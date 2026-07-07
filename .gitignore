@@ -1,0 +1,75 @@
+# Project docs (local only)
+CLAUDE.md
+GDD.md
+
+# Claude Code
+.claude/settings.local.json
+
+# Unity generated folders
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+
+# Unity cache files
+/[Aa]ssets/AssetStoreTools*
+
+# Visual Studio / Rider / VS Code
+.vs/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+*.slnx
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Unity YAML merge
+*.orig
+
+# Crashlytics
+Assets/StreamingAssets/HockeyAppUnityAndroid
+
+# Nuget packages
+/[Pp]ackages/*
+!/[Pp]ackages/manifest.json
+!/[Pp]ackages/packages-lock.json
+
+# Asset meta files (keep these)
+# !/[Aa]ssets/**/*.meta
+
+# TextMeshPro
+# Assets/TextMesh Pro/
+
+# JetBrains Rider
+.idea/
+*.sln.DotSettings.user
+
+# VS Code
+.vscode/
+
+# Uncomment if you use addressables
+# /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*
+# /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AddressableAssetSettings.asset
+**/[Aa]ssets/[Ii]mported/
