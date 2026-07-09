@@ -1,0 +1,39 @@
+{
+    "permissions": {
+      "allow": [
+        "Read",
+        "Bash(git status)",
+        "Bash(git diff *)",
+        "Bash(git log *)",
+        "Bash(dotnet csharpier *)"
+      ],
+      "deny": [
+        "Read(./Library/**)",
+        "Read(!./Library/PackageCache/**)",
+        "Read(./Temp/**)",
+        "Read(./Logs/**)",
+        "Read(./obj/**)",
+        "Read(./**/*.csproj)",
+        "Read(./**/*.sln)",
+        "Write(./**/*.meta)",
+        "Edit(./**/packages-lock.json)",
+        "Edit(./**/*.unity)",
+        "Write(./**/*.unity)",
+        "Bash(rm -rf *)"
+      ],
+      "defaultMode": "default"
+    },
+    "hooks": {
+      "PostToolUse": [
+        {
+          "matcher": "Edit|Write|MultiEdit",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/.claude/hooks/csharpier-format.ps1\""
+            }
+          ]
+        }
+      ]
+    }
+  }

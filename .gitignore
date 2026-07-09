@@ -1,7 +1,3 @@
-# Project docs (local only)
-CLAUDE.md
-GDD.md
-
 # Claude Code
 .claude/settings.local.json
 
@@ -72,4 +68,4 @@ Assets/StreamingAssets/HockeyAppUnityAndroid
 # Uncomment if you use addressables
 # /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*
 # /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AddressableAssetSettings.asset
-**/[Aa]ssets/[Ii]mported/
+/[Aa]ssets/[Ii]mported/
