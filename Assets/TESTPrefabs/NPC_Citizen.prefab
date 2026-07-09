@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 3692059701882310837}
   - component: {fileID: 3508257805276926635}
   - component: {fileID: 4452197611904741975}
+  - component: {fileID: 1460853445745521395}
   m_Layer: 0
   m_Name: NPC_Citizen
   m_TagString: Untagged
@@ -71,6 +72,20 @@ MonoBehaviour:
   m_wanderRadius: 10
   m_idleTimeMin: 1
   m_idleTimeMax: 3
+--- !u!114 &1460853445745521395
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 32ac43b6e86b4a24498de92f1a644b5c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcStateTester
+  m_manualMode: 0
+  m_previewState: 0
 --- !u!1001 &3679051956096844986
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -126,7 +141,7 @@ PrefabInstance:
     - target: {fileID: 95497033138367770, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
       propertyPath: m_Controller
       value: 
-      objectReference: {fileID: 0}
+      objectReference: {fileID: 9100000, guid: cc946fca7654a6b46ab7e7577cb5c85c, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
