@@ -550,6 +550,20 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcAnimationDriver
   m_animator: {fileID: 0}
+--- !u!114 &2015838928
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2015838914}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 32ac43b6e86b4a24498de92f1a644b5c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcStateTester
+  m_manualMode: 0
+  m_previewState: 0
 --- !u!1001 &4799187168505447173
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -619,6 +633,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 8791269624150694847, guid: e7cbd7673d85ce0488590f20f53288ac, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2015838924}
+    - targetCorrespondingSourceObject: {fileID: 8791269624150694847, guid: e7cbd7673d85ce0488590f20f53288ac, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2015838928}
   m_SourcePrefab: {fileID: 100100000, guid: e7cbd7673d85ce0488590f20f53288ac, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
