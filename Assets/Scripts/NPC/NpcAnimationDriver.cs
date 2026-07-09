@@ -1,12 +1,14 @@
 using UnityEngine;
 
 /// <summary>
-/// FSM 상태 변경을 Animator 파라미터로 전달한다 (NpcState.Walk → IsWalking).
+/// FSM 상태 변경을 Animator의 State(int) 파라미터로 전달한다.
+/// NpcState enum 값이 그대로 Animator 상태 번호가 되므로(Idle=0, Walk=1...),
+/// 새 상태가 생겨도 이 스크립트는 수정할 필요가 없다.
 /// </summary>
 [RequireComponent(typeof(NpcController))]
 public class NpcAnimationDriver : MonoBehaviour
 {
-    private static readonly int s_isWalkingHash = Animator.StringToHash("IsWalking");
+    private static readonly int s_stateHash = Animator.StringToHash("State");
 
     [SerializeField] private Animator m_animator;
 
@@ -34,7 +36,8 @@ public class NpcAnimationDriver : MonoBehaviour
 
     private void HandleStateChanged(NpcState state)
     {
+        // enum 값을 int로 변환해 전달 → Animator의 Any State 전이(State == N)가 해당 모션으로 전환한다
         if (m_animator != null)
-            m_animator.SetBool(s_isWalkingHash, state == NpcState.Walk);
+            m_animator.SetInteger(s_stateHash, (int)state);
     }
 }
