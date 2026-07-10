@@ -1,23 +1,35 @@
 using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
+
 // using Unity.Netcode; // TODO: 네트워크 테스트 시 주석 해제
 
 public class PlayerInputHandler : MonoBehaviour // TODO: 네트워크 테스트 시 NetworkBehaviour로 복구
 {
     [Header("Input Actions")]
-    [SerializeField] private InputActionReference m_moveAction;
-    [SerializeField] private InputActionReference m_lookAction;
-    [SerializeField] private InputActionReference m_interactAction;
-    [SerializeField] private InputActionReference m_sprintAction;
+    [SerializeField]
+    private InputActionReference m_moveAction;
+
+    [SerializeField]
+    private InputActionReference m_lookAction;
+
+    [SerializeField]
+    private InputActionReference m_interactAction;
+
+    [SerializeField]
+    private InputActionReference m_sprintAction;
+
+    [SerializeField]
+    private InputActionReference m_attackAction;
 
     public Vector2 MoveInput { get; private set; }
     public Vector2 LookInput { get; private set; }
     public bool IsSprinting { get; private set; }
 
-    public event Action OnInteractStarted;   // 채널링 시작 (버튼 누름)
+    public event Action OnInteractStarted; // 채널링 시작 (버튼 누름)
     public event Action OnInteractPerformed; // Hold 완료 (3초 채움)
-    public event Action OnInteractCanceled;  // 중간에 뗌
+    public event Action OnInteractCanceled; // 중간에 뗌
+    public event Action OnAttackPerformed; // 아이템 사용 (조준 대상에 사용)
 
     private void OnEnable() // TODO: 네트워크 테스트 시 OnNetworkSpawn으로 복구
     {
@@ -31,6 +43,7 @@ public class PlayerInputHandler : MonoBehaviour // TODO: 네트워크 테스트 
         m_lookAction.action.Enable();
         m_interactAction.action.Enable();
         m_sprintAction.action.Enable();
+        m_attackAction.action.Enable();
 
         m_moveAction.action.performed += OnMove;
         m_moveAction.action.canceled += OnMove;
@@ -41,6 +54,7 @@ public class PlayerInputHandler : MonoBehaviour // TODO: 네트워크 테스트 
         m_interactAction.action.canceled += OnInteractCanceledHandler;
         m_sprintAction.action.performed += OnSprintPerformed;
         m_sprintAction.action.canceled += OnSprintCanceled;
+        m_attackAction.action.performed += OnAttackPerformedHandler;
     }
 
     private void OnDisable() // TODO: 네트워크 테스트 시 OnNetworkDespawn으로 복구
@@ -56,20 +70,32 @@ public class PlayerInputHandler : MonoBehaviour // TODO: 네트워크 테스트 
         m_interactAction.action.canceled -= OnInteractCanceledHandler;
         m_sprintAction.action.performed -= OnSprintPerformed;
         m_sprintAction.action.canceled -= OnSprintCanceled;
+        m_attackAction.action.performed -= OnAttackPerformedHandler;
 
         m_moveAction.action.Disable();
         m_lookAction.action.Disable();
         m_interactAction.action.Disable();
         m_sprintAction.action.Disable();
+        m_attackAction.action.Disable();
     }
 
     private void OnMove(InputAction.CallbackContext ctx) => MoveInput = ctx.ReadValue<Vector2>();
+
     private void OnLook(InputAction.CallbackContext ctx) => LookInput = ctx.ReadValue<Vector2>();
 
-    private void OnInteractStartedHandler(InputAction.CallbackContext ctx) => OnInteractStarted?.Invoke();
-    private void OnInteractPerformedHandler(InputAction.CallbackContext ctx) => OnInteractPerformed?.Invoke();
-    private void OnInteractCanceledHandler(InputAction.CallbackContext ctx) => OnInteractCanceled?.Invoke();
+    private void OnInteractStartedHandler(InputAction.CallbackContext ctx) =>
+        OnInteractStarted?.Invoke();
+
+    private void OnInteractPerformedHandler(InputAction.CallbackContext ctx) =>
+        OnInteractPerformed?.Invoke();
+
+    private void OnInteractCanceledHandler(InputAction.CallbackContext ctx) =>
+        OnInteractCanceled?.Invoke();
 
     private void OnSprintPerformed(InputAction.CallbackContext ctx) => IsSprinting = true;
+
     private void OnSprintCanceled(InputAction.CallbackContext ctx) => IsSprinting = false;
+
+    private void OnAttackPerformedHandler(InputAction.CallbackContext ctx) =>
+        OnAttackPerformed?.Invoke();
 }
