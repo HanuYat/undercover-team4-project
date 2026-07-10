@@ -9,5 +9,6 @@ public enum NpcState
     Attack,
     Captured,
     Stunned,
-    Panic
+    Panic,
+    Escorted // 연행 중 — 체포한 플레이어를 따라 이동 (#59). enum 값 = Animator 번호이므로 반드시 끝에만 추가할 것
 }

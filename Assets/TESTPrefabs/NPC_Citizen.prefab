@@ -82,6 +82,10 @@ MonoBehaviour:
   m_longIdleTimeMax: 10
   m_speedMultiplierMin: 0.8
   m_speedMultiplierMax: 1.2
+  m_escortFollowDistance: 1.2
+  m_escortBoostDistance: 4
+  m_escortBoostMultiplier: 1.5
+  m_escortBreakDistance: 8
 --- !u!54 &161675701295816944
 Rigidbody:
   m_ObjectHideFlags: 0
