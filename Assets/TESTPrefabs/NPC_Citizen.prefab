@@ -15,6 +15,7 @@ GameObject:
   - component: {fileID: 1646443744982264073}
   - component: {fileID: 1405749366994800697}
   - component: {fileID: 3625219082931332717}
+  - component: {fileID: 1458645678561649132}
   m_Layer: 0
   m_Name: NPC_Citizen
   m_TagString: Untagged
@@ -73,8 +74,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcController
   m_wanderRadius: 10
+  m_minWanderDistance: 3
   m_idleTimeMin: 1
   m_idleTimeMax: 3
+  m_longIdleChance: 0.15
+  m_longIdleTimeMin: 5
+  m_longIdleTimeMax: 10
+  m_speedMultiplierMin: 0.8
+  m_speedMultiplierMax: 1.2
 --- !u!54 &161675701295816944
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -150,6 +157,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NpcStateTester
   m_manualMode: 0
   m_previewState: 0
+--- !u!114 &1458645678561649132
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f31dede33414a7a4b9805fc2692a0bc1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CitizenIdentity
 --- !u!1001 &3679051956096844986
 PrefabInstance:
   m_ObjectHideFlags: 0
