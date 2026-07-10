@@ -102,7 +102,7 @@ public class Scanner : ItemBase, IChargeable
             return "대상 정보 없음";
         }
 
-        return $"이름={m_targetProfile.m_citizenName}, 타입={m_targetProfile.m_typeView}, 세력={m_targetProfile.m_factionView}";
+        return $"이름={m_targetProfile.CitizenName}, 타입={m_targetProfile.m_typeView}, 세력={m_targetProfile.m_factionView}";
     }
 
     // ---- 라이프사이클 ----
