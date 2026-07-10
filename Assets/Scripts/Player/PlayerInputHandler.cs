@@ -1,10 +1,9 @@
 using System;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-// using Unity.Netcode; // TODO: 네트워크 테스트 시 주석 해제
-
-public class PlayerInputHandler : MonoBehaviour // TODO: 네트워크 테스트 시 NetworkBehaviour로 복구
+public class PlayerInputHandler : NetworkBehaviour
 {
     [Header("Input Actions")]
     [SerializeField]
@@ -31,13 +30,13 @@ public class PlayerInputHandler : MonoBehaviour // TODO: 네트워크 테스트 
     public event Action OnInteractCanceled; // 중간에 뗌
     public event Action OnAttackPerformed; // 아이템 사용 (조준 대상에 사용)
 
-    private void OnEnable() // TODO: 네트워크 테스트 시 OnNetworkSpawn으로 복구
+    public override void OnNetworkSpawn()
     {
-        // if (!IsOwner)
-        // {
-        //     enabled = false;
-        //     return;
-        // }
+        if (!IsOwner)
+        {
+            enabled = false;
+            return;
+        }
 
         m_moveAction.action.Enable();
         m_lookAction.action.Enable();
@@ -57,9 +56,10 @@ public class PlayerInputHandler : MonoBehaviour // TODO: 네트워크 테스트 
         m_attackAction.action.performed += OnAttackPerformedHandler;
     }
 
-    private void OnDisable() // TODO: 네트워크 테스트 시 OnNetworkDespawn으로 복구
+    public override void OnNetworkDespawn()
     {
-        // if (!IsOwner) return;
+        if (!IsOwner)
+            return;
 
         m_moveAction.action.performed -= OnMove;
         m_moveAction.action.canceled -= OnMove;
