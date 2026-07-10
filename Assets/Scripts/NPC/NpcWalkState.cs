@@ -33,8 +33,11 @@ public class NpcWalkState : NpcStateBase
     {
         for (int i = 0; i < k_maxSampleAttempts; i++)
         {
-            Vector2 randomCircle = Random.insideUnitCircle * m_owner.WanderRadius;
-            Vector3 candidate = m_owner.transform.position + new Vector3(randomCircle.x, 0f, randomCircle.y);
+            // 최소~최대 거리 사이의 랜덤 방향 지점을 뽑는다 — 너무 가까운 지점을 배제해 한두 걸음 걷고 마는 이동을 방지
+            float angle = Random.Range(0f, Mathf.PI * 2f);
+            float distance = Random.Range(m_owner.MinWanderDistance, m_owner.WanderRadius);
+            Vector3 direction = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
+            Vector3 candidate = m_owner.transform.position + direction * distance;
 
             if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, 2f, NavMesh.AllAreas))
             {
