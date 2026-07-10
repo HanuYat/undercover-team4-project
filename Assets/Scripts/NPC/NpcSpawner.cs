@@ -32,10 +32,6 @@ public class NpcSpawner : MonoBehaviour
     [Tooltip("랜덤 위치에서 이 거리(m) 안에 NavMesh가 없으면 그 위치는 버리고 다시 뽑는다")]
     [SerializeField] private float m_sampleMaxDistance = 4f;
 
-    [Header("외형 다양화 (캐릭터 모델 목록)")]
-    [Tooltip("스폰 시 이 목록에서 랜덤으로 골라 외형(메시·머티리얼)을 교체한다. 비워두면 프리팹 기본 외형 그대로 사용. Synty 캐릭터는 같은 리그를 공유하므로 메시 교체만으로 애니메이션이 그대로 동작한다")]
-    [SerializeField] private GameObject[] m_characterModels;
-
     [Header("프레임당 스폰 수")]
     [Tooltip("한 프레임에 이 수만큼만 생성하고 다음 프레임으로 넘긴다 — 대량 스폰 시 첫 프레임 끊김(히칭) 방지")]
     [SerializeField] private int m_spawnPerFrame = 3;
@@ -126,8 +122,7 @@ public class NpcSpawner : MonoBehaviour
             // 부모를 지정하지 않고 씬 루트에 생성 — NetworkObject는 비NetworkObject 아래에
             // 부모로 붙인 채 스폰할 수 없다 (NGO가 경고 후 강제로 떼어낸다)
             NpcController npc = Instantiate(m_npcPrefab, hit.position, rotation);
-            // TODO: 외형 교체는 아직 서버 로컬 — 클라이언트 동기화는 후속 이슈 (외형 인덱스 NetworkVariable화)
-            ApplyRandomAppearance(npc);
+            // 외형 랜덤 교체는 프리팹의 NpcAppearance가 담당한다 — 서버가 뽑은 인덱스를 전 클라에 동기화 (#56)
 
             // 네트워크 세션이면 전 클라이언트에 복제 (서버 권위 스폰, #56)
             if (IsNetworkSessionActive)
@@ -151,32 +146,6 @@ public class NpcSpawner : MonoBehaviour
         m_isSpawning = false;
         IsSpawnCompleted = true;
         OnSpawnCompleted?.Invoke();
-    }
-
-    /// <summary>
-    /// 모델 목록에서 랜덤으로 하나를 골라 NPC의 외형(메시·머티리얼)을 교체한다.
-    /// 모델 오브젝트 전체를 갈아끼우지 않고 SkinnedMeshRenderer의 메시만 바꾸므로
-    /// Animator·NpcAnimationDriver가 잡고 있는 참조가 깨지지 않는다.
-    /// </summary>
-    private void ApplyRandomAppearance(NpcController npc)
-    {
-        if (m_characterModels == null || m_characterModels.Length == 0)
-            return;
-
-        GameObject source = m_characterModels[Random.Range(0, m_characterModels.Length)];
-        if (source == null)
-            return;
-
-        SkinnedMeshRenderer sourceRenderer = source.GetComponentInChildren<SkinnedMeshRenderer>();
-        SkinnedMeshRenderer targetRenderer = npc.GetComponentInChildren<SkinnedMeshRenderer>();
-        if (sourceRenderer == null || targetRenderer == null)
-        {
-            Debug.LogWarning($"NpcSpawner: SkinnedMeshRenderer를 찾지 못해 외형 교체 생략 ({source.name})", this);
-            return;
-        }
-
-        targetRenderer.sharedMesh = sourceRenderer.sharedMesh;
-        targetRenderer.sharedMaterials = sourceRenderer.sharedMaterials;
     }
 
     // 씬 뷰에서 스폰 포인트 위치와 분산 반경을 눈으로 확인할 수 있게 기즈모를 그린다
