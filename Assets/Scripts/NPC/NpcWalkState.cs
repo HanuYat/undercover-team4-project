@@ -6,10 +6,17 @@ public class NpcWalkState : NpcStateBase
     private const int k_maxSampleAttempts = 10;
     private const float k_arriveThreshold = 0.5f;
 
+    // 막힘 감지 — 군중 교착 등으로 이 시간(초) 이상 제자리면 목적지를 다시 뽑는다
+    private const float k_stuckSpeedThreshold = 0.05f;
+    private const float k_stuckTimeout = 2f;
+
+    private float m_stuckTimer;
+
     public NpcWalkState(NpcController owner) : base(owner) { }
 
     public override void Enter()
     {
+        m_stuckTimer = 0f;
         SetNextWanderPoint();
     }
 
@@ -20,6 +27,23 @@ public class NpcWalkState : NpcStateBase
             m_owner.Agent.remainingDistance <= m_owner.Agent.stoppingDistance + k_arriveThreshold)
         {
             m_owner.StateMachine.ChangeState(NpcState.Idle);
+            return;
+        }
+
+        // 막힘 감지 안전망 — 좁은 길목에서 여럿이 엉켜 회피로도 못 풀 때,
+        // 목적지를 새로 뽑아 교착이 스스로 풀리게 한다
+        if (!m_owner.Agent.pathPending && m_owner.Agent.velocity.magnitude < k_stuckSpeedThreshold)
+        {
+            m_stuckTimer += Time.deltaTime;
+            if (m_stuckTimer >= k_stuckTimeout)
+            {
+                m_stuckTimer = 0f;
+                SetNextWanderPoint();
+            }
+        }
+        else
+        {
+            m_stuckTimer = 0f;
         }
     }
 
