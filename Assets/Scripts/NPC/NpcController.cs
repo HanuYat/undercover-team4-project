@@ -46,6 +46,7 @@ public class NpcController : MonoBehaviour
         m_stateMachine = new NpcStateMachine();
         m_stateMachine.AddState(NpcState.Idle, new NpcIdleState(this));
         m_stateMachine.AddState(NpcState.Walk, new NpcWalkState(this));
+        m_stateMachine.AddState(NpcState.Captured, new NpcCapturedState(this));
     }
 
     private void Start()
