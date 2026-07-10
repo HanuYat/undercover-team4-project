@@ -419,6 +419,10 @@ PrefabInstance:
       propertyPath: m_attackAction
       value: 
       objectReference: {fileID: 1120369429361536294, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+    - target: {fileID: 7952644528617391114, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
+      propertyPath: m_CullingMask.m_Bits
+      value: 183
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -453,7 +457,7 @@ MonoBehaviour:
   m_range: 5
   m_interactMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 128
 --- !u!1 &1904356628
 GameObject:
   m_ObjectHideFlags: 0
@@ -467,7 +471,7 @@ GameObject:
   - component: {fileID: 1904356630}
   - component: {fileID: 1904356629}
   - component: {fileID: 1904356633}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: Cube
   m_TagString: Untagged
   m_Icon: {fileID: 0}
