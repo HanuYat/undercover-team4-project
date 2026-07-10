@@ -15,12 +15,12 @@ public class PlayerItemUser : MonoBehaviour
 
     private void OnEnable()
     {
-        m_inputHandler.OnInteractPerformed += HandleUseItem;
+        m_inputHandler.OnAttackPerformed += HandleUseItem;
     }
 
     private void OnDisable()
     {
-        m_inputHandler.OnInteractPerformed -= HandleUseItem;
+        m_inputHandler.OnAttackPerformed -= HandleUseItem;
     }
 
     public void SetEquippedItem(ItemBase item)
