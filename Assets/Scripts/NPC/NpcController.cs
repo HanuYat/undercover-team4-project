@@ -54,6 +54,10 @@ public class NpcController : MonoBehaviour
         // 개체마다 걷는 속도를 다르게 해 군중이 같은 리듬으로 움직이는 것을 깨준다
         m_agent.speed *= Random.Range(m_speedMultiplierMin, m_speedMultiplierMax);
 
+        // 회피 우선순위도 개체마다 다르게 — 전원이 같은 값이면 정면으로 마주친 둘이
+        // 대칭적으로 서로 양보하다가 교착에 빠진다 (값이 낮은 쪽이 우선권을 가진다)
+        m_agent.avoidancePriority = Random.Range(30, 71);
+
         m_stateMachine.ChangeState(NpcState.Idle);
     }
 
