@@ -15,6 +15,9 @@ public class CitizenIdentity : MonoBehaviour
     /// <summary>외형 특징 조합(#74) — 몽타주 부합 판정의 기준. AppearanceAssigner가 채워준다.</summary>
     public AppearanceProfile Appearance { get; private set; } = AppearanceProfile.Unassigned;
 
+    /// <summary>검거 반응 유형(#76) — 수갑 채널링 성공 순간의 반응. CriminalAssigner가 배정한다.</summary>
+    public ReactionType Reaction { get; private set; } = ReactionType.Compliant;
+
     /// <summary>프로필과 범인 여부를 배정한다. CriminalAssigner 전용.</summary>
     public void AssignProfile(CitizenProfile profile, bool isCriminal)
     {
@@ -26,5 +29,11 @@ public class CitizenIdentity : MonoBehaviour
     public void AssignAppearance(AppearanceProfile appearance)
     {
         Appearance = appearance;
+    }
+
+    /// <summary>검거 반응 유형을 배정한다. CriminalAssigner 전용.</summary>
+    public void AssignReaction(ReactionType reaction)
+    {
+        Reaction = reaction;
     }
 }

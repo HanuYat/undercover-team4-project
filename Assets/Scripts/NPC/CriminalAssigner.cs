@@ -17,6 +17,12 @@ public class CriminalAssigner : MonoBehaviour
     [Header("공식 기록 (세력 심볼 조회용)")]
     [SerializeField] private OfficialRecords m_officialRecords;
 
+    [Header("범인 검거 반응 가중치 (#76)")]
+    [Tooltip("합이 1일 필요 없음 — 비율로 추첨한다. 일반 시민은 항상 순응(GDD 6-3)")]
+    [SerializeField] private float m_compliantWeight = 0.2f;
+    [SerializeField] private float m_fleeWeight = 0.4f;
+    [SerializeField] private float m_resistWeight = 0.4f;
+
     // 임시 이름 풀 — 사이버펑크 톤. 추후 데이터 에셋으로 분리 가능
     private static readonly string[] s_namePool =
     {
@@ -97,6 +103,10 @@ public class CriminalAssigner : MonoBehaviour
             bool isCriminal = i == criminalIndex;
             identity.AssignProfile(profile, isCriminal);
 
+            // 검거 반응 — 일반 시민은 전부 순응, 범인만 유형을 추첨한다 (GDD 6-1/6-3, #76)
+            ReactionType reaction = isCriminal ? RollCriminalReaction() : ReactionType.Compliant;
+            identity.AssignReaction(reaction);
+
             if (isCriminal)
             {
                 CriminalNpc = npcs[i];
@@ -105,7 +115,7 @@ public class CriminalAssigner : MonoBehaviour
 
             // 범인 표시는 정답이 노출되므로 데모 빌드 전에 제거할 것
             logBuilder.AppendLine(
-                $"  {profile.CitizenName} | {profile.m_typeView} | {profile.m_factionView}{(isCriminal ? "  ← 범인" : "")}");
+                $"  {profile.CitizenName} | {profile.m_typeView} | {profile.m_factionView}{(isCriminal ? $"  ← 범인 ({reaction})" : "")}");
         }
 
         OnCriminalAssigned?.Invoke(CriminalNpc);
@@ -131,6 +141,21 @@ public class CriminalAssigner : MonoBehaviour
                 : $"{shuffled[i % shuffled.Length]} {i / shuffled.Length + 1}"; // 풀 초과분은 번호로 구분
         }
         return result;
+    }
+
+    /// <summary>범인의 검거 반응 유형을 가중치 비율로 추첨한다. (#76)</summary>
+    private ReactionType RollCriminalReaction()
+    {
+        float total = m_compliantWeight + m_fleeWeight + m_resistWeight;
+        if (total <= 0f)
+            return ReactionType.Compliant; // 가중치가 전부 0이면 안전하게 순응
+
+        float roll = Random.Range(0f, total);
+        if (roll < m_compliantWeight)
+            return ReactionType.Compliant;
+        if (roll < m_compliantWeight + m_fleeWeight)
+            return ReactionType.Flee;
+        return ReactionType.Resist;
     }
 
     private static TEnum RandomEnum<TEnum>() where TEnum : Enum

@@ -44,11 +44,29 @@ public class NpcController : NetworkBehaviour
     [Tooltip("이 거리(m)를 넘으면 연행이 풀리고 그 자리에서 체포 상태로 멈춘다")]
     [SerializeField] private float m_escortBreakDistance = 8f;
 
+    [Header("검거 반응 (#76)")]
+    [Tooltip("도주 시 기본 이동 속도에 곱하는 배율")]
+    [SerializeField] private float m_fleeSpeedMultiplier = 1.5f;
+    [Tooltip("도주 목적지를 한 번에 이만큼(m) 앞으로 잡는다")]
+    [SerializeField] private float m_fleeStepDistance = 10f;
+    [Tooltip("추적자와 이 거리(m) 이상 벌어지면 도주 성공 — 배회로 복귀한다")]
+    [SerializeField] private float m_fleeEscapeDistance = 25f;
+    [Tooltip("저항 제압 게이지 최대치 — ApplySubdueHit로 깎여 0이 되면 체포된다")]
+    [SerializeField] private float m_subdueGaugeMax = 100f;
+    [Tooltip("저항 중 이 시간(초) 동안 아무도 제압을 시도하지 않으면 진정하고 배회로 복귀한다")]
+    [SerializeField] private float m_resistCalmSeconds = 10f;
+    [Tooltip("기절(테이저 등) 지속 시간(초)")]
+    [SerializeField] private float m_stunSeconds = 3f;
+
     private NavMeshAgent m_agent;
     private NpcStateMachine m_stateMachine;
 
     // 서버 권위 FSM 상태 — 서버만 쓰고 모든 클라이언트가 읽는다 (#56)
     private readonly NetworkVariable<NpcState> m_networkState = new NetworkVariable<NpcState>(NpcState.Idle);
+
+    // 서버 권위 제압 게이지 — 저항(Attack) 상태에서만 의미. 진행도 UI(후속)를 위해 동기화한다 (#76)
+    private readonly NetworkVariable<float> m_syncedSubdueGauge = new NetworkVariable<float>(0f);
+    private float m_subdueGauge; // 서버·오프라인의 진실값 — m_networkState와 같은 이중 구조
 
     public NavMeshAgent Agent => m_agent;
     public NpcStateMachine StateMachine => m_stateMachine;
@@ -63,6 +81,21 @@ public class NpcController : NetworkBehaviour
     public float EscortBoostDistance => m_escortBoostDistance;
     public float EscortBoostMultiplier => m_escortBoostMultiplier;
     public float EscortBreakDistance => m_escortBreakDistance;
+    public float FleeSpeedMultiplier => m_fleeSpeedMultiplier;
+    public float FleeStepDistance => m_fleeStepDistance;
+    public float FleeEscapeDistance => m_fleeEscapeDistance;
+    public float SubdueGaugeMax => m_subdueGaugeMax;
+    public float ResistCalmSeconds => m_resistCalmSeconds;
+    public float StunSeconds => m_stunSeconds;
+
+    /// <summary>현재 제압 게이지. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 읽을 수 있다. (#76)</summary>
+    public float SubdueGauge => IsSpawned ? m_syncedSubdueGauge.Value : m_subdueGauge;
+
+    /// <summary>마지막으로 제압 타격을 받은 시각(Time.time) — 저항 진정 타이머 기준. 서버에서만 유효. (#76)</summary>
+    public float LastSubdueHitTime { get; private set; }
+
+    /// <summary>도주 중 피해 다니는 위협 대상(체포를 시도한 플레이어). 도주 중이 아니면 null. 서버에서만 유효. (#76)</summary>
+    public Transform ThreatTarget { get; private set; }
 
     /// <summary>
     /// 현재 NPC 상태. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 안전하게 읽을 수 있다.
@@ -85,6 +118,9 @@ public class NpcController : NetworkBehaviour
         m_stateMachine.AddState(NpcState.Walk, new NpcWalkState(this));
         m_stateMachine.AddState(NpcState.Captured, new NpcCapturedState(this));
         m_stateMachine.AddState(NpcState.Escorted, new NpcEscortedState(this));
+        m_stateMachine.AddState(NpcState.Run, new NpcFleeState(this));
+        m_stateMachine.AddState(NpcState.Attack, new NpcResistState(this));
+        m_stateMachine.AddState(NpcState.Stunned, new NpcStunnedState(this));
 
         // FSM 전이(서버/오프라인에서만 발생)를 동기화 변수 또는 로컬 이벤트로 흘려보낸다
         m_stateMachine.OnStateChanged += HandleFsmStateChanged;
@@ -185,5 +221,81 @@ public class NpcController : NetworkBehaviour
 
         EscortTarget = null;
         m_stateMachine.ChangeState(NpcState.Captured);
+    }
+
+    // ---- 검거 반응 (#76) ----
+    // FSM 전이는 전부 서버 권위 — 클라이언트 호출은 StartEscort와 같은 방식으로 무시한다.
+    // TODO: 아이템/상호작용 네트워크 전환(#55 계열) 시 클라 입력 → ServerRpc 경로로 연결
+
+    /// <summary>도주 시작 — 수갑 채널링 성공 순간 도주형의 반응. threat(플레이어) 반대 방향으로 달아난다.</summary>
+    public void StartFlee(Transform threat)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        ThreatTarget = threat;
+        m_stateMachine.ChangeState(NpcState.Run);
+    }
+
+    /// <summary>위협 참조 정리 — NpcFleeState.Exit 전용.</summary>
+    public void ClearThreat() => ThreatTarget = null;
+
+    /// <summary>저항 시작 — 수갑 채널링 성공 순간 저항형의 반응. 그 자리에서 버틴다.</summary>
+    public void StartResist()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        m_stateMachine.ChangeState(NpcState.Attack);
+    }
+
+    /// <summary>저항 진입 시 게이지를 최대로 리셋한다 — NpcResistState.Enter 전용.</summary>
+    public void ResetSubdueGauge()
+    {
+        SetSubdueGauge(m_subdueGaugeMax);
+        LastSubdueHitTime = Time.time;
+    }
+
+    /// <summary>
+    /// 제압 타격 — 저항 게이지를 깎는다. 진압봉 등 타격 수단(후속 아이템 이슈)이 호출.
+    /// 여러 명이 함께 때리면 그만큼 빨리 깎인다 (GDD 7-4 협동 인센티브).
+    /// </summary>
+    public void ApplySubdueHit(float amount)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+        if (CurrentState != NpcState.Attack)
+            return; // 저항 중이 아닐 때의 타격은 무시 — 배회 NPC 폭행 방지
+
+        SetSubdueGauge(Mathf.Max(0f, SubdueGauge - amount));
+        LastSubdueHitTime = Time.time;
+    }
+
+    /// <summary>도주 중인 NPC 근접 제압 — 상호작용 홀드 성공 시 그 자리에서 체포. (NpcSubdueInteractable 경유)</summary>
+    public void CaptureBySubdue()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+        if (CurrentState != NpcState.Run)
+            return;
+
+        m_stateMachine.ChangeState(NpcState.Captured);
+    }
+
+    /// <summary>기절 진입 — 테이저(후속 아이템 이슈)의 연결고리. 지속 시간 후 스스로 배회로 복귀한다.</summary>
+    public void EnterStunned()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        m_stateMachine.ChangeState(NpcState.Stunned);
+    }
+
+    // 게이지는 서버 진실값과 동기화 변수에 함께 기록한다 — 오프라인에서는 NetworkVariable에 쓰지 않는다 (#56 상태 패턴과 동일)
+    private void SetSubdueGauge(float value)
+    {
+        m_subdueGauge = value;
+        if (IsSpawned && IsServer)
+            m_syncedSubdueGauge.Value = value;
     }
 }
