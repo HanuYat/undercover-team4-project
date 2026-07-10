@@ -1,7 +1,8 @@
+using Unity.Netcode;
 using UnityEngine;
 
 [RequireComponent(typeof(PlayerInputHandler))]
-public class PlayerInteractor : MonoBehaviour
+public class PlayerInteractor : NetworkBehaviour
 {
     [Header("레이캐스트")]
     [SerializeField] private Camera m_camera;
@@ -13,14 +14,26 @@ public class PlayerInteractor : MonoBehaviour
 
     private PlayerInputHandler m_inputHandler;
 
-    private void Awake()
+    public override void OnNetworkSpawn()
     {
         m_inputHandler = GetComponent<PlayerInputHandler>();
         if (m_camera == null) m_camera = Camera.main;
+
+        if (!IsOwner)
+        {
+            enabled = false;
+            return;
+        }
+
+        m_inputHandler.OnInteractPerformed += HandleInteract;
     }
 
-    private void OnEnable()  => m_inputHandler.OnInteractPerformed += HandleInteract;
-    private void OnDisable() => m_inputHandler.OnInteractPerformed -= HandleInteract;
+    public override void OnNetworkDespawn()
+    {
+        if (!IsOwner) return;
+
+        m_inputHandler.OnInteractPerformed -= HandleInteract;
+    }
 
     private void Update()
     {
