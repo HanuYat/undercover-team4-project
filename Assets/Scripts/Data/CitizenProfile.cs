@@ -4,9 +4,13 @@ using UnityEngine;
 public class CitizenProfile : ScriptableObject
 {
     [Header("실제 데이터")]
-    public string m_citizenName;
-    public OfficialRecords.CitizenType m_citizenType;    // 실제 타입
-    public OfficialRecords.Faction m_faction;            // 실제 세력
+    [SerializeField] private string m_citizenName;
+    [SerializeField] private OfficialRecords.CitizenType m_citizenType;
+    [SerializeField] private OfficialRecords.Faction m_faction;
+
+    public string CitizenName => m_citizenName;
+    public OfficialRecords.CitizenType CitizenType => m_citizenType;
+    public OfficialRecords.Faction Faction => m_faction;
 
     [Header("스캔으로 확인할 결과")]
     public string m_typeView;     // 표시 타입
