@@ -75,6 +75,10 @@ public class CriminalAssigner : MonoBehaviour
         int criminalIndex = Random.Range(0, npcs.Count);
         string[] names = BuildUniqueNames(npcs.Count);
 
+        // 스캔 UI(#39) 전까지는 로그로 배정 결과를 확인한다
+        var logBuilder = new System.Text.StringBuilder();
+        logBuilder.AppendLine($"시민 프로필 배정 완료 ({npcs.Count}명):");
+
         for (int i = 0; i < npcs.Count; i++)
         {
             // 프리팹에 CitizenIdentity가 없어도 동작하도록 없으면 붙여준다
@@ -98,12 +102,14 @@ public class CriminalAssigner : MonoBehaviour
                 CriminalNpc = npcs[i];
                 WantedProfile = profile;
             }
+
+            // 범인 표시는 정답이 노출되므로 데모 빌드 전에 제거할 것
+            logBuilder.AppendLine(
+                $"  {profile.CitizenName} | {profile.m_typeView} | {profile.m_factionView}{(isCriminal ? "  ← 범인" : "")}");
         }
 
         OnCriminalAssigned?.Invoke(CriminalNpc);
-
-        // 개발용 로그 — 정답이 노출되므로 데모 빌드 전에 제거할 것
-        Debug.Log($"범인 배정 완료: {npcs.Count}명 중 '{WantedProfile.CitizenName}' ({CriminalNpc.name})");
+        Debug.Log(logBuilder.ToString());
     }
 
     /// <summary>이름 풀을 섞어 중복 없는 이름 배열을 만든다. NPC가 풀보다 많으면 번호를 붙인다.</summary>
