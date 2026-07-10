@@ -12,9 +12,9 @@ public class CCTVSwitchTest : MonoBehaviour
             return;
 
         if (Keyboard.current.eKey.wasPressedThisFrame)
-            m_switcher.SwitchNext();
+            m_switcher.RequestSwitchNextRpc();
 
         if (Keyboard.current.qKey.wasPressedThisFrame)
-            m_switcher.SwitchPrev();
+            m_switcher.RequestSwitchPrevRpc();
     }
 }
