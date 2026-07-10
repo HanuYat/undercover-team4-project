@@ -60,7 +60,8 @@ public class Handcuffs : ItemBase
         }
 
         // 이미 체포되어 멈춰 있는 대상은 채널링 없이 즉시 재연행한다 (#59)
-        if (target.StateMachine.CurrentState == NpcState.Captured)
+        // 상태는 반드시 동기화된 CurrentState로 읽는다 — StateMachine 값은 서버에서만 갱신됨 (#56)
+        if (target.CurrentState == NpcState.Captured)
         {
             m_escorter?.StartEscort(target);
             return;
@@ -129,7 +130,7 @@ public class Handcuffs : ItemBase
 
             // 연행 중인 NPC는 대상에서 제외 — 중복 연행·타인의 연행 가로채기 방지 (#59)
             // (Captured는 재연행 대상이므로 포함한다)
-            if (npc.StateMachine.CurrentState == NpcState.Escorted)
+            if (npc.CurrentState == NpcState.Escorted)
                 continue;
 
             float sqr = (npc.transform.position - transform.position).sqrMagnitude;

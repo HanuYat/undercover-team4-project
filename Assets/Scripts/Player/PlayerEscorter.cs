@@ -38,7 +38,8 @@ public class PlayerEscorter : MonoBehaviour
     private void Update()
     {
         // 거리 이탈 등으로 NPC 쪽에서 연행이 스스로 풀린 경우 참조를 정리한다
-        if (EscortingNpc != null && EscortingNpc.StateMachine.CurrentState != NpcState.Escorted)
+        // (동기화된 CurrentState를 읽어야 클라이언트에서도 올바르게 정리된다, #56)
+        if (EscortingNpc != null && EscortingNpc.CurrentState != NpcState.Escorted)
             EscortingNpc = null;
     }
 }
