@@ -1,6 +1,9 @@
+using System;
 using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.AI;
+using Random = UnityEngine.Random;
 
 /// <summary>
 /// 필드에 다수의 NPC를 스폰하는 스포너. (이슈 #37)
@@ -32,10 +35,25 @@ public class NpcSpawner : MonoBehaviour
     [Tooltip("스폰 시 이 목록에서 랜덤으로 골라 외형(메시·머티리얼)을 교체한다. 비워두면 프리팹 기본 외형 그대로 사용. Synty 캐릭터는 같은 리그를 공유하므로 메시 교체만으로 애니메이션이 그대로 동작한다")]
     [SerializeField] private GameObject[] m_characterModels;
 
+    [Header("프레임당 스폰 수")]
+    [Tooltip("한 프레임에 이 수만큼만 생성하고 다음 프레임으로 넘긴다 — 대량 스폰 시 첫 프레임 끊김(히칭) 방지")]
+    [SerializeField] private int m_spawnPerFrame = 3;
+
+    [Header("시작 시 자동 스폰")]
+    [Tooltip("끄면 라운드 매니저 등 외부에서 StartSpawn()을 호출해 원하는 시점(예: 페이드인 중)에 스폰한다")]
+    [SerializeField] private bool m_spawnOnStart = true;
+
     private readonly List<NpcController> m_spawnedNpcs = new List<NpcController>();
+    private bool m_isSpawning;
 
     /// <summary>스폰된 NPC 목록. (#38 범인 랜덤 배정 등 후속 시스템에서 사용)</summary>
     public IReadOnlyList<NpcController> SpawnedNpcs => m_spawnedNpcs;
+
+    /// <summary>스폰이 모두 끝났는지 여부.</summary>
+    public bool IsSpawnCompleted { get; private set; }
+
+    /// <summary>스폰 완료 이벤트 — 범인 배정(#38) 등 "전원 스폰 이후"에 시작해야 하는 시스템이 구독한다.</summary>
+    public event Action OnSpawnCompleted;
 
     private void Awake()
     {
@@ -50,10 +68,24 @@ public class NpcSpawner : MonoBehaviour
 
     private void Start()
     {
-        SpawnAll();
+        if (m_spawnOnStart)
+            StartSpawn();
     }
 
-    private void SpawnAll()
+    /// <summary>
+    /// 스폰을 시작한다. 자동 스폰을 끈 경우 라운드 매니저 등 외부에서
+    /// 원하는 시점(페이드인·라운드 준비 화면 중)에 호출한다.
+    /// </summary>
+    public void StartSpawn()
+    {
+        if (m_isSpawning || IsSpawnCompleted)
+            return;
+
+        SpawnAllAsync().Forget();
+    }
+
+    // 대량 스폰 시 첫 프레임 히칭을 막기 위해 프레임당 m_spawnPerFrame마리씩 나눠 생성한다
+    private async UniTaskVoid SpawnAllAsync()
     {
         if (m_npcPrefab == null || m_spawnPoints.Length == 0)
         {
@@ -61,9 +93,12 @@ public class NpcSpawner : MonoBehaviour
             return;
         }
 
+        m_isSpawning = true;
+
         int spawned = 0;
         int attempts = 0;
         int maxAttempts = m_spawnCount * 10; // NavMesh 보정 실패가 반복돼도 무한 루프에 빠지지 않도록 상한을 둔다
+        int spawnedThisFrame = 0;
 
         while (spawned < m_spawnCount && attempts < maxAttempts)
         {
@@ -83,10 +118,22 @@ public class NpcSpawner : MonoBehaviour
             ApplyRandomAppearance(npc);
             m_spawnedNpcs.Add(npc);
             spawned++;
+            spawnedThisFrame++;
+
+            // 프레임당 할당량을 채웠으면 다음 프레임으로 양보 (스포너 파괴 시 자동 취소)
+            if (spawnedThisFrame >= Mathf.Max(1, m_spawnPerFrame))
+            {
+                spawnedThisFrame = 0;
+                await UniTask.Yield(destroyCancellationToken);
+            }
         }
 
         if (spawned < m_spawnCount)
             Debug.LogWarning($"NpcSpawner: {m_spawnCount}마리 중 {spawned}마리만 스폰됨 — 스폰 포인트가 NavMesh 근처에 있는지 확인 필요", this);
+
+        m_isSpawning = false;
+        IsSpawnCompleted = true;
+        OnSpawnCompleted?.Invoke();
     }
 
     /// <summary>
