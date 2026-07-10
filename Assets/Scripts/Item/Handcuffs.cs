@@ -22,6 +22,13 @@ public class Handcuffs : ItemBase
 
     private bool m_isRestraining;
     private CancellationTokenSource m_cts;
+    private PlayerEscorter m_escorter;
+
+    private void Awake()
+    {
+        // 이 수갑을 든 플레이어의 연행 관리자 — 체포 성공 시 연행을 시작한다 (#59)
+        m_escorter = GetComponentInParent<PlayerEscorter>();
+    }
 
     // ---- ItemBase ----
 
@@ -37,11 +44,25 @@ public class Handcuffs : ItemBase
             return;
         }
 
+        // 연행 중이면 이번 입력은 "놓기" — NPC는 그 자리에서 체포 상태로 멈춘다 (#59)
+        if (m_escorter != null && m_escorter.IsEscorting)
+        {
+            m_escorter.Release();
+            return;
+        }
+
         // 대상이 없으면 채널링 자체를 시작하지 않는다
         NpcController target = FindTarget();
         if (target == null)
         {
             Debug.Log("체포할 대상이 근처에 없음");
+            return;
+        }
+
+        // 이미 체포되어 멈춰 있는 대상은 채널링 없이 즉시 재연행한다 (#59)
+        if (target.StateMachine.CurrentState == NpcState.Captured)
+        {
+            m_escorter?.StartEscort(target);
             return;
         }
 
@@ -67,8 +88,14 @@ public class Handcuffs : ItemBase
                 return;
             }
 
-            target.StateMachine.ChangeState(NpcState.Captured);
             Debug.Log($"NPC 구속됨: {target.name}");
+
+            // 체포 성공 즉시 연행 시작 — 플레이어를 따라온다 (#59).
+            // 에스코터가 없는 구성(테스트 등)에서는 기존처럼 그 자리에서 체포 상태 유지
+            if (m_escorter != null)
+                m_escorter.StartEscort(target);
+            else
+                target.StateMachine.ChangeState(NpcState.Captured);
         }
         catch (OperationCanceledException)
         {
@@ -100,8 +127,9 @@ public class Handcuffs : ItemBase
             if (npc == null)
                 continue;
 
-            // 이미 체포된 NPC는 다시 대상으로 잡지 않는다
-            if (npc.StateMachine.CurrentState == NpcState.Captured)
+            // 연행 중인 NPC는 대상에서 제외 — 중복 연행·타인의 연행 가로채기 방지 (#59)
+            // (Captured는 재연행 대상이므로 포함한다)
+            if (npc.StateMachine.CurrentState == NpcState.Escorted)
                 continue;
 
             float sqr = (npc.transform.position - transform.position).sqrMagnitude;

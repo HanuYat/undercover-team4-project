@@ -26,6 +26,15 @@ public class NpcController : MonoBehaviour
     [SerializeField] private float m_speedMultiplierMin = 0.8f;
     [SerializeField] private float m_speedMultiplierMax = 1.2f;
 
+    [Header("연행 (#59)")]
+    [Tooltip("연행 중 플레이어와 유지하는 추종 거리(m)")]
+    [SerializeField] private float m_escortFollowDistance = 1.2f;
+    [Tooltip("이 거리(m)보다 뒤처지면 속도를 올려 따라잡는다")]
+    [SerializeField] private float m_escortBoostDistance = 4f;
+    [SerializeField] private float m_escortBoostMultiplier = 1.5f;
+    [Tooltip("이 거리(m)를 넘으면 연행이 풀리고 그 자리에서 체포 상태로 멈춘다")]
+    [SerializeField] private float m_escortBreakDistance = 8f;
+
     private NavMeshAgent m_agent;
     private NpcStateMachine m_stateMachine;
 
@@ -38,6 +47,13 @@ public class NpcController : MonoBehaviour
     public float LongIdleChance => m_longIdleChance;
     public float LongIdleTimeMin => m_longIdleTimeMin;
     public float LongIdleTimeMax => m_longIdleTimeMax;
+    public float EscortFollowDistance => m_escortFollowDistance;
+    public float EscortBoostDistance => m_escortBoostDistance;
+    public float EscortBoostMultiplier => m_escortBoostMultiplier;
+    public float EscortBreakDistance => m_escortBreakDistance;
+
+    /// <summary>연행 중 따라갈 대상(체포한 플레이어). 연행 중이 아니면 null.</summary>
+    public Transform EscortTarget { get; private set; }
 
     private void Awake()
     {
@@ -47,6 +63,21 @@ public class NpcController : MonoBehaviour
         m_stateMachine.AddState(NpcState.Idle, new NpcIdleState(this));
         m_stateMachine.AddState(NpcState.Walk, new NpcWalkState(this));
         m_stateMachine.AddState(NpcState.Captured, new NpcCapturedState(this));
+        m_stateMachine.AddState(NpcState.Escorted, new NpcEscortedState(this));
+    }
+
+    /// <summary>연행 시작 — 체포 성공 직후 호출. NPC가 target(플레이어)을 따라 이동한다. (#59)</summary>
+    public void StartEscort(Transform target)
+    {
+        EscortTarget = target;
+        m_stateMachine.ChangeState(NpcState.Escorted);
+    }
+
+    /// <summary>연행 중단 — 그 자리에서 체포(Captured) 상태로 멈춘다. (#59)</summary>
+    public void StopEscort()
+    {
+        EscortTarget = null;
+        m_stateMachine.ChangeState(NpcState.Captured);
     }
 
     private void Start()
