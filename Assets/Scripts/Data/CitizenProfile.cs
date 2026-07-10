@@ -19,4 +19,20 @@ public class CitizenProfile : ScriptableObject
 
     // 생성 시: enum 랜덤 → 표시값을 OfficialRecords에서 복사 → 일정 확률로 한 글자만 오염
     // ex. typeText    = OfficialRecords.CitizenTypeNames[type];
+
+    /// <summary>
+    /// 런타임 생성용 초기화 — 실제 데이터를 채우고 표시값을 공식 기록에서 복사한다. (이슈 #38)
+    /// 표시값 오염(디코이·난이도 튜닝)은 다음 빌드 과제라 지금은 실제값을 그대로 복사한다.
+    /// </summary>
+    public void Initialize(string citizenName, OfficialRecords.CitizenType citizenType,
+        OfficialRecords.Faction faction, OfficialRecords officialRecords)
+    {
+        m_citizenName = citizenName;
+        m_citizenType = citizenType;
+        m_faction = faction;
+
+        m_typeView = OfficialRecords.CitizenTypeNames[citizenType];
+        m_factionView = OfficialRecords.FactionNames[faction];
+        m_symbolView = officialRecords != null ? officialRecords.GetFactionSymbol(faction) : null;
+    }
 }
