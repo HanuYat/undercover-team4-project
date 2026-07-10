@@ -17,7 +17,8 @@ public class HqDropoffZone : MonoBehaviour
         NpcController npc = other.GetComponentInParent<NpcController>();
 
         // 연행 중인 NPC만 인계 대상 — 배회하다 지나가는 시민은 무시
-        if (npc == null || npc.StateMachine.CurrentState != NpcState.Escorted)
+        // (동기화된 CurrentState로 판정해야 클라이언트에서도 올바르다, #56)
+        if (npc == null || npc.CurrentState != NpcState.Escorted)
             return;
 
         Debug.Log($"본부 도달 — 인계 가능: {npc.name}");

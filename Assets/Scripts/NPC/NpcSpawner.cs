@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.AI;
 using Random = UnityEngine.Random;
@@ -9,8 +10,8 @@ using Random = UnityEngine.Random;
 /// 필드에 다수의 NPC를 스폰하는 스포너. (이슈 #37)
 /// 여러 스폰 포인트를 돌아가며 지정된 수만큼 NPC를 생성하고,
 /// 스폰 위치는 NavMesh 위 지점으로 보정해 배회가 항상 동작하게 한다.
+/// 네트워크 세션에서는 서버만 스폰하고 NetworkObject.Spawn으로 전 클라이언트에 복제한다. (#56)
 /// </summary>
-// TODO: 네트워크 전환(#56) 시 서버에서만 스폰하고 NetworkObject.Spawn으로 동기화
 public class NpcSpawner : MonoBehaviour
 {
     [Header("NPC 프리팹")]
@@ -78,11 +79,19 @@ public class NpcSpawner : MonoBehaviour
     /// </summary>
     public void StartSpawn()
     {
+        // 네트워크 세션에서는 서버만 스폰한다 — 클라이언트는 NGO가 복제해주는 NPC를 받기만 함 (#56)
+        if (IsNetworkSessionActive && !NetworkManager.Singleton.IsServer)
+            return;
+
         if (m_isSpawning || IsSpawnCompleted)
             return;
 
         SpawnAllAsync().Forget();
     }
+
+    // 네트워크 세션이 켜져 있는지 — 꺼져 있으면 기존처럼 로컬 단독 스폰으로 동작한다
+    private static bool IsNetworkSessionActive =>
+        NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening;
 
     // 대량 스폰 시 첫 프레임 히칭을 막기 위해 프레임당 m_spawnPerFrame마리씩 나눠 생성한다
     private async UniTaskVoid SpawnAllAsync()
@@ -114,8 +123,16 @@ public class NpcSpawner : MonoBehaviour
                 continue;
 
             Quaternion rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
-            NpcController npc = Instantiate(m_npcPrefab, hit.position, rotation, transform);
+            // 부모를 지정하지 않고 씬 루트에 생성 — NetworkObject는 비NetworkObject 아래에
+            // 부모로 붙인 채 스폰할 수 없다 (NGO가 경고 후 강제로 떼어낸다)
+            NpcController npc = Instantiate(m_npcPrefab, hit.position, rotation);
+            // TODO: 외형 교체는 아직 서버 로컬 — 클라이언트 동기화는 후속 이슈 (외형 인덱스 NetworkVariable화)
             ApplyRandomAppearance(npc);
+
+            // 네트워크 세션이면 전 클라이언트에 복제 (서버 권위 스폰, #56)
+            if (IsNetworkSessionActive)
+                npc.GetComponent<NetworkObject>().Spawn();
+
             m_spawnedNpcs.Add(npc);
             spawned++;
             spawnedThisFrame++;

@@ -39,6 +39,10 @@ public class NpcStateTester : MonoBehaviour
 
     private void Apply()
     {
+        // 네트워크 세션에서 FSM은 서버 전용 — 클라이언트 인스턴스에서는 강제 전환하지 않는다 (#56)
+        if (m_controller.IsSpawned && !m_controller.IsServer)
+            return;
+
         // 수동 모드를 켜고 끌 때 FSM(NpcController)과 드라이버를 함께 정지/재개한다
         if (m_manualMode != m_lastManualMode)
         {
