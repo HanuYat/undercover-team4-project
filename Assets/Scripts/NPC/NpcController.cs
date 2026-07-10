@@ -53,10 +53,20 @@ public class NpcController : NetworkBehaviour
     [SerializeField] private float m_fleeEscapeDistance = 25f;
     [Tooltip("저항 제압 게이지 최대치 — ApplySubdueHit로 깎여 0이 되면 체포된다")]
     [SerializeField] private float m_subdueGaugeMax = 100f;
-    [Tooltip("저항 중 이 시간(초) 동안 아무도 제압을 시도하지 않으면 진정하고 배회로 복귀한다")]
-    [SerializeField] private float m_resistCalmSeconds = 10f;
     [Tooltip("기절(테이저 등) 지속 시간(초)")]
     [SerializeField] private float m_stunSeconds = 3f;
+
+    [Header("저항 전투 (#79)")]
+    [Tooltip("저항 중 범위 타격을 휘두르는 주기(초)")]
+    [SerializeField] private float m_resistAttackInterval = 1.5f;
+    [Tooltip("범위 타격이 닿는 반경(m)")]
+    [SerializeField] private float m_resistAttackRange = 2f;
+    [Tooltip("범위 타격 1회당 플레이어 HP 감소량")]
+    [SerializeField] private int m_resistAttackDamage = 10;
+    [Tooltip("제압 홀드 성공 1회가 깎는 제압 게이지량")]
+    [SerializeField] private float m_subdueHitPower = 34f;
+    [Tooltip("저항 시작 후 이 시간(초) 안에 제압당하지 않으면 플레이어 패배 — 도주형으로 전환된다 (GDD 7-4)")]
+    [SerializeField] private float m_resistDefeatSeconds = 15f;
 
     private NavMeshAgent m_agent;
     private NpcStateMachine m_stateMachine;
@@ -85,14 +95,14 @@ public class NpcController : NetworkBehaviour
     public float FleeStepDistance => m_fleeStepDistance;
     public float FleeEscapeDistance => m_fleeEscapeDistance;
     public float SubdueGaugeMax => m_subdueGaugeMax;
-    public float ResistCalmSeconds => m_resistCalmSeconds;
     public float StunSeconds => m_stunSeconds;
+    public float ResistAttackInterval => m_resistAttackInterval;
+    public float ResistAttackRange => m_resistAttackRange;
+    public int ResistAttackDamage => m_resistAttackDamage;
+    public float ResistDefeatSeconds => m_resistDefeatSeconds;
 
     /// <summary>현재 제압 게이지. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 읽을 수 있다. (#76)</summary>
     public float SubdueGauge => IsSpawned ? m_syncedSubdueGauge.Value : m_subdueGauge;
-
-    /// <summary>마지막으로 제압 타격을 받은 시각(Time.time) — 저항 진정 타이머 기준. 서버에서만 유효. (#76)</summary>
-    public float LastSubdueHitTime { get; private set; }
 
     /// <summary>도주 중 피해 다니는 위협 대상(체포를 시도한 플레이어). 도주 중이 아니면 null. 서버에서만 유효. (#76)</summary>
     public Transform ThreatTarget { get; private set; }
@@ -253,7 +263,6 @@ public class NpcController : NetworkBehaviour
     public void ResetSubdueGauge()
     {
         SetSubdueGauge(m_subdueGaugeMax);
-        LastSubdueHitTime = Time.time;
     }
 
     /// <summary>
@@ -268,7 +277,29 @@ public class NpcController : NetworkBehaviour
             return; // 저항 중이 아닐 때의 타격은 무시 — 배회 NPC 폭행 방지
 
         SetSubdueGauge(Mathf.Max(0f, SubdueGauge - amount));
-        LastSubdueHitTime = Time.time;
+    }
+
+    /// <summary>
+    /// 제압 홀드 타격 요청 — 상호작용 경로(NpcSubdueInteractable)가 호출. (#79)
+    /// 클라이언트에서 불리면 서버로 전달되므로 비호스트 플레이어의 타격도 게이지에 반영된다.
+    /// 타격량은 서버가 자기 인스펙터 값(m_subdueHitPower)을 쓴다 — 클라이언트가 수치를 보낼 수 없다.
+    /// </summary>
+    // TODO: 상호작용 네트워크 전환(#55 계열)에서 거리·조준 서버 검증 추가 (지금은 요청 자체는 신뢰)
+    public void RequestSubdueHit()
+    {
+        if (IsSpawned && !IsServer)
+        {
+            SubdueHitRpc();
+            return;
+        }
+
+        ApplySubdueHit(m_subdueHitPower);
+    }
+
+    [Rpc(SendTo.Server)]
+    private void SubdueHitRpc()
+    {
+        ApplySubdueHit(m_subdueHitPower);
     }
 
     /// <summary>도주 중인 NPC 근접 제압 — 상호작용 홀드 성공 시 그 자리에서 체포. (NpcSubdueInteractable 경유)</summary>
