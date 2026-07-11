@@ -16,8 +16,11 @@ PR 번호를 받아 아래 절차대로 리뷰하고, 리뷰어가 훑어보기 
 1. `git status`로 워킹 트리가 깨끗한지 확인. 커밋 안 된 변경이 있으면 **중단하고** 사용자에게 알린다 (PR 체크아웃이 필요하므로).
 2. PR 정보 수집:
    - `gh pr view <n> --json title,body,author,baseRefName,headRefName,files`
-   - `gh pr diff <n>` — 전체 diff
-3. 리뷰 대상 파악: 변경 파일 중 `Assets/` 아래 `.cs` 파일이 핵심. `Assets/Imported/Synty/` 아래 파일이 변경됐다면 **그 자체가 지적 사항**이다 (서드파티 에셋 수정 금지 — CLAUDE.md).
+   - `gh pr diff <n> --name-only` — 변경 파일 목록
+3. **리뷰 대상은 `.cs` 스크립트 파일만이다 (토큰 절약 — 팀 확정).**
+   - 씬(`.unity`)·프리팹(`.prefab`)·애니메이션(`.controller`/`.anim`/블렌드 트리)·`.asset`·`.meta` 등 비스크립트 파일은 **diff 내용을 읽지 않는다.** 대신 변경된 비스크립트 파일의 **경로 목록만** 리포트에 기재해 리뷰어가 Editor에서 직접 확인하도록 안내한다.
+   - `.cs` diff는 브랜치 체크아웃 후 `git diff origin/<base브랜치>...HEAD -- '*.cs'`로 얻는다.
+   - 예외: `Assets/Imported/Synty/` 아래 파일이 변경 목록에 있으면 내용과 무관하게 **그 자체가 지적 사항**이다 (서드파티 에셋 수정 금지 — CLAUDE.md).
 
 ## 1. 컴파일 확인
 
@@ -58,7 +61,7 @@ PR 번호를 받아 아래 절차대로 리뷰하고, 리뷰어가 훑어보기 
 2. **Netcode**: `NetworkBehaviour` 상속 코드가 변경됐다면 —
    - 서버 권한이 필요한 로직(판정·스폰·상태 변경)이 클라이언트에서 실행되지 않는지
    - `NetworkVariable` 쓰기가 서버/오너 권한과 맞는지, RPC 방향(`ServerRpc`/`ClientRpc`)이 적절한지
-   - 새 네트워크 프리팹이 생겼다면 `Assets/DefaultNetworkPrefabs.asset` 등록 여부
+   - 새 네트워크 프리팹이 생겼다면 `Assets/DefaultNetworkPrefabs.asset` 등록 여부 (파일 변경 **목록**으로만 판단 — 내용은 읽지 않는다)
 3. **일반 버그**: null 체크 누락, 이벤트 구독 해제 누락(OnDestroy/OnNetworkDespawn), Update 내 비싼 호출(GetComponent, Find 등), UniTask 대신 코루틴/Thread 남용 등 명백한 것만. 사소한 스타일 지적은 하지 않는다.
 
 ## 4. 리포트 출력
@@ -78,6 +81,9 @@ PR 번호를 받아 아래 절차대로 리뷰하고, 리뷰어가 훑어보기 
 
 ### 컨벤션 / Netcode
 (위반 항목 또는 "이상 없음")
+
+### 리뷰 제외된 파일 (Editor에서 확인 필요)
+(변경된 씬/프리팹/애니메이션/에셋 파일 경로 목록 — 내용 미검토. 없으면 생략)
 
 ### 기타 소견
 (선택 — 버그 의심, 구조 제안 등. 없으면 생략)
