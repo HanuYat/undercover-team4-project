@@ -68,6 +68,18 @@ public class NpcController : NetworkBehaviour
     [Tooltip("저항 시작 후 이 시간(초) 안에 제압당하지 않으면 플레이어 패배 — 도주형으로 전환된다 (GDD 7-4)")]
     [SerializeField] private float m_resistDefeatSeconds = 15f;
 
+    [Header("패닉 (#81)")]
+    [Tooltip("소란(저항 전투·도주)이 주변 시민을 패닉시키는 전파 반경(m)")]
+    [SerializeField] private float m_disturbanceRadius = 8f;
+    [Tooltip("저항·도주 중 소란 펄스를 발산하는 주기(초) — 소란이 계속되면 지나가던 시민도 놀란다")]
+    [SerializeField] private float m_disturbancePulseInterval = 1f;
+    [Tooltip("패닉 시 기본 이동 속도에 곱하는 배율")]
+    [SerializeField] private float m_panicSpeedMultiplier = 1.8f;
+    [Tooltip("패닉 도주 지점을 한 번에 이만큼(m) 앞으로 잡는다")]
+    [SerializeField] private float m_panicStepDistance = 8f;
+    [Tooltip("마지막 소란 감지 후 이 시간(초)이 지나면 진정하고 배회로 복귀")]
+    [SerializeField] private float m_panicCalmSeconds = 5f;
+
     private NavMeshAgent m_agent;
     private NpcStateMachine m_stateMachine;
 
@@ -100,6 +112,15 @@ public class NpcController : NetworkBehaviour
     public float ResistAttackRange => m_resistAttackRange;
     public int ResistAttackDamage => m_resistAttackDamage;
     public float ResistDefeatSeconds => m_resistDefeatSeconds;
+    public float PanicSpeedMultiplier => m_panicSpeedMultiplier;
+    public float PanicStepDistance => m_panicStepDistance;
+    public float PanicCalmSeconds => m_panicCalmSeconds;
+
+    /// <summary>패닉의 원인이 된 소란 지점 — 이 반대 방향으로 달아난다. 서버에서만 유효. (#81)</summary>
+    public Vector3 PanicSource { get; private set; }
+
+    /// <summary>마지막으로 소란을 감지한 시각(Time.time) — 패닉 진정 타이머 기준. 서버에서만 유효. (#81)</summary>
+    public float LastDisturbedTime { get; private set; }
 
     /// <summary>현재 제압 게이지. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 읽을 수 있다. (#76)</summary>
     public float SubdueGauge => IsSpawned ? m_syncedSubdueGauge.Value : m_subdueGauge;
@@ -131,6 +152,7 @@ public class NpcController : NetworkBehaviour
         m_stateMachine.AddState(NpcState.Run, new NpcFleeState(this));
         m_stateMachine.AddState(NpcState.Attack, new NpcResistState(this));
         m_stateMachine.AddState(NpcState.Stunned, new NpcStunnedState(this));
+        m_stateMachine.AddState(NpcState.Panic, new NpcPanicState(this));
 
         // FSM 전이(서버/오프라인에서만 발생)를 동기화 변수 또는 로컬 이벤트로 흘려보낸다
         m_stateMachine.OnStateChanged += HandleFsmStateChanged;
@@ -185,6 +207,20 @@ public class NpcController : NetworkBehaviour
             return;
 
         m_stateMachine.Tick();
+        EmitDisturbancePulse();
+    }
+
+    // 저항·도주 중인 NPC는 그 자체가 소란의 원천 — 주기적으로 주변 시민을 패닉시킨다 (#81)
+    private void EmitDisturbancePulse()
+    {
+        NpcState state = m_stateMachine.CurrentState;
+        if (state != NpcState.Run && state != NpcState.Attack)
+            return;
+        if (Time.time < m_nextDisturbancePulseTime)
+            return;
+
+        m_nextDisturbancePulseTime = Time.time + m_disturbancePulseInterval;
+        BroadcastDisturbance(transform.position, m_disturbanceRadius);
     }
 
     // 서버(또는 오프라인)의 FSM 전이를 밖으로 전파한다
@@ -320,6 +356,56 @@ public class NpcController : NetworkBehaviour
             return;
 
         m_stateMachine.ChangeState(NpcState.Stunned);
+    }
+
+    // ---- 패닉 (#81) ----
+
+    // 소란 전파용 공유 버퍼 — 서버(또는 오프라인)에서만 쓰므로 공유해도 안전하다
+    private static readonly Collider[] s_disturbanceBuffer = new Collider[64];
+
+    private float m_nextDisturbancePulseTime;
+
+    /// <summary>
+    /// 소란 발생 — position 반경 radius 안의 배회 NPC를 전부 패닉시킨다. (#81)
+    /// 저항·도주 NPC의 펄스가 호출하며, 돌발 이벤트(GDD 6-4 후속 이슈)도 이 API로 소란을 일으킨다.
+    /// 서버(또는 오프라인)에서 호출할 것 — 클라이언트에서 불려도 각 NPC의 EnterPanic이 무시한다.
+    /// </summary>
+    public static void BroadcastDisturbance(Vector3 position, float radius)
+    {
+        int hitCount = Physics.OverlapSphereNonAlloc(position, radius, s_disturbanceBuffer);
+        for (int i = 0; i < hitCount; i++)
+        {
+            NpcController npc = s_disturbanceBuffer[i].GetComponentInParent<NpcController>();
+            if (npc != null)
+                npc.EnterPanic(position);
+        }
+    }
+
+    /// <summary>
+    /// 패닉 진입/갱신 — 배회 중(Idle/Walk)일 때만 전이한다.
+    /// 검거(채널링·체포·연행)는 소란이 아니므로 이 메서드를 부르지 않고,
+    /// 체포·연행·기절·반응 중(도주/저항)인 NPC는 여기서 걸러진다.
+    /// 이미 패닉 중이면 소란 지점·진정 타이머만 갱신한다 (도주 방향은 다음 지점 갱신 때 반영).
+    /// </summary>
+    public void EnterPanic(Vector3 disturbancePosition)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        NpcState state = m_stateMachine.CurrentState; // 서버 진실값 — 동기화 지연 없이 판정
+        if (state == NpcState.Panic)
+        {
+            PanicSource = disturbancePosition;
+            LastDisturbedTime = Time.time;
+            return;
+        }
+
+        if (state != NpcState.Idle && state != NpcState.Walk)
+            return;
+
+        PanicSource = disturbancePosition;
+        LastDisturbedTime = Time.time;
+        m_stateMachine.ChangeState(NpcState.Panic);
     }
 
     // 게이지는 서버 진실값과 동기화 변수에 함께 기록한다 — 오프라인에서는 NetworkVariable에 쓰지 않는다 (#56 상태 패턴과 동일)
