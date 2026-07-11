@@ -89,14 +89,33 @@ public class Handcuffs : ItemBase
                 return;
             }
 
-            Debug.Log($"NPC 구속됨: {target.name}");
+            // 채널링 성공 순간 대상의 반응이 갈린다 (GDD 6-1, #76).
+            // 기절 중인 대상은 반응하지 못하고 그대로 연행된다 (테이저 연결고리).
+            ReactionType reaction = ResolveReaction(target);
+            switch (reaction)
+            {
+                case ReactionType.Flee:
+                    // 뿌리치고 도주 — 근접 제압 홀드 또는 테이저(후속)로만 잡힌다
+                    Debug.Log($"체포 실패 — 뿌리치고 도주: {target.name}");
+                    target.StartFlee(m_escorter != null ? m_escorter.transform : transform);
+                    break;
 
-            // 체포 성공 즉시 연행 시작 — 플레이어를 따라온다 (#59).
-            // 에스코터가 없는 구성(테스트 등)에서는 기존처럼 그 자리에서 체포 상태 유지
-            if (m_escorter != null)
-                m_escorter.StartEscort(target);
-            else
-                target.StateMachine.ChangeState(NpcState.Captured);
+                case ReactionType.Resist:
+                    // 그 자리에서 저항 — 제압 게이지를 깎아야 체포된다
+                    Debug.Log($"체포 실패 — 저항 시작: {target.name}");
+                    target.StartResist();
+                    break;
+
+                default:
+                    Debug.Log($"NPC 구속됨: {target.name}");
+                    // 체포 성공 즉시 연행 시작 — 플레이어를 따라온다 (#59).
+                    // 에스코터가 없는 구성(테스트 등)에서는 기존처럼 그 자리에서 체포 상태 유지
+                    if (m_escorter != null)
+                        m_escorter.StartEscort(target);
+                    else
+                        target.StateMachine.ChangeState(NpcState.Captured);
+                    break;
+            }
         }
         catch (OperationCanceledException)
         {
@@ -112,6 +131,19 @@ public class Handcuffs : ItemBase
 
     /// <summary>진행 중인 구속 채널링을 취소한다. (이동·피격 등 방해 시 호출)</summary>
     public void CancelRestrain() => m_cts?.Cancel();
+
+    /// <summary>
+    /// 채널링 성공 순간의 반응을 정한다. (#76)
+    /// 기절(Stunned) 중이거나 신원이 없으면 반응 없이 순응 취급 — 즉시 연행된다.
+    /// </summary>
+    private static ReactionType ResolveReaction(NpcController target)
+    {
+        if (target.CurrentState == NpcState.Stunned)
+            return ReactionType.Compliant;
+
+        CitizenIdentity identity = target.GetComponent<CitizenIdentity>();
+        return identity != null ? identity.Reaction : ReactionType.Compliant;
+    }
 
     // ---- 대상 탐색 ----
 

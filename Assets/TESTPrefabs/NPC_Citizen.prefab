@@ -19,6 +19,7 @@ GameObject:
   - component: {fileID: 2281887230768859551}
   - component: {fileID: 8156950665793670387}
   - component: {fileID: 8301901334336164859}
+  - component: {fileID: 5127349806152873460}
   m_Layer: 0
   m_Name: NPC_Citizen
   m_TagString: Untagged
@@ -177,6 +178,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f31dede33414a7a4b9805fc2692a0bc1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CitizenIdentity
+--- !u!114 &5127349806152873460
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9e1d6f42a8c34b70d1e2f3a4b5c6d834, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::NpcSubdueInteractable
 --- !u!114 &2281887230768859551
 MonoBehaviour:
   m_ObjectHideFlags: 0
