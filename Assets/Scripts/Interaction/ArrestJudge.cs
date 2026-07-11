@@ -19,6 +19,9 @@ public class ArrestJudge : MonoBehaviour
     /// <summary>오검거 보상 — 없음 (GDD 9-1: 보상 없는 대상이라 수익 0).</summary>
     private const int k_wrongfulReward = 0;
 
+    /// <summary>경범죄(거수자 공무집행방해) 검거 보상 (GDD 9-1: 1,000원, #78).</summary>
+    private const int k_misdemeanorReward = 1000;
+
     [Header("인계 구역 (비우면 씬에서 자동 탐색)")]
     [SerializeField] private HqDropoffZone m_dropoffZone;
 
@@ -72,10 +75,22 @@ public class ArrestJudge : MonoBehaviour
             return null;
         }
 
-        ArrestVerdict verdict = identity.IsCriminal
-            ? ArrestVerdict.WantedCriminal
-            : ArrestVerdict.WrongfulArrest;
-        int reward = verdict == ArrestVerdict.WantedCriminal ? k_wantedReward : k_wrongfulReward;
+        // 진범이면 수배 검거. 무고하더라도 도주·저항한 거수자면 경범죄(공무집행방해),
+        // 순순히 따라온 무고자면 오검거다. (모델 B — 행위범, #78)
+        ArrestVerdict verdict;
+        if (identity.IsCriminal)
+            verdict = ArrestVerdict.WantedCriminal;
+        else if (identity.Reaction == ReactionType.Flee || identity.Reaction == ReactionType.Resist)
+            verdict = ArrestVerdict.Misdemeanor;
+        else
+            verdict = ArrestVerdict.WrongfulArrest;
+
+        int reward = verdict switch
+        {
+            ArrestVerdict.WantedCriminal => k_wantedReward,
+            ArrestVerdict.Misdemeanor => k_misdemeanorReward,
+            _ => k_wrongfulReward,
+        };
 
         var result = new ArrestResult(npc, verdict, identity.Profile, reward, ResolveDeliverer(npc));
 
@@ -98,7 +113,12 @@ public class ArrestJudge : MonoBehaviour
     private static void LogVerdict(ArrestResult result)
     {
         string citizenName = result.Profile != null ? result.Profile.CitizenName : result.Npc.name;
-        string tag = result.Verdict == ArrestVerdict.WantedCriminal ? "현상수배범 검거" : "오검거";
+        string tag = result.Verdict switch
+        {
+            ArrestVerdict.WantedCriminal => "현상수배범 검거",
+            ArrestVerdict.Misdemeanor => "경범죄 검거",
+            _ => "오검거",
+        };
         string deliverer = result.DeliveredBy != null ? result.DeliveredBy.name : "알 수 없음";
         Debug.Log($"[검거 판정] {tag}: {citizenName} (인계: {deliverer}) — 보상 {result.Reward}원");
     }
