@@ -282,6 +282,10 @@ MonoBehaviour:
   - {fileID: 1102192756587244, guid: 19c80593b90872a4fa3bb5a1139b26c1, type: 3}
   - {fileID: 1420900672563822, guid: a136ffd5a9160a74d975cbda00d432bb, type: 3}
   - {fileID: 1401195396439946, guid: 90292aae433301f4eb6dee5ffe961c01, type: 3}
+  m_appearanceDatabase: {fileID: 11400000, guid: 57bb736c337156747a8246abdf3cab42, type: 2}
+  m_headAnchor: {fileID: 0}
+  m_overrideMaterialSlot: 0
+  m_colorPropertyName: _BaseColor
 --- !u!1001 &3679051956096844986
 PrefabInstance:
   m_ObjectHideFlags: 0
