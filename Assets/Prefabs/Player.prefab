@@ -1206,7 +1206,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 152330586
+  GlobalObjectIdHash: 3828970125
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -1363,6 +1363,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerAnimationDriver
   m_animator: {fileID: 4974376238118954305}
+  m_movement: {fileID: 3468529030498822857}
   m_damping: 0.1
 --- !u!1 &5536001738967602051
 GameObject:

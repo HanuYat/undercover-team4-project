@@ -3,16 +3,23 @@ using UnityEngine;
 /// <summary>
 /// 플레이어의 이동 속도를 Animator의 MoveX/MoveZ(float) 파라미터로 전달한다.
 /// (MoveX = 좌우 strafe, MoveZ = 전후 — 플레이어 로컬 기준)
+/// 측정한 속도(m/s)는 PlayerMovement의 걷기/달리기 속도로 정규화해서 넣는다:
+/// 걷기 속도 = k_walkParam(1), 달리기 속도 = k_runParam(2).
+/// 덕분에 이동 속도를 튜닝해도 블렌드 트리(.controller)를 다시 만들 필요가 없다.
 /// 위치 변화량으로 속도를 계산하므로, NetworkTransform으로 위치가 동기화되는
 /// 원격 플레이어에서도 올바른 이동 애니메이션이 재생된다. (소유자 가드 불필요)
-/// Animator 쪽에서 2D 블렌드 트리(Idle 중앙 / Walk 8방향 / Run 8방향)로 연결한다.
 /// </summary>
 public class PlayerAnimationDriver : MonoBehaviour
 {
+    // 블렌드 트리 좌표 (PlayerAnimatorControllerBuilder가 클립 배치에 같은 상수를 사용)
+    public const float k_walkParam = 1f;
+    public const float k_runParam = 2f;
+
     private static readonly int s_moveXHash = Animator.StringToHash("MoveX");
     private static readonly int s_moveZHash = Animator.StringToHash("MoveZ");
 
     [SerializeField] private Animator m_animator;
+    [SerializeField] private PlayerMovement m_movement; // 정규화 기준 속도를 읽어옴
     [SerializeField] private float m_damping = 0.1f; // 전환 부드럽게
 
     private Vector3 m_lastPosition;
@@ -24,12 +31,17 @@ public class PlayerAnimationDriver : MonoBehaviour
             m_animator = GetComponentInChildren<Animator>();
         }
 
+        if (m_movement == null)
+        {
+            m_movement = GetComponentInParent<PlayerMovement>();
+        }
+
         m_lastPosition = transform.position;
     }
 
     private void Update()
     {
-        if (m_animator == null || Time.deltaTime <= 0f) return;
+        if (m_animator == null || m_movement == null || Time.deltaTime <= 0f) return;
 
         Vector3 worldDelta = transform.position - m_lastPosition;
         worldDelta.y = 0f; // 수평 이동만
@@ -37,8 +49,28 @@ public class PlayerAnimationDriver : MonoBehaviour
 
         // 월드 이동량 → 플레이어 로컬 방향 (x = 좌우, z = 전후)
         Vector3 localVelocity = transform.InverseTransformDirection(worldDelta / Time.deltaTime);
+        Vector2 param = NormalizeToBlendSpace(new Vector2(localVelocity.x, localVelocity.z));
 
-        m_animator.SetFloat(s_moveXHash, localVelocity.x, m_damping, Time.deltaTime);
-        m_animator.SetFloat(s_moveZHash, localVelocity.z, m_damping, Time.deltaTime);
+        m_animator.SetFloat(s_moveXHash, param.x, m_damping, Time.deltaTime);
+        m_animator.SetFloat(s_moveZHash, param.y, m_damping, Time.deltaTime);
+    }
+
+    /// <summary>
+    /// 실제 속도(m/s)를 블렌드 트리 좌표로 구간별 매핑한다.
+    /// [0, 걷기속도] → [0, k_walkParam], [걷기속도, 달리기속도] → [k_walkParam, k_runParam]
+    /// </summary>
+    private Vector2 NormalizeToBlendSpace(Vector2 velocity)
+    {
+        float speed = velocity.magnitude;
+        if (speed < 0.01f) return Vector2.zero;
+
+        float walkSpeed = Mathf.Max(m_movement.MoveSpeed, 0.01f);
+        float runSpeed = Mathf.Max(m_movement.SprintSpeed, walkSpeed + 0.01f);
+
+        float t = speed <= walkSpeed
+            ? speed / walkSpeed * k_walkParam
+            : k_walkParam + (speed - walkSpeed) / (runSpeed - walkSpeed) * (k_runParam - k_walkParam);
+
+        return velocity / speed * t; // 방향은 유지, 크기만 좌표계로 환산
     }
 }
