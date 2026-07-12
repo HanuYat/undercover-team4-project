@@ -21,6 +21,11 @@ public abstract class ItemBase : MonoBehaviour
     [TextArea]
     private string m_itemDescription;
 
+    [Header("1인칭 표시")]
+    [Tooltip("장착 시 1인칭 손에 표시할 모델 프리팹. 비우면 손만 표시된다 (#45)")]
+    [SerializeField]
+    private GameObject m_heldModelPrefab;
+
     /// <summary>인벤토리·UI에 표시되는 아이템 이름.</summary>
     public string ItemName => m_itemName;
 
@@ -29,6 +34,9 @@ public abstract class ItemBase : MonoBehaviour
 
     /// <summary>인벤토리·UI에 표시되는 아이템 설명.</summary>
     public string ItemDescription => m_itemDescription;
+
+    /// <summary>장착 시 1인칭 손에 들리는 모델 프리팹. 없으면 null — PlayerHandView가 표시를 생략한다. (#45)</summary>
+    public GameObject HeldModelPrefab => m_heldModelPrefab;
 
     /// <summary>
     /// 현재 아이템을 사용할 수 있는지 여부.
