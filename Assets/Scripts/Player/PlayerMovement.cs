@@ -42,11 +42,14 @@ public class PlayerMovement : NetworkBehaviour
     private float m_verticalVelocity;
     private bool m_cursorUnlocked; // 임시: OnGUI 버튼 조작용 커서 해제 상태
 
-    public override void OnNetworkSpawn()
+    private void Awake()
     {
         m_controller = GetComponent<CharacterController>();
         m_inputHandler = GetComponent<PlayerInputHandler>();
+    }
 
+    public override void OnNetworkSpawn()
+    {
         if (!IsOwner)
         {
             playerCamera.gameObject.SetActive(false);
