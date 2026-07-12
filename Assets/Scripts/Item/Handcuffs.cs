@@ -37,7 +37,8 @@ public class Handcuffs : ItemBase
     public override bool CanUse() => !m_isRestraining;
 
     // TODO: 네트워크 테스트 시 서버 권위로 실행 (오너 입력 → ServerRpc 요청 → 서버가 채널링/구속 실행 후 결과 동기화)
-    public override void Use()
+    // TODO(#35): 전달받은 aimTarget을 체포 대상으로 사용하도록 전환. 지금은 OverlapSphere FindTarget 사용(임시).
+    public override void Use(GameObject aimTarget)
     {
         if (!CanUse())
         {

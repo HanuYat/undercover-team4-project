@@ -55,7 +55,8 @@ public class Scanner : ItemBase, IChargeable
     public override bool CanUse() => !m_isScanning && !IsDepleted;
 
     // TODO: 네트워크 테스트 시 서버 권위로 실행 (오너 입력 → ServerRpc 요청 → 서버가 스캔 실행/검증 후 결과 동기화)
-    public override void Use()
+    // TODO(#34): target에서 CitizenProfile을 조회해 스캔하도록 전환. 지금은 직렬화 m_targetProfile 사용(임시).
+    public override void Use(GameObject target)
     {
         if (!CanUse())
         {
