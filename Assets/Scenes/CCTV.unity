@@ -131,7 +131,9 @@ GameObject:
   - component: {fileID: 64181168}
   - component: {fileID: 64181167}
   - component: {fileID: 64181166}
-  m_Layer: 0
+  - component: {fileID: 64181170}
+  - component: {fileID: 64181171}
+  m_Layer: 7
   m_Name: CCTVMonitor
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -232,6 +234,50 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &64181170
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 64181165}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
+  GlobalObjectIdHash: 2691043903
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  DeferredDespawnTick: 0
+  Ownership: 1
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  <InScenePlaced>k__BackingField: 0
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 0
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+  SyncOwnerTransformWhenParented: 1
+  AllowOwnerToParent: 0
+--- !u!114 &64181171
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 64181165}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6390e2e6d4a0bf94e836bfd3c232a5c2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CCTVSwitcher
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_cameras:
+  - {fileID: 137480187}
+  - {fileID: 843033828}
+  - {fileID: 988733591}
+  m_monitorRt: {fileID: 8400000, guid: f6a1415621d630c41bb0b57d61f47104, type: 2}
 --- !u!1 &116649470
 GameObject:
   m_ObjectHideFlags: 0
@@ -435,97 +481,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 90, y: 0, z: 0}
---- !u!1 &231700409
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 231700411}
-  - component: {fileID: 231700413}
-  - component: {fileID: 231700410}
-  - component: {fileID: 231700412}
-  m_Layer: 0
-  m_Name: CCTVSwitcher
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &231700410
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 231700409}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6390e2e6d4a0bf94e836bfd3c232a5c2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CCTVSwitcher
-  ShowTopMostFoldoutHeaderGroup: 1
-  m_cameras:
-  - {fileID: 137480187}
-  - {fileID: 843033828}
-  - {fileID: 988733591}
-  m_monitorRt: {fileID: 8400000, guid: f6a1415621d630c41bb0b57d61f47104, type: 2}
---- !u!4 &231700411
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 231700409}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: -0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &231700412
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 231700409}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6bec512b504aa0144b363ebac0b24c6a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CctvSwitchTest
-  m_switcher: {fileID: 231700410}
---- !u!114 &231700413
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 231700409}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3636279684
-  InScenePlacedSourceGlobalObjectIdHash: 0
-  DeferredDespawnTick: 0
-  Ownership: 1
-  AlwaysReplicateAsRoot: 0
-  SynchronizeTransform: 1
-  <InScenePlaced>k__BackingField: 0
-  ActiveSceneSynchronization: 0
-  SceneMigrationSynchronization: 0
-  SpawnWithObservers: 1
-  DontDestroyWithOwner: 0
-  AutoObjectParentSync: 1
-  SyncOwnerTransformWhenParented: 1
-  AllowOwnerToParent: 0
 --- !u!1 &544566926
 GameObject:
   m_ObjectHideFlags: 0
@@ -1575,7 +1530,7 @@ MonoBehaviour:
   NetworkConfig:
     ProtocolVersion: 0
     NetworkTransport: {fileID: 1508727289}
-    PlayerPrefab: {fileID: 0}
+    PlayerPrefab: {fileID: 5466483465133727208, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
     Prefabs:
       NetworkPrefabsLists:
       - {fileID: 11400000, guid: 0831c94819e2aa64d952866c02eeafa8, type: 2}
@@ -2025,7 +1980,6 @@ SceneRoots:
   - {fileID: 2120386666}
   - {fileID: 1412642282}
   - {fileID: 1057044778}
-  - {fileID: 231700411}
   - {fileID: 1508727288}
   - {fileID: 544566930}
   - {fileID: 1993815992}

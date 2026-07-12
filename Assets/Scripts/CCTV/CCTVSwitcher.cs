@@ -1,7 +1,7 @@
 using Unity.Netcode;
 using UnityEngine;
 
-public class CCTVSwitcher : NetworkBehaviour
+public class CCTVSwitcher : NetworkBehaviour, IInteractable
 {
     [SerializeField] Camera[] m_cameras;
     [SerializeField] RenderTexture m_monitorRt;
@@ -32,11 +32,12 @@ public class CCTVSwitcher : NetworkBehaviour
         m_currentIndex.Value = (m_currentIndex.Value + 1) % m_cameras.Length;
     }
 
-    [Rpc(SendTo.Server)]
-    public void RequestSwitchPrevRpc()
-    {
-        m_currentIndex.Value = (m_currentIndex.Value - 1 + m_cameras.Length) % m_cameras.Length;
-    }
+    // 채널 변경에 단일 상호작용 키(E)를 사용하므로 주석 처리 하였음.
+    //[Rpc(SendTo.Server)]
+    //public void RequestSwitchPrevRpc()
+    //{
+    //    m_currentIndex.Value = (m_currentIndex.Value - 1 + m_cameras.Length) % m_cameras.Length;
+    //}
 
     void Apply()
     {
@@ -46,5 +47,10 @@ public class CCTVSwitcher : NetworkBehaviour
             m_cameras[i].targetTexture = active ? m_monitorRt : null;
             m_cameras[i].enabled = active;   // 안 보이는 카메라는 렌더 안 함
         }
+    }
+
+    public void Interact(GameObject interactor)
+    {
+        RequestSwitchNextRpc();
     }
 }
