@@ -75,12 +75,14 @@ public class ArrestJudge : MonoBehaviour
             return null;
         }
 
-        // 진범이면 수배 검거. 무고하더라도 도주·저항한 거수자면 경범죄(공무집행방해),
-        // 순순히 따라온 무고자면 오검거다. (모델 B — 행위범, #78)
+        // 진범이면 수배 검거. 위조·기타 혐의가 있는 거수자가 도주·저항한 채 잡히면 경범죄(공무집행방해).
+        // 혐의 없는 일반 시민은 도주/저항하더라도 경범죄가 아니라 오검거다 — 순응 무고자도 마찬가지. (모델 B — 행위범, #78)
+        bool fledOrResisted =
+            identity.Reaction == ReactionType.Flee || identity.Reaction == ReactionType.Resist;
         ArrestVerdict verdict;
         if (identity.IsCriminal)
             verdict = ArrestVerdict.WantedCriminal;
-        else if (identity.Reaction == ReactionType.Flee || identity.Reaction == ReactionType.Resist)
+        else if (identity.IsSuspicious && fledOrResisted)
             verdict = ArrestVerdict.Misdemeanor;
         else
             verdict = ArrestVerdict.WrongfulArrest;

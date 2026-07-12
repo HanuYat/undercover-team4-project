@@ -142,13 +142,15 @@ public class CriminalAssigner : MonoBehaviour
             );
 
             bool isCriminal = i == criminalIndex;
+            bool isSuspicious = !isCriminal && suspiciousIndices.Contains(i);
             identity.AssignProfile(profile, isCriminal);
+            identity.AssignSuspicious(isSuspicious); // 거수자 신분 — 도주/저항 시 경범죄 판정 기준 (#78)
 
             // 검거 반응 — 범인은 유형 추첨(#76), 거수자는 도주/저항만(#78), 그 외 시민은 순응 (GDD 6-1/6-2/6-3)
             ReactionType reaction;
             if (isCriminal)
                 reaction = RollCriminalReaction();
-            else if (suspiciousIndices.Contains(i))
+            else if (isSuspicious)
                 reaction = RollSuspiciousReaction();
             else
                 reaction = ReactionType.Compliant;
@@ -162,7 +164,7 @@ public class CriminalAssigner : MonoBehaviour
 
             // 범인/거수자 표시는 정답이 노출되므로 데모 빌드 전에 제거할 것
             string roleTag = isCriminal ? $"  ← 범인 ({reaction})"
-                : suspiciousIndices.Contains(i) ? $"  ← 거수자 ({reaction})"
+                : isSuspicious ? $"  ← 거수자 ({reaction})"
                 : "";
             logBuilder.AppendLine(
                 $"  {profile.CitizenName} | {profile.m_typeView} | {profile.m_factionView}{roleTag}"

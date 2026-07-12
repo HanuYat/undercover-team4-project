@@ -12,6 +12,12 @@ public class CitizenIdentity : MonoBehaviour
     /// <summary>실제 범인 여부 — 진범 판정(#41)의 정답 기준.</summary>
     public bool IsCriminal { get; private set; }
 
+    /// <summary>
+    /// 거수자 여부 — 위조·기타 혐의가 있는 무고 시민. 도주/저항한 채 검거되면 경범죄(공무집행방해)로 성립한다. (#78)
+    /// 혐의 없는 일반 시민은 도주/저항하더라도 이 플래그가 false라 경범죄가 아닌 오검거로 판정된다.
+    /// </summary>
+    public bool IsSuspicious { get; private set; }
+
     /// <summary>외형 특징 조합(#74) — 몽타주 부합 판정의 기준. AppearanceAssigner가 채워준다.</summary>
     public AppearanceProfile Appearance { get; private set; } = AppearanceProfile.Unassigned;
 
@@ -35,5 +41,11 @@ public class CitizenIdentity : MonoBehaviour
     public void AssignReaction(ReactionType reaction)
     {
         Reaction = reaction;
+    }
+
+    /// <summary>거수자 여부를 배정한다. CriminalAssigner 전용. (#78)</summary>
+    public void AssignSuspicious(bool isSuspicious)
+    {
+        IsSuspicious = isSuspicious;
     }
 }
