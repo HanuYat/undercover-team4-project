@@ -17,6 +17,12 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Player_Test.unity
     guid: e2c8025fad3af6a4896601be940bcace
+  - enabled: 1
+    path: Assets/Scenes/NPCMove.unity
+    guid: 7c0347763d85d634081c4cbf2a25f3d8
+  - enabled: 1
+    path: Assets/Scenes/ScanUI_Test.unity
+    guid: 4da519bf667cc8f4cacf0dd96e257c56
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0
