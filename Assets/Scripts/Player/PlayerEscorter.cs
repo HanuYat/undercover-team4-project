@@ -1,12 +1,14 @@
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 플레이어의 연행 상태 관리 — 지금 누구를 연행 중인지 추적한다. (이슈 #59)
-/// 연행 시작(체포 성공)과 놓기는 같은 E 입력을 받는 Handcuffs가 분기해서 호출한다.
-/// 한 번에 1명만 연행 가능 (이슈 완료 기준).
+/// 플레이어의 검거·연행 서버 권위 허브. (#59, #56/#118 네트워크 전환)
+/// 오너 클라의 아이템/상호작용(Handcuffs·NpcSubdueInteractable)이 이 컴포넌트의 요청 API를 호출하면,
+/// 요청을 서버로 넘겨(ServerRpc) 서버가 채널링·사거리·반응 판정을 실행한다.
+/// 그 결과 NpcController 상태 변경은 서버에서 일어나고 NetworkVariable로 전 피어에 동기화된다.
+/// 한 번에 1명만 연행 가능 (동시 1명 제약).
 /// </summary>
-// TODO: 네트워크 전환 시 연행 소유권을 서버 권위로 (플레이어별 NetworkVariable)
-public class PlayerEscorter : MonoBehaviour
+public class PlayerEscorter : NetworkBehaviour
 {
     /// <summary>지금 연행 중인 NPC. 없으면 null.</summary>
     public NpcController EscortingNpc { get; private set; }
@@ -37,8 +39,12 @@ public class PlayerEscorter : MonoBehaviour
 
     private void Update()
     {
+        // 참조 정리는 서버(또는 오프라인)에서만 — 연행 상태 자체가 서버 권위다 (#56/#118).
+        // 클라이언트에서는 EscortingNpc가 서버 로직으로만 세팅되므로 여기서 건드리지 않는다.
+        if (IsSpawned && !IsServer)
+            return;
+
         // 거리 이탈 등으로 NPC 쪽에서 연행이 스스로 풀린 경우 참조를 정리한다
-        // (동기화된 CurrentState를 읽어야 클라이언트에서도 올바르게 정리된다, #56)
         if (EscortingNpc != null && EscortingNpc.CurrentState != NpcState.Escorted)
             EscortingNpc = null;
     }
