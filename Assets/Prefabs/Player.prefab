@@ -32,6 +32,56 @@ Transform:
   - {fileID: 45454874269807273}
   m_Father: {fileID: 322532580044278375}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &338465684241875806
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5747497806078530203}
+  - component: {fileID: 91540322421291893}
+  m_Layer: 0
+  m_Name: Handcuffs
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5747497806078530203
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 338465684241875806}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3912174001731183965}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &91540322421291893
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 338465684241875806}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 62ce75e126b8d8849a748b5a60fb0c10, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Handcuffs
+  m_itemName: 
+  m_itemIcon: {fileID: 0}
+  m_itemDescription: 
+  m_heldModelPrefab: {fileID: 0}
+  m_channelSeconds: 3
+  m_captureRange: 2.5
 --- !u!1 &554224255856011205
 GameObject:
   m_ObjectHideFlags: 0
@@ -176,7 +226,6 @@ MonoBehaviour:
   m_heldModelPrefab: {fileID: 1603617425342002, guid: d4b0d3b273b187c4696240caebff3f7a, type: 3}
   m_channelSeconds: 3
   m_maxBattery: 5
-  m_targetProfile: {fileID: 11400000, guid: 276e1ec758e6bc947b2bd160117c17f7, type: 2}
 --- !u!1 &1371366428614623846
 GameObject:
   m_ObjectHideFlags: 0
@@ -1174,6 +1223,7 @@ GameObject:
   - component: {fileID: -879792188796056759}
   - component: {fileID: 7365381909932747572}
   - component: {fileID: 4797622518154175178}
+  - component: {fileID: 7757215531818328684}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -1198,6 +1248,7 @@ Transform:
   - {fileID: 6253218595595543391}
   - {fileID: 8921649807672335866}
   - {fileID: 1686898779648271855}
+  - {fileID: 5747497806078530203}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!95 &4974376238118954305
@@ -1370,7 +1421,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 32a9aa539f237094d9281eb8adaa6974, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerItemUser
-  m_equippedItem: {fileID: 3503644817148251253}
+  m_equippedItem: {fileID: 91540322421291893}
 --- !u!114 &5787005119048988933
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1433,6 +1484,18 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_handAnchor: {fileID: 3996050025929079483}
   m_handsModel: {fileID: 0}
+--- !u!114 &7757215531818328684
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 058b4f1512fb3ed45a97a0901a44c130, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerEscorter
 --- !u!1 &5536001738967602051
 GameObject:
   m_ObjectHideFlags: 0
