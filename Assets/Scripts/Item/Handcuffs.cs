@@ -38,7 +38,7 @@ public class Handcuffs : ItemBase
 
     public override void Use(GameObject aimTarget)
     {
-        if (m_escorter == null)
+        if (Escorter == null)
         {
             Debug.LogWarning("Handcuffs: PlayerEscorter를 찾지 못함 — 검거 불가", this);
             return;
@@ -91,7 +91,8 @@ public class Handcuffs : ItemBase
             await UniTask.Delay(TimeSpan.FromSeconds(m_channelSeconds), cancellationToken: m_cts.Token);
 
             // 채널링 동안 대상이 파괴됐거나 사거리를 벗어났으면 실패 — 도주형 NPC 대응 (GDD 6장)
-            if (target == null || !IsInRange(target))
+            // 사거리 벗어난걸 확인하는 메서드 IsInRange(target) 추후에 추가
+            if (target == null)
             {
                 Debug.Log("구속 실패 — 대상이 범위를 벗어남");
                 return;
