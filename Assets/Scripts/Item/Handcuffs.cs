@@ -4,17 +4,17 @@ using UnityEngine;
 /// 수갑 아이템. 사용 시 겨냥한 NPC(레이캐스트 타겟)를 대상으로 잡아 체포를 요청한다. (GDD 8-2, 이슈 #36/#35)
 /// 실제 채널링·사거리·반응 판정·연행은 서버 권위이며 PlayerEscorter가 수행한다 (#118).
 /// 이 컴포넌트는 오너 클라의 "의도"만 담당한다 — 대상을 해석해 PlayerEscorter에 요청을 넘긴다.
+/// (채널링을 여기서 직접 돌리면 서버 가드에 막혀 클라 검거가 조용히 실패한다 — #88 머지 회귀의 원인)
 /// 배터리 등 자원 소모는 없다.
 /// </summary>
 public class Handcuffs : ItemBase
 {
-    private PlayerEscorter m_escorter;
-
-    private void Awake()
-    {
-        // 이 수갑을 든 플레이어의 검거·연행 관리자 — 체포/연행 요청을 서버로 넘긴다 (#59/#118)
-        m_escorter = GetComponentInParent<PlayerEscorter>();
-    }
+    /// <summary>
+    /// 이 수갑을 든 플레이어의 검거·연행 관리자 — 체포/연행 요청을 서버로 넘긴다 (#59/#118).
+    /// 아이템이 독립 NetworkObject가 되어(#88) 줍기/버리기로 부모가 바뀌므로 캐시하지 않고
+    /// 사용 시점마다 부모 계층에서 해석한다 (버려진 상태에선 부모가 없어 null).
+    /// </summary>
+    private PlayerEscorter Escorter => GetComponentInParent<PlayerEscorter>();
 
     // ---- ItemBase ----
 
@@ -23,16 +23,17 @@ public class Handcuffs : ItemBase
 
     public override void Use(GameObject aimTarget)
     {
-        if (m_escorter == null)
+        PlayerEscorter escorter = Escorter;
+        if (escorter == null)
         {
             Debug.LogWarning("Handcuffs: PlayerEscorter를 찾지 못함 — 검거 불가", this);
             return;
         }
 
         // 연행 중이면 이번 입력은 "놓기" — NPC는 그 자리에서 체포 상태로 멈춘다 (#59)
-        if (m_escorter.IsEscorting)
+        if (escorter.IsEscorting)
         {
-            m_escorter.RequestRelease();
+            escorter.RequestRelease();
             return;
         }
 
@@ -45,11 +46,11 @@ public class Handcuffs : ItemBase
         }
 
         // 대상 상태 판정(즉시 재연행/채널링/사거리)과 반응 판정은 서버가 수행한다 — 여기서는 요청만 넘긴다.
-        m_escorter.RequestCapture(target);
+        escorter.RequestCapture(target);
     }
 
-    /// <summary>진행 중인 구속 채널링을 취소한다. (이동·피격 등 방해 시 호출) — 서버 채널링을 취소 요청.</summary>
-    public void CancelRestrain() => m_escorter?.CancelCapture();
+    /// <summary>진행 중인 구속 채널링을 취소한다. (이동·피격 등 방해 시 호출) — 서버 채널링에 취소를 요청한다.</summary>
+    public void CancelRestrain() => Escorter?.CancelCapture();
 
     // ---- 대상 탐색 ----
 
@@ -68,6 +69,12 @@ public class Handcuffs : ItemBase
     }
 
     // ---- 라이프사이클 ----
+
+    public override void OnNetworkDespawn()
+    {
+        // 디스폰(버리기·파괴) 시 진행 중인 서버 채널링도 취소 요청 (#88)
+        CancelRestrain();
+    }
 
     private void OnDisable()
     {

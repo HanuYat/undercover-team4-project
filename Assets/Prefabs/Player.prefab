@@ -1683,6 +1683,7 @@ MonoBehaviour:
   m_attackAction: {fileID: 1120369429361536294, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_previousAction: {fileID: 2411907206095950430, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_nextAction: {fileID: 7476244043514120974, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  m_dropAction: {fileID: 4997308800450375893, guid: 052faaac586de48259a63d0c4782560b, type: 3}
 --- !u!114 &3468529030498822857
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1806,10 +1807,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f15d455974178c64e9b464926912f249, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerLoadout
+  ShowTopMostFoldoutHeaderGroup: 1
   m_startingGear:
   - {fileID: 6465765157232573796, guid: ef3d4594c5614be42ad3cdf1ec34cb19, type: 3}
   - {fileID: 7706984690027994764, guid: f9679efa0de9358449d82923ccfc9755, type: 3}
   m_itemAnchor: {fileID: 0}
+  m_dropDistance: 1.2
 --- !u!208 &979386637743612742
 NavMeshObstacle:
   m_ObjectHideFlags: 0

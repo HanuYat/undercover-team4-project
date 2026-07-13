@@ -9,7 +9,8 @@ using Random = UnityEngine.Random;
 /// 잡아도 보상 없는 오검거일 뿐이다(진범만 유효 검거). 행동은 단서가 아니라 노이즈다. (#78)
 /// 범인의 프로필(WantedProfile)이 곧 본부 수배 데이터(#58)의 원본이 된다.
 /// </summary>
-// TODO: 네트워크 전환(#52/#56) 시 서버에서만 배정하고 결과를 클라이언트에 동기화
+// 네트워크 세션에서 배정은 자연히 서버 전용이다 — 스포너의 OnSpawnCompleted가 서버에서만 발생한다 (#56).
+// 배정 결과 중 공개 가능한 신원은 CitizenIdentity의 NetworkVariable로 전 클라이언트에 동기화된다 (#52).
 public class CriminalAssigner : MonoBehaviour
 {
     [Header("스포너 (비우면 씬에서 자동 탐색)")]
@@ -147,10 +148,17 @@ public class CriminalAssigner : MonoBehaviour
 
         for (int i = 0; i < npcs.Count; i++)
         {
-            // 프리팹에 CitizenIdentity가 없어도 동작하도록 없으면 붙여준다
+            // CitizenIdentity는 NetworkBehaviour라 스폰 뒤 AddComponent로 붙일 수 없다 (#52)
+            // — NPC 프리팹에 미리 부착돼 있어야 하며, 없으면 이 NPC는 신원 없이 배회만 한다
             CitizenIdentity identity = npcs[i].GetComponent<CitizenIdentity>();
             if (identity == null)
-                identity = npcs[i].gameObject.AddComponent<CitizenIdentity>();
+            {
+                Debug.LogWarning(
+                    $"CriminalAssigner: {npcs[i].name}에 CitizenIdentity가 없어 신원 배정을 건너뜀 — NPC 프리팹에 부착 필요",
+                    npcs[i]
+                );
+                continue;
+            }
 
             // 프로필은 에셋이 아닌 런타임 인스턴스 — 라운드마다 새로 배정된다
             CitizenProfile profile = ScriptableObject.CreateInstance<CitizenProfile>();

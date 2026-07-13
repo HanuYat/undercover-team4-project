@@ -9,8 +9,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8582058400689807853}
+  - component: {fileID: 6452959357712406287}
   - component: {fileID: 7706984690027994764}
-  m_Layer: 0
+  - component: {fileID: 7457172703288361766}
+  m_Layer: 7
   m_Name: Handcuffs
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -32,6 +34,32 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &6452959357712406287
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1880200359134565560}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
+  GlobalObjectIdHash: 3129635724
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  DeferredDespawnTick: 0
+  Ownership: 1
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  <InScenePlaced>k__BackingField: 0
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 1
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+  SyncOwnerTransformWhenParented: 1
+  AllowOwnerToParent: 0
 --- !u!114 &7706984690027994764
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -44,7 +72,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 62ce75e126b8d8849a748b5a60fb0c10, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Handcuffs
+  ShowTopMostFoldoutHeaderGroup: 1
   m_itemName: "\uC218\uAC11"
   m_itemIcon: {fileID: 0}
   m_itemDescription: 
   m_heldModelPrefab: {fileID: 8305548188873936973, guid: 4b88ad5ccbafd07458845faf5be83a01, type: 3}
+  m_channelSeconds: 3
+  m_captureRange: 2.5
+--- !u!114 &7457172703288361766
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1880200359134565560}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6708c43a2175d914ea50ce6a610d3cb6, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::WorldItemPickup
