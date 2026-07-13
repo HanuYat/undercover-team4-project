@@ -15,6 +15,8 @@ public class AuthBootstrap : MonoBehaviour
     private string m_status = "대기 중...";
     private bool m_eventsRegistered;
 
+    public event Action OnSignedIn;
+
     public bool IsSignedIn => 
         UnityServices.State == ServicesInitializationState.Initialized 
         && AuthenticationService.Instance.IsSignedIn;
@@ -106,6 +108,9 @@ public class AuthBootstrap : MonoBehaviour
                 throw;
             }
         }
+
+        if (IsSignedIn)
+            OnSignedIn?.Invoke();
     }
 
     public void SignOut(bool clearCredentials = false)
