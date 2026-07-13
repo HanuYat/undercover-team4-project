@@ -19,9 +19,6 @@ public class ArrestJudge : MonoBehaviour
     /// <summary>오검거 보상 — 없음 (GDD 9-1: 보상 없는 대상이라 수익 0).</summary>
     private const int k_wrongfulReward = 0;
 
-    /// <summary>경범죄(거수자 공무집행방해) 검거 보상 (GDD 9-1: 1,000원, #78).</summary>
-    private const int k_misdemeanorReward = 1000;
-
     [Header("인계 구역 (비우면 씬에서 자동 탐색)")]
     [SerializeField] private HqDropoffZone m_dropoffZone;
 
@@ -75,24 +72,12 @@ public class ArrestJudge : MonoBehaviour
             return null;
         }
 
-        // 진범이면 수배 검거. 위조·기타 혐의가 있는 거수자가 도주·저항한 채 잡히면 경범죄(공무집행방해).
-        // 혐의 없는 일반 시민은 도주/저항하더라도 경범죄가 아니라 오검거다 — 순응 무고자도 마찬가지. (모델 B — 행위범, #78)
-        bool fledOrResisted =
-            identity.Reaction == ReactionType.Flee || identity.Reaction == ReactionType.Resist;
-        ArrestVerdict verdict;
-        if (identity.IsCriminal)
-            verdict = ArrestVerdict.WantedCriminal;
-        else if (identity.IsSuspicious && fledOrResisted)
-            verdict = ArrestVerdict.Misdemeanor;
-        else
-            verdict = ArrestVerdict.WrongfulArrest;
-
-        int reward = verdict switch
-        {
-            ArrestVerdict.WantedCriminal => k_wantedReward,
-            ArrestVerdict.Misdemeanor => k_misdemeanorReward,
-            _ => k_wrongfulReward,
-        };
+        // 진범이면 수배 검거, 그 외에는 전부 오검거. 무고 시민의 도주·저항은 진범을 헷갈리게 하는
+        // 미끼 행동일 뿐이라 판정에 영향을 주지 않는다 — 순응·도주·저항을 가리지 않고 오검거다. (#78)
+        ArrestVerdict verdict = identity.IsCriminal
+            ? ArrestVerdict.WantedCriminal
+            : ArrestVerdict.WrongfulArrest;
+        int reward = verdict == ArrestVerdict.WantedCriminal ? k_wantedReward : k_wrongfulReward;
 
         var result = new ArrestResult(npc, verdict, identity.Profile, reward, ResolveDeliverer(npc));
 
@@ -115,12 +100,7 @@ public class ArrestJudge : MonoBehaviour
     private static void LogVerdict(ArrestResult result)
     {
         string citizenName = result.Profile != null ? result.Profile.CitizenName : result.Npc.name;
-        string tag = result.Verdict switch
-        {
-            ArrestVerdict.WantedCriminal => "현상수배범 검거",
-            ArrestVerdict.Misdemeanor => "경범죄 검거",
-            _ => "오검거",
-        };
+        string tag = result.Verdict == ArrestVerdict.WantedCriminal ? "현상수배범 검거" : "오검거";
         string deliverer = result.DeliveredBy != null ? result.DeliveredBy.name : "알 수 없음";
         Debug.Log($"[검거 판정] {tag}: {citizenName} (인계: {deliverer}) — 보상 {result.Reward}원");
     }

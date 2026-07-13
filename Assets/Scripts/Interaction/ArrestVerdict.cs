@@ -7,12 +7,10 @@ public enum ArrestVerdict
     /// <summary>현상수배범 — 실제 범인 검거. 보상 지급 대상 (GDD 9-1: 10,000원).</summary>
     WantedCriminal,
 
-    /// <summary>오검거 — 올바른 체포 대상이 아니었음. 보상 없음, 개인별 오검거 기록 대상 (GDD 7-3).</summary>
-    WrongfulArrest,
-
     /// <summary>
-    /// 경범죄 — 무고하지만 검거 시 도주·저항으로 공무집행을 방해한 거수자. 소액 보상 (GDD 6-2/9-1: 1,000원, #78).
-    /// 행위범: 스폰 시 정해지는 죄가 아니라 도주·저항 '행위'로 성립한다 — 순순히 따라온 무고자(WrongfulArrest)와 구분된다.
+    /// 오검거 — 진범이 아닌 대상을 검거함. 보상 없음, 개인별 오검거 기록 대상 (GDD 7-3).
+    /// 도주·저항한 무고 시민을 잡아도 이 판정이다 — 도주/저항은 진범을 헷갈리게 하는 미끼 행동일 뿐,
+    /// 진범(WantedCriminal) 외의 검거는 순응·도주·저항을 가리지 않고 전부 오검거로 성립한다. (#78)
     /// </summary>
-    Misdemeanor,
+    WrongfulArrest,
 }

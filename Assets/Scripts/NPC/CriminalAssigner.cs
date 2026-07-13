@@ -5,8 +5,8 @@ using Random = UnityEngine.Random;
 
 /// <summary>
 /// 스폰 완료 후 모든 NPC에 랜덤 시민 프로필을 채우고, 그중 1명을 실제 범인으로 지정한다. (이슈 #38)
-/// 범인 외에 거수자(도주/저항 성향의 무고 시민)를 N명 배정한다 — 잡아 인계하면 경범죄가 된다. (#78, 모델 B)
-/// 몽타주 후보군(#74) 안 배치·디코이 수 정교화는 후속 과제 — 지금은 무작위 무고 시민에 배정한다.
+/// 무고 시민도 확률적으로 도주/저항 반응을 보인다 — 진범을 헷갈리게 하는 미끼 행동으로,
+/// 잡아도 보상 없는 오검거일 뿐이다(진범만 유효 검거). 행동은 단서가 아니라 노이즈다. (#78)
 /// 범인의 프로필(WantedProfile)이 곧 본부 수배 데이터(#58)의 원본이 된다.
 /// </summary>
 // TODO: 네트워크 전환(#52/#56) 시 서버에서만 배정하고 결과를 클라이언트에 동기화
@@ -21,7 +21,7 @@ public class CriminalAssigner : MonoBehaviour
     private OfficialRecords m_officialRecords;
 
     [Header("범인 검거 반응 가중치 (#76)")]
-    [Tooltip("합이 1일 필요 없음 — 비율로 추첨한다. 일반 시민은 항상 순응(GDD 6-3)")]
+    [Tooltip("합이 1일 필요 없음 — 비율로 추첨한다. 범인은 도주/저항 성향이 높다")]
     [SerializeField]
     private float m_compliantWeight = 0.2f;
 
@@ -31,12 +31,18 @@ public class CriminalAssigner : MonoBehaviour
     [SerializeField]
     private float m_resistWeight = 0.4f;
 
-    [Header("거수자 (#78)")]
+    [Header("일반 시민 검거 반응 가중치 (#78)")]
     [Tooltip(
-        "범인 외에 도주/저항 성향을 갖는 무고 시민 수. 잡아서 인계하면 경범죄(공무집행방해)가 된다 — 구성 비율 난이도 노브. 범인 제외 인원보다 크면 가능한 만큼만 배정"
+        "무고 시민의 반응 추첨 비율. 도주/저항은 진범을 헷갈리게 하는 미끼일 뿐 잡아도 오검거다 — 이 비율로 미끼 행동의 빈도(난이도)를 조절한다. 기본값은 대부분 순응 + 소수만 도주/저항"
     )]
     [SerializeField]
-    private int m_suspiciousCitizenCount = 2;
+    private float m_citizenCompliantWeight = 0.8f;
+
+    [SerializeField]
+    private float m_citizenFleeWeight = 0.1f;
+
+    [SerializeField]
+    private float m_citizenResistWeight = 0.1f;
 
     // 임시 이름 풀 — 사이버펑크 톤. 추후 데이터 에셋으로 분리 가능
     private static readonly string[] s_namePool =
@@ -113,12 +119,6 @@ public class CriminalAssigner : MonoBehaviour
         }
 
         int criminalIndex = Random.Range(0, npcs.Count);
-        // 범인을 제외한 무고 시민 중 거수자로 만들 인덱스 집합 (도주/저항 성향 부여, #78)
-        HashSet<int> suspiciousIndices = PickSuspiciousIndices(
-            npcs.Count,
-            criminalIndex,
-            m_suspiciousCitizenCount
-        );
         string[] names = BuildUniqueNames(npcs.Count);
 
         // 스캔 UI(#39) 전까지는 로그로 배정 결과를 확인한다
@@ -142,18 +142,13 @@ public class CriminalAssigner : MonoBehaviour
             );
 
             bool isCriminal = i == criminalIndex;
-            bool isSuspicious = !isCriminal && suspiciousIndices.Contains(i);
             identity.AssignProfile(profile, isCriminal);
-            identity.AssignSuspicious(isSuspicious); // 거수자 신분 — 도주/저항 시 경범죄 판정 기준 (#78)
 
-            // 검거 반응 — 범인은 유형 추첨(#76), 거수자는 도주/저항만(#78), 그 외 시민은 순응 (GDD 6-1/6-2/6-3)
-            ReactionType reaction;
-            if (isCriminal)
-                reaction = RollCriminalReaction();
-            else if (isSuspicious)
-                reaction = RollSuspiciousReaction();
-            else
-                reaction = ReactionType.Compliant;
+            // 검거 반응 — 범인은 범인 가중치로, 무고 시민은 시민 가중치로 추첨한다.
+            // 시민의 도주/저항은 진범을 헷갈리게 하는 미끼 행동일 뿐 판정엔 영향이 없다 (GDD 6-1/6-3, #76/#78)
+            ReactionType reaction = isCriminal
+                ? RollReaction(m_compliantWeight, m_fleeWeight, m_resistWeight)
+                : RollReaction(m_citizenCompliantWeight, m_citizenFleeWeight, m_citizenResistWeight);
             identity.AssignReaction(reaction);
 
             if (isCriminal)
@@ -162,9 +157,9 @@ public class CriminalAssigner : MonoBehaviour
                 WantedProfile = profile;
             }
 
-            // 범인/거수자 표시는 정답이 노출되므로 데모 빌드 전에 제거할 것
+            // 범인 표시는 정답이 노출되므로 데모 빌드 전에 제거할 것. 반응은 미끼 행동 확인용으로 함께 로그
             string roleTag = isCriminal ? $"  ← 범인 ({reaction})"
-                : isSuspicious ? $"  ← 거수자 ({reaction})"
+                : reaction != ReactionType.Compliant ? $"  (미끼: {reaction})"
                 : "";
             logBuilder.AppendLine(
                 $"  {profile.CitizenName} | {profile.m_typeView} | {profile.m_factionView}{roleTag}"
@@ -197,50 +192,19 @@ public class CriminalAssigner : MonoBehaviour
         return result;
     }
 
-    /// <summary>범인의 검거 반응 유형을 가중치 비율로 추첨한다. (#76)</summary>
-    private ReactionType RollCriminalReaction()
+    /// <summary>순응/도주/저항 가중치 비율로 검거 반응을 추첨한다. 범인·시민이 각자의 가중치로 호출한다. (#76/#78)</summary>
+    private static ReactionType RollReaction(float compliantWeight, float fleeWeight, float resistWeight)
     {
-        float total = m_compliantWeight + m_fleeWeight + m_resistWeight;
+        float total = compliantWeight + fleeWeight + resistWeight;
         if (total <= 0f)
             return ReactionType.Compliant; // 가중치가 전부 0이면 안전하게 순응
 
         float roll = Random.Range(0f, total);
-        if (roll < m_compliantWeight)
+        if (roll < compliantWeight)
             return ReactionType.Compliant;
-        if (roll < m_compliantWeight + m_fleeWeight)
+        if (roll < compliantWeight + fleeWeight)
             return ReactionType.Flee;
         return ReactionType.Resist;
-    }
-
-    /// <summary>거수자의 반응을 추첨한다 — 순응은 제외하고 도주/저항만 (순응이면 거수자로서 의미가 없다). (#78)</summary>
-    private ReactionType RollSuspiciousReaction()
-    {
-        float total = m_fleeWeight + m_resistWeight;
-        if (total <= 0f)
-            return ReactionType.Flee; // 가중치가 전부 0이면 안전하게 도주
-        return Random.Range(0f, total) < m_fleeWeight ? ReactionType.Flee : ReactionType.Resist;
-    }
-
-    /// <summary>범인을 제외한 시민 중 거수자로 만들 인덱스를 count명 무작위로 고른다. (#78)</summary>
-    private static HashSet<int> PickSuspiciousIndices(int total, int excludeIndex, int count)
-    {
-        var pool = new List<int>(total);
-        for (int i = 0; i < total; i++)
-            if (i != excludeIndex)
-                pool.Add(i);
-
-        int take = Mathf.Clamp(count, 0, pool.Count);
-        // 피셔-예이츠로 앞에서 take개만 확정
-        for (int i = 0; i < take; i++)
-        {
-            int j = Random.Range(i, pool.Count);
-            (pool[i], pool[j]) = (pool[j], pool[i]);
-        }
-
-        var set = new HashSet<int>();
-        for (int i = 0; i < take; i++)
-            set.Add(pool[i]);
-        return set;
     }
 
     private static TEnum RandomEnum<TEnum>()
