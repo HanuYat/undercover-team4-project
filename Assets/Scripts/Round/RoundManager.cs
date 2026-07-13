@@ -53,7 +53,7 @@ public class RoundManager : MonoBehaviour
     [Min(1)]
     [SerializeField] private int m_arrestQuota = 1;
     [Tooltip("라운드 제한시간(초). 시간 안에 할당량을 못 채우면 실패(게임오버). 0 이하 = 무제한(타이머 없음)")]
-    [SerializeField] private float m_timeLimitSeconds = 300f;
+    [SerializeField] private float m_timeLimitSeconds = 180f;
 
     private NetworkManager m_networkManager;
 
