@@ -111,6 +111,16 @@ public class SessionManager : MonoBehaviour
         Debug.Log($"[SessionManager] OnSessionPropertiesChanged()");
     }
 
+    private void OnDestroy()
+    {
+        // 파괴 시 이벤트만 정리한다 (파괴된 객체로 세션 콜백이 유입되는 것을 막는다).
+        // TODO(#51/#55/#56): 씬 전환 통합 시, 씬 언로드 전에 await LeaveAsync()로
+        //   세션을 실제로 나가는 라이프사이클 처리가 필요하다. OnDestroy에서의
+        //   async leave는 완료가 보장되지 않으므로 여기서 부르지 않는다.
+        if (m_session != null)
+            UnsubscribeSessionEvents(m_session);
+    }
+
     [SerializeField] private float m_guiTopOffset = 10f;
 
     private string m_joinCodeInput = string.Empty;
