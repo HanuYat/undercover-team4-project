@@ -17,10 +17,6 @@ public class Scanner : ItemBase, IChargeable
     [SerializeField]
     private int m_maxBattery = 5;
 
-    [Header("스캔 대상 (프로토타입 테스트용)")]
-    [SerializeField]
-    private CitizenProfile m_targetProfile;
-
     // TODO: 네트워크 테스트 시 m_currentBattery를 NetworkVariable<int>로 교체 (지금은 로컬 값이라 다른 클라에 동기화 안 됨)
     private int m_currentBattery;
     private bool m_isScanning;
@@ -55,20 +51,28 @@ public class Scanner : ItemBase, IChargeable
     public override bool CanUse() => !m_isScanning && !IsDepleted;
 
     // TODO: 네트워크 테스트 시 서버 권위로 실행 (오너 입력 → ServerRpc 요청 → 서버가 스캔 실행/검증 후 결과 동기화)
-    public override void Use()
+    public override void Use(GameObject target)
     {
         if (!CanUse())
         {
             return;
         }
 
-        ScanAsync().Forget();
+        // 겨냥한 대상에서 시민 프로필을 조회한다 (#34). 신원을 확인할 수 없으면 스캔을 시작하지 않는다.
+        CitizenProfile profile = ResolveProfile(target);
+        if (profile == null)
+        {
+            Debug.Log("스캔할 대상이 없음 (시민 프로필 미확인)");
+            return;
+        }
+
+        ScanAsync(profile).Forget();
     }
 
     // ---- 스캔 채널링 ----
 
     // TODO: 네트워크 테스트 시 채널링 타이밍/배터리 소모를 서버 권위로 (클라 시간 조작 방지). 스캔 결과는 ClientRpc/NetworkVariable로 전파
-    private async UniTaskVoid ScanAsync()
+    private async UniTaskVoid ScanAsync(CitizenProfile profile)
     {
         m_isScanning = true;
         m_cts = new CancellationTokenSource();
@@ -78,7 +82,7 @@ public class Scanner : ItemBase, IChargeable
             await UniTask.Delay(TimeSpan.FromSeconds(m_channelSeconds), cancellationToken: m_cts.Token);
 
             m_currentBattery = Mathf.Max(m_currentBattery - 1, 0);
-            Debug.Log($"NPC 스캔됨: {GetScanInfo()}");
+            Debug.Log($"NPC 스캔됨: {GetScanInfo(profile)}");
         }
         catch (OperationCanceledException)
         {
@@ -95,14 +99,27 @@ public class Scanner : ItemBase, IChargeable
     /// <summary>진행 중인 스캔 채널링을 취소한다. (이동·피격 등 방해 시 호출)</summary>
     public void CancelScan() => m_cts?.Cancel();
 
-    private string GetScanInfo()
+    /// <summary>겨냥한 대상 GameObject에서 시민 프로필을 조회한다. NPC 신원(CitizenIdentity)이 없으면 null.</summary>
+    private static CitizenProfile ResolveProfile(GameObject target)
     {
-        if (m_targetProfile == null)
+        if (target == null)
+        {
+            return null;
+        }
+
+        // 콜라이더가 NPC 루트의 자식일 수 있으므로 부모까지 탐색한다 (Handcuffs.FindTarget과 동일 관례).
+        CitizenIdentity identity = target.GetComponentInParent<CitizenIdentity>();
+        return identity != null ? identity.Profile : null;
+    }
+
+    private static string GetScanInfo(CitizenProfile profile)
+    {
+        if (profile == null)
         {
             return "대상 정보 없음";
         }
 
-        return $"이름={m_targetProfile.CitizenName}, 타입={m_targetProfile.m_typeView}, 세력={m_targetProfile.m_factionView}";
+        return $"이름={profile.CitizenName}, 타입={profile.m_typeView}, 세력={profile.m_factionView}";
     }
 
     // ---- 라이프사이클 ----
