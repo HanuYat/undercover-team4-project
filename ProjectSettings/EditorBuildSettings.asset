@@ -21,6 +21,9 @@ EditorBuildSettings:
     path: Assets/Scenes/NPCMove.unity
     guid: 7c0347763d85d634081c4cbf2a25f3d8
   - enabled: 1
+    path: Assets/Scenes/ScanUI_Test.unity
+    guid: 4da519bf667cc8f4cacf0dd96e257c56
+  - enabled: 1
     path: Assets/Scenes/TotalTest.unity
     guid: 41b8d1662669d0c49a6e3c7ef5f5ce83
   m_configObjects:
