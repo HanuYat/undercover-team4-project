@@ -1122,6 +1122,8 @@ GameObject:
   - component: {fileID: 5787005119048988933}
   - component: {fileID: -879792188796056759}
   - component: {fileID: 7365381909932747572}
+  - component: {fileID: 7479500580879463138}
+  - component: {fileID: 8149433006083028916}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -1317,7 +1319,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 32a9aa539f237094d9281eb8adaa6974, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerItemUser
-  m_equippedItem: {fileID: 0}
+  m_equippedItem: {fileID: 8149433006083028916}
 --- !u!114 &5787005119048988933
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1365,6 +1367,35 @@ MonoBehaviour:
   m_animator: {fileID: 4974376238118954305}
   m_movement: {fileID: 3468529030498822857}
   m_damping: 0.1
+--- !u!114 &7479500580879463138
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 058b4f1512fb3ed45a97a0901a44c130, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerEscorter
+--- !u!114 &8149433006083028916
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 62ce75e126b8d8849a748b5a60fb0c10, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Handcuffs
+  m_itemName: "\uC218\uAC11(\uC784\uC2DC)"
+  m_itemIcon: {fileID: 0}
+  m_itemDescription: 
+  m_channelSeconds: 3
+  m_captureRange: 2.5
 --- !u!1 &5536001738967602051
 GameObject:
   m_ObjectHideFlags: 0
