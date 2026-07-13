@@ -47,12 +47,14 @@ public class PlayerItemUser : MonoBehaviour
 
     private void HandleUseItem()
     {
-        if (m_equippedItem == null || !m_equippedItem.CanUse())
+        if (m_equippedItem == null)
         {
             return;
         }
 
-        // 겨냥한 대상을 함께 넘긴다 — 각 아이템이 대상에서 필요한 정보를 조회한다 (#34/#35).
+        // CanUse() 게이트는 각 아이템의 Use() 내부에서 수행한다 — 사용 불가 사유
+        // (배터리 부족 등) 피드백을 아이템이 직접 낼 수 있게 하기 위함. (#34/#35)
+        // 겨냥한 대상을 함께 넘긴다 — 각 아이템이 대상에서 필요한 정보를 조회한다.
         GameObject target = m_interactor != null ? m_interactor.CurrentTarget : null;
         m_equippedItem.Use(target);
     }

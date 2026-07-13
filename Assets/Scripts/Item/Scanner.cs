@@ -62,6 +62,11 @@ public class Scanner : ItemBase, IChargeable
     {
         if (!CanUse())
         {
+            if (IsDepleted)
+            {
+                Debug.Log($"스캐너 배터리 부족! (남은 배터리: {m_currentBattery})");
+            }
+
             return;
         }
 
@@ -105,6 +110,7 @@ public class Scanner : ItemBase, IChargeable
             m_currentBattery = Mathf.Max(m_currentBattery - 1, 0);
             Debug.Log($"NPC 스캔됨: {GetScanInfo(profile)}");
             OnScanCompleted?.Invoke(profile);
+            Debug.Log($"남은 배터리: {m_currentBattery}");
         }
         catch (OperationCanceledException)
         {
