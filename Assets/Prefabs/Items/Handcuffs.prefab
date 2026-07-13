@@ -48,5 +48,3 @@ MonoBehaviour:
   m_itemIcon: {fileID: 0}
   m_itemDescription: 
   m_heldModelPrefab: {fileID: 0}
-  m_channelSeconds: 3
-  m_captureRange: 2.5

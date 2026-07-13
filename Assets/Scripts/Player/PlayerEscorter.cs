@@ -22,7 +22,13 @@ public class PlayerEscorter : NetworkBehaviour
     /// <summary>지금 연행 중인 NPC. 없으면 null. 서버(또는 오프라인)에서만 유효.</summary>
     public NpcController EscortingNpc { get; private set; }
 
-    public bool IsEscorting => EscortingNpc != null;
+    // 연행 여부를 클라이언트에도 알리는 동기화 플래그 — 서버만 기록한다.
+    // 오너 클라의 Handcuffs가 "놓기/체포" 분기를 하려면 자기가 연행 중인지 알아야 하는데,
+    // EscortingNpc는 서버에서만 세팅되므로 이 플래그가 없으면 클라에서 놓기가 안 된다 (#118 리뷰).
+    private readonly NetworkVariable<bool> m_isEscortingSynced = new(false);
+
+    /// <summary>연행 중 여부. 서버·오프라인은 실제 참조로, 원격 피어는 동기화 플래그로 판정.</summary>
+    public bool IsEscorting => IsSpawned && !IsServer ? m_isEscortingSynced.Value : EscortingNpc != null;
 
     // 서버에서 진행 중인 채널링 취소 토큰 — 오너가 이동/뗌으로 취소하거나 대상이 사라지면 끊는다
     private CancellationTokenSource m_channelCts;
@@ -225,10 +231,12 @@ public class PlayerEscorter : NetworkBehaviour
     /// <summary>연행 시작. 이미 다른 NPC를 연행 중이면 무시된다 (동시 1명 제약). 서버(또는 오프라인) 실행.</summary>
     public void StartEscort(NpcController npc)
     {
+        if (IsSpawned && !IsServer)
+            return; // 연행 상태는 서버 권위 — NpcController 상태 메서드와 동일한 방어 컨벤션 (#118 리뷰)
         if (IsEscorting || npc == null)
             return;
 
-        EscortingNpc = npc;
+        SetEscorting(npc);
         npc.StartEscort(transform);
         Debug.Log($"연행 시작: {npc.name}");
     }
@@ -236,12 +244,22 @@ public class PlayerEscorter : NetworkBehaviour
     /// <summary>연행 놓기 — NPC는 그 자리에서 체포 상태로 멈춘다. 다시 다가가 재연행 가능. 서버(또는 오프라인) 실행.</summary>
     public void Release()
     {
+        if (IsSpawned && !IsServer)
+            return; // 서버 권위 방어 — 클라 직접 호출은 무시 (요청은 RequestRelease 경유)
         if (!IsEscorting)
             return;
 
         Debug.Log($"연행 놓기: {EscortingNpc.name}");
         EscortingNpc.StopEscort();
-        EscortingNpc = null;
+        SetEscorting(null);
+    }
+
+    // EscortingNpc와 동기화 플래그를 함께 갱신 — 서버(또는 오프라인)에서만 호출된다
+    private void SetEscorting(NpcController npc)
+    {
+        EscortingNpc = npc;
+        if (IsSpawned && IsServer)
+            m_isEscortingSynced.Value = npc != null;
     }
 
     private void Update()
@@ -253,7 +271,7 @@ public class PlayerEscorter : NetworkBehaviour
 
         // 거리 이탈 등으로 NPC 쪽에서 연행이 스스로 풀린 경우 참조를 정리한다
         if (EscortingNpc != null && EscortingNpc.CurrentState != NpcState.Escorted)
-            EscortingNpc = null;
+            SetEscorting(null);
     }
 
     public override void OnNetworkDespawn()
