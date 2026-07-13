@@ -72,6 +72,8 @@ public class ArrestJudge : MonoBehaviour
             return null;
         }
 
+        // 진범이면 수배 검거, 그 외에는 전부 오검거. 무고 시민의 도주·저항은 진범을 헷갈리게 하는
+        // 미끼 행동일 뿐이라 판정에 영향을 주지 않는다 — 순응·도주·저항을 가리지 않고 오검거다. (#78)
         ArrestVerdict verdict = identity.IsCriminal
             ? ArrestVerdict.WantedCriminal
             : ArrestVerdict.WrongfulArrest;

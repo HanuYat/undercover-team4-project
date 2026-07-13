@@ -5,32 +5,72 @@ using Random = UnityEngine.Random;
 
 /// <summary>
 /// 스폰 완료 후 모든 NPC에 랜덤 시민 프로필을 채우고, 그중 1명을 실제 범인으로 지정한다. (이슈 #38)
-/// 디코이 수 조절 등 난이도 튜닝은 다음 빌드 과제 — 지금은 순수 랜덤 배정으로 사이클만 완성한다.
+/// 무고 시민도 확률적으로 도주/저항 반응을 보인다 — 진범을 헷갈리게 하는 미끼 행동으로,
+/// 잡아도 보상 없는 오검거일 뿐이다(진범만 유효 검거). 행동은 단서가 아니라 노이즈다. (#78)
 /// 범인의 프로필(WantedProfile)이 곧 본부 수배 데이터(#58)의 원본이 된다.
 /// </summary>
 // TODO: 네트워크 전환(#52/#56) 시 서버에서만 배정하고 결과를 클라이언트에 동기화
 public class CriminalAssigner : MonoBehaviour
 {
     [Header("스포너 (비우면 씬에서 자동 탐색)")]
-    [SerializeField] private NpcSpawner m_spawner;
+    [SerializeField]
+    private NpcSpawner m_spawner;
 
     [Header("공식 기록 (세력 심볼 조회용)")]
-    [SerializeField] private OfficialRecords m_officialRecords;
+    [SerializeField]
+    private OfficialRecords m_officialRecords;
 
     [Header("범인 검거 반응 가중치 (#76)")]
-    [Tooltip("합이 1일 필요 없음 — 비율로 추첨한다. 일반 시민은 항상 순응(GDD 6-3)")]
-    [SerializeField] private float m_compliantWeight = 0.2f;
-    [SerializeField] private float m_fleeWeight = 0.4f;
-    [SerializeField] private float m_resistWeight = 0.4f;
+    [Tooltip("합이 1일 필요 없음 — 비율로 추첨한다. 범인은 도주/저항 성향이 높다")]
+    [SerializeField]
+    private float m_compliantWeight = 0.2f;
+
+    [SerializeField]
+    private float m_fleeWeight = 0.4f;
+
+    [SerializeField]
+    private float m_resistWeight = 0.4f;
+
+    [Header("일반 시민 검거 반응 가중치 (#78)")]
+    [Tooltip(
+        "무고 시민의 반응 추첨 비율. 도주/저항은 진범을 헷갈리게 하는 미끼일 뿐 잡아도 오검거다 — 이 비율로 미끼 행동의 빈도(난이도)를 조절한다. 기본값은 대부분 순응 + 소수만 도주/저항"
+    )]
+    [SerializeField]
+    private float m_citizenCompliantWeight = 0.8f;
+
+    [SerializeField]
+    private float m_citizenFleeWeight = 0.1f;
+
+    [SerializeField]
+    private float m_citizenResistWeight = 0.1f;
 
     // 임시 이름 풀 — 사이버펑크 톤. 추후 데이터 에셋으로 분리 가능
     private static readonly string[] s_namePool =
     {
-        "Kai Vex", "Nova Lin", "Rex Halden", "Mira Sato", "Juno Ashe",
-        "Silas Kwon", "Vera Molnar", "Dax Rivera", "Iris Chen", "Orin Blake",
-        "Lena Voss", "Cyrus Nam", "Tessa Rho", "Egan Cole", "Yuna Park",
-        "Marlo Finn", "Sana Idris", "Bront Keller", "Hana Ryu", "Odis Grant",
-        "Piper Nyx", "Ravi Sol", "Wren Okada", "Zane Mercer"
+        "Kai Vex",
+        "Nova Lin",
+        "Rex Halden",
+        "Mira Sato",
+        "Juno Ashe",
+        "Silas Kwon",
+        "Vera Molnar",
+        "Dax Rivera",
+        "Iris Chen",
+        "Orin Blake",
+        "Lena Voss",
+        "Cyrus Nam",
+        "Tessa Rho",
+        "Egan Cole",
+        "Yuna Park",
+        "Marlo Finn",
+        "Sana Idris",
+        "Bront Keller",
+        "Hana Ryu",
+        "Odis Grant",
+        "Piper Nyx",
+        "Ravi Sol",
+        "Wren Okada",
+        "Zane Mercer",
     };
 
     /// <summary>실제 범인으로 지정된 NPC. 배정 전에는 null.</summary>
@@ -98,13 +138,17 @@ public class CriminalAssigner : MonoBehaviour
                 names[i],
                 RandomEnum<OfficialRecords.CitizenType>(),
                 RandomEnum<OfficialRecords.Faction>(),
-                m_officialRecords);
+                m_officialRecords
+            );
 
             bool isCriminal = i == criminalIndex;
             identity.AssignProfile(profile, isCriminal);
 
-            // 검거 반응 — 일반 시민은 전부 순응, 범인만 유형을 추첨한다 (GDD 6-1/6-3, #76)
-            ReactionType reaction = isCriminal ? RollCriminalReaction() : ReactionType.Compliant;
+            // 검거 반응 — 범인은 범인 가중치로, 무고 시민은 시민 가중치로 추첨한다.
+            // 시민의 도주/저항은 진범을 헷갈리게 하는 미끼 행동일 뿐 판정엔 영향이 없다 (GDD 6-1/6-3, #76/#78)
+            ReactionType reaction = isCriminal
+                ? RollReaction(m_compliantWeight, m_fleeWeight, m_resistWeight)
+                : RollReaction(m_citizenCompliantWeight, m_citizenFleeWeight, m_citizenResistWeight);
             identity.AssignReaction(reaction);
 
             if (isCriminal)
@@ -113,9 +157,13 @@ public class CriminalAssigner : MonoBehaviour
                 WantedProfile = profile;
             }
 
-            // 범인 표시는 정답이 노출되므로 데모 빌드 전에 제거할 것
+            // 범인 표시는 정답이 노출되므로 데모 빌드 전에 제거할 것. 반응은 미끼 행동 확인용으로 함께 로그
+            string roleTag = isCriminal ? $"  ← 범인 ({reaction})"
+                : reaction != ReactionType.Compliant ? $"  (미끼: {reaction})"
+                : "";
             logBuilder.AppendLine(
-                $"  {profile.CitizenName} | {profile.m_typeView} | {profile.m_factionView}{(isCriminal ? $"  ← 범인 ({reaction})" : "")}");
+                $"  {profile.CitizenName} | {profile.m_typeView} | {profile.m_factionView}{roleTag}"
+            );
         }
 
         OnCriminalAssigned?.Invoke(CriminalNpc);
@@ -136,29 +184,31 @@ public class CriminalAssigner : MonoBehaviour
         string[] result = new string[count];
         for (int i = 0; i < count; i++)
         {
-            result[i] = i < shuffled.Length
-                ? shuffled[i]
-                : $"{shuffled[i % shuffled.Length]} {i / shuffled.Length + 1}"; // 풀 초과분은 번호로 구분
+            result[i] =
+                i < shuffled.Length
+                    ? shuffled[i]
+                    : $"{shuffled[i % shuffled.Length]} {i / shuffled.Length + 1}"; // 풀 초과분은 번호로 구분
         }
         return result;
     }
 
-    /// <summary>범인의 검거 반응 유형을 가중치 비율로 추첨한다. (#76)</summary>
-    private ReactionType RollCriminalReaction()
+    /// <summary>순응/도주/저항 가중치 비율로 검거 반응을 추첨한다. 범인·시민이 각자의 가중치로 호출한다. (#76/#78)</summary>
+    private static ReactionType RollReaction(float compliantWeight, float fleeWeight, float resistWeight)
     {
-        float total = m_compliantWeight + m_fleeWeight + m_resistWeight;
+        float total = compliantWeight + fleeWeight + resistWeight;
         if (total <= 0f)
             return ReactionType.Compliant; // 가중치가 전부 0이면 안전하게 순응
 
         float roll = Random.Range(0f, total);
-        if (roll < m_compliantWeight)
+        if (roll < compliantWeight)
             return ReactionType.Compliant;
-        if (roll < m_compliantWeight + m_fleeWeight)
+        if (roll < compliantWeight + fleeWeight)
             return ReactionType.Flee;
         return ReactionType.Resist;
     }
 
-    private static TEnum RandomEnum<TEnum>() where TEnum : Enum
+    private static TEnum RandomEnum<TEnum>()
+        where TEnum : Enum
     {
         Array values = Enum.GetValues(typeof(TEnum));
         return (TEnum)values.GetValue(Random.Range(0, values.Length));
