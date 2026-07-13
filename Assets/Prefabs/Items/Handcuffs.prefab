@@ -47,4 +47,4 @@ MonoBehaviour:
   m_itemName: "\uC218\uAC11"
   m_itemIcon: {fileID: 0}
   m_itemDescription: 
-  m_heldModelPrefab: {fileID: 0}
+  m_heldModelPrefab: {fileID: 8305548188873936973, guid: 4b88ad5ccbafd07458845faf5be83a01, type: 3}
