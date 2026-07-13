@@ -90472,7 +90472,7 @@ MonoBehaviour:
   m_spawnRadius: 5
   m_sampleMaxDistance: 4
   m_spawnPerFrame: 3
-  m_spawnOnStart: 1
+  m_spawnOnStart: 0
 --- !u!1001 &1297917786
 PrefabInstance:
   m_ObjectHideFlags: 0

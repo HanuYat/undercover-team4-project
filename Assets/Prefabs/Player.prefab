@@ -32,6 +32,7 @@ Transform:
   - {fileID: 45454874269807273}
   m_Father: {fileID: 322532580044278375}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+
 --- !u!1 &554224255856011205
 GameObject:
   m_ObjectHideFlags: 0
@@ -1790,6 +1791,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 058b4f1512fb3ed45a97a0901a44c130, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerEscorter
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_channelSeconds: 3
+  m_captureRange: 2.5
 --- !u!114 &6677678871598212644
 MonoBehaviour:
   m_ObjectHideFlags: 0

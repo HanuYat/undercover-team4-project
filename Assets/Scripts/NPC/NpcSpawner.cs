@@ -65,8 +65,21 @@ public class NpcSpawner : MonoBehaviour
 
     private void Start()
     {
-        if (m_spawnOnStart)
-            StartSpawn();
+        if (!m_spawnOnStart)
+            return;
+
+        // 네트워크 씬(NetworkManager 존재)에서는 자동 스폰 금지 — Play 직후는 아직 Host 시작 전이라
+        // IsListening이 false여서 전 피어가 각자 "네트워크에 실리지 않은 로컬 NPC"를 만들어버린다.
+        // 그러면 클라이언트는 자기 화면의 유령 NPC를 조준하게 되고, 네트워크 오브젝트가 아니라
+        // 검거 요청을 서버로 보낼 수 없어 체포가 영원히 실패한다 (#118 회귀 원인).
+        // 네트워크 씬의 스폰은 RoundManager가 서버 시작(OnServerStarted) 후 StartSpawn()으로 트리거한다.
+        if (NetworkManager.Singleton != null)
+        {
+            Debug.LogWarning("NpcSpawner: 네트워크 씬에서는 자동 스폰을 건너뛴다 — RoundManager가 서버 시작 후 스폰을 트리거함 (m_spawnOnStart를 꺼 두는 것을 권장)", this);
+            return;
+        }
+
+        StartSpawn();
     }
 
     /// <summary>

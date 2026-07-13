@@ -11,6 +11,8 @@ using UnityEngine;
 public class NpcAnimationDriver : MonoBehaviour
 {
     private static readonly int s_stateHash = Animator.StringToHash("State");
+    // 패닉 시 다리(LowerBodyRun 레이어) 달리기 클립의 재생속도 배율 — 실제 이동 속도에 맞춰 발 미끄러짐을 줄인다 (#81)
+    private static readonly int s_legRunSpeedHash = Animator.StringToHash("LegRunSpeedMul");
 
     // 연행 근접 정지(#97) 모션 전환 임계값 — 실제 이동 속도(m/s) 기준.
     // 켜짐/꺼짐 경계를 다르게 둬(히스테리시스) 정지 직전 감속 구간에서 모션이 떨리는 것을 막는다.
@@ -20,6 +22,13 @@ public class NpcAnimationDriver : MonoBehaviour
     // 프레임 노이즈 완화용 지수 평활 계수 — 클수록 정지 반응이 빨라진다.
     // 근접 정지가 velocity를 즉시 0으로 끊으므로(#97) 평활이 식는 시간이 곧 모션 전환 지연이다
     private const float k_speedSmoothing = 25f;
+
+    // 다리 달리기 클립(HumanM@Run01_Forward)이 발 미끄러짐 없이 자연스러워 보이는 기준 지상 속도(m/s).
+    // 이 속도일 때 배율 1배로 재생되고, 실제 이동 속도가 다르면 그 비율로 재생속도를 늘리거나 줄인다.
+    // 클립이 in-place(루트모션 없음)라 자동 계산이 불가능한 값 — 눈으로 보며 미세 튜닝할 것.
+    [Header("패닉 다리 달리기 (#81)")]
+    [Tooltip("다리 달리기 클립이 미끄럼 없이 보이는 기준 지상 속도(m/s). 발이 앞으로 밀리면 값을 낮추고, 뒤로 끌리면 높인다")]
+    [SerializeField] private float m_panicRunReferenceSpeed = 4.5f;
 
     [SerializeField] private Animator m_animator;
 
@@ -52,18 +61,28 @@ public class NpcAnimationDriver : MonoBehaviour
 
     private void Update()
     {
-        // 연행(Escorted)은 "따라 걷기 ↔ 근접 정지"가 한 FSM 상태 안에서 일어나므로(#97)
-        // 실제 이동 속도로 모션만 구분한다. transform 이동량 기준이라 클라이언트에서도
-        // NetworkTransform이 움직여 주는 값을 그대로 쓸 수 있다 — 별도 동기화 불필요.
-        if (m_animator == null || m_controller.CurrentState != NpcState.Escorted)
+        // 연행(Escorted)·패닉(Panic) 모두 실제 이동 속도가 필요하다. transform 이동량 기준이라
+        // 클라이언트에서도 NetworkTransform이 움직여 주는 값을 그대로 쓸 수 있다 — 별도 동기화 불필요.
+        if (m_animator == null || Time.deltaTime <= 0f)
             return;
-        if (Time.deltaTime <= 0f)
+
+        NpcState state = m_controller.CurrentState;
+        if (state != NpcState.Escorted && state != NpcState.Panic)
             return;
 
         float rawSpeed = (transform.position - m_lastPosition).magnitude / Time.deltaTime;
         m_lastPosition = transform.position;
         m_smoothedSpeed = Mathf.Lerp(m_smoothedSpeed, rawSpeed, Time.deltaTime * k_speedSmoothing);
 
+        // 패닉: 하체 달리기 클립 재생속도를 실제 이동 속도에 비례시켜 발 미끄러짐을 줄인다 (#81)
+        if (state == NpcState.Panic)
+        {
+            float mul = Mathf.Clamp(m_smoothedSpeed / m_panicRunReferenceSpeed, 0.2f, 2f);
+            m_animator.SetFloat(s_legRunSpeedHash, mul);
+            return;
+        }
+
+        // 연행(Escorted)은 "따라 걷기 ↔ 근접 정지"가 한 FSM 상태 안에서 일어나므로(#97) 속도로 모션만 구분한다.
         if (m_escortMoving && m_smoothedSpeed < k_escortMoveOffSpeed)
         {
             m_escortMoving = false;
@@ -89,6 +108,14 @@ public class NpcAnimationDriver : MonoBehaviour
             m_escortMoving = true;
             m_lastPosition = transform.position;
             m_smoothedSpeed = k_escortMoveOnSpeed;
+        }
+        // 패닉 진입 시에도 이동 판별을 초기화. 첫 프레임 배율이 0으로 튀지 않도록 기준 속도로 시드한다 (#81)
+        else if (state == NpcState.Panic)
+        {
+            m_lastPosition = transform.position;
+            m_smoothedSpeed = m_panicRunReferenceSpeed;
+            if (m_animator != null)
+                m_animator.SetFloat(s_legRunSpeedHash, 1f);
         }
     }
 }
