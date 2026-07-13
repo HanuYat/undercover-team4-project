@@ -13,7 +13,14 @@ public class NpcFleeState : NpcStateBase
     // 도주 방향에 주는 ±각도 지터 — 일직선으로만 도망가다 벽·코너에 박히는 것을 완화한다
     private const float k_directionJitterDegrees = 50f;
 
+    // 추격 중 플레이어가 방향을 틀면 목적지 도착을 기다리지 않고 위협 반대 방향을 다시 잡는다 (#96)
+    // 매 프레임 재계산은 비싸므로 NpcEscortedState와 같은 스로틀링(주기 + 이동량 임계치)을 쓴다
+    private const float k_repathInterval = 0.25f;          // 재계산 최소 간격(초)
+    private const float k_repathThreatMoveThreshold = 1f;  // 위협이 이만큼(m) 움직였을 때만 재계산
+
     private float m_baseSpeed;
+    private float m_repathTimer;
+    private Vector3 m_lastThreatPos;
 
     public NpcFleeState(NpcController owner) : base(owner) { }
 
@@ -22,6 +29,11 @@ public class NpcFleeState : NpcStateBase
         m_owner.Agent.isStopped = false;
         m_baseSpeed = m_owner.Agent.speed;
         m_owner.Agent.speed = m_baseSpeed * m_owner.FleeSpeedMultiplier;
+
+        m_repathTimer = 0f;
+        if (m_owner.ThreatTarget != null)
+            m_lastThreatPos = m_owner.ThreatTarget.position;
+
         SetFleePoint();
     }
 
@@ -44,10 +56,21 @@ public class NpcFleeState : NpcStateBase
             return;
         }
 
-        // 도주 지점에 도착했는데 아직 붙잡히지 않았다면 다음 지점으로 계속 도망친다
-        if (!m_owner.Agent.pathPending &&
-            m_owner.Agent.remainingDistance <= m_owner.Agent.stoppingDistance + k_arriveThreshold)
+        // 도주 지점에 도착했으면 다음 지점을 잡는다 (기존 동작)
+        bool arrived = !m_owner.Agent.pathPending &&
+            m_owner.Agent.remainingDistance <= m_owner.Agent.stoppingDistance + k_arriveThreshold;
+
+        // 추격자가 방향을 틀면 도착 전에도 위협 반대 방향을 다시 잡는다 — 주기 + 위협 이동량으로 스로틀링 (#96)
+        m_repathTimer += Time.deltaTime;
+        bool threatMoved = (threat.position - m_lastThreatPos).sqrMagnitude
+            >= k_repathThreatMoveThreshold * k_repathThreatMoveThreshold;
+        bool shouldRepath = m_repathTimer >= k_repathInterval && threatMoved;
+
+        // 둘 중 하나라도면 위협 현재 위치 기준으로 도주 지점 재계산 (지터·NavMesh 보정은 SetFleePoint 그대로)
+        if (arrived || shouldRepath)
         {
+            m_repathTimer = 0f;
+            m_lastThreatPos = threat.position;
             SetFleePoint();
         }
     }

@@ -5,8 +5,8 @@ using UnityEngine;
 // using Unity.Netcode; // TODO: 네트워크 테스트 시 주석 해제
 
 /// <summary>
-/// 수갑 아이템. 사용 시 주변에서 가장 가까운 NPC를 대상으로 잡아
-/// 3초 채널링 후 대상 FSM을 Captured로 전이시킨다. (GDD 8-2, 이슈 #36)
+/// 수갑 아이템. 사용 시 겨냥한 NPC(레이캐스트 타겟)를 대상으로 잡아
+/// 3초 채널링 후 대상 FSM을 Captured로 전이시킨다. (GDD 8-2, 이슈 #36/#35)
 /// 배터리 등 자원 소모는 없다.
 /// </summary>
 public class Handcuffs : ItemBase
@@ -16,7 +16,7 @@ public class Handcuffs : ItemBase
     private float m_channelSeconds = 3f;
 
     [Header("체포 판정")]
-    [Tooltip("이 반경(m) 안에 있는 NPC만 체포 대상으로 잡는다")]
+    [Tooltip("채널링 도중 대상이 이 거리(m)를 벗어나면 체포 실패로 처리한다")]
     [SerializeField]
     private float m_captureRange = 2.5f;
 
@@ -37,7 +37,6 @@ public class Handcuffs : ItemBase
     public override bool CanUse() => !m_isRestraining;
 
     // TODO: 네트워크 테스트 시 서버 권위로 실행 (오너 입력 → ServerRpc 요청 → 서버가 채널링/구속 실행 후 결과 동기화)
-    // TODO(#35): 전달받은 aimTarget을 체포 대상으로 사용하도록 전환. 지금은 OverlapSphere FindTarget 사용(임시).
     public override void Use(GameObject aimTarget)
     {
         if (!CanUse())
@@ -52,11 +51,18 @@ public class Handcuffs : ItemBase
             return;
         }
 
-        // 대상이 없으면 채널링 자체를 시작하지 않는다
-        NpcController target = FindTarget();
+        // 겨냥한 대상에서 NPC를 조회한다 (#35). 대상이 없거나 NPC가 아니면 채널링 자체를 시작하지 않는다.
+        NpcController target = ResolveTarget(aimTarget);
         if (target == null)
         {
-            Debug.Log("체포할 대상이 근처에 없음");
+            Debug.Log("체포할 대상이 없음 (NPC를 겨냥하지 않음)");
+            return;
+        }
+
+        // 연행 중인 NPC는 대상에서 제외 — 중복 연행·타인의 연행 가로채기 방지 (#59)
+        if (target.CurrentState == NpcState.Escorted)
+        {
+            Debug.Log("이미 연행 중인 대상 — 체포 불가");
             return;
         }
 
@@ -148,33 +154,18 @@ public class Handcuffs : ItemBase
 
     // ---- 대상 탐색 ----
 
-    /// <summary>사거리 안에서 가장 가까운, 아직 체포되지 않은 NPC를 찾는다.</summary>
-    private NpcController FindTarget()
+    /// <summary>
+    /// 겨냥한 대상 GameObject에서 NPC를 조회한다. NPC(NpcController)가 아니면 null.
+    /// 콜라이더가 NPC 루트의 자식일 수 있으므로 부모까지 탐색한다 (Scanner.ResolveProfile과 동일 관례, #34/#35).
+    /// </summary>
+    private static NpcController ResolveTarget(GameObject aimTarget)
     {
-        Collider[] hits = Physics.OverlapSphere(transform.position, m_captureRange);
-        NpcController nearest = null;
-        float nearestSqr = float.MaxValue;
-
-        foreach (Collider hit in hits)
+        if (aimTarget == null)
         {
-            NpcController npc = hit.GetComponentInParent<NpcController>();
-            if (npc == null)
-                continue;
-
-            // 연행 중인 NPC는 대상에서 제외 — 중복 연행·타인의 연행 가로채기 방지 (#59)
-            // (Captured는 재연행 대상이므로 포함한다)
-            if (npc.CurrentState == NpcState.Escorted)
-                continue;
-
-            float sqr = (npc.transform.position - transform.position).sqrMagnitude;
-            if (sqr < nearestSqr)
-            {
-                nearestSqr = sqr;
-                nearest = npc;
-            }
+            return null;
         }
 
-        return nearest;
+        return aimTarget.GetComponentInParent<NpcController>();
     }
 
     private bool IsInRange(NpcController target)
