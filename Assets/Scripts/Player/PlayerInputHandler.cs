@@ -21,6 +21,12 @@ public class PlayerInputHandler : NetworkBehaviour
     [SerializeField]
     private InputActionReference m_attackAction;
 
+    [SerializeField]
+    private InputActionReference m_previousAction;
+
+    [SerializeField]
+    private InputActionReference m_nextAction;
+
     public Vector2 MoveInput { get; private set; }
     public Vector2 LookInput { get; private set; }
     public bool IsSprinting { get; private set; }
@@ -29,6 +35,8 @@ public class PlayerInputHandler : NetworkBehaviour
     public event Action OnInteractPerformed; // Hold 완료 (3초 채움)
     public event Action OnInteractCanceled; // 중간에 뗌
     public event Action OnAttackPerformed; // 아이템 사용 (조준 대상에 사용)
+    public event Action OnPreviousItem; // 마우스 휠 위 — 이전 아이템으로 전환 (#46)
+    public event Action OnNextItem; // 마우스 휠 아래 — 다음 아이템으로 전환 (#46)
 
     public override void OnNetworkSpawn()
     {
@@ -43,6 +51,8 @@ public class PlayerInputHandler : NetworkBehaviour
         m_interactAction.action.Enable();
         m_sprintAction.action.Enable();
         m_attackAction.action.Enable();
+        m_previousAction.action.Enable();
+        m_nextAction.action.Enable();
 
         m_moveAction.action.performed += OnMove;
         m_moveAction.action.canceled += OnMove;
@@ -54,6 +64,8 @@ public class PlayerInputHandler : NetworkBehaviour
         m_sprintAction.action.performed += OnSprintPerformed;
         m_sprintAction.action.canceled += OnSprintCanceled;
         m_attackAction.action.performed += OnAttackPerformedHandler;
+        m_previousAction.action.performed += OnPreviousItemHandler;
+        m_nextAction.action.performed += OnNextItemHandler;
     }
 
     public override void OnNetworkDespawn()
@@ -71,12 +83,16 @@ public class PlayerInputHandler : NetworkBehaviour
         m_sprintAction.action.performed -= OnSprintPerformed;
         m_sprintAction.action.canceled -= OnSprintCanceled;
         m_attackAction.action.performed -= OnAttackPerformedHandler;
+        m_previousAction.action.performed -= OnPreviousItemHandler;
+        m_nextAction.action.performed -= OnNextItemHandler;
 
         m_moveAction.action.Disable();
         m_lookAction.action.Disable();
         m_interactAction.action.Disable();
         m_sprintAction.action.Disable();
         m_attackAction.action.Disable();
+        m_previousAction.action.Disable();
+        m_nextAction.action.Disable();
     }
 
     private void OnMove(InputAction.CallbackContext ctx) => MoveInput = ctx.ReadValue<Vector2>();
@@ -98,4 +114,8 @@ public class PlayerInputHandler : NetworkBehaviour
 
     private void OnAttackPerformedHandler(InputAction.CallbackContext ctx) =>
         OnAttackPerformed?.Invoke();
+
+    private void OnPreviousItemHandler(InputAction.CallbackContext ctx) => OnPreviousItem?.Invoke();
+
+    private void OnNextItemHandler(InputAction.CallbackContext ctx) => OnNextItem?.Invoke();
 }
