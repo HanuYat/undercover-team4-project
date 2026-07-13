@@ -23,6 +23,10 @@ public class PlayerLoadout : MonoBehaviour
 
     private readonly List<ItemBase> m_heldItems = new List<ItemBase>();
     private PlayerItemUser m_itemUser;
+    private PlayerInputHandler m_inputHandler;
+
+    // 현재 장착 중인 아이템의 m_heldItems 인덱스. 보유 아이템이 없으면 -1. (#46)
+    private int m_equippedIndex = -1;
 
     /// <summary>현재 보유 중인 아이템 목록. 마우스 휠 전환(#46)이 순환 대상으로 사용한다.</summary>
     public IReadOnlyList<ItemBase> HeldItems => m_heldItems;
@@ -30,6 +34,19 @@ public class PlayerLoadout : MonoBehaviour
     private void Awake()
     {
         m_itemUser = GetComponent<PlayerItemUser>();
+        m_inputHandler = GetComponent<PlayerInputHandler>();
+    }
+
+    private void OnEnable()
+    {
+        m_inputHandler.OnPreviousItem += EquipPrevious;
+        m_inputHandler.OnNextItem += EquipNext;
+    }
+
+    private void OnDisable()
+    {
+        m_inputHandler.OnPreviousItem -= EquipPrevious;
+        m_inputHandler.OnNextItem -= EquipNext;
     }
 
     private void Start()
@@ -56,7 +73,31 @@ public class PlayerLoadout : MonoBehaviour
         // 첫 지급 아이템을 기본 장착 — 없으면 빈손으로 둔다.
         if (m_heldItems.Count > 0)
         {
+            m_equippedIndex = 0;
             m_itemUser.SetEquippedItem(m_heldItems[0]);
         }
+    }
+
+    // 마우스 휠 위 — 보유 목록의 이전 아이템으로 순환 전환. (#46)
+    private void EquipPrevious() => Cycle(-1);
+
+    // 마우스 휠 아래 — 보유 목록의 다음 아이템으로 순환 전환. (#46)
+    private void EquipNext() => Cycle(1);
+
+    // 현재 인덱스에서 direction만큼 이동해 순환 장착한다. 보유 아이템이 없으면 무시.
+    private void Cycle(int direction)
+    {
+        int count = m_heldItems.Count;
+        if (count == 0)
+        {
+            return;
+        }
+
+        // 아직 장착 인덱스가 없으면(빈손 상태) 첫 아이템부터 시작한다.
+        int baseIndex = m_equippedIndex >= 0 ? m_equippedIndex : 0;
+
+        // % 결과가 음수일 수 있으므로 count를 더해 양수 범위로 보정.
+        m_equippedIndex = (baseIndex + direction % count + count) % count;
+        m_itemUser.SetEquippedItem(m_heldItems[m_equippedIndex]);
     }
 }
