@@ -9,6 +9,8 @@ using UnityEngine;
 /// 오너 클라의 아이템/상호작용(Handcuffs·NpcSubdueInteractable)이 이 컴포넌트의 요청 API를 호출하면,
 /// 요청을 서버로 넘겨(ServerRpc) 서버가 채널링·사거리·반응 판정을 실행한다.
 /// 그 결과 NpcController 상태 변경은 서버에서 일어나고 NetworkVariable로 전 피어에 동기화된다.
+/// 체포 채널링: Handcuffs가 좌클릭 누름에 RequestCapture, 뗌에 CancelCapture를 요청 (#91).
+/// 놓기·재연행은 상호작용키(E) — PlayerInteractor가 RequestRelease, NpcSubdueInteractable이 RequestEscort (#91).
 /// 한 번에 1명만 연행 가능 (동시 1명 제약).
 /// </summary>
 public class PlayerEscorter : NetworkBehaviour
@@ -84,6 +86,16 @@ public class PlayerEscorter : NetworkBehaviour
         SubdueCaptureRpc(new NetworkObjectReference(target.NetworkObject));
     }
 
+    /// <summary>체포되어 멈춘 NPC 재연행 — 오너가 호출(E, NpcSubdueInteractable). (#91)</summary>
+    public void RequestEscort(NpcController target)
+    {
+        if (target == null) return;
+        if (!IsSpawned || IsServer) { ServerEscort(target); return; } // 서버/오프라인 즉시 실행
+        if (!IsOwner) return;
+        if (!IsTargetNetworkReady(target)) return;
+        EscortRequestRpc(new NetworkObjectReference(target.NetworkObject));
+    }
+
     // 원격 클라 → 서버로 대상을 넘기려면 스폰돼 있어야 한다(NetworkObjectReference 제약).
     // 스폰 안 된 NPC(씬 배치 후 미스폰 등)면 참조 생성이 예외를 던지므로 미리 걸러 경고만 남긴다.
     private bool IsTargetNetworkReady(NpcController target)
@@ -123,30 +135,31 @@ public class PlayerEscorter : NetworkBehaviour
         }
     }
 
+    [Rpc(SendTo.Server)]
+    private void EscortRequestRpc(NetworkObjectReference targetRef)
+    {
+        if (targetRef.TryGet(out NetworkObject targetObj) &&
+            targetObj.TryGetComponent(out NpcController target))
+        {
+            ServerEscort(target);
+        }
+    }
+
     // ---- 서버 실행 (권위) ----
 
-    /// <summary>체포 진입 — 대상 상태에 따라 즉시 연행 또는 채널링 시작. 서버(또는 오프라인)에서만 실행.</summary>
+    /// <summary>체포 진입 — 대상 검증 후 채널링 시작. 서버(또는 오프라인)에서만 실행.</summary>
     private void ServerBeginCapture(NpcController target)
     {
         if (m_isChanneling)
             return; // 중복 채널링 방지
         if (IsEscorting)
-        {
-            // 이미 연행 중이면 이번 입력은 "놓기"
-            Release();
-            return;
-        }
+            return; // 연행 중엔 체포 불가 — 놓기는 상호작용키(E)의 RequestRelease 전용 (#91)
         if (target.CurrentState == NpcState.Escorted)
             return; // 이미(타인이) 연행 중 — 가로채기 방지
+        if (target.CurrentState == NpcState.Captured)
+            return; // 체포된 대상 재연행은 상호작용키(E)의 RequestEscort 경로로 (#91)
         if (!IsInRange(target))
             return; // 사거리 밖이면 시작조차 안 함
-
-        // 이미 체포되어 멈춰 있는 대상은 채널링 없이 즉시 재연행
-        if (target.CurrentState == NpcState.Captured)
-        {
-            StartEscort(target);
-            return;
-        }
 
         ServerChannelAsync(target).Forget();
     }
@@ -157,13 +170,19 @@ public class PlayerEscorter : NetworkBehaviour
         m_channelCts = new CancellationTokenSource();
         try
         {
-            await UniTask.Delay(TimeSpan.FromSeconds(m_channelSeconds), cancellationToken: m_channelCts.Token);
-
-            // 채널링 동안 대상이 파괴됐거나 사거리를 벗어났으면 실패 — 도주형 NPC 대응 (GDD 6장)
-            if (target == null || !IsInRange(target))
+            // 단일 Delay가 아닌 프레임 루프 — 채널링 도중 거리 이탈을 즉시 실패시킨다 (#91, 도주형 NPC 대응 GDD 6장)
+            // 뗌 취소는 Yield의 토큰 예외(catch)로, 거리 이탈은 return으로 — 취소 사유가 구분된다
+            float elapsed = 0f;
+            while (elapsed < m_channelSeconds)
             {
-                Debug.Log("구속 실패 — 대상이 범위를 벗어남");
-                return;
+                if (target == null || !IsInRange(target))
+                {
+                    Debug.Log("구속 실패 — 대상이 범위를 벗어남");
+                    return;
+                }
+
+                await UniTask.Yield(PlayerLoopTiming.Update, m_channelCts.Token);
+                elapsed += Time.deltaTime;
             }
 
             // 채널링 성공 순간 반응 판정 (GDD 6-1, #76)
@@ -208,6 +227,13 @@ public class PlayerEscorter : NetworkBehaviour
     {
         if (target.CurrentState == NpcState.Run)
             target.CaptureBySubdue();
+    }
+
+    /// <summary>재연행 — 서버 실행. 체포되어 멈춘 대상만 연행 시작(동시 1명 가드는 StartEscort). (#91)</summary>
+    private void ServerEscort(NpcController target)
+    {
+        if (target.CurrentState == NpcState.Captured)
+            StartEscort(target);
     }
 
     private bool IsInRange(NpcController target)
