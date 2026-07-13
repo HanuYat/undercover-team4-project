@@ -13,7 +13,6 @@ GameObject:
   - component: {fileID: 2281887230768859551}
   - component: {fileID: 4452197611904741975}
   - component: {fileID: 161675701295816944}
-  - component: {fileID: 1646443744982264073}
   - component: {fileID: 1405749366994800697}
   - component: {fileID: 3625219082931332717}
   - component: {fileID: 1458645678561649132}
@@ -22,6 +21,7 @@ GameObject:
   - component: {fileID: 5127349806152873460}
   - component: {fileID: -860446410880811197}
   - component: {fileID: 3095144112121068292}
+  - component: {fileID: 4422740345284790104}
   m_Layer: 7
   m_Name: NPC_Citizen
   m_TagString: Untagged
@@ -161,27 +161,6 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
---- !u!65 &1646443744982264073
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8791269624150694847}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 1, y: 1, z: 1}
-  m_Center: {x: 0, y: 0, z: 0}
 --- !u!114 &1405749366994800697
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -380,6 +359,29 @@ MonoBehaviour:
   m_MinRegionArea: 2
   m_NavMeshData: {fileID: 0}
   m_BuildHeightMesh: 0
+--- !u!136 &4422740345284790104
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 0.4
+  m_Height: 2
+  m_Direction: 1
+  m_Center: {x: 0, y: 1, z: 0}
 --- !u!1001 &3679051956096844986
 PrefabInstance:
   m_ObjectHideFlags: 0
