@@ -10,9 +10,14 @@ public class NpcEscortedState : NpcStateBase
     private const float k_repathInterval = 0.2f;      // 경로 재계산 최소 간격(초) — 매 프레임 재계산 방지
     private const float k_repathMoveThreshold = 0.5f; // 목표가 이만큼(m) 움직였을 때만 재계산
 
+    // 근접 정지 히스테리시스(m) — 멈춘 뒤 추종 거리보다 이만큼 더 멀어져야 재추종한다.
+    // 정지/추종 경계가 하나면 그 근처에서 매 프레임 상태가 뒤집혀 떨림(jitter)이 생긴다 (#97)
+    private const float k_resumeDistanceOffset = 0.75f;
+
     private float m_repathTimer;
     private Vector3 m_lastTargetPos;
     private float m_baseSpeed;
+    private bool m_isHolding; // 플레이어 근접으로 정지 중인지 (#97)
 
     public NpcEscortedState(NpcController owner) : base(owner) { }
 
@@ -23,6 +28,7 @@ public class NpcEscortedState : NpcStateBase
         m_owner.Agent.stoppingDistance = m_owner.EscortFollowDistance;
         m_baseSpeed = m_owner.Agent.speed;
         m_repathTimer = 0f;
+        m_isHolding = false;
 
         if (m_owner.EscortTarget != null)
         {
@@ -51,6 +57,34 @@ public class NpcEscortedState : NpcStateBase
             return;
         }
 
+        // ---- 근접 정지 (#97) ----
+        // stoppingDistance만으로는 목적지가 계속 갱신될 때 감속·재출발이 반복돼
+        // 플레이어가 멈추거나 돌아설 때 미끄러지듯 파고드는 문제가 있다.
+        // 추종 거리 안으로 들어오면 경로를 버리고 확실히 정지시킨다.
+        if (m_isHolding)
+        {
+            // 히스테리시스 밖으로 벗어나야 재추종 — 경계에서 정지/추종이 떨리는 것 방지
+            if (distance > m_owner.EscortFollowDistance + k_resumeDistanceOffset)
+            {
+                m_isHolding = false;
+                m_owner.Agent.isStopped = false;
+                m_repathTimer = 0f;
+                m_lastTargetPos = target.position;
+                m_owner.Agent.SetDestination(target.position);
+            }
+            return; // 정지 유지 — 아래 추종 로직은 건너뛴다
+        }
+
+        if (distance <= m_owner.EscortFollowDistance)
+        {
+            m_isHolding = true;
+            m_owner.Agent.isStopped = true;
+            m_owner.Agent.velocity = Vector3.zero; // 감속 관성까지 끊어 밀림 없이 그 자리에 선다
+            if (m_owner.Agent.isOnNavMesh)
+                m_owner.Agent.ResetPath();
+            return;
+        }
+
         // 뒤처지면 속도를 올려 따라잡는다
         m_owner.Agent.speed = distance > m_owner.EscortBoostDistance
             ? m_baseSpeed * m_owner.EscortBoostMultiplier
@@ -69,10 +103,14 @@ public class NpcEscortedState : NpcStateBase
 
     public override void Exit()
     {
-        // 연행 중 바꿨던 값들을 원복한다
+        // 연행 중 바꿨던 값들을 원복한다 — 근접 정지로 잠근 isStopped도 풀어
+        // 다음 상태(배회 등)가 멈춘 채 시작되지 않게 한다 (#97)
         m_owner.Agent.speed = m_baseSpeed;
         m_owner.Agent.stoppingDistance = 0f;
         if (m_owner.Agent.isOnNavMesh)
+        {
+            m_owner.Agent.isStopped = false;
             m_owner.Agent.ResetPath();
+        }
     }
 }
