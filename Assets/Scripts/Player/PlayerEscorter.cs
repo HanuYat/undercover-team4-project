@@ -30,13 +30,16 @@ public class PlayerEscorter : NetworkBehaviour
 
     // ---- 오너 클라 진입점 (아이템/상호작용이 호출) ----
 
-    /// <summary>체포 시도 — 오너가 호출. 오프라인이면 즉시 서버 로직을, 네트워크면 서버로 요청을 넘긴다.</summary>
+    /// <summary>체포 시도 — 오너가 호출. 서버/오프라인은 즉시 실행, 원격 클라는 서버로 요청을 넘긴다.</summary>
     public void RequestCapture(NpcController target)
     {
         if (target == null)
             return;
 
-        if (!IsSpawned) // 오프라인 폴백 — 단독 Play
+        // 서버(호스트 포함)·오프라인은 로컬 NpcController 참조로 바로 실행 — 네트워크 직렬화 불필요.
+        // (호스트는 이미 대상을 들고 있어 RPC가 불필요하고, NetworkObjectReference는 스폰된 대상에서만
+        //  생성 가능해 스폰 안 된 NPC를 넘기면 예외가 난다 — 이 우회가 호스트 검거 회귀를 막는다, #118)
+        if (!IsSpawned || IsServer)
         {
             ServerBeginCapture(target);
             return;
@@ -44,6 +47,8 @@ public class PlayerEscorter : NetworkBehaviour
         if (!IsOwner)
             return; // 남의 플레이어 오브젝트에서 온 호출 방지
 
+        if (!IsTargetNetworkReady(target))
+            return;
         CaptureRequestRpc(new NetworkObjectReference(target.NetworkObject));
     }
 
@@ -67,9 +72,20 @@ public class PlayerEscorter : NetworkBehaviour
     public void RequestSubdueCapture(NpcController target)
     {
         if (target == null) return;
-        if (!IsSpawned) { ServerSubdueCapture(target); return; }
+        if (!IsSpawned || IsServer) { ServerSubdueCapture(target); return; } // 서버/오프라인 즉시 실행
         if (!IsOwner) return;
+        if (!IsTargetNetworkReady(target)) return;
         SubdueCaptureRpc(new NetworkObjectReference(target.NetworkObject));
+    }
+
+    // 원격 클라 → 서버로 대상을 넘기려면 스폰돼 있어야 한다(NetworkObjectReference 제약).
+    // 스폰 안 된 NPC(씬 배치 후 미스폰 등)면 참조 생성이 예외를 던지므로 미리 걸러 경고만 남긴다.
+    private bool IsTargetNetworkReady(NpcController target)
+    {
+        if (target.NetworkObject != null && target.NetworkObject.IsSpawned)
+            return true;
+        Debug.LogWarning($"검거/제압 요청 무시 — 대상 NPC가 네트워크 스폰되지 않음: {target.name}", this);
+        return false;
     }
 
     // ---- 서버 RPC (오너 → 서버) ----
