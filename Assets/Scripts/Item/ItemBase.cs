@@ -1,14 +1,14 @@
+using Unity.Netcode;
 using UnityEngine;
-
-// using Unity.Netcode; // TODO: 네트워크 테스트 시 주석 해제
 
 /// <summary>
 /// 모든 아이템의 공통 기반 클래스.
 /// 이름·아이콘·설명 등 공통 데이터와 사용 진입점(Use)을 정의한다.
 /// 스캐너·수갑 등 하위 아이템은 이 클래스를 상속해 Use()를 구현한다.
+/// 아이템은 독립 NetworkObject 프리팹이므로(#88) NetworkBehaviour를 상속한다 —
+/// 배터리 등 상태를 NetworkVariable로 전 클라에 동기화하고, 줍기 시 소유권이 이전된다.
 /// </summary>
-// TODO: 네트워크 테스트 시 NetworkBehaviour로 승격 검토 (아이템 액션을 서버 권위로 동기화)
-public abstract class ItemBase : MonoBehaviour
+public abstract class ItemBase : NetworkBehaviour
 {
     [Header("아이템 정보")]
     [SerializeField]

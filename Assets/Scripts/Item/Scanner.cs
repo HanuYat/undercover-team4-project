@@ -1,8 +1,8 @@
 using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using Unity.Netcode;
 using UnityEngine;
-// using Unity.Netcode; // TODO: 네트워크 테스트 시 주석 해제
 
 /// <summary>
 /// 스캐너 아이템. 3초 채널링 후 대상 시민의 스캔 정보를 로그로 출력한다.
@@ -17,19 +17,23 @@ public class Scanner : ItemBase, IChargeable
     [SerializeField]
     private int m_maxBattery = 5;
 
-    // TODO: 네트워크 테스트 시 m_currentBattery를 NetworkVariable<int>로 교체 (지금은 로컬 값이라 다른 클라에 동기화 안 됨)
-    private int m_currentBattery;
+    // 배터리 잔량 — 아이템 NetworkObject에 실려 전 클라에 동기화되고 줍기/버리기 시 함께 이동한다 (#88).
+    // 쓰기는 Owner(스캐너를 든 플레이어)만 — 스캔 1회당 소모를 오너가 반영. 읽기는 전원(본부 UI 포함).
+    // TODO: #55 서버권위 전환 시 쓰기를 Server로 좁히고 소모/충전을 ServerRpc 경유로 (클라 조작 방지)
+    private readonly NetworkVariable<int> m_currentBattery = new NetworkVariable<int>(
+        0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
     private bool m_isScanning;
     private CancellationTokenSource m_cts;
 
     // ---- IChargeable ----
 
-    public int CurrentBattery => m_currentBattery;
+    public int CurrentBattery => m_currentBattery.Value;
     public int MaxBattery => m_maxBattery;
-    public bool IsFullyCharged => m_currentBattery >= m_maxBattery;
-    public bool IsDepleted => m_currentBattery <= 0;
+    public bool IsFullyCharged => m_currentBattery.Value >= m_maxBattery;
+    public bool IsDepleted => m_currentBattery.Value <= 0;
 
-    // TODO: 네트워크 테스트 시 OnCharged를 NetworkVariable.OnValueChanged로 구동 (전 클라 UI 갱신)
+    // 배터리 변화 시 발행 — NetworkVariable.OnValueChanged로 구동되어 전 클라 UI가 갱신된다.
     public event Action<int> OnCharged;
 
     /// <summary>
@@ -39,7 +43,7 @@ public class Scanner : ItemBase, IChargeable
     // TODO: 네트워크 테스트(서버 권위 전환) 시 서버 실행 결과를 오너 클라에 RPC로 돌려준 뒤 그 수신 지점에서 발행
     public event Action<CitizenProfile> OnScanCompleted;
 
-    // TODO: 네트워크 테스트 시 서버 권위로만 호출 (본부 충전기 → ServerRpc 요청 → 서버가 배터리 변경)
+    // TODO: #55 서버권위 전환 시 본부 충전기 → ServerRpc → 서버가 배터리 변경으로 바꾼다
     public void Charge(int amount)
     {
         if (amount <= 0)
@@ -47,8 +51,14 @@ public class Scanner : ItemBase, IChargeable
             return;
         }
 
-        m_currentBattery = Mathf.Min(m_currentBattery + amount, m_maxBattery);
-        OnCharged?.Invoke(m_currentBattery);
+        // NetworkVariable 쓰기는 Owner/Server만 가능 — 그 외 컨텍스트에서 호출되면 무시한다.
+        // (본부 충전기의 원격 충전은 #55에서 ServerRpc 경로로 정식 처리)
+        if (!IsOwner && !IsServer)
+        {
+            return;
+        }
+
+        m_currentBattery.Value = Mathf.Min(m_currentBattery.Value + amount, m_maxBattery);
     }
 
     // ---- ItemBase ----
@@ -107,10 +117,11 @@ public class Scanner : ItemBase, IChargeable
         {
             await UniTask.Delay(TimeSpan.FromSeconds(m_channelSeconds), cancellationToken: m_cts.Token);
 
-            m_currentBattery = Mathf.Max(m_currentBattery - 1, 0);
+            // 오너가 배터리를 소모 — NetworkVariable(Owner 쓰기)이라 전 클라에 동기화된다.
+            m_currentBattery.Value = Mathf.Max(m_currentBattery.Value - 1, 0);
             Debug.Log($"NPC 스캔됨: {GetScanInfo(profile)}");
             OnScanCompleted?.Invoke(profile);
-            Debug.Log($"남은 배터리: {m_currentBattery}");
+            Debug.Log($"남은 배터리: {m_currentBattery.Value}");
         }
         catch (OperationCanceledException)
         {
@@ -139,21 +150,35 @@ public class Scanner : ItemBase, IChargeable
 
     // ---- 라이프사이클 ----
 
-    // TODO: 네트워크 테스트 시 배터리 초기화를 서버의 OnNetworkSpawn으로 이동 (NetworkVariable은 서버가 초기화)
-    private void Awake()
+    public override void OnNetworkSpawn()
     {
-        m_currentBattery = m_maxBattery;
+        // 배터리 초기값은 서버가 채운다 — NetworkVariable은 서버 권위로 초기화되고 전 클라에 복제된다.
+        if (IsServer)
+        {
+            m_currentBattery.Value = m_maxBattery;
+        }
+
+        // 배터리 변화를 전 클라가 수신해 UI를 갱신한다 (본부 화면 포함).
+        m_currentBattery.OnValueChanged += HandleBatteryChanged;
     }
 
-    // TODO: 네트워크 테스트 시 OnNetworkDespawn에서도 취소 처리 추가
+    public override void OnNetworkDespawn()
+    {
+        m_currentBattery.OnValueChanged -= HandleBatteryChanged;
+        CancelScan();
+    }
+
+    private void HandleBatteryChanged(int previous, int current) => OnCharged?.Invoke(current);
+
     private void OnDisable()
     {
         CancelScan();
     }
 
-    private void OnDestroy()
+    public override void OnDestroy()
     {
         m_cts?.Cancel();
         m_cts?.Dispose();
+        base.OnDestroy();
     }
 }
