@@ -152,14 +152,19 @@ public class Scanner : ItemBase, IChargeable
 
     public override void OnNetworkSpawn()
     {
-        // 배터리 초기값은 서버가 채운다 — NetworkVariable은 서버 권위로 초기화되고 전 클라에 복제된다.
-        if (IsServer)
+        // 배터리 변화를 전 클라가 수신해 UI를 갱신한다 (본부 화면 포함).
+        // 초기값 세팅보다 먼저 구독해 오너 자신의 0→최대 변화도 이벤트로 받게 한다.
+        m_currentBattery.OnValueChanged += HandleBatteryChanged;
+
+        // 배터리 초기값은 '오너'가 채운다. 이 변수는 쓰기 권한이 Owner라 서버(오너 아님)가 쓰면
+        // NGO가 조용히 무시한다(LogWritePermissionError 후 return) — 게스트 소유 스캐너
+        // (PlayerLoadout이 SpawnWithOwnership로 스폰)의 배터리가 0으로 남던 원인이었다.
+        // 오너가 채우면 전 클라에 복제되고 뒤늦게 접속한 클라도 스폰 동기화로 현재값을 받는다.
+        // TODO: #55 서버권위 전환 시 쓰기를 Server로 좁히고 초기화/소모/충전을 ServerRpc 경유로.
+        if (IsOwner)
         {
             m_currentBattery.Value = m_maxBattery;
         }
-
-        // 배터리 변화를 전 클라가 수신해 UI를 갱신한다 (본부 화면 포함).
-        m_currentBattery.OnValueChanged += HandleBatteryChanged;
     }
 
     public override void OnNetworkDespawn()
