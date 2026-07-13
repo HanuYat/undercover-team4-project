@@ -26,11 +26,19 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
         switch (m_controller.CurrentState)
         {
             case NpcState.Run:
-                Debug.Log($"도주 NPC 제압: {m_controller.name}");
-                m_controller.CaptureBySubdue();
+                // 도주 제압도 서버 권위 — 요청자(플레이어)의 PlayerEscorter를 통해 서버로 넘긴다 (#118).
+                // CaptureBySubdue는 서버 가드가 있어 클라에서 직접 부르면 무시되기 때문.
+                PlayerEscorter escorter = interactor != null
+                    ? interactor.GetComponentInParent<PlayerEscorter>() : null;
+                if (escorter != null)
+                {
+                    Debug.Log($"도주 NPC 제압 요청: {m_controller.name}");
+                    escorter.RequestSubdueCapture(m_controller);
+                }
                 break;
 
             case NpcState.Attack:
+                // 저항 타격은 이미 자체 RPC 경로(RequestSubdueHit → SubdueHitRpc)를 가진다 (#79)
                 Debug.Log($"저항 NPC 제압 타격: {m_controller.name}");
                 m_controller.RequestSubdueHit();
                 break;
