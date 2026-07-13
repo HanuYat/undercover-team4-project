@@ -198,8 +198,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f31dede33414a7a4b9805fc2692a0bc1, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::CitizenIdentity
+  m_officialRecords: {fileID: 11400000, guid: 1b5b7a3bc8cc725468fa2e0d915c05cb, type: 2}
 --- !u!114 &8156950665793670387
 MonoBehaviour:
   m_ObjectHideFlags: 0
