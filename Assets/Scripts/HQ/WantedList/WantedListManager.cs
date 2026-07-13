@@ -6,14 +6,11 @@ using UnityEngine;
 /// <summary>
 /// 본부 수배 리스트(#58) — 라운드 검거 대상을 서버 권위로 채우고, 검거되면 해당 항목을 지운다.
 /// 리스트는 NetworkList로 전 클라이언트에 동기화되며, 본부 UI는 이 컴포넌트의 <see cref="Wanted"/>를
-/// 구독해 표시한다. 지금은 범인 1명이라 항목이 1개지만, 다중 수배 확장 대비 리스트로 둔다.
+/// 구독해 표시한다. 진범이 여러 명이면(#127) OnMontageGenerated가 범인마다 발행되어 항목도 그만큼 쌓인다.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
 public class WantedListManager : NetworkBehaviour
 {
-    [Header("범인 배정 (비우면 씬에서 자동 탐색)")]
-    [SerializeField] private CriminalAssigner m_criminalAssigner;
-
     [Header("외형/몽타주 배정 (비우면 씬에서 자동 탐색)")]
     [SerializeField] private AppearanceAssigner m_appearanceAssigner;
 
@@ -35,9 +32,6 @@ public class WantedListManager : NetworkBehaviour
 
     private void Awake()
     {
-        if (m_criminalAssigner == null)
-            m_criminalAssigner = FindFirstObjectByType<CriminalAssigner>();
-
         if (m_appearanceAssigner == null)
             m_appearanceAssigner = FindFirstObjectByType<AppearanceAssigner>();
 
@@ -78,16 +72,18 @@ public class WantedListManager : NetworkBehaviour
     }
 
     // 몽타주 생성 완료 = 범인·외형·이름 모두 확정된 시점. 수배 항목을 리스트에 추가한다. (서버 전용)
-    private void HandleMontageGenerated(string montageText)
+    // 진범이 여러 명이면(#127) 범인마다 한 번씩 호출되어 항목이 그만큼 추가된다.
+    private void HandleMontageGenerated(NpcController criminal, string montageText)
     {
-        NpcController criminal = m_criminalAssigner != null ? m_criminalAssigner.CriminalNpc : null;
         if (criminal == null)
         {
             Debug.LogWarning("WantedListManager: 범인 NPC가 없어 수배 항목을 등록하지 못했다", this);
             return;
         }
 
-        CitizenProfile profile = m_criminalAssigner.WantedProfile;
+        // 수배 이름은 범인 신원(CitizenIdentity)에서 직접 읽는다 — CriminalAssigner가 배정해 둔 프로필
+        CitizenIdentity identity = criminal.GetComponent<CitizenIdentity>();
+        CitizenProfile profile = identity != null ? identity.Profile : null;
         string wantedName = profile != null ? profile.CitizenName : criminal.name;
 
         m_wanted.Add(new WantedEntry

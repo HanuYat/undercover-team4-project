@@ -4,7 +4,7 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// 스폰 완료 후 모든 NPC에 랜덤 시민 프로필을 채우고, 그중 1명을 실제 범인으로 지정한다. (이슈 #38)
+/// 스폰 완료 후 모든 NPC에 랜덤 시민 프로필을 채우고, 인스펙터에서 지정한 수만큼 실제 범인으로 지정한다. (이슈 #38/#127)
 /// 무고 시민도 확률적으로 도주/저항 반응을 보인다 — 진범을 헷갈리게 하는 미끼 행동으로,
 /// 잡아도 보상 없는 오검거일 뿐이다(진범만 유효 검거). 행동은 단서가 아니라 노이즈다. (#78)
 /// 범인의 프로필(WantedProfile)이 곧 본부 수배 데이터(#58)의 원본이 된다.
@@ -19,6 +19,12 @@ public class CriminalAssigner : MonoBehaviour
     [Header("공식 기록 (세력 심볼 조회용)")]
     [SerializeField]
     private OfficialRecords m_officialRecords;
+
+    [Header("진범 수 (#127)")]
+    [Tooltip("이번 라운드에 배정할 진범 수. NPC 수보다 크면 NPC 수로 잘라 배정한다(경고 로그)")]
+    [Min(1)]
+    [SerializeField]
+    private int m_criminalCount = 1;
 
     [Header("범인 검거 반응 가중치 (#76)")]
     [Tooltip("합이 1일 필요 없음 — 비율로 추첨한다. 범인은 도주/저항 성향이 높다")]
@@ -73,14 +79,17 @@ public class CriminalAssigner : MonoBehaviour
         "Zane Mercer",
     };
 
-    /// <summary>실제 범인으로 지정된 NPC. 배정 전에는 null.</summary>
-    public NpcController CriminalNpc { get; private set; }
+    private readonly List<NpcController> m_criminalNpcs = new List<NpcController>();
+    private readonly List<CitizenProfile> m_wantedProfiles = new List<CitizenProfile>();
 
-    /// <summary>범인의 프로필 = 본부 수배 데이터(#58)의 원본.</summary>
-    public CitizenProfile WantedProfile { get; private set; }
+    /// <summary>실제 범인으로 지정된 NPC들. 배정 전에는 비어 있다. (#127)</summary>
+    public IReadOnlyList<NpcController> CriminalNpcs => m_criminalNpcs;
 
-    /// <summary>배정 완료 이벤트 — 수배 UI(#58)·진범 판정(#41) 등이 구독한다.</summary>
-    public event Action<NpcController> OnCriminalAssigned;
+    /// <summary>범인들의 프로필 = 본부 수배 데이터(#58)의 원본. CriminalNpcs와 같은 순서.</summary>
+    public IReadOnlyList<CitizenProfile> WantedProfiles => m_wantedProfiles;
+
+    /// <summary>배정 완료 이벤트 — 수배 UI(#58)·진범 판정(#41) 등이 구독한다. 배정된 전체 범인 목록을 넘긴다. (#127)</summary>
+    public event Action<IReadOnlyList<NpcController>> OnCriminalAssigned;
 
     private void Awake()
     {
@@ -118,12 +127,23 @@ public class CriminalAssigner : MonoBehaviour
             return;
         }
 
-        int criminalIndex = Random.Range(0, npcs.Count);
+        // 진범 수는 NPC 수를 넘을 수 없다 — 초과 지정 시 잘라서 배정한다 (#127)
+        int criminalCount = Mathf.Clamp(m_criminalCount, 1, npcs.Count);
+        if (m_criminalCount > npcs.Count)
+            Debug.LogWarning(
+                $"CriminalAssigner: 진범 수({m_criminalCount})가 NPC 수({npcs.Count})보다 많아 {criminalCount}명으로 잘라 배정한다",
+                this
+            );
+
+        HashSet<int> criminalIndices = PickCriminalIndices(npcs.Count, criminalCount);
         string[] names = BuildUniqueNames(npcs.Count);
+
+        m_criminalNpcs.Clear();
+        m_wantedProfiles.Clear();
 
         // 스캔 UI(#39) 전까지는 로그로 배정 결과를 확인한다
         var logBuilder = new System.Text.StringBuilder();
-        logBuilder.AppendLine($"시민 프로필 배정 완료 ({npcs.Count}명):");
+        logBuilder.AppendLine($"시민 프로필 배정 완료 ({npcs.Count}명, 진범 {criminalCount}명):");
 
         for (int i = 0; i < npcs.Count; i++)
         {
@@ -141,7 +161,7 @@ public class CriminalAssigner : MonoBehaviour
                 m_officialRecords
             );
 
-            bool isCriminal = i == criminalIndex;
+            bool isCriminal = criminalIndices.Contains(i);
             identity.AssignProfile(profile, isCriminal);
 
             // 검거 반응 — 범인은 범인 가중치로, 무고 시민은 시민 가중치로 추첨한다.
@@ -153,8 +173,8 @@ public class CriminalAssigner : MonoBehaviour
 
             if (isCriminal)
             {
-                CriminalNpc = npcs[i];
-                WantedProfile = profile;
+                m_criminalNpcs.Add(npcs[i]);
+                m_wantedProfiles.Add(profile);
             }
 
             // 범인 표시는 정답이 노출되므로 데모 빌드 전에 제거할 것. 반응은 미끼 행동 확인용으로 함께 로그
@@ -166,8 +186,28 @@ public class CriminalAssigner : MonoBehaviour
             );
         }
 
-        OnCriminalAssigned?.Invoke(CriminalNpc);
+        OnCriminalAssigned?.Invoke(m_criminalNpcs);
         Debug.Log(logBuilder.ToString());
+    }
+
+    /// <summary>0~total-1 인덱스를 셔플해 앞에서 count개를 뽑는다 — 중복 없는 진범 인덱스. (#127)</summary>
+    private static HashSet<int> PickCriminalIndices(int total, int count)
+    {
+        // 인덱스 배열 피셔-예이츠 셔플 — 이름 풀(BuildUniqueNames)과 같은 방식
+        int[] indices = new int[total];
+        for (int i = 0; i < total; i++)
+            indices[i] = i;
+
+        for (int i = total - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            (indices[i], indices[j]) = (indices[j], indices[i]);
+        }
+
+        var result = new HashSet<int>();
+        for (int i = 0; i < count; i++)
+            result.Add(indices[i]);
+        return result;
     }
 
     /// <summary>이름 풀을 섞어 중복 없는 이름 배열을 만든다. NPC가 풀보다 많으면 번호를 붙인다.</summary>
