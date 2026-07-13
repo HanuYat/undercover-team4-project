@@ -107,7 +107,7 @@ public class Scanner : ItemBase, IChargeable
             return null;
         }
 
-        // 콜라이더가 NPC 루트의 자식일 수 있으므로 부모까지 탐색한다 (Handcuffs.FindTarget과 동일 관례).
+        // 콜라이더가 NPC 루트의 자식일 수 있으므로 부모까지 탐색한다 (Handcuffs.ResolveTarget과 동일 관례).
         CitizenIdentity identity = target.GetComponentInParent<CitizenIdentity>();
         return identity != null ? identity.Profile : null;
     }
