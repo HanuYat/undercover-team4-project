@@ -80,8 +80,6 @@ MonoBehaviour:
   m_itemIcon: {fileID: 0}
   m_itemDescription: 
   m_heldModelPrefab: {fileID: 0}
-  m_channelSeconds: 3
-  m_captureRange: 2.5
 --- !u!1 &554224255856011205
 GameObject:
   m_ObjectHideFlags: 0
@@ -1496,6 +1494,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 058b4f1512fb3ed45a97a0901a44c130, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerEscorter
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_channelSeconds: 3
+  m_captureRange: 2.5
 --- !u!1 &5536001738967602051
 GameObject:
   m_ObjectHideFlags: 0
