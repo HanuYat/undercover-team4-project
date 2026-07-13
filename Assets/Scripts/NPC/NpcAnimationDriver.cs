@@ -13,10 +13,13 @@ public class NpcAnimationDriver : MonoBehaviour
     private static readonly int s_stateHash = Animator.StringToHash("State");
 
     // 연행 근접 정지(#97) 모션 전환 임계값 — 실제 이동 속도(m/s) 기준.
-    // 켜짐/꺼짐 경계를 다르게 둬(히스테리시스) 정지 직전 감속 구간에서 모션이 떨리는 것을 막는다
-    private const float k_escortMoveOnSpeed = 0.3f;
-    private const float k_escortMoveOffSpeed = 0.1f;
-    private const float k_speedSmoothing = 10f; // 프레임 노이즈 완화용 지수 평활 계수
+    // 켜짐/꺼짐 경계를 다르게 둬(히스테리시스) 정지 직전 감속 구간에서 모션이 떨리는 것을 막는다.
+    // 꺼짐 임계값은 걷기 최저 속도(~1.6m/s)보다 충분히 낮게 — 추종 중 순간 감속에 오작동하지 않는 선
+    private const float k_escortMoveOnSpeed = 0.5f;
+    private const float k_escortMoveOffSpeed = 0.25f;
+    // 프레임 노이즈 완화용 지수 평활 계수 — 클수록 정지 반응이 빨라진다.
+    // 근접 정지가 velocity를 즉시 0으로 끊으므로(#97) 평활이 식는 시간이 곧 모션 전환 지연이다
+    private const float k_speedSmoothing = 25f;
 
     [SerializeField] private Animator m_animator;
 
