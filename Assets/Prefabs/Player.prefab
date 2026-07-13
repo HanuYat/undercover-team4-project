@@ -336,7 +336,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScanResultPresenter
   ShowTopMostFoldoutHeaderGroup: 1
-  m_scanner: {fileID: 3503644817148251253}
   m_view: {fileID: 4638328407914202160}
   m_uiRoot: {fileID: 1776703635028233291}
 --- !u!1 &1907838594340494681
@@ -1541,8 +1540,6 @@ Transform:
   - {fileID: 3828944588678825438}
   - {fileID: 6253218595595543391}
   - {fileID: 8921649807672335866}
-  - {fileID: 1686898779648271855}
-  - {fileID: 5747497806078530203}
   - {fileID: 7500928697689941379}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -1716,7 +1713,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 32a9aa539f237094d9281eb8adaa6974, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerItemUser
-  m_equippedItem: {fileID: 3503644817148251253}
+  m_equippedItem: {fileID: 0}
 --- !u!114 &5787005119048988933
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1804,8 +1801,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerLoadout
   m_startingGear:
-  - {fileID: 7706984690027994764, guid: f9679efa0de9358449d82923ccfc9755, type: 3}
   - {fileID: 6465765157232573796, guid: ef3d4594c5614be42ad3cdf1ec34cb19, type: 3}
+  - {fileID: 7706984690027994764, guid: f9679efa0de9358449d82923ccfc9755, type: 3}
   m_itemAnchor: {fileID: 0}
 --- !u!1 &5536001738967602051
 GameObject:
