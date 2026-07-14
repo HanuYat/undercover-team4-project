@@ -67,11 +67,11 @@ public class Scanner : ItemBase, IChargeable
             return;
         }
 
-        // 클라 → ServerRpc 경유. RequireOwnership 기본 false — 본부 충전기(#60)도 호출 가능.
+        // 클라 → ServerRpc 경유. InvokePermission = Everyone으로 명시 — 본부 충전기(#60) 등 비오너도 호출 가능.
         RequestChargeRpc(amount);
     }
 
-    [Rpc(SendTo.Server)]
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void RequestChargeRpc(int amount)
     {
         ServerCharge(amount);
@@ -79,7 +79,9 @@ public class Scanner : ItemBase, IChargeable
 
     private void ServerCharge(int amount)
     {
-        if (!IsServer)
+        // 스폰 전(오프라인)엔 IsServer 캐시가 아직 갱신되지 않아 false일 수 있으므로,
+        // "스폰된 상태에서 서버가 아닐 때"만 차단한다.
+        if (IsSpawned && !IsServer)
         {
             return;
         }
@@ -173,7 +175,9 @@ public class Scanner : ItemBase, IChargeable
     /// </summary>
     private void ServerBeginScan(NetworkObjectReference npcRef)
     {
-        if (!IsServer)
+        // 스폰 전(오프라인)엔 IsServer 캐시가 아직 갱신되지 않아 false일 수 있으므로,
+        // "스폰된 상태에서 서버가 아닐 때"만 차단한다.
+        if (IsSpawned && !IsServer)
         {
             return;
         }
