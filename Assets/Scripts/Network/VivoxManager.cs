@@ -205,7 +205,7 @@ public class VivoxManager : MonoBehaviour
         GUILayout.Label($"LoggedIn: {m_loggedIn}");
         GUILayout.Label($"Joined: {m_joined}");
         GUILayout.Label($"Transmitting(PTT): {m_transmitting}");
-        GUILayout.Label($"Push To Talk: {(m_pushToTalkAction != null ? m_pushToTalkAction.action.name : "(미할당)")}");
+        GUILayout.Label($"Push To Talk: {(m_pushToTalkAction != null ? m_pushToTalkAction.action.GetBindingDisplayString() : "(미할당)")}");
         GUILayout.Space(6);
         GUILayout.Label(m_status);
         GUILayout.EndArea();
