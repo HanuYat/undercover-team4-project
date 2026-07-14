@@ -16,6 +16,7 @@ using UnityEngine;
 /// </summary>
 // TODO: #55 서버권위 전환 시 장착/사용 실행도 서버 기준으로 (지금은 장착 상태가 오너 로컬)
 [RequireComponent(typeof(PlayerItemUser))]
+[RequireComponent(typeof(PlayerInteractor))]
 public class PlayerLoadout : NetworkBehaviour
 {
     [Header("기본 지급 장비")]
@@ -38,8 +39,9 @@ public class PlayerLoadout : NetworkBehaviour
     private PlayerInputHandler m_inputHandler;
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 아이템 전환·버리기 차단용 (#105)
 
-    // 서버 줍기 거리 검증용 사거리(m) — PlayerInteractor의 조준 사거리를 캐싱해 재사용한다.
-    // 값을 따로 두지 않고 여기서 읽어야 조준-줍기 사거리가 항상 정합된다 (#147).
+    // 서버 줍기 거리 검증용 — PlayerInteractor의 조준 사거리·기준점을 그대로 재사용한다 (#147).
+    // 값을 따로 두지 않고 여기서 읽어야 조준-줍기 사거리가 항상 정합된다.
+    private PlayerInteractor m_interactor;
     private float m_pickupRange;
 
     // 다운(무력화) 중 여부 — 무력화 컴포넌트가 없으면(테스트 구성 등) 항상 false. (PlayerMovement 관례)
@@ -58,7 +60,8 @@ public class PlayerLoadout : NetworkBehaviour
         m_itemUser = GetComponent<PlayerItemUser>();
         m_inputHandler = GetComponent<PlayerInputHandler>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
-        m_pickupRange = GetComponent<PlayerInteractor>().Range;
+        m_interactor = GetComponent<PlayerInteractor>();
+        m_pickupRange = m_interactor.Range;
     }
 
     public override void OnNetworkSpawn()
@@ -157,8 +160,9 @@ public class PlayerLoadout : NetworkBehaviour
             return;
         }
 
-        // 서버 거리 검증 — 위조 RPC로 원격 줍기 방지 (#147). root↔아이템 sqrMagnitude 비교.
-        Vector3 toItem = itemNetworkObject.transform.position - transform.position;
+        // 서버 거리 검증 — 위조 RPC로 원격 줍기 방지 (#147). 클라 조준과 동일한 기준점(카메라)↔아이템
+        // sqrMagnitude 비교 — root 기준이면 카메라 오프셋만큼 사거리 경계에서 오탐 거부될 수 있다.
+        Vector3 toItem = itemNetworkObject.transform.position - m_interactor.AimOrigin.position;
         if (toItem.sqrMagnitude > m_pickupRange * m_pickupRange)
         {
             return;
