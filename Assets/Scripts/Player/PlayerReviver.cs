@@ -147,6 +147,23 @@ public class PlayerReviver : NetworkBehaviour
         if (m_isChanneling || target == null)
             return;
 
+        // --- [Issue #148] 변조된 클라이언트의 비정상 RPC 호출 방어를 위한 서버 측 검증 ---
+        
+        // 1. 구조자가 다운된 상태인지 검증
+        if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
+        {
+            Debug.LogWarning($"[Server] 다운 상태인 플레이어({m_selfData.name})가 구조를 시도하여 거부됨.");
+            return;
+        }
+
+        // 2. 구조 대상이 자기 자신인지 검증 (자가 구조 방지)
+        if (target == m_selfData)
+        {
+            Debug.LogWarning($"[Server] 플레이어({m_selfData.name})가 자가 구조(Self-revive)를 시도하여 거부됨.");
+            return;
+        }
+        // --------------------------------------------------------------------------------
+
         PlayerIncapacitation targetIncap = target.GetComponent<PlayerIncapacitation>();
         if (targetIncap == null || !targetIncap.IsIncapacitated)
             return; // 다운 상태에서만 구조 가능
