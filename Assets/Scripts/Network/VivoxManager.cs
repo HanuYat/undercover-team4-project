@@ -1,17 +1,17 @@
-using Cysharp.Threading.Tasks;
 using System;
 using System.Text;
-using Unity.Services.Authentication;
-using Unity.Services.Core;
-using Unity.Services.Vivox;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Cysharp.Threading.Tasks;
+using Unity.Services.Core;
+using Unity.Services.Vivox;
+using Unity.Services.Authentication;
 
 // GDD 4-91: 전역 오픈 음성 채널 1개(거리무관, non-positional) + PTT.
 public class VivoxManager : MonoBehaviour
 {
-    [SerializeField] private string m_channelPrefix = "GlobalRadio";
-    [SerializeField] private Key m_pushToTalkKey = Key.V;
+    [SerializeField] private string m_channelPrefix = "Radio";
+    [SerializeField] private InputActionReference m_pushToTalkAction;
     [SerializeField] private SessionManager m_session;   // 인스펙터에서 연결
 
     private bool m_loggedIn;
@@ -27,6 +27,13 @@ public class VivoxManager : MonoBehaviour
             m_session.OnSessionJoined += HandleSessionJoined;
             m_session.OnSessionLeft += HandleSessionLeft;
         }
+
+        if (m_pushToTalkAction != null)
+        {
+            m_pushToTalkAction.action.started += OnPushToTalkStarted;
+            m_pushToTalkAction.action.canceled += OnPushToTalkCanceled;
+            m_pushToTalkAction.action.Enable();
+        }
     }
 
     private void OnDisable()
@@ -35,6 +42,13 @@ public class VivoxManager : MonoBehaviour
         {
             m_session.OnSessionJoined -= HandleSessionJoined;
             m_session.OnSessionLeft -= HandleSessionLeft;
+        }
+
+        if (m_pushToTalkAction != null)
+        {
+            m_pushToTalkAction.action.started -= OnPushToTalkStarted;
+            m_pushToTalkAction.action.canceled -= OnPushToTalkCanceled;
+            m_pushToTalkAction.action.Disable();
         }
     }
 
@@ -136,19 +150,12 @@ public class VivoxManager : MonoBehaviour
         return sb.ToString();
     }
 
-    private void Update()
-    {
-        if (!m_joined) return;
-
-        var control = Keyboard.current?[m_pushToTalkKey];
-        if (control == null) return;
-
-        if (control.wasPressedThisFrame) SetTransmitting(true);
-        if (control.wasReleasedThisFrame) SetTransmitting(false);
-    }
+    private void OnPushToTalkStarted(InputAction.CallbackContext ctx) => SetTransmitting(true);
+    private void OnPushToTalkCanceled(InputAction.CallbackContext ctx) => SetTransmitting(false);
 
     private void SetTransmitting(bool on)
     {
+        if (!m_joined) return;  // 채널 참가 전에는 무시
         if (m_transmitting == on) return;
         m_transmitting = on;
 
@@ -198,7 +205,7 @@ public class VivoxManager : MonoBehaviour
         GUILayout.Label($"LoggedIn: {m_loggedIn}");
         GUILayout.Label($"Joined: {m_joined}");
         GUILayout.Label($"Transmitting(PTT): {m_transmitting}");
-        GUILayout.Label($"PTT 키: {m_pushToTalkKey}");
+        GUILayout.Label($"Push To Talk: {(m_pushToTalkAction != null ? m_pushToTalkAction.action.name : "(미할당)")}");
         GUILayout.Space(6);
         GUILayout.Label(m_status);
         GUILayout.EndArea();

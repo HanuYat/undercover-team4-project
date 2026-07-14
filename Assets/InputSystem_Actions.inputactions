@@ -1,4 +1,5 @@
 {
+    "version": 1,
     "name": "InputSystem_Actions",
     "maps": [
         {
@@ -1028,6 +1029,34 @@
                     "processors": "",
                     "groups": "XR",
                     "action": "TrackedDeviceOrientation",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        },
+        {
+            "name": "Voice",
+            "id": "4ffc76ce-034f-4b9d-9c17-b8dda170028d",
+            "actions": [
+                {
+                    "name": "PushToTalk",
+                    "type": "Button",
+                    "id": "55127614-8b35-4a20-a646-b42b88dd4900",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "4a86b493-c350-48dd-a107-000c45f48593",
+                    "path": "<Keyboard>/v",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "PushToTalk",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }
