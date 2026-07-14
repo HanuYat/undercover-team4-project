@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -9,14 +10,9 @@ using UnityEngine;
 /// 범인 배정(CriminalAssigner)이 서버에서만 이뤄지고 아직 클라이언트에 동기화되지 않으므로(#52/#56 TODO),
 /// 판정도 서버(또는 오프라인)에서만 수행한다 — 인계 NPC의 네트워크 권위로 게이트한다.
 /// </summary>
-// TODO: 본부 인계 상호작용(#40) 연결 시 자동 판정 대신 상호작용 시점에 Judge()를 호출하도록 전환.
-//       네트워크 전환 시 판정 결과를 ClientRpc로 브로드캐스트해 본부 UI(#43)가 전 피어에서 표시.
 public class ArrestJudge : MonoBehaviour
 {
-    /// <summary>현상수배범(진범) 검거 보상 (GDD 9-1).</summary>
     private const int k_wantedReward = 10000;
-
-    /// <summary>오검거 보상 — 없음 (GDD 9-1: 보상 없는 대상이라 수익 0).</summary>
     private const int k_wrongfulReward = 0;
 
     [Header("인계 구역 (비우면 씬에서 자동 탐색)")]
@@ -25,8 +21,10 @@ public class ArrestJudge : MonoBehaviour
     [Tooltip("인계 도달 시 자동 판정. 본부 인계 상호작용(#40) 도입 전까지 데모용으로 켜둔다")]
     [SerializeField] private bool m_autoJudgeOnDelivery = true;
 
-    /// <summary>판정 완료 이벤트 — 자금 정산(#42)·오검거 페널티(GDD 7-3)·판정 UI(#43)가 구독한다.</summary>
     public event Action<ArrestResult> OnArrestJudged;
+
+    // [수정] static으로 선언하여 HqDropoffZone 등 외부에서 쉽게 검사할 수 있도록 공개 (블랙리스트)
+    public static HashSet<NpcController> JudgedNpcs { get; } = new HashSet<NpcController>();
 
     private void Awake()
     {
@@ -52,18 +50,13 @@ public class ArrestJudge : MonoBehaviour
             Judge(npc);
     }
 
-    /// <summary>
-    /// 인계된 NPC를 판정한다. 판정에 성공하면 결과를 반환하고 OnArrestJudged를 발행한다.
-    /// 클라이언트(서버 권위 밖)이거나 신원이 없어 판정할 수 없으면 null을 반환한다.
-    /// </summary>
     public ArrestResult? Judge(NpcController npc)
     {
-        if (npc == null)
-            return null;
+        if (npc == null) return null;
+        if (npc.IsSpawned && !npc.IsServer) return null;
 
-        // 서버 권위 — 범인 배정이 서버에서만 유효하므로 클라이언트는 판정하지 않는다 (#56 패턴)
-        if (npc.IsSpawned && !npc.IsServer)
-            return null;
+        // 혹시 모를 중복 진입 방어
+        if (JudgedNpcs.Contains(npc)) return null;
 
         CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
         if (identity == null)
@@ -72,21 +65,29 @@ public class ArrestJudge : MonoBehaviour
             return null;
         }
 
-        // 진범이면 수배 검거, 그 외에는 전부 오검거. 무고 시민의 도주·저항은 진범을 헷갈리게 하는
-        // 미끼 행동일 뿐이라 판정에 영향을 주지 않는다 — 순응·도주·저항을 가리지 않고 오검거다. (#78)
+        // [핵심] 판정이 시작되면 즉시 판정 완료 명단에 추가
+        JudgedNpcs.Add(npc);
+
         ArrestVerdict verdict = identity.IsCriminal
             ? ArrestVerdict.WantedCriminal
             : ArrestVerdict.WrongfulArrest;
         int reward = verdict == ArrestVerdict.WantedCriminal ? k_wantedReward : k_wrongfulReward;
 
-        var result = new ArrestResult(npc, verdict, identity.Profile, reward, ResolveDeliverer(npc));
+        PlayerEscorter deliverer = ResolveDeliverer(npc);
+        var result = new ArrestResult(npc, verdict, identity.Profile, reward, deliverer);
 
         LogVerdict(result);
         OnArrestJudged?.Invoke(result);
+
+        // 연행 상태 물리적 해제 (플레이어에게서 분리)
+        if (deliverer != null)
+            deliverer.RequestRelease();
+        else
+            npc.StopEscort();
+
         return result;
     }
 
-    /// <summary>이 NPC를 연행 중이던 플레이어를 찾는다 — 오검거 개인 기록(GDD 7-3)용. 못 찾으면 null.</summary>
     private static PlayerEscorter ResolveDeliverer(NpcController npc)
     {
         PlayerEscorter[] escorters = FindObjectsByType<PlayerEscorter>(FindObjectsSortMode.None);
@@ -106,22 +107,12 @@ public class ArrestJudge : MonoBehaviour
     }
 }
 
-/// <summary>검거 판정 결과 묶음. (#41)</summary>
 public readonly struct ArrestResult
 {
-    /// <summary>판정된 NPC.</summary>
     public readonly NpcController Npc;
-
-    /// <summary>판정 결과 — 진범/오검거.</summary>
     public readonly ArrestVerdict Verdict;
-
-    /// <summary>인계 NPC의 실제 프로필. 신원 미배정이면 null.</summary>
     public readonly CitizenProfile Profile;
-
-    /// <summary>이 검거로 발생하는 보상액(원) — 실제 정산은 #42가 담당.</summary>
     public readonly int Reward;
-
-    /// <summary>인계한 플레이어 — 오검거 개인 기록(GDD 7-3)용. 못 찾으면 null.</summary>
     public readonly PlayerEscorter DeliveredBy;
 
     public ArrestResult(NpcController npc, ArrestVerdict verdict, CitizenProfile profile,
