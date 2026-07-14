@@ -67,6 +67,7 @@ public class PlayerInteractor : NetworkBehaviour
         if (m_escorter != null && m_escorter.IsEscorting)
         {
             // Release() 직접 호출은 서버 가드에 막힌다 — 요청 API로 서버에 넘긴다 (#118)
+            Debug.Log("E 입력 — 연행 놓기 요청");
             m_escorter.RequestRelease();
             return;
         }
