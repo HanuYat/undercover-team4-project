@@ -39,7 +39,7 @@ public class PlayerReviveHud : NetworkBehaviour
         if (m_reviver != null && m_reviver.CurrentReviveTarget != null)
         {
             string key = m_inputHandler != null ? m_inputHandler.InteractDisplayName : "?";
-            DrawCenterLabel($"[{key}] 홀드하여 구조");
+            DrawCenterLabel($"[E]키를 홀드하여 구조");
         }
     }
 

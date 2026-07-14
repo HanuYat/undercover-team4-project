@@ -30,8 +30,11 @@ public enum RoundResult
 ///
 /// 종료 조건 (#103, GDD 9-3):
 ///  · 성공 — 진범 검거 수가 할당량(m_arrestQuota)에 도달.
-///  · 실패(게임오버) — 제한시간(m_timeLimitSeconds) 초과 시점에 할당량 미달. <b>유일한 게임오버 조건</b>이다.
-///    오검거·플레이어 다운 등은 라운드를 끝내지 않는다 (GDD 부록B #2, 7-5).
+///  · 실패(게임오버) — 다음 중 하나:
+///    - 제한시간(m_timeLimitSeconds) 초과 시점에 할당량 미달 (GDD 9-3, 부록B #2).
+///    - 플레이어 <b>전원</b> 다운(무력화) — 아무도 행동할 수 없는 전멸 상태 (#105).
+///  오검거·플레이어 '일부' 다운 방치는 라운드를 끝내지 않는다 — 할당량 압박이 자연 페널티다 (GDD 7-5).
+///  ⚠ GDD 부록B #2는 시간초과를 '유일한' 게임오버로 적고 있어, 전멸 종료는 GDD 본문 확정이 필요하다(팀 검토).
 /// 할당량·제한시간 수치는 전부 인스펙터 — 밸런싱 보류 항목(GDD 12장)이라 코드에 못 박지 않는다.
 ///
 /// 범인 배정(CriminalAssigner)·검거 판정(ArrestJudge)이 서버 권위이므로 라운드 진행도 서버(또는 오프라인)에서만 한다.
@@ -90,12 +93,15 @@ public class RoundManager : MonoBehaviour
     {
         if (m_arrestJudge != null)
             m_arrestJudge.OnArrestJudged += HandleArrestJudged;
+        // 전원 다운(전멸) 감시 — 무력화 상태 변화는 서버·오프라인에서만 발행된다. (#105)
+        PlayerIncapacitation.OnAnyIncapacitatedChanged += HandleAnyIncapacitatedChanged;
     }
 
     private void OnDisable()
     {
         if (m_arrestJudge != null)
             m_arrestJudge.OnArrestJudged -= HandleArrestJudged;
+        PlayerIncapacitation.OnAnyIncapacitatedChanged -= HandleAnyIncapacitatedChanged;
         if (m_networkManager != null)
             m_networkManager.OnServerStarted -= HandleServerStarted;
     }
@@ -161,8 +167,8 @@ public class RoundManager : MonoBehaviour
             return;
         RemainingSeconds = 0f;
 
-        // 시간 초과 = 할당량 미달 확정 (채웠다면 그 순간 이미 성공 종료됐다) → 게임오버.
-        // 할당량 미달이 유일한 게임오버 조건이다 (GDD 9-3, 부록B #2).
+        // 시간 초과 = 할당량 미달 확정 (채웠다면 그 순간 이미 성공 종료됐다) → 게임오버. (GDD 9-3, 부록B #2)
+        // (전원 다운(전멸)도 별도 게임오버 조건이다 — HandleAnyIncapacitatedChanged, #105)
         Debug.Log($"[라운드] 제한시간 초과 — 진범 검거 {CriminalArrestCount}/{m_arrestQuota}명, 할당량 미달");
         EndRound(RoundResult.Failure);
     }
@@ -183,6 +189,35 @@ public class RoundManager : MonoBehaviour
 
         if (CriminalArrestCount >= m_arrestQuota)
             EndRound(RoundResult.Success);
+    }
+
+    // 플레이어 무력화 상태 변화 수신 — 전원 다운(전멸)이면 게임오버로 종료한다. (#105, 서버/오프라인에서만 발행됨)
+    // Phase가 InProgress가 되는 곳이 서버/오프라인뿐이라 클라이언트에서는 아래 가드에 걸려 아무 일도 하지 않는다.
+    private void HandleAnyIncapacitatedChanged()
+    {
+        if (Phase != RoundPhase.InProgress)
+            return;
+        if (!AreAllPlayersIncapacitated())
+            return;
+
+        Debug.Log("[라운드] 플레이어 전원 다운 — 전멸(게임오버)");
+        EndRound(RoundResult.Failure);
+    }
+
+    // 현재 존재하는 모든 플레이어가 무력화 상태인지 — 한 명이라도 멀쩡하면 false. 플레이어가 없으면 전멸이 아니다.
+    // (IsIncapacitated가 온라인=동기화값/서버=실참조, 오프라인=실참조를 알아서 처리하므로 세션 종류와 무관하게 동작한다)
+    private static bool AreAllPlayersIncapacitated()
+    {
+        PlayerIncapacitation[] players = FindObjectsByType<PlayerIncapacitation>(FindObjectsSortMode.None);
+        if (players.Length == 0)
+            return false;
+
+        foreach (PlayerIncapacitation player in players)
+        {
+            if (!player.IsIncapacitated)
+                return false;
+        }
+        return true;
     }
 
     /// <summary>라운드를 종료한다 — 성공(할당량 달성)·실패(제한시간 초과) 공통 경로. (#42/#103)</summary>
