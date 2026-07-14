@@ -44,6 +44,13 @@ public class ArrestJudge : MonoBehaviour
             m_dropoffZone.OnNpcDelivered -= HandleNpcDelivered;
     }
 
+    // [리뷰 반영] 씬 전환 및 라운드 재시작 시 정적 데이터가 남아 
+    // 메모리 누수나 다음 라운드에 영향을 주지 않도록 초기화합니다.
+    private void OnDestroy()
+    {
+        JudgedNpcs.Clear();
+    }
+
     private void HandleNpcDelivered(NpcController npc)
     {
         if (m_autoJudgeOnDelivery)
@@ -81,9 +88,15 @@ public class ArrestJudge : MonoBehaviour
 
         // 연행 상태 물리적 해제 (플레이어에게서 분리)
         if (deliverer != null)
-            deliverer.RequestRelease();
+        {
+            // [리뷰 반영] RequestRelease()는 클라이언트 오너 권한이 필요하므로,
+            // 비호스트 유저 검거 시 동작하지 않습니다. 따라서 서버 권위로 즉시 풀어버리는 Release()를 호출합니다.
+            deliverer.Release();
+        }
         else
+        {
             npc.StopEscort();
+        }
 
         return result;
     }
