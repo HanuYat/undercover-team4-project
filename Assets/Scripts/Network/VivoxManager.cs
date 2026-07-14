@@ -213,9 +213,13 @@ public class VivoxManager : MonoBehaviour
         catch (Exception ex) { Debug.LogError($"[VivoxManager] 정리 실패: {ex}"); }
     }
 
+    [SerializeField] private float m_guiTopOffset = 10f;
+
     private void OnGUI()
     {
-        GUILayout.BeginArea(new Rect(400, 10, 320, 160));
+        if (m_session != null && m_session.Auth != null && m_session.Auth.IsNetworkConnected) return;
+
+        GUILayout.BeginArea(new Rect(450, m_guiTopOffset, 320, 160));
         GUILayout.Label("Vivox 무전 — 상태");
         GUILayout.Label($"LoggedIn: {m_loggedIn}");
         GUILayout.Label($"Joined: {m_joined}");
