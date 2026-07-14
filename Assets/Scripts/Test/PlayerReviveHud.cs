@@ -38,7 +38,6 @@ public class PlayerReviveHud : NetworkBehaviour
         // 다운된 아군을 조준 중이면 구조 키 프롬프트
         if (m_reviver != null && m_reviver.CurrentReviveTarget != null)
         {
-            string key = m_inputHandler != null ? m_inputHandler.InteractDisplayName : "?";
             DrawCenterLabel($"[E]키를 홀드하여 구조");
         }
     }

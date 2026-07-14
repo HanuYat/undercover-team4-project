@@ -321,9 +321,10 @@ public class PlayerEscorter : NetworkBehaviour
         ServerCancelCapture();
     }
 
-    private void OnDestroy()
+    public override void OnDestroy()
     {
         m_channelCts?.Cancel();
         m_channelCts?.Dispose();
+        base.OnDestroy(); // NetworkBehaviour의 파괴 시 네트워크 정리 — 생략하면 정리 로직이 통째로 건너뛰어진다
     }
 }
