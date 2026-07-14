@@ -98,6 +98,24 @@ public class NpcSpawner : MonoBehaviour
         SpawnAllAsync().Forget();
     }
 
+    /// <summary>
+    /// 스폰 상태를 초기화한다 — 서버 재시작(Shutdown 후 재기동) 시 재스폰을 허용하기 위해 RoundManager가 호출한다.
+    /// 이전 NPC를 정리하고 완료 래치(IsSpawnCompleted)를 풀어 StartSpawn()이 다시 동작하게 한다.
+    /// (네트워크 재시작 시 NGO가 이미 despawn한 NPC는 null이라 파괴를 건너뛴다)
+    /// </summary>
+    public void ResetSpawnState()
+    {
+        foreach (NpcController npc in m_spawnedNpcs)
+        {
+            if (npc != null)
+                Destroy(npc.gameObject);
+        }
+
+        m_spawnedNpcs.Clear();
+        m_isSpawning = false;
+        IsSpawnCompleted = false;
+    }
+
     // 네트워크 세션이 켜져 있는지 — 꺼져 있으면 기존처럼 로컬 단독 스폰으로 동작한다
     private static bool IsNetworkSessionActive =>
         NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening;
