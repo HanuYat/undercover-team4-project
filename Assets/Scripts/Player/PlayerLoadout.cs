@@ -36,6 +36,10 @@ public class PlayerLoadout : NetworkBehaviour
     private readonly List<ItemBase> m_heldItems = new List<ItemBase>();
     private PlayerItemUser m_itemUser;
     private PlayerInputHandler m_inputHandler;
+    private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 아이템 전환·버리기 차단용 (#105)
+
+    // 다운(무력화) 중 여부 — 무력화 컴포넌트가 없으면(테스트 구성 등) 항상 false. (PlayerMovement 관례)
+    private bool IsIncapacitated => m_incapacitation != null && m_incapacitation.IsIncapacitated;
 
     // 현재 장착 중인 아이템의 m_heldItems 인덱스. 보유 아이템이 없으면 -1. (#46)
     private int m_equippedIndex = -1;
@@ -49,6 +53,7 @@ public class PlayerLoadout : NetworkBehaviour
     {
         m_itemUser = GetComponent<PlayerItemUser>();
         m_inputHandler = GetComponent<PlayerInputHandler>();
+        m_incapacitation = GetComponent<PlayerIncapacitation>();
     }
 
     public override void OnNetworkSpawn()
@@ -160,6 +165,12 @@ public class PlayerLoadout : NetworkBehaviour
     private void RequestDropEquipped()
     {
         if (!IsOwner)
+        {
+            return;
+        }
+
+        // 다운(무력화) 중에는 아이템을 버릴 수 없다 (#105)
+        if (IsIncapacitated)
         {
             return;
         }
@@ -301,6 +312,12 @@ public class PlayerLoadout : NetworkBehaviour
     // 현재 인덱스에서 direction만큼 이동해 순환 장착한다. 보유 아이템이 없으면 무시.
     private void Cycle(int direction)
     {
+        // 다운(무력화) 중에는 마우스 휠 아이템 전환 차단 (#105)
+        if (IsIncapacitated)
+        {
+            return;
+        }
+
         int count = m_heldItems.Count;
         if (count == 0)
         {

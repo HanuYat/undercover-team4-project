@@ -23,6 +23,14 @@ public static class PlayerAnimatorControllerBuilder
     private const string k_runFolder =
         "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Movement/Run";
 
+    // 다운(무력화) 상태 머신 — Knockdown 3단계: 쓰러짐 → 바닥 대기(루프) → 기상. (#105)
+    private const string k_downParam = "Down";
+    private const string k_fallState = "Knockdown_Fall";
+    private const string k_groundState = "Knockdown_Ground";
+    private const string k_standUpState = "Knockdown_StandUp";
+    private const string k_combatFolder =
+        "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Combat";
+
     // 8방향 (클립 이름 접미사, 로컬 방향 벡터) — x = 좌우, z = 전후
     private static readonly (string suffix, Vector2 dir)[] s_directions =
     {
@@ -69,13 +77,15 @@ public static class PlayerAnimatorControllerBuilder
             blendTree.AddChild(run, dir * PlayerAnimationDriver.k_runParam);
         }
 
+        SetupDownStates(controller); // 다운(무력화) 상태 머신 추가/갱신 (#105)
+
         EditorUtility.SetDirty(blendTree);
         EditorUtility.SetDirty(controller);
         AssetDatabase.SaveAssets();
 
         Debug.Log($"[PlayerAnimatorControllerBuilder] {(isNew ? "생성" : "갱신")} 완료: {k_outputPath} " +
                   $"(Idle 중앙 / Walk 반경 {PlayerAnimationDriver.k_walkParam} 8방향 / " +
-                  $"Run 반경 {PlayerAnimationDriver.k_runParam} 8방향, 총 17모션)");
+                  $"Run 반경 {PlayerAnimationDriver.k_runParam} 8방향, 총 17모션 + 다운 3상태)");
 
         Selection.activeObject = controller;
     }
@@ -88,6 +98,117 @@ public static class PlayerAnimatorControllerBuilder
         }
 
         controller.AddParameter(name, AnimatorControllerParameterType.Float);
+    }
+
+    private static void EnsureBoolParameter(AnimatorController controller, string name)
+    {
+        foreach (AnimatorControllerParameter parameter in controller.parameters)
+        {
+            if (parameter.name == name) return;
+        }
+
+        controller.AddParameter(name, AnimatorControllerParameterType.Bool);
+    }
+
+    /// <summary>
+    /// 다운(무력화) 상태 머신을 구성한다. (#105, GDD 7-5)
+    /// Down(bool)=true면 Locomotion → Fall(쓰러짐) → Ground(바닥 대기, 루프),
+    /// 구조로 Down=false가 되면 Ground → StandUp(기상) → Locomotion으로 복귀한다.
+    /// 재실행 시 기존 다운 상태/전환을 지우고 다시 만들어 중복을 막는다.
+    /// </summary>
+    private static void SetupDownStates(AnimatorController controller)
+    {
+        AnimationClip fall = LoadClip($"{k_combatFolder}/HumanM@Knockdown01 - Fall.fbx");
+        AnimationClip ground = LoadClip($"{k_combatFolder}/HumanM@Knockdown01 - Ground.fbx");
+        AnimationClip standUp = LoadClip($"{k_combatFolder}/HumanM@Knockdown01 - StandUp.fbx");
+        if (fall == null || ground == null || standUp == null) return;
+
+        EnsureBoolParameter(controller, k_downParam);
+
+        AnimatorStateMachine stateMachine = controller.layers[0].stateMachine;
+        RemoveDownStates(stateMachine); // 재실행 시 중복 방지
+
+        AnimatorState locomotion = FindState(stateMachine, k_stateName);
+        AnimatorState fallState = stateMachine.AddState(k_fallState);
+        fallState.motion = fall;
+        AnimatorState groundState = stateMachine.AddState(k_groundState);
+        groundState.motion = ground;
+        AnimatorState standUpState = stateMachine.AddState(k_standUpState);
+        standUpState.motion = standUp;
+
+        // Locomotion → Fall : 다운되는 순간(Down=true) 즉시 쓰러짐
+        if (locomotion != null)
+        {
+            AnimatorStateTransition toFall = locomotion.AddTransition(fallState);
+            toFall.hasExitTime = false;
+            toFall.duration = 0.1f;
+            toFall.AddCondition(AnimatorConditionMode.If, 0f, k_downParam);
+        }
+
+        // Fall → Ground : 쓰러짐 모션이 끝나면 자동으로 바닥 대기(루프)
+        AnimatorStateTransition toGround = fallState.AddTransition(groundState);
+        toGround.hasExitTime = true;
+        toGround.exitTime = 0.9f;
+        toGround.duration = 0.1f;
+
+        // Ground → StandUp : 구조로 Down=false가 되면 기상
+        AnimatorStateTransition toStandUp = groundState.AddTransition(standUpState);
+        toStandUp.hasExitTime = false;
+        toStandUp.duration = 0.1f;
+        toStandUp.AddCondition(AnimatorConditionMode.IfNot, 0f, k_downParam);
+
+        // StandUp → Locomotion : 기상 모션이 끝나면 이동 상태로 복귀
+        if (locomotion != null)
+        {
+            AnimatorStateTransition toLocomotion = standUpState.AddTransition(locomotion);
+            toLocomotion.hasExitTime = true;
+            toLocomotion.exitTime = 0.9f;
+            toLocomotion.duration = 0.1f;
+        }
+    }
+
+    // 다운 상태(3종)와 그 상태로 향하는 전환을 모두 제거한다.
+    private static void RemoveDownStates(AnimatorStateMachine stateMachine)
+    {
+        // 먼저 다른 상태(Locomotion 등)에서 다운 상태로 향하는 전환 제거
+        foreach (ChildAnimatorState child in stateMachine.states)
+        {
+            var toRemove = new System.Collections.Generic.List<AnimatorStateTransition>();
+            foreach (AnimatorStateTransition transition in child.state.transitions)
+            {
+                if (transition.destinationState != null && IsDownState(transition.destinationState.name))
+                {
+                    toRemove.Add(transition);
+                }
+            }
+            foreach (AnimatorStateTransition transition in toRemove)
+            {
+                child.state.RemoveTransition(transition);
+            }
+        }
+
+        // 다운 상태 자체 제거 (해당 상태의 나가는 전환도 함께 삭제됨)
+        foreach (ChildAnimatorState child in stateMachine.states)
+        {
+            if (IsDownState(child.state.name))
+            {
+                stateMachine.RemoveState(child.state);
+            }
+        }
+    }
+
+    private static bool IsDownState(string name)
+    {
+        return name == k_fallState || name == k_groundState || name == k_standUpState;
+    }
+
+    private static AnimatorState FindState(AnimatorStateMachine stateMachine, string name)
+    {
+        foreach (ChildAnimatorState child in stateMachine.states)
+        {
+            if (child.state.name == name) return child.state;
+        }
+        return null;
     }
 
     /// <summary>

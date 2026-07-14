@@ -9,6 +9,7 @@ public class PlayerItemUser : MonoBehaviour
 
     private PlayerInputHandler m_inputHandler;
     private PlayerInteractor m_interactor;
+    private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 아이템 사용 차단용 (#105)
 
     /// <summary>현재 장착 중인 아이템. 없으면 null. (#45 — PlayerHandView가 초기 표시에 사용)</summary>
     public ItemBase EquippedItem => m_equippedItem;
@@ -22,6 +23,7 @@ public class PlayerItemUser : MonoBehaviour
         // 사용 시점에 겨냥 중인 대상을 아이템에 넘기기 위한 참조 (#33).
         // 테스트 구성 등 인터랙터가 없으면 null — 이때는 대상 없이(null) 사용된다.
         m_interactor = GetComponent<PlayerInteractor>();
+        m_incapacitation = GetComponent<PlayerIncapacitation>();
     }
 
     private void OnEnable()
@@ -49,6 +51,12 @@ public class PlayerItemUser : MonoBehaviour
 
     private void HandleUseItem()
     {
+        // 다운(무력화) 중에는 아이템 사용 불가 (#105)
+        if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
+        {
+            return;
+        }
+
         if (m_equippedItem == null)
         {
             return;
