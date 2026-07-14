@@ -26,14 +26,14 @@ public class PlayerItemUser : MonoBehaviour
 
     private void OnEnable()
     {
-        m_inputHandler.OnAttackStarted += HandleUseItem;
-        m_inputHandler.OnAttackCanceled += HandleCancelItem;
+        m_inputHandler.OnUseItemStarted += HandleUseItem;
+        m_inputHandler.OnUseItemCanceled += HandleCancelItem;
     }
 
     private void OnDisable()
     {
-        m_inputHandler.OnAttackStarted -= HandleUseItem;
-        m_inputHandler.OnAttackCanceled -= HandleCancelItem;
+        m_inputHandler.OnUseItemStarted -= HandleUseItem;
+        m_inputHandler.OnUseItemCanceled -= HandleCancelItem;
     }
 
     public void SetEquippedItem(ItemBase item)

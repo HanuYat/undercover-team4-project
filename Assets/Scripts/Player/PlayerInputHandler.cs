@@ -19,7 +19,7 @@ public class PlayerInputHandler : NetworkBehaviour
     private InputActionReference m_sprintAction;
 
     [SerializeField]
-    private InputActionReference m_attackAction;
+    private InputActionReference m_useItemAction;
 
     [SerializeField]
     private InputActionReference m_previousAction;
@@ -37,8 +37,8 @@ public class PlayerInputHandler : NetworkBehaviour
     public event Action OnInteractStarted; // 상호작용 버튼 누름
     public event Action OnInteractPerformed; // 상호작용 발동 — 순수 Button이라 누르는 즉시 발화 (즉시발동)
     public event Action OnInteractCanceled; // 상호작용 버튼 뗌
-    public event Action OnAttackStarted; // 아이템 사용 시작 (좌클릭 누름 — 채널링 시작, #91)
-    public event Action OnAttackCanceled; // 아이템 사용 중단 (좌클릭 뗌 — 채널링 취소, #91)
+    public event Action OnUseItemStarted; // 아이템 사용 시작 (좌클릭 누름 — 채널링 시작, #91)
+    public event Action OnUseItemCanceled; // 아이템 사용 중단 (좌클릭 뗌 — 채널링 취소, #91)
     public event Action OnPreviousItem; // 마우스 휠 위 — 이전 아이템으로 전환 (#46)
     public event Action OnNextItem; // 마우스 휠 아래 — 다음 아이템으로 전환 (#46)
     public event Action OnDropItem; // 장착 아이템 버리기 (#88)
@@ -55,7 +55,7 @@ public class PlayerInputHandler : NetworkBehaviour
         m_lookAction.action.Enable();
         m_interactAction.action.Enable();
         m_sprintAction.action.Enable();
-        m_attackAction.action.Enable();
+        m_useItemAction.action.Enable();
         m_previousAction.action.Enable();
         m_nextAction.action.Enable();
         m_dropAction.action.Enable();
@@ -69,8 +69,8 @@ public class PlayerInputHandler : NetworkBehaviour
         m_interactAction.action.canceled += OnInteractCanceledHandler;
         m_sprintAction.action.performed += OnSprintPerformed;
         m_sprintAction.action.canceled += OnSprintCanceled;
-        m_attackAction.action.started += OnAttackStartedHandler;
-        m_attackAction.action.canceled += OnAttackCanceledHandler;
+        m_useItemAction.action.started += OnUseItemStartedHandler;
+        m_useItemAction.action.canceled += OnUseItemCanceledHandler;
         m_previousAction.action.performed += OnPreviousItemHandler;
         m_nextAction.action.performed += OnNextItemHandler;
         m_dropAction.action.performed += OnDropItemHandler;
@@ -90,8 +90,8 @@ public class PlayerInputHandler : NetworkBehaviour
         m_interactAction.action.canceled -= OnInteractCanceledHandler;
         m_sprintAction.action.performed -= OnSprintPerformed;
         m_sprintAction.action.canceled -= OnSprintCanceled;
-        m_attackAction.action.started -= OnAttackStartedHandler;
-        m_attackAction.action.canceled -= OnAttackCanceledHandler;
+        m_useItemAction.action.started -= OnUseItemStartedHandler;
+        m_useItemAction.action.canceled -= OnUseItemCanceledHandler;
         m_previousAction.action.performed -= OnPreviousItemHandler;
         m_nextAction.action.performed -= OnNextItemHandler;
         m_dropAction.action.performed -= OnDropItemHandler;
@@ -100,7 +100,7 @@ public class PlayerInputHandler : NetworkBehaviour
         m_lookAction.action.Disable();
         m_interactAction.action.Disable();
         m_sprintAction.action.Disable();
-        m_attackAction.action.Disable();
+        m_useItemAction.action.Disable();
         m_previousAction.action.Disable();
         m_nextAction.action.Disable();
         m_dropAction.action.Disable();
@@ -123,11 +123,11 @@ public class PlayerInputHandler : NetworkBehaviour
 
     private void OnSprintCanceled(InputAction.CallbackContext ctx) => IsSprinting = false;
 
-    private void OnAttackStartedHandler(InputAction.CallbackContext ctx) =>
-        OnAttackStarted?.Invoke();
+    private void OnUseItemStartedHandler(InputAction.CallbackContext ctx) =>
+        OnUseItemStarted?.Invoke();
 
-    private void OnAttackCanceledHandler(InputAction.CallbackContext ctx) =>
-        OnAttackCanceled?.Invoke();
+    private void OnUseItemCanceledHandler(InputAction.CallbackContext ctx) =>
+        OnUseItemCanceled?.Invoke();
 
     private void OnPreviousItemHandler(InputAction.CallbackContext ctx) => OnPreviousItem?.Invoke();
 
