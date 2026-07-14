@@ -1,5 +1,3 @@
-using System;
-using System.Threading;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
@@ -32,9 +30,8 @@ public class PlayerEscorter : NetworkBehaviour
     /// <summary>연행 중 여부. 서버·오프라인은 실제 참조로, 원격 피어는 동기화 플래그로 판정.</summary>
     public bool IsEscorting => IsSpawned && !IsServer ? m_isEscortingSynced.Value : EscortingNpc != null;
 
-    // 서버에서 진행 중인 채널링 취소 토큰 — 오너가 이동/뗌으로 취소하거나 대상이 사라지면 끊는다
-    private CancellationTokenSource m_channelCts;
-    private bool m_isChanneling; // 서버 기준 채널링 진행 여부(중복 시작 방지)
+    // 서버 채널링 생명주기(CTS 소유·재진입 가드)는 ServerChannel에 위임 (#109)
+    private readonly ServerChannel m_channel = new();
 
     // ---- 오너 클라 진입점 (아이템/상호작용이 호출) ----
 
@@ -150,7 +147,7 @@ public class PlayerEscorter : NetworkBehaviour
     /// <summary>체포 진입 — 대상 검증 후 채널링 시작. 서버(또는 오프라인)에서만 실행.</summary>
     private void ServerBeginCapture(NpcController target)
     {
-        if (m_isChanneling)
+        if (m_channel.IsActive)
             return; // 중복 채널링 방지
         if (IsEscorting)
             return; // 연행 중엔 체포 불가 — 놓기는 상호작용키(E)의 RequestRelease 전용 (#91)
@@ -166,63 +163,51 @@ public class PlayerEscorter : NetworkBehaviour
 
     private async UniTaskVoid ServerChannelAsync(NpcController target)
     {
-        m_isChanneling = true;
-        m_channelCts = new CancellationTokenSource();
-        try
+        NotifyOwner($"구속 채널링 시작: {target.name} ({m_channelSeconds}초)");
+
+        // 프레임 루프 기반 keepAlive — 채널링 도중 거리 이탈을 즉시 실패시킨다 (#91, 도주형 NPC 대응 GDD 6장)
+        ServerChannel.Result result = await m_channel.RunAsync(
+            m_channelSeconds, () => target != null && IsInRange(target));
+
+        switch (result)
         {
-            NotifyOwner($"구속 채널링 시작: {target.name} ({m_channelSeconds}초)");
+            case ServerChannel.Result.OutOfRange:
+                NotifyOwner("구속 실패 — 대상이 범위를 벗어남");
+                return;
 
-            // 단일 Delay가 아닌 프레임 루프 — 채널링 도중 거리 이탈을 즉시 실패시킨다 (#91, 도주형 NPC 대응 GDD 6장)
-            // 뗌 취소는 Yield의 토큰 예외(catch)로, 거리 이탈은 return으로 — 취소 사유가 구분된다
-            float elapsed = 0f;
-            while (elapsed < m_channelSeconds)
-            {
-                if (target == null || !IsInRange(target))
-                {
-                    NotifyOwner("구속 실패 — 대상이 범위를 벗어남");
-                    return;
-                }
+            case ServerChannel.Result.Canceled:
+                NotifyOwner("구속 취소됨 (홀드 뗌)");
+                return;
 
-                await UniTask.Yield(PlayerLoopTiming.Update, m_channelCts.Token);
-                elapsed += Time.deltaTime;
-            }
-
-            // 채널링 성공 순간 반응 판정 (GDD 6-1, #76)
-            ReactionType reaction = ResolveReaction(target);
-            switch (reaction)
-            {
-                case ReactionType.Flee:
-                    // 뿌리치고 도주 — 근접 제압 홀드 또는 테이저(후속)로만 잡힌다
-                    NotifyOwner($"체포 실패 — 뿌리치고 도주: {target.name}");
-                    target.StartFlee(transform); // 이 플레이어(서버측 transform)로부터 도주
-                    break;
-
-                case ReactionType.Resist:
-                    // 그 자리에서 저항 — 제압 게이지를 깎아야 체포된다
-                    NotifyOwner($"체포 실패 — 저항 시작: {target.name}");
-                    target.StartResist();
-                    break;
-
-                default:
-                    // 체포 성공 → 이 플레이어를 따라 연행 (#59)
-                    NotifyOwner($"NPC 구속됨: {target.name}");
-                    StartEscort(target);
-                    break;
-            }
+            case ServerChannel.Result.Completed:
+                break; // 아래 반응 판정으로 진행
         }
-        catch (OperationCanceledException)
+
+        // 채널링 성공 순간 반응 판정 (GDD 6-1, #76)
+        ReactionType reaction = ResolveReaction(target);
+        switch (reaction)
         {
-            NotifyOwner("구속 취소됨 (홀드 뗌)");
-        }
-        finally
-        {
-            m_isChanneling = false;
-            m_channelCts?.Dispose();
-            m_channelCts = null;
+            case ReactionType.Flee:
+                // 뿌리치고 도주 — 근접 제압 홀드 또는 테이저(후속)로만 잡힌다
+                NotifyOwner($"체포 실패 — 뿌리치고 도주: {target.name}");
+                target.StartFlee(transform); // 이 플레이어(서버측 transform)로부터 도주
+                break;
+
+            case ReactionType.Resist:
+                // 그 자리에서 저항 — 제압 게이지를 깎아야 체포된다
+                NotifyOwner($"체포 실패 — 저항 시작: {target.name}");
+                target.StartResist();
+                break;
+
+            default:
+                // 체포 성공 → 이 플레이어를 따라 연행 (#59)
+                NotifyOwner($"NPC 구속됨: {target.name}");
+                StartEscort(target);
+                break;
         }
     }
 
-    private void ServerCancelCapture() => m_channelCts?.Cancel();
+    private void ServerCancelCapture() => m_channel.Cancel();
 
     /// <summary>도주 NPC 근접 제압 — 서버 실행. 도주 중일 때만 그 자리에서 체포.</summary>
     private void ServerSubdueCapture(NpcController target)
@@ -323,8 +308,7 @@ public class PlayerEscorter : NetworkBehaviour
 
     public override void OnDestroy()
     {
-        m_channelCts?.Cancel();
-        m_channelCts?.Dispose();
+        m_channel.Dispose();
         base.OnDestroy(); // NetworkBehaviour의 파괴 시 네트워크 정리 — 생략하면 정리 로직이 통째로 건너뛰어진다
     }
 }
