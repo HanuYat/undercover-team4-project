@@ -1,13 +1,12 @@
-using Cysharp.Threading.Tasks;
-using System;
-using Unity.Services.Authentication;
-using Unity.Services.Core;
 using Unity.Services.Multiplayer;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
+using System;
 
 public class SessionManager : MonoBehaviour
 {
     [SerializeField] private int m_maxPlayer = 6;
+    [SerializeField] private AuthBootstrap m_auth; // 인스펙터로 연결
 
     private ISession m_session;
     public ISession CurrentSession => m_session;
@@ -17,17 +16,13 @@ public class SessionManager : MonoBehaviour
 
     public async UniTask EnsureSignedInAsync()
     {
-        if (UnityServices.State != ServicesInitializationState.Initialized)
+        if (m_auth == null)
         {
-            await UnityServices.InitializeAsync();
-            Debug.Log($"[SessionManager] UnityServices 초기화 완료");
+            Debug.LogError($"[SessionManager] AuthBootstrap 참조가 없습니다.");
+            throw new InvalidOperationException("AuthBootstrap not assigned");
         }
 
-        if (!AuthenticationService.Instance.IsSignedIn)
-        {
-            await AuthenticationService.Instance.SignInAnonymouslyAsync();
-            Debug.Log($"[SessionManager] 익명 로그인 완료 - PlayerId: {AuthenticationService.Instance.PlayerId}");
-        }
+        await m_auth.InitializeAndSignInAsync();
     }
 
     public async UniTask<string> CreateSessionAsync(int maxPlayer)
