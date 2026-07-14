@@ -1,17 +1,18 @@
 using Cysharp.Threading.Tasks;
 using System;
+using System.Text;
 using Unity.Services.Authentication;
 using Unity.Services.Core;
 using Unity.Services.Vivox;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-// GDD 4-91: 전역 오픈 음성 채널 1개(거리무관, non-positional) + PTT. 최소 핵심.
+// GDD 4-91: 전역 오픈 음성 채널 1개(거리무관, non-positional) + PTT.
 public class VivoxManager : MonoBehaviour
 {
-    [SerializeField] private string m_channelName = "GlobalRadio";
+    [SerializeField] private string m_channelPrefix = "GlobalRadio";
     [SerializeField] private Key m_pushToTalkKey = Key.V;
-    [SerializeField] private AuthBootstrap m_auth;   // 인스펙터에서 연결
+    [SerializeField] private SessionManager m_session;   // 인스펙터에서 연결
 
     private bool m_loggedIn;
     private bool m_joined;
@@ -21,22 +22,23 @@ public class VivoxManager : MonoBehaviour
 
     private void OnEnable()
     {
-        if (m_auth != null) m_auth.OnSignedIn += HandleSignedIn;
+        if (m_session != null)
+        {
+            m_session.OnSessionJoined += HandleSessionJoined;
+            m_session.OnSessionLeft += HandleSessionLeft;
+        }
     }
 
     private void OnDisable()
     {
-        if (m_auth != null) m_auth.OnSignedIn -= HandleSignedIn;
+        if (m_session != null)
+        {
+            m_session.OnSessionJoined -= HandleSessionJoined;
+            m_session.OnSessionLeft -= HandleSessionLeft;
+        }
     }
 
-
-    private void Start()
-    {
-        if (m_auth != null && m_auth.IsSignedIn) HandleSignedIn();
-    }
-
-    // init → login → 전역 채널 join. 인증(AuthBootstrap)이 먼저 끝나 있어야 함.
-    public async UniTask StartRadioAsync()
+    private async UniTask EnsureLoggedInAsync()
     {
         if (m_loggedIn || m_starting) return;
         m_starting = true;
@@ -49,7 +51,7 @@ public class VivoxManager : MonoBehaviour
             }
             if (!AuthenticationService.Instance.IsSignedIn)
             {
-                m_status = "로그인 안 됨 — AuthBootstrap 먼저 로그인 필요";
+                m_status = "로그인 안 됨 — 세션 인증 필요";
                 return;
             }
 
@@ -59,28 +61,79 @@ public class VivoxManager : MonoBehaviour
             m_status = "Vivox 로그인 중...";
             await VivoxService.Instance.LoginAsync(
                 new LoginOptions { DisplayName = AuthenticationService.Instance.PlayerId });
-            m_loggedIn = true;
 
-            m_status = "전역 채널 참가 중...";
-            await VivoxService.Instance.JoinGroupChannelAsync(m_channelName, ChatCapability.AudioOnly);
+            m_loggedIn = true;
+            m_status = "Vivox 로그인 완료";
+        }
+        catch (Exception ex)
+        {
+            m_status = $"로그인 실패: {ex.Message}";
+            Debug.LogError($"[VivoxManager] {ex}");
+        }
+        finally
+        {
+            m_starting = false;
+        }
+    }
+
+    private async UniTask JoinRadioAsync(string sessionId)
+    {
+        await EnsureLoggedInAsync();
+        if (!m_loggedIn) return;
+
+        await LeaveChannelAsync();
+        await JoinChannelAsync(BuildChannelName(sessionId));
+    }
+
+    private async UniTask JoinChannelAsync(string channelName)
+    {
+        if (m_joined) return;
+        try
+        {
+            m_status = "채널 참가 중...";
+            await VivoxService.Instance.JoinGroupChannelAsync(channelName, ChatCapability.AudioOnly);
             m_joined = true;
 
             // PTT: 기본은 송신 차단(mute). 키 누를 때만 unmute.
             VivoxService.Instance.MuteInputDevice();
             m_transmitting = false;
 
-            m_status = $"채널 참가 완료: {m_channelName}";
-            Debug.Log($"[VivoxManager] 무전 채널 참가 완료 / channel: {m_channelName}");
+            m_status = $"채널 참가 완료: {channelName}";
+            Debug.Log($"[VivoxManager] 무전 채널 참가 완료 / channel: {channelName}");
         }
         catch (Exception e)
         {
             m_status = $"실패: {e.Message}";
             Debug.LogError($"[VivoxManager] {e}");
         }
+    }
+
+    private async UniTask LeaveChannelAsync()
+    {
+        if (!m_joined) return;
+        try
+        {
+            await VivoxService.Instance.LeaveAllChannelsAsync();
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[VivoxManager] 채널 나가기 실패: {ex}");
+        }
         finally
         {
-            m_starting = false;
+            m_joined = false;
+            m_transmitting = false;
         }
+    }
+
+    private string BuildChannelName(string sessionId)
+    {
+        var sb = new StringBuilder(m_channelPrefix);
+        foreach (char c in sessionId)
+        {
+            if (char.IsLetterOrDigit(c)) sb.Append(c);
+        }
+        return sb.ToString();
     }
 
     private void Update()
@@ -117,15 +170,25 @@ public class VivoxManager : MonoBehaviour
         }
     }
 
-    private void HandleSignedIn()
+    private void HandleSessionJoined(string sessionId)
     {
-        StartRadioAsync().Forget();
+        JoinRadioAsync(sessionId).Forget();
+    }
+
+    private void HandleSessionLeft()
+    {
+        LeaveChannelAsync().Forget();
     }
 
     private void OnDestroy()
     {
-        // 세션 나갈 때 정리. 완료 보장은 안 되지만 draft 단계에선 충분.
-        LeaveAsync().Forget();
+        CleanupAsync().Forget();
+    }
+
+    private async UniTaskVoid CleanupAsync()
+    {
+        try { await LeaveAsync(); }
+        catch (Exception ex) { Debug.LogError($"[VivoxManager] 정리 실패: {ex}"); }
     }
 
     private void OnGUI()
