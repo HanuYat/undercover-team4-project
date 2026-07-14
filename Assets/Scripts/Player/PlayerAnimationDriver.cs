@@ -17,11 +17,13 @@ public class PlayerAnimationDriver : MonoBehaviour
 
     private static readonly int s_moveXHash = Animator.StringToHash("MoveX");
     private static readonly int s_moveZHash = Animator.StringToHash("MoveZ");
+    private static readonly int s_downHash = Animator.StringToHash("Down"); // 다운(무력화) 상태 머신 구동 (#105)
 
     [SerializeField] private Animator m_animator;
     [SerializeField] private PlayerMovement m_movement; // 정규화 기준 속도를 읽어옴
     [SerializeField] private float m_damping = 0.1f; // 전환 부드럽게
 
+    private PlayerIncapacitation m_incapacitation; // 다운 애니메이션 구동용 (#105)
     private Vector3 m_lastPosition;
 
     private void Awake()
@@ -36,12 +38,22 @@ public class PlayerAnimationDriver : MonoBehaviour
             m_movement = GetComponentInParent<PlayerMovement>();
         }
 
+        m_incapacitation = GetComponentInParent<PlayerIncapacitation>();
         m_lastPosition = transform.position;
     }
 
     private void Update()
     {
-        if (m_animator == null || m_movement == null || Time.deltaTime <= 0f) return;
+        if (m_animator == null) return;
+
+        // 다운(무력화) 상태를 애니메이터에 반영 — 모든 인스턴스가 IsIncapacitated(동기화값)를 폴링해
+        // Down 상태 머신(Knockdown Fall→Ground→StandUp)을 구동하므로 원격 뷰도 동일하게 재생된다.
+        if (m_incapacitation != null)
+        {
+            m_animator.SetBool(s_downHash, m_incapacitation.IsIncapacitated);
+        }
+
+        if (m_movement == null || Time.deltaTime <= 0f) return;
 
         Vector3 worldDelta = transform.position - m_lastPosition;
         worldDelta.y = 0f; // 수평 이동만

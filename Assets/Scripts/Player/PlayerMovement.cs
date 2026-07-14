@@ -36,16 +36,36 @@ public class PlayerMovement : NetworkBehaviour
     [SerializeField]
     private Transform m_ownBodyRoot; // 내 카메라에서만 안 보이게 할 캐릭터 몸(머리) 루트
 
+    [Header("다운(무력화) 시점")]
+    [Tooltip("다운 중 카메라를 낮출 바닥 근처 높이(m)")]
+    [SerializeField] private float m_downCamHeight = 0.35f;
+
+    [Tooltip("다운 중 카메라 피치(양수=아래, 음수=위). 바닥에서 살짝 위를 보게 함")]
+    [SerializeField] private float m_downCamPitch = -20f;
+
+    [Tooltip("서기↔다운 시점 전환 보간 속도")]
+    [SerializeField] private float m_camPoseLerpSpeed = 8f;
+
     private CharacterController m_controller;
     private PlayerInputHandler m_inputHandler;
+    private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 이동·시점 차단용 (#105)
     private float m_pitch;
+    private float m_standCamHeight; // 평소(서기) 카메라 높이 — 프리팹 초기값에서 캡처 (#105)
     private float m_verticalVelocity;
     private bool m_cursorUnlocked; // 임시: OnGUI 버튼 조작용 커서 해제 상태
+
+    // 다운(무력화) 중 여부 — 무력화 컴포넌트가 없으면(테스트 구성 등) 항상 false
+    private bool IsIncapacitated => m_incapacitation != null && m_incapacitation.IsIncapacitated;
 
     private void Awake()
     {
         m_controller = GetComponent<CharacterController>();
         m_inputHandler = GetComponent<PlayerInputHandler>();
+        m_incapacitation = GetComponent<PlayerIncapacitation>();
+        if (playerCamera != null)
+        {
+            m_standCamHeight = playerCamera.transform.localPosition.y; // 서기 시점 높이 기준값
+        }
     }
 
     public override void OnNetworkSpawn()
@@ -92,22 +112,47 @@ public class PlayerMovement : NetworkBehaviour
             HandleLook(); // 커서 해제 중에는 시점 회전 정지 (마우스 이동이 화면을 돌리지 않게)
         }
 
+        UpdateCameraPose(); // 카메라 높이/피치를 매 프레임 적용 (다운 시 바닥 시점) (#105)
         HandleMove();
     }
 
     private void HandleLook()
     {
+        if (IsIncapacitated) return; // 다운 중 시점 회전 차단 (#105) — 카메라 적용은 UpdateCameraPose가 담당
+
         Vector2 look = m_inputHandler.LookInput * m_mouseSensitivity;
 
         transform.Rotate(Vector3.up * look.x);
 
         m_pitch = Mathf.Clamp(m_pitch - look.y, m_minPitch, m_maxPitch);
+    }
+
+    // 카메라 위치(높이)와 피치를 적용한다. 다운 중에는 바닥 근처 높이 + 상방 시선으로 부드럽게 눕히고,
+    // 평소에는 서기 높이에서 시선 입력(m_pitch)을 그대로 반영한다. 구조되면 원위치로 복귀한다. (#105)
+    private void UpdateCameraPose()
+    {
+        if (playerCamera == null) return;
+
+        float lerp = m_camPoseLerpSpeed * Time.deltaTime;
+        bool downed = IsIncapacitated;
+
+        Vector3 localPos = playerCamera.transform.localPosition;
+        localPos.y = Mathf.Lerp(localPos.y, downed ? m_downCamHeight : m_standCamHeight, lerp);
+        playerCamera.transform.localPosition = localPos;
+
+        // 다운 중엔 시선 입력이 멈추므로(HandleLook 차단) 피치를 바닥 시점으로 눕힌다.
+        // (m_pitch를 함께 옮겨두면 구조 후에도 그 각도에서 자연스럽게 이어진다)
+        if (downed)
+        {
+            m_pitch = Mathf.Lerp(m_pitch, m_downCamPitch, lerp);
+        }
         playerCamera.transform.localEulerAngles = new Vector3(m_pitch, 0f, 0f);
     }
 
     private void HandleMove()
     {
-        Vector2 input = m_inputHandler.MoveInput;
+        // 다운 중 이동 입력 차단 — 단 중력·접지는 유지해 바닥에 서 있게 한다 (#105)
+        Vector2 input = IsIncapacitated ? Vector2.zero : m_inputHandler.MoveInput;
         Vector3 moveDirection = (
             transform.right * input.x + transform.forward * input.y
         ).normalized;

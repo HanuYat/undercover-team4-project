@@ -13,10 +13,12 @@ public class PlayerInteractor : NetworkBehaviour
     public GameObject CurrentTarget { get; private set; } // 아이템 타겟팅/UI용
 
     private PlayerInputHandler m_inputHandler;
+    private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 상호작용 차단용 (#105)
 
     public override void OnNetworkSpawn()
     {
         m_inputHandler = GetComponent<PlayerInputHandler>();
+        m_incapacitation = GetComponent<PlayerIncapacitation>();
         if (m_camera == null) m_camera = Camera.main;
 
         if (!IsOwner)
@@ -59,6 +61,9 @@ public class PlayerInteractor : NetworkBehaviour
 
     private void HandleInteract()
     {
+        // 다운(무력화) 중에는 상호작용 발동 불가 (#105)
+        if (m_incapacitation != null && m_incapacitation.IsIncapacitated) return;
+
         CurrentInteractable?.Interact(gameObject);
     }
 }

@@ -34,6 +34,12 @@ public class PlayerInputHandler : NetworkBehaviour
     public Vector2 LookInput { get; private set; }
     public bool IsSprinting { get; private set; }
 
+    /// <summary>상호작용 키의 표시 문자열(예: "E") — 임시 구조 HUD 프롬프트용. (#105)</summary>
+    public string InteractDisplayName =>
+        m_interactAction != null && m_interactAction.action != null
+            ? m_interactAction.action.GetBindingDisplayString()
+            : "?";
+
     public event Action OnInteractStarted; // 채널링 시작 (버튼 누름)
     public event Action OnInteractPerformed; // Hold 완료 (3초 채움)
     public event Action OnInteractCanceled; // 중간에 뗌
