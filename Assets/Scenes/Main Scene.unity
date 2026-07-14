@@ -25371,7 +25371,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SessionManager
   m_maxPlayer: 6
-  m_guiTopOffset: 260
+  m_auth: {fileID: 729177724}
+  m_guiTopOffset: 0
 --- !u!4 &373063424
 Transform:
   m_ObjectHideFlags: 0
@@ -48099,7 +48100,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::AuthBootstrap
   m_signInOnStart: 1
   m_environmentName: production
-  m_profile: test2
+  m_profile: 
+  m_guiTopOffset: 10
 --- !u!4 &729177725
 Transform:
   m_ObjectHideFlags: 0
@@ -102593,8 +102595,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VivoxManager
   m_channelPrefix: Radio
-  m_pushToTalkKey: 36
+  m_pushToTalkAction: {fileID: -3939125208035815356, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_session: {fileID: 373063423}
+  m_guiTopOffset: 10
 --- !u!4 &1467963242
 Transform:
   m_ObjectHideFlags: 0

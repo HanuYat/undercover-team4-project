@@ -163,9 +163,13 @@ public class AuthBootstrap : MonoBehaviour
         Debug.Log($"[AuthBootstrap] ClearSessionToken 완료");
     }
 
+    [SerializeField] private float m_guiTopOffset = 10f;
+
     private void OnGUI()
     {
-        GUILayout.BeginArea(new Rect(10, 10, 380, 280));
+        if (IsNetworkConnected) return;
+
+        GUILayout.BeginArea(new Rect(700, m_guiTopOffset, 380, 280));
 
         GUILayout.Label("Authentication (익명) — 상태");
 

@@ -38,17 +38,21 @@ public class NetworkBootstrap : MonoBehaviour
         Debug.Log($"[NetworkBootstrap] 클라이언트 끊김 {clientId}");
     }
 
+    [SerializeField] private float m_guiTopOffset = 10f;
+
     private void OnGUI()
     {
         if (m_networkManager == null)
         {
-            GUILayout.BeginArea(new Rect(10, 10, 320, 60));
+            GUILayout.BeginArea(new Rect(10, m_guiTopOffset, 320, 60));
             GUILayout.Label("NetworkManager 를 찾을 수 없습니다.");
             GUILayout.EndArea();
             return;
         }
 
-        GUILayout.BeginArea(new Rect(10, 10, 320, 220));
+        if (m_networkManager.IsClient || m_networkManager.IsServer) return;
+
+        GUILayout.BeginArea(new Rect(10, 610, 320, 220));
 
         if (!m_networkManager.IsClient && !m_networkManager.IsServer)   // 접속 전
         {
@@ -67,17 +71,18 @@ public class NetworkBootstrap : MonoBehaviour
                 }
             }
         }
-        else // 접속 후
-        {
-            string mode = m_networkManager.IsHost ? "Host" : "Client";
-            GUILayout.Label($"모드: {mode}");
+        // ▼ 죽은 코드인데 혹시 몰라서 남김
+        //else // 접속 후
+        //{
+        //    string mode = m_networkManager.IsHost ? "Host" : "Client";
+        //    GUILayout.Label($"모드: {mode}");
 
-            if (m_networkManager.IsHost)
-                GUILayout.Label($"연결된 클라이언트 수: {m_networkManager.ConnectedClientsIds.Count}");
+        //    if (m_networkManager.IsHost)
+        //        GUILayout.Label($"연결된 클라이언트 수: {m_networkManager.ConnectedClientsIds.Count}");
             
-            if (GUILayout.Button("Shutdown (연결 종료)"))
-                m_networkManager.Shutdown();
-        }
+        //    if (GUILayout.Button("Shutdown (연결 종료)"))
+        //        m_networkManager.Shutdown();
+        //}
 
         GUILayout.EndArea();
     }
