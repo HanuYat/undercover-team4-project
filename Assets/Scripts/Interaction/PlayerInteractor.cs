@@ -12,6 +12,13 @@ public class PlayerInteractor : NetworkBehaviour
     public IInteractable CurrentInteractable { get; private set; }
     public GameObject CurrentTarget { get; private set; } // 아이템 타겟팅/UI용
 
+    /// <summary>상호작용 레이캐스트 사거리(m). 서버 줍기 거리 검증(#147)이 같은 값을 재사용한다.</summary>
+    public float Range => m_range;
+
+    /// <summary>레이캐스트 기준점(카메라 위치). 카메라 미배정 시 플레이어 루트로 대체.
+    /// 서버 줍기 거리 검증(#147)이 클라이언트 조준과 동일한 기준점을 쓰기 위해 참조한다.</summary>
+    public Transform AimOrigin => m_camera != null ? m_camera.transform : transform;
+
     private PlayerInputHandler m_inputHandler;
     private PlayerEscorter m_escorter;
 
