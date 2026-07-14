@@ -1,10 +1,11 @@
 using UnityEngine;
 
 /// <summary>
-/// 수갑 아이템. 사용 시 겨냥한 NPC(레이캐스트 타겟)를 대상으로 잡아 체포를 요청한다. (GDD 8-2, 이슈 #36/#35)
+/// 수갑 아이템 — 좌클릭 홀드로 겨냥한 NPC(레이캐스트 타겟)를 대상으로 체포를 요청한다. (GDD 8-2, #36/#35/#91)
 /// 실제 채널링·사거리·반응 판정·연행은 서버 권위이며 PlayerEscorter가 수행한다 (#118).
-/// 이 컴포넌트는 오너 클라의 "의도"만 담당한다 — 대상을 해석해 PlayerEscorter에 요청을 넘긴다.
+/// 이 컴포넌트는 오너 클라의 "의도"만 담당한다 — 누름(Use)에 체포 요청, 뗌(CancelUse)에 취소 요청.
 /// (채널링을 여기서 직접 돌리면 서버 가드에 막혀 클라 검거가 조용히 실패한다 — #88 머지 회귀의 원인)
+/// 연행 놓기·재연행은 상호작용키(E)로 이관됨 — PlayerInteractor/NpcSubdueInteractable 참고 (#91).
 /// 배터리 등 자원 소모는 없다.
 /// </summary>
 public class Handcuffs : ItemBase
@@ -30,13 +31,6 @@ public class Handcuffs : ItemBase
             return;
         }
 
-        // 연행 중이면 이번 입력은 "놓기" — NPC는 그 자리에서 체포 상태로 멈춘다 (#59)
-        if (escorter.IsEscorting)
-        {
-            escorter.RequestRelease();
-            return;
-        }
-
         // 겨냥한 대상에서 NPC를 조회한다 (#35). 대상이 없거나 NPC가 아니면 요청 자체를 보내지 않는다.
         NpcController target = ResolveTarget(aimTarget);
         if (target == null)
@@ -45,9 +39,29 @@ public class Handcuffs : ItemBase
             return;
         }
 
-        // 대상 상태 판정(즉시 재연행/채널링/사거리)과 반응 판정은 서버가 수행한다 — 여기서는 요청만 넘긴다.
+        // 연행 중인 NPC는 대상에서 제외 — 중복 연행·타인의 연행 가로채기 방지 (#59)
+        // 상태는 반드시 동기화된 CurrentState로 읽는다 — StateMachine 값은 서버에서만 갱신됨 (#56)
+        if (target.CurrentState == NpcState.Escorted)
+        {
+            Debug.Log("이미 연행 중인 대상 — 체포 불가");
+            return;
+        }
+
+        // 이미 체포된 대상은 채널링 대상이 아니다 — 재연행은 상호작용키(E)로 (#91)
+        if (target.CurrentState == NpcState.Captured)
+        {
+            Debug.Log("이미 체포된 대상 — 재연행은 상호작용키로");
+            return;
+        }
+
+        // 채널링·사거리·반응 판정은 서버가 수행한다 — 여기서는 요청만 넘긴다.
+        // 이 로그 뒤에 서버의 "[서버 판정] 구속 채널링 시작"이 안 오면 RPC 경로 문제다 (진단용)
+        Debug.Log($"좌클릭 — 체포 채널링 요청: {target.name}");
         escorter.RequestCapture(target);
     }
+
+    /// <summary>좌클릭 뗌 — 진행 중인 체포 채널링 취소를 서버에 요청한다 (#91).</summary>
+    public override void CancelUse() => CancelRestrain();
 
     /// <summary>진행 중인 구속 채널링을 취소한다. (이동·피격 등 방해 시 호출) — 서버 채널링에 취소를 요청한다.</summary>
     public void CancelRestrain() => Escorter?.CancelCapture();
