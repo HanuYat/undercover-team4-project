@@ -7,6 +7,7 @@ public class SessionManager : MonoBehaviour
 {
     [SerializeField] private int m_maxPlayer = 6;
     [SerializeField] private AuthBootstrap m_auth; // 인스펙터로 연결
+    public AuthBootstrap Auth => m_auth;
 
     private ISession m_session;
     public ISession CurrentSession => m_session;

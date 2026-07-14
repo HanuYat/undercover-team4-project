@@ -17,6 +17,7 @@ public class AuthBootstrap : MonoBehaviour
     private bool m_eventsRegistered;
 
     public event Action OnSignedIn;
+    public event Action OnSignedOut;
 
     public bool IsSignedIn => 
         UnityServices.State == ServicesInitializationState.Initialized 
@@ -137,6 +138,7 @@ public class AuthBootstrap : MonoBehaviour
         if (!IsSignedIn) return;
 
         AuthenticationService.Instance.SignOut(clearCredentials);
+        OnSignedOut?.Invoke();
         Debug.Log($"[AuthBootstrap] SignOut 완료");
     }
 
@@ -154,6 +156,7 @@ public class AuthBootstrap : MonoBehaviour
         if (IsSignedIn)
         {
             AuthenticationService.Instance.SignOut();
+            OnSignedOut?.Invoke();
         }
 
         AuthenticationService.Instance.ClearSessionToken();

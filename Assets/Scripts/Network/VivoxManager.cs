@@ -25,6 +25,9 @@ public class VivoxManager : MonoBehaviour
         {
             m_session.OnSessionJoined += HandleSessionJoined;
             m_session.OnSessionLeft += HandleSessionLeft;
+
+            if (m_session.Auth != null)
+                m_session.Auth.OnSignedOut += HandleAuthSignedOut;
         }
 
         if (m_pushToTalkAction != null)
@@ -41,6 +44,9 @@ public class VivoxManager : MonoBehaviour
         {
             m_session.OnSessionJoined -= HandleSessionJoined;
             m_session.OnSessionLeft -= HandleSessionLeft;
+
+            if (m_session.Auth != null)
+                m_session.Auth.OnSignedOut -= HandleAuthSignedOut;
         }
 
         if (m_pushToTalkAction != null)
@@ -189,6 +195,11 @@ public class VivoxManager : MonoBehaviour
     private void HandleSessionLeft()
     {
         LeaveChannelAsync().Forget();
+    }
+
+    private void HandleAuthSignedOut()
+    {
+        CleanupAsync().Forget();
     }
 
     private void OnDestroy()
