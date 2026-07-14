@@ -58,6 +58,7 @@ public abstract class ItemBase : NetworkBehaviour
     /// 사용 대상 — PlayerInteractor가 겨냥한 오브젝트. 겨냥한 것이 없으면 null.
     /// 하위 아이템이 이 대상에서 필요한 컴포넌트를 조회한다 (Scanner→CitizenProfile #34, Handcuffs→NpcController #35).
     /// </param>
-    // TODO: 네트워크 테스트 시 서버 권위로 실행되게 (오너 입력 → ServerRpc 요청 → 서버가 실제 효과 실행/검증 후 동기화)
+    // 네트워크 전환 패턴: 오너 입력 → 클라에서 대상 조기 검증 → ServerRpc 요청 → 서버가 실제 효과 실행/검증 후 동기화.
+    // 각 하위 구현(Scanner, Handcuffs 등)이 이 패턴을 직접 담당한다 (#55).
     public abstract void Use(GameObject target);
 }
