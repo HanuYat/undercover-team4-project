@@ -170,6 +170,8 @@ public class PlayerEscorter : NetworkBehaviour
         m_channelCts = new CancellationTokenSource();
         try
         {
+            NotifyOwner($"구속 채널링 시작: {target.name} ({m_channelSeconds}초)");
+
             // 단일 Delay가 아닌 프레임 루프 — 채널링 도중 거리 이탈을 즉시 실패시킨다 (#91, 도주형 NPC 대응 GDD 6장)
             // 뗌 취소는 Yield의 토큰 예외(catch)로, 거리 이탈은 return으로 — 취소 사유가 구분된다
             float elapsed = 0f;
@@ -177,7 +179,7 @@ public class PlayerEscorter : NetworkBehaviour
             {
                 if (target == null || !IsInRange(target))
                 {
-                    Debug.Log("구속 실패 — 대상이 범위를 벗어남");
+                    NotifyOwner("구속 실패 — 대상이 범위를 벗어남");
                     return;
                 }
 
@@ -191,26 +193,26 @@ public class PlayerEscorter : NetworkBehaviour
             {
                 case ReactionType.Flee:
                     // 뿌리치고 도주 — 근접 제압 홀드 또는 테이저(후속)로만 잡힌다
-                    Debug.Log($"체포 실패 — 뿌리치고 도주: {target.name}");
+                    NotifyOwner($"체포 실패 — 뿌리치고 도주: {target.name}");
                     target.StartFlee(transform); // 이 플레이어(서버측 transform)로부터 도주
                     break;
 
                 case ReactionType.Resist:
                     // 그 자리에서 저항 — 제압 게이지를 깎아야 체포된다
-                    Debug.Log($"체포 실패 — 저항 시작: {target.name}");
+                    NotifyOwner($"체포 실패 — 저항 시작: {target.name}");
                     target.StartResist();
                     break;
 
                 default:
                     // 체포 성공 → 이 플레이어를 따라 연행 (#59)
-                    Debug.Log($"NPC 구속됨: {target.name}");
+                    NotifyOwner($"NPC 구속됨: {target.name}");
                     StartEscort(target);
                     break;
             }
         }
         catch (OperationCanceledException)
         {
-            Debug.Log("구속 취소됨");
+            NotifyOwner("구속 취소됨 (홀드 뗌)");
         }
         finally
         {
@@ -252,6 +254,20 @@ public class PlayerEscorter : NetworkBehaviour
         return identity != null ? identity.Reaction : ReactionType.Compliant;
     }
 
+    // ---- 오너 로그 피드백 ----
+
+    // 판정 로그는 서버에서 찍히므로 원격 클라 오너는 결과를 볼 수 없다 — 오너 콘솔에도 같은 로그를 전달한다 (#91).
+    // 정식 UI 피드백(#65 계열)이 생기면 이 RPC를 그 이벤트 전달 경로로 확장한다.
+    private void NotifyOwner(string message)
+    {
+        Debug.Log(message); // 서버(호스트)·오프라인 콘솔
+        if (IsSpawned && IsServer && !IsOwner)
+            OwnerLogRpc(message); // 원격 클라가 오너인 경우에만 전달 (호스트 오너는 위에서 이미 찍음)
+    }
+
+    [Rpc(SendTo.Owner)]
+    private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
+
     // ---- 서버 내부 연행 상태 조작 ----
 
     /// <summary>연행 시작. 이미 다른 NPC를 연행 중이면 무시된다 (동시 1명 제약). 서버(또는 오프라인) 실행.</summary>
@@ -264,7 +280,7 @@ public class PlayerEscorter : NetworkBehaviour
 
         SetEscorting(npc);
         npc.StartEscort(transform);
-        Debug.Log($"연행 시작: {npc.name}");
+        NotifyOwner($"연행 시작: {npc.name}");
     }
 
     /// <summary>연행 놓기 — NPC는 그 자리에서 체포 상태로 멈춘다. 다시 다가가 재연행 가능. 서버(또는 오프라인) 실행.</summary>
@@ -275,7 +291,7 @@ public class PlayerEscorter : NetworkBehaviour
         if (!IsEscorting)
             return;
 
-        Debug.Log($"연행 놓기: {EscortingNpc.name}");
+        NotifyOwner($"연행 놓기: {EscortingNpc.name} — 그 자리에서 체포 상태로 정지");
         EscortingNpc.StopEscort();
         SetEscorting(null);
     }

@@ -55,6 +55,8 @@ public class Handcuffs : ItemBase
         }
 
         // 채널링·사거리·반응 판정은 서버가 수행한다 — 여기서는 요청만 넘긴다.
+        // 이 로그 뒤에 서버의 "[서버 판정] 구속 채널링 시작"이 안 오면 RPC 경로 문제다 (진단용)
+        Debug.Log($"좌클릭 — 체포 채널링 요청: {target.name}");
         escorter.RequestCapture(target);
     }
 
