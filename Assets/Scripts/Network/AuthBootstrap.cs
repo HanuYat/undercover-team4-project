@@ -82,6 +82,8 @@ public class AuthBootstrap : MonoBehaviour
 
     public async UniTask InitializeAndSignInAsync(string profile = null)
     {
+        bool wasSignedIn = IsSignedIn;
+
         if (UnityServices.State != ServicesInitializationState.Initialized)
         {
             var options = new InitializationOptions();
@@ -119,7 +121,7 @@ public class AuthBootstrap : MonoBehaviour
             }
         }
 
-        if (IsSignedIn)
+        if (!wasSignedIn && IsSignedIn)
             OnSignedIn?.Invoke();
     }
 
