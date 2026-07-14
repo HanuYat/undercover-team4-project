@@ -12,6 +12,9 @@ public class SessionManager : MonoBehaviour
     private ISession m_session;
     public ISession CurrentSession => m_session;
 
+    public event Action<string> OnSessionJoined; // 인자: session.Id
+    public event Action OnSessionLeft;
+
     public async UniTask EnsureSignedInAsync()
     {
         if (UnityServices.State != ServicesInitializationState.Initialized)
@@ -64,6 +67,8 @@ public class SessionManager : MonoBehaviour
             UnsubscribeSessionEvents(leaving);
             if (ReferenceEquals(m_session, leaving))
                 m_session = null;
+
+            OnSessionLeft?.Invoke();
         }
     }
 
@@ -76,6 +81,8 @@ public class SessionManager : MonoBehaviour
 
         m_session = session;
         SubscribeSessionEvents(m_session);
+
+        OnSessionJoined?.Invoke(session.Id);
     }
 
     private void SubscribeSessionEvents(ISession session)
