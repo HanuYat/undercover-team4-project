@@ -38,6 +38,10 @@ public class PlayerLoadout : NetworkBehaviour
     private PlayerInputHandler m_inputHandler;
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 아이템 전환·버리기 차단용 (#105)
 
+    // 서버 줍기 거리 검증용 사거리(m) — PlayerInteractor의 조준 사거리를 캐싱해 재사용한다.
+    // 값을 따로 두지 않고 여기서 읽어야 조준-줍기 사거리가 항상 정합된다 (#147).
+    private float m_pickupRange;
+
     // 다운(무력화) 중 여부 — 무력화 컴포넌트가 없으면(테스트 구성 등) 항상 false. (PlayerMovement 관례)
     private bool IsIncapacitated => m_incapacitation != null && m_incapacitation.IsIncapacitated;
 
@@ -54,6 +58,7 @@ public class PlayerLoadout : NetworkBehaviour
         m_itemUser = GetComponent<PlayerItemUser>();
         m_inputHandler = GetComponent<PlayerInputHandler>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
+        m_pickupRange = GetComponent<PlayerInteractor>().Range;
     }
 
     public override void OnNetworkSpawn()
@@ -148,6 +153,13 @@ public class PlayerLoadout : NetworkBehaviour
 
         // 이미 누군가 들고 있으면(부모가 있으면) 무시 — 중복 줍기·가로채기 방지.
         if (itemNetworkObject.transform.parent != null)
+        {
+            return;
+        }
+
+        // 서버 거리 검증 — 위조 RPC로 원격 줍기 방지 (#147). root↔아이템 sqrMagnitude 비교.
+        Vector3 toItem = itemNetworkObject.transform.position - transform.position;
+        if (toItem.sqrMagnitude > m_pickupRange * m_pickupRange)
         {
             return;
         }
