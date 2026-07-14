@@ -1440,7 +1440,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VivoxManager
   m_channelPrefix: Radio
-  m_pushToTalkKey: 36
+  m_pushToTalkAction: {fileID: -3939125208035815356, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_session: {fileID: 1659654874}
 --- !u!4 &1042802660
 Transform:

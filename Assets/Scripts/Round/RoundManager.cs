@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -59,6 +60,7 @@ public class RoundManager : MonoBehaviour
     [SerializeField] private float m_timeLimitSeconds = 180f;
 
     private NetworkManager m_networkManager;
+    private CriminalAssigner m_criminalAssigner;
 
     /// <summary>현재 라운드 단계. 서버(또는 오프라인)의 진실값 — 클라이언트 동기화는 #43에서.</summary>
     public RoundPhase Phase { get; private set; } = RoundPhase.Preparing;
@@ -75,6 +77,22 @@ public class RoundManager : MonoBehaviour
     /// <summary>남은 제한시간(초). 무제한이면 양의 무한대. 서버(또는 오프라인)의 진실값. (#103)</summary>
     public float RemainingSeconds { get; private set; } = float.PositiveInfinity;
 
+    /// <summary>
+    /// 라운드 종료로 게임플레이가 정지(freeze)돼야 하는지 — 플레이어 이동(PlayerMovement) 등이 읽는다. (라운드 종료 freeze)
+    /// 종료(Ended)이면서 이 피어가 권위(서버/오프라인)일 때만 true.
+    /// 원격 클라이언트는 아직 라운드 종료를 동기화받지 못하므로(#43 전) 항상 false를 반환해 오판으로 멈추지 않게 한다.
+    /// </summary>
+    // TODO(#43): 페이즈 클라 동기화가 붙으면 클라이언트도 종료 시점에 정지하도록 확장한다.
+    public bool GameplayFrozen
+    {
+        get
+        {
+            if (m_networkManager != null && m_networkManager.IsListening && !m_networkManager.IsServer)
+                return false;
+            return Phase == RoundPhase.Ended;
+        }
+    }
+
     /// <summary>라운드 시작 이벤트 — 스폰 트리거 직후 발행. UI·연출(#43 등)이 구독한다.</summary>
     public event Action OnRoundStarted;
 
@@ -87,21 +105,33 @@ public class RoundManager : MonoBehaviour
             m_spawner = FindFirstObjectByType<NpcSpawner>();
         if (m_arrestJudge == null)
             m_arrestJudge = FindFirstObjectByType<ArrestJudge>();
+            
+        m_criminalAssigner = FindFirstObjectByType<CriminalAssigner>();
     }
 
     private void OnEnable()
     {
         if (m_arrestJudge != null)
             m_arrestJudge.OnArrestJudged += HandleArrestJudged;
+            
         // 전원 다운(전멸) 감시 — 무력화 상태 변화는 서버·오프라인에서만 발행된다. (#105)
         PlayerIncapacitation.OnAnyIncapacitatedChanged += HandleAnyIncapacitatedChanged;
+        
+        // [버그 수정] 할당량 > 실제 진범 수 검증을 위해 진범 배정 완료 이벤트를 구독합니다. (#149)
+        if (m_criminalAssigner != null)
+            m_criminalAssigner.OnCriminalAssigned += HandleCriminalAssigned;
     }
 
     private void OnDisable()
     {
         if (m_arrestJudge != null)
             m_arrestJudge.OnArrestJudged -= HandleArrestJudged;
+            
         PlayerIncapacitation.OnAnyIncapacitatedChanged -= HandleAnyIncapacitatedChanged;
+        
+        if (m_criminalAssigner != null)
+            m_criminalAssigner.OnCriminalAssigned -= HandleCriminalAssigned;
+            
         if (m_networkManager != null)
             m_networkManager.OnServerStarted -= HandleServerStarted;
     }
@@ -134,7 +164,23 @@ public class RoundManager : MonoBehaviour
 
     private void HandleServerStarted()
     {
+        // 서버 재시작(Shutdown 후 StartHost) 대응 — 이전 세션의 종료 상태가 남아 있으면
+        // Phase·스포너 래치가 잠긴 채라 StartRound와 재스폰이 막힌다. 시작 전에 초기화한다.
+        // (첫 시작이면 이미 Preparing이라 초기화를 건너뛴다)
+        if (Phase != RoundPhase.Preparing)
+            ResetForRestart();
+
         StartRound();
+    }
+
+    // 서버 재시작 시 이전 라운드 상태를 초기화한다 — Phase·결과·진행도와 스포너 래치를 되돌려 재스폰을 허용한다.
+    private void ResetForRestart()
+    {
+        Phase = RoundPhase.Preparing;
+        Result = RoundResult.None;
+        CriminalArrestCount = 0;
+        RemainingSeconds = float.PositiveInfinity;
+        m_spawner.ResetSpawnState(); // IsSpawnCompleted 래치 해제 + 이전 NPC 정리 → StartSpawn 재동작
     }
 
     /// <summary>
@@ -153,6 +199,18 @@ public class RoundManager : MonoBehaviour
         m_spawner.StartSpawn(); // 서버/오프라인만 실제 스폰 — 클라이언트 호출은 NpcSpawner가 걸러낸다 (#56)
         Debug.Log($"[라운드] 시작 — NPC 스폰 트리거 (할당량 {m_arrestQuota}명, 제한시간 {(float.IsPositiveInfinity(RemainingSeconds) ? "무제한" : $"{RemainingSeconds:0}초")})");
         OnRoundStarted?.Invoke();
+    }
+
+    // [버그 수정] 배정 완료 시점에 실제 진범 수와 할당량을 대조합니다. (#149)
+    // 달성 불가능한 할당량일 경우, 아무런 알림 없이 영구 실패하는 상황을 막기 위해 실제 진범 수로 clamp 처리합니다.
+    private void HandleCriminalAssigned(IReadOnlyList<NpcController> criminals)
+    {
+        if (m_arrestQuota > criminals.Count)
+        {
+            Debug.LogWarning($"RoundManager: 총 할당량({m_arrestQuota})이 실제 배정된 진범 수({criminals.Count})보다 큽니다 — " +
+                             $"달성 불가 - {criminals.Count}명으로 할당량을 강제로 깎아 적용합니다.", this);
+            m_arrestQuota = criminals.Count;
+        }
     }
 
     private void Update()
@@ -228,7 +286,21 @@ public class RoundManager : MonoBehaviour
 
         Phase = RoundPhase.Ended;
         Result = result;
+        FreezeAllNpcs(); // NPC 정지 — 플레이어 정지는 PlayerMovement가 GameplayFrozen을 읽어 처리
         Debug.Log($"[라운드] 종료 — 결과: {result}");
         OnRoundEnded?.Invoke(result);
+    }
+
+    // 스폰된 NPC를 전부 정지시킨다 — 서버(또는 오프라인)에서만 호출되며, 서버 정지가 전 클라이언트로 복제된다.
+    private void FreezeAllNpcs()
+    {
+        if (m_spawner == null)
+            return;
+
+        foreach (NpcController npc in m_spawner.SpawnedNpcs)
+        {
+            if (npc != null)
+                npc.SetFrozen(true);
+        }
     }
 }

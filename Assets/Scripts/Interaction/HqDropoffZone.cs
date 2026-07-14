@@ -1,4 +1,5 @@
 using System;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -14,11 +15,24 @@ public class HqDropoffZone : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
+        // 서버 권위 게이트 (클라이언트에서는 실행 무시 - 로그 스팸 및 중복 발화 방지)
+        if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer)
+            return;
+
         NpcController npc = other.GetComponentInParent<NpcController>();
 
+        if (npc == null)
+            return;
+
+        // [가장 중요한 수정] 이미 판정이 끝난 NPC라면, 존에 닿아도 완전히 무시합니다.
+        if (ArrestJudge.JudgedNpcs.Contains(npc))
+        {
+            Debug.Log($"[중복 방지] 이미 판정 완료된 NPC가 존에 재진입하여 무시됩니다: {npc.name}");
+            return;
+        }
+
         // 연행 중인 NPC만 인계 대상 — 배회하다 지나가는 시민은 무시
-        // (동기화된 CurrentState로 판정해야 클라이언트에서도 올바르다, #56)
-        if (npc == null || npc.CurrentState != NpcState.Escorted)
+        if (npc.CurrentState != NpcState.Escorted)
             return;
 
         Debug.Log($"본부 도달 — 인계 가능: {npc.name}");

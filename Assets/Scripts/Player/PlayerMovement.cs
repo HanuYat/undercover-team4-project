@@ -49,6 +49,7 @@ public class PlayerMovement : NetworkBehaviour
     private CharacterController m_controller;
     private PlayerInputHandler m_inputHandler;
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 이동·시점 차단용 (#105)
+    private RoundManager m_roundManager; // 라운드 종료 시 이동·시점 차단용 (라운드 종료 freeze)
     private float m_pitch;
     private float m_standCamHeight; // 평소(서기) 카메라 높이 — 프리팹 초기값에서 캡처 (#105)
     private float m_verticalVelocity;
@@ -57,11 +58,19 @@ public class PlayerMovement : NetworkBehaviour
     // 다운(무력화) 중 여부 — 무력화 컴포넌트가 없으면(테스트 구성 등) 항상 false
     private bool IsIncapacitated => m_incapacitation != null && m_incapacitation.IsIncapacitated;
 
+    // 라운드 종료로 정지(freeze)됐는지 — RoundManager가 없으면(단독 테스트 씬) 항상 false
+    private bool IsRoundOver => m_roundManager != null && m_roundManager.GameplayFrozen;
+
+    // 이동·시점을 막아야 하는 상태 — 다운(무력화) 또는 라운드 종료
+    private bool IsMovementLocked => IsIncapacitated || IsRoundOver;
+
     private void Awake()
     {
         m_controller = GetComponent<CharacterController>();
         m_inputHandler = GetComponent<PlayerInputHandler>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
+        m_roundManager = FindFirstObjectByType<RoundManager>(); // 씬에 하나 — 없으면 단독 테스트 씬
+
         if (playerCamera != null)
         {
             m_standCamHeight = playerCamera.transform.localPosition.y; // 서기 시점 높이 기준값
@@ -118,7 +127,7 @@ public class PlayerMovement : NetworkBehaviour
 
     private void HandleLook()
     {
-        if (IsIncapacitated) return; // 다운 중 시점 회전 차단 (#105) — 카메라 적용은 UpdateCameraPose가 담당
+        if (IsMovementLocked) return; // 다운 중·라운드 종료 시 시점 회전 차단 — 카메라 적용은 UpdateCameraPose가 담당
 
         Vector2 look = m_inputHandler.LookInput * m_mouseSensitivity;
 
@@ -151,8 +160,8 @@ public class PlayerMovement : NetworkBehaviour
 
     private void HandleMove()
     {
-        // 다운 중 이동 입력 차단 — 단 중력·접지는 유지해 바닥에 서 있게 한다 (#105)
-        Vector2 input = IsIncapacitated ? Vector2.zero : m_inputHandler.MoveInput;
+        // 다운 중·라운드 종료 시 이동 입력 차단 — 단 중력·접지는 유지해 바닥에 서 있게 한다 (#105, 라운드 종료 freeze)
+        Vector2 input = IsMovementLocked ? Vector2.zero : m_inputHandler.MoveInput;
         Vector3 moveDirection = (
             transform.right * input.x + transform.forward * input.y
         ).normalized;

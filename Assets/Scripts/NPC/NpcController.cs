@@ -83,6 +83,9 @@ public class NpcController : NetworkBehaviour
     private NavMeshAgent m_agent;
     private NpcStateMachine m_stateMachine;
 
+    // 라운드 종료 시 정지(freeze) 플래그 — 서버(또는 오프라인)에서만 의미. 켜지면 FSM/이동을 멈춘다. (라운드 종료 freeze)
+    private bool m_frozen;
+
     // 서버 권위 FSM 상태 — 서버만 쓰고 모든 클라이언트가 읽는다 (#56)
     private readonly NetworkVariable<NpcState> m_networkState = new NetworkVariable<NpcState>(NpcState.Idle);
 
@@ -206,6 +209,10 @@ public class NpcController : NetworkBehaviour
         if (IsSpawned && !IsServer)
             return;
 
+        // 라운드 종료 freeze — 서버에서 멈추면 NetworkTransform이 정지 위치를 복제해 전 피어에서 멈춘다
+        if (m_frozen)
+            return;
+
         m_stateMachine.Tick();
         EmitDisturbancePulse();
     }
@@ -245,6 +252,23 @@ public class NpcController : NetworkBehaviour
     private void HandleNetworkStateChanged(NpcState previous, NpcState current)
     {
         OnStateChanged?.Invoke(current);
+    }
+
+    /// <summary>
+    /// 라운드 종료 정지(freeze) — 서버(또는 오프라인)에서 호출. FSM 틱과 NavMesh 이동을 멈춘다. (라운드 종료 freeze)
+    /// 서버에서 멈추면 NetworkTransform이 정지 위치를 복제하므로 모든 클라이언트에서도 멈춘 것으로 보인다.
+    /// </summary>
+    public void SetFrozen(bool frozen)
+    {
+        // FSM/이동은 서버 권위 — 클라이언트 호출은 다른 제어 메서드와 동일하게 무시한다
+        if (IsSpawned && !IsServer)
+            return;
+
+        m_frozen = frozen;
+
+        // 에이전트를 멈춘다 — 비활성/NavMesh 밖이면 isStopped 접근이 예외를 던지므로 가드
+        if (m_agent != null && m_agent.enabled && m_agent.isOnNavMesh)
+            m_agent.isStopped = frozen;
     }
 
     /// <summary>연행 시작 — 체포 성공 직후 호출. NPC가 target(플레이어)을 따라 이동한다. (#59)</summary>
