@@ -7,12 +7,17 @@ using UnityEngine;
 /// <summary>
 /// 스캐너 아이템. 3초 채널링 후 대상 시민의 스캔 정보를 오너 화면에 출력한다.
 /// 배터리 충전식(IChargeable)이며, 스캔 1회당 배터리를 1 소모한다. (GDD 5-1/5-2)
+/// 채널링·배터리·충전은 서버 권위(#55). 좌클릭 홀드로 채널링, 뗌·거리 이탈 시 취소된다 (#91).
 /// </summary>
 public class Scanner : ItemBase, IChargeable
 {
     [Header("스캐너 설정")]
     [SerializeField]
     private float m_channelSeconds = 3f;
+
+    [Tooltip("채널링 도중 대상이 이 거리(m)를 벗어나면 스캔 실패로 처리한다 (#91)")]
+    [SerializeField]
+    private float m_scanKeepRange = 5f;
 
     [SerializeField]
     private int m_maxBattery = 5;
@@ -203,17 +208,37 @@ public class Scanner : ItemBase, IChargeable
             return;
         }
 
-        ServerScanAsync(npcRef, identity.Profile).Forget();
+        ServerScanAsync(npcRef, identity).Forget();
     }
 
-    private async UniTaskVoid ServerScanAsync(NetworkObjectReference npcRef, CitizenProfile profile)
+    // 거리 이탈 판정에 대상 위치가 필요해 프로필이 아닌 신원 컴포넌트째 받는다 (#91)
+    private async UniTaskVoid ServerScanAsync(NetworkObjectReference npcRef, CitizenIdentity identity)
     {
         m_isScanning = true;
         m_cts = new CancellationTokenSource();
 
+        // 프로필은 시작 시점 값으로 고정 — 채널링 도중 재배정될 일은 없다
+        CitizenProfile profile = identity.Profile;
+
         try
         {
-            await UniTask.Delay(TimeSpan.FromSeconds(m_channelSeconds), cancellationToken: m_cts.Token);
+            NotifyOwner($"스캔 채널링 시작: {identity.name} ({m_channelSeconds}초)");
+
+            // 단일 Delay가 아닌 프레임 루프 — 채널링 도중 거리 이탈을 즉시 실패시킨다 (#91)
+            // 뗌 취소는 Yield의 토큰 예외(catch)로, 거리 이탈은 return으로 — 취소 사유가 구분된다
+            float elapsed = 0f;
+            while (elapsed < m_channelSeconds)
+            {
+                if (identity == null || !IsInRange(identity.transform))
+                {
+                    NotifyOwner("스캔 실패 — 대상이 범위를 벗어남");
+                    ClearPendingRpc(); // 실패로 끝나도 오너의 in-flight 플래그를 풀어야 재시도 가능 (#91)
+                    return;
+                }
+
+                await UniTask.Yield(PlayerLoopTiming.Update, m_cts.Token);
+                elapsed += Time.deltaTime;
+            }
 
             // 서버가 배터리를 소모 — NetworkVariable(Server 쓰기)이라 전 클라에 동기화된다.
             m_currentBattery.Value = Mathf.Max(m_currentBattery.Value - 1, 0);
@@ -226,7 +251,8 @@ public class Scanner : ItemBase, IChargeable
         }
         catch (OperationCanceledException)
         {
-            Debug.Log("[서버] 스캔 취소됨");
+            NotifyOwner("스캔 취소됨 (홀드 뗌)");
+            ClearPendingRpc(); // 뗌 취소 후에도 오너가 즉시 재시도할 수 있어야 한다 (#91)
         }
         finally
         {
@@ -254,14 +280,31 @@ public class Scanner : ItemBase, IChargeable
         OnScanCompleted?.Invoke(identity.Profile);
     }
 
-    // 서버 → 오너: 스캔 거부 시 in-flight 플래그 해제
+    // 서버 → 오너: 스캔 거부·취소·실패 시 in-flight 플래그 해제
     [Rpc(SendTo.Owner)]
     private void ClearPendingRpc()
     {
         m_pendingScan = false;
     }
 
+    // ---- 오너 로그 피드백 ----
+
+    // 판정 로그는 서버에서 찍히므로 원격 클라 오너는 결과를 볼 수 없다 — 오너 콘솔에도 같은 로그를 전달한다.
+    // PlayerEscorter.NotifyOwner와 동일 패턴 (#91). 정식 UI 피드백(#65 계열)이 생기면 그 전달 경로로 확장.
+    private void NotifyOwner(string message)
+    {
+        Debug.Log(message); // 서버(호스트)·오프라인 콘솔
+        if (IsSpawned && IsServer && !IsOwner)
+            OwnerLogRpc(message); // 원격 클라가 오너인 경우에만 전달 (호스트 오너는 위에서 이미 찍음)
+    }
+
+    [Rpc(SendTo.Owner)]
+    private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
+
     // ---- 스캔 취소 ----
+
+    /// <summary>좌클릭 뗌 — 진행 중인 스캔 채널링 취소를 서버에 요청한다 (#91).</summary>
+    public override void CancelUse() => CancelScan();
 
     /// <summary>진행 중인 스캔 채널링을 취소한다. (이동·피격 등 방해 시 호출)</summary>
     public void CancelScan()
@@ -281,6 +324,12 @@ public class Scanner : ItemBase, IChargeable
     private void RequestCancelScanRpc()
     {
         m_cts?.Cancel();
+    }
+
+    private bool IsInRange(Transform target)
+    {
+        return (target.position - transform.position).sqrMagnitude
+            <= m_scanKeepRange * m_scanKeepRange;
     }
 
     private static string GetScanInfo(CitizenProfile profile)
