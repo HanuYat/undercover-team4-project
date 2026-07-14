@@ -1,9 +1,10 @@
-using Cysharp.Threading.Tasks;
-using System;
+using Unity.Services.Core.Environments;
 using Unity.Services.Authentication;
 using Unity.Services.Core;
-using Unity.Services.Core.Environments;
+using Cysharp.Threading.Tasks;
+using Unity.Netcode;
 using UnityEngine;
+using System;
 
 public class AuthBootstrap : MonoBehaviour
 {
@@ -25,6 +26,15 @@ public class AuthBootstrap : MonoBehaviour
 
     public bool SessionTokenExists => UnityServices.State == ServicesInitializationState.Initialized
         && AuthenticationService.Instance.SessionTokenExists;
+
+    public bool IsNetworkConnected
+    {
+        get
+        {
+            var nm = NetworkManager.Singleton;
+            return nm != null && (nm.IsClient || nm.IsServer);
+        }
+    }
 
     private void RegisterEvents()
     {
@@ -115,6 +125,13 @@ public class AuthBootstrap : MonoBehaviour
 
     public void SignOut(bool clearCredentials = false)
     {
+        if (IsNetworkConnected)
+        {
+            m_status = "세션 참가 중에는 로그아웃 불가";
+            Debug.LogWarning("[AuthBootstrap] 연결 중 SignOut 거부 - 세션 이탈 후 재시도.");
+            return;
+        }
+
         if (!IsSignedIn) return;
 
         AuthenticationService.Instance.SignOut(clearCredentials);
@@ -123,6 +140,13 @@ public class AuthBootstrap : MonoBehaviour
 
     public void ClearSessionToken()
     {
+        if (IsNetworkConnected)
+        {
+            m_status = "세션 참가 중 토큰 삭제 불가.";
+            Debug.LogWarning("[AuthBootstrap] 연결 중 ClearSessionToken 거부 - 세션 이탈 후 재시도.");
+            return;
+        }
+
         if (UnityServices.State != ServicesInitializationState.Initialized) return;
 
         if (IsSignedIn)
@@ -136,7 +160,7 @@ public class AuthBootstrap : MonoBehaviour
 
     private void OnGUI()
     {
-        GUILayout.BeginArea(new Rect(10, 10, 380, 240));
+        GUILayout.BeginArea(new Rect(10, 10, 380, 280));
 
         GUILayout.Label("Authentication (익명) — 상태");
 
@@ -146,15 +170,18 @@ public class AuthBootstrap : MonoBehaviour
         GUILayout.Label($"PlayerId: {(string.IsNullOrEmpty(PlayerId) ? "(없음)" : PlayerId)}");
         GUILayout.Label($"SessionTokenExists: {(initialized ? SessionTokenExists.ToString() : "(미초기화)")}");
 
+        GUILayout.Label($"연결됨(세션/NGO): {IsNetworkConnected}");
         GUILayout.Space(8);
 
-        GUI.enabled = !m_isBusy;
+        bool canSignOut = !m_isBusy && !IsNetworkConnected;
 
+        GUI.enabled = !m_isBusy;
         if (GUILayout.Button("Sign In (init + 익명 로그인)"))
         {
             HandleSignInAsync(string.IsNullOrWhiteSpace(m_profile) ? null : m_profile).Forget();
         }
 
+        GUI.enabled = canSignOut;
         if (GUILayout.Button("Sign Out"))
         {
             SignOut();
@@ -166,6 +193,11 @@ public class AuthBootstrap : MonoBehaviour
         }
 
         GUI.enabled = true;
+
+        if (IsNetworkConnected)
+        {
+            GUILayout.Label("*세션 참가 중*");
+        }
 
         GUILayout.Space(8);
         GUILayout.Label(m_status);
