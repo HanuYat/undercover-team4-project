@@ -222,6 +222,8 @@ public class Scanner : ItemBase, IChargeable
 
         try
         {
+            NotifyOwner($"스캔 채널링 시작: {identity.name} ({m_channelSeconds}초)");
+
             // 단일 Delay가 아닌 프레임 루프 — 채널링 도중 거리 이탈을 즉시 실패시킨다 (#91)
             // 뗌 취소는 Yield의 토큰 예외(catch)로, 거리 이탈은 return으로 — 취소 사유가 구분된다
             float elapsed = 0f;
@@ -229,7 +231,7 @@ public class Scanner : ItemBase, IChargeable
             {
                 if (identity == null || !IsInRange(identity.transform))
                 {
-                    Debug.Log("[서버] 스캔 실패 — 대상이 범위를 벗어남");
+                    NotifyOwner("스캔 실패 — 대상이 범위를 벗어남");
                     ClearPendingRpc(); // 실패로 끝나도 오너의 in-flight 플래그를 풀어야 재시도 가능 (#91)
                     return;
                 }
@@ -249,7 +251,7 @@ public class Scanner : ItemBase, IChargeable
         }
         catch (OperationCanceledException)
         {
-            Debug.Log("[서버] 스캔 취소됨 (홀드 뗌)");
+            NotifyOwner("스캔 취소됨 (홀드 뗌)");
             ClearPendingRpc(); // 뗌 취소 후에도 오너가 즉시 재시도할 수 있어야 한다 (#91)
         }
         finally
@@ -284,6 +286,20 @@ public class Scanner : ItemBase, IChargeable
     {
         m_pendingScan = false;
     }
+
+    // ---- 오너 로그 피드백 ----
+
+    // 판정 로그는 서버에서 찍히므로 원격 클라 오너는 결과를 볼 수 없다 — 오너 콘솔에도 같은 로그를 전달한다.
+    // PlayerEscorter.NotifyOwner와 동일 패턴 (#91). 정식 UI 피드백(#65 계열)이 생기면 그 전달 경로로 확장.
+    private void NotifyOwner(string message)
+    {
+        Debug.Log(message); // 서버(호스트)·오프라인 콘솔
+        if (IsSpawned && IsServer && !IsOwner)
+            OwnerLogRpc(message); // 원격 클라가 오너인 경우에만 전달 (호스트 오너는 위에서 이미 찍음)
+    }
+
+    [Rpc(SendTo.Owner)]
+    private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
 
     // ---- 스캔 취소 ----
 
