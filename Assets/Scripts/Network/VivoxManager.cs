@@ -3,7 +3,6 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Cysharp.Threading.Tasks;
-using Unity.Services.Core;
 using Unity.Services.Vivox;
 using Unity.Services.Authentication;
 
@@ -59,13 +58,18 @@ public class VivoxManager : MonoBehaviour
 
         try
         {
-            if (UnityServices.State != ServicesInitializationState.Initialized)
+            if (m_session == null)
             {
-                await UnityServices.InitializeAsync();
+                m_status = "SessionManager 미할당";
+                Debug.LogError("[VivoxManager] SessionManager 참조가 없습니다.");
+                return;
             }
+
+            await m_session.EnsureSignedInAsync();
+
             if (!AuthenticationService.Instance.IsSignedIn)
             {
-                m_status = "로그인 안 됨 — 세션 인증 필요";
+                m_status = "로그인 안 됨 - 세션 인증 필요";
                 return;
             }
 
