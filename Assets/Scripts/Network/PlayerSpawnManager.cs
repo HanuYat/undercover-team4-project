@@ -4,6 +4,8 @@ using UnityEngine;
 /// <summary>
 /// 접속하는 모든 플레이어를 지정한 스폰 포인트 한 곳에서 생성한다.
 /// NetworkManager 인스펙터에서 Connection Approval이 켜져 있어야 동작한다.
+/// 오너 클라이언트 쪽 위치 보정은 PlayerMovement.ApplyServerSpawnPose가 담당한다
+/// (NetworkTransform이 Owner 권한이라 서버 지정 위치만으로는 부족함).
 /// </summary>
 public class PlayerSpawnManager : MonoBehaviour
 {
@@ -23,6 +25,22 @@ public class PlayerSpawnManager : MonoBehaviour
         {
             Debug.LogWarning("[PlayerSpawnManager] NetworkManager를 찾을 수 없습니다.");
             return;
+        }
+
+        if (!m_networkManager.NetworkConfig.ConnectionApproval)
+        {
+            Debug.LogWarning(
+                "[PlayerSpawnManager] NetworkManager의 Connection Approval이 꺼져 있어 "
+                    + "Approval 콜백이 호출되지 않습니다 → 항상 기본 위치에 스폰됩니다."
+            );
+        }
+
+        if (m_networkManager.IsListening)
+        {
+            Debug.LogWarning(
+                "[PlayerSpawnManager] 콜백 등록 전에 네트워크가 이미 시작됨 — "
+                    + "먼저 접속한 플레이어(호스트 포함)는 기본 위치에 스폰됐을 수 있습니다."
+            );
         }
 
         m_networkManager.ConnectionApprovalCallback = OnConnectionApproval;
@@ -48,11 +66,16 @@ public class PlayerSpawnManager : MonoBehaviour
         {
             response.Position = m_spawnPoint.position + GetSpreadOffset(m_approvedCount++);
             response.Rotation = m_spawnPoint.rotation;
+            Debug.Log(
+                $"[PlayerSpawnManager] 클라이언트 {request.ClientNetworkId} 스폰 위치 지정: "
+                    + $"{response.Position}"
+            );
         }
         else
         {
             Debug.LogWarning(
-                "[PlayerSpawnManager] 스폰 포인트가 지정되지 않아 기본 위치(프리팹 원점)에 생성됩니다."
+                $"[PlayerSpawnManager] 스폰 포인트가 지정되지 않아 클라이언트 "
+                    + $"{request.ClientNetworkId}가 기본 위치(프리팹 원점)에 생성됩니다."
             );
         }
     }

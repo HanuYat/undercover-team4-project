@@ -46,6 +46,14 @@ public class PlayerMovement : NetworkBehaviour
     [Tooltip("서기↔다운 시점 전환 보간 속도")]
     [SerializeField] private float m_camPoseLerpSpeed = 8f;
 
+    // 서버가 Connection Approval에서 지정한 스폰 포즈. 프리팹의 NetworkTransform이 Owner 권한이라,
+    // 씬 동기화를 거쳐 접속하면 오너 로컬 인스턴스가 프리팹 원점에 생성된 채 권한을 잡고 원점
+    // 위치를 역전파해 스폰 위치를 덮어쓴다 — 오너가 이 값을 읽어 스스로 스폰 포즈로 이동해 바로잡는다.
+    private readonly NetworkVariable<Vector3> m_serverSpawnPosition = new NetworkVariable<Vector3>();
+    private readonly NetworkVariable<Quaternion> m_serverSpawnRotation = new NetworkVariable<Quaternion>(
+        Quaternion.identity
+    );
+
     private CharacterController m_controller;
     private PlayerInputHandler m_inputHandler;
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 이동·시점 차단용 (#105)
@@ -79,12 +87,21 @@ public class PlayerMovement : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
+        if (IsServer)
+        {
+            // 서버 인스턴스는 Approval이 지정한 위치에 생성된다 — 이 포즈가 오너에게 초기 동기화된다
+            m_serverSpawnPosition.Value = transform.position;
+            m_serverSpawnRotation.Value = transform.rotation;
+        }
+
         if (!IsOwner)
         {
             playerCamera.gameObject.SetActive(false);
             enabled = false;
             return;
         }
+
+        ApplyServerSpawnPose();
 
         if (m_ownBodyRoot != null)
         {
@@ -93,6 +110,19 @@ public class PlayerMovement : NetworkBehaviour
 
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+    }
+
+    // 오너 로컬 인스턴스를 서버가 지정한 스폰 포즈로 이동시킨다. CharacterController가 켜진
+    // 상태에서 transform을 직접 옮기면 내부 캐시가 위치를 되돌릴 수 있어 잠시 끄고 옮긴다.
+    private void ApplyServerSpawnPose()
+    {
+        m_controller.enabled = false;
+        transform.SetPositionAndRotation(m_serverSpawnPosition.Value, m_serverSpawnRotation.Value);
+        m_controller.enabled = true;
+
+        Debug.Log(
+            $"[PlayerMovement] 서버 지정 스폰 포즈 적용 — Owner {OwnerClientId}, 위치 {transform.position}"
+        );
     }
 
     private void SetLayerRecursively(Transform root, int layer)
