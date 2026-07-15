@@ -42,6 +42,9 @@ public class NpcResistState : NpcStateBase
         if (m_owner.SubdueGauge <= 0f)
         {
             Debug.Log($"저항 제압됨: {m_owner.name}");
+            // 체포로 반응이 끝나므로 위협 참조를 여기서 정리한다. Exit()에 넣으면 안 된다 —
+            // Defeat()의 StartFlee()가 세팅한 위협을 그 직후 Exit()가 지워 도주 전환이 깨진다 (#205).
+            m_owner.ClearThreat();
             m_owner.StateMachine.ChangeState(NpcState.Captured);
             return;
         }

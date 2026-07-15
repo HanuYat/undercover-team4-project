@@ -307,7 +307,7 @@ public class NpcController : NetworkBehaviour
         m_stateMachine.ChangeState(NpcState.Run);
     }
 
-    /// <summary>위협 참조 정리 — NpcFleeState.Exit 전용.</summary>
+    /// <summary>위협 참조 정리 — 반응(도주·저항)이 끝나는 지점에서 호출한다.</summary>
     public void ClearThreat() => ThreatTarget = null;
 
     /// <summary>저항 시작 — 수갑 채널링 성공 순간 저항형의 반응. 그 자리에서 버틴다.</summary>
