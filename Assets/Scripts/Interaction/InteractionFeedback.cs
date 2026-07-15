@@ -112,12 +112,34 @@ public class InteractionFeedback : NetworkBehaviour
         {
             // 런타임 AddComponent는 Reset()이 호출되지 않으므로 렌더러 수집을 직접 한다
             outlinable = root.AddComponent<Outlinable>();
-            outlinable.AddAllChildRenderersToRenderingList(
-                RenderersAddingMode.MeshRenderer | RenderersAddingMode.SkinnedMeshRenderer);
+            AddOutlineTargets(outlinable, root);
         }
 
         outlinable.OutlineParameters.Color = color;
         outlinable.enabled = true;
         m_currentOutlinable = outlinable;
+    }
+
+    /// <summary>
+    /// 자식 렌더러들을 윤곽선 대상으로 수집한다. EPO의 AddAllChildRenderersToRenderingList는
+    /// 모든 MeshRenderer에 MeshFilter가 있다고 가정해 TextMesh(디버그 라벨 등 메시 내부 생성형)에서
+    /// MissingComponentException을 던지므로, 유효한 메시가 있는 렌더러만 직접 담는다. (#207)
+    /// </summary>
+    private static void AddOutlineTargets(Outlinable outlinable, GameObject root)
+    {
+        foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
+        {
+            Mesh mesh = null;
+            if (renderer is SkinnedMeshRenderer skinned)
+                mesh = skinned.sharedMesh;
+            else if (renderer is MeshRenderer && renderer.TryGetComponent(out MeshFilter filter))
+                mesh = filter.sharedMesh;
+
+            if (mesh == null)
+                continue; // TextMesh 라벨·메시 미지정 렌더러 — 윤곽선 대상에서 제외
+
+            for (int i = 0; i < mesh.subMeshCount; i++)
+                outlinable.AddTarget(new OutlineTarget(renderer, i));
+        }
     }
 }
