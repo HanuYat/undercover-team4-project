@@ -102597,6 +102597,11 @@ MonoBehaviour:
   m_channelPrefix: Radio
   m_pushToTalkAction: {fileID: -3939125208035815356, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_session: {fileID: 373063423}
+  m_proximityChannelPrefix: Proximity
+  m_conversationalDistance: 2
+  m_audibleDistance: 15
+  m_audioFadeIntensity: 4
+  m_positionUpdateInterval: 0.1
   m_guiTopOffset: 10
 --- !u!4 &1467963242
 Transform:

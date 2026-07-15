@@ -1,23 +1,34 @@
 using System;
 using System.Text;
+using System.Threading;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Cysharp.Threading.Tasks;
+using Unity.Netcode;
 using Unity.Services.Vivox;
 using Unity.Services.Authentication;
 
-// GDD 4-91: 전역 오픈 음성 채널 1개(거리무관, non-positional) + PTT.
 public class VivoxManager : MonoBehaviour
 {
     [SerializeField] private string m_channelPrefix = "Radio";
     [SerializeField] private InputActionReference m_pushToTalkAction;
     [SerializeField] private SessionManager m_session;   // 인스펙터에서 연결
-
     private bool m_loggedIn;
-    private bool m_joined;
+    //private bool m_joined; // -> m_radioJoined, m_proximityJoined로 대체
     private bool m_transmitting;
     private bool m_starting;
     private string m_status = "대기 중...";
+
+    [Header("근접 음성 (positional)")]
+    [SerializeField] private string m_proximityChannelPrefix = "Proximity";
+    [SerializeField] private int m_conversationalDistance = 3;
+    [SerializeField] private int m_audibleDistance = 15;
+    [SerializeField] private float m_audioFadeIntensity = 1.0f; // 감쇠 강도 (테스트 중 멀어져도 크게 들리면 강도 ↑)
+    [SerializeField] private float m_positionUpdateInterval = 0.1f; // 위치 보고 주기
+    private bool m_radioJoined;
+    private bool m_proximityJoined;
+    private string m_proximityChannelName;
+    private CancellationTokenSource m_posLoopCts;
 
     private void OnEnable()
     {
@@ -55,6 +66,8 @@ public class VivoxManager : MonoBehaviour
             m_pushToTalkAction.action.canceled -= OnPushToTalkCanceled;
             m_pushToTalkAction.action.Disable();
         }
+
+        m_posLoopCts?.Cancel();
     }
 
     private async UniTask EnsureLoggedInAsync()
@@ -100,41 +113,83 @@ public class VivoxManager : MonoBehaviour
         }
     }
 
-    private async UniTask JoinRadioAsync(string sessionId)
+    private async UniTask JoinChannelAsync(string sessionId)
     {
         await EnsureLoggedInAsync();
         if (!m_loggedIn) return;
 
-        await LeaveChannelAsync();
-        await JoinChannelAsync(BuildChannelName(sessionId));
-    }
+        await LeaveChannelAsync();  // 재참가 대비
 
-    private async UniTask JoinChannelAsync(string channelName)
-    {
-        if (m_joined) return;
+        string radio = BuildChannelName(m_channelPrefix, sessionId);
+        m_proximityChannelName = BuildChannelName(m_proximityChannelPrefix, sessionId);
+
         try
         {
-            m_status = "채널 참가 중...";
-            await VivoxService.Instance.JoinGroupChannelAsync(channelName, ChatCapability.AudioOnly);
-            m_joined = true;
+            // 거리 무관 무전 채널
+            await VivoxService.Instance.JoinGroupChannelAsync(radio, ChatCapability.AudioOnly);
+            m_radioJoined = true;
 
-            // PTT: 기본은 송신 차단(mute). 키 누를 때만 unmute.
-            VivoxService.Instance.MuteInputDevice();
-            m_transmitting = false;
+            // 3D positional 채널
+            var props = new Channel3DProperties(m_audibleDistance, m_conversationalDistance, m_audioFadeIntensity, AudioFadeModel.InverseByDistance);
+            await VivoxService.Instance.JoinPositionalChannelAsync(m_proximityChannelName, ChatCapability.AudioOnly, props);
+            m_proximityJoined = true;
+            StartPositionLoop();
 
-            m_status = $"채널 참가 완료: {channelName}";
-            Debug.Log($"[VivoxManager] 무전 채널 참가 완료 / channel: {channelName}");
+            // 오픈마이크 장치 언뮤트 + 기본 송신은 근접 채널로만
+            VivoxService.Instance.UnmuteInputDevice();
+            await VivoxService.Instance.SetChannelTransmissionModeAsync(TransmissionMode.Single, m_proximityChannelName);
+
+            m_status = "무전 + 근접 채널 참가 완료";
         }
-        catch (Exception e)
+        catch (Exception ex)
         {
-            m_status = $"실패: {e.Message}";
-            Debug.LogError($"[VivoxManager] {e}");
+            m_status = $"채널 참가 실패: {ex.Message}";
+            Debug.LogError($"[VivoxManager] {ex}");
+        }
+    }
+
+    private void StartPositionLoop()
+    {
+        m_posLoopCts?.Cancel();
+        m_posLoopCts?.Dispose();
+        m_posLoopCts = new CancellationTokenSource();
+        PositionLoopAsync(m_posLoopCts.Token).Forget();
+    }
+
+    private async UniTaskVoid PositionLoopAsync(CancellationToken token)
+    {
+        Vector3 lastPos = Vector3.positiveInfinity;
+        Quaternion lastRot = Quaternion.identity;
+        NetworkObject local = null;
+
+        while (!token.IsCancellationRequested)
+        {
+            if (local == null)
+            {
+                var nm = NetworkManager.Singleton;
+                local = (nm != null && nm.IsClient) ? nm.LocalClient?.PlayerObject : null;
+            }
+
+            if (m_proximityJoined && local != null)
+            {
+                var t = local.transform;
+                bool moved = (t.position - lastPos).sqrMagnitude > 0.0001f || Quaternion.Angle(t.rotation, lastRot) > 0.5f;
+
+                if (moved)
+                {
+                    VivoxService.Instance.Set3DPosition(local.gameObject, m_proximityChannelName);
+                    lastPos = t.position;
+                    lastRot = t.rotation;
+                }
+            }
+
+            await UniTask.Delay(TimeSpan.FromSeconds(m_positionUpdateInterval), cancellationToken: token);
         }
     }
 
     private async UniTask LeaveChannelAsync()
     {
-        if (!m_joined) return;
+        if (!m_radioJoined && !m_proximityJoined) return;
         try
         {
             await VivoxService.Instance.LeaveAllChannelsAsync();
@@ -145,14 +200,16 @@ public class VivoxManager : MonoBehaviour
         }
         finally
         {
-            m_joined = false;
+            m_radioJoined = false;
+            m_proximityJoined = false;
             m_transmitting = false;
+            m_posLoopCts?.Cancel();
         }
     }
 
-    private string BuildChannelName(string sessionId)
+    private string BuildChannelName(string prefix, string sessionId)
     {
-        var sb = new StringBuilder(m_channelPrefix);
+        var sb = new StringBuilder(prefix);
         foreach (char c in sessionId)
         {
             if (char.IsLetterOrDigit(c)) sb.Append(c);
@@ -160,25 +217,26 @@ public class VivoxManager : MonoBehaviour
         return sb.ToString();
     }
 
-    private void OnPushToTalkStarted(InputAction.CallbackContext ctx) => SetTransmitting(true);
-    private void OnPushToTalkCanceled(InputAction.CallbackContext ctx) => SetTransmitting(false);
+    private void OnPushToTalkStarted(InputAction.CallbackContext ctx) => SetRadioTransmit(true);
+    private void OnPushToTalkCanceled(InputAction.CallbackContext ctx) => SetRadioTransmit(false);
 
-    private void SetTransmitting(bool on)
+    private void SetRadioTransmit(bool on)
     {
-        if (!m_joined) return;  // 채널 참가 전에는 무시
-        if (m_transmitting == on) return;
+        if (!m_radioJoined || !m_proximityJoined) return;
         m_transmitting = on;
 
-        if (on) VivoxService.Instance.UnmuteInputDevice();
-        else VivoxService.Instance.MuteInputDevice();
+        var mode = on ? TransmissionMode.All : TransmissionMode.Single;
+        string ch = on ? null : m_proximityChannelName;
+        VivoxService.Instance.SetChannelTransmissionModeAsync(mode, ch).AsUniTask().Forget();
     }
 
     private async UniTask LeaveAsync()
     {
-        if (m_joined)
+        if (m_radioJoined || m_proximityJoined)
         {
             await VivoxService.Instance.LeaveAllChannelsAsync();
-            m_joined = false;
+            m_radioJoined = false;
+            m_proximityJoined = false;
         }
         if (m_loggedIn)
         {
@@ -189,7 +247,7 @@ public class VivoxManager : MonoBehaviour
 
     private void HandleSessionJoined(string sessionId)
     {
-        JoinRadioAsync(sessionId).Forget();
+        JoinChannelAsync(sessionId).Forget();
     }
 
     private void HandleSessionLeft()
@@ -205,6 +263,7 @@ public class VivoxManager : MonoBehaviour
     private void OnDestroy()
     {
         CleanupAsync().Forget();
+        m_posLoopCts?.Cancel();
     }
 
     private async UniTaskVoid CleanupAsync()
@@ -222,7 +281,8 @@ public class VivoxManager : MonoBehaviour
         GUILayout.BeginArea(new Rect(450, m_guiTopOffset, 320, 160));
         GUILayout.Label("Vivox 무전 — 상태");
         GUILayout.Label($"LoggedIn: {m_loggedIn}");
-        GUILayout.Label($"Joined: {m_joined}");
+        GUILayout.Label($"Proximity Joined: {m_proximityJoined}");
+        GUILayout.Label($"Radio Joined: {m_radioJoined}");
         GUILayout.Label($"Transmitting(PTT): {m_transmitting}");
         GUILayout.Label($"Push To Talk: {(m_pushToTalkAction != null ? m_pushToTalkAction.action.GetBindingDisplayString() : "(미할당)")}");
         GUILayout.Space(6);
