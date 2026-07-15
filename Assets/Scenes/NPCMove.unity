@@ -1097,6 +1097,7 @@ GameObject:
   - component: {fileID: 1083012407}
   - component: {fileID: 1083012410}
   - component: {fileID: 1083012409}
+  - component: {fileID: 1083012411}
   m_Layer: 0
   m_Name: SuddenEvents
   m_TagString: Untagged
@@ -1212,6 +1213,38 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::DeviceBlackoutEvent
   ShowTopMostFoldoutHeaderGroup: 1
   m_durationSeconds: 12
+--- !u!114 &1083012411
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1083012404}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6beb6a5727fc0044492574c65748868e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SpawnedNpcEventSet
+  m_events:
+  - m_displayName: "\uAC70\uB9AC \uB09C\uB3D9\uC790"
+    m_mode: 0
+    m_npcPrefab: {fileID: 4452197611904741975, guid: d683626f03b237a4da9faa4542cc57a0, type: 3}
+    m_spawnDistanceMin: 6
+    m_spawnDistanceMax: 12
+    m_navSampleMaxDistance: 4
+    m_maxSpawnAttempts: 8
+    m_pettyCrimeReward: 50
+    m_maxLifetimeSeconds: 60
+  - m_displayName: "\uB098\uCCB4 \uB09C\uB3D9\uAFBC"
+    m_mode: 1
+    m_npcPrefab: {fileID: 4452197611904741975, guid: 5ec59267efd14b0409911db86746a985, type: 3}
+    m_spawnDistanceMin: 6
+    m_spawnDistanceMax: 12
+    m_navSampleMaxDistance: 4
+    m_maxSpawnAttempts: 8
+    m_pettyCrimeReward: 50
+    m_maxLifetimeSeconds: 60
+  m_arrestJudge: {fileID: 0}
 --- !u!1 &1179928418
 GameObject:
   m_ObjectHideFlags: 0

@@ -13,4 +13,11 @@ public enum ArrestVerdict
     /// 진범(WantedCriminal) 외의 검거는 순응·도주·저항을 가리지 않고 전부 오검거로 성립한다. (#78)
     /// </summary>
     WrongfulArrest,
+
+    /// <summary>
+    /// 경범죄 — 돌발 이벤트로 등장한 난동꾼(거리 난동자·나체 난동꾼 등)을 제압·연행해 즉결 처리함. (GDD 6-4, #106)
+    /// 진범 수사 대상이 아니므로 라운드 할당량에는 포함되지 않고, 오검거도 아니다 — 별도 소액 수익을 준다.
+    /// 대상은 <see cref="MisdemeanorOffender"/> 마커로 식별한다 (신원 IsCriminal 대조를 타지 않는다).
+    /// </summary>
+    Misdemeanor,
 }
