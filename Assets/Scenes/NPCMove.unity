@@ -1235,6 +1235,15 @@ MonoBehaviour:
     m_maxSpawnAttempts: 8
     m_pettyCrimeReward: 50
     m_maxLifetimeSeconds: 60
+  - m_displayName: "\uB098\uCCB4 \uB09C\uB3D9\uAFBC"
+    m_mode: 1
+    m_npcPrefab: {fileID: 4452197611904741975, guid: 5ec59267efd14b0409911db86746a985, type: 3}
+    m_spawnDistanceMin: 6
+    m_spawnDistanceMax: 12
+    m_navSampleMaxDistance: 4
+    m_maxSpawnAttempts: 8
+    m_pettyCrimeReward: 50
+    m_maxLifetimeSeconds: 60
   m_arrestJudge: {fileID: 0}
 --- !u!1 &1179928418
 GameObject:
