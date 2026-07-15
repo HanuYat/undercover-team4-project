@@ -34892,6 +34892,7 @@ GameObject:
   m_Component:
   - component: {fileID: 708957382}
   - component: {fileID: 708957383}
+  - component: {fileID: 708957384}
   m_Layer: 0
   m_Name: RoundManager
   m_TagString: Untagged
@@ -34930,6 +34931,21 @@ MonoBehaviour:
   m_arrestJudge: {fileID: 0}
   m_arrestQuota: 1
   m_timeLimitSeconds: 600
+--- !u!114 &708957384
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 708957381}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d46dac2f49b012c46a79dd287d42c4e4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RoundEndResetter
+  m_round: {fileID: 0}
+  m_session: {fileID: 0}
+  m_resetDelaySeconds: 2
 --- !u!1001 &709961684
 PrefabInstance:
   m_ObjectHideFlags: 0
