@@ -233,9 +233,19 @@ public class Scanner : ItemBase, IChargeable
         CitizenProfile profile = identity.Profile;
 
         NotifyOwner($"스캔 채널링 시작: {identity.name} ({m_channelSeconds}초)");
+        NotifyChannelGaugeStart(m_channelSeconds);
 
-        ServerChannel.Result result = await m_channel.RunAsync(
-            m_channelSeconds, () => identity != null && IsInRange(identity.transform));
+        ServerChannel.Result result;
+        try
+        {
+            result = await m_channel.RunAsync(
+                m_channelSeconds, () => identity != null && IsInRange(identity.transform));
+        }
+        finally
+        {
+            // 완료·뗌·거리이탈·예외 어떤 경로로 끝나도 게이지 숨김을 보장한다 (#184)
+            NotifyChannelGaugeEnd();
+        }
 
         switch (result)
         {
@@ -301,6 +311,36 @@ public class Scanner : ItemBase, IChargeable
 
     [Rpc(SendTo.Owner)]
     private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
+
+    // ---- 채널링 게이지 피드백 (#184) ----
+    // NotifyOwner와 동일 분기 — 호스트 오너·오프라인은 직접 호출, 원격 오너에게만 RPC.
+    // 스캐너는 줍기 시 소유권이 홀더로 이전되므로(#88) SendTo.Owner가 정확히 든 사람에게 간다.
+
+    private void NotifyChannelGaugeStart(float seconds)
+    {
+        if (IsSpawned && IsServer && !IsOwner)
+        {
+            ChannelGaugeStartRpc(seconds);
+            return;
+        }
+        ChannelingGaugeUI.Instance?.Show(seconds);
+    }
+
+    private void NotifyChannelGaugeEnd()
+    {
+        if (IsSpawned && IsServer && !IsOwner)
+        {
+            ChannelGaugeEndRpc();
+            return;
+        }
+        ChannelingGaugeUI.Instance?.Hide();
+    }
+
+    [Rpc(SendTo.Owner)]
+    private void ChannelGaugeStartRpc(float seconds) => ChannelingGaugeUI.Instance?.Show(seconds);
+
+    [Rpc(SendTo.Owner)]
+    private void ChannelGaugeEndRpc() => ChannelingGaugeUI.Instance?.Hide();
 
     // ---- 스캔 취소 ----
 
