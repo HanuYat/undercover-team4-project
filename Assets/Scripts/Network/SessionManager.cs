@@ -1,18 +1,29 @@
-using Unity.Services.Multiplayer;
-using Cysharp.Threading.Tasks;
-using UnityEngine;
 using System;
+using UnityEngine;
+using Cysharp.Threading.Tasks;
+using Unity.Services.Multiplayer;
 
 public class SessionManager : MonoBehaviour
 {
     [SerializeField] private int m_maxPlayer = 6;
     [SerializeField] private AuthBootstrap m_auth; // 인스펙터로 연결
+    public AuthBootstrap Auth => m_auth;
 
     private ISession m_session;
     public ISession CurrentSession => m_session;
 
     public event Action<string> OnSessionJoined; // 인자: session.Id
     public event Action OnSessionLeft;
+
+    private void OnEnable()
+    {
+        if (m_auth != null) m_auth.CanSignOut = () => m_session == null && !m_isBusy;   // 세션에 접속 중이 아니면 로그아웃 가능
+    }
+
+    private void OnDisable()
+    {
+        if (m_auth != null) m_auth.CanSignOut = null;
+    }
 
     public async UniTask EnsureSignedInAsync()
     {

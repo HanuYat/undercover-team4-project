@@ -1,5 +1,4 @@
 using System;
-using System.Threading;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
@@ -28,9 +27,8 @@ public class Scanner : ItemBase, IChargeable
     private readonly NetworkVariable<int> m_currentBattery = new NetworkVariable<int>(
         0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-    // 서버 전용 상태 — 채널링 중복 방지 및 CTS 관리.
-    private bool m_isScanning;
-    private CancellationTokenSource m_cts;
+    // 서버 전용 상태 — 채널링 중복 방지·CTS 관리는 ServerChannel에 위임 (#109).
+    private readonly ServerChannel m_channel = new();
 
     // 오너 UI용 in-flight 플래그 — 서버가 수락하기 전까지 연속 요청을 클라 측에서 억제. (서버 재검증이 최종 판정)
     private bool m_pendingScan;
@@ -91,6 +89,13 @@ public class Scanner : ItemBase, IChargeable
             return;
         }
 
+        // 스캔 채널링 도중엔 충전 거부 — "충전은 본부에서만·왕복 필요" 리듬 설계를 우회하는 걸 막는다 (#60 리뷰, #109).
+        if (m_channel.IsActive)
+        {
+            NotifyOwner("충전 실패 — 스캔 채널링 중");
+            return;
+        }
+
         m_currentBattery.Value = Mathf.Min(m_currentBattery.Value + amount, m_maxBattery);
     }
 
@@ -98,6 +103,16 @@ public class Scanner : ItemBase, IChargeable
 
     /// <summary>스캔 중이 아니고 배터리가 남아 있을 때만 사용 가능. (UI 힌트용 — 최종 판정은 서버가 재검증)</summary>
     public override bool CanUse() => !m_pendingScan && !IsDepleted;
+
+    /// <summary>스캔 가능한 대상인지 — 신원(CitizenIdentity)이 있고 배터리·중복 스캔 게이트(CanUse) 통과.
+    /// Use()의 조기 검증과 동일 기준 — 조준 피드백(윤곽선) 판정용. (#184)</summary>
+    public override bool CanTarget(GameObject aimTarget)
+    {
+        if (!CanUse())
+            return false;
+
+        return aimTarget != null && aimTarget.GetComponentInParent<CitizenIdentity>() != null;
+    }
 
     /// <summary>
     /// 아이템 사용 진입점. 오너의 의도를 서버로 전달한다.
@@ -187,7 +202,7 @@ public class Scanner : ItemBase, IChargeable
             return;
         }
 
-        if (m_isScanning)
+        if (m_channel.IsActive)
         {
             ClearPendingRpc();
             return;
@@ -214,52 +229,48 @@ public class Scanner : ItemBase, IChargeable
     // 거리 이탈 판정에 대상 위치가 필요해 프로필이 아닌 신원 컴포넌트째 받는다 (#91)
     private async UniTaskVoid ServerScanAsync(NetworkObjectReference npcRef, CitizenIdentity identity)
     {
-        m_isScanning = true;
-        m_cts = new CancellationTokenSource();
-
         // 프로필은 시작 시점 값으로 고정 — 채널링 도중 재배정될 일은 없다
         CitizenProfile profile = identity.Profile;
 
+        NotifyOwner($"스캔 채널링 시작: {identity.name} ({m_channelSeconds}초)");
+        NotifyChannelGaugeStart(m_channelSeconds);
+
+        ServerChannel.Result result;
         try
         {
-            NotifyOwner($"스캔 채널링 시작: {identity.name} ({m_channelSeconds}초)");
-
-            // 단일 Delay가 아닌 프레임 루프 — 채널링 도중 거리 이탈을 즉시 실패시킨다 (#91)
-            // 뗌 취소는 Yield의 토큰 예외(catch)로, 거리 이탈은 return으로 — 취소 사유가 구분된다
-            float elapsed = 0f;
-            while (elapsed < m_channelSeconds)
-            {
-                if (identity == null || !IsInRange(identity.transform))
-                {
-                    NotifyOwner("스캔 실패 — 대상이 범위를 벗어남");
-                    ClearPendingRpc(); // 실패로 끝나도 오너의 in-flight 플래그를 풀어야 재시도 가능 (#91)
-                    return;
-                }
-
-                await UniTask.Yield(PlayerLoopTiming.Update, m_cts.Token);
-                elapsed += Time.deltaTime;
-            }
-
-            // 서버가 배터리를 소모 — NetworkVariable(Server 쓰기)이라 전 클라에 동기화된다.
-            m_currentBattery.Value = Mathf.Max(m_currentBattery.Value - 1, 0);
-            Debug.Log($"[서버] NPC 스캔됨: {GetScanInfo(profile)}. 남은 배터리: {m_currentBattery.Value}");
-
-            // 스캔 결과를 오너 클라에만 전달 — GDD 5-4: 스캔 정보는 스캔한 플레이어 화면 전용.
-            // 본부/타 클라는 배터리 감소(NetworkVariable)만 전파받는다.
-            // NPC NetworkObjectReference를 넘기면 오너 클라가 CitizenIdentity.Profile을 로컬에서 해석 (#55).
-            ScanResultRpc(npcRef);
-        }
-        catch (OperationCanceledException)
-        {
-            NotifyOwner("스캔 취소됨 (홀드 뗌)");
-            ClearPendingRpc(); // 뗌 취소 후에도 오너가 즉시 재시도할 수 있어야 한다 (#91)
+            result = await m_channel.RunAsync(
+                m_channelSeconds, () => identity != null && IsInRange(identity.transform));
         }
         finally
         {
-            m_isScanning = false;
-            m_cts?.Dispose();
-            m_cts = null;
+            // 완료·뗌·거리이탈·예외 어떤 경로로 끝나도 게이지 숨김을 보장한다 (#184)
+            NotifyChannelGaugeEnd();
         }
+
+        switch (result)
+        {
+            case ServerChannel.Result.OutOfRange:
+                NotifyOwner("스캔 실패 — 대상이 범위를 벗어남");
+                ClearPendingRpc(); // 실패로 끝나도 오너의 in-flight 플래그를 풀어야 재시도 가능 (#91)
+                return;
+
+            case ServerChannel.Result.Canceled:
+                NotifyOwner("스캔 취소됨 (홀드 뗌)");
+                ClearPendingRpc(); // 뗌 취소 후에도 오너가 즉시 재시도할 수 있어야 한다 (#91)
+                return;
+
+            case ServerChannel.Result.Completed:
+                break; // 아래 성공 처리로 진행
+        }
+
+        // 서버가 배터리를 소모 — NetworkVariable(Server 쓰기)이라 전 클라에 동기화된다.
+        m_currentBattery.Value = Mathf.Max(m_currentBattery.Value - 1, 0);
+        Debug.Log($"[서버] NPC 스캔됨: {GetScanInfo(profile)}. 남은 배터리: {m_currentBattery.Value}");
+
+        // 스캔 결과를 오너 클라에만 전달 — GDD 5-4: 스캔 정보는 스캔한 플레이어 화면 전용.
+        // 본부/타 클라는 배터리 감소(NetworkVariable)만 전파받는다.
+        // NPC NetworkObjectReference를 넘기면 오너 클라가 CitizenIdentity.Profile을 로컬에서 해석 (#55).
+        ScanResultRpc(npcRef);
     }
 
     // 서버 → 오너: 스캔 결과 회신. 오너가 로컬 CitizenIdentity에서 프로필을 추출해 이벤트를 발행한다.
@@ -301,6 +312,36 @@ public class Scanner : ItemBase, IChargeable
     [Rpc(SendTo.Owner)]
     private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
 
+    // ---- 채널링 게이지 피드백 (#184) ----
+    // NotifyOwner와 동일 분기 — 호스트 오너·오프라인은 직접 호출, 원격 오너에게만 RPC.
+    // 스캐너는 줍기 시 소유권이 홀더로 이전되므로(#88) SendTo.Owner가 정확히 든 사람에게 간다.
+
+    private void NotifyChannelGaugeStart(float seconds)
+    {
+        if (IsSpawned && IsServer && !IsOwner)
+        {
+            ChannelGaugeStartRpc(seconds);
+            return;
+        }
+        ChannelingGaugeUI.Instance?.Show(seconds);
+    }
+
+    private void NotifyChannelGaugeEnd()
+    {
+        if (IsSpawned && IsServer && !IsOwner)
+        {
+            ChannelGaugeEndRpc();
+            return;
+        }
+        ChannelingGaugeUI.Instance?.Hide();
+    }
+
+    [Rpc(SendTo.Owner)]
+    private void ChannelGaugeStartRpc(float seconds) => ChannelingGaugeUI.Instance?.Show(seconds);
+
+    [Rpc(SendTo.Owner)]
+    private void ChannelGaugeEndRpc() => ChannelingGaugeUI.Instance?.Hide();
+
     // ---- 스캔 취소 ----
 
     /// <summary>좌클릭 뗌 — 진행 중인 스캔 채널링 취소를 서버에 요청한다 (#91).</summary>
@@ -311,8 +352,8 @@ public class Scanner : ItemBase, IChargeable
     {
         if (!IsSpawned || IsServer)
         {
-            // 서버(호스트)·오프라인은 직접 CTS 취소
-            m_cts?.Cancel();
+            // 서버(호스트)·오프라인은 직접 채널 취소
+            m_channel.Cancel();
             return;
         }
 
@@ -323,12 +364,16 @@ public class Scanner : ItemBase, IChargeable
     [Rpc(SendTo.Server)]
     private void RequestCancelScanRpc()
     {
-        m_cts?.Cancel();
+        m_channel.Cancel();
     }
 
     private bool IsInRange(Transform target)
     {
-        return (target.position - transform.position).sqrMagnitude
+        // 기준점은 든 플레이어의 AimOrigin(카메라) — 조준·윤곽선 게이트와 동일 (#184).
+        // 아이템은 줍기/버리기로 부모가 바뀌므로 캐시하지 않고 호출 시점에 해석한다 (Handcuffs.Escorter 관례).
+        PlayerInteractor interactor = GetComponentInParent<PlayerInteractor>();
+        Vector3 origin = interactor != null ? interactor.AimOrigin.position : transform.position;
+        return (target.position - origin).sqrMagnitude
             <= m_scanKeepRange * m_scanKeepRange;
     }
 
@@ -364,7 +409,7 @@ public class Scanner : ItemBase, IChargeable
         // 디스폰(버리기·파괴) 시 서버에서 진행 중인 채널링도 취소
         if (IsServer)
         {
-            m_cts?.Cancel();
+            m_channel.Cancel();
         }
 
         m_pendingScan = false;
@@ -381,8 +426,7 @@ public class Scanner : ItemBase, IChargeable
 
     public override void OnDestroy()
     {
-        m_cts?.Cancel();
-        m_cts?.Dispose();
+        m_channel.Dispose();
         base.OnDestroy();
     }
 }

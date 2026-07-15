@@ -1,5 +1,3 @@
-using System;
-using System.Threading;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
@@ -16,17 +14,17 @@ public class PlayerReviver : NetworkBehaviour
     [Header("구조 채널링 (서버 권위)")]
     [Tooltip("구조 채널링 시간(초)")]
     [SerializeField] private float m_reviveSeconds = 3f;
-    [Tooltip("채널링 시작/진행 중 대상이 이 거리(m)를 벗어나면 실패")]
-    [SerializeField] private float m_reviveRange = 2.5f;
+
+    // 사거리는 조준·윤곽선과 같은 기준 — PlayerInteractor.Range 재사용 (#147 패턴, #184)
+    private const float k_fallbackRange = 3f; // 테스트 구성 등 PlayerInteractor가 없을 때
 
     private PlayerInputHandler m_inputHandler;
     private PlayerInteractor m_interactor;      // 조준 대상 조회용
     private PlayerIncapacitation m_incapacitation; // 내가 다운 중이면 구조 불가
     private PlayerData m_selfData;              // 자기 자신 제외 판정용
 
-    // 서버에서 진행 중인 채널링 취소 토큰 — 오너가 뗌으로 취소하거나 대상이 사라지면 끊는다
-    private CancellationTokenSource m_channelCts;
-    private bool m_isChanneling; // 서버 기준 채널링 진행 여부(중복 시작 방지)
+    // 서버 채널링 생명주기(CTS 소유·재진입 가드)는 ServerChannel에 위임 (#109)
+    private readonly ServerChannel m_channel = new();
 
     /// <summary>지금 조준 중인 '다운된 아군'. 없으면 null. 임시 구조 HUD 프롬프트용(오너 전용). (#105)</summary>
     public PlayerData CurrentReviveTarget => IsOwner ? FindDownedTarget() : null;
@@ -144,7 +142,7 @@ public class PlayerReviver : NetworkBehaviour
 
     private void ServerBeginRevive(PlayerData target)
     {
-        if (m_isChanneling || target == null)
+        if (m_channel.IsActive || target == null)
             return;
 
         // --- [Issue #148] 변조된 클라이언트의 비정상 RPC 호출 방어를 위한 서버 측 검증 ---
@@ -175,52 +173,110 @@ public class PlayerReviver : NetworkBehaviour
 
     private async UniTaskVoid ServerChannelAsync(PlayerData target, PlayerIncapacitation targetIncap)
     {
-        m_isChanneling = true;
-        m_channelCts = new CancellationTokenSource();
+        NotifyOwner($"구조 채널링 시작: {target.name} ({m_reviveSeconds}초)");
+        NotifyChannelGaugeStart(m_reviveSeconds);
+
+        // keepAlive 생략 — 단일 Delay로 대기하고, 완료 시점에만 거리·중복복구를 검사한다 (기존 동작 유지)
+        ServerChannel.Result result;
         try
         {
-            await UniTask.Delay(TimeSpan.FromSeconds(m_reviveSeconds), cancellationToken: m_channelCts.Token);
-
-            // 채널링 동안 대상이 파괴됐거나 사거리를 벗어났으면 실패
-            if (target == null || !IsInRange(target))
-            {
-                Debug.Log("구조 실패 — 대상이 범위를 벗어남");
-                return;
-            }
-            // 다른 동료가 먼저 살렸다면 중복 구조 방지
-            if (!targetIncap.IsIncapacitated)
-            {
-                Debug.Log("구조 취소 — 대상이 이미 복구됨");
-                return;
-            }
-
-            Debug.Log($"구조 완료: {target.name}");
-            target.ServerRevive();
-        }
-        catch (OperationCanceledException)
-        {
-            Debug.Log("구조 취소됨");
+            result = await m_channel.RunAsync(m_reviveSeconds);
         }
         finally
         {
-            m_isChanneling = false;
-            m_channelCts?.Dispose();
-            m_channelCts = null;
+            // 완료·뗌·예외 어떤 경로로 끝나도 게이지 숨김을 보장한다 (#184)
+            NotifyChannelGaugeEnd();
         }
+
+        switch (result)
+        {
+            case ServerChannel.Result.Canceled:
+                NotifyOwner("구조 취소됨 (홀드 뗌)");
+                return;
+
+            case ServerChannel.Result.OutOfRange:
+                // PlayerReviver는 keepAlive를 넘기지 않아 이 사유는 발생하지 않는다 — 완료 시점 검사가 담당.
+                break;
+
+            case ServerChannel.Result.Completed:
+                break;
+        }
+
+        // 채널링 동안 대상이 파괴됐거나 사거리를 벗어났으면 실패
+        if (target == null || !IsInRange(target))
+        {
+            NotifyOwner("구조 실패 — 대상이 범위를 벗어남");
+            return;
+        }
+        // 다른 동료가 먼저 살렸다면 중복 구조 방지
+        if (!targetIncap.IsIncapacitated)
+        {
+            NotifyOwner("구조 취소 — 대상이 이미 복구됨");
+            return;
+        }
+
+        NotifyOwner($"구조 완료: {target.name}");
+        target.ServerRevive();
     }
 
-    private void ServerCancelRevive() => m_channelCts?.Cancel();
+    private void ServerCancelRevive() => m_channel.Cancel();
 
     private bool IsInRange(PlayerData target)
     {
-        return (target.transform.position - transform.position).sqrMagnitude
-            <= m_reviveRange * m_reviveRange;
+        float range = m_interactor != null ? m_interactor.Range : k_fallbackRange;
+        // 기준점은 조준·윤곽선 게이트와 동일한 AimOrigin(카메라) (#184)
+        Vector3 origin = m_interactor != null ? m_interactor.AimOrigin.position : transform.position;
+        return (target.transform.position - origin).sqrMagnitude
+            <= range * range;
     }
+
+    // ---- 오너 로그 피드백 ----
+
+    // 판정 로그는 서버에서 찍히므로 원격 클라 오너는 결과를 볼 수 없다 — 오너 콘솔에도 같은 로그를 전달한다.
+    // Scanner.NotifyOwner/PlayerEscorter.NotifyOwner와 동일 패턴 (#109).
+    private void NotifyOwner(string message)
+    {
+        Debug.Log(message); // 서버(호스트)·오프라인 콘솔
+        if (IsSpawned && IsServer && !IsOwner)
+            OwnerLogRpc(message); // 원격 클라가 오너인 경우에만 전달 (호스트 오너는 위에서 이미 찍음)
+    }
+
+    [Rpc(SendTo.Owner)]
+    private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
+
+    // ---- 채널링 게이지 피드백 (#184) ----
+    // NotifyOwner와 동일 분기 — 호스트 오너·오프라인은 직접 호출, 원격 오너에게만 RPC.
+    // (RPC는 NGO 코드젠 제약상 클래스별 선언 필요 — Escorter/Scanner와 동일 패턴 중복)
+
+    private void NotifyChannelGaugeStart(float seconds)
+    {
+        if (IsSpawned && IsServer && !IsOwner)
+        {
+            ChannelGaugeStartRpc(seconds);
+            return;
+        }
+        ChannelingGaugeUI.Instance?.Show(seconds);
+    }
+
+    private void NotifyChannelGaugeEnd()
+    {
+        if (IsSpawned && IsServer && !IsOwner)
+        {
+            ChannelGaugeEndRpc();
+            return;
+        }
+        ChannelingGaugeUI.Instance?.Hide();
+    }
+
+    [Rpc(SendTo.Owner)]
+    private void ChannelGaugeStartRpc(float seconds) => ChannelingGaugeUI.Instance?.Show(seconds);
+
+    [Rpc(SendTo.Owner)]
+    private void ChannelGaugeEndRpc() => ChannelingGaugeUI.Instance?.Hide();
 
     public override void OnDestroy()
     {
-        m_channelCts?.Cancel();
-        m_channelCts?.Dispose();
+        m_channel.Dispose();
         base.OnDestroy(); // NetworkBehaviour 내부 정리 — 반드시 호출
     }
 }

@@ -16,7 +16,10 @@ public class AuthBootstrap : MonoBehaviour
     private string m_status = "대기 중...";
     private bool m_eventsRegistered;
 
+    public Func<bool> CanSignOut;   // 델리게이트 (bool형 반환)
+
     public event Action OnSignedIn;
+    public event Action OnSignedOut;
 
     public bool IsSignedIn => 
         UnityServices.State == ServicesInitializationState.Initialized 
@@ -134,9 +137,17 @@ public class AuthBootstrap : MonoBehaviour
             return;
         }
 
+        if (CanSignOut != null && !CanSignOut())
+        {
+            m_status = "세션 전환 중 로그아웃 불가";
+            Debug.LogWarning("[AuthBootstrap] 세션 전환 중 SignOut 거부");
+            return;
+        }
+
         if (!IsSignedIn) return;
 
         AuthenticationService.Instance.SignOut(clearCredentials);
+        OnSignedOut?.Invoke();
         Debug.Log($"[AuthBootstrap] SignOut 완료");
     }
 
@@ -144,8 +155,15 @@ public class AuthBootstrap : MonoBehaviour
     {
         if (IsNetworkConnected)
         {
-            m_status = "세션 참가 중 토큰 삭제 불가.";
+            m_status = "세션 참가 중 토큰 삭제 불가";
             Debug.LogWarning("[AuthBootstrap] 연결 중 ClearSessionToken 거부 - 세션 이탈 후 재시도.");
+            return;
+        }
+
+        if (CanSignOut != null && !CanSignOut())
+        {
+            m_status = "세션 전환 중 토큰 삭제 불가";
+            Debug.LogWarning("[AuthBootstrap] 연결 중 ClearSessionToken 거부");
             return;
         }
 
@@ -154,15 +172,20 @@ public class AuthBootstrap : MonoBehaviour
         if (IsSignedIn)
         {
             AuthenticationService.Instance.SignOut();
+            OnSignedOut?.Invoke();
         }
 
         AuthenticationService.Instance.ClearSessionToken();
         Debug.Log($"[AuthBootstrap] ClearSessionToken 완료");
     }
 
+    [SerializeField] private float m_guiTopOffset = 10f;
+
     private void OnGUI()
     {
-        GUILayout.BeginArea(new Rect(10, 10, 380, 280));
+        if (IsNetworkConnected) return;
+
+        GUILayout.BeginArea(new Rect(700, m_guiTopOffset, 380, 280));
 
         GUILayout.Label("Authentication (익명) — 상태");
 
@@ -175,7 +198,7 @@ public class AuthBootstrap : MonoBehaviour
         GUILayout.Label($"연결됨(세션/NGO): {IsNetworkConnected}");
         GUILayout.Space(8);
 
-        bool canSignOut = !m_isBusy && !IsNetworkConnected;
+        bool canSignOut = !m_isBusy && !IsNetworkConnected && (CanSignOut == null || CanSignOut());
 
         GUI.enabled = !m_isBusy;
         if (GUILayout.Button("Sign In (init + 익명 로그인)"))
