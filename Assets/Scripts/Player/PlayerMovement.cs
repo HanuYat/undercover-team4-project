@@ -108,8 +108,19 @@ public class PlayerMovement : NetworkBehaviour
             SetLayerRecursively(m_ownBodyRoot, LayerMask.NameToLayer("OwnBody")); // 내 카메라에서만 안 보이게
         }
 
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+        SetCursorUnlocked(false); // 커서 잠금 초기화 — 잠금/해제 로직 단일 경로 (아래 SetCursorUnlocked)
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        // 오너 로컬 플레이어가 사라지면(라운드 종료 리셋·연결 종료 등) OnNetworkSpawn에서 잠갔던 커서를 되돌린다.
+        // Cursor.lockState는 전역 상태라 씬을 재로드해도 유지되는데, 재로드된 로비 씬에는 이 커서를 풀어 줄
+        // PlayerMovement가 없어(ESC 토글도 못 돎) 커서가 잠긴 채 고착된다 — 마우스로 로비 UI를 못 누르는 원인. (#188)
+        if (IsOwner)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
     }
 
     // 오너 로컬 인스턴스를 서버가 지정한 스폰 포즈로 이동시킨다. CharacterController가 켜진
@@ -141,9 +152,7 @@ public class PlayerMovement : NetworkBehaviour
         // 정식 UI(메뉴/로비)가 들어오면 그쪽 시스템으로 옮기고 이 블록은 제거할 것.
         if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
         {
-            m_cursorUnlocked = !m_cursorUnlocked;
-            Cursor.lockState = m_cursorUnlocked ? CursorLockMode.None : CursorLockMode.Locked;
-            Cursor.visible = m_cursorUnlocked;
+            SetCursorUnlocked(!m_cursorUnlocked);
         }
 
         if (!m_cursorUnlocked)
@@ -153,6 +162,14 @@ public class PlayerMovement : NetworkBehaviour
 
         UpdateCameraPose(); // 카메라 높이/피치를 매 프레임 적용 (다운 시 바닥 시점) (#105)
         HandleMove();
+    }
+
+    /// <summary>커서 잠금/해제를 전환한다 — 해제 중엔 시점 회전도 정지. ESC 임시 토글·인벤토리 편집 모드(#144)가 공용.</summary>
+    public void SetCursorUnlocked(bool unlocked)
+    {
+        m_cursorUnlocked = unlocked;
+        Cursor.lockState = unlocked ? CursorLockMode.None : CursorLockMode.Locked;
+        Cursor.visible = unlocked;
     }
 
     private void HandleLook()

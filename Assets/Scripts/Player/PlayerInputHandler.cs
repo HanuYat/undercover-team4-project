@@ -30,6 +30,12 @@ public class PlayerInputHandler : NetworkBehaviour
     [SerializeField]
     private InputActionReference m_dropAction;
 
+    [SerializeField]
+    private InputActionReference m_selectSlotAction;
+
+    [SerializeField]
+    private InputActionReference m_toggleInventoryAction;
+
     public Vector2 MoveInput { get; private set; }
     public Vector2 LookInput { get; private set; }
     public bool IsSprinting { get; private set; }
@@ -42,6 +48,8 @@ public class PlayerInputHandler : NetworkBehaviour
     public event Action OnPreviousItem; // 마우스 휠 위 — 이전 아이템으로 전환 (#46)
     public event Action OnNextItem; // 마우스 휠 아래 — 다음 아이템으로 전환 (#46)
     public event Action OnDropItem; // 장착 아이템 버리기 (#88)
+    public event Action<int> OnSelectSlot; // 숫자키 1~3 — 슬롯 직접 선택, 인덱스 0~2 (#144)
+    public event Action OnToggleInventory; // Tab — 인벤토리 편집 모드 토글 (#144)
 
     public override void OnNetworkSpawn()
     {
@@ -59,6 +67,8 @@ public class PlayerInputHandler : NetworkBehaviour
         m_previousAction.action.Enable();
         m_nextAction.action.Enable();
         m_dropAction.action.Enable();
+        m_selectSlotAction.action.Enable();
+        m_toggleInventoryAction.action.Enable();
 
         m_moveAction.action.performed += OnMove;
         m_moveAction.action.canceled += OnMove;
@@ -74,6 +84,8 @@ public class PlayerInputHandler : NetworkBehaviour
         m_previousAction.action.performed += OnPreviousItemHandler;
         m_nextAction.action.performed += OnNextItemHandler;
         m_dropAction.action.performed += OnDropItemHandler;
+        m_selectSlotAction.action.performed += OnSelectSlotHandler;
+        m_toggleInventoryAction.action.performed += OnToggleInventoryHandler;
     }
 
     public override void OnNetworkDespawn()
@@ -95,6 +107,8 @@ public class PlayerInputHandler : NetworkBehaviour
         m_previousAction.action.performed -= OnPreviousItemHandler;
         m_nextAction.action.performed -= OnNextItemHandler;
         m_dropAction.action.performed -= OnDropItemHandler;
+        m_selectSlotAction.action.performed -= OnSelectSlotHandler;
+        m_toggleInventoryAction.action.performed -= OnToggleInventoryHandler;
 
         m_moveAction.action.Disable();
         m_lookAction.action.Disable();
@@ -104,6 +118,8 @@ public class PlayerInputHandler : NetworkBehaviour
         m_previousAction.action.Disable();
         m_nextAction.action.Disable();
         m_dropAction.action.Disable();
+        m_selectSlotAction.action.Disable();
+        m_toggleInventoryAction.action.Disable();
     }
 
     private void OnMove(InputAction.CallbackContext ctx) => MoveInput = ctx.ReadValue<Vector2>();
@@ -134,4 +150,16 @@ public class PlayerInputHandler : NetworkBehaviour
     private void OnNextItemHandler(InputAction.CallbackContext ctx) => OnNextItem?.Invoke();
 
     private void OnDropItemHandler(InputAction.CallbackContext ctx) => OnDropItem?.Invoke();
+
+    // 숫자키 1~3 바인딩이 한 액션에 묶여 있어, 눌린 키 이름("1"~"3")으로 슬롯 인덱스(0~2)를 구한다.
+    private void OnSelectSlotHandler(InputAction.CallbackContext ctx)
+    {
+        if (int.TryParse(ctx.control.name, out int keyNumber))
+        {
+            OnSelectSlot?.Invoke(keyNumber - 1);
+        }
+    }
+
+    private void OnToggleInventoryHandler(InputAction.CallbackContext ctx) =>
+        OnToggleInventory?.Invoke();
 }
