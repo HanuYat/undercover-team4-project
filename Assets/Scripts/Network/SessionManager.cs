@@ -15,6 +15,16 @@ public class SessionManager : MonoBehaviour
     public event Action<string> OnSessionJoined; // 인자: session.Id
     public event Action OnSessionLeft;
 
+    private void OnEnable()
+    {
+        if (m_auth != null) m_auth.CanSignOut = () => m_session == null && !m_isBusy;   // 세션에 접속 중이 아니면 로그아웃 가능
+    }
+
+    private void OnDisable()
+    {
+        if (m_auth != null) m_auth.CanSignOut = null;
+    }
+
     public async UniTask EnsureSignedInAsync()
     {
         if (m_auth == null)
