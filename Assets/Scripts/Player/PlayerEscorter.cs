@@ -182,10 +182,20 @@ public class PlayerEscorter : NetworkBehaviour
     private async UniTaskVoid ServerChannelAsync(NpcController target)
     {
         NotifyOwner($"구속 채널링 시작: {target.name} ({m_channelSeconds}초)");
+        NotifyChannelGaugeStart(m_channelSeconds);
 
         // 프레임 루프 기반 keepAlive — 채널링 도중 거리 이탈을 즉시 실패시킨다 (#91, 도주형 NPC 대응 GDD 6장)
-        ServerChannel.Result result = await m_channel.RunAsync(
-            m_channelSeconds, () => target != null && IsInRange(target));
+        ServerChannel.Result result;
+        try
+        {
+            result = await m_channel.RunAsync(
+                m_channelSeconds, () => target != null && IsInRange(target));
+        }
+        finally
+        {
+            // 완료·뗌·거리이탈·예외 어떤 경로로 끝나도 게이지 숨김을 보장한다 (#184)
+            NotifyChannelGaugeEnd();
+        }
 
         switch (result)
         {
@@ -270,6 +280,36 @@ public class PlayerEscorter : NetworkBehaviour
 
     [Rpc(SendTo.Owner)]
     private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
+
+    // ---- 채널링 게이지 피드백 (#184) ----
+    // NotifyOwner와 동일 분기 — 호스트 오너·오프라인은 직접 호출, 원격 오너에게만 RPC.
+    // 데디케이티드 서버 등 HUD가 없는 환경에선 Instance가 null이라 무동작(안전).
+
+    private void NotifyChannelGaugeStart(float seconds)
+    {
+        if (IsSpawned && IsServer && !IsOwner)
+        {
+            ChannelGaugeStartRpc(seconds);
+            return;
+        }
+        ChannelingGaugeUI.Instance?.Show(seconds);
+    }
+
+    private void NotifyChannelGaugeEnd()
+    {
+        if (IsSpawned && IsServer && !IsOwner)
+        {
+            ChannelGaugeEndRpc();
+            return;
+        }
+        ChannelingGaugeUI.Instance?.Hide();
+    }
+
+    [Rpc(SendTo.Owner)]
+    private void ChannelGaugeStartRpc(float seconds) => ChannelingGaugeUI.Instance?.Show(seconds);
+
+    [Rpc(SendTo.Owner)]
+    private void ChannelGaugeEndRpc() => ChannelingGaugeUI.Instance?.Hide();
 
     // ---- 서버 내부 연행 상태 조작 ----
 
