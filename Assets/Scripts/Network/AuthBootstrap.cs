@@ -16,6 +16,8 @@ public class AuthBootstrap : MonoBehaviour
     private string m_status = "대기 중...";
     private bool m_eventsRegistered;
 
+    public Func<bool> CanSignOut;   // 델리게이트 (bool형 반환)
+
     public event Action OnSignedIn;
     public event Action OnSignedOut;
 
@@ -135,6 +137,13 @@ public class AuthBootstrap : MonoBehaviour
             return;
         }
 
+        if (CanSignOut != null && !CanSignOut())
+        {
+            m_status = "세션 전환 중 로그아웃 불가";
+            Debug.LogWarning("[AuthBootstrap] 세션 전환 중 SignOut 거부");
+            return;
+        }
+
         if (!IsSignedIn) return;
 
         AuthenticationService.Instance.SignOut(clearCredentials);
@@ -146,8 +155,15 @@ public class AuthBootstrap : MonoBehaviour
     {
         if (IsNetworkConnected)
         {
-            m_status = "세션 참가 중 토큰 삭제 불가.";
+            m_status = "세션 참가 중 토큰 삭제 불가";
             Debug.LogWarning("[AuthBootstrap] 연결 중 ClearSessionToken 거부 - 세션 이탈 후 재시도.");
+            return;
+        }
+
+        if (CanSignOut != null && !CanSignOut())
+        {
+            m_status = "세션 전환 중 토큰 삭제 불가";
+            Debug.LogWarning("[AuthBootstrap] 연결 중 ClearSessionToken 거부");
             return;
         }
 
@@ -182,7 +198,7 @@ public class AuthBootstrap : MonoBehaviour
         GUILayout.Label($"연결됨(세션/NGO): {IsNetworkConnected}");
         GUILayout.Space(8);
 
-        bool canSignOut = !m_isBusy && !IsNetworkConnected;
+        bool canSignOut = !m_isBusy && !IsNetworkConnected && (CanSignOut == null || CanSignOut());
 
         GUI.enabled = !m_isBusy;
         if (GUILayout.Button("Sign In (init + 익명 로그인)"))
