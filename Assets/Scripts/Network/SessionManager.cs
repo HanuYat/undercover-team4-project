@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using Cysharp.Threading.Tasks;
 using Unity.Services.Multiplayer;
+using Unity.Netcode;
 
 public class SessionManager : MonoBehaviour
 {
@@ -14,6 +15,8 @@ public class SessionManager : MonoBehaviour
 
     public event Action<string> OnSessionJoined; // 인자: session.Id
     public event Action OnSessionLeft;
+    public event Action OnConnectionLost;   // 비자발 끊김
+    private bool m_isLeaving;   // 자발적 LeaveAsync 진행 중 표시
 
     private void OnEnable()
     {
@@ -64,6 +67,8 @@ public class SessionManager : MonoBehaviour
         }
 
         ISession leaving = m_session;
+        m_isLeaving = true;
+
         try
         {
             await leaving.LeaveAsync();
@@ -71,9 +76,11 @@ public class SessionManager : MonoBehaviour
         finally
         {
             UnsubscribeSessionEvents(leaving);
+            UnsubscribeNetworkEvents();
             if (ReferenceEquals(m_session, leaving))
                 m_session = null;
 
+            m_isLeaving = false;
             OnSessionLeft?.Invoke();
         }
     }
@@ -87,6 +94,7 @@ public class SessionManager : MonoBehaviour
 
         m_session = session;
         SubscribeSessionEvents(m_session);
+        SubscribeNetworkEvents();
 
         OnSessionJoined?.Invoke(session.Id);
     }
@@ -95,18 +103,61 @@ public class SessionManager : MonoBehaviour
     {
         if (session == null) return;
 
-        session.PlayerJoined += OnPlayerJoined;
-        session.Changed += OnSessionChanged;
+        session.PlayerJoined    += OnPlayerJoined;
+        session.Changed         += OnSessionChanged;
         session.SessionPropertiesChanged += OnSessionPropertiesChanged;
+        session.Deleted         += OnSessionDeleted;
     }
 
     private void UnsubscribeSessionEvents(ISession session)
     {
         if (session == null) return;
 
-        session.PlayerJoined -= OnPlayerJoined;
-        session.Changed -= OnSessionChanged;
+        session.PlayerJoined    -= OnPlayerJoined;
+        session.Changed         -= OnSessionChanged;
         session.SessionPropertiesChanged -= OnSessionPropertiesChanged;
+        session.Deleted         -= OnSessionDeleted;
+    }
+
+    private void SubscribeNetworkEvents()
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm != null) nm.OnClientDisconnectCallback += OnClientDisconnected;
+    }
+
+    private void UnsubscribeNetworkEvents()
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm != null) nm.OnClientDisconnectCallback -= OnClientDisconnected;
+    }
+
+    private void OnClientDisconnected(ulong clientId)
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null) return;
+        if (nm.IsServer && clientId != nm.LocalClientId)
+        {
+            Debug.Log($"[SessionManager] 원격 클라 끊김: {clientId} (무시)");
+            return;
+        }
+
+        HandleConnectionLost("NGO 본인 드롭");
+    }
+
+    private void OnSessionDeleted() => HandleConnectionLost("세션 삭제/호스트 종료");
+
+    private void HandleConnectionLost(string reason)
+    {
+        if (m_isLeaving)        return;
+        if (m_session == null)  return;
+
+        Debug.Log($"[SessionManager] 연결 끊김 정규화: {reason}");
+        ISession lost = m_session;
+        UnsubscribeSessionEvents(lost);
+        UnsubscribeNetworkEvents();
+        m_session = null;
+
+        OnConnectionLost?.Invoke();
     }
 
     private void OnPlayerJoined(string playerId)
@@ -126,12 +177,11 @@ public class SessionManager : MonoBehaviour
 
     private void OnDestroy()
     {
-        // 파괴 시 이벤트만 정리한다 (파괴된 객체로 세션 콜백이 유입되는 것을 막는다).
-        // TODO(#51/#55/#56): 씬 전환 통합 시, 씬 언로드 전에 await LeaveAsync()로
-        //   세션을 실제로 나가는 라이프사이클 처리가 필요하다. OnDestroy에서의
-        //   async leave는 완료가 보장되지 않으므로 여기서 부르지 않는다.
         if (m_session != null)
+        {
             UnsubscribeSessionEvents(m_session);
+            UnsubscribeNetworkEvents();
+        }
     }
 
     [SerializeField] private float m_guiTopOffset = 10f;
