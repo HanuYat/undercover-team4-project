@@ -224,7 +224,7 @@ public class PlayerEscorter : NetworkBehaviour
             case ReactionType.Resist:
                 // 그 자리에서 저항 — 제압 게이지를 깎아야 체포된다
                 NotifyOwner($"체포 실패 — 저항 시작: {target.name}");
-                target.StartResist();
+                target.StartResist(transform); // 이 플레이어(서버측 transform)를 위협으로 — 제압 실패 시 여기서 도주 (#205)
                 break;
 
             default:
