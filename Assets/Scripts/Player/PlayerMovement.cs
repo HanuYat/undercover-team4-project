@@ -108,8 +108,7 @@ public class PlayerMovement : NetworkBehaviour
             SetLayerRecursively(m_ownBodyRoot, LayerMask.NameToLayer("OwnBody")); // 내 카메라에서만 안 보이게
         }
 
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+        SetCursorUnlocked(false); // 커서 잠금 초기화 — 잠금/해제 로직 단일 경로 (아래 SetCursorUnlocked)
     }
 
     public override void OnNetworkDespawn()
@@ -153,9 +152,7 @@ public class PlayerMovement : NetworkBehaviour
         // 정식 UI(메뉴/로비)가 들어오면 그쪽 시스템으로 옮기고 이 블록은 제거할 것.
         if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
         {
-            m_cursorUnlocked = !m_cursorUnlocked;
-            Cursor.lockState = m_cursorUnlocked ? CursorLockMode.None : CursorLockMode.Locked;
-            Cursor.visible = m_cursorUnlocked;
+            SetCursorUnlocked(!m_cursorUnlocked);
         }
 
         if (!m_cursorUnlocked)
@@ -165,6 +162,14 @@ public class PlayerMovement : NetworkBehaviour
 
         UpdateCameraPose(); // 카메라 높이/피치를 매 프레임 적용 (다운 시 바닥 시점) (#105)
         HandleMove();
+    }
+
+    /// <summary>커서 잠금/해제를 전환한다 — 해제 중엔 시점 회전도 정지. ESC 임시 토글·인벤토리 편집 모드(#144)가 공용.</summary>
+    public void SetCursorUnlocked(bool unlocked)
+    {
+        m_cursorUnlocked = unlocked;
+        Cursor.lockState = unlocked ? CursorLockMode.None : CursorLockMode.Locked;
+        Cursor.visible = unlocked;
     }
 
     private void HandleLook()
