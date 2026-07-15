@@ -104,6 +104,16 @@ public class Scanner : ItemBase, IChargeable
     /// <summary>스캔 중이 아니고 배터리가 남아 있을 때만 사용 가능. (UI 힌트용 — 최종 판정은 서버가 재검증)</summary>
     public override bool CanUse() => !m_pendingScan && !IsDepleted;
 
+    /// <summary>스캔 가능한 대상인지 — 신원(CitizenIdentity)이 있고 배터리·중복 스캔 게이트(CanUse) 통과.
+    /// Use()의 조기 검증과 동일 기준 — 조준 피드백(윤곽선) 판정용. (#184)</summary>
+    public override bool CanTarget(GameObject aimTarget)
+    {
+        if (!CanUse())
+            return false;
+
+        return aimTarget != null && aimTarget.GetComponentInParent<CitizenIdentity>() != null;
+    }
+
     /// <summary>
     /// 아이템 사용 진입점. 오너의 의도를 서버로 전달한다.
     /// 대상 해석(CitizenIdentity/Profile 유무)은 진단 로그·조기 반환을 위해 클라에서 수행.
@@ -319,7 +329,11 @@ public class Scanner : ItemBase, IChargeable
 
     private bool IsInRange(Transform target)
     {
-        return (target.position - transform.position).sqrMagnitude
+        // 기준점은 든 플레이어의 AimOrigin(카메라) — 조준·윤곽선 게이트와 동일 (#184).
+        // 아이템은 줍기/버리기로 부모가 바뀌므로 캐시하지 않고 호출 시점에 해석한다 (Handcuffs.Escorter 관례).
+        PlayerInteractor interactor = GetComponentInParent<PlayerInteractor>();
+        Vector3 origin = interactor != null ? interactor.AimOrigin.position : transform.position;
+        return (target.position - origin).sqrMagnitude
             <= m_scanKeepRange * m_scanKeepRange;
     }
 

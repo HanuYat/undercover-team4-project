@@ -14,8 +14,9 @@ public class PlayerReviver : NetworkBehaviour
     [Header("구조 채널링 (서버 권위)")]
     [Tooltip("구조 채널링 시간(초)")]
     [SerializeField] private float m_reviveSeconds = 3f;
-    [Tooltip("채널링 시작/진행 중 대상이 이 거리(m)를 벗어나면 실패")]
-    [SerializeField] private float m_reviveRange = 2.5f;
+
+    // 사거리는 조준·윤곽선과 같은 기준 — PlayerInteractor.Range 재사용 (#147 패턴, #184)
+    private const float k_fallbackRange = 3f; // 테스트 구성 등 PlayerInteractor가 없을 때
 
     private PlayerInputHandler m_inputHandler;
     private PlayerInteractor m_interactor;      // 조준 대상 조회용
@@ -212,8 +213,11 @@ public class PlayerReviver : NetworkBehaviour
 
     private bool IsInRange(PlayerData target)
     {
-        return (target.transform.position - transform.position).sqrMagnitude
-            <= m_reviveRange * m_reviveRange;
+        float range = m_interactor != null ? m_interactor.Range : k_fallbackRange;
+        // 기준점은 조준·윤곽선 게이트와 동일한 AimOrigin(카메라) (#184)
+        Vector3 origin = m_interactor != null ? m_interactor.AimOrigin.position : transform.position;
+        return (target.transform.position - origin).sqrMagnitude
+            <= range * range;
     }
 
     // ---- 오너 로그 피드백 ----
