@@ -44,6 +44,11 @@ public class WantedListManager : NetworkBehaviour
         // 서버만 리스트를 채우고 지운다 — 배정·판정이 서버 권위이므로 (#56 패턴)
         if (IsServer)
         {
+            // 재시작(Shutdown 후 StartHost) 시 씬 NetworkObject의 NetworkList에는 이전 세션 항목이
+            // 그대로 남아 새 라운드 항목과 섞인다 — 서버가 새로 뜨면 항상 빈 상태로 시작한다 (#209)
+            // (몽타주 등록은 라운드 시작 → NPC 스폰 이후라 여기서 지워질 새 항목은 없다)
+            m_wanted.Clear();
+
             // 등록은 외형·몽타주까지 확정된 시점(OnMontageGenerated)에 한다.
             // OnCriminalAssigned 시점엔 외형이 아직 배정 전이라 몽타주가 비어 있다 (AppearanceAssigner).
             if (m_appearanceAssigner != null)
