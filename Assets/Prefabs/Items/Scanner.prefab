@@ -75,7 +75,9 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_itemName: "\uC2A4\uCE90\uB108"
   m_itemIcon: {fileID: 0}
-  m_itemDescription: 
+  m_itemDescription: "\uB300\uC0C1\uC744 \uC870\uC900\uD574 \uC2E0\uC6D0 \uC815\uBCF4\uB97C
+    \uC2A4\uCE94\uD55C\uB2E4. \uBCF8\uBD80\uC640 \uB300\uC870\uD574 \uC6A9\uC758\uC790\uB97C
+    \uD2B9\uC815\uD558\uB294 \uB370 \uC4F4\uB2E4."
   m_heldModelPrefab: {fileID: 1603617425342002, guid: d4b0d3b273b187c4696240caebff3f7a, type: 3}
   m_targetOutlineColor: {r: 0, g: 0.25335073, b: 1, a: 1}
   m_channelSeconds: 3

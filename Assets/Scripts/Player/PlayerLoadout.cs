@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
@@ -6,8 +7,8 @@ using UnityEngine;
 /// <summary>
 /// 플레이어의 아이템 보유·장착·줍기·버리기를 관리한다. (#47, #46, #88)
 /// 아이템은 독립 NetworkObject 프리팹이므로(#88) 서버가 스폰·소유권 부여·부착을 담당하고,
-/// 오너 클라는 서버가 보낸 보유 목록으로 자기 인벤토리(HeldItems)를 재구성해 휠 전환(#46)·
-/// 1인칭 손 표시(#45)에 쓴다.
+/// 오너 클라는 서버가 보낸 보유 목록으로 자기 인벤토리(Slots, 고정 3칸)를 재구성해 휠/숫자키 전환(#46, #144)·
+/// 1인칭 손 표시(#45)·인벤토리 UI(#144)에 쓴다. 칸 배치(어느 칸에 뭐가 있는지)는 오너 로컬 관심사.
 ///
 /// 권위 구분:
 /// - 서버: 시작 지급 스폰, 줍기/버리기 요청 검증, 소유권 이전, 부모(부착) 변경.
@@ -34,7 +35,12 @@ public class PlayerLoadout : NetworkBehaviour
     [SerializeField]
     private float m_dropDistance = 1.2f;
 
-    private readonly List<ItemBase> m_heldItems = new List<ItemBase>();
+    /// <summary>플레이어 소지 슬롯 수 — 고정 3칸 (#144, GDD 용량 3칸).</summary>
+    public const int k_maxHeldItems = 3;
+
+    // 오너 로컬 슬롯 매핑 — 빈 칸 = null. 서버 동기화는 flat list(BuildHeldItemRefs) 그대로 두고
+    // 배치(어느 칸에 있는지)만 로컬에서 유지한다. 버리면 그 자리가 비고, 주우면 첫 빈 칸에 들어간다.
+    private readonly ItemBase[] m_slots = new ItemBase[k_maxHeldItems];
     private PlayerItemUser m_itemUser;
     private PlayerInputHandler m_inputHandler;
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 아이템 전환·버리기 차단용 (#105)
@@ -45,13 +51,23 @@ public class PlayerLoadout : NetworkBehaviour
     private float m_pickupRange;
 
     // 다운(무력화) 중 여부 — 무력화 컴포넌트가 없으면(테스트 구성 등) 항상 false. (PlayerMovement 관례)
-    private bool IsIncapacitated => m_incapacitation != null && m_incapacitation.IsIncapacitated;
+    // 인벤토리 UI(#144)가 편집 모드 진입 게이트에 쓰므로 public.
+    public bool IsIncapacitated => m_incapacitation != null && m_incapacitation.IsIncapacitated;
 
-    // 현재 장착 중인 아이템의 m_heldItems 인덱스. 보유 아이템이 없으면 -1. (#46)
+    // 현재 장착 중인 슬롯 인덱스. 빈손이면 -1. 빈 칸을 숫자키로 선택하면 그 칸 인덱스가 된다. (#46, #144)
     private int m_equippedIndex = -1;
 
-    /// <summary>현재 보유 중인 아이템 목록. 마우스 휠 전환(#46)이 순환 대상으로 사용한다. (오너 로컬)</summary>
-    public IReadOnlyList<ItemBase> HeldItems => m_heldItems;
+    /// <summary>고정 3칸 슬롯 (빈 칸 = null). 인벤토리 UI(#144)·휠 전환(#46)이 사용한다. (오너 로컬)</summary>
+    public IReadOnlyList<ItemBase> Slots => m_slots;
+
+    /// <summary>슬롯 구성 변경 이벤트 — 줍기/버리기/초기 지급/드래그 스왑 시 발행. 인벤토리 UI(#144)가 구독.</summary>
+    public event Action OnSlotsChanged;
+
+    /// <summary>현재 선택(장착)된 슬롯 인덱스. 빈손이면 -1. 빈 칸을 선택하면 그 칸 인덱스가 된다.</summary>
+    public int EquippedIndex => m_equippedIndex;
+
+    /// <summary>선택 슬롯 이동 이벤트 — 빈 칸↔빈 칸 전환처럼 장착 아이템이 안 바뀌어도 발행. UI 하이라이트(#144)가 구독.</summary>
+    public event Action OnEquippedSlotChanged;
 
     private Transform ItemParent => m_itemAnchor != null ? m_itemAnchor : transform;
 
@@ -81,6 +97,7 @@ public class PlayerLoadout : NetworkBehaviour
             m_inputHandler.OnPreviousItem += EquipPrevious;
             m_inputHandler.OnNextItem += EquipNext;
             m_inputHandler.OnDropItem += RequestDropEquipped;
+            m_inputHandler.OnSelectSlot += SelectSlot;
         }
     }
 
@@ -91,6 +108,7 @@ public class PlayerLoadout : NetworkBehaviour
             m_inputHandler.OnPreviousItem -= EquipPrevious;
             m_inputHandler.OnNextItem -= EquipNext;
             m_inputHandler.OnDropItem -= RequestDropEquipped;
+            m_inputHandler.OnSelectSlot -= SelectSlot;
         }
     }
 
@@ -117,6 +135,7 @@ public class PlayerLoadout : NetworkBehaviour
     {
         Transform parent = ItemParent;
 
+        int granted = 0;
         foreach (ItemBase gearPrefab in m_startingGear)
         {
             if (gearPrefab == null)
@@ -124,10 +143,22 @@ public class PlayerLoadout : NetworkBehaviour
                 continue;
             }
 
+            // 소지 3칸 초과분은 스폰하지 않는다 (#144) — 캡을 안 두면 초과 아이템이 부착되지만
+            // 슬롯에 안 들어가 장착·드롭 불가 상태로 남고, BuildHeldItemRefs 카운트가 영구히 꽉 차
+            // 이후 모든 줍기가 거부된다.
+            if (granted >= k_maxHeldItems)
+            {
+                Debug.LogWarning(
+                    $"[PlayerLoadout] 시작 지급이 소지 한도({k_maxHeldItems})를 초과 — 초과분 무시. m_startingGear 설정 확인."
+                );
+                break;
+            }
+
             ItemBase item = Instantiate(gearPrefab);
             NetworkObject itemNetworkObject = item.GetComponent<NetworkObject>();
             itemNetworkObject.SpawnWithOwnership(OwnerClientId);
             AttachToParent(itemNetworkObject, parent);
+            granted++;
         }
 
         SyncHeldItemsRpc(BuildHeldItemRefs());
@@ -143,6 +174,8 @@ public class PlayerLoadout : NetworkBehaviour
             return;
         }
 
+        // 용량 검사는 서버(PickupRpc)가 권위로 수행한다. 로컬 m_slots는 드롭→동기화 RPC 왕복이
+        // 끝나야 갱신되므로, 여기서 로컬로 미리 막으면 방금 버려 서버는 받아줄 줍기를 오거부한다 (#144).
         PickupRpc(new NetworkObjectReference(itemNetworkObject));
     }
 
@@ -164,6 +197,13 @@ public class PlayerLoadout : NetworkBehaviour
         // sqrMagnitude 비교 — root 기준이면 카메라 오프셋만큼 사거리 경계에서 오탐 거부될 수 있다.
         Vector3 toItem = itemNetworkObject.transform.position - m_interactor.AimOrigin.position;
         if (toItem.sqrMagnitude > m_pickupRange * m_pickupRange)
+        {
+            return;
+        }
+
+        // 소지 3칸 제한 (#144, GDD 용량 3칸) — 꽉 차면 줍기 거부. 서버 권위 검증.
+        // 개수만 필요하므로 무할당 CountHeldItems 사용 (동기화용 refs는 부착 후 아래에서 1회 빌드).
+        if (CountHeldItems() >= k_maxHeldItems)
         {
             return;
         }
@@ -232,6 +272,22 @@ public class PlayerLoadout : NetworkBehaviour
     // ---- 서버 → 오너: 보유 목록 동기화 ----
 
     // 플레이어에 현재 부착된 아이템들의 참조 목록을 만든다 (서버 진실).
+    // ItemParent 자식 중 실제 보유 아이템 개수 — 용량 가드용. BuildHeldItemRefs와 달리 List/배열 무할당.
+    private int CountHeldItems()
+    {
+        Transform parent = ItemParent;
+        int count = 0;
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            if (parent.GetChild(i).GetComponent<ItemBase>() != null)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
     private NetworkObjectReference[] BuildHeldItemRefs()
     {
         Transform parent = ItemParent;
@@ -290,42 +346,65 @@ public class PlayerLoadout : NetworkBehaviour
         return true;
     }
 
+    // 서버 진실 목록(flat)을 로컬 슬롯 배치와 대조(reconcile)한다 — 버린 아이템은 그 칸만 비우고,
+    // 새 아이템은 첫 빈 칸에 넣어 나머지 아이템의 칸 위치를 유지한다 (#144, positional).
     private void RebuildHeldItems(NetworkObjectReference[] itemRefs)
     {
-        ItemBase previouslyEquipped = m_itemUser.EquippedItem;
-
-        m_heldItems.Clear();
+        List<ItemBase> incoming = new List<ItemBase>(itemRefs.Length);
         foreach (NetworkObjectReference itemRef in itemRefs)
         {
             if (itemRef.TryGet(out NetworkObject itemNetworkObject)
                 && itemNetworkObject.TryGetComponent(out ItemBase item))
             {
-                m_heldItems.Add(item);
+                incoming.Add(item);
             }
         }
 
-        if (m_heldItems.Count == 0)
+        // 1) 목록에서 사라진 아이템은 그 칸만 비운다 (버린 자리 유지).
+        for (int i = 0; i < m_slots.Length; i++)
         {
-            m_equippedIndex = -1;
-            m_itemUser.SetEquippedItem(null);
-            return;
+            if (m_slots[i] != null && !incoming.Contains(m_slots[i]))
+            {
+                m_slots[i] = null;
+            }
         }
 
-        // 장착 중이던 아이템이 아직 목록에 있으면 그대로 유지, 아니면 첫 아이템을 장착.
-        int keptIndex = previouslyEquipped != null ? m_heldItems.IndexOf(previouslyEquipped) : -1;
-        m_equippedIndex = keptIndex >= 0 ? keptIndex : 0;
-        m_itemUser.SetEquippedItem(m_heldItems[m_equippedIndex]);
+        // 2) 새 아이템은 첫 빈 칸에 넣는다 (줍기/초기 지급).
+        foreach (ItemBase item in incoming)
+        {
+            if (Array.IndexOf(m_slots, item) >= 0)
+            {
+                continue;
+            }
+
+            int emptySlot = FirstEmptySlot();
+            if (emptySlot < 0)
+            {
+                break; // 슬롯 초과분은 무시 — 서버 용량 가드가 막지만 방어적으로.
+            }
+
+            m_slots[emptySlot] = item;
+        }
+
+        // 3) 선택 슬롯은 현재 인덱스를 그대로 유지한다 (positional, #144).
+        //  - 장착 아이템을 버리면 그 칸이 비므로, 인덱스는 그대로 두고 빈손이 된다 (다른 아이템으로 자동 전환 안 함).
+        //  - 빈 칸을 의도적으로 선택한 상태(빈손)도 그대로 유지된다.
+        //  아직 아무것도 선택한 적 없을 때(-1, 초기 지급)만 첫 아이템 칸을 장착한다.
+        int keptIndex = m_equippedIndex >= 0 ? m_equippedIndex : FirstOccupiedSlot();
+        EquipSlot(keptIndex); // 인덱스 세팅·장착·하이라이트 이벤트를 한 경로로 통일 (index -1이면 빈손)
+
+        OnSlotsChanged?.Invoke();
     }
 
-    // ---- 휠 순환 장착 (#46, 오너 로컬) ----
+    // ---- 슬롯 선택/정렬 (#46, #144, 오너 로컬) ----
 
-    // 마우스 휠 위 — 보유 목록의 이전 아이템으로 순환 전환.
+    // 마우스 휠 위 — 이전 슬롯의 아이템으로 순환 전환.
     private void EquipPrevious() => Cycle(-1);
 
-    // 마우스 휠 아래 — 보유 목록의 다음 아이템으로 순환 전환.
+    // 마우스 휠 아래 — 다음 슬롯의 아이템으로 순환 전환.
     private void EquipNext() => Cycle(1);
 
-    // 현재 인덱스에서 direction만큼 이동해 순환 장착한다. 보유 아이템이 없으면 무시.
+    // 현재 슬롯에서 direction 방향으로 한 칸 이동해 장착한다 — 빈 칸도 대상(숫자키와 동일하게 빈손). (#144)
     private void Cycle(int direction)
     {
         // 다운(무력화) 중에는 마우스 휠 아이템 전환 차단 (#105)
@@ -334,18 +413,95 @@ public class PlayerLoadout : NetworkBehaviour
             return;
         }
 
-        int count = m_heldItems.Count;
-        if (count == 0)
+        // 아직 장착 인덱스가 없으면(빈손 상태) 첫 칸 기준으로 시작한다.
+        int baseIndex = m_equippedIndex >= 0 ? m_equippedIndex : 0;
+        int length = m_slots.Length;
+
+        // % 결과가 음수일 수 있으므로 length를 더해 양수 범위로 보정.
+        EquipSlot(((baseIndex + direction) % length + length) % length);
+    }
+
+    /// <summary>슬롯을 직접 선택해 장착한다 (숫자키 1~3, #144). 빈 칸이면 빈손이 된다.</summary>
+    public void SelectSlot(int index)
+    {
+        // 다운(무력화) 중에는 아이템 전환 차단 (#105)
+        if (IsIncapacitated)
         {
             return;
         }
 
-        // 아직 장착 인덱스가 없으면(빈손 상태) 첫 아이템부터 시작한다.
-        int baseIndex = m_equippedIndex >= 0 ? m_equippedIndex : 0;
+        if (index < 0 || index >= m_slots.Length)
+        {
+            return;
+        }
 
-        // % 결과가 음수일 수 있으므로 count를 더해 양수 범위로 보정.
-        m_equippedIndex = (baseIndex + direction % count + count) % count;
-        m_itemUser.SetEquippedItem(m_heldItems[m_equippedIndex]);
+        EquipSlot(index);
+    }
+
+    // 선택 슬롯을 index로 바꾸고 그 칸 아이템(빈 칸이면 null=빈손)을 장착한다. index -1이면 빈손.
+    // 빈 칸↔빈 칸이면 SetEquippedItem이 이벤트를 안 내므로, 인덱스 변경 이벤트를 따로 발행해 UI 하이라이트를 갱신한다.
+    private void EquipSlot(int index)
+    {
+        m_equippedIndex = index;
+        m_itemUser.SetEquippedItem(index >= 0 ? m_slots[index] : null);
+        OnEquippedSlotChanged?.Invoke();
+    }
+
+    /// <summary>두 슬롯의 내용을 맞바꾼다 (편집 모드 드래그 정렬, #144). 순수 오너 로컬 — 서버 무관.</summary>
+    public void SwapSlots(int a, int b)
+    {
+        // 다운(무력화) 중에는 슬롯 정렬 차단 (#105, Cycle/SelectSlot과 동일 관례)
+        if (IsIncapacitated)
+        {
+            return;
+        }
+
+        if (a == b || a < 0 || b < 0 || a >= m_slots.Length || b >= m_slots.Length)
+        {
+            return;
+        }
+
+        (m_slots[a], m_slots[b]) = (m_slots[b], m_slots[a]);
+
+        // 장착 슬롯이 이동했으면 인덱스만 따라간다 — 장착 아이템 자체는 그대로라 이벤트 불필요.
+        if (m_equippedIndex == a)
+        {
+            m_equippedIndex = b;
+        }
+        else if (m_equippedIndex == b)
+        {
+            m_equippedIndex = a;
+        }
+
+        OnSlotsChanged?.Invoke();
+    }
+
+    // 첫 빈 슬롯 인덱스. 꽉 찼으면 -1.
+    private int FirstEmptySlot()
+    {
+        for (int i = 0; i < m_slots.Length; i++)
+        {
+            if (m_slots[i] == null)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    // 첫 아이템이 든 슬롯 인덱스. 전부 비었으면 -1.
+    private int FirstOccupiedSlot()
+    {
+        for (int i = 0; i < m_slots.Length; i++)
+        {
+            if (m_slots[i] != null)
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     // ---- 공통 ----
