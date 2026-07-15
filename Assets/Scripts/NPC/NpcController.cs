@@ -128,7 +128,7 @@ public class NpcController : NetworkBehaviour
     /// <summary>현재 제압 게이지. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 읽을 수 있다. (#76)</summary>
     public float SubdueGauge => IsSpawned ? m_syncedSubdueGauge.Value : m_subdueGauge;
 
-    /// <summary>도주 중 피해 다니는 위협 대상(체포를 시도한 플레이어). 도주 중이 아니면 null. 서버에서만 유효. (#76)</summary>
+    /// <summary>저항·도주 중 피해 다니는 위협 대상(체포를 시도한 플레이어). 배회 등 반응 중이 아니면 null. 서버에서만 유효. (#76)</summary>
     public Transform ThreatTarget { get; private set; }
 
     /// <summary>
@@ -311,11 +311,14 @@ public class NpcController : NetworkBehaviour
     public void ClearThreat() => ThreatTarget = null;
 
     /// <summary>저항 시작 — 수갑 채널링 성공 순간 저항형의 반응. 그 자리에서 버틴다.</summary>
-    public void StartResist()
+    public void StartResist(Transform subduer = null)
     {
         if (IsSpawned && !IsServer)
             return;
 
+        // 저항을 유발한(수갑 채우려던) 플레이어를 위협으로 기억한다 — 제압 실패 시 이 대상에게서 도주한다.
+        // (도주형이 StartFlee(subduer)로 위협을 받는 것과 대칭 — #205)
+        ThreatTarget = subduer;
         m_stateMachine.ChangeState(NpcState.Attack);
     }
 

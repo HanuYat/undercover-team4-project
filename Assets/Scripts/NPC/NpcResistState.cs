@@ -94,16 +94,22 @@ public class NpcResistState : NpcStateBase
         return aliveCount == 0;
     }
 
-    /// <summary>플레이어 승리 실패 — 가장 가까운 플레이어를 위협 삼아 도주형으로 전환한다.</summary>
+    /// <summary>플레이어 승리 실패 — 저항을 유발한 플레이어(없으면 근처 플레이어)를 위협 삼아 도주형으로 전환한다.</summary>
     private void Defeat(string reason)
     {
         Debug.Log($"저항 승리({reason}) — 도주 전환: {m_owner.name}");
 
-        Transform threat = FindNearestPlayer(m_owner.ResistAttackRange * k_threatSearchRadiusMultiplier);
+        // 저항을 유발한 플레이어(수갑 채우려던 자)를 우선 위협으로 삼는다 — 제한 시간 내내 붙어 싸우던
+        // 상대가 판정 직전 잠깐 멀어졌다고 도주를 포기하면 안 된다(그 순간 반경 재검색은 놓치기 쉽다, #205).
+        // 유발자가 사라졌을 때(연결 종료 등)만 근처 플레이어로 폴백한다.
+        Transform threat = m_owner.ThreatTarget;
+        if (threat == null)
+            threat = FindNearestPlayer(m_owner.ResistAttackRange * k_threatSearchRadiusMultiplier);
+
         if (threat != null)
             m_owner.StartFlee(threat);
         else
-            m_owner.StateMachine.ChangeState(NpcState.Idle); // 주변에 아무도 없으면 도망갈 이유도 없다
+            m_owner.StateMachine.ChangeState(NpcState.Idle); // 유발자도 없고 주변에도 아무도 없으면 도망갈 이유가 없다
     }
 
     /// <summary>반경 내 PlayerData를 중복 없이 s_playerBuffer에 모은다.</summary>
