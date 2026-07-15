@@ -65,8 +65,12 @@ public class ArrestJudge : MonoBehaviour
         // 혹시 모를 중복 진입 방어
         if (JudgedNpcs.Contains(npc)) return null;
 
+        // 경범죄 이벤트 NPC(난동꾼)는 신원 대조 이전에 마커로 식별한다 (#106).
+        MisdemeanorOffender misdemeanor = npc.GetComponent<MisdemeanorOffender>();
         CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
-        if (identity == null)
+
+        // 경범죄 마커도 신원도 없으면 판정할 수 없다.
+        if (misdemeanor == null && identity == null)
         {
             Debug.LogWarning($"ArrestJudge: 신원(CitizenIdentity) 없음 — 판정 불가: {npc.name}", npc);
             return null;
@@ -75,13 +79,25 @@ public class ArrestJudge : MonoBehaviour
         // [핵심] 판정이 시작되면 즉시 판정 완료 명단에 추가
         JudgedNpcs.Add(npc);
 
-        ArrestVerdict verdict = identity.IsCriminal
-            ? ArrestVerdict.WantedCriminal
-            : ArrestVerdict.WrongfulArrest;
-        int reward = verdict == ArrestVerdict.WantedCriminal ? k_wantedReward : k_wrongfulReward;
+        ArrestVerdict verdict;
+        int reward;
+        if (misdemeanor != null)
+        {
+            // 난동꾼 즉결 처리 — 진범/오검거 대조를 타지 않고 경범죄로 확정, 이벤트가 정한 수익을 준다.
+            verdict = ArrestVerdict.Misdemeanor;
+            reward = misdemeanor.Reward;
+        }
+        else
+        {
+            verdict = identity.IsCriminal
+                ? ArrestVerdict.WantedCriminal
+                : ArrestVerdict.WrongfulArrest;
+            reward = verdict == ArrestVerdict.WantedCriminal ? k_wantedReward : k_wrongfulReward;
+        }
 
-        PlayerEscorter deliverer = ResolveDeliverer(npc);
-        var result = new ArrestResult(npc, verdict, identity.Profile, reward, deliverer);
+        CitizenProfile profile = identity != null ? identity.Profile : null;
+        PlayerEscorter deliverer = PlayerEscorter.FindEscorterOf(npc);
+        var result = new ArrestResult(npc, verdict, profile, reward, deliverer);
 
         LogVerdict(result);
         OnArrestJudged?.Invoke(result);
@@ -101,20 +117,15 @@ public class ArrestJudge : MonoBehaviour
         return result;
     }
 
-    private static PlayerEscorter ResolveDeliverer(NpcController npc)
-    {
-        PlayerEscorter[] escorters = FindObjectsByType<PlayerEscorter>(FindObjectsSortMode.None);
-        foreach (PlayerEscorter escorter in escorters)
-            if (escorter.EscortingNpc == npc)
-                return escorter;
-
-        return null;
-    }
-
     private static void LogVerdict(ArrestResult result)
     {
         string citizenName = result.Profile != null ? result.Profile.CitizenName : result.Npc.name;
-        string tag = result.Verdict == ArrestVerdict.WantedCriminal ? "현상수배범 검거" : "오검거";
+        string tag = result.Verdict switch
+        {
+            ArrestVerdict.WantedCriminal => "현상수배범 검거",
+            ArrestVerdict.Misdemeanor => "경범죄 처리",
+            _ => "오검거"
+        };
         string deliverer = result.DeliveredBy != null ? result.DeliveredBy.name : "알 수 없음";
         Debug.Log($"[검거 판정] {tag}: {citizenName} (인계: {deliverer}) — 보상 {result.Reward}원");
     }

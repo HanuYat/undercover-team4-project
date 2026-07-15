@@ -30,6 +30,23 @@ public class PlayerEscorter : NetworkBehaviour
     /// <summary>연행 중 여부. 서버·오프라인은 실제 참조로, 원격 피어는 동기화 플래그로 판정.</summary>
     public bool IsEscorting => IsSpawned && !IsServer ? m_isEscortingSynced.Value : EscortingNpc != null;
 
+    /// <summary>
+    /// 해당 NPC를 연행 중인 플레이어를 찾는다 — 없으면 null.
+    /// EscortingNpc가 서버 권위 참조이므로 서버(또는 오프라인)에서만 유효하다.
+    /// </summary>
+    public static PlayerEscorter FindEscorterOf(NpcController npc)
+    {
+        if (npc == null)
+            return null;
+
+        PlayerEscorter[] escorters = FindObjectsByType<PlayerEscorter>(FindObjectsSortMode.None);
+        foreach (PlayerEscorter escorter in escorters)
+            if (escorter.EscortingNpc == npc)
+                return escorter;
+
+        return null;
+    }
+
     // 서버 채널링 생명주기(CTS 소유·재진입 가드)는 ServerChannel에 위임 (#109)
     private readonly ServerChannel m_channel = new();
 
