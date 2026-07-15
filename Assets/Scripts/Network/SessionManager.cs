@@ -94,6 +94,7 @@ public class SessionManager : MonoBehaviour
 
         m_session = session;
         SubscribeSessionEvents(m_session);
+        UnsubscribeNetworkEvents();
         SubscribeNetworkEvents();
 
         OnSessionJoined?.Invoke(session.Id);
