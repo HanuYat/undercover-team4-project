@@ -112,6 +112,27 @@ VivoxManager ──▶ SessionManager ──▶ AuthBootstrap
 
 각각 별도 PR이지만 전부 이 규칙 위에서 움직이므로 서로 충돌하지 않는다.
 
+## #167 구현 계획 (착수 노트)
+
+> #166(단일 소유권) 위에 얹는 자기완결 작업. 로비 불필요. `SessionManager` 한 파일에서 완성된다.
+
+**목표:** 연결이 밑에서 죽는 신호(본인 드롭·킥·호스트 이탈·세션 삭제)를 `SessionManager`가 전부 받아 `m_session`을 정리하고 위로 이벤트화(`OnConnectionLost`). 자발적 이탈(`LeaveAsync`)의 `OnSessionLeft`와 구분한다.
+
+**단계:**
+1. `public event Action OnConnectionLost;` 추가 (기존 `OnSessionJoined`/`OnSessionLeft` 옆).
+2. NGO `NetworkManager.Singleton.OnClientDisconnectCallback` 구독 → **본인 드롭** 감지 → `m_session` 정리 → `OnConnectionLost` 방출.
+3. `ISession`의 세션 삭제/호스트 이탈 이벤트 구독 → 동일 정규화 (기존 `SubscribeSessionEvents`/`UnsubscribeSessionEvents`에 대칭 추가).
+4. **자발 vs 비자발 가드(필수):** `LeaveAsync`는 이미 `OnSessionLeft`를 쏜다 → Leave 진행 중엔 `OnConnectionLost`가 새지 않도록 플래그(예: `m_isLeaving`)로 구분. 미구현 시 나가기 때 두 이벤트가 겹쳐 발화한다.
+5. 삭제된 `NetworkBootstrap`의 접속/끊김 `Debug.Log` 로깅을 여기로 재구현.
+
+**착수 전 확인할 불확실 요소 2개 (견적이 여기서 갈림):**
+1. **어떤 `ISession` 이벤트가 "호스트 이탈/세션 삭제"를 알리는지** — Multiplayer SDK 2.2.4 문서 확인 필요. 현재 구독 중인 건 `PlayerJoined`/`Changed`/`SessionPropertiesChanged`뿐.
+2. **NGO `OnClientDisconnectCallback` 구독 타이밍** — `NetworkManager`가 세션 생성 중에 뜨므로 `AdoptSession` 시점 또는 `IsListening` 확인 후 구독, `OnDisable`에서 대칭 해제.
+
+**검증:** MPPM에서 호스트 종료 / 클라 드롭 / 네트워크 킬 각각 `OnConnectionLost` **1회만** 발화 + 자발 `LeaveAsync` 시 새지 않음.
+
+**참고:** `Assets/Scripts/Network/SessionManager.cs` (`LeaveAsync`, `AdoptSession`, `Subscribe/UnsubscribeSessionEvents`, `OnDisable`). 삭제된 로깅 로직은 커밋 `dbf0c06^`에서 참고.
+
 ## 미결 사항 (검토 필요)
 
 - **teardown 오케스트레이션 주체:** 별도 클래스 vs 로비/메뉴 컨트롤러 겸임.
