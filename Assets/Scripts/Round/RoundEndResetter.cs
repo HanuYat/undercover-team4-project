@@ -64,8 +64,8 @@ public class RoundEndResetter : MonoBehaviour
             nm.OnClientStopped -= HandleClientStopped;
     }
 
-    // 서버·오프라인: 라운드가 끝나면(성공/실패 공통) 리셋을 시작한다.
-    private void HandleRoundEnded(RoundResult result)
+    // 서버·오프라인: 라운드가 끝나면(성공/실패 공통) 리셋을 시작한다. (사유는 종료 피드백 UI(#210)가 따로 표시)
+    private void HandleRoundEnded(RoundResult result, RoundEndReason reason)
     {
         BeginReset();
     }
