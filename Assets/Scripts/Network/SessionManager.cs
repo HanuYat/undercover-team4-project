@@ -1,12 +1,15 @@
 using System;
-using UnityEngine;
 using Cysharp.Threading.Tasks;
 using Unity.Services.Multiplayer;
+using UnityEngine;
 
 public class SessionManager : MonoBehaviour
 {
-    [SerializeField] private int m_maxPlayer = 6;
-    [SerializeField] private AuthBootstrap m_auth; // 인스펙터로 연결
+    [SerializeField]
+    private int m_maxPlayer = 6;
+
+    [SerializeField]
+    private AuthBootstrap m_auth; // 인스펙터로 연결
     public AuthBootstrap Auth => m_auth;
 
     private ISession m_session;
@@ -17,12 +20,14 @@ public class SessionManager : MonoBehaviour
 
     private void OnEnable()
     {
-        if (m_auth != null) m_auth.CanSignOut = () => m_session == null && !m_isBusy;   // 세션에 접속 중이 아니면 로그아웃 가능
+        if (m_auth != null)
+            m_auth.CanSignOut = () => m_session == null && !m_isBusy; // 세션에 접속 중이 아니면 로그아웃 가능
     }
 
     private void OnDisable()
     {
-        if (m_auth != null) m_auth.CanSignOut = null;
+        if (m_auth != null)
+            m_auth.CanSignOut = null;
     }
 
     public async UniTask EnsureSignedInAsync()
@@ -39,10 +44,16 @@ public class SessionManager : MonoBehaviour
     public async UniTask<string> CreateSessionAsync(int maxPlayer)
     {
         await EnsureSignedInAsync();
-        var options = new SessionOptions { MaxPlayers = maxPlayer, Type = "Session" }.WithRelayNetwork();
+        var options = new SessionOptions
+        {
+            MaxPlayers = maxPlayer,
+            Type = "Session",
+        }.WithRelayNetwork();
         ISession session = await MultiplayerService.Instance.CreateSessionAsync(options);
         AdoptSession(session);
-        Debug.Log($"[SessionManager] 세션과 호스트 만들어짐 / Id: {session.Id}, Code = {session.Code}");
+        Debug.Log(
+            $"[SessionManager] 세션과 호스트 만들어짐 / Id: {session.Id}, Code = {session.Code}"
+        );
 
         return session.Code;
     }
@@ -93,7 +104,8 @@ public class SessionManager : MonoBehaviour
 
     private void SubscribeSessionEvents(ISession session)
     {
-        if (session == null) return;
+        if (session == null)
+            return;
 
         session.PlayerJoined += OnPlayerJoined;
         session.Changed += OnSessionChanged;
@@ -102,7 +114,8 @@ public class SessionManager : MonoBehaviour
 
     private void UnsubscribeSessionEvents(ISession session)
     {
-        if (session == null) return;
+        if (session == null)
+            return;
 
         session.PlayerJoined -= OnPlayerJoined;
         session.Changed -= OnSessionChanged;
@@ -134,7 +147,8 @@ public class SessionManager : MonoBehaviour
             UnsubscribeSessionEvents(m_session);
     }
 
-    [SerializeField] private float m_guiTopOffset = 10f;
+    [SerializeField]
+    private float m_guiTopOffset = 10f;
 
     private string m_joinCodeInput = string.Empty;
     private bool m_isBusy;
@@ -180,6 +194,24 @@ public class SessionManager : MonoBehaviour
         }
 
         GUI.enabled = true;
+
+        // 게임 종료 (#210) — 세션 접속 중에는 OnGUI가 DrawInSessionUI로 분기해 이 버튼이 그려지지
+        // 않고, 세션에서 나오면(m_session == null) 로비와 함께 다시 나타난다. (Auth/Vivox GUI와 동일한 수명)
+        GUILayout.Space(6);
+        if (GUILayout.Button("게임 종료 (Quit)"))
+        {
+            QuitGame();
+        }
+    }
+
+    // 빌드에서는 앱 종료, 에디터에서는 플레이 모드 종료. (임시 메인 메뉴 버튼, #210)
+    private static void QuitGame()
+    {
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
     }
 
     private void DrawInSessionUI()
@@ -200,7 +232,8 @@ public class SessionManager : MonoBehaviour
 
     private async UniTaskVoid HandleCreateAsync()
     {
-        if (m_isBusy) return;
+        if (m_isBusy)
+            return;
         m_isBusy = true;
         m_status = "세션 생성 중...";
         try
@@ -221,7 +254,8 @@ public class SessionManager : MonoBehaviour
 
     private async UniTaskVoid HandleJoinAsync(string code)
     {
-        if (m_isBusy) return;
+        if (m_isBusy)
+            return;
         m_isBusy = true;
         m_status = "세션 참가 중...";
         try
@@ -242,7 +276,8 @@ public class SessionManager : MonoBehaviour
 
     private async UniTaskVoid HandleLeaveAsync()
     {
-        if (m_isBusy) return;
+        if (m_isBusy)
+            return;
         m_isBusy = true;
         m_status = "세션 나가는 중...";
         try
