@@ -1095,6 +1095,8 @@ GameObject:
   - component: {fileID: 1083012405}
   - component: {fileID: 1083012408}
   - component: {fileID: 1083012407}
+  - component: {fileID: 1083012410}
+  - component: {fileID: 1083012409}
   m_Layer: 0
   m_Name: SuddenEvents
   m_TagString: Untagged
@@ -1179,6 +1181,37 @@ MonoBehaviour:
   m_maxInterval: 15
   m_startDelay: 5
   m_enabled: 1
+--- !u!114 &1083012409
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1083012404}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 58752d6af7438004cb50c7b401dbabbe, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DeviceBlackoutView
+  m_blackout: {fileID: 0}
+  m_vivox: {fileID: 0}
+  m_overlayAlpha: 0.75
+  m_overlayLabel: "\u26A0 \uC804\uC790\uAE30\uAE30 \uBA39\uD1B5 \u2014 \uC2DC\uC57C\xB7\uD1B5\uC2E0
+    \uC7A5\uC560"
+--- !u!114 &1083012410
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1083012404}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a22184e6d60531647aad8c4af74eeff3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DeviceBlackoutEvent
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_durationSeconds: 12
 --- !u!1 &1179928418
 GameObject:
   m_ObjectHideFlags: 0
