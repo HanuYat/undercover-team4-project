@@ -14,7 +14,6 @@ public class VivoxManager : MonoBehaviour
     [SerializeField] private InputActionReference m_pushToTalkAction;
     [SerializeField] private SessionManager m_session;   // 인스펙터에서 연결
     private bool m_loggedIn;
-    //private bool m_joined; // -> m_radioJoined, m_proximityJoined로 대체
     private bool m_transmitting;
     private bool m_starting;
     private string m_status = "대기 중...";
@@ -47,6 +46,8 @@ public class VivoxManager : MonoBehaviour
             m_pushToTalkAction.action.canceled += OnPushToTalkCanceled;
             m_pushToTalkAction.action.Enable();
         }
+
+        if (m_proximityJoined) StartPositionLoop();
     }
 
     private void OnDisable()
@@ -145,6 +146,7 @@ public class VivoxManager : MonoBehaviour
         {
             m_status = $"채널 참가 실패: {ex.Message}";
             Debug.LogError($"[VivoxManager] {ex}");
+            await LeaveChannelAsync();
         }
     }
 
