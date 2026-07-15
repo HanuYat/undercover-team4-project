@@ -112,6 +112,18 @@ public class PlayerMovement : NetworkBehaviour
         Cursor.visible = false;
     }
 
+    public override void OnNetworkDespawn()
+    {
+        // 오너 로컬 플레이어가 사라지면(라운드 종료 리셋·연결 종료 등) OnNetworkSpawn에서 잠갔던 커서를 되돌린다.
+        // Cursor.lockState는 전역 상태라 씬을 재로드해도 유지되는데, 재로드된 로비 씬에는 이 커서를 풀어 줄
+        // PlayerMovement가 없어(ESC 토글도 못 돎) 커서가 잠긴 채 고착된다 — 마우스로 로비 UI를 못 누르는 원인. (#188)
+        if (IsOwner)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+    }
+
     // 오너 로컬 인스턴스를 서버가 지정한 스폰 포즈로 이동시킨다. CharacterController가 켜진
     // 상태에서 transform을 직접 옮기면 내부 캐시가 위치를 되돌릴 수 있어 잠시 끄고 옮긴다.
     private void ApplyServerSpawnPose()
