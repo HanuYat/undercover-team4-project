@@ -59,6 +59,12 @@ public class NpcController : NetworkBehaviour
     [SerializeField] private float m_fleeClearanceRadius = 4f;
     [Tooltip("도주 진입 후 이 시간(초) 안에는 포위됐어도 저항으로 되돌아가지 않는다 — 저항↔도주 왕복 방지 (#213)")]
     [SerializeField] private float m_fleeResistCooldown = 2f;
+
+    [Header("인계 방치 (#230)")]
+    [Tooltip("체포된 채 이 시간(초) 동안 인계되지 않으면 수갑을 풀고 도주한다 — 방치 전략 차단")]
+    [SerializeField] private float m_capturedEscapeSeconds = 30f;
+    [Tooltip("도주 직전 이 시간(초) 동안 소란을 낸다 — 수갑 풀려는 소동으로 현장·본부에 예고")]
+    [SerializeField] private float m_capturedEscapeWarningSeconds = 5f;
     [Tooltip("저항 제압 게이지 최대치 — ApplySubdueHit로 깎여 0이 되면 체포된다")]
     [SerializeField] private float m_subdueGaugeMax = 100f;
     [Tooltip("기절(테이저 등) 지속 시간(초)")]
@@ -119,6 +125,8 @@ public class NpcController : NetworkBehaviour
     public float FleeEscapeDistance => m_fleeEscapeDistance;
     public float FleeClearanceRadius => m_fleeClearanceRadius;
     public float FleeResistCooldown => m_fleeResistCooldown;
+    public float CapturedEscapeSeconds => m_capturedEscapeSeconds;
+    public float CapturedEscapeWarningSeconds => m_capturedEscapeWarningSeconds;
     public float SubdueGaugeMax => m_subdueGaugeMax;
     public float StunSeconds => m_stunSeconds;
     public float ResistAttackInterval => m_resistAttackInterval;
@@ -146,6 +154,23 @@ public class NpcController : NetworkBehaviour
 
     /// <summary>저항·도주 중 피해 다니는 위협 대상(체포를 시도한 플레이어). 배회 등 반응 중이 아니면 null. 서버에서만 유효. (#76)</summary>
     public Transform ThreatTarget { get; private set; }
+
+    /// <summary>
+    /// 본부 인계 판정이 끝났는가 — <see cref="MarkDelivered"/>로 ArrestJudge가 세팅한다. (#230)
+    /// 판정 완료분은 인계 방치 타이머에서 빠지고(본부에서 탈출하면 안 된다), 인계존 재진입 시 중복 판정도 막는다.
+    /// 서버(또는 오프라인)에서만 유효 — 판정·인계존 게이트가 모두 서버 전용이라 동기화하지 않는다.
+    /// 판정 후 본부에 남는 NPC의 처리는 유치장(#228)이 가져간다.
+    /// </summary>
+    public bool IsDelivered { get; private set; }
+
+    /// <summary>인계 판정 완료로 표시 — ArrestJudge 전용. 서버(또는 오프라인)에서만 호출된다. (#230)</summary>
+    public void MarkDelivered()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        IsDelivered = true;
+    }
 
     /// <summary>
     /// 현재 NPC 상태. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 안전하게 읽을 수 있다.
@@ -239,6 +264,17 @@ public class NpcController : NetworkBehaviour
         NpcState state = m_stateMachine.CurrentState;
         if (state != NpcState.Run && state != NpcState.Attack)
             return;
+
+        RequestDisturbancePulse();
+    }
+
+    /// <summary>
+    /// 소란 펄스를 1회 요청한다 — 상태 클래스가 자기 사정으로 소란을 낼 때 쓴다.
+    /// 주기 스로틀은 자동 펄스(<see cref="EmitDisturbancePulse"/>)와 공유하므로 펄스 타이머가 둘로 갈라지지 않는다.
+    /// 서버(또는 오프라인) 전용 — FSM Tick 안에서만 불린다. (#81, #230)
+    /// </summary>
+    public void RequestDisturbancePulse()
+    {
         if (Time.time < m_nextDisturbancePulseTime)
             return;
 
