@@ -31,6 +31,13 @@ public static class PlayerAnimatorControllerBuilder
     private const string k_combatFolder =
         "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Combat";
 
+    // 앉기 상태 — Crouch(bool)=true면 서기 블렌드 트리에서 앉기 블렌드 트리로 짧게 전환한다. (#236)
+    // 서기↔앉기 전환 클립은 에셋에 없어(Crouch는 Idle/이동만 제공) 전환 클립 대신 짧은 블렌딩으로 처리한다.
+    private const string k_crouchParam = "Crouch";
+    private const string k_crouchState = "Crouch";
+    private const string k_crouchFolder =
+        "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Movement/Crouch";
+
     // 8방향 (클립 이름 접미사, 로컬 방향 벡터) — x = 좌우, z = 전후
     private static readonly (string suffix, Vector2 dir)[] s_directions =
     {
@@ -48,7 +55,8 @@ public static class PlayerAnimatorControllerBuilder
     public static void Create()
     {
         AnimationClip idle = LoadClip(k_idleFbx);
-        if (idle == null) return;
+        if (idle == null)
+            return;
 
         var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(k_outputPath);
         bool isNew = controller == null;
@@ -60,7 +68,7 @@ public static class PlayerAnimatorControllerBuilder
         EnsureFloatParameter(controller, "MoveX");
         EnsureFloatParameter(controller, "MoveZ");
 
-        BlendTree blendTree = FindOrCreateBlendTree(controller);
+        BlendTree blendTree = FindOrCreateBlendTree(controller, k_stateName);
         blendTree.children = new ChildMotion[0]; // 재실행 시 기존 클립 배치를 비우고 다시 채움
 
         // 중앙 = Idle
@@ -71,21 +79,30 @@ public static class PlayerAnimatorControllerBuilder
         {
             AnimationClip walk = LoadClip($"{k_walkFolder}/HumanM@Walk01_{suffix}.fbx");
             AnimationClip run = LoadClip($"{k_runFolder}/HumanM@Run01_{suffix}.fbx");
-            if (walk == null || run == null) return;
+            if (walk == null || run == null)
+                return;
 
             blendTree.AddChild(walk, dir * PlayerAnimationDriver.k_walkParam);
             blendTree.AddChild(run, dir * PlayerAnimationDriver.k_runParam);
         }
 
+        BlendTree crouchTree = SetupCrouchState(controller); // 앉기 상태 추가/갱신 (#236) — 다운 전환보다 먼저
         SetupDownStates(controller); // 다운(무력화) 상태 머신 추가/갱신 (#105)
 
         EditorUtility.SetDirty(blendTree);
+        if (crouchTree != null)
+        {
+            EditorUtility.SetDirty(crouchTree);
+        }
         EditorUtility.SetDirty(controller);
         AssetDatabase.SaveAssets();
 
-        Debug.Log($"[PlayerAnimatorControllerBuilder] {(isNew ? "생성" : "갱신")} 완료: {k_outputPath} " +
-                  $"(Idle 중앙 / Walk 반경 {PlayerAnimationDriver.k_walkParam} 8방향 / " +
-                  $"Run 반경 {PlayerAnimationDriver.k_runParam} 8방향, 총 17모션 + 다운 3상태)");
+        Debug.Log(
+            $"[PlayerAnimatorControllerBuilder] {(isNew ? "생성" : "갱신")} 완료: {k_outputPath} "
+                + $"(Idle 중앙 / Walk 반경 {PlayerAnimationDriver.k_walkParam} 8방향 / "
+                + $"Run 반경 {PlayerAnimationDriver.k_runParam} 8방향, 총 17모션 + 다운 3상태 "
+                + $"+ 앉기 9모션)"
+        );
 
         Selection.activeObject = controller;
     }
@@ -94,7 +111,8 @@ public static class PlayerAnimatorControllerBuilder
     {
         foreach (AnimatorControllerParameter parameter in controller.parameters)
         {
-            if (parameter.name == name) return;
+            if (parameter.name == name)
+                return;
         }
 
         controller.AddParameter(name, AnimatorControllerParameterType.Float);
@@ -104,10 +122,88 @@ public static class PlayerAnimatorControllerBuilder
     {
         foreach (AnimatorControllerParameter parameter in controller.parameters)
         {
-            if (parameter.name == name) return;
+            if (parameter.name == name)
+                return;
         }
 
         controller.AddParameter(name, AnimatorControllerParameterType.Bool);
+    }
+
+    /// <summary>
+    /// 앉기 상태를 구성한다. (#236)
+    /// 중앙에 Crouch Idle, 반경 k_walkParam(1)에 CrouchWalk 8방향을 배치한 블렌드 트리를 만들고,
+    /// Locomotion과 Crouch(bool) 조건으로 짧게(PlayerCrouch.k_blendDuration) 양방향 전환한다.
+    /// 앉기에는 달리기 단계가 없어(에셋 미제공) 반경 k_runParam 링은 만들지 않는다 —
+    /// PlayerAnimationDriver가 앉기 중엔 앉기 속도를 k_walkParam에 대응시킨다.
+    /// 재실행 시 Locomotion↔Crouch 전환을 지우고 다시 만들어 중복을 막는다.
+    /// </summary>
+    private static BlendTree SetupCrouchState(AnimatorController controller)
+    {
+        AnimationClip crouchIdle = LoadClip($"{k_crouchFolder}/HumanM@Crouch01_Idle.fbx");
+        if (crouchIdle == null)
+            return null;
+
+        EnsureBoolParameter(controller, k_crouchParam);
+
+        BlendTree crouchTree = FindOrCreateBlendTree(controller, k_crouchState);
+        crouchTree.children = new ChildMotion[0]; // 재실행 시 기존 클립 배치를 비우고 다시 채움
+        crouchTree.AddChild(crouchIdle, Vector2.zero);
+
+        foreach ((string suffix, Vector2 dir) in s_directions)
+        {
+            AnimationClip crouchWalk = LoadClip(
+                $"{k_crouchFolder}/CrouchWalk/HumanM@Crouch01_Walk_{suffix}.fbx"
+            );
+            if (crouchWalk == null)
+                return null;
+
+            crouchTree.AddChild(crouchWalk, dir * PlayerAnimationDriver.k_walkParam);
+        }
+
+        AnimatorStateMachine stateMachine = controller.layers[0].stateMachine;
+        AnimatorState locomotion = FindState(stateMachine, k_stateName);
+        AnimatorState crouch = FindState(stateMachine, k_crouchState);
+        if (locomotion == null || crouch == null)
+            return crouchTree;
+
+        RemoveTransitionsBetween(locomotion, crouch); // 재실행 시 중복 방지
+
+        // Locomotion → Crouch : Ctrl을 누르는 순간 짧게 블렌딩하며 앉는다 (전환 클립 없음 — 의도된 설계)
+        AnimatorStateTransition toCrouch = locomotion.AddTransition(crouch);
+        toCrouch.hasExitTime = false;
+        toCrouch.duration = PlayerCrouch.k_blendDuration;
+        toCrouch.AddCondition(AnimatorConditionMode.If, 0f, k_crouchParam);
+
+        // Crouch → Locomotion : Ctrl을 떼면 같은 시간으로 기립
+        AnimatorStateTransition toStand = crouch.AddTransition(locomotion);
+        toStand.hasExitTime = false;
+        toStand.duration = PlayerCrouch.k_blendDuration;
+        toStand.AddCondition(AnimatorConditionMode.IfNot, 0f, k_crouchParam);
+
+        return crouchTree;
+    }
+
+    // 두 상태 사이의 기존 전환을 양방향으로 제거한다 — 빌더 재실행 시 전환이 중복 누적되는 것을 막는다.
+    private static void RemoveTransitionsBetween(AnimatorState a, AnimatorState b)
+    {
+        RemoveTransitionsTo(a, b);
+        RemoveTransitionsTo(b, a);
+    }
+
+    private static void RemoveTransitionsTo(AnimatorState from, AnimatorState destination)
+    {
+        var toRemove = new System.Collections.Generic.List<AnimatorStateTransition>();
+        foreach (AnimatorStateTransition transition in from.transitions)
+        {
+            if (transition.destinationState == destination)
+            {
+                toRemove.Add(transition);
+            }
+        }
+        foreach (AnimatorStateTransition transition in toRemove)
+        {
+            from.RemoveTransition(transition);
+        }
     }
 
     /// <summary>
@@ -121,7 +217,8 @@ public static class PlayerAnimatorControllerBuilder
         AnimationClip fall = LoadClip($"{k_combatFolder}/HumanM@Knockdown01 - Fall.fbx");
         AnimationClip ground = LoadClip($"{k_combatFolder}/HumanM@Knockdown01 - Ground.fbx");
         AnimationClip standUp = LoadClip($"{k_combatFolder}/HumanM@Knockdown01 - StandUp.fbx");
-        if (fall == null || ground == null || standUp == null) return;
+        if (fall == null || ground == null || standUp == null)
+            return;
 
         EnsureBoolParameter(controller, k_downParam);
 
@@ -136,10 +233,15 @@ public static class PlayerAnimatorControllerBuilder
         AnimatorState standUpState = stateMachine.AddState(k_standUpState);
         standUpState.motion = standUp;
 
-        // Locomotion → Fall : 다운되는 순간(Down=true) 즉시 쓰러짐
-        if (locomotion != null)
+        // Locomotion/Crouch → Fall : 다운되는 순간(Down=true) 즉시 쓰러짐.
+        // 앉은 채로 다운될 수 있으므로 앉기 상태에서도 나가는 전환이 필요하다. (#236)
+        AnimatorState crouch = FindState(stateMachine, k_crouchState);
+        foreach (AnimatorState source in new[] { locomotion, crouch })
         {
-            AnimatorStateTransition toFall = locomotion.AddTransition(fallState);
+            if (source == null)
+                continue;
+
+            AnimatorStateTransition toFall = source.AddTransition(fallState);
             toFall.hasExitTime = false;
             toFall.duration = 0.1f;
             toFall.AddCondition(AnimatorConditionMode.If, 0f, k_downParam);
@@ -176,7 +278,10 @@ public static class PlayerAnimatorControllerBuilder
             var toRemove = new System.Collections.Generic.List<AnimatorStateTransition>();
             foreach (AnimatorStateTransition transition in child.state.transitions)
             {
-                if (transition.destinationState != null && IsDownState(transition.destinationState.name))
+                if (
+                    transition.destinationState != null
+                    && IsDownState(transition.destinationState.name)
+                )
                 {
                     toRemove.Add(transition);
                 }
@@ -206,32 +311,25 @@ public static class PlayerAnimatorControllerBuilder
     {
         foreach (ChildAnimatorState child in stateMachine.states)
         {
-            if (child.state.name == name) return child.state;
+            if (child.state.name == name)
+                return child.state;
         }
         return null;
     }
 
     /// <summary>
-    /// Locomotion 상태의 블렌드 트리를 찾고, 없으면 만든다.
+    /// 지정한 상태의 MoveX/MoveZ 블렌드 트리를 찾고, 없으면 상태와 함께 만든다.
     /// 컨트롤러의 다른 상태/전환은 건드리지 않는다.
     /// </summary>
-    private static BlendTree FindOrCreateBlendTree(AnimatorController controller)
+    private static BlendTree FindOrCreateBlendTree(AnimatorController controller, string stateName)
     {
         AnimatorStateMachine stateMachine = controller.layers[0].stateMachine;
 
-        AnimatorState state = null;
-        foreach (ChildAnimatorState child in stateMachine.states)
-        {
-            if (child.state.name == k_stateName)
-            {
-                state = child.state;
-                break;
-            }
-        }
+        AnimatorState state = FindState(stateMachine, stateName);
 
         if (state == null)
         {
-            state = stateMachine.AddState(k_stateName);
+            state = stateMachine.AddState(stateName);
         }
 
         if (state.motion is BlendTree existing)
@@ -244,7 +342,7 @@ public static class PlayerAnimatorControllerBuilder
 
         var blendTree = new BlendTree
         {
-            name = k_stateName,
+            name = stateName,
             blendType = BlendTreeType.FreeformDirectional2D,
             blendParameter = "MoveX",
             blendParameterY = "MoveZ",
