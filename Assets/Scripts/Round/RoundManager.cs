@@ -26,6 +26,22 @@ public enum RoundResult
 }
 
 /// <summary>
+/// 라운드 종료 사유 — Result(성공/실패)만으로는 실패 원인(시간 초과 vs 전멸)을 구분할 수 없어
+/// 종료 피드백 UI(#210)가 플레이어에게 "왜 끝났는지"를 보여줄 때 쓴다.
+/// </summary>
+public enum RoundEndReason
+{
+    /// <summary>아직 종료되지 않음.</summary>
+    None,
+    /// <summary>진범 검거 수가 할당량에 도달 — 성공. (GDD 9-3)</summary>
+    QuotaMet,
+    /// <summary>제한시간 초과 시점에 할당량 미달 — 게임오버. (GDD 9-3, 부록B #2)</summary>
+    TimeOver,
+    /// <summary>플레이어 전원 다운(전멸) — 게임오버. (#105)</summary>
+    AllPlayersDown
+}
+
+/// <summary>
 /// 라운드 흐름 관리 — 시작 시 NPC 스폰 트리거, 진행 중 상태 유지, 목표 달성/실패 시 종료 처리. (이슈 #42/#103, GDD 3-2)
 /// 기존 테스트용 NpcRoundStarter(#37/#56)의 스폰 트리거 역할을 흡수해 본 게임의 라운드 진입점이 된다.
 ///
@@ -68,6 +84,9 @@ public class RoundManager : MonoBehaviour
     /// <summary>라운드 종료 결과. 종료 전에는 None.</summary>
     public RoundResult Result { get; private set; } = RoundResult.None;
 
+    /// <summary>라운드 종료 사유 — 종료 피드백 UI(#210)가 읽는다. 종료 전에는 None.</summary>
+    public RoundEndReason EndReason { get; private set; } = RoundEndReason.None;
+
     /// <summary>이번 라운드에 검거한 진범 수 — 할당량 진행도. 서버(또는 오프라인)의 진실값. (#103)</summary>
     public int CriminalArrestCount { get; private set; }
 
@@ -96,8 +115,8 @@ public class RoundManager : MonoBehaviour
     /// <summary>라운드 시작 이벤트 — 스폰 트리거 직후 발행. UI·연출(#43 등)이 구독한다.</summary>
     public event Action OnRoundStarted;
 
-    /// <summary>라운드 종료 이벤트 — 정산(#42 후속)·결과 UI(#43)가 구독한다.</summary>
-    public event Action<RoundResult> OnRoundEnded;
+    /// <summary>라운드 종료 이벤트 — 정산(#42 후속)·결과 UI(#43)·종료 피드백(#210)이 구독한다.</summary>
+    public event Action<RoundResult, RoundEndReason> OnRoundEnded;
 
     private void Awake()
     {
@@ -178,6 +197,7 @@ public class RoundManager : MonoBehaviour
     {
         Phase = RoundPhase.Preparing;
         Result = RoundResult.None;
+        EndReason = RoundEndReason.None;
         CriminalArrestCount = 0;
         RemainingSeconds = float.PositiveInfinity;
         m_spawner.ResetSpawnState(); // IsSpawnCompleted 래치 해제 + 이전 NPC 정리 → StartSpawn 재동작
@@ -228,7 +248,7 @@ public class RoundManager : MonoBehaviour
         // 시간 초과 = 할당량 미달 확정 (채웠다면 그 순간 이미 성공 종료됐다) → 게임오버. (GDD 9-3, 부록B #2)
         // (전원 다운(전멸)도 별도 게임오버 조건이다 — HandleAnyIncapacitatedChanged, #105)
         Debug.Log($"[라운드] 제한시간 초과 — 진범 검거 {CriminalArrestCount}/{m_arrestQuota}명, 할당량 미달");
-        EndRound(RoundResult.Failure);
+        EndRound(RoundResult.Failure, RoundEndReason.TimeOver);
     }
 
     // 검거 판정 결과 수신 — 진범 검거를 할당량에 누적하고, 채우면 성공 종료. (서버/오프라인에서만 발행됨, ArrestJudge)
@@ -246,7 +266,7 @@ public class RoundManager : MonoBehaviour
         Debug.Log($"[라운드] 진범 검거 — 할당량 진행 {CriminalArrestCount}/{m_arrestQuota}");
 
         if (CriminalArrestCount >= m_arrestQuota)
-            EndRound(RoundResult.Success);
+            EndRound(RoundResult.Success, RoundEndReason.QuotaMet);
     }
 
     // 플레이어 무력화 상태 변화 수신 — 전원 다운(전멸)이면 게임오버로 종료한다. (#105, 서버/오프라인에서만 발행됨)
@@ -259,7 +279,7 @@ public class RoundManager : MonoBehaviour
             return;
 
         Debug.Log("[라운드] 플레이어 전원 다운 — 전멸(게임오버)");
-        EndRound(RoundResult.Failure);
+        EndRound(RoundResult.Failure, RoundEndReason.AllPlayersDown);
     }
 
     // 현재 존재하는 모든 플레이어가 무력화 상태인지 — 한 명이라도 멀쩡하면 false. 플레이어가 없으면 전멸이 아니다.
@@ -278,17 +298,18 @@ public class RoundManager : MonoBehaviour
         return true;
     }
 
-    /// <summary>라운드를 종료한다 — 성공(할당량 달성)·실패(제한시간 초과) 공통 경로. (#42/#103)</summary>
-    public void EndRound(RoundResult result)
+    /// <summary>라운드를 종료한다 — 성공(할당량 달성)·실패(제한시간 초과/전멸) 공통 경로. (#42/#103)</summary>
+    public void EndRound(RoundResult result, RoundEndReason reason)
     {
         if (Phase == RoundPhase.Ended)
             return;
 
         Phase = RoundPhase.Ended;
         Result = result;
+        EndReason = reason;
         FreezeAllNpcs(); // NPC 정지 — 플레이어 정지는 PlayerMovement가 GameplayFrozen을 읽어 처리
-        Debug.Log($"[라운드] 종료 — 결과: {result}");
-        OnRoundEnded?.Invoke(result);
+        Debug.Log($"[라운드] 종료 — 결과: {result} (사유: {reason})");
+        OnRoundEnded?.Invoke(result, reason);
     }
 
     // 스폰된 NPC를 전부 정지시킨다 — 서버(또는 오프라인)에서만 호출되며, 서버 정지가 전 클라이언트로 복제된다.
