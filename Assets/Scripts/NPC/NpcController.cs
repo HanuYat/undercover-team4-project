@@ -60,15 +60,16 @@ public class NpcController : NetworkBehaviour
     [Tooltip("도주 진입 후 이 시간(초) 안에는 포위됐어도 저항으로 되돌아가지 않는다 — 저항↔도주 왕복 방지 (#213)")]
     [SerializeField] private float m_fleeResistCooldown = 2f;
 
+    [Tooltip("저항 제압 게이지 최대치 — ApplySubdueHit로 깎여 0이 되면 체포된다")]
+    [SerializeField] private float m_subdueGaugeMax = 100f;
+    [Tooltip("기절(테이저 등) 지속 시간(초)")]
+    [SerializeField] private float m_stunSeconds = 3f;
+
     [Header("인계 방치 (#230)")]
     [Tooltip("체포된 채 이 시간(초) 동안 인계되지 않으면 수갑을 풀고 도주한다 — 방치 전략 차단")]
     [SerializeField] private float m_capturedEscapeSeconds = 30f;
     [Tooltip("도주 직전 이 시간(초) 동안 소란을 낸다 — 수갑 풀려는 소동으로 현장·본부에 예고")]
     [SerializeField] private float m_capturedEscapeWarningSeconds = 5f;
-    [Tooltip("저항 제압 게이지 최대치 — ApplySubdueHit로 깎여 0이 되면 체포된다")]
-    [SerializeField] private float m_subdueGaugeMax = 100f;
-    [Tooltip("기절(테이저 등) 지속 시간(초)")]
-    [SerializeField] private float m_stunSeconds = 3f;
 
     [Header("저항 전투 (#79)")]
     [Tooltip("저항 중 범위 타격을 휘두르는 주기(초)")]
