@@ -13,6 +13,10 @@ using Random = UnityEngine.Random;
 [RequireComponent(typeof(NavMeshAgent))]
 public class NpcController : NetworkBehaviour
 {
+    // 위협 탐색 반경 배율 — 저항 패배 후 도주 대상을 찾을 때(#205)와 도주 방향 산출(#213)이 공유한다.
+    // 공격 범위보다 넓게 잡아 멀리서 접근 중인 플레이어도 회피 대상에 들어온다.
+    private const float k_threatSearchRadiusMultiplier = 5f;
+
     [Header("배회 반경")]
     [SerializeField] private float m_wanderRadius = 10f;
 
@@ -51,6 +55,10 @@ public class NpcController : NetworkBehaviour
     [SerializeField] private float m_fleeStepDistance = 10f;
     [Tooltip("추적자와 이 거리(m) 이상 벌어지면 도주 성공 — 배회로 복귀한다")]
     [SerializeField] private float m_fleeEscapeDistance = 25f;
+    [Tooltip("도주 경로가 플레이어에게 이 거리(m)보다 가까이 스치면 그 방향은 버린다 — 체포 사거리(PlayerInteractor.Range, 3m) + 여유 마진")]
+    [SerializeField] private float m_fleeClearanceRadius = 4f;
+    [Tooltip("도주 진입 후 이 시간(초) 안에는 포위됐어도 저항으로 되돌아가지 않는다 — 저항↔도주 왕복 방지 (#213)")]
+    [SerializeField] private float m_fleeResistCooldown = 2f;
     [Tooltip("저항 제압 게이지 최대치 — ApplySubdueHit로 깎여 0이 되면 체포된다")]
     [SerializeField] private float m_subdueGaugeMax = 100f;
     [Tooltip("기절(테이저 등) 지속 시간(초)")]
@@ -109,12 +117,20 @@ public class NpcController : NetworkBehaviour
     public float FleeSpeedMultiplier => m_fleeSpeedMultiplier;
     public float FleeStepDistance => m_fleeStepDistance;
     public float FleeEscapeDistance => m_fleeEscapeDistance;
+    public float FleeClearanceRadius => m_fleeClearanceRadius;
+    public float FleeResistCooldown => m_fleeResistCooldown;
     public float SubdueGaugeMax => m_subdueGaugeMax;
     public float StunSeconds => m_stunSeconds;
     public float ResistAttackInterval => m_resistAttackInterval;
     public float ResistAttackRange => m_resistAttackRange;
     public int ResistAttackDamage => m_resistAttackDamage;
     public float ResistDefeatSeconds => m_resistDefeatSeconds;
+
+    /// <summary>
+    /// 위협(플레이어)을 찾는 반경(m) — 저항 패배 후 도주 대상 탐색(#205)과 도주 방향 산출(#213)이 같은 값을 쓴다.
+    /// 두 경로가 다른 반경을 쓰면 "도망칠 상대"와 "피할 상대"의 기준이 어긋난다.
+    /// </summary>
+    public float ThreatSearchRadius => m_resistAttackRange * k_threatSearchRadiusMultiplier;
     public float PanicSpeedMultiplier => m_panicSpeedMultiplier;
     public float PanicStepDistance => m_panicStepDistance;
     public float PanicCalmSeconds => m_panicCalmSeconds;
