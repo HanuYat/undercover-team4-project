@@ -34893,6 +34893,7 @@ GameObject:
   - component: {fileID: 708957382}
   - component: {fileID: 708957383}
   - component: {fileID: 708957384}
+  - component: {fileID: 708957385}
   m_Layer: 0
   m_Name: RoundManager
   m_TagString: Untagged
@@ -34946,6 +34947,20 @@ MonoBehaviour:
   m_round: {fileID: 0}
   m_session: {fileID: 0}
   m_resetDelaySeconds: 2
+--- !u!114 &708957385
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 708957381}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2a72b50ad2072d1460f013591f317192, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RoundEndFeedback
+  m_round: {fileID: 0}
+  m_fontSize: 36
 --- !u!1001 &709961684
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -98521,7 +98536,7 @@ MonoBehaviour:
   m_VoxelSize: 0.13333334
   m_MinRegionArea: 9
   m_NavMeshData: {fileID: 23800000, guid: a4f09f5c0689666418f46cf5cf86c04f, type: 2}
-  m_BuildHeightMesh: 0
+  m_BuildHeightMesh: 1
 --- !u!4 &1926681261
 Transform:
   m_ObjectHideFlags: 0
