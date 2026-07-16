@@ -14,11 +14,15 @@ public class PlayerMovement : NetworkBehaviour
     private float m_sprintSpeed = 8f;
 
     [SerializeField]
+    private float m_crouchSpeed = 2.5f;
+
+    [SerializeField]
     private float m_gravity = -9.81f;
 
     // PlayerAnimationDriver가 속도 정규화에 사용 (실제 속도 ↔ 블렌드 트리 좌표 분리)
     public float MoveSpeed => m_moveSpeed;
     public float SprintSpeed => m_sprintSpeed;
+    public float CrouchSpeed => m_crouchSpeed;
 
     [Header("1인칭 시점")]
     [SerializeField]
@@ -57,9 +61,11 @@ public class PlayerMovement : NetworkBehaviour
     private CharacterController m_controller;
     private PlayerInputHandler m_inputHandler;
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 이동·시점 차단용 (#105)
+    private PlayerCrouch m_crouch; // 앉기 중 이동 속도·카메라 높이 조정용 (#236)
     private RoundManager m_roundManager; // 라운드 종료 시 이동·시점 차단용 (라운드 종료 freeze)
     private float m_pitch;
     private float m_standCamHeight; // 평소(서기) 카메라 높이 — 프리팹 초기값에서 캡처 (#105)
+    private float m_downCamBlend; // 서기 시점(0) ↔ 다운 시점(1) 보간 진행도 (#105)
     private float m_verticalVelocity;
     private bool m_cursorUnlocked; // 임시: OnGUI 버튼 조작용 커서 해제 상태
 
@@ -72,11 +78,18 @@ public class PlayerMovement : NetworkBehaviour
     // 이동·시점을 막아야 하는 상태 — 다운(무력화) 또는 라운드 종료
     private bool IsMovementLocked => IsIncapacitated || IsRoundOver;
 
+    // 앉기 중 여부 — 앉기 컴포넌트가 없으면(테스트 구성 등) 항상 false (#236)
+    private bool IsCrouching => m_crouch != null && m_crouch.IsCrouching;
+
+    // 앉기 블렌딩으로 머리가 내려간 높이(m) — 카메라를 같은 만큼 낮춘다 (#236)
+    private float CrouchHeadDrop => m_crouch != null ? m_crouch.HeadDrop : 0f;
+
     private void Awake()
     {
         m_controller = GetComponent<CharacterController>();
         m_inputHandler = GetComponent<PlayerInputHandler>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
+        m_crouch = GetComponent<PlayerCrouch>();
         m_roundManager = FindFirstObjectByType<RoundManager>(); // 씬에 하나 — 없으면 단독 테스트 씬
 
         if (playerCamera != null)
@@ -185,6 +198,7 @@ public class PlayerMovement : NetworkBehaviour
 
     // 카메라 위치(높이)와 피치를 적용한다. 다운 중에는 바닥 근처 높이 + 상방 시선으로 부드럽게 눕히고,
     // 평소에는 서기 높이에서 시선 입력(m_pitch)을 그대로 반영한다. 구조되면 원위치로 복귀한다. (#105)
+    // 앉기 중이면 서기 높이를 머리가 내려간 만큼 낮춘 값으로 대체한다. (#236)
     private void UpdateCameraPose()
     {
         if (playerCamera == null) return;
@@ -192,8 +206,14 @@ public class PlayerMovement : NetworkBehaviour
         float lerp = m_camPoseLerpSpeed * Time.deltaTime;
         bool downed = IsIncapacitated;
 
+        m_downCamBlend = Mathf.Lerp(m_downCamBlend, downed ? 1f : 0f, lerp);
+
+        // 앉기 높이는 PlayerCrouch가 이미 0.12초로 블렌딩한 값이라 여기서 추가 보간하지 않는다
+        // (카메라만 한 번 더 감쇠되면 애니메이션보다 늦게 내려가 반응이 무겁게 느껴진다) (#236)
+        float uprightHeight = m_standCamHeight - CrouchHeadDrop;
+
         Vector3 localPos = playerCamera.transform.localPosition;
-        localPos.y = Mathf.Lerp(localPos.y, downed ? m_downCamHeight : m_standCamHeight, lerp);
+        localPos.y = Mathf.Lerp(uprightHeight, m_downCamHeight, m_downCamBlend);
         playerCamera.transform.localPosition = localPos;
 
         // 다운 중엔 시선 입력이 멈추므로(HandleLook 차단) 피치를 바닥 시점으로 눕힌다.
@@ -219,7 +239,11 @@ public class PlayerMovement : NetworkBehaviour
         }
         m_verticalVelocity += m_gravity * Time.deltaTime;
 
-        float speed = m_inputHandler.IsSprinting ? m_sprintSpeed : m_moveSpeed;
+        // 앉기가 달리기보다 우선 — Ctrl을 누르는 동안은 Shift를 눌러도 앉은 채 느리게 이동한다.
+        // (앉은 채 달리는 애니메이션 클립이 에셋에 없어 자세와 속도가 어긋나는 것도 막는다) (#236)
+        float speed = IsCrouching ? m_crouchSpeed
+            : m_inputHandler.IsSprinting ? m_sprintSpeed
+            : m_moveSpeed;
         Vector3 velocity = moveDirection * speed + Vector3.up * m_verticalVelocity;
         m_controller.Move(velocity * Time.deltaTime);
     }
