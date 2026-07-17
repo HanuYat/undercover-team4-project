@@ -52,6 +52,8 @@ public class ThugAttacker : NetworkBehaviour
     // 그때 사거리·타깃 유효성을 재검증하므로 준비 중 벗어난 표적은 빗나간다. (#220)
     private float m_pendingStrikeTime = k_noPendingStrike;
     private PlayerData m_pendingStrikeTarget;
+    // 마지막 스윙을 시작한 시각 — 피격 로그에서 "스윙 후 몇 초 만에 맞았는지"(오프셋)를 보여주기 위함 (#220)
+    private float m_lastSwingStartTime;
 
     /// <summary>타격을 한 번 휘두를 때 발행 — 전 피어에서 발생한다(서버는 로컬 발행 + ClientRpc 중계).
     /// 애니메이션 표현(<see cref="ThugAnimationDriver"/>)이 구독해 타격 모션을 재생한다. (#56 서버 권위 패턴)</summary>
@@ -128,8 +130,10 @@ public class ThugAttacker : NetworkBehaviour
         NotifyAttack(); // 스윙 모션은 명중 여부와 무관하게 재생 (전 피어)
 
         // 데미지는 타격 프레임까지 미룬다 — 스윙 준비 동작과 실제 HP 감소 순간을 일치시킨다 (#220)
+        m_lastSwingStartTime = Time.time;
         m_pendingStrikeTime = Time.time + m_strikeOffsetSeconds;
         m_pendingStrikeTarget = target;
+        Debug.Log($"[괴한 스윙] {name} 스윙 시작 (t={Time.time:F2}s, 타격 예정 +{m_strikeOffsetSeconds:F2}s)");
     }
 
     // 예약된 타격을 타격 프레임에 실행한다 — 그 순간 사거리·타깃 유효성을 다시 확인하므로
@@ -157,8 +161,13 @@ public class ThugAttacker : NetworkBehaviour
         if (to.sqrMagnitude > 0.0001f && Vector3.Angle(forward, to) > m_attackConeAngle * 0.5f)
             return;
 
+        int hpBefore = target.CurrentHp;
         ((IDamageable)target).TakeDamage(m_attackDamage, gameObject);
-        Debug.Log($"괴한 습격 타격: {name} → {target.name} (-{m_attackDamage})");
+
+        // 피격 순간 로그 — 언제(스윙 시작 후 몇 초) 어디서(거리·정면각) 맞아 HP가 얼마가 됐는지 (#220)
+        float angle = Vector3.Angle(forward, to);
+        Debug.Log($"[괴한 피격] {target.name} HP {hpBefore}→{target.CurrentHp} " +
+                  $"(t={Time.time:F2}s, 스윙 후 {Time.time - m_lastSwingStartTime:F2}s | 거리 {to.magnitude:F2}m, 정면각 {angle:F0}°) ← {name}");
     }
 
     // 습격 자체가 소란의 원천 — 주기적으로 주변 시민을 패닉시킨다 (#81, 저항 NPC의 EmitDisturbancePulse와 동일 패턴)
