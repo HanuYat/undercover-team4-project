@@ -55,6 +55,31 @@ public class NpcFleeState : NpcStateBase
 
     public override void Tick()
     {
+        m_repathTimer += Time.deltaTime;
+
+        // 도주 지점 도착 판정 — Agent 내부 값만 읽으므로 매 프레임 확인해도 공짜다 (기존 동작)
+        bool arrived =
+            !m_owner.Agent.pathPending
+            && m_owner.Agent.remainingDistance
+                <= m_owner.Agent.stoppingDistance + k_arriveThreshold;
+
+        // 위협 스캔(CollectThreats)은 씬 전체 FindObjectsByType이라 매 프레임 돌리면
+        // 도주 중인 NPC 수만큼 비용이 누적된다(범인 다수 + 미끼 시민 + 난동꾼).
+        // 재경로와 같은 주기로 묶는다 — 이탈 판정이 최대 k_repathInterval만큼 늦어지지만,
+        // 25m 밖으로 벗어난 순간과 0.25초 뒤 사이에 게임 상 차이는 없다. (리뷰 지적 반영)
+        if (m_repathTimer < k_repathInterval)
+        {
+            // 도착했으면 다음 지점은 기다리지 않고 바로 잡는다 — 도착마다 1회뿐이라 스로틀 대상이 아니고,
+            // 여기서 미루면 도주 중 NPC가 지점마다 멈칫한다. (SetFleePoint가 자체 스캔을 한다)
+            if (arrived)
+                SetFleePoint();
+            return;
+        }
+
+        // 스캔 주기 리셋 — 재경로 여부와 무관하게 이번 틱에 스캔했다는 뜻이다.
+        // (재경로할 때만 리셋하면 주기가 지난 뒤 매 프레임 스캔으로 되돌아간다)
+        m_repathTimer = 0f;
+
         // 이탈 판정은 도주 방향 산출과 반경이 다르다 — 방향은 근처(ThreatSearchRadius) 플레이어만 보면 되지만,
         // 이탈은 FleeEscapeDistance(25m)까지 아무도 없어야 성립한다.
         CollectThreats(m_owner.FleeEscapeDistance);
@@ -72,23 +97,14 @@ public class NpcFleeState : NpcStateBase
         if (m_owner.ThreatTarget == null)
             m_owner.StartFlee(nearest);
 
-        // 도주 지점에 도착했으면 다음 지점을 잡는다 (기존 동작)
-        bool arrived =
-            !m_owner.Agent.pathPending
-            && m_owner.Agent.remainingDistance
-                <= m_owner.Agent.stoppingDistance + k_arriveThreshold;
-
-        // 추격자가 방향을 틀면 도착 전에도 도주 방향을 다시 잡는다 — 주기 + 이동량으로 스로틀링 (#96)
+        // 추격자가 방향을 틀면 도착 전에도 도주 방향을 다시 잡는다 — 이동량 임계치로 한 번 더 거른다 (#96)
         // 기준은 고정된 위협 1명이 아니라 그 시점의 가장 가까운 추격자다.
-        m_repathTimer += Time.deltaTime;
         bool threatMoved =
             (nearest.position - m_lastThreatPos).sqrMagnitude
             >= k_repathThreatMoveThreshold * k_repathThreatMoveThreshold;
-        bool shouldRepath = m_repathTimer >= k_repathInterval && threatMoved;
 
-        if (arrived || shouldRepath)
+        if (arrived || threatMoved)
         {
-            m_repathTimer = 0f;
             m_lastThreatPos = nearest.position;
             SetFleePoint();
         }
