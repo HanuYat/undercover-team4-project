@@ -19,8 +19,13 @@ public class NpcResistState : NpcStateBase
     private static readonly Collider[] s_overlapBuffer = new Collider[k_maxOverlapHits];
     private static readonly List<PlayerData> s_playerBuffer = new List<PlayerData>(8);
 
+    private const float k_noPendingStrike = -1f;
+
     private float m_resistStartTime;
     private float m_nextAttackTime;
+    // 스윙을 시작한 뒤 타격 프레임을 기다리는 예약 시각 — 데미지를 스윙 시작이 아니라 이 시점에 넣어
+    // 눈에 보이는 타격과 HP 감소를 일치시킨다. k_noPendingStrike면 대기 중인 타격 없음. (#220)
+    private float m_pendingStrikeTime = k_noPendingStrike;
 
     public NpcResistState(NpcController owner) : base(owner) { }
 
@@ -34,6 +39,7 @@ public class NpcResistState : NpcStateBase
         m_owner.ResetSubdueGauge();
         m_resistStartTime = Time.time;
         m_nextAttackTime = Time.time + m_owner.ResistAttackInterval;
+        m_pendingStrikeTime = k_noPendingStrike; // 직전 저항의 예약이 남아 첫 타격이 앞당겨지지 않게
     }
 
     public override void Tick()
@@ -49,10 +55,20 @@ public class NpcResistState : NpcStateBase
             return;
         }
 
-        // 주기적 범위 타격 — 교전 중이던 플레이어가 전원 무력화됐으면 그 즉시 승리 (GDD 7-4 'HP 소진')
+        // 주기적 스윙 — 애니메이션을 먼저 발행하고 데미지는 타격 프레임까지 미룬다.
+        // 그래야 눈에 보이는 스윙 준비 동작과 실제 HP 감소 순간이 일치하고, 준비 중 벗어난 플레이어는 빗나간다 (#220)
         if (Time.time >= m_nextAttackTime)
         {
             m_nextAttackTime = Time.time + m_owner.ResistAttackInterval;
+            m_owner.RaiseAttackSwing();
+            m_pendingStrikeTime = Time.time + m_owner.StrikeOffsetSeconds;
+        }
+
+        // 타격 프레임 도달 — 예약된 스윙의 데미지를 지금 넣는다. 범위 재수집도 이 순간에 하므로
+        // 교전 중이던 플레이어가 전원 무력화됐으면 그 즉시 승리 (GDD 7-4 'HP 소진')
+        if (m_pendingStrikeTime >= 0f && Time.time >= m_pendingStrikeTime)
+        {
+            m_pendingStrikeTime = k_noPendingStrike;
             if (SwingAttack())
             {
                 Defeat("교전 플레이어 전원 무력화");

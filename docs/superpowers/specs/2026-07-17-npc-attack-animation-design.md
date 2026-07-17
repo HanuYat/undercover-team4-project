@@ -28,16 +28,15 @@ NPC의 공격이 **언제 일어나는지, 언제 플레이어가 맞는지** �
 
 ### 1. 애니메이터 `Assets/Animation/NPC.controller`
 
-**단발 스윙을 State int와 독립한 트리거로 오버레이한다.**
+**변경 최소화 — 클립 루프 OFF 하나.** 스윙 표현은 드라이버가 State int를 잠깐 Attack으로 펄스했다가 되돌리는 방식으로 하므로, 애니메이터 구조(상태·전환·파라미터)는 건드리지 않는다.
 
 | 변경 | 내용 |
 |---|---|
-| 클립 루프 OFF | `NPC_Attack1H_Loop.anim` → 루프 해제(단발). 이름을 `NPC_AttackSwing.anim`으로 정리(guid 유지되어 컨트롤러 참조 안 깨짐). |
-| Trigger 추가 | `AttackSwing` (트리거 파라미터). |
-| 스윙 상태 | 새 상태 `AttackSwing`(단발 클립). **Any State → AttackSwing**: 조건 `AttackSwing` 트리거, `HasExitTime=false`, 전환 0.1초(즉발). **AttackSwing → Exit**: `HasExitTime=true`, ExitTime ~0.9 → 스윙 끝나면 base 상태(State int)로 복귀. |
-| `Attack`(int 3) 모션 교체 | 기존 루프 공격 클립 → **Idle 클립**(버틴 자세). enum=Animator번호 규약 유지: `State==3`은 여전히 유효한 "전투 대기" 상태이고, 저항 NPC는 스윙 사이에 이 자세로 버틴다. |
+| 클립 루프 OFF | `NPC_Attack1H_Loop.anim` → 루프 해제(단발 스윙). 이름을 `NPC_AttackSwing.anim`으로 정리(guid 유지되어 컨트롤러 참조 안 깨짐 · 선택). |
 
-스윙은 base 상태(Idle/Run/Attack 대기) **위에** 얹혀 재생되고 끝나면 돌아온다. 저항 NPC든 추격 중 괴한이든 같은 트리거 하나로 동작한다.
+> **트리거 오버레이를 안 쓰는 이유.** 이 컨트롤러의 로코모션 전이는 전부 **Any State(`State == N`)**다. 스윙을 트리거로 base 레이어에 얹으면, 저항 NPC는 `State==3`(Attack)이 계속 참이라 "Any State → Attack" 전이가 스윙을 매 프레임 즉시 끊는다. 별도 오버라이드 레이어는 빈 상태가 base를 덮어쓰는 부작용을 또 처리해야 한다. **State int 펄스**는 한 순간 하나의 int만 참이라 이 충돌이 없고, 괴한 드라이버가 이미 쓰던 검증된 방식이다.
+>
+> `Attack`(int 3) 상태 모션은 그대로 **단발 스윙 클립**이다(교체 안 함). 저항 중 "버틴 자세"는 드라이버가 FSM Attack을 Idle(0)로 매핑해 표현하고, int 3은 스윙 펄스로만 진입한다. `State==3 → Attack` Any State 전이는 `CanTransitionToSelf=0`이라 진입 후 클립을 재시작하지 않고 1회 재생 후 마지막 프레임을 유지한다(펄스 종료 시 드라이버가 base로 되돌림). — MCP 연결 후 이 값만 확인.
 
 ### 2. `NpcController` — 스윙 브로드캐스트
 
@@ -96,24 +95,26 @@ Update 내 타격 예약 처리:
 
 준비 중 표적이 벗어나거나 다운되면 빗나간다 — 회피 창.
 
-### 5. 애니메이션 드라이버 통일
+### 5. 애니메이션 드라이버 통일 (State int 펄스)
+
+두 드라이버 모두 **스윙 시 State를 Attack(3)으로 `m_swingAnimSeconds`(기본 0.9초) 동안 펄스했다가 base로 복귀**한다.
 
 | 드라이버 | 변경 |
 |---|---|
-| `NpcAnimationDriver` | `m_controller.OnAttackSwing` 구독 → `SetTrigger("AttackSwing")`. FSM `Attack` 진입 시 base는 버틴 자세(int 3, 이제 Idle 모션). |
-| `ThugAnimationDriver` | 0.6초 State 홀드 로직(`m_attackAnimUntil`, `m_attackAnimDuration`) 제거 → `HandleAttack`에서 `SetTrigger("AttackSwing")`. 스윙 사이는 기존 이동 판별(Run/Idle) 그대로. |
+| `NpcAnimationDriver` | `m_controller.OnAttackSwing` 구독. `HandleAttackSwing`: State=Attack(3), `m_swingUntil` 설정. `Update`: `m_swingUntil` 경과 시 base로 복귀. FSM `Attack`의 base는 Idle(0)로 매핑(`AnimatorBaseState`). 상태 전이가 오면 진행 중 스윙을 취소하고 새 base를 즉시 적용. |
+| `ThugAnimationDriver` | 기존 State 홀드 방식 유지하되 유지 시간을 `m_swingAnimSeconds`(0.9초)로 명명·연장. 스윙 사이는 기존 이동 판별(Run/Idle) 그대로. |
 
-두 드라이버가 같은 트리거 방식으로 통일된다. 이동 속도 추정·발 미끄럼 보정 로직은 그대로 둔다(이번 범위 아님).
+`m_swingAnimSeconds`는 타격 주기(저항 1.5초·괴한 1.2초)보다 짧고 타격 오프셋(0.45초)보다 길어야 한다 — 그래야 타격이 스윙 도중에 들어간다. 이동 속도 추정·발 미끄럼 보정 로직은 그대로 둔다(이번 범위 아님).
 
 ## 동기화 (전 피어)
 
-- **저항 NPC:** 스윙 → `NpcController.OnAttackSwing`(서버 로컬 + ClientRpc) → 전 피어 트리거. base 상태는 기존 `m_networkState`로 동기화.
-- **괴한:** 스윙 → `ThugAttacker.OnAttack`(기존 ClientRpc) → 전 피어 트리거. 위치는 NetworkTransform.
+- **저항 NPC:** 스윙 → `NpcController.OnAttackSwing`(서버 로컬 + ClientRpc) → 전 피어에서 State int 펄스. base 상태는 기존 `m_networkState`로 동기화.
+- **괴한:** 스윙 → `ThugAttacker.OnAttack`(기존 ClientRpc) → 전 피어에서 State int 펄스. 위치는 NetworkTransform.
 - **데미지:** 서버 전용. HP는 `PlayerData` 동기화 HP로 전 클라 반영. 시각 스윙과 서버 데미지 순간이 오프셋만큼 뒤에서 일치.
 
 ## 완료 기준 매핑
 
-- [ ] **공격 재생·전환 로직 정리** → State-루프/0.6초-홀드 이원화를 트리거 단발 스윙 하나로 통일
+- [ ] **공격 재생·전환 로직 정리** → State-루프/0.6초-홀드 이원화를 State int 펄스 단발 스윙 하나로 통일
 - [ ] **저항형 NPC 회귀 없음 (#205 포함)** → 게이지·제압·제한시간·`ClearThreat`/`Defeat` 도주 전환 유지, 타격만 오프셋 뒤로
 - [ ] **전 피어 애니메이션 동기화** → `OnAttackSwing`/`OnAttack` ClientRpc 브로드캐스트
 
