@@ -67,7 +67,7 @@ public class NpcAnimationDriver : MonoBehaviour
             return;
 
         NpcState state = m_controller.CurrentState;
-        if (state != NpcState.Escorted && state != NpcState.Panic)
+        if (!IsHandcuffedMotion(state) && state != NpcState.Panic)
             return;
 
         float rawSpeed = (transform.position - m_lastPosition).magnitude / Time.deltaTime;
@@ -82,7 +82,8 @@ public class NpcAnimationDriver : MonoBehaviour
             return;
         }
 
-        // 연행(Escorted)은 "따라 걷기 ↔ 근접 정지"가 한 FSM 상태 안에서 일어나므로(#97) 속도로 모션만 구분한다.
+        // 연행(Escorted)은 "따라 걷기 ↔ 근접 정지"가, 수감(Jailed)은 "유치장까지 걷기 ↔ 수용 정지"가
+        // 각각 한 FSM 상태 안에서 일어나므로(#97/#228) 속도로 모션만 구분한다.
         if (m_escortMoving && m_smoothedSpeed < k_escortMoveOffSpeed)
         {
             m_escortMoving = false;
@@ -96,15 +97,26 @@ public class NpcAnimationDriver : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 수갑 찬 채 이동하는 상태인가 — 걷기(Escorted 모션) ↔ 정지(Captured 모션)를 속도로 구분해야 하는 상태들.
+    /// 수감(Jailed)은 대응하는 Animator 상태가 없어 연행 모션을 빌려 쓴다 (#228).
+    /// </summary>
+    private static bool IsHandcuffedMotion(NpcState state) =>
+        state is NpcState.Escorted or NpcState.Jailed;
+
     private void HandleStateChanged(NpcState state)
     {
-        // enum 값을 int로 변환해 전달 → Animator의 Any State 전이(State == N)가 해당 모션으로 전환한다
-        if (m_animator != null)
+        // enum 값을 int로 변환해 전달 → Animator의 Any State 전이(State == N)가 해당 모션으로 전환한다.
+        // 수감(Jailed)은 Animator 상태가 없으므로 int를 그대로 넘기지 않는다 — 아래에서 연행 모션으로 시드한다.
+        if (m_animator != null && state != NpcState.Jailed)
             m_animator.SetInteger(s_stateHash, (int)state);
 
-        // 연행 진입 시 이동 판별을 초기화 — 직전 상태의 잔여 속도 값이 첫 판정을 오염시키지 않게 (#97)
-        if (state == NpcState.Escorted)
+        // 연행·수감 진입 시 이동 판별을 초기화 — 직전 상태의 잔여 속도 값이 첫 판정을 오염시키지 않게 (#97/#228)
+        if (IsHandcuffedMotion(state))
         {
+            if (m_animator != null)
+                m_animator.SetInteger(s_stateHash, (int)NpcState.Escorted);
+
             m_escortMoving = true;
             m_lastPosition = transform.position;
             m_smoothedSpeed = k_escortMoveOnSpeed;

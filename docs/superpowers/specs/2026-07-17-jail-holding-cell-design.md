@@ -130,7 +130,15 @@ HandleArrestJudged(result):
             npc.ReleaseFromCustody()                // 수갑 해제 → 배회 복귀
 ```
 
-판정(`ArrestJudge`)은 **누가 범인인가**만, 라우터는 **어디로 보내는가**만 안다. `ArrestJudge`는 손대지 않는다 — 이미 판정 직후 연행을 물리적으로 해제해(`deliverer.Release()`) NPC를 `Captured`로 만들어 두므로, 라우터는 그 다음 상태만 이어받는다.
+판정(`ArrestJudge`)은 **누가 범인인가**만, 라우터는 **어디로 보내는가**만 안다. 라우터는 판정 직후 연행이 물리적으로 해제된(`deliverer.Release()` → `Captured`) 상태를 이어받는다.
+
+### 6-1. `ArrestJudge` — 해제와 이벤트 순서 교체 (필수)
+
+기존 `Judge()`는 **`OnArrestJudged` 발행 → 연행 해제** 순서다(`ArrestJudge.cs:102-115`). 이대로면 라우터가 `Jailed`로 보낸 **직후** `StopEscort()`의 `Captured` 전이가 행선지를 덮어써, NPC가 유치장으로 출발하지 못하고 그 자리에 선다. 석방 경로도 같은 이유로 깨진다(`ReleaseFromCustody`가 `Captured`를 요구하는데 그 시점엔 아직 `Escorted`).
+
+→ **연행 해제를 이벤트 발행보다 앞으로** 옮긴다. 판정 → 신병 해제 → 행선지 라우팅 순서가 되어 구독자가 항상 `Captured`인 NPC를 넘겨받는다. 기존 구독자(`RoundManager`, 향후 #101)는 `ArrestResult`만 읽으므로 영향 없다.
+
+> Play 모드에서 실제로 확인한 회귀다 — 순서 교체 전에는 `JailCell`이 배정된 채 상태만 `Captured`로 남았다.
 
 ### 7. `NpcStateRules` — 수감 상태 차단
 

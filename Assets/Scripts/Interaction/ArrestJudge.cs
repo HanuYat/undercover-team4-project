@@ -100,9 +100,11 @@ public class ArrestJudge : MonoBehaviour
         var result = new ArrestResult(npc, verdict, profile, reward, deliverer);
 
         LogVerdict(result);
-        OnArrestJudged?.Invoke(result);
 
-        // 연행 상태 물리적 해제 (플레이어에게서 분리)
+        // 연행 상태 물리적 해제 (플레이어에게서 분리) — NPC는 Captured로 그 자리에 선다.
+        // 반드시 OnArrestJudged보다 **먼저** 해야 한다: 구독자(CustodyRouter, #228)가 판정 결과에 따라
+        // 다음 상태(유치장 이송·석방)로 전이시키는데, 해제를 뒤에 하면 StopEscort의 Captured 전이가
+        // 그 행선지를 덮어써 NPC가 그 자리에 멈춰버린다.
         if (deliverer != null)
         {
             // [리뷰 반영] RequestRelease()는 클라이언트 오너 권한이 필요하므로,
@@ -113,6 +115,8 @@ public class ArrestJudge : MonoBehaviour
         {
             npc.StopEscort();
         }
+
+        OnArrestJudged?.Invoke(result);
 
         return result;
     }
