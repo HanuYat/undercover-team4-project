@@ -86,9 +86,25 @@ public class NpcAnimationDriver : MonoBehaviour
     {
         if (m_animator == null)
             return;
+
+        // 상태 변경(NetworkVariable)과 스윙 알림(ClientRpc)은 서로 다른 네트워크 경로라
+        // 도착 순서가 보장되지 않는다. 제압 직전에 발사된 스윙이 Captured 전이보다 늦게 도착하면
+        // 이미 제압된 NPC가 원격 클라에서 m_swingAnimSeconds 동안 헛스윙을 한다. (리뷰 반영)
+        //
+        // '스윙이 성립할 수 없는 상태'에서만 막는다 — 이 상태들은 저항으로 되돌아가지 않으므로
+        // 늦게 온 스윙은 무조건 유령이다. 반대로 배회(Idle/Walk/Run)는 막지 않는다:
+        // 상태 동기화가 늦어 아직 Attack을 못 받았을 뿐일 수 있고, 그때 스윙을 버리면
+        // 예고 동작이 통째로 사라져 "언제 맞는지 모른다"는 #220의 목적이 깨진다.
+        if (!CanSwingIn(m_baseState))
+            return;
+
         m_animator.SetInteger(s_stateHash, (int)NpcState.Attack);
         m_swingUntil = Time.time + m_swingAnimSeconds;
     }
+
+    /// <summary>스윙 모션이 성립할 수 있는 기준 상태인가 — 구속·무력화 상태에서는 공격이 나올 수 없다. (#220)</summary>
+    private static bool CanSwingIn(NpcState state) =>
+        state is not (NpcState.Captured or NpcState.Escorted or NpcState.Stunned);
 
     // FSM 기준 상태에 대응하는 Animator base 번호. 저항(Attack) 중의 base는 버틴 자세(Idle)이고,
     // Attack 번호(3)는 이제 단발 스윙 전용이라 base로 쓰지 않는다. 그 외 상태는 enum 값을 그대로 쓴다. (#220)
