@@ -26,8 +26,6 @@ public class NpcResistState : NpcStateBase
     // 스윙을 시작한 뒤 타격 프레임을 기다리는 예약 시각 — 데미지를 스윙 시작이 아니라 이 시점에 넣어
     // 눈에 보이는 타격과 HP 감소를 일치시킨다. k_noPendingStrike면 대기 중인 타격 없음. (#220)
     private float m_pendingStrikeTime = k_noPendingStrike;
-    // 마지막 스윙을 시작한 시각 — 피격 로그에서 "스윙 후 몇 초 만에 맞았는지"(오프셋)를 보여주기 위함 (#220)
-    private float m_lastSwingStartTime;
 
     public NpcResistState(NpcController owner) : base(owner) { }
 
@@ -68,10 +66,8 @@ public class NpcResistState : NpcStateBase
         if (Time.time >= m_nextAttackTime)
         {
             m_nextAttackTime = Time.time + m_owner.ResistAttackInterval;
-            m_lastSwingStartTime = Time.time;
             m_owner.RaiseAttackSwing();
             m_pendingStrikeTime = Time.time + m_owner.StrikeOffsetSeconds;
-            Debug.Log($"[저항 스윙] {m_owner.name} 스윙 시작 (t={Time.time:F2}s, 타격 예정 +{m_owner.StrikeOffsetSeconds:F2}s)");
         }
 
         // 타격 프레임 도달 — 예약된 스윙의 데미지를 지금 넣는다. 범위 재수집도 이 순간에 하므로
@@ -118,18 +114,7 @@ public class NpcResistState : NpcStateBase
             if (player.CurrentHp <= 0)
                 continue;
 
-            int hpBefore = player.CurrentHp;
             ((IDamageable)player).TakeDamage(m_owner.ResistAttackDamage, m_owner.gameObject);
-
-            // 피격 순간 로그 — 언제(스윙 시작 후 몇 초) 어디서(거리·정면각) 맞아 HP가 얼마가 됐는지 (#220)
-            Vector3 to = player.transform.position - m_owner.transform.position;
-            to.y = 0f;
-            float dist = to.magnitude;
-            Vector3 fwd = m_owner.transform.forward; fwd.y = 0f;
-            float angle = Vector3.Angle(fwd, to);
-            Debug.Log($"[저항 피격] {player.name} HP {hpBefore}→{player.CurrentHp} " +
-                      $"(t={Time.time:F2}s, 스윙 후 {Time.time - m_lastSwingStartTime:F2}s | 거리 {dist:F2}m, 정면각 {angle:F0}°) ← {m_owner.name}");
-
             if (player.CurrentHp > 0)
                 aliveCount++;
         }
@@ -137,6 +122,7 @@ public class NpcResistState : NpcStateBase
         if (engaged == 0)
             return false; // 정면에 아무도 없으면 허공에 휘두를 뿐 — 패배 판정은 제한 시간이 담당
 
+        Debug.Log($"저항 범위 타격: {m_owner.name} → 정면 {engaged}명 (잔존 {aliveCount}명)");
         return aliveCount == 0;
     }
 
