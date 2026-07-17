@@ -32,6 +32,8 @@ public class ThugAttacker : NetworkBehaviour
     [SerializeField] private int m_attackDamage = 12;
     [Tooltip("스윙 시작→타격이 닿는 프레임까지의 시간(초). 이 만큼 뒤에 데미지가 들어가고, 그때 사거리를 재검증하므로 준비 동작이 곧 회피 창이 된다 (#220)")]
     [SerializeField] private float m_strikeOffsetSeconds = 0.45f;
+    [Tooltip("타격이 닿는 정면 부채꼴의 전체 각도(도). 타격 순간 이 각도(정면 기준 ±절반) 안에 있어야 명중 — 준비 중 측면·뒤로 돌아가면 빗나간다 (#220)")]
+    [SerializeField] private float m_attackConeAngle = 120f;
 
     [Header("소란 (#81 패닉 전파)")]
     [Tooltip("습격이 주변 시민을 패닉시키는 전파 반경(m)")]
@@ -144,9 +146,16 @@ public class ThugAttacker : NetworkBehaviour
         if (target == null || !target.IsTargetable)
             return; // 준비 중 표적이 다운되거나 사라짐
 
-        float sqrDistance = (target.transform.position - transform.position).sqrMagnitude;
-        if (sqrDistance > m_attackRange * m_attackRange)
+        Vector3 to = target.transform.position - transform.position;
+        to.y = 0f;
+        if (to.sqrMagnitude > m_attackRange * m_attackRange)
             return; // 준비 중 사거리를 벗어남 — 빗나감
+
+        // 정면 부채꼴 밖(측면·뒤)이면 빗나감 — 추격 중 표적을 바라보므로 보통은 정면이지만, 준비 중 옆으로 파고들면 빗맞는다 (#220)
+        Vector3 forward = transform.forward;
+        forward.y = 0f;
+        if (to.sqrMagnitude > 0.0001f && Vector3.Angle(forward, to) > m_attackConeAngle * 0.5f)
+            return;
 
         ((IDamageable)target).TakeDamage(m_attackDamage, gameObject);
         Debug.Log($"괴한 습격 타격: {name} → {target.name} (-{m_attackDamage})");

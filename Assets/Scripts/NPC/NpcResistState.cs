@@ -3,7 +3,7 @@ using UnityEngine;
 
 /// <summary>
 /// 저항(Attack) 상태 — 수갑 채널링 성공 순간 그 자리에서 버티며 싸운다. (GDD 6-1/7-4, #76/#79)
-/// 주기적으로 범위 타격을 휘둘러 근처 플레이어의 HP를 깎고(선제 공격),
+/// 표적을 바라보며 주기적으로 정면 부채꼴 타격을 휘둘러 사거리 안 플레이어의 HP를 깎고(선제 공격, 방향 판정 #220),
 /// ApplySubdueHit로 제압 게이지가 0이 되면 체포(Captured)된다 — 여럿이 때리면 빨리 끝난다(협동 인센티브).
 /// 제한 시간 안에 제압당하지 않거나 교전 중인 플레이어가 전원 무력화되면
 /// 플레이어 패배 — 도주형으로 전환되어 달아난다 (GDD 7-4 3항).
@@ -36,6 +36,9 @@ public class NpcResistState : NpcStateBase
         if (m_owner.Agent.isOnNavMesh)
             m_owner.Agent.ResetPath();
 
+        // 표적을 직접 바라보도록 수동 회전할 것이므로 에이전트 자동 회전을 끈다 — 안 그러면 서로 방향을 다툰다 (#220)
+        m_owner.Agent.updateRotation = false;
+
         m_owner.ResetSubdueGauge();
         m_resistStartTime = Time.time;
         m_nextAttackTime = Time.time + m_owner.ResistAttackInterval;
@@ -54,6 +57,9 @@ public class NpcResistState : NpcStateBase
             m_owner.StateMachine.ChangeState(NpcState.Captured);
             return;
         }
+
+        // 표적을 향해 돈다 — 정면 부채꼴 타격 판정의 기준 방향을 표적에 맞춘다 (#220)
+        FaceTarget();
 
         // 주기적 스윙 — 애니메이션을 먼저 발행하고 데미지는 타격 프레임까지 미룬다.
         // 그래야 눈에 보이는 스윙 준비 동작과 실제 HP 감소 순간이 일치하고, 준비 중 벗어난 플레이어는 빗나간다 (#220)
@@ -86,21 +92,25 @@ public class NpcResistState : NpcStateBase
     public override void Exit()
     {
         m_owner.Agent.isStopped = false;
+        m_owner.Agent.updateRotation = true; // 이동 재개 시 에이전트가 다시 진행 방향으로 돈다
     }
 
     /// <summary>
-    /// 범위 타격 1회 — 반경 내 모든 플레이어의 HP를 깎는다.
-    /// 반환값: 범위 안에 플레이어가 있었는데 전원 HP 0이면 true (플레이어 패배).
+    /// 범위 타격 1회 — 사거리 안이면서 <b>정면 부채꼴 안</b>에 든 플레이어의 HP를 깎는다. (#220 방향 판정)
+    /// 반환값: 정면에서 실제로 교전한 플레이어가 있었는데 전원 HP 0이면 true (플레이어 패배).
     /// </summary>
     private bool SwingAttack()
     {
         CollectPlayersInRange(m_owner.ResistAttackRange);
-        if (s_playerBuffer.Count == 0)
-            return false; // 아무도 안 붙어 있으면 허공에 휘두를 뿐 — 패배 판정은 제한 시간이 담당
 
-        int aliveCount = 0;
+        int engaged = 0;    // 정면 부채꼴 안에서 실제로 노린 대상 수
+        int aliveCount = 0; // 그중 타격 후에도 살아있는 수
         foreach (PlayerData player in s_playerBuffer)
         {
+            if (!IsInFrontCone(player.transform.position))
+                continue; // 등 뒤·측면 — 스윙이 닿지 않는다
+
+            engaged++;
             if (player.CurrentHp <= 0)
                 continue;
 
@@ -109,8 +119,43 @@ public class NpcResistState : NpcStateBase
                 aliveCount++;
         }
 
-        Debug.Log($"저항 범위 타격: {m_owner.name} → {s_playerBuffer.Count}명 (잔존 {aliveCount}명)");
+        if (engaged == 0)
+            return false; // 정면에 아무도 없으면 허공에 휘두를 뿐 — 패배 판정은 제한 시간이 담당
+
+        Debug.Log($"저항 범위 타격: {m_owner.name} → 정면 {engaged}명 (잔존 {aliveCount}명)");
         return aliveCount == 0;
+    }
+
+    /// <summary>표적(위협 대상, 없으면 사거리 내 가장 가까운 플레이어)을 향해 몸을 돌린다. 서버(또는 오프라인) 전용.</summary>
+    private void FaceTarget()
+    {
+        Transform target = m_owner.ThreatTarget != null
+            ? m_owner.ThreatTarget
+            : FindNearestPlayer(m_owner.ResistAttackRange);
+        if (target == null)
+            return;
+
+        Vector3 to = target.position - m_owner.transform.position;
+        to.y = 0f; // 수평 회전(yaw)만 — NetworkTransform이 동기화하는 축과 일치 (SyncRotAngleY)
+        if (to.sqrMagnitude < 0.0001f)
+            return;
+
+        Quaternion look = Quaternion.LookRotation(to);
+        m_owner.transform.rotation = Quaternion.RotateTowards(
+            m_owner.transform.rotation, look, m_owner.AttackTurnSpeed * Time.deltaTime);
+    }
+
+    /// <summary>주어진 위치가 NPC 정면 부채꼴(AttackConeAngle) 안인지 — 수평 방향 기준.</summary>
+    private bool IsInFrontCone(Vector3 position)
+    {
+        Vector3 to = position - m_owner.transform.position;
+        to.y = 0f;
+        if (to.sqrMagnitude < 0.0001f)
+            return true; // 거의 겹쳐 있으면 방향이 무의미 — 명중으로 본다
+
+        Vector3 forward = m_owner.transform.forward;
+        forward.y = 0f;
+        return Vector3.Angle(forward, to) <= m_owner.AttackConeAngle * 0.5f;
     }
 
     /// <summary>플레이어 승리 실패 — 저항을 유발한 플레이어(없으면 근처 플레이어)를 위협 삼아 도주형으로 전환한다.</summary>

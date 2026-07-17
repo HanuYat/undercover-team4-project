@@ -69,6 +69,10 @@ public class NpcController : NetworkBehaviour
     [SerializeField] private float m_resistDefeatSeconds = 15f;
     [Tooltip("스윙 시작→타격이 닿는 프레임까지의 시간(초). 이 만큼 뒤에 데미지가 들어가므로 준비 동작이 곧 회피 창이 된다 (#220)")]
     [SerializeField] private float m_strikeOffsetSeconds = 0.45f;
+    [Tooltip("타격이 닿는 정면 부채꼴의 전체 각도(도). 이 각도 안(정면 기준 ±절반)에 있는 플레이어만 맞는다 — 등 뒤·측면은 빗나간다 (#220)")]
+    [SerializeField] private float m_attackConeAngle = 120f;
+    [Tooltip("저항 중 표적을 바라보도록 도는 회전 속도(도/초) — 부채꼴 기준 방향을 표적에 맞춘다 (#220)")]
+    [SerializeField] private float m_attackTurnSpeed = 540f;
 
     [Header("패닉 (#81)")]
     [Tooltip("소란(저항 전투·도주)이 주변 시민을 패닉시키는 전파 반경(m)")]
@@ -118,6 +122,8 @@ public class NpcController : NetworkBehaviour
     public int ResistAttackDamage => m_resistAttackDamage;
     public float ResistDefeatSeconds => m_resistDefeatSeconds;
     public float StrikeOffsetSeconds => m_strikeOffsetSeconds;
+    public float AttackConeAngle => m_attackConeAngle;
+    public float AttackTurnSpeed => m_attackTurnSpeed;
     public float PanicSpeedMultiplier => m_panicSpeedMultiplier;
     public float PanicStepDistance => m_panicStepDistance;
     public float PanicCalmSeconds => m_panicCalmSeconds;

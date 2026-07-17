@@ -106,6 +106,19 @@ Update 내 타격 예약 처리:
 
 `m_swingAnimSeconds`는 타격 주기(저항 1.5초·괴한 1.2초)보다 짧고 타격 오프셋(0.45초)보다 길어야 한다 — 그래야 타격이 스윙 도중에 들어간다. 이동 속도 추정·발 미끄럼 보정 로직은 그대로 둔다(이번 범위 아님).
 
+### 6. 정면 부채꼴 방향 판정 (#220 추가)
+
+기존엔 반경 안이면 방향 무관하게(360°) 맞았다. 이제 **타격 프레임 순간 NPC 정면 부채꼴 안**에 있어야 맞는다.
+
+| 요소 | 내용 |
+|---|---|
+| 각도 | `m_attackConeAngle`(기본 120° 전체 = 정면 ±60°). `NpcController`·`ThugAttacker` 각각 `[SerializeField]`. |
+| 표적 바라보기 | 저항 NPC는 정지 상태라 안 돌아 부채꼴 기준이 엉뚱해진다 → `NpcResistState`가 매 Tick `FaceTarget()`으로 위협(없으면 사거리 내 최근접)을 향해 yaw 회전(`m_attackTurnSpeed` 540°/s). Enter에서 `Agent.updateRotation=false`(수동 회전과 다툼 방지), Exit에서 복구. 괴한은 추격으로 이미 표적을 바라봄. |
+| 판정 | 타격 시점 `Vector3.Angle(forward_xz, to_xz) <= 각도/2`. 저항은 `SwingAttack`에서 부채꼴 밖 대상을 건너뛰고, 정면 교전 대상이 0명이면 허공 스윙(패배 판정 안 함). 괴한은 `ProcessPendingStrike`에서 사거리+부채꼴 통과 시에만 명중. |
+| 동기화 | yaw 회전은 NetworkTransform `SyncRotAngleY=1`로 전 피어 복제 — 서버가 돌린 방향을 클라도 본다. 데미지 판정은 서버 transform 기준(권위). |
+
+> **GDD 영향:** 저항형 선제 범위 타격(7-4)이 360°에서 **정면 120°**로 좁아졌다. 정면에서 제압하려는 플레이어는 여전히 맞지만 측면·배후로 돌면 안전 — 협동 회피 여지가 생긴다. 확정 시 GDD에 반영 필요.
+
 ## 동기화 (전 피어)
 
 - **저항 NPC:** 스윙 → `NpcController.OnAttackSwing`(서버 로컬 + ClientRpc) → 전 피어에서 State int 펄스. base 상태는 기존 `m_networkState`로 동기화.
@@ -122,3 +135,4 @@ Update 내 타격 예약 처리:
 
 - 회피 창(오프셋)은 의도된 동작 변화다. 저항 NPC의 전원 무력화 판정·괴한의 명중 모두 **타격 프레임**에 평가된다.
 - `m_strikeOffsetSeconds` 기본 0.45f는 클립의 팔이 닿는 대략 프레임. 클립 확정 후 눈으로 미세 튜닝.
+- 정면 부채꼴(#220 추가, 섹션 6)은 이슈 원래 범위(애니메이션 리팩토링) 밖이지만 "맞는 지점"을 방향까지 명확히 하려고 함께 포함했다. `m_attackConeAngle`(120°)·`m_attackTurnSpeed`(540°/s)로 튜닝.
