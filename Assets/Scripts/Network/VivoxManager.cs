@@ -267,7 +267,7 @@ public class VivoxManager : MonoBehaviour
         }
     }
 
-    private async UniTask LeaveAsync()
+    public async UniTask LogoutAsync()
     {
         if (m_radioJoined || m_proximityJoined)
         {
@@ -305,7 +305,7 @@ public class VivoxManager : MonoBehaviour
 
     private async UniTaskVoid CleanupAsync()
     {
-        try { await LeaveAsync(); }
+        try { await LogoutAsync(); }
         catch (Exception ex) { Debug.LogError($"[VivoxManager] 정리 실패: {ex}"); }
     }
 
