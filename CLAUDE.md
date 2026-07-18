@@ -9,7 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **게임 디자인 정본:** [docs/GDD.md](docs/GDD.md). 게임 시스템/규칙 관련 작업 전 반드시 참고.
   - 초안 단계 항목은 헤더에 `(초안 — 팀 검토 필요)` 표기되어 있으니 확정 사항과 구분할 것.
   - 여러 기획 자료 간 모순의 최종 확정은 GDD **부록 B**에 근거표로 정리되어 있음.
-- 개발은 이제 막 시작 단계. `Assets/`에는 아직 게임플레이 코드가 없고 Synty 아트 에셋과 `SampleScene`만 있음. 새 게임 코드는 여기서부터 작성됨.
+- **코드 구조 정본:** [docs/architecture.md](docs/architecture.md). 매니저·전역 접근·씬 전환 코드를 작성/리뷰하기 전 반드시 참고 (규칙 R1~R8).
+- 게임플레이 코드는 `Assets/Scripts/` 아래 도메인 폴더(Round/NPC/Player/HQ/Item/Interaction/Events/Network/UI)로 구성되어 있고, 전역 구조 코드는 `Assets/Scripts/Core/`에 있다.
 
 ## 엔진 & 실행 환경
 
@@ -25,7 +26,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **빌드:** Editor의 Build Profiles / Build Settings. (MCP: `manage_build`)
 - **플레이/디버그:** Editor Play 모드. **멀티플레이 동시 테스트는 Multiplayer Play Mode**(`com.unity.multiplayer.playmode`)로 여러 가상 플레이어를 띄운다. (MCP: `manage_editor`)
 
-## 아키텍처 (패키지가 정의하는 큰 그림)
+## 아키텍처
+
+**코드 구조 규칙은 [docs/architecture.md](docs/architecture.md)가 정본이다.** 핵심만 요약하면:
+
+- 전역 매니저 접근은 **`App` 파사드 단일 경로** (`App.Net` / `App.Game` / `App.UI` / `App.SceneFlow`). `FindFirstObjectByType`으로 매니저 검색 금지, 신규 `static Instance` 싱글톤 금지 (R1·R2).
+- 새 매니저는 `CommonManagerBase`(또는 NetworkBehaviour면 `NetworkedManagerBase`) 상속 + App에 필드/프로퍼티 추가 — Awake에서 자동 등록된다 (R4). `Awake`/`OnDestroy`는 반드시 `protected override` + `base` 호출 (R5 — 누락 시 컴파일 에러).
+- 씬 전환은 `App.LoadScene`만 사용 — 세션 중이면 NGO 씬 동기화로 자동 분기된다 (R7).
+
+### 패키지가 정의하는 큰 그림
 
 이 프로젝트의 구조는 대부분 설치된 패키지 스택으로 결정된다:
 

@@ -62,12 +62,19 @@ PR 번호를 받아 아래 절차대로 리뷰하고, 리뷰어가 훑어보기 
 
 ## 3. 컨벤션 & 아키텍처 체크
 
-1. **네이밍 컨벤션** (CLAUDE.md / GDD 10-5): 신규·수정 코드에서 `m_`(private 인스턴스), `s_`(static), `k_`(const), `I`/`T` 접두사, 이벤트 `On` 접두사, public 멤버 PascalCase 위반을 찾는다.
-2. **Netcode**: `NetworkBehaviour` 상속 코드가 변경됐다면 —
+1. **아키텍처 규칙** (`docs/architecture.md`가 정본 — 반드시 읽고 대조): **이 PR의 diff에 대해서만** R1~R8 위반을 찾는다. 기계적 검사 요령:
+   - diff에 `FindFirstObjectByType` **추가**가 있으면 → 대상 타입이 App 등록 타입인지 확인(R1 위반), 아니면 architecture.md §4 예외 표에 기재됐는지 확인(미기재면 지적)
+   - diff에 `static` + `Instance` 프로퍼티/필드 **신설**이 있으면 → R2 위반
+   - diff에 `SceneManager.LoadScene` 직접 호출 **추가**가 있으면 → R7 위반 (AppHelper 내부 제외)
+   - 새 매니저 클래스(베이스 상속)가 생겼으면 → App 필드/프로퍼티 추가·`[DefaultExecutionOrder]` 명시 여부(R4), `Awake`/`OnDestroy`의 `base` 호출(R5), 다른 매니저 구독이 Start에 있는지(R6), R3 등록 기준(유일성+교차 도메인 2곳 이상) 충족 근거
+   - 매니저를 **필드에 캐싱**하는 코드가 추가됐으면 → R8 위반 (`private X Xxx => App.그룹.X;` 프로퍼티 패턴 안내)
+   - 유예 조항(§5): 머지 이전에 열린 브랜치의 위반은 🟡로, 이후 신규 코드는 🟠 이상으로 분류
+2. **네이밍 컨벤션** (CLAUDE.md / GDD 10-5): 신규·수정 코드에서 `m_`(private 인스턴스), `s_`(static), `k_`(const), `I`/`T` 접두사, 이벤트 `On` 접두사, public 멤버 PascalCase 위반을 찾는다.
+3. **Netcode**: `NetworkBehaviour` 상속 코드가 변경됐다면 —
    - 서버 권한이 필요한 로직(판정·스폰·상태 변경)이 클라이언트에서 실행되지 않는지
    - `NetworkVariable` 쓰기가 서버/오너 권한과 맞는지, RPC 방향(`ServerRpc`/`ClientRpc`)이 적절한지
    - 새 네트워크 프리팹이 생겼다면 `Assets/DefaultNetworkPrefabs.asset` 등록 여부 (파일 변경 **목록**으로만 판단 — 내용은 읽지 않는다)
-3. **일반 버그**: null 체크 누락, 이벤트 구독 해제 누락(OnDestroy/OnNetworkDespawn), Update 내 비싼 호출(GetComponent, Find 등), UniTask 대신 코루틴/Thread 남용 등 명백한 것만. 사소한 스타일 지적은 하지 않는다.
+4. **일반 버그**: null 체크 누락, 이벤트 구독 해제 누락(OnDestroy/OnNetworkDespawn), Update 내 비싼 호출(GetComponent, Find 등), UniTask 대신 코루틴/Thread 남용 등 명백한 것만. 사소한 스타일 지적은 하지 않는다.
 
 ## 4. 다른 작업과의 교차 확인
 
