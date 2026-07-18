@@ -9,13 +9,11 @@ using UnityEngine;
 /// 구독해 표시한다. 진범이 여러 명이면(#127) OnMontageGenerated가 범인마다 발행되어 항목도 그만큼 쌓인다.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
-public class WantedListManager : NetworkBehaviour
+[DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
+public class WantedListManager : NetworkedManagerBase
 {
-    [Header("외형/몽타주 배정 (비우면 씬에서 자동 탐색)")]
-    [SerializeField] private AppearanceAssigner m_appearanceAssigner;
-
-    [Header("검거 판정 (비우면 씬에서 자동 탐색)")]
-    [SerializeField] private ArrestJudge m_arrestJudge;
+    private AppearanceAssigner Appearance => App.Game.Appearance;
+    private ArrestJudge Judge => App.Game.ArrestJudge;
 
     // 서버만 쓰기, 전 클라이언트 읽기. UI(#58)는 Wanted.OnListChanged로 갱신을 받는다.
     private readonly NetworkList<WantedEntry> m_wanted = new NetworkList<WantedEntry>();
@@ -30,15 +28,6 @@ public class WantedListManager : NetworkBehaviour
     /// </summary>
     public event Action OnListReady;
 
-    private void Awake()
-    {
-        if (m_appearanceAssigner == null)
-            m_appearanceAssigner = FindFirstObjectByType<AppearanceAssigner>();
-
-        if (m_arrestJudge == null)
-            m_arrestJudge = FindFirstObjectByType<ArrestJudge>();
-    }
-
     public override void OnNetworkSpawn()
     {
         // 서버만 리스트를 채우고 지운다 — 배정·판정이 서버 권위이므로 (#56 패턴)
@@ -51,13 +40,13 @@ public class WantedListManager : NetworkBehaviour
 
             // 등록은 외형·몽타주까지 확정된 시점(OnMontageGenerated)에 한다.
             // OnCriminalAssigned 시점엔 외형이 아직 배정 전이라 몽타주가 비어 있다 (AppearanceAssigner).
-            if (m_appearanceAssigner != null)
-                m_appearanceAssigner.OnMontageGenerated += HandleMontageGenerated;
+            if (Appearance != null)
+                Appearance.OnMontageGenerated += HandleMontageGenerated;
             else
                 Debug.LogWarning("WantedListManager: AppearanceAssigner를 찾지 못해 수배 항목을 등록할 수 없다", this);
 
-            if (m_arrestJudge != null)
-                m_arrestJudge.OnArrestJudged += HandleArrestJudged;
+            if (Judge != null)
+                Judge.OnArrestJudged += HandleArrestJudged;
             else
                 Debug.LogWarning("WantedListManager: ArrestJudge를 찾지 못해 검거 시 항목을 지울 수 없다", this);
         }
@@ -69,11 +58,11 @@ public class WantedListManager : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
-        if (m_appearanceAssigner != null)
-            m_appearanceAssigner.OnMontageGenerated -= HandleMontageGenerated;
+        if (Appearance != null)
+            Appearance.OnMontageGenerated -= HandleMontageGenerated;
 
-        if (m_arrestJudge != null)
-            m_arrestJudge.OnArrestJudged -= HandleArrestJudged;
+        if (Judge != null)
+            Judge.OnArrestJudged -= HandleArrestJudged;
     }
 
     // 몽타주 생성 완료 = 범인·외형·이름 모두 확정된 시점. 수배 항목을 리스트에 추가한다. (서버 전용)

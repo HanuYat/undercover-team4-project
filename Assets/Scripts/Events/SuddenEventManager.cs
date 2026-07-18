@@ -27,7 +27,8 @@ using Random = UnityEngine.Random;
 /// </summary>
 // TODO: 이벤트 발생/종료 HUD 알림(본부 관제 UI, #43 계열)은 OnEventAnnounced/AnnounceEventClientRpc를 구독해 연결한다.
 [RequireComponent(typeof(NetworkObject))]
-public class SuddenEventManager : NetworkBehaviour
+[DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
+public class SuddenEventManager : NetworkedManagerBase
 {
     private RoundManager Round => App.Game.Round;
 
@@ -68,8 +69,10 @@ public class SuddenEventManager : NetworkBehaviour
     // 서버(또는 오프라인)에서만 의미 — 이 피어가 이벤트 권위를 가지는지. 스폰 전(오프라인)이면 항상 권위.
     private bool IsAuthority => !IsSpawned || IsServer;
 
-    private void Awake()
+    protected override void Awake()
     {
+        base.Awake(); // App.Game.SuddenEvent 등록
+
         // 같은 오브젝트의 이벤트 핸들러를 풀로 수집 — RequireComponent가 이벤트를 같은 오브젝트에 강제하므로
         // 자식까지 훑지 않는다(그래야 자식 배치 오용 시 조용히 수집되는 대신 리그가 잘못됐음이 드러난다)
         GetComponents(m_events); // 컴포넌트형: 1개 = 1종 (괴한 습격·전자기기 먹통)

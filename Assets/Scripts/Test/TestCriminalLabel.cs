@@ -9,35 +9,28 @@ using UnityEngine;
 /// </summary>
 public class TestCriminalLabel : MonoBehaviour
 {
-    [Header("범인 배정기 (비우면 씬에서 자동 탐색)")]
-    [SerializeField] private CriminalAssigner m_assigner;
+    private CriminalAssigner Assigner => App.Game.CriminalAssigner;
 
     [SerializeField] private string m_text = "범인";
     [SerializeField] private Color m_color = Color.red;
 
-    private void Awake()
-    {
-        if (m_assigner == null)
-            m_assigner = FindFirstObjectByType<CriminalAssigner>();
-    }
-
     private void OnEnable()
     {
-        if (m_assigner != null)
-            m_assigner.OnCriminalAssigned += HandleCriminalAssigned;
+        if (Assigner != null)
+            Assigner.OnCriminalAssigned += HandleCriminalAssigned;
     }
 
     private void Start()
     {
         // 늦게 활성화돼 배정 이벤트를 이미 놓친 경우 보정
-        if (m_assigner != null && m_assigner.CriminalNpcs.Count > 0)
-            HandleCriminalAssigned(m_assigner.CriminalNpcs);
+        if (Assigner != null && Assigner.CriminalNpcs.Count > 0)
+            HandleCriminalAssigned(Assigner.CriminalNpcs);
     }
 
     private void OnDisable()
     {
-        if (m_assigner != null)
-            m_assigner.OnCriminalAssigned -= HandleCriminalAssigned;
+        if (Assigner != null)
+            Assigner.OnCriminalAssigned -= HandleCriminalAssigned;
     }
 
     private void HandleCriminalAssigned(IReadOnlyList<NpcController> criminals)

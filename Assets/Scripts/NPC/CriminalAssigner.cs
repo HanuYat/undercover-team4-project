@@ -11,11 +11,10 @@ using Random = UnityEngine.Random;
 /// </summary>
 // 네트워크 세션에서 배정은 자연히 서버 전용이다 — 스포너의 OnSpawnCompleted가 서버에서만 발생한다 (#56).
 // 배정 결과 중 공개 가능한 신원은 CitizenIdentity의 NetworkVariable로 전 클라이언트에 동기화된다 (#52).
-public class CriminalAssigner : MonoBehaviour
+[DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
+public class CriminalAssigner : CommonManagerBase
 {
-    [Header("스포너 (비우면 씬에서 자동 탐색)")]
-    [SerializeField]
-    private NpcSpawner m_spawner;
+    private NpcSpawner Spawner => App.Game.NpcSpawner;
 
     [Header("공식 기록 (세력 심볼 조회용)")]
     [SerializeField]
@@ -92,36 +91,32 @@ public class CriminalAssigner : MonoBehaviour
     /// <summary>배정 완료 이벤트 — 수배 UI(#58)·진범 판정(#41) 등이 구독한다. 배정된 전체 범인 목록을 넘긴다. (#127)</summary>
     public event Action<IReadOnlyList<NpcController>> OnCriminalAssigned;
 
-    private void Awake()
-    {
-        if (m_spawner == null)
-            m_spawner = FindFirstObjectByType<NpcSpawner>();
-    }
-
     private void Start()
     {
-        if (m_spawner == null)
+        if (Spawner == null)
         {
             Debug.LogWarning("CriminalAssigner: NpcSpawner를 찾지 못해 배정 불가", this);
             return;
         }
 
         // 스포너가 이미 스폰을 끝냈으면 바로 배정, 아니면 완료 이벤트를 기다린다
-        if (m_spawner.IsSpawnCompleted)
+        if (Spawner.IsSpawnCompleted)
             AssignAll();
         else
-            m_spawner.OnSpawnCompleted += AssignAll;
+            Spawner.OnSpawnCompleted += AssignAll;
     }
 
-    private void OnDestroy()
+    protected override void OnDestroy()
     {
-        if (m_spawner != null)
-            m_spawner.OnSpawnCompleted -= AssignAll;
+        base.OnDestroy(); // App 등록 해제
+
+        if (Spawner != null)
+            Spawner.OnSpawnCompleted -= AssignAll;
     }
 
     private void AssignAll()
     {
-        IReadOnlyList<NpcController> npcs = m_spawner.SpawnedNpcs;
+        IReadOnlyList<NpcController> npcs = Spawner.SpawnedNpcs;
         if (npcs.Count == 0)
         {
             Debug.LogWarning("CriminalAssigner: 스폰된 NPC가 없어 배정 불가", this);
