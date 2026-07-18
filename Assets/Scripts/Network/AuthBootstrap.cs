@@ -6,7 +6,8 @@ using Unity.Netcode;
 using UnityEngine;
 using System;
 
-public class AuthBootstrap : MonoBehaviour
+[DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
+public class AuthBootstrap : CommonManagerBase
 {
     [SerializeField] private bool m_signInOnStart = true;
     [SerializeField] private string m_environmentName = "production";
@@ -46,8 +47,10 @@ public class AuthBootstrap : MonoBehaviour
         m_eventsRegistered = true;
     }
 
-    private void OnDestroy()
+    protected override void OnDestroy()
     {
+        base.OnDestroy(); // App 등록 해제
+
         if (!m_eventsRegistered) return;
 
         m_eventsRegistered = false;

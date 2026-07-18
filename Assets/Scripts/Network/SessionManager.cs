@@ -4,7 +4,8 @@ using Cysharp.Threading.Tasks;
 using Unity.Services.Multiplayer;
 using Unity.Netcode;
 
-public class SessionManager : MonoBehaviour
+[DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
+public class SessionManager : CommonManagerBase
 {
     [SerializeField] private int m_maxPlayer = 6;
     [SerializeField] private AuthBootstrap m_auth; // 인스펙터로 연결
@@ -176,8 +177,10 @@ public class SessionManager : MonoBehaviour
         Debug.Log($"[SessionManager] OnSessionPropertiesChanged()");
     }
 
-    private void OnDestroy()
+    protected override void OnDestroy()
     {
+        base.OnDestroy(); // App 등록 해제
+
         if (m_session != null)
         {
             UnsubscribeSessionEvents(m_session);

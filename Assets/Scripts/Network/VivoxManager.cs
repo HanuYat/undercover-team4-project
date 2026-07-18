@@ -8,7 +8,8 @@ using Unity.Netcode;
 using Unity.Services.Vivox;
 using Unity.Services.Authentication;
 
-public class VivoxManager : MonoBehaviour
+[DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
+public class VivoxManager : CommonManagerBase
 {
     [SerializeField] private string m_channelPrefix = "Radio";
     [SerializeField] private InputActionReference m_pushToTalkAction;
@@ -300,8 +301,10 @@ public class VivoxManager : MonoBehaviour
         CleanupAsync().Forget();
     }
 
-    private void OnDestroy()
+    protected override void OnDestroy()
     {
+        base.OnDestroy(); // App 등록 해제
+
         CleanupAsync().Forget();
         m_posLoopCts?.Cancel();
     }
