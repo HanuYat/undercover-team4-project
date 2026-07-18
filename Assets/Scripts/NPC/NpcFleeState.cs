@@ -21,6 +21,11 @@ public class NpcFleeState : NpcStateBase
     // 후보 도착점을 NavMesh 위로 끌어당길 때 허용하는 최대 거리(m)
     private const float k_navSampleMaxDistance = 2f;
 
+    // 경로(origin→point) 위에서 위협의 최근접점이 이 t(정규화 위치)보다 앞(interior)에 있을 때만
+    // clearance 제약을 건다. t가 0에 가까우면 최근접점이 origin이라 그 위협을 '등지고' 뛰는 방향이므로,
+    // 이미 위협에 붙어 있어 origin이 clearance 안이더라도 그 방향까지 막지 않는다 (#213 오판 수정).
+    private const float k_pathClearanceMinT = 0.05f;
+
     // 추격 중 플레이어가 방향을 틀면 목적지 도착을 기다리지 않고 도주 방향을 다시 잡는다 (#96)
     // 매 프레임 재계산은 비싸므로 NpcEscortedState와 같은 스로틀링(주기 + 이동량 임계치)을 쓴다
     private const float k_repathInterval = 0.25f; // 재계산 최소 간격(초)
@@ -160,11 +165,15 @@ public class NpcFleeState : NpcStateBase
             foreach (Transform threat in s_threatBuffer)
             {
                 Vector3 threatPos = threat.position;
-                pathClearanceSqr = Mathf.Min(
-                    pathClearanceSqr,
-                    SqrDistanceToSegment(threatPos, origin, point)
-                );
                 arrivalNearestSqr = Mathf.Min(arrivalNearestSqr, (threatPos - point).sqrMagnitude);
+
+                // 위협이 경로의 시작점(origin) 쪽(t≈0)에 있으면 이 방향은 그 위협을 등지고 뛰는 방향이다.
+                // origin 근처라는 이유만으로 모든 방향을 탈락시키면(위협이 4m 안으로 붙는 순간)
+                // 앞이 뻥 뚫려 있어도 포위로 오판한다 — 앞(interior)에 있는 위협만 clearance 제약에 넣는다.
+                float t;
+                float segSqr = SqrDistanceToSegment(threatPos, origin, point, out t);
+                if (t > k_pathClearanceMinT)
+                    pathClearanceSqr = Mathf.Min(pathClearanceSqr, segSqr);
             }
 
             if (pathClearanceSqr < clearanceSqr)
@@ -230,8 +239,11 @@ public class NpcFleeState : NpcStateBase
         return nearest;
     }
 
-    /// <summary>점과 선분(a→b) 사이 최단거리의 제곱 — 수평면(XZ) 기준. 도주 경로가 플레이어를 스치는지 판정한다.</summary>
-    private static float SqrDistanceToSegment(Vector3 point, Vector3 a, Vector3 b)
+    /// <summary>
+    /// 점과 선분(a→b) 사이 최단거리의 제곱 — 수평면(XZ) 기준. 도주 경로가 플레이어를 스치는지 판정한다.
+    /// <paramref name="t"/>는 최근접점의 선분 위 정규화 위치([0,1]) — 0이면 시작점(a), 1이면 끝점(b)이다.
+    /// </summary>
+    private static float SqrDistanceToSegment(Vector3 point, Vector3 a, Vector3 b, out float t)
     {
         Vector2 p = new Vector2(point.x, point.z);
         Vector2 start = new Vector2(a.x, a.z);
@@ -240,10 +252,13 @@ public class NpcFleeState : NpcStateBase
         Vector2 segment = end - start;
         float sqrLength = segment.sqrMagnitude;
         if (sqrLength < Mathf.Epsilon)
+        {
+            t = 0f;
             return (p - start).sqrMagnitude; // 선분이 점으로 뭉개진 경우
+        }
 
         // 선분 위로의 정사영을 [0,1]로 잘라 최근접점을 구한다
-        float t = Mathf.Clamp01(Vector2.Dot(p - start, segment) / sqrLength);
+        t = Mathf.Clamp01(Vector2.Dot(p - start, segment) / sqrLength);
         Vector2 closest = start + segment * t;
         return (p - closest).sqrMagnitude;
     }
