@@ -309,7 +309,7 @@ public class PlayerEscorter : NetworkBehaviour
             ChannelGaugeStartRpc(seconds);
             return;
         }
-        ChannelingGaugeUI.Instance?.Show(seconds);
+        App.UI.Gauge?.Show(seconds);
     }
 
     private void NotifyChannelGaugeEnd()
@@ -319,14 +319,14 @@ public class PlayerEscorter : NetworkBehaviour
             ChannelGaugeEndRpc();
             return;
         }
-        ChannelingGaugeUI.Instance?.Hide();
+        App.UI.Gauge?.Hide();
     }
 
     [Rpc(SendTo.Owner)]
-    private void ChannelGaugeStartRpc(float seconds) => ChannelingGaugeUI.Instance?.Show(seconds);
+    private void ChannelGaugeStartRpc(float seconds) => App.UI.Gauge?.Show(seconds);
 
     [Rpc(SendTo.Owner)]
-    private void ChannelGaugeEndRpc() => ChannelingGaugeUI.Instance?.Hide();
+    private void ChannelGaugeEndRpc() => App.UI.Gauge?.Hide();
 
     // ---- 서버 내부 연행 상태 조작 ----
 

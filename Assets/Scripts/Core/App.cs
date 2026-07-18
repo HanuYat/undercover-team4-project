@@ -30,6 +30,10 @@ public class App : Singleton<App>
 
     // UI 매니저 (씬 전환 시 교체됨)
     private UIManagerBase m_uiManager;
+
+    // 로컬 HUD (런타임 생성 프리팹 — 생성/파괴 시 자동 등록/해제)
+    private CrosshairUI m_crosshairUI;
+    private ChannelingGaugeUI m_channelingGaugeUI;
 #pragma warning restore CS0649
     #endregion
 
@@ -84,6 +88,10 @@ public class App : Singleton<App>
     {
         public static UIManagerBase Current => Instance.m_uiManager;
         // TitleUI / InGameUI 캐스트 프로퍼티는 3단계에서 해당 클래스와 함께 추가
+
+        // 로컬 HUD — 씬 시작 시점엔 null일 수 있다 (오너 스폰 시 프리팹 생성). 사용처는 ?. 가드 필수
+        public static CrosshairUI Crosshair => Instance.m_crosshairUI;
+        public static ChannelingGaugeUI Gauge => Instance.m_channelingGaugeUI;
     }
     #endregion
 
