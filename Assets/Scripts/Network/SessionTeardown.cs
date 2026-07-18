@@ -1,5 +1,5 @@
-using Cysharp.Threading.Tasks;
 using System;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
@@ -9,31 +9,37 @@ using UnityEngine;
 /// </summary>
 public class SessionTeardown : MonoBehaviour
 {
-    [SerializeField] private SessionManager m_session;
-    [SerializeField] private VivoxManager m_vivox;
-    [SerializeField] private AuthBootstrap m_auth;
+    [SerializeField]
+    private SessionManager m_session;
+
+    [SerializeField]
+    private VivoxManager m_vivox;
+
+    [SerializeField]
+    private AuthBootstrap m_auth;
 
     private bool m_busy;
 
     /// <summary>
-    /// "메인으로 나가기(로그아웃)" — 세션 이탈 → (NGO 자동 종료) → Vivox 로그아웃 → Auth 로그아웃.
+    /// "메인으로 나가기(로그아웃)" — Vivox 로그아웃 → 세션 이탈(NGO 자동 종료) → Auth 로그아웃.
     /// 이 순서를 지키면 #164류(계층 간 미전파)가 구조적으로 발생하지 않는다.
     /// </summary>
-    /// 
+    ///
     public async UniTask LeaveToMainAsync()
     {
-        if (m_busy) return;
+        if (m_busy)
+            return;
         m_busy = true;
 
         try
         {
-            // 1. 세션 이탈 -> NGO 내림(자동) -> OnSessionLeft로 Vivox 채널 이탈(자동)
-            if (m_session != null)
-                await m_session.LeaveAsync();
-
-            // 2. Vivox 완전 로그아웃
+            // 1. Vivox 완전 로그아웃
             if (m_vivox != null)
                 await m_vivox.LogoutAsync();
+
+            // 2. 세션 이탈 -> NGO 내림(자동). 채널은 1번에서 이미 정리됨 -> OnSessionLeft발 채널 이탈은 no-op
+            if (m_session != null)
+                await m_session.LeaveAsync();
 
             // 3. 세션이 비었으면 로그아웃 성공
             if (m_auth != null)
@@ -49,7 +55,9 @@ public class SessionTeardown : MonoBehaviour
         }
     }
 
-    [SerializeField] private float m_guiTopOffset = 200f;
+    [SerializeField]
+    private float m_guiTopOffset = 200f;
+
     private void OnGUI()
     {
         GUILayout.BeginArea(new Rect(10, m_guiTopOffset, 380, 60));
