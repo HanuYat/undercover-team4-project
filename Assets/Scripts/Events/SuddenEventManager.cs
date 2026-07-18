@@ -29,9 +29,7 @@ using Random = UnityEngine.Random;
 [RequireComponent(typeof(NetworkObject))]
 public class SuddenEventManager : NetworkBehaviour
 {
-    [Header("라운드 매니저 (비우면 씬에서 자동 탐색)")]
-    [SerializeField]
-    private RoundManager m_round;
+    private RoundManager Round => App.Game.Round;
 
     [Header("발생 스케줄 (초)")]
     [Tooltip(
@@ -72,9 +70,6 @@ public class SuddenEventManager : NetworkBehaviour
 
     private void Awake()
     {
-        if (m_round == null)
-            m_round = FindFirstObjectByType<RoundManager>();
-
         // 같은 오브젝트의 이벤트 핸들러를 풀로 수집 — RequireComponent가 이벤트를 같은 오브젝트에 강제하므로
         // 자식까지 훑지 않는다(그래야 자식 배치 오용 시 조용히 수집되는 대신 리그가 잘못됐음이 드러난다)
         GetComponents(m_events); // 컴포넌트형: 1개 = 1종 (괴한 습격·전자기기 먹통)
@@ -92,11 +87,11 @@ public class SuddenEventManager : NetworkBehaviour
         // 발생 스케줄·판정은 서버 권위 — 클라이언트에서는 아예 돌지 않는다 (#56)
         if (!IsAuthority)
             return;
-        if (m_round == null)
+        if (Round == null)
             return;
 
         // 라운드 페이즈 전이 감지 — InProgress 진입 시 스케줄 시작, 이탈 시 진행 이벤트를 정리하고 멈춘다
-        RoundPhase phase = m_round.Phase;
+        RoundPhase phase = Round.Phase;
         if (phase != m_lastPhase)
         {
             HandlePhaseChanged(phase);

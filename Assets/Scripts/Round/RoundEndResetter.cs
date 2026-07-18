@@ -17,8 +17,9 @@ using UnityEngine.SceneManagement;
 /// </summary>
 public class RoundEndResetter : MonoBehaviour
 {
+    private RoundManager Round => App.Game.Round;
+
     [Header("참조 (비우면 씬에서 자동 탐색)")]
-    [SerializeField] private RoundManager m_round;
     [SerializeField] private SessionManager m_session;
 
     [Header("리셋 타이밍")]
@@ -30,8 +31,6 @@ public class RoundEndResetter : MonoBehaviour
 
     private void Awake()
     {
-        if (m_round == null)
-            m_round = FindFirstObjectByType<RoundManager>();
         if (m_session == null)
             m_session = FindFirstObjectByType<SessionManager>();
     }
@@ -39,8 +38,8 @@ public class RoundEndResetter : MonoBehaviour
     private void OnEnable()
     {
         // 라운드 종료는 서버·오프라인에서만 발행된다 — 이 훅으로 권위 피어가 리셋을 시작한다.
-        if (m_round != null)
-            m_round.OnRoundEnded += HandleRoundEnded;
+        if (Round != null)
+            Round.OnRoundEnded += HandleRoundEnded;
     }
 
     private void Start()
@@ -53,8 +52,8 @@ public class RoundEndResetter : MonoBehaviour
 
     private void OnDisable()
     {
-        if (m_round != null)
-            m_round.OnRoundEnded -= HandleRoundEnded;
+        if (Round != null)
+            Round.OnRoundEnded -= HandleRoundEnded;
     }
 
     private void OnDestroy()

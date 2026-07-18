@@ -37,7 +37,8 @@ public enum RoundEndReason
 /// </summary>
 // TODO: 라운드 페이즈·결과의 클라이언트 동기화는 본부 판정/결과 UI(#43) 연결 시 NetworkVariable/ClientRpc로 추가.
 //       (ArrestJudge와 동일 방침 — 지금은 서버 로컬 상태 + 로컬 이벤트로만 둔다)
-public class RoundManager : MonoBehaviour
+[DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
+public class RoundManager : CommonManagerBase
 {
     [Header("스포너 (비우면 씬에서 자동 탐색)")]
     [SerializeField] private NpcSpawner m_spawner;
@@ -95,13 +96,15 @@ public class RoundManager : MonoBehaviour
     /// <summary>라운드 종료 이벤트 — 정산(#42 후속)·결과 UI(#43)·종료 피드백(#210)이 구독한다.</summary>
     public event Action<RoundResult, RoundEndReason> OnRoundEnded;
 
-    private void Awake()
+    protected override void Awake()
     {
+        base.Awake(); // App.Game.Round 등록
+
         if (m_spawner == null)
             m_spawner = FindFirstObjectByType<NpcSpawner>();
         if (m_arrestJudge == null)
             m_arrestJudge = FindFirstObjectByType<ArrestJudge>();
-            
+
         m_criminalAssigner = FindFirstObjectByType<CriminalAssigner>();
     }
 
