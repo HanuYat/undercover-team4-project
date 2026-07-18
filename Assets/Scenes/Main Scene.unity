@@ -28942,9 +28942,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MinimapViewer
   m_worldCenterX: 0
-  m_worldCenterZ: 0
-  m_worldSizeX: 30
-  m_worldSizeZ: 30
+  m_worldCenterZ: 17.5
+  m_worldSizeX: 66
+  m_worldSizeZ: 125
   m_mapRect: {fileID: 381507845}
   m_iconContainer: {fileID: 381507845}
   m_iconPrefab: {fileID: 5698290347383743024, guid: e1ffd24007d473845a05c3d95f226b68, type: 3}
