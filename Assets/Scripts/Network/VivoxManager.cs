@@ -292,6 +292,9 @@ public class VivoxManager : MonoBehaviour
         LeaveChannelAsync().Forget();
     }
 
+    // 인증 로그아웃 → Vivox도 정리 (#171 auth→voice 전파). 세션만 나가고 로그인은 유지된 상태에서
+    // 직접 SignOut한 경로의 안전망이다. SessionTeardown 경로에선 이미 LogoutAsync가 끝난 뒤라
+    // no-op(LogoutAsync는 멱등).
     private void HandleAuthSignedOut()
     {
         CleanupAsync().Forget();
