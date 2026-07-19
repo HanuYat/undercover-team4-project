@@ -3,55 +3,32 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
-/// <summary>라운드 진행 단계. (GDD 3-2)</summary>
 public enum RoundPhase
 {
-    /// <summary>시작 전 준비 상태.</summary>
     Preparing,
-    /// <summary>수사·검거가 진행 중.</summary>
     InProgress,
-    /// <summary>종료됨 (성공/실패는 Result 참조).</summary>
     Ended
 }
 
-/// <summary>라운드 종료 결과. (GDD 3-2 / 7장)</summary>
 public enum RoundResult
 {
-    /// <summary>아직 종료되지 않음.</summary>
-    None,
-    /// <summary>목표 달성 — 진범 검거.</summary>
-    Success,
-    /// <summary>목표 미달 — 제한시간 안에 검거 할당량을 못 채움. 게임오버 (GDD 9-3, #103)</summary>
-    Failure
+    None,       // 라운드 종료 전
+    Success,    // 목표 달성
+    Failure     // 목표 미달
 }
 
-/// <summary>
-/// 라운드 종료 사유 — Result(성공/실패)만으로는 실패 원인(시간 초과 vs 전멸)을 구분할 수 없어
-/// 종료 피드백 UI(#210)가 플레이어에게 "왜 끝났는지"를 보여줄 때 쓴다.
-/// </summary>
 public enum RoundEndReason
 {
-    /// <summary>아직 종료되지 않음.</summary>
-    None,
-    /// <summary>진범 검거 수가 할당량에 도달 — 성공. (GDD 9-3)</summary>
-    QuotaMet,
-    /// <summary>제한시간 초과 시점에 할당량 미달 — 게임오버. (GDD 9-3, 부록B #2)</summary>
+    None,           // 라운드 종료 전
+    QuotaMet,       // 할당량 충족
     TimeOver,
-    /// <summary>플레이어 전원 다운(전멸) — 게임오버. (#105)</summary>
     AllPlayersDown
 }
 
 /// <summary>
 /// 라운드 흐름 관리 — 시작 시 NPC 스폰 트리거, 진행 중 상태 유지, 목표 달성/실패 시 종료 처리. (이슈 #42/#103, GDD 3-2)
-/// 기존 테스트용 NpcRoundStarter(#37/#56)의 스폰 트리거 역할을 흡수해 본 게임의 라운드 진입점이 된다.
+/// 본 게임의 라운드 진입점.
 ///
-/// 종료 조건 (#103, GDD 9-3):
-///  · 성공 — 진범 검거 수가 할당량(m_arrestQuota)에 도달.
-///  · 실패(게임오버) — 다음 중 하나:
-///    - 제한시간(m_timeLimitSeconds) 초과 시점에 할당량 미달 (GDD 9-3, 부록B #2).
-///    - 플레이어 <b>전원</b> 다운(무력화) — 아무도 행동할 수 없는 전멸 상태 (#105).
-///  오검거·플레이어 '일부' 다운 방치는 라운드를 끝내지 않는다 — 할당량 압박이 자연 페널티다 (GDD 7-5).
-///  ⚠ GDD 부록B #2는 시간초과를 '유일한' 게임오버로 적고 있어, 전멸 종료는 GDD 본문 확정이 필요하다(팀 검토).
 /// 할당량·제한시간 수치는 전부 인스펙터 — 밸런싱 보류 항목(GDD 12장)이라 코드에 못 박지 않는다.
 ///
 /// 범인 배정(CriminalAssigner)·검거 판정(ArrestJudge)이 서버 권위이므로 라운드 진행도 서버(또는 오프라인)에서만 한다.
@@ -68,11 +45,11 @@ public class RoundManager : MonoBehaviour
     [Header("검거 판정 (비우면 씬에서 자동 탐색)")]
     [SerializeField] private ArrestJudge m_arrestJudge;
 
-    [Header("라운드 목표 (GDD 3-2·9-3, #103)")]
-    [Tooltip("라운드당 검거 할당량 — 진범 검거 수가 이 값에 도달하면 성공 종료")]
+    [Header("라운드 목표")]
+    [Tooltip("라운드당 검거 할당량")]
     [Min(1)]
     [SerializeField] private int m_arrestQuota = 1;
-    [Tooltip("라운드 제한시간(초). 시간 안에 할당량을 못 채우면 실패(게임오버). 0 이하 = 무제한(타이머 없음)")]
+    [Tooltip("라운드 제한시간(초). 0 이하 = 무제한(타이머 없음)")]
     [SerializeField] private float m_timeLimitSeconds = 180f;
 
     private NetworkManager m_networkManager;
@@ -136,7 +113,7 @@ public class RoundManager : MonoBehaviour
         // 전원 다운(전멸) 감시 — 무력화 상태 변화는 서버·오프라인에서만 발행된다. (#105)
         PlayerIncapacitation.OnAnyIncapacitatedChanged += HandleAnyIncapacitatedChanged;
         
-        // [버그 수정] 할당량 > 실제 진범 수 검증을 위해 진범 배정 완료 이벤트를 구독합니다. (#149)
+        // 할당량 > 실제 진범 수 검증을 위해 진범 배정 완료 이벤트를 구독. (#149)
         if (m_criminalAssigner != null)
             m_criminalAssigner.OnCriminalAssigned += HandleCriminalAssigned;
     }
@@ -150,9 +127,6 @@ public class RoundManager : MonoBehaviour
         
         if (m_criminalAssigner != null)
             m_criminalAssigner.OnCriminalAssigned -= HandleCriminalAssigned;
-            
-        if (m_networkManager != null)
-            m_networkManager.OnServerStarted -= HandleServerStarted;
     }
 
     private void Start()
@@ -172,24 +146,8 @@ public class RoundManager : MonoBehaviour
             return;
         }
 
-        // 네트워크 세션 — 서버가 떠 있으면 즉시, 아니면 서버 시작 콜백에서 시작한다.
-        // (씬에 NetworkManager가 있으면 Host 시작 전까지 라운드를 열지 않는다 — 서버 권위 스폰이 NGO에 실려야 하므로, #56)
-        // 클라이언트에서는 OnServerStarted가 발생하지 않으므로 라운드를 스스로 시작하지 않는다.
-        if (m_networkManager.IsServer)
-            StartRound();
-        else
-            m_networkManager.OnServerStarted += HandleServerStarted;
-    }
-
-    private void HandleServerStarted()
-    {
-        // 서버 재시작(Shutdown 후 StartHost) 대응 — 이전 세션의 종료 상태가 남아 있으면
-        // Phase·스포너 래치가 잠긴 채라 StartRound와 재스폰이 막힌다. 시작 전에 초기화한다.
-        // (첫 시작이면 이미 Preparing이라 초기화를 건너뛴다)
-        if (Phase != RoundPhase.Preparing)
-            ResetForRestart();
-
-        StartRound();
+        // 네트워크 세션 — 로비 대기. 라운드는 호스트의 '게임 시작'(LobbyManager)이 StartRound()로 연다.
+        // (서버 시작 즉시 시작하던 기존 동작 제거 — #154 로비)
     }
 
     // 서버 재시작 시 이전 라운드 상태를 초기화한다 — Phase·결과·진행도와 스포너 래치를 되돌려 재스폰을 허용한다.
