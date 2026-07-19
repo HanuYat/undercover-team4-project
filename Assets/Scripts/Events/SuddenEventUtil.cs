@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.AI;
@@ -66,6 +67,33 @@ public static class SuddenEventUtil
             }
         }
         return nearest;
+    }
+
+    /// <summary>
+    /// 기준점에서 <paramref name="maxRadius"/>(m) 이내의 행동 가능한 현장 플레이어를 전부 <paramref name="results"/>에 모은다.
+    /// 다운된 플레이어는 제외한다. 호출 시 리스트를 비우므로 호출자는 버퍼를 재사용할 수 있다. (#213)
+    ///
+    /// <see cref="FindNearestFieldPlayer"/>와 같은 기준(PlayerData 목록 직접 순회 + IsTargetable)을 쓴다 —
+    /// 한쪽만 물리 쿼리를 쓰면 두 경로의 대상 집합이 어긋난다.
+    /// </summary>
+    public static void CollectFieldPlayers(Vector3 origin, float maxRadius, List<Transform> results)
+    {
+        results.Clear();
+
+        PlayerData[] players = UnityEngine.Object.FindObjectsByType<PlayerData>(
+            FindObjectsSortMode.None
+        );
+
+        float maxSqr = maxRadius * maxRadius;
+        for (int i = 0; i < players.Length; i++)
+        {
+            PlayerData player = players[i];
+            if (!player.IsTargetable)
+                continue;
+
+            if ((player.transform.position - origin).sqrMagnitude <= maxSqr)
+                results.Add(player.transform);
+        }
     }
 
     /// <summary>

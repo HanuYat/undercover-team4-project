@@ -232,8 +232,8 @@ public class SessionManager : MonoBehaviour
 
         GUI.enabled = true;
 
-                // 게임 종료 (#210) — 세션 접속 중에는 OnGUI가 DrawInSessionUI로 분기해 이 버튼이 그려지지
-        // 않고, 세션에서 나오면(m_session == null) 로비와 함께 다시 나타난다. (Auth/Vivox GUI와 동일한 수명)
+        // 게임 종료 (#210) — 세션 접속 중에는 OnGUI가 DrawInSessionUI로 분기해 이 버튼이 그려지지 않고,
+        // 세션에서 나오면(m_session == null) 로비와 함께 다시 나타난다. (Auth/Vivox GUI와 동일한 수명)
         GUILayout.Space(6);
         if (GUILayout.Button("게임 종료 (Quit)"))
         {

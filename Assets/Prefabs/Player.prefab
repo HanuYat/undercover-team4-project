@@ -2452,6 +2452,7 @@ GameObject:
   - component: {fileID: 759370021765073938}
   - component: {fileID: 4837865491593241638}
   - component: {fileID: 4510581181374338851}
+  - component: {fileID: -961902104319678753}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -2886,6 +2887,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerCrouch
   ShowTopMostFoldoutHeaderGroup: 1
   m_crouchHeight: 1.2
+--- !u!114 &-961902104319678753
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8589cf5bdc1bf07489b808b1f33f0108, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MinimapTarget
+  m_iconSprite: {fileID: 0}
+  m_iconColor: {r: 0, g: 0, b: 1, a: 1}
 --- !u!1 &5536001738967602051
 GameObject:
   m_ObjectHideFlags: 0

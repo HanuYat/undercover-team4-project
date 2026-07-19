@@ -136,17 +136,18 @@ public class PlayerMovement : NetworkBehaviour
         }
     }
 
-    // 오너 로컬 인스턴스를 서버가 지정한 스폰 포즈로 이동시킨다. CharacterController가 켜진
-    // 상태에서 transform을 직접 옮기면 내부 캐시가 위치를 되돌릴 수 있어 잠시 끄고 옮긴다.
     private void ApplyServerSpawnPose()
     {
-        m_controller.enabled = false;
-        transform.SetPositionAndRotation(m_serverSpawnPosition.Value, m_serverSpawnRotation.Value);
-        m_controller.enabled = true;
+        SetPose(m_serverSpawnPosition.Value, m_serverSpawnRotation.Value);
+        Debug.Log($"[PlayerMovement] 서버 지정 스폰 포즈 적용 — Owner {OwnerClientId}, 위치 {transform.position}");
+    }
 
-        Debug.Log(
-            $"[PlayerMovement] 서버 지정 스폰 포즈 적용 — Owner {OwnerClientId}, 위치 {transform.position}"
-        );
+    // CharacterController가 켜진 상태에서 transform을 직접 옮기면 내부 캐시가 위치를 되돌릴 수 있어 잠시 끄고 옮긴다.
+    private void SetPose(Vector3 pos, Quaternion rot)
+    {
+        m_controller.enabled = false;
+        transform.SetPositionAndRotation(pos, rot);
+        m_controller.enabled = true;
     }
 
     private void SetLayerRecursively(Transform root, int layer)
