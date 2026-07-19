@@ -126,9 +126,14 @@ public class NpcResistState : NpcStateBase
     /// <summary>표적(위협 대상, 없으면 사거리 내 가장 가까운 플레이어)을 향해 몸을 돌린다. 서버(또는 오프라인) 전용.</summary>
     private void FaceTarget()
     {
-        Transform target = m_owner.ThreatTarget != null
-            ? m_owner.ThreatTarget
-            : FindNearestPlayer(m_owner.ResistAttackRange);
+        Transform target = m_owner.ThreatTarget;
+        if (target == null)
+        {
+            // 유발자가 없으면 사거리 내 가장 가까운 현장 플레이어를 향한다 (#213에서 FindNearestPlayer가 헬퍼로 통합됨)
+            PlayerData nearest = SuddenEventUtil.FindNearestFieldPlayer(
+                m_owner.transform.position, m_owner.ResistAttackRange);
+            target = nearest != null ? nearest.transform : null;
+        }
         if (target == null)
             return;
 
