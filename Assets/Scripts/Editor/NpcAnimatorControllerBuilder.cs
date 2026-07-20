@@ -32,6 +32,14 @@ public static class NpcAnimatorControllerBuilder
     private const string k_attack1HFolder =
         "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Combat/1H";
 
+    // 자물쇠 해제 모션 — 도착 순간 Begin, 채널링 동안 Loop. (#261)
+    // Stop(마무리)은 쓰지 않는다: 해제가 끝나는 순간 자물쇠가 열리고 침입자는 곧바로 도주로 전이하므로
+    // 재생될 틈이 없고, 억지로 끼우면 도주 시작이 그만큼 늦어진다.
+    private const string k_openFolder =
+        "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Misc/Open";
+    private const string k_unlockBeginState = "Unlocking_Begin";
+    private const string k_unlockLoopState = "Unlocking_Loop";
+
     // 단발 스윙만 고른다 — 쌍수(AttackDW)·패링(Parry)·전투 진입/이탈(CombatEnter/Exit)은 제외.
     // 전부 31~42프레임(약 1.0~1.4초)이라 콤보가 섞여 있지 않다.
     private static readonly string[] s_swingClipFiles =
@@ -98,6 +106,8 @@ public static class NpcAnimatorControllerBuilder
 
         attack.motion = tree;
 
+        SetupUnlockStates(controller);
+
         EditorUtility.SetDirty(tree);
         EditorUtility.SetDirty(controller);
         AssetDatabase.SaveAssets();
@@ -110,6 +120,78 @@ public static class NpcAnimatorControllerBuilder
 
         Selection.activeObject = controller;
     }
+
+    /// <summary>
+    /// 자물쇠 해제 상태를 구성한다 — Any State → Begin(1회) → Loop(반복). (#261)
+    /// 진입 조건은 <c>State == NpcAnimationDriver.k_unlockingAnimState</c> 하나뿐이라
+    /// 기존 로코모션 전이(State == enum값)와 번호가 겹치지 않는다.
+    /// 이탈은 따로 만들지 않는다 — 드라이버가 다른 번호를 넣는 순간 그쪽 Any State 전이가 걸린다.
+    /// 재실행 시 기존 해제 상태/전환을 지우고 다시 만들어 중복을 막는다.
+    /// </summary>
+    private static void SetupUnlockStates(AnimatorController controller)
+    {
+        AnimationClip begin = LoadClip($"{k_openFolder}/HumanM@Opening01 - Begin.fbx");
+        AnimationClip loop = LoadClip($"{k_openFolder}/HumanM@Opening01 - Loop.fbx");
+        if (begin == null || loop == null)
+        {
+            Debug.LogError("[NpcAnimatorControllerBuilder] 자물쇠 해제 클립을 불러오지 못해 해제 상태 구성을 건너뜀");
+            return;
+        }
+
+        AnimatorStateMachine stateMachine = controller.layers[0].stateMachine;
+        RemoveUnlockStates(stateMachine);
+
+        AnimatorState beginState = stateMachine.AddState(k_unlockBeginState);
+        beginState.motion = begin;
+        AnimatorState loopState = stateMachine.AddState(k_unlockLoopState);
+        loopState.motion = loop;
+
+        // Any State → Begin : 드라이버가 해제 번호를 넣는 순간 진입.
+        // CanTransitionToSelf를 끄지 않으면 번호가 유지되는 매 프레임 Begin이 재시작돼 클립이 앞으로 못 나간다.
+        AnimatorStateTransition toBegin = stateMachine.AddAnyStateTransition(beginState);
+        toBegin.hasExitTime = false;
+        toBegin.duration = 0.1f;
+        toBegin.canTransitionToSelf = false;
+        toBegin.AddCondition(
+            AnimatorConditionMode.Equals,
+            NpcAnimationDriver.k_unlockingAnimState,
+            "State"
+        );
+
+        // Begin → Loop : 시작 동작이 끝나면 해제 반복으로 넘어간다
+        AnimatorStateTransition toLoop = beginState.AddTransition(loopState);
+        toLoop.hasExitTime = true;
+        toLoop.exitTime = 0.9f;
+        toLoop.duration = 0.1f;
+    }
+
+    /// <summary>이전 실행이 만든 해제 상태와 그 상태를 가리키는 Any State 전이를 제거한다.</summary>
+    private static void RemoveUnlockStates(AnimatorStateMachine stateMachine)
+    {
+        var staleTransitions = new List<AnimatorStateTransition>();
+        foreach (AnimatorStateTransition transition in stateMachine.anyStateTransitions)
+        {
+            if (transition.destinationState != null && IsUnlockState(transition.destinationState.name))
+            {
+                staleTransitions.Add(transition);
+            }
+        }
+        foreach (AnimatorStateTransition transition in staleTransitions)
+        {
+            stateMachine.RemoveAnyStateTransition(transition);
+        }
+
+        foreach (ChildAnimatorState child in stateMachine.states)
+        {
+            if (IsUnlockState(child.state.name))
+            {
+                stateMachine.RemoveState(child.state);
+            }
+        }
+    }
+
+    private static bool IsUnlockState(string name) =>
+        name == k_unlockBeginState || name == k_unlockLoopState;
 
     /// <summary>스윙 클립을 순서대로 불러온다. 없는 파일은 경고만 남기고 건너뛴다(일부 누락돼도 나머지로 동작).</summary>
     private static List<AnimationClip> LoadSwingClips()
