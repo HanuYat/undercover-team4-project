@@ -18,6 +18,10 @@ public class JailZone : NetworkBehaviour
     [Tooltip("수감된 NPC가 걸어가 서는 지점들. 순서대로 배정된다 — NavMesh 위에 둘 것")]
     [SerializeField] private Transform[] m_cellPoints;
 
+    [Header("자물쇠 (비우면 같은 오브젝트에서 자동 탐색)")]
+    [Tooltip("새 수감자를 받을 때 자동으로 다시 잠근다 — 범인 탈출 이벤트(#231)로 열린 상태를 되돌리는 경로")]
+    [SerializeField] private JailLock m_jailLock;
+
     // 서버 권위 수용 인원 — 서버만 쓰고 모든 클라이언트가 읽는다 (#56)
     private readonly NetworkVariable<int> m_inmateCount = new NetworkVariable<int>(0);
 
@@ -33,8 +37,18 @@ public class JailZone : NetworkBehaviour
     /// <summary>현재 수용 인원. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 읽을 수 있다.</summary>
     public int InmateCount => IsSpawned ? m_inmateCount.Value : m_localInmateCount;
 
+    /// <summary>현재 수감자 — 범인 탈출 이벤트(#231)가 방출 대상을 고르려고 읽는다. 서버에서만 유효.</summary>
+    public IReadOnlyCollection<NpcController> Inmates => m_inmates;
+
     /// <summary>수용 인원 변경 — 서버·클라이언트 모든 피어에서 발생한다. 본부 UI(별도 이슈)가 구독.</summary>
     public event Action<int> OnInmateCountChanged;
+
+    private void Awake()
+    {
+        // 자물쇠는 같은 오브젝트에 두는 것이 기본 — 인스펙터로 따로 지정할 수도 있다
+        if (m_jailLock == null)
+            m_jailLock = GetComponent<JailLock>();
+    }
 
     public override void OnNetworkSpawn()
     {
@@ -91,6 +105,12 @@ public class JailZone : NetworkBehaviour
 
         SetInmateCount(m_inmates.Count);
         Debug.Log($"[유치장] 수용: {npc.name} — 현재 {InmateCount}명");
+
+        // 탈출 이벤트(#231)로 열린 자물쇠는 새 수감자를 받는 순간 자동으로 다시 잠긴다 —
+        // 플레이어가 따로 잠글 것이 없으면서도 연속 발동은 자연히 막힌다.
+        // 유치장이 자물쇠를 아는 방향이다(그 반대가 아니라) — 자물쇠는 수용을 몰라야 한다.
+        if (m_jailLock != null)
+            m_jailLock.ServerRelock();
     }
 
     /// <summary>
