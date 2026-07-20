@@ -3,9 +3,15 @@ using UnityEngine;
 /// <summary>
 /// FSM 상태 변경을 Animator의 State(int) 파라미터로 전달한다.
 /// NpcState enum 값이 그대로 Animator 상태 번호가 되므로(Idle=0, Walk=1...),
-/// 새 상태가 생겨도 이 스크립트는 수정할 필요가 없다.
+/// 새 상태가 생겨도 이 스크립트는 대체로 수정할 필요가 없다.
 /// NpcController.OnStateChanged는 네트워크 동기화를 거쳐 모든 피어에서 발생하므로
 /// 서버·클라이언트 어디서든 같은 모션이 재생된다. (#56)
+///
+/// 공격만 예외다(#220): 저항(Attack) 상태의 base 모션은 "버틴 자세"(Idle)이고,
+/// Animator의 Attack 번호(3)는 <b>단발 스윙 클립</b> 전용이다. 스윙은 상태 전이가 아니라
+/// <see cref="NpcController.OnAttackSwing"/> 순간 이벤트로 오며, State int를 잠깐 Attack으로
+/// 펄스했다가 되돌리는 식으로 표현한다 — 로코모션이 전부 Any State(State==N) 전이라
+/// 트리거 오버레이는 스윙을 매 프레임 끊어버리기 때문이다.
 /// </summary>
 [RequireComponent(typeof(NpcController))]
 public class NpcAnimationDriver : MonoBehaviour
@@ -30,12 +36,20 @@ public class NpcAnimationDriver : MonoBehaviour
     [Tooltip("다리 달리기 클립이 미끄럼 없이 보이는 기준 지상 속도(m/s). 발이 앞으로 밀리면 값을 낮추고, 뒤로 끌리면 높인다")]
     [SerializeField] private float m_panicRunReferenceSpeed = 4.5f;
 
+    [Header("공격 스윙 (#220)")]
+    [Tooltip("스윙 1회당 Attack(단발) 모션을 유지하는 시간(초) — 이후 버틴 자세로 복귀한다. 저항 공격 주기보다 짧고 타격 오프셋보다 길게")]
+    [SerializeField] private float m_swingAnimSeconds = 0.9f;
+
     [SerializeField] private Animator m_animator;
 
     private NpcController m_controller;
     private Vector3 m_lastPosition;
     private float m_smoothedSpeed;
     private bool m_escortMoving;
+    // 현재 스윙 모션을 유지할 종료 시각. 0 이하면 스윙 중 아님. 스윙이 끝나면 base 상태로 되돌린다 (#220)
+    private float m_swingUntil;
+    // 스윙이 끝난 뒤 되돌아갈 FSM 기준 상태 — 저항(Attack)이면 버틴 자세(Idle)로 복귀한다 (#220)
+    private NpcState m_baseState;
 
     private void Awake()
     {
@@ -50,13 +64,53 @@ public class NpcAnimationDriver : MonoBehaviour
         // 로컬 FSM 이벤트가 아닌 컨트롤러의 통합 이벤트를 구독한다 — 클라이언트에서는
         // NetworkVariable 동기화가, 오프라인에서는 로컬 FSM이 이 이벤트를 발생시킨다 (#56)
         m_controller.OnStateChanged += HandleStateChanged;
+        // 스윙은 상태 전이가 아니라 순간 이벤트 — 저항 상태를 유지한 채 매 타격마다 단발 스윙을 얹는다 (#220)
+        m_controller.OnAttackSwing += HandleAttackSwing;
         HandleStateChanged(m_controller.CurrentState);
     }
 
     private void OnDestroy()
     {
         if (m_controller != null)
+        {
             m_controller.OnStateChanged -= HandleStateChanged;
+            m_controller.OnAttackSwing -= HandleAttackSwing;
+        }
+    }
+
+    // 저항 NPC의 공격 스윙 1회 — Animator State를 Attack(단발 스윙 클립)으로 잠깐 펄스한다.
+    // 이 컨트롤러의 로코모션이 전부 Any State(State==N) 전이라, State int 하나만 참이어야 스윙이
+    // 중간에 끊기지 않는다 — 그래서 트리거 오버레이가 아니라 int 펄스를 쓴다. 스윙 종료는 Update가 처리.
+    // 데미지 타이밍은 NpcResistState가 타격 오프셋으로 맞추므로 여기선 모션만 얹는다. (#220)
+    private void HandleAttackSwing()
+    {
+        if (m_animator == null)
+            return;
+
+        // 상태 변경(NetworkVariable)과 스윙 알림(ClientRpc)은 서로 다른 네트워크 경로라
+        // 도착 순서가 보장되지 않는다. 제압 직전에 발사된 스윙이 Captured 전이보다 늦게 도착하면
+        // 이미 제압된 NPC가 원격 클라에서 m_swingAnimSeconds 동안 헛스윙을 한다. (리뷰 반영)
+        //
+        // '스윙이 성립할 수 없는 상태'에서만 막는다 — 이 상태들은 저항으로 되돌아가지 않으므로
+        // 늦게 온 스윙은 무조건 유령이다. 반대로 배회(Idle/Walk/Run)는 막지 않는다:
+        // 상태 동기화가 늦어 아직 Attack을 못 받았을 뿐일 수 있고, 그때 스윙을 버리면
+        // 예고 동작이 통째로 사라져 "언제 맞는지 모른다"는 #220의 목적이 깨진다.
+        if (!CanSwingIn(m_baseState))
+            return;
+
+        m_animator.SetInteger(s_stateHash, (int)NpcState.Attack);
+        m_swingUntil = Time.time + m_swingAnimSeconds;
+    }
+
+    /// <summary>스윙 모션이 성립할 수 있는 기준 상태인가 — 구속·무력화 상태에서는 공격이 나올 수 없다. (#220)</summary>
+    private static bool CanSwingIn(NpcState state) =>
+        state is not (NpcState.Captured or NpcState.Escorted or NpcState.Stunned);
+
+    // FSM 기준 상태에 대응하는 Animator base 번호. 저항(Attack) 중의 base는 버틴 자세(Idle)이고,
+    // Attack 번호(3)는 이제 단발 스윙 전용이라 base로 쓰지 않는다. 그 외 상태는 enum 값을 그대로 쓴다. (#220)
+    private int AnimatorBaseState(NpcState state)
+    {
+        return state == NpcState.Attack ? (int)NpcState.Idle : (int)state;
     }
 
     private void Update()
@@ -65,6 +119,13 @@ public class NpcAnimationDriver : MonoBehaviour
         // 클라이언트에서도 NetworkTransform이 움직여 주는 값을 그대로 쓸 수 있다 — 별도 동기화 불필요.
         if (m_animator == null || Time.deltaTime <= 0f)
             return;
+
+        // 스윙 모션 유지 시간이 끝나면 버틴 자세(base)로 되돌린다 — 저항 상태를 유지한 채 스윙만 단발로 얹는 방식 (#220)
+        if (m_swingUntil > 0f && Time.time >= m_swingUntil)
+        {
+            m_swingUntil = 0f;
+            m_animator.SetInteger(s_stateHash, AnimatorBaseState(m_baseState));
+        }
 
         NpcState state = m_controller.CurrentState;
         if (state != NpcState.Escorted && state != NpcState.Panic)
@@ -98,9 +159,15 @@ public class NpcAnimationDriver : MonoBehaviour
 
     private void HandleStateChanged(NpcState state)
     {
-        // enum 값을 int로 변환해 전달 → Animator의 Any State 전이(State == N)가 해당 모션으로 전환한다
+        // 상태 전이는 스윙보다 우선한다 — 진행 중이던 스윙을 취소하고 새 base 모션을 즉시 적용한다
+        // (예: 저항 중 스윙하다 제압되면 그 프레임에 Captured로 넘어가야 한다) (#220)
+        m_baseState = state;
+        m_swingUntil = 0f;
+
+        // enum 값을 int로 변환해 전달 → Animator의 Any State 전이(State == N)가 해당 모션으로 전환한다.
+        // 단, 저항(Attack)의 base는 버틴 자세(Idle) — Attack 번호는 단발 스윙 전용이다 (#220)
         if (m_animator != null)
-            m_animator.SetInteger(s_stateHash, (int)state);
+            m_animator.SetInteger(s_stateHash, AnimatorBaseState(state));
 
         // 연행 진입 시 이동 판별을 초기화 — 직전 상태의 잔여 속도 값이 첫 판정을 오염시키지 않게 (#97)
         if (state == NpcState.Escorted)

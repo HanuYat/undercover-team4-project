@@ -30,6 +30,10 @@ public class ThugAttacker : NetworkBehaviour
     [SerializeField] private float m_attackInterval = 1.2f;
     [Tooltip("타격 1회당 플레이어 HP 감소량")]
     [SerializeField] private int m_attackDamage = 12;
+    [Tooltip("스윙 시작→타격이 닿는 프레임까지의 시간(초). 이 만큼 뒤에 데미지가 들어가고, 그때 사거리를 재검증하므로 준비 동작이 곧 회피 창이 된다 (#220)")]
+    [SerializeField] private float m_strikeOffsetSeconds = 0.45f;
+    [Tooltip("타격이 닿는 정면 부채꼴의 전체 각도(도). 타격 순간 이 각도(정면 기준 ±절반) 안에 있어야 명중 — 준비 중 측면·뒤로 돌아가면 빗나간다 (#220)")]
+    [SerializeField] private float m_attackConeAngle = 120f;
 
     [Header("소란 (#81 패닉 전파)")]
     [Tooltip("습격이 주변 시민을 패닉시키는 전파 반경(m)")]
@@ -37,11 +41,17 @@ public class ThugAttacker : NetworkBehaviour
     [Tooltip("소란 펄스 주기(초)")]
     [SerializeField] private float m_disturbancePulseInterval = 1f;
 
+    private const float k_noPendingStrike = -1f;
+
     private NavMeshAgent m_agent;
     private PlayerData m_target;
     private float m_nextRetargetTime;
     private float m_nextAttackTime;
     private float m_nextPulseTime;
+    // 스윙을 시작한 뒤 타격 프레임을 기다리는 예약. 데미지는 스윙 시작이 아니라 이 시점에 넣고
+    // 그때 사거리·타깃 유효성을 재검증하므로 준비 중 벗어난 표적은 빗나간다. (#220)
+    private float m_pendingStrikeTime = k_noPendingStrike;
+    private PlayerData m_pendingStrikeTarget;
 
     /// <summary>타격을 한 번 휘두를 때 발행 — 전 피어에서 발생한다(서버는 로컬 발행 + ClientRpc 중계).
     /// 애니메이션 표현(<see cref="ThugAnimationDriver"/>)이 구독해 타격 모션을 재생한다. (#56 서버 권위 패턴)</summary>
@@ -64,6 +74,9 @@ public class ThugAttacker : NetworkBehaviour
         // 추격·타격은 서버 전용 (오프라인 폴백 포함) — 클라이언트는 동기화된 위치만 표현한다 (#56)
         if (IsSpawned && !IsServer)
             return;
+
+        // 예약된 타격은 표적이 바뀌거나 사라졌더라도 먼저 처리한다 — 스윙을 시작한 이상 타격 프레임은 온다
+        ProcessPendingStrike();
 
         PlayerData target = AcquireTarget();
         if (target == null)
@@ -114,7 +127,36 @@ public class ThugAttacker : NetworkBehaviour
 
         NotifyAttack(); // 스윙 모션은 명중 여부와 무관하게 재생 (전 피어)
 
-        // 표적은 AcquireTarget에서 이미 행동 가능(IsTargetable)한 것만 걸러진다 — 다운된 표적을 때릴 일은 없다
+        // 데미지는 타격 프레임까지 미룬다 — 스윙 준비 동작과 실제 HP 감소 순간을 일치시킨다 (#220)
+        m_pendingStrikeTime = Time.time + m_strikeOffsetSeconds;
+        m_pendingStrikeTarget = target;
+    }
+
+    // 예약된 타격을 타격 프레임에 실행한다 — 그 순간 사거리·타깃 유효성을 다시 확인하므로
+    // 준비 동작 중 벗어나거나 다운된 표적은 자연히 빗나간다(회피 창). (#220)
+    private void ProcessPendingStrike()
+    {
+        if (m_pendingStrikeTime < 0f || Time.time < m_pendingStrikeTime)
+            return;
+
+        PlayerData target = m_pendingStrikeTarget;
+        m_pendingStrikeTime = k_noPendingStrike;
+        m_pendingStrikeTarget = null;
+
+        if (target == null || !target.IsTargetable)
+            return; // 준비 중 표적이 다운되거나 사라짐
+
+        Vector3 to = target.transform.position - transform.position;
+        to.y = 0f;
+        if (to.sqrMagnitude > m_attackRange * m_attackRange)
+            return; // 준비 중 사거리를 벗어남 — 빗나감
+
+        // 정면 부채꼴 밖(측면·뒤)이면 빗나감 — 추격 중 표적을 바라보므로 보통은 정면이지만, 준비 중 옆으로 파고들면 빗맞는다 (#220)
+        Vector3 forward = transform.forward;
+        forward.y = 0f;
+        if (to.sqrMagnitude > 0.0001f && Vector3.Angle(forward, to) > m_attackConeAngle * 0.5f)
+            return;
+
         ((IDamageable)target).TakeDamage(m_attackDamage, gameObject);
         Debug.Log($"괴한 습격 타격: {name} → {target.name} (-{m_attackDamage})");
     }

@@ -37,10 +37,10 @@ public class ThugAnimationDriver : MonoBehaviour
     [SerializeField]
     private float m_runReferenceSpeed = 4.5f;
 
-    [Header("타격 모션")]
-    [Tooltip("타격 스윙 1회당 Attack 모션을 유지하는 시간(초) — 이후 이동 상태로 복귀한다")]
+    [Header("공격 스윙 (#220)")]
+    [Tooltip("스윙 1회당 Attack(단발) 모션을 유지하는 시간(초) — 이후 이동 상태로 복귀한다. 타격 주기보다 짧고 타격 오프셋보다 길게")]
     [SerializeField]
-    private float m_attackAnimDuration = 0.6f;
+    private float m_swingAnimSeconds = 0.9f;
 
     [SerializeField]
     private Animator m_animator;
@@ -48,7 +48,8 @@ public class ThugAnimationDriver : MonoBehaviour
     private ThugAttacker m_thug;
     private Vector3 m_lastPosition;
     private float m_smoothedSpeed;
-    private float m_attackAnimUntil;
+    // 현재 스윙 모션을 유지할 종료 시각 — 이 시각 전까지는 Attack(단발 스윙)을, 이후엔 이동 모션을 낸다 (#220)
+    private float m_swingUntil;
     private int m_appliedState = -1; // 마지막으로 Animator에 쓴 값 — 매 프레임 중복 SetInteger 방지
 
     private void Awake()
@@ -77,9 +78,12 @@ public class ThugAnimationDriver : MonoBehaviour
             m_thug.OnAttack -= HandleAttack;
     }
 
+    // 괴한의 공격 스윙 1회 — 잠시 Attack(단발 스윙 클립)을 유지하다 이동 모션으로 복귀한다.
+    // NpcAnimationDriver와 같은 int 펄스 방식(로코모션이 Any State 전이라 트리거 오버레이가 스윙을
+    // 끊는다). 데미지 타이밍은 ThugAttacker가 타격 오프셋으로 맞춘다. (#220)
     private void HandleAttack()
     {
-        m_attackAnimUntil = Time.time + m_attackAnimDuration;
+        m_swingUntil = Time.time + m_swingAnimSeconds;
     }
 
     private void Update()
@@ -92,8 +96,9 @@ public class ThugAnimationDriver : MonoBehaviour
         m_lastPosition = transform.position;
         m_smoothedSpeed = Mathf.Lerp(m_smoothedSpeed, rawSpeed, Time.deltaTime * k_speedSmoothing);
 
+        // 스윙 유지 시간 동안은 Attack(단발 스윙)을, 그 외엔 이동 속도로 Run/Idle을 낸다 (#220)
         int desired;
-        if (Time.time < m_attackAnimUntil)
+        if (Time.time < m_swingUntil)
             desired = (int)NpcState.Attack;
         else
             desired =
