@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 모든 아이템의 공통 기반 클래스.
@@ -12,14 +13,13 @@ public abstract class ItemBase : NetworkBehaviour
 {
     [Header("아이템 정보")]
     [SerializeField]
-    private string m_itemName;
+    private LocalizedString m_itemName;
 
     [SerializeField]
     private Sprite m_itemIcon;
 
     [SerializeField]
-    [TextArea]
-    private string m_itemDescription;
+    private LocalizedString m_itemDescription;
 
     [Header("1인칭 표시")]
     [Tooltip("장착 시 1인칭 손에 표시할 모델 프리팹. 비우면 손만 표시된다 (#45)")]
@@ -32,13 +32,13 @@ public abstract class ItemBase : NetworkBehaviour
     private Color m_targetOutlineColor = new Color(1f, 0.85f, 0.2f);
 
     /// <summary>인벤토리·UI에 표시되는 아이템 이름.</summary>
-    public string ItemName => m_itemName;
+    public LocalizedString ItemName => m_itemName;
 
     /// <summary>인벤토리·UI에 표시되는 아이템 아이콘.</summary>
     public Sprite ItemIcon => m_itemIcon;
 
     /// <summary>인벤토리·UI에 표시되는 아이템 설명.</summary>
-    public string ItemDescription => m_itemDescription;
+    public LocalizedString ItemDescription => m_itemDescription;
 
     /// <summary>장착 시 1인칭 손에 들리는 모델 프리팹. 없으면 null — PlayerHandView가 표시를 생략한다. (#45)</summary>
     public GameObject HeldModelPrefab => m_heldModelPrefab;
