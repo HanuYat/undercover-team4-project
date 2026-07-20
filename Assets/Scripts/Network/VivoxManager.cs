@@ -7,6 +7,7 @@ using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using Unity.Services.Vivox;
 using Unity.Services.Authentication;
+using System.Collections.Generic;
 
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class VivoxManager : CommonManagerBase
@@ -30,6 +31,15 @@ public class VivoxManager : CommonManagerBase
     private bool m_proximityJoined;
     private string m_proximityChannelName;
     private CancellationTokenSource m_posLoopCts;
+
+    private readonly Dictionary<string, bool> m_speakingByPlayer = new();
+    private bool m_participantEventsHooked;
+    public event Action<string, bool> OnSpeakingChanged;
+
+    public bool IsSpeaking(string playerId) => 
+        !string.IsNullOrEmpty(playerId)
+        && m_speakingByPlayer.TryGetValue(playerId, out var speaking)
+        && speaking;
 
     private void OnEnable()
     {
@@ -103,6 +113,8 @@ public class VivoxManager : CommonManagerBase
                 new LoginOptions { DisplayName = AuthenticationService.Instance.PlayerId });
 
             m_loggedIn = true;
+            HookParticipantEvents();
+
             m_status = "Vivox 로그인 완료";
         }
         catch (Exception ex)
@@ -191,6 +203,55 @@ public class VivoxManager : CommonManagerBase
         }
     }
 
+    private void HookParticipantEvents()
+    {
+        if (m_participantEventsHooked) return;
+        VivoxService.Instance.ParticipantAddedToChannel += OnParticipantAdded;
+        VivoxService.Instance.ParticipantRemovedFromChannel += OnParticipantRemoved;
+        m_participantEventsHooked = true;
+    }
+
+    private void UnhookParticipantEvents()
+    {
+        if (!m_participantEventsHooked) return;
+        VivoxService.Instance.ParticipantAddedToChannel -= OnParticipantAdded;
+        VivoxService.Instance.ParticipantRemovedFromChannel -= OnParticipantRemoved;
+        m_participantEventsHooked = false;
+    }
+
+    private void OnParticipantAdded(VivoxParticipant participant)
+    {
+        // 참가자 인스턴스가 발화 상태 변화를 알림.
+        participant.ParticipantSpeechDetected += () => RefreshSpeaking(participant.PlayerId);
+        RefreshSpeaking(participant.PlayerId);
+    }
+
+    private void OnParticipantRemoved(VivoxParticipant participant)
+    {
+        RefreshSpeaking(participant.PlayerId);
+    }
+
+    private void RefreshSpeaking(string playerId)
+    {
+        if (string.IsNullOrEmpty(playerId)) return;
+
+        bool speaking = false;
+        foreach (var channel in VivoxService.Instance.ActiveChannels.Values)
+        {
+            foreach (var p in channel)
+            {
+                if (p.PlayerId == playerId && p.SpeechDetected) { speaking = true; break; }
+            }
+            if (speaking) break;
+        }
+
+        bool prev = m_speakingByPlayer.TryGetValue(playerId, out var v) && v;
+        if (prev == speaking) return;
+
+        m_speakingByPlayer[playerId] = speaking;
+        OnSpeakingChanged?.Invoke(playerId, speaking);
+    }
+
     private async UniTask LeaveChannelAsync()
     {
         if (!m_radioJoined && !m_proximityJoined) return;
@@ -270,6 +331,9 @@ public class VivoxManager : CommonManagerBase
 
     public async UniTask LogoutAsync()
     {
+        UnhookParticipantEvents();
+        m_speakingByPlayer.Clear();
+
         if (m_radioJoined || m_proximityJoined)
         {
             await VivoxService.Instance.LeaveAllChannelsAsync();
