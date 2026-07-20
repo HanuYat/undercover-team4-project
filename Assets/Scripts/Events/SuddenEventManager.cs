@@ -160,6 +160,15 @@ public class SuddenEventManager : NetworkedManagerBase
 
         ISuddenEvent chosen = m_eligibleBuffer[Random.Range(0, m_eligibleBuffer.Count)];
         chosen.ServerBegin();
+
+        // 이벤트가 내부 사정(스폰 지점 실패 등)으로 발동을 접었을 수 있다 — IsActive로 확인하고 로그를 가른다.
+        // 성공으로 단정하고 찍으면 실제로는 아무 일도 없는데 콘솔에만 "발생"이 남아 디버깅이 흔들린다.
+        if (!chosen.IsActive)
+        {
+            Debug.Log($"[돌발이벤트] 발동 불발 — {chosen.DisplayName}");
+            return;
+        }
+
         Debug.Log($"[돌발이벤트] 발생 — {chosen.DisplayName}");
 
         // 조용히 시작하는 이벤트(AnnounceOnBegin=false)는 자기가 원하는 시점에 Announce를 직접 부른다

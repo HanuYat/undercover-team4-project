@@ -223,15 +223,22 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
             return false;
         }
 
-        Transform point = points[Random.Range(0, points.Count)];
-        if (point == null)
+        // 무작위 지점에서 시작해 목록을 한 바퀴 돈다 — 고른 포인트가 비어 있거나(인스펙터 미설정)
+        // 주변에 NavMesh가 없어도 이벤트를 통째로 취소하지 않고 다음 포인트로 넘어간다 (JailZone.ReserveCell과 같은 방식).
+        int start = Random.Range(0, points.Count);
+        for (int i = 0; i < points.Count; i++)
         {
-            result = default;
-            return false;
+            Transform point = points[(start + i) % points.Count];
+            if (point == null)
+                continue;
+
+            if (SuddenEventUtil.TryFindSpawnPositionNear(
+                    point.position, 0f, m_spawnRadius, m_navSampleMaxDistance, m_maxSpawnAttempts, out result))
+                return true;
         }
 
-        return SuddenEventUtil.TryFindSpawnPositionNear(
-            point.position, 0f, m_spawnRadius, m_navSampleMaxDistance, m_maxSpawnAttempts, out result);
+        result = default;
+        return false;
     }
 
     // 자물쇠 해제 착수 — 이 순간 본부 경보를 울린다. 발동 시점에는 알리지 않았으므로(AnnounceOnBegin=false)
