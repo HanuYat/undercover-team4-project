@@ -209,6 +209,12 @@ public class SessionManager : CommonManagerBase
         }
     }
 
+    [Tooltip(
+        "OnGUI 디버그 패널 표시 — 테스트 씬 수동 세션 조작용. 정식 UI는 SessionPanel·SessionCodePanel (#247)"
+    )]
+    [SerializeField]
+    private bool m_showDebugGui;
+
     [SerializeField]
     private float m_guiTopOffset = 10f;
 
@@ -218,6 +224,9 @@ public class SessionManager : CommonManagerBase
 
     private void OnGUI()
     {
+        if (!m_showDebugGui)
+            return;
+
         GUILayout.BeginArea(new Rect(10, m_guiTopOffset, 380, 300));
 
         if (m_session == null)
