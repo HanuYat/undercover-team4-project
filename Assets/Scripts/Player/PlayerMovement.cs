@@ -149,7 +149,8 @@ public class PlayerMovement : NetworkBehaviour
         m_controller.enabled = true;
     }
 
-    private void SetLayerRecursively(Transform root, int layer)
+    // 3인칭 장착 표시(#151)도 오너 화면에서 숨기려면 같은 처리가 필요해 공개한다.
+    public static void SetLayerRecursively(Transform root, int layer)
     {
         root.gameObject.layer = layer;
         foreach (Transform child in root)
