@@ -12,13 +12,11 @@ using Random = UnityEngine.Random;
 /// 배정은 서버 권위 — NpcAppearance.SetProfile이 인덱스만 전 클라이언트에 동기화한다 (#56).
 /// 몽타주 텍스트(GDD 10-3 글 방식)는 범인 프로필에서 자동 생성 — 본부 수배 UI(#58)의 원본.
 /// </summary>
-public class AppearanceAssigner : MonoBehaviour
+[DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
+public class AppearanceAssigner : CommonManagerBase
 {
-    [Header("범인 배정기 (비우면 씬에서 자동 탐색)")]
-    [SerializeField] private CriminalAssigner m_criminalAssigner;
-
-    [Header("스포너 (비우면 씬에서 자동 탐색)")]
-    [SerializeField] private NpcSpawner m_spawner;
+    private CriminalAssigner Assigner => App.Game.CriminalAssigner;
+    private NpcSpawner Spawner => App.Game.NpcSpawner;
 
     [Header("외형 축별 옵션 정의")]
     [SerializeField] private AppearanceDatabase m_appearanceDatabase;
@@ -48,35 +46,29 @@ public class AppearanceAssigner : MonoBehaviour
     /// <summary>몽타주 생성 완료 이벤트 — 수배 UI(#58)가 구독한다. 범인마다 한 번씩 (해당 범인, 몽타주 텍스트)로 발행된다. (#127)</summary>
     public event Action<NpcController, string> OnMontageGenerated;
 
-    private void Awake()
-    {
-        if (m_criminalAssigner == null)
-            m_criminalAssigner = FindFirstObjectByType<CriminalAssigner>();
-        if (m_spawner == null)
-            m_spawner = FindFirstObjectByType<NpcSpawner>();
-
-        // 범인 확정 이후에 배정해야 디코이 기준(범인)이 존재한다 — Start보다 먼저 구독해 이벤트를 놓치지 않는다
-        if (m_criminalAssigner != null)
-            m_criminalAssigner.OnCriminalAssigned += AssignAll;
-    }
-
     private void Start()
     {
-        if (m_criminalAssigner == null)
+        if (Assigner == null)
         {
             Debug.LogWarning("AppearanceAssigner: CriminalAssigner를 찾지 못해 외형 배정 불가", this);
             return;
         }
 
-        // 이 컴포넌트가 늦게 활성화돼 배정 이벤트를 이미 놓친 경우 보정
-        if (m_criminalAssigner.CriminalNpcs.Count > 0 && m_criminalProfiles.Count == 0)
-            AssignAll(m_criminalAssigner.CriminalNpcs);
+        // 범인 확정 이벤트 구독 — 매니저 간 구독은 모든 매니저의 Awake(App 등록)가 끝난 Start에서 한다.
+        // 실제 배정은 스폰 완료(수 프레임 뒤) 이후에 발화하므로 Start 구독으로 놓치지 않는다.
+        Assigner.OnCriminalAssigned += AssignAll;
+
+        // 구독 전에 배정이 이미 끝난 경우 보정
+        if (Assigner.CriminalNpcs.Count > 0 && m_criminalProfiles.Count == 0)
+            AssignAll(Assigner.CriminalNpcs);
     }
 
-    private void OnDestroy()
+    protected override void OnDestroy()
     {
-        if (m_criminalAssigner != null)
-            m_criminalAssigner.OnCriminalAssigned -= AssignAll;
+        base.OnDestroy(); // App 등록 해제
+
+        if (Assigner != null)
+            Assigner.OnCriminalAssigned -= AssignAll;
     }
 
     private void AssignAll(IReadOnlyList<NpcController> criminals)
@@ -86,13 +78,13 @@ public class AppearanceAssigner : MonoBehaviour
             Debug.LogWarning("AppearanceAssigner: AppearanceDatabase가 지정되지 않아 외형 배정 불가", this);
             return;
         }
-        if (m_spawner == null)
+        if (Spawner == null)
         {
             Debug.LogWarning("AppearanceAssigner: NpcSpawner를 찾지 못해 외형 배정 불가", this);
             return;
         }
 
-        IReadOnlyList<NpcController> npcs = m_spawner.SpawnedNpcs;
+        IReadOnlyList<NpcController> npcs = Spawner.SpawnedNpcs;
         if (npcs.Count == 0 || criminals.Count == 0)
             return;
 

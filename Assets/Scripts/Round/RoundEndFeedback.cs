@@ -18,9 +18,7 @@ public class RoundEndFeedback : MonoBehaviour
 {
     private const string k_messageName = "RoundEndFeedback";
 
-    [Header("참조 (비우면 씬에서 자동 탐색)")]
-    [SerializeField]
-    private RoundManager m_round;
+    private RoundManager Round => App.Game.Round;
 
     [Header("표시")]
     [Tooltip("종료 사유 텍스트 폰트 크기")]
@@ -30,23 +28,17 @@ public class RoundEndFeedback : MonoBehaviour
     private string m_message;
     private bool m_handlerRegistered;
 
-    private void Awake()
-    {
-        if (m_round == null)
-            m_round = FindFirstObjectByType<RoundManager>();
-    }
-
     private void OnEnable()
     {
         // 라운드 종료는 서버·오프라인에서만 발행된다 — 권위 피어는 이 훅으로 즉시 표시·전파한다.
-        if (m_round != null)
-            m_round.OnRoundEnded += HandleRoundEnded;
+        if (Round != null)
+            Round.OnRoundEnded += HandleRoundEnded;
     }
 
     private void OnDisable()
     {
-        if (m_round != null)
-            m_round.OnRoundEnded -= HandleRoundEnded;
+        if (Round != null)
+            Round.OnRoundEnded -= HandleRoundEnded;
     }
 
     private void Start()

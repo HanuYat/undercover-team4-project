@@ -19,21 +19,16 @@ public class SpawnedNpcEventSet : MonoBehaviour, ISuddenEventProvider
     [Header("스폰형 이벤트 목록 — 항목을 추가해 종류를 늘린다")]
     [SerializeField] private List<SpawnedNpcEvent> m_events = new List<SpawnedNpcEvent>();
 
-    [Header("검거 판정 (비우면 씬에서 자동 탐색)")]
-    [Tooltip("모든 항목이 공유한다 — 인계 후 경범죄 판정 시점에 자기 스폰물을 정리하는 데 쓴다")]
-    [SerializeField] private ArrestJudge m_arrestJudge;
+    // 모든 항목이 공유한다 — 인계 후 경범죄 판정 시점에 자기 스폰물을 정리하는 데 쓴다
+    private ArrestJudge Judge => App.Game.ArrestJudge;
 
     private void Awake()
     {
-        // 항목마다 찾지 않고 여기서 한 번만 — 항목 수만큼 씬을 훑을 이유가 없다
-        if (m_arrestJudge == null)
-            m_arrestJudge = FindFirstObjectByType<ArrestJudge>();
-
-        if (m_arrestJudge == null)
+        if (Judge == null)
             Debug.LogWarning("SpawnedNpcEventSet: ArrestJudge를 찾지 못해 인계 후 스폰물이 정리되지 않는다", this);
 
         for (int i = 0; i < m_events.Count; i++)
-            m_events[i].Initialize(this, m_arrestJudge);
+            m_events[i].Initialize(this, Judge);
     }
 
     private void OnEnable()

@@ -17,9 +17,8 @@ using UnityEngine.SceneManagement;
 /// </summary>
 public class RoundEndResetter : MonoBehaviour
 {
-    [Header("참조 (비우면 씬에서 자동 탐색)")]
-    [SerializeField] private RoundManager m_round;
-    [SerializeField] private SessionManager m_session;
+    private RoundManager Round => App.Game.Round;
+    private SessionManager Session => App.Net.Session;
 
     [Header("리셋 타이밍")]
     [Tooltip("라운드 종료 후 리셋까지의 대기(초) — 결과를 잠깐 보여줄 여유. 0이면 즉시")]
@@ -28,19 +27,11 @@ public class RoundEndResetter : MonoBehaviour
     // 종료·끊김이 겹쳐 들어와도(호스트는 둘 다 발생) 리셋을 한 번만 수행하기 위한 래치
     private bool m_resetting;
 
-    private void Awake()
-    {
-        if (m_round == null)
-            m_round = FindFirstObjectByType<RoundManager>();
-        if (m_session == null)
-            m_session = FindFirstObjectByType<SessionManager>();
-    }
-
     private void OnEnable()
     {
         // 라운드 종료는 서버·오프라인에서만 발행된다 — 이 훅으로 권위 피어가 리셋을 시작한다.
-        if (m_round != null)
-            m_round.OnRoundEnded += HandleRoundEnded;
+        if (Round != null)
+            Round.OnRoundEnded += HandleRoundEnded;
     }
 
     private void Start()
@@ -53,8 +44,8 @@ public class RoundEndResetter : MonoBehaviour
 
     private void OnDisable()
     {
-        if (m_round != null)
-            m_round.OnRoundEnded -= HandleRoundEnded;
+        if (Round != null)
+            Round.OnRoundEnded -= HandleRoundEnded;
     }
 
     private void OnDestroy()
@@ -91,11 +82,11 @@ public class RoundEndResetter : MonoBehaviour
             await UniTask.Delay(TimeSpan.FromSeconds(m_resetDelaySeconds), ignoreTimeScale: true);
 
         // 1) UGS 세션 나가기 (있을 때만) — OnSessionLeft로 Vivox 채널 정리까지 연쇄된다.
-        if (m_session != null && m_session.CurrentSession != null)
+        if (Session != null && Session.CurrentSession != null)
         {
             try
             {
-                await m_session.LeaveAsync();
+                await Session.LeaveAsync();
             }
             catch (Exception ex)
             {

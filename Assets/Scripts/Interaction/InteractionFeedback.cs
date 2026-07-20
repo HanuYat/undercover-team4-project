@@ -33,7 +33,7 @@ public class InteractionFeedback : NetworkBehaviour
             return;
         }
 
-        if (CrosshairUI.Instance == null && m_hudPrefab != null)
+        if (App.UI.Crosshair == null && m_hudPrefab != null)
             Instantiate(m_hudPrefab);
 
         m_interactor = GetComponent<PlayerInteractor>();
@@ -83,12 +83,12 @@ public class InteractionFeedback : NetworkBehaviour
         if (itemUsable || interactUsable)
         {
             SetOutlined(root, itemUsable ? equipped.TargetOutlineColor : m_outlineColor);
-            CrosshairUI.Instance?.SetInteractable(true);
+            App.UI.Crosshair?.SetInteractable(true);
         }
         else
         {
             SetOutlined(null, Color.clear);
-            CrosshairUI.Instance?.SetInteractable(false);
+            App.UI.Crosshair?.SetInteractable(false);
         }
     }
 

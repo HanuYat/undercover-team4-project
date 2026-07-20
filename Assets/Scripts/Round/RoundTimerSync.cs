@@ -16,20 +16,12 @@ public class RoundTimerSync : NetworkBehaviour
     /// <summary>타이머가 돌고 있지 않음(미시작·무제한·종료)을 나타내는 종료 시각 값.</summary>
     private const double k_notRunning = 0d;
 
-    [Header("라운드 관리 (비우면 씬에서 자동 탐색)")]
-    [SerializeField]
-    private RoundManager m_round;
+    private RoundManager Round => App.Game.Round;
 
     // 서버만 쓰기, 전 클라이언트 읽기. 값은 ServerTime 기준 라운드 종료 시각(초).
     private readonly NetworkVariable<double> m_endServerTime = new NetworkVariable<double>(
         k_notRunning
     );
-
-    private void Awake()
-    {
-        if (m_round == null)
-            m_round = FindFirstObjectByType<RoundManager>();
-    }
 
     public override void OnNetworkSpawn()
     {
@@ -40,7 +32,7 @@ public class RoundTimerSync : NetworkBehaviour
         // 서버가 새로 뜨면 항상 정지 상태로 시작한다 (WantedListManager #209와 같은 방침)
         m_endServerTime.Value = k_notRunning;
 
-        if (m_round == null)
+        if (Round == null)
         {
             Debug.LogWarning(
                 "RoundTimerSync: RoundManager를 찾지 못해 타이머를 동기화할 수 없다",
@@ -49,35 +41,35 @@ public class RoundTimerSync : NetworkBehaviour
             return;
         }
 
-        m_round.OnRoundStarted += HandleRoundStarted;
-        m_round.OnRoundEnded += HandleRoundEnded;
+        Round.OnRoundStarted += HandleRoundStarted;
+        Round.OnRoundEnded += HandleRoundEnded;
 
         // 스폰 순서 경합 대비 — 이 오브젝트가 스폰되기 전에 라운드가 이미 시작됐다면
         // 서버 진실값(RemainingSeconds)으로 종료 시각을 복원한다.
-        if (m_round.Phase == RoundPhase.InProgress)
+        if (Round.Phase == RoundPhase.InProgress)
             HandleRoundStarted();
     }
 
     public override void OnNetworkDespawn()
     {
-        if (m_round == null)
+        if (Round == null)
             return;
 
-        m_round.OnRoundStarted -= HandleRoundStarted;
-        m_round.OnRoundEnded -= HandleRoundEnded;
+        Round.OnRoundStarted -= HandleRoundStarted;
+        Round.OnRoundEnded -= HandleRoundEnded;
     }
 
     // 라운드 시작 — 서버 시계 기준 종료 시각을 한 번만 기록한다. 이후 갱신은 각 피어의 로컬 계산.
     private void HandleRoundStarted()
     {
         // 무제한(RemainingSeconds == 무한대)이면 타이머를 걸지 않는다 — UI도 표시하지 않음
-        if (float.IsPositiveInfinity(m_round.RemainingSeconds))
+        if (float.IsPositiveInfinity(Round.RemainingSeconds))
         {
             m_endServerTime.Value = k_notRunning;
             return;
         }
 
-        m_endServerTime.Value = NetworkManager.ServerTime.Time + m_round.RemainingSeconds;
+        m_endServerTime.Value = NetworkManager.ServerTime.Time + Round.RemainingSeconds;
     }
 
     // 라운드 종료 — 조기 종료(할당량 달성·전멸)에도 타이머 표시를 멈춘다. 종료 사유는 RoundEndFeedback(#210)가 보여준다.

@@ -62,7 +62,7 @@ public class PlayerMovement : NetworkBehaviour
     private PlayerInputHandler m_inputHandler;
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 이동·시점 차단용 (#105)
     private PlayerCrouch m_crouch; // 앉기 중 이동 속도·카메라 높이 조정용 (#236)
-    private RoundManager m_roundManager; // 라운드 종료 시 이동·시점 차단용 (라운드 종료 freeze)
+    private RoundManager Round => App.Game.Round; // 라운드 종료 시 이동·시점 차단용 (라운드 종료 freeze)
     private float m_pitch;
     private float m_standCamHeight; // 평소(서기) 카메라 높이 — 프리팹 초기값에서 캡처 (#105)
     private float m_downCamBlend; // 서기 시점(0) ↔ 다운 시점(1) 보간 진행도 (#105)
@@ -73,7 +73,7 @@ public class PlayerMovement : NetworkBehaviour
     private bool IsIncapacitated => m_incapacitation != null && m_incapacitation.IsIncapacitated;
 
     // 라운드 종료로 정지(freeze)됐는지 — RoundManager가 없으면(단독 테스트 씬) 항상 false
-    private bool IsRoundOver => m_roundManager != null && m_roundManager.GameplayFrozen;
+    private bool IsRoundOver => Round != null && Round.GameplayFrozen;
 
     // 이동·시점을 막아야 하는 상태 — 다운(무력화) 또는 라운드 종료
     private bool IsMovementLocked => IsIncapacitated || IsRoundOver;
@@ -90,7 +90,6 @@ public class PlayerMovement : NetworkBehaviour
         m_inputHandler = GetComponent<PlayerInputHandler>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
         m_crouch = GetComponent<PlayerCrouch>();
-        m_roundManager = FindFirstObjectByType<RoundManager>(); // 씬에 하나 — 없으면 단독 테스트 씬
 
         if (playerCamera != null)
         {

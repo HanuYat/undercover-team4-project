@@ -9,7 +9,8 @@ using UnityEngine;
 /// 범인 배정(CriminalAssigner)이 서버에서만 이뤄지고 아직 클라이언트에 동기화되지 않으므로(#52/#56 TODO),
 /// 판정도 서버(또는 오프라인)에서만 수행한다 — 인계 NPC의 네트워크 권위로 게이트한다.
 /// </summary>
-public class ArrestJudge : MonoBehaviour
+[DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
+public class ArrestJudge : CommonManagerBase
 {
     private const int k_wantedReward = 10000;
     private const int k_wrongfulReward = 0;
@@ -22,8 +23,11 @@ public class ArrestJudge : MonoBehaviour
 
     public event Action<ArrestResult> OnArrestJudged;
 
-    private void Awake()
+    protected override void Awake()
     {
+        base.Awake(); // App.Game.ArrestJudge 등록
+
+        // HqDropoffZone은 장소 오브젝트라 App 대상이 아님 — 씬 탐색 유지 (같은 도메인 부품)
         if (m_dropoffZone == null)
             m_dropoffZone = FindFirstObjectByType<HqDropoffZone>();
     }
@@ -42,6 +46,7 @@ public class ArrestJudge : MonoBehaviour
 
     // 판정 완료 표식은 NpcController.IsDelivered가 들고 있다 (#230) — NPC와 수명을 같이하므로
     // 씬 전환·라운드 재시작 시 수동으로 비울 static 상태가 없다.
+    // (App 등록 해제는 베이스 OnDestroy가 처리 — 여기서 오버라이드할 것이 없다)
 
     private void HandleNpcDelivered(NpcController npc)
     {

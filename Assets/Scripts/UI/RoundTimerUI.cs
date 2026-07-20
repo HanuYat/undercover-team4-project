@@ -13,8 +13,7 @@ public class RoundTimerUI : MonoBehaviour
     [SerializeField]
     private RoundTimerSync m_timerSync;
 
-    [SerializeField]
-    private RoundManager m_round;
+    private RoundManager Round => App.Game.Round;
 
     [Header("표시")]
     [Tooltip("mm:ss를 표시할 TextMeshProUGUI — 화면 중앙 상단에 앵커해 배치")]
@@ -28,8 +27,6 @@ public class RoundTimerUI : MonoBehaviour
     {
         if (m_timerSync == null)
             m_timerSync = FindFirstObjectByType<RoundTimerSync>();
-        if (m_round == null)
-            m_round = FindFirstObjectByType<RoundManager>();
 
         if (m_timerText == null)
             Debug.LogWarning("RoundTimerUI: 타이머 텍스트가 연결되지 않아 표시할 수 없다", this);
@@ -69,13 +66,13 @@ public class RoundTimerUI : MonoBehaviour
 
         seconds = 0f;
         if (
-            m_round == null
-            || m_round.Phase != RoundPhase.InProgress
-            || float.IsPositiveInfinity(m_round.RemainingSeconds)
+            Round == null
+            || Round.Phase != RoundPhase.InProgress
+            || float.IsPositiveInfinity(Round.RemainingSeconds)
         )
             return false;
 
-        seconds = Mathf.Max(0f, m_round.RemainingSeconds);
+        seconds = Mathf.Max(0f, Round.RemainingSeconds);
         return true;
     }
 

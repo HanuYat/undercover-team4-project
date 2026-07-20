@@ -323,7 +323,7 @@ public class Scanner : ItemBase, IChargeable
             ChannelGaugeStartRpc(seconds);
             return;
         }
-        ChannelingGaugeUI.Instance?.Show(seconds);
+        App.UI.Gauge?.Show(seconds);
     }
 
     private void NotifyChannelGaugeEnd()
@@ -333,14 +333,14 @@ public class Scanner : ItemBase, IChargeable
             ChannelGaugeEndRpc();
             return;
         }
-        ChannelingGaugeUI.Instance?.Hide();
+        App.UI.Gauge?.Hide();
     }
 
     [Rpc(SendTo.Owner)]
-    private void ChannelGaugeStartRpc(float seconds) => ChannelingGaugeUI.Instance?.Show(seconds);
+    private void ChannelGaugeStartRpc(float seconds) => App.UI.Gauge?.Show(seconds);
 
     [Rpc(SendTo.Owner)]
-    private void ChannelGaugeEndRpc() => ChannelingGaugeUI.Instance?.Hide();
+    private void ChannelGaugeEndRpc() => App.UI.Gauge?.Hide();
 
     // ---- 스캔 취소 ----
 
