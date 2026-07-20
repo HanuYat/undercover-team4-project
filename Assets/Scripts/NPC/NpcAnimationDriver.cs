@@ -107,10 +107,17 @@ public class NpcAnimationDriver : MonoBehaviour
         state is not (NpcState.Captured or NpcState.Escorted or NpcState.Stunned);
 
     // FSM 기준 상태에 대응하는 Animator base 번호. 저항(Attack) 중의 base는 버틴 자세(Idle)이고,
-    // Attack 번호(3)는 이제 단발 스윙 전용이라 base로 쓰지 않는다. 그 외 상태는 enum 값을 그대로 쓴다. (#220)
+    // Attack 번호(3)는 이제 단발 스윙 전용이라 base로 쓰지 않는다. (#220)
+    // 침입(Intruding)은 대응 Animator 상태가 없어 평범한 걷기(Walk)를 빌려 쓴다 —
+    // 수갑을 차지 않은 채 본부로 걸어 들어오는 그림이라 Escorted가 아니라 Walk다. (#231)
     private int AnimatorBaseState(NpcState state)
     {
-        return state == NpcState.Attack ? (int)NpcState.Idle : (int)state;
+        return state switch
+        {
+            NpcState.Attack => (int)NpcState.Idle,
+            NpcState.Intruding => (int)NpcState.Walk,
+            _ => (int)state,
+        };
     }
 
     private void Update()

@@ -205,6 +205,12 @@ public class NpcController : NetworkBehaviour
     /// <summary>유치장 수용 지점 도달 — 유치장(JailZone)이 구독해 수용 인원을 올린다. 서버에서만 발생. (#228)</summary>
     public event Action<NpcController> OnJailed;
 
+    /// <summary>침입 중 걸어갈 목표 지점(유치장 자물쇠). 침입 중이 아니면 null. 서버에서만 유효. (#231)</summary>
+    public Transform IntrudeTarget { get; private set; }
+
+    /// <summary>침입 이동 종료 — reached=true 도달, false 경로 실패. 탈출 이벤트가 구독한다. 서버에서만 발생. (#231)</summary>
+    public event Action<NpcController, bool> OnIntrudeFinished;
+
     private void Awake()
     {
         m_agent = GetComponent<NavMeshAgent>();
@@ -219,6 +225,7 @@ public class NpcController : NetworkBehaviour
         m_stateMachine.AddState(NpcState.Stunned, new NpcStunnedState(this));
         m_stateMachine.AddState(NpcState.Panic, new NpcPanicState(this));
         m_stateMachine.AddState(NpcState.Jailed, new NpcJailedState(this));
+        m_stateMachine.AddState(NpcState.Intruding, new NpcIntrudeState(this));
 
         // FSM 전이(서버/오프라인에서만 발생)를 동기화 변수 또는 로컬 이벤트로 흘려보낸다
         m_stateMachine.OnStateChanged += HandleFsmStateChanged;
@@ -404,6 +411,25 @@ public class NpcController : NetworkBehaviour
 
     /// <summary>수용 지점 도달 통보 — NpcJailedState 전용. 유치장이 이 이벤트로 수용 인원을 센다.</summary>
     public void NotifyJailed() => OnJailed?.Invoke(this);
+
+    // ---- 침입 (#231) ----
+
+    /// <summary>
+    /// 침입 시작 — 돌발 이벤트가 스폰한 침입자를 target(유치장 자물쇠)까지 걸어가게 한다. (GDD 6-4)
+    /// 도착·실패는 <see cref="OnIntrudeFinished"/>로 통보된다.
+    /// </summary>
+    public void StartIntrude(Transform target)
+    {
+        // FSM 전이는 서버 권위 — StartEscort와 동일하게 클라이언트 호출은 무시한다
+        if (IsSpawned && !IsServer)
+            return;
+
+        IntrudeTarget = target;
+        m_stateMachine.ChangeState(NpcState.Intruding);
+    }
+
+    /// <summary>침입 이동 종료 통보 — NpcIntrudeState 전용.</summary>
+    public void NotifyIntrudeFinished(bool reached) => OnIntrudeFinished?.Invoke(this, reached);
 
     /// <summary>
     /// 수갑 해제 — 오검거로 판정된 무고한 시민을 풀어준다. 배회(Idle)로 복귀한다. (GDD 7-2/7-3, #228)
