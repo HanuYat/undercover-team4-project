@@ -46,6 +46,7 @@ public class NpcAnimationDriver : MonoBehaviour
     private Vector3 m_lastPosition;
     private float m_smoothedSpeed;
     private bool m_escortMoving;
+    private bool m_resistMoving; // 저항(Attack) 추격 중 이동/정지 판별 — 걷기 ↔ 버틴 자세 전환 (#254)
     // 현재 스윙 모션을 유지할 종료 시각. 0 이하면 스윙 중 아님. 스윙이 끝나면 base 상태로 되돌린다 (#220)
     private float m_swingUntil;
     // 스윙이 끝난 뒤 되돌아갈 FSM 기준 상태 — 저항(Attack)이면 버틴 자세(Idle)로 복귀한다 (#220)
@@ -106,15 +107,15 @@ public class NpcAnimationDriver : MonoBehaviour
     private static bool CanSwingIn(NpcState state) =>
         state is not (NpcState.Captured or NpcState.Escorted or NpcState.Stunned);
 
-    // FSM 기준 상태에 대응하는 Animator base 번호. 저항(Attack) 중의 base는 버틴 자세(Idle)이고,
-    // Attack 번호(3)는 이제 단발 스윙 전용이라 base로 쓰지 않는다. (#220)
+    // FSM 기준 상태에 대응하는 Animator base 번호. Attack 번호(3)는 단발 스윙 전용이라 base로 쓰지 않는다 (#220).
+    // 저항(Attack)의 base는 이동 여부로 갈린다 — 추격 중이면 달리기(Run), 사거리 안에서 멈추면 버틴 자세(Idle) (#254).
     // 침입(Intruding)은 대응 Animator 상태가 없어 평범한 걷기(Walk)를 빌려 쓴다 —
     // 수갑을 차지 않은 채 본부로 걸어 들어오는 그림이라 Escorted가 아니라 Walk다. (#231)
     private int AnimatorBaseState(NpcState state)
     {
         return state switch
         {
-            NpcState.Attack => (int)NpcState.Idle,
+            NpcState.Attack => m_resistMoving ? (int)NpcState.Run : (int)NpcState.Idle,
             NpcState.Intruding => (int)NpcState.Walk,
             _ => (int)state,
         };
@@ -135,7 +136,7 @@ public class NpcAnimationDriver : MonoBehaviour
         }
 
         NpcState state = m_controller.CurrentState;
-        if (!IsHandcuffedMotion(state) && state != NpcState.Panic)
+        if (!IsHandcuffedMotion(state) && state != NpcState.Panic && state != NpcState.Attack)
             return;
 
         float rawSpeed = (transform.position - m_lastPosition).magnitude / Time.deltaTime;
@@ -147,6 +148,13 @@ public class NpcAnimationDriver : MonoBehaviour
         {
             float mul = Mathf.Clamp(m_smoothedSpeed / m_panicRunReferenceSpeed, 0.2f, 2f);
             m_animator.SetFloat(s_legRunSpeedHash, mul);
+            return;
+        }
+
+        // 저항(Attack): 추격 중이면 달리기, 사거리 안에서 멈추면 버틴 자세 — 이동/정지를 속도로 구분한다 (#254)
+        if (state == NpcState.Attack)
+        {
+            UpdateResistMotion();
             return;
         }
 
@@ -165,6 +173,27 @@ public class NpcAnimationDriver : MonoBehaviour
         }
     }
 
+    // 저항(Attack) 이동/정지 모션 전환 — 추격 중이면 달리기, 사거리 안에서 멈추면 버틴 자세(Idle). (#254)
+    // 스윙 중(m_swingUntil>0)에는 단발 스윙 클립이 State를 점유하므로 base를 건드리지 않는다 —
+    // 플래그만 갱신하고, 스윙이 끝나면 Update 상단이 올바른 base(걷기/버틴 자세)로 되돌린다. (#220)
+    private void UpdateResistMotion()
+    {
+        bool swinging = m_swingUntil > 0f;
+
+        if (m_resistMoving && m_smoothedSpeed < k_escortMoveOffSpeed)
+        {
+            m_resistMoving = false;
+            if (!swinging)
+                m_animator.SetInteger(s_stateHash, (int)NpcState.Idle);
+        }
+        else if (!m_resistMoving && m_smoothedSpeed > k_escortMoveOnSpeed)
+        {
+            m_resistMoving = true;
+            if (!swinging)
+                m_animator.SetInteger(s_stateHash, (int)NpcState.Run);
+        }
+    }
+
     /// <summary>
     /// 수갑 찬 채 이동하는 상태인가 — 걷기(Escorted 모션) ↔ 정지(Captured 모션)를 속도로 구분해야 하는 상태들.
     /// 수감(Jailed)은 대응하는 Animator 상태가 없어 연행 모션을 빌려 쓴다 (#228).
@@ -179,8 +208,18 @@ public class NpcAnimationDriver : MonoBehaviour
         m_baseState = state;
         m_swingUntil = 0f;
 
+        // 저항(Attack) 진입은 추격으로 시작하는 것이 일반적이라 달리기로 시드하고 이동 판별을 초기화한다 —
+        // AnimatorBaseState(Attack)가 m_resistMoving을 읽으므로 반드시 아래 SetInteger 이전에 정한다.
+        // 표적이 이미 사거리 안이면 다음 몇 프레임 안에 Update가 버틴 자세로 낮춘다. (#254)
+        if (state == NpcState.Attack)
+        {
+            m_resistMoving = true;
+            m_lastPosition = transform.position;
+            m_smoothedSpeed = k_escortMoveOnSpeed;
+        }
+
         // enum 값을 int로 변환해 전달 → Animator의 Any State 전이(State == N)가 해당 모션으로 전환한다.
-        // 단, 저항(Attack)의 base는 버틴 자세(Idle) — Attack 번호는 단발 스윙 전용이다 (#220)
+        // 단, Attack 번호(3)는 단발 스윙 전용이라 base로 쓰지 않고, 저항 base는 걷기/버틴 자세로 갈린다 (#220·#254).
         // 수감(Jailed)은 대응하는 Animator 상태가 없으므로 여기서 넘기지 않는다 — 아래에서 연행 모션으로 시드한다 (#228)
         if (m_animator != null && state != NpcState.Jailed)
             m_animator.SetInteger(s_stateHash, AnimatorBaseState(state));
