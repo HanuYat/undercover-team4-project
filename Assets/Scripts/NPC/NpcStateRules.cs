@@ -10,7 +10,7 @@ public static class NpcStateRules
     /// <summary>수갑 체포 채널링의 대상이 될 수 있는 상태인가.
     /// 제외 목록 방식 — 새 상태는 기본 '체포 가능'이므로 막아야 하면 여기 추가할 것.</summary>
     public static bool IsCapturable(NpcState state) =>
-        state != NpcState.Escorted && state != NpcState.Captured;
+        state != NpcState.Escorted && state != NpcState.Captured && state != NpcState.Jailed;
 
     /// <summary>E 상호작용(제압·타격·재연행)이 반응하는 상태인가.
     /// 포함 목록 방식 — 새 상태는 기본 'E 불가'이므로 열어야 하면 여기 추가할 것.
