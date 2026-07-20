@@ -36,6 +36,14 @@ MonoBehaviour:
 '
     m_Metadata:
       m_Items: []
+  - m_Id: 85083466829824
+    m_Localized: taser gun
+    m_Metadata:
+      m_Items: []
+  - m_Id: 85371460325376
+    m_Localized: If you fire and hit the target, you can subdue the suspect.
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

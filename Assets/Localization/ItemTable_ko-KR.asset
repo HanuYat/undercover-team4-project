@@ -35,6 +35,15 @@ MonoBehaviour:
       \uB54C \uC0AC\uC6A9\uD55C\uB2E4."
     m_Metadata:
       m_Items: []
+  - m_Id: 85083466829824
+    m_Localized: "\uD14C\uC774\uC800\uAC74"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 85371460325376
+    m_Localized: "\uBC1C\uC0AC\uD574\uC11C \uB9DE\uCD94\uBA74 \uC6A9\uC758\uC790\uB97C
+      \uC81C\uC555\uD560 \uC218 \uC788\uB2E4."
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []
