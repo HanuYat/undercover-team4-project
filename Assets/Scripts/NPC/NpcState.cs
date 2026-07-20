@@ -18,5 +18,11 @@ public enum NpcState
     /// 이송 중엔 Escorted(수갑 찬 채 걷기), 수용 후엔 Captured(수갑 찬 대기) 모션을
     /// NpcAnimationDriver가 대신 지정한다.
     /// </summary>
-    Jailed
+    Jailed,
+
+    /// <summary>
+    /// 침입 — 돌발 이벤트가 스폰한 침입자가 목표 지점(유치장 자물쇠)까지 걸어간다 (#231).
+    /// Jailed와 같은 규약 예외: 대응 Animator 상태가 없어 NpcAnimationDriver가 Walk 모션을 지정한다.
+    /// </summary>
+    Intruding
 }
