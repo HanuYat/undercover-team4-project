@@ -181,7 +181,8 @@ public class NpcAnimationDriver : MonoBehaviour
 
         // enum 값을 int로 변환해 전달 → Animator의 Any State 전이(State == N)가 해당 모션으로 전환한다.
         // 단, 저항(Attack)의 base는 버틴 자세(Idle) — Attack 번호는 단발 스윙 전용이다 (#220)
-        if (m_animator != null)
+        // 수감(Jailed)은 대응하는 Animator 상태가 없으므로 여기서 넘기지 않는다 — 아래에서 연행 모션으로 시드한다 (#228)
+        if (m_animator != null && state != NpcState.Jailed)
             m_animator.SetInteger(s_stateHash, AnimatorBaseState(state));
 
         // 연행·수감 진입 시 이동 판별을 초기화 — 직전 상태의 잔여 속도 값이 첫 판정을 오염시키지 않게 (#97/#228)
