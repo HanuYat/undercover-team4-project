@@ -18,20 +18,29 @@ public class NpcResistState : NpcStateBase
 
     private const float k_noPendingStrike = -1f;
 
+    // 추격 이동 (#254)
+    private const float k_stopDistanceFactor = 0.8f;       // 사거리 안쪽 이 비율 지점에 멈춰 타격 사거리를 유지
+    private const float k_chaseRepathInterval = 0.25f;     // 목적지 재계산 최소 간격(초) — NpcFleeState와 같은 스로틀
+    private const float k_chaseRepathMoveThreshold = 0.5f; // 표적이 이만큼(m) 움직였을 때만 재계산
+    private static readonly Vector3 k_noDestination = new Vector3(float.PositiveInfinity, 0f, 0f);
+
     private float m_resistStartTime;
     private float m_nextAttackTime;
     // 스윙을 시작한 뒤 타격 프레임을 기다리는 예약 시각 — 데미지를 스윙 시작이 아니라 이 시점에 넣어
     // 눈에 보이는 타격과 HP 감소를 일치시킨다. k_noPendingStrike면 대기 중인 타격 없음. (#220)
     private float m_pendingStrikeTime = k_noPendingStrike;
 
+    // 추격 재경로 스로틀 상태 (#254)
+    private float m_repathTimer;
+    private Vector3 m_lastChaseDestination;
+
     public NpcResistState(NpcController owner) : base(owner) { }
 
     public override void Enter()
     {
-        // 이동을 멈추고 그 자리에서 버틴다
-        m_owner.Agent.isStopped = true;
-        if (m_owner.Agent.isOnNavMesh)
-            m_owner.Agent.ResetPath();
+        // 표적을 추격하며 싸운다 — 이동을 멈추지 않고, 사거리 안으로 들어오면 stoppingDistance로 자연히 선다 (#254)
+        m_owner.Agent.isStopped = false;
+        m_owner.Agent.stoppingDistance = m_owner.ResistAttackRange * k_stopDistanceFactor;
 
         // 표적을 직접 바라보도록 수동 회전할 것이므로 에이전트 자동 회전을 끈다 — 안 그러면 서로 방향을 다툰다 (#220)
         m_owner.Agent.updateRotation = false;
@@ -40,6 +49,9 @@ public class NpcResistState : NpcStateBase
         m_resistStartTime = Time.time;
         m_nextAttackTime = Time.time + m_owner.ResistAttackInterval;
         m_pendingStrikeTime = k_noPendingStrike; // 직전 저항의 예약이 남아 첫 타격이 앞당겨지지 않게
+
+        m_repathTimer = 0f;
+        m_lastChaseDestination = k_noDestination; // 첫 Tick에 무조건 목적지를 새로 잡게 한다
     }
 
     public override void Tick()
@@ -55,8 +67,10 @@ public class NpcResistState : NpcStateBase
             return;
         }
 
-        // 표적을 향해 돈다 — 정면 부채꼴 타격 판정의 기준 방향을 표적에 맞춘다 (#220)
-        FaceTarget();
+        // 표적을 정하고(유발자 우선), 사거리 밖이면 추격·안이면 멈춰 타격, 그리고 표적을 향해 돈다 (#254·#220)
+        Transform target = ResolveTarget();
+        ChaseTarget(target);
+        FaceTarget(target);
 
         // 주기적 스윙 — 애니메이션을 먼저 발행하고 데미지는 타격 프레임까지 미룬다.
         // 그래야 눈에 보이는 스윙 준비 동작과 실제 HP 감소 순간이 일치하고, 준비 중 벗어난 플레이어는 빗나간다 (#220)
@@ -90,6 +104,7 @@ public class NpcResistState : NpcStateBase
     {
         m_owner.Agent.isStopped = false;
         m_owner.Agent.updateRotation = true; // 이동 재개 시 에이전트가 다시 진행 방향으로 돈다
+        m_owner.Agent.stoppingDistance = 0f; // 추격용으로 늘린 정지 거리를 원복 (#254)
     }
 
     /// <summary>
@@ -123,17 +138,51 @@ public class NpcResistState : NpcStateBase
         return aliveCount == 0;
     }
 
-    /// <summary>표적(위협 대상, 없으면 사거리 내 가장 가까운 플레이어)을 향해 몸을 돌린다. 서버(또는 오프라인) 전용.</summary>
-    private void FaceTarget()
+    /// <summary>
+    /// 이번 틱의 표적 — 저항을 유발한 플레이어(<see cref="NpcController.ThreatTarget"/>)를 우선하고,
+    /// 사라졌으면 추격 반경(<see cref="NpcController.ThreatSearchRadius"/>) 안 가장 가까운 현장 플레이어로 폴백한다.
+    /// 폴백 반경은 도주(#213)와 같은 값이라 "쫓을 상대"와 "피할 상대"의 기준이 어긋나지 않는다. 서버(또는 오프라인) 전용.
+    /// </summary>
+    private Transform ResolveTarget()
     {
-        Transform target = m_owner.ThreatTarget;
+        if (m_owner.ThreatTarget != null)
+            return m_owner.ThreatTarget;
+
+        PlayerData nearest = SuddenEventUtil.FindNearestFieldPlayer(
+            m_owner.transform.position, m_owner.ThreatSearchRadius);
+        return nearest != null ? nearest.transform : null;
+    }
+
+    /// <summary>
+    /// 표적을 향해 이동한다 — 사거리 안(stoppingDistance)에 들면 NavMeshAgent가 스스로 멈춰 타격 사거리를 유지한다.
+    /// 표적이 없으면 그 자리에 선다(제한 시간이 패배를 판정). 재경로는 NpcFleeState와 같은 스로틀로 묶는다. (#254)
+    /// </summary>
+    private void ChaseTarget(Transform target)
+    {
         if (target == null)
         {
-            // 유발자가 없으면 사거리 내 가장 가까운 현장 플레이어를 향한다 (#213에서 FindNearestPlayer가 헬퍼로 통합됨)
-            PlayerData nearest = SuddenEventUtil.FindNearestFieldPlayer(
-                m_owner.transform.position, m_owner.ResistAttackRange);
-            target = nearest != null ? nearest.transform : null;
+            if (m_owner.Agent.isOnNavMesh)
+                m_owner.Agent.isStopped = true;
+            return;
         }
+
+        m_owner.Agent.isStopped = false;
+
+        m_repathTimer += Time.deltaTime;
+        bool moved = (target.position - m_lastChaseDestination).sqrMagnitude
+            >= k_chaseRepathMoveThreshold * k_chaseRepathMoveThreshold;
+        if (m_repathTimer < k_chaseRepathInterval && !moved)
+            return;
+
+        m_repathTimer = 0f;
+        m_lastChaseDestination = target.position;
+        if (m_owner.Agent.isOnNavMesh)
+            m_owner.Agent.SetDestination(target.position);
+    }
+
+    /// <summary>표적을 향해 몸을 돌린다 — 정면 부채꼴 타격 판정의 기준 방향을 표적에 맞춘다. 서버(또는 오프라인) 전용. (#220)</summary>
+    private void FaceTarget(Transform target)
+    {
         if (target == null)
             return;
 
