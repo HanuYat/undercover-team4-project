@@ -27,6 +27,7 @@ public class AuthBootstrap : CommonManagerBase
         && AuthenticationService.Instance.IsSignedIn;
 
     public string PlayerId => IsSignedIn ? AuthenticationService.Instance.PlayerId : string.Empty;
+    public string PlayerName => IsSignedIn ? AuthenticationService.Instance.PlayerName : string.Empty;
 
     public bool SessionTokenExists => UnityServices.State == ServicesInitializationState.Initialized
         && AuthenticationService.Instance.SessionTokenExists;
@@ -113,6 +114,7 @@ public class AuthBootstrap : CommonManagerBase
             try
             {
                 await AuthenticationService.Instance.SignInAnonymouslyAsync();
+                await AuthenticationService.Instance.GetPlayerNameAsync();
                 Debug.Log($"[AuthBootstrap] 익명 로그인 완료 / playerId: {PlayerId}");
             }
             catch (AuthenticationException ex)
@@ -130,6 +132,8 @@ public class AuthBootstrap : CommonManagerBase
         if (!wasSignedIn && IsSignedIn)
             OnSignedIn?.Invoke();
     }
+
+    public async UniTask SetPlayerNameAsync(string name) => await AuthenticationService.Instance.UpdatePlayerNameAsync(name);
 
     public void SignOut(bool clearCredentials = false)
     {

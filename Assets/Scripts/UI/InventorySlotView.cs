@@ -44,6 +44,12 @@ public class InventorySlotView : MonoBehaviour,
     /// <summary>슬롯 내용 갱신. null = 빈 칸 (프레임만 표시).</summary>
     public void Bind(ItemBase item)
     {
+        // 이전 아이템 구독 해제 — 빈/교체된 슬롯이 언어 전환 시 옛 아이템 이름으로 갱신되는 것 방지 (#251)
+        if (m_item != null)
+        {
+            m_item.ItemName.StringChanged -= HandleItemNameChanged;
+        }
+
         m_item = item;
 
         if (item == null)
@@ -55,7 +61,21 @@ public class InventorySlotView : MonoBehaviour,
 
         m_icon.sprite = item.ItemIcon;
         m_icon.enabled = item.ItemIcon != null; // 아이콘 미설정이면 이름 텍스트가 폴백
-        m_nameText.text = item.ItemName;
+        // 구독 즉시 현재 언어 값으로 1회 호출되고, 이후 언어 전환 시마다 다시 호출된다 (#251)
+        item.ItemName.StringChanged += HandleItemNameChanged;
+    }
+
+    private void HandleItemNameChanged(string localizedName)
+    {
+        m_nameText.text = localizedName;
+    }
+
+    private void OnDestroy()
+    {
+        if (m_item != null)
+        {
+            m_item.ItemName.StringChanged -= HandleItemNameChanged;
+        }
     }
 
     /// <summary>선택(장착) 하이라이트 — 배경색 스왑.</summary>

@@ -61,6 +61,12 @@ public class WorldItemPickup : MonoBehaviour, IInteractable
     {
         m_pickupCollider = gameObject.AddComponent<BoxCollider>();
 
+        // 조준 판정 전용이므로 트리거로 둔다 — 솔리드면 최소 크기(0.5m) 박스가 그대로 발판이 되어
+        // 버린 아이템을 밟고 떠오른다(#263). CharacterController는 트리거와 물리 충돌하지 않는다.
+        // 줍기 조준은 그대로 동작한다: PlayerInteractor의 Raycast가 queryTriggerInteraction을 지정하지 않아
+        // 프로젝트 설정(Physics.queriesHitTriggers = true)을 따르므로 트리거도 잡힌다.
+        m_pickupCollider.isTrigger = true;
+
         Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
         if (renderers.Length == 0)
         {
