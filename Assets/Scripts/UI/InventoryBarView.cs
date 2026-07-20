@@ -183,7 +183,8 @@ public class InventoryBarView : NetworkBehaviour
 
     private void ShowItemName(ItemBase item)
     {
-        m_itemNameLabel.text = item.ItemName;
+        // 표시 시점마다 새로 가져오는 일회성 텍스트라 동기 호출로 충분 — 언어 전환 갱신 구독 불필요 (#251)
+        m_itemNameLabel.text = item.ItemName.GetLocalizedString();
         m_itemNameLabel.gameObject.SetActive(true);
         HideItemNameAsync(++m_itemNameVersion).Forget();
     }
@@ -253,8 +254,8 @@ public class InventoryBarView : NetworkBehaviour
             return;
         }
 
-        m_tooltipName.text = slot.Item.ItemName;
-        m_tooltipDescription.text = slot.Item.ItemDescription;
+        m_tooltipName.text = slot.Item.ItemName.GetLocalizedString();
+        m_tooltipDescription.text = slot.Item.ItemDescription.GetLocalizedString();
         m_tooltipPanel.transform.position =
             slot.transform.position + new Vector3(0f, m_tooltipOffsetY, 0f);
         m_tooltipPanel.SetActive(true);

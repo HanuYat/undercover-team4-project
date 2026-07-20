@@ -2969,6 +2969,7 @@ MonoBehaviour:
   m_startingGear:
   - {fileID: 6465765157232573796, guid: ef3d4594c5614be42ad3cdf1ec34cb19, type: 3}
   - {fileID: 7706984690027994764, guid: f9679efa0de9358449d82923ccfc9755, type: 3}
+  - {fileID: 6588843841137046898, guid: 9da4b15656bbf3e4c8c3c0d8134f7547, type: 3}
   m_itemAnchor: {fileID: 0}
   m_dropDistance: 1.2
 --- !u!114 &-6068744480840221127
