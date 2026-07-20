@@ -54,6 +54,7 @@ public class WantedListManager : NetworkBehaviour
             // 그대로 남아 새 라운드 항목과 섞인다 — 서버가 새로 뜨면 항상 빈 상태로 시작한다 (#209)
             // (몽타주 등록은 라운드 시작 → NPC 스폰 이후라 여기서 지워질 새 항목은 없다)
             m_wanted.Clear();
+            m_arrestedEntries.Clear(); // 탈출 재등재용 보관함도 함께 — 이전 세션 항목이 새 라운드 NetworkObjectId와 겹치면 엉뚱한 몽타주가 되살아난다 (#231)
 
             // 등록은 외형·몽타주까지 확정된 시점(OnMontageGenerated)에 한다.
             // OnCriminalAssigned 시점엔 외형이 아직 배정 전이라 몽타주가 비어 있다 (AppearanceAssigner).
