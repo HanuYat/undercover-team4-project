@@ -141,6 +141,24 @@ public class PlayerMovement : NetworkBehaviour
         Debug.Log($"[PlayerMovement] 서버 지정 스폰 포즈 적용 — Owner {OwnerClientId}, 위치 {transform.position}");
     }
 
+    /// <summary>
+    /// 서버 전용 — 접속 시점에 스폰 포인트를 받지 못한 플레이어를 재배치한다. (#247)
+    /// 호스트는 Title 씬에서 접속하므로(세션 생성=StartHost) Main Scene의 PlayerSpawnManager
+    /// 콜백 등록 전에 기본 위치(원점)에 스폰된다 — InGame 로드 후 이 메서드로 바로잡는다.
+    /// 원격 클라이언트는 서버가 InGame에 있을 때만 접속하므로 대상은 사실상 호스트(서버=오너)뿐이다.
+    /// </summary>
+    public void ServerReposition(Vector3 position, Quaternion rotation)
+    {
+        if (!IsServer)
+            return;
+
+        m_serverSpawnPosition.Value = position;
+        m_serverSpawnRotation.Value = rotation;
+
+        if (IsOwner)
+            SetPose(position, rotation); // 호스트 플레이어: 서버=오너라 즉시 적용 (NetworkTransform 오너 권한)
+    }
+
     // CharacterController가 켜진 상태에서 transform을 직접 옮기면 내부 캐시가 위치를 되돌릴 수 있어 잠시 끄고 옮긴다.
     private void SetPose(Vector3 pos, Quaternion rot)
     {

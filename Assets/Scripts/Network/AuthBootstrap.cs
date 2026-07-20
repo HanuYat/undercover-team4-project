@@ -1,34 +1,40 @@
-using Unity.Services.Core.Environments;
-using Unity.Services.Authentication;
-using Unity.Services.Core;
+using System;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
+using Unity.Services.Authentication;
+using Unity.Services.Core;
+using Unity.Services.Core.Environments;
 using UnityEngine;
-using System;
 
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class AuthBootstrap : CommonManagerBase
 {
-    [SerializeField] private bool m_signInOnStart = true;
-    [SerializeField] private string m_environmentName = "production";
-    [SerializeField] private string m_profile = string.Empty;
+    [SerializeField]
+    private bool m_signInOnStart = true;
+
+    [SerializeField]
+    private string m_environmentName = "production";
+
+    [SerializeField]
+    private string m_profile = string.Empty;
 
     private bool m_isBusy;
     private string m_status = "대기 중...";
     private bool m_eventsRegistered;
 
-    public Func<bool> CanSignOut;   // 델리게이트 (bool형 반환)
+    public Func<bool> CanSignOut; // 델리게이트 (bool형 반환)
 
     public event Action OnSignedIn;
     public event Action OnSignedOut;
 
-    public bool IsSignedIn => 
-        UnityServices.State == ServicesInitializationState.Initialized 
+    public bool IsSignedIn =>
+        UnityServices.State == ServicesInitializationState.Initialized
         && AuthenticationService.Instance.IsSignedIn;
 
     public string PlayerId => IsSignedIn ? AuthenticationService.Instance.PlayerId : string.Empty;
 
-    public bool SessionTokenExists => UnityServices.State == ServicesInitializationState.Initialized
+    public bool SessionTokenExists =>
+        UnityServices.State == ServicesInitializationState.Initialized
         && AuthenticationService.Instance.SessionTokenExists;
 
     public bool IsNetworkConnected
@@ -42,8 +48,9 @@ public class AuthBootstrap : CommonManagerBase
 
     private void RegisterEvents()
     {
-        if (m_eventsRegistered) return;
-        
+        if (m_eventsRegistered)
+            return;
+
         m_eventsRegistered = true;
     }
 
@@ -51,7 +58,8 @@ public class AuthBootstrap : CommonManagerBase
     {
         base.OnDestroy(); // App 등록 해제
 
-        if (!m_eventsRegistered) return;
+        if (!m_eventsRegistered)
+            return;
 
         m_eventsRegistered = false;
     }
@@ -66,8 +74,9 @@ public class AuthBootstrap : CommonManagerBase
 
     private async UniTaskVoid HandleSignInAsync(string profile)
     {
-        if (m_isBusy) return;
-        
+        if (m_isBusy)
+            return;
+
         m_isBusy = true;
         m_status = "초기화 + 익명 로그인 중...";
 
@@ -103,7 +112,9 @@ public class AuthBootstrap : CommonManagerBase
             }
 
             await UnityServices.InitializeAsync(options);
-            Debug.Log($"[AuthBootstrap] UnityServices 초기화 완료 / env: {m_environmentName}, profile: {m_profile}");
+            Debug.Log(
+                $"[AuthBootstrap] UnityServices 초기화 완료 / env: {m_environmentName}, profile: {m_profile}"
+            );
         }
 
         RegisterEvents();
@@ -147,7 +158,8 @@ public class AuthBootstrap : CommonManagerBase
             return;
         }
 
-        if (!IsSignedIn) return;
+        if (!IsSignedIn)
+            return;
 
         AuthenticationService.Instance.SignOut(clearCredentials);
         OnSignedOut?.Invoke();
@@ -159,7 +171,9 @@ public class AuthBootstrap : CommonManagerBase
         if (IsNetworkConnected)
         {
             m_status = "세션 참가 중 토큰 삭제 불가";
-            Debug.LogWarning("[AuthBootstrap] 연결 중 ClearSessionToken 거부 - 세션 이탈 후 재시도.");
+            Debug.LogWarning(
+                "[AuthBootstrap] 연결 중 ClearSessionToken 거부 - 세션 이탈 후 재시도."
+            );
             return;
         }
 
@@ -170,7 +184,8 @@ public class AuthBootstrap : CommonManagerBase
             return;
         }
 
-        if (UnityServices.State != ServicesInitializationState.Initialized) return;
+        if (UnityServices.State != ServicesInitializationState.Initialized)
+            return;
 
         if (IsSignedIn)
         {
@@ -182,11 +197,19 @@ public class AuthBootstrap : CommonManagerBase
         Debug.Log($"[AuthBootstrap] ClearSessionToken 완료");
     }
 
-    [SerializeField] private float m_guiTopOffset = 10f;
+    [Tooltip("OnGUI 디버그 패널 표시 — 테스트 씬 수동 조작용. 정식 UI는 AuthPanel (#247)")]
+    [SerializeField]
+    private bool m_showDebugGui;
+
+    [SerializeField]
+    private float m_guiTopOffset = 10f;
 
     private void OnGUI()
     {
-        if (IsNetworkConnected) return;
+        if (!m_showDebugGui)
+            return;
+        if (IsNetworkConnected)
+            return;
 
         GUILayout.BeginArea(new Rect(700, m_guiTopOffset, 380, 280));
 
@@ -196,7 +219,9 @@ public class AuthBootstrap : CommonManagerBase
         GUILayout.Label($"초기화됨: {initialized}");
         GUILayout.Label($"IsSignedIn: {IsSignedIn}");
         GUILayout.Label($"PlayerId: {(string.IsNullOrEmpty(PlayerId) ? "(없음)" : PlayerId)}");
-        GUILayout.Label($"SessionTokenExists: {(initialized ? SessionTokenExists.ToString() : "(미초기화)")}");
+        GUILayout.Label(
+            $"SessionTokenExists: {(initialized ? SessionTokenExists.ToString() : "(미초기화)")}"
+        );
 
         GUILayout.Label($"연결됨(세션/NGO): {IsNetworkConnected}");
         GUILayout.Space(8);

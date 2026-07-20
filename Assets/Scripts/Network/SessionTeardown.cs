@@ -56,7 +56,7 @@ public class SessionTeardown : MonoBehaviour
     }
 
     [SerializeField]
-    private float m_guiTopOffset = 200f;
+    private float m_guiTopOffset = 60f; // 좌측 상단 — 세션 코드 HUD 아래
 
     private void OnGUI()
     {

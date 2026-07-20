@@ -44,6 +44,32 @@ public class PlayerSpawnManager : MonoBehaviour
         }
 
         m_networkManager.ConnectionApprovalCallback = OnConnectionApproval;
+
+        // 이미 시작된 세션(호스트가 Title에서 접속, #247)이면 접속돼 있는 플레이어를 스폰 포인트로 재배치
+        if (m_networkManager.IsListening && m_networkManager.IsServer)
+            RepositionConnectedPlayers();
+    }
+
+    // Title 씬에서 접속한 호스트는 Approval 콜백 등록 전에 원점에 스폰된다 (#247)
+    // — InGame 로드 시점에 이미 스폰돼 있는 플레이어를 스폰 포인트 규칙대로 재배치한다.
+    private void RepositionConnectedPlayers()
+    {
+        if (m_spawnPoint == null)
+            return;
+
+        foreach (NetworkClient client in m_networkManager.ConnectedClientsList)
+        {
+            if (client.PlayerObject == null)
+                continue;
+
+            PlayerMovement movement = client.PlayerObject.GetComponent<PlayerMovement>();
+            if (movement == null)
+                continue;
+
+            Vector3 position = m_spawnPoint.position + GetSpreadOffset(m_approvedCount++);
+            movement.ServerReposition(position, m_spawnPoint.rotation);
+            Debug.Log($"[PlayerSpawnManager] 기존 접속 플레이어 {client.ClientId} 재배치: {position}");
+        }
     }
 
     private void OnDestroy()

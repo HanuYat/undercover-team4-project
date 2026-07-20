@@ -315,10 +315,14 @@ public class VivoxManager : CommonManagerBase
         catch (Exception ex) { Debug.LogError($"[VivoxManager] 정리 실패: {ex}"); }
     }
 
+    [Tooltip("OnGUI 디버그 패널 표시 — 테스트 씬 수동 조작용 (#247)")]
+    [SerializeField] private bool m_showDebugGui;
+
     [SerializeField] private float m_guiTopOffset = 10f;
 
     private void OnGUI()
     {
+        if (!m_showDebugGui) return;
         if (m_session != null && m_session.Auth != null && m_session.Auth.IsNetworkConnected) return;
 
         GUILayout.BeginArea(new Rect(450, m_guiTopOffset, 320, 160));
