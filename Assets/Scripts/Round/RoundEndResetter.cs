@@ -78,8 +78,10 @@ public class RoundEndResetter : MonoBehaviour
     private async UniTaskVoid ResetToStartAsync()
     {
         // 결과를 잠깐 보여줄 여유. freeze로 timeScale이 건드려져도 흐르도록 실시간 기준.
+        // [버그 수정] 대기 중 씬 언로드로 파괴되면 이후 로직이 죽은 오브젝트에서 돌지 않게 취소한다. (#247)
         if (m_resetDelaySeconds > 0f)
-            await UniTask.Delay(TimeSpan.FromSeconds(m_resetDelaySeconds), ignoreTimeScale: true);
+            await UniTask.Delay(TimeSpan.FromSeconds(m_resetDelaySeconds), ignoreTimeScale: true,
+                cancellationToken: this.GetCancellationTokenOnDestroy());
 
         // 1) UGS 세션 나가기 (있을 때만) — OnSessionLeft로 Vivox 채널 정리까지 연쇄된다.
         if (Session != null && Session.CurrentSession != null)
