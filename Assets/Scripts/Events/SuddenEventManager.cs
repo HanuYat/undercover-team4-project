@@ -161,7 +161,10 @@ public class SuddenEventManager : NetworkedManagerBase
         ISuddenEvent chosen = m_eligibleBuffer[Random.Range(0, m_eligibleBuffer.Count)];
         chosen.ServerBegin();
         Debug.Log($"[돌발이벤트] 발생 — {chosen.DisplayName}");
-        AnnounceEvent(chosen.DisplayName);
+
+        // 조용히 시작하는 이벤트(AnnounceOnBegin=false)는 자기가 원하는 시점에 Announce를 직접 부른다
+        if (chosen.AnnounceOnBegin)
+            Announce(chosen.DisplayName);
     }
 
     // 다음 발생까지의 대기 시간을 min~max 사이에서 뽑아 예약한다 (extraDelay는 라운드 시작 유예용)
@@ -177,8 +180,12 @@ public class SuddenEventManager : NetworkedManagerBase
             m_events[i].ServerReset();
     }
 
-    // 이벤트 발생을 전 클라이언트에 알린다 — HUD 알림(#43)용. 네트워크 세션에서만 RPC를 쏜다.
-    private void AnnounceEvent(string displayName)
+    /// <summary>
+    /// 이벤트 알림을 전 클라이언트에 발행한다 — HUD 알림(#43)용. 네트워크 세션에서만 RPC를 쏜다.
+    /// 보통은 발생 시점에 매니저가 부르지만, <see cref="ISuddenEvent.AnnounceOnBegin"/>이 false인 이벤트는
+    /// 알릴 시점을 스스로 정해 이 메서드를 직접 부른다. 서버(또는 오프라인) 전용.
+    /// </summary>
+    public void Announce(string displayName)
     {
         OnEventAnnounced?.Invoke(displayName); // 서버·오프라인 로컬 발행
         if (IsSpawned && IsServer)

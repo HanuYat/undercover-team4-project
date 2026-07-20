@@ -4,16 +4,28 @@ using UnityEngine;
 
 /// <summary>
 /// 범인 탈출 (돌발 이벤트 · 본부) — 본부가 무인일 때 확률적으로 침입자가 본부에 들어와
-/// 유치장 자물쇠를 열고, 수감돼 있던 범인들을 탈출시킨다. (GDD 6-4, #231)
+/// 유치장 자물쇠를 열고, 수감돼 있던 범인들을 탈출시킨다. (GDD 6-4, #231/#261)
 /// 본부 상주 트레이드오프(GDD 4-1)를 강화한다 — 전원이 현장에 나가 있으면 잡아 둔 범인을 잃는다.
+///
+/// <b>대응 구간이 둘 있다</b> (#261):
+///  · 이동 구간 — 침입자는 일반 NPC와 같은 스폰 포인트에서 나와 자물쇠까지 걸어온다. 겉모습·출신지가
+///    시민과 구분되지 않으므로, 본부로 곧장 향하는 걸음을 알아채는 것이 유일한 단서다(조용히 발생 —
+///    <see cref="AnnounceOnBegin"/>가 false인 이유).
+///  · 해제 구간 — 자물쇠에 닿으면 그때 경보를 울리고 m_unlockSeconds 동안 해제를 진행한다. 늦게 알아챈
+///    팀도 달려와 막을 수 있는 마지막 기회다.
+/// 어느 구간이든 수갑을 채우면 침입자는 저항형으로 맞서고, 제압·연행해 인계하면 경범죄로 처리된다
+/// (<see cref="MisdemeanorOffender"/> 마커 — 진범 대조를 타지 않으므로 오검거가 아니다).
+/// 판정된 신병은 다른 검거자와 똑같이 <see cref="CustodyRouter"/>가 유치장으로 보내며, 그 시점에
+/// 이 이벤트는 추적을 끊고 손을 뗀다 — 이후로는 평범한 수감자다.
 ///
 /// 흐름(전부 서버 권위 · #56):
 ///  1. <see cref="CanTrigger"/> — 본부 무인 + 무인 지속 시간 충족 + 자물쇠 잠김 + 수감자 존재일 때만 성립.
-///  2. <see cref="ServerBegin"/> — 침입자 NPC를 스폰해 자물쇠 지점까지 걸어가게 한다(StartIntrude).
-///  3. 도착(OnIntrudeFinished reached=true) — 자물쇠를 열고(ServerUnlock) 수감자를 전원 방출한다.
+///  2. <see cref="ServerBegin"/> — 침입자 NPC를 도시 스폰 포인트에 스폰(다음 프레임에 StartIntrude).
+///  3. 해제 착수(OnIntrudeUnlockStarted) — 본부 경보를 울린다.
+///  4. 해제 완료(OnIntrudeFinished reached=true) — 자물쇠를 열고 수감자를 전원 방출한다.
 ///     · 방출: JailZone.ReleaseInmate + NpcController.ClearDelivered + StartFlee(재검거 가능하게)
 ///     · 진범만: RoundManager.ReportCriminalEscaped + WantedListManager.ReinstateByNpcId
-///  4. 침입자는 잠시 머문 뒤(또는 경로 실패 시 즉시) 물러난다(디스폰).
+///  5. 침입자도 함께 달아난다 — 추격해 잡으면 경범죄 수익은 챙길 수 있다. 방치되면 수명 초과로 정리.
 ///
 /// 발동 빈도(추첨 주기)는 <see cref="SuddenEventManager"/>가 쥐고, 이 이벤트는 "지금 발동 가능한가"만 판정한다.
 /// 스폰물(침입자)은 자기 NetworkObject로, 자물쇠·수배·할당량 상태는 각 소유 컴포넌트가 전파한다 —
@@ -25,9 +37,9 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     [Header("침입자 프리팹 (NpcController)")]
     [SerializeField] private NpcController m_intruderPrefab;
 
-    [Header("스폰 지점 (본부 입구 — 비우면 자물쇠 위치)")]
-    [Tooltip("침입자가 나타나는 지점 — NavMesh 위에 둘 것. 비우면 자물쇠 위치에서 스폰된다")]
-    [SerializeField] private Transform m_spawnPoint;
+    [Header("스폰 포인트 공급 (비우면 씬에서 자동 탐색)")]
+    [Tooltip("일반 NPC와 같은 지점에서 등장시키기 위해 NpcSpawner의 스폰 포인트를 빌려 쓴다")]
+    [SerializeField] private NpcSpawner m_npcSpawner;
 
     [Header("본부 무인 감지 (비우면 씬에서 자동 탐색)")]
     [SerializeField] private HqOccupancyZone m_occupancyZone;
@@ -36,25 +48,42 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     [SerializeField] private JailZone m_jailZone;
     [SerializeField] private JailLock m_jailLock;
 
-    [Header("수배 리스트 / 라운드 (비우면 씬에서 자동 탐색)")]
+    [Header("수배 리스트 / 라운드 / 검거 판정 (비우면 씬에서 자동 탐색)")]
     [SerializeField] private WantedListManager m_wantedList;
     [SerializeField] private RoundManager m_round;
+    [SerializeField] private ArrestJudge m_arrestJudge;
 
     [Header("발동 조건")]
     [Tooltip("본부가 이 시간(초) 이상 비어 있어야 발동한다 — 잠깐 자리를 비운 것으로는 터지지 않게")]
     [SerializeField] private float m_minUnmannedSeconds = 20f;
 
-    [Header("침입자 지속")]
-    [Tooltip("자물쇠를 연 뒤 침입자가 이 시간(초) 머문 뒤 물러난다(디스폰)")]
-    [SerializeField] private float m_intruderLingerSeconds = 3f;
+    [Header("자물쇠 해제")]
+    [Tooltip("자물쇠에 도달한 뒤 해제까지 걸리는 시간(초) — 경보를 듣고 달려와 막을 수 있는 구간")]
+    [SerializeField] private float m_unlockSeconds = 10f;
 
-    [Tooltip("도착 통보가 끝내 오지 않는 이례적 상황(경로 교착 등)의 안전장치 — 이 시간(초) 넘기면 강제 정리")]
-    [SerializeField] private float m_maxActiveSeconds = 30f;
+    [Header("스폰 위치 보정")]
+    [Tooltip("고른 스폰 포인트를 중심으로 이 반경(m) 안에 흩어 배치한다 (NpcSpawner와 같은 방식)")]
+    [SerializeField] private float m_spawnRadius = 5f;
+    [Tooltip("스폰 후보 지점에서 이 거리(m) 안에 NavMesh가 없으면 그 지점은 버린다")]
+    [SerializeField] private float m_navSampleMaxDistance = 4f;
+    [Tooltip("유효한 스폰 지점을 찾는 최대 시도 횟수")]
+    [SerializeField] private int m_maxSpawnAttempts = 8;
+
+    [Header("경범죄 수익")]
+    [Tooltip("침입자를 제압·연행해 인계하면 지급되는 수익 — ArrestJudge가 마커에서 읽어 지급한다")]
+    [SerializeField] private int m_intruderReward = 100;
+
+    [Header("안전 장치")]
+    [Tooltip("연행되지 않은 채 이 시간(초)을 넘기면 강제로 정리한다 (스폰물 누수 방지)")]
+    [SerializeField] private float m_maxLifetimeSeconds = 90f;
+
+    private SuddenEventManager m_manager;
 
     private NpcController m_intruder;
-    private bool m_unlocked; // 자물쇠를 이미 열었는가 — 도착 통보 이후 단계
-    private float m_despawnTime; // 물러날 예정 시각(Time.time)
-    private float m_beginTime;
+    private bool m_pendingStart;  // 스폰 다음 프레임에 침입을 시작하기 위한 플래그(초기화 순서 보장)
+    private bool m_hasStarted;    // 침입을 실제로 시작했는지 — 배회 복귀(이탈) 판정에 쓴다
+    private int m_spawnFrame;
+    private float m_lifetimeStart; // 방치 타이머 기준 시각 — 국면이 바뀔 때마다 갱신한다
 
     // 방출 대상 스냅샷 — Inmates(HashSet 뷰)를 순회하며 ReleaseInmate로 수정하면 열거 예외가 나므로 복사한다
     private readonly List<NpcController> m_releaseBuffer = new List<NpcController>();
@@ -63,8 +92,15 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
 
     public bool IsActive => m_intruder != null;
 
+    /// <summary>조용히 시작한다 — 침입자가 자물쇠에 손댈 때까지 알리지 않아야 이동 구간이 관찰 대상이 된다. (#261)</summary>
+    public bool AnnounceOnBegin => false;
+
     private void Awake()
     {
+        m_manager = GetComponent<SuddenEventManager>();
+
+        if (m_npcSpawner == null)
+            m_npcSpawner = FindFirstObjectByType<NpcSpawner>();
         if (m_occupancyZone == null)
             m_occupancyZone = FindFirstObjectByType<HqOccupancyZone>();
         if (m_jailZone == null)
@@ -75,11 +111,27 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
             m_wantedList = FindFirstObjectByType<WantedListManager>();
         if (m_round == null)
             m_round = FindFirstObjectByType<RoundManager>();
+        if (m_arrestJudge == null)
+            m_arrestJudge = FindFirstObjectByType<ArrestJudge>();
+    }
+
+    private void OnEnable()
+    {
+        if (m_arrestJudge != null)
+            m_arrestJudge.OnArrestJudged += HandleArrestJudged;
+    }
+
+    private void OnDisable()
+    {
+        if (m_arrestJudge != null)
+            m_arrestJudge.OnArrestJudged -= HandleArrestJudged;
     }
 
     public bool CanTrigger()
     {
         if (m_intruderPrefab == null || m_occupancyZone == null || m_jailZone == null || m_jailLock == null)
+            return false;
+        if (m_npcSpawner == null || m_npcSpawner.SpawnPoints == null || m_npcSpawner.SpawnPoints.Count == 0)
             return false;
 
         // 본부가 충분히 오래 비어 있어야 하고(GDD 4-1 트레이드오프), 자물쇠가 아직 잠겨 있어야 하며,
@@ -105,21 +157,32 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
             return;
         }
 
-        Transform target = m_jailLock.transform;
-        Vector3 spawnPos = m_spawnPoint != null ? m_spawnPoint.position : target.position;
-        Quaternion spawnRot = m_spawnPoint != null ? m_spawnPoint.rotation : Quaternion.identity;
+        if (!TryFindSpawnPosition(out Vector3 spawnPosition))
+        {
+            Debug.LogWarning("JailbreakEvent: NavMesh 위 스폰 지점을 찾지 못해 발동 취소", this);
+            return;
+        }
 
-        m_intruder = Instantiate(m_intruderPrefab, spawnPos, spawnRot);
+        Quaternion rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
+        m_intruder = Instantiate(m_intruderPrefab, spawnPosition, rotation);
+
+        // 경범죄 표식 — 인계되면 ArrestJudge가 진범 대조 대신 경범죄로 판정하고 Reward를 지급한다 (#106).
+        // 침입자는 CriminalAssigner를 타지 않아 IsCriminal이 false다. 이 마커가 없으면 침입을 막은 플레이어가
+        // 오검거 페널티를 먹는다 — 대응에 성공한 쪽이 손해 보는 판정을 막는 것이 이 한 줄의 역할이다. (#261)
+        m_intruder.gameObject.AddComponent<MisdemeanorOffender>().Reward = m_intruderReward;
 
         if (SuddenEventUtil.IsNetworkSessionActive)
             m_intruder.GetComponent<NetworkObject>().Spawn();
 
-        m_unlocked = false;
-        m_beginTime = Time.time;
-
-        // 도착·실패 통보를 받아 자물쇠 해제/불발 정리를 판정한다
+        // 해제 착수·완료 통보를 받아 경보/자물쇠 해제를, 상태 전이를 받아 플레이어 개입을 판정한다
+        m_intruder.OnIntrudeUnlockStarted += HandleUnlockStarted;
         m_intruder.OnIntrudeFinished += HandleIntrudeFinished;
-        m_intruder.StartIntrude(target);
+        m_intruder.OnStateChanged += HandleStateChanged;
+
+        m_hasStarted = false;
+        m_spawnFrame = Time.frameCount;
+        m_pendingStart = true;
+        m_lifetimeStart = Time.time;
     }
 
     public void ServerTick()
@@ -127,17 +190,24 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (m_intruder == null)
             return;
 
-        // 자물쇠를 연 뒤 머무는 시간이 지나면 침입자가 물러난다
-        if (m_unlocked && Time.time >= m_despawnTime)
+        // 스폰 초기화(InitBehavior의 Idle 전환)가 끝난 다음 프레임에 침입을 시작한다 —
+        // 같은 프레임에 부르면 뒤이어 실행되는 InitBehavior가 Idle로 덮어쓸 수 있다.
+        if (m_pendingStart && Time.frameCount > m_spawnFrame)
         {
-            Despawn();
-            return;
+            m_intruder.StartIntrude(m_jailLock.transform, m_unlockSeconds);
+            m_pendingStart = false;
+            m_hasStarted = true;
         }
 
-        // 도착 통보가 끝내 오지 않는 이례적 상황의 안전장치 (정상 경로는 OnIntrudeFinished로 즉시 정리된다)
-        if (!m_unlocked && Time.time - m_beginTime >= m_maxActiveSeconds)
+        // 연행 중에는 방치 타이머를 멈춘다 — 본부까지 데려가는 데 얼마가 걸리든 플레이어 손에서 사라지면 안 된다.
+        // (이 리셋이 없으면 제압한 침입자가 연행 도중 강제 정리로 증발한다 — #261에서 고친 버그)
+        if (m_intruder.CurrentState == NpcState.Escorted)
+            m_lifetimeStart = Time.time;
+
+        // 아무도 데려가지 않은 채 방치되면 강제 정리 (스폰물 누수 방지)
+        if (Time.time - m_lifetimeStart > m_maxLifetimeSeconds)
         {
-            Debug.LogWarning("[돌발이벤트] 범인 탈출 — 침입 시간 초과, 강제 정리");
+            Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 방치 시간 초과로 정리");
             Despawn();
         }
     }
@@ -150,13 +220,47 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         Despawn();
     }
 
-    // 침입 이동 종료 — 도착이면 자물쇠를 열고 수감자를 방출, 경로 실패면 불발로 정리한다.
+    // 일반 NPC와 같은 스폰 포인트를 무작위로 골라 그 주변 NavMesh 위 지점을 찾는다 (#261).
+    // 분산 반경 안에서 다시 뽑는 방식이라 같은 포인트라도 매번 다른 자리에서 나온다.
+    private bool TryFindSpawnPosition(out Vector3 result)
+    {
+        IReadOnlyList<Transform> points = m_npcSpawner != null ? m_npcSpawner.SpawnPoints : null;
+        if (points == null || points.Count == 0)
+        {
+            result = default;
+            return false;
+        }
+
+        Transform point = points[Random.Range(0, points.Count)];
+        if (point == null)
+        {
+            result = default;
+            return false;
+        }
+
+        return SuddenEventUtil.TryFindSpawnPositionNear(
+            point.position, 0f, m_spawnRadius, m_navSampleMaxDistance, m_maxSpawnAttempts, out result);
+    }
+
+    // 자물쇠 해제 착수 — 이 순간 본부 경보를 울린다. 발동 시점에는 알리지 않았으므로(AnnounceOnBegin=false)
+    // 팀이 침입을 처음 인지하는 지점이 여기다. 연출(HUD·사운드)은 OnEventAnnounced 구독으로 붙인다 (#43).
+    private void HandleUnlockStarted(NpcController npc)
+    {
+        if (npc != m_intruder)
+            return;
+
+        Debug.Log($"[돌발이벤트] 범인 탈출 — 자물쇠 해제 시작, {m_unlockSeconds}초 후 개방");
+        m_manager.Announce(DisplayName);
+    }
+
+    // 해제 완료 — 자물쇠를 열고 수감자를 방출한다. 경로 실패면 불발로 정리한다.
     private void HandleIntrudeFinished(NpcController npc, bool reached)
     {
         if (npc != m_intruder)
             return;
 
         m_intruder.OnIntrudeFinished -= HandleIntrudeFinished;
+        m_intruder.OnIntrudeUnlockStarted -= HandleUnlockStarted;
 
         if (!reached)
         {
@@ -168,8 +272,45 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         m_jailLock.ServerUnlock();
         ReleaseAllInmates();
 
-        m_unlocked = true;
-        m_despawnTime = Time.time + m_intruderLingerSeconds;
+        // 침입자도 수감자들과 함께 달아난다 — 늦게 도착한 팀도 추격해 잡으면 경범죄 수익은 챙길 수 있다.
+        // 방치 유예를 새로 줘서 도주 직후 강제 정리로 증발하지 않게 한다.
+        m_lifetimeStart = Time.time;
+        m_intruder.StartFlee(null);
+    }
+
+    // 상태 전이 수신 — 플레이어 개입(제압·연행)은 유예 갱신, 배회 복귀는 이탈로 보고 정리한다.
+    private void HandleStateChanged(NpcState state)
+    {
+        if (m_intruder == null)
+            return;
+
+        // 제압·연행 중에는 유예를 새로 준다. 침입이 아직 진행 중이었다면 이 전이가 곧 "저지 성공"이다 —
+        // 침입자는 죽이지 않는다(플레이어가 연행 중일 수 있다). 이후 수명은 방치 타이머가 관리한다.
+        if (state == NpcState.Captured || state == NpcState.Escorted)
+        {
+            m_lifetimeStart = Time.time;
+            return;
+        }
+
+        // 침입을 시작한 뒤 배회로 돌아왔다 = 뿌리치고 달아나 진정했거나(저지 실패) 도주가 끝났다 — 이탈 종료
+        if (m_hasStarted && (state == NpcState.Idle || state == NpcState.Walk))
+        {
+            Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 이탈");
+            Despawn();
+        }
+    }
+
+    // 검거 판정 수신 — 침입자가 판정됐으면 이벤트는 손을 뗀다. 파괴하지 않는다:
+    // 신병은 CustodyRouter가 유치장으로 보내고(경범죄도 수용 대상), 그 뒤로는 평범한 수감자로서
+    // JailZone이 관리한다. 여기서 despawn하거나 방치 타이머를 계속 돌리면 유치장으로 걸어가던/갇혀 있던
+    // 침입자가 증발한다. 수익은 ArrestJudge가 마커를 읽어 이미 지급했다. (#261)
+    private void HandleArrestJudged(ArrestResult result)
+    {
+        if (m_intruder == null || result.Npc != m_intruder)
+            return;
+
+        Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 경범죄 판정 완료, 신병은 유치장으로 (이벤트 추적 종료)");
+        StopTracking();
     }
 
     // 수감자를 전원 방출한다 — 자물쇠가 열린 순간 모두 뛰쳐나간다.
@@ -213,15 +354,38 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         inmate.StartFlee(m_intruder != null ? m_intruder.transform : null);
     }
 
+    // 추적만 끊는다 — 침입자는 씬에 남는다. 검거되어 신병이 유치장으로 넘어간 경우처럼
+    // "이벤트의 일은 끝났지만 NPC는 계속 살아 있어야 하는" 종료 경로에서 쓴다.
+    private void StopTracking()
+    {
+        if (m_intruder == null)
+            return;
+
+        // 이미 해제됐더라도 -=는 중복 호출이 안전하다(미구독 시 무동작)
+        m_intruder.OnIntrudeUnlockStarted -= HandleUnlockStarted;
+        m_intruder.OnIntrudeFinished -= HandleIntrudeFinished;
+        m_intruder.OnStateChanged -= HandleStateChanged;
+
+        m_intruder = null;
+        m_pendingStart = false;
+        m_hasStarted = false;
+    }
+
+    // 침입자를 씬에서 치운다 — 이탈·불발·방치·라운드 종료 등 신병을 넘길 데가 없는 종료 경로.
     private void Despawn()
     {
         if (m_intruder == null)
             return;
 
-        // HandleIntrudeFinished가 이미 해제했더라도 -=는 중복 호출이 안전하다(미구독 시 무동작)
-        m_intruder.OnIntrudeFinished -= HandleIntrudeFinished;
-        SuddenEventUtil.DespawnOrDestroy(m_intruder.gameObject);
-        m_intruder = null;
-        m_unlocked = false;
+        NpcController intruder = m_intruder;
+        StopTracking();
+
+        // 연행 중인 채로 정리되면(라운드 종료 등) 연행 참조가 파괴된 NPC를 가리킨 채 남아 그 플레이어가
+        // 영영 연행 중이 된다 — 파괴 전에 놓게 한다.
+        PlayerEscorter escorter = PlayerEscorter.FindEscorterOf(intruder);
+        if (escorter != null)
+            escorter.Release();
+
+        SuddenEventUtil.DespawnOrDestroy(intruder.gameObject);
     }
 }
