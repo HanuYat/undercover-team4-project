@@ -73,12 +73,30 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Handcuffs
   ShowTopMostFoldoutHeaderGroup: 1
-  m_itemName: "\uC218\uAC11"
+  m_itemName:
+    m_TableReference:
+      m_TableCollectionName: GUID:faae75c9a0a19b441be27b8614effa3d
+    m_TableEntryReference:
+      m_KeyId: 286270754816
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
   m_itemIcon: {fileID: 0}
-  m_itemDescription: "\uC6A9\uC758\uC790\uB97C \uCCB4\uD3EC\uD560 \uB54C \uC0AC\uC6A9\uD55C\uB2E4.
-    \uAC00\uAE4C\uC774\uC5D0\uC11C \uB300\uC0C1\uC744 \uC870\uC900\uD558\uACE0 \uC0AC\uC6A9\uD55C\uB2E4."
+  m_itemDescription:
+    m_TableReference:
+      m_TableCollectionName: GUID:faae75c9a0a19b441be27b8614effa3d
+    m_TableEntryReference:
+      m_KeyId: 4498341826560
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
   m_heldModelPrefab: {fileID: 8305548188873936973, guid: 4b88ad5ccbafd07458845faf5be83a01, type: 3}
   m_targetOutlineColor: {r: 1, g: 0, b: 0.009994984, a: 1}
+  references:
+    version: 2
+    RefIds: []
 --- !u!114 &7457172703288361766
 MonoBehaviour:
   m_ObjectHideFlags: 0
