@@ -86,8 +86,11 @@ public class NpcResistState : NpcStateBase
         if (targetInRange && Time.time >= m_nextAttackTime)
         {
             m_nextAttackTime = Time.time + m_owner.ResistAttackInterval;
-            m_owner.RaiseAttackSwing();
-            m_pendingStrikeTime = Time.time + m_owner.StrikeOffsetSeconds;
+            // 변형을 서버에서 뽑아 전 피어에 넘긴다 — 데미지는 그 클립의 타격 오프셋에 맞춰 넣고(아래),
+            // 같은 index가 애니메이션에도 가므로 화면 속 주먹이 닿는 순간과 HP 감소가 일치한다. (#220)
+            int variant = m_owner.NextSwingVariant();
+            m_owner.RaiseAttackSwing(variant);
+            m_pendingStrikeTime = Time.time + m_owner.SwingImpactOffset(variant);
         }
 
         // 타격 프레임 도달 — 예약된 스윙의 데미지를 지금 넣는다. 범위 재수집도 이 순간에 하므로

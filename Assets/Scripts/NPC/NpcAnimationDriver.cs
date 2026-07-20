@@ -64,8 +64,6 @@ public class NpcAnimationDriver : MonoBehaviour
     [Header("공격 스윙 (#220)")]
     [Tooltip("스윙 1회당 Attack(단발) 모션을 유지하는 시간(초) — 이후 버틴 자세로 복귀한다. 저항 공격 주기보다 짧고 타격 오프셋보다 길게")]
     [SerializeField] private float m_swingAnimSeconds = 0.9f;
-    [Tooltip("스윙 클립 종류 수 — NpcAnimatorControllerBuilder가 Attack 블렌드 트리에 넣은 클립 개수와 같아야 한다. 클립을 빼거나 더하면 이 값도 함께 고칠 것")]
-    [SerializeField] private int m_swingVariantCount = 4;
 
     [Header("자물쇠 해제 (#261)")]
     [Tooltip("해제 시작(Begin) 모션을 유지하는 시간(초) — 이후 반복(Loop)으로 넘어간다. Begin 클립 길이(0.63초)에 맞춘 값")]
@@ -117,8 +115,9 @@ public class NpcAnimationDriver : MonoBehaviour
     // 저항 NPC의 공격 스윙 1회 — Animator State를 Attack(단발 스윙 클립)으로 잠깐 펄스한다.
     // 이 컨트롤러의 로코모션이 전부 Any State(State==N) 전이라, State int 하나만 참이어야 스윙이
     // 중간에 끊기지 않는다 — 그래서 트리거 오버레이가 아니라 int 펄스를 쓴다. 스윙 종료는 Update가 처리.
-    // 데미지 타이밍은 NpcResistState가 타격 오프셋으로 맞추므로 여기선 모션만 얹는다. (#220)
-    private void HandleAttackSwing()
+    // variant는 서버가 뽑아 전 피어에 넘긴 클립 index — 데미지는 NpcResistState가 그 클립의 타격
+    // 오프셋에 맞춰 넣으므로, 여기선 같은 클립을 재생만 하면 주먹 닿는 순간과 HP 감소가 일치한다. (#220)
+    private void HandleAttackSwing(int variant)
     {
         if (m_animator == null)
             return;
@@ -134,11 +133,11 @@ public class NpcAnimationDriver : MonoBehaviour
         if (!CanSwingIn(m_baseState))
             return;
 
-        // 이번 스윙에 쓸 단발 클립을 뽑는다 — 반드시 State 펄스보다 먼저다.
+        // 이번 스윙에 쓸 단발 클립을 지정한다 — 반드시 State 펄스보다 먼저다.
         // Attack 상태에 들어간 뒤에 바꾸면 재생 중인 클립이 도중에 갈아끼워져 모션이 튄다.
-        // 각 피어가 따로 뽑으므로 화면마다 다른 클립이 나올 수 있다. 연출 전용 값이고
-        // 데미지는 서버가 타격 오프셋으로 판정하므로(#220) 동기화하지 않는다.
-        m_animator.SetFloat(s_swingVariantHash, Random.Range(0, m_swingVariantCount));
+        // index는 서버가 뽑아 전 피어에 넘긴 값이라 화면마다 같은 클립이 나오고, 서버가 그 클립의
+        // 타격 오프셋으로 데미지를 넣으므로 주먹 닿는 순간과 HP 감소가 일치한다. (#220)
+        m_animator.SetFloat(s_swingVariantHash, variant);
 
         m_animator.SetInteger(s_stateHash, (int)NpcState.Attack);
         m_swingUntil = Time.time + m_swingAnimSeconds;
