@@ -11669,13 +11669,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::JailbreakEvent
   m_intruderPrefab: {fileID: 4452197611904741975, guid: e7cbd7673d85ce0488590f20f53288ac, type: 3}
-  m_npcSpawner: {fileID: 1297908258}
   m_occupancyZone: {fileID: 1944194182}
   m_jailZone: {fileID: 2137162817}
   m_jailLock: {fileID: 2137162818}
-  m_wantedList: {fileID: 1417416485}
-  m_round: {fileID: 708957383}
-  m_arrestJudge: {fileID: 1334629126}
   m_minUnmannedSeconds: 20
   m_unlockSeconds: 5
   m_spawnRadius: 5

@@ -316,7 +316,10 @@
 
 ### 10-2. 상태 enum
 **Player:** `Idle` / `Walk` / `Run` / `Attack` / `Die` / `Dance`
-**NPC (용의자 포함):** `Idle` / `Walk` / `Run` / `Attack` / `Captured` / `Stunned` / `Panic`
+**NPC (용의자 포함):** `Idle` / `Walk` / `Run` / `Attack` / `Captured` / `Stunned` / `Panic` / `Escorted` / `Jailed` / `Intruding`
+- `Escorted` — 연행 중(수갑 찬 채 체포한 플레이어를 따라 이동)
+- `Jailed` — 인계 판정 후 유치장으로 이송·수용. 대응 Animator 상태가 없어 이송 중 Escorted, 수용 후 Captured 모션을 대신 쓴다
+- `Intruding` — 돌발 이벤트(범인 탈출)의 침입자가 자물쇠까지 이동 후 해제를 진행하는 상태. Jailed와 같은 예외로 Walk 모션을 대신 쓴다
 
 ### 10-3. 몽타주(외형) 표현 방식
 - **글 방식** (구현 쉬움): "검정 옷, ○○색 머리…" 형태의 텍스트 특징 나열. ← 우선 채택 후보

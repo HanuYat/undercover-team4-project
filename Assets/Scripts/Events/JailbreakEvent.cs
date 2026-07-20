@@ -37,21 +37,12 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     [Header("침입자 프리팹 (NpcController)")]
     [SerializeField] private NpcController m_intruderPrefab;
 
-    [Header("스폰 포인트 공급 (비우면 씬에서 자동 탐색)")]
-    [Tooltip("일반 NPC와 같은 지점에서 등장시키기 위해 NpcSpawner의 스폰 포인트를 빌려 쓴다")]
-    [SerializeField] private NpcSpawner m_npcSpawner;
-
     [Header("본부 무인 감지 (비우면 씬에서 자동 탐색)")]
     [SerializeField] private HqOccupancyZone m_occupancyZone;
 
     [Header("유치장 / 자물쇠 (비우면 자동 탐색)")]
     [SerializeField] private JailZone m_jailZone;
     [SerializeField] private JailLock m_jailLock;
-
-    [Header("수배 리스트 / 라운드 / 검거 판정 (비우면 씬에서 자동 탐색)")]
-    [SerializeField] private WantedListManager m_wantedList;
-    [SerializeField] private RoundManager m_round;
-    [SerializeField] private ArrestJudge m_arrestJudge;
 
     [Header("발동 조건")]
     [Tooltip("본부가 이 시간(초) 이상 비어 있어야 발동한다 — 잠깐 자리를 비운 것으로는 터지지 않게")]
@@ -77,7 +68,13 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     [Tooltip("연행되지 않은 채 이 시간(초)을 넘기면 강제로 정리한다 (스폰물 누수 방지)")]
     [SerializeField] private float m_maxLifetimeSeconds = 90f;
 
-    private SuddenEventManager m_manager;
+    // 매니저는 캐싱하지 않고 App 경유로 매번 읽는다 (아키텍처 규칙 R1/R8).
+    // 침입자 스폰 지점은 일반 NPC와 같아야 하므로 NpcSpawner의 것을 빌려 쓴다.
+    private NpcSpawner Spawner => App.Game.NpcSpawner;
+    private WantedListManager WantedList => App.Game.WantedList;
+    private RoundManager Round => App.Game.Round;
+    private ArrestJudge Judge => App.Game.ArrestJudge;
+    private SuddenEventManager SuddenEvents => App.Game.SuddenEvent;
 
     private NpcController m_intruder;
     private bool m_pendingStart;  // 스폰 다음 프레임에 침입을 시작하기 위한 플래그(초기화 순서 보장)
@@ -97,41 +94,36 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
 
     private void Awake()
     {
-        m_manager = GetComponent<SuddenEventManager>();
-
-        if (m_npcSpawner == null)
-            m_npcSpawner = FindFirstObjectByType<NpcSpawner>();
+        // 매니저가 아닌 장소·부품만 여기서 찾는다 (자물쇠·유치장·본부 트리거 존).
+        // 매니저는 App 경유 프로퍼티로 읽으므로 Awake에서 손대지 않는다 — 등록이 아직 안 끝났을 수 있다.
         if (m_occupancyZone == null)
             m_occupancyZone = FindFirstObjectByType<HqOccupancyZone>();
         if (m_jailZone == null)
             m_jailZone = FindFirstObjectByType<JailZone>();
         if (m_jailLock == null)
             m_jailLock = m_jailZone != null ? m_jailZone.GetComponent<JailLock>() : FindFirstObjectByType<JailLock>();
-        if (m_wantedList == null)
-            m_wantedList = FindFirstObjectByType<WantedListManager>();
-        if (m_round == null)
-            m_round = FindFirstObjectByType<RoundManager>();
-        if (m_arrestJudge == null)
-            m_arrestJudge = FindFirstObjectByType<ArrestJudge>();
     }
 
-    private void OnEnable()
+    // 매니저 구독은 Start에서 — 모든 매니저의 Awake(=App 등록)가 끝난 뒤가 보장된다 (아키텍처 규칙 R6).
+    private void Start()
     {
-        if (m_arrestJudge != null)
-            m_arrestJudge.OnArrestJudged += HandleArrestJudged;
+        if (Judge != null)
+            Judge.OnArrestJudged += HandleArrestJudged;
+        else
+            Debug.LogWarning("JailbreakEvent: ArrestJudge를 찾지 못해 검거된 침입자를 놓아주지 못한다", this);
     }
 
-    private void OnDisable()
+    private void OnDestroy()
     {
-        if (m_arrestJudge != null)
-            m_arrestJudge.OnArrestJudged -= HandleArrestJudged;
+        if (Judge != null)
+            Judge.OnArrestJudged -= HandleArrestJudged;
     }
 
     public bool CanTrigger()
     {
         if (m_intruderPrefab == null || m_occupancyZone == null || m_jailZone == null || m_jailLock == null)
             return false;
-        if (m_npcSpawner == null || m_npcSpawner.SpawnPoints == null || m_npcSpawner.SpawnPoints.Count == 0)
+        if (Spawner == null || Spawner.SpawnPoints == null || Spawner.SpawnPoints.Count == 0)
             return false;
 
         // 본부가 충분히 오래 비어 있어야 하고(GDD 4-1 트레이드오프), 자물쇠가 아직 잠겨 있어야 하며,
@@ -224,7 +216,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     // 분산 반경 안에서 다시 뽑는 방식이라 같은 포인트라도 매번 다른 자리에서 나온다.
     private bool TryFindSpawnPosition(out Vector3 result)
     {
-        IReadOnlyList<Transform> points = m_npcSpawner != null ? m_npcSpawner.SpawnPoints : null;
+        IReadOnlyList<Transform> points = Spawner != null ? Spawner.SpawnPoints : null;
         if (points == null || points.Count == 0)
         {
             result = default;
@@ -250,7 +242,8 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
             return;
 
         Debug.Log($"[돌발이벤트] 범인 탈출 — 자물쇠 해제 시작, {m_unlockSeconds}초 후 개방");
-        m_manager.Announce(DisplayName);
+        if (SuddenEvents != null)
+            SuddenEvents.Announce(DisplayName);
     }
 
     // 해제 완료 — 자물쇠를 열고 수감자를 방출한다. 경로 실패면 불발로 정리한다.
@@ -343,10 +336,10 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         CitizenIdentity identity = inmate.GetComponent<CitizenIdentity>();
         if (identity != null && identity.IsCriminal)
         {
-            if (m_round != null)
-                m_round.ReportCriminalEscaped();
-            if (m_wantedList != null)
-                m_wantedList.ReinstateByNpcId(inmate.NetworkObjectId);
+            if (Round != null)
+                Round.ReportCriminalEscaped();
+            if (WantedList != null)
+                WantedList.ReinstateByNpcId(inmate.NetworkObjectId);
         }
 
         // 유치장을 뛰쳐나와 도주한다 — 침입자를 위협으로 삼아 반대로 달아난 뒤 배회로 섞여 든다.
