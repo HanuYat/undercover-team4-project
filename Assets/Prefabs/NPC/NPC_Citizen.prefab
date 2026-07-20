@@ -79,7 +79,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3597202934
+  GlobalObjectIdHash: 3276814461
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -122,13 +122,25 @@ MonoBehaviour:
   m_fleeSpeedMultiplier: 1.5
   m_fleeStepDistance: 10
   m_fleeEscapeDistance: 25
+  m_fleeClearanceRadius: 4
+  m_fleeResistCooldown: 2
   m_subdueGaugeMax: 100
   m_stunSeconds: 2.67
+  m_capturedEscapeSeconds: 30
+  m_capturedEscapeWarningSeconds: 5
   m_resistAttackInterval: 1.5
   m_resistAttackRange: 2
   m_resistAttackDamage: 10
   m_subdueHitPower: 34
   m_resistDefeatSeconds: 15
+  m_strikeOffsetSeconds: 0.45
+  m_swingImpactOffsets:
+  - 0.63
+  - 0.53
+  - 0.44
+  - 0.73
+  m_attackConeAngle: 120
+  m_attackTurnSpeed: 540
   m_disturbanceRadius: 8
   m_disturbancePulseInterval: 1
   m_panicSpeedMultiplier: 1.8
@@ -174,6 +186,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcAnimationDriver
   m_panicRunReferenceSpeed: 4.5
+  m_swingAnimSeconds: 0.9
+  m_unlockBeginSeconds: 0.63
   m_animator: {fileID: 0}
 --- !u!114 &3625219082931332717
 MonoBehaviour:
@@ -326,7 +340,7 @@ MonoBehaviour:
   m_OverrideTileSize: 0
   m_TileSize: 256
   m_OverrideVoxelSize: 0
-  m_VoxelSize: 0.16666667
+  m_VoxelSize: 0.13333334
   m_MinRegionArea: 2
   m_NavMeshData: {fileID: 0}
   m_BuildHeightMesh: 0
