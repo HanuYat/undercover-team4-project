@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -23,9 +22,6 @@ public class ArrestJudge : MonoBehaviour
 
     public event Action<ArrestResult> OnArrestJudged;
 
-    // [수정] static으로 선언하여 HqDropoffZone 등 외부에서 쉽게 검사할 수 있도록 공개 (블랙리스트)
-    public static HashSet<NpcController> JudgedNpcs { get; } = new HashSet<NpcController>();
-
     private void Awake()
     {
         if (m_dropoffZone == null)
@@ -44,12 +40,8 @@ public class ArrestJudge : MonoBehaviour
             m_dropoffZone.OnNpcDelivered -= HandleNpcDelivered;
     }
 
-    // [리뷰 반영] 씬 전환 및 라운드 재시작 시 정적 데이터가 남아 
-    // 메모리 누수나 다음 라운드에 영향을 주지 않도록 초기화합니다.
-    private void OnDestroy()
-    {
-        JudgedNpcs.Clear();
-    }
+    // 판정 완료 표식은 NpcController.IsDelivered가 들고 있다 (#230) — NPC와 수명을 같이하므로
+    // 씬 전환·라운드 재시작 시 수동으로 비울 static 상태가 없다.
 
     private void HandleNpcDelivered(NpcController npc)
     {
@@ -63,7 +55,7 @@ public class ArrestJudge : MonoBehaviour
         if (npc.IsSpawned && !npc.IsServer) return null;
 
         // 혹시 모를 중복 진입 방어
-        if (JudgedNpcs.Contains(npc)) return null;
+        if (npc.IsDelivered) return null;
 
         // 경범죄 이벤트 NPC(난동꾼)는 신원 대조 이전에 마커로 식별한다 (#106).
         MisdemeanorOffender misdemeanor = npc.GetComponent<MisdemeanorOffender>();
@@ -76,8 +68,9 @@ public class ArrestJudge : MonoBehaviour
             return null;
         }
 
-        // [핵심] 판정이 시작되면 즉시 판정 완료 명단에 추가
-        JudgedNpcs.Add(npc);
+        // [핵심] 판정이 시작되면 즉시 판정 완료로 표시 — 인계존 재진입 중복 판정과
+        // 인계 방치 타이머(#230)를 함께 막는다
+        npc.MarkDelivered();
 
         ArrestVerdict verdict;
         int reward;

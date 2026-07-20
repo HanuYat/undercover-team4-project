@@ -13,6 +13,10 @@ using Random = UnityEngine.Random;
 [RequireComponent(typeof(NavMeshAgent))]
 public class NpcController : NetworkBehaviour
 {
+    // 위협 탐색 반경 배율 — 저항 패배 후 도주 대상을 찾을 때(#205)와 도주 방향 산출(#213)이 공유한다.
+    // 공격 범위보다 넓게 잡아 멀리서 접근 중인 플레이어도 회피 대상에 들어온다.
+    private const float k_threatSearchRadiusMultiplier = 5f;
+
     [Header("배회 반경")]
     [SerializeField] private float m_wanderRadius = 10f;
 
@@ -51,10 +55,21 @@ public class NpcController : NetworkBehaviour
     [SerializeField] private float m_fleeStepDistance = 10f;
     [Tooltip("추적자와 이 거리(m) 이상 벌어지면 도주 성공 — 배회로 복귀한다")]
     [SerializeField] private float m_fleeEscapeDistance = 25f;
+    [Tooltip("도주 경로가 플레이어에게 이 거리(m)보다 가까이 스치면 그 방향은 버린다 — 체포 사거리(PlayerInteractor.Range, 3m) + 여유 마진")]
+    [SerializeField] private float m_fleeClearanceRadius = 4f;
+    [Tooltip("도주 진입 후 이 시간(초) 안에는 포위됐어도 저항으로 되돌아가지 않는다 — 저항↔도주 왕복 방지 (#213)")]
+    [SerializeField] private float m_fleeResistCooldown = 2f;
+
     [Tooltip("저항 제압 게이지 최대치 — ApplySubdueHit로 깎여 0이 되면 체포된다")]
     [SerializeField] private float m_subdueGaugeMax = 100f;
     [Tooltip("기절(테이저 등) 지속 시간(초)")]
     [SerializeField] private float m_stunSeconds = 3f;
+
+    [Header("인계 방치 (#230)")]
+    [Tooltip("체포된 채 이 시간(초) 동안 인계되지 않으면 수갑을 풀고 도주한다 — 방치 전략 차단")]
+    [SerializeField] private float m_capturedEscapeSeconds = 30f;
+    [Tooltip("도주 직전 이 시간(초) 동안 소란을 낸다 — 수갑 풀려는 소동으로 현장·본부에 예고")]
+    [SerializeField] private float m_capturedEscapeWarningSeconds = 5f;
 
     [Header("저항 전투 (#79)")]
     [Tooltip("저항 중 범위 타격을 휘두르는 주기(초)")]
@@ -67,6 +82,12 @@ public class NpcController : NetworkBehaviour
     [SerializeField] private float m_subdueHitPower = 34f;
     [Tooltip("저항 시작 후 이 시간(초) 안에 제압당하지 않으면 플레이어 패배 — 도주형으로 전환된다 (GDD 7-4)")]
     [SerializeField] private float m_resistDefeatSeconds = 15f;
+    [Tooltip("스윙 시작→타격이 닿는 프레임까지의 시간(초). 이 만큼 뒤에 데미지가 들어가므로 준비 동작이 곧 회피 창이 된다 (#220)")]
+    [SerializeField] private float m_strikeOffsetSeconds = 0.45f;
+    [Tooltip("타격이 닿는 정면 부채꼴의 전체 각도(도). 이 각도 안(정면 기준 ±절반)에 있는 플레이어만 맞는다 — 등 뒤·측면은 빗나간다 (#220)")]
+    [SerializeField] private float m_attackConeAngle = 120f;
+    [Tooltip("저항 중 표적을 바라보도록 도는 회전 속도(도/초) — 부채꼴 기준 방향을 표적에 맞춘다 (#220)")]
+    [SerializeField] private float m_attackTurnSpeed = 540f;
 
     [Header("패닉 (#81)")]
     [Tooltip("소란(저항 전투·도주)이 주변 시민을 패닉시키는 전파 반경(m)")]
@@ -109,12 +130,25 @@ public class NpcController : NetworkBehaviour
     public float FleeSpeedMultiplier => m_fleeSpeedMultiplier;
     public float FleeStepDistance => m_fleeStepDistance;
     public float FleeEscapeDistance => m_fleeEscapeDistance;
+    public float FleeClearanceRadius => m_fleeClearanceRadius;
+    public float FleeResistCooldown => m_fleeResistCooldown;
+    public float CapturedEscapeSeconds => m_capturedEscapeSeconds;
+    public float CapturedEscapeWarningSeconds => m_capturedEscapeWarningSeconds;
     public float SubdueGaugeMax => m_subdueGaugeMax;
     public float StunSeconds => m_stunSeconds;
     public float ResistAttackInterval => m_resistAttackInterval;
     public float ResistAttackRange => m_resistAttackRange;
     public int ResistAttackDamage => m_resistAttackDamage;
     public float ResistDefeatSeconds => m_resistDefeatSeconds;
+    public float StrikeOffsetSeconds => m_strikeOffsetSeconds;
+    public float AttackConeAngle => m_attackConeAngle;
+    public float AttackTurnSpeed => m_attackTurnSpeed;
+
+    /// <summary>
+    /// 위협(플레이어)을 찾는 반경(m) — 저항 패배 후 도주 대상 탐색(#205)과 도주 방향 산출(#213)이 같은 값을 쓴다.
+    /// 두 경로가 다른 반경을 쓰면 "도망칠 상대"와 "피할 상대"의 기준이 어긋난다.
+    /// </summary>
+    public float ThreatSearchRadius => m_resistAttackRange * k_threatSearchRadiusMultiplier;
     public float PanicSpeedMultiplier => m_panicSpeedMultiplier;
     public float PanicStepDistance => m_panicStepDistance;
     public float PanicCalmSeconds => m_panicCalmSeconds;
@@ -132,6 +166,23 @@ public class NpcController : NetworkBehaviour
     public Transform ThreatTarget { get; private set; }
 
     /// <summary>
+    /// 본부 인계 판정이 끝났는가 — <see cref="MarkDelivered"/>로 ArrestJudge가 세팅한다. (#230)
+    /// 판정 완료분은 인계 방치 타이머에서 빠지고(본부에서 탈출하면 안 된다), 인계존 재진입 시 중복 판정도 막는다.
+    /// 서버(또는 오프라인)에서만 유효 — 판정·인계존 게이트가 모두 서버 전용이라 동기화하지 않는다.
+    /// 판정 후 본부에 남는 NPC의 처리는 유치장(#228)이 가져간다.
+    /// </summary>
+    public bool IsDelivered { get; private set; }
+
+    /// <summary>인계 판정 완료로 표시 — ArrestJudge 전용. 서버(또는 오프라인)에서만 호출된다. (#230)</summary>
+    public void MarkDelivered()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        IsDelivered = true;
+    }
+
+    /// <summary>
     /// 현재 NPC 상태. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 안전하게 읽을 수 있다.
     /// (StateMachine.CurrentState는 서버에서만 갱신되므로 외부 코드는 반드시 이 프로퍼티를 읽을 것)
     /// </summary>
@@ -139,6 +190,11 @@ public class NpcController : NetworkBehaviour
 
     /// <summary>상태 변경 이벤트 — 서버·클라이언트 모든 피어에서 발생한다. 애니메이션 등 표현 계층이 구독. (#56)</summary>
     public event Action<NpcState> OnStateChanged;
+
+    /// <summary>공격 스윙 1회를 휘두를 때 발행 — 전 피어에서 발생한다(서버는 로컬 발행 + ClientRpc 중계).
+    /// 애니메이션 표현(<see cref="NpcAnimationDriver"/>)이 구독해 단발 스윙 모션을 트리거한다.
+    /// FSM 상태와 독립한 순간 이벤트라 State 동기화와 별개로 스윙 타이밍을 정확히 맞춘다. (#220, ThugAttacker.OnAttack과 동일 패턴)</summary>
+    public event Action OnAttackSwing;
 
     /// <summary>연행 중 따라갈 대상(체포한 플레이어). 연행 중이 아니면 null. 서버에서만 유효.</summary>
     public Transform EscortTarget { get; private set; }
@@ -230,6 +286,17 @@ public class NpcController : NetworkBehaviour
         NpcState state = m_stateMachine.CurrentState;
         if (state != NpcState.Run && state != NpcState.Attack)
             return;
+
+        RequestDisturbancePulse();
+    }
+
+    /// <summary>
+    /// 소란 펄스를 1회 요청한다 — 상태 클래스가 자기 사정으로 소란을 낼 때 쓴다.
+    /// 주기 스로틀은 자동 펄스(<see cref="EmitDisturbancePulse"/>)와 공유하므로 펄스 타이머가 둘로 갈라지지 않는다.
+    /// 서버(또는 오프라인) 전용 — FSM Tick 안에서만 불린다. (#81, #230)
+    /// </summary>
+    public void RequestDisturbancePulse()
+    {
         if (Time.time < m_nextDisturbancePulseTime)
             return;
 
@@ -259,6 +326,24 @@ public class NpcController : NetworkBehaviour
     private void HandleNetworkStateChanged(NpcState previous, NpcState current)
     {
         OnStateChanged?.Invoke(current);
+    }
+
+    /// <summary>공격 스윙 1회를 전 피어에 알린다 — 애니메이션 표현용. 서버(또는 오프라인) FSM Tick에서만 호출한다.
+    /// 서버는 로컬 발행 + ClientRpc로 원격 클라에 중계한다. (#220, ThugAttacker.NotifyAttack과 동일 패턴)</summary>
+    public void RaiseAttackSwing()
+    {
+        OnAttackSwing?.Invoke(); // 서버·오프라인 로컬 발행
+        if (IsSpawned && IsServer)
+            PlayAttackSwingClientRpc();
+    }
+
+    [ClientRpc]
+    private void PlayAttackSwingClientRpc()
+    {
+        // 서버(호스트)는 위에서 이미 발행했으므로 원격 클라에서만 중계
+        if (IsServer)
+            return;
+        OnAttackSwing?.Invoke();
     }
 
     /// <summary>
