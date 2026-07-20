@@ -255,7 +255,7 @@ public class PlayerReviver : NetworkBehaviour
             ChannelGaugeStartRpc(seconds);
             return;
         }
-        ChannelingGaugeUI.Instance?.Show(seconds);
+        App.UI.Gauge?.Show(seconds);
     }
 
     private void NotifyChannelGaugeEnd()
@@ -265,14 +265,14 @@ public class PlayerReviver : NetworkBehaviour
             ChannelGaugeEndRpc();
             return;
         }
-        ChannelingGaugeUI.Instance?.Hide();
+        App.UI.Gauge?.Hide();
     }
 
     [Rpc(SendTo.Owner)]
-    private void ChannelGaugeStartRpc(float seconds) => ChannelingGaugeUI.Instance?.Show(seconds);
+    private void ChannelGaugeStartRpc(float seconds) => App.UI.Gauge?.Show(seconds);
 
     [Rpc(SendTo.Owner)]
-    private void ChannelGaugeEndRpc() => ChannelingGaugeUI.Instance?.Hide();
+    private void ChannelGaugeEndRpc() => App.UI.Gauge?.Hide();
 
     public override void OnDestroy()
     {

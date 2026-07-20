@@ -12,7 +12,8 @@ using Random = UnityEngine.Random;
 /// 스폰 위치는 NavMesh 위 지점으로 보정해 배회가 항상 동작하게 한다.
 /// 네트워크 세션에서는 서버만 스폰하고 NetworkObject.Spawn으로 전 클라이언트에 복제한다. (#56)
 /// </summary>
-public class NpcSpawner : MonoBehaviour
+[DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
+public class NpcSpawner : CommonManagerBase
 {
     [Header("NPC 프리팹")]
     [SerializeField] private NpcController m_npcPrefab;
@@ -52,8 +53,10 @@ public class NpcSpawner : MonoBehaviour
     /// <summary>스폰 완료 이벤트 — 범인 배정(#38) 등 "전원 스폰 이후"에 시작해야 하는 시스템이 구독한다.</summary>
     public event Action OnSpawnCompleted;
 
-    private void Awake()
+    protected override void Awake()
     {
+        base.Awake(); // App.Game.NpcSpawner 등록
+
         // 인스펙터에 스폰 포인트를 따로 지정하지 않았으면 자식들을 그대로 사용한다
         if (m_spawnPoints == null || m_spawnPoints.Length == 0)
         {

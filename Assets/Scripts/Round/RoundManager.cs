@@ -37,13 +37,12 @@ public enum RoundEndReason
 /// </summary>
 // TODO: 라운드 페이즈·결과의 클라이언트 동기화는 본부 판정/결과 UI(#43) 연결 시 NetworkVariable/ClientRpc로 추가.
 //       (ArrestJudge와 동일 방침 — 지금은 서버 로컬 상태 + 로컬 이벤트로만 둔다)
-public class RoundManager : MonoBehaviour
+[DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
+public class RoundManager : CommonManagerBase
 {
-    [Header("스포너 (비우면 씬에서 자동 탐색)")]
-    [SerializeField] private NpcSpawner m_spawner;
-
-    [Header("검거 판정 (비우면 씬에서 자동 탐색)")]
-    [SerializeField] private ArrestJudge m_arrestJudge;
+    private NpcSpawner Spawner => App.Game.NpcSpawner;
+    private ArrestJudge Judge => App.Game.ArrestJudge;
+    private CriminalAssigner Assigner => App.Game.CriminalAssigner;
 
     [Header("라운드 목표")]
     [Tooltip("라운드당 검거 할당량")]
@@ -53,7 +52,6 @@ public class RoundManager : MonoBehaviour
     [SerializeField] private float m_timeLimitSeconds = 180f;
 
     private NetworkManager m_networkManager;
-    private CriminalAssigner m_criminalAssigner;
 
     /// <summary>현재 라운드 단계. 서버(또는 오프라인)의 진실값 — 클라이언트 동기화는 #43에서.</summary>
     public RoundPhase Phase { get; private set; } = RoundPhase.Preparing;
@@ -95,43 +93,34 @@ public class RoundManager : MonoBehaviour
     /// <summary>라운드 종료 이벤트 — 정산(#42 후속)·결과 UI(#43)·종료 피드백(#210)이 구독한다.</summary>
     public event Action<RoundResult, RoundEndReason> OnRoundEnded;
 
-    private void Awake()
-    {
-        if (m_spawner == null)
-            m_spawner = FindFirstObjectByType<NpcSpawner>();
-        if (m_arrestJudge == null)
-            m_arrestJudge = FindFirstObjectByType<ArrestJudge>();
-            
-        m_criminalAssigner = FindFirstObjectByType<CriminalAssigner>();
-    }
-
     private void OnEnable()
     {
-        if (m_arrestJudge != null)
-            m_arrestJudge.OnArrestJudged += HandleArrestJudged;
-            
         // 전원 다운(전멸) 감시 — 무력화 상태 변화는 서버·오프라인에서만 발행된다. (#105)
         PlayerIncapacitation.OnAnyIncapacitatedChanged += HandleAnyIncapacitatedChanged;
-        
-        // 할당량 > 실제 진범 수 검증을 위해 진범 배정 완료 이벤트를 구독. (#149)
-        if (m_criminalAssigner != null)
-            m_criminalAssigner.OnCriminalAssigned += HandleCriminalAssigned;
     }
 
     private void OnDisable()
     {
-        if (m_arrestJudge != null)
-            m_arrestJudge.OnArrestJudged -= HandleArrestJudged;
-            
+        if (Judge != null)
+            Judge.OnArrestJudged -= HandleArrestJudged;
+
         PlayerIncapacitation.OnAnyIncapacitatedChanged -= HandleAnyIncapacitatedChanged;
-        
-        if (m_criminalAssigner != null)
-            m_criminalAssigner.OnCriminalAssigned -= HandleCriminalAssigned;
+
+        if (Assigner != null)
+            Assigner.OnCriminalAssigned -= HandleCriminalAssigned;
     }
 
     private void Start()
     {
-        if (m_spawner == null)
+        // 매니저 간 이벤트 구독 — 모든 매니저의 Awake(App 등록)가 끝난 Start 시점에 한다
+        if (Judge != null)
+            Judge.OnArrestJudged += HandleArrestJudged;
+
+        // [버그 수정] 할당량 > 실제 진범 수 검증을 위해 진범 배정 완료 이벤트를 구독합니다. (#149)
+        if (Assigner != null)
+            Assigner.OnCriminalAssigned += HandleCriminalAssigned;
+
+        if (Spawner == null)
         {
             Debug.LogWarning("RoundManager: NpcSpawner를 찾지 못해 라운드를 시작할 수 없다", this);
             return;
@@ -158,7 +147,7 @@ public class RoundManager : MonoBehaviour
         EndReason = RoundEndReason.None;
         CriminalArrestCount = 0;
         RemainingSeconds = float.PositiveInfinity;
-        m_spawner.ResetSpawnState(); // IsSpawnCompleted 래치 해제 + 이전 NPC 정리 → StartSpawn 재동작
+        Spawner.ResetSpawnState(); // IsSpawnCompleted 래치 해제 + 이전 NPC 정리 → StartSpawn 재동작
     }
 
     /// <summary>
@@ -174,7 +163,7 @@ public class RoundManager : MonoBehaviour
         CriminalArrestCount = 0;
         // 0 이하 = 무제한 — 타이머를 아예 돌리지 않는다 (밸런싱 전 테스트·본부 단독 씬용)
         RemainingSeconds = m_timeLimitSeconds > 0f ? m_timeLimitSeconds : float.PositiveInfinity;
-        m_spawner.StartSpawn(); // 서버/오프라인만 실제 스폰 — 클라이언트 호출은 NpcSpawner가 걸러낸다 (#56)
+        Spawner.StartSpawn(); // 서버/오프라인만 실제 스폰 — 클라이언트 호출은 NpcSpawner가 걸러낸다 (#56)
         Debug.Log($"[라운드] 시작 — NPC 스폰 트리거 (할당량 {m_arrestQuota}명, 제한시간 {(float.IsPositiveInfinity(RemainingSeconds) ? "무제한" : $"{RemainingSeconds:0}초")})");
         OnRoundStarted?.Invoke();
     }
@@ -273,10 +262,10 @@ public class RoundManager : MonoBehaviour
     // 스폰된 NPC를 전부 정지시킨다 — 서버(또는 오프라인)에서만 호출되며, 서버 정지가 전 클라이언트로 복제된다.
     private void FreezeAllNpcs()
     {
-        if (m_spawner == null)
+        if (Spawner == null)
             return;
 
-        foreach (NpcController npc in m_spawner.SpawnedNpcs)
+        foreach (NpcController npc in Spawner.SpawnedNpcs)
         {
             if (npc != null)
                 npc.SetFrozen(true);

@@ -18,7 +18,12 @@ PR 번호를 받아 아래 절차대로 리뷰하고, 리뷰어가 훑어보기 
    - `gh pr view <n> --json title,body,author,baseRefName,headRefName,files,mergeStateStatus`
    - `gh pr diff <n> --name-only` — 변경 파일 목록
    - **mergeStateStatus 확인**: `DIRTY`(base와 충돌)면 결론을 "충돌 해소 필요"로 하고 리포트 최상단에 표기. `BEHIND`(base보다 뒤처짐)면 경고 — 특히 씬 파일이 포함된 PR이 뒤처져 있으면 먼저 머지된 씬 작업을 덮어쓸 위험이 크다고 명시할 것.
-3. **리뷰 대상은 `.cs` 스크립트 파일이 기본이다 (토큰 절약 — 팀 확정).**
+3. **PR 본문 템플릿 검사** (`.github/PULL_REQUEST_TEMPLATE.md`의 4개 섹션: 요약 / 테스트 방법 / 씬·프리팹 변경 / 후속으로 미룬 것):
+   - 섹션이 누락됐거나 비어 있으면 🟡로 지적한다. 단순 형식 지적에 그치지 말고 **본문 선언과 실제 diff를 교차 검증**한다:
+   - **씬/프리팹 칸 ↔ 변경 파일 목록 대조 (핵심)**: diff에 공용 씬(`Main Scene.unity` 등)·`.prefab` 변경이 있는데 칸이 "없음"/"내 테스트 씬만"이면 🟠 — 리뷰어가 씬을 검토할 유일한 근거가 누락된 것이므로 작성자에게 변경 내용 설명을 요구한다. 반대로 선언은 있는데 해당 파일 변경이 없으면 🔵로 언급.
+   - **테스트 방법**: 비어 있거나 재현 절차 없이 "확인함" 수준이면 🟡 — 어느 씬·몇 인·무엇을 봐야 하는지 요구. 멀티플레이 코드(NetworkBehaviour) 변경인데 오프라인 테스트만 적혀 있으면 🟡.
+   - **후속으로 미룬 것**: 여기 적힌 항목은 4장 2번(요구사항 대조)에서 누락 지적 대신 "후속 확인"으로 분류한다. 칸에 없는데 이슈 체크리스트에서 빠진 항목은 정상적으로 지적.
+4. **리뷰 대상은 `.cs` 스크립트 파일이 기본이다 (토큰 절약 — 팀 확정).**
    - 씬(`.unity`)·애니메이션(`.controller`/`.anim`/블렌드 트리)·`.asset`·`.meta` 등 비스크립트 파일은 diff가 몇 줄이든 **어떤 이유로도 내용을 읽지 않는다.** 변경된 파일의 **경로 목록만** 리포트에 기재해 리뷰어가 Editor에서 직접 확인하도록 안내한다.
    - **프리팹(`.prefab`)만 예외 — diff가 150줄 이하일 때만 읽는다** (`git diff --stat`으로 먼저 줄 수 확인). 프리팹 diff는 작으면서 배선 버그(잘못된 컴포넌트 참조, 씬 오브젝트 칸에 에셋 연결 등) 밀도가 높다 — PR #89에서 m_handsModel에 프리팹 에셋이 잘못 연결된 실사례를 잡음. 150줄 초과 프리팹은 다른 비스크립트와 동일하게 목록만 기재한다. 읽은 프리팹은 "리뷰 제외된 파일"이 아니라 검토 대상으로 리포트에 표기.
    - 단, 씬/프리팹에서 **삭제된 오브젝트 이름만** 경량 추출한다 (diff 전체를 읽지 말 것):
@@ -62,12 +67,19 @@ PR 번호를 받아 아래 절차대로 리뷰하고, 리뷰어가 훑어보기 
 
 ## 3. 컨벤션 & 아키텍처 체크
 
-1. **네이밍 컨벤션** (CLAUDE.md / GDD 10-5): 신규·수정 코드에서 `m_`(private 인스턴스), `s_`(static), `k_`(const), `I`/`T` 접두사, 이벤트 `On` 접두사, public 멤버 PascalCase 위반을 찾는다.
-2. **Netcode**: `NetworkBehaviour` 상속 코드가 변경됐다면 —
+1. **아키텍처 규칙** (`docs/architecture.md`가 정본 — 반드시 읽고 대조): **이 PR의 diff에 대해서만** R1~R8 위반을 찾는다. 기계적 검사 요령:
+   - diff에 `FindFirstObjectByType` **추가**가 있으면 → 대상 타입이 App 등록 타입인지 확인(R1 위반), 아니면 architecture.md §4 예외 표에 기재됐는지 확인(미기재면 지적)
+   - diff에 `static` + `Instance` 프로퍼티/필드 **신설**이 있으면 → R2 위반
+   - diff에 `SceneManager.LoadScene` 직접 호출 **추가**가 있으면 → R7 위반 (AppHelper 내부 제외)
+   - 새 매니저 클래스(베이스 상속)가 생겼으면 → App 필드/프로퍼티 추가·`[DefaultExecutionOrder]` 명시 여부(R4), `Awake`/`OnDestroy`의 `base` 호출(R5), 다른 매니저 구독이 Start에 있는지(R6), R3 등록 기준(유일성+교차 도메인 2곳 이상) 충족 근거
+   - 매니저를 **필드에 캐싱**하는 코드가 추가됐으면 → R8 위반 (`private X Xxx => App.그룹.X;` 프로퍼티 패턴 안내)
+   - 유예 조항(§5): 머지 이전에 열린 브랜치의 위반은 🟡로, 이후 신규 코드는 🟠 이상으로 분류
+2. **네이밍 컨벤션** (CLAUDE.md / GDD 10-5): 신규·수정 코드에서 `m_`(private 인스턴스), `s_`(static), `k_`(const), `I`/`T` 접두사, 이벤트 `On` 접두사, public 멤버 PascalCase 위반을 찾는다.
+3. **Netcode**: `NetworkBehaviour` 상속 코드가 변경됐다면 —
    - 서버 권한이 필요한 로직(판정·스폰·상태 변경)이 클라이언트에서 실행되지 않는지
    - `NetworkVariable` 쓰기가 서버/오너 권한과 맞는지, RPC 방향(`ServerRpc`/`ClientRpc`)이 적절한지
    - 새 네트워크 프리팹이 생겼다면 `Assets/DefaultNetworkPrefabs.asset` 등록 여부 (파일 변경 **목록**으로만 판단 — 내용은 읽지 않는다)
-3. **일반 버그**: null 체크 누락, 이벤트 구독 해제 누락(OnDestroy/OnNetworkDespawn), Update 내 비싼 호출(GetComponent, Find 등), UniTask 대신 코루틴/Thread 남용 등 명백한 것만. 사소한 스타일 지적은 하지 않는다.
+4. **일반 버그**: null 체크 누락, 이벤트 구독 해제 누락(OnDestroy/OnNetworkDespawn), Update 내 비싼 호출(GetComponent, Find 등), UniTask 대신 코루틴/Thread 남용 등 명백한 것만. 사소한 스타일 지적은 하지 않는다.
 
 ## 4. 다른 작업과의 교차 확인
 

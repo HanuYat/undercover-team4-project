@@ -27,11 +27,10 @@ using Random = UnityEngine.Random;
 /// </summary>
 // TODO: 이벤트 발생/종료 HUD 알림(본부 관제 UI, #43 계열)은 OnEventAnnounced/AnnounceEventClientRpc를 구독해 연결한다.
 [RequireComponent(typeof(NetworkObject))]
-public class SuddenEventManager : NetworkBehaviour
+[DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
+public class SuddenEventManager : NetworkedManagerBase
 {
-    [Header("라운드 매니저 (비우면 씬에서 자동 탐색)")]
-    [SerializeField]
-    private RoundManager m_round;
+    private RoundManager Round => App.Game.Round;
 
     [Header("발생 스케줄 (초)")]
     [Tooltip(
@@ -70,10 +69,9 @@ public class SuddenEventManager : NetworkBehaviour
     // 서버(또는 오프라인)에서만 의미 — 이 피어가 이벤트 권위를 가지는지. 스폰 전(오프라인)이면 항상 권위.
     private bool IsAuthority => !IsSpawned || IsServer;
 
-    private void Awake()
+    protected override void Awake()
     {
-        if (m_round == null)
-            m_round = FindFirstObjectByType<RoundManager>();
+        base.Awake(); // App.Game.SuddenEvent 등록
 
         // 같은 오브젝트의 이벤트 핸들러를 풀로 수집 — RequireComponent가 이벤트를 같은 오브젝트에 강제하므로
         // 자식까지 훑지 않는다(그래야 자식 배치 오용 시 조용히 수집되는 대신 리그가 잘못됐음이 드러난다)
@@ -92,11 +90,11 @@ public class SuddenEventManager : NetworkBehaviour
         // 발생 스케줄·판정은 서버 권위 — 클라이언트에서는 아예 돌지 않는다 (#56)
         if (!IsAuthority)
             return;
-        if (m_round == null)
+        if (Round == null)
             return;
 
         // 라운드 페이즈 전이 감지 — InProgress 진입 시 스케줄 시작, 이탈 시 진행 이벤트를 정리하고 멈춘다
-        RoundPhase phase = m_round.Phase;
+        RoundPhase phase = Round.Phase;
         if (phase != m_lastPhase)
         {
             HandlePhaseChanged(phase);

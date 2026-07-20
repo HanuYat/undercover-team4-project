@@ -10,7 +10,8 @@ public class DeviceBlackoutView : MonoBehaviour
 {
     [Header("참조 (비우면 씬에서 자동 탐색)")]
     [SerializeField] private DeviceBlackoutEvent m_blackout;
-    [SerializeField] private VivoxManager m_vivox;
+
+    private VivoxManager Vivox => App.Net.Vivox;
 
     [Header("시야 제한 오버레이")]
     [Tooltip("먹통 중 화면을 덮는 어둠의 불투명도 (0=효과 없음, 1=완전 암전). 시야를 '제한'하되 완전히 가리지는 않게")]
@@ -26,8 +27,6 @@ public class DeviceBlackoutView : MonoBehaviour
     {
         if (m_blackout == null)
             m_blackout = FindFirstObjectByType<DeviceBlackoutEvent>();
-        if (m_vivox == null)
-            m_vivox = FindFirstObjectByType<VivoxManager>();
 
         if (m_blackout == null)
         {
@@ -53,8 +52,8 @@ public class DeviceBlackoutView : MonoBehaviour
     {
         m_blackoutActive = active;
         // 통신 차단은 이 피어의 무전(VivoxManager)에 위임 — 없으면(본부 단독·미설정) 건너뛴다
-        if (m_vivox != null)
-            m_vivox.SetCommsJammed(active);
+        if (Vivox != null)
+            Vivox.SetCommsJammed(active);
     }
 
     private void OnGUI()
