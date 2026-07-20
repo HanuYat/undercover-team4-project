@@ -55,6 +55,67 @@ public class PlayerInputHandler : NetworkBehaviour
     public event Action OnToggleInventory; // Tab — 인벤토리 편집 모드 토글 (#144)
     public event Action<bool> OnCrouchChanged; // Left Ctrl 홀드 — 누르면 true, 떼면 false (#236)
 
+    private bool m_isSuspended;
+
+    /// <summary>
+    /// 게임플레이 입력이 정지된 상태인지 — 텍스트 입력 UI(신호 해석기 #108) 등이 켠다.
+    /// 정지 중에는 이동·시점·아이템·상호작용 입력이 전부 끊긴다.
+    /// </summary>
+    public bool IsSuspended => m_isSuspended;
+
+    /// <summary>
+    /// 게임플레이 입력을 일시 정지/재개한다. 타이핑 중 WASD가 이동으로 새는 것을 막는 용도다.
+    /// (인벤토리 편집 모드는 "이동 입력이 들어오면 닫기" 방식이라 타이핑에는 쓸 수 없다 — InventoryBarView.Update)
+    /// 오너에서만 의미가 있다. 정지/재개는 구독을 건드리지 않고 액션만 켜고 끈다.
+    /// </summary>
+    public void SetSuspended(bool suspended)
+    {
+        if (!IsOwner || m_isSuspended == suspended)
+            return;
+
+        m_isSuspended = suspended;
+        SetActionsEnabled(!suspended);
+
+        if (suspended)
+        {
+            // 액션을 끄면 진행 중이던 입력의 canceled 콜백이 돌아 캐시값이 비워지지만, 순서에 기대지 않고
+            // 여기서 확실히 비운다 — 남아 있으면 정지 중에도 마지막 입력값으로 계속 이동한다.
+            MoveInput = Vector2.zero;
+            LookInput = Vector2.zero;
+            IsSprinting = false;
+        }
+    }
+
+    // 11개 액션을 한꺼번에 켜고 끈다 — 스폰/디스폰/정지가 같은 목록을 쓰도록 한 곳에 모은다.
+    private void SetActionsEnabled(bool value)
+    {
+        InputActionReference[] actions =
+        {
+            m_moveAction,
+            m_lookAction,
+            m_interactAction,
+            m_sprintAction,
+            m_useItemAction,
+            m_previousAction,
+            m_nextAction,
+            m_dropAction,
+            m_selectSlotAction,
+            m_toggleInventoryAction,
+            m_crouchAction,
+        };
+
+        foreach (InputActionReference reference in actions)
+        {
+            if (reference == null || reference.action == null)
+                continue;
+
+            if (value)
+                reference.action.Enable();
+            else
+                reference.action.Disable();
+        }
+    }
+
     public override void OnNetworkSpawn()
     {
         if (!IsOwner)
@@ -63,17 +124,7 @@ public class PlayerInputHandler : NetworkBehaviour
             return;
         }
 
-        m_moveAction.action.Enable();
-        m_lookAction.action.Enable();
-        m_interactAction.action.Enable();
-        m_sprintAction.action.Enable();
-        m_useItemAction.action.Enable();
-        m_previousAction.action.Enable();
-        m_nextAction.action.Enable();
-        m_dropAction.action.Enable();
-        m_selectSlotAction.action.Enable();
-        m_toggleInventoryAction.action.Enable();
-        m_crouchAction.action.Enable();
+        SetActionsEnabled(true);
 
         m_moveAction.action.performed += OnMove;
         m_moveAction.action.canceled += OnMove;
@@ -119,17 +170,8 @@ public class PlayerInputHandler : NetworkBehaviour
         m_crouchAction.action.started -= OnCrouchStartedHandler;
         m_crouchAction.action.canceled -= OnCrouchCanceledHandler;
 
-        m_moveAction.action.Disable();
-        m_lookAction.action.Disable();
-        m_interactAction.action.Disable();
-        m_sprintAction.action.Disable();
-        m_useItemAction.action.Disable();
-        m_previousAction.action.Disable();
-        m_nextAction.action.Disable();
-        m_dropAction.action.Disable();
-        m_selectSlotAction.action.Disable();
-        m_toggleInventoryAction.action.Disable();
-        m_crouchAction.action.Disable();
+        SetActionsEnabled(false);
+        m_isSuspended = false; // 재접속·재스폰 시 정지 상태가 남지 않도록 초기화
     }
 
     private void OnMove(InputAction.CallbackContext ctx) => MoveInput = ctx.ReadValue<Vector2>();
