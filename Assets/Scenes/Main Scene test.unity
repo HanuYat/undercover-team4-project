@@ -11673,8 +11673,6 @@ MonoBehaviour:
   m_occupancyZone: {fileID: 1944194182}
   m_jailZone: {fileID: 2137162817}
   m_jailLock: {fileID: 2137162818}
-  m_wantedList: {fileID: 1417416485}
-  m_round: {fileID: 708957383}
   m_minUnmannedSeconds: 20
   m_intruderLingerSeconds: 3
   m_maxActiveSeconds: 30

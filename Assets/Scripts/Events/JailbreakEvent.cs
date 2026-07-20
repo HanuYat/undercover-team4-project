@@ -36,10 +36,6 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     [SerializeField] private JailZone m_jailZone;
     [SerializeField] private JailLock m_jailLock;
 
-    [Header("수배 리스트 / 라운드 (비우면 씬에서 자동 탐색)")]
-    [SerializeField] private WantedListManager m_wantedList;
-    [SerializeField] private RoundManager m_round;
-
     [Header("발동 조건")]
     [Tooltip("본부가 이 시간(초) 이상 비어 있어야 발동한다 — 잠깐 자리를 비운 것으로는 터지지 않게")]
     [SerializeField] private float m_minUnmannedSeconds = 20f;
@@ -63,18 +59,19 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
 
     public bool IsActive => m_intruder != null;
 
+    // 매니저는 App 파사드 단일 경로로 읽는다 — 캐싱하지 않는다(파괴된 참조를 쥐지 않게). (#245 아키텍처 규칙 R1/R8)
+    private WantedListManager WantedList => App.Game.WantedList;
+    private RoundManager Round => App.Game.Round;
+
     private void Awake()
     {
+        // 매니저가 아닌 장소·부품만 여기서 찾는다 — 본부 트리거 존·유치장·자물쇠는 App 등록 대상이 아니다
         if (m_occupancyZone == null)
             m_occupancyZone = FindFirstObjectByType<HqOccupancyZone>();
         if (m_jailZone == null)
             m_jailZone = FindFirstObjectByType<JailZone>();
         if (m_jailLock == null)
             m_jailLock = m_jailZone != null ? m_jailZone.GetComponent<JailLock>() : FindFirstObjectByType<JailLock>();
-        if (m_wantedList == null)
-            m_wantedList = FindFirstObjectByType<WantedListManager>();
-        if (m_round == null)
-            m_round = FindFirstObjectByType<RoundManager>();
     }
 
     public bool CanTrigger()
@@ -202,10 +199,10 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         CitizenIdentity identity = inmate.GetComponent<CitizenIdentity>();
         if (identity != null && identity.IsCriminal)
         {
-            if (m_round != null)
-                m_round.ReportCriminalEscaped();
-            if (m_wantedList != null)
-                m_wantedList.ReinstateByNpcId(inmate.NetworkObjectId);
+            if (Round != null)
+                Round.ReportCriminalEscaped();
+            if (WantedList != null)
+                WantedList.ReinstateByNpcId(inmate.NetworkObjectId);
         }
 
         // 유치장을 뛰쳐나와 도주한다 — 침입자를 위협으로 삼아 반대로 달아난 뒤 배회로 섞여 든다.
