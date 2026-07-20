@@ -29,8 +29,10 @@ public static class NpcAnimatorControllerBuilder
     // 상수를 참조하는 것과 같은 방향) — 한쪽만 고쳐 조용히 어긋나는 사고를 막는다.
     private const string k_swingVariantParam = NpcAnimationDriver.k_swingVariantParam;
 
-    private const string k_attack1HFolder =
-        "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Combat/1H";
+    // 저항 NPC는 제자리에서 버티며 펀치만 얹으므로 루트모션이 없는 Inplace 클립을 쓴다 —
+    // 원본(루트모션판)은 펀치할 때 앞으로 파고들어 NPC가 미끄러진다. (권투 모션 교체)
+    private const string k_boxerAttackFolder =
+        "Assets/Imported/Unleashed_boxer_AnimSet/Animation/Humanoid/Inplace";
 
     // 자물쇠 해제 모션 — 도착 순간 Begin, 채널링 동안 Loop. (#261)
     // Stop(마무리)은 쓰지 않는다: 해제가 끝나는 순간 자물쇠가 열리고 침입자는 곧바로 도주로 전이하므로
@@ -40,17 +42,15 @@ public static class NpcAnimatorControllerBuilder
     private const string k_unlockBeginState = "Unlocking_Begin";
     private const string k_unlockLoopState = "Unlocking_Loop";
 
-    // 단발 스윙만 고른다 — 쌍수(AttackDW)·패링(Parry)·전투 진입/이탈(CombatEnter/Exit)은 제외.
-    // 전부 31~42프레임(약 1.0~1.4초)이라 콤보가 섞여 있지 않다.
+    // 한 번만 내지르는 단발 타격만 고른다 — attack01(원투 2연타)·attack06(4연타 콤보)은
+    // 한 클립 안에 타격이 여러 번이라 제외했다. 스윙 오버레이(#220)는 1회성 타격을 전제로 한다.
+    // (판별: 팔 완전 신전 횟수 + 손 속도 버스트 교차검증. 02·03은 직선 펀치, 04·05는 훅류 단발)
     private static readonly string[] s_swingClipFiles =
     {
-        "HumanM@Attack1H01_L.fbx",
-        "HumanM@Attack1H01_R.fbx",
-        "HumanM@Attack1H02_L.fbx",
-        "HumanM@Attack1H02_R.fbx",
-        "HumanM@Attack1H03_L.fbx",
-        "HumanM@Attack1H03_R.fbx",
-        "HumanM@Attack1H04_R.fbx",
+        "attack02_inplace.fbx",
+        "attack03_inplace.fbx",
+        "attack04_inplace.fbx",
+        "attack05_inplace.fbx",
     };
 
     [MenuItem("Tools/NPC/Rebuild Attack Swing Variants")]
@@ -122,9 +122,10 @@ public static class NpcAnimatorControllerBuilder
     }
 
     /// <summary>
-    /// 자물쇠 해제 상태를 구성한다 — Any State → Begin(1회) → Loop(반복). (#261)
-    /// 진입 조건은 <c>State == NpcAnimationDriver.k_unlockingAnimState</c> 하나뿐이라
-    /// 기존 로코모션 전이(State == enum값)와 번호가 겹치지 않는다.
+    /// 자물쇠 해제 상태를 구성한다 — Any State → Begin(1회), Any State → Loop(반복). (#261)
+    /// Begin·Loop는 서로 <b>다른 번호</b>(<c>k_unlockingBeginAnimState</c>/<c>k_unlockingLoopAnimState</c>)로
+    /// 진입한다 — 드라이버가 Begin 유지시간이 끝나면 번호를 Loop로 바꿔 Begin→Loop 전환을 직접 몬다.
+    /// 두 전이 모두 기존 로코모션 전이(State == enum값)와 번호가 겹치지 않는다.
     /// 이탈은 따로 만들지 않는다 — 드라이버가 다른 번호를 넣는 순간 그쪽 Any State 전이가 걸린다.
     /// 재실행 시 기존 해제 상태/전환을 지우고 다시 만들어 중복을 막는다.
     /// </summary>
@@ -134,7 +135,9 @@ public static class NpcAnimatorControllerBuilder
         AnimationClip loop = LoadClip($"{k_openFolder}/HumanM@Opening01 - Loop.fbx");
         if (begin == null || loop == null)
         {
-            Debug.LogError("[NpcAnimatorControllerBuilder] 자물쇠 해제 클립을 불러오지 못해 해제 상태 구성을 건너뜀");
+            Debug.LogError(
+                "[NpcAnimatorControllerBuilder] 자물쇠 해제 클립을 불러오지 못해 해제 상태 구성을 건너뜀"
+            );
             return;
         }
 
@@ -146,7 +149,7 @@ public static class NpcAnimatorControllerBuilder
         AnimatorState loopState = stateMachine.AddState(k_unlockLoopState);
         loopState.motion = loop;
 
-        // Any State → Begin : 드라이버가 해제 번호를 넣는 순간 진입.
+        // Any State → Begin : 드라이버가 Begin 번호(100)를 넣는 순간 진입.
         // CanTransitionToSelf를 끄지 않으면 번호가 유지되는 매 프레임 Begin이 재시작돼 클립이 앞으로 못 나간다.
         AnimatorStateTransition toBegin = stateMachine.AddAnyStateTransition(beginState);
         toBegin.hasExitTime = false;
@@ -154,15 +157,24 @@ public static class NpcAnimatorControllerBuilder
         toBegin.canTransitionToSelf = false;
         toBegin.AddCondition(
             AnimatorConditionMode.Equals,
-            NpcAnimationDriver.k_unlockingAnimState,
+            NpcAnimationDriver.k_unlockingBeginAnimState,
             "State"
         );
 
-        // Begin → Loop : 시작 동작이 끝나면 해제 반복으로 넘어간다
-        AnimatorStateTransition toLoop = beginState.AddTransition(loopState);
-        toLoop.hasExitTime = true;
-        toLoop.exitTime = 0.9f;
+        // Any State → Loop : 드라이버가 Begin 유지시간이 끝나 Loop 번호(101)를 넣으면 진입.
+        // Begin→Loop를 exit time 자동 전이가 아니라 이 조건 전이로 두는 것이 핵심이다 — Begin과 Loop가
+        // 서로 다른 번호라 Loop에 들어간 뒤에는 State==100(Begin 조건)이 거짓이 되어 Begin으로 다시
+        // 끌려가지 않는다. (단일 번호 + exit time이면 Loop 중에도 Any State→Begin 조건이 참이라
+        // 매 프레임 Begin으로 되돌아가 해제 모션이 끊기듯 무한 재시작된다 — 이전 버그의 원인이었다.)
+        AnimatorStateTransition toLoop = stateMachine.AddAnyStateTransition(loopState);
+        toLoop.hasExitTime = false;
         toLoop.duration = 0.1f;
+        toLoop.canTransitionToSelf = false;
+        toLoop.AddCondition(
+            AnimatorConditionMode.Equals,
+            NpcAnimationDriver.k_unlockingLoopAnimState,
+            "State"
+        );
     }
 
     /// <summary>이전 실행이 만든 해제 상태와 그 상태를 가리키는 Any State 전이를 제거한다.</summary>
@@ -171,7 +183,10 @@ public static class NpcAnimatorControllerBuilder
         var staleTransitions = new List<AnimatorStateTransition>();
         foreach (AnimatorStateTransition transition in stateMachine.anyStateTransitions)
         {
-            if (transition.destinationState != null && IsUnlockState(transition.destinationState.name))
+            if (
+                transition.destinationState != null
+                && IsUnlockState(transition.destinationState.name)
+            )
             {
                 staleTransitions.Add(transition);
             }
@@ -199,7 +214,7 @@ public static class NpcAnimatorControllerBuilder
         var clips = new List<AnimationClip>(s_swingClipFiles.Length);
         foreach (string file in s_swingClipFiles)
         {
-            AnimationClip clip = LoadClip($"{k_attack1HFolder}/{file}");
+            AnimationClip clip = LoadClip($"{k_boxerAttackFolder}/{file}");
             if (clip != null)
             {
                 clips.Add(clip);

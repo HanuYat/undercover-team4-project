@@ -29,13 +29,21 @@ public class NpcAnimationDriver : MonoBehaviour
     private static readonly int s_swingVariantHash = Animator.StringToHash(k_swingVariantParam);
 
     /// <summary>
-    /// 자물쇠 해제 모션의 Animator 상태 번호. (#261)
+    /// 자물쇠 해제 시작(Begin) 모션의 Animator 상태 번호. (#261)
     /// <b>NpcState enum 값이 아니다</b> — 해제는 FSM 상태가 아니라 침입(Intruding) 안의 한 페이즈이고,
     /// 그 구분은 서버 FSM 내부값이라 클라이언트가 모른다. 그래서 상태를 늘리는 대신
     /// enum이 앞으로 자라도 겹치지 않을 만큼 떨어진 번호를 모션 전용으로 쓴다.
     /// NpcAnimatorControllerBuilder(Editor)가 이 상수로 Any State 전이 조건을 만든다.
     /// </summary>
-    public const int k_unlockingAnimState = 100;
+    public const int k_unlockingBeginAnimState = 100;
+
+    /// <summary>
+    /// 자물쇠 해제 반복(Loop) 모션의 Animator 상태 번호. (#261)
+    /// Begin과 번호를 나눠 갖는 것이 핵심이다 — 하나로 두면 Loop에 들어간 뒤에도 Any State 조건이
+    /// 계속 참이라 매번 Begin으로 되돌아가 동작이 무한히 다시 시작된다
+    /// (canTransitionToSelf는 자기 자신으로의 재진입만 막는다).
+    /// </summary>
+    public const int k_unlockingLoopAnimState = 101;
 
     // 연행 근접 정지(#97) 모션 전환 임계값 — 실제 이동 속도(m/s) 기준.
     // 켜짐/꺼짐 경계를 다르게 둬(히스테리시스) 정지 직전 감속 구간에서 모션이 떨리는 것을 막는다.
@@ -57,7 +65,11 @@ public class NpcAnimationDriver : MonoBehaviour
     [Tooltip("스윙 1회당 Attack(단발) 모션을 유지하는 시간(초) — 이후 버틴 자세로 복귀한다. 저항 공격 주기보다 짧고 타격 오프셋보다 길게")]
     [SerializeField] private float m_swingAnimSeconds = 0.9f;
     [Tooltip("스윙 클립 종류 수 — NpcAnimatorControllerBuilder가 Attack 블렌드 트리에 넣은 클립 개수와 같아야 한다. 클립을 빼거나 더하면 이 값도 함께 고칠 것")]
-    [SerializeField] private int m_swingVariantCount = 7;
+    [SerializeField] private int m_swingVariantCount = 4;
+
+    [Header("자물쇠 해제 (#261)")]
+    [Tooltip("해제 시작(Begin) 모션을 유지하는 시간(초) — 이후 반복(Loop)으로 넘어간다. Begin 클립 길이(0.63초)에 맞춘 값")]
+    [SerializeField] private float m_unlockBeginSeconds = 0.63f;
 
     [SerializeField] private Animator m_animator;
 
@@ -67,6 +79,8 @@ public class NpcAnimationDriver : MonoBehaviour
     private bool m_escortMoving;
     // 침입(Intruding) 이동/해제 판별 — 자물쇠까지 걷기 ↔ 도착 후 해제 모션 전환 (#261)
     private bool m_intrudeMoving;
+    // 해제 시작(Begin) 모션을 반복(Loop)으로 넘길 시각. 0 이하면 대기 중 아님 (#261)
+    private float m_unlockBeginUntil;
     // 현재 스윙 모션을 유지할 종료 시각. 0 이하면 스윙 중 아님. 스윙이 끝나면 base 상태로 되돌린다 (#220)
     private float m_swingUntil;
     // 스윙이 끝난 뒤 되돌아갈 FSM 기준 상태 — 저항(Attack)이면 버틴 자세(Idle)로 복귀한다 (#220)
@@ -186,12 +200,22 @@ public class NpcAnimationDriver : MonoBehaviour
             if (m_intrudeMoving && m_smoothedSpeed < k_escortMoveOffSpeed)
             {
                 m_intrudeMoving = false;
-                m_animator.SetInteger(s_stateHash, k_unlockingAnimState);
+                m_animator.SetInteger(s_stateHash, k_unlockingBeginAnimState);
+                m_unlockBeginUntil = Time.time + m_unlockBeginSeconds;
             }
             else if (!m_intrudeMoving && m_smoothedSpeed > k_escortMoveOnSpeed)
             {
                 m_intrudeMoving = true;
+                m_unlockBeginUntil = 0f;
                 m_animator.SetInteger(s_stateHash, (int)NpcState.Walk);
+            }
+            // 시작 동작이 끝나면 반복으로 넘긴다. 이 전환을 Animator의 exit time에 맡기지 않는 이유는,
+            // 번호가 Begin에 머물러 있으면 Loop로 넘어간 뒤에도 Any State 조건이 참이라
+            // 다시 Begin으로 끌려가 동작이 무한 반복되기 때문이다.
+            else if (m_unlockBeginUntil > 0f && Time.time >= m_unlockBeginUntil)
+            {
+                m_unlockBeginUntil = 0f;
+                m_animator.SetInteger(s_stateHash, k_unlockingLoopAnimState);
             }
             return;
         }
@@ -246,6 +270,7 @@ public class NpcAnimationDriver : MonoBehaviour
         else if (state == NpcState.Intruding)
         {
             m_intrudeMoving = true;
+            m_unlockBeginUntil = 0f;
             m_lastPosition = transform.position;
             m_smoothedSpeed = k_escortMoveOnSpeed;
         }
