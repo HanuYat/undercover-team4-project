@@ -33,8 +33,10 @@ public class InteractionFeedback : NetworkBehaviour
             return;
         }
 
-        if (App.UI.Crosshair == null && m_hudPrefab != null)
-            Instantiate(m_hudPrefab);
+        EnsureHud();
+        // 호스트는 Title 씬에서 스폰되므로(세션 생성=StartHost, #247) 거기서 만든 HUD가
+        // InGame 씬 전환 때 파괴된다 — 씬이 로드될 때마다 다시 보장한다.
+        App.OnSceneLoaded += HandleSceneLoaded;
 
         m_interactor = GetComponent<PlayerInteractor>();
         m_itemUser = GetComponent<PlayerItemUser>(); // 없는 구성(테스트 등)이면 null
@@ -44,7 +46,20 @@ public class InteractionFeedback : NetworkBehaviour
     {
         if (!IsOwner) return;
 
+        App.OnSceneLoaded -= HandleSceneLoaded;
         SetOutlined(null, Color.clear);
+    }
+
+    private void HandleSceneLoaded(EScene scene) => EnsureHud();
+
+    // 씬에 HUD가 없으면 생성한다. Title에서는 만들지 않는다 — 인게임 HUD(타이머·조준점)라
+    // 로비에 있을 물건이 아니고, 어차피 씬 전환 때 파괴된다. InGame 로드 시 다시 생성된다.
+    private void EnsureHud()
+    {
+        if (App.CurrentScene == EScene.Title)
+            return;
+        if (App.UI.Crosshair == null && m_hudPrefab != null)
+            Instantiate(m_hudPrefab);
     }
 
     private void Update() // 비오너는 OnNetworkSpawn에서 비활성화되므로 오너만 돈다
