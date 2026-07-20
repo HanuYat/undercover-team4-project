@@ -82,6 +82,12 @@ public class NpcController : NetworkBehaviour
     [SerializeField] private float m_subdueHitPower = 34f;
     [Tooltip("저항 시작 후 이 시간(초) 안에 제압당하지 않으면 플레이어 패배 — 도주형으로 전환된다 (GDD 7-4)")]
     [SerializeField] private float m_resistDefeatSeconds = 15f;
+    [Tooltip("스윙 시작→타격이 닿는 프레임까지의 시간(초). 이 만큼 뒤에 데미지가 들어가므로 준비 동작이 곧 회피 창이 된다 (#220)")]
+    [SerializeField] private float m_strikeOffsetSeconds = 0.45f;
+    [Tooltip("타격이 닿는 정면 부채꼴의 전체 각도(도). 이 각도 안(정면 기준 ±절반)에 있는 플레이어만 맞는다 — 등 뒤·측면은 빗나간다 (#220)")]
+    [SerializeField] private float m_attackConeAngle = 120f;
+    [Tooltip("저항 중 표적을 바라보도록 도는 회전 속도(도/초) — 부채꼴 기준 방향을 표적에 맞춘다 (#220)")]
+    [SerializeField] private float m_attackTurnSpeed = 540f;
 
     [Header("패닉 (#81)")]
     [Tooltip("소란(저항 전투·도주)이 주변 시민을 패닉시키는 전파 반경(m)")]
@@ -134,6 +140,9 @@ public class NpcController : NetworkBehaviour
     public float ResistAttackRange => m_resistAttackRange;
     public int ResistAttackDamage => m_resistAttackDamage;
     public float ResistDefeatSeconds => m_resistDefeatSeconds;
+    public float StrikeOffsetSeconds => m_strikeOffsetSeconds;
+    public float AttackConeAngle => m_attackConeAngle;
+    public float AttackTurnSpeed => m_attackTurnSpeed;
 
     /// <summary>
     /// 위협(플레이어)을 찾는 반경(m) — 저항 패배 후 도주 대상 탐색(#205)과 도주 방향 산출(#213)이 같은 값을 쓴다.
@@ -181,6 +190,11 @@ public class NpcController : NetworkBehaviour
 
     /// <summary>상태 변경 이벤트 — 서버·클라이언트 모든 피어에서 발생한다. 애니메이션 등 표현 계층이 구독. (#56)</summary>
     public event Action<NpcState> OnStateChanged;
+
+    /// <summary>공격 스윙 1회를 휘두를 때 발행 — 전 피어에서 발생한다(서버는 로컬 발행 + ClientRpc 중계).
+    /// 애니메이션 표현(<see cref="NpcAnimationDriver"/>)이 구독해 단발 스윙 모션을 트리거한다.
+    /// FSM 상태와 독립한 순간 이벤트라 State 동기화와 별개로 스윙 타이밍을 정확히 맞춘다. (#220, ThugAttacker.OnAttack과 동일 패턴)</summary>
+    public event Action OnAttackSwing;
 
     /// <summary>연행 중 따라갈 대상(체포한 플레이어). 연행 중이 아니면 null. 서버에서만 유효.</summary>
     public Transform EscortTarget { get; private set; }
@@ -305,6 +319,24 @@ public class NpcController : NetworkBehaviour
     private void HandleNetworkStateChanged(NpcState previous, NpcState current)
     {
         OnStateChanged?.Invoke(current);
+    }
+
+    /// <summary>공격 스윙 1회를 전 피어에 알린다 — 애니메이션 표현용. 서버(또는 오프라인) FSM Tick에서만 호출한다.
+    /// 서버는 로컬 발행 + ClientRpc로 원격 클라에 중계한다. (#220, ThugAttacker.NotifyAttack과 동일 패턴)</summary>
+    public void RaiseAttackSwing()
+    {
+        OnAttackSwing?.Invoke(); // 서버·오프라인 로컬 발행
+        if (IsSpawned && IsServer)
+            PlayAttackSwingClientRpc();
+    }
+
+    [ClientRpc]
+    private void PlayAttackSwingClientRpc()
+    {
+        // 서버(호스트)는 위에서 이미 발행했으므로 원격 클라에서만 중계
+        if (IsServer)
+            return;
+        OnAttackSwing?.Invoke();
     }
 
     /// <summary>
