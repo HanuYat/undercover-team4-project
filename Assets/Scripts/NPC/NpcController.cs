@@ -183,6 +183,21 @@ public class NpcController : NetworkBehaviour
     }
 
     /// <summary>
+    /// 인계 판정 완료 표시를 되돌린다 — 범인 탈출 이벤트(#231) 전용. 서버(또는 오프라인)에서만 호출된다.
+    ///
+    /// <b>재검거의 핵심이다.</b> <see cref="HqDropoffZone"/>은 <see cref="IsDelivered"/>가 켜진 NPC를
+    /// 인계존에서 통째로 무시하므로(중복 판정 방지, #230), 이 플래그를 되돌리지 않으면 탈출한 범인을
+    /// 다시 잡아 와도 판정이 아예 나지 않는다.
+    /// </summary>
+    public void ClearDelivered()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        IsDelivered = false;
+    }
+
+    /// <summary>
     /// 현재 NPC 상태. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 안전하게 읽을 수 있다.
     /// (StateMachine.CurrentState는 서버에서만 갱신되므로 외부 코드는 반드시 이 프로퍼티를 읽을 것)
     /// </summary>

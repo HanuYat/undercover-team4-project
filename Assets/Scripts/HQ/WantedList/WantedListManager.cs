@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
@@ -19,6 +20,11 @@ public class WantedListManager : NetworkBehaviour
 
     // 서버만 쓰기, 전 클라이언트 읽기. UI(#58)는 Wanted.OnListChanged로 갱신을 받는다.
     private readonly NetworkList<WantedEntry> m_wanted = new NetworkList<WantedEntry>();
+
+    // 검거로 리스트에서 내린 항목 보관함 — 범인 탈출(#231) 시 몽타주를 그대로 되살리기 위해 남긴다.
+    // 몽타주를 재생성하면 본부가 기억하던 인상착의와 달라져 "아까 그 놈"이 성립하지 않는다.
+    // 서버에서만 쓰므로 동기화하지 않는다(재등재도 서버 권위).
+    private readonly Dictionary<ulong, WantedEntry> m_arrestedEntries = new Dictionary<ulong, WantedEntry>();
 
     // 동기화된 수배 리스트 — 본부 UI(#58)가 구독·열람한다. 서버 외에는 읽기 전용으로 취급.
     public NetworkList<WantedEntry> Wanted => m_wanted;
@@ -118,9 +124,35 @@ public class WantedListManager : NetworkBehaviour
 
             WantedEntry removed = m_wanted[i];
             m_wanted.RemoveAt(i);
+            // 탈출(#231) 시 되살릴 수 있게 보관 — 지워버리면 몽타주 텍스트를 복원할 방법이 없다
+            m_arrestedEntries[npcId] = removed;
             Debug.Log($"[수배] 검거 완료로 제거: {removed.Name} (남은 {m_wanted.Count}건)");
             return;
         }
+    }
+
+    /// <summary>
+    /// 검거로 내렸던 수배 항목을 되살린다 — 범인 탈출 이벤트(#231) 전용. 서버에서만 호출된다.
+    /// 몽타주는 검거 시점에 보관해 둔 것을 그대로 쓴다 — 본부가 기억하던 인상착의와 일치해야
+    /// "아까 그 놈"을 다시 찾는 재미가 성립한다.
+    /// </summary>
+    public void ReinstateByNpcId(ulong npcId)
+    {
+        // 등록·제거 구독이 OnNetworkSpawn(IsServer)에서만 걸리므로, 네트워크 세션 밖에서는
+        // 수배 리스트 자체가 돌지 않는다 — 오프라인 단독 Play에서 되살릴 항목이 없는 것은 정상이라
+        // 경고 없이 조용히 빠진다(아래 '보관 항목 없음' 경고는 진짜 이상 상황에만 뜨게 한다).
+        if (!IsSpawned || !IsServer)
+            return;
+
+        if (!m_arrestedEntries.TryGetValue(npcId, out WantedEntry entry))
+        {
+            Debug.LogWarning($"WantedListManager: 보관된 수배 항목이 없어 재등재하지 못했다 (NpcId {npcId})", this);
+            return;
+        }
+
+        m_arrestedEntries.Remove(npcId);
+        m_wanted.Add(entry);
+        Debug.Log($"[수배] 탈출로 재등재: {entry.Name} (현재 {m_wanted.Count}건)");
     }
 
     // FixedString은 용량 초과 시 던지므로, 초과분은 잘라 안전하게 담는다.

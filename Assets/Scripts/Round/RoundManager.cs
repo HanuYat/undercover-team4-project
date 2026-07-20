@@ -227,6 +227,27 @@ public class RoundManager : MonoBehaviour
             EndRound(RoundResult.Success, RoundEndReason.QuotaMet);
     }
 
+    /// <summary>
+    /// 검거했던 진범이 유치장에서 탈출했다 — 할당량 진행도에서 다시 뺀다. (GDD 6-4, #231)
+    /// 서버(또는 오프라인)에서만 호출된다(범인 탈출 이벤트가 서버 권위).
+    ///
+    /// 팀 자금은 되돌리지 않는다 — 음수 자금 방어와 재검거 시 중복 지급 방지까지 끌어들이게 되고,
+    /// "다시 잡아야 한다"는 압박은 할당량만으로 충분히 만들어진다. (스펙 확정 사항)
+    /// </summary>
+    public void ReportCriminalEscaped()
+    {
+        if (Phase != RoundPhase.InProgress)
+            return;
+
+        // 할당량을 채우는 순간 라운드가 성공 종료되므로 InProgress 중에는 0 미만이 될 수 없지만,
+        // 호출 경로가 늘어도 진행도가 음수로 새지 않게 방어한다
+        if (CriminalArrestCount <= 0)
+            return;
+
+        CriminalArrestCount--;
+        Debug.Log($"[라운드] 진범 탈출 — 할당량 진행 {CriminalArrestCount}/{m_arrestQuota}");
+    }
+
     // 플레이어 무력화 상태 변화 수신 — 전원 다운(전멸)이면 게임오버로 종료한다. (#105, 서버/오프라인에서만 발행됨)
     // Phase가 InProgress가 되는 곳이 서버/오프라인뿐이라 클라이언트에서는 아래 가드에 걸려 아무 일도 하지 않는다.
     private void HandleAnyIncapacitatedChanged()
