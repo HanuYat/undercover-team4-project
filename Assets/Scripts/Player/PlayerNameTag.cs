@@ -1,30 +1,46 @@
 using TMPro;
 using Unity.Collections;
 using Unity.Netcode;
-using Unity.Services.Authentication;
 using UnityEngine;
 
 public class PlayerNameTag : NetworkBehaviour
 {
-    [SerializeField] private TextMeshProUGUI m_label;
-    [SerializeField] private Transform m_tagRoot;
-    [SerializeField] private float m_showDistance = 15f;
+    [SerializeField]
+    private TextMeshProUGUI m_label;
+
+    [SerializeField]
+    private Transform m_tagRoot;
+
+    [SerializeField]
+    private float m_showDistance = 15f;
     private Transform m_cam;
 
     private readonly NetworkVariable<FixedString64Bytes> m_name = new(
         default,
         NetworkVariableReadPermission.Everyone,
-        NetworkVariableWritePermission.Owner);
+        NetworkVariableWritePermission.Owner
+    );
 
     private void LateUpdate()
     {
-        if (IsOwner) return;
+        if (IsOwner || !IsSpawned)
+            return;
+
+        // 이름이 아직 동기화되지 않았으면 빈 라벨이 보이지 않도록 숨긴다
+        if (m_name.Value.IsEmpty)
+        {
+            m_tagRoot.gameObject.SetActive(false);
+            return;
+        }
 
         var cam = ResolveCamera();
-        if (cam == null) return;
+        if (cam == null)
+            return;
 
         m_tagRoot.rotation = cam.rotation;
-        m_tagRoot.gameObject.SetActive(Vector3.Distance(m_cam.position, transform.position) <= m_showDistance);
+        m_tagRoot.gameObject.SetActive(
+            Vector3.Distance(cam.position, transform.position) <= m_showDistance
+        );
     }
 
     public override void OnNetworkSpawn()
@@ -32,7 +48,7 @@ public class PlayerNameTag : NetworkBehaviour
         if (IsOwner)
         {
             var fs = new FixedString64Bytes();
-            fs.CopyFromTruncated(AuthenticationService.Instance.PlayerName ?? string.Empty);
+            fs.CopyFromTruncated(App.Net.Auth.PlayerName ?? string.Empty);
             m_name.Value = fs;
 
             m_tagRoot.gameObject.SetActive(false);
@@ -57,13 +73,15 @@ public class PlayerNameTag : NetworkBehaviour
 
     private Transform ResolveCamera()
     {
-        if (m_cam != null) return m_cam;
+        if (m_cam != null)
+            return m_cam;
 
         var nm = NetworkManager.Singleton;
         if (nm != null && nm.LocalClient != null && nm.LocalClient.PlayerObject != null)
         {
             var cam = nm.LocalClient.PlayerObject.GetComponentInChildren<Camera>();
-            if (cam != null) m_cam = cam.transform;
+            if (cam != null)
+                m_cam = cam.transform;
         }
 
         if (m_cam == null && Camera.main != null)
