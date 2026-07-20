@@ -33,6 +33,7 @@ public class NpcResistState : NpcStateBase
     // 추격 재경로 스로틀 상태 (#254)
     private float m_repathTimer;
     private Vector3 m_lastChaseDestination;
+    private float m_baseSpeed; // 진입 시점의 이동 속도 — 추격 질주 배율 적용 전 값(Exit에서 복원) (#254)
 
     public NpcResistState(NpcController owner) : base(owner) { }
 
@@ -41,6 +42,10 @@ public class NpcResistState : NpcStateBase
         // 표적을 추격하며 싸운다 — 이동을 멈추지 않고, 사거리 안으로 들어오면 stoppingDistance로 자연히 선다 (#254)
         m_owner.Agent.isStopped = false;
         m_owner.Agent.stoppingDistance = m_owner.ResistAttackRange * k_stopDistanceFactor;
+
+        // 걸어오지 않고 달려온다 — 도주와 같은 질주 속도를 써서 공용 Run 클립이 발 미끄러짐 없이 맞는다 (#254)
+        m_baseSpeed = m_owner.Agent.speed;
+        m_owner.Agent.speed = m_baseSpeed * m_owner.FleeSpeedMultiplier;
 
         // 표적을 직접 바라보도록 수동 회전할 것이므로 에이전트 자동 회전을 끈다 — 안 그러면 서로 방향을 다툰다 (#220)
         m_owner.Agent.updateRotation = false;
@@ -72,9 +77,13 @@ public class NpcResistState : NpcStateBase
         ChaseTarget(target);
         FaceTarget(target);
 
-        // 주기적 스윙 — 애니메이션을 먼저 발행하고 데미지는 타격 프레임까지 미룬다.
-        // 그래야 눈에 보이는 스윙 준비 동작과 실제 HP 감소 순간이 일치하고, 준비 중 벗어난 플레이어는 빗나간다 (#220)
-        if (Time.time >= m_nextAttackTime)
+        // 주기적 스윙 — 표적이 사거리 안일 때만 휘두른다. 추격 중(사거리 밖)엔 스윙하지 않아
+        // 헛스윙·스윙 중 미끄러짐을 막는다 (#254). 애니메이션을 먼저 발행하고 데미지는 타격 프레임까지
+        // 미뤄, 눈에 보이는 준비 동작과 HP 감소 순간을 맞추고 준비 중 벗어난 플레이어는 빗나가게 한다 (#220)
+        bool targetInRange = target != null
+            && (target.position - m_owner.transform.position).sqrMagnitude
+                <= m_owner.ResistAttackRange * m_owner.ResistAttackRange;
+        if (targetInRange && Time.time >= m_nextAttackTime)
         {
             m_nextAttackTime = Time.time + m_owner.ResistAttackInterval;
             m_owner.RaiseAttackSwing();
@@ -105,6 +114,7 @@ public class NpcResistState : NpcStateBase
         m_owner.Agent.isStopped = false;
         m_owner.Agent.updateRotation = true; // 이동 재개 시 에이전트가 다시 진행 방향으로 돈다
         m_owner.Agent.stoppingDistance = 0f; // 추격용으로 늘린 정지 거리를 원복 (#254)
+        m_owner.Agent.speed = m_baseSpeed;   // 추격 질주 배율 원복 (#254)
     }
 
     /// <summary>
