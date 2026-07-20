@@ -35,12 +35,36 @@ public class SessionPanel : PanelBase
     {
         m_createButton.onClick.AddListener(HandleCreateClicked);
         m_joinButton.onClick.AddListener(HandleJoinClicked);
+
+        // 익명 로그인 완료 전에는 버튼을 잠근다 — 로그인은 AuthBootstrap이 씬 시작 시 자동 수행(m_signInOnStart)
+        AuthBootstrap auth = App.Net.Auth;
+        if (auth != null && !auth.IsSignedIn)
+        {
+            SetButtonsInteractable(false);
+            SetStatus("익명 로그인 중...");
+            auth.OnSignedIn += HandleSignedIn;
+        }
     }
 
     private void OnDisable()
     {
         m_createButton.onClick.RemoveListener(HandleCreateClicked);
         m_joinButton.onClick.RemoveListener(HandleJoinClicked);
+
+        if (App.Net.Auth != null)
+            App.Net.Auth.OnSignedIn -= HandleSignedIn;
+    }
+
+    private void HandleSignedIn()
+    {
+        SetButtonsInteractable(true);
+        SetStatus($"로그인 완료 — {App.Net.Auth.PlayerId}");
+    }
+
+    private void SetButtonsInteractable(bool interactable)
+    {
+        m_createButton.interactable = interactable;
+        m_joinButton.interactable = interactable;
     }
 
     private void HandleCreateClicked() => CreateAsync().Forget();

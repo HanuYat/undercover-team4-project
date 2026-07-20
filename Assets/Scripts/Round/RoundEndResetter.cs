@@ -13,7 +13,8 @@ using UnityEngine.SceneManagement;
 ///  · 멀티플레이 클라이언트 — 라운드 종료를 아직 동기화받지 않으므로(#43 전), 호스트가 세션을 내려
 ///    연결이 끊기는 것(<see cref="NetworkManager.OnClientStopped"/>)을 신호로 각자 동일하게 리셋한다.
 ///
-/// 리셋 = UGS 세션 나가기 → NGO Shutdown → 활성 씬 재로드(모든 씬 오브젝트가 초기 상태로 되돌아감).
+/// 리셋 = UGS 세션 나가기 → NGO Shutdown → 로비(Title) 복귀. (#247 씬 흐름)
+/// 단, EScene 매핑이 없는 테스트 씬에서는 기존처럼 자기 씬을 재로드한다.
 /// </summary>
 public class RoundEndResetter : MonoBehaviour
 {
@@ -102,9 +103,17 @@ public class RoundEndResetter : MonoBehaviour
         if (nm != null && (nm.IsListening || nm.IsClient || nm.IsServer))
             nm.Shutdown();
 
-        // 3) 활성 씬 재로드 — 매니저·NPC·플레이어 등 모든 씬 오브젝트가 초기 상태로 리셋된다("처음부터").
-        Scene active = SceneManager.GetActiveScene();
-        Debug.Log($"[RoundEndResetter] 라운드 종료 — 세션 종료 후 '{active.name}' 씬 재로드(처음부터)");
-        SceneManager.LoadScene(active.buildIndex);
+        // 3) 로비(Title) 복귀 — App 씬 흐름 단일 경로. (#247)
+        //    EScene 매핑이 없는 테스트 씬(CurrentScene == None)은 App 흐름 밖이므로 기존처럼 자기 씬을 재로드한다.
+        if (App.CurrentScene == EScene.None)
+        {
+            Scene active = SceneManager.GetActiveScene();
+            Debug.Log($"[RoundEndResetter] 라운드 종료 — 세션 종료 후 '{active.name}' 씬 재로드(테스트 씬 폴백)");
+            SceneManager.LoadScene(active.name);
+            return;
+        }
+
+        Debug.Log("[RoundEndResetter] 라운드 종료 — 세션 종료 후 로비(Title) 복귀");
+        App.LoadScene(EScene.Title);
     }
 }
