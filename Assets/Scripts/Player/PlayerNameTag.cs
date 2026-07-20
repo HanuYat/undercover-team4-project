@@ -21,6 +21,15 @@ public class PlayerNameTag : NetworkBehaviour
         NetworkVariableWritePermission.Owner
     );
 
+    [SerializeField]
+    private GameObject m_speakerIcon;
+
+    private readonly NetworkVariable<FixedString64Bytes> m_playerId = new(
+        default,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Owner
+        );
+
     private void LateUpdate()
     {
         if (IsOwner || !IsSpawned)
@@ -51,24 +60,62 @@ public class PlayerNameTag : NetworkBehaviour
             fs.CopyFromTruncated(App.Net.Auth.PlayerName ?? string.Empty);
             m_name.Value = fs;
 
+            var pid = new FixedString64Bytes();
+            pid.CopyFromTruncated(App.Net.Auth.PlayerId ?? string.Empty);
+            m_playerId.Value = pid;
+
             m_tagRoot.gameObject.SetActive(false);
+
+            if (m_speakerIcon != null)
+                m_speakerIcon.SetActive(false);
         }
         else
         {
             m_name.OnValueChanged += HandleNameChanged;
             if (!m_name.Value.IsEmpty)
                 HandleNameChanged(default, m_name.Value);
+
+            if (App.Net.Vivox != null)
+                App.Net.Vivox.OnSpeakingChanged += HandleSpeakingChanged;
+            m_playerId.OnValueChanged += HandleIdChanged;
+            RefreshSpeakerIcon();
         }
     }
 
     public override void OnNetworkDespawn()
     {
         m_name.OnValueChanged -= HandleNameChanged;
+        m_playerId.OnValueChanged -= HandleIdChanged;
+        if (App.Net.Vivox != null)
+            App.Net.Vivox.OnSpeakingChanged -= HandleSpeakingChanged;
     }
 
     private void HandleNameChanged(FixedString64Bytes previous, FixedString64Bytes current)
     {
         m_label.text = current.ToString();
+    }
+
+    private void HandleIdChanged(FixedString64Bytes previous, FixedString64Bytes current) => RefreshSpeakerIcon();
+
+    private void HandleSpeakingChanged(string playerId, bool speaking)
+    {
+        if (playerId == m_playerId.Value.ToString())
+            SetSpeakerIcon(speaking);
+    }
+
+    private void RefreshSpeakerIcon()
+    {
+        string pid = m_playerId.Value.ToString();
+        bool speaking = !string.IsNullOrEmpty(pid)
+            && App.Net.Vivox != null
+            && App.Net.Vivox.IsSpeaking(pid);
+        SetSpeakerIcon(speaking);
+    }
+
+    private void SetSpeakerIcon(bool on)
+    {
+        if (m_speakerIcon != null)
+            m_speakerIcon.SetActive(on);
     }
 
     private Transform ResolveCamera()
