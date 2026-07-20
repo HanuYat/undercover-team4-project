@@ -10,9 +10,6 @@ using UnityEngine;
 /// </summary>
 public class NpcResistState : NpcStateBase
 {
-    // 패배 판정 후 도주 위협 대상을 찾는 반경 배율 — 공격 범위보다 넓게 잡아
-    // 멀리서 접근 중인 플레이어에게서도 도망칠 방향이 나온다
-    private const float k_threatSearchRadiusMultiplier = 5f;
     private const int k_maxOverlapHits = 16;
 
     // 서버에서만 Tick되므로 버퍼 공유 안전 — 매 타격마다의 할당 방지
@@ -105,9 +102,17 @@ public class NpcResistState : NpcStateBase
         // 저항을 유발한 플레이어(수갑 채우려던 자)를 우선 위협으로 삼는다 — 제한 시간 내내 붙어 싸우던
         // 상대가 판정 직전 잠깐 멀어졌다고 도주를 포기하면 안 된다(그 순간 반경 재검색은 놓치기 쉽다, #205).
         // 유발자가 사라졌을 때(연결 종료 등)만 근처 플레이어로 폴백한다.
+        // 폴백 반경은 NpcController.ThreatSearchRadius로 통일한다 — 도주가 회피 대상을 모으는 반경과
+        // 같은 값이어야 "도망칠 상대"와 "피할 상대"의 기준이 어긋나지 않는다. (#213)
         Transform threat = m_owner.ThreatTarget;
         if (threat == null)
-            threat = FindNearestPlayer(m_owner.ResistAttackRange * k_threatSearchRadiusMultiplier);
+        {
+            PlayerData nearest = SuddenEventUtil.FindNearestFieldPlayer(
+                m_owner.transform.position,
+                m_owner.ThreatSearchRadius
+            );
+            threat = nearest != null ? nearest.transform : null;
+        }
 
         if (threat != null)
             m_owner.StartFlee(threat);
@@ -126,23 +131,5 @@ public class NpcResistState : NpcStateBase
             if (player != null && !s_playerBuffer.Contains(player))
                 s_playerBuffer.Add(player);
         }
-    }
-
-    private Transform FindNearestPlayer(float radius)
-    {
-        CollectPlayersInRange(radius);
-
-        Transform nearest = null;
-        float nearestSqr = float.MaxValue;
-        foreach (PlayerData player in s_playerBuffer)
-        {
-            float sqr = (player.transform.position - m_owner.transform.position).sqrMagnitude;
-            if (sqr < nearestSqr)
-            {
-                nearestSqr = sqr;
-                nearest = player.transform;
-            }
-        }
-        return nearest;
     }
 }

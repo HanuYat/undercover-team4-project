@@ -2451,6 +2451,8 @@ GameObject:
   - component: {fileID: 6729906829730803492}
   - component: {fileID: 759370021765073938}
   - component: {fileID: 4837865491593241638}
+  - component: {fileID: 4510581181374338851}
+  - component: {fileID: -961902104319678753}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -2636,6 +2638,7 @@ MonoBehaviour:
   m_dropAction: {fileID: 4997308800450375893, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_selectSlotAction: {fileID: -6296644355122630615, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_toggleInventoryAction: {fileID: 3681908641102379961, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  m_crouchAction: {fileID: 5064262545289094806, guid: 052faaac586de48259a63d0c4782560b, type: 3}
 --- !u!114 &3468529030498822857
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2651,6 +2654,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_moveSpeed: 5
   m_sprintSpeed: 8
+  m_crouchSpeed: 2.5
   m_gravity: -9.81
   playerCamera: {fileID: 7952644528617391114}
   m_mouseSensitivity: 1
@@ -2869,6 +2873,34 @@ MonoBehaviour:
   m_itemNameDuration: 1.5
   m_barNormalColor: {r: 0, g: 0, b: 0, a: 0.25}
   m_barEditColor: {r: 0.2, g: 0.5, b: 1, a: 0.35}
+--- !u!114 &4510581181374338851
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3bd15288b26e0074a9c1301742b758f7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerCrouch
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_crouchHeight: 1.2
+--- !u!114 &-961902104319678753
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8589cf5bdc1bf07489b808b1f33f0108, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MinimapTarget
+  m_iconSprite: {fileID: 0}
+  m_iconColor: {r: 0, g: 0, b: 1, a: 1}
 --- !u!1 &5536001738967602051
 GameObject:
   m_ObjectHideFlags: 0

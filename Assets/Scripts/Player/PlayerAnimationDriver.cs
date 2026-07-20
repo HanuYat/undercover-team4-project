@@ -18,12 +18,19 @@ public class PlayerAnimationDriver : MonoBehaviour
     private static readonly int s_moveXHash = Animator.StringToHash("MoveX");
     private static readonly int s_moveZHash = Animator.StringToHash("MoveZ");
     private static readonly int s_downHash = Animator.StringToHash("Down"); // 다운(무력화) 상태 머신 구동 (#105)
+    private static readonly int s_crouchHash = Animator.StringToHash("Crouch"); // 서기↔앉기 상태 전환 (#236)
 
-    [SerializeField] private Animator m_animator;
-    [SerializeField] private PlayerMovement m_movement; // 정규화 기준 속도를 읽어옴
-    [SerializeField] private float m_damping = 0.1f; // 전환 부드럽게
+    [SerializeField]
+    private Animator m_animator;
+
+    [SerializeField]
+    private PlayerMovement m_movement; // 정규화 기준 속도를 읽어옴
+
+    [SerializeField]
+    private float m_damping = 0.1f; // 전환 부드럽게
 
     private PlayerIncapacitation m_incapacitation; // 다운 애니메이션 구동용 (#105)
+    private PlayerCrouch m_crouch; // 앉기 애니메이션 구동용 (#236)
     private Vector3 m_lastPosition;
 
     private void Awake()
@@ -39,12 +46,14 @@ public class PlayerAnimationDriver : MonoBehaviour
         }
 
         m_incapacitation = GetComponentInParent<PlayerIncapacitation>();
+        m_crouch = GetComponentInParent<PlayerCrouch>();
         m_lastPosition = transform.position;
     }
 
     private void Update()
     {
-        if (m_animator == null) return;
+        if (m_animator == null)
+            return;
 
         // 다운(무력화) 상태를 애니메이터에 반영 — 모든 인스턴스가 IsIncapacitated(동기화값)를 폴링해
         // Down 상태 머신(Knockdown Fall→Ground→StandUp)을 구동하므로 원격 뷰도 동일하게 재생된다.
@@ -53,7 +62,14 @@ public class PlayerAnimationDriver : MonoBehaviour
             m_animator.SetBool(s_downHash, m_incapacitation.IsIncapacitated);
         }
 
-        if (m_movement == null || Time.deltaTime <= 0f) return;
+        // 앉기도 같은 방식 — 서버 권위 동기화값을 폴링해 Crouch 상태(Crouch Idle/Walk 블렌드 트리)를 구동한다. (#236)
+        if (m_crouch != null)
+        {
+            m_animator.SetBool(s_crouchHash, m_crouch.IsCrouching);
+        }
+
+        if (m_movement == null || Time.deltaTime <= 0f)
+            return;
 
         Vector3 worldDelta = transform.position - m_lastPosition;
         worldDelta.y = 0f; // 수평 이동만
@@ -70,18 +86,25 @@ public class PlayerAnimationDriver : MonoBehaviour
     /// <summary>
     /// 실제 속도(m/s)를 블렌드 트리 좌표로 구간별 매핑한다.
     /// [0, 걷기속도] → [0, k_walkParam], [걷기속도, 달리기속도] → [k_walkParam, k_runParam]
+    /// 앉기 중에는 앉기 속도가 '걷기속도' 기준이 된다 — Crouch 블렌드 트리는 반경 k_walkParam에
+    /// CrouchWalk 8방향만 있고 달리기 단계가 없으므로(에셋에 없음), 앉기 속도가 그대로 1.0에 대응해야
+    /// 앉은 채 이동할 때 Idle 쪽으로 블렌딩되지 않는다. (#236)
     /// </summary>
     private Vector2 NormalizeToBlendSpace(Vector2 velocity)
     {
         float speed = velocity.magnitude;
-        if (speed < 0.01f) return Vector2.zero;
+        if (speed < 0.01f)
+            return Vector2.zero;
 
-        float walkSpeed = Mathf.Max(m_movement.MoveSpeed, 0.01f);
+        bool crouching = m_crouch != null && m_crouch.IsCrouching;
+        float walkSpeed = Mathf.Max(crouching ? m_movement.CrouchSpeed : m_movement.MoveSpeed, 0.01f);
         float runSpeed = Mathf.Max(m_movement.SprintSpeed, walkSpeed + 0.01f);
 
-        float t = speed <= walkSpeed
-            ? speed / walkSpeed * k_walkParam
-            : k_walkParam + (speed - walkSpeed) / (runSpeed - walkSpeed) * (k_runParam - k_walkParam);
+        float t =
+            speed <= walkSpeed
+                ? speed / walkSpeed * k_walkParam
+                : k_walkParam
+                    + (speed - walkSpeed) / (runSpeed - walkSpeed) * (k_runParam - k_walkParam);
 
         return velocity / speed * t; // 방향은 유지, 크기만 좌표계로 환산
     }

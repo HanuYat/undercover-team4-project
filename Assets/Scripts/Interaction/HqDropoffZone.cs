@@ -25,7 +25,7 @@ public class HqDropoffZone : MonoBehaviour
             return;
 
         // [가장 중요한 수정] 이미 판정이 끝난 NPC라면, 존에 닿아도 완전히 무시합니다.
-        if (ArrestJudge.JudgedNpcs.Contains(npc))
+        if (npc.IsDelivered)
         {
             Debug.Log($"[중복 방지] 이미 판정 완료된 NPC가 존에 재진입하여 무시됩니다: {npc.name}");
             return;

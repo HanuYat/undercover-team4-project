@@ -82,13 +82,14 @@ m_auth.CanSignOut = () => m_session == null && !m_isTransitioning;
 로그아웃(가장 깊은 종료)의 정해진 순서. 이 순서를 **호출부(로비/메뉴 컨트롤러)가 오케스트레이션**한다:
 
 ```
-await Session.LeaveAsync();   // ① 세션 이탈 → NGO 내려감 → OnSessionLeft 방출
-                              //    → Vivox가 이벤트 받고 채널 자동 이탈 (이미 연결됨)
-await Vivox.LogoutAsync();    // ② Vivox 완전 로그아웃  (#171)
-Auth.SignOut();               // ③ 이제 게이트 열림 → 로그아웃 성공
+await Vivox.LogoutAsync();    // ① 음성 채널 이탈 + 로그아웃을 먼저 완결  (#171)
+await Session.LeaveAsync();   // ② 세션 이탈 → NGO 내려감 → OnSessionLeft 방출
+                              //    (채널은 ①에서 이미 정리됨 → 이벤트발 채널 이탈은 no-op)
+Auth.SignOut();               // ③ 세션이 비었으므로 게이트 열림 → 로그아웃 성공
 ```
 
-`LeaveAsync`를 안 부르고 `SignOut`부터 부르면 원칙 4의 게이트가 막는다 — **순서 위반이 구조적으로 불가능.**
+`Auth.SignOut`은 반드시 세션 이탈 뒤에 온다 — `Session.LeaveAsync` 없이 `SignOut`부터 부르면 원칙 4의 게이트가 막는다(**순서 위반이 구조적으로 불가능**).
+Vivox 로그아웃은 세션·NGO와 독립이라 세션 이탈보다 **먼저** 완결시킨다. 이렇게 하면 세션 이탈이 방출하는 `OnSessionLeft → 채널 이탈`과의 동시 실행(#169 리뷰에서 지적된 레이스 컨디션)이 구조적으로 사라진다 — 세션 이탈 시점엔 채널이 이미 정리돼 있어 이벤트 핸들러가 즉시 반환한다.
 
 ## 의존 방향 요약
 
@@ -108,7 +109,7 @@ VivoxManager ──▶ SessionManager ──▶ AuthBootstrap
 | 1 | #166 ✅ | 원칙 1 — SessionManager를 NGO 단일 소유자로, NetworkBootstrap **제거**(수동 경로 삭제) |
 | 2 | #167 | 원칙 5 — 끊김 신호 정규화 → `OnConnectionLost` 방출 |
 | 3 | #168 | 원칙 4 — `CanSignOut` 델리게이트 게이트 (#164 흡수) |
-| 4 | #169 | 원칙 2 + 종료 순서 — `LeaveAsync` 단일 레버 + 호출부 오케스트레이션 |
+| 4 | #169 ✅ | 원칙 2 + 종료 순서 — `LeaveAsync` 단일 레버 + 호출부 오케스트레이션. 임시 오케스트레이터 `SessionTeardown`(PR #243)로 구현, 로비(#154) 도입 시 흡수·제거 예정 |
 
 각각 별도 PR이지만 전부 이 규칙 위에서 움직이므로 서로 충돌하지 않는다.
 
@@ -135,7 +136,6 @@ VivoxManager ──▶ SessionManager ──▶ AuthBootstrap
 
 ## 미결 사항 (검토 필요)
 
-- **teardown 오케스트레이션 주체:** 별도 클래스 vs 로비/메뉴 컨트롤러 겸임.
-  최소핵심 관점에선 **후자 권장** — 새 클래스 없이 "나가기/로그아웃" 핸들러가 정해진 순서만 호출.
-- `SessionManager.cs`의 `TODO(#51/#55/#56)` 주석은 **stale**(해당 이슈들은 플레이어/아이템/NPC 네트워크 전환이며 CLOSED). #169 작업 시 주석을 올바른 이슈 번호로 갱신할 것.
+- ~~**teardown 오케스트레이션 주체:** 별도 클래스 vs 로비/메뉴 컨트롤러 겸임.~~ **결정(#169, 2026-07-19):** 로비(#154)가 아직 없어 **임시 별도 클래스 `SessionTeardown`** 로 구현(PR #243). 로비 도입 시 그 컨트롤러가 `LeaveToMainAsync()`를 호출하도록 흡수하고 임시 클래스는 제거한다.
+- ~~`SessionManager.cs`의 `TODO(#51/#55/#56)` 주석은 **stale**.~~ **확인 완료(#169, 2026-07-19):** 해당 주석은 선행 PR에서 이미 정리돼 현재 `SessionManager.cs`에 없음 — 조치 불필요.
 - ~~세션 SDK가 `LeaveAsync` 시 NGO를 자동 Shutdown 하는지 확인 필요.~~ **확인 완료(#166, 2026-07-15):** Multiplayer SDK 2.2.4가 `LeaveAsync` 시 NGO를 자동으로 내려준다(MPPM에서 Leave 후 `NetworkManager.Singleton.IsListening → false` 검증). 따라서 `SessionManager`가 명시적으로 `Shutdown()`을 호출할 필요 없음.

@@ -36,6 +36,9 @@ public class PlayerInputHandler : NetworkBehaviour
     [SerializeField]
     private InputActionReference m_toggleInventoryAction;
 
+    [SerializeField]
+    private InputActionReference m_crouchAction;
+
     public Vector2 MoveInput { get; private set; }
     public Vector2 LookInput { get; private set; }
     public bool IsSprinting { get; private set; }
@@ -50,6 +53,7 @@ public class PlayerInputHandler : NetworkBehaviour
     public event Action OnDropItem; // 장착 아이템 버리기 (#88)
     public event Action<int> OnSelectSlot; // 숫자키 1~3 — 슬롯 직접 선택, 인덱스 0~2 (#144)
     public event Action OnToggleInventory; // Tab — 인벤토리 편집 모드 토글 (#144)
+    public event Action<bool> OnCrouchChanged; // Left Ctrl 홀드 — 누르면 true, 떼면 false (#236)
 
     public override void OnNetworkSpawn()
     {
@@ -69,6 +73,7 @@ public class PlayerInputHandler : NetworkBehaviour
         m_dropAction.action.Enable();
         m_selectSlotAction.action.Enable();
         m_toggleInventoryAction.action.Enable();
+        m_crouchAction.action.Enable();
 
         m_moveAction.action.performed += OnMove;
         m_moveAction.action.canceled += OnMove;
@@ -86,6 +91,8 @@ public class PlayerInputHandler : NetworkBehaviour
         m_dropAction.action.performed += OnDropItemHandler;
         m_selectSlotAction.action.performed += OnSelectSlotHandler;
         m_toggleInventoryAction.action.performed += OnToggleInventoryHandler;
+        m_crouchAction.action.started += OnCrouchStartedHandler;
+        m_crouchAction.action.canceled += OnCrouchCanceledHandler;
     }
 
     public override void OnNetworkDespawn()
@@ -109,6 +116,8 @@ public class PlayerInputHandler : NetworkBehaviour
         m_dropAction.action.performed -= OnDropItemHandler;
         m_selectSlotAction.action.performed -= OnSelectSlotHandler;
         m_toggleInventoryAction.action.performed -= OnToggleInventoryHandler;
+        m_crouchAction.action.started -= OnCrouchStartedHandler;
+        m_crouchAction.action.canceled -= OnCrouchCanceledHandler;
 
         m_moveAction.action.Disable();
         m_lookAction.action.Disable();
@@ -120,6 +129,7 @@ public class PlayerInputHandler : NetworkBehaviour
         m_dropAction.action.Disable();
         m_selectSlotAction.action.Disable();
         m_toggleInventoryAction.action.Disable();
+        m_crouchAction.action.Disable();
     }
 
     private void OnMove(InputAction.CallbackContext ctx) => MoveInput = ctx.ReadValue<Vector2>();
@@ -162,4 +172,10 @@ public class PlayerInputHandler : NetworkBehaviour
 
     private void OnToggleInventoryHandler(InputAction.CallbackContext ctx) =>
         OnToggleInventory?.Invoke();
+
+    private void OnCrouchStartedHandler(InputAction.CallbackContext ctx) =>
+        OnCrouchChanged?.Invoke(true);
+
+    private void OnCrouchCanceledHandler(InputAction.CallbackContext ctx) =>
+        OnCrouchChanged?.Invoke(false);
 }
