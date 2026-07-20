@@ -199,6 +199,12 @@ public class NpcController : NetworkBehaviour
     /// <summary>연행 중 따라갈 대상(체포한 플레이어). 연행 중이 아니면 null. 서버에서만 유효.</summary>
     public Transform EscortTarget { get; private set; }
 
+    /// <summary>수감 중 걸어갈 유치장 수용 지점. 수감 중이 아니면 null. 서버에서만 유효. (#228)</summary>
+    public Transform JailCell { get; private set; }
+
+    /// <summary>유치장 수용 지점 도달 — 유치장(JailZone)이 구독해 수용 인원을 올린다. 서버에서만 발생. (#228)</summary>
+    public event Action<NpcController> OnJailed;
+
     private void Awake()
     {
         m_agent = GetComponent<NavMeshAgent>();
@@ -212,6 +218,7 @@ public class NpcController : NetworkBehaviour
         m_stateMachine.AddState(NpcState.Attack, new NpcResistState(this));
         m_stateMachine.AddState(NpcState.Stunned, new NpcStunnedState(this));
         m_stateMachine.AddState(NpcState.Panic, new NpcPanicState(this));
+        m_stateMachine.AddState(NpcState.Jailed, new NpcJailedState(this));
 
         // FSM 전이(서버/오프라인에서만 발생)를 동기화 변수 또는 로컬 이벤트로 흘려보낸다
         m_stateMachine.OnStateChanged += HandleFsmStateChanged;
@@ -376,6 +383,42 @@ public class NpcController : NetworkBehaviour
 
         EscortTarget = null;
         m_stateMachine.ChangeState(NpcState.Captured);
+    }
+
+    // ---- 유치장 (#228) ----
+
+    /// <summary>
+    /// 수감 — 인계존 판정에서 진범·경범죄로 확정된 NPC를 유치장으로 보낸다. (CustodyRouter 경유, GDD 7-2)
+    /// cell(수용 지점)까지 스스로 걸어가 그 자리에 수용된다. cell이 null이면 그 자리에서 수용된 것으로 처리한다.
+    /// </summary>
+    public void SendToJail(Transform cell)
+    {
+        // FSM 전이는 서버 권위 — StartEscort와 동일하게 클라이언트 호출은 무시한다
+        if (IsSpawned && !IsServer)
+            return;
+
+        EscortTarget = null; // 판정 시점에 연행은 이미 풀렸지만, 참조가 남아 있으면 여기서 끊는다
+        JailCell = cell;
+        m_stateMachine.ChangeState(NpcState.Jailed);
+    }
+
+    /// <summary>수용 지점 도달 통보 — NpcJailedState 전용. 유치장이 이 이벤트로 수용 인원을 센다.</summary>
+    public void NotifyJailed() => OnJailed?.Invoke(this);
+
+    /// <summary>
+    /// 수갑 해제 — 오검거로 판정된 무고한 시민을 풀어준다. 배회(Idle)로 복귀한다. (GDD 7-2/7-3, #228)
+    /// 체포(Captured) 상태에서만 유효 — 판정 직후 ArrestJudge가 연행을 풀어 Captured로 만들어 둔 상태를 이어받는다.
+    /// 오검거 카운트·페널티는 여기서 다루지 않는다 (ArrestJudge.OnArrestJudged를 구독하는 #101 담당).
+    /// </summary>
+    public void ReleaseFromCustody()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+        if (m_stateMachine.CurrentState != NpcState.Captured)
+            return;
+
+        JailCell = null;
+        m_stateMachine.ChangeState(NpcState.Idle);
     }
 
     // ---- 검거 반응 (#76) ----
