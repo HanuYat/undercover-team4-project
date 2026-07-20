@@ -19,6 +19,14 @@ public class NpcAnimationDriver : MonoBehaviour
     private static readonly int s_stateHash = Animator.StringToHash("State");
     // 패닉 시 다리(LowerBodyRun 레이어) 달리기 클립의 재생속도 배율 — 실제 이동 속도에 맞춰 발 미끄러짐을 줄인다 (#81)
     private static readonly int s_legRunSpeedHash = Animator.StringToHash("LegRunSpeedMul");
+    /// <summary>
+    /// 스윙 1회에 재생할 단발 클립 번호를 고르는 Animator 파라미터 이름.
+    /// Attack 상태의 블렌드 트리가 이 값으로 클립을 고른다 — 컨트롤러를 만드는
+    /// NpcAnimatorControllerBuilder(Editor)가 이 상수를 참조하므로 이름이 어긋날 수 없다.
+    /// </summary>
+    public const string k_swingVariantParam = "SwingVariant";
+
+    private static readonly int s_swingVariantHash = Animator.StringToHash(k_swingVariantParam);
 
     // 연행 근접 정지(#97) 모션 전환 임계값 — 실제 이동 속도(m/s) 기준.
     // 켜짐/꺼짐 경계를 다르게 둬(히스테리시스) 정지 직전 감속 구간에서 모션이 떨리는 것을 막는다.
@@ -39,6 +47,8 @@ public class NpcAnimationDriver : MonoBehaviour
     [Header("공격 스윙 (#220)")]
     [Tooltip("스윙 1회당 Attack(단발) 모션을 유지하는 시간(초) — 이후 버틴 자세로 복귀한다. 저항 공격 주기보다 짧고 타격 오프셋보다 길게")]
     [SerializeField] private float m_swingAnimSeconds = 0.9f;
+    [Tooltip("스윙 클립 종류 수 — NpcAnimatorControllerBuilder가 Attack 블렌드 트리에 넣은 클립 개수와 같아야 한다. 클립을 빼거나 더하면 이 값도 함께 고칠 것")]
+    [SerializeField] private int m_swingVariantCount = 7;
 
     [SerializeField] private Animator m_animator;
 
@@ -97,6 +107,12 @@ public class NpcAnimationDriver : MonoBehaviour
         // 예고 동작이 통째로 사라져 "언제 맞는지 모른다"는 #220의 목적이 깨진다.
         if (!CanSwingIn(m_baseState))
             return;
+
+        // 이번 스윙에 쓸 단발 클립을 뽑는다 — 반드시 State 펄스보다 먼저다.
+        // Attack 상태에 들어간 뒤에 바꾸면 재생 중인 클립이 도중에 갈아끼워져 모션이 튄다.
+        // 각 피어가 따로 뽑으므로 화면마다 다른 클립이 나올 수 있다. 연출 전용 값이고
+        // 데미지는 서버가 타격 오프셋으로 판정하므로(#220) 동기화하지 않는다.
+        m_animator.SetFloat(s_swingVariantHash, Random.Range(0, m_swingVariantCount));
 
         m_animator.SetInteger(s_stateHash, (int)NpcState.Attack);
         m_swingUntil = Time.time + m_swingAnimSeconds;
