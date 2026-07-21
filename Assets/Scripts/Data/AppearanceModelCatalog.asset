@@ -1,0 +1,175 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bff8a3b039392ea42853934e907f1bde, type: 3}
+  m_Name: AppearanceModelCatalog
+  m_EditorClassIdentifier: Assembly-CSharp::AppearanceModelCatalog
+  m_models:
+  - ModelName: Character_Alien_Male_01
+    Profile:
+      HairStyleIndex: 0
+      HairColorIndex: 8
+      SkinColorIndex: 3
+      FacialHairIndex: 0
+      HeadwearIndex: 0
+      EyewearIndex: 0
+  - ModelName: Character_Alien_Male_02
+    Profile:
+      HairStyleIndex: 0
+      HairColorIndex: 8
+      SkinColorIndex: 4
+      FacialHairIndex: 0
+      HeadwearIndex: 0
+      EyewearIndex: 0
+  - ModelName: Character_Android_Female_01
+    Profile:
+      HairStyleIndex: 4
+      HairColorIndex: 8
+      SkinColorIndex: 4
+      FacialHairIndex: 0
+      HeadwearIndex: 4
+      EyewearIndex: 0
+  - ModelName: Character_Augmented_Male_01
+    Profile:
+      HairStyleIndex: 1
+      HairColorIndex: 1
+      SkinColorIndex: 1
+      FacialHairIndex: 0
+      HeadwearIndex: 0
+      EyewearIndex: 0
+  - ModelName: Character_Cop_01
+    Profile:
+      HairStyleIndex: 4
+      HairColorIndex: 8
+      SkinColorIndex: 1
+      FacialHairIndex: 0
+      HeadwearIndex: 3
+      EyewearIndex: 0
+  - ModelName: Character_Cyber_Female_01
+    Profile:
+      HairStyleIndex: 2
+      HairColorIndex: 0
+      SkinColorIndex: 1
+      FacialHairIndex: 0
+      HeadwearIndex: 0
+      EyewearIndex: 0
+  - ModelName: Character_Cyber_Male_01
+    Profile:
+      HairStyleIndex: 1
+      HairColorIndex: 0
+      SkinColorIndex: 1
+      FacialHairIndex: 0
+      HeadwearIndex: 0
+      EyewearIndex: 2
+  - ModelName: Character_CyberPunk_Male_01
+    Profile:
+      HairStyleIndex: 1
+      HairColorIndex: 0
+      SkinColorIndex: 1
+      FacialHairIndex: 0
+      HeadwearIndex: 0
+      EyewearIndex: 0
+  - ModelName: Character_CyborgNinja_01
+    Profile:
+      HairStyleIndex: 4
+      HairColorIndex: 8
+      SkinColorIndex: 4
+      FacialHairIndex: 0
+      HeadwearIndex: 6
+      EyewearIndex: 4
+  - ModelName: Character_Garbage_Male_01
+    Profile:
+      HairStyleIndex: 4
+      HairColorIndex: 8
+      SkinColorIndex: 1
+      FacialHairIndex: 0
+      HeadwearIndex: 2
+      EyewearIndex: 3
+  - ModelName: Character_Hacker_Female_01
+    Profile:
+      HairStyleIndex: 1
+      HairColorIndex: 6
+      SkinColorIndex: 1
+      FacialHairIndex: 0
+      HeadwearIndex: 0
+      EyewearIndex: 4
+  - ModelName: Character_Hologram_Female_01
+    Profile:
+      HairStyleIndex: 2
+      HairColorIndex: 7
+      SkinColorIndex: 5
+      FacialHairIndex: 0
+      HeadwearIndex: 0
+      EyewearIndex: 0
+  - ModelName: Character_Junky_Female_01
+    Profile:
+      HairStyleIndex: 1
+      HairColorIndex: 2
+      SkinColorIndex: 1
+      FacialHairIndex: 0
+      HeadwearIndex: 5
+      EyewearIndex: 0
+  - ModelName: Character_Junky_Male_01
+    Profile:
+      HairStyleIndex: 4
+      HairColorIndex: 8
+      SkinColorIndex: 1
+      FacialHairIndex: 0
+      HeadwearIndex: 4
+      EyewearIndex: 3
+  - ModelName: Character_Medical_Male_01
+    Profile:
+      HairStyleIndex: 4
+      HairColorIndex: 8
+      SkinColorIndex: 1
+      FacialHairIndex: 0
+      HeadwearIndex: 4
+      EyewearIndex: 4
+  - ModelName: Character_Monk_Male_01
+    Profile:
+      HairStyleIndex: 4
+      HairColorIndex: 8
+      SkinColorIndex: 1
+      FacialHairIndex: 0
+      HeadwearIndex: 2
+      EyewearIndex: 2
+  - ModelName: Character_Muscle_Male_01
+    Profile:
+      HairStyleIndex: 1
+      HairColorIndex: 0
+      SkinColorIndex: 1
+      FacialHairIndex: 2
+      HeadwearIndex: 0
+      EyewearIndex: 1
+  - ModelName: Character_Rich_Female_01
+    Profile:
+      HairStyleIndex: 1
+      HairColorIndex: 5
+      SkinColorIndex: 1
+      FacialHairIndex: 0
+      HeadwearIndex: 0
+      EyewearIndex: 0
+  - ModelName: Character_Rich_Male_01
+    Profile:
+      HairStyleIndex: 1
+      HairColorIndex: 5
+      SkinColorIndex: 1
+      FacialHairIndex: 1
+      HeadwearIndex: 3
+      EyewearIndex: 0
+  - ModelName: Character_Robot_01
+    Profile:
+      HairStyleIndex: 4
+      HairColorIndex: 8
+      SkinColorIndex: 4
+      FacialHairIndex: 0
+      HeadwearIndex: 6
+      EyewearIndex: 4

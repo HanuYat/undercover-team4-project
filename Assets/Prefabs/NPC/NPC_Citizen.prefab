@@ -17,11 +17,11 @@ GameObject:
   - component: {fileID: 3625219082931332717}
   - component: {fileID: 1458645678561649132}
   - component: {fileID: 8156950665793670387}
-  - component: {fileID: 8301901334336164859}
   - component: {fileID: 5127349806152873460}
   - component: {fileID: -860446410880811197}
   - component: {fileID: 4422740345284790104}
   - component: {fileID: 5951565256141623223}
+  - component: {fileID: 7883451613544855259}
   m_Layer: 7
   m_Name: NPC_Citizen
   m_TagString: Untagged
@@ -263,43 +263,6 @@ MonoBehaviour:
   SwitchTransformSpaceWhenParented: 0
   Interpolate: 1
   SlerpPosition: 0
---- !u!114 &8301901334336164859
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8791269624150694847}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b9e28fee53bdf304baccfa74293a1688, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NpcAppearance
-  ShowTopMostFoldoutHeaderGroup: 1
-  m_characterModels:
-  - {fileID: 1199693883326640, guid: 9d6944272ca1ef448a6c08e77fec10f0, type: 3}
-  - {fileID: 1076653177335980, guid: 9724bf37757803a4997ef69d34974e3d, type: 3}
-  - {fileID: 1132329847709068, guid: 35b2f23f35e445a4ab2e58c5310d87bd, type: 3}
-  - {fileID: 1394440181588748, guid: a37e15f4f9ea2284097945cfeb8fe9c0, type: 3}
-  - {fileID: 1546608955749146, guid: 6b3fff6a0afe72545a41df9afbe304a2, type: 3}
-  - {fileID: 1550672808291654, guid: 0f9ccd71741ee50488626ad04bd719f9, type: 3}
-  - {fileID: 1447477219941586, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
-  - {fileID: 1112095941276756, guid: 9173cd04cd0fa7d478bdcc707b3aab84, type: 3}
-  - {fileID: 1885274332863988, guid: 9d49ce5feb2bfd245a9e7f8e7a33026f, type: 3}
-  - {fileID: 1568468871427000, guid: aad8348bab0cb854f83377110195a3bc, type: 3}
-  - {fileID: 1128428043689436, guid: da563cdca29e92d4ab32c3331d2db540, type: 3}
-  - {fileID: 1787067274310504, guid: be6e7002526a3724f97d31ae3e596927, type: 3}
-  - {fileID: 1295246249878948, guid: 5f7f35f5ee9d7fa4e9139ee56900d398, type: 3}
-  - {fileID: 1967492678687660, guid: 57fc8dbaad512514aa9683fd9261d4a2, type: 3}
-  - {fileID: 1542036819191410, guid: fc62b962a6a22f148b707e207ab06996, type: 3}
-  - {fileID: 1870903629192928, guid: 2c12eb3809a798446836011a05b7a00b, type: 3}
-  - {fileID: 1102192756587244, guid: 19c80593b90872a4fa3bb5a1139b26c1, type: 3}
-  - {fileID: 1420900672563822, guid: a136ffd5a9160a74d975cbda00d432bb, type: 3}
-  - {fileID: 1401195396439946, guid: 90292aae433301f4eb6dee5ffe961c01, type: 3}
-  m_appearanceDatabase: {fileID: 11400000, guid: 57bb736c337156747a8246abdf3cab42, type: 2}
-  m_headAnchor: {fileID: 0}
-  m_overrideMaterialSlot: 0
-  m_colorPropertyName: _BaseColor
 --- !u!114 &5127349806152873460
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -381,6 +344,21 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NpcSubdueGaugeHud
   m_headHeight: 2.2
   m_maxDrawDistance: 20
+--- !u!114 &7883451613544855259
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ac9f14259a54ad34eb0002dc9a37cba6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcCatalogAppearance
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_modelRoot: {fileID: 3683407917210904916}
+  m_catalog: {fileID: 11400000, guid: 6b0ad8e93c79903439c11556cdc30e5b, type: 2}
 --- !u!1001 &3679051956096844986
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -448,6 +426,10 @@ PrefabInstance:
     - target: {fileID: 1261447944107944, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
       propertyPath: m_Layer
       value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 1261447944107944, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1262147715846388, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
       propertyPath: m_Layer
@@ -521,6 +503,10 @@ PrefabInstance:
       propertyPath: m_Layer
       value: 7
       objectReference: {fileID: 0}
+    - target: {fileID: 1553431776736530, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 1566944020321144, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
       propertyPath: m_Layer
       value: 7
@@ -557,9 +543,17 @@ PrefabInstance:
       propertyPath: m_Layer
       value: 7
       objectReference: {fileID: 0}
+    - target: {fileID: 1632160650222512, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 1638217353452206, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
       propertyPath: m_Layer
       value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 1638217353452206, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1659482237158836, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
       propertyPath: m_Layer
@@ -613,6 +607,10 @@ PrefabInstance:
       propertyPath: m_Layer
       value: 7
       objectReference: {fileID: 0}
+    - target: {fileID: 1844060577332196, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 1852099313780894, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
       propertyPath: m_Layer
       value: 7
@@ -645,6 +643,10 @@ PrefabInstance:
       propertyPath: m_Layer
       value: 7
       objectReference: {fileID: 0}
+    - target: {fileID: 1915543731640542, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 1933285457078180, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
       propertyPath: m_Layer
       value: 7
@@ -652,6 +654,10 @@ PrefabInstance:
     - target: {fileID: 1935064479506666, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
       propertyPath: m_Layer
       value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 1935064479506666, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1935847432839040, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
       propertyPath: m_Layer
