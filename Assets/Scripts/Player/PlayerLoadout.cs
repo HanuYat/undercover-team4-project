@@ -269,6 +269,65 @@ public class PlayerLoadout : NetworkBehaviour
         SyncHeldItemsRpc(BuildHeldItemRefs());
     }
 
+    // ---- 수갑 소모·반환 (#229) ----
+
+    /// <summary>
+    /// 이 플레이어가 수갑을 보유 중인가 — 체포 자원 게이트(#229). 부착된 자식 기준이라 서버·오너 모두 유효.
+    /// 체포 성공 시 수갑이 NPC로 옮겨가면(ConsumeHandcuffsTo) false가 되어 새 체포가 막힌다.
+    /// </summary>
+    public bool HasHandcuffs => FindHeldHandcuffs() != null;
+
+    // 현재 부착된 수갑 아이템을 찾는다 — 없으면 null. NPC는 한 벌만 들고 다니므로 첫 항목이면 충분.
+    private Handcuffs FindHeldHandcuffs()
+    {
+        Transform parent = ItemParent;
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            if (parent.GetChild(i).TryGetComponent(out Handcuffs cuffs))
+            {
+                return cuffs;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 체포 성공 시 이 플레이어의 수갑을 인벤토리에서 빼 custodyParent(연행되는 NPC)로 옮긴다. (#229)
+    /// 판정 후 반환(NpcController.DropHandcuffs)까지 NPC가 들고 있으므로, 커스터디 동안 소유권은 서버로 되돌린다.
+    /// 서버(또는 오프라인)에서만. 수갑이 없으면 무동작(호출부 가드가 이미 막지만 방어적).
+    /// 버리기(DropRpc)와 같은 분리·소유권 처리에, 목적지만 NPC 하위인 셈이다.
+    /// </summary>
+    public void ConsumeHandcuffsTo(Transform custodyParent)
+    {
+        if (IsSpawned && !IsServer)
+        {
+            return;
+        }
+
+        Handcuffs cuffs = FindHeldHandcuffs();
+        if (cuffs == null || custodyParent == null)
+        {
+            return;
+        }
+
+        NetworkObject cuffsNetworkObject = cuffs.NetworkObject;
+        if (cuffsNetworkObject == null)
+        {
+            return;
+        }
+
+        // NPC 하위로 옮긴다 — ItemParent 자식에서 빠지므로 BuildHeldItemRefs가 더는 세지 않는다.
+        // WorldItemPickup이 "들린 상태"(부모 있음)로 보고 월드 비주얼·줍기 콜라이더를 끈다(안 보이고 못 줍는다).
+        cuffsNetworkObject.TrySetParent(custodyParent, false);
+        cuffsNetworkObject.transform.localPosition = Vector3.zero;
+        cuffsNetworkObject.transform.localRotation = Quaternion.identity;
+        cuffsNetworkObject.RemoveOwnership();
+
+        // 오너 슬롯에서 제거를 동기화 — 장착 중이었다면 빈손이 되고 1·3인칭 손 표시도 함께 정리된다(#45/#151).
+        SyncHeldItemsRpc(BuildHeldItemRefs());
+    }
+
     // ---- 서버 → 오너: 보유 목록 동기화 ----
 
     // 플레이어에 현재 부착된 아이템들의 참조 목록을 만든다 (서버 진실).

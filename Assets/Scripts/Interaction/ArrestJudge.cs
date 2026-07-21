@@ -114,6 +114,11 @@ public class ArrestJudge : CommonManagerBase
             npc.StopEscort();
         }
 
+        // 판정 완료 — 채워졌던 수갑을 발밑 바닥에 떨어뜨려 반환한다. 수감·석방 어느 쪽이든 공통 (#229).
+        // 연행 물리 해제와 같은 "판정 후 정리"라 여기(판정 funnel)에서 한다 — CustodyRouter는 유치장 씬에만
+        // 있을 수 있어(신병 라우팅 전용) 반환을 그쪽에 걸면 인계존만 있는 씬에서 누락된다.
+        npc.DropHandcuffs();
+
         OnArrestJudged?.Invoke(result);
 
         return result;

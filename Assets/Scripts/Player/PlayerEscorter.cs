@@ -32,6 +32,21 @@ public class PlayerEscorter : NetworkBehaviour
         }
     }
 
+    // 수갑 자원 게이트·소모용 로드아웃 (#229). 테스트 구성 등 없을 수 있어 null 허용.
+    private PlayerLoadout m_loadout;
+
+    private PlayerLoadout Loadout
+    {
+        get
+        {
+            if (m_loadout == null) m_loadout = GetComponent<PlayerLoadout>();
+            return m_loadout;
+        }
+    }
+
+    // 수갑을 들고 있는가 — 새 체포의 자원 게이트(#229). 로드아웃이 없으면(테스트 구성) 통과시킨다.
+    private bool HasHandcuffs => Loadout == null || Loadout.HasHandcuffs;
+
     private float CaptureRange => Interactor != null ? Interactor.Range : k_fallbackRange;
 
     // 거리 기준점 — 조준 레이캐스트·윤곽선 게이트와 동일한 AimOrigin(카메라).
@@ -188,6 +203,8 @@ public class PlayerEscorter : NetworkBehaviour
             return; // 중복 채널링 방지
         if (IsEscorting)
             return; // 연행 중엔 체포 불가 — 놓기는 상호작용키(E)의 RequestRelease 전용 (#91)
+        if (!HasHandcuffs)
+            return; // 수갑 없으면 체포 시도 불가 — 연행 중 소모돼 사라진 상태 포함 (#229)
         if (!NpcStateRules.IsCapturable(target.CurrentState))
             return; // 연행 중(가로채기 방지 #59)·체포됨(재연행은 E 경로 #91) — 클라 검증·윤곽선과 단일 기준 (#184)
         if (!IsInRange(target))
@@ -257,6 +274,8 @@ public class PlayerEscorter : NetworkBehaviour
     /// <summary>도주 NPC 근접 제압 — 서버 실행. 도주 중일 때만 그 자리에서 체포.</summary>
     private void ServerSubdueCapture(NpcController target)
     {
+        if (!HasHandcuffs)
+            return; // 수갑 없으면 도주 제압(=체포)도 불가 (#229)
         if (target.CurrentState == NpcState.Run)
             target.CaptureBySubdue();
     }
@@ -337,6 +356,13 @@ public class PlayerEscorter : NetworkBehaviour
             return; // 연행 상태는 서버 권위 — NpcController 상태 메서드와 동일한 방어 컨벤션 (#118 리뷰)
         if (IsEscorting || npc == null)
             return;
+
+        // 첫 연행에만 수갑을 소모해 NPC로 옮긴다 — 판정 후 반환까지 NPC가 들고 간다 (#229).
+        // 재연행(놓았다 다시 잡기)이면 NPC에 이미 수갑이 있으니 또 소모하지 않는다.
+        // ponytail: 도주 제압(Captured)만 되고 아직 연행 안 한 NPC는 첫 연행자 수갑을 소모한다 —
+        // 제압↔연행 사이 수갑 든 채 다른 도주범 추가 제압이 가능(마이너). 제압 시 예약은 과설계라 보류.
+        if (!npc.HasHandcuffs)
+            Loadout?.ConsumeHandcuffsTo(npc.transform);
 
         SetEscorting(npc);
         npc.StartEscort(transform);
