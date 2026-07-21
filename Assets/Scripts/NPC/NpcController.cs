@@ -113,10 +113,9 @@ public class NpcController : NetworkBehaviour
     [Tooltip("착지 지점을 NavMesh 위로 되돌릴 때 허용하는 최대 탐색 거리(m)")]
     [SerializeField] private float m_knockbackLandSampleDistance = 4f;
 
-    [Tooltip("이 거리(m) 안에서 NavMesh가 끊기는 것은 벽이 아니라 연석·경계로 보고 무시한다. " +
-             "NavMesh는 실제 벽보다 에이전트 반지름만큼 안쪽에서 끝나므로, 그대로 벽 취급하면 " +
-             "발밑에서 바로 막혀 넉백이 제자리 점프가 된다")]
-    [SerializeField] private float m_knockbackEdgeIgnoreDistance = 1.5f;
+    [Tooltip("날아가는 도중 벽으로 칠 콜라이더 — 여기에 걸리면 수평 이동이 멈춘다. " +
+             "NPC 자신의 레이어는 런타임에 자동으로 빠진다")]
+    [SerializeField] private LayerMask m_knockbackObstacleMask = ~0;
 
     private NavMeshAgent m_agent;
     private NpcStateMachine m_stateMachine;
@@ -126,6 +125,7 @@ public class NpcController : NetworkBehaviour
     private Vector3 m_knockbackLaunch;
     private float m_knockbackElapsed;
     private bool m_knockbackActive;
+    private NpcState m_knockbackLandingState; // 착지 후 돌아갈 상태 — 검거 중이었으면 Captured, 그 외엔 Stunned
 
     // 라운드 종료 시 정지(freeze) 플래그 — 서버(또는 오프라인)에서만 의미. 켜지면 FSM/이동을 멈춘다. (라운드 종료 freeze)
     private bool m_frozen;
@@ -679,8 +679,10 @@ public class NpcController : NetworkBehaviour
     /// (<see cref="PlayerMovement.AddKnockback"/>), NPC는 이동 권한이 서버의 NavMeshAgent에 있고
     /// 클라이언트는 NetworkTransform으로 결과만 받으므로 서버가 직접 민다.
     ///
-    /// 검거 관련 상태(체포·연행·수감)는 제외한다 — 호송 중 NPC가 날아가면 커스터디가 끊겨
-    /// 판정 경로(ArrestJudge·JailZone)가 깨진다. 폭발로 피의자를 놓치는 건 별개의 기획 결정이다.
+    /// 수감(<see cref="NpcState.Jailed"/>)·침입(<see cref="NpcState.Intruding"/>)은 제외한다 —
+    /// 이벤트가 그 NPC의 진행(수용·자물쇠 해제)을 쥐고 있어서, 중간에 날아가면 판정 경로가 끊긴다.
+    /// 체포·연행 중인 NPC는 <b>수갑을 찬 채</b> 날아가고 착지 후에도 체포 상태로 남는다
+    /// (연행만 풀린다 — <see cref="PlayerEscorter"/>가 Escorted 이탈을 보고 스스로 참조를 정리한다).
     /// </summary>
     public void ServerApplyKnockback(Vector3 velocity)
     {
@@ -692,13 +694,19 @@ public class NpcController : NetworkBehaviour
             return;
 
         NpcState state = m_stateMachine.CurrentState; // 서버 진실값 — 동기화 지연 없이 판정
-        if (state == NpcState.Captured || state == NpcState.Escorted || state == NpcState.Jailed)
+        if (state == NpcState.Jailed || state == NpcState.Intruding)
             return;
 
-        // 기절 전이가 먼저다 — 에이전트를 끄기 전에 넣어야 상태 클래스가 에이전트를 정상적으로 정리한다.
-        // 표현상으로도 걷는 모션 그대로 날아가지 않고 축 늘어져 날아간다.
-        // 비행 중에는 FSM Tick을 건너뛰므로 기절 타이머는 착지 후부터 흐른다.
-        m_stateMachine.ChangeState(NpcState.Stunned);
+        // 상태 전이가 먼저다 — 에이전트를 끄기 전에 넣어야 상태 클래스가 에이전트를 정상적으로 정리한다.
+        // 비행 중에는 FSM Tick을 건너뛰므로 상태별 타이머(기절 해제·인계 방치)는 착지 후부터 흐른다.
+        m_knockbackLandingState = state == NpcState.Captured || state == NpcState.Escorted
+            ? NpcState.Captured // 검거 유지 — 폭발로 수갑이 풀리지는 않는다
+            : NpcState.Stunned; // 그 외엔 축 늘어져 날아가 기절 상태로 착지한다
+
+        if (state == NpcState.Escorted)
+            StopEscort(); // 연행만 해제(Captured 전이) — 에이전트 정리는 Escorted.Exit이 맡는다
+        else
+            m_stateMachine.ChangeState(m_knockbackLandingState);
 
         m_knockbackActive = true;
         m_knockbackVelocity = velocity;
@@ -714,7 +722,7 @@ public class NpcController : NetworkBehaviour
         }
     }
 
-    // 포물선 비행 1프레임. 착지하면 NavMesh 위로 되돌리고 기절 상태로 넘긴다.
+    // 포물선 비행 1프레임. 착지하면 NavMesh 위로 되돌리고 발사 시점에 정한 상태로 넘긴다.
     private void TickKnockback()
     {
         m_knockbackElapsed += Time.deltaTime;
@@ -722,16 +730,16 @@ public class NpcController : NetworkBehaviour
 
         Vector3 next = transform.position + m_knockbackVelocity * Time.deltaTime;
 
-        // 벽을 뚫고 날아가지 않게 NavMesh를 충돌 프록시로 쓴다 — 출발점에서 목표 XZ까지 통행 가능한지 본다.
-        // (도시 지오메트리 캐스트는 Synty 프록시 콜라이더·창살 때문에 오판이 잦아 신뢰하지 않는다)
+        // 벽을 뚫고 날아가지 않게 실제 콜라이더를 훑는다 — 지금 위치에서 이번 프레임 수평 이동분만큼
+        // 몸통 굵기로 스윕한다.
         //
-        // 단, NavMesh 경계 = 벽이 아니다. NavMesh는 실제 벽에서 에이전트 반지름만큼 물러나 끝나고
-        // 연석·차도 경계에서도 끊긴다 — 실측상 절반가량의 방향이 발밑 0.1~0.7m에서 막혔고,
-        // 그걸 그대로 벽으로 치면 넉백이 "제자리에서 폴짝"이 된다. 가까운 끊김은 무시한다.
-        Vector3 horizontalTarget = new Vector3(next.x, m_knockbackLaunch.y, next.z);
-        if (NavMesh.Raycast(m_knockbackLaunch, horizontalTarget, out NavMeshHit block, NavMesh.AllAreas)
-            && (block.position - m_knockbackLaunch).sqrMagnitude
-               >= m_knockbackEdgeIgnoreDistance * m_knockbackEdgeIgnoreDistance)
+        // NavMesh를 충돌 프록시로 쓰면 안 된다: NavMesh는 실제 벽보다 에이전트 반지름만큼 물러나 끝나고
+        // 연석·차도 경계에서도 끊긴다. 실측(Test Scene)에서 벽이 11.8m 밖인 방향이 NavMesh 기준으로는
+        // 2.0m에서 "막힘"으로 나왔고, 그걸 벽으로 치면 수평 속도가 비행 첫 프레임에 0이 되어
+        // 넉백이 그대로 제자리 점프가 된다 (#232).
+        Vector3 horizontalStep = new Vector3(next.x - transform.position.x, 0f, next.z - transform.position.z);
+        float stepDistance = horizontalStep.magnitude;
+        if (stepDistance > 0.0001f && SweepHitsObstacle(horizontalStep / stepDistance, stepDistance))
         {
             // 진짜 벽에 닿았다 — 수평 성분을 버리고 그 자리에서 떨어진다
             next.x = transform.position.x;
@@ -760,6 +768,18 @@ public class NpcController : NetworkBehaviour
             EndKnockback(m_knockbackLaunch);
     }
 
+    // 이번 프레임 수평 이동 구간에 벽이 있는지 — 몸통 굵기로 훑는다.
+    // 프레임이 튀어 한 번에 몇 미터씩 움직여도 구간 전체를 검사하므로 벽을 지나쳐 버리지 않는다.
+    private bool SweepHitsObstacle(Vector3 direction, float distance)
+    {
+        float radius = m_agent.radius;
+        Vector3 origin = transform.position + Vector3.up * Mathf.Max(radius, m_agent.height * 0.5f);
+        int mask = m_knockbackObstacleMask & ~(1 << gameObject.layer); // 자기 콜라이더에 걸리지 않게
+
+        return Physics.SphereCast(origin, radius, direction, out RaycastHit _, distance, mask,
+                                  QueryTriggerInteraction.Ignore);
+    }
+
     private void EndKnockback(Vector3 landing)
     {
         m_knockbackActive = false;
@@ -776,9 +796,9 @@ public class NpcController : NetworkBehaviour
             return;
         }
 
-        // 이미 발사 시점에 기절로 전이해 뒀다 — 여기 호출은 그 사이 상태가 바뀐 경우를 위한 보정이다.
-        // (같은 상태면 StateMachine이 무시하므로 기절 타이머가 착지 시점에 리셋되지도 않는다)
-        m_stateMachine.ChangeState(NpcState.Stunned);
+        // 이미 발사 시점에 전이해 뒀다 — 여기 호출은 그 사이 상태가 바뀐 경우를 위한 보정이다.
+        // (같은 상태면 StateMachine이 무시하므로 상태별 타이머가 착지 시점에 리셋되지도 않는다)
+        m_stateMachine.ChangeState(m_knockbackLandingState);
     }
 
     // ---- 패닉 (#81) ----
