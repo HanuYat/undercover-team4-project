@@ -15,6 +15,10 @@ public static class NpcStateRules
         state != NpcState.Escorted && state != NpcState.Captured && state != NpcState.Jailed
         && state != NpcState.Run && state != NpcState.Attack;
 
+    /// <summary>밧줄로 묶어 끌 수 있는 상태인가 — 테이저로 기절한 대상만. (#269)
+    /// 수갑 연행과 역할이 갈린다: 수갑은 순응형 즉시 연행, 밧줄은 기절시킨 대상 전용.</summary>
+    public static bool IsRopeable(NpcState state) => state == NpcState.Stunned;
+
     /// <summary>E 상호작용(제압·타격·재연행)이 반응하는 상태인가.
     /// 포함 목록 방식 — 새 상태는 기본 'E 불가'이므로 열어야 하면 여기 추가할 것.
     /// NpcSubdueInteractable.Interact의 분기 집합과 반드시 일치해야 한다.</summary>

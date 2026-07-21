@@ -292,6 +292,23 @@ public class PlayerLoadout : NetworkBehaviour
         return null;
     }
 
+    /// <summary>이 플레이어가 밧줄을 보유 중인가 — 끌기 자원 게이트. 부착된 자식 기준. (#269)</summary>
+    public bool HasRope => FindHeldRope() != null;
+
+    private Rope FindHeldRope()
+    {
+        Transform parent = ItemParent;
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            if (parent.GetChild(i).TryGetComponent(out Rope rope))
+            {
+                return rope;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// 체포 성공 시 이 플레이어의 수갑을 인벤토리에서 빼 custodyParent(연행되는 NPC)로 옮긴다. (#229)
     /// 판정 후 반환(NpcController.DropHandcuffs)까지 NPC가 들고 있으므로, 커스터디 동안 소유권은 서버로 되돌린다.

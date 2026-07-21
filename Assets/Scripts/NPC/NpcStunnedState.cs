@@ -22,6 +22,10 @@ public class NpcStunnedState : NpcStateBase
 
     public override void Tick()
     {
+        // 밧줄로 묶여 있는 동안엔 기절 타이머를 멈춘다 — 끌려가는 내내 깨어나지 않는다 (#269)
+        if (m_owner.IsRoped)
+            return;
+
         m_timer += Time.deltaTime;
         if (m_timer >= m_owner.StunSeconds)
             m_owner.StateMachine.ChangeState(NpcState.Idle);
