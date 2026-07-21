@@ -93,7 +93,7 @@ LightmapSettings:
     m_ExportTrainingData: 0
     m_TrainingDataDestination: TrainingData
     m_LightProbeSampleCountMultiplier: 4
-  m_LightingDataAsset: {fileID: 112000000, guid: 0e3f6cc75c9a58e45916546ff0a09086, type: 2}
+  m_LightingDataAsset: {fileID: 112000000, guid: 35397b51604fa534497f1faa9d9a8c0f, type: 2}
   m_LightingSettings: {fileID: 4890085278179872738, guid: 4929aadf0a6abda4ebf8d62448f80c93, type: 2}
 --- !u!196 &4
 NavMeshSettings:
@@ -18584,6 +18584,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SessionManager
   m_maxPlayer: 6
   m_auth: {fileID: 729177724}
+  m_showDebugGui: 0
   m_guiTopOffset: 0
 --- !u!4 &373063424
 Transform:
@@ -36373,6 +36374,7 @@ MonoBehaviour:
   m_signInOnStart: 1
   m_environmentName: production
   m_profile: 
+  m_showDebugGui: 0
   m_guiTopOffset: 10
 --- !u!4 &729177725
 Transform:
@@ -66320,7 +66322,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6e0f7fd522bd08f4097a0ee5f5857aab, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LobbyManager
-  m_roundManager: {fileID: 0}
 --- !u!4 &1296072054
 Transform:
   m_ObjectHideFlags: 0
@@ -75547,6 +75548,7 @@ MonoBehaviour:
   m_audibleDistance: 15
   m_audioFadeIntensity: 4
   m_positionUpdateInterval: 0.1
+  m_showDebugGui: 0
   m_guiTopOffset: 10
 --- !u!4 &1467963242
 Transform:
