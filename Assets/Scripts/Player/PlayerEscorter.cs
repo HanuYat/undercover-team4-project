@@ -493,7 +493,7 @@ public class PlayerEscorter : NetworkBehaviour
             return;
 
         SetDragging(target);
-        target.StartRopeDrag();
+        target.StartRopeDrag(transform); // 끈 플레이어를 위협으로 기억 — 놓아준 뒤 깨어나면 이쪽에서 도망친다
         NotifyOwner($"밧줄로 묶어 끌기 시작: {target.name}");
     }
 

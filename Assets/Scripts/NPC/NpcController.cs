@@ -64,6 +64,9 @@ public class NpcController : NetworkBehaviour
     [SerializeField] private float m_subdueGaugeMax = 100f;
     [Tooltip("기절(테이저 등) 지속 시간(초)")]
     [SerializeField] private float m_stunSeconds = 3f;
+    [Tooltip("기절이 풀릴 때 일어나는 모션의 길이(초) — 기절 시간의 마지막 이 구간에 일어난다(총 무력화 시간은 그대로). " +
+             "Knockdown01-StandUp 클립 길이(1.17초)에 맞춘 값 (#269)")]
+    [SerializeField] private float m_standUpSeconds = 1.17f;
 
     [Header("인계 방치 (#230)")]
     [Tooltip("체포된 채 이 시간(초) 동안 인계되지 않으면 수갑을 풀고 도주한다 — 방치 전략 차단")]
@@ -138,6 +141,9 @@ public class NpcController : NetworkBehaviour
     public float CapturedEscapeWarningSeconds => m_capturedEscapeWarningSeconds;
     public float SubdueGaugeMax => m_subdueGaugeMax;
     public float StunSeconds => m_stunSeconds;
+
+    /// <summary>일어나는 모션의 길이(초) — FSM이 이 구간만큼 먼저 모션을 시작하고, 표현(NpcAnimationDriver)이 같은 값으로 재생을 유지한다. (#269)</summary>
+    public float StandUpSeconds => m_standUpSeconds;
     public float ResistAttackInterval => m_resistAttackInterval;
     public float ResistAttackRange => m_resistAttackRange;
     public int ResistAttackDamage => m_resistAttackDamage;
@@ -375,6 +381,28 @@ public class NpcController : NetworkBehaviour
     private void HandleNetworkStateChanged(NpcState previous, NpcState current)
     {
         OnStateChanged?.Invoke(current);
+    }
+
+    /// <summary>기절에서 일어나기 시작할 때 발행 — 전 피어에서 발생한다(서버는 로컬 발행 + ClientRpc 중계).
+    /// 일어나는 구간은 FSM 상태가 여전히 Stunned라(그 동안 움직이지 않는다) 상태 동기화만으로는
+    /// 클라이언트가 알 수 없다 — 스윙(OnAttackSwing)과 같은 순간 이벤트로 전달한다. (#269)</summary>
+    public event Action OnStandUp;
+
+    /// <summary>기절 해제 직전 일어나는 모션을 전 피어에 알린다 — 서버(또는 오프라인) FSM Tick에서만 호출한다. (#269)</summary>
+    public void RaiseStandUp()
+    {
+        OnStandUp?.Invoke(); // 서버·오프라인 로컬 발행
+        if (IsSpawned && IsServer)
+            PlayStandUpClientRpc();
+    }
+
+    [ClientRpc]
+    private void PlayStandUpClientRpc()
+    {
+        // 서버(호스트)는 위에서 이미 발행했으므로 원격 클라에서만 중계
+        if (IsServer)
+            return;
+        OnStandUp?.Invoke();
     }
 
     /// <summary>공격 스윙 1회를 전 피어에 알린다 — 애니메이션 표현용. 서버(또는 오프라인) FSM Tick에서만 호출한다.
@@ -629,12 +657,19 @@ public class NpcController : NetworkBehaviour
         m_stateMachine.ChangeState(NpcState.Captured);
     }
 
-    /// <summary>기절 진입 — 테이저(후속 아이템 이슈)의 연결고리. 지속 시간 후 스스로 배회로 복귀한다.</summary>
-    public void EnterStunned()
+    /// <summary>
+    /// 기절 진입 — 테이저의 연결고리. 지속 시간이 끝나면 스스로 일어나 <b>도주</b>한다(#269 확정).
+    /// </summary>
+    /// <param name="threat">
+    /// 기절시킨 상대(테이저 사수). 깨어났을 때 이 대상에게서 도망친다 — 없으면(null) 도주 상태가
+    /// 그 시점의 가장 가까운 추격자를 폴백으로 잡고, 주변에 아무도 없으면 배회로 돌아간다(NpcFleeState).
+    /// </param>
+    public void EnterStunned(Transform threat = null)
     {
         if (IsSpawned && !IsServer)
             return;
 
+        ThreatTarget = threat;
         m_stateMachine.ChangeState(NpcState.Stunned);
     }
 
@@ -646,12 +681,15 @@ public class NpcController : NetworkBehaviour
     public bool IsRoped => m_roped;
 
     /// <summary>밧줄 끌기 시작 — 기절한 대상을 PlayerEscorter가 서버에서 호출. 위치를 끄는 플레이어가 직접 제어하므로
-    /// NavMeshAgent를 끈다(켜져 있으면 에이전트가 위치를 도로 잡아당긴다). 상태는 Stunned를 그대로 유지한다.</summary>
-    public void StartRopeDrag()
+    /// NavMeshAgent를 끈다(켜져 있으면 에이전트가 위치를 도로 잡아당긴다). 상태는 Stunned를 그대로 유지한다.
+    /// 끈 플레이어를 위협으로 기억한다 — 놓아준 뒤 깨어나면 그 플레이어에게서 도망친다.</summary>
+    public void StartRopeDrag(Transform dragger = null)
     {
         if (IsSpawned && !IsServer)
             return;
 
+        if (dragger != null)
+            ThreatTarget = dragger;
         m_roped = true;
         if (m_agent != null && m_agent.enabled)
             m_agent.enabled = false;
