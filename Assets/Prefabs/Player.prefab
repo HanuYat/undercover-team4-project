@@ -2887,6 +2887,7 @@ GameObject:
   - component: {fileID: -961902104319678753}
   - component: {fileID: 7911917710776014538}
   - component: {fileID: 3120017538077844962}
+  - component: {fileID: -3123601567961304525}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -3368,6 +3369,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerHeldItemView
   ShowTopMostFoldoutHeaderGroup: 1
   m_handAnchor: {fileID: 6357114946146360780}
+--- !u!114 &-3123601567961304525
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0a423f07a0214f44cbbbca94d2c0b43c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerPenaltyView
+  ShowTopMostFoldoutHeaderGroup: 1
 --- !u!1 &5536001738967602051
 GameObject:
   m_ObjectHideFlags: 0
