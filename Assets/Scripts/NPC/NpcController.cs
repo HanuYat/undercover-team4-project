@@ -71,6 +71,20 @@ public class NpcController : NetworkBehaviour
     [Tooltip("도주 직전 이 시간(초) 동안 소란을 낸다 — 수갑 풀려는 소동으로 현장·본부에 예고")]
     [SerializeField] private float m_capturedEscapeWarningSeconds = 5f;
 
+    [Header("오검거 추격 (#278)")]
+    [Tooltip("추격 최고 속도(m/s) — 플레이어 전력질주(8)보다 1 낮게: 직선에서는 벗어날 수 있되 코너·군중에서 따라잡힌다")]
+    [SerializeField] private float m_chaseMaxSpeed = 7f;
+    [Tooltip("타겟 확보 후 최고 속도까지 걸리는 가속 시간(초)")]
+    [SerializeField] private float m_chaseAccelSeconds = 8f;
+    [Tooltip("추격 가능 범위(m) — 타겟이 벗어나면 범위 안의 다른 플레이어로 갈아탄다. 아무도 없으면 배회하며 사냥 모드")]
+    [SerializeField] private float m_chaseRange = 30f;
+    [Tooltip("이 거리(m) 안으로 붙으면 포획 — 잡힌 플레이어가 오검거 페널티를 받는다")]
+    [SerializeField] private float m_chaseCatchDistance = 1.3f;
+    [Tooltip("격퇴(호루라기 예정 #250) 시 도주하는 시간(초)")]
+    [SerializeField] private float m_chaseRepelFleeSeconds = 3f;
+    [Tooltip("격퇴당한 뒤 이 시간(초) 동안은 격퇴한 플레이어를 다시 노리지 않는다")]
+    [SerializeField] private float m_chaseRetargetCooldown = 5f;
+
     [Header("저항 전투 (#79)")]
     [Tooltip("저항 중 범위 타격을 휘두르는 주기(초)")]
     [SerializeField] private float m_resistAttackInterval = 1.5f;
@@ -157,6 +171,12 @@ public class NpcController : NetworkBehaviour
     public float FleeResistCooldown => m_fleeResistCooldown;
     public float CapturedEscapeSeconds => m_capturedEscapeSeconds;
     public float CapturedEscapeWarningSeconds => m_capturedEscapeWarningSeconds;
+    public float ChaseMaxSpeed => m_chaseMaxSpeed;
+    public float ChaseAccelSeconds => m_chaseAccelSeconds;
+    public float ChaseRange => m_chaseRange;
+    public float ChaseCatchDistance => m_chaseCatchDistance;
+    public float ChaseRepelFleeSeconds => m_chaseRepelFleeSeconds;
+    public float ChaseRetargetCooldown => m_chaseRetargetCooldown;
     public float SubdueGaugeMax => m_subdueGaugeMax;
     public float StunSeconds => m_stunSeconds;
     public float ResistAttackInterval => m_resistAttackInterval;
@@ -289,6 +309,9 @@ public class NpcController : NetworkBehaviour
         m_stateMachine.AddState(NpcState.Panic, new NpcPanicState(this));
         m_stateMachine.AddState(NpcState.Jailed, new NpcJailedState(this));
         m_stateMachine.AddState(NpcState.Intruding, new NpcIntrudeState(this));
+        m_stateMachine.AddState(NpcState.Detained, new NpcDetainedState(this));
+        m_stateMachine.AddState(NpcState.Chasing, new NpcChaseState(this));
+        m_stateMachine.AddState(NpcState.PenaltyEscorting, new NpcPenaltyEscortState(this));
 
         // FSM 전이(서버/오프라인에서만 발생)를 동기화 변수 또는 로컬 이벤트로 흘려보낸다
         m_stateMachine.OnStateChanged += HandleFsmStateChanged;
@@ -482,6 +505,132 @@ public class NpcController : NetworkBehaviour
 
     /// <summary>수용 지점 도달 통보 — NpcJailedState 전용. 유치장이 이 이벤트로 수용 인원을 센다.</summary>
     public void NotifyJailed() => OnJailed?.Invoke(this);
+
+    // ---- 오검거 페널티: 수용·추격·호송 (#277/#278/#279) ----
+    // FSM 전이는 전부 서버 권위 — WrongfulArrestPenalty(서버)만 호출한다. 클라 호출은 StartEscort와 같은 방식으로 무시.
+
+    /// <summary>원한 구역 수용 지점. 수용(Detained) 중이 아니면 null. 서버에서만 유효. (#277)</summary>
+    public Transform DetentionSpot { get; private set; }
+
+    /// <summary>추격 대상 플레이어. 추격 중이 아니면 null. 서버에서만 유효. (#278)</summary>
+    public Transform ChaseTarget { get; private set; }
+
+    /// <summary>수렴 대상(포획된 플레이어) — 설정되면 추격 상태가 일반 추격 대신 이 대상에게 모인다. (#279)</summary>
+    public Transform PenaltyConvergeTarget { get; private set; }
+
+    /// <summary>격퇴를 건 플레이어 — 추격 상태가 이 대상 반대로 도주하고 재추격 쿨다운을 건다. (#278)</summary>
+    public Transform ChaseRepelBy { get; private set; }
+
+    /// <summary>격퇴 도주가 끝나는 시각(Time.time). 이 시각 전에는 추격 대신 도주한다. (#278)</summary>
+    public float ChaseRepelUntil { get; private set; }
+
+    /// <summary>호송 선두 NPC — null이면 자신이 선두(광장으로 직접 걷는다). (#279)</summary>
+    public NpcController PenaltyEscortLeader { get; private set; }
+
+    /// <summary>호송 대형에서 선두 기준 로컬 오프셋 — 선두는 무시. (#279)</summary>
+    public Vector3 PenaltyEscortOffset { get; private set; }
+
+    /// <summary>호송 목적지(광장). 호송 중이 아니면 null. (#279)</summary>
+    public Transform PenaltyEscortGoal { get; private set; }
+
+    /// <summary>추격 NPC가 대상을 포획한 순간 발행 — WrongfulArrestPenalty가 구독해 수렴·호송을 개시한다. 서버에서만 발생. (#278)</summary>
+    public event Action<NpcController, Transform> OnPenaltyCaught;
+
+    /// <summary>포획 통보 — NpcChaseState 전용. (#278)</summary>
+    public void NotifyPenaltyCaught(Transform caught) => OnPenaltyCaught?.Invoke(this, caught);
+
+    /// <summary>
+    /// 원한 구역 수용 — 오검거당한 시민을 석방 대신 전용 구역으로 보낸다. (#277)
+    /// spot이 null이면(구역 미배선 씬) 그 자리에서 수용된 것으로 처리한다 — SendToJail의 null cell과 동일 관례.
+    /// </summary>
+    public void SendToDetention(Transform spot)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        EscortTarget = null;
+        DetentionSpot = spot;
+        m_stateMachine.ChangeState(NpcState.Detained);
+    }
+
+    /// <summary>추격 출동 — 임계치를 넘긴 플레이어를 초기 타겟으로 쫓기 시작한다. (#278)</summary>
+    public void StartPenaltyChase(Transform target)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        DetentionSpot = null;
+        ChaseTarget = target;
+        m_stateMachine.ChangeState(NpcState.Chasing);
+    }
+
+    /// <summary>추격 타겟 교체 — 범위 이탈 재타겟(NpcChaseState)·수렴 지시(매니저)가 호출한다. (#278)</summary>
+    public void SetChaseTarget(Transform target)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        ChaseTarget = target;
+    }
+
+    /// <summary>
+    /// 수렴 개시 — 포획된 플레이어에게 모인다. 추격 중이 아니었어도(막 수용된 NPC 등) 추격 상태로 끌어와 모은다. (#279)
+    /// </summary>
+    public void StartPenaltyConverge(Transform caught)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        PenaltyConvergeTarget = caught;
+        if (m_stateMachine.CurrentState != NpcState.Chasing)
+            m_stateMachine.ChangeState(NpcState.Chasing);
+    }
+
+    /// <summary>
+    /// 격퇴 — 호루라기(#250 후속)의 연결고리. by에게서 잠시 도주하고, 재추격 쿨다운 동안 그 플레이어를 노리지 않는다. (#278)
+    /// 수렴 중(포획 확정 후)에는 무시한다 — 유예 창은 잡히기 전까지다.
+    /// </summary>
+    public void ApplyChaseRepel(Transform by)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+        if (PenaltyConvergeTarget != null)
+            return;
+
+        ChaseRepelBy = by;
+        ChaseRepelUntil = Time.time + m_chaseRepelFleeSeconds;
+    }
+
+    /// <summary>호송 시작 — goal(광장)으로 이동. leader가 null이면 자신이 선두, 아니면 선두 기준 offset 위치를 따라간다. (#279)</summary>
+    public void StartPenaltyEscort(Transform goal, NpcController leader, Vector3 offset)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        PenaltyEscortGoal = goal;
+        PenaltyEscortLeader = leader;
+        PenaltyEscortOffset = offset;
+        m_stateMachine.ChangeState(NpcState.PenaltyEscorting);
+    }
+
+    /// <summary>
+    /// 페널티 임무 종료 — 추격·수렴·호송 참조를 정리하고 배회(Idle)로 복귀한다(시민 복귀). (#279)
+    /// 격퇴 잔여값도 지운다 — 다음 페널티 발동 때 이전 도주가 이어지지 않게.
+    /// </summary>
+    public void EndPenaltyDuty()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        DetentionSpot = null;
+        ChaseTarget = null;
+        PenaltyConvergeTarget = null;
+        ChaseRepelBy = null;
+        ChaseRepelUntil = 0f;
+        PenaltyEscortLeader = null;
+        PenaltyEscortGoal = null;
+        m_stateMachine.ChangeState(NpcState.Idle);
+    }
 
     // ---- 침입 (#231) ----
 
