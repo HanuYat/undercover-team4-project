@@ -236,6 +236,14 @@ public static class FPArmGenerator
             {
                 skeletonTop = skeletonTop.parent;
             }
+            if (skeletonTop == null)
+            {
+                Debug.LogError(
+                    "[FPArmGenerator] 팔 SkinnedMeshRenderer에 rootBone이 없다 — "
+                        + "SkinnedMeshRenderer의 Root Bone 할당을 확인하라. 프리팹 생성을 건너뛴다."
+                );
+                return;
+            }
 
             GameObject newRoot = new GameObject("FPArm_Right");
             skeletonTop.SetParent(newRoot.transform, true);
