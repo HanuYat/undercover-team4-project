@@ -18,6 +18,14 @@ public class NpcSpawner : CommonManagerBase
     [Header("NPC 프리팹")]
     [SerializeField] private NpcController m_npcPrefab;
 
+    [Header("혼합 스폰 (선택)")]
+    [Tooltip("지정하면 이 프리팹을 m_altRatio 확률로 섞어 스폰한다 (예: Generic NPC). 비우면 m_npcPrefab만 스폰")]
+    [SerializeField] private NpcController m_npcPrefabAlt;
+
+    [Range(0f, 1f)]
+    [Tooltip("전체 스폰 중 m_npcPrefabAlt(Generic) 비율")]
+    [SerializeField] private float m_altRatio = 0.5f;
+
     [Header("총 스폰 수")]
     [SerializeField] private int m_spawnCount = 15;
 
@@ -161,7 +169,8 @@ public class NpcSpawner : CommonManagerBase
             Quaternion rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
             // 부모를 지정하지 않고 씬 루트에 생성 — NetworkObject는 비NetworkObject 아래에
             // 부모로 붙인 채 스폰할 수 없다 (NGO가 경고 후 강제로 떼어낸다)
-            NpcController npc = Instantiate(m_npcPrefab, hit.position, rotation);
+            NpcController prefab = (m_npcPrefabAlt != null && Random.value < m_altRatio) ? m_npcPrefabAlt : m_npcPrefab;
+            NpcController npc = Instantiate(prefab, hit.position, rotation);
             // 외형 랜덤 교체는 프리팹의 NpcAppearance가 담당한다 — 서버가 뽑은 인덱스를 전 클라에 동기화 (#56)
 
             // 네트워크 세션이면 전 클라이언트에 복제 (서버 권위 스폰, #56)

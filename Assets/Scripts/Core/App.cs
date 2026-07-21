@@ -27,6 +27,7 @@ public class App : Singleton<App>
     private CriminalAssigner m_criminalAssigner;
     private NpcSpawner m_npcSpawner;
     private AppearanceAssigner m_appearanceAssigner;
+    private WrongfulArrestPenalty m_wrongfulArrestPenalty;
 
     // UI 매니저 (씬 전환 시 교체됨)
     private UIManagerBase m_uiManager;
@@ -77,6 +78,8 @@ public class App : Singleton<App>
         public static CriminalAssigner CriminalAssigner => Instance.m_criminalAssigner;
         public static NpcSpawner NpcSpawner => Instance.m_npcSpawner;
         public static AppearanceAssigner Appearance => Instance.m_appearanceAssigner;
+        public static WrongfulArrestPenalty WrongfulArrestPenalty =>
+            Instance.m_wrongfulArrestPenalty;
     }
 
     public static class SceneFlow

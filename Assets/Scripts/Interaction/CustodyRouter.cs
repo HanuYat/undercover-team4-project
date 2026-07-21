@@ -61,8 +61,13 @@ public class CustodyRouter : MonoBehaviour
 
         if (result.Verdict == ArrestVerdict.WrongfulArrest)
         {
-            // 무고한 시민 — 수갑을 풀어 돌려보낸다 (GDD 7-3: 오검거 기록은 #101이 따로 센다)
-            Debug.Log($"[신병 처리] 오검거 석방 — 수갑 해제: {npc.name}");
+            // 오검거 신병은 오검거 페널티(#277)가 원한 구역 수용까지 책임진다 — 카운트·수용·출동이
+            // 한 구독자 안에서 순서 보장되어야 해서(같은 이벤트의 구독자 간 순서는 보장이 없다) 여기서 넘긴다.
+            // 페널티 매니저가 없는 씬(단독 테스트 등)에서만 기존대로 석방한다 — Captured로 방치되지 않게.
+            if (App.Game.WrongfulArrestPenalty != null)
+                return;
+
+            Debug.Log($"[신병 처리] 오검거 석방(페널티 매니저 없음) — 수갑 해제: {npc.name}");
             npc.ReleaseFromCustody();
             return;
         }

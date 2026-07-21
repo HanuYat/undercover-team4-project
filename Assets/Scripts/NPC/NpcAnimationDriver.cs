@@ -62,6 +62,11 @@ public class NpcAnimationDriver : MonoBehaviour
     // 근접 정지가 velocity를 즉시 0으로 끊으므로(#97) 평활이 식는 시간이 곧 모션 전환 지연이다
     private const float k_speedSmoothing = 25f;
 
+    // 오검거 페널티 상태(#277~#279)의 걷기↔달리기 전환 임계값(m/s) — 켜짐/꺼짐을 다르게 둔 히스테리시스.
+    // 추격 가속(걷기 속도→7)이 이 경계를 지나는 순간 달리기 모션으로 넘어간다
+    private const float k_penaltyRunOnSpeed = 4f;
+    private const float k_penaltyRunOffSpeed = 3.4f;
+
     // 다리 달리기 클립(HumanM@Run01_Forward)이 발 미끄러짐 없이 자연스러워 보이는 기준 지상 속도(m/s).
     // 이 속도일 때 배율 1배로 재생되고, 실제 이동 속도가 다르면 그 비율로 재생속도를 늘리거나 줄인다.
     // 클립이 in-place(루트모션 없음)라 자동 계산이 불가능한 값 — 눈으로 보며 미세 튜닝할 것.
@@ -86,6 +91,8 @@ public class NpcAnimationDriver : MonoBehaviour
     private bool m_resistMoving; // 저항(Attack) 추격 중 이동/정지 판별 — 걷기 ↔ 버틴 자세 전환 (#254)
     // 침입(Intruding) 이동/해제 판별 — 자물쇠까지 걷기 ↔ 도착 후 해제 모션 전환 (#261)
     private bool m_intrudeMoving;
+    // 오검거 페널티 상태의 현재 로코모션 모션 번호(Idle/Walk/Run) — 속도 히스테리시스 전환용 (#277~#279)
+    private int m_penaltyMotion;
     // 해제 시작(Begin) 모션을 반복(Loop)으로 넘길 시각. 0 이하면 대기 중 아님 (#261)
     private float m_unlockBeginUntil;
     // 현재 스윙 모션을 유지할 종료 시각. 0 이하면 스윙 중 아님. 스윙이 끝나면 base 상태로 되돌린다 (#220)
@@ -172,9 +179,13 @@ public class NpcAnimationDriver : MonoBehaviour
         m_standingUp = true;
     }
 
-    /// <summary>스윙 모션이 성립할 수 있는 기준 상태인가 — 구속·무력화 상태에서는 공격이 나올 수 없다. (#220)</summary>
+    /// <summary>스윙 모션이 성립할 수 있는 기준 상태인가 — 구속·무력화 상태에서는 공격이 나올 수 없다. (#220)
+    /// 오검거 페널티 상태(#277~#279)도 저항으로 되돌아가지 않으므로 늦게 도착한 스윙은 유령이다 — 차단.</summary>
     private static bool CanSwingIn(NpcState state) =>
-        state is not (NpcState.Captured or NpcState.Escorted or NpcState.Stunned);
+        state is not (
+            NpcState.Captured or NpcState.Escorted or NpcState.Stunned
+            or NpcState.Detained or NpcState.Chasing or NpcState.PenaltyEscorting
+        );
 
     // FSM 기준 상태에 대응하는 Animator base 번호. Attack 번호(3)는 단발 스윙 전용이라 base로 쓰지 않는다 (#220).
     // 저항(Attack)의 base는 이동 여부로 갈린다 — 추격 중이면 달리기(Run), 사거리 안에서 멈추면 버틴 자세(Idle) (#254).
@@ -186,6 +197,11 @@ public class NpcAnimationDriver : MonoBehaviour
         {
             NpcState.Attack => m_resistMoving ? (int)NpcState.Run : (int)NpcState.Idle,
             NpcState.Intruding => (int)NpcState.Walk,
+            // 오검거 페널티 상태들도 대응 Animator 상태가 없다 — 속도 기반 로코모션을 빌려 쓴다 (#277~#279).
+            // 여기 값은 진입 시드일 뿐이고, 이후 Update의 UpdatePenaltyLocomotion이 속도로 갈아탄다
+            NpcState.Detained => (int)NpcState.Walk,
+            NpcState.Chasing => (int)NpcState.Run,
+            NpcState.PenaltyEscorting => (int)NpcState.Walk,
             _ => (int)state,
         };
     }
@@ -213,7 +229,13 @@ public class NpcAnimationDriver : MonoBehaviour
         }
 
         NpcState state = m_controller.CurrentState;
-        if (!IsHandcuffedMotion(state) && state != NpcState.Panic && state != NpcState.Attack && state != NpcState.Intruding)
+        if (
+            !IsHandcuffedMotion(state)
+            && !IsPenaltyLocomotion(state)
+            && state != NpcState.Panic
+            && state != NpcState.Attack
+            && state != NpcState.Intruding
+        )
             return;
 
         float rawSpeed = (transform.position - m_lastPosition).magnitude / Time.deltaTime;
@@ -232,6 +254,13 @@ public class NpcAnimationDriver : MonoBehaviour
         if (state == NpcState.Attack)
         {
             UpdateResistMotion();
+            return;
+        }
+
+        // 오검거 페널티(수용·추격·호송): 대응 Animator 상태가 없어 속도로 Idle/Walk/Run을 가른다 (#277~#279)
+        if (IsPenaltyLocomotion(state))
+        {
+            UpdatePenaltyLocomotion();
             return;
         }
 
@@ -300,12 +329,38 @@ public class NpcAnimationDriver : MonoBehaviour
         }
     }
 
+    // 오검거 페널티 로코모션 — 속도 기준 Idle/Walk/Run 3단 전환. 히스테리시스는 걷기 경계(연행 상수 공유)와
+    // 달리기 경계(k_penaltyRun*) 두 겹이다. 경계 사이 속도에서는 현재 모션을 유지해 떨림을 막는다 (#277~#279)
+    private void UpdatePenaltyLocomotion()
+    {
+        int desired = m_penaltyMotion;
+        if (m_smoothedSpeed < k_escortMoveOffSpeed)
+            desired = (int)NpcState.Idle;
+        else if (m_smoothedSpeed > k_penaltyRunOnSpeed)
+            desired = (int)NpcState.Run;
+        else if (m_smoothedSpeed > k_escortMoveOnSpeed && m_smoothedSpeed < k_penaltyRunOffSpeed)
+            desired = (int)NpcState.Walk;
+
+        if (desired == m_penaltyMotion)
+            return;
+
+        m_penaltyMotion = desired;
+        m_animator.SetInteger(s_stateHash, desired);
+    }
+
     /// <summary>
     /// 수갑 찬 채 이동하는 상태인가 — 걷기(Escorted 모션) ↔ 정지(Captured 모션)를 속도로 구분해야 하는 상태들.
     /// 수감(Jailed)은 대응하는 Animator 상태가 없어 연행 모션을 빌려 쓴다 (#228).
     /// </summary>
     private static bool IsHandcuffedMotion(NpcState state) =>
         state is NpcState.Escorted or NpcState.Jailed;
+
+    /// <summary>
+    /// 오검거 페널티 상태인가 — 수갑 없이 걷기/달리기 로코모션을 속도로 가르는 상태들 (#277~#279).
+    /// 앵그리 마크(#280) 표시 조건과 같은 집합이다 — 페널티에 얽힌 동안 계속 표시된다.
+    /// </summary>
+    private static bool IsPenaltyLocomotion(NpcState state) =>
+        state is NpcState.Detained or NpcState.Chasing or NpcState.PenaltyEscorting;
 
     private void HandleStateChanged(NpcState state)
     {
@@ -314,6 +369,10 @@ public class NpcAnimationDriver : MonoBehaviour
         m_baseState = state;
         m_swingUntil = 0f;
         m_standingUp = false; // 상태가 바뀌면 일어나기도 끝난다 — 새 base 모션이 즉시 적용된다
+
+        // 앵그리 마크(#280) — 페널티 상태(수용~호송) 동안 머리 위에 표시한다. 이 이벤트는 동기화를 거쳐
+        // 모든 피어에서 발생하므로(#56) 원격 클라·CCTV 화면에서도 같은 시점에 켜지고 꺼진다
+        NpcPenaltyMark.SetVisible(m_controller, IsPenaltyLocomotion(state));
 
         // 저항(Attack) 진입은 추격으로 시작하는 것이 일반적이라 달리기로 시드하고 이동 판별을 초기화한다 —
         // AnimatorBaseState(Attack)가 m_resistMoving을 읽으므로 반드시 아래 SetInteger 이전에 정한다.
@@ -340,6 +399,14 @@ public class NpcAnimationDriver : MonoBehaviour
             m_escortMoving = true;
             m_lastPosition = transform.position;
             m_smoothedSpeed = k_escortMoveOnSpeed;
+        }
+        // 오검거 페널티 진입 — AnimatorBaseState가 시드한 모션(수용·호송=걷기, 추격=달리기)에 판별 상태를 맞추고
+        // 속도 평활을 초기화한다. 직전 상태의 잔여 속도가 첫 전환 판정을 오염시키지 않게 (#277~#279)
+        else if (IsPenaltyLocomotion(state))
+        {
+            m_penaltyMotion = AnimatorBaseState(state);
+            m_lastPosition = transform.position;
+            m_smoothedSpeed = state == NpcState.Chasing ? k_penaltyRunOnSpeed : k_escortMoveOnSpeed;
         }
         // 침입 진입은 언제나 걷기로 시작한다(자물쇠까지 이동) — 걷기로 시드하고 이동 판별을 초기화한다.
         // 직전 상태의 잔여 속도가 첫 판정을 오염시켜 도착도 전에 해제 모션이 나오는 것을 막는다 (#261)

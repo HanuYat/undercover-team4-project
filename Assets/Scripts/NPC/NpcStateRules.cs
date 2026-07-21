@@ -13,7 +13,10 @@ public static class NpcStateRules
     /// 반응이 시작된 뒤에는 수갑 채널링이 걸리지 않아야 한다.</summary>
     public static bool IsCapturable(NpcState state) =>
         state != NpcState.Escorted && state != NpcState.Captured && state != NpcState.Jailed
-        && state != NpcState.Run && state != NpcState.Attack;
+        && state != NpcState.Run && state != NpcState.Attack
+        // 오검거 페널티에 얽힌 시민(수용·추격·호송)은 다시 수갑을 채울 수 없다 (#277~#279) —
+        // 추격대를 체포해 페널티 집행을 무산시키는 우회를 막는다 (회피 수단은 격퇴(호루라기 #250)뿐)
+        && state != NpcState.Detained && state != NpcState.Chasing && state != NpcState.PenaltyEscorting;
 
     /// <summary>밧줄로 묶어 끌 수 있는 상태인가 — 테이저로 기절한 대상만. (#269)
     /// 수갑 연행과 역할이 갈린다: 수갑은 순응형 즉시 연행, 밧줄은 기절시킨 대상 전용.</summary>

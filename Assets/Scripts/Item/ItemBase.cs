@@ -2,6 +2,14 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Localization;
 
+/// <summary>1인칭 FP 손 손가락 프리셋 — 장착 아이템에 맞춰 손 모양을 바꾼다. PlayerHandView가 적용한다. (#265)</summary>
+public enum HandGrip
+{
+    Relaxed, // 빈손·기본 — 자연스럽게 살짝 쥔 손
+    Trigger, // 총류 — 검지 펴고 나머지 감싸 쥠
+    Wide,    // 스캐너·박스 등 큰 물건 — 손 넓게 편 채로
+}
+
 /// <summary>
 /// 모든 아이템의 공통 기반 클래스.
 /// 이름·아이콘·설명 등 공통 데이터와 사용 진입점(Use)을 정의한다.
@@ -35,6 +43,10 @@ public abstract class ItemBase : NetworkBehaviour
     [SerializeField]
     private Vector3 m_heldRotationOffset;
 
+    [Tooltip("1인칭 손 손가락 프리셋 — 이 아이템을 들 때 손 모양 (#265)")]
+    [SerializeField]
+    private HandGrip m_handGrip = HandGrip.Relaxed;
+
     [Header("조준 피드백")]
     [Tooltip("이 아이템으로 사용 가능한 대상을 조준했을 때의 윤곽선 색 (#184)")]
     [SerializeField]
@@ -60,6 +72,9 @@ public abstract class ItemBase : NetworkBehaviour
 
     /// <summary>이 아이템으로 사용 가능한 대상을 조준 중일 때의 윤곽선 색. (#184)</summary>
     public Color TargetOutlineColor => m_targetOutlineColor;
+
+    /// <summary>1인칭 손 손가락 프리셋. PlayerHandView가 장착 시 FP 손에 적용한다. (#265)</summary>
+    public HandGrip HandGrip => m_handGrip;
 
     /// <summary>
     /// 이 아이템을 지금 저 대상에 사용할 수 있는지 — 조준 피드백(윤곽선) 판정용. (#184)
