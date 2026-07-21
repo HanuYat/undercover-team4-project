@@ -1,14 +1,17 @@
 using System;
-using UnityEngine;
 using Cysharp.Threading.Tasks;
-using Unity.Services.Multiplayer;
 using Unity.Netcode;
+using Unity.Services.Multiplayer;
+using UnityEngine;
 
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class SessionManager : CommonManagerBase
 {
-    [SerializeField] private int m_maxPlayer = 6;
-    [SerializeField] private AuthBootstrap m_auth; // 인스펙터로 연결
+    [SerializeField]
+    private int m_maxPlayer = 6;
+
+    [SerializeField]
+    private AuthBootstrap m_auth; // 인스펙터로 연결
     public AuthBootstrap Auth => m_auth;
 
     private ISession m_session;
@@ -16,17 +19,19 @@ public class SessionManager : CommonManagerBase
 
     public event Action<string> OnSessionJoined; // 인자: session.Id
     public event Action OnSessionLeft;
-    public event Action OnConnectionLost;   // 비자발 끊김
-    private bool m_isLeaving;   // 자발적 LeaveAsync 진행 중 표시
+    public event Action OnConnectionLost; // 비자발 끊김
+    private bool m_isLeaving; // 자발적 LeaveAsync 진행 중 표시
 
     private void OnEnable()
     {
-        if (m_auth != null) m_auth.CanSignOut = () => m_session == null && !m_isBusy;   // 세션에 접속 중이 아니면 로그아웃 가능
+        if (m_auth != null)
+            m_auth.CanSignOut = () => m_session == null && !m_isBusy; // 세션에 접속 중이 아니면 로그아웃 가능
     }
 
     private void OnDisable()
     {
-        if (m_auth != null) m_auth.CanSignOut = null;
+        if (m_auth != null)
+            m_auth.CanSignOut = null;
     }
 
     public async UniTask EnsureSignedInAsync()
@@ -40,13 +45,22 @@ public class SessionManager : CommonManagerBase
         await m_auth.InitializeAndSignInAsync();
     }
 
+    /// <summary>인스펙터의 최대 인원(m_maxPlayer)으로 세션을 생성한다 — 세션 관문 UI(#247)용.</summary>
+    public UniTask<string> CreateSessionAsync() => CreateSessionAsync(m_maxPlayer);
+
     public async UniTask<string> CreateSessionAsync(int maxPlayer)
     {
         await EnsureSignedInAsync();
-        var options = new SessionOptions { MaxPlayers = maxPlayer, Type = "Session" }.WithRelayNetwork();
+        var options = new SessionOptions
+        {
+            MaxPlayers = maxPlayer,
+            Type = "Session",
+        }.WithRelayNetwork();
         ISession session = await MultiplayerService.Instance.CreateSessionAsync(options);
         AdoptSession(session);
-        Debug.Log($"[SessionManager] 세션과 호스트 만들어짐 / Id: {session.Id}, Code = {session.Code}");
+        Debug.Log(
+            $"[SessionManager] 세션과 호스트 만들어짐 / Id: {session.Id}, Code = {session.Code}"
+        );
 
         return session.Code;
     }
@@ -103,40 +117,45 @@ public class SessionManager : CommonManagerBase
 
     private void SubscribeSessionEvents(ISession session)
     {
-        if (session == null) return;
+        if (session == null)
+            return;
 
-        session.PlayerJoined    += OnPlayerJoined;
-        session.Changed         += OnSessionChanged;
+        session.PlayerJoined += OnPlayerJoined;
+        session.Changed += OnSessionChanged;
         session.SessionPropertiesChanged += OnSessionPropertiesChanged;
-        session.Deleted         += OnSessionDeleted;
+        session.Deleted += OnSessionDeleted;
     }
 
     private void UnsubscribeSessionEvents(ISession session)
     {
-        if (session == null) return;
+        if (session == null)
+            return;
 
-        session.PlayerJoined    -= OnPlayerJoined;
-        session.Changed         -= OnSessionChanged;
+        session.PlayerJoined -= OnPlayerJoined;
+        session.Changed -= OnSessionChanged;
         session.SessionPropertiesChanged -= OnSessionPropertiesChanged;
-        session.Deleted         -= OnSessionDeleted;
+        session.Deleted -= OnSessionDeleted;
     }
 
     private void SubscribeNetworkEvents()
     {
         var nm = NetworkManager.Singleton;
-        if (nm != null) nm.OnClientDisconnectCallback += OnClientDisconnected;
+        if (nm != null)
+            nm.OnClientDisconnectCallback += OnClientDisconnected;
     }
 
     private void UnsubscribeNetworkEvents()
     {
         var nm = NetworkManager.Singleton;
-        if (nm != null) nm.OnClientDisconnectCallback -= OnClientDisconnected;
+        if (nm != null)
+            nm.OnClientDisconnectCallback -= OnClientDisconnected;
     }
 
     private void OnClientDisconnected(ulong clientId)
     {
         var nm = NetworkManager.Singleton;
-        if (nm == null) return;
+        if (nm == null)
+            return;
         if (nm.IsServer && clientId != nm.LocalClientId)
         {
             Debug.Log($"[SessionManager] 원격 클라 끊김: {clientId} (무시)");
@@ -150,8 +169,10 @@ public class SessionManager : CommonManagerBase
 
     private void HandleConnectionLost(string reason)
     {
-        if (m_isLeaving)        return;
-        if (m_session == null)  return;
+        if (m_isLeaving)
+            return;
+        if (m_session == null)
+            return;
 
         Debug.Log($"[SessionManager] 연결 끊김 정규화: {reason}");
         ISession lost = m_session;
@@ -188,7 +209,14 @@ public class SessionManager : CommonManagerBase
         }
     }
 
-    [SerializeField] private float m_guiTopOffset = 10f;
+    [Tooltip(
+        "OnGUI 디버그 패널 표시 — 테스트 씬 수동 세션 조작용. 정식 UI는 SessionPanel·SessionCodePanel (#247)"
+    )]
+    [SerializeField]
+    private bool m_showDebugGui;
+
+    [SerializeField]
+    private float m_guiTopOffset = 10f;
 
     private string m_joinCodeInput = string.Empty;
     private bool m_isBusy;
@@ -196,6 +224,9 @@ public class SessionManager : CommonManagerBase
 
     private void OnGUI()
     {
+        if (!m_showDebugGui)
+            return;
+
         GUILayout.BeginArea(new Rect(10, m_guiTopOffset, 380, 300));
 
         if (m_session == null)
@@ -272,7 +303,8 @@ public class SessionManager : CommonManagerBase
 
     private async UniTaskVoid HandleCreateAsync()
     {
-        if (m_isBusy) return;
+        if (m_isBusy)
+            return;
         m_isBusy = true;
         m_status = "세션 생성 중...";
         try
@@ -293,7 +325,8 @@ public class SessionManager : CommonManagerBase
 
     private async UniTaskVoid HandleJoinAsync(string code)
     {
-        if (m_isBusy) return;
+        if (m_isBusy)
+            return;
         m_isBusy = true;
         m_status = "세션 참가 중...";
         try
@@ -314,7 +347,8 @@ public class SessionManager : CommonManagerBase
 
     private async UniTaskVoid HandleLeaveAsync()
     {
-        if (m_isBusy) return;
+        if (m_isBusy)
+            return;
         m_isBusy = true;
         m_status = "세션 나가는 중...";
         try

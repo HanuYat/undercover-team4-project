@@ -38,8 +38,8 @@ public class App : Singleton<App>
     #endregion
 
     #region 씬 상태 · 이벤트
-    public static UnityAction<EScene> OnSceneLoad;    // 언로드 직전 (정리 작업 훅)
-    public static UnityAction<EScene> OnSceneLoaded;  // 새 씬 로드 완료
+    public static event UnityAction<EScene> OnSceneLoad; // 언로드 직전 (정리 작업 훅)
+    public static event UnityAction<EScene> OnSceneLoaded; // 새 씬 로드 완료
 
     public static EScene PrevScene { get; private set; }
     public static EScene CurrentScene { get; private set; }
@@ -82,12 +82,15 @@ public class App : Singleton<App>
     public static class SceneFlow
     {
         public static SceneManagerBase Current => Instance.m_sceneManager;
+        public static TitleManager Title => Instance.m_sceneManager as TitleManager;
+        public static InGameManager InGame => Instance.m_sceneManager as InGameManager;
     }
 
     public static class UI
     {
         public static UIManagerBase Current => Instance.m_uiManager;
-        // TitleUI / InGameUI 캐스트 프로퍼티는 3단계에서 해당 클래스와 함께 추가
+        public static TitleUIManager Title => Instance.m_uiManager as TitleUIManager;
+        public static InGameUIManager InGame => Instance.m_uiManager as InGameUIManager;
 
         // 로컬 HUD — 씬 시작 시점엔 null일 수 있다 (오너 스폰 시 프리팹 생성). 사용처는 ?. 가드 필수
         public static CrosshairUI Crosshair => Instance.m_crosshairUI;

@@ -5,8 +5,7 @@ using UnityEngine;
 // 로비는 플레이 맵 안 본부를 그대로 쓴다. (임시?)
 public class LobbyManager : MonoBehaviour
 {
-    [Header("라운드 (비우면 씬에서 자동 탐색)")]
-    [SerializeField] private RoundManager m_roundManager;
+    private RoundManager Round => App.Game.Round;
 
     private NetworkManager m_networkManager;
     private bool m_gameStarted;
@@ -16,21 +15,19 @@ public class LobbyManager : MonoBehaviour
     private void Start()
     {
         m_networkManager = NetworkManager.Singleton;
-        if (m_roundManager == null)
-            m_roundManager = FindFirstObjectByType<RoundManager>();
     }
 
     public void StartGame()
     {
         if (!IsServer || m_gameStarted) return;
-        if (m_roundManager == null)
+        if (Round == null)
         {
-            Debug.LogWarning("[LobbyManager] RoundManager 미설정", this);
+            Debug.LogWarning("[LobbyManager] RoundManager를 찾지 못해 게임을 시작할 수 없다", this);
             return;
         }
 
         m_gameStarted = true;
-        m_roundManager.StartRound();
+        Round.StartRound();
         Debug.Log("[LobbyManager] 게임 시작 - 라운드 시작");
     }
 
@@ -39,7 +36,8 @@ public class LobbyManager : MonoBehaviour
         if (!IsServer || m_gameStarted)
             return;
 
-        GUILayout.BeginArea(new Rect(10, 320, 220, 60));
+        // 좌측 상단 — 세션 코드 HUD 바로 아래, '메인으로 나가기'(SessionTeardown, y=60) 다음 줄
+        GUILayout.BeginArea(new Rect(10, 90, 220, 60));
         if (GUILayout.Button("게임 시작 (StartGame)")) StartGame();
         GUILayout.EndArea();
     }
