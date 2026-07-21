@@ -159,6 +159,34 @@ public class PlayerMovement : NetworkBehaviour
             SetPose(position, rotation); // 호스트 플레이어: 서버=오너라 즉시 적용 (NetworkTransform 오너 권한)
     }
 
+    /// <summary>
+    /// 서버 전용 — 게임 도중 플레이어를 지정 위치로 순간이동한다. (오검거 광장 매달기 #101 등)
+    /// NetworkTransform이 오너 권한이라 서버가 원격 클라 위치를 직접 못 바꾼다 —
+    /// 오너에게 RPC로 넘겨 오너가 스스로 SetPose하게 한다(호스트 오너는 로컬로 즉시 적용).
+    /// ServerReposition은 스폰 직후 재배치(#247) 전용이라, 도중 텔레포트는 이 경로를 쓴다.
+    /// </summary>
+    public void ServerTeleport(Vector3 position, Quaternion rotation)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        // 늦게 접속하거나 재스폰되는 피어를 위해 서버 지정 포즈도 함께 갱신해 둔다.
+        if (IsSpawned)
+        {
+            m_serverSpawnPosition.Value = position;
+            m_serverSpawnRotation.Value = rotation;
+            ApplyPoseRpc(position, rotation); // 오너(호스트 포함)가 스스로 적용
+        }
+        else
+        {
+            SetPose(position, rotation); // 오프라인 Play 테스트
+        }
+    }
+
+    // 오너에서만 실행 — NetworkTransform 오너 권한이라 위치 변경은 오너가 해야 전 피어에 전파된다.
+    [Rpc(SendTo.Owner)]
+    private void ApplyPoseRpc(Vector3 position, Quaternion rotation) => SetPose(position, rotation);
+
     // CharacterController가 켜진 상태에서 transform을 직접 옮기면 내부 캐시가 위치를 되돌릴 수 있어 잠시 끄고 옮긴다.
     private void SetPose(Vector3 pos, Quaternion rot)
     {
