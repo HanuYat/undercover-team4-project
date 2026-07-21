@@ -47,6 +47,12 @@ public class NpcSpawner : CommonManagerBase
     /// <summary>스폰된 NPC 목록. (#38 범인 랜덤 배정 등 후속 시스템에서 사용)</summary>
     public IReadOnlyList<NpcController> SpawnedNpcs => m_spawnedNpcs;
 
+    /// <summary>
+    /// 스폰 포인트 목록 — 일반 NPC와 같은 지점에서 등장해야 하는 시스템이 빌려 쓴다 (#231 범인 탈출의 침입자).
+    /// Awake에서 자식 자동 수집이 끝난 뒤부터 유효하다.
+    /// </summary>
+    public IReadOnlyList<Transform> SpawnPoints => m_spawnPoints;
+
     /// <summary>스폰이 모두 끝났는지 여부.</summary>
     public bool IsSpawnCompleted { get; private set; }
 

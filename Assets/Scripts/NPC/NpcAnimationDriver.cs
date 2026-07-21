@@ -19,6 +19,31 @@ public class NpcAnimationDriver : MonoBehaviour
     private static readonly int s_stateHash = Animator.StringToHash("State");
     // 패닉 시 다리(LowerBodyRun 레이어) 달리기 클립의 재생속도 배율 — 실제 이동 속도에 맞춰 발 미끄러짐을 줄인다 (#81)
     private static readonly int s_legRunSpeedHash = Animator.StringToHash("LegRunSpeedMul");
+    /// <summary>
+    /// 스윙 1회에 재생할 단발 클립 번호를 고르는 Animator 파라미터 이름.
+    /// Attack 상태의 블렌드 트리가 이 값으로 클립을 고른다 — 컨트롤러를 만드는
+    /// NpcAnimatorControllerBuilder(Editor)가 이 상수를 참조하므로 이름이 어긋날 수 없다.
+    /// </summary>
+    public const string k_swingVariantParam = "SwingVariant";
+
+    private static readonly int s_swingVariantHash = Animator.StringToHash(k_swingVariantParam);
+
+    /// <summary>
+    /// 자물쇠 해제 시작(Begin) 모션의 Animator 상태 번호. (#261)
+    /// <b>NpcState enum 값이 아니다</b> — 해제는 FSM 상태가 아니라 침입(Intruding) 안의 한 페이즈이고,
+    /// 그 구분은 서버 FSM 내부값이라 클라이언트가 모른다. 그래서 상태를 늘리는 대신
+    /// enum이 앞으로 자라도 겹치지 않을 만큼 떨어진 번호를 모션 전용으로 쓴다.
+    /// NpcAnimatorControllerBuilder(Editor)가 이 상수로 Any State 전이 조건을 만든다.
+    /// </summary>
+    public const int k_unlockingBeginAnimState = 100;
+
+    /// <summary>
+    /// 자물쇠 해제 반복(Loop) 모션의 Animator 상태 번호. (#261)
+    /// Begin과 번호를 나눠 갖는 것이 핵심이다 — 하나로 두면 Loop에 들어간 뒤에도 Any State 조건이
+    /// 계속 참이라 매번 Begin으로 되돌아가 동작이 무한히 다시 시작된다
+    /// (canTransitionToSelf는 자기 자신으로의 재진입만 막는다).
+    /// </summary>
+    public const int k_unlockingLoopAnimState = 101;
 
     // 연행 근접 정지(#97) 모션 전환 임계값 — 실제 이동 속도(m/s) 기준.
     // 켜짐/꺼짐 경계를 다르게 둬(히스테리시스) 정지 직전 감속 구간에서 모션이 떨리는 것을 막는다.
@@ -40,6 +65,10 @@ public class NpcAnimationDriver : MonoBehaviour
     [Tooltip("스윙 1회당 Attack(단발) 모션을 유지하는 시간(초) — 이후 버틴 자세로 복귀한다. 저항 공격 주기보다 짧고 타격 오프셋보다 길게")]
     [SerializeField] private float m_swingAnimSeconds = 0.9f;
 
+    [Header("자물쇠 해제 (#261)")]
+    [Tooltip("해제 시작(Begin) 모션을 유지하는 시간(초) — 이후 반복(Loop)으로 넘어간다. Begin 클립 길이(0.63초)에 맞춘 값")]
+    [SerializeField] private float m_unlockBeginSeconds = 0.63f;
+
     [SerializeField] private Animator m_animator;
 
     private NpcController m_controller;
@@ -47,6 +76,10 @@ public class NpcAnimationDriver : MonoBehaviour
     private float m_smoothedSpeed;
     private bool m_escortMoving;
     private bool m_resistMoving; // 저항(Attack) 추격 중 이동/정지 판별 — 걷기 ↔ 버틴 자세 전환 (#254)
+    // 침입(Intruding) 이동/해제 판별 — 자물쇠까지 걷기 ↔ 도착 후 해제 모션 전환 (#261)
+    private bool m_intrudeMoving;
+    // 해제 시작(Begin) 모션을 반복(Loop)으로 넘길 시각. 0 이하면 대기 중 아님 (#261)
+    private float m_unlockBeginUntil;
     // 현재 스윙 모션을 유지할 종료 시각. 0 이하면 스윙 중 아님. 스윙이 끝나면 base 상태로 되돌린다 (#220)
     private float m_swingUntil;
     // 스윙이 끝난 뒤 되돌아갈 FSM 기준 상태 — 저항(Attack)이면 버틴 자세(Idle)로 복귀한다 (#220)
@@ -82,8 +115,9 @@ public class NpcAnimationDriver : MonoBehaviour
     // 저항 NPC의 공격 스윙 1회 — Animator State를 Attack(단발 스윙 클립)으로 잠깐 펄스한다.
     // 이 컨트롤러의 로코모션이 전부 Any State(State==N) 전이라, State int 하나만 참이어야 스윙이
     // 중간에 끊기지 않는다 — 그래서 트리거 오버레이가 아니라 int 펄스를 쓴다. 스윙 종료는 Update가 처리.
-    // 데미지 타이밍은 NpcResistState가 타격 오프셋으로 맞추므로 여기선 모션만 얹는다. (#220)
-    private void HandleAttackSwing()
+    // variant는 서버가 뽑아 전 피어에 넘긴 클립 index — 데미지는 NpcResistState가 그 클립의 타격
+    // 오프셋에 맞춰 넣으므로, 여기선 같은 클립을 재생만 하면 주먹 닿는 순간과 HP 감소가 일치한다. (#220)
+    private void HandleAttackSwing(int variant)
     {
         if (m_animator == null)
             return;
@@ -98,6 +132,12 @@ public class NpcAnimationDriver : MonoBehaviour
         // 예고 동작이 통째로 사라져 "언제 맞는지 모른다"는 #220의 목적이 깨진다.
         if (!CanSwingIn(m_baseState))
             return;
+
+        // 이번 스윙에 쓸 단발 클립을 지정한다 — 반드시 State 펄스보다 먼저다.
+        // Attack 상태에 들어간 뒤에 바꾸면 재생 중인 클립이 도중에 갈아끼워져 모션이 튄다.
+        // index는 서버가 뽑아 전 피어에 넘긴 값이라 화면마다 같은 클립이 나오고, 서버가 그 클립의
+        // 타격 오프셋으로 데미지를 넣으므로 주먹 닿는 순간과 HP 감소가 일치한다. (#220)
+        m_animator.SetFloat(s_swingVariantHash, variant);
 
         m_animator.SetInteger(s_stateHash, (int)NpcState.Attack);
         m_swingUntil = Time.time + m_swingAnimSeconds;
@@ -136,7 +176,7 @@ public class NpcAnimationDriver : MonoBehaviour
         }
 
         NpcState state = m_controller.CurrentState;
-        if (!IsHandcuffedMotion(state) && state != NpcState.Panic && state != NpcState.Attack)
+        if (!IsHandcuffedMotion(state) && state != NpcState.Panic && state != NpcState.Attack && state != NpcState.Intruding)
             return;
 
         float rawSpeed = (transform.position - m_lastPosition).magnitude / Time.deltaTime;
@@ -155,6 +195,35 @@ public class NpcAnimationDriver : MonoBehaviour
         if (state == NpcState.Attack)
         {
             UpdateResistMotion();
+            return;
+        }
+
+        // 침입(Intruding): "자물쇠까지 걷기 ↔ 도착 후 해제"가 한 FSM 상태 안에서 일어난다 (#231/#261).
+        // 해제 페이즈는 NpcIntrudeState 내부값이라 클라이언트가 알 수 없으므로, 연행·수감과 같은
+        // 속도 기준으로 가른다 — 해제 중엔 그 자리에 완전히 멈추므로 이 판별이 정확하다.
+        // (이 분기가 없으면 자물쇠를 따는 내내 제자리에서 걷기 모션이 돈다 — 대응 구간이 안 보인다)
+        if (state == NpcState.Intruding)
+        {
+            if (m_intrudeMoving && m_smoothedSpeed < k_escortMoveOffSpeed)
+            {
+                m_intrudeMoving = false;
+                m_animator.SetInteger(s_stateHash, k_unlockingBeginAnimState);
+                m_unlockBeginUntil = Time.time + m_unlockBeginSeconds;
+            }
+            else if (!m_intrudeMoving && m_smoothedSpeed > k_escortMoveOnSpeed)
+            {
+                m_intrudeMoving = true;
+                m_unlockBeginUntil = 0f;
+                m_animator.SetInteger(s_stateHash, (int)NpcState.Walk);
+            }
+            // 시작 동작이 끝나면 반복으로 넘긴다. 이 전환을 Animator의 exit time에 맡기지 않는 이유는,
+            // 번호가 Begin에 머물러 있으면 Loop로 넘어간 뒤에도 Any State 조건이 참이라
+            // 다시 Begin으로 끌려가 동작이 무한 반복되기 때문이다.
+            else if (m_unlockBeginUntil > 0f && Time.time >= m_unlockBeginUntil)
+            {
+                m_unlockBeginUntil = 0f;
+                m_animator.SetInteger(s_stateHash, k_unlockingLoopAnimState);
+            }
             return;
         }
 
@@ -231,6 +300,15 @@ public class NpcAnimationDriver : MonoBehaviour
                 m_animator.SetInteger(s_stateHash, (int)NpcState.Escorted);
 
             m_escortMoving = true;
+            m_lastPosition = transform.position;
+            m_smoothedSpeed = k_escortMoveOnSpeed;
+        }
+        // 침입 진입은 언제나 걷기로 시작한다(자물쇠까지 이동) — 걷기로 시드하고 이동 판별을 초기화한다.
+        // 직전 상태의 잔여 속도가 첫 판정을 오염시켜 도착도 전에 해제 모션이 나오는 것을 막는다 (#261)
+        else if (state == NpcState.Intruding)
+        {
+            m_intrudeMoving = true;
+            m_unlockBeginUntil = 0f;
             m_lastPosition = transform.position;
             m_smoothedSpeed = k_escortMoveOnSpeed;
         }

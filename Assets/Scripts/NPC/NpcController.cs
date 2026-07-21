@@ -82,8 +82,10 @@ public class NpcController : NetworkBehaviour
     [SerializeField] private float m_subdueHitPower = 34f;
     [Tooltip("저항 시작 후 이 시간(초) 안에 제압당하지 않으면 플레이어 패배 — 도주형으로 전환된다 (GDD 7-4)")]
     [SerializeField] private float m_resistDefeatSeconds = 15f;
-    [Tooltip("스윙 시작→타격이 닿는 프레임까지의 시간(초). 이 만큼 뒤에 데미지가 들어가므로 준비 동작이 곧 회피 창이 된다 (#220)")]
+    [Tooltip("스윙 시작→타격 프레임까지의 시간(초) — 클립별 오프셋(m_swingImpactOffsets)이 비었거나 범위 밖일 때만 쓰는 폴백값 (#220)")]
     [SerializeField] private float m_strikeOffsetSeconds = 0.45f;
+    [Tooltip("스윙 변형(SwingVariant)별 타격 오프셋(초). 인덱스 = NpcAnimatorControllerBuilder의 클립 순서(attack02·03·04·05). 배열 길이가 곧 변형 개수 — 블렌드 트리 자식 수와 같아야 한다. 각 클립의 주먹 최대 신전 시점에 맞춤 (#220)")]
+    [SerializeField] private float[] m_swingImpactOffsets = { 0.63f, 0.53f, 0.44f, 0.73f };
     [Tooltip("타격이 닿는 정면 부채꼴의 전체 각도(도). 이 각도 안(정면 기준 ±절반)에 있는 플레이어만 맞는다 — 등 뒤·측면은 빗나간다 (#220)")]
     [SerializeField] private float m_attackConeAngle = 120f;
     [Tooltip("저항 중 표적을 바라보도록 도는 회전 속도(도/초) — 부채꼴 기준 방향을 표적에 맞춘다 (#220)")]
@@ -141,6 +143,20 @@ public class NpcController : NetworkBehaviour
     public int ResistAttackDamage => m_resistAttackDamage;
     public float ResistDefeatSeconds => m_resistDefeatSeconds;
     public float StrikeOffsetSeconds => m_strikeOffsetSeconds;
+
+    /// <summary>스윙 변형 개수 — 오프셋 배열 길이(=블렌드 트리 클립 수). 비어 있으면 단일 변형(0)으로 폴백. (#220)</summary>
+    public int SwingVariantCount =>
+        m_swingImpactOffsets != null && m_swingImpactOffsets.Length > 0 ? m_swingImpactOffsets.Length : 1;
+
+    /// <summary>이번 스윙에 쓸 변형 index를 서버에서 뽑는다 — 데미지 타이밍(클립별 오프셋)과 시각(클라 동기화)이 같은 값을 공유한다. (#220)</summary>
+    public int NextSwingVariant() => UnityEngine.Random.Range(0, SwingVariantCount);
+
+    /// <summary>변형 index에 해당하는 타격 오프셋(초). 범위 밖이면 고정 폴백값. (#220)</summary>
+    public float SwingImpactOffset(int variant) =>
+        m_swingImpactOffsets != null && variant >= 0 && variant < m_swingImpactOffsets.Length
+            ? m_swingImpactOffsets[variant]
+            : m_strikeOffsetSeconds;
+
     public float AttackConeAngle => m_attackConeAngle;
     public float AttackTurnSpeed => m_attackTurnSpeed;
 
@@ -207,9 +223,11 @@ public class NpcController : NetworkBehaviour
     public event Action<NpcState> OnStateChanged;
 
     /// <summary>공격 스윙 1회를 휘두를 때 발행 — 전 피어에서 발생한다(서버는 로컬 발행 + ClientRpc 중계).
+    /// 인자는 재생할 스윙 변형 index — 서버가 뽑아 전 피어가 같은 클립을 재생하므로, HP 감소 순간(서버가
+    /// 그 클립의 타격 오프셋으로 판정)과 화면 속 주먹이 닿는 순간이 일치한다.
     /// 애니메이션 표현(<see cref="NpcAnimationDriver"/>)이 구독해 단발 스윙 모션을 트리거한다.
     /// FSM 상태와 독립한 순간 이벤트라 State 동기화와 별개로 스윙 타이밍을 정확히 맞춘다. (#220, ThugAttacker.OnAttack과 동일 패턴)</summary>
-    public event Action OnAttackSwing;
+    public event Action<int> OnAttackSwing;
 
     /// <summary>연행 중 따라갈 대상(체포한 플레이어). 연행 중이 아니면 null. 서버에서만 유효.</summary>
     public Transform EscortTarget { get; private set; }
@@ -223,8 +241,17 @@ public class NpcController : NetworkBehaviour
     /// <summary>침입 중 걸어갈 목표 지점(유치장 자물쇠). 침입 중이 아니면 null. 서버에서만 유효. (#231)</summary>
     public Transform IntrudeTarget { get; private set; }
 
+    /// <summary>자물쇠에 도달해 해제를 시작하기까지 걸리는 시간(초). 탈출 이벤트가 StartIntrude로 넘겨준다. (#231)</summary>
+    public float IntrudeUnlockSeconds { get; private set; }
+
     /// <summary>침입 이동 종료 — reached=true 도달, false 경로 실패. 탈출 이벤트가 구독한다. 서버에서만 발생. (#231)</summary>
     public event Action<NpcController, bool> OnIntrudeFinished;
+
+    /// <summary>
+    /// 자물쇠 해제 착수 — 목표에 도달해 해제 채널링을 시작한 순간. 탈출 이벤트가 구독해 본부 경보를 울린다.
+    /// 도달과 해제 완료(<see cref="OnIntrudeFinished"/>) 사이의 대응 구간을 여는 신호다. 서버에서만 발생. (#231)
+    /// </summary>
+    public event Action<NpcController> OnIntrudeUnlockStarted;
 
     private void Awake()
     {
@@ -352,20 +379,20 @@ public class NpcController : NetworkBehaviour
 
     /// <summary>공격 스윙 1회를 전 피어에 알린다 — 애니메이션 표현용. 서버(또는 오프라인) FSM Tick에서만 호출한다.
     /// 서버는 로컬 발행 + ClientRpc로 원격 클라에 중계한다. (#220, ThugAttacker.NotifyAttack과 동일 패턴)</summary>
-    public void RaiseAttackSwing()
+    public void RaiseAttackSwing(int variant)
     {
-        OnAttackSwing?.Invoke(); // 서버·오프라인 로컬 발행
+        OnAttackSwing?.Invoke(variant); // 서버·오프라인 로컬 발행
         if (IsSpawned && IsServer)
-            PlayAttackSwingClientRpc();
+            PlayAttackSwingClientRpc(variant);
     }
 
     [ClientRpc]
-    private void PlayAttackSwingClientRpc()
+    private void PlayAttackSwingClientRpc(int variant)
     {
         // 서버(호스트)는 위에서 이미 발행했으므로 원격 클라에서만 중계
         if (IsServer)
             return;
-        OnAttackSwing?.Invoke();
+        OnAttackSwing?.Invoke(variant);
     }
 
     /// <summary>
@@ -431,20 +458,25 @@ public class NpcController : NetworkBehaviour
 
     /// <summary>
     /// 침입 시작 — 돌발 이벤트가 스폰한 침입자를 target(유치장 자물쇠)까지 걸어가게 한다. (GDD 6-4)
-    /// 도착·실패는 <see cref="OnIntrudeFinished"/>로 통보된다.
+    /// 도달하면 unlockSeconds 동안 그 자리에서 해제 채널링을 하고, 다 채워야 <see cref="OnIntrudeFinished"/>가
+    /// reached=true로 통보된다 — 그 사이가 플레이어의 대응 구간이다.
     /// </summary>
-    public void StartIntrude(Transform target)
+    public void StartIntrude(Transform target, float unlockSeconds)
     {
         // FSM 전이는 서버 권위 — StartEscort와 동일하게 클라이언트 호출은 무시한다
         if (IsSpawned && !IsServer)
             return;
 
         IntrudeTarget = target;
+        IntrudeUnlockSeconds = unlockSeconds;
         m_stateMachine.ChangeState(NpcState.Intruding);
     }
 
     /// <summary>침입 이동 종료 통보 — NpcIntrudeState 전용.</summary>
     public void NotifyIntrudeFinished(bool reached) => OnIntrudeFinished?.Invoke(this, reached);
+
+    /// <summary>자물쇠 해제 착수 통보 — NpcIntrudeState 전용.</summary>
+    public void NotifyIntrudeUnlockStarted() => OnIntrudeUnlockStarted?.Invoke(this);
 
     /// <summary>
     /// 수갑 해제 — 오검거로 판정된 무고한 시민을 풀어준다. 배회(Idle)로 복귀한다. (GDD 7-2/7-3, #228)

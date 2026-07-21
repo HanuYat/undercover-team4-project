@@ -23,6 +23,9 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/TotalTest.unity
     guid: 41b8d1662669d0c49a6e3c7ef5f5ce83
+  - enabled: 1
+    path: Assets/Scenes/Main Scene test.unity
+    guid: 2c0591d0cfb1e2348b2d447cac392bb0
   m_configObjects:
     com.unity.addressableassets: {fileID: 11400000, guid: 0442b01178056f44e83856934aa9a135, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

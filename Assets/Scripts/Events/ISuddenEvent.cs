@@ -14,6 +14,13 @@ public interface ISuddenEvent
     /// <summary>현재 진행 중인지 — 진행 중이면 프레임워크가 재발생시키지 않고 <see cref="ServerTick"/>만 돌린다.</summary>
     bool IsActive { get; }
 
+    /// <summary>
+    /// 발생 즉시 전 클라에 알릴지 여부. 기본은 true — 대부분의 이벤트는 터지는 순간이 곧 알릴 순간이다.
+    /// false로 두면 매니저는 조용히 발생시키고, 이벤트가 원하는 시점에 <see cref="SuddenEventManager.Announce"/>를
+    /// 직접 부른다(예: 범인 탈출은 침입자가 자물쇠에 손댈 때까지 알리지 않는다 — 그 전 구간이 관찰 대상이므로).
+    /// </summary>
+    bool AnnounceOnBegin => true;
+
     /// <summary>지금 발생 가능한지 — 선행 조건(예: 현장 플레이어 존재) 검사. 서버(또는 오프라인)에서만 호출된다.</summary>
     bool CanTrigger();
 
