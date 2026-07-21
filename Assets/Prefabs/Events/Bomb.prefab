@@ -11,7 +11,6 @@ GameObject:
   - component: {fileID: 2917742096447410239}
   - component: {fileID: 4266320102480622429}
   - component: {fileID: 4177722383005666615}
-  - component: {fileID: 7096073926170667882}
   m_Layer: 0
   m_Name: 3
   m_TagString: Untagged
@@ -182,21 +181,6 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_renderer: {fileID: 4266320102480622429}
   m_maskType: 0
---- !u!114 &7096073926170667882
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 517070180749623324}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2e80ed8405ac72f4dad1f7ad33e02abe, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BombSerialView
-  m_label: {fileID: 0}
-  m_format: SN-{0}
-  m_idleText: SN-***
 --- !u!1 &685403980818584406
 GameObject:
   m_ObjectHideFlags: 0
@@ -1117,8 +1101,8 @@ Transform:
   m_GameObject: {fileID: 4201324896907460732}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 0.1, y: 0.27, z: 0.0288}
-  m_LocalScale: {x: 0.9186853, y: 0.05, z: 0.05}
+  m_LocalPosition: {x: 0.1, y: 0.27, z: -0.006}
+  m_LocalScale: {x: 0.849049, y: 0.05, z: 0.05}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 608036759110152579}
@@ -1345,7 +1329,7 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5286285475160518572}
   m_LocalRotation: {x: 0.7071043, y: 0.0018511974, z: -0.0018511974, w: 0.7071043}
-  m_LocalPosition: {x: 0, y: 0, z: 0.348}
+  m_LocalPosition: {x: 0, y: 0, z: 0.311}
   m_LocalScale: {x: 0.16, y: 0.16, z: 0.16}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1353,7 +1337,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 90, y: 0, z: -0.3}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -0.475, y: 0.34}
+  m_AnchoredPosition: {x: -0.472, y: 0.237}
   m_SizeDelta: {x: 3, y: 1}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!23 &6909212592689361632
@@ -1667,7 +1651,6 @@ GameObject:
   - component: {fileID: 6216247962284678392}
   - component: {fileID: 183734363642029002}
   - component: {fileID: 6320938269186437966}
-  - component: {fileID: 5973060984659922676}
   m_Layer: 0
   m_Name: 1
   m_TagString: Untagged
@@ -1838,21 +1821,6 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_renderer: {fileID: 183734363642029002}
   m_maskType: 0
---- !u!114 &5973060984659922676
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6088774775010317078}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2e80ed8405ac72f4dad1f7ad33e02abe, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BombSerialView
-  m_label: {fileID: 0}
-  m_format: SN-{0}
-  m_idleText: SN-***
 --- !u!1 &6202223806880384058
 GameObject:
   m_ObjectHideFlags: 0
@@ -1864,7 +1832,6 @@ GameObject:
   - component: {fileID: 1276576213118003450}
   - component: {fileID: 2053726681065371767}
   - component: {fileID: 2396569527315068131}
-  - component: {fileID: 383102884416940502}
   m_Layer: 0
   m_Name: 2
   m_TagString: Untagged
@@ -2035,21 +2002,6 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_renderer: {fileID: 2053726681065371767}
   m_maskType: 0
---- !u!114 &383102884416940502
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6202223806880384058}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2e80ed8405ac72f4dad1f7ad33e02abe, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BombSerialView
-  m_label: {fileID: 0}
-  m_format: SN-{0}
-  m_idleText: SN-***
 --- !u!1 &6622188981329066135
 GameObject:
   m_ObjectHideFlags: 0
@@ -2426,7 +2378,6 @@ GameObject:
   - component: {fileID: 8701758823593930899}
   - component: {fileID: 269344707609511645}
   - component: {fileID: 5603269257925707248}
-  - component: {fileID: 532434497310174405}
   m_Layer: 0
   m_Name: 4
   m_TagString: Untagged
@@ -2597,18 +2548,3 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_renderer: {fileID: 269344707609511645}
   m_maskType: 0
---- !u!114 &532434497310174405
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8585185421583392544}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2e80ed8405ac72f4dad1f7ad33e02abe, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BombSerialView
-  m_label: {fileID: 0}
-  m_format: SN-{0}
-  m_idleText: SN-***
