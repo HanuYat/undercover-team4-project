@@ -56,6 +56,7 @@ public class NpcChaseState : NpcStateBase
     public override void Exit()
     {
         m_owner.Agent.speed = m_baseSpeed;
+        m_owner.Agent.stoppingDistance = 0f; // 수렴 페이즈가 올린 정지 거리 원복 — 배회 복귀 시 목적지 앞 멈춤 방지
         if (m_owner.Agent.isOnNavMesh)
         {
             m_owner.Agent.isStopped = false;

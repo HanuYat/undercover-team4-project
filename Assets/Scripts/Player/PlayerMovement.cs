@@ -138,6 +138,10 @@ public class PlayerMovement : NetworkBehaviour
         {
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
+
+            // 끌려가는 도중 정리(라운드 리셋·연결 종료)되면 서버의 StopCarried가 못 올 수 있다 —
+            // CharacterController 비활성 + 추종 상태가 남지 않게 여기서 안전하게 푼다. (#279 리뷰 반영)
+            EndCarriedFollow();
         }
     }
 
