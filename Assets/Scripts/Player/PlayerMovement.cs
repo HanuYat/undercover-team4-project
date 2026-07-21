@@ -31,6 +31,10 @@ public class PlayerMovement : NetworkBehaviour
     [SerializeField]
     private float m_mouseSensitivity = 1f;
 
+    [Tooltip("마우스 회전 스무딩 강도 — 클수록 반응이 빠르고 덜 부드러움. 0이면 스무딩 없음(원시 입력). (#216)")]
+    [SerializeField]
+    private float m_lookSmoothing = 20f;
+
     [SerializeField]
     private float m_minPitch = -80f;
 
@@ -64,6 +68,7 @@ public class PlayerMovement : NetworkBehaviour
     private PlayerCrouch m_crouch; // 앉기 중 이동 속도·카메라 높이 조정용 (#236)
     private RoundManager Round => App.Game.Round; // 라운드 종료 시 이동·시점 차단용 (라운드 종료 freeze)
     private float m_pitch;
+    private Vector2 m_smoothedLook; // 지수 감쇠로 부드럽게 만든 시점 입력 — 저속 픽셀 양자화 지터 완화 (#216)
     private float m_standCamHeight; // 평소(서기) 카메라 높이 — 프리팹 초기값에서 캡처 (#105)
     private float m_downCamBlend; // 서기 시점(0) ↔ 다운 시점(1) 보간 진행도 (#105)
     private float m_verticalVelocity;
@@ -294,17 +299,27 @@ public class PlayerMovement : NetworkBehaviour
         m_cursorUnlocked = unlocked;
         Cursor.lockState = unlocked ? CursorLockMode.None : CursorLockMode.Locked;
         Cursor.visible = unlocked;
+        m_smoothedLook = Vector2.zero; // 커서 해제 중엔 회전이 멈추므로 재잠금 시 스무딩 잔여값으로 튀지 않게 초기화 (#216)
     }
 
     private void HandleLook()
     {
-        if (IsMovementLocked) return; // 다운 중·라운드 종료 시 시점 회전 차단 — 카메라 적용은 UpdateCameraPose가 담당
+        if (IsMovementLocked) // 다운 중·라운드 종료 시 시점 회전 차단 — 카메라 적용은 UpdateCameraPose가 담당
+        {
+            m_smoothedLook = Vector2.zero; // 재개 시 잠긴 동안의 스무딩 잔여값으로 튀지 않도록 초기화 (#216)
+            return;
+        }
 
         Vector2 look = m_inputHandler.LookInput * m_mouseSensitivity;
 
-        transform.Rotate(Vector3.up * look.x);
+        // 프레임률 독립 지수 감쇠 — 느린 회전 시 정수 픽셀 delta(0/1/0/1…)로 생기는 계단 지터를 완만하게 한다.
+        // 감쇠 계수 0이면 원시 입력을 그대로 적용(스무딩 없음). (#216)
+        float t = m_lookSmoothing <= 0f ? 1f : 1f - Mathf.Exp(-m_lookSmoothing * Time.deltaTime);
+        m_smoothedLook = Vector2.Lerp(m_smoothedLook, look, t);
 
-        m_pitch = Mathf.Clamp(m_pitch - look.y, m_minPitch, m_maxPitch);
+        transform.Rotate(Vector3.up * m_smoothedLook.x);
+
+        m_pitch = Mathf.Clamp(m_pitch - m_smoothedLook.y, m_minPitch, m_maxPitch);
     }
 
     // 카메라 위치(높이)와 피치를 적용한다. 다운 중에는 바닥 근처 높이 + 상방 시선으로 부드럽게 눕히고,
