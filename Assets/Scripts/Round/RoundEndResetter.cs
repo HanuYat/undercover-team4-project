@@ -11,7 +11,8 @@ using UnityEngine.SceneManagement;
 /// 서버 권위 흐름 (RoundManager와 동일 방침, #56):
 ///  · 서버·오프라인 — <see cref="RoundManager.OnRoundEnded"/>가 발행되면(성공·실패 무관) 리셋을 시작한다.
 ///  · 멀티플레이 클라이언트 — 라운드 종료를 아직 동기화받지 않으므로(#43 전), 호스트가 세션을 내려
-///    연결이 끊기는 것(<see cref="NetworkManager.OnClientStopped"/>)을 신호로 각자 동일하게 리셋한다.
+///    "비자발"로 끊기는 것(<see cref="SessionManager.OnConnectionLost"/>)을 신호로 각자 동일하게 리셋한다.
+///    자발적 로그아웃은 SessionTeardown이 전담한다 — 이 리셋은 발화하지 않는다(#287 충돌 방지).
 ///
 /// 리셋 = UGS 세션 나가기 → NGO Shutdown → 로비(Title) 복귀. (#247 씬 흐름)
 /// 단, EScene 매핑이 없는 테스트 씬에서는 기존처럼 자기 씬을 재로드한다.
@@ -37,10 +38,12 @@ public class RoundEndResetter : MonoBehaviour
 
     private void Start()
     {
-        // NetworkManager는 자체 Awake에서 Singleton을 세팅하므로, 준비가 보장되는 Start에서 구독한다.
-        NetworkManager nm = NetworkManager.Singleton;
-        if (nm != null)
-            nm.OnClientStopped += HandleClientStopped;
+        // 클라이언트 리셋 신호는 "비자발 드롭"(호스트가 세션을 내림)만 삼는다 — SessionManager.OnConnectionLost.
+        // NetworkManager.OnClientStopped(모든 NGO 정지에 반응)를 쓰면 자발적 로그아웃(SessionTeardown)이
+        // 촉발한 정지에도 깨어나, 세션 이탈~타이틀 복귀를 SessionTeardown과 중복 수행하며 충돌한다(#287).
+        // OnConnectionLost는 SessionManager의 m_isLeaving 가드로 자발적 이탈 시엔 발화하지 않는다.
+        if (Session != null)
+            Session.OnConnectionLost += HandleConnectionLost;
     }
 
     private void OnDisable()
@@ -51,9 +54,8 @@ public class RoundEndResetter : MonoBehaviour
 
     private void OnDestroy()
     {
-        NetworkManager nm = NetworkManager.Singleton;
-        if (nm != null)
-            nm.OnClientStopped -= HandleClientStopped;
+        if (Session != null)
+            Session.OnConnectionLost -= HandleConnectionLost;
     }
 
     // 서버·오프라인: 라운드가 끝나면(성공/실패 공통) 리셋을 시작한다. (사유는 종료 피드백 UI(#210)가 따로 표시)
@@ -62,8 +64,9 @@ public class RoundEndResetter : MonoBehaviour
         BeginReset();
     }
 
-    // 클라이언트: 호스트가 세션을 내려 연결이 끊기면 리셋한다. (wasHost는 무시 — 어느 쪽이든 리셋 대상)
-    private void HandleClientStopped(bool wasHost)
+    // 클라이언트: 호스트가 세션을 내려 "비자발"로 연결이 끊기면 리셋한다.
+    // (자발적 로그아웃은 SessionTeardown이 전담하므로 여기로 오지 않는다 — m_isLeaving 가드)
+    private void HandleConnectionLost()
     {
         BeginReset();
     }
@@ -97,10 +100,12 @@ public class RoundEndResetter : MonoBehaviour
             }
         }
 
-        // 2) NGO 종료 (떠 있을 때만). 호스트 Shutdown은 클라이언트를 끊고,
-        //    클라이언트는 각자의 OnClientStopped로 이 리셋에 진입한다(래치로 중복 방지).
+        // 2) NGO 종료. 세션이 있으면 위 LeaveAsync가 SDK(ISession.LeaveAsync) 경로로 이미 내렸다 —
+        //    여기서 NetworkManager.Shutdown()을 직접 부르면 SDK 상태가 깨져 NRE가 난다(#287).
+        //    그래서 SDK 세션이 아예 없는 로컬/오프라인 NGO만 여기서 직접 내린다.
         NetworkManager nm = NetworkManager.Singleton;
-        if (nm != null && (nm.IsListening || nm.IsClient || nm.IsServer))
+        if ((Session == null || Session.CurrentSession == null)
+            && nm != null && (nm.IsListening || nm.IsClient || nm.IsServer))
             nm.Shutdown();
 
         // 3) 로비(Title) 복귀 — App 씬 흐름 단일 경로. (#247)

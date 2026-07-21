@@ -47,6 +47,7 @@ public class VivoxManager : CommonManagerBase
         {
             m_session.OnSessionJoined += HandleSessionJoined;
             m_session.OnSessionLeft += HandleSessionLeft;
+            m_session.OnConnectionLost += HandleConnectionLost; // 비자발 드롭은 경량 정리 (#287)
 
             if (m_session.Auth != null)
                 m_session.Auth.OnSignedOut += HandleAuthSignedOut;
@@ -68,6 +69,7 @@ public class VivoxManager : CommonManagerBase
         {
             m_session.OnSessionJoined -= HandleSessionJoined;
             m_session.OnSessionLeft -= HandleSessionLeft;
+            m_session.OnConnectionLost -= HandleConnectionLost; // #287
 
             if (m_session.Auth != null)
                 m_session.Auth.OnSignedOut -= HandleAuthSignedOut;
@@ -132,6 +134,13 @@ public class VivoxManager : CommonManagerBase
     {
         await EnsureLoggedInAsync();
         if (!m_loggedIn) return;
+
+        // EnsureLoggedInAsync(Vivox 초기화+로그인)를 기다리는 사이에 로그아웃/세션 이탈이 끝났을 수 있다
+        // (#287 teardown 레이스). 그 상태로 채널에 참가하면 인증이 풀려 Vivox 토큰을 못 만들고
+        // accessToken null 예외가 난다 — 아직 세션·인증이 살아있을 때만 참가한다.
+        if (m_session == null || m_session.CurrentSession == null
+            || !AuthenticationService.Instance.IsSignedIn)
+            return;
 
         await LeaveChannelAsync();  // 재참가 대비
 
@@ -355,6 +364,17 @@ public class VivoxManager : CommonManagerBase
     private void HandleSessionLeft()
     {
         LeaveChannelAsync().Forget();
+    }
+
+    // 비자발 드롭(#287): 연결이 이미 죽어 LeaveAllChannelsAsync는 타임아웃만 낸다(Vivox는 이미 채널 밖).
+    // 그래서 네트워크 이탈 없이 로컬 상태만 정리한다 — 포지션 루프 정지 + 참가 플래그 리셋
+    // (LeaveChannelAsync의 finally와 동일한 로컬 정리, 네트워크 호출만 뺀 것).
+    private void HandleConnectionLost()
+    {
+        m_posLoopCts?.Cancel();
+        m_radioJoined = false;
+        m_proximityJoined = false;
+        m_transmitting = false;
     }
 
     // 인증 로그아웃 → Vivox도 정리 (#171 auth→voice 전파). 세션만 나가고 로그인은 유지된 상태에서

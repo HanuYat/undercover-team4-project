@@ -181,6 +181,25 @@ public class SessionManager : CommonManagerBase
         m_session = null;
 
         OnConnectionLost?.Invoke();
+
+        // 비자발 드롭은 SDK에 Deleted/RemovedFromSession 이벤트를 안 주므로, MultiplayerService
+        // 레지스트리에 세션이 남아 다음 생성이 "already registered"로 실패한다. SDK LeaveAsync를 걸어
+        // SDK 자체 핸들러가 레지스트리에서 세션을 빼게 한다(호스트=DeleteAsync). (#287)
+        TeardownLostSessionAsync(lost).Forget();
+    }
+
+    // 끊긴 세션을 SDK 레지스트리에서 내린다. 죽은 relay와 무관하게 Lobby 백엔드(HTTP)로 정리되며,
+    // 이미 삭제된 세션이면 SDK 내부에서 즉시 반환한다(안전한 no-op). 실패해도 게임 흐름은 막지 않는다.
+    private static async UniTaskVoid TeardownLostSessionAsync(ISession lost)
+    {
+        try
+        {
+            await lost.LeaveAsync();
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[SessionManager] 끊긴 세션 SDK 정리 실패(무시): {ex.Message}");
+        }
     }
 
     private void OnPlayerJoined(string playerId)
