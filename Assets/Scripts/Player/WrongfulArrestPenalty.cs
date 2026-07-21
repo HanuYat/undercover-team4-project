@@ -289,7 +289,7 @@ public class WrongfulArrestPenalty : NetworkedManagerBase
         {
             if (caught == null)
             {
-                AbortCarry();
+                AbortCarry(convergers);
                 return;
             }
             if (carrierA == null || m_plazaPoint == null)
