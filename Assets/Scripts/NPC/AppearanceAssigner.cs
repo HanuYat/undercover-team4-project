@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -75,74 +76,184 @@ public class AppearanceAssigner : CommonManagerBase
     {
         if (m_appearanceDatabase == null)
         {
-            Debug.LogWarning("AppearanceAssigner: AppearanceDatabase가 지정되지 않아 외형 배정 불가", this);
+            Debug.LogWarning("[AppearanceAssigner] AppearanceDatabase가 지정되지 않아 외형 배정 불가", this);
             return;
         }
         if (Spawner == null)
         {
-            Debug.LogWarning("AppearanceAssigner: NpcSpawner를 찾지 못해 외형 배정 불가", this);
+            Debug.LogWarning("[AppearanceAssigner] NpcSpawner를 찾지 못해 외형 배정 불가", this);
             return;
         }
-
         IReadOnlyList<NpcController> npcs = Spawner.SpawnedNpcs;
-        if (npcs.Count == 0 || criminals.Count == 0)
-            return;
+        if (npcs.Count == 0 || criminals.Count == 0) return;
 
-        // 1. 범인별 외형 확정 + 몽타주로 공개할 축 선택 (공개 축은 전 범인 공통 — 몽타주 포맷 통일)
+        AppearanceModelCatalog catalog = FindCatalog(npcs);
+
+        // 1. 범인 배정
         m_criminalProfiles.Clear();
         m_montageTexts.Clear();
-        for (int i = 0; i < criminals.Count; i++)
-            m_criminalProfiles.Add(m_appearanceDatabase.CreateRandomProfile());
+        foreach (NpcController c in criminals)
+        {
+            NpcCatalogAppearance cat = c.GetComponent<NpcCatalogAppearance>();
+            if (cat != null && catalog != null) 
+                m_criminalProfiles.Add(catalog.GetProfile(cat.ModelIndex)); // Sci-fi
+            else
+                m_criminalProfiles.Add(m_appearanceDatabase.CreateRandomProfile()); // Generic
+        }
         PickRevealedAxes();
 
-        // 공개 축이 전부 옵션 1개 이하면 모든 NPC가 몽타주에 부합해 필터링이 성립하지 않는다
-        if (!HasMutableRevealedAxis())
-            Debug.LogWarning("AppearanceAssigner: 공개 축에 옵션이 2개 이상인 축이 없음 — 비부합 NPC를 만들 수 없다. AppearanceDatabase 옵션을 확인할 것", this);
-
-        // 2. 범인을 제외한 NPC 중 범인마다 디코이 k−1명을 겹치지 않게 랜덤 선정
+        // 2. 디코이 선정
         Dictionary<NpcController, int> decoyOwners = PickDecoys(npcs, criminals);
-
-        // 범인 → 인덱스 역조회 — 배정 루프에서 자기 프로필을 찾기 위함
         var criminalIndexOf = new Dictionary<NpcController, int>();
-        for (int i = 0; i < criminals.Count; i++)
-            criminalIndexOf[criminals[i]] = i;
+        for (int i = 0; i < criminals.Count; i++) criminalIndexOf[criminals[i]] = i;
 
-        // 3. 배정 — 범인·디코이는 담당 범인과 공개 특징 일치, 나머지는 모든 범인과 최소 1개 공개 특징이 다르게
-        var logBuilder = new System.Text.StringBuilder();
-        foreach (NpcController npc in npcs)
+        // 3. 역할별 실현
+        var logBuilder = new StringBuilder();
+        foreach (var npc in npcs)
         {
-            AppearanceProfile profile;
+            AppearanceProfile applied;
             string role;
-            if (criminalIndexOf.TryGetValue(npc, out int criminalIndex))
+            if (criminalIndexOf.TryGetValue(npc, out int ci))
             {
-                profile = m_criminalProfiles[criminalIndex];
-                role = $"  ← 범인 #{criminalIndex + 1}";
+                applied = RealizeCriminal(npc, ci, catalog);
+                role = $"  ← 범인 #{ci + 1}";
             }
-            else if (decoyOwners.TryGetValue(npc, out int ownerIndex))
+            else if (decoyOwners.TryGetValue(npc, out int oi))
             {
-                profile = CreateDecoyProfile(m_criminalProfiles[ownerIndex]);
-                role = $"  ← 디코이 (범인 #{ownerIndex + 1})";
+                applied = RealizeDecoy(npc, oi, catalog);
+                role = $"  ← 디코이 (범인 #{oi + 1})";
             }
             else
             {
-                profile = CreateNonMatchingProfile();
+                applied = RealizeNonMatching(npc, catalog);
                 role = string.Empty;
             }
-
-            ApplyToNpc(npc, profile);
-            logBuilder.AppendLine($"  {DescribeProfile(profile)}{role}");
+            logBuilder.AppendLine($"  {DescribeProfile(applied)}{role}");
         }
 
-        // 4. 범인별 몽타주 텍스트 생성 — 본부 수배 UI(#58)의 원본. 범인마다 이벤트를 한 번씩 발행한다 (#127)
+        // 4. 범인별 몽타주 텍스트
         for (int i = 0; i < criminals.Count; i++)
         {
-            string montageText = m_appearanceDatabase.BuildMontageText(m_criminalProfiles[i], m_revealedAxes);
+            AppearanceProfile p = m_criminalProfiles[i];
+            string montageText = m_appearanceDatabase.BuildMontageText(p, m_revealedAxes);
             m_montageTexts.Add(montageText);
             OnMontageGenerated?.Invoke(criminals[i], montageText);
         }
+        Debug.Log($"외형 배정 완료 ({npcs.Count}명, 범인 {criminals.Count}명) | 몽타주: {string.Join(" / ", m_montageTexts.ConvertAll(t => $"\"{t}\""))}\n{logBuilder}");
+    }
 
-        // 수배 UI(#58) 전까지는 로그로 배치 결과를 확인한다 — 정답이 노출되므로 데모 빌드 전에 제거할 것
-        Debug.Log($"외형 배정 완료 ({npcs.Count}명, 범인 {criminals.Count}명) | 몽타주: {string.Join(" / ", m_montageTexts.ConvertAll(t => $"\"{t}\""))} | 몽타주당 부합 목표 {m_montageMatchCount}명\n{logBuilder}");
+    /// <summary>범인: SciFi는 스폰 모델 유지, Generic은 확정 프로필 배정. 신원엔 실제 프로필 반영.</summary>
+    private AppearanceProfile RealizeCriminal(NpcController npc, int criminalIndex, AppearanceModelCatalog catalog)
+    {
+        NpcCatalogAppearance cat = npc.GetComponent<NpcCatalogAppearance>();
+        if (cat != null && catalog != null)
+        {
+            AppearanceProfile p = catalog.GetProfile(cat.ModelIndex);
+            AssignIdentity(npc, p);
+            return p;
+        }
+        return RealizeGeneric(npc, m_criminalProfiles[criminalIndex]);
+    }
+
+    /// <summary>디코이: 담당 범인과 공개 축 일치. SciFi는 일치 모델 선택, Generic은 프로필 배정.</summary>
+    private AppearanceProfile RealizeDecoy(NpcController npc, int ownerIndex, AppearanceModelCatalog catalog)
+    {
+        AppearanceProfile owner = m_criminalProfiles[ownerIndex];
+        NpcCatalogAppearance cat = npc.GetComponent<NpcCatalogAppearance>();
+        if (cat != null && catalog != null)
+        {
+            int idx = FindModelMatchingRevealed(catalog, owner);
+            if (idx >= 0)
+            {
+                cat.SetModelIndex(idx);
+                AppearanceProfile p = catalog.GetProfile(idx);
+                AssignIdentity(npc, p);
+                return p;
+            }
+            Debug.LogWarning($"[AppearanceAsigner] SciFi 디코이 {npc.name}에 공개축 일치 모델이 없어 비부합 처리 - 몽타주 부합 인원 부족 가능", npc);
+            return RealizeSciFiNonMatching(npc, cat, catalog);
+        }
+        return RealizeGeneric(npc, CreateDecoyProfile(owner));
+    }
+
+    /// <summary>비부합: 전 범인과 공개 축이 최소 1개 다르게.</summary>
+    private AppearanceProfile RealizeNonMatching(NpcController npc, AppearanceModelCatalog catalog)
+    {
+        NpcCatalogAppearance cat = npc.GetComponent<NpcCatalogAppearance>();
+        if (cat != null && catalog != null)
+            return RealizeSciFiNonMatching(npc, cat, catalog);
+        return RealizeGeneric(npc, CreateNonMatchingProfile());
+    }
+
+    private AppearanceProfile RealizeSciFiNonMatching(NpcController npc, NpcCatalogAppearance cat, AppearanceModelCatalog catalog)
+    {
+        int idx = PickNonMatchingModel(catalog);
+        cat.SetModelIndex(idx);
+        AppearanceProfile p = catalog.GetProfile(idx);
+        AssignIdentity(npc, p);
+        return p;
+    }
+
+    /// <summary>Generic: 프롭 배정 + 신원. NpcAppearance.SetProfile이 인덱스만 전 클라에 동기화.</summary>
+    private AppearanceProfile RealizeGeneric(NpcController npc, AppearanceProfile profile)
+    {
+        NpcAppearance app = npc.GetComponent<NpcAppearance>();
+        if (app != null) app.SetProfile(profile);
+        else Debug.LogWarning($"AppearanceAssigner: {npc.name}에 외형 컴포넌트가 없어 시각 적용 생략", npc);
+        AssignIdentity(npc, profile);
+        return profile;
+    }
+
+    private void AssignIdentity(NpcController npc, AppearanceProfile profile)
+    {
+        CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
+        if (identity != null) identity.AssignAppearance(profile);
+    }
+
+    /// <summary>공개 축이 criminalProfile과 모두 같은 모델 인덱스(셔플 후 첫). 없으면 -1.</summary>
+    private int FindModelMatchingRevealed(AppearanceModelCatalog catalog, AppearanceProfile criminalProfile)
+    {
+        var order = new List<int>(catalog.Count);
+        for (int i = 0; i < catalog.Count; i++) order.Add(i);
+        for (int i = order.Count - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            (order[i], order[j]) = (order[j], order[i]);
+        }
+        foreach (int m in order)
+        {
+            AppearanceProfile p = catalog.GetProfile(m);
+            if (p.MatchesOn(criminalProfile, m_revealedAxes)) return m;
+        }
+        return -1;
+    }
+
+    private AppearanceModelCatalog FindCatalog(IReadOnlyList<NpcController> npcs)
+    {
+        foreach (var n in npcs)
+        {
+            var cat = n.GetComponent<NpcCatalogAppearance>();
+            if (cat != null && cat.Catalog != null) return cat.Catalog;
+        }
+        return null;
+    }
+
+    private int PickNonMatchingModel(AppearanceModelCatalog catalog)
+    {
+        var order = new List<int>(catalog.Count);
+        for (int i = 0; i < catalog.Count; i++) order.Add(i);
+        for (int i = order.Count - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            (order[i], order[j]) = (order[j], order[i]);
+        }
+        foreach (int m in order)
+        {
+            AppearanceProfile p = catalog.GetProfile(m);
+            if (!MatchesAnyCriminal(p)) return m;
+        }
+        Debug.LogWarning("[AppearanceAssigner] 전 범인과 비부합인 모델이 없음 — 공개 축 수나 모델 다양성 확인", this);
+        return Random.Range(0, catalog.Count);
     }
 
     /// <summary>축 전체를 셔플해 앞에서 공개 수만큼 고른다.</summary>
@@ -219,21 +330,19 @@ public class AppearanceAssigner : CommonManagerBase
         // 강제로 바꾼다 — 몽타주 부합은 공개 축 전부 일치일 때만 성립하므로 이 한 번으로 전 범인 비부합이 보장된다
         foreach (AppearanceAxis axis in m_revealedAxes)
         {
-            int optionCount = m_appearanceDatabase.GetOptionCount(axis);
             var criminalValues = new HashSet<int>();
             foreach (AppearanceProfile criminalProfile in m_criminalProfiles)
                 criminalValues.Add(criminalProfile.GetIndex(axis));
 
-            // 이 축의 옵션이 전부 범인 값으로 차 있으면 다른 축에서 시도한다
-            if (criminalValues.Count >= optionCount)
+            // Generic 경로이므로 SciFiOnly가 아닌 값 중에서만 대체값을 찾는다 (가림 등 재유입 방지)
+            List<int> selectable = m_appearanceDatabase.GetGenericSelectableIndices(axis);
+            selectable.RemoveAll(v => criminalValues.Contains(v));
+
+            // 이 축의 선택 가능한 값이 전부 범인 값으로 차 있으면 다른 축에서 시도한다
+            if (selectable.Count == 0)
                 continue;
 
-            int value;
-            do
-            {
-                value = Random.Range(0, optionCount);
-            } while (criminalValues.Contains(value));
-            profile.SetIndex(axis, value);
+            profile.SetIndex(axis, selectable[Random.Range(0, selectable.Count)]);
             return profile;
         }
 
@@ -248,32 +357,6 @@ public class AppearanceAssigner : CommonManagerBase
         foreach (AppearanceProfile criminalProfile in m_criminalProfiles)
         {
             if (profile.MatchesOn(criminalProfile, m_revealedAxes))
-                return true;
-        }
-        return false;
-    }
-
-    /// <summary>신원(판정 기준)과 외형(시각·동기화) 양쪽에 프로필을 배정한다.</summary>
-    private void ApplyToNpc(NpcController npc, AppearanceProfile profile)
-    {
-        // 몽타주 부합 판정(#39 스캔 검증 등)은 CitizenIdentity.Appearance를 기준으로 한다
-        CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
-        if (identity != null)
-            identity.AssignAppearance(profile);
-
-        NpcAppearance appearance = npc.GetComponent<NpcAppearance>();
-        if (appearance != null)
-            appearance.SetProfile(profile); // 서버 권위 — 인덱스만 전 클라이언트에 동기화 (#56)
-        else
-            Debug.LogWarning($"AppearanceAssigner: {npc.name}에 NpcAppearance가 없어 시각 적용 생략", npc);
-    }
-
-    /// <summary>공개 축에 옵션이 2개 이상인 축이 하나라도 있는지 — 비부합 프로필 생성 가능 여부.</summary>
-    private bool HasMutableRevealedAxis()
-    {
-        foreach (AppearanceAxis axis in m_revealedAxes)
-        {
-            if (m_appearanceDatabase.GetOptionCount(axis) >= 2)
                 return true;
         }
         return false;

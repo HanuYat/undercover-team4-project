@@ -4,11 +4,9 @@ using System.Text;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
-/// <summary>
-/// 외형 특징 축별 옵션 정의 (ScriptableObject). (#74)
-/// 각 옵션은 무전으로 말로 전달 가능한 표시 이름과 시각 리소스(색/머티리얼/프롭)를 가진다.
-/// 몽타주 텍스트(GDD 10-3 글 방식)도 여기서 생성한다 — 본부 수배 UI(#58)의 원본.
-/// </summary>
+// 외형 특징 축별 옵션 정의 (ScriptableObject).
+// 각 옵션은 무전으로 말로 전달 가능한 표시 이름과 시각 리소스(색/머티리얼/프롭)를 가진다.
+// 몽타주 텍스트도 여기서 생성. — 본부 수배 리스트 UI의 원본.
 [CreateAssetMenu(fileName = "AppearanceDatabase", menuName = "Scriptable Objects/AppearanceDatabase")]
 public class AppearanceDatabase : ScriptableObject
 {
@@ -27,6 +25,9 @@ public class AppearanceDatabase : ScriptableObject
 
         [Tooltip("지정하면 머리 앵커에 부착하는 프롭 (머리카락·수염·모자·안경 등). 색은 Color로 틴트된다")]
         public GameObject PropPrefab;
+
+        [Tooltip("SciFi 카탈로그 전용 값 — Generic 경로엔 프롭이 없어 표현 불가하므로 Generic 랜덤 배정에서 제외한다 (예: 머리 '가림', 후드/헬멧, 특수 피부색). 몽타주 텍스트·SciFi 카탈로그에는 그대로 쓰인다")]
+        public bool SciFiOnly;
     }
 
     /// <summary>축 하나의 정의 — 몽타주 표기용 축 이름과 옵션 목록.</summary>
@@ -39,16 +40,22 @@ public class AppearanceDatabase : ScriptableObject
     }
 
     [Header("특징 축 (AppearanceAxis 순서와 일치)")]
+    [SerializeField] private AxisDefinition m_hairStyle;
     [SerializeField] private AxisDefinition m_hairColor;
+    [SerializeField] private AxisDefinition m_skinColor;
     [SerializeField] private AxisDefinition m_facialHair;
-    [SerializeField] private AxisDefinition m_accessory;
+    [SerializeField] private AxisDefinition m_headwear;   // 기존 m_accessory에서 개명
+    [SerializeField] private AxisDefinition m_eyewear;
 
     public AxisDefinition GetAxis(AppearanceAxis axis) => axis switch
     {
+        AppearanceAxis.HairStyle => m_hairStyle,
         AppearanceAxis.HairColor => m_hairColor,
+        AppearanceAxis.SkinColor => m_skinColor,
         AppearanceAxis.FacialHair => m_facialHair,
-        AppearanceAxis.Accessory => m_accessory,
-        _ => null,
+        AppearanceAxis.Headwear => m_headwear,
+        AppearanceAxis.Eyewear => m_eyewear,
+        _ => null
     };
 
     public int GetOptionCount(AppearanceAxis axis)
@@ -67,15 +74,43 @@ public class AppearanceDatabase : ScriptableObject
         return definition.Options[index];
     }
 
-    /// <summary>모든 축에서 랜덤 옵션을 뽑아 프로필을 만든다. 옵션이 없는 축은 0으로 둔다.</summary>
+    /// <summary>Generic 경로로 표현 가능한(SciFiOnly가 아닌) 옵션 인덱스 목록. 전부 SciFiOnly거나 옵션이 없으면 전체 인덱스로 폴백(제한 없음).</summary>
+    public List<int> GetGenericSelectableIndices(AppearanceAxis axis)
+    {
+        var result = new List<int>();
+        AxisDefinition definition = GetAxis(axis);
+        if (definition?.Options == null)
+            return result;
+
+        for (int i = 0; i < definition.Options.Length; i++)
+        {
+            if (definition.Options[i] != null && !definition.Options[i].SciFiOnly)
+                result.Add(i);
+        }
+
+        if (result.Count == 0) // 안전 폴백: 전부 SciFiOnly면 제한하지 않는다
+        {
+            for (int i = 0; i < definition.Options.Length; i++)
+                result.Add(i);
+        }
+        return result;
+    }
+
+    /// <summary>Generic 경로용 랜덤 옵션 인덱스 — SciFiOnly 값은 제외한다.</summary>
+    public int GetRandomGenericIndex(AppearanceAxis axis)
+    {
+        List<int> indices = GetGenericSelectableIndices(axis);
+        return indices.Count > 0 ? indices[Random.Range(0, indices.Count)] : 0;
+    }
+
+    /// <summary>Generic 경로용 랜덤 프로필 — 축마다 SciFiOnly가 아닌 옵션에서만 뽑는다. 옵션이 없는 축은 0.</summary>
     public AppearanceProfile CreateRandomProfile()
     {
         AppearanceProfile profile = default;
         for (int i = 0; i < AppearanceProfile.k_axisCount; i++)
         {
             var axis = (AppearanceAxis)i;
-            int count = GetOptionCount(axis);
-            profile.SetIndex(axis, count > 0 ? Random.Range(0, count) : 0);
+            profile.SetIndex(axis, GetRandomGenericIndex(axis));
         }
         return profile;
     }
