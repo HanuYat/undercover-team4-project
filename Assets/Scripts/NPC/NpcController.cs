@@ -103,8 +103,29 @@ public class NpcController : NetworkBehaviour
     [Tooltip("마지막 소란 감지 후 이 시간(초)이 지나면 진정하고 배회로 복귀")]
     [SerializeField] private float m_panicCalmSeconds = 5f;
 
+    [Header("넉백 (폭발 등 외력) — #232")]
+    [Tooltip("날아가는 동안 받는 중력(m/s²). 음수 — 클수록 낮고 빠르게 떨어진다")]
+    [SerializeField] private float m_knockbackGravity = -18f;
+
+    [Tooltip("안전장치: 이 시간(초)이 지나도 착지 판정이 안 나면 강제로 내려놓는다")]
+    [SerializeField] private float m_knockbackMaxFlightSeconds = 3f;
+
+    [Tooltip("착지 지점을 NavMesh 위로 되돌릴 때 허용하는 최대 탐색 거리(m)")]
+    [SerializeField] private float m_knockbackLandSampleDistance = 4f;
+
+    [Tooltip("이 거리(m) 안에서 NavMesh가 끊기는 것은 벽이 아니라 연석·경계로 보고 무시한다. " +
+             "NavMesh는 실제 벽보다 에이전트 반지름만큼 안쪽에서 끝나므로, 그대로 벽 취급하면 " +
+             "발밑에서 바로 막혀 넉백이 제자리 점프가 된다")]
+    [SerializeField] private float m_knockbackEdgeIgnoreDistance = 1.5f;
+
     private NavMeshAgent m_agent;
     private NpcStateMachine m_stateMachine;
+
+    // 넉백 비행 상태 — 서버(또는 오프라인)에서만 의미. 비행 중에는 FSM/NavMeshAgent가 정지한다. (#232)
+    private Vector3 m_knockbackVelocity;
+    private Vector3 m_knockbackLaunch;
+    private float m_knockbackElapsed;
+    private bool m_knockbackActive;
 
     // 라운드 종료 시 정지(freeze) 플래그 — 서버(또는 오프라인)에서만 의미. 켜지면 FSM/이동을 멈춘다. (라운드 종료 freeze)
     private bool m_frozen;
@@ -324,6 +345,14 @@ public class NpcController : NetworkBehaviour
         // 라운드 종료 freeze — 서버에서 멈추면 NetworkTransform이 정지 위치를 복제해 전 피어에서 멈춘다
         if (m_frozen)
             return;
+
+        // 넉백 비행 중에는 FSM을 돌리지 않는다 — NavMeshAgent를 꺼 둔 채라 상태 클래스가
+        // SetDestination/isStopped를 부르면 "agent not on NavMesh" 에러가 쏟아진다 (#232)
+        if (m_knockbackActive)
+        {
+            TickKnockback();
+            return;
+        }
 
         m_stateMachine.Tick();
         EmitDisturbancePulse();
@@ -635,6 +664,120 @@ public class NpcController : NetworkBehaviour
         if (IsSpawned && !IsServer)
             return;
 
+        m_stateMachine.ChangeState(NpcState.Stunned);
+    }
+
+    // ---- 넉백 (#232) ----
+
+    /// <summary>폭발 등으로 날아가는 중인가 — 이 동안 FSM·NavMesh는 멈춘다. 서버(또는 오프라인)에서만 유효.</summary>
+    public bool IsKnockedBack => m_knockbackActive;
+
+    /// <summary>
+    /// 외력으로 날려보낸다 — 폭발 넉백(<see cref="BombDevice"/>) 등. 세기는 m/s 단위 초기 속도로 준다.
+    ///
+    /// <b>서버(또는 오프라인) 전용.</b> 플레이어 넉백은 각 피어가 자기 오너 캐릭터에 적용하지만
+    /// (<see cref="PlayerMovement.AddKnockback"/>), NPC는 이동 권한이 서버의 NavMeshAgent에 있고
+    /// 클라이언트는 NetworkTransform으로 결과만 받으므로 서버가 직접 민다.
+    ///
+    /// 검거 관련 상태(체포·연행·수감)는 제외한다 — 호송 중 NPC가 날아가면 커스터디가 끊겨
+    /// 판정 경로(ArrestJudge·JailZone)가 깨진다. 폭발로 피의자를 놓치는 건 별개의 기획 결정이다.
+    /// </summary>
+    public void ServerApplyKnockback(Vector3 velocity)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+        if (m_knockbackActive)
+            return; // 같은 폭발이 콜라이더 여러 개로 잡힌 중복 호출 — 처음 것만 받는다
+        if (velocity.sqrMagnitude < 0.01f)
+            return;
+
+        NpcState state = m_stateMachine.CurrentState; // 서버 진실값 — 동기화 지연 없이 판정
+        if (state == NpcState.Captured || state == NpcState.Escorted || state == NpcState.Jailed)
+            return;
+
+        // 기절 전이가 먼저다 — 에이전트를 끄기 전에 넣어야 상태 클래스가 에이전트를 정상적으로 정리한다.
+        // 표현상으로도 걷는 모션 그대로 날아가지 않고 축 늘어져 날아간다.
+        // 비행 중에는 FSM Tick을 건너뛰므로 기절 타이머는 착지 후부터 흐른다.
+        m_stateMachine.ChangeState(NpcState.Stunned);
+
+        m_knockbackActive = true;
+        m_knockbackVelocity = velocity;
+        m_knockbackLaunch = transform.position;
+        m_knockbackElapsed = 0f;
+
+        // 에이전트가 켜져 있으면 매 프레임 NavMesh 위로 끌어내려 애초에 뜨지 못한다
+        if (m_agent.enabled)
+        {
+            if (m_agent.isOnNavMesh)
+                m_agent.ResetPath();
+            m_agent.enabled = false;
+        }
+    }
+
+    // 포물선 비행 1프레임. 착지하면 NavMesh 위로 되돌리고 기절 상태로 넘긴다.
+    private void TickKnockback()
+    {
+        m_knockbackElapsed += Time.deltaTime;
+        m_knockbackVelocity.y += m_knockbackGravity * Time.deltaTime;
+
+        Vector3 next = transform.position + m_knockbackVelocity * Time.deltaTime;
+
+        // 벽을 뚫고 날아가지 않게 NavMesh를 충돌 프록시로 쓴다 — 출발점에서 목표 XZ까지 통행 가능한지 본다.
+        // (도시 지오메트리 캐스트는 Synty 프록시 콜라이더·창살 때문에 오판이 잦아 신뢰하지 않는다)
+        //
+        // 단, NavMesh 경계 = 벽이 아니다. NavMesh는 실제 벽에서 에이전트 반지름만큼 물러나 끝나고
+        // 연석·차도 경계에서도 끊긴다 — 실측상 절반가량의 방향이 발밑 0.1~0.7m에서 막혔고,
+        // 그걸 그대로 벽으로 치면 넉백이 "제자리에서 폴짝"이 된다. 가까운 끊김은 무시한다.
+        Vector3 horizontalTarget = new Vector3(next.x, m_knockbackLaunch.y, next.z);
+        if (NavMesh.Raycast(m_knockbackLaunch, horizontalTarget, out NavMeshHit block, NavMesh.AllAreas)
+            && (block.position - m_knockbackLaunch).sqrMagnitude
+               >= m_knockbackEdgeIgnoreDistance * m_knockbackEdgeIgnoreDistance)
+        {
+            // 진짜 벽에 닿았다 — 수평 성분을 버리고 그 자리에서 떨어진다
+            next.x = transform.position.x;
+            next.z = transform.position.z;
+            m_knockbackVelocity.x = 0f;
+            m_knockbackVelocity.z = 0f;
+        }
+
+        transform.position = next;
+
+        bool timedOut = m_knockbackElapsed >= m_knockbackMaxFlightSeconds;
+        if (!timedOut && m_knockbackVelocity.y > 0f)
+            return; // 아직 상승 중 — 착지 판정은 내려올 때부터
+
+        if (NavMesh.SamplePosition(transform.position, out NavMeshHit ground, m_knockbackLandSampleDistance, NavMesh.AllAreas))
+        {
+            if (!timedOut && transform.position.y > ground.position.y + 0.05f)
+                return; // 아직 공중
+
+            EndKnockback(ground.position);
+            return;
+        }
+
+        // NavMesh를 아예 벗어난 곳까지 날아갔다 — 시간이 다 되면 출발점으로 회수한다(맵 밖 유실 방지)
+        if (timedOut)
+            EndKnockback(m_knockbackLaunch);
+    }
+
+    private void EndKnockback(Vector3 landing)
+    {
+        m_knockbackActive = false;
+        m_knockbackVelocity = Vector3.zero;
+
+        m_agent.enabled = true;
+        m_agent.Warp(landing); // 에이전트를 NavMesh 위 착지점에 다시 붙인다
+
+        // Warp가 실패했으면(착지점이 NavMesh 밖) 상태 전이를 시키지 않는다 —
+        // 상태 클래스들이 곧바로 에이전트를 건드려 에러가 난다. 다음 프레임 이후 스스로 복구되진 않으므로 남긴다.
+        if (!m_agent.isOnNavMesh)
+        {
+            Debug.LogWarning("NpcController: 넉백 착지 지점을 NavMesh에 붙이지 못했다", this);
+            return;
+        }
+
+        // 이미 발사 시점에 기절로 전이해 뒀다 — 여기 호출은 그 사이 상태가 바뀐 경우를 위한 보정이다.
+        // (같은 상태면 StateMachine이 무시하므로 기절 타이머가 착지 시점에 리셋되지도 않는다)
         m_stateMachine.ChangeState(NpcState.Stunned);
     }
 
