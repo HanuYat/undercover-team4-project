@@ -50238,6 +50238,37 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &981800781
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 981800782}
+  m_Layer: 0
+  m_Name: DetentionPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &981800782
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 981800781}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -14, y: 0.1, z: 42}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &983758486
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -68949,6 +68980,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WrongfulArrestPenalty
   ShowTopMostFoldoutHeaderGroup: 1
   m_plazaPoint: {fileID: 981800772}
+  m_detentionPoint: {fileID: 981800782}
 --- !u!1001 &1332766135
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -110178,4 +110210,5 @@ SceneRoots:
   - {fileID: 440736929}
   - {fileID: 724086594}
   - {fileID: 981800772}
+  - {fileID: 981800782}
   - {fileID: 1328834707}

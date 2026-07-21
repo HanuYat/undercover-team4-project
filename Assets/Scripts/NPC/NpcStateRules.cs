@@ -13,7 +13,10 @@ public static class NpcStateRules
     /// 반응이 시작된 뒤에는 수갑 채널링이 걸리지 않아야 한다.</summary>
     public static bool IsCapturable(NpcState state) =>
         state != NpcState.Escorted && state != NpcState.Captured && state != NpcState.Jailed
-        && state != NpcState.Run && state != NpcState.Attack;
+        && state != NpcState.Run && state != NpcState.Attack
+        // 오검거 페널티에 얽힌 시민(수용·추격·호송)은 다시 수갑을 채울 수 없다 (#277~#279) —
+        // 추격대를 체포해 페널티 집행을 무산시키는 우회를 막는다 (회피 수단은 격퇴(호루라기 #250)뿐)
+        && state != NpcState.Detained && state != NpcState.Chasing && state != NpcState.PenaltyEscorting;
 
     /// <summary>E 상호작용(제압·타격·재연행)이 반응하는 상태인가.
     /// 포함 목록 방식 — 새 상태는 기본 'E 불가'이므로 열어야 하면 여기 추가할 것.
