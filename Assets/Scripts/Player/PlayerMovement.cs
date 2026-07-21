@@ -69,6 +69,12 @@ public class PlayerMovement : NetworkBehaviour
     private float m_verticalVelocity;
     private bool m_cursorUnlocked; // 임시: OnGUI 버튼 조작용 커서 해제 상태
 
+    // 끌려가기(#279) — 오검거 호송 중 오너 로컬이 끌기 NPC 2명을 추종한다. 앵커가 파괴돼도
+    // m_carried가 참인 동안은 입력 이동으로 돌아가지 않는다(서버의 종료/스냅 텔레포트가 마무리).
+    private bool m_carried;
+    private Transform m_carryAnchorA;
+    private Transform m_carryAnchorB;
+
     // 다운(무력화) 중 여부 — 무력화 컴포넌트가 없으면(테스트 구성 등) 항상 false
     private bool IsIncapacitated => m_incapacitation != null && m_incapacitation.IsIncapacitated;
 
@@ -187,6 +193,50 @@ public class PlayerMovement : NetworkBehaviour
     [Rpc(SendTo.Owner)]
     private void ApplyPoseRpc(Vector3 position, Quaternion rotation) => SetPose(position, rotation);
 
+    /// <summary>
+    /// 끌려가기 추종 시작 — 오너 로컬 전용, PlayerPenaltyView(오검거 호송 #279)가 호출한다.
+    /// CharacterController를 끄고 매 프레임 두 앵커(양옆 끌기 NPC — 전 피어에 NetworkTransform으로
+    /// 동기화된 위치) 중점 살짝 뒤를 따라간다 — 오너가 움직여야 내 위치가 전 피어에 전파된다.
+    /// </summary>
+    public void BeginCarriedFollow(Transform anchorA, Transform anchorB)
+    {
+        m_carried = true;
+        m_carryAnchorA = anchorA;
+        m_carryAnchorB = anchorB;
+        m_controller.enabled = false; // 직접 transform 이동 — 켜 두면 내부 캐시가 위치를 되돌린다 (SetPose와 동일 사정)
+    }
+
+    /// <summary>끌려가기 추종 종료 — 호송 종료(광장 도착·중단) 시 PlayerPenaltyView가 호출한다.</summary>
+    public void EndCarriedFollow()
+    {
+        m_carried = false;
+        m_carryAnchorA = null;
+        m_carryAnchorB = null;
+        m_controller.enabled = true;
+    }
+
+    // 끌기 NPC 추종 — 두 앵커 중점 뒤(끌리는 몸)를 부드럽게 따라간다. 한쪽이 파괴되면 남은 쪽만 따른다.
+    private void UpdateCarriedFollow()
+    {
+        Transform a = m_carryAnchorA != null ? m_carryAnchorA : m_carryAnchorB;
+        if (a == null)
+            return; // 앵커 전부 소실 — 그 자리에서 대기, 서버의 종료/스냅 텔레포트가 마무리한다
+        Transform b = m_carryAnchorB != null ? m_carryAnchorB : a;
+
+        Vector3 forward = a.forward;
+        forward.y = 0f;
+        if (forward.sqrMagnitude < 0.001f)
+            forward = transform.forward;
+        forward.Normalize();
+
+        Vector3 mid = (a.position + b.position) * 0.5f;
+        Vector3 targetPos = mid - forward * 0.75f; // 끌기 담당들 살짝 뒤 — 질질 끌리는 그림
+
+        float lerp = 12f * Time.deltaTime;
+        transform.position = Vector3.Lerp(transform.position, targetPos, lerp);
+        transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(forward), lerp);
+    }
+
     // CharacterController가 켜진 상태에서 transform을 직접 옮기면 내부 캐시가 위치를 되돌릴 수 있어 잠시 끄고 옮긴다.
     private void SetPose(Vector3 pos, Quaternion rot)
     {
@@ -213,6 +263,16 @@ public class PlayerMovement : NetworkBehaviour
         if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
         {
             SetCursorUnlocked(!m_cursorUnlocked);
+        }
+
+        // 끌려가는 중(#279) — 입력 이동 대신 끌기 NPC를 추종한다. 행동불능 상태라 시점 입력은 어차피
+        // 막혀 있고(IsMovementLocked), 카메라는 다운 시점(UpdateCameraPose)이 계속 담당한다.
+        // CharacterController가 꺼져 있어 HandleMove(중력 Move)를 타면 안 된다.
+        if (m_carried)
+        {
+            UpdateCarriedFollow();
+            UpdateCameraPose();
+            return;
         }
 
         if (!m_cursorUnlocked)
