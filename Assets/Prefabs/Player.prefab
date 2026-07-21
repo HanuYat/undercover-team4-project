@@ -2759,6 +2759,7 @@ GameObject:
   - component: {fileID: -961902104319678753}
   - component: {fileID: 7911917710776014538}
   - component: {fileID: 3120017538077844962}
+  - component: {fileID: 914296157285595536}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -3061,6 +3062,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerEscorter
   ShowTopMostFoldoutHeaderGroup: 1
   m_channelSeconds: 3
+  m_ropeLength: 1.6
+  m_dragSmoothTime: 0.14
+  m_dragTurnSharpness: 6
+  m_dragSwayAngle: 7
+  m_dragSwayFrequency: 1.6
 --- !u!114 &6677678871598212644
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3240,6 +3246,25 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerHeldItemView
   ShowTopMostFoldoutHeaderGroup: 1
   m_handAnchor: {fileID: 6357114946146360780}
+--- !u!114 &914296157285595536
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 23e7cfe64e554094386268a4940bee79, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RopeDragView
+  m_ropeMaterial: {fileID: 2100000, guid: 27971b6c6e4fe13439d5deeb311c44fe, type: 2}
+  m_ropeWidth: 0.035
+  m_segments: 12
+  m_maxSag: 0.3
+  m_fallbackHandHeight: 1.1
+  m_npcKnotHeight: 0.25
+  m_dustPrefab: {fileID: 1045822040965688886, guid: 4de88cbc821234449becd970358420a7, type: 3}
 --- !u!1 &5536001738967602051
 GameObject:
   m_ObjectHideFlags: 0

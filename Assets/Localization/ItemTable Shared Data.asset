@@ -39,6 +39,14 @@ MonoBehaviour:
     m_Key: Item.Description.Taser
     m_Metadata:
       m_Items: []
+  - m_Id: 465442687246336
+    m_Key: Item.Name.Rope
+    m_Metadata:
+      m_Items: []
+  - m_Id: 465442729189376
+    m_Key: Item.Description.Rope
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

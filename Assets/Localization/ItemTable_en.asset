@@ -44,6 +44,14 @@ MonoBehaviour:
     m_Localized: If you fire and hit the target, you can subdue the suspect.
     m_Metadata:
       m_Items: []
+  - m_Id: 465442687246336
+    m_Localized: Rope
+    m_Metadata:
+      m_Items: []
+  - m_Id: 465442729189376
+    m_Localized: Used to tie up a stunned target and drag them along the ground.
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

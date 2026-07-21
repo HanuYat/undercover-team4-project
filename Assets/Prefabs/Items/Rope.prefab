@@ -46,7 +46,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 1960023520
+  GlobalObjectIdHash: 3918227804
   InScenePlacedSourceGlobalObjectIdHash: 3129635724
   DeferredDespawnTick: 0
   Ownership: 1
@@ -87,9 +87,9 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_itemName:
     m_TableReference:
-      m_TableCollectionName: 
+      m_TableCollectionName: GUID:faae75c9a0a19b441be27b8614effa3d
     m_TableEntryReference:
-      m_KeyId: 0
+      m_KeyId: 465442687246336
       m_Key: 
     m_FallbackState: 0
     m_WaitForCompletion: 0
@@ -97,9 +97,9 @@ MonoBehaviour:
   m_itemIcon: {fileID: 0}
   m_itemDescription:
     m_TableReference:
-      m_TableCollectionName: 
+      m_TableCollectionName: GUID:faae75c9a0a19b441be27b8614effa3d
     m_TableEntryReference:
-      m_KeyId: 0
+      m_KeyId: 465442729189376
       m_Key: 
     m_FallbackState: 0
     m_WaitForCompletion: 0
