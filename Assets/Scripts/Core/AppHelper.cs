@@ -6,24 +6,25 @@ using UnityEngine.SceneManagement;
 /// 씬 로드 실행 담당 — App.LoadScene의 실제 구현부. 직접 호출하지 말고 App.LoadScene을 쓸 것.
 /// 세션 중이면 NGO 씬 동기화(서버만), 아니면 로컬 로드.
 /// 전제: NetworkManager의 Enable Scene Management가 켜져 있어야 한다.
-/// TODO(3단계): AppBootstrap 프리팹(DontDestroyOnLoad·프레임 제한·중복 가드) 추가.
 /// </summary>
 public static class AppHelper
 {
     /// <summary>EScene → 실제 씬 이름. 빌드 인덱스에 결합하지 않는다 (NGO도 이름 기반 로드).</summary>
-    public static string ToSceneName(EScene scene) => scene switch
-    {
-        EScene.Title => "Title",        // 3단계에서 신설되는 로비 씬
-        EScene.InGame => "Main Scene",
-        _ => null,
-    };
+    public static string ToSceneName(EScene scene) =>
+        scene switch
+        {
+            EScene.Title => "Title", // 3단계에서 신설되는 로비 씬
+            EScene.InGame => "Main Scene",
+            _ => null,
+        };
 
-    private static EScene FromSceneName(string sceneName) => sceneName switch
-    {
-        "Title" => EScene.Title,
-        "Main Scene" => EScene.InGame,
-        _ => EScene.None,
-    };
+    private static EScene FromSceneName(string sceneName) =>
+        sceneName switch
+        {
+            "Title" => EScene.Title,
+            "Main Scene" => EScene.InGame,
+            _ => EScene.None,
+        };
 
     internal static void LoadScene(EScene scene)
     {
@@ -46,7 +47,10 @@ public static class AppHelper
                 return;
             }
 
-            SceneEventProgressStatus status = net.SceneManager.LoadScene(sceneName, LoadSceneMode.Single);
+            SceneEventProgressStatus status = net.SceneManager.LoadScene(
+                sceneName,
+                LoadSceneMode.Single
+            );
             if (status != SceneEventProgressStatus.Started)
                 Debug.LogError($"[AppHelper] NGO 씬 로드 실패: {scene} ({status})");
             return;

@@ -38,8 +38,8 @@ public class App : Singleton<App>
     #endregion
 
     #region 씬 상태 · 이벤트
-    public static UnityAction<EScene> OnSceneLoad; // 언로드 직전 (정리 작업 훅)
-    public static UnityAction<EScene> OnSceneLoaded; // 새 씬 로드 완료
+    public static event UnityAction<EScene> OnSceneLoad; // 언로드 직전 (정리 작업 훅)
+    public static event UnityAction<EScene> OnSceneLoaded; // 새 씬 로드 완료
 
     public static EScene PrevScene { get; private set; }
     public static EScene CurrentScene { get; private set; }
