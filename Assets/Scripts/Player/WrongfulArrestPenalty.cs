@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Threading;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
@@ -11,11 +10,12 @@ using UnityEngine;
 ///
 /// 흐름: 오검거 판정 → 시민을 원한 구역 수용(#277, 구역 인원 = 팀 카운트) → 임계치 초과 순간
 /// 구역 전원 출동 + <b>팀 카운트 즉시 리셋</b>(#278 — 추격 중 새 오검거는 새 카운트로 쌓여 새 추격대가 된다)
-/// → 추격 NPC에게 잡힌 플레이어(원인 제공자가 아니어도!)가 페널티 확정 → 맵의 미해소 페널티 NPC
-/// <b>전원</b>이 수렴한 뒤 2명이 양옆에서 광장까지 끌고 가고(#279) → 30초 매달기(행동불능) 후 자동 복귀.
+/// → 추격 NPC에게 잡힌 플레이어(원인 제공자가 아니어도!)가 페널티 확정 → <b>포획 시점에 미해소였던</b>
+/// 페널티 NPC 전원이 수렴한 뒤 2명이 양옆에서 광장까지 끌고 가고(#279) → 30초 매달기(행동불능) 후 자동 복귀.
 ///
-/// 폴백(#101 텔레포트 집행)이 두 겹의 안전망이다: ① 출동 시점에 구역이 비어 있으면 즉시,
-/// ② 추격이 타임아웃(m_chaseTimeoutSeconds)되면 원래 대상에게 — 기존 매달기 로직이 최후 보루로 남는다.
+/// <b>추격에 시간 제한은 없다(팀 결정)</b> — 못 잡으면 사냥 모드로 계속 배회하며 노린다.
+/// 페널티는 잡히거나 격퇴로 미뤄질 뿐 사라지지 않는다. 폴백(#101 텔레포트 집행)은 한 겹만 남는다:
+/// 출동 시점에 구역이 비어 추격대를 꾸릴 수 없는 예외 상황 — 기존 매달기 로직이 최후 보루다.
 ///
 /// 호루라기(#250)는 이번 범위 밖 — 격퇴 진입점(<see cref="RepelChasers"/>)만 열어 둔다.
 /// 판정·카운트·추격·호송은 모두 서버에서만 일어나고 결과(팀 카운트·NPC 상태·행동불능)만 동기화된다(#56).
@@ -35,6 +35,7 @@ public class WrongfulArrestPenalty : NetworkedManagerBase
     private const float k_carrierGap = 1.1f;         // 양옆 끌기 담당의 선두 기준 좌우 간격(m)
     private const float k_plazaArriveDistance = 2f;  // 호송 선두의 광장 도착 판정 거리(m)
     private const float k_carryTravelTimeoutSeconds = 90f; // 호송 이동 안전 상한(초) — 넘으면 스냅 텔레포트로 마무리
+    private const float k_warningSeconds = 8f;       // 출동 알림 표시 시간(초) — 카운트다운이 아니라 잠깐 뜨는 경고
 
     [Header("광장 (매달기 지점) — 비우면 원점")]
     [Tooltip("페널티 확정 시 끌려가/이송될 맵 중앙 지점. 씬의 빈 GameObject를 지정한다")]
@@ -45,8 +46,6 @@ public class WrongfulArrestPenalty : NetworkedManagerBase
     [SerializeField] private Transform m_detentionPoint;
 
     [Header("추격 (#278)")]
-    [Tooltip("출동 후 이 시간(초) 안에 아무도 못 잡으면 원래 대상에게 텔레포트 집행으로 폴백한다")]
-    [SerializeField] private float m_chaseTimeoutSeconds = 60f;
     [Tooltip("격퇴(RepelChasers, 호루라기 #250 예정)가 미치는 반경(m)")]
     [SerializeField] private float m_repelRadius = 10f;
 
@@ -67,20 +66,11 @@ public class WrongfulArrestPenalty : NetworkedManagerBase
     // 원한 구역 대기 인원(#277) — 불변식: 이 목록 수 == 팀 카운트. 출동 시 통째로 추격대가 되며 비워진다.
     private readonly List<NpcController> m_detained = new List<NpcController>();
 
-    // 미해소 페널티 NPC 전원(전 추격대 합산) — 포획 시 이들 전부가 수렴한다(독박, #276 확정).
+    // 미해소 페널티 NPC 전원(전 출동분 합산) — 포획 시점의 스냅샷이 수렴 대상이 된다(독박, #276 확정).
     private readonly List<NpcController> m_activeNpcs = new List<NpcController>();
 
-    // 출동한 추격대 — 추격대별 원래 대상·타임아웃을 관리한다. 포획 확정 시 전부 해산.
-    private sealed class Squad
-    {
-        public readonly List<NpcController> Npcs = new List<NpcController>();
-        public Transform Target;            // 임계치를 넘긴 초기 타겟 — 타임아웃 폴백 집행 대상
-        public CancellationTokenSource Cts; // 타임아웃 취소 채널 (포획 확정·매니저 파괴 시 취소)
-    }
-
-    private readonly List<Squad> m_squads = new List<Squad>();
-
-    // 현재 호송(수렴~광장) 처리 중인 대상 — 동시에 하나만. 추격 상태의 늦은 포획 통보는 무시된다.
+    // 현재 호송(수렴~광장) 처리 중인 대상 — 동시에 하나만. 추격 상태의 늦은 포획 통보는 무시된다
+    // (호송 중 새로 출동한 추격대는 계속 추격하다가, 이 호송이 끝난 뒤의 포획부터 다시 접수된다).
     private Transform m_carryTarget;
 
     /// <summary>팀 공유 오검거 카운트(페널티 게이지). 전 피어 읽기 가능.</summary>
@@ -112,14 +102,6 @@ public class WrongfulArrestPenalty : NetworkedManagerBase
     {
         if (Judge != null)
             Judge.OnArrestJudged -= HandleArrestJudged;
-
-        CancelAllSquads();
-    }
-
-    public override void OnDestroy()
-    {
-        CancelAllSquads();
-        base.OnDestroy(); // App 등록 해제
     }
 
     // ---- 오검거 접수: 개인 집계 + 수용 + 출동 판단 (서버 전용) ----
@@ -180,57 +162,21 @@ public class WrongfulArrestPenalty : NetworkedManagerBase
             return;
         }
 
-        var squad = new Squad { Target = initialTarget };
-        squad.Npcs.AddRange(m_detained);
-        m_detained.Clear();
-
-        foreach (NpcController npc in squad.Npcs)
+        int launched = m_detained.Count;
+        foreach (NpcController npc in m_detained)
         {
             m_activeNpcs.Add(npc);
             npc.OnPenaltyCaught += HandlePenaltyCaught;
             npc.StartPenaltyChase(initialTarget); // null이면 사냥 모드로 시작해 범위에 드는 플레이어를 문다
         }
+        m_detained.Clear();
 
-        // 초기 타겟 본인에게 경고 — 잡히기 전까지가 유예 창(도망·격퇴). 타임아웃이 지나면 폴백 강제 이송된다.
-        ShowWarning(initialTarget, m_chaseTimeoutSeconds);
-
-        squad.Cts = CancellationTokenSource.CreateLinkedTokenSource(destroyCancellationToken);
-        m_squads.Add(squad);
-        SquadTimeoutAsync(squad).Forget();
+        // 초기 타겟 본인에게 알림(잠깐 표시 후 자동 소멸). 추격에 시간 제한은 없다(팀 결정) —
+        // 못 잡으면 사냥 모드로 계속 배회하며 노리므로, 페널티는 잡히거나 격퇴로 미뤄질 뿐 사라지지 않는다.
+        ShowWarning(initialTarget, k_warningSeconds);
 
         string targetName = initialTarget != null ? initialTarget.name : "(없음 — 사냥 모드)";
-        Debug.Log($"[오검거] 추격대 출동 — {squad.Npcs.Count}명, 초기 타겟 {targetName}");
-    }
-
-    // 폴백 ② — 추격 타임아웃: 아무도 못 잡았다. 추격대를 해산하고 원래 대상에게 텔레포트 집행 (#101).
-    private async UniTaskVoid SquadTimeoutAsync(Squad squad)
-    {
-        bool timedOut = false;
-        try
-        {
-            await UniTask.Delay(TimeSpan.FromSeconds(m_chaseTimeoutSeconds), cancellationToken: squad.Cts.Token);
-            timedOut = true;
-        }
-        catch (OperationCanceledException)
-        {
-            // 포획 확정(전 추격대 해산) 또는 매니저 파괴 — 폴백 없이 종료
-        }
-        finally
-        {
-            squad.Cts.Dispose();
-        }
-
-        if (!timedOut)
-            return;
-
-        m_squads.Remove(squad);
-        foreach (NpcController npc in squad.Npcs)
-            ReleaseNpc(npc);
-        HideWarning(squad.Target);
-
-        Debug.Log("[오검거] 추격 타임아웃 — 텔레포트 집행 폴백");
-        if (squad.Target != null)
-            HangAsync(squad.Target).Forget();
+        Debug.Log($"[오검거] 추격대 출동 — {launched}명, 초기 타겟 {targetName}");
     }
 
     /// <summary>
@@ -255,7 +201,9 @@ public class WrongfulArrestPenalty : NetworkedManagerBase
 
     // ---- 포획·수렴·호송 (#279) ----
 
-    // 추격 NPC의 포획 통보 — 잡힌 플레이어가 페널티 독박: 전 추격대를 해산하고 미해소 NPC 전원을 수렴시킨다.
+    // 추격 NPC의 포획 통보 — 잡힌 플레이어가 페널티 독박: 포획 시점의 미해소 NPC 스냅샷이 수렴한다.
+    // 스냅샷 이후(호송 중) 새로 출동한 추격대는 건드리지 않는다 — 자기 사냥을 계속하다가
+    // 이 호송이 끝난 뒤의 포획부터 다시 접수된다 (조기 해산 방지, 리뷰 반영).
     private void HandlePenaltyCaught(NpcController catcher, Transform caught)
     {
         if (m_carryTarget != null)
@@ -265,71 +213,67 @@ public class WrongfulArrestPenalty : NetworkedManagerBase
 
         m_carryTarget = caught;
 
-        // 전 추격대 타임아웃 취소 + 경고 정리 — 잡힌 한 명이 전부 흡수한다 (#276 확정)
-        foreach (Squad squad in m_squads)
-        {
-            squad.Cts.Cancel();
-            HideWarning(squad.Target);
-        }
-        m_squads.Clear();
-
         // 즉시 행동불능(구조 불가) — 매달기와 같은 계열의 무력화 (#101/#105)
         PlayerIncapacitation incap = caught.GetComponent<PlayerIncapacitation>();
         if (incap != null)
             incap.Incapacitate(revivable: false);
 
         PruneDead(m_activeNpcs);
-        foreach (NpcController npc in m_activeNpcs)
+        var convergers = new List<NpcController>(m_activeNpcs); // 포획 시점 스냅샷 — 이 호송의 수렴·해산 대상
+        foreach (NpcController npc in convergers)
             npc.StartPenaltyConverge(caught);
 
-        Debug.Log($"[오검거] 포획 — {catcher.name} → {caught.name}, {m_activeNpcs.Count}명 수렴 시작");
-        CarrySequenceAsync(caught).Forget();
+        Debug.Log($"[오검거] 포획 — {catcher.name} → {caught.name}, {convergers.Count}명 수렴 시작");
+        CarrySequenceAsync(caught, convergers).Forget();
     }
 
     // 수렴 대기 → 대형 편성(2명 양옆 끌기 + 뒤따름) → 광장 도착 → 30초 매달기. (서버 전용)
-    private async UniTask CarrySequenceAsync(Transform caught)
+    // convergers = 포획 시점 스냅샷 — 수렴·대형·해산 전부 이 목록 기준. m_activeNpcs 전체가 아니다.
+    private async UniTask CarrySequenceAsync(Transform caught, List<NpcController> convergers)
     {
         // ---- 수렴 대기: 전원이 모이거나 상한이 지날 때까지 — "다 모여야 끌기 시작" (#276 확정)
         float deadline = Time.time + m_convergeTimeoutSeconds;
         while (Time.time < deadline)
         {
-            if (caught == null || !PruneActives())
+            PruneDead(convergers);
+            if (caught == null || convergers.Count == 0)
             {
-                AbortCarry();
+                AbortCarry(convergers);
                 return;
             }
 
-            if (AllActivesWithin(caught.position, m_convergeArriveDistance + 1f))
+            if (AllWithin(convergers, caught.position, m_convergeArriveDistance + 1f))
                 break;
 
             await UniTask.Delay(TimeSpan.FromSeconds(0.25), cancellationToken: destroyCancellationToken);
         }
 
-        if (caught == null || !PruneActives())
+        PruneDead(convergers);
+        if (caught == null || convergers.Count == 0)
         {
-            AbortCarry();
+            AbortCarry(convergers);
             return;
         }
 
         // ---- 대형 편성: 가장 가까운 2명이 양옆 끌기, 나머지는 뒤따름 (#279)
         Vector3 caughtPos = caught.position;
-        m_activeNpcs.Sort(
+        convergers.Sort(
             (a, b) => (a.transform.position - caughtPos).sqrMagnitude
                 .CompareTo((b.transform.position - caughtPos).sqrMagnitude));
 
-        NpcController carrierA = m_activeNpcs[0];
-        NpcController carrierB = m_activeNpcs.Count > 1 ? m_activeNpcs[1] : null;
+        NpcController carrierA = convergers[0];
+        NpcController carrierB = convergers.Count > 1 ? convergers[1] : null;
 
         carrierA.StartPenaltyEscort(m_plazaPoint, null, Vector3.zero);
         if (carrierB != null)
             carrierB.StartPenaltyEscort(m_plazaPoint, carrierA, new Vector3(k_carrierGap, 0f, 0f));
 
-        for (int i = 2; i < m_activeNpcs.Count; i++)
+        for (int i = 2; i < convergers.Count; i++)
         {
             // 뒤따름 대형 — 좌우 지그재그로 한 줄씩 뒤에 선다
             float x = i % 2 == 0 ? -0.9f : 0.9f;
             float z = -(1.8f + (i - 2) / 2 * 1.2f);
-            m_activeNpcs[i].StartPenaltyEscort(m_plazaPoint, carrierA, new Vector3(x, 0f, z));
+            convergers[i].StartPenaltyEscort(m_plazaPoint, carrierA, new Vector3(x, 0f, z));
         }
 
         // 플레이어 본인은 오너 클라가 끌기 담당 2명 사이를 추종한다 — NetworkTransform 오너 권한 (#279)
@@ -337,7 +281,7 @@ public class WrongfulArrestPenalty : NetworkedManagerBase
         if (view != null)
             view.StartCarried(carrierA, carrierB != null ? carrierB : carrierA);
 
-        Debug.Log($"[오검거] 호송 시작 — 끌기 {carrierA.name}{(carrierB != null ? "·" + carrierB.name : "")}, 총 {m_activeNpcs.Count}명");
+        Debug.Log($"[오검거] 호송 시작 — 끌기 {carrierA.name}{(carrierB != null ? "·" + carrierB.name : "")}, 총 {convergers.Count}명");
 
         // ---- 광장 도착 대기 — 선두 기준. 선두 소실·광장 미배선·상한 초과면 스냅 텔레포트(HangAsync)가 보정한다
         float travelDeadline = Time.time + k_carryTravelTimeoutSeconds;
@@ -356,20 +300,21 @@ public class WrongfulArrestPenalty : NetworkedManagerBase
             await UniTask.Delay(TimeSpan.FromSeconds(0.25), cancellationToken: destroyCancellationToken);
         }
 
-        // ---- 종료: 끌기 해제 → NPC 시민 복귀 → 광장 스냅 + 30초 매달기 (#101 로직 재사용)
+        // ---- 종료: 끌기 해제 → 수렴분만 시민 복귀 → 광장 스냅 + 30초 매달기 (#101 로직 재사용)
+        // 호송 중 새로 출동한 추격대(m_activeNpcs에는 있지만 convergers에는 없음)는 계속 추격한다.
         if (view != null)
             view.StopCarried();
-        ReleaseAllActives();
+        ReleaseAll(convergers);
         m_carryTarget = null;
 
         if (caught != null)
             await HangAsync(caught);
     }
 
-    // 호송 중단(대상 소실 등) — NPC들을 시민으로 복귀시키고 처리 중 표시를 지운다.
-    private void AbortCarry()
+    // 호송 중단(대상 소실 등) — 수렴 중이던 NPC만 시민으로 복귀시키고 처리 중 표시를 지운다.
+    private void AbortCarry(List<NpcController> convergers)
     {
-        ReleaseAllActives();
+        ReleaseAll(convergers);
         m_carryTarget = null;
         Debug.Log("[오검거] 호송 중단 — 대상 소실");
     }
@@ -427,39 +372,28 @@ public class WrongfulArrestPenalty : NetworkedManagerBase
         m_activeNpcs.Remove(npc);
     }
 
-    private void ReleaseAllActives()
+    // 목록의 NPC 전원 임무 해제 — 뒤에서부터 지워 ReleaseNpc의 m_activeNpcs.Remove와 안전하게 공존한다.
+    private void ReleaseAll(List<NpcController> npcs)
     {
-        for (int i = m_activeNpcs.Count - 1; i >= 0; i--)
-            ReleaseNpc(m_activeNpcs[i]);
-    }
-
-    // 미해소 목록에서 파괴된 NPC를 걷어낸다 — 남은 인원이 있으면 true.
-    private bool PruneActives()
-    {
-        PruneDead(m_activeNpcs);
-        return m_activeNpcs.Count > 0;
+        for (int i = npcs.Count - 1; i >= 0; i--)
+        {
+            ReleaseNpc(npcs[i]);
+            npcs.RemoveAt(i);
+        }
     }
 
     private static void PruneDead(List<NpcController> list) => list.RemoveAll(npc => npc == null);
 
-    private bool AllActivesWithin(Vector3 center, float radius)
+    private static bool AllWithin(List<NpcController> npcs, Vector3 center, float radius)
     {
         float sqr = radius * radius;
-        foreach (NpcController npc in m_activeNpcs)
+        foreach (NpcController npc in npcs)
         {
             if (npc != null && (npc.transform.position - center).sqrMagnitude > sqr)
                 return false;
         }
 
         return true;
-    }
-
-    private void CancelAllSquads()
-    {
-        foreach (Squad squad in m_squads)
-            squad.Cts?.Cancel(); // Dispose는 SquadTimeoutAsync의 finally가 맡는다
-
-        m_squads.Clear();
     }
 
     private static void ShowWarning(Transform target, float seconds)
@@ -470,16 +404,6 @@ public class WrongfulArrestPenalty : NetworkedManagerBase
         PlayerPenaltyView view = target.GetComponent<PlayerPenaltyView>();
         if (view != null)
             view.ShowWarning(seconds);
-    }
-
-    private static void HideWarning(Transform target)
-    {
-        if (target == null)
-            return;
-
-        PlayerPenaltyView view = target.GetComponent<PlayerPenaltyView>();
-        if (view != null)
-            view.HideWarning();
     }
 
     // 개인 집계 전체를 "client N:x회" 형태로 이어붙인다 — 정산 코믹 스탯이 붙기 전까지 로그로 확인용.

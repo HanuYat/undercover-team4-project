@@ -4,9 +4,9 @@ using UnityEngine;
 /// <summary>
 /// 오검거 페널티의 플레이어 측 표현 (#101/#279) — 두 가지를 담당한다:
 ///
-/// 1) <b>추격 경고</b>: 추격대 출동 시 초기 타겟 "본인"에게만 카운트다운을 띄운다.
+/// 1) <b>추격 경고</b>: 추격대 출동 시 초기 타겟 "본인"에게만 알림을 잠깐 띄운다(표시 시간 뒤 자동 소멸).
 ///    서버의 <see cref="WrongfulArrestPenalty"/>가 호출하면 [Rpc(SendTo.Owner)]로 대상 오너 클라에만
-///    전달된다 — 다른 플레이어 화면에는 뜨지 않는다. 카운트다운은 폴백 강제 이송까지 남은 시간.
+///    전달된다 — 다른 플레이어 화면에는 뜨지 않는다. 추격에 시간 제한이 없으므로(팀 결정) 카운트다운이 아니다.
 ///    [임시] 표시는 OnGUI — PlayerReviveHud·SignalDecoderHud의 임시 HUD 관례를 따른다(정식 UI 후속).
 ///
 /// 2) <b>끌려가기 중계</b>: 포획 후 호송(#279)에서 서버가 끌기 담당 NPC 2명을 넘기면, 오너 클라가
@@ -28,7 +28,7 @@ public class PlayerPenaltyView : NetworkBehaviour
 
     // ---- 추격 경고 (#278) ----
 
-    /// <summary>서버 전용 — 대상 오너 클라에 카운트다운 경고를 띄운다. seconds = 폴백 강제 이송까지 남은 시간.</summary>
+    /// <summary>서버 전용 — 대상 오너 클라에 경고를 띄운다. seconds = 표시 시간(지나면 자동 소멸).</summary>
     public void ShowWarning(float seconds)
     {
         if (IsSpawned)
@@ -56,7 +56,7 @@ public class PlayerPenaltyView : NetworkBehaviour
     private void ShowLocal(float seconds)
     {
         m_showing = true;
-        m_deadline = Time.time + seconds;
+        m_deadline = Time.time + seconds; // 표시 종료 시각 — 카운트다운이 아니라 알림 지속 시간
     }
 
     // ---- 끌려가기 (#279) ----
@@ -111,10 +111,9 @@ public class PlayerPenaltyView : NetworkBehaviour
         if (!m_showing)
             return;
 
-        float remaining = m_deadline - Time.time;
-        if (remaining <= 0f)
+        if (Time.time >= m_deadline)
         {
-            m_showing = false; // 폴백 집행 시점 — 이후엔 행동불능 상태가 대신 보인다
+            m_showing = false; // 표시 시간 종료 — 자동 소멸
             return;
         }
 
@@ -123,8 +122,9 @@ public class PlayerPenaltyView : NetworkBehaviour
         Rect rect = new Rect((Screen.width - width) * 0.5f, Screen.height * 0.28f, width, 64f);
         GUI.Label(
             rect,
-            $"오검거 누적 초과! 성난 시민들이 당신을 노립니다 — 잡히면 광장으로 끌려갑니다\n({Mathf.CeilToInt(remaining)}초 안에 안 잡혀도 강제 이송)",
-            m_style);
+            "오검거 누적 초과! 성난 시민들이 당신을 노립니다 — 잡히면 광장으로 끌려갑니다",
+            m_style
+        );
     }
 
     private void EnsureStyle()
@@ -137,7 +137,7 @@ public class PlayerPenaltyView : NetworkBehaviour
             alignment = TextAnchor.MiddleCenter,
             fontSize = 20,
             fontStyle = FontStyle.Bold,
-            wordWrap = true
+            wordWrap = true,
         };
         m_style.normal.textColor = new Color(1f, 0.5f, 0.4f);
     }

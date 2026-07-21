@@ -150,9 +150,13 @@ public class NpcAnimationDriver : MonoBehaviour
         m_swingUntil = Time.time + m_swingAnimSeconds;
     }
 
-    /// <summary>스윙 모션이 성립할 수 있는 기준 상태인가 — 구속·무력화 상태에서는 공격이 나올 수 없다. (#220)</summary>
+    /// <summary>스윙 모션이 성립할 수 있는 기준 상태인가 — 구속·무력화 상태에서는 공격이 나올 수 없다. (#220)
+    /// 오검거 페널티 상태(#277~#279)도 저항으로 되돌아가지 않으므로 늦게 도착한 스윙은 유령이다 — 차단.</summary>
     private static bool CanSwingIn(NpcState state) =>
-        state is not (NpcState.Captured or NpcState.Escorted or NpcState.Stunned);
+        state is not (
+            NpcState.Captured or NpcState.Escorted or NpcState.Stunned
+            or NpcState.Detained or NpcState.Chasing or NpcState.PenaltyEscorting
+        );
 
     // FSM 기준 상태에 대응하는 Animator base 번호. Attack 번호(3)는 단발 스윙 전용이라 base로 쓰지 않는다 (#220).
     // 저항(Attack)의 base는 이동 여부로 갈린다 — 추격 중이면 달리기(Run), 사거리 안에서 멈추면 버틴 자세(Idle) (#254).
