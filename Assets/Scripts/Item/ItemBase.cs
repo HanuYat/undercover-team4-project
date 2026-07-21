@@ -26,6 +26,15 @@ public abstract class ItemBase : NetworkBehaviour
     [SerializeField]
     private GameObject m_heldModelPrefab;
 
+    [Header("3인칭 손 그립 (#151)")]
+    [Tooltip("손 본 앵커 기준 위치 오프셋(m). 아이템마다 모델 피벗이 달라 개별 조정이 필요하다")]
+    [SerializeField]
+    private Vector3 m_heldPositionOffset;
+
+    [Tooltip("손 본 앵커 기준 회전 오프셋(도). 실제로 손에 쥔 각도로 맞춘다")]
+    [SerializeField]
+    private Vector3 m_heldRotationOffset;
+
     [Header("조준 피드백")]
     [Tooltip("이 아이템으로 사용 가능한 대상을 조준했을 때의 윤곽선 색 (#184)")]
     [SerializeField]
@@ -42,6 +51,12 @@ public abstract class ItemBase : NetworkBehaviour
 
     /// <summary>장착 시 1인칭 손에 들리는 모델 프리팹. 없으면 null — PlayerHandView가 표시를 생략한다. (#45)</summary>
     public GameObject HeldModelPrefab => m_heldModelPrefab;
+
+    /// <summary>3인칭 손 앵커 기준 위치 오프셋. PlayerHeldItemView가 표시 모델에 적용한다. (#151)</summary>
+    public Vector3 HeldPositionOffset => m_heldPositionOffset;
+
+    /// <summary>3인칭 손 앵커 기준 회전 오프셋(오일러 각). PlayerHeldItemView가 표시 모델에 적용한다. (#151)</summary>
+    public Vector3 HeldRotationOffset => m_heldRotationOffset;
 
     /// <summary>이 아이템으로 사용 가능한 대상을 조준 중일 때의 윤곽선 색. (#184)</summary>
     public Color TargetOutlineColor => m_targetOutlineColor;
