@@ -42858,7 +42858,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3746892711893343113, guid: d1c30cbbf1aa4ac44b4f5ad0936bd9f2, type: 3}
       propertyPath: m_Name
-      value: "Rope (\uD14C\uC2A4\uD2B8 \uBC30\uCE58)"
+      value: Rope_TestPickup
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
