@@ -71,7 +71,11 @@ PR 번호를 받아 아래 절차대로 리뷰하고, 리뷰어가 훑어보기 
    - diff에 `FindFirstObjectByType` **추가**가 있으면 → 대상 타입이 App 등록 타입인지 확인(R1 위반), 아니면 architecture.md §4 예외 표에 기재됐는지 확인(미기재면 지적)
    - diff에 `static` + `Instance` 프로퍼티/필드 **신설**이 있으면 → R2 위반
    - diff에 `SceneManager.LoadScene` 직접 호출 **추가**가 있으면 → R7 위반 (AppHelper 내부 제외)
-   - 새 매니저 클래스(베이스 상속)가 생겼으면 → App 필드/프로퍼티 추가·`[DefaultExecutionOrder]` 명시 여부(R4), `Awake`/`OnDestroy`의 `base` 호출(R5), 다른 매니저 구독이 Start에 있는지(R6), R3 등록 기준(유일성+교차 도메인 2곳 이상) 충족 근거
+   - 새 매니저 클래스(베이스 상속)가 생겼으면 → App 필드/프로퍼티 추가·`[DefaultExecutionOrder]` 명시 여부(R4), `Awake`/`OnDestroy`의 `base` 호출(R5), 다른 매니저 구독이 Start에 있는지(R6), 그리고 아래 **R3 등록 기준 검사**.
+   - **R3 등록 기준 검사** (App에 새로 등록되거나 App 필드가 추가된 타입마다 수행하고, **집계 근거를 리포트에 출력**한다): architecture.md §1의 도메인 정의를 기준으로 이 타입을 참조하는 도메인 수를 센다.
+     1. `git grep '<타입명>' -- '*.cs'`로 참조 후보를 찾고, 각 매치가 **실제 코드 참조인지 주석/`<see cref>`인지 눈으로 걸러낸다** (주석은 제외).
+     2. 코드 참조가 있는 파일의 폴더로 도메인을 판정하되 — 비도메인 폴더(`Core`·`UI`·`Data`·`Scene`·`Localization`·`Editor`·`Test`), **같은 도메인 내부 파일, 같은 오브젝트 `[RequireComponent]` 배선은 세지 않는다**.
+     3. 리포트에 **집계한 도메인 목록과 개수**를 반드시 쓴다 (예: `ArrestJudge ← Economy·Events·HQ·Round = 4도메인 → 등록 타당`). 유일성(①)까지 만족하고 도메인 2곳 이상이면 등록 타당, **2곳 미만이면 🟠 "R3 미달 — 참조자 1곳·같은 도메인이면 SerializeField 연결이 맞다"**. 이미 등록돼 있는데 미달로 나오면 강등 후보로 지적한다.
    - 매니저를 **필드에 캐싱**하는 코드가 추가됐으면 → R8 위반 (`private X Xxx => App.그룹.X;` 프로퍼티 패턴 안내)
    - 유예 조항(§5): 머지 이전에 열린 브랜치의 위반은 🟡로, 이후 신규 코드는 🟠 이상으로 분류
 2. **네이밍 컨벤션** (CLAUDE.md / GDD 10-5): 신규·수정 코드에서 `m_`(private 인스턴스), `s_`(static), `k_`(const), `I`/`T` 접두사, 이벤트 `On` 접두사, public 멤버 PascalCase 위반을 찾는다.

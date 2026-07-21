@@ -18,7 +18,9 @@
   - `App.UI` — UIManagerBase(3단계 예정) · CrosshairUI · ChannelingGaugeUI
   - `App.SceneFlow` — 현재 씬의 SceneManagerBase (3단계 예정)
 - **등록 메커니즘** — `CommonManagerBase`(일반) / `NetworkedManagerBase`(NetworkBehaviour)를 상속하면 Awake에서 `ManagerHandler`가 리플렉션으로 App의 같은 타입 필드에 주입하고, 파괴 시 해제한다. **App 필드에 직접 대입하는 코드를 만들지 말 것.**
-- **도메인** = `Assets/Scripts/` 하위 폴더 (Round, NPC, Player, HQ, Item, Interaction, Events, Network). 판별이 애매하면 "이 파일이 바뀌는 이유가 뭐냐"로 판단한다. `UI/`는 각 도메인의 화면 표현, `Data/`는 전 도메인 공유 어휘로 취급해 교차 참조로 세지 않는다.
+- **도메인** = `Assets/Scripts/` 하위의 **게임플레이 폴더**. 현재: Round, NPC, Player, HQ, Item, Interaction, Events, Network, Economy (게임플레이 폴더가 새로 생기면 자동 포함). 판별이 애매하면 "이 파일이 바뀌는 이유가 뭐냐"로 판단한다.
+  - **도메인으로 세지 않는 폴더**: `Core`(App 인프라 자체), `UI`(각 도메인의 화면 표현), `Data`(전 도메인 공유 어휘), `Scene`(씬 진입점), `Localization`(공유 자원), `Editor`·`Test`(런타임 아님).
+  - **참조를 셀 때**: (a) **실제 코드 의존성만** 센다 — 주석·독스트링의 언급(`<see cref=...>` 포함)은 제외. (b) 같은 도메인 내부의 다른 파일 참조는 세지 않는다. (c) 같은 오브젝트에 강제된 컴포넌트(`[RequireComponent]`) 배선은 같은 도메인으로 본다 (별도 도메인이 아님).
 
 ## 2. 규칙 (R1–R8)
 
