@@ -165,6 +165,8 @@ public class PlayerReviver : NetworkBehaviour
         PlayerIncapacitation targetIncap = target.GetComponent<PlayerIncapacitation>();
         if (targetIncap == null || !targetIncap.IsIncapacitated)
             return; // 다운 상태에서만 구조 가능
+        if (!targetIncap.IsRevivable)
+            return; // 오검거 매달기(#101)는 구조 대상이 아님 — 30초 자동 복귀만 (히트박스가 꺼져 조준도 안 되지만 방어)
         if (!IsInRange(target))
             return; // 사거리 밖이면 시작조차 안 함
 
