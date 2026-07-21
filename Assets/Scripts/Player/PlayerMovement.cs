@@ -19,6 +19,10 @@ public class PlayerMovement : NetworkBehaviour
     [SerializeField]
     private float m_gravity = -9.81f;
 
+    [Header("넉백 (폭발 등 외력)")]
+    [Tooltip("넉백 속도가 잦아드는 감쇠율(1/초) — 클수록 빨리 멈춘다")]
+    [SerializeField] private float m_knockbackDamping = 4f;
+
     // PlayerAnimationDriver가 속도 정규화에 사용 (실제 속도 ↔ 블렌드 트리 좌표 분리)
     public float MoveSpeed => m_moveSpeed;
     public float SprintSpeed => m_sprintSpeed;
@@ -72,6 +76,7 @@ public class PlayerMovement : NetworkBehaviour
     private float m_standCamHeight; // 평소(서기) 카메라 높이 — 프리팹 초기값에서 캡처 (#105)
     private float m_downCamBlend; // 서기 시점(0) ↔ 다운 시점(1) 보간 진행도 (#105)
     private float m_verticalVelocity;
+    private Vector3 m_knockbackVelocity; // 외력으로 밀려나는 수평 속도 — 매 프레임 감쇠 (#232 폭발 넉백)
     private bool m_cursorUnlocked; // 임시: OnGUI 버튼 조작용 커서 해제 상태
 
     // 끌려가기(#279) — 오검거 호송 중 오너 로컬이 끌기 NPC 2명을 추종한다. 앵커가 파괴돼도
@@ -293,6 +298,26 @@ public class PlayerMovement : NetworkBehaviour
         HandleMove();
     }
 
+    /// <summary>
+    /// 외력으로 밀어낸다 — 폭발 넉백 등(<see cref="BombExplosionView"/>). 세기는 m/s 단위 속도로 준다.
+    ///
+    /// <b>오너 로컬 전용.</b> 이동 권한이 오너에게 있어(CharacterController + 오너 권한 NetworkTransform)
+    /// 남의 인스턴스에서 밀어봤자 오너의 다음 위치 전파에 덮인다 — 그래서 오너가 아니면 조용히 무시한다.
+    /// 각 피어가 자기 플레이어에만 적용하는 전제로 호출자가 전수 순회해도 되게 만든 방어다.
+    /// (세션이 없는 오프라인 테스트에서는 IsOwner가 false이므로 스폰 여부로 먼저 거른다)
+    /// </summary>
+    public void AddKnockback(Vector3 velocity)
+    {
+        if (IsSpawned && !IsOwner) return;
+
+        m_knockbackVelocity += new Vector3(velocity.x, 0f, velocity.z);
+
+        // 위로 띄우는 성분은 중력과 같은 채널로 넣어야 접지 판정·낙하가 자연스럽게 이어진다.
+        // 이미 더 크게 튀어오른 중이면 덮어쓰지 않는다(연쇄 폭발이 상승을 잘라먹지 않게).
+        if (velocity.y > 0f)
+            m_verticalVelocity = Mathf.Max(m_verticalVelocity, velocity.y);
+    }
+
     /// <summary>커서 잠금/해제를 전환한다 — 해제 중엔 시점 회전도 정지. ESC 임시 토글·인벤토리 편집 모드(#144)가 공용.</summary>
     public void SetCursorUnlocked(bool unlocked)
     {
@@ -370,7 +395,13 @@ public class PlayerMovement : NetworkBehaviour
         float speed = IsCrouching ? m_crouchSpeed
             : m_inputHandler.IsSprinting ? m_sprintSpeed
             : m_moveSpeed;
-        Vector3 velocity = moveDirection * speed + Vector3.up * m_verticalVelocity;
+        // 넉백은 입력 이동과 별개로 감쇠하며 합산된다 — 다운·라운드 종료로 입력이 막혀도 폭발엔 밀려난다
+        Vector3 velocity = moveDirection * speed + m_knockbackVelocity + Vector3.up * m_verticalVelocity;
         m_controller.Move(velocity * Time.deltaTime);
+
+        // 프레임률과 무관하게 같은 곡선으로 잦아들도록 지수 감쇠
+        m_knockbackVelocity *= Mathf.Exp(-m_knockbackDamping * Time.deltaTime);
+        if (m_knockbackVelocity.sqrMagnitude < 0.01f)
+            m_knockbackVelocity = Vector3.zero;
     }
 }
