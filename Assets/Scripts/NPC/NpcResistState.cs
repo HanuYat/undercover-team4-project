@@ -30,6 +30,9 @@ public class NpcResistState : NpcStateBase
     // 눈에 보이는 타격과 HP 감소를 일치시킨다. k_noPendingStrike면 대기 중인 타격 없음. (#220)
     private float m_pendingStrikeTime = k_noPendingStrike;
 
+    // 스윙 동안 이동을 멈추는 종료 시각 — 멈춰서 때린다. 0이면 홀드 중 아님 (팀 피드백: 스케이트 수정)
+    private float m_swingHoldUntil;
+
     // 추격 재경로 스로틀 상태 (#254)
     private float m_repathTimer;
     private Vector3 m_lastChaseDestination;
@@ -61,6 +64,7 @@ public class NpcResistState : NpcStateBase
         m_resistStartTime = Time.time;
         m_nextAttackTime = Time.time + m_config.AttackInterval;
         m_pendingStrikeTime = k_noPendingStrike; // 직전 저항의 예약이 남아 첫 타격이 앞당겨지지 않게
+        m_swingHoldUntil = 0f;
 
         m_repathTimer = 0f;
         m_lastChaseDestination = k_noDestination; // 첫 Tick에 무조건 목적지를 새로 잡게 한다
@@ -98,6 +102,11 @@ public class NpcResistState : NpcStateBase
             int variant = Random.Range(0, m_config.SwingVariantCount);
             m_owner.RaiseAttackSwing(variant);
             m_pendingStrikeTime = Time.time + m_config.SwingImpactOffset(variant);
+
+            // 멈춰서 때린다 — 스윙 동안 추격 이동을 멈춰, 표적이 움직여도 미끄러지며 때리지 않는다 (팀 피드백)
+            m_swingHoldUntil = Time.time + m_config.SwingHoldSeconds;
+            if (m_owner.Agent.isOnNavMesh)
+                m_owner.Agent.isStopped = true;
         }
 
         // 타격 프레임 도달 — 예약된 스윙의 데미지를 지금 넣는다. 범위 재수집도 이 순간에 하므로
@@ -179,6 +188,10 @@ public class NpcResistState : NpcStateBase
     /// </summary>
     private void ChaseTarget(Transform target)
     {
+        // 스윙 홀드 중엔 제자리 — 홀드가 끝나면 아래 경로가 isStopped를 되돌려 추격을 재개한다
+        if (Time.time < m_swingHoldUntil)
+            return;
+
         if (target == null)
         {
             if (m_owner.Agent.isOnNavMesh)
