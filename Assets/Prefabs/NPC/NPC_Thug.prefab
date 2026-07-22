@@ -229,12 +229,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ThugAttacker
   ShowTopMostFoldoutHeaderGroup: 1
-  m_targetSearchRadius: 40
-  m_attackRange: 3.5
-  m_attackInterval: 1.2
-  m_attackDamage: 12
-  m_disturbanceRadius: 8
-  m_disturbancePulseInterval: 1
+  m_config: {fileID: 11400000, guid: 4e1d103796e33144989780fce7672753, type: 2}
 --- !u!114 &1866420322299295921
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -248,7 +243,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ThugAnimationDriver
   m_moveSpeedThreshold: 0.3
-  m_attackAnimDuration: 0.6
+  m_runReferenceSpeed: 4.5
+  m_swingAnimSeconds: 0.9
   m_animator: {fileID: 0}
 --- !u!1001 &3679051956096844986
 PrefabInstance:

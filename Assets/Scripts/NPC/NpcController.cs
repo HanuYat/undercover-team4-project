@@ -162,6 +162,7 @@ public partial class NpcController : NetworkBehaviour
         m_stateMachine.AddState(NpcState.Detained, new NpcDetainedState(this));
         m_stateMachine.AddState(NpcState.Chasing, new NpcChaseState(this, m_chaseConfig, m_walkConfig, m_fleeConfig));
         m_stateMachine.AddState(NpcState.PenaltyEscorting, new NpcPenaltyEscortState(this, m_escortConfig));
+        m_stateMachine.AddState(NpcState.Holding, new NpcHoldingState(this));
 
         // FSM 전이(서버/오프라인에서만 발생)를 동기화 변수 또는 로컬 이벤트로 흘려보낸다
         m_stateMachine.OnStateChanged += HandleFsmStateChanged;
