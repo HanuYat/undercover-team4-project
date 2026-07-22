@@ -68,6 +68,7 @@ public class CitizenIdentity : NetworkBehaviour
     {
         CitizenProfile profile = ScriptableObject.CreateInstance<CitizenProfile>();
         profile.Initialize(data.Name.ToString(), data.Type, data.Faction, m_officialRecords);
+        profile.m_nameView = data.NameView.ToString(); // 위조된 표시 이름 반영 — 정상 시민은 정본과 동일 (#223)
         Profile = profile;
     }
 

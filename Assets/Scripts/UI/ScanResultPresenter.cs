@@ -139,7 +139,8 @@ public class ScanResultPresenter : NetworkBehaviour
         if (scanned)
         {
             CitizenProfile profile = m_currentIdentity.Profile;
-            m_currentView.ShowReal(profile.CitizenName, profile.m_typeView, profile.m_factionView);
+            // 스캔 표시는 정본이 아닌 표시 이름(m_nameView) — 위조범은 여기서 정본과 어긋난다 (#223)
+            m_currentView.ShowReal(profile.m_nameView, profile.m_typeView, profile.m_factionView);
         }
         else
         {
