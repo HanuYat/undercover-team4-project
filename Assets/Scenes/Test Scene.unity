@@ -66877,6 +66877,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcSpawner
   m_npcPrefab: {fileID: 4452197611904741975, guid: e7cbd7673d85ce0488590f20f53288ac, type: 3}
+  m_npcPrefabAlt: {fileID: 4452197611904741975, guid: d4649c983efa1a044a2da745ede78b51, type: 3}
+  m_altRatio: 0.5
   m_spawnCount: 20
   m_spawnPoints: []
   m_spawnRadius: 5
@@ -69079,7 +69081,6 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_plazaPoint: {fileID: 981800772}
   m_detentionPoint: {fileID: 981800782}
-  m_chaseTimeoutSeconds: 60
   m_repelRadius: 10
   m_convergeArriveDistance: 2.5
   m_convergeTimeoutSeconds: 20
