@@ -51,7 +51,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3352483787
+  GlobalObjectIdHash: 601321265
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -82,6 +82,17 @@ MonoBehaviour:
   m_maxInterval: 45
   m_startDelay: 15
   m_enabled: 1
+  m_eventEntries:
+  - component: {fileID: 4617273519023223210}
+    enabled: 1
+  - component: {fileID: 3457248640073257328}
+    enabled: 1
+  - component: {fileID: 616769972397347302}
+    enabled: 1
+  - component: {fileID: 6553283234259604354}
+    enabled: 1
+  - component: {fileID: 1036064955631126747}
+    enabled: 1
 --- !u!114 &4617273519023223210
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -118,10 +129,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BombDefusalEvent
   m_bombPrefab: {fileID: 8953918111541867319, guid: 27813f0cd07ab3a489e202d07dbc64a2, type: 3}
-  m_placeDistanceMin: 8
-  m_placeDistanceMax: 20
-  m_navSampleMaxDistance: 4
-  m_maxSpawnAttempts: 12
+  m_spawnPoints: []
   m_resolvedLingerSeconds: 3
 --- !u!114 &616769972397347302
 MonoBehaviour:
@@ -154,7 +162,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DeviceBlackoutEvent
   ShowTopMostFoldoutHeaderGroup: 1
-  m_durationSeconds: 12
+  m_durationSeconds: 5
 --- !u!114 &812660901877859943
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -192,6 +200,7 @@ MonoBehaviour:
     m_navSampleMaxDistance: 4
     m_maxSpawnAttempts: 8
     m_pettyCrimeReward: 50
+    m_holdingPoint: {fileID: 0}
     m_maxLifetimeSeconds: 60
   - m_displayName: "\uB098\uCCB4 \uB09C\uB3D9\uAFBC"
     m_mode: 1
@@ -201,4 +210,5 @@ MonoBehaviour:
     m_navSampleMaxDistance: 4
     m_maxSpawnAttempts: 8
     m_pettyCrimeReward: 50
+    m_holdingPoint: {fileID: 0}
     m_maxLifetimeSeconds: 60
