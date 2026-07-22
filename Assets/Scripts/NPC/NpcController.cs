@@ -13,126 +13,18 @@ using Random = UnityEngine.Random;
 [RequireComponent(typeof(NavMeshAgent))]
 public class NpcController : NetworkBehaviour
 {
-    // 위협 탐색 반경 배율 — 저항 패배 후 도주 대상을 찾을 때(#205)와 도주 방향 산출(#213)이 공유한다.
-    // 공격 범위보다 넓게 잡아 멀리서 접근 중인 플레이어도 회피 대상에 들어온다.
-    private const float k_threatSearchRadiusMultiplier = 5f;
-
-    [Header("배회 반경")]
-    [SerializeField] private float m_wanderRadius = 10f;
-
-    [Header("배회 지점 최소 거리")]
-    [Tooltip("다음 배회 지점이 이 거리보다 가까우면 다시 뽑는다 — 한두 걸음 걷고 마는 어색한 이동 방지")]
-    [SerializeField] private float m_minWanderDistance = 3f;
-
-    [Header("Idle 유지 시간 (초)")]
-    [SerializeField] private float m_idleTimeMin = 1f;
-    [SerializeField] private float m_idleTimeMax = 3f;
-
-    [Header("긴 대기 (가끔 구경하듯 오래 멈춰 서 있기)")]
-    [Tooltip("Idle 진입 시 이 확률로 아래의 긴 대기 시간을 대신 사용한다")]
-    [SerializeField, Range(0f, 1f)] private float m_longIdleChance = 0.15f;
-    [SerializeField] private float m_longIdleTimeMin = 5f;
-    [SerializeField] private float m_longIdleTimeMax = 10f;
-
-    [Header("개체별 이동 속도 편차 (배율)")]
-    [Tooltip("스폰 시 NavMeshAgent 속도에 이 범위의 랜덤 배율을 곱한다 — 군중이 전부 같은 속도로 걷는 것 방지")]
-    [SerializeField] private float m_speedMultiplierMin = 0.8f;
-    [SerializeField] private float m_speedMultiplierMax = 1.2f;
-
-    [Header("연행 (#59)")]
-    [Tooltip("연행 중 플레이어와 유지하는 추종 거리(m)")]
-    [SerializeField] private float m_escortFollowDistance = 1.2f;
-    [Tooltip("이 거리(m)보다 뒤처지면 속도를 올려 따라잡는다")]
-    [SerializeField] private float m_escortBoostDistance = 4f;
-    [SerializeField] private float m_escortBoostMultiplier = 1.5f;
-    [Tooltip("이 거리(m)를 넘으면 연행이 풀리고 그 자리에서 체포 상태로 멈춘다")]
-    [SerializeField] private float m_escortBreakDistance = 8f;
-
-    [Header("검거 반응 (#76)")]
-    [Tooltip("도주 시 기본 이동 속도에 곱하는 배율")]
-    [SerializeField] private float m_fleeSpeedMultiplier = 1.5f;
-    [Tooltip("도주 목적지를 한 번에 이만큼(m) 앞으로 잡는다")]
-    [SerializeField] private float m_fleeStepDistance = 10f;
-    [Tooltip("추적자와 이 거리(m) 이상 벌어지면 도주 성공 — 배회로 복귀한다")]
-    [SerializeField] private float m_fleeEscapeDistance = 25f;
-    [Tooltip("도주 경로가 플레이어에게 이 거리(m)보다 가까이 스치면 그 방향은 버린다 — 체포 사거리(PlayerInteractor.Range, 3m) + 여유 마진")]
-    [SerializeField] private float m_fleeClearanceRadius = 4f;
-    [Tooltip("도주 진입 후 이 시간(초) 안에는 포위됐어도 저항으로 되돌아가지 않는다 — 저항↔도주 왕복 방지 (#213)")]
-    [SerializeField] private float m_fleeResistCooldown = 2f;
-
-    [Tooltip("저항 제압 게이지 최대치 — ApplySubdueHit로 깎여 0이 되면 체포된다")]
-    [SerializeField] private float m_subdueGaugeMax = 100f;
-    [Tooltip("기절(테이저 등) 지속 시간(초)")]
-    [SerializeField] private float m_stunSeconds = 3f;
-    [Tooltip("기절이 풀릴 때 일어나는 모션의 길이(초) — 기절 시간의 마지막 이 구간에 일어난다(총 무력화 시간은 그대로). " +
-             "Knockdown01-StandUp 클립 길이(1.17초)에 맞춘 값 (#269)")]
-    [SerializeField] private float m_standUpSeconds = 1.17f;
-
-    [Header("인계 방치 (#230)")]
-    [Tooltip("체포된 채 이 시간(초) 동안 인계되지 않으면 수갑을 풀고 도주한다 — 방치 전략 차단")]
-    [SerializeField] private float m_capturedEscapeSeconds = 30f;
-    [Tooltip("도주 직전 이 시간(초) 동안 소란을 낸다 — 수갑 풀려는 소동으로 현장·본부에 예고")]
-    [SerializeField] private float m_capturedEscapeWarningSeconds = 5f;
-
-    [Header("오검거 추격 (#278)")]
-    [Tooltip("추격 최고 속도(m/s) — 플레이어 전력질주(8)보다 1 낮게: 직선에서는 벗어날 수 있되 코너·군중에서 따라잡힌다")]
-    [SerializeField] private float m_chaseMaxSpeed = 7f;
-    [Tooltip("타겟 확보 후 최고 속도까지 걸리는 가속 시간(초)")]
-    [SerializeField] private float m_chaseAccelSeconds = 8f;
-    [Tooltip("추격 가능 범위(m) — 타겟이 벗어나면 범위 안의 다른 플레이어로 갈아탄다. 아무도 없으면 배회하며 사냥 모드")]
-    [SerializeField] private float m_chaseRange = 30f;
-    [Tooltip("이 거리(m) 안으로 붙으면 포획 — 잡힌 플레이어가 오검거 페널티를 받는다")]
-    [SerializeField] private float m_chaseCatchDistance = 1.3f;
-    [Tooltip("격퇴(호루라기 예정 #250) 시 도주하는 시간(초)")]
-    [SerializeField] private float m_chaseRepelFleeSeconds = 3f;
-    [Tooltip("격퇴당한 뒤 이 시간(초) 동안은 격퇴한 플레이어를 다시 노리지 않는다")]
-    [SerializeField] private float m_chaseRetargetCooldown = 5f;
-
-    [Header("저항 전투 (#79)")]
-    [Tooltip("저항 중 범위 타격을 휘두르는 주기(초)")]
-    [SerializeField] private float m_resistAttackInterval = 1.5f;
-    [Tooltip("범위 타격이 닿는 반경(m)")]
-    [SerializeField] private float m_resistAttackRange = 2f;
-    [Tooltip("범위 타격 1회당 플레이어 HP 감소량")]
-    [SerializeField] private int m_resistAttackDamage = 10;
-    [Tooltip("제압 홀드 성공 1회가 깎는 제압 게이지량")]
-    [SerializeField] private float m_subdueHitPower = 34f;
-    [Tooltip("저항 시작 후 이 시간(초) 안에 제압당하지 않으면 플레이어 패배 — 도주형으로 전환된다 (GDD 7-4)")]
-    [SerializeField] private float m_resistDefeatSeconds = 15f;
-    [Tooltip("스윙 시작→타격 프레임까지의 시간(초) — 클립별 오프셋(m_swingImpactOffsets)이 비었거나 범위 밖일 때만 쓰는 폴백값 (#220)")]
-    [SerializeField] private float m_strikeOffsetSeconds = 0.45f;
-    [Tooltip("스윙 변형(SwingVariant)별 타격 오프셋(초). 인덱스 = NpcAnimatorControllerBuilder의 클립 순서(attack02·03·04·05). 배열 길이가 곧 변형 개수 — 블렌드 트리 자식 수와 같아야 한다. 각 클립의 주먹 최대 신전 시점에 맞춤 (#220)")]
-    [SerializeField] private float[] m_swingImpactOffsets = { 0.63f, 0.53f, 0.44f, 0.73f };
-    [Tooltip("타격이 닿는 정면 부채꼴의 전체 각도(도). 이 각도 안(정면 기준 ±절반)에 있는 플레이어만 맞는다 — 등 뒤·측면은 빗나간다 (#220)")]
-    [SerializeField] private float m_attackConeAngle = 120f;
-    [Tooltip("저항 중 표적을 바라보도록 도는 회전 속도(도/초) — 부채꼴 기준 방향을 표적에 맞춘다 (#220)")]
-    [SerializeField] private float m_attackTurnSpeed = 540f;
-
-    [Header("패닉 (#81)")]
-    [Tooltip("소란(저항 전투·도주)이 주변 시민을 패닉시키는 전파 반경(m)")]
-    [SerializeField] private float m_disturbanceRadius = 8f;
-    [Tooltip("저항·도주 중 소란 펄스를 발산하는 주기(초) — 소란이 계속되면 지나가던 시민도 놀란다")]
-    [SerializeField] private float m_disturbancePulseInterval = 1f;
-    [Tooltip("패닉 시 기본 이동 속도에 곱하는 배율")]
-    [SerializeField] private float m_panicSpeedMultiplier = 1.8f;
-    [Tooltip("패닉 도주 지점을 한 번에 이만큼(m) 앞으로 잡는다")]
-    [SerializeField] private float m_panicStepDistance = 8f;
-    [Tooltip("마지막 소란 감지 후 이 시간(초)이 지나면 진정하고 배회로 복귀")]
-    [SerializeField] private float m_panicCalmSeconds = 5f;
-
-    [Header("넉백 (폭발 등 외력) — #232")]
-    [Tooltip("날아가는 동안 받는 중력(m/s²). 음수 — 클수록 낮고 빠르게 떨어진다")]
-    [SerializeField] private float m_knockbackGravity = -18f;
-
-    [Tooltip("안전장치: 이 시간(초)이 지나도 착지 판정이 안 나면 강제로 내려놓는다")]
-    [SerializeField] private float m_knockbackMaxFlightSeconds = 3f;
-
-    [Tooltip("착지 지점을 NavMesh 위로 되돌릴 때 허용하는 최대 탐색 거리(m)")]
-    [SerializeField] private float m_knockbackLandSampleDistance = 4f;
-
-    [Tooltip("날아가는 도중 벽으로 칠 콜라이더 — 여기에 걸리면 수평 이동이 멈춘다. " +
-             "NPC 자신의 레이어는 런타임에 자동으로 빠진다")]
-    [SerializeField] private LayerMask m_knockbackObstacleMask = ~0;
+    [Header("상태별 튜닝 데이터 (ScriptableObject) — #259")]
+    [Tooltip("각 FSM 상태가 자기 config를 주입받아 읽는다. 값 조정은 이 에셋들에서 한다.")]
+    [SerializeField] private NpcIdleConfig m_idleConfig;
+    [SerializeField] private NpcWalkConfig m_walkConfig;
+    [SerializeField] private NpcEscortConfig m_escortConfig;
+    [SerializeField] private NpcFleeConfig m_fleeConfig;
+    [SerializeField] private NpcResistConfig m_resistConfig;
+    [SerializeField] private NpcStunConfig m_stunConfig;
+    [SerializeField] private NpcCapturedConfig m_capturedConfig;
+    [SerializeField] private NpcChaseConfig m_chaseConfig;
+    [SerializeField] private NpcPanicConfig m_panicConfig;
+    [SerializeField] private NpcCommonConfig m_commonConfig;
 
     private NavMeshAgent m_agent;
     private NpcStateMachine m_stateMachine;
@@ -156,65 +48,17 @@ public class NpcController : NetworkBehaviour
 
     public NavMeshAgent Agent => m_agent;
     public NpcStateMachine StateMachine => m_stateMachine;
-    public float WanderRadius => m_wanderRadius;
-    public float MinWanderDistance => m_minWanderDistance;
-    public float IdleTimeMin => m_idleTimeMin;
-    public float IdleTimeMax => m_idleTimeMax;
-    public float LongIdleChance => m_longIdleChance;
-    public float LongIdleTimeMin => m_longIdleTimeMin;
-    public float LongIdleTimeMax => m_longIdleTimeMax;
-    public float EscortFollowDistance => m_escortFollowDistance;
-    public float EscortBoostDistance => m_escortBoostDistance;
-    public float EscortBoostMultiplier => m_escortBoostMultiplier;
-    public float EscortBreakDistance => m_escortBreakDistance;
-    public float FleeSpeedMultiplier => m_fleeSpeedMultiplier;
-    public float FleeStepDistance => m_fleeStepDistance;
-    public float FleeEscapeDistance => m_fleeEscapeDistance;
-    public float FleeClearanceRadius => m_fleeClearanceRadius;
-    public float FleeResistCooldown => m_fleeResistCooldown;
-    public float CapturedEscapeSeconds => m_capturedEscapeSeconds;
-    public float CapturedEscapeWarningSeconds => m_capturedEscapeWarningSeconds;
-    public float ChaseMaxSpeed => m_chaseMaxSpeed;
-    public float ChaseAccelSeconds => m_chaseAccelSeconds;
-    public float ChaseRange => m_chaseRange;
-    public float ChaseCatchDistance => m_chaseCatchDistance;
-    public float ChaseRepelFleeSeconds => m_chaseRepelFleeSeconds;
-    public float ChaseRetargetCooldown => m_chaseRetargetCooldown;
-    public float SubdueGaugeMax => m_subdueGaugeMax;
-    public float StunSeconds => m_stunSeconds;
+    /// <summary>저항 제압 게이지 최대치 — HUD가 게이지 비율 계산에 읽는다. (#76/#79)</summary>
+    public float SubdueGaugeMax => m_resistConfig.SubdueGaugeMax;
 
-    /// <summary>일어나는 모션의 길이(초) — FSM이 이 구간만큼 먼저 모션을 시작하고, 표현(NpcAnimationDriver)이 같은 값으로 재생을 유지한다. (#269)</summary>
-    public float StandUpSeconds => m_standUpSeconds;
-    public float ResistAttackInterval => m_resistAttackInterval;
-    public float ResistAttackRange => m_resistAttackRange;
-    public int ResistAttackDamage => m_resistAttackDamage;
-    public float ResistDefeatSeconds => m_resistDefeatSeconds;
-    public float StrikeOffsetSeconds => m_strikeOffsetSeconds;
-
-    /// <summary>스윙 변형 개수 — 오프셋 배열 길이(=블렌드 트리 클립 수). 비어 있으면 단일 변형(0)으로 폴백. (#220)</summary>
-    public int SwingVariantCount =>
-        m_swingImpactOffsets != null && m_swingImpactOffsets.Length > 0 ? m_swingImpactOffsets.Length : 1;
-
-    /// <summary>이번 스윙에 쓸 변형 index를 서버에서 뽑는다 — 데미지 타이밍(클립별 오프셋)과 시각(클라 동기화)이 같은 값을 공유한다. (#220)</summary>
-    public int NextSwingVariant() => UnityEngine.Random.Range(0, SwingVariantCount);
-
-    /// <summary>변형 index에 해당하는 타격 오프셋(초). 범위 밖이면 고정 폴백값. (#220)</summary>
-    public float SwingImpactOffset(int variant) =>
-        m_swingImpactOffsets != null && variant >= 0 && variant < m_swingImpactOffsets.Length
-            ? m_swingImpactOffsets[variant]
-            : m_strikeOffsetSeconds;
-
-    public float AttackConeAngle => m_attackConeAngle;
-    public float AttackTurnSpeed => m_attackTurnSpeed;
+    /// <summary>기절 지속 시간(초) — 테이저가 명중 안내에 읽는다. (#269)</summary>
+    public float StunSeconds => m_stunConfig.StunSeconds;
 
     /// <summary>
     /// 위협(플레이어)을 찾는 반경(m) — 저항 패배 후 도주 대상 탐색(#205)과 도주 방향 산출(#213)이 같은 값을 쓴다.
     /// 두 경로가 다른 반경을 쓰면 "도망칠 상대"와 "피할 상대"의 기준이 어긋난다.
     /// </summary>
-    public float ThreatSearchRadius => m_resistAttackRange * k_threatSearchRadiusMultiplier;
-    public float PanicSpeedMultiplier => m_panicSpeedMultiplier;
-    public float PanicStepDistance => m_panicStepDistance;
-    public float PanicCalmSeconds => m_panicCalmSeconds;
+    public float ThreatSearchRadius => m_resistConfig.AttackRange * m_resistConfig.ThreatSearchRadiusMultiplier;
 
     /// <summary>패닉의 원인이 된 소란 지점 — 이 반대 방향으로 달아난다. 서버에서만 유효. (#81)</summary>
     public Vector3 PanicSource { get; private set; }
@@ -305,19 +149,19 @@ public class NpcController : NetworkBehaviour
         m_agent = GetComponent<NavMeshAgent>();
 
         m_stateMachine = new NpcStateMachine();
-        m_stateMachine.AddState(NpcState.Idle, new NpcIdleState(this));
-        m_stateMachine.AddState(NpcState.Walk, new NpcWalkState(this));
-        m_stateMachine.AddState(NpcState.Captured, new NpcCapturedState(this));
-        m_stateMachine.AddState(NpcState.Escorted, new NpcEscortedState(this));
-        m_stateMachine.AddState(NpcState.Run, new NpcFleeState(this));
-        m_stateMachine.AddState(NpcState.Attack, new NpcResistState(this));
-        m_stateMachine.AddState(NpcState.Stunned, new NpcStunnedState(this));
-        m_stateMachine.AddState(NpcState.Panic, new NpcPanicState(this));
+        m_stateMachine.AddState(NpcState.Idle, new NpcIdleState(this, m_idleConfig));
+        m_stateMachine.AddState(NpcState.Walk, new NpcWalkState(this, m_walkConfig));
+        m_stateMachine.AddState(NpcState.Captured, new NpcCapturedState(this, m_capturedConfig));
+        m_stateMachine.AddState(NpcState.Escorted, new NpcEscortedState(this, m_escortConfig));
+        m_stateMachine.AddState(NpcState.Run, new NpcFleeState(this, m_fleeConfig));
+        m_stateMachine.AddState(NpcState.Attack, new NpcResistState(this, m_resistConfig, m_fleeConfig));
+        m_stateMachine.AddState(NpcState.Stunned, new NpcStunnedState(this, m_stunConfig));
+        m_stateMachine.AddState(NpcState.Panic, new NpcPanicState(this, m_panicConfig));
         m_stateMachine.AddState(NpcState.Jailed, new NpcJailedState(this));
         m_stateMachine.AddState(NpcState.Intruding, new NpcIntrudeState(this));
         m_stateMachine.AddState(NpcState.Detained, new NpcDetainedState(this));
-        m_stateMachine.AddState(NpcState.Chasing, new NpcChaseState(this));
-        m_stateMachine.AddState(NpcState.PenaltyEscorting, new NpcPenaltyEscortState(this));
+        m_stateMachine.AddState(NpcState.Chasing, new NpcChaseState(this, m_chaseConfig, m_walkConfig, m_fleeConfig));
+        m_stateMachine.AddState(NpcState.PenaltyEscorting, new NpcPenaltyEscortState(this, m_escortConfig));
 
         // FSM 전이(서버/오프라인에서만 발생)를 동기화 변수 또는 로컬 이벤트로 흘려보낸다
         m_stateMachine.OnStateChanged += HandleFsmStateChanged;
@@ -356,7 +200,7 @@ public class NpcController : NetworkBehaviour
     private void InitBehavior()
     {
         // 개체마다 걷는 속도를 다르게 해 군중이 같은 리듬으로 움직이는 것을 깨준다
-        m_agent.speed *= Random.Range(m_speedMultiplierMin, m_speedMultiplierMax);
+        m_agent.speed *= Random.Range(m_commonConfig.SpawnSpeedMultiplierMin, m_commonConfig.SpawnSpeedMultiplierMax);
 
         // 회피 우선순위도 개체마다 다르게 — 전원이 같은 값이면 정면으로 마주친 둘이
         // 대칭적으로 서로 양보하다가 교착에 빠진다 (값이 낮은 쪽이 우선권을 가진다)
@@ -407,8 +251,8 @@ public class NpcController : NetworkBehaviour
         if (Time.time < m_nextDisturbancePulseTime)
             return;
 
-        m_nextDisturbancePulseTime = Time.time + m_disturbancePulseInterval;
-        BroadcastDisturbance(transform.position, m_disturbanceRadius);
+        m_nextDisturbancePulseTime = Time.time + m_commonConfig.DisturbancePulseInterval;
+        BroadcastDisturbance(transform.position, m_commonConfig.DisturbanceRadius);
     }
 
     // 서버(또는 오프라인)의 FSM 전이를 밖으로 전파한다
@@ -626,7 +470,7 @@ public class NpcController : NetworkBehaviour
             return;
 
         ChaseRepelBy = by;
-        ChaseRepelUntil = Time.time + m_chaseRepelFleeSeconds;
+        ChaseRepelUntil = Time.time + m_chaseConfig.RepelFleeSeconds;
     }
 
     /// <summary>호송 시작 — goal(광장)으로 이동. leader가 null이면 자신이 선두, 아니면 선두 기준 offset 위치를 따라간다. (#279)</summary>
@@ -784,7 +628,7 @@ public class NpcController : NetworkBehaviour
     /// <summary>저항 진입 시 게이지를 최대로 리셋한다 — NpcResistState.Enter 전용.</summary>
     public void ResetSubdueGauge()
     {
-        SetSubdueGauge(m_subdueGaugeMax);
+        SetSubdueGauge(m_resistConfig.SubdueGaugeMax);
     }
 
     /// <summary>
@@ -804,7 +648,7 @@ public class NpcController : NetworkBehaviour
     /// <summary>
     /// 제압 홀드 타격 요청 — 상호작용 경로(NpcSubdueInteractable)가 호출. (#79)
     /// 클라이언트에서 불리면 서버로 전달되므로 비호스트 플레이어의 타격도 게이지에 반영된다.
-    /// 타격량은 서버가 자기 인스펙터 값(m_subdueHitPower)을 쓴다 — 클라이언트가 수치를 보낼 수 없다.
+    /// 타격량은 서버가 자기 인스펙터 값(m_resistConfig.SubdueHitPower)을 쓴다 — 클라이언트가 수치를 보낼 수 없다.
     /// </summary>
     // TODO: 상호작용 네트워크 전환(#55 계열)에서 거리·조준 서버 검증 추가 (지금은 요청 자체는 신뢰)
     public void RequestSubdueHit()
@@ -815,13 +659,13 @@ public class NpcController : NetworkBehaviour
             return;
         }
 
-        ApplySubdueHit(m_subdueHitPower);
+        ApplySubdueHit(m_resistConfig.SubdueHitPower);
     }
 
     [Rpc(SendTo.Server)]
     private void SubdueHitRpc()
     {
-        ApplySubdueHit(m_subdueHitPower);
+        ApplySubdueHit(m_resistConfig.SubdueHitPower);
     }
 
     /// <summary>도주 중인 NPC 근접 제압 — 상호작용 홀드 성공 시 그 자리에서 체포. (NpcSubdueInteractable 경유)</summary>
@@ -960,7 +804,7 @@ public class NpcController : NetworkBehaviour
     private void TickKnockback()
     {
         m_knockbackElapsed += Time.deltaTime;
-        m_knockbackVelocity.y += m_knockbackGravity * Time.deltaTime;
+        m_knockbackVelocity.y += m_commonConfig.KnockbackGravity * Time.deltaTime;
 
         Vector3 next = transform.position + m_knockbackVelocity * Time.deltaTime;
 
@@ -984,11 +828,11 @@ public class NpcController : NetworkBehaviour
 
         transform.position = next;
 
-        bool timedOut = m_knockbackElapsed >= m_knockbackMaxFlightSeconds;
+        bool timedOut = m_knockbackElapsed >= m_commonConfig.KnockbackMaxFlightSeconds;
         if (!timedOut && m_knockbackVelocity.y > 0f)
             return; // 아직 상승 중 — 착지 판정은 내려올 때부터
 
-        if (NavMesh.SamplePosition(transform.position, out NavMeshHit ground, m_knockbackLandSampleDistance, NavMesh.AllAreas))
+        if (NavMesh.SamplePosition(transform.position, out NavMeshHit ground, m_commonConfig.KnockbackLandSampleDistance, NavMesh.AllAreas))
         {
             if (!timedOut && transform.position.y > ground.position.y + 0.05f)
                 return; // 아직 공중
@@ -1008,7 +852,7 @@ public class NpcController : NetworkBehaviour
     {
         float radius = m_agent.radius;
         Vector3 origin = transform.position + Vector3.up * Mathf.Max(radius, m_agent.height * 0.5f);
-        int mask = m_knockbackObstacleMask & ~(1 << gameObject.layer); // 자기 콜라이더에 걸리지 않게
+        int mask = m_commonConfig.KnockbackObstacleMask & ~(1 << gameObject.layer); // 자기 콜라이더에 걸리지 않게
 
         return Physics.SphereCast(origin, radius, direction, out RaycastHit _, distance, mask,
                                   QueryTriggerInteraction.Ignore);
