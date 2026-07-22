@@ -61,6 +61,10 @@ public class NpcCapturedState : NpcStateBase
     /// <summary>방치 타이머 만료 — 수갑을 풀고 달아난다.</summary>
     private void Escape()
     {
+        // 스스로 풀려나므로 채웠던 수갑을 발밑에 떨궈 반환한다 — 안 하면 NPC가 수갑을 들고 사라져
+        // 판정 funnel 밖에서 영구 손실된다 (#290 증상1). 수갑 없는 Captured(제압만)면 no-op.
+        m_owner.DropHandcuffs();
+
         // 가장 가까운 플레이어를 위협 삼아 도주한다 — 반경은 저항 폴백(#205)·도주 회피(#213)와 같은
         // ThreatSearchRadius를 쓴다. 기준이 어긋나면 "도망칠 상대"와 "피할 상대"가 달라진다.
         PlayerData nearest = SuddenEventUtil.FindNearestFieldPlayer(
