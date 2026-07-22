@@ -4,7 +4,7 @@ using UnityEngine;
 /// 체포(Captured) 상태 — 수갑 채널링 완료 시 진입한다. (GDD 7-4, 이슈 #36)
 /// 이동·배회를 완전히 멈춘다.
 ///
-/// 인계 방치 타이머를 든다 (GDD 7-6, #230): 이 상태로 <see cref="NpcController.CapturedEscapeSeconds"/>가
+/// 인계 방치 타이머를 든다 (GDD 7-6, #230): 이 상태로 <see cref="NpcCapturedConfig.EscapeSeconds"/>가
 /// 지나도록 인계되지 않으면 수갑을 풀고 도주한다 — "일단 다 수갑 채워놓고 나중에 인계" 전략 차단.
 /// 판정이 끝난(<see cref="NpcController.IsDelivered"/>) NPC는 제외한다 — 본부에서 탈출하면 안 되고,
 /// 그 뒤 처리는 유치장(#228) 몫이다.
