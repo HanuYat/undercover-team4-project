@@ -17,12 +17,13 @@ using Random = UnityEngine.Random;
 /// 발생·틱·정리를 호출할 뿐이다. 이벤트의 효과·상태·전 클라 전파는 전부 각 구현체가 스스로 소유한다
 /// (스폰형은 자기 NetworkObject, 전역형은 자기 NetworkVariable). 이벤트를 늘리거나 지워도 이 파일은 그대로다.
 ///
-/// 같은 GameObject에서 이벤트 풀을 자동 수집한다 — 두 경로가 있다:
-///  · <see cref="ISuddenEvent"/> 컴포넌트 — 1개 = 1종 (세상에 하나뿐인 이벤트: 괴한 습격·전자기기 먹통).
-///  · <see cref="ISuddenEventProvider"/> 컴포넌트 — 1개가 여러 종을 품는다 (스폰형: <see cref="SpawnedNpcEventSet"/>의 리스트 항목들).
-/// 어느 쪽이든 매니저가 보는 것은 평평한 <see cref="ISuddenEvent"/> 풀 하나뿐이라 추첨 단위는 이벤트 1종이다.
-/// — 각 이벤트가 <c>[RequireComponent(typeof(SuddenEventManager))]</c>로 매니저와 같은 오브젝트를 강제하므로,
-///   이벤트는 반드시 이 매니저와 같은 오브젝트에 둔다(자식에 두면 그 자식에 두 번째 매니저가 자동 생성됨).
+/// 이벤트 풀은 인스펙터 <b>명시 리스트</b>(m_eventEntries)로 구성한다 — 자동수집을 쓰지 않는다 (#291).
+///  · <see cref="ISuddenEvent"/> 컴포넌트 — 1개 = 1종 (괴한 습격·전자기기 먹통).
+///  · <see cref="ISuddenEventProvider"/> 컴포넌트 — 1개가 여러 종을 품는다 (스폰형: <see cref="SpawnedNpcEventSet"/>).
+/// 항목마다 enabled 토글이 있어 특정 이벤트만 켜서 추첨할 수 있다(테스트·튜토리얼).
+/// <b>이벤트 컴포넌트는 반드시 이 오브젝트에 둔다</b> — 전부 [RequireComponent(typeof(SuddenEventManager))]라
+/// 다른 오브젝트에 붙이면 거기에 두 번째 매니저가 자동 생성된다. 리스트 구조 자체는 타 오브젝트 참조가
+/// 가능하지만, 규약 완화(RequireComponent 제거)는 팀 결정 대기 항목이다(#291 고려사항 · PR #298 리뷰).
 /// 발생 빈도·이벤트별 수치는 전부 인스펙터 — 밸런싱 보류 항목이라 코드에 못 박지 않는다 (GDD 12장).
 /// </summary>
 // TODO: 이벤트 발생/종료 HUD 알림(본부 관제 UI, #43 계열)은 OnEventAnnounced/AnnounceEventClientRpc를 구독해 연결한다.
@@ -53,7 +54,26 @@ public class SuddenEventManager : NetworkedManagerBase
     [SerializeField]
     private bool m_enabled = true;
 
-    // 같은 오브젝트에서 자동 수집한 이벤트 풀 (Awake에서 1회)
+    [System.Serializable]
+    private class SuddenEventEntry
+    {
+        [Tooltip(
+            "ISuddenEvent 또는 ISuddenEventProvider를 구현한 컴포넌트 (예: ThugAssaultEvent, DeviceBlackoutEvent, SpawnedNpcEventSet, JailbreakEvent)"
+        )]
+        public MonoBehaviour component;
+
+        [Tooltip("끄면 이 항목은 이벤트 풀에서 제외된다 — 특정 이벤트만 켜서 테스트할 때 쓴다")]
+        public bool enabled = true;
+    }
+
+    [Header("이벤트 풀 (명시 리스트)")]
+    [Tooltip(
+        "발생 후보 이벤트를 여기 등록한다. 자동수집은 쓰지 않는다 — 항목의 enabled로 개별 토글 (#291)"
+    )]
+    [SerializeField]
+    private List<SuddenEventEntry> m_eventEntries = new List<SuddenEventEntry>();
+
+    // 명시 리스트에서 구성한 이벤트 풀 (Awake에서 1회)
     private readonly List<ISuddenEvent> m_events = new List<ISuddenEvent>();
 
     // 발생 후보 임시 버퍼 — 매 추첨마다의 할당을 피한다 (서버/오프라인에서만 쓰므로 공유 안전)
@@ -73,16 +93,25 @@ public class SuddenEventManager : NetworkedManagerBase
     {
         base.Awake(); // App.Game.SuddenEvent 등록
 
-        // 같은 오브젝트의 이벤트 핸들러를 풀로 수집 — RequireComponent가 이벤트를 같은 오브젝트에 강제하므로
-        // 자식까지 훑지 않는다(그래야 자식 배치 오용 시 조용히 수집되는 대신 리그가 잘못됐음이 드러난다)
-        GetComponents(m_events); // 컴포넌트형: 1개 = 1종 (괴한 습격·전자기기 먹통)
+        // 명시 리스트에서 이벤트 풀을 구성한다 — 자동수집(GetComponents) 대신 인스펙터 등록분만 (#291).
+        // enabled=false 항목은 풀에서 제외 — 특정 이벤트만 켜서 반복 테스트한다.
+        m_events.Clear();
+        for (int i = 0; i < m_eventEntries.Count; i++)
+        {
+            SuddenEventEntry entry = m_eventEntries[i];
+            if (!entry.enabled || entry.component == null)
+                continue;
 
-        // 제공자형: 컴포넌트 1개가 여러 종을 품는다 (스폰형 = SpawnedNpcEventSet의 리스트 항목들).
-        // GetComponents가 풀을 비우므로 반드시 그 뒤에 얹는다. (#106)
-        List<ISuddenEventProvider> providers = new List<ISuddenEventProvider>();
-        GetComponents(providers);
-        for (int i = 0; i < providers.Count; i++)
-            providers[i].CollectEvents(m_events);
+            if (entry.component is ISuddenEventProvider provider)
+                provider.CollectEvents(m_events); // 제공자형: 1개가 여러 종 (SpawnedNpcEventSet)
+            else if (entry.component is ISuddenEvent evt)
+                m_events.Add(evt); // 컴포넌트형: 1개 = 1종
+            else
+                Debug.LogWarning(
+                    $"SuddenEventManager: '{entry.component.name}'은(는) ISuddenEvent/ISuddenEventProvider가 아니다 — 무시",
+                    entry.component
+                );
+        }
     }
 
     private void Update()
@@ -175,6 +204,39 @@ public class SuddenEventManager : NetworkedManagerBase
         if (chosen.AnnounceOnBegin)
             Announce(chosen.DisplayName);
     }
+
+    /// <summary>
+    /// 디버그 — 풀의 index번 이벤트를 즉시 발동한다(밸런싱·테스트용). 서버(또는 오프라인)에서만 동작하며
+    /// 이미 활성이거나 발생 불가(CanTrigger=false)면 무시한다. (#291)
+    /// </summary>
+    public void ForceTrigger(int index)
+    {
+        if (!IsAuthority)
+            return;
+        if (index < 0 || index >= m_events.Count)
+        {
+            Debug.LogWarning(
+                $"SuddenEventManager.ForceTrigger: 잘못된 index {index} (풀 크기 {m_events.Count})",
+                this
+            );
+            return;
+        }
+
+        ISuddenEvent evt = m_events[index];
+        if (evt.IsActive || !evt.CanTrigger())
+        {
+            Debug.Log($"[돌발이벤트] 강제발동 불가 — {evt.DisplayName} (활성이거나 조건 미충족)");
+            return;
+        }
+
+        evt.ServerBegin();
+        if (evt.IsActive && evt.AnnounceOnBegin)
+            Announce(evt.DisplayName);
+        Debug.Log($"[돌발이벤트] 강제발동 — {evt.DisplayName}");
+    }
+
+    [ContextMenu("Debug/Force Trigger First Event")]
+    private void ForceTriggerFirst() => ForceTrigger(0);
 
     // 다음 발생까지의 대기 시간을 min~max 사이에서 뽑아 예약한다 (extraDelay는 라운드 시작 유예용)
     private void ScheduleNext(float extraDelay)

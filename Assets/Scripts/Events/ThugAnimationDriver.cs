@@ -1,13 +1,12 @@
 using UnityEngine;
 
 /// <summary>
-/// 괴한(<see cref="ThugAttacker"/>) 전용 애니메이션 구동 — Animator의 State(int) 파라미터를 갱신한다. (#106)
-/// 괴한은 <see cref="NpcController"/>가 아니라 FSM/상태 동기화가 없으므로, 표현에 필요한 최소한만 로컬에서 유도한다:
+/// 차저(<see cref="ThugAttacker"/>) 전용 애니메이션 구동 — Animator의 State(int) 파라미터를 갱신한다. (#106, #291)
+/// FSM/상태 동기화가 없으므로 표현에 필요한 최소한만 로컬에서 유도한다:
 ///  · <b>이동</b> — transform 이동량으로 속도를 추정해 Run/Idle을 전환하고, 달리기 클립의 재생속도를
 ///    실제 이동 속도에 비례시켜 발 미끄러짐을 줄인다. 서버는 NavMeshAgent가,
 ///    클라이언트는 NetworkTransform이 transform을 움직이므로 별도 동기화 없이 전 피어에서 동작한다.
-///  · <b>타격</b> — <see cref="ThugAttacker.OnAttack"/>(서버가 ClientRpc로 전 피어 복제)을 구독해
-///    잠시 Attack 모션을 재생한 뒤 이동 상태로 복귀한다.
+///  · <b>윈드업</b> — 돌진 준비 중(<see cref="ThugAttacker.IsWindingUp"/>)엔 숨고르는 전용 모션을 낸다.
 /// Animator 상태 번호는 <see cref="NpcState"/> 값 규약을 그대로 따른다(NPC.controller 공용). (NpcAnimationDriver와 동일)
 /// </summary>
 [RequireComponent(typeof(ThugAttacker))]
@@ -16,15 +15,18 @@ public class ThugAnimationDriver : MonoBehaviour
     private static readonly int s_stateHash = Animator.StringToHash("State");
 
     // Base Layer 달리기 클립의 재생속도 배율 — 실제 이동 속도에 맞춰 발 미끄러짐을 줄인다.
-    // (NpcAnimationDriver의 패닉 다리 처리와 동일 기법. 기본값 1이라 이 값을 안 쓰는 NPC는 영향 없음)
     private static readonly int s_runSpeedHash = Animator.StringToHash("RunSpeedMul");
 
-    // 프레임 노이즈 완화용 지수 평활 계수 — 클수록 정지/이동 반응이 빨라진다. (NpcAnimationDriver와 동일 개념)
+    // 프레임 노이즈 완화용 지수 평활 계수 — 클수록 정지/이동 반응이 빨라진다.
     private const float k_speedSmoothing = 12f;
 
-    // 재생속도 배율 허용 범위 — 과하게 늘리거나 줄이면 슬로모션/과속처럼 보인다. (NpcAnimationDriver와 동일)
+    // 재생속도 배율 허용 범위 — 과하게 늘리거나 줄이면 슬로모션/과속처럼 보인다.
     private const float k_runSpeedMulMin = 0.2f;
     private const float k_runSpeedMulMax = 2f;
+
+    /// <summary>윈드업(숨고르는 준비) 모션의 Animator 상태 번호 — NpcState enum 밖 전용 번호(해제/기상 모션과 같은 규약, #291).
+    /// NPC.controller에 이 번호로 CombatIdle01 클립 상태를 만들고 Any State 전이(State==103)를 건다.</summary>
+    public const int k_windupAnimState = 103;
 
     [Header("이동 판별")]
     [Tooltip("이 추정 속도(m/s) 이상이면 달리기(Run), 미만이면 정지(Idle)로 본다")]
@@ -32,15 +34,9 @@ public class ThugAnimationDriver : MonoBehaviour
     private float m_moveSpeedThreshold = 0.3f;
 
     // 클립이 in-place(루트모션 없음)라 자동 계산이 불가능한 값 — 눈으로 보며 미세 튜닝할 것.
-    // NpcAnimationDriver.m_panicRunReferenceSpeed와 같은 클립(HumanM@Run01_Forward)이라 기본값도 같다.
     [Tooltip("달리기 클립이 미끄럼 없이 보이는 기준 지상 속도(m/s). 발이 앞으로 밀리면 값을 낮추고, 뒤로 끌리면 높인다")]
     [SerializeField]
     private float m_runReferenceSpeed = 4.5f;
-
-    [Header("공격 스윙 (#220)")]
-    [Tooltip("스윙 1회당 Attack(단발) 모션을 유지하는 시간(초) — 이후 이동 상태로 복귀한다. 타격 주기보다 짧고 타격 오프셋보다 길게")]
-    [SerializeField]
-    private float m_swingAnimSeconds = 0.9f;
 
     [SerializeField]
     private Animator m_animator;
@@ -48,8 +44,6 @@ public class ThugAnimationDriver : MonoBehaviour
     private ThugAttacker m_thug;
     private Vector3 m_lastPosition;
     private float m_smoothedSpeed;
-    // 현재 스윙 모션을 유지할 종료 시각 — 이 시각 전까지는 Attack(단발 스윙)을, 이후엔 이동 모션을 낸다 (#220)
-    private float m_swingUntil;
     private int m_appliedState = -1; // 마지막으로 Animator에 쓴 값 — 매 프레임 중복 SetInteger 방지
 
     private void Awake()
@@ -61,29 +55,13 @@ public class ThugAnimationDriver : MonoBehaviour
 
     private void Start()
     {
-        // 타격 알림은 전 피어에서 발생한다 — 서버는 로컬 발행, 원격 클라는 ClientRpc 중계 (#56)
-        m_thug.OnAttack += HandleAttack;
         m_lastPosition = transform.position;
 
-        // 괴한은 스폰 직후 바로 추격에 들어간다 — 평활 속도를 기준 속도로 시드해 두지 않으면
-        // 0에서 올라오는 동안 첫 걸음이 슬로모션으로 보인다. (NpcAnimationDriver의 패닉 진입과 동일)
+        // 차저는 스폰 직후 바로 추격에 들어간다 — 평활 속도를 기준 속도로 시드해 두지 않으면
+        // 0에서 올라오는 동안 첫 걸음이 슬로모션으로 보인다.
         m_smoothedSpeed = m_runReferenceSpeed;
         if (m_animator != null)
             m_animator.SetFloat(s_runSpeedHash, 1f);
-    }
-
-    private void OnDestroy()
-    {
-        if (m_thug != null)
-            m_thug.OnAttack -= HandleAttack;
-    }
-
-    // 괴한의 공격 스윙 1회 — 잠시 Attack(단발 스윙 클립)을 유지하다 이동 모션으로 복귀한다.
-    // NpcAnimationDriver와 같은 int 펄스 방식(로코모션이 Any State 전이라 트리거 오버레이가 스윙을
-    // 끊는다). 데미지 타이밍은 ThugAttacker가 타격 오프셋으로 맞춘다. (#220)
-    private void HandleAttack()
-    {
-        m_swingUntil = Time.time + m_swingAnimSeconds;
     }
 
     private void Update()
@@ -96,10 +74,10 @@ public class ThugAnimationDriver : MonoBehaviour
         m_lastPosition = transform.position;
         m_smoothedSpeed = Mathf.Lerp(m_smoothedSpeed, rawSpeed, Time.deltaTime * k_speedSmoothing);
 
-        // 스윙 유지 시간 동안은 Attack(단발 스윙)을, 그 외엔 이동 속도로 Run/Idle을 낸다 (#220)
+        // 윈드업(숨고르기)이면 전용 상태, 그 외엔 이동 속도로 Run/Idle (#291)
         int desired;
-        if (Time.time < m_swingUntil)
-            desired = (int)NpcState.Attack;
+        if (m_thug.IsWindingUp)
+            desired = k_windupAnimState;
         else
             desired =
                 m_smoothedSpeed >= m_moveSpeedThreshold ? (int)NpcState.Run : (int)NpcState.Idle;

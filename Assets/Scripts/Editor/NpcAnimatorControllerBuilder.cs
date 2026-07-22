@@ -43,6 +43,9 @@ public static class NpcAnimatorControllerBuilder
     private const string k_unlockLoopState = "Unlocking_Loop";
 
     // 기절에서 일어나는 모션 — 기절(누운 자세) 클립과 같은 Knockdown01 세트라 자세가 그대로 이어진다. (#269)
+    // 재생속도 배율 — 원본 클립(1.17초)이 굼떠 보여 빠르게 벌떡 일어나게 한다(팀 피드백).
+    // 바꾸면 NpcStunConfig의 StandUpSeconds(클립 길이 ÷ 이 배율)도 함께 맞출 것.
+    private const float k_standUpSpeed = 2f;
     private const string k_standUpClip =
         "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Combat/HumanM@Knockdown01 - StandUp.fbx";
     private const string k_standUpState = "Stunned_StandUp";
@@ -206,6 +209,7 @@ public static class NpcAnimatorControllerBuilder
 
         AnimatorState state = stateMachine.AddState(k_standUpState);
         state.motion = standUp;
+        state.speed = k_standUpSpeed; // 빠르게 벌떡 — 배율만큼 StunConfig.StandUpSeconds를 줄여 시작 시점이 맞다
 
         // canTransitionToSelf를 끄지 않으면 번호가 유지되는 매 프레임 재진입해 클립이 앞으로 못 나간다
         // (해제 Begin과 같은 함정 — 일어나다 말고 계속 처음부터 다시 시작한다)
