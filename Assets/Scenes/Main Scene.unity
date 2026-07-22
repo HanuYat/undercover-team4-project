@@ -12521,6 +12521,22 @@ PrefabInstance:
       propertyPath: m_events.Array.data[1].m_holdingPoint
       value: 
       objectReference: {fileID: 1597901838}
+    - target: {fileID: 3457248640073257328, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_spawnPoints.Array.size
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 3457248640073257328, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: 'm_spawnPoints.Array.data[0]'
+      value: 
+      objectReference: {fileID: 1690307094}
+    - target: {fileID: 3457248640073257328, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: 'm_spawnPoints.Array.data[1]'
+      value: 
+      objectReference: {fileID: 1560712092}
+    - target: {fileID: 3457248640073257328, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: 'm_spawnPoints.Array.data[2]'
+      value: 
+      objectReference: {fileID: 433694344}
     - target: {fileID: 4617273519023223210, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_holdingPoint
       value: 
@@ -21759,6 +21775,37 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4794361783473008, guid: 7aaa490d804da864bb2ab5258370fdfe, type: 3}
   m_PrefabInstance: {fileID: 431335193}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &433694343
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 433694344}
+  m_Layer: 0
+  m_Name: BombSpawnPoint_3
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &433694344
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 433694343}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -14, y: -0.11726261, z: 55}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 594547326}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &434662340
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -30334,6 +30381,9 @@ Transform:
   - {fileID: 592068289}
   - {fileID: 1668961364}
   - {fileID: 1597901838}
+  - {fileID: 1690307094}
+  - {fileID: 1560712092}
+  - {fileID: 433694344}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &596747281
@@ -81341,6 +81391,37 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4097076603240660, guid: 31dade7a3305059458fd6662c8492e46, type: 3}
   m_PrefabInstance: {fileID: 1558755053}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1560712091
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1560712092}
+  m_Layer: 0
+  m_Name: BombSpawnPoint_2
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1560712092
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1560712091}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 4, y: 0.12027121, z: 10}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 594547326}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1560959898
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -87972,6 +88053,37 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4824166743973364, guid: daae79edade7cba4085f136c226319c2, type: 3}
   m_PrefabInstance: {fileID: 1686495718}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1690307093
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1690307094}
+  m_Layer: 0
+  m_Name: BombSpawnPoint_1
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1690307094
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1690307093}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -6, y: 0.11774035, z: 25}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 594547326}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1692667175
 PrefabInstance:
   m_ObjectHideFlags: 0
