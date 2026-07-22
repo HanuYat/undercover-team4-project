@@ -40,14 +40,19 @@ public class NpcFleeState : NpcStateBase
     private float m_fleeStartTime;
     private bool m_transitioningToResist;
 
-    public NpcFleeState(NpcController owner)
-        : base(owner) { }
+    private readonly NpcFleeConfig m_config;
+
+    public NpcFleeState(NpcController owner, NpcFleeConfig config)
+        : base(owner)
+    {
+        m_config = config;
+    }
 
     public override void Enter()
     {
         m_owner.Agent.isStopped = false;
         m_baseSpeed = m_owner.Agent.speed;
-        m_owner.Agent.speed = m_baseSpeed * m_owner.FleeSpeedMultiplier;
+        m_owner.Agent.speed = m_baseSpeed * m_config.SpeedMultiplier;
 
         m_repathTimer = 0f;
         m_fleeStartTime = Time.time;
@@ -87,7 +92,7 @@ public class NpcFleeState : NpcStateBase
 
         // 이탈 판정은 도주 방향 산출과 반경이 다르다 — 방향은 근처(ThreatSearchRadius) 플레이어만 보면 되지만,
         // 이탈은 FleeEscapeDistance(25m)까지 아무도 없어야 성립한다.
-        CollectThreats(m_owner.FleeEscapeDistance);
+        CollectThreats(m_config.EscapeDistance);
         Transform nearest = NearestThreat(m_owner.transform.position);
 
         if (nearest == null)
@@ -147,7 +152,7 @@ public class NpcFleeState : NpcStateBase
                 return;
         }
 
-        float clearanceSqr = m_owner.FleeClearanceRadius * m_owner.FleeClearanceRadius;
+        float clearanceSqr = m_config.ClearanceRadius * m_config.ClearanceRadius;
 
         Vector3 bestPoint = Vector3.zero;
         float bestScore = float.NegativeInfinity; // 필터를 통과한 후보의 도착점 maximin
@@ -162,7 +167,7 @@ public class NpcFleeState : NpcStateBase
             // 좌우 대칭 협공에서 방향이 0벡터로 상쇄되는 문제가 아예 생기지 않는다
             float angle = 360f / k_directionSampleCount * i;
             Vector3 direction = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
-            Vector3 candidate = origin + direction * m_owner.FleeStepDistance;
+            Vector3 candidate = origin + direction * m_config.StepDistance;
 
             if (
                 !NavMesh.SamplePosition(
@@ -220,7 +225,7 @@ public class NpcFleeState : NpcStateBase
 
         // 통과 후보 0개 = 포위 성립. 다만 저항에서 막 넘어온 직후라면(#205 저항 승리 → 도주 전환)
         // 즉시 되돌아가 프레임마다 왕복하므로, 쿨다운 동안은 그나마 나은 방향으로 뚫고 나가려 시도한다. (#213)
-        if (Time.time - m_fleeStartTime < m_owner.FleeResistCooldown)
+        if (Time.time - m_fleeStartTime < m_config.ResistCooldown)
         {
             if (hasFallback)
                 m_owner.Agent.SetDestination(fallbackPoint);

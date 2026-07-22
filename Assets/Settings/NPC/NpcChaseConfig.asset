@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3d5d0f5e7436eb1448a30c1fb9cac214, type: 3}
+  m_Name: NpcChaseConfig
+  m_EditorClassIdentifier: Assembly-CSharp::NpcChaseConfig
+  m_maxSpeed: 7
+  m_accelSeconds: 8
+  m_range: 30
+  m_catchDistance: 1.3
+  m_repelFleeSeconds: 3
+  m_retargetCooldown: 5

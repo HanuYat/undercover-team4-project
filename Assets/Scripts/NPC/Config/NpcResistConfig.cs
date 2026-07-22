@@ -1,0 +1,54 @@
+using UnityEngine;
+
+/// <summary>
+/// 저항(Attack) 전투 튜닝 값. (#79, #220, #259 — NpcController에서 분리)
+/// 제압 게이지·타격량은 컨트롤러의 제압 요청 경로도 이 값을 읽는다.
+/// ThreatSearchRadiusMultiplier는 AttackRange와 곱해져 위협 탐색 반경(#205/#213)을 정한다.
+/// </summary>
+[CreateAssetMenu(fileName = "NpcResistConfig", menuName = "Undercover/NPC/Resist Config")]
+public class NpcResistConfig : ScriptableObject
+{
+    [Tooltip("저항 중 범위 타격을 휘두르는 주기(초)")]
+    [SerializeField] private float m_attackInterval = 1.5f;
+    [Tooltip("범위 타격이 닿는 반경(m)")]
+    [SerializeField] private float m_attackRange = 2f;
+    [Tooltip("범위 타격 1회당 플레이어 HP 감소량")]
+    [SerializeField] private int m_attackDamage = 10;
+    [Tooltip("저항 제압 게이지 최대치 — ApplySubdueHit로 깎여 0이 되면 체포된다")]
+    [SerializeField] private float m_subdueGaugeMax = 100f;
+    [Tooltip("제압 홀드 성공 1회가 깎는 제압 게이지량")]
+    [SerializeField] private float m_subdueHitPower = 34f;
+    [Tooltip("저항 시작 후 이 시간(초) 안에 제압당하지 않으면 플레이어 패배 — 도주형으로 전환된다 (GDD 7-4)")]
+    [SerializeField] private float m_defeatSeconds = 15f;
+    [Tooltip("스윙 시작→타격 프레임까지의 시간(초) — 클립별 오프셋이 비었거나 범위 밖일 때만 쓰는 폴백값 (#220)")]
+    [SerializeField] private float m_strikeOffsetSeconds = 0.45f;
+    [Tooltip("스윙 변형별 타격 오프셋(초). 인덱스 = 클립 순서(attack02·03·04·05). 배열 길이가 곧 변형 개수 — 블렌드 트리 자식 수와 같아야 한다 (#220)")]
+    [SerializeField] private float[] m_swingImpactOffsets = { 0.63f, 0.53f, 0.44f, 0.73f };
+    [Tooltip("타격이 닿는 정면 부채꼴의 전체 각도(도). 이 각도 안(정면 기준 ±절반)에 있는 플레이어만 맞는다 (#220)")]
+    [SerializeField] private float m_attackConeAngle = 120f;
+    [Tooltip("저항 중 표적을 바라보도록 도는 회전 속도(도/초) — 부채꼴 기준 방향을 표적에 맞춘다 (#220)")]
+    [SerializeField] private float m_attackTurnSpeed = 540f;
+    [Tooltip("위협 탐색 반경 배율 — AttackRange에 곱한다. 저항 패배 후 도주 대상 탐색(#205)·도주 방향 산출(#213)이 공유")]
+    [SerializeField] private float m_threatSearchRadiusMultiplier = 5f;
+
+    public float AttackInterval => m_attackInterval;
+    public float AttackRange => m_attackRange;
+    public int AttackDamage => m_attackDamage;
+    public float SubdueGaugeMax => m_subdueGaugeMax;
+    public float SubdueHitPower => m_subdueHitPower;
+    public float DefeatSeconds => m_defeatSeconds;
+    public float StrikeOffsetSeconds => m_strikeOffsetSeconds;
+    public float AttackConeAngle => m_attackConeAngle;
+    public float AttackTurnSpeed => m_attackTurnSpeed;
+    public float ThreatSearchRadiusMultiplier => m_threatSearchRadiusMultiplier;
+
+    /// <summary>스윙 변형 개수 — 오프셋 배열 길이(=블렌드 트리 클립 수). 비어 있으면 단일 변형(0)으로 폴백. (#220)</summary>
+    public int SwingVariantCount =>
+        m_swingImpactOffsets != null && m_swingImpactOffsets.Length > 0 ? m_swingImpactOffsets.Length : 1;
+
+    /// <summary>변형 index에 해당하는 타격 오프셋(초). 범위 밖이면 고정 폴백값. (#220)</summary>
+    public float SwingImpactOffset(int variant) =>
+        m_swingImpactOffsets != null && variant >= 0 && variant < m_swingImpactOffsets.Length
+            ? m_swingImpactOffsets[variant]
+            : m_strikeOffsetSeconds;
+}

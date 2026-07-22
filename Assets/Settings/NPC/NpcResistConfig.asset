@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3cb463be10f26924f800234d1944dfb6, type: 3}
+  m_Name: NpcResistConfig
+  m_EditorClassIdentifier: Assembly-CSharp::NpcResistConfig
+  m_attackInterval: 1.5
+  m_attackRange: 2
+  m_attackDamage: 10
+  m_subdueGaugeMax: 100
+  m_subdueHitPower: 34
+  m_defeatSeconds: 15
+  m_strikeOffsetSeconds: 0.45
+  m_swingImpactOffsets:
+  - 0.63
+  - 0.53
+  - 0.44
+  - 0.73
+  m_attackConeAngle: 120
+  m_attackTurnSpeed: 540
+  m_threatSearchRadiusMultiplier: 5

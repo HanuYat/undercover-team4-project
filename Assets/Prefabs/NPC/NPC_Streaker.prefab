@@ -105,46 +105,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcController
   ShowTopMostFoldoutHeaderGroup: 1
-  m_wanderRadius: 10
-  m_minWanderDistance: 3
-  m_idleTimeMin: 1
-  m_idleTimeMax: 3
-  m_longIdleChance: 0.15
-  m_longIdleTimeMin: 5
-  m_longIdleTimeMax: 10
-  m_speedMultiplierMin: 0.8
-  m_speedMultiplierMax: 1.2
-  m_escortFollowDistance: 1.2
-  m_escortBoostDistance: 4
-  m_escortBoostMultiplier: 1.5
-  m_escortBreakDistance: 8
-  m_fleeSpeedMultiplier: 1.5
-  m_fleeStepDistance: 10
-  m_fleeEscapeDistance: 25
-  m_fleeClearanceRadius: 4
-  m_fleeResistCooldown: 2
-  m_subdueGaugeMax: 100
-  m_stunSeconds: 2.67
-  m_capturedEscapeSeconds: 30
-  m_capturedEscapeWarningSeconds: 5
-  m_resistAttackInterval: 1.5
-  m_resistAttackRange: 2
-  m_resistAttackDamage: 10
-  m_subdueHitPower: 34
-  m_resistDefeatSeconds: 15
-  m_strikeOffsetSeconds: 0.45
-  m_swingImpactOffsets:
-  - 0.63
-  - 0.53
-  - 0.44
-  - 0.73
-  m_attackConeAngle: 120
-  m_attackTurnSpeed: 540
-  m_disturbanceRadius: 8
-  m_disturbancePulseInterval: 1
-  m_panicSpeedMultiplier: 1.8
-  m_panicStepDistance: 8
-  m_panicCalmSeconds: 5
+  m_idleConfig: {fileID: 11400000, guid: 06da8e7651d49b449a78684f7ae21e48, type: 2}
+  m_walkConfig: {fileID: 11400000, guid: 1174fc40d92cb4f4d8e6c77f7d7bc4cd, type: 2}
+  m_escortConfig: {fileID: 11400000, guid: 2e246c8caf3283d4ea0a5e394d790617, type: 2}
+  m_fleeConfig: {fileID: 11400000, guid: a1e4dd9a2763fd74db478ba982dacfb7, type: 2}
+  m_resistConfig: {fileID: 11400000, guid: 2f2bed55a9288b1439c8388fccf73779, type: 2}
+  m_stunConfig: {fileID: 11400000, guid: 9ad3ad04e833d95468a4ae478241f6a9, type: 2}
+  m_capturedConfig: {fileID: 11400000, guid: ea1210064ec160f42b74c49da9fc0db3, type: 2}
+  m_chaseConfig: {fileID: 11400000, guid: 9ed1e2d21e0bab04ab936f0ee96d01a4, type: 2}
+  m_panicConfig: {fileID: 11400000, guid: e4fa123e038e1fe419162cbbbf0ec1bf, type: 2}
+  m_commonConfig: {fileID: 11400000, guid: 53e1f2f00b63a3d49adad69104609b9a, type: 2}
 --- !u!54 &161675701295816944
 Rigidbody:
   m_ObjectHideFlags: 0

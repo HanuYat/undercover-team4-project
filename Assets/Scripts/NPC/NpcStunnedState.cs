@@ -13,7 +13,12 @@ public class NpcStunnedState : NpcStateBase
     // 일어나는 모션을 이미 시작했는가 — 기절 시간의 마지막 구간에서 한 번만 발행한다 (#269)
     private bool m_standingUp;
 
-    public NpcStunnedState(NpcController owner) : base(owner) { }
+    private readonly NpcStunConfig m_config;
+
+    public NpcStunnedState(NpcController owner, NpcStunConfig config) : base(owner)
+    {
+        m_config = config;
+    }
 
     public override void Enter()
     {
@@ -38,7 +43,7 @@ public class NpcStunnedState : NpcStateBase
 
         // 기절 시간의 마지막 구간을 일어나는 모션에 쓴다 — 총 무력화 시간(StunSeconds)은 그대로 두고
         // "누워 있다 → 일어난다 → 배회"가 이어지게 한다. 이 구간에도 상태는 Stunned라 움직이지 않는다.
-        float standUpAt = Mathf.Max(0f, m_owner.StunSeconds - m_owner.StandUpSeconds);
+        float standUpAt = Mathf.Max(0f, m_config.StunSeconds - m_config.StandUpSeconds);
         if (!m_standingUp && m_timer >= standUpAt)
         {
             m_standingUp = true;
@@ -49,7 +54,7 @@ public class NpcStunnedState : NpcStateBase
         // 위협은 기절시킨 상대(테이저 사수)이거나, 밧줄로 끌고 다닌 플레이어다.
         // 주변에 추격자가 아무도 없으면 도주 상태가 스스로 배회로 돌려보낸다(NpcFleeState) —
         // 아무도 없는 곳에 두고 온 NPC가 혼자 전력 질주하지 않는다.
-        if (m_timer >= m_owner.StunSeconds)
+        if (m_timer >= m_config.StunSeconds)
             m_owner.StartFlee(m_owner.ThreatTarget);
     }
 

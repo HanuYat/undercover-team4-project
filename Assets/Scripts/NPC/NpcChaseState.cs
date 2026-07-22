@@ -37,8 +37,17 @@ public class NpcChaseState : NpcStateBase
     private float m_handledRepelUntil; // 이미 쿨다운을 등록한 격퇴인지 — 같은 격퇴에 중복 등록 방지
     private bool m_hunting; // 사냥(배회) 모드 중인지 — 추격/사냥 간 속도·목적지 전환용
 
-    public NpcChaseState(NpcController owner)
-        : base(owner) { }
+    private readonly NpcChaseConfig m_config;
+    private readonly NpcWalkConfig m_walkConfig;
+    private readonly NpcFleeConfig m_fleeConfig;
+
+    public NpcChaseState(NpcController owner, NpcChaseConfig config, NpcWalkConfig walkConfig, NpcFleeConfig fleeConfig)
+        : base(owner)
+    {
+        m_config = config;
+        m_walkConfig = walkConfig;
+        m_fleeConfig = fleeConfig;
+    }
 
     public override void Enter()
     {
@@ -103,8 +112,8 @@ public class NpcChaseState : NpcStateBase
         // ---- 추격: 가속하며 쫓고, 붙으면 포획을 통보한다
         m_hunting = false;
         float elapsed = Time.time - m_targetAcquiredTime;
-        float accel = Mathf.Clamp01(elapsed / Mathf.Max(m_owner.ChaseAccelSeconds, 0.01f));
-        m_owner.Agent.speed = Mathf.Lerp(m_baseSpeed, m_owner.ChaseMaxSpeed, accel);
+        float accel = Mathf.Clamp01(elapsed / Mathf.Max(m_config.AccelSeconds, 0.01f));
+        m_owner.Agent.speed = Mathf.Lerp(m_baseSpeed, m_config.MaxSpeed, accel);
         m_owner.Agent.stoppingDistance = 0f;
 
         if (m_repathTimer <= 0f)
@@ -114,7 +123,7 @@ public class NpcChaseState : NpcStateBase
         }
 
         float distance = Vector3.Distance(m_owner.transform.position, target.position);
-        if (distance <= m_owner.ChaseCatchDistance && Time.time >= m_nextCatchNotifyTime)
+        if (distance <= m_config.CatchDistance && Time.time >= m_nextCatchNotifyTime)
         {
             // 매니저가 이미 다른 호송을 처리 중이면 통보가 무시된다 — 재시도 간격을 두고 계속 붙어 다닌다
             m_nextCatchNotifyTime = Time.time + k_catchRetrySeconds;
@@ -125,7 +134,7 @@ public class NpcChaseState : NpcStateBase
     // 포획된 플레이어에게 모여 선다 — 도착 판정·호송 개시는 매니저(WrongfulArrestPenalty)가 거리로 지휘한다.
     private void TickConverge(Transform converge)
     {
-        m_owner.Agent.speed = m_owner.ChaseMaxSpeed; // 수렴은 전속 — 연출 대기를 줄인다
+        m_owner.Agent.speed = m_config.MaxSpeed; // 수렴은 전속 — 연출 대기를 줄인다
         m_owner.Agent.stoppingDistance = k_convergeStopDistance;
 
         if (m_repathTimer <= 0f)
@@ -142,11 +151,11 @@ public class NpcChaseState : NpcStateBase
         {
             m_handledRepelUntil = m_owner.ChaseRepelUntil;
             if (m_owner.ChaseRepelBy != null)
-                m_targetCooldowns[m_owner.ChaseRepelBy] = Time.time + m_owner.ChaseRetargetCooldown;
+                m_targetCooldowns[m_owner.ChaseRepelBy] = Time.time + m_config.RetargetCooldown;
             m_owner.SetChaseTarget(null); // 도주가 끝나면 재타겟부터 다시 — 쿨다운 대상은 후보에서 빠진다
         }
 
-        m_owner.Agent.speed = m_owner.ChaseMaxSpeed;
+        m_owner.Agent.speed = m_config.MaxSpeed;
         m_owner.Agent.stoppingDistance = 0f;
 
         if (m_repathTimer > 0f || m_owner.ChaseRepelBy == null)
@@ -157,12 +166,12 @@ public class NpcChaseState : NpcStateBase
         if (away.sqrMagnitude < 0.01f)
             away = m_owner.transform.forward;
 
-        Vector3 candidate = m_owner.transform.position + away * m_owner.FleeStepDistance;
+        Vector3 candidate = m_owner.transform.position + away * m_fleeConfig.StepDistance;
         if (
             NavMesh.SamplePosition(
                 candidate,
                 out NavMeshHit hit,
-                m_owner.FleeStepDistance,
+                m_fleeConfig.StepDistance,
                 NavMesh.AllAreas
             )
         )
@@ -190,13 +199,13 @@ public class NpcChaseState : NpcStateBase
     private void PickWanderPoint()
     {
         Vector2 dir = Random.insideUnitCircle.normalized;
-        float dist = Random.Range(m_owner.MinWanderDistance, m_owner.WanderRadius);
+        float dist = Random.Range(m_walkConfig.MinWanderDistance, m_walkConfig.WanderRadius);
         Vector3 candidate = m_owner.transform.position + new Vector3(dir.x, 0f, dir.y) * dist;
         if (
             NavMesh.SamplePosition(
                 candidate,
                 out NavMeshHit hit,
-                m_owner.WanderRadius,
+                m_walkConfig.WanderRadius,
                 NavMesh.AllAreas
             )
         )
@@ -215,7 +224,7 @@ public class NpcChaseState : NpcStateBase
         if (data == null || !data.IsTargetable)
             return false;
 
-        return Vector3.Distance(m_owner.transform.position, target.position) <= m_owner.ChaseRange;
+        return Vector3.Distance(m_owner.transform.position, target.position) <= m_config.Range;
     }
 
     // 추격 범위 안의 행동 가능한 플레이어 중 무작위 — 쿨다운 대상 제외. 없으면 null(사냥 모드).
@@ -228,7 +237,7 @@ public class NpcChaseState : NpcStateBase
 
         SuddenEventUtil.CollectFieldPlayers(
             m_owner.transform.position,
-            m_owner.ChaseRange,
+            m_config.Range,
             m_candidateBuffer
         );
         for (int i = m_candidateBuffer.Count - 1; i >= 0; i--)

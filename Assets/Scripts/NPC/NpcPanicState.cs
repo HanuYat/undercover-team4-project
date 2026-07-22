@@ -16,20 +16,25 @@ public class NpcPanicState : NpcStateBase
 
     private float m_baseSpeed;
 
-    public NpcPanicState(NpcController owner) : base(owner) { }
+    private readonly NpcPanicConfig m_config;
+
+    public NpcPanicState(NpcController owner, NpcPanicConfig config) : base(owner)
+    {
+        m_config = config;
+    }
 
     public override void Enter()
     {
         m_owner.Agent.isStopped = false;
         m_baseSpeed = m_owner.Agent.speed;
-        m_owner.Agent.speed = m_baseSpeed * m_owner.PanicSpeedMultiplier;
+        m_owner.Agent.speed = m_baseSpeed * m_config.SpeedMultiplier;
         SetEscapePoint();
     }
 
     public override void Tick()
     {
         // 소란이 멎은 뒤 진정 시간이 지나면 배회로 복귀
-        if (Time.time - m_owner.LastDisturbedTime > m_owner.PanicCalmSeconds)
+        if (Time.time - m_owner.LastDisturbedTime > m_config.CalmSeconds)
         {
             Debug.Log($"패닉 진정 — 배회 복귀: {m_owner.name}");
             m_owner.StateMachine.ChangeState(NpcState.Idle);
@@ -64,7 +69,7 @@ public class NpcPanicState : NpcStateBase
             // 시도가 거듭될수록 지터를 키운다 — 막다른 방향이면 점점 옆길을 찾게 된다
             float jitter = Random.Range(-k_directionJitterDegrees, k_directionJitterDegrees) * (1f + i * 0.5f);
             Vector3 direction = Quaternion.Euler(0f, jitter, 0f) * away;
-            Vector3 candidate = m_owner.transform.position + direction * m_owner.PanicStepDistance;
+            Vector3 candidate = m_owner.transform.position + direction * m_config.StepDistance;
 
             if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, 2f, NavMesh.AllAreas))
             {

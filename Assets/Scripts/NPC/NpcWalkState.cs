@@ -12,7 +12,12 @@ public class NpcWalkState : NpcStateBase
 
     private float m_stuckTimer;
 
-    public NpcWalkState(NpcController owner) : base(owner) { }
+    private readonly NpcWalkConfig m_config;
+
+    public NpcWalkState(NpcController owner, NpcWalkConfig config) : base(owner)
+    {
+        m_config = config;
+    }
 
     public override void Enter()
     {
@@ -59,7 +64,7 @@ public class NpcWalkState : NpcStateBase
         {
             // 최소~최대 거리 사이의 랜덤 방향 지점을 뽑는다 — 너무 가까운 지점을 배제해 한두 걸음 걷고 마는 이동을 방지
             float angle = Random.Range(0f, Mathf.PI * 2f);
-            float distance = Random.Range(m_owner.MinWanderDistance, m_owner.WanderRadius);
+            float distance = Random.Range(m_config.MinWanderDistance, m_config.WanderRadius);
             Vector3 direction = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
             Vector3 candidate = m_owner.transform.position + direction * distance;
 
