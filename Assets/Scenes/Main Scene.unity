@@ -12521,6 +12521,10 @@ PrefabInstance:
       propertyPath: m_events.Array.data[1].m_holdingPoint
       value: 
       objectReference: {fileID: 1597901838}
+    - target: {fileID: 4617273519023223210, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_holdingPoint
+      value: 
+      objectReference: {fileID: 1597901838}
     - target: {fileID: 5897735017321614696, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: GlobalObjectIdHash
       value: 847924823

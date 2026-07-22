@@ -14,8 +14,4 @@ public class MisdemeanorOffender : MonoBehaviour
 {
     /// <summary>제압·연행·판정 성공 시 팀 자금에 더할 경범죄 수익. 스폰한 이벤트가 설정한다.</summary>
     public int Reward { get; set; }
-
-    /// <summary>판정 후 신병을 유치장에 수용할지 — 탈옥 침입자는 수감(true), 스폰형 이벤트 난동꾼은
-    /// 임시 거처로 걸어가 소멸하므로 수용하지 않는다(false 기본값). 스폰한 이벤트가 설정한다. (#291 B)</summary>
-    public bool DetainInJail { get; set; }
 }

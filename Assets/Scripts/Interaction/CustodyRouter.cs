@@ -72,18 +72,14 @@ public class CustodyRouter : MonoBehaviour
             return;
         }
 
-        // 경범죄 중 스폰형 이벤트 난동꾼은 유치장 수용 대상이 아니다 — 스폰한 이벤트가 같은 판정 이벤트를
-        // 받아 임시 거처로 데려가 정리한다(#291 B). 마커 플래그로 가른다. 이 게이트가 없으면 여기의
-        // SendToJail과 이벤트의 SendToHolding이 구독 순서에 따라 서로를 덮어쓰는 경합이 생긴다 —
-        // 유치장이 이기면 홀딩 도착이 영영 안 와 이벤트의 방치 타이머가 수감된 NPC를 증발시킨다.
+        // 경범죄는 유치장 수용 대상이 아니다 — 스폰한 이벤트(SpawnedNpcEvent·JailbreakEvent)가 같은
+        // 판정 이벤트를 받아 임시 거처로 데려가 정리한다(#291 B·#299). 유치장은 진범 전용이다.
+        // 여기서 SendToJail을 부르면 이벤트의 SendToHolding과 구독 순서에 따라 서로를 덮어쓰는
+        // 경합이 생긴다 — 유치장이 이기면 홀딩 도착이 영영 안 와 방치 타이머가 수감된 NPC를 증발시킨다.
         if (result.Verdict == ArrestVerdict.Misdemeanor)
-        {
-            MisdemeanorOffender misdemeanor = npc.GetComponent<MisdemeanorOffender>();
-            if (misdemeanor != null && !misdemeanor.DetainInJail)
-                return;
-        }
+            return;
 
-        // 현상수배범·(수용 대상) 경범죄 — 유치장으로 이송한다
+        // 현상수배범 — 유치장으로 이송한다
         if (m_jailZone == null)
         {
             Debug.LogWarning(
