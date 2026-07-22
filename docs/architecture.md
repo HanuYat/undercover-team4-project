@@ -14,7 +14,7 @@
 
 - **App** ([Assets/Scripts/Core/App.cs](../Assets/Scripts/Core/App.cs)) — 전역 매니저 접근의 단일 경로.
   - `App.Net` — SessionManager · AuthBootstrap · VivoxManager
-  - `App.Game` — RoundManager · SuddenEventManager · WantedListManager · ArrestJudge · CriminalAssigner · NpcSpawner · AppearanceAssigner
+  - `App.Game` — RoundManager · SuddenEventManager · WantedListManager · ArrestJudge · CriminalAssigner · NpcSpawner · AppearanceAssigner · WrongfulArrestPenalty · TeamFund
   - `App.UI` — UIManagerBase(3단계 예정) · CrosshairUI · ChannelingGaugeUI
   - `App.SceneFlow` — 현재 씬의 SceneManagerBase (3단계 예정)
 - **등록 메커니즘** — `CommonManagerBase`(일반) / `NetworkedManagerBase`(NetworkBehaviour)를 상속하면 Awake에서 `ManagerHandler`가 리플렉션으로 App의 같은 타입 필드에 주입하고, 파괴 시 해제한다. **App 필드에 직접 대입하는 코드를 만들지 말 것.**

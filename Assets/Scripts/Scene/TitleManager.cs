@@ -1,8 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// Title(로비) 씬 진입점 — 세션 관문. 세션 생성/참가 UI(SessionPanel)만 담당하고,
-/// 대기 공간은 Game(본부)이 맡는다 (#154 LobbyManager). (#247)
+/// Title 씬 진입점 — 세션 관문. 세션 생성/참가 UI(SessionPanel)만 담당한다.
+/// 대기·준비는 별도 씬 — Lobby(최초 대기)·Shop(라운드 사이 허브)가 맡는다. (#214)
 /// </summary>
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class TitleManager : SceneManagerBase
