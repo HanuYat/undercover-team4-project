@@ -127,6 +127,12 @@ MonoBehaviour:
   m_stunSeconds: 2.67
   m_capturedEscapeSeconds: 30
   m_capturedEscapeWarningSeconds: 5
+  m_chaseMaxSpeed: 7
+  m_chaseAccelSeconds: 8
+  m_chaseRange: 30
+  m_chaseCatchDistance: 1.3
+  m_chaseRepelFleeSeconds: 3
+  m_chaseRetargetCooldown: 5
   m_resistAttackInterval: 1.5
   m_resistAttackRange: 2
   m_resistAttackDamage: 10
@@ -145,6 +151,12 @@ MonoBehaviour:
   m_panicSpeedMultiplier: 1.8
   m_panicStepDistance: 8
   m_panicCalmSeconds: 5
+  m_knockbackGravity: -18
+  m_knockbackMaxFlightSeconds: 3
+  m_knockbackLandSampleDistance: 4
+  m_knockbackObstacleMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
 --- !u!54 &161675701295816944
 Rigidbody:
   m_ObjectHideFlags: 0

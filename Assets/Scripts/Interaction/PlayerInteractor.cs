@@ -22,6 +22,9 @@ public class PlayerInteractor : NetworkBehaviour
     /// 서버 줍기 거리 검증(#147)이 클라이언트 조준과 동일한 기준점을 쓰기 위해 참조한다.</summary>
     public Transform AimOrigin => m_camera != null ? m_camera.transform : transform;
 
+    /// <summary>조준 카메라. 조준 대상의 월드→스크린 좌표 변환(#233 스캔 정보 추종)에 쓴다. 미배정이면 null.</summary>
+    public Camera AimCamera => m_camera;
+
     private PlayerInputHandler m_inputHandler;
     private PlayerEscorter m_escorter;
     private PlayerIncapacitation m_incapacitation;
