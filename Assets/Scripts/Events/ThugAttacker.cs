@@ -38,10 +38,6 @@ public class ThugAttacker : NetworkBehaviour
     private Vector3 m_chargeStart;
     private float m_chargeElapsed;
 
-    /// <summary>타격(돌진 명중) 1회를 휘두를 때 발행 — 전 피어에서 발생(서버 로컬 + ClientRpc 중계).
-    /// ThugAnimationDriver가 구독해 타격 모션을 재생한다. (#56 서버 권위 패턴)</summary>
-    public event Action OnAttack;
-
     private bool IsAuthority => !IsSpawned || IsServer;
 
     /// <summary>돌진 준비(윈드업) 중인가 — 표현 계층(ThugAnimationDriver)이 숨고르는 모션을 낼지 판단에 읽는다. (#291)</summary>
@@ -300,20 +296,5 @@ public class ThugAttacker : NetworkBehaviour
             return;
         m_nextPulseTime = Time.time + m_config.DisturbancePulseInterval;
         NpcController.BroadcastDisturbance(transform.position, m_config.DisturbanceRadius);
-    }
-
-    private void NotifyAttack()
-    {
-        OnAttack?.Invoke(); // 서버·오프라인 로컬 발행
-        if (IsSpawned && IsServer)
-            PlayAttackClientRpc();
-    }
-
-    [ClientRpc]
-    private void PlayAttackClientRpc()
-    {
-        if (IsServer)
-            return; // 호스트는 위에서 이미 발행
-        OnAttack?.Invoke();
     }
 }
