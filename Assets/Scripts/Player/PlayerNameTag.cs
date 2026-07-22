@@ -24,11 +24,14 @@ public class PlayerNameTag : NetworkBehaviour
     [SerializeField]
     private GameObject m_speakerIcon;
 
+    /// <summary>동기화된 표시 이름 — 정산 코믹 스탯 등이 clientId→이름 변환에 읽는다. (#107)</summary>
+    public string DisplayName => m_name.Value.ToString();
+
     private readonly NetworkVariable<FixedString64Bytes> m_playerId = new(
         default,
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Owner
-        );
+    );
 
     private void LateUpdate()
     {
@@ -95,7 +98,8 @@ public class PlayerNameTag : NetworkBehaviour
         m_label.text = current.ToString();
     }
 
-    private void HandleIdChanged(FixedString64Bytes previous, FixedString64Bytes current) => RefreshSpeakerIcon();
+    private void HandleIdChanged(FixedString64Bytes previous, FixedString64Bytes current) =>
+        RefreshSpeakerIcon();
 
     private void HandleSpeakingChanged(string playerId, bool speaking)
     {
@@ -106,9 +110,8 @@ public class PlayerNameTag : NetworkBehaviour
     private void RefreshSpeakerIcon()
     {
         string pid = m_playerId.Value.ToString();
-        bool speaking = !string.IsNullOrEmpty(pid)
-            && App.Net.Vivox != null
-            && App.Net.Vivox.IsSpeaking(pid);
+        bool speaking =
+            !string.IsNullOrEmpty(pid) && App.Net.Vivox != null && App.Net.Vivox.IsSpeaking(pid);
         SetSpeakerIcon(speaking);
     }
 

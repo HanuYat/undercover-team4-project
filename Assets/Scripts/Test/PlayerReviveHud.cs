@@ -28,6 +28,13 @@ public class PlayerReviveHud : NetworkBehaviour
 
     private void OnGUI()
     {
+        // 라운드 정산 화면이 떠 있으면 그 위로 겹쳐 그리지 않는다.
+        // (전원 다운으로 라운드가 끝나면 나는 여전히 무력화 상태라 아래 "다운됨" 메시지가 정산 위로 샌다)
+        if (App.UI.Current != null
+            && App.UI.Current.TryGetPanel(out SettlementPanel settlement)
+            && settlement.IsOpened)
+            return;
+
         // 내가 다운된 경우 — 구조 대기 메시지
         if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
         {
