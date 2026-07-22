@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d0605869b5b7c9f47adbd0e1f44057cf, type: 3}
+  m_Name: ThugChargerConfig
+  m_EditorClassIdentifier: Assembly-CSharp::ThugChargerConfig
+  m_targetSearchRadius: 40
+  m_retargetInterval: 0.25
+  m_chargeStartRange: 8
+  m_approachSpeed: 4
+  m_windupSeconds: 0.6
+  m_chargeSpeed: 12
+  m_chargeMaxDistance: 12
+  m_chargeMaxSeconds: 1.2
+  m_hitRadius: 1.5
+  m_obstacleMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_hitDamage: 20
+  m_knockbackSpeed: 10
+  m_recoverSeconds: 1.5
+  m_hitCooldownSeconds: 0.8
+  m_disturbanceRadius: 8
+  m_disturbancePulseInterval: 1
