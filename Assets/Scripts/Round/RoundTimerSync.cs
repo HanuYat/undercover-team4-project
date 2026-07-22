@@ -72,7 +72,7 @@ public class RoundTimerSync : NetworkBehaviour
         m_endServerTime.Value = NetworkManager.ServerTime.Time + Round.RemainingSeconds;
     }
 
-    // 라운드 종료 — 조기 종료(할당량 달성·전멸)에도 타이머 표시를 멈춘다. 종료 사유는 RoundEndFeedback(#210)가 보여준다.
+    // 라운드 종료 — 조기 종료(할당량 달성·전멸)에도 타이머 표시를 멈춘다. 결과·정산은 정산 화면(SettlementController, #107)이 보여준다.
     private void HandleRoundEnded(RoundResult result, RoundEndReason reason)
     {
         m_endServerTime.Value = k_notRunning;

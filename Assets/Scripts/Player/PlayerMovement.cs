@@ -78,6 +78,7 @@ public class PlayerMovement : NetworkBehaviour
     private float m_verticalVelocity;
     private Vector3 m_knockbackVelocity; // 외력으로 밀려나는 수평 속도 — 매 프레임 감쇠 (#232 폭발 넉백)
     private bool m_cursorUnlocked; // 임시: OnGUI 버튼 조작용 커서 해제 상태
+    private bool m_ignoreRoundEndFreeze; // 정산 화면을 닫은 로컬 플레이어는 라운드 종료 freeze를 무시하고 움직인다 (#107)
 
     // 끌려가기(#279) — 오검거 호송 중 오너 로컬이 끌기 NPC 2명을 추종한다. 앵커가 파괴돼도
     // m_carried가 참인 동안은 입력 이동으로 돌아가지 않는다(서버의 종료/스냅 텔레포트가 마무리).
@@ -88,8 +89,15 @@ public class PlayerMovement : NetworkBehaviour
     // 다운(무력화) 중 여부 — 무력화 컴포넌트가 없으면(테스트 구성 등) 항상 false
     private bool IsIncapacitated => m_incapacitation != null && m_incapacitation.IsIncapacitated;
 
-    // 라운드 종료로 정지(freeze)됐는지 — RoundManager가 없으면(단독 테스트 씬) 항상 false
-    private bool IsRoundOver => Round != null && Round.GameplayFrozen;
+    // 라운드 종료로 정지(freeze)됐는지 — RoundManager가 없으면(단독 테스트 씬) 항상 false.
+    // 단 정산 화면을 닫은 로컬 플레이어는 예외 — 남은 카운트다운 동안 자유롭게 움직인다 (#107).
+    private bool IsRoundOver => Round != null && Round.GameplayFrozen && !m_ignoreRoundEndFreeze;
+
+    /// <summary>
+    /// 라운드 종료 freeze를 이 플레이어에 한해 무시할지 설정한다 — 정산 화면(SettlementPanel)을 닫으면 켜진다.
+    /// 다운(무력화) 잠금은 별개라 이 값과 무관하게 유지된다(전원 다운 종료 시 다운 플레이어는 그대로 못 움직임).
+    /// </summary>
+    public void SetIgnoreRoundEndFreeze(bool ignore) => m_ignoreRoundEndFreeze = ignore;
 
     // 이동·시점을 막아야 하는 상태 — 다운(무력화) 또는 라운드 종료
     private bool IsMovementLocked => IsIncapacitated || IsRoundOver;

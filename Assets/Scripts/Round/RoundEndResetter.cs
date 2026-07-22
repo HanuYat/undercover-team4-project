@@ -23,8 +23,13 @@ public class RoundEndResetter : MonoBehaviour
     private SessionManager Session => App.Net.Session;
 
     [Header("정산 표시")]
-    [Tooltip("라운드 종료 후 로비 복귀까지의 대기(초) — 정산을 잠깐 보여줄 여유. 0이면 즉시. (현재 UI 없음)")]
-    [SerializeField] private float m_resetDelaySeconds = 2f;
+    // 정산 화면(#107) 연출과 맞춘다: SettlementPanel의 텍스트 지연(1.5s) + 카운트다운(10s) = 11.5s.
+    // 카운트다운이 0에 닿는 순간 상점(허브)으로 복귀하도록 이 값을 그 합과 같게 유지할 것.
+    [Tooltip(
+        "라운드 종료 후 상점(허브) 복귀까지의 대기(초) — 정산 텍스트 지연+카운트다운과 맞춘다. 0이면 즉시"
+    )]
+    [SerializeField]
+    private float m_resetDelaySeconds = 11.5f;
 
     // 한 번만 수행하기 위한 래치
     private bool m_ending;
@@ -58,7 +63,8 @@ public class RoundEndResetter : MonoBehaviour
     // 서버·오프라인: 라운드 종료(성공/실패 공통) → 정산 표시 후 로비 복귀. (세션 유지)
     private void HandleRoundEnded(RoundResult result, RoundEndReason reason)
     {
-        if (m_ending) return;
+        if (m_ending)
+            return;
         m_ending = true;
         EndRoundToLobbyAsync().Forget();
     }
@@ -78,13 +84,18 @@ public class RoundEndResetter : MonoBehaviour
         // 정산을 잠깐 보여줄 여유. freeze로 timeScale이 건드려져도 흐르도록 실시간 기준.
         // 대기 중 씬 언로드로 파괴되면 취소한다. (#247)
         if (m_resetDelaySeconds > 0f)
-            await UniTask.Delay(TimeSpan.FromSeconds(m_resetDelaySeconds), ignoreTimeScale: true, cancellationToken: this.GetCancellationTokenOnDestroy());
+            await UniTask.Delay(
+                TimeSpan.FromSeconds(m_resetDelaySeconds),
+                ignoreTimeScale: true,
+                cancellationToken: this.GetCancellationTokenOnDestroy()
+            );
 
         // 테스트 씬(App 흐름 밖, 오프라인): 세션이 없으니 NGO만 내리고 자기 씬 재로드. (기존 폴백)
         if (App.CurrentScene == EScene.None)
         {
             NetworkManager nm = NetworkManager.Singleton;
-            if (nm != null && (nm.IsListening || nm.IsClient || nm.IsServer)) nm.Shutdown();
+            if (nm != null && (nm.IsListening || nm.IsClient || nm.IsServer))
+                nm.Shutdown();
             Scene active = SceneManager.GetActiveScene();
             Debug.Log($"[RoundEndResetter] 라운드 종료 - '{active.name}' 재로드(테스트 씬 폴백)");
             SceneManager.LoadScene(active.name);
