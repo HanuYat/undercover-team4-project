@@ -721,30 +721,8 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 6309785483521376438, guid: 719f666d4571ca94ca2b4f5a029c960b, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 2091158855}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 719f666d4571ca94ca2b4f5a029c960b, type: 3}
---- !u!1 &2091158854 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 6309785483521376438, guid: 719f666d4571ca94ca2b4f5a029c960b, type: 3}
-  m_PrefabInstance: {fileID: 2091158853}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &2091158855
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2091158854}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 424a3544b2a138b409c8133f83a88638, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SessionObjectSpawner
-  m_persistentPrefabs:
-  - {fileID: 3455862892653891524, guid: ee55831d23071d047a46eef925780d91, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
