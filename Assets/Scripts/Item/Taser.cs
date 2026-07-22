@@ -143,11 +143,12 @@ public class Taser : ItemBase
             return;
         }
 
-        // 제외 대상(Escorted·Captured)은 이미 신병을 확보해 기절시킬 이유가 없는 상태 —
-        // 수갑 게이트와 정확히 일치하므로 규칙을 공유한다. 상태가 늘면 NpcStateRules만 고치면 된다.
-        if (!NpcStateRules.IsCapturable(target.CurrentState))
+        // 스턴 전용 게이트(#289) — 수갑용 IsCapturable과 분리한다. IsCapturable은 Run·Attack을
+        // 제외하지만(수갑으론 못 잡음), 그 둘이야말로 테이저의 주 대상이다. 여기서 걸러지는 건
+        // 이미 신병 확보·페널티 진행 중이라 스턴이 링크만 끊는 상태뿐 — 상태가 늘면 NpcStateRules만 고친다.
+        if (!NpcStateRules.CanBeStunned(target.CurrentState))
         {
-            NotifyOwner($"테이저 무효 — 이미 제압된 대상 ({target.CurrentState})");
+            NotifyOwner($"테이저 무효 — 이미 제압됐거나 페널티 진행 중인 대상 ({target.CurrentState})");
             return;
         }
 
