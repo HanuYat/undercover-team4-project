@@ -40,8 +40,12 @@ public class ThugAttacker : NetworkBehaviour
 
     private bool IsAuthority => !IsSpawned || IsServer;
 
+    // m_phase는 서버에서만 갱신되므로, 클라이언트가 윈드업(숨고르기) 모션을 내려면 표현용 동기화가 필요하다. (#291)
+    private readonly NetworkVariable<bool> m_netIsWindingUp = new NetworkVariable<bool>();
+
     /// <summary>돌진 준비(윈드업) 중인가 — 표현 계층(ThugAnimationDriver)이 숨고르는 모션을 낼지 판단에 읽는다. (#291)</summary>
-    public bool IsWindingUp => m_phase == Phase.Windup;
+    public bool IsWindingUp =>
+        IsSpawned && !IsServer ? m_netIsWindingUp.Value : m_phase == Phase.Windup;
 
     private void Awake()
     {
@@ -110,6 +114,8 @@ public class ThugAttacker : NetworkBehaviour
         m_target = target;
         m_phase = Phase.Windup;
         m_phaseEndTime = Time.time + m_config.WindupSeconds;
+        if (IsSpawned && IsServer)
+            m_netIsWindingUp.Value = true;
         if (m_agent.enabled && m_agent.isOnNavMesh)
         {
             m_agent.isStopped = true;
@@ -138,6 +144,8 @@ public class ThugAttacker : NetworkBehaviour
         m_chargeStart = transform.position;
         m_chargeElapsed = 0f;
         m_phase = Phase.Charge;
+        if (IsSpawned && IsServer)
+            m_netIsWindingUp.Value = false;
 
         // 돌진 중에는 에이전트를 끄고 transform으로 직접 민다(넉백 비행과 동일 사고) — 켜두면 NavMesh가 직선을 꺾는다
         if (m_agent.enabled)
