@@ -26,6 +26,10 @@ public class ThugAnimationDriver : MonoBehaviour
     private const float k_runSpeedMulMin = 0.2f;
     private const float k_runSpeedMulMax = 2f;
 
+    /// <summary>윈드업(숨고르는 준비) 모션의 Animator 상태 번호 — NpcState enum 밖 전용 번호(해제/기상 모션과 같은 규약, #291).
+    /// NPC.controller에 이 번호로 CombatIdle01 클립 상태를 만들고 Any State 전이(State==103)를 건다.</summary>
+    public const int k_windupAnimState = 103;
+
     [Header("이동 판별")]
     [Tooltip("이 추정 속도(m/s) 이상이면 달리기(Run), 미만이면 정지(Idle)로 본다")]
     [SerializeField]
@@ -98,7 +102,9 @@ public class ThugAnimationDriver : MonoBehaviour
 
         // 스윙 유지 시간 동안은 Attack(단발 스윙)을, 그 외엔 이동 속도로 Run/Idle을 낸다 (#220)
         int desired;
-        if (Time.time < m_swingUntil)
+        if (m_thug.IsWindingUp)
+            desired = k_windupAnimState; // 돌진 준비 — 숨고르는 CombatIdle (#291)
+        else if (Time.time < m_swingUntil)
             desired = (int)NpcState.Attack;
         else
             desired =

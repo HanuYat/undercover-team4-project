@@ -44,6 +44,9 @@ public class ThugAttacker : NetworkBehaviour
 
     private bool IsAuthority => !IsSpawned || IsServer;
 
+    /// <summary>돌진 준비(윈드업) 중인가 — 표현 계층(ThugAnimationDriver)이 숨고르는 모션을 낼지 판단에 읽는다. (#291)</summary>
+    public bool IsWindingUp => m_phase == Phase.Windup;
+
     private void Awake()
     {
         m_agent = GetComponent<NavMeshAgent>();
