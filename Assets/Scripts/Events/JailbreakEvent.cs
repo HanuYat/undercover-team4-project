@@ -161,7 +161,9 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         // 경범죄 표식 — 인계되면 ArrestJudge가 진범 대조 대신 경범죄로 판정하고 Reward를 지급한다 (#106).
         // 침입자는 CriminalAssigner를 타지 않아 IsCriminal이 false다. 이 마커가 없으면 침입을 막은 플레이어가
         // 오검거 페널티를 먹는다 — 대응에 성공한 쪽이 손해 보는 판정을 막는 것이 이 한 줄의 역할이다. (#261)
-        m_intruder.gameObject.AddComponent<MisdemeanorOffender>().Reward = m_intruderReward;
+        MisdemeanorOffender marker = m_intruder.gameObject.AddComponent<MisdemeanorOffender>();
+        marker.Reward = m_intruderReward;
+        marker.DetainInJail = true; // 침입자는 판정 후 유치장 수감 — 이벤트는 추적만 끊는다 (난동꾼과 다른 점)
 
         if (SuddenEventUtil.IsNetworkSessionActive)
             m_intruder.GetComponent<NetworkObject>().Spawn();
