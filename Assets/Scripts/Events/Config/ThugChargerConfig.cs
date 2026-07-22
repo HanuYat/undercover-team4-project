@@ -38,8 +38,8 @@ public class ThugChargerConfig : ScriptableObject
     [Header("명중 효과")]
     [Tooltip("명중 1회당 플레이어 HP 감소량")]
     [SerializeField] private int m_hitDamage = 20;
-    [Tooltip("명중 시 플레이어에 가하는 수평 넉백 초기 속도(m/s)")]
-    [SerializeField] private float m_knockbackSpeed = 10f;
+    [Tooltip("명중 시 플레이어에 가하는 수평 넉백 초기 속도(m/s) — 돌진 충돌이라 강하게")]
+    [SerializeField] private float m_knockbackSpeed = 20f;
 
     [Header("경직 / 쿨다운")]
     [Tooltip("빗맞거나 벽에 박은 뒤 제자리에서 움직이지 못하는 시간(초) — 반격 창")]

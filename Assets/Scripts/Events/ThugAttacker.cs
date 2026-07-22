@@ -1,7 +1,7 @@
 using System;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.AI;
-using Unity.Netcode;
 
 /// <summary>
 /// 차저 — 괴한 습격에서 스폰되는 돌진형 위협 개체. (#291, 구 ThugAttacker 재작성)
@@ -14,15 +14,22 @@ using Unity.Netcode;
 [RequireComponent(typeof(NavMeshAgent))]
 public class ThugAttacker : NetworkBehaviour
 {
-    private enum Phase { Approach, Windup, Charge, Recover }
+    private enum Phase
+    {
+        Approach,
+        Windup,
+        Charge,
+        Recover,
+    }
 
     [Header("튜닝 (#291)")]
-    [SerializeField] private ThugChargerConfig m_config;
+    [SerializeField]
+    private ThugChargerConfig m_config;
 
     private NavMeshAgent m_agent;
     private PlayerData m_target;
     private Phase m_phase;
-    private float m_phaseEndTime;      // Windup/Recover 종료 시각
+    private float m_phaseEndTime; // Windup/Recover 종료 시각
     private float m_nextRetargetTime;
     private float m_nextPulseTime;
 
@@ -59,10 +66,18 @@ public class ThugAttacker : NetworkBehaviour
 
         switch (m_phase)
         {
-            case Phase.Approach: TickApproach(); break;
-            case Phase.Windup:   TickWindup();   break;
-            case Phase.Charge:   TickCharge();   break;
-            case Phase.Recover:  TickRecover();  break;
+            case Phase.Approach:
+                TickApproach();
+                break;
+            case Phase.Windup:
+                TickWindup();
+                break;
+            case Phase.Charge:
+                TickCharge();
+                break;
+            case Phase.Recover:
+                TickRecover();
+                break;
         }
 
         EmitDisturbancePulse();
@@ -113,7 +128,12 @@ public class ThugAttacker : NetworkBehaviour
             return;
 
         // 돌진 방향 고정 — 이 시점의 표적 방향으로 커밋(이후 표적이 움직여도 방향은 안 바뀐다 = 회피 가능)
-        Vector3 aim = (m_target != null ? m_target.transform.position : transform.position + transform.forward) - transform.position;
+        Vector3 aim =
+            (
+                m_target != null
+                    ? m_target.transform.position
+                    : transform.position + transform.forward
+            ) - transform.position;
         aim.y = 0f;
         m_chargeDir = aim.sqrMagnitude > 0.0001f ? aim.normalized : transform.forward;
         m_chargeStart = transform.position;
@@ -146,7 +166,10 @@ public class ThugAttacker : NetworkBehaviour
         FaceTowards(transform.position + m_chargeDir);
 
         // 명중 판정 — 사거리(HitRadius) 안 행동 가능 플레이어
-        PlayerData hit = SuddenEventUtil.FindNearestFieldPlayer(transform.position, m_config.HitRadius);
+        PlayerData hit = SuddenEventUtil.FindNearestFieldPlayer(
+            transform.position,
+            m_config.HitRadius
+        );
         if (hit != null)
         {
             HitPlayer(hit);
@@ -193,7 +216,10 @@ public class ThugAttacker : NetworkBehaviour
         if (Time.time >= m_nextRetargetTime)
         {
             m_nextRetargetTime = Time.time + m_config.RetargetInterval;
-            m_target = SuddenEventUtil.FindNearestFieldPlayer(transform.position, m_config.TargetSearchRadius);
+            m_target = SuddenEventUtil.FindNearestFieldPlayer(
+                transform.position,
+                m_config.TargetSearchRadius
+            );
         }
         return m_target;
     }
@@ -201,8 +227,8 @@ public class ThugAttacker : NetworkBehaviour
     // 명중 — 데미지(서버 권위 HP)는 직접, 넉백은 오너 피어가 적용하도록 ClientRpc로(비오너 self-무시). (BombExplosionView 패턴)
     private void HitPlayer(PlayerData player)
     {
-        NotifyAttack();
-
+        // 공격 스윙 모션 없음 — 달려가 부딪히는 돌진 그 자체가 타격이다 (#291 피드백).
+        // 달리는 모션은 ThugAnimationDriver가 이동 속도로 이미 내준다.
         ((IDamageable)player).TakeDamage(m_config.HitDamage, gameObject);
 
         Vector3 kb = player.transform.position - transform.position;
@@ -229,7 +255,12 @@ public class ThugAttacker : NetworkBehaviour
         // 각 피어가 자기 오너 플레이어에만 적용 — AddKnockback이 비오너를 스스로 무시한다 (BombExplosionView와 동일)
         if (NetworkManager.Singleton == null)
             return;
-        if (!NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetPlayerObjectId, out NetworkObject obj))
+        if (
+            !NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(
+                targetPlayerObjectId,
+                out NetworkObject obj
+            )
+        )
             return;
         if (obj.TryGetComponent(out PlayerMovement pm))
             pm.AddKnockback(velocity);
@@ -249,7 +280,15 @@ public class ThugAttacker : NetworkBehaviour
         float radius = m_agent.radius;
         Vector3 origin = transform.position + Vector3.up * Mathf.Max(radius, m_agent.height * 0.5f);
         int mask = m_config.ObstacleMask & ~(1 << gameObject.layer);
-        return Physics.SphereCast(origin, radius, direction, out RaycastHit _, distance, mask, QueryTriggerInteraction.Ignore);
+        return Physics.SphereCast(
+            origin,
+            radius,
+            direction,
+            out RaycastHit _,
+            distance,
+            mask,
+            QueryTriggerInteraction.Ignore
+        );
     }
 
     private void EmitDisturbancePulse()
