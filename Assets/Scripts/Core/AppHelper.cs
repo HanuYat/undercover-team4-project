@@ -72,6 +72,15 @@ public static class AppHelper
         SceneManager.sceneLoaded += OnSceneLoaded;
     }
 
+    // 특정 씬에서 바로 Play하면 그 초기(활성) 씬은 sceneLoaded가 울리지 않아 CurrentScene이 None으로 남는다.
+    // 최초 활성 씬을 한 번 반영한다 — 이후 전환은 위 sceneLoaded 훅이 담당.
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    private static void InitCurrentScene()
+    {
+        if (App.CurrentScene == EScene.None)
+            App.NotifySceneLoaded(FromSceneName(SceneManager.GetActiveScene().name));
+    }
+
     private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         if (mode != LoadSceneMode.Single)
