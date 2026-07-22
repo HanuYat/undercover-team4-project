@@ -10,7 +10,8 @@ using Unity.Netcode;
 /// </summary>
 public struct CitizenData : INetworkSerializable, IEquatable<CitizenData>
 {
-    public FixedString64Bytes Name; // 시민 이름 — 수배 리스트(#58) 대조의 유일 판별자
+    public FixedString64Bytes Name; // 정본 이름 — 수배 리스트(#58)·본부 인명부(#223) 대조의 유일 판별자
+    public FixedString64Bytes NameView; // 스캔 표시 이름 — 정본과 다르면 이름 위조 (#223)
     public OfficialRecords.CitizenType Type;
     public OfficialRecords.Faction Faction;
 
@@ -27,9 +28,14 @@ public struct CitizenData : INetworkSerializable, IEquatable<CitizenData>
         var name = new FixedString64Bytes();
         name.CopyFromTruncated(profile.CitizenName ?? string.Empty);
 
+        // 표시 이름이 비어 있으면 정본으로 대체 — 정상 시민은 정본==표시 (#223)
+        var nameView = new FixedString64Bytes();
+        nameView.CopyFromTruncated(profile.m_nameView ?? profile.CitizenName ?? string.Empty);
+
         return new CitizenData
         {
             Name = name,
+            NameView = nameView,
             Type = profile.CitizenType,
             Faction = profile.Faction,
         };
@@ -39,12 +45,16 @@ public struct CitizenData : INetworkSerializable, IEquatable<CitizenData>
         where T : IReaderWriter
     {
         serializer.SerializeValue(ref Name);
+        serializer.SerializeValue(ref NameView);
         serializer.SerializeValue(ref Type);
         serializer.SerializeValue(ref Faction);
     }
 
     public bool Equals(CitizenData other) =>
-        Name.Equals(other.Name) && Type == other.Type && Faction == other.Faction;
+        Name.Equals(other.Name)
+        && NameView.Equals(other.NameView)
+        && Type == other.Type
+        && Faction == other.Faction;
 
     public override bool Equals(object obj) => obj is CitizenData other && Equals(other);
 

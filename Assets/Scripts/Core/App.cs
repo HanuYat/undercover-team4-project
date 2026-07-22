@@ -27,6 +27,7 @@ public class App : Singleton<App>
     private CriminalAssigner m_criminalAssigner;
     private NpcSpawner m_npcSpawner;
     private AppearanceAssigner m_appearanceAssigner;
+    private DirectoryManager m_directoryManager;
     private WrongfulArrestPenalty m_wrongfulArrestPenalty;
     private TeamFund m_teamFund;
 
@@ -80,8 +81,8 @@ public class App : Singleton<App>
         public static NpcSpawner NpcSpawner => Instance.m_npcSpawner;
         public static AppearanceAssigner Appearance => Instance.m_appearanceAssigner;
         public static WrongfulArrestPenalty WrongfulArrestPenalty => Instance.m_wrongfulArrestPenalty;
-
         public static TeamFund TeamFund => Instance.m_teamFund;
+        public static DirectoryManager Directory => Instance.m_directoryManager;
     }
 
     public static class SceneFlow
