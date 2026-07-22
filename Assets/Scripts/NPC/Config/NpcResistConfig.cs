@@ -28,6 +28,8 @@ public class NpcResistConfig : ScriptableObject
     [SerializeField] private float m_attackConeAngle = 120f;
     [Tooltip("저항 중 표적을 바라보도록 도는 회전 속도(도/초) — 부채꼴 기준 방향을 표적에 맞춘다 (#220)")]
     [SerializeField] private float m_attackTurnSpeed = 540f;
+    [Tooltip("스윙 1회 동안 제자리에 멈춰 때리는 시간(초) — 추격을 멈춰 미끄러지며 때리는 그림을 막는다. 드라이버의 스윙 모션 유지시간(0.9)과 맞출 것")]
+    [SerializeField] private float m_swingHoldSeconds = 0.9f;
     [Tooltip("위협 탐색 반경 배율 — AttackRange에 곱한다. 저항 패배 후 도주 대상 탐색(#205)·도주 방향 산출(#213)이 공유")]
     [SerializeField] private float m_threatSearchRadiusMultiplier = 5f;
 
@@ -40,6 +42,7 @@ public class NpcResistConfig : ScriptableObject
     public float StrikeOffsetSeconds => m_strikeOffsetSeconds;
     public float AttackConeAngle => m_attackConeAngle;
     public float AttackTurnSpeed => m_attackTurnSpeed;
+    public float SwingHoldSeconds => m_swingHoldSeconds;
     public float ThreatSearchRadiusMultiplier => m_threatSearchRadiusMultiplier;
 
     /// <summary>스윙 변형 개수 — 오프셋 배열 길이(=블렌드 트리 클립 수). 비어 있으면 단일 변형(0)으로 폴백. (#220)</summary>

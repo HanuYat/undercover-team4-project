@@ -9,6 +9,9 @@ using UnityEngine.AI;
 ///
 /// 도주 방향은 위협 1명이 아니라 <see cref="NpcController.ThreatSearchRadius"/> 안의 플레이어 전원을 보고 고른다 (#213) —
 /// 협공하면 두 사람 사이로 뛰어드는 대신 옆으로 빠지고, 완전히 포위되면 저항으로 전환한다.
+///
+/// 도주 지점은 멀리(<see cref="NpcFleeConfig.FarPointDistance"/>) 잡고 <b>도착할 때까지 커밋</b>한다 —
+/// 추격자가 움직일 때마다 실시간으로 방향을 다시 재지 않는다(팀 피드백: 갈지자 없이 먼 곳으로 쭉 도주).
 /// </summary>
 public class NpcFleeState : NpcStateBase
 {
@@ -21,22 +24,23 @@ public class NpcFleeState : NpcStateBase
     // 후보 도착점을 NavMesh 위로 끌어당길 때 허용하는 최대 거리(m)
     private const float k_navSampleMaxDistance = 2f;
 
+    // 먼 지점(FarPointDistance) 샘플의 허용 거리(m) — 멀수록 건물 안 등에 떨어질 확률이 높아 여유를 더 준다
+    private const float k_farNavSampleMaxDistance = 4f;
+
     // 경로(origin→point) 위에서 위협의 최근접점이 이 t(정규화 위치)보다 앞(interior)에 있을 때만
     // clearance 제약을 건다. t가 0에 가까우면 최근접점이 origin이라 그 위협을 '등지고' 뛰는 방향이므로,
     // 이미 위협에 붙어 있어 origin이 clearance 안이더라도 그 방향까지 막지 않는다 (#213 오판 수정).
     private const float k_pathClearanceMinT = 0.05f;
 
-    // 추격 중 플레이어가 방향을 틀면 목적지 도착을 기다리지 않고 도주 방향을 다시 잡는다 (#96)
-    // 매 프레임 재계산은 비싸므로 NpcEscortedState와 같은 스로틀링(주기 + 이동량 임계치)을 쓴다
-    private const float k_repathInterval = 0.25f; // 재계산 최소 간격(초)
-    private const float k_repathThreatMoveThreshold = 1f; // 추격자가 이만큼(m) 움직였을 때만 재계산
+    // 이탈 판정(위협 스캔)의 최소 간격(초) — 씬 전체 검색이라 매 프레임 돌리지 않는다.
+    // 도주 지점 재계산에는 쓰지 않는다 — 지점은 도착까지 커밋한다 (팀 피드백, 구 #96 실시간 재계산 제거)
+    private const float k_scanInterval = 0.25f;
 
     // 서버에서만 Tick되므로 버퍼 공유 안전 — 매 재계산마다의 할당 방지 (NpcResistState와 같은 방식)
     private static readonly List<Transform> s_threatBuffer = new List<Transform>(8);
 
     private float m_baseSpeed;
-    private float m_repathTimer;
-    private Vector3 m_lastThreatPos;
+    private float m_scanTimer;
     private float m_fleeStartTime;
     private bool m_transitioningToResist;
 
@@ -54,18 +58,16 @@ public class NpcFleeState : NpcStateBase
         m_baseSpeed = m_owner.Agent.speed;
         m_owner.Agent.speed = m_baseSpeed * m_config.SpeedMultiplier;
 
-        m_repathTimer = 0f;
+        m_scanTimer = 0f;
         m_fleeStartTime = Time.time;
         m_transitioningToResist = false;
-        if (m_owner.ThreatTarget != null)
-            m_lastThreatPos = m_owner.ThreatTarget.position;
 
         SetFleePoint();
     }
 
     public override void Tick()
     {
-        m_repathTimer += Time.deltaTime;
+        m_scanTimer += Time.deltaTime;
 
         // 도주 지점 도착 판정 — Agent 내부 값만 읽으므로 매 프레임 확인해도 공짜다 (기존 동작)
         bool arrived =
@@ -73,22 +75,16 @@ public class NpcFleeState : NpcStateBase
             && m_owner.Agent.remainingDistance
                 <= m_owner.Agent.stoppingDistance + k_arriveThreshold;
 
-        // 위협 스캔(CollectThreats)은 씬 전체 FindObjectsByType이라 매 프레임 돌리면
-        // 도주 중인 NPC 수만큼 비용이 누적된다(범인 다수 + 미끼 시민 + 난동꾼).
-        // 재경로와 같은 주기로 묶는다 — 이탈 판정이 최대 k_repathInterval만큼 늦어지지만,
-        // 25m 밖으로 벗어난 순간과 0.25초 뒤 사이에 게임 상 차이는 없다. (리뷰 지적 반영)
-        if (m_repathTimer < k_repathInterval)
-        {
-            // 도착했으면 다음 지점은 기다리지 않고 바로 잡는다 — 도착마다 1회뿐이라 스로틀 대상이 아니고,
-            // 여기서 미루면 도주 중 NPC가 지점마다 멈칫한다. (SetFleePoint가 자체 스캔을 한다)
-            if (arrived)
-                SetFleePoint();
-            return;
-        }
+        // 도착했을 때만 다음 지점을 잡는다 — 지점은 커밋이라 도중에 방향을 다시 재지 않는다 (팀 피드백)
+        if (arrived)
+            SetFleePoint();
 
-        // 스캔 주기 리셋 — 재경로 여부와 무관하게 이번 틱에 스캔했다는 뜻이다.
-        // (재경로할 때만 리셋하면 주기가 지난 뒤 매 프레임 스캔으로 되돌아간다)
-        m_repathTimer = 0f;
+        // 위협 스캔(CollectThreats)은 씬 전체 FindObjectsByType이라 매 프레임 돌리면
+        // 도주 중인 NPC 수만큼 비용이 누적된다(범인 다수 + 미끼 시민 + 난동꾼) — 주기로 묶는다.
+        // 이탈 판정이 최대 k_scanInterval만큼 늦어지지만 게임 상 차이는 없다.
+        if (m_scanTimer < k_scanInterval)
+            return;
+        m_scanTimer = 0f;
 
         // 이탈 판정은 도주 방향 산출과 반경이 다르다 — 방향은 근처(ThreatSearchRadius) 플레이어만 보면 되지만,
         // 이탈은 FleeEscapeDistance(25m)까지 아무도 없어야 성립한다.
@@ -106,18 +102,6 @@ public class NpcFleeState : NpcStateBase
         // 도주형에는 이 폴백이 없어 Idle로 빠지던 문제 (#213). NpcResistState의 폴백(#205)과 대칭.
         if (m_owner.ThreatTarget == null)
             m_owner.StartFlee(nearest);
-
-        // 추격자가 방향을 틀면 도착 전에도 도주 방향을 다시 잡는다 — 이동량 임계치로 한 번 더 거른다 (#96)
-        // 기준은 고정된 위협 1명이 아니라 그 시점의 가장 가까운 추격자다.
-        bool threatMoved =
-            (nearest.position - m_lastThreatPos).sqrMagnitude
-            >= k_repathThreatMoveThreshold * k_repathThreatMoveThreshold;
-
-        if (arrived || threatMoved)
-        {
-            m_lastThreatPos = nearest.position;
-            SetFleePoint();
-        }
     }
 
     public override void Exit()
@@ -136,6 +120,7 @@ public class NpcFleeState : NpcStateBase
     /// <summary>
     /// 360도를 훑어 도주 지점을 고른다 — 경로가 플레이어를 스치는 방향은 버리고,
     /// 남은 후보 중 도착점에서 가장 가까운 플레이어까지의 거리가 최대인 쪽을 택한다.
+    /// 지점은 멀리(FarPointDistance) 잡고 도착할 때까지 커밋한다 — 막힌 방향만 StepDistance로 줄여 잡는다.
     /// 남는 후보가 없으면 포위가 성립한 것이므로 저항으로 전환한다.
     /// </summary>
     private void SetFleePoint()
@@ -167,19 +152,15 @@ public class NpcFleeState : NpcStateBase
             // 좌우 대칭 협공에서 방향이 0벡터로 상쇄되는 문제가 아예 생기지 않는다
             float angle = 360f / k_directionSampleCount * i;
             Vector3 direction = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
-            Vector3 candidate = origin + direction * m_config.StepDistance;
 
+            // 먼 지점 우선(커밋 도주) — 건물 안 등으로 샘플이 실패한 방향은 가까운 지점으로 줄여 다시 시도
             if (
-                !NavMesh.SamplePosition(
-                    candidate,
-                    out NavMeshHit hit,
-                    k_navSampleMaxDistance,
-                    NavMesh.AllAreas
-                )
+                !TrySamplePoint(origin, direction, m_config.FarPointDistance,
+                    k_farNavSampleMaxDistance, out Vector3 point)
+                && !TrySamplePoint(origin, direction, m_config.StepDistance,
+                    k_navSampleMaxDistance, out point)
             )
-                continue; // 벽 너머 등 갈 수 없는 방향
-
-            Vector3 point = hit.position;
+                continue; // 어느 거리로도 갈 수 없는 방향
             float pathClearanceSqr = float.MaxValue; // 경로가 플레이어를 스치는 최단거리
             float arrivalNearestSqr = float.MaxValue; // 도착점에서 가장 가까운 플레이어까지 거리
 
@@ -235,6 +216,19 @@ public class NpcFleeState : NpcStateBase
         Debug.Log($"도주로 차단(포위) — 저항 전환: {m_owner.name}");
         m_transitioningToResist = true;
         m_owner.StartResist(m_owner.ThreatTarget);
+    }
+
+    /// <summary>origin에서 direction으로 distance만큼 간 지점을 NavMesh 위로 샘플한다 — 실패 시 false.</summary>
+    private static bool TrySamplePoint(
+        Vector3 origin, Vector3 direction, float distance, float sampleMaxDistance, out Vector3 point)
+    {
+        point = default;
+        if (!NavMesh.SamplePosition(
+                origin + direction * distance, out NavMeshHit hit, sampleMaxDistance, NavMesh.AllAreas))
+            return false;
+
+        point = hit.position;
+        return true;
     }
 
     /// <summary>반경 내 행동 가능한 플레이어를 공유 버퍼에 모은다.</summary>
