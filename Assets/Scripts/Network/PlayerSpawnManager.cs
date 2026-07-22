@@ -1,74 +1,39 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 /// <summary>
-/// 접속하는 모든 플레이어를 지정한 스폰 포인트 한 곳에서 생성한다.
-/// NetworkManager 인스펙터에서 Connection Approval이 켜져 있어야 동작한다.
-/// 오너 클라이언트 쪽 위치 보정은 PlayerMovement.ApplyServerSpawnPose가 담당한다
-/// (NetworkTransform이 Owner 권한이라 서버 지정 위치만으로는 부족함).
+/// 연결 승인 + 플레이어 스폰/재배치. (#214/#51)
+/// m_spawnPlayers=false(로비·타이틀): 접속만 승인하고 플레이어는 만들지 않는다.
+/// m_spawnPlayers=true(상점·게임): 진입한 피어에 플레이어가 없으면 스폰, 있으면 스폰 포인트로 재배치.
+/// 플레이어는 destroyWithScene:false라 Shop↔Game 루프 내내 유지된다.
 /// </summary>
 public class PlayerSpawnManager : MonoBehaviour
 {
-    [SerializeField]
-    private Transform m_spawnPoint;
+    [Tooltip("이 씬에서 플레이어를 스폰/유지하는가 (로비·타이틀은 false — UI 대기)")]
+    [SerializeField] private bool m_spawnPlayers = true;
 
-    [SerializeField]
-    private float m_spreadRadius = 1.5f; // 겹침 방지용 분산 반경(m)
+    [SerializeField] private Transform m_spawnPoint;
+    [SerializeField] private float m_spreadRadius = 1.5f; // 겹침 방지용 분산 반경(m)
 
     private NetworkManager m_networkManager;
-    private int m_approvedCount;
+    private int m_placedCount;
 
     private void Start()
     {
         m_networkManager = NetworkManager.Singleton;
         if (m_networkManager == null)
         {
-            Debug.LogWarning("[PlayerSpawnManager] NetworkManager를 찾을 수 없습니다.");
+            Debug.LogWarning("[PlayerSpawnManager] NetworkManager 없음.");
             return;
-        }
-
-        if (!m_networkManager.NetworkConfig.ConnectionApproval)
-        {
-            Debug.LogWarning(
-                "[PlayerSpawnManager] NetworkManager의 Connection Approval이 꺼져 있어 "
-                    + "Approval 콜백이 호출되지 않습니다 → 항상 기본 위치에 스폰됩니다."
-            );
-        }
-
-        if (m_networkManager.IsListening)
-        {
-            Debug.LogWarning(
-                "[PlayerSpawnManager] 콜백 등록 전에 네트워크가 이미 시작됨 — "
-                    + "먼저 접속한 플레이어(호스트 포함)는 기본 위치에 스폰됐을 수 있습니다."
-            );
         }
 
         m_networkManager.ConnectionApprovalCallback = OnConnectionApproval;
 
-        // 이미 시작된 세션(호스트가 Title에서 접속, #247)이면 접속돼 있는 플레이어를 스폰 포인트로 재배치
-        if (m_networkManager.IsListening && m_networkManager.IsServer)
-            RepositionConnectedPlayers();
-    }
-
-    // Title 씬에서 접속한 호스트는 Approval 콜백 등록 전에 원점에 스폰된다 (#247)
-    // — InGame 로드 시점에 이미 스폰돼 있는 플레이어를 스폰 포인트 규칙대로 재배치한다.
-    private void RepositionConnectedPlayers()
-    {
-        if (m_spawnPoint == null)
-            return;
-
-        foreach (NetworkClient client in m_networkManager.ConnectedClientsList)
+        if (m_networkManager.IsServer && m_spawnPlayers)
         {
-            if (client.PlayerObject == null)
-                continue;
-
-            PlayerMovement movement = client.PlayerObject.GetComponent<PlayerMovement>();
-            if (movement == null)
-                continue;
-
-            Vector3 position = m_spawnPoint.position + GetSpreadOffset(m_approvedCount++);
-            movement.ServerReposition(position, m_spawnPoint.rotation);
-            Debug.Log($"[PlayerSpawnManager] 기존 접속 플레이어 {client.ClientId} 재배치: {position}");
+            m_networkManager.SceneManager.OnLoadComplete += HandleLoadComplete;
+            EnsureAndPlace(m_networkManager.LocalClientId); // 서버(호스트) 자신
         }
     }
 
@@ -77,44 +42,74 @@ public class PlayerSpawnManager : MonoBehaviour
         if (m_networkManager != null)
         {
             m_networkManager.ConnectionApprovalCallback = null;
+            if (m_networkManager.SceneManager != null)
+                m_networkManager.SceneManager.OnLoadComplete -= HandleLoadComplete;
         }
+    }
+
+    private void HandleLoadComplete(ulong clientId, string sceneName, LoadSceneMode loadSceneMode)
+    {
+        if (sceneName != gameObject.scene.name) return;
+        if (clientId == m_networkManager.LocalClientId) return; // 서버는 Start에서 처리
+        EnsureAndPlace(clientId);
+    }
+
+    private void EnsureAndPlace(ulong clientId)
+    {
+        if (!m_networkManager.ConnectedClients.TryGetValue(clientId, out NetworkClient client))
+            return;
+
+        if (client.PlayerObject == null)
+            SpawnPlayerFor(clientId);
+        else
+            RepositionPlayer(client.PlayerObject);
+    }
+
+    private void SpawnPlayerFor(ulong clientId)
+    {
+        GameObject prefab = m_networkManager.NetworkConfig.PlayerPrefab;
+        if (prefab == null)
+        {
+            Debug.LogError("[PlayerSpawnManager] NetworkConfig.PlayerPrefab 미설정");
+            return;
+        }
+
+        (Vector3 pos, Quaternion rot) = NextPose();
+        NetworkObject no = Instantiate(prefab, pos, rot).GetComponent<NetworkObject>();
+        no.SpawnAsPlayerObject(clientId, destroyWithScene: false); // 루프 내내 유지
+        Debug.Log($"[PlayerSpawnManager] 클라이언트 {clientId} 플레이어 스폰: {pos}");
+    }
+
+    private void RepositionPlayer(NetworkObject playerObject)
+    {
+        PlayerMovement movement = playerObject.GetComponent<PlayerMovement>();
+        if (movement == null) return;
+        (Vector3 pos, Quaternion rot) = NextPose();
+        movement.ServerReposition(pos, rot);
+    }
+
+    private (Vector3, Quaternion) NextPose()
+    {
+        Vector3 basePos = m_spawnPoint != null ? m_spawnPoint.position : Vector3.zero;
+        Quaternion rot = m_spawnPoint != null ? m_spawnPoint.rotation : Quaternion.identity;
+        return (basePos + GetSpreadOffset(m_placedCount++), rot);
     }
 
     private void OnConnectionApproval(
         NetworkManager.ConnectionApprovalRequest request,
-        NetworkManager.ConnectionApprovalResponse response
-    )
+        NetworkManager.ConnectionApprovalResponse response)
     {
         response.Approved = true;
-        response.CreatePlayerObject = true;
-
-        if (m_spawnPoint != null)
+        response.CreatePlayerObject = m_spawnPlayers; // 로비=false → 접속만, 플레이어 안 만듦
+        if (m_spawnPlayers && m_spawnPoint != null)
         {
-            response.Position = m_spawnPoint.position + GetSpreadOffset(m_approvedCount++);
-            response.Rotation = m_spawnPoint.rotation;
-            Debug.Log(
-                $"[PlayerSpawnManager] 클라이언트 {request.ClientNetworkId} 스폰 위치 지정: "
-                    + $"{response.Position}"
-            );
-        }
-        else
-        {
-            Debug.LogWarning(
-                $"[PlayerSpawnManager] 스폰 포인트가 지정되지 않아 클라이언트 "
-                    + $"{request.ClientNetworkId}가 기본 위치(프리팹 원점)에 생성됩니다."
-            );
+            (response.Position, response.Rotation) = NextPose();
         }
     }
 
-    // 접속 순서대로 스폰 포인트 주변 원 둘레에 배치한다 — 같은 좌표에 겹쳐 스폰되면
-    // CharacterController 겹침 해소가 플레이어를 임의 방향으로 밀어내기 때문 (최대 6인, GDD 기준)
     private Vector3 GetSpreadOffset(int index)
     {
-        if (index == 0)
-        {
-            return Vector3.zero;
-        }
-
+        if (index == 0) return Vector3.zero;
         float angle = (index % 6) * 60f * Mathf.Deg2Rad;
         return new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * m_spreadRadius;
     }

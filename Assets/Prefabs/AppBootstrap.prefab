@@ -52,6 +52,7 @@ MonoBehaviour:
   m_audibleDistance: 15
   m_audioFadeIntensity: 4
   m_positionUpdateInterval: 0.1
+  m_showDebugGui: 0
   m_guiTopOffset: 10
 --- !u!1 &4732638935019186088
 GameObject:
@@ -100,6 +101,7 @@ MonoBehaviour:
   m_signInOnStart: 1
   m_environmentName: production
   m_profile: 
+  m_showDebugGui: 0
   m_guiTopOffset: 10
 --- !u!1 &6309785483521376438
 GameObject:
@@ -111,6 +113,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2193270077844097952}
   - component: {fileID: 4559333319471191761}
+  - component: {fileID: 1633400896758511009}
   m_Layer: 0
   m_Name: AppBootstrap
   m_TagString: Untagged
@@ -148,6 +151,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: eda9f6d90e702f14a9743720d0b68396, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AppBootstrap
+--- !u!114 &1633400896758511009
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6309785483521376438}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d1c849de939a99d49a9222c36121ee3b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SceneIndicatorHud
 --- !u!1 &8772099138944498732
 GameObject:
   m_ObjectHideFlags: 0
@@ -194,4 +209,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SessionManager
   m_maxPlayer: 6
   m_auth: {fileID: 8182215812419880272}
+  m_showDebugGui: 0
   m_guiTopOffset: 0

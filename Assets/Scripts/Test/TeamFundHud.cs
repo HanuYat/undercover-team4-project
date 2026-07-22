@@ -18,9 +18,10 @@ public class TeamFundHud : MonoBehaviour
 
     private void OnGUI()
     {
-        // 세션 시작(Host/Client) 전에는 씬 NetworkObject가 스폰되지 않아 자금이 무의미하다 — 스폰 후에만 표시.
         if (m_teamFund == null || !m_teamFund.IsSpawned)
             return;
+        if (App.CurrentScene != EScene.Shop && App.CurrentScene != EScene.Game)
+            return; // 자금 표시는 상점 진입부터
 
         const float width = 200f;
         const float height = 32f;
@@ -40,5 +41,10 @@ public class TeamFundHud : MonoBehaviour
         };
         style.normal.textColor = Color.white;
         GUI.Label(rect, $"팀 자금: {m_teamFund.Balance:N0}원", style);
+
+        // [임시] 이월 확인용 — 호스트만. 눌러서 올린 뒤 로비↔게임 오가며 값이 유지되는지 본다.
+        //if (m_teamFund.IsServer &&
+        //    GUI.Button(new Rect(12f, rect.yMax + 4f, 120f, 28f), "+100 (debug)"))
+        //    m_teamFund.DebugAddFund(100);
     }
 }

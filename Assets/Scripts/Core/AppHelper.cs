@@ -13,16 +13,20 @@ public static class AppHelper
     public static string ToSceneName(EScene scene) =>
         scene switch
         {
-            EScene.Title => "Title", // 3단계에서 신설되는 로비 씬
-            EScene.InGame => "Main Scene",
+            EScene.Title => "Title Scene", // main이 Title.unity → "Title Scene.unity"로 개명 (#214 리베이스 반영)
+            EScene.Lobby => "Lobby",
+            EScene.Shop => "Shop",
+            EScene.Game => "Main Scene",
             _ => null,
         };
 
     private static EScene FromSceneName(string sceneName) =>
         sceneName switch
         {
-            "Title" => EScene.Title,
-            "Main Scene" => EScene.InGame,
+            "Title Scene" => EScene.Title,
+            "Lobby" => EScene.Lobby,
+            "Shop" => EScene.Shop,
+            "Main Scene" => EScene.Game,
             _ => EScene.None,
         };
 
@@ -66,6 +70,15 @@ public static class AppHelper
     {
         SceneManager.sceneLoaded -= OnSceneLoaded;
         SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    // 특정 씬에서 바로 Play하면 그 초기(활성) 씬은 sceneLoaded가 울리지 않아 CurrentScene이 None으로 남는다.
+    // 최초 활성 씬을 한 번 반영한다 — 이후 전환은 위 sceneLoaded 훅이 담당.
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    private static void InitCurrentScene()
+    {
+        if (App.CurrentScene == EScene.None)
+            App.NotifySceneLoaded(FromSceneName(SceneManager.GetActiveScene().name));
     }
 
     private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)

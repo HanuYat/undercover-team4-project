@@ -2,8 +2,10 @@
 public enum EScene
 {
     None,
-    Title,      // 로비 — 세션 생성/참가 (3단계에서 신설)
-    InGame,     // Main Scene
+    Title,      // 메인메뉴 — 세션 생성/참가
+    Lobby,      // 최초 대기 화면
+    Shop,       // 상점 = 인게임 허브 (라운드 사이 준비, 루프 진입점)
+    Game,       // 게임맵 - 라운드 진행 (구 InGame / "Main Scene")
 }
 
 /// <summary>

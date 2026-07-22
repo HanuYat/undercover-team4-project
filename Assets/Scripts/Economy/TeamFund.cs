@@ -2,66 +2,59 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 팀 공용 자금(#104, GDD 9-1/9-2) — 검거 보상을 서버 권위로 합산해 아이템 구매에 쓰는 팀 자산.
-/// 자금은 0 밑으로 내려가지 않는다(GDD 9-2). 값은 NetworkVariable로 전 클라이언트에 동기화되며,
-/// 정산 화면(#107)·상점(#182)이 <see cref="Fund"/>를 구독·조회한다.
-///
-/// 배정·판정이 서버 권위이므로(#56 패턴) 자금 변경도 서버(또는 오프라인 호스트)에서만 한다.
-/// 상점의 구매 차감은 이 컴포넌트의 <see cref="TrySpend"/>를 서버(구매 ServerRpc, #182)에서 호출한다.
+/// 팀 공용 자금(#104) — 세션 내내 유지되는 상주 홀더. (#214 §6 이월 구조)
+/// 세션 시작 시 서버가 1회 스폰(destroyWithScene:false)해 씬을 넘어 값이 유지된다.
+/// 검거 보상 가산은 게임 씬의 ArrestJudge에 붙어야 하므로, 게임 씬 진입마다 재배선한다.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
-public class TeamFund : NetworkBehaviour
+[DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
+public class TeamFund : NetworkedManagerBase
 {
-    [Header("검거 판정 (비우면 씬에서 자동 탐색)")]
-    [SerializeField] private ArrestJudge m_arrestJudge;
-
-    [Tooltip("라운드 시작(서버 스폰) 시 초기 자금. 밸런싱 보류 항목(GDD 12장)이라 인스펙터에 둔다")]
+    [Tooltip("세션 시작 시 초기 자금")]
     [Min(0)]
     [SerializeField] private int m_startingFund = 0;
 
-    // 서버만 쓰기(기본 쓰기 권한 = Server), 전 클라이언트 읽기. UI는 Fund.OnValueChanged로 갱신을 받는다.
-    private readonly NetworkVariable<int> m_fund = new NetworkVariable<int>();
+    private readonly NetworkVariable<int> m_fund = new();
 
-    /// <summary>동기화된 팀 자금 — 정산 UI(#107)·상점(#182)이 구독(OnValueChanged)·조회(Value)한다. 서버 외에는 읽기 전용.</summary>
     public NetworkVariable<int> Fund => m_fund;
-
-    /// <summary>현재 팀 자금 잔액 — 조회 편의용. 쓰기는 서버 전용 API로만.</summary>
-    public int Balance => m_fund.Value;
-
-    private void Awake()
-    {
-        if (m_arrestJudge == null)
-            m_arrestJudge = FindFirstObjectByType<ArrestJudge>();
-    }
+    public int Balance => m_fund.Value; // 팀 자금 잔액 (조회 편의용)
 
     public override void OnNetworkSpawn()
     {
-        // 서버만 자금을 채우고 지운다 — 판정이 서버 권위이므로 (#56 패턴)
-        if (!IsServer)
-            return;
+        if (!IsServer) return;
 
-        // 재시작(Shutdown 후 StartHost) 시 씬 NetworkObject의 값에는 이전 세션 자금이 남는다 —
-        // 서버가 새로 뜨면 항상 초기값으로 시작한다. (WantedListManager의 Clear와 같은 이유, #209)
+        // 세션 시작 시 1회 초기화
         m_fund.Value = m_startingFund;
 
-        if (m_arrestJudge != null)
-            m_arrestJudge.OnArrestJudged += HandleArrestJudged;
-        else
-            Debug.LogWarning("TeamFund: ArrestJudge를 찾지 못해 검거 보상을 합산할 수 없다", this);
+        // 게임 씬의 ArrestJudge에 라운드마다 다시 붙는다.
+        App.OnSceneLoaded += HandleSceneLoaded;
+        if (App.CurrentScene == EScene.Game)
+            HandleSceneLoaded(EScene.Game);
     }
 
     public override void OnNetworkDespawn()
     {
-        if (m_arrestJudge != null)
-            m_arrestJudge.OnArrestJudged -= HandleArrestJudged;
+        if (!IsServer) return;
+
+        App.OnSceneLoaded -= HandleSceneLoaded;
+        // 현재 ArrestJudge 구독은 씬 언로드와 동시에 자동 정리됨.
     }
 
-    // 검거 판정 수신 — 판정이 정한 보상을 자금에 가산한다. (서버 전용, ArrestJudge)
-    // 수배범(10000)·경범죄(이벤트 지정액)는 양수, 오검거는 0이라 자금에 영향이 없다 (GDD 9-2, ArrestResult.Reward).
+    // 게임 씬 진입 시 그 씬의 ArrestJudge에 구독한다. 이전 씬의 ArrestJudge는 파괴됐으므로 중복/누수 없음.
+    private void HandleSceneLoaded(EScene scene)
+    {
+        if (scene != EScene.Game) return;
+
+        ArrestJudge judge = App.Game.ArrestJudge;
+        if (judge != null)
+            judge.OnArrestJudged += HandleArrestJudged;
+        else
+            Debug.LogWarning($"[TeamFund] 게임 씬에 ArrestJudge가 없어 검거 보상을 받지 못함.", this);
+    }
+
     private void HandleArrestJudged(ArrestResult result)
     {
-        if (result.Reward == 0)
-            return;
+        if (result.Reward == 0) return;
 
         m_fund.Value = Mathf.Max(0, m_fund.Value + result.Reward);
         Debug.Log($"[팀 자금] 보상 +{result.Reward} → 잔액 {m_fund.Value}");
@@ -76,16 +69,20 @@ public class TeamFund : NetworkBehaviour
     {
         if (!IsServer)
         {
-            Debug.LogWarning("TeamFund.TrySpend는 서버에서만 호출해야 한다 (구매 ServerRpc 경유)", this);
+            Debug.LogWarning("TeamFund.TrySpend는 서버에서만", this);
             return false;
         }
-        if (cost < 0)
-            return false;
-        if (m_fund.Value < cost)
-            return false;
+        if (cost < 0 || m_fund.Value < cost) return false;
 
         m_fund.Value -= cost;
         Debug.Log($"[팀 자금] 차감 -{cost} → 잔액 {m_fund.Value}");
         return true;
     }
+
+    // [임시/디버그] 이월 확인용 — 서버 전용. 정식 증감은 검거 보상·상점. (#214 테스트, 확인 후 제거)
+    //public void DebugAddFund(int amount)
+    //{
+    //    if (IsServer)
+    //        m_fund.Value = Mathf.Max(0, m_fund.Value + amount);
+    //}
 }

@@ -162,10 +162,10 @@ public class PlayerMovement : NetworkBehaviour
     }
 
     /// <summary>
-    /// 서버 전용 — 접속 시점에 스폰 포인트를 받지 못한 플레이어를 재배치한다. (#247)
-    /// 호스트는 Title 씬에서 접속하므로(세션 생성=StartHost) Main Scene의 PlayerSpawnManager
-    /// 콜백 등록 전에 기본 위치(원점)에 스폰된다 — InGame 로드 후 이 메서드로 바로잡는다.
-    /// 원격 클라이언트는 서버가 InGame에 있을 때만 접속하므로 대상은 사실상 호스트(서버=오너)뿐이다.
+    /// 서버 전용 — 플레이어를 지정 스폰 포인트로 재배치한다. (#214 §8-2)
+    /// 세션 유지 루프(Shop↔Game)에서 플레이어는 씬을 넘어 이월되므로, 각 씬 진입 시 재배치가 필요하다.
+    /// 호스트(서버=오너)는 즉시 SetPose, 원격 클라이언트는 NetworkTransform이 오너 권한이라
+    /// ApplyPoseRpc(SendTo.Owner)로 넘겨 오너가 스스로 적용해야 전 피어에 전파된다.
     /// </summary>
     public void ServerReposition(Vector3 position, Quaternion rotation)
     {
@@ -176,7 +176,9 @@ public class PlayerMovement : NetworkBehaviour
         m_serverSpawnRotation.Value = rotation;
 
         if (IsOwner)
-            SetPose(position, rotation); // 호스트 플레이어: 서버=오너라 즉시 적용 (NetworkTransform 오너 권한)
+            SetPose(position, rotation);       // 호스트(서버=오너): 즉시 적용
+        else
+            ApplyPoseRpc(position, rotation);  // 원격 클라: 오너가 스스로 적용 (NetworkTransform 오너 권한)
     }
 
     /// <summary>
