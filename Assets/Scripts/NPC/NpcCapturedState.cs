@@ -15,7 +15,12 @@ public class NpcCapturedState : NpcStateBase
     // 타이머를 미루려면 직접 걸어와 재연행(E)해야 하니 꼼수 가치가 낮다.
     private float m_escapeTime;
 
-    public NpcCapturedState(NpcController owner) : base(owner) { }
+    private readonly NpcCapturedConfig m_config;
+
+    public NpcCapturedState(NpcController owner, NpcCapturedConfig config) : base(owner)
+    {
+        m_config = config;
+    }
 
     public override void Enter()
     {
@@ -24,7 +29,7 @@ public class NpcCapturedState : NpcStateBase
         if (m_owner.Agent.isOnNavMesh)
             m_owner.Agent.ResetPath();
 
-        m_escapeTime = Time.time + m_owner.CapturedEscapeSeconds;
+        m_escapeTime = Time.time + m_config.EscapeSeconds;
     }
 
     public override void Tick()
@@ -43,7 +48,7 @@ public class NpcCapturedState : NpcStateBase
 
         // 도주 직전 구간엔 소란을 낸다 — 수갑 풀려고 몸부림치는 소동.
         // 주변 시민이 패닉해 흩어지므로 현장(목격)·본부(CCTV) 양쪽이 눈치챈다 (#81 재사용)
-        if (remaining <= m_owner.CapturedEscapeWarningSeconds)
+        if (remaining <= m_config.EscapeWarningSeconds)
             m_owner.RequestDisturbancePulse();
     }
 

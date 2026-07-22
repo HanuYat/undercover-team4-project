@@ -10,7 +10,12 @@ public class NpcStunnedState : NpcStateBase
 {
     private float m_timer;
 
-    public NpcStunnedState(NpcController owner) : base(owner) { }
+    private readonly NpcStunConfig m_config;
+
+    public NpcStunnedState(NpcController owner, NpcStunConfig config) : base(owner)
+    {
+        m_config = config;
+    }
 
     public override void Enter()
     {
@@ -23,7 +28,7 @@ public class NpcStunnedState : NpcStateBase
     public override void Tick()
     {
         m_timer += Time.deltaTime;
-        if (m_timer >= m_owner.StunSeconds)
+        if (m_timer >= m_config.StunSeconds)
             m_owner.StateMachine.ChangeState(NpcState.Idle);
     }
 

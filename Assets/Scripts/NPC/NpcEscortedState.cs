@@ -19,13 +19,18 @@ public class NpcEscortedState : NpcStateBase
     private float m_baseSpeed;
     private bool m_isHolding; // 플레이어 근접으로 정지 중인지 (#97)
 
-    public NpcEscortedState(NpcController owner) : base(owner) { }
+    private readonly NpcEscortConfig m_config;
+
+    public NpcEscortedState(NpcController owner, NpcEscortConfig config) : base(owner)
+    {
+        m_config = config;
+    }
 
     public override void Enter()
     {
         m_owner.Agent.isStopped = false;
         // 플레이어 등에 딱 붙지 않도록 추종 거리만큼 앞에서 멈춘다
-        m_owner.Agent.stoppingDistance = m_owner.EscortFollowDistance;
+        m_owner.Agent.stoppingDistance = m_config.FollowDistance;
         m_baseSpeed = m_owner.Agent.speed;
         m_repathTimer = 0f;
         m_isHolding = false;
@@ -50,7 +55,7 @@ public class NpcEscortedState : NpcStateBase
         float distance = Vector3.Distance(m_owner.transform.position, target.position);
 
         // 너무 멀어지면 연행이 풀리고 그 자리에서 체포된 채 멈춘다
-        if (distance > m_owner.EscortBreakDistance)
+        if (distance > m_config.BreakDistance)
         {
             Debug.Log($"연행 해제 — 거리 이탈 ({distance:F1}m): {m_owner.name}");
             m_owner.StopEscort();
@@ -64,7 +69,7 @@ public class NpcEscortedState : NpcStateBase
         if (m_isHolding)
         {
             // 히스테리시스 밖으로 벗어나야 재추종 — 경계에서 정지/추종이 떨리는 것 방지
-            if (distance > m_owner.EscortFollowDistance + k_resumeDistanceOffset)
+            if (distance > m_config.FollowDistance + k_resumeDistanceOffset)
             {
                 m_isHolding = false;
                 m_owner.Agent.isStopped = false;
@@ -75,7 +80,7 @@ public class NpcEscortedState : NpcStateBase
             return; // 정지 유지 — 아래 추종 로직은 건너뛴다
         }
 
-        if (distance <= m_owner.EscortFollowDistance)
+        if (distance <= m_config.FollowDistance)
         {
             m_isHolding = true;
             m_owner.Agent.isStopped = true;
@@ -86,8 +91,8 @@ public class NpcEscortedState : NpcStateBase
         }
 
         // 뒤처지면 속도를 올려 따라잡는다
-        m_owner.Agent.speed = distance > m_owner.EscortBoostDistance
-            ? m_baseSpeed * m_owner.EscortBoostMultiplier
+        m_owner.Agent.speed = distance > m_config.BoostDistance
+            ? m_baseSpeed * m_config.BoostMultiplier
             : m_baseSpeed;
 
         // 경로 재계산은 "주기 경과 + 목표가 충분히 움직임" 둘 다 만족할 때만 (비용 절약)

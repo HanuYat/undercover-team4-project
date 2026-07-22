@@ -15,8 +15,13 @@ public class NpcPenaltyEscortState : NpcStateBase
     private float m_baseSpeed;
     private float m_repathTimer;
 
-    public NpcPenaltyEscortState(NpcController owner)
-        : base(owner) { }
+    private readonly NpcEscortConfig m_config;
+
+    public NpcPenaltyEscortState(NpcController owner, NpcEscortConfig config)
+        : base(owner)
+    {
+        m_config = config;
+    }
 
     public override void Enter()
     {
@@ -62,8 +67,8 @@ public class NpcPenaltyEscortState : NpcStateBase
         // 선두보다 뒤처지면 살짝 빠르게 따라잡는다 — 대형이 길게 늘어지는 것 방지 (연행 부스트 관례)
         float lag = Vector3.Distance(m_owner.transform.position, spot);
         m_owner.Agent.speed =
-            lag > m_owner.EscortBoostDistance
-                ? m_baseSpeed * m_owner.EscortBoostMultiplier
+            lag > m_config.BoostDistance
+                ? m_baseSpeed * m_config.BoostMultiplier
                 : m_baseSpeed;
     }
 }

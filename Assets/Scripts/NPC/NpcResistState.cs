@@ -35,24 +35,31 @@ public class NpcResistState : NpcStateBase
     private Vector3 m_lastChaseDestination;
     private float m_baseSpeed; // 진입 시점의 이동 속도 — 추격 질주 배율 적용 전 값(Exit에서 복원) (#254)
 
-    public NpcResistState(NpcController owner) : base(owner) { }
+    private readonly NpcResistConfig m_config;
+    private readonly NpcFleeConfig m_fleeConfig;
+
+    public NpcResistState(NpcController owner, NpcResistConfig config, NpcFleeConfig fleeConfig) : base(owner)
+    {
+        m_config = config;
+        m_fleeConfig = fleeConfig;
+    }
 
     public override void Enter()
     {
         // 표적을 추격하며 싸운다 — 이동을 멈추지 않고, 사거리 안으로 들어오면 stoppingDistance로 자연히 선다 (#254)
         m_owner.Agent.isStopped = false;
-        m_owner.Agent.stoppingDistance = m_owner.ResistAttackRange * k_stopDistanceFactor;
+        m_owner.Agent.stoppingDistance = m_config.AttackRange * k_stopDistanceFactor;
 
         // 걸어오지 않고 달려온다 — 도주와 같은 질주 속도를 써서 공용 Run 클립이 발 미끄러짐 없이 맞는다 (#254)
         m_baseSpeed = m_owner.Agent.speed;
-        m_owner.Agent.speed = m_baseSpeed * m_owner.FleeSpeedMultiplier;
+        m_owner.Agent.speed = m_baseSpeed * m_fleeConfig.SpeedMultiplier;
 
         // 표적을 직접 바라보도록 수동 회전할 것이므로 에이전트 자동 회전을 끈다 — 안 그러면 서로 방향을 다툰다 (#220)
         m_owner.Agent.updateRotation = false;
 
         m_owner.ResetSubdueGauge();
         m_resistStartTime = Time.time;
-        m_nextAttackTime = Time.time + m_owner.ResistAttackInterval;
+        m_nextAttackTime = Time.time + m_config.AttackInterval;
         m_pendingStrikeTime = k_noPendingStrike; // 직전 저항의 예약이 남아 첫 타격이 앞당겨지지 않게
 
         m_repathTimer = 0f;
@@ -82,15 +89,15 @@ public class NpcResistState : NpcStateBase
         // 미뤄, 눈에 보이는 준비 동작과 HP 감소 순간을 맞추고 준비 중 벗어난 플레이어는 빗나가게 한다 (#220)
         bool targetInRange = target != null
             && (target.position - m_owner.transform.position).sqrMagnitude
-                <= m_owner.ResistAttackRange * m_owner.ResistAttackRange;
+                <= m_config.AttackRange * m_config.AttackRange;
         if (targetInRange && Time.time >= m_nextAttackTime)
         {
-            m_nextAttackTime = Time.time + m_owner.ResistAttackInterval;
+            m_nextAttackTime = Time.time + m_config.AttackInterval;
             // 변형을 서버에서 뽑아 전 피어에 넘긴다 — 데미지는 그 클립의 타격 오프셋에 맞춰 넣고(아래),
             // 같은 index가 애니메이션에도 가므로 화면 속 주먹이 닿는 순간과 HP 감소가 일치한다. (#220)
-            int variant = m_owner.NextSwingVariant();
+            int variant = Random.Range(0, m_config.SwingVariantCount);
             m_owner.RaiseAttackSwing(variant);
-            m_pendingStrikeTime = Time.time + m_owner.SwingImpactOffset(variant);
+            m_pendingStrikeTime = Time.time + m_config.SwingImpactOffset(variant);
         }
 
         // 타격 프레임 도달 — 예약된 스윙의 데미지를 지금 넣는다. 범위 재수집도 이 순간에 하므로
@@ -106,7 +113,7 @@ public class NpcResistState : NpcStateBase
         }
 
         // 제한 시간 안에 못 꺾었으면 제압 실패 — 뿌리치고 도주 (GDD 7-4 '제압 실패')
-        if (Time.time - m_resistStartTime > m_owner.ResistDefeatSeconds)
+        if (Time.time - m_resistStartTime > m_config.DefeatSeconds)
         {
             Defeat("제압 제한 시간 초과");
         }
@@ -126,7 +133,7 @@ public class NpcResistState : NpcStateBase
     /// </summary>
     private bool SwingAttack()
     {
-        CollectPlayersInRange(m_owner.ResistAttackRange);
+        CollectPlayersInRange(m_config.AttackRange);
 
         int engaged = 0;    // 정면 부채꼴 안에서 실제로 노린 대상 수
         int aliveCount = 0; // 그중 타격 후에도 살아있는 수
@@ -139,7 +146,7 @@ public class NpcResistState : NpcStateBase
             if (player.CurrentHp <= 0)
                 continue;
 
-            ((IDamageable)player).TakeDamage(m_owner.ResistAttackDamage, m_owner.gameObject);
+            ((IDamageable)player).TakeDamage(m_config.AttackDamage, m_owner.gameObject);
             if (player.CurrentHp > 0)
                 aliveCount++;
         }
@@ -206,7 +213,7 @@ public class NpcResistState : NpcStateBase
 
         Quaternion look = Quaternion.LookRotation(to);
         m_owner.transform.rotation = Quaternion.RotateTowards(
-            m_owner.transform.rotation, look, m_owner.AttackTurnSpeed * Time.deltaTime);
+            m_owner.transform.rotation, look, m_config.AttackTurnSpeed * Time.deltaTime);
     }
 
     /// <summary>주어진 위치가 NPC 정면 부채꼴(AttackConeAngle) 안인지 — 수평 방향 기준.</summary>
@@ -219,7 +226,7 @@ public class NpcResistState : NpcStateBase
 
         Vector3 forward = m_owner.transform.forward;
         forward.y = 0f;
-        return Vector3.Angle(forward, to) <= m_owner.AttackConeAngle * 0.5f;
+        return Vector3.Angle(forward, to) <= m_config.AttackConeAngle * 0.5f;
     }
 
     /// <summary>플레이어 승리 실패 — 저항을 유발한 플레이어(없으면 근처 플레이어)를 위협 삼아 도주형으로 전환한다.</summary>
