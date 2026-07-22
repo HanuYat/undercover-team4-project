@@ -36,22 +36,13 @@ public class SettlementController : MonoBehaviour
 
     private RoundManager Round => App.Game.Round;
     private WrongfulArrestPenalty Penalty => App.Game.WrongfulArrestPenalty;
-
-    [Header("참조 (비우면 씬에서 자동 탐색)")]
-    [SerializeField]
-    private TeamFund m_teamFund;
+    private TeamFund TeamFund => App.Game.TeamFund;
 
     private bool m_handlerRegistered;
 
     // 이번 라운드 시작 시점의 팀 자금 — 정산 증감(현재-시작) 기준. TeamFund가 세션 지속형이라(#214)
     // 세션 초기값이 아니라 "이 라운드가 시작될 때" 잔액을 스냅샷해야 이번 라운드 증감이 나온다.
     private int m_roundStartFund;
-
-    private void Awake()
-    {
-        if (m_teamFund == null)
-            m_teamFund = FindFirstObjectByType<TeamFund>();
-    }
 
     private void OnEnable()
     {
@@ -75,7 +66,7 @@ public class SettlementController : MonoBehaviour
     // 라운드 시작(서버·오프라인) 시점 자금을 기록해 둔다 — 종료 시 증감 계산 기준.
     private void HandleRoundStarted()
     {
-        m_roundStartFund = m_teamFund != null ? m_teamFund.Balance : 0;
+        m_roundStartFund = TeamFund != null ? TeamFund.Balance : 0;
     }
 
     private void Start()
@@ -140,8 +131,8 @@ public class SettlementController : MonoBehaviour
     // 결과·종료 사유·자금 증감·최다 오검거를 모은다 (서버·오프라인 권위 데이터).
     private SettlementData BuildData(RoundResult result, RoundEndReason reason)
     {
-        int balance = m_teamFund != null ? m_teamFund.Balance : 0;
-        int delta = m_teamFund != null ? m_teamFund.Balance - m_roundStartFund : 0;
+        int balance = TeamFund != null ? TeamFund.Balance : 0;
+        int delta = TeamFund != null ? TeamFund.Balance - m_roundStartFund : 0;
 
         string topName = string.Empty;
         int topCount = 0;
