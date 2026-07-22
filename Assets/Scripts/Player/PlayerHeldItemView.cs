@@ -24,6 +24,9 @@ public class PlayerHeldItemView : NetworkBehaviour
     [SerializeField]
     private Transform m_handAnchor;
 
+    /// <summary>손 본 앵커 — 손에서 뻗어 나가는 표현(밧줄 선 #269 등)이 시작점으로 쓴다. 미지정이면 null.</summary>
+    public Transform HandAnchor => m_handAnchor;
+
     // 아이템 참조 해석 대기 상한(프레임). 스폰 메시지와 NetworkVariable 도착 순서 경쟁으로
     // 참조가 즉시 안 풀릴 수 있다 — PlayerLoadout.ResolveAndRebuildAsync와 같은 방침.
     private const int k_maxResolveWaitFrames = 120;

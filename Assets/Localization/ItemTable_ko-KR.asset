@@ -44,6 +44,15 @@ MonoBehaviour:
       \uC81C\uC555\uD560 \uC218 \uC788\uB2E4."
     m_Metadata:
       m_Items: []
+  - m_Id: 465442687246336
+    m_Localized: "\uBC27\uC904"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 465442729189376
+    m_Localized: "\uAE30\uC808\uD55C \uB300\uC0C1\uC744 \uBB36\uC5B4 \uC9C8\uC9C8
+      \uB04C\uACE0 \uAC08 \uB54C \uC0AC\uC6A9\uD55C\uB2E4."
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

@@ -31,8 +31,8 @@ public class HqDropoffZone : MonoBehaviour
             return;
         }
 
-        // 연행 중인 NPC만 인계 대상 — 배회하다 지나가는 시민은 무시
-        if (npc.CurrentState != NpcState.Escorted)
+        // 연행 중이거나 밧줄로 끌려온 기절 NPC만 인계 대상 — 배회 시민은 무시 (#59/#269)
+        if (npc.CurrentState != NpcState.Escorted && !npc.IsRoped)
             return;
 
         Debug.Log($"본부 도달 — 인계 가능: {npc.name}");

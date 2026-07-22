@@ -42,6 +42,11 @@ public static class NpcAnimatorControllerBuilder
     private const string k_unlockBeginState = "Unlocking_Begin";
     private const string k_unlockLoopState = "Unlocking_Loop";
 
+    // 기절에서 일어나는 모션 — 기절(누운 자세) 클립과 같은 Knockdown01 세트라 자세가 그대로 이어진다. (#269)
+    private const string k_standUpClip =
+        "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Combat/HumanM@Knockdown01 - StandUp.fbx";
+    private const string k_standUpState = "Stunned_StandUp";
+
     // 한 번만 내지르는 단발 타격만 고른다 — attack01(원투 2연타)·attack06(4연타 콤보)은
     // 한 클립 안에 타격이 여러 번이라 제외했다. 스윙 오버레이(#220)는 1회성 타격을 전제로 한다.
     // (판별: 팔 완전 신전 횟수 + 손 속도 버스트 교차검증. 02·03은 직선 펀치, 04·05는 훅류 단발)
@@ -107,6 +112,7 @@ public static class NpcAnimatorControllerBuilder
         attack.motion = tree;
 
         SetupUnlockStates(controller);
+        SetupStandUpState(controller);
 
         EditorUtility.SetDirty(tree);
         EditorUtility.SetDirty(controller);
@@ -175,6 +181,64 @@ public static class NpcAnimatorControllerBuilder
             NpcAnimationDriver.k_unlockingLoopAnimState,
             "State"
         );
+    }
+
+    /// <summary>
+    /// 기절 해제 시 일어나는 상태를 구성한다 — Any State → StandUp(1회). (#269)
+    /// 해제(Unlocking) 상태와 같은 구조다: 드라이버가 <c>k_standUpAnimState</c> 번호를 넣는 순간 진입하고,
+    /// 유지 시간이 끝나 드라이버가 다른 번호를 넣으면 그쪽 Any State 전이가 걸려 빠져나온다.
+    /// 이탈 전이를 따로 만들지 않는 것도 같은 이유다.
+    /// 재실행 시 기존 상태/전이를 지우고 다시 만들어 중복을 막는다.
+    /// </summary>
+    private static void SetupStandUpState(AnimatorController controller)
+    {
+        AnimationClip standUp = LoadClip(k_standUpClip);
+        if (standUp == null)
+        {
+            Debug.LogError(
+                "[NpcAnimatorControllerBuilder] 일어나기 클립을 불러오지 못해 StandUp 상태 구성을 건너뜀"
+            );
+            return;
+        }
+
+        AnimatorStateMachine stateMachine = controller.layers[0].stateMachine;
+        RemoveStandUpState(stateMachine);
+
+        AnimatorState state = stateMachine.AddState(k_standUpState);
+        state.motion = standUp;
+
+        // canTransitionToSelf를 끄지 않으면 번호가 유지되는 매 프레임 재진입해 클립이 앞으로 못 나간다
+        // (해제 Begin과 같은 함정 — 일어나다 말고 계속 처음부터 다시 시작한다)
+        AnimatorStateTransition toStandUp = stateMachine.AddAnyStateTransition(state);
+        toStandUp.hasExitTime = false;
+        toStandUp.duration = 0.1f;
+        toStandUp.canTransitionToSelf = false;
+        toStandUp.AddCondition(
+            AnimatorConditionMode.Equals,
+            NpcAnimationDriver.k_standUpAnimState,
+            "State"
+        );
+    }
+
+    /// <summary>이전 실행이 만든 일어나기 상태와 그 상태를 가리키는 Any State 전이를 제거한다.</summary>
+    private static void RemoveStandUpState(AnimatorStateMachine stateMachine)
+    {
+        var staleTransitions = new List<AnimatorStateTransition>();
+        foreach (AnimatorStateTransition transition in stateMachine.anyStateTransitions)
+        {
+            if (transition.destinationState != null && transition.destinationState.name == k_standUpState)
+                staleTransitions.Add(transition);
+        }
+        foreach (AnimatorStateTransition transition in staleTransitions)
+        {
+            stateMachine.RemoveAnyStateTransition(transition);
+        }
+
+        foreach (ChildAnimatorState child in stateMachine.states)
+        {
+            if (child.state.name == k_standUpState)
+                stateMachine.RemoveState(child.state);
+        }
     }
 
     /// <summary>이전 실행이 만든 해제 상태와 그 상태를 가리키는 Any State 전이를 제거한다.</summary>

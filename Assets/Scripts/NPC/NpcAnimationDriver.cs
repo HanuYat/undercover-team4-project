@@ -45,6 +45,14 @@ public class NpcAnimationDriver : MonoBehaviour
     /// </summary>
     public const int k_unlockingLoopAnimState = 101;
 
+    /// <summary>
+    /// 기절에서 일어나는(StandUp) 모션의 Animator 상태 번호. (#269)
+    /// 해제 모션과 같은 이유로 NpcState enum 값이 아니다 — 일어나는 동안 FSM 상태는 여전히 Stunned이고,
+    /// 그 구분은 서버 FSM 내부값이라 클라이언트가 모른다. enum과 겹치지 않는 전용 번호를 쓴다.
+    /// NpcAnimatorControllerBuilder(Editor)가 이 상수로 Any State 전이 조건을 만든다.
+    /// </summary>
+    public const int k_standUpAnimState = 102;
+
     // 연행 근접 정지(#97) 모션 전환 임계값 — 실제 이동 속도(m/s) 기준.
     // 켜짐/꺼짐 경계를 다르게 둬(히스테리시스) 정지 직전 감속 구간에서 모션이 떨리는 것을 막는다.
     // 꺼짐 임계값은 걷기 최저 속도(~1.6m/s)보다 충분히 낮게 — 추종 중 순간 감속에 오작동하지 않는 선
@@ -89,6 +97,10 @@ public class NpcAnimationDriver : MonoBehaviour
     private float m_unlockBeginUntil;
     // 현재 스윙 모션을 유지할 종료 시각. 0 이하면 스윙 중 아님. 스윙이 끝나면 base 상태로 되돌린다 (#220)
     private float m_swingUntil;
+    // 일어나는 모션 재생 중인가 (#269). 스윙과 달리 시간으로 끊지 않는다 — 클립이 1회 재생이라
+    // 마지막 프레임(선 자세)에서 멈추고, 곧 도착하는 Idle 전이가 배회 모션으로 이어받는다.
+    // 시간으로 끊으면 그 사이 한 프레임 동안 누운 자세(base)가 스쳐 지나가 툭 끊겨 보인다.
+    private bool m_standingUp;
     // 스윙이 끝난 뒤 되돌아갈 FSM 기준 상태 — 저항(Attack)이면 버틴 자세(Idle)로 복귀한다 (#220)
     private NpcState m_baseState;
 
@@ -107,6 +119,8 @@ public class NpcAnimationDriver : MonoBehaviour
         m_controller.OnStateChanged += HandleStateChanged;
         // 스윙은 상태 전이가 아니라 순간 이벤트 — 저항 상태를 유지한 채 매 타격마다 단발 스윙을 얹는다 (#220)
         m_controller.OnAttackSwing += HandleAttackSwing;
+        // 일어나기도 상태 전이가 아닌 순간 이벤트 — 기절 상태를 유지한 채 마지막 구간에만 얹는다 (#269)
+        m_controller.OnStandUp += HandleStandUp;
         HandleStateChanged(m_controller.CurrentState);
     }
 
@@ -116,6 +130,7 @@ public class NpcAnimationDriver : MonoBehaviour
         {
             m_controller.OnStateChanged -= HandleStateChanged;
             m_controller.OnAttackSwing -= HandleAttackSwing;
+            m_controller.OnStandUp -= HandleStandUp;
         }
     }
 
@@ -148,6 +163,20 @@ public class NpcAnimationDriver : MonoBehaviour
 
         m_animator.SetInteger(s_stateHash, (int)NpcState.Attack);
         m_swingUntil = Time.time + m_swingAnimSeconds;
+    }
+
+    // 기절이 풀리기 직전 일어나는 모션 — 스윙과 같은 int 펄스 방식이다(트리거 오버레이는 Any State
+    // 전이에 매 프레임 끊긴다). FSM 상태는 아직 Stunned라 NPC는 제자리에 있고, 모션만 누운 자세에서
+    // 일어나는 자세로 바뀐다. 복귀는 Update가 처리한다 — 유지 시간이 끝나거나 도중에 다시 묶이면 누운 자세로.
+    private void HandleStandUp()
+    {
+        if (m_animator == null)
+            return;
+        if (m_baseState != NpcState.Stunned)
+            return; // 늦게 도착한 알림 — 이미 다른 상태면 유령 모션이 된다 (스윙과 같은 방어)
+
+        m_animator.SetInteger(s_stateHash, k_standUpAnimState);
+        m_standingUp = true;
     }
 
     /// <summary>스윙 모션이 성립할 수 있는 기준 상태인가 — 구속·무력화 상태에서는 공격이 나올 수 없다. (#220)
@@ -188,6 +217,14 @@ public class NpcAnimationDriver : MonoBehaviour
         if (m_swingUntil > 0f && Time.time >= m_swingUntil)
         {
             m_swingUntil = 0f;
+            m_animator.SetInteger(s_stateHash, AnimatorBaseState(m_baseState));
+        }
+
+        // 일어나던 중에 다시 밧줄로 묶이면 취소하고 누운 자세로 되돌린다 — 끌려가는데 서 있으면 안 된다.
+        // 정상 종료(기절 해제)는 여기가 아니라 Idle 상태 전이가 처리한다 (#269)
+        if (m_standingUp && m_controller.IsRoped)
+        {
+            m_standingUp = false;
             m_animator.SetInteger(s_stateHash, AnimatorBaseState(m_baseState));
         }
 
@@ -331,6 +368,7 @@ public class NpcAnimationDriver : MonoBehaviour
         // (예: 저항 중 스윙하다 제압되면 그 프레임에 Captured로 넘어가야 한다) (#220)
         m_baseState = state;
         m_swingUntil = 0f;
+        m_standingUp = false; // 상태가 바뀌면 일어나기도 끝난다 — 새 base 모션이 즉시 적용된다
 
         // 앵그리 마크(#280) — 페널티 상태(수용~호송) 동안 머리 위에 표시한다. 이 이벤트는 동기화를 거쳐
         // 모든 피어에서 발생하므로(#56) 원격 클라·CCTV 화면에서도 같은 시점에 켜지고 꺼진다
