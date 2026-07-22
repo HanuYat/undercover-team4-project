@@ -213,6 +213,19 @@ public class PlayerEscorter : NetworkBehaviour
         EscortRequestRpc(new NetworkObjectReference(target.NetworkObject));
     }
 
+    /// <summary>수갑 해제 시도 — 빈손 오너가 호출(빈손 좌클릭, PlayerItemUser). 서버/오프라인 즉시 실행, 원격은 서버로 요청. (#290)</summary>
+    public void RequestUncuff(NpcController target)
+    {
+        if (target == null) return;
+        if (!IsSpawned || IsServer) { ServerBeginUncuff(target); return; } // 서버/오프라인 즉시 실행
+        if (!IsOwner) return;
+        if (!IsTargetNetworkReady(target)) return;
+        UncuffRequestRpc(new NetworkObjectReference(target.NetworkObject));
+    }
+
+    /// <summary>수갑 해제 채널링 취소 — 오너가 호출(빈손 좌클릭 뗌). 체포와 같은 채널(m_channel)을 공유하므로 CancelCapture로 위임한다. (#290)</summary>
+    public void CancelUncuff() => CancelCapture();
+
     // 원격 클라 → 서버로 대상을 넘기려면 스폰돼 있어야 한다(NetworkObjectReference 제약).
     // 스폰 안 된 NPC(씬 배치 후 미스폰 등)면 참조 생성이 예외를 던지므로 미리 걸러 경고만 남긴다.
     private bool IsTargetNetworkReady(NpcController target)
@@ -269,6 +282,16 @@ public class PlayerEscorter : NetworkBehaviour
             targetObj.TryGetComponent(out NpcController target))
         {
             ServerEscort(target);
+        }
+    }
+
+    [Rpc(SendTo.Server)]
+    private void UncuffRequestRpc(NetworkObjectReference targetRef)
+    {
+        if (targetRef.TryGet(out NetworkObject targetObj) &&
+            targetObj.TryGetComponent(out NpcController target))
+        {
+            ServerBeginUncuff(target);
         }
     }
 
@@ -365,6 +388,60 @@ public class PlayerEscorter : NetworkBehaviour
             StartEscort(target);
     }
 
+    // ---- 수갑 해제 채널링 (서버 권위, #290) ----
+    // 체포 채널링(ServerBeginCapture)의 역방향 — 빈손 좌클릭으로 체포된 NPC의 수갑을 풀어 회수한다.
+    // 체포와 같은 m_channel·게이지·사거리 판정을 재사용한다(빈손↔수갑 든 상태는 상호배타라 채널 하나면 충분).
+
+    /// <summary>수갑 해제 진입 — 체포된 대상만, 중복·연행중·사거리 검증 후 채널링 시작. 서버(또는 오프라인) 실행. (#290)</summary>
+    private void ServerBeginUncuff(NpcController target)
+    {
+        if (m_channel.IsActive)
+            return; // 체포/해제 채널링 중복 방지 (한 채널 공유)
+        if (IsBusy)
+            return; // 연행/끌기 중엔 해제 불가 — 빈손 상태가 아니다
+        if (!NpcStateRules.IsUncuffable(target.CurrentState))
+            return; // 체포(Captured)만 — 클라 조기검증(PlayerItemUser)과 단일 기준 (#184/#290)
+        if (!target.HasHandcuffs)
+            return; // 실제로 수갑이 채워진 NPC만 해제 대상 — cuffless Captured(제압만)는 타이머로 탈출 (#290)
+        if (!IsInRange(target))
+            return; // 사거리 밖이면 시작조차 안 함
+
+        ServerUncuffChannelAsync(target).Forget();
+    }
+
+    private async UniTaskVoid ServerUncuffChannelAsync(NpcController target)
+    {
+        NotifyOwner($"수갑 해제 채널링 시작: {target.name} ({m_channelSeconds}초)");
+        NotifyChannelGaugeStart(m_channelSeconds);
+
+        // 체포 채널링과 동일한 keepAlive — 도중 거리 이탈은 즉시 실패시킨다.
+        ServerChannel.Result result;
+        try
+        {
+            result = await m_channel.RunAsync(
+                m_channelSeconds, () => target != null && IsInRange(target));
+        }
+        finally
+        {
+            NotifyChannelGaugeEnd(); // 어떤 경로로 끝나도 게이지 숨김 보장
+        }
+
+        if (result != ServerChannel.Result.Completed)
+        {
+            NotifyOwner("수갑 해제 중단 (홀드 뗌 / 거리 이탈)");
+            return;
+        }
+
+        // 채널링 도중 상태가 바뀌었을 수 있다 — 완료 시점에 재확인(예: 그새 다른 플레이어가 재연행).
+        if (!NpcStateRules.IsUncuffable(target.CurrentState))
+            return;
+
+        // 채운 수갑을 발밑에 반환하고(없으면 no-op) 배회로 복귀시킨다 — 판정 funnel 밖의 회수 경로 (#290).
+        NotifyOwner($"수갑 해제 완료 — 발밑 반환 후 배회 복귀: {target.name}");
+        target.DropHandcuffs();
+        target.ReleaseFromCustody();
+    }
+
     private bool IsInRange(NpcController target)
     {
         return (target.transform.position - AimOriginPosition).sqrMagnitude
@@ -435,12 +512,20 @@ public class PlayerEscorter : NetworkBehaviour
         if (IsBusy || npc == null)
             return;
 
-        // 첫 연행에만 수갑을 소모해 NPC로 옮긴다 — 판정 후 반환까지 NPC가 들고 간다 (#229).
-        // 재연행(놓았다 다시 잡기)이면 NPC에 이미 수갑이 있으니 또 소모하지 않는다.
-        // ponytail: 도주 제압(Captured)만 되고 아직 연행 안 한 NPC는 첫 연행자 수갑을 소모한다 —
-        // 제압↔연행 사이 수갑 든 채 다른 도주범 추가 제압이 가능(마이너). 제압 시 예약은 과설계라 보류.
+        // 연행은 반드시 NPC에 수갑이 채워져야 성립한다 — 소모 관문을 여기 하나로 둔다 (#290 모델B).
+        // 제압(도주/저항)은 여러 명·제압봉으로 가능해 '누구 수갑을 채우나'가 모호하므로 소모하지 않고,
+        // 소유자가 명확한 연행 시점에 첫 연행자의 수갑을 NPC로 옮긴다 (판정 후 반환까지 NPC가 들고 감, #229).
+        // 재연행(놓았다 다시 잡기)·이미 수갑 찬 NPC면 또 소모하지 않는다.
         if (!npc.HasHandcuffs)
+        {
+            // 플레이어도 NPC도 수갑이 없으면 연행 불가 — '수갑 없이 연행' 구멍을 막는다 (#290).
+            if (!HasHandcuffs)
+            {
+                NotifyOwner($"수갑 없음 — 연행 불가: {npc.name}");
+                return;
+            }
             Loadout?.ConsumeHandcuffsTo(npc.transform);
+        }
 
         SetEscorting(npc);
         npc.StartEscort(transform);
