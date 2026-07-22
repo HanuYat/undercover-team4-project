@@ -1,0 +1,16 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 653d8a0b670309c4fa509f120a5a8c69, type: 3}
+  m_Name: NpcWalkConfig
+  m_EditorClassIdentifier: Assembly-CSharp::NpcWalkConfig
+  m_wanderRadius: 10
+  m_minWanderDistance: 3
