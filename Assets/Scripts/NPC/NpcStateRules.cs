@@ -42,6 +42,13 @@ public static class NpcStateRules
     /// 수갑 연행과 역할이 갈린다: 수갑은 순응형 즉시 연행, 밧줄은 기절시킨 대상 전용.</summary>
     public static bool IsRopeable(NpcState state) => state == NpcState.Stunned;
 
+    /// <summary>빈손 좌클릭 채널링으로 수갑을 풀어 회수할 수 있는 '상태'인가 — 체포되어 멈춘 대상. (#290)
+    /// 상태 게이트는 Captured만(ReleaseFromCustody의 게이트와 일치). 순수 함수라 여기서 수갑 유무는
+    /// 보지 않는다 — 호출부(PlayerItemUser·PlayerEscorter)가 npc.HasHandcuffs를 함께 걸어 '수갑 찬
+    /// Captured'로 좁힌다. 수갑 없이 제압만 된 Captured(도주·저항 제압)는 대상이 아니며, 그런 NPC는
+    /// 인계 방치 타이머(NpcCapturedState)로 스스로 풀려난다.</summary>
+    public static bool IsUncuffable(NpcState state) => state == NpcState.Captured;
+
     /// <summary>E 상호작용(제압·타격·재연행)이 반응하는 상태인가.
     /// 포함 목록 방식 — 새 상태는 기본 'E 불가'이므로 열어야 하면 여기 추가할 것.
     /// NpcSubdueInteractable.Interact의 분기 집합과 반드시 일치해야 한다.</summary>

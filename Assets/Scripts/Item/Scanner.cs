@@ -44,11 +44,12 @@ public class Scanner : ItemBase, IChargeable
     public event Action<int> OnCharged;
 
     /// <summary>
-    /// 스캔 채널링 성공 이벤트 — 조회된 시민 프로필을 전달한다. 스캔 결과 프레젠터(#39)가 구독한다.
+    /// 스캔 채널링 성공 이벤트 — 조회된 시민 프로필과 대상 NPC의 NetworkObjectId를 전달한다.
+    /// 스캔 결과 프레젠터(#39)가 구독해 "이 플레이어가 스캔한 NPC" 집합에 id를 기록한다 (#233).
     /// 인스턴스 이벤트이므로 구독자는 자기 스캐너의 결과만 받는다 — 스캔 결과는 본인 화면 전용. (GDD 5-4)
     /// 서버가 채널링 완료 후 ScanResultRpc로 오너에게 NPC 참조를 회신하면, 수신 지점에서 발행된다 (#55).
     /// </summary>
-    public event Action<CitizenProfile> OnScanCompleted;
+    public event Action<CitizenProfile, ulong> OnScanCompleted;
 
     // ---- IChargeable — 충전 요청 진입점 ----
 
@@ -288,7 +289,7 @@ public class Scanner : ItemBase, IChargeable
         }
 
         Debug.Log($"스캔 결과 수신: {GetScanInfo(identity.Profile)}");
-        OnScanCompleted?.Invoke(identity.Profile);
+        OnScanCompleted?.Invoke(identity.Profile, npcNetObj.NetworkObjectId);
     }
 
     // 서버 → 오너: 스캔 거부·취소·실패 시 in-flight 플래그 해제
