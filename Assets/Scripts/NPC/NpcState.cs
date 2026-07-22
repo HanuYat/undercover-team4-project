@@ -46,4 +46,11 @@ public enum NpcState
     /// 선두 2명이 양옆에서 끌고 나머지는 뒤따른다. 규약 예외: 속도 기준 Walk/Idle 모션.
     /// </summary>
     PenaltyEscorting,
+
+    /// <summary>
+    /// 임시 거처 이송 — 경범죄 이벤트 NPC(난동자·난동꾼)가 판정 후 임시 거처 지점까지 걸어가 도착 시 소멸한다. (#291)
+    /// Jailed와 같은 규약 예외: 대응 Animator 상태가 없어 NpcAnimationDriver가 Walk 모션을 대여한다.
+    /// 원한 구역(Detained #277)과는 다른 지점·다른 목적이다(추격 출동 없이 정리 대상).
+    /// </summary>
+    Holding,
 }

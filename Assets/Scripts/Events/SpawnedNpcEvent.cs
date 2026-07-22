@@ -45,6 +45,10 @@ public class SpawnedNpcEvent : ISuddenEvent
     [Tooltip("본부 인계 후 경범죄 판정 성공 시 팀 자금에 더해질 수익 — ArrestJudge가 마커에서 읽어 지급한다")]
     [SerializeField] private int m_pettyCrimeReward = 50;
 
+    [Header("임시 거처 (#291)")]
+    [Tooltip("경범죄 판정 후 이 지점으로 걸어가 도착하면 소멸한다. 비우면 기존처럼 그 자리에서 소멸한다(폴백)")]
+    [SerializeField] private Transform m_holdingPoint;
+
     [Header("안전 장치")]
     [Tooltip("연행되지 않은 채 이 시간(초)을 넘기면 강제로 정리한다 (스폰물 누수 방지)")]
     [SerializeField] private float m_maxLifetimeSeconds = 60f;
@@ -222,13 +226,34 @@ public class SpawnedNpcEvent : ISuddenEvent
         }
     }
 
-    // 검거 판정 수신 — 내가 스폰한 NPC가 판정됐으면 정리를 예약한다. 수익은 ArrestJudge가 마커를 읽어 이미 지급했다.
+    // 검거 판정 수신 — 내가 스폰한 NPC가 판정됐으면 임시 거처로 이송한다(도착 시 정리). 수익은 ArrestJudge가 이미 지급.
     private void HandleArrestJudged(ArrestResult result)
     {
         if (m_npc == null || result.Npc != m_npc)
             return;
 
+        // 임시 거처가 배선돼 있으면 그쪽으로 걸어가 도착 시 정리한다 — 눈앞에서 사라지지 않게 (#291)
+        if (m_holdingPoint != null)
+        {
+            Debug.Log($"[돌발이벤트] {m_displayName} — 경범죄 판정, 임시 거처로 이송");
+            m_startTime = Time.time; // 이송에 방치 타이머 예산을 새로 준다
+            m_npc.OnReachedHolding += HandleReachedHolding;
+            m_npc.SendToHolding(m_holdingPoint);
+            return;
+        }
+
+        // 임시 거처 미배선 — 기존처럼 그 자리에서 정리 예약 (폴백)
         Debug.Log($"[돌발이벤트] {m_displayName} — 경범죄 판정 완료, 정리 예약");
+        m_despawnQueued = true;
+    }
+
+    // 임시 거처 도착 — 다음 ServerTick에 정리한다(파괴-중-틱 회피, 기존 지연 despawn 경로 재사용). (#291)
+    private void HandleReachedHolding(NpcController npc)
+    {
+        if (m_npc == null || npc != m_npc)
+            return;
+
+        Debug.Log($"[돌발이벤트] {m_displayName} — 임시 거처 도착, 정리 예약");
         m_despawnQueued = true;
     }
 
@@ -239,6 +264,7 @@ public class SpawnedNpcEvent : ISuddenEvent
             return;
 
         m_npc.OnStateChanged -= HandleStateChanged;
+        m_npc.OnReachedHolding -= HandleReachedHolding;
 
         // 연행 중인 채로 정리되면(라운드 종료 등) 연행 참조가 파괴된 NPC를 가리킨 채 남아 그 플레이어가
         // 영영 연행 중이 된다 — 파괴 전에 놓게 한다. 판정 경로에서는 ArrestJudge가 이미 놓았으므로 null이다.
