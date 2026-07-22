@@ -175,7 +175,7 @@ public class NpcSpawner : CommonManagerBase
 
             // 네트워크 세션이면 전 클라이언트에 복제 (서버 권위 스폰, #56)
             if (IsNetworkSessionActive)
-                npc.GetComponent<NetworkObject>().Spawn();
+                npc.GetComponent<NetworkObject>().Spawn(destroyWithScene: true);
 
             m_spawnedNpcs.Add(npc);
             spawned++;

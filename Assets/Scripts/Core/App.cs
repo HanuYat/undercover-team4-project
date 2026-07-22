@@ -28,6 +28,7 @@ public class App : Singleton<App>
     private NpcSpawner m_npcSpawner;
     private AppearanceAssigner m_appearanceAssigner;
     private WrongfulArrestPenalty m_wrongfulArrestPenalty;
+    private TeamFund m_teamFund;
 
     // UI 매니저 (씬 전환 시 교체됨)
     private UIManagerBase m_uiManager;
@@ -78,22 +79,25 @@ public class App : Singleton<App>
         public static CriminalAssigner CriminalAssigner => Instance.m_criminalAssigner;
         public static NpcSpawner NpcSpawner => Instance.m_npcSpawner;
         public static AppearanceAssigner Appearance => Instance.m_appearanceAssigner;
-        public static WrongfulArrestPenalty WrongfulArrestPenalty =>
-            Instance.m_wrongfulArrestPenalty;
+        public static WrongfulArrestPenalty WrongfulArrestPenalty => Instance.m_wrongfulArrestPenalty;
+
+        public static TeamFund TeamFund => Instance.m_teamFund;
     }
 
     public static class SceneFlow
     {
         public static SceneManagerBase Current => Instance.m_sceneManager;
         public static TitleManager Title => Instance.m_sceneManager as TitleManager;
-        public static InGameManager InGame => Instance.m_sceneManager as InGameManager;
+        public static LobbyManager Lobby => Instance.m_sceneManager as LobbyManager;
+        public static ShopManager Shop => Instance.m_sceneManager as ShopManager;
+        public static InGameManager Game => Instance.m_sceneManager as InGameManager;
     }
 
     public static class UI
     {
         public static UIManagerBase Current => Instance.m_uiManager;
         public static TitleUIManager Title => Instance.m_uiManager as TitleUIManager;
-        public static InGameUIManager InGame => Instance.m_uiManager as InGameUIManager;
+        public static InGameUIManager Game => Instance.m_uiManager as InGameUIManager;
 
         // 로컬 HUD — 씬 시작 시점엔 null일 수 있다 (오너 스폰 시 프리팹 생성). 사용처는 ?. 가드 필수
         public static CrosshairUI Crosshair => Instance.m_crosshairUI;

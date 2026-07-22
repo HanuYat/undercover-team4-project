@@ -385,4 +385,24 @@ public class SessionManager : CommonManagerBase
             m_isBusy = false;
         }
     }
+
+    /// <summary>세션 잠금/해제 — 호스트 전용. 잠그면 코드 참가가 거부된다. (#214 게임 중 신규 접속 차단)</summary>
+    public async UniTask SetLockedAsync(bool locked)
+    {
+        if (m_session == null)
+            return;
+        try
+        {
+            IHostSession host = m_session.AsHost(); // 호스트(세션 생성자)만 유효
+            if (host.IsLocked == locked)
+                return;
+            host.IsLocked = locked;
+            await host.SavePropertiesAsync();
+            Debug.Log($"[SessionManager] 세션 {(locked ? "잠금(참가 차단)" : "해제(참가 허용)")}");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[SessionManager] 세션 잠금 변경 실패(무시): {ex.Message}");
+        }
+    }
 }

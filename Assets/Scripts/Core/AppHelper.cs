@@ -13,16 +13,20 @@ public static class AppHelper
     public static string ToSceneName(EScene scene) =>
         scene switch
         {
-            EScene.Title => "Title", // 3단계에서 신설되는 로비 씬
-            EScene.InGame => "Main Scene",
+            EScene.Title => "Title Scene", // main이 Title.unity → "Title Scene.unity"로 개명 (#214 리베이스 반영)
+            EScene.Lobby => "Lobby",
+            EScene.Shop => "Shop",
+            EScene.Game => "Main Scene",
             _ => null,
         };
 
     private static EScene FromSceneName(string sceneName) =>
         sceneName switch
         {
-            "Title" => EScene.Title,
-            "Main Scene" => EScene.InGame,
+            "Title Scene" => EScene.Title,
+            "Lobby" => EScene.Lobby,
+            "Shop" => EScene.Shop,
+            "Main Scene" => EScene.Game,
             _ => EScene.None,
         };
 

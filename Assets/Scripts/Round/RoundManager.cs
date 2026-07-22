@@ -135,8 +135,10 @@ public class RoundManager : CommonManagerBase
             return;
         }
 
-        // 네트워크 세션 — 로비 대기. 라운드는 호스트의 '게임 시작'(LobbyManager)이 StartRound()로 연다.
-        // (서버 시작 즉시 시작하던 기존 동작 제거 — #154 로비)
+        // 네트워크 세션: 게임 씬의 들어옴 = 라운드 시작 신호 (로비는 별도 씬, #214)
+        // 서버만 연다(서버 권위) - 클라이언트는 서버의 스폰/판정 동기화만 받음.
+        if (m_networkManager.IsServer) 
+            StartRound();
     }
 
     // 서버 재시작 시 이전 라운드 상태를 초기화한다 — Phase·결과·진행도와 스포너 래치를 되돌려 재스폰을 허용한다.

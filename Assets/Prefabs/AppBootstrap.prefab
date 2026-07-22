@@ -52,6 +52,7 @@ MonoBehaviour:
   m_audibleDistance: 15
   m_audioFadeIntensity: 4
   m_positionUpdateInterval: 0.1
+  m_showDebugGui: 0
   m_guiTopOffset: 10
 --- !u!1 &4732638935019186088
 GameObject:
@@ -100,6 +101,7 @@ MonoBehaviour:
   m_signInOnStart: 1
   m_environmentName: production
   m_profile: 
+  m_showDebugGui: 0
   m_guiTopOffset: 10
 --- !u!1 &6309785483521376438
 GameObject:
@@ -194,4 +196,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SessionManager
   m_maxPlayer: 6
   m_auth: {fileID: 8182215812419880272}
+  m_showDebugGui: 0
   m_guiTopOffset: 0

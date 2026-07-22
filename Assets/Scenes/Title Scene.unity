@@ -1098,6 +1098,53 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 828396477}
   m_CullTransparentMesh: 1
+--- !u!1 &860555997
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 860555998}
+  - component: {fileID: 860555999}
+  m_Layer: 0
+  m_Name: PlayerSpawnManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &860555998
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 860555997}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: -0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &860555999
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 860555997}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9228909be7b60ad418e2ce1aace88c98, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerSpawnManager
+  m_spawnPlayers: 0
+  m_spawnPoint: {fileID: 0}
+  m_spreadRadius: 1.5
 --- !u!1 &868270461
 GameObject:
   m_ObjectHideFlags: 0
@@ -1413,6 +1460,25 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 894602689}
   m_CullTransparentMesh: 1
+--- !u!1 &1007819048 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 6309785483521376438, guid: 719f666d4571ca94ca2b4f5a029c960b, type: 3}
+  m_PrefabInstance: {fileID: 2091158853}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1007819051
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1007819048}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 424a3544b2a138b409c8133f83a88638, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SessionObjectSpawner
+  m_persistentPrefabs:
+  - {fileID: 3455862892653891524, guid: ee55831d23071d047a46eef925780d91, type: 3}
 --- !u!1 &1068861816
 GameObject:
   m_ObjectHideFlags: 0
@@ -2765,7 +2831,10 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 6309785483521376438, guid: 719f666d4571ca94ca2b4f5a029c960b, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1007819051}
   m_SourcePrefab: {fileID: 100100000, guid: 719f666d4571ca94ca2b4f5a029c960b, type: 3}
 --- !u!1 &2114877462
 GameObject:
@@ -2900,3 +2969,4 @@ SceneRoots:
   - {fileID: 439721881}
   - {fileID: 730117342}
   - {fileID: 256231340}
+  - {fileID: 860555998}

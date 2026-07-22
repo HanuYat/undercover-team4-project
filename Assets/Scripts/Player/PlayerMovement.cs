@@ -176,7 +176,9 @@ public class PlayerMovement : NetworkBehaviour
         m_serverSpawnRotation.Value = rotation;
 
         if (IsOwner)
-            SetPose(position, rotation); // 호스트 플레이어: 서버=오너라 즉시 적용 (NetworkTransform 오너 권한)
+            SetPose(position, rotation);       // 호스트(서버=오너): 즉시 적용
+        else
+            ApplyPoseRpc(position, rotation);  // 원격 클라: 오너가 스스로 적용 (NetworkTransform 오너 권한)
     }
 
     /// <summary>
