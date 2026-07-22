@@ -20,8 +20,10 @@ using Random = UnityEngine.Random;
 /// 이벤트 풀은 인스펙터 <b>명시 리스트</b>(m_eventEntries)로 구성한다 — 자동수집을 쓰지 않는다 (#291).
 ///  · <see cref="ISuddenEvent"/> 컴포넌트 — 1개 = 1종 (괴한 습격·전자기기 먹통).
 ///  · <see cref="ISuddenEventProvider"/> 컴포넌트 — 1개가 여러 종을 품는다 (스폰형: <see cref="SpawnedNpcEventSet"/>).
-/// 항목마다 enabled 토글이 있어 특정 이벤트만 켜서 추첨할 수 있다(테스트·튜토리얼). 리스트는 같은
-/// 오브젝트가 아닌 이벤트 컴포넌트도 참조할 수 있다(씬 배선 최종형은 팀 결정).
+/// 항목마다 enabled 토글이 있어 특정 이벤트만 켜서 추첨할 수 있다(테스트·튜토리얼).
+/// <b>이벤트 컴포넌트는 반드시 이 오브젝트에 둔다</b> — 전부 [RequireComponent(typeof(SuddenEventManager))]라
+/// 다른 오브젝트에 붙이면 거기에 두 번째 매니저가 자동 생성된다. 리스트 구조 자체는 타 오브젝트 참조가
+/// 가능하지만, 규약 완화(RequireComponent 제거)는 팀 결정 대기 항목이다(#291 고려사항 · PR #298 리뷰).
 /// 발생 빈도·이벤트별 수치는 전부 인스펙터 — 밸런싱 보류 항목이라 코드에 못 박지 않는다 (GDD 12장).
 /// </summary>
 // TODO: 이벤트 발생/종료 HUD 알림(본부 관제 UI, #43 계열)은 OnEventAnnounced/AnnounceEventClientRpc를 구독해 연결한다.
