@@ -151,7 +151,9 @@ public class Taser : ItemBase
             return;
         }
 
-        target.EnterStunned();
+        // 쏜 사람을 위협으로 넘긴다 — 기절이 풀리면 이 사람에게서 도망친다 (#269)
+        PlayerInteractor shooter = GetComponentInParent<PlayerInteractor>();
+        target.EnterStunned(shooter != null ? shooter.transform : null);
         NotifyOwner($"테이저 명중: {target.name} ({target.StunSeconds}초 기절)");
     }
 

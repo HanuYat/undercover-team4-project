@@ -83,12 +83,14 @@ public class PlayerInteractor : NetworkBehaviour
         if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
             return;
 
-        // 연행 중 E는 놓기가 최우선 — 다른 대상을 겨냥하고 있어도 이번 입력은 놓기로 소비한다 (#91)
+        // 연행·밧줄 끌기 중 E는 놓기가 최우선 — 다른 대상을 겨냥하고 있어도 이번 입력은 놓기로 소비한다 (#91/#269)
         // (PlayerEscorter가 따로 입력을 구독하면 놓기+제압이 한 입력에 동시 발동하는 이중 소비가 생긴다)
-        if (m_escorter != null && m_escorter.IsEscorting)
+        // IsEscorting이 아니라 IsBusy로 게이트한다 — 끌기는 별도 플래그라 연행만 보면 밧줄을 놓을 방법이 없다.
+        if (m_escorter != null && m_escorter.IsBusy)
         {
             // Release() 직접 호출은 서버 가드에 막힌다 — 요청 API로 서버에 넘긴다 (#118)
-            Debug.Log("E 입력 — 연행 놓기 요청");
+            // 서버 Release()가 끌기/연행 중 무엇이었는지 보고 알맞은 놓기로 분기한다.
+            Debug.Log("E 입력 — 놓기 요청 (연행/밧줄 끌기)");
             m_escorter.RequestRelease();
             return;
         }
