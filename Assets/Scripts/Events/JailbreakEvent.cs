@@ -3,9 +3,10 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 범인 탈출 (돌발 이벤트 · 본부) — 본부가 무인일 때 확률적으로 침입자가 본부에 들어와
-/// 유치장 자물쇠를 열고, 수감돼 있던 범인들을 탈출시킨다. (GDD 6-4, #231/#261)
-/// 본부 상주 트레이드오프(GDD 4-1)를 강화한다 — 전원이 현장에 나가 있으면 잡아 둔 범인을 잃는다.
+/// 범인 탈출 (돌발 이벤트 · 본부) — 침입자가 본부에 들어와 유치장 자물쇠를 열고,
+/// 수감돼 있던 범인들을 탈출시킨다. (GDD 6-4, #231/#261)
+/// 본부 무인 조건은 #311에서 제거됐다(2026-07-23 확정) — 수감자만 있으면 언제든 발동할 수 있어,
+/// 본부에 있어도 침입자를 알아채고 막아야 한다.
 ///
 /// <b>대응 구간이 둘 있다</b> (#261):
 ///  · 이동 구간 — 침입자는 일반 NPC와 같은 스폰 포인트에서 나와 자물쇠까지 걸어온다. 겉모습·출신지가
@@ -38,16 +39,9 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     [Header("침입자 프리팹 (NpcController)")]
     [SerializeField] private NpcController m_intruderPrefab;
 
-    [Header("본부 무인 감지 (비우면 씬에서 자동 탐색)")]
-    [SerializeField] private HqOccupancyZone m_occupancyZone;
-
     [Header("유치장 / 자물쇠 (비우면 자동 탐색)")]
     [SerializeField] private JailZone m_jailZone;
     [SerializeField] private JailLock m_jailLock;
-
-    [Header("발동 조건")]
-    [Tooltip("본부가 이 시간(초) 이상 비어 있어야 발동한다 — 잠깐 자리를 비운 것으로는 터지지 않게")]
-    [SerializeField] private float m_minUnmannedSeconds = 20f;
 
     [Header("자물쇠 해제")]
     [Tooltip("자물쇠에 도달한 뒤 해제까지 걸리는 시간(초) — 경보를 듣고 달려와 막을 수 있는 구간")]
@@ -100,10 +94,8 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
 
     private void Awake()
     {
-        // 매니저가 아닌 장소·부품만 여기서 찾는다 (자물쇠·유치장·본부 트리거 존).
+        // 매니저가 아닌 장소·부품만 여기서 찾는다 (자물쇠·유치장).
         // 매니저는 App 경유 프로퍼티로 읽으므로 Awake에서 손대지 않는다 — 등록이 아직 안 끝났을 수 있다.
-        if (m_occupancyZone == null)
-            m_occupancyZone = FindFirstObjectByType<HqOccupancyZone>();
         if (m_jailZone == null)
             m_jailZone = FindFirstObjectByType<JailZone>();
         if (m_jailLock == null)
@@ -127,18 +119,15 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
 
     public bool CanTrigger()
     {
-        if (m_intruderPrefab == null || m_occupancyZone == null || m_jailZone == null || m_jailLock == null)
+        if (m_intruderPrefab == null || m_jailZone == null || m_jailLock == null)
             return false;
         if (Spawner == null || Spawner.SpawnPoints == null || Spawner.SpawnPoints.Count == 0)
             return false;
 
-        // 본부가 충분히 오래 비어 있어야 하고(GDD 4-1 트레이드오프), 자물쇠가 아직 잠겨 있어야 하며,
-        // 풀어 줄 수감자가 실제로 있어야 성립한다 — 빈 유치장에서 자물쇠만 여는 무의미 발동을 막는다.
+        // 자물쇠가 아직 잠겨 있고, 풀어 줄 수감자가 실제로 있어야 성립한다 — 빈 유치장에서
+        // 자물쇠만 여는 무의미 발동을 막는다. 본부 무인 조건은 #311에서 제거 — 본부에 있어도
+        // 침입자를 알아채고 저지해야 하는 상시 위협이 됐다.
         // (자물쇠는 새 수감자가 들어올 때 JailZone.Admit이 다시 잠그므로 연속 발동은 자연히 막힌다)
-        if (!m_occupancyZone.IsUnmanned)
-            return false;
-        if (m_occupancyZone.UnmannedSeconds < m_minUnmannedSeconds)
-            return false;
         if (!m_jailLock.IsLocked)
             return false;
         if (m_jailZone.InmateCount <= 0)
@@ -269,8 +258,8 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (SuddenEvents != null)
             SuddenEvents.Announce(DisplayName);
 
-        // 전 플레이어 팝업 + 침입자 머리 위 진행 게이지 — 대응 구간이 시작됐음을 시각화한다 (#311)
-        m_jailLock.ServerAnnounceUnlockAttempt(m_intruder, m_unlockSeconds);
+        // 전 플레이어 팝업 — 대응 구간이 시작됐음을 알린다 (#311)
+        m_jailLock.ServerAnnounceUnlockAttempt();
     }
 
     // 해제 완료 — 자물쇠를 열고 수감자를 방출한다. 경로 실패면 불발로 정리한다.
@@ -388,7 +377,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         }
 
         // 유치장을 뛰쳐나와 도주한다 — 침입자를 위협으로 삼아 반대로 달아난 뒤 배회로 섞여 든다.
-        // 본부가 무인이라(발동 조건) 근처에 플레이어가 없으면 도주 상태가 곧 배회로 복귀한다(NpcFleeState).
+        // 근처에 플레이어가 없으면 도주 상태가 곧 배회로 복귀한다(NpcFleeState).
         inmate.StartFlee(m_intruder != null ? m_intruder.transform : null);
     }
 

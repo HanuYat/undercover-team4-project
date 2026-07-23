@@ -32,8 +32,7 @@ public class NpcSubdueGaugeHud : MonoBehaviour
     }
 
     // 내 화면을 렌더하는 로컬 플레이어 카메라를 찾는다(파괴되면 재탐색). 없으면 Camera.main 폴백.
-    // 다른 임시 OnGUI HUD(IntruderUnlockHud #311)도 같은 '내 화면' 카메라가 필요해 공용으로 둔다.
-    public static Camera ViewCamera
+    private static Camera ViewCamera
     {
         get
         {
