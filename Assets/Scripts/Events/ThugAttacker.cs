@@ -281,21 +281,42 @@ public class ThugAttacker : NetworkBehaviour
             transform.rotation = Quaternion.LookRotation(dir);
     }
 
-    // 이번 프레임 이동 구간에 벽이 있는지 — 넉백(#232)의 SweepHitsObstacle와 동일 기법
+    // 벽 스윕 히트 버퍼 — 서버 전용 틱이라 공유해도 안전하다 (프레임마다의 할당 방지)
+    private static readonly RaycastHit[] s_sweepBuffer = new RaycastHit[8];
+
+    // 이번 프레임 이동 구간에 벽이 있는지 — 넉백(#232)의 SweepHitsObstacle와 동일 기법.
+    // 캐릭터(플레이어·NPC)는 벽으로 치지 않는다(#313): 플레이어 몸통(CharacterController)이 환경과
+    // 같은 Default 레이어라 마스크만으로는 걸러지지 않는데, 표적을 벽으로 보면 스윕이 명중 판정보다
+    // 먼저 도는 구조상 돌진이 명중 직전에 끊긴다. 군중 NPC도 같은 이유로 뚫고 지나간다.
     private bool SweepHitsObstacle(Vector3 direction, float distance)
     {
         float radius = m_agent.radius;
         Vector3 origin = transform.position + Vector3.up * Mathf.Max(radius, m_agent.height * 0.5f);
         int mask = m_config.ObstacleMask & ~(1 << gameObject.layer);
-        return Physics.SphereCast(
+        int count = Physics.SphereCastNonAlloc(
             origin,
             radius,
             direction,
-            out RaycastHit _,
+            s_sweepBuffer,
             distance,
             mask,
             QueryTriggerInteraction.Ignore
         );
+
+        for (int i = 0; i < count; i++)
+        {
+            Collider hit = s_sweepBuffer[i].collider;
+            if (hit == null)
+                continue;
+            if (hit.GetComponentInParent<PlayerData>() != null)
+                continue; // 표적/다른 플레이어 — 벽이 아니라 명중 후보다 (명중은 HitRadius 판정이 처리)
+            if (hit.GetComponentInParent<NpcController>() != null)
+                continue; // 군중 NPC — 사이를 뚫고 돌진한다
+
+            return true; // 캐릭터가 아닌 무언가 = 벽/환경
+        }
+
+        return false;
     }
 
     private void EmitDisturbancePulse()
