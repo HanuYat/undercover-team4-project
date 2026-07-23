@@ -87,12 +87,11 @@ public class ArrestJudge : CommonManagerBase
         if (misdemeanor != null)
         {
             // 난동꾼 즉결 처리 — 진범/오검거 대조를 타지 않고 경범죄로 확정, 이벤트가 정한 수익을 준다.
+            // reward는 지급이 아니라 "유치장 수감 시 실릴 정산 bounty"다 — 실제 자금은 라운드 종료 시
+            // 유치장 점유로 1회 정산된다(#340). 그래서 재검거 중복지급 방지용 Reward 비우기는 필요 없다
+            // (점유를 한 번만 세므로) — 오히려 비우면 재수감된 난동꾼이 0으로 잡혀 정산에서 누락된다.
             verdict = ArrestVerdict.Misdemeanor;
             reward = misdemeanor.Reward;
-            // 보상은 첫 판정에만 — 경범죄자도 수감되면서(2026-07-23) 탈옥으로 풀려난 놈을 재검거하는
-            // 경로가 생겼다. 마커를 지우지 않고 보상만 비우는 이유: 재검거가 오검거(페널티)로 판정되면
-            // 다시 잡은 쪽이 손해를 보므로, 판정은 경범죄로 유지하되 수익만 반복되지 않게 한다.
-            misdemeanor.Reward = 0;
         }
         else if (identity.IsCriminal)
         {

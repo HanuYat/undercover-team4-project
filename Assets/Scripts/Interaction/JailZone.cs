@@ -31,6 +31,10 @@ public class JailZone : NetworkBehaviour
     // 이미 수용된 NPC — 중복 카운트 방어(도착 통보가 두 번 오거나 재수용되는 경우)
     private readonly HashSet<NpcController> m_inmates = new HashSet<NpcController>();
 
+    // 수감자별 보상액(bounty) — 라운드 종료 점유 기반 정산(#340)이 합산한다. 탈옥 방출 시 함께 제거되므로
+    // 유치장에 남아 있는 대상만 정산에 계상된다("끝까지 데리고 있어야 보상"). 서버(또는 오프라인) 전용.
+    private readonly Dictionary<NpcController, int> m_bounty = new Dictionary<NpcController, int>();
+
     // 수용 지점 순차 배정 커서 — 여러 명이 한 점에 겹쳐 서지 않게 돌려 쓴다
     private int m_nextCellIndex;
 
@@ -90,8 +94,9 @@ public class JailZone : NetworkBehaviour
     /// <summary>
     /// 수용 — NPC가 수용 지점에 도달했을 때 호출된다 (NpcController.OnJailed 구독).
     /// 판정 시점이 아니라 실제로 걸어 들어온 시점에 세므로, 이송 중 탈출(별도 이슈)이 카운트를 오염시키지 않는다.
+    /// <paramref name="bounty"/>는 이 수감자가 라운드 종료 정산(#340)에 기여할 보상액이다(CustodyRouter가 판정 보상을 넘긴다).
     /// </summary>
-    public void Admit(NpcController npc)
+    public void Admit(NpcController npc, int bounty)
     {
         if (npc == null)
             return;
@@ -103,6 +108,7 @@ public class JailZone : NetworkBehaviour
         if (!m_inmates.Add(npc))
             return; // 이미 수용됨 — 중복 통보 무시
 
+        m_bounty[npc] = bounty; // 정산용 보상액 기록 (재수용 시 최신 값으로 갱신)
         SetInmateCount(m_inmates.Count);
         Debug.Log($"[유치장] 수용: {npc.name} — 현재 {InmateCount}명");
 
@@ -128,8 +134,35 @@ public class JailZone : NetworkBehaviour
         if (!m_inmates.Remove(npc))
             return;
 
+        m_bounty.Remove(npc); // 방출된 수감자는 정산에서 빠진다 — 탈옥해 유치장에 없으면 보상 없음 (#340)
         SetInmateCount(m_inmates.Count);
         Debug.Log($"[유치장] 수용 해제: {npc.name} — 현재 {InmateCount}명");
+    }
+
+    /// <summary>
+    /// 현재 수감자를 진범/경범죄로 나눈 인원과 보상액 합 — 라운드 종료 점유 기반 정산(#340)이 읽는다.
+    /// 진범 여부는 각 수감자의 <see cref="CitizenIdentity.IsCriminal"/>로 판별한다(그 외는 경범죄 = 난동꾼·위조범).
+    /// 서버(또는 오프라인) 전용 — Inmates가 서버 권위 집합이다.
+    /// </summary>
+    public (int criminals, int misdemeanors, int total) TallySettlement()
+    {
+        int criminals = 0;
+        int misdemeanors = 0;
+        int total = 0;
+        foreach (NpcController npc in m_inmates)
+        {
+            if (npc == null)
+                continue;
+
+            total += m_bounty.TryGetValue(npc, out int bounty) ? bounty : 0;
+
+            CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
+            if (identity != null && identity.IsCriminal)
+                criminals++;
+            else
+                misdemeanors++;
+        }
+        return (criminals, misdemeanors, total);
     }
 
     // 서버 진실값과 동기화 변수에 함께 기록한다 — 오프라인에서는 NetworkVariable에 쓰지 않고

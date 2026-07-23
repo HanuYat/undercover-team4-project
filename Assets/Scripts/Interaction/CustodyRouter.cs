@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -23,6 +24,11 @@ public class CustodyRouter : MonoBehaviour
     [Header("유치장 (비우면 씬에서 자동 탐색)")]
     [SerializeField]
     private JailZone m_jailZone;
+
+    // 판정 보상을 수감 도착 시점까지 실어 나른다 — 라운드 종료 정산(#340)이 쓸 수감자별 bounty가 된다.
+    // 판정(HandleArrestJudged)과 도착 통보(HandleNpcJailed)가 분리돼 있어 그 사이 값을 보관한다.
+    private readonly Dictionary<NpcController, int> m_pendingBounty =
+        new Dictionary<NpcController, int>();
 
     private void Awake()
     {
@@ -85,6 +91,9 @@ public class CustodyRouter : MonoBehaviour
             return;
         }
 
+        // 판정 보상을 도착 시점까지 보관 — 라운드 종료 정산(#340)이 쓸 수감자별 bounty. (오검거는 여기 못 옴 = 0원 대상 아님)
+        m_pendingBounty[npc] = result.Reward;
+
         // 도착 시점에 수용 인원을 세도록 1회성 구독을 걸어 둔다 (판정 시점이 아니라 걸어 들어온 시점)
         npc.OnJailed += HandleNpcJailed;
         npc.SendToJail(m_jailZone.ReserveCell());
@@ -93,6 +102,9 @@ public class CustodyRouter : MonoBehaviour
     private void HandleNpcJailed(NpcController npc)
     {
         npc.OnJailed -= HandleNpcJailed;
-        m_jailZone.Admit(npc);
+
+        int bounty = m_pendingBounty.TryGetValue(npc, out int b) ? b : 0;
+        m_pendingBounty.Remove(npc);
+        m_jailZone.Admit(npc, bounty);
     }
 }
