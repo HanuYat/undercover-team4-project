@@ -176,7 +176,7 @@ public class SpawnedNpcEvent : ISuddenEvent
             m_exitQueued = false;
             m_exiting = true;
             m_startTime = Time.time; // 출구까지 걸어갈 유예를 새로 준다
-            m_npc.SendToHolding(SuddenEventUtil.FindNearestExitPoint(m_npc.transform.position));
+            m_npc.SendToHolding(SuddenEventUtil.FindExitPoint(m_npc.transform.position));
             return;
         }
 
@@ -246,7 +246,7 @@ public class SpawnedNpcEvent : ISuddenEvent
         }
 
         // 행동을 시작한 뒤 배회 상태로 돌아왔다 = 제압 실패로 뿌리치고 달아나 이탈함 (수익 없음).
-        // 눈앞에서 증발하는 대신 가장 가까운 출구(스폰 포인트)로 걸어 나가 소멸한다 (#310) —
+        // 눈앞에서 증발하는 대신 플레이어들에게서 떨어진 출구(스폰 포인트)로 걸어 나가 소멸한다 (#310) —
         // 걸어가는 동안은 Holding 상태라 이 분기에 다시 들어오지 않고, 따라가 잡으면 도로 Captured가 된다.
         if (m_hasStarted && !m_exiting && (state == NpcState.Idle || state == NpcState.Walk))
         {
