@@ -175,8 +175,8 @@ public class SpawnedNpcEvent : ISuddenEvent
         {
             m_exitQueued = false;
             m_exiting = true;
-            m_startTime = Time.time; // 출구까지 걸어갈 유예를 새로 준다
-            m_npc.SendToHolding(SuddenEventUtil.FindExitPoint(m_npc.transform.position));
+            m_startTime = Time.time; // 출구까지 달아날 유예를 새로 준다
+            m_npc.SendToHolding(SuddenEventUtil.FindExitPoint(m_npc.transform.position), sprint: true);
             return;
         }
 

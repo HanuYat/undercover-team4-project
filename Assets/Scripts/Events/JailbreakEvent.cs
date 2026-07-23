@@ -219,8 +219,8 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         {
             m_exitQueued = false;
             m_exiting = true;
-            m_lifetimeStart = Time.time; // 출구까지 걸어갈 유예를 새로 준다
-            m_intruder.SendToHolding(SuddenEventUtil.FindExitPoint(m_intruder.transform.position));
+            m_lifetimeStart = Time.time; // 출구까지 달아날 유예를 새로 준다
+            m_intruder.SendToHolding(SuddenEventUtil.FindExitPoint(m_intruder.transform.position), sprint: true);
             return;
         }
 
