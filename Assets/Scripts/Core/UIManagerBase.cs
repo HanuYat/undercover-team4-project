@@ -13,13 +13,26 @@ public abstract class UIManagerBase : CommonManagerBase
     private readonly Dictionary<Type, PanelBase> m_panels = new();
     private readonly Stack<PanelBase> m_escStack = new();
 
+    // 스택이 비었을 때 ESC로 여는 씬의 진입 메뉴(일시정지·종료 확인). 씬당 하나 — 패널이 스스로 등록.
+    private PanelBase m_escMenuPanel;
+
     protected virtual void Update()
     {
         if (Keyboard.current == null || !Keyboard.current.escapeKey.wasPressedThisFrame)
             return;
 
-        if (m_escStack.TryPeek(out PanelBase top) && top != null && top.CanCloseWithESC)
-            top.ClosePanel();
+        // 창이 쌓여 있으면 ESC는 그 창만 처리한다 — 닫든(닫기 가능) 말든 진입 메뉴로는 새지 않는다.
+        if (m_escStack.TryPeek(out PanelBase top) && top != null)
+        {
+            if (top.CanCloseWithESC)
+                top.ClosePanel();
+            return;
+        }
+
+        // 스택이 비었을 때만 진입 메뉴를 연다. 다른 모달(명부·폭탄 매뉴얼 등)이 화면을 잡고 있으면
+        // 그 패널이 CanOpenFromEsc로 거부해 이중 동작을 막는다.
+        if (m_escMenuPanel != null && m_escMenuPanel.CanOpenFromEsc)
+            m_escMenuPanel.OpenPanel();
     }
 
     public void RegisterPanel(PanelBase panel)
@@ -28,7 +41,21 @@ public abstract class UIManagerBase : CommonManagerBase
             return;
 
         if (!m_panels.TryAdd(panel.GetType(), panel))
+        {
             Debug.LogError($"[{GetType().Name}] 패널 중복 등록: {panel.GetType().Name}", panel);
+            return;
+        }
+
+        if (!panel.IsEscMenu)
+            return;
+
+        if (m_escMenuPanel != null)
+            Debug.LogError(
+                $"[{GetType().Name}] ESC 진입 메뉴가 이미 있음: {m_escMenuPanel.GetType().Name} — {panel.GetType().Name} 무시",
+                panel
+            );
+        else
+            m_escMenuPanel = panel;
     }
 
     public void UnregisterPanel(PanelBase panel)
@@ -37,8 +64,14 @@ public abstract class UIManagerBase : CommonManagerBase
             return;
 
         // 내가 등록한 그 인스턴스일 때만 제거 (ManagerHandler와 같은 방침)
-        if (m_panels.TryGetValue(panel.GetType(), out PanelBase current) && ReferenceEquals(current, panel))
+        if (
+            m_panels.TryGetValue(panel.GetType(), out PanelBase current)
+            && ReferenceEquals(current, panel)
+        )
             m_panels.Remove(panel.GetType());
+
+        if (ReferenceEquals(m_escMenuPanel, panel))
+            m_escMenuPanel = null;
     }
 
     public void PushUIStack(PanelBase panel)
@@ -54,7 +87,8 @@ public abstract class UIManagerBase : CommonManagerBase
             m_escStack.Pop();
     }
 
-    public bool TryGetPanel<T>(out T panel) where T : PanelBase
+    public bool TryGetPanel<T>(out T panel)
+        where T : PanelBase
     {
         if (m_panels.TryGetValue(typeof(T), out PanelBase value) && value is T typed)
         {
@@ -66,15 +100,19 @@ public abstract class UIManagerBase : CommonManagerBase
         return false;
     }
 
-    public T GetPanel<T>() where T : PanelBase
+    public T GetPanel<T>()
+        where T : PanelBase
     {
         if (TryGetPanel(out T panel))
             return panel;
 
-        throw new InvalidOperationException($"[{GetType().Name}] 등록되지 않은 패널: {typeof(T).Name}");
+        throw new InvalidOperationException(
+            $"[{GetType().Name}] 등록되지 않은 패널: {typeof(T).Name}"
+        );
     }
 
-    public bool OpenPanel<T>() where T : PanelBase
+    public bool OpenPanel<T>()
+        where T : PanelBase
     {
         if (!TryGetPanel(out T panel))
             return false;
@@ -83,7 +121,8 @@ public abstract class UIManagerBase : CommonManagerBase
         return true;
     }
 
-    public bool ClosePanel<T>() where T : PanelBase
+    public bool ClosePanel<T>()
+        where T : PanelBase
     {
         if (!TryGetPanel(out T panel))
             return false;

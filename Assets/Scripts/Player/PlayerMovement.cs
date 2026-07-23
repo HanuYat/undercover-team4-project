@@ -1,6 +1,5 @@
 using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(CharacterController))]
 [RequireComponent(typeof(PlayerInputHandler))]
@@ -284,13 +283,8 @@ public class PlayerMovement : NetworkBehaviour
 
     private void Update()
     {
-        // 임시: ESC로 커서 잠금/해제 토글 — OnGUI 버튼 조작용.
-        // lockState를 명시적으로 None으로 바꿔야 클릭 시 엔진이 재잠금하지 않는다.
-        // 정식 UI(메뉴/로비)가 들어오면 그쪽 시스템으로 옮기고 이 블록은 제거할 것.
-        if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-        {
-            SetCursorUnlocked(!m_cursorUnlocked);
-        }
+        // 커서 잠금/해제는 이제 UI 계층이 소유한다 — ESC 일시정지 패널(#326)이 열림/닫힘에 맞춰 SetCursorUnlocked를
+        // 호출한다. (구 임시 ESC 토글 블록은 그 패널과 이중으로 ESC를 읽어 커서 소유권이 꼬여 제거됨, #326)
 
         // 끌려가는 중(#279) — 입력 이동 대신 끌기 NPC를 추종한다. 행동불능 상태라 시점 입력은 어차피
         // 막혀 있고(IsMovementLocked), 카메라는 다운 시점(UpdateCameraPose)이 계속 담당한다.

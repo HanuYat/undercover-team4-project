@@ -71,8 +71,14 @@ public class BombManualHud : MonoBehaviour
 
     private void Update()
     {
+        if (!m_isOpen)
+            return;
+
+        // 열려 있는 동안 ESC 진입 메뉴(일시정지) 오픈을 막는다 — 닫힘 프레임의 파이프라인 스큐까지 덮는다 (#326)
+        EscMenuGuard.BlockThisFrame();
+
         // 연 플레이어가 디스폰되면 되돌릴 대상이 사라진다 — 즉시 닫아 입력이 잠긴 채 남지 않게
-        if (m_isOpen && m_input == null)
+        if (m_input == null)
             Close();
     }
 

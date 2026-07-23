@@ -130,6 +130,10 @@ public class CitizenDirectoryView : MonoBehaviour
     {
         if (!m_isOpen)
             return;
+
+        // 열려 있는 동안 ESC 진입 메뉴(일시정지) 오픈을 막는다 — 이중 동작 방지 (#326)
+        EscMenuGuard.BlockThisFrame();
+
         if (m_input == null) // 연 플레이어 디스폰 시 입력 잠김 방지
         {
             Close();

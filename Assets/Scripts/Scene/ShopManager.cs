@@ -17,7 +17,8 @@ public class ShopManager : SceneManagerBase
     // 상점(라운드 사이)도 조인 가능 — 진입 시 잠금 해제. 게임 종료 후 복귀 시에도 다시 열린다.
     private void Start()
     {
-        if (!IsServer) return;
+        if (!IsServer)
+            return;
 
         Session?.SetLockedAsync(false).Forget();
 
@@ -34,32 +35,27 @@ public class ShopManager : SceneManagerBase
 
     private void HandleLoadComplete(ulong clientId, string sceneName, LoadSceneMode mode)
     {
-        if (sceneName != gameObject.scene.name) return;
-        if (clientId == NetworkManager.Singleton.LocalClientId) return; // 서버는 Start에서
+        if (sceneName != gameObject.scene.name)
+            return;
+        if (clientId == NetworkManager.Singleton.LocalClientId)
+            return; // 서버는 Start에서
         ResetPlayer(clientId);
     }
 
     private void ResetPlayer(ulong clientId)
     {
-        if (!NetworkManager.Singleton.ConnectedClients.TryGetValue(clientId, out var client)) return;
+        if (!NetworkManager.Singleton.ConnectedClients.TryGetValue(clientId, out var client))
+            return;
         client.PlayerObject?.GetComponent<PlayerData>()?.ServerResetState();
     }
 
     /// <summary>호스트 전용 — 출동. 게임 씬으로 전환하며 세션을 잠근다(게임 진행 중 신규 접속 차단).</summary>
     public void Dispatch()
     {
-        if (!IsServer || m_dispatched) return;
+        if (!IsServer || m_dispatched)
+            return;
         m_dispatched = true;
         Session?.SetLockedAsync(true).Forget();
         MoveToNextScene(EScene.Game);
-    }
-
-    private void OnGUI()
-    {
-        if (!IsServer || m_dispatched) return;
-        GUILayout.BeginArea(new Rect(10, 90, 220, 60));
-        if (GUILayout.Button("출동 (Dispatch)"))
-            Dispatch();
-        GUILayout.EndArea();
     }
 }
