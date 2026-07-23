@@ -366,15 +366,15 @@ public class VivoxManager : CommonManagerBase
         LeaveChannelAsync().Forget();
     }
 
-    // 비자발 드롭(#287): 연결이 이미 죽어 LeaveAllChannelsAsync는 타임아웃만 낸다(Vivox는 이미 채널 밖).
-    // 그래서 네트워크 이탈 없이 로컬 상태만 정리한다 — 포지션 루프 정지 + 참가 플래그 리셋
-    // (LeaveChannelAsync의 finally와 동일한 로컬 정리, 네트워크 호출만 뺀 것).
+    // 비자발 드롭(#287): 호스트가 세션을 내리면 클라의 NGO는 끊기지만 Vivox는 NGO/호스트와 별개 서비스라
+    // (자체 서버 연결) 클라의 음성 연결은 그대로 살아있다. 채널에서 실제로 나가지 않으면 세션이 죽어도
+    // 클라들끼리 계속 목소리가 들린다. 그래서 자발적 경로와 동일하게 완전 정리한다.
+    // (클라 본인 인터넷이 끊긴 진짜 드롭이면 LeaveAllChannelsAsync가 타임아웃날 수 있으나 fire-and-forget이라 무해.)
     private void HandleConnectionLost()
     {
         m_posLoopCts?.Cancel();
-        m_radioJoined = false;
-        m_proximityJoined = false;
         m_transmitting = false;
+        CleanupAsync().Forget(); // 채널 이탈 + Vivox 로그아웃 (LogoutAsync는 멱등)
     }
 
     // 인증 로그아웃 → Vivox도 정리 (#171 auth→voice 전파). 세션만 나가고 로그인은 유지된 상태에서
