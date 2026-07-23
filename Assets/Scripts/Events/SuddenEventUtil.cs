@@ -133,11 +133,22 @@ public static class SuddenEventUtil
         return false;
     }
 
-    /// <summary>스폰물을 정리한다 — 네트워크 세션이면 Despawn, 아니면 Destroy. null·미스폰 상황을 안전하게 처리한다.</summary>
-    public static void DespawnOrDestroy(GameObject target)
+    /// <summary>
+    /// 스폰물을 정리한다 — 네트워크 세션이면 Despawn, 아니면 Destroy. null·미스폰 상황을 안전하게 처리한다.
+    /// 대상 프리팹에 <see cref="NpcDespawnVfx"/>가 배선돼 있으면 사라지는 자리에 소멸 연출을 남긴다 —
+    /// 라운드 종료 일괄 정리처럼 연출이 필요 없는 경로만 playVfx=false로 끈다. (#310)
+    /// </summary>
+    public static void DespawnOrDestroy(GameObject target, bool playVfx = true)
     {
         if (target == null)
             return;
+
+        if (playVfx)
+        {
+            NpcDespawnVfx vfx = target.GetComponent<NpcDespawnVfx>();
+            if (vfx != null)
+                vfx.ServerPlay();
+        }
 
         if (IsNetworkSessionActive)
         {

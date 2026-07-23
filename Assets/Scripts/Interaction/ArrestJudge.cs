@@ -84,6 +84,10 @@ public class ArrestJudge : CommonManagerBase
             // 난동꾼 즉결 처리 — 진범/오검거 대조를 타지 않고 경범죄로 확정, 이벤트가 정한 수익을 준다.
             verdict = ArrestVerdict.Misdemeanor;
             reward = misdemeanor.Reward;
+            // 보상은 첫 판정에만 — 경범죄자도 수감되면서(2026-07-23) 탈옥으로 풀려난 놈을 재검거하는
+            // 경로가 생겼다. 마커를 지우지 않고 보상만 비우는 이유: 재검거가 오검거(페널티)로 판정되면
+            // 다시 잡은 쪽이 손해를 보므로, 판정은 경범죄로 유지하되 수익만 반복되지 않게 한다.
+            misdemeanor.Reward = 0;
         }
         else
         {

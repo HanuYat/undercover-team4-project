@@ -118,14 +118,20 @@ public class Scanner : ItemBase, IChargeable
     /// <summary>스캔 중이 아니고 배터리가 남아 있을 때만 사용 가능. (UI 힌트용 — 최종 판정은 서버가 재검증)</summary>
     public override bool CanUse() => !m_pendingScan && !IsDepleted;
 
-    /// <summary>스캔 가능한 대상인지 — 신원(CitizenIdentity)이 있고 배터리·중복 스캔 게이트(CanUse) 통과.
-    /// Use()의 조기 검증과 동일 기준 — 조준 피드백(윤곽선) 판정용. (#184)</summary>
+    /// <summary>스캔 가능한 대상인지 — 신원(CitizenIdentity)과 배정된 프로필이 있고 배터리·중복 스캔
+    /// 게이트(CanUse)를 통과해야 한다. Use()의 조기 검증과 동일 기준 — 조준 피드백(윤곽선) 판정용. (#184)
+    /// 프로필까지 보는 이유(#310 후속): 이벤트 NPC(난동꾼·침입자)는 라운드 시작 배정을 타지 않아 프로필이
+    /// 없다 — 신원만 보면 윤곽선은 뜨는데 스캔은 실패하는 어긋남이 생긴다. 프로필은 NetworkVariable로
+    /// 동기화되므로(#52) 이 판정은 모든 피어에서 일관된다.</summary>
     public override bool CanTarget(GameObject aimTarget)
     {
         if (!CanUse())
             return false;
+        if (aimTarget == null)
+            return false;
 
-        return aimTarget != null && aimTarget.GetComponentInParent<CitizenIdentity>() != null;
+        CitizenIdentity identity = aimTarget.GetComponentInParent<CitizenIdentity>();
+        return identity != null && identity.Profile != null;
     }
 
     /// <summary>

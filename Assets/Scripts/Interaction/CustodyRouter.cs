@@ -5,7 +5,7 @@ using UnityEngine;
 /// 신병 처리 — 인계존 판정(ArrestJudge) 결과에 따라 NPC의 행선지를 정한다. (GDD 7-2, #228)
 /// 판정 구역과 관리 구역을 잇는 얇은 라우터다:
 ///
-/// - 현상수배범·경범죄 → 유치장(JailZone)으로 이송·수용
+/// - 현상수배범·경범죄 → 유치장(JailZone)으로 이송·수용 (경범죄 수감은 팀 확정 2026-07-23 — #299 임시 거처 소멸 대체)
 /// - 오검거(무고한 시민) → 수갑 해제 후 석방(배회 복귀)
 ///
 /// ArrestJudge는 "누가 범인인가"만, JailZone은 "어디에 가두는가"만 안다 — 그 사이는 여기가 안다.
@@ -72,14 +72,10 @@ public class CustodyRouter : MonoBehaviour
             return;
         }
 
-        // 경범죄는 유치장 수용 대상이 아니다 — 스폰한 이벤트(SpawnedNpcEvent·JailbreakEvent)가 같은
-        // 판정 이벤트를 받아 임시 거처로 데려가 정리한다(#291 B·#299). 유치장은 진범 전용이다.
-        // 여기서 SendToJail을 부르면 이벤트의 SendToHolding과 구독 순서에 따라 서로를 덮어쓰는
-        // 경합이 생긴다 — 유치장이 이기면 홀딩 도착이 영영 안 와 방치 타이머가 수감된 NPC를 증발시킨다.
-        if (result.Verdict == ArrestVerdict.Misdemeanor)
-            return;
-
-        // 현상수배범 — 유치장으로 이송한다
+        // 현상수배범·경범죄 — 유치장으로 이송한다. 경범죄도 수감하는 결정(2026-07-23)으로 #299의
+        // '유치장은 진범 전용' 규칙은 폐기됐다: 반복 수익은 ArrestJudge가 첫 판정 후 마커 보상을
+        // 0으로 만들어 막고, 이벤트들은 판정 시 추적만 끊으므로(SendToHolding 경합 제거) 안전하다.
+        // 경범죄 수감자도 '수감자 존재' 조건을 채우므로 범인 탈출 이벤트의 무대가 넓어진다.
         if (m_jailZone == null)
         {
             Debug.LogWarning(

@@ -200,7 +200,6 @@ MonoBehaviour:
     m_navSampleMaxDistance: 4
     m_maxSpawnAttempts: 8
     m_pettyCrimeReward: 50
-    m_holdingPoint: {fileID: 0}
     m_maxLifetimeSeconds: 60
   - m_displayName: "\uB098\uCCB4 \uB09C\uB3D9\uAFBC"
     m_mode: 1
@@ -210,5 +209,4 @@ MonoBehaviour:
     m_navSampleMaxDistance: 4
     m_maxSpawnAttempts: 8
     m_pettyCrimeReward: 50
-    m_holdingPoint: {fileID: 0}
     m_maxLifetimeSeconds: 60

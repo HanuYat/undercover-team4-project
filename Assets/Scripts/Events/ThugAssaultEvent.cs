@@ -85,15 +85,15 @@ public class ThugAssaultEvent : MonoBehaviour, ISuddenEvent
 
     public void ServerReset()
     {
-        Despawn();
+        Despawn(playVfx: false); // 라운드 종료 일괄 정리 — 소멸 연출은 끈다
     }
 
-    private void Despawn()
+    private void Despawn(bool playVfx = true)
     {
         if (m_thug == null)
             return;
 
-        SuddenEventUtil.DespawnOrDestroy(m_thug.gameObject);
+        SuddenEventUtil.DespawnOrDestroy(m_thug.gameObject, playVfx);
         m_thug = null;
     }
 }
