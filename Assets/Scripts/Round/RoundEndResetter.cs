@@ -15,7 +15,7 @@ using UnityEngine.SceneManagement;
 ///  · EScene 매핑이 없는 테스트 씬은 App 흐름 밖 — 세션 없이 자기 씬을 재로드한다(기존 폴백).
 ///
 /// 비자발 드롭(호스트 이탈·세션 삭제)은 세션이 죽은 것이므로 로비가 아니라 타이틀로 복귀한다.
-/// (자발적 로그아웃은 SessionTeardown 전담 — m_isLeaving 가드로 OnConnectionLost가 발화하지 않는다.)
+/// (자발적 로그아웃은 SessionFlow.LeaveToMainAsync 전담 — m_isLeaving 가드로 OnConnectionLost가 발화하지 않는다.)
 /// </summary>
 public class RoundEndResetter : MonoBehaviour
 {
