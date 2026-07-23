@@ -44,6 +44,9 @@ public class AppearanceAssigner : CommonManagerBase
     /// <summary>범인별 글 방식 몽타주 텍스트 (GDD 10-3) — CriminalNpcs와 같은 순서. 본부 수배 UI(#58)가 그대로 표시한다.</summary>
     public IReadOnlyList<string> MontageTexts => m_montageTexts;
 
+    /// <summary>외형 축별 옵션 정의 — 인덱스를 표시 이름으로 옮길 때 쓴다(디버그/검증용 읽기 전용).</summary>
+    public AppearanceDatabase Database => m_appearanceDatabase;
+
     /// <summary>몽타주 생성 완료 이벤트 — 수배 UI(#58)가 구독한다. 범인마다 한 번씩 (해당 범인, 몽타주 텍스트)로 발행된다. (#127)</summary>
     public event Action<NpcController, string> OnMontageGenerated;
 
