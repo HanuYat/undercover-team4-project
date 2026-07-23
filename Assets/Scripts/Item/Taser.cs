@@ -125,31 +125,18 @@ public class Taser : ItemBase
         // 명중 여부와 무관하게 소모한다 — 빗나감에 대가가 없으면 조준할 이유가 사라진다.
         m_nextFireTime = Time.time + m_cooldownSeconds;
 
-        // 마스크를 두지 않는다(~0) — 벽이든 NPC든 "먼저 맞은 것"이 결과가 되어야 엄폐가 성립한다.
-        // 트리거 콜라이더는 무시한다: 인계존·구조 히트박스 같은 판정용 볼륨에 전극이 막히면 안 된다.
-        if (!Physics.Raycast(origin, direction.normalized, out RaycastHit hit, m_range,
-                ~0, QueryTriggerInteraction.Ignore))
+        // 명중 판정은 EvaluateAim이 단일 규칙으로 수행한다 — 클라 크로스헤어(#328)와 공유해 색↔명중을 일치시킨다.
+        switch (EvaluateAim(origin, direction, out NpcController target, out RaycastHit hit))
         {
-            NotifyOwner("테이저 빗나감 — 허공");
-            return;
-        }
-
-        // 맞은 것이 NPC인지 확인한다. 콜라이더가 NPC 루트의 자식일 수 있으므로 부모까지 탐색한다
-        // (Handcuffs.ResolveTarget과 동일 관례). 벽·소품·플레이어를 맞췄으면 그대로 빗나감이다.
-        NpcController target = hit.collider.GetComponentInParent<NpcController>();
-        if (target == null)
-        {
-            NotifyOwner($"테이저 빗나감 — {hit.collider.name}에 맞음");
-            return;
-        }
-
-        // 스턴 전용 게이트(#289) — 수갑용 IsCapturable과 분리한다. IsCapturable은 Run·Attack을
-        // 제외하지만(수갑으론 못 잡음), 그 둘이야말로 테이저의 주 대상이다. 여기서 걸러지는 건
-        // 이미 신병 확보·페널티 진행 중이라 스턴이 링크만 끊는 상태뿐 — 상태가 늘면 NpcStateRules만 고친다.
-        if (!NpcStateRules.CanBeStunned(target.CurrentState))
-        {
-            NotifyOwner($"테이저 무효 — 이미 제압됐거나 페널티 진행 중인 대상 ({target.CurrentState})");
-            return;
+            case AimResult.NoHit:
+                NotifyOwner("테이저 빗나감 — 허공");
+                return;
+            case AimResult.HitNonTarget:
+                NotifyOwner($"테이저 빗나감 — {hit.collider.name}에 맞음");
+                return;
+            case AimResult.TargetInvalidState:
+                NotifyOwner($"테이저 무효 — 이미 제압됐거나 페널티 진행 중인 대상 ({target.CurrentState})");
+                return;
         }
 
         // 쏜 사람을 위협으로 넘긴다 — 기절이 풀리면 이 사람에게서 도망친다 (#269)
@@ -157,6 +144,48 @@ public class Taser : ItemBase
         target.EnterStunned(shooter != null ? shooter.transform : null);
         NotifyOwner($"테이저 명중: {target.name} ({target.StunSeconds}초 기절)");
     }
+
+    // ---- 조준 판정 (서버 사격 · 클라 크로스헤어 공유, #328) ----
+
+    private enum AimResult { NoHit, HitNonTarget, TargetInvalidState, ValidTarget }
+
+    /// <summary>
+    /// 조준 원점·방향으로 사거리(m_range) 레이캐스트해 명중 결과를 분류한다 (레이캐스트 1회).
+    /// 서버 사격 판정(ServerFire)과 오너 크로스헤어 색(#328)이 이 한 규칙을 공유한다.
+    /// 마스크 ~0 + 트리거 무시 — "먼저 맞은 것"이 결과라 벽 엄폐가 성립한다.
+    /// </summary>
+    private AimResult EvaluateAim(Vector3 origin, Vector3 direction, out NpcController target, out RaycastHit hit)
+    {
+        target = null;
+        hit = default;
+
+        if (direction.sqrMagnitude < 0.0001f)
+            return AimResult.NoHit; // 0벡터 방향은 레이를 만들 수 없다 (위조·직렬화 사고 방어)
+
+        if (!Physics.Raycast(origin, direction.normalized, out hit, m_range, ~0, QueryTriggerInteraction.Ignore))
+            return AimResult.NoHit;
+
+        // 콜라이더가 NPC 루트의 자식일 수 있으므로 부모까지 탐색한다 (Handcuffs.ResolveTarget과 동일 관례).
+        // 벽·소품·플레이어를 맞췄으면 그대로 빗나감이다.
+        NpcController npc = hit.collider.GetComponentInParent<NpcController>();
+        if (npc == null)
+            return AimResult.HitNonTarget;
+
+        // 스턴 전용 게이트(#289) — 수갑용 IsCapturable과 분리한다. 여기서 걸러지는 건
+        // 이미 신병 확보·페널티 진행 중이라 스턴이 링크만 끊는 상태뿐 — 상태가 늘면 NpcStateRules만 고친다.
+        target = npc;
+        if (!NpcStateRules.CanBeStunned(npc.CurrentState))
+            return AimResult.TargetInvalidState;
+
+        return AimResult.ValidTarget;
+    }
+
+    /// <summary>
+    /// 조준선이 스턴 가능한 NPC에 닿는지 — 오너 크로스헤어 색 예측용(#328). 서버 판정과 동일 규칙이다.
+    /// 로컬 물리로 매 프레임 호출해도 되도록 순수 조회다(원점 검증·쿨다운과 무관).
+    /// </summary>
+    public bool HasValidAimTarget(Vector3 origin, Vector3 direction)
+        => EvaluateAim(origin, direction, out _, out _) == AimResult.ValidTarget;
 
     /// <summary>
     /// 클라가 보낸 조준 원점이 서버가 아는 이 아이템 소지자 위치 근처인지 — 원점 위조 방어.
