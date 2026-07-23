@@ -99,7 +99,10 @@ public class SettlementPanel : PanelBase
             m_reasonText.text = ReasonToText(data.Reason);
 
         if (m_fundText != null)
-            m_fundText.text = $"팀 자금  {data.FundBalance:N0}원  ({data.FundDelta:+#,##0;-#,##0;0})";
+            // 자금 잔액·증감 + 이번 라운드 유치장 정산 내역(#340). 증감(FundDelta)이 곧 이번 라운드 정산액이다.
+            m_fundText.text =
+                $"팀 자금  {data.FundBalance:N0}원  ({data.FundDelta:+#,##0;-#,##0;0})"
+                + $"\n수감 정산: 현상수배 {data.CriminalCount} · 경범죄 {data.MisdemeanorCount}";
 
         if (m_topOffenderText != null)
             m_topOffenderText.text =

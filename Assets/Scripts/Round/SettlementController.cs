@@ -11,7 +11,9 @@ public struct SettlementData
     public RoundResult Result;      // 라운드 결과(성공/실패)
     public RoundEndReason Reason;   // 종료 사유(할당량 달성/제한시간 초과/전원 다운)
     public int FundBalance;         // 팀 자금 잔액
-    public int FundDelta;           // 이번 라운드 자금 증감(현재-시작)
+    public int FundDelta;           // 이번 라운드 자금 증감(현재-시작) = 이번 라운드 정산액 (#340)
+    public int CriminalCount;       // 종료 시 유치장의 진범 수 (#340)
+    public int MisdemeanorCount;    // 종료 시 유치장의 경범죄자(난동꾼·위조범) 수 (#340)
     public string TopOffenderName;  // 이번 판 최다 오검거 플레이어 이름 (없으면 빈 문자열)
     public int TopOffenderCount;    // 그 플레이어의 오검거 횟수 (0이면 오검거 없음)
 }
@@ -32,7 +34,7 @@ public struct SettlementData
 public class SettlementController : MonoBehaviour
 {
     private const string k_messageName = "RoundSettlement";
-    private const int k_writerSize = 128; // byte + int*3 + FixedString64(최대 66) < 128
+    private const int k_writerSize = 128; // byte*2 + int*5 + FixedString64(최대 66) = 88 < 128
 
     private RoundManager Round => App.Game.Round;
     private WrongfulArrestPenalty Penalty => App.Game.WrongfulArrestPenalty;
@@ -129,10 +131,23 @@ public class SettlementController : MonoBehaviour
     }
 
     // 결과·종료 사유·자금 증감·최다 오검거를 모은다 (서버·오프라인 권위 데이터).
+    // #340: 여기서(서버·오프라인 전용 경로) 라운드 종료 시점의 유치장 점유로 보상을 정산해 자금에 1회
+    // 반영한 뒤 잔액을 스냅샷한다 — 판정 즉시 지급을 대체한다. 탈옥해 유치장에 없는 대상은 계상되지 않는다.
     private SettlementData BuildData(RoundResult result, RoundEndReason reason)
     {
+        int criminals = 0;
+        int misdemeanors = 0;
+        JailZone jail = FindFirstObjectByType<JailZone>();
+        if (jail != null)
+        {
+            int total;
+            (criminals, misdemeanors, total) = jail.TallySettlement();
+            if (TeamFund != null)
+                TeamFund.AddSettlement(total);
+        }
+
         int balance = TeamFund != null ? TeamFund.Balance : 0;
-        int delta = TeamFund != null ? TeamFund.Balance - m_roundStartFund : 0;
+        int delta = TeamFund != null ? balance - m_roundStartFund : 0;
 
         string topName = string.Empty;
         int topCount = 0;
@@ -145,6 +160,8 @@ public class SettlementController : MonoBehaviour
             Reason = reason,
             FundBalance = balance,
             FundDelta = delta,
+            CriminalCount = criminals,
+            MisdemeanorCount = misdemeanors,
             TopOffenderName = topName,
             TopOffenderCount = topCount,
         };
@@ -206,6 +223,8 @@ public class SettlementController : MonoBehaviour
         writer.WriteValueSafe((byte)data.Reason);
         writer.WriteValueSafe(data.FundBalance);
         writer.WriteValueSafe(data.FundDelta);
+        writer.WriteValueSafe(data.CriminalCount);
+        writer.WriteValueSafe(data.MisdemeanorCount);
         writer.WriteValueSafe(data.TopOffenderCount);
         writer.WriteValueSafe(name);
         nm.CustomMessagingManager.SendNamedMessageToAll(
@@ -228,6 +247,8 @@ public class SettlementController : MonoBehaviour
         reader.ReadValueSafe(out byte reasonByte);
         reader.ReadValueSafe(out int balance);
         reader.ReadValueSafe(out int delta);
+        reader.ReadValueSafe(out int criminals);
+        reader.ReadValueSafe(out int misdemeanors);
         reader.ReadValueSafe(out int topCount);
         reader.ReadValueSafe(out FixedString64Bytes name);
 
@@ -238,6 +259,8 @@ public class SettlementController : MonoBehaviour
                 Reason = (RoundEndReason)reasonByte,
                 FundBalance = balance,
                 FundDelta = delta,
+                CriminalCount = criminals,
+                MisdemeanorCount = misdemeanors,
                 TopOffenderCount = topCount,
                 TopOffenderName = name.ToString(),
             }

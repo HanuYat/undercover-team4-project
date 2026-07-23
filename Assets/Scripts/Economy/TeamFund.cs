@@ -4,7 +4,8 @@ using UnityEngine;
 /// <summary>
 /// 팀 공용 자금(#104) — 세션 내내 유지되는 상주 홀더. (#214 §6 이월 구조)
 /// 세션 시작 시 서버가 1회 스폰(destroyWithScene:false)해 씬을 넘어 값이 유지된다.
-/// 검거 보상 가산은 게임 씬의 ArrestJudge에 붙어야 하므로, 게임 씬 진입마다 재배선한다.
+/// 검거 보상은 판정 즉시가 아니라 라운드 종료 시 유치장 점유로 정산된다(#340) — SettlementController가
+/// 종료 시 AddSettlement로 1회 가산한다. 차감은 상점 구매(TrySpend)뿐이다.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
@@ -25,39 +26,27 @@ public class TeamFund : NetworkedManagerBase
 
         // 세션 시작 시 1회 초기화
         m_fund.Value = m_startingFund;
-
-        // 게임 씬의 ArrestJudge에 라운드마다 다시 붙는다.
-        App.OnSceneLoaded += HandleSceneLoaded;
-        if (App.CurrentScene == EScene.Game)
-            HandleSceneLoaded(EScene.Game);
     }
 
-    public override void OnNetworkDespawn()
+    // 검거 보상은 판정 즉시가 아니라 라운드 종료 시 유치장 점유 기반으로 정산된다(#340) — SettlementController가
+    // 종료 시 AddSettlement를 1회 호출한다. 그래서 ArrestJudge.OnArrestJudged 구독은 더 이상 없다
+    // (탈옥해 유치장에 없는 대상은 애초에 정산되지 않아 "판정 즉시 지급 + 회수 없음" 불일치가 사라진다).
+
+    /// <summary>
+    /// 라운드 종료 정산액을 팀 자금에 1회 가산한다 — SettlementController(서버·오프라인)가 호출한다. (#340)
+    /// 유치장 점유 기반 정산이라 음수가 들어올 일은 없지만 방어적으로 0 이하는 무시한다.
+    /// </summary>
+    public void AddSettlement(int amount)
     {
-        if (!IsServer) return;
+        if (!IsServer)
+        {
+            Debug.LogWarning("TeamFund.AddSettlement는 서버에서만", this);
+            return;
+        }
+        if (amount <= 0) return;
 
-        App.OnSceneLoaded -= HandleSceneLoaded;
-        // 현재 ArrestJudge 구독은 씬 언로드와 동시에 자동 정리됨.
-    }
-
-    // 게임 씬 진입 시 그 씬의 ArrestJudge에 구독한다. 이전 씬의 ArrestJudge는 파괴됐으므로 중복/누수 없음.
-    private void HandleSceneLoaded(EScene scene)
-    {
-        if (scene != EScene.Game) return;
-
-        ArrestJudge judge = App.Game.ArrestJudge;
-        if (judge != null)
-            judge.OnArrestJudged += HandleArrestJudged;
-        else
-            Debug.LogWarning($"[TeamFund] 게임 씬에 ArrestJudge가 없어 검거 보상을 받지 못함.", this);
-    }
-
-    private void HandleArrestJudged(ArrestResult result)
-    {
-        if (result.Reward == 0) return;
-
-        m_fund.Value = Mathf.Max(0, m_fund.Value + result.Reward);
-        Debug.Log($"[팀 자금] 보상 +{result.Reward} → 잔액 {m_fund.Value}");
+        m_fund.Value = Mathf.Max(0, m_fund.Value + amount);
+        Debug.Log($"[팀 자금] 라운드 정산 +{amount} → 잔액 {m_fund.Value}");
     }
 
     /// <summary>
