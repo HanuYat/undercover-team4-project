@@ -77,7 +77,7 @@ public class InteractionFeedback : NetworkBehaviour
             bool onTarget = taser.HasValidAimTarget(
                 m_interactor.AimOrigin.position, m_interactor.AimOrigin.forward);
             SetOutlined(null, Color.clear);
-            App.UI.Crosshair?.SetInteractable(onTarget);
+            App.UI.Crosshair?.SetTaserTargeting(onTarget);
             return;
         }
 
