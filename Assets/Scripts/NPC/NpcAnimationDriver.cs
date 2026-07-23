@@ -53,6 +53,21 @@ public class NpcAnimationDriver : MonoBehaviour
     /// </summary>
     public const int k_standUpAnimState = 102;
 
+    /// <summary>
+    /// 저항형 제압 전환(그로기) 모션의 Animator 상태 번호. (#332)
+    /// 제압 순간의 전환은 FSM 상태가 아니라 Captured 진입 위에 얹는 연출이라 전용 번호를 쓴다 —
+    /// 두들겨 맞아 제압된 저항형은 곧바로 고개 숙인 대기 자세로 스냅되는 대신 서서 헤롱거리다 가라앉는다.
+    /// NpcAnimatorControllerBuilder(Editor)가 이 상수로 Any State 전이 조건을 만든다.
+    /// </summary>
+    public const int k_subdueGroggyAnimState = 103;
+
+    /// <summary>
+    /// 도주형 제압 전환(구르기) 모션의 Animator 상태 번호. (#332)
+    /// 달리다 붙잡힌 관성을 표현한다 — 태클당해 구르고 스스로 일어난 뒤 대기 자세로 이어진다
+    /// (클립 끝 프레임이 완전 기립이라 Captured 자세와 크로스페이드로 자연 연결).
+    /// </summary>
+    public const int k_subdueRollAnimState = 104;
+
     // 연행 근접 정지(#97) 모션 전환 임계값 — 실제 이동 속도(m/s) 기준.
     // 켜짐/꺼짐 경계를 다르게 둬(히스테리시스) 정지 직전 감속 구간에서 모션이 떨리는 것을 막는다.
     // 꺼짐 임계값은 걷기 최저 속도(~1.6m/s)보다 충분히 낮게 — 추종 중 순간 감속에 오작동하지 않는 선
@@ -82,6 +97,12 @@ public class NpcAnimationDriver : MonoBehaviour
     [Tooltip("해제 시작(Begin) 모션을 유지하는 시간(초) — 이후 반복(Loop)으로 넘어간다. Begin 클립 길이(0.63초)에 맞춘 값")]
     [SerializeField] private float m_unlockBeginSeconds = 0.63f;
 
+    [Header("제압 전환 (#332)")]
+    [Tooltip("저항형 제압 시 그로기(헤롱) 모션을 유지하는 시간(초) — 이후 고개 숙인 대기 자세로 가라앉는다. 클립(Stun01)은 루프라 원하는 만큼")]
+    [SerializeField] private float m_subdueGroggySeconds = 1.5f;
+    [Tooltip("도주형 제압 시 구르기 모션을 유지하는 시간(초) — 클립(Roll01) 길이 1.3초에 맞춘 값")]
+    [SerializeField] private float m_subdueRollSeconds = 1.3f;
+
     [SerializeField] private Animator m_animator;
 
     private NpcController m_controller;
@@ -97,6 +118,8 @@ public class NpcAnimationDriver : MonoBehaviour
     private float m_unlockBeginUntil;
     // 현재 스윙 모션을 유지할 종료 시각. 0 이하면 스윙 중 아님. 스윙이 끝나면 base 상태로 되돌린다 (#220)
     private float m_swingUntil;
+    // 제압 전환(그로기/구르기) 모션을 유지할 종료 시각. 0 이하면 전환 중 아님 — 끝나면 Captured 대기 자세로 (#332)
+    private float m_subdueUntil;
     // 일어나는 모션 재생 중인가 (#269). 스윙과 달리 시간으로 끊지 않는다 — 클립이 1회 재생이라
     // 마지막 프레임(선 자세)에서 멈추고, 곧 도착하는 Idle 전이가 배회 모션으로 이어받는다.
     // 시간으로 끊으면 그 사이 한 프레임 동안 누운 자세(base)가 스쳐 지나가 툭 끊겨 보인다.
@@ -219,6 +242,14 @@ public class NpcAnimationDriver : MonoBehaviour
         if (m_swingUntil > 0f && Time.time >= m_swingUntil)
         {
             m_swingUntil = 0f;
+            m_animator.SetInteger(s_stateHash, AnimatorBaseState(m_baseState));
+        }
+
+        // 제압 전환(그로기/구르기) 유지 시간이 끝나면 고개 숙인 대기 자세(Captured)로 가라앉는다 (#332).
+        // 그 전에 다른 상태로 바뀌었으면 HandleStateChanged가 이미 타이머를 지우고 새 모션을 적용했다.
+        if (m_subdueUntil > 0f && Time.time >= m_subdueUntil)
+        {
+            m_subdueUntil = 0f;
             m_animator.SetInteger(s_stateHash, AnimatorBaseState(m_baseState));
         }
 
@@ -364,12 +395,40 @@ public class NpcAnimationDriver : MonoBehaviour
     private static bool IsPenaltyLocomotion(NpcState state) =>
         state is NpcState.Detained or NpcState.Chasing or NpcState.PenaltyEscorting;
 
+    /// <summary>
+    /// 제압 전환 모션을 시드한다 — 직전 상태가 저항(Attack)이면 그로기, 도주(Run)면 구르기. (#332)
+    /// 그 외(수갑 채널링 체포·기절 후 재제압 등)는 저항 없이 잡히는 그림이라 전환 없이 false를 돌려주고,
+    /// 호출부가 기존대로 대기 자세를 직접 시드한다.
+    /// </summary>
+    private bool TryBeginSubdueTransition(NpcState previous)
+    {
+        switch (previous)
+        {
+            case NpcState.Attack:
+                m_animator.SetInteger(s_stateHash, k_subdueGroggyAnimState);
+                m_subdueUntil = Time.time + m_subdueGroggySeconds;
+                return true;
+
+            case NpcState.Run:
+                m_animator.SetInteger(s_stateHash, k_subdueRollAnimState);
+                m_subdueUntil = Time.time + m_subdueRollSeconds;
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
     private void HandleStateChanged(NpcState state)
     {
+        // 제압 전환 분기용 직전 상태 — base를 덮어쓰기 전에 읽는다 (#332)
+        NpcState previous = m_baseState;
+
         // 상태 전이는 스윙보다 우선한다 — 진행 중이던 스윙을 취소하고 새 base 모션을 즉시 적용한다
         // (예: 저항 중 스윙하다 제압되면 그 프레임에 Captured로 넘어가야 한다) (#220)
         m_baseState = state;
         m_swingUntil = 0f;
+        m_subdueUntil = 0f; // 전환 중 다른 상태로 바뀌면(재연행 등) 전환도 끝난다
         m_standingUp = false; // 상태가 바뀌면 일어나기도 끝난다 — 새 base 모션이 즉시 적용된다
 
         // 앵그리 마크(#280) — 페널티 상태(수용~호송) 동안 머리 위에 표시한다. 이 이벤트는 동기화를 거쳐
@@ -385,6 +444,12 @@ public class NpcAnimationDriver : MonoBehaviour
             m_lastPosition = transform.position;
             m_smoothedSpeed = k_escortMoveOnSpeed;
         }
+
+        // 제압 순간의 전환 연출 (#332) — 도주·저항 중이던 NPC가 Captured로 넘어오면 곧바로 대기 자세로
+        // 스냅하지 않고 유형별 전환 모션(저항=그로기, 도주=구르기)을 거친다. 상태는 동기화 값이라
+        // 직전 상태 추적도 모든 피어에서 같게 흐른다 — 전 화면에서 같은 전환이 보인다.
+        if (m_animator != null && state == NpcState.Captured && TryBeginSubdueTransition(previous))
+            return; // 전환 모션이 시드됐다 — 유지 시간이 끝나면 Update가 대기 자세로 넘긴다
 
         // enum 값을 int로 변환해 전달 → Animator의 Any State 전이(State == N)가 해당 모션으로 전환한다.
         // 단, Attack 번호(3)는 단발 스윙 전용이라 base로 쓰지 않고, 저항 base는 걷기/버틴 자세로 갈린다 (#220·#254).
