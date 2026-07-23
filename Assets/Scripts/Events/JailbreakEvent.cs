@@ -69,8 +69,8 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     [Tooltip("경범죄 판정 후 이 지점으로 걸어가 도착하면 소멸한다. 비우면 판정 즉시 그 자리에서 소멸한다(폴백)")]
     [SerializeField] private Transform m_holdingPoint;
 
-    [Header("안전 장치")]
-    [Tooltip("연행되지 않은 채 이 시간(초)을 넘기면 강제로 정리한다 (스폰물 누수 방지)")]
+    [Header("잔류 전환")]
+    [Tooltip("제압되지 않은 채 이 시간(초)이 지나면 침입을 포기하고 배회 시민으로 잔류한다 — 마커가 남아 언제든 잡으면 경범죄 수익 (#310)")]
     [SerializeField] private float m_maxLifetimeSeconds = 90f;
 
     // 매니저는 캐싱하지 않고 App 경유로 매번 읽는다 (아키텍처 규칙 R1/R8).
@@ -85,8 +85,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     private bool m_pendingStart;  // 스폰 다음 프레임에 침입을 시작하기 위한 플래그(초기화 순서 보장)
     private bool m_despawnQueued; // 판정·홀딩 도착분을 다음 틱에 정리 — 발행 체인 안 즉시 파괴 금지(SpawnedNpcEvent와 동일)
     private bool m_hasStarted;    // 침입을 실제로 시작했는지 — 배회 복귀(이탈) 판정에 쓴다
-    private bool m_exitQueued;    // 이탈 확정 — 다음 틱에 출구로 걸어 나가게 한다 (상태 전이 체인 안 전이 회피, #310)
-    private bool m_exiting;       // 출구로 퇴장 이동 중인지 — 재제압 시 취소·도착 로그 분기에 쓴다 (#310)
+    private bool m_releaseQueued; // 잔류 전환 확정 — 다음 틱에 이벤트가 손을 뗀다 (상태 전이 체인 안 처리 회피, #310)
     private int m_spawnFrame;
     private float m_lifetimeStart; // 방치 타이머 기준 시각 — 국면이 바뀔 때마다 갱신한다
 
@@ -183,8 +182,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
 
         m_despawnQueued = false;
         m_hasStarted = false;
-        m_exitQueued = false;
-        m_exiting = false;
+        m_releaseQueued = false;
         m_spawnFrame = Time.frameCount;
         m_pendingStart = true;
         m_lifetimeStart = Time.time;
@@ -212,37 +210,26 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
             m_hasStarted = true;
         }
 
-        // 이탈 확정분을 상태 전이 체인 밖(다음 틱)에서 처리한다 — OnStateChanged 안에서 곧바로 상태를
-        // 갈아타면 전이 통지가 중첩된다 (SpawnedNpcEvent의 지연 이탈과 같은 이유). (#310)
-        // 출구가 없으면(마커·스폰 포인트 모두 부재) SendToHolding(null)이 그 자리 도착 통보를 내 기존처럼 즉시 정리된다.
-        if (m_exitQueued)
+        // 잔류 전환 확정분을 상태 전이 체인 밖(다음 틱)에서 처리한다 — OnStateChanged 안에서 곧바로
+        // 상태를 갈아타면 전이 통지가 중첩된다 (SpawnedNpcEvent와 같은 이유). (#310)
+        if (m_releaseQueued)
         {
-            m_exitQueued = false;
-            m_exiting = true;
-            m_lifetimeStart = Time.time; // 출구까지 달아날 유예를 새로 준다
-            m_intruder.SendToHolding(SuddenEventUtil.FindExitPoint(m_intruder.transform.position), sprint: true);
+            ReleaseToCity();
             return;
         }
 
-        // 연행 중에는 방치 타이머를 멈춘다 — 본부까지 데려가는 데 얼마가 걸리든 플레이어 손에서 사라지면 안 된다.
-        // (이 리셋이 없으면 제압한 침입자가 연행 도중 강제 정리로 증발한다 — #261에서 고친 버그)
+        // 연행 중에는 잔류 타이머를 멈춘다 — 본부까지 데려가는 동안 이벤트가 끝나면 안 된다.
+        // (이 리셋이 없으면 제압한 침입자가 연행 도중 잔류 전환돼 이벤트 추적이 끊긴다 — #261에서 고친 버그의 변형)
         if (m_intruder.CurrentState == NpcState.Escorted)
             m_lifetimeStart = Time.time;
 
-        // 아무도 데려가지 않은 채 방치되면 정리 수순 (스폰물 누수 방지)
-        if (Time.time - m_lifetimeStart > m_maxLifetimeSeconds)
+        // 잔류 전환 시간이 다하면 침입을 포기하고 배회 시민으로 잔류한다 (SpawnedNpcEvent와 동일 설계).
+        // Holding(판정 후 이송) 중에는 두지 않는다.
+        if (Time.time - m_lifetimeStart > m_maxLifetimeSeconds && m_intruder.CurrentState != NpcState.Holding)
         {
-            // 아직 걸어 나가는 중이 아니면 즉시 증발 대신 출구 퇴장으로 전환한다 (SpawnedNpcEvent와 동일).
-            // 퇴장·이송(Holding)까지 막힌 채 또 초과하면 그때 강제 정리.
-            if (!m_exiting && m_intruder.CurrentState != NpcState.Holding)
-            {
-                Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 방치 시간 초과, 출구로 퇴장");
-                m_exitQueued = true;
-                return;
-            }
-
-            Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 방치 시간 초과로 정리");
-            Despawn();
+            Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 침입 포기, 잔류");
+            m_intruder.StartFlee(null); // 위협 없는 도주 — 잠깐 흩어졌다가 곧 배회로 가라앉는다
+            ReleaseToCity();
         }
     }
 
@@ -331,17 +318,15 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (state == NpcState.Captured || state == NpcState.Escorted)
         {
             m_lifetimeStart = Time.time;
-            m_exiting = false; // 출구로 걸어 나가던 중이라도 다시 붙잡히면 퇴장은 취소된다 (#310)
             return;
         }
 
         // 침입을 시작한 뒤 배회로 돌아왔다 = 뿌리치고 달아나 진정했거나(저지 실패) 도주가 끝났다.
-        // 눈앞에서 증발하는 대신 출구 마커(SuddenEventExitPoint)로 걸어 나가 소멸한다 (#310) —
-        // 걸어가는 동안은 Holding 상태라 이 분기에 다시 들어오지 않고, 따라가 잡으면 도로 Captured가 된다.
-        if (m_hasStarted && !m_exiting && (state == NpcState.Idle || state == NpcState.Walk))
+        // 소멸시키지 않고 배회 시민으로 도심에 남긴다 (#310) — 마커가 남아 언제든 잡아 인계하면 수익이 난다.
+        if (m_hasStarted && (state == NpcState.Idle || state == NpcState.Walk))
         {
-            Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 출구로 이탈");
-            m_exitQueued = true;
+            Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 도심에 잔류");
+            m_releaseQueued = true;
         }
     }
 
@@ -372,9 +357,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (npc != m_intruder)
             return;
 
-        Debug.Log(m_exiting
-            ? "[돌발이벤트] 범인 탈출 — 침입자 출구 도착, 퇴장"
-            : "[돌발이벤트] 범인 탈출 — 침입자 임시 거처 도착, 정리 예약");
+        Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 임시 거처 도착, 정리 예약");
         m_despawnQueued = true;
     }
 
@@ -436,8 +419,16 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         m_pendingStart = false;
         m_hasStarted = false;
         m_despawnQueued = false;
-        m_exitQueued = false;
-        m_exiting = false;
+        m_releaseQueued = false;
+    }
+
+    // 이벤트가 손을 떼고 침입자를 도심에 남긴다 — 뒷일(인계 판정·라운드 종료 정리)은
+    // MisdemeanorLoiterer가 물려받는다 (SpawnedNpcEvent.ReleaseToCity와 동일 설계). (#310)
+    private void ReleaseToCity()
+    {
+        NpcController intruder = m_intruder;
+        StopTracking();
+        MisdemeanorLoiterer.Attach(intruder, Judge, m_holdingPoint, DisplayName);
     }
 
     // 침입자를 씬에서 치운다 — 이탈·불발·방치·라운드 종료 등 신병을 넘길 데가 없는 종료 경로.

@@ -67,13 +67,6 @@ public class NpcAnimationDriver : MonoBehaviour
     private const float k_penaltyRunOnSpeed = 4f;
     private const float k_penaltyRunOffSpeed = 3.4f;
 
-    // 임시 거처/출구 이송(Holding)의 걷기↔달리기 전환 임계값(m/s) — 페널티 임계(4)는 플레이어급 추격
-    // 속도 기준이라 NPC 질주에는 안 걸린다. NPC 보행은 개체 랜덤 배속 포함 ~1.5-2.3, 질주(도주 배속
-    // 1.5)는 ~2.3-3.4 — 겹치는 경계(2.3)에 맞춰 걷는 이송이 달리기로 보이지 않는 쪽을 우선한다.
-    // (최저 배속 개체의 질주가 걷기 모션으로 보이는 드문 경우는 감수 — 속도는 어차피 질주다) (#310)
-    private const float k_holdingRunOnSpeed = 2.3f;
-    private const float k_holdingRunOffSpeed = 2.1f;
-
     // 다리 달리기 클립(HumanM@Run01_Forward)이 발 미끄러짐 없이 자연스러워 보이는 기준 지상 속도(m/s).
     // 이 속도일 때 배율 1배로 재생되고, 실제 이동 속도가 다르면 그 비율로 재생속도를 늘리거나 줄인다.
     // 클립이 in-place(루트모션 없음)라 자동 계산이 불가능한 값 — 눈으로 보며 미세 튜닝할 것.
@@ -209,7 +202,7 @@ public class NpcAnimationDriver : MonoBehaviour
             NpcState.Detained => (int)NpcState.Walk,
             NpcState.Chasing => (int)NpcState.Run,
             NpcState.PenaltyEscorting => (int)NpcState.Walk,
-            // 임시 거처/출구 이송 진입 시드 — 이후 속도 로코모션이 걷기/달리기를 가른다 (#291/#310)
+            // 임시 거처 이송도 대응 Animator 상태가 없다 — 걷기 모션을 빌려 쓴다 (#291)
             NpcState.Holding => (int)NpcState.Walk,
             _ => (int)state,
         };
@@ -240,7 +233,7 @@ public class NpcAnimationDriver : MonoBehaviour
         NpcState state = m_controller.CurrentState;
         if (
             !IsHandcuffedMotion(state)
-            && !IsVelocityLocomotion(state)
+            && !IsPenaltyLocomotion(state)
             && state != NpcState.Panic
             && state != NpcState.Attack
             && state != NpcState.Intruding
@@ -266,15 +259,10 @@ public class NpcAnimationDriver : MonoBehaviour
             return;
         }
 
-        // 오검거 페널티(수용·추격·호송)·임시 거처/출구 이송(Holding): 대응 Animator 상태가 없어
-        // 속도로 Idle/Walk/Run을 가른다 (#277~#279 · 출구 탈출 질주는 #310).
-        // Run 임계는 상태별 — 페널티 추격대는 플레이어급 속도, 이송 질주는 NPC 도주 배속 기준
-        if (IsVelocityLocomotion(state))
+        // 오검거 페널티(수용·추격·호송): 대응 Animator 상태가 없어 속도로 Idle/Walk/Run을 가른다 (#277~#279)
+        if (IsPenaltyLocomotion(state))
         {
-            if (state == NpcState.Holding)
-                UpdateVelocityLocomotion(k_holdingRunOnSpeed, k_holdingRunOffSpeed);
-            else
-                UpdateVelocityLocomotion(k_penaltyRunOnSpeed, k_penaltyRunOffSpeed);
+            UpdatePenaltyLocomotion();
             return;
         }
 
@@ -345,14 +333,14 @@ public class NpcAnimationDriver : MonoBehaviour
 
     // 오검거 페널티 로코모션 — 속도 기준 Idle/Walk/Run 3단 전환. 히스테리시스는 걷기 경계(연행 상수 공유)와
     // 달리기 경계(k_penaltyRun*) 두 겹이다. 경계 사이 속도에서는 현재 모션을 유지해 떨림을 막는다 (#277~#279)
-    private void UpdateVelocityLocomotion(float runOnSpeed, float runOffSpeed)
+    private void UpdatePenaltyLocomotion()
     {
         int desired = m_penaltyMotion;
         if (m_smoothedSpeed < k_escortMoveOffSpeed)
             desired = (int)NpcState.Idle;
-        else if (m_smoothedSpeed > runOnSpeed)
+        else if (m_smoothedSpeed > k_penaltyRunOnSpeed)
             desired = (int)NpcState.Run;
-        else if (m_smoothedSpeed > k_escortMoveOnSpeed && m_smoothedSpeed < runOffSpeed)
+        else if (m_smoothedSpeed > k_escortMoveOnSpeed && m_smoothedSpeed < k_penaltyRunOffSpeed)
             desired = (int)NpcState.Walk;
 
         if (desired == m_penaltyMotion)
@@ -375,12 +363,6 @@ public class NpcAnimationDriver : MonoBehaviour
     /// </summary>
     private static bool IsPenaltyLocomotion(NpcState state) =>
         state is NpcState.Detained or NpcState.Chasing or NpcState.PenaltyEscorting;
-
-    // 속도 기반 로코모션을 쓰는 상태 — 페널티 3종 + 임시 거처/출구 이송(Holding). Holding은 걷기(판정 후
-    // 이송)와 질주(출구 탈출, #310)가 한 상태라 실제 속도로 모션을 가른다. 앵그리 마크(#280)는 페널티
-    // 전용이므로 IsPenaltyLocomotion을 그대로 쓴다 — 이 판정을 마크에 쓰면 이송 NPC에도 마크가 뜬다.
-    private static bool IsVelocityLocomotion(NpcState state) =>
-        IsPenaltyLocomotion(state) || state == NpcState.Holding;
 
     private void HandleStateChanged(NpcState state)
     {
@@ -420,10 +402,9 @@ public class NpcAnimationDriver : MonoBehaviour
             m_lastPosition = transform.position;
             m_smoothedSpeed = k_escortMoveOnSpeed;
         }
-        // 오검거 페널티·임시 거처/출구 이송 진입 — AnimatorBaseState가 시드한 모션(수용·호송·이송=걷기,
-        // 추격=달리기)에 판별 상태를 맞추고 속도 평활을 초기화한다. 직전 상태의 잔여 속도가 첫 전환 판정을
-        // 오염시키지 않게 (#277~#279 · #310). 출구 질주는 걷기로 시드돼도 몇 프레임 안에 Run으로 넘어간다
-        else if (IsVelocityLocomotion(state))
+        // 오검거 페널티 진입 — AnimatorBaseState가 시드한 모션(수용·호송=걷기, 추격=달리기)에 판별 상태를 맞추고
+        // 속도 평활을 초기화한다. 직전 상태의 잔여 속도가 첫 전환 판정을 오염시키지 않게 (#277~#279)
+        else if (IsPenaltyLocomotion(state))
         {
             m_penaltyMotion = AnimatorBaseState(state);
             m_lastPosition = transform.position;
