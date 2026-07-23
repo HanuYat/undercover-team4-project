@@ -58,15 +58,18 @@ public class NpcAnimationDriver : MonoBehaviour
     /// 제압 순간의 전환은 FSM 상태가 아니라 Captured 진입 위에 얹는 연출이라 전용 번호를 쓴다 —
     /// 두들겨 맞아 제압된 저항형은 곧바로 고개 숙인 대기 자세로 스냅되는 대신 서서 헤롱거리다 가라앉는다.
     /// NpcAnimatorControllerBuilder(Editor)가 이 상수로 Any State 전이 조건을 만든다.
+    /// <b>번호 주의:</b> 103은 차저 돌진 준비(ThugAnimationDriver.k_windupAnimState)가 이미 쓴다 —
+    /// 같은 컨트롤러의 Any State 조건이 겹치면 우선순위에 밀려 엉뚱한 모션(CombatIdle)이 재생된다.
+    /// 새 번호를 더할 때는 두 드라이버의 상수를 모두 확인할 것.
     /// </summary>
-    public const int k_subdueGroggyAnimState = 103;
+    public const int k_subdueGroggyAnimState = 105;
 
     /// <summary>
     /// 도주형 제압 전환(구르기) 모션의 Animator 상태 번호. (#332)
     /// 달리다 붙잡힌 관성을 표현한다 — 태클당해 구르고 스스로 일어난 뒤 대기 자세로 이어진다
     /// (클립 끝 프레임이 완전 기립이라 Captured 자세와 크로스페이드로 자연 연결).
     /// </summary>
-    public const int k_subdueRollAnimState = 104;
+    public const int k_subdueRollAnimState = 106;
 
     // 연행 근접 정지(#97) 모션 전환 임계값 — 실제 이동 속도(m/s) 기준.
     // 켜짐/꺼짐 경계를 다르게 둬(히스테리시스) 정지 직전 감속 구간에서 모션이 떨리는 것을 막는다.
