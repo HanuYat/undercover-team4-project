@@ -2833,6 +2833,7 @@ GameObject:
   - component: {fileID: 3120017538077844962}
   - component: {fileID: 914296157285595536}
   - component: {fileID: -3123601567961304525}
+  - component: {fileID: 3605863908184502176}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -3137,6 +3138,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerEscorter
   ShowTopMostFoldoutHeaderGroup: 1
   m_channelSeconds: 3
+  m_subdueChannelSeconds: 3
   m_ropeLength: 1.6
   m_dragSmoothTime: 0.14
   m_dragTurnSharpness: 6
@@ -3353,6 +3355,25 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerPenaltyView
   ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &3605863908184502176
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5586e13acfce84444ad3a2bf1db23cd9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerHeadLook
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_neckBone: {fileID: 2589263494624060831}
+  m_headBone: {fileID: 1850758295541522602}
+  m_neckWeight: 0.4
+  m_maxVisualPitch: 60
+  m_pitchLerpSpeed: 15
+  m_weightLerpSpeed: 8
 --- !u!1 &5536001738967602051
 GameObject:
   m_ObjectHideFlags: 0
