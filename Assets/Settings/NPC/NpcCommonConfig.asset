@@ -21,4 +21,4 @@ MonoBehaviour:
   m_knockbackLandSampleDistance: 4
   m_knockbackObstacleMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 1
