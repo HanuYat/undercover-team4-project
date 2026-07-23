@@ -4699,7 +4699,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &119285121
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -53164,6 +53164,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: df5ce1efead3d784895dc53f93f9ebef, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ArrestJudge
+  m_forgeryReward: 1000
   m_dropoffZone: {fileID: 2038403617}
   m_autoJudgeOnDelivery: 1
 --- !u!1001 &1337212480
@@ -81041,7 +81042,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4013905553807786, guid: 72743bd38a7349d4fa26ac056b454810, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -4.4192877
+      value: -5.071
       objectReference: {fileID: 0}
     - target: {fileID: 4013905553807786, guid: 72743bd38a7349d4fa26ac056b454810, type: 3}
       propertyPath: m_LocalPosition.z
