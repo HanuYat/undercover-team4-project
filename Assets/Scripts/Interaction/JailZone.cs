@@ -28,7 +28,7 @@ public class JailZone : NetworkBehaviour
     // 오프라인(네트워크 없이 Play) 폴백용 로컬 값 — NpcController의 게이지 이중 구조와 동일
     private int m_localInmateCount;
 
-    // 이미 수용된 NPC — 중복 카운트 방어(도착 통보가 두 번 오거나 재수용되는 경우)
+    // 이미 수용된 NPC — 중복 카운트 방어(같은 대상이 두 번 판정·통보되거나 재수용되는 경우)
     private readonly HashSet<NpcController> m_inmates = new HashSet<NpcController>();
 
     // 수감자별 보상액(bounty) — 라운드 종료 점유 기반 정산(#340)이 합산한다. 탈옥 방출 시 함께 제거되므로
@@ -92,8 +92,9 @@ public class JailZone : NetworkBehaviour
     }
 
     /// <summary>
-    /// 수용 — NPC가 수용 지점에 도달했을 때 호출된다 (NpcController.OnJailed 구독).
-    /// 판정 시점이 아니라 실제로 걸어 들어온 시점에 세므로, 이송 중 탈출(별도 이슈)이 카운트를 오염시키지 않는다.
+    /// 수용 — 검거 판정 직후 CustodyRouter가 호출한다(NPC가 셀까지 걸어 도착하기를 기다리지 않는다).
+    /// 판정 순간 바로 세므로 할당량 종료(#340)가 카운트를 앞질러 마지막 검거가 정산에서 누락되지 않는다.
+    /// 탈옥해 풀려난 대상은 ReleaseInmate로 이 카운트에서 빠지므로 "끝까지 데리고 있어야 보상"은 유지된다.
     /// <paramref name="bounty"/>는 이 수감자가 라운드 종료 정산(#340)에 기여할 보상액이다(CustodyRouter가 판정 보상을 넘긴다).
     /// </summary>
     public void Admit(NpcController npc, int bounty)
