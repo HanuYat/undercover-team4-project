@@ -185,6 +185,11 @@ public static class SuddenEventUtil
             if (hiddenFromPlayers && !IsHiddenFromFieldPlayers(hit.position))
                 continue; // 누군가의 눈앞 — 팝인이 보인다, 다음 후보로
 
+            // 기준 플레이어에게서는 링(min~max)이 거리를 보장하지만, 다른 플레이어 바로 옆일 수 있다 —
+            // 시야 밖(등 뒤)이라도 코앞 스폰은 소란이 갑자기 터진 느낌이라 링 최소 거리를 전원에게 적용한다 (#332 A)
+            if (hiddenFromPlayers && FindNearestFieldPlayer(hit.position, distanceMin) != null)
+                continue;
+
             result = hit.position;
             return true;
         }

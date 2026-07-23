@@ -145,8 +145,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ThugAssaultEvent
   m_thugPrefab: {fileID: 2937104856208815511, guid: b346482e77513644ea3522271c62578d, type: 3}
   m_durationSeconds: 20
-  m_spawnDistanceMin: 8
-  m_spawnDistanceMax: 15
+  m_spawnDistanceMin: 12
+  m_spawnDistanceMax: 20
   m_navSampleMaxDistance: 4
   m_maxSpawnAttempts: 8
 --- !u!114 &6553283234259604354
@@ -195,8 +195,8 @@ MonoBehaviour:
   - m_displayName: "\uAC70\uB9AC \uB09C\uB3D9\uC790"
     m_mode: 0
     m_npcPrefab: {fileID: 4452197611904741975, guid: d683626f03b237a4da9faa4542cc57a0, type: 3}
-    m_spawnDistanceMin: 6
-    m_spawnDistanceMax: 12
+    m_spawnDistanceMin: 12
+    m_spawnDistanceMax: 20
     m_navSampleMaxDistance: 4
     m_maxSpawnAttempts: 8
     m_pettyCrimeReward: 50
@@ -204,8 +204,8 @@ MonoBehaviour:
   - m_displayName: "\uB098\uCCB4 \uB09C\uB3D9\uAFBC"
     m_mode: 1
     m_npcPrefab: {fileID: 4452197611904741975, guid: 5ec59267efd14b0409911db86746a985, type: 3}
-    m_spawnDistanceMin: 6
-    m_spawnDistanceMax: 12
+    m_spawnDistanceMin: 12
+    m_spawnDistanceMax: 20
     m_navSampleMaxDistance: 4
     m_maxSpawnAttempts: 8
     m_pettyCrimeReward: 50
