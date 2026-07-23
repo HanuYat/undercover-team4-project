@@ -20,9 +20,6 @@ public partial class NpcController
         m_stateMachine.ChangeState(NpcState.Jailed);
     }
 
-    /// <summary>수용 지점 도달 통보 — NpcJailedState 전용. 유치장이 이 이벤트로 수용 인원을 센다.</summary>
-    public void NotifyJailed() => OnJailed?.Invoke(this);
-
     // ---- 수갑 소모·반환 (#229) ----
 
     /// <summary>
@@ -74,5 +71,4 @@ public partial class NpcController
         cuffsNetworkObject.TrySetParent((Transform)null, true);
         cuffsNetworkObject.transform.position = transform.position;
     }
-
 }

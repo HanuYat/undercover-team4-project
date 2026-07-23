@@ -126,9 +126,6 @@ public partial class NpcController : NetworkBehaviour
     /// <summary>수감 중 걸어갈 유치장 수용 지점. 수감 중이 아니면 null. 서버에서만 유효. (#228)</summary>
     public Transform JailCell { get; private set; }
 
-    /// <summary>유치장 수용 지점 도달 — 유치장(JailZone)이 구독해 수용 인원을 올린다. 서버에서만 발생. (#228)</summary>
-    public event Action<NpcController> OnJailed;
-
     /// <summary>침입 중 걸어갈 목표 지점(유치장 자물쇠). 침입 중이 아니면 null. 서버에서만 유효. (#231)</summary>
     public Transform IntrudeTarget { get; private set; }
 
