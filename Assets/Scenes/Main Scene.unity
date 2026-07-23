@@ -36401,7 +36401,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 83d0daea87b0f2c4cb04fc30fdb14018, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoundManager
-  m_arrestQuota: 3
+  m_arrestQuota: 1
   m_timeLimitSeconds: 600
 --- !u!114 &708957384
 MonoBehaviour:
@@ -61794,7 +61794,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CriminalAssigner
   m_officialRecords: {fileID: 11400000, guid: 1b5b7a3bc8cc725468fa2e0d915c05cb, type: 2}
-  m_criminalCount: 3
+  m_criminalCount: 1
   m_forgerCount: 2
   m_forgedCharCount: 1
   m_compliantWeight: 0.2
