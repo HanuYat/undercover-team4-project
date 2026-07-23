@@ -14,12 +14,12 @@ public class ScannerCharger : MonoBehaviour, IInteractable
     [Tooltip("m_chargeToFull이 false일 때 1회 상호작용당 충전량")]
     [SerializeField] private int m_chargeAmount = 1;
 
-    /// <summary>장착 아이템이 충전 대상(IChargeable)이고 완충이 아닐 때만 상호작용 의미가 있다 —
-    /// 조준 피드백(윤곽선) 판정용. Interact()의 조기 반환 조건과 동일 기준. (#184)</summary>
+    /// <summary>장착 아이템이 충전 대상(IChargeable)이면 상호작용 의미가 있다 — 조준 피드백(윤곽선) 판정용. (#184)
+    /// 완충이어도 윤곽선을 띄운다 — E로 "이미 가득 참" 토스트 피드백을 주기 위함 (#309).</summary>
     public bool CanInteract(GameObject interactor)
     {
         IChargeable chargeable = interactor.GetComponentInParent<PlayerItemUser>()?.EquippedItem as IChargeable;
-        return chargeable != null && !chargeable.IsFullyCharged;
+        return chargeable != null;
     }
 
     public void Interact(GameObject interactor)
@@ -28,12 +28,8 @@ public class ScannerCharger : MonoBehaviour, IInteractable
         if (chargeable == null)
             return;
 
-        if (chargeable.IsFullyCharged)
-        {
-            Debug.Log("충전기 상호작용 — 이미 완충 상태");
-            return;
-        }
-
+        // 완충이어도 Charge를 호출한다 — 서버가 완충을 감지해 "가득 참" 토스트를 오너에게 띄운다 (#309).
+        // (값이 안 바뀌므로 실제 충전은 없고 피드백만 나간다.)
         int amount = m_chargeToFull ? chargeable.MaxBattery : m_chargeAmount;
         chargeable.Charge(amount);
         Debug.Log($"충전기 상호작용 — {amount} 충전 요청");

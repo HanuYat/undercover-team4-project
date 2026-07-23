@@ -51,6 +51,12 @@ public class Scanner : ItemBase, IChargeable
     /// </summary>
     public event Action<CitizenProfile, ulong> OnScanCompleted;
 
+    /// <summary>
+    /// 오너 화면 토스트로 띄울 사유 문자열 (#309). ScanResultPresenter(오너 로컬)가 구독.
+    /// 범위 이탈 실패·완충 상태 충전 시도에 발행 — 배터리 부족/충전완료 알림은 배터리 값 변화로 presenter가 직접 구동한다.
+    /// </summary>
+    public event Action<string> OnScanFeedback;
+
     // ---- IChargeable — 충전 요청 진입점 ----
 
     /// <summary>
@@ -94,6 +100,13 @@ public class Scanner : ItemBase, IChargeable
         if (m_channel.IsActive)
         {
             NotifyOwner("충전 실패 — 스캔 채널링 중");
+            return;
+        }
+
+        // 이미 완충이면 값 변화가 없어 OnCharged가 안 울리므로, 여기서 직접 오너 토스트를 띄운다 (#309).
+        if (IsFullyCharged)
+        {
+            NotifyOwner("스캐너 배터리 가득 참", toast: true);
             return;
         }
 
@@ -251,7 +264,7 @@ public class Scanner : ItemBase, IChargeable
         switch (result)
         {
             case ServerChannel.Result.OutOfRange:
-                NotifyOwner("스캔 실패 — 대상이 범위를 벗어남");
+                NotifyOwner("스캔 실패 — 대상이 범위를 벗어남", toast: true); // 오너 화면 토스트 (#309)
                 ClearPendingRpc(); // 실패로 끝나도 오너의 in-flight 플래그를 풀어야 재시도 가능 (#91)
                 return;
 
@@ -303,15 +316,26 @@ public class Scanner : ItemBase, IChargeable
 
     // 판정 로그는 서버에서 찍히므로 원격 클라 오너는 결과를 볼 수 없다 — 오너 콘솔에도 같은 로그를 전달한다.
     // PlayerEscorter.NotifyOwner와 동일 패턴 (#91). 정식 UI 피드백(#65 계열)이 생기면 그 전달 경로로 확장.
-    private void NotifyOwner(string message)
+    // toast=true면 콘솔 로그에 더해 오너 화면 토스트(OnScanFeedback)도 발행한다 (#309).
+    private void NotifyOwner(string message, bool toast = false)
     {
         Debug.Log(message); // 서버(호스트)·오프라인 콘솔
         if (IsSpawned && IsServer && !IsOwner)
-            OwnerLogRpc(message); // 원격 클라가 오너인 경우에만 전달 (호스트 오너는 위에서 이미 찍음)
+        {
+            OwnerLogRpc(message, toast); // 원격 클라가 오너면 RPC로 전달 (거기서 로그·토스트)
+            return;
+        }
+        if (toast)
+            OnScanFeedback?.Invoke(message); // 호스트 오너·오프라인은 로컬 발행
     }
 
     [Rpc(SendTo.Owner)]
-    private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
+    private void OwnerLogRpc(string message, bool toast)
+    {
+        Debug.Log($"[서버 판정] {message}");
+        if (toast)
+            OnScanFeedback?.Invoke(message);
+    }
 
     // ---- 채널링 게이지 피드백 (#184) ----
     // NotifyOwner와 동일 분기 — 호스트 오너·오프라인은 직접 호출, 원격 오너에게만 RPC.
