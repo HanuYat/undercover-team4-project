@@ -15,6 +15,11 @@ public class ArrestJudge : CommonManagerBase
     private const int k_wantedReward = 10000;
     private const int k_wrongfulReward = 0;
 
+    [Header("위조범 보상 (#320)")]
+    [Tooltip("위조범(스캔 표시 정보가 인명부 정본과 어긋나는 NPC) 검거 시 지급하는 경범죄 보상 (GDD 9-1 기본 1,000)")]
+    [Min(0)]
+    [SerializeField] private int m_forgeryReward = 1000;
+
     [Header("인계 구역 (비우면 씬에서 자동 탐색)")]
     [SerializeField] private HqDropoffZone m_dropoffZone;
 
@@ -89,12 +94,22 @@ public class ArrestJudge : CommonManagerBase
             // 다시 잡은 쪽이 손해를 보므로, 판정은 경범죄로 유지하되 수익만 반복되지 않게 한다.
             misdemeanor.Reward = 0;
         }
+        else if (identity.IsCriminal)
+        {
+            // 진범 우선 — 진범이면서 위조범인 NPC도 현상수배범으로 판정한다 (위조 판정에 가려지지 않음, #320).
+            verdict = ArrestVerdict.WantedCriminal;
+            reward = k_wantedReward;
+        }
+        else if (identity.IsForger)
+        {
+            // 위조범 — 난동꾼과 동일한 즉결 경범죄로 확정하고 소액 위조 보상을 준다 (#320).
+            verdict = ArrestVerdict.Misdemeanor;
+            reward = m_forgeryReward;
+        }
         else
         {
-            verdict = identity.IsCriminal
-                ? ArrestVerdict.WantedCriminal
-                : ArrestVerdict.WrongfulArrest;
-            reward = verdict == ArrestVerdict.WantedCriminal ? k_wantedReward : k_wrongfulReward;
+            verdict = ArrestVerdict.WrongfulArrest;
+            reward = k_wrongfulReward;
         }
 
         CitizenProfile profile = identity != null ? identity.Profile : null;

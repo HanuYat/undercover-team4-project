@@ -185,6 +185,8 @@ public class CriminalAssigner : CommonManagerBase
 
             bool isCriminal = criminalIndices.Contains(i);
             identity.AssignProfile(profile, isCriminal);
+            // 위조 여부를 신원에 기록 — 위조 검거 판정(#320)이 읽는다. 이름 오염(m_nameView)과 별개의 서버 전용 플래그.
+            identity.AssignForgery(isForger);
 
             // 검거 반응 — 범인은 범인 가중치로, 무고 시민은 시민 가중치로 추첨한다.
             // 시민의 도주/저항은 진범을 헷갈리게 하는 미끼 행동일 뿐 판정엔 영향이 없다 (GDD 6-1/6-3, #76/#78)
