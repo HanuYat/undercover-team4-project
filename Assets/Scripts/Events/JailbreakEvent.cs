@@ -15,9 +15,9 @@ using UnityEngine;
 ///    팀도 달려와 막을 수 있는 마지막 기회다.
 /// 어느 구간이든 수갑을 채우면 침입자는 저항형으로 맞서고, 제압·연행해 인계하면 경범죄로 처리된다
 /// (<see cref="MisdemeanorOffender"/> 마커 — 진범 대조를 타지 않으므로 오검거가 아니다).
-/// 판정된 신병은 난동꾼(<see cref="SpawnedNpcEvent"/>)과 똑같이 임시 거처로 걸어가 소멸한다 —
-/// 유치장은 진범 전용이다(#299). 침입자를 수감하면 "수감자 존재" 조건이 채워져 소득 없는 탈옥이
-/// 또 발동하고, 방출된 침입자를 재검거하면 마커가 남아 경범죄 수익이 반복 지급되기 때문이다.
+/// 판정된 신병은 CustodyRouter가 유치장으로 이송한다 — 경범죄 수감 확정(2026-07-23)으로 #299의
+/// '유치장은 진범 전용' 규칙은 폐기됐다. 수감된 침입자가 또 탈옥으로 풀려날 수 있지만(수감자 존재
+/// 조건 충족), 반복 수익은 ArrestJudge가 첫 판정 후 마커 보상을 비워 막는다.
 ///
 /// 흐름(전부 서버 권위 · #56):
 ///  1. <see cref="CanTrigger"/> — 본부 무인 + 무인 지속 시간 충족 + 자물쇠 잠김 + 수감자 존재일 때만 성립.
@@ -65,10 +65,6 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     [Tooltip("침입자를 제압·연행해 인계하면 지급되는 수익 — ArrestJudge가 마커에서 읽어 지급한다")]
     [SerializeField] private int m_intruderReward = 100;
 
-    [Header("임시 거처 (#299)")]
-    [Tooltip("경범죄 판정 후 이 지점으로 걸어가 도착하면 소멸한다. 비우면 판정 즉시 그 자리에서 소멸한다(폴백)")]
-    [SerializeField] private Transform m_holdingPoint;
-
     [Header("잔류 전환")]
     [Tooltip("제압되지 않은 채 이 시간(초)이 지나면 침입을 포기하고 배회 시민으로 잔류한다 — 마커가 남아 언제든 잡으면 경범죄 수익 (#310)")]
     [SerializeField] private float m_maxLifetimeSeconds = 90f;
@@ -83,7 +79,6 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
 
     private NpcController m_intruder;
     private bool m_pendingStart;  // 스폰 다음 프레임에 침입을 시작하기 위한 플래그(초기화 순서 보장)
-    private bool m_despawnQueued; // 판정·홀딩 도착분을 다음 틱에 정리 — 발행 체인 안 즉시 파괴 금지(SpawnedNpcEvent와 동일)
     private bool m_hasStarted;    // 침입을 실제로 시작했는지 — 배회 복귀(이탈) 판정에 쓴다
     private bool m_releaseQueued; // 잔류 전환 확정 — 다음 틱에 이벤트가 손을 뗀다 (상태 전이 체인 안 처리 회피, #310)
     private int m_spawnFrame;
@@ -173,14 +168,11 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (SuddenEventUtil.IsNetworkSessionActive)
             m_intruder.GetComponent<NetworkObject>().Spawn();
 
-        // 해제 착수·완료 통보를 받아 경보/자물쇠 해제를, 상태 전이를 받아 플레이어 개입을,
-        // 임시 거처 도착을 받아 판정 후 정리를 처리한다 (#299)
+        // 해제 착수·완료 통보를 받아 경보/자물쇠 해제를, 상태 전이를 받아 플레이어 개입을 처리한다
         m_intruder.OnIntrudeUnlockStarted += HandleUnlockStarted;
         m_intruder.OnIntrudeFinished += HandleIntrudeFinished;
         m_intruder.OnStateChanged += HandleStateChanged;
-        m_intruder.OnReachedHolding += HandleReachedHolding;
 
-        m_despawnQueued = false;
         m_hasStarted = false;
         m_releaseQueued = false;
         m_spawnFrame = Time.frameCount;
@@ -192,14 +184,6 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     {
         if (m_intruder == null)
             return;
-
-        // 판정·홀딩 도착분을 한 프레임 미뤄 정리한다 — 발행 체인 안에서 즉시 파괴하면 같은 이벤트를
-        // 구독한 다른 수신자가 파괴된 참조를 만진다 (SpawnedNpcEvent의 지연 despawn과 같은 이유)
-        if (m_despawnQueued)
-        {
-            Despawn();
-            return;
-        }
 
         // 스폰 초기화(InitBehavior의 Idle 전환)가 끝난 다음 프레임에 침입을 시작한다 —
         // 같은 프레임에 부르면 뒤이어 실행되는 InitBehavior가 Idle로 덮어쓸 수 있다.
@@ -224,8 +208,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
             m_lifetimeStart = Time.time;
 
         // 잔류 전환 시간이 다하면 침입을 포기하고 배회 시민으로 잔류한다 (SpawnedNpcEvent와 동일 설계).
-        // Holding(판정 후 이송) 중에는 두지 않는다.
-        if (Time.time - m_lifetimeStart > m_maxLifetimeSeconds && m_intruder.CurrentState != NpcState.Holding)
+        if (Time.time - m_lifetimeStart > m_maxLifetimeSeconds)
         {
             Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 침입 포기, 잔류");
             m_intruder.StartFlee(null); // 위협 없는 도주 — 잠깐 흩어졌다가 곧 배회로 가라앉는다
@@ -330,35 +313,15 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         }
     }
 
-    // 검거 판정 수신 — 침입자도 난동꾼과 똑같이 임시 거처로 이송해 도착 시 소멸한다 (#299).
-    // 유치장에 수감하지 않는다: 침입자만 있는 유치장은 소득 없는 탈옥을 또 발동시키고, 방출된
-    // 침입자를 재검거하면 경범죄 수익이 반복 지급된다. 수익은 ArrestJudge가 마커를 읽어 이미 지급했다.
+    // 검거 판정 수신 — 수감(유치장 이송)은 CustodyRouter가 하므로, 이벤트는 추적만 끊는다.
+    // 수익은 ArrestJudge가 이미 지급했다(첫 판정 한정). 뒷정리(라운드 종료)는 Loiterer가 물려받는다.
     private void HandleArrestJudged(ArrestResult result)
     {
         if (m_intruder == null || result.Npc != m_intruder)
             return;
 
-        if (m_holdingPoint != null)
-        {
-            Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 경범죄 판정, 임시 거처로 이송");
-            m_lifetimeStart = Time.time; // 이송에 방치 유예를 새로 준다 (경로 실패 시 즉시 도착 통보가 정리)
-            m_intruder.SendToHolding(m_holdingPoint);
-            return;
-        }
-
-        // 임시 거처 미배선 — 그 자리에서 정리 (다음 틱, 발행 체인 보호)
-        Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 경범죄 판정 완료, 정리 예약");
-        m_despawnQueued = true;
-    }
-
-    // 임시 거처 도착 — 다음 틱에 정리한다 (SpawnedNpcEvent와 동일 패턴). (#299)
-    private void HandleReachedHolding(NpcController npc)
-    {
-        if (npc != m_intruder)
-            return;
-
-        Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 임시 거처 도착, 정리 예약");
-        m_despawnQueued = true;
+        Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 경범죄 판정, 유치장 인계 (이벤트 종료)");
+        ReleaseToCity();
     }
 
     // 수감자를 전원 방출한다 — 자물쇠가 열린 순간 모두 뛰쳐나간다.
@@ -413,12 +376,10 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         m_intruder.OnIntrudeUnlockStarted -= HandleUnlockStarted;
         m_intruder.OnIntrudeFinished -= HandleIntrudeFinished;
         m_intruder.OnStateChanged -= HandleStateChanged;
-        m_intruder.OnReachedHolding -= HandleReachedHolding;
 
         m_intruder = null;
         m_pendingStart = false;
         m_hasStarted = false;
-        m_despawnQueued = false;
         m_releaseQueued = false;
     }
 
@@ -428,7 +389,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     {
         NpcController intruder = m_intruder;
         StopTracking();
-        MisdemeanorLoiterer.Attach(intruder, Judge, m_holdingPoint, DisplayName);
+        MisdemeanorLoiterer.Attach(intruder, DisplayName);
     }
 
     // 침입자를 씬에서 치운다 — 이탈·불발·방치·라운드 종료 등 신병을 넘길 데가 없는 종료 경로.

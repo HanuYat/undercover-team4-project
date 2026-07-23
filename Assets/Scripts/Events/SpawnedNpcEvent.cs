@@ -10,7 +10,8 @@ using Random = UnityEngine.Random;
 /// 둘 다 기존 <see cref="NpcController"/> 로직(Attack/Run 상태의 소란 펄스 #81, 상호작용키 E 제압)을 그대로 재사용한다.
 /// 제압은 종료가 아니라 시작이다 — 스폰 시 <see cref="MisdemeanorOffender"/> 마커를 붙여 두면 일반 용의자와 똑같이
 /// "제압 → 수갑 → E로 연행 → HQ 인계" 흐름을 타고, <see cref="ArrestJudge"/>가 경범죄로 판정하며 수익도 그쪽에서 지급한다.
-/// 이 이벤트는 판정 시점에 자기 NPC를 정리하는 것까지만 맡는다.
+/// 판정된 신병은 CustodyRouter가 유치장으로 이송한다(경범죄 수감 — 2026-07-23 확정) — 이 이벤트는 판정
+/// 시점에 추적을 끊고 뒷정리(라운드 종료)를 <see cref="MisdemeanorLoiterer"/>에 넘기는 것까지만 맡는다.
 /// 스폰·판정은 서버(또는 오프라인)에서만 — 스폰물은 NetworkObject로 복제된다. (#56)
 ///
 /// <b>컴포넌트가 아니라 데이터다</b> — <see cref="SpawnedNpcEventSet"/>의 인스펙터 리스트 항목으로 존재하며,
@@ -45,10 +46,6 @@ public class SpawnedNpcEvent : ISuddenEvent
     [Tooltip("본부 인계 후 경범죄 판정 성공 시 팀 자금에 더해질 수익 — ArrestJudge가 마커에서 읽어 지급한다")]
     [SerializeField] private int m_pettyCrimeReward = 50;
 
-    [Header("임시 거처 (#291)")]
-    [Tooltip("경범죄 판정 후 이 지점으로 걸어가 도착하면 소멸한다. 비우면 기존처럼 그 자리에서 소멸한다(폴백)")]
-    [SerializeField] private Transform m_holdingPoint;
-
     [Header("소란 지속")]
     [Tooltip("제압되지 않은 채 이 시간(초)이 지나면 소란을 멈추고 진정해 배회 시민으로 잔류한다 — 마커가 남아 언제든 잡으면 경범죄 수익 (#310)")]
     [SerializeField] private float m_maxLifetimeSeconds = 60f;
@@ -65,7 +62,6 @@ public class SpawnedNpcEvent : ISuddenEvent
     private bool m_pendingStart;  // 스폰 다음 프레임에 행동을 적용(초기화 순서 보장)하기 위한 플래그
     private bool m_hasStarted;    // 행동을 실제로 시작했는지 — 이탈(배회 복귀) 종료 판정에 쓴다
     private bool m_captured;      // 한 번이라도 제압됐는지 — 제압 로그를 첫 진입에만 남기려고 쓴다
-    private bool m_despawnQueued; // 판정 완료 — 다음 틱에 정리한다 (ServerTick의 지연 이유 참고)
     private bool m_releaseQueued; // 잔류 전환 확정 — 다음 틱에 이벤트가 손을 뗀다 (상태 전이 체인 안 처리 회피, #310)
 
     public string DisplayName => m_displayName;
@@ -131,14 +127,12 @@ public class SpawnedNpcEvent : ISuddenEvent
             m_npc.GetComponent<NetworkObject>().Spawn();
 
         m_npc.OnStateChanged += HandleStateChanged;
-        m_npc.OnReachedHolding += HandleReachedHolding; // 임시 거처·출구 도착 통보 — 두 퇴장 경로가 공유한다 (#310)
         m_threat = player;
         m_startTime = Time.time;
         m_spawnFrame = Time.frameCount;
         m_pendingStart = true;
         m_hasStarted = false;
         m_captured = false;
-        m_despawnQueued = false;
         m_releaseQueued = false;
     }
 
@@ -146,16 +140,6 @@ public class SpawnedNpcEvent : ISuddenEvent
     {
         if (m_npc == null)
             return;
-
-        // 판정 완료분을 한 프레임 미뤄 정리한다 — ArrestJudge는 OnArrestJudged를 발행한 "직후" 연행을 해제하는데,
-        // 이벤트 안에서 곧바로 despawn하면 네트워크 세션에서는 NetworkObject가 즉시 파괴돼 뒤이은
-        // PlayerEscorter.Release()가 파괴된 참조에 걸려 조기 return한다. 그러면 연행 동기화 플래그가 켜진 채 남아
-        // 그 플레이어는 영영 연행 중이 된다. (오프라인은 Destroy가 프레임 끝에 반영돼 드러나지 않는다)
-        if (m_despawnQueued)
-        {
-            Despawn();
-            return;
-        }
 
         // 스폰 초기화(InitBehavior의 Idle 전환)가 끝난 다음 프레임에 행동을 적용한다 —
         // 같은 프레임에 부르면 뒤이어 실행되는 InitBehavior가 Idle로 덮어쓸 수 있다.
@@ -167,7 +151,7 @@ public class SpawnedNpcEvent : ISuddenEvent
         }
 
         // 잔류 전환 확정분을 상태 전이 체인 밖(다음 틱)에서 처리한다 — OnStateChanged 안에서 곧바로
-        // 상태를 갈아타면 전이 통지가 중첩된다 (m_despawnQueued를 지연시키는 것과 같은 이유). (#310)
+        // 상태를 갈아타면 전이 통지가 중첩된다. (#310)
         if (m_releaseQueued)
         {
             ReleaseToCity();
@@ -180,8 +164,8 @@ public class SpawnedNpcEvent : ISuddenEvent
 
         // 소란 지속 시간이 다하면 진정하고 배회 시민으로 잔류한다 — 저항형(Resist)은 스스로 멈추지 않으므로
         // 이 타이머가 소란의 끝이다. 제압 시점에 타이머를 새로 돌리므로 "제압해 놓고 안 데려간" 경우도
-        // 같은 유예 뒤 (수갑이 풀려 배회 복귀 →) 잔류로 넘어간다. Holding(판정 후 이송) 중에는 두지 않는다.
-        if (Time.time - m_startTime > m_maxLifetimeSeconds && m_npc.CurrentState != NpcState.Holding)
+        // 같은 유예 뒤 (수갑이 풀려 배회 복귀 →) 잔류로 넘어간다.
+        if (Time.time - m_startTime > m_maxLifetimeSeconds)
         {
             Debug.Log($"[돌발이벤트] {m_displayName} — 소란 지속 시간 종료, 진정");
             m_npc.StartFlee(null); // 위협 없는 도주 — 잠깐 흩어졌다가 곧 배회(Idle)로 가라앉는다
@@ -215,7 +199,7 @@ public class SpawnedNpcEvent : ISuddenEvent
     // 상태 전이 수신 — 제압(Captured)은 연행 대기, 행동 시작 뒤 배회 복귀(Idle/Walk)는 이탈로 종료 처리
     private void HandleStateChanged(NpcState state)
     {
-        if (m_npc == null || m_despawnQueued)
+        if (m_npc == null)
             return;
 
         if (state == NpcState.Captured)
@@ -240,34 +224,15 @@ public class SpawnedNpcEvent : ISuddenEvent
         }
     }
 
-    // 검거 판정 수신 — 내가 스폰한 NPC가 판정됐으면 임시 거처로 이송한다(도착 시 정리). 수익은 ArrestJudge가 이미 지급.
+    // 검거 판정 수신 — 수감(유치장 이송)은 CustodyRouter가 하므로, 이벤트는 추적만 끊는다.
+    // 수익은 ArrestJudge가 이미 지급했다(첫 판정 한정). 뒷정리(라운드 종료)는 Loiterer가 물려받는다.
     private void HandleArrestJudged(ArrestResult result)
     {
         if (m_npc == null || result.Npc != m_npc)
             return;
 
-        // 임시 거처가 배선돼 있으면 그쪽으로 걸어가 도착 시 정리한다 — 눈앞에서 사라지지 않게 (#291)
-        if (m_holdingPoint != null)
-        {
-            Debug.Log($"[돌발이벤트] {m_displayName} — 경범죄 판정, 임시 거처로 이송");
-            m_startTime = Time.time; // 이송에 방치 타이머 예산을 새로 준다
-            m_npc.SendToHolding(m_holdingPoint);
-            return;
-        }
-
-        // 임시 거처 미배선 — 기존처럼 그 자리에서 정리 예약 (폴백)
-        Debug.Log($"[돌발이벤트] {m_displayName} — 경범죄 판정 완료, 정리 예약");
-        m_despawnQueued = true;
-    }
-
-    // 임시 거처 도착 — 다음 ServerTick에 정리한다(파괴-중-틱 회피, 기존 지연 despawn 경로 재사용). (#291)
-    private void HandleReachedHolding(NpcController npc)
-    {
-        if (m_npc == null || npc != m_npc)
-            return;
-
-        Debug.Log($"[돌발이벤트] {m_displayName} — 임시 거처 도착, 정리 예약");
-        m_despawnQueued = true;
+        Debug.Log($"[돌발이벤트] {m_displayName} — 경범죄 판정, 유치장 인계 (이벤트 종료)");
+        ReleaseToCity();
     }
 
     // 이벤트가 손을 떼고 NPC를 도심에 남긴다 — 뒷일(인계 판정·라운드 종료 정리)은 MisdemeanorLoiterer가
@@ -277,16 +242,14 @@ public class SpawnedNpcEvent : ISuddenEvent
         NpcController npc = m_npc;
 
         npc.OnStateChanged -= HandleStateChanged;
-        npc.OnReachedHolding -= HandleReachedHolding;
         m_npc = null;
         m_threat = null;
         m_pendingStart = false;
         m_hasStarted = false;
         m_captured = false;
-        m_despawnQueued = false;
         m_releaseQueued = false;
 
-        MisdemeanorLoiterer.Attach(npc, m_arrestJudge, m_holdingPoint, m_displayName);
+        MisdemeanorLoiterer.Attach(npc, m_displayName);
     }
 
     // 스폰한 NPC를 정리한다 — 구독 해제 후 Despawn/Destroy하고 참조·플래그를 비운다.
@@ -296,7 +259,6 @@ public class SpawnedNpcEvent : ISuddenEvent
             return;
 
         m_npc.OnStateChanged -= HandleStateChanged;
-        m_npc.OnReachedHolding -= HandleReachedHolding;
 
         // 연행 중인 채로 정리되면(라운드 종료 등) 연행 참조가 파괴된 NPC를 가리킨 채 남아 그 플레이어가
         // 영영 연행 중이 된다 — 파괴 전에 놓게 한다. 판정 경로에서는 ArrestJudge가 이미 놓았으므로 null이다.
@@ -311,7 +273,6 @@ public class SpawnedNpcEvent : ISuddenEvent
         m_pendingStart = false;
         m_hasStarted = false;
         m_captured = false;
-        m_despawnQueued = false;
         m_releaseQueued = false;
     }
 }
