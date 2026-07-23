@@ -22,6 +22,7 @@ GameObject:
   - component: {fileID: 4422740345284790104}
   - component: {fileID: 5951565256141623223}
   - component: {fileID: 7883451613544855259}
+  - component: {fileID: 2671233897693649276}
   m_Layer: 7
   m_Name: NPC_Citizen
   m_TagString: Untagged
@@ -330,6 +331,21 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_modelRoot: {fileID: 3683407917210904916}
   m_catalog: {fileID: 11400000, guid: 6b0ad8e93c79903439c11556cdc30e5b, type: 2}
+--- !u!114 &2671233897693649276
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ae2a3750259948d4e8df83ef9747d7c6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcDespawnVfx
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_vfxPrefab: {fileID: 206728948442734668, guid: 9e767c3e60a2d0b4a8e5a01d3f1019e1, type: 3}
+  m_heightOffset: 1
 --- !u!1001 &2229125471116794606
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -17,6 +17,7 @@ GameObject:
   - component: {fileID: 4422740345284790104}
   - component: {fileID: 2937104856208815511}
   - component: {fileID: 1866420322299295921}
+  - component: {fileID: 6408231463455718527}
   m_Layer: 7
   m_Name: NPC_Thug
   m_TagString: Untagged
@@ -244,8 +245,22 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ThugAnimationDriver
   m_moveSpeedThreshold: 0.3
   m_runReferenceSpeed: 4.5
-  m_swingAnimSeconds: 0.9
   m_animator: {fileID: 0}
+--- !u!114 &6408231463455718527
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ae2a3750259948d4e8df83ef9747d7c6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcDespawnVfx
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_vfxPrefab: {fileID: 206728948442734668, guid: 9e767c3e60a2d0b4a8e5a01d3f1019e1, type: 3}
+  m_heightOffset: 1
 --- !u!1001 &3679051956096844986
 PrefabInstance:
   m_ObjectHideFlags: 0
