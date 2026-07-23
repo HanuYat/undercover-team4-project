@@ -98,9 +98,9 @@ public class NpcAnimationDriver : MonoBehaviour
     [SerializeField] private float m_unlockBeginSeconds = 0.63f;
 
     [Header("제압 전환 (#332)")]
-    [Tooltip("저항형 제압 시 그로기(헤롱) 모션을 유지하는 시간(초) — 이후 고개 숙인 대기 자세로 가라앉는다. 클립(Stun01)은 루프라 원하는 만큼")]
-    [SerializeField] private float m_subdueGroggySeconds = 1.5f;
-    [Tooltip("도주형 제압 시 구르기 모션을 유지하는 시간(초) — 클립(Roll01) 길이 1.3초에 맞춘 값")]
+    [Tooltip("제압 시 그로기(헤롱) 모션을 유지하는 시간(초) — 이후 고개 숙인 대기 자세로 가라앉는다. 클립(Stun01) 한 사이클이 2.67초라 그 배수로 둬야 이음새에서 끊긴다(중간에 자르면 모션이 뚝 끊겨 보임)")]
+    [SerializeField] private float m_subdueGroggySeconds = 2.7f;
+    [Tooltip("도주형 제압 시 구르기 모션을 유지하는 시간(초) — 클립(Roll01) 길이 1.3초에 맞춘 값. 이후 그로기를 한 번 거쳐 가라앉는다")]
     [SerializeField] private float m_subdueRollSeconds = 1.3f;
 
     [SerializeField] private Animator m_animator;
@@ -120,6 +120,8 @@ public class NpcAnimationDriver : MonoBehaviour
     private float m_swingUntil;
     // 제압 전환(그로기/구르기) 모션을 유지할 종료 시각. 0 이하면 전환 중 아님 — 끝나면 Captured 대기 자세로 (#332)
     private float m_subdueUntil;
+    // 구르기가 끝나면 곧바로 대기 자세가 아니라 짧은 그로기를 한 번 더 거친다 — 그 예약 플래그 (#332)
+    private bool m_subdueRollThenGroggy;
     // 일어나는 모션 재생 중인가 (#269). 스윙과 달리 시간으로 끊지 않는다 — 클립이 1회 재생이라
     // 마지막 프레임(선 자세)에서 멈추고, 곧 도착하는 Idle 전이가 배회 모션으로 이어받는다.
     // 시간으로 끊으면 그 사이 한 프레임 동안 누운 자세(base)가 스쳐 지나가 툭 끊겨 보인다.
@@ -249,6 +251,16 @@ public class NpcAnimationDriver : MonoBehaviour
         // 그 전에 다른 상태로 바뀌었으면 HandleStateChanged가 이미 타이머를 지우고 새 모션을 적용했다.
         if (m_subdueUntil > 0f && Time.time >= m_subdueUntil)
         {
+            // 구르기 직후는 대기 자세로 직행하지 않는다 — 역동적으로 굴러 일어난 몸이 곧바로 얌전해지는
+            // 낙차가 어색해서(팀 피드백), 짧은 그로기를 한 번 거쳐 가라앉는다.
+            if (m_subdueRollThenGroggy)
+            {
+                m_subdueRollThenGroggy = false;
+                m_animator.SetInteger(s_stateHash, k_subdueGroggyAnimState);
+                m_subdueUntil = Time.time + m_subdueGroggySeconds;
+                return;
+            }
+
             m_subdueUntil = 0f;
             m_animator.SetInteger(s_stateHash, AnimatorBaseState(m_baseState));
         }
@@ -412,6 +424,7 @@ public class NpcAnimationDriver : MonoBehaviour
             case NpcState.Run:
                 m_animator.SetInteger(s_stateHash, k_subdueRollAnimState);
                 m_subdueUntil = Time.time + m_subdueRollSeconds;
+                m_subdueRollThenGroggy = true; // 굴러 일어난 뒤 짧은 그로기를 거쳐 가라앉는다
                 return true;
 
             default:
@@ -429,6 +442,7 @@ public class NpcAnimationDriver : MonoBehaviour
         m_baseState = state;
         m_swingUntil = 0f;
         m_subdueUntil = 0f; // 전환 중 다른 상태로 바뀌면(재연행 등) 전환도 끝난다
+        m_subdueRollThenGroggy = false;
         m_standingUp = false; // 상태가 바뀌면 일어나기도 끝난다 — 새 base 모션이 즉시 적용된다
 
         // 앵그리 마크(#280) — 페널티 상태(수용~호송) 동안 머리 위에 표시한다. 이 이벤트는 동기화를 거쳐
