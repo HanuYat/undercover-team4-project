@@ -13,19 +13,32 @@ public class SessionObjectSpawner : MonoBehaviour
     [SerializeField] private NetworkObject[] m_persistentPrefabs;
 
     private NetworkManager m_nm;
-    private bool m_spawned; // 이 인스턴스가 이미 스폰했는지 — 중복 스폰 가드
+    private bool m_spawned; // 이번 세션에서 이미 스폰했는지 — 세션 내 중복 스폰 가드 (서버 정지 시 리셋)
 
     private void Start()
     {
         m_nm = NetworkManager.Singleton;
         if (m_nm != null)
+        {
             m_nm.OnServerStarted += HandleServerStarted;
+            m_nm.OnServerStopped += HandleServerStopped;
+        }
     }
 
     private void OnDestroy()
     {
         if (m_nm != null)
+        {
             m_nm.OnServerStarted -= HandleServerStarted;
+            m_nm.OnServerStopped -= HandleServerStopped;
+        }
+    }
+
+    // 이 spawner는 AppBootstrap(DontDestroyOnLoad)에 붙어 세션을 넘어 살아남는다. 그래서 m_spawned를
+    // 세션 종료 시 리셋하지 않으면 두 번째 세션의 OnServerStarted가 가드에 막혀 상주 오브젝트를 못 만든다.
+    private void HandleServerStopped(bool _)
+    {
+        m_spawned = false;
     }
 
     private void HandleServerStarted()
