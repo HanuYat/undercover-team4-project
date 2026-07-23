@@ -17,6 +17,9 @@ public class PlayerEscorter : NetworkBehaviour
     [Tooltip("체포 채널링 시간(초)")]
     [SerializeField] private float m_channelSeconds = 3f;
 
+    [Tooltip("도주 NPC 근접 제압(E 홀드) 채널링 시간(초) — 딸깍 한 번이 아니라 붙어서 홀드를 유지해야 잡힌다 (#332)")]
+    [SerializeField] private float m_subdueChannelSeconds = 3f;
+
     [Header("밧줄 끌기 (#269)")]
     [Tooltip("밧줄 길이(m) — 이 거리를 넘어야 NPC가 끌려온다. 안쪽이면 밧줄이 늘어져 당기지 않는다")]
     [SerializeField] private float m_ropeLength = 1.6f;
@@ -136,6 +139,10 @@ public class PlayerEscorter : NetworkBehaviour
     // 서버 채널링 생명주기(CTS 소유·재진입 가드)는 ServerChannel에 위임 (#109)
     private readonly ServerChannel m_channel = new();
 
+    // 지금 도는 채널링이 '도주 제압 홀드'인지 — E 뗌 취소가 수갑 채널링(좌클릭 홀드)을 오발로 끊지 않게
+    // 종류를 구분한다. 서버(또는 오프라인)에서만 유효. (#332)
+    private bool m_subdueChanneling;
+
     // ---- 오너 클라 진입점 (아이템/상호작용이 호출) ----
 
     /// <summary>체포 시도 — 오너가 호출. 서버/오프라인은 즉시 실행, 원격 클라는 서버로 요청을 넘긴다.</summary>
@@ -193,14 +200,22 @@ public class PlayerEscorter : NetworkBehaviour
         ReleaseRpc();
     }
 
-    /// <summary>도주 NPC 근접 제압 — 오너가 호출.</summary>
+    /// <summary>도주 NPC 근접 제압 홀드 시작 — 오너가 호출(E 누름). 3초 홀드를 채워야 잡힌다. (#332)</summary>
     public void RequestSubdueCapture(NpcController target)
     {
         if (target == null) return;
-        if (!IsSpawned || IsServer) { ServerSubdueCapture(target); return; } // 서버/오프라인 즉시 실행
+        if (!IsSpawned || IsServer) { ServerBeginSubdue(target); return; } // 서버/오프라인 즉시 실행
         if (!IsOwner) return;
         if (!IsTargetNetworkReady(target)) return;
         SubdueCaptureRpc(new NetworkObjectReference(target.NetworkObject));
+    }
+
+    /// <summary>도주 제압 홀드 취소 — 오너가 호출(E 뗌). 수갑 채널링은 건드리지 않는다(서버가 종류로 가드). (#332)</summary>
+    public void RequestCancelSubdue()
+    {
+        if (!IsSpawned) { ServerCancelSubdue(); return; }
+        if (!IsOwner) return;
+        CancelSubdueRpc();
     }
 
     /// <summary>체포되어 멈춘 NPC 재연행 — 오너가 호출(E, NpcSubdueInteractable). (#91)</summary>
@@ -253,6 +268,9 @@ public class PlayerEscorter : NetworkBehaviour
     private void CancelCaptureRpc() => ServerCancelCapture();
 
     [Rpc(SendTo.Server)]
+    private void CancelSubdueRpc() => ServerCancelSubdue();
+
+    [Rpc(SendTo.Server)]
     private void ReleaseRpc() => Release();
 
     [Rpc(SendTo.Server)]
@@ -271,7 +289,7 @@ public class PlayerEscorter : NetworkBehaviour
         if (targetRef.TryGet(out NetworkObject targetObj) &&
             targetObj.TryGetComponent(out NpcController target))
         {
-            ServerSubdueCapture(target);
+            ServerBeginSubdue(target);
         }
     }
 
@@ -372,13 +390,68 @@ public class PlayerEscorter : NetworkBehaviour
 
     private void ServerCancelCapture() => m_channel.Cancel();
 
-    /// <summary>도주 NPC 근접 제압 — 서버 실행. 도주 중일 때만 그 자리에서 체포.</summary>
-    private void ServerSubdueCapture(NpcController target)
+    /// <summary>
+    /// 도주 NPC 근접 제압 홀드 진입 — 검증 후 채널링 시작. 서버(또는 오프라인) 실행. (#332)
+    /// 딸깍 한 번에 잡히던 것을 저항형 연타 제압과 균형을 맞춰 홀드로 바꿨다 — 붙어서
+    /// m_subdueChannelSeconds를 채워야 하고, 뗌·사거리 이탈·대상 상태 변화면 무산된다.
+    /// </summary>
+    private void ServerBeginSubdue(NpcController target)
     {
+        if (m_channel.IsActive)
+            return; // 체포/해제/제압 채널링 중복 방지 (한 채널 공유)
+        if (IsBusy)
+            return; // 연행/끌기 중엔 제압 불가
         if (!HasHandcuffs)
             return; // 수갑 없으면 도주 제압(=체포)도 불가 (#229)
-        if (target.CurrentState == NpcState.Run)
+        if (target.CurrentState != NpcState.Run)
+            return; // 도주 중일 때만 — 저항은 타격 연타, 배회는 수갑 채널링이 정식 경로
+        if (!IsInRange(target))
+            return; // 사거리 밖이면 시작조차 안 함
+
+        ServerSubdueChannelAsync(target).Forget();
+    }
+
+    private async UniTaskVoid ServerSubdueChannelAsync(NpcController target)
+    {
+        m_subdueChanneling = true;
+        NotifyOwner($"제압 홀드 시작: {target.name} ({m_subdueChannelSeconds}초)");
+        NotifyChannelGaugeStart(m_subdueChannelSeconds);
+
+        // 도주 대상은 계속 달아나는 중 — 사거리 유지가 곧 추격이고, 뿌리치거나(상태 변화) 놓치면 무산된다
+        ServerChannel.Result result;
+        try
+        {
+            result = await m_channel.RunAsync(
+                m_subdueChannelSeconds,
+                () => target != null && target.CurrentState == NpcState.Run && IsInRange(target));
+        }
+        finally
+        {
+            m_subdueChanneling = false;
+            NotifyChannelGaugeEnd(); // 어떤 경로로 끝나도 게이지 숨김 보장 (#184)
+        }
+
+        switch (result)
+        {
+            case ServerChannel.Result.OutOfRange:
+                NotifyOwner($"제압 실패 — 대상을 놓침: {(target != null ? target.name : "?")}");
+                return;
+
+            case ServerChannel.Result.Canceled:
+                NotifyOwner("제압 취소됨 (홀드 뗌)");
+                return;
+        }
+
+        // 홀드 완주 — 아직 도주 중이면 그 자리에서 체포
+        if (target != null && target.CurrentState == NpcState.Run)
             target.CaptureBySubdue();
+    }
+
+    // E 뗌 취소 — 도주 제압 홀드만 끊는다. 수갑 체포/해제 채널링(좌클릭 홀드)은 종류가 달라 건드리지 않는다 (#332)
+    private void ServerCancelSubdue()
+    {
+        if (m_subdueChanneling)
+            m_channel.Cancel();
     }
 
     /// <summary>재연행 — 서버 실행. 체포되어 멈춘 대상만 연행 시작(동시 1명 가드는 StartEscort). (#91)</summary>
