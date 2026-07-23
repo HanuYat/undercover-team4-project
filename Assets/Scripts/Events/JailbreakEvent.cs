@@ -220,7 +220,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
             m_exitQueued = false;
             m_exiting = true;
             m_lifetimeStart = Time.time; // 출구까지 걸어갈 유예를 새로 준다
-            m_intruder.SendToHolding(SuddenEventUtil.FindNearestExitPoint(m_intruder.transform.position));
+            m_intruder.SendToHolding(SuddenEventUtil.FindExitPoint(m_intruder.transform.position));
             return;
         }
 
@@ -336,7 +336,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         }
 
         // 침입을 시작한 뒤 배회로 돌아왔다 = 뿌리치고 달아나 진정했거나(저지 실패) 도주가 끝났다.
-        // 눈앞에서 증발하는 대신 가장 가까운 출구(스폰 포인트)로 걸어 나가 소멸한다 (#310) —
+        // 눈앞에서 증발하는 대신 플레이어들에게서 떨어진 출구(스폰 포인트)로 걸어 나가 소멸한다 (#310) —
         // 걸어가는 동안은 Holding 상태라 이 분기에 다시 들어오지 않고, 따라가 잡으면 도로 Captured가 된다.
         if (m_hasStarted && !m_exiting && (state == NpcState.Idle || state == NpcState.Walk))
         {
