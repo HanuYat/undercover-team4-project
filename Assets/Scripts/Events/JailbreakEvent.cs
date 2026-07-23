@@ -85,6 +85,8 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     private bool m_pendingStart;  // 스폰 다음 프레임에 침입을 시작하기 위한 플래그(초기화 순서 보장)
     private bool m_despawnQueued; // 판정·홀딩 도착분을 다음 틱에 정리 — 발행 체인 안 즉시 파괴 금지(SpawnedNpcEvent와 동일)
     private bool m_hasStarted;    // 침입을 실제로 시작했는지 — 배회 복귀(이탈) 판정에 쓴다
+    private bool m_exitQueued;    // 이탈 확정 — 다음 틱에 출구로 걸어 나가게 한다 (상태 전이 체인 안 전이 회피, #310)
+    private bool m_exiting;       // 출구로 퇴장 이동 중인지 — 재제압 시 취소·도착 로그 분기에 쓴다 (#310)
     private int m_spawnFrame;
     private float m_lifetimeStart; // 방치 타이머 기준 시각 — 국면이 바뀔 때마다 갱신한다
 
@@ -181,6 +183,8 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
 
         m_despawnQueued = false;
         m_hasStarted = false;
+        m_exitQueued = false;
+        m_exiting = false;
         m_spawnFrame = Time.frameCount;
         m_pendingStart = true;
         m_lifetimeStart = Time.time;
@@ -208,14 +212,35 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
             m_hasStarted = true;
         }
 
+        // 이탈 확정분을 상태 전이 체인 밖(다음 틱)에서 처리한다 — OnStateChanged 안에서 곧바로 상태를
+        // 갈아타면 전이 통지가 중첩된다 (SpawnedNpcEvent의 지연 이탈과 같은 이유). (#310)
+        // 출구가 없으면(스폰 포인트 미배선) SendToHolding(null)이 그 자리 도착 통보를 내 기존처럼 즉시 정리된다.
+        if (m_exitQueued)
+        {
+            m_exitQueued = false;
+            m_exiting = true;
+            m_lifetimeStart = Time.time; // 출구까지 걸어갈 유예를 새로 준다
+            m_intruder.SendToHolding(SuddenEventUtil.FindNearestExitPoint(m_intruder.transform.position));
+            return;
+        }
+
         // 연행 중에는 방치 타이머를 멈춘다 — 본부까지 데려가는 데 얼마가 걸리든 플레이어 손에서 사라지면 안 된다.
         // (이 리셋이 없으면 제압한 침입자가 연행 도중 강제 정리로 증발한다 — #261에서 고친 버그)
         if (m_intruder.CurrentState == NpcState.Escorted)
             m_lifetimeStart = Time.time;
 
-        // 아무도 데려가지 않은 채 방치되면 강제 정리 (스폰물 누수 방지)
+        // 아무도 데려가지 않은 채 방치되면 정리 수순 (스폰물 누수 방지)
         if (Time.time - m_lifetimeStart > m_maxLifetimeSeconds)
         {
+            // 아직 걸어 나가는 중이 아니면 즉시 증발 대신 출구 퇴장으로 전환한다 (SpawnedNpcEvent와 동일).
+            // 퇴장·이송(Holding)까지 막힌 채 또 초과하면 그때 강제 정리.
+            if (!m_exiting && m_intruder.CurrentState != NpcState.Holding)
+            {
+                Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 방치 시간 초과, 출구로 퇴장");
+                m_exitQueued = true;
+                return;
+            }
+
             Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 방치 시간 초과로 정리");
             Despawn();
         }
@@ -225,8 +250,8 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     {
         // 라운드 종료 등으로 즉시 끝난다 — 침입자만 정리한다.
         // 이미 열린 자물쇠·방출된 수감자는 되돌리지 않는다: 라운드가 끝났으므로 의미가 없고,
-        // 새 라운드 준비 시 유치장/자물쇠가 스스로 초기화된다.
-        Despawn();
+        // 새 라운드 준비 시 유치장/자물쇠가 스스로 초기화된다. 일괄 정리라 소멸 연출은 끈다.
+        Despawn(playVfx: false);
     }
 
     // 일반 NPC와 같은 스폰 포인트를 무작위로 골라 그 주변 NavMesh 위 지점을 찾는다 (#261).
@@ -306,14 +331,17 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (state == NpcState.Captured || state == NpcState.Escorted)
         {
             m_lifetimeStart = Time.time;
+            m_exiting = false; // 출구로 걸어 나가던 중이라도 다시 붙잡히면 퇴장은 취소된다 (#310)
             return;
         }
 
-        // 침입을 시작한 뒤 배회로 돌아왔다 = 뿌리치고 달아나 진정했거나(저지 실패) 도주가 끝났다 — 이탈 종료
-        if (m_hasStarted && (state == NpcState.Idle || state == NpcState.Walk))
+        // 침입을 시작한 뒤 배회로 돌아왔다 = 뿌리치고 달아나 진정했거나(저지 실패) 도주가 끝났다.
+        // 눈앞에서 증발하는 대신 가장 가까운 출구(스폰 포인트)로 걸어 나가 소멸한다 (#310) —
+        // 걸어가는 동안은 Holding 상태라 이 분기에 다시 들어오지 않고, 따라가 잡으면 도로 Captured가 된다.
+        if (m_hasStarted && !m_exiting && (state == NpcState.Idle || state == NpcState.Walk))
         {
-            Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 이탈");
-            Despawn();
+            Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 출구로 이탈");
+            m_exitQueued = true;
         }
     }
 
@@ -344,7 +372,9 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (npc != m_intruder)
             return;
 
-        Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 임시 거처 도착, 정리 예약");
+        Debug.Log(m_exiting
+            ? "[돌발이벤트] 범인 탈출 — 침입자 출구 도착, 퇴장"
+            : "[돌발이벤트] 범인 탈출 — 침입자 임시 거처 도착, 정리 예약");
         m_despawnQueued = true;
     }
 
@@ -406,10 +436,12 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         m_pendingStart = false;
         m_hasStarted = false;
         m_despawnQueued = false;
+        m_exitQueued = false;
+        m_exiting = false;
     }
 
     // 침입자를 씬에서 치운다 — 이탈·불발·방치·라운드 종료 등 신병을 넘길 데가 없는 종료 경로.
-    private void Despawn()
+    private void Despawn(bool playVfx = true)
     {
         if (m_intruder == null)
             return;
@@ -423,6 +455,6 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (escorter != null)
             escorter.Release();
 
-        SuddenEventUtil.DespawnOrDestroy(intruder.gameObject);
+        SuddenEventUtil.DespawnOrDestroy(intruder.gameObject, playVfx);
     }
 }

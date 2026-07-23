@@ -133,11 +133,51 @@ public static class SuddenEventUtil
         return false;
     }
 
-    /// <summary>스폰물을 정리한다 — 네트워크 세션이면 Despawn, 아니면 Destroy. null·미스폰 상황을 안전하게 처리한다.</summary>
-    public static void DespawnOrDestroy(GameObject target)
+    /// <summary>
+    /// 현재 위치에서 가장 가까운 일반 NPC 스폰 포인트 — 이탈하는 이벤트 NPC가 걸어 나갈 '출구'로 쓴다. 없으면 null. (#310)
+    /// 스폰 포인트는 시민이 드나드는 맵 출입구이므로, 별도 배선 없이 "온 곳으로 되돌아 나가는" 퇴장 동선이 된다.
+    /// </summary>
+    public static Transform FindNearestExitPoint(Vector3 from)
+    {
+        NpcSpawner spawner = App.Game.NpcSpawner;
+        IReadOnlyList<Transform> points = spawner != null ? spawner.SpawnPoints : null;
+        if (points == null)
+            return null;
+
+        Transform nearest = null;
+        float nearestSqr = float.MaxValue;
+        for (int i = 0; i < points.Count; i++)
+        {
+            Transform point = points[i];
+            if (point == null)
+                continue;
+
+            float sqr = (point.position - from).sqrMagnitude;
+            if (sqr < nearestSqr)
+            {
+                nearestSqr = sqr;
+                nearest = point;
+            }
+        }
+        return nearest;
+    }
+
+    /// <summary>
+    /// 스폰물을 정리한다 — 네트워크 세션이면 Despawn, 아니면 Destroy. null·미스폰 상황을 안전하게 처리한다.
+    /// 대상 프리팹에 <see cref="NpcDespawnVfx"/>가 배선돼 있으면 사라지는 자리에 소멸 연출을 남긴다 —
+    /// 라운드 종료 일괄 정리처럼 연출이 필요 없는 경로만 playVfx=false로 끈다. (#310)
+    /// </summary>
+    public static void DespawnOrDestroy(GameObject target, bool playVfx = true)
     {
         if (target == null)
             return;
+
+        if (playVfx)
+        {
+            NpcDespawnVfx vfx = target.GetComponent<NpcDespawnVfx>();
+            if (vfx != null)
+                vfx.ServerPlay();
+        }
 
         if (IsNetworkSessionActive)
         {
