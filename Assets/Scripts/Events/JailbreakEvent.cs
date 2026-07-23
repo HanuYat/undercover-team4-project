@@ -21,7 +21,7 @@ using UnityEngine;
 /// 또 발동하고, 방출된 침입자를 재검거하면 마커가 남아 경범죄 수익이 반복 지급되기 때문이다.
 ///
 /// 흐름(전부 서버 권위 · #56):
-///  1. <see cref="CanTrigger"/> — 본부 무인 + 무인 지속 시간 충족 + 자물쇠 잠김 + 수감자 존재일 때만 성립.
+///  1. <see cref="CanTrigger"/> — 자물쇠 잠김 + 수감자 존재일 때 성립 (본부 무인 조건은 #311에서 제거).
 ///  2. <see cref="ServerBegin"/> — 침입자 NPC를 도시 스폰 포인트에 스폰(다음 프레임에 StartIntrude).
 ///  3. 해제 착수(OnIntrudeUnlockStarted) — 본부 경보를 울린다.
 ///  4. 해제 완료(OnIntrudeFinished reached=true) — 자물쇠를 열고 수감자를 전원 방출한다.

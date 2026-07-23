@@ -66,7 +66,7 @@ public class JailLock : NetworkBehaviour
             AnnounceUnlockAttemptClientRpc();
     }
 
-    [Unity.Netcode.ClientRpc]
+    [ClientRpc]
     private void AnnounceUnlockAttemptClientRpc()
     {
         // 호스트는 위에서 이미 띄웠다 — 원격 클라에서만 중계 (SuddenEventManager.AnnounceEventClientRpc와 동일)
