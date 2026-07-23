@@ -60,6 +60,9 @@ public class SettlementPanel : PanelBase
     // 열기 직전의 커서 잠금 상태 — 닫을 때 이 상태로 되돌린다.
     private bool m_cursorUnlockedBeforeOpen;
 
+    // 로컬 플레이어 입력을 정지 중인지 — 자동복귀(OnDestroy) 시 대칭 복구 판단용.
+    private bool m_playerBlocked;
+
     // 텍스트 지연 등장 + 카운트다운 시퀀스 취소용 — 닫히거나 파괴되면 중단한다.
     private CancellationTokenSource m_revealCts;
 
@@ -78,6 +81,9 @@ public class SettlementPanel : PanelBase
     protected override void OnDestroy()
     {
         CancelReveal();
+
+        if (m_playerBlocked)
+            SetLocalPlayerBlocked(false);
         if (m_confirmButton != null)
             m_confirmButton.onClick.RemoveListener(ClosePanel);
         base.OnDestroy();
@@ -205,6 +211,7 @@ public class SettlementPanel : PanelBase
     //           붙으면 자연히 일관돼진다 — 그 전까진 호스트 한정 잔상으로 둔다.
     private void SetLocalPlayerBlocked(bool blocked)
     {
+        m_playerBlocked = blocked;
         NetworkManager nm = NetworkManager.Singleton;
         if (nm == null || nm.LocalClient == null || nm.LocalClient.PlayerObject == null)
             return;
