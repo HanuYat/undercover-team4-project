@@ -41,6 +41,42 @@ public class JailLock : NetworkBehaviour
         OnLockChanged?.Invoke(current);
     }
 
+    /// <summary>
+    /// 해제 '시도' 전파 (#311) — 침입자가 자물쇠 앞에서 해제 채널링을 시작했을 때 탈출 이벤트가 호출한다.
+    /// 모든 피어 화면에 전역 팝업과 침입자 머리 위 진행 게이지를 띄운다 — 잠금 상태와 마찬가지로
+    /// "자물쇠에서 벌어지는 일은 자물쇠가 전파한다". 서버(또는 오프라인) 전용.
+    /// </summary>
+    public void ServerAnnounceUnlockAttempt(NpcController intruder, float seconds)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        ShowUnlockAttemptLocal(intruder, seconds); // 서버(호스트)·오프라인 자기 화면
+        // 침입자가 네트워크에 실려 있을 때만 원격 전파 — 미스폰 오브젝트로 NetworkObjectReference를
+        // 만들면 예외가 난다 (정상 경로에선 항상 스폰돼 있지만, 방어적으로 가드)
+        if (IsSpawned && IsServer && intruder != null && intruder.IsSpawned)
+            AnnounceUnlockAttemptClientRpc(intruder.GetComponent<Unity.Netcode.NetworkObject>(), seconds);
+    }
+
+    [Unity.Netcode.ClientRpc]
+    private void AnnounceUnlockAttemptClientRpc(Unity.Netcode.NetworkObjectReference intruderRef, float seconds)
+    {
+        // 호스트는 위에서 이미 띄웠다 — 원격 클라에서만 중계 (SuddenEventManager.AnnounceEventClientRpc와 동일)
+        if (IsServer)
+            return;
+
+        intruderRef.TryGet(out Unity.Netcode.NetworkObject intruderObject);
+        ShowUnlockAttemptLocal(
+            intruderObject != null ? intruderObject.GetComponent<NpcController>() : null, seconds);
+    }
+
+    // 내 화면에 표시 — 팝업은 침입자 참조가 풀려도(despawn 경합) 띄운다: 경고 자체는 유효하다
+    private static void ShowUnlockAttemptLocal(NpcController intruder, float seconds)
+    {
+        SuddenEventToastHud.Show("⚠ 침입자가 범죄자 해방을 시도하고 있습니다!");
+        IntruderUnlockHud.Begin(intruder, seconds);
+    }
+
     /// <summary>자물쇠 해제 — 침입자가 자물쇠에 도달했을 때 탈출 이벤트가 호출한다. 서버(또는 오프라인) 전용.</summary>
     public void ServerUnlock()
     {

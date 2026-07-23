@@ -268,6 +268,9 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         Debug.Log($"[돌발이벤트] 범인 탈출 — 자물쇠 해제 시작, {m_unlockSeconds}초 후 개방");
         if (SuddenEvents != null)
             SuddenEvents.Announce(DisplayName);
+
+        // 전 플레이어 팝업 + 침입자 머리 위 진행 게이지 — 대응 구간이 시작됐음을 시각화한다 (#311)
+        m_jailLock.ServerAnnounceUnlockAttempt(m_intruder, m_unlockSeconds);
     }
 
     // 해제 완료 — 자물쇠를 열고 수감자를 방출한다. 경로 실패면 불발로 정리한다.
