@@ -284,25 +284,9 @@ public class SessionManager : CommonManagerBase
         }
 
         GUI.enabled = true;
-
-        // 게임 종료 (#210) — 세션 접속 중에는 OnGUI가 DrawInSessionUI로 분기해 이 버튼이 그려지지 않고,
-        // 세션에서 나오면(m_session == null) 로비와 함께 다시 나타난다. (Auth/Vivox GUI와 동일한 수명)
-        GUILayout.Space(6);
-        if (GUILayout.Button("게임 종료 (Quit)"))
-        {
-            QuitGame();
-        }
     }
 
-    // 빌드에서는 앱 종료, 에디터에서는 플레이 모드 종료. (임시 메인 메뉴 버튼, #210)
-    private static void QuitGame()
-    {
-#if UNITY_EDITOR
-        UnityEditor.EditorApplication.isPlaying = false;
-#else
-        Application.Quit();
-#endif
-    }
+    // 게임 종료 버튼은 Title 메인 메뉴(TitleUIManager)로 이관됨 — 여기 OnGUI는 순수 세션 디버그 조작만 남긴다. (#224)
 
     private void DrawInSessionUI()
     {
