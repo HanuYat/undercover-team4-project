@@ -75,8 +75,17 @@ public class RoundEndResetter : MonoBehaviour
         if (m_ending)
             return;
         m_ending = true;
+        ReturnToTitleAsync().Forget();
+    }
+
+    // NGO Shutdown이 끝난 뒤에 타이틀로 로드해야 한다 — 아직 IsListening이면 App.LoadScene이 NGO 씬 동기화
+    // 분기를 타고, 클라는 씬 로드 권한이 없어 아무 일도 안 일어나 Game 씬에 고착된다(#326 재현). SessionTeardown/
+    // SessionFlow의 자발적 이탈이 같은 이유로 shutdown을 기다리는 것과 동일하다.
+    private async UniTaskVoid ReturnToTitleAsync()
+    {
+        await SessionFlow.WaitForNetworkShutdownAsync();
         if (App.CurrentScene != EScene.Title)
-            App.LoadScene(EScene.Title); // NGO 이미 내려간 상태 → 오프라인 로컬 로드
+            App.LoadScene(EScene.Title); // NGO 내려간 뒤 → 오프라인 로컬 로드
     }
 
     private async UniTaskVoid EndRoundToLobbyAsync()

@@ -106,7 +106,13 @@ public class SignalDecoderHud : MonoBehaviour
     // 참조가 죽으면 즉시 닫아 입력이 잠긴 채 남지 않게 한다.
     private void Update()
     {
-        if (m_isOpen && m_input == null)
+        if (!m_isOpen)
+            return;
+
+        // 열려 있는 동안 ESC 진입 메뉴(일시정지) 오픈을 막는다 — IMGUI↔Input System 프레임 스큐까지 덮는다 (#326)
+        EscMenuGuard.BlockThisFrame();
+
+        if (m_input == null)
             Close();
     }
 
