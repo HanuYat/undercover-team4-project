@@ -69,6 +69,18 @@ public class InteractionFeedback : NetworkBehaviour
 
     private void Refresh()
     {
+        // 테이저는 3m 상호작용 레이(CanTarget) 대신 자체 사거리 조준 판정으로 크로스헤어를 구동한다 (#328).
+        // 아웃라인은 두지 않고 색만 바꾼다 — 조준 사격이라 대상 윤곽선이 실제 사거리(8m)와 어긋난다.
+        ItemBase equipped = m_itemUser != null ? m_itemUser.EquippedItem : null;
+        if (equipped is Taser taser)
+        {
+            bool onTarget = taser.HasValidAimTarget(
+                m_interactor.AimOrigin.position, m_interactor.AimOrigin.forward);
+            SetOutlined(null, Color.clear);
+            App.UI.Crosshair?.SetTaserTargeting(onTarget);
+            return;
+        }
+
         GameObject aimTarget = m_interactor.CurrentTarget;
         IInteractable interactable = m_interactor.CurrentInteractable;
 
@@ -87,8 +99,7 @@ public class InteractionFeedback : NetworkBehaviour
         }
 
         // ① 아이템 경로 — 장착 아이템이 이 대상에 실제로 사용 가능한가 (아이템별 색, 우선)
-        //    색이 "어떤 키가 먹히는지" 안내 역할을 하도록 아이템 경로를 우선한다
-        ItemBase equipped = m_itemUser != null ? m_itemUser.EquippedItem : null;
+        //    색이 "어떤 키가 먹히는지" 안내 역할을 하도록 아이템 경로를 우선한다 (equipped는 위에서 해석)
         bool itemUsable = inRange && equipped != null && equipped.CanTarget(aimTarget);
 
         // ② E 상호작용 경로 — 지금 상태에서 E가 실제로 동작하는가 (기본색)
