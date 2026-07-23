@@ -436,9 +436,10 @@ public class PlayerEscorter : NetworkBehaviour
         if (!NpcStateRules.IsUncuffable(target.CurrentState))
             return;
 
-        // 채운 수갑을 발밑에 반환하고(없으면 no-op) 배회로 복귀시킨다 — 판정 funnel 밖의 회수 경로 (#290).
-        NotifyOwner($"수갑 해제 완료 — 발밑 반환 후 배회 복귀: {target.name}");
-        target.DropHandcuffs();
+        // 채운 수갑을 이 플레이어 인벤토리로 회수하고(꽉 차면 발밑 반환) 배회로 복귀시킨다 — 판정 funnel 밖의 회수 경로 (#290/#307).
+        NotifyOwner($"수갑 해제 완료 — 수갑 회수 후 배회 복귀: {target.name}");
+        if (Loadout == null || !Loadout.TryRecoverHandcuffs(target))
+            target.DropHandcuffs();
         target.ReleaseFromCustody();
     }
 

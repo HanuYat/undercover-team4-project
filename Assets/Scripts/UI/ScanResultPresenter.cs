@@ -1,4 +1,8 @@
+using System;
 using System.Collections.Generic;
+using System.Threading;
+using Cysharp.Threading.Tasks;
+using TMPro;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -27,6 +31,27 @@ public class ScanResultPresenter : NetworkBehaviour
     [SerializeField]
     private GameObject m_uiRoot;
 
+    [Header("스캐너 피드백 (#309) — m_uiRoot 하위 오너 전용 UI")]
+    [Tooltip("배터리 게이지 패널 루트(배경 포함). 스캐너를 들었을 때만 켜진다 — 표시/숨김 토글 대상")]
+    [SerializeField]
+    private GameObject m_batteryPanel;
+
+    [Tooltip("장착 스캐너 배터리 잔량 텍스트 (m_batteryPanel 하위)")]
+    [SerializeField]
+    private TextMeshProUGUI m_batteryText;
+
+    [Tooltip("토스트 패널 루트(배경 포함). 실패 사유 표시 중에만 켜진다 — 표시/숨김 토글 대상")]
+    [SerializeField]
+    private GameObject m_toastPanel;
+
+    [Tooltip("스캔 실패·취소 사유 토스트 텍스트 (m_toastPanel 하위)")]
+    [SerializeField]
+    private TextMeshProUGUI m_toastText;
+
+    [Tooltip("토스트 표시 유지 시간(초)")]
+    [SerializeField]
+    private float m_toastSeconds = 2f;
+
     private PlayerInteractor m_interactor;
     private PlayerItemUser m_itemUser;
     private Scanner m_scanner; // 현재 장착된 스캐너 인스턴스에 바인딩. 스캐너 미장착이면 null.
@@ -40,6 +65,12 @@ public class ScanResultPresenter : NetworkBehaviour
     private ulong m_currentNpcId;
     private bool m_currentHasId;
 
+    // 토스트 자동 숨김 타이머 — 새 메시지가 오면 이전 타이머를 취소하고 이어받는다. (지속 토스트는 타이머 없음)
+    private CancellationTokenSource m_toastCts;
+
+    // 마지막으로 본 배터리 값 — 증가(충전) 감지용. 미장착이면 -1. (#309)
+    private int m_lastBattery = -1;
+
     public override void OnNetworkSpawn()
     {
         if (!IsOwner)
@@ -52,6 +83,9 @@ public class ScanResultPresenter : NetworkBehaviour
 
         if (m_uiRoot != null)
             m_uiRoot.SetActive(true);
+
+        SetActive(m_batteryPanel, false); // 스캐너 장착 전엔 숨김
+        SetActive(m_toastPanel, false);
 
         // 인터랙터/아이템유저는 플레이어 루트에 있다 — 부모까지 탐색.
         m_interactor = GetComponentInParent<PlayerInteractor>();
@@ -77,7 +111,7 @@ public class ScanResultPresenter : NetworkBehaviour
         if (m_itemUser != null)
             m_itemUser.OnEquippedItemChanged -= HandleEquippedItemChanged;
 
-        BindScanner(null);
+        BindScanner(null); // 게이지·토스트 정리 포함
         HideCurrent();
     }
 
@@ -139,7 +173,8 @@ public class ScanResultPresenter : NetworkBehaviour
         if (scanned)
         {
             CitizenProfile profile = m_currentIdentity.Profile;
-            m_currentView.ShowReal(profile.CitizenName, profile.m_typeView, profile.m_factionView);
+            // 스캔 표시는 정본이 아닌 표시 이름(m_nameView) — 위조범은 여기서 정본과 어긋난다 (#223)
+            m_currentView.ShowReal(profile.m_nameView, profile.m_typeView, profile.m_factionView);
         }
         else
         {
@@ -165,12 +200,29 @@ public class ScanResultPresenter : NetworkBehaviour
             return;
 
         if (m_scanner != null)
+        {
             m_scanner.OnScanCompleted -= HandleScanCompleted;
+            m_scanner.OnCharged -= HandleBatteryChanged;
+            m_scanner.OnScanFeedback -= HandleScanFeedback;
+        }
 
         m_scanner = scanner;
 
         if (m_scanner != null)
+        {
             m_scanner.OnScanCompleted += HandleScanCompleted;
+            m_scanner.OnCharged += HandleBatteryChanged;      // 스캔 소모·본부 충전 반영 (#309)
+            m_scanner.OnScanFeedback += HandleScanFeedback;   // 범위 이탈 등 실패 토스트 (#309)
+            m_lastBattery = -1;                               // 장착 시점 값을 "충전"으로 오인하지 않게 리셋
+            SetActive(m_batteryPanel, true);                  // 게이지 노출
+            UpdateBattery(m_scanner.CurrentBattery);          // 초기 잔량 + 소진 시 부족 토스트
+        }
+        else
+        {
+            SetActive(m_batteryPanel, false);                 // 스캐너 내려놓으면 게이지 숨김
+            HideToast();
+            m_lastBattery = -1;
+        }
     }
 
     // 스캔 성공 — 이 NPC를 "스캔 완료" 집합에 기록한다. 지금 그 NPC를 보고 있으면 즉시 실제값으로 교체.
@@ -180,5 +232,81 @@ public class ScanResultPresenter : NetworkBehaviour
 
         if (m_currentHasId && m_currentNpcId == npcNetworkObjectId)
             UpdateCurrentContent();
+    }
+
+    // ---- 스캐너 배터리 게이지 + 상태 토스트 (#309) ----
+    // 배터리 값은 Scanner의 NetworkVariable이 이미 오너에 동기화되므로 여기선 표시만 한다(RPC 불필요).
+    // 토스트: 소진=장착 중 지속, 충전(증가)=잠깐. 범위 이탈은 Scanner.OnScanFeedback가 잠깐 띄운다.
+
+    private void HandleBatteryChanged(int current) => UpdateBattery(current);
+
+    private void UpdateBattery(int current)
+    {
+        if (m_batteryText != null && m_scanner != null)
+            m_batteryText.text = $"배터리 {current}/{m_scanner.MaxBattery}";
+
+        bool charged = m_lastBattery >= 0 && current > m_lastBattery; // 잔량 증가 = 충전기 이용
+        m_lastBattery = current;
+
+        if (charged)
+            ShowToast("스캐너 충전 완료", transient: true);
+        else if (current <= 0)
+            ShowToast("스캐너 배터리 부족", transient: false); // 소진 — 장착 중 계속 노출
+        else
+            HideToast(); // 정상 잔량 — 배터리 관련 토스트 없음
+    }
+
+    // 범위 이탈 등 스캔 실패 사유 — 잠깐 띄운다.
+    private void HandleScanFeedback(string message) => ShowToast(message, transient: true);
+
+    // transient=true면 m_toastSeconds 후 자동 숨김, false면 다음 토스트/숨김 전까지 지속.
+    private void ShowToast(string message, bool transient)
+    {
+        if (m_toastPanel == null || string.IsNullOrEmpty(message))
+            return;
+
+        m_toastCts?.Cancel();
+        m_toastCts?.Dispose();
+        m_toastCts = null;
+
+        if (m_toastText != null)
+            m_toastText.text = message;
+        SetActive(m_toastPanel, true);
+
+        if (transient)
+        {
+            m_toastCts = new CancellationTokenSource();
+            HideAfterAsync(m_toastCts.Token).Forget();
+        }
+    }
+
+    private void HideToast()
+    {
+        m_toastCts?.Cancel();
+        m_toastCts?.Dispose();
+        m_toastCts = null;
+        SetActive(m_toastPanel, false);
+    }
+
+    private async UniTaskVoid HideAfterAsync(CancellationToken token)
+    {
+        try
+        {
+            await UniTask.Delay(TimeSpan.FromSeconds(m_toastSeconds), cancellationToken: token);
+        }
+        catch (OperationCanceledException)
+        {
+            return; // 새 토스트가 이어받았거나 디스폰 — 패널은 그쪽이 관리
+        }
+
+        SetActive(m_toastPanel, false);
+        m_toastCts?.Dispose(); // 정상 만료도 Cancel 경로와 동일하게 정리 (CTS 누적 방지)
+        m_toastCts = null;
+    }
+
+    private static void SetActive(GameObject go, bool active)
+    {
+        if (go != null && go.activeSelf != active)
+            go.SetActive(active);
     }
 }

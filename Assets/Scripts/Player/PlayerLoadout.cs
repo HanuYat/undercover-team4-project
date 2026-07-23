@@ -278,9 +278,11 @@ public class PlayerLoadout : NetworkBehaviour
     public bool HasHandcuffs => FindHeldHandcuffs() != null;
 
     // 현재 부착된 수갑 아이템을 찾는다 — 없으면 null. NPC는 한 벌만 들고 다니므로 첫 항목이면 충분.
-    private Handcuffs FindHeldHandcuffs()
+    private Handcuffs FindHeldHandcuffs() => FindHandcuffsIn(ItemParent);
+
+    // 부모 루트 직속 자식에서 수갑을 찾는다 (플레이어 ItemParent·NPC 루트 공통 — 둘 다 루트 직속 부착).
+    private static Handcuffs FindHandcuffsIn(Transform parent)
     {
-        Transform parent = ItemParent;
         for (int i = 0; i < parent.childCount; i++)
         {
             if (parent.GetChild(i).TryGetComponent(out Handcuffs cuffs))
@@ -343,6 +345,56 @@ public class PlayerLoadout : NetworkBehaviour
 
         // 오너 슬롯에서 제거를 동기화 — 장착 중이었다면 빈손이 되고 1·3인칭 손 표시도 함께 정리된다(#45/#151).
         SyncHeldItemsRpc(BuildHeldItemRefs());
+    }
+
+    /// <summary>
+    /// 판정·석방 후 NPC에 채워졌던 수갑을 이 플레이어 인벤토리로 회수한다 — <see cref="ConsumeHandcuffsTo"/>의 역방향. (#307)
+    /// 여유 칸이 있으면 NPC → 이 플레이어 ItemParent로 재부착 + 소유권 재부여하고 true,
+    /// 소지 3칸이 꽉 찼거나(또는 NPC에 수갑이 없으면) 아무것도 안 하고 false를 반환한다 — 호출부가 바닥에 떨군다.
+    /// 서버(또는 오프라인)에서만. 줍기(PickupRpc)와 같은 부착·소유권 처리에, 출처만 NPC 하위인 셈이다.
+    /// </summary>
+    public bool TryRecoverHandcuffs(NpcController npc)
+    {
+        if (IsSpawned && !IsServer)
+        {
+            return false;
+        }
+
+        if (npc == null)
+        {
+            return false;
+        }
+
+        // 소지 3칸 제한 — 서버 권위 카운트(PickupRpc와 동일). 오너 로컬 슬롯(FirstEmptySlot)은 원격 클라가
+        // 연행자일 때 서버에 없으므로, 물리 부착 기준 CountHeldItems로 여유를 판정한다.
+        if (CountHeldItems() >= k_maxHeldItems)
+        {
+            return false;
+        }
+
+        Handcuffs cuffs = FindHandcuffsIn(npc.transform);
+        if (cuffs == null)
+        {
+            return false;
+        }
+
+        NetworkObject cuffsNetworkObject = cuffs.NetworkObject;
+        if (cuffsNetworkObject == null)
+        {
+            return false;
+        }
+
+        // NPC 하위에서 이 플레이어로 옮긴다 — 소유권을 오너에게 되돌린 뒤 부착(줍기와 동일 순서).
+        if (IsSpawned)
+        {
+            cuffsNetworkObject.ChangeOwnership(OwnerClientId);
+        }
+
+        AttachToParent(cuffsNetworkObject, ItemParent);
+
+        // 오너 슬롯에 첫 빈 칸으로 들어간다 — 줍기와 동일 경로(RebuildHeldItems).
+        SyncHeldItemsRpc(BuildHeldItemRefs());
+        return true;
     }
 
     // ---- 서버 → 오너: 보유 목록 동기화 ----
