@@ -3297,6 +3297,7 @@ GameObject:
   - component: {fileID: 4422740345284790104}
   - component: {fileID: 5951565256141623223}
   - component: {fileID: 4603734993763582029}
+  - component: {fileID: 5678977034810245416}
   m_Layer: 7
   m_Name: NPC_Citizen_Generic
   m_TagString: Untagged
@@ -3611,6 +3612,20 @@ MonoBehaviour:
   m_hairColorPropertyName: _Hair_Color
   m_hairBaseMaterial: {fileID: 2100000, guid: 4625364858fb08d479fa095a5cbcd9a1, type: 2}
   m_skinColorPropertyName: _Skin_Color
+--- !u!114 &5678977034810245416
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d525591d149f8b448b1ca167c087f6fc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcProfileDebugView
+  m_drawSceneLabel: 1
+  m_labelHeight: 2.2
 --- !u!1 &8855344057427867759
 GameObject:
   m_ObjectHideFlags: 0
