@@ -26,7 +26,7 @@ public class NpcCommonConfig : ScriptableObject
     [Tooltip("착지 지점을 NavMesh 위로 되돌릴 때 허용하는 최대 탐색 거리(m)")]
     [SerializeField] private float m_knockbackLandSampleDistance = 4f;
     [Tooltip("날아가는 도중 벽으로 칠 콜라이더 — 여기에 걸리면 수평 이동이 멈춘다. NPC 자신의 레이어는 런타임에 자동으로 빠진다")]
-    [SerializeField] private LayerMask m_knockbackObstacleMask = ~0;
+    [SerializeField] private LayerMask m_knockbackObstacleMask = 1; // Default(환경)만 — 캐릭터 오판 방지 (#339)
 
     public float SpawnSpeedMultiplierMin => m_spawnSpeedMultiplierMin;
     public float SpawnSpeedMultiplierMax => m_spawnSpeedMultiplierMax;

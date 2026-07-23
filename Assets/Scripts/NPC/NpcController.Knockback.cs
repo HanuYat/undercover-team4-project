@@ -104,16 +104,41 @@ public partial class NpcController
             EndKnockback(m_knockbackLaunch);
     }
 
+    // 벽 스윕 히트 버퍼 — 넉백 틱은 서버 전용이라 공유해도 안전하다 (프레임마다의 할당 방지, ThugAttacker와 동일)
+    private static readonly RaycastHit[] s_sweepBuffer = new RaycastHit[16];
+
     // 이번 프레임 수평 이동 구간에 벽이 있는지 — 몸통 굵기로 훑는다.
     // 프레임이 튀어 한 번에 몇 미터씩 움직여도 구간 전체를 검사하므로 벽을 지나쳐 버리지 않는다.
+    // 캐릭터(플레이어·다른 NPC)는 벽으로 치지 않는다(#339): 플레이어 몸통이 환경과 같은 Default 레이어라
+    // 마스크만으로는 걸러지지 않는데, 폭발로 날아가는 NPC가 군중을 벽으로 오판하면 죄다 제자리에
+    // 툭 떨어져 넉백이 밋밋해진다 — 차저 돌진(#313, ThugAttacker.SweepHitsObstacle)과 같은 수정.
     private bool SweepHitsObstacle(Vector3 direction, float distance)
     {
         float radius = m_agent.radius;
         Vector3 origin = transform.position + Vector3.up * Mathf.Max(radius, m_agent.height * 0.5f);
         int mask = m_commonConfig.KnockbackObstacleMask & ~(1 << gameObject.layer); // 자기 콜라이더에 걸리지 않게
 
-        return Physics.SphereCast(origin, radius, direction, out RaycastHit _, distance, mask,
-                                  QueryTriggerInteraction.Ignore);
+        int count = Physics.SphereCastNonAlloc(origin, radius, direction, s_sweepBuffer, distance, mask,
+                                               QueryTriggerInteraction.Ignore);
+
+        // 버퍼 포화 = 반환되지 못한 히트(그중 진짜 벽 포함 가능)가 있을 수 있다 — 나오면 확대 신호 (#313 리뷰와 동일)
+        if (count == s_sweepBuffer.Length)
+            Debug.LogWarning($"NpcController: 넉백 스윕 버퍼 포화({count}) — 히트 누락 가능", this);
+
+        for (int i = 0; i < count; i++)
+        {
+            Collider hit = s_sweepBuffer[i].collider;
+            if (hit == null)
+                continue;
+            if (hit.GetComponentInParent<PlayerData>() != null)
+                continue; // 플레이어 — 벽이 아니다, 뚫고 날아간다
+            if (hit.GetComponentInParent<NpcController>() != null)
+                continue; // 다른 NPC — 군중 속 폭발에서 서로를 벽으로 보지 않게
+
+            return true; // 캐릭터가 아닌 무언가 = 벽/환경
+        }
+
+        return false;
     }
 
     private void EndKnockback(Vector3 landing)
