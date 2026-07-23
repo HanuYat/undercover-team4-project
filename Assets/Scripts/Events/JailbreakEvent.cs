@@ -361,8 +361,12 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         }
 
         // 유치장을 뛰쳐나와 도주한다 — 침입자를 위협으로 삼아 반대로 달아난 뒤 배회로 섞여 든다.
-        // 본부가 무인이라(발동 조건) 근처에 플레이어가 없으면 도주 상태가 곧 배회로 복귀한다(NpcFleeState).
+        // 근처에 플레이어가 없으면 도주 상태가 곧 배회로 복귀한다(NpcFleeState).
         inmate.StartFlee(m_intruder != null ? m_intruder.transform : null);
+
+        // 방출된 난동꾼은 조용한 시민으로 남지 않는다 — 도주가 가라앉으면 원래 소란 행동을 재개한다
+        // (팀 확정 2026-07-23). 침입자 등 소란 기록이 없는 개체는 무동작으로 기존대로 배회 잔류.
+        MisdemeanorLoiterer.BeginRiot(inmate);
     }
 
     // 추적만 끊는다 — 침입자는 씬에 남는다. 검거되어 신병이 유치장으로 넘어간 경우처럼

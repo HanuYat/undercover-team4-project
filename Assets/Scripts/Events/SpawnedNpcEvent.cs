@@ -120,7 +120,10 @@ public class SpawnedNpcEvent : ISuddenEvent
 
         // 경범죄 표식 — 인계되면 ArrestJudge가 이 마커를 보고 진범 대조 대신 경범죄로 판정하고 Reward를 지급한다 (#106).
         // 판정이 서버 권위라 마커도 서버에서만 읽힌다 — 복제할 필요가 없어 plain MonoBehaviour로 붙인다.
-        m_npc.gameObject.AddComponent<MisdemeanorOffender>().Reward = m_pettyCrimeReward;
+        // 소란 행동도 함께 기록한다 — 탈옥으로 방출되면 이 행동을 재개한다 (MisdemeanorLoiterer.BeginRiot).
+        MisdemeanorOffender offender = m_npc.gameObject.AddComponent<MisdemeanorOffender>();
+        offender.Reward = m_pettyCrimeReward;
+        offender.SetRiotBehavior(m_mode, m_maxLifetimeSeconds);
 
         // 네트워크 세션이면 전 클라에 복제 — Spawn()이 서버에서 OnNetworkSpawn(InitBehavior)를 동기 실행한다 (#56)
         if (SuddenEventUtil.IsNetworkSessionActive)
