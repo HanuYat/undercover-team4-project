@@ -22,6 +22,7 @@ public class WorldItemPickup : MonoBehaviour, IInteractable
     private NetworkObject m_networkObject;
     private GameObject m_worldVisual;
     private BoxCollider m_pickupCollider;
+    private DroppedItemHighlight m_highlight;
 
     /// <summary>이미 누군가 들고 있으면(부모가 있으면) 주울 수 없다 — 중복 줍기 방지.</summary>
     public bool IsHeld => transform.parent != null;
@@ -30,6 +31,11 @@ public class WorldItemPickup : MonoBehaviour, IInteractable
     {
         m_networkObject = GetComponent<NetworkObject>();
         BuildWorldVisual();
+
+        // 바닥 상시 하이라이트 (#330) — 프리팹 배선 없이 런타임 부착, 놓임/들림에 맞춰 켜고 끈다
+        m_highlight = gameObject.AddComponent<DroppedItemHighlight>();
+        m_highlight.Initialize();
+
         RefreshWorldPresence();
     }
 
@@ -111,6 +117,10 @@ public class WorldItemPickup : MonoBehaviour, IInteractable
         {
             childCollider.enabled = inWorld;
         }
+
+        // 바닥에 있을 때만 상시 하이라이트 (#330)
+        if (m_highlight != null)
+            m_highlight.SetGrounded(inWorld);
     }
 
     public void Interact(GameObject interactor)

@@ -127,8 +127,15 @@ public class InteractionFeedback : NetworkBehaviour
             return;
         }
 
-        if (m_currentOutlinable != null) // 이전 대상 끄기 (파괴됐으면 이미 null)
-            m_currentOutlinable.enabled = false;
+        if (m_currentOutlinable != null) // 이전 대상 정리 (파괴됐으면 이미 null)
+        {
+            // 바닥 아이템 상시 하이라이트(#330)와 Outlinable을 공유한다 — 꺼버리면 상시 표시까지
+            // 죽으므로, 하이라이트가 있는 대상은 끄는 대신 기본색으로 되돌려 준다.
+            if (m_currentOutlinable.TryGetComponent(out DroppedItemHighlight highlight))
+                highlight.Restore();
+            else
+                m_currentOutlinable.enabled = false;
+        }
         m_currentOutlinable = null;
 
         if (root == null) return;
@@ -150,8 +157,9 @@ public class InteractionFeedback : NetworkBehaviour
     /// 자식 렌더러들을 윤곽선 대상으로 수집한다. EPO의 AddAllChildRenderersToRenderingList는
     /// 모든 MeshRenderer에 MeshFilter가 있다고 가정해 TextMesh(디버그 라벨 등 메시 내부 생성형)에서
     /// MissingComponentException을 던지므로, 유효한 메시가 있는 렌더러만 직접 담는다. (#207)
+    /// 바닥 아이템 상시 하이라이트(DroppedItemHighlight, #330)도 같은 수집 규칙을 쓴다 — public인 이유.
     /// </summary>
-    private static void AddOutlineTargets(Outlinable outlinable, GameObject root)
+    public static void AddOutlineTargets(Outlinable outlinable, GameObject root)
     {
         foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
         {
