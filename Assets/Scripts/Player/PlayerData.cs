@@ -85,4 +85,12 @@ public class PlayerData : NetworkBehaviour, IDamageable
         if (value == 0 && previous > 0)
             m_incapacitation?.Incapacitate();
     }
+
+    /// <summary>라운드 사이 상태 초기화 — HP 풀 회복 + 다운 해제. 서버(또는 오프라인)에서만. (상점 진입)</summary>
+    public void ServerResetState()
+    {
+        if (IsSpawned && !IsServer) return;
+        SetHp(m_maxHp);
+        m_incapacitation?.Recover();
+    }
 }
