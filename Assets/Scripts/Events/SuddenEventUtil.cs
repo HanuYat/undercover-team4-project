@@ -133,74 +133,11 @@ public static class SuddenEventUtil
         return false;
     }
 
-    // 출구 선정 시 현장 플레이어와 유지해야 하는 최소 거리(m) — 이벤트 NPC는 플레이어 근처에 스폰되므로
-    // '무조건 최근접 출구'는 방금 싸운 자리 옆일 수 있다. 그러면 걸어 나가는 그림 없이 눈앞에서 글리치가
-    // 터져 즉시 증발처럼 보인다 (#310 후속 피드백).
-    private const float k_exitClearOfPlayersMeters = 12f;
-
-    /// <summary>
-    /// 이탈하는 이벤트 NPC가 걸어 나갈 '출구'(일반 NPC 스폰 포인트) — 모든 현장 플레이어에게서
-    /// <see cref="k_exitClearOfPlayersMeters"/> 이상 떨어진 포인트 중 NPC 최근접을 고르고, 전부 플레이어
-    /// 근처면 플레이어에게서 가장 먼 포인트로 물러난다. 포인트가 없으면 null. (#310)
-    /// 스폰 포인트는 시민이 드나드는 맵 출입구이므로, 별도 배선 없이 "온 곳으로 되돌아 나가는" 퇴장 동선이 된다.
-    /// </summary>
-    public static Transform FindExitPoint(Vector3 npcPosition)
-    {
-        NpcSpawner spawner = App.Game.NpcSpawner;
-        IReadOnlyList<Transform> points = spawner != null ? spawner.SpawnPoints : null;
-        if (points == null)
-            return null;
-
-        Transform nearestClear = null;        // 플레이어 간섭 없는 포인트 중 NPC 최근접
-        float nearestClearSqr = float.MaxValue;
-        Transform farthestFromPlayers = null; // 폴백 — 플레이어에게서 가장 먼 포인트
-        float farthestPlayerSqr = -1f;
-
-        for (int i = 0; i < points.Count; i++)
-        {
-            Transform point = points[i];
-            if (point == null)
-                continue;
-
-            PlayerData nearbyPlayer = FindNearestFieldPlayer(point.position, k_exitClearOfPlayersMeters);
-            if (nearbyPlayer == null)
-            {
-                float sqr = (point.position - npcPosition).sqrMagnitude;
-                if (sqr < nearestClearSqr)
-                {
-                    nearestClearSqr = sqr;
-                    nearestClear = point;
-                }
-                continue;
-            }
-
-            float playerSqr = (nearbyPlayer.transform.position - point.position).sqrMagnitude;
-            if (playerSqr > farthestPlayerSqr)
-            {
-                farthestPlayerSqr = playerSqr;
-                farthestFromPlayers = point;
-            }
-        }
-
-        return nearestClear != null ? nearestClear : farthestFromPlayers;
-    }
-
-    /// <summary>
-    /// 스폰물을 정리한다 — 네트워크 세션이면 Despawn, 아니면 Destroy. null·미스폰 상황을 안전하게 처리한다.
-    /// 대상 프리팹에 <see cref="NpcDespawnVfx"/>가 배선돼 있으면 사라지는 자리에 소멸 연출을 남긴다 —
-    /// 라운드 종료 일괄 정리처럼 연출이 필요 없는 경로만 playVfx=false로 끈다. (#310)
-    /// </summary>
-    public static void DespawnOrDestroy(GameObject target, bool playVfx = true)
+    /// <summary>스폰물을 정리한다 — 네트워크 세션이면 Despawn, 아니면 Destroy. null·미스폰 상황을 안전하게 처리한다.</summary>
+    public static void DespawnOrDestroy(GameObject target)
     {
         if (target == null)
             return;
-
-        if (playVfx)
-        {
-            NpcDespawnVfx vfx = target.GetComponent<NpcDespawnVfx>();
-            if (vfx != null)
-                vfx.ServerPlay();
-        }
 
         if (IsNetworkSessionActive)
         {
