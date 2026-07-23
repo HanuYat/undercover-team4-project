@@ -8951,6 +8951,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 600757700}
     m_Modifications:
+    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_eventEntries.Array.data[1].enabled
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_eventEntries.Array.data[2].enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_eventEntries.Array.data[3].enabled
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 498939978214492355, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_Name
       value: SuddenEvents
@@ -16592,8 +16604,8 @@ Transform:
   m_GameObject: {fileID: 428938283}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: 0.7157436, z: -0, w: 0.69836324}
-  m_LocalPosition: {x: 1.894, y: 2.173, z: 53.72}
-  m_LocalScale: {x: 2, y: 1.1, z: 0.01}
+  m_LocalPosition: {x: 1.8907, y: 2.173, z: 53.5844}
+  m_LocalScale: {x: 2.2712, y: 1.1, z: 0.01}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 594547326}
@@ -17652,7 +17664,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AppearanceAssigner
   m_appearanceDatabase: {fileID: 11400000, guid: 57bb736c337156747a8246abdf3cab42, type: 2}
-  m_revealedAxisCount: 2
+  m_revealedAxisCount: 5
   m_montageMatchCount: 3
 --- !u!1001 &448560145
 PrefabInstance:
@@ -28495,7 +28507,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 83d0daea87b0f2c4cb04fc30fdb14018, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoundManager
-  m_arrestQuota: 1
+  m_arrestQuota: 3
   m_timeLimitSeconds: 600
 --- !u!114 &708957384
 MonoBehaviour:
@@ -42921,16 +42933,16 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1088181652}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0.00000011917329}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1505779030}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 100, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1088181654
 MonoBehaviour:
@@ -46599,7 +46611,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CriminalAssigner
   m_officialRecords: {fileID: 11400000, guid: 1b5b7a3bc8cc725468fa2e0d915c05cb, type: 2}
-  m_criminalCount: 1
+  m_criminalCount: 3
   m_forgerCount: 2
   m_forgedCharCount: 1
   m_compliantWeight: 0.2
@@ -60046,7 +60058,7 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1505779025}
   m_LocalRotation: {x: -0, y: 0.7157436, z: -0, w: 0.69836324}
-  m_LocalPosition: {x: 0, y: 0, z: 53.718483}
+  m_LocalPosition: {x: 0, y: 0, z: 53.5785}
   m_LocalScale: {x: 0.0018, y: 0.0018, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -60055,8 +60067,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 91.408, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 1.8749589, y: 2.177}
-  m_SizeDelta: {x: 1000, y: 563}
+  m_AnchoredPosition: {x: 1.8715, y: 2.177}
+  m_SizeDelta: {x: 1155.6084, y: 563}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!4 &1507433722 stripped
 Transform:

@@ -27,6 +27,12 @@ public class WantedListManager : NetworkedManagerBase
     // 동기화된 수배 리스트 — 본부 UI(#58)가 구독·열람한다. 서버 외에는 읽기 전용으로 취급.
     public NetworkList<WantedEntry> Wanted => m_wanted;
 
+    // 이번 라운드에 등록된 진범 총수 — 검거/탈출로 남은 수가 줄고 늘어도 바뀌지 않는다(신규 몽타주 등록 시에만 +1).
+    // HUD "남은/전체" 표시(#331)를 위해 서버 권위로 전 클라이언트에 동기화한다.
+    private readonly NetworkVariable<int> m_totalWanted = new NetworkVariable<int>();
+    public int TotalWanted => m_totalWanted.Value;
+    public event Action OnTotalWantedChanged;
+
     /// <summary>
     /// 이 피어에서 리스트가 스폰·초기 동기화된 시점 — 뷰가 최초 표시를 위해 구독한다.
     /// NetworkList는 뒤늦게 접속한 클라이언트에 초기 내용을 OnListChanged로 알리지 않으므로,
@@ -36,13 +42,14 @@ public class WantedListManager : NetworkedManagerBase
 
     public override void OnNetworkSpawn()
     {
+        // 전체 수(#331) 변경을 전 피어에서 구독 — 클라 HUD 재갱신용
+        m_totalWanted.OnValueChanged += HandleTotalWantedChanged;
+
         // 서버만 리스트를 채우고 지운다 — 배정·판정이 서버 권위이므로 (#56 패턴)
         if (IsServer)
         {
-            // 재시작(Shutdown 후 StartHost) 시 씬 NetworkObject의 NetworkList에는 이전 세션 항목이
-            // 그대로 남아 새 라운드 항목과 섞인다 — 서버가 새로 뜨면 항상 빈 상태로 시작한다 (#209)
-            // (몽타주 등록은 라운드 시작 → NPC 스폰 이후라 여기서 지워질 새 항목은 없다)
             m_wanted.Clear();
+            m_totalWanted.Value = 0;    // 재시작 시 이전 세션 총수도 함께 초기화 (#209와 동일 취지)
             m_arrestedEntries.Clear(); // 탈출 재등재용 보관함도 함께 — 이전 세션 항목이 새 라운드 NetworkObjectId와 겹치면 엉뚱한 몽타주가 되살아난다 (#231)
 
             // 등록은 외형·몽타주까지 확정된 시점(OnMontageGenerated)에 한다.
@@ -65,6 +72,8 @@ public class WantedListManager : NetworkedManagerBase
 
     public override void OnNetworkDespawn()
     {
+        m_totalWanted.OnValueChanged -= HandleTotalWantedChanged;
+
         if (Appearance != null)
             Appearance.OnMontageGenerated -= HandleMontageGenerated;
 
@@ -93,6 +102,10 @@ public class WantedListManager : NetworkedManagerBase
             Name = ToFixed64(wantedName),
             Montage = ToFixed128(montageText),
         });
+        // 전체 진범 수 누적(#331) — 검거/탈출로는 줄지 않는다.
+        // ⚠ 라운드 도중 수배 리스트에 진범을 새로 추가하는 다른 경로(#102 제보 전화 '승격' 등)가 생기면,
+        //   그 경로에서도 반드시 m_totalWanted를 함께 증가시켜야 HUD 전체 진범 수가 어긋나지 않는다.
+        m_totalWanted.Value++;
         Debug.Log($"[수배] 등록: {wantedName} — \"{montageText}\" (현재 {m_wanted.Count}건)");
     }
 
@@ -104,6 +117,9 @@ public class WantedListManager : NetworkedManagerBase
 
         RemoveByNpcId(result.Npc.NetworkObjectId);
     }
+
+    // 전체 진범 수(#331) 변경을 얇은 C# 이벤트로 재발행 — HUD가 값에 관심만 있고 이전/이후 값은 불필요.
+    private void HandleTotalWantedChanged(int previous, int current) => OnTotalWantedChanged?.Invoke();
 
     // 고유 NetworkObjectId로 검거된 그 개체의 항목만 찾아 제거한다.
     private void RemoveByNpcId(ulong npcId)
