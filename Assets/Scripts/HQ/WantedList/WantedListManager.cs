@@ -102,6 +102,9 @@ public class WantedListManager : NetworkedManagerBase
             Name = ToFixed64(wantedName),
             Montage = ToFixed128(montageText),
         });
+        // 전체 진범 수 누적(#331) — 검거/탈출로는 줄지 않는다.
+        // ⚠ 라운드 도중 수배 리스트에 진범을 새로 추가하는 다른 경로(#102 제보 전화 '승격' 등)가 생기면,
+        //   그 경로에서도 반드시 m_totalWanted를 함께 증가시켜야 HUD 전체 진범 수가 어긋나지 않는다.
         m_totalWanted.Value++;
         Debug.Log($"[수배] 등록: {wantedName} — \"{montageText}\" (현재 {m_wanted.Count}건)");
     }

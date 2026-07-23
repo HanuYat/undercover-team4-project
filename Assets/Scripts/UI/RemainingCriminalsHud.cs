@@ -17,7 +17,7 @@ public class RemainingCriminalsHud : MonoBehaviour
     [SerializeField]
     private TextMeshProUGUI m_countText;
 
-    [Tooltip("표시 형식 — {0}=잡은 수, {1}=잡아야 하는 수(할당량)")]
+    [Tooltip("표시 형식 — {0}=잡은 수, {1}=잡아야 하는 수(전체 진범 수, TotalWanted). 검거 할당량(ArrestQuota)이 아님")]
     [SerializeField]
     private string m_format = "{0} / {1}";
 
