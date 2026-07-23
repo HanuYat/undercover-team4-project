@@ -66,6 +66,8 @@ public class SpawnedNpcEvent : ISuddenEvent
     private bool m_hasStarted;    // 행동을 실제로 시작했는지 — 이탈(배회 복귀) 종료 판정에 쓴다
     private bool m_captured;      // 한 번이라도 제압됐는지 — 제압 로그를 첫 진입에만 남기려고 쓴다
     private bool m_despawnQueued; // 판정 완료 — 다음 틱에 정리한다 (ServerTick의 지연 이유 참고)
+    private bool m_exitQueued;    // 이탈 확정 — 다음 틱에 출구로 걸어 나가게 한다 (상태 전이 체인 안 전이 회피, #310)
+    private bool m_exiting;       // 출구로 퇴장 이동 중인지 — 재제압 시 취소·도착 로그 분기에 쓴다 (#310)
 
     public string DisplayName => m_displayName;
 
@@ -130,6 +132,7 @@ public class SpawnedNpcEvent : ISuddenEvent
             m_npc.GetComponent<NetworkObject>().Spawn();
 
         m_npc.OnStateChanged += HandleStateChanged;
+        m_npc.OnReachedHolding += HandleReachedHolding; // 임시 거처·출구 도착 통보 — 두 퇴장 경로가 공유한다 (#310)
         m_threat = player;
         m_startTime = Time.time;
         m_spawnFrame = Time.frameCount;
@@ -137,6 +140,8 @@ public class SpawnedNpcEvent : ISuddenEvent
         m_hasStarted = false;
         m_captured = false;
         m_despawnQueued = false;
+        m_exitQueued = false;
+        m_exiting = false;
     }
 
     public void ServerTick()
@@ -163,14 +168,35 @@ public class SpawnedNpcEvent : ISuddenEvent
             m_hasStarted = true;
         }
 
+        // 이탈 확정분을 상태 전이 체인 밖(다음 틱)에서 처리한다 — OnStateChanged 안에서 곧바로 상태를
+        // 갈아타면 전이 통지가 중첩된다 (m_despawnQueued를 지연시키는 것과 같은 이유). (#310)
+        // 출구가 없으면(스폰 포인트 미배선) SendToHolding(null)이 그 자리 도착 통보를 내 기존처럼 즉시 정리된다.
+        if (m_exitQueued)
+        {
+            m_exitQueued = false;
+            m_exiting = true;
+            m_startTime = Time.time; // 출구까지 걸어갈 유예를 새로 준다
+            m_npc.SendToHolding(SuddenEventUtil.FindExitPoint(m_npc.transform.position));
+            return;
+        }
+
         // 연행 중에는 방치 타이머를 멈춘다 — 본부까지 데려가는 데 얼마가 걸리든 플레이어 손에서 사라지면 안 된다.
         if (m_npc.CurrentState == NpcState.Escorted)
             m_startTime = Time.time;
 
-        // 아무도 연행하지 않은 채 방치되면 강제 정리 (스폰물 누수 방지). 제압 시점에 타이머를 새로 돌리므로
-        // "제압해 놓고 안 데려간" 경우도 같은 유예를 거쳐 정리된다.
+        // 아무도 연행하지 않은 채 방치되면 정리 수순 (스폰물 누수 방지). 제압 시점에 타이머를 새로 돌리므로
+        // "제압해 놓고 안 데려간" 경우도 같은 유예를 거친다.
         if (Time.time - m_startTime > m_maxLifetimeSeconds)
         {
+            // 아직 걸어 나가는 중이 아니면 즉시 증발 대신 출구 퇴장으로 전환한다 — "방치하면 스스로 풀고
+            // 달아난다"(GDD 7-6)와 결이 같다. 퇴장·이송(Holding)까지 막힌 채 또 초과하면 그때 강제 정리.
+            if (!m_exiting && m_npc.CurrentState != NpcState.Holding)
+            {
+                Debug.Log($"[돌발이벤트] {m_displayName} — 방치 시간 초과, 출구로 퇴장");
+                m_exitQueued = true;
+                return;
+            }
+
             Debug.Log($"[돌발이벤트] {m_displayName} — 방치 시간 초과로 정리");
             Despawn();
         }
@@ -178,7 +204,7 @@ public class SpawnedNpcEvent : ISuddenEvent
 
     public void ServerReset()
     {
-        Despawn();
+        Despawn(playVfx: false); // 라운드 종료 일괄 정리 — 남은 스폰물마다 이펙트가 터지지 않게 연출은 끈다
     }
 
     // 모드에 따라 스폰 직후 행동을 적용한다 (서버에서만 호출됨)
@@ -210,6 +236,7 @@ public class SpawnedNpcEvent : ISuddenEvent
             // 제압만으로는 아무 일도 일어나지 않는다 — 본부까지 연행해야 판정·수익이 난다.
             // 연행이 끊겨 다시 Captured로 돌아온 경우에도 방치 유예를 새로 준다.
             m_startTime = Time.time;
+            m_exiting = false; // 출구로 걸어 나가던 중이라도 다시 붙잡히면 퇴장은 취소된다 (#310)
             if (!m_captured)
             {
                 m_captured = true;
@@ -218,11 +245,13 @@ public class SpawnedNpcEvent : ISuddenEvent
             return;
         }
 
-        // 행동을 시작한 뒤 배회 상태로 돌아왔다 = 제압 실패로 뿌리치고 달아나 이탈함 (수익 없음)
-        if (m_hasStarted && (state == NpcState.Idle || state == NpcState.Walk))
+        // 행동을 시작한 뒤 배회 상태로 돌아왔다 = 제압 실패로 뿌리치고 달아나 이탈함 (수익 없음).
+        // 눈앞에서 증발하는 대신 플레이어들에게서 떨어진 출구(스폰 포인트)로 걸어 나가 소멸한다 (#310) —
+        // 걸어가는 동안은 Holding 상태라 이 분기에 다시 들어오지 않고, 따라가 잡으면 도로 Captured가 된다.
+        if (m_hasStarted && !m_exiting && (state == NpcState.Idle || state == NpcState.Walk))
         {
-            Debug.Log($"[돌발이벤트] {m_displayName} — 제압 실패, 이탈");
-            Despawn();
+            Debug.Log($"[돌발이벤트] {m_displayName} — 제압 실패, 출구로 이탈");
+            m_exitQueued = true;
         }
     }
 
@@ -237,7 +266,6 @@ public class SpawnedNpcEvent : ISuddenEvent
         {
             Debug.Log($"[돌발이벤트] {m_displayName} — 경범죄 판정, 임시 거처로 이송");
             m_startTime = Time.time; // 이송에 방치 타이머 예산을 새로 준다
-            m_npc.OnReachedHolding += HandleReachedHolding;
             m_npc.SendToHolding(m_holdingPoint);
             return;
         }
@@ -253,12 +281,14 @@ public class SpawnedNpcEvent : ISuddenEvent
         if (m_npc == null || npc != m_npc)
             return;
 
-        Debug.Log($"[돌발이벤트] {m_displayName} — 임시 거처 도착, 정리 예약");
+        Debug.Log(m_exiting
+            ? $"[돌발이벤트] {m_displayName} — 출구 도착, 퇴장"
+            : $"[돌발이벤트] {m_displayName} — 임시 거처 도착, 정리 예약");
         m_despawnQueued = true;
     }
 
     // 스폰한 NPC를 정리한다 — 구독 해제 후 Despawn/Destroy하고 참조·플래그를 비운다.
-    private void Despawn()
+    private void Despawn(bool playVfx = true)
     {
         if (m_npc == null)
             return;
@@ -272,7 +302,7 @@ public class SpawnedNpcEvent : ISuddenEvent
         if (escorter != null)
             escorter.Release();
 
-        SuddenEventUtil.DespawnOrDestroy(m_npc.gameObject);
+        SuddenEventUtil.DespawnOrDestroy(m_npc.gameObject, playVfx);
 
         m_npc = null;
         m_threat = null;
@@ -280,5 +310,7 @@ public class SpawnedNpcEvent : ISuddenEvent
         m_hasStarted = false;
         m_captured = false;
         m_despawnQueued = false;
+        m_exitQueued = false;
+        m_exiting = false;
     }
 }
