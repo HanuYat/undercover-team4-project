@@ -26,6 +26,17 @@ public class CriminalAssigner : CommonManagerBase
     [SerializeField]
     private int m_criminalCount = 1;
 
+    [Header("위조범 (#223)")]
+    [Tooltip("표시 이름을 오염시킬 위조범 수. 진범과 독립 배정된다")]
+    [Min(0)]
+    [SerializeField]
+    private int m_forgerCount = 2;
+
+    [Tooltip("위조범 1명의 표시 이름에서 오염시킬 글자 수(모음↔모음·자음↔자음 치환). 이름 글자 수보다 크면 잘린다")]
+    [Min(1)]
+    [SerializeField]
+    private int m_forgedCharCount = 1;
+
     [Header("범인 검거 반응 가중치 (#76)")]
     [Tooltip("합이 1일 필요 없음 — 비율로 추첨한다. 범인은 도주/저항 성향이 높다")]
     [SerializeField]
@@ -132,6 +143,8 @@ public class CriminalAssigner : CommonManagerBase
             );
 
         HashSet<int> criminalIndices = PickCriminalIndices(npcs.Count, criminalCount);
+        // 위조범은 진범과 독립적으로 추첨한다 — 겹칠 수도 있다(범인이 위조 papers 소지) (#223)
+        HashSet<int> forgerIndices = PickCriminalIndices(npcs.Count, Mathf.Clamp(m_forgerCount, 0, npcs.Count));
         string[] names = BuildUniqueNames(npcs.Count);
 
         m_criminalNpcs.Clear();
@@ -164,6 +177,12 @@ public class CriminalAssigner : CommonManagerBase
                 m_officialRecords
             );
 
+            // 위조범: 표시 이름(m_nameView)을 오염시켜 정본/인명부와 어긋나게 한다.
+            // 반드시 AssignProfile(= CitizenData 동기화 스냅샷) 이전에 적용해야 오염 이름이 전 클라에 전파된다 (#223)
+            bool isForger = forgerIndices.Contains(i);
+            if (isForger)
+                profile.m_nameView = CorruptName(profile.CitizenName, m_forgedCharCount);
+
             bool isCriminal = criminalIndices.Contains(i);
             identity.AssignProfile(profile, isCriminal);
 
@@ -184,8 +203,10 @@ public class CriminalAssigner : CommonManagerBase
             string roleTag = isCriminal ? $"  ← 범인 ({reaction})"
                 : reaction != ReactionType.Compliant ? $"  (미끼: {reaction})"
                 : "";
+            // 위조 시 정본→표시 이름을 함께 남겨 대조 확인에 쓴다 (데모 빌드 전 제거 대상)
+            string forgeryTag = isForger ? $"  [위조: {profile.CitizenName}→{profile.m_nameView}]" : "";
             logBuilder.AppendLine(
-                $"  {profile.CitizenName} | {profile.m_typeView} | {profile.m_factionView}{roleTag}"
+                $"  {profile.CitizenName} | {profile.m_typeView} | {profile.m_factionView}{roleTag}{forgeryTag}"
             );
         }
 
@@ -255,5 +276,59 @@ public class CriminalAssigner : CommonManagerBase
     {
         Array values = Enum.GetValues(typeof(TEnum));
         return (TEnum)values.GetValue(Random.Range(0, values.Length));
+    }
+
+    // ---- 이름 위조 (#223) ----
+
+    private static readonly char[] s_vowels = { 'a', 'e', 'i', 'o', 'u' };
+    private static readonly char[] s_consonants =
+        { 'b', 'c', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 't', 'v', 'w', 'x', 'y', 'z' };
+
+    /// <summary>
+    /// 이름의 알파벳 중 count글자를 같은 종류(모음↔모음, 자음↔자음)의 다른 글자로 치환한다. (#223)
+    /// 발음 가능한 자연스러운 이름을 유지한 채 정본과 어긋나게 만든다 — 대소문자 보존, 공백/기호는 건너뛴다.
+    /// count가 이름의 알파벳 수보다 크면 가능한 만큼만 오염한다.
+    /// </summary>
+    private static string CorruptName(string name, int count)
+    {
+        if (string.IsNullOrEmpty(name) || count <= 0)
+            return name;
+
+        // 알파벳 위치만 모아 셔플 → 앞에서 count개 = 중복 없는 오염 위치
+        var positions = new List<int>();
+        for (int i = 0; i < name.Length; i++)
+            if (char.IsLetter(name[i]))
+                positions.Add(i);
+        if (positions.Count == 0)
+            return name;
+
+        for (int i = positions.Count - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            (positions[i], positions[j]) = (positions[j], positions[i]);
+        }
+
+        int corruptCount = Mathf.Min(count, positions.Count);
+        char[] chars = name.ToCharArray();
+        for (int k = 0; k < corruptCount; k++)
+            chars[positions[k]] = SubstituteSameClass(chars[positions[k]]);
+
+        return new string(chars);
+    }
+
+    /// <summary>알파벳 한 글자를 같은 종류(모음↔모음, 자음↔자음)의 다른 글자로 치환한다. 대소문자 보존. (#223)</summary>
+    private static char SubstituteSameClass(char original)
+    {
+        char lower = char.ToLowerInvariant(original);
+        char[] pool = Array.IndexOf(s_vowels, lower) >= 0 ? s_vowels : s_consonants;
+
+        char replacement;
+        do
+        {
+            replacement = pool[Random.Range(0, pool.Length)];
+        }
+        while (replacement == lower);
+
+        return char.IsUpper(original) ? char.ToUpperInvariant(replacement) : replacement;
     }
 }
