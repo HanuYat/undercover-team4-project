@@ -300,6 +300,7 @@ public class ScanResultPresenter : NetworkBehaviour
         }
 
         SetActive(m_toastPanel, false);
+        m_toastCts?.Dispose(); // 정상 만료도 Cancel 경로와 동일하게 정리 (CTS 누적 방지)
         m_toastCts = null;
     }
 
