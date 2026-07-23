@@ -108,6 +108,9 @@ public class PlayerMovement : NetworkBehaviour
     // 앉기 블렌딩으로 머리가 내려간 높이(m) — 카메라를 같은 만큼 낮춘다 (#236)
     private float CrouchHeadDrop => m_crouch != null ? m_crouch.HeadDrop : 0f;
 
+    /// <summary>시선 pitch(도, +아래/-위) — PlayerHeadLook이 머리 본 회전에 사용한다. (#348)</summary>
+    public float Pitch => m_pitch;
+
     private void Awake()
     {
         m_controller = GetComponent<CharacterController>();
