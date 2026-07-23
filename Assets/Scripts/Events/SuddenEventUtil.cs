@@ -139,13 +139,35 @@ public static class SuddenEventUtil
     private const float k_exitClearOfPlayersMeters = 12f;
 
     /// <summary>
-    /// 이탈하는 이벤트 NPC가 걸어 나갈 '출구'(일반 NPC 스폰 포인트) — 모든 현장 플레이어에게서
-    /// <see cref="k_exitClearOfPlayersMeters"/> 이상 떨어진 포인트 중 NPC 최근접을 고르고, 전부 플레이어
-    /// 근처면 플레이어에게서 가장 먼 포인트로 물러난다. 포인트가 없으면 null. (#310)
-    /// 스폰 포인트는 시민이 드나드는 맵 출입구이므로, 별도 배선 없이 "온 곳으로 되돌아 나가는" 퇴장 동선이 된다.
+    /// 이탈하는 이벤트 NPC가 걸어 나갈 '출구' — 씬에 배치된 전용 마커(<see cref="SuddenEventExitPoint"/>) 중
+    /// NPC 최근접을 고른다. 마커가 없는 씬은 일반 NPC 스폰 포인트 폴백으로 동작한다: 모든 현장
+    /// 플레이어에게서 <see cref="k_exitClearOfPlayersMeters"/> 이상 떨어진 포인트 중 NPC 최근접, 전부 플레이어
+    /// 근처면 플레이어에게서 가장 먼 포인트. 그마저 없으면 null(호출부가 그 자리 소멸로 처리). (#310)
+    /// 스폰 포인트 겸용은 액션 한복판이라 퇴장 그림이 어색하다는 피드백으로 전용 마커를 도입했다.
     /// </summary>
     public static Transform FindExitPoint(Vector3 npcPosition)
     {
+        // 1순위 — 전용 출구 마커 중 최근접. 마커는 맵 가장자리 등 '나가는 그림'이 되는 곳에 배치돼 있다.
+        IReadOnlyList<SuddenEventExitPoint> exits = SuddenEventExitPoint.Active;
+        Transform nearestExit = null;
+        float nearestExitSqr = float.MaxValue;
+        for (int i = 0; i < exits.Count; i++)
+        {
+            SuddenEventExitPoint exit = exits[i];
+            if (exit == null)
+                continue;
+
+            float sqr = (exit.transform.position - npcPosition).sqrMagnitude;
+            if (sqr < nearestExitSqr)
+            {
+                nearestExitSqr = sqr;
+                nearestExit = exit.transform;
+            }
+        }
+        if (nearestExit != null)
+            return nearestExit;
+
+        // 폴백 — 마커가 없는 씬(테스트 씬 등)은 기존 스폰 포인트 선정으로 동작한다.
         NpcSpawner spawner = App.Game.NpcSpawner;
         IReadOnlyList<Transform> points = spawner != null ? spawner.SpawnPoints : null;
         if (points == null)

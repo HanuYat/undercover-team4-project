@@ -214,7 +214,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
 
         // 이탈 확정분을 상태 전이 체인 밖(다음 틱)에서 처리한다 — OnStateChanged 안에서 곧바로 상태를
         // 갈아타면 전이 통지가 중첩된다 (SpawnedNpcEvent의 지연 이탈과 같은 이유). (#310)
-        // 출구가 없으면(스폰 포인트 미배선) SendToHolding(null)이 그 자리 도착 통보를 내 기존처럼 즉시 정리된다.
+        // 출구가 없으면(마커·스폰 포인트 모두 부재) SendToHolding(null)이 그 자리 도착 통보를 내 기존처럼 즉시 정리된다.
         if (m_exitQueued)
         {
             m_exitQueued = false;
@@ -336,7 +336,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         }
 
         // 침입을 시작한 뒤 배회로 돌아왔다 = 뿌리치고 달아나 진정했거나(저지 실패) 도주가 끝났다.
-        // 눈앞에서 증발하는 대신 플레이어들에게서 떨어진 출구(스폰 포인트)로 걸어 나가 소멸한다 (#310) —
+        // 눈앞에서 증발하는 대신 출구 마커(SuddenEventExitPoint)로 걸어 나가 소멸한다 (#310) —
         // 걸어가는 동안은 Holding 상태라 이 분기에 다시 들어오지 않고, 따라가 잡으면 도로 Captured가 된다.
         if (m_hasStarted && !m_exiting && (state == NpcState.Idle || state == NpcState.Walk))
         {
