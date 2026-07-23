@@ -96,9 +96,65 @@ public static class SuddenEventUtil
         }
     }
 
+    // ---- 스폰 시야 검사 (#332 A) — 팝인이 보이지 않을 지점만 통과시키기 위한 파라미터 ----
+    // 플레이어 눈높이(m) — 1인칭 카메라 근사. 후보 지점은 NPC 몸통 높이로 본다.
+    private const float k_eyeHeight = 1.6f;
+    private const float k_spawnTargetHeight = 0.9f;
+    // 수평 시야 반각의 코사인 — 서버는 원격 플레이어의 카메라 피치를 모르므로(요 회전만 동기화)
+    // 수평 각도로만 판정한다. cos(75°)≈0.26 — 실제 화면보다 넉넉히 잡아 '보일지도 모르는' 쪽을 탈락시킨다.
+    private const float k_viewDotThreshold = 0.26f;
+    // 가림 판정 구 스윕 반지름(m) — 가는 레이는 창살·소품 틈을 지나 '가려짐'으로 오판한다(Synty 지오메트리).
+    // 어느 정도 부피가 있는 것에 막혀야 진짜 가려진 것으로 본다.
+    private const float k_visProbeRadius = 0.3f;
+    // 가림물 레이어 — 환경(Default)만. 캐릭터·상호작용물은 가림물이 아니다 (#313의 벽 판정과 같은 기준)
+    private const int k_occluderMask = 1;
+
+    /// <summary>
+    /// 후보 지점이 모든 현장 플레이어의 시야에서 벗어나 있는가 (#332 A) — 스폰 팝인 방지용.
+    /// 시야 판정은 수평 각도(넉넉한 반각) + 환경 가림 구 스윕: 각도 밖이면 안 보이는 것으로,
+    /// 각도 안이면 지형이 가려줄 때만 숨은 것으로 본다. 다운된 플레이어는 화면이 유효하므로 제외하지 않는다.
+    /// </summary>
+    public static bool IsHiddenFromFieldPlayers(Vector3 point)
+    {
+        PlayerData[] players = UnityEngine.Object.FindObjectsByType<PlayerData>(
+            FindObjectsSortMode.None
+        );
+
+        Vector3 target = point + Vector3.up * k_spawnTargetHeight;
+        for (int i = 0; i < players.Length; i++)
+        {
+            Transform playerTransform = players[i].transform;
+            Vector3 eye = playerTransform.position + Vector3.up * k_eyeHeight;
+            Vector3 toTarget = target - eye;
+
+            // 수평 각도 판정 — 뒤·측면이면 이 플레이어에게는 안 보인다
+            Vector3 flat = toTarget;
+            flat.y = 0f;
+            Vector3 forward = playerTransform.forward;
+            forward.y = 0f;
+            if (flat.sqrMagnitude > 0.0001f && forward.sqrMagnitude > 0.0001f
+                && Vector3.Dot(forward.normalized, flat.normalized) < k_viewDotThreshold)
+                continue;
+
+            // 시야각 안 — 환경이 가려줄 때만 숨은 것으로 본다
+            float distance = toTarget.magnitude;
+            if (distance < 0.5f)
+                return false; // 발밑 수준 — 무조건 보인다
+
+            if (!Physics.SphereCast(
+                    eye, k_visProbeRadius, toTarget / distance, out RaycastHit _,
+                    distance, k_occluderMask, QueryTriggerInteraction.Ignore))
+                return false; // 가림 없이 훤히 보인다 — 이 지점은 탈락
+        }
+
+        return true;
+    }
+
     /// <summary>
     /// 기준점 주변 링(min~max 거리) 안에서 NavMesh 위 스폰 지점을 찾는다 — 시도 실패가 반복되면 false.
     /// 화면 밖·너무 붙지 않게 플레이어에게서 일정 거리를 두고 스폰하기 위함.
+    /// <paramref name="hiddenFromPlayers"/>가 참이면 모든 현장 플레이어의 시야에서 벗어난 지점만
+    /// 통과시킨다 (#332 A — 눈앞 팝인 방지). 전 시도가 시야에 걸리면 false — 호출부의 불발 폴백 유지.
     /// </summary>
     public static bool TryFindSpawnPositionNear(
         Vector3 origin,
@@ -106,7 +162,8 @@ public static class SuddenEventUtil
         float distanceMax,
         float navSampleMaxDistance,
         int maxAttempts,
-        out Vector3 result
+        out Vector3 result,
+        bool hiddenFromPlayers = false
     )
     {
         for (int i = 0; i < maxAttempts; i++)
@@ -116,17 +173,20 @@ public static class SuddenEventUtil
             Vector3 candidate = origin + new Vector3(dir.x, 0f, dir.y) * distance;
 
             if (
-                NavMesh.SamplePosition(
+                !NavMesh.SamplePosition(
                     candidate,
                     out NavMeshHit hit,
                     navSampleMaxDistance,
                     NavMesh.AllAreas
                 )
             )
-            {
-                result = hit.position;
-                return true;
-            }
+                continue;
+
+            if (hiddenFromPlayers && !IsHiddenFromFieldPlayers(hit.position))
+                continue; // 누군가의 눈앞 — 팝인이 보인다, 다음 후보로
+
+            result = hit.position;
+            return true;
         }
 
         result = default;
