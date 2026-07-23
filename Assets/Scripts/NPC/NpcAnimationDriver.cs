@@ -98,9 +98,7 @@ public class NpcAnimationDriver : MonoBehaviour
     [SerializeField] private float m_unlockBeginSeconds = 0.63f;
 
     [Header("제압 전환 (#332)")]
-    [Tooltip("제압 시 그로기(헤롱) 모션을 유지하는 시간(초) — 이후 고개 숙인 대기 자세로 가라앉는다. 클립(Stun01) 한 사이클이 2.67초라 그 배수로 둬야 이음새에서 끊긴다(중간에 자르면 모션이 뚝 끊겨 보임)")]
-    [SerializeField] private float m_subdueGroggySeconds = 2.7f;
-    [Tooltip("도주형 제압 시 구르기 모션을 유지하는 시간(초) — 클립(Roll01) 길이 1.3초에 맞춘 값. 이후 그로기를 한 번 거쳐 가라앉는다")]
+    [Tooltip("도주형 제압 시 구르기 모션을 유지하는 시간(초) — 클립(Roll01) 길이 1.3초에 맞춘 값. 이후 그로기로 넘어간다")]
     [SerializeField] private float m_subdueRollSeconds = 1.3f;
 
     [SerializeField] private Animator m_animator;
@@ -247,22 +245,18 @@ public class NpcAnimationDriver : MonoBehaviour
             m_animator.SetInteger(s_stateHash, AnimatorBaseState(m_baseState));
         }
 
-        // 제압 전환(그로기/구르기) 유지 시간이 끝나면 고개 숙인 대기 자세(Captured)로 가라앉는다 (#332).
-        // 그 전에 다른 상태로 바뀌었으면 HandleStateChanged가 이미 타이머를 지우고 새 모션을 적용했다.
+        // 구르기 유지 시간이 끝나면 그로기로 넘어간다 (#332) — 역동적으로 굴러 일어난 몸이 곧바로
+        // 얌전해지는 낙차가 어색해서(팀 피드백) 그로기를 거친다. 그로기는 시간으로 끝나지 않는다:
+        // 플레이어가 연행(E)하러 올 때까지 헤롱거리며 유지되고, 상태 전이(Escorted·방치 풀림 등)가
+        // 오면 HandleStateChanged가 새 모션으로 갈아탄다. 타이머는 구르기에만 쓰인다.
         if (m_subdueUntil > 0f && Time.time >= m_subdueUntil)
         {
-            // 구르기 직후는 대기 자세로 직행하지 않는다 — 역동적으로 굴러 일어난 몸이 곧바로 얌전해지는
-            // 낙차가 어색해서(팀 피드백), 짧은 그로기를 한 번 거쳐 가라앉는다.
+            m_subdueUntil = 0f;
             if (m_subdueRollThenGroggy)
             {
                 m_subdueRollThenGroggy = false;
                 m_animator.SetInteger(s_stateHash, k_subdueGroggyAnimState);
-                m_subdueUntil = Time.time + m_subdueGroggySeconds;
-                return;
             }
-
-            m_subdueUntil = 0f;
-            m_animator.SetInteger(s_stateHash, AnimatorBaseState(m_baseState));
         }
 
         // 일어나던 중에 다시 밧줄로 묶이면 취소하고 누운 자세로 되돌린다 — 끌려가는데 서 있으면 안 된다.
@@ -417,14 +411,14 @@ public class NpcAnimationDriver : MonoBehaviour
         switch (previous)
         {
             case NpcState.Attack:
+                // 그로기는 시간으로 끝나지 않는다 — 플레이어가 연행하러 올 때까지 헤롱거리며 유지 (팀 확정)
                 m_animator.SetInteger(s_stateHash, k_subdueGroggyAnimState);
-                m_subdueUntil = Time.time + m_subdueGroggySeconds;
                 return true;
 
             case NpcState.Run:
                 m_animator.SetInteger(s_stateHash, k_subdueRollAnimState);
                 m_subdueUntil = Time.time + m_subdueRollSeconds;
-                m_subdueRollThenGroggy = true; // 굴러 일어난 뒤 짧은 그로기를 거쳐 가라앉는다
+                m_subdueRollThenGroggy = true; // 굴러 일어난 뒤 그로기로 넘어가 유지된다
                 return true;
 
             default:
