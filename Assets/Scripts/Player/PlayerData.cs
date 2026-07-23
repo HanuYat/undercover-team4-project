@@ -17,6 +17,9 @@ public class PlayerData : NetworkBehaviour, IDamageable
     // HP 0 도달 시 다운시킬 무력화 컴포넌트 (#105). 같은 플레이어 오브젝트에 있음.
     private PlayerIncapacitation m_incapacitation;
 
+    // 오검거 끌려가기(#279) 표현 컴포넌트 — 라운드 사이 리셋 시 추종 상태를 함께 푼다. 같은 오브젝트에 있음.
+    private PlayerPenaltyView m_penaltyView;
+
     public ulong PlayerId => OwnerClientId;
     public int MaxHp => m_maxHp;
     public int CurrentHp => IsSpawned ? m_syncedHp.Value : m_hp;
@@ -32,6 +35,7 @@ public class PlayerData : NetworkBehaviour, IDamageable
     {
         m_hp = m_maxHp; // 오프라인(비네트워크) Play 테스트 폴백 초기값
         m_incapacitation = GetComponent<PlayerIncapacitation>();
+        m_penaltyView = GetComponent<PlayerPenaltyView>();
     }
 
     public override void OnNetworkSpawn()
@@ -86,11 +90,14 @@ public class PlayerData : NetworkBehaviour, IDamageable
             m_incapacitation?.Incapacitate();
     }
 
-    /// <summary>라운드 사이 상태 초기화 — HP 풀 회복 + 다운 해제. 서버(또는 오프라인)에서만. (상점 진입)</summary>
+    /// <summary>라운드 사이 상태 초기화 — HP 풀 회복 + 다운 해제 + 끌려가기 해제. 서버(또는 오프라인)에서만. (상점 진입)</summary>
     public void ServerResetState()
     {
         if (IsSpawned && !IsServer) return;
         SetHp(m_maxHp);
         m_incapacitation?.Recover();
+        // 오검거 호송(#279) 도중 씬 전환되면 despawn이 안 일어나 EndCarriedFollow가 안 탄다.
+        // 세션 유지 리셋 지점에서 끌려가기 추종도 함께 푼다 — 오너 권한이라 서버 전용 StopCarried(→ 오너 RPC)로. (#314 계열)
+        m_penaltyView?.StopCarried();
     }
 }
