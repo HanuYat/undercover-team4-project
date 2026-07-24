@@ -23,7 +23,7 @@ MonoBehaviour:
   m_hitRadius: 1.5
   m_obstacleMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 1
   m_hitDamage: 20
   m_knockbackSpeed: 20
   m_recoverSeconds: 1.5
