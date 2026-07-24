@@ -6,7 +6,7 @@ using Random = UnityEngine.Random;
 
 /// <summary>
 /// 돌발 이벤트 프레임워크 — 라운드 진행 중 불규칙하게 <see cref="ISuddenEvent"/>를 서버 권위로 발생시킨다. (GDD 6-4/7-4, #106)
-/// 수사와 무관하게 세계관(치안 붕괴)을 반영하는 이벤트(거리 난동자·괴한 습격·전자기기 먹통 등)를 관리한다.
+/// 수사와 무관하게 세계관(치안 붕괴)을 반영하는 이벤트(거리 난동자·전자기기 먹통 등)를 관리한다.
 ///
 /// 서버 권위(#56 패턴):
 ///  · 발생 타이밍·판정은 서버(또는 오프라인)에서만 돈다 — <see cref="RoundManager.Phase"/>가 InProgress가 되는 곳이 서버뿐이라
@@ -18,7 +18,7 @@ using Random = UnityEngine.Random;
 /// (스폰형은 자기 NetworkObject, 전역형은 자기 NetworkVariable). 이벤트를 늘리거나 지워도 이 파일은 그대로다.
 ///
 /// 이벤트 풀은 인스펙터 <b>명시 리스트</b>(m_eventEntries)로 구성한다 — 자동수집을 쓰지 않는다 (#291).
-///  · <see cref="ISuddenEvent"/> 컴포넌트 — 1개 = 1종 (괴한 습격·전자기기 먹통).
+///  · <see cref="ISuddenEvent"/> 컴포넌트 — 1개 = 1종 (전자기기 먹통 등).
 ///  · <see cref="ISuddenEventProvider"/> 컴포넌트 — 1개가 여러 종을 품는다 (스폰형: <see cref="SpawnedNpcEventSet"/>).
 /// 항목마다 enabled 토글이 있어 특정 이벤트만 켜서 추첨할 수 있다(테스트·튜토리얼).
 /// <b>이벤트 컴포넌트는 반드시 이 오브젝트에 둔다</b> — 전부 [RequireComponent(typeof(SuddenEventManager))]라
@@ -58,7 +58,7 @@ public class SuddenEventManager : NetworkedManagerBase
     private class SuddenEventEntry
     {
         [Tooltip(
-            "ISuddenEvent 또는 ISuddenEventProvider를 구현한 컴포넌트 (예: ThugAssaultEvent, DeviceBlackoutEvent, SpawnedNpcEventSet, JailbreakEvent)"
+            "ISuddenEvent 또는 ISuddenEventProvider를 구현한 컴포넌트 (예: DeviceBlackoutEvent, SpawnedNpcEventSet, JailbreakEvent)"
         )]
         public MonoBehaviour component;
 

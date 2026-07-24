@@ -13,7 +13,6 @@ GameObject:
   - component: {fileID: 386971617754569526}
   - component: {fileID: 4617273519023223210}
   - component: {fileID: 3457248640073257328}
-  - component: {fileID: 616769972397347302}
   - component: {fileID: 6553283234259604354}
   - component: {fileID: 812660901877859943}
   - component: {fileID: 1036064955631126747}
@@ -87,8 +86,6 @@ MonoBehaviour:
     enabled: 1
   - component: {fileID: 3457248640073257328}
     enabled: 1
-  - component: {fileID: 616769972397347302}
-    enabled: 1
   - component: {fileID: 6553283234259604354}
     enabled: 1
   - component: {fileID: 1036064955631126747}
@@ -131,24 +128,6 @@ MonoBehaviour:
   m_bombPrefab: {fileID: 8953918111541867319, guid: 27813f0cd07ab3a489e202d07dbc64a2, type: 3}
   m_spawnPoints: []
   m_resolvedLingerSeconds: 3
---- !u!114 &616769972397347302
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 498939978214492355}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 048a56f72e625bd4582bc22ad3662a24, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ThugAssaultEvent
-  m_thugPrefab: {fileID: 2937104856208815511, guid: b346482e77513644ea3522271c62578d, type: 3}
-  m_durationSeconds: 20
-  m_spawnDistanceMin: 12
-  m_spawnDistanceMax: 20
-  m_navSampleMaxDistance: 4
-  m_maxSpawnAttempts: 8
 --- !u!114 &6553283234259604354
 MonoBehaviour:
   m_ObjectHideFlags: 0

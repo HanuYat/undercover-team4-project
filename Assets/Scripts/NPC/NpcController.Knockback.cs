@@ -104,14 +104,14 @@ public partial class NpcController
             EndKnockback(m_knockbackLaunch);
     }
 
-    // 벽 스윕 히트 버퍼 — 넉백 틱은 서버 전용이라 공유해도 안전하다 (프레임마다의 할당 방지, ThugAttacker와 동일)
+    // 벽 스윕 히트 버퍼 — 넉백 틱은 서버 전용이라 공유해도 안전하다 (프레임마다의 할당 방지)
     private static readonly RaycastHit[] s_sweepBuffer = new RaycastHit[16];
 
     // 이번 프레임 수평 이동 구간에 벽이 있는지 — 몸통 굵기로 훑는다.
     // 프레임이 튀어 한 번에 몇 미터씩 움직여도 구간 전체를 검사하므로 벽을 지나쳐 버리지 않는다.
     // 캐릭터(플레이어·다른 NPC)는 벽으로 치지 않는다(#339): 플레이어 몸통이 환경과 같은 Default 레이어라
     // 마스크만으로는 걸러지지 않는데, 폭발로 날아가는 NPC가 군중을 벽으로 오판하면 죄다 제자리에
-    // 툭 떨어져 넉백이 밋밋해진다 — 차저 돌진(#313, ThugAttacker.SweepHitsObstacle)과 같은 수정.
+    // 툭 떨어져 넉백이 밋밋해진다 — 장애물 스윕 판정(#313)과 같은 수정.
     private bool SweepHitsObstacle(Vector3 direction, float distance)
     {
         float radius = m_agent.radius;

@@ -17,8 +17,6 @@ using UnityEngine;
 public class NpcAnimationDriver : MonoBehaviour
 {
     private static readonly int s_stateHash = Animator.StringToHash("State");
-    // 패닉 시 다리(LowerBodyRun 레이어) 달리기 클립의 재생속도 배율 — 실제 이동 속도에 맞춰 발 미끄러짐을 줄인다 (#81)
-    private static readonly int s_legRunSpeedHash = Animator.StringToHash("LegRunSpeedMul");
     /// <summary>
     /// 스윙 1회에 재생할 단발 클립 번호를 고르는 Animator 파라미터 이름.
     /// Attack 상태의 블렌드 트리가 이 값으로 클립을 고른다 — 컨트롤러를 만드는
@@ -58,9 +56,8 @@ public class NpcAnimationDriver : MonoBehaviour
     /// 제압 순간의 전환은 FSM 상태가 아니라 Captured 진입 위에 얹는 연출이라 전용 번호를 쓴다 —
     /// 두들겨 맞아 제압된 저항형은 곧바로 고개 숙인 대기 자세로 스냅되는 대신 서서 헤롱거리다 가라앉는다.
     /// NpcAnimatorControllerBuilder(Editor)가 이 상수로 Any State 전이 조건을 만든다.
-    /// <b>번호 주의:</b> 103은 차저 돌진 준비(ThugAnimationDriver.k_windupAnimState)가 이미 쓴다 —
-    /// 같은 컨트롤러의 Any State 조건이 겹치면 우선순위에 밀려 엉뚱한 모션(CombatIdle)이 재생된다.
-    /// 새 번호를 더할 때는 두 드라이버의 상수를 모두 확인할 것.
+    /// <b>번호 주의:</b> 같은 컨트롤러의 Any State 조건은 번호가 겹치면 우선순위에 밀려 엉뚱한 모션이
+    /// 재생되므로 새 모션 전용 번호는 기존과 겹치지 않게 고를 것. (103은 과거 괴한 윈드업이 쓰다 제거돼 현재는 빈 번호)
     /// </summary>
     public const int k_subdueGroggyAnimState = 105;
 
@@ -84,13 +81,6 @@ public class NpcAnimationDriver : MonoBehaviour
     // 추격 가속(걷기 속도→7)이 이 경계를 지나는 순간 달리기 모션으로 넘어간다
     private const float k_penaltyRunOnSpeed = 4f;
     private const float k_penaltyRunOffSpeed = 3.4f;
-
-    // 다리 달리기 클립(HumanM@Run01_Forward)이 발 미끄러짐 없이 자연스러워 보이는 기준 지상 속도(m/s).
-    // 이 속도일 때 배율 1배로 재생되고, 실제 이동 속도가 다르면 그 비율로 재생속도를 늘리거나 줄인다.
-    // 클립이 in-place(루트모션 없음)라 자동 계산이 불가능한 값 — 눈으로 보며 미세 튜닝할 것.
-    [Header("패닉 다리 달리기 (#81)")]
-    [Tooltip("다리 달리기 클립이 미끄럼 없이 보이는 기준 지상 속도(m/s). 발이 앞으로 밀리면 값을 낮추고, 뒤로 끌리면 높인다")]
-    [SerializeField] private float m_panicRunReferenceSpeed = 4.5f;
 
     [Header("공격 스윙 (#220)")]
     [Tooltip("스윙 1회당 Attack(단발) 모션을 유지하는 시간(초) — 이후 버틴 자세로 복귀한다. 저항 공격 주기보다 짧고 타격 오프셋보다 길게")]
@@ -236,7 +226,7 @@ public class NpcAnimationDriver : MonoBehaviour
 
     private void Update()
     {
-        // 연행(Escorted)·패닉(Panic) 모두 실제 이동 속도가 필요하다. transform 이동량 기준이라
+        // 연행(Escorted)은 실제 이동 속도가 필요하다. transform 이동량 기준이라
         // 클라이언트에서도 NetworkTransform이 움직여 주는 값을 그대로 쓸 수 있다 — 별도 동기화 불필요.
         if (m_animator == null || Time.deltaTime <= 0f)
             return;
@@ -274,7 +264,6 @@ public class NpcAnimationDriver : MonoBehaviour
         if (
             !IsHandcuffedMotion(state)
             && !IsPenaltyLocomotion(state)
-            && state != NpcState.Panic
             && state != NpcState.Attack
             && state != NpcState.Intruding
         )
@@ -283,14 +272,6 @@ public class NpcAnimationDriver : MonoBehaviour
         float rawSpeed = (transform.position - m_lastPosition).magnitude / Time.deltaTime;
         m_lastPosition = transform.position;
         m_smoothedSpeed = Mathf.Lerp(m_smoothedSpeed, rawSpeed, Time.deltaTime * k_speedSmoothing);
-
-        // 패닉: 하체 달리기 클립 재생속도를 실제 이동 속도에 비례시켜 발 미끄러짐을 줄인다 (#81)
-        if (state == NpcState.Panic)
-        {
-            float mul = Mathf.Clamp(m_smoothedSpeed / m_panicRunReferenceSpeed, 0.2f, 2f);
-            m_animator.SetFloat(s_legRunSpeedHash, mul);
-            return;
-        }
 
         // 저항(Attack): 추격 중이면 달리기, 사거리 안에서 멈추면 버틴 자세 — 이동/정지를 속도로 구분한다 (#254)
         if (state == NpcState.Attack)
@@ -494,14 +475,6 @@ public class NpcAnimationDriver : MonoBehaviour
             m_unlockBeginUntil = 0f;
             m_lastPosition = transform.position;
             m_smoothedSpeed = k_escortMoveOnSpeed;
-        }
-        // 패닉 진입 시에도 이동 판별을 초기화. 첫 프레임 배율이 0으로 튀지 않도록 기준 속도로 시드한다 (#81)
-        else if (state == NpcState.Panic)
-        {
-            m_lastPosition = transform.position;
-            m_smoothedSpeed = m_panicRunReferenceSpeed;
-            if (m_animator != null)
-                m_animator.SetFloat(s_legRunSpeedHash, 1f);
         }
     }
 }

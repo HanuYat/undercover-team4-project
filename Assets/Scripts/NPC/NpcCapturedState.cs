@@ -17,7 +17,8 @@ public class NpcCapturedState : NpcStateBase
 
     private readonly NpcCapturedConfig m_config;
 
-    public NpcCapturedState(NpcController owner, NpcCapturedConfig config) : base(owner)
+    public NpcCapturedState(NpcController owner, NpcCapturedConfig config)
+        : base(owner)
     {
         m_config = config;
     }
@@ -45,11 +46,6 @@ public class NpcCapturedState : NpcStateBase
             Escape();
             return;
         }
-
-        // 도주 직전 구간엔 소란을 낸다 — 수갑 풀려고 몸부림치는 소동.
-        // 주변 시민이 패닉해 흩어지므로 현장(목격)·본부(CCTV) 양쪽이 눈치챈다 (#81 재사용)
-        if (remaining <= m_config.EscapeWarningSeconds)
-            m_owner.RequestDisturbancePulse();
     }
 
     public override void Exit()

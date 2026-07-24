@@ -64,10 +64,6 @@ public class BombDevice : NetworkBehaviour
     [SerializeField]
     private float m_knockbackEdgeFalloff = 0.25f;
 
-    [Tooltip("폭발이 주변 시민을 패닉시키는 전파 반경(m) — 기존 소란 전파 재사용")]
-    [SerializeField]
-    private float m_disturbanceRadius = 10f;
-
     [Header("테스트")]
     [Tooltip("켜면 스폰/시작 시 스스로 무장한다 — 돌발 이벤트 없이 폭탄을 씬에 놓고 바로 해체·매뉴얼을 테스트할 때. " +
              "실전 배선(BombDefusalEvent) 전까지의 임시 스위치 (SignalDecoder.m_installedOnStart 관례)")]
@@ -91,7 +87,6 @@ public class BombDevice : NetworkBehaviour
     private readonly List<Transform> m_blastBuffer = new List<Transform>();
 
     // NPC 넉백 대상 수집용 공유 버퍼 — 서버(또는 오프라인)에서만 쓰므로 정적으로 공유해도 안전하다
-    // (NpcController.BroadcastDisturbance와 동일 관례)
     private static readonly Collider[] s_blastColliders = new Collider[64];
 
     // 라운드당 폭탄 1개 — 본부 매뉴얼(BombManual)이 "현재 폭탄"의 규칙표를 읽기 위한 단일 참조.
@@ -324,7 +319,7 @@ public class BombDevice : NetworkBehaviour
         if (m_state == BombState.Exploded)
             return;
 
-        // 반경 내 행동 가능한 플레이어에게 피해 (NPC는 HP가 없어 피해 대신 뷰의 넉백 연출·패닉만 받는다)
+        // 반경 내 행동 가능한 플레이어에게 피해 (NPC는 HP가 없어 피해 대신 뷰의 넉백 연출만 받는다)
         SuddenEventUtil.CollectFieldPlayers(transform.position, m_explosionRadius, m_blastBuffer);
         for (int i = 0; i < m_blastBuffer.Count; i++)
         {
@@ -335,10 +330,6 @@ public class BombDevice : NetworkBehaviour
         // 반경 내 NPC 넉백 — 서버 권위. 플레이어와 달리 NPC 이동은 서버의 NavMeshAgent가 쥐고
         // 클라는 NetworkTransform으로 결과만 받으므로, 뷰가 아니라 여기서 직접 날린다.
         ServerKnockbackNpcs();
-
-        // 주변 시민 패닉 — 기존 소란 전파 재사용 (ThugAttacker와 동일 경로)
-        // (날아간 NPC는 착지 후 기절 상태라 패닉 전이에서 걸러진다 — 순서와 무관하다)
-        NpcController.BroadcastDisturbance(transform.position, m_disturbanceRadius);
 
         Debug.Log($"[폭탄] 시간 초과 — 폭발 (반경 {m_explosionRadius}m, 피해 {m_explosionDamage})");
         SetState(BombState.Exploded);

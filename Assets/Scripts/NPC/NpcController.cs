@@ -23,7 +23,6 @@ public partial class NpcController : NetworkBehaviour
     [SerializeField] private NpcStunConfig m_stunConfig;
     [SerializeField] private NpcCapturedConfig m_capturedConfig;
     [SerializeField] private NpcChaseConfig m_chaseConfig;
-    [SerializeField] private NpcPanicConfig m_panicConfig;
     [SerializeField] private NpcCommonConfig m_commonConfig;
 
     private NavMeshAgent m_agent;
@@ -59,12 +58,6 @@ public partial class NpcController : NetworkBehaviour
     /// 두 경로가 다른 반경을 쓰면 "도망칠 상대"와 "피할 상대"의 기준이 어긋난다.
     /// </summary>
     public float ThreatSearchRadius => m_resistConfig.AttackRange * m_resistConfig.ThreatSearchRadiusMultiplier;
-
-    /// <summary>패닉의 원인이 된 소란 지점 — 이 반대 방향으로 달아난다. 서버에서만 유효. (#81)</summary>
-    public Vector3 PanicSource { get; private set; }
-
-    /// <summary>마지막으로 소란을 감지한 시각(Time.time) — 패닉 진정 타이머 기준. 서버에서만 유효. (#81)</summary>
-    public float LastDisturbedTime { get; private set; }
 
     /// <summary>현재 제압 게이지. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 읽을 수 있다. (#76)</summary>
     public float SubdueGauge => IsSpawned ? m_syncedSubdueGauge.Value : m_subdueGauge;
@@ -117,7 +110,7 @@ public partial class NpcController : NetworkBehaviour
     /// 인자는 재생할 스윙 변형 index — 서버가 뽑아 전 피어가 같은 클립을 재생하므로, HP 감소 순간(서버가
     /// 그 클립의 타격 오프셋으로 판정)과 화면 속 주먹이 닿는 순간이 일치한다.
     /// 애니메이션 표현(<see cref="NpcAnimationDriver"/>)이 구독해 단발 스윙 모션을 트리거한다.
-    /// FSM 상태와 독립한 순간 이벤트라 State 동기화와 별개로 스윙 타이밍을 정확히 맞춘다. (#220, ThugAttacker.OnAttack과 동일 패턴)</summary>
+    /// FSM 상태와 독립한 순간 이벤트라 State 동기화와 별개로 스윙 타이밍을 정확히 맞춘다. (#220)</summary>
     public event Action<int> OnAttackSwing;
 
     /// <summary>연행 중 따라갈 대상(체포한 플레이어). 연행 중이 아니면 null. 서버에서만 유효.</summary>
@@ -153,7 +146,6 @@ public partial class NpcController : NetworkBehaviour
         m_stateMachine.AddState(NpcState.Run, new NpcFleeState(this, m_fleeConfig));
         m_stateMachine.AddState(NpcState.Attack, new NpcResistState(this, m_resistConfig, m_fleeConfig));
         m_stateMachine.AddState(NpcState.Stunned, new NpcStunnedState(this, m_stunConfig));
-        m_stateMachine.AddState(NpcState.Panic, new NpcPanicState(this, m_panicConfig));
         m_stateMachine.AddState(NpcState.Jailed, new NpcJailedState(this));
         m_stateMachine.AddState(NpcState.Intruding, new NpcIntrudeState(this));
         m_stateMachine.AddState(NpcState.Detained, new NpcDetainedState(this));
@@ -226,31 +218,6 @@ public partial class NpcController : NetworkBehaviour
         }
 
         m_stateMachine.Tick();
-        EmitDisturbancePulse();
-    }
-
-    // 저항·도주 중인 NPC는 그 자체가 소란의 원천 — 주기적으로 주변 시민을 패닉시킨다 (#81)
-    private void EmitDisturbancePulse()
-    {
-        NpcState state = m_stateMachine.CurrentState;
-        if (state != NpcState.Run && state != NpcState.Attack)
-            return;
-
-        RequestDisturbancePulse();
-    }
-
-    /// <summary>
-    /// 소란 펄스를 1회 요청한다 — 상태 클래스가 자기 사정으로 소란을 낼 때 쓴다.
-    /// 주기 스로틀은 자동 펄스(<see cref="EmitDisturbancePulse"/>)와 공유하므로 펄스 타이머가 둘로 갈라지지 않는다.
-    /// 서버(또는 오프라인) 전용 — FSM Tick 안에서만 불린다. (#81, #230)
-    /// </summary>
-    public void RequestDisturbancePulse()
-    {
-        if (Time.time < m_nextDisturbancePulseTime)
-            return;
-
-        m_nextDisturbancePulseTime = Time.time + m_commonConfig.DisturbancePulseInterval;
-        BroadcastDisturbance(transform.position, m_commonConfig.DisturbanceRadius);
     }
 
     // 서버(또는 오프라인)의 FSM 전이를 밖으로 전파한다
@@ -300,7 +267,7 @@ public partial class NpcController : NetworkBehaviour
     }
 
     /// <summary>공격 스윙 1회를 전 피어에 알린다 — 애니메이션 표현용. 서버(또는 오프라인) FSM Tick에서만 호출한다.
-    /// 서버는 로컬 발행 + ClientRpc로 원격 클라에 중계한다. (#220, ThugAttacker.NotifyAttack과 동일 패턴)</summary>
+    /// 서버는 로컬 발행 + ClientRpc로 원격 클라에 중계한다. (#220)</summary>
     public void RaiseAttackSwing(int variant)
     {
         OnAttackSwing?.Invoke(variant); // 서버·오프라인 로컬 발행

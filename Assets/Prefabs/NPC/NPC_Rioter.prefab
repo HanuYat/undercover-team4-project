@@ -114,7 +114,6 @@ MonoBehaviour:
   m_stunConfig: {fileID: 11400000, guid: 9ad3ad04e833d95468a4ae478241f6a9, type: 2}
   m_capturedConfig: {fileID: 11400000, guid: ea1210064ec160f42b74c49da9fc0db3, type: 2}
   m_chaseConfig: {fileID: 11400000, guid: 9ed1e2d21e0bab04ab936f0ee96d01a4, type: 2}
-  m_panicConfig: {fileID: 11400000, guid: e4fa123e038e1fe419162cbbbf0ec1bf, type: 2}
   m_commonConfig: {fileID: 11400000, guid: 53e1f2f00b63a3d49adad69104609b9a, type: 2}
 --- !u!54 &161675701295816944
 Rigidbody:
@@ -155,7 +154,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 84b556080d067894abc1fbda2ebef87a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcAnimationDriver
-  m_panicRunReferenceSpeed: 4.5
   m_swingAnimSeconds: 0.9
   m_unlockBeginSeconds: 0.63
   m_animator: {fileID: 0}

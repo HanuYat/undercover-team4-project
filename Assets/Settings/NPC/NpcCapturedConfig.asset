@@ -13,4 +13,3 @@ MonoBehaviour:
   m_Name: NpcCapturedConfig
   m_EditorClassIdentifier: Assembly-CSharp::NpcCapturedConfig
   m_escapeSeconds: 30
-  m_escapeWarningSeconds: 5
