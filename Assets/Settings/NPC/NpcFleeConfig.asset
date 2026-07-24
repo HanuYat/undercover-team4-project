@@ -12,8 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0eec706d0f436a64a899cba682e93296, type: 3}
   m_Name: NpcFleeConfig
   m_EditorClassIdentifier: Assembly-CSharp::NpcFleeConfig
-  m_speedMultiplier: 1.5
+  m_speedMultiplier: 3
   m_stepDistance: 10
+  m_farPointDistance: 20
   m_escapeDistance: 25
   m_clearanceRadius: 4
   m_resistCooldown: 2
