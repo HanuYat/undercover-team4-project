@@ -747,6 +747,17 @@ public class PlayerEscorter : NetworkBehaviour
         if (EscortingNpc != null && EscortingNpc.CurrentState != NpcState.Escorted)
             SetEscorting(null);
 
+        // 대상이 파괴되면(라운드 종료 시 NPC가 씬과 함께 destroy) 위 가드와 아래 끌기 가드가 Unity 가짜 null에
+        // 걸려 통째로 건너뛴다 — 참조는 사라졌는데 동기화 플래그만 남으면 원격 오너의 IsBusy가 영구 true가 되어
+        // E 상호작용이 다음 라운드까지 죽는다(PlayerInteractor가 매 입력을 '놓기'로 소비). 참조가 비면 플래그도 내린다. (#356)
+        if (IsSpawned && IsServer)
+        {
+            if (EscortingNpc == null && m_isEscortingSynced.Value)
+                SetEscorting(null);
+            if (DraggingNpc == null && m_draggedNpcSynced.Value.NetworkObjectId != 0)
+                SetDragging(null);
+        }
+
         // 밧줄 끌기: 끌리는 NPC를 매 프레임 밧줄 장력으로 끌어당긴다 — 위치 종속(플레이어 속도 그대로). (#269)
         if (DraggingNpc != null)
         {
