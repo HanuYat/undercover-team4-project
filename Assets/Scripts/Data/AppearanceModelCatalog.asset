@@ -25,23 +25,23 @@ MonoBehaviour:
     Profile:
       HairStyleIndex: 0
       HairColorIndex: 8
-      SkinColorIndex: 4
+      SkinColorIndex: 6
       FacialHairIndex: 0
       HeadwearIndex: 0
       EyewearIndex: 0
   - ModelName: Character_Android_Female_01
     Profile:
-      HairStyleIndex: 4
-      HairColorIndex: 8
+      HairStyleIndex: 1
+      HairColorIndex: 7
       SkinColorIndex: 4
       FacialHairIndex: 0
-      HeadwearIndex: 4
+      HeadwearIndex: 0
       EyewearIndex: 0
   - ModelName: Character_Augmented_Male_01
     Profile:
       HairStyleIndex: 1
       HairColorIndex: 1
-      SkinColorIndex: 1
+      SkinColorIndex: 0
       FacialHairIndex: 0
       HeadwearIndex: 0
       EyewearIndex: 0
@@ -49,15 +49,15 @@ MonoBehaviour:
     Profile:
       HairStyleIndex: 4
       HairColorIndex: 8
-      SkinColorIndex: 1
+      SkinColorIndex: 6
       FacialHairIndex: 0
-      HeadwearIndex: 3
+      HeadwearIndex: 6
       EyewearIndex: 0
   - ModelName: Character_Cyber_Female_01
     Profile:
       HairStyleIndex: 2
       HairColorIndex: 0
-      SkinColorIndex: 1
+      SkinColorIndex: 0
       FacialHairIndex: 0
       HeadwearIndex: 0
       EyewearIndex: 0
@@ -65,63 +65,63 @@ MonoBehaviour:
     Profile:
       HairStyleIndex: 1
       HairColorIndex: 0
-      SkinColorIndex: 1
-      FacialHairIndex: 0
+      SkinColorIndex: 0
+      FacialHairIndex: 2
       HeadwearIndex: 0
-      EyewearIndex: 2
+      EyewearIndex: 0
   - ModelName: Character_CyberPunk_Male_01
     Profile:
       HairStyleIndex: 1
       HairColorIndex: 0
-      SkinColorIndex: 1
+      SkinColorIndex: 0
       FacialHairIndex: 0
-      HeadwearIndex: 0
+      HeadwearIndex: 5
       EyewearIndex: 0
   - ModelName: Character_CyborgNinja_01
     Profile:
-      HairStyleIndex: 4
+      HairStyleIndex: 0
       HairColorIndex: 8
       SkinColorIndex: 4
       FacialHairIndex: 0
-      HeadwearIndex: 6
-      EyewearIndex: 4
+      HeadwearIndex: 0
+      EyewearIndex: 0
   - ModelName: Character_Garbage_Male_01
     Profile:
-      HairStyleIndex: 4
-      HairColorIndex: 8
-      SkinColorIndex: 1
+      HairStyleIndex: 1
+      HairColorIndex: 1
+      SkinColorIndex: 0
       FacialHairIndex: 0
-      HeadwearIndex: 2
-      EyewearIndex: 3
+      HeadwearIndex: 0
+      EyewearIndex: 0
   - ModelName: Character_Hacker_Female_01
     Profile:
       HairStyleIndex: 1
       HairColorIndex: 6
-      SkinColorIndex: 1
+      SkinColorIndex: 0
       FacialHairIndex: 0
       HeadwearIndex: 0
-      EyewearIndex: 4
+      EyewearIndex: 3
   - ModelName: Character_Hologram_Female_01
     Profile:
-      HairStyleIndex: 2
+      HairStyleIndex: 1
       HairColorIndex: 7
       SkinColorIndex: 5
       FacialHairIndex: 0
       HeadwearIndex: 0
-      EyewearIndex: 0
+      EyewearIndex: 4
   - ModelName: Character_Junky_Female_01
     Profile:
-      HairStyleIndex: 1
+      HairStyleIndex: 3
       HairColorIndex: 2
-      SkinColorIndex: 1
+      SkinColorIndex: 0
       FacialHairIndex: 0
       HeadwearIndex: 5
       EyewearIndex: 0
   - ModelName: Character_Junky_Male_01
     Profile:
       HairStyleIndex: 4
-      HairColorIndex: 8
-      SkinColorIndex: 1
+      HairColorIndex: 1
+      SkinColorIndex: 0
       FacialHairIndex: 0
       HeadwearIndex: 4
       EyewearIndex: 3
@@ -129,33 +129,33 @@ MonoBehaviour:
     Profile:
       HairStyleIndex: 4
       HairColorIndex: 8
-      SkinColorIndex: 1
+      SkinColorIndex: 6
       FacialHairIndex: 0
-      HeadwearIndex: 4
-      EyewearIndex: 4
+      HeadwearIndex: 6
+      EyewearIndex: 3
   - ModelName: Character_Monk_Male_01
     Profile:
-      HairStyleIndex: 4
+      HairStyleIndex: 0
       HairColorIndex: 8
-      SkinColorIndex: 1
+      SkinColorIndex: 0
       FacialHairIndex: 0
-      HeadwearIndex: 2
-      EyewearIndex: 2
+      HeadwearIndex: 5
+      EyewearIndex: 3
   - ModelName: Character_Muscle_Male_01
     Profile:
       HairStyleIndex: 1
       HairColorIndex: 0
-      SkinColorIndex: 1
-      FacialHairIndex: 2
+      SkinColorIndex: 0
+      FacialHairIndex: 1
       HeadwearIndex: 0
-      EyewearIndex: 1
+      EyewearIndex: 4
   - ModelName: Character_Rich_Female_01
     Profile:
-      HairStyleIndex: 1
+      HairStyleIndex: 2
       HairColorIndex: 5
-      SkinColorIndex: 1
-      FacialHairIndex: 0
-      HeadwearIndex: 0
+      SkinColorIndex: 0
+      FacialHairIndex: 1
+      HeadwearIndex: 3
       EyewearIndex: 0
   - ModelName: Character_Rich_Male_01
     Profile:
@@ -167,9 +167,9 @@ MonoBehaviour:
       EyewearIndex: 0
   - ModelName: Character_Robot_01
     Profile:
-      HairStyleIndex: 4
+      HairStyleIndex: 0
       HairColorIndex: 8
       SkinColorIndex: 4
       FacialHairIndex: 0
-      HeadwearIndex: 6
+      HeadwearIndex: 0
       EyewearIndex: 4

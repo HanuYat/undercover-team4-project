@@ -28,7 +28,7 @@ MonoBehaviour:
     - DisplayName: "\uAE34\uBA38\uB9AC"
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 1272386763867106638, guid: 515a24c6c0ff2404782d8d7c7de093af, type: 3}
+      PropPrefab: {fileID: 1090390649989844869, guid: d30df5bb55089ad4a989b1473c7a2293, type: 3}
       SciFiOnly: 0
     - DisplayName: "\uBB36\uC74C\uBA38\uB9AC"
       Color: {r: 1, g: 1, b: 1, a: 1}
@@ -49,12 +49,12 @@ MonoBehaviour:
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
     - DisplayName: "\uAC08\uC0C9"
-      Color: {r: 0.32, g: 0.19, b: 0.1, a: 1}
+      Color: {r: 0.2264151, g: 0.18297055, b: 0.15485938, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
     - DisplayName: "\uAE08\uBC1C"
-      Color: {r: 0.92, g: 0.74, b: 0.32, a: 1}
+      Color: {r: 1, g: 0.90781844, b: 0.6933962, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
@@ -91,12 +91,12 @@ MonoBehaviour:
   m_skinColor:
     AxisName: "\uD53C\uBD80\uC0C9"
     Options:
-    - DisplayName: "\uCC3D\uBC31"
+    - DisplayName: "\uBC1D\uC74C"
       Color: {r: 0.95, g: 0.85, b: 0.78, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
-    - DisplayName: "\uBCF4\uD1B5"
+    - DisplayName: "\uC0B4\uAD6C\uC0C9"
       Color: {r: 0.85, g: 0.68, b: 0.55, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
@@ -111,13 +111,18 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
-    - DisplayName: "\uC740\uC0C9\uBA54\uD0C8"
+    - DisplayName: "\uBA54\uD0C8"
       Color: {r: 0.6, g: 0.62, b: 0.66, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
     - DisplayName: "\uB124\uC628"
       Color: {r: 0.95, g: 0.35, b: 0.85, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefab: {fileID: 0}
+      SciFiOnly: 1
+    - DisplayName: "\uADF8 \uC678"
+      Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
@@ -137,7 +142,7 @@ MonoBehaviour:
     - DisplayName: "\uD131\uC218\uC5FC"
       Color: {r: 0.15, g: 0.12, b: 0.1, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 3252513830353061635, guid: 5552d13d2d0636b4b84403bca027f0c0, type: 3}
+      PropPrefab: {fileID: 5381899529043745372, guid: 2c3db847c027ff04f9f95cf539c047de, type: 3}
       SciFiOnly: 0
     - DisplayName: "\uAD6C\uB808\uB098\uB8FB"
       Color: {r: 0.15, g: 0.12, b: 0.1, a: 1}
@@ -175,7 +180,7 @@ MonoBehaviour:
     - DisplayName: "\uD5E4\uB4DC\uD3F0"
       Color: {r: 0.15, g: 0.15, b: 0.15, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 5483532631979247779, guid: 04e2a0f1ad1a87f4fa83b8972846ec96, type: 3}
+      PropPrefab: {fileID: 7624828572083015622, guid: 640045eb994ac644d9f89980114f4305, type: 3}
       SciFiOnly: 0
     - DisplayName: "\uD5EC\uBA67"
       Color: {r: 0.5, g: 0.5, b: 0.55, a: 1}
@@ -203,8 +208,8 @@ MonoBehaviour:
     - DisplayName: "\uACE0\uAE00"
       Color: {r: 0.2, g: 0.3, b: 0.2, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
-      SciFiOnly: 1
+      PropPrefab: {fileID: 5483532631979247779, guid: 04e2a0f1ad1a87f4fa83b8972846ec96, type: 3}
+      SciFiOnly: 0
     - DisplayName: "\uBC1C\uAD11\uB80C\uC988"
       Color: {r: 0.2, g: 0.8, b: 0.8, a: 1}
       MaterialOverride: {fileID: 0}
