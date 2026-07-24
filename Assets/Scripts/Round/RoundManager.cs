@@ -211,6 +211,11 @@ public class RoundManager : CommonManagerBase
         if (result.Verdict != ArrestVerdict.WantedCriminal)
             return;
 
+        // 재판정(같은 진범을 다시 인계)으로 할당량이 부풀지 않게 — 첫 인계에만 누적한다.
+        // 탈옥(ClearDelivered)하면 다시 첫 인계가 되어 재검거 때 정상적으로 재누적된다. (#358)
+        if (!result.IsFirstDelivery)
+            return;
+
         CriminalArrestCount++;
         Debug.Log($"[라운드] 진범 검거 — 할당량 진행 {CriminalArrestCount}/{m_arrestQuota}");
 

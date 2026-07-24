@@ -113,6 +113,10 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         if (result.Verdict != ArrestVerdict.WrongfulArrest)
             return;
 
+        // 재판정(같은 시민을 다시 인계)으로 오검거 카운트·수용·출동이 중복되지 않게 — 첫 인계만 처리한다. (#358)
+        if (!result.IsFirstDelivery)
+            return;
+
         // 개인 집계는 실제 오검거 기록 — 페널티 결과와 무관하게 항상 +1 (정산 코믹 스탯용).
         if (result.DeliveredBy != null)
         {

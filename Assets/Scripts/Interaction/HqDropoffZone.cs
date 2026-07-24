@@ -15,20 +15,20 @@ public class HqDropoffZone : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        TryDeliver(other, logIgnored: true);
+        TryDeliver(other);
     }
 
     // Enter만으로는 구멍이 있다 (#310 후속): 잔류·탈옥 방출된 경범죄 NPC가 본부 안까지 배회해 들어온 뒤
     // '존 안에서' 제압·연행되면 진입 이벤트가 다시 울리지 않아 판정이 영영 안 난다. Stay가 매 물리 틱
-    // 자격을 재검사해 그 경우를 잡는다 — 판정 즉시 IsDelivered가 세팅되므로(ArrestJudge) 중복 발화는
-    // 그 게이트가 막는다. (자동 판정을 끈 구성에서는 Stay가 반복 발화할 수 있다 — 그 모드로 전환하는
-    // 시점(#40)에 1회 래치를 함께 붙일 것)
+    // 자격을 재검사해 그 경우를 잡는다 — 판정 직후엔 연행/끌기가 풀려(Escorted/Roped 이탈) 아래 상태
+    // 게이트가 틱 재발화를 막고, 다시 연행해 데려오면 그때 한 번 더 판정된다(재판정 허용 #358). (자동
+    // 판정을 끈 구성에서는 Stay가 반복 발화할 수 있다 — 그 모드로 전환하는 시점(#40)에 1회 래치를 붙일 것)
     private void OnTriggerStay(Collider other)
     {
-        TryDeliver(other, logIgnored: false);
+        TryDeliver(other);
     }
 
-    private void TryDeliver(Collider other, bool logIgnored)
+    private void TryDeliver(Collider other)
     {
         // 서버 권위 게이트 (클라이언트에서는 실행 무시 - 로그 스팸 및 중복 발화 방지)
         if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer)
@@ -39,15 +39,9 @@ public class HqDropoffZone : MonoBehaviour
         if (npc == null)
             return;
 
-        // [가장 중요한 수정] 이미 판정이 끝난 NPC라면, 존에 닿아도 완전히 무시합니다.
-        if (npc.IsDelivered)
-        {
-            if (logIgnored)
-                Debug.Log($"[중복 방지] 이미 판정 완료된 NPC가 존에 재진입하여 무시됩니다: {npc.name}");
-            return;
-        }
-
-        // 연행 중이거나 밧줄로 끌려온 기절 NPC만 인계 대상 — 배회 시민은 무시 (#59/#269)
+        // 연행 중이거나 밧줄로 끌려온 기절 NPC만 인계 대상 — 배회 시민은 무시 (#59/#269).
+        // 재판정 허용(#358): 판정 후엔 연행/끌기가 즉시 풀려 이 게이트에 걸리므로 매 틱 재발화가 막히고,
+        // 다시 연행(E)해 데려오면 그때 한 번 더 판정된다. 중복 후처리(할당량·오검거·돈)는 판정 쪽에서 1회로 건다.
         if (npc.CurrentState != NpcState.Escorted && !npc.IsRoped)
             return;
 
