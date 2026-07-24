@@ -113,9 +113,10 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         if (result.Verdict != ArrestVerdict.WrongfulArrest)
             return;
 
-        // 재판정(같은 시민을 다시 인계)으로 오검거 카운트·수용·출동이 중복되지 않게 — 첫 인계만 처리한다. (#358)
-        if (!result.IsFirstDelivery)
-            return;
+        // 오검거 카운트는 매 인계마다 오른다 — 무고한 시민을 다시 잡아 인계하면 또 한 번의 오검거다 (#358).
+        // IsFirstDelivery로 막지 않는 이유: 시민은 석방(ReleaseFromCustody)돼도 ClearDelivered가 불리지 않아
+        // IsDelivered가 영구 true로 남는다 → 가드를 걸면 첫 인계 이후 오검거가 영영 안 세진다. 재판정 스팸은
+        // HqDropoffZone의 Escorted/Roped 게이트 + 판정 즉시 Release로 물리 인계 1회당 Judge 1회라 애초에 없다.
 
         // 개인 집계는 실제 오검거 기록 — 페널티 결과와 무관하게 항상 +1 (정산 코믹 스탯용).
         if (result.DeliveredBy != null)

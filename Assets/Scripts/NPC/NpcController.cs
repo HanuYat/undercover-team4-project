@@ -74,7 +74,8 @@ public partial class NpcController : NetworkBehaviour
 
     /// <summary>
     /// 본부 인계 판정이 끝났는가 — <see cref="MarkDelivered"/>로 ArrestJudge가 세팅한다. (#230)
-    /// 판정 완료분은 인계 방치 타이머에서 빠지고(본부에서 탈출하면 안 된다), 인계존 재진입 시 중복 판정도 막는다.
+    /// 판정 완료분은 인계 방치 타이머에서 빠진다(본부에서 탈출하면 안 된다). 재판정 자체는 막지 않으며(#358 —
+    /// HqDropoffZone이 더는 IsDelivered NPC를 무시하지 않는다), 재판정 후처리 중복은 <see cref="ArrestResult.IsFirstDelivery"/>가 건다.
     /// 서버(또는 오프라인)에서만 유효 — 판정·인계존 게이트가 모두 서버 전용이라 동기화하지 않는다.
     /// 판정 후 본부에 남는 NPC의 처리는 유치장(#228)이 가져간다.
     /// </summary>
@@ -92,9 +93,9 @@ public partial class NpcController : NetworkBehaviour
     /// <summary>
     /// 인계 판정 완료 표시를 되돌린다 — 범인 탈출 이벤트(#231) 전용. 서버(또는 오프라인)에서만 호출된다.
     ///
-    /// <b>재검거의 핵심이다.</b> <see cref="HqDropoffZone"/>은 <see cref="IsDelivered"/>가 켜진 NPC를
-    /// 인계존에서 통째로 무시하므로(중복 판정 방지, #230), 이 플래그를 되돌리지 않으면 탈출한 범인을
-    /// 다시 잡아 와도 판정이 아예 나지 않는다.
+    /// <b>재검거의 핵심이다.</b> 이 플래그가 켜져 있으면 <see cref="ArrestResult.IsFirstDelivery"/>가 false가 되어,
+    /// 탈출한 범인을 다시 잡아 인계해도 <see cref="RoundManager"/> 할당량이 다시 누적되지 않는다(#358). 되돌려야
+    /// 재검거가 '첫 인계'로 잡혀 정상 카운트된다. (오검거 카운트는 IsFirstDelivery에 의존하지 않는다 — WrongfulArrestPenalty 참조)
     /// </summary>
     public void ClearDelivered()
     {
