@@ -31,9 +31,24 @@ public class JailZone : NetworkBehaviour
     // 이미 수용된 NPC — 중복 카운트 방어(같은 대상이 두 번 판정·통보되거나 재수용되는 경우)
     private readonly HashSet<NpcController> m_inmates = new HashSet<NpcController>();
 
-    // 수감자별 보상액(bounty) — 라운드 종료 점유 기반 정산(#340)이 합산한다. 탈옥 방출 시 함께 제거되므로
-    // 유치장에 남아 있는 대상만 정산에 계상된다("끝까지 데리고 있어야 보상"). 서버(또는 오프라인) 전용.
-    private readonly Dictionary<NpcController, int> m_bounty = new Dictionary<NpcController, int>();
+    // 수감자별 정산 레코드 — 보상액(bounty)과 진범 여부를 수감 시점(NPC 생존 확정)에 박제한다. 라운드 종료 시
+    // 잔류 정리(MisdemeanorLoiterer)로 NPC가 파괴돼도 살아 있는 참조 없이 합산할 수 있어, 파괴 타이밍과
+    // 정산 읽는 프레임의 경합으로 돌발이벤트 수감자가 누락되던 문제를 없앤다. 탈옥 방출 시 함께 제거되므로
+    // 유치장에 남아 있는 대상만 계상된다("끝까지 데리고 있어야 보상"). 서버(또는 오프라인) 전용. (#358/#340)
+    private readonly Dictionary<NpcController, InmateRecord> m_records = new Dictionary<NpcController, InmateRecord>();
+
+    // 정산에 필요한 값만 담은 불변 레코드 — 수감 시점 스냅샷이라 NpcController 참조 없이 합산할 수 있다. (#358)
+    private readonly struct InmateRecord
+    {
+        public readonly int Bounty;
+        public readonly bool IsCriminal;
+
+        public InmateRecord(int bounty, bool isCriminal)
+        {
+            Bounty = bounty;
+            IsCriminal = isCriminal;
+        }
+    }
 
     // 수용 지점 순차 배정 커서 — 여러 명이 한 점에 겹쳐 서지 않게 돌려 쓴다
     private int m_nextCellIndex;
@@ -109,7 +124,8 @@ public class JailZone : NetworkBehaviour
         if (!m_inmates.Add(npc))
             return; // 이미 수용됨 — 중복 통보 무시
 
-        m_bounty[npc] = bounty; // 정산용 보상액 기록 (재수용 시 최신 값으로 갱신)
+        // 진범 여부를 수감 시점에 판정해 박제한다 — 정산 때 살아 있는 NPC를 다시 안 봐도 되게 (#358).
+        m_records[npc] = new InmateRecord(bounty, IsCriminalInmate(npc)); // 재수용 시 최신 값으로 갱신
         SetInmateCount(m_inmates.Count);
         Debug.Log($"[유치장] 수용: {npc.name} — 현재 {InmateCount}명");
 
@@ -135,7 +151,7 @@ public class JailZone : NetworkBehaviour
         if (!m_inmates.Remove(npc))
             return;
 
-        m_bounty.Remove(npc); // 방출된 수감자는 정산에서 빠진다 — 탈옥해 유치장에 없으면 보상 없음 (#340)
+        m_records.Remove(npc); // 방출된 수감자는 정산에서 빠진다 — 탈옥해 유치장에 없으면 보상 없음 (#340)
         SetInmateCount(m_inmates.Count);
         Debug.Log($"[유치장] 수용 해제: {npc.name} — 현재 {InmateCount}명");
     }
@@ -150,20 +166,23 @@ public class JailZone : NetworkBehaviour
         int criminals = 0;
         int misdemeanors = 0;
         int total = 0;
-        foreach (NpcController npc in m_inmates)
+        // 저장된 레코드로 합산한다 — NPC 오브젝트가 이미 파괴됐어도(라운드 종료 잔류 정리) 계상된다. (#358)
+        foreach (InmateRecord record in m_records.Values)
         {
-            if (npc == null)
-                continue;
-
-            total += m_bounty.TryGetValue(npc, out int bounty) ? bounty : 0;
-
-            CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
-            if (identity != null && identity.IsCriminal)
+            total += record.Bounty;
+            if (record.IsCriminal)
                 criminals++;
             else
                 misdemeanors++;
         }
         return (criminals, misdemeanors, total);
+    }
+
+    // 수감 시점의 진범 여부 — 기존 정산 분류와 동일 기준(CitizenIdentity.IsCriminal, 그 외는 경범죄). (#358)
+    private static bool IsCriminalInmate(NpcController npc)
+    {
+        CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
+        return identity != null && identity.IsCriminal;
     }
 
     // 서버 진실값과 동기화 변수에 함께 기록한다 — 오프라인에서는 NetworkVariable에 쓰지 않고

@@ -64,9 +64,6 @@ public class ArrestJudge : CommonManagerBase
         if (npc == null) return null;
         if (npc.IsSpawned && !npc.IsServer) return null;
 
-        // 혹시 모를 중복 진입 방어
-        if (npc.IsDelivered) return null;
-
         // 경범죄 이벤트 NPC(난동꾼)는 신원 대조 이전에 마커로 식별한다 (#106).
         MisdemeanorOffender misdemeanor = npc.GetComponent<MisdemeanorOffender>();
         CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
@@ -78,8 +75,11 @@ public class ArrestJudge : CommonManagerBase
             return null;
         }
 
-        // [핵심] 판정이 시작되면 즉시 판정 완료로 표시 — 인계존 재진입 중복 판정과
-        // 인계 방치 타이머(#230)를 함께 막는다
+        // 첫 인계 여부를 표식 세우기 전에 잡아 둔다 — 할당량·오검거 카운트가 재판정으로 부풀지 않게 (#358).
+        bool firstDelivery = !npc.IsDelivered;
+
+        // 판정 완료로 표시 — 본부 방치 도주 타이머(#230)를 멈춘다. 재판정 자체는 허용하므로(#358)
+        // 여기서 중복을 막지는 않는다(틱 스팸은 HqDropoffZone의 Escorted/Roped 게이트가 걸러 준다).
         npc.MarkDelivered();
 
         ArrestVerdict verdict;
@@ -113,7 +113,7 @@ public class ArrestJudge : CommonManagerBase
 
         CitizenProfile profile = identity != null ? identity.Profile : null;
         PlayerEscorter deliverer = PlayerEscorter.FindEscorterOf(npc);
-        var result = new ArrestResult(npc, verdict, profile, reward, deliverer);
+        var result = new ArrestResult(npc, verdict, profile, reward, deliverer, firstDelivery);
 
         LogVerdict(result);
 
@@ -166,13 +166,18 @@ public readonly struct ArrestResult
     public readonly int Reward;
     public readonly PlayerEscorter DeliveredBy;
 
+    // 이 판정이 첫 인계인지 — 재판정(같은 대상을 다시 인계존에 넣음)이면 false. 할당량·오검거 카운트처럼
+    // 1회만 세어야 하는 후처리가 이 값으로 재판정을 걸러 낸다. 탈옥(ClearDelivered) 후 재검거는 다시 true. (#358)
+    public readonly bool IsFirstDelivery;
+
     public ArrestResult(NpcController npc, ArrestVerdict verdict, CitizenProfile profile,
-        int reward, PlayerEscorter deliveredBy)
+        int reward, PlayerEscorter deliveredBy, bool isFirstDelivery)
     {
         Npc = npc;
         Verdict = verdict;
         Profile = profile;
         Reward = reward;
         DeliveredBy = deliveredBy;
+        IsFirstDelivery = isFirstDelivery;
     }
 }
