@@ -343,35 +343,8 @@ public class Scanner : ItemBase, IChargeable
             OnScanFeedback?.Invoke(message);
     }
 
-    // ---- 채널링 게이지 피드백 (#184) ----
-    // NotifyOwner와 동일 분기 — 호스트 오너·오프라인은 직접 호출, 원격 오너에게만 RPC.
-    // 스캐너는 줍기 시 소유권이 홀더로 이전되므로(#88) SendTo.Owner가 정확히 든 사람에게 간다.
-
-    private void NotifyChannelGaugeStart(float seconds)
-    {
-        if (IsSpawned && IsServer && !IsOwner)
-        {
-            ChannelGaugeStartRpc(seconds);
-            return;
-        }
-        App.UI.Gauge?.Show(seconds);
-    }
-
-    private void NotifyChannelGaugeEnd()
-    {
-        if (IsSpawned && IsServer && !IsOwner)
-        {
-            ChannelGaugeEndRpc();
-            return;
-        }
-        App.UI.Gauge?.Hide();
-    }
-
-    [Rpc(SendTo.Owner)]
-    private void ChannelGaugeStartRpc(float seconds) => App.UI.Gauge?.Show(seconds);
-
-    [Rpc(SendTo.Owner)]
-    private void ChannelGaugeEndRpc() => App.UI.Gauge?.Hide();
+    // 채널링 게이지 피드백(NotifyChannelGaugeStart/End)은 기반 ChanneledInteractionBehaviour가 제공한다. (#184)
+    // 스캐너는 줍기 시 소유권이 홀더로 이전되므로(#88) 기반의 SendTo.Owner가 정확히 든 사람에게 간다.
 
     // ---- 스캔 취소 ----
 

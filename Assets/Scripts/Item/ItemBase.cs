@@ -16,8 +16,10 @@ public enum HandGrip
 /// 스캐너·수갑 등 하위 아이템은 이 클래스를 상속해 Use()를 구현한다.
 /// 아이템은 독립 NetworkObject 프리팹이므로(#88) NetworkBehaviour를 상속한다 —
 /// 배터리 등 상태를 NetworkVariable로 전 클라에 동기화하고, 줍기 시 소유권이 이전된다.
+/// 채널링 게이지 피드백(#184)은 공통 기반 ChanneledInteractionBehaviour가 제공한다 —
+/// CancelUse()로 이미 채널링을 아이템 공통 개념으로 다루므로 게이지 헬퍼도 여기에 둔다.
 /// </summary>
-public abstract class ItemBase : NetworkBehaviour
+public abstract class ItemBase : ChanneledInteractionBehaviour
 {
     [Header("아이템 정보")]
     [SerializeField]
