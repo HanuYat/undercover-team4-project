@@ -16,8 +16,10 @@ public enum HandGrip
 /// 스캐너·수갑 등 하위 아이템은 이 클래스를 상속해 Use()를 구현한다.
 /// 아이템은 독립 NetworkObject 프리팹이므로(#88) NetworkBehaviour를 상속한다 —
 /// 배터리 등 상태를 NetworkVariable로 전 클라에 동기화하고, 줍기 시 소유권이 이전된다.
+/// 채널링 게이지 피드백(#184)은 공통 기반 ChanneledInteractionBehaviour가 제공한다 —
+/// CancelUse()로 이미 채널링을 아이템 공통 개념으로 다루므로 게이지 헬퍼도 여기에 둔다.
 /// </summary>
-public abstract class ItemBase : NetworkBehaviour
+public abstract class ItemBase : ChanneledInteractionBehaviour
 {
     [Header("아이템 정보")]
     [SerializeField]
@@ -114,4 +116,12 @@ public abstract class ItemBase : NetworkBehaviour
     /// </summary>
     // TODO: 네트워크 테스트 시 취소도 서버 권위로 (오너 뗌 입력 → CancelUseServerRpc → 서버가 채널링 중단)
     public virtual void CancelUse() { }
+
+    /// <summary>
+    /// 서버 권위로 진행 중인 사용(채널링)을 즉시 중단한다 — 소유권 이전을 동반하는 경로(버리기)에서
+    /// 서버가 직접 호출한다. <see cref="CancelUse"/>는 오너 클라의 '의도'라 소유권이 회수된 원격 드롭에선
+    /// 취소 RPC가 거부되지만(RequireOwnership), 이건 서버가 자기 채널을 직접 끊으므로 경합이 없다.
+    /// 채널링 없는 아이템은 무동작(기본).
+    /// </summary>
+    public virtual void ServerCancelActiveUse() { }
 }

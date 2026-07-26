@@ -76,6 +76,13 @@ public class Handcuffs : ItemBase
     /// <summary>진행 중인 구속 채널링을 취소한다. (이동·피격 등 방해 시 호출) — 서버 채널링에 취소를 요청한다.</summary>
     public void CancelRestrain() => Escorter?.CancelCapture();
 
+    /// <summary>
+    /// 버리기 등 소유권 이전 경로에서 서버가 직접 체포 채널을 끊는다 (ItemBase 훅). 서버(또는 오프라인)에서만 호출.
+    /// 수갑의 채널은 자기 자신이 아니라 PlayerEscorter에 있고, 분리되면 Escorter를 못 찾으므로(부모 상실)
+    /// DropRpc가 아직 부착돼 있을 때(분리 전) 부르는 이 훅에서 서버 권위로 끊는다.
+    /// </summary>
+    public override void ServerCancelActiveUse() => Escorter?.ServerCancelChannel();
+
     // ---- 대상 탐색 ----
 
     /// <summary>
