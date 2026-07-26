@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// 전자기기 먹통의 클라이언트 표현 — 먹통 이벤트의 플래그(<see cref="DeviceBlackoutEvent.IsCommsBlackout"/>)를 구독해
-/// 시야 제한(화면 어둡게)과 통신 차단(<see cref="VivoxManager.SetCommsJammed"/>)을 켜고 끈다. (GDD 6-4/4-4, #106)
+/// 시야 제한(화면 어둡게)과 음성 왜곡(<see cref="VivoxManager.SetVoiceDistorted"/>)을 켜고 끈다. (GDD 6-4/4-4, #106/#372)
 /// 서버·원격 클라·오프라인 모든 피어에서 각자 자기 화면·자기 무전을 처리한다
 /// (플래그 변화는 <see cref="DeviceBlackoutEvent.OnCommsBlackoutChanged"/>가 전 피어에서 발행한다).
 /// </summary>
@@ -25,8 +25,9 @@ public class DeviceBlackoutView : MonoBehaviour
 
     private void Start()
     {
+        // 비워두면 App 파사드에서 해석한다 — 먹통 이벤트는 자기 자신을 매니저로 등록한다 (#372, R1)
         if (m_blackout == null)
-            m_blackout = FindFirstObjectByType<DeviceBlackoutEvent>();
+            m_blackout = App.Game.Blackout;
 
         if (m_blackout == null)
         {
@@ -51,9 +52,11 @@ public class DeviceBlackoutView : MonoBehaviour
     private void HandleBlackoutChanged(bool active)
     {
         m_blackoutActive = active;
-        // 통신 차단은 이 피어의 무전(VivoxManager)에 위임 — 없으면(본부 단독·미설정) 건너뛴다
+        // 음성 왜곡은 이 피어의 무전(VivoxManager)에 위임 — 없으면(본부 단독·미설정) 건너뛴다.
+        // 차단이 아니라 왜곡인 이유(#372): 완전 침묵은 답답하고 버그로 오인된다. 망가진 소리는
+        // 이벤트 발생을 즉시 알리면서 알아듣기 어려워 통신 제한 효과도 낸다.
         if (Vivox != null)
-            Vivox.SetCommsJammed(active);
+            Vivox.SetVoiceDistorted(active);
     }
 
     private void OnGUI()
