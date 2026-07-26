@@ -116,4 +116,12 @@ public abstract class ItemBase : ChanneledInteractionBehaviour
     /// </summary>
     // TODO: 네트워크 테스트 시 취소도 서버 권위로 (오너 뗌 입력 → CancelUseServerRpc → 서버가 채널링 중단)
     public virtual void CancelUse() { }
+
+    /// <summary>
+    /// 서버 권위로 진행 중인 사용(채널링)을 즉시 중단한다 — 소유권 이전을 동반하는 경로(버리기)에서
+    /// 서버가 직접 호출한다. <see cref="CancelUse"/>는 오너 클라의 '의도'라 소유권이 회수된 원격 드롭에선
+    /// 취소 RPC가 거부되지만(RequireOwnership), 이건 서버가 자기 채널을 직접 끊으므로 경합이 없다.
+    /// 채널링 없는 아이템은 무동작(기본).
+    /// </summary>
+    public virtual void ServerCancelActiveUse() { }
 }

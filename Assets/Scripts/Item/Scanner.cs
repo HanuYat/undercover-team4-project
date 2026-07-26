@@ -351,6 +351,9 @@ public class Scanner : ItemBase, IChargeable
     /// <summary>좌클릭 뗌 — 진행 중인 스캔 채널링 취소를 서버에 요청한다 (#91).</summary>
     public override void CancelUse() => CancelScan();
 
+    /// <summary>버리기 등 소유권 이전 경로에서 서버가 직접 스캔 채널을 끊는다 (ItemBase 훅). 서버(또는 오프라인)에서만 호출된다.</summary>
+    public override void ServerCancelActiveUse() => m_channel.Cancel();
+
     /// <summary>진행 중인 스캔 채널링을 취소한다. (이동·피격 등 방해 시 호출)</summary>
     public void CancelScan()
     {
@@ -361,8 +364,11 @@ public class Scanner : ItemBase, IChargeable
             return;
         }
 
-        // 클라 → 서버에 취소 요청
-        RequestCancelScanRpc();
+        // 원격 클라 → 서버 취소 요청. 단 이미 소유권을 잃은 경우(버리기 직후)엔 RequireOwnership에
+        // 막혀 서버가 거부(경고 로그)하므로 보내지 않는다 — 그 경로는 서버가 DropRpc에서
+        // ServerCancelActiveUse로 직접 끊는다.
+        if (IsOwner)
+            RequestCancelScanRpc();
     }
 
     [Rpc(SendTo.Server)]

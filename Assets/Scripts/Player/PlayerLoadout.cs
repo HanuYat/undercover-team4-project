@@ -258,6 +258,14 @@ public class PlayerLoadout : NetworkBehaviour
             return;
         }
 
+        // 버리는 아이템이 채널링 중이면 서버가 직접 끊는다 — 소유권 회수(RemoveOwnership) 후엔 오너의
+        // 취소 RPC가 RequireOwnership에 막혀 거부되므로, 여기서 서버 권위로 중단해야 배터리 낭비·오완료를
+        // 막는다. 채널링 없는 아이템은 무동작(ItemBase 기본). (드롭 중 채널링 경합 대응)
+        if (itemNetworkObject.TryGetComponent(out ItemBase droppedItem))
+        {
+            droppedItem.ServerCancelActiveUse();
+        }
+
         // 플레이어에서 분리해 정면 바닥에 내려놓고, 소유권은 서버로 되돌린다(월드 상태).
         itemNetworkObject.TrySetParent((Transform)null, true);
         Vector3 dropPosition = transform.position + transform.forward * m_dropDistance;
