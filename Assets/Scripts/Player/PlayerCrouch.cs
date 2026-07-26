@@ -28,21 +28,50 @@ public class PlayerCrouch : NetworkBehaviour
     private bool m_isCrouching; // 서버·오프라인의 진실값 (비네트워크 Play 테스트 폴백)
     private bool m_crouchRequested; // 오너가 보낸 Ctrl 홀드 여부 — 서버에만 의미 있음
 
+    // 눌림 여부 자체도 전파한다 — 공중에서는 실제 앉기가 보류되지만 자세는 웅크려야 하고,
+    // 그 자세는 남의 화면에도 보여야 한다. (#189)
+    private readonly NetworkVariable<bool> m_isCrouchRequestedSynced = new NetworkVariable<bool>();
+    private bool m_isCrouchRequested;
+
     private CharacterController m_controller;
     private PlayerInputHandler m_inputHandler;
     private PlayerIncapacitation m_incapacitation; // 다운 중엔 앉기 해제 (콜라이더가 줄어든 채 고착되는 것 방지)
+    private PlayerJump m_jump; // 공중에서는 실제 앉기를 보류한다 (#189)
     private float m_standHeight; // 서기 CharacterController 높이 — 프리팹 초기값에서 캡처
     private float m_standCenterY; // 서기 CharacterController 중심 y — 발 위치 고정 계산 기준
     private float m_crouchBlend; // 0 = 완전히 섬, 1 = 완전히 앉음
 
-    /// <summary>앉기 여부. 서버·오프라인은 실참조, 원격 피어는 동기화값으로 판정. (PlayerIncapacitation.IsIncapacitated 관례)</summary>
+    /// <summary>
+    /// <b>앉기 상태</b>인지 — 이동 속도가 따르는 값. 공중에서는 키를 누르고 있어도 false이고,
+    /// 착지해야 걸린다. 덕분에 앞으로 뛰다가 공중에서 앉아도 체공 중 이동이 느려지지 않는다.
+    /// 콜라이더·카메라는 이 값이 아니라 <see cref="IsCrouchRequested"/>를 따른다는 점에 주의. (#189)
+    /// 서버·오프라인은 실참조, 원격 피어는 동기화값으로 판정. (PlayerIncapacitation.IsIncapacitated 관례)
+    /// </summary>
     public bool IsCrouching => IsSpawned && !IsServer ? m_isCrouchingSynced.Value : m_isCrouching;
+
+    /// <summary>
+    /// 앉기 키를 누르고 있는지 — <b>자세(애니메이션)와 콜라이더·카메라</b>가 따르는 값.
+    /// 공중에서 키를 누르면 <see cref="IsCrouching"/>은 false여도 이 값이 true라, 웅크린 자세와
+    /// 줄어든 콜라이더가 함께 간다. 보이는 몸과 실제 충돌 크기를 어긋나지 않게 하려는 것이다.
+    /// (그 대가로 공중에서 콜라이더가 작아지는 크라우치 점프가 가능하다 — 의도된 선택) (#189)
+    ///
+    /// 순수 로컬 판단이라 오너는 서버 왕복을 기다리지 않는다 — 체공이 0.7초 남짓이라
+    /// 왕복을 기다리면 내 화면에서 웅크리는 자세가 거의 안 보인다. (PlayerJump.IsAirborne과 같은 사정)
+    /// </summary>
+    public bool IsCrouchRequested =>
+        IsSpawned && !IsServer && !IsOwner ? m_isCrouchRequestedSynced.Value : m_isCrouchRequested;
 
     /// <summary>서기(0)↔앉기(1) 블렌딩 진행도. 콜라이더·카메라가 모션과 같은 속도로 따라오도록 공유한다.</summary>
     public float CrouchBlend => m_crouchBlend;
 
     /// <summary>현재 블렌딩 기준으로 머리가 내려간 높이(m). PlayerMovement가 카메라를 같이 낮추는 데 쓴다.</summary>
     public float HeadDrop => m_standHeight - m_controller.height;
+
+    /// <summary>
+    /// HeadDrop이 변하는 속도(m/초). PlayerMovement가 카메라를 <b>같은 속도로</b> 따라오게 하는 데 쓴다 —
+    /// 속도를 맞춰야 지상에서 카메라가 콜라이더보다 늦게 내려가는 일이 없다. (#236 취지 유지, #189)
+    /// </summary>
+    public float HeadDropRate => (m_standHeight - m_crouchHeight) / k_blendDuration;
 
     /// <summary>앉기 상태가 바뀔 때 발행 — UI·사운드 훅용.</summary>
     public event Action<bool> OnCrouchChanged;
@@ -52,6 +81,7 @@ public class PlayerCrouch : NetworkBehaviour
         m_controller = GetComponent<CharacterController>();
         m_inputHandler = GetComponent<PlayerInputHandler>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
+        m_jump = GetComponent<PlayerJump>();
 
         m_standHeight = m_controller.height;
         m_standCenterY = m_controller.center.y;
@@ -64,7 +94,8 @@ public class PlayerCrouch : NetworkBehaviour
 
         // 늦게 접속한 클라: 이미 앉아 있는 플레이어의 콜라이더를 즉시 맞춘다.
         // (OnValueChanged는 '변화' 시에만 발생하므로 스폰 시 한 번 맞춰줘야 한다)
-        m_crouchBlend = IsCrouching ? 1f : 0f;
+        // 콜라이더 기준은 눌림 여부다 — 공중에서 웅크린 채 접속을 마주해도 크기가 자세와 맞는다.
+        m_crouchBlend = IsCrouchRequested ? 1f : 0f;
         ApplyColliderHeight();
 
         if (IsOwner)
@@ -94,6 +125,7 @@ public class PlayerCrouch : NetworkBehaviour
     // 오너 로컬 입력 → 서버에 홀드 여부만 전달. 앉기 상태를 스스로 바꾸지 않는다. (서버 권위)
     private void HandleCrouchInput(bool pressed)
     {
+        m_isCrouchRequested = pressed; // 내 화면 자세는 즉시 (IsCrouchRequested 주석 참고)
         RequestCrouchServerRpc(pressed);
     }
 
@@ -113,11 +145,23 @@ public class PlayerCrouch : NetworkBehaviour
         UpdateBlend(); // 콜라이더 높이는 모든 인스턴스에서 동기화값을 따라간다
     }
 
-    // 서버 판정: 오너가 Ctrl을 누르고 있고 다운 상태가 아니면 앉는다.
+    // 서버 판정: 오너가 Ctrl을 누르고 있고, 다운도 아니고, 발이 땅에 붙어 있으면 앉는다.
+    // 공중에서 보류하는 이유는 두 가지 — 자세와 콜라이더가 따로 노는 것을 막고,
+    // 공중에서 콜라이더를 줄여 좁은 틈을 통과하는 크라우치 점프를 막는다. (#189)
     private void UpdateServerState()
     {
+        // 눌림 여부는 공중에서도 그대로 전파한다 — 애니메이션이 이 값으로 웅크린 자세를 만든다.
+        if (m_isCrouchRequested != m_crouchRequested)
+        {
+            m_isCrouchRequested = m_crouchRequested;
+            if (IsSpawned && IsServer)
+                m_isCrouchRequestedSynced.Value = m_crouchRequested;
+        }
+
         bool desired =
-            m_crouchRequested && !(m_incapacitation != null && m_incapacitation.IsIncapacitated);
+            m_crouchRequested
+            && !(m_incapacitation != null && m_incapacitation.IsIncapacitated)
+            && !(m_jump != null && m_jump.IsAirborne);
         if (m_isCrouching == desired)
             return;
 
@@ -128,9 +172,12 @@ public class PlayerCrouch : NetworkBehaviour
     }
 
     // 앉기 블렌딩을 k_blendDuration에 맞춰 진행시키고 콜라이더에 반영한다 — 애니메이터 전환과 같은 시간.
+    // 기준이 IsCrouching이 아니라 IsCrouchRequested인 이유: 콜라이더는 '앉기 상태'가 아니라
+    // '웅크린 자세'를 따라야 보이는 몸과 충돌 크기가 어긋나지 않는다. 공중에서 앉기 키를 누르면
+    // 자세와 함께 콜라이더도 줄어들고, 착지 시점엔 이미 줄어든 상태다. (#189)
     private void UpdateBlend()
     {
-        float target = IsCrouching ? 1f : 0f;
+        float target = IsCrouchRequested ? 1f : 0f;
         if (Mathf.Approximately(m_crouchBlend, target))
             return;
 
