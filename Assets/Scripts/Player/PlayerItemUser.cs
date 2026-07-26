@@ -47,6 +47,15 @@ public class PlayerItemUser : MonoBehaviour
             return;
         }
 
+        // 장착을 바꾸면 내려놓는 아이템이 진행 중이던 채널링(예: 스캐너 스캔)을 취소한다.
+        // 안 하면 채널링이 그대로 돌아 완료된다 — 좌클릭 뗌 취소(HandleCancelItem)는 '지금 든 아이템'
+        // 에게만 가므로, 아이템을 바꾼 뒤엔 원래 아이템에 취소가 닿지 않기 때문. (거리이탈만 keepAlive로 취소됨)
+        // CancelUse는 채널링 중이 아니면 무동작이라 항상 호출해도 안전하다. Unity 파괴 참조 대비 != null 가드.
+        if (m_equippedItem != null)
+        {
+            m_equippedItem.CancelUse();
+        }
+
         m_equippedItem = item;
         OnEquippedItemChanged?.Invoke(item);
     }
