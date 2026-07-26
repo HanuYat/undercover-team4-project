@@ -448,15 +448,24 @@ public class VivoxManager : CommonManagerBase
         if (participant == null || participant.IsSelf) return;
         if (m_distortTaps.ContainsKey(participant)) return; // 중복 탭 방지
 
+        // 탭이 만들어졌는지 추적한다 — 아래 어느 경로로 빠져나가든 되돌리기 위함 (실패 시 영구 무음 방지)
+        bool tapCreated = false;
+
         try
         {
-            // silenceInChannelAudioMix=true — Vivox 믹스에서는 죽이고 우리 AudioSource로만 재생한다
+            // silenceInChannelAudioMix=true — Vivox 믹스에서는 죽이고 우리 AudioSource로만 재생한다.
+            // 이 호출이 성공한 순간부터 그 참가자는 Vivox 믹스에서 들리지 않는다. 따라서 이후
+            // 어느 경로로 실패하든 탭을 반드시 되돌려야 한다 — 탭만 걸리고 우리도 재생하지 않으면
+            // 그 사람 목소리가 세션 내내 완전히 사라지고, m_distortTaps에 없으니 해제 때도 못 살린다.
             GameObject tapObject = participant.CreateVivoxParticipantTap(
                 $"BlackoutVoiceTap_{participant.PlayerId}", true);
+            tapCreated = true;
+
             AudioSource source = participant.ParticipantTapAudioSource;
             if (tapObject == null || source == null)
             {
                 Debug.LogWarning($"[VivoxManager] 오디오 탭 생성 실패 — {participant.PlayerId}");
+                SafeDestroyTap(participant); // 음소거만 남기고 나가지 않는다
                 return;
             }
 
@@ -499,17 +508,35 @@ public class VivoxManager : CommonManagerBase
         catch (Exception ex)
         {
             Debug.LogError($"[VivoxManager] 음성 왜곡 적용 실패 ({participant.PlayerId}): {ex}");
+
+            // 필터를 얹다 실패했어도 탭은 이미 걸려 있을 수 있다 — 등록에 성공하지 못했다면 되돌린다.
+            // (등록됐다면 정상 경로이므로 해제는 ClearAllDistortion이 맡는다)
+            if (tapCreated && !m_distortTaps.ContainsKey(participant))
+                SafeDestroyTap(participant);
+        }
+    }
+
+    // 탭 해제 — 어느 경로에서 부르든 여기서 실패가 나머지 정리를 막지 않게 한다.
+    // 탭 GameObject가 통째로 파괴되므로 얹은 필터도 함께 사라진다.
+    private void SafeDestroyTap(VivoxParticipant participant)
+    {
+        if (participant == null) return;
+
+        try
+        {
+            participant.DestroyVivoxParticipantTap();
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[VivoxManager] 탭 해제 실패 ({participant.PlayerId}): {ex}");
         }
     }
 
     private void ClearAllDistortion()
     {
         foreach (VivoxParticipant participant in m_distortTaps.Keys)
-        {
-            // 탭 GameObject가 통째로 파괴되므로 얹은 필터도 함께 사라진다
-            try { participant?.DestroyVivoxParticipantTap(); }
-            catch (Exception ex) { Debug.LogError($"[VivoxManager] 탭 해제 실패: {ex}"); }
-        }
+            SafeDestroyTap(participant);
+
         m_distortTaps.Clear();
     }
 
