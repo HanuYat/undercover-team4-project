@@ -9,7 +9,7 @@ using UnityEngine;
 /// 버튼을 떼거나 대상이 사거리를 벗어나면 실패. 서버 권위·RPC 구조는 PlayerEscorter를 본뜬다.
 /// </summary>
 [RequireComponent(typeof(PlayerInputHandler))]
-public class PlayerReviver : NetworkBehaviour
+public class PlayerReviver : ChanneledInteractionBehaviour
 {
     [Header("구조 채널링 (서버 권위)")]
     [Tooltip("구조 채널링 시간(초)")]
@@ -246,35 +246,7 @@ public class PlayerReviver : NetworkBehaviour
     [Rpc(SendTo.Owner)]
     private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
 
-    // ---- 채널링 게이지 피드백 (#184) ----
-    // NotifyOwner와 동일 분기 — 호스트 오너·오프라인은 직접 호출, 원격 오너에게만 RPC.
-    // (RPC는 NGO 코드젠 제약상 클래스별 선언 필요 — Escorter/Scanner와 동일 패턴 중복)
-
-    private void NotifyChannelGaugeStart(float seconds)
-    {
-        if (IsSpawned && IsServer && !IsOwner)
-        {
-            ChannelGaugeStartRpc(seconds);
-            return;
-        }
-        App.UI.Gauge?.Show(seconds);
-    }
-
-    private void NotifyChannelGaugeEnd()
-    {
-        if (IsSpawned && IsServer && !IsOwner)
-        {
-            ChannelGaugeEndRpc();
-            return;
-        }
-        App.UI.Gauge?.Hide();
-    }
-
-    [Rpc(SendTo.Owner)]
-    private void ChannelGaugeStartRpc(float seconds) => App.UI.Gauge?.Show(seconds);
-
-    [Rpc(SendTo.Owner)]
-    private void ChannelGaugeEndRpc() => App.UI.Gauge?.Hide();
+    // 채널링 게이지 피드백(NotifyChannelGaugeStart/End)은 기반 ChanneledInteractionBehaviour가 제공한다. (#184)
 
     public override void OnDestroy()
     {
