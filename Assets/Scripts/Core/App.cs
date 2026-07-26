@@ -30,6 +30,7 @@ public class App : Singleton<App>
     private DirectoryManager m_directoryManager;
     private WrongfulArrestPenalty m_wrongfulArrestPenalty;
     private TeamFund m_teamFund;
+    private FactionSymbolManager m_factionSymbolManager;
 
     // UI 매니저 (씬 전환 시 교체됨)
     private UIManagerBase m_uiManager;
@@ -83,6 +84,7 @@ public class App : Singleton<App>
         public static WrongfulArrestPenalty WrongfulArrestPenalty => Instance.m_wrongfulArrestPenalty;
         public static TeamFund TeamFund => Instance.m_teamFund;
         public static DirectoryManager Directory => Instance.m_directoryManager;
+        public static FactionSymbolManager FactionSymbol => Instance.m_factionSymbolManager;
     }
 
     public static class SceneFlow
