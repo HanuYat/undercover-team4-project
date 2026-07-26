@@ -335,21 +335,47 @@ public class VivoxManager : CommonManagerBase
 
     [Header("먹통 음성 왜곡 (#372)")]
     [Tooltip("왜곡 기본 피치 — 1보다 낮으면 저음으로 뭉개진다 (고장난 음성 합성기 느낌)")]
-    [SerializeField, Range(0.5f, 1.5f)] private float m_distortBasePitch = 0.7f;
+    [SerializeField, Range(0.4f, 1.5f)] private float m_distortBasePitch = 0.6f;
 
     [Tooltip("왜곡 강도 (AudioDistortionFilter) — 높을수록 지직거린다")]
-    [SerializeField, Range(0f, 1f)] private float m_distortLevel = 0.4f;
+    [SerializeField, Range(0f, 1f)] private float m_distortLevel = 0.65f;
 
-    [Tooltip("저역 통과 차단 주파수(Hz) — 낮을수록 먹먹해진다")]
-    [SerializeField, Range(500f, 5000f)] private float m_distortLowPassHz = 1500f;
+    [Tooltip("저역 통과 차단 주파수(Hz) — 낮을수록 먹먹해진다. 900 부근부터 말이 뭉개지기 시작한다")]
+    [SerializeField, Range(300f, 5000f)] private float m_distortLowPassHz = 900f;
 
-    [Tooltip("피치가 튀는 간격(초) 최소/최대 — 신호가 튀는 글리치 연출")]
-    [SerializeField] private float m_glitchIntervalMin = 0.4f;
-    [SerializeField] private float m_glitchIntervalMax = 1.2f;
+    [Tooltip("피치가 튀는 간격(초) 최소/최대 — 짧을수록 자주 튀어 알아듣기 어려워진다")]
+    [SerializeField] private float m_glitchIntervalMin = 0.22f;
+    [SerializeField] private float m_glitchIntervalMax = 0.65f;
 
-    [Tooltip("글리치 시 피치가 튀는 범위 — 기본 피치를 벗어나 위아래로 흔들린다")]
-    [SerializeField] private float m_glitchPitchMin = 0.7f;
-    [SerializeField] private float m_glitchPitchMax = 1.4f;
+    [Tooltip("글리치 시 피치가 튀는 범위 — 넓을수록 목소리가 요동친다")]
+    [SerializeField] private float m_glitchPitchMin = 0.55f;
+    [SerializeField] private float m_glitchPitchMax = 1.5f;
+
+    // 코러스가 뭉개짐의 핵심이다 — 미세하게 어긋난 복사본을 겹쳐 발음의 윤곽을 흐린다.
+    // 왜곡·저역통과는 '음질'을 떨어뜨리지만 말은 알아들을 수 있는 반면, 코러스는 말 자체를 뭉갠다.
+    [Tooltip("코러스(겹침 흔들림) 사용 — 발음 윤곽을 흐려 말을 뭉갠다. 뭉개짐 강화의 핵심")]
+    [SerializeField] private bool m_useChorus = true;
+
+    [Tooltip("코러스 깊이 — 높을수록 흔들림이 커진다")]
+    [SerializeField, Range(0f, 1f)] private float m_chorusDepth = 0.7f;
+
+    [Tooltip("코러스 속도(Hz) — 흔들리는 빠르기")]
+    [SerializeField, Range(0f, 20f)] private float m_chorusRate = 1.2f;
+
+    [Tooltip("코러스 혼합량 — 원음 대비 흔들린 복사본의 비중")]
+    [SerializeField, Range(0f, 1f)] private float m_chorusMix = 0.6f;
+
+    [Tooltip("짧은 에코 사용 — 소리를 번지게 해 뭉개짐을 더한다")]
+    [SerializeField] private bool m_useEcho = true;
+
+    [Tooltip("에코 딜레이(ms) — 짧을수록 금속성으로 번진다")]
+    [SerializeField, Range(10f, 500f)] private float m_echoDelayMs = 60f;
+
+    [Tooltip("에코 감쇠율 — 높을수록 오래 번진다")]
+    [SerializeField, Range(0f, 1f)] private float m_echoDecay = 0.4f;
+
+    [Tooltip("에코 혼합량")]
+    [SerializeField, Range(0f, 1f)] private float m_echoMix = 0.5f;
 
     [Tooltip(
         "근접 채널 음성도 왜곡할지. 끄면 무전 채널만 왜곡한다 — 근접은 Vivox가 자체 3D 감쇠를 처리하는데, "
@@ -414,8 +440,29 @@ public class VivoxManager : CommonManagerBase
 
             source.pitch = m_distortBasePitch;
 
+            // 필터 순서: 코러스(윤곽 흐리기) → 왜곡(지직) → 에코(번짐) → 저역통과(먹먹).
+            // 저역통과를 마지막에 둬야 앞 단계가 만든 고역 잡음까지 함께 깎아 뭉개진 결과가 된다.
+            if (m_useChorus)
+            {
+                var chorus = tapObject.AddComponent<AudioChorusFilter>();
+                chorus.depth = m_chorusDepth;
+                chorus.rate = m_chorusRate;
+                chorus.wetMix1 = m_chorusMix;
+                chorus.wetMix2 = m_chorusMix * 0.7f; // 2·3번 탭을 조금씩 낮춰 겹침이 뭉치지 않게
+                chorus.wetMix3 = m_chorusMix * 0.4f;
+            }
+
             var distortion = tapObject.AddComponent<AudioDistortionFilter>();
             distortion.distortionLevel = m_distortLevel;
+
+            if (m_useEcho)
+            {
+                var echo = tapObject.AddComponent<AudioEchoFilter>();
+                echo.delay = m_echoDelayMs;
+                echo.decayRatio = m_echoDecay;
+                echo.wetMix = m_echoMix;
+                echo.dryMix = 1f;
+            }
 
             var lowPass = tapObject.AddComponent<AudioLowPassFilter>();
             lowPass.cutoffFrequency = m_distortLowPassHz;
