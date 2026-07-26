@@ -16,9 +16,8 @@ public class VivoxManager : CommonManagerBase
     [SerializeField] private InputActionReference m_pushToTalkAction;
     [SerializeField] private SessionManager m_session;   // 인스펙터에서 연결
     private bool m_loggedIn;
-    private bool m_transmitting;   // PTT를 누르고 있는지 — 먹통 중에도 계속 추적해 해제 시 복원한다
+    private bool m_transmitting;   // PTT를 누르고 있는지 — 디버그 표시용
     private bool m_starting;
-    private bool m_jammed;         // 전자기기 먹통(#106) 중 무전 차단 — 근접 음성은 막지 않는다
     private string m_status = "대기 중...";
 
     [Header("근접 음성 (positional)")]
@@ -308,9 +307,7 @@ public class VivoxManager : CommonManagerBase
     private void SetRadioTransmit(bool on)
     {
         if (!m_radioJoined || !m_proximityJoined) return;
-        m_transmitting = on; // 먹통 중에도 PTT 상태는 기록해 둔다 — 해제 시 누른 채면 바로 재개하기 위함 (#106)
-
-        if (m_jammed) return; // 먹통 중에는 무전이 나가지 않는다 — 근접 음성은 그대로 (#106)
+        m_transmitting = on;
 
         ApplyRadioTransmission(on);
     }
@@ -569,33 +566,9 @@ public class VivoxManager : CommonManagerBase
         }
     }
 
-    /// <summary>
-    /// 무전 차단(먹통) 설정 — 전자기기 먹통 돌발 이벤트(#106)가 켜고 끈다. (GDD 4-4/6-4)
-    /// <b>현재 먹통 경로는 이 메서드 대신 <see cref="SetVoiceDistorted"/>를 쓴다</b>(#372 — 차단 대신 왜곡).
-    /// 차단형 연출로 되돌릴 여지를 남겨 API는 유지한다.
-    /// 차단 대상은 <b>무전(거리 무관 채널)뿐</b>이다 — 근접 음성은 살아 있어 옆에 선 동료와는 계속 말할 수 있고
-    /// 본부와의 무전만 끊긴다. 본부·현장 분리가 이 이벤트의 노림수다.
-    /// 해제 시 PTT를 계속 누르고 있었다면 즉시 무전이 재개된다.
-    /// </summary>
-    public void SetCommsJammed(bool jammed)
-    {
-        if (m_jammed == jammed) return;
-        m_jammed = jammed;
-
-        // 채널 참가 전이면 건드릴 송신 상태가 없다 — 참가 시 기본값(근접 전용)이 곧 차단 상태와 같다
-        if (!m_radioJoined || !m_proximityJoined) return;
-
-        if (jammed)
-        {
-            ApplyRadioTransmission(false); // 진행 중이던 무전 송신을 즉시 끊는다
-            m_status = "무전 차단(먹통)";
-        }
-        else
-        {
-            ApplyRadioTransmission(m_transmitting); // 누르고 있던 PTT를 그대로 복원
-            m_status = "무전 복구";
-        }
-    }
+    // 먹통 중 무전을 '차단'하던 SetCommsJammed는 제거했다 (#372). 먹통 연출이 차단에서 왜곡으로
+    // 바뀌면서 호출부가 사라졌고, 통신을 끊는 경로가 둘로 남으면 다음 사람이 어느 쪽이 살아있는지
+    // 알 수 없다. 차단형으로 되돌릴 일이 생기면 이 커밋의 diff에서 복원하면 된다.
 
     public async UniTask LogoutAsync()
     {
@@ -624,6 +597,12 @@ public class VivoxManager : CommonManagerBase
 
     private void HandleSessionLeft()
     {
+        // 세션 이탈은 채널 이탈과 다른 사건이다 — 채널은 세션 도중에도 다시 붙지만(그래서
+        // LeaveChannelAsync는 왜곡 플래그를 유지한다), 세션이 끝나면 먹통이라는 맥락 자체가 사라진다.
+        // 여기서 리셋하지 않으면 다음 세션이 이유 없이 왜곡된 채 시작된다 (#372).
+        // 지금은 새 씬의 DeviceBlackoutView가 초기 상태를 내려줘 우연히 풀리지만, 그 초기화에
+        // 기대는 구조라 View 쪽이 바뀌면 조용히 깨진다.
+        m_voiceDistorted = false;
         LeaveChannelAsync().Forget();
     }
 
