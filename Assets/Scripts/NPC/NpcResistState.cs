@@ -177,17 +177,40 @@ public class NpcResistState : NpcStateBase
 
     /// <summary>
     /// 이번 틱의 표적 — 저항을 유발한 플레이어(<see cref="NpcController.ThreatTarget"/>)를 우선하고,
-    /// 사라졌으면 추격 반경(<see cref="NpcController.ThreatSearchRadius"/>) 안 가장 가까운 현장 플레이어로 폴백한다.
+    /// 놓쳤으면 추격 반경(<see cref="NpcController.ThreatSearchRadius"/>) 안 가장 가까운 현장 플레이어로 폴백한다.
     /// 폴백 반경은 도주(#213)와 같은 값이라 "쫓을 상대"와 "피할 상대"의 기준이 어긋나지 않는다. 서버(또는 오프라인) 전용.
     /// </summary>
     private Transform ResolveTarget()
     {
-        if (m_owner.ThreatTarget != null)
-            return m_owner.ThreatTarget;
+        Transform threat = m_owner.ThreatTarget;
+        if (threat != null && IsStillEngaged(threat))
+            return threat;
 
         PlayerData nearest = SuddenEventUtil.FindNearestFieldPlayer(
             m_owner.transform.position, m_owner.ThreatSearchRadius);
         return nearest != null ? nearest.transform : null;
+    }
+
+    /// <summary>
+    /// 유발자를 계속 표적으로 삼을 수 있는가 — <b>참조가 살아 있는 것만으로는 부족하다.</b>
+    ///
+    /// ThreatTarget은 오브젝트가 파괴될 때(연결 종료 등)만 null이 되므로, 이 검사가 없으면
+    /// 유발자가 맵 끝까지 도망쳐도 표적이 계속 잡혀 <see cref="NpcResistConfig.NoTargetIdleSeconds"/>
+    /// 복귀 타이머가 매 틱 리셋된다. 제한시간 도주(구 DefeatSeconds)를 없앤 뒤로는 그게 Attack의
+    /// 유일한 출구라, 리셋되면 저항 NPC가 라운드 끝까지 질주로 따라붙는다.
+    ///
+    /// 다운된 유발자도 놓아준다 — 폴백 경로는 IsTargetable로 거르는데 이 경로만 통과하면
+    /// 쓰러진 플레이어를 영구히 쫓는다.
+    /// </summary>
+    private bool IsStillEngaged(Transform threat)
+    {
+        float giveUpSqr = m_config.GiveUpDistance * m_config.GiveUpDistance;
+        if ((threat.position - m_owner.transform.position).sqrMagnitude > giveUpSqr)
+            return false;
+
+        // 위협이 플레이어가 아니면(테스트용 더미 등) 거리 조건만 본다
+        PlayerData player = threat.GetComponentInParent<PlayerData>();
+        return player == null || player.IsTargetable;
     }
 
     /// <summary>
