@@ -64,8 +64,10 @@ public partial class NpcController
     {
         if (IsSpawned && !IsServer)
             return;
-        if (IsStunned)
-            return; // 이미 스턴 — 추가 타격이 기절 시간을 리셋하지 못한다 (#366의 엣지 성질 유지)
+        // 이미 무력화돼 있으면 무시한다 — 추가 타격이 기절 시간을 리셋하지 못하게 하고(#366의 엣지
+        // 성질), 넉백 KO(enum Stunned) 위에 오버레이가 덧씌워지는 이중 기절도 막는다 (#292).
+        if (NpcStateRules.IsIncapacitated(this))
+            return;
 
         ThreatTarget = threat;
         m_stunElapsed = 0f;
@@ -105,6 +107,23 @@ public partial class NpcController
 
         if (m_stunElapsed >= m_stunConfig.StunSeconds)
             ExitStun(resumeReaction: true);
+    }
+
+    /// <summary>
+    /// 오버레이만 조용히 걷어낸다 — 체력 회복도, 상태 전이도 하지 않는다.
+    /// 넉백이 오버레이 위에 겹칠 때 쓴다: 넉백이 이기고 기절 시간은 넉백 기준으로 새로 흐른다.
+    /// 회복은 착지 후 NpcStunnedState.Exit이 한 번만 하면 된다 (#292).
+    /// </summary>
+    private void ClearStunOverlay()
+    {
+        if (!IsStunned)
+            return;
+
+        SetStunned(false);
+        m_stunElapsed = 0f;
+        m_standingUp = false;
+        // isStopped는 되돌리지 않는다 — 넉백이 곧 에이전트를 통째로 끄고,
+        // 착지 상태(NpcStunnedState.Enter)가 다시 정한다.
     }
 
     /// <summary>
