@@ -54,6 +54,8 @@ public static class PlayerAnimatorControllerBuilder
 
     // 공중에서 앉기 키를 누르면 자세만 웅크린다 — 실제 앉기(콜라이더·속도)는 착지 시점에
     // PlayerCrouch가 건다. 덕분에 공중에서 콜라이더를 줄여 좁은 틈을 통과하는 크라우치 점프가 막힌다.
+    // 지상 앉기와 같은 구성의 블렌드 트리(Crouch Idle + CrouchWalk 8방향)를 쓴다 — 단일 Idle 클립이면
+    // 공중에서 좌우로 움직이는 동안 몸이 굳어 보인다. MoveX/MoveZ는 위치 변화량 기반이라 공중에서도 돈다.
     private const string k_jumpAirCrouchState = "Jump_Air_Crouch";
 
     // 더 이상 만들지 않는 구 착지 상태 — 이전 빌드가 남긴 것을 재실행 시 지우기 위해서만 쓴다.
@@ -108,13 +110,17 @@ public static class PlayerAnimatorControllerBuilder
         }
 
         BlendTree crouchTree = SetupCrouchState(controller); // 앉기 상태 추가/갱신 (#236) — 다운 전환보다 먼저
-        SetupJumpStates(controller); // 점프 상태 머신 추가/갱신 (#189) — 다운 전환보다 먼저
+        BlendTree airCrouchTree = SetupJumpStates(controller); // 점프 상태 머신 추가/갱신 (#189) — 다운 전환보다 먼저
         SetupDownStates(controller); // 다운(무력화) 상태 머신 추가/갱신 (#105)
 
         EditorUtility.SetDirty(blendTree);
         if (crouchTree != null)
         {
             EditorUtility.SetDirty(crouchTree);
+        }
+        if (airCrouchTree != null)
+        {
+            EditorUtility.SetDirty(airCrouchTree);
         }
         EditorUtility.SetDirty(controller);
         AssetDatabase.SaveAssets();
@@ -123,7 +129,7 @@ public static class PlayerAnimatorControllerBuilder
             $"[PlayerAnimatorControllerBuilder] {(isNew ? "생성" : "갱신")} 완료: {k_outputPath} "
                 + $"(Idle 중앙 / Walk 반경 {PlayerAnimationDriver.k_walkParam} 8방향 / "
                 + $"Run 반경 {PlayerAnimationDriver.k_runParam} 8방향, 총 17모션 + 다운 3상태 "
-                + $"+ 앉기 9모션 + 점프 3상태)"
+                + $"+ 앉기 9모션 + 점프 3상태(공중 웅크림 9모션))"
         );
 
         Selection.activeObject = controller;
@@ -161,26 +167,11 @@ public static class PlayerAnimatorControllerBuilder
     /// </summary>
     private static BlendTree SetupCrouchState(AnimatorController controller)
     {
-        AnimationClip crouchIdle = LoadClip($"{k_crouchFolder}/HumanM@Crouch01_Idle.fbx");
-        if (crouchIdle == null)
-            return null;
-
         EnsureBoolParameter(controller, k_crouchParam);
 
         BlendTree crouchTree = FindOrCreateBlendTree(controller, k_crouchState);
-        crouchTree.children = new ChildMotion[0]; // 재실행 시 기존 클립 배치를 비우고 다시 채움
-        crouchTree.AddChild(crouchIdle, Vector2.zero);
-
-        foreach ((string suffix, Vector2 dir) in s_directions)
-        {
-            AnimationClip crouchWalk = LoadClip(
-                $"{k_crouchFolder}/CrouchWalk/HumanM@Crouch01_Walk_{suffix}.fbx"
-            );
-            if (crouchWalk == null)
-                return null;
-
-            crouchTree.AddChild(crouchWalk, dir * PlayerAnimationDriver.k_walkParam);
-        }
+        if (!FillCrouchBlendTree(crouchTree))
+            return null;
 
         AnimatorStateMachine stateMachine = controller.layers[0].stateMachine;
         AnimatorState locomotion = FindState(stateMachine, k_stateName);
@@ -203,6 +194,35 @@ public static class PlayerAnimatorControllerBuilder
         toStand.AddCondition(AnimatorConditionMode.IfNot, 0f, k_crouchParam);
 
         return crouchTree;
+    }
+
+    /// <summary>
+    /// 앉기 클립을 블렌드 트리에 채운다 — 중앙 Crouch Idle, 반경 k_walkParam에 CrouchWalk 8방향.
+    /// 지상 앉기(Crouch)와 공중 웅크림(Jump_Air_Crouch)이 같은 구성을 쓰므로 한 곳에 모은다. (#236, #189)
+    /// 두 상태가 <b>같은 트리를 공유하지 않고 각자 하나씩</b> 갖는 이유는 SetupJumpStates 주석 참고.
+    /// 클립을 못 찾으면 false — 호출부가 상태 구성을 중단한다.
+    /// </summary>
+    private static bool FillCrouchBlendTree(BlendTree tree)
+    {
+        AnimationClip crouchIdle = LoadClip($"{k_crouchFolder}/HumanM@Crouch01_Idle.fbx");
+        if (crouchIdle == null)
+            return false;
+
+        tree.children = new ChildMotion[0]; // 재실행 시 기존 클립 배치를 비우고 다시 채움
+        tree.AddChild(crouchIdle, Vector2.zero);
+
+        foreach ((string suffix, Vector2 dir) in s_directions)
+        {
+            AnimationClip crouchWalk = LoadClip(
+                $"{k_crouchFolder}/CrouchWalk/HumanM@Crouch01_Walk_{suffix}.fbx"
+            );
+            if (crouchWalk == null)
+                return false;
+
+            tree.AddChild(crouchWalk, dir * PlayerAnimationDriver.k_walkParam);
+        }
+
+        return true;
     }
 
     // 두 상태 사이의 기존 전환을 양방향으로 제거한다 — 빌더 재실행 시 전환이 중복 누적되는 것을 막는다.
@@ -238,15 +258,19 @@ public static class PlayerAnimatorControllerBuilder
     /// 트리거가 아닌 bool로 구동하는 이유: 공중 여부는 서버 권위 NetworkVariable로 전파되는데
     /// (PlayerJump.IsAirborne) 트리거는 원격 피어에서 유실·중복되기 쉽다. bool은 폴링이라 안전하다.
     /// 재실행 시 기존 점프 상태/전환을 지우고 다시 만들어 중복을 막는다.
+    ///
+    /// 공중 웅크림(Jump_Air_Crouch)만 예외로 상태를 지우지 않고 재사용한다 — 지상 앉기와 같은
+    /// 블렌드 트리를 들고 있어서, 상태를 지우면 트리 서브에셋이 컨트롤러에 고아로 남기 때문이다.
+    /// 지상 앉기와 트리를 <b>공유하지 않고 따로 하나 더</b> 두는 것도 같은 이유다 — 공유하면 한쪽
+    /// 상태를 지울 때 다른 쪽 모션까지 날아갈 위험이 있다. 구성은 FillCrouchBlendTree가 한곳에서 맞춘다.
+    /// 반환값은 그 공중 웅크림 트리(호출부가 SetDirty용으로 받는다).
     /// </summary>
-    private static void SetupJumpStates(AnimatorController controller)
+    private static BlendTree SetupJumpStates(AnimatorController controller)
     {
         AnimationClip begin = LoadClip($"{k_jumpFolder}/HumanM@Jump01 - Begin.fbx");
         AnimationClip air = LoadClip($"{k_jumpFolder}/HumanM@Fall01.fbx");
-        // 공중 웅크림에는 앉기 Idle을 그대로 쓴다 — 전용 턱(tuck) 클립이 에셋에 없다.
-        AnimationClip airCrouch = LoadClip($"{k_crouchFolder}/HumanM@Crouch01_Idle.fbx");
-        if (begin == null || air == null || airCrouch == null)
-            return;
+        if (begin == null || air == null)
+            return null;
 
         EnsureBoolParameter(controller, k_airborneParam);
 
@@ -260,8 +284,16 @@ public static class PlayerAnimatorControllerBuilder
         beginState.motion = begin;
         AnimatorState airState = stateMachine.AddState(k_jumpAirState);
         airState.motion = air;
-        AnimatorState airCrouchState = stateMachine.AddState(k_jumpAirCrouchState);
-        airCrouchState.motion = airCrouch;
+
+        // 공중 웅크림 — 전용 턱(tuck) 클립이 에셋에 없어 앉기 클립을 그대로 쓴다.
+        // 단일 Idle이 아니라 앉기와 같은 블렌드 트리라, 공중에서 움직이면 앉은 채 걷는 모션이 나온다.
+        // (공중 이동 속도는 앉기 속도가 아니라 걷기/달리기 속도지만 — PlayerCrouch.IsCrouching이
+        //  공중에선 false — 발이 땅에 없어 발 미끄러짐이 눈에 띄지 않는다)
+        BlendTree airCrouchTree = FindOrCreateBlendTree(controller, k_jumpAirCrouchState);
+        if (!FillCrouchBlendTree(airCrouchTree))
+            return null;
+
+        AnimatorState airCrouchState = FindState(stateMachine, k_jumpAirCrouchState);
 
         // Crouch → Air_Crouch : 앉은 채 점프하면 이륙 상태를 건너뛰고 곧장 웅크린 체공으로 간다.
         // Begin(선 자세 이륙)을 거치면 발이 떨어지는 순간 일어섰다 다시 앉는 장면이 70ms쯤 스친다
@@ -335,9 +367,12 @@ public static class PlayerAnimatorControllerBuilder
         toAir.hasExitTime = true;
         toAir.exitTime = 0.8f;
         toAir.duration = 0.1f;
+
+        return airCrouchTree;
     }
 
-    // 점프 상태(3종)와 그 상태로 향하는 전환을 모두 제거한다. (RemoveDownStates와 동일 구조)
+    // 점프 상태와 그 상태로 향하는 전환을 모두 제거한다. (RemoveDownStates와 동일 구조)
+    // Jump_Air_Crouch만 상태를 남기고 전환만 비운다 — 이유는 SetupJumpStates 주석 참고.
     private static void RemoveJumpStates(AnimatorStateMachine stateMachine)
     {
         foreach (ChildAnimatorState child in stateMachine.states)
@@ -359,22 +394,39 @@ public static class PlayerAnimatorControllerBuilder
             }
         }
 
+        // 살아남는 Jump_Air_Crouch의 나가는 전환(착지 → Locomotion/Crouch)은 위 루프가 못 지운다 —
+        // 목적지가 점프 상태가 아니기 때문. 재실행 시 중복되지 않도록 여기서 비운다.
+        AnimatorState airCrouch = FindState(stateMachine, k_jumpAirCrouchState);
+        if (airCrouch != null)
+        {
+            foreach (AnimatorStateTransition transition in airCrouch.transitions)
+            {
+                airCrouch.RemoveTransition(transition);
+            }
+        }
+
         foreach (ChildAnimatorState child in stateMachine.states)
         {
-            if (IsJumpState(child.state.name))
+            if (IsRemovableJumpState(child.state.name))
             {
                 stateMachine.RemoveState(child.state);
             }
         }
     }
 
-    // RemoveJumpStates 전용 판정 — 구 Jump_Land를 포함해야 예전 빌드의 잔재까지 청소된다.
+    // 전환 정리 대상 — 구 Jump_Land를 포함해야 예전 빌드의 잔재까지 청소된다.
     private static bool IsJumpState(string name)
     {
         return name == k_jumpBeginState
             || name == k_jumpAirState
             || name == k_jumpAirCrouchState
             || name == k_legacyJumpLandState;
+    }
+
+    // 상태 자체를 지울 대상 — 블렌드 트리를 들고 재사용되는 Jump_Air_Crouch만 제외한다.
+    private static bool IsRemovableJumpState(string name)
+    {
+        return name != k_jumpAirCrouchState && IsJumpState(name);
     }
 
     /// <summary>
