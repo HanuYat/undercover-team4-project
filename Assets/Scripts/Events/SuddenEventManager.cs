@@ -114,6 +114,19 @@ public class SuddenEventManager : NetworkedManagerBase
         }
     }
 
+    /// <summary>
+    /// 풀에서 T 타입 이벤트를 찾아 준다 — 특정 이벤트의 상태를 밖에서 조회해야 할 때 쓴다
+    /// (예: 스캐너가 <see cref="DeviceBlackoutEvent"/>의 먹통 플래그를 본다).
+    ///
+    /// 이래도 <b>매니저는 여전히 어떤 이벤트가 있는지 모른다</b> — 타입은 부르는 쪽이 정하고
+    /// 여기엔 남지 않는다. 그래서 이벤트마다 App에 필드를 하나씩 다는 대신 이 경로를 쓴다 (#372 리뷰, R3).
+    ///
+    /// 없으면 null — 인스펙터 리스트에 등록하지 않았거나 항목을 꺼 둔 구성이다. 그 이벤트는 발생하지도
+    /// 않으므로 조회하는 쪽에서 "그 효과는 없다"로 처리하면 맞는다.
+    /// </summary>
+    public T GetEvent<T>()
+        where T : class, ISuddenEvent => m_events.Find(e => e is T) as T;
+
     private void Update()
     {
         // 발생 스케줄·판정은 서버 권위 — 클라이언트에서는 아예 돌지 않는다 (#56)

@@ -52,6 +52,8 @@ MonoBehaviour:
   m_audibleDistance: 15
   m_audioFadeIntensity: 4
   m_positionUpdateInterval: 0.1
+  m_distortProfile: {fileID: 11400000, guid: adc714cfd45c12849939ca1dc2cc3b04, type: 2}
+  m_distortProximityToo: 1
   m_showDebugGui: 0
   m_guiTopOffset: 10
 --- !u!1 &4732638935019186088

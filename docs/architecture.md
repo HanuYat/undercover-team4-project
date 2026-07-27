@@ -43,6 +43,7 @@ R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단�
 
 - **승격**: R3의 ①을 이미 만족하는 클래스에 두 번째 도메인의 참조가 생기는 순간 App에 올린다. 비용은 App 필드+프로퍼티 2줄 + 베이스 상속.
 - **강등**: App에서 필드/프로퍼티를 지우면 사용처 전부가 컴파일 에러로 드러난다 — 컴파일러가 수정 목록을 준다.
+- **올리지 않는 대안 (부품 조회)**: 승격 대상이 *이미 App에 있는 매니저가 관리하는 부품*이라면, 부품을 따로 등록하지 말고 그 매니저에게 제네릭으로 물어본다 — `App.Game.SuddenEvent?.GetEvent<DeviceBlackoutEvent>()`. 타입은 부르는 쪽에만 남으므로 매니저는 여전히 부품 종류를 모르고, App 필드도 늘지 않는다. 런타임 스폰 프리팹처럼 인스펙터 배선이 불가능한 사용처(스캐너)도 이 경로로 해결된다 (#372 리뷰).
 - 판단이 애매하면 PR에서 R3 기준으로 논의한다.
 
 ## 4. 의도적 예외 (위반 아님)
@@ -51,7 +52,6 @@ R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단�
 |---|---|
 | ArrestJudge → HqDropoffZone `Find` | 장소(트리거 존) 오브젝트 — 매니저 아님 |
 | RoundTimerUI → RoundTimerSync `Find` | Round 도메인 내부 부품 (HQ 타이머 표시가 생기면 승격 후보) |
-| DeviceBlackoutView → DeviceBlackoutEvent `Find` | Events 도메인 내부 부품 |
 | SessionManager → AuthBootstrap `SerializeField` | 같은 오브젝트/프리팹 내 직접 연결 |
 | RoundEndResetter의 테스트 씬 폴백 `SceneManager.LoadScene` | EScene 매핑이 없는 테스트 씬 한정 — 정식 흐름은 App.LoadScene(Title)로 전환 완료 (#247) |
 
