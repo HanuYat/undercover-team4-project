@@ -289,10 +289,12 @@ public class PlayerLoadout : NetworkBehaviour
             droppedItem.ServerCancelActiveUse();
         }
 
-        // 플레이어에서 분리해 정면 바닥에 내려놓고, 소유권은 서버로 되돌린다(월드 상태).
-        itemNetworkObject.TrySetParent((Transform)null, true);
+        // 정면 바닥에 내려놓은 뒤 분리하고, 소유권은 서버로 되돌린다(월드 상태).
+        // 순서 중요 — 아이템엔 NetworkTransform이 없어, 분리 시 나가는 ParentSyncMessage가 위치를
+        // 복제하는 유일한 수단이다. 분리가 먼저면 손에 있던 옛 위치가 실려 나간다 (#361).
         Vector3 dropPosition = transform.position + transform.forward * m_dropDistance;
         itemNetworkObject.transform.SetPositionAndRotation(dropPosition, Quaternion.identity);
+        itemNetworkObject.TrySetParent((Transform)null, true);
         itemNetworkObject.RemoveOwnership();
 
         SyncHeldItemsRpc(BuildHeldItemRefs());
