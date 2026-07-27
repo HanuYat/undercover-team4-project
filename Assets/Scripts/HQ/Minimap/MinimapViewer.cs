@@ -55,11 +55,12 @@ public class MinimapViewer : MonoBehaviour
         }
     }
 
-    private void UpdatePositions()  // 미니맵 아이콘 위치 갱신
+    private void UpdatePositions()  // 아이콘 위치, 색 갱신
     {
         foreach (var pair in m_targetIcons)
         {
             pair.Value.rectTransform.anchoredPosition = WorldToMap(pair.Key.transform.position);
+            pair.Value.color = pair.Key.IconColor;
         }
     }
 

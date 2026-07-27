@@ -10,7 +10,13 @@ public class MinimapTarget : MonoBehaviour
     [SerializeField] private Color m_iconColor = Color.blue;
 
     public Sprite IconSprite => m_iconSprite;
-    public Color IconColor => m_iconColor;
+
+    /// <summary>아이콘 색 — 런타임 변경 가능. MinimapViewer가 매 프레임 반영한다. (#362 CCTV 선택 하이라이트)</summary>
+    public Color IconColor
+    {
+        get => m_iconColor;
+        set => m_iconColor = value;
+    }
 
     private void OnEnable() => ActiveTargets.Add(this);
     private void OnDisable() => ActiveTargets.Remove(this);
