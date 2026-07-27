@@ -319,7 +319,9 @@ public class BombDevice : NetworkBehaviour
         if (m_state == BombState.Exploded)
             return;
 
-        // 반경 내 행동 가능한 플레이어에게 피해 (NPC는 HP가 없어 피해 대신 뷰의 넉백 연출만 받는다)
+        // 반경 내 행동 가능한 플레이어에게 피해.
+        // NPC는 이제 체력이 있지만(#366) 폭발 피해는 아직 연결하지 않았다 — 넉백 착지가 이미
+        // Stunned로 보내고 있어 중복 정리가 필요하다(후속 이슈). 지금은 넉백만 받는다.
         SuddenEventUtil.CollectFieldPlayers(transform.position, m_explosionRadius, m_blastBuffer);
         for (int i = 0; i < m_blastBuffer.Count; i++)
         {
