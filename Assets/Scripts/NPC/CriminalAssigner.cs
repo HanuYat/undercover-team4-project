@@ -259,6 +259,98 @@ public class CriminalAssigner : CommonManagerBase
         Debug.Log(logBuilder.ToString());
     }
 
+    // ---- 제보 전화 승격 (#102) ----
+    //
+    // 배정 자체가 서버(또는 오프라인)에서만 일어나므로 승격도 같은 쪽에서만 의미가 있다.
+    // 호출자(TipCallPhone)가 서버 권위를 게이트한다 — 여기서 다시 막지 않는다.
+
+    /// <summary>
+    /// 아직 공개되지 않은 예비 용의자가 남아 있는가 — 전화를 계속 걸지의 기준 (#102 설계 결정 5).
+    /// 연행·끌기 중인 대상도 '남아 있다'로 센다: 곧 판정되면 IsDelivered로 자동으로 빠지고,
+    /// 석방되면 다시 승격 후보가 된다. 여기서 빼면 마지막 예비 용의자를 끌고 가는 동안 울린
+    /// 전화 하나 때문에 그 라운드 전화가 영영 끊긴다.
+    /// </summary>
+    public bool HasPendingSuspect
+    {
+        get
+        {
+            for (int i = 0; i < m_criminalNpcs.Count; i++)
+                if (IsPending(m_criminalNpcs[i]))
+                    return true;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 대기 중인 예비 용의자 1명을 수배로 공개한다 — 제보 전화를 받았을 때 호출한다. (#102)
+    /// 성공하면 true. 지금 승격 가능한 대상이 없으면 false — 그 전화 한 번을 놓친 것일 뿐이므로
+    /// 호출자는 다음 수신을 그대로 예약하면 된다 (풀 소진 판정은 HasPendingSuspect로 따로 한다).
+    /// </summary>
+    public bool PromoteNext()
+    {
+        AppearanceAssigner appearance = App.Game.Appearance;
+        if (appearance == null)
+        {
+            // 몽타주를 발행하지 못하면 수배 리스트에 뜨지 않는다 — IsCriminal만 켜면
+            // 아무도 모르는 진범이 생기므로, 켜기 전에 막는다
+            Debug.LogWarning("CriminalAssigner: AppearanceAssigner를 찾지 못해 승격할 수 없다", this);
+            return false;
+        }
+
+        NpcController npc = FindNextPromotable();
+        if (npc == null)
+            return false;
+
+        CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
+        identity.SetCriminal(true);
+
+        // 예비 용의자는 시민 가중치(대부분 순응)로 뽑혀 있다 — 범인 가중치로 다시 뽑는다.
+        // Reaction은 서버 전용이라 바꿔도 플레이어에게 티가 나지 않는다 (#102 설계 결정 6)
+        identity.AssignReaction(RollReaction(m_compliantWeight, m_fleeWeight, m_resistWeight));
+
+        // 라운드 시작에 보관해 둔 몽타주를 그대로 발행한다 — WantedListManager가 이 이벤트로
+        // NetworkList 추가와 TotalWanted++ 를 한다(기존 경로 재사용)
+        appearance.RevealMontage(npc);
+
+        CitizenProfile profile = identity.Profile;
+        Debug.Log($"[제보 전화] 수배 공개: {(profile != null ? profile.CitizenName : npc.name)} ({identity.Reaction})");
+        return true;
+    }
+
+    /// <summary>미공개 예비 용의자인가 — 살아 있고, 아직 공개 전이고, 판정이 끝나지 않았다. (#102)</summary>
+    private static bool IsPending(NpcController npc)
+    {
+        // 디스폰·파괴된 대상은 Unity null로 잡힌다 — IsSpawned는 오프라인에서 항상 false라 쓸 수 없다
+        if (npc == null)
+            return false;
+
+        CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
+        if (identity == null || identity.IsCriminal)
+            return false;
+
+        // 미공개 상태로 오검거되어 판정이 끝난 대상 — 그 몽타주를 등록하면 잡을 대상이 없다 (#230)
+        return !npc.IsDelivered;
+    }
+
+    /// <summary>지금 당장 승격시킬 수 있는 첫 후보. 없으면 null. (#102 설계 §3 가드)</summary>
+    private NpcController FindNextPromotable()
+    {
+        for (int i = 0; i < m_criminalNpcs.Count; i++)
+        {
+            NpcController npc = m_criminalNpcs[i];
+            if (!IsPending(npc))
+                continue;
+
+            // 연행·끌기 중 — 곧 판정될 대상이라 등록 직후 사라진다. 건너뛰되 풀 소진으로는 세지 않는다
+            // (FindEscorterOf는 연행과 밧줄 끌기를 둘 다 본다, #269)
+            if (PlayerEscorter.FindEscorterOf(npc) != null)
+                continue;
+
+            return npc;
+        }
+        return null;
+    }
+
     /// <summary>0~total-1 인덱스를 셔플해 앞에서 count개를 뽑는다 — 중복 없는 진범 인덱스. (#127)</summary>
     private static HashSet<int> PickCriminalIndices(int total, int count)
     {
