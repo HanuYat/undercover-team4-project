@@ -4,7 +4,8 @@ using UnityEngine;
 /// <summary>
 /// 저항(Attack) 상태 — 수갑 채널링 성공 순간 그 자리에서 버티며 싸운다. (GDD 6-1/7-4, #76/#79)
 /// 표적을 바라보며 주기적으로 정면 부채꼴 타격을 휘둘러 사거리 안 플레이어의 HP를 깎고(선제 공격, 방향 판정 #220),
-/// ApplySubdueHit로 제압 게이지가 0이 되면 체포(Captured)된다 — 여럿이 때리면 빨리 끝난다(협동 인센티브).
+/// 제압 타격으로 체력이 0이 되면 기절(Stunned)한다 — 여럿이 때리면 빨리 끝난다(협동 인센티브).
+/// 전이 자체는 NpcController.SetHp가 걸므로 이 상태 클래스는 체력을 보지 않는다 (#366).
 /// 제한 시간 안에 제압당하지 않거나 교전 중인 플레이어가 전원 무력화되면
 /// 플레이어 패배 — 도주형으로 전환되어 달아난다 (GDD 7-4 3항).
 /// </summary>
@@ -60,7 +61,6 @@ public class NpcResistState : NpcStateBase
         // 표적을 직접 바라보도록 수동 회전할 것이므로 에이전트 자동 회전을 끈다 — 안 그러면 서로 방향을 다툰다 (#220)
         m_owner.Agent.updateRotation = false;
 
-        m_owner.ResetSubdueGauge();
         m_resistStartTime = Time.time;
         m_nextAttackTime = Time.time + m_config.AttackInterval;
         m_pendingStrikeTime = k_noPendingStrike; // 직전 저항의 예약이 남아 첫 타격이 앞당겨지지 않게
@@ -72,17 +72,6 @@ public class NpcResistState : NpcStateBase
 
     public override void Tick()
     {
-        // 게이지가 다 깎이면 제압 성공 — 체포
-        if (m_owner.SubdueGauge <= 0f)
-        {
-            Debug.Log($"저항 제압됨: {m_owner.name}");
-            // 체포로 반응이 끝나므로 위협 참조를 여기서 정리한다. Exit()에 넣으면 안 된다 —
-            // Defeat()의 StartFlee()가 세팅한 위협을 그 직후 Exit()가 지워 도주 전환이 깨진다 (#205).
-            m_owner.ClearThreat();
-            m_owner.StateMachine.ChangeState(NpcState.Captured);
-            return;
-        }
-
         // 표적을 정하고(유발자 우선), 사거리 밖이면 추격·안이면 멈춰 타격, 그리고 표적을 향해 돈다 (#254·#220)
         Transform target = ResolveTarget();
         ChaseTarget(target);

@@ -32,30 +32,13 @@ public partial class NpcController
         m_stateMachine.ChangeState(NpcState.Attack);
     }
 
-    /// <summary>저항 진입 시 게이지를 최대로 리셋한다 — NpcResistState.Enter 전용.</summary>
-    public void ResetSubdueGauge()
-    {
-        SetSubdueGauge(m_resistConfig.SubdueGaugeMax);
-    }
-
     /// <summary>
-    /// 제압 타격 — 저항 게이지를 깎는다. 진압봉 등 타격 수단(후속 아이템 이슈)이 호출.
-    /// 여러 명이 함께 때리면 그만큼 빨리 깎인다 (GDD 7-4 협동 인센티브).
-    /// </summary>
-    public void ApplySubdueHit(float amount)
-    {
-        if (IsSpawned && !IsServer)
-            return;
-        if (CurrentState != NpcState.Attack)
-            return; // 저항 중이 아닐 때의 타격은 무시 — 배회 NPC 폭행 방지
-
-        SetSubdueGauge(Mathf.Max(0f, SubdueGauge - amount));
-    }
-
-    /// <summary>
-    /// 제압 홀드 타격 요청 — 상호작용 경로(NpcSubdueInteractable)가 호출. (#79)
-    /// 클라이언트에서 불리면 서버로 전달되므로 비호스트 플레이어의 타격도 게이지에 반영된다.
-    /// 타격량은 서버가 자기 인스펙터 값(m_resistConfig.SubdueHitPower)을 쓴다 — 클라이언트가 수치를 보낼 수 없다.
+    /// 제압 타격 요청 — 상호작용 경로(NpcSubdueInteractable)가 호출한다. (#79/#366)
+    /// 클라이언트에서 불리면 서버로 전달되므로 비호스트 플레이어의 타격도 반영된다.
+    /// 타격량은 서버가 자기 config 값을 쓴다 — 클라이언트가 수치를 보낼 수 없다.
+    ///
+    /// 상태 게이트는 TakeDamage가 CanBeStunned로 건다 (#366). 예전의 "저항 중이 아니면 무시"
+    /// (배회 NPC 폭행 방지)는 체력이 지속형이 되면서 없어졌다 — 배회 중인 NPC도 때릴 수 있다.
     /// </summary>
     // TODO: 상호작용 네트워크 전환(#55 계열)에서 거리·조준 서버 검증 추가 (지금은 요청 자체는 신뢰)
     public void RequestSubdueHit()
@@ -66,13 +49,15 @@ public partial class NpcController
             return;
         }
 
-        ApplySubdueHit(m_resistConfig.SubdueHitPower);
+        TakeDamage(m_commonConfig.SubdueHitPower, null);
     }
 
+    // 가해자를 넘기지 않는 이유: RPC가 요청자를 싣지 않기 때문이다(기존 경로와 동일).
+    // 기절에서 깨어나면 도주가 아니라 배회로 복귀하므로(#366 결정 5) 위협 대상이 필요 없다.
     [Rpc(SendTo.Server)]
     private void SubdueHitRpc()
     {
-        ApplySubdueHit(m_resistConfig.SubdueHitPower);
+        TakeDamage(m_commonConfig.SubdueHitPower, null);
     }
 
     /// <summary>도주 중인 NPC 근접 제압 — 상호작용 홀드 성공 시 그 자리에서 체포. (NpcSubdueInteractable 경유)</summary>
@@ -100,13 +85,5 @@ public partial class NpcController
 
         ThreatTarget = threat;
         m_stateMachine.ChangeState(NpcState.Stunned);
-    }
-
-    // 게이지는 서버 진실값과 동기화 변수에 함께 기록한다 — 오프라인에서는 NetworkVariable에 쓰지 않는다 (#56 상태 패턴과 동일)
-    private void SetSubdueGauge(float value)
-    {
-        m_subdueGauge = value;
-        if (IsSpawned && IsServer)
-            m_syncedSubdueGauge.Value = value;
     }
 }

@@ -41,14 +41,8 @@ public partial class NpcController : NetworkBehaviour
     // 서버 권위 FSM 상태 — 서버만 쓰고 모든 클라이언트가 읽는다 (#56)
     private readonly NetworkVariable<NpcState> m_networkState = new NetworkVariable<NpcState>(NpcState.Idle);
 
-    // 서버 권위 제압 게이지 — 저항(Attack) 상태에서만 의미. 진행도 UI(후속)를 위해 동기화한다 (#76)
-    private readonly NetworkVariable<float> m_syncedSubdueGauge = new NetworkVariable<float>(0f);
-    private float m_subdueGauge; // 서버·오프라인의 진실값 — m_networkState와 같은 이중 구조
-
     public NavMeshAgent Agent => m_agent;
     public NpcStateMachine StateMachine => m_stateMachine;
-    /// <summary>저항 제압 게이지 최대치 — HUD가 게이지 비율 계산에 읽는다. (#76/#79)</summary>
-    public float SubdueGaugeMax => m_resistConfig.SubdueGaugeMax;
 
     /// <summary>기절 지속 시간(초) — 테이저가 명중 안내에 읽는다. (#269)</summary>
     public float StunSeconds => m_stunConfig.StunSeconds;
@@ -58,9 +52,6 @@ public partial class NpcController : NetworkBehaviour
     /// 두 경로가 다른 반경을 쓰면 "도망칠 상대"와 "피할 상대"의 기준이 어긋난다.
     /// </summary>
     public float ThreatSearchRadius => m_resistConfig.AttackRange * m_resistConfig.ThreatSearchRadiusMultiplier;
-
-    /// <summary>현재 제압 게이지. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 읽을 수 있다. (#76)</summary>
-    public float SubdueGauge => IsSpawned ? m_syncedSubdueGauge.Value : m_subdueGauge;
 
     /// <summary>저항·도주 중 피해 다니는 위협 대상(체포를 시도한 플레이어). 배회 등 반응 중이 아니면 null. 서버에서만 유효. (#76)</summary>
     public Transform ThreatTarget { get; private set; }
