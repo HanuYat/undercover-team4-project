@@ -22,6 +22,7 @@ GameObject:
   - component: {fileID: 4422740345284790104}
   - component: {fileID: 5951565256141623223}
   - component: {fileID: 6528445042961001699}
+  - component: {fileID: 823714932558543339}
   m_Layer: 7
   m_Name: NPC_Streaker
   m_TagString: Untagged
@@ -156,6 +157,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NpcAnimationDriver
   m_swingAnimSeconds: 0.9
   m_unlockBeginSeconds: 0.63
+  m_subdueRollSeconds: 1.3
   m_animator: {fileID: 3068399505254570713}
 --- !u!114 &3625219082931332717
 MonoBehaviour:
@@ -326,6 +328,21 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NpcDespawnVfx
   ShowTopMostFoldoutHeaderGroup: 1
   m_ghostMaterial: {fileID: 2100000, guid: c963e5de356285c46a7cd4699624970b, type: 2}
+--- !u!114 &823714932558543339
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 230f673c9159def43ad5a33cf986c3f3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcProneCollider
+  m_proneRadius: 0.3
+  m_proneHeight: 1.8
+  m_proneCenter: {x: 0, y: 0.3, z: -0.1}
 --- !u!1001 &1485141803111560614
 PrefabInstance:
   m_ObjectHideFlags: 0
