@@ -85,8 +85,7 @@ public class App : Singleton<App>
         public static CriminalAssigner CriminalAssigner => Instance.m_criminalAssigner;
         public static NpcSpawner NpcSpawner => Instance.m_npcSpawner;
         public static AppearanceAssigner Appearance => Instance.m_appearanceAssigner;
-        public static WrongfulArrestPenalty WrongfulArrestPenalty =>
-            Instance.m_wrongfulArrestPenalty;
+        public static WrongfulArrestPenalty WrongfulArrestPenalty => Instance.m_wrongfulArrestPenalty;
         public static TeamFund TeamFund => Instance.m_teamFund;
         public static DirectoryManager Directory => Instance.m_directoryManager;
     }
