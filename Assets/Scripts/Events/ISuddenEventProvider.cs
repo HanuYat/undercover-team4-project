@@ -13,7 +13,7 @@ public interface ISuddenEventProvider
     /// <summary>
     /// 자기가 가진 이벤트를 <paramref name="into"/>에 <b>추가</b>한다.
     /// <b>비우지 말 것</b> — 매니저가 컴포넌트형 이벤트로 풀을 먼저 채운 뒤 제공자들이 같은 풀에 얹는 순서라,
-    /// 여기서 Clear()하면 앞서 수집된 이벤트(괴한·먹통 등)가 조용히 사라진다.
+    /// 여기서 Clear()하면 앞서 수집된 이벤트(먹통·탈옥 등)가 조용히 사라진다.
     /// </summary>
     void CollectEvents(List<ISuddenEvent> into);
 }
