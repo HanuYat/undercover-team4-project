@@ -2,9 +2,9 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// [임시] 저항(Attack) NPC의 제압 게이지 표시 — 머리 위 게이지 바. (#76/#79)
-/// 저항 중일 때만 모든 클라 화면에 그려지며, 홀드 타격으로 게이지가 깎이는 진행도를 보여준다.
-/// 값은 <see cref="NpcController.SubdueGauge"/>·<see cref="NpcController.CurrentState"/>(동기화 값)를 읽으므로
+/// [임시] NPC 체력 표시 — 머리 위 바. (#76/#79/#366)
+/// 체력이 최대보다 낮을 때만 모든 클라 화면에 그려지며, 타격으로 깎이는 진행도를 보여준다.
+/// 값은 <see cref="NpcController.CurrentHp"/>(동기화 값)를 읽으므로
 /// 서버·클라 구분 없이 각자 화면에 그린다.
 /// NetworkBootstrap·PlayerReviveHud의 임시 OnGUI 관례를 따른다 — 정식 상호작용 UI(#65 계열)로 대체 예정.
 /// </summary>
@@ -52,8 +52,9 @@ public class NpcSubdueGaugeHud : MonoBehaviour
 
     private void OnGUI()
     {
-        // 저항 상태에서만 표시 — 배회·도주 NPC에는 제압 게이지 개념이 없다
-        if (m_controller.CurrentState != NpcState.Attack)
+        // 다친 NPC만 표시 — 체력이 지속형이라 상태로 거를 수 없다(#366). 상태로 걸면 배회 시민
+        // 전원 머리 위에 바가 상시로 뜨고, 저항 상태로만 걸면 도망친 부상 NPC의 체력이 숨는다.
+        if (m_controller.CurrentHp >= m_controller.MaxHp)
             return;
 
         Camera cam = ViewCamera;
@@ -65,8 +66,8 @@ public class NpcSubdueGaugeHud : MonoBehaviour
         if (screen.z <= 0f || screen.z > m_maxDrawDistance)
             return; // 카메라 뒤이거나 너무 멀면 생략
 
-        float fill = m_controller.SubdueGaugeMax > 0f
-            ? Mathf.Clamp01(m_controller.SubdueGauge / m_controller.SubdueGaugeMax)
+        float fill = m_controller.MaxHp > 0
+            ? Mathf.Clamp01((float)m_controller.CurrentHp / m_controller.MaxHp)
             : 0f;
 
         // 스크린 좌표(하단 원점) → GUI 좌표(상단 원점)로 뒤집는다

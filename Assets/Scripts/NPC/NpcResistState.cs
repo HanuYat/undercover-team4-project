@@ -4,9 +4,11 @@ using UnityEngine;
 /// <summary>
 /// 저항(Attack) 상태 — 수갑 채널링 성공 순간 그 자리에서 버티며 싸운다. (GDD 6-1/7-4, #76/#79)
 /// 표적을 바라보며 주기적으로 정면 부채꼴 타격을 휘둘러 사거리 안 플레이어의 HP를 깎고(선제 공격, 방향 판정 #220),
-/// ApplySubdueHit로 제압 게이지가 0이 되면 체포(Captured)된다 — 여럿이 때리면 빨리 끝난다(협동 인센티브).
-/// 제한 시간 안에 제압당하지 않거나 교전 중인 플레이어가 전원 무력화되면
-/// 플레이어 패배 — 도주형으로 전환되어 달아난다 (GDD 7-4 3항).
+/// 제압 타격으로 체력이 0이 되면 기절(Stunned)한다 — 여럿이 때리면 빨리 끝난다(협동 인센티브).
+/// 전이 자체는 NpcController.SetHp가 걸므로 이 상태 클래스는 체력을 보지 않는다 (#366).
+/// 교전 중인 플레이어가 전원 무력화되면 플레이어 패배 — 도주형으로 전환되어 달아난다 (GDD 7-4 3항).
+/// 제한 시간으로 뿌리치고 도주하던 경로는 폐지됐다 (#366) — 저항 NPC는 체력이 0이 될 때까지 버틴다.
+/// 표적이 사라지면 NoTargetIdleSeconds 후 배회로 돌아간다(고착 방지).
 /// </summary>
 public class NpcResistState : NpcStateBase
 {
@@ -24,7 +26,8 @@ public class NpcResistState : NpcStateBase
     private const float k_chaseRepathMoveThreshold = 0.5f; // 표적이 이만큼(m) 움직였을 때만 재계산
     private static readonly Vector3 k_noDestination = new Vector3(float.PositiveInfinity, 0f, 0f);
 
-    private float m_resistStartTime;
+    // 표적을 찾지 못한 채 흐른 시간(초) — 표적이 다시 잡히면 0으로 리셋해 연속일 때만 누적한다 (#366)
+    private float m_noTargetSeconds;
     private float m_nextAttackTime;
     // 스윙을 시작한 뒤 타격 프레임을 기다리는 예약 시각 — 데미지를 스윙 시작이 아니라 이 시점에 넣어
     // 눈에 보이는 타격과 HP 감소를 일치시킨다. k_noPendingStrike면 대기 중인 타격 없음. (#220)
@@ -60,8 +63,7 @@ public class NpcResistState : NpcStateBase
         // 표적을 직접 바라보도록 수동 회전할 것이므로 에이전트 자동 회전을 끈다 — 안 그러면 서로 방향을 다툰다 (#220)
         m_owner.Agent.updateRotation = false;
 
-        m_owner.ResetSubdueGauge();
-        m_resistStartTime = Time.time;
+        m_noTargetSeconds = 0f;
         m_nextAttackTime = Time.time + m_config.AttackInterval;
         m_pendingStrikeTime = k_noPendingStrike; // 직전 저항의 예약이 남아 첫 타격이 앞당겨지지 않게
         m_swingHoldUntil = 0f;
@@ -72,19 +74,31 @@ public class NpcResistState : NpcStateBase
 
     public override void Tick()
     {
-        // 게이지가 다 깎이면 제압 성공 — 체포
-        if (m_owner.SubdueGauge <= 0f)
-        {
-            Debug.Log($"저항 제압됨: {m_owner.name}");
-            // 체포로 반응이 끝나므로 위협 참조를 여기서 정리한다. Exit()에 넣으면 안 된다 —
-            // Defeat()의 StartFlee()가 세팅한 위협을 그 직후 Exit()가 지워 도주 전환이 깨진다 (#205).
-            m_owner.ClearThreat();
-            m_owner.StateMachine.ChangeState(NpcState.Captured);
-            return;
-        }
-
         // 표적을 정하고(유발자 우선), 사거리 밖이면 추격·안이면 멈춰 타격, 그리고 표적을 향해 돈다 (#254·#220)
         Transform target = ResolveTarget();
+
+        // 표적이 사라진 채로 일정 시간이 지나면 배회로 돌아간다 (#366 결정 7).
+        // 제한시간 도주를 없애면서 Attack 상태의 시간 기반 출구가 사라졌는데,
+        // 표적이 없으면 ChaseTarget이 에이전트를 세우고 사거리 밖이라 스윙도 하지 않아
+        // 그대로 두면 NPC가 이 상태로 영구히 굳는다. 도주가 아니라 배회다 —
+        // 때릴 상대가 사라진 NPC가 혼자 전력 질주할 이유가 없다. (기절 해제는 도주로
+        // 복귀하지만 그쪽은 방금 맞은 직후라 상황이 다르다.)
+        if (target == null)
+        {
+            m_noTargetSeconds += Time.deltaTime;
+            if (m_noTargetSeconds >= m_config.NoTargetIdleSeconds)
+            {
+                Debug.Log($"저항 종료(표적 상실) — 배회 복귀: {m_owner.name}");
+                m_owner.ClearThreat();
+                m_owner.StateMachine.ChangeState(NpcState.Idle);
+                return;
+            }
+        }
+        else
+        {
+            m_noTargetSeconds = 0f;
+        }
+
         ChaseTarget(target);
         FaceTarget(target);
 
@@ -119,12 +133,6 @@ public class NpcResistState : NpcStateBase
                 Defeat("교전 플레이어 전원 무력화");
                 return;
             }
-        }
-
-        // 제한 시간 안에 못 꺾었으면 제압 실패 — 뿌리치고 도주 (GDD 7-4 '제압 실패')
-        if (Time.time - m_resistStartTime > m_config.DefeatSeconds)
-        {
-            Defeat("제압 제한 시간 초과");
         }
     }
 
@@ -169,17 +177,40 @@ public class NpcResistState : NpcStateBase
 
     /// <summary>
     /// 이번 틱의 표적 — 저항을 유발한 플레이어(<see cref="NpcController.ThreatTarget"/>)를 우선하고,
-    /// 사라졌으면 추격 반경(<see cref="NpcController.ThreatSearchRadius"/>) 안 가장 가까운 현장 플레이어로 폴백한다.
+    /// 놓쳤으면 추격 반경(<see cref="NpcController.ThreatSearchRadius"/>) 안 가장 가까운 현장 플레이어로 폴백한다.
     /// 폴백 반경은 도주(#213)와 같은 값이라 "쫓을 상대"와 "피할 상대"의 기준이 어긋나지 않는다. 서버(또는 오프라인) 전용.
     /// </summary>
     private Transform ResolveTarget()
     {
-        if (m_owner.ThreatTarget != null)
-            return m_owner.ThreatTarget;
+        Transform threat = m_owner.ThreatTarget;
+        if (threat != null && IsStillEngaged(threat))
+            return threat;
 
         PlayerData nearest = SuddenEventUtil.FindNearestFieldPlayer(
             m_owner.transform.position, m_owner.ThreatSearchRadius);
         return nearest != null ? nearest.transform : null;
+    }
+
+    /// <summary>
+    /// 유발자를 계속 표적으로 삼을 수 있는가 — <b>참조가 살아 있는 것만으로는 부족하다.</b>
+    ///
+    /// ThreatTarget은 오브젝트가 파괴될 때(연결 종료 등)만 null이 되므로, 이 검사가 없으면
+    /// 유발자가 맵 끝까지 도망쳐도 표적이 계속 잡혀 <see cref="NpcResistConfig.NoTargetIdleSeconds"/>
+    /// 복귀 타이머가 매 틱 리셋된다. 제한시간 도주(구 DefeatSeconds)를 없앤 뒤로는 그게 Attack의
+    /// 유일한 출구라, 리셋되면 저항 NPC가 라운드 끝까지 질주로 따라붙는다.
+    ///
+    /// 다운된 유발자도 놓아준다 — 폴백 경로는 IsTargetable로 거르는데 이 경로만 통과하면
+    /// 쓰러진 플레이어를 영구히 쫓는다.
+    /// </summary>
+    private bool IsStillEngaged(Transform threat)
+    {
+        float giveUpSqr = m_config.GiveUpDistance * m_config.GiveUpDistance;
+        if ((threat.position - m_owner.transform.position).sqrMagnitude > giveUpSqr)
+            return false;
+
+        // 위협이 플레이어가 아니면(테스트용 더미 등) 거리 조건만 본다
+        PlayerData player = threat.GetComponentInParent<PlayerData>();
+        return player == null || player.IsTargetable;
     }
 
     /// <summary>

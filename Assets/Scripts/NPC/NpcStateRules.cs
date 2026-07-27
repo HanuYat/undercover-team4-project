@@ -26,8 +26,8 @@ public static class NpcStateRules
     /// <summary>테이저 스턴이 걸리는 상태인가 — 수갑용 <see cref="IsCapturable"/>과 분리한다 (#289).
     /// 도주(Run)·저항(Attack)이 주 대상이라 <see cref="IsCapturable"/>과 달리 이 둘을 제외하지 않는다.
     /// 제외하는 건 이미 신병을 확보(Escorted/Captured/Jailed)했거나 오검거 페널티가 진행(Detained/
-    /// Chasing/PenaltyEscorting) 중인 상태뿐 — 이들은 스턴이 호송·수감·페널티 집행을 끊어버리고(스턴은
-    /// Idle로 복귀할 뿐 원래 링크로 못 돌아온다) 전술 가치도 없어 no-op으로 둔다.
+    /// Chasing/PenaltyEscorting) 중인 상태뿐 — 이들은 스턴이 호송·수감·페널티 집행을 끊어버리고(스턴이
+    /// 풀리면 도주로 빠질 뿐 원래 링크로 못 돌아온다) 전술 가치도 없어 no-op으로 둔다.
     /// 전 상태 스턴 + 원상 복귀(pause-resume)는 별도 이슈(#292)에서 오버레이 방식으로 다룬다.
     /// Stunned 재진입은 상태 머신이 같은 상태로 막으므로 자연히 무해한 no-op이다.</summary>
     public static bool CanBeStunned(NpcState state) =>
@@ -38,7 +38,9 @@ public static class NpcStateRules
         && state != NpcState.Chasing
         && state != NpcState.PenaltyEscorting;
 
-    /// <summary>밧줄로 묶어 끌 수 있는 상태인가 — 테이저로 기절한 대상만. (#269)
+    /// <summary>밧줄로 묶어 끌 수 있는 상태인가 — 기절(Stunned)한 대상만. (#269)
+    /// 기절 경로가 둘이라 테이저 전용이 아니다: 테이저 직격과 제압 타격으로 HP가 0에 도달한
+    /// 경우(#366) 모두 같은 Stunned로 들어오므로, 맞아서 쓰러진 저항형도 밧줄 대상이다.
     /// 수갑 연행과 역할이 갈린다: 수갑은 순응형 즉시 연행, 밧줄은 기절시킨 대상 전용.</summary>
     public static bool IsRopeable(NpcState state) => state == NpcState.Stunned;
 
@@ -51,7 +53,9 @@ public static class NpcStateRules
 
     /// <summary>E 상호작용(제압·타격·재연행)이 반응하는 상태인가.
     /// 포함 목록 방식 — 새 상태는 기본 'E 불가'이므로 열어야 하면 여기 추가할 것.
-    /// NpcSubdueInteractable.Interact의 분기 집합과 반드시 일치해야 한다.</summary>
+    /// NpcSubdueInteractable.Interact의 분기 집합과 반드시 일치해야 한다.
+    /// 배회(Idle/Walk)가 열린 것은 체력이 지속형이 되면서다 (#366) — 예전에는 '배회 NPC 폭행 방지'로
+    /// 막혀 있었지만, 이제 아무 때나 때려 체력을 깎을 수 있다.</summary>
     public static bool HasSubdueInteraction(NpcState state) =>
-        state is NpcState.Run or NpcState.Attack or NpcState.Captured;
+        state is NpcState.Idle or NpcState.Walk or NpcState.Run or NpcState.Attack or NpcState.Captured;
 }

@@ -186,7 +186,7 @@ public class JailZone : NetworkBehaviour
     }
 
     // 서버 진실값과 동기화 변수에 함께 기록한다 — 오프라인에서는 NetworkVariable에 쓰지 않고
-    // 이벤트를 직접 발행한다 (NpcController.SetSubdueGauge / HandleFsmStateChanged와 동일 구조)
+    // 이벤트를 직접 발행한다 (NpcController.HandleFsmStateChanged와 동일 구조)
     private void SetInmateCount(int value)
     {
         m_localInmateCount = value;

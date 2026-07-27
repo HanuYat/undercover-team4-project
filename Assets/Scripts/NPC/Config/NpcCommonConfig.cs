@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// 컨트롤러 레벨 공용 튜닝 값 — 특정 FSM 상태에 속하지 않는다. (#259 — NpcController에서 분리)
-/// 스폰 시 개체 편차, 넉백 비행 물리(#232)를 담는다.
+/// 스폰 시 개체 편차, 넉백 비행 물리(#232), 체력(#366)을 담는다.
 /// </summary>
 [CreateAssetMenu(fileName = "NpcCommonConfig", menuName = "Undercover/NPC/Common Config")]
 public class NpcCommonConfig : ScriptableObject
@@ -22,10 +22,22 @@ public class NpcCommonConfig : ScriptableObject
     [Tooltip("날아가는 도중 벽으로 칠 콜라이더 — 여기에 걸리면 수평 이동이 멈춘다. NPC 자신의 레이어는 런타임에 자동으로 빠진다")]
     [SerializeField] private LayerMask m_knockbackObstacleMask = 1; // Default(환경)만 — 캐릭터 오판 방지 (#339)
 
+    [Header("체력 — #366")]
+    [Tooltip("NPC 최대 체력 — 0이 되면 기절(Stunned)한다. 저항 제압 게이지(구 SubdueGaugeMax)를 대체한 값")]
+    [SerializeField] private int m_maxHp = 100;
+    [Tooltip("제압 홀드 성공 1회가 깎는 체력 — 기본값 기준 3회로 기절. NpcResistConfig에서 이관 (#366)")]
+    [SerializeField] private int m_subdueHitPower = 34;
+
     public float SpawnSpeedMultiplierMin => m_spawnSpeedMultiplierMin;
     public float SpawnSpeedMultiplierMax => m_spawnSpeedMultiplierMax;
     public float KnockbackGravity => m_knockbackGravity;
     public float KnockbackMaxFlightSeconds => m_knockbackMaxFlightSeconds;
     public float KnockbackLandSampleDistance => m_knockbackLandSampleDistance;
     public LayerMask KnockbackObstacleMask => m_knockbackObstacleMask;
+
+    /// <summary>NPC 최대 체력 — HUD가 비율 계산에, NpcController가 초기화·회복에 읽는다. (#366)</summary>
+    public int MaxHp => m_maxHp;
+
+    /// <summary>제압 홀드 1회가 깎는 체력. (#366 — 구 NpcResistConfig.SubdueHitPower)</summary>
+    public int SubdueHitPower => m_subdueHitPower;
 }
