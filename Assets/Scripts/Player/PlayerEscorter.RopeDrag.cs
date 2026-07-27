@@ -133,7 +133,7 @@ public partial class PlayerEscorter
     {
         if (!CanBeginRopeDrag(target))
             return;
-        if (!NpcStateRules.IsRopeable(target.CurrentState))
+        if (!NpcStateRules.CanArrest(target.CurrentState))
             return; // 이미 신병이 확보됐거나 다른 시스템이 소유한 상태 제외 — 클라 검증·윤곽선과 단일 기준 (#184)
 
         // 기절 대상은 채널링 없이 즉시 묶는다 — 기절 지속(2.67초)이 채널(3초)보다 짧아 채널을 걸면
@@ -154,7 +154,7 @@ public partial class PlayerEscorter
     {
         if (!CanBeginRopeDrag(target))
             return;
-        if (!NpcStateRules.IsUnropeable(target.CurrentState))
+        if (!NpcStateRules.CanRelease(target.CurrentState))
             return; // 체포되어 멈춘 대상만
 
         ServerApplyRopeDrag(target);
@@ -203,7 +203,7 @@ public partial class PlayerEscorter
         }
 
         // 채널링 도중 상태가 바뀌었을 수 있다 — 완료 시점에 재확인(다른 플레이어가 먼저 확보 등).
-        if (target == null || !NpcStateRules.IsRopeable(target.CurrentState) || IsBusy)
+        if (target == null || !NpcStateRules.CanArrest(target.CurrentState) || IsBusy)
             return;
 
         // 채널링 성공 순간 반응 판정 (GDD 6-1, #76) — 수갑 체포에서 그대로 옮겨온 분기다.

@@ -34,13 +34,13 @@ public class Rope : ItemBase
         // 대상 판정은 NpcStateRules 단일 기준 — 서버 가드·조준 피드백과 동일 (#184)
 
         // 이미 체포되어 멈춰 있는 대상은 풀어준다 — 오검거 구제·방해 수단 (수갑 해제 #290의 자리).
-        if (NpcStateRules.IsUnropeable(target.CurrentState))
+        if (NpcStateRules.CanRelease(target.CurrentState))
         {
             escorter.RequestUnrope(target);
             return;
         }
 
-        if (!NpcStateRules.IsRopeable(target.CurrentState))
+        if (!NpcStateRules.CanArrest(target.CurrentState))
         {
             Debug.Log("밧줄로 묶을 수 없는 대상 (이미 신병 확보됨 / 페널티 진행 중)");
             return;
@@ -65,8 +65,8 @@ public class Rope : ItemBase
         if (tethered != null && tethered != target.transform)
             return false;
 
-        return NpcStateRules.IsUnropeable(target.CurrentState)
-            || NpcStateRules.IsRopeable(target.CurrentState);
+        return NpcStateRules.CanRelease(target.CurrentState)
+            || NpcStateRules.CanArrest(target.CurrentState);
     }
 
     /// <summary>좌클릭 뗌 — 진행 중인 묶기/풀기 채널링 취소를 서버에 요청한다. (Handcuffs와 동일, #91)</summary>

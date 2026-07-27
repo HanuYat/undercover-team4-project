@@ -41,9 +41,9 @@ public static class NpcStateRules
     /// <summary>밧줄로 묶어 끌 수 있는 상태인가. (#269 → #369 기본 검거로 승격)
     /// 제외 목록 방식 — 이미 신병 확보(Escorted/Captured/Jailed)·타 시스템 소유(Holding·페널티)는 제외.
     /// 기절·도주·저항 등 나머지는 전부 대상이다(제압 타격으로 HP 0에 쓰러진 저항형 Stunned 포함, #366).
-    /// Captured 제외 주의: 그 상태에선 밧줄 좌클릭이 '풀어주기'로 갈리고(<see cref="IsUnropeable"/>),
+    /// Captured 제외 주의: 그 상태에선 밧줄 좌클릭이 '풀어주기'로 갈리고(<see cref="CanRelease"/>),
     /// 다시 끄는 건 E 경로다.</summary>
-    public static bool IsRopeable(NpcState state) =>
+    public static bool CanArrest(NpcState state) =>
         state != NpcState.Escorted
         && state != NpcState.Captured
         && state != NpcState.Jailed
@@ -54,7 +54,7 @@ public static class NpcStateRules
 
     /// <summary>밧줄 좌클릭으로 풀어 석방할 수 있는 상태인가 — 체포되어 멈춘 대상(Captured)만. (#290 → #369)
     /// 밧줄은 소모형이 아니라 상태만으로 가른다(수갑 시절의 자원 유무 조건 없음). 제압만으로 잡힌 Captured도 대상.</summary>
-    public static bool IsUnropeable(NpcState state) => state == NpcState.Captured;
+    public static bool CanRelease(NpcState state) => state == NpcState.Captured;
 
     /// <summary>E 상호작용(제압·타격·재연행)이 반응하는 상태인가.
     /// 포함 목록 방식 — 새 상태는 기본 'E 불가'이므로 열어야 하면 여기 추가할 것.

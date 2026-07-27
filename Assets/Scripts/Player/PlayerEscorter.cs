@@ -321,7 +321,7 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
             return; // 묶기/풀기 채널링 중복 방지 (한 채널 공유)
         if (IsBusy)
             return; // 연행/끌기 중엔 풀기 불가 — 이미 다른 대상을 잡고 있다
-        if (!NpcStateRules.IsUnropeable(target.CurrentState))
+        if (!NpcStateRules.CanRelease(target.CurrentState))
             return; // 체포(Captured)만 — 클라 조기검증(Rope.Use)과 단일 기준 (#184/#369)
         if (!HasRope)
             return; // 밧줄을 들고 있어야 풀 수 있다
@@ -357,7 +357,7 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
         }
 
         // 채널링 도중 상태가 바뀌었을 수 있다 — 완료 시점에 재확인(예: 그새 다른 플레이어가 끌기 재개).
-        if (!NpcStateRules.IsUnropeable(target.CurrentState))
+        if (!NpcStateRules.CanRelease(target.CurrentState))
             return;
 
         // 밧줄은 소모되지 않아 대상에 남은 게 없다 — 회수할 자원 없이 배회로 돌려보내기만 한다 (#369).
