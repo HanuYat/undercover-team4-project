@@ -148,6 +148,8 @@ public class NpcAnimationDriver : MonoBehaviour
         m_controller.OnAttackSwing += HandleAttackSwing;
         // 일어나기도 상태 전이가 아닌 순간 이벤트 — 기절 상태를 유지한 채 마지막 구간에만 얹는다 (#269)
         m_controller.OnStandUp += HandleStandUp;
+        // 스턴은 상태 전이가 아니라 오버레이라 OnStateChanged로 안 온다 — 따로 구독한다 (#292)
+        m_controller.OnStunnedChanged += HandleStunnedChanged;
         HandleStateChanged(m_controller.CurrentState);
     }
 
@@ -158,6 +160,7 @@ public class NpcAnimationDriver : MonoBehaviour
             m_controller.OnStateChanged -= HandleStateChanged;
             m_controller.OnAttackSwing -= HandleAttackSwing;
             m_controller.OnStandUp -= HandleStandUp;
+            m_controller.OnStunnedChanged -= HandleStunnedChanged;
         }
     }
 
@@ -190,6 +193,16 @@ public class NpcAnimationDriver : MonoBehaviour
 
         m_animator.SetInteger(s_stateHash, (int)NpcState.Attack);
         m_swingUntil = Time.time + m_swingAnimSeconds;
+    }
+
+    // 스턴 오버레이 온/오프 (#292) — 기존 기절 표현을 그대로 재사용한다.
+    // 오버레이는 FSM 상태를 바꾸지 않으므로, 드라이버에는 "Stunned로 전이한 것처럼" 먹여
+    // 누운 자세·일어나기(#269)·스윙 취소(#220)·누움 콜라이더(#363)가 손대지 않고 그대로 동작하게 한다.
+    // m_baseState == Stunned에 매달린 표현은 전부 이 한 줄을 타고 들어온다.
+    // 풀릴 때는 진짜 현재 상태로 되돌린다 — 반응군이면 곧이어 도주 전이가 덮어쓴다.
+    private void HandleStunnedChanged(bool stunned)
+    {
+        HandleStateChanged(stunned ? NpcState.Stunned : m_controller.CurrentState);
     }
 
     // 기절이 풀리기 직전 일어나는 모션 — 스윙과 같은 int 펄스 방식이다(트리거 오버레이는 Any State
@@ -301,6 +314,11 @@ public class NpcAnimationDriver : MonoBehaviour
             m_lastPosition = transform.position; // 풀린 직후 이동량이 몰려 속도가 튀지 않게
             return;
         }
+
+        // 스턴 오버레이 중에는 속도 기반 로코모션을 돌리지 않는다 (#292) — 상태 enum이 그대로라
+        // 연행·저항·페널티 상태에서 기절하면 아래 블록이 매 프레임 기절 포즈를 덮어쓴다.
+        if (m_controller.IsStunned)
+            return;
 
         NpcState state = m_controller.CurrentState;
         if (
@@ -454,6 +472,14 @@ public class NpcAnimationDriver : MonoBehaviour
 
     private void HandleStateChanged(NpcState state)
     {
+        // 스턴 오버레이 중에는 밑에서 상태가 바뀌어도 화면은 계속 누워 있어야 한다 (#292).
+        // 오버레이는 CurrentState를 얼리지 않는다 — FSM Tick만 멈출 뿐이라 외부(오검거 페널티
+        // 매니저의 Detained→Chasing 전이 등)에서 걸린 전이는 그대로 들어온다. 그걸 그대로 받으면
+        // m_baseState가 Stunned에서 벗어나 기절 중에 벌떡 서는 그림이 나오고, RefreshProne(#363)이
+        // 누움을 풀어 콜라이더까지 같이 선다.
+        if (m_controller.IsStunned)
+            state = NpcState.Stunned;
+
         // 제압 전환 분기용 직전 상태 — base를 덮어쓰기 전에 읽는다 (#332)
         NpcState previous = m_baseState;
 

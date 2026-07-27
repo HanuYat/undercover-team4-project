@@ -152,6 +152,7 @@ public partial class NpcController : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         m_networkState.OnValueChanged += HandleNetworkStateChanged;
+        m_syncedStunned.OnValueChanged += HandleSyncedStunnedChanged; // 스턴 오버레이 표현 전파 (#292)
 
         if (IsServer)
         {
@@ -168,6 +169,7 @@ public partial class NpcController : NetworkBehaviour
     public override void OnNetworkDespawn()
     {
         m_networkState.OnValueChanged -= HandleNetworkStateChanged;
+        m_syncedStunned.OnValueChanged -= HandleSyncedStunnedChanged;
     }
 
     private void Start()
@@ -209,6 +211,14 @@ public partial class NpcController : NetworkBehaviour
         if (m_knockbackActive)
         {
             TickKnockback();
+            return;
+        }
+
+        // 스턴 오버레이 중에는 FSM을 돌리지 않는다 — 상태는 그대로 둔 채 제자리에 얼린다.
+        // 넉백 게이트 뒤에 두는 게 중요하다: 둘이 겹치면 넉백이 이긴다 (#292)
+        if (HasStunOverlay)
+        {
+            TickStun();
             return;
         }
 

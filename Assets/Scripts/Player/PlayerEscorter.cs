@@ -374,7 +374,7 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
     /// <summary>채널링 성공 순간의 반응. 기절 중이거나 신원이 없으면 순응(즉시 연행) 취급. (#76)</summary>
     private static ReactionType ResolveReaction(NpcController target)
     {
-        if (target.CurrentState == NpcState.Stunned)
+        if (target.IsStunned)
             return ReactionType.Compliant;
 
         CitizenIdentity identity = target.GetComponent<CitizenIdentity>();

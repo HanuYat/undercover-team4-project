@@ -23,20 +23,36 @@ public static class NpcStateRules
         && state != NpcState.Chasing
         && state != NpcState.PenaltyEscorting;
 
-    /// <summary>테이저 스턴이 걸리는 상태인가 — 수갑용 <see cref="IsCapturable"/>과 분리한다 (#289).
-    /// 도주(Run)·저항(Attack)이 주 대상이라 <see cref="IsCapturable"/>과 달리 이 둘을 제외하지 않는다.
+    /// <summary>타격 피해가 들어가는 상태인가 — <b>스턴 게이트가 아니다.</b> (#292)
+    /// 스턴은 오버레이가 되면서 전 상태에 걸리게 됐지만(#292), 타격까지 함께 열면 연행 중인
+    /// NPC를 때려 기절시켜 신병에서 빼내는 우회가 생긴다. 그래서 게이트를 둘로 쪼개고
+    /// 이쪽은 구 CanBeStunned(#289)의 제외 목록을 그대로 물려받았다 — 팀 결정은
+    /// "스턴은 허용, 타격은 차단"이다.
+    ///
     /// 제외하는 건 이미 신병을 확보(Escorted/Captured/Jailed)했거나 오검거 페널티가 진행(Detained/
-    /// Chasing/PenaltyEscorting) 중인 상태뿐 — 이들은 스턴이 호송·수감·페널티 집행을 끊어버리고(스턴이
-    /// 풀리면 도주로 빠질 뿐 원래 링크로 못 돌아온다) 전술 가치도 없어 no-op으로 둔다.
-    /// 전 상태 스턴 + 원상 복귀(pause-resume)는 별도 이슈(#292)에서 오버레이 방식으로 다룬다.
-    /// Stunned 재진입은 상태 머신이 같은 상태로 막으므로 자연히 무해한 no-op이다.</summary>
-    public static bool CanBeStunned(NpcState state) =>
+    /// Chasing/PenaltyEscorting) 중인 상태 — 도주(Run)·저항(Attack)은 주 타격 대상이라 제외하지 않는다.</summary>
+    public static bool CanBeDamaged(NpcState state) =>
         state != NpcState.Escorted
         && state != NpcState.Captured
         && state != NpcState.Jailed
         && state != NpcState.Detained
         && state != NpcState.Chasing
         && state != NpcState.PenaltyEscorting;
+
+    /// <summary>반응·배회군인가 — 스턴이 풀릴 때 도주로 전환되는 쪽. (#292)
+    /// 여집합(확보·페널티군 + Holding)은 스턴이 풀려도 아무 전이 없이 하던 일을 재개한다 —
+    /// 상태 enum이 애초에 안 바뀌므로 호송·수감·페널티·정리 링크가 그대로 살아 있다.
+    ///
+    /// 포함 목록 방식이라 <b>새 상태는 기본이 '재개'</b>다. 도주로 깨어나야 하면 여기 추가할 것.
+    /// 의도적으로 뺀 둘: <see cref="NpcState.Holding"/>(#291 — 임시 거처로 걸어가 소멸하는 정리
+    /// 대상이라 도주시키면 경로가 끊긴다)과 <see cref="NpcState.Stunned"/>(넉백 KO — 자기 상태
+    /// 클래스가 스스로 빠져나간다).</summary>
+    public static bool IsReactive(NpcState state) =>
+        state is NpcState.Idle
+            or NpcState.Walk
+            or NpcState.Run
+            or NpcState.Attack
+            or NpcState.Intruding;
 
     /// <summary>밧줄로 묶어 끌 수 있는 상태인가. (#269 → #369 기본 검거로 승격)
     /// 제외 목록 방식 — 이미 신병 확보(Escorted/Captured/Jailed)·타 시스템 소유(Holding·페널티)는 제외.

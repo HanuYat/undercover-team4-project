@@ -138,7 +138,10 @@ public partial class PlayerEscorter
 
         // 기절 대상은 채널링 없이 즉시 묶는다 — 기절 지속(2.67초)이 채널(3초)보다 짧아 채널을 걸면
         // 묶기 전에 깨어나 테이저→밧줄 콤보가 깨진다. (#269)
-        if (target.CurrentState == NpcState.Stunned)
+        // 상태값이 아니라 IsStunned를 보는 이유: 스턴이 오버레이가 되면서 테이저 기절은 CurrentState를
+        // 바꾸지 않는다(넉백 KO만 NpcState.Stunned). 상태로 보면 이 지름길이 조용히 죽어
+        // 기절 대상에게도 채널링을 요구하게 되고, 깨어나기 전에 못 묶어 콤보가 깨진다. (#292)
+        if (target.IsStunned)
         {
             ServerApplyRopeDrag(target);
             return;
@@ -236,6 +239,13 @@ public partial class PlayerEscorter
         // 꺼진 에이전트에 isStopped를 써 에러가 난다(넉백 ServerApplyKnockback과 같은 순서). (#369)
         target.StartEscort(transform);
         target.StartRopeDrag(transform); // 끈 플레이어를 위협으로 기억 — 풀려나면 이쪽에서 도망친다
+
+        // 기절한 채 묶였으면 오버레이를 걷는다 (#292 — 수갑 체포 성공 분기에 있던 처리를 밧줄로 옮긴 것).
+        // 남겨두면 Update의 스턴 게이트가 끌기 Tick을 막고, 만료 해제 경로(resumeReaction: true)를 타면
+        // StartFlee가 걸려 묶자마자 도망친다. 그래서 강제 해제다.
+        // StartEscort 뒤에 두는 이유: EnterStunned가 Escorted를 만나면 StopEscort로 연행을 끊으므로
+        // 순서를 뒤집으면 방금 건 커스터디가 풀린다.
+        target.ExitStun(resumeReaction: false);
 
         NotifyOwner($"밧줄로 묶어 끌기 시작: {target.name}");
     }

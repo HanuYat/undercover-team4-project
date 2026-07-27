@@ -31,9 +31,10 @@ public partial class NpcController : IDamageable
     /// <summary>
     /// 피해 적용 (<see cref="IDamageable"/>) — 진압봉 타격 등 모든 데미지 소스의 공통 경로. (#366)
     ///
-    /// 신병을 확보했거나 오검거 페널티가 진행 중인 상태(<see cref="NpcStateRules.CanBeStunned"/>가 false)
+    /// 신병을 확보했거나 오검거 페널티가 진행 중인 상태(<see cref="NpcStateRules.CanBeDamaged"/>가 false)
     /// 에서는 <b>피해 자체를 무시</b>한다. 이 게이트가 없으면 호송 중인 NPC를 때려 기절시켜 신병에서
-    /// 빼내는 우회가 생긴다 — 테이저가 같은 상태들에서 no-op인 것과 같은 기준이다(#289).
+    /// 빼내는 우회가 생긴다. 테이저는 #292로 그 상태들에도 걸리게 됐지만(스턴은 링크를 끊지 않는다)
+    /// 타격은 계속 막는다 — 팀 결정이다.
     /// 무시하는 쪽을 택한 이유: HP만 깎고 기절은 막으면 "HP 0인데 기절 아님" 상태가 생겨,
     /// 엣지 트리거 특성상 그 NPC가 영영 기절하지 않게 된다.
     /// </summary>
@@ -45,7 +46,7 @@ public partial class NpcController : IDamageable
             return;
         if (amount <= 0)
             return;
-        if (!NpcStateRules.CanBeStunned(CurrentState))
+        if (!NpcStateRules.CanBeDamaged(CurrentState))
             return;
 
         SetHp(Mathf.Clamp(CurrentHp - amount, 0, MaxHp), attacker);

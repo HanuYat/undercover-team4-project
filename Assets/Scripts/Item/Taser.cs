@@ -135,7 +135,7 @@ public class Taser : ItemBase
                 NotifyOwner($"테이저 빗나감 — {hit.collider.name}에 맞음");
                 return;
             case AimResult.TargetInvalidState:
-                NotifyOwner($"테이저 무효 — 이미 제압됐거나 페널티 진행 중인 대상 ({target.CurrentState})");
+                NotifyOwner($"테이저 무효 — 이미 기절한 대상 ({target.name})");
                 return;
         }
 
@@ -171,10 +171,14 @@ public class Taser : ItemBase
         if (npc == null)
             return AimResult.HitNonTarget;
 
-        // 스턴 전용 게이트(#289) — 수갑용 IsCapturable과 분리한다. 여기서 걸러지는 건
-        // 이미 신병 확보·페널티 진행 중이라 스턴이 링크만 끊는 상태뿐 — 상태가 늘면 NpcStateRules만 고친다.
+        // 상태 게이트는 사라졌다 — 스턴이 오버레이가 되면서 전 상태에 걸린다 (#292).
+        // 확보·페널티 상태도 3초 얼었다가 원래 하던 일을 그대로 재개하므로 막을 이유가 없다.
+        // (타격 피해는 여전히 막힌다 — NpcStateRules.CanBeDamaged)
         target = npc;
-        if (!NpcStateRules.CanBeStunned(npc.CurrentState))
+
+        // 남은 무효 케이스는 하나 — 이미 기절해 있는 대상이다. EnterStunned가 no-op이라
+        // 그냥 통과시키면 탄만 쓰고 "명중"이 뜬다. 크로스헤어(#328)도 이 판정을 공유한다.
+        if (npc.IsStunned)
             return AimResult.TargetInvalidState;
 
         return AimResult.ValidTarget;

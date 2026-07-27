@@ -37,7 +37,7 @@ public partial class NpcController
     /// 클라이언트에서 불리면 서버로 전달되므로 비호스트 플레이어의 타격도 반영된다.
     /// 타격량은 서버가 자기 config 값을 쓴다 — 클라이언트가 수치를 보낼 수 없다.
     ///
-    /// 상태 게이트는 TakeDamage가 CanBeStunned로 건다 (#366). 예전의 "저항 중이 아니면 무시"
+    /// 상태 게이트는 TakeDamage가 CanBeDamaged로 건다 (#366/#292). 예전의 "저항 중이 아니면 무시"
     /// (배회 NPC 폭행 방지)는 체력이 지속형이 되면서 없어졌다 — 배회 중인 NPC도 때릴 수 있다.
     /// </summary>
     // TODO: 상호작용 네트워크 전환(#55 계열)에서 거리·조준 서버 검증 추가 (지금은 요청 자체는 신뢰)
@@ -73,21 +73,6 @@ public partial class NpcController
         m_stateMachine.ChangeState(NpcState.Captured);
     }
 
-    /// <summary>
-    /// 기절 진입 — 테이저(직접 호출)와 체력 0 도달(NpcController.SetHp)의 연결고리. 지속 시간이
-    /// 끝나면 스스로 일어나 <b>도주(Run)</b>한다 (#269 확정 — #366 결정 5의 배회 복귀에서 원복).
-    /// 체력 회복은 NpcStunnedState.Exit()이 맡는다.
-    /// </summary>
-    /// <param name="threat">
-    /// 기절시킨 상대 — 깨어날 때 이 대상에게서 도주한다. null이면 NpcFleeState가 근처 추격자로
-    /// 폴백하고, 아무도 없으면 배회로 가라앉는다. null 허용.
-    /// </param>
-    public void EnterStunned(Transform threat = null)
-    {
-        if (IsSpawned && !IsServer)
-            return;
-
-        ThreatTarget = threat;
-        m_stateMachine.ChangeState(NpcState.Stunned);
-    }
+    // 기절 진입(EnterStunned)은 NpcController.Stun.cs로 이사했다 — 상태 전이가 아니라
+    // 오버레이 플래그가 됐기 때문이다 (#292).
 }
