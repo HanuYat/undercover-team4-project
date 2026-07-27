@@ -17,6 +17,7 @@
 1. **테이저·HP 0은 오버레이, 넉백 KO는 상태 전이 유지** — 이슈 원문의 이원 구조를 따르되 HP 0(#366)을 오버레이 쪽에 붙인다. `NpcState.Stunned` enum과 `NpcStunnedState`는 **넉백 착지 전용으로 존속**한다. (§5의 에이전트 정리 문제를 피하기 위한 선택 — 2026-07-27 결정)
 2. **게이트를 둘로 분리** — 스턴은 **전 상태 허용**(`CanBeStunned` 삭제), 타격 피해는 **기존 제외 목록을 그대로 유지**(신규 `CanBeDamaged`). 지금은 `CanBeStunned` 하나가 두 역할을 겸하고 있어 분리가 필수다.
 3. **스턴 해제 후 동작은 상태군으로 갈린다** — 반응·배회군은 **도주**(#269/#366 확정), 확보·페널티군은 **unfreeze만 하고 원래 상태·링크를 재개**한다.
+3-1. **연행(`Escorted`)만은 예외로 끊는다** — 스턴 진입 시 `StopEscort()`로 `Captured`에 떨군다(수갑은 유지). 넉백이 이미 같은 처리를 한다. 근거는 아래.
 4. **기절을 묻는 판정은 전부 "둘 중 하나"로 바꾼다** — 결정 1로 기절 경로가 둘이 되므로, `Stunned` enum만 보던 4곳은 `IsStunned || CurrentState == Stunned`를 봐야 한다. 안 고치면 테이저 기절이 밧줄·수갑·표현에서 조용히 누락된다(§4).
 5. **체력 회복 지점이 둘이 된다** — 오버레이 해제(`ExitStun`)와 `NpcStunnedState.Exit()` 양쪽에서 `ServerRestoreHp()`를 부른다. 어느 경로로 기절하든 깨어날 때 풀피라는 #366의 불변식을 유지한다.
 
@@ -77,7 +78,8 @@ NpcController (partial)
 | 군 | 상태 | 스턴 해제 시 |
 |---|---|---|
 | 반응·배회 | Idle · Walk · Run · Attack · Panic · Intruding | `StartFlee(ThreatTarget)` — 위협이 없으면 도주 상태가 알아서 배회로 가라앉힌다 |
-| 확보·페널티 | Escorted · Captured · Jailed · Detained · Chasing · PenaltyEscorting | unfreeze만. 상태 유지, 타이머 이어서 진행 |
+| 확보·페널티 | Captured · Jailed · Detained · Chasing · PenaltyEscorting | unfreeze만. 상태 유지, 타이머 이어서 진행 |
+| 연행(예외) | Escorted | **진입 시** `StopEscort()` → `Captured`로 떨어진 뒤 그 상태로 얼어붙는다 |
 
 ## 3. `NpcState.Stunned` 참조 8곳의 처리
 
@@ -160,7 +162,7 @@ Unity Play 단독 + **MPPM 2인**.
 
 1. 13개 상태 각각에서 테이저 피격 → 크래시·에러 없음.
 2. 반응·배회군: 3초 후 도주. 위협이 없으면 배회로 가라앉음.
-3. 확보군: 호송 중 피격 → 3초 정지 후 **호송 재개**(수갑 안 풀림).
+3. 연행 중 피격 → **연행이 끊기고** 그 자리에 수갑 찬 채(`Captured`) 남는지. 쏜 쪽/놓친 쪽 모두에서 확인하고, 재연행(E)이 되는지도 본다.
 4. `Captured` 피격 → #230 인계 방치 타이머가 **리셋되지 않는지**(Arch A가 못 막던 항목).
 5. `Jailed` 피격 → 유치장 인원 **이중 집계 없음**.
 6. 페널티 집행 중 피격 → 3초 후 추격 재개, 매니저-NPC desync 없음.

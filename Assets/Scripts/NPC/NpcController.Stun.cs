@@ -6,6 +6,10 @@ using UnityEngine;
 /// 동기화 플래그로 다룬다. 상태 enum이 바뀌지 않으므로 호송·수감·페널티 링크와 각 상태의
 /// 타이머가 스턴에 끊기지 않고, 풀리면 하던 일을 그대로 재개한다.
 ///
+/// <b>예외 하나 — 연행은 끊는다.</b> 링크를 지키는 게 목적이지만 연행(Escorted)만은 예외로 끊어
+/// Captured로 떨군다(수갑은 유지). 그래야 연행 중인 대상을 쏘는 행동에 의미가 생긴다.
+/// 넉백이 이미 같은 처리를 한다(NpcController.Knockback).
+///
 /// 서버 권위 + 오프라인 폴백 — 서버(또는 오프라인)만 값을 바꾸고 클라이언트는 동기화 값을 읽는다.
 /// m_networkState·m_syncedHp와 같은 이중 구조다 (#56 패턴).
 ///
@@ -78,6 +82,16 @@ public partial class NpcController
         // 성질), 넉백 KO(enum Stunned) 위에 오버레이가 덧씌워지는 이중 기절도 막는다 (#292).
         if (IsStunned)
             return;
+
+        // 연행 중이면 연행을 끊는다 — 넉백과 같은 처리다(Escorted → Captured, 수갑은 유지).
+        // 오버레이의 목적은 "링크를 의도치 않게 끊지 않는 것"이지 "무엇도 끊지 않는 것"이 아니다.
+        // 호송을 그대로 재개시키면 연행 중인 대상을 쏠 이유가 없어져 상호작용 자체가 죽는다 —
+        // 놓친 쪽은 E로 재연행해야 하고, 그동안 다른 플레이어가 가로챌 여지가 생긴다.
+        // 유치장·오검거 페널티(Jailed/Detained/Chasing/PenaltyEscorting)는 플레이어가 쥔 링크가
+        // 아니라 시스템이 진행 중인 절차라 건드리지 않는다 — 끊으면 이중 집계·타이머 리셋·
+        // 매니저 desync가 그대로 돌아온다(#292가 오버레이를 택한 이유).
+        if (CurrentState == NpcState.Escorted)
+            StopEscort();
 
         ThreatTarget = threat;
         m_stunElapsed = 0f;

@@ -167,7 +167,7 @@ private void ExitStun(bool resumeReaction)
 
 - [ ] **Step 5: 컴파일 + Play 검증**
 
-호송 중 NPC 테이저 → 3초 정지 후 **호송 재개**(수갑 안 풀림). 호송 중 NPC를 E로 타격 → **아무 일 없음**(`CanBeDamaged`). `Captured` 테이저 → #230 인계 방치 타이머가 리셋되지 않는지. `Jailed` 테이저 → 유치장 인원 이중 집계 없는지.
+호송 중 NPC 테이저 → **연행이 끊기고** `Captured`로 떨어지는지(수갑은 유지). 호송 중 NPC를 E로 타격 → **아무 일 없음**(`CanBeDamaged`). `Captured` 테이저 → #230 인계 방치 타이머가 리셋되지 않는지. `Jailed` 테이저 → 유치장 인원 이중 집계 없는지.
 
 - [ ] **Step 6: 커밋** — `스턴 오버레이 — 전 상태 스턴 개방 + 타격 게이트 분리 (#292)`
 
@@ -180,7 +180,7 @@ private void ExitStun(bool resumeReaction)
 `m_syncedStunned` 동기화는 단독 Play에서 검증되지 않는다.
 
 1. 클라가 쏜 테이저 → 호스트·클라 **양쪽**에서 기절 포즈.
-2. 호스트가 호송 중인 NPC를 클라가 테이저 → 3초 후 양쪽에서 호송 재개.
+2. 호스트가 호송 중인 NPC를 클라가 테이저 → 양쪽에서 연행이 끊기고 `Captured`로 떨어지는지.
 3. 넉백 KO도 양쪽에서 누운 포즈(enum 경로 회귀).
 
 > 클라이언트 콘솔은 `Library/VP/mppm*/Logs/Editor.log`를 직접 읽어야 한다.
