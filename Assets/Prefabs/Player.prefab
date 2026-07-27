@@ -3139,13 +3139,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerEscorter
   ShowTopMostFoldoutHeaderGroup: 1
-  m_channelSeconds: 3
-  m_subdueChannelSeconds: 3
   m_ropeLength: 1.6
   m_dragSmoothTime: 0.14
   m_dragTurnSharpness: 6
   m_dragSwayAngle: 7
   m_dragSwayFrequency: 1.6
+  m_ropeBreakDistance: 10
+  m_channelSeconds: 3
+  m_subdueChannelSeconds: 3
 --- !u!114 &6677678871598212644
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3161,8 +3162,8 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_startingGear:
   - {fileID: 6465765157232573796, guid: ef3d4594c5614be42ad3cdf1ec34cb19, type: 3}
-  - {fileID: 7706984690027994764, guid: f9679efa0de9358449d82923ccfc9755, type: 3}
   - {fileID: 6588843841137046898, guid: 9da4b15656bbf3e4c8c3c0d8134f7547, type: 3}
+  - {fileID: 5880397347069557750, guid: d1c30cbbf1aa4ac44b4f5ad0936bd9f2, type: 3}
   m_itemAnchor: {fileID: 0}
   m_dropDistance: 1.2
 --- !u!114 &-6068744480840221127

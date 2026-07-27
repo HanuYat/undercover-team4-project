@@ -74,12 +74,9 @@ public class PlayerItemUser : MonoBehaviour
             return;
         }
 
-        // 빈손 좌클릭 — 겨냥한 체포 NPC의 수갑을 풀어 회수하는 채널링을 요청한다 (#290).
-        // 아이템 사용과 입력(좌클릭)은 같지만 손에 든 게 없을 때의 전용 조작이라 여기서 갈린다.
         if (m_equippedItem == null)
         {
-            TryUncuffAimed();
-            return;
+            return; // 빈손 좌클릭은 무동작 — 풀어주기는 밧줄을 든 좌클릭으로 이관됐다 (#290 → #369)
         }
 
         // CanUse() 게이트는 각 아이템의 Use() 내부에서 수행한다 — 사용 불가 사유
@@ -91,35 +88,8 @@ public class PlayerItemUser : MonoBehaviour
 
     private void HandleCancelItem()
     {
-        // 빈손이면 진행 중인 수갑 해제 채널링 취소, 아이템을 들었으면 아이템 채널링 취소 (#290/#91).
-        if (m_equippedItem == null)
-        {
-            m_escorter?.CancelUncuff();
-            return;
-        }
-
         // 채널링 중이 아니면 CancelUse는 무동작이라 항상 호출해도 안전하다.
         // CanUse() 체크 금지 — 채널링 중엔 false라서 취소가 막힌다 (#91)
-        m_equippedItem.CancelUse();
-    }
-
-    // 빈손 좌클릭 — 겨냥한 NPC가 '수갑 찬 체포(Captured)' 상태면 수갑 해제 채널링을 서버에 요청한다 (#290).
-    // 조기검증(대상/상태/수갑 유무)은 Handcuffs.Use와 같은 관례 — 클라에서 걸러 불필요한 RPC를 막는다(최종 판정은 서버).
-    private void TryUncuffAimed()
-    {
-        if (m_escorter == null || m_interactor == null)
-        {
-            return;
-        }
-
-        GameObject aim = m_interactor.CurrentTarget;
-        NpcController target = aim != null ? aim.GetComponentInParent<NpcController>() : null;
-        // 상태(Captured) + 자원(수갑 채워짐) 둘 다 만족해야 대상 — 제압만 된 cuffless Captured는 제외 (#290).
-        if (target == null || !NpcStateRules.IsUncuffable(target.CurrentState) || !target.HasHandcuffs)
-        {
-            return;
-        }
-
-        m_escorter.RequestUncuff(target);
+        m_equippedItem?.CancelUse();
     }
 }

@@ -132,12 +132,7 @@ public class ArrestJudge : CommonManagerBase
             npc.StopEscort();
         }
 
-        // 판정 완료 — 채워졌던 수갑을 연행자 인벤토리로 회수한다. 꽉 차 있으면 기존처럼 발밑 바닥에 떨군다 (#307).
-        // 수감·석방 어느 쪽이든 공통 (#229). 연행 물리 해제와 같은 "판정 후 정리"라 여기(판정 funnel)에서 한다
-        // — CustodyRouter는 유치장 씬에만 있을 수 있어(신병 라우팅 전용) 반환을 그쪽에 걸면 인계존만 있는 씬에서 누락된다.
-        PlayerLoadout loadout = deliverer != null ? deliverer.GetComponent<PlayerLoadout>() : null;
-        if (loadout == null || !loadout.TryRecoverHandcuffs(npc))
-            npc.DropHandcuffs();
+        // 수갑 회수(#307/#229)는 제거됐다 — 밧줄은 소모형이 아니라 NPC에 채워둔 자원이 없다. (#369)
 
         OnArrestJudged?.Invoke(result);
 

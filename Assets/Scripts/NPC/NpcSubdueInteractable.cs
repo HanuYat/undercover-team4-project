@@ -56,11 +56,11 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
                 break;
 
             case NpcState.Captured:
-                // 체포되어 멈춘 NPC를 E로 재연행 — 연행 시작을 수갑 클릭에서 상호작용키로 이관 (#91)
-                // StartEscort 직접 호출은 서버 가드에 막힌다 — 요청 API로 서버에 넘긴다 (#118).
-                // 중복 연행 가드(동시 1명)는 서버의 StartEscort가 처리한다
-                Debug.Log($"E 입력 — 재연행 요청: {m_controller.name}");
-                interactor.GetComponentInParent<PlayerEscorter>()?.RequestEscort(m_controller);
+                // 체포되어 멈춘 NPC를 E로 다시 끌기 시작 — 좌클릭은 같은 대상에서 '풀어주기'라 재개는 E다 (#91/#369).
+                // 서버 직접 호출은 가드에 막힌다 — 요청 API로 서버에 넘긴다 (#118).
+                // 중복 확보 가드(동시 1명)·밧줄 소지·사거리는 서버가 처리한다
+                Debug.Log($"E 입력 — 밧줄 끌기 재개 요청: {m_controller.name}");
+                interactor.GetComponentInParent<PlayerEscorter>()?.RequestRopeResume(m_controller);
                 break;
         }
     }

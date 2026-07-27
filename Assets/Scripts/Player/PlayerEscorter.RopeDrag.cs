@@ -1,10 +1,10 @@
+using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// PlayerEscorter의 밧줄 끌기(#269) 흐름 — 검거·연행 채널링과 독립된 상호작용이라 partial로 분리한다.
-/// 기절한 NPC를 밧줄 장력으로 매 프레임 끌어당기는 서버 권위 로직과 그 상태·동기화 필드를 담는다.
-/// (본체 PlayerEscorter.cs는 검거/제압/해제 채널링 + 연행/놓기를 담당.)
+/// PlayerEscorter의 밧줄 묶기·끌기(#269/#369) — 본체와 partial로 분리. NPC를 밧줄 장력으로
+/// 매 프레임 끌어당기는 서버 권위 로직과 그 상태·동기화 필드를 담는다.
 /// </summary>
 public partial class PlayerEscorter
 {
@@ -24,38 +24,57 @@ public partial class PlayerEscorter
     [Tooltip("흔들림 주기 — 끌린 거리 1m당 위상(라디안)")]
     [SerializeField] private float m_dragSwayFrequency = 1.6f;
 
+    [Tooltip("이 거리(m)를 넘게 멀어지면 밧줄이 끊겨 NPC가 풀려난다 — 벽에 막혀 못 따라오거나 놓아둔 채 걸어가면 발생. 밧줄 길이보다 넉넉해야 한다")]
+    [SerializeField] private float m_ropeBreakDistance = 10f;
+
     /// <summary>지금 밧줄로 끌고 있는 NPC. 없으면 null. 서버(또는 오프라인)에서만 유효. (#269)</summary>
     public NpcController DraggingNpc { get; private set; }
 
-    // 끌리는 대상을 클라이언트에도 알린다 — 서버만 기록한다(연행 플래그와 동일 관례).
+    /// <summary>
+    /// 지금 이 플레이어의 밧줄에 묶여 있는 NPC — 끌기를 멈춰도(E) 유지된다. 서버(또는 오프라인)에서만 유효. (#369)
+    /// 놓기는 손에서 줄을 놓는 게 아니라 <b>끌기를 멈추는 것</b>이다: 대상은 묶인 채 그 자리에 서고
+    /// 밧줄은 여전히 이 플레이어와 이어져 있다. 실제로 푸는 건 밧줄 좌클릭 채널링(풀기)뿐이고,
+    /// 그 외에는 인계 판정·방치 탈주처럼 대상이 커스터디를 벗어날 때 저절로 끊긴다.
+    /// </summary>
+    public NpcController TetheredNpc { get; private set; }
+
+    // 묶여 있는 대상을 클라이언트에도 알린다 — 서버만 기록한다(연행 플래그와 동일 관례).
     // 단순 bool이 아니라 대상 참조인 이유: 원격 피어의 밧줄 표시(RopeDragView)가 선의 양 끝점을
-    // 알아야 하는데, DraggingNpc는 서버에서만 세팅되므로 누구를 끄는지 알 방법이 없다.
-    private readonly NetworkVariable<NetworkObjectReference> m_draggedNpcSynced = new();
+    // 알아야 하는데, TetheredNpc는 서버에서만 세팅되므로 누구와 이어져 있는지 알 방법이 없다.
+    private readonly NetworkVariable<NetworkObjectReference> m_tetheredNpcSynced = new();
+
+    // 끌고 있는 중인지 — 오너 클라의 입력 게이트(아이템 사용 차단·E 놓기)가 봐야 해서 따로 동기화한다.
+    // 묶여 있음(위)과 다르다: 놓은 뒤에도 줄은 이어져 있지만 끌고 있지는 않다. (#369)
+    private readonly NetworkVariable<bool> m_isDraggingSynced = new(false);
 
     // 끌기 추종 상태 (서버·오프라인 전용) — 매 프레임 이어지는 값이라 SetDragging에서 초기화한다.
     private Vector3 m_dragVelocity;   // SmoothDamp 관성
     private Quaternion m_dragFacing;  // 흔들림을 뺀 몸 방향 — 여기에 sway를 얹어 최종 회전을 만든다
     private float m_dragTravel;       // 끌린 누적 거리(m) — 흔들림 위상의 기준
 
-    /// <summary>밧줄 끌기 중 여부. 서버·오프라인은 실제 참조로, 원격 피어는 동기화 참조로 판정. (#269)</summary>
+    /// <summary>밧줄 끌기 중 여부. 서버·오프라인은 실제 참조로, 원격 피어는 동기화 플래그로 판정. (#269)</summary>
     public bool IsDragging =>
-        IsSpawned && !IsServer ? m_draggedNpcSynced.Value.NetworkObjectId != 0 : DraggingNpc != null;
+        IsSpawned && !IsServer ? m_isDraggingSynced.Value : DraggingNpc != null;
 
-    /// <summary>끌리는 NPC의 트랜스폼 — 전 피어에서 유효한 표현 계층용 접근자. 없으면 null. (#269)</summary>
-    public Transform DraggedNpcTransform
+    /// <summary>밧줄이 어딘가에 묶여 있는가 — 끌고 있지 않아도 참이다. 새 대상을 묶는 것을 막는다. (#369)</summary>
+    public bool IsTethered =>
+        IsSpawned && !IsServer ? m_tetheredNpcSynced.Value.NetworkObjectId != 0 : TetheredNpc != null;
+
+    /// <summary>묶여 있는 NPC의 트랜스폼 — 전 피어에서 유효한 표현 계층용 접근자. 없으면 null. (#269/#369)</summary>
+    public Transform TetheredNpcTransform
     {
         get
         {
-            if (DraggingNpc != null) return DraggingNpc.transform;
+            if (TetheredNpc != null) return TetheredNpc.transform;
             if (!IsSpawned) return null;
-            return m_draggedNpcSynced.Value.TryGet(out NetworkObject npcObject) ? npcObject.transform : null;
+            return m_tetheredNpcSynced.Value.TryGet(out NetworkObject npcObject) ? npcObject.transform : null;
         }
     }
 
     /// <summary>밧줄 길이(m) — 표시(늘어짐 정도)와 서버 장력 판정이 같은 값을 쓴다. (#269)</summary>
     public float RopeLength => m_ropeLength;
 
-    /// <summary>밧줄 끌기 시도 — 오너가 호출(Rope 아이템). 서버/오프라인 즉시 실행, 원격은 서버로 요청. (#269)</summary>
+    /// <summary>밧줄 묶기 시도 — 오너가 호출(Rope 아이템 좌클릭). 서버/오프라인 즉시 실행, 원격은 서버로 요청. (#269)</summary>
     public void RequestRopeDrag(NpcController target)
     {
         if (target == null)
@@ -72,6 +91,23 @@ public partial class PlayerEscorter
         RopeDragRequestRpc(new NetworkObjectReference(target.NetworkObject));
     }
 
+    /// <summary>밧줄 끌기 재개 — 오너가 호출(E, NpcSubdueInteractable). 놓아뒀던 체포 대상을 다시 끈다. (#91 재연행의 자리, #369)</summary>
+    public void RequestRopeResume(NpcController target)
+    {
+        if (target == null)
+            return;
+        if (!IsSpawned || IsServer)
+        {
+            ServerResumeRopeDrag(target);
+            return;
+        }
+        if (!IsOwner)
+            return;
+        if (!IsTargetNetworkReady(target))
+            return;
+        RopeResumeRequestRpc(new NetworkObjectReference(target.NetworkObject));
+    }
+
     [Rpc(SendTo.Server)]
     private void RopeDragRequestRpc(NetworkObjectReference targetRef)
     {
@@ -82,22 +118,135 @@ public partial class PlayerEscorter
         }
     }
 
-    /// <summary>밧줄 끌기 진입 — 기절한 대상만, 사거리·중복 검증 후 시작. 서버(또는 오프라인) 실행.</summary>
+    [Rpc(SendTo.Server)]
+    private void RopeResumeRequestRpc(NetworkObjectReference targetRef)
+    {
+        if (targetRef.TryGet(out NetworkObject targetObj) &&
+            targetObj.TryGetComponent(out NpcController target))
+        {
+            ServerResumeRopeDrag(target);
+        }
+    }
+
+    /// <summary>밧줄 묶기 진입 — 검증 후 채널링을 시작한다. 서버(또는 오프라인) 실행. (#369)</summary>
     private void ServerBeginRopeDrag(NpcController target)
     {
+        if (!CanBeginRopeDrag(target))
+            return;
+        if (!NpcStateRules.CanArrest(target.CurrentState))
+            return; // 이미 신병이 확보됐거나 다른 시스템이 소유한 상태 제외 — 클라 검증·윤곽선과 단일 기준 (#184)
+
+        // 기절 대상은 채널링 없이 즉시 묶는다 — 기절 지속(2.67초)이 채널(3초)보다 짧아 채널을 걸면
+        // 묶기 전에 깨어나 테이저→밧줄 콤보가 깨진다. (#269)
+        // 상태값이 아니라 IsStunned를 보는 이유: 스턴이 오버레이가 되면서 테이저 기절은 CurrentState를
+        // 바꾸지 않는다(넉백 KO만 NpcState.Stunned). 상태로 보면 이 지름길이 조용히 죽어
+        // 기절 대상에게도 채널링을 요구하게 되고, 깨어나기 전에 못 묶어 콤보가 깨진다. (#292)
+        if (target.IsStunned)
+        {
+            ServerApplyRopeDrag(target);
+            return;
+        }
+
+        ServerRopeChannelAsync(target).Forget();
+    }
+
+    /// <summary>밧줄 끌기 재개 — 이미 체포되어 멈춘 대상을 채널링·반응 판정 없이 즉시 다시 끈다. (#369)
+    /// 수갑 시절의 재연행(ServerEscort)이 그랬듯, 이미 확보된 신병에 반응 판정을 다시 굴리면
+    /// 잡아 둔 대상이 그 자리에서 도망치게 된다.</summary>
+    private void ServerResumeRopeDrag(NpcController target)
+    {
+        if (!CanBeginRopeDrag(target))
+            return;
+        if (!NpcStateRules.CanRelease(target.CurrentState))
+            return; // 체포되어 멈춘 대상만
+
+        ServerApplyRopeDrag(target);
+    }
+
+    // 묶기·재개가 공유하는 진입 조건 — 상태 게이트만 각자 다르다.
+    private bool CanBeginRopeDrag(NpcController target)
+    {
         if (m_channel.IsActive)
-            return; // 체포 채널링 중엔 시작 안 함
+            return false;
         if (IsBusy)
-            return; // 연행/끌기 중엔 새 끌기 불가 (한 번에 1명)
-        if (!NpcStateRules.IsRopeable(target))
-            return; // 기절한 대상만 — 클라 검증·윤곽선과 단일 기준 (#184)
+            return false; // 한 번에 1명
         if (!HasRope)
-            return; // 밧줄을 들고 있어야 끌기 시작 가능 (#269)
-        if (!IsInRange(target))
+            return false;
+        if (TetheredNpc != null && TetheredNpc != target)
+            return false; // 밧줄은 하나뿐 — 다른 대상에 묶여 있으면 먼저 풀어야 한다 (#369)
+        return IsInRange(target);
+    }
+
+    private async UniTaskVoid ServerRopeChannelAsync(NpcController target)
+    {
+        NotifyOwner($"밧줄 묶기 채널링 시작: {target.name} ({m_channelSeconds}초)");
+        NotifyChannelGaugeStart(m_channelSeconds);
+
+        // 수갑 체포와 동일한 keepAlive — 도중 거리 이탈은 즉시 실패시킨다 (#91)
+        ServerChannel.Result result;
+        try
+        {
+            result = await m_channel.RunAsync(
+                m_channelSeconds, () => target != null && IsInRange(target));
+        }
+        finally
+        {
+            NotifyChannelGaugeEnd(); // 어떤 경로로 끝나도 게이지 숨김 보장 (#184)
+        }
+
+        switch (result)
+        {
+            case ServerChannel.Result.OutOfRange:
+                NotifyOwner("묶기 실패 — 대상이 범위를 벗어남");
+                return;
+
+            case ServerChannel.Result.Canceled:
+                NotifyOwner("묶기 취소됨 (홀드 뗌)");
+                return;
+        }
+
+        // 채널링 도중 상태가 바뀌었을 수 있다 — 완료 시점에 재확인(다른 플레이어가 먼저 확보 등).
+        if (target == null || !NpcStateRules.CanArrest(target.CurrentState) || IsBusy)
             return;
 
+        // 채널링 성공 순간 반응 판정 (GDD 6-1, #76) — 수갑 체포에서 그대로 옮겨온 분기다.
+        // (기절 대상은 위에서 즉시 처리돼 여기 오지 않는다)
+        switch (ResolveReaction(target))
+        {
+            case ReactionType.Flee:
+                NotifyOwner($"묶기 실패 — 뿌리치고 도주: {target.name}");
+                target.StartFlee(transform);
+                return;
+
+            case ReactionType.Resist:
+                NotifyOwner($"묶기 실패 — 저항 시작: {target.name}");
+                target.StartResist(transform); // 제압 실패 시 여기서 도주 (#205)
+                return;
+        }
+
+        ServerApplyRopeDrag(target);
+    }
+
+    // 실제 끌기 진입 — 검증·판정이 끝난 뒤의 상태 조작만 담당한다. 서버(또는 오프라인).
+    private void ServerApplyRopeDrag(NpcController target)
+    {
+        SetTethered(target);
         SetDragging(target);
-        target.StartRopeDrag(transform); // 끈 플레이어를 위협으로 기억 — 놓아준 뒤 깨어나면 이쪽에서 도망친다
+
+        // 커스터디 상태는 수갑 연행과 같은 Escorted를 재사용한다 — 인계존·이벤트 수명·가로채기 방지가
+        // 이미 이 상태를 기준으로 판정하기 때문. 이동은 밧줄 장력이 하고 NpcEscortedState가 IsRoped를 보고
+        // 추종을 건너뛴다. 상태 전이가 StartRopeDrag(에이전트 끄기)보다 먼저다 — 뒤집으면 직전 상태 Exit이
+        // 꺼진 에이전트에 isStopped를 써 에러가 난다(넉백 ServerApplyKnockback과 같은 순서). (#369)
+        target.StartEscort(transform);
+        target.StartRopeDrag(transform); // 끈 플레이어를 위협으로 기억 — 풀려나면 이쪽에서 도망친다
+
+        // 기절한 채 묶였으면 오버레이를 걷는다 (#292 — 수갑 체포 성공 분기에 있던 처리를 밧줄로 옮긴 것).
+        // 남겨두면 Update의 스턴 게이트가 끌기 Tick을 막고, 만료 해제 경로(resumeReaction: true)를 타면
+        // StartFlee가 걸려 묶자마자 도망친다. 그래서 강제 해제다.
+        // StartEscort 뒤에 두는 이유: EnterStunned가 Escorted를 만나면 StopEscort로 연행을 끊으므로
+        // 순서를 뒤집으면 방금 건 커스터디가 풀린다.
+        target.ExitStun(resumeReaction: false);
+
         NotifyOwner($"밧줄로 묶어 끌기 시작: {target.name}");
     }
 
@@ -115,28 +264,74 @@ public partial class PlayerEscorter
         }
 
         if (IsSpawned && IsServer)
-        {
-            // 스폰된 대상만 참조로 넘길 수 있다(NetworkObjectReference 제약) — 아니면 표시 없이 끌기만 진행된다
-            bool syncable = npc != null && npc.NetworkObject != null && npc.NetworkObject.IsSpawned;
-            m_draggedNpcSynced.Value = syncable ? new NetworkObjectReference(npc.NetworkObject) : default;
-        }
+            m_isDraggingSynced.Value = npc != null;
     }
 
-    /// <summary>밧줄 끌기 매 프레임 처리 — 본체 Update가 서버(또는 오프라인)에서만 호출한다. (#269)</summary>
+    // TetheredNpc와 동기화 참조를 함께 갱신 — 서버(또는 오프라인)에서만 호출된다.
+    // 값이 그대로면 쓰지 않는다 — 매 프레임 정리(TickRopeDrag)가 호출해도 대역폭을 먹지 않게.
+    private void SetTethered(NpcController npc)
+    {
+        TetheredNpc = npc;
+
+        if (!IsSpawned || !IsServer)
+            return;
+
+        // 스폰된 대상만 참조로 넘길 수 있다(NetworkObjectReference 제약) — 아니면 표시 없이 끌기만 진행된다
+        bool syncable = npc != null && npc.NetworkObject != null && npc.NetworkObject.IsSpawned;
+        ulong desired = syncable ? npc.NetworkObject.NetworkObjectId : 0;
+        if (m_tetheredNpcSynced.Value.NetworkObjectId == desired)
+            return;
+
+        m_tetheredNpcSynced.Value = syncable ? new NetworkObjectReference(npc.NetworkObject) : default;
+    }
+
+    /// <summary>
+    /// 밧줄 끌기·연결 매 프레임 처리 — 본체 Update가 서버(또는 오프라인)에서만 호출한다. (#269/#369)
+    /// </summary>
     private void TickRopeDrag()
     {
+        // 대상이 커스터디를 벗어나면 밧줄 연결도 끊는다 — 인계 판정(→Jailed)·방치 탈주·풀기(→Idle)·
+        // 라운드 종료 파괴가 전부 여기로 수렴한다(참조가 Unity 가짜 null이 되는 파괴 경로 포함, #356).
+        // 끌기 중 강제 전이(넉백·페널티)는 아래 끌기 가드가 먼저 잡는다.
+        if (TetheredNpc == null
+            || (TetheredNpc.CurrentState != NpcState.Escorted
+                && TetheredNpc.CurrentState != NpcState.Captured))
+        {
+            SetTethered(null); // 값이 이미 비었으면 아무것도 쓰지 않는다
+        }
+        // 너무 멀어지면 줄이 끊겨 풀려나 달아난다 — 벽에 막혀 못 따라오거나(끌기 중) 놓아둔 채 걸어간 경우(#369).
+        // 끌던 중이면 먼저 놓아 에이전트를 되살린다(StopRopeDrag) — 도주(Run)가 NavMesh를 쓰기 때문.
+        // 방치 탈주(NpcCapturedState.Escape)와 같은 반응: 끌던 플레이어에게서 도주한다.
+        else if (IsTooFarToTether(TetheredNpc))
+        {
+            NpcController broken = TetheredNpc;
+            NotifyOwner($"밧줄 끊김 — 너무 멀어져 도주: {broken.name}");
+            if (DraggingNpc != null)
+                ReleaseDrag();
+            broken.StartFlee(transform);
+            SetTethered(null);
+            return;
+        }
+
         if (DraggingNpc == null)
             return;
 
-        // 외부 요인으로 기절에서 벗어났으면(예: 강제 상태 전이) 끌기를 정리한다.
-        // 오버레이 해제도 여기서 잡힌다 — 판정은 NpcStateRules 단일 기준 (#292)
-        if (!DraggingNpc.IsStunned)
+        // 외부 요인으로 커스터디에서 벗어났으면(넉백·페널티 등 강제 상태 전이) 끌기를 정리한다.
+        if (DraggingNpc.CurrentState != NpcState.Escorted)
         {
             ReleaseDrag();
             return;
         }
 
         ServerUpdateDrag();
+    }
+
+    // 끊김 판정 — 수평 거리만 본다(끌기 장력과 같은 기준, 계단·경사에서 y차로 오작동하지 않게).
+    private bool IsTooFarToTether(NpcController npc)
+    {
+        Vector3 delta = npc.transform.position - transform.position;
+        delta.y = 0f;
+        return delta.sqrMagnitude > m_ropeBreakDistance * m_ropeBreakDistance;
     }
 
     /// <summary>
@@ -158,7 +353,8 @@ public partial class PlayerEscorter
         if (distance > m_ropeLength)
             target = anchor + toNpc / distance * m_ropeLength;
 
-        // 바닥 높이는 끄는 플레이어 기준을 그대로 쓴다 — 경사·계단 지면 스냅은 후속 (기존 동작 유지)
+        // 높이는 끄는 플레이어 기준으로 시드만 한다 — 실제 지면 스냅·벽 판정은 NPC 쪽
+        // NpcController.ServerDragTo가 지형을 보고 확정한다 (#369)
         target.y = anchor.y;
 
         Vector3 next = Vector3.SmoothDamp(npcPosition, target, ref m_dragVelocity, m_dragSmoothTime);
@@ -180,7 +376,9 @@ public partial class PlayerEscorter
         DraggingNpc.ServerDragTo(next, m_dragFacing * Quaternion.Euler(0f, sway, 0f));
     }
 
-    /// <summary>밧줄 끌기 놓기 — NPC를 그 자리에 풀어 기절 상태를 잇게 한다(에이전트 복구). 서버(또는 오프라인) 실행. (#269)</summary>
+    /// <summary>밧줄 끌기 놓기 — NPC를 그 자리에 풀어 체포(Captured) 상태로 세운다(에이전트 복구). 서버(또는 오프라인) 실행. (#269/#369)
+    /// <b>밧줄은 풀리지 않는다</b> — 줄은 여전히 이 플레이어와 이어져 있고(TetheredNpc), 다시 E로 끌 수 있다.
+    /// 실제로 푸는 건 밧줄 좌클릭 채널링(ServerBeginUnrope)뿐이다.</summary>
     public void ReleaseDrag()
     {
         if (IsSpawned && !IsServer)
@@ -188,8 +386,14 @@ public partial class PlayerEscorter
         if (DraggingNpc == null)
             return;
 
-        NotifyOwner($"밧줄 끌기 놓기: {DraggingNpc.name}");
-        DraggingNpc.StopRopeDrag();
+        NotifyOwner($"밧줄 끌기 놓기: {DraggingNpc.name} — 묶인 채 그 자리에 정지 (줄은 그대로)");
+        DraggingNpc.StopRopeDrag(transform); // 놓은 자리가 NavMesh 밖이면 이 플레이어가 선 자리로 대체 복귀
+
+        // 아직 커스터디면 그 자리에서 Captured로 멈춘다(방치 타이머·재확보로 이어짐). 이미 다른 상태로
+        // 넘어갔으면(판정 후 수감·넉백·페널티) 그 행선지를 덮어쓰지 않는다. (#230)
+        if (DraggingNpc.CurrentState == NpcState.Escorted)
+            DraggingNpc.StopEscort();
+
         SetDragging(null);
     }
 }

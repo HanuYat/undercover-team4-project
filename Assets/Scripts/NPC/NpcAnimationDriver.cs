@@ -113,10 +113,11 @@ public class NpcAnimationDriver : MonoBehaviour
     private float m_subdueUntil;
     // 구르기가 끝나면 곧바로 대기 자세가 아니라 짧은 그로기를 한 번 더 거친다 — 그 예약 플래그 (#332)
     private bool m_subdueRollThenGroggy;
-    // 일어나는 모션 재생 중인가 (#269). 스윙과 달리 시간으로 끊지 않는다 — 클립이 1회 재생이라
-    // 마지막 프레임(선 자세)에서 멈추고, 곧 도착하는 Idle 전이가 배회 모션으로 이어받는다.
-    // 시간으로 끊으면 그 사이 한 프레임 동안 누운 자세(base)가 스쳐 지나가 툭 끊겨 보인다.
+    // 일어나는(StandUp) 모션 재생 중인가 (#269). 시간으로 끊지 않는다 — 클립 마지막(선 자세)에서 멈추고
+    // 곧 도착하는 Idle 전이가 이어받는다. 누움 콜라이더(#363) 판정에도 쓰인다.
     private bool m_standingUp;
+    // 직전 프레임의 끌림 여부 — 묶임/풀림이 바뀌는 순간에만 base 모션·콜라이더를 다시 시드한다 (#369).
+    private bool m_ropedMotion;
     // 스윙이 끝난 뒤 되돌아갈 FSM 기준 상태 — 저항(Attack)이면 버틴 자세(Idle)로 복귀한다 (#220)
     private NpcState m_baseState;
 
@@ -219,10 +220,11 @@ public class NpcAnimationDriver : MonoBehaviour
         RefreshProne(); // 몸이 일어나기 시작했다 — 콜라이더도 같이 선다 (#363)
     }
 
-    // 누움 여부를 다시 판정해 바뀌었으면 알린다 — m_baseState/m_standingUp을 건드린 직후에 부른다. (#363)
+    // 누움 여부를 다시 판정해 바뀌었으면 알린다 — m_baseState/m_standingUp/IsRoped를 건드린 직후에 부른다. (#363/#369)
     private void RefreshProne()
     {
-        bool prone = m_baseState == NpcState.Stunned && !m_standingUp;
+        // 밧줄에 끌리는 중이면(누운 모션) 콜라이더도 눕는다 — 커스터디 상태는 Escorted라 아래 조건만으론 서 있게 된다 (#369)
+        bool prone = m_controller.IsRoped || (m_baseState == NpcState.Stunned && !m_standingUp);
         if (prone == IsProne)
             return;
 
@@ -244,6 +246,11 @@ public class NpcAnimationDriver : MonoBehaviour
     // 수갑을 차지 않은 채 본부로 걸어 들어오는 그림이라 Escorted가 아니라 Walk다. (#231)
     private int AnimatorBaseState(NpcState state)
     {
+        // 밧줄에 묶여 끌리는 중이면 FSM 상태와 무관하게 누운 모션이다 (#369) — 커스터디 상태는
+        // 수갑 연행과 같은 Escorted(수갑 찬 걷기)라, 이 분기가 없으면 서서 끌려간다.
+        if (m_controller.IsRoped)
+            return (int)NpcState.Stunned;
+
         return state switch
         {
             NpcState.Attack => m_resistMoving ? (int)NpcState.Run : (int)NpcState.Idle,
@@ -287,13 +294,25 @@ public class NpcAnimationDriver : MonoBehaviour
             }
         }
 
-        // 일어나던 중에 다시 밧줄로 묶이면 취소하고 누운 자세로 되돌린다 — 끌려가는데 서 있으면 안 된다.
-        // 정상 종료(기절 해제)는 여기가 아니라 Idle 상태 전이가 처리한다 (#269)
-        if (m_standingUp && m_controller.IsRoped)
+        // 묶임/풀림이 바뀌는 순간 base 모션을 다시 시드한다 (#269/#369). 상태 전이 훅만으론 놓친다 —
+        // 커스터디 전이와 끌기 플래그가 별개 NetworkVariable이라 원격 피어 도착 순서가 안 보장된다.
+        if (m_ropedMotion != m_controller.IsRoped)
         {
-            m_standingUp = false;
+            m_ropedMotion = m_controller.IsRoped;
+            // 일어나던 중에 묶였어도 여기서 누운 자세로 되돌아간다 — 끌려가는데 서 있으면 안 된다
+            if (m_controller.IsRoped)
+                m_standingUp = false;
             m_animator.SetInteger(s_stateHash, AnimatorBaseState(m_baseState));
-            RefreshProne(); // 다시 누웠다 — 콜라이더도 되돌린다 (#363)
+            RefreshProne(); // 눕/서에 맞춰 콜라이더도 되돌린다 (#363)
+            m_lastPosition = transform.position;
+            m_smoothedSpeed = 0f;
+        }
+
+        // 끌리는 동안은 속도 기반 로코모션을 돌리지 않는다 — 누운 모션을 걷기/정지로 갈아치우게 된다 (#369)
+        if (m_controller.IsRoped)
+        {
+            m_lastPosition = transform.position; // 풀린 직후 이동량이 몰려 속도가 튀지 않게
+            return;
         }
 
         // 스턴 오버레이 중에는 속도 기반 로코모션을 돌리지 않는다 (#292) — 상태 enum이 그대로라
@@ -470,7 +489,6 @@ public class NpcAnimationDriver : MonoBehaviour
         m_swingUntil = 0f;
         m_subdueUntil = 0f; // 전환 중 다른 상태로 바뀌면(재연행 등) 전환도 끝난다
         m_subdueRollThenGroggy = false;
-        m_standingUp = false; // 상태가 바뀌면 일어나기도 끝난다 — 새 base 모션이 즉시 적용된다
 
         // 누움 판정은 여기서 끝난다(m_baseState·m_standingUp이 모두 확정) — 아래 제압 전환 분기가
         // 중간에 return하므로 그 앞에서 부른다 (#363)
@@ -503,7 +521,8 @@ public class NpcAnimationDriver : MonoBehaviour
             m_animator.SetInteger(s_stateHash, AnimatorBaseState(state));
 
         // 연행·수감 진입 시 이동 판별을 초기화 — 직전 상태의 잔여 속도 값이 첫 판정을 오염시키지 않게 (#97/#228)
-        if (IsHandcuffedMotion(state))
+        // 밧줄 끌기는 같은 Escorted지만 걷는 그림이 아니라 제외한다 — 위에서 시드한 누운 모션을 지키기 위해서다 (#369)
+        if (IsHandcuffedMotion(state) && !m_controller.IsRoped)
         {
             if (m_animator != null)
                 m_animator.SetInteger(s_stateHash, (int)NpcState.Escorted);
