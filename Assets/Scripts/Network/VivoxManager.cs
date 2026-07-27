@@ -16,9 +16,8 @@ public class VivoxManager : CommonManagerBase
     [SerializeField] private InputActionReference m_pushToTalkAction;
     [SerializeField] private SessionManager m_session;   // 인스펙터에서 연결
     private bool m_loggedIn;
-    private bool m_transmitting;   // PTT를 누르고 있는지 — 먹통 중에도 계속 추적해 해제 시 복원한다
+    private bool m_transmitting;   // PTT를 누르고 있는지 — 디버그 표시용
     private bool m_starting;
-    private bool m_jammed;         // 전자기기 먹통(#106) 중 무전 차단 — 근접 음성은 막지 않는다
     private string m_status = "대기 중...";
 
     [Header("근접 음성 (positional)")]
@@ -233,11 +232,18 @@ public class VivoxManager : CommonManagerBase
         // 참가자 인스턴스가 발화 상태 변화를 알림.
         participant.ParticipantSpeechDetected += () => RefreshSpeaking(participant.PlayerId);
         RefreshSpeaking(participant.PlayerId);
+
+        // 먹통 진행 중에 들어온 참가자도 왜곡을 받아야 한다 — 안 하면 그 사람 목소리만 멀쩡하다 (#372)
+        if (m_voiceDistorted && ShouldDistortChannel(participant.ChannelName))
+            ApplyDistortion(participant);
     }
 
     private void OnParticipantRemoved(VivoxParticipant participant)
     {
         RefreshSpeaking(participant.PlayerId);
+
+        // 나간 참가자의 탭 기록을 지운다 — 탭 오브젝트는 Vivox가 참가자와 함께 정리한다 (#372)
+        m_distortTaps.Remove(participant);
     }
 
     private void RefreshSpeaking(string playerId)
@@ -278,6 +284,10 @@ public class VivoxManager : CommonManagerBase
             m_proximityJoined = false;
             m_transmitting = false;
             m_posLoopCts?.Cancel();
+
+            // 채널을 떠나면 참가자와 탭이 함께 사라진다 — 기록만 비운다 (#372).
+            // m_voiceDistorted는 유지: 먹통 중 재접속하면 OnParticipantAdded가 다시 왜곡을 건다.
+            m_distortTaps.Clear();
         }
     }
 
@@ -297,9 +307,7 @@ public class VivoxManager : CommonManagerBase
     private void SetRadioTransmit(bool on)
     {
         if (!m_radioJoined || !m_proximityJoined) return;
-        m_transmitting = on; // 먹통 중에도 PTT 상태는 기록해 둔다 — 해제 시 누른 채면 바로 재개하기 위함 (#106)
-
-        if (m_jammed) return; // 먹통 중에는 무전이 나가지 않는다 — 근접 음성은 그대로 (#106)
+        m_transmitting = on;
 
         ApplyRadioTransmission(on);
     }
@@ -312,36 +320,262 @@ public class VivoxManager : CommonManagerBase
         VivoxService.Instance.SetChannelTransmissionModeAsync(mode, ch).AsUniTask().Forget();
     }
 
+    // ---- 먹통 음성 왜곡 (#372) ----
+    //
+    // 먹통 중 음성을 '끊는' 대신 '망가뜨린다'. 완전 침묵은 협동 게임에서 답답하고 버그로 오인되는데,
+    // 왜곡은 이벤트가 터졌다는 게 즉시 전달되면서 알아듣기 어려워 통신 제한 목적도 달성한다.
+    // 신호 해석기(#108)의 텍스트 경로는 여전히 또렷하므로 "먹통 시 정확한 통신 수단"이라는 역할도 남는다.
+    //
+    // 구현: Vivox 오디오 탭으로 참가자 음성을 Unity AudioSource로 끌어와 필터를 건다.
+    // silenceInChannelAudioMix=true로 Vivox 자체 믹스에서는 죽여야 소리가 두 번 나지 않는다.
+    // 전부 로컬 재생 처리라 네트워크 동기화가 없다 — 각 피어가 자기가 듣는 소리만 망가뜨린다.
+
+    [Header("먹통 음성 왜곡 (#372)")]
+    [Tooltip("왜곡 기본 피치 — 1보다 낮으면 저음으로 뭉개진다 (고장난 음성 합성기 느낌)")]
+    [SerializeField, Range(0.4f, 1.5f)] private float m_distortBasePitch = 0.6f;
+
+    [Tooltip("왜곡 강도 (AudioDistortionFilter) — 높을수록 지직거린다")]
+    [SerializeField, Range(0f, 1f)] private float m_distortLevel = 0.35f;
+
+    [Tooltip(
+        "저역 통과 차단 주파수(Hz) — 낮을수록 먹먹해진다. 링 모듈레이터를 쓸 때는 너무 낮추지 말 것: "
+        + "기계음의 특징인 금속성 배음까지 깎여 그냥 먹먹한 소리가 된다")]
+    [SerializeField, Range(300f, 5000f)] private float m_distortLowPassHz = 2000f;
+
+    // ---- 기계음(링 모듈레이션) ----
+    // 로봇 목소리의 정체는 링 모듈레이션이다. Unity 내장 필터에는 없어 VoiceRingModulator로 직접 구현했다.
+    // 코러스·왜곡이 '고장난 무전'이라면 이쪽은 '기계가 말하는' 소리 — 로봇 경찰이라는 설정에 더 맞는다.
+    [Tooltip("링 모듈레이터(기계음) 사용 — 로봇이 말하는 듯한 음색. 기계음 연출의 핵심")]
+    [SerializeField] private bool m_useRingMod = true;
+
+    [Tooltip(
+        "링 모듈레이터 반송파 주파수(Hz). 30~80이 전형적인 로봇 음성, 높일수록 금속성 링잉에 가까워진다")]
+    [SerializeField, Range(10f, 400f)] private float m_ringModCarrierHz = 55f;
+
+    [Tooltip("피치가 튀는 간격(초) 최소/최대 — 짧을수록 자주 튀어 알아듣기 어려워진다")]
+    [SerializeField] private float m_glitchIntervalMin = 0.22f;
+    [SerializeField] private float m_glitchIntervalMax = 0.65f;
+
+    // 오토튠이 오토튠처럼 들리는 이유는 음정 보정 자체가 아니라 피치가 '계단식'으로 끊기기 때문이다.
+    // 연속 난수로 피치를 뽑으면 흐물거리며 미끄러지는데, 반음 단위로 스냅하면 기계가 음을 짚는 느낌이 난다.
+    // (진짜 오토튠은 실시간 피치 검출 + 피치 시프트가 필요해 이 연출 하나에 쓸 비용이 아니다)
+    [Tooltip("글리치 피치를 반음 단위로 스냅 — 오토튠 특유의 계단식 음정 변화를 만든다")]
+    [SerializeField] private bool m_snapPitchToSemitones = true;
+
+    [Tooltip("글리치 시 기본 피치에서 벗어나는 반음 범위 (-7 = 5도 아래, +7 = 5도 위)")]
+    [SerializeField] private int m_glitchSemitoneMin = -7;
+    [SerializeField] private int m_glitchSemitoneMax = 7;
+
+    [Tooltip("반음 스냅을 끈 경우에 쓰는 연속 피치 범위")]
+    [SerializeField] private float m_glitchPitchMin = 0.55f;
+    [SerializeField] private float m_glitchPitchMax = 1.5f;
+
+    // 코러스는 발음 윤곽을 흐려 말을 뭉갠다. 다만 링 모듈레이터와 겹치면 명료도가 과하게 떨어져
+    // 아무 말도 못 알아듣게 되므로, 기계음 프리셋에서는 기본으로 꺼 둔다 (토글로 A/B 가능).
+    [Tooltip("코러스(겹침 흔들림) 사용 — 말을 뭉갠다. 링 모듈레이터와 함께 켜면 과해지기 쉽다")]
+    [SerializeField] private bool m_useChorus;
+
+    [Tooltip("코러스 깊이 — 높을수록 흔들림이 커진다")]
+    [SerializeField, Range(0f, 1f)] private float m_chorusDepth = 0.7f;
+
+    [Tooltip("코러스 속도(Hz) — 흔들리는 빠르기")]
+    [SerializeField, Range(0f, 20f)] private float m_chorusRate = 1.2f;
+
+    [Tooltip("코러스 혼합량 — 원음 대비 흔들린 복사본의 비중")]
+    [SerializeField, Range(0f, 1f)] private float m_chorusMix = 0.6f;
+
+    [Tooltip("짧은 에코 사용 — 소리를 번지게 해 뭉개짐을 더한다")]
+    [SerializeField] private bool m_useEcho = true;
+
+    [Tooltip("에코 딜레이(ms) — 짧을수록 금속성으로 번진다")]
+    [SerializeField, Range(10f, 500f)] private float m_echoDelayMs = 45f;
+
+    [Tooltip("에코 감쇠율 — 높을수록 오래 번진다")]
+    [SerializeField, Range(0f, 1f)] private float m_echoDecay = 0.3f;
+
+    [Tooltip("에코 혼합량")]
+    [SerializeField, Range(0f, 1f)] private float m_echoMix = 0.35f;
+
+    [Tooltip(
+        "근접 채널 음성도 왜곡할지. 끄면 무전 채널만 왜곡한다 — 근접은 Vivox가 자체 3D 감쇠를 처리하는데, "
+        + "탭으로 빼내면 그 감쇠가 유지되는지 확인이 필요하다(멀리 있는 사람이 크게 들리면 이 옵션을 끌 것)")]
+    [SerializeField] private bool m_distortProximityToo = true;
+
+    private bool m_voiceDistorted;
+    private float m_nextGlitchTime;
+
+    // 탭을 건 참가자 → 그 참가자의 재생 AudioSource. 해제 시 전부 되돌린다.
+    private readonly Dictionary<VivoxParticipant, AudioSource> m_distortTaps = new();
+
     /// <summary>
-    /// 무전 차단(먹통) 설정 — 전자기기 먹통 돌발 이벤트(#106)가 켜고 끈다. (GDD 4-4/6-4)
-    /// 차단 대상은 <b>무전(거리 무관 채널)뿐</b>이다 — 근접 음성은 살아 있어 옆에 선 동료와는 계속 말할 수 있고
-    /// 본부와의 무전만 끊긴다. 본부·현장 분리가 이 이벤트의 노림수다.
-    /// 해제 시 PTT를 계속 누르고 있었다면 즉시 무전이 재개된다.
+    /// 먹통 음성 왜곡을 켜고 끈다 — <see cref="DeviceBlackoutView"/>가 먹통 플래그에 맞춰 호출한다. (#372)
+    /// 자기 목소리(IsSelf)는 어차피 자기에게 재생되지 않으므로 건너뛴다.
     /// </summary>
-    public void SetCommsJammed(bool jammed)
+    public void SetVoiceDistorted(bool distorted)
     {
-        if (m_jammed == jammed) return;
-        m_jammed = jammed;
+        if (m_voiceDistorted == distorted) return;
+        m_voiceDistorted = distorted;
 
-        // 채널 참가 전이면 건드릴 송신 상태가 없다 — 참가 시 기본값(근접 전용)이 곧 차단 상태와 같다
-        if (!m_radioJoined || !m_proximityJoined) return;
-
-        if (jammed)
-        {
-            ApplyRadioTransmission(false); // 진행 중이던 무전 송신을 즉시 끊는다
-            m_status = "무전 차단(먹통)";
-        }
+        if (distorted)
+            ApplyDistortionToAll();
         else
+            ClearAllDistortion();
+
+        m_status = distorted ? "음성 왜곡(먹통)" : "음성 정상";
+    }
+
+    private void ApplyDistortionToAll()
+    {
+        if (!m_loggedIn) return;
+
+        foreach (var channel in VivoxService.Instance.ActiveChannels)
         {
-            ApplyRadioTransmission(m_transmitting); // 누르고 있던 PTT를 그대로 복원
-            m_status = "무전 복구";
+            if (!ShouldDistortChannel(channel.Key)) continue;
+            foreach (VivoxParticipant participant in channel.Value)
+                ApplyDistortion(participant);
         }
     }
+
+    // 근접 채널 왜곡 여부는 인스펙터 토글 — 3D 감쇠 확인 전까지 끌 수 있어야 한다
+    private bool ShouldDistortChannel(string channelName)
+        => m_distortProximityToo || channelName != m_proximityChannelName;
+
+    private void ApplyDistortion(VivoxParticipant participant)
+    {
+        if (participant == null || participant.IsSelf) return;
+        if (m_distortTaps.ContainsKey(participant)) return; // 중복 탭 방지
+
+        // 탭이 만들어졌는지 추적한다 — 아래 어느 경로로 빠져나가든 되돌리기 위함 (실패 시 영구 무음 방지)
+        bool tapCreated = false;
+
+        try
+        {
+            // silenceInChannelAudioMix=true — Vivox 믹스에서는 죽이고 우리 AudioSource로만 재생한다.
+            // 이 호출이 성공한 순간부터 그 참가자는 Vivox 믹스에서 들리지 않는다. 따라서 이후
+            // 어느 경로로 실패하든 탭을 반드시 되돌려야 한다 — 탭만 걸리고 우리도 재생하지 않으면
+            // 그 사람 목소리가 세션 내내 완전히 사라지고, m_distortTaps에 없으니 해제 때도 못 살린다.
+            GameObject tapObject = participant.CreateVivoxParticipantTap(
+                $"BlackoutVoiceTap_{participant.PlayerId}", true);
+            tapCreated = true;
+
+            AudioSource source = participant.ParticipantTapAudioSource;
+            if (tapObject == null || source == null)
+            {
+                Debug.LogWarning($"[VivoxManager] 오디오 탭 생성 실패 — {participant.PlayerId}");
+                SafeDestroyTap(participant); // 음소거만 남기고 나가지 않는다
+                return;
+            }
+
+            source.pitch = m_distortBasePitch;
+
+            // 필터 순서: 링모드(기계음) → 코러스(윤곽 흐리기) → 왜곡(지직) → 에코(번짐) → 저역통과(먹먹).
+            // 링 모듈레이터가 맨 앞이라야 원음의 배음을 옮긴 결과에 나머지 색이 입혀진다 — 뒤에 두면
+            // 이미 뭉개진 소리를 다시 곱하는 꼴이라 기계음 특유의 음정감이 흐려진다.
+            // 저역통과는 마지막 — 앞 단계가 만든 고역 잡음까지 함께 깎아야 정리된 소리가 된다.
+            if (m_useRingMod)
+                tapObject.AddComponent<VoiceRingModulator>().Configure(m_ringModCarrierHz);
+
+            if (m_useChorus)
+            {
+                var chorus = tapObject.AddComponent<AudioChorusFilter>();
+                chorus.depth = m_chorusDepth;
+                chorus.rate = m_chorusRate;
+                chorus.wetMix1 = m_chorusMix;
+                chorus.wetMix2 = m_chorusMix * 0.7f; // 2·3번 탭을 조금씩 낮춰 겹침이 뭉치지 않게
+                chorus.wetMix3 = m_chorusMix * 0.4f;
+            }
+
+            var distortion = tapObject.AddComponent<AudioDistortionFilter>();
+            distortion.distortionLevel = m_distortLevel;
+
+            if (m_useEcho)
+            {
+                var echo = tapObject.AddComponent<AudioEchoFilter>();
+                echo.delay = m_echoDelayMs;
+                echo.decayRatio = m_echoDecay;
+                echo.wetMix = m_echoMix;
+                echo.dryMix = 1f;
+            }
+
+            var lowPass = tapObject.AddComponent<AudioLowPassFilter>();
+            lowPass.cutoffFrequency = m_distortLowPassHz;
+
+            m_distortTaps[participant] = source;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[VivoxManager] 음성 왜곡 적용 실패 ({participant.PlayerId}): {ex}");
+
+            // 필터를 얹다 실패했어도 탭은 이미 걸려 있을 수 있다 — 등록에 성공하지 못했다면 되돌린다.
+            // (등록됐다면 정상 경로이므로 해제는 ClearAllDistortion이 맡는다)
+            if (tapCreated && !m_distortTaps.ContainsKey(participant))
+                SafeDestroyTap(participant);
+        }
+    }
+
+    // 탭 해제 — 어느 경로에서 부르든 여기서 실패가 나머지 정리를 막지 않게 한다.
+    // 탭 GameObject가 통째로 파괴되므로 얹은 필터도 함께 사라진다.
+    private void SafeDestroyTap(VivoxParticipant participant)
+    {
+        if (participant == null) return;
+
+        try
+        {
+            participant.DestroyVivoxParticipantTap();
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[VivoxManager] 탭 해제 실패 ({participant.PlayerId}): {ex}");
+        }
+    }
+
+    private void ClearAllDistortion()
+    {
+        foreach (VivoxParticipant participant in m_distortTaps.Keys)
+            SafeDestroyTap(participant);
+
+        m_distortTaps.Clear();
+    }
+
+    // 다음 글리치 피치를 뽑는다. 반음 스냅을 켜면 기본 피치에서 반음 단위로만 벗어나
+    // 오토튠처럼 계단식으로 음이 바뀐다 — 연속 난수는 음이 미끄러져 '고장'에 가깝게 들린다.
+    private float NextGlitchPitch()
+    {
+        if (!m_snapPitchToSemitones)
+            return UnityEngine.Random.Range(m_glitchPitchMin, m_glitchPitchMax);
+
+        // Random.Range(int)는 상한이 배타적이라 +1 — max 반음까지 포함시킨다
+        int semitone = UnityEngine.Random.Range(m_glitchSemitoneMin, m_glitchSemitoneMax + 1);
+        return m_distortBasePitch * Mathf.Pow(2f, semitone / 12f); // 반음 = 2^(1/12)배
+    }
+
+    // 피치를 주기적으로 튀게 해 "신호가 튄다"는 인상을 준다 — 왜곡 중에만 돈다
+    private void Update()
+    {
+        if (!m_voiceDistorted || m_distortTaps.Count == 0) return;
+        if (Time.time < m_nextGlitchTime) return;
+
+        m_nextGlitchTime = Time.time
+            + UnityEngine.Random.Range(m_glitchIntervalMin, m_glitchIntervalMax);
+        float pitch = NextGlitchPitch();
+
+        foreach (AudioSource source in m_distortTaps.Values)
+        {
+            if (source != null)
+                source.pitch = pitch;
+        }
+    }
+
+    // 먹통 중 무전을 '차단'하던 SetCommsJammed는 제거했다 (#372). 먹통 연출이 차단에서 왜곡으로
+    // 바뀌면서 호출부가 사라졌고, 통신을 끊는 경로가 둘로 남으면 다음 사람이 어느 쪽이 살아있는지
+    // 알 수 없다. 차단형으로 되돌릴 일이 생기면 이 커밋의 diff에서 복원하면 된다.
 
     public async UniTask LogoutAsync()
     {
         UnhookParticipantEvents();
         m_speakingByPlayer.Clear();
+        m_distortTaps.Clear(); // 탭은 채널 이탈과 함께 정리된다 — 기록만 비운다 (#372)
+        m_voiceDistorted = false;
 
         if (m_radioJoined || m_proximityJoined)
         {
@@ -363,6 +597,12 @@ public class VivoxManager : CommonManagerBase
 
     private void HandleSessionLeft()
     {
+        // 세션 이탈은 채널 이탈과 다른 사건이다 — 채널은 세션 도중에도 다시 붙지만(그래서
+        // LeaveChannelAsync는 왜곡 플래그를 유지한다), 세션이 끝나면 먹통이라는 맥락 자체가 사라진다.
+        // 여기서 리셋하지 않으면 다음 세션이 이유 없이 왜곡된 채 시작된다 (#372).
+        // 지금은 새 씬의 DeviceBlackoutView가 초기 상태를 내려줘 우연히 풀리지만, 그 초기화에
+        // 기대는 구조라 View 쪽이 바뀌면 조용히 깨진다.
+        m_voiceDistorted = false;
         LeaveChannelAsync().Forget();
     }
 
