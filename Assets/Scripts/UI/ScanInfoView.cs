@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 /// <summary>
 /// NPC 머리 위에 붙는 월드공간 스캔 정보 카드. (#233)
@@ -20,6 +21,10 @@ public class ScanInfoView : MonoBehaviour
 
     [SerializeField]
     private TMP_Text m_factionText;
+
+    [Tooltip("스캔된 NPC의 세력 문양")]
+    [SerializeField]
+    private Image m_symbolImage;
 
     [Header("빌보드")]
     [Tooltip("켜져 있는 동안 카메라를 향하도록 회전한다. 끄면 프리팹의 고정 방향을 유지")]
@@ -44,11 +49,12 @@ public class ScanInfoView : MonoBehaviour
     }
 
     /// <summary>스캔 완료 NPC — 실제 프로필 값을 표시하고 카드를 켠다.</summary>
-    public void ShowReal(string citizenName, string typeView, string factionView)
+    public void ShowReal(string citizenName, string typeView, string factionView, Sprite symbolView)
     {
         m_nameText.text = $"Name: {citizenName}";
         m_typeText.text = $"Type: {typeView}";
         m_factionText.text = $"Faction: {factionView}";
+        SetSymbol(symbolView);
         SetCardActive(true);
     }
 
@@ -58,7 +64,17 @@ public class ScanInfoView : MonoBehaviour
         m_nameText.text = $"Name: {k_masked}";
         m_typeText.text = $"Type: {k_masked}";
         m_factionText.text = $"Faction: {k_masked}";
+        SetSymbol(null);
         SetCardActive(true);
+    }
+
+    // 문양 스프라이트 세팅
+    private void SetSymbol(Sprite symbol)
+    {
+        if (m_symbolImage == null) return;
+
+        m_symbolImage.sprite = symbol;
+        m_symbolImage.enabled = symbol != null;
     }
 
     /// <summary>카드를 끈다.</summary>

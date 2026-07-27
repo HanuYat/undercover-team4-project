@@ -1,9 +1,8 @@
-using System.Collections.Generic;
 using TMPro;
-using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.UI;
+using Unity.Netcode;
+using System.Collections.Generic;
 
 /// <summary>
 /// 본부 시민 인명부 패널 (#223) — E로 펼치는 열람 UI. DirectoryManager의 동기화 리스트를 읽어 행으로 그린다.
@@ -11,13 +10,9 @@ using UnityEngine.UI;
 /// 여는 동안 게임플레이 입력을 정지하고 커서를 푼다(BombManualHud와 동일 취지). Esc로 닫는다.
 /// 로컬 UI — 상호작용한 본인 클라에서만 열린다. 데이터 갱신은 NetworkList.OnListChanged로 따라간다.
 /// </summary>
-public class CitizenDirectoryView : MonoBehaviour
+public class CitizenDirectoryView : HqPanelView
 {
     private DirectoryManager Manager => App.Game.Directory;
-
-    [Header("루트/목록")]
-    [SerializeField]
-    private GameObject m_root; // 켜고 끌 패널 루트 (기본 비활성)
 
     [SerializeField]
     private RectTransform m_entryContainer; // ScrollRect Content
@@ -59,88 +54,14 @@ public class CitizenDirectoryView : MonoBehaviour
     private readonly List<DirectoryEntryView> m_rows = new List<DirectoryEntryView>();
     private readonly List<DirectoryEntry> m_sorted = new List<DirectoryEntry>();
 
-    private PlayerInputHandler m_input;
-    private PlayerMovement m_movement;
-    private bool m_cursorUnlockedBeforeOpen;
-    private bool m_isOpen;
-
-    private void Awake()
+    protected override void Awake()
     {
-        if (m_root != null)
-            m_root.SetActive(false);
+        base.Awake();
 
-        if (m_sortNameButton != null)
-            m_sortNameButton.onClick.AddListener(() => SetSort(SortKey.Name));
-        if (m_sortFactionButton != null)
-            m_sortFactionButton.onClick.AddListener(() => SetSort(SortKey.Faction));
-        if (m_prevButton != null)
-            m_prevButton.onClick.AddListener(() => ChangePage(-1));
-        if (m_nextButton != null)
-            m_nextButton.onClick.AddListener(() => ChangePage(1));
-    }
-
-    /// <summary>인명부를 펼친다. 상호작용한 본인 클라에서만 호출된다(CitizenDirectory.Interact).</summary>
-    public void Open(GameObject interactor)
-    {
-        if (m_isOpen || interactor == null || m_root == null)
-            return;
-
-        m_input = interactor.GetComponent<PlayerInputHandler>();
-        m_movement = interactor.GetComponent<PlayerMovement>();
-
-        m_isOpen = true;
-        m_page = 0;
-        m_root.SetActive(true);
-        m_input?.SetSuspended(true);
-        if (m_movement != null)
-        {
-            m_cursorUnlockedBeforeOpen = Cursor.lockState == CursorLockMode.None;
-            m_movement.SetCursorUnlocked(true);
-        }
-
-        if (Manager != null)
-            Manager.Directory.OnListChanged += HandleListChanged;
-
-        Rebuild();
-    }
-
-    public void Close()
-    {
-        if (!m_isOpen)
-            return;
-
-        m_isOpen = false;
-        if (m_root != null)
-            m_root.SetActive(false);
-        if (Manager != null)
-            Manager.Directory.OnListChanged -= HandleListChanged;
-
-        // ?. 금지 — 파괴된 Unity 오브젝트 fake null 우회 방지 (BombManualHud 관례)
-        if (m_input != null)
-            m_input.SetSuspended(false);
-        if (m_movement != null)
-            m_movement.SetCursorUnlocked(m_cursorUnlockedBeforeOpen);
-        m_input = null;
-        m_movement = null;
-    }
-
-    private void OnDisable() => Close();
-
-    private void Update()
-    {
-        if (!m_isOpen)
-            return;
-
-        // 열려 있는 동안 ESC 진입 메뉴(일시정지) 오픈을 막는다 — 이중 동작 방지 (#326)
-        EscMenuGuard.BlockThisFrame();
-
-        if (m_input == null) // 연 플레이어 디스폰 시 입력 잠김 방지
-        {
-            Close();
-            return;
-        }
-        if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-            Close();
+        if (m_sortNameButton != null) m_sortNameButton.onClick.AddListener(() => SetSort(SortKey.Name));
+        if (m_sortFactionButton != null) m_sortFactionButton.onClick.AddListener(() => SetSort(SortKey.Faction));
+        if (m_prevButton != null) m_prevButton.onClick.AddListener(() => ChangePage(-1));
+        if (m_nextButton != null) m_nextButton.onClick.AddListener(() => ChangePage(1));
     }
 
     private void SetSort(SortKey key)
@@ -229,5 +150,17 @@ public class CitizenDirectoryView : MonoBehaviour
             );
         }
         return m_ascending ? c : -c;
+    }
+
+    protected override void OnOpened()
+    {
+        m_page = 0;
+        if (Manager != null) Manager.Directory.OnListChanged += HandleListChanged;
+        Rebuild();
+    }
+
+    protected override void OnClosed()
+    {
+        if (Manager != null) Manager.Directory.OnListChanged -= HandleListChanged;
     }
 }

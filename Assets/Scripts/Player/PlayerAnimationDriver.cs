@@ -19,6 +19,7 @@ public class PlayerAnimationDriver : MonoBehaviour
     private static readonly int s_moveZHash = Animator.StringToHash("MoveZ");
     private static readonly int s_downHash = Animator.StringToHash("Down"); // 다운(무력화) 상태 머신 구동 (#105)
     private static readonly int s_crouchHash = Animator.StringToHash("Crouch"); // 서기↔앉기 상태 전환 (#236)
+    private static readonly int s_airborneHash = Animator.StringToHash("Airborne"); // 점프 상태 머신 구동 (#189)
 
     [SerializeField]
     private Animator m_animator;
@@ -31,6 +32,7 @@ public class PlayerAnimationDriver : MonoBehaviour
 
     private PlayerIncapacitation m_incapacitation; // 다운 애니메이션 구동용 (#105)
     private PlayerCrouch m_crouch; // 앉기 애니메이션 구동용 (#236)
+    private PlayerJump m_jump; // 점프 애니메이션 구동용 (#189)
     private Vector3 m_lastPosition;
 
     private void Awake()
@@ -47,6 +49,7 @@ public class PlayerAnimationDriver : MonoBehaviour
 
         m_incapacitation = GetComponentInParent<PlayerIncapacitation>();
         m_crouch = GetComponentInParent<PlayerCrouch>();
+        m_jump = GetComponentInParent<PlayerJump>();
         m_lastPosition = transform.position;
     }
 
@@ -63,9 +66,19 @@ public class PlayerAnimationDriver : MonoBehaviour
         }
 
         // 앉기도 같은 방식 — 서버 권위 동기화값을 폴링해 Crouch 상태(Crouch Idle/Walk 블렌드 트리)를 구동한다. (#236)
+        // 실제 앉기(IsCrouching)가 아니라 '눌렀는지'(IsCrouchRequested)를 넘기는 이유: 공중에서는
+        // 실제 앉기가 착지까지 보류되지만 자세는 웅크려야 한다. 지상에서는 두 값이 같다. (#189)
         if (m_crouch != null)
         {
-            m_animator.SetBool(s_crouchHash, m_crouch.IsCrouching);
+            m_animator.SetBool(s_crouchHash, m_crouch.IsCrouchRequested);
+        }
+
+        // 점프도 같은 방식 — 공중 여부만 bool로 넘기고 이륙/체공/착지 3단계는 애니메이터가 나눈다. (#189)
+        // 원격 피어의 CharacterController는 isGrounded가 안 도므로 서버 권위 동기화값을 폴링한다.
+        // (트리거 대신 bool을 쓰는 이유 — 트리거는 원격에서 유실·중복되기 쉽다)
+        if (m_jump != null)
+        {
+            m_animator.SetBool(s_airborneHash, m_jump.IsAirborne);
         }
 
         if (m_movement == null || Time.deltaTime <= 0f)
@@ -97,7 +110,10 @@ public class PlayerAnimationDriver : MonoBehaviour
             return Vector2.zero;
 
         bool crouching = m_crouch != null && m_crouch.IsCrouching;
-        float walkSpeed = Mathf.Max(crouching ? m_movement.CrouchSpeed : m_movement.MoveSpeed, 0.01f);
+        float walkSpeed = Mathf.Max(
+            crouching ? m_movement.CrouchSpeed : m_movement.MoveSpeed,
+            0.01f
+        );
         float runSpeed = Mathf.Max(m_movement.SprintSpeed, walkSpeed + 0.01f);
 
         float t =

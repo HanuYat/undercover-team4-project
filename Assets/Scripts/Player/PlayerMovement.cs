@@ -69,10 +69,12 @@ public class PlayerMovement : NetworkBehaviour
     private PlayerInputHandler m_inputHandler;
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 이동·시점 차단용 (#105)
     private PlayerCrouch m_crouch; // 앉기 중 이동 속도·카메라 높이 조정용 (#236)
+    private PlayerJump m_jump; // 점프 입력 수집·공중 상태 전파 (#189)
     private RoundManager Round => App.Game.Round; // 라운드 종료 시 이동·시점 차단용 (라운드 종료 freeze)
     private float m_pitch;
     private Vector2 m_smoothedLook; // 지수 감쇠로 부드럽게 만든 시점 입력 — 저속 픽셀 양자화 지터 완화 (#216)
     private float m_standCamHeight; // 평소(서기) 카메라 높이 — 프리팹 초기값에서 캡처 (#105)
+    private float m_camCrouchDrop; // 시점에 실제로 반영 중인 앉기 하강량 — 공중에서는 얼린다 (#189)
     private float m_downCamBlend; // 서기 시점(0) ↔ 다운 시점(1) 보간 진행도 (#105)
     private float m_verticalVelocity;
     private Vector3 m_knockbackVelocity; // 외력으로 밀려나는 수평 속도 — 매 프레임 감쇠 (#232 폭발 넉백)
@@ -116,6 +118,7 @@ public class PlayerMovement : NetworkBehaviour
         m_inputHandler = GetComponent<PlayerInputHandler>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
         m_crouch = GetComponent<PlayerCrouch>();
+        m_jump = GetComponent<PlayerJump>();
 
         if (playerCamera != null)
         {
@@ -230,6 +233,13 @@ public class PlayerMovement : NetworkBehaviour
         m_carryAnchorA = anchorA;
         m_carryAnchorB = anchorB;
         m_controller.enabled = false; // 직접 transform 이동 — 켜 두면 내부 캐시가 위치를 되돌린다 (SetPose와 동일 사정)
+
+        // 호송 중에는 HandleMove를 건너뛰어 접지 보고가 멈춘다 — 공중에서 붙잡히면 공중 상태가
+        // 그대로 고착돼 끌려가는 내내 낙하 애니메이션이 재생된다. 여기서 한 번 내려준다. (#189)
+        if (m_jump != null)
+        {
+            m_jump.ReportGrounded(true);
+        }
     }
 
     /// <summary>끌려가기 추종 종료 — 호송 종료(광장 도착·중단) 시 PlayerPenaltyView가 호출한다.</summary>
@@ -269,6 +279,10 @@ public class PlayerMovement : NetworkBehaviour
         m_controller.enabled = false;
         transform.SetPositionAndRotation(pos, rot);
         m_controller.enabled = true;
+
+        // 낙하·점프 도중 텔레포트되면 쌓인 수직 속도가 그대로 남아 도착지에서 바닥을 파고들거나
+        // 튀어오른다 — 도착 즉시 접지 판정으로 이어지도록 초기화한다. (#189)
+        m_verticalVelocity = 0f;
     }
 
     // 3인칭 장착 표시(#151)도 오너 화면에서 숨기려면 같은 처리가 필요해 공개한다.
@@ -366,9 +380,28 @@ public class PlayerMovement : NetworkBehaviour
 
         m_downCamBlend = Mathf.Lerp(m_downCamBlend, downed ? 1f : 0f, lerp);
 
-        // 앉기 높이는 PlayerCrouch가 이미 0.12초로 블렌딩한 값이라 여기서 추가 보간하지 않는다
-        // (카메라만 한 번 더 감쇠되면 애니메이션보다 늦게 내려가 반응이 무겁게 느껴진다) (#236)
-        float uprightHeight = m_standCamHeight - CrouchHeadDrop;
+        // 공중에서는 앉기에 따른 시점 높이 변화를 얼린다 (#189).
+        // 몸이 웅크리는 건 다리를 접는 동작이지 머리가 내려가는 게 아닌데, 시점을 같이 내리면
+        // 상승 중에 카메라만 0.8m 꺼져 발은 계속 오르는데도 점프 힘이 죽은 것처럼 보인다.
+        // (측정: 발 0.45→0.73m 상승 구간에서 카메라 월드 높이는 2.05→1.59m로 하강)
+        // 이륙 시점의 자세를 그대로 유지하므로 앉은 채 뛰면 앉은 시점, 서서 뛰면 선 시점으로 난다.
+        //
+        // 지상에서는 CrouchHeadDrop(PlayerCrouch가 k_blendDuration으로 블렌딩한 값)을 같은 속도로
+        // 쫓아가므로 추가 지연이 붙지 않는다 — "카메라를 한 번 더 감쇠하지 않는다"는 #236 취지 유지.
+        if (m_crouch == null)
+        {
+            m_camCrouchDrop = 0f;
+        }
+        else if (m_jump == null || !m_jump.IsAirborne)
+        {
+            m_camCrouchDrop = Mathf.MoveTowards(
+                m_camCrouchDrop,
+                CrouchHeadDrop,
+                m_crouch.HeadDropRate * Time.deltaTime
+            );
+        }
+
+        float uprightHeight = m_standCamHeight - m_camCrouchDrop;
 
         Vector3 localPos = playerCamera.transform.localPosition;
         localPos.y = Mathf.Lerp(uprightHeight, m_downCamHeight, m_downCamBlend);
@@ -391,11 +424,28 @@ public class PlayerMovement : NetworkBehaviour
             transform.right * input.x + transform.forward * input.y
         ).normalized;
 
-        if (m_controller.isGrounded && m_verticalVelocity < 0f)
+        bool grounded = m_controller.isGrounded;
+        if (grounded && m_verticalVelocity < 0f)
         {
             m_verticalVelocity = -2f;
         }
         m_verticalVelocity += m_gravity * Time.deltaTime;
+
+        // 점프 (#189) — 넉백의 상승 성분과 같은 수직 채널을 쓴다. 중력 적분 뒤에 덮어써야
+        // 접지 유지용 -2f 클램프에 임펄스가 잡아먹히지 않는다.
+        // 앉은 채로도 뛴다 — 애니메이터가 Crouch → Jump_Begin → Jump_Air_Crouch로 웅크린 자세를
+        // 유지해 주고, 콜라이더도 눌림 여부를 따라 계속 작은 상태다(PlayerCrouch.UpdateBlend).
+        if (m_jump != null)
+        {
+            if (m_jump.ConsumeJumpRequest() && grounded && !IsMovementLocked)
+            {
+                // v = sqrt(2gh) — 중력을 튜닝해도 목표 높이가 유지된다.
+                // m_gravity가 잘못 0 이상으로 설정돼도 NaN이 나지 않게 바닥을 깐다.
+                m_verticalVelocity = Mathf.Sqrt(
+                    2f * m_jump.JumpHeight * Mathf.Max(-m_gravity, 0.01f)
+                );
+            }
+        }
 
         // 앉기가 달리기보다 우선 — Ctrl을 누르는 동안은 Shift를 눌러도 앉은 채 느리게 이동한다.
         // (앉은 채 달리는 애니메이션 클립이 에셋에 없어 자세와 속도가 어긋나는 것도 막는다) (#236)
@@ -405,6 +455,24 @@ public class PlayerMovement : NetworkBehaviour
         // 넉백은 입력 이동과 별개로 감쇠하며 합산된다 — 다운·라운드 종료로 입력이 막혀도 폭발엔 밀려난다
         Vector3 velocity = moveDirection * speed + m_knockbackVelocity + Vector3.up * m_verticalVelocity;
         m_controller.Move(velocity * Time.deltaTime);
+
+        // 천장에 머리를 박으면 상승 속도를 즉시 죽인다 — CharacterController는 이동이 막혀도 속도를
+        // 스스로 지우지 않아, 그냥 두면 남은 상승 속도가 중력에 다 깎일 때까지(점프 1회면 0.4초 남짓)
+        // 천장에 붙어 있는다. 실내 천장이 낮은 경찰서에서 바로 드러난다. (#189)
+        // 접지 쪽 -2f 클램프와 같은 역할을 위쪽에 해 주는 것.
+        if ((m_controller.collisionFlags & CollisionFlags.Above) != 0 && m_verticalVelocity > 0f)
+        {
+            m_verticalVelocity = 0f;
+        }
+
+        // 접지 보고는 반드시 Move() 뒤의 신선한 값으로 한다 (#189).
+        // isGrounded는 Move()가 갱신하므로 프레임 앞에서 읽으면 직전 프레임 결과가 나온다 —
+        // 그만큼 착지 판정이 한 프레임 밀려 착지 모션이 늦게 뜨는 것으로 보인다.
+        // 점프 가능 판정(위 grounded)은 반대로 프레임 앞의 값이 맞다 — 그 시점의 마지막 확정 접지다.
+        if (m_jump != null)
+        {
+            m_jump.ReportGrounded(m_controller.isGrounded);
+        }
 
         // 프레임률과 무관하게 같은 곡선으로 잦아들도록 지수 감쇠
         m_knockbackVelocity *= Mathf.Exp(-m_knockbackDamping * Time.deltaTime);
