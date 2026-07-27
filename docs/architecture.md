@@ -51,7 +51,7 @@ R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단�
 |---|---|
 | ArrestJudge → HqDropoffZone `Find` | 장소(트리거 존) 오브젝트 — 매니저 아님 |
 | RoundTimerUI → RoundTimerSync `Find` | Round 도메인 내부 부품 (HQ 타이머 표시가 생기면 승격 후보) |
-| DeviceBlackoutView → DeviceBlackoutEvent `Find` | Events 도메인 내부 부품 |
+| Scanner → DeviceBlackoutEvent `App.Game.Blackout` | R3 ② 미달(외부 참조 도메인은 Item 1곳)이지만 스캐너는 **런타임 스폰 프리팹**이라 인스펙터로 씬 오브젝트를 물릴 수 없다 — R3의 위반 판정 근거인 "SerializeField 연결이 맞다"가 성립하지 않는 케이스. 두 번째 외부 도메인이 생기면 이 행을 지운다 (#372) |
 | SessionManager → AuthBootstrap `SerializeField` | 같은 오브젝트/프리팹 내 직접 연결 |
 | RoundEndResetter의 테스트 씬 폴백 `SceneManager.LoadScene` | EScene 매핑이 없는 테스트 씬 한정 — 정식 흐름은 App.LoadScene(Title)로 전환 완료 (#247) |
 
