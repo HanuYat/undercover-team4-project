@@ -60,7 +60,7 @@ public class PlayerNameTag : NetworkBehaviour
         if (IsOwner)
         {
             var fs = new FixedString64Bytes();
-            fs.CopyFromTruncated(App.Net.Auth.PlayerName ?? string.Empty);
+            fs.CopyFromTruncated(App.Net.Auth.Nickname ?? string.Empty);
             m_name.Value = fs;
 
             var pid = new FixedString64Bytes();
