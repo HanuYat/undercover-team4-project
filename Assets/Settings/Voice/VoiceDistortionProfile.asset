@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d7e9966ef7be47d4a8884e2917e23cf6, type: 3}
+  m_Name: VoiceDistortionProfile
+  m_EditorClassIdentifier: Assembly-CSharp::VoiceDistortionProfile
+  m_basePitch: 0.6
+  m_distortionLevel: 0.35
+  m_lowPassHz: 2000
+  m_useRingMod: 1
+  m_ringModCarrierHz: 55
+  m_glitchIntervalMin: 0.22
+  m_glitchIntervalMax: 0.65
+  m_snapPitchToSemitones: 1
+  m_glitchSemitoneMin: -7
+  m_glitchSemitoneMax: 7
+  m_glitchPitchMin: 0.55
+  m_glitchPitchMax: 1.5
+  m_useChorus: 0
+  m_chorusDepth: 0.7
+  m_chorusRate: 1.2
+  m_chorusMix: 0.6
+  m_useEcho: 1
+  m_echoDelayMs: 45
+  m_echoDecay: 0.3
+  m_echoMix: 0.35

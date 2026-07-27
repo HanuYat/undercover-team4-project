@@ -113,10 +113,35 @@ public class Scanner : ItemBase, IChargeable
         m_currentBattery.Value = Mathf.Min(m_currentBattery.Value + amount, m_maxBattery);
     }
 
+    // ---- 전자기기 먹통 게이트 (#372) ----
+
+    // 먹통 이벤트 참조 — 첫 조회 후 캐시한다. 씬이 바뀌어 이벤트가 파괴되면 Unity의 null 판정에
+    // 걸려 자동으로 다시 해석된다. 아이템은 씬을 넘어 살아남을 수 있으므로 이 재해석이 필수다.
+    private DeviceBlackoutEvent m_blackout;
+
+    /// <summary>
+    /// 전자기기 먹통(#106) 중인지 — 스캐너는 먹통 동안 사용할 수 없다. (GDD 6-4)
+    /// 판정값은 <see cref="DeviceBlackoutEvent.IsCommsBlackout"/>이 피어별로 갈라준다
+    /// (서버·오프라인은 실참조, 원격 클라는 동기화값) — 클라 힌트와 서버 판정이 같은 규칙을 쓴다.
+    /// 먹통 이벤트가 없는 구성(테스트 씬·이벤트 항목 off)에서는 null이라 항상 false다.
+    /// </summary>
+    private bool IsBlackout
+    {
+        get
+        {
+            if (m_blackout == null)
+                m_blackout = App.Game.SuddenEvent?.GetEvent<DeviceBlackoutEvent>();
+            return m_blackout != null && m_blackout.IsCommsBlackout;
+        }
+    }
+
     // ---- ItemBase — 사용 요청 진입점 ----
 
-    /// <summary>스캔 중이 아니고 배터리가 남아 있을 때만 사용 가능. (UI 힌트용 — 최종 판정은 서버가 재검증)</summary>
-    public override bool CanUse() => !m_pendingScan && !IsDepleted;
+    /// <summary>
+    /// 스캔 중이 아니고, 배터리가 남아 있고, 먹통이 아닐 때만 사용 가능.
+    /// (UI 힌트용 — 최종 판정은 서버가 재검증. CanTarget이 이 값을 보므로 윤곽선·크로스헤어도 함께 꺼진다)
+    /// </summary>
+    public override bool CanUse() => !m_pendingScan && !IsDepleted && !IsBlackout;
 
     /// <summary>스캔 가능한 대상인지 — 신원(CitizenIdentity)과 배정된 프로필이 있고 배터리·중복 스캔
     /// 게이트(CanUse)를 통과해야 한다. Use()의 조기 검증과 동일 기준 — 조준 피드백(윤곽선) 판정용. (#184)
@@ -143,7 +168,13 @@ public class Scanner : ItemBase, IChargeable
     {
         if (!CanUse())
         {
-            if (IsDepleted)
+            // 먹통을 먼저 본다 — 배터리도 없고 먹통이기도 하면 "지금 왜 안 되는가"의 답은 먹통이다.
+            // 토스트로 띄우는 이유(#309): 아무 반응이 없으면 고장으로 오인한다.
+            if (IsBlackout)
+            {
+                NotifyOwner("스캐너 먹통 — 전자기기 장애", toast: true);
+            }
+            else if (IsDepleted)
             {
                 Debug.Log($"스캐너 배터리 부족! (남은 배터리: {m_currentBattery.Value})");
             }
@@ -234,6 +265,14 @@ public class Scanner : ItemBase, IChargeable
             return;
         }
 
+        // 클라 CanUse는 신뢰할 수 없으므로 먹통도 서버가 재검증한다 — 없으면 위조 RPC로 먹통 중 스캔이 뚫린다 (#372)
+        if (IsBlackout)
+        {
+            NotifyOwner("스캔 실패 — 전자기기 먹통", toast: true);
+            ClearPendingRpc();
+            return;
+        }
+
         if (!npcRef.TryGet(out NetworkObject npcNetObj) ||
             !npcNetObj.TryGetComponent(out CitizenIdentity identity) ||
             identity.Profile == null)
@@ -258,8 +297,12 @@ public class Scanner : ItemBase, IChargeable
         ServerChannel.Result result;
         try
         {
+            // 먹통을 keepAlive에 포함한다 — 없으면 먹통 직전에 시작한 스캔이 먹통 한복판에서 성공한다 (#372).
+            // 사유는 OutOfRange 하나로 묶여 오지만, 아래에서 먹통 여부로 메시지를 갈라 어긋남을 막는다
+            // (공용 ServerChannel.Result에 사유를 늘리면 Escorter·Reviver까지 건드리게 되므로 여기서 해석한다).
             result = await m_channel.RunAsync(
-                m_channelSeconds, () => identity != null && IsInRange(identity.transform));
+                m_channelSeconds,
+                () => identity != null && IsInRange(identity.transform) && !IsBlackout);
         }
         finally
         {
@@ -270,7 +313,11 @@ public class Scanner : ItemBase, IChargeable
         switch (result)
         {
             case ServerChannel.Result.OutOfRange:
-                NotifyOwner("스캔 실패 — 대상이 범위를 벗어남", toast: true); // 오너 화면 토스트 (#309)
+                // keepAlive 이탈 사유를 여기서 갈라 준다 (#372) — 먹통으로 끊겼는데 "범위를 벗어남"이 뜨면
+                // 플레이어가 원인을 오해한다.
+                NotifyOwner(
+                    IsBlackout ? "스캔 중단 — 전자기기 먹통" : "스캔 실패 — 대상이 범위를 벗어남",
+                    toast: true); // 오너 화면 토스트 (#309)
                 ClearPendingRpc(); // 실패로 끝나도 오너의 in-flight 플래그를 풀어야 재시도 가능 (#91)
                 return;
 

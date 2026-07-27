@@ -75,6 +75,8 @@ public class App : Singleton<App>
     public static class Game
     {
         public static RoundManager Round => Instance.m_roundManager;
+        // 개별 돌발 이벤트(먹통 등)는 App에 올리지 않는다 — 이벤트마다 필드가 늘어나는 대신
+        // SuddenEvent.GetEvent<T>()로 물어본다 (#372 리뷰, R3).
         public static SuddenEventManager SuddenEvent => Instance.m_suddenEventManager;
         public static WantedListManager WantedList => Instance.m_wantedListManager;
         public static ArrestJudge ArrestJudge => Instance.m_arrestJudge;
