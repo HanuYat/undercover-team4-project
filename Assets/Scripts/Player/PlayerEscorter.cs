@@ -254,6 +254,8 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
             return; // 체포/해제/제압 채널링 중복 방지 (한 채널 공유)
         if (IsBusy)
             return; // 연행/끌기 중엔 제압 불가
+        if (TetheredNpc != null)
+            return; // 이미 밧줄로 묶어 둔 대상이 있으면 새로 확보 불가 — 놓아둔(끌기 중 아님) 대상도 포함, 한 번에 1명 (#369)
         if (!HasRope)
             return; // 밧줄 없으면 도주 제압(=체포)도 불가 (#369)
         if (target.CurrentState != NpcState.Run)
