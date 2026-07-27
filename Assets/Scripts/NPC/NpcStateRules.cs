@@ -51,7 +51,9 @@ public static class NpcStateRules
 
     /// <summary>E 상호작용(제압·타격·재연행)이 반응하는 상태인가.
     /// 포함 목록 방식 — 새 상태는 기본 'E 불가'이므로 열어야 하면 여기 추가할 것.
-    /// NpcSubdueInteractable.Interact의 분기 집합과 반드시 일치해야 한다.</summary>
+    /// NpcSubdueInteractable.Interact의 분기 집합과 반드시 일치해야 한다.
+    /// 배회(Idle/Walk)가 열린 것은 체력이 지속형이 되면서다 (#366) — 예전에는 '배회 NPC 폭행 방지'로
+    /// 막혀 있었지만, 이제 아무 때나 때려 체력을 깎을 수 있다.</summary>
     public static bool HasSubdueInteraction(NpcState state) =>
-        state is NpcState.Run or NpcState.Attack or NpcState.Captured;
+        state is NpcState.Idle or NpcState.Walk or NpcState.Run or NpcState.Attack or NpcState.Captured;
 }
