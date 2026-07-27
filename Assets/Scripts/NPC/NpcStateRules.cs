@@ -38,7 +38,9 @@ public static class NpcStateRules
         && state != NpcState.Chasing
         && state != NpcState.PenaltyEscorting;
 
-    /// <summary>밧줄로 묶어 끌 수 있는 상태인가 — 테이저로 기절한 대상만. (#269)
+    /// <summary>밧줄로 묶어 끌 수 있는 상태인가 — 기절(Stunned)한 대상만. (#269)
+    /// 기절 경로가 둘이라 테이저 전용이 아니다: 테이저 직격과 제압 타격으로 HP가 0에 도달한
+    /// 경우(#366) 모두 같은 Stunned로 들어오므로, 맞아서 쓰러진 저항형도 밧줄 대상이다.
     /// 수갑 연행과 역할이 갈린다: 수갑은 순응형 즉시 연행, 밧줄은 기절시킨 대상 전용.</summary>
     public static bool IsRopeable(NpcState state) => state == NpcState.Stunned;
 
