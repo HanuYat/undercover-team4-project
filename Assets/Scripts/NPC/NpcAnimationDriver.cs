@@ -196,7 +196,8 @@ public class NpcAnimationDriver : MonoBehaviour
 
     // 스턴 오버레이 온/오프 (#292) — 기존 기절 표현을 그대로 재사용한다.
     // 오버레이는 FSM 상태를 바꾸지 않으므로, 드라이버에는 "Stunned로 전이한 것처럼" 먹여
-    // 누운 자세·일어나기·스윙 취소 로직이 손대지 않고 그대로 동작하게 한다.
+    // 누운 자세·일어나기(#269)·스윙 취소(#220)·누움 콜라이더(#363)가 손대지 않고 그대로 동작하게 한다.
+    // m_baseState == Stunned에 매달린 표현은 전부 이 한 줄을 타고 들어온다.
     // 풀릴 때는 진짜 현재 상태로 되돌린다 — 반응군이면 곧이어 도주 전이가 덮어쓴다.
     private void HandleStunnedChanged(bool stunned)
     {
@@ -452,6 +453,14 @@ public class NpcAnimationDriver : MonoBehaviour
 
     private void HandleStateChanged(NpcState state)
     {
+        // 스턴 오버레이 중에는 밑에서 상태가 바뀌어도 화면은 계속 누워 있어야 한다 (#292).
+        // 오버레이는 CurrentState를 얼리지 않는다 — FSM Tick만 멈출 뿐이라 외부(오검거 페널티
+        // 매니저의 Detained→Chasing 전이 등)에서 걸린 전이는 그대로 들어온다. 그걸 그대로 받으면
+        // m_baseState가 Stunned에서 벗어나 기절 중에 벌떡 서는 그림이 나오고, RefreshProne(#363)이
+        // 누움을 풀어 콜라이더까지 같이 선다.
+        if (m_controller.IsStunned)
+            state = NpcState.Stunned;
+
         // 제압 전환 분기용 직전 상태 — base를 덮어쓰기 전에 읽는다 (#332)
         NpcState previous = m_baseState;
 
