@@ -73,21 +73,6 @@ public partial class NpcController
         m_stateMachine.ChangeState(NpcState.Captured);
     }
 
-    /// <summary>
-    /// 기절 진입 — 테이저(직접 호출)와 체력 0 도달(NpcController.SetHp)의 연결고리. 지속 시간이
-    /// 끝나면 스스로 일어나 <b>도주(Run)</b>한다 (#269 확정 — #366 결정 5의 배회 복귀에서 원복).
-    /// 체력 회복은 NpcStunnedState.Exit()이 맡는다.
-    /// </summary>
-    /// <param name="threat">
-    /// 기절시킨 상대 — 깨어날 때 이 대상에게서 도주한다. null이면 NpcFleeState가 근처 추격자로
-    /// 폴백하고, 아무도 없으면 배회로 가라앉는다. null 허용.
-    /// </param>
-    public void EnterStunned(Transform threat = null)
-    {
-        if (IsSpawned && !IsServer)
-            return;
-
-        ThreatTarget = threat;
-        m_stateMachine.ChangeState(NpcState.Stunned);
-    }
+    // 기절 진입(EnterStunned)은 NpcController.Stun.cs로 이사했다 — 상태 전이가 아니라
+    // 오버레이 플래그가 됐기 때문이다 (#292).
 }

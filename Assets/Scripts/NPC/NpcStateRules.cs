@@ -38,6 +38,21 @@ public static class NpcStateRules
         && state != NpcState.Chasing
         && state != NpcState.PenaltyEscorting;
 
+    /// <summary>반응·배회군인가 — 스턴이 풀릴 때 도주로 전환되는 쪽. (#292)
+    /// 여집합(확보·페널티군 + Holding)은 스턴이 풀려도 아무 전이 없이 하던 일을 재개한다 —
+    /// 상태 enum이 애초에 안 바뀌므로 호송·수감·페널티·정리 링크가 그대로 살아 있다.
+    ///
+    /// 포함 목록 방식이라 <b>새 상태는 기본이 '재개'</b>다. 도주로 깨어나야 하면 여기 추가할 것.
+    /// 의도적으로 뺀 둘: <see cref="NpcState.Holding"/>(#291 — 임시 거처로 걸어가 소멸하는 정리
+    /// 대상이라 도주시키면 경로가 끊긴다)과 <see cref="NpcState.Stunned"/>(넉백 KO — 자기 상태
+    /// 클래스가 스스로 빠져나간다).</summary>
+    public static bool IsReactive(NpcState state) =>
+        state is NpcState.Idle
+            or NpcState.Walk
+            or NpcState.Run
+            or NpcState.Attack
+            or NpcState.Intruding;
+
     /// <summary>무력화(기절) 상태인가 — 기절 경로가 둘이라 호출부가 매번 OR를 쓰지 않게 모은다. (#292)
     /// 오버레이(테이저·체력 0 #366)와 넉백 KO(<see cref="NpcState.Stunned"/>)를 함께 잡는다.
     /// <b>새로 "기절인가?"를 묻는 코드는 반드시 이걸 쓸 것</b> — CurrentState만 보면 오버레이
