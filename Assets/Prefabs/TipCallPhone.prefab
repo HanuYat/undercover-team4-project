@@ -92,7 +92,7 @@ AudioSource:
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 8300000, guid: a2338087da560984d95558a71a583ae3, type: 3}
   m_PlayOnAwake: 0
-  m_Volume: 1
+  m_Volume: 0
   m_Pitch: 1
   Loop: 1
   Mute: 0
@@ -136,7 +136,7 @@ AudioSource:
     m_Curve:
     - serializedVersion: 3
       time: 0
-      value: 1
+      value: 0
       inSlope: 0
       outSlope: 0
       tangentMode: 0
@@ -190,6 +190,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TipCallPhoneView
   m_phone: {fileID: 993039071981101747}
   m_source: {fileID: 6736088829418134764}
+  m_audibleDistance: 18
+  m_fullVolumeDistance: 4
+  m_maxVolume: 1
   m_handle: {fileID: 1122487159880620782}
   m_shakeAngle: 6
   m_shakeSpeed: 28

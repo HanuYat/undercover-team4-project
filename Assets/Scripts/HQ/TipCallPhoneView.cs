@@ -1,3 +1,4 @@
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -10,6 +11,19 @@ public class TipCallPhoneView : MonoBehaviour
 {
     [SerializeField] private TipCallPhone m_phone;
     [SerializeField] private AudioSource m_source;
+
+    [Header("들리는 범위")]
+    [Tooltip("이 거리(m)를 넘으면 벨소리가 들리지 않는다 — 본부 밖 현장까지 새어 나가지 않게 하는 값")]
+    [Min(1f)]
+    [SerializeField] private float m_audibleDistance = 18f;
+
+    [Tooltip("이 거리(m) 안에서는 최대 음량으로 들린다")]
+    [Min(0f)]
+    [SerializeField] private float m_fullVolumeDistance = 4f;
+
+    [Tooltip("최대 음량")]
+    [Range(0f, 1f)]
+    [SerializeField] private float m_maxVolume = 1f;
 
     [Header("수화기 떨림")]
     [Tooltip("울릴 때 덜그럭거릴 부품 — 보통 수화기(Handle). 비우면 소리만 나고 움직임은 없다")]
@@ -27,6 +41,9 @@ public class TipCallPhoneView : MonoBehaviour
     // 원래 자세 — 떨림을 얹기 전 기준이고, 멈출 때 여기로 되돌린다
     private Vector3 m_handleBasePosition;
     private Quaternion m_handleBaseRotation;
+
+    // 로컬 플레이어의 귀 위치 — 거리 감쇠 기준. 스폰 전엔 없을 수 있어 매번 재확인한다.
+    private Transform m_listener;
 
     private void Awake()
     {
@@ -75,7 +92,12 @@ public class TipCallPhoneView : MonoBehaviour
 
     private void Update()
     {
-        if (m_handle == null || m_phone == null || !m_phone.IsRinging)
+        if (m_phone == null || !m_phone.IsRinging)
+            return;
+
+        ApplyDistanceVolume();
+
+        if (m_handle == null)
             return;
 
         // 멀리서도 "지금 울린다"가 보이는 게 목적이다 — 본부를 비운 사이 돌아왔을 때
@@ -83,6 +105,55 @@ public class TipCallPhoneView : MonoBehaviour
         float t = Time.time * m_shakeSpeed;
         m_handle.localRotation = m_handleBaseRotation * Quaternion.Euler(0f, 0f, Mathf.Sin(t) * m_shakeAngle);
         m_handle.localPosition = m_handleBasePosition + new Vector3(0f, Mathf.Abs(Mathf.Sin(t)) * m_shakeHeight, 0f);
+    }
+
+    /// <summary>
+    /// 거리에 따라 음량을 직접 깎는다 — 본부 안에서만 들리게 하는 장치. (#102)
+    ///
+    /// Unity의 3D 감쇠(spatialBlend 1)를 쓰지 않는 이유: 이 프로젝트에는 <b>플레이어를 따라다니는
+    /// AudioListener가 없다.</b> 유일한 리스너가 씬 Main Camera에 고정돼 있어 3D로 두면 본부에서도
+    /// 100m 밖으로 판정돼 아무 소리도 안 난다. 그래서 소스는 2D로 두고 감쇠만 여기서 계산한다.
+    ///
+    /// 리스너를 로컬 플레이어에 붙이는 정비가 끝나면 이 함수를 지우고 spatialBlend를 1로 되돌리는 게 맞다.
+    /// </summary>
+    private void ApplyDistanceVolume()
+    {
+        if (m_source == null)
+            return;
+
+        Transform listener = ResolveListener();
+        if (listener == null)
+        {
+            m_source.volume = 0f; // 들을 사람이 없다 — 소리를 내지 않는다
+            return;
+        }
+
+        float distance = Vector3.Distance(listener.position, transform.position);
+
+        // 가까우면 최대, 멀어지면 선형으로 줄어 audibleDistance에서 0
+        float far = Mathf.Max(m_audibleDistance, m_fullVolumeDistance + 0.01f);
+        float t = Mathf.InverseLerp(far, m_fullVolumeDistance, distance);
+        m_source.volume = m_maxVolume * Mathf.Clamp01(t);
+    }
+
+    // 로컬 플레이어 카메라 → 없으면 메인 카메라 (PlayerNameTag와 같은 관례)
+    private Transform ResolveListener()
+    {
+        if (m_listener != null)
+            return m_listener;
+
+        NetworkManager nm = NetworkManager.Singleton;
+        if (nm != null && nm.LocalClient != null && nm.LocalClient.PlayerObject != null)
+        {
+            Camera cam = nm.LocalClient.PlayerObject.GetComponentInChildren<Camera>();
+            if (cam != null)
+                m_listener = cam.transform;
+        }
+
+        if (m_listener == null && Camera.main != null)
+            m_listener = Camera.main.transform;
+
+        return m_listener;
     }
 
     private void RestoreHandle()

@@ -47415,7 +47415,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CriminalAssigner
   m_officialRecords: {fileID: 11400000, guid: 1b5b7a3bc8cc725468fa2e0d915c05cb, type: 2}
-  m_maxWantedCount: 3
+  m_maxWantedCount: 1
   m_initialRevealCount: 1
   m_forgerCount: 2
   m_forgedCharCount: 1
