@@ -15,9 +15,7 @@ MonoBehaviour:
   m_attackInterval: 1.5
   m_attackRange: 2
   m_attackDamage: 10
-  m_subdueGaugeMax: 100
-  m_subdueHitPower: 34
-  m_defeatSeconds: 15
+  m_noTargetIdleSeconds: 5
   m_strikeOffsetSeconds: 0.45
   m_swingImpactOffsets:
   - 0.63
@@ -26,4 +24,5 @@ MonoBehaviour:
   - 0.73
   m_attackConeAngle: 120
   m_attackTurnSpeed: 540
+  m_swingHoldSeconds: 0.9
   m_threatSearchRadiusMultiplier: 5

@@ -14,11 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NpcCommonConfig
   m_spawnSpeedMultiplierMin: 0.8
   m_spawnSpeedMultiplierMax: 1.2
-  m_disturbanceRadius: 8
-  m_disturbancePulseInterval: 1
   m_knockbackGravity: -18
   m_knockbackMaxFlightSeconds: 3
   m_knockbackLandSampleDistance: 4
   m_knockbackObstacleMask:
     serializedVersion: 2
     m_Bits: 1
+  m_maxHp: 100
+  m_subdueHitPower: 34
