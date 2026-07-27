@@ -129,10 +129,16 @@ public class PlayerCrouch : NetworkBehaviour
         RequestCrouchServerRpc(pressed);
     }
 
+    // 눌림 여부는 여기서 곧바로 전파한다 — Update에서 "값이 달라졌을 때만" 쓰면 호스트가 새어 나간다.
+    // 호스트는 오너이자 서버라 HandleCrouchInput의 로컬 반영과 이 RPC 본문이 같은 호출에서 처리되고
+    // (호스트 ServerRpc는 인라인 실행), 두 필드가 동시에 채워져 발산이 영영 생기지 않기 때문이다.
+    // 그러면 남의 화면에서 호스트만 앉기 자세가 안 보인다. (PlayerJump.ReportAirborneServerRpc와 같은 형태)
     [ServerRpc]
     private void RequestCrouchServerRpc(bool pressed)
     {
         m_crouchRequested = pressed;
+        m_isCrouchRequested = pressed; // 서버 인스턴스의 자세 값 — 오너가 아닐 때 IsCrouchRequested가 읽는다
+        m_isCrouchRequestedSynced.Value = pressed;
     }
 
     private void Update()
@@ -150,13 +156,8 @@ public class PlayerCrouch : NetworkBehaviour
     // 공중에서 콜라이더를 줄여 좁은 틈을 통과하는 크라우치 점프를 막는다. (#189)
     private void UpdateServerState()
     {
-        // 눌림 여부는 공중에서도 그대로 전파한다 — 애니메이션이 이 값으로 웅크린 자세를 만든다.
-        if (m_isCrouchRequested != m_crouchRequested)
-        {
-            m_isCrouchRequested = m_crouchRequested;
-            if (IsSpawned && IsServer)
-                m_isCrouchRequestedSynced.Value = m_crouchRequested;
-        }
+        // 눌림 여부(m_isCrouchRequested)는 공중에서도 그대로 전파해야 하지만, 그 갱신은 여기가 아니라
+        // RequestCrouchServerRpc가 한다 — 이유는 그쪽 주석 참고.
 
         bool desired =
             m_crouchRequested
