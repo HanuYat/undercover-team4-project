@@ -147,13 +147,17 @@ public class TipCallPhoneView : MonoBehaviour
         {
             Camera cam = nm.LocalClient.PlayerObject.GetComponentInChildren<Camera>();
             if (cam != null)
-                m_listener = cam.transform;
+            {
+                m_listener = cam.transform; // 플레이어를 잡았을 때만 캐시한다
+                return m_listener;
+            }
         }
 
-        if (m_listener == null && Camera.main != null)
-            m_listener = Camera.main.transform;
-
-        return m_listener;
+        // 아직 스폰 전 — 폴백은 캐시하지 않는다. 씬 Main Camera는 로드 직후부터 존재하므로
+        // 여기서 캐시해 버리면 플레이어가 스폰된 뒤에도 영영 그 고정 위치로 거리를 재게 되고,
+        // 본부 한복판에서도 100m 밖으로 판정돼 벨소리가 영구 무음이 된다.
+        Camera fallback = Camera.main;
+        return fallback != null ? fallback.transform : null;
     }
 
     private void RestoreHandle()
