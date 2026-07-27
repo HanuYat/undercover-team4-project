@@ -24,6 +24,7 @@ GameObject:
   - component: {fileID: 7883451613544855259}
   - component: {fileID: 2671233897693649276}
   - component: {fileID: 8244280171983730853}
+  - component: {fileID: 3755396486927013622}
   m_Layer: 7
   m_Name: NPC_Citizen
   m_TagString: Untagged
@@ -359,6 +360,21 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NpcProfileDebugView
   m_drawSceneLabel: 1
   m_labelHeight: 2.2
+--- !u!114 &3755396486927013622
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 230f673c9159def43ad5a33cf986c3f3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcProneCollider
+  m_proneRadius: 0.3
+  m_proneHeight: 1.8
+  m_proneCenter: {x: 0, y: 0.3, z: -0.1}
 --- !u!1001 &2229125471116794606
 PrefabInstance:
   m_ObjectHideFlags: 0
