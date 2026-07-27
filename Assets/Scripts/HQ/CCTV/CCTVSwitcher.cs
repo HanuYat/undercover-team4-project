@@ -33,6 +33,9 @@ public class CCTVSwitcher : NetworkBehaviour
     // 외부 차단(먹통 이벤트) — 이미 동기화된 플래그에서 각 피어가 로컬로 유도하므로 동기화하지 않는다.
     private bool m_externallyJammed;
 
+    // 구독 해제를 위해 들고 있는 먹통 이벤트 — 없는 구성에서는 null이다. (#382)
+    private DeviceBlackoutEvent m_blackout;
+
     /// <summary>현재 채널의 설치 위치 이름 — 송출 중이 아니면 빈 문자열. (#362 라벨용)</summary>
     public string CurrentLocationLabel =>
         IsDisplaying
@@ -66,6 +69,30 @@ public class CCTVSwitcher : NetworkBehaviour
     {
         m_currentIndex.OnValueChanged -= HandleIndexChanged;
         m_isPowered.OnValueChanged -= HandlePowerChanged;
+    }
+
+    // 먹통 구독은 OnNetworkSpawn이 아니라 Start에서 한다 — App 매니저 등록이 Awake에서
+    // 끝나야 SuddenEvent 조회가 성립하기 때문이다(RoundManager와 같은 이유). (#382)
+    private void Start()
+    {
+        m_blackout = App.Game.SuddenEvent?.GetEvent<DeviceBlackoutEvent>();
+        if (m_blackout == null)
+            return; // 먹통이 인스펙터 리스트에 없거나 꺼진 구성 — 그 이벤트는 발생하지도 않는다
+
+        m_blackout.OnCommsBlackoutChanged += SetExternallyJammed;
+
+        // 이미 먹통이 진행 중인 경우(늦은 접속·이벤트 도중 씬 진입)를 즉시 반영한다.
+        SetExternallyJammed(m_blackout.IsCommsBlackout);
+    }
+
+    // NetworkBehaviour.OnDestroy는 virtual이라 반드시 override + base 호출이다 —
+    // 새로 선언하면 NGO의 파괴 시 정리가 통째로 가려진다(PlayerEscorter와 같은 관례).
+    public override void OnDestroy()
+    {
+        if (m_blackout != null)
+            m_blackout.OnCommsBlackoutChanged -= SetExternallyJammed;
+
+        base.OnDestroy();
     }
 
     private void CacheNodes()
