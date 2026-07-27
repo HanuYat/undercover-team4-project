@@ -72,11 +72,14 @@ public partial class NpcController
     }
 
     /// <summary>
-    /// 기절 진입 — 테이저의 연결고리. 지속 시간이 끝나면 스스로 일어나 <b>도주</b>한다(#269 확정).
+    /// 기절 진입 — 테이저(직접 호출)와 체력 0 도달(NpcController.SetHp)의 연결고리. 지속 시간이
+    /// 끝나면 스스로 일어나 <b>배회(Idle)</b>로 돌아간다 — 도주 복귀는 폐지됐다(#366 결정 5,
+    /// #269의 도주 복귀를 대체). 체력 회복은 NpcStunnedState.Exit()이 맡는다.
     /// </summary>
     /// <param name="threat">
-    /// 기절시킨 상대(테이저 사수). 깨어났을 때 이 대상에게서 도망친다 — 없으면(null) 도주 상태가
-    /// 그 시점의 가장 가까운 추격자를 폴백으로 잡고, 주변에 아무도 없으면 배회로 돌아간다(NpcFleeState).
+    /// 기절시킨 상대. 깨어날 때 도주하지 않으므로(#366) 더 이상 도망칠 대상으로 쓰이지 않지만,
+    /// 기절 중 ThreatTarget으로 남아 있다가 NpcStunnedState.Tick()의 깨어나는 분기에서
+    /// ClearThreat()로 정리된다. null 허용.
     /// </param>
     public void EnterStunned(Transform threat = null)
     {

@@ -92,10 +92,17 @@ public partial class NpcController : IDamageable
 
 ```
 NpcStunnedState.Tick — m_timer >= StunSeconds
-  → ServerRestoreHp()  (HP = MaxHp)
   → ClearThreat()
   → ChangeState(Idle)
+
+NpcStunnedState.Exit — Stunned를 벗어나는 모든 경로(위의 Idle 복귀 + 수갑 채포로 인한
+                        Stunned → Captured 전이)에서 호출된다
+  → ServerRestoreHp()  (HP = MaxHp)
 ```
+
+> 최초 설계는 회복을 `Tick()`의 "시간 다 됨" 분기에 두었으나, 수갑 채포 경로(`Stunned → Captured`)가
+> 그 분기를 거치지 않아 HP 0 무적이 발생함을 Task 4 리뷰에서 확인했다. 회복 지점을 `Exit()`으로
+> 옮겨 모든 탈출 경로를 덮도록 정정했다(6절 참고).
 
 ---
 
@@ -107,7 +114,8 @@ NpcStunnedState.Tick — m_timer >= StunSeconds
 | `NpcResistState.Tick` | `if (SubdueGauge <= 0f) → ChangeState(Captured)` 블록 **삭제**. HP 0은 `SetHp`가 기절로 처리하므로 저항 상태를 알아서 빠져나가고, `NpcResistState.Exit()`이 에이전트 설정을 복원한다 |
 | `NpcResistState.Tick` | `Time.time - m_resistStartTime > DefeatSeconds → Defeat()` 블록 **삭제** (결정 6). `m_resistStartTime` 필드도 함께 제거 |
 | `NpcResistState.Tick` | `SwingAttack()` → 전원 무력화 시 `Defeat()` — **유지** |
-| `NpcStunnedState.Tick` | `m_owner.StartFlee(m_owner.ThreatTarget)` → `ServerRestoreHp()` + `ClearThreat()` + `ChangeState(Idle)` |
+| `NpcStunnedState.Tick` | `m_owner.StartFlee(m_owner.ThreatTarget)` → `ClearThreat()` + `ChangeState(Idle)` |
+| `NpcStunnedState.Exit` | `ServerRestoreHp()` **추가** — 회복 지점을 `Tick()`에서 `Exit()`으로 옮김(Task 4 리뷰 정정, 6절 참고). Stunned를 벗어나는 모든 경로(시간 경과·수갑 채포)를 덮기 위함 |
 
 `NpcStunnedState`의 밧줄 타이머 정지(`IsRoped`)와 일어나는 모션(`RaiseStandUp`, #269)은 그대로 둔다.
 
@@ -163,7 +171,7 @@ NpcStunnedState.Tick — m_timer >= StunSeconds
 
 ## 6. 엣지 케이스
 
-- **HP 0인 채로 깨어남** — 발생하지 않는다. `NpcStunnedState`가 깨어나는 시점에 `ServerRestoreHp()`로 풀피를 보장한다(결정 4). 이 회복이 빠지면 엣지 트리거 특성상 NPC가 두 번 다시 기절하지 않는 무적이 된다.
+- **HP 0인 채로 깨어남** — 발생하지 않는다. 단, 회복 지점은 처음 설계(`Tick()`의 "시간 다 됨" 분기)가 아니라 **`Exit()`**이다(Task 4 리뷰에서 정정). 기절한 NPC에 수갑을 채우면 `Stunned → Captured`로 곧장 전이하는데(`IsCapturable`이 `Stunned`를 막지 않음 — 의도된 동작) 이 경로는 `Tick()`의 "시간 다 됨" 분기를 거치지 않는다. 회복을 그 분기에만 두면 이런 NPC는 HP 0인 채로 `Captured`에 남고, 이후 `ReleaseFromCustody()`(오검거 석방)나 `NpcCapturedState`의 인계 방치 타이머가 `Idle`/`Run`으로 돌려보내도 HP를 회복하지 않아 두 번 다시 기절하지 않는 무적이 된다. `Exit()`은 상태 머신이 `Stunned`를 벗어나는 모든 경로(시간 경과·수갑 채포)에서 호출되므로 이 문제를 막는다(결정 4).
 - **기절 중 추가 타격** — HP가 이미 0이라 `SetHp`의 엣지 조건(`previous > 0`)이 false → no-op. 재기절로 타이머가 리셋되지 않는다.
 - **신병 확보 중 타격** — 2절의 `CanBeStunned` 게이트로 무시.
 - **넉백 착지** — `m_knockbackLandingState`가 이미 `Stunned`(검거 중이면 `Captured`)로 보낸다. HP를 거치지 않는 별도 경로이므로 이번 변경과 충돌하지 않는다. 이때 HP는 0이 아니지만 `Stunned` 상태이고, 깨어날 때 `ServerRestoreHp()`가 돌아도 이미 풀피라 무해하다.
