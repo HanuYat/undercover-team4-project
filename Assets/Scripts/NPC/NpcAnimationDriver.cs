@@ -120,6 +120,16 @@ public class NpcAnimationDriver : MonoBehaviour
     // 스윙이 끝난 뒤 되돌아갈 FSM 기준 상태 — 저항(Attack)이면 버틴 자세(Idle)로 복귀한다 (#220)
     private NpcState m_baseState;
 
+    /// <summary>
+    /// 지금 모델이 바닥에 누워 있는가 — 기절(Stunned) 중이면서 아직 일어나기 시작하지 않은 구간. (#363)
+    /// 몸통 콜라이더를 같이 눕히는 <see cref="NpcProneCollider"/>가 읽는다. FSM 상태만으로는 판별할 수 없다:
+    /// 일어나는 모션(#269) 동안에도 상태는 Stunned라, 상태만 보면 서 있는 몸에 누운 콜라이더가 남는다.
+    /// </summary>
+    public bool IsProne { get; private set; }
+
+    /// <summary>누움 여부가 바뀔 때 발행 — 표현(모션)과 콜라이더가 같은 순간에 움직이도록 한다. (#363)</summary>
+    public event System.Action<bool> OnProneChanged;
+
     private void Awake()
     {
         m_controller = GetComponent<NpcController>();
@@ -205,6 +215,18 @@ public class NpcAnimationDriver : MonoBehaviour
 
         m_animator.SetInteger(s_stateHash, k_standUpAnimState);
         m_standingUp = true;
+        RefreshProne(); // 몸이 일어나기 시작했다 — 콜라이더도 같이 선다 (#363)
+    }
+
+    // 누움 여부를 다시 판정해 바뀌었으면 알린다 — m_baseState/m_standingUp을 건드린 직후에 부른다. (#363)
+    private void RefreshProne()
+    {
+        bool prone = m_baseState == NpcState.Stunned && !m_standingUp;
+        if (prone == IsProne)
+            return;
+
+        IsProne = prone;
+        OnProneChanged?.Invoke(prone);
     }
 
     /// <summary>스윙 모션이 성립할 수 있는 기준 상태인가 — 구속·무력화 상태에서는 공격이 나올 수 없다. (#220)
@@ -270,6 +292,7 @@ public class NpcAnimationDriver : MonoBehaviour
         {
             m_standingUp = false;
             m_animator.SetInteger(s_stateHash, AnimatorBaseState(m_baseState));
+            RefreshProne(); // 다시 누웠다 — 콜라이더도 되돌린다 (#363)
         }
 
         // 스턴 오버레이 중에는 속도 기반 로코모션을 돌리지 않는다 (#292) — 상태 enum이 그대로라
@@ -439,6 +462,10 @@ public class NpcAnimationDriver : MonoBehaviour
         m_subdueUntil = 0f; // 전환 중 다른 상태로 바뀌면(재연행 등) 전환도 끝난다
         m_subdueRollThenGroggy = false;
         m_standingUp = false; // 상태가 바뀌면 일어나기도 끝난다 — 새 base 모션이 즉시 적용된다
+
+        // 누움 판정은 여기서 끝난다(m_baseState·m_standingUp이 모두 확정) — 아래 제압 전환 분기가
+        // 중간에 return하므로 그 앞에서 부른다 (#363)
+        RefreshProne();
 
         // 앵그리 마크(#280) — 페널티 상태(수용~호송) 동안 머리 위에 표시한다. 이 이벤트는 동기화를 거쳐
         // 모든 피어에서 발생하므로(#56) 원격 클라·CCTV 화면에서도 같은 시점에 켜지고 꺼진다

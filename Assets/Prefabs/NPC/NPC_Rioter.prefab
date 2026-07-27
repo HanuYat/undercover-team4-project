@@ -23,6 +23,7 @@ GameObject:
   - component: {fileID: 5951565256141623223}
   - component: {fileID: 6387710733866401857}
   - component: {fileID: 2738106457710375312}
+  - component: {fileID: 2626146088452646355}
   m_Layer: 7
   m_Name: NPC_Rioter
   m_TagString: Untagged
@@ -343,6 +344,21 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_modelRoot: {fileID: 3683407917210904916}
   m_catalog: {fileID: 11400000, guid: 6b0ad8e93c79903439c11556cdc30e5b, type: 2}
+--- !u!114 &2626146088452646355
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 230f673c9159def43ad5a33cf986c3f3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcProneCollider
+  m_proneRadius: 0.3
+  m_proneHeight: 1.8
+  m_proneCenter: {x: 0, y: 0.3, z: -0.1}
 --- !u!1001 &3679051956096844986
 PrefabInstance:
   m_ObjectHideFlags: 0
