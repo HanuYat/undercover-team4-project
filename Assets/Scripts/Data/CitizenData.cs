@@ -14,6 +14,7 @@ public struct CitizenData : INetworkSerializable, IEquatable<CitizenData>
     public FixedString64Bytes NameView; // 스캔 표시 이름 — 정본과 다르면 이름 위조 (#223)
     public OfficialRecords.CitizenType Type;
     public OfficialRecords.Faction Faction;
+    public byte SymbolIndex;
 
     /// <summary>배정 완료 여부 — 서버 배정 전 기본값(빈 이름)과 구분한다.</summary>
     public bool IsAssigned => !Name.IsEmpty;
@@ -38,6 +39,7 @@ public struct CitizenData : INetworkSerializable, IEquatable<CitizenData>
             NameView = nameView,
             Type = profile.CitizenType,
             Faction = profile.Faction,
+            SymbolIndex = (byte)(profile.m_symbolIndexView < 0 ? 0 : profile.m_symbolIndexView)
         };
     }
 
@@ -48,13 +50,15 @@ public struct CitizenData : INetworkSerializable, IEquatable<CitizenData>
         serializer.SerializeValue(ref NameView);
         serializer.SerializeValue(ref Type);
         serializer.SerializeValue(ref Faction);
+        serializer.SerializeValue(ref SymbolIndex);
     }
 
     public bool Equals(CitizenData other) =>
         Name.Equals(other.Name)
         && NameView.Equals(other.NameView)
         && Type == other.Type
-        && Faction == other.Faction;
+        && Faction == other.Faction
+        && SymbolIndex == other.SymbolIndex;
 
     public override bool Equals(object obj) => obj is CitizenData other && Equals(other);
 

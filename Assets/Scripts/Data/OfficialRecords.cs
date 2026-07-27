@@ -21,20 +21,34 @@ public class OfficialRecords : ScriptableObject
     };
 
     [System.Serializable]
-    public struct FactionSymbol
+    public struct FactionSymbolSet
     {
         public Faction faction;
-        public Sprite symbol;
+        public Sprite[] variants;   // 세력 하나가 갖는 "비슷한 문양" 세트.
     }
 
     [SerializeField]
-    private FactionSymbol[] m_factionSymbols;
+    private FactionSymbolSet[] m_factionSymbolSets;
 
-    public Sprite GetFactionSymbol(Faction faction)
+    public Sprite[] GetVariants(Faction faction)
     {
-        foreach (var pair in m_factionSymbols)
-            if (pair.faction == faction) return pair.symbol;
+        foreach (var set in m_factionSymbolSets)
+            if (set.faction == faction) return set.variants;
         
         return null;
+    }
+
+    public int GetVariantsCount(Faction faction)
+    {
+        Sprite[] variants = GetVariants(faction);
+        return variants != null ? variants.Length : 0;
+    }
+
+    public Sprite GetFactionSymbol(Faction faction, int index)
+    {
+        Sprite[] variants = GetVariants(faction);
+        if (variants == null || index < 0 || index >= variants.Length) return null;
+
+        return variants[index];
     }
 }

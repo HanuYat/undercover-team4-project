@@ -20,13 +20,14 @@ public class CitizenProfile : ScriptableObject
     public string m_typeView;     // 표시 타입
     public string m_factionView;  // 표시 세력
     public Sprite m_symbolView;   // 표시 심볼
+    public int m_symbolIndexView;    // 표시 심볼의 variant index
 
     /// <summary>
     /// 런타임 생성용 초기화 — 실제 데이터를 채우고 표시값을 정본과 동일하게 세팅한다(정상 시민 기준). (이슈 #38)
     /// 위조(표시값 오염)는 이 뒤 배정 단계(#223)에서 표시값 필드만 덮어써 적용한다 — Initialize 자체는 항상 정상 프로필을 만든다.
     /// </summary>
     public void Initialize(string citizenName, OfficialRecords.CitizenType citizenType,
-        OfficialRecords.Faction faction, OfficialRecords officialRecords)
+        OfficialRecords.Faction faction, int symbolIndex, OfficialRecords officialRecords)
     {
         m_citizenName = citizenName;
         m_citizenType = citizenType;
@@ -35,6 +36,14 @@ public class CitizenProfile : ScriptableObject
         m_nameView = citizenName;
         m_typeView = OfficialRecords.CitizenTypeNames[citizenType];
         m_factionView = OfficialRecords.FactionNames[faction];
-        m_symbolView = officialRecords != null ? officialRecords.GetFactionSymbol(faction) : null;
+        m_symbolIndexView = symbolIndex;
+        m_symbolView = officialRecords != null ? officialRecords.GetFactionSymbol(faction, symbolIndex) : null;
+    }
+
+    /// <summary>표시 문양만 다른 variant로 덮어쓴다 — 위조범의 문양 위조 전용 (#222/#223).</summary>
+    public void SetSymbolIndexView(int symbolIndex, OfficialRecords officialRecords)
+    {
+        m_symbolIndexView = symbolIndex;
+        m_symbolView = officialRecords != null ? officialRecords.GetFactionSymbol(m_faction, symbolIndex) : null;
     }
 }

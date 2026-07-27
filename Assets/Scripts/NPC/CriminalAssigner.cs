@@ -93,6 +93,8 @@ public class CriminalAssigner : CommonManagerBase
     private readonly List<NpcController> m_criminalNpcs = new List<NpcController>();
     private readonly List<CitizenProfile> m_wantedProfiles = new List<CitizenProfile>();
 
+    private readonly Dictionary<OfficialRecords.Faction, int> m_localRealIndices = new Dictionary<OfficialRecords.Faction, int>();
+
     /// <summary>실제 범인으로 지정된 NPC들. 배정 전에는 비어 있다. (#127)</summary>
     public IReadOnlyList<NpcController> CriminalNpcs => m_criminalNpcs;
 
@@ -169,19 +171,35 @@ public class CriminalAssigner : CommonManagerBase
             }
 
             // 프로필은 에셋이 아닌 런타임 인스턴스 — 라운드마다 새로 배정된다
+            OfficialRecords.Faction faction = RandomFaction();
+            int realIndex = RealSymbolIndex(faction);
+
             CitizenProfile profile = ScriptableObject.CreateInstance<CitizenProfile>();
             profile.Initialize(
                 names[i],
                 RandomEnum<OfficialRecords.CitizenType>(),
-                RandomEnum<OfficialRecords.Faction>(),
+                faction,
+                realIndex,
                 m_officialRecords
             );
 
-            // 위조범: 표시 이름(m_nameView)을 오염시켜 정본/인명부와 어긋나게 한다.
-            // 반드시 AssignProfile(= CitizenData 동기화 스냅샷) 이전에 적용해야 오염 이름이 전 클라에 전파된다 (#223)
+            // 위조범: 표시값을 정본/인명부와 어긋나게 한다. 이름·문양 중 하나만 오염한다 (#222 (a)①) —
+            // 본부가 "이름이 안 맞나 문양이 안 맞나"를 매번 새로 대조하게 만든다.
+            // 문양 variant가 2개 미만이면 가짜를 만들 수 없어 이름 위조로 폴백한다 (#222 (c)).
+            // 반드시 AssignProfile(= CitizenData 동기화 스냅샷) 이전에 적용해야 오염값이 전 클라에 전파된다 (#223)
             bool isForger = forgerIndices.Contains(i);
+            bool forgedSymbol = false;
             if (isForger)
-                profile.m_nameView = CorruptName(profile.CitizenName, m_forgedCharCount);
+            {
+                bool canForgeSymbol =
+                    m_officialRecords != null && m_officialRecords.GetVariantsCount(faction) >= 2;
+                forgedSymbol = canForgeSymbol && Random.value < 0.5f;
+
+                if (forgedSymbol)
+                    profile.SetSymbolIndexView(PickFakeSymbolIndex(faction, realIndex), m_officialRecords);
+                else
+                    profile.m_nameView = CorruptName(profile.CitizenName, m_forgedCharCount);
+            }
 
             bool isCriminal = criminalIndices.Contains(i);
             identity.AssignProfile(profile, isCriminal);
@@ -205,8 +223,12 @@ public class CriminalAssigner : CommonManagerBase
             string roleTag = isCriminal ? $"  ← 범인 ({reaction})"
                 : reaction != ReactionType.Compliant ? $"  (미끼: {reaction})"
                 : "";
-            // 위조 시 정본→표시 이름을 함께 남겨 대조 확인에 쓴다 (데모 빌드 전 제거 대상)
-            string forgeryTag = isForger ? $"  [위조: {profile.CitizenName}→{profile.m_nameView}]" : "";
+
+            // 위조 시 어느 축이 오염됐는지 함께 남겨 대조 확인에 쓴다 (데모 빌드 전 제거 대상)
+            string forgeryTag = !isForger ? ""
+                : forgedSymbol ? $"  [위조: 문양 {realIndex}→{profile.m_symbolIndexView}]"
+                : $"  [위조: {profile.CitizenName}→{profile.m_nameView}]";
+
             logBuilder.AppendLine(
                 $"  {profile.CitizenName} | {profile.m_typeView} | {profile.m_factionView}{roleTag}{forgeryTag}"
             );
@@ -278,6 +300,51 @@ public class CriminalAssigner : CommonManagerBase
     {
         Array values = Enum.GetValues(typeof(TEnum));
         return (TEnum)values.GetValue(Random.Range(0, values.Length));
+    }
+
+    // ---- 세력 · 문양 (#222) ----
+
+    // None(무소속·문양 없음)은 위조 대조 축이 될 수 없어 배정에서 제외한다 (#222 (b)).
+    // enum에 세력을 추가하면 자동으로 후보에 포함된다 — 여기를 고칠 필요 없음.
+    private static readonly OfficialRecords.Faction[] s_assignableFactions = BuildAssignableFactions();
+
+    private static OfficialRecords.Faction[] BuildAssignableFactions()
+    {
+        var all = (OfficialRecords.Faction[])Enum.GetValues(typeof(OfficialRecords.Faction));
+        var list = new List<OfficialRecords.Faction>(all.Length);
+        foreach (OfficialRecords.Faction faction in all)
+            if (faction != OfficialRecords.Faction.None)
+                list.Add(faction);
+        return list.ToArray();
+    }
+
+    private static OfficialRecords.Faction RandomFaction() =>
+        s_assignableFactions.Length > 0
+            ? s_assignableFactions[Random.Range(0, s_assignableFactions.Length)]
+            : OfficialRecords.Faction.None;
+
+    /// <summary>이번 세션에 이 세력의 진짜 문양 index. 세션 중이면 동기화 값, 오프라인이면 로컬 폴백. (#222)</summary>
+    private int RealSymbolIndex(OfficialRecords.Faction faction)
+    {
+        FactionSymbolManager manager = App.Game.FactionSymbol;
+        if (manager != null)
+            return manager.RealIndex(faction);
+
+        if (!m_localRealIndices.TryGetValue(faction, out int index))
+        {
+            int count = m_officialRecords != null ? m_officialRecords.GetVariantsCount(faction) : 0;
+            index = count > 0 ? Random.Range(0, count) : 0;
+            m_localRealIndices[faction] = index;
+        }
+        return index;
+    }
+
+    /// <summary>진짜를 제외한 나머지 variant 중 하나 — 위조범의 가짜 문양. variant 2개 이상일 때만 호출. (#222)</summary>
+    private int PickFakeSymbolIndex(OfficialRecords.Faction faction, int realIndex)
+    {
+        int count = m_officialRecords.GetVariantsCount(faction);
+        int pick = Random.Range(0, count - 1); // 진짜 1개를 뺀 범위에서 뽑고
+        return pick >= realIndex ? pick + 1 : pick; // 진짜 자리를 건너뛴다
     }
 
     // ---- 이름 위조 (#223) ----
