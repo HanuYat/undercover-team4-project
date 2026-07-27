@@ -38,6 +38,12 @@ public class PlayerLoadout : NetworkBehaviour
     /// <summary>플레이어 소지 슬롯 수 — 고정 3칸 (#144, GDD 용량 3칸).</summary>
     public const int k_maxHeldItems = 3;
 
+    // 드롭 장애물 탐침 높이(m). 발밑에서 쏘면 바닥·문턱에 걸리므로 허리 높이에서 앞을 훑는다.
+    private const float k_dropProbeHeight = 0.5f;
+
+    // 벽에서 띄울 여유(m). 줍기 박스 최소 크기(0.5m)의 절반 — 박스가 벽을 파고들지 않을 만큼.
+    private const float k_dropWallMargin = 0.3f;
+
     // 오너 로컬 슬롯 배치 모델 — 어느 칸에 뭐가 있는지·선택 인덱스와 그 위의 대조/순환/선택/스왑은
     // 순수 인덱스 연산이라 Netcode와 무관한 LoadoutSlots<T>로 분리했다(단위 테스트 가능). 부착·소유권·
     // 동기화는 이 컴포넌트가, 칸 배치는 모델이 담당한다. 서버 동기화는 flat list(BuildHeldItemRefs) 그대로. (#144)
@@ -201,6 +207,12 @@ public class PlayerLoadout : NetworkBehaviour
             return;
         }
 
+        // 벽 너머 줍기 차단 — 클라 조준만 막으면 위조 RPC로 그대로 뚫린다 (#360)
+        if (!m_interactor.HasLineOfSightTo(itemNetworkObject.transform))
+        {
+            return;
+        }
+
         // 소지 3칸 제한 (#144, GDD 용량 3칸) — 꽉 차면 줍기 거부. 서버 권위 검증.
         // 개수만 필요하므로 무할당 CountHeldItems 사용 (동기화용 refs는 부착 후 아래에서 1회 빌드).
         if (CountHeldItems() >= k_maxHeldItems)
@@ -292,12 +304,42 @@ public class PlayerLoadout : NetworkBehaviour
         // 정면 바닥에 내려놓은 뒤 분리하고, 소유권은 서버로 되돌린다(월드 상태).
         // 순서 중요 — 아이템엔 NetworkTransform이 없어, 분리 시 나가는 ParentSyncMessage가 위치를
         // 복제하는 유일한 수단이다. 분리가 먼저면 손에 있던 옛 위치가 실려 나간다 (#361).
-        Vector3 dropPosition = transform.position + transform.forward * m_dropDistance;
-        itemNetworkObject.transform.SetPositionAndRotation(dropPosition, Quaternion.identity);
+        itemNetworkObject.transform.SetPositionAndRotation(
+            ResolveDropPosition(),
+            Quaternion.identity
+        );
         itemNetworkObject.TrySetParent((Transform)null, true);
         itemNetworkObject.RemoveOwnership();
 
         SyncHeldItemsRpc(BuildHeldItemRefs());
+    }
+
+    // 정면 드롭 지점을 구한다 — 앞이 벽이면 벽 앞으로 당긴다 (서버에서 호출).
+    // 벽에 붙어 버리면 아이템이 벽 너머로 넘어가는데, 가시선 차단(#360) 이후로는 그렇게 넘어간
+    // 아이템을 벽 너머로 주울 수도 없어 영영 회수 불가가 된다.
+    // "벽"의 정의는 조준 쪽과 하나로 묶는다(PlayerInteractor.LosBlockMask) — 따로 두면
+    // 조준은 막히는데 드롭은 통과하는 식으로 어긋난다.
+    private Vector3 ResolveDropPosition()
+    {
+        float distance = m_dropDistance;
+
+        Vector3 probeOrigin = transform.position + Vector3.up * k_dropProbeHeight;
+        if (
+            Physics.Raycast(
+                probeOrigin,
+                transform.forward,
+                out RaycastHit obstacle,
+                m_dropDistance,
+                m_interactor.LosBlockMask,
+                QueryTriggerInteraction.Ignore
+            )
+        )
+        {
+            // 벽에 바짝 붙었으면 0까지 줄어 발밑에 떨어진다 — 벽 안쪽보다 낫다.
+            distance = Mathf.Max(0f, obstacle.distance - k_dropWallMargin);
+        }
+
+        return transform.position + transform.forward * distance;
     }
 
     // ---- 밧줄 자원 게이트 (#269) ----

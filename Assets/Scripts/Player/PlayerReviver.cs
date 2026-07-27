@@ -228,8 +228,9 @@ public class PlayerReviver : ChanneledInteractionBehaviour
         float range = m_interactor != null ? m_interactor.Range : k_fallbackRange;
         // 기준점은 조준·윤곽선 게이트와 동일한 AimOrigin(카메라) (#184)
         Vector3 origin = m_interactor != null ? m_interactor.AimOrigin.position : transform.position;
-        return (target.transform.position - origin).sqrMagnitude
-            <= range * range;
+        // 사거리 + 가시선 — 거리만 보면 위조 RPC로 벽 너머 구조가 된다 (#360)
+        return (target.transform.position - origin).sqrMagnitude <= range * range
+            && (m_interactor == null || m_interactor.HasLineOfSightTo(target.transform));
     }
 
     // ---- 오너 로그 피드백 ----
