@@ -197,6 +197,9 @@ public partial class NpcController : NetworkBehaviour
         // 대칭적으로 서로 양보하다가 교착에 빠진다 (값이 낮은 쪽이 우선권을 가진다)
         m_agent.avoidancePriority = Random.Range(30, 71);
 
+        // 체력은 FSM 시동 전에 채운다 — 첫 틱부터 CurrentHp가 유효해야 한다 (#366)
+        InitHealth();
+
         m_stateMachine.ChangeState(NpcState.Idle);
     }
 
