@@ -152,6 +152,7 @@ public partial class NpcController : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         m_networkState.OnValueChanged += HandleNetworkStateChanged;
+        m_syncedStunned.OnValueChanged += HandleSyncedStunnedChanged; // 스턴 오버레이 표현 전파 (#292)
 
         if (IsServer)
         {
@@ -168,6 +169,7 @@ public partial class NpcController : NetworkBehaviour
     public override void OnNetworkDespawn()
     {
         m_networkState.OnValueChanged -= HandleNetworkStateChanged;
+        m_syncedStunned.OnValueChanged -= HandleSyncedStunnedChanged;
     }
 
     private void Start()

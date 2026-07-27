@@ -23,12 +23,31 @@ public partial class NpcController
     /// <summary>스턴 오버레이가 걸려 있는가. 세션 중에는 동기화 값이라 클라이언트에서도 읽을 수 있다. (#292)</summary>
     public bool IsStunned => IsSpawned ? m_syncedStunned.Value : m_stunned;
 
-    // 서버 진실값과 동기화 변수에 함께 기록한다 — 오프라인에서는 NetworkVariable에 쓰지 않는다 (#56 상태 패턴과 동일)
+    /// <summary>스턴 오버레이가 켜지거나 꺼질 때 전 피어에서 발행된다 — 표현(NpcAnimationDriver)용. (#292)
+    /// 오버레이는 m_networkState를 바꾸지 않으므로 OnStateChanged로는 알 수 없다.</summary>
+    public event System.Action<bool> OnStunnedChanged;
+
+    // 서버 진실값과 동기화 변수에 함께 기록한다 — HandleFsmStateChanged와 같은 구조 (#56)
     private void SetStunned(bool value)
     {
         m_stunned = value;
-        if (IsSpawned && IsServer)
-            m_syncedStunned.Value = value;
+
+        if (!IsSpawned)
+        {
+            OnStunnedChanged?.Invoke(value); // 오프라인 — 동기화 없이 바로 로컬 이벤트
+            return;
+        }
+
+        if (!IsServer)
+            return; // 서버 권위 — 클라이언트 쓰기는 무시
+
+        m_syncedStunned.Value = value; // OnValueChanged를 거쳐 모든 피어에서 OnStunnedChanged가 발생한다
+    }
+
+    // 동기화 변수 변경 수신 — 서버 자신도 여기를 거치므로 발행 지점이 하나로 모인다.
+    private void HandleSyncedStunnedChanged(bool previous, bool current)
+    {
+        OnStunnedChanged?.Invoke(current);
     }
 
     // 경과 시간으로 센다 — 밧줄에 묶이면 멈춰야 해서 "끝나는 시각" 방식으로는 계산이 지저분해진다.
