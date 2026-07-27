@@ -1,6 +1,6 @@
 # #189 — 플레이어 점프 구현 정리
 
-- **날짜:** 2026-07-26
+- **날짜:** 2026-07-26 (최초) / 2026-07-27 (후속 — 5-6, 5-7)
 - **브랜치:** `feature/189-player-jump`
 - **범위:** 점프 이동·애니메이션 + 공중 앉기(웅크림). GDD에는 점프 항목이 없어(`docs/` 전체 검색 0건) 신규 기능으로 설계했다.
 
@@ -9,6 +9,8 @@
 ## 1. 한 줄 요약
 
 점프 로직 자체가 없던 상태(`Assets/Scripts` 전체에 "jump" 문자열 0건)에서 시작해, **입력 → 수직 임펄스 → 애니메이터 상태 머신 → 원격 동기화**를 붙였다. 클립·입력 액션·리그는 이미 프로젝트에 다 있어서 새 에셋 임포트는 없었다. 구현 중 플레이 모드 계측으로 **천장 붙음 버그**를 찾아 함께 고쳤고, 이후 체감 피드백 4건을 전부 수치로 원인을 특정해 수정했다.
+
+후속 플레이테스트에서 2건을 더 잡았다 — **클라 화면에서 호스트만 앉기 자세가 안 보이던 회귀**(5-6)와 **공중에서 웅크린 채 움직일 때 몸이 굳어 보이던 문제**(5-7).
 
 ---
 
@@ -90,15 +92,15 @@ Jump_Air_Crouch ─(!Crouch)────────→ Jump_Air
 
 **전환 등록 순서가 곧 우선순위다.** 착지 전환을 다른 전환보다 먼저 달아야, 착지 프레임에 앉기 키를 누르거나 떼도 공중 상태끼리(`Air ↔ Air_Crouch`) 한 번 들렀다 오는 군더더기가 안 생긴다. 같은 이유로 `Crouch → Jump_Air_Crouch`가 `Crouch → Jump_Begin`보다 앞에 있다.
 
-공중 웅크림에는 앉기 Idle 클립을 재사용했다 — 전용 턱(tuck) 클립이 에셋에 없다.
+공중 웅크림(`Jump_Air_Crouch`)은 **지상 앉기와 같은 구성의 블렌드 트리**다 — 중앙에 Crouch Idle, 반경 `k_walkParam`(1)에 CrouchWalk 8방향. 전용 턱(tuck) 클립이 에셋에 없어 앉기 클립을 재사용하되, 단일 Idle이 아니라 트리로 물려 공중 이동 중에도 자세가 살아 있게 했다 (5-7).
 
-> ⚠️ **Animator 창에서 손으로 고치지 말 것.** `Tools > Player > Create Animator Controller`를 다시 돌리면 점프 상태·전환이 통째로 재생성돼 수정이 날아간다. 값 조정은 [`SetupJumpStates()`](../Assets/Scripts/Editor/PlayerAnimatorControllerBuilder.cs) 안에서 하고 메뉴를 재실행하는 흐름이다. (Locomotion 블렌드트리·Crouch·Knockdown도 같은 구조)
+> ⚠️ **Animator 창에서 손으로 고치지 말 것.** `Tools > Player > Create Animator Controller`를 다시 돌리면 점프 상태·전환이 통째로 재생성돼 수정이 날아간다. `Jump_Air_Crouch`는 상태만 살아남고 전환과 블렌드 트리 내용은 매번 다시 채워진다(5-7). 값 조정은 [`SetupJumpStates()`](../Assets/Scripts/Editor/PlayerAnimatorControllerBuilder.cs) 안에서 하고 메뉴를 재실행하는 흐름이다. (Locomotion 블렌드트리·Crouch·Knockdown도 같은 구조)
 
 ---
 
 ## 5. 발견해서 고친 문제들
 
-전부 플레이 모드에서 프레임 단위로 계측해 원인을 특정했다. 체감 보고만으로 추측하지 않은 것이 결정적이었다.
+5-1 ~ 5-5는 플레이 모드에서 프레임 단위로 계측해 원인을 특정했다. 체감 보고만으로 추측하지 않은 것이 결정적이었다. 5-6 ~ 5-7은 후속 플레이테스트 보고에서 시작해 **코드 경로를 따라가 원인을 짚은** 건이다(계측 아님 — 근거의 성격이 다르니 구분해 둔다).
 
 ### 5-1. 천장에 머리를 박으면 0.4초간 매달림
 
@@ -179,6 +181,65 @@ if ((m_controller.collisionFlags & CollisionFlags.Above) != 0 && m_verticalVeloc
 
 `Crouch → Jump_Air_Crouch` 전환을 `Crouch → Jump_Begin`보다 **먼저** 달아 가로챘다. 수정 후 20ms 간격 계측에서 `Begin`이 한 프레임도 안 나온다.
 
+### 5-6. 클라 화면에서 **호스트만** 앉기 자세가 안 보임 (회귀, 2026-07-27)
+
+**증상:** 이 브랜치 이전에는 클라이언트에서 호스트가 앉는 게 보였는데 안 보이게 됐다. 클라↔클라는 정상 — **호스트만** 안 보인다.
+
+**원인:** 6장에서 애니메이션 소스를 `IsCrouching` → `IsCrouchRequested`로 바꿨는데(공중 웅크림을 위해 필요한 변경), 원격 피어용으로 신설한 `m_isCrouchRequestedSynced`를 채우는 트리거가 `UpdateServerState()` 안의 **발산 검사**였다:
+
+```csharp
+// 문제가 된 코드
+if (m_isCrouchRequested != m_crouchRequested)   // ← 호스트에서는 영영 false
+{
+    m_isCrouchRequested = m_crouchRequested;
+    if (IsSpawned && IsServer)
+        m_isCrouchRequestedSynced.Value = m_crouchRequested;
+}
+```
+
+호스트는 **오너이자 서버**라 두 필드가 같은 호출 안에서 동시에 채워진다:
+
+| 순서 | 코드 | 결과 |
+|---|---|---|
+| 1 | `HandleCrouchInput` — 오너 자격 낙관 반영 | `m_isCrouchRequested = true` |
+| 2 | 바로 다음 줄 `RequestCrouchServerRpc` — **호스트 ServerRpc는 인라인 실행** | `m_crouchRequested = true` |
+| 3 | 다음 `Update`의 발산 검사 | 두 값이 이미 같음 → **동기화 변수 미기록** |
+
+클라가 오너일 때는 오너 인스턴스와 서버 인스턴스가 별개라 서버 쪽 `m_isCrouchRequested`가 `false`로 시작한다 — 그래서 발산이 생기고 정상 전파됐다. 기존에 쓰던 `IsCrouching`(`m_isCrouchingSynced`)은 오너십과 무관하게 서버가 항상 기록해서 호스트도 잘 보였던 것.
+
+**해결:** 전파를 `Update`의 조건부에서 떼어내, RPC가 받는 즉시 무조건 쓰게 했다. `PlayerJump.ReportAirborneServerRpc`가 이미 쓰던 형태 — 그래서 점프 애니메이션은 같은 함정을 피해 갔다.
+
+```csharp
+[ServerRpc]
+private void RequestCrouchServerRpc(bool pressed)
+{
+    m_crouchRequested = pressed;
+    m_isCrouchRequested = pressed;              // 서버 인스턴스의 자세 값
+    m_isCrouchRequestedSynced.Value = pressed;  // 오너가 곧 서버(호스트)여도 반드시 전파
+}
+```
+
+**교훈:** 호스트에서는 "오너 로컬 낙관 반영"과 "서버 권위 값"이 **같은 필드를 공유한다**. 그 필드의 변화를 전파 트리거로 삼으면 호스트에서만 새어 나간다. 낙관 반영 필드와 전파 트리거를 섞지 말고, 전파는 서버 진입점(RPC)에서 무조건 할 것.
+
+### 5-7. 공중에서 웅크린 채 움직이면 몸이 굳어 보임 (2026-07-27)
+
+**증상:** 앉아서 점프한 뒤 이동하면 자세가 앉은 Idle로 굳어 있다. 발은 안 움직이는데 몸만 옆으로 미끄러진다.
+
+**원인:** `Jump_Air_Crouch`가 `Crouch01_Idle` **단일 클립**이었다. 지상 앉기(`Crouch`)는 8방향 CrouchWalk 블렌드 트리인데 공중 웅크림만 정적 클립이라, 이동 파라미터가 아무리 들어와도 반응할 모션이 없었다.
+
+**해결:** 지상 앉기와 같은 구성의 블렌드 트리를 물렸다. `MoveX`/`MoveZ`는 `PlayerAnimationDriver`가 **위치 변화량**으로 계산하므로 공중에서도 그대로 도는 값이라, 드라이버는 손댈 게 없었다.
+
+구현에서 걸린 건 빌더의 "지웠다 다시 만들기" 패턴과의 충돌이었다:
+
+| 문제 | 처리 |
+|---|---|
+| `RemoveJumpStates`가 매 실행 상태를 삭제 → 블렌드 트리 서브에셋이 컨트롤러에 **고아로 남음** | `Jump_Air_Crouch`만 상태를 남기고 **전환만 비운다**. 나가는 전환(착지 → Locomotion/Crouch)은 목적지가 점프 상태가 아니라 기존 루프가 못 지우므로 명시적으로 비움 |
+| 지상 앉기 트리를 그대로 공유하면? | **공유하지 않고 따로 하나 더** 둔다 — 한쪽 상태를 지울 때 다른 쪽 모션까지 날아갈 위험. 대신 `FillCrouchBlendTree()`로 구성을 한곳에서 맞춘다 |
+
+검증: 갱신된 `Player.controller`에 블렌드 트리가 정확히 3개(`Locomotion` / `Crouch` / `Jump_Air_Crouch`), 공중 웅크림 트리에 모션 9개, `MoveX`/`MoveZ` · `FreeformDirectional2D`. 고아 서브에셋 없음.
+
+**남긴 어색함:** 공중 이동 속도는 앉기 속도가 아니라 걷기/달리기 속도라(9장 마지막 항목), 앉은 걷기 클립이 실제 이동보다 느린 발놀림으로 재생된다. 발이 땅에 닿아 있지 않아 발 미끄러짐으로는 안 보인다 — 신경 쓰이면 공중 웅크림일 때만 앉기 속도로 정규화하도록 드라이버를 손보면 된다.
+
 ---
 
 ## 6. 공중 앉기 동작 명세
@@ -191,7 +252,7 @@ if ((m_controller.collisionFlags & CollisionFlags.Above) != 0 && m_verticalVeloc
 | **콜라이더 · 카메라** | `IsCrouchRequested` | 즉시 반영 |
 | **애니메이션 자세** | `IsCrouchRequested` | 즉시 반영 |
 
-지상에서는 두 값이 같아 기존 동작은 그대로다. `IsCrouchRequested`도 오너는 왕복을 기다리지 않는다(체공이 0.7초라 기다리면 자세가 거의 안 보인다).
+지상에서는 두 값이 같아 기존 동작은 그대로다. `IsCrouchRequested`도 오너는 왕복을 기다리지 않는다(체공이 0.7초라 기다리면 자세가 거의 안 보인다) — 남의 화면용으로는 별도 `NetworkVariable`로 전파한다. **이 전파 경로에서 호스트 전용 버그가 났다 (5-6).**
 
 계측 확인:
 
@@ -235,7 +296,7 @@ Move가 두 번 불리면 2.0, 중력이 두 번 적분되면 y만 어긋나는�
 ### 검증 못 한 것
 
 - **실제 Space 키 입력** — 배선(`m_jumpAction = Player/Jump`)과 구독 코드는 확인했지만, 계측은 전부 리플렉션으로 입력 경로를 우회했다. 게임 뷰 포커스가 필요해 MCP로는 누를 수 없었다. **수동 확인 필요.**
-- **원격 피어 시야** — Multiplayer Play Mode로 가상 플레이어 2명을 띄워, 남의 점프·공중 앉기가 제대로 보이는지 확인 필요.
+- **원격 피어 시야** — Multiplayer Play Mode로 가상 플레이어 2명을 띄워, 남의 점프·공중 앉기가 제대로 보이는지 확인 필요. 5-6의 호스트 버그가 여기서 나왔으니 다음 4가지를 나눠 볼 것: ① 클라 화면에서 **호스트**의 앉기·공중 웅크림, ② 호스트 화면에서 **클라**의 같은 동작(기존 경로 회귀 확인), ③ 앉은 채 접속해 있는 플레이어를 **늦게 들어온 클라**가 볼 때 콜라이더·자세 일치, ④ 공중에서 이동 중인 웅크림이 남의 화면에서도 걷기 모션으로 보이는지.
 
 ### 설계상 남긴 것
 
@@ -244,7 +305,7 @@ Move가 두 번 불리면 2.0, 중력이 두 번 적분되면 y만 어긋나는�
   2. `Begin → Air` exitTime 0.8 → 0.35 — 이륙이 잘리는 느낌 가능
   3. `m_jumpHeight` 0.8 → 1.3m — 모션은 가장 자연스럽지만 맵 올라타기 위험 증가
 - **크라우치 점프 가능.** 앉으면 콜라이더가 1.2m라 천장을 안 박아 0.742m → 0.83m까지 뜬다. 서서 뛸 땐 못 올라가는 곳에 올라간다. 자세와 콜라이더 일치를 우선해 의도적으로 열어둔 것.
-- **공중 이동 속도가 앉기 속도가 아니다.** `IsCrouching`이 공중에서 false라, 앉아 기다가 점프하면 체공 중엔 5~8 m/s로 움직인다. 연속으로 앉은 점프를 하면 콜라이더는 작은데 빠르게 이동하는 토끼뜀이 된다. 막으려면 `PlayerMovement`의 속도 선택도 `IsCrouchRequested`로 바꾸면 되지만(한 줄), 그러면 "앞으로 뛰다가 공중에서 앉기"에서 체공 이동이 뚝 느려진다.
+- **공중 이동 속도가 앉기 속도가 아니다.** `IsCrouching`이 공중에서 false라, 앉아 기다가 점프하면 체공 중엔 5~8 m/s로 움직인다. 연속으로 앉은 점프를 하면 콜라이더는 작은데 빠르게 이동하는 토끼뜀이 된다. 막으려면 `PlayerMovement`의 속도 선택도 `IsCrouchRequested`로 바꾸면 되지만(한 줄), 그러면 "앞으로 뛰다가 공중에서 앉기"에서 체공 이동이 뚝 느려진다. 부수적으로 5-7의 공중 웅크림 걷기 모션도 이 속도 불일치를 물려받는다(발놀림이 실제 이동보다 느림).
 - **맵 검증 미실시.** GDD에 점프가 없어 맵이 점프를 전제로 설계되지 않았다. 올라타면 안 되는 구조물이 나오면 `m_jumpHeight`부터 낮출 것.
 
 ### 무관한 사항
