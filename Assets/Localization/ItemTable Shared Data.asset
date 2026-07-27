@@ -47,6 +47,14 @@ MonoBehaviour:
     m_Key: Item.Description.Rope
     m_Metadata:
       m_Items: []
+  - m_Id: 2627560929300480
+    m_Key: Item.Name.Baton
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2627560988020736
+    m_Key: Item.Description.Baton
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

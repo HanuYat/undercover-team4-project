@@ -53,6 +53,15 @@ MonoBehaviour:
       \uB04C\uACE0 \uAC08 \uB54C \uC0AC\uC6A9\uD55C\uB2E4."
     m_Metadata:
       m_Items: []
+  - m_Id: 2627560929300480
+    m_Localized: "\uC9C4\uC555\uBD09"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2627560988020736
+    m_Localized: "\uD718\uB458\uB7EC \uADFC\uC811\uD55C \uB300\uC0C1\uC744 \uAC00\uACA9\uD55C\uB2E4.
+      \uC5EC\uB7EC \uB300 \uB9DE\uD788\uBA74 \uAE30\uC808\uC2DC\uD0AC \uC218 \uC788\uB2E4."
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

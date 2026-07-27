@@ -61,6 +61,58 @@ public static class PlayerAnimatorControllerBuilder
     // 더 이상 만들지 않는 구 착지 상태 — 이전 빌드가 남긴 것을 재실행 시 지우기 위해서만 쓴다.
     private const string k_legacyJumpLandState = "Jump_Land";
 
+    // 타격(진압봉) 상체 레이어 — 이동·점프·앉기를 유지한 채 상체만 스윙으로 덮는다. (#217)
+    // Base Layer에 상태로 넣지 않는 이유: 그러면 공격 중 하체가 멈춰 점프·앉은 채 공격이 불가능해진다.
+    // 구조는 NPC.controller의 UpperBodyCuffed 레이어와 동일하다 — 마스크 + Override + weight 1 고정에,
+    // 평소엔 모션 없는 빈 상태(None)에 머물러 Base Layer가 그대로 보이고, 트리거로만 스윙에 들어갔다 나온다.
+    // (레이어 weight를 코드로 0↔1 흔드는 방식은 블렌딩을 직접 관리해야 해서 쓰지 않는다)
+    private const string k_attackParam = "Attack";
+    private const string k_attackLayer = "UpperBodyAttack";
+    private const string k_attackEmptyState = "None";
+    private const string k_attackState = "Attack_Baton";
+    private const string k_attackMaskPath = "Assets/Animation/UpperBodyAttack.mask";
+
+    // 반드시 _R(오른손) 클립일 것 — 아이템은 오른손 본(Hand_R/HeldItemAnchor)에 붙으므로
+    // _L을 쓰면 왼손으로 휘두르는데 진압봉은 오른손에 붙어 따로 논다.
+    // 에셋에 좌우 클립이 모두 있어 미러링은 필요 없다. 나머지 클립과 같은 남성(HumanM) 세트를 쓴다.
+    //
+    // 같은 _R 중에서도 01을 쓰는 이유가 두 가지 있다 (02·03은 왼쪽에서 오른쪽으로 긋는 백핸드):
+    //  1. 1인칭 팔 스윙(PlayerHandView)이 오른쪽→왼쪽 정타라, 백핸드를 쓰면 내가 보는 팔과
+    //     남이 보는 내 몸이 서로 반대로 휘두른다.
+    //  2. 임팩트 시점(t≈0.30)에 봉 끝이 화면 정면 한가운데(좌우 +0.24m, 앞 1.90m)를 지난다 —
+    //     타격 판정이 카메라 정면 스피어캐스트(m_range 2m)라 보이는 궤적과 맞는다.
+    //     02는 같은 순간 봉이 오른쪽으로 1.07m 치우쳐 판정선과 어긋났다.
+    private const string k_attackClip =
+        "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Combat/1H/HumanM@Attack1H01_R.fbx";
+
+    // 스윙 진입/복귀 블렌딩(초). 짧게 — 길면 타격 입력에 손이 늦게 반응하는 느낌이 난다.
+    private const float k_attackBlend = 0.08f;
+
+    // 스윙 클립의 몇 %가 지났을 때 빈 상태로 돌아가기 시작할지. 끝(1.0)까지 두면 마무리 잔동작이
+    // 그대로 다 나와 다음 입력이 굼떠 보인다 — 임팩트 이후 회수 동작을 블렌딩으로 잘라낸다.
+    //
+    // 클립 안에서 임팩트(봉이 정면 최대 도달)가 일어나는 정규화 시점. 계측값이다 —
+    // k_attackClip을 바꾸면 반드시 다시 재서 갱신할 것. 이 값이 틀리면 1인칭과 3인칭이 어긋난다.
+    private const float k_attackClipImpactNormalized = 0.3f;
+
+    // 스윙 재생 길이(exitTime)와 배속은 상수로 박지 않고 PlayerAnimationDriver의 공용 목표에서
+    // 계산한다 — SetupAttackLayer 참고. 클립을 갈아끼워도 싱크가 저절로 맞는다.
+
+    // 상체 레이어가 관할할 휴머노이드 부위. Body(척추)를 켜는 게 핵심이다 — 스윙은 척추 회전이
+    // 동작의 대부분이라 팔만 켜면 팔을 휘적거리는 그림이 된다.
+    // Root는 반드시 끈다 — 켜면 공중에서 자세가 튄다. 다리·IK도 하체 로코모션에 맡긴다.
+    // (NPC의 UpperBodyCuffed와 Body 하나만 다르다. 그쪽은 '포즈'라 척추를 로코모션에 맡기는 게 맞고,
+    //  같은 에셋을 공유하면 수갑 찬 NPC의 상체가 함께 굳으므로 마스크를 따로 둔다)
+    private static readonly AvatarMaskBodyPart[] s_attackMaskParts =
+    {
+        AvatarMaskBodyPart.Body,
+        AvatarMaskBodyPart.Head,
+        AvatarMaskBodyPart.LeftArm,
+        AvatarMaskBodyPart.RightArm,
+        AvatarMaskBodyPart.LeftFingers,
+        AvatarMaskBodyPart.RightFingers,
+    };
+
     // 8방향 (클립 이름 접미사, 로컬 방향 벡터) — x = 좌우, z = 전후
     private static readonly (string suffix, Vector2 dir)[] s_directions =
     {
@@ -112,6 +164,7 @@ public static class PlayerAnimatorControllerBuilder
         BlendTree crouchTree = SetupCrouchState(controller); // 앉기 상태 추가/갱신 (#236) — 다운 전환보다 먼저
         BlendTree airCrouchTree = SetupJumpStates(controller); // 점프 상태 머신 추가/갱신 (#189) — 다운 전환보다 먼저
         SetupDownStates(controller); // 다운(무력화) 상태 머신 추가/갱신 (#105)
+        SetupAttackLayer(controller); // 타격 상체 레이어 추가/갱신 (#217) — Base Layer가 아닌 레이어 1
 
         EditorUtility.SetDirty(blendTree);
         if (crouchTree != null)
@@ -129,7 +182,7 @@ public static class PlayerAnimatorControllerBuilder
             $"[PlayerAnimatorControllerBuilder] {(isNew ? "생성" : "갱신")} 완료: {k_outputPath} "
                 + $"(Idle 중앙 / Walk 반경 {PlayerAnimationDriver.k_walkParam} 8방향 / "
                 + $"Run 반경 {PlayerAnimationDriver.k_runParam} 8방향, 총 17모션 + 다운 3상태 "
-                + $"+ 앉기 9모션 + 점프 3상태(공중 웅크림 9모션))"
+                + $"+ 앉기 9모션 + 점프 3상태(공중 웅크림 9모션) + 타격 상체 레이어 1)"
         );
 
         Selection.activeObject = controller;
@@ -155,6 +208,164 @@ public static class PlayerAnimatorControllerBuilder
         }
 
         controller.AddParameter(name, AnimatorControllerParameterType.Bool);
+    }
+
+    private static void EnsureTriggerParameter(AnimatorController controller, string name)
+    {
+        foreach (AnimatorControllerParameter parameter in controller.parameters)
+        {
+            if (parameter.name == name)
+                return;
+        }
+
+        controller.AddParameter(name, AnimatorControllerParameterType.Trigger);
+    }
+
+    /// <summary>
+    /// 타격 상체 레이어(레이어 1)를 추가/갱신한다. (#217)
+    /// 마스크로 상체만 관할하므로 하체는 Base Layer의 이동·점프·앉기가 그대로 재생된다 —
+    /// 점프하면서 공격, 앉아서 공격이 별도 상태 없이 성립한다.
+    ///
+    /// 다른 Setup 메서드들과 달리 Base Layer(layers[0])를 건드리지 않는다. 덕분에 다운·점프 상태
+    /// 머신과 전환 조합이 늘어나지 않는다 — 타격을 Base Layer 상태로 넣었다면 (지상/공중/앉기) ×
+    /// (타격중/아님) 조합마다 전환을 깔아야 했다.
+    /// </summary>
+    private static void SetupAttackLayer(AnimatorController controller)
+    {
+        AnimationClip swing = LoadClip(k_attackClip);
+        if (swing == null)
+            return;
+
+        EnsureTriggerParameter(controller, k_attackParam);
+
+        AvatarMask mask = CreateOrUpdateAttackMask();
+        AnimatorStateMachine stateMachine = FindOrCreateAttackLayer(controller, mask);
+
+        // 재실행 시 중복 방지 — 이 레이어는 통째로 다시 만든다(Base Layer와 달리 수동 편집분이 없다).
+        foreach (ChildAnimatorState child in stateMachine.states)
+        {
+            stateMachine.RemoveState(child.state);
+        }
+
+        // 모션 없는 빈 상태가 기본 — 이 상태에 있는 동안은 레이어가 아무 것도 쓰지 않아
+        // 마스크 부위까지 Base Layer가 그대로 보인다. (NPC.controller의 UpperBodyCuffed와 같은 구성)
+        AnimatorState empty = stateMachine.AddState(k_attackEmptyState);
+        empty.motion = null;
+        stateMachine.defaultState = empty;
+
+        AnimatorState attack = stateMachine.AddState(k_attackState);
+        attack.motion = swing;
+
+        // ---- 1인칭과의 타이밍 정렬 (#217) ----
+        // 클립을 그대로 틀면 임팩트가 자연 시점(여기선 0.42초)에 오는데, 1인칭 절차적 스윙은
+        // PlayerAnimationDriver.k_swingImpactSeconds에 맞춰 때린다. 클립을 잘라서는 앞부분을
+        // 당길 수 없으므로(임팩트는 중간에 있다) 재생 속도로 끌어온다.
+        float naturalImpact = k_attackClipImpactNormalized * swing.length;
+        attack.speed = naturalImpact / PlayerAnimationDriver.k_swingImpactSeconds;
+
+        // 배속이 걸렸으니 종료 시점도 그만큼 뒤로 밀 수 있다 — 실시간 k_swingSeconds가 되는 지점.
+        // (exitTime은 클립 기준 정규화값이라 speed를 곱해야 실시간으로 환산된다)
+        float exitTime = PlayerAnimationDriver.k_swingSeconds * attack.speed / swing.length;
+        if (exitTime > 1f)
+        {
+            // 클립이 목표 길이보다 짧다 — 끝까지 재생하고 남는 시간은 기본 자세로 서 있는다.
+            Debug.LogWarning(
+                $"[PlayerAnimatorControllerBuilder] 스윙 클립이 목표 길이보다 짧다 "
+                    + $"(필요 exitTime={exitTime:F2}). 1.0으로 자른다 — 1인칭 스윙이 3인칭보다 늦게 끝난다."
+            );
+            exitTime = 1f;
+        }
+
+        AnimatorStateTransition toAttack = empty.AddTransition(attack);
+        toAttack.hasExitTime = false; // 트리거 즉시 진입 — 대기 시간이 있으면 타격 판정과 어긋난다
+        toAttack.hasFixedDuration = true;
+        toAttack.duration = k_attackBlend;
+        toAttack.AddCondition(AnimatorConditionMode.If, 0f, k_attackParam);
+
+        AnimatorStateTransition toEmpty = attack.AddTransition(empty);
+        toEmpty.hasExitTime = true; // 조건 없이 클립이 끝나가면 자동 복귀
+        toEmpty.exitTime = exitTime;
+        toEmpty.hasFixedDuration = true;
+        toEmpty.duration = k_attackBlend;
+
+        EditorUtility.SetDirty(stateMachine);
+    }
+
+    /// <summary>
+    /// 타격 레이어용 아바타 마스크를 만들거나(없으면) 부위 구성을 다시 맞춘다.
+    /// 휴머노이드 부위 단위로만 지정하고 transform 목록은 비워 둔다 — 리그가 바뀌어도 그대로 쓰인다.
+    /// </summary>
+    private static AvatarMask CreateOrUpdateAttackMask()
+    {
+        AvatarMask mask = AssetDatabase.LoadAssetAtPath<AvatarMask>(k_attackMaskPath);
+        bool isNew = mask == null;
+        if (isNew)
+        {
+            mask = new AvatarMask();
+        }
+
+        foreach (AvatarMaskBodyPart part in System.Enum.GetValues(typeof(AvatarMaskBodyPart)))
+        {
+            if (part == AvatarMaskBodyPart.LastBodyPart)
+                continue;
+
+            mask.SetHumanoidBodyPartActive(
+                part,
+                System.Array.IndexOf(s_attackMaskParts, part) >= 0
+            );
+        }
+
+        if (isNew)
+        {
+            AssetDatabase.CreateAsset(mask, k_attackMaskPath);
+        }
+        else
+        {
+            EditorUtility.SetDirty(mask);
+        }
+
+        return mask;
+    }
+
+    /// <summary>
+    /// 타격 레이어를 찾고 없으면 만든 뒤, 마스크·블렌딩·weight를 매번 다시 맞춰 반환한다.
+    /// controller.layers는 복사본을 돌려주므로 배열을 통째로 다시 대입해야 변경이 반영된다.
+    /// </summary>
+    private static AnimatorStateMachine FindOrCreateAttackLayer(
+        AnimatorController controller,
+        AvatarMask mask
+    )
+    {
+        bool exists = false;
+        foreach (AnimatorControllerLayer existing in controller.layers)
+        {
+            if (existing.name == k_attackLayer)
+            {
+                exists = true;
+                break;
+            }
+        }
+
+        if (!exists)
+        {
+            controller.AddLayer(k_attackLayer); // 상태 머신도 함께 서브에셋으로 생성된다
+        }
+
+        AnimatorControllerLayer[] layers = controller.layers;
+        AnimatorStateMachine stateMachine = null;
+        foreach (AnimatorControllerLayer layer in layers)
+        {
+            if (layer.name != k_attackLayer)
+                continue;
+
+            layer.avatarMask = mask;
+            layer.blendingMode = AnimatorLayerBlendingMode.Override;
+            layer.defaultWeight = 1f; // 켜고 끄는 건 weight가 아니라 빈 상태↔스윙 상태 전환이다
+            stateMachine = layer.stateMachine;
+        }
+
+        controller.layers = layers;
+        return stateMachine;
     }
 
     /// <summary>
