@@ -14,8 +14,8 @@ public class NpcResistConfig : ScriptableObject
     [SerializeField] private float m_attackRange = 2f;
     [Tooltip("범위 타격 1회당 플레이어 HP 감소량")]
     [SerializeField] private int m_attackDamage = 10;
-    [Tooltip("저항 시작 후 이 시간(초) 안에 제압당하지 않으면 플레이어 패배 — 도주형으로 전환된다 (GDD 7-4)")]
-    [SerializeField] private float m_defeatSeconds = 15f;
+    [Tooltip("표적이 사라진 채 이 시간(초)이 지나면 배회로 복귀한다 — 제한시간 도주를 없애면서 생긴 Attack 상태의 유일한 시간 기반 출구 (#366)")]
+    [SerializeField] private float m_noTargetIdleSeconds = 5f;
     [Tooltip("스윙 시작→타격 프레임까지의 시간(초) — 클립별 오프셋이 비었거나 범위 밖일 때만 쓰는 폴백값 (#220)")]
     [SerializeField] private float m_strikeOffsetSeconds = 0.45f;
     [Tooltip("스윙 변형별 타격 오프셋(초). 인덱스 = 클립 순서(attack02·03·04·05). 배열 길이가 곧 변형 개수 — 블렌드 트리 자식 수와 같아야 한다 (#220)")]
@@ -32,7 +32,7 @@ public class NpcResistConfig : ScriptableObject
     public float AttackInterval => m_attackInterval;
     public float AttackRange => m_attackRange;
     public int AttackDamage => m_attackDamage;
-    public float DefeatSeconds => m_defeatSeconds;
+    public float NoTargetIdleSeconds => m_noTargetIdleSeconds;
     public float StrikeOffsetSeconds => m_strikeOffsetSeconds;
     public float AttackConeAngle => m_attackConeAngle;
     public float AttackTurnSpeed => m_attackTurnSpeed;
