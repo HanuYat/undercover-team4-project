@@ -174,7 +174,7 @@ public class ScanResultPresenter : NetworkBehaviour
         {
             CitizenProfile profile = m_currentIdentity.Profile;
             // 스캔 표시는 정본이 아닌 표시 이름(m_nameView) — 위조범은 여기서 정본과 어긋난다 (#223)
-            m_currentView.ShowReal(profile.m_nameView, profile.m_typeView, profile.m_factionView);
+            m_currentView.ShowReal(profile.m_nameView, profile.m_typeView, profile.m_factionView, profile.m_symbolView);
         }
         else
         {

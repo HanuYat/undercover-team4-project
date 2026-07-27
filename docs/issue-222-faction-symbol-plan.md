@@ -19,7 +19,7 @@
 | (a) 위조 축 결합 | **①** — 기존 위조범이 **이름·문양 중 하나를 랜덤으로** 오염. 본부가 매번 "이름이 안 맞나 / 문양이 안 맞나"를 새로 대조 |
 | (b) None 세력 | **랜덤 배정·문양 위조에서 제외** (None = 무소속·문양 없음) |
 | (c) variant 1개짜리 세력 | 가짜로 뽑을 다른 variant가 없으므로 **그 세력 위조범은 이름 위조로 폴백** (①에서 자동 처리됨) |
-| (d) 본부 대조자료 뷰 위치 | **Directory 옆** |
+| (d) 본부 대조자료 뷰 위치 | **Directory 옆 — 별도 설치물**(게시판)로. 인명부 책 옆에 놓고 E로 여는 독립 패널 (2026-07-27 확정: 인명부 패널 안에 끼워넣는 안은 기각) |
 | 세력 수 | 현재 2개(A/B)지만 **데이터/동기화는 세력 수에 무관하게 설계** — 나중에 enum·에셋만 추가하면 늘어남. 실제 개수는 밸런싱하며 결정 |
 | 진짜 index 동기화 방식 | **명시적 `NetworkList<byte>`** (호스트 시드 파생 방식보다 눈에 보이고 틀릴 여지가 적음) |
 
@@ -31,23 +31,31 @@
   클라이언트는 NPC만 봐선 진짜/가짜를 구분할 수 없다. 그래서 **세력→진짜index 맵을 세션 1회 roll해 별도로 동기화**한다.
   서버가 위조범의 가짜 index를 "진짜 ≠ 가짜"로 뽑을 때도 이 값을 기준으로 쓴다.
 
-## 3-1. 진행 상태 (2026-07-26 기준)
+## 3-1. 진행 상태 (2026-07-27 기준)
 
 | 단계 | 상태 |
 |---|---|
 | 1) OfficialRecords variant 세트 | ✅ 완료 (실제 API명: `GetVariants` / `GetVariantsCount` / `GetFactionSymbol(faction, index)`) |
-| 2) FactionSymbolManager + App 등록 + 프리팹 | ✅ 완료 (프리팹 생성까지) |
+| 2) FactionSymbolManager + App 등록 + 프리팹 | ✅ 완료 (스폰 배선까지) |
 | 3) per-NPC 문양 배정·동기화 | ✅ 완료 (컴파일 통과 확인) |
-| 4) 스캔 UI 문양 표시 | ☐ **여기서 이어서 시작** |
-| 5) 본부 대조자료 뷰 (Directory 옆) | ☐ 미착수 |
+| 4) 스캔 UI 문양 표시 | ✅ 완료 (Play 확인) |
+| 5) 본부 대조자료 뷰 (Directory 옆) | ☐ **여기서 이어서 시작** |
 
-**다음 세션 재개 지점 — 4단계.** 산출물: 스캐너로 NPC를 조준하면 카드에 세력 이름 + 문양 이미지가
-같이 뜨고, 미스캔이면 문양도 가려진다. 손댈 곳: `ScanInfoView`(Image 슬롯 + `ShowReal`/`ShowMasked` 확장),
-`ScanResultPresenter`(`profile.m_symbolView` 전달), `ScanInfoCard.prefab`(Image 배선 — 에디터 작업).
+**에디터 배선 완료**
+- `FactionSymbolManager` 프리팹: `DefaultNetworkPrefabs.asset` 등록 + Main/Title 두 씬의 `SessionObjectSpawner.m_persistentPrefabs`에 추가 완료.
+  - 참고: `Spawn(destroyWithScene:false)`는 스폰 시점에 DontDestroyOnLoad로 옮기지 않는다. 씬 전환 때 `NetworkSceneManager`가 DDOL로 대피시켰다가 새 활성 씬으로 되돌리므로, 평상시 Hierarchy에서는 현재 씬 밑에 보이는 게 정상.
+- `OfficialRecord.asset`의 `m_factionSymbolSets`: FactionA/FactionB × variant 2개씩 (`Assets/Sprites/Faction{A,B}-{1,2}.png`). None은 항목 자체를 넣지 않는다 — `GetVariantsCount`가 0이 되어 배정·표시에서 자동으로 빠진다.
 
-**남은 에디터 배선 확인 사항**
-- `FactionSymbolManager` 프리팹: `DefaultNetworkPrefabs.asset` 등록 + `SessionObjectSpawner.m_persistentPrefabs`에 추가 (TeamFund 프리팹이 들어있는 그 배열) — 이게 빠지면 세션에 스폰되지 않아 오프라인 폴백 경로로만 동작한다.
-- `OfficialRecord.asset`의 `m_factionSymbolSets`에 세력별 variant 이미지 채우기 (아직 비어 있으면 전부 index 0 + 위조는 이름으로만 폴백 — 정상 동작).
+**다음 세션 재개 지점 — 5단계.** 산출물: 인명부 책 **옆에 놓인 별도 게시판**을 E로 열면
+이번 세션의 세력별 진짜 문양 목록이 뜬다. 구성:
+- `HqPanelView`(신규 베이스) — "E로 열고 Esc로 닫는 본부 패널"의 공통 뼈대(입력 정지·커서 복구·EscMenuGuard).
+  같은 뭉치가 이미 `BombManualHud`·`CitizenDirectoryView` 두 곳에 복제돼 있어 세 번째를 만들기 전에 추출한다.
+  `CitizenDirectoryView`를 여기로 이관(`Open`/`Close`/`Update`/`m_root` 제거 → `OnOpened`/`OnClosed` 오버라이드).
+- `FactionSymbolBoard`(상호작용 진입점, `CitizenDirectory` 패턴) / `FactionSymbolBoardView : HqPanelView` / `FactionSymbolRowView`(세력명+문양 한 줄).
+- 에디터: `FactionSymbolRow.prefab`(Image는 **Preserve Aspect** 켤 것) · Main Scene에 패널 · `FactionSymbolBoard.prefab`을 인명부 옆에 배치.
+
+⚠️ 테스트 시: `FactionSymbolManager`가 안 뜨면 뷰는 index 0을 보여주는데 서버 `CriminalAssigner`는
+로컬 난수로 진짜를 정한다 → 정직한 시민이 전부 위조범으로 보인다. 그 증상이 나오면 매니저 스폰부터 의심할 것.
 
 ## 4. 작업 순서
 

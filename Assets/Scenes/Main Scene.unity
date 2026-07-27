@@ -87920,6 +87920,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SessionObjectSpawner
   m_persistentPrefabs:
   - {fileID: 3455862892653891524, guid: ee55831d23071d047a46eef925780d91, type: 3}
+  - {fileID: 3852833443600366810, guid: 672472e5aa1d059459b477699c36b0f3, type: 3}
 --- !u!1001 &2748020430515835494
 PrefabInstance:
   m_ObjectHideFlags: 0
