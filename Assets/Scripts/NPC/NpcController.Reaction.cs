@@ -53,7 +53,9 @@ public partial class NpcController
     }
 
     // 가해자를 넘기지 않는 이유: RPC가 요청자를 싣지 않기 때문이다(기존 경로와 동일).
-    // 기절에서 깨어나면 도주가 아니라 배회로 복귀하므로(#366 결정 5) 위협 대상이 필요 없다.
+    // 깨어나면 도주하지만(#269) 위협이 null이어도 NpcFleeState가 EscapeDistance 안 추격자를
+    // 스캔해 폴백하므로, 때린 플레이어가 옆에 있는 한 그쪽에서 도망친다. 정확히 '때린 사람'을
+    // 물려야 할 이유가 생기면 그때 RPC에 요청자를 싣는다(#55 계열 상호작용 네트워크 전환).
     [Rpc(SendTo.Server)]
     private void SubdueHitRpc()
     {
@@ -73,13 +75,12 @@ public partial class NpcController
 
     /// <summary>
     /// 기절 진입 — 테이저(직접 호출)와 체력 0 도달(NpcController.SetHp)의 연결고리. 지속 시간이
-    /// 끝나면 스스로 일어나 <b>배회(Idle)</b>로 돌아간다 — 도주 복귀는 폐지됐다(#366 결정 5,
-    /// #269의 도주 복귀를 대체). 체력 회복은 NpcStunnedState.Exit()이 맡는다.
+    /// 끝나면 스스로 일어나 <b>도주(Run)</b>한다 (#269 확정 — #366 결정 5의 배회 복귀에서 원복).
+    /// 체력 회복은 NpcStunnedState.Exit()이 맡는다.
     /// </summary>
     /// <param name="threat">
-    /// 기절시킨 상대. 깨어날 때 도주하지 않으므로(#366) 더 이상 도망칠 대상으로 쓰이지 않지만,
-    /// 기절 중 ThreatTarget으로 남아 있다가 NpcStunnedState.Tick()의 깨어나는 분기에서
-    /// ClearThreat()로 정리된다. null 허용.
+    /// 기절시킨 상대 — 깨어날 때 이 대상에게서 도주한다. null이면 NpcFleeState가 근처 추격자로
+    /// 폴백하고, 아무도 없으면 배회로 가라앉는다. null 허용.
     /// </param>
     public void EnterStunned(Transform threat = null)
     {

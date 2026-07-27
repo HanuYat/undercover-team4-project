@@ -3,7 +3,8 @@ using UnityEngine;
 /// <summary>
 /// 기절(Stunned) 상태 — 테이저 및 체력 0 도달의 연결고리. (GDD 7-4/8-3, #76/#366)
 /// 지속 시간 동안 완전 무방비로 멈추며, 이 동안 수갑을 채우면 반응 없이 즉시 연행된다.
-/// 시간이 지나면 일어나(#269 StandUp 모션) 배회로 돌아간다 (#366 — 도주 폐지).
+/// 시간이 지나면 일어나(#269 StandUp 모션) 스스로 도주한다 — 무력화가 풀린 대상은 그대로 서 있지
+/// 않는다(#269 확정). #366 결정 5로 배회 복귀에 잠시 바뀌었다가 원복됐다.
 /// 체력 회복은 Exit()에서 처리한다 — 시간 경과뿐 아니라 수갑 채포 등 이 상태를 벗어나는
 /// 모든 경로를 덮어야 "HP 0인 채로 무적이 되는" 문제를 막을 수 있기 때문이다 (#366, Exit() 참고).
 /// 진입은 NpcController.EnterStunned() — 테이저와 체력 0 도달(NpcController.SetHp)이 호출한다.
@@ -52,13 +53,15 @@ public class NpcStunnedState : NpcStateBase
             m_owner.RaiseStandUp(); // 전 피어에 일어나는 모션 재생을 알린다
         }
 
-        // 깨어나면 배회로 돌아간다 — 도주하지 않는다 (#366 결정 5, #269의 도주 복귀를 대체).
+        // 깨어나면 배회가 아니라 도주다 (#269 확정 — #366 결정 5의 배회 복귀에서 원복).
+        // 위협은 기절시킨 상대(테이저 사수)이거나 밧줄로 끌고 다닌 플레이어다. 타격으로 기절한
+        // 경우엔 null인데(SubdueHitRpc가 요청자를 싣지 않는다) NpcFleeState가 EscapeDistance 안
+        // 추격자를 스캔해 폴백하므로, 때린 플레이어가 옆에 있으면 그쪽에서 도망친다.
+        // 주변에 아무도 없으면 도주 상태가 스스로 배회로 돌려보낸다 — 아무도 없는 곳에 두고 온
+        // NPC가 혼자 전력 질주하지 않는다.
         // 체력 회복은 여기서 하지 않는다 — Exit()으로 옮겼다. 이유는 Exit() 주석 참고 (#366).
         if (m_timer >= m_config.StunSeconds)
-        {
-            m_owner.ClearThreat(); // 도주하지 않으므로 위협 참조를 남길 이유가 없다
-            m_owner.StateMachine.ChangeState(NpcState.Idle);
-        }
+            m_owner.StartFlee(m_owner.ThreatTarget);
     }
 
     public override void Exit()

@@ -38,7 +38,7 @@ NPC에 체력을 도입하고, 기존 **저항 제압 게이지(`SubdueGauge`)�
 2. **HP 0 → 무조건 `Stunned`** — 상황별 분기 없음. `NpcResistState`의 `게이지 0 → Captured` 전이는 제거한다.
 3. **HP는 지속형, 어디서든 피해** — `IDamageable`을 일반 구현하고, 배회 중인 NPC도 피격 대상이 된다. 피해는 교전 사이에 누적된다.
 4. **기절에서 깨어날 때 풀피 회복** — 기절이 개념적으로 "한 번의 다운"이 된다.
-5. **기절 종료 시 도주하지 않고 `Idle`(배회) 복귀** — 일어나는 모션(#269)은 유지한다.
+5. ~~**기절 종료 시 도주하지 않고 `Idle`(배회) 복귀**~~ → **철회, `Run`(도주) 복귀로 원복** (2026-07-27 재확정). #269의 "무력화가 풀린 대상은 그대로 서 있지 않는다"를 되살린다. 일어나는 모션(#269)은 그대로 유지한다.
 6. **저항 제한시간 도주 제거** — `DefeatSeconds` 초과로 뿌리치고 도주하던 경로를 없앤다. "교전 플레이어 전원 무력화 → 도주"는 유지한다.
 7. **표적을 잃은 저항 NPC는 5초 후 `Idle` 복귀** — 결정 6으로 사라진 `Attack` 상태의 출구를 대신한다(도주 아님).
 
@@ -92,10 +92,11 @@ public partial class NpcController : IDamageable
 
 ```
 NpcStunnedState.Tick — m_timer >= StunSeconds
-  → ClearThreat()
-  → ChangeState(Idle)
+  → StartFlee(ThreatTarget)   // 위협이 null이면 NpcFleeState가 근처 추격자로 폴백,
+                              // 아무도 없으면 스스로 Idle로 가라앉는다
+  → ChangeState(Run)
 
-NpcStunnedState.Exit — Stunned를 벗어나는 모든 경로(위의 Idle 복귀 + 수갑 채포로 인한
+NpcStunnedState.Exit — Stunned를 벗어나는 모든 경로(위의 Run 복귀 + 수갑 채포로 인한
                         Stunned → Captured 전이)에서 호출된다
   → ServerRestoreHp()  (HP = MaxHp)
 ```
@@ -123,7 +124,7 @@ NpcStunnedState.Exit — Stunned를 벗어나는 모든 경로(위의 Idle 복�
 
 제한시간을 없애면 **저항(`Attack`) 상태를 빠져나갈 시간 기반 출구가 사라진다.** 표적이 사라진 경우(플레이어가 멀리 도망 / 접속 종료) `ResolveTarget()`이 null을 반환하고, `ChaseTarget(null)`이 에이전트를 세운 뒤 사거리 밖이라 스윙도 하지 않는다 — NPC가 `Attack` 상태로 **영구히 굳는다.** 기존에는 `DefeatSeconds`가 이 상황의 유일한 탈출구였다.
 
-**확정(결정 7):** `ResolveTarget()`이 null인 상태가 **5초** 이어지면 `Idle`로 복귀시킨다. 도주가 아니라 배회다 — 결정 5와 같은 방향이고, 때릴 상대가 사라진 NPC가 혼자 전력 질주하지 않는다.
+**확정(결정 7):** `ResolveTarget()`이 null인 상태가 **5초** 이어지면 `Idle`로 복귀시킨다. 도주가 아니라 배회다 — 때릴 상대가 사라진 NPC가 혼자 전력 질주하지 않는다. (결정 5가 도주 복귀로 원복된 뒤에도 이 항목은 배회 그대로다. 기절 해제는 방금 얻어맞은 직후라 상황이 다르다.)
 
 - 타이머는 `NpcResistState`의 인스턴스 필드로 두고, 표적이 다시 잡히는 틱마다 0으로 리셋한다(연속 null일 때만 누적).
 - 값은 `NpcResistConfig.NoTargetIdleSeconds`(신설, 기본 5f)로 뺀다 — 삭제되는 `DefeatSeconds`의 자리를 대신한다.
@@ -193,7 +194,7 @@ Unity Play 모드 단독 + **Multiplayer Play Mode 2인**(호스트 + 클라이�
 
 1. 저항 NPC를 E 홀드로 3회 타격 → HP 0 → **기절**(체포 아님) 확인.
 2. 기절 상태에서 밧줄로 묶어 끌기가 되는지 확인(`IsRopeable`은 `Stunned`만).
-3. 기절 방치 → `StunSeconds` 후 일어나서 **도주하지 않고 배회**, HP가 **풀피**로 돌아왔는지 확인.
+3. 기절 방치 → `StunSeconds` 후 일어나서 **도주**, HP가 **풀피**로 돌아왔는지 확인. 옆에 플레이어가 있으면 그 반대로 달아나고, 아무도 없으면 잠깐 뛰다 배회로 가라앉는지도 함께 본다.
 4. 깨어난 NPC를 다시 3회 타격 → 또 기절하는지 확인(무적 구멍 회귀 테스트).
 5. **배회 중인** 시민을 E로 타격 → HP가 깎이는지 확인(결정 3).
 6. 연행(`Escorted`) 중인 NPC를 타격 → **아무 일도 일어나지 않는지** 확인(신병 우회 차단).

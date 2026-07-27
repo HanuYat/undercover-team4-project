@@ -81,7 +81,8 @@ public class NpcResistState : NpcStateBase
         // 제한시간 도주를 없애면서 Attack 상태의 시간 기반 출구가 사라졌는데,
         // 표적이 없으면 ChaseTarget이 에이전트를 세우고 사거리 밖이라 스윙도 하지 않아
         // 그대로 두면 NPC가 이 상태로 영구히 굳는다. 도주가 아니라 배회다 —
-        // 때릴 상대가 사라진 NPC가 혼자 전력 질주할 이유가 없다(결정 5와 같은 방향).
+        // 때릴 상대가 사라진 NPC가 혼자 전력 질주할 이유가 없다. (기절 해제는 도주로
+        // 복귀하지만 그쪽은 방금 맞은 직후라 상황이 다르다.)
         if (target == null)
         {
             m_noTargetSeconds += Time.deltaTime;
