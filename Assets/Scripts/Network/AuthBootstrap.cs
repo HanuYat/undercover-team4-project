@@ -32,7 +32,38 @@ public class AuthBootstrap : CommonManagerBase
         && AuthenticationService.Instance.IsSignedIn;
 
     public string PlayerId => IsSignedIn ? AuthenticationService.Instance.PlayerId : string.Empty;
-    public string PlayerName => IsSignedIn ? AuthenticationService.Instance.PlayerName : string.Empty;
+    public string PlayerName =>
+        IsSignedIn ? AuthenticationService.Instance.PlayerName : string.Empty;
+
+    private const string k_nicknamePrefKeyPrefix = "player.nickname.";
+
+    /// <summary>
+    /// 닉네임 최대 글자 수 — UGS는 길이를 제한하지 않으므로 우리가 정한다. (#249)
+    /// 이름표가 FixedString64Bytes(실사용 61바이트)로 동기화되는데 한글은 UTF-8 3바이트라
+    /// 20자를 넘으면 CopyFromTruncated가 조용히 잘라낸다. 머리 위 가독성까지 고려해 여유를 뒀다.
+    /// </summary>
+    private const int k_maxNicknameLength = 12;
+
+    public static int MaxNicknameLength => k_maxNicknameLength;
+
+    public event Action OnNicknameChanged;
+
+    /// <summary>표시용 닉네임 — UGS가 자동으로 붙이는 #1234 판별자를 제거한 이름. (#249)</summary>
+    public string Nickname
+    {
+        get
+        {
+            string full = PlayerName;
+            if (string.IsNullOrEmpty(full))
+                return string.Empty;
+
+            int hash = full.LastIndexOf('#');
+            return hash >= 0 ? full.Substring(0, hash) : full;
+        }
+    }
+
+    private string NicknamePrefKey =>
+        k_nicknamePrefKeyPrefix + (string.IsNullOrWhiteSpace(m_profile) ? "default" : m_profile);
 
     public bool SessionTokenExists =>
         UnityServices.State == ServicesInitializationState.Initialized
@@ -141,10 +172,39 @@ public class AuthBootstrap : CommonManagerBase
         }
 
         if (!wasSignedIn && IsSignedIn)
+        {
+            await RestoreCachedNicknameAsync();
             OnSignedIn?.Invoke();
+        }
     }
 
-    public async UniTask SetPlayerNameAsync(string name) => await AuthenticationService.Instance.UpdatePlayerNameAsync(name);
+    /// <summary>닉네임 변경 — 서버 반영에 성공했을 때만 로컬 캐시를 갱신한다. (#249)</summary>
+    public async UniTask SetPlayerNameAsync(string name)
+    {
+        if (!IsSignedIn)
+            return;
+
+        string trimmed = name?.Trim() ?? string.Empty;
+        if (string.IsNullOrEmpty(trimmed) || trimmed == Nickname)
+            return;
+
+        // UGS는 길이·문자셋을 제한하지 않지만 공백은 거절한다 — 서버 메시지가 불친절해 여기서 막는다.
+        foreach (char c in trimmed)
+        {
+            if (char.IsWhiteSpace(c))
+                throw new ArgumentException("닉네임에 공백을 쓸 수 없습니다.");
+        }
+
+        if (trimmed.Length > k_maxNicknameLength)
+            throw new ArgumentException($"닉네임은 {k_maxNicknameLength}자 이하여야 합니다.");
+
+        await AuthenticationService.Instance.UpdatePlayerNameAsync(trimmed);
+
+        PlayerPrefs.SetString(NicknamePrefKey, trimmed);
+        PlayerPrefs.Save();
+
+        OnNicknameChanged?.Invoke();
+    }
 
     public void SignOut(bool clearCredentials = false)
     {
@@ -201,12 +261,49 @@ public class AuthBootstrap : CommonManagerBase
         Debug.Log($"[AuthBootstrap] ClearSessionToken 완료");
     }
 
+    /// <summary>
+    /// 로그인 직후 로컬 캐시와 서버 닉네임을 맞춘다. (#249)
+    /// 캐시가 없으면 서버 값을 씨딩하고, 다르면 캐시를 정본으로 삼아 서버에 밀어넣는다 —
+    /// 세션 토큰이 지워져 PlayerId가 새로 발급된 경우의 복원 경로.
+    /// </summary>
+    private async UniTask RestoreCachedNicknameAsync()
+    {
+        string cached = PlayerPrefs.GetString(NicknamePrefKey, string.Empty);
+
+        if (string.IsNullOrEmpty(cached))
+        {
+            if (!string.IsNullOrEmpty(Nickname))
+            {
+                PlayerPrefs.SetString(NicknamePrefKey, Nickname);
+                PlayerPrefs.Save();
+            }
+            return;
+        }
+
+        if (cached == Nickname)
+            return; // 이미 일치 — 대부분의 재접속 경로, 네트워크 호출 없음
+
+        try
+        {
+            await AuthenticationService.Instance.UpdatePlayerNameAsync(cached);
+            Debug.Log($"[AuthBootstrap] 캐시된 닉네임 복원: {cached}");
+            OnNicknameChanged?.Invoke();
+        }
+        catch (RequestFailedException ex)
+        {
+            // 복원 실패는 치명적이지 않다 — 서버 이름을 그대로 쓰고 다음 로그인에 재시도한다.
+            Debug.LogWarning($"[AuthBootstrap] 닉네임 복원 실패: {ex.Message}");
+        }
+    }
+
     [Tooltip("OnGUI 디버그 패널 표시 — 테스트 씬 수동 조작용. 정식 UI는 AuthPanel (#247)")]
     [SerializeField]
     private bool m_showDebugGui;
 
     [SerializeField]
     private float m_guiTopOffset = 10f;
+
+    private string m_nicknameInput = string.Empty;
 
     private void OnGUI()
     {
@@ -215,7 +312,7 @@ public class AuthBootstrap : CommonManagerBase
         if (IsNetworkConnected)
             return;
 
-        GUILayout.BeginArea(new Rect(700, m_guiTopOffset, 380, 280));
+        GUILayout.BeginArea(new Rect(700, m_guiTopOffset, 380, 360));
 
         GUILayout.Label("Authentication (익명) — 상태");
 
@@ -223,6 +320,17 @@ public class AuthBootstrap : CommonManagerBase
         GUILayout.Label($"초기화됨: {initialized}");
         GUILayout.Label($"IsSignedIn: {IsSignedIn}");
         GUILayout.Label($"PlayerId: {(string.IsNullOrEmpty(PlayerId) ? "(없음)" : PlayerId)}");
+        GUILayout.Label($"Nickname: {(string.IsNullOrEmpty(Nickname) ? "(없음)" : Nickname)}");
+        GUILayout.Label($"PlayerName(전체): {PlayerName}");
+
+        GUILayout.BeginHorizontal();
+        m_nicknameInput = GUILayout.TextField(m_nicknameInput, 128);
+        GUI.enabled = !m_isBusy && IsSignedIn;
+        if (GUILayout.Button("적용", GUILayout.Width(60)))
+            ApplyNicknameAsync(m_nicknameInput).Forget();
+        GUI.enabled = true;
+        GUILayout.EndHorizontal();
+
         GUILayout.Label(
             $"SessionTokenExists: {(initialized ? SessionTokenExists.ToString() : "(미초기화)")}"
         );
@@ -260,5 +368,26 @@ public class AuthBootstrap : CommonManagerBase
         GUILayout.Label(m_status);
 
         GUILayout.EndArea();
+    }
+
+    private async UniTaskVoid ApplyNicknameAsync(string name)
+    {
+        if (m_isBusy)
+            return;
+
+        m_isBusy = true;
+        try
+        {
+            await SetPlayerNameAsync(name);
+            m_status = $"닉네임 적용: {PlayerName}";
+        }
+        catch (Exception ex)
+        {
+            m_status = $"닉네임 실패 - {ex.GetType().Name}: {ex.Message}";
+        }
+        finally
+        {
+            m_isBusy = false;
+        }
     }
 }
