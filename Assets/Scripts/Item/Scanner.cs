@@ -115,18 +115,23 @@ public class Scanner : ItemBase, IChargeable
 
     // ---- 전자기기 먹통 게이트 (#372) ----
 
+    // 먹통 이벤트 참조 — 첫 조회 후 캐시한다. 씬이 바뀌어 이벤트가 파괴되면 Unity의 null 판정에
+    // 걸려 자동으로 다시 해석된다. 아이템은 씬을 넘어 살아남을 수 있으므로 이 재해석이 필수다.
+    private DeviceBlackoutEvent m_blackout;
+
     /// <summary>
     /// 전자기기 먹통(#106) 중인지 — 스캐너는 먹통 동안 사용할 수 없다. (GDD 6-4)
     /// 판정값은 <see cref="DeviceBlackoutEvent.IsCommsBlackout"/>이 피어별로 갈라준다
     /// (서버·오프라인은 실참조, 원격 클라는 동기화값) — 클라 힌트와 서버 판정이 같은 규칙을 쓴다.
-    /// Main 씬 밖이거나 먹통 이벤트를 배치하지 않은 구성(테스트 씬)에서는 null이라 항상 false다.
+    /// 먹통 이벤트가 없는 구성(테스트 씬·이벤트 항목 off)에서는 null이라 항상 false다.
     /// </summary>
-    private static bool IsBlackout
+    private bool IsBlackout
     {
         get
         {
-            DeviceBlackoutEvent blackout = App.Game.Blackout;
-            return blackout != null && blackout.IsCommsBlackout;
+            if (m_blackout == null)
+                m_blackout = App.Game.SuddenEvent?.GetEvent<DeviceBlackoutEvent>();
+            return m_blackout != null && m_blackout.IsCommsBlackout;
         }
     }
 

@@ -25,9 +25,10 @@ public class DeviceBlackoutView : MonoBehaviour
 
     private void Start()
     {
-        // 비워두면 App 파사드에서 해석한다 — 먹통 이벤트는 자기 자신을 매니저로 등록한다 (#372, R1)
+        // 비워두면 돌발 이벤트 매니저에게 물어본다 — 먹통 이벤트는 App에 따로 등록하지 않는다 (#372 리뷰, R1/R3).
+        // 이벤트 풀에서 항목을 껐거나 등록하지 않은 구성이면 null이 오고, 그 경우 먹통은 발생하지도 않는다.
         if (m_blackout == null)
-            m_blackout = App.Game.Blackout;
+            m_blackout = App.Game.SuddenEvent?.GetEvent<DeviceBlackoutEvent>();
 
         if (m_blackout == null)
         {

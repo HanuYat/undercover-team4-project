@@ -15,14 +15,14 @@ using UnityEngine;
 /// 프레임워크가 "먹통"이라는 이벤트의 존재를 몰라도 된다. NetworkVariable을 쓰려면 NetworkBehaviour여야 하는데,
 /// 매니저가 요구하는 NetworkObject가 같은 오브젝트에 이미 있으므로 여기에 얹으면 된다.
 ///
-/// <b>App에 등록되는 이유</b>(#372) — 먹통 플래그를 아이템(스캐너)·무전 왜곡이 조회해야 하는데,
-/// 아이템은 런타임 스폰 프리팹이라 인스펙터로 씬 오브젝트를 물릴 수 없다. 그렇다고
-/// <see cref="SuddenEventManager"/>에 상태를 얹으면 "매니저는 어떤 이벤트가 있는지 모른다"는
-/// 프레임워크 원칙이 깨지므로, 이벤트 자신이 매니저로 등록되어 <c>App.Game.Blackout</c> 경로를 제공한다 (R4).
+/// <b>밖에서 어떻게 찾나</b>(#372) — 먹통 플래그를 아이템(스캐너)·무전 왜곡이 조회해야 하는데,
+/// 아이템은 런타임 스폰 프리팹이라 인스펙터로 씬 오브젝트를 물릴 수 없다. 그렇다고 이벤트 하나마다
+/// App에 필드를 다는 것도, <see cref="SuddenEventManager"/>에 먹통 상태를 얹는 것도(그러면 프레임워크가
+/// 특정 이벤트를 알게 된다) 답이 아니다. 대신 <see cref="SuddenEventManager.GetEvent{T}"/>로 물어본다 —
+/// 매니저는 여전히 이 타입을 모르고, App에는 매니저 하나만 남는다 (#372 리뷰, R3).
 /// </summary>
 [RequireComponent(typeof(SuddenEventManager))]
-[DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
-public class DeviceBlackoutEvent : NetworkedManagerBase, ISuddenEvent
+public class DeviceBlackoutEvent : NetworkBehaviour, ISuddenEvent
 {
     [Header("지속 시간(초)")]
     [Tooltip("먹통이 유지되는 시간 — 지나면 시야·통신이 자동 복구된다")]

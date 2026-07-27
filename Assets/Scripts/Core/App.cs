@@ -22,7 +22,6 @@ public class App : Singleton<App>
     // 인게임 매니저 (Main Scene)
     private RoundManager m_roundManager;
     private SuddenEventManager m_suddenEventManager;
-    private DeviceBlackoutEvent m_deviceBlackoutEvent;
     private WantedListManager m_wantedListManager;
     private ArrestJudge m_arrestJudge;
     private CriminalAssigner m_criminalAssigner;
@@ -75,11 +74,9 @@ public class App : Singleton<App>
     public static class Game
     {
         public static RoundManager Round => Instance.m_roundManager;
+        // 개별 돌발 이벤트(먹통 등)는 App에 올리지 않는다 — 이벤트마다 필드가 늘어나는 대신
+        // SuddenEvent.GetEvent<T>()로 물어본다 (#372 리뷰, R3).
         public static SuddenEventManager SuddenEvent => Instance.m_suddenEventManager;
-
-        // 먹통은 돌발 이벤트 1종이지만 아이템·무전이 상태를 조회해야 해 별도 경로를 둔다 (#372).
-        // 사용처는 ?. 가드 필수 — Main 씬 밖(Title/Lobby)에서는 null이다.
-        public static DeviceBlackoutEvent Blackout => Instance.m_deviceBlackoutEvent;
         public static WantedListManager WantedList => Instance.m_wantedListManager;
         public static ArrestJudge ArrestJudge => Instance.m_arrestJudge;
         public static CriminalAssigner CriminalAssigner => Instance.m_criminalAssigner;

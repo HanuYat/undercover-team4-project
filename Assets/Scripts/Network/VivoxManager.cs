@@ -35,7 +35,7 @@ public class VivoxManager : CommonManagerBase
     private bool m_participantEventsHooked;
     public event Action<string, bool> OnSpeakingChanged;
 
-    public bool IsSpeaking(string playerId) => 
+    public bool IsSpeaking(string playerId) =>
         !string.IsNullOrEmpty(playerId)
         && m_speakingByPlayer.TryGetValue(playerId, out var speaking)
         && speaking;
@@ -329,76 +329,18 @@ public class VivoxManager : CommonManagerBase
     // 구현: Vivox 오디오 탭으로 참가자 음성을 Unity AudioSource로 끌어와 필터를 건다.
     // silenceInChannelAudioMix=true로 Vivox 자체 믹스에서는 죽여야 소리가 두 번 나지 않는다.
     // 전부 로컬 재생 처리라 네트워크 동기화가 없다 — 각 피어가 자기가 듣는 소리만 망가뜨린다.
+    //
+    // 어떤 필터를 어떤 값으로 얹을지는 VoiceDistortionProfile(SO)이 소유한다 — 이 매니저는
+    // '언제 왜곡할지'만 안다. 튜닝 값이 여기 늘어나면 프리셋 교체가 불가능해진다 (#372 리뷰).
 
     [Header("먹통 음성 왜곡 (#372)")]
-    [Tooltip("왜곡 기본 피치 — 1보다 낮으면 저음으로 뭉개진다 (고장난 음성 합성기 느낌)")]
-    [SerializeField, Range(0.4f, 1.5f)] private float m_distortBasePitch = 0.6f;
-
-    [Tooltip("왜곡 강도 (AudioDistortionFilter) — 높을수록 지직거린다")]
-    [SerializeField, Range(0f, 1f)] private float m_distortLevel = 0.35f;
-
-    [Tooltip(
-        "저역 통과 차단 주파수(Hz) — 낮을수록 먹먹해진다. 링 모듈레이터를 쓸 때는 너무 낮추지 말 것: "
-        + "기계음의 특징인 금속성 배음까지 깎여 그냥 먹먹한 소리가 된다")]
-    [SerializeField, Range(300f, 5000f)] private float m_distortLowPassHz = 2000f;
-
-    // ---- 기계음(링 모듈레이션) ----
-    // 로봇 목소리의 정체는 링 모듈레이션이다. Unity 내장 필터에는 없어 VoiceRingModulator로 직접 구현했다.
-    // 코러스·왜곡이 '고장난 무전'이라면 이쪽은 '기계가 말하는' 소리 — 로봇 경찰이라는 설정에 더 맞는다.
-    [Tooltip("링 모듈레이터(기계음) 사용 — 로봇이 말하는 듯한 음색. 기계음 연출의 핵심")]
-    [SerializeField] private bool m_useRingMod = true;
-
-    [Tooltip(
-        "링 모듈레이터 반송파 주파수(Hz). 30~80이 전형적인 로봇 음성, 높일수록 금속성 링잉에 가까워진다")]
-    [SerializeField, Range(10f, 400f)] private float m_ringModCarrierHz = 55f;
-
-    [Tooltip("피치가 튀는 간격(초) 최소/최대 — 짧을수록 자주 튀어 알아듣기 어려워진다")]
-    [SerializeField] private float m_glitchIntervalMin = 0.22f;
-    [SerializeField] private float m_glitchIntervalMax = 0.65f;
-
-    // 오토튠이 오토튠처럼 들리는 이유는 음정 보정 자체가 아니라 피치가 '계단식'으로 끊기기 때문이다.
-    // 연속 난수로 피치를 뽑으면 흐물거리며 미끄러지는데, 반음 단위로 스냅하면 기계가 음을 짚는 느낌이 난다.
-    // (진짜 오토튠은 실시간 피치 검출 + 피치 시프트가 필요해 이 연출 하나에 쓸 비용이 아니다)
-    [Tooltip("글리치 피치를 반음 단위로 스냅 — 오토튠 특유의 계단식 음정 변화를 만든다")]
-    [SerializeField] private bool m_snapPitchToSemitones = true;
-
-    [Tooltip("글리치 시 기본 피치에서 벗어나는 반음 범위 (-7 = 5도 아래, +7 = 5도 위)")]
-    [SerializeField] private int m_glitchSemitoneMin = -7;
-    [SerializeField] private int m_glitchSemitoneMax = 7;
-
-    [Tooltip("반음 스냅을 끈 경우에 쓰는 연속 피치 범위")]
-    [SerializeField] private float m_glitchPitchMin = 0.55f;
-    [SerializeField] private float m_glitchPitchMax = 1.5f;
-
-    // 코러스는 발음 윤곽을 흐려 말을 뭉갠다. 다만 링 모듈레이터와 겹치면 명료도가 과하게 떨어져
-    // 아무 말도 못 알아듣게 되므로, 기계음 프리셋에서는 기본으로 꺼 둔다 (토글로 A/B 가능).
-    [Tooltip("코러스(겹침 흔들림) 사용 — 말을 뭉갠다. 링 모듈레이터와 함께 켜면 과해지기 쉽다")]
-    [SerializeField] private bool m_useChorus;
-
-    [Tooltip("코러스 깊이 — 높을수록 흔들림이 커진다")]
-    [SerializeField, Range(0f, 1f)] private float m_chorusDepth = 0.7f;
-
-    [Tooltip("코러스 속도(Hz) — 흔들리는 빠르기")]
-    [SerializeField, Range(0f, 20f)] private float m_chorusRate = 1.2f;
-
-    [Tooltip("코러스 혼합량 — 원음 대비 흔들린 복사본의 비중")]
-    [SerializeField, Range(0f, 1f)] private float m_chorusMix = 0.6f;
-
-    [Tooltip("짧은 에코 사용 — 소리를 번지게 해 뭉개짐을 더한다")]
-    [SerializeField] private bool m_useEcho = true;
-
-    [Tooltip("에코 딜레이(ms) — 짧을수록 금속성으로 번진다")]
-    [SerializeField, Range(10f, 500f)] private float m_echoDelayMs = 45f;
-
-    [Tooltip("에코 감쇠율 — 높을수록 오래 번진다")]
-    [SerializeField, Range(0f, 1f)] private float m_echoDecay = 0.3f;
-
-    [Tooltip("에코 혼합량")]
-    [SerializeField, Range(0f, 1f)] private float m_echoMix = 0.35f;
+    [Tooltip("왜곡 음색 프로파일(SO) — 필터 조합·수치는 전부 이 에셋이 정한다. 비면 왜곡을 걸지 않는다")]
+    [SerializeField] private VoiceDistortionProfile m_distortProfile;
 
     [Tooltip(
         "근접 채널 음성도 왜곡할지. 끄면 무전 채널만 왜곡한다 — 근접은 Vivox가 자체 3D 감쇠를 처리하는데, "
-        + "탭으로 빼내면 그 감쇠가 유지되는지 확인이 필요하다(멀리 있는 사람이 크게 들리면 이 옵션을 끌 것)")]
+        + "탭으로 빼내면 그 감쇠가 유지되는지 확인이 필요하다(멀리 있는 사람이 크게 들리면 이 옵션을 끌 것). "
+        + "음색이 아니라 '어느 채널에 거는가'라는 Vivox 배선이라 프로파일이 아니라 여기 남는다")]
     [SerializeField] private bool m_distortProximityToo = true;
 
     private bool m_voiceDistorted;
@@ -414,6 +356,15 @@ public class VivoxManager : CommonManagerBase
     public void SetVoiceDistorted(bool distorted)
     {
         if (m_voiceDistorted == distorted) return;
+
+        // 프로파일이 없으면 왜곡 자체를 시작하지 않는다 — 탭만 걸고 필터를 못 얹으면
+        // Vivox 믹스에서 죽인 목소리를 대신 재생해 줄 설정이 없어 그 사람이 통째로 무음이 된다.
+        if (distorted && m_distortProfile == null)
+        {
+            Debug.LogWarning("[VivoxManager] VoiceDistortionProfile 미할당 — 먹통 음성 왜곡을 건너뛴다", this);
+            return;
+        }
+
         m_voiceDistorted = distorted;
 
         if (distorted)
@@ -443,6 +394,7 @@ public class VivoxManager : CommonManagerBase
     private void ApplyDistortion(VivoxParticipant participant)
     {
         if (participant == null || participant.IsSelf) return;
+        if (m_distortProfile == null) return; // SetVoiceDistorted가 이미 막지만 진입점이 둘이라 여기서도 확인
         if (m_distortTaps.ContainsKey(participant)) return; // 중복 탭 방지
 
         // 탭이 만들어졌는지 추적한다 — 아래 어느 경로로 빠져나가든 되돌리기 위함 (실패 시 영구 무음 방지)
@@ -466,39 +418,8 @@ public class VivoxManager : CommonManagerBase
                 return;
             }
 
-            source.pitch = m_distortBasePitch;
-
-            // 필터 순서: 링모드(기계음) → 코러스(윤곽 흐리기) → 왜곡(지직) → 에코(번짐) → 저역통과(먹먹).
-            // 링 모듈레이터가 맨 앞이라야 원음의 배음을 옮긴 결과에 나머지 색이 입혀진다 — 뒤에 두면
-            // 이미 뭉개진 소리를 다시 곱하는 꼴이라 기계음 특유의 음정감이 흐려진다.
-            // 저역통과는 마지막 — 앞 단계가 만든 고역 잡음까지 함께 깎아야 정리된 소리가 된다.
-            if (m_useRingMod)
-                tapObject.AddComponent<VoiceRingModulator>().Configure(m_ringModCarrierHz);
-
-            if (m_useChorus)
-            {
-                var chorus = tapObject.AddComponent<AudioChorusFilter>();
-                chorus.depth = m_chorusDepth;
-                chorus.rate = m_chorusRate;
-                chorus.wetMix1 = m_chorusMix;
-                chorus.wetMix2 = m_chorusMix * 0.7f; // 2·3번 탭을 조금씩 낮춰 겹침이 뭉치지 않게
-                chorus.wetMix3 = m_chorusMix * 0.4f;
-            }
-
-            var distortion = tapObject.AddComponent<AudioDistortionFilter>();
-            distortion.distortionLevel = m_distortLevel;
-
-            if (m_useEcho)
-            {
-                var echo = tapObject.AddComponent<AudioEchoFilter>();
-                echo.delay = m_echoDelayMs;
-                echo.decayRatio = m_echoDecay;
-                echo.wetMix = m_echoMix;
-                echo.dryMix = 1f;
-            }
-
-            var lowPass = tapObject.AddComponent<AudioLowPassFilter>();
-            lowPass.cutoffFrequency = m_distortLowPassHz;
+            // 어떤 필터를 어떤 순서·값으로 얹을지는 프로파일이 안다 (#372 리뷰)
+            m_distortProfile.Apply(tapObject, source);
 
             m_distortTaps[participant] = source;
         }
@@ -539,27 +460,15 @@ public class VivoxManager : CommonManagerBase
         m_distortTaps.Clear();
     }
 
-    // 다음 글리치 피치를 뽑는다. 반음 스냅을 켜면 기본 피치에서 반음 단위로만 벗어나
-    // 오토튠처럼 계단식으로 음이 바뀐다 — 연속 난수는 음이 미끄러져 '고장'에 가깝게 들린다.
-    private float NextGlitchPitch()
-    {
-        if (!m_snapPitchToSemitones)
-            return UnityEngine.Random.Range(m_glitchPitchMin, m_glitchPitchMax);
-
-        // Random.Range(int)는 상한이 배타적이라 +1 — max 반음까지 포함시킨다
-        int semitone = UnityEngine.Random.Range(m_glitchSemitoneMin, m_glitchSemitoneMax + 1);
-        return m_distortBasePitch * Mathf.Pow(2f, semitone / 12f); // 반음 = 2^(1/12)배
-    }
-
-    // 피치를 주기적으로 튀게 해 "신호가 튄다"는 인상을 준다 — 왜곡 중에만 돈다
+    // 피치를 주기적으로 튀게 해 "신호가 튄다"는 인상을 준다 — 왜곡 중에만 돈다.
+    // 튀는 간격·폭은 프로파일이 정한다 (m_voiceDistorted가 켜졌다면 프로파일은 반드시 있다).
     private void Update()
     {
         if (!m_voiceDistorted || m_distortTaps.Count == 0) return;
         if (Time.time < m_nextGlitchTime) return;
 
-        m_nextGlitchTime = Time.time
-            + UnityEngine.Random.Range(m_glitchIntervalMin, m_glitchIntervalMax);
-        float pitch = NextGlitchPitch();
+        m_nextGlitchTime = Time.time + m_distortProfile.NextGlitchInterval();
+        float pitch = m_distortProfile.NextGlitchPitch();
 
         foreach (AudioSource source in m_distortTaps.Values)
         {
