@@ -430,8 +430,10 @@ public class Scanner : ItemBase, IChargeable
         // 아이템은 줍기/버리기로 부모가 바뀌므로 캐시하지 않고 호출 시점에 해석한다 (Handcuffs.Escorter 관례).
         PlayerInteractor interactor = GetComponentInParent<PlayerInteractor>();
         Vector3 origin = interactor != null ? interactor.AimOrigin.position : transform.position;
-        return (target.position - origin).sqrMagnitude
-            <= m_scanKeepRange * m_scanKeepRange;
+        // 사거리 + 가시선 — 거리만 보면 위조 RPC로 벽 너머 스캔이 된다 (#360).
+        // 유지 판정에도 걸리므로 스캔 도중 대상이 벽 뒤로 들어가면 채널이 끊긴다 — 의도된 동작.
+        return (target.position - origin).sqrMagnitude <= m_scanKeepRange * m_scanKeepRange
+            && (interactor == null || interactor.HasLineOfSightTo(target));
     }
 
     private static string GetScanInfo(CitizenProfile profile)

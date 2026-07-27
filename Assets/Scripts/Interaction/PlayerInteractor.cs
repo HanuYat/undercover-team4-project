@@ -9,6 +9,9 @@ public class PlayerInteractor : NetworkBehaviour
     [SerializeField] private float m_range = 3f;
     [SerializeField] private LayerMask m_interactMask = ~0;
 
+    [Tooltip("시야를 가로막는 장애물 레이어 — 벽·건물(Default). 여기 걸리면 대상으로 잡지 않는다")]
+    [SerializeField] private LayerMask m_losBlockMask = 1; // Default
+
     public IInteractable CurrentInteractable { get; private set; }
     public GameObject CurrentTarget { get; private set; } // 아이템 타겟팅/UI용
 
@@ -24,6 +27,10 @@ public class PlayerInteractor : NetworkBehaviour
 
     /// <summary>조준 카메라. 조준 대상의 월드→스크린 좌표 변환(#233 스캔 정보 추종)에 쓴다. 미배정이면 null.</summary>
     public Camera AimCamera => m_camera;
+
+    /// <summary>시야를 막는 장애물 레이어. 서버 드롭 위치 보정(#360)이 "벽"의 정의를 여기서 재사용한다 —
+    /// 값을 따로 두면 조준은 막히는데 드롭은 통과하는 식으로 어긋난다.</summary>
+    public LayerMask LosBlockMask => m_losBlockMask;
 
     private PlayerInputHandler m_inputHandler;
     private PlayerEscorter m_escorter;
@@ -68,7 +75,10 @@ public class PlayerInteractor : NetworkBehaviour
         GameObject previousTarget = CurrentTarget;
 
         Ray ray = new Ray(m_camera.transform.position, m_camera.transform.forward);
-        if (Physics.Raycast(ray, out RaycastHit hit, m_range, m_interactMask))
+        if (
+            Physics.Raycast(ray, out RaycastHit hit, m_range, m_interactMask)
+            && HasLineOfSight(ray.origin, hit.point, hit.transform)
+        )
         {
             CurrentTarget = hit.collider.gameObject;
             CurrentInteractable = hit.collider.GetComponentInParent<IInteractable>();
@@ -80,6 +90,47 @@ public class PlayerInteractor : NetworkBehaviour
         }
 
         if (CurrentTarget != previousTarget) OnTargetChanged?.Invoke(CurrentTarget);
+    }
+
+    /// <summary>
+    /// 서버 판정용 가시선 검사 — 조준 기준점(AimOrigin)에서 대상이 벽에 가리지 않았는가. (#360)
+    /// 클라 조준(<see cref="UpdateTarget"/>)과 같은 기준점·같은 장애물 마스크를 쓴다.
+    /// 서버 사거리 검증(#147)만으로는 위조 RPC로 벽 너머 줍기·제압·구조·스캔이 그대로 되므로,
+    /// 각 서버 판정이 사거리 검사와 함께 이걸 통과해야 한다.
+    /// </summary>
+    public bool HasLineOfSightTo(Transform target)
+    {
+        // 끝점은 대상 콜라이더의 중심 — 루트 원점은 대개 발밑이라 바닥(Default)에 걸려 오차단된다.
+        // TryGetComponent는 비재귀 — 판정 콜라이더가 대상 루트에 있다는 전제다. 현재 호출부 전부 성립:
+        // 아이템(WorldItemPickup이 루트에 AddComponent)·NPC(루트 CapsuleCollider, 기절 시에도
+        // NpcProneCollider가 끄지 않고 재성형)·플레이어(루트 CharacterController). 자식에만 콜라이더가
+        // 있는 대상을 새로 물리면 발밑 폴백으로 오차단될 수 있으니 그때 GetComponentInChildren로 넓힐 것.
+        Vector3 point = target.TryGetComponent(out Collider targetCollider)
+            ? targetCollider.bounds.center
+            : target.position;
+
+        return HasLineOfSight(AimOrigin.position, point, target);
+    }
+
+    // 벽 너머 대상을 잡지 않게 하는 가시선 검사 (#360). 조준 레이캐스트는 Interactable 레이어만 보므로
+    // 벽(Default)을 그냥 통과한다 — 벽 너머 아이템 줍기·NPC 검거·본부 조작이 전부 됐다.
+    //
+    // 마스크에 벽을 넣는 방식은 불가능하다: 그러면 본부 트리거 존(Default + 트리거)이 레이를 가로채고,
+    // 그렇다고 트리거를 무시하면 줍기 콜라이더가 트리거라(#263) 아이템 줍기가 통째로 죽는다.
+    // 그래서 대상 확정 후 별도 Linecast로 장애물만 따로 본다.
+    // 대상 자신의 구조 콜라이더는 가림으로 치지 않는다 — 폭탄은 몸통(Default)이 배선(Interactable)을
+    // 감싸고 있어서, 이걸 안 걸러내면 배선 자르기가 통째로 막힌다.
+    // Linecast는 가장 가까운 히트를 주므로, 그게 대상 소속이면 그 앞을 막은 것은 없다는 뜻이다.
+    private bool HasLineOfSight(Vector3 origin, Vector3 point, Transform target)
+    {
+        return !Physics.Linecast(
+                origin,
+                point,
+                out RaycastHit blocker,
+                m_losBlockMask,
+                QueryTriggerInteraction.Ignore
+            )
+            || blocker.transform.root == target.root;
     }
 
     private void HandleInteract()

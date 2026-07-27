@@ -367,8 +367,11 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
 
     private bool IsInRange(NpcController target)
     {
+        // 사거리 + 가시선 — 거리만 보면 위조 RPC로 벽 너머 제압·검거가 된다 (#360).
+        // Interactor 없는 구성(테스트 등)은 종전대로 거리만 본다.
         return (target.transform.position - AimOriginPosition).sqrMagnitude
-            <= CaptureRange * CaptureRange;
+                <= CaptureRange * CaptureRange
+            && (Interactor == null || Interactor.HasLineOfSightTo(target.transform));
     }
 
     /// <summary>채널링 성공 순간의 반응. 기절 중이거나 신원이 없으면 순응(즉시 연행) 취급. (#76)</summary>
