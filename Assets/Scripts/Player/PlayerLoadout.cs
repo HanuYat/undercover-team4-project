@@ -45,6 +45,7 @@ public class PlayerLoadout : NetworkBehaviour
     private PlayerItemUser m_itemUser;
     private PlayerInputHandler m_inputHandler;
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 아이템 전환·버리기 차단용 (#105)
+    private PlayerEscorter m_escorter; // 밧줄을 묶어 둔 동안 그 밧줄 버리기 차단용 (#369)
 
     // 서버 줍기 거리 검증용 — PlayerInteractor의 조준 사거리·기준점을 그대로 재사용한다 (#147).
     // 값을 따로 두지 않고 여기서 읽어야 조준-줍기 사거리가 항상 정합된다.
@@ -74,6 +75,7 @@ public class PlayerLoadout : NetworkBehaviour
         m_itemUser = GetComponent<PlayerItemUser>();
         m_inputHandler = GetComponent<PlayerInputHandler>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
+        m_escorter = GetComponent<PlayerEscorter>();
         m_interactor = GetComponent<PlayerInteractor>();
         m_pickupRange = m_interactor.Range;
     }
@@ -215,6 +217,11 @@ public class PlayerLoadout : NetworkBehaviour
 
     // ---- 버리기 (오너 요청 → 서버 실행) ----
 
+    // 지금 NPC를 묶어 둔 밧줄인가 — 이 상태로 버리면 묶인 대상이 주인 없이 남는다. IsTethered는
+    // 서버·오너 양쪽에서 유효해(동기화 참조) 조기검증과 서버 판정이 같은 기준을 쓴다. (#369)
+    private bool IsTetheredRope(ItemBase item) =>
+        item is Rope && m_escorter != null && m_escorter.IsTethered;
+
     // 현재 장착 아이템을 버린다 (버리기 입력 핸들러).
     private void RequestDropEquipped()
     {
@@ -232,6 +239,13 @@ public class PlayerLoadout : NetworkBehaviour
         ItemBase equipped = m_itemUser.EquippedItem;
         if (equipped == null)
         {
+            return;
+        }
+
+        // 묶어 둔 대상이 있으면 그 밧줄은 버릴 수 없다 — 최종 판정은 서버(DropRpc)가 한다 (#369)
+        if (IsTetheredRope(equipped))
+        {
+            Debug.Log("밧줄에 묶어 둔 대상이 있어 버릴 수 없음 — 먼저 풀어야 한다");
             return;
         }
 
@@ -258,10 +272,19 @@ public class PlayerLoadout : NetworkBehaviour
             return;
         }
 
+        itemNetworkObject.TryGetComponent(out ItemBase droppedItem);
+
+        // 묶어 둔 대상이 있는 밧줄은 버릴 수 없다 — 줄이 손을 떠나면 묶인 NPC가 주인 없이 남는다
+        // (놓아둔 대상도 포함). 오너 조기검증과 같은 기준, 최종 판정은 여기 서버가 한다. (#369)
+        if (IsTetheredRope(droppedItem))
+        {
+            return;
+        }
+
         // 버리는 아이템이 채널링 중이면 서버가 직접 끊는다 — 소유권 회수(RemoveOwnership) 후엔 오너의
         // 취소 RPC가 RequireOwnership에 막혀 거부되므로, 여기서 서버 권위로 중단해야 배터리 낭비·오완료를
         // 막는다. 채널링 없는 아이템은 무동작(ItemBase 기본). (드롭 중 채널링 경합 대응)
-        if (itemNetworkObject.TryGetComponent(out ItemBase droppedItem))
+        if (droppedItem != null)
         {
             droppedItem.ServerCancelActiveUse();
         }
@@ -275,30 +298,8 @@ public class PlayerLoadout : NetworkBehaviour
         SyncHeldItemsRpc(BuildHeldItemRefs());
     }
 
-    // ---- 수갑 소모·반환 (#229) ----
-
-    /// <summary>
-    /// 이 플레이어가 수갑을 보유 중인가 — 체포 자원 게이트(#229). 부착된 자식 기준이라 서버·오너 모두 유효.
-    /// 체포 성공 시 수갑이 NPC로 옮겨가면(ConsumeHandcuffsTo) false가 되어 새 체포가 막힌다.
-    /// </summary>
-    public bool HasHandcuffs => FindHeldHandcuffs() != null;
-
-    // 현재 부착된 수갑 아이템을 찾는다 — 없으면 null. NPC는 한 벌만 들고 다니므로 첫 항목이면 충분.
-    private Handcuffs FindHeldHandcuffs() => FindHandcuffsIn(ItemParent);
-
-    // 부모 루트 직속 자식에서 수갑을 찾는다 (플레이어 ItemParent·NPC 루트 공통 — 둘 다 루트 직속 부착).
-    private static Handcuffs FindHandcuffsIn(Transform parent)
-    {
-        for (int i = 0; i < parent.childCount; i++)
-        {
-            if (parent.GetChild(i).TryGetComponent(out Handcuffs cuffs))
-            {
-                return cuffs;
-            }
-        }
-
-        return null;
-    }
+    // ---- 밧줄 자원 게이트 (#269) ----
+    // 수갑 소모·반환(#229: HasHandcuffs/ConsumeHandcuffsTo/TryRecoverHandcuffs)은 밧줄이 소모형이 아니게 되며 제거됐다. (#369)
 
     /// <summary>이 플레이어가 밧줄을 보유 중인가 — 끌기 자원 게이트. 부착된 자식 기준. (#269)</summary>
     public bool HasRope => FindHeldRope() != null;
@@ -315,92 +316,6 @@ public class PlayerLoadout : NetworkBehaviour
         }
 
         return null;
-    }
-
-    /// <summary>
-    /// 체포 성공 시 이 플레이어의 수갑을 인벤토리에서 빼 custodyParent(연행되는 NPC)로 옮긴다. (#229)
-    /// 판정 후 반환(NpcController.DropHandcuffs)까지 NPC가 들고 있으므로, 커스터디 동안 소유권은 서버로 되돌린다.
-    /// 서버(또는 오프라인)에서만. 수갑이 없으면 무동작(호출부 가드가 이미 막지만 방어적).
-    /// 버리기(DropRpc)와 같은 분리·소유권 처리에, 목적지만 NPC 하위인 셈이다.
-    /// </summary>
-    public void ConsumeHandcuffsTo(Transform custodyParent)
-    {
-        if (IsSpawned && !IsServer)
-        {
-            return;
-        }
-
-        Handcuffs cuffs = FindHeldHandcuffs();
-        if (cuffs == null || custodyParent == null)
-        {
-            return;
-        }
-
-        NetworkObject cuffsNetworkObject = cuffs.NetworkObject;
-        if (cuffsNetworkObject == null)
-        {
-            return;
-        }
-
-        // NPC 하위로 옮긴다 — ItemParent 자식에서 빠지므로 BuildHeldItemRefs가 더는 세지 않는다.
-        // WorldItemPickup이 "들린 상태"(부모 있음)로 보고 월드 비주얼·줍기 콜라이더를 끈다(안 보이고 못 줍는다).
-        cuffsNetworkObject.TrySetParent(custodyParent, false);
-        cuffsNetworkObject.transform.localPosition = Vector3.zero;
-        cuffsNetworkObject.transform.localRotation = Quaternion.identity;
-        cuffsNetworkObject.RemoveOwnership();
-
-        // 오너 슬롯에서 제거를 동기화 — 장착 중이었다면 빈손이 되고 1·3인칭 손 표시도 함께 정리된다(#45/#151).
-        SyncHeldItemsRpc(BuildHeldItemRefs());
-    }
-
-    /// <summary>
-    /// 판정·석방 후 NPC에 채워졌던 수갑을 이 플레이어 인벤토리로 회수한다 — <see cref="ConsumeHandcuffsTo"/>의 역방향. (#307)
-    /// 여유 칸이 있으면 NPC → 이 플레이어 ItemParent로 재부착 + 소유권 재부여하고 true,
-    /// 소지 3칸이 꽉 찼거나(또는 NPC에 수갑이 없으면) 아무것도 안 하고 false를 반환한다 — 호출부가 바닥에 떨군다.
-    /// 서버(또는 오프라인)에서만. 줍기(PickupRpc)와 같은 부착·소유권 처리에, 출처만 NPC 하위인 셈이다.
-    /// </summary>
-    public bool TryRecoverHandcuffs(NpcController npc)
-    {
-        if (IsSpawned && !IsServer)
-        {
-            return false;
-        }
-
-        if (npc == null)
-        {
-            return false;
-        }
-
-        // 소지 3칸 제한 — 서버 권위 카운트(PickupRpc와 동일). 오너 로컬 슬롯 모델(m_slotModel)은 원격 클라가
-        // 연행자일 때 서버에 없으므로, 물리 부착 기준 CountHeldItems로 여유를 판정한다.
-        if (CountHeldItems() >= k_maxHeldItems)
-        {
-            return false;
-        }
-
-        Handcuffs cuffs = FindHandcuffsIn(npc.transform);
-        if (cuffs == null)
-        {
-            return false;
-        }
-
-        NetworkObject cuffsNetworkObject = cuffs.NetworkObject;
-        if (cuffsNetworkObject == null)
-        {
-            return false;
-        }
-
-        // NPC 하위에서 이 플레이어로 옮긴다 — 소유권을 오너에게 되돌린 뒤 부착(줍기와 동일 순서).
-        if (IsSpawned)
-        {
-            cuffsNetworkObject.ChangeOwnership(OwnerClientId);
-        }
-
-        AttachToParent(cuffsNetworkObject, ItemParent);
-
-        // 오너 슬롯에 첫 빈 칸으로 들어간다 — 줍기와 동일 경로(RebuildHeldItems).
-        SyncHeldItemsRpc(BuildHeldItemRefs());
-        return true;
     }
 
     // ---- 서버 → 오너: 보유 목록 동기화 ----

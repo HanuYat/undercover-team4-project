@@ -28,12 +28,19 @@ public class NpcEscortedState : NpcStateBase
 
     public override void Enter()
     {
-        m_owner.Agent.isStopped = false;
-        // 플레이어 등에 딱 붙지 않도록 추종 거리만큼 앞에서 멈춘다
-        m_owner.Agent.stoppingDistance = m_config.FollowDistance;
+        // 원복용 기준 속도는 밧줄 분기보다 먼저 잡는다 — 안 그러면 Exit이 0으로 되돌려 놓는다
         m_baseSpeed = m_owner.Agent.speed;
         m_repathTimer = 0f;
         m_isHolding = false;
+
+        // 밧줄로 끌려오는 중이면 에이전트가 꺼져 있다 — 추종 로직을 아예 돌리지 않는다.
+        // 위치는 끄는 플레이어(PlayerEscorter.ServerUpdateDrag)가 밧줄 장력으로 직접 제어한다. (#369)
+        if (m_owner.IsRoped)
+            return;
+
+        m_owner.Agent.isStopped = false;
+        // 플레이어 등에 딱 붙지 않도록 추종 거리만큼 앞에서 멈춘다
+        m_owner.Agent.stoppingDistance = m_config.FollowDistance;
 
         if (m_owner.EscortTarget != null)
         {
@@ -44,6 +51,12 @@ public class NpcEscortedState : NpcStateBase
 
     public override void Tick()
     {
+        // 밧줄 끌기 중에는 추종·거리 이탈 판정을 돌리지 않는다 — 에이전트가 꺼져 있어 SetDestination이
+        // 조용히 실패하고, 밧줄은 길이로 거리를 스스로 유지하므로 이탈 개념 자체가 없다.
+        // 끌기 해제는 PlayerEscorter.TickRopeDrag가 상태를 보고 판단한다. (#369)
+        if (m_owner.IsRoped)
+            return;
+
         Transform target = m_owner.EscortTarget;
         if (target == null)
         {
