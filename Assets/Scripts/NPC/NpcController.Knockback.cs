@@ -75,7 +75,7 @@ public partial class NpcController
         // 넉백이 그대로 제자리 점프가 된다 (#232).
         Vector3 horizontalStep = new Vector3(next.x - transform.position.x, 0f, next.z - transform.position.z);
         float stepDistance = horizontalStep.magnitude;
-        if (stepDistance > 0.0001f && SweepHitsObstacle(horizontalStep / stepDistance, stepDistance))
+        if (stepDistance > 0.0001f && SweepHitsObstacle(horizontalStep / stepDistance, stepDistance, out _))
         {
             // 진짜 벽에 닿았다 — 수평 성분을 버리고 그 자리에서 떨어진다
             next.x = transform.position.x;
@@ -112,8 +112,10 @@ public partial class NpcController
     // 캐릭터(플레이어·다른 NPC)는 벽으로 치지 않는다(#339): 플레이어 몸통이 환경과 같은 Default 레이어라
     // 마스크만으로는 걸러지지 않는데, 폭발로 날아가는 NPC가 군중을 벽으로 오판하면 죄다 제자리에
     // 툭 떨어져 넉백이 밋밋해진다 — 장애물 스윕 판정(#313)과 같은 수정.
-    private bool SweepHitsObstacle(Vector3 direction, float distance)
+    private bool SweepHitsObstacle(Vector3 direction, float distance, out RaycastHit obstacle)
     {
+        obstacle = default;
+
         float radius = m_agent.radius;
         Vector3 origin = transform.position + Vector3.up * Mathf.Max(radius, m_agent.height * 0.5f);
         int mask = m_commonConfig.KnockbackObstacleMask & ~(1 << gameObject.layer); // 자기 콜라이더에 걸리지 않게
@@ -123,8 +125,9 @@ public partial class NpcController
 
         // 버퍼 포화 = 반환되지 못한 히트(그중 진짜 벽 포함 가능)가 있을 수 있다 — 나오면 확대 신호 (#313 리뷰와 동일)
         if (count == s_sweepBuffer.Length)
-            Debug.LogWarning($"NpcController: 넉백 스윕 버퍼 포화({count}) — 히트 누락 가능", this);
+            Debug.LogWarning($"NpcController: 스윕 버퍼 포화({count}) — 히트 누락 가능", this);
 
+        bool found = false;
         for (int i = 0; i < count; i++)
         {
             Collider hit = s_sweepBuffer[i].collider;
@@ -135,10 +138,21 @@ public partial class NpcController
             if (hit.GetComponentInParent<NpcController>() != null)
                 continue; // 다른 NPC — 군중 속 폭발에서 서로를 벽으로 보지 않게
 
-            return true; // 캐릭터가 아닌 무언가 = 벽/환경
+            // 시작 지점에서 이미 겹친 히트(거리 0)는 버린다 — 법선이 진행 방향 반대로 잡혀 어느 쪽으로
+            // 움직여도 계속 막히므로, 한 번 끼면 영영 빠져나오지 못한다 (밧줄 끌기에서 실제로 낀 사례, #369).
+            // 이미 안에 있는 이상 막는 것보다 빠져나갈 기회를 주는 편이 항상 낫다.
+            if (s_sweepBuffer[i].distance <= 0.001f)
+                continue;
+
+            // 캐릭터가 아닌 무언가 = 벽/환경. 여럿이면 가장 가까운 것을 남긴다.
+            if (!found || s_sweepBuffer[i].distance < obstacle.distance)
+            {
+                obstacle = s_sweepBuffer[i];
+                found = true;
+            }
         }
 
-        return false;
+        return found;
     }
 
     private void EndKnockback(Vector3 landing)

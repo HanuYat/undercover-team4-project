@@ -39,10 +39,10 @@ public class HqDropoffZone : MonoBehaviour
         if (npc == null)
             return;
 
-        // 연행 중이거나 밧줄로 끌려온 기절 NPC만 인계 대상 — 배회 시민은 무시 (#59/#269).
-        // 재판정 허용(#358): 판정 후엔 연행/끌기가 즉시 풀려 이 게이트에 걸리므로 매 틱 재발화가 막히고,
-        // 다시 연행(E)해 데려오면 그때 한 번 더 판정된다. 중복 후처리(할당량·오검거·돈)는 판정 쪽에서 1회로 건다.
-        if (npc.CurrentState != NpcState.Escorted && !npc.IsRoped)
+        // 밧줄로 끌려온(Escorted) NPC만 인계 대상 — 배회 시민·놓아둔 체포(Captured)는 무시 (#59/#269/#369).
+        // 재판정 허용(#358): 판정 후엔 끌기가 즉시 풀려 이 게이트에 안 걸리므로 매 틱 재발화가 막히고,
+        // 다시 끌어(E) 데려오면 그때 한 번 더 판정된다. 중복 후처리(할당량·오검거·돈)는 판정 쪽에서 1회로 건다.
+        if (npc.CurrentState != NpcState.Escorted)
             return;
 
         Debug.Log($"본부 도달 — 인계 가능: {npc.name}");

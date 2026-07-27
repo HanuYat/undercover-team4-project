@@ -1,15 +1,10 @@
 using UnityEngine;
 
 /// <summary>
-/// 밧줄 끌기 표현 — 끄는 플레이어의 손과 끌리는 NPC를 잇는 밧줄 선, 바닥에 쓸리는 먼지. (#269 표현 계층)
-///
-/// <b>순수 로컬 연출이다</b>(<see cref="BombExplosionVfx"/>와 같은 방침). 네트워크로 오가는 건
-/// "누가 누구를 끄는가" 하나뿐이고(<see cref="PlayerEscorter.DraggedNpcTransform"/>), 각 피어가 그 두 끝점을
-/// 보고 자기 화면에 선을 그린다 — 선 자체를 스폰하거나 동기화하지 않는다.
-///
-/// 전 피어에서 돈다(오너 전용이 아니다) — 남이 끌고 가는 모습도 밧줄이 보여야 한다.
-/// 선의 시작점은 3인칭 손 앵커(<see cref="PlayerHeldItemView.HandAnchor"/>)라 손에 든 밧줄 코일에서
-/// 자연스럽게 이어진다. 앵커가 없는 구성(테스트 등)이면 몸통 높이로 대체한다.
+/// 밧줄 표현 — 플레이어 손과 묶인 NPC를 잇는 선 + 바닥 먼지. <b>순수 로컬 연출</b>이라 선을 동기화하지
+/// 않고, 각 피어가 동기화된 양 끝점(<see cref="PlayerEscorter.TetheredNpcTransform"/>)을 보고 스스로 그린다.
+/// 전 피어에서 돈다 — 남이 끌고 가는 모습도 보여야 한다. 선 시작점은 3인칭 손 앵커
+/// (<see cref="PlayerHeldItemView.HandAnchor"/>), 없으면 몸통 높이로 대체. (#269)
 /// </summary>
 [RequireComponent(typeof(PlayerEscorter))]
 public class RopeDragView : MonoBehaviour
@@ -31,7 +26,7 @@ public class RopeDragView : MonoBehaviour
     [Tooltip("손 앵커가 없을 때 쓰는 대체 시작 높이(m) — 플레이어 발밑 기준")]
     [SerializeField] private float m_fallbackHandHeight = 1.1f;
 
-    [Tooltip("NPC 쪽 매듭 높이(m) — 누운 몸 위쪽에 걸리게 살짝 띄운다")]
+    [Tooltip("몸통 뼈를 못 찾는 NPC의 대체 매듭 높이(m) — 루트(발밑) 기준")]
     [SerializeField] private float m_npcKnotHeight = 0.25f;
 
     [Header("먼지")]
@@ -45,6 +40,10 @@ public class RopeDragView : MonoBehaviour
     private LineRenderer m_rope;
     private GameObject m_dust;
 
+    // NPC 몸통 뼈 캐시 — 대상이 바뀔 때만 다시 잡는다. 뼈를 못 찾은 NPC는 null로 캐시해 재검색을 막는다.
+    private Transform m_knotAnchorSource;
+    private Transform m_knotAnchor;
+
     private void Awake()
     {
         m_escorter = GetComponent<PlayerEscorter>();
@@ -55,21 +54,45 @@ public class RopeDragView : MonoBehaviour
     // 선을 LateUpdate에서 그려야 이번 프레임의 최종 위치를 잇는다(한 프레임 늦게 따라붙지 않는다).
     private void LateUpdate()
     {
-        Transform dragged = m_escorter.DraggedNpcTransform;
-        if (dragged == null)
+        // 끌고 있는 동안만이 아니라 '묶여 있는 동안' 내내 그린다 — 놓기(E)는 끌기를 멈출 뿐
+        // 줄을 푸는 게 아니다. 실제로 풀리면(밧줄 좌클릭 풀기·인계 판정·방치 탈주) 연결이 끊긴다. (#369)
+        Transform tethered = m_escorter.TetheredNpcTransform;
+        if (tethered == null)
         {
             SetVisible(false);
             return;
         }
 
         SetVisible(true);
-        DrawRope(HandPoint, dragged.position + Vector3.up * m_npcKnotHeight);
+        DrawRope(HandPoint, KnotPoint(tethered));
 
+        // 먼지는 실제로 끌고 있을 때만 — 세워 둔 대상 발밑에서 먼지가 계속 일면 안 된다
         if (m_dust != null)
-            m_dust.transform.position = dragged.position;
+        {
+            if (m_dust.activeSelf != m_escorter.IsDragging)
+                m_dust.SetActive(m_escorter.IsDragging);
+            m_dust.transform.position = tethered.position;
+        }
     }
 
     private void OnDisable() => SetVisible(false);
+
+    // NPC 쪽 매듭점 — 몸통 뼈가 있으면 그 위치(눕든 서든 몸을 따라간다), 없으면 루트+대체 높이. (#369)
+    private Vector3 KnotPoint(Transform tethered)
+    {
+        if (tethered != m_knotAnchorSource)
+        {
+            m_knotAnchorSource = tethered;
+            Animator animator = tethered.GetComponentInChildren<Animator>();
+            m_knotAnchor = animator != null && animator.isHuman
+                ? animator.GetBoneTransform(HumanBodyBones.Chest)
+                : null;
+        }
+
+        return m_knotAnchor != null
+            ? m_knotAnchor.position
+            : tethered.position + Vector3.up * m_npcKnotHeight;
+    }
 
     private Vector3 HandPoint
     {
@@ -111,8 +134,9 @@ public class RopeDragView : MonoBehaviour
         if (m_rope != null)
             m_rope.enabled = visible;
 
-        if (m_dust != null && m_dust.activeSelf != visible)
-            m_dust.SetActive(visible);
+        // 먼지 켜기는 LateUpdate가 끌기 여부로 따로 판단한다 — 여기서는 끄기만 보장한다
+        if (!visible && m_dust != null && m_dust.activeSelf)
+            m_dust.SetActive(false);
     }
 
     // 선·먼지 인스턴스를 첫 끌기 때 한 번만 만든다 — 끌지 않는 플레이어는 비용이 0이다.

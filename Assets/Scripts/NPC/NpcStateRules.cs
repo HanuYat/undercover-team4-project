@@ -1,6 +1,6 @@
 /// <summary>
 /// NPC 상태 → 상호작용 가능성 해석 규칙. (#184)
-/// 클라 조기검증(Handcuffs)·서버 가드(PlayerEscorter)·조준 피드백(InteractionFeedback)이
+/// 클라 조기검증(Rope)·서버 가드(PlayerEscorter)·조준 피드백(InteractionFeedback)이
 /// 모두 여기를 읽는다 — 새 상태 추가 시 이 파일만 고치면 셋이 함께 움직인다.
 /// 상태별 '행동'은 NpcXxxState 클래스(FSM, 서버 전용), 상태별 '가능 여부'는 여기 — 역할 분리.
 /// 클라이언트는 동기화된 enum(NpcController.CurrentState)만 알기 때문에 순수 함수로 둔다.
@@ -38,18 +38,23 @@ public static class NpcStateRules
         && state != NpcState.Chasing
         && state != NpcState.PenaltyEscorting;
 
-    /// <summary>밧줄로 묶어 끌 수 있는 상태인가 — 기절(Stunned)한 대상만. (#269)
-    /// 기절 경로가 둘이라 테이저 전용이 아니다: 테이저 직격과 제압 타격으로 HP가 0에 도달한
-    /// 경우(#366) 모두 같은 Stunned로 들어오므로, 맞아서 쓰러진 저항형도 밧줄 대상이다.
-    /// 수갑 연행과 역할이 갈린다: 수갑은 순응형 즉시 연행, 밧줄은 기절시킨 대상 전용.</summary>
-    public static bool IsRopeable(NpcState state) => state == NpcState.Stunned;
+    /// <summary>밧줄로 묶어 끌 수 있는 상태인가. (#269 → #369 기본 검거로 승격)
+    /// 제외 목록 방식 — 이미 신병 확보(Escorted/Captured/Jailed)·타 시스템 소유(Holding·페널티)는 제외.
+    /// 기절·도주·저항 등 나머지는 전부 대상이다(제압 타격으로 HP 0에 쓰러진 저항형 Stunned 포함, #366).
+    /// Captured 제외 주의: 그 상태에선 밧줄 좌클릭이 '풀어주기'로 갈리고(<see cref="CanRelease"/>),
+    /// 다시 끄는 건 E 경로다.</summary>
+    public static bool CanArrest(NpcState state) =>
+        state != NpcState.Escorted
+        && state != NpcState.Captured
+        && state != NpcState.Jailed
+        && state != NpcState.Holding
+        && state != NpcState.Detained
+        && state != NpcState.Chasing
+        && state != NpcState.PenaltyEscorting;
 
-    /// <summary>빈손 좌클릭 채널링으로 수갑을 풀어 회수할 수 있는 '상태'인가 — 체포되어 멈춘 대상. (#290)
-    /// 상태 게이트는 Captured만(ReleaseFromCustody의 게이트와 일치). 순수 함수라 여기서 수갑 유무는
-    /// 보지 않는다 — 호출부(PlayerItemUser·PlayerEscorter)가 npc.HasHandcuffs를 함께 걸어 '수갑 찬
-    /// Captured'로 좁힌다. 수갑 없이 제압만 된 Captured(도주·저항 제압)는 대상이 아니며, 그런 NPC는
-    /// 인계 방치 타이머(NpcCapturedState)로 스스로 풀려난다.</summary>
-    public static bool IsUncuffable(NpcState state) => state == NpcState.Captured;
+    /// <summary>밧줄 좌클릭으로 풀어 석방할 수 있는 상태인가 — 체포되어 멈춘 대상(Captured)만. (#290 → #369)
+    /// 밧줄은 소모형이 아니라 상태만으로 가른다(수갑 시절의 자원 유무 조건 없음). 제압만으로 잡힌 Captured도 대상.</summary>
+    public static bool CanRelease(NpcState state) => state == NpcState.Captured;
 
     /// <summary>E 상호작용(제압·타격·재연행)이 반응하는 상태인가.
     /// 포함 목록 방식 — 새 상태는 기본 'E 불가'이므로 열어야 하면 여기 추가할 것.

@@ -34,14 +34,8 @@ public class NpcStunnedState : NpcStateBase
 
     public override void Tick()
     {
-        // 밧줄로 묶여 있는 동안엔 기절 타이머를 멈춘다 — 끌려가는 내내 깨어나지 않는다 (#269)
-        if (m_owner.IsRoped)
-        {
-            // 일어나려던 참에 묶였으면 다시 누운 것으로 되돌린다 — 표현(드라이버)도 끌기를 보고 누운 모션으로 복귀한다
-            m_standingUp = false;
-            return;
-        }
-
+        // 밧줄로 묶이면 커스터디(Escorted)로 넘어가므로 여기서 끌기를 볼 일이 없다 —
+        // 기절 타이머 정지 분기는 그 전이와 함께 제거됐다. (#369)
         m_timer += Time.deltaTime;
 
         // 기절 시간의 마지막 구간을 일어나는 모션에 쓴다 — 총 무력화 시간(StunSeconds)은 그대로 두고
