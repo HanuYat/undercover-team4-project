@@ -32,7 +32,7 @@ public static class NpcStateRules
     /// 다만 <b>확보·페널티군까지 열리지는 않는다</b> — 기절했다고 남이 호송 중인 대상을 가로챌 수 없다.</summary>
     public static bool IsCapturable(NpcController npc) =>
         npc != null
-        && (IsCapturable(npc.CurrentState) || (IsIncapacitated(npc) && IsReactive(npc.CurrentState)));
+        && (IsCapturable(npc.CurrentState) || (npc.IsStunned && IsReactive(npc.CurrentState)));
 
     /// <summary>타격 피해가 들어가는 상태인가 — <b>스턴 게이트가 아니다.</b> (#292)
     /// 스턴은 오버레이가 되면서 전 상태에 걸리게 됐지만(#292), 타격까지 함께 열면 연행 중인
@@ -65,19 +65,12 @@ public static class NpcStateRules
             or NpcState.Attack
             or NpcState.Intruding;
 
-    /// <summary>무력화(기절) 상태인가 — 기절 경로가 둘이라 호출부가 매번 OR를 쓰지 않게 모은다. (#292)
-    /// 오버레이(테이저·체력 0 #366)와 넉백 KO(<see cref="NpcState.Stunned"/>)를 함께 잡는다.
-    /// <b>새로 "기절인가?"를 묻는 코드는 반드시 이걸 쓸 것</b> — CurrentState만 보면 오버레이
-    /// 경로가 조용히 누락되고, IsStunned만 보면 넉백 KO가 누락된다.</summary>
-    public static bool IsIncapacitated(NpcController npc) =>
-        npc != null && (npc.IsStunned || npc.CurrentState == NpcState.Stunned);
-
     /// <summary>밧줄로 묶어 끌 수 있는 대상인가 — 기절한 대상만. (#269)
     /// 기절 경로가 둘이라 테이저 전용이 아니다: 테이저 직격, 제압 타격으로 HP 0 도달(#366),
     /// 넉백 착지가 모두 대상이다. 상태값이 아니라 컨트롤러를 받는 이유는 오버레이(#292)가
     /// NpcState에 나타나지 않기 때문이다.
     /// 수갑 연행과 역할이 갈린다: 수갑은 순응형 즉시 연행, 밧줄은 기절시킨 대상 전용.</summary>
-    public static bool IsRopeable(NpcController npc) => IsIncapacitated(npc);
+    public static bool IsRopeable(NpcController npc) => npc != null && npc.IsStunned;
 
     /// <summary>빈손 좌클릭 채널링으로 수갑을 풀어 회수할 수 있는 '상태'인가 — 체포되어 멈춘 대상. (#290)
     /// 상태 게이트는 Captured만(ReleaseFromCustody의 게이트와 일치). 순수 함수라 여기서 수갑 유무는

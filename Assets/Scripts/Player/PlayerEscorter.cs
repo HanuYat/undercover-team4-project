@@ -324,8 +324,7 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
                 // 스턴 중 수갑을 채운 경우 오버레이를 먼저 걷는다 (#292). 남겨두면 Update의 스턴
                 // 게이트가 연행 Tick을 막고, 만료 해제 경로(resumeReaction: true)를 타면 StartFlee가
                 // 걸려 수갑을 채우자마자 도망친다 — 그래서 강제 해제다.
-                if (target.IsStunned)
-                    target.ExitStun(resumeReaction: false);
+                target.ExitStun(resumeReaction: false);
 
                 // 체포 성공 → 이 플레이어를 따라 연행 (#59)
                 NotifyOwner($"NPC 구속됨: {target.name}");
@@ -483,7 +482,7 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
     /// <summary>채널링 성공 순간의 반응. 기절 중이거나 신원이 없으면 순응(즉시 연행) 취급. (#76)</summary>
     private static ReactionType ResolveReaction(NpcController target)
     {
-        if (NpcStateRules.IsIncapacitated(target))
+        if (target.IsStunned)
             return ReactionType.Compliant;
 
         CitizenIdentity identity = target.GetComponent<CitizenIdentity>();

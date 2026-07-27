@@ -178,7 +178,7 @@ public class Taser : ItemBase
 
         // 남은 무효 케이스는 하나 — 이미 기절해 있는 대상이다. EnterStunned가 no-op이라
         // 그냥 통과시키면 탄만 쓰고 "명중"이 뜬다. 크로스헤어(#328)도 이 판정을 공유한다.
-        if (NpcStateRules.IsIncapacitated(npc))
+        if (npc.IsStunned)
             return AimResult.TargetInvalidState;
 
         return AimResult.ValidTarget;

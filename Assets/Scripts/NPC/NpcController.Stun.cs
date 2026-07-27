@@ -12,7 +12,8 @@ using UnityEngine;
 /// <b>기절 경로는 둘이다.</b> 테이저와 체력 0(#366)은 이 오버레이를 쓰고, 넉백 착지는
 /// <see cref="NpcState.Stunned"/> 상태 전이를 그대로 쓴다 — 넉백은 비행 전 상태 전이로 이전
 /// 상태의 Exit()이 에이전트를 정리하게 만드는 구조라 오버레이로 옮기면 그 정리가 빠진다.
-/// 그래서 "기절인가?"를 묻는 판정은 <see cref="NpcStateRules.IsIncapacitated"/>로 모은다.
+/// 그래서 <see cref="IsStunned"/>가 두 경로를 함께 답한다 — 밖에서는 이것만 쓰면 된다.
+/// 오버레이만 따로 봐야 하는 건 이 파일 안의 게이팅뿐이라 <c>HasStunOverlay</c>를 private로 둔다.
 /// </summary>
 public partial class NpcController
 {
@@ -20,8 +21,17 @@ public partial class NpcController
     private readonly NetworkVariable<bool> m_syncedStunned = new NetworkVariable<bool>();
     private bool m_stunned;
 
-    /// <summary>스턴 오버레이가 걸려 있는가. 세션 중에는 동기화 값이라 클라이언트에서도 읽을 수 있다. (#292)</summary>
-    public bool IsStunned => IsSpawned ? m_syncedStunned.Value : m_stunned;
+    /// <summary>기절해 있는가 — <b>경로를 가리지 않는 일반 질문.</b> 오버레이(테이저·체력 0)와
+    /// 넉백 KO(<see cref="NpcState.Stunned"/>)를 함께 답한다. 세션 중에는 동기화 값이라
+    /// 클라이언트에서도 읽을 수 있다. (#292)
+    ///
+    /// 밖에서 "이 NPC 기절했나?"를 물을 일이 있으면 <b>항상 이것</b>이다 — 경로별로 갈라 물을 이유가
+    /// 없도록 여기서 합쳐 둔다.</summary>
+    public bool IsStunned => HasStunOverlay || CurrentState == NpcState.Stunned;
+
+    // 오버레이만 — 넉백 KO는 제외한다. Update의 스턴 게이트가 이걸 봐야 넉백 KO일 때
+    // NpcStunnedState.Tick이 정상적으로 돌고, 해제 경로도 오버레이가 켜진 경우에만 동작한다.
+    private bool HasStunOverlay => IsSpawned ? m_syncedStunned.Value : m_stunned;
 
     /// <summary>스턴 오버레이가 켜지거나 꺼질 때 전 피어에서 발행된다 — 표현(NpcAnimationDriver)용. (#292)
     /// 오버레이는 m_networkState를 바꾸지 않으므로 OnStateChanged로는 알 수 없다.</summary>
@@ -66,7 +76,7 @@ public partial class NpcController
             return;
         // 이미 무력화돼 있으면 무시한다 — 추가 타격이 기절 시간을 리셋하지 못하게 하고(#366의 엣지
         // 성질), 넉백 KO(enum Stunned) 위에 오버레이가 덧씌워지는 이중 기절도 막는다 (#292).
-        if (NpcStateRules.IsIncapacitated(this))
+        if (IsStunned)
             return;
 
         ThreatTarget = threat;
@@ -116,7 +126,7 @@ public partial class NpcController
     /// </summary>
     private void ClearStunOverlay()
     {
-        if (!IsStunned)
+        if (!HasStunOverlay)
             return;
 
         SetStunned(false);
@@ -139,8 +149,8 @@ public partial class NpcController
     {
         if (IsSpawned && !IsServer)
             return;
-        if (!IsStunned)
-            return;
+        if (!HasStunOverlay)
+            return; // 오버레이가 없으면 풀 것도 없다 — 넉백 KO는 NpcStunnedState가 스스로 빠져나간다
 
         ServerRestoreHp(); // 오버레이 경로의 회복 지점 — 넉백 KO는 NpcStunnedState.Exit이 담당 (#366)
         SetStunned(false);

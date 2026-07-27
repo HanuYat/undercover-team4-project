@@ -93,13 +93,20 @@ enum과 `NpcStunnedState`는 **넉백 KO 전용으로 남는다.** 다만 "기�
 | `PlayerEscorter.RopeDrag.cs:132` | 끌기 중단 검사 `!= Stunned` | 둘 다 허용 |
 | `NpcAnimationDriver.cs:191,202` | 기절 포즈 판정 | 둘 다 허용 — 오버레이는 enum이 안 바뀌므로 **플래그 구독**을 추가 |
 
-판정이 흩어지지 않도록 헬퍼 하나로 모은다.
+판정이 흩어지지 않도록 **공개 API를 하나로 합친다.** 별도 헬퍼를 두는 대신 `IsStunned` 자체가
+두 경로를 답하게 하고, 오버레이만 보는 쪽은 private으로 숨긴다 — 밖에서 고를 수 있는 선택지가
+없으면 잘못 고를 수도 없다.
 
 ```csharp
-// NpcStateRules — 기절 경로가 둘(오버레이/넉백 KO)이라 호출부가 매번 OR를 쓰지 않게 한다
-public static bool IsIncapacitated(NpcController npc) =>
-    npc.IsStunned || npc.CurrentState == NpcState.Stunned;
+// NpcController.Stun.cs
+public  bool IsStunned      => HasStunOverlay || CurrentState == NpcState.Stunned; // 일반 질문
+private bool HasStunOverlay => IsSpawned ? m_syncedStunned.Value : m_stunned;      // 내부 게이팅 전용
 ```
+
+> 처음에는 `NpcStateRules.IsIncapacitated(npc)` 헬퍼를 두고 "새 코드는 반드시 이걸 쓸 것"이라고
+> 주석에 경고했다. 잘못 부르기 쉬운 API를 만들어 놓고 조심하라고 써 붙인 셈이라 접었다.
+> 이 프로젝트에서 **"무력화(Incapacitated)"는 이미 플레이어 다운을 가리키는 용어**(`PlayerIncapacitation`)라
+> 의미가 겹치는 문제도 있었다.
 
 ### 두 경로가 겹칠 때
 
@@ -121,15 +128,21 @@ public static bool IsRopeable(NpcState state) => state == NpcState.Stunned;
 
 ## 5. 위험 · 미해결
 
-### 넉백 착지의 Exit 정리 — 해소됨 (결정 1)
+### 넉백은 왜 상태 전이로 남는가 (결정 1)
 
-`ApplyKnockback`은 비행 시작 **전에** `ChangeState`를 걸어 이전 상태의 `Exit()`이 에이전트를 정리하게 만든다(주석에 명시된 의도). 넉백까지 오버레이로 바꿨다면 그 정리가 실행되지 않아, 저항 중 폭발에 날아간 NPC는 `NpcResistState.Exit`이 되돌리던 `speed`·`stoppingDistance`가 그대로 남는다.
+**본질적인 이유: 넉백은 하던 일을 실제로 중단시키는 게 맞다.** 폭발에 날아가면 호송이 끊기고(`Escorted → Captured`) 저항이 풀린다 — 의도된 동작이다. 테이저는 **얼리고**, 넉백은 **끊는다**. 상태 전이는 "중단하고 리셋한다"는 뜻이므로 넉백의 의미와 정확히 맞는다.
 
-→ **넉백만 상태 전이를 유지**하는 것으로 결론냈다(2026-07-27). 대신 기절 경로가 둘로 갈리는 비용을 §3·§4에서 흡수한다.
+구현상으로도 맞물린다. `ApplyKnockback`은 비행 시작 **전에** `ChangeState`를 걸어 이전 상태의 `Exit()`이 에이전트를 정리하게 만든다(주석에 명시된 의도). 오버레이로 바꾸면 그 정리 시점이 사라진다.
 
-### 기절 경로가 둘이라는 비용
+> 처음에는 이 구현상의 이유만 근거로 적었는데, 그것만 보면 "`ApplyKnockback`에서 파라미터를 직접 원복하면 되지 않나"로 읽힌다. 실제로는 위의 의미 차이가 먼저다.
 
-앞으로 "기절인가?"를 묻는 코드가 생길 때마다 두 경로를 다 봐야 한다. `IsIncapacitated` 헬퍼로 모아두지만, 헬퍼를 안 쓰고 `CurrentState == Stunned`만 새로 짜면 테이저 기절이 조용히 누락된다. 리뷰에서 봐야 할 항목이다.
+→ **넉백만 상태 전이를 유지**한다(2026-07-27 결정). 대신 기절 경로가 둘로 갈리는 비용을 §3에서 흡수한다.
+
+### 기절 경로가 둘이라는 비용 — API로 흡수한다
+
+경로가 둘이면 "기절인가?"를 묻는 코드마다 둘 다 봐야 한다. **묻는 방법을 하나로 만들어** 이 비용을 없앤다: `IsStunned`가 두 경로를 함께 답하고, 오버레이만 보는 쪽은 private이라 밖에서 부를 수 없다.
+
+남는 위험은 `CurrentState == Stunned`를 직접 비교하는 새 코드뿐이다. 이건 이름으로 막을 수 없으니 리뷰 항목으로 남긴다 — 다만 `IsStunned`라는 자연스러운 선택지가 바로 옆에 있으므로 굳이 raw 비교를 쓸 이유가 없다.
 
 ### 페널티군 스턴 허용은 #277~#279와 충돌한다
 
@@ -156,5 +169,5 @@ Unity Play 단독 + **MPPM 2인**.
 9. HP 0 기절 → 3초 후 도주 + **풀피 회복**(무적 구멍 회귀 — #366).
 10. 저항 중 폭발 넉백 → 착지 후 에이전트 속도·정지거리가 원복됐는지(상태 전이 유지의 근거).
 11. **두 경로 겹침** — 테이저로 기절시킨 NPC를 폭발로 날림 → 오버레이가 꺼지고 넉백 기절로 일원화되는지, 착지 후 정상적으로 깨어나는지.
-12. **넉백 KO도 밧줄로 끌리는지** — `IsIncapacitated`가 두 경로를 다 잡는지 확인.
+12. **넉백 KO도 밧줄로 끌리는지** — `IsStunned`가 두 경로를 다 잡는지 확인.
 13. MPPM: 클라 화면에서 기절 포즈가 보이는지 — 오버레이(플래그 구독)와 넉백 KO(enum) **양쪽 다**.

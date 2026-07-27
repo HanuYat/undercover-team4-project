@@ -130,7 +130,7 @@ public partial class PlayerEscorter
 
         // 외부 요인으로 기절에서 벗어났으면(예: 강제 상태 전이) 끌기를 정리한다.
         // 오버레이 해제도 여기서 잡힌다 — 판정은 NpcStateRules 단일 기준 (#292)
-        if (!NpcStateRules.IsIncapacitated(DraggingNpc))
+        if (!DraggingNpc.IsStunned)
         {
             ReleaseDrag();
             return;
