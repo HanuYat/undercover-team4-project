@@ -2834,6 +2834,7 @@ GameObject:
   - component: {fileID: 914296157285595536}
   - component: {fileID: -3123601567961304525}
   - component: {fileID: 3605863908184502176}
+  - component: {fileID: 3601868820283084074}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -3021,6 +3022,7 @@ MonoBehaviour:
   m_selectSlotAction: {fileID: -6296644355122630615, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_toggleInventoryAction: {fileID: 3681908641102379961, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_crouchAction: {fileID: 5064262545289094806, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  m_jumpAction: {fileID: -2099379676528639254, guid: 052faaac586de48259a63d0c4782560b, type: 3}
 --- !u!114 &3468529030498822857
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3374,6 +3376,20 @@ MonoBehaviour:
   m_maxVisualPitch: 60
   m_pitchLerpSpeed: 15
   m_weightLerpSpeed: 8
+--- !u!114 &3601868820283084074
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eaf33954189a1c849990d9d415c56821, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerJump
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_jumpHeight: 0.8
 --- !u!1 &5536001738967602051
 GameObject:
   m_ObjectHideFlags: 0
