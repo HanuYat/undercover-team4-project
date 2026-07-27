@@ -40,6 +40,7 @@ NPC에 체력을 도입하고, 기존 **저항 제압 게이지(`SubdueGauge`)�
 4. **기절에서 깨어날 때 풀피 회복** — 기절이 개념적으로 "한 번의 다운"이 된다.
 5. **기절 종료 시 도주하지 않고 `Idle`(배회) 복귀** — 일어나는 모션(#269)은 유지한다.
 6. **저항 제한시간 도주 제거** — `DefeatSeconds` 초과로 뿌리치고 도주하던 경로를 없앤다. "교전 플레이어 전원 무력화 → 도주"는 유지한다.
+7. **표적을 잃은 저항 NPC는 5초 후 `Idle` 복귀** — 결정 6으로 사라진 `Attack` 상태의 출구를 대신한다(도주 아님).
 
 ---
 
@@ -110,13 +111,15 @@ NpcStunnedState.Tick — m_timer >= StunSeconds
 
 `NpcStunnedState`의 밧줄 타이머 정지(`IsRoped`)와 일어나는 모션(`RaiseStandUp`, #269)은 그대로 둔다.
 
-### ⚠️ 결정 6의 파생 — 표적을 잃은 저항 NPC (확인 필요)
+### 결정 6의 파생 — 표적을 잃은 저항 NPC
 
 제한시간을 없애면 **저항(`Attack`) 상태를 빠져나갈 시간 기반 출구가 사라진다.** 표적이 사라진 경우(플레이어가 멀리 도망 / 접속 종료) `ResolveTarget()`이 null을 반환하고, `ChaseTarget(null)`이 에이전트를 세운 뒤 사거리 밖이라 스윙도 하지 않는다 — NPC가 `Attack` 상태로 **영구히 굳는다.** 기존에는 `DefeatSeconds`가 이 상황의 유일한 탈출구였다.
 
-**제안:** `ResolveTarget()`이 null인 틱이 일정 시간 이어지면 `Idle`로 복귀시킨다(도주 아님 — 결정 5와 같은 방향). 짧은 상수(예: 2초)면 충분하고, 튜닝이 필요하면 `NpcResistConfig`에 필드를 둔다.
+**확정(결정 7):** `ResolveTarget()`이 null인 상태가 **5초** 이어지면 `Idle`로 복귀시킨다. 도주가 아니라 배회다 — 결정 5와 같은 방향이고, 때릴 상대가 사라진 NPC가 혼자 전력 질주하지 않는다.
 
-이 항목은 결정 6에서 파생된 것이라 팀 확인 후 확정한다. **미해결 시 저항 NPC 고착 버그가 발생한다.**
+- 타이머는 `NpcResistState`의 인스턴스 필드로 두고, 표적이 다시 잡히는 틱마다 0으로 리셋한다(연속 null일 때만 누적).
+- 값은 `NpcResistConfig.NoTargetIdleSeconds`(신설, 기본 5f)로 뺀다 — 삭제되는 `DefeatSeconds`의 자리를 대신한다.
+- 복귀 시 `ClearThreat()`를 함께 호출한다. 위협 참조를 남기면 다음 반응이 사라진 대상을 물고 시작한다.
 
 ---
 
@@ -140,6 +143,7 @@ NpcStunnedState.Tick — m_timer >= StunSeconds
 | `SubdueHitPower` (float→int) | `NpcResistConfig` → `NpcCommonConfig` **이동** | 34 |
 | `SubdueGaugeMax` | `NpcResistConfig`에서 **삭제** | — (`MaxHp`가 대체) |
 | `DefeatSeconds` | `NpcResistConfig`에서 **삭제** | — (결정 6) |
+| `NoTargetIdleSeconds` (float) | `NpcResistConfig` **신설** | 5 (결정 7) |
 
 `NpcCommonConfig`는 "특정 FSM 상태에 속하지 않는 컨트롤러 레벨 공용 값"을 담는 SO라 HP·타격량의 자리로 맞다.
 
@@ -186,4 +190,5 @@ Unity Play 모드 단독 + **Multiplayer Play Mode 2인**(호스트 + 클라이�
 5. **배회 중인** 시민을 E로 타격 → HP가 깎이는지 확인(결정 3).
 6. 연행(`Escorted`) 중인 NPC를 타격 → **아무 일도 일어나지 않는지** 확인(신병 우회 차단).
 7. **클라이언트에서** 타격 → 서버 HP가 깎이고 양쪽 화면 HUD가 같이 줄어드는지 확인(RPC 경로).
-8. 저항 중 플레이어가 멀리 도망 → NPC가 `Attack`에 고착되지 않는지 확인(2절 파생 항목).
+8. 저항 중 플레이어가 멀리 도망 → **5초 후** NPC가 `Idle`로 복귀하는지 확인(도주하지 않을 것). `Attack` 고착 회귀 테스트.
+9. 위 8번 도중 5초가 지나기 전에 플레이어가 다시 접근 → 타이머가 리셋되고 저항이 이어지는지 확인.
