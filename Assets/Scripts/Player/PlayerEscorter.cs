@@ -264,7 +264,7 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
             return; // 연행/끌기 중엔 체포 불가 — 놓기는 상호작용키(E)의 RequestRelease 전용 (#91/#269)
         if (!HasHandcuffs)
             return; // 수갑 없으면 체포 시도 불가 — 연행 중 소모돼 사라진 상태 포함 (#229)
-        if (!NpcStateRules.IsCapturable(target.CurrentState))
+        if (!NpcStateRules.IsCapturable(target))
             return; // 연행 중(가로채기 방지 #59)·체포됨(재연행은 E 경로 #91) — 클라 검증·윤곽선과 단일 기준 (#184)
         if (!IsInRange(target))
             return; // 사거리 밖이면 시작조차 안 함
@@ -321,6 +321,12 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
                 break;
 
             default:
+                // 스턴 중 수갑을 채운 경우 오버레이를 먼저 걷는다 (#292). 남겨두면 Update의 스턴
+                // 게이트가 연행 Tick을 막고, 만료 해제 경로(resumeReaction: true)를 타면 StartFlee가
+                // 걸려 수갑을 채우자마자 도망친다 — 그래서 강제 해제다.
+                if (target.IsStunned)
+                    target.ExitStun(resumeReaction: false);
+
                 // 체포 성공 → 이 플레이어를 따라 연행 (#59)
                 NotifyOwner($"NPC 구속됨: {target.name}");
                 StartEscort(target);

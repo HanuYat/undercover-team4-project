@@ -10,7 +10,9 @@ public static class NpcStateRules
     /// <summary>수갑 체포 채널링의 대상이 될 수 있는 상태인가.
     /// 제외 목록 방식 — 새 상태는 기본 '체포 가능'이므로 막아야 하면 여기 추가할 것.
     /// 도주(Run)·저항(Attack)은 수갑이 아니라 E 제압 홀드·테이저로만 잡는다 (GDD 6-1/7-4, #254) —
-    /// 반응이 시작된 뒤에는 수갑 채널링이 걸리지 않아야 한다.</summary>
+    /// 반응이 시작된 뒤에는 수갑 채널링이 걸리지 않아야 한다.
+    /// <b>호출부는 대개 이쪽이 아니라 컨트롤러 오버로드를 써야 한다</b> — 스턴 오버레이가 상태값에
+    /// 나타나지 않기 때문이다 (#292).</summary>
     public static bool IsCapturable(NpcState state) =>
         state != NpcState.Escorted
         && state != NpcState.Captured
@@ -23,14 +25,24 @@ public static class NpcStateRules
         && state != NpcState.Chasing
         && state != NpcState.PenaltyEscorting;
 
-    /// <summary>테이저 스턴이 걸리는 상태인가 — 수갑용 <see cref="IsCapturable"/>과 분리한다 (#289).
-    /// 도주(Run)·저항(Attack)이 주 대상이라 <see cref="IsCapturable"/>과 달리 이 둘을 제외하지 않는다.
+    /// <summary>수갑 체포 채널링의 대상이 될 수 있는가 — 위 상태 판정에 스턴 오버레이를 얹은 것. (#292)
+    /// 기절한 대상은 도주(Run)·저항(Attack) 중이어도 수갑이 채워진다: 무방비로 누워 있는데
+    /// "반응 중"이라는 이유로 막으면 테이저→수갑 콤보가 성립하지 않는다(오버레이 전에는 상태가
+    /// Stunned로 바뀌어 저절로 통과됐다).
+    /// 다만 <b>확보·페널티군까지 열리지는 않는다</b> — 기절했다고 남이 호송 중인 대상을 가로챌 수 없다.</summary>
+    public static bool IsCapturable(NpcController npc) =>
+        npc != null
+        && (IsCapturable(npc.CurrentState) || (IsIncapacitated(npc) && IsReactive(npc.CurrentState)));
+
+    /// <summary>타격 피해가 들어가는 상태인가 — <b>스턴 게이트가 아니다.</b> (#292)
+    /// 스턴은 오버레이가 되면서 전 상태에 걸리게 됐지만(#292), 타격까지 함께 열면 연행 중인
+    /// NPC를 때려 기절시켜 신병에서 빼내는 우회가 생긴다. 그래서 게이트를 둘로 쪼개고
+    /// 이쪽은 구 CanBeStunned(#289)의 제외 목록을 그대로 물려받았다 — 팀 결정은
+    /// "스턴은 허용, 타격은 차단"이다.
+    ///
     /// 제외하는 건 이미 신병을 확보(Escorted/Captured/Jailed)했거나 오검거 페널티가 진행(Detained/
-    /// Chasing/PenaltyEscorting) 중인 상태뿐 — 이들은 스턴이 호송·수감·페널티 집행을 끊어버리고(스턴이
-    /// 풀리면 도주로 빠질 뿐 원래 링크로 못 돌아온다) 전술 가치도 없어 no-op으로 둔다.
-    /// 전 상태 스턴 + 원상 복귀(pause-resume)는 별도 이슈(#292)에서 오버레이 방식으로 다룬다.
-    /// Stunned 재진입은 상태 머신이 같은 상태로 막으므로 자연히 무해한 no-op이다.</summary>
-    public static bool CanBeStunned(NpcState state) =>
+    /// Chasing/PenaltyEscorting) 중인 상태 — 도주(Run)·저항(Attack)은 주 타격 대상이라 제외하지 않는다.</summary>
+    public static bool CanBeDamaged(NpcState state) =>
         state != NpcState.Escorted
         && state != NpcState.Captured
         && state != NpcState.Jailed

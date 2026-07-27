@@ -41,7 +41,7 @@ public class Handcuffs : ItemBase
 
         // 체포 가능 상태 판정은 NpcStateRules 단일 기준 — 서버 가드·조준 피드백과 동일 (#184)
         // 상태는 반드시 동기화된 CurrentState로 읽는다 — StateMachine 값은 서버에서만 갱신됨 (#56)
-        if (!NpcStateRules.IsCapturable(target.CurrentState))
+        if (!NpcStateRules.IsCapturable(target))
         {
             // 재연행은 상호작용키(E)로 (#91) / 연행 중 대상은 가로채기 방지 (#59)
             Debug.Log(
@@ -62,7 +62,7 @@ public class Handcuffs : ItemBase
     public override bool CanTarget(GameObject aimTarget)
     {
         NpcController target = ResolveTarget(aimTarget);
-        if (target == null || !NpcStateRules.IsCapturable(target.CurrentState))
+        if (target == null || !NpcStateRules.IsCapturable(target))
             return false;
 
         // 연행 중엔 체포 불가 (서버 ServerBeginCapture 가드와 동일) — 오너 클라는 동기화 플래그로 판정
