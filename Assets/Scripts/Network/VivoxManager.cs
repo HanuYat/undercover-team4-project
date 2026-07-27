@@ -531,7 +531,9 @@ public class VivoxManager : CommonManagerBase
 
     private void ClearAllDistortion()
     {
-        foreach (VivoxParticipant participant in m_distortTaps.Keys)
+        // 키 복사본을 순회한다 — SafeDestroyTap이 Vivox 참가자 콜백을 동기로 깨우면
+        // OnParticipantRemoved가 m_distortTaps를 건드려 순회 중 수정 예외가 난다 (#372)
+        foreach (VivoxParticipant participant in new List<VivoxParticipant>(m_distortTaps.Keys))
             SafeDestroyTap(participant);
 
         m_distortTaps.Clear();
