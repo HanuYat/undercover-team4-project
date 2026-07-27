@@ -3,8 +3,8 @@ using UnityEngine;
 /// <summary>
 /// 기절(Stunned) 상태 — 테이저 등 무력화 수단의 연결고리. (GDD 7-4/8-3, #76)
 /// 지속 시간 동안 완전 무방비로 멈추며, 이 동안 수갑을 채우면 반응 없이 즉시 연행된다.
-/// 시간이 지나면 일어나(#269 StandUp 모션) 스스로 도주한다. 진입은 NpcController.EnterStunned() —
-/// 테이저 아이템(후속 이슈)이 호출한다.
+/// 시간이 지나면 일어나(#269 StandUp 모션) 체력을 회복하고 배회로 돌아간다 (#366 — 도주 폐지).
+/// 진입은 NpcController.EnterStunned() — 테이저와 체력 0 도달(NpcController.SetHp)이 호출한다.
 /// </summary>
 public class NpcStunnedState : NpcStateBase
 {
@@ -50,12 +50,18 @@ public class NpcStunnedState : NpcStateBase
             m_owner.RaiseStandUp(); // 전 피어에 일어나는 모션 재생을 알린다
         }
 
-        // 깨어나면 배회가 아니라 도주다 — 무력화가 풀린 용의자는 그대로 서 있지 않는다 (#269 확정).
-        // 위협은 기절시킨 상대(테이저 사수)이거나, 밧줄로 끌고 다닌 플레이어다.
-        // 주변에 추격자가 아무도 없으면 도주 상태가 스스로 배회로 돌려보낸다(NpcFleeState) —
-        // 아무도 없는 곳에 두고 온 NPC가 혼자 전력 질주하지 않는다.
+        // 깨어나면 배회로 돌아간다 — 도주하지 않는다 (#366 결정 5, #269의 도주 복귀를 대체).
+        //
+        // 체력 회복이 이 지점의 핵심이다: HP 0 → 기절은 '0에 도달하는 순간'만 걸리는 엣지
+        // 트리거라(NpcController.SetHp), 0인 채로 깨어나면 두 번 다시 기절하지 않는 무적이 된다.
+        // 회복을 상태 진입(Enter)이 아니라 여기 두는 이유는, 기절해 있는 동안에는 HP 0이
+        // 유지돼야 "기절 중 추가 타격이 타이머를 리셋하지 않는다"는 성질이 성립하기 때문이다.
         if (m_timer >= m_config.StunSeconds)
-            m_owner.StartFlee(m_owner.ThreatTarget);
+        {
+            m_owner.ServerRestoreHp();
+            m_owner.ClearThreat(); // 도주하지 않으므로 위협 참조를 남길 이유가 없다
+            m_owner.StateMachine.ChangeState(NpcState.Idle);
+        }
     }
 
     public override void Exit()
