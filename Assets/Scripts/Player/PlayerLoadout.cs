@@ -45,6 +45,7 @@ public class PlayerLoadout : NetworkBehaviour
     private PlayerItemUser m_itemUser;
     private PlayerInputHandler m_inputHandler;
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 아이템 전환·버리기 차단용 (#105)
+    private PlayerEscorter m_escorter; // 밧줄을 묶어 둔 동안 그 밧줄 버리기 차단용 (#369)
 
     // 서버 줍기 거리 검증용 — PlayerInteractor의 조준 사거리·기준점을 그대로 재사용한다 (#147).
     // 값을 따로 두지 않고 여기서 읽어야 조준-줍기 사거리가 항상 정합된다.
@@ -74,6 +75,7 @@ public class PlayerLoadout : NetworkBehaviour
         m_itemUser = GetComponent<PlayerItemUser>();
         m_inputHandler = GetComponent<PlayerInputHandler>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
+        m_escorter = GetComponent<PlayerEscorter>();
         m_interactor = GetComponent<PlayerInteractor>();
         m_pickupRange = m_interactor.Range;
     }
@@ -215,6 +217,11 @@ public class PlayerLoadout : NetworkBehaviour
 
     // ---- 버리기 (오너 요청 → 서버 실행) ----
 
+    // 지금 NPC를 묶어 둔 밧줄인가 — 이 상태로 버리면 묶인 대상이 주인 없이 남는다. IsTethered는
+    // 서버·오너 양쪽에서 유효해(동기화 참조) 조기검증과 서버 판정이 같은 기준을 쓴다. (#369)
+    private bool IsTetheredRope(ItemBase item) =>
+        item is Rope && m_escorter != null && m_escorter.IsTethered;
+
     // 현재 장착 아이템을 버린다 (버리기 입력 핸들러).
     private void RequestDropEquipped()
     {
@@ -232,6 +239,13 @@ public class PlayerLoadout : NetworkBehaviour
         ItemBase equipped = m_itemUser.EquippedItem;
         if (equipped == null)
         {
+            return;
+        }
+
+        // 묶어 둔 대상이 있으면 그 밧줄은 버릴 수 없다 — 최종 판정은 서버(DropRpc)가 한다 (#369)
+        if (IsTetheredRope(equipped))
+        {
+            Debug.Log("밧줄에 묶어 둔 대상이 있어 버릴 수 없음 — 먼저 풀어야 한다");
             return;
         }
 
@@ -258,10 +272,19 @@ public class PlayerLoadout : NetworkBehaviour
             return;
         }
 
+        itemNetworkObject.TryGetComponent(out ItemBase droppedItem);
+
+        // 묶어 둔 대상이 있는 밧줄은 버릴 수 없다 — 줄이 손을 떠나면 묶인 NPC가 주인 없이 남는다
+        // (놓아둔 대상도 포함). 오너 조기검증과 같은 기준, 최종 판정은 여기 서버가 한다. (#369)
+        if (IsTetheredRope(droppedItem))
+        {
+            return;
+        }
+
         // 버리는 아이템이 채널링 중이면 서버가 직접 끊는다 — 소유권 회수(RemoveOwnership) 후엔 오너의
         // 취소 RPC가 RequireOwnership에 막혀 거부되므로, 여기서 서버 권위로 중단해야 배터리 낭비·오완료를
         // 막는다. 채널링 없는 아이템은 무동작(ItemBase 기본). (드롭 중 채널링 경합 대응)
-        if (itemNetworkObject.TryGetComponent(out ItemBase droppedItem))
+        if (droppedItem != null)
         {
             droppedItem.ServerCancelActiveUse();
         }
