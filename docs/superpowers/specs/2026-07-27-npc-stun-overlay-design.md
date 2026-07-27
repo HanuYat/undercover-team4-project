@@ -14,11 +14,11 @@
 
 ## 1. 확정 결정
 
-1. **세 경로 모두 오버레이로 통일** — 테이저·HP 0·넉백 착지가 전부 `IsStunned` 플래그를 켠다. `NpcState.Stunned` enum과 `NpcStunnedState` 클래스는 **은퇴**한다. (이슈 원문의 이원 구조에서 변경)
+1. **테이저·HP 0은 오버레이, 넉백 KO는 상태 전이 유지** — 이슈 원문의 이원 구조를 따르되 HP 0(#366)을 오버레이 쪽에 붙인다. `NpcState.Stunned` enum과 `NpcStunnedState`는 **넉백 착지 전용으로 존속**한다. (§5의 에이전트 정리 문제를 피하기 위한 선택 — 2026-07-27 결정)
 2. **게이트를 둘로 분리** — 스턴은 **전 상태 허용**(`CanBeStunned` 삭제), 타격 피해는 **기존 제외 목록을 그대로 유지**(신규 `CanBeDamaged`). 지금은 `CanBeStunned` 하나가 두 역할을 겸하고 있어 분리가 필수다.
 3. **스턴 해제 후 동작은 상태군으로 갈린다** — 반응·배회군은 **도주**(#269/#366 확정), 확보·페널티군은 **unfreeze만 하고 원래 상태·링크를 재개**한다.
-4. **`Stunned` enum을 보던 판정은 전부 `IsStunned`로 전환** — 밧줄·수갑·반응 판정·끌기 중단 검사 4곳. 안 옮기면 기능이 조용히 죽는다(§4).
-5. **체력 회복 지점을 오버레이 해제로 이동** — 지금은 `NpcStunnedState.Exit()`에 있는데 그 클래스가 사라진다.
+4. **기절을 묻는 판정은 전부 "둘 중 하나"로 바꾼다** — 결정 1로 기절 경로가 둘이 되므로, `Stunned` enum만 보던 4곳은 `IsStunned || CurrentState == Stunned`를 봐야 한다. 안 고치면 테이저 기절이 밧줄·수갑·표현에서 조용히 누락된다(§4).
+5. **체력 회복 지점이 둘이 된다** — 오버레이 해제(`ExitStun`)와 `NpcStunnedState.Exit()` 양쪽에서 `ServerRestoreHp()`를 부른다. 어느 경로로 기절하든 깨어날 때 풀피라는 #366의 불변식을 유지한다.
 
 ### 결정 2의 근거 — 왜 게이트를 쪼개나
 
@@ -63,7 +63,8 @@ NpcController (partial)
     └─ 만료 → ExitStun()
 
   ExitStun()
-    ├─ ServerRestoreHp()               ← NpcStunnedState.Exit에서 이사
+    ├─ ServerRestoreHp()               ← 오버레이 경로의 회복 지점
+    │                                     (넉백 KO는 NpcStunnedState.Exit이 그대로 담당)
     ├─ m_isStunned = false, 에이전트 재개
     ├─ 반응·배회군  → StartFlee(ThreatTarget)
     └─ 확보·페널티군 → 아무것도 안 함 (상태·링크 그대로 재개)
@@ -78,21 +79,33 @@ NpcController (partial)
 | 반응·배회 | Idle · Walk · Run · Attack · Panic · Intruding | `StartFlee(ThreatTarget)` — 위협이 없으면 도주 상태가 알아서 배회로 가라앉힌다 |
 | 확보·페널티 | Escorted · Captured · Jailed · Detained · Chasing · PenaltyEscorting | unfreeze만. 상태 유지, 타이머 이어서 진행 |
 
-## 3. `NpcState.Stunned` 은퇴
+## 3. `NpcState.Stunned` 참조 8곳의 처리
 
-enum 값과 `NpcStunnedState` 클래스를 지운다. 현재 참조 8곳의 처리는 다음과 같다.
+enum과 `NpcStunnedState`는 **넉백 KO 전용으로 남는다.** 다만 "기절인가?"를 묻던 판정은 이제 두 경로를 모두 봐야 한다.
 
 | 위치 | 현재 | 전환 |
 |---|---|---|
-| `NpcController.cs:140` | `AddState(Stunned, new NpcStunnedState(...))` | 삭제 |
-| `NpcController.Reaction.cs:91` | `ChangeState(Stunned)` | 플래그 세팅 |
-| `NpcController.Knockback.cs:40` | 착지 상태 = `Stunned` | §5 위험 항목 — 별도 처리 |
-| `NpcStateRules.cs:45` | `IsRopeable(state) => state == Stunned` | `IsStunned` 기반으로 시그니처 변경 |
-| `PlayerEscorter.cs:480` | `ResolveReaction`의 `== Stunned` | `IsStunned` |
-| `PlayerEscorter.RopeDrag.cs:132` | 끌기 중단 검사 `!= Stunned` | `IsStunned` |
-| `NpcAnimationDriver.cs:191,202` | 기절 포즈 판정 | 동기화 enum이 안 바뀌므로 **플래그 구독**으로 전환 |
+| `NpcController.cs:140` | `AddState(Stunned, new NpcStunnedState(...))` | **유지** — 넉백 착지가 쓴다 |
+| `NpcController.Knockback.cs:40` | 착지 상태 = `Stunned` | **유지** — 상태 전이라야 이전 상태의 `Exit()`이 에이전트를 정리한다 |
+| `NpcController.Reaction.cs:91` | `EnterStunned`의 `ChangeState(Stunned)` | 플래그 세팅으로 교체 (테이저·HP 0 경로) |
+| `NpcStateRules.cs:45` | `IsRopeable(state) => state == Stunned` | 둘 다 허용 + 컨트롤러를 받도록 시그니처 변경 |
+| `PlayerEscorter.cs:480` | `ResolveReaction`의 `== Stunned` | 둘 다 허용 |
+| `PlayerEscorter.RopeDrag.cs:132` | 끌기 중단 검사 `!= Stunned` | 둘 다 허용 |
+| `NpcAnimationDriver.cs:191,202` | 기절 포즈 판정 | 둘 다 허용 — 오버레이는 enum이 안 바뀌므로 **플래그 구독**을 추가 |
 
-`NpcStunnedState.cs`는 삭제한다. 이슈 원문은 "넉백 KO용으로 유지"라고 했으나, 결정 1로 넉백도 오버레이가 되므로 남길 이유가 없다.
+판정이 흩어지지 않도록 헬퍼 하나로 모은다.
+
+```csharp
+// NpcStateRules — 기절 경로가 둘(오버레이/넉백 KO)이라 호출부가 매번 OR를 쓰지 않게 한다
+public static bool IsIncapacitated(NpcController npc) =>
+    npc.IsStunned || npc.CurrentState == NpcState.Stunned;
+```
+
+### 두 경로가 겹칠 때
+
+테이저를 맞아 오버레이가 켜진 NPC가 폭발에 날아가면 두 기절이 동시에 성립한다. `Update`의 게이트 순서가 넉백 → 오버레이 → FSM이라 비행 중에는 오버레이 타이머가 멈추고, 착지 후에는 오버레이 게이트가 `NpcStunnedState.Tick`을 가로챈다.
+
+→ **넉백이 우선한다.** `ApplyKnockback`이 오버레이를 끄고(`m_isStunned = false`) enum `Stunned`로 일원화한다. 기절 시간은 넉백 쪽 기준으로 새로 흐른다.
 
 ## 4. 안 옮기면 조용히 죽는 것 (이슈에 빠져 있던 항목)
 
@@ -104,15 +117,19 @@ public static bool IsRopeable(NpcState state) => state == NpcState.Stunned;
 
 테이저로 기절시킨 NPC가 `NpcState.Stunned`가 아니게 되어 **밧줄로 못 끈다.** GDD 8-3의 "테이저(기절) → 밧줄(운반)" 콤보가 통째로 죽는다. 호출부는 `Rope.cs` 2곳과 `PlayerEscorter.RopeDrag.cs` 1곳, 그리고 raw 비교 1곳(`RopeDrag.cs:132`)이다.
 
-`IsRopeable`은 `NpcState`가 아니라 컨트롤러를 받도록 시그니처를 바꾼다 — 오버레이는 상태값이 아니기 때문이다.
+`IsRopeable`은 `NpcState`가 아니라 컨트롤러를 받도록 시그니처를 바꾼다 — 오버레이는 상태값이 아니기 때문이다. 넉백 KO도 계속 밧줄 대상이어야 하므로 §3의 `IsIncapacitated`를 그대로 쓴다.
 
 ## 5. 위험 · 미해결
 
-### 넉백 착지의 Exit 정리가 사라진다 ⚠️
+### 넉백 착지의 Exit 정리 — 해소됨 (결정 1)
 
-`ApplyKnockback`은 비행 시작 **전에** `ChangeState`를 걸어 이전 상태의 `Exit()`이 에이전트를 정리하게 만든다(주석에 명시된 의도). 오버레이로 바꾸면 상태 전이가 없어 그 정리가 실행되지 않는다. `ApplyKnockback`이 에이전트를 직접 끄긴 하지만(`m_agent.enabled = false`), 상태별 `Exit()`이 되돌리던 값(`isStopped`·`stoppingDistance`·`speed`·`updateRotation`)은 남는다. 특히 `NpcResistState.Exit`이 추격용으로 올린 `speed`·`stoppingDistance`를 원복하는데, 저항 중 폭발에 날아가면 그 값이 그대로 남는다.
+`ApplyKnockback`은 비행 시작 **전에** `ChangeState`를 걸어 이전 상태의 `Exit()`이 에이전트를 정리하게 만든다(주석에 명시된 의도). 넉백까지 오버레이로 바꿨다면 그 정리가 실행되지 않아, 저항 중 폭발에 날아간 NPC는 `NpcResistState.Exit`이 되돌리던 `speed`·`stoppingDistance`가 그대로 남는다.
 
-→ 구현 시 `ApplyKnockback`에서 에이전트 파라미터를 명시적으로 원복하거나, 넉백만 상태 전이를 유지하는 절충을 검토한다. **구현 착수 전 결론을 낼 것.**
+→ **넉백만 상태 전이를 유지**하는 것으로 결론냈다(2026-07-27). 대신 기절 경로가 둘로 갈리는 비용을 §3·§4에서 흡수한다.
+
+### 기절 경로가 둘이라는 비용
+
+앞으로 "기절인가?"를 묻는 코드가 생길 때마다 두 경로를 다 봐야 한다. `IsIncapacitated` 헬퍼로 모아두지만, 헬퍼를 안 쓰고 `CurrentState == Stunned`만 새로 짜면 테이저 기절이 조용히 누락된다. 리뷰에서 봐야 할 항목이다.
 
 ### 페널티군 스턴 허용은 #277~#279와 충돌한다
 
@@ -137,5 +154,7 @@ Unity Play 단독 + **MPPM 2인**.
 7. **밧줄 회귀** — 테이저 기절 → 밧줄로 끌기 성공, 끌리는 동안 안 깨어남.
 8. **타격 차단 회귀** — 연행 중 NPC를 E로 타격 → 아무 일 없음(`CanBeDamaged`).
 9. HP 0 기절 → 3초 후 도주 + **풀피 회복**(무적 구멍 회귀 — #366).
-10. 저항 중 폭발 넉백 → 착지 후 에이전트 속도·정지거리가 원복됐는지(§5).
-11. MPPM: 클라 화면에서 기절 포즈가 보이는지(플래그 기반 표현 전환).
+10. 저항 중 폭발 넉백 → 착지 후 에이전트 속도·정지거리가 원복됐는지(상태 전이 유지의 근거).
+11. **두 경로 겹침** — 테이저로 기절시킨 NPC를 폭발로 날림 → 오버레이가 꺼지고 넉백 기절로 일원화되는지, 착지 후 정상적으로 깨어나는지.
+12. **넉백 KO도 밧줄로 끌리는지** — `IsIncapacitated`가 두 경로를 다 잡는지 확인.
+13. MPPM: 클라 화면에서 기절 포즈가 보이는지 — 오버레이(플래그 구독)와 넉백 KO(enum) **양쪽 다**.
