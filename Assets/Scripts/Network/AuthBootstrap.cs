@@ -178,6 +178,27 @@ public class AuthBootstrap : CommonManagerBase
         }
     }
 
+    /// <summary>
+    /// 닉네임 입력 규칙 검사 — 위반이면 사유 문자열, 통과면 null. (#249)
+    /// UGS는 길이·문자셋을 제한하지 않고 공백만 거절하며 그 응답도 불친절해, 규칙은 우리가 정한다.
+    /// </summary>
+    private static string ValidateNickname(string trimmed)
+    {
+        if (string.IsNullOrEmpty(trimmed))
+            return "닉네임을 입력해 주세요.";
+
+        foreach (char c in trimmed)
+        {
+            if (char.IsWhiteSpace(c))
+                return "닉네임에 공백을 쓸 수 없습니다.";
+        }
+
+        if (trimmed.Length > k_maxNicknameLength)
+            return $"닉네임은 {k_maxNicknameLength}자 이하여야 합니다.";
+
+        return null;
+    }
+
     /// <summary>닉네임 변경 — 서버 반영에 성공했을 때만 로컬 캐시를 갱신한다. (#249)</summary>
     public async UniTask SetPlayerNameAsync(string name)
     {
@@ -185,18 +206,12 @@ public class AuthBootstrap : CommonManagerBase
             return;
 
         string trimmed = name?.Trim() ?? string.Empty;
-        if (string.IsNullOrEmpty(trimmed) || trimmed == Nickname)
-            return;
+        if (trimmed == Nickname)
+            return; // 변경 없음 — 조용히 넘어간다
 
-        // UGS는 길이·문자셋을 제한하지 않지만 공백은 거절한다 — 서버 메시지가 불친절해 여기서 막는다.
-        foreach (char c in trimmed)
-        {
-            if (char.IsWhiteSpace(c))
-                throw new ArgumentException("닉네임에 공백을 쓸 수 없습니다.");
-        }
-
-        if (trimmed.Length > k_maxNicknameLength)
-            throw new ArgumentException($"닉네임은 {k_maxNicknameLength}자 이하여야 합니다.");
+        string error = ValidateNickname(trimmed);
+        if (error != null)
+            throw new ArgumentException(error);
 
         await AuthenticationService.Instance.UpdatePlayerNameAsync(trimmed);
 
@@ -283,15 +298,27 @@ public class AuthBootstrap : CommonManagerBase
         if (cached == Nickname)
             return; // 이미 일치 — 대부분의 재접속 경로, 네트워크 호출 없음
 
+        // 규칙 도입 이전 빌드나 수동 조작으로 남은 캐시가 그대로 서버에 반영되지 않게 한 번 더 검사한다.
+        string error = ValidateNickname(cached);
+        if (error != null)
+        {
+            Debug.LogWarning($"[AuthBootstrap] 캐시된 닉네임이 규칙 위반이라 폐기: {error}");
+            PlayerPrefs.DeleteKey(NicknamePrefKey);
+            PlayerPrefs.Save();
+            return;
+        }
+
         try
         {
             await AuthenticationService.Instance.UpdatePlayerNameAsync(cached);
             Debug.Log($"[AuthBootstrap] 캐시된 닉네임 복원: {cached}");
             OnNicknameChanged?.Invoke();
         }
-        catch (RequestFailedException ex)
+        catch (Exception ex)
         {
             // 복원 실패는 치명적이지 않다 — 서버 이름을 그대로 쓰고 다음 로그인에 재시도한다.
+            // 여기서 예외가 새어 나가면 호출부의 OnSignedIn이 실행되지 않아 로그인은 됐는데
+            // UI가 갱신되지 않는 상태로 남으므로, 주석의 의도대로 모든 예외를 삼킨다.
             Debug.LogWarning($"[AuthBootstrap] 닉네임 복원 실패: {ex.Message}");
         }
     }
