@@ -101,6 +101,10 @@ public class PlayerInteractor : NetworkBehaviour
     public bool HasLineOfSightTo(Transform target)
     {
         // 끝점은 대상 콜라이더의 중심 — 루트 원점은 대개 발밑이라 바닥(Default)에 걸려 오차단된다.
+        // TryGetComponent는 비재귀 — 판정 콜라이더가 대상 루트에 있다는 전제다. 현재 호출부 전부 성립:
+        // 아이템(WorldItemPickup이 루트에 AddComponent)·NPC(루트 CapsuleCollider, 기절 시에도
+        // NpcProneCollider가 끄지 않고 재성형)·플레이어(루트 CharacterController). 자식에만 콜라이더가
+        // 있는 대상을 새로 물리면 발밑 폴백으로 오차단될 수 있으니 그때 GetComponentInChildren로 넓힐 것.
         Vector3 point = target.TryGetComponent(out Collider targetCollider)
             ? targetCollider.bounds.center
             : target.position;
