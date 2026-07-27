@@ -45,6 +45,7 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
     private float m_ringEndTime;
     private bool m_scheduling;
     private RoundPhase m_lastPhase = RoundPhase.Preparing;
+    private bool m_warnedNoRound;
 
     /// <summary>지금 울리는 중인가. 서버·오프라인은 진실값, 원격 피어는 동기화 값.</summary>
     public bool IsRinging => IsSpawned && !IsServer ? m_isRingingSynced.Value : m_isRinging;
@@ -104,8 +105,17 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
     {
         if (!IsAuthority)
             return;
+
         if (Round == null)
+        {
+            // 여기서 조용히 return하면 전화가 영영 안 오는데 아무 단서도 안 남는다 — 1회만 알린다
+            if (!m_warnedNoRound)
+            {
+                m_warnedNoRound = true;
+                Debug.LogWarning("TipCallPhone: RoundManager를 찾지 못해 수신 타이머가 돌지 않는다", this);
+            }
             return;
+        }
 
         // 라운드 페이즈 전이 감지 — InProgress 진입 시 수신 시작, 이탈 시 울림을 끊고 멈춘다
         RoundPhase phase = Round.Phase;
@@ -184,6 +194,10 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
     private void ScheduleNext(float extraDelay = 0f)
     {
         m_nextRingTime = Time.time + extraDelay + UnityEngine.Random.Range(m_minInterval, m_maxInterval);
+
+        // 첫 전화까지 startDelay + 간격이라 1~2분이 걸릴 수 있다. 이 로그가 없으면 타이머가 도는지
+        // 죽었는지 구분할 방법이 없다 — 서버(또는 오프라인)에서만 찍힌다.
+        Debug.Log($"[제보 전화] 다음 수신 예약 — {m_nextRingTime - Time.time:0}초 뒤");
     }
 
     private void SetRinging(bool value)
