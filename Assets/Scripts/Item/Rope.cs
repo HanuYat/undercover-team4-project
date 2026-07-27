@@ -30,7 +30,7 @@ public class Rope : ItemBase
         }
 
         // 대상 판정은 NpcStateRules 단일 기준 — 서버 가드·조준 피드백과 동일 (#184)
-        if (!NpcStateRules.IsRopeable(target.CurrentState))
+        if (!NpcStateRules.IsRopeable(target))
         {
             Debug.Log("기절한 대상만 밧줄로 묶을 수 있음");
             return;
@@ -43,7 +43,7 @@ public class Rope : ItemBase
     public override bool CanTarget(GameObject aimTarget)
     {
         NpcController target = ResolveTarget(aimTarget);
-        if (target == null || !NpcStateRules.IsRopeable(target.CurrentState))
+        if (target == null || !NpcStateRules.IsRopeable(target))
             return false;
 
         PlayerEscorter escorter = Escorter;

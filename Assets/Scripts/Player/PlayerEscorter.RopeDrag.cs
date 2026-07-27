@@ -89,7 +89,7 @@ public partial class PlayerEscorter
             return; // 체포 채널링 중엔 시작 안 함
         if (IsBusy)
             return; // 연행/끌기 중엔 새 끌기 불가 (한 번에 1명)
-        if (!NpcStateRules.IsRopeable(target.CurrentState))
+        if (!NpcStateRules.IsRopeable(target))
             return; // 기절한 대상만 — 클라 검증·윤곽선과 단일 기준 (#184)
         if (!HasRope)
             return; // 밧줄을 들고 있어야 끌기 시작 가능 (#269)
@@ -129,7 +129,8 @@ public partial class PlayerEscorter
             return;
 
         // 외부 요인으로 기절에서 벗어났으면(예: 강제 상태 전이) 끌기를 정리한다.
-        if (DraggingNpc.CurrentState != NpcState.Stunned)
+        // 오버레이 해제도 여기서 잡힌다 — 판정은 NpcStateRules 단일 기준 (#292)
+        if (!NpcStateRules.IsIncapacitated(DraggingNpc))
         {
             ReleaseDrag();
             return;
