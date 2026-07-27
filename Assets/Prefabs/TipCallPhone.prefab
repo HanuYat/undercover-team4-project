@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 993039071981101747}
   - component: {fileID: 6736088829418134764}
   - component: {fileID: 7470760652434759410}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: TipCallPhone
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -48,8 +48,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3497213525
-  InScenePlacedSourceGlobalObjectIdHash: 0
+  GlobalObjectIdHash: 2767304461
+  InScenePlacedSourceGlobalObjectIdHash: 2025248869
   DeferredDespawnTick: 0
   Ownership: 1
   AlwaysReplicateAsRoot: 0
@@ -206,6 +206,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: SM_Prop_Phone_01
       objectReference: {fileID: 0}
+    - target: {fileID: 189758892431563535, guid: 07266958e405c5b459e09ac47921df31, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
     - target: {fileID: 714374804503429557, guid: 07266958e405c5b459e09ac47921df31, type: 3}
       propertyPath: m_LocalPosition.x
       value: -0
@@ -245,6 +249,14 @@ PrefabInstance:
     - target: {fileID: 714374804503429557, guid: 07266958e405c5b459e09ac47921df31, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1354878217921984364, guid: 07266958e405c5b459e09ac47921df31, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 7793189733645973198, guid: 07266958e405c5b459e09ac47921df31, type: 3}
+      propertyPath: m_Layer
+      value: 7
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
