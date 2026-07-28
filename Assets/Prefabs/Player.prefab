@@ -3081,6 +3081,9 @@ MonoBehaviour:
   m_interactMask:
     serializedVersion: 2
     m_Bits: 128
+  m_losBlockMask:
+    serializedVersion: 2
+    m_Bits: 1
 --- !u!114 &-879792188796056759
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3267,7 +3270,7 @@ MonoBehaviour:
   m_startingGear:
   - {fileID: 6465765157232573796, guid: ef3d4594c5614be42ad3cdf1ec34cb19, type: 3}
   - {fileID: 6588843841137046898, guid: 9da4b15656bbf3e4c8c3c0d8134f7547, type: 3}
-  - {fileID: 5880397347069557750, guid: d1c30cbbf1aa4ac44b4f5ad0936bd9f2, type: 3}
+  - {fileID: 1048637736484071511, guid: 35764ff7639685444b8c8802043b67b1, type: 3}
   m_itemAnchor: {fileID: 0}
   m_dropDistance: 1.2
 --- !u!114 &-6068744480840221127
