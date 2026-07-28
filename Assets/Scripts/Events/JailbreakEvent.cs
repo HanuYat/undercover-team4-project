@@ -58,11 +58,11 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     [Header("경범죄 수익")]
     [Tooltip("침입자를 제압·연행해 인계했을 때의 수익 하한 — 스폰 시점에 [하한, 상한]에서 뽑아 마커에 박는다 (#395)")]
     [Min(0)]
-    [SerializeField] private int m_intruderRewardMin = 60;
+    [SerializeField] private int m_intruderRewardMin = 500;
 
     [Tooltip("침입자 수익 상한. 하한보다 작으면 하한이 쓰인다")]
     [Min(0)]
-    [SerializeField] private int m_intruderRewardMax = 150;
+    [SerializeField] private int m_intruderRewardMax = 4000;
 
     [Header("잔류 전환")]
     [Tooltip("제압되지 않은 채 이 시간(초)이 지나면 침입을 포기하고 배회 시민으로 잔류한다 — 마커가 남아 언제든 잡으면 경범죄 수익 (#310)")]

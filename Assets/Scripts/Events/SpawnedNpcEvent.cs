@@ -45,11 +45,11 @@ public class SpawnedNpcEvent : ISuddenEvent
     [Header("경범죄 수익")]
     [Tooltip("본부 인계 후 경범죄 판정 성공 시의 수익 하한 — 스폰 시점에 [하한, 상한]에서 뽑아 마커에 박는다 (#395)")]
     [Min(0)]
-    [SerializeField] private int m_pettyCrimeRewardMin = 30;
+    [SerializeField] private int m_pettyCrimeRewardMin = 500;
 
     [Tooltip("경범죄 수익 상한. 하한보다 작으면 하한이 쓰인다")]
     [Min(0)]
-    [SerializeField] private int m_pettyCrimeRewardMax = 80;
+    [SerializeField] private int m_pettyCrimeRewardMax = 4000;
 
     // 이번 스폰에서 실제로 뽑힌 수익 — 마커에 실은 값과 같다 (#395)
     private int m_rolledReward;
