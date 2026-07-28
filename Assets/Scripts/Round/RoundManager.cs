@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public enum RoundPhase
 {
@@ -28,13 +31,16 @@ public enum RoundEndReason
 }
 
 /// <summary>
-/// 라운드 흐름 관리 — 시작 시 NPC 스폰 트리거, 진행 중 상태 유지, 목표 달성/실패 시 종료 처리. (이슈 #42/#103, GDD 3-2)
+/// 라운드 흐름 관리 — 준비(NPC 스폰 → 전원 입장 → 시작 지연) → 진행 중 상태 유지 → 목표 달성/실패 시 종료. (이슈 #42/#103/#403, GDD 3-2)
 /// 본 게임의 라운드 진입점.
 ///
 /// 라운드 목표는 검거 수가 아니라 금액이다 (#395). 진행도는 지금 유치장에 잡아둔 대상들의 현상금 합
 /// (JailZone.BountyTotal)이며, 목표를 채워도 라운드가 자동으로 끝나지 않는다 — 본부의 종료 버튼이
 /// 활성화되고 팀이 원할 때 끝낸다. 더 벌고 싶으면 제한시간까지 계속 수사할 수 있다.
 /// 제한시간이 다 됐을 때 목표를 넘겨 있으면 버튼을 누르지 않았어도 성공으로 끝낸다.
+///
+/// 씬 진입 시 BeginRoundPreparation이 자동으로 돌고, 준비가 끝나야 StartRound로 넘어간다.
+/// 스폰을 시작보다 앞에 두는 이유는 로딩 화면이 스폰 완료까지 덮을 수 있게 하기 위함이다 (#403).
 ///
 /// 목표 금액·제한시간 수치는 전부 인스펙터 — 밸런싱 보류 항목(GDD 12장)이라 코드에 못 박지 않는다.
 ///
@@ -58,11 +64,24 @@ public class RoundManager : CommonManagerBase
     [Tooltip("라운드 제한시간(초). 0 이하 = 무제한(타이머 없음)")]
     [SerializeField] private float m_timeLimitSeconds = 180f;
 
+    [Header("라운드 시작 조건")]
+    [Tooltip("NPC 스폰 완료 + 전원 입장 확인 후 실제 라운드 시작까지의 대기(초). 0 이하면 즉시 시작")]
+    [SerializeField] private float m_startDelaySeconds = 3f;
+
+    [Tooltip("전원 입장 확인을 기다리는 상한(초) — 넘으면 경고 후 남은 인원으로 시작한다")]
+    [SerializeField] private float m_peerWaitTimeoutSeconds = 30f;
+
     [Header("유치장 (비우면 씬에서 자동 탐색)")]
     [Tooltip("목표 진행도(누적 현상금)를 읽어올 유치장. ArrestJudge의 인계 구역 지정과 같은 관례")]
     [SerializeField] private JailZone m_jailZone;
 
     private NetworkManager m_networkManager;
+
+    // 준비 절차를 한 번만 돌리기 위한 래치
+    private bool m_preparing;
+
+    // NGO 씬 동기화가 "이 씬을 전원이 로드했다"고 알려줬는가 (서버에서만 채워진다)
+    private bool m_allPeersLoaded;
 
     // 인스펙터에서 비워 뒀으면 씬에서 한 번 찾아 캐시한다 (ArrestJudge의 인계 구역과 같은 방식).
     // JailZone은 App에 등록된 매니저가 아니라 씬 배치 오브젝트라 App 파사드 경로가 없다.
@@ -120,7 +139,10 @@ public class RoundManager : CommonManagerBase
         }
     }
 
-    /// <summary>라운드 시작 이벤트 — 스폰 트리거 직후 발행. UI·연출(#43 등)이 구독한다.</summary>
+    /// <summary>
+    /// 라운드 시작 이벤트 — Phase가 InProgress로 넘어가는 순간 발행. UI·연출(#43 등)이 구독한다.
+    /// NPC 스폰·범인 배정은 이 시점에 이미 끝나 있다 (준비 단계로 옮김, #403).
+    /// </summary>
     public event Action OnRoundStarted;
 
     /// <summary>라운드 종료 이벤트 — 정산(#42 후속)·결과 UI(#43)·종료 피드백(#210)이 구독한다.</summary>
@@ -162,17 +184,49 @@ public class RoundManager : CommonManagerBase
 
         m_networkManager = NetworkManager.Singleton;
 
-        // 오프라인 실행 — 네트워크 없이 바로 라운드 시작 (기존 단독 테스트 유지)
+        // 오프라인 실행 — 전원 입장을 기다릴 상대가 없다 (기존 단독 테스트 유지)
         if (m_networkManager == null)
         {
-            StartRound();
+            BeginRoundPreparation();
             return;
         }
 
-        // 네트워크 세션: 게임 씬의 들어옴 = 라운드 시작 신호 (로비는 별도 씬, #214)
+        // 네트워크 세션: 게임 씬에 들어옴 = 라운드 준비 시작 신호 (로비는 별도 씬, #214)
         // 서버만 연다(서버 권위) - 클라이언트는 서버의 스폰/판정 동기화만 받음.
-        if (m_networkManager.IsServer) 
-            StartRound();
+        if (!m_networkManager.IsServer)
+            return;
+
+        // 전원 로드 완료 신호. 서버의 씬 활성화 프레임(=이 Start)이 NGO의 완료 콜백보다 먼저라 여기서 걸어도 놓치지 않는다.
+        if (m_networkManager.SceneManager != null)
+            m_networkManager.SceneManager.OnLoadEventCompleted += HandleLoadEventCompleted;
+
+        BeginRoundPreparation();
+    }
+
+    protected override void OnDestroy()
+    {
+        base.OnDestroy(); // ★ 매니저 등록 해제 유지 (R5)
+
+        if (m_networkManager != null && m_networkManager.SceneManager != null)
+            m_networkManager.SceneManager.OnLoadEventCompleted -= HandleLoadEventCompleted;
+    }
+
+    // NGO 씬 동기화 완료 — 이 씬을 전원이 로드했다. 서버에서만 구독한다.
+    private void HandleLoadEventCompleted(
+        string sceneName,
+        LoadSceneMode mode,
+        List<ulong> clientsCompleted,
+        List<ulong> clientsTimedOut
+    )
+    {
+        if (sceneName != gameObject.scene.name)
+            return;
+
+        // 시간 초과 클라이언트가 있어도 진행한다 — NGO가 이미 자체 상한을 적용한 뒤이고, 여기서 더 기다려도 안 온다.
+        if (clientsTimedOut != null && clientsTimedOut.Count > 0)
+            Debug.LogWarning($"[라운드] 씬 로드 시간 초과 {clientsTimedOut.Count}명 — 남은 인원으로 진행한다", this);
+
+        m_allPeersLoaded = true;
     }
 
     // 서버 재시작 시 이전 라운드 상태를 초기화한다 — Phase·결과·진행도와 스포너 래치를 되돌려 재스폰을 허용한다.
@@ -183,12 +237,87 @@ public class RoundManager : CommonManagerBase
         EndReason = RoundEndReason.None;
         CriminalArrestCount = 0;
         RemainingSeconds = float.PositiveInfinity;
+        m_preparing = false;
+        m_allPeersLoaded = false;
         Spawner.ResetSpawnState(); // IsSpawnCompleted 래치 해제 + 이전 NPC 정리 → StartSpawn 재동작
     }
 
     /// <summary>
-    /// 라운드를 시작한다 — NPC 스폰을 트리거하고 진행 상태로 전환한다.
-    /// (스폰 → 범인 배정 → 판정 체인은 NpcSpawner.OnSpawnCompleted로 자동 이어진다)
+    /// 라운드 준비를 시작한다 — NPC를 먼저 스폰하고, 스폰 완료 + 전원 입장 확인 후 지연을 두고 StartRound로 넘어간다.
+    /// 게임 씬 진입 시 서버(또는 오프라인)에서 자동 호출된다.
+    /// 씬을 직접 Play하는 개발 흐름에서는 호스트를 띄운 뒤 DevAutoHost가 직접 호출한다.
+    /// Phase는 이 구간 내내 Preparing이다 — 타이머·검거 판정은 StartRound부터 돈다.
+    /// </summary>
+    public void BeginRoundPreparation()
+    {
+        if (m_preparing || Phase != RoundPhase.Preparing)
+            return;
+
+        if (Spawner == null)
+        {
+            Debug.LogWarning("RoundManager: NpcSpawner를 찾지 못해 라운드를 준비할 수 없다", this);
+            return;
+        }
+
+        m_preparing = true;
+
+        Spawner.StartSpawn(); // 서버/오프라인만 실제 스폰 — 클라이언트 호출은 NpcSpawner가 걸러낸다 (#56)
+        PrepareAndStartAsync().Forget();
+    }
+
+    private async UniTaskVoid PrepareAndStartAsync()
+    {
+        CancellationToken token = this.GetCancellationTokenOnDestroy();
+
+        // 1. NPC 스폰 완료 — NpcSpawner는 프레임당 한 마리씩 스폰한다. 이 대기 중에 범인 배정도 이어져 끝난다.
+        await UniTask.WaitUntil(
+            () => Spawner == null || Spawner.IsSpawnCompleted,
+            cancellationToken: token
+        );
+
+        // 2. 전원 입장 확인 — 기다릴 상대가 실제로 있을 때만. 호스트 혼자면(솔로 플레이, DevAutoHost로 씬을
+        //    직접 Play하는 개발 흐름) NGO 씬 동기화 자체가 없어 완료 신호가 영영 오지 않으므로 여기서 걸러낸다.
+        //    정식 흐름에서는 클라가 Title/Lobby에서 이미 접속해 있어 이 시점에 ConnectedClients에 들어와 있다.
+        bool waitForPeers =
+            m_networkManager != null
+            && m_networkManager.IsListening
+            && m_networkManager.ConnectedClientsIds.Count > 1;
+
+        if (waitForPeers && !m_allPeersLoaded)
+        {
+            float deadline = Time.realtimeSinceStartup + m_peerWaitTimeoutSeconds;
+            await UniTask.WaitUntil(
+                () =>
+                    m_allPeersLoaded
+                    || !m_networkManager.IsListening
+                    || Time.realtimeSinceStartup >= deadline,
+                cancellationToken: token
+            );
+
+            if (!m_allPeersLoaded)
+                Debug.LogWarning(
+                    $"[라운드] 전원 입장 확인을 {m_peerWaitTimeoutSeconds}초 내에 받지 못했다 — 그대로 시작한다",
+                    this
+                );
+        }
+
+        // 3. 시작 지연 — 라운드 종료 freeze 등으로 timeScale이 건드려져도 흐르도록 실시간 기준 (RoundEndResetter와 동일 방침)
+        if (m_startDelaySeconds > 0f)
+        {
+            Debug.Log($"[라운드] 준비 완료 — {m_startDelaySeconds:0.#}초 후 시작");
+            await UniTask.Delay(
+                TimeSpan.FromSeconds(m_startDelaySeconds),
+                ignoreTimeScale: true,
+                cancellationToken: token
+            );
+        }
+
+        StartRound();
+    }
+
+    /// <summary>
+    /// 라운드를 진행 상태로 전환한다 — 제한시간이 여기서부터 흐른다.
+    /// NPC 스폰·범인 배정은 BeginRoundPreparation에서 이미 끝나 있다.
     /// </summary>
     public void StartRound()
     {
@@ -199,8 +328,7 @@ public class RoundManager : CommonManagerBase
         CriminalArrestCount = 0;
         // 0 이하 = 무제한 — 타이머를 아예 돌리지 않는다 (밸런싱 전 테스트·본부 단독 씬용)
         RemainingSeconds = m_timeLimitSeconds > 0f ? m_timeLimitSeconds : float.PositiveInfinity;
-        Spawner.StartSpawn(); // 서버/오프라인만 실제 스폰 — 클라이언트 호출은 NpcSpawner가 걸러낸다 (#56)
-        Debug.Log($"[라운드] 시작 — NPC 스폰 트리거 (목표 {m_targetFund}원, 제한시간 {(float.IsPositiveInfinity(RemainingSeconds) ? "무제한" : $"{RemainingSeconds:0}초")})");
+        Debug.Log($"[라운드] 시작 — 목표 {m_targetFund}원, 제한시간 {(float.IsPositiveInfinity(RemainingSeconds) ? "무제한" : $"{RemainingSeconds:0}초")}");
         OnRoundStarted?.Invoke();
     }
 

@@ -1,3 +1,5 @@
+using System.Threading;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -18,6 +20,7 @@ public class App : Singleton<App>
     private SessionManager m_sessionManager;
     private AuthBootstrap m_authBootstrap;
     private VivoxManager m_vivoxManager;
+    private LoadingScreen m_loadingScreen;
 
     // 인게임 매니저 (Main Scene)
     private RoundManager m_roundManager;
@@ -48,12 +51,64 @@ public class App : Singleton<App>
     public static EScene PrevScene { get; private set; }
     public static EScene CurrentScene { get; private set; }
 
+    // 전환이 끝나기 전에 다른 LoadScene이 겹치면 로딩 화면 표시 상태가 꼬인다 — 재진입 가드.
+    private static bool s_isLoading;
+
     /// <summary>씬 전환 단일 경로 — 세션 중이면 NGO 씬 동기화, 아니면 로컬 로드 (AppHelper가 분기).</summary>
-    public static void LoadScene(EScene scene)
+    public static void LoadScene(EScene scene) => LoadSceneAsync(scene).Forget();
+
+    /// <summary>
+    /// 씬 전환 + 로딩 화면 파이프라인 (#403). 전환 완료까지 기다려야 하는 호출부만 이쪽을 await 한다.
+    /// 순서: 정리 훅 → 화면 덮기(렌더 보장) → 실제 로드 → 페이드 아웃.
+    /// </summary>
+    public static async UniTask LoadSceneAsync(EScene scene)
     {
-        OnSceneLoad?.Invoke(scene);
-        AppHelper.LoadScene(scene);
+        if (s_isLoading)
+        {
+            Debug.LogWarning($"[App] 씬 전환이 진행 중이라 중복 요청을 무시합니다: {scene}");
+            return;
+        }
+        s_isLoading = true;
+
+        try
+        {
+            OnSceneLoad?.Invoke(scene);
+
+            // App은 MonoBehaviour가 아니라 파괴 토큰이 없다 — 플레이 종료 시 취소되는 토큰을 쓴다
+            CancellationToken token = Application.exitCancellationToken;
+
+            // 에디터에서 씬을 직접 Play하면 AppBootstrap이 없어 null일 수 있다 — 그때는 그냥 덮지 않는다
+            LoadingScreen loading = ShouldCoverWithLoadingScreen(scene) ? UI.Loading : null;
+
+            if (loading != null)
+                await loading.ShowAsync(token); // 덮은 화면이 실제로 렌더될 때까지 대기
+
+            await AppHelper.LoadSceneAsync(scene, token);
+
+            // 씬 오브젝트는 활성화 프레임에 다 섰지만 런타임 스폰(NPC 등)은 아직이다 — 씬이 스스로 보고한다
+            await WaitUntilSceneReadyAsync(token);
+
+            if (loading != null)
+                await loading.HideAsync(token);
+        }
+        finally
+        {
+            s_isLoading = false;
+        }
     }
+
+    // Title → Lobby는 세션 생성 UI가 이미 진행 상태를 보여주고 있어 덮지 않는다 (#403).
+    private static bool ShouldCoverWithLoadingScreen(EScene next) =>
+        !(CurrentScene == EScene.Title && next == EScene.Lobby);
+
+    /// <summary>
+    /// 새 씬의 준비 완료를 기다린다 (#403). 씬 매니저는 활성화 프레임에 이미 App에 등록돼 있어 그대로 물으면 된다.
+    /// 클라이언트는 이 경로를 타지 않으므로 LoadingScreen이 같은 대기를 따로 건다.
+    /// </summary>
+    internal static UniTask WaitUntilSceneReadyAsync(CancellationToken token) =>
+        SceneFlow.Current != null
+            ? SceneFlow.Current.WaitUntilReadyAsync(token)
+            : UniTask.CompletedTask;
 
     /// <summary>AppHelper의 sceneLoaded 콜백에서만 호출 — 씬 상태 갱신 + 완료 이벤트.</summary>
     internal static void NotifySceneLoaded(EScene scene)
@@ -75,6 +130,7 @@ public class App : Singleton<App>
     public static class Game
     {
         public static RoundManager Round => Instance.m_roundManager;
+
         // 개별 돌발 이벤트(먹통 등)는 App에 올리지 않는다 — 이벤트마다 필드가 늘어나는 대신
         // SuddenEvent.GetEvent<T>()로 물어본다 (#372 리뷰, R3).
         public static SuddenEventManager SuddenEvent => Instance.m_suddenEventManager;
@@ -83,7 +139,8 @@ public class App : Singleton<App>
         public static CriminalAssigner CriminalAssigner => Instance.m_criminalAssigner;
         public static NpcSpawner NpcSpawner => Instance.m_npcSpawner;
         public static AppearanceAssigner Appearance => Instance.m_appearanceAssigner;
-        public static WrongfulArrestPenalty WrongfulArrestPenalty => Instance.m_wrongfulArrestPenalty;
+        public static WrongfulArrestPenalty WrongfulArrestPenalty =>
+            Instance.m_wrongfulArrestPenalty;
         public static TeamFund TeamFund => Instance.m_teamFund;
         public static DirectoryManager Directory => Instance.m_directoryManager;
         public static FactionSymbolManager FactionSymbol => Instance.m_factionSymbolManager;
@@ -107,6 +164,9 @@ public class App : Singleton<App>
         // 로컬 HUD — 씬 시작 시점엔 null일 수 있다 (오너 스폰 시 프리팹 생성). 사용처는 ?. 가드 필수
         public static CrosshairUI Crosshair => Instance.m_crosshairUI;
         public static ChannelingGaugeUI Gauge => Instance.m_channelingGaugeUI;
+
+        // 씬 전환을 덮는 상주 로딩 화면 (AppBootstrap 하위). 씬 직접 Play 등 부트스트랩이 없으면 null
+        public static LoadingScreen Loading => Instance.m_loadingScreen;
     }
     #endregion
 
@@ -119,5 +179,6 @@ public class App : Singleton<App>
         OnSceneLoaded = null;
         PrevScene = EScene.None;
         CurrentScene = EScene.None;
+        s_isLoading = false;
     }
 }
