@@ -43,9 +43,11 @@ public class DevAutoHost : MonoBehaviour
 
         await UniTask.NextFrame(this.GetCancellationTokenOnDestroy()); // NGO 서버 준비 보장
 
-        // 서버 권위로 라운드 시작 — LobbyManager '게임 시작' 버튼을 대신한다
-        App.Game.Round?.StartRound();
-        Debug.Log("[DevAutoHost] 로컬 호스트 + 라운드 자동 시작 (Test Scene 전용)");
+        // 서버 권위로 라운드 준비 시작 — LobbyManager '게임 시작' 버튼을 대신한다.
+        // StartRound가 아니라 준비 진입점을 부른다 — NPC 스폰이 준비 단계로 옮겨졌다(#403).
+        // 여기선 호스트 혼자라 RoundManager의 전원 입장 대기는 자동으로 건너뛴다(기다릴 상대가 없음).
+        App.Game.Round?.BeginRoundPreparation();
+        Debug.Log("[DevAutoHost] 로컬 호스트 + 라운드 자동 준비 시작 (Test Scene 전용)");
     }
 
     // MPPM 클론 전용 — 호스트(메인 에디터)가 뜬 뒤 눌러 로컬 접속한다. 접속 주소는 UnityTransport 기본값(127.0.0.1).
