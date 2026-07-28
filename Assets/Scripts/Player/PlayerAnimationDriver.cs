@@ -116,8 +116,11 @@ public class PlayerAnimationDriver : MonoBehaviour
         if (m_animator == null)
             return;
 
-        // 다운(무력화) 상태를 애니메이터에 반영 — 모든 인스턴스가 IsIncapacitated(동기화값)를 폴링해
-        // Down 상태 머신(Knockdown Fall→Ground→StandUp)을 구동하므로 원격 뷰도 동일하게 재생된다.
+        // 다운(무력화) 상태를 애니메이터에 반영 — 모든 인스턴스가 동기화값을 폴링해 상태 머신을
+        // 구동하므로 원격 뷰도 동일하게 재생된다.
+        //
+        // 원인(다운·매달기·기절)을 가리지 않고 같은 Knockdown 모션을 쓴다 — 무력화는 곧 쓰러진 자세다.
+        // 기절만 따로 세워 두면 카메라는 바닥 높이로 내려가는데 몸만 서 있어 어긋난다 (#252).
         if (m_incapacitation != null)
         {
             m_animator.SetBool(s_downHash, m_incapacitation.IsIncapacitated);

@@ -25,7 +25,7 @@ public partial class WrongfulArrestPenalty
         // 즉시 행동불능(구조 불가) — 매달기와 같은 계열의 무력화 (#101/#105)
         PlayerIncapacitation incap = caught.GetComponent<PlayerIncapacitation>();
         if (incap != null)
-            incap.Incapacitate(revivable: false);
+            incap.Incapacitate(IncapacitationCause.Penalty);
 
         PruneDead(m_activeNpcs);
         var convergers = new List<NpcController>(m_activeNpcs); // 포획 시점 스냅샷 — 이 호송의 수렴·해산 대상

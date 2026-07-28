@@ -322,16 +322,17 @@ public class RoundManager : CommonManagerBase
     {
         if (Phase != RoundPhase.InProgress)
             return;
-        if (!AreAllPlayersIncapacitated())
+        if (!AreAllPlayersDowned())
             return;
 
         Debug.Log("[라운드] 플레이어 전원 다운 — 전멸(게임오버)");
         EndRound(RoundResult.Failure, RoundEndReason.AllPlayersDown);
     }
 
-    // 현재 존재하는 모든 플레이어가 무력화 상태인지 — 한 명이라도 멀쩡하면 false. 플레이어가 없으면 전멸이 아니다.
-    // (IsIncapacitated가 온라인=동기화값/서버=실참조, 오프라인=실참조를 알아서 처리하므로 세션 종류와 무관하게 동작한다)
-    private static bool AreAllPlayersIncapacitated()
+    // 현재 존재하는 모든 플레이어가 HP0 다운인지 — 한 명이라도 멀쩡하면 false. 플레이어가 없으면 전멸이 아니다.
+    // 무력화 전부가 아니라 다운만 센다 (#252) — 곧 스스로 일어나는 기절·매달기를 세면 아무도 죽지 않았는데
+    // 게임오버가 뜬다. (IsDowned가 온라인=동기화값/서버=실참조, 오프라인=실참조를 알아서 처리한다)
+    private static bool AreAllPlayersDowned()
     {
         PlayerIncapacitation[] players = FindObjectsByType<PlayerIncapacitation>(FindObjectsSortMode.None);
         if (players.Length == 0)
@@ -339,7 +340,7 @@ public class RoundManager : CommonManagerBase
 
         foreach (PlayerIncapacitation player in players)
         {
-            if (!player.IsIncapacitated)
+            if (!player.IsDowned)
                 return false;
         }
         return true;

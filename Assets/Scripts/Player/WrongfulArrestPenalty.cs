@@ -224,7 +224,7 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         if (movement != null)
             movement.ServerTeleport(pos, rot); // 오너 권한 경로 — 호스트·원격 클라 모두 이동
         if (incap != null)
-            incap.Incapacitate(revivable: false); // 이미 무력화면 무동작(중복 트리거 무시) — 폴백 경로에선 여기서 진입
+            incap.Incapacitate(IncapacitationCause.Penalty); // 이미 무력화면 무동작(중복 트리거 무시) — 폴백 경로에선 여기서 진입
 
         Debug.Log($"[오검거] 광장 매달기 — {target.name} → {pos}, {k_hangSeconds}초");
 

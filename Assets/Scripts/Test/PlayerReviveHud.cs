@@ -35,8 +35,10 @@ public class PlayerReviveHud : NetworkBehaviour
             && settlement.IsOpened)
             return;
 
-        // 내가 다운된 경우 — 구조 대기 메시지
-        if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
+        // 내가 다운된 경우 — 구조 대기 메시지.
+        // IsIncapacitated가 아니라 IsDowned를 본다 (#252): 기절·오검거 매달기도 무력화지만 스스로
+        // 풀리므로 구조를 기다리라는 안내가 거짓이 된다. 아무도 오지 않는데 기다리게 만든다.
+        if (m_incapacitation != null && m_incapacitation.IsDowned)
         {
             DrawCenterLabel("다운됨 — 동료의 구조를 기다리는 중...");
             return;

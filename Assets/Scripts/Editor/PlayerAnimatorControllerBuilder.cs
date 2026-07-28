@@ -31,6 +31,14 @@ public static class PlayerAnimatorControllerBuilder
     private const string k_combatFolder =
         "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Combat";
 
+    // 기절(테이저 아군 오사)은 다운과 같은 Knockdown 상태 머신을 탄다 — 맞는 즉시 쓰러진다. (#252)
+    // 한때 Stun01로 갈랐는데 그건 NPC '제압 그로기'(서서 헤롱거리는 루프)가 쓰는 클립이었다.
+    // 선 채로 비틀대는 몸에 카메라만 바닥 높이로 내려가 어긋났고, NPC 기절도 실은 Knockdown01-Ground로
+    // 쓰러져 있다 — "기절=쓰러진 자세"가 원래 규칙이다 (GDD 7-4).
+    // 아래 두 이름은 그때 만든 상태·파라미터를 재실행으로 걷어내기 위해서만 남긴다.
+    private const string k_stunParam = "Stunned";
+    private const string k_stunState = "Stun";
+
     // 앉기 상태 — Crouch(bool)=true면 서기 블렌드 트리에서 앉기 블렌드 트리로 짧게 전환한다. (#236)
     // 서기↔앉기 전환 클립은 에셋에 없어(Crouch는 Idle/이동만 제공) 전환 클립 대신 짧은 블렌딩으로 처리한다.
     private const string k_crouchParam = "Crouch";
@@ -164,6 +172,7 @@ public static class PlayerAnimatorControllerBuilder
         BlendTree crouchTree = SetupCrouchState(controller); // 앉기 상태 추가/갱신 (#236) — 다운 전환보다 먼저
         BlendTree airCrouchTree = SetupJumpStates(controller); // 점프 상태 머신 추가/갱신 (#189) — 다운 전환보다 먼저
         SetupDownStates(controller); // 다운(무력화) 상태 머신 추가/갱신 (#105)
+        RemoveLegacyStunStates(controller); // 구 기절 상태 제거 — 다운 상태 머신에 흡수됐다 (#252)
         SetupAttackLayer(controller); // 타격 상체 레이어 추가/갱신 (#217) — Base Layer가 아닌 레이어 1
 
         EditorUtility.SetDirty(blendTree);
@@ -181,7 +190,7 @@ public static class PlayerAnimatorControllerBuilder
         Debug.Log(
             $"[PlayerAnimatorControllerBuilder] {(isNew ? "생성" : "갱신")} 완료: {k_outputPath} "
                 + $"(Idle 중앙 / Walk 반경 {PlayerAnimationDriver.k_walkParam} 8방향 / "
-                + $"Run 반경 {PlayerAnimationDriver.k_runParam} 8방향, 총 17모션 + 다운 3상태 "
+                + $"Run 반경 {PlayerAnimationDriver.k_runParam} 8방향, 총 17모션 + 다운 3상태(기절 공용) "
                 + $"+ 앉기 9모션 + 점프 3상태(공중 웅크림 9모션) + 타격 상체 레이어 1)"
         );
 
@@ -708,6 +717,58 @@ public static class PlayerAnimatorControllerBuilder
             toLocomotion.hasExitTime = true;
             toLocomotion.exitTime = 0.9f;
             toLocomotion.duration = 0.1f;
+        }
+    }
+
+
+    // 이전 빌드가 남긴 기절 상태·파라미터를 걷어낸다 — 기절은 이제 다운과 같은 Knockdown 상태 머신을
+    // 타므로 전용 상태가 필요 없다. (#252)
+    // 남겨 두면 Stunned가 영영 false인 채 죽은 상태로 컨트롤러에 붙어 있고, 나중에 다른 기능이 같은
+    // 이름의 파라미터를 만들 때 충돌한다.
+    private static void RemoveLegacyStunStates(AnimatorController controller)
+    {
+        RemoveStunStates(controller.layers[0].stateMachine);
+
+        foreach (AnimatorControllerParameter parameter in controller.parameters)
+        {
+            if (parameter.name == k_stunParam)
+            {
+                controller.RemoveParameter(parameter);
+                return;
+            }
+        }
+    }
+
+    // 기절 상태와 그 상태로 향하는 전환을 제거한다 (RemoveDownStates와 같은 방식).
+    private static void RemoveStunStates(AnimatorStateMachine stateMachine)
+    {
+        foreach (ChildAnimatorState child in stateMachine.states)
+        {
+            var toRemove = new System.Collections.Generic.List<AnimatorStateTransition>();
+            foreach (AnimatorStateTransition transition in child.state.transitions)
+            {
+                if (
+                    transition.destinationState != null
+                    && transition.destinationState.name == k_stunState
+                )
+                {
+                    toRemove.Add(transition);
+                }
+            }
+            foreach (AnimatorStateTransition transition in toRemove)
+            {
+                child.state.RemoveTransition(transition);
+            }
+        }
+
+        // 기절 상태 자체 제거 (하나뿐이라 찾으면 끝낸다 — 컬렉션이 바뀌므로 계속 돌지 않는다)
+        foreach (ChildAnimatorState child in stateMachine.states)
+        {
+            if (child.state.name == k_stunState)
+            {
+                stateMachine.RemoveState(child.state);
+                return;
+            }
         }
     }
 
