@@ -52,6 +52,15 @@ MonoBehaviour:
     m_Localized: Used to tie up a stunned target and drag them along the ground.
     m_Metadata:
       m_Items: []
+  - m_Id: 2627560929300480
+    m_Localized: Baton
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2627560988020736
+    m_Localized: Swing it to strike a target at close range. Enough hits will knock
+      them out.
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

@@ -15,11 +15,40 @@ public class PlayerAnimationDriver : MonoBehaviour
     public const float k_walkParam = 1f;
     public const float k_runParam = 2f;
 
+    /// <summary>
+    /// 타격 스윙에서 <b>맞는 순간</b>까지의 시간(초). 트리거 시점 기준. (#217)
+    /// </summary>
+    /// <remarks>
+    /// <b>세 곳이 반드시 같은 값을 봐야 한다.</b> 재생 방식이 전부 달라서 각자 튜닝하면 조용히 어긋난다:
+    /// <list type="bullet">
+    ///   <item>1인칭 — <see cref="PlayerHandView"/>. 애니메이터 없는 정적 메시를 코드로 흔든다.
+    ///     구간 비율(준비/내려침/팔로스루)을 이 값에서 뽑는다.</item>
+    ///   <item>3인칭 — PlayerAnimatorControllerBuilder. 애니메이터 클립이다. 클립의 임팩트 프레임은
+    ///     정해져 있으므로 <b>재생 speed</b>를 조정해 이 시점으로 끌어온다.</item>
+    ///   <item>데미지 — Baton.ServerResolveHitAtImpactAsync. 서버가 이만큼 기다렸다가 캐스트한다.</item>
+    /// </list>
+    /// 실제로 처음엔 1인칭 0.25초 / 3인칭 0.42초 / 데미지 0초(좌클릭 즉시)로 갈라져 있었다 —
+    /// 내 화면에선 다 때렸는데 남의 화면에선 아직 휘두르는 중이었고, 데미지는 봉이 뒤로 젖혀져
+    /// 있는 동안 먼저 들어갔다. 그래서 '초' 단위 목표를 여기 한 곳에 두고 셋이 각자 맞춘다.
+    ///
+    /// <b>이 값은 연출만이 아니라 조작감도 정한다.</b> 데미지가 여기에 묶여 있으므로, 줄이면
+    /// 좌클릭에서 명중까지의 지연이 함께 줄어든다. 무작정 줄이지 못하는 이유는 3인칭 쪽인데,
+    /// 클립을 과하게 빨리 돌리면 동작이 뭉개져 보인다(현재 배속은 1.40배 — 아래 k_swingSeconds 주석 참고).
+    /// </remarks>
+    public const float k_swingImpactSeconds = 0.3f;
+
+    /// <summary>
+    /// 타격 스윙 전체 길이(초) — 이 시간이 지나면 양쪽 모두 기본 자세로 돌아와 있어야 한다. (#217)
+    /// Baton.m_cooldownSeconds(0.9초)보다 짧게 유지할 것. 넘기면 다음 타격이 이전 스윙을 잘라먹는다.
+    /// </summary>
+    public const float k_swingSeconds = 0.64f;
+
     private static readonly int s_moveXHash = Animator.StringToHash("MoveX");
     private static readonly int s_moveZHash = Animator.StringToHash("MoveZ");
     private static readonly int s_downHash = Animator.StringToHash("Down"); // 다운(무력화) 상태 머신 구동 (#105)
     private static readonly int s_crouchHash = Animator.StringToHash("Crouch"); // 서기↔앉기 상태 전환 (#236)
     private static readonly int s_airborneHash = Animator.StringToHash("Airborne"); // 점프 상태 머신 구동 (#189)
+    private static readonly int s_attackHash = Animator.StringToHash("Attack"); // 타격 상체 레이어 트리거 (#217)
 
     [SerializeField]
     private Animator m_animator;
@@ -33,6 +62,7 @@ public class PlayerAnimationDriver : MonoBehaviour
     private PlayerIncapacitation m_incapacitation; // 다운 애니메이션 구동용 (#105)
     private PlayerCrouch m_crouch; // 앉기 애니메이션 구동용 (#236)
     private PlayerJump m_jump; // 점프 애니메이션 구동용 (#189)
+    private PlayerHandView m_handView; // 1인칭 팔 스윙 구동용 — 오너에서만 활성 (#217)
     private Vector3 m_lastPosition;
 
     private void Awake()
@@ -50,7 +80,35 @@ public class PlayerAnimationDriver : MonoBehaviour
         m_incapacitation = GetComponentInParent<PlayerIncapacitation>();
         m_crouch = GetComponentInParent<PlayerCrouch>();
         m_jump = GetComponentInParent<PlayerJump>();
+        m_handView = GetComponentInParent<PlayerHandView>();
         m_lastPosition = transform.position;
+    }
+
+    /// <summary>
+    /// 타격 스윙 1회를 재생한다 — 3인칭 상체 레이어(UpperBodyAttack)의 트리거를 당기고,
+    /// 1인칭 팔 뷰모델의 절차적 스윙(PlayerHandView)을 함께 돌린다. (#217)
+    /// 하체는 Base Layer가 계속 돌므로 달리기·점프·앉기 중에도 그대로 겹쳐 나온다.
+    ///
+    /// 두 표현을 <b>한 진입점에서</b> 묶는 이유: 화면 안(내 팔)과 화면 밖(남이 보는 내 몸)이
+    /// 같은 이벤트로 출발해야 어긋나지 않는다. 각각 다른 호출부에서 따로 부르면 한쪽만 빠뜨리기 쉽다.
+    /// 1인칭 팔은 리그가 아예 다른 정적 메시라 같은 클립을 공유할 수 없어 절차적으로 흉내 낸다.
+    ///
+    /// <b>모든 피어에서 호출되어야 한다.</b> Down/Crouch/Airborne처럼 동기화값을 폴링하는 방식이
+    /// 아니라 일회성 이벤트라, 서버가 스윙을 판정할 때 전 피어로 RPC를 쏴서(Baton.PlaySwingRpc)
+    /// 각자 이걸 부른다. 소유자 가드를 두지 않는 이유다 — 1인칭 몫은 PlayerHandView가 스스로
+    /// 비오너에서 무동작이므로, 여기서 갈라 줄 필요가 없다.
+    /// </summary>
+    public void TriggerAttack()
+    {
+        if (m_animator != null)
+        {
+            m_animator.SetTrigger(s_attackHash);
+        }
+
+        if (m_handView != null)
+        {
+            m_handView.PlaySwing();
+        }
     }
 
     private void Update()
