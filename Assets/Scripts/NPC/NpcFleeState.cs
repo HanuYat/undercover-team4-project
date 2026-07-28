@@ -32,12 +32,21 @@ public class NpcFleeState : NpcStateBase
     // 이미 위협에 붙어 있어 origin이 clearance 안이더라도 그 방향까지 막지 않는다 (#213 오판 수정).
     private const float k_pathClearanceMinT = 0.05f;
 
-    // 막힘 감지 — 플레이어가 몸으로 길을 막으면(#400) 로컬 회피가 속도를 0으로 떨어뜨리는데,
-    // 도주 지점은 도착까지 커밋이라 방향을 다시 뽑는 경로가 없어 제자리 달리기로 굳는다.
-    // 이 시간(초) 이상 제자리면 지점을 재추첨한다 — 배회(NpcWalkState)의 안전망과 같은 방식이고,
-    // 도주는 급한 상황이라 배회(2초)보다 짧게 잡는다.
-    private const float k_stuckSpeedThreshold = 0.05f;
-    private const float k_stuckTimeout = 1f;
+    // 막힘 감지 — 플레이어가 몸으로 길을 막으면(#400) 진행이 멈추는데, 도주 지점은 도착까지
+    // 커밋이라 방향을 다시 뽑는 경로가 없어 제자리 달리기로 굳는다.
+    //
+    // 판정 기준은 Agent.velocity가 아니라 실제 이동 거리다. NPC의 Rigidbody는 kinematic이라
+    // 물리로 밀려 멈추는 게 아니고, 플레이어의 NavMeshObstacle(carving 꺼짐)을 로컬 회피가
+    // 처리하면서 장애물 표면을 따라 좌우로 미끄러진다 — 속도가 0으로 떨어지지 않아 속도 기준은
+    // 이 교착을 놓친다(첫 시도의 실패 원인).
+    private const float k_stuckCheckInterval = 0.5f;
+
+    // 한 구간에 이 거리(m)도 못 갔으면 막힘. 도주 속도는 기본 이동의 SpeedMultiplier배(현재 6m/s)라
+    // 0.5초에 3m는 가므로, 회피 미끄러짐과 실제 도주는 이 선에서 확실히 갈린다.
+    private const float k_stuckMinProgress = 0.5f;
+
+    // 막힘이 이 횟수(= 0.5초 x 2 = 1초) 이어지면 도주 지점을 재추첨한다
+    private const int k_stuckStrikesToRepick = 2;
 
     // 재추첨을 이 횟수만큼 했는데도 계속 제자리면 저항으로 전환한다. 재추첨이 통하는 것은 열린
     // 방향이 남아 있을 때뿐이고, 좁은 골목·문턱을 막고 선 경우엔 막힌 방향이 유일한 통로라
@@ -53,7 +62,9 @@ public class NpcFleeState : NpcStateBase
 
     private float m_baseSpeed;
     private float m_scanTimer;
-    private float m_stuckTimer;
+    private float m_stuckCheckTimer;
+    private Vector3 m_lastProgressPosition;
+    private int m_stuckStrikes;
     private int m_stuckRepicks;
     private float m_fleeStartTime;
     private bool m_transitioningToResist;
@@ -73,8 +84,7 @@ public class NpcFleeState : NpcStateBase
         m_owner.Agent.speed = m_baseSpeed * m_config.SpeedMultiplier;
 
         m_scanTimer = 0f;
-        m_stuckTimer = 0f;
-        m_stuckRepicks = 0;
+        ResetStuck();
         m_fleeStartTime = Time.time;
         m_transitioningToResist = false;
 
@@ -97,33 +107,9 @@ public class NpcFleeState : NpcStateBase
             ResetStuck();
             SetFleePoint();
         }
-        else if (!m_owner.Agent.pathPending
-            && m_owner.Agent.velocity.magnitude < k_stuckSpeedThreshold)
+        else if (TickStuckWatch())
         {
-            // 막힘 — 플레이어가 몸으로 길을 막는 경우가 전형이다. 재추첨하면 도착점 maximin
-            // 점수가 막고 선 쪽 방향을 떨어뜨려 옆·뒤로 빠진다. 그래도 안 풀리면 저항으로
-            // 넘긴다 — "길막하면 결국 돌아서서 싸운다"가 성립한다.
-            m_stuckTimer += Time.deltaTime;
-            if (m_stuckTimer >= k_stuckTimeout)
-            {
-                m_stuckTimer = 0f;
-                m_stuckRepicks++;
-
-                // 저항 전환은 도주 진입 직후엔 막는다 — 저항에서 막 넘어온 경우
-                // 프레임마다 왕복하기 때문이다 (SetFleePoint의 포위 판정과 같은 가드, #205/#213)
-                if (m_stuckRepicks >= k_maxStuckRepicks
-                    && Time.time - m_fleeStartTime >= m_config.ResistCooldown)
-                {
-                    TransitionToResist("길막");
-                    return;
-                }
-
-                SetFleePoint();
-            }
-        }
-        else
-        {
-            ResetStuck();
+            return; // 길막으로 저항 전환됨 — 이 상태는 끝났다
         }
 
         // 위협 스캔(CollectThreats)은 씬 전체 FindObjectsByType이라 매 프레임 돌리면
@@ -271,9 +257,63 @@ public class NpcFleeState : NpcStateBase
         m_owner.StartResist(m_owner.ThreatTarget);
     }
 
+    /// <summary>
+    /// 막힘 감시 — 일정 간격으로 실제 이동 거리를 보고, 제자리면 도주 지점을 재추첨한다.
+    /// 재추첨으로도 안 풀리면 저항으로 전환하고 true를 반환한다(이 상태는 끝났다는 뜻). (#400)
+    /// </summary>
+    private bool TickStuckWatch()
+    {
+        // 기절 중엔 멈춰 있는 게 정상이다 — 스턴은 상태가 아니라 플래그라 도주 상태가 유지된다(#292).
+        // 여기서 세면 테이저 한 방에 저항으로 돌변한다.
+        if (m_owner.IsStunned)
+        {
+            ResetStuck();
+            return false;
+        }
+
+        m_stuckCheckTimer += Time.deltaTime;
+        if (m_stuckCheckTimer < k_stuckCheckInterval)
+            return false;
+        m_stuckCheckTimer = 0f;
+
+        Vector3 position = m_owner.transform.position;
+        float progress = Vector3.Distance(position, m_lastProgressPosition);
+        m_lastProgressPosition = position;
+
+        if (progress >= k_stuckMinProgress)
+        {
+            m_stuckStrikes = 0;
+            m_stuckRepicks = 0;
+            return false;
+        }
+
+        m_stuckStrikes++;
+        if (m_stuckStrikes < k_stuckStrikesToRepick)
+            return false;
+        m_stuckStrikes = 0;
+        m_stuckRepicks++;
+
+        // 저항 전환은 도주 진입 직후엔 막는다 — 저항에서 막 넘어온 경우 프레임마다 왕복하기
+        // 때문이다 (SetFleePoint의 포위 판정과 같은 가드, #205/#213)
+        if (m_stuckRepicks >= k_maxStuckRepicks
+            && Time.time - m_fleeStartTime >= m_config.ResistCooldown)
+        {
+            TransitionToResist("길막");
+            return true;
+        }
+
+        // 재추첨하면 도착점 maximin 점수가 막고 선 쪽 방향을 떨어뜨려 옆·뒤로 빠진다
+        Debug.Log(
+            $"도주 막힘 — {progress:F2}m/{k_stuckCheckInterval}s, 지점 재추첨 {m_stuckRepicks}회: {m_owner.name}");
+        SetFleePoint();
+        return false;
+    }
+
     private void ResetStuck()
     {
-        m_stuckTimer = 0f;
+        m_stuckCheckTimer = 0f;
+        m_lastProgressPosition = m_owner.transform.position;
+        m_stuckStrikes = 0;
         m_stuckRepicks = 0;
     }
 
