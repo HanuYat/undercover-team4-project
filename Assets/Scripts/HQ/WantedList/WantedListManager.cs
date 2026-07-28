@@ -101,8 +101,6 @@ public class WantedListManager : NetworkedManagerBase
             NpcId = criminal.NetworkObjectId,
             Name = ToFixed64(wantedName),
             Montage = ToFixed128(montageText),
-            // 현상금은 서버 전용 값이라 항목에 실어야 본부에서 볼 수 있다 (#395)
-            Bounty = identity != null ? identity.Bounty : 0,
         });
         // 전체 진범 수 누적(#331) — 검거/탈출로는 줄지 않는다.
         // ⚠ 라운드 도중 수배 리스트에 진범을 새로 추가하는 다른 경로(#102 제보 전화 '승격' 등)가 생기면,
