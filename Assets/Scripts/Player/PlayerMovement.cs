@@ -31,6 +31,7 @@ public class PlayerMovement : NetworkBehaviour
     [SerializeField]
     private Camera playerCamera;
 
+    [Tooltip("프리팹 기준 감도 — 실제 감도는 여기에 설정 창의 감도 배율(GameSettings.MouseSensitivity)을 곱한 값이다 (#225)")]
     [SerializeField]
     private float m_mouseSensitivity = 1f;
 
@@ -342,7 +343,7 @@ public class PlayerMovement : NetworkBehaviour
             return;
         }
 
-        Vector2 look = m_inputHandler.LookInput * m_mouseSensitivity;
+        Vector2 look = m_inputHandler.LookInput * m_mouseSensitivity * GameSettings.MouseSensitivity;
 
         // 프레임률 독립 지수 감쇠 — 느린 회전 시 정수 픽셀 delta(0/1/0/1…)로 생기는 계단 지터를 완만하게 한다.
         // 감쇠 계수 0이면 원시 입력을 그대로 적용(스무딩 없음). (#216)

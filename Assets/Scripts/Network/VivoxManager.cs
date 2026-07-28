@@ -162,6 +162,9 @@ public class VivoxManager : CommonManagerBase
             VivoxService.Instance.UnmuteInputDevice();
             await VivoxService.Instance.SetChannelTransmissionModeAsync(TransmissionMode.Single, m_proximityChannelName);
 
+            // 로그인 전에는 출력 장치 볼륨을 걸 수 없으므로, 참가 시점에 설정값을 당겨 온다 (#225)
+            ApplyVoiceVolume();
+
             m_status = "무전 + 근접 채널 참가 완료";
         }
         catch (Exception ex)
@@ -320,6 +323,46 @@ public class VivoxManager : CommonManagerBase
         VivoxService.Instance.SetChannelTransmissionModeAsync(mode, ch).AsUniTask().Forget();
     }
 
+    // ---- 음성 음량 (#225) ----
+    // Vivox 출력 볼륨은 -50~50 정수 로그 스케일이고 0이 '변화 없음'이다.
+    // 문서 기준 실사용 구간이 -10~25라 하한을 -50까지 열면 슬라이더 아래 80%가 무음 구간이 된다.
+    // '완전 무음'은 곡선의 끝이 아니라 별개 상태로 취급해 슬라이더 0에서만 -50으로 떨어뜨린다.
+    private const int k_vivoxVolumeMute = -50;
+    private const int k_vivoxVolumeFloor = -20;
+    private const int k_vivoxVolumeCeil = 0;
+
+    /// <summary>
+    /// 설정의 음성 음량을 실제 재생 경로에 적용한다. (#225)
+    /// ① 평소 — Vivox 자체 믹스로 재생되므로 출력 장치 볼륨으로 조절한다.
+    /// ② 먹통 왜곡 중(#372) — Vivox 믹스를 죽이고 우리 AudioSource로 재생하므로 ①이 통하지 않는다.
+    ///    새 AudioSource의 기본 volume은 1이라, 여기서 걸지 않으면 음성을 0으로 내려둔 사람도
+    ///    먹통이 터지는 순간 목소리가 원래 크기로 되살아난다 (음소거가 저절로 풀리는 셈).
+    ///
+    /// 값을 필드로 복사하지 않고 매번 GameSettings에서 읽는다 — 부르는 지점이 셋(설정 변경·채널
+    /// 참가·탭 생성)이라 복사본을 두면 어긋날 여지가 생긴다.
+    /// </summary>
+    public void ApplyVoiceVolume()
+    {
+        float volume = GameSettings.VoiceVolume;
+        if (m_loggedIn)
+            VivoxService.Instance.SetOutputDeviceVolume(ToVivoxVolume(volume));
+
+        foreach (AudioSource source in m_distortTaps.Values)
+        {
+            if (source != null)
+                source.volume = volume;
+        }
+    }
+
+    // 0~1 → Vivox 정수 스케일. 0은 확실한 무음으로 떨어뜨리고, 그 위는 실사용 구간으로 보간한다.
+    private static int ToVivoxVolume(float volume01)
+    {
+        if (volume01 <= 0f)
+            return k_vivoxVolumeMute;
+
+        return Mathf.RoundToInt(Mathf.Lerp(k_vivoxVolumeFloor, k_vivoxVolumeCeil, volume01));
+    }
+
     // ---- 먹통 음성 왜곡 (#372) ----
     //
     // 먹통 중 음성을 '끊는' 대신 '망가뜨린다'. 완전 침묵은 협동 게임에서 답답하고 버그로 오인되는데,
@@ -420,6 +463,9 @@ public class VivoxManager : CommonManagerBase
 
             // 어떤 필터를 어떤 순서·값으로 얹을지는 프로파일이 안다 (#372 리뷰)
             m_distortProfile.Apply(tapObject, source);
+
+            // 새 AudioSource의 기본 volume은 1 — 설정값을 걸지 않으면 음소거가 풀린다 (#225)
+            source.volume = GameSettings.VoiceVolume;
 
             m_distortTaps[participant] = source;
         }
