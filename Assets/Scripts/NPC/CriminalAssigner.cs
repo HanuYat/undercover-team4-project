@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// 스폰 완료 후 모든 NPC에 랜덤 시민 프로필을 채우고, 인스펙터에서 지정한 수만큼 실제 범인으로 지정한다. (이슈 #38/#127)
+/// 스폰 완료 후 모든 NPC에 랜덤 시민 프로필을 채우고, 인스펙터에서 지정한 수만큼 예비 용의자로 지정한다. (이슈 #38/#127)
+/// 예비 용의자는 라운드 시작에 전원 확정되지만 앞 N명만 수배로 공개되고, 나머지는 제보 전화로 1명씩 공개된다 (#102).
 /// 무고 시민도 확률적으로 도주/저항 반응을 보인다 — 진범을 헷갈리게 하는 미끼 행동으로,
 /// 잡아도 보상 없는 오검거일 뿐이다(진범만 유효 검거). 행동은 단서가 아니라 노이즈다. (#78)
 /// 범인의 프로필(WantedProfile)이 곧 본부 수배 데이터(#58)의 원본이 된다.
@@ -20,11 +22,17 @@ public class CriminalAssigner : CommonManagerBase
     [SerializeField]
     private OfficialRecords m_officialRecords;
 
-    [Header("진범 수 (#127)")]
-    [Tooltip("이번 라운드에 배정할 진범 수. NPC 수보다 크면 NPC 수로 잘라 배정한다(경고 로그)")]
+    [Header("수배 용의자 (#127 · #102)")]
+    [Tooltip("이번 라운드의 예비 용의자 풀 크기 = 최대 수배 수. 라운드 시작에 전원 확정되지만 공개는 나눠서 된다(제보 전화). NPC 수보다 크면 NPC 수로 잘라 배정한다(경고 로그)")]
     [Min(1)]
+    [FormerlySerializedAs("m_criminalCount")] // 씬에 저장된 기존 값 보존 — 의미가 '진범 수'에서 '예비 풀 크기'로 바뀌었다 (#102)
     [SerializeField]
-    private int m_criminalCount = 1;
+    private int m_maxWantedCount = 3;
+
+    [Tooltip("라운드 시작에 이미 수배로 공개된 용의자 수. 나머지는 미공개로 대기하다가 제보 전화를 받을 때마다 1명씩 공개된다 (#102). 0이면 수배 없이 시작한다")]
+    [Min(0)]
+    [SerializeField]
+    private int m_initialRevealCount = 1;
 
     [Header("위조범 (#223)")]
     [Tooltip("표시 이름을 오염시킬 위조범 수. 진범과 독립 배정된다")]
@@ -95,10 +103,13 @@ public class CriminalAssigner : CommonManagerBase
 
     private readonly Dictionary<OfficialRecords.Faction, int> m_localRealIndices = new Dictionary<OfficialRecords.Faction, int>();
 
-    /// <summary>실제 범인으로 지정된 NPC들. 배정 전에는 비어 있다. (#127)</summary>
+    /// <summary>
+    /// 이번 라운드의 예비 용의자 전원 — 공개된 수배와 미공개 대기분을 모두 포함한다. 배정 전에는 비어 있다. (#127 · #102)
+    /// 공개 여부는 각 NPC의 <see cref="CitizenIdentity.IsCriminal"/>이 가른다 — 이 목록에 있다고 진범인 것은 아니다.
+    /// </summary>
     public IReadOnlyList<NpcController> CriminalNpcs => m_criminalNpcs;
 
-    /// <summary>범인들의 프로필 = 본부 수배 데이터(#58)의 원본. CriminalNpcs와 같은 순서.</summary>
+    /// <summary>예비 용의자 전원의 프로필 = 본부 수배 데이터(#58)의 원본. CriminalNpcs와 같은 순서.</summary>
     public IReadOnlyList<CitizenProfile> WantedProfiles => m_wantedProfiles;
 
     /// <summary>배정 완료 이벤트 — 수배 UI(#58)·진범 판정(#41) 등이 구독한다. 배정된 전체 범인 목록을 넘긴다. (#127)</summary>
@@ -136,15 +147,18 @@ public class CriminalAssigner : CommonManagerBase
             return;
         }
 
-        // 진범 수는 NPC 수를 넘을 수 없다 — 초과 지정 시 잘라서 배정한다 (#127)
-        int criminalCount = Mathf.Clamp(m_criminalCount, 1, npcs.Count);
-        if (m_criminalCount > npcs.Count)
+        // 예비 풀 크기는 NPC 수를 넘을 수 없다 — 초과 지정 시 잘라서 배정한다 (#127)
+        int suspectCount = Mathf.Clamp(m_maxWantedCount, 1, npcs.Count);
+        if (m_maxWantedCount > npcs.Count)
             Debug.LogWarning(
-                $"CriminalAssigner: 진범 수({m_criminalCount})가 NPC 수({npcs.Count})보다 많아 {criminalCount}명으로 잘라 배정한다",
+                $"CriminalAssigner: 최대 수배 수({m_maxWantedCount})가 NPC 수({npcs.Count})보다 많아 {suspectCount}명으로 잘라 배정한다",
                 this
             );
 
-        HashSet<int> criminalIndices = PickCriminalIndices(npcs.Count, criminalCount);
+        // 최초 공개 수는 풀 크기를 넘을 수 없다 — 넘으면 전원 공개(= 제보 전화가 아무것도 안 하는 구성)
+        int revealCount = Mathf.Clamp(m_initialRevealCount, 0, suspectCount);
+
+        HashSet<int> criminalIndices = PickCriminalIndices(npcs.Count, suspectCount);
         // 위조범은 진범과 독립적으로 추첨한다 — 겹칠 수도 있다(범인이 위조 papers 소지) (#223)
         HashSet<int> forgerIndices = PickCriminalIndices(npcs.Count, Mathf.Clamp(m_forgerCount, 0, npcs.Count));
         string[] names = BuildUniqueNames(npcs.Count);
@@ -154,7 +168,7 @@ public class CriminalAssigner : CommonManagerBase
 
         // 스캔 UI(#39) 전까지는 로그로 배정 결과를 확인한다
         var logBuilder = new System.Text.StringBuilder();
-        logBuilder.AppendLine($"시민 프로필 배정 완료 ({npcs.Count}명, 진범 {criminalCount}명):");
+        logBuilder.AppendLine($"시민 프로필 배정 완료 ({npcs.Count}명, 예비 용의자 {suspectCount}명 중 {revealCount}명 공개):");
 
         for (int i = 0; i < npcs.Count; i++)
         {
@@ -201,7 +215,11 @@ public class CriminalAssigner : CommonManagerBase
                     profile.m_nameView = CorruptName(profile.CitizenName, m_forgedCharCount);
             }
 
-            bool isCriminal = criminalIndices.Contains(i);
+            // 예비 풀은 라운드 시작에 전부 확정하고 공개만 나눈다 — 전화 시점에 몽타주를 역생성하면
+            // 부합 인원 수를 통제할 수 없어 디코이 설계가 깨진다 (#102 설계 결정 1)
+            bool isSuspect = criminalIndices.Contains(i);
+            // m_criminalNpcs에 담기기 전에 세므로 이 비교가 곧 '앞 revealCount명'이다
+            bool isCriminal = isSuspect && m_criminalNpcs.Count < revealCount;
             identity.AssignProfile(profile, isCriminal);
             // 위조 여부를 신원에 기록 — 위조 검거 판정(#320)이 읽는다. 이름 오염(m_nameView)과 별개의 서버 전용 플래그.
             identity.AssignForgery(isForger);
@@ -213,14 +231,17 @@ public class CriminalAssigner : CommonManagerBase
                 : RollReaction(m_citizenCompliantWeight, m_citizenFleeWeight, m_citizenResistWeight);
             identity.AssignReaction(reaction);
 
-            if (isCriminal)
+            // 미공개 예비 용의자도 목록에 담는다 — AppearanceAssigner가 이 목록으로 디코이와 몽타주를
+            // 만들고, 승격(PromoteNext)도 여기서 다음 대상을 찾는다. 공개 여부는 IsCriminal이 가른다 (#102)
+            if (isSuspect)
             {
                 m_criminalNpcs.Add(npcs[i]);
                 m_wantedProfiles.Add(profile);
             }
 
             // 범인 표시는 정답이 노출되므로 데모 빌드 전에 제거할 것. 반응은 미끼 행동 확인용으로 함께 로그
-            string roleTag = isCriminal ? $"  ← 범인 ({reaction})"
+            string roleTag = isCriminal ? $"  ← 수배 공개 ({reaction})"
+                : isSuspect ? $"  ← 예비 용의자 · 미공개 ({reaction})"
                 : reaction != ReactionType.Compliant ? $"  (미끼: {reaction})"
                 : "";
 
@@ -236,6 +257,122 @@ public class CriminalAssigner : CommonManagerBase
 
         OnCriminalAssigned?.Invoke(m_criminalNpcs);
         Debug.Log(logBuilder.ToString());
+    }
+
+    // ---- 제보 전화 승격 (#102) ----
+    //
+    // 배정 자체가 서버(또는 오프라인)에서만 일어나므로 승격도 같은 쪽에서만 의미가 있다.
+    // 호출자(TipCallPhone)가 서버 권위를 게이트한다 — 여기서 다시 막지 않는다.
+
+    /// <summary>
+    /// 아직 공개되지 않은 예비 용의자가 남아 있는가 — 전화를 계속 걸지의 기준 (#102 설계 결정 5).
+    /// 연행·끌기 중인 대상도 '남아 있다'로 센다: 곧 판정되면 IsDelivered로 자동으로 빠지고,
+    /// 석방되면 다시 승격 후보가 된다. 여기서 빼면 마지막 예비 용의자를 끌고 가는 동안 울린
+    /// 전화 하나 때문에 그 라운드 전화가 영영 끊긴다.
+    /// </summary>
+    public bool HasPendingSuspect
+    {
+        get
+        {
+            for (int i = 0; i < m_criminalNpcs.Count; i++)
+                if (IsPending(m_criminalNpcs[i]))
+                    return true;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 지금 수배로 공개된 용의자 수 — 라운드 시작 직후엔 초기 공개 수이고, 제보 전화 승격마다 늘어난다. (#102)
+    /// 라운드 시작 할당량이 달성 가능한지 대조하는 기준이다(RoundManager) — 미공개 예비 용의자는 수배
+    /// 리스트에 없어 잡을 대상으로 인식되지 않으므로(잡으면 오검거) 시작 할당량에 셀 수 없다.
+    /// </summary>
+    public int RevealedCount
+    {
+        get
+        {
+            int count = 0;
+            for (int i = 0; i < m_criminalNpcs.Count; i++)
+            {
+                NpcController npc = m_criminalNpcs[i];
+                if (npc == null)
+                    continue;
+
+                CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
+                if (identity != null && identity.IsCriminal)
+                    count++;
+            }
+            return count;
+        }
+    }
+
+    /// <summary>
+    /// 대기 중인 예비 용의자 1명을 수배로 공개한다 — 제보 전화를 받았을 때 호출한다. (#102)
+    /// 성공하면 true. 지금 승격 가능한 대상이 없으면 false — 그 전화 한 번을 놓친 것일 뿐이므로
+    /// 호출자는 다음 수신을 그대로 예약하면 된다 (풀 소진 판정은 HasPendingSuspect로 따로 한다).
+    /// </summary>
+    public bool PromoteNext()
+    {
+        AppearanceAssigner appearance = App.Game.Appearance;
+        if (appearance == null)
+        {
+            // 몽타주를 발행하지 못하면 수배 리스트에 뜨지 않는다 — IsCriminal만 켜면
+            // 아무도 모르는 진범이 생기므로, 켜기 전에 막는다
+            Debug.LogWarning("CriminalAssigner: AppearanceAssigner를 찾지 못해 승격할 수 없다", this);
+            return false;
+        }
+
+        NpcController npc = FindNextPromotable();
+        if (npc == null)
+            return false;
+
+        CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
+        identity.SetCriminal(true);
+
+        // 예비 용의자는 시민 가중치(대부분 순응)로 뽑혀 있다 — 범인 가중치로 다시 뽑는다.
+        // Reaction은 서버 전용이라 바꿔도 플레이어에게 티가 나지 않는다 (#102 설계 결정 6)
+        identity.AssignReaction(RollReaction(m_compliantWeight, m_fleeWeight, m_resistWeight));
+
+        // 라운드 시작에 보관해 둔 몽타주를 그대로 발행한다 — WantedListManager가 이 이벤트로
+        // NetworkList 추가와 TotalWanted++ 를 한다(기존 경로 재사용)
+        appearance.RevealMontage(npc);
+
+        CitizenProfile profile = identity.Profile;
+        Debug.Log($"[제보 전화] 수배 공개: {(profile != null ? profile.CitizenName : npc.name)} ({identity.Reaction})");
+        return true;
+    }
+
+    /// <summary>미공개 예비 용의자인가 — 살아 있고, 아직 공개 전이고, 판정이 끝나지 않았다. (#102)</summary>
+    private static bool IsPending(NpcController npc)
+    {
+        // 디스폰·파괴된 대상은 Unity null로 잡힌다 — IsSpawned는 오프라인에서 항상 false라 쓸 수 없다
+        if (npc == null)
+            return false;
+
+        CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
+        if (identity == null || identity.IsCriminal)
+            return false;
+
+        // 미공개 상태로 오검거되어 판정이 끝난 대상 — 그 몽타주를 등록하면 잡을 대상이 없다 (#230)
+        return !npc.IsDelivered;
+    }
+
+    /// <summary>지금 당장 승격시킬 수 있는 첫 후보. 없으면 null. (#102 설계 §3 가드)</summary>
+    private NpcController FindNextPromotable()
+    {
+        for (int i = 0; i < m_criminalNpcs.Count; i++)
+        {
+            NpcController npc = m_criminalNpcs[i];
+            if (!IsPending(npc))
+                continue;
+
+            // 연행·끌기 중 — 곧 판정될 대상이라 등록 직후 사라진다. 건너뛰되 풀 소진으로는 세지 않는다
+            // (FindEscorterOf는 연행과 밧줄 끌기를 둘 다 본다, #269)
+            if (PlayerEscorter.FindEscorterOf(npc) != null)
+                continue;
+
+            return npc;
+        }
+        return null;
     }
 
     /// <summary>0~total-1 인덱스를 셔플해 앞에서 count개를 뽑는다 — 중복 없는 진범 인덱스. (#127)</summary>

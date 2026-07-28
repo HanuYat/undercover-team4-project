@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// [테스트용] 범인으로 배정된 NPC들 머리 위에 "범인" 라벨을 띄운다. (다수 진범 지원, #127)
+/// [테스트용] 예비 용의자 머리 위에 라벨을 띄운다 — 공개된 수배와 미공개 대기분을 구분한다. (#127 · #102)
 /// CriminalAssigner.OnCriminalAssigned를 구독해 런타임에 TestWorldLabel을 부착한다.
 /// 정답이 노출되므로 데모 빌드 전에 제거할 것.
 /// (범인 배정은 서버/오프라인에서만 발생하므로 이 라벨도 그쪽에서만 보인다)
@@ -11,8 +11,13 @@ public class TestCriminalLabel : MonoBehaviour
 {
     private CriminalAssigner Assigner => App.Game.CriminalAssigner;
 
-    [SerializeField] private string m_text = "범인";
+    [SerializeField] private string m_text = "수배";
     [SerializeField] private Color m_color = Color.red;
+
+    [Header("미공개 예비 용의자 (#102)")]
+    [Tooltip("제보 전화로 아직 공개되지 않은 대기 중 용의자에게 붙는 라벨")]
+    [SerializeField] private string m_pendingText = "예비(미공개)";
+    [SerializeField] private Color m_pendingColor = Color.gray;
 
     private void OnEnable()
     {
@@ -45,7 +50,34 @@ public class TestCriminalLabel : MonoBehaviour
                 continue;
 
             TestWorldLabel label = criminal.gameObject.AddComponent<TestWorldLabel>();
-            label.Configure(m_text, m_color);
+            Apply(label, criminal);
         }
+    }
+
+    // 제보 전화 승격(#102)은 배정 이벤트 밖에서 일어나므로, 라벨은 폴링으로 따라간다.
+    // 테스트 전용 스크립트이고 대상이 예비 풀 크기(보통 3명)뿐이라 비용을 따질 규모가 아니다.
+    private void Update()
+    {
+        if (Assigner == null)
+            return;
+
+        IReadOnlyList<NpcController> criminals = Assigner.CriminalNpcs;
+        for (int i = 0; i < criminals.Count; i++)
+        {
+            if (criminals[i] == null)
+                continue;
+
+            TestWorldLabel label = criminals[i].GetComponent<TestWorldLabel>();
+            if (label != null)
+                Apply(label, criminals[i]);
+        }
+    }
+
+    // 공개된 수배인지 대기 중인 예비 용의자인지로 문구·색을 가른다 (#102)
+    private void Apply(TestWorldLabel label, NpcController npc)
+    {
+        CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
+        bool revealed = identity != null && identity.IsCriminal;
+        label.Configure(revealed ? m_text : m_pendingText, revealed ? m_color : m_pendingColor);
     }
 }

@@ -9,7 +9,8 @@ using Random = UnityEngine.Random;
 /// 범인별 외형 확정 → 공개 축 선택(전 범인 공통) → 각 몽타주에 부합하는 NPC가 정확히 k명(해당 범인 포함)이
 /// 되도록 범인마다 디코이 k−1명에게 공개 특징 일치 조합을 주고, 나머지는 모든 범인과 공개 특징이
 /// 최소 1개 다르게 배정한다. k값으로 난이도를 조절한다 (GDD 6-5 분포=난이도).
-/// 진범이 여러 명이면(#127) 몽타주도 범인 수만큼 생성되고, OnMontageGenerated가 범인마다 발행된다.
+/// 진범이 여러 명이면(#127) 몽타주도 범인 수만큼 생성된다. 다만 발행(OnMontageGenerated)은
+/// 이미 공개된 수배만 — 대기 중인 예비 용의자(#102)는 RevealMontage로 나중에 발행된다.
 /// 배정은 서버 권위 — NpcAppearance.SetProfile이 인덱스만 전 클라이언트에 동기화한다 (#56).
 /// 몽타주 텍스트(GDD 10-3 글 방식)는 범인 프로필에서 자동 생성 — 본부 수배 UI(#58)의 원본.
 /// </summary>
@@ -134,15 +135,63 @@ public class AppearanceAssigner : CommonManagerBase
             logBuilder.AppendLine($"  {DescribeProfile(applied)}{role}");
         }
 
-        // 4. 범인별 몽타주 텍스트
+        // 4. 범인별 몽타주 텍스트 — 예비 용의자분까지 전원 생성해 보관한다 (#102).
+        //    보관해 두는 이유: 승격 시 RevealMontage가 이 텍스트를 그대로 쓴다. 그 시점에 재생성하면
+        //    공개 축을 다시 뽑아야 하고, 본부에 이미 떠 있던 몽타주가 무효가 된다.
+        int revealedCount = 0;
         for (int i = 0; i < criminals.Count; i++)
         {
             AppearanceProfile p = m_criminalProfiles[i];
             string montageText = m_appearanceDatabase.BuildMontageText(p, m_revealedAxes);
             m_montageTexts.Add(montageText);
+
+            // 발행은 이미 공개된 수배만 — 예비 용의자는 IsCriminal = false로 대기하다가
+            // 제보 전화 승격 시 RevealMontage로 같은 텍스트가 나간다 (#102)
+            CitizenIdentity identity = criminals[i].GetComponent<CitizenIdentity>();
+            if (identity == null || !identity.IsCriminal)
+                continue;
+
+            revealedCount++;
             OnMontageGenerated?.Invoke(criminals[i], montageText);
         }
-        Debug.Log($"외형 배정 완료 ({npcs.Count}명, 범인 {criminals.Count}명) | 몽타주: {string.Join(" / ", m_montageTexts.ConvertAll(t => $"\"{t}\""))}\n{logBuilder}");
+        Debug.Log($"외형 배정 완료 ({npcs.Count}명, 용의자 {criminals.Count}명 중 공개 {revealedCount}명) | 몽타주: {string.Join(" / ", m_montageTexts.ConvertAll(t => $"\"{t}\""))}\n{logBuilder}");
+    }
+
+    /// <summary>
+    /// 대기 중이던 용의자의 몽타주를 지금 발행한다 — 제보 전화 승격(#102) 전용. 서버(또는 오프라인) 전용.
+    /// 라운드 시작에 보관해 둔 텍스트를 그대로 쓰므로 공개 축은 바뀌지 않는다.
+    /// 발행 자체는 라운드 시작 때와 같은 경로(OnMontageGenerated)라, WantedListManager의
+    /// NetworkList 추가와 TotalWanted++ 가 그대로 따라온다 — 별도 등록 경로를 만들지 않는 이유다.
+    /// </summary>
+    public void RevealMontage(NpcController npc)
+    {
+        if (npc == null)
+            return;
+
+        IReadOnlyList<NpcController> criminals = Assigner != null ? Assigner.CriminalNpcs : null;
+        if (criminals == null)
+        {
+            Debug.LogWarning("AppearanceAssigner: CriminalAssigner를 찾지 못해 몽타주를 공개할 수 없다", this);
+            return;
+        }
+
+        // CriminalNpcs와 m_montageTexts는 같은 순서다 — 인덱스로 짝을 찾는다
+        for (int i = 0; i < criminals.Count; i++)
+        {
+            if (criminals[i] != npc)
+                continue;
+
+            if (i >= m_montageTexts.Count)
+            {
+                Debug.LogWarning($"AppearanceAssigner: {npc.name}의 몽타주가 아직 생성되지 않아 공개할 수 없다", npc);
+                return;
+            }
+
+            OnMontageGenerated?.Invoke(npc, m_montageTexts[i]);
+            return;
+        }
+
+        Debug.LogWarning($"AppearanceAssigner: {npc.name}은(는) 용의자 목록에 없어 공개 대상이 아니다", npc);
     }
 
     /// <summary>범인: SciFi는 스폰 모델 유지, Generic은 확정 프로필 배정. 신원엔 실제 프로필 반영.</summary>

@@ -26,7 +26,11 @@ public class CitizenIdentity : NetworkBehaviour
     /// </summary>
     public CitizenProfile Profile { get; private set; }
 
-    /// <summary>실제 범인 여부 — 진범 판정(#41)의 정답 기준. 서버 전용 (클라이언트에서는 항상 false).</summary>
+    /// <summary>
+    /// 실제 범인 여부 — 진범 판정(#41)의 정답 기준. 서버 전용 (클라이언트에서는 항상 false).
+    /// 곧 공개 플래그이기도 하다 (#102): 라운드 시작에 확정된 예비 용의자는 false로 대기하다가
+    /// 제보 전화 승격 시 켜진다. 대기 중에 잡으면 오검거로 판정된다 (GDD 7-3과 일치).
+    /// </summary>
     public bool IsCriminal { get; private set; }
 
     /// <summary>
@@ -93,6 +97,16 @@ public class CitizenIdentity : NetworkBehaviour
 
         if (IsSpawned && IsServer)
             m_syncedData.Value = CitizenData.FromProfile(profile);
+    }
+
+    /// <summary>
+    /// 범인 여부만 바꾼다 — 프로필은 그대로 둔다. 제보 전화 승격(#102) 전용.
+    /// 프로필까지 다시 배정하면 CitizenData 동기화 스냅샷이 재전송되어, 본부가 보고 있던
+    /// 스캔 표시값이 이유 없이 깜빡인다. IsCriminal은 서버 전용이라 동기화할 것이 없다.
+    /// </summary>
+    public void SetCriminal(bool isCriminal)
+    {
+        IsCriminal = isCriminal;
     }
 
     /// <summary>외형 특징 조합을 배정한다. AppearanceAssigner 전용. (서버 전용 — 동기화 없음)</summary>

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 public enum RoundPhase
 {
@@ -45,9 +46,10 @@ public class RoundManager : CommonManagerBase
     private CriminalAssigner Assigner => App.Game.CriminalAssigner;
 
     [Header("라운드 목표")]
-    [Tooltip("라운드당 검거 할당량")]
+    [Tooltip("라운드 시작 시점의 검거 할당량 — 제보 전화로 수배가 공개될 때마다 1씩 늘어난다(#102). 라운드 시작 공개 수배 수보다 크면 그 값으로 깎인다")]
     [Min(1)]
-    [SerializeField] private int m_arrestQuota = 1;
+    [FormerlySerializedAs("m_arrestQuota")] // 씬에 저장된 기존 값 보존 — 의미가 '고정 할당량'에서 '시작 할당량'으로 바뀌었다 (#102)
+    [SerializeField] private int m_initialQuota = 1;
     [Tooltip("라운드 제한시간(초). 0 이하 = 무제한(타이머 없음)")]
     [SerializeField] private float m_timeLimitSeconds = 180f;
 
@@ -65,8 +67,11 @@ public class RoundManager : CommonManagerBase
     /// <summary>이번 라운드에 검거한 진범 수 — 할당량 진행도. 서버(또는 오프라인)의 진실값. (#103)</summary>
     public int CriminalArrestCount { get; private set; }
 
-    /// <summary>라운드당 검거 할당량 — HUD(할당량 진행 표시) 등이 읽는다. (#103)</summary>
-    public int ArrestQuota => m_arrestQuota;
+    /// <summary>
+    /// 현재 라운드의 검거 할당량 — 시작값은 m_initialQuota이고, 제보 전화로 수배가 공개될 때마다 늘어난다(#102).
+    /// 서버(또는 오프라인)의 진실값. (#103)
+    /// </summary>
+    public int ArrestQuota { get; private set; }
 
     /// <summary>남은 제한시간(초). 무제한이면 양의 무한대. 서버(또는 오프라인)의 진실값. (#103)</summary>
     public float RemainingSeconds { get; private set; } = float.PositiveInfinity;
@@ -148,6 +153,7 @@ public class RoundManager : CommonManagerBase
         Result = RoundResult.None;
         EndReason = RoundEndReason.None;
         CriminalArrestCount = 0;
+        ArrestQuota = m_initialQuota;
         RemainingSeconds = float.PositiveInfinity;
         Spawner.ResetSpawnState(); // IsSpawnCompleted 래치 해제 + 이전 NPC 정리 → StartSpawn 재동작
     }
@@ -163,22 +169,26 @@ public class RoundManager : CommonManagerBase
 
         Phase = RoundPhase.InProgress;
         CriminalArrestCount = 0;
+        ArrestQuota = m_initialQuota;
         // 0 이하 = 무제한 — 타이머를 아예 돌리지 않는다 (밸런싱 전 테스트·본부 단독 씬용)
         RemainingSeconds = m_timeLimitSeconds > 0f ? m_timeLimitSeconds : float.PositiveInfinity;
         Spawner.StartSpawn(); // 서버/오프라인만 실제 스폰 — 클라이언트 호출은 NpcSpawner가 걸러낸다 (#56)
-        Debug.Log($"[라운드] 시작 — NPC 스폰 트리거 (할당량 {m_arrestQuota}명, 제한시간 {(float.IsPositiveInfinity(RemainingSeconds) ? "무제한" : $"{RemainingSeconds:0}초")})");
+        Debug.Log($"[라운드] 시작 — NPC 스폰 트리거 (할당량 {ArrestQuota}명, 제한시간 {(float.IsPositiveInfinity(RemainingSeconds) ? "무제한" : $"{RemainingSeconds:0}초")})");
         OnRoundStarted?.Invoke();
     }
 
     // [버그 수정] 배정 완료 시점에 실제 진범 수와 할당량을 대조합니다. (#149)
-    // 달성 불가능한 할당량일 경우, 아무런 알림 없이 영구 실패하는 상황을 막기 위해 실제 진범 수로 clamp 처리합니다.
+    // 달성 불가능한 할당량일 경우, 아무런 알림 없이 영구 실패하는 상황을 막기 위해 clamp 처리합니다.
+    // 기준은 예비 풀 전체가 아니라 '지금 공개된 수배 수'다 — 미공개 예비 용의자는 수배 리스트에 없어
+    // 잡을 대상으로 인식되지 않으므로(잡으면 오검거) 시작 할당량에 셀 수 없다. 나머지 몫은 제보 전화로 늘어난다. (#102)
     private void HandleCriminalAssigned(IReadOnlyList<NpcController> criminals)
     {
-        if (m_arrestQuota > criminals.Count)
+        int revealed = Assigner != null ? Assigner.RevealedCount : criminals.Count;
+        if (ArrestQuota > revealed)
         {
-            Debug.LogWarning($"RoundManager: 총 할당량({m_arrestQuota})이 실제 배정된 진범 수({criminals.Count})보다 큽니다 — " +
-                             $"달성 불가 - {criminals.Count}명으로 할당량을 강제로 깎아 적용합니다.", this);
-            m_arrestQuota = criminals.Count;
+            Debug.LogWarning($"RoundManager: 시작 할당량({ArrestQuota})이 라운드 시작 공개 수배 수({revealed})보다 큽니다 — " +
+                             $"달성 불가 - {revealed}명으로 깎아 적용합니다. 나머지는 제보 전화로 늘어납니다.", this);
+            ArrestQuota = revealed;
         }
     }
 
@@ -196,7 +206,7 @@ public class RoundManager : CommonManagerBase
 
         // 시간 초과 = 할당량 미달 확정 (채웠다면 그 순간 이미 성공 종료됐다) → 게임오버. (GDD 9-3, 부록B #2)
         // (전원 다운(전멸)도 별도 게임오버 조건이다 — HandleAnyIncapacitatedChanged, #105)
-        Debug.Log($"[라운드] 제한시간 초과 — 진범 검거 {CriminalArrestCount}/{m_arrestQuota}명, 할당량 미달");
+        Debug.Log($"[라운드] 제한시간 초과 — 진범 검거 {CriminalArrestCount}/{ArrestQuota}명, 할당량 미달");
         EndRound(RoundResult.Failure, RoundEndReason.TimeOver);
     }
 
@@ -217,10 +227,24 @@ public class RoundManager : CommonManagerBase
             return;
 
         CriminalArrestCount++;
-        Debug.Log($"[라운드] 진범 검거 — 할당량 진행 {CriminalArrestCount}/{m_arrestQuota}");
+        Debug.Log($"[라운드] 진범 검거 — 할당량 진행 {CriminalArrestCount}/{ArrestQuota}");
 
-        if (CriminalArrestCount >= m_arrestQuota)
+        if (CriminalArrestCount >= ArrestQuota)
             EndRound(RoundResult.Success, RoundEndReason.QuotaMet);
+    }
+
+    /// <summary>
+    /// 검거 할당량을 늘린다 — 제보 전화로 대기 중이던 용의자가 수배로 공개됐을 때 호출한다. (#102)
+    /// 서버(또는 오프라인)에서만 호출된다(승격 자체가 서버 권위).
+    /// 진행 중일 때만 유효하다 — 이미 할당량을 채워 종료된 라운드를 되돌리지 않는다.
+    /// </summary>
+    public void AddQuota(int amount)
+    {
+        if (Phase != RoundPhase.InProgress || amount <= 0)
+            return;
+
+        ArrestQuota += amount;
+        Debug.Log($"[라운드] 제보 전화로 할당량 증가 — 할당량 진행 {CriminalArrestCount}/{ArrestQuota}");
     }
 
     /// <summary>
@@ -242,7 +266,7 @@ public class RoundManager : CommonManagerBase
             return;
 
         CriminalArrestCount--;
-        Debug.Log($"[라운드] 진범 탈출 — 할당량 진행 {CriminalArrestCount}/{m_arrestQuota}");
+        Debug.Log($"[라운드] 진범 탈출 — 할당량 진행 {CriminalArrestCount}/{ArrestQuota}");
     }
 
     // 플레이어 무력화 상태 변화 수신 — 전원 다운(전멸)이면 게임오버로 종료한다. (#105, 서버/오프라인에서만 발행됨)
