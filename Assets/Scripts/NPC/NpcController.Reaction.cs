@@ -9,7 +9,7 @@ public partial class NpcController
     // TODO: 아이템/상호작용 네트워크 전환(#55 계열) 시 클라 입력 → ServerRpc 경로로 연결
 
     /// <summary>
-    /// 반응 판정 진입점 — 스캔·피격이 공유한다. 서버(또는 오프라인) 전용. (#400)
+    /// 반응 판정 진입점 — 스캔·플레이어 타격이 공유한다. 서버(또는 오프라인) 전용. (#400)
     ///
     /// 반응이 터지는 시점이 "검거하려 할 때"에서 "의심받을 때(스캔)·맞을 때(피격)"로 옮겨졌다.
     /// 밧줄 묶기는 더 이상 반응을 굴리지 않는다 — 순수 검거 수단이다.
@@ -131,6 +131,11 @@ public partial class NpcController
     private void ServerSubdueHit(GameObject attacker)
     {
         TakeDamage(m_commonConfig.SubdueHitPower, attacker);
+
+        // 피해 뒤에 반응 (#400) — HP가 0이 되어 기절했으면 ServerReactTo가 IsStunned에서 걸러 낸다.
+        // 쓰러진 대상이 도망치기 시작하면 안 되고, 깨어날 때의 도주 전환은 NpcStunnedState가 따로 한다.
+        // TakeDamage가 상태 게이트로 피해를 무시한 경우(연행·수감·페널티)엔 CanStartReaction도 막는다.
+        ServerReactTo(ReactionTrigger.Damage, attacker != null ? attacker.transform : null);
     }
 
     /// <summary>도주 중인 NPC 근접 제압 — 상호작용 홀드 성공 시 그 자리에서 체포. (NpcSubdueInteractable 경유)</summary>

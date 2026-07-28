@@ -51,10 +51,9 @@ public partial class NpcController : IDamageable
 
         SetHp(Mathf.Clamp(CurrentHp - amount, 0, MaxHp), attacker);
 
-        // 맞으면 반응한다 (#400) — 도주형은 도주, 저항형은 저항, 순응형은 도주·저항 중 랜덤.
-        // SetHp 뒤에 두는 이유: HP가 0이 되어 기절했으면 ServerReactTo가 IsStunned에서 걸러 낸다.
-        // 쓰러진 대상이 도망치기 시작하면 안 되고, 깨어날 때의 도주 전환은 NpcStunnedState가 따로 한다.
-        ServerReactTo(ReactionTrigger.Damage, attacker != null ? attacker.transform : null);
+        // 피격 반응(#400)은 여기서 굴리지 않는다 — 이 경로는 폭발(BombDevice) 같은 환경 피해도
+        // 함께 지나가고, 폭탄에 놀라 도주·저항이 터지는 것은 '때린 사람에게 반응한다'가 아니다.
+        // 판정은 플레이어 타격 경로(Baton.ServerSwing · ServerSubdueHit)가 직접 부른다.
     }
 
     /// <summary>
