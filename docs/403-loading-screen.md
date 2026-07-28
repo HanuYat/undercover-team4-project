@@ -1,11 +1,14 @@
 # #403 — 씬 전환 로딩 화면 + 라운드 시작 준비 단계 정리
 
 - **날짜:** 2026-07-28
-- **브랜치:** `feature/403-loadpanel` (기준: `main` = `957a520`의 부모)
-- **커밋 2개:**
-  - `9ed8a86` 기능 — 씬 전환 로딩 화면 (#403)
-  - `957a520` 기능 — 라운드 시작을 준비 단계 뒤로 (NPC 스폰 → 전원 입장 → 지연) (#403)
+- **브랜치:** `feature/403-loadpanel` (기준: `main` = `e03079e`, 리베이스 완료)
+- **커밋 4개:**
+  - `909c1a1` 기능 — 씬 전환 로딩 화면 (#403)
+  - `2b3d12e` 기능 — 라운드 시작을 준비 단계 뒤로 (NPC 스폰 → 전원 입장 → 지연) (#403)
+  - `00ee567` 기록용 문서 (이 파일)
+  - `6b091af` Loading화면 프리팹으로 분리
 - **상태:** 원격 미푸시 / PR 미생성. 컴파일·플레이 검증 상태는 6장 참고.
+- **리베이스 이력:** `e03079e`로 리베이스하며 `RoundManager.cs`에서 **#395(라운드 목표를 검거 수 → 금액으로 전환)와 의미 충돌**이 있었다. 해소 내용은 3-1·5장 참고.
 
 ---
 
@@ -15,7 +18,7 @@
 
 ---
 
-## 2. 커밋 ①  씬 전환 로딩 화면 (`9ed8a86`)
+## 2. 커밋 ①  씬 전환 로딩 화면 (`909c1a1`)
 
 ### 2-1. 문제
 
@@ -82,25 +85,27 @@ NPC는 활성화 프레임 이후에 채워지므로 override 했고, **서버�
 - **클라이언트** — `NpcSpawner.StartSpawn`이 클라에서 즉시 return하므로 `IsSpawnCompleted`가 영영 false → 그걸 기다리면 타임아웃까지 갇힌다. 그래서 **자기 플레이어 오브젝트 도착까지만** 기다리는 근사로 뒀다.
 - 상한 20초, 초과 시 경고 후 로딩 화면 내림.
 
-### 2-7. `AppBootstrap.prefab`
+### 2-7. 프리팹
 
-`LoadingScreen` 캔버스 계층 추가 — Canvas(ScreenSpaceOverlay, **sortingOrder 1000**) + CanvasScaler + CanvasGroup + `LoadingScreen` 컴포넌트, 하위에 `Background`(Image) / `Spinner`(Dot0~Dot2 Image) / `StatusText`(TMP). 직렬화 참조 4개(`m_canvas`/`m_canvasGroup`/`m_spinner`/`m_statusText`)와 `m_fadeOutSeconds = 0.35`가 프리팹에 채워져 있다.
+Canvas(ScreenSpaceOverlay, **sortingOrder 1000**) + CanvasScaler + CanvasGroup + `LoadingScreen` 컴포넌트, 하위에 `Background`(Image) / `Spinner`(Dot0~Dot2 Image) / `StatusText`(TMP). 직렬화 참조 4개(`m_canvas`/`m_canvasGroup`/`m_spinner`/`m_statusText`)와 `m_fadeOutSeconds = 0.35`가 채워져 있다.
+
+처음엔 `AppBootstrap.prefab`에 계층을 직접 넣었지만, 커밋 `6b091af`에서 **`Assets/Prefabs/UI/LoadingScreen.prefab`으로 분리**하고 AppBootstrap은 그것을 중첩 참조하도록 바꿨다 — UI를 AppBootstrap 열지 않고 따로 편집할 수 있다.
 
 ---
 
-## 3. 커밋 ②  라운드 시작을 준비 단계 뒤로 (`957a520`)
+## 3. 커밋 ②  라운드 시작을 준비 단계 뒤로 (`2b3d12e`)
 
 ### 3-1. 왜
 
-1. **로딩 화면이 스폰 완료까지 덮을 수 있게** — 스폰이 `StartRound` 안에 있으면 라운드가 이미 시작된 뒤에 NPC가 프레임마다 튀어나온다.
-2. **범인 배정 뒤에 라운드를 연다** — 스폰 완료 후 `CriminalAssigner`가 실제 공개 수배 수로 할당량을 깎는데(#149), 그 보정이 반영된 값으로 라운드가 시작된다.
+**로딩 화면이 스폰 완료까지 덮을 수 있게** — 스폰이 `StartRound` 안에 있으면 라운드가 이미 시작된 뒤에 NPC가 프레임마다 튀어나온다.
+
+> 최초 작성 시에는 "범인 배정 후 `CriminalAssigner`의 할당량 보정(#149)이 시작값에 반영된다"는 근거도 함께 들었으나, 리베이스 과정에서 **#395가 할당량(`ArrestQuota`)을 목표 금액(`m_targetFund`)으로 대체하며 그 보정 자체를 없앴다**(값을 깎지 않고 경고만 남기는 방식). 따라서 지금 남은 근거는 로딩 화면 하나다. (5장 참고)
 
 ### 3-2. 새 흐름 ([RoundManager.cs](../Assets/Scripts/Round/RoundManager.cs))
 
 ```
 씬 진입(서버/오프라인)
   → BeginRoundPreparation()          Phase = Preparing 유지
-      · 할당량 초기화(스폰보다 먼저)
       · Spawner.StartSpawn()
   → ① NPC 스폰 완료 대기 (이 사이에 범인 배정도 끝난다)
   → ② 전원 입장 확인 대기 (기다릴 상대가 있을 때만, 상한 30초)
@@ -109,7 +114,7 @@ NPC는 활성화 프레임 이후에 채워지므로 override 했고, **서버�
 ```
 
 - `BeginRoundPreparation()` — 신규 public 진입점. `m_preparing` 래치로 1회만.
-- **할당량 초기화 위치 이동** — 준비 단계에서 `CriminalArrestCount`/`ArrestQuota`를 세팅하고, `StartRound`에서는 **건드리지 않는다.** 여기서 다시 `m_initialQuota`로 되돌리면 #149 보정이 날아간다. 단, 준비를 거치지 않고 `StartRound`가 직접 호출된 경우(테스트 등)를 위해 `!m_preparing`일 때만 초기화하는 방어를 남겼다.
+- **`StartRound`는 상태 전환만 한다** — `Spawner.StartSpawn()`이 준비 단계로 빠졌고, 진행도 초기화(`CriminalArrestCount = 0`)는 #395 코드 그대로 `StartRound`에 남겼다. 준비 구간에는 누적될 일이 없다 — `HandleArrestJudged`가 `Phase != InProgress`면 곧바로 return한다.
 - **전원 입장 판정** — 서버가 `NetworkSceneManager.OnLoadEventCompleted`를 구독(`m_allPeersLoaded`). 씬 이름이 자기 씬일 때만 처리. 시간 초과 클라가 있어도 진행한다(NGO가 이미 자체 상한을 적용한 뒤라 더 기다려도 안 온다) — 경고만 남긴다.
 - **호스트 혼자면 건너뛴다** — `ConnectedClientsIds.Count > 1`이 아니면 NGO 씬 동기화 자체가 없어 완료 신호가 영영 오지 않는다. 솔로 플레이·`DevAutoHost` 개발 흐름이 여기 해당.
 - `OnDestroy` override 추가 — `base.OnDestroy()`(R5) + `OnLoadEventCompleted` 해제.
@@ -157,6 +162,7 @@ NPC는 활성화 프레임 이후에 채워지므로 override 했고, **서버�
 - **로딩 화면은 NPC 스폰 완료까지만 덮는다** — 전원 입장 대기 + 3초 지연은 덮지 않는다(플레이어가 맵을 보며 기다리는 그림).
 
 **한계:**
+- ⚠️ **스폰 이동의 근거가 하나로 줄었다** — #395가 할당량 보정(#149)을 없앴으므로, 이제 "스폰을 시작 앞으로"를 지지하는 것은 로딩 화면뿐이다. 로딩 화면 요구가 바뀌면 이 배치를 재검토할 근거가 사라진다는 뜻이기도 하다.
 - ⚠️ **클라이언트 준비 판정이 근사다** — 자기 플레이어 오브젝트 도착까지만 기다린다. NPC 전원 도착까지 정확히 맞추려면 **서버 권위 "준비 완료" 플래그를 복제**해야 한다.
 - ⚠️ **전원 준비 판정이 서버 관점이다** — `OnLoadEventCompleted`는 "클라가 씬을 로드했다"까지만 알려줘, 클라 화면이 아직 로딩 중인데 라운드가 시작될 수 있다. → **#410으로 분리 등록**(권장 방향: `SceneReadyGate : NetworkedManagerBase` + 클라 → 서버 ServerRpc 보고). 로딩 화면의 `대기 중 (2/4)` 표시도 여기서 함께 해결된다.
 - ⚠️ **준비 구간(3초) 동안 NPC는 이미 활동한다.** 스폰 직후 freeze는 넣지 않았다 — "3초 뒤 시작"은 타이머와 `OnRoundStarted`만 미루는 것.
@@ -181,7 +187,7 @@ NPC는 활성화 프레임 이후에 채워지므로 override 했고, **서버�
 - [ ] **라운드 준비 순서** — NPC가 로딩 화면 아래에서 다 스폰되는지, 화면이 내려간 뒤 3초 후 라운드 시작 로그가 찍히는지.
 - [ ] **전원 입장 대기** — 클라가 늦게 로드될 때 호스트가 기다리는지, 30초 초과 시 경고 후 진행하는지.
 - [ ] **재진입 가드** — 전환 중 다른 `LoadScene`이 겹칠 때 경고만 남고 화면이 꼬이지 않는지.
-- [ ] **할당량 회귀** — `CriminalAssigner`의 #149 보정값이 라운드 시작 후에도 유지되는지(`StartRound`가 덮어쓰지 않는지).
+- [ ] **#395 회귀** — 리베이스로 목표 금액 방식과 합쳐졌으므로: 목표 진행도(`CurrentFund`) 표시, 본부 종료 버튼 활성 조건, 제한시간 종료 시 성공/실패 판정이 그대로 동작하는지.
 
 ---
 
@@ -194,13 +200,15 @@ NPC는 활성화 프레임 이후에 채워지므로 override 했고, **서버�
 | `Assets/Scripts/Core/AppHelper.cs` | 동기 → 비동기 로드. 로컬은 활성화 제어, NGO는 `OnLoadComplete` 폴링(30초) |
 | `Assets/Scripts/Core/SceneManagerBase.cs` | `WaitUntilReadyAsync` 훅 추가(기본 즉시 완료) |
 | `Assets/Scripts/Scene/InGameManager.cs` | 준비 대기 override — 서버는 스폰 완료, 클라는 플레이어 오브젝트 도착 |
-| `Assets/Scripts/Round/RoundManager.cs` | `BeginRoundPreparation` 신설, 스폰·할당량 초기화를 준비 단계로 이동, 전원 입장 대기, 시작 지연 |
+| `Assets/Scripts/Round/RoundManager.cs` | `BeginRoundPreparation` 신설, NPC 스폰을 준비 단계로 이동, 전원 입장 대기, 시작 지연 |
 | `Assets/Scripts/Test/DevAutoHost.cs` | `StartRound` → `BeginRoundPreparation` |
-| `Assets/Prefabs/AppBootstrap.prefab` | LoadingScreen 캔버스 계층(sortingOrder 1000) + 참조 연결 |
+| `Assets/Prefabs/UI/LoadingScreen.prefab` | **신규** — 로딩 화면 캔버스 계층(sortingOrder 1000) + 참조 연결 |
+| `Assets/Prefabs/AppBootstrap.prefab` | 위 프리팹을 중첩 참조 |
+| `docs/403-loading-screen.md` | **신규** — 이 문서 |
 
 ---
 
 ## 8. 관련 문서 / 이슈
 
 - 구조 규칙: [docs/architecture.md](architecture.md) — R1(App 파사드), R4(매니저 등록), R5(`base` 호출), R7(`App.LoadScene` 단일 경로)
-- 관련 이슈: **#403**(본건), #149(할당량 보정), #56(스폰 서버 권위), #214(로비 별도 씬), #43(라운드 UI 동기화)
+- 관련 이슈: **#403**(본건), #395(라운드 목표를 금액으로 — 리베이스 충돌 상대), #410(전원 준비 판정 후속), #56(스폰 서버 권위), #214(로비 별도 씬), #43(라운드 UI 동기화)
