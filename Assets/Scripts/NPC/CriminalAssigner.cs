@@ -374,6 +374,11 @@ public class CriminalAssigner : CommonManagerBase
         CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
         identity.SetCriminal(true);
 
+        // 오검거로 이미 한 번 판정된 대상일 수 있다 — 표식을 지워야 다시 잡아 인계했을 때
+        // '첫 인계'로 잡혀 검거 수가 정상 누적된다(IsFirstDelivery, #358). 탈옥 재검거(#231)가
+        // ClearDelivered를 부르는 것과 같은 이유다.
+        npc.ClearDelivered();
+
         // 예비 용의자는 시민 가중치(대부분 순응)로 뽑혀 있다 — 범인 가중치로 다시 뽑는다.
         // Reaction은 서버 전용이라 바꿔도 플레이어에게 티가 나지 않는다 (#102 설계 결정 6)
         identity.AssignReaction(RollReaction(m_compliantWeight, m_fleeWeight, m_resistWeight));
@@ -394,7 +399,7 @@ public class CriminalAssigner : CommonManagerBase
         return true;
     }
 
-    /// <summary>미공개 예비 용의자인가 — 살아 있고, 아직 공개 전이고, 판정이 끝나지 않았다. (#102)</summary>
+    /// <summary>미공개 예비 용의자인가 — 살아 있고, 아직 공개 전이고, 지금 잡을 수 있다. (#102 · #392)</summary>
     private static bool IsPending(NpcController npc)
     {
         // 디스폰·파괴된 대상은 Unity null로 잡힌다 — IsSpawned는 오프라인에서 항상 false라 쓸 수 없다
@@ -405,8 +410,16 @@ public class CriminalAssigner : CommonManagerBase
         if (identity == null || identity.IsCriminal)
             return false;
 
-        // 미공개 상태로 오검거되어 판정이 끝난 대상 — 그 몽타주를 등록하면 잡을 대상이 없다 (#230)
-        return !npc.IsDelivered;
+        // 유치장에 수감된 대상만 뺀다 — 미공개 상태에서 위조범으로 판정돼 갇힌 개체다. 수배로 올려도
+        // 본부 안에 있어 찾을 것이 없고, 이미 위조 현상금으로 정산에 계상돼 있다.
+        //
+        // 오검거로 판정된 대상은 뺐다가 되살렸다 (#392). 예전에는 IsDelivered를 영구 제외했는데
+        // 그 근거("판정이 끝난 대상은 아무도 못 잡는 유령 항목이 된다", #230)가 더 이상 맞지 않는다:
+        // 오검거당한 시민은 죽지 않고 원한 구역(Detained)에서 대기하다 추격대(Chasing)로 나가며,
+        // 재판정도 허용된다(#358 — 다시 끌어와 인계하면 판정된다). 즉 잡을 수 있는 대상인데 승격만
+        // 막고 있었고, 그 탓에 미공개 용의자를 오검거로 태울 때마다 풀이 영구히 줄어 제보 전화가
+        // 조용히 죽었다.
+        return npc.CurrentState != NpcState.Jailed;
     }
 
     /// <summary>지금 당장 승격시킬 수 있는 첫 후보. 없으면 null. (#102 설계 §3 가드)</summary>
