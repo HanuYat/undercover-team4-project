@@ -55,7 +55,7 @@ public class PlayerIncapacitation : NetworkBehaviour
     /// <summary>HP 0 다운인지 — <b>구조 대상·전멸 판정은 이것만</b> 본다. 매달기·기절은 스스로 풀린다. (#252)</summary>
     public bool IsDowned => Cause == IncapacitationCause.Down;
 
-    /// <summary>테이저 피격 기절인지 — 애니메이션이 다운 모션과 기절 모션으로 갈리는 기준. (#252)</summary>
+    /// <summary>테이저 피격 기절인지. 모션은 다운과 같으므로(#252) 표시·집계처럼 원인을 구분할 때만 쓴다.</summary>
     public bool IsStunned => Cause == IncapacitationCause.Stun;
 
     /// <summary>무력화 상태가 바뀔 때 발행 — 애니메이션·UI 훅용. 원인만 바뀌면 울리지 않는다.</summary>

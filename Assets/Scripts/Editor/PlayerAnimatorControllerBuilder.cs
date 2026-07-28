@@ -31,13 +31,13 @@ public static class PlayerAnimatorControllerBuilder
     private const string k_combatFolder =
         "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Combat";
 
-    // 기절(테이저 아군 오사) 상태 — 다운과 달리 스스로 일어나므로 눈으로 구분되게 다른 클립을 쓴다. (#252)
-    // Stun01은 NPC 기절이 쓰는 것과 같은 클립(2.67초 루프)이라 "저 자세=기절"이 게임 전체에서 통일된다.
-    // 기상은 다운과 같은 Knockdown01-StandUp 상태를 재사용한다 — 자세가 그대로 이어진다.
+    // 기절(테이저 아군 오사)은 다운과 같은 Knockdown 상태 머신을 탄다 — 맞는 즉시 쓰러진다. (#252)
+    // 한때 Stun01로 갈랐는데 그건 NPC '제압 그로기'(서서 헤롱거리는 루프)가 쓰는 클립이었다.
+    // 선 채로 비틀대는 몸에 카메라만 바닥 높이로 내려가 어긋났고, NPC 기절도 실은 Knockdown01-Ground로
+    // 쓰러져 있다 — "기절=쓰러진 자세"가 원래 규칙이다 (GDD 7-4).
+    // 아래 두 이름은 그때 만든 상태·파라미터를 재실행으로 걷어내기 위해서만 남긴다.
     private const string k_stunParam = "Stunned";
     private const string k_stunState = "Stun";
-    private const string k_stunClip =
-        "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Combat/HumanM@Stun01.fbx";
 
     // 앉기 상태 — Crouch(bool)=true면 서기 블렌드 트리에서 앉기 블렌드 트리로 짧게 전환한다. (#236)
     // 서기↔앉기 전환 클립은 에셋에 없어(Crouch는 Idle/이동만 제공) 전환 클립 대신 짧은 블렌딩으로 처리한다.
@@ -172,7 +172,7 @@ public static class PlayerAnimatorControllerBuilder
         BlendTree crouchTree = SetupCrouchState(controller); // 앉기 상태 추가/갱신 (#236) — 다운 전환보다 먼저
         BlendTree airCrouchTree = SetupJumpStates(controller); // 점프 상태 머신 추가/갱신 (#189) — 다운 전환보다 먼저
         SetupDownStates(controller); // 다운(무력화) 상태 머신 추가/갱신 (#105)
-        SetupStunStates(controller); // 기절 상태 추가/갱신 — StandUp을 재사용하므로 다운 뒤에 (#252)
+        RemoveLegacyStunStates(controller); // 구 기절 상태 제거 — 다운 상태 머신에 흡수됐다 (#252)
         SetupAttackLayer(controller); // 타격 상체 레이어 추가/갱신 (#217) — Base Layer가 아닌 레이어 1
 
         EditorUtility.SetDirty(blendTree);
@@ -721,54 +721,21 @@ public static class PlayerAnimatorControllerBuilder
     }
 
 
-    // 기절 상태 머신 — Stun01(루프) 한 상태로 끝나고, 기상은 다운의 StandUp 상태를 재사용한다. (#252)
-    // SetupDownStates가 StandUp을 다시 만들므로 반드시 그 뒤에 호출해야 한다.
-    private static void SetupStunStates(AnimatorController controller)
+    // 이전 빌드가 남긴 기절 상태·파라미터를 걷어낸다 — 기절은 이제 다운과 같은 Knockdown 상태 머신을
+    // 타므로 전용 상태가 필요 없다. (#252)
+    // 남겨 두면 Stunned가 영영 false인 채 죽은 상태로 컨트롤러에 붙어 있고, 나중에 다른 기능이 같은
+    // 이름의 파라미터를 만들 때 충돌한다.
+    private static void RemoveLegacyStunStates(AnimatorController controller)
     {
-        AnimationClip stun = LoadClip(k_stunClip);
-        if (stun == null)
-            return;
+        RemoveStunStates(controller.layers[0].stateMachine);
 
-        EnsureBoolParameter(controller, k_stunParam);
-
-        AnimatorStateMachine stateMachine = controller.layers[0].stateMachine;
-        RemoveStunStates(stateMachine); // 재실행 시 중복 방지
-
-        AnimatorState locomotion = FindState(stateMachine, k_stateName);
-        AnimatorState standUp = FindState(stateMachine, k_standUpState);
-        AnimatorState stunState = stateMachine.AddState(k_stunState);
-        stunState.motion = stun;
-
-        // 어느 자세에서 맞아도 기절로 들어간다 — 출발 집합은 다운과 같다(서기·앉기·공중).
-        AnimatorState[] sources =
+        foreach (AnimatorControllerParameter parameter in controller.parameters)
         {
-            locomotion,
-            FindState(stateMachine, k_crouchState),
-            FindState(stateMachine, k_jumpBeginState),
-            FindState(stateMachine, k_jumpAirState),
-            FindState(stateMachine, k_jumpAirCrouchState),
-        };
-        foreach (AnimatorState source in sources)
-        {
-            if (source == null)
-                continue;
-
-            AnimatorStateTransition toStun = source.AddTransition(stunState);
-            toStun.hasExitTime = false;
-            toStun.duration = 0.1f;
-            toStun.AddCondition(AnimatorConditionMode.If, 0f, k_stunParam);
-        }
-
-        // Stun → StandUp : 기절이 풀리면(Stunned=false) 스스로 일어난다 — 구조를 기다리는 다운과 달리
-        // 서버 타이머가 시간이 되면 알아서 풀어 준다(PlayerIncapacitation.ServerStun).
-        // StandUp → Locomotion 전환은 SetupDownStates가 이미 만들어 둔 것을 그대로 탄다.
-        AnimatorState standUpTarget = standUp != null ? standUp : locomotion;
-        if (standUpTarget != null)
-        {
-            AnimatorStateTransition toStandUp = stunState.AddTransition(standUpTarget);
-            toStandUp.hasExitTime = false;
-            toStandUp.duration = 0.1f;
-            toStandUp.AddCondition(AnimatorConditionMode.IfNot, 0f, k_stunParam);
+            if (parameter.name == k_stunParam)
+            {
+                controller.RemoveParameter(parameter);
+                return;
+            }
         }
     }
 
