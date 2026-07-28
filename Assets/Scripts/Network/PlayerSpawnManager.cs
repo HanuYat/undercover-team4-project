@@ -1,10 +1,12 @@
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
 /// 연결 승인 + 플레이어 스폰/재배치. (#214/#51)
-/// m_spawnPlayers=false(로비·타이틀): 접속만 승인하고 플레이어는 만들지 않는다.
+/// m_spawnPlayers=false(로비·타이틀): 접속만 승인하고 플레이어는 만들지 않는다. 이미 있던 플레이어와
+///   바닥에 남은 아이템은 여기서 내린다 — 둘 다 destroyWithScene:false라 씬을 바꿔도 안 사라진다.
 /// m_spawnPlayers=true(상점·게임): 진입한 피어에 플레이어가 없으면 스폰, 있으면 스폰 포인트로 재배치.
 /// 플레이어는 destroyWithScene:false라 Shop↔Game 루프 내내 유지된다.
 /// </summary>
@@ -30,10 +32,20 @@ public class PlayerSpawnManager : MonoBehaviour
 
         m_networkManager.ConnectionApprovalCallback = OnConnectionApproval;
 
-        if (m_networkManager.IsServer && m_spawnPlayers)
+        if (!m_networkManager.IsServer)
+            return;
+
+        if (m_spawnPlayers)
         {
             m_networkManager.SceneManager.OnLoadComplete += HandleLoadComplete;
             EnsureAndPlace(m_networkManager.LocalClientId); // 서버(호스트) 자신
+        }
+        else
+        {
+            // 순서 중요 — 플레이어를 먼저 내려야 소지품이 PlayerLoadout을 통해 함께 정리되고,
+            // 그 뒤 남는 것(바닥에 버려진 아이템)만 아래에서 쓸어 담는다.
+            DespawnAllPlayers();
+            DespawnLooseItems();
         }
     }
 
@@ -45,6 +57,58 @@ public class PlayerSpawnManager : MonoBehaviour
             if (m_networkManager.SceneManager != null)
                 m_networkManager.SceneManager.OnLoadComplete -= HandleLoadComplete;
         }
+    }
+
+    /// <summary>
+    /// 살아남은 플레이어 오브젝트를 전부 내린다 — 플레이어를 두지 않는 씬(로비·타이틀) 전용. (#395)
+    /// 플레이어는 Shop↔Game 루프를 유지하려고 destroyWithScene:false로 스폰되므로, 씬을 바꿔도
+    /// 저절로 사라지지 않는다. 라운드 실패로 로비에 돌아오면 대기 화면 뒤에 캐릭터가 남아
+    /// 바닥 없는 공간을 떨어지는 것이 그대로 보인다.
+    /// </summary>
+    private void DespawnAllPlayers()
+    {
+        // 순회 중에 Despawn하면 ConnectedClientsList가 흔들릴 수 있어 먼저 모아 둔다
+        var players = new List<NetworkObject>();
+        foreach (NetworkClient client in m_networkManager.ConnectedClientsList)
+        {
+            if (client.PlayerObject != null)
+                players.Add(client.PlayerObject);
+        }
+
+        foreach (NetworkObject player in players)
+        {
+            if (player != null && player.IsSpawned)
+                player.Despawn(destroy: true);
+        }
+
+        if (players.Count > 0)
+            Debug.Log($"[PlayerSpawnManager] 플레이어 {players.Count}개 정리 — 이 씬은 플레이어를 두지 않는다");
+    }
+
+    /// <summary>
+    /// 씬에 남은 아이템을 전부 내린다 — 플레이어를 두지 않는 씬(로비·타이틀) 전용. (#395)
+    /// 바닥에 버린 아이템은 부모가 해제된 서버 소유 월드 오브젝트이고, 아이템 프리팹은
+    /// destroyWithScene:false로 스폰되므로(PlayerLoadout) 씬을 바꿔도 그대로 따라온다.
+    /// 소지품은 플레이어를 내릴 때 PlayerLoadout이 함께 정리하므로 여기 걸리는 건 버려진 것들이다.
+    /// </summary>
+    private void DespawnLooseItems()
+    {
+        // 순회 중에 Despawn하면 SpawnedObjectsList가 흔들린다 — 먼저 모아 둔다
+        var items = new List<NetworkObject>();
+        foreach (NetworkObject spawned in m_networkManager.SpawnManager.SpawnedObjectsList)
+        {
+            if (spawned != null && spawned.GetComponent<ItemBase>() != null)
+                items.Add(spawned);
+        }
+
+        foreach (NetworkObject item in items)
+        {
+            if (item != null && item.IsSpawned)
+                item.Despawn(destroy: true);
+        }
+
+        if (items.Count > 0)
+            Debug.Log($"[PlayerSpawnManager] 남은 아이템 {items.Count}개 정리 — 이 씬은 아이템을 두지 않는다");
     }
 
     private void HandleLoadComplete(ulong clientId, string sceneName, LoadSceneMode loadSceneMode)

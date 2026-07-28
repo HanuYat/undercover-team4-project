@@ -103,15 +103,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::JailbreakEvent
   m_intruderPrefab: {fileID: 4452197611904741975, guid: e7cbd7673d85ce0488590f20f53288ac, type: 3}
-  m_occupancyZone: {fileID: 0}
   m_jailZone: {fileID: 0}
   m_jailLock: {fileID: 0}
-  m_minUnmannedSeconds: 20
   m_unlockSeconds: 5
   m_spawnRadius: 5
   m_navSampleMaxDistance: 4
   m_maxSpawnAttempts: 8
-  m_intruderReward: 100
+  m_intruderRewardMin: 500
+  m_intruderRewardMax: 4000
   m_maxLifetimeSeconds: 90
 --- !u!114 &3457248640073257328
 MonoBehaviour:
@@ -178,7 +177,8 @@ MonoBehaviour:
     m_spawnDistanceMax: 20
     m_navSampleMaxDistance: 4
     m_maxSpawnAttempts: 8
-    m_pettyCrimeReward: 50
+    m_pettyCrimeRewardMin: 500
+    m_pettyCrimeRewardMax: 4000
     m_maxLifetimeSeconds: 60
   - m_displayName: "\uB098\uCCB4 \uB09C\uB3D9\uAFBC"
     m_mode: 1
@@ -187,5 +187,6 @@ MonoBehaviour:
     m_spawnDistanceMax: 20
     m_navSampleMaxDistance: 4
     m_maxSpawnAttempts: 8
-    m_pettyCrimeReward: 50
+    m_pettyCrimeRewardMin: 500
+    m_pettyCrimeRewardMax: 4000
     m_maxLifetimeSeconds: 60

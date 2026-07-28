@@ -211,10 +211,11 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
         }
         else if (Assigner.PromoteNext())
         {
-            // 잡을 대상이 하나 늘었으니 할당량도 하나 늘어난다 (#102). 반드시 승격 성공일 때만 —
-            // 실패했는데 올리면 수배 리스트에 없는 몫까지 채워야 하는 달성 불가 라운드가 된다
-            if (Round != null)
-                Round.AddQuota(1);
+            // 라운드 목표는 검거 인원 수가 아니라 금액이라(#395) 여기서 목표를 건드리지 않는다.
+            // 제보 전화의 역할은 '벌 수 있는 총액을 늘리는 것'이다 — 승격된 용의자의 현상금이
+            // CriminalAssigner.PromoteNext에서 진범 몫으로 배정되고, 잡아서 유치장에 넣으면
+            // JailZone.BountyTotal로 목표 진행도에 반영된다.
+            // (#102의 Round.AddQuota(1) 호출은 할당량 개념과 함께 폐기됐다)
         }
         else
         {

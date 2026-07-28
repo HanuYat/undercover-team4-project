@@ -19,11 +19,16 @@ public struct WantedEntry : INetworkSerializable, IEquatable<WantedEntry>
 
     public FixedString128Bytes Montage; // 글 방식 몽타주 텍스트 - 본부 화면에 그대로 띄울 것
 
+    // 이 대상의 현상금 (#395) — 본부 수배 화면에 함께 띄운다. 원본은 서버 전용 값
+    // (CitizenIdentity.Bounty)이라, 본부에 보여주려면 이렇게 항목에 실어 보내야 한다.
+    public int Bounty;
+
     public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
     {
         serializer.SerializeValue(ref NpcId);
         serializer.SerializeValue(ref Name);
         serializer.SerializeValue(ref Montage);
+        serializer.SerializeValue(ref Bounty);
     }
 
     public bool Equals(WantedEntry other) => NpcId == other.NpcId;  // 제거 매칭 용도

@@ -5,8 +5,12 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// 라운드가 끝나면 정산을 잠깐 보여주고 로비로 복귀시키는 라운드 마감 처리. (#214 세션 유지 씬 흐름)
-/// 세션·NGO·Vivox를 유지한 채 로비로만 전환한다 — 루프(로비↔게임)를 세션 유지로 반복하기 위함.
+/// 라운드가 끝나면 정산을 잠깐 보여주고 다음 씬으로 넘기는 라운드 마감 처리. (#214 세션 유지 씬 흐름)
+/// 세션·NGO·Vivox를 유지한 채 씬만 전환한다 — 루프를 세션 유지로 반복하기 위함.
+///
+/// 결과에 따라 도착지가 갈린다 (#395):
+///  · <b>성공</b> — 상점(허브)으로. 번 돈으로 다음 라운드를 준비하는 기존 루프.
+///  · <b>실패</b> — 판이 끝났으므로 로비로 되돌리고 팀 자금을 초기값으로 리셋한다. 거기서 새 판을 시작한다.
 /// 정산 UI 내용은 #107/#183; 여기서는 표시 시간(placeholder)만 둔다.
 ///
 /// 서버 권위 흐름 (RoundManager와 동일 방침, #56):
@@ -21,6 +25,7 @@ public class RoundEndResetter : MonoBehaviour
 {
     private RoundManager Round => App.Game.Round;
     private SessionManager Session => App.Net.Session;
+    private TeamFund TeamFund => App.Game.TeamFund;
 
     [Header("정산 표시")]
     // 정산 화면(#107) 연출과 맞춘다: SettlementPanel의 텍스트 지연(1.5s) + 카운트다운(10s) = 11.5s.
@@ -66,7 +71,7 @@ public class RoundEndResetter : MonoBehaviour
         if (m_ending)
             return;
         m_ending = true;
-        EndRoundToLobbyAsync().Forget();
+        EndRoundAsync(result).Forget();
     }
 
     // 비자발 드롭: 세션이 죽었으므로 타이틀로. (붙어 있을 세션이 없어 로비로 가면 안 된다)
@@ -88,7 +93,7 @@ public class RoundEndResetter : MonoBehaviour
             App.LoadScene(EScene.Title); // NGO 내려간 뒤 → 오프라인 로컬 로드
     }
 
-    private async UniTaskVoid EndRoundToLobbyAsync()
+    private async UniTaskVoid EndRoundAsync(RoundResult result)
     {
         // 정산을 잠깐 보여줄 여유. freeze로 timeScale이 건드려져도 흐르도록 실시간 기준.
         // 대기 중 씬 언로드로 파괴되면 취소한다. (#247)
@@ -111,8 +116,23 @@ public class RoundEndResetter : MonoBehaviour
             return;
         }
 
-        // 정식 루프: 세션 유지하며 상점 씬으로 복귀. 서버만 로드하면 클라는 NGO 씬 동기화로 따라옴.
-        Debug.Log("[RoundEndResetter] 라운드 종료 — 세션 유지한 채 상점(허브) 복귀");
+        // 실패 = 판이 끝났다 (#395). 로비로 되돌려 새 판을 시작하게 하고, 그동안 모은 팀 자금도 되돌린다.
+        // 자금 리셋을 여기서 하는 이유: 정산 화면이 이미 이번 라운드 결과를 다 보여준 뒤라(위 대기) 표시가
+        // 흔들리지 않고, TeamFund는 씬을 넘어 유지되는 상주 홀더라 씬 전환만으로는 초기화되지 않는다.
+        if (result != RoundResult.Success)
+        {
+            if (TeamFund != null)
+                TeamFund.ResetToStarting();
+            else
+                Debug.LogWarning("[RoundEndResetter] TeamFund를 찾지 못해 자금을 초기화하지 못했다", this);
+
+            Debug.Log("[RoundEndResetter] 라운드 실패 — 세션 유지한 채 로비 복귀 (새 판 시작)");
+            App.LoadScene(EScene.Lobby);
+            return;
+        }
+
+        // 성공: 세션 유지하며 상점 씬으로 복귀. 서버만 로드하면 클라는 NGO 씬 동기화로 따라옴.
+        Debug.Log("[RoundEndResetter] 라운드 성공 — 세션 유지한 채 상점(허브) 복귀");
         App.LoadScene(EScene.Shop);
     }
 }

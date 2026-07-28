@@ -67,7 +67,15 @@ public partial class PlayerEscorter
         {
             if (TetheredNpc != null) return TetheredNpc.transform;
             if (!IsSpawned) return null;
-            return m_tetheredNpcSynced.Value.TryGet(out NetworkObject npcObject) ? npcObject.transform : null;
+
+            // 세션이 내려가는 중에는 NetworkManager가 이미 사라져 있는데, TryGet은 내부에서 그것을
+            // 참조하므로 그대로 부르면 NullReferenceException이 난다. IsSpawned만으로는 이 순간을
+            // 거를 수 없다 — 디스폰 통지보다 매니저 소멸이 앞설 수 있어, 라운드 종료 후 씬이 바뀌는
+            // 동안 표시(RopeDragView.LateUpdate)가 매 프레임 예외를 뱉는다.
+            NetworkManager manager = NetworkManager.Singleton;
+            if (manager == null || !manager.IsListening) return null;
+
+            return m_tetheredNpcSynced.Value.TryGet(out NetworkObject npcObject, manager) ? npcObject.transform : null;
         }
     }
 
