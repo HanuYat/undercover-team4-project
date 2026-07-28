@@ -54,6 +54,12 @@ public static class NpcStateRules
             or NpcState.Attack
             or NpcState.Intruding;
 
+    /// <summary>지금 새로 반응(도주·저항)을 시작할 수 있는 상태인가. (#400)
+    /// <see cref="IsReactive"/>에서 이미 반응 중인 둘(Run·Attack)을 뺀 집합 — 스캔·타격이 연달아
+    /// 들어와도 진행 중인 반응을 갈아엎지 않는다. 확보·페널티군은 IsReactive가 이미 걸러 준다.</summary>
+    public static bool CanStartReaction(NpcState state) =>
+        IsReactive(state) && state != NpcState.Run && state != NpcState.Attack;
+
     /// <summary>밧줄로 묶어 끌 수 있는 상태인가. (#269 → #369 기본 검거로 승격)
     /// 제외 목록 방식 — 이미 신병 확보(Escorted/Captured/Jailed)·타 시스템 소유(Holding·페널티)는 제외.
     /// 기절·도주·저항 등 나머지는 전부 대상이다(제압 타격으로 HP 0에 쓰러진 저항형 Stunned 포함, #366).

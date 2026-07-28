@@ -4,7 +4,7 @@ using UnityEngine;
 /// <summary>
 /// 테이저건 아이템 — 조준한 방향으로 전극을 쏴 맞은 NPC를 기절시킨다. (GDD 8-3, #108)
 /// 도주형(Run)·저항형(Attack)을 그 자리에 멈춰 세우는 것이 주 용도이며,
-/// 기절 중에는 수갑 채널링이 반응 없이 즉시 연행으로 이어진다 (PlayerEscorter.ResolveReaction).
+/// 기절 중에는 스캔·피격 반응이 걸러져 그대로 검거된다 (NpcController.ServerReactTo, #400).
 /// 소지형·영구형이라 배터리 같은 소모 자원이 없다 (GDD 8-4).
 ///
 /// <b>조준 사격</b> — 수갑·스캐너처럼 PlayerInteractor가 잡아준 대상을 쓰지 않는다.

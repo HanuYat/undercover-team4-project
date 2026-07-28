@@ -18,6 +18,11 @@ public class Scanner : ItemBase, IChargeable
     [SerializeField]
     private float m_scanKeepRange = 5f;
 
+    [Tooltip("스캔 진행률이 이 지점(0~1)을 넘으면 대상이 반응한다 (#400). 도주형은 여기서 달아나기 시작하므로, 남은 구간 동안 따라붙어야 스캔이 완료된다")]
+    [Range(0f, 1f)]
+    [SerializeField]
+    private float m_reactionPoint = 0.5f;
+
     [SerializeField]
     private int m_maxBattery = 5;
 
@@ -300,9 +305,13 @@ public class Scanner : ItemBase, IChargeable
             // 먹통을 keepAlive에 포함한다 — 없으면 먹통 직전에 시작한 스캔이 먹통 한복판에서 성공한다 (#372).
             // 사유는 OutOfRange 하나로 묶여 오지만, 아래에서 먹통 여부로 메시지를 갈라 어긋남을 막는다
             // (공용 ServerChannel.Result에 사유를 늘리면 Escorter·Reviver까지 건드리게 되므로 여기서 해석한다).
+            // 스캔 중간에 대상이 반응한다 (#400). 시작이면 도주형은 사거리 이탈로 영영 스캔되지 않고,
+            // 완료 후면 대가 없이 정보를 얻는다 — 중간이라야 남은 구간을 따라붙어야 정보가 나온다.
             result = await m_channel.RunAsync(
                 m_channelSeconds,
-                () => identity != null && IsInRange(identity.transform) && !IsBlackout);
+                () => identity != null && IsInRange(identity.transform) && !IsBlackout,
+                m_reactionPoint,
+                () => ServerTriggerScanReaction(identity));
         }
         finally
         {
@@ -338,6 +347,21 @@ public class Scanner : ItemBase, IChargeable
         // 본부/타 클라는 배터리 감소(NetworkVariable)만 전파받는다.
         // NPC NetworkObjectReference를 넘기면 오너 클라가 CitizenIdentity.Profile을 로컬에서 해석 (#55).
         ScanResultRpc(npcRef);
+    }
+
+    // 스캔 중간 지점 — 대상을 반응시킨다. RunAsync가 서버 경로라 서버(또는 오프라인)에서만 불린다. (#400)
+    private void ServerTriggerScanReaction(CitizenIdentity identity)
+    {
+        if (identity == null)
+            return;
+
+        NpcController npc = identity.GetComponent<NpcController>();
+        if (npc == null)
+            return;
+
+        // 스캐너는 줍기·버리기로 부모가 바뀌므로 호출 시점에 해석한다 (IsInRange와 같은 관례)
+        PlayerInteractor interactor = GetComponentInParent<PlayerInteractor>();
+        npc.ServerReactTo(ReactionTrigger.Scan, interactor != null ? interactor.transform : null);
     }
 
     // 서버 → 오너: 스캔 결과 회신. 오너가 로컬 CitizenIdentity에서 프로필을 추출해 이벤트를 발행한다.

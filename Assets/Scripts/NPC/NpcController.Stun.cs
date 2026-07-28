@@ -66,6 +66,7 @@ public partial class NpcController
 
     // 경과 시간으로 센다 — 밧줄에 묶이면 멈춰야 해서 "끝나는 시각" 방식으로는 계산이 지저분해진다.
     private float m_stunElapsed;
+    private float m_stunDuration;       // 이번 기절의 지속 시간 — 경로마다 다르다 (테이저 vs 타격, #400)
     private bool m_standingUp;          // 일어나는 모션을 이미 발행했는가 — 마지막 구간에서 1회만 (#269)
     private bool m_agentStoppedBefore;  // 스턴 직전의 isStopped — 해제 시 그대로 되돌린다
 
@@ -74,7 +75,9 @@ public partial class NpcController
     /// 넉백 착지는 이 경로가 아니라 NpcState.Stunned 전이를 쓴다 (NpcController.Knockback).
     /// </summary>
     /// <param name="threat">기절시킨 상대 — 깨어날 때 이 대상에게서 도주한다. null 허용.</param>
-    public void EnterStunned(Transform threat = null)
+    /// <param name="seconds">지속 시간(초). 생략하면 <see cref="NpcStunConfig.StunSeconds"/>(테이저 기준)를
+    /// 쓴다. 체력 0으로 쓰러진 경우는 KnockdownStunSeconds를 넘겨 테이저와 따로 튜닝한다 (#400).</param>
+    public void EnterStunned(Transform threat = null, float? seconds = null)
     {
         if (IsSpawned && !IsServer)
             return;
@@ -94,6 +97,7 @@ public partial class NpcController
             StopEscort();
 
         ThreatTarget = threat;
+        m_stunDuration = seconds ?? m_stunConfig.StunSeconds;
         m_stunElapsed = 0f;
         m_standingUp = false;
         SetStunned(true);
@@ -122,14 +126,14 @@ public partial class NpcController
 
         // 기절 시간의 마지막 구간을 일어나는 모션에 쓴다 — 총 무력화 시간은 그대로 두고
         // "누워 있다 → 일어난다 → 행동 재개"가 이어지게 한다.
-        float standUpAt = Mathf.Max(0f, m_stunConfig.StunSeconds - m_stunConfig.StandUpSeconds);
+        float standUpAt = Mathf.Max(0f, m_stunDuration - m_stunConfig.StandUpSeconds);
         if (!m_standingUp && m_stunElapsed >= standUpAt)
         {
             m_standingUp = true;
             RaiseStandUp(); // 전 피어에 일어나는 모션 재생을 알린다
         }
 
-        if (m_stunElapsed >= m_stunConfig.StunSeconds)
+        if (m_stunElapsed >= m_stunDuration)
             ExitStun(resumeReaction: true);
     }
 

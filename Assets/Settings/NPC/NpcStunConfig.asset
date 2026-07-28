@@ -13,4 +13,5 @@ MonoBehaviour:
   m_Name: NpcStunConfig
   m_EditorClassIdentifier: Assembly-CSharp::NpcStunConfig
   m_stunSeconds: 2.67
+  m_knockdownStunSeconds: 3.6
   m_standUpSeconds: 0.585

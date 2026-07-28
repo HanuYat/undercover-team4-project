@@ -50,6 +50,9 @@ public partial class NpcController : IDamageable
             return;
 
         SetHp(Mathf.Clamp(CurrentHp - amount, 0, MaxHp), attacker);
+
+        // 피격 반응(#400)은 여기서 굴리지 않는다 — 폭발(BombDevice) 같은 환경 피해도 이 경로를 지나기
+        // 때문이다. 판정은 플레이어 타격 경로(Baton.ServerSwing · ServerSubdueHit)가 직접 부른다.
     }
 
     /// <summary>
@@ -73,7 +76,9 @@ public partial class NpcController : IDamageable
         if (IsSpawned && IsServer)
             m_syncedHp.Value = value;
 
+        // 타격으로 쓰러진 기절은 테이저보다 길다 — 밧줄로 끌 창을 따로 튜닝한다 (#400)
         if (value == 0 && previous > 0)
-            EnterStunned(attacker != null ? attacker.transform : null);
+            EnterStunned(
+                attacker != null ? attacker.transform : null, m_stunConfig.KnockdownStunSeconds);
     }
 }

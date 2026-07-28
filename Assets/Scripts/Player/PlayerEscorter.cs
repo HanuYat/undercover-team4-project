@@ -227,7 +227,8 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
     // ---- 서버 실행 (권위) ----
 
     // 좌클릭 체포 채널링(ServerBeginCapture/ServerChannelAsync)은 밧줄 묶기로 대체되어 제거됐다. (#369)
-    // 반응 판정(ResolveReaction)·연행(StartEscort)은 밧줄 경로(PlayerEscorter.RopeDrag.cs)가 이어받는다.
+    // 연행(StartEscort)은 밧줄 경로(PlayerEscorter.RopeDrag.cs)가 이어받는다.
+    // 반응 판정은 검거에서 완전히 빠졌다 (#400) — 스캔·피격이 트리거이고 NpcController.ServerReactTo가 갖는다.
 
     private void ServerCancelCapture() => m_channel.Cancel();
 
@@ -372,16 +373,6 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
         return (target.transform.position - AimOriginPosition).sqrMagnitude
                 <= CaptureRange * CaptureRange
             && (Interactor == null || Interactor.HasLineOfSightTo(target.transform));
-    }
-
-    /// <summary>채널링 성공 순간의 반응. 기절 중이거나 신원이 없으면 순응(즉시 연행) 취급. (#76)</summary>
-    private static ReactionType ResolveReaction(NpcController target)
-    {
-        if (target.IsStunned)
-            return ReactionType.Compliant;
-
-        CitizenIdentity identity = target.GetComponent<CitizenIdentity>();
-        return identity != null ? identity.Reaction : ReactionType.Compliant;
     }
 
     // ---- 오너 로그 피드백 ----

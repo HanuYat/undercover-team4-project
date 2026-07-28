@@ -251,9 +251,10 @@ public class Baton : ItemBase, IAimedWeapon
                 return;
         }
 
-        // 때린 사람을 가해자로 넘긴다 — 이 타격으로 기절하면 깨어난 뒤 이 사람에게서 도망친다 (#269).
-        // (E 제압 타격 경로는 RPC에 요청자를 못 실어 null을 넘기지만, 아이템은 소지자가 부모라 바로 잡힌다)
+        // 때린 사람을 가해자로 넘긴다 — 맞은 즉시 이 사람에게 반격·도주하고(#400),
+        // 이 타격으로 기절하면 깨어난 뒤에도 이 사람에게서 도망친다 (#269).
         target.TakeDamage(m_damage, holder.gameObject);
+        target.ServerReactTo(ReactionTrigger.Damage, holderTransform); // 맞은 즉시 반응 (#400)
         NotifyOwner($"진압봉 명중: {target.name} (-{m_damage} → {target.CurrentHp}/{target.MaxHp})");
     }
 

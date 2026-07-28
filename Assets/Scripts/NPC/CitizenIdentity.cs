@@ -43,7 +43,8 @@ public class CitizenIdentity : NetworkBehaviour
     /// <summary>외형 특징 조합(#74) — 몽타주 부합 판정의 기준. AppearanceAssigner가 채워준다. 서버 전용.</summary>
     public AppearanceProfile Appearance { get; private set; } = AppearanceProfile.Unassigned;
 
-    /// <summary>검거 반응 유형(#76) — 수갑 채널링 성공 순간의 반응. CriminalAssigner가 배정한다. 서버 전용.</summary>
+    /// <summary>반응 유형(#76) — 스캔당하거나 플레이어에게 맞을 때 보이는 반응 (#400).
+    /// CriminalAssigner가 배정하고, 순응형이 타격으로 뽑은 결과는 NpcController가 확정한다. 서버 전용.</summary>
     public ReactionType Reaction { get; private set; } = ReactionType.Compliant;
 
     /// <summary>
@@ -130,7 +131,11 @@ public class CitizenIdentity : NetworkBehaviour
         IsForger = isForger;
     }
 
-    /// <summary>검거 반응 유형을 배정한다. CriminalAssigner 전용. (서버 전용 — 동기화 없음)</summary>
+    /// <summary>
+    /// 검거 반응 유형을 배정한다. (서버 전용 — 동기화 없음)
+    /// CriminalAssigner가 라운드 시작에 배정하고, 순응형이 피격으로 도주·저항을 뽑았을 때
+    /// NpcController가 그 결과를 여기에 1회 확정한다 (#400).
+    /// </summary>
     public void AssignReaction(ReactionType reaction)
     {
         Reaction = reaction;
