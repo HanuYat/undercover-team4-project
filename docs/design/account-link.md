@@ -92,6 +92,11 @@ PlayerNameTag · SessionFlow · SessionManager        ← 수정 없음
    - `AddUsernamePasswordAsync` 후 **`PlayerId`가 그대로인지** — 승격 검증의 핵심. 바뀌면 이 설계가 성립하지 않는다
    - **연동 여부 판별 수단** — `PlayerInfo.Username` / `PlayerInfo.Identities` 중 무엇이 실제로 채워지는지
    - **아이디 중복 시 실제 에러 코드 값** — 문서에 없어 `AuthenticationErrorCodes` enum을 직접 봐야 한다
+
+   **API 표면은 확인 완료** (2026-07-28, 컴파일 통과 — 공식 문서에 일부 누락되어 여기 기록한다):
+   `AddUsernamePasswordAsync` · `SignInWithUsernamePasswordAsync` · `SignUpWithUsernamePasswordAsync` · `UpdatePasswordAsync` · `GetPlayerInfoAsync()` 모두 3.6.1에 존재하고, `PlayerInfo`에는 **`Username`과 `Identities`(`TypeId`/`UserId`)가 둘 다** 있다 → 연동 판별이 `Username` 하나로 끝날 가능성이 있다. 에러 코드는 `RequestFailedException.ErrorCode`로 읽으며 `AuthenticationException`은 파생 클래스라 함께 잡힌다.
+
+   **남은 것은 전부 런타임 확인이다** — 프로퍼티가 존재한다는 것과 값이 채워진다는 것은 다르다. `Username`은 **승격 전·후 두 번** 조회해 익명 상태의 값(빈 문자열인지)까지 확인해야 판별 조건이 확정된다.
 2. **`AuthBootstrap` 확장** — §5의 4개. 검증은 `ValidateNickname`(185줄)과 같은 "위반이면 사유 문자열, 통과면 null" 형태로 맞춘다. 세션 참가·전환 중 차단은 기존 `IsNetworkConnected`/`CanSignOut()` 가드를 그대로 재사용한다.
 3. **닉네임 우선순위 분기** — `RestoreCachedNicknameAsync`에 §4 표를 반영. 승격 성공 직후의 1회 push는 `LinkAccountAsync` 안에 둔다.
 4. **`AuthPanel` UI** — 아이디/비번 입력(비번은 `contentType = Password`) + [계정 만들기·연동] [로그인] + 상태 텍스트. 기존 닉네임 UI와 같은 패턴(`m_isApplyingNickname` 래치 → 실패 시 입력 유지 → `Refresh()`)을 따른다. `Refresh()`에서 `IsLinked`면 연동 버튼 비활성.
@@ -122,7 +127,8 @@ PlayerNameTag · SessionFlow · SessionManager        ← 수정 없음
 
 ## 9. 미결 항목
 
-- **1단계 스파이크 결과 반영** — 연동 판별 수단과 아이디 중복 에러 코드가 확정되면 §5·§7을 갱신한다.
+- **1단계 스파이크 — 런타임 검증 미완.** API 표면은 확인됐고(§6 1단계), 대시보드 provider 활성화 후 ① 승격 시 `PlayerId` 유지 ② `Username`의 익명/연동 상태별 값 ③ 아이디 중복·이미연동 에러 코드 값을 확인하면 §5·§7을 갱신한다.
+- **스파이크 디버그 GUI는 임시 코드다** — 커밋 `00ed905`(`m_showDebugGui` 패널 안쪽)로 분리돼 있다. 검증 결과를 이 문서에 반영한 뒤 PR 전에 삭제하거나 revert한다.
 - **플랫폼 링크(C-2)** — 배포 플랫폼 확정 후 별도 이슈. 같은 계정에 identity 추가로 붙으므로 이 설계를 되돌릴 필요는 없다.
 - **비밀번호 변경 UI** — Admin API 없이 가능한 유일한 경로가 `UpdatePasswordAsync`이고 전 기기 로그아웃을 동반한다. 필요해지면 별도 이슈.
 - **UI 문자열 로컬라이즈** — 현행 관례대로 평문 TMP로 두고 일괄 작업 때 처리 ([settings-ui.md](settings-ui.md) §7과 동일).
