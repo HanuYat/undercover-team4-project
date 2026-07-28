@@ -14,6 +14,14 @@ public class WantedEntryView : MonoBehaviour
     [SerializeField]
     private TMP_Text m_montageText;
 
+    [Tooltip("현상금 표시 (#395). 비워 두면 표시하지 않는다")]
+    [SerializeField]
+    private TMP_Text m_bountyText;
+
+    [Tooltip("현상금 표시 형식 — {0}=금액")]
+    [SerializeField]
+    private string m_bountyFormat = "{0:N0}원";
+
     public void Bind(in WantedEntry entry)
     {
         if (m_nameText != null)
@@ -21,5 +29,8 @@ public class WantedEntryView : MonoBehaviour
 
         if (m_montageText != null)
             m_montageText.text = entry.Montage.ToString();
+
+        if (m_bountyText != null)
+            m_bountyText.text = string.Format(m_bountyFormat, entry.Bounty);
     }
 }
