@@ -15,8 +15,6 @@ public class BombManualHud : MonoBehaviour
 
     private BombManual m_manual;
     private PlayerInputHandler m_input;
-    private PlayerMovement m_movement;
-    private bool m_cursorUnlockedBeforeOpen;
     private bool m_isOpen;
 
     private GUIStyle m_titleStyle;
@@ -34,16 +32,10 @@ public class BombManualHud : MonoBehaviour
 
         m_manual = manual;
         m_input = interactor.GetComponent<PlayerInputHandler>();
-        m_movement = interactor.GetComponent<PlayerMovement>();
 
         m_isOpen = true;
         m_input?.SetSuspended(true);
-
-        if (m_movement != null)
-        {
-            m_cursorUnlockedBeforeOpen = Cursor.lockState == CursorLockMode.None;
-            m_movement.SetCursorUnlocked(true);
-        }
+        CursorLock.PushUnlock();
     }
 
     /// <summary>매뉴얼을 덮고 입력·커서를 원래대로 되돌린다.</summary>
@@ -57,11 +49,9 @@ public class BombManualHud : MonoBehaviour
         // ?. 금지 — 파괴된 Unity 오브젝트의 fake null을 우회하지 않도록 명시 비교 (SignalDecoderHud와 동일)
         if (m_input != null)
             m_input.SetSuspended(false);
-        if (m_movement != null)
-            m_movement.SetCursorUnlocked(m_cursorUnlockedBeforeOpen);
+        CursorLock.PopUnlock();
 
         m_input = null;
-        m_movement = null;
     }
 
     private void OnDisable()

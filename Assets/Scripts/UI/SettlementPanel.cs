@@ -57,10 +57,7 @@ public class SettlementPanel : PanelBase
     public override bool CanCloseWithESC => true;
     public override bool IsStackable => true;
 
-    // 열기 직전의 커서 잠금 상태 — 닫을 때 이 상태로 되돌린다.
-    private bool m_cursorUnlockedBeforeOpen;
-
-    // 로컬 플레이어 입력을 정지 중인지 — 자동복귀(OnDestroy) 시 대칭 복구 판단용.
+    // 로컬 플레이어 입력을 정지 중인지 — 자동복귀(OnDestroy) 시 대칭 복구 + 커서 Push/Pop 1:1 판단용.
     private bool m_playerBlocked;
 
     // 텍스트 지연 등장 + 카운트다운 시퀀스 취소용 — 닫히거나 파괴되면 중단한다.
@@ -208,13 +205,24 @@ public class SettlementPanel : PanelBase
 
     // 로컬 플레이어(오너)의 입력 정지 + 커서 해제를 함께 처리한다.
     // 정산 화면 뒤 월드로 이동·시점이 새지 않게 입력을 멈추고(SetSuspended), 버튼을 누를 수 있게
-    // 커서를 띄운다(SetCursorUnlocked — SignalDecoderHud 관례). 닫을 때는 열기 직전의 커서 상태로 되돌린다.
+    // 커서를 푼다(CursorLock.PushUnlock — 닫을 때 Pop).
     // ponytail: 호스트는 라운드 종료 후 RoundManager.GameplayFrozen(Phase==Ended)으로도 이동이 막혀 있어
     //           닫아도 계속 못 움직인다(원격 클라는 GameplayFrozen이 false라 닫으면 움직임). 페이즈 클라 동기화(#43)가
     //           붙으면 자연히 일관돼진다 — 그 전까진 호스트 한정 잔상으로 둔다.
     private void SetLocalPlayerBlocked(bool blocked)
     {
+        // 같은 값으로 두 번 불려도(PanelBase.OpenPanel엔 재진입 가드가 없다) 커서 Push/Pop이 어긋나지 않게 한다 (#352)
+        if (m_playerBlocked == blocked)
+            return;
+
         m_playerBlocked = blocked;
+
+        // 플레이어 조회보다 먼저 — 라운드 종료 디스폰으로 플레이어가 사라져도 Push/Pop 짝은 유지돼야 한다 (#352)
+        if (blocked)
+            CursorLock.PushUnlock();
+        else
+            CursorLock.PopUnlock();
+
         NetworkManager nm = NetworkManager.Singleton;
         if (nm == null || nm.LocalClient == null || nm.LocalClient.PlayerObject == null)
             return;
@@ -229,18 +237,7 @@ public class SettlementPanel : PanelBase
         if (movement == null)
             return;
 
-        if (blocked)
-        {
-            // 열기 직전 커서 상태를 기억해 닫을 때 되돌린다 (InventoryBarView·SignalDecoderHud 관례)
-            m_cursorUnlockedBeforeOpen = Cursor.lockState == CursorLockMode.None;
-            movement.SetCursorUnlocked(true);
-            movement.SetIgnoreRoundEndFreeze(false); // 정산 열려 있는 동안은 그대로 정지
-        }
-        else
-        {
-            movement.SetCursorUnlocked(m_cursorUnlockedBeforeOpen);
-            // 정산을 닫으면 라운드 종료 freeze를 무시하고 움직일 수 있게 한다 (호스트도 — 다운 상태면 여전히 잠김) (#107)
-            movement.SetIgnoreRoundEndFreeze(true);
-        }
+        // 정산을 닫으면 라운드 종료 freeze를 무시하고 움직일 수 있게 한다 (호스트도 — 다운 상태면 여전히 잠김) (#107)
+        movement.SetIgnoreRoundEndFreeze(!blocked);
     }
 }

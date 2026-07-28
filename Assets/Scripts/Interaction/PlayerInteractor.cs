@@ -135,6 +135,10 @@ public class PlayerInteractor : NetworkBehaviour
 
     private void HandleInteract()
     {
+        // 커서가 풀려 있으면(인벤토리 편집 등 UI 조작 중) 월드 상호작용은 막는다 — 아이템 사용과 동일 (#352)
+        if (CursorLock.IsUnlocked)
+            return;
+
         // 행동불능(HP 다운·오검거 매달기) 중엔 상호작용 불가 — 이동·아이템과 동일하게 게이트한다 (#101/#105)
         if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
             return;

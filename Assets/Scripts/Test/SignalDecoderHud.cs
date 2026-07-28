@@ -23,8 +23,6 @@ public class SignalDecoderHud : MonoBehaviour
 
     private SignalDecoder m_decoder;
     private PlayerInputHandler m_input;   // 입력창을 연 플레이어의 입력 — 닫을 때 되돌린다
-    private PlayerMovement m_movement;    // 커서·시점 복구용
-    private bool m_cursorUnlockedBeforeOpen;
 
     private bool m_isOpen;
     private string m_draft = string.Empty;
@@ -50,7 +48,6 @@ public class SignalDecoderHud : MonoBehaviour
 
         m_decoder = decoder;
         m_input = interactor.GetComponent<PlayerInputHandler>();
-        m_movement = interactor.GetComponent<PlayerMovement>();
 
         m_isOpen = true;
         m_draft = string.Empty;
@@ -59,13 +56,7 @@ public class SignalDecoderHud : MonoBehaviour
         // 타이핑 중 WASD가 이동으로 새는 것을 막는다 — 인벤토리 편집 모드의 "이동하면 닫기" 방식은
         // 타이핑에 쓸 수 없어 입력 정지를 따로 만들었다 (PlayerInputHandler.SetSuspended).
         m_input?.SetSuspended(true);
-
-        if (m_movement != null)
-        {
-            // 진입 전 커서 상태를 기억해 닫을 때 되돌린다 (InventoryBarView.SetEditMode 관례)
-            m_cursorUnlockedBeforeOpen = Cursor.lockState == CursorLockMode.None;
-            m_movement.SetCursorUnlocked(true);
-        }
+        CursorLock.PushUnlock();
     }
 
     /// <summary>입력창을 닫고 입력·커서를 원래대로 되돌린다.</summary>
@@ -81,11 +72,9 @@ public class SignalDecoderHud : MonoBehaviour
         // Update의 안전망이 발동하는 상황이 곧 m_input이 파괴된 상황이라, ?.면 파괴된 객체를 호출해 터진다.
         if (m_input != null)
             m_input.SetSuspended(false);
-        if (m_movement != null)
-            m_movement.SetCursorUnlocked(m_cursorUnlockedBeforeOpen);
+        CursorLock.PopUnlock();
 
         m_input = null;
-        m_movement = null;
     }
 
     // 입력창이 열린 채 이 HUD가 파괴·비활성되면(씬 전환, 향후 상점의 단말 회수 등) 정지된 입력을

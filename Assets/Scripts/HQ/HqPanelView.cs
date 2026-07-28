@@ -8,52 +8,50 @@ using UnityEngine.InputSystem;
 public abstract class HqPanelView : MonoBehaviour
 {
     [Header("루트")]
-    [SerializeField] protected GameObject m_root;   // 켜고 끌 패널 루트 (기본 비활성)
+    [SerializeField]
+    protected GameObject m_root; // 켜고 끌 패널 루트 (기본 비활성)
 
     private PlayerInputHandler m_input;
-    private PlayerMovement m_movement;
-    private bool m_cursorUnlockedBeforeOpen;
     private bool m_isOpen;
 
     protected virtual void Awake()
     {
-        if (m_root != null) m_root.SetActive(false);
+        if (m_root != null)
+            m_root.SetActive(false);
     }
 
     public void Open(GameObject interactor)
     {
-        if (m_isOpen || interactor == null || m_root == null) return;
+        if (m_isOpen || interactor == null || m_root == null)
+            return;
 
         m_input = interactor.GetComponent<PlayerInputHandler>();
-        m_movement = interactor.GetComponent<PlayerMovement>();
 
         m_isOpen = true;
         m_root.SetActive(true);
         m_input?.SetSuspended(true);
-        if (m_movement != null)
-        {
-            m_cursorUnlockedBeforeOpen = Cursor.lockState == CursorLockMode.None;
-            m_movement.SetCursorUnlocked(true);
-        }
+        CursorLock.PushUnlock();
 
         OnOpened();
     }
 
     public void Close()
     {
-        if (!m_isOpen) return;
+        if (!m_isOpen)
+            return;
 
         m_isOpen = false;
-        if (m_root != null) m_root.SetActive(false);
+        if (m_root != null)
+            m_root.SetActive(false);
 
         OnClosed();
 
         // ?. 금지 — 파괴된 Unity 오브젝트 fake null 우회 방지 (BombManualHud 관례)
-        if (m_input != null) m_input.SetSuspended(false);
-        if (m_movement != null) m_movement.SetCursorUnlocked(m_cursorUnlockedBeforeOpen);
+        if (m_input != null)
+            m_input.SetSuspended(false);
+        CursorLock.PopUnlock();
 
         m_input = null;
-        m_movement = null;
     }
 
     /// <summary>열린 직후 — 데이터 구독·최초 그리기.</summary>
@@ -66,7 +64,8 @@ public abstract class HqPanelView : MonoBehaviour
 
     protected virtual void Update()
     {
-        if (!m_isOpen) return;
+        if (!m_isOpen)
+            return;
 
         // 열려 있는 동안 ESC 진입 메뉴(일시정지) 오픈을 막는다 — 이중 동작 방지 (#326)
         EscMenuGuard.BlockThisFrame();

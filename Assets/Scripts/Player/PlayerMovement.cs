@@ -78,7 +78,6 @@ public class PlayerMovement : NetworkBehaviour
     private float m_downCamBlend; // 서기 시점(0) ↔ 다운 시점(1) 보간 진행도 (#105)
     private float m_verticalVelocity;
     private Vector3 m_knockbackVelocity; // 외력으로 밀려나는 수평 속도 — 매 프레임 감쇠 (#232 폭발 넉백)
-    private bool m_cursorUnlocked; // 임시: OnGUI 버튼 조작용 커서 해제 상태
     private bool m_ignoreRoundEndFreeze; // 정산 화면을 닫은 로컬 플레이어는 라운드 종료 freeze를 무시하고 움직인다 (#107)
 
     // 끌려가기(#279) — 오검거 호송 중 오너 로컬이 끌기 NPC 2명을 추종한다. 앵커가 파괴돼도
@@ -149,18 +148,19 @@ public class PlayerMovement : NetworkBehaviour
             SetLayerRecursively(m_ownBodyRoot, LayerMask.NameToLayer("OwnBody")); // 내 카메라에서만 안 보이게
         }
 
-        SetCursorUnlocked(false); // 커서 잠금 초기화 — 잠금/해제 로직 단일 경로 (아래 SetCursorUnlocked)
+        // 게임플레이 시작 — 커서를 푸는 UI가 없으면 잠긴다. 실제 Cursor 조작은 CursorLock만 한다. (#352)
+        CursorLock.SetGameplayActive(true);
     }
 
     public override void OnNetworkDespawn()
     {
-        // 오너 로컬 플레이어가 사라지면(라운드 종료 리셋·연결 종료 등) OnNetworkSpawn에서 잠갔던 커서를 되돌린다.
-        // Cursor.lockState는 전역 상태라 씬을 재로드해도 유지되는데, 재로드된 로비 씬에는 이 커서를 풀어 줄
-        // PlayerMovement가 없어(ESC 토글도 못 돎) 커서가 잠긴 채 고착된다 — 마우스로 로비 UI를 못 누르는 원인. (#188)
         if (IsOwner)
         {
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
+            // 오너 로컬 플레이어가 사라지면(라운드 종료 리셋·연결 종료 등) 게임플레이가 끝난 것으로 보고 커서를 푼다.
+            // Cursor.lockState는 전역 상태라 씬을 재로드해도 유지되는데, 재로드된 로비 씬에는 이 커서를 풀어 줄
+            // PlayerMovement가 없어 커서가 잠긴 채 고착된다 — 마우스로 로비 UI를 못 누르는 원인. (#188)
+            // 커서를 푼 UI가 아직 열려 있어도(디스폰 경합) CursorLock이 최종 상태를 단독으로 정한다. (#352)
+            CursorLock.SetGameplayActive(false);
 
             // 끌려가는 도중 정리(라운드 리셋·연결 종료)되면 서버의 StopCarried가 못 올 수 있다 —
             // CharacterController 비활성 + 추종 상태가 남지 않게 여기서 안전하게 푼다. (#279 리뷰 반영)
@@ -297,9 +297,6 @@ public class PlayerMovement : NetworkBehaviour
 
     private void Update()
     {
-        // 커서 잠금/해제는 이제 UI 계층이 소유한다 — ESC 일시정지 패널(#326)이 열림/닫힘에 맞춰 SetCursorUnlocked를
-        // 호출한다. (구 임시 ESC 토글 블록은 그 패널과 이중으로 ESC를 읽어 커서 소유권이 꼬여 제거됨, #326)
-
         // 끌려가는 중(#279) — 입력 이동 대신 끌기 NPC를 추종한다. 행동불능 상태라 시점 입력은 어차피
         // 막혀 있고(IsMovementLocked), 카메라는 다운 시점(UpdateCameraPose)이 계속 담당한다.
         // CharacterController가 꺼져 있어 HandleMove(중력 Move)를 타면 안 된다.
@@ -310,11 +307,7 @@ public class PlayerMovement : NetworkBehaviour
             return;
         }
 
-        if (!m_cursorUnlocked)
-        {
-            HandleLook(); // 커서 해제 중에는 시점 회전 정지 (마우스 이동이 화면을 돌리지 않게)
-        }
-
+        HandleLook();
         UpdateCameraPose(); // 카메라 높이/피치를 매 프레임 적용 (다운 시 바닥 시점) (#105)
         HandleMove();
     }
@@ -339,18 +332,11 @@ public class PlayerMovement : NetworkBehaviour
             m_verticalVelocity = Mathf.Max(m_verticalVelocity, velocity.y);
     }
 
-    /// <summary>커서 잠금/해제를 전환한다 — 해제 중엔 시점 회전도 정지. ESC 임시 토글·인벤토리 편집 모드(#144)가 공용.</summary>
-    public void SetCursorUnlocked(bool unlocked)
-    {
-        m_cursorUnlocked = unlocked;
-        Cursor.lockState = unlocked ? CursorLockMode.None : CursorLockMode.Locked;
-        Cursor.visible = unlocked;
-        m_smoothedLook = Vector2.zero; // 커서 해제 중엔 회전이 멈추므로 재잠금 시 스무딩 잔여값으로 튀지 않게 초기화 (#216)
-    }
-
     private void HandleLook()
     {
-        if (IsMovementLocked) // 다운 중·라운드 종료 시 시점 회전 차단 — 카메라 적용은 UpdateCameraPose가 담당
+        // 다운 중·라운드 종료 시 시점 회전 차단 — 카메라 적용은 UpdateCameraPose가 담당.
+        // 커서가 풀려 있을 때도 같다 — 마우스 이동이 화면을 돌리면 안 된다 (#352).
+        if (IsMovementLocked || CursorLock.IsUnlocked)
         {
             m_smoothedLook = Vector2.zero; // 재개 시 잠긴 동안의 스무딩 잔여값으로 튀지 않도록 초기화 (#216)
             return;
