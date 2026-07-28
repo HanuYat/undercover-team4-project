@@ -52,11 +52,14 @@ public class InteractionFeedback : NetworkBehaviour
 
     private void HandleSceneLoaded(EScene scene) => EnsureHud();
 
-    // 씬에 HUD가 없으면 생성한다. Title에서는 만들지 않는다 — 인게임 HUD(타이머·조준점)라
-    // 로비에 있을 물건이 아니고, 어차피 씬 전환 때 파괴된다. InGame 로드 시 다시 생성된다.
+    // 씬에 HUD가 없으면 생성한다. 타이틀·로비에서는 만들지 않는다 — 인게임 HUD(조준점·타이머·목표
+    // 금액)라 UI 대기 화면에 있을 물건이 아니다.
+    // 로비를 함께 막는 이유: 플레이어는 destroyWithScene:false로 스폰돼 씬을 넘어 살아남는데,
+    // 이 오브젝트가 App.OnSceneLoaded마다 EnsureHud를 다시 부른다. 막지 않으면 라운드 실패로
+    // 로비에 돌아왔을 때(#395) 대기 화면 위에 인게임 HUD가 다시 그려진다.
     private void EnsureHud()
     {
-        if (App.CurrentScene == EScene.Title)
+        if (App.CurrentScene == EScene.Title || App.CurrentScene == EScene.Lobby)
             return;
         if (App.UI.Crosshair == null && m_hudPrefab != null)
             Instantiate(m_hudPrefab);
