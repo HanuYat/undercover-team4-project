@@ -45,8 +45,8 @@ public class CriminalAssigner : CommonManagerBase
     [SerializeField]
     private int m_forgedCharCount = 1;
 
-    [Header("범인 검거 반응 가중치 (#76)")]
-    [Tooltip("합이 1일 필요 없음 — 비율로 추첨한다. 범인은 도주/저항 성향이 높다")]
+    [Header("예비 용의자 반응 가중치 (#76 · 트리거 변경 #400)")]
+    [Tooltip("합이 1일 필요 없음 — 비율로 추첨한다. 스캔·피격당할 때 이 유형대로 반응한다 (#400). 범인은 도주/저항 성향이 높다")]
     [SerializeField]
     private float m_compliantWeight = 0.2f;
 
@@ -56,18 +56,18 @@ public class CriminalAssigner : CommonManagerBase
     [SerializeField]
     private float m_resistWeight = 0.4f;
 
-    [Header("일반 시민 검거 반응 가중치 (#78)")]
+    [Header("일반 시민 반응 가중치 (#78 · 재조정 #400)")]
     [Tooltip(
-        "무고 시민의 반응 추첨 비율. 도주/저항은 진범을 헷갈리게 하는 미끼일 뿐 잡아도 오검거다 — 이 비율로 미끼 행동의 빈도(난이도)를 조절한다. 기본값은 대부분 순응 + 소수만 도주/저항"
+        "무고 시민의 반응 추첨 비율. 도주/저항은 진범을 헷갈리게 하는 미끼일 뿐 잡아도 오검거다 — 이 비율로 미끼 행동의 빈도(난이도)를 조절한다. 반응 트리거가 검거에서 스캔으로 옮겨지면서(#400) 반응이 사실상 진범 tell이 될 위험이 커져 비순응 비율을 절반까지 올렸다 — 스캔은 아무나 찔러 보는 행위라 반응 표본이 훨씬 넓다 (GDD 6-2)"
     )]
     [SerializeField]
-    private float m_citizenCompliantWeight = 0.8f;
+    private float m_citizenCompliantWeight = 0.5f;
 
     [SerializeField]
-    private float m_citizenFleeWeight = 0.1f;
+    private float m_citizenFleeWeight = 0.25f;
 
     [SerializeField]
-    private float m_citizenResistWeight = 0.1f;
+    private float m_citizenResistWeight = 0.25f;
 
     // 임시 이름 풀 — 사이버펑크 톤. 추후 데이터 에셋으로 분리 가능
     private static readonly string[] s_namePool =
@@ -328,8 +328,10 @@ public class CriminalAssigner : CommonManagerBase
         CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
         identity.SetCriminal(true);
 
-        // 예비 용의자는 시민 가중치(대부분 순응)로 뽑혀 있다 — 범인 가중치로 다시 뽑는다.
-        // Reaction은 서버 전용이라 바꿔도 플레이어에게 티가 나지 않는다 (#102 설계 결정 6)
+        // 예비 용의자는 시민 가중치로 뽑혀 있다 — 범인 가중치로 다시 뽑는다.
+        // Reaction은 서버 전용이라 바꿔도 플레이어에게 티가 나지 않는다 (#102 설계 결정 6).
+        // 이미 반응 중인 대상의 유형이 바뀔 수는 있지만 진행 중인 반응을 갈아엎지는 않는다 —
+        // 새 판정은 NpcStateRules.CanStartReaction이 도주·저항 중에는 막는다 (#400).
         identity.AssignReaction(RollReaction(m_compliantWeight, m_fleeWeight, m_resistWeight));
 
         // 라운드 시작에 보관해 둔 몽타주를 그대로 발행한다 — WantedListManager가 이 이벤트로

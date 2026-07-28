@@ -47422,9 +47422,9 @@ MonoBehaviour:
   m_compliantWeight: 0.2
   m_fleeWeight: 0.4
   m_resistWeight: 0.4
-  m_citizenCompliantWeight: 0.6
-  m_citizenFleeWeight: 0.2
-  m_citizenResistWeight: 0.2
+  m_citizenCompliantWeight: 0.5
+  m_citizenFleeWeight: 0.25
+  m_citizenResistWeight: 0.25
 --- !u!114 &1168895124
 MonoBehaviour:
   m_ObjectHideFlags: 0
