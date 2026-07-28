@@ -282,6 +282,30 @@ public class CriminalAssigner : CommonManagerBase
     }
 
     /// <summary>
+    /// 지금 수배로 공개된 용의자 수 — 라운드 시작 직후엔 초기 공개 수이고, 제보 전화 승격마다 늘어난다. (#102)
+    /// 라운드 시작 할당량이 달성 가능한지 대조하는 기준이다(RoundManager) — 미공개 예비 용의자는 수배
+    /// 리스트에 없어 잡을 대상으로 인식되지 않으므로(잡으면 오검거) 시작 할당량에 셀 수 없다.
+    /// </summary>
+    public int RevealedCount
+    {
+        get
+        {
+            int count = 0;
+            for (int i = 0; i < m_criminalNpcs.Count; i++)
+            {
+                NpcController npc = m_criminalNpcs[i];
+                if (npc == null)
+                    continue;
+
+                CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
+                if (identity != null && identity.IsCriminal)
+                    count++;
+            }
+            return count;
+        }
+    }
+
+    /// <summary>
     /// 대기 중인 예비 용의자 1명을 수배로 공개한다 — 제보 전화를 받았을 때 호출한다. (#102)
     /// 성공하면 true. 지금 승격 가능한 대상이 없으면 false — 그 전화 한 번을 놓친 것일 뿐이므로
     /// 호출자는 다음 수신을 그대로 예약하면 된다 (풀 소진 판정은 HasPendingSuspect로 따로 한다).
