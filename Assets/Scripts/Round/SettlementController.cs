@@ -11,7 +11,9 @@ public struct SettlementData
     public RoundResult Result;      // 라운드 결과(성공/실패)
     public RoundEndReason Reason;   // 종료 사유(할당량 달성/제한시간 초과/전원 다운)
     public int FundBalance;         // 팀 자금 잔액
-    public int FundDelta;           // 이번 라운드 자금 증감(현재-시작) = 이번 라운드 정산액 (#340)
+    public int FundDelta;           // 이번 라운드 자금 증감(현재-시작) = 팀이 실제로 챙긴 몫 (#340/#395)
+    public int GrossEarned;         // 종료 시 유치장 점유 현상금 합 = 할당량 차감 전 총 수익 (#395)
+    public int TargetFund;          // 이번 라운드 목표 금액(할당량) — 총 수익에서 이만큼 떼고 남는 게 팀 몫 (#395)
     public int CriminalCount;       // 종료 시 유치장의 진범 수 (#340)
     public int MisdemeanorCount;    // 종료 시 유치장의 경범죄자(난동꾼·위조범) 수 (#340)
     public string TopOffenderName;  // 이번 판 최다 오검거 플레이어 이름 (없으면 빈 문자열)
@@ -34,7 +36,7 @@ public struct SettlementData
 public class SettlementController : MonoBehaviour
 {
     private const string k_messageName = "RoundSettlement";
-    private const int k_writerSize = 128; // byte*2 + int*5 + FixedString64(최대 66) = 88 < 128
+    private const int k_writerSize = 128; // byte*2 + int*7 + FixedString64(최대 66) = 96 < 128
 
     private RoundManager Round => App.Game.Round;
     private WrongfulArrestPenalty Penalty => App.Game.WrongfulArrestPenalty;
@@ -137,14 +139,17 @@ public class SettlementController : MonoBehaviour
     {
         int criminals = 0;
         int misdemeanors = 0;
+        int gross = 0;
         JailZone jail = FindFirstObjectByType<JailZone>();
         if (jail != null)
-        {
-            int total;
-            (criminals, misdemeanors, total) = jail.TallySettlement();
-            if (TeamFund != null)
-                TeamFund.AddSettlement(total);
-        }
+            (criminals, misdemeanors, gross) = jail.TallySettlement();
+
+        // 할당량은 경찰서에 납부하는 몫이다 — 총 수익에서 목표 금액을 떼고 남은 초과분만 팀이 챙긴다 (#395).
+        // 목표를 못 채웠으면 초과분이 없으므로 0원이다(음수를 자금에서 깎지는 않는다 — GDD 9-2 마이너스 방지).
+        int target = Round != null ? Round.TargetFund : 0;
+        int payout = Mathf.Max(0, gross - target);
+        if (TeamFund != null)
+            TeamFund.AddSettlement(payout);
 
         int balance = TeamFund != null ? TeamFund.Balance : 0;
         int delta = TeamFund != null ? balance - m_roundStartFund : 0;
@@ -160,6 +165,8 @@ public class SettlementController : MonoBehaviour
             Reason = reason,
             FundBalance = balance,
             FundDelta = delta,
+            GrossEarned = gross,
+            TargetFund = target,
             CriminalCount = criminals,
             MisdemeanorCount = misdemeanors,
             TopOffenderName = topName,
@@ -223,6 +230,8 @@ public class SettlementController : MonoBehaviour
         writer.WriteValueSafe((byte)data.Reason);
         writer.WriteValueSafe(data.FundBalance);
         writer.WriteValueSafe(data.FundDelta);
+        writer.WriteValueSafe(data.GrossEarned);
+        writer.WriteValueSafe(data.TargetFund);
         writer.WriteValueSafe(data.CriminalCount);
         writer.WriteValueSafe(data.MisdemeanorCount);
         writer.WriteValueSafe(data.TopOffenderCount);
@@ -247,6 +256,8 @@ public class SettlementController : MonoBehaviour
         reader.ReadValueSafe(out byte reasonByte);
         reader.ReadValueSafe(out int balance);
         reader.ReadValueSafe(out int delta);
+        reader.ReadValueSafe(out int gross);
+        reader.ReadValueSafe(out int target);
         reader.ReadValueSafe(out int criminals);
         reader.ReadValueSafe(out int misdemeanors);
         reader.ReadValueSafe(out int topCount);
@@ -259,6 +270,8 @@ public class SettlementController : MonoBehaviour
                 Reason = (RoundEndReason)reasonByte,
                 FundBalance = balance,
                 FundDelta = delta,
+                GrossEarned = gross,
+                TargetFund = target,
                 CriminalCount = criminals,
                 MisdemeanorCount = misdemeanors,
                 TopOffenderCount = topCount,

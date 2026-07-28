@@ -50,6 +50,25 @@ public class TeamFund : NetworkedManagerBase
     }
 
     /// <summary>
+    /// 자금을 세션 시작값으로 되돌린다 — 라운드 실패로 판이 끝났을 때 호출한다 (#395).
+    /// TeamFund는 씬을 넘어 유지되는 상주 홀더(#214)라, 실패 후 로비에서 새 판을 시작해도
+    /// 스스로는 초기화되지 않는다. 되돌릴 주체가 없으면 실패해도 이월 자금이 그대로 남는다.
+    /// 서버(또는 오프라인) 전용.
+    /// </summary>
+    public void ResetToStarting()
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning("TeamFund.ResetToStarting은 서버에서만", this);
+            return;
+        }
+
+        int before = m_fund.Value;
+        m_fund.Value = m_startingFund;
+        Debug.Log($"[팀 자금] 라운드 실패로 초기화 — {before} → {m_fund.Value}");
+    }
+
+    /// <summary>
     /// 자금을 차감한다 — 상점 구매(#182)가 서버(구매 ServerRpc)에서 호출한다.
     /// 잔액이 부족하면 차감하지 않고 false를 반환한다(자금은 0 밑으로 내려가지 않음, GDD 9-2).
     /// </summary>
