@@ -86,6 +86,7 @@ SettingsCanvas.prefab                            ← Title · Lobby · Shop · M
 
 - **마스터 음량은 Vivox 음성에 걸리지 않는다.** Vivox는 자체 믹스로 재생돼 `AudioListener.volume` 밖에 있다 — 음성 슬라이더를 따로 두는 실제 이유.
 - **먹통 음성 왜곡 중에는 경로가 뒤집힌다.** [VivoxManager.cs:405](../../Assets/Scripts/Network/VivoxManager.cs#L405)가 `silenceInChannelAudioMix=true`로 Vivox 믹스를 죽이고 우리 `AudioSource`로 재생하므로, 그 구간에는 `SetOutputDeviceVolume`이 먹지 않는다. **탭 `AudioSource.volume`에 함께 반영하는 것으로 해결한다** (결정 (h) · 작업 2). 남는 차이 하나: 이 경로는 Unity 믹스라 마스터 음량도 함께 걸려 왜곡 중 실효 음량이 `마스터 × 음성`이 된다 — 정상 구간(마스터 무관)과 미묘하게 다르지만 왜곡이 짧은 이벤트라 허용한다.
+- **캔버스 Sort Order 충돌** — `PauseCanvas`·`QuitConfirmCanvas`가 모두 100이다. `PauseCanvas`를 복제해 만든 `SettingsCanvas`도 100을 물려받아, Sort Order가 같은 Overlay 캔버스는 Hierarchy 루트 순서로 승부가 갈린다 → 씬마다 위아래가 달라진다(Shop에서 일시정지가 설정 창을 덮는 문제로 실제 발생). 설정은 일시정지 **위**에 겹치는 유일한 창이므로 프리팹에서 **110**으로 고정한다. 클릭 우선순위(`GraphicRaycaster`)도 같은 순서를 따르므로 이걸 고치면 슬라이더가 안 잡히던 문제도 함께 사라진다.
 - **슬라이더 드래그마다 `PlayerPrefs.Save()`를 부르지 않는다.** `SetFloat`은 메모리, `Save()`는 디스크 쓰기 — 창 닫을 때 1회로 모은다.
 - **감도 배율의 상한**을 프리팹 기준값과 곱해 확인한다 — 기준값이 이미 크면 3.0배가 조작 불가 수준이 될 수 있다.
 - **로그 스케일 매핑 검증** — Vivox 볼륨은 선형이 아니라, 슬라이더 중앙이 "절반 크기"로 들리지 않는다. 2인 테스트에서 체감으로 매핑 구간을 조정한다.

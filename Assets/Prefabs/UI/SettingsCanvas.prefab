@@ -743,7 +743,7 @@ Canvas:
   m_AdditionalShaderChannelsFlag: 25
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0
-  m_SortingOrder: 100
+  m_SortingOrder: 110
   m_TargetDisplay: 0
 --- !u!114 &2267754149803046060
 MonoBehaviour:
@@ -2096,7 +2096,7 @@ MonoBehaviour:
   m_mouseSensitivitySlider: {fileID: 8718707710705804045}
   m_masterVolumeSlider: {fileID: 4353965133042861775}
   m_voiceVolumeSlider: {fileID: 4295827647840038585}
-  m_mouseSensitivityValue: {fileID: 2508320292688612145}
+  m_mouseSensitivityValue: {fileID: 8132839985389289788}
   m_masterVolumeValue: {fileID: 830620354406716806}
   m_voiceVolumeValue: {fileID: 3569447710274677747}
   m_closeButton: {fileID: 5998930857260170296}

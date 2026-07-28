@@ -21,6 +21,9 @@ public class PausePanel : PanelBase
     [SerializeField]
     private Button m_leaveButton; // 메인으로 나가기 — 세션 이탈 후 타이틀 복귀
 
+    [SerializeField]
+    private Button m_settingsButton; // 설정 — 설정 창을 이 패널 위로 겹쳐 연다
+
     [Header("배경 딤 (패널과 함께 켜고 끔)")]
     [SerializeField]
     private GameObject m_background;
@@ -45,6 +48,8 @@ public class PausePanel : PanelBase
             m_resumeButton.onClick.AddListener(ClosePanel);
         if (m_leaveButton != null)
             m_leaveButton.onClick.AddListener(HandleLeave);
+        if (m_settingsButton != null)
+            m_settingsButton.onClick.AddListener(OpenSettings);
     }
 
     protected override void OnDestroy()
@@ -55,6 +60,8 @@ public class PausePanel : PanelBase
             m_resumeButton.onClick.RemoveListener(ClosePanel);
         if (m_leaveButton != null)
             m_leaveButton.onClick.RemoveListener(HandleLeave);
+        if (m_settingsButton != null)
+            m_settingsButton.onClick.RemoveListener(OpenSettings);
         base.OnDestroy();
     }
 
@@ -73,6 +80,10 @@ public class PausePanel : PanelBase
         SetLocalPlayerBlocked(false);
         base.ClosePanel();
     }
+
+    // 설정 창은 ESC 스택 위로 쌓인다 — 일시정지는 열린 채 남고, ESC 한 번이면 설정만 닫혀 여기로 돌아온다.
+    // 커서·입력 정지는 이 패널이 이미 잡고 있으므로(CursorLock Push 상태) 설정 창은 아무것도 건드리지 않는다.
+    private static void OpenSettings() => App.UI.Current?.OpenPanel<SettingsPanel>();
 
     private void HandleLeave()
     {
