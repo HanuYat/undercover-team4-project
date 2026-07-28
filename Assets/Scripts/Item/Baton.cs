@@ -56,7 +56,7 @@ public class Baton : ItemBase, IAimedWeapon
     [SerializeField]
     private float m_originTolerance = 3f;
 
-    // 캐스트 결과 버퍼 — 서버 판정과 오너 윤곽선(CanTarget)이 함께 쓰지만 인스턴스 간 공유해도 안전하다.
+    // 캐스트 결과 버퍼 — 서버 판정과 오너 크로스헤어(HasValidAimTarget)가 함께 쓰지만 공유해도 안전하다.
     // 둘 다 메인 스레드에서 동기적으로 돌고, 결과를 호출 안에서 즉시 꺼내 쓴 뒤 버퍼를 붙들지 않는다.
     // (호스트에서는 두 경로가 같은 프레임에 돌 수 있지만 겹쳐 실행되지는 않는다)
     // 2m 반경 0.35m 구체가 훑는 범위에 16개를 넘는 콜라이더가 들어올 일은 없다(넘치면 초과분이 잘릴 뿐, 최근접은 대개 남는다).
@@ -334,9 +334,9 @@ public class Baton : ItemBase, IAimedWeapon
     /// 원점을 앞으로 밀어 피하는 방법도 있지만, 벽에 붙어 있을 때 시작점이 벽 너머로 넘어가 관통 타격이 된다.
     ///
     /// <b>부수효과 없는 순수 판정으로 유지할 것.</b> 서버 타격 판정(<see cref="ServerResolveHitAtImpactAsync"/>)과
-    /// 오너 윤곽선(<see cref="CanTarget"/>) 둘이 공유한다 — 후자는 매 프레임 도는 로컬 피드백이라,
-    /// 여기에 상태 변경이나 로그를 넣으면 조준만 해도 그게 매 프레임 실행된다.
-    /// 둘이 같은 함수를 보는 것이 "윤곽선은 떴는데 안 맞음"을 막는 장치이므로 분기시키지 말 것.
+    /// 오너 크로스헤어(<see cref="HasValidAimTarget"/>) 둘이 공유한다 — 후자는 매 프레임 도는 로컬
+    /// 피드백이라, 여기에 상태 변경이나 로그를 넣으면 조준만 해도 그게 매 프레임 실행된다.
+    /// 둘이 같은 함수를 보는 것이 "크로스헤어는 켜졌는데 안 맞음"을 막는 장치이므로 분기시키지 말 것.
     /// </summary>
     private SwingResult EvaluateSwing(
         Vector3 origin,
