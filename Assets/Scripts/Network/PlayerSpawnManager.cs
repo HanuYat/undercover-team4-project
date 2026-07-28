@@ -9,6 +9,8 @@ using UnityEngine.SceneManagement;
 ///   바닥에 남은 아이템은 여기서 내린다 — 둘 다 destroyWithScene:false라 씬을 바꿔도 안 사라진다.
 /// m_spawnPlayers=true(상점·게임): 진입한 피어에 플레이어가 없으면 스폰, 있으면 스폰 포인트로 재배치.
 /// 플레이어는 destroyWithScene:false라 Shop↔Game 루프 내내 유지된다.
+/// 게임 씬 진입일 때는 기본 장비 지급까지 여기서 트리거한다 — 피어별 씬 진입을 아는 유일한 지점이라
+/// 매 라운드 지급이 이 한 경로로 모인다. (#370)
 /// </summary>
 public class PlayerSpawnManager : MonoBehaviour
 {
@@ -127,6 +129,12 @@ public class PlayerSpawnManager : MonoBehaviour
             SpawnPlayerFor(clientId);
         else
             RepositionPlayer(client.PlayerObject);
+
+        // 기본 장비는 게임 씬에 들어온 시점에 지급한다 — 상점(허브)은 빈손 대기. (#370)
+        // 씬별 인스펙터 플래그를 새로 두지 않고 App의 씬 상태로 가른다(다른 스크립트와 같은 관례).
+        // 이 시점엔 sceneLoaded 훅이 이미 CurrentScene을 갱신한 뒤다(Start/OnLoadComplete 모두 그 이후).
+        if (App.CurrentScene == EScene.Game)
+            client.PlayerObject?.GetComponent<PlayerLoadout>()?.ServerGrantStartingGear();
     }
 
     private void SpawnPlayerFor(ulong clientId)

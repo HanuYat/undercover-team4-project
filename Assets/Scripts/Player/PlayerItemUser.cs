@@ -13,7 +13,10 @@ public class PlayerItemUser : MonoBehaviour
     private PlayerEscorter m_escorter; // 밧줄 끌기 중 아이템 사용 잠금용 (#269)
 
     /// <summary>현재 장착 중인 아이템. 없으면 null. (#45 — PlayerHandView가 초기 표시에 사용)</summary>
-    public ItemBase EquippedItem => m_equippedItem;
+    // 파괴된 아이템은 null로 내보낸다 — 장착 중 디스폰(라운드 종료 회수, #370) 후 장착 해제가 도착하기까지
+    // 참조가 한 프레임 남는데, `is`/`as` 타입 검사는 Unity 가짜 null을 못 걸러 그대로 통과시킨다
+    // (InteractionFeedback의 `equipped is IAimedWeapon`). 사용처마다 가드 두는 대신 여기서 한 번 막는다.
+    public ItemBase EquippedItem => m_equippedItem != null ? m_equippedItem : null;
 
     /// <summary>장착 아이템 변경 이벤트 — 실제로 값이 바뀔 때만 발행. 1인칭 손 표시(#45)·UI 등이 구독한다.</summary>
     public event Action<ItemBase> OnEquippedItemChanged;
@@ -103,7 +106,11 @@ public class PlayerItemUser : MonoBehaviour
     {
         // 채널링 중이 아니면 CancelUse는 무동작이라 항상 호출해도 안전하다.
         // CanUse() 체크 금지 — 채널링 중엔 false라서 취소가 막힌다 (#91)
-        m_equippedItem?.CancelUse();
+        // ?. 대신 != null — ?.는 Unity 가짜 null을 못 걸러 파괴된 아이템에 호출이 들어간다 (#370, SetEquippedItem과 동일 관례)
+        if (m_equippedItem != null)
+        {
+            m_equippedItem.CancelUse();
+        }
     }
 
     private void HandleCancelItem() => CancelUse();

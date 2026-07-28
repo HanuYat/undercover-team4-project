@@ -3269,7 +3269,6 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_startingGear:
   - {fileID: 6465765157232573796, guid: ef3d4594c5614be42ad3cdf1ec34cb19, type: 3}
-  - {fileID: 1048637736484071511, guid: 35764ff7639685444b8c8802043b67b1, type: 3}
   - {fileID: 5880397347069557750, guid: d1c30cbbf1aa4ac44b4f5ad0936bd9f2, type: 3}
   m_itemAnchor: {fileID: 0}
   m_dropDistance: 1.2
@@ -3359,7 +3358,6 @@ MonoBehaviour:
   m_loadout: {fileID: 6677678871598212644}
   m_itemUser: {fileID: 6972632809807839780}
   m_inputHandler: {fileID: 6963651317364931010}
-  m_movement: {fileID: 3468529030498822857}
   m_barRoot: {fileID: 5974939317137653256}
   m_barBackground: {fileID: 4026529837888026507}
   m_slotViews:
