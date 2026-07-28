@@ -101,10 +101,15 @@ public class NpcFleeState : NpcStateBase
         {
             ResetStuck();
             SetFleePoint();
+
+            // SetFleePoint가 포위로 보고 저항으로 넘겼을 수 있다 — 그대로 진행하면 아래 이탈 판정이
+            // 추격자를 못 찾은 프레임에 Idle로 덮어써 방금 건 저항이 사라진다.
+            if (m_transitioningToResist)
+                return;
         }
         else if (TickStuckWatch())
         {
-            return; // 길막으로 저항 전환됨 — 이 상태는 끝났다
+            return; // 길막·포위로 저항 전환됨 — 이 상태는 끝났다
         }
 
         // 위협 스캔(CollectThreats)은 씬 전체 FindObjectsByType이라 매 프레임 돌리면
@@ -301,7 +306,9 @@ public class NpcFleeState : NpcStateBase
         Debug.Log(
             $"도주 막힘 — {progress:F2}m/{k_stuckCheckInterval}s, 지점 재추첨 {m_stuckRepicks}회: {m_owner.name}");
         SetFleePoint();
-        return false;
+
+        // 재추첨이 포위로 판단해 저항으로 넘어갔으면 그것도 호출부에 알려야 한다
+        return m_transitioningToResist;
     }
 
     private void ResetStuck()

@@ -37,7 +37,7 @@ public class ServerChannel
     ///
     /// onProgressPoint를 넘기면 진행률이 progressPoint(0~1)를 넘는 프레임에 <b>딱 한 번</b> 호출한다
     /// (#400 스캔 반응). 채널을 둘로 쪼개지 않는 이유는 그 사이에 IsActive가 풀려 재진입·취소 유실이
-    /// 생기기 때문. keepAlive 없는 단일 Delay 경로에서는 중간 지점을 잡을 수 없어 무시된다.
+    /// 생기기 때문. 1.0이면 완료 직전에 부르고, keepAlive 없는 단일 Delay 경로에서는 무시된다.
     /// </summary>
     public async UniTask<Result> RunAsync(
         float seconds,
@@ -79,6 +79,11 @@ public class ServerChannel
                 await UniTask.Yield(PlayerLoopTiming.Update, m_cts.Token);
                 elapsed += Time.deltaTime;
             }
+
+            // 지점을 1.0(= 완료 시점)으로 두면 루프 조건상 위에서 한 번도 성립하지 않는다 —
+            // 완료 직전에 한 번 더 본다. 취소·조건 이탈로 빠지는 경로는 여기까지 오지 않는다.
+            if (!pointFired)
+                onProgressPoint();
 
             return Result.Completed;
         }
