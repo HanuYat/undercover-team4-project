@@ -56,7 +56,9 @@ public class Baton : ItemBase
     [SerializeField]
     private float m_originTolerance = 3f;
 
-    // 캐스트 결과 버퍼 — 판정은 서버 한 곳에서 동기적으로만 돌므로 인스턴스 간 공유해도 안전하다.
+    // 캐스트 결과 버퍼 — 서버 판정과 오너 윤곽선(CanTarget)이 함께 쓰지만 인스턴스 간 공유해도 안전하다.
+    // 둘 다 메인 스레드에서 동기적으로 돌고, 결과를 호출 안에서 즉시 꺼내 쓴 뒤 버퍼를 붙들지 않는다.
+    // (호스트에서는 두 경로가 같은 프레임에 돌 수 있지만 겹쳐 실행되지는 않는다)
     // 2m 반경 0.35m 구체가 훑는 범위에 16개를 넘는 콜라이더가 들어올 일은 없다(넘치면 초과분이 잘릴 뿐, 최근접은 대개 남는다).
     private static readonly RaycastHit[] s_hitBuffer = new RaycastHit[16];
 
@@ -70,8 +72,55 @@ public class Baton : ItemBase
 
     // ---- ItemBase ----
 
-    // CanTarget은 재정의하지 않는다(기본 false) — 조준 타격이라 조준 대상 윤곽선(#184)의 기준(상호작용 레이 3m)과
-    // 실제 사거리(2m)가 어긋난다. 크로스헤어 피드백이 필요해지면 Taser처럼 InteractionFeedback에서 타입 분기할 것.
+    /// <summary>
+    /// 조준 대상 윤곽선·크로스헤어 판정 (#184) — <b>지금 휘두르면 저 대상이 맞는가</b>를 그대로 답한다.
+    /// </summary>
+    /// <remarks>
+    /// 윤곽선의 기본 경로는 상호작용 레이(3m)가 잡은 대상인데 진압봉 사거리는 2m라, 그대로 두면
+    /// 2~3m 구간에서 <b>윤곽선은 떴는데 휘둘러도 안 맞는</b> 상태가 된다. 거리만 좁혀 비교해도
+    /// 부족하다 — 실제 판정은 두께 있는 구체 캐스트라 벽 엄폐도 걸리고 사거리 안이어도 빗나간다.
+    /// 그래서 거리 비교로 흉내 내지 않고 <see cref="EvaluateSwing"/>을 그대로 한 번 더 돌린다.
+    /// <see cref="ItemBase.CanTarget"/>이 요구하는 "Use()의 조기 검증과 같은 기준"을 지키는 가장
+    /// 확실한 방법이고, 판정 규칙이 바뀌어도 두 경로가 함께 움직인다.
+    ///
+    /// Taser(#328/#363)처럼 InteractionFeedback에서 타입 분기해 윤곽선을 끄는 길도 있었지만
+    /// 그쪽을 따르지 않았다. 테이저는 8m 조준 사격이라 겨냥한 몸이 빛나면 오사격의 긴장이
+    /// 사라지는 게 이유였는데, 진압봉은 2m 근접이라 '닿는 거리인가'를 보여주는 편이 도움이 된다.
+    ///
+    /// 쿨다운은 보지 않는다 — 서버 전용 상태(m_nextSwingTime)라 원격 오너에게는 늘 0이어서,
+    /// 넣으면 호스트와 클라이언트의 윤곽선이 서로 달라진다. '지금 칠 수 있나'가 아니라
+    /// '겨냥이 맞았나'만 답하는 쪽이 두 환경에서 일관된다.
+    ///
+    /// 매 프레임 호출된다(InteractionFeedback.Update). 스피어캐스트 1회로, 인터랙터가 이미 매
+    /// 프레임 쏘는 레이와 같은 급이다.
+    /// </remarks>
+    public override bool CanTarget(GameObject aimTarget)
+    {
+        if (aimTarget == null)
+        {
+            return false;
+        }
+
+        // 오너 클라에서 도는 로컬 피드백이라 소지자는 자기 계층에서 찾는다 (Use와 같은 관례).
+        PlayerInteractor holder = GetComponentInParent<PlayerInteractor>();
+        if (holder == null)
+        {
+            return false;
+        }
+
+        Transform aim = holder.AimOrigin;
+        if (
+            EvaluateSwing(aim.position, aim.forward, holder.transform, out NpcController target, out _)
+            != SwingResult.ValidTarget
+        )
+        {
+            return false;
+        }
+
+        // 실제로 맞을 대상과 지금 윤곽선이 걸릴 대상이 같은지 확인한다 — 다르면 엉뚱한 몸이 빛난다.
+        // (조준 대상은 인터랙터의 얇은 레이가, 실제 타격은 두꺼운 구체가 잡으므로 서로 다를 수 있다)
+        return aimTarget.GetComponentInParent<NpcController>() == target;
+    }
 
     /// <summary>
     /// 아이템 사용 진입점. 겨냥 대상(aimTarget)은 쓰지 않는다 — 조준 방향으로 직접 휘두르기 때문이다.
@@ -305,6 +354,11 @@ public class Baton : ItemBase
     /// SphereCast는 레이캐스트와 달리 <b>시작 지점에 이미 겹친 콜라이더를 distance 0으로 되돌려준다.</b>
     /// 원점이 카메라(= 소지자 캡슐 안)라서 자기 몸이 항상 걸리므로, 소지자 계층은 걸러내고 최근접을 고른다.
     /// 원점을 앞으로 밀어 피하는 방법도 있지만, 벽에 붙어 있을 때 시작점이 벽 너머로 넘어가 관통 타격이 된다.
+    ///
+    /// <b>부수효과 없는 순수 판정으로 유지할 것.</b> 서버 타격 판정(<see cref="ServerResolveHitAtImpactAsync"/>)과
+    /// 오너 윤곽선(<see cref="CanTarget"/>) 둘이 공유한다 — 후자는 매 프레임 도는 로컬 피드백이라,
+    /// 여기에 상태 변경이나 로그를 넣으면 조준만 해도 그게 매 프레임 실행된다.
+    /// 둘이 같은 함수를 보는 것이 "윤곽선은 떴는데 안 맞음"을 막는 장치이므로 분기시키지 말 것.
     /// </summary>
     private SwingResult EvaluateSwing(
         Vector3 origin,
