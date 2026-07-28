@@ -23,9 +23,6 @@ public class InventoryBarView : NetworkBehaviour
     [SerializeField]
     private PlayerInputHandler m_inputHandler;
 
-    [SerializeField]
-    private PlayerMovement m_movement;
-
     [Header("UI 참조")]
     [Tooltip("핫바 패널 루트 — 비오너에선 통째로 꺼진다.")]
     [SerializeField]
@@ -66,7 +63,6 @@ public class InventoryBarView : NetworkBehaviour
     private Color m_barEditColor = new Color(0.2f, 0.5f, 1f, 0.35f);
 
     private bool m_isEditMode;
-    private bool m_cursorUnlockedBeforeEdit; // 편집 진입 전 커서 상태 — 종료 시 복원(ESC 토글과 desync 방지)
     private int m_itemNameVersion; // 팝업 연속 발생 시 이전 숨김 예약 무효화용
     private readonly ItemBase[] m_lastSlots = new ItemBase[PlayerLoadout.k_maxHeldItems]; // 줍기 감지 스냅샷
 
@@ -106,6 +102,8 @@ public class InventoryBarView : NetworkBehaviour
             return;
         }
 
+        SetEditMode(false); // 편집 모드인 채 디스폰되면 커서 해제 요청이 남는다 — 여기서 거둔다 (#352)
+
         m_loadout.OnSlotsChanged -= HandleSlotsChanged;
         m_loadout.OnEquippedSlotChanged -= RefreshHighlight;
         m_itemUser.OnEquippedItemChanged -= HandleEquippedItemChanged;
@@ -119,10 +117,10 @@ public class InventoryBarView : NetworkBehaviour
             return;
         }
 
-        // 편집 모드 자동 종료 조건:
-        //  - WASD 이동 입력 → 움직이기 시작하면 조준 복귀 (UX).
-        //  - 외부(ESC 임시 토글 등)에서 커서가 다시 잠기면 → 편집 UI만 살아 있는 desync를 막으려 함께 닫는다 (#144).
-        if (m_inputHandler.MoveInput != Vector2.zero || Cursor.lockState == CursorLockMode.Locked)
+        // 편집 모드 자동 종료 — WASD 이동 입력이 들어오면 조준 복귀 (UX).
+        // (구 "커서가 다시 잠기면 함께 닫기" 조건은 제거 — 커서 상태는 이제 CursorLock이 단독 소유라
+        //  편집 모드가 요청을 거두기 전에 외부가 강제로 잠그는 일이 없다. #352)
+        if (m_inputHandler.MoveInput != Vector2.zero)
         {
             SetEditMode(false);
         }
@@ -225,16 +223,17 @@ public class InventoryBarView : NetworkBehaviour
 
         m_isEditMode = on;
 
+        // 드래그 정렬·호버 툴팁을 쓰도록 커서를 푼다 — 해제 중엔 시점 회전도 정지 (PlayerMovement).
         if (on)
         {
-            // 진입 전 커서 상태를 기억 — 종료 시 이 상태로 되돌린다. ESC 임시 토글이 풀어둔 커서를
-            // 편집 모드 종료가 강제로 잠그지 않게 한다. 해제 중엔 시점 회전도 정지 (PlayerMovement).
-            m_cursorUnlockedBeforeEdit = Cursor.lockState == CursorLockMode.None;
-            m_movement.SetCursorUnlocked(true);
+            // 좌클릭을 누른 채 Tab을 치면 채널링이 그대로 완주한다 — 다른 UI는 SetSuspended가 액션을 꺼
+            // Input System이 canceled를 쏘지만, 편집 모드는 WASD를 감지해야 해 액션을 못 끈다. (#352)
+            m_itemUser.CancelUse();
+            CursorLock.PushUnlock();
         }
         else
         {
-            m_movement.SetCursorUnlocked(m_cursorUnlockedBeforeEdit);
+            CursorLock.PopUnlock();
             HideTooltip();
         }
 
