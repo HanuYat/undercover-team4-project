@@ -16,7 +16,7 @@ using UnityEngine;
 /// 클라가 보낸 원점은 서버가 아는 플레이어 위치와 대조해 검증한다 (원점 위조 = 벽 너머 저격 방지).
 /// 채널링이 없는 즉발 아이템이라 CancelUse는 기본 구현(무동작)을 그대로 쓴다.
 /// </summary>
-public class Taser : ItemBase
+public class Taser : ItemBase, IAimedWeapon
 {
     [Header("테이저 설정")]
     [Tooltip("전극이 날아가는 최대 사거리(m). 상호작용 레이(PlayerInteractor.Range)와 무관하게 이 값이 기준이다")]

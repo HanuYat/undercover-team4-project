@@ -25,7 +25,7 @@ using UnityEngine;
 /// 홀드 채널링은 아니다 — 좌클릭을 떼도 이미 시작된 스윙은 그대로 들어간다(CancelUse 기본 구현 유지).
 /// 취소되는 경우는 스윙 도중 아이템이 손을 떠났을 때뿐이다.
 /// </summary>
-public class Baton : ItemBase
+public class Baton : ItemBase, IAimedWeapon
 {
     [Header("진압봉 설정")]
     [Tooltip("타격이 닿는 최대 사거리(m). 상호작용 레이(PlayerInteractor.Range)와 무관하게 이 값이 기준이다")]
@@ -72,54 +72,32 @@ public class Baton : ItemBase
 
     // ---- ItemBase ----
 
+    // CanTarget은 재정의하지 않는다(기본 false) — 조준 대상 윤곽선(#184)의 기준인 상호작용 레이(3m)와
+    // 실제 사거리(2m)가 어긋나 그대로 쓰면 2~3m에서 "윤곽선은 떴는데 안 맞는" 상태가 된다.
+    // 대신 IAimedWeapon으로 크로스헤어 색만 구동한다 (테이저와 같은 방식, 아래 HasValidAimTarget).
+
     /// <summary>
-    /// 조준 대상 윤곽선·크로스헤어 판정 (#184) — <b>지금 휘두르면 저 대상이 맞는가</b>를 그대로 답한다.
+    /// 조준선이 지금 휘두르면 맞을 NPC에 닿는지 — 오너 크로스헤어 색 예측용. (#184/#217)
+    /// 서버 타격 판정과 <b>같은 함수</b>(<see cref="EvaluateSwing"/>)를 쓰므로 규칙이 어긋날 수 없다.
     /// </summary>
     /// <remarks>
-    /// 윤곽선의 기본 경로는 상호작용 레이(3m)가 잡은 대상인데 진압봉 사거리는 2m라, 그대로 두면
-    /// 2~3m 구간에서 <b>윤곽선은 떴는데 휘둘러도 안 맞는</b> 상태가 된다. 거리만 좁혀 비교해도
-    /// 부족하다 — 실제 판정은 두께 있는 구체 캐스트라 벽 엄폐도 걸리고 사거리 안이어도 빗나간다.
-    /// 그래서 거리 비교로 흉내 내지 않고 <see cref="EvaluateSwing"/>을 그대로 한 번 더 돌린다.
-    /// <see cref="ItemBase.CanTarget"/>이 요구하는 "Use()의 조기 검증과 같은 기준"을 지키는 가장
-    /// 확실한 방법이고, 판정 규칙이 바뀌어도 두 경로가 함께 움직인다.
-    ///
-    /// Taser(#328/#363)처럼 InteractionFeedback에서 타입 분기해 윤곽선을 끄는 길도 있었지만
-    /// 그쪽을 따르지 않았다. 테이저는 8m 조준 사격이라 겨냥한 몸이 빛나면 오사격의 긴장이
-    /// 사라지는 게 이유였는데, 진압봉은 2m 근접이라 '닿는 거리인가'를 보여주는 편이 도움이 된다.
-    ///
-    /// 쿨다운은 보지 않는다 — 서버 전용 상태(m_nextSwingTime)라 원격 오너에게는 늘 0이어서,
-    /// 넣으면 호스트와 클라이언트의 윤곽선이 서로 달라진다. '지금 칠 수 있나'가 아니라
-    /// '겨냥이 맞았나'만 답하는 쪽이 두 환경에서 일관된다.
-    ///
-    /// 매 프레임 호출된다(InteractionFeedback.Update). 스피어캐스트 1회로, 인터랙터가 이미 매
-    /// 프레임 쏘는 레이와 같은 급이다.
+    /// 거리 비교로 흉내 내지 않는 이유: 실제 판정은 두께 있는 구체 캐스트라 사거리 안이어도
+    /// 벽 엄폐에 걸리거나 빗나간다. 쿨다운은 보지 않는다 — 서버 전용 상태(m_nextSwingTime)라
+    /// 원격 오너에게는 늘 0이어서, 넣으면 호스트와 클라이언트의 크로스헤어가 서로 달라진다.
+    /// '지금 칠 수 있나'가 아니라 '겨냥이 맞았나'만 답한다 (Taser.HasValidAimTarget과 같은 방침).
     /// </remarks>
-    public override bool CanTarget(GameObject aimTarget)
+    public bool HasValidAimTarget(Vector3 origin, Vector3 direction)
     {
-        if (aimTarget == null)
-        {
-            return false;
-        }
-
-        // 오너 클라에서 도는 로컬 피드백이라 소지자는 자기 계층에서 찾는다 (Use와 같은 관례).
+        // 소지자 계층은 자기 몸을 캐스트에서 걸러내는 데 필요하다 — 원점이 카메라(캡슐 안)라
+        // 걸러내지 않으면 자기 콜라이더가 distance 0으로 먼저 잡힌다. (EvaluateSwing 주석 참고)
         PlayerInteractor holder = GetComponentInParent<PlayerInteractor>();
         if (holder == null)
         {
             return false;
         }
 
-        Transform aim = holder.AimOrigin;
-        if (
-            EvaluateSwing(aim.position, aim.forward, holder.transform, out NpcController target, out _)
-            != SwingResult.ValidTarget
-        )
-        {
-            return false;
-        }
-
-        // 실제로 맞을 대상과 지금 윤곽선이 걸릴 대상이 같은지 확인한다 — 다르면 엉뚱한 몸이 빛난다.
-        // (조준 대상은 인터랙터의 얇은 레이가, 실제 타격은 두꺼운 구체가 잡으므로 서로 다를 수 있다)
-        return aimTarget.GetComponentInParent<NpcController>() == target;
+        return EvaluateSwing(origin, direction, holder.transform, out _, out _)
+            == SwingResult.ValidTarget;
     }
 
     /// <summary>

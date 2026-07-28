@@ -69,11 +69,13 @@ public class InteractionFeedback : NetworkBehaviour
 
     private void Refresh()
     {
-        // 테이저는 3m 상호작용 레이(CanTarget) 대신 자체 사거리 조준 판정으로 크로스헤어를 구동한다 (#328).
+        // 조준 무기(테이저 8m·진압봉 2m)는 3m 상호작용 레이(CanTarget) 대신 자체 사거리 조준 판정으로
+        // 크로스헤어를 구동한다 (#328/#217). 아이템 타입으로 분기하지 않고 IAimedWeapon으로 묶어,
+        // 무기가 늘어도 이 파일을 고치지 않게 한다.
         ItemBase equipped = m_itemUser != null ? m_itemUser.EquippedItem : null;
-        bool holdingTaser = equipped is Taser;
-        bool taserOnTarget = holdingTaser
-            && ((Taser)equipped).HasValidAimTarget(
+        bool holdingAimedWeapon = equipped is IAimedWeapon;
+        bool weaponOnTarget = equipped is IAimedWeapon aimedWeapon
+            && aimedWeapon.HasValidAimTarget(
                 m_interactor.AimOrigin.position, m_interactor.AimOrigin.forward);
 
         GameObject aimTarget = m_interactor.CurrentTarget;
@@ -101,12 +103,13 @@ public class InteractionFeedback : NetworkBehaviour
         bool interactUsable = inRange && !itemUsable
             && interactable != null && interactable.CanInteract(gameObject);
 
-        // 테이저를 든 동안엔 NPC 윤곽선만 끈다 (#328/#363). 조준 사격이라 상호작용 레이(3m) 기준
-        // 윤곽선이 실제 사거리(8m)와 어긋나고, 겨냥한 몸이 빛나면 오사격의 긴장이 사라지기 때문이다.
+        // 조준 무기를 든 동안엔 NPC 윤곽선만 끈다 (#328/#363/#217). 상호작용 레이(3m) 기준 윤곽선이
+        // 무기의 실제 사거리와 어긋나고(테이저 8m로 더 멀고, 진압봉 2m로 더 가깝다), 겨냥한 몸이
+        // 빛나면 오조준의 긴장이 사라지기 때문이다. 명중 가능 여부는 아래 크로스헤어 색으로 알린다.
         // 끄는 범위를 NPC로 좁힌 것이 #363의 수정 — 예전에는 조기 return이라 인명부·콘솔 같은
-        // 사격과 무관한 E 상호작용물까지 통째로 표시가 죽었다. 테이저의 대상은 NPC뿐이므로,
-        // NPC만 빼면 오사격 설계는 그대로 유지된다.
-        if (holdingTaser && root != null && root.GetComponentInParent<NpcController>() != null)
+        // 사격과 무관한 E 상호작용물까지 통째로 표시가 죽었다. 이 무기들의 대상은 NPC뿐이므로,
+        // NPC만 빼면 오조준 설계는 그대로 유지된다.
+        if (holdingAimedWeapon && root != null && root.GetComponentInParent<NpcController>() != null)
         {
             itemUsable = false;
             interactUsable = false;
@@ -117,10 +120,10 @@ public class InteractionFeedback : NetworkBehaviour
         else
             SetOutlined(null, Color.clear);
 
-        // 크로스헤어는 테이저 명중선이 최우선 — 쏠 수 있는 대상을 겨눴다면 그 색을 덮어쓰지 않는다.
+        // 크로스헤어는 무기 명중선이 최우선 — 때리거나 쏠 수 있는 대상을 겨눴다면 그 색을 덮어쓰지 않는다.
         // (둘 다 아니면 어느 쪽을 부르든 기본색이라 분기 하나로 충분하다)
-        if (taserOnTarget)
-            App.UI.Crosshair?.SetTaserTargeting(true);
+        if (weaponOnTarget)
+            App.UI.Crosshair?.SetWeaponTargeting(true);
         else
             App.UI.Crosshair?.SetInteractable(itemUsable || interactUsable);
     }
