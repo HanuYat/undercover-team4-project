@@ -2835,6 +2835,7 @@ GameObject:
   - component: {fileID: -3123601567961304525}
   - component: {fileID: 3605863908184502176}
   - component: {fileID: 3601868820283084074}
+  - component: {fileID: 5887233641706128439}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -3050,6 +3051,9 @@ MonoBehaviour:
   m_downCamHeight: 0.35
   m_downCamPitch: -20
   m_camPoseLerpSpeed: 8
+  m_downYawRange: 100
+  m_downMinPitch: -80
+  m_downMaxPitch: 20
 --- !u!114 &6972632809807839780
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3497,6 +3501,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerJump
   ShowTopMostFoldoutHeaderGroup: 1
   m_jumpHeight: 0.8
+--- !u!114 &5887233641706128439
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3e00d2b1d9a0c854b97aac62808ac808, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ShopStandPresenter
 --- !u!1 &5536001738967602051
 GameObject:
   m_ObjectHideFlags: 0

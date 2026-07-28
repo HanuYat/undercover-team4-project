@@ -26,6 +26,7 @@ public class RoundEndResetter : MonoBehaviour
     private RoundManager Round => App.Game.Round;
     private SessionManager Session => App.Net.Session;
     private TeamFund TeamFund => App.Game.TeamFund;
+    private ShopPurchases ShopPurchases => App.Game.ShopPurchases;
 
     [Header("정산 표시")]
     // 정산 화면(#107) 연출과 맞춘다: SettlementPanel의 텍스트 지연(1.5s) + 카운트다운(10s) = 11.5s.
@@ -125,6 +126,10 @@ public class RoundEndResetter : MonoBehaviour
                 TeamFund.ResetToStarting();
             else
                 Debug.LogWarning("[RoundEndResetter] TeamFund를 찾지 못해 자금을 초기화하지 못했다", this);
+
+            // 상점 구매 목록도 같은 이유로 여기서 비운다 — 자금만 되돌리면 지난 판에 산 장비를
+            // 공짜로 들고 새 판을 시작한다. (#182, TeamFund와 같은 상주 홀더라 씬 전환으로는 안 지워진다)
+            ShopPurchases?.Clear();
 
             Debug.Log("[RoundEndResetter] 라운드 실패 — 세션 유지한 채 로비 복귀 (새 판 시작)");
             App.LoadScene(EScene.Lobby);
