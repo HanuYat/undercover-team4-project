@@ -34,23 +34,18 @@ public class NpcFleeState : NpcStateBase
 
     // 막힘 감지 — 플레이어가 몸으로 길을 막으면(#400) 진행이 멈추는데, 도주 지점은 도착까지
     // 커밋이라 방향을 다시 뽑는 경로가 없어 제자리 달리기로 굳는다.
-    //
-    // 판정 기준은 Agent.velocity가 아니라 실제 이동 거리다. NPC의 Rigidbody는 kinematic이라
-    // 물리로 밀려 멈추는 게 아니고, 플레이어의 NavMeshObstacle(carving 꺼짐)을 로컬 회피가
-    // 처리하면서 장애물 표면을 따라 좌우로 미끄러진다 — 속도가 0으로 떨어지지 않아 속도 기준은
-    // 이 교착을 놓친다(첫 시도의 실패 원인).
+    // Agent.velocity로는 못 잡는다 — 로컬 회피가 장애물 표면을 따라 좌우로 미끄러져 속도가 0으로
+    // 떨어지지 않기 때문이다(NPC Rigidbody는 kinematic이라 물리로 멈추는 것도 아니다).
     private const float k_stuckCheckInterval = 0.5f;
 
-    // 한 구간에 이 거리(m)도 못 갔으면 막힘. 도주 속도는 기본 이동의 SpeedMultiplier배(현재 6m/s)라
-    // 0.5초에 3m는 가므로, 회피 미끄러짐과 실제 도주는 이 선에서 확실히 갈린다.
+    // 한 구간에 이 거리(m)도 못 갔으면 막힘 — 도주 속도 6m/s면 0.5초에 3m는 간다
     private const float k_stuckMinProgress = 0.5f;
 
-    // 막힘이 이 횟수(= 0.5초 x 2 = 1초) 이어지면 도주 지점을 재추첨한다
+    // 막힘이 이 횟수(= 1초) 이어지면 도주 지점을 재추첨한다
     private const int k_stuckStrikesToRepick = 2;
 
-    // 재추첨을 이 횟수만큼 했는데도 계속 제자리면 저항으로 전환한다. 재추첨이 통하는 것은 열린
-    // 방향이 남아 있을 때뿐이고, 좁은 골목·문턱을 막고 선 경우엔 막힌 방향이 유일한 통로라
-    // 같은 방향이 계속 뽑힌다 — 그때는 포위와 다를 게 없으므로 같은 결말로 보낸다.
+    // 재추첨을 이 횟수만큼 해도 계속 제자리면 저항으로 전환한다 — 좁은 골목·문턱을 막은 경우엔
+    // 막힌 방향이 유일한 통로라 같은 방향이 계속 뽑히고, 그건 포위와 다를 게 없다.
     private const int k_maxStuckRepicks = 2;
 
     // 이탈 판정(위협 스캔)의 최소 간격(초) — 씬 전체 검색이라 매 프레임 돌리지 않는다.
@@ -263,8 +258,8 @@ public class NpcFleeState : NpcStateBase
     /// </summary>
     private bool TickStuckWatch()
     {
-        // 기절 중엔 멈춰 있는 게 정상이다 — 스턴은 상태가 아니라 플래그라 도주 상태가 유지된다(#292).
-        // 여기서 세면 테이저 한 방에 저항으로 돌변한다.
+        // 기절 중엔 멈춰 있는 게 정상이다 — 스턴은 상태가 아니라 플래그라(#292) 여기서 세면
+        // 테이저 한 방에 저항으로 돌변한다.
         if (m_owner.IsStunned)
         {
             ResetStuck();

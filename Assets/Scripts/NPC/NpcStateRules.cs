@@ -55,9 +55,8 @@ public static class NpcStateRules
             or NpcState.Intruding;
 
     /// <summary>지금 새로 반응(도주·저항)을 시작할 수 있는 상태인가. (#400)
-    /// <see cref="IsReactive"/>에서 이미 반응 중인 둘(Run·Attack)을 뺀 집합이다 — 스캔·피격이
-    /// 연달아 들어와도 진행 중인 반응을 갈아엎지 않는다(때릴 때마다 도주↔저항이 오가는 것 방지).
-    /// 확보·페널티군은 IsReactive가 이미 걸러 준다.</summary>
+    /// <see cref="IsReactive"/>에서 이미 반응 중인 둘(Run·Attack)을 뺀 집합 — 스캔·타격이 연달아
+    /// 들어와도 진행 중인 반응을 갈아엎지 않는다. 확보·페널티군은 IsReactive가 이미 걸러 준다.</summary>
     public static bool CanStartReaction(NpcState state) =>
         IsReactive(state) && state != NpcState.Run && state != NpcState.Attack;
 

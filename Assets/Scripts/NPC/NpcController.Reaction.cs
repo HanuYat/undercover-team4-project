@@ -11,14 +11,10 @@ public partial class NpcController
     /// <summary>
     /// 반응 판정 진입점 — 스캔·플레이어 타격이 공유한다. 서버(또는 오프라인) 전용. (#400)
     ///
-    /// 반응이 터지는 시점이 "검거하려 할 때"에서 "의심받을 때(스캔)·맞을 때(피격)"로 옮겨졌다.
+    /// 도주형·저항형은 트리거와 무관하게 각자의 반응을 하고, 순응형만 갈린다 — 스캔에는 무반응,
+    /// 피격에는 도주·저항 중 랜덤이며 뽑은 결과는 <see cref="CitizenIdentity.AssignReaction"/>으로
+    /// 1회 확정이다(매번 재추첨하면 연타 도중 유형이 오가 전투가 성립하지 않는다).
     /// 밧줄 묶기는 더 이상 반응을 굴리지 않는다 — 순수 검거 수단이다.
-    ///
-    /// 유형별 처리:
-    ///  · 도주형·저항형 — 트리거와 무관하게 각자의 반응.
-    ///  · 순응형 — 스캔에는 무반응(의심받아도 태연하다), 피격에는 도주·저항 중 랜덤.
-    ///    뽑은 결과는 <see cref="CitizenIdentity.AssignReaction"/>으로 확정해 이후에도 유지한다(팀 확정) —
-    ///    매번 다시 뽑으면 연타 도중 도주↔저항이 오가 전투가 성립하지 않는다.
     /// </summary>
     /// <param name="trigger">무엇이 반응을 촉발했는가 — 순응형 처리가 갈린다.</param>
     /// <param name="threat">위협 대상(가해자·스캔한 플레이어). 도주 방향과 저항 대상이 된다. null 허용.</param>
@@ -31,7 +27,7 @@ public partial class NpcController
         if (!NpcStateRules.CanStartReaction(CurrentState))
             return;
 
-        // 기절 중엔 반응하지 않는다 — 쓰러진 대상은 그대로 잡힌다 (기존 ResolveReaction의 IsStunned 처리 계승)
+        // 기절 중엔 반응하지 않는다 — 쓰러진 대상은 그대로 잡힌다 (테이저 콤보)
         if (IsStunned)
             return;
 
@@ -107,8 +103,8 @@ public partial class NpcController
     {
         if (IsSpawned && !IsServer)
         {
-            // 요청자를 함께 실어 보낸다 (#400) — 예전에는 싣지 않아 서버에서 attacker가 항상 null이었다.
-            // 피격이 반응 트리거가 되면서 '때린 사람'을 정확히 물어야 그쪽으로 반격·도주한다.
+            // 요청자를 함께 싣는다 (#400) — 예전엔 안 실어 서버에서 attacker가 항상 null이었다.
+            // 피격이 트리거가 되면서 때린 사람을 정확히 물어야 그쪽으로 반격·도주한다.
             NetworkObject attackerObj =
                 attacker != null ? attacker.GetComponentInParent<NetworkObject>() : null;
             SubdueHitRpc(attackerObj != null ? new NetworkObjectReference(attackerObj) : default);
@@ -121,8 +117,7 @@ public partial class NpcController
     [Rpc(SendTo.Server)]
     private void SubdueHitRpc(NetworkObjectReference attackerRef)
     {
-        // 해석 실패(디스폰 등)면 null — TakeDamage·ServerReactTo 모두 null 위협을 허용한다.
-        // 위협이 null이어도 NpcFleeState가 EscapeDistance 안 추격자를 스캔해 폴백한다 (#269).
+        // 해석 실패(디스폰 등)면 null — 위협이 null이어도 NpcFleeState가 추격자를 스캔해 폴백한다 (#269).
         GameObject attacker = attackerRef.TryGet(out NetworkObject obj) ? obj.gameObject : null;
         ServerSubdueHit(attacker);
     }
@@ -132,9 +127,8 @@ public partial class NpcController
     {
         TakeDamage(m_commonConfig.SubdueHitPower, attacker);
 
-        // 피해 뒤에 반응 (#400) — HP가 0이 되어 기절했으면 ServerReactTo가 IsStunned에서 걸러 낸다.
-        // 쓰러진 대상이 도망치기 시작하면 안 되고, 깨어날 때의 도주 전환은 NpcStunnedState가 따로 한다.
-        // TakeDamage가 상태 게이트로 피해를 무시한 경우(연행·수감·페널티)엔 CanStartReaction도 막는다.
+        // 피해 뒤에 반응 (#400) — HP 0으로 기절했으면 ServerReactTo가 걸러 내고(깨어날 때의 도주 전환은
+        // NpcStunnedState 담당), 피해가 상태 게이트로 무시된 경우엔 CanStartReaction이 함께 막는다.
         ServerReactTo(ReactionTrigger.Damage, attacker != null ? attacker.transform : null);
     }
 

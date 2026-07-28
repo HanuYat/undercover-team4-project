@@ -305,10 +305,8 @@ public class Scanner : ItemBase, IChargeable
             // 먹통을 keepAlive에 포함한다 — 없으면 먹통 직전에 시작한 스캔이 먹통 한복판에서 성공한다 (#372).
             // 사유는 OutOfRange 하나로 묶여 오지만, 아래에서 먹통 여부로 메시지를 갈라 어긋남을 막는다
             // (공용 ServerChannel.Result에 사유를 늘리면 Escorter·Reviver까지 건드리게 되므로 여기서 해석한다).
-            // 중간 지점에서 대상이 반응한다 (#400) — 스캔은 "의심하는 행위"라 그 자체가 리스크를 갖는다.
-            // 시작이 아니라 중간인 이유: 시작에 도주시키면 도주형은 사거리 이탈로 영영 스캔되지 않고
-            // 배터리만 날린다. 완료 후면 아무 대가 없이 정보를 얻는다. 중간이면 "반응이 터진 뒤
-            // 남은 구간을 따라붙어야 정보를 얻는다"가 되어 판단과 조작이 함께 걸린다.
+            // 스캔 중간에 대상이 반응한다 (#400). 시작이면 도주형은 사거리 이탈로 영영 스캔되지 않고,
+            // 완료 후면 대가 없이 정보를 얻는다 — 중간이라야 남은 구간을 따라붙어야 정보가 나온다.
             result = await m_channel.RunAsync(
                 m_channelSeconds,
                 () => identity != null && IsInRange(identity.transform) && !IsBlackout,
@@ -351,8 +349,7 @@ public class Scanner : ItemBase, IChargeable
         ScanResultRpc(npcRef);
     }
 
-    // 스캔 중간 지점 — 대상을 반응시킨다. 서버(또는 오프라인)에서만 불린다(RunAsync가 서버 경로). (#400)
-    // 위협 대상은 스캔한 플레이어다 — 도주형은 그 반대로 달아나고, 저항형은 그쪽으로 달려든다.
+    // 스캔 중간 지점 — 대상을 반응시킨다. RunAsync가 서버 경로라 서버(또는 오프라인)에서만 불린다. (#400)
     private void ServerTriggerScanReaction(CitizenIdentity identity)
     {
         if (identity == null)

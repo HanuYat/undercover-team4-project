@@ -35,10 +35,9 @@ public class ServerChannel
     /// keepAlive를 넘기면 매 프레임 호출해 false가 되는 즉시 OutOfRange로 중단한다(거리 이탈 등, Scanner/Escorter 관례).
     /// keepAlive를 생략하면 중간 검사 없이 단일 Delay로 대기한다(PlayerReviver 관례 — 완료 시점에만 호출부가 검사).
     ///
-    /// onProgressPoint를 넘기면 진행률이 progressPoint(0~1)를 넘는 프레임에 <b>딱 한 번</b> 호출한다 (#400).
-    /// 스캔 도중에 대상을 반응시키는 용도다 — 채널을 둘로 쪼개 이어 붙이면 그 사이에 IsActive가 풀려
-    /// 재진입·취소 유실이 생기므로, 한 채널 안에서 콜백으로 처리한다.
-    /// keepAlive가 없으면(단일 Delay 경로) 중간 지점을 잡을 수 없어 무시된다.
+    /// onProgressPoint를 넘기면 진행률이 progressPoint(0~1)를 넘는 프레임에 <b>딱 한 번</b> 호출한다
+    /// (#400 스캔 반응). 채널을 둘로 쪼개지 않는 이유는 그 사이에 IsActive가 풀려 재진입·취소 유실이
+    /// 생기기 때문. keepAlive 없는 단일 Delay 경로에서는 중간 지점을 잡을 수 없어 무시된다.
     /// </summary>
     public async UniTask<Result> RunAsync(
         float seconds,
@@ -70,8 +69,7 @@ public class ServerChannel
                     return Result.OutOfRange;
                 }
 
-                // 중간 지점 통과 — 1회만. 콜백이 대상을 도주시키면 다음 프레임 keepAlive에서
-                // 사거리 이탈로 끊길 수 있는데, 그게 의도다(#400 — 남은 시간 동안 붙어 있어야 완료).
+                // 중간 지점 통과 — 1회만. 여기서 대상이 도주해 다음 프레임 keepAlive가 끊기는 것도 의도다 (#400)
                 if (!pointFired && elapsed >= pointSeconds)
                 {
                     pointFired = true;

@@ -217,11 +217,9 @@ public partial class PlayerEscorter
         if (target == null || !NpcStateRules.CanArrest(target.CurrentState) || IsBusy)
             return;
 
-        // 반응 판정은 여기서 굴리지 않는다 (#400) — 밧줄은 순수 검거 수단이 됐다.
-        // 반응이 터지는 시점이 "잡으려 할 때"에서 "의심받을 때(스캔)·맞을 때(피격)"로 옮겨졌고,
-        // 그 판정은 NpcController.ServerReactTo가 단독으로 갖는다.
-        // 함부로 묶는 것을 막던 장치도 함께 사라졌다 — 이제는 반응이 이미 시작된 대상(Run/Attack)이
-        // NpcStateRules.IsCapturable에서 걸리는 것이 그 역할을 대신한다.
+        // 반응 판정은 여기서 굴리지 않는다 (#400) — 밧줄은 순수 검거 수단이 됐고, 판정은
+        // NpcController.ServerReactTo가 단독으로 갖는다. 함부로 묶는 것을 막던 장치도 함께 사라졌다 —
+        // 이제는 이미 반응 중인 대상이 CanArrest에서 걸리는 것이 그 역할을 대신한다.
         ServerApplyRopeDrag(target);
     }
 
