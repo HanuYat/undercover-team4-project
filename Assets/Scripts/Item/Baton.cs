@@ -362,10 +362,14 @@ public class Baton : ItemBase
             return SwingResult.HitNonTarget;
         }
 
-        // 스턴 게이트를 데미지 전에 본다 — TakeDamage도 같은 규칙(CanBeStunned)으로 피해를 무시하지만(#366/#289),
+        // 피해 게이트를 데미지 전에 본다 — TakeDamage도 같은 규칙으로 피해를 무시하지만(#366/#292),
         // 여기서 먼저 걸러야 오너에게 "무효" 사유를 알려줄 수 있다. 두 곳의 기준은 반드시 같아야 한다.
+        //
+        // 스턴 게이트가 아니라 <b>타격 게이트</b>다 — #292에서 스턴이 오버레이가 되며 전 상태에 걸리게
+        // 되면서 둘이 갈라졌다(구 CanBeStunned → CanBeDamaged). 타격까지 함께 열면 연행 중인 NPC를
+        // 때려 기절시켜 신병에서 빼내는 우회가 생기므로, 진압봉은 좁은 쪽(타격)을 따른다.
         target = npc;
-        if (!NpcStateRules.CanBeStunned(npc.CurrentState))
+        if (!NpcStateRules.CanBeDamaged(npc.CurrentState))
         {
             return SwingResult.TargetInvalidState;
         }
