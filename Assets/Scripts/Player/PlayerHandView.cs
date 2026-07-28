@@ -66,11 +66,11 @@ public class PlayerHandView : NetworkBehaviour
     [Header("스윙 포즈 — 준비 (#217)")]
     [Tooltip("오른쪽 위로 세워 젖히는 자세. 카메라 축 기준 회전(도)")]
     [SerializeField]
-    private Vector3 m_swingWindupEuler = new Vector3(-12f, 8f, -28f);
+    private Vector3 m_swingWindupEuler = new Vector3(-32f, 3f, -24f);
 
     [Tooltip("몸쪽으로 당기는 위치 오프셋(m)")]
     [SerializeField]
-    private Vector3 m_swingWindupOffset = new Vector3(0.015f, 0.005f, -0.06f);
+    private Vector3 m_swingWindupOffset = new Vector3(0.015f, 0.06f, -0.05f);
 
     [Header("스윙 포즈 — 임팩트")]
     [Tooltip("우상 → 좌하 대각 내려치기. 맞는 순간의 자세다")]
@@ -100,7 +100,7 @@ public class PlayerHandView : NetworkBehaviour
     [Tooltip("임팩트까지의 시간 중 준비 동작이 차지하는 비율. 작을수록 늦게 젖혔다 급히 친다")]
     [SerializeField]
     [Range(0.15f, 0.85f)]
-    private float m_swingWindupFraction = 0.49f;
+    private float m_swingWindupFraction = 0.62f;
 
     [Tooltip("임팩트 이후 남은 시간 중 팔로스루가 차지하는 비율. 나머지는 기본 자세로 회수")]
     [SerializeField]
