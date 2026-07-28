@@ -44,39 +44,102 @@ public class PlayerHandView : NetworkBehaviour
     private const float k_swingDuration = PlayerAnimationDriver.k_swingSeconds;
     private const float k_swingStrikeEnd =
         PlayerAnimationDriver.k_swingImpactSeconds / PlayerAnimationDriver.k_swingSeconds; // 임팩트
-    private const float k_swingWindupEnd = k_swingStrikeEnd * 0.49f; // 준비 동작은 임팩트까지의 절반쯤에서 끝난다
 
-    // 임팩트에서 곧장 멈추지 않고 잠깐 더 밀고 나갔다가 돌아온다 — 팔로스루가 없으면 봉이 허공에
-    // 정지했다 되감기는 것처럼 보여 타격감이 죽는다. 남은 시간의 30%를 여기에 쓴다.
-    private const float k_swingFollowEnd =
-        k_swingStrikeEnd + (1f - k_swingStrikeEnd) * 0.3f;
-
-    // 회전은 팔 로컬이 아니라 카메라(부모) 축 기준이다 — 아래 Update가 base 회전 앞에 곱한다.
+    // ---- 스윙 튜닝 (인스펙터) ----
+    //
+    // 회전은 팔 로컬이 아니라 카메라(부모) 축 기준이다 — Update가 base 회전 <b>앞에</b> 곱한다.
     // X = 위아래(음수가 들어올림), Y = 좌우, Z = 롤.
     //
-    // 각도가 작아 보이지만 회전축이 어깨라 화면에서는 크게 움직인다 — 팔이 기준 자세에서 이미
-    // 화면 오른쪽 아래(뷰포트 약 0.80, 0.21)에 있어서, 값을 키우면 손이 곧장 화면 밖으로 나간다.
-    // 아래 값은 손과 봉이 프레임 안에 남는 선에서 잡은 것이다(내려치기 끝 기준 손 약 0.61, 0.07).
-    // 조정할 때는 '내려치기 끝에서 손이 화면 아래로 사라지지 않는지'를 먼저 볼 것.
-    // 그래서 내려치기는 각도를 위아래(X)보다 좌우(Y)에 싣는다 — 아래로 파면 손이 곧바로 프레임을
-    // 벗어나지만, 화면을 가로지르면 같은 힘을 보여주면서도 스윙이 계속 보인다.
+    // 각도가 작아 보여도 회전축이 어깨라 화면에서는 크게 움직인다. 팔이 기준 자세부터 이미
+    // 화면 오른쪽 아래(뷰포트 약 0.80, 0.21)에 있어서, 키우면 손이 곧장 프레임 밖으로 나간다.
+    // <b>조정할 때는 '손이 화면에 남아 있는지'를 가장 먼저 볼 것</b> — 손만 빠지고 봉은 남으면
+    // 봉이 허공에 떠 보인다. 기본값의 실측 여유는 손 최저 y=0.044 / 최대 x=0.942다.
     //
     // 휘두르는 '맛'은 대부분 롤(Z)에서 나온다. X·Y는 손을 화면에서 옮길 뿐이고, 든 물건이 실제로
     // 회전해 보이게 만드는 건 롤이다 — 롤 없이 X·Y만 키우면 봉이 각도를 유지한 채 미끄러져
-    // 휘두르는 게 아니라 흔드는 그림이 된다. 이 값에서 봉의 화면상 기울기가 약 -11°(준비) →
-    // -46°(임팩트)로 돌아간다. 부호에 주의: 롤 음수가 봉을 오른쪽으로 세우고, 양수가 좌하로 넘긴다.
-    // 롤은 손 위치를 거의 안 건드리면서 봉만 돌린다(계측: 롤 26→40으로 14도를 더 줘도 손은 뷰포트
-    // 0.06→0.04, 봉 기울기는 -41°→-49°). 그래서 역동성은 롤에서 벌고, 손을 옮기는 X·Y는 프레임을
-    // 벗어나지 않는 선에서 아낀다. 이 세 포즈로 봉이 화면상 -9° → -53°(임팩트) → -61°(팔로스루)로 돈다.
-    private static readonly Vector3 s_swingWindupEuler = new Vector3(-12f, 8f, -28f); // 오른쪽 위로 바짝 세워 젖힘
-    private static readonly Vector3 s_swingStrikeEuler = new Vector3(8f, -18f, 46f); // 우상 → 좌하 대각 내려치기
+    // 휘두르는 게 아니라 흔드는 그림이 된다. 게다가 롤은 손 위치를 거의 안 건드린다(계측: 롤을
+    // 26→40으로 14도 더 줘도 손은 0.06→0.04, 봉 기울기는 -41°→-49°). 그래서 <b>역동성은 롤에서 벌고
+    // X·Y는 아낀다.</b> 부호 주의 — 롤 음수가 봉을 오른쪽으로 세우고, 양수가 좌하로 넘긴다.
+    //
+    // 기본값에서 봉의 화면상 기울기가 -9°(준비) → -53°(임팩트) → -66°(팔로스루)로 돈다.
+
+    [Header("스윙 포즈 — 준비 (#217)")]
+    [Tooltip("오른쪽 위로 세워 젖히는 자세. 카메라 축 기준 회전(도)")]
+    [SerializeField]
+    private Vector3 m_swingWindupEuler = new Vector3(-12f, 8f, -28f);
+
+    [Tooltip("몸쪽으로 당기는 위치 오프셋(m)")]
+    [SerializeField]
+    private Vector3 m_swingWindupOffset = new Vector3(0.015f, 0.005f, -0.06f);
+
+    [Header("스윙 포즈 — 임팩트")]
+    [Tooltip("우상 → 좌하 대각 내려치기. 맞는 순간의 자세다")]
+    [SerializeField]
+    private Vector3 m_swingStrikeEuler = new Vector3(8f, -18f, 46f);
+
+    [Tooltip("앞으로 뻗으며 치는 위치 오프셋(m)")]
+    [SerializeField]
+    private Vector3 m_swingStrikeOffset = new Vector3(-0.035f, -0.025f, 0.085f);
+
+    [Header("스윙 포즈 — 팔로스루")]
     // 팔로스루는 아래(X)가 아니라 옆(Y)과 롤로 흘린다 — 임팩트 자세가 이미 화면 아래쪽(손 y≈0.04)이라
-    // 여기서 더 숙이면 주먹만 프레임 밖으로 빠져 봉이 허공에 떠 보인다(계측: X를 9로 두면 손 y=-0.03).
-    // X를 낮추고 그만큼 Y·롤로 옮기면 손은 y≈0.08로 남으면서 봉은 오히려 더 돈다(-60° → -66°).
-    private static readonly Vector3 s_swingFollowEuler = new Vector3(5f, -24f, 64f);
-    private static readonly Vector3 s_swingWindupOffset = new Vector3(0.015f, 0.005f, -0.06f); // 몸쪽으로 당겼다가
-    private static readonly Vector3 s_swingStrikeOffset = new Vector3(-0.035f, -0.025f, 0.085f); // 앞으로 뻗으며 친다
-    private static readonly Vector3 s_swingFollowOffset = new Vector3(-0.05f, 0.01f, 0.04f); // 힘이 빠지며 옆으로 흘림
+    // 여기서 더 숙이면 주먹만 프레임 밖으로 빠진다(계측: X를 9로 두면 손 y=-0.03). X를 낮추고
+    // 그만큼 Y·롤로 옮기면 손은 y≈0.08로 남으면서 봉은 오히려 더 돈다(-60° → -66°).
+    [Tooltip("임팩트 뒤 흘러나가는 자세. X(아래)보다 Y·롤로 흘릴 것 — 아래로 파면 손이 화면에서 빠진다")]
+    [SerializeField]
+    private Vector3 m_swingFollowEuler = new Vector3(5f, -24f, 64f);
+
+    [Tooltip("힘이 빠지며 옆으로 흘리는 위치 오프셋(m)")]
+    [SerializeField]
+    private Vector3 m_swingFollowOffset = new Vector3(-0.05f, 0.01f, 0.04f);
+
+    [Header("스윙 구간 비율")]
+    // 임팩트 시점(k_swingStrikeEnd)과 전체 길이는 3인칭·데미지와 공유하는 값이라 여기서 못 바꾼다 —
+    // PlayerAnimationDriver의 상수다. 아래 둘은 그 안에서 준비/팔로스루가 차지하는 몫일 뿐이라
+    // 마음대로 만져도 싱크가 깨지지 않는다.
+    [Tooltip("임팩트까지의 시간 중 준비 동작이 차지하는 비율. 작을수록 늦게 젖혔다 급히 친다")]
+    [SerializeField]
+    [Range(0.15f, 0.85f)]
+    private float m_swingWindupFraction = 0.49f;
+
+    [Tooltip("임팩트 이후 남은 시간 중 팔로스루가 차지하는 비율. 나머지는 기본 자세로 회수")]
+    [SerializeField]
+    [Range(0.05f, 0.9f)]
+    private float m_swingFollowFraction = 0.3f;
+
+    [Header("스윙 가속 곡선")]
+    // 구간마다 곡선이 다른 것이 역동성의 핵심이다. 전부 S자(EaseInOut)로 깔면 내려치기가
+    // 임팩트 직전에 감속해서 — 가장 빨라야 할 순간에 브레이크를 밟는 셈이라 — 휘두르는 게 아니라
+    // 훑는 것처럼 보인다. 기본값은 코드로 계산하던 것과 정확히 같은 모양이다(준비 1-(1-u)²,
+    // 내려침 u², 팔로스루 1-(1-u)², 회수 smoothstep).
+    //
+    // 경계에서 속도가 이어지도록 접선을 맞출 것. 준비 끝과 내려침 시작은 둘 다 0,
+    // <b>임팩트(내려침 끝 ↔ 팔로스루 시작)는 둘 다 최고 속도</b>여야 한다 — 여기서 0이 되면
+    // 봉이 맞는 순간 허공에 멈춰 선다.
+    [Tooltip("준비 — 빠르게 젖혔다 멎는다(감속으로 끝날 것)")]
+    [SerializeField]
+    private AnimationCurve m_swingWindupCurve = new AnimationCurve(
+        new Keyframe(0f, 0f, 2f, 2f),
+        new Keyframe(1f, 1f, 0f, 0f)
+    );
+
+    [Tooltip("내려침 — 임팩트가 최고 속도가 되도록 가속으로 끝낼 것. 여기를 S자로 바꾸면 타격감이 죽는다")]
+    [SerializeField]
+    private AnimationCurve m_swingStrikeCurve = new AnimationCurve(
+        new Keyframe(0f, 0f, 0f, 0f),
+        new Keyframe(1f, 1f, 2f, 2f)
+    );
+
+    [Tooltip("팔로스루 — 최고 속도로 이어받아 힘이 풀리며 멎는다")]
+    [SerializeField]
+    private AnimationCurve m_swingFollowCurve = new AnimationCurve(
+        new Keyframe(0f, 0f, 2f, 2f),
+        new Keyframe(1f, 1f, 0f, 0f)
+    );
+
+    [Tooltip("회수 — 기본 자세로 조용히 복귀. 여기서 튀면 다음 스윙이 지저분해진다")]
+    [SerializeField]
+    private AnimationCurve m_swingRecoverCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
 
     private PlayerItemUser m_itemUser;
     private GameObject m_heldModelInstance;
@@ -204,7 +267,8 @@ public class PlayerHandView : NetworkBehaviour
 
         // 스윙은 bob 위에 얹는다 — 걷거나 점프하면서 휘둘러도 두 움직임이 함께 살아 있어야 한다.
         // 회전을 base 앞에 곱해 팔 로컬이 아닌 카메라 축으로 돌린다(= 어깨를 축으로 한 스윙).
-        AdvanceSwing(out Vector3 swingOffset, out Quaternion swingRotation);
+        AdvanceSwingTime();
+        EvaluateSwingPose(out Vector3 swingOffset, out Quaternion swingRotation);
 
         m_handsModel.transform.localPosition = m_handBasePos + new Vector3(x, y, 0f) + swingOffset;
         m_handsModel.transform.localRotation =
@@ -213,8 +277,27 @@ public class PlayerHandView : NetworkBehaviour
             * Quaternion.Euler(y * k_swayTiltDegrees, x * k_swayTiltDegrees, 0f);
     }
 
-    // 스윙 타이머를 한 프레임 진행시키고 이번 프레임의 오프셋을 낸다. 진행 중이 아니면 무변화(항등).
-    private void AdvanceSwing(out Vector3 offset, out Quaternion rotation)
+    // 스윙 타이머를 한 프레임 진행시킨다 — Update에서 <b>프레임당 정확히 한 번만</b> 부를 것.
+    // 두 번 부르면 스윙이 2배 속도로 간다. 진행 중이 아니면 아무 일도 하지 않는다.
+    private void AdvanceSwingTime()
+    {
+        if (m_swingTime < 0f)
+        {
+            return;
+        }
+
+        m_swingTime += Time.deltaTime;
+        if (m_swingTime >= k_swingDuration)
+        {
+            m_swingTime = -1f; // 끝 — 기준 포즈로 복귀
+        }
+    }
+
+    /// <summary>
+    /// 지금 스윙 진행도에 해당하는 포즈를 낸다 — 상태를 바꾸지 않는다(타이머는 AdvanceSwingTime 담당).
+    /// 스윙 중이 아니면 무변화(오프셋 0, 항등 회전).
+    /// </summary>
+    private void EvaluateSwingPose(out Vector3 offset, out Quaternion rotation)
     {
         offset = Vector3.zero;
         rotation = Quaternion.identity;
@@ -224,67 +307,49 @@ public class PlayerHandView : NetworkBehaviour
             return;
         }
 
-        m_swingTime += Time.deltaTime;
         float t = m_swingTime / k_swingDuration;
-        if (t >= 1f)
-        {
-            m_swingTime = -1f; // 끝 — 기준 포즈로 복귀(오프셋 0)
-            return;
-        }
 
-        // 준비 → 임팩트 → 팔로스루 → 회수 4구간.
-        //
-        // 구간마다 가속 곡선을 다르게 주는 게 역동성의 핵심이다. 전부 SmoothStep으로 깔면
-        // 내려치기가 임팩트 <b>직전에 감속</b>해서 — 가장 빨라야 할 순간에 브레이크를 밟는 셈이라 —
-        // 휘두르는 게 아니라 훑는 것처럼 보인다. 그래서 각 구간의 성격에 맞춰 나눈다:
-        //   준비   : 감속(EaseOut) — 빠르게 젖혔다가 잠깐 멎어 다음 동작을 예고한다
-        //   내려침 : 가속(EaseIn)  — 임팩트 순간이 최고 속도가 된다
-        //   팔로스루: 감속(EaseOut) — 힘이 풀리며 흘러나간다
-        //   회수   : SmoothStep    — 기준 자세로 조용히 복귀(여기서 튀면 다음 스윙이 지저분해진다)
-        //
-        // 경계는 전부 속도가 이어진다. 준비→내려침과 팔로스루→회수는 양쪽 다 0에서 만나 멎었다
-        // 출발하고, 임팩트(내려침→팔로스루)는 반대로 <b>양쪽 다 최고 속도</b>로 만난다 —
-        // 여기서 속도가 0이 되면 봉이 맞는 순간 허공에 멈춰 서므로, 그대로 흘려보내는 게 맞다.
+        // 준비 → 임팩트 → 팔로스루 → 회수 4구간. 구간별 곡선은 인스펙터에서 튜닝한다
+        // (기본값과 각 구간이 왜 그 모양이어야 하는지는 필드 선언부 주석 참고).
+        // 임팩트 시점(k_swingStrikeEnd)만 3인칭·데미지와 공유하는 고정값이고, 나머지 경계는
+        // 인스펙터 비율에서 나온다.
+        float windupEnd = k_swingStrikeEnd * m_swingWindupFraction;
+        float followEnd = k_swingStrikeEnd + (1f - k_swingStrikeEnd) * m_swingFollowFraction;
+
         Vector3 euler;
-        if (t < k_swingWindupEnd)
+        if (t < windupEnd)
         {
-            float u = EaseOut(t / k_swingWindupEnd);
-            euler = Vector3.Lerp(Vector3.zero, s_swingWindupEuler, u);
-            offset = Vector3.Lerp(Vector3.zero, s_swingWindupOffset, u);
+            float u = Ease(m_swingWindupCurve, t / windupEnd);
+            euler = Vector3.Lerp(Vector3.zero, m_swingWindupEuler, u);
+            offset = Vector3.Lerp(Vector3.zero, m_swingWindupOffset, u);
         }
         else if (t < k_swingStrikeEnd)
         {
-            float u = EaseIn((t - k_swingWindupEnd) / (k_swingStrikeEnd - k_swingWindupEnd));
-            euler = Vector3.Lerp(s_swingWindupEuler, s_swingStrikeEuler, u);
-            offset = Vector3.Lerp(s_swingWindupOffset, s_swingStrikeOffset, u);
+            float u = Ease(m_swingStrikeCurve, (t - windupEnd) / (k_swingStrikeEnd - windupEnd));
+            euler = Vector3.Lerp(m_swingWindupEuler, m_swingStrikeEuler, u);
+            offset = Vector3.Lerp(m_swingWindupOffset, m_swingStrikeOffset, u);
         }
-        else if (t < k_swingFollowEnd)
+        else if (t < followEnd)
         {
-            float u = EaseOut((t - k_swingStrikeEnd) / (k_swingFollowEnd - k_swingStrikeEnd));
-            euler = Vector3.Lerp(s_swingStrikeEuler, s_swingFollowEuler, u);
-            offset = Vector3.Lerp(s_swingStrikeOffset, s_swingFollowOffset, u);
+            float u = Ease(m_swingFollowCurve, (t - k_swingStrikeEnd) / (followEnd - k_swingStrikeEnd));
+            euler = Vector3.Lerp(m_swingStrikeEuler, m_swingFollowEuler, u);
+            offset = Vector3.Lerp(m_swingStrikeOffset, m_swingFollowOffset, u);
         }
         else
         {
-            float u = Mathf.SmoothStep(0f, 1f, (t - k_swingFollowEnd) / (1f - k_swingFollowEnd));
-            euler = Vector3.Lerp(s_swingFollowEuler, Vector3.zero, u);
-            offset = Vector3.Lerp(s_swingFollowOffset, Vector3.zero, u);
+            float u = Ease(m_swingRecoverCurve, (t - followEnd) / (1f - followEnd));
+            euler = Vector3.Lerp(m_swingFollowEuler, Vector3.zero, u);
+            offset = Vector3.Lerp(m_swingFollowOffset, Vector3.zero, u);
         }
 
         rotation = Quaternion.Euler(euler);
     }
 
-    // 시작이 빠르고 끝에서 감속 — 젖히기·팔로스루처럼 '힘이 빠지며 멎는' 동작에 쓴다.
-    private static float EaseOut(float u)
+    // 커브를 평가하되 키를 다 지운 커브는 선형으로 처리한다 — 인스펙터에서 실수로 비웠을 때
+    // 팔이 한 자세에 굳는 대신 어색하게나마 움직이게 두는 편이 원인을 찾기 쉽다.
+    private static float Ease(AnimationCurve curve, float u)
     {
-        float inverse = 1f - u;
-        return 1f - inverse * inverse;
-    }
-
-    // 시작이 느리고 끝에서 가속 — 내려치기에 쓴다. 구간 끝(임팩트)이 최고 속도가 된다.
-    private static float EaseIn(float u)
-    {
-        return u * u;
+        return curve != null && curve.length >= 2 ? curve.Evaluate(u) : u;
     }
 
     // 앵커가 인스펙터에서 지정되지 않았으면 카메라 하위에 기본 위치로 만든다.
