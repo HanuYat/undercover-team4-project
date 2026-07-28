@@ -53,6 +53,11 @@ public class PlayerIncapacitation : NetworkBehaviour
     public bool IsIncapacitated => Cause != IncapacitationCause.None;
 
     /// <summary>HP 0 다운인지 — <b>구조 대상·전멸 판정은 이것만</b> 본다. 매달기·기절은 스스로 풀린다. (#252)</summary>
+    /// <remarks>
+    /// 원인 하나와의 <b>정확한 일치</b>다. Die(#364)처럼 '스스로 못 풀리는 무력화'가 나중에 늘어나면
+    /// 여기와 <c>RoundManager.AreAllPlayersDowned</c>를 함께 넓혀야 한다 — 안 넓히면 전원이 그 상태여도
+    /// 전멸 판정이 통과하지 못해 게임오버가 영영 뜨지 않는다.
+    /// </remarks>
     public bool IsDowned => Cause == IncapacitationCause.Down;
 
     /// <summary>테이저 피격 기절인지. 모션은 다운과 같으므로(#252) 표시·집계처럼 원인을 구분할 때만 쓴다.</summary>
