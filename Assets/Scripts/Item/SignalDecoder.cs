@@ -12,8 +12,8 @@ using UnityEngine;
 /// 또렷한 통신 수단이라는 이 아이템의 역할은 그대로다 — 오히려 왜곡이 심할수록 가치가 올라간다)
 ///
 /// <b>설치형</b>(GDD 8-4) — 들고 다니는 아이템이 아니라 본부에 놓인 고정 단말이다.
-/// 상점(#182)에서 구매하면 설치되는 물건이므로 기본은 미설치이며, 구매 시 <see cref="SetInstalled"/>를
-/// 서버에서 호출하면 켜진다. 상점 구현 전에는 인스펙터의 설치 기본값으로 테스트한다.
+/// 기본은 미설치이며, 상점(#182)에서 사면 배달(ShopDelivery)이 서버에서 <see cref="SetInstalled"/>를
+/// 호출해 켠다. 미설치 상태에서는 모델도 콜라이더도 꺼져 있어 본부에 아예 없는 것처럼 보인다.
 ///
 /// 서버 권위 — 전송은 오너가 아닌 아무 플레이어나 할 수 있으므로(씬에 놓인 서버 소유 오브젝트)
 /// 요청 RPC는 Everyone 권한이며, 서버가 길이·설치 여부를 재검증한 뒤 전 피어에 뿌린다 (#55).
@@ -25,7 +25,9 @@ public class SignalDecoder : NetworkBehaviour, IInteractable
     public const int k_maxMessageLength = 20;
 
     [Header("설치 (상점 #182 접합점)")]
-    [Tooltip("구매로 설치되기 전의 초기 상태. 상점 구현 전에는 여기를 켜서 테스트한다")]
+    // 정식 흐름에서는 반드시 꺼 둔다 — 켜면 사지 않아도 단말이 작동한다. 상점을 거치지 않는
+    // 단독 Play로 단말만 확인할 때만 임시로 켠다.
+    [Tooltip("라운드 시작 시의 설치 상태. 정식 흐름에서는 꺼 둘 것 — 구매가 켜 준다")]
     [SerializeField]
     private bool m_installedOnStart;
 
@@ -35,12 +37,21 @@ public class SignalDecoder : NetworkBehaviour, IInteractable
 
     private SignalDecoderHud m_hud;
 
+    // 미설치 단말을 숨기는 대상. GameObject 자체는 끄지 않는다 — 끄면 NetworkBehaviour가 멈춰
+    // 설치 동기화값을 못 받아 영영 안 켜진다.
+    private Renderer[] m_renderers;
+    private Collider[] m_colliders;
+
     /// <summary>설치(구매 완료) 여부. 서버·오프라인은 실참조, 원격 피어는 동기화값으로 판정.</summary>
     public bool IsInstalled => IsSpawned && !IsServer ? m_installedSynced.Value : m_installed;
 
     private void Awake()
     {
         m_hud = GetComponent<SignalDecoderHud>();
+        m_renderers = GetComponentsInChildren<Renderer>(true);
+        m_colliders = GetComponentsInChildren<Collider>(true);
+
+        ApplyVisibility(); // 스폰 전 기본값은 미설치 — 씬 로드 직후 한 프레임 노출되는 것을 막는다
     }
 
     public override void OnNetworkSpawn()
@@ -48,6 +59,36 @@ public class SignalDecoder : NetworkBehaviour, IInteractable
         // 설치 상태 초기값은 서버가 채운다 — 쓰기 권한이 서버뿐이라 클라는 조작할 수 없다.
         if (IsServer)
             SetInstalled(m_installedOnStart);
+
+        // 원격 피어는 스폰 페이로드로 도착한 값을, 이후 구매는 변경 콜백으로 반영한다.
+        m_installedSynced.OnValueChanged += HandleInstalledChanged;
+        ApplyVisibility();
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        m_installedSynced.OnValueChanged -= HandleInstalledChanged;
+    }
+
+    private void HandleInstalledChanged(bool previous, bool current) => ApplyVisibility();
+
+    // 미설치 단말은 보이지도, 부딪히지도 않는다 — 사지 않은 물건이 본부에 서 있으면 혼란스럽고,
+    // 렌더러만 끄면 보이지 않는 벽이 남는다(콜라이더가 솔리드라 그대로 몸이 막힌다).
+    private void ApplyVisibility()
+    {
+        bool visible = IsInstalled;
+
+        foreach (Renderer renderer in m_renderers)
+        {
+            if (renderer != null)
+                renderer.enabled = visible;
+        }
+
+        foreach (Collider itemCollider in m_colliders)
+        {
+            if (itemCollider != null)
+                itemCollider.enabled = visible;
+        }
     }
 
     /// <summary>
@@ -62,6 +103,9 @@ public class SignalDecoder : NetworkBehaviour, IInteractable
         m_installed = installed;
         if (IsSpawned && IsServer)
             m_installedSynced.Value = installed;
+
+        // 서버·오프라인은 자기 화면도 여기서 맞춘다 — 오프라인(!IsSpawned)에는 변경 콜백이 아예 없다.
+        ApplyVisibility();
     }
 
     // ---- 상호작용 (E) ----

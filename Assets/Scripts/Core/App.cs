@@ -30,6 +30,7 @@ public class App : Singleton<App>
     private DirectoryManager m_directoryManager;
     private WrongfulArrestPenalty m_wrongfulArrestPenalty;
     private TeamFund m_teamFund;
+    private ShopPurchases m_shopPurchases;
     private FactionSymbolManager m_factionSymbolManager;
 
     // UI 매니저 (씬 전환 시 교체됨)
@@ -85,6 +86,7 @@ public class App : Singleton<App>
         public static AppearanceAssigner Appearance => Instance.m_appearanceAssigner;
         public static WrongfulArrestPenalty WrongfulArrestPenalty => Instance.m_wrongfulArrestPenalty;
         public static TeamFund TeamFund => Instance.m_teamFund;
+        public static ShopPurchases ShopPurchases => Instance.m_shopPurchases;
         public static DirectoryManager Directory => Instance.m_directoryManager;
         public static FactionSymbolManager FactionSymbol => Instance.m_factionSymbolManager;
     }

@@ -97,6 +97,7 @@ MonoBehaviour:
   m_heldRotationOffset: {x: 190, y: -80, z: 95}
   m_handGrip: 1
   m_targetOutlineColor: {r: 1, g: 0.85, b: 0.2, a: 1}
+  m_shopPrice: 7500
   m_range: 8
   m_originTolerance: 3
   m_cooldownSeconds: 5

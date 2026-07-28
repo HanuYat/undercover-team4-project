@@ -56,6 +56,12 @@ public abstract class ItemBase : ChanneledInteractionBehaviour
     [SerializeField]
     private Color m_targetOutlineColor = new Color(1f, 0.85f, 0.2f);
 
+    [Header("상점 (#182)")]
+    [Tooltip("상점 판매가. 0이면 비매품 — 기본 지급품(스캐너·밧줄·진압봉)은 건드리지 않는다")]
+    [Min(0)]
+    [SerializeField]
+    private int m_shopPrice;
+
     /// <summary>인벤토리·UI에 표시되는 아이템 이름.</summary>
     public LocalizedString ItemName => m_itemName;
 
@@ -79,6 +85,13 @@ public abstract class ItemBase : ChanneledInteractionBehaviour
 
     /// <summary>1인칭 손 손가락 프리셋. PlayerHandView가 장착 시 FP 손에 적용한다. (#265)</summary>
     public HandGrip HandGrip => m_handGrip;
+
+    /// <summary>
+    /// 상점 판매가 — 진열대(ShopStand)가 참조한 프리팹에서 읽는다. 0이면 비매품. (#182)
+    /// 상점 전용 ScriptableObject를 따로 두지 않는 이유: 표시 이름·아이콘·설명이 이미 여기 있어
+    /// 판매가만 얹으면 끝이고, SO를 만들면 그 필드를 복제하는 껍데기가 된다 (GDD 10-4 이탈 사유).
+    /// </summary>
+    public int ShopPrice => m_shopPrice;
 
     /// <summary>
     /// 이 아이템을 지금 저 대상에 사용할 수 있는지 — 조준 피드백(윤곽선) 판정용. (#184)
