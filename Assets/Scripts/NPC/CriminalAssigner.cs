@@ -38,7 +38,7 @@ public class CriminalAssigner : CommonManagerBase
     private int m_forgedCharCount = 1;
 
     [Header("현상금 (#395)")]
-    [Tooltip("진범 1명의 현상금 하한. 라운드 시작 배정 시점에 [하한, 상한]에서 뽑아 확정한다 — 판정 시점에 뽑으면 재검거 리롤이 가능해진다")]
+    [Tooltip("진범 1명의 현상금 하한. 라운드 시작 배정 시점에 [하한, 상한]에서 100원 단위로 뽑아 확정한다 — 판정 시점에 뽑으면 재검거 리롤이 가능해진다")]
     [Min(0)]
     [SerializeField]
     private int m_criminalBountyMin = 8000;
@@ -246,8 +246,8 @@ public class CriminalAssigner : CommonManagerBase
 
             // 현상금 확정 (#395) — 판정 시점이 아니라 여기서 뽑는다. ArrestJudge의 판정 우선순위와 같은
             // 순서로 정한다(진범 > 위조범 > 무고). 무고 시민은 오검거라 0원이다.
-            int bounty = isCriminal ? RollBounty(m_criminalBountyMin, m_criminalBountyMax)
-                : isForger ? RollBounty(m_forgeryBountyMin, m_forgeryBountyMax)
+            int bounty = isCriminal ? BountyRoll.Roll(m_criminalBountyMin, m_criminalBountyMax)
+                : isForger ? BountyRoll.Roll(m_forgeryBountyMin, m_forgeryBountyMax)
                 : 0;
             identity.AssignBounty(bounty);
             m_totalAssignedBounty += bounty;
@@ -336,14 +336,6 @@ public class CriminalAssigner : CommonManagerBase
         if (roll < compliantWeight + fleeWeight)
             return ReactionType.Flee;
         return ReactionType.Resist;
-    }
-
-    /// <summary>[min, max] 범위에서 현상금을 뽑는다(양 끝 포함). 상한이 하한보다 작게 설정돼도 하한을 보장한다. (#395)</summary>
-    private static int RollBounty(int min, int max)
-    {
-        if (max < min)
-            max = min;
-        return Random.Range(min, max + 1);
     }
 
     private static TEnum RandomEnum<TEnum>()

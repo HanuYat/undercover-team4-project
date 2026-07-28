@@ -56,7 +56,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     [SerializeField] private int m_maxSpawnAttempts = 8;
 
     [Header("경범죄 수익")]
-    [Tooltip("침입자를 제압·연행해 인계했을 때의 수익 하한 — 스폰 시점에 [하한, 상한]에서 뽑아 마커에 박는다 (#395)")]
+    [Tooltip("침입자를 제압·연행해 인계했을 때의 수익 하한 — 스폰 시점에 [하한, 상한]에서 100원 단위로 뽑아 마커에 박는다 (#395)")]
     [Min(0)]
     [SerializeField] private int m_intruderRewardMin = 500;
 
@@ -159,7 +159,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         // 오검거 페널티를 먹는다 — 대응에 성공한 쪽이 손해 보는 판정을 막는 것이 이 한 줄의 역할이다. (#261)
         // 수익은 스폰 시점에 확정한다 (#395) — 판정 시점에 뽑으면 재검거로 금액을 리롤할 수 있다
         m_intruder.gameObject.AddComponent<MisdemeanorOffender>().Reward =
-            Random.Range(m_intruderRewardMin, Mathf.Max(m_intruderRewardMin, m_intruderRewardMax) + 1);
+            BountyRoll.Roll(m_intruderRewardMin, m_intruderRewardMax);
 
         if (SuddenEventUtil.IsNetworkSessionActive)
             m_intruder.GetComponent<NetworkObject>().Spawn();

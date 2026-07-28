@@ -43,7 +43,7 @@ public class SpawnedNpcEvent : ISuddenEvent
     [SerializeField] private int m_maxSpawnAttempts = 8;
 
     [Header("경범죄 수익")]
-    [Tooltip("본부 인계 후 경범죄 판정 성공 시의 수익 하한 — 스폰 시점에 [하한, 상한]에서 뽑아 마커에 박는다 (#395)")]
+    [Tooltip("본부 인계 후 경범죄 판정 성공 시의 수익 하한 — 스폰 시점에 [하한, 상한]에서 100원 단위로 뽑아 마커에 박는다 (#395)")]
     [Min(0)]
     [SerializeField] private int m_pettyCrimeRewardMin = 500;
 
@@ -132,7 +132,7 @@ public class SpawnedNpcEvent : ISuddenEvent
         MisdemeanorOffender offender = m_npc.gameObject.AddComponent<MisdemeanorOffender>();
         // 수익은 스폰 시점에 확정한다 (#395) — 판정 시점에 뽑으면 재검거로 금액을 리롤할 수 있다.
         // 뽑은 값을 따로 들고 있는 이유는 아래 제압 로그가 실제 지급될 금액을 보여주기 위함이다.
-        m_rolledReward = Random.Range(m_pettyCrimeRewardMin, Mathf.Max(m_pettyCrimeRewardMin, m_pettyCrimeRewardMax) + 1);
+        m_rolledReward = BountyRoll.Roll(m_pettyCrimeRewardMin, m_pettyCrimeRewardMax);
         offender.Reward = m_rolledReward;
         offender.SetRiotBehavior(m_mode, m_maxLifetimeSeconds);
 
