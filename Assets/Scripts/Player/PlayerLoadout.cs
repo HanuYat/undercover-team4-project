@@ -109,12 +109,60 @@ public class PlayerLoadout : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
+        // 서버: 들고 있던 아이템도 함께 내린다. 아이템은 플레이어에 부모로 붙은 독립 NetworkObject라
+        // 플레이어만 디스폰하면 부모만 떨어져 나가고 아이템은 살아남는다 — 플레이어를 정리하는
+        // 씬(로비·타이틀)에서 원점에 뜬 채로 그대로 보인다. (#395)
+        if (IsServer)
+        {
+            DespawnHeldItems();
+        }
+
         if (IsOwner)
         {
             m_inputHandler.OnPreviousItem -= EquipPrevious;
             m_inputHandler.OnNextItem -= EquipNext;
             m_inputHandler.OnDropItem -= RequestDropEquipped;
             m_inputHandler.OnSelectSlot -= SelectSlot;
+        }
+    }
+
+    /// <summary>
+    /// 손에 든 아이템을 전부 디스폰한다 — 아이템의 수명을 플레이어와 묶는다. 서버 전용. (#395)
+    /// 월드에 버린 아이템은 대상이 아니다 — 이미 부모가 해제돼 이 밑에 없다.
+    /// </summary>
+    private void DespawnHeldItems()
+    {
+        // 세션이 통째로 내려가는 중이면 NGO가 알아서 정리한다 — 그 와중에 Despawn을 부르면 경고만 남는다
+        NetworkManager manager = NetworkManager.Singleton;
+        if (manager == null || !manager.IsListening)
+            return;
+
+        Transform parent = ItemParent;
+        if (parent == null)
+            return;
+
+        // 디스폰하면 자식 목록이 바뀌므로 먼저 모아 둔다 (BuildHeldItemRefs와 같은 열거 방식)
+        List<NetworkObject> held = new List<NetworkObject>();
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            ItemBase item = parent.GetChild(i).GetComponent<ItemBase>();
+            if (item != null && item.NetworkObject != null)
+            {
+                held.Add(item.NetworkObject);
+            }
+        }
+
+        foreach (NetworkObject item in held)
+        {
+            if (item != null && item.IsSpawned)
+            {
+                item.Despawn(destroy: true);
+            }
+        }
+
+        if (held.Count > 0)
+        {
+            Debug.Log($"[PlayerLoadout] 플레이어 정리와 함께 소지 아이템 {held.Count}개 디스폰");
         }
     }
 

@@ -45,6 +45,27 @@ public class CriminalAssigner : CommonManagerBase
     [SerializeField]
     private int m_forgedCharCount = 1;
 
+    [Header("현상금 (#395)")]
+    [Tooltip("진범 1명의 현상금 하한. 라운드 시작 배정 시점에 [하한, 상한]에서 100원 단위로 뽑아 확정한다 — 판정 시점에 뽑으면 재검거 리롤이 가능해진다")]
+    [Min(0)]
+    [SerializeField]
+    private int m_criminalBountyMin = 8000;
+
+    [Tooltip("진범 1명의 현상금 상한")]
+    [Min(0)]
+    [SerializeField]
+    private int m_criminalBountyMax = 15000;
+
+    [Tooltip("위조범 1명의 현상금 하한 (경범죄 취급 — GDD 9-1 기본 1,000 주변)")]
+    [Min(0)]
+    [SerializeField]
+    private int m_forgeryBountyMin = 500;
+
+    [Tooltip("위조범 1명의 현상금 상한")]
+    [Min(0)]
+    [SerializeField]
+    private int m_forgeryBountyMax = 2000;
+
     [Header("범인 검거 반응 가중치 (#76)")]
     [Tooltip("합이 1일 필요 없음 — 비율로 추첨한다. 범인은 도주/저항 성향이 높다")]
     [SerializeField]
@@ -102,6 +123,15 @@ public class CriminalAssigner : CommonManagerBase
     private readonly List<CitizenProfile> m_wantedProfiles = new List<CitizenProfile>();
 
     private readonly Dictionary<OfficialRecords.Faction, int> m_localRealIndices = new Dictionary<OfficialRecords.Faction, int>();
+
+    private int m_totalAssignedBounty;
+
+    /// <summary>
+    /// 이번 라운드에 배정된 현상금 총합 (#395) — 진범 + 위조범. 배정 전에는 0.
+    /// 라운드 목표 금액이 달성 가능한지 대조하는 기준이다(RoundManager). 돌발 이벤트로 나중에 스폰되는
+    /// 난동꾼의 수익은 여기에 포함되지 않는다 — 배정 시점엔 존재하지 않기 때문이다.
+    /// </summary>
+    public int TotalAssignedBounty => m_totalAssignedBounty;
 
     /// <summary>
     /// 이번 라운드의 예비 용의자 전원 — 공개된 수배와 미공개 대기분을 모두 포함한다. 배정 전에는 비어 있다. (#127 · #102)
@@ -165,6 +195,7 @@ public class CriminalAssigner : CommonManagerBase
 
         m_criminalNpcs.Clear();
         m_wantedProfiles.Clear();
+        m_totalAssignedBounty = 0;
 
         // 스캔 UI(#39) 전까지는 로그로 배정 결과를 확인한다
         var logBuilder = new System.Text.StringBuilder();
@@ -231,6 +262,17 @@ public class CriminalAssigner : CommonManagerBase
                 : RollReaction(m_citizenCompliantWeight, m_citizenFleeWeight, m_citizenResistWeight);
             identity.AssignReaction(reaction);
 
+            // 현상금 확정 (#395) — 판정 시점이 아니라 여기서 뽑는다. ArrestJudge의 판정 우선순위와 같은
+            // 순서로 정한다(진범 > 위조범 > 무고). 무고 시민은 오검거라 0원이다.
+            // 기준은 isSuspect가 아니라 isCriminal(지금 공개된 수배)이다 — 미공개 예비 용의자를 잡으면
+            // 오검거이거나(0원) 위조 검거라, 그 시점의 판정과 금액이 맞아야 한다. 승격되어 진범이 되는
+            // 순간의 현상금은 PromoteNext가 다시 배정한다 (#102 · #395).
+            int bounty = isCriminal ? BountyRoll.Roll(m_criminalBountyMin, m_criminalBountyMax)
+                : isForger ? BountyRoll.Roll(m_forgeryBountyMin, m_forgeryBountyMax)
+                : 0;
+            identity.AssignBounty(bounty);
+            m_totalAssignedBounty += bounty;
+
             // 미공개 예비 용의자도 목록에 담는다 — AppearanceAssigner가 이 목록으로 디코이와 몽타주를
             // 만들고, 승격(PromoteNext)도 여기서 다음 대상을 찾는다. 공개 여부는 IsCriminal이 가른다 (#102)
             if (isSuspect)
@@ -250,10 +292,14 @@ public class CriminalAssigner : CommonManagerBase
                 : forgedSymbol ? $"  [위조: 문양 {realIndex}→{profile.m_symbolIndexView}]"
                 : $"  [위조: {profile.CitizenName}→{profile.m_nameView}]";
 
+            string bountyTag = bounty > 0 ? $"  [현상금 {bounty}원]" : "";
+
             logBuilder.AppendLine(
-                $"  {profile.CitizenName} | {profile.m_typeView} | {profile.m_factionView}{roleTag}{forgeryTag}"
+                $"  {profile.CitizenName} | {profile.m_typeView} | {profile.m_factionView}{roleTag}{forgeryTag}{bountyTag}"
             );
         }
+
+        logBuilder.AppendLine($"  → 배정 현상금 총합 {m_totalAssignedBounty}원 (돌발 이벤트 수익 별도)");
 
         OnCriminalAssigned?.Invoke(m_criminalNpcs);
         Debug.Log(logBuilder.ToString());
@@ -328,20 +374,32 @@ public class CriminalAssigner : CommonManagerBase
         CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
         identity.SetCriminal(true);
 
+        // 오검거로 이미 한 번 판정된 대상일 수 있다 — 표식을 지워야 다시 잡아 인계했을 때
+        // '첫 인계'로 잡혀 검거 수가 정상 누적된다(IsFirstDelivery, #358). 탈옥 재검거(#231)가
+        // ClearDelivered를 부르는 것과 같은 이유다.
+        npc.ClearDelivered();
+
         // 예비 용의자는 시민 가중치(대부분 순응)로 뽑혀 있다 — 범인 가중치로 다시 뽑는다.
         // Reaction은 서버 전용이라 바꿔도 플레이어에게 티가 나지 않는다 (#102 설계 결정 6)
         identity.AssignReaction(RollReaction(m_compliantWeight, m_fleeWeight, m_resistWeight));
+
+        // 현상금도 진범 몫으로 다시 배정한다 (#395) — 대기 중에는 오검거/위조 기준 금액이 들어 있어,
+        // 그대로 두면 승격된 진범이 0원이나 소액으로 잡힌다. 재검거 리롤은 생기지 않는다: 승격 대상은
+        // IsCriminal이 꺼진 개체뿐이라(FindNextPromotable) 한 번 승격된 NPC는 다시 이 경로를 타지 않는다.
+        int promotedBounty = BountyRoll.Roll(m_criminalBountyMin, m_criminalBountyMax);
+        m_totalAssignedBounty += promotedBounty - identity.Bounty; // 대기 시 금액을 빼고 새 금액을 더한다
+        identity.AssignBounty(promotedBounty);
 
         // 라운드 시작에 보관해 둔 몽타주를 그대로 발행한다 — WantedListManager가 이 이벤트로
         // NetworkList 추가와 TotalWanted++ 를 한다(기존 경로 재사용)
         appearance.RevealMontage(npc);
 
         CitizenProfile profile = identity.Profile;
-        Debug.Log($"[제보 전화] 수배 공개: {(profile != null ? profile.CitizenName : npc.name)} ({identity.Reaction})");
+        Debug.Log($"[제보 전화] 수배 공개: {(profile != null ? profile.CitizenName : npc.name)} ({identity.Reaction}, 현상금 {promotedBounty}원)");
         return true;
     }
 
-    /// <summary>미공개 예비 용의자인가 — 살아 있고, 아직 공개 전이고, 판정이 끝나지 않았다. (#102)</summary>
+    /// <summary>미공개 예비 용의자인가 — 살아 있고, 아직 공개 전이고, 지금 잡을 수 있다. (#102 · #392)</summary>
     private static bool IsPending(NpcController npc)
     {
         // 디스폰·파괴된 대상은 Unity null로 잡힌다 — IsSpawned는 오프라인에서 항상 false라 쓸 수 없다
@@ -352,8 +410,16 @@ public class CriminalAssigner : CommonManagerBase
         if (identity == null || identity.IsCriminal)
             return false;
 
-        // 미공개 상태로 오검거되어 판정이 끝난 대상 — 그 몽타주를 등록하면 잡을 대상이 없다 (#230)
-        return !npc.IsDelivered;
+        // 유치장에 수감된 대상만 뺀다 — 미공개 상태에서 위조범으로 판정돼 갇힌 개체다. 수배로 올려도
+        // 본부 안에 있어 찾을 것이 없고, 이미 위조 현상금으로 정산에 계상돼 있다.
+        //
+        // 오검거로 판정된 대상은 뺐다가 되살렸다 (#392). 예전에는 IsDelivered를 영구 제외했는데
+        // 그 근거("판정이 끝난 대상은 아무도 못 잡는 유령 항목이 된다", #230)가 더 이상 맞지 않는다:
+        // 오검거당한 시민은 죽지 않고 원한 구역(Detained)에서 대기하다 추격대(Chasing)로 나가며,
+        // 재판정도 허용된다(#358 — 다시 끌어와 인계하면 판정된다). 즉 잡을 수 있는 대상인데 승격만
+        // 막고 있었고, 그 탓에 미공개 용의자를 오검거로 태울 때마다 풀이 영구히 줄어 제보 전화가
+        // 조용히 죽었다.
+        return npc.CurrentState != NpcState.Jailed;
     }
 
     /// <summary>지금 당장 승격시킬 수 있는 첫 후보. 없으면 null. (#102 설계 §3 가드)</summary>

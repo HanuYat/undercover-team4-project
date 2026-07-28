@@ -28,6 +28,10 @@ public class JailZone : NetworkBehaviour
     // 오프라인(네트워크 없이 Play) 폴백용 로컬 값 — NpcController의 게이지 이중 구조와 동일
     private int m_localInmateCount;
 
+    // 현재 수감자들의 현상금 합 — 라운드 목표 금액(#395)의 라이브 진행도. 인원 수와 같은 이중 구조.
+    private readonly NetworkVariable<int> m_bountyTotal = new NetworkVariable<int>(0);
+    private int m_localBountyTotal;
+
     // 이미 수용된 NPC — 중복 카운트 방어(같은 대상이 두 번 판정·통보되거나 재수용되는 경우)
     private readonly HashSet<NpcController> m_inmates = new HashSet<NpcController>();
 
@@ -62,6 +66,20 @@ public class JailZone : NetworkBehaviour
     /// <summary>수용 인원 변경 — 서버·클라이언트 모든 피어에서 발생한다. 본부 UI(별도 이슈)가 구독.</summary>
     public event Action<int> OnInmateCountChanged;
 
+    /// <summary>
+    /// 지금 유치장에 잡아둔 대상들의 현상금 합 — 라운드 목표 금액(#395)의 진행도다.
+    /// 라운드 종료 정산액(<see cref="TallySettlement"/>의 total)과 같은 레코드에서 나오므로
+    /// 진행 중에 보이던 금액과 최종 정산이 어긋나지 않는다. 탈옥으로 방출되면 함께 줄어든다
+    /// ("끝까지 데리고 있어야 인정"). 세션 중에는 동기화된 값이라 클라이언트에서도 읽을 수 있다.
+    ///
+    /// 팀 자금(TeamFund)과 혼동하지 말 것 — 그쪽은 세션 이월 잔액이라 상점 구매로 줄고
+    /// 이전 라운드 몫이 섞여 있어 이번 라운드 진행도가 아니다.
+    /// </summary>
+    public int BountyTotal => IsSpawned ? m_bountyTotal.Value : m_localBountyTotal;
+
+    /// <summary>누적 현상금 변경 — 목표 진행 HUD·라운드 종료 버튼(#395)이 구독한다. 전 피어에서 발생.</summary>
+    public event Action<int> OnBountyTotalChanged;
+
     private void Awake()
     {
         // 자물쇠는 같은 오브젝트에 두는 것이 기본 — 인스펙터로 따로 지정할 수도 있다
@@ -72,16 +90,23 @@ public class JailZone : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         m_inmateCount.OnValueChanged += HandleInmateCountChanged;
+        m_bountyTotal.OnValueChanged += HandleBountyTotalChanged;
     }
 
     public override void OnNetworkDespawn()
     {
         m_inmateCount.OnValueChanged -= HandleInmateCountChanged;
+        m_bountyTotal.OnValueChanged -= HandleBountyTotalChanged;
     }
 
     private void HandleInmateCountChanged(int previous, int current)
     {
         OnInmateCountChanged?.Invoke(current);
+    }
+
+    private void HandleBountyTotalChanged(int previous, int current)
+    {
+        OnBountyTotalChanged?.Invoke(current);
     }
 
     /// <summary>
@@ -127,7 +152,8 @@ public class JailZone : NetworkBehaviour
         // 진범 여부를 수감 시점에 판정해 박제한다 — 정산 때 살아 있는 NPC를 다시 안 봐도 되게 (#358).
         m_records[npc] = new InmateRecord(bounty, IsCriminalInmate(npc)); // 재수용 시 최신 값으로 갱신
         SetInmateCount(m_inmates.Count);
-        Debug.Log($"[유치장] 수용: {npc.name} — 현재 {InmateCount}명");
+        RefreshBountyTotal();
+        Debug.Log($"[유치장] 수용: {npc.name} — 현재 {InmateCount}명, 누적 현상금 {BountyTotal}원");
 
         // 탈출 이벤트(#231)로 열린 자물쇠는 새 수감자를 받는 순간 자동으로 다시 잠긴다 —
         // 플레이어가 따로 잠글 것이 없으면서도 연속 발동은 자연히 막힌다.
@@ -153,7 +179,8 @@ public class JailZone : NetworkBehaviour
 
         m_records.Remove(npc); // 방출된 수감자는 정산에서 빠진다 — 탈옥해 유치장에 없으면 보상 없음 (#340)
         SetInmateCount(m_inmates.Count);
-        Debug.Log($"[유치장] 수용 해제: {npc.name} — 현재 {InmateCount}명");
+        RefreshBountyTotal();
+        Debug.Log($"[유치장] 수용 해제: {npc.name} — 현재 {InmateCount}명, 누적 현상금 {BountyTotal}원");
     }
 
     /// <summary>
@@ -183,6 +210,22 @@ public class JailZone : NetworkBehaviour
     {
         CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
         return identity != null && identity.IsCriminal;
+    }
+
+    // 레코드가 바뀔 때마다 합을 다시 낸다 — 수감자 수가 많지 않아 매번 합산해도 부담이 없고,
+    // 재수용으로 레코드가 통째로 교체되는 경우(Admit의 '최신 값으로 갱신')에 증분 갱신보다 안전하다.
+    private void RefreshBountyTotal()
+    {
+        int total = 0;
+        foreach (InmateRecord record in m_records.Values)
+            total += record.Bounty;
+
+        m_localBountyTotal = total;
+
+        if (IsSpawned && IsServer)
+            m_bountyTotal.Value = total; // OnValueChanged를 거쳐 모든 피어에서 이벤트 발생
+        else if (!IsSpawned)
+            OnBountyTotalChanged?.Invoke(total);
     }
 
     // 서버 진실값과 동기화 변수에 함께 기록한다 — 오프라인에서는 NetworkVariable에 쓰지 않고

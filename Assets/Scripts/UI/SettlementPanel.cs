@@ -86,9 +86,14 @@ public class SettlementPanel : PanelBase
         base.OnDestroy();
     }
 
+    // 이번 정산의 도착지 — 성공은 상점, 실패는 로비(새 판). RoundEndResetter의 분기와 맞춘다 (#395).
+    private string m_returnLabel = "상점";
+
     /// <summary>정산 데이터를 채우고 패널을 연다. 3줄 텍스트는 지연 후 등장한다.</summary>
     public void Show(SettlementData data)
     {
+        m_returnLabel = data.Result == RoundResult.Success ? "상점" : "로비";
+
         if (m_resultText != null)
             m_resultText.text = data.Result == RoundResult.Success ? "라운드 성공!" : "게임 오버";
 
@@ -96,9 +101,11 @@ public class SettlementPanel : PanelBase
             m_reasonText.text = ReasonToText(data.Reason);
 
         if (m_fundText != null)
-            // 자금 잔액·증감 + 이번 라운드 유치장 정산 내역(#340). 증감(FundDelta)이 곧 이번 라운드 정산액이다.
+            // 할당량은 경찰서 납부분이라 총 수익에서 떼고 남은 초과분만 팀 몫이 된다 (#395).
+            // 뺄셈을 그대로 보여줘야 "왜 이만큼밖에 안 들어왔지"가 생기지 않는다.
             m_fundText.text =
-                $"팀 자금  {data.FundBalance:N0}원  ({data.FundDelta:+#,##0;-#,##0;0})"
+                $"수익 {data.GrossEarned:N0}원  -  할당량 {data.TargetFund:N0}원  =  팀 몫 {data.FundDelta:N0}원"
+                + $"\n팀 자금  {data.FundBalance:N0}원"
                 + $"\n수감 정산: 현상수배 {data.CriminalCount} · 경범죄 {data.MisdemeanorCount}";
 
         if (m_topOffenderText != null)
@@ -133,11 +140,11 @@ public class SettlementPanel : PanelBase
             for (int sec = Mathf.CeilToInt(m_countdownSeconds); sec > 0; sec--)
             {
                 if (m_countdownText != null)
-                    m_countdownText.text = $"상점 복귀까지 {sec}초";
+                    m_countdownText.text = $"{m_returnLabel} 복귀까지 {sec}초";
                 await UniTask.Delay(TimeSpan.FromSeconds(1), ignoreTimeScale: true, cancellationToken: ct);
             }
             if (m_countdownText != null)
-                m_countdownText.text = "상점 복귀까지 0초";
+                m_countdownText.text = $"{m_returnLabel} 복귀까지 0초";
         }
         catch (OperationCanceledException)
         {
@@ -150,8 +157,9 @@ public class SettlementPanel : PanelBase
     {
         return reason switch
         {
-            RoundEndReason.QuotaMet => "검거 할당량 달성",
-            RoundEndReason.TimeOver => "제한시간 초과 — 검거 할당량 미달",
+            RoundEndReason.ManualEnd => "수사 종료 — 목표 금액 달성",
+            RoundEndReason.QuotaMet => "제한시간 종료 — 목표 금액 달성",
+            RoundEndReason.TimeOver => "제한시간 초과 — 목표 금액 미달",
             RoundEndReason.AllPlayersDown => "플레이어 전원 다운",
             _ => string.Empty,
         };
