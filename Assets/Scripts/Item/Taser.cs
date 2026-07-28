@@ -38,6 +38,12 @@ public class Taser : ItemBase, IAimedWeapon
     [SerializeField]
     private float m_cooldownSeconds = 5f;
 
+    // 아군 오사(#252) — 동료를 맞췄을 때의 기절 시간. NPC 기절(2.67초)과 따로 둔다: 플레이어는 구조 없이
+    // 스스로 일어나므로 '쓰러져 있는 동안 아무것도 못 한다'가 곧 대가이고, 그 길이를 따로 잡아야 한다.
+    [Tooltip("동료를 맞췄을 때 기절 시간(초). 쿨다운(m_cooldownSeconds)보다 짧게 둘 것 — 같거나 길면 일어나는 순간 다시 쏴서 한 명을 영구히 묶을 수 있다")]
+    [SerializeField]
+    private float m_playerStunSeconds = 5f;
+
     // 다음 발사가 가능해지는 시각. 판정자가 서버 하나뿐이라 동기화하지 않는다 (서버 전용 상태).
     // 아이템 인스턴스에 붙어 있으므로 버리고 다시 주워도 충전 상태가 따라간다.
     private float m_nextFireTime;
@@ -126,7 +132,10 @@ public class Taser : ItemBase, IAimedWeapon
         m_nextFireTime = Time.time + m_cooldownSeconds;
 
         // 명중 판정은 EvaluateAim이 단일 규칙으로 수행한다 — 클라 크로스헤어(#328)와 공유해 색↔명중을 일치시킨다.
-        switch (EvaluateAim(origin, direction, out NpcController target, out RaycastHit hit))
+        switch (
+            EvaluateAim(
+                origin, direction, out NpcController target,
+                out PlayerIncapacitation playerTarget, out RaycastHit hit))
         {
             case AimResult.NoHit:
                 NotifyOwner("테이저 빗나감 — 허공");
@@ -135,8 +144,20 @@ public class Taser : ItemBase, IAimedWeapon
                 NotifyOwner($"테이저 빗나감 — {hit.collider.name}에 맞음");
                 return;
             case AimResult.TargetInvalidState:
-                NotifyOwner($"테이저 무효 — 이미 기절한 대상 ({target.name})");
+                NotifyOwner(
+                    playerTarget != null
+                        ? $"테이저 무효 — 이미 무력화된 동료 ({playerTarget.name})"
+                        : $"테이저 무효 — 이미 기절한 대상 ({target.name})");
                 return;
+        }
+
+        // 동료를 맞췄다 — 아군 오사 (#252). NPC와 달리 위협 개념이 없다(도주할 상대가 아니다).
+        // 구조 없이 시간이 지나면 스스로 일어나고, 전멸 판정에도 잡히지 않는다 (IncapacitationCause.Stun).
+        if (playerTarget != null)
+        {
+            playerTarget.ServerStun(m_playerStunSeconds);
+            NotifyOwner($"테이저 명중 — 동료 오사! {playerTarget.name} ({m_playerStunSeconds}초 기절)");
+            return;
         }
 
         // 쏜 사람을 위협으로 넘긴다 — 기절이 풀리면 이 사람에게서 도망친다 (#269)
@@ -154,9 +175,15 @@ public class Taser : ItemBase, IAimedWeapon
     /// 서버 사격 판정(ServerFire)과 오너 크로스헤어 색(#328)이 이 한 규칙을 공유한다.
     /// 마스크 ~0 + 트리거 무시 — "먼저 맞은 것"이 결과라 벽 엄폐가 성립한다.
     /// </summary>
-    private AimResult EvaluateAim(Vector3 origin, Vector3 direction, out NpcController target, out RaycastHit hit)
+    private AimResult EvaluateAim(
+        Vector3 origin,
+        Vector3 direction,
+        out NpcController target,
+        out PlayerIncapacitation playerTarget,
+        out RaycastHit hit)
     {
         target = null;
+        playerTarget = null;
         hit = default;
 
         if (direction.sqrMagnitude < 0.0001f)
@@ -165,11 +192,11 @@ public class Taser : ItemBase, IAimedWeapon
         if (!Physics.Raycast(origin, direction.normalized, out hit, m_range, ~0, QueryTriggerInteraction.Ignore))
             return AimResult.NoHit;
 
-        // 콜라이더가 NPC 루트의 자식일 수 있으므로 부모까지 탐색한다 (Handcuffs.ResolveTarget과 동일 관례).
-        // 벽·소품·플레이어를 맞췄으면 그대로 빗나감이다.
+        // 콜라이더가 루트의 자식일 수 있으므로 부모까지 탐색한다 (Handcuffs.ResolveTarget과 동일 관례).
+        // 벽·소품을 맞췄으면 그대로 빗나감이고, 동료를 맞췄으면 아군 오사다 (#252).
         NpcController npc = hit.collider.GetComponentInParent<NpcController>();
         if (npc == null)
-            return AimResult.HitNonTarget;
+            return EvaluatePlayerAim(hit, out playerTarget);
 
         // 상태 게이트는 사라졌다 — 스턴이 오버레이가 되면서 전 상태에 걸린다 (#292).
         // 확보·페널티 상태도 3초 얼었다가 원래 하던 일을 그대로 재개하므로 막을 이유가 없다.
@@ -184,12 +211,32 @@ public class Taser : ItemBase, IAimedWeapon
         return AimResult.ValidTarget;
     }
 
+    // 동료 명중 판정 (#252). 소지자 자신은 대상이 아니다 — 카메라 원점이 자기 캡슐 안이라 보통 안 맞지만,
+    // 앉기·넉백으로 원점이 몸 밖으로 나가는 순간 자기를 쏠 수 있어 명시적으로 막는다.
+    private AimResult EvaluatePlayerAim(RaycastHit hit, out PlayerIncapacitation playerTarget)
+    {
+        playerTarget = hit.collider.GetComponentInParent<PlayerIncapacitation>();
+        if (playerTarget == null)
+            return AimResult.HitNonTarget;
+
+        if (playerTarget == GetComponentInParent<PlayerIncapacitation>())
+        {
+            playerTarget = null;
+            return AimResult.HitNonTarget; // 자기 자신
+        }
+
+        // 이미 무력화된 동료는 무효 — 다운을 기절로 덮어써 구조 대상에서 빼버리면 안 된다
+        // (ServerStun도 같은 가드를 갖지만, 여기서 걸러야 탄만 쓰고 '명중'이 뜨지 않는다)
+        return playerTarget.IsIncapacitated ? AimResult.TargetInvalidState : AimResult.ValidTarget;
+    }
+
     /// <summary>
-    /// 조준선이 스턴 가능한 NPC에 닿는지 — 오너 크로스헤어 색 예측용(#328). 서버 판정과 동일 규칙이다.
+    /// 조준선이 스턴 가능한 대상(NPC·동료)에 닿는지 — 오너 크로스헤어 색 예측용(#328). 서버 판정과 동일 규칙이다.
+    /// 동료를 겨눠도 켜진다 — 쏘면 실제로 맞으므로, 오사를 피하려면 그게 보여야 한다 (#252).
     /// 로컬 물리로 매 프레임 호출해도 되도록 순수 조회다(원점 검증·쿨다운과 무관).
     /// </summary>
     public bool HasValidAimTarget(Vector3 origin, Vector3 direction)
-        => EvaluateAim(origin, direction, out _, out _) == AimResult.ValidTarget;
+        => EvaluateAim(origin, direction, out _, out _, out _) == AimResult.ValidTarget;
 
     /// <summary>
     /// 클라가 보낸 조준 원점이 서버가 아는 이 아이템 소지자 위치 근처인지 — 원점 위조 방어.

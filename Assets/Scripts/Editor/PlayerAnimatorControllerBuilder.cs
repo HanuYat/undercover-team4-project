@@ -31,6 +31,14 @@ public static class PlayerAnimatorControllerBuilder
     private const string k_combatFolder =
         "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Combat";
 
+    // 기절(테이저 아군 오사) 상태 — 다운과 달리 스스로 일어나므로 눈으로 구분되게 다른 클립을 쓴다. (#252)
+    // Stun01은 NPC 기절이 쓰는 것과 같은 클립(2.67초 루프)이라 "저 자세=기절"이 게임 전체에서 통일된다.
+    // 기상은 다운과 같은 Knockdown01-StandUp 상태를 재사용한다 — 자세가 그대로 이어진다.
+    private const string k_stunParam = "Stunned";
+    private const string k_stunState = "Stun";
+    private const string k_stunClip =
+        "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Combat/HumanM@Stun01.fbx";
+
     // 앉기 상태 — Crouch(bool)=true면 서기 블렌드 트리에서 앉기 블렌드 트리로 짧게 전환한다. (#236)
     // 서기↔앉기 전환 클립은 에셋에 없어(Crouch는 Idle/이동만 제공) 전환 클립 대신 짧은 블렌딩으로 처리한다.
     private const string k_crouchParam = "Crouch";
@@ -164,6 +172,7 @@ public static class PlayerAnimatorControllerBuilder
         BlendTree crouchTree = SetupCrouchState(controller); // 앉기 상태 추가/갱신 (#236) — 다운 전환보다 먼저
         BlendTree airCrouchTree = SetupJumpStates(controller); // 점프 상태 머신 추가/갱신 (#189) — 다운 전환보다 먼저
         SetupDownStates(controller); // 다운(무력화) 상태 머신 추가/갱신 (#105)
+        SetupStunStates(controller); // 기절 상태 추가/갱신 — StandUp을 재사용하므로 다운 뒤에 (#252)
         SetupAttackLayer(controller); // 타격 상체 레이어 추가/갱신 (#217) — Base Layer가 아닌 레이어 1
 
         EditorUtility.SetDirty(blendTree);
@@ -181,7 +190,7 @@ public static class PlayerAnimatorControllerBuilder
         Debug.Log(
             $"[PlayerAnimatorControllerBuilder] {(isNew ? "생성" : "갱신")} 완료: {k_outputPath} "
                 + $"(Idle 중앙 / Walk 반경 {PlayerAnimationDriver.k_walkParam} 8방향 / "
-                + $"Run 반경 {PlayerAnimationDriver.k_runParam} 8방향, 총 17모션 + 다운 3상태 "
+                + $"Run 반경 {PlayerAnimationDriver.k_runParam} 8방향, 총 17모션 + 다운 3상태 + 기절 1상태 "
                 + $"+ 앉기 9모션 + 점프 3상태(공중 웅크림 9모션) + 타격 상체 레이어 1)"
         );
 
@@ -708,6 +717,91 @@ public static class PlayerAnimatorControllerBuilder
             toLocomotion.hasExitTime = true;
             toLocomotion.exitTime = 0.9f;
             toLocomotion.duration = 0.1f;
+        }
+    }
+
+
+    // 기절 상태 머신 — Stun01(루프) 한 상태로 끝나고, 기상은 다운의 StandUp 상태를 재사용한다. (#252)
+    // SetupDownStates가 StandUp을 다시 만들므로 반드시 그 뒤에 호출해야 한다.
+    private static void SetupStunStates(AnimatorController controller)
+    {
+        AnimationClip stun = LoadClip(k_stunClip);
+        if (stun == null)
+            return;
+
+        EnsureBoolParameter(controller, k_stunParam);
+
+        AnimatorStateMachine stateMachine = controller.layers[0].stateMachine;
+        RemoveStunStates(stateMachine); // 재실행 시 중복 방지
+
+        AnimatorState locomotion = FindState(stateMachine, k_stateName);
+        AnimatorState standUp = FindState(stateMachine, k_standUpState);
+        AnimatorState stunState = stateMachine.AddState(k_stunState);
+        stunState.motion = stun;
+
+        // 어느 자세에서 맞아도 기절로 들어간다 — 출발 집합은 다운과 같다(서기·앉기·공중).
+        AnimatorState[] sources =
+        {
+            locomotion,
+            FindState(stateMachine, k_crouchState),
+            FindState(stateMachine, k_jumpBeginState),
+            FindState(stateMachine, k_jumpAirState),
+            FindState(stateMachine, k_jumpAirCrouchState),
+        };
+        foreach (AnimatorState source in sources)
+        {
+            if (source == null)
+                continue;
+
+            AnimatorStateTransition toStun = source.AddTransition(stunState);
+            toStun.hasExitTime = false;
+            toStun.duration = 0.1f;
+            toStun.AddCondition(AnimatorConditionMode.If, 0f, k_stunParam);
+        }
+
+        // Stun → StandUp : 기절이 풀리면(Stunned=false) 스스로 일어난다 — 구조를 기다리는 다운과 달리
+        // 서버 타이머가 시간이 되면 알아서 풀어 준다(PlayerIncapacitation.ServerStun).
+        // StandUp → Locomotion 전환은 SetupDownStates가 이미 만들어 둔 것을 그대로 탄다.
+        AnimatorState standUpTarget = standUp != null ? standUp : locomotion;
+        if (standUpTarget != null)
+        {
+            AnimatorStateTransition toStandUp = stunState.AddTransition(standUpTarget);
+            toStandUp.hasExitTime = false;
+            toStandUp.duration = 0.1f;
+            toStandUp.AddCondition(AnimatorConditionMode.IfNot, 0f, k_stunParam);
+        }
+    }
+
+    // 기절 상태와 그 상태로 향하는 전환을 제거한다 (RemoveDownStates와 같은 방식).
+    private static void RemoveStunStates(AnimatorStateMachine stateMachine)
+    {
+        foreach (ChildAnimatorState child in stateMachine.states)
+        {
+            var toRemove = new System.Collections.Generic.List<AnimatorStateTransition>();
+            foreach (AnimatorStateTransition transition in child.state.transitions)
+            {
+                if (
+                    transition.destinationState != null
+                    && transition.destinationState.name == k_stunState
+                )
+                {
+                    toRemove.Add(transition);
+                }
+            }
+            foreach (AnimatorStateTransition transition in toRemove)
+            {
+                child.state.RemoveTransition(transition);
+            }
+        }
+
+        // 기절 상태 자체 제거 (하나뿐이라 찾으면 끝낸다 — 컬렉션이 바뀌므로 계속 돌지 않는다)
+        foreach (ChildAnimatorState child in stateMachine.states)
+        {
+            if (child.state.name == k_stunState)
+            {
+                stateMachine.RemoveState(child.state);
+                return;
+            }
         }
     }
 

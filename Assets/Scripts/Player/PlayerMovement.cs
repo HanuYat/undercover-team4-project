@@ -58,6 +58,16 @@ public class PlayerMovement : NetworkBehaviour
     [Tooltip("서기↔다운 시점 전환 보간 속도")]
     [SerializeField] private float m_camPoseLerpSpeed = 8f;
 
+    // 쓰러진 동안에도 주변을 볼 수 있게 시야만 돌린다 (#252) — 몸은 누운 채 그대로다.
+    [Tooltip("쓰러진 동안(다운·기절) 시야를 좌우로 돌릴 수 있는 범위(±도). 몸을 돌리지 않으므로 목이 꺾여 보이지 않을 만큼만 준다")]
+    [SerializeField] private float m_downYawRange = 100f;
+
+    [Tooltip("쓰러진 동안 시야 피치 하한(음수=위). 바닥에 누워 있으니 위로는 넉넉히 열어 둔다")]
+    [SerializeField] private float m_downMinPitch = -80f;
+
+    [Tooltip("쓰러진 동안 시야 피치 상한(양수=아래). 아래로는 바닥밖에 없어 좁게 잡는다")]
+    [SerializeField] private float m_downMaxPitch = 20f;
+
     // 서버가 Connection Approval에서 지정한 스폰 포즈. 프리팹의 NetworkTransform이 Owner 권한이라,
     // 씬 동기화를 거쳐 접속하면 오너 로컬 인스턴스가 프리팹 원점에 생성된 채 권한을 잡고 원점
     // 위치를 역전파해 스폰 위치를 덮어쓴다 — 오너가 이 값을 읽어 스스로 스폰 포즈로 이동해 바로잡는다.
@@ -77,6 +87,8 @@ public class PlayerMovement : NetworkBehaviour
     private float m_standCamHeight; // 평소(서기) 카메라 높이 — 프리팹 초기값에서 캡처 (#105)
     private float m_camCrouchDrop; // 시점에 실제로 반영 중인 앉기 하강량 — 공중에서는 얼린다 (#189)
     private float m_downCamBlend; // 서기 시점(0) ↔ 다운 시점(1) 보간 진행도 (#105)
+    private float m_downYaw;      // 쓰러진 동안 누적한 시야 좌우 각도 — 몸 회전이 아니라 카메라 로컬 (#252)
+    private bool m_downLookTaken; // 쓰러진 뒤 플레이어가 시선을 직접 움직였는가 — 그 순간부터 강제 피치를 놓는다
     private float m_verticalVelocity;
     private Vector3 m_knockbackVelocity; // 외력으로 밀려나는 수평 속도 — 매 프레임 감쇠 (#232 폭발 넉백)
     private bool m_ignoreRoundEndFreeze; // 정산 화면을 닫은 로컬 플레이어는 라운드 종료 freeze를 무시하고 움직인다 (#107)
@@ -335,9 +347,9 @@ public class PlayerMovement : NetworkBehaviour
 
     private void HandleLook()
     {
-        // 다운 중·라운드 종료 시 시점 회전 차단 — 카메라 적용은 UpdateCameraPose가 담당.
-        // 커서가 풀려 있을 때도 같다 — 마우스 이동이 화면을 돌리면 안 된다 (#352).
-        if (IsMovementLocked || CursorLock.IsUnlocked)
+        // 라운드 종료 freeze·커서 해제 시엔 시점 회전을 막는다 — 마우스 이동이 화면을 돌리면 안 된다 (#352).
+        // 쓰러진 동안(다운·기절)은 열어 둔다 (#252) — 몸은 못 움직여도 주변은 볼 수 있어야 한다.
+        if (IsRoundOver || CursorLock.IsUnlocked)
         {
             m_smoothedLook = Vector2.zero; // 재개 시 잠긴 동안의 스무딩 잔여값으로 튀지 않도록 초기화 (#216)
             return;
@@ -349,6 +361,20 @@ public class PlayerMovement : NetworkBehaviour
         // 감쇠 계수 0이면 원시 입력을 그대로 적용(스무딩 없음). (#216)
         float t = m_lookSmoothing <= 0f ? 1f : 1f - Mathf.Exp(-m_lookSmoothing * Time.deltaTime);
         m_smoothedLook = Vector2.Lerp(m_smoothedLook, look, t);
+
+        // 쓰러져 있으면 몸을 돌리지 않는다 (#252) — transform을 돌리면 누운 캐릭터가 바닥에서
+        // 제자리 회전하는 그림이 되고, 그건 다른 플레이어 화면에도 그대로 보인다.
+        // 좌우는 카메라 로컬 각도에 누적하고(범위 제한), 위아래는 누운 자세용 범위로 잡는다.
+        if (IsIncapacitated)
+        {
+            if (m_smoothedLook.sqrMagnitude > 0.0001f)
+                m_downLookTaken = true; // 이 순간부터 시선은 플레이어 것 — 바닥 시점 강제를 놓는다
+
+            m_downYaw = Mathf.Clamp(
+                m_downYaw + m_smoothedLook.x, -m_downYawRange, m_downYawRange);
+            m_pitch = Mathf.Clamp(m_pitch - m_smoothedLook.y, m_downMinPitch, m_downMaxPitch);
+            return;
+        }
 
         transform.Rotate(Vector3.up * m_smoothedLook.x);
 
@@ -394,13 +420,23 @@ public class PlayerMovement : NetworkBehaviour
         localPos.y = Mathf.Lerp(uprightHeight, m_downCamHeight, m_downCamBlend);
         playerCamera.transform.localPosition = localPos;
 
-        // 다운 중엔 시선 입력이 멈추므로(HandleLook 차단) 피치를 바닥 시점으로 눕힌다.
-        // (m_pitch를 함께 옮겨두면 구조 후에도 그 각도에서 자연스럽게 이어진다)
-        if (downed)
+        // 쓰러지는 동안 피치를 바닥 시점으로 눕힌다 — 단 플레이어가 마우스를 움직인 뒤에는 놓는다 (#252).
+        // 계속 강제하면 올려다본 각도가 매 프레임 되돌아가 시야 조작이 먹지 않는다.
+        if (downed && !m_downLookTaken)
         {
             m_pitch = Mathf.Lerp(m_pitch, m_downCamPitch, lerp);
         }
-        playerCamera.transform.localEulerAngles = new Vector3(m_pitch, 0f, 0f);
+
+        // 일어나면 시야 좌우 각도를 0으로 되돌린다 — 몸을 그 방향으로 돌리지는 않는다.
+        // 기상 모션이 정해진 방향으로 일어나므로 몸을 순간 회전시키면 모션과 어긋난다.
+        if (!downed)
+        {
+            m_downYaw = Mathf.Lerp(m_downYaw, 0f, lerp);
+            m_downLookTaken = false;
+            m_pitch = Mathf.Clamp(m_pitch, m_minPitch, m_maxPitch); // 누운 자세용 범위에서 서기 범위로 복귀
+        }
+
+        playerCamera.transform.localEulerAngles = new Vector3(m_pitch, m_downYaw, 0f);
     }
 
     private void HandleMove()

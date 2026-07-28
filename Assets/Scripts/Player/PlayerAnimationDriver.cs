@@ -46,6 +46,7 @@ public class PlayerAnimationDriver : MonoBehaviour
     private static readonly int s_moveXHash = Animator.StringToHash("MoveX");
     private static readonly int s_moveZHash = Animator.StringToHash("MoveZ");
     private static readonly int s_downHash = Animator.StringToHash("Down"); // 다운(무력화) 상태 머신 구동 (#105)
+    private static readonly int s_stunnedHash = Animator.StringToHash("Stunned"); // 기절 상태 구동 (#252)
     private static readonly int s_crouchHash = Animator.StringToHash("Crouch"); // 서기↔앉기 상태 전환 (#236)
     private static readonly int s_airborneHash = Animator.StringToHash("Airborne"); // 점프 상태 머신 구동 (#189)
     private static readonly int s_attackHash = Animator.StringToHash("Attack"); // 타격 상체 레이어 트리거 (#217)
@@ -116,11 +117,17 @@ public class PlayerAnimationDriver : MonoBehaviour
         if (m_animator == null)
             return;
 
-        // 다운(무력화) 상태를 애니메이터에 반영 — 모든 인스턴스가 IsIncapacitated(동기화값)를 폴링해
-        // Down 상태 머신(Knockdown Fall→Ground→StandUp)을 구동하므로 원격 뷰도 동일하게 재생된다.
+        // 다운(무력화) 상태를 애니메이터에 반영 — 모든 인스턴스가 동기화값을 폴링해 상태 머신을
+        // 구동하므로 원격 뷰도 동일하게 재생된다.
+        //
+        // 기절은 다운과 다른 모션을 쓴다 (#252) — 같은 무력화라도 기절은 스스로 일어나므로,
+        // 구조하러 달려갈 대상인지 눈으로 구분돼야 한다. 두 bool이 동시에 켜지지 않게 갈라 준다
+        // (켜지면 어느 전환이 먼저 잡히는지에 따라 모션이 갈려 재현이 어려워진다).
         if (m_incapacitation != null)
         {
-            m_animator.SetBool(s_downHash, m_incapacitation.IsIncapacitated);
+            bool stunned = m_incapacitation.IsStunned;
+            m_animator.SetBool(s_stunnedHash, stunned);
+            m_animator.SetBool(s_downHash, m_incapacitation.IsIncapacitated && !stunned);
         }
 
         // 앉기도 같은 방식 — 서버 권위 동기화값을 폴링해 Crouch 상태(Crouch Idle/Walk 블렌드 트리)를 구동한다. (#236)

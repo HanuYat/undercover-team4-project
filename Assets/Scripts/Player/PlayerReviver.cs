@@ -82,7 +82,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
             return null; // 자기 자신 제외
 
         PlayerIncapacitation targetIncap = target.GetComponent<PlayerIncapacitation>();
-        return targetIncap != null && targetIncap.IsIncapacitated ? target : null;
+        return targetIncap != null && targetIncap.IsDowned ? target : null;
     }
 
     // ---- 오너 클라 진입점 (서버/오프라인은 즉시 실행, 원격 클라는 서버로 요청) ----
@@ -163,10 +163,9 @@ public class PlayerReviver : ChanneledInteractionBehaviour
         // --------------------------------------------------------------------------------
 
         PlayerIncapacitation targetIncap = target.GetComponent<PlayerIncapacitation>();
-        if (targetIncap == null || !targetIncap.IsIncapacitated)
-            return; // 다운 상태에서만 구조 가능
-        if (!targetIncap.IsRevivable)
-            return; // 오검거 매달기(#101)는 구조 대상이 아님 — 30초 자동 복귀만 (히트박스가 꺼져 조준도 안 되지만 방어)
+        if (targetIncap == null || !targetIncap.IsDowned)
+            return; // HP0 다운만 구조 대상 — 매달기(#101)·기절(#252)은 스스로 풀린다
+                    // (둘 다 구조 히트박스가 꺼져 조준도 안 되지만 위조 RPC 방어로 여기서도 본다)
         if (!IsInRange(target))
             return; // 사거리 밖이면 시작조차 안 함
 
@@ -211,7 +210,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
             return;
         }
         // 다른 동료가 먼저 살렸다면 중복 구조 방지
-        if (!targetIncap.IsIncapacitated)
+        if (!targetIncap.IsDowned)
         {
             NotifyOwner("구조 취소 — 대상이 이미 복구됨");
             return;

@@ -86,8 +86,9 @@ public class PlayerData : NetworkBehaviour, IDamageable
 
         // HP가 0에 도달하는 순간 다운(무력화) 진입. 서버(또는 오프라인)에서만 실행되며
         // Incapacitate 자체에도 서버 가드가 있다. (#105, GDD 7-5)
+        // 원인을 Down으로 명시한다 — 구조·전멸 판정 대상은 이 원인뿐이다 (#252).
         if (value == 0 && previous > 0)
-            m_incapacitation?.Incapacitate();
+            m_incapacitation?.Incapacitate(IncapacitationCause.Down);
     }
 
     /// <summary>라운드 사이 상태 초기화 — HP 풀 회복 + 다운 해제 + 끌려가기 해제. 서버(또는 오프라인)에서만. (상점 진입)</summary>
