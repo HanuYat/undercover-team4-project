@@ -50,6 +50,11 @@ public partial class NpcController : IDamageable
             return;
 
         SetHp(Mathf.Clamp(CurrentHp - amount, 0, MaxHp), attacker);
+
+        // 맞으면 반응한다 (#400) — 도주형은 도주, 저항형은 저항, 순응형은 도주·저항 중 랜덤.
+        // SetHp 뒤에 두는 이유: HP가 0이 되어 기절했으면 ServerReactTo가 IsStunned에서 걸러 낸다.
+        // 쓰러진 대상이 도망치기 시작하면 안 되고, 깨어날 때의 도주 전환은 NpcStunnedState가 따로 한다.
+        ServerReactTo(ReactionTrigger.Damage, attacker != null ? attacker.transform : null);
     }
 
     /// <summary>

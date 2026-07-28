@@ -34,8 +34,17 @@ public class ServerChannel
     /// seconds초 동안 채널링을 진행한다. 동시에 하나만 실행 가능 — 호출부가 IsActive로 먼저 가드해야 한다.
     /// keepAlive를 넘기면 매 프레임 호출해 false가 되는 즉시 OutOfRange로 중단한다(거리 이탈 등, Scanner/Escorter 관례).
     /// keepAlive를 생략하면 중간 검사 없이 단일 Delay로 대기한다(PlayerReviver 관례 — 완료 시점에만 호출부가 검사).
+    ///
+    /// onProgressPoint를 넘기면 진행률이 progressPoint(0~1)를 넘는 프레임에 <b>딱 한 번</b> 호출한다 (#400).
+    /// 스캔 도중에 대상을 반응시키는 용도다 — 채널을 둘로 쪼개 이어 붙이면 그 사이에 IsActive가 풀려
+    /// 재진입·취소 유실이 생기므로, 한 채널 안에서 콜백으로 처리한다.
+    /// keepAlive가 없으면(단일 Delay 경로) 중간 지점을 잡을 수 없어 무시된다.
     /// </summary>
-    public async UniTask<Result> RunAsync(float seconds, Func<bool> keepAlive = null)
+    public async UniTask<Result> RunAsync(
+        float seconds,
+        Func<bool> keepAlive = null,
+        float progressPoint = -1f,
+        Action onProgressPoint = null)
     {
         IsActive = true;
         m_cts = new CancellationTokenSource();
@@ -50,12 +59,23 @@ public class ServerChannel
 
             // 단일 Delay가 아닌 프레임 루프 — 채널링 도중 조건 이탈(거리 등)을 즉시 실패시킨다 (#91).
             // 뗌 취소는 Yield의 토큰 예외(catch)로, 조건 이탈은 return으로 — 종료 사유가 구분된다.
+            bool pointFired = onProgressPoint == null || progressPoint < 0f;
+            float pointSeconds = seconds * Mathf.Clamp01(progressPoint);
+
             float elapsed = 0f;
             while (elapsed < seconds)
             {
                 if (!keepAlive())
                 {
                     return Result.OutOfRange;
+                }
+
+                // 중간 지점 통과 — 1회만. 콜백이 대상을 도주시키면 다음 프레임 keepAlive에서
+                // 사거리 이탈로 끊길 수 있는데, 그게 의도다(#400 — 남은 시간 동안 붙어 있어야 완료).
+                if (!pointFired && elapsed >= pointSeconds)
+                {
+                    pointFired = true;
+                    onProgressPoint();
                 }
 
                 await UniTask.Yield(PlayerLoopTiming.Update, m_cts.Token);

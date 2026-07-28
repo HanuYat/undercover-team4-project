@@ -52,7 +52,7 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
                 // 배회(Idle/Walk)도 같은 경로다 — 체력이 지속형이 되면서 저항 중이 아니어도
                 // 때려서 깎을 수 있다 (#366). 상태 게이트는 TakeDamage가 CanBeDamaged로 건다 (#292).
                 Debug.Log($"NPC 제압 타격: {m_controller.name}");
-                m_controller.RequestSubdueHit();
+                m_controller.RequestSubdueHit(interactor);
                 break;
 
             case NpcState.Captured:

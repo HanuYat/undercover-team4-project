@@ -209,21 +209,11 @@ public partial class PlayerEscorter
         if (target == null || !NpcStateRules.CanArrest(target.CurrentState) || IsBusy)
             return;
 
-        // 채널링 성공 순간 반응 판정 (GDD 6-1, #76) — 수갑 체포에서 그대로 옮겨온 분기다.
-        // (기절 대상은 위에서 즉시 처리돼 여기 오지 않는다)
-        switch (ResolveReaction(target))
-        {
-            case ReactionType.Flee:
-                NotifyOwner($"묶기 실패 — 뿌리치고 도주: {target.name}");
-                target.StartFlee(transform);
-                return;
-
-            case ReactionType.Resist:
-                NotifyOwner($"묶기 실패 — 저항 시작: {target.name}");
-                target.StartResist(transform); // 제압 실패 시 여기서 도주 (#205)
-                return;
-        }
-
+        // 반응 판정은 여기서 굴리지 않는다 (#400) — 밧줄은 순수 검거 수단이 됐다.
+        // 반응이 터지는 시점이 "잡으려 할 때"에서 "의심받을 때(스캔)·맞을 때(피격)"로 옮겨졌고,
+        // 그 판정은 NpcController.ServerReactTo가 단독으로 갖는다.
+        // 함부로 묶는 것을 막던 장치도 함께 사라졌다 — 이제는 반응이 이미 시작된 대상(Run/Attack)이
+        // NpcStateRules.IsCapturable에서 걸리는 것이 그 역할을 대신한다.
         ServerApplyRopeDrag(target);
     }
 

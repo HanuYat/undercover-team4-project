@@ -121,7 +121,11 @@ public class CitizenIdentity : NetworkBehaviour
         IsForger = isForger;
     }
 
-    /// <summary>검거 반응 유형을 배정한다. CriminalAssigner 전용. (서버 전용 — 동기화 없음)</summary>
+    /// <summary>
+    /// 검거 반응 유형을 배정한다. (서버 전용 — 동기화 없음)
+    /// CriminalAssigner가 라운드 시작에 배정하고, 순응형이 피격으로 도주·저항을 뽑았을 때
+    /// NpcController가 그 결과를 여기에 1회 확정한다 (#400).
+    /// </summary>
     public void AssignReaction(ReactionType reaction)
     {
         Reaction = reaction;
