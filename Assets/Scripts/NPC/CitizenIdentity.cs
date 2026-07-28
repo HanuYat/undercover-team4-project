@@ -42,6 +42,15 @@ public class CitizenIdentity : NetworkBehaviour
     /// <summary>검거 반응 유형(#76) — 수갑 채널링 성공 순간의 반응. CriminalAssigner가 배정한다. 서버 전용.</summary>
     public ReactionType Reaction { get; private set; } = ReactionType.Compliant;
 
+    /// <summary>
+    /// 이 NPC를 검거했을 때의 현상금 (#395) — ArrestJudge가 판정 보상으로 그대로 쓴다. 서버 전용.
+    /// 라운드 시작 배정 시점에 CriminalAssigner가 범위에서 뽑아 확정한다. 판정 시점에 뽑지 않는 이유는
+    /// 재판정(#358)·탈옥 후 재검거(#231)가 허용되어 있어, 그때마다 새로 뽑으면 잡았다 풀었다 하며
+    /// 높은 금액을 노리는 리롤이 가능해지기 때문이다.
+    /// 오검거 대상(무고 시민)은 0이며, 난동꾼은 이 값을 쓰지 않는다(MisdemeanorOffender.Reward).
+    /// </summary>
+    public int Bounty { get; private set; }
+
     // ---- 동기화 수신 (클라이언트) ----
 
     public override void OnNetworkSpawn()
@@ -111,5 +120,11 @@ public class CitizenIdentity : NetworkBehaviour
     public void AssignReaction(ReactionType reaction)
     {
         Reaction = reaction;
+    }
+
+    /// <summary>현상금을 배정한다. CriminalAssigner 전용. (서버 전용 — 동기화 없음, #395)</summary>
+    public void AssignBounty(int bounty)
+    {
+        Bounty = bounty;
     }
 }

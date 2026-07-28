@@ -12,13 +12,11 @@ using UnityEngine;
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class ArrestJudge : CommonManagerBase
 {
-    private const int k_wantedReward = 10000;
     private const int k_wrongfulReward = 0;
 
-    [Header("위조범 보상 (#320)")]
-    [Tooltip("위조범(스캔 표시 정보가 인명부 정본과 어긋나는 NPC) 검거 시 지급하는 경범죄 보상 (GDD 9-1 기본 1,000)")]
-    [Min(0)]
-    [SerializeField] private int m_forgeryReward = 1000;
+    // 진범·위조범 보상은 여기서 정하지 않는다 (#395) — NPC마다 다른 현상금을 CriminalAssigner가
+    // 라운드 시작에 뽑아 CitizenIdentity.Bounty에 확정해 두고, 판정은 그 값을 읽기만 한다.
+    // 판정 시점에 뽑으면 재판정(#358)·탈옥 후 재검거(#231)로 금액을 리롤할 수 있게 된다.
 
     [Header("인계 구역 (비우면 씬에서 자동 탐색)")]
     [SerializeField] private HqDropoffZone m_dropoffZone;
@@ -97,13 +95,13 @@ public class ArrestJudge : CommonManagerBase
         {
             // 진범 우선 — 진범이면서 위조범인 NPC도 현상수배범으로 판정한다 (위조 판정에 가려지지 않음, #320).
             verdict = ArrestVerdict.WantedCriminal;
-            reward = k_wantedReward;
+            reward = ResolveBounty(identity, npc);
         }
         else if (identity.IsForger)
         {
             // 위조범 — 난동꾼과 동일한 즉결 경범죄로 확정하고 소액 위조 보상을 준다 (#320).
             verdict = ArrestVerdict.Misdemeanor;
-            reward = m_forgeryReward;
+            reward = ResolveBounty(identity, npc);
         }
         else
         {
@@ -137,6 +135,16 @@ public class ArrestJudge : CommonManagerBase
         OnArrestJudged?.Invoke(result);
 
         return result;
+    }
+
+    // 배정된 현상금을 읽는다 (#395). 0이면 CriminalAssigner의 배정을 타지 않은 NPC라는 뜻이라 —
+    // 라운드 목표(금액)가 조용히 미달로 흐르지 않게 경고를 남긴다. 값 자체는 그대로 쓴다.
+    private static int ResolveBounty(CitizenIdentity identity, NpcController npc)
+    {
+        if (identity.Bounty <= 0)
+            Debug.LogWarning($"ArrestJudge: {npc.name}에 현상금이 배정되지 않아 0원으로 판정한다 — CriminalAssigner 배정을 타지 않은 NPC인지 확인할 것", npc);
+
+        return identity.Bounty;
     }
 
     private static void LogVerdict(ArrestResult result)

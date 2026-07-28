@@ -43,8 +43,16 @@ public class SpawnedNpcEvent : ISuddenEvent
     [SerializeField] private int m_maxSpawnAttempts = 8;
 
     [Header("경범죄 수익")]
-    [Tooltip("본부 인계 후 경범죄 판정 성공 시 팀 자금에 더해질 수익 — ArrestJudge가 마커에서 읽어 지급한다")]
-    [SerializeField] private int m_pettyCrimeReward = 50;
+    [Tooltip("본부 인계 후 경범죄 판정 성공 시의 수익 하한 — 스폰 시점에 [하한, 상한]에서 뽑아 마커에 박는다 (#395)")]
+    [Min(0)]
+    [SerializeField] private int m_pettyCrimeRewardMin = 30;
+
+    [Tooltip("경범죄 수익 상한. 하한보다 작으면 하한이 쓰인다")]
+    [Min(0)]
+    [SerializeField] private int m_pettyCrimeRewardMax = 80;
+
+    // 이번 스폰에서 실제로 뽑힌 수익 — 마커에 실은 값과 같다 (#395)
+    private int m_rolledReward;
 
     [Header("소란 지속")]
     [Tooltip("제압되지 않은 채 이 시간(초)이 지나면 소란을 멈추고 진정해 배회 시민으로 잔류한다 — 마커가 남아 언제든 잡으면 경범죄 수익 (#310)")]
@@ -122,7 +130,10 @@ public class SpawnedNpcEvent : ISuddenEvent
         // 판정이 서버 권위라 마커도 서버에서만 읽힌다 — 복제할 필요가 없어 plain MonoBehaviour로 붙인다.
         // 소란 행동도 함께 기록한다 — 탈옥으로 방출되면 이 행동을 재개한다 (MisdemeanorLoiterer.BeginRiot).
         MisdemeanorOffender offender = m_npc.gameObject.AddComponent<MisdemeanorOffender>();
-        offender.Reward = m_pettyCrimeReward;
+        // 수익은 스폰 시점에 확정한다 (#395) — 판정 시점에 뽑으면 재검거로 금액을 리롤할 수 있다.
+        // 뽑은 값을 따로 들고 있는 이유는 아래 제압 로그가 실제 지급될 금액을 보여주기 위함이다.
+        m_rolledReward = Random.Range(m_pettyCrimeRewardMin, Mathf.Max(m_pettyCrimeRewardMin, m_pettyCrimeRewardMax) + 1);
+        offender.Reward = m_rolledReward;
         offender.SetRiotBehavior(m_mode, m_maxLifetimeSeconds);
 
         // 네트워크 세션이면 전 클라에 복제 — Spawn()이 서버에서 OnNetworkSpawn(InitBehavior)를 동기 실행한다 (#56)
@@ -213,7 +224,7 @@ public class SpawnedNpcEvent : ISuddenEvent
             if (!m_captured)
             {
                 m_captured = true;
-                Debug.Log($"[돌발이벤트] {m_displayName} 제압 — 본부로 연행하면 경범죄 처리(수익 {m_pettyCrimeReward})");
+                Debug.Log($"[돌발이벤트] {m_displayName} 제압 — 본부로 연행하면 경범죄 처리(수익 {m_rolledReward})");
             }
             return;
         }

@@ -37,6 +37,27 @@ public class CriminalAssigner : CommonManagerBase
     [SerializeField]
     private int m_forgedCharCount = 1;
 
+    [Header("현상금 (#395)")]
+    [Tooltip("진범 1명의 현상금 하한. 라운드 시작 배정 시점에 [하한, 상한]에서 뽑아 확정한다 — 판정 시점에 뽑으면 재검거 리롤이 가능해진다")]
+    [Min(0)]
+    [SerializeField]
+    private int m_criminalBountyMin = 8000;
+
+    [Tooltip("진범 1명의 현상금 상한")]
+    [Min(0)]
+    [SerializeField]
+    private int m_criminalBountyMax = 15000;
+
+    [Tooltip("위조범 1명의 현상금 하한 (경범죄 취급 — GDD 9-1 기본 1,000 주변)")]
+    [Min(0)]
+    [SerializeField]
+    private int m_forgeryBountyMin = 500;
+
+    [Tooltip("위조범 1명의 현상금 상한")]
+    [Min(0)]
+    [SerializeField]
+    private int m_forgeryBountyMax = 2000;
+
     [Header("범인 검거 반응 가중치 (#76)")]
     [Tooltip("합이 1일 필요 없음 — 비율로 추첨한다. 범인은 도주/저항 성향이 높다")]
     [SerializeField]
@@ -95,6 +116,15 @@ public class CriminalAssigner : CommonManagerBase
 
     private readonly Dictionary<OfficialRecords.Faction, int> m_localRealIndices = new Dictionary<OfficialRecords.Faction, int>();
 
+    private int m_totalAssignedBounty;
+
+    /// <summary>
+    /// 이번 라운드에 배정된 현상금 총합 (#395) — 진범 + 위조범. 배정 전에는 0.
+    /// 라운드 목표 금액이 달성 가능한지 대조하는 기준이다(RoundManager). 돌발 이벤트로 나중에 스폰되는
+    /// 난동꾼의 수익은 여기에 포함되지 않는다 — 배정 시점엔 존재하지 않기 때문이다.
+    /// </summary>
+    public int TotalAssignedBounty => m_totalAssignedBounty;
+
     /// <summary>실제 범인으로 지정된 NPC들. 배정 전에는 비어 있다. (#127)</summary>
     public IReadOnlyList<NpcController> CriminalNpcs => m_criminalNpcs;
 
@@ -151,6 +181,7 @@ public class CriminalAssigner : CommonManagerBase
 
         m_criminalNpcs.Clear();
         m_wantedProfiles.Clear();
+        m_totalAssignedBounty = 0;
 
         // 스캔 UI(#39) 전까지는 로그로 배정 결과를 확인한다
         var logBuilder = new System.Text.StringBuilder();
@@ -213,6 +244,14 @@ public class CriminalAssigner : CommonManagerBase
                 : RollReaction(m_citizenCompliantWeight, m_citizenFleeWeight, m_citizenResistWeight);
             identity.AssignReaction(reaction);
 
+            // 현상금 확정 (#395) — 판정 시점이 아니라 여기서 뽑는다. ArrestJudge의 판정 우선순위와 같은
+            // 순서로 정한다(진범 > 위조범 > 무고). 무고 시민은 오검거라 0원이다.
+            int bounty = isCriminal ? RollBounty(m_criminalBountyMin, m_criminalBountyMax)
+                : isForger ? RollBounty(m_forgeryBountyMin, m_forgeryBountyMax)
+                : 0;
+            identity.AssignBounty(bounty);
+            m_totalAssignedBounty += bounty;
+
             if (isCriminal)
             {
                 m_criminalNpcs.Add(npcs[i]);
@@ -229,10 +268,14 @@ public class CriminalAssigner : CommonManagerBase
                 : forgedSymbol ? $"  [위조: 문양 {realIndex}→{profile.m_symbolIndexView}]"
                 : $"  [위조: {profile.CitizenName}→{profile.m_nameView}]";
 
+            string bountyTag = bounty > 0 ? $"  [현상금 {bounty}원]" : "";
+
             logBuilder.AppendLine(
-                $"  {profile.CitizenName} | {profile.m_typeView} | {profile.m_factionView}{roleTag}{forgeryTag}"
+                $"  {profile.CitizenName} | {profile.m_typeView} | {profile.m_factionView}{roleTag}{forgeryTag}{bountyTag}"
             );
         }
+
+        logBuilder.AppendLine($"  → 배정 현상금 총합 {m_totalAssignedBounty}원 (돌발 이벤트 수익 별도)");
 
         OnCriminalAssigned?.Invoke(m_criminalNpcs);
         Debug.Log(logBuilder.ToString());
@@ -293,6 +336,14 @@ public class CriminalAssigner : CommonManagerBase
         if (roll < compliantWeight + fleeWeight)
             return ReactionType.Flee;
         return ReactionType.Resist;
+    }
+
+    /// <summary>[min, max] 범위에서 현상금을 뽑는다(양 끝 포함). 상한이 하한보다 작게 설정돼도 하한을 보장한다. (#395)</summary>
+    private static int RollBounty(int min, int max)
+    {
+        if (max < min)
+            max = min;
+        return Random.Range(min, max + 1);
     }
 
     private static TEnum RandomEnum<TEnum>()

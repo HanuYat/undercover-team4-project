@@ -153,8 +153,9 @@ public class SettlementPanel : PanelBase
     {
         return reason switch
         {
-            RoundEndReason.QuotaMet => "검거 할당량 달성",
-            RoundEndReason.TimeOver => "제한시간 초과 — 검거 할당량 미달",
+            RoundEndReason.ManualEnd => "수사 종료 — 목표 금액 달성",
+            RoundEndReason.QuotaMet => "제한시간 종료 — 목표 금액 달성",
+            RoundEndReason.TimeOver => "제한시간 초과 — 목표 금액 미달",
             RoundEndReason.AllPlayersDown => "플레이어 전원 다운",
             _ => string.Empty,
         };

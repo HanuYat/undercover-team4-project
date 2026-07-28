@@ -56,8 +56,13 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     [SerializeField] private int m_maxSpawnAttempts = 8;
 
     [Header("경범죄 수익")]
-    [Tooltip("침입자를 제압·연행해 인계하면 지급되는 수익 — ArrestJudge가 마커에서 읽어 지급한다")]
-    [SerializeField] private int m_intruderReward = 100;
+    [Tooltip("침입자를 제압·연행해 인계했을 때의 수익 하한 — 스폰 시점에 [하한, 상한]에서 뽑아 마커에 박는다 (#395)")]
+    [Min(0)]
+    [SerializeField] private int m_intruderRewardMin = 60;
+
+    [Tooltip("침입자 수익 상한. 하한보다 작으면 하한이 쓰인다")]
+    [Min(0)]
+    [SerializeField] private int m_intruderRewardMax = 150;
 
     [Header("잔류 전환")]
     [Tooltip("제압되지 않은 채 이 시간(초)이 지나면 침입을 포기하고 배회 시민으로 잔류한다 — 마커가 남아 언제든 잡으면 경범죄 수익 (#310)")]
@@ -152,7 +157,9 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         // 경범죄 표식 — 인계되면 ArrestJudge가 진범 대조 대신 경범죄로 판정하고 Reward를 지급한다 (#106).
         // 침입자는 CriminalAssigner를 타지 않아 IsCriminal이 false다. 이 마커가 없으면 침입을 막은 플레이어가
         // 오검거 페널티를 먹는다 — 대응에 성공한 쪽이 손해 보는 판정을 막는 것이 이 한 줄의 역할이다. (#261)
-        m_intruder.gameObject.AddComponent<MisdemeanorOffender>().Reward = m_intruderReward;
+        // 수익은 스폰 시점에 확정한다 (#395) — 판정 시점에 뽑으면 재검거로 금액을 리롤할 수 있다
+        m_intruder.gameObject.AddComponent<MisdemeanorOffender>().Reward =
+            Random.Range(m_intruderRewardMin, Mathf.Max(m_intruderRewardMin, m_intruderRewardMax) + 1);
 
         if (SuddenEventUtil.IsNetworkSessionActive)
             m_intruder.GetComponent<NetworkObject>().Spawn();
