@@ -88,13 +88,12 @@ public class PlayerLoadout : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        // 서버가 기본 장비를 스폰해 소유권을 부여하고 플레이어에 부착한다.
-        // 단, OnNetworkSpawn 내부에서 NetworkObject를 스폰하면 이후 접속하는 클라의 씬 동기화가
-        // 중복 스폰(같은 NetworkObjectId 재생성)으로 깨진다. 스폰 처리 캐스케이드 밖(다음 프레임)에서
-        // 지급하도록 한 프레임 미룬다.
-        if (IsServer)
+        // 게임 씬에서 플레이어가 처음 만들어지는 경우만 여기서 지급한다 — 직접 Play(DevAutoHost)처럼
+        // NGO 연결 승인이 플레이어를 만드는 흐름. 정식 루프(상점→게임)의 매 라운드 지급은
+        // PlayerSpawnManager가 호출한다(둘이 겹쳐도 GrantStartingGear의 보유 검사가 막는다). (#370)
+        if (App.CurrentScene == EScene.Game)
         {
-            GrantStartingGearAsync().Forget();
+            ServerGrantStartingGear();
         }
 
         // 오너만 입력을 받는다 (휠 순환·버리기). 입력 핸들러는 오너 외엔 비활성.
@@ -114,7 +113,11 @@ public class PlayerLoadout : NetworkBehaviour
         // 씬(로비·타이틀)에서 원점에 뜬 채로 그대로 보인다. (#395)
         if (IsServer)
         {
-            DespawnHeldItems();
+            int despawned = DespawnHeldItems();
+            if (despawned > 0)
+            {
+                Debug.Log($"[PlayerLoadout] 플레이어 정리와 함께 소지 아이템 {despawned}개 디스폰");
+            }
         }
 
         if (IsOwner)
@@ -129,17 +132,19 @@ public class PlayerLoadout : NetworkBehaviour
     /// <summary>
     /// 손에 든 아이템을 전부 디스폰한다 — 아이템의 수명을 플레이어와 묶는다. 서버 전용. (#395)
     /// 월드에 버린 아이템은 대상이 아니다 — 이미 부모가 해제돼 이 밑에 없다.
+    /// 상점 복귀 회수(<see cref="ServerClearHeldItems"/>)도 이 경로를 쓴다. (#370)
     /// </summary>
-    private void DespawnHeldItems()
+    /// <returns>디스폰한 아이템 수.</returns>
+    private int DespawnHeldItems()
     {
         // 세션이 통째로 내려가는 중이면 NGO가 알아서 정리한다 — 그 와중에 Despawn을 부르면 경고만 남는다
         NetworkManager manager = NetworkManager.Singleton;
         if (manager == null || !manager.IsListening)
-            return;
+            return 0;
 
         Transform parent = ItemParent;
         if (parent == null)
-            return;
+            return 0;
 
         // 디스폰하면 자식 목록이 바뀌므로 먼저 모아 둔다 (BuildHeldItemRefs와 같은 열거 방식)
         List<NetworkObject> held = new List<NetworkObject>();
@@ -148,6 +153,8 @@ public class PlayerLoadout : NetworkBehaviour
             ItemBase item = parent.GetChild(i).GetComponent<ItemBase>();
             if (item != null && item.NetworkObject != null)
             {
+                // 채널링 중이면 먼저 끊는다 — 드롭과 같은 이유(배터리 낭비·오완료 방지). (#370)
+                item.ServerCancelActiveUse();
                 held.Add(item.NetworkObject);
             }
         }
@@ -160,16 +167,20 @@ public class PlayerLoadout : NetworkBehaviour
             }
         }
 
-        if (held.Count > 0)
-        {
-            Debug.Log($"[PlayerLoadout] 플레이어 정리와 함께 소지 아이템 {held.Count}개 디스폰");
-        }
+        return held.Count;
     }
 
-    // ---- 서버: 시작 지급 ----
+    // ---- 서버: 시작 지급 (게임 씬 진입, #370) ----
 
-    // OnNetworkSpawn 밖으로 한 프레임 미뤄 지급한다 — 스폰 메시지 처리 중 스폰을 피해 후속 접속
-    // 클라의 동기화 중복 스폰을 막는다.
+    /// <summary>
+    /// 기본 장비를 지급한다 — 게임 씬 진입 시 서버(PlayerSpawnManager)가 클라별로 호출한다. (#370)
+    /// 상점 복귀 때 <see cref="ServerClearHeldItems"/>로 전량 회수되므로 매 라운드 같은 구성으로 시작한다.
+    /// 서버 판정은 한 프레임 뒤 GrantStartingGearAsync가 한다 — 클라 호출은 거기서 걸러진다.
+    /// </summary>
+    public void ServerGrantStartingGear() => GrantStartingGearAsync().Forget();
+
+    // 호출 지점(스폰 처리·씬 로드 완료 콜백) 밖으로 한 프레임 미뤄 지급한다 — NGO 메시지 처리 중
+    // 스폰하면 후속 접속 클라의 씬 동기화가 중복 스폰(같은 NetworkObjectId 재생성)으로 깨진다.
     private async UniTaskVoid GrantStartingGearAsync()
     {
         await UniTask.NextFrame();
@@ -188,6 +199,14 @@ public class PlayerLoadout : NetworkBehaviour
     private void GrantStartingGear()
     {
         Transform parent = ItemParent;
+
+        // 이미 뭔가 들고 있으면 지급하지 않는다 — 게임 씬 재진입·중복 호출로 같은 장비가 겹쳐 스폰되면
+        // 슬롯(3칸)이 헛되이 차 이후 줍기가 전부 거부된다. 정상 흐름에서는 상점 복귀 때 전량 회수돼 빈손이다. (#370)
+        if (CountHeldItems() > 0)
+        {
+            Debug.LogWarning("[PlayerLoadout] 이미 아이템을 보유 중이라 기본 장비 지급을 건너뛴다.", this);
+            return;
+        }
 
         int granted = 0;
         foreach (ItemBase gearPrefab in m_startingGear)
@@ -215,6 +234,31 @@ public class PlayerLoadout : NetworkBehaviour
             granted++;
         }
 
+        Debug.Log($"[PlayerLoadout] 기본 장비 지급 — client {OwnerClientId}, {granted}개 ({App.CurrentScene})");
+        SyncHeldItemsRpc(BuildHeldItemRefs());
+    }
+
+    // ---- 서버: 회수 (상점 복귀, #370) ----
+
+    /// <summary>
+    /// 보유 아이템을 전량 회수(디스폰)한다 — 상점 복귀 시 서버(ShopManager)가 클라별로 호출한다. (#370)
+    /// 아이템은 destroyWithScene:false로 스폰돼 씬을 넘어도 살아남으므로, 회수하지 않으면 다음 라운드
+    /// 지급분과 겹쳐 슬롯이 찬다. 라운드 사이 이월은 오브젝트 생존이 아니라 상점 구매 목록(#182)이 맡는다.
+    /// </summary>
+    public void ServerClearHeldItems()
+    {
+        if (!IsServer)
+        {
+            return;
+        }
+
+        // 디스폰 자체는 플레이어 정리(#395)와 같은 경로 — 여기서는 그 뒤 오너 동기화까지 한다.
+        // 플레이어는 살아 남아 다음 라운드에 다시 지급받으므로 슬롯을 비워 줘야 하기 때문.
+        int cleared = DespawnHeldItems();
+        Debug.Log($"[PlayerLoadout] 보유 아이템 회수 — client {OwnerClientId}, {cleared}개");
+
+        // 오너 슬롯 모델에 파괴된 참조가 남지 않도록 빈 목록으로 재구성시킨다 — 안 보내면 인벤토리 UI가
+        // 죽은 아이템 칸을 그대로 들고 있어 다음 라운드 지급분이 들어갈 칸이 없다.
         SyncHeldItemsRpc(BuildHeldItemRefs());
     }
 
@@ -437,7 +481,11 @@ public class PlayerLoadout : NetworkBehaviour
         for (int i = 0; i < parent.childCount; i++)
         {
             ItemBase item = parent.GetChild(i).GetComponent<ItemBase>();
-            if (item != null && item.NetworkObject != null)
+
+            // 디스폰된 아이템은 건너뛴다 — Despawn은 즉시지만 GameObject 파괴는 프레임 끝이라 회수
+            // (ServerClearHeldItems) 직후에도 자식으로 남는다. 그대로 참조를 만들면 생성자가 던져
+            // 동기화 RPC가 발송되지 않고, 오너는 파괴된 아이템을 계속 장착·표시한다. (#370)
+            if (item != null && item.NetworkObject != null && item.NetworkObject.IsSpawned)
             {
                 refs.Add(new NetworkObjectReference(item.NetworkObject));
             }

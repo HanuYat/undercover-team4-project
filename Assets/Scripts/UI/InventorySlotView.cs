@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Localization;
 using UnityEngine.UI;
 using TMPro;
 
@@ -24,6 +25,11 @@ public class InventorySlotView : MonoBehaviour,
     private int m_index;
     private ItemBase m_item;
 
+    // 이름 갱신을 구독 중인 LocalizedString — 해제 기준을 아이템이 아니라 이 참조로 잡는다. 아이템이
+    // 파괴되면(라운드 종료 회수, #370) m_item이 Unity 가짜 null이라 아이템 기준 해제가 통째로 스킵되고,
+    // 남은 구독이 나중에 발화해 빈 칸에 옛 이름을 쓴다. LocalizedString은 순수 관리 객체라 안전. (#251)
+    private LocalizedString m_boundName;
+
     // 드래그 고스트 복원용 — 드래그 중 아이콘을 캔버스 최상위로 옮겼다가 되돌린다.
     private Transform m_iconOriginalParent;
     private Vector3 m_iconOriginalLocalPosition;
@@ -45,9 +51,10 @@ public class InventorySlotView : MonoBehaviour,
     public void Bind(ItemBase item)
     {
         // 이전 아이템 구독 해제 — 빈/교체된 슬롯이 언어 전환 시 옛 아이템 이름으로 갱신되는 것 방지 (#251)
-        if (m_item != null)
+        if (m_boundName != null)
         {
-            m_item.ItemName.StringChanged -= HandleItemNameChanged;
+            m_boundName.StringChanged -= HandleItemNameChanged;
+            m_boundName = null;
         }
 
         m_item = item;
@@ -62,7 +69,8 @@ public class InventorySlotView : MonoBehaviour,
         m_icon.sprite = item.ItemIcon;
         m_icon.enabled = item.ItemIcon != null; // 아이콘 미설정이면 이름 텍스트가 폴백
         // 구독 즉시 현재 언어 값으로 1회 호출되고, 이후 언어 전환 시마다 다시 호출된다 (#251)
-        item.ItemName.StringChanged += HandleItemNameChanged;
+        m_boundName = item.ItemName;
+        m_boundName.StringChanged += HandleItemNameChanged;
     }
 
     private void HandleItemNameChanged(string localizedName)
@@ -72,9 +80,9 @@ public class InventorySlotView : MonoBehaviour,
 
     private void OnDestroy()
     {
-        if (m_item != null)
+        if (m_boundName != null)
         {
-            m_item.ItemName.StringChanged -= HandleItemNameChanged;
+            m_boundName.StringChanged -= HandleItemNameChanged;
         }
     }
 

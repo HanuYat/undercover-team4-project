@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
@@ -21,6 +22,8 @@ public class ShopManager : SceneManagerBase
             return;
 
         Session?.SetLockedAsync(false).Forget();
+
+        DespawnDroppedItems(); // 지난 라운드에 바닥에 버려진 아이템 회수 (#370)
 
         NetworkManager.Singleton.SceneManager.OnLoadComplete += HandleLoadComplete;
         ResetPlayer(NetworkManager.Singleton.LocalClientId); // 호스트 자신
@@ -47,6 +50,31 @@ public class ShopManager : SceneManagerBase
         if (!NetworkManager.Singleton.ConnectedClients.TryGetValue(clientId, out var client))
             return;
         client.PlayerObject?.GetComponent<PlayerData>()?.ServerResetState();
+        client.PlayerObject?.GetComponent<PlayerLoadout>()?.ServerClearHeldItems(); // 지급 장비 회수 (#370)
+    }
+
+    // 주인 없이 바닥에 떨어져 있는 아이템을 정리한다 — 아이템은 destroyWithScene:false로 스폰돼 안 치우면
+    // 지난 라운드에 버린 것이 옛 좌표 그대로 따라온다. 손에 든 것은 플레이어 자식이라 여기 안 걸린다
+    // (PlayerLoadout 몫). 로비·타이틀의 비슷한 정리는 플레이어를 먼저 내리므로 조건이 달라
+    // PlayerSpawnManager가 따로 한다(#395). 조회는 씬 Find가 아니라 NGO 스폰 목록. (#370)
+    private static void DespawnDroppedItems()
+    {
+        NetworkSpawnManager spawnManager = NetworkManager.Singleton.SpawnManager;
+        if (spawnManager == null)
+            return;
+
+        // 디스폰이 스폰 목록을 건드리므로 스냅샷을 떠서 순회한다.
+        int despawned = 0;
+        foreach (NetworkObject spawned in new List<NetworkObject>(spawnManager.SpawnedObjectsList))
+        {
+            if (spawned == null || spawned.transform.parent != null || !spawned.TryGetComponent(out ItemBase _))
+                continue;
+
+            spawned.Despawn(true);
+            despawned++;
+        }
+
+        Debug.Log($"[ShopManager] 바닥 아이템 회수 — {despawned}개");
     }
 
     /// <summary>호스트 전용 — 출동. 게임 씬으로 전환하며 세션을 잠근다(게임 진행 중 신규 접속 차단).</summary>
