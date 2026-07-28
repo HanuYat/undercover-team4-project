@@ -79,8 +79,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WantedEntryView
   m_nameText: {fileID: 1026461672375944391}
   m_montageText: {fileID: 1735181897273002423}
-  m_bountyText: {fileID: 0}
-  m_bountyFormat: "{0:N0}\uC6D0"
 --- !u!1 &2826982392914896267
 GameObject:
   m_ObjectHideFlags: 0
