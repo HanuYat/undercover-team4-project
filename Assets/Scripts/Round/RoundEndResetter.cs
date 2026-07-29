@@ -18,13 +18,11 @@ using UnityEngine.SceneManagement;
 ///    서버가 로비를 로드하면 클라는 NGO 씬 동기화로 함께 이동한다 — 클라는 여기서 아무 것도 하지 않는다.
 ///  · EScene 매핑이 없는 테스트 씬은 App 흐름 밖 — 세션 없이 자기 씬을 재로드한다(기존 폴백).
 ///
-/// 비자발 드롭(호스트 이탈·세션 삭제)은 세션이 죽은 것이므로 로비가 아니라 타이틀로 복귀한다.
-/// (자발적 로그아웃은 SessionFlow.LeaveToMainAsync 전담 — m_isLeaving 가드로 OnConnectionLost가 발화하지 않는다.)
+/// /// 비자발 드롭(호스트 이탈·세션 삭제)은 이 컴포넌트가 다루지 않는다 — 상주 ConnectionLostReturner가 전 씬 공통으로 처리한다. (#429)
 /// </summary>
 public class RoundEndResetter : MonoBehaviour
 {
     private RoundManager Round => App.Game.Round;
-    private SessionManager Session => App.Net.Session;
     private TeamFund TeamFund => App.Game.TeamFund;
     private ShopPurchases ShopPurchases => App.Game.ShopPurchases;
 
@@ -47,23 +45,10 @@ public class RoundEndResetter : MonoBehaviour
             Round.OnRoundEnded += HandleRoundEnded;
     }
 
-    private void Start()
-    {
-        // 비자발 드롭(호스트가 세션을 내림) — 세션이 죽었으니 타이틀로. 자발적 로그아웃은 SessionTeardown 전담.
-        if (Session != null)
-            Session.OnConnectionLost += HandleConnectionLost;
-    }
-
     private void OnDisable()
     {
         if (Round != null)
             Round.OnRoundEnded -= HandleRoundEnded;
-    }
-
-    private void OnDestroy()
-    {
-        if (Session != null)
-            Session.OnConnectionLost -= HandleConnectionLost;
     }
 
     // 서버·오프라인: 라운드 종료(성공/실패 공통) → 정산 표시 후 로비 복귀. (세션 유지)
@@ -73,25 +58,6 @@ public class RoundEndResetter : MonoBehaviour
             return;
         m_ending = true;
         EndRoundAsync(result).Forget();
-    }
-
-    // 비자발 드롭: 세션이 죽었으므로 타이틀로. (붙어 있을 세션이 없어 로비로 가면 안 된다)
-    private void HandleConnectionLost()
-    {
-        if (m_ending)
-            return;
-        m_ending = true;
-        ReturnToTitleAsync().Forget();
-    }
-
-    // NGO Shutdown이 끝난 뒤에 타이틀로 로드해야 한다 — 아직 IsListening이면 App.LoadScene이 NGO 씬 동기화
-    // 분기를 타고, 클라는 씬 로드 권한이 없어 아무 일도 안 일어나 Game 씬에 고착된다(#326 재현). SessionTeardown/
-    // SessionFlow의 자발적 이탈이 같은 이유로 shutdown을 기다리는 것과 동일하다.
-    private async UniTaskVoid ReturnToTitleAsync()
-    {
-        await SessionFlow.WaitForNetworkShutdownAsync();
-        if (App.CurrentScene != EScene.Title)
-            App.LoadScene(EScene.Title); // NGO 내려간 뒤 → 오프라인 로컬 로드
     }
 
     private async UniTaskVoid EndRoundAsync(RoundResult result)

@@ -593,6 +593,12 @@ public class VivoxManager : CommonManagerBase
     private async UniTaskVoid CleanupAsync()
     {
         try { await LogoutAsync(); }
+        catch (TimeoutException)
+        {
+            // 종료 시점엔 Vivox 메시지 펌프가 먼저 내려가 이탈 응답을 못 받는다 —
+            // 요청은 서버에 갔고 세션은 서버가 정리하므로 실패가 아니다.
+            Debug.LogWarning("[VivoxManager] 종료 중 채널 이탈 응답 없음 (무해)");
+        }
         catch (Exception ex) { Debug.LogError($"[VivoxManager] 정리 실패: {ex}"); }
     }
 
