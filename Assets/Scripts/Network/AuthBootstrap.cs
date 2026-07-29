@@ -46,6 +46,22 @@ public class AuthBootstrap : CommonManagerBase
 
     public static int MaxNicknameLength => k_maxNicknameLength;
 
+    // ── 계정 연동 (#384) — 형식 규칙·오류 문장은 AccountCredentials가 담당 ──
+    private string m_accountUsername = string.Empty;
+
+    /// <summary>
+    /// 연동 상태를 서버에서 확인했는가. (#384)
+    /// 조회에 실패한 상태를 "익명"으로 오인하면 §4 우선순위가 뒤집혀
+    /// 로컬 캐시가 계정 닉네임을 덮어쓴다 — 그래서 "모름"을 별도로 구분한다.
+    /// </summary>
+    private bool m_accountStateKnown;
+
+    /// <summary>연동된 아이디 — 미연동이면 빈 문자열. (#384)</summary>
+    public string AccountUsername => m_accountUsername;
+
+    /// <summary>정식 계정으로 승격됐는가. 판별은 PlayerInfo.Username 유무. (#384)</summary>
+    public bool IsLinked => m_accountStateKnown && !string.IsNullOrEmpty(m_accountUsername);
+
     public event Action OnNicknameChanged;
 
     /// <summary>표시용 닉네임 — UGS가 자동으로 붙이는 #1234 판별자를 제거한 이름. (#249)</summary>
@@ -173,6 +189,7 @@ public class AuthBootstrap : CommonManagerBase
 
         if (!wasSignedIn && IsSignedIn)
         {
+            await RefreshAccountStateAsync(); // 순서 중요 — 아래 복원이 IsLinked에 의존한다 (§4)
             await RestoreCachedNicknameAsync();
             OnSignedIn?.Invoke();
         }
@@ -221,6 +238,116 @@ public class AuthBootstrap : CommonManagerBase
         OnNicknameChanged?.Invoke();
     }
 
+    /// <summary>
+    /// 익명 계정을 정식 계정으로 승격 — 익명 로그인 상태를 **유지한 채** 자격증명을 붙인다. (#384)
+    /// 신규 SignUp으로 처리하면 새 PlayerId가 발급돼 닉네임이 유실된다.
+    /// </summary>
+    public async UniTask LinkAccountAsync(string username, string password)
+    {
+        if (!IsSignedIn)
+            throw new InvalidOperationException("로그인 후에 연동할 수 있습니다.");
+        if (IsNetworkConnected)
+            throw new InvalidOperationException("세션 참가 중에는 계정을 연동할 수 없습니다.");
+        if (CanSignOut != null && !CanSignOut())
+            throw new InvalidOperationException("세션 전환 중에는 계정을 연동할 수 없습니다.");
+        if (IsLinked)
+            throw new InvalidOperationException("이미 계정이 연동되어 있습니다.");
+
+        string id = username?.Trim() ?? string.Empty;
+        string pw = password ?? string.Empty; // 비밀번호는 Trim하지 않는다 — 공백도 유효 문자일 수 있다
+
+        string error = AccountCredentials.Validate(id, pw);
+        if (error != null)
+            throw new ArgumentException(error);
+
+        await AuthenticationService.Instance.AddUsernamePasswordAsync(id, pw);
+
+        m_accountUsername = id;
+        m_accountStateKnown = true;
+        Debug.Log($"[AuthBootstrap] 계정 연동 완료 / playerId: {PlayerId}");
+
+        // 승격 순간만 캐시 → 서버 1회 (§4). 로그인 때의 push가 조용히 실패했을 수 있어
+        // 계정에 이름을 남기는 마지막 기회다.
+        string cached = PlayerPrefs.GetString(NicknamePrefKey, string.Empty);
+        if (!string.IsNullOrEmpty(cached) && cached != Nickname && ValidateNickname(cached) == null)
+        {
+            try
+            {
+                await AuthenticationService.Instance.UpdatePlayerNameAsync(cached);
+                OnNicknameChanged?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[AuthBootstrap] 승격 후 닉네임 반영 실패: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 아이디로 로그인 — 새 기기(또는 토큰이 지워진 기기)의 경로. (#384)
+    /// m_signInOnStart로 이미 익명 로그인된 상태라 SignOut이 **선행**이어야 한다 —
+    /// 안 그러면 ClientInvalidUserState가 난다.
+    /// </summary>
+    public async UniTask SignInWithAccountAsync(string username, string password)
+    {
+        if (IsNetworkConnected)
+            throw new InvalidOperationException("세션 참가 중에는 계정을 바꿀 수 없습니다.");
+        if (CanSignOut != null && !CanSignOut())
+            throw new InvalidOperationException("세션 전환 중에는 계정을 바꿀 수 없습니다.");
+
+        string id = username?.Trim() ?? string.Empty;
+        string pw = password ?? string.Empty;
+
+        string error = AccountCredentials.Validate(id, pw);
+        if (error != null)
+            throw new ArgumentException(error);
+
+        if (UnityServices.State != ServicesInitializationState.Initialized)
+            await InitializeAndSignInAsync(m_profile); // 초기화 경로 확보 — 바로 아래에서 로그아웃한다
+
+        bool wasSignedIn = IsSignedIn;
+        if (wasSignedIn)
+            AuthenticationService.Instance.SignOut(); // 토큰은 유지 — 실패 시 익명으로 되돌아갈 수 있다
+
+        try
+        {
+            await AuthenticationService.Instance.SignInWithUsernamePasswordAsync(id, pw);
+            await AuthenticationService.Instance.GetPlayerNameAsync(); // 이걸 빼면 Nickname이 빈 문자열
+        }
+        catch
+        {
+            // 비밀번호를 틀렸을 뿐인데 로그아웃 상태로 방치하지 않는다.
+            // SignOut이 토큰을 남겨두므로 익명 로그인은 원래 PlayerId로 복귀한다.
+            if (wasSignedIn)
+            {
+                try
+                {
+                    await AuthenticationService.Instance.SignInAnonymouslyAsync();
+                    await AuthenticationService.Instance.GetPlayerNameAsync();
+                }
+                catch (Exception restoreEx)
+                {
+                    Debug.LogWarning($"[AuthBootstrap] 익명 복귀 실패: {restoreEx.Message}");
+                }
+            }
+            throw;
+        }
+
+        m_accountUsername = id;
+        m_accountStateKnown = true;
+
+        // 연동 계정은 서버가 정본 — 캐시를 덮어쓴다 (§4)
+        if (!string.IsNullOrEmpty(Nickname))
+        {
+            PlayerPrefs.SetString(NicknamePrefKey, Nickname);
+            PlayerPrefs.Save();
+        }
+
+        Debug.Log($"[AuthBootstrap] 계정 로그인 완료 / playerId: {PlayerId}");
+        OnSignedIn?.Invoke();
+        OnNicknameChanged?.Invoke();
+    }
+
     public void SignOut(bool clearCredentials = false)
     {
         if (IsNetworkConnected)
@@ -241,6 +368,10 @@ public class AuthBootstrap : CommonManagerBase
             return;
 
         AuthenticationService.Instance.SignOut(clearCredentials);
+
+        m_accountUsername = string.Empty;
+        m_accountStateKnown = false;
+
         OnSignedOut?.Invoke();
         Debug.Log($"[AuthBootstrap] SignOut 완료");
     }
@@ -268,6 +399,9 @@ public class AuthBootstrap : CommonManagerBase
 
         if (IsSignedIn)
         {
+            m_accountUsername = string.Empty;
+            m_accountStateKnown = false;
+
             AuthenticationService.Instance.SignOut();
             OnSignedOut?.Invoke();
         }
@@ -277,12 +411,55 @@ public class AuthBootstrap : CommonManagerBase
     }
 
     /// <summary>
+    /// 서버에서 연동 상태를 확인한다 — 로그인당 1회. (#384)
+    /// §4 우선순위가 이 값에 의존하므로 RestoreCachedNicknameAsync보다 **먼저** 불러야 한다.
+    /// </summary>
+    private async UniTask RefreshAccountStateAsync()
+    {
+        try
+        {
+            // PlayerInfo.Username을 그대로 믿고 이 호출을 생략하면 안 된다. Editor에서는
+            // UnityServices 초기화가 도메인 리로드를 넘어 살아남아 앞선 실행의 조회 결과가
+            // 남아 있을 수 있고(실측), 새 프로세스에서는 비어 있다. 비어 있는 값을 "미연동"으로
+            // 읽으면 §4가 익명 경로로 가서 로컬 캐시가 계정 닉네임을 덮어쓴다.
+            // 아끼는 것은 로그인당 1회 왕복, 잃는 것은 닉네임이므로 항상 서버에 확인한다.
+            var info = await AuthenticationService.Instance.GetPlayerInfoAsync();
+            m_accountUsername = info?.Username ?? string.Empty;
+            m_accountStateKnown = true;
+            Debug.Log($"[AuthBootstrap] 연동 상태: {(IsLinked ? m_accountUsername : "미연동")}");
+        }
+        catch (Exception ex)
+        {
+            // 실패해도 로그인은 유효하다 — "모름"으로 남겨 캐시 push를 막는다 (§4).
+            m_accountUsername = string.Empty;
+            m_accountStateKnown = false;
+            Debug.LogWarning($"[AuthBootstrap] 연동 상태 조회 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// 로그인 직후 로컬 캐시와 서버 닉네임을 맞춘다. (#249)
     /// 캐시가 없으면 서버 값을 씨딩하고, 다르면 캐시를 정본으로 삼아 서버에 밀어넣는다 —
     /// 세션 토큰이 지워져 PlayerId가 새로 발급된 경우의 복원 경로.
     /// </summary>
     private async UniTask RestoreCachedNicknameAsync()
     {
+        // 연동된 계정은 서버가 정본 — 캐시를 덮어쓰기만 하고 서버로 밀지 않는다 (§4).
+        // 이 분기가 없으면 새 기기의 낡은 익명 캐시가 계정 닉네임을 덮어쓴다.
+        if (IsLinked)
+        {
+            if (!string.IsNullOrEmpty(Nickname))
+            {
+                PlayerPrefs.SetString(NicknamePrefKey, Nickname);
+                PlayerPrefs.Save();
+            }
+            return;
+        }
+
+        // 연동 여부를 모르는 상태(조회 실패)에서는 push하지 않는다 — 계정 닉네임을 덮어쓸 위험.
+        if (!m_accountStateKnown)
+            return;
+
         string cached = PlayerPrefs.GetString(NicknamePrefKey, string.Empty);
 
         if (string.IsNullOrEmpty(cached))
