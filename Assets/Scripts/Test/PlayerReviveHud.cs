@@ -76,11 +76,45 @@ public class PlayerReviveHud : NetworkBehaviour
         }
     }
 
+    // 라벨 스타일 — OnGUI는 프레임당 여러 번(Layout·Repaint) 돌기 때문에 매번 새로 만들지 않는다.
+    // GUI.skin은 OnGUI 안에서만 유효하므로 여기(호출부)에서 지연 생성한다.
+    private static GUIStyle s_labelStyle;
+
     // 화면 중앙 하단에 가독성용 반투명 배경과 함께 라벨을 그린다.
+    // 폭·높이는 문구를 <b>재서</b> 잡는다 — 고정 폭이면 긴 안내(운반·이송)가 잘린다.
     private static void DrawCenterLabel(string text)
     {
-        const float width = 420f;
-        const float height = 44f;
+        const float paddingX = 24f;
+        const float paddingY = 12f;
+        const float maxWidthRatio = 0.9f; // 좁은 창에서도 화면 밖으로 나가지 않게
+
+        if (s_labelStyle == null)
+        {
+            s_labelStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 20,
+                fontStyle = FontStyle.Bold
+            };
+            s_labelStyle.normal.textColor = Color.white;
+        }
+
+        var content = new GUIContent(text);
+
+        // 한 줄 기준으로 먼저 잰다 — wordWrap을 켜 둔 채 CalcSize를 부르면 결과가 흔들려서,
+        // 끈 상태로 재고 화면 폭을 넘길 때만 접는다.
+        s_labelStyle.wordWrap = false;
+        float maxWidth = Screen.width * maxWidthRatio - paddingX * 2f;
+        float singleLineWidth = s_labelStyle.CalcSize(content).x;
+
+        float textWidth = Mathf.Min(singleLineWidth, maxWidth);
+        if (singleLineWidth > maxWidth)
+            s_labelStyle.wordWrap = true; // 그래도 안 들어가면 두 줄로 접는다 — 잘리는 것보다 낫다
+
+        float textHeight = s_labelStyle.CalcHeight(content, textWidth);
+
+        float width = textWidth + paddingX * 2f;
+        float height = textHeight + paddingY * 2f;
         Rect rect = new Rect((Screen.width - width) * 0.5f, Screen.height * 0.62f, width, height);
 
         Color prev = GUI.color;
@@ -88,13 +122,6 @@ public class PlayerReviveHud : NetworkBehaviour
         GUI.DrawTexture(rect, Texture2D.whiteTexture);
         GUI.color = prev;
 
-        GUIStyle style = new GUIStyle(GUI.skin.label)
-        {
-            alignment = TextAnchor.MiddleCenter,
-            fontSize = 20,
-            fontStyle = FontStyle.Bold
-        };
-        style.normal.textColor = Color.white;
-        GUI.Label(rect, text, style);
+        GUI.Label(rect, content, s_labelStyle);
     }
 }
