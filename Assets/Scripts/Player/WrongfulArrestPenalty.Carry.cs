@@ -20,10 +20,22 @@ public partial class WrongfulArrestPenalty
         if (caught == null)
             return;
 
+        PlayerIncapacitation incap = caught.GetComponent<PlayerIncapacitation>();
+
+        // 기능 정지(Die)된 몸은 접수하지 않는다 (#365). 추격 포획은 거리만 보므로(NpcChaseState) 바닥에
+        // 쓰러진 몸도 잡히는데, 아래 Incapacitate는 Die를 덮지 못하게 막혀 있어도(#364) 호송·매달기는
+        // 그 가드 밖이라 그대로 진행된다 — 상태만 Die로 둔 채 광장으로 순간이동하고, 본부 부활 장치에
+        // 안치해 둔 몸이면 동료 눈앞에서 사라진다. 여기서 끊으면 끌기 연출과 m_carryTarget 점유
+        // (다른 사람 페널티까지 막는다), Incapacitate의 경고 로그가 함께 정리된다.
+        //
+        // 페널티가 취소되는 것은 아니다 — 추격대는 해산하지 않고 계속 노리므로 부활한 뒤에 잡힌다.
+        // 방치·격퇴와 같은 '유예'다 (7-3: 페널티는 미뤄질 뿐 사라지지 않는다).
+        if (incap != null && incap.IsDead)
+            return;
+
         m_carryTarget = caught;
 
         // 즉시 행동불능(구조 불가) — 매달기와 같은 계열의 무력화 (#101/#105)
-        PlayerIncapacitation incap = caught.GetComponent<PlayerIncapacitation>();
         if (incap != null)
             incap.Incapacitate(IncapacitationCause.Penalty);
 
