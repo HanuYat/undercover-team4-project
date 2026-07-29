@@ -1,4 +1,5 @@
 using Unity.Services.Core;
+using UnityEngine;
 
 /// <summary>
 /// 계정 자격증명의 형식 규칙과 오류 메시지. (#384)
@@ -91,8 +92,13 @@ public static class AccountCredentials
                 return "이 계정에는 이미 아이디가 연동되어 있습니다.";
             case k_errorInvalidFormat:
                 return "아이디 또는 비밀번호 형식이 올바르지 않습니다.";
-            default:
-                return $"처리 실패 ({ex.ErrorCode}) — 아이디와 비밀번호를 확인해 주세요.";
         }
+
+        // 아이디·비번 불일치(서버 title: WRONG_USERNAME_PASSWORD)는 SDK가 코드로 매핑하지 않아
+        // ErrorCode가 0으로 온다(실측). 네트워크·서비스 장애도 같은 0이라 둘을 가릴 수 없으므로
+        // 어느 하나로 단정하지 않는다 — "비밀번호가 틀렸다"고 잘라 말하면 서버 장애 때 거짓이 된다.
+        // 진단에 필요한 값은 화면이 아니라 로그로 보낸다.
+        Debug.LogWarning($"[AccountCredentials] 미분류 인증 오류 code={ex.ErrorCode}: {ex.Message}");
+        return "아이디 또는 비밀번호를 확인해 주세요. 계속 실패하면 잠시 후 다시 시도해 주세요.";
     }
 }

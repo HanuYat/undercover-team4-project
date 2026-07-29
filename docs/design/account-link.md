@@ -71,6 +71,10 @@ C-3는 막다른 길이 아니다 — 한 계정에 여러 identity를 링크할
 
 10004의 서버 응답 `"user already has a username/password account linked to it"` 로 **계정당 아이디/비번은 하나뿐**임이 확인됐다.
 
+⚠️ **아이디·비밀번호 불일치는 코드로 가릴 수 없다.** 서버는 `WRONG_USERNAME_PASSWORD`(400, `"Invalid username or password"`)를 보내지만 SDK가 이를 매핑하지 않아 **`ErrorCode`가 0**으로 온다(실측). 네트워크·서비스 장애도 같은 0이므로, 0을 "비밀번호 틀림"으로 단정하면 서버 장애 때 거짓 안내가 된다 — `AccountCredentials.DescribeError`는 0을 두 경우 모두에 맞는 문장으로 처리하고 실제 코드·메시지는 `Debug.LogWarning`으로 보낸다.
+
+참고로 서버가 "아이디가 없음"과 "비밀번호가 틀림"을 구분해 주지 않는 것은 의도적이다(구분하면 아이디 존재 여부를 캐낼 수 있다). 우리 문장도 같은 수준으로 뭉뚱그린다.
+
 ## 4. 닉네임 우선순위 (가장 위험한 지점)
 
 현재 `RestoreCachedNicknameAsync`([AuthBootstrap.cs:284](../../Assets/Scripts/Network/AuthBootstrap.cs#L284))는 **캐시를 정본으로 서버에 밀어넣는다** — #249에서 "토큰이 지워져 `PlayerId`가 새로 발급된 경우의 복원"을 위해 의도적으로 그렇게 만든 것이다.
@@ -108,7 +112,7 @@ PlayerNameTag · SessionFlow · SessionManager        ← 수정 없음
    | 승격 후 닉네임 유지 | **✅** 승격 전 닉네임이 그대로 남는다 |
    | 토큰 삭제 → 아이디 로그인 | **✅ `PlayerId`·닉네임 모두 복원.** 기기 간 유지 성립. 이 경로는 `GetPlayerNameAsync()`로 **서버에서** 받아온 값이라 PlayerPrefs 캐시의 영향이 아니다 |
    | 연동 판별 수단 | **`PlayerInfo.Username`.** 익명 상태 `''` → 승격 후 `'jina-test1'`. **`Identities`는 승격 후에도 0** — 아이디/비번은 identity 항목을 만들지 않는다(외부/소셜 provider 전용)이므로 순회 코드는 불필요 |
-   | 에러 코드 | 10002 / 10003 / 10004 세 상황이 모두 구분된다 → §3 표 |
+   | 에러 코드 | 10002 / 10003 / 10004 세 상황은 구분된다. **아이디·비번 불일치만 코드가 0**으로 와 가릴 수 없다 → §3 표 |
 
    **API 표면**(3.6.1, 컴파일 확인): `AddUsernamePasswordAsync` · `SignInWithUsernamePasswordAsync` · `SignUpWithUsernamePasswordAsync` · `UpdatePasswordAsync` · `GetPlayerInfoAsync()` 모두 존재. `PlayerInfo`에 `Username`과 `Identities`(`TypeId`/`UserId`) 둘 다 있으나, 위와 같이 **쓸 것은 `Username`뿐**이다.
 
@@ -147,8 +151,8 @@ PlayerNameTag · SessionFlow · SessionManager        ← 수정 없음
 ## 9. 미결 항목
 
 - ~~**`PlayerInfo.Username`의 채워지는 시점**~~ **✅ 결론: 항상 `GetPlayerInfoAsync()`로 확인한다.** Editor에서 조회 전에도 값이 들어 있는 것을 관찰했지만, `UnityServices` 초기화가 도메인 리로드를 넘어 살아남아 **앞선 실행의 조회 결과가 남은 것**과 구분할 수 없다(같은 현상을 프로필 전환 테스트에서도 겪었다). 새 프로세스에서 비어 있는 값을 "미연동"으로 읽으면 §4가 익명 경로로 가서 캐시가 계정 닉네임을 덮어쓴다 — 아끼는 것은 로그인당 왕복 1회, 잃는 것은 닉네임이므로 호출을 유지한다.
-- **스파이크 디버그 GUI는 임시 코드다** — `OnGUI`의 `m_showDebugGui` 블록과 `Spike*Async` 3개 메서드가 전부다(그 밖으로 새지 않는다). 2단계 정식 구현이 끝나면 PR 전에 삭제한다. 정식 UI(`AuthPanel`)와 기능이 중복되므로 남겨둘 이유가 없다.
-- **Title 씬에 테스트용 오버라이드를 커밋하지 않는다** — 스파이크 중 `m_profile`(프로필 분리 테스트)과 `m_showDebugGui`가 씬에 저장된다. `m_profile`이 섞여 들어가면 다른 팀원의 닉네임 캐시 스코프까지 바뀌므로, PR 전에 **빈칸으로 되돌리고 `m_showDebugGui`도 해제**한다.
+- ~~**스파이크 디버그 GUI는 임시 코드다**~~ **✅ 삭제 완료.** `m_showDebugGui` 패널은 #249 이전 원형(상태 표시·닉네임 적용·Sign In/Out·New Player)으로 되돌아갔다. `m_showDebugGui`는 프로필별 계정 테스트에 여전히 쓸모가 있어 패널 자체는 남긴다.
+- **Title 씬에 테스트용 오버라이드를 커밋하지 않는다** — 계정 테스트 중 `m_profile`(프로필 분리)과 `m_showDebugGui`가 씬에 저장된다. `m_profile`이 섞여 들어가면 다른 팀원의 닉네임 캐시 스코프까지 바뀐다. **빈칸으로 되돌리고(오버라이드 항목까지 Revert) `m_showDebugGui`도 해제**할 것.
 - **플랫폼 링크(C-2)** — 배포 플랫폼 확정 후 별도 이슈. 같은 계정에 identity 추가로 붙으므로 이 설계를 되돌릴 필요는 없다.
 - **비밀번호 변경 UI** — Admin API 없이 가능한 유일한 경로가 `UpdatePasswordAsync`이고 전 기기 로그아웃을 동반한다. 필요해지면 별도 이슈.
 - **UI 문자열 로컬라이즈** — 현행 관례대로 평문 TMP로 두고 일괄 작업 때 처리 ([settings-ui.md](settings-ui.md) §7과 동일).

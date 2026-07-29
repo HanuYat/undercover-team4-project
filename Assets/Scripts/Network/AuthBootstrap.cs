@@ -509,11 +509,6 @@ public class AuthBootstrap : CommonManagerBase
 
     private string m_nicknameInput = string.Empty;
 
-    // ── #384 스파이크 (임시 — 확인 끝나면 삭제) ──
-    private string m_idInput = string.Empty;
-    private string m_pwInput = string.Empty;
-    private string m_spikeResult = "-";
-
     private void OnGUI()
     {
         if (!m_showDebugGui)
@@ -521,7 +516,7 @@ public class AuthBootstrap : CommonManagerBase
         if (IsNetworkConnected)
             return;
 
-        GUILayout.BeginArea(new Rect(700, m_guiTopOffset, 380, 560));
+        GUILayout.BeginArea(new Rect(700, m_guiTopOffset, 380, 360));
 
         GUILayout.Label("Authentication (익명) — 상태");
 
@@ -574,32 +569,6 @@ public class AuthBootstrap : CommonManagerBase
         }
 
         GUILayout.Space(8);
-        GUILayout.Label("── 계정 연동 스파이크 (#384) ──");
-
-        GUILayout.BeginHorizontal();
-        GUILayout.Label("ID", GUILayout.Width(26));
-        m_idInput = GUILayout.TextField(m_idInput, 20);
-        GUILayout.EndHorizontal();
-
-        GUILayout.BeginHorizontal();
-        GUILayout.Label("PW", GUILayout.Width(26));
-        m_pwInput = GUILayout.TextField(m_pwInput, 30);
-        GUILayout.EndHorizontal();
-
-        GUI.enabled = !m_isBusy && IsSignedIn;
-        if (GUILayout.Button("① 승격(Add) — PlayerId 유지 확인"))
-            SpikeLinkAsync().Forget();
-        if (GUILayout.Button("② 연동 상태 조회(PlayerInfo)"))
-            SpikeInspectAsync().Forget();
-
-        GUI.enabled = !m_isBusy;
-        if (GUILayout.Button("③ 로그아웃 → 아이디 로그인"))
-            SpikeSignInAsync().Forget();
-        GUI.enabled = true;
-
-        GUILayout.Label(m_spikeResult);
-
-        GUILayout.Space(8);
         GUILayout.Label(m_status);
 
         GUILayout.EndArea();
@@ -619,104 +588,6 @@ public class AuthBootstrap : CommonManagerBase
         catch (Exception ex)
         {
             m_status = $"닉네임 실패 - {ex.GetType().Name}: {ex.Message}";
-        }
-        finally
-        {
-            m_isBusy = false;
-        }
-    }
-
-    /// <summary>① 익명 계정에 자격증명 추가 = 승격. PlayerId가 유지되는지가 핵심. (#384 스파이크)</summary>
-    private async UniTaskVoid SpikeLinkAsync()
-    {
-        if (m_isBusy)
-            return;
-
-        m_isBusy = true;
-        string idBefore = PlayerId;
-        string nickBefore = Nickname;
-        try
-        {
-            Debug.Log($"[스파이크] 전송값 id='{m_idInput}' (길이 {m_idInput.Length}) / pw 길이 {m_pwInput.Length}");
-
-            await AuthenticationService.Instance.AddUsernamePasswordAsync(m_idInput, m_pwInput);
-
-            bool kept = PlayerId == idBefore;
-            m_spikeResult =
-                $"승격 {(kept ? "OK — PlayerId 유지" : "!! PlayerId 변경됨 (설계 재검토)")}\n"
-                + $"before: {idBefore}\nafter : {PlayerId}\n닉네임: {nickBefore} → {Nickname}";
-            Debug.Log($"[스파이크] {m_spikeResult}");
-        }
-        catch (RequestFailedException ex) // AuthenticationException도 여기로 잡힌다 (파생 클래스)
-        {
-            m_spikeResult = $"{ex.GetType().Name} ErrorCode={ex.ErrorCode}\n{ex.Message}";
-            Debug.LogError($"[스파이크] {m_spikeResult}");
-        }
-        finally
-        {
-            m_isBusy = false;
-        }
-    }
-
-    /// <summary>② 연동 여부를 무엇으로 판별할 수 있는지 확인. (#384 스파이크)</summary>
-    private async UniTaskVoid SpikeInspectAsync()
-    {
-        if (m_isBusy)
-            return;
-
-        m_isBusy = true;
-        try
-        {
-            var info = await AuthenticationService.Instance.GetPlayerInfoAsync();
-
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine($"Username: '{info.Username}'");
-            sb.AppendLine($"Identities: {info.Identities?.Count ?? 0}");
-            if (info.Identities != null)
-            {
-                foreach (var identity in info.Identities)
-                    sb.AppendLine($"  typeId='{identity.TypeId}' userId='{identity.UserId}'");
-            }
-
-            m_spikeResult = sb.ToString();
-            Debug.Log($"[스파이크] PlayerInfo\n{m_spikeResult}");
-        }
-        catch (RequestFailedException ex)
-        {
-            m_spikeResult = $"{ex.GetType().Name} ErrorCode={ex.ErrorCode}\n{ex.Message}";
-            Debug.LogError($"[스파이크] {m_spikeResult}");
-        }
-        finally
-        {
-            m_isBusy = false;
-        }
-    }
-
-    /// <summary>③ 새 기기 로그인 경로 — SignOut 선행이 필수. (#384 스파이크)</summary>
-    private async UniTaskVoid SpikeSignInAsync()
-    {
-        if (m_isBusy)
-            return;
-
-        m_isBusy = true;
-        try
-        {
-            if (IsSignedIn)
-                AuthenticationService.Instance.SignOut(); // 이걸 빼면 ClientInvalidUserState
-
-            await AuthenticationService.Instance.SignInWithUsernamePasswordAsync(
-                m_idInput,
-                m_pwInput
-            );
-            await AuthenticationService.Instance.GetPlayerNameAsync(); // 이걸 빼면 Nickname이 빈 문자열
-
-            m_spikeResult = $"로그인 OK\nPlayerId: {PlayerId}\n닉네임: {Nickname}";
-            Debug.Log($"[스파이크] {m_spikeResult}");
-        }
-        catch (RequestFailedException ex)
-        {
-            m_spikeResult = $"{ex.GetType().Name} ErrorCode={ex.ErrorCode}\n{ex.Message}";
-            Debug.LogError($"[스파이크] {m_spikeResult}");
         }
         finally
         {
