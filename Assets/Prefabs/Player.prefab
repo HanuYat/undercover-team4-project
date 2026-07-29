@@ -3142,6 +3142,8 @@ MonoBehaviour:
   m_losBlockMask:
     serializedVersion: 2
     m_Bits: 1
+  m_logLineOfSight: 0
+  m_logInterval: 0.5
 --- !u!114 &-879792188796056759
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3304,11 +3306,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerEscorter
   ShowTopMostFoldoutHeaderGroup: 1
-  m_ropeLength: 1.6
-  m_dragSmoothTime: 0.14
-  m_dragTurnSharpness: 6
-  m_dragSwayAngle: 7
-  m_dragSwayFrequency: 1.6
   m_ropeBreakDistance: 10
   m_channelSeconds: 3
   m_subdueChannelSeconds: 3
