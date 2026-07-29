@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// [임시] 현재 씬을 화면 우상단에 표시 — 씬 전환 후 화면에 아무것도 안 보여도 어느 씬인지 알 수 있게. (#214)
+/// [임시] 현재 씬을 화면 좌상단에 표시 — 씬 전환 후 화면에 아무것도 안 보여도 어느 씬인지 알 수 있게. (#214)
 /// AppBootstrap(상주·DDOL)에 붙여 전 씬에서 항상 보이게 한다. 정식 UI 나오면 제거.
 /// App.CurrentScene은 씬 로드마다 갱신되므로(App.NotifySceneLoaded) 별도 구독 없이 그려도 최신값이다.
 /// </summary>
@@ -21,7 +21,7 @@ public class SceneIndicatorHud : MonoBehaviour
     {
         const float width = 180f;
         const float height = 26f;
-        Rect rect = new Rect(Screen.width - width - 12f, 12f, width, height); // 우상단 (좌측 HUD들과 안 겹치게)
+        Rect rect = new Rect(12f, 12f, width, height); // 좌상단 (세션 코드 HUD를 아래로 비켜뒀다)
 
         Color prev = GUI.color;
         GUI.color = new Color(0f, 0f, 0f, 0.55f);
