@@ -37,9 +37,12 @@ public class JailDoor : NetworkBehaviour
     [Tooltip("근접 검사 주기(초) — 매 프레임 돌 필요가 없다. 0이면 매 프레임 검사한다")]
     [SerializeField] private float m_proximityCheckInterval = 0.1f;
 
-    [Header("자물쇠 (비우면 부모에서 자동 탐색)")]
-    [Tooltip("풀려 있는 동안(탈옥, #231)에는 근처에 아무도 없어도 계속 열어 둔다")]
+    [Header("자물쇠·유치장 (비우면 부모에서 자동 탐색)")]
+    [Tooltip("풀려 있고 아직 수감자가 남아 있는 동안(탈옥 진행 중, #231)에는 근처에 아무도 없어도 열어 둔다")]
     [SerializeField] private JailLock m_jailLock;
+
+    [Tooltip("수감자가 남아 있는지 확인용 — 다 빠져나간 빈 유치장이면 문을 닫는다")]
+    [SerializeField] private JailZone m_jailZone;
 
     // 서버 권위 개폐 상태 — JailLock·JailZone과 동일한 이중 구조(오프라인 폴백 로컬 값)
     private readonly NetworkVariable<bool> m_isOpenSynced = new NetworkVariable<bool>(false);
@@ -65,6 +68,9 @@ public class JailDoor : NetworkBehaviour
         // 자물쇠는 같은 유치장 오브젝트에 있다 — 부모 쪽에서 찾는다 (JailZone.Awake와 같은 관례)
         if (m_jailLock == null)
             m_jailLock = GetComponentInParent<JailLock>();
+
+        if (m_jailZone == null)
+            m_jailZone = GetComponentInParent<JailZone>();
     }
 
     public override void OnNetworkSpawn() => m_isOpenSynced.OnValueChanged += HandleOpenSyncedChanged;
@@ -83,12 +89,43 @@ public class JailDoor : NetworkBehaviour
             return;
         m_proximityCooldown = m_proximityCheckInterval;
 
+        Vector3 center = DoorCenter;
+
         // 플레이어 목록을 직접 훑는다 — 최대 6명이라 물리 쿼리보다 싸고, 콜라이더가 빽빽한
         // 도시 씬에서 논알록 버퍼가 넘쳐 대상을 놓치는 문제가 없다 (SuddenEventUtil 주석과 같은 이유)
-        bool playerNear = SuddenEventUtil.FindNearestFieldPlayer(DoorCenter, m_autoOpenRadius) != null;
-        bool jailbreakOpen = m_jailLock != null && !m_jailLock.IsLocked;
+        bool playerNear = SuddenEventUtil.FindNearestFieldPlayer(center, m_autoOpenRadius) != null;
 
-        ServerSetOpen(playerNear || jailbreakOpen);
+        // 문을 지나야 하는 NPC도 연다 — 수감 이송되는 진범·위조범·난동꾼(Jailed)과 침입자(Intruding).
+        bool npcNear = IsJailBoundNpcNear(center);
+        // 탈옥이 '진행 중'일 때만 열어 둔다 — 자물쇠가 풀렸어도 수감자가 다 빠져나갔으면 닫는다.
+        // 안 그러면 마지막 수감자가 나간 뒤 다음 수감자가 들어와 재잠금될 때까지 영영 열려 있다.
+        // Inmates는 서버 권위 집합이라 이 판단은 서버(또는 오프라인)에서만 유효하다.
+        bool jailbreakOpen = m_jailLock != null && !m_jailLock.IsLocked
+                             && m_jailZone != null && m_jailZone.Inmates.Count > 0;
+
+        ServerSetOpen(playerNear || npcNear || jailbreakOpen);
+    }
+
+    // 문을 통과해야 하는 NPC가 반경 안에 있는가 — 상태 화이트리스트로 본다.
+    // 배회 시민까지 세면 본부를 지나가는 것만으로 문이 계속 열려 있게 되고, 애초에 시민은
+    // Jail 영역에 못 들어가므로(NavMesh 게이팅) 열어 줄 이유가 없다.
+    // 연행(Escorted) 중인 대상은 끌고 있는 플레이어가 반경 안에 있으니 위 판정에서 이미 걸린다.
+    private bool IsJailBoundNpcNear(Vector3 center)
+    {
+        // 검사 주기(m_proximityCheckInterval)로 호출을 눌러 두었기에 목록 훑기로 충분하다.
+        NpcController[] npcs = UnityEngine.Object.FindObjectsByType<NpcController>(FindObjectsSortMode.None);
+        float sqrRadius = m_autoOpenRadius * m_autoOpenRadius;
+
+        for (int i = 0; i < npcs.Length; i++)
+        {
+            NpcState state = npcs[i].CurrentState;
+            if (state != NpcState.Jailed && state != NpcState.Intruding)
+                continue;
+            if ((npcs[i].transform.position - center).sqrMagnitude <= sqrRadius)
+                return true;
+        }
+
+        return false;
     }
 
     // 근접 판정의 기준점 — 문짝의 <b>닫힌 위치</b>를 월드로 환산해 쓴다.
