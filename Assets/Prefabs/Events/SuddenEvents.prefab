@@ -154,9 +154,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DeviceBlackoutView
   m_blackout: {fileID: 0}
-  m_overlayAlpha: 0.75
-  m_overlayLabel: "\u26A0 \uC804\uC790\uAE30\uAE30 \uBA39\uD1B5 \u2014 \uC2DC\uC57C\xB7\uD1B5\uC2E0
-    \uC7A5\uC560"
 --- !u!114 &1036064955631126747
 MonoBehaviour:
   m_ObjectHideFlags: 0
