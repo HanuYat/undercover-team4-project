@@ -20,22 +20,22 @@ public partial class NpcController
     // 이게 없으면 원격 피어에서 NPC가 서서 끌려간다. (#369)
     private readonly NetworkVariable<bool> m_ropedSynced = new(false);
 
-    // 장력을 거는 쪽(끄는 플레이어들)의 트랜스폼 — 서버(또는 오프라인) 전용. StartRopeDrag가 하나씩 더한다.
-    // 여러 명이 같은 대상을 함께 끌 수 있어(줄다리기, #390) 목록이다. E로 놓은 참가자는 여기서 빠지고
-    // 줄만 남는다 — 장력에 기여하지 않으므로 줄이 늘어나다 거리 초과로 끊긴다.
+    // 장력을 거는 쪽(끄는 플레이어들)의 트랜스폼 — 서버(또는 오프라인) 전용. 여러 명이 같은 대상을
+    // 함께 끌 수 있어(줄다리기) 목록이다. E로 놓은 참가자는 여기서 빠지고 줄만 남는다 —
+    // 장력에 기여하지 않으므로 줄이 늘어나다 거리 초과로 끊긴다.
     private readonly List<Transform> m_dragAnchors = new List<Transform>();
 
     // 끌기 추종 상태 (서버·오프라인 전용) — 매 프레임 이어지는 값이라 StartRopeDrag에서 초기화한다.
-    // 원래 PlayerEscorter에 1인분으로 있던 것을 NPC가 소유하도록 옮겼다 (#390) — 한 플레이어가 여러 명을
-    // 끌면 추종 상태도 NPC 수만큼 필요한데, 끌리는 당사자가 갖는 것이 제일 자연스럽다.
+    // 끄는 쪽이 아니라 끌리는 쪽이 갖는다: 한 플레이어가 여러 명을 끌면 이 상태도 NPC 수만큼 필요하다.
     private Vector3 m_dragVelocity; // SmoothDamp 관성
     private Quaternion m_dragFacing; // 흔들림을 뺀 몸 방향 — 여기에 sway를 얹어 최종 회전을 만든다
     private float m_dragTravel; // 끌린 누적 거리(m) — 흔들림 위상의 기준
 
-    /// <summary>밧줄로 묶여 끌리는 중인가. 서버·오프라인은 실제 값으로, 원격 피어는 동기화 플래그로 판정. (#269/#369)</summary>
+    /// <summary>밧줄로 묶여 <b>누군가에게</b> 끌리는 중인가 — 참가자별 판정은 <see cref="IsDraggedBy"/>.
+    /// 서버·오프라인은 실제 값으로, 원격 피어는 동기화 플래그로 판정. (#269/#369)</summary>
     public bool IsRoped => IsSpawned && !IsServer ? m_ropedSynced.Value : m_roped;
 
-    /// <summary>밧줄 길이(m) — 표시(늘어짐 정도)와 서버 장력 판정이 같은 값을 쓴다. (#269, #390에서 NPC로 이관)</summary>
+    /// <summary>밧줄 길이(m) — 표시(늘어짐 정도)와 서버 장력 판정이 같은 값을 쓴다.</summary>
     public float RopeLength => m_ropeDragConfig.RopeLength;
 
     /// <summary>밧줄 끌기 시작 — PlayerEscorter가 서버에서 호출. 위치를 끄는 플레이어가 직접 제어하므로
@@ -49,8 +49,7 @@ public partial class NpcController
             return;
 
         // 첫 참가자일 때만 추종 상태를 새로 잡는다 — 이전 끌기의 관성·위상이 남으면 첫 프레임에 튄다.
-        // 이미 끌리는 중에 합류(줄다리기)하면 이어서 가야 하므로 건드리지 않는다: 여기서 리셋하면
-        // 남이 합류하는 순간 끌려가던 몸이 멈칫한다. (#390)
+        // 이미 끌리는 중이면(합류) 건드리지 않는다: 리셋하면 남이 붙는 순간 끌려가던 몸이 멈칫한다.
         if (!m_roped)
         {
             m_dragVelocity = Vector3.zero;
@@ -70,20 +69,16 @@ public partial class NpcController
             m_agent.enabled = false;
     }
 
-    /// <summary>이 플레이어가 지금 이 NPC에 장력을 걸고 있는가 — 서버(또는 오프라인) 전용. (#390)</summary>
+    /// <summary>이 플레이어가 지금 이 NPC에 장력을 걸고 있는가 — 서버(또는 오프라인) 전용.
+    /// 끄는 쪽(PlayerEscorter)의 "내가 이걸 끌고 있나"가 이 값을 그대로 쓴다 — 양쪽에 따로 두면 어긋난다.</summary>
     public bool IsDraggedBy(Transform dragger) =>
         dragger != null && m_dragAnchors.Contains(dragger);
 
-    /// <summary>지금 함께 끌고 있는 인원 수 — 무게 페널티 완화(#398)가 읽을 자리. 서버(또는 오프라인) 전용. (#390)</summary>
-    public int DragParticipantCount => m_dragAnchors.Count;
-
-    // 한 플레이어가 여러 명을 끌 때의 자리 배치 — 끄는 쪽(PlayerEscorter)이 매 프레임 알려준다.
-    // 전원이 플레이어 1점에 앵커되면 밧줄 길이만큼 떨어진 같은 지점으로 수렴해 몸이 겹치는데,
-    // 벽 스윕이 사람은 장애물로 치지 않아(#313/#339) 서로 통과해 한 덩어리가 된다. (#390)
+    // 부채꼴 배치용 자리 번호 — 끄는 쪽이 매 프레임 알려준다.
     private int m_dragSlot;
     private int m_dragSlotCount = 1;
 
-    /// <summary>끌리는 자리(부채꼴 배치용) 지정 — 끄는 플레이어가 매 프레임 갱신한다. 서버(또는 오프라인) 전용. (#390)</summary>
+    /// <summary>끌리는 자리(부채꼴 배치용) 지정 — 끄는 플레이어가 매 프레임 갱신한다. 서버(또는 오프라인) 전용.</summary>
     public void SetDragSlot(int slot, int slotCount)
     {
         m_dragSlot = slot;
@@ -98,11 +93,10 @@ public partial class NpcController
             m_ropedSynced.Value = value;
     }
 
-    /// <summary>밧줄 끌기 해제 — 이 참가자를 장력에서 뺀다. 아직 다른 참가자가 잡고 있으면 끌기는 계속되고
-    /// <b>true</b>를 돌려준다(에이전트를 되살리면 안 된다 — 다른 사람이 끌던 몸이 NavMesh로 튀어 오른다).
-    /// 마지막 한 명이 놓았을 때만 에이전트를 되살려 NavMesh로 복귀(Warp)시키고 false를 돌려준다.
-    /// 안 하면 이후 이동·상태가 깨진다. 커스터디 상태를 어디로 보낼지는 호출부가 정한다(놓기=Captured, 판정=유치장).
-    /// releaser는 밧줄을 놓는 플레이어 — 장력 목록에서 뺄 키이자, 놓은 자리가 NavMesh 밖일 때 대체 기준점이다. (#390)</summary>
+    /// <summary>밧줄 끌기 해제 — releaser를 장력에서 뺀다. 아직 남은 참가자가 있으면 <b>true</b>(끌기 계속).
+    /// 마지막 한 명이 놓았을 때만 에이전트를 되살려 NavMesh로 복귀(Warp)시키고 false를 돌려준다 —
+    /// 안 하면 이후 이동·상태 전이가 조용히 실패한다. 커스터디 행선지는 호출부가 정한다(놓기=Captured, 판정=유치장).
+    /// releaser는 장력 목록에서 뺄 키이자, 놓은 자리가 NavMesh 밖일 때 대체 기준점이다.</summary>
     public bool StopRopeDrag(Transform releaser)
     {
         if (IsSpawned && !IsServer)
@@ -166,15 +160,15 @@ public partial class NpcController
     }
 
     /// <summary>
-    /// 밧줄 장력으로 끌리는 몸을 끌어당긴다 — 서버(또는 오프라인) 매 프레임. (#269, #390에서 PlayerEscorter에서 이관)
+    /// 밧줄 장력으로 끌리는 몸을 끌어당긴다 — 서버(또는 오프라인) 매 프레임. (#269)
     /// 위치를 직접 대입하고 NetworkTransform이 전 클라에 복제하므로 원격 피어에서도 끌리는 위치가 맞는다.
     ///
     /// 뒤 고정점에 강체로 붙이지 않는다: (1) 밧줄 길이를 넘을 때만 당기고 (2) 늦게 따라오게 해서
     /// 코너를 돌면 몸이 바깥으로 끌려나오는 궤적이 생긴다.
     ///
     /// <b>호출 위치 주의</b> — Update의 넉백·스턴 게이트보다 <b>앞</b>이다. 묶인 채 기절한 대상은 스턴
-    /// 오버레이를 단 채로 끌려가야 하기 때문(TickStun이 IsRoped면 타이머를 멈추는 것과 같은 사양) —
-    /// 게이트 뒤로 내리면 테이저→밧줄 콤보로 잡은 대상이 그 자리에 멈춘다. (#269)
+    /// 오버레이를 단 채로 끌려가야 하기 때문(TickStun이 IsRoped면 타이머를 멈추는 것과 짝) —
+    /// 게이트 뒤로 내리면 테이저→밧줄 콤보로 잡은 대상이 그 자리에 멈춘다.
     /// </summary>
     private void TickRopeDrag()
     {
@@ -190,13 +184,19 @@ public partial class NpcController
         Vector3 npcPosition = transform.position;
         float ropeLength = m_ropeDragConfig.RopeLength;
 
-        // 참가자마다 "자기 밧줄이 허용하는 위치"를 내고 그 평균으로 간다 — 합력(#390).
+        // 여러 명을 함께 끌 때 자리마다 옆으로 벌린다 — 혼자면(slotCount 1) 0이라 궤적이 예전과 같다.
+        //
+        // 단 경합(줄다리기) 중에는 벌리지 않는다. 자리 번호는 끄는 쪽이 "내가 끄는 대상들" 안에서 매기는데,
+        // 참가자가 여럿이면 각자 자기 기준으로 매겨 같은 대상에 다른 번호가 들어온다(A는 2자리 중 1번,
+        // B는 1자리 중 0번). 매 프레임 나중에 도는 쪽이 이겨 오프셋이 좌우로 떨린다.
+        // 부채꼴은 애초에 "한 사람이 여러 명"을 벌리려는 장치라 경합에는 의미가 없다.
+        float lateral = m_dragAnchors.Count > 1
+            ? 0f
+            : (m_dragSlot - (m_dragSlotCount - 1) * 0.5f) * m_ropeDragConfig.DragSpacing;
+
+        // 참가자마다 "자기 밧줄이 허용하는 위치"를 내고 그 평균으로 간다 — 합력.
         // 같은 방향으로 끌면 그대로 끌려가고, 서로 반대로 당기면 두 목표가 상쇄돼 가운데서 멈춘다(줄다리기).
         // 밧줄이 늘어져 있으면(길이 안쪽) 그 참가자는 당기지 않는다 — 제자리에서 돌기만 하면 NPC는 가만히 있다.
-        // 여러 명을 함께 끌 때 자리마다 옆으로 벌린다 — 밧줄 방향에 수직으로, 가운데를 0으로 하는 부채꼴.
-        // 혼자면(slotCount 1) 0이라 예전과 완전히 같은 궤적이다. (#390)
-        float lateral = (m_dragSlot - (m_dragSlotCount - 1) * 0.5f) * m_ropeDragConfig.DragSpacing;
-
         Vector3 targetSum = Vector3.zero;
         Vector3 anchorSum = Vector3.zero;
         for (int i = 0; i < m_dragAnchors.Count; i++)

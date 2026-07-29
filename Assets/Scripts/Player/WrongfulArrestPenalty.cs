@@ -176,15 +176,17 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
     {
         m_teamCountSynced.Value = 0;
         PruneDead(m_detained);
-        targets?.RemoveAll(t => t == null);
+
+        // 아래에서 네 번 도는 목록이라 여기서 한 번만 정규화한다 — null 목록·죽은 항목 둘 다.
+        targets ??= new List<Transform>();
+        targets.RemoveAll(t => t == null);
 
         // 폴백 ① — 구역이 비어 추격대를 꾸릴 수 없다(리셋 타이밍 등 예외 상황). 기존 텔레포트 집행 (#101)
         if (m_detained.Count == 0)
         {
             Debug.LogWarning("[오검거] 원한 구역이 비어 있음 — 텔레포트 집행 폴백", this);
-            if (targets != null)
-                foreach (Transform target in targets)
-                    HangAsync(target).Forget();
+            foreach (Transform target in targets)
+                HangAsync(target).Forget();
             return;
         }
 
@@ -200,11 +202,10 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
 
         // 대상 본인들에게 알림(잠깐 표시 후 자동 소멸). 추격에 시간 제한은 없다(팀 결정) —
         // 못 잡으면 사냥 모드로 계속 배회하며 노리므로, 페널티는 잡히거나 격퇴로 미뤄질 뿐 사라지지 않는다.
-        if (targets != null)
-            foreach (Transform target in targets)
-                ShowWarning(target, k_warningSeconds);
+        foreach (Transform target in targets)
+            ShowWarning(target, k_warningSeconds);
 
-        string targetNames = targets != null && targets.Count > 0
+        string targetNames = targets.Count > 0
             ? string.Join(", ", targets.ConvertAll(t => t.name))
             : "(없음 — 사냥 모드)";
         Debug.Log($"[오검거] 추격대 출동 — {launched}명, 초기 타겟 {targetNames}");

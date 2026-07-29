@@ -4,10 +4,11 @@ using Unity.Netcode;
 /// <summary>
 /// 밧줄 연결 하나 — 어느 NPC에 걸렸고 지금 <b>끌고 있는지</b>를 담는다. (#390)
 /// 서버가 만들어 <see cref="PlayerEscorter"/>의 NetworkList로 전 클라이언트에 동기화한다 (WantedEntry와 같은 관례, #52/#56).
+/// 서버 자신은 읽지 않는다 — 진실은 NPC의 앵커 목록(<see cref="NpcController.IsDraggedBy"/>)이다.
 ///
-/// 끌기 여부를 NPC가 아니라 <b>연결마다</b> 두는 이유: 여러 플레이어가 같은 대상을 함께 묶을 수 있어
-/// (줄다리기), NPC 쪽 <see cref="NpcController.IsRoped"/>는 "누구든 끌고 있다"까지만 말해 준다.
-/// 내가 E로 놓았는데 남이 계속 끌고 있는 상태를 구분하려면 참가자별 플래그가 필요하다.
+/// 끌기 여부를 NPC가 아니라 <b>연결마다</b> 두는 이유: 여러 명이 같은 대상을 함께 묶을 수 있어(줄다리기)
+/// <see cref="NpcController.IsRoped"/>는 "누구든 끌고 있다"까지만 말해 준다. 내가 E로 놓았는데 남이
+/// 계속 끌고 있는 상태를 클라가 구분하려면 참가자별 플래그가 필요하다.
 /// </summary>
 public struct RopeTether : INetworkSerializable, IEquatable<RopeTether>
 {

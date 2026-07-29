@@ -145,9 +145,8 @@ public class PlayerInteractor : NetworkBehaviour
         if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
             return;
 
-        // 밧줄 놓기는 **조준 대상 기준**이다 (#390). 여러 명을 동시에 끌 수 있게 되면서 "끌고 있으면
-        // 무조건 놓기"로는 무엇을 놓을지 정할 수 없고, 끌고 있는 동안 다른 대상에게 E(제압·끌기 재개)를
-        // 쓸 방법도 사라진다. 그래서 지금 겨냥한 대상이 내가 끄는 대상일 때만 이번 입력을 놓기로 소비한다.
+        // 밧줄 놓기는 **조준 대상 기준**이다 (#390). 여러 명을 동시에 끌 수 있어 "끌고 있으면 무조건 놓기"로는
+        // 무엇을 놓을지 정할 수 없고, 끄는 동안 다른 대상에게 E(제압·끌기 재개)를 쓸 방법도 사라진다.
         // (PlayerEscorter가 따로 입력을 구독하면 놓기+제압이 한 입력에 동시 발동하는 이중 소비가 생긴다)
         NpcController aimed = CurrentTarget != null
             ? CurrentTarget.GetComponentInParent<NpcController>()
