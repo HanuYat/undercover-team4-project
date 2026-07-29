@@ -12,7 +12,7 @@ using UnityEngine;
 /// 그래서 서버가 대상 오너에게 RPC로 추종 지시를 내리고, 오너의 PlayerMovement가
 /// <see cref="PlayerMovement.BeginDraggedFollow"/>로 따라간다. (오검거 호송 #279와 같은 구조)
 ///
-/// 복구는 운반이 아니라 본부 부활 존(<see cref="HqRevivalZone"/>)이 한다 — 여기는 옮기기만 한다.
+/// 복구는 운반이 아니라 본부 부활 장치(<see cref="HqRevivalDevice"/>)가 한다 — 여기는 옮기기만 한다.
 /// </summary>
 public class PlayerCarrier : NetworkBehaviour
 {
@@ -229,7 +229,7 @@ public class PlayerCarrier : NetworkBehaviour
 
     /// <summary>
     /// 운반 해제 — 서버(또는 오프라인) 전용. 내려놓기·거리 이탈·부활·운반자 무력화가 모두 여기로 모인다.
-    /// 부활(HqRevivalZone)처럼 끌려가는 쪽에서 끝내야 하는 경우를 위해 공개한다.
+    /// 부활(<see cref="HqRevivalDevice"/>)처럼 끌려가는 쪽에서 끝내야 하는 경우를 위해 공개한다.
     /// </summary>
     public void ServerDrop(string reason)
     {

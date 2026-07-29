@@ -114,12 +114,13 @@ public class PlayerIncapacitation : NetworkBehaviour
     private double CurrentTime =>
         IsSpawned && NetworkManager != null ? NetworkManager.ServerTime.Time : Time.timeAsDouble;
 
-    // 살아 있는 인스턴스 목록 — 매 프레임 플레이어를 훑어야 하는 쪽(본부 부활 구역 #365)이
-    // FindObjectsByType으로 씬 전체를 뒤지지 않게 한다. 그쪽은 상시 도는 검사라 조회 비용이 그대로 상시 비용이 된다.
+    // 살아 있는 인스턴스 목록 — 플레이어 전원을 훑어야 하는 쪽(전멸 판정 RoundManager)이
+    // FindObjectsByType으로 씬 전체를 뒤지지 않게 한다. 조회는 배열을 새로 만드는 엔진 호출이라,
+    // 자주 도는 검사에 넣으면 그 비용이 그대로 상시 비용이 된다. (#365에서 도입)
     // 활성/비활성 시점에 스스로 등록·해제하므로 스폰 여부·오프라인 테스트와 무관하게 정확하다.
     private static readonly List<PlayerIncapacitation> s_instances = new();
 
-    /// <summary>현재 씬에 존재하는 모든 플레이어의 무력화 컴포넌트. 매 프레임 순회해도 되는 무할당 목록. (#365)</summary>
+    /// <summary>현재 씬에 존재하는 모든 플레이어의 무력화 컴포넌트. 자주 순회해도 되는 무할당 목록. (#365)</summary>
     public static IReadOnlyList<PlayerIncapacitation> All => s_instances;
 
     private void OnEnable() => s_instances.Add(this);

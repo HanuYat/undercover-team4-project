@@ -132,7 +132,7 @@ public class PlayerMovement : NetworkBehaviour
 
     // 운반되는 중(#365) — 나를 끌고 가는 플레이어. 오검거 끌려가기(위)와 달리 CharacterController를
     // 끄지 않는다: 벽·계단·경사를 CC가 스스로 풀어 준다(밧줄 끌기의 ResolveDragPosition에 해당).
-    // (본부 부활 존은 콜라이더가 아니라 위치 폴링으로 점유를 보므로 여기에 기대지 않는다 — HqRevivalZone)
+    // (본부 부활 장치는 콜라이더 점유가 아니라 E 상호작용으로 안치를 확정하므로 여기에 기대지 않는다 — HqRevivalDevice)
     private Transform m_dragCarrier;
     private Vector3 m_dragVelocity;  // SmoothDamp 관성
     private Quaternion m_dragFacing; // 흔들림을 뺀 몸 방향 — 여기에 sway를 얹어 최종 회전을 만든다
