@@ -1,4 +1,3 @@
-using Unity.Netcode;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -89,52 +88,11 @@ public partial class NpcController
         m_stateMachine.ChangeState(NpcState.Attack);
     }
 
-    /// <summary>
-    /// 제압 타격 요청 — 상호작용 경로(NpcSubdueInteractable)가 호출한다. (#79/#366)
-    /// 클라이언트에서 불리면 서버로 전달되므로 비호스트 플레이어의 타격도 반영된다.
-    /// 타격량은 서버가 자기 config 값을 쓴다 — 클라이언트가 수치를 보낼 수 없다.
-    ///
-    /// 상태 게이트는 TakeDamage가 CanBeDamaged로 건다 (#366/#292). 예전의 "저항 중이 아니면 무시"
-    /// (배회 NPC 폭행 방지)는 체력이 지속형이 되면서 없어졌다 — 배회 중인 NPC도 때릴 수 있다.
-    /// </summary>
-    // TODO: 상호작용 네트워크 전환(#55 계열)에서 거리·조준 서버 검증 추가 (지금은 요청 자체는 신뢰)
-    /// <param name="attacker">때린 플레이어. 피격 반응(#400)의 위협 대상이 된다.</param>
-    public void RequestSubdueHit(GameObject attacker)
-    {
-        if (IsSpawned && !IsServer)
-        {
-            // 요청자를 함께 싣는다 (#400) — 예전엔 안 실어 서버에서 attacker가 항상 null이었다.
-            // 피격이 트리거가 되면서 때린 사람을 정확히 물어야 그쪽으로 반격·도주한다.
-            NetworkObject attackerObj =
-                attacker != null ? attacker.GetComponentInParent<NetworkObject>() : null;
-            SubdueHitRpc(attackerObj != null ? new NetworkObjectReference(attackerObj) : default);
-            return;
-        }
-
-        ServerSubdueHit(attacker);
-    }
-
-    [Rpc(SendTo.Server)]
-    private void SubdueHitRpc(NetworkObjectReference attackerRef)
-    {
-        // 해석 실패(디스폰 등)면 null — 위협이 null이어도 NpcFleeState가 추격자를 스캔해 폴백한다 (#269).
-        GameObject attacker = attackerRef.TryGet(out NetworkObject obj) ? obj.gameObject : null;
-        ServerSubdueHit(attacker);
-    }
-
-    // 타격량은 서버가 자기 config 값을 쓴다 — 클라이언트가 수치를 보낼 수 없다.
-    private void ServerSubdueHit(GameObject attacker)
-    {
-        TakeDamage(m_commonConfig.SubdueHitPower, attacker);
-
-        // 피해 뒤에 반응 (#400) — HP 0으로 기절했으면 ServerReactTo가 걸러 내고(깨어날 때의 도주 전환은
-        // NpcStunnedState 담당), 피해가 상태 게이트로 무시된 경우엔 CanStartReaction이 함께 막는다.
-        ServerReactTo(ReactionTrigger.Damage, attacker != null ? attacker.transform : null);
-    }
-
-    // 도주 NPC 근접 제압(CaptureBySubdue)은 제거됐다 (#436) — 홀드 완주로 Run에서 Captured로
-    // 바로 점프하던 도주형 전용 경로다. 이제 도주형도 타격으로 체력을 깎아 기절시킨 뒤
-    // 밧줄로 끌어 신병을 확보한다(저항형과 동일, #366/#369).
+    // E 제압 경로는 전부 제거됐다 — E는 신병 조작(재연행·줄다리기 복귀) 전용 키가 됐다.
+    //  · 도주 NPC 근접 제압(CaptureBySubdue, #436) — 홀드 완주로 Run에서 Captured로 바로 점프했다.
+    //  · 제압 타격(RequestSubdueHit/SubdueHitRpc/ServerSubdueHit, #438) — 맨몸 타격으로 체력을 깎았다.
+    // 이제 체력을 깎는 플레이어 경로는 진압봉(Baton.ServerSwing)뿐이고, 즉시 무력화는 테이저(#292),
+    // 신병 확보는 밧줄(#369)이 맡는다. 피격 반응(ReactionTrigger.Damage)도 진압봉이 직접 부른다.
 
     // 기절 진입(EnterStunned)은 NpcController.Stun.cs로 이사했다 — 상태 전이가 아니라
     // 오버레이 플래그가 됐기 때문이다 (#292).

@@ -1,20 +1,22 @@
 using UnityEngine;
 
 /// <summary>
-/// NPC의 상호작용키(E) 반응 (#76/#79/#91) — 누르는 즉시 NPC 상태에 따라 갈린다.
-/// 배회(Idle/Walk)·도주(Run)·저항(Attack) 중이면 타격 1회로 체력을 깎는다 — 여럿이 함께 누르면
-/// 그만큼 빨리 기절시킨다 (GDD 7-4 협동 인센티브, #366).
+/// NPC의 상호작용키(E) 반응 (#76/#91/#398) — 누르는 즉시 NPC 상태에 따라 갈린다.
 /// 체포(Captured) 상태면 재연행을 시작한다 — 연행 동작을 수갑 클릭에서 E로 이관 (#91).
+/// 남이 끌고 있는(Escorted) 대상에 내 줄이 걸려 있으면 끌기를 재개한다 — 줄다리기 복귀 (#398).
 /// PlayerInteractor의 IInteractable 경로를 그대로 사용하므로
-/// NPC가 사거리·조준을 벗어나면 자연히 실패한다 (추격전·몸싸움 성립).
-/// 제압 프롬프트 표시는 상호작용 UI 이슈(#65 계열) 후속.
+/// NPC가 사거리·조준을 벗어나면 자연히 실패한다.
+/// 프롬프트 표시는 상호작용 UI 이슈(#65 계열) 후속.
 ///
-/// 도주형 전용이던 <b>3초 E 제압 홀드는 제거됐다</b>(#436 — 이전 #332). 도주형도 저항형과 같은
-/// 타격 → 기절 → 밧줄 흐름을 탄다: 홀드 완주로 <c>Captured</c>에 바로 점프하는 별도 경로가
-/// 유형마다 처리를 갈라놨기 때문이다. 즉시 무력화가 필요하면 테이저(#292)가 그 자리를 맡는다.
+/// <b>E는 신병 조작 전용 키가 됐다</b> — 때리는 것도 잡는 것도 하지 않는다.
+/// 두 단계로 걷혔다: 도주형 전용 3초 제압 홀드(#332 → #436 제거),
+/// 그리고 배회·도주·저항에 대한 제압 타격(#79/#366 → #438 제거).
+/// 이제 체력을 깎는 것은 <see cref="Baton"/>(진압봉), 즉시 무력화는 <see cref="Taser"/>(#292),
+/// 신병 확보는 <see cref="Rope"/>(밧줄, #369)가 각각 맡는다.
+///
+/// 클래스·파일명에 남은 "Subdue"(제압)는 <b>이름만 남은 이력</b>이다 — 프리팹이 스크립트를
+/// 파일 GUID로 참조하므로 개명 churn을 피해 그대로 뒀다. 실제 역할은 위 두 갈래뿐이다.
 /// </summary>
-// TODO: 상호작용 네트워크 전환(#55 계열) 시 이 경로도 클라 입력 → ServerRpc로 정리
-//       (타격은 RequestSubdueHit이 이미 자체 RPC 경로를 가진다, #79)
 [RequireComponent(typeof(NpcController))]
 public class NpcSubdueInteractable : MonoBehaviour, IInteractable
 {
@@ -29,7 +31,7 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
     /// 상태를 먼저 본다: 조준 대상마다 매 프레임 도는 경로라 Escorted가 아니면 escorter 조회조차
     /// 하지 않는다(인자가 즉시 평가되므로 CanRejoinOwnRope 안의 상태 검사로는 늦다).</summary>
     public bool CanInteract(GameObject interactor) =>
-        NpcStateRules.HasSubdueInteraction(m_controller.CurrentState)
+        NpcStateRules.HasInteractKeyAction(m_controller.CurrentState)
         || (
             m_controller.CurrentState == NpcState.Escorted
             && CanRejoinOwnRope(FindEscorter(interactor))
@@ -56,9 +58,9 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
     {
         PlayerEscorter escorter = FindEscorter(interactor);
 
-        // 배회·도주·저항·체포 상태에서 반응한다.
-        // 배회가 열린 것은 체력이 지속형이 되면서다 (#366)
-        // 이 switch의 분기 집합은 NpcStateRules.HasSubdueInteraction + CanRejoinOwnRope와 반드시
+        // 신병이 걸린 두 상태에서만 반응한다. 배회·도주·저항은 #438에서 빠졌다 — 그 상태의
+        // NPC에게 E는 아무 일도 하지 않으며, CanInteract가 false라 윤곽선도 뜨지 않는다.
+        // 이 switch의 분기 집합은 NpcStateRules.HasInteractKeyAction + CanRejoinOwnRope와 반드시
         // 일치해야 한다 (#184 — Escorted 분기만 상태가 아니라 요청자의 줄로 갈린다, #398)
         switch (m_controller.CurrentState)
         {
@@ -72,18 +74,6 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
                     );
                     escorter.RequestRopeResume(m_controller);
                 }
-                break;
-
-            case NpcState.Idle:
-            case NpcState.Walk:
-            case NpcState.Run:
-            case NpcState.Attack:
-                // 타격은 자체 RPC 경로(RequestSubdueHit → SubdueHitRpc)를 가진다 (#79).
-                // 배회(Idle/Walk)도 같은 경로다 — 체력이 지속형이 되면서 저항 중이 아니어도
-                // 때려서 깎을 수 있다 (#366). 상태 게이트는 TakeDamage가 CanBeDamaged로 건다 (#292).
-                // 도주(Run)가 여기 합류한 것이 #436이다 — 쫓아가며 때려 기절시킨 뒤 밧줄로 끈다.
-                Debug.Log($"NPC 제압 타격: {m_controller.name}");
-                m_controller.RequestSubdueHit(interactor);
                 break;
 
             case NpcState.Captured:

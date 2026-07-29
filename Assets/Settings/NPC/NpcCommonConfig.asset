@@ -21,4 +21,3 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 1
   m_maxHp: 100
-  m_subdueHitPower: 34

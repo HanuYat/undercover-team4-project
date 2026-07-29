@@ -160,7 +160,7 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
     }
 
     // 도주 제압 홀드 진입점(RequestSubdueCapture/RequestCancelSubdue)은 제거됐다 (#436).
-    // 도주 NPC에 대한 E는 이제 NpcController.RequestSubdueHit(타격) 경로만 탄다.
+    // 도주 NPC에 대한 E는 아무 동작도 하지 않는다 — 제압 타격까지 제거됐다 (#438).
 
     /// <summary>밧줄 풀기 시도 — 오너가 호출(Rope 좌클릭, 대상이 체포 상태일 때). 서버/오프라인 즉시 실행, 원격은 서버로 요청. (#290 → #369)</summary>
     public void RequestUnrope(NpcController target)
