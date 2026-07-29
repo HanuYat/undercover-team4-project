@@ -328,7 +328,8 @@ public class Baton : ItemBase, IAimedWeapon
 
     /// <summary>
     /// 조준 원점·방향으로 사거리(m_range)만큼 반경 m_hitRadius 구체를 날려 명중 결과를 분류한다.
-    /// 마스크 ~0 + 트리거 무시 — "가장 가까이 맞은 것"이 결과라 벽 엄폐가 성립한다.
+    /// 마스크 ~0 + 트리거 무시. 후보 중 하나를 고르는 기준은 <see cref="AimOcclusion"/>가 단독으로
+    /// 가지며, 그 기준이 벽 엄폐의 정의다 — 테이저·상호작용 가시선과 같은 규칙이다.
     ///
     /// SphereCast는 레이캐스트와 달리 <b>시작 지점에 이미 겹친 콜라이더를 distance 0으로 되돌려준다.</b>
     /// 원점이 카메라(= 소지자 캡슐 안)라서 자기 몸이 항상 걸리므로, 소지자 계층은 걸러내고 최근접을 고른다.
@@ -360,32 +361,14 @@ public class Baton : ItemBase, IAimedWeapon
             QueryTriggerInteraction.Ignore
         );
 
-        float nearest = float.PositiveInfinity;
-        bool found = false;
-        for (int i = 0; i < count; i++)
-        {
-            RaycastHit candidate = s_hitBuffer[i];
-
-            // 휘두른 본인(과 그가 들고 있는 것들)은 건너뛴다 — 위 주석의 자기 겹침 문제.
-            if (holderRoot != null && candidate.collider.transform.IsChildOf(holderRoot))
-            {
-                continue;
-            }
-
-            if (candidate.distance >= nearest)
-            {
-                continue;
-            }
-
-            nearest = candidate.distance;
-            hit = candidate;
-            found = true;
-        }
-
-        if (!found)
+        // 휘두른 본인(과 그가 들고 있는 것들)은 제외 계층으로 넘긴다 — 위 주석의 자기 겹침 문제.
+        int index = AimOcclusion.FindNearestByPivot(origin, s_hitBuffer, count, holderRoot);
+        if (index < 0)
         {
             return SwingResult.NoHit;
         }
+
+        hit = s_hitBuffer[index];
 
         // 콜라이더가 NPC 루트의 자식일 수 있으므로 부모까지 탐색한다 (Taser.EvaluateAim과 동일 관례).
         // 벽·소품·다른 플레이어를 맞췄으면 그대로 빗나감이다.
