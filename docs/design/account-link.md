@@ -59,6 +59,18 @@ C-3는 막다른 길이 아니다 — 한 계정에 여러 identity를 링크할
 | 비밀번호 변경 | `UpdatePasswordAsync(현재, 신규)`. 성공 시 **모든 기기에서 로그아웃** |
 | 상태 위반 | 이미 로그인된 상태에서 SignUp/SignIn → `AuthenticationErrorCodes.ClientInvalidUserState` |
 
+### 에러 코드 (2026-07-28 실측 — 공식 문서에 숫자 매핑이 없다)
+
+`RequestFailedException.ErrorCode`로 읽는다(`AuthenticationException`은 파생 클래스라 함께 잡힌다). **세 상황이 서로 다른 코드로 오므로 사용자 메시지를 정확히 가를 수 있다.**
+
+| 코드 | 상수 | 상황 | 처리 |
+|---|---|---|---|
+| **10002** | `InvalidParameters` | 아이디·비번 형식 위반 | **어느 쪽이 틀렸는지 알려주지 않는다** → 클라이언트 선검증으로 여기 오기 전에 막는다 (결정 (f)) |
+| **10003** | `AccountAlreadyLinked` | 그 아이디를 **다른 플레이어**가 이미 씀 | **"이미 사용 중인 아이디입니다"** — 사용자가 고칠 수 있는 유일한 오류. 익명 계정은 그대로 유지 |
+| **10004** | `AccountLinkLimitExceeded` | **내 계정에** 이미 아이디/비번이 붙어 있음 (서버: `LINKED_ACCOUNT_LIMIT_EXCEEDED`) | `IsLinked`로 버튼을 비활성해 애초에 도달하지 않게 한다 |
+
+10004의 서버 응답 `"user already has a username/password account linked to it"` 로 **계정당 아이디/비번은 하나뿐**임이 확인됐다.
+
 ## 4. 닉네임 우선순위 (가장 위험한 지점)
 
 현재 `RestoreCachedNicknameAsync`([AuthBootstrap.cs:284](../../Assets/Scripts/Network/AuthBootstrap.cs#L284))는 **캐시를 정본으로 서버에 밀어넣는다** — #249에서 "토큰이 지워져 `PlayerId`가 새로 발급된 경우의 복원"을 위해 의도적으로 그렇게 만든 것이다.
@@ -75,7 +87,7 @@ C-3는 막다른 길이 아니다 — 한 계정에 여러 identity를 링크할
 
 ```
 AuthBootstrap (Network · CommonManagerBase)         ← 이 이슈에서 바뀌는 유일한 스크립트
-   ├─ IsLinked                                     ← 연동 여부 (로그인 직후 1회 조회 후 캐시)
+   ├─ IsLinked                                     ← PlayerInfo.Username 유무 (§6 1단계 실측)
    ├─ LinkAccountAsync(id, pw)                     ← 익명 유지 → AddUsernamePasswordAsync
    ├─ SignInWithAccountAsync(id, pw)               ← SignOut() → SignInWithUsernamePasswordAsync
    ├─ ValidateCredentials(id, pw)                  ← §3 규칙, 위반이면 사유 문자열 (ValidateNickname과 같은 형태)
@@ -88,15 +100,21 @@ PlayerNameTag · SessionFlow · SessionManager        ← 수정 없음
 
 ## 6. 작업 순서
 
-1. **스파이크 — 대시보드 + 실제 API 확인.** Unity Cloud Dashboard에서 Username/Password provider 활성화 후, `m_showDebugGui` 패널([AuthBootstrap.cs:335](../../Assets/Scripts/Network/AuthBootstrap.cs#L335))에 입력 2개 + 버튼 3개를 임시로 붙여 확인한다. 정식 UI는 4단계.
-   - `AddUsernamePasswordAsync` 후 **`PlayerId`가 그대로인지** — 승격 검증의 핵심. 바뀌면 이 설계가 성립하지 않는다
-   - **연동 여부 판별 수단** — `PlayerInfo.Username` / `PlayerInfo.Identities` 중 무엇이 실제로 채워지는지
-   - **아이디 중복 시 실제 에러 코드 값** — 문서에 없어 `AuthenticationErrorCodes` enum을 직접 봐야 한다
+1. ~~**스파이크 — 대시보드 + 실제 API 확인.**~~ **✅ 완료 (2026-07-28).** 대시보드에서 Username/Password provider를 활성화하고, `m_showDebugGui` 패널에 임시 UI를 붙여 Editor Play 모드로 검증했다. 결과:
 
-   **API 표면은 확인 완료** (2026-07-28, 컴파일 통과 — 공식 문서에 일부 누락되어 여기 기록한다):
-   `AddUsernamePasswordAsync` · `SignInWithUsernamePasswordAsync` · `SignUpWithUsernamePasswordAsync` · `UpdatePasswordAsync` · `GetPlayerInfoAsync()` 모두 3.6.1에 존재하고, `PlayerInfo`에는 **`Username`과 `Identities`(`TypeId`/`UserId`)가 둘 다** 있다 → 연동 판별이 `Username` 하나로 끝날 가능성이 있다. 에러 코드는 `RequestFailedException.ErrorCode`로 읽으며 `AuthenticationException`은 파생 클래스라 함께 잡힌다.
+   | 확인 항목 | 결과 |
+   |---|---|
+   | 승격 후 `PlayerId` 유지 | **✅ 일치.** `AddUsernamePasswordAsync`는 새 계정을 만들지 않는다 → 결정 (c) 성립 |
+   | 승격 후 닉네임 유지 | **✅** 승격 전 닉네임이 그대로 남는다 |
+   | 토큰 삭제 → 아이디 로그인 | **✅ `PlayerId`·닉네임 모두 복원.** 기기 간 유지 성립. 이 경로는 `GetPlayerNameAsync()`로 **서버에서** 받아온 값이라 PlayerPrefs 캐시의 영향이 아니다 |
+   | 연동 판별 수단 | **`PlayerInfo.Username`.** 익명 상태 `''` → 승격 후 `'jina-test1'`. **`Identities`는 승격 후에도 0** — 아이디/비번은 identity 항목을 만들지 않는다(외부/소셜 provider 전용)이므로 순회 코드는 불필요 |
+   | 에러 코드 | 10002 / 10003 / 10004 세 상황이 모두 구분된다 → §3 표 |
 
-   **남은 것은 전부 런타임 확인이다** — 프로퍼티가 존재한다는 것과 값이 채워진다는 것은 다르다. `Username`은 **승격 전·후 두 번** 조회해 익명 상태의 값(빈 문자열인지)까지 확인해야 판별 조건이 확정된다.
+   **API 표면**(3.6.1, 컴파일 확인): `AddUsernamePasswordAsync` · `SignInWithUsernamePasswordAsync` · `SignUpWithUsernamePasswordAsync` · `UpdatePasswordAsync` · `GetPlayerInfoAsync()` 모두 존재. `PlayerInfo`에 `Username`과 `Identities`(`TypeId`/`UserId`) 둘 다 있으나, 위와 같이 **쓸 것은 `Username`뿐**이다.
+
+   > ⚠️ 남은 확인 하나: `PlayerInfo.Username`이 **로그인 직후 자동으로 채워지는지**, `GetPlayerInfoAsync()`를 불러야 채워지는지. 후자면 `IsLinked` 확정에 로그인마다 네트워크 호출 1회가 붙는다(그래도 로그인당 1회이므로 설계는 그대로). 2단계 구현 중 확인한다.
+   >
+   > **실측 팁:** 닉네임 입력 직후 아이디/비번을 타이핑하면 IME가 한글 모드로 남아 10002가 난다. 이 에러는 어느 필드가 틀렸는지 알려주지 않으므로, 검증 실패 시 전송값을 먼저 찍어볼 것.
 2. **`AuthBootstrap` 확장** — §5의 4개. 검증은 `ValidateNickname`(185줄)과 같은 "위반이면 사유 문자열, 통과면 null" 형태로 맞춘다. 세션 참가·전환 중 차단은 기존 `IsNetworkConnected`/`CanSignOut()` 가드를 그대로 재사용한다.
 3. **닉네임 우선순위 분기** — `RestoreCachedNicknameAsync`에 §4 표를 반영. 승격 성공 직후의 1회 push는 `LinkAccountAsync` 안에 둔다.
 4. **`AuthPanel` UI** — 아이디/비번 입력(비번은 `contentType = Password`) + [계정 만들기·연동] [로그인] + 상태 텍스트. 기존 닉네임 UI와 같은 패턴(`m_isApplyingNickname` 래치 → 실패 시 입력 유지 → `Refresh()`)을 따른다. `Refresh()`에서 `IsLinked`면 연동 버튼 비활성.
@@ -106,7 +124,8 @@ PlayerNameTag · SessionFlow · SessionManager        ← 수정 없음
 
 - **승격과 새 기기 로그인은 전제가 정반대다.** 승격은 익명 로그인 **유지**, 로그인은 `SignOut()` **선행**. `m_signInOnStart`가 이미 익명 로그인을 해두기 때문에 순서를 틀리면 `ClientInvalidUserState`가 난다. 이 예외는 **삼키지 말고** `Debug.LogError` — 사용자 입력 실수가 아니라 코드의 상태 전제 위반이다.
 - **아이디 충돌은 익명 계정을 죽이지 않는다.** 중복 실패 후에도 현재 익명 계정은 그대로여야 하고, 사용자는 다른 아이디로 재시도할 수 있어야 한다. 실패 경로에서 `SignOut()`을 부르지 않는다.
-- **이슈 본문의 `AccountAlreadyLinked` 시나리오는 형태가 바뀐다.** username/password는 계정당 1개뿐이라 "이미 다른 기기에서 연동된 계정과 충돌"이 아니라 **아이디 유일성 충돌**로 나타난다. 이슈 코멘트에 명시할 것.
+- **이슈 본문의 `AccountAlreadyLinked` 시나리오는 형태가 바뀐다.** username/password는 계정당 1개뿐(10004 서버 응답으로 확인)이라 "이미 다른 기기에서 연동된 계정과 충돌"이 아니라 **아이디 유일성 충돌**(10003)로 나타난다. 이슈 코멘트에 명시했다.
+- **`Identities`를 연동 판별에 쓰면 안 된다.** 승격 후에도 비어 있다(§6 1단계 실측). 이름만 보고 "연결된 자격증명 목록"으로 오해하기 쉬운데, 외부/소셜 provider 전용이다. 판별은 `Username` 유무.
 - **`RestoreCachedNicknameAsync`의 예외 삼키기를 유지한다.** 여기서 예외가 새면 `OnSignedIn`이 실행되지 않아 로그인은 됐는데 UI가 갱신되지 않는다(319~322줄 주석). 분기를 추가하면서 이 구조를 깨지 않도록 주의.
 - **비밀번호 분실 = 계정 상실.** 복구 경로가 없다는 걸 UI에서 미리 알린다. 팀 테스트 계정은 비밀번호를 공유 문서에 적어둘 것.
 - **`UpdatePasswordAsync`는 전 기기 로그아웃을 유발한다.** 비밀번호 변경 UI를 넣을 경우 세션 중 호출을 반드시 막아야 한다. (이번 범위에 넣지 않는 이유)
@@ -127,8 +146,9 @@ PlayerNameTag · SessionFlow · SessionManager        ← 수정 없음
 
 ## 9. 미결 항목
 
-- **1단계 스파이크 — 런타임 검증 미완.** API 표면은 확인됐고(§6 1단계), 대시보드 provider 활성화 후 ① 승격 시 `PlayerId` 유지 ② `Username`의 익명/연동 상태별 값 ③ 아이디 중복·이미연동 에러 코드 값을 확인하면 §5·§7을 갱신한다.
-- **스파이크 디버그 GUI는 임시 코드다** — 커밋 `00ed905`(`m_showDebugGui` 패널 안쪽)로 분리돼 있다. 검증 결과를 이 문서에 반영한 뒤 PR 전에 삭제하거나 revert한다.
+- **`PlayerInfo.Username`의 채워지는 시점** — 로그인 직후 자동인지 `GetPlayerInfoAsync()` 필요인지. 2단계 구현 중 확인해 §5를 확정한다 (§6 1단계 주석).
+- **스파이크 디버그 GUI는 임시 코드다** — `OnGUI`의 `m_showDebugGui` 블록과 `Spike*Async` 3개 메서드가 전부다(그 밖으로 새지 않는다). 2단계 정식 구현이 끝나면 PR 전에 삭제한다. 정식 UI(`AuthPanel`)와 기능이 중복되므로 남겨둘 이유가 없다.
+- **Title 씬에 테스트용 오버라이드를 커밋하지 않는다** — 스파이크 중 `m_profile`(프로필 분리 테스트)과 `m_showDebugGui`가 씬에 저장된다. `m_profile`이 섞여 들어가면 다른 팀원의 닉네임 캐시 스코프까지 바뀌므로, PR 전에 **빈칸으로 되돌리고 `m_showDebugGui`도 해제**한다.
 - **플랫폼 링크(C-2)** — 배포 플랫폼 확정 후 별도 이슈. 같은 계정에 identity 추가로 붙으므로 이 설계를 되돌릴 필요는 없다.
 - **비밀번호 변경 UI** — Admin API 없이 가능한 유일한 경로가 `UpdatePasswordAsync`이고 전 기기 로그아웃을 동반한다. 필요해지면 별도 이슈.
 - **UI 문자열 로컬라이즈** — 현행 관례대로 평문 TMP로 두고 일괄 작업 때 처리 ([settings-ui.md](settings-ui.md) §7과 동일).

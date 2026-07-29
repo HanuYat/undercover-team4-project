@@ -460,6 +460,8 @@ public class AuthBootstrap : CommonManagerBase
         string nickBefore = Nickname;
         try
         {
+            Debug.Log($"[스파이크] 전송값 id='{m_idInput}' (길이 {m_idInput.Length}) / pw 길이 {m_pwInput.Length}");
+
             await AuthenticationService.Instance.AddUsernamePasswordAsync(m_idInput, m_pwInput);
 
             bool kept = PlayerId == idBefore;
