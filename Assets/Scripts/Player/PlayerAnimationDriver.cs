@@ -170,6 +170,12 @@ public class PlayerAnimationDriver : MonoBehaviour
         if (speed < 0.01f)
             return Vector2.zero;
 
+        // 기준 속도에 외부 배율(끌기 무게 #398)이 이미 곱해져 있다 — 실제 속도와 같은 비율로 줄어야
+        // 자세가 유지된다. 안 태우면 파라미터만 작아져 걷는 중에 반쯤 Idle로 블렌딩된다.
+        //
+        // ponytail: 재생 배속은 그대로라 배율이 낮으면 발이 미끄러진다(하한 0.35에서 눈에 띈다). 고치려면
+        // Base Layer 걷기 스테이트에 speed multiplier 파라미터를 붙여야 한다 — Animator.speed는 전역이라
+        // 타격 스윙까지 느려져 k_swingImpactSeconds에 묶인 데미지 타이밍과 어긋난다.
         bool crouching = m_crouch != null && m_crouch.IsCrouching;
         float walkSpeed = Mathf.Max(
             crouching ? m_movement.CrouchSpeed : m_movement.MoveSpeed,

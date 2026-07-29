@@ -25,10 +25,18 @@ public struct RopeTether : INetworkSerializable, IEquatable<RopeTether>
         serializer.SerializeValue(ref Dragging);
     }
 
-    // 제거·검색 매칭은 대상만 본다 — 같은 NPC에 대한 항목은 하나뿐이다.
-    public bool Equals(RopeTether other) => NpcId == other.NpcId;
+    /// <summary>
+    /// <b>모든 필드를 비교할 것 — NGO의 변경 감지가 이걸 쓴다.</b> <c>NetworkList.Set</c>은
+    /// <c>NetworkVariableSerialization&lt;T&gt;.AreEqual</c>(→ 이 메서드)로 갱신 여부를 판단해서, 같다고
+    /// 나오면 내부 리스트에도 쓰지 않고 복제도 하지 않는다. <see cref="NpcId"/>만 보던 동안에는
+    /// <see cref="Dragging"/> 반전이 삼켜져 원격 클라의 플래그가 처음 걸린 값에 굳었다 (#390 → #398).
+    ///
+    /// 항목 검색·제거는 이 비교에 의존하지 않는다 — <c>IndexOfSynced</c>가 <see cref="NpcId"/>를 직접 훑고
+    /// 제거는 <c>RemoveAt</c>이다.
+    /// </summary>
+    public bool Equals(RopeTether other) => NpcId == other.NpcId && Dragging == other.Dragging;
 
     public override bool Equals(object obj) => obj is RopeTether other && Equals(other);
 
-    public override int GetHashCode() => NpcId.GetHashCode();
+    public override int GetHashCode() => HashCode.Combine(NpcId, Dragging);
 }

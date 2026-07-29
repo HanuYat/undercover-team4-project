@@ -23,9 +23,18 @@ public class PlayerMovement : NetworkBehaviour
     [SerializeField] private float m_knockbackDamping = 4f;
 
     // PlayerAnimationDriver가 속도 정규화에 사용 (실제 속도 ↔ 블렌드 트리 좌표 분리)
-    public float MoveSpeed => m_moveSpeed;
-    public float SprintSpeed => m_sprintSpeed;
-    public float CrouchSpeed => m_crouchSpeed;
+    // 실제 이동(HandleMove)도 같은 프로퍼티를 쓴다 — 배율이 걸린 값을 한 곳에서만 내야
+    // 애니메이션 블렌드가 실제 속도와 어긋나지 않는다. (#398)
+    public float MoveSpeed => m_moveSpeed * SpeedFactor;
+    public float SprintSpeed => m_sprintSpeed * SpeedFactor;
+    public float CrouchSpeed => m_crouchSpeed * SpeedFactor;
+
+    /// <summary>
+    /// 이동 속도에 걸린 외부 배율 — 지금은 밧줄로 끌고 있는 무게뿐이다(<see cref="PlayerEscorter.DragSpeedFactor"/>).
+    /// 연행 컴포넌트가 없으면(단독 테스트 씬) 1. 소스가 여럿이 되면(스탯 강화 #368 등) 여기서 곱해
+    /// 합성한다 — 이 프로퍼티를 거치는 한 애니메이션 정합은 따라온다. (#398)
+    /// </summary>
+    public float SpeedFactor => m_escorter != null ? m_escorter.DragSpeedFactor : 1f;
 
     [Header("1인칭 시점")]
     [SerializeField]
@@ -81,6 +90,7 @@ public class PlayerMovement : NetworkBehaviour
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 이동·시점 차단용 (#105)
     private PlayerCrouch m_crouch; // 앉기 중 이동 속도·카메라 높이 조정용 (#236)
     private PlayerJump m_jump; // 점프 입력 수집·공중 상태 전파 (#189)
+    private PlayerEscorter m_escorter; // 끌고 있는 무게로 깎인 이동속도 배율을 읽는다 (#398)
     private RoundManager Round => App.Game.Round; // 라운드 종료 시 이동·시점 차단용 (라운드 종료 freeze)
     private float m_pitch;
     private Vector2 m_smoothedLook; // 지수 감쇠로 부드럽게 만든 시점 입력 — 저속 픽셀 양자화 지터 완화 (#216)
@@ -131,6 +141,7 @@ public class PlayerMovement : NetworkBehaviour
         m_incapacitation = GetComponent<PlayerIncapacitation>();
         m_crouch = GetComponent<PlayerCrouch>();
         m_jump = GetComponent<PlayerJump>();
+        m_escorter = GetComponent<PlayerEscorter>();
 
         if (playerCamera != null)
         {
@@ -472,11 +483,19 @@ public class PlayerMovement : NetworkBehaviour
 
         // 앉기가 달리기보다 우선 — Ctrl을 누르는 동안은 Shift를 눌러도 앉은 채 느리게 이동한다.
         // (앉은 채 달리는 애니메이션 클립이 에셋에 없어 자세와 속도가 어긋나는 것도 막는다) (#236)
-        float speed = IsCrouching ? m_crouchSpeed
-            : m_inputHandler.IsSprinting ? m_sprintSpeed
-            : m_moveSpeed;
+        // 상수가 아니라 프로퍼티 — 무게 배율(#398)이 곱해져 있고 애니메이션 블렌드도 같은 값을 읽는다.
+        float speed = IsCrouching ? CrouchSpeed
+            : m_inputHandler.IsSprinting ? SprintSpeed
+            : MoveSpeed;
+
+        // 팽팽해진 밧줄이 허용하는 만큼으로 입력 이동을 깎는다 — 줄다리기 힘겨루기 (#398).
+        // 넉백에는 걸지 않는다: 폭발 같은 외력은 줄을 이겨야 하고, 막으면 벽과 줄 사이에 낀다.
+        Vector3 inputVelocity = moveDirection * speed;
+        if (m_escorter != null)
+            inputVelocity = m_escorter.ConstrainByTautRopes(inputVelocity);
+
         // 넉백은 입력 이동과 별개로 감쇠하며 합산된다 — 다운·라운드 종료로 입력이 막혀도 폭발엔 밀려난다
-        Vector3 velocity = moveDirection * speed + m_knockbackVelocity + Vector3.up * m_verticalVelocity;
+        Vector3 velocity = inputVelocity + m_knockbackVelocity + Vector3.up * m_verticalVelocity;
         m_controller.Move(velocity * Time.deltaTime);
 
         // 천장에 머리를 박으면 상승 속도를 즉시 죽인다 — CharacterController는 이동이 막혀도 속도를
