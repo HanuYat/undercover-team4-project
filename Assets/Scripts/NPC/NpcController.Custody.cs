@@ -13,7 +13,8 @@ public partial class NpcController
     /// 유치장 내부(Jail 영역) 통행 허용/차단. (#415)
     /// 배회 시민은 프리팹 areaMask에서 Jail이 빠져 있어 감옥 안으로 걸어 들어갈 수 없고,
     /// <b>수감 이송에 들어가는 순간에만</b> 이 메서드로 통행을 얻는다(NpcJailedState.Enter).
-    /// 문에는 area=Jail인 NavMeshLink가 걸려 있어, 통행이 없으면 문턱도 넘지 못한다.
+    /// 차단은 문이 아니라 NavMesh 영역이 한다 — 유치장 내부 폴리곤이 통째로 Jail이라, 통행이 없으면
+    /// 문이 열려 있어도 문턱을 넘는 경로 자체가 잡히지 않는다.
     /// 이동은 서버 권위이므로 서버(또는 오프라인)에서만 의미가 있다.
     /// </summary>
     public void SetJailAccess(bool allowed)
