@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -117,11 +118,14 @@ public class ArrestJudge : CommonManagerBase
         }
 
         CitizenProfile profile = identity != null ? identity.Profile : null;
-        // 인계자 = 그 밧줄의 주인. 끌기 검색만 하면 인계존에 내려놓고 접수한 경로(#414)에서 인계자가
-        // '알 수 없음'이 되어 오검거 개인 집계·매달기 페널티 대상이 사라진다 — 줄이 이어져 있는 것을
-        // 근거로 주인까지 찾는다(놓기는 줄을 풀지 않는다, #369).
-        PlayerEscorter deliverer = PlayerEscorter.FindEscorterOf(npc) ?? PlayerEscorter.FindTetherOwnerOf(npc);
-        var result = new ArrestResult(npc, verdict, profile, reward, deliverer, firstDelivery);
+
+        // 줄다리기로 여러 명이 함께 끌고 왔을 수 있다 (#390) — 관여한 전원이 인계자다.
+        // 오검거 페널티가 이 목록 전원에게 걸린다: 밧줄이 걸린 채 인계존까지 들어갔다는 것은
+        // 막지 못했다는 뜻이고, 손을 떼는 수단(E 놓고 걸어가 줄 끊기 / 자기 줄 풀기)이 양쪽에 있다.
+        // 끌고 있지 않아도 줄이 이어져 있으면 포함된다 — 인계존에 내려놓고 E로 접수하는 경로(#414)에서도
+        // 인계자가 '알 수 없음'이 되지 않는다.
+        List<PlayerEscorter> deliverers = PlayerEscorter.FindEscortersOf(npc);
+        var result = new ArrestResult(npc, verdict, profile, reward, deliverers, firstDelivery);
 
         LogVerdict(result);
 
@@ -131,11 +135,13 @@ public class ArrestJudge : CommonManagerBase
         // 반드시 OnArrestJudged보다 **먼저** 해야 한다: 구독자(CustodyRouter, #228)가 판정 결과에 따라
         // 다음 상태(유치장 이송·석방)로 전이시키는데, 해제를 뒤에 하면 StopEscort의 Captured 전이가
         // 그 행선지를 덮어써 NPC가 그 자리에 멈춰버린다.
-        if (deliverer != null)
+        if (deliverers.Count > 0)
         {
             // [리뷰 반영] RequestRelease()는 클라이언트 오너 권한이 필요하므로,
-            // 비호스트 유저 검거 시 동작하지 않습니다. 따라서 서버 권위로 즉시 풀어버리는 Release()를 호출합니다.
-            deliverer.Release();
+            // 비호스트 유저 검거 시 동작하지 않습니다. 따라서 서버 권위로 즉시 풀어버리는 ReleaseDrag()를 호출합니다.
+            // 판정된 그 NPC의 줄만 전원에게서 푼다 — 같이 끌고 온 다른 대상은 계속 끌린다 (#390).
+            foreach (PlayerEscorter deliverer in deliverers)
+                deliverer.ReleaseDrag(npc);
         }
         else
         {
@@ -168,7 +174,9 @@ public class ArrestJudge : CommonManagerBase
             ArrestVerdict.Misdemeanor => "경범죄 처리",
             _ => "오검거"
         };
-        string deliverer = result.DeliveredBy != null ? result.DeliveredBy.name : "알 수 없음";
+        string deliverer = result.DeliveredBy.Count > 0
+            ? string.Join(", ", result.DeliveredBy.ConvertAll(e => e.name))
+            : "알 수 없음";
         Debug.Log($"[검거 판정] {tag}: {citizenName} (인계: {deliverer}) — 보상 {result.Reward}원");
     }
 }
@@ -179,20 +187,25 @@ public readonly struct ArrestResult
     public readonly ArrestVerdict Verdict;
     public readonly CitizenProfile Profile;
     public readonly int Reward;
-    public readonly PlayerEscorter DeliveredBy;
+
+    /// <summary>이 대상에 밧줄을 걸고 인계존까지 들어온 플레이어 전원 — 아무도 없으면 빈 목록(자동 판정 등). (#390)
+    /// 줄다리기로 여러 명이 함께 끌 수 있어 단일 참조에서 목록이 됐다. 검거에 개인 보상은 없고
+    /// (팀 자금은 라운드 종료에 유치장 점유로 1회 정산, #340) 이 목록은 <b>페널티 지정</b>에 쓰인다 —
+    /// 오검거 개인 카운트와 추격대 대상이 여기서 나온다.</summary>
+    public readonly List<PlayerEscorter> DeliveredBy;
 
     // 이 판정이 첫 인계인지 — 재판정(같은 대상을 다시 인계존에 넣음)이면 false. 할당량·오검거 카운트처럼
     // 1회만 세어야 하는 후처리가 이 값으로 재판정을 걸러 낸다. 탈옥(ClearDelivered) 후 재검거는 다시 true. (#358)
     public readonly bool IsFirstDelivery;
 
     public ArrestResult(NpcController npc, ArrestVerdict verdict, CitizenProfile profile,
-        int reward, PlayerEscorter deliveredBy, bool isFirstDelivery)
+        int reward, List<PlayerEscorter> deliveredBy, bool isFirstDelivery)
     {
         Npc = npc;
         Verdict = verdict;
         Profile = profile;
         Reward = reward;
-        DeliveredBy = deliveredBy;
+        DeliveredBy = deliveredBy ?? new List<PlayerEscorter>();
         IsFirstDelivery = isFirstDelivery;
     }
 }

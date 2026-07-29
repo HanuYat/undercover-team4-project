@@ -41,27 +41,34 @@ public class HqDropoffTerminal : MonoBehaviour, IInteractable
 
     /// <summary>
     /// 지금 E가 실제로 먹히는가 — 조준 윤곽선(#184)과 서버 판정이 같은 기준을 쓴다.
-    /// 원격 클라이언트에서도 성립해야 하므로 동기화되는 값만 본다(IsTethered·TetheredNpcTransform·
-    /// NpcController.CurrentState) — DraggingNpc·TetheredNpc는 서버 전용이라 여기서 보면 남의 화면에서
-    /// 윤곽선이 영영 안 켜진다.
+    /// 원격 클라이언트에서도 성립해야 하므로 동기화되는 값만 본다(TetheredCount·GetTetheredNpc·
+    /// NpcController.CurrentState) — 끌기 여부(IsDraggingNpc)는 서버 전용이라 여기서 보면 남의
+    /// 화면에서 윤곽선이 영영 안 켜진다.
+    /// 여러 명을 한 번에 끌고 왔으면(#390) 그중 하나라도 접수 가능할 때 켜진다 — 서버(ServerDeliver)도
+    /// 묶인 대상을 전부 돌며 판정하므로 기준이 어긋나지 않는다.
     /// </summary>
     public bool CanInteract(GameObject interactor)
     {
         PlayerEscorter escorter = FindEscorter(interactor);
-        if (escorter == null || !escorter.IsTethered)
+        if (escorter == null)
             return false; // 내 밧줄에 묶인 대상이 없으면 넘길 것이 없다 (끌기 여부는 묻지 않는다)
 
-        Transform npc = escorter.TetheredNpcTransform;
-        if (npc == null)
-            return false;
+        for (int i = 0; i < escorter.TetheredCount; i++)
+        {
+            NpcController npc = escorter.GetTetheredNpc(i);
+            if (npc == null)
+                continue;
 
-        // 확보된 신병만 — 끌려오는 중(Escorted)과 내려놓은 대상(Captured) 둘 다 통과한다.
-        // 상태는 동기화되므로(NpcController.CurrentState) 클라에서도 서버와 같은 답이 나온다.
-        NpcController controller = npc.GetComponent<NpcController>();
-        if (controller == null || !NpcStateRules.CanDeliver(controller.CurrentState))
-            return false;
+            // 확보된 신병만 — 끌려오는 중(Escorted)과 내려놓은 대상(Captured) 둘 다 통과한다.
+            // 상태는 동기화되므로(NpcController.CurrentState) 클라에서도 서버와 같은 답이 나온다.
+            if (!NpcStateRules.CanDeliver(npc.CurrentState))
+                continue;
 
-        return m_zone == null || m_zone.Contains(npc.position);
+            if (m_zone == null || m_zone.Contains(npc.transform.position))
+                return true;
+        }
+
+        return false;
     }
 
     public void Interact(GameObject interactor)
