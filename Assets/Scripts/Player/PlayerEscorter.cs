@@ -103,7 +103,7 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
 
         PlayerEscorter[] escorters = FindObjectsByType<PlayerEscorter>(FindObjectsSortMode.None);
         foreach (PlayerEscorter escorter in escorters)
-            if (escorter.TetheredNpc == npc)
+            if (escorter.IsTetheredTo(npc)) // 큐 전체를 본다 — 머리만 보면 뒤쪽 대상의 인계자를 놓친다 (#414)
                 return escorter;
 
         return null;
