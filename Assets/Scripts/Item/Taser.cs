@@ -10,7 +10,8 @@ using UnityEngine;
 /// <b>조준 사격</b> — 수갑·스캐너처럼 PlayerInteractor가 잡아준 대상을 쓰지 않는다.
 /// 그 경로는 사거리가 상호작용 레이(3m)에 묶여 원거리 무기가 될 수 없고, 겨냥만 하면 100% 명중이라
 /// 빗나갈 여지가 없다. 대신 조준 방향으로 직접 레이캐스트해 <b>맞으면 명중, 빗나가면 실패</b>다.
-/// 벽·다른 오브젝트가 먼저 맞으면 그대로 빗나간다 (레이가 첫 충돌에서 멈추므로 엄폐가 성립).
+/// 벽·다른 오브젝트가 대상보다 앞이면 그대로 빗나간다 (엄폐 성립).
+/// "앞"의 정의는 <see cref="AimOcclusion"/>가 단독으로 갖는다 — 진압봉·상호작용 가시선과 같은 규칙이다.
 ///
 /// 서버 권위 — 오너가 조준 원점·방향을 보내면 서버가 자기 물리로 레이캐스트해 판정한다 (#55).
 /// 클라가 보낸 원점은 서버가 아는 플레이어 위치와 대조해 검증한다 (원점 위조 = 벽 너머 저격 방지).
@@ -47,6 +48,10 @@ public class Taser : ItemBase, IAimedWeapon
     // 다음 발사가 가능해지는 시각. 판정자가 서버 하나뿐이라 동기화하지 않는다 (서버 전용 상태).
     // 아이템 인스턴스에 붙어 있으므로 버리고 다시 주워도 충전 상태가 따라간다.
     private float m_nextFireTime;
+
+    // 조준 히트 버퍼 — 크로스헤어(HasValidAimTarget)가 매 프레임 도는 경로라
+    // RaycastAll(호출마다 배열 할당) 대신 NonAlloc + 고정 버퍼를 쓴다. (Baton.s_hitBuffer와 동일 관례)
+    private static readonly RaycastHit[] s_aimBuffer = new RaycastHit[16];
 
     // ---- ItemBase ----
 
@@ -173,7 +178,8 @@ public class Taser : ItemBase, IAimedWeapon
     /// <summary>
     /// 조준 원점·방향으로 사거리(m_range) 레이캐스트해 명중 결과를 분류한다 (레이캐스트 1회).
     /// 서버 사격 판정(ServerFire)과 오너 크로스헤어 색(#328)이 이 한 규칙을 공유한다.
-    /// 마스크 ~0 + 트리거 무시 — "먼저 맞은 것"이 결과라 벽 엄폐가 성립한다.
+    /// 마스크 ~0 + 트리거 무시. 히트를 전부 받아 <see cref="AimOcclusion.FindNearestByPivot"/>로
+    /// 하나를 고르며, 그 기준이 벽 엄폐의 정의다.
     /// </summary>
     private AimResult EvaluateAim(
         Vector3 origin,
@@ -189,8 +195,16 @@ public class Taser : ItemBase, IAimedWeapon
         if (direction.sqrMagnitude < 0.0001f)
             return AimResult.NoHit; // 0벡터 방향은 레이를 만들 수 없다 (위조·직렬화 사고 방어)
 
-        if (!Physics.Raycast(origin, direction.normalized, out hit, m_range, ~0, QueryTriggerInteraction.Ignore))
+        int count = Physics.RaycastNonAlloc(
+            origin, direction.normalized, s_aimBuffer, m_range, ~0, QueryTriggerInteraction.Ignore);
+
+        // 제외 계층은 넘기지 않는다 — 레이는 원점을 감싼 콜라이더를 애초에 감지하지 않고,
+        // 자기 자신을 맞추는 예외는 EvaluatePlayerAim이 명시적으로 걸러낸다.
+        int index = AimOcclusion.FindNearestByPivot(origin, s_aimBuffer, count, null);
+        if (index < 0)
             return AimResult.NoHit;
+
+        hit = s_aimBuffer[index];
 
         // 콜라이더가 루트의 자식일 수 있으므로 부모까지 탐색한다 (Handcuffs.ResolveTarget과 동일 관례).
         // 벽·소품을 맞췄으면 그대로 빗나감이고, 동료를 맞췄으면 아군 오사다 (#252).
