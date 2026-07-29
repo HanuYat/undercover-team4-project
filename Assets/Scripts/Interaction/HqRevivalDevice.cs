@@ -31,6 +31,13 @@ public class HqRevivalDevice : NetworkBehaviour, ICarriedBodyReceiver
     [SerializeField]
     private float m_placeRange = 4f;
 
+    [Tooltip(
+        "안치 자리에서 이 거리(m) 밖으로 몸이 벗어나면 안치가 풀린다 — 밧줄이 아닌 경로로 몸이 "
+        + "옮겨진 경우(오검거 광장 이송 등)를 잡는 방어선이다"
+    )]
+    [SerializeField]
+    private float m_strayDistance = 3f;
+
     [Header("표시")]
     [Tooltip("남은 시간을 띄울 월드 라벨 — 비우면 표시 없이 동작한다")]
     [SerializeField]
@@ -47,6 +54,9 @@ public class HqRevivalDevice : NetworkBehaviour, ICarriedBodyReceiver
     private readonly NetworkVariable<float> m_remainingSynced = new();
 
     private int m_shownSeconds = -1; // 라벨 갱신 스로틀 — 초 단위가 바뀔 때만 텍스트를 만든다
+
+    // 안치 직후 자리 이탈 검사를 미루는 유예(초) — 오너 권한 텔레포트가 도착할 시간을 준다.
+    private const float k_strayGraceSeconds = 1f;
 
     private Transform Slot => m_slot != null ? m_slot : transform;
 
@@ -146,6 +156,23 @@ public class HqRevivalDevice : NetworkBehaviour, ICarriedBodyReceiver
         }
 
         m_elapsed += Time.deltaTime;
+
+        // 몸이 자리를 벗어났다 — 밧줄이 아닌 경로로 옮겨졌다는 뜻이다(오검거 광장 이송 등).
+        // 안치 '판정'은 여전히 위치가 아니라 상호작용이지만(위 주석), 이미 들어온 몸이 사라진 것까지
+        // 모른 척하면 장치 밖에 있는 사람이 타이머만 채우고 부활한다. 넣는 조건과 유지 조건은 다르다.
+        //
+        // 유예를 두는 이유: 몸 이동은 오너 권한이라 ServerPlace의 텔레포트가 한 왕복 늦게 반영된다.
+        // 유예가 없으면 안치한 프레임에 몸이 아직 운반자 옆에 있어 스스로 풀려 버린다.
+        if (m_elapsed >= k_strayGraceSeconds)
+        {
+            Vector3 stray = m_occupant.transform.position - Slot.position;
+            if (stray.sqrMagnitude > m_strayDistance * m_strayDistance)
+            {
+                ClearOccupant("몸이 자리를 벗어남 — 밧줄이 아닌 경로로 옮겨졌다");
+                return;
+            }
+        }
+
         SetRemaining(Mathf.Max(0f, m_revivalSeconds - m_elapsed));
 
         if (m_elapsed >= m_revivalSeconds)
