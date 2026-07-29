@@ -7,11 +7,20 @@ using UnityEngine;
 /// 실제 채널링·사거리·반응 판정·끌기는 서버 권위이며 PlayerEscorter가 수행한다 (수갑과 동일한 허브 패턴, #59/#118).
 /// 끌기 중엔 손이 묶여 다른 아이템을 쓸 수 없고, 한 번에 1명만 확보할 수 있다.
 /// 밧줄은 소모되지 않는다 — 대상에 남지 않으므로 풀기 판정도 상태만 본다.
+///
+/// <b>기능 정지(Die)된 동료도 같은 밧줄로 끈다</b> (#365) — 대상이 NPC냐 동료냐로 갈릴 뿐,
+/// 겨냥하고 좌클릭해 묶고 E로 내려놓는 조작은 같다. 동료 한 명이 밧줄 한 개를 차지하므로 NPC 끌기와
+/// 같은 자원 상한(소지한 밧줄 개수, #390)을 나눠 쓴다 — 줄이 남으면 NPC를 끌면서 동료를 옮길 수 있다.
+/// 동료 쪽 서버 로직은 PlayerCarrier가 든다(대상이 플레이어라 상태·이동 권한이 NPC와 다르기 때문).
+/// 저항하지 않는 몸이라 묶기 채널링은 없다 — 기절한 NPC를 즉시 묶는 것과 같은 취급이다.
 /// </summary>
 public class Rope : ItemBase
 {
     /// <summary>이 밧줄을 든 플레이어의 연행 허브 — 요청을 서버로 넘긴다. (Handcuffs와 동일 관례, #88)</summary>
     private PlayerEscorter Escorter => GetComponentInParent<PlayerEscorter>();
+
+    /// <summary>이 밧줄을 든 플레이어의 운반 허브 — 동료(Die) 대상 요청을 서버로 넘긴다. (#365)</summary>
+    private PlayerCarrier Carrier => GetComponentInParent<PlayerCarrier>();
 
     public override bool CanUse() => true;
 
@@ -21,6 +30,21 @@ public class Rope : ItemBase
         if (escorter == null)
         {
             Debug.LogWarning("Rope: PlayerEscorter를 찾지 못함 — 사용 불가", this);
+            return;
+        }
+
+        // 기능 정지된 동료를 겨냥했으면 운반이다 (#365) — 상태 판정·사거리는 서버(PlayerCarrier)가 한다
+        PlayerCarrier carryTarget = ResolveCarryTarget(aimTarget);
+        if (carryTarget != null)
+        {
+            PlayerCarrier carrier = Carrier;
+            if (carrier == null)
+            {
+                Debug.LogWarning("Rope: PlayerCarrier를 찾지 못함 — 동료 운반 불가", this);
+                return;
+            }
+
+            carrier.RequestCarry(carryTarget);
             return;
         }
 
@@ -63,11 +87,23 @@ public class Rope : ItemBase
     /// <summary>Use()의 조기 검증과 동일 기준 — 조준 피드백(윤곽선)용. 묶기·풀기 어느 쪽이든 반응한다. (#184)</summary>
     public override bool CanTarget(GameObject aimTarget)
     {
+        PlayerEscorter escorter = Escorter;
+
+        // 기능 정지된 동료 — 끌 수 있는 상태이고 남는 밧줄이 있어야 한다 (서버 가드 ServerBeginCarry와 단일 기준, #365).
+        // 운반은 한 번에 1명이지만 상한 자체는 NPC 끌기와 같은 자원(소지한 밧줄 개수)에서 나온다 (#390).
+        PlayerCarrier carryTarget = ResolveCarryTarget(aimTarget);
+        if (carryTarget != null)
+        {
+            PlayerCarrier carrier = Carrier;
+            return carrier != null
+                && !carrier.IsCarrying
+                && (escorter == null || !escorter.IsAtRopeCapacity);
+        }
+
         NpcController target = ResolveTarget(aimTarget);
         if (target == null)
             return false;
 
-        PlayerEscorter escorter = Escorter;
         if (escorter == null)
             return false;
 
@@ -96,6 +132,20 @@ public class Rope : ItemBase
         if (aimTarget == null)
             return null;
         return aimTarget.GetComponentInParent<NpcController>();
+    }
+
+    // 겨냥한 것이 '끌 수 있는 동료'인가 — 조준에 잡히는 것은 쓰러진 동안 켜지는 히트박스이고,
+    // 그 부모가 플레이어다. 상태 판정은 PlayerCarrier가 단독으로 갖는다(클라·서버 단일 기준, #365).
+    private PlayerCarrier ResolveCarryTarget(GameObject aimTarget)
+    {
+        if (aimTarget == null)
+            return null;
+
+        PlayerCarrier target = aimTarget.GetComponentInParent<PlayerCarrier>();
+        if (target == null || target == Carrier)
+            return null; // 자기 자신 제외
+
+        return target.CanBeCarried ? target : null;
     }
 
     // ---- 라이프사이클 ----

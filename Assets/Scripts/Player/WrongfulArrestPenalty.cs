@@ -263,6 +263,19 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         PlayerMovement movement = target.GetComponent<PlayerMovement>();
         PlayerIncapacitation incap = target.GetComponent<PlayerIncapacitation>();
 
+        // 기능 정지(Die)된 몸은 매달지 않는다 (#365). 아래 Incapacitate는 Die를 못 덮게 막혀 있지만(#364)
+        // <b>텔레포트는 그 가드 밖</b>이라, 안 막으면 상태만 Die로 둔 채 광장으로 옮겨진다 — 본부 부활
+        // 장치에 안치해 둔 몸이면 동료 눈앞에서 사라지고, 운반 중이었으면 이탈 거리에 걸려 줄이 끊긴다.
+        //
+        // 포획 경로는 HandlePenaltyCaught에서 이미 걸러진다. 여기가 막는 것은 추격대를 꾸리지 못해
+        // 곧장 집행되는 폴백 경로다(위 LaunchSquad — 원한 구역이 빈 예외 상황).
+        // 이 폴백에서는 페널티가 미뤄지는 게 아니라 이번 집행분이 넘어간다 — 예외 경로라 그대로 둔다.
+        if (incap != null && incap.IsDead)
+        {
+            Debug.Log($"[오검거] 매달기 건너뜀 — {target.name}은 기능 정지(Die) 상태다 (본부 부활이 우선)");
+            return;
+        }
+
         if (m_plazaPoint == null)
             Debug.LogWarning("WrongfulArrestPenalty: Plaza Point 미할당 — 원점(0,0,0)으로 이송된다. 인스펙터에 광장 지점을 지정할 것", this);
 
@@ -271,8 +284,11 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
 
         if (movement != null)
             movement.ServerTeleport(pos, rot); // 오너 권한 경로 — 호스트·원격 클라 모두 이동
+        // 폴백 경로(구역이 비어 추격대 없이 집행)에서는 여기서 무력화가 처음 걸린다.
+        // 같은 원인이면 무동작이지만 <b>다른 원인은 덮어쓴다</b> — 기능 정지(Die)만은 덮이지 않게
+        // Incapacitate 쪽에서 막는다(#364). 안 막으면 30초 뒤 아래 Recover()가 Die까지 풀어 공짜 부활이 된다.
         if (incap != null)
-            incap.Incapacitate(IncapacitationCause.Penalty); // 이미 무력화면 무동작(중복 트리거 무시) — 폴백 경로에선 여기서 진입
+            incap.Incapacitate(IncapacitationCause.Penalty);
 
         Debug.Log($"[오검거] 광장 매달기 — {target.name} → {pos}, {k_hangSeconds}초");
 

@@ -49,6 +49,7 @@ public class PlayerInteractor : NetworkBehaviour
     private PlayerInputHandler m_inputHandler;
     private PlayerEscorter m_escorter;
     private PlayerIncapacitation m_incapacitation;
+    private PlayerCarrier m_carrier; // 운반 중 E의 "내려놓기" 선점 판정용 (#365)
 
     // 로그 중복 억제 상태 — 대상·차단자·결과가 그대로면 다시 찍지 않는다
     private int m_lastLogTargetId;
@@ -63,6 +64,7 @@ public class PlayerInteractor : NetworkBehaviour
         m_escorter = GetComponent<PlayerEscorter>();
         // 행동불능 중 상호작용 차단용 — 이동/아이템은 각자 게이팅하지만 E 상호작용은 공백이었다 (#101)
         m_incapacitation = GetComponent<PlayerIncapacitation>();
+        m_carrier = GetComponent<PlayerCarrier>(); // 없는 구성(테스트 등)이면 null (#365)
         if (m_camera == null) m_camera = Camera.main;
 
         if (!IsOwner)
@@ -289,6 +291,38 @@ public class PlayerInteractor : NetworkBehaviour
             Debug.Log($"E 입력 — 밧줄 끌기 놓기 요청: {aimed.name}");
             m_escorter.RequestRelease(aimed);
             return;
+        }
+
+        // 동료 운반 중 내려놓기도 밧줄 놓기와 같은 규칙 — **조준 대상 기준**이다 (#365 → #390).
+        // 처음엔 "운반 중이면 E는 무조건 내려놓기"였다. 그때는 운반과 NPC 끌기가 배타라 그걸로 충분했지만,
+        // 이제 둘은 밧줄을 한 칸씩 나눠 쓰며 동시에 성립한다 — 무조건 소비하면 위 놓기와 똑같은 이유로
+        // 업고 가는 동안 문·콘솔·제압에 E를 쓸 방법이 사라진다.
+        if (m_carrier != null && m_carrier.IsCarrying)
+        {
+            // 몸을 받는 대상(부활 장치)은 내려놓기보다 앞선다 — 아니면 장치 앞에서 E를 눌러도 그 자리에
+            // 툭 내려놓게 된다. 선점을 여는 대상은 ICarriedBodyReceiver로 한정한다(문·콘솔은 종전대로).
+            // 밧줄 쪽 TakesPriorityOverRelease와 같은 취지이며, CanInteract를 함께 보는 것도 같은 이유다.
+            if (CurrentInteractable is ICarriedBodyReceiver receiver
+                && receiver.CanInteract(gameObject))
+            {
+                receiver.Interact(gameObject);
+                return;
+            }
+
+            // 내려놓기는 업은 동료를 겨냥했을 때, 또는 겨냥한 상호작용 대상이 없을 때만.
+            // 뒤에 끌려오는 몸을 매번 돌아볼 수는 없으니 후자가 사실상 기본 동선이고,
+            // 무언가를 겨냥한 E는 그쪽으로 흘러가 운반 중에도 평소 상호작용이 그대로 살아 있다.
+            Transform carried = m_carrier.CarriedTransform;
+            bool aimingAtCarried = carried != null
+                && CurrentTarget != null
+                && CurrentTarget.transform.IsChildOf(carried);
+
+            if (aimingAtCarried || CurrentInteractable == null)
+            {
+                Debug.Log("E 입력 — 내려놓기 요청 (운반)");
+                m_carrier.RequestDrop();
+                return;
+            }
         }
 
         CurrentInteractable?.Interact(gameObject);

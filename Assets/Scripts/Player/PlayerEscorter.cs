@@ -54,6 +54,21 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
         }
     }
 
+    // 기능 정지된 동료를 끄는 중인가 (#365) — 운반도 밧줄 한 개를 쓰므로 용량 계산(RopesInUse)에 들어간다.
+    // '한 번에 1명'이 폐기된 뒤(#390) 운반과 NPC 끌기는 배타가 아니라 같은 자원을 나눠 쓰는 관계다.
+    // 없는 구성(테스트 등)이면 false.
+    private PlayerCarrier m_carrier;
+
+    private bool IsCarryingPlayer
+    {
+        get
+        {
+            if (m_carrier == null)
+                m_carrier = GetComponent<PlayerCarrier>();
+            return m_carrier != null && m_carrier.IsCarrying;
+        }
+    }
+
     private float CaptureRange => Interactor != null ? Interactor.Range : k_fallbackRange;
 
     // 거리 기준점 — 조준 레이캐스트·윤곽선 게이트와 동일한 AimOrigin(카메라).
@@ -283,6 +298,8 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
     // 도주 제압 홀드 채널링(ServerBeginSubdue/ServerSubdueChannelAsync/ServerCancelSubdue)은
     // 제거됐다 (#436 — 이전 #332). 도주형 전용으로 Captured에 바로 점프하던 경로라, 저항형의
     // 타격 → 기절 → 밧줄과 처리가 갈려 있었다. 이제 두 유형이 같은 흐름을 탄다.
+    // 이 메서드가 읽던 IsAtRopeCapacity는 동료 운반(#365)까지 세도록 확장됐지만, 그 규칙은
+    // 밧줄 묶기·줄다리기 경로가 계속 읽으므로 여기 삭제로 잃는 것은 없다.
 
     // ---- 밧줄 풀기 채널링 (서버 권위, #290 → #369) ----
     // 묶기 채널링의 역방향 — 밧줄을 든 좌클릭으로 체포되어 멈춘 NPC를 풀어 배회로 돌려보낸다.
