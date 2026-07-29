@@ -126,6 +126,22 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
         ReleaseRpc();
     }
 
+    /// <summary>
+    /// 본부 인계 요청 — 오너가 호출(인계 단말 E). 서버가 대상·구역을 재검증해 판정한다. (#414)
+    /// 예전엔 인계존 콜라이더가 자동으로 판정을 냈다 — 트리거가 상호작용키로 옮겨진 진입점이다.
+    /// </summary>
+    public void RequestDeliver()
+    {
+        if (!IsSpawned)
+        {
+            ServerDeliver();
+            return;
+        }
+        if (!IsOwner)
+            return;
+        DeliverRpc();
+    }
+
     /// <summary>도주 NPC 근접 제압 홀드 시작 — 오너가 호출(E 누름). 3초 홀드를 채워야 잡힌다. (#332)</summary>
     public void RequestSubdueCapture(NpcController target)
     {
@@ -198,6 +214,9 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
     [Rpc(SendTo.Server)]
     private void ReleaseRpc() => Release();
 
+    [Rpc(SendTo.Server)]
+    private void DeliverRpc() => ServerDeliver();
+
     // 밧줄 끌기 요청 RPC(RopeDragRequestRpc)는 PlayerEscorter.RopeDrag.cs에 있다. (#269)
 
     [Rpc(SendTo.Server)]
@@ -231,6 +250,27 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
     // 반응 판정은 검거에서 완전히 빠졌다 (#400) — 스캔·피격이 트리거이고 NpcController.ServerReactTo가 갖는다.
 
     private void ServerCancelCapture() => m_channel.Cancel();
+
+    // 인계 실행 — 대상은 클라가 지정하지 않는다. 서버가 자기 권위 상태(DraggingNpc)에서 읽으므로
+    // "남이 끌던 NPC를 인계했다"는 위조가 성립할 수 없다. 상태·구역 검증과 판정은 ArrestJudge가 한다 —
+    // 연행 허브가 인계존을 알 필요는 없고, 판정 기준이 한 곳(#414)에 모여 있어야 하기 때문이다.
+    private void ServerDeliver()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        if (DraggingNpc == null)
+            return; // 끌고 있는 대상이 없으면 넘길 것이 없다
+
+        ArrestJudge judge = App.Game.ArrestJudge;
+        if (judge == null)
+        {
+            Debug.LogWarning("PlayerEscorter: ArrestJudge가 없어 인계 판정을 할 수 없다", this);
+            return;
+        }
+
+        judge.TryDeliver(DraggingNpc);
+    }
 
     /// <summary>
     /// 진행 중인 체포/제압/해제 채널링을 서버 권위로 즉시 중단한다 — 수갑을 채널링 중 버리는 등

@@ -150,6 +150,16 @@ public class PlayerInteractor : NetworkBehaviour
         // IsEscorting이 아니라 IsBusy로 게이트한다 — 끌기는 별도 플래그라 연행만 보면 밧줄을 놓을 방법이 없다.
         if (m_escorter != null && m_escorter.IsBusy)
         {
+            // 예외: 인계 단말처럼 '끌고 온 상태에서만 의미 있는' 대상은 놓기보다 우선한다 (#414).
+            // CanInteract를 함께 보므로 조준 윤곽선이 켜진 조건과 실제로 E가 먹히는 조건이 일치하고,
+            // 조건이 어긋나면 아래 놓기로 흘러가 끌던 NPC를 놓을 방법이 사라지지 않는다.
+            IInteractable priority = CurrentInteractable;
+            if (priority != null && priority.TakesPriorityOverRelease(gameObject) && priority.CanInteract(gameObject))
+            {
+                priority.Interact(gameObject);
+                return;
+            }
+
             // Release() 직접 호출은 서버 가드에 막힌다 — 요청 API로 서버에 넘긴다 (#118)
             // 서버 Release()가 끌기/연행 중 무엇이었는지 보고 알맞은 놓기로 분기한다.
             Debug.Log("E 입력 — 놓기 요청 (연행/밧줄 끌기)");

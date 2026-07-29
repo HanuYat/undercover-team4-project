@@ -3,7 +3,8 @@ using UnityEngine;
 
 /// <summary>
 /// 검거 판정 — 본부로 인계된 NPC의 실제 신원을 대조해 진범/오검거를 판정한다. (GDD 7-2, #41)
-/// HqDropoffZone의 인계 이벤트를 구독해 자동 판정하고, 결과를 로그 + OnArrestJudged로 알린다.
+/// 인계 단말(HqDropoffTerminal)의 상호작용키 요청이 TryDeliver로 들어오면 판정하고, 결과를
+/// 로그 + OnArrestJudged로 알린다. 인계존 도달 자동 판정은 폐기됐다 (#414).
 /// 실제 자금 정산(#42)·오검거 페널티(GDD 7-3)·판정 UI(#43)는 이 이벤트를 구독해 후속 구현한다.
 ///
 /// 범인 배정(CriminalAssigner)이 서버에서만 이뤄지고 아직 클라이언트에 동기화되지 않으므로(#52/#56 TODO),
@@ -19,10 +20,8 @@ public class ArrestJudge : CommonManagerBase
     // 판정 시점에 뽑으면 재판정(#358)·탈옥 후 재검거(#231)로 금액을 리롤할 수 있게 된다.
 
     [Header("인계 구역 (비우면 씬에서 자동 탐색)")]
+    [Tooltip("인계 요청 시 대상이 이 구역 안에 있는지 서버가 재검증한다 — 판정의 실제 기준 (#414)")]
     [SerializeField] private HqDropoffZone m_dropoffZone;
-
-    [Tooltip("인계 도달 시 자동 판정. 본부 인계 상호작용(#40) 도입 전까지 데모용으로 켜둔다")]
-    [SerializeField] private bool m_autoJudgeOnDelivery = true;
 
     public event Action<ArrestResult> OnArrestJudged;
 
@@ -35,26 +34,33 @@ public class ArrestJudge : CommonManagerBase
             m_dropoffZone = FindFirstObjectByType<HqDropoffZone>();
     }
 
-    private void OnEnable()
-    {
-        if (m_dropoffZone != null)
-            m_dropoffZone.OnNpcDelivered += HandleNpcDelivered;
-    }
-
-    private void OnDisable()
-    {
-        if (m_dropoffZone != null)
-            m_dropoffZone.OnNpcDelivered -= HandleNpcDelivered;
-    }
-
     // 판정 완료 표식은 NpcController.IsDelivered가 들고 있다 (#230) — NPC와 수명을 같이하므로
     // 씬 전환·라운드 재시작 시 수동으로 비울 static 상태가 없다.
     // (App 등록 해제는 베이스 OnDestroy가 처리 — 여기서 오버라이드할 것이 없다)
 
-    private void HandleNpcDelivered(NpcController npc)
+    /// <summary>
+    /// 인계 시도 — 인계 단말(#414)의 요청이 서버에 도달했을 때 호출된다. 상태·구역을 재검증하고
+    /// 통과하면 판정한다. <b>판정의 실제 기준은 여기 한 곳</b>이다: 단말의 CanInteract는 조준 피드백용
+    /// 클라 게이팅이라 위조 RPC를 막지 못한다 (RoundEndButton·CCTVSwitcher와 같은 관례, #362).
+    /// 서버(또는 오프라인) 전용 — 게이트는 Judge가 대상 권위로 한 번 더 건다.
+    /// </summary>
+    public ArrestResult? TryDeliver(NpcController npc)
     {
-        if (m_autoJudgeOnDelivery)
-            Judge(npc);
+        if (npc == null) return null;
+
+        // 밧줄로 끌려온(Escorted) 대상만 인계 대상 — 배회 시민·놓아둔 체포(Captured)는 무시 (#59/#269/#369).
+        // 재판정(#358)은 그대로 허용된다: 다시 끌고 와 E를 누르면 다시 판정되고, 중복 후처리는
+        // ArrestResult.IsFirstDelivery가 건다. 자동 트리거가 사라져 틱 중복 발화 방어는 필요 없어졌다.
+        if (npc.CurrentState != NpcState.Escorted)
+            return null;
+
+        if (m_dropoffZone != null && !m_dropoffZone.Contains(npc.transform.position))
+        {
+            Debug.Log($"인계 거부 — 대상이 인계 구역 밖에 있다: {npc.name}");
+            return null;
+        }
+
+        return Judge(npc);
     }
 
     public ArrestResult? Judge(NpcController npc)
@@ -77,7 +83,7 @@ public class ArrestJudge : CommonManagerBase
         bool firstDelivery = !npc.IsDelivered;
 
         // 판정 완료로 표시 — 본부 방치 도주 타이머(#230)를 멈춘다. 재판정 자체는 허용하므로(#358)
-        // 여기서 중복을 막지는 않는다(틱 스팸은 HqDropoffZone의 Escorted/Roped 게이트가 걸러 준다).
+        // 여기서 중복을 막지는 않는다(수동 트리거라 E를 누른 횟수만큼만 판정된다, #414).
         npc.MarkDelivered();
 
         ArrestVerdict verdict;
