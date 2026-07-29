@@ -21,7 +21,7 @@ public class SceneIndicatorHud : MonoBehaviour
     {
         const float width = 180f;
         const float height = 26f;
-        Rect rect = new Rect(Screen.width - width - 12f, 12f, width, height); // 우상단 (좌측 HUD들과 안 겹치게)
+        Rect rect = new Rect(12f, 12f, width, height); // 우상단 (좌측 HUD들과 안 겹치게)
 
         Color prev = GUI.color;
         GUI.color = new Color(0f, 0f, 0f, 0.55f);
