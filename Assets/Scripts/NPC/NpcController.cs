@@ -24,6 +24,7 @@ public partial class NpcController : NetworkBehaviour
     [SerializeField] private NpcCapturedConfig m_capturedConfig;
     [SerializeField] private NpcChaseConfig m_chaseConfig;
     [SerializeField] private NpcCommonConfig m_commonConfig;
+    [SerializeField] private NpcRopeDragConfig m_ropeDragConfig;
 
     private NavMeshAgent m_agent;
     private NpcStateMachine m_stateMachine;
@@ -59,8 +60,8 @@ public partial class NpcController : NetworkBehaviour
     /// <summary>
     /// 본부 인계 판정이 끝났는가 — <see cref="MarkDelivered"/>로 ArrestJudge가 세팅한다. (#230)
     /// 판정 완료분은 인계 방치 타이머에서 빠진다(본부에서 탈출하면 안 된다). 재판정 자체는 막지 않으며(#358 —
-    /// HqDropoffZone이 더는 IsDelivered NPC를 무시하지 않는다), 재판정 후처리 중복은 <see cref="ArrestResult.IsFirstDelivery"/>가 건다.
-    /// 서버(또는 오프라인)에서만 유효 — 판정·인계존 게이트가 모두 서버 전용이라 동기화하지 않는다.
+    /// 다시 끌고 와 인계 단말에서 E를 누르면 다시 판정된다), 재판정 후처리 중복은 <see cref="ArrestResult.IsFirstDelivery"/>가 건다.
+    /// 서버(또는 오프라인)에서만 유효 — 판정·인계 검증이 모두 서버 전용이라 동기화하지 않는다.
     /// 판정 후 본부에 남는 NPC의 처리는 유치장(#228)이 가져간다.
     /// </summary>
     public bool IsDelivered { get; private set; }
@@ -205,6 +206,13 @@ public partial class NpcController : NetworkBehaviour
         // 라운드 종료 freeze — 서버에서 멈추면 NetworkTransform이 정지 위치를 복제해 전 피어에서 멈춘다
         if (m_frozen)
             return;
+
+        // 밧줄 장력 — 아래 넉백·스턴 게이트보다 **먼저** 돈다 (#390). 묶인 채 기절한 대상은 스턴
+        // 오버레이를 단 채로 끌려가야 하므로(TickStun이 IsRoped면 타이머를 멈추는 것과 짝) 게이트 뒤로
+        // 내리면 테이저→밧줄 콤보로 잡은 대상이 그 자리에 멈춘다. 끌기가 아니면 즉시 반환한다.
+        // (넉백은 서로 배타적이다 — Escorted 대상이 넉백을 맞으면 StopEscort로 커스터디가 풀리고
+        //  PlayerEscorter가 그것을 보고 끌기를 정리한다.)
+        TickRopeDrag();
 
         // 넉백 비행 중에는 FSM을 돌리지 않는다 — NavMeshAgent를 꺼 둔 채라 상태 클래스가
         // SetDestination/isStopped를 부르면 "agent not on NavMesh" 에러가 쏟아진다 (#232)

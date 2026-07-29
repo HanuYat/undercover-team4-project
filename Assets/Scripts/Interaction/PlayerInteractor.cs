@@ -145,15 +145,27 @@ public class PlayerInteractor : NetworkBehaviour
         if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
             return;
 
-        // 연행·밧줄 끌기 중 E는 놓기가 최우선 — 다른 대상을 겨냥하고 있어도 이번 입력은 놓기로 소비한다 (#91/#269)
+        // 밧줄 놓기는 **조준 대상 기준**이다 (#390). 여러 명을 동시에 끌 수 있어 "끌고 있으면 무조건 놓기"로는
+        // 무엇을 놓을지 정할 수 없고, 끄는 동안 다른 대상에게 E(제압·끌기 재개)를 쓸 방법도 사라진다.
         // (PlayerEscorter가 따로 입력을 구독하면 놓기+제압이 한 입력에 동시 발동하는 이중 소비가 생긴다)
-        // IsEscorting이 아니라 IsBusy로 게이트한다 — 끌기는 별도 플래그라 연행만 보면 밧줄을 놓을 방법이 없다.
-        if (m_escorter != null && m_escorter.IsBusy)
+        NpcController aimed = CurrentTarget != null
+            ? CurrentTarget.GetComponentInParent<NpcController>()
+            : null;
+        if (m_escorter != null && m_escorter.IsDraggingNpc(aimed))
         {
-            // Release() 직접 호출은 서버 가드에 막힌다 — 요청 API로 서버에 넘긴다 (#118)
-            // 서버 Release()가 끌기/연행 중 무엇이었는지 보고 알맞은 놓기로 분기한다.
-            Debug.Log("E 입력 — 놓기 요청 (연행/밧줄 끌기)");
-            m_escorter.RequestRelease();
+            // 예외: 인계 단말처럼 '끌고 온 상태에서만 의미 있는' 대상은 놓기보다 우선한다 (#414).
+            // CanInteract를 함께 보므로 조준 윤곽선이 켜진 조건과 실제로 E가 먹히는 조건이 일치하고,
+            // 조건이 어긋나면 아래 놓기로 흘러가 끌던 NPC를 놓을 방법이 사라지지 않는다.
+            IInteractable priority = CurrentInteractable;
+            if (priority != null && priority.TakesPriorityOverRelease(gameObject) && priority.CanInteract(gameObject))
+            {
+                priority.Interact(gameObject);
+                return;
+            }
+
+            // ReleaseDrag 직접 호출은 서버 가드에 막힌다 — 요청 API로 서버에 넘긴다 (#118)
+            Debug.Log($"E 입력 — 밧줄 끌기 놓기 요청: {aimed.name}");
+            m_escorter.RequestRelease(aimed);
             return;
         }
 
