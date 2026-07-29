@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
@@ -30,13 +31,30 @@ public partial class PlayerEscorter
     /// <summary>지금 밧줄로 끌고 있는 NPC. 없으면 null. 서버(또는 오프라인)에서만 유효. (#269)</summary>
     public NpcController DraggingNpc { get; private set; }
 
+    // 이 플레이어의 밧줄에 묶인 대상들 — <b>묶은 순서를 유지하는 큐</b>다 (#414 팀 확정).
+    // 인계 판정의 기준이 NPC가 아니라 플레이어로 옮겨졌다: 인계존에서 E를 누르면 이 큐를
+    // 앞에서부터 꺼내 순서대로 판정한다(ServerDeliver).
+    // 밧줄이 하나뿐인 지금은 항상 0~1개지만, 다중 끌기(#390)가 들어오면 그대로 여러 개가 쌓인다 —
+    // 그래서 접근자 이름을 #390 쪽(TetheredCount·GetTetheredNpc·IsTetheredTo)에 맞춰 뒀다.
+    private readonly List<NpcController> m_tetherQueue = new List<NpcController>();
+
+    /// <summary>밧줄에 묶여 있는 대상 수. 서버(또는 오프라인)에서만 유효. (#414)</summary>
+    public int TetheredCount => m_tetherQueue.Count;
+
+    /// <summary>큐의 index번째 대상 — 범위를 벗어나면 null. 서버(또는 오프라인) 전용. (#414)</summary>
+    public NpcController GetTetheredNpc(int index) =>
+        index >= 0 && index < m_tetherQueue.Count ? m_tetherQueue[index] : null;
+
+    /// <summary>이 대상이 내 밧줄에 묶여 있는가. 서버(또는 오프라인) 전용. (#414)</summary>
+    public bool IsTetheredTo(NpcController npc) => npc != null && m_tetherQueue.Contains(npc);
+
     /// <summary>
     /// 지금 이 플레이어의 밧줄에 묶여 있는 NPC — 끌기를 멈춰도(E) 유지된다. 서버(또는 오프라인)에서만 유효. (#369)
     /// 놓기는 손에서 줄을 놓는 게 아니라 <b>끌기를 멈추는 것</b>이다: 대상은 묶인 채 그 자리에 서고
     /// 밧줄은 여전히 이 플레이어와 이어져 있다. 실제로 푸는 건 밧줄 좌클릭 채널링(풀기)뿐이고,
     /// 그 외에는 인계 판정·방치 탈주처럼 대상이 커스터디를 벗어날 때 저절로 끊긴다.
     /// </summary>
-    public NpcController TetheredNpc { get; private set; }
+    public NpcController TetheredNpc => m_tetherQueue.Count > 0 ? m_tetherQueue[0] : null;
 
     // 묶여 있는 대상을 클라이언트에도 알린다 — 서버만 기록한다(연행 플래그와 동일 관례).
     // 단순 bool이 아니라 대상 참조인 이유: 원격 피어의 밧줄 표시(RopeDragView)가 선의 양 끝점을
@@ -267,7 +285,11 @@ public partial class PlayerEscorter
     // 값이 그대로면 쓰지 않는다 — 매 프레임 정리(TickRopeDrag)가 호출해도 대역폭을 먹지 않게.
     private void SetTethered(NpcController npc)
     {
-        TetheredNpc = npc;
+        // 큐 갱신 — null이면 비우고, 아니면 그 대상만 남긴다(밧줄 1개 전제).
+        // 다중 끌기(#390)에서는 이 자리가 대상별 Enqueue/Remove로 갈라진다.
+        m_tetherQueue.Clear();
+        if (npc != null)
+            m_tetherQueue.Add(npc);
 
         if (!IsSpawned || !IsServer)
             return;

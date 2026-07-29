@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
@@ -278,9 +279,9 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
         if (IsSpawned && !IsServer)
             return;
 
-        // 끌기(DraggingNpc)가 아니라 밧줄(TetheredNpc)이 기준이다 — 인계존에 내려놓고 접수하는 경로에서는
+        // 끌기(DraggingNpc)가 아니라 밧줄이 기준이다 — 인계존에 내려놓고 접수하는 경로에서는
         // 끌기가 풀려 있다. 묶여 있는 동안은 끌든 놓든 같은 대상이라 이 하나로 두 경로가 모두 덮인다.
-        if (TetheredNpc == null)
+        if (TetheredCount == 0)
             return; // 묶어 둔 대상이 없으면 넘길 것이 없다
 
         ArrestJudge judge = App.Game.ArrestJudge;
@@ -290,7 +291,15 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
             return;
         }
 
-        judge.TryDeliver(TetheredNpc);
+        // 밧줄 큐를 앞에서부터 순서대로 판정한다 (#414 팀 확정 — 판정 기준이 NPC가 아니라 플레이어다).
+        // 인계존 밖이거나 상태가 맞지 않는 대상은 ArrestJudge가 걸러 내고 큐에 그대로 남는다 —
+        // 다시 데려와 E를 누르면 그때 판정된다(재판정 #358과 같은 취급).
+        //
+        // 큐를 복사해 도는 이유: 판정에 성공한 대상은 Jailed로 넘어가고 그 순간 TickRopeDrag가
+        // 큐에서 빼므로, 원본을 그대로 순회하면 도중에 컬렉션이 바뀐다.
+        List<NpcController> pending = new List<NpcController>(m_tetherQueue);
+        for (int i = 0; i < pending.Count; i++)
+            judge.TryDeliver(pending[i]);
     }
 
     /// <summary>
