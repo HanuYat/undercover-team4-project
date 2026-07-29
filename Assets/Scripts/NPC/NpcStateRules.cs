@@ -9,7 +9,8 @@ public static class NpcStateRules
 {
     /// <summary>수갑 체포 채널링의 대상이 될 수 있는 상태인가.
     /// 제외 목록 방식 — 새 상태는 기본 '체포 가능'이므로 막아야 하면 여기 추가할 것.
-    /// 도주(Run)·저항(Attack)은 수갑이 아니라 E 제압 홀드·테이저로만 잡는다 (GDD 6-1/7-4, #254) —
+    /// 도주(Run)·저항(Attack)은 수갑이 아니라 타격(E·진압봉)·테이저로 기절시킨 뒤 밧줄로 잡는다
+    /// (GDD 6-1/7-4, #254 · 도주형 E 제압 홀드는 #436에서 제거) —
     /// 반응이 시작된 뒤에는 수갑 채널링이 걸리지 않아야 한다.</summary>
     public static bool IsCapturable(NpcState state) =>
         state != NpcState.Escorted
@@ -93,11 +94,12 @@ public static class NpcStateRules
     public static bool CanDeliver(NpcState state) =>
         state is NpcState.Escorted or NpcState.Captured;
 
-    /// <summary>E 상호작용(제압·타격·재연행)이 반응하는 상태인가.
+    /// <summary>E 상호작용(타격·재연행)이 반응하는 상태인가.
     /// 포함 목록 방식 — 새 상태는 기본 'E 불가'이므로 열어야 하면 여기 추가할 것.
     /// NpcSubdueInteractable.Interact의 분기 집합과 반드시 일치해야 한다.
     /// 배회(Idle/Walk)가 열린 것은 체력이 지속형이 되면서다 (#366) — 예전에는 '배회 NPC 폭행 방지'로
-    /// 막혀 있었지만, 이제 아무 때나 때려 체력을 깎을 수 있다.</summary>
+    /// 막혀 있었지만, 이제 아무 때나 때려 체력을 깎을 수 있다.
+    /// 도주(Run)는 목록에 남아 있지만 의미가 바뀌었다 (#436) — 3초 제압 홀드가 아니라 타격 1회다.</summary>
     public static bool HasSubdueInteraction(NpcState state) =>
         state is NpcState.Idle or NpcState.Walk or NpcState.Run or NpcState.Attack or NpcState.Captured;
 }

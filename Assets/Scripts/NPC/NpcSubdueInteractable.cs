@@ -2,16 +2,19 @@ using UnityEngine;
 
 /// <summary>
 /// NPC의 상호작용키(E) 반응 (#76/#79/#91) — 누르는 즉시 NPC 상태에 따라 갈린다.
-/// 도주(Run) 중이면 3초 제압 홀드를 시작한다(#332 — 붙어서 유지해야 체포, 뗌·이탈이면 무산).
-/// 배회(Idle/Walk)·저항(Attack) 중이면 타격 1회로 체력을 깎는다 — 여럿이 함께 누르면 그만큼
-/// 빨리 기절시킨다 (GDD 7-4 협동 인센티브, #366).
+/// 배회(Idle/Walk)·도주(Run)·저항(Attack) 중이면 타격 1회로 체력을 깎는다 — 여럿이 함께 누르면
+/// 그만큼 빨리 기절시킨다 (GDD 7-4 협동 인센티브, #366).
 /// 체포(Captured) 상태면 재연행을 시작한다 — 연행 동작을 수갑 클릭에서 E로 이관 (#91).
 /// PlayerInteractor의 IInteractable 경로를 그대로 사용하므로
 /// NPC가 사거리·조준을 벗어나면 자연히 실패한다 (추격전·몸싸움 성립).
 /// 제압 프롬프트 표시는 상호작용 UI 이슈(#65 계열) 후속.
+///
+/// 도주형 전용이던 <b>3초 E 제압 홀드는 제거됐다</b>(#436 — 이전 #332). 도주형도 저항형과 같은
+/// 타격 → 기절 → 밧줄 흐름을 탄다: 홀드 완주로 <c>Captured</c>에 바로 점프하는 별도 경로가
+/// 유형마다 처리를 갈라놨기 때문이다. 즉시 무력화가 필요하면 테이저(#292)가 그 자리를 맡는다.
 /// </summary>
-// TODO: 상호작용 네트워크 전환(#55 계열) 시 도주 제압도 클라 입력 → ServerRpc 경로로 호출
-//       (저항 타격은 RequestSubdueHit이 자체 RPC 경로를 가진다, #79)
+// TODO: 상호작용 네트워크 전환(#55 계열) 시 이 경로도 클라 입력 → ServerRpc로 정리
+//       (타격은 RequestSubdueHit이 이미 자체 RPC 경로를 가진다, #79)
 [RequireComponent(typeof(NpcController))]
 public class NpcSubdueInteractable : MonoBehaviour, IInteractable
 {
@@ -53,7 +56,7 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
     {
         PlayerEscorter escorter = FindEscorter(interactor);
 
-        // 배회·도주·저항·체포 상태에서 반응한다 (체포는 수갑 채널링이 정식 경로).
+        // 배회·도주·저항·체포 상태에서 반응한다.
         // 배회가 열린 것은 체력이 지속형이 되면서다 (#366)
         // 이 switch의 분기 집합은 NpcStateRules.HasSubdueInteraction + CanRejoinOwnRope와 반드시
         // 일치해야 한다 (#184 — Escorted 분기만 상태가 아니라 요청자의 줄로 갈린다, #398)
@@ -71,22 +74,14 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
                 }
                 break;
 
-            case NpcState.Run:
-                // 도주 제압도 서버 권위 — 요청자(플레이어)의 PlayerEscorter를 통해 서버로 넘긴다 (#118).
-                // CaptureBySubdue는 서버 가드가 있어 클라에서 직접 부르면 무시되기 때문.
-                if (escorter != null)
-                {
-                    Debug.Log($"도주 NPC 제압 홀드 시작 요청: {m_controller.name}");
-                    escorter.RequestSubdueCapture(m_controller);
-                }
-                break;
-
             case NpcState.Idle:
             case NpcState.Walk:
+            case NpcState.Run:
             case NpcState.Attack:
                 // 타격은 자체 RPC 경로(RequestSubdueHit → SubdueHitRpc)를 가진다 (#79).
                 // 배회(Idle/Walk)도 같은 경로다 — 체력이 지속형이 되면서 저항 중이 아니어도
                 // 때려서 깎을 수 있다 (#366). 상태 게이트는 TakeDamage가 CanBeDamaged로 건다 (#292).
+                // 도주(Run)가 여기 합류한 것이 #436이다 — 쫓아가며 때려 기절시킨 뒤 밧줄로 끈다.
                 Debug.Log($"NPC 제압 타격: {m_controller.name}");
                 m_controller.RequestSubdueHit(interactor);
                 break;
