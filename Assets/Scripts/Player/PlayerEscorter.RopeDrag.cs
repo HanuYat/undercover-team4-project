@@ -100,8 +100,12 @@ public partial class PlayerEscorter
     // 동시에 묶을 수 있는 상한 — 로드아웃이 없으면(테스트 구성) 무제한.
     private int RopeCapacity => Loadout != null ? Loadout.RopeCount : int.MaxValue;
 
-    /// <summary>소지한 밧줄을 전부 쓰고 있는가 — 새 대상을 묶는 것을 막는 자원 게이트.</summary>
-    public bool IsAtRopeCapacity => TetheredCount >= RopeCapacity;
+    // 지금 쓰고 있는 줄 수 — 묶어 둔 NPC + 기능 정지 동료 운반 1명(#365). 동료도 같은 밧줄로 끌기 때문에
+    // NPC와 같은 자원 풀을 나눠 쓴다: 밧줄 2개면 NPC 1명을 끌면서 동료 1명을 옮길 수 있고, 1개면 둘 중 하나다.
+    private int RopesInUse => TetheredCount + (IsCarryingPlayer ? 1 : 0);
+
+    /// <summary>소지한 밧줄을 전부 쓰고 있는가 — 새 대상을 묶는(또는 동료를 드는) 것을 막는 자원 게이트.</summary>
+    public bool IsAtRopeCapacity => RopesInUse >= RopeCapacity;
 
     /// <summary>묶인 대상을 순번으로 얻는다 — 전 피어에서 유효한 표현·검증용. 없거나 못 찾으면 null.</summary>
     public NpcController GetTetheredNpc(int index)
@@ -281,7 +285,7 @@ public partial class PlayerEscorter
         if (IsTetheredTo(target))
             return false; // 이미 내 줄에 묶여 있다 — 좌클릭은 풀기/재개로 갈린다
         if (IsAtRopeCapacity)
-            return false; // 소지한 밧줄 수만큼만 — 예전의 "한 번에 1명"을 대체한 자원 게이트
+            return false; // 소지한 밧줄 수만큼만 — 예전의 "한 번에 1명"을 대체한 자원 게이트. 운반 중인 동료도 한 칸을 차지한다 (#365)
         return IsInRange(target);
     }
 

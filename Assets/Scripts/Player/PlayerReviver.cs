@@ -27,7 +27,14 @@ public class PlayerReviver : ChanneledInteractionBehaviour
     private readonly ServerChannel m_channel = new();
 
     /// <summary>지금 조준 중인 '다운된 아군'. 없으면 null. 임시 구조 HUD 프롬프트용(오너 전용). (#105)</summary>
-    public PlayerData CurrentReviveTarget => IsOwner ? FindDownedTarget() : null;
+    public PlayerData CurrentReviveTarget => IsOwner ? FindAllyTarget(IncapacitationCause.Down) : null;
+
+    /// <summary>
+    /// 지금 조준 중인 '기능 정지(Die)된 아군'. 없으면 null. 구조 불가 안내용(오너 전용). (#364)
+    /// 히트박스가 Die에서도 켜져 윤곽선은 잡히는데(운반 조준용, #365) 구조는 거부되므로,
+    /// 안내가 없으면 "조준은 되는데 홀드해도 아무 일이 없는" 상태가 된다.
+    /// </summary>
+    public PlayerData CurrentDeadTarget => IsOwner ? FindAllyTarget(IncapacitationCause.Die) : null;
 
     public override void OnNetworkSpawn()
     {
@@ -63,15 +70,15 @@ public class PlayerReviver : ChanneledInteractionBehaviour
         if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
             return;
 
-        PlayerData target = FindDownedTarget();
+        PlayerData target = FindAllyTarget(IncapacitationCause.Down);
         if (target != null)
             RequestBeginRevive(target);
     }
 
     private void HandleInteractCanceled() => RequestCancelRevive();
 
-    // 조준 중인 대상이 '다운된 아군'이면 그 PlayerData를, 아니면 null을 반환한다.
-    private PlayerData FindDownedTarget()
+    // 조준 중인 대상이 지정한 무력화 원인의 아군이면 그 PlayerData를, 아니면 null을 반환한다. (#105, #364)
+    private PlayerData FindAllyTarget(IncapacitationCause cause)
     {
         GameObject targetObj = m_interactor != null ? m_interactor.CurrentTarget : null;
         if (targetObj == null)
@@ -82,7 +89,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
             return null; // 자기 자신 제외
 
         PlayerIncapacitation targetIncap = target.GetComponent<PlayerIncapacitation>();
-        return targetIncap != null && targetIncap.IsDowned ? target : null;
+        return targetIncap != null && targetIncap.Cause == cause ? target : null;
     }
 
     // ---- 오너 클라 진입점 (서버/오프라인은 즉시 실행, 원격 클라는 서버로 요청) ----
@@ -164,8 +171,14 @@ public class PlayerReviver : ChanneledInteractionBehaviour
 
         PlayerIncapacitation targetIncap = target.GetComponent<PlayerIncapacitation>();
         if (targetIncap == null || !targetIncap.IsDowned)
-            return; // HP0 다운만 구조 대상 — 매달기(#101)·기절(#252)은 스스로 풀린다
-                    // (둘 다 구조 히트박스가 꺼져 조준도 안 되지만 위조 RPC 방어로 여기서도 본다)
+        {
+            // HP0 다운만 구조 대상 — 매달기(#101)·기절(#252)은 스스로 풀린다
+            // (둘 다 히트박스가 꺼져 조준도 안 되지만 위조 RPC 방어로 여기서도 본다)
+            // Die는 히트박스가 켜져 있어 실제로 여기까지 온다 — 조준·홀드가 되는데 침묵하면 버그로 보인다 (#364)
+            if (targetIncap != null && targetIncap.IsDead)
+                NotifyOwner($"구조 불가 — {target.name}은 기능 정지 상태다. 본부로 이송해야 복구된다");
+            return;
+        }
         if (!IsInRange(target))
             return; // 사거리 밖이면 시작조차 안 함
 
@@ -177,11 +190,14 @@ public class PlayerReviver : ChanneledInteractionBehaviour
         NotifyOwner($"구조 채널링 시작: {target.name} ({m_reviveSeconds}초)");
         NotifyChannelGaugeStart(m_reviveSeconds);
 
-        // keepAlive 생략 — 단일 Delay로 대기하고, 완료 시점에만 거리·중복복구를 검사한다 (기존 동작 유지)
+        // 대상이 구조 대상이 아니게 되는 순간 즉시 끊는다 (#364) — 구조 제한시간이 채널링 도중 끝나
+        // Die로 떨어졌는데 게이지만 끝까지 차오르면, 다 채운 뒤에 실패를 통보받는 꼴이 된다.
+        // 거리 검사는 종전대로 완료 시점에만 한다 — 여기 넣으면 채널링 중 한 발짝 어긋나도 즉시 실패다.
         ServerChannel.Result result;
         try
         {
-            result = await m_channel.RunAsync(m_reviveSeconds);
+            result = await m_channel.RunAsync(
+                m_reviveSeconds, () => target != null && targetIncap.IsDowned);
         }
         finally
         {
@@ -196,8 +212,12 @@ public class PlayerReviver : ChanneledInteractionBehaviour
                 return;
 
             case ServerChannel.Result.OutOfRange:
-                // PlayerReviver는 keepAlive를 넘기지 않아 이 사유는 발생하지 않는다 — 완료 시점 검사가 담당.
-                break;
+                // 여기서는 '거리 이탈'이 아니라 대상이 구조 대상에서 벗어난 것이다 (keepAlive, #364).
+                NotifyOwner(
+                    target != null && targetIncap.IsDead
+                        ? $"구조 중단 — 제한시간 초과로 기능 정지됨: {target.name} (본부 이송 필요)"
+                        : "구조 중단 — 대상이 구조 대상이 아니게 됨");
+                return;
 
             case ServerChannel.Result.Completed:
                 break;
@@ -209,10 +229,15 @@ public class PlayerReviver : ChanneledInteractionBehaviour
             NotifyOwner("구조 실패 — 대상이 범위를 벗어남");
             return;
         }
-        // 다른 동료가 먼저 살렸다면 중복 구조 방지
+        // 다른 동료가 먼저 살렸다면 중복 구조 방지.
+        // 채널링(3초) 도중 구조 제한시간이 끝나 Die로 떨어졌을 수도 있다 — 한 발 늦은 구조는 실패다 (#364)
         if (!targetIncap.IsDowned)
         {
-            NotifyOwner("구조 취소 — 대상이 이미 복구됨");
+            NotifyOwner(
+                targetIncap.IsDead
+                    ? $"구조 실패 — 제한시간 초과로 기능 정지됨: {target.name} (본부 이송 필요)"
+                    : "구조 취소 — 대상이 이미 복구됨"
+            );
             return;
         }
 
