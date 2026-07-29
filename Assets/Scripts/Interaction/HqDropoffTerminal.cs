@@ -4,6 +4,11 @@ using UnityEngine;
 /// 본부 인계 단말 (#414) — 연행해 온 NPC를 여기서 상호작용키(E)로 넘겨야 검거 판정이 난다.
 /// 예전에는 인계 구역 콜라이더에 닿는 순간 자동 판정됐다(#59) — 어색해서 수동 상호작용으로 바꿨다.
 ///
+/// <b>내려놓고 접수해도 된다.</b> 대상이 끌려오는 중(Escorted)이든 인계존에 내려놓은 상태(Captured)든
+/// 인계할 수 있다 — 끌고 선 채로는 단말을 겨누는 동안 대상이 존을 벗어나기 쉽다. 판별 기준은 끌기가
+/// 아니라 <b>밧줄</b>이다: 놓기(E)는 줄을 풀지 않으므로(#369) "누가 데려온 신병인가"가 그대로 남는다.
+/// 줄이 끊기면(먼 이탈·풀기 채널링) 다시 묶어 와야 접수된다.
+///
 /// <b>판정을 직접 하지 않는다.</b> 요청을 끌고 있는 플레이어(<see cref="PlayerEscorter.RequestDeliver"/>)에게
 /// 넘기고, 서버가 <see cref="ArrestJudge.TryDeliver"/>로 상태·구역을 재검증한 뒤 판정한다
 /// (요청/실행 분리, #118 관례). 대상 NPC를 클라가 지정하지 않으므로 위조할 여지도 없고,
@@ -36,17 +41,24 @@ public class HqDropoffTerminal : MonoBehaviour, IInteractable
 
     /// <summary>
     /// 지금 E가 실제로 먹히는가 — 조준 윤곽선(#184)과 서버 판정이 같은 기준을 쓴다.
-    /// 원격 클라이언트에서도 성립해야 하므로 동기화되는 값만 본다(IsDragging·TetheredNpcTransform) —
-    /// DraggingNpc는 서버 전용이라 여기서 보면 남의 화면에서 윤곽선이 영영 안 켜진다.
+    /// 원격 클라이언트에서도 성립해야 하므로 동기화되는 값만 본다(IsTethered·TetheredNpcTransform·
+    /// NpcController.CurrentState) — DraggingNpc·TetheredNpc는 서버 전용이라 여기서 보면 남의 화면에서
+    /// 윤곽선이 영영 안 켜진다.
     /// </summary>
     public bool CanInteract(GameObject interactor)
     {
         PlayerEscorter escorter = FindEscorter(interactor);
-        if (escorter == null || !escorter.IsDragging)
-            return false; // 끌고 있지 않으면 넘길 것이 없다 (놓아둔 체포도 인계 대상 아님)
+        if (escorter == null || !escorter.IsTethered)
+            return false; // 내 밧줄에 묶인 대상이 없으면 넘길 것이 없다 (끌기 여부는 묻지 않는다)
 
         Transform npc = escorter.TetheredNpcTransform;
         if (npc == null)
+            return false;
+
+        // 확보된 신병만 — 끌려오는 중(Escorted)과 내려놓은 대상(Captured) 둘 다 통과한다.
+        // 상태는 동기화되므로(NpcController.CurrentState) 클라에서도 서버와 같은 답이 나온다.
+        NpcController controller = npc.GetComponent<NpcController>();
+        if (controller == null || !NpcStateRules.CanDeliver(controller.CurrentState))
             return false;
 
         return m_zone == null || m_zone.Contains(npc.position);

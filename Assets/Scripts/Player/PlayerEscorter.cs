@@ -89,6 +89,25 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
         return null;
     }
 
+    /// <summary>
+    /// 해당 NPC를 밧줄로 <b>묶어 둔</b> 플레이어를 찾는다(끌고 있지 않아도 포함) — 없으면 null. (#414)
+    /// 서버(또는 오프라인)에서만 유효. 인계존에 내려놓고 접수하는 경로에서는 끌기가 이미 풀려 있어
+    /// <see cref="FindEscorterOf"/>로는 인계자를 못 찾으므로, 줄이 이어져 있는 것을 근거로 주인을 찾는다.
+    /// (끌기 여부를 보는 기존 호출자들의 판정을 바꾸지 않으려고 별도 메서드로 둔다)
+    /// </summary>
+    public static PlayerEscorter FindTetherOwnerOf(NpcController npc)
+    {
+        if (npc == null)
+            return null;
+
+        PlayerEscorter[] escorters = FindObjectsByType<PlayerEscorter>(FindObjectsSortMode.None);
+        foreach (PlayerEscorter escorter in escorters)
+            if (escorter.TetheredNpc == npc)
+                return escorter;
+
+        return null;
+    }
+
     // 서버 채널링 생명주기(CTS 소유·재진입 가드)는 ServerChannel에 위임 (#109)
     private readonly ServerChannel m_channel = new();
 
@@ -251,16 +270,18 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
 
     private void ServerCancelCapture() => m_channel.Cancel();
 
-    // 인계 실행 — 대상은 클라가 지정하지 않는다. 서버가 자기 권위 상태(DraggingNpc)에서 읽으므로
-    // "남이 끌던 NPC를 인계했다"는 위조가 성립할 수 없다. 상태·구역 검증과 판정은 ArrestJudge가 한다 —
+    // 인계 실행 — 대상은 클라가 지정하지 않는다. 서버가 자기 권위 상태(TetheredNpc)에서 읽으므로
+    // "남이 데려온 NPC를 인계했다"는 위조가 성립할 수 없다. 상태·구역 검증과 판정은 ArrestJudge가 한다 —
     // 연행 허브가 인계존을 알 필요는 없고, 판정 기준이 한 곳(#414)에 모여 있어야 하기 때문이다.
     private void ServerDeliver()
     {
         if (IsSpawned && !IsServer)
             return;
 
-        if (DraggingNpc == null)
-            return; // 끌고 있는 대상이 없으면 넘길 것이 없다
+        // 끌기(DraggingNpc)가 아니라 밧줄(TetheredNpc)이 기준이다 — 인계존에 내려놓고 접수하는 경로에서는
+        // 끌기가 풀려 있다. 묶여 있는 동안은 끌든 놓든 같은 대상이라 이 하나로 두 경로가 모두 덮인다.
+        if (TetheredNpc == null)
+            return; // 묶어 둔 대상이 없으면 넘길 것이 없다
 
         ArrestJudge judge = App.Game.ArrestJudge;
         if (judge == null)
@@ -269,7 +290,7 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
             return;
         }
 
-        judge.TryDeliver(DraggingNpc);
+        judge.TryDeliver(TetheredNpc);
     }
 
     /// <summary>

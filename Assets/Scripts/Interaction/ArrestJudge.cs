@@ -48,10 +48,11 @@ public class ArrestJudge : CommonManagerBase
     {
         if (npc == null) return null;
 
-        // 밧줄로 끌려온(Escorted) 대상만 인계 대상 — 배회 시민·놓아둔 체포(Captured)는 무시 (#59/#269/#369).
-        // 재판정(#358)은 그대로 허용된다: 다시 끌고 와 E를 누르면 다시 판정되고, 중복 후처리는
+        // 밧줄로 확보한 신병만 인계 대상 — 끌려오는 중(Escorted)과 인계존에 내려놓은 대상(Captured)이
+        // 모두 통과하고, 배회 시민·수감자는 걸린다. 단말의 조준 피드백과 같은 기준을 쓴다(#184).
+        // 재판정(#358)은 그대로 허용된다: 다시 데려와 E를 누르면 다시 판정되고, 중복 후처리는
         // ArrestResult.IsFirstDelivery가 건다. 자동 트리거가 사라져 틱 중복 발화 방어는 필요 없어졌다.
-        if (npc.CurrentState != NpcState.Escorted)
+        if (!NpcStateRules.CanDeliver(npc.CurrentState))
             return null;
 
         if (m_dropoffZone != null && !m_dropoffZone.Contains(npc.transform.position))
@@ -116,12 +117,17 @@ public class ArrestJudge : CommonManagerBase
         }
 
         CitizenProfile profile = identity != null ? identity.Profile : null;
-        PlayerEscorter deliverer = PlayerEscorter.FindEscorterOf(npc);
+        // 인계자 = 그 밧줄의 주인. 끌기 검색만 하면 인계존에 내려놓고 접수한 경로(#414)에서 인계자가
+        // '알 수 없음'이 되어 오검거 개인 집계·매달기 페널티 대상이 사라진다 — 줄이 이어져 있는 것을
+        // 근거로 주인까지 찾는다(놓기는 줄을 풀지 않는다, #369).
+        PlayerEscorter deliverer = PlayerEscorter.FindEscorterOf(npc) ?? PlayerEscorter.FindTetherOwnerOf(npc);
         var result = new ArrestResult(npc, verdict, profile, reward, deliverer, firstDelivery);
 
         LogVerdict(result);
 
         // 연행 상태 물리적 해제 (플레이어에게서 분리) — NPC는 Captured로 그 자리에 선다.
+        // 이미 내려놓은(Captured) 신병이면 Release가 할 일이 없어 그대로 통과한다 — 남은 밧줄 연결은
+        // 대상이 유치장·석방으로 커스터디를 벗어날 때 TickRopeDrag가 끊는다.
         // 반드시 OnArrestJudged보다 **먼저** 해야 한다: 구독자(CustodyRouter, #228)가 판정 결과에 따라
         // 다음 상태(유치장 이송·석방)로 전이시키는데, 해제를 뒤에 하면 StopEscort의 Captured 전이가
         // 그 행선지를 덮어써 NPC가 그 자리에 멈춰버린다.
