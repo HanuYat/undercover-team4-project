@@ -38,6 +38,27 @@ public partial class NpcController
     /// <summary>밧줄 길이(m) — 표시(늘어짐 정도)와 서버 장력 판정이 같은 값을 쓴다.</summary>
     public float RopeLength => m_ropeDragConfig.RopeLength;
 
+    // ---- 무게 (#398) ----
+
+    // 동기화하지 않는다 — 무게를 읽는 건 서버의 페널티 계산뿐이고 결과 배율만 동기화된다
+    // (PlayerEscorter.DragSpeedFactor). 스캔·인명부 표시를 넣게 되면 그때 붙인다.
+    private float m_dragWeight = 1f;
+
+    /// <summary>이 NPC의 무게 — 끄는 플레이어의 속도 페널티 기준. 서버(또는 오프라인)에서만 유효. (#398)</summary>
+    public float DragWeight => m_dragWeight;
+
+    // 참가자 수의 클라 사본 — 목줄 반경(끊김거리 ÷ 참가자 수)을 오너가 계산해야 해서 원격 클라도
+    // 이 수를 알아야 한다 (PlayerEscorter.ConstrainByTautRopes).
+    private readonly NetworkVariable<byte> m_draggerCountSynced = new(0);
+
+    /// <summary>지금 이 NPC에 장력을 걸고 있는 인원 수 — 페널티를 이 수로 나눈다. 전 피어에서 유효.
+    /// E로 놓아 장력에서 빠진 참가자는 포함되지 않는다. (#398)</summary>
+    public int DraggerCount =>
+        IsSpawned && !IsServer ? m_draggerCountSynced.Value : m_dragAnchors.Count;
+
+    /// <summary>무게 배정 — InitBehavior에서 서버(또는 오프라인) 1회 호출된다. (#398)</summary>
+    private void InitDragWeight() => m_dragWeight = m_commonConfig.PickWeight();
+
     /// <summary>밧줄 끌기 시작 — PlayerEscorter가 서버에서 호출. 위치를 끄는 플레이어가 직접 제어하므로
     /// NavMeshAgent를 끈다(켜져 있으면 에이전트가 위치를 도로 잡아당긴다).
     /// 커스터디 상태 전이(Escorted)는 호출부가 <b>이 호출 앞에</b> 한다 — 에이전트를 끈 뒤에 전이하면
@@ -65,6 +86,7 @@ public partial class NpcController
         }
 
         SetRoped(true);
+        SyncDraggerCount();
         if (m_agent != null && m_agent.enabled)
             m_agent.enabled = false;
     }
@@ -141,6 +163,16 @@ public partial class NpcController
         for (int i = m_dragAnchors.Count - 1; i >= 0; i--)
             if (m_dragAnchors[i] == null)
                 m_dragAnchors.RemoveAt(i);
+
+        SyncDraggerCount(); // 놓기·이탈이 전부 이 경로를 지난다(StopRopeDrag·매 프레임 TickRopeDrag)
+    }
+
+    // 참가자 수 동기화 — 매 프레임 불려도 대역폭을 안 먹는다(NetworkVariable.Value 세터가 같은 값이면
+    // 스스로 조기 반환한다). 인원은 접속 플레이어 수로 묶여 있어 byte로 충분하다.
+    private void SyncDraggerCount()
+    {
+        if (IsSpawned && IsServer)
+            m_draggerCountSynced.Value = (byte)m_dragAnchors.Count;
     }
 
     // 기준점 주변에서 NavMesh 위 지점을 찾아 에이전트를 붙인다 — 붙었으면 true.

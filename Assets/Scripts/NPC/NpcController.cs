@@ -194,6 +194,9 @@ public partial class NpcController : NetworkBehaviour
         // 체력은 FSM 시동 전에 채운다 — 첫 틱부터 CurrentHp가 유효해야 한다 (#366)
         InitHealth();
 
+        // 무게 추첨 — 라운드 내내 유지된다(재검거·탈옥 후에도 같은 값). (#398)
+        InitDragWeight();
+
         m_stateMachine.ChangeState(NpcState.Idle);
     }
 
