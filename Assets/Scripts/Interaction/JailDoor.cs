@@ -95,7 +95,7 @@ public class JailDoor : NetworkBehaviour
         // 도시 씬에서 논알록 버퍼가 넘쳐 대상을 놓치는 문제가 없다 (SuddenEventUtil 주석과 같은 이유)
         bool playerNear = SuddenEventUtil.FindNearestFieldPlayer(center, m_autoOpenRadius) != null;
 
-        // 문을 지나야 하는 NPC도 연다 — 수감 이송되는 진범·위조범·난동꾼(Jailed)과 침입자(Intruding).
+        // 문을 지나야 하는 NPC도 연다 — 수감 이송되는 진범·위조범·난동꾼(Jailed).
         bool npcNear = IsJailBoundNpcNear(center);
         // 탈옥이 '진행 중'일 때만 열어 둔다 — 자물쇠가 풀렸어도 수감자가 다 빠져나갔으면 닫는다.
         // 안 그러면 마지막 수감자가 나간 뒤 다음 수감자가 들어와 재잠금될 때까지 영영 열려 있다.
@@ -106,10 +106,14 @@ public class JailDoor : NetworkBehaviour
         ServerSetOpen(playerNear || npcNear || jailbreakOpen);
     }
 
-    // 문을 통과해야 하는 NPC가 반경 안에 있는가 — 상태 화이트리스트로 본다.
+    // 문을 통과해야 하는 NPC가 반경 안에 있는가 — 수감 이송(Jailed)만 본다.
     // 배회 시민까지 세면 본부를 지나가는 것만으로 문이 계속 열려 있게 되고, 애초에 시민은
     // Jail 영역에 못 들어가므로(NavMesh 게이팅) 열어 줄 이유가 없다.
     // 연행(Escorted) 중인 대상은 끌고 있는 플레이어가 반경 안에 있으니 위 판정에서 이미 걸린다.
+    //
+    // <b>침입자(Intruding)는 일부러 뺐다.</b> 목표가 문 바깥의 접근 지점(JailLock.ApproachPoint)이라
+    // 문을 통과할 일이 없고(#415에서 자물쇠가 우리 안이라 경로가 막히던 것을 밖으로 빼서 해결했다),
+    // 문이 저절로 열리면 자물쇠를 해제해 탈옥을 일으킨다는 이벤트 전제가 무너진다 (#231).
     private bool IsJailBoundNpcNear(Vector3 center)
     {
         // 검사 주기(m_proximityCheckInterval)로 호출을 눌러 두었기에 목록 훑기로 충분하다.
@@ -118,8 +122,7 @@ public class JailDoor : NetworkBehaviour
 
         for (int i = 0; i < npcs.Length; i++)
         {
-            NpcState state = npcs[i].CurrentState;
-            if (state != NpcState.Jailed && state != NpcState.Intruding)
+            if (npcs[i].CurrentState != NpcState.Jailed)
                 continue;
             if ((npcs[i].transform.position - center).sqrMagnitude <= sqrRadius)
                 return true;
