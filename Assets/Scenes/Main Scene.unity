@@ -18559,7 +18559,6 @@ Transform:
   - {fileID: 415158602}
   - {fileID: 282154270}
   - {fileID: 1712426936}
-  - {fileID: 748275621}
   m_Father: {fileID: 594547326}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &469349654
@@ -29179,6 +29178,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RoundManager
   m_targetFund: 10000
   m_timeLimitSeconds: 600
+  m_startDelaySeconds: 3
+  m_peerWaitTimeoutSeconds: 30
   m_jailZone: {fileID: 467094108}
 --- !u!114 &708957384
 MonoBehaviour:
@@ -31032,63 +31033,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4947124086116618, guid: 14be2c847c5873f40af6081f07f0bc27, type: 3}
   m_PrefabInstance: {fileID: 1635683889}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &748275620
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 748275621}
-  - component: {fileID: 748275622}
-  m_Layer: 0
-  m_Name: JailDoorLink
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &748275621
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 748275620}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 1.6600003, y: 0.01, z: 3.7299995}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 467094110}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &748275622
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 748275620}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6eeb5dc026fdf4b488bc7ae0138ab719, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.AI.Navigation::Unity.AI.Navigation.NavMeshLink
-  m_SerializedVersion: 1
-  m_AgentTypeID: 0
-  m_StartPoint: {x: 0, y: 0, z: -0.55}
-  m_EndPoint: {x: 0, y: 0, z: 0.5}
-  m_StartTransform: {fileID: 0}
-  m_EndTransform: {fileID: 0}
-  m_Activated: 1
-  m_Width: 0.8
-  m_CostModifier: 1
-  m_IsOverridingCost: 0
-  m_Bidirectional: 1
-  m_AutoUpdatePosition: 0
-  m_Area: 3
 --- !u!1001 &749540179
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -49578,7 +49522,10 @@ MonoBehaviour:
   m_leaf: {fileID: 526600851}
   m_openOffset: {x: -1.05, y: 0, z: 0}
   m_slideSeconds: 0.7
+  m_autoOpenRadius: 3
+  m_proximityCheckInterval: 0.1
   m_jailLock: {fileID: 0}
+  m_jailZone: {fileID: 0}
 --- !u!1001 &1204265296
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -67003,7 +66950,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c5dccefce28da0f418f6b54e3ce035e6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShopDelivery
-  m_dropPoint: {fileID: 1597609515}
   m_spreadRadius: 0.4
   m_signalDecoder: {fileID: 1565537737}
 --- !u!1001 &1598220861
