@@ -408,7 +408,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         // 영영 연행 중이 된다 — 파괴 전에 놓게 한다.
         PlayerEscorter escorter = PlayerEscorter.FindEscorterOf(intruder);
         if (escorter != null)
-            escorter.Release();
+            escorter.ReleaseDrag(intruder); // 이 대상만 — 같이 끌던 나머지는 그대로 둔다 (#390)
 
         SuddenEventUtil.DespawnOrDestroy(intruder.gameObject, playVfx);
     }

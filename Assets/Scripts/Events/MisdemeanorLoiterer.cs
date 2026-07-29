@@ -78,7 +78,7 @@ public class MisdemeanorLoiterer : MonoBehaviour
             // 연행 중이던 플레이어가 파괴된 참조를 쥐지 않게 먼저 놓게 한다 (이벤트 Despawn들과 동일)
             PlayerEscorter escorter = PlayerEscorter.FindEscorterOf(m_controller);
             if (escorter != null)
-                escorter.Release();
+                escorter.ReleaseDrag(m_controller); // 이 대상만 — 같이 끌던 나머지는 그대로 둔다 (#390)
 
             SuddenEventUtil.DespawnOrDestroy(gameObject, playVfx: false);
             return;

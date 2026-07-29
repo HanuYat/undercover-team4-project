@@ -278,7 +278,7 @@ public class SpawnedNpcEvent : ISuddenEvent
         // 영영 연행 중이 된다 — 파괴 전에 놓게 한다. 판정 경로에서는 ArrestJudge가 이미 놓았으므로 null이다.
         PlayerEscorter escorter = PlayerEscorter.FindEscorterOf(m_npc);
         if (escorter != null)
-            escorter.Release();
+            escorter.ReleaseDrag(m_npc); // 이 대상만 — 같이 끌던 나머지는 그대로 둔다 (#390)
 
         SuddenEventUtil.DespawnOrDestroy(m_npc.gameObject, playVfx);
 
