@@ -57,6 +57,21 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
         }
     }
 
+    // 기능 정지된 동료를 끄는 중인가 (#365) — 운반도 밧줄 한 개를 쓰므로 용량 계산(RopesInUse)에 들어간다.
+    // '한 번에 1명'이 폐기된 뒤(#390) 운반과 NPC 끌기는 배타가 아니라 같은 자원을 나눠 쓰는 관계다.
+    // 없는 구성(테스트 등)이면 false.
+    private PlayerCarrier m_carrier;
+
+    private bool IsCarryingPlayer
+    {
+        get
+        {
+            if (m_carrier == null)
+                m_carrier = GetComponent<PlayerCarrier>();
+            return m_carrier != null && m_carrier.IsCarrying;
+        }
+    }
+
     private float CaptureRange => Interactor != null ? Interactor.Range : k_fallbackRange;
 
     // 거리 기준점 — 조준 레이캐스트·윤곽선 게이트와 동일한 AimOrigin(카메라).
@@ -335,7 +350,7 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
         if (m_channel.IsActive)
             return; // 체포/해제/제압 채널링 중복 방지 (한 채널 공유)
         if (IsAtRopeCapacity)
-            return; // 소지한 밧줄을 전부 쓰고 있으면 새로 확보 불가 — 밧줄 없음(0개)도 여기서 걸린다 (#369 → #390)
+            return; // 소지한 밧줄을 전부 쓰고 있으면 새로 확보 불가 — 밧줄 없음(0개)·동료 운반 중(#365)도 여기서 걸린다 (#369 → #390)
         if (target.CurrentState != NpcState.Run)
             return; // 도주 중일 때만 — 저항은 타격 연타, 배회는 수갑 채널링이 정식 경로
         if (!IsInRange(target))
@@ -413,8 +428,7 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
 
     /// <summary>이 대상에 밧줄 풀기를 걸 수 있는가 — 서버 가드와 클라 조기검증(Rope)이 함께 쓰는 단일 기준.</summary>
     public bool CanUnrope(NpcController target) =>
-        target != null
-        && (NpcStateRules.CanRelease(target.CurrentState) || IsTetheredTo(target));
+        target != null && (NpcStateRules.CanRelease(target.CurrentState) || IsTetheredTo(target));
 
     private async UniTaskVoid ServerUnropeChannelAsync(NpcController target)
     {

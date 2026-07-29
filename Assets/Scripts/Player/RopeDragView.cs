@@ -7,6 +7,7 @@ using UnityEngine;
 /// 전 피어에서 돈다 — 남이 끌고 가는 모습도 보여야 한다. 선 시작점은 3인칭 손 앵커
 /// (<see cref="PlayerHeldItemView.HandAnchor"/>), 없으면 몸통 높이로 대체. (#269)
 /// 밧줄 1개당 NPC 1명이라 선도 대상 수만큼 그린다 — 표시 인스턴스는 슬롯 단위로 풀링한다. (#390)
+/// 기능 정지(Die) 동료 운반도 같은 밧줄이라 NPC 줄 뒤에 슬롯 한 칸을 더 써서 같이 그린다. (#365)
 /// </summary>
 [RequireComponent(typeof(PlayerEscorter))]
 public class RopeDragView : MonoBehaviour
@@ -48,6 +49,7 @@ public class RopeDragView : MonoBehaviour
     }
 
     private PlayerEscorter m_escorter;
+    private PlayerCarrier m_carrier; // 기능 정지 동료 운반 — 같은 밧줄이라 같은 선을 그린다 (#365)
     private PlayerHeldItemView m_heldItemView;
 
     private readonly List<RopeVisual> m_visuals = new List<RopeVisual>();
@@ -55,6 +57,7 @@ public class RopeDragView : MonoBehaviour
     private void Awake()
     {
         m_escorter = GetComponent<PlayerEscorter>();
+        m_carrier = GetComponent<PlayerCarrier>();
         m_heldItemView = GetComponent<PlayerHeldItemView>(); // 없는 구성(테스트 등)이면 null
     }
 
@@ -94,6 +97,29 @@ public class RopeDragView : MonoBehaviour
             }
         }
 
+        // 기능 정지 동료 운반(#365)도 같은 밧줄이라 같은 선을 그린다 — NPC 줄 뒤에 슬롯 한 칸을 더 쓴다.
+        // 운반에는 '묶어만 둔' 상태가 없어(내려놓으면 줄이 풀린다) 끌고 있는 동안만 이어지고,
+        // 그래서 먼지도 조건 없이 켠다(NPC 쪽 IsRoped 분기에 해당하는 상태가 없다).
+        Transform carried = m_carrier != null ? m_carrier.CarriedTransform : null;
+        if (carried != null)
+        {
+            RopeVisual visual = EnsureVisual(count);
+            if (visual == null)
+                return; // 머티리얼이 없어 그릴 수 없다 — Build가 컴포넌트를 스스로 껐다
+
+            visual.Line.enabled = true;
+            DrawRope(visual, handPoint, KnotPoint(visual, carried), CarriedRopeLength(carried));
+
+            if (visual.Dust != null)
+            {
+                if (!visual.Dust.activeSelf)
+                    visual.Dust.SetActive(true);
+                visual.Dust.transform.position = carried.position;
+            }
+
+            count++; // 아래 정리 루프가 이 슬롯을 끄지 않게 한다
+        }
+
         // 줄이 줄어들면 남는 슬롯은 꺼 둔다 — 파괴하지 않고 다음 끌기에 재사용한다
         for (int i = count; i < m_visuals.Count; i++)
             HideVisual(i);
@@ -103,6 +129,27 @@ public class RopeDragView : MonoBehaviour
     {
         for (int i = 0; i < m_visuals.Count; i++)
             HideVisual(i);
+    }
+
+    // 운반 대상의 밧줄 길이 — 늘어짐(sag) 계산의 기준. NPC는 설정 에셋에 길이가 있지만 플레이어는
+    // 끌려가는 쪽의 추종 간격(PlayerMovement.DragFollowDistance)이 곧 줄 길이라 거기서 가져온다.
+    // 매 프레임 GetComponent를 피하려고 대상이 바뀔 때만 다시 잡는다 (KnotSource 캐시와 같은 관례).
+    private Transform m_carriedLengthSource;
+    private float m_carriedRopeLength = k_fallbackCarriedRopeLength;
+
+    private const float k_fallbackCarriedRopeLength = 1.6f; // PlayerMovement가 없는 구성(테스트 등)
+
+    private float CarriedRopeLength(Transform carried)
+    {
+        if (carried != m_carriedLengthSource)
+        {
+            m_carriedLengthSource = carried;
+            PlayerMovement movement = carried.GetComponent<PlayerMovement>();
+            m_carriedRopeLength =
+                movement != null ? movement.DragFollowDistance : k_fallbackCarriedRopeLength;
+        }
+
+        return m_carriedRopeLength;
     }
 
     // NPC 쪽 매듭점 — 몸통 뼈가 있으면 그 위치(눕든 서든 몸을 따라간다), 없으면 루트+대체 높이. (#369)
