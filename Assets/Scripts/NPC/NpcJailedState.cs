@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.AI;
 
 /// <summary>
 /// 수감(Jailed) 상태 — 인계존 판정에서 진범·경범죄로 확정된 NPC가 유치장까지 걸어가 그 자리에 멈춰 선다. (GDD 7-2, #228)
@@ -17,9 +16,6 @@ public class NpcJailedState : NpcStateBase
 
     private bool m_stopped; // 도착해 멈춤 — 정지 처리를 한 번만 하기 위한 래치
 
-    // 이송 동안 꺼 두는 회피 설정 — Exit에서 원래 값으로 되돌린다 (프리팹 값을 하드코딩하지 않으려고 저장한다)
-    private ObstacleAvoidanceType m_savedAvoidance;
-
     public NpcJailedState(NpcController owner) : base(owner) { }
 
     public override void Enter()
@@ -31,12 +27,6 @@ public class NpcJailedState : NpcStateBase
         // 유치장 내부는 시민이 못 들어가는 별도 NavMesh 영역(Jail)이다 — 수감 대상만 이 순간 통행을 얻는다 (#415).
         // SetDestination보다 반드시 먼저 켜야 셀까지의 경로가 잡힌다(문의 NavMeshLink도 Jail 영역이다).
         m_owner.SetJailAccess(true);
-
-        // 이송 동안 회피를 끈다 — 창살 문턱의 NavMesh 폭이 0.25m까지 좁아져(에이전트 지름 0.70m)
-        // 회피에 밀리면 면 밖으로 나갔다가 스냅으로 되돌아오며 순간이동처럼 보인다.
-        // 좁은 통로를 한 줄로 지나는 구간이라 서로 비켜 줄 여지도 없다. 나갈 때 원래 값으로 되돌린다.
-        m_savedAvoidance = m_owner.Agent.obstacleAvoidanceType;
-        m_owner.Agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
 
         // 유치장이 없는 테스트 씬 — 그 자리에서 멈춘 것으로 처리한다 (멍하니 걷는 자세로 남지 않게)
         if (m_owner.JailCell == null)
@@ -69,8 +59,6 @@ public class NpcJailedState : NpcStateBase
 
     public override void Exit()
     {
-        m_owner.Agent.obstacleAvoidanceType = m_savedAvoidance; // 이송 중 껐던 회피 복구
-
         // 탈출(별도 이슈) 등으로 풀려날 경우를 대비해 이동을 복구한다
         if (m_owner.Agent.isOnNavMesh)
         {
