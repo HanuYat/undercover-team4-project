@@ -303,11 +303,8 @@ public static class NpcAnimatorControllerBuilder
 
     /// <summary>
     /// 유치장 착석 상태를 구성한다 — Any State → Begin(1회), Any State → Loop(반복). (#462)
-    /// 자물쇠 해제 상태와 완전히 같은 구조다: Begin·Loop가 <b>다른 번호</b>
-    /// (<c>k_sitBeginAnimState</c>/<c>k_sitLoopAnimState</c>)로 진입하고, 드라이버가 Begin 유지시간이 끝나면
-    /// 번호를 Loop로 바꿔 Begin→Loop 전환을 직접 몬다. 하나로 두면 Loop 중에도 Begin 조건이 참이라
-    /// 매 프레임 다시 앉기 시작한다.
-    /// 이탈은 따로 만들지 않는다 — 드라이버가 다른 번호를 넣는 순간 그쪽 Any State 전이가 걸린다.
+    /// 자물쇠 해제(<see cref="SetupUnlockStates"/>)와 완전히 같은 구조·같은 함정이다: Begin과 Loop가
+    /// 다른 번호로 진입하고, 드라이버가 번호를 바꿔 Begin→Loop를 직접 몬다.
     /// 재실행 시 기존 착석 상태/전이를 지우고 다시 만들어 중복을 막는다.
     /// </summary>
     private static void SetupSitStates(AnimatorController controller)

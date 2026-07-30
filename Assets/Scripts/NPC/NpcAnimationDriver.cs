@@ -342,12 +342,10 @@ public class NpcAnimationDriver : MonoBehaviour
             m_smoothedSpeed = 0f;
         }
 
-        // 유치장 착석 (#462) — "좌석까지 걷기 ↔ 앉기"가 한 FSM 상태(Jailed) 안에서 일어나므로 연행·해제와
-        // 같이 표현만 가른다. 다만 착석은 속도로 판별하지 않는다: 걸어와 멈춘 것과 앉은 것이 둘 다 속도 0이라
-        // 구분되지 않는다 — 서버가 확정한 플래그를 그대로 따른다.
-        //
-        // 위치 주의 — 끌림 블록보다 뒤, 끌림 조기 반환보다 앞이다. 뒤로 내리면 앉은 채 다른 상태로 넘어갈 때
-        // (탈옥 방출 → 도주) 이 블록이 실행되지 않아 루트모션이 꺼진 채로 남는다.
+        // 유치장 착석 (#462) — 해제·연행처럼 한 FSM 상태(Jailed) 안의 표현만 가른다. 단 속도로는 못 가른다:
+        // 걸어와 멈춘 것과 앉은 것이 둘 다 속도 0이라 서버가 확정한 플래그를 따른다.
+        // 위치 주의 — 끌림 조기 반환보다 <b>앞</b>이어야 한다. 뒤로 내리면 앉은 채 다른 상태로 넘어갈 때
+        // 이 블록이 안 돌아 루트모션이 꺼진 채로 남는다.
         if (m_seatedMotion != m_controller.IsSeated)
         {
             m_seatedMotion = m_controller.IsSeated;
@@ -373,9 +371,8 @@ public class NpcAnimationDriver : MonoBehaviour
 
         if (m_seatedMotion)
         {
-            // 시작 동작이 끝나면 앉은 자세로 넘긴다. 이 전환을 Animator의 exit time에 맡기지 않는 이유는
-            // 자물쇠 해제와 같다 — 번호가 Begin에 머물러 있으면 Loop로 넘어간 뒤에도 Any State 조건이 참이라
-            // 다시 Begin으로 끌려가 앉는 동작이 무한 반복된다.
+            // 시작 동작이 끝나면 앉은 자세로 넘긴다 — exit time에 맡기지 않는 이유는 자물쇠 해제와 같다
+            // (번호가 Begin에 머물면 Any State 조건이 계속 참이라 무한히 다시 앉는다)
             if (m_sitBeginUntil > 0f && Time.time >= m_sitBeginUntil)
             {
                 m_sitBeginUntil = 0f;

@@ -2,45 +2,37 @@ using UnityEngine;
 using UnityEngine.AI;
 
 /// <summary>
-/// 수감(Jailed) 상태 — 인계존 판정에서 진범·경범죄로 확정된 NPC가 유치장 좌석까지 걸어가 앉는다. (GDD 7-2, #228/#462)
-/// 이송("걸어가는 중")·정렬("좌석 방향으로 돌기")·착석("앉아 있음")을 한 상태 안에서 처리한다 —
-/// 연행(NpcEscortedState)이 추종과 근접 정지를 한 상태로 다루는 것과 같은 구조다 (#97).
-/// 앉은 뒤에는 스스로 다른 상태로 전이하지 않는 최종 상태다 (탈옥 방출은 JailbreakEvent가 걸어 준다).
-/// 이송이 시작되면 <b>플레이어가 몸으로 길을 막거나 밀어낼 수 없다</b> — 로컬 회피를 끈다(Enter).
+/// 수감(Jailed) 상태 — 판정에서 확정된 NPC가 유치장 좌석까지 걸어가 앉는다. (GDD 7-2, #228/#462)
+/// 걷기 → 좌석 방향으로 돌기 → 앉기를 한 상태에서 처리하고(연행 #97과 같은 구조), 앉으면 최종 상태다
+/// (탈옥 방출은 JailbreakEvent가 걸어 준다). 이송 중에는 로컬 회피를 끈다 — 이유는 Enter 주석.
 ///
-/// 목적지는 손으로 배치한 좌석뿐이다 — 계산된 자리가 통로를 막던 문제와 그 근거는 JailZone.ReserveSeat 참고 (#462).
-/// 여기서 중요한 것은 <b>어떤 실패도 그 자리에 굳지 않는다</b>는 것이다: 경로를 못 잡거나 잃거나 제 시간에
-/// 도착하지 못하면 전부 좌석으로 옮겨 앉힌다(SeatByWarp). 옛 처리는 그 자리에 세워서 입구를 막았다.
+/// <b>계약: 어떤 실패도 그 자리에 굳지 않는다.</b> 경로를 못 잡거나 잃거나 제 시간에 도착하지 못하면
+/// 전부 좌석으로 옮겨 앉힌다(SeatByWarp) — 그 자리에 세우던 옛 처리가 입구를 막았다 (#462).
+/// 목적지가 손으로 배치한 좌석인 근거는 JailZone.ReserveSeat 참고.
 ///
-/// 정산 수용 인원 계상(JailZone.Admit)은 판정 시점에 CustodyRouter가 이미 끝내므로(#340) 이 상태는
-/// 계상에 관여하지 않는다 — 좌석까지 걸어가 앉는 연출만 담당한다.
+/// 정산 계상(JailZone.Admit)은 판정 시점에 CustodyRouter가 끝낸다(#340) — 여기는 연출만 담당한다.
 /// </summary>
 public class NpcJailedState : NpcStateBase
 {
-    // 좌석에 이만큼(m) 다가오면 도착으로 본다 — NavMesh 경로의 끝점 오차를 흡수한다.
-    // 예전(0.5m)보다 좁다: 남은 오차는 도착 순간 Warp로 좌석에 맞추므로, 눈에 띄는 스냅이 되지 않을 만큼만 남긴다
+    // 도착 판정 거리(m) — 남은 오차는 Warp로 좌석에 맞추므로 스냅이 눈에 띄지 않을 만큼만 남긴다
     private const float k_arriveDistance = 0.25f;
 
     // 앉는 방향으로 도는 속도(도/초)와 앉기를 시작할 정렬 오차(도).
-    // 몸을 돌린 뒤 앉는 순서라야 벤치에 등을 대고 앉는 그림이 된다 — 도착 즉시 앉으면 걸어온 방향 그대로 앉는다
+    // 돌고 나서 앉아야 벤치를 등지는 그림이 된다 — 도착 즉시 앉으면 걸어온 방향 그대로 앉는다
     private const float k_seatTurnDegreesPerSecond = 360f;
     private const float k_seatFacingTolerance = 6f;
 
-    // 좌석까지 이 시간(초) 안에 도착하지 못하면 좌석으로 직접 옮겨 앉힌다.
-    // 유치장은 넓지 않아 정상이면 몇 초다 — 이만큼 걸렸다는 건 경로가 끊겼다는 뜻이다 (아래 SeatByWarp)
+    // 이 시간(초) 안에 못 도착하면 좌석으로 옮겨 앉힌다 — 유치장은 좁아 정상이면 몇 초다
     private const float k_travelTimeoutSeconds = 20f;
 
-    // 수감 진행 단계 — 걷기 → 좌석 방향으로 돌기 → 앉음(최종)
     private enum SeatPhase
     {
         Walking,
         Turning,
-        Seated,
+        Seated, // 최종
     }
 
     private SeatPhase m_phase;
-
-    // 이송 제한 시각 — 이때까지 도착하지 못하면 좌석으로 옮긴다
     private float m_travelDeadline;
 
     // 이송 중의 회피 설정 — 셀에 세울 때 껐다가(이유는 Enter 주석) Exit에서 이 값으로 되돌린다.
@@ -178,7 +170,7 @@ public class NpcJailedState : NpcStateBase
         SitDown();
     }
 
-    // 좌석 도착 — 이동을 끊고 좌석 위에 정확히 세운 뒤 앉는 방향으로 돌기 시작한다.
+    // 좌석 도착 — 이동을 끊고 좌석 위에 정확히 세운 뒤 돌기 시작한다.
     private void ArriveAtSeat()
     {
         StopMoving();
@@ -186,9 +178,8 @@ public class NpcJailedState : NpcStateBase
         // 회전 주도권을 넘겨받는다 — 에이전트가 쥔 채로 돌리면 되돌려져 정렬이 끝나지 않는다
         m_owner.Agent.updateRotation = false;
 
-        // 경로 끝점 오차(최대 k_arriveDistance)를 좌석 위로 흡수한다 — 앉는 자세는 좌석과 몇 cm만 어긋나도
-        // 벤치에 걸터앉은 것처럼 보인다. Warp는 에이전트를 끄지 않으므로 NavMesh 재부착 실패 위험이 없다
-        // (밧줄 끌기가 물려받는 그 위험군 — Enter 주석).
+        // 끝점 오차를 좌석 위로 흡수한다 — 몇 cm만 어긋나도 걸터앉은 것처럼 보인다.
+        // Warp는 에이전트를 끄지 않으므로 NavMesh 재부착 실패 위험이 없다 (Enter 주석의 그 위험군).
         if (m_owner.JailSeat != null)
             m_owner.Agent.Warp(m_owner.JailSeat.position);
 
@@ -230,8 +221,7 @@ public class NpcJailedState : NpcStateBase
             m_owner.Agent.ResetPath();
     }
 
-    // 앉아서 바라볼 방향 — 좌석의 Z축(forward)에서 수평 성분만 쓴다.
-    // 좌석 지점이 기울어져 배치돼도 몸이 같이 기울지 않게 한다.
+    // 앉아서 바라볼 방향 — 좌석 forward의 수평 성분만 쓴다(좌석이 기울어 배치돼도 몸은 안 기운다).
     private Quaternion SeatRotation()
     {
         if (m_owner.JailSeat == null)

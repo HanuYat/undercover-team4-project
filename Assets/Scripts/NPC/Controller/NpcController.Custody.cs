@@ -80,16 +80,15 @@ public partial class NpcController
 
     private bool m_seated;
 
-    // 앉아 있는지를 클라이언트에도 알리는 동기화 플래그 — 서버만 기록한다(끌기 m_ropedSynced와 같은 관례).
-    // 표현 계층(NpcAnimationDriver)이 이 값으로 앉기 모션을 고른다. 속도로는 판별할 수 없다:
-    // 좌석까지 걸어와 멈춘 것과 앉은 것이 둘 다 속도 0이고, 그 구분은 서버 FSM 내부값이다.
+    // 동기화 플래그 — 서버만 기록한다(끌기 m_ropedSynced와 같은 관례). NpcAnimationDriver가 이 값으로
+    // 앉기 모션을 고른다. 속도로는 못 가른다: 걸어와 멈춘 것과 앉은 것이 둘 다 속도 0이다.
     private readonly NetworkVariable<bool> m_seatedSynced = new(false);
 
-    /// <summary>유치장 좌석에 앉아 있는가 — 서버·오프라인은 실제 값으로, 원격 피어는 동기화 플래그로 판정. (#462)</summary>
+    /// <summary>유치장 좌석에 앉아 있는가 — 서버·오프라인은 실제 값, 원격 피어는 동기화 플래그. (#462)</summary>
     public bool IsSeated => IsSpawned && !IsServer ? m_seatedSynced.Value : m_seated;
 
-    /// <summary>착석 상태 지정 — 좌석에 도착해 앉을 때 true, 수감이 풀릴 때 false. 서버(또는 오프라인) 전용.
-    /// 호출부는 <see cref="NpcJailedState"/>다(도착 판정을 그쪽이 갖고 있다). (#462)</summary>
+    /// <summary>착석 지정 — 앉을 때 true, 수감이 풀릴 때 false. 서버(또는 오프라인) 전용.
+    /// 호출부는 <see cref="NpcJailedState"/>(도착 판정을 그쪽이 쥔다). (#462)</summary>
     public void SetSeated(bool value)
     {
         if (IsSpawned && !IsServer)
