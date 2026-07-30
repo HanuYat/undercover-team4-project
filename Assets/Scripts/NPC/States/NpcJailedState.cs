@@ -8,10 +8,9 @@ using UnityEngine.AI;
 /// 앉은 뒤에는 스스로 다른 상태로 전이하지 않는 최종 상태다 (탈옥 방출은 JailbreakEvent가 걸어 준다).
 /// 이송이 시작되면 <b>플레이어가 몸으로 길을 막거나 밀어낼 수 없다</b> — 로컬 회피를 끈다(Enter).
 ///
-/// <b>앉히는 이유(#462)</b> — 예전에는 셀 지점 몇 개를 돌려 쓰며 남는 인원을 계산된 오프셋(GatherSlot)으로
-/// 밖으로 퍼뜨렸다. 인원이 늘면 그 자리가 문↔셀 통로 위에 떨어져 뒤따라 오는 NPC의 진입과 유치장 안
-/// 플레이어의 탈출을 막았고, 자리를 아예 못 잡으면 그 자리(보통 입구)에 굳었다. 손으로 배치한 좌석만
-/// 쓰면 통로 위에 설 자리가 존재하지 않는다 — 배정은 JailZone.ReserveSeat이 한다.
+/// 목적지는 손으로 배치한 좌석뿐이다 — 계산된 자리가 통로를 막던 문제와 그 근거는 JailZone.ReserveSeat 참고 (#462).
+/// 여기서 중요한 것은 <b>어떤 실패도 그 자리에 굳지 않는다</b>는 것이다: 경로를 못 잡거나 잃거나 제 시간에
+/// 도착하지 못하면 전부 좌석으로 옮겨 앉힌다(SeatByWarp). 옛 처리는 그 자리에 세워서 입구를 막았다.
 ///
 /// 정산 수용 인원 계상(JailZone.Admit)은 판정 시점에 CustodyRouter가 이미 끝내므로(#340) 이 상태는
 /// 계상에 관여하지 않는다 — 좌석까지 걸어가 앉는 연출만 담당한다.
@@ -100,13 +99,7 @@ public class NpcJailedState : NpcStateBase
 
         // 경로를 못 잡으면(좌석이 NavMesh 밖 등) 영원히 걷는 자세로 남는다 — 좌석으로 옮겨 앉힌다
         if (!m_owner.Agent.SetDestination(m_owner.JailSeat.position))
-        {
-            Debug.LogWarning(
-                $"NpcJailedState: 유치장 좌석 경로 실패 — 좌석으로 옮겨 앉힌다: {m_owner.name}",
-                m_owner
-            );
-            SeatByWarp();
-        }
+            SeatByWarp("좌석 경로 실패");
     }
 
     public override void Tick()
@@ -150,11 +143,7 @@ public class NpcJailedState : NpcStateBase
         // 먼저 걸러 내지 않으면 문 밖에서 도착 처리가 돌아 좌석까지 순간이동한다.
         if (!m_owner.Agent.hasPath)
         {
-            Debug.LogWarning(
-                $"NpcJailedState: 좌석까지의 경로를 잃음 — 좌석으로 옮겨 앉힌다: {m_owner.name}",
-                m_owner
-            );
-            SeatByWarp();
+            SeatByWarp("좌석까지의 경로를 잃음");
             return;
         }
 
@@ -164,16 +153,10 @@ public class NpcJailedState : NpcStateBase
             return;
         }
 
-        // 제 시간에 도착하지 못했다 — 문이 닫혀 경로가 끊겼거나 목적지가 닿지 않는 경우다.
-        // 걷는 자세로 영원히 남거나 통로 한복판에 서 있게 두지 않는다 (#462의 입구 고착)
+        // 경로는 있는데 진행이 안 되는 경우(문에 걸림 등)까지 받아 낸다 — 걷는 자세로 영원히 남거나
+        // 통로 한복판에 서 있게 두지 않는다. #462의 증상이 정확히 이 고착이었다.
         if (Time.time >= m_travelDeadline)
-        {
-            Debug.LogWarning(
-                $"NpcJailedState: 좌석까지 {k_travelTimeoutSeconds}초 안에 도착하지 못함 — 좌석으로 옮겨 앉힌다: {m_owner.name}",
-                m_owner
-            );
-            SeatByWarp();
-        }
+            SeatByWarp($"{k_travelTimeoutSeconds}초 안에 좌석 도착 실패");
     }
 
     // 앉는 방향으로 도는 중 — 다 돌면 앉는다.
@@ -212,20 +195,20 @@ public class NpcJailedState : NpcStateBase
         m_phase = SeatPhase.Turning;
     }
 
-    // 좌석으로 직접 옮겨 앉힌다 — 경로가 없거나 제 시간에 도착하지 못한 경우의 마지막 수단.
+    // 좌석으로 직접 옮겨 앉힌다 — 걸어서 도착하지 못한 모든 경우의 마지막 수단.
     // 그 자리에 세우던 옛 처리는 보통 입구 근처에서 걸려 뒤따라 오는 NPC와 플레이어의 동선을 막았다 (#462).
-    private void SeatByWarp()
+    // reason은 로그에만 쓴다 — 원인별로 처리가 갈리지 않으므로 분기하지 않는다.
+    private void SeatByWarp(string reason)
     {
-        if (m_owner.JailSeat != null)
-        {
-            if (m_owner.Agent.Warp(m_owner.JailSeat.position))
-                m_owner.transform.rotation = SeatRotation();
-            else
-                Debug.LogWarning(
-                    $"NpcJailedState: 좌석으로 워프 실패 — 그 자리에서 앉힌다: {m_owner.name}",
-                    m_owner
-                );
-        }
+        bool moved = m_owner.JailSeat != null && m_owner.Agent.Warp(m_owner.JailSeat.position);
+        if (moved)
+            m_owner.transform.rotation = SeatRotation();
+
+        Debug.LogWarning(
+            $"NpcJailedState: {reason} — "
+                + $"{(moved ? "좌석으로 옮겨 앉힌다" : "워프까지 실패해 그 자리에서 앉힌다")}: {m_owner.name}",
+            m_owner
+        );
 
         SitDown();
     }

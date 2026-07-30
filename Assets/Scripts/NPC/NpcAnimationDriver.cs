@@ -354,7 +354,6 @@ public class NpcAnimationDriver : MonoBehaviour
 
             // 앉기 클립에는 루트 커브가 있어(hasRootCurves) 루트모션이 켜진 채 재생하면 몸이 좌석에서
             // 밀려난다 — 특히 Loop는 반복마다 같은 방향으로 밀려 결국 벤치를 벗어난다.
-            // (권투 원본 클립이 펀치할 때 NPC를 미끄러뜨리던 것과 같은 현상 — NpcAnimatorControllerBuilder 주석)
             // 위치는 좌석에 이미 맞춰져 있으므로(NpcJailedState가 도착 순간 Warp로 정렬) 끄는 쪽이 맞다.
             m_animator.applyRootMotion = m_seatedMotion ? false : m_rootMotionDefault;
 

@@ -101,6 +101,9 @@ public class JailZone : NetworkBehaviour
         // 자물쇠는 같은 오브젝트에 두는 것이 기본 — 인스펙터로 따로 지정할 수도 있다
         if (m_jailLock == null)
             m_jailLock = GetComponent<JailLock>();
+
+        // 좌석 점유 배열은 좌석 수와 1:1 — 좌석은 씬 배치라 런타임에 늘지 않으므로 여기서 한 번만 잡는다 (#462)
+        m_seatOccupants = new NpcController[m_seatPoints != null ? m_seatPoints.Length : 0];
     }
 
     public override void OnNetworkSpawn()
@@ -125,41 +128,20 @@ public class JailZone : NetworkBehaviour
         OnBountyTotalChanged?.Invoke(current);
     }
 
-    /// <summary>배선된 좌석 수 = 정원. 인스펙터에서 비워 둔 슬롯은 세지 않는다. (#462)</summary>
-    public int SeatCount
-    {
-        get
-        {
-            if (m_seatPoints == null)
-                return 0;
-
-            int count = 0;
-            for (int i = 0; i < m_seatPoints.Length; i++)
-                if (m_seatPoints[i] != null)
-                    count++;
-            return count;
-        }
-    }
-
     /// <summary>
     /// 좌석 배정 — 수감 대상 1명이 걸어가 앉을 좌석을 내준다. 서버(또는 오프라인)에서 호출. (#462)
     ///
-    /// 손으로 배치한 좌석 목록에서 <b>빈 자리를 앞에서부터</b> 고른다. 자리를 계산해 만들지 않는 것이 핵심이다:
-    /// 예전에는 셀 지점 몇 개를 돌려 쓰며 남는 인원을 해바라기 오프셋(GatherSlot)으로 밖으로 퍼뜨렸는데,
-    /// 그 오프셋이 전방위로 커져 일부가 문↔셀 통로 위에 떨어졌다 — 뒤따라 오는 NPC의 진입과 유치장 안
-    /// 플레이어의 탈출이 그 캡슐에 막혔다(수감 상태는 회피가 꺼져 있어 흩어 줄 주체도 없다).
-    /// 목록에 문 앞 자리가 아예 존재하지 않으면 그 사고가 구조적으로 불가능해진다.
+    /// 손으로 배치한 좌석 목록에서 <b>빈 자리를 앞에서부터</b> 고른다. 자리를 계산해 만들지 않는 것이 핵심이다 —
+    /// 예전 방식(셀 지점 돌려 쓰기 + GatherSlot 오프셋)은 인원이 늘면 자리가 문↔셀 통로 위에 떨어져
+    /// NPC의 진입과 플레이어의 탈출을 막았다. 목록에 문 앞 자리가 없으면 그 사고가 구조적으로 불가능해진다.
     ///
-    /// 정원을 넘으면 이미 앉은 좌석을 돌려 쓴다 — 겹쳐 앉는 그림이 되지만 좌석은 전부 통로 밖이라 통행을
-    /// 막지 않는다(팀 확정 2026-07-30). 조용히 넘어가면 나중에 겹친 것을 보고 원인을 다시 추적해야 하므로
-    /// 경고를 남긴다.
+    /// 정원을 넘으면 좌석을 돌려 써 겹쳐 앉힌다 — 좌석은 전부 통로 밖이라 겹쳐도 통행을 막지 않는다
+    /// (팀 확정 2026-07-30). 조용히 넘어가지 않게 경고를 남긴다.
     /// </summary>
     public Transform ReserveSeat(NpcController npc)
     {
         if (npc == null || m_seatPoints == null || m_seatPoints.Length == 0)
             return transform;
-
-        EnsureSeatOccupants();
 
         // 이미 자리가 있는 대상이면 그 자리를 그대로 준다 — 재판정·중복 통보로 한 명이 두 자리를 쥐지 않게
         for (int i = 0; i < m_seatPoints.Length; i++)
@@ -178,7 +160,7 @@ public class JailZone : NetworkBehaviour
 
         Transform shared = NextOverflowSeat();
         Debug.LogWarning(
-            $"[유치장] 좌석 정원({SeatCount}석) 초과 — {npc.name}을(를) {shared.name}에 겹쳐 앉힌다. "
+            $"[유치장] 좌석 정원({m_seatPoints.Length}석) 초과 — {npc.name}을(를) {shared.name}에 겹쳐 앉힌다. "
                 + "정원을 늘리려면 유치장에 벤치·좌석 지점을 추가할 것",
             this
         );
@@ -204,19 +186,9 @@ public class JailZone : NetworkBehaviour
     // 좌석 점유 해제 — 방출·재수용으로 자리가 빈다. 비우지 않으면 정원이 조용히 줄어든다.
     private void ReleaseSeat(NpcController npc)
     {
-        if (m_seatOccupants == null)
-            return;
-
         for (int i = 0; i < m_seatOccupants.Length; i++)
             if (m_seatOccupants[i] == npc)
                 m_seatOccupants[i] = null;
-    }
-
-    // 점유 배열을 좌석 수에 맞춰 준비한다 — 인스펙터에서 좌석을 늘렸다 줄여도 인덱스가 어긋나지 않게.
-    private void EnsureSeatOccupants()
-    {
-        if (m_seatOccupants == null || m_seatOccupants.Length != m_seatPoints.Length)
-            m_seatOccupants = new NpcController[m_seatPoints.Length];
     }
 
     /// <summary>
