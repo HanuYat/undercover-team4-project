@@ -5,23 +5,28 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 세션 이탈 확인창 (#429) — 로비의 상시 '나가기' 버튼이 띄운다.
+/// 세션 이탈 확인창 (#429) — 로비의 상시 '나가기' 버튼과 인게임·상점의 PausePanel '나가기'가 함께 띄운다 (#441).
 /// 이탈 순서를 다시 구현하지 않는다 — SessionFlow.LeaveToMainAsync() 단일 진입점을 부른다
 /// (network-lifecycle.md 원칙 2). 스택 패널이라 ESC로 취소된다.
-/// 로비의 ESC 진입 메뉴는 PausePanel이므로 IsEscMenu는 켜지 않는다 — 씬당 하나만 허용된다.
+/// ESC 진입 메뉴는 씬당 하나(PausePanel/QuitConfirmPanel)뿐이므로 IsEscMenu는 켜지 않는다.
+/// 커서 해제·입력 정지는 부르는 쪽(PausePanel)이 이미 잡고 있어 이 패널은 아무것도 건드리지 않는다.
 /// </summary>
 public class LeaveConfirmPanel : PanelBase
 {
     [Header("문구")]
-    [SerializeField] private TMP_Text m_messageText;
+    [SerializeField]
+    private TMP_Text m_messageText;
 
     [Header("버튼")]
-    [SerializeField] private Button m_confirmButton; // 예 — 세션 이탈
+    [SerializeField]
+    private Button m_confirmButton; // 예 — 세션 이탈
 
-    [SerializeField] private Button m_cancelButton; // 아니오 — 창 닫기
+    [SerializeField]
+    private Button m_cancelButton; // 아니오 — 창 닫기
 
     [Header("배경 딤 (패널과 함께 켜고 끔)")]
-    [SerializeField] private GameObject m_background;
+    [SerializeField]
+    private GameObject m_background;
 
     public override bool CanCloseWithESC => true;
     public override bool IsStackable => true;

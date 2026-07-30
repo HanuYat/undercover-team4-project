@@ -273,7 +273,7 @@ Canvas:
   m_AdditionalShaderChannelsFlag: 25
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0
-  m_SortingOrder: 100
+  m_SortingOrder: 105
   m_TargetDisplay: 0
 --- !u!114 &8453266883898305074
 MonoBehaviour:
@@ -587,7 +587,7 @@ GameObject:
   - component: {fileID: 6216985770550092302}
   - component: {fileID: 6407286168163313312}
   - component: {fileID: 8381539281098699399}
-  - component: {fileID: 2500020742345042318}
+  - component: {fileID: 1839704762841401044}
   m_Layer: 5
   m_Name: Window
   m_TagString: Untagged
@@ -670,7 +670,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_ShowMaskGraphic: 1
---- !u!114 &2500020742345042318
+--- !u!114 &1839704762841401044
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -679,10 +679,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 2314282634576351962}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 41f1c47cb67adc445a82de845d73c545, type: 3}
+  m_Script: {fileID: 11500000, guid: 3b48333f6b87c8e47826e2adcac74121, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::QuitConfirmPanel
+  m_EditorClassIdentifier: Assembly-CSharp::LeaveConfirmPanel
   m_panelRoot: {fileID: 2314282634576351962}
+  m_messageText: {fileID: 4641312411183637747}
   m_confirmButton: {fileID: 8012744694866545837}
   m_cancelButton: {fileID: 609620981156407590}
   m_background: {fileID: 6062578524186672839}
@@ -835,7 +836,7 @@ GameObject:
   - component: {fileID: 5483070556126155654}
   - component: {fileID: 4641312411183637747}
   m_Layer: 5
-  m_Name: Title
+  m_Name: Message
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -857,8 +858,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 35, y: -46}
-  m_SizeDelta: {x: 500, y: 92}
+  m_AnchoredPosition: {x: -0.000030517578, y: -44.99997}
+  m_SizeDelta: {x: 820, y: 90}
   m_Pivot: {x: 0, y: 0.5}
 --- !u!222 &5483070556126155654
 CanvasRenderer:
@@ -888,7 +889,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\uAC8C\uC784\uC744 \uC885\uB8CC\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?"
+  m_text: "\uC138\uC158\uC5D0\uC11C \uB098\uAC00\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 672baec5a3f7b4d329bf5b4052d5109b, type: 2}
   m_sharedMaterial: {fileID: 4707819496639375797, guid: 672baec5a3f7b4d329bf5b4052d5109b, type: 2}
@@ -915,14 +916,14 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 40
-  m_fontSizeBase: 40
+  m_fontSize: 30
+  m_fontSizeBase: 30
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
   m_fontStyle: 16
-  m_HorizontalAlignment: 1
+  m_HorizontalAlignment: 2
   m_VerticalAlignment: 4096
   m_textAlignment: 65535
   m_characterSpacing: 0
