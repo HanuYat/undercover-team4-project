@@ -176,9 +176,19 @@ public class JailDoor : NetworkBehaviour, IInteractable
 
         m_manualOpen = !m_manualOpen;
 
+        bool npcEnRoute = IsJailBoundNpcNear(DoorCenter);
+
+        // 방금 구한 값으로 전이 기준도 함께 갱신한다 (#457) — 여기서 갱신하지 않으면 낡은 값이 남아,
+        // 이송 NPC가 막 유치장에 들어선 뒤 다음 자동 틱(최대 m_proximityCheckInterval)이 돌기 전에
+        // E를 누른 경우 그 틱이 '이송 종료' 전이로 오인해 방금 플레이어가 연 문을 다시 닫는다.
+        //
+        // <b>전이 검사(래치 풀기)는 여기서 하지 않는다.</b> 하면 방금 누른 E가 그 자리에서 무효가 된다 —
+        // 플레이어의 명시적 입력이 자동 정리보다 우선한다. 이 지점은 전이를 '소비'만 한다.
+        m_npcWasEnRoute = npcEnRoute;
+
         // 다음 근접 검사 주기(최대 m_proximityCheckInterval)를 기다리지 않고 즉시 반영한다 —
         // 누르자마자 움직여야 입력이 먹혔다는 것이 보인다.
-        ServerSetOpen(ShouldBeOpen(IsJailBoundNpcNear(DoorCenter)));
+        ServerSetOpen(ShouldBeOpen(npcEnRoute));
     }
 
     // 문을 통과해야 하는 NPC가 반경 안에 있는가 — 수감 이송(Jailed)만 본다.
