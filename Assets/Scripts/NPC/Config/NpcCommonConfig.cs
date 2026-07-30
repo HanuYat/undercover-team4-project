@@ -29,8 +29,8 @@ public class NpcCommonConfig : ScriptableObject
     [Header("체력 — #366")]
     [Tooltip("NPC 최대 체력 — 0이 되면 기절(Stunned)한다. 저항 제압 게이지(구 SubdueGaugeMax)를 대체한 값")]
     [SerializeField] private int m_maxHp = 100;
-    [Tooltip("제압 홀드 성공 1회가 깎는 체력 — 기본값 기준 3회로 기절. NpcResistConfig에서 이관 (#366)")]
-    [SerializeField] private int m_subdueHitPower = 34;
+    // 제압 타격량(m_subdueHitPower)은 제거됐다 (#438) — 유일한 소비처였던 E 제압 타격이 사라졌다.
+    // 진압봉은 자기 Baton.m_damage(같은 34)를 쓴다 — 무기 수치는 무기가 들고 있는 편이 맞다.
 
     public float SpawnSpeedMultiplierMin => m_spawnSpeedMultiplierMin;
     public float SpawnSpeedMultiplierMax => m_spawnSpeedMultiplierMax;
@@ -49,7 +49,4 @@ public class NpcCommonConfig : ScriptableObject
 
     /// <summary>NPC 최대 체력 — HUD가 비율 계산에, NpcController가 초기화·회복에 읽는다. (#366)</summary>
     public int MaxHp => m_maxHp;
-
-    /// <summary>제압 홀드 1회가 깎는 체력. (#366 — 구 NpcResistConfig.SubdueHitPower)</summary>
-    public int SubdueHitPower => m_subdueHitPower;
 }

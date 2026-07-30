@@ -220,28 +220,22 @@ public partial class PlayerEscorter
             return;
 
         // 남이 끌고 있는 대상에는 밧줄을 덧건다 — 줄다리기 합류. 기존 끌기는 끊지 않는다(탈취 차단).
-        // 이미 커스터디라 반응 판정·기절 지름길이 필요 없어 채널링만 태우고 바로 붙인다.
+        // 이미 커스터디라 반응 판정이 필요 없어 채널링만 태우고 바로 붙인다.
+        // 합류는 제압이 아니라 이미 확보된 신병에 대한 조작이라 좌클릭 홀드가 그대로 남아 있다 (#446).
         if (NpcStateRules.CanJoinDrag(target.CurrentState))
         {
-            ServerRopeChannelAsync(target, joining: true).Forget();
+            ServerRopeJoinChannelAsync(target).Forget();
             return;
         }
 
-        if (!NpcStateRules.CanArrest(target.CurrentState))
-            return; // 이미 신병이 확보됐거나 다른 시스템이 소유한 상태 제외 — 클라 검증·윤곽선과 단일 기준 (#184)
-
-        // 기절 대상은 채널링 없이 즉시 묶는다 — 기절 지속(2.67초)이 채널(3초)보다 짧아 채널을 걸면
-        // 묶기 전에 깨어나 테이저→밧줄 콤보가 깨진다. (#269)
-        // 상태값이 아니라 IsStunned를 보는 이유: 스턴이 오버레이가 되면서 테이저 기절은 CurrentState를
-        // 바꾸지 않는다(넉백 KO만 NpcState.Stunned). 상태로 보면 이 지름길이 조용히 죽어
-        // 기절 대상에게도 채널링을 요구하게 되고, 깨어나기 전에 못 묶어 콤보가 깨진다. (#292)
-        if (target.IsStunned)
-        {
-            ServerApplyRopeDrag(target);
+        // 새로 묶기는 무력화된 대상만 — 깨어 있는 NPC를 좌클릭 3초 홀드로 묶던 경로는 제거됐다 (#446).
+        // 홀드가 없어져 판정을 통과하면 그 자리에서 즉시 묶인다: 원래 기절 대상에만 있던 지름길이
+        // (기절 지속이 채널보다 짧아 콤보가 깨지던 문제, #269) 이제 유일한 경로가 됐다.
+        // 클라 조기검증·조준 피드백(Rope)과 단일 기준 (#184).
+        if (!NpcStateRules.CanRopeBind(target))
             return;
-        }
 
-        ServerRopeChannelAsync(target, joining: false).Forget();
+        ServerApplyRopeDrag(target);
     }
 
     /// <summary>밧줄 끌기 재개 — 이미 체포되어 멈춘 대상을 채널링·반응 판정 없이 즉시 다시 끈다. (#369)
@@ -289,12 +283,11 @@ public partial class PlayerEscorter
         return IsInRange(target);
     }
 
-    private async UniTaskVoid ServerRopeChannelAsync(NpcController target, bool joining)
+    // 줄다리기 합류 채널링 — 새로 묶기가 즉시 적용으로 바뀌면서(#446) 이 채널은 합류 전용이 됐다.
+    // joining 분기가 있던 자리로, 묶기 쪽 분기는 호출부가 사라져 함께 걷었다.
+    private async UniTaskVoid ServerRopeJoinChannelAsync(NpcController target)
     {
-        NotifyOwner(
-            joining
-                ? $"줄다리기 합류 채널링 시작: {target.name} ({m_channelSeconds}초)"
-                : $"밧줄 묶기 채널링 시작: {target.name} ({m_channelSeconds}초)");
+        NotifyOwner($"줄다리기 합류 채널링 시작: {target.name} ({m_channelSeconds}초)");
         NotifyChannelGaugeStart(m_channelSeconds);
 
         // 수갑 체포와 동일한 keepAlive — 도중 거리 이탈은 즉시 실패시킨다 (#91)
@@ -312,27 +305,23 @@ public partial class PlayerEscorter
         switch (result)
         {
             case ServerChannel.Result.OutOfRange:
-                NotifyOwner("묶기 실패 — 대상이 범위를 벗어남");
+                NotifyOwner("합류 실패 — 대상이 범위를 벗어남");
                 return;
 
             case ServerChannel.Result.Canceled:
-                NotifyOwner("묶기 취소됨 (홀드 뗌)");
+                NotifyOwner("합류 취소됨 (홀드 뗌)");
                 return;
         }
 
-        // 채널링 도중 상태·자원이 바뀌었을 수 있다 — 완료 시점에 재확인(다른 플레이어가 먼저 확보,
-        // 그 사이 밧줄을 버려 용량이 준 경우, 합류하려던 대상을 그새 놓아버린 경우 등).
+        // 채널링 도중 상태·자원이 바뀌었을 수 있다 — 완료 시점에 재확인(그 사이 밧줄을 버려 용량이
+        // 준 경우, 합류하려던 대상을 끌던 사람이 그새 놓아버린 경우 등).
         if (target == null || IsAtRopeCapacity)
             return;
-        bool stateOk = joining
-            ? NpcStateRules.CanJoinDrag(target.CurrentState)
-            : NpcStateRules.CanArrest(target.CurrentState);
-        if (!stateOk)
+        if (!NpcStateRules.CanJoinDrag(target.CurrentState))
             return;
 
         // 반응 판정은 여기서 굴리지 않는다 (#400) — 밧줄은 순수 검거 수단이 됐고, 판정은
-        // NpcController.ServerReactTo가 단독으로 갖는다. 함부로 묶는 것을 막던 장치도 함께 사라졌다 —
-        // 이제는 이미 반응 중인 대상이 CanArrest에서 걸리는 것이 그 역할을 대신한다.
+        // NpcController.ServerReactTo가 단독으로 갖는다.
         ServerApplyRopeDrag(target);
     }
 

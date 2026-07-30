@@ -3,14 +3,15 @@
 /// 클라 조기검증(Rope)·서버 가드(PlayerEscorter)·조준 피드백(InteractionFeedback)이
 /// 모두 여기를 읽는다 — 새 상태 추가 시 이 파일만 고치면 셋이 함께 움직인다.
 /// 상태별 '행동'은 NpcXxxState 클래스(FSM, 서버 전용), 상태별 '가능 여부'는 여기 — 역할 분리.
-/// 클라이언트는 동기화된 enum(NpcController.CurrentState)만 알기 때문에 순수 함수로 둔다.
+/// 대부분은 동기화된 enum(NpcController.CurrentState)만 보는 순수 함수다 — 클라도 그것만 알기 때문.
+/// 예외는 <see cref="CanRopeBind"/> 하나 — 무력화 여부가 상태 enum에 없어 NpcController를 받는다 (#446).
 /// </summary>
 public static class NpcStateRules
 {
     /// <summary>수갑 체포 채널링의 대상이 될 수 있는 상태인가.
     /// 제외 목록 방식 — 새 상태는 기본 '체포 가능'이므로 막아야 하면 여기 추가할 것.
-    /// 도주(Run)·저항(Attack)은 수갑이 아니라 타격(E·진압봉)·테이저로 기절시킨 뒤 밧줄로 잡는다
-    /// (GDD 6-1/7-4, #254 · 도주형 E 제압 홀드는 #436에서 제거) —
+    /// 도주(Run)·저항(Attack)은 수갑이 아니라 진압봉·테이저로 기절시킨 뒤 밧줄로 잡는다
+    /// (GDD 6-1/7-4, #254 · E 제압은 #436·#438에서 전부 제거) —
     /// 반응이 시작된 뒤에는 수갑 채널링이 걸리지 않아야 한다.</summary>
     public static bool IsCapturable(NpcState state) =>
         state != NpcState.Escorted
@@ -61,11 +62,13 @@ public static class NpcStateRules
     public static bool CanStartReaction(NpcState state) =>
         IsReactive(state) && state != NpcState.Run && state != NpcState.Attack;
 
-    /// <summary>밧줄로 묶어 끌 수 있는 상태인가. (#269 → #369 기본 검거로 승격)
+    /// <summary>밧줄 대상에서 <b>신병·소유권 때문에</b> 빠지는 상태인가. (#269 → #369 기본 검거로 승격)
     /// 제외 목록 방식 — 이미 신병 확보(Escorted/Captured/Jailed)·타 시스템 소유(Holding·페널티)는 제외.
-    /// 기절·도주·저항 등 나머지는 전부 대상이다(제압 타격으로 HP 0에 쓰러진 저항형 Stunned 포함, #366).
     /// Captured 제외 주의: 그 상태에선 밧줄 좌클릭이 '풀어주기'로 갈리고(<see cref="CanRelease"/>),
-    /// 다시 끄는 건 E 경로다.</summary>
+    /// 다시 끄는 건 E 경로다.
+    ///
+    /// <b>이것만으로 묶기를 판정하지 말 것</b> — 새로 묶기는 무력화까지 요구하므로
+    /// <see cref="CanRopeBind"/>가 정본이고 이 함수는 그 한 조각이다 (#446).</summary>
     public static bool CanArrest(NpcState state) =>
         state != NpcState.Escorted
         && state != NpcState.Captured
@@ -74,6 +77,19 @@ public static class NpcStateRules
         && state != NpcState.Detained
         && state != NpcState.Chasing
         && state != NpcState.PenaltyEscorting;
+
+    /// <summary>밧줄 좌클릭으로 <b>새로 묶을</b> 수 있는 대상인가 — 무력화된 대상만. (#446)
+    /// 깨어 있는 NPC를 좌클릭 3초 홀드로 묶던 경로가 제거되면서 묶기의 전제가 무력화가 됐다.
+    /// 역할이 완전히 갈린다: 체력 깎기는 진압봉, 즉시 무력화는 테이저, 신병 확보는 밧줄.
+    /// 홀드가 없어졌으므로 이 판정을 통과한 대상은 좌클릭 한 번에 즉시 묶인다 —
+    /// 원래 기절 대상에만 있던 지름길이 유일한 경로가 된 것이다 (PlayerEscorter.ServerBeginRopeDrag).
+    ///
+    /// 상태 enum이 아니라 <see cref="NpcController.IsStunned"/>를 보는 이유: 스턴은 오버레이라
+    /// 테이저·체력 0 기절이 CurrentState를 바꾸지 않는다(넉백 KO만 <see cref="NpcState.Stunned"/>).
+    /// 상태로만 보면 두 기절 경로 중 하나가 조용히 빠진다 (#292). IsStunned는 동기화 값이라
+    /// 클라 조기검증·조준 피드백(Rope)에서도 읽을 수 있다.</summary>
+    public static bool CanRopeBind(NpcController npc) =>
+        npc != null && npc.IsStunned && CanArrest(npc.CurrentState);
 
     /// <summary>이미 남이 끌고 있는 대상에 밧줄을 <b>덧걸</b> 수 있는가 — 줄다리기 합류. (#390)
     /// 팀 결정은 "합류는 허용, 탈취는 차단"이다. 합류는 기존 끌기를 끊지 않고 참가자만 하나 늘린다.
@@ -94,12 +110,17 @@ public static class NpcStateRules
     public static bool CanDeliver(NpcState state) =>
         state is NpcState.Escorted or NpcState.Captured;
 
-    /// <summary>E 상호작용(타격·재연행)이 반응하는 상태인가.
+    /// <summary>E 상호작용이 반응하는 상태인가 — 이제 <b>신병 조작 전용</b>이다. (#438)
     /// 포함 목록 방식 — 새 상태는 기본 'E 불가'이므로 열어야 하면 여기 추가할 것.
     /// NpcSubdueInteractable.Interact의 분기 집합과 반드시 일치해야 한다.
-    /// 배회(Idle/Walk)가 열린 것은 체력이 지속형이 되면서다 (#366) — 예전에는 '배회 NPC 폭행 방지'로
-    /// 막혀 있었지만, 이제 아무 때나 때려 체력을 깎을 수 있다.
-    /// 도주(Run)는 목록에 남아 있지만 의미가 바뀌었다 (#436) — 3초 제압 홀드가 아니라 타격 1회다.</summary>
-    public static bool HasSubdueInteraction(NpcState state) =>
-        state is NpcState.Idle or NpcState.Walk or NpcState.Run or NpcState.Attack or NpcState.Captured;
+    ///
+    /// 두 단계로 좁혀졌다: 도주형 3초 제압 홀드 제거(#436)로 <c>Run</c>이 타격 분기에 합쳐졌고,
+    /// 제압 타격 자체가 제거(#438)되면서 배회(Idle/Walk)·도주(Run)·저항(Attack)이 전부 빠졌다.
+    /// 남은 <c>Captured</c>는 재연행이고, 끌리는 중(<c>Escorted</c>)의 줄다리기 복귀는 상태가 아니라
+    /// "누구의 줄인가"로 갈리므로 순수 함수인 여기가 아니라 호출부가 판단한다 (#398).
+    /// 때리는 것은 진압봉, 즉시 무력화는 테이저, 신병 확보는 밧줄이 맡는다.
+    ///
+    /// 개명 이력: <c>HasSubdueInteraction</c> → 제압(subdue) 동작이 E에서 전부 빠져 이름이
+    /// 실제 역할과 어긋나게 되어 #438에서 바꿨다.</summary>
+    public static bool HasInteractKeyAction(NpcState state) => state is NpcState.Captured;
 }
