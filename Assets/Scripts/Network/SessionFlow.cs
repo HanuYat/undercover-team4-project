@@ -19,7 +19,10 @@ public static class SessionFlow
     public static bool IsBusy => s_busy;
 
     /// <summary>
-    /// "메인으로 나가기(로그아웃)" — Vivox 로그아웃 → 세션 이탈(NGO 자동 종료) → Auth 로그아웃 → 타이틀 복귀.
+    /// "메인으로 나가기" — Vivox 로그아웃 → 세션 이탈(NGO 자동 종료) → 타이틀 복귀.
+    /// **인증은 유지한다** (#442) — 타이틀에서 곧바로 방을 만들거나 참가할 수 있어야 하고,
+    /// 명시적 로그아웃은 AuthPanel의 로그아웃 버튼이 전담한다. 세션을 먼저 비우므로
+    /// 원칙 4의 CanSignOut 게이트는 그대로 유효하다 — 순서 위반은 여전히 구조적으로 불가능하다.
     /// 이 순서를 지키면 #164류(계층 간 미전파)가 구조적으로 발생하지 않는다.
     /// 클라가 호출하면 본인만 이탈하고, 호스트가 호출하면 세션이 닫혀 전원이 나간다.
     /// </summary>
@@ -40,15 +43,11 @@ public static class SessionFlow
                 await App.Net.Session.LeaveAsync();
 
             // 2-1. NGO가 완전히 내려갈 때까지 대기 — Shutdown은 즉시가 아니라 다음 프레임(들)에 걸쳐 끝난다.
-            //      완료를 기다리지 않으면 (a) 아래 SignOut이 AuthBootstrap의 IsNetworkConnected 가드에 막히고,
-            //      (b) App.LoadScene이 NGO가 살아있는 걸로 보고 로컬 로드 대신 NGO 씬 동기화로 잘못 분기한다.
+            //      완료를 기다리지 않으면 App.LoadScene이 NGO가 살아있는 걸로 보고
+            //      로컬 로드 대신 NGO 씬 동기화로 잘못 분기한다.
             await WaitForNetworkShutdownAsync();
 
-            // 3. 세션이 비었으면 로그아웃 성공
-            if (App.Net.Auth != null)
-                App.Net.Auth.SignOut();
-
-            // 4. 타이틀(로비)로 복귀 — 씬 전환 단일 경로. NGO가 완전히 내려간 뒤라 오프라인 로컬 로드로 처리된다.
+            // 3. 타이틀(로비)로 복귀 — 씬 전환 단일 경로. NGO가 완전히 내려간 뒤라 오프라인 로컬 로드로 처리된다.
             //    세션 없이 단독 Play한 경우에도 여기서 확실히 타이틀로 돌아간다.
             if (App.CurrentScene != EScene.Title)
                 App.LoadScene(EScene.Title);
