@@ -20,11 +20,8 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
     [SerializeField]
     private float m_channelSeconds = 3f;
 
-    [Tooltip(
-        "도주 NPC 근접 제압(E 홀드) 채널링 시간(초) — 딸깍 한 번이 아니라 붙어서 홀드를 유지해야 잡힌다 (#332)"
-    )]
-    [SerializeField]
-    private float m_subdueChannelSeconds = 3f;
+    // 도주 NPC 근접 제압(E 홀드) 채널링은 제거됐다 (#436 — 이전 #332).
+    // 도주형도 타격(E·진압봉)·테이저로 기절시킨 뒤 밧줄로 끄는 저항형과 같은 흐름을 탄다.
 
     // 밧줄 끌기(#269) 관련 필드·상태·로직은 PlayerEscorter.RopeDrag.cs로 분리돼 있다 (partial).
 
@@ -124,9 +121,8 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
     // 서버 채널링 생명주기(CTS 소유·재진입 가드)는 ServerChannel에 위임 (#109)
     private readonly ServerChannel m_channel = new();
 
-    // 지금 도는 채널링이 '도주 제압 홀드'인지 — E 뗌 취소가 수갑 채널링(좌클릭 홀드)을 오발로 끊지 않게
-    // 종류를 구분한다. 서버(또는 오프라인)에서만 유효. (#332)
-    private bool m_subdueChanneling;
+    // 채널링 종류 구분(m_subdueChanneling)은 제거됐다 (#436) — E 홀드 채널링이 없어져
+    // m_channel을 쓰는 것은 좌클릭 홀드(밧줄 묶기·풀기)뿐이다.
 
     // ---- 오너 클라 진입점 (아이템/상호작용이 호출) ----
 
@@ -178,35 +174,8 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
         DeliverRpc();
     }
 
-    /// <summary>도주 NPC 근접 제압 홀드 시작 — 오너가 호출(E 누름). 3초 홀드를 채워야 잡힌다. (#332)</summary>
-    public void RequestSubdueCapture(NpcController target)
-    {
-        if (target == null)
-            return;
-        if (!IsSpawned || IsServer)
-        {
-            ServerBeginSubdue(target);
-            return;
-        } // 서버/오프라인 즉시 실행
-        if (!IsOwner)
-            return;
-        if (!IsTargetNetworkReady(target))
-            return;
-        SubdueCaptureRpc(new NetworkObjectReference(target.NetworkObject));
-    }
-
-    /// <summary>도주 제압 홀드 취소 — 오너가 호출(E 뗌). 수갑 채널링은 건드리지 않는다(서버가 종류로 가드). (#332)</summary>
-    public void RequestCancelSubdue()
-    {
-        if (!IsSpawned)
-        {
-            ServerCancelSubdue();
-            return;
-        }
-        if (!IsOwner)
-            return;
-        CancelSubdueRpc();
-    }
+    // 도주 제압 홀드 진입점(RequestSubdueCapture/RequestCancelSubdue)은 제거됐다 (#436).
+    // 도주 NPC에 대한 E는 이제 NpcController.RequestSubdueHit(타격) 경로만 탄다.
 
     /// <summary>밧줄 풀기 시도 — 오너가 호출(Rope 좌클릭, 대상이 체포 상태일 때). 서버/오프라인 즉시 실행, 원격은 서버로 요청. (#290 → #369)</summary>
     public void RequestUnrope(NpcController target)
@@ -245,9 +214,6 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
     private void CancelCaptureRpc() => ServerCancelCapture();
 
     [Rpc(SendTo.Server)]
-    private void CancelSubdueRpc() => ServerCancelSubdue();
-
-    [Rpc(SendTo.Server)]
     private void ReleaseRpc(NetworkObjectReference targetRef)
     {
         if (
@@ -263,18 +229,7 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
     private void DeliverRpc() => ServerDeliver();
 
     // 밧줄 끌기 요청 RPC(RopeDragRequestRpc)는 PlayerEscorter.RopeDrag.cs에 있다. (#269)
-
-    [Rpc(SendTo.Server)]
-    private void SubdueCaptureRpc(NetworkObjectReference targetRef)
-    {
-        if (
-            targetRef.TryGet(out NetworkObject targetObj)
-            && targetObj.TryGetComponent(out NpcController target)
-        )
-        {
-            ServerBeginSubdue(target);
-        }
-    }
+    // 도주 제압 RPC(SubdueCaptureRpc/CancelSubdueRpc)는 제거됐다 (#436).
 
     [Rpc(SendTo.Server)]
     private void UnropeRequestRpc(NetworkObjectReference targetRef)
@@ -340,68 +295,11 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
         m_channel.Cancel();
     }
 
-    /// <summary>
-    /// 도주 NPC 근접 제압 홀드 진입 — 검증 후 채널링 시작. 서버(또는 오프라인) 실행. (#332)
-    /// 딸깍 한 번에 잡히던 것을 저항형 연타 제압과 균형을 맞춰 홀드로 바꿨다 — 붙어서
-    /// m_subdueChannelSeconds를 채워야 하고, 뗌·사거리 이탈·대상 상태 변화면 무산된다.
-    /// </summary>
-    private void ServerBeginSubdue(NpcController target)
-    {
-        if (m_channel.IsActive)
-            return; // 체포/해제/제압 채널링 중복 방지 (한 채널 공유)
-        if (IsAtRopeCapacity)
-            return; // 소지한 밧줄을 전부 쓰고 있으면 새로 확보 불가 — 밧줄 없음(0개)·동료 운반 중(#365)도 여기서 걸린다 (#369 → #390)
-        if (target.CurrentState != NpcState.Run)
-            return; // 도주 중일 때만 — 저항은 타격 연타, 배회는 수갑 채널링이 정식 경로
-        if (!IsInRange(target))
-            return; // 사거리 밖이면 시작조차 안 함
-
-        ServerSubdueChannelAsync(target).Forget();
-    }
-
-    private async UniTaskVoid ServerSubdueChannelAsync(NpcController target)
-    {
-        m_subdueChanneling = true;
-        NotifyOwner($"제압 홀드 시작: {target.name} ({m_subdueChannelSeconds}초)");
-        NotifyChannelGaugeStart(m_subdueChannelSeconds);
-
-        // 도주 대상은 계속 달아나는 중 — 사거리 유지가 곧 추격이고, 뿌리치거나(상태 변화) 놓치면 무산된다
-        ServerChannel.Result result;
-        try
-        {
-            result = await m_channel.RunAsync(
-                m_subdueChannelSeconds,
-                () => target != null && target.CurrentState == NpcState.Run && IsInRange(target)
-            );
-        }
-        finally
-        {
-            m_subdueChanneling = false;
-            NotifyChannelGaugeEnd(); // 어떤 경로로 끝나도 게이지 숨김 보장 (#184)
-        }
-
-        switch (result)
-        {
-            case ServerChannel.Result.OutOfRange:
-                NotifyOwner($"제압 실패 — 대상을 놓침: {(target != null ? target.name : "?")}");
-                return;
-
-            case ServerChannel.Result.Canceled:
-                NotifyOwner("제압 취소됨 (홀드 뗌)");
-                return;
-        }
-
-        // 홀드 완주 — 아직 도주 중이면 그 자리에서 체포
-        if (target != null && target.CurrentState == NpcState.Run)
-            target.CaptureBySubdue();
-    }
-
-    // E 뗌 취소 — 도주 제압 홀드만 끊는다. 수갑 체포/해제 채널링(좌클릭 홀드)은 종류가 달라 건드리지 않는다 (#332)
-    private void ServerCancelSubdue()
-    {
-        if (m_subdueChanneling)
-            m_channel.Cancel();
-    }
+    // 도주 제압 홀드 채널링(ServerBeginSubdue/ServerSubdueChannelAsync/ServerCancelSubdue)은
+    // 제거됐다 (#436 — 이전 #332). 도주형 전용으로 Captured에 바로 점프하던 경로라, 저항형의
+    // 타격 → 기절 → 밧줄과 처리가 갈려 있었다. 이제 두 유형이 같은 흐름을 탄다.
+    // 이 메서드가 읽던 IsAtRopeCapacity는 동료 운반(#365)까지 세도록 확장됐지만, 그 규칙은
+    // 밧줄 묶기·줄다리기 경로가 계속 읽으므로 여기 삭제로 잃는 것은 없다.
 
     // ---- 밧줄 풀기 채널링 (서버 권위, #290 → #369) ----
     // 묶기 채널링의 역방향 — 밧줄을 든 좌클릭으로 체포되어 멈춘 NPC를 풀어 배회로 돌려보낸다.

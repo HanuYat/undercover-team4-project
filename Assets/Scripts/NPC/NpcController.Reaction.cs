@@ -132,16 +132,9 @@ public partial class NpcController
         ServerReactTo(ReactionTrigger.Damage, attacker != null ? attacker.transform : null);
     }
 
-    /// <summary>도주 중인 NPC 근접 제압 — 상호작용 홀드 성공 시 그 자리에서 체포. (NpcSubdueInteractable 경유)</summary>
-    public void CaptureBySubdue()
-    {
-        if (IsSpawned && !IsServer)
-            return;
-        if (CurrentState != NpcState.Run)
-            return;
-
-        m_stateMachine.ChangeState(NpcState.Captured);
-    }
+    // 도주 NPC 근접 제압(CaptureBySubdue)은 제거됐다 (#436) — 홀드 완주로 Run에서 Captured로
+    // 바로 점프하던 도주형 전용 경로다. 이제 도주형도 타격으로 체력을 깎아 기절시킨 뒤
+    // 밧줄로 끌어 신병을 확보한다(저항형과 동일, #366/#369).
 
     // 기절 진입(EnterStunned)은 NpcController.Stun.cs로 이사했다 — 상태 전이가 아니라
     // 오버레이 플래그가 됐기 때문이다 (#292).
