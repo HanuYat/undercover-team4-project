@@ -166,6 +166,7 @@ MonoBehaviour:
   m_factionText: {fileID: 3441501477243226008}
   m_symbolImage: {fileID: 5893198452207115774}
   m_billboard: 1
+  m_proneOffset: {x: 0.1, y: 0.72, z: -0.4}
 --- !u!1 &7491715764817063870
 GameObject:
   m_ObjectHideFlags: 0
