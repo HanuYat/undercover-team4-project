@@ -12,14 +12,21 @@ using Unity.Netcode;
 public abstract class ChanneledInteractionBehaviour : NetworkBehaviour
 {
     /// <summary>채널링 게이지 표시 — 오너 화면에. 서버·오프라인은 로컬, 원격 오너에겐 RPC.</summary>
-    protected void NotifyChannelGaugeStart(float seconds)
+    protected void NotifyChannelGaugeStart(float seconds) => NotifyChannelGaugeStart(seconds, 0f);
+
+    /// <summary>
+    /// 이미 진행 중인 것을 중간부터 이어 표시한다 — elapsed초 지난 상태로 시작. (#455)
+    /// 아이템을 다시 장착했을 때 남은 충전을 보여주는 용도(Taser). 전체 시간과 경과 시간을 함께 넘기는
+    /// 이유는 ChannelingGaugeUI.Show(seconds, elapsed) 문서에 있다.
+    /// </summary>
+    protected void NotifyChannelGaugeStart(float seconds, float elapsed)
     {
         if (IsSpawned && IsServer && !IsOwner)
         {
-            ChannelGaugeStartRpc(seconds);
+            ChannelGaugeStartRpc(seconds, elapsed);
             return;
         }
-        App.UI.Gauge?.Show(seconds);
+        App.UI.Gauge?.Show(seconds, elapsed);
     }
 
     /// <summary>채널링 게이지 숨김 — 완료·취소·거리이탈 등 어떤 종료 경로에서도 반드시 호출.</summary>
@@ -34,7 +41,8 @@ public abstract class ChanneledInteractionBehaviour : NetworkBehaviour
     }
 
     [Rpc(SendTo.Owner)]
-    private void ChannelGaugeStartRpc(float seconds) => App.UI.Gauge?.Show(seconds);
+    private void ChannelGaugeStartRpc(float seconds, float elapsed) =>
+        App.UI.Gauge?.Show(seconds, elapsed);
 
     [Rpc(SendTo.Owner)]
     private void ChannelGaugeEndRpc() => App.UI.Gauge?.Hide();

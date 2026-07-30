@@ -25,16 +25,24 @@ public class ChannelingGaugeUI : CommonManagerBase
     }
 
     /// <summary>채널링 시작 — seconds 동안 0→100%로 차오른다. 서버 시작 통지 수신 시 호출.</summary>
-    public void Show(float seconds)
+    public void Show(float seconds) => Show(seconds, 0f);
+
+    /// <summary>
+    /// 진행 중인 것을 <b>중간부터 이어</b> 표시한다 — 이미 elapsed초 지난 상태로 시작한다. (#455)
+    /// 테이저 충전처럼 아이템을 다시 장착했을 때 남은 시간만 보여주려면, 남은 시간을 duration으로 주는 게
+    /// 아니라 전체 시간과 경과 시간을 함께 줘야 한다: 남은 시간을 duration으로 주면 게이지가 0%에서
+    /// 다시 차올라 "방금 시작한 것"처럼 보인다.
+    /// </summary>
+    public void Show(float seconds, float elapsed)
     {
         if (seconds <= 0f)
             return;
 
         m_duration = seconds;
-        m_elapsed = 0f;
+        m_elapsed = Mathf.Clamp(elapsed, 0f, seconds);
         m_isRunning = true;
         if (m_fillImage != null)
-            m_fillImage.fillAmount = 0f;
+            m_fillImage.fillAmount = Mathf.Clamp01(m_elapsed / m_duration);
         SetVisible(true);
     }
 

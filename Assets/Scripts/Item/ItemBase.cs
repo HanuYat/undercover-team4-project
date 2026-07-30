@@ -139,4 +139,13 @@ public abstract class ItemBase : ChanneledInteractionBehaviour
     /// 채널링 없는 아이템은 무동작(기본).
     /// </summary>
     public virtual void ServerCancelActiveUse() { }
+
+    /// <summary>
+    /// 이 아이템이 손에 장착됐다 — 오너 클라에서만 호출된다(PlayerLoadout.EquipSlot). (#455)
+    /// 장착 전환은 진행 중이던 게이지를 내리는데, 새로 든 아이템이 아직 진행 중인 것을 갖고 있으면
+    /// 여기서 다시 띄운다(테이저 충전). 그런 상태가 없는 아이템은 무동작(기본).
+    /// 장착 해제 쪽 대응 훅은 따로 두지 않았다 — 게이지를 내리는 것은 아이템 종류와 무관해
+    /// EquipSlot이 한 번에 처리한다.
+    /// </summary>
+    public virtual void OnEquipped() { }
 }
