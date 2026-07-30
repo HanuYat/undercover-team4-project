@@ -284,7 +284,11 @@ public class Taser : ItemBase, IAimedWeapon
     /// 아이템 인스턴스에 남아 다시 주웠을 때 그대로 이어진다.
     /// 오너 라우팅은 기반(ChanneledInteractionBehaviour)이 처리하므로 여기서는 그냥 부르면 된다:
     /// 호스트 오너는 로컬로, 원격 오너에게는 SendTo.Owner RPC로 나간다.
-    /// 슬롯을 바꿔 손에서 내리는 경우는 이 훅을 타지 않는다 — 충전이 계속 진행되므로 게이지를 유지한다.
+    ///
+    /// 슬롯을 바꿔 손에서 내리는 경우는 이 훅이 아니라 <c>PlayerLoadout.EquipSlot</c>이 게이지를 내린다 —
+    /// 그쪽은 아이템 종류를 가리지 않는 오너 로컬 처리라 여기에 중복으로 둘 필요가 없다.
+    /// <c>CancelUse</c>를 쓰지 않는 이유도 같은 맥락이다: 그건 <b>좌클릭 뗌</b>에도 불려서,
+    /// 발사 직후 버튼을 떼는 순간 충전 게이지가 사라져 버린다.
     /// </summary>
     public override void ServerCancelActiveUse() => NotifyChannelGaugeEnd();
 

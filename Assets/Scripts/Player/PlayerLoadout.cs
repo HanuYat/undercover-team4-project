@@ -615,6 +615,17 @@ public class PlayerLoadout : NetworkBehaviour
     {
         m_slotModel.SetEquippedIndex(index);
         m_itemUser.SetEquippedItem(m_slotModel.Equipped);
+
+        // 장착을 바꾸면 진행 중이던 게이지를 내린다 (#455). SetEquippedItem이 내려놓는 아이템의
+        // CancelUse로 채널링 자체는 끊지만, 테이저 충전처럼 채널링이 아닌 게이지는 그 경로로 지워지지
+        // 않는다 — 손에 없는 아이템의 진행도가 화면에 남는다. 채널링 쪽도 서버 통지를 기다리지 않고
+        // 즉시 사라져 반응이 또렷해진다.
+        //
+        // 오너에서만: 이 메서드는 서버 목록 동기화(RebuildHeldItems) 경로로도 불려 비오너 피어에서
+        // 실행되므로, 가드가 없으면 남의 아이템 정리가 내 화면 게이지를 지운다.
+        if (IsOwner)
+            App.UI.Gauge?.Hide();
+
         OnEquippedSlotChanged?.Invoke();
     }
 
