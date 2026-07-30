@@ -46,6 +46,14 @@ public class AuthPanel : PanelBase
 
     private bool m_isSigningIn; // 로그인 요청 겹침 방지 래치
 
+    /// <summary>
+    /// 인증 요청이 진행 중인가 — 두 래치를 **함께** 본다. (#444)
+    /// 따로 보면 서로의 창이 열린다: 전환은 중간에 OnSignedOut을 발생시켜 재로그인 대기 중
+    /// signedIn=false로 UI를 갱신하므로 [로그인]이 되살아나고, 반대로 로그인 대기 중에는
+    /// 계정 로그인 버튼이 열려 있다. 어느 쪽이든 InitializeAndSignInAsync가 두 번 돈다.
+    /// </summary>
+    private bool AuthBusy => m_isSigningIn || m_isAccountBusy;
+
     private void OnEnable()
     {
         m_signInButton.onClick.AddListener(HandleSignInClicked);
@@ -93,7 +101,7 @@ public class AuthPanel : PanelBase
 
     private async UniTaskVoid SignInAsync()
     {
-        if (m_isSigningIn || Auth == null)
+        if (AuthBusy || Auth == null)
             return;
         m_isSigningIn = true;
         try
@@ -149,7 +157,7 @@ public class AuthPanel : PanelBase
     /// </summary>
     private void HandleLinkClicked()
     {
-        if (m_isAccountBusy || Auth == null)
+        if (AuthBusy || Auth == null)
             return;
 
         // 형식 위반은 확인창 **전에** 걸러낸다 — "되돌릴 수 없습니다"를 읽고 확정했는데
@@ -184,7 +192,7 @@ public class AuthPanel : PanelBase
     /// <summary>익명 → 정식 승격. 성공하면 이 기기 밖에서도 같은 닉네임으로 접속된다. (#384)</summary>
     private async UniTaskVoid LinkAsync(string username, string password)
     {
-        if (m_isAccountBusy || Auth == null)
+        if (AuthBusy || Auth == null)
             return;
 
         m_isAccountBusy = true;
@@ -217,7 +225,7 @@ public class AuthPanel : PanelBase
     /// <summary>아이디로 로그인 — 다른 기기(또는 토큰이 지워진 기기)의 경로. (#384)</summary>
     private async UniTaskVoid AccountSignInAsync()
     {
-        if (m_isAccountBusy || Auth == null)
+        if (AuthBusy || Auth == null)
             return;
 
         m_isAccountBusy = true;
@@ -249,7 +257,7 @@ public class AuthPanel : PanelBase
     /// </summary>
     private void HandleNewAnonymousClicked()
     {
-        if (m_isAccountBusy || Auth == null)
+        if (AuthBusy || Auth == null)
             return;
 
         if (!TryGetConfirmPanel(out AccountConfirmPanel confirm))
@@ -269,7 +277,7 @@ public class AuthPanel : PanelBase
 
     private async UniTaskVoid StartNewAnonymousAsync()
     {
-        if (m_isAccountBusy || Auth == null)
+        if (AuthBusy || Auth == null)
             return;
 
         m_isAccountBusy = true;
@@ -308,10 +316,13 @@ public class AuthPanel : PanelBase
     {
         bool signedIn = Auth != null && Auth.IsSignedIn;
         m_playerIdText.text = signedIn ? $"ID: {Auth.PlayerId}" : "로그인 안 됨";
-        m_signInButton.interactable = !signedIn;
-        m_signOutButton.interactable = signedIn;
+        // 요청 중에는 둘 다 잠근다 — 전환(#444)의 중간 로그아웃 상태에서 [로그인]이 눌리면
+        // 같은 AuthBootstrap에서 InitializeAndSignInAsync가 두 번 돈다.
+        m_signInButton.interactable = !signedIn && !AuthBusy;
+        m_signOutButton.interactable = signedIn && !AuthBusy;
 
-        bool canEdit = signedIn && !Auth.IsNetworkConnected && !m_isApplyingNickname;
+        bool canEdit =
+            signedIn && !Auth.IsNetworkConnected && !m_isApplyingNickname && !AuthBusy;
         m_nicknameInput.interactable = canEdit;
         m_applyNicknameButton.interactable = canEdit;
 
@@ -321,7 +332,7 @@ public class AuthPanel : PanelBase
 
         // ── 계정 연동 (#384) ──
         bool linked = signedIn && Auth.IsLinked;
-        bool canUseAccount = Auth != null && !Auth.IsNetworkConnected && !m_isAccountBusy;
+        bool canUseAccount = Auth != null && !Auth.IsNetworkConnected && !AuthBusy;
 
         m_usernameInput.interactable = canUseAccount && !linked;
         m_passwordInput.interactable = canUseAccount;
