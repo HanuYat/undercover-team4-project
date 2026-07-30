@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -99,8 +98,8 @@ public class WantedListManager : NetworkedManagerBase
         m_wanted.Add(new WantedEntry
         {
             NpcId = criminal.NetworkObjectId,
-            Name = ToFixed64(wantedName),
-            Montage = ToFixed128(montageText),
+            Name = wantedName.ToFixed64(),
+            Montage = montageText.ToFixed128(),
             // 현상금은 서버 전용 값이라 항목에 실어야 본부에서 볼 수 있다 (#395)
             Bounty = identity != null ? identity.Bounty : 0,
         });
@@ -161,20 +160,5 @@ public class WantedListManager : NetworkedManagerBase
         m_arrestedEntries.Remove(npcId);
         m_wanted.Add(entry);
         Debug.Log($"[수배] 탈출로 재등재: {entry.Name} (현재 {m_wanted.Count}건)");
-    }
-
-    // FixedString은 용량 초과 시 던지므로, 초과분은 잘라 안전하게 담는다.
-    private static FixedString64Bytes ToFixed64(string value)
-    {
-        var result = new FixedString64Bytes();
-        result.CopyFromTruncated(value ?? string.Empty);
-        return result;
-    }
-
-    private static FixedString128Bytes ToFixed128(string value)
-    {
-        var result = new FixedString128Bytes();
-        result.CopyFromTruncated(value ?? string.Empty);
-        return result;
     }
 }

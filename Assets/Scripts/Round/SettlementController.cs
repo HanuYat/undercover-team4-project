@@ -222,8 +222,7 @@ public class SettlementController : MonoBehaviour
         if (nm == null || !nm.IsServer || nm.CustomMessagingManager == null)
             return;
 
-        FixedString64Bytes name = default;
-        name.CopyFromTruncated(data.TopOffenderName ?? string.Empty);
+        FixedString64Bytes name = data.TopOffenderName.ToFixed64();
 
         using FastBufferWriter writer = new FastBufferWriter(k_writerSize, Allocator.Temp);
         writer.WriteValueSafe((byte)data.Result);

@@ -130,8 +130,7 @@ public class ArrestVerdictFeedback : MonoBehaviour
         if (nm == null || !nm.IsServer || nm.CustomMessagingManager == null)
             return;
 
-        FixedString64Bytes name = default;
-        name.CopyFromTruncated(data.CitizenName ?? string.Empty);
+        FixedString64Bytes name = data.CitizenName.ToFixed64();
 
         using FastBufferWriter writer = new FastBufferWriter(k_writerSize, Allocator.Temp);
         writer.WriteValueSafe((byte)data.Verdict);

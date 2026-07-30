@@ -59,13 +59,8 @@ public class PlayerNameTag : NetworkBehaviour
     {
         if (IsOwner)
         {
-            var fs = new FixedString64Bytes();
-            fs.CopyFromTruncated(App.Net.Auth.Nickname ?? string.Empty);
-            m_name.Value = fs;
-
-            var pid = new FixedString64Bytes();
-            pid.CopyFromTruncated(App.Net.Auth.PlayerId ?? string.Empty);
-            m_playerId.Value = pid;
+            m_name.Value = App.Net.Auth.Nickname.ToFixed64();
+            m_playerId.Value = App.Net.Auth.PlayerId.ToFixed64();
 
             m_tagRoot.gameObject.SetActive(false);
 

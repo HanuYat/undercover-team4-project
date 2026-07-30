@@ -25,13 +25,10 @@ public struct CitizenData : INetworkSerializable, IEquatable<CitizenData>
         if (profile == null)
             return default;
 
-        // FixedString은 용량 초과 시 던지므로 잘라 담는다 (WantedListManager와 동일 관례)
-        var name = new FixedString64Bytes();
-        name.CopyFromTruncated(profile.CitizenName ?? string.Empty);
+        var name = profile.CitizenName.ToFixed64();
 
         // 표시 이름이 비어 있으면 정본으로 대체 — 정상 시민은 정본==표시 (#223)
-        var nameView = new FixedString64Bytes();
-        nameView.CopyFromTruncated(profile.m_nameView ?? profile.CitizenName ?? string.Empty);
+        var nameView = (profile.m_nameView ?? profile.CitizenName).ToFixed64();
 
         return new CitizenData
         {
@@ -39,7 +36,7 @@ public struct CitizenData : INetworkSerializable, IEquatable<CitizenData>
             NameView = nameView,
             Type = profile.CitizenType,
             Faction = profile.Faction,
-            SymbolIndex = (byte)(profile.m_symbolIndexView < 0 ? 0 : profile.m_symbolIndexView)
+            SymbolIndex = (byte)(profile.m_symbolIndexView < 0 ? 0 : profile.m_symbolIndexView),
         };
     }
 

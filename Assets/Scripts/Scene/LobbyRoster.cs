@@ -1,5 +1,4 @@
 using System;
-using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -84,11 +83,8 @@ public class LobbyRoster : NetworkBehaviour
     {
         AuthBootstrap auth = App.Net.Auth;
 
-        var nickname = new FixedString64Bytes();
-        nickname.CopyFromTruncated(auth != null ? auth.Nickname ?? string.Empty : string.Empty);
-
-        var playerId = new FixedString64Bytes();
-        playerId.CopyFromTruncated(auth != null ? auth.PlayerId ?? string.Empty : string.Empty);
+        var nickname = (auth != null ? auth.Nickname : null).ToFixed64();
+        var playerId = (auth != null ? auth.PlayerId : null).ToFixed64();
 
         // ClientId는 서버가 발신자로 채운다 — 여기서 넣지 않는다.
         return new LobbyPlayerEntry { Nickname = nickname, PlayerId = playerId };
