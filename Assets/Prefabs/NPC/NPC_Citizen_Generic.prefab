@@ -3295,7 +3295,6 @@ GameObject:
   - component: {fileID: 5127349806152873460}
   - component: {fileID: -860446410880811197}
   - component: {fileID: 4422740345284790104}
-  - component: {fileID: 5951565256141623223}
   - component: {fileID: 4603734993763582029}
   - component: {fileID: 5678977034810245416}
   - component: {fileID: 965164983003205256}
@@ -3344,7 +3343,7 @@ NavMeshAgent:
   m_Height: 1.8
   m_BaseOffset: 0
   m_WalkableMask: 4294967287
-  m_ObstacleAvoidanceType: 4
+  m_ObstacleAvoidanceType: 3
 --- !u!114 &2281887230768859551
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3574,24 +3573,10 @@ CapsuleCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.4
+  m_Radius: 0.35
   m_Height: 2
   m_Direction: 1
   m_Center: {x: 0, y: 1, z: 0}
---- !u!114 &5951565256141623223
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8791269624150694847}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 59453b376637c604d9f3e3dd5adc2522, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NpcSubdueGaugeHud
-  m_headHeight: 2.2
-  m_maxDrawDistance: 20
 --- !u!114 &4603734993763582029
 MonoBehaviour:
   m_ObjectHideFlags: 0
