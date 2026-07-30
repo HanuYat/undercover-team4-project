@@ -292,6 +292,40 @@ public class Taser : ItemBase, IAimedWeapon
     /// </summary>
     public override void ServerCancelActiveUse() => NotifyChannelGaugeEnd();
 
+    /// <summary>
+    /// 다시 장착됐다 — 아직 충전 중이면 남은 만큼 게이지를 이어 띄운다 (#455).
+    /// 오너 클라에서만 불린다(PlayerLoadout.EquipSlot). 충전 시각(m_nextFireTime)은 서버 전용 상태라
+    /// 원격 오너는 남은 시간을 모르므로 서버에 물어본다 — 게이지가 한 왕복만큼 늦게 뜨는 것은 감수한다.
+    /// 동기화 변수로 바꾸지 않은 이유: 판정자는 서버 하나뿐이고, 이 값이 필요한 곳은 이 표시뿐이다.
+    /// </summary>
+    public override void OnEquipped()
+    {
+        // 호스트 오너·오프라인은 서버 상태를 직접 읽을 수 있다
+        if (!IsSpawned || IsServer)
+        {
+            ServerReportCharge();
+            return;
+        }
+
+        RequestChargeGaugeRpc();
+    }
+
+    // 아이템은 소지자 소유라 기본 권한(오너 전용)으로 충분하다 — RequestFireRpc와 동일.
+    [Rpc(SendTo.Server)]
+    private void RequestChargeGaugeRpc() => ServerReportCharge();
+
+    // 남은 충전을 오너 화면 게이지로 되돌린다. 서버(또는 오프라인) 전용.
+    private void ServerReportCharge()
+    {
+        float remaining = m_nextFireTime - Time.time;
+        if (remaining <= 0f)
+            return; // 충전 완료(또는 한 번도 안 쏨) — 띄울 것이 없다
+
+        // 남은 시간을 duration으로 주면 게이지가 0%에서 다시 차오른다 —
+        // 전체 쿨다운과 경과분을 함께 넘겨 중간부터 잇는다.
+        NotifyChannelGaugeStart(m_cooldownSeconds, m_cooldownSeconds - remaining);
+    }
+
     // ---- 오너 로그 피드백 ----
 
     // 판정 로그는 서버에서 찍히므로 원격 클라 오너는 결과를 볼 수 없다 — 오너 콘솔에도 같은 로그를 전달한다.
