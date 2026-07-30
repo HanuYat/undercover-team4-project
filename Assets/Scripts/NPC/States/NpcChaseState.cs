@@ -41,7 +41,12 @@ public class NpcChaseState : NpcStateBase
     private readonly NpcWalkConfig m_walkConfig;
     private readonly NpcFleeConfig m_fleeConfig;
 
-    public NpcChaseState(NpcController owner, NpcChaseConfig config, NpcWalkConfig walkConfig, NpcFleeConfig fleeConfig)
+    public NpcChaseState(
+        NpcController owner,
+        NpcChaseConfig config,
+        NpcWalkConfig walkConfig,
+        NpcFleeConfig fleeConfig
+    )
         : base(owner)
     {
         m_config = config;
@@ -220,8 +225,8 @@ public class NpcChaseState : NpcStateBase
         if (IsOnCooldown(target))
             return false;
 
-        PlayerData data = target.GetComponent<PlayerData>();
-        if (data == null || !data.IsTargetable)
+        PlayerHealth health = target.GetComponent<PlayerHealth>();
+        if (health == null || !health.IsTargetable)
             return false;
 
         return Vector3.Distance(m_owner.transform.position, target.position) <= m_config.Range;

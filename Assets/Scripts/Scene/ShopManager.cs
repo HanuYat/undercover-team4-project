@@ -49,7 +49,7 @@ public class ShopManager : SceneManagerBase
     {
         if (!NetworkManager.Singleton.ConnectedClients.TryGetValue(clientId, out var client))
             return;
-        client.PlayerObject?.GetComponent<PlayerData>()?.ServerResetState();
+        client.PlayerObject?.GetComponent<PlayerHealth>()?.ServerResetState();
         client.PlayerObject?.GetComponent<PlayerLoadout>()?.ServerClearHeldItems(); // 지급 장비 회수 (#370)
     }
 

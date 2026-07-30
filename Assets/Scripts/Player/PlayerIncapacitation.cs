@@ -47,7 +47,7 @@ public class PlayerIncapacitation : NetworkBehaviour
     [SerializeField]
     private float m_dieAfterDownSeconds = 60f;
 
-    // 서버 권위 무력화 원인 — 서버만 쓰고 모든 클라가 읽는다. (PlayerData.m_syncedHp와 동일 패턴)
+    // 서버 권위 무력화 원인 — 서버만 쓰고 모든 클라가 읽는다. (PlayerHealth.m_syncedHp와 동일 패턴)
     // 예전에는 bool 두 개(무력화 여부 + 구조 가능 여부)였는데, 기절이 들어오며 '구조 불가'가 둘로
     // 갈려(매달기·기절) 조합으로는 구분할 수 없게 됐다 — 원인 하나로 합쳤다. (#252)
     private readonly NetworkVariable<IncapacitationCause> m_causeSynced =

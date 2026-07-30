@@ -30,7 +30,7 @@ public class DeviceBlackoutEvent : NetworkBehaviour, ISuddenEvent
     [SerializeField]
     private float m_durationSeconds = 12f;
 
-    // 먹통 전역 상태 — 서버만 쓰고 모든 클라가 읽는다. (PlayerData.m_syncedHp와 동일 이중 구조)
+    // 먹통 전역 상태 — 서버만 쓰고 모든 클라가 읽는다. (PlayerHealth.m_syncedHp와 동일 이중 구조)
     private readonly NetworkVariable<bool> m_blackoutSynced = new NetworkVariable<bool>();
     private bool m_blackout; // 서버·오프라인의 진실값 (비네트워크 Play 폴백)
 

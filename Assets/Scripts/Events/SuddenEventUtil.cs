@@ -17,11 +17,11 @@ public static class SuddenEventUtil
     /// <summary>
     /// 행동 가능한 현장 플레이어 중 하나를 무작위로 고른다 — 없으면 null.
     /// 다운된 플레이어는 제외한다: 전원 다운이면 습격·소란을 걸 대상이 없으므로 이벤트 자체가 성립하지 않는다. (#105)
-    /// (본부/현장 구분 도입 전이라 씬에 존재하는 <see cref="PlayerData"/>를 현장 플레이어로 본다)
+    /// (본부/현장 구분 도입 전이라 씬에 존재하는 <see cref="PlayerHealth"/>를 현장 플레이어로 본다)
     /// </summary>
     public static Transform FindRandomFieldPlayer()
     {
-        PlayerData[] players = UnityEngine.Object.FindObjectsByType<PlayerData>(
+        PlayerHealth[] players = UnityEngine.Object.FindObjectsByType<PlayerHealth>(
             FindObjectsSortMode.None
         );
 
@@ -45,17 +45,17 @@ public static class SuddenEventUtil
     /// 물리 쿼리(OverlapSphere) 대신 플레이어 목록을 직접 훑는다 — 플레이어는 최대 6명이라 훨씬 저렴하고,
     /// 도시 씬처럼 콜라이더가 빽빽한 곳에서 논알록 버퍼가 넘쳐 표적을 놓치는 문제가 없다.
     /// </summary>
-    public static PlayerData FindNearestFieldPlayer(Vector3 origin, float maxRadius)
+    public static PlayerHealth FindNearestFieldPlayer(Vector3 origin, float maxRadius)
     {
-        PlayerData[] players = UnityEngine.Object.FindObjectsByType<PlayerData>(
+        PlayerHealth[] players = UnityEngine.Object.FindObjectsByType<PlayerHealth>(
             FindObjectsSortMode.None
         );
 
-        PlayerData nearest = null;
+        PlayerHealth nearest = null;
         float nearestSqr = maxRadius * maxRadius; // 반경 밖은 애초에 후보가 되지 않는다
         for (int i = 0; i < players.Length; i++)
         {
-            PlayerData player = players[i];
+            PlayerHealth player = players[i];
             if (!player.IsTargetable)
                 continue;
 
@@ -73,21 +73,21 @@ public static class SuddenEventUtil
     /// 기준점에서 <paramref name="maxRadius"/>(m) 이내의 행동 가능한 현장 플레이어를 전부 <paramref name="results"/>에 모은다.
     /// 다운된 플레이어는 제외한다. 호출 시 리스트를 비우므로 호출자는 버퍼를 재사용할 수 있다. (#213)
     ///
-    /// <see cref="FindNearestFieldPlayer"/>와 같은 기준(PlayerData 목록 직접 순회 + IsTargetable)을 쓴다 —
+    /// <see cref="FindNearestFieldPlayer"/>와 같은 기준(PlayerHealth 목록 직접 순회 + IsTargetable)을 쓴다 —
     /// 한쪽만 물리 쿼리를 쓰면 두 경로의 대상 집합이 어긋난다.
     /// </summary>
     public static void CollectFieldPlayers(Vector3 origin, float maxRadius, List<Transform> results)
     {
         results.Clear();
 
-        PlayerData[] players = UnityEngine.Object.FindObjectsByType<PlayerData>(
+        PlayerHealth[] players = UnityEngine.Object.FindObjectsByType<PlayerHealth>(
             FindObjectsSortMode.None
         );
 
         float maxSqr = maxRadius * maxRadius;
         for (int i = 0; i < players.Length; i++)
         {
-            PlayerData player = players[i];
+            PlayerHealth player = players[i];
             if (!player.IsTargetable)
                 continue;
 
@@ -116,7 +116,7 @@ public static class SuddenEventUtil
     /// </summary>
     public static bool IsHiddenFromFieldPlayers(Vector3 point)
     {
-        PlayerData[] players = UnityEngine.Object.FindObjectsByType<PlayerData>(
+        PlayerHealth[] players = UnityEngine.Object.FindObjectsByType<PlayerHealth>(
             FindObjectsSortMode.None
         );
 
