@@ -48,9 +48,10 @@ public class LobbyRoster : NetworkBehaviour
             NetworkManager.OnClientDisconnectCallback -= HandleClientDisconnected;
     }
 
-    // 오너십을 요구하지 않는다 — 씬 NetworkObject의 오너는 서버이고 보고하는 쪽은 클라다.
-    // (구 [ServerRpc]는 기본이 RequireOwnership=true라 클라 호출이 거부된다. 신 Rpc API는 그 제약이 없다)
-    [Rpc(SendTo.Server)]
+    // InvokePermission = Everyone을 명시한다 — 이 로스터는 씬에 놓인 서버 소유 오브젝트라
+    // 어떤 플레이어도 오너가 아니다. 기본값(오너 전용)이면 클라가 자기 정보를 보고할 수 없다.
+    // (ShopStand.RequestPurchaseRpc·SignalDecoder.RequestBroadcastRpc·Scanner.RequestChargeRpc가 같은 이유로 이렇게 돼 있다)
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void ReportSelfRpc(LobbyPlayerEntry entry, RpcParams rpcParams = default)
     {
         // 보낸 값을 믿지 않고 서버가 본 발신자로 덮는다 — 남의 행을 갈아치우지 못하게.

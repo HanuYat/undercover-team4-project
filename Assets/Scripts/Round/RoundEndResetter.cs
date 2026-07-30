@@ -18,7 +18,7 @@ using UnityEngine.SceneManagement;
 ///    서버가 로비를 로드하면 클라는 NGO 씬 동기화로 함께 이동한다 — 클라는 여기서 아무 것도 하지 않는다.
 ///  · EScene 매핑이 없는 테스트 씬은 App 흐름 밖 — 세션 없이 자기 씬을 재로드한다(기존 폴백).
 ///
-/// /// 비자발 드롭(호스트 이탈·세션 삭제)은 이 컴포넌트가 다루지 않는다 — 상주 ConnectionLostReturner가 전 씬 공통으로 처리한다. (#429)
+/// 비자발 드롭(호스트 이탈·세션 삭제)은 이 컴포넌트가 다루지 않는다 — 상주 ConnectionLostReturner가 전 씬 공통으로 처리한다. (#429)
 /// </summary>
 public class RoundEndResetter : MonoBehaviour
 {
