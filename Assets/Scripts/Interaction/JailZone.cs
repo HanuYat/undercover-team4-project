@@ -17,7 +17,10 @@ public class JailZone : NetworkBehaviour
     [Header("좌석 (비우면 유치장 자신의 위치)")]
     [Tooltip(
         "수감자가 걸어가 앉는 좌석 지점들. 빈 자리를 앞에서부터 배정한다 — 벤치 위, 문↔통로 동선을 비켜, "
-            + "Jail NavMesh 위에 둘 것. Z축(파랑 화살표)이 앉아서 바라보는 방향이다"
+            + "Jail NavMesh 위에 둘 것. Z축(파랑 화살표)이 앉아서 바라보는 방향이다.\n\n"
+            + "주의: 벤치 프롭에는 NavMeshModifier의 'Ignore From Build'가 켜져 있어야 한다. "
+            + "끄고 NavMesh를 다시 구우면 벤치가 바닥을 파내서(카빙) 좌석이 걸어갈 수 없는 곳이 되고 "
+            + "수감 이송이 전부 실패한다"
     )]
     [SerializeField] private Transform[] m_seatPoints;
 

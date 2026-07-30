@@ -126,13 +126,18 @@ public class NpcJailedState : NpcStateBase
     }
 
     // 좌석까지 걷는 중 — 도착하면 정렬로, 제 시간에 못 가면 좌석으로 옮긴다.
+    //
+    // 아래 세 값은 NavMeshAgent가 알려주는 길찾기 상태다:
+    //   pathPending       경로를 아직 계산하는 중 (결과가 안 나왔다)
+    //   hasPath           쓸 수 있는 경로를 쥐고 있다
+    //   remainingDistance 그 경로를 따라 목적지까지 남은 길이(m)
     private void TickWalk()
     {
         if (m_owner.Agent.pathPending)
-            return;
+            return; // 계산이 끝날 때까지 판단을 미룬다
 
-        // 경로를 잃었다(재계산 실패 등) — 이 상태에서 remainingDistance는 0으로 보고되므로 도착으로 오인된다.
-        // 먼저 걸러 내지 않으면 문 밖에서 도착 처리가 돌아 좌석까지 순간이동한다.
+        // 경로를 잃었다(재계산 실패 등). 이때 remainingDistance는 0으로 보고되는데,
+        // 그러면 아래 도착 판정이 참이 되어 문 밖에서 도착 처리가 돌아 좌석까지 순간이동한다 — 먼저 걸러 낸다.
         if (!m_owner.Agent.hasPath)
         {
             SeatByWarp("좌석까지의 경로를 잃음");
@@ -152,6 +157,8 @@ public class NpcJailedState : NpcStateBase
     }
 
     // 앉는 방향으로 도는 중 — 다 돌면 앉는다.
+    // RotateTowards = "지금 방향에서 목표 방향으로 이번 프레임에 허용된 각도만큼만 돌린다"(부드럽게 회전),
+    // Quaternion.Angle = 두 방향 사이의 각도 차(도).
     private void TickTurn()
     {
         Quaternion target = SeatRotation();
@@ -175,11 +182,14 @@ public class NpcJailedState : NpcStateBase
     {
         StopMoving();
 
-        // 회전 주도권을 넘겨받는다 — 에이전트가 쥔 채로 돌리면 되돌려져 정렬이 끝나지 않는다
+        // updateRotation = 에이전트가 "가는 방향"으로 몸을 자동 회전시키는 옵션. 켜져 있는 동안은
+        // 우리가 돌려도 매 프레임 되돌려지므로, 앉는 방향을 맞추는 동안만 끄고 회전을 직접 쥔다 (복원은 Exit).
         m_owner.Agent.updateRotation = false;
 
-        // 끝점 오차를 좌석 위로 흡수한다 — 몇 cm만 어긋나도 걸터앉은 것처럼 보인다.
-        // Warp는 에이전트를 끄지 않으므로 NavMesh 재부착 실패 위험이 없다 (Enter 주석의 그 위험군).
+        // Warp = 경로를 따라 걷는 게 아니라 위치를 즉시 옮기고 NavMesh에 다시 붙이는 것(순간이동).
+        // 여기서는 걸어온 끝점 오차(최대 0.25m)를 좌석 위로 흡수하는 데 쓴다 — 몇 cm만 어긋나도
+        // 벤치에 걸터앉은 것처럼 보인다. 에이전트를 끄지 않으므로 NavMesh 재부착 실패 위험은 없다
+        // (에이전트를 껐다 켜면 다시 못 붙어 NPC가 굳는 그 위험군 — Enter 주석).
         if (m_owner.JailSeat != null)
             m_owner.Agent.Warp(m_owner.JailSeat.position);
 

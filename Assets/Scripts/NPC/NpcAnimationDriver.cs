@@ -350,9 +350,10 @@ public class NpcAnimationDriver : MonoBehaviour
         {
             m_seatedMotion = m_controller.IsSeated;
 
-            // 앉기 클립에는 루트 커브가 있어(hasRootCurves) 루트모션이 켜진 채 재생하면 몸이 좌석에서
-            // 밀려난다 — 특히 Loop는 반복마다 같은 방향으로 밀려 결국 벤치를 벗어난다.
-            // 위치는 좌석에 이미 맞춰져 있으므로(NpcJailedState가 도착 순간 Warp로 정렬) 끄는 쪽이 맞다.
+            // 루트모션(applyRootMotion) = 애니메이션 클립이 몸의 자세뿐 아니라 위치까지 움직이는 기능.
+            // 걷기·구르기처럼 실제로 이동해야 하는 클립에 쓴다. 앉기 클립에도 그 이동 정보(루트 커브)가
+            // 들어 있어서, 켠 채로 재생하면 몸이 좌석에서 밀려난다 — 특히 Loop는 반복마다 같은 방향으로
+            // 밀려 결국 벤치를 벗어난다. 위치는 NpcJailedState가 도착 순간 좌석에 맞춰 두므로 끄는 쪽이 맞다.
             m_animator.applyRootMotion = m_seatedMotion ? false : m_rootMotionDefault;
 
             if (m_seatedMotion)
