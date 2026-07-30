@@ -11,8 +11,28 @@ public class SuddenEventToastHud : MonoBehaviour
 {
     private const float k_showSeconds = 4f;   // 총 표시 시간
     private const float k_fadeSeconds = 1f;   // 마지막 이 시간 동안 서서히 사라진다
-    private const float k_topMargin = 60f;    // 화면 상단에서의 여백(px)
     private const int k_fontSize = 22;
+
+    // ---- 상단 중앙 띠 배치 ----
+    // 이 화면 영역은 캔버스 HUD(HUD.prefab)와 나눠 쓴다. 캔버스 쪽은 상단 앵커·pivot top으로
+    // 타이머·남은 범인이 0~50, 할당량(RoundFundHud)이 55~115를 차지한다 — 그 아래에 앉아야 겹치지 않는다.
+    //
+    // 캔버스는 CanvasScaler(높이 매칭, ref 1920x1080)로 해상도에 따라 커지고 줄지만 IMGUI는 원시 픽셀
+    // 그대로 그려진다 — 상수 하나로 못 박으면 1080p에서만 맞고 창 크기를 바꾸면 다시 겹친다.
+    // 그래서 같은 비율(Screen.height / 1080)을 곱해 환산한다.
+    private const float k_canvasHudBottom = 115f; // 캔버스 단위 — 할당량 HUD의 아래 끝
+    private const float k_bandGap = 8f;           // 띠 사이 간격(px)
+    private const float k_bandHeight = 44f;       // 토스트 한 줄 높이 — 폰트 22 + 위아래 여백
+
+    // 토스트 띠의 위 끝(px). 캔버스 HUD 밑으로 환산해 내려온다.
+    private static float BandTop => k_canvasHudBottom * Screen.height / 1080f + k_bandGap;
+
+    /// <summary>
+    /// 토스트 띠의 아래 끝(px) — 같은 상단 중앙을 쓰는 다른 IMGUI HUD가 여기 밑에 앉는다.
+    /// (<see cref="SignalDecoderHud"/>의 수신 메시지가 이 값을 읽는다 — 상수를 각자 두면
+    ///  한쪽만 고쳤을 때 조용히 다시 겹친다)
+    /// </summary>
+    public static float BandBottom => BandTop + k_bandHeight + k_bandGap;
 
     private static SuddenEventToastHud s_instance;
 
@@ -64,12 +84,15 @@ public class SuddenEventToastHud : MonoBehaviour
         }
 
         float alpha = Mathf.Clamp01(remaining / k_fadeSeconds);
+
+        // 폭만 문구에 맞추고 높이는 k_bandHeight로 고정한다 — 높이가 문구마다 달라지면
+        // 아래 띠(BandBottom)가 흔들려 다음 HUD와 겹칠 수 있다. 라벨은 그 안에서 수직 중앙 정렬된다.
         Vector2 size = m_style.CalcSize(new GUIContent(m_message));
         var rect = new Rect(
             (Screen.width - size.x) * 0.5f - 16f,
-            k_topMargin,
+            BandTop,
             size.x + 32f,
-            size.y + 16f);
+            k_bandHeight);
 
         Color prev = GUI.color;
 

@@ -125,10 +125,19 @@ public class SignalDecoderHud : MonoBehaviour
         GUI.depth = previousDepth;
     }
 
+    // 수신 메시지는 화면 상단 중앙을 캔버스 HUD(타이머·남은 범인·할당량)와 돌발이벤트 토스트와
+    // 나눠 쓴다. 토스트(4초)와 이 메시지(8초)는 동시에 뜰 수 있어 위아래 띠를 갈라 잡는다 —
+    // 띠의 시작점은 SuddenEventToastHud가 단독으로 계산한다(양쪽에 상수를 두면 한쪽만 고쳤을 때 다시 겹친다).
+    private const float k_messageHeight = 34f;
+
     private void DrawMessage()
     {
         const float width = 720f;
-        Rect rect = new Rect((Screen.width - width) * 0.5f, 48f, width, 34f);
+        Rect rect = new Rect(
+            (Screen.width - width) * 0.5f,
+            SuddenEventToastHud.BandBottom,
+            width,
+            k_messageHeight);
         GUI.Label(rect, $"[신호 해석기] {m_message}", m_messageStyle);
     }
 
