@@ -61,6 +61,12 @@ public class JailZone : NetworkBehaviour
     // 수용 지점 순차 배정 커서 — 여러 명이 한 점에 겹쳐 서지 않게 돌려 쓴다
     private int m_nextCellIndex;
 
+    // 커서가 한 바퀴를 돈 횟수 — 지점 수보다 많이 수감될 때 몇 겹 밖에 세울지의 기준. (아래 ReserveCell)
+    private int m_cellLap;
+
+    // 같은 셀 지점을 나눠 쓸 때의 자리 간격(m) — 유치장은 좁으니 캡슐 지름(0.8m)에 딱 맞춘다
+    private const float k_cellSlotSpacing = 0.8f;
+
     /// <summary>현재 수용 인원. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 읽을 수 있다.</summary>
     public int InmateCount => IsSpawned ? m_inmateCount.Value : m_localInmateCount;
 
@@ -121,10 +127,14 @@ public class JailZone : NetworkBehaviour
 
     /// <summary>
     /// 수용 지점 배정 — 수감 대상 1명이 걸어갈 지점을 내준다. 서버(또는 오프라인)에서 호출.
-    /// 지점 수보다 많이 들어오면 앞에서부터 돌려 쓴다 — 겹친 NPC는 NavMesh 회피가 흩어 준다.
+    /// 지점 수보다 많이 들어오면 앞에서부터 돌려 쓰고, 돌려 쓴 만큼 <paramref name="slotOffset"/>으로
+    /// 한 겹 밖에 세운다 — 이송 중에는 회피를 끄므로(NpcJailedState.Enter) 겹침을 흩어 줄 주체가 없다.
+    /// 첫 한 바퀴(지점마다 1명)는 오프셋이 0이라 지정된 지점에 정확히 선다.
     /// </summary>
-    public Transform ReserveCell()
+    public Transform ReserveCell(out Vector3 slotOffset)
     {
+        slotOffset = Vector3.zero;
+
         if (m_cellPoints == null || m_cellPoints.Length == 0)
             return transform;
 
@@ -133,9 +143,15 @@ public class JailZone : NetworkBehaviour
         {
             Transform cell = m_cellPoints[m_nextCellIndex % m_cellPoints.Length];
             m_nextCellIndex = (m_nextCellIndex + 1) % m_cellPoints.Length;
+            if (m_nextCellIndex == 0)
+                m_cellLap++; // 커서가 처음으로 돌아왔다 — 다음 한 바퀴는 한 겹 밖이다
 
             if (cell != null)
+            {
+                // 같은 바퀴의 수감자들은 서로 다른 셀 지점에 서므로 오프셋이 같아도 겹치지 않는다
+                slotOffset = GatherSlot.Offset(m_cellLap, k_cellSlotSpacing);
                 return cell;
+            }
         }
 
         return transform;

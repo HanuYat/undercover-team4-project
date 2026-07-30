@@ -36,13 +36,14 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
     private const float k_plazaArriveDistance = 2f;  // 호송 선두의 광장 도착 판정 거리(m)
     private const float k_carryTravelTimeoutSeconds = 90f; // 호송 이동 안전 상한(초) — 넘으면 스냅 텔레포트로 마무리
     private const float k_warningSeconds = 8f;       // 출동 알림 표시 시간(초) — 카운트다운이 아니라 잠깐 뜨는 경고
+    private const float k_detentionSlotSpacing = 1.1f; // 원한 구역에서 시민끼리 벌어질 간격(m) — 캡슐 지름 0.8m + 여유
 
     [Header("광장 (매달기 지점) — 비우면 원점")]
     [Tooltip("페널티 확정 시 끌려가/이송될 맵 중앙 지점. 씬의 빈 GameObject를 지정한다")]
     [SerializeField] private Transform m_plazaPoint;
 
     [Header("원한 구역 (오검거 시민 수용 지점) — 비우면 그 자리 수용 (#277)")]
-    [Tooltip("오검거당한 시민이 걸어가 대기하는 지점. NavMesh 위에 둘 것 — 여러 명은 회피가 흩어 준다")]
+    [Tooltip("오검거당한 시민이 걸어가 대기하는 지점. NavMesh 위에 둘 것 — 여러 명은 이 지점 주변으로 퍼져 선다")]
     [SerializeField] private Transform m_detentionPoint;
 
     [Header("추격 (#278)")]
@@ -162,8 +163,14 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         if (m_detentionPoint == null)
             Debug.LogWarning("WrongfulArrestPenalty: 원한 구역(Detention Point) 미배선 — 그 자리에서 수용된다", this);
 
+        // 설 자리는 여기서 나눠 준다 — 구역 지점은 하나뿐이고, 이송 중에는 회피를 끄므로
+        // (NpcDetainedState.Enter) 겹침을 흩어 줄 주체가 없다. 구역 로스터를 쥔 이쪽이 도착 순번으로
+        // 배정하는 게 맞다: 0번은 지점 정중앙, 이후는 바깥으로 한 겹씩 퍼진다.
+        // 출동(LaunchSquad)으로 구역이 비면 순번도 0부터 다시 시작한다 — 앞 무리는 이미 떠났다.
+        Vector3 slotOffset = GatherSlot.Offset(m_detained.Count, k_detentionSlotSpacing);
+
         m_detained.Add(npc);
-        npc.SendToDetention(m_detentionPoint);
+        npc.SendToDetention(m_detentionPoint, slotOffset);
         Debug.Log($"[오검거] 원한 구역 수용: {npc.name} — 대기 {m_detained.Count}명");
     }
 

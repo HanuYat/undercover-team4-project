@@ -9,6 +9,10 @@ public partial class NpcController
     /// <summary>원한 구역 수용 지점. 수용(Detained) 중이 아니면 null. 서버에서만 유효. (#277)</summary>
     public Transform DetentionSpot { get; private set; }
 
+    /// <summary>원한 구역에서 이 시민이 설 자리의 오프셋 — <see cref="DetentionSpot"/>과 함께 배정된다
+    /// (WrongfulArrestPenalty가 도착 순번으로 나눠 준다). 지점이 null이면 의미 없다. 서버에서만 유효.</summary>
+    public Vector3 DetentionSlotOffset { get; private set; }
+
     /// <summary>추격 대상 플레이어. 추격 중이 아니면 null. 서버에서만 유효. (#278)</summary>
     public Transform ChaseTarget { get; private set; }
 
@@ -39,14 +43,16 @@ public partial class NpcController
     /// <summary>
     /// 원한 구역 수용 — 오검거당한 시민을 석방 대신 전용 구역으로 보낸다. (#277)
     /// spot이 null이면(구역 미배선 씬) 그 자리에서 수용된 것으로 처리한다 — SendToJail의 null cell과 동일 관례.
+    /// slotOffset은 구역을 여러 명이 나눠 쓸 때의 자리 오프셋이다 — 배정은 보내는 쪽(WrongfulArrestPenalty)이 한다.
     /// </summary>
-    public void SendToDetention(Transform spot)
+    public void SendToDetention(Transform spot, Vector3 slotOffset)
     {
         if (IsSpawned && !IsServer)
             return;
 
         EscortTarget = null;
         DetentionSpot = spot;
+        DetentionSlotOffset = slotOffset;
         m_stateMachine.ChangeState(NpcState.Detained);
     }
 
@@ -128,5 +134,4 @@ public partial class NpcController
         PenaltyEscortGoal = null;
         m_stateMachine.ChangeState(NpcState.Idle);
     }
-
 }
