@@ -32,7 +32,7 @@ public class AppBootstrap : MonoBehaviour
     }
 
     /// <summary>
-    /// 표시(present) 설정 — 빌드에서 수직동기를 켠다 (에디터는 끈다, 아래 주석 참고).
+    /// 표시(present) 설정 — 수직동기를 켠다. 에디터도 예외를 두지 않는다(아래 주석 참고).
     ///
     /// VSync가 꺼져 있으면 모니터가 화면을 위에서 아래로 그리는 중간에 새 프레임 버퍼로 갈아타서,
     /// 가로 절단선을 기준으로 위아래가 좌우로 어긋나 보인다(티어링). 시점을 빠르게 돌릴 때
@@ -44,11 +44,10 @@ public class AppBootstrap : MonoBehaviour
     /// </summary>
     private static void ApplyDisplaySettings()
     {
-        // 에디터에서는 끈다 — 에디터는 빌드보다 무거워 주사율 타이밍을 자주 놓치는데, VSync가 켜져 있으면
-        // 한 번 놓칠 때마다 다음 수직 공백까지 기다려 프레임이 절반(100Hz면 50)으로 떨어진다.
-        // 이 왕복이 개발 중 계속 끊김으로 체감된다. Game 뷰는 에디터 창 안에서 합성되므로
-        // VSync를 꺼도 티어링이 거의 보이지 않아, 끄는 쪽이 손해가 없다.
-        QualitySettings.vSyncCount = Application.isEditor ? 0 : k_vSyncCount;
+        // 에디터에서만 끄는 예외를 두지 않는다 — "Game 뷰는 에디터 창 안에서 합성되니 티어링이
+        // 안 보인다"는 통념이 이 프로젝트 환경에서 성립하지 않았다(에디터 Play에서 그대로 찢어졌다).
+        // 에디터도 빌드와 같게 두는 편이, 개발 중에 보이는 화면을 그대로 신뢰할 수 있어 낫다.
+        QualitySettings.vSyncCount = k_vSyncCount;
 
         // vSyncCount != 0이면 targetFrameRate는 무시되므로 상한을 따로 걸지 않는다.
         // (기존 60 고정은 60Hz 모니터에서만 성립했고, VSync를 끈 채 캡을 걸어 티어링을 만들고 있었다)
