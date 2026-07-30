@@ -38,6 +38,7 @@ public class ScanInfoView : MonoBehaviour
             + "서 있을 때 위치는 프리팹 값을 그대로 쓴다"
     )]
     
+    [SerializeField]
     private Vector3 m_proneOffset = new Vector3(0.1f, 0.72f, -0.4f);
 
     // 미스캔 NPC의 미확인 필드 표기 (#233)

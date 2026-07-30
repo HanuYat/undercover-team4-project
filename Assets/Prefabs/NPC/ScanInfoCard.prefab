@@ -148,7 +148,7 @@ MonoBehaviour:
   m_FallbackScreenDPI: 96
   m_DefaultSpriteDPI: 96
   m_DynamicPixelsPerUnit: 1
-  m_PresetInfoIsWorld: 1
+  m_PresetInfoIsWorld: 0
 --- !u!114 &8381361228857447033
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -166,7 +166,7 @@ MonoBehaviour:
   m_factionText: {fileID: 3441501477243226008}
   m_symbolImage: {fileID: 5893198452207115774}
   m_billboard: 1
-  m_proneOffset: {x: 0.14, y: 0.35, z: -2.07}
+  m_proneOffset: {x: 0.1, y: 0.72, z: -0.4}
 --- !u!1 &7491715764817063870
 GameObject:
   m_ObjectHideFlags: 0
