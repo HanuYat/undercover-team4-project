@@ -3313,6 +3313,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerEscorter
   ShowTopMostFoldoutHeaderGroup: 1
   m_ropeBreakDistance: 10
+  m_dragSlowPerWeight: 0.25
+  m_minDragSpeedFactor: 0.35
   m_channelSeconds: 3
 --- !u!114 &6677678871598212644
 MonoBehaviour:
