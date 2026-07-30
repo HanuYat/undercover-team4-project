@@ -27,13 +27,4 @@ public class LobbyManager : SceneManagerBase
         m_started = true;
         MoveToNextScene(EScene.Shop);
     }
-
-    private void OnGUI()
-    {
-        if (!IsServer || m_started) return;
-        GUILayout.BeginArea(new Rect(10, 90, 220, 60));
-        if (GUILayout.Button("게임 시작 (→ 상점)"))
-            StartGame();
-        GUILayout.EndArea();
-    }
 }

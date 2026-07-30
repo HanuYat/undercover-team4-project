@@ -3,9 +3,10 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 전자기기 먹통 (돌발 이벤트 · 전역) — 도시 인프라 장애로 시야·통신이 제한된다. (GDD 6-4/4-4/7-4, #106)
+/// 전자기기 먹통 (돌발 이벤트 · 전역) — 도시 인프라 장애로 통신·감시 설비가 마비된다. (GDD 6-4/4-4/7-4, #106)
 /// 먹통 플래그를 <b>스스로 소유</b>해 서버 권위로 켜고 끄며, NetworkVariable로 전 클라에 동기화한다.
-/// 실제 표현(통신 차단·시야 오버레이)은 이 플래그를 구독하는 <see cref="DeviceBlackoutView"/>가 전 클라에서 담당한다.
+/// 실제 표현은 이 플래그를 구독하는 쪽이 각자 담당한다 — 무전 음성 왜곡은 <see cref="DeviceBlackoutView"/>,
+/// CCTV 송출 차단은 <see cref="CCTVSwitcher"/>, 스캐너 사용 불가는 <see cref="Scanner"/>가 본다.
 /// 시간이 지나면 자동으로 해제된다.
 ///
 /// 서버 권위 — 발생·해제 판정은 서버(또는 오프라인)에서만. 프레임워크(<see cref="SuddenEventManager"/>)가
@@ -25,7 +26,7 @@ using UnityEngine;
 public class DeviceBlackoutEvent : NetworkBehaviour, ISuddenEvent
 {
     [Header("지속 시간(초)")]
-    [Tooltip("먹통이 유지되는 시간 — 지나면 시야·통신이 자동 복구된다")]
+    [Tooltip("먹통이 유지되는 시간 — 지나면 무전·CCTV가 자동 복구된다")]
     [SerializeField]
     private float m_durationSeconds = 12f;
 
@@ -41,10 +42,10 @@ public class DeviceBlackoutEvent : NetworkBehaviour, ISuddenEvent
     // (매니저가 IsActive를 읽는 것은 서버·오프라인에서뿐이므로 서버 진실값을 그대로 준다)
     public bool IsActive => m_blackout;
 
-    /// <summary>통신·시야 먹통이 활성인지 — 서버·오프라인은 실참조, 원격 피어는 동기화값으로 판정.</summary>
+    /// <summary>통신 먹통이 활성인지 — 서버·오프라인은 실참조, 원격 피어는 동기화값으로 판정.</summary>
     public bool IsCommsBlackout => IsSpawned && !IsServer ? m_blackoutSynced.Value : m_blackout;
 
-    /// <summary>먹통 상태가 바뀔 때 발행 — 통신 차단·시야 오버레이 등 표현 계층이 구독한다. (#67 무전·시야 연동)</summary>
+    /// <summary>먹통 상태가 바뀔 때 발행 — 음성 왜곡·CCTV 차단 등 표현 계층이 구독한다. (#67 무전 연동)</summary>
     public event Action<bool> OnCommsBlackoutChanged;
 
     public override void OnNetworkSpawn()
@@ -97,7 +98,7 @@ public class DeviceBlackoutEvent : NetworkBehaviour, ISuddenEvent
     }
 
     // 먹통 상태 설정 — 서버(또는 오프라인)에서만 호출된다.
-    // 동기화 변수와 로컬 진실값을 함께 갱신하고, 표현 계층(통신·시야)에 이벤트로 알린다.
+    // 동기화 변수와 로컬 진실값을 함께 갱신하고, 표현 계층(무전·CCTV)에 이벤트로 알린다.
     private void SetBlackout(bool value)
     {
         if (m_blackout == value)
