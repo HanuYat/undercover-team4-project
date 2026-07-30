@@ -48,14 +48,19 @@ public partial class NpcController
 
         if (exitPoint != null && !TryWarpNear(exitPoint.position))
         {
-            Debug.LogWarning($"NpcController: 유치장 출구로 워프 실패 — Jail 통행을 유지한다: {name}", this);
+            Debug.LogWarning(
+                $"NpcController: 유치장 출구로 워프 실패 — Jail 통행을 유지한다: {name}",
+                this
+            );
             return;
         }
 
         SetJailAccess(false);
     }
 
-    private static int JailAreaMask
+    /// <summary>유치장 내부(Jail) NavMesh 영역 마스크 — 없는 프로젝트면 0.
+    /// 수감 이송이 자리 오프셋을 감옥 안으로 한정하는 데도 쓴다(NpcJailedState).</summary>
+    public static int JailAreaMask
     {
         get
         {
@@ -68,11 +73,16 @@ public partial class NpcController
         }
     }
 
+    /// <summary>셀 지점 안에서 이 수감자가 설 자리의 오프셋 — <see cref="JailCell"/>과 함께 배정된다
+    /// (JailZone.ReserveCell). 지점이 null이면 의미 없다. 서버에서만 유효.</summary>
+    public Vector3 JailSlotOffset { get; private set; }
+
     /// <summary>
     /// 수감 — 인계존 판정에서 진범·경범죄로 확정된 NPC를 유치장으로 보낸다. (CustodyRouter 경유, GDD 7-2)
     /// cell(수용 지점)까지 스스로 걸어가 그 자리에 수용된다. cell이 null이면 그 자리에서 수용된 것으로 처리한다.
+    /// slotOffset은 셀 지점을 여러 명이 나눠 쓸 때의 자리 오프셋이다 — 배정은 보내는 쪽(JailZone)이 한다.
     /// </summary>
-    public void SendToJail(Transform cell)
+    public void SendToJail(Transform cell, Vector3 slotOffset)
     {
         // FSM 전이는 서버 권위 — StartEscort와 동일하게 클라이언트 호출은 무시한다
         if (IsSpawned && !IsServer)
@@ -80,6 +90,7 @@ public partial class NpcController
 
         EscortTarget = null; // 판정 시점에 연행은 이미 풀렸지만, 참조가 남아 있으면 여기서 끊는다
         JailCell = cell;
+        JailSlotOffset = slotOffset;
         m_stateMachine.ChangeState(NpcState.Jailed);
     }
 
