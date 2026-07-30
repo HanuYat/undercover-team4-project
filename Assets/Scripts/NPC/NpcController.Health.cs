@@ -5,7 +5,7 @@ using UnityEngine;
 /// NPC 체력 (#366) — 저항 제압 게이지(#76/#79)를 대체한다. 0이 되면 기절(Stunned)한다.
 ///
 /// 서버 권위 + 오프라인 폴백: 서버(또는 오프라인)만 값을 바꾸고 클라이언트는 동기화 값을 읽는다.
-/// <see cref="PlayerData"/>의 HP와 같은 규칙이며, m_networkState와 같은 이중 구조를 쓴다 (#56 패턴).
+/// <see cref="PlayerHealth"/>의 HP와 같은 규칙이며, m_networkState와 같은 이중 구조를 쓴다 (#56 패턴).
 ///
 /// <b>지속형이다</b> — 교전이 끝나도 깎인 체력은 남는다(구 게이지는 저항 진입마다 리셋됐다).
 /// 회복 지점은 기절에서 깨어나는 순간 하나뿐이다(<see cref="ServerRestoreHp"/>, NpcStunnedState).
@@ -68,7 +68,7 @@ public partial class NpcController : IDamageable
         SetHp(MaxHp, null);
     }
 
-    // 0에 '도달하는 순간'에만 기절시킨다 — PlayerData.SetHp의 무력화 진입과 같은 엣지 트리거.
+    // 0에 '도달하는 순간'에만 기절시킨다 — PlayerHealth.SetHp의 무력화 진입과 같은 엣지 트리거.
     // 덕분에 이미 0인 대상에 대한 추가 타격이 기절 타이머를 리셋하지 못한다.
     private void SetHp(int value, GameObject attacker)
     {

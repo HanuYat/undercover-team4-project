@@ -1,7 +1,7 @@
 using Unity.Netcode;
 using UnityEngine;
 
-public class PlayerData : NetworkBehaviour, IDamageable
+public class PlayerHealth : NetworkBehaviour, IDamageable
 {
     [Header("스테이터스")]
     [SerializeField] private int m_maxHp = 100;

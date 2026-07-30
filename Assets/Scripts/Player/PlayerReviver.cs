@@ -5,7 +5,7 @@ using UnityEngine;
 /// <summary>
 /// 다운된 동료 구조(리바이브) — 서버 권위 채널링. (#105, GDD 7-5)
 /// 오너가 다운된 아군을 조준한 채 상호작용 버튼을 누르고 있으면(홀드) 서버가 T초 채널링을 돌리고,
-/// 완료 시 대상의 HP를 일부 회복시켜 무력화를 해제한다(PlayerData.ServerRevive).
+/// 완료 시 대상의 HP를 일부 회복시켜 무력화를 해제한다(PlayerHealth.ServerRevive).
 /// 버튼을 떼거나 대상이 사거리를 벗어나면 실패. 서버 권위·RPC 구조는 PlayerEscorter를 본뜬다.
 /// </summary>
 [RequireComponent(typeof(PlayerInputHandler))]
@@ -21,27 +21,27 @@ public class PlayerReviver : ChanneledInteractionBehaviour
     private PlayerInputHandler m_inputHandler;
     private PlayerInteractor m_interactor;      // 조준 대상 조회용
     private PlayerIncapacitation m_incapacitation; // 내가 다운 중이면 구조 불가
-    private PlayerData m_selfData;              // 자기 자신 제외 판정용
+    private PlayerHealth m_selfHealth;              // 자기 자신 제외 판정용
 
     // 서버 채널링 생명주기(CTS 소유·재진입 가드)는 ServerChannel에 위임 (#109)
     private readonly ServerChannel m_channel = new();
 
     /// <summary>지금 조준 중인 '다운된 아군'. 없으면 null. 임시 구조 HUD 프롬프트용(오너 전용). (#105)</summary>
-    public PlayerData CurrentReviveTarget => IsOwner ? FindAllyTarget(IncapacitationCause.Down) : null;
+    public PlayerHealth CurrentReviveTarget => IsOwner ? FindAllyTarget(IncapacitationCause.Down) : null;
 
     /// <summary>
     /// 지금 조준 중인 '기능 정지(Die)된 아군'. 없으면 null. 구조 불가 안내용(오너 전용). (#364)
     /// 히트박스가 Die에서도 켜져 윤곽선은 잡히는데(운반 조준용, #365) 구조는 거부되므로,
     /// 안내가 없으면 "조준은 되는데 홀드해도 아무 일이 없는" 상태가 된다.
     /// </summary>
-    public PlayerData CurrentDeadTarget => IsOwner ? FindAllyTarget(IncapacitationCause.Die) : null;
+    public PlayerHealth CurrentDeadTarget => IsOwner ? FindAllyTarget(IncapacitationCause.Die) : null;
 
     public override void OnNetworkSpawn()
     {
         m_inputHandler = GetComponent<PlayerInputHandler>();
         m_interactor = GetComponent<PlayerInteractor>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
-        m_selfData = GetComponent<PlayerData>();
+        m_selfHealth = GetComponent<PlayerHealth>();
 
         // 입력 구독은 오너만 — 서버 RPC 수신·채널링은 enabled와 무관하게 동작하므로
         // (PlayerEscorter처럼) 컴포넌트를 비활성화하지 않는다.
@@ -70,22 +70,22 @@ public class PlayerReviver : ChanneledInteractionBehaviour
         if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
             return;
 
-        PlayerData target = FindAllyTarget(IncapacitationCause.Down);
+        PlayerHealth target = FindAllyTarget(IncapacitationCause.Down);
         if (target != null)
             RequestBeginRevive(target);
     }
 
     private void HandleInteractCanceled() => RequestCancelRevive();
 
-    // 조준 중인 대상이 지정한 무력화 원인의 아군이면 그 PlayerData를, 아니면 null을 반환한다. (#105, #364)
-    private PlayerData FindAllyTarget(IncapacitationCause cause)
+    // 조준 중인 대상이 지정한 무력화 원인의 아군이면 그 PlayerHealth를, 아니면 null을 반환한다. (#105, #364)
+    private PlayerHealth FindAllyTarget(IncapacitationCause cause)
     {
         GameObject targetObj = m_interactor != null ? m_interactor.CurrentTarget : null;
         if (targetObj == null)
             return null;
 
-        PlayerData target = targetObj.GetComponentInParent<PlayerData>();
-        if (target == null || target == m_selfData)
+        PlayerHealth target = targetObj.GetComponentInParent<PlayerHealth>();
+        if (target == null || target == m_selfHealth)
             return null; // 자기 자신 제외
 
         PlayerIncapacitation targetIncap = target.GetComponent<PlayerIncapacitation>();
@@ -95,7 +95,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
     // ---- 오너 클라 진입점 (서버/오프라인은 즉시 실행, 원격 클라는 서버로 요청) ----
 
     /// <summary>구조 채널링 시작 요청 — 오너가 호출.</summary>
-    public void RequestBeginRevive(PlayerData target)
+    public void RequestBeginRevive(PlayerHealth target)
     {
         if (target == null)
             return;
@@ -122,7 +122,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
     }
 
     // 원격 클라 → 서버로 대상을 넘기려면 스폰돼 있어야 한다(NetworkObjectReference 제약).
-    private bool IsTargetNetworkReady(PlayerData target)
+    private bool IsTargetNetworkReady(PlayerHealth target)
     {
         if (target.NetworkObject != null && target.NetworkObject.IsSpawned)
             return true;
@@ -136,7 +136,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
     private void BeginReviveRpc(NetworkObjectReference targetRef)
     {
         if (targetRef.TryGet(out NetworkObject targetObj) &&
-            targetObj.TryGetComponent(out PlayerData target))
+            targetObj.TryGetComponent(out PlayerHealth target))
         {
             ServerBeginRevive(target);
         }
@@ -147,7 +147,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
 
     // ---- 서버 실행 (권위) ----
 
-    private void ServerBeginRevive(PlayerData target)
+    private void ServerBeginRevive(PlayerHealth target)
     {
         if (m_channel.IsActive || target == null)
             return;
@@ -157,14 +157,14 @@ public class PlayerReviver : ChanneledInteractionBehaviour
         // 1. 구조자가 다운된 상태인지 검증
         if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
         {
-            Debug.LogWarning($"[Server] 다운 상태인 플레이어({m_selfData.name})가 구조를 시도하여 거부됨.");
+            Debug.LogWarning($"[Server] 다운 상태인 플레이어({m_selfHealth.name})가 구조를 시도하여 거부됨.");
             return;
         }
 
         // 2. 구조 대상이 자기 자신인지 검증 (자가 구조 방지)
-        if (target == m_selfData)
+        if (target == m_selfHealth)
         {
-            Debug.LogWarning($"[Server] 플레이어({m_selfData.name})가 자가 구조(Self-revive)를 시도하여 거부됨.");
+            Debug.LogWarning($"[Server] 플레이어({m_selfHealth.name})가 자가 구조(Self-revive)를 시도하여 거부됨.");
             return;
         }
         // --------------------------------------------------------------------------------
@@ -185,7 +185,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
         ServerChannelAsync(target, targetIncap).Forget();
     }
 
-    private async UniTaskVoid ServerChannelAsync(PlayerData target, PlayerIncapacitation targetIncap)
+    private async UniTaskVoid ServerChannelAsync(PlayerHealth target, PlayerIncapacitation targetIncap)
     {
         NotifyOwner($"구조 채널링 시작: {target.name} ({m_reviveSeconds}초)");
         NotifyChannelGaugeStart(m_reviveSeconds);
@@ -247,7 +247,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
 
     private void ServerCancelRevive() => m_channel.Cancel();
 
-    private bool IsInRange(PlayerData target)
+    private bool IsInRange(PlayerHealth target)
     {
         float range = m_interactor != null ? m_interactor.Range : k_fallbackRange;
         // 기준점은 조준·윤곽선 게이트와 동일한 AimOrigin(카메라) (#184)

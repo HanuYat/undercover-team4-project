@@ -61,7 +61,7 @@ public class NpcCapturedState : NpcStateBase
 
         // 가장 가까운 플레이어를 위협 삼아 도주한다 — 반경은 저항 폴백(#205)·도주 회피(#213)와 같은
         // ThreatSearchRadius를 쓴다. 기준이 어긋나면 "도망칠 상대"와 "피할 상대"가 달라진다.
-        PlayerData nearest = SuddenEventUtil.FindNearestFieldPlayer(
+        PlayerHealth nearest = SuddenEventUtil.FindNearestFieldPlayer(
             m_owner.transform.position,
             m_owner.ThreatSearchRadius
         );

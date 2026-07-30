@@ -139,7 +139,7 @@ public partial class NpcController
             Collider hit = s_sweepBuffer[i].collider;
             if (hit == null)
                 continue;
-            if (hit.GetComponentInParent<PlayerData>() != null)
+            if (hit.GetComponentInParent<PlayerHealth>() != null)
                 continue; // 플레이어 — 벽이 아니다, 뚫고 날아간다
             if (hit.GetComponentInParent<NpcController>() != null)
                 continue; // 다른 NPC — 군중 속 폭발에서 서로를 벽으로 보지 않게

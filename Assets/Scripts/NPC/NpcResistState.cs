@@ -16,7 +16,7 @@ public class NpcResistState : NpcStateBase
 
     // 서버에서만 Tick되므로 버퍼 공유 안전 — 매 타격마다의 할당 방지
     private static readonly Collider[] s_overlapBuffer = new Collider[k_maxOverlapHits];
-    private static readonly List<PlayerData> s_playerBuffer = new List<PlayerData>(8);
+    private static readonly List<PlayerHealth> s_playerBuffer = new List<PlayerHealth>(8);
 
     private const float k_noPendingStrike = -1f;
 
@@ -154,7 +154,7 @@ public class NpcResistState : NpcStateBase
 
         int engaged = 0;    // 정면 부채꼴 안에서 실제로 노린 대상 수
         int aliveCount = 0; // 그중 타격 후에도 살아있는 수
-        foreach (PlayerData player in s_playerBuffer)
+        foreach (PlayerHealth player in s_playerBuffer)
         {
             if (!IsInFrontCone(player.transform.position))
                 continue; // 등 뒤·측면 — 스윙이 닿지 않는다
@@ -186,7 +186,7 @@ public class NpcResistState : NpcStateBase
         if (threat != null && IsStillEngaged(threat))
             return threat;
 
-        PlayerData nearest = SuddenEventUtil.FindNearestFieldPlayer(
+        PlayerHealth nearest = SuddenEventUtil.FindNearestFieldPlayer(
             m_owner.transform.position, m_owner.ThreatSearchRadius);
         return nearest != null ? nearest.transform : null;
     }
@@ -209,7 +209,7 @@ public class NpcResistState : NpcStateBase
             return false;
 
         // 위협이 플레이어가 아니면(테스트용 더미 등) 거리 조건만 본다
-        PlayerData player = threat.GetComponentInParent<PlayerData>();
+        PlayerHealth player = threat.GetComponentInParent<PlayerHealth>();
         return player == null || player.IsTargetable;
     }
 
@@ -286,7 +286,7 @@ public class NpcResistState : NpcStateBase
         Transform threat = m_owner.ThreatTarget;
         if (threat == null)
         {
-            PlayerData nearest = SuddenEventUtil.FindNearestFieldPlayer(
+            PlayerHealth nearest = SuddenEventUtil.FindNearestFieldPlayer(
                 m_owner.transform.position,
                 m_owner.ThreatSearchRadius
             );
@@ -299,14 +299,14 @@ public class NpcResistState : NpcStateBase
             m_owner.StateMachine.ChangeState(NpcState.Idle); // 유발자도 없고 주변에도 아무도 없으면 도망갈 이유가 없다
     }
 
-    /// <summary>반경 내 PlayerData를 중복 없이 s_playerBuffer에 모은다.</summary>
+    /// <summary>반경 내 PlayerHealth를 중복 없이 s_playerBuffer에 모은다.</summary>
     private void CollectPlayersInRange(float radius)
     {
         s_playerBuffer.Clear();
         int hitCount = Physics.OverlapSphereNonAlloc(m_owner.transform.position, radius, s_overlapBuffer);
         for (int i = 0; i < hitCount; i++)
         {
-            PlayerData player = s_overlapBuffer[i].GetComponentInParent<PlayerData>();
+            PlayerHealth player = s_overlapBuffer[i].GetComponentInParent<PlayerHealth>();
             if (player != null && !s_playerBuffer.Contains(player))
                 s_playerBuffer.Add(player);
         }
