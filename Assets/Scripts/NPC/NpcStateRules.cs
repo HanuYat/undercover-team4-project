@@ -3,7 +3,8 @@
 /// 클라 조기검증(Rope)·서버 가드(PlayerEscorter)·조준 피드백(InteractionFeedback)이
 /// 모두 여기를 읽는다 — 새 상태 추가 시 이 파일만 고치면 셋이 함께 움직인다.
 /// 상태별 '행동'은 NpcXxxState 클래스(FSM, 서버 전용), 상태별 '가능 여부'는 여기 — 역할 분리.
-/// 클라이언트는 동기화된 enum(NpcController.CurrentState)만 알기 때문에 순수 함수로 둔다.
+/// 대부분은 동기화된 enum(NpcController.CurrentState)만 보는 순수 함수다 — 클라도 그것만 알기 때문.
+/// 예외는 <see cref="CanRopeBind"/> 하나 — 무력화 여부가 상태 enum에 없어 NpcController를 받는다 (#446).
 /// </summary>
 public static class NpcStateRules
 {
@@ -61,11 +62,13 @@ public static class NpcStateRules
     public static bool CanStartReaction(NpcState state) =>
         IsReactive(state) && state != NpcState.Run && state != NpcState.Attack;
 
-    /// <summary>밧줄로 묶어 끌 수 있는 상태인가. (#269 → #369 기본 검거로 승격)
+    /// <summary>밧줄 대상에서 <b>신병·소유권 때문에</b> 빠지는 상태인가. (#269 → #369 기본 검거로 승격)
     /// 제외 목록 방식 — 이미 신병 확보(Escorted/Captured/Jailed)·타 시스템 소유(Holding·페널티)는 제외.
-    /// 기절·도주·저항 등 나머지는 전부 대상이다(제압 타격으로 HP 0에 쓰러진 저항형 Stunned 포함, #366).
     /// Captured 제외 주의: 그 상태에선 밧줄 좌클릭이 '풀어주기'로 갈리고(<see cref="CanRelease"/>),
-    /// 다시 끄는 건 E 경로다.</summary>
+    /// 다시 끄는 건 E 경로다.
+    ///
+    /// <b>이것만으로 묶기를 판정하지 말 것</b> — 새로 묶기는 무력화까지 요구하므로
+    /// <see cref="CanRopeBind"/>가 정본이고 이 함수는 그 한 조각이다 (#446).</summary>
     public static bool CanArrest(NpcState state) =>
         state != NpcState.Escorted
         && state != NpcState.Captured
@@ -74,6 +77,19 @@ public static class NpcStateRules
         && state != NpcState.Detained
         && state != NpcState.Chasing
         && state != NpcState.PenaltyEscorting;
+
+    /// <summary>밧줄 좌클릭으로 <b>새로 묶을</b> 수 있는 대상인가 — 무력화된 대상만. (#446)
+    /// 깨어 있는 NPC를 좌클릭 3초 홀드로 묶던 경로가 제거되면서 묶기의 전제가 무력화가 됐다.
+    /// 역할이 완전히 갈린다: 체력 깎기는 진압봉, 즉시 무력화는 테이저, 신병 확보는 밧줄.
+    /// 홀드가 없어졌으므로 이 판정을 통과한 대상은 좌클릭 한 번에 즉시 묶인다 —
+    /// 원래 기절 대상에만 있던 지름길이 유일한 경로가 된 것이다 (PlayerEscorter.ServerBeginRopeDrag).
+    ///
+    /// 상태 enum이 아니라 <see cref="NpcController.IsStunned"/>를 보는 이유: 스턴은 오버레이라
+    /// 테이저·체력 0 기절이 CurrentState를 바꾸지 않는다(넉백 KO만 <see cref="NpcState.Stunned"/>).
+    /// 상태로만 보면 두 기절 경로 중 하나가 조용히 빠진다 (#292). IsStunned는 동기화 값이라
+    /// 클라 조기검증·조준 피드백(Rope)에서도 읽을 수 있다.</summary>
+    public static bool CanRopeBind(NpcController npc) =>
+        npc != null && npc.IsStunned && CanArrest(npc.CurrentState);
 
     /// <summary>이미 남이 끌고 있는 대상에 밧줄을 <b>덧걸</b> 수 있는가 — 줄다리기 합류. (#390)
     /// 팀 결정은 "합류는 허용, 탈취는 차단"이다. 합류는 기존 끌기를 끊지 않고 참가자만 하나 늘린다.

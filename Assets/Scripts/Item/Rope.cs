@@ -1,7 +1,9 @@
 using UnityEngine;
 
 /// <summary>
-/// 밧줄 아이템 — 기본 검거 수단. 겨냥한 NPC를 좌클릭 홀드로 묶어 누운 채 질질 끌고 다닌다. (#269 → #369)
+/// 밧줄 아이템 — 기본 검거 수단. 겨냥한 NPC를 좌클릭으로 묶어 누운 채 질질 끌고 다닌다. (#269 → #369)
+/// <b>묶을 수 있는 것은 무력화된 대상뿐이다</b> (#446) — 깨어 있는 NPC를 좌클릭 3초 홀드로 묶던 경로는
+/// 제거됐다. 진압봉·테이저로 먼저 쓰러뜨려야 하고, 쓰러진 대상은 홀드 없이 한 번에 묶인다.
 /// 같은 좌클릭이 대상 상태로 갈린다: 체포되어 멈춘 대상(Captured)에겐 '풀어주기'다.
 /// 놓았던 대상을 다시 끄는 것은 상호작용키(E) — NpcSubdueInteractable이 담당한다.
 /// 실제 채널링·사거리·반응 판정·끌기는 서버 권위이며 PlayerEscorter가 수행한다 (수갑과 동일한 허브 패턴, #59/#118).
@@ -69,9 +71,9 @@ public class Rope : ItemBase
         // 남이 끌고 가는 중이면 밧줄을 덧걸어 합류한다 — 기존 끌기는 끊기지 않는다(탈취 차단).
         // 새 대상을 묶는 것과 같은 자원(밧줄 1개)을 쓰므로 진입 판정도 같은 경로다.
         if (!NpcStateRules.CanJoinDrag(target.CurrentState)
-            && !NpcStateRules.CanArrest(target.CurrentState))
+            && !NpcStateRules.CanRopeBind(target))
         {
-            Debug.Log("밧줄로 묶을 수 없는 대상 (이미 신병 확보됨 / 페널티 진행 중)");
+            Debug.Log("밧줄로 묶을 수 없는 대상 (깨어 있음 / 이미 신병 확보됨 / 페널티 진행 중)");
             return;
         }
 
@@ -112,8 +114,9 @@ public class Rope : ItemBase
             return true;
 
         // 새로 묶기·합류는 소지한 밧줄 개수까지만 (서버 가드 CanBeginRopeDrag와 단일 기준, #184/#390)
+        // 새로 묶기는 무력화된 대상만이라 깨어 있는 NPC에는 윤곽선도 뜨지 않는다 (#446)
         return !escorter.IsAtRopeCapacity
-            && (NpcStateRules.CanArrest(target.CurrentState)
+            && (NpcStateRules.CanRopeBind(target)
                 || NpcStateRules.CanJoinDrag(target.CurrentState));
     }
 

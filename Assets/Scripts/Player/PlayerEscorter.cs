@@ -15,8 +15,11 @@ using UnityEngine;
 /// </summary>
 public partial class PlayerEscorter : ChanneledInteractionBehaviour
 {
-    [Header("수갑 채널링 (서버 권위)")]
-    [Tooltip("체포 채널링 시간(초)")]
+    [Header("밧줄 채널링 (서버 권위)")]
+    [Tooltip(
+        "밧줄 채널링 시간(초) — 줄다리기 합류와 풀기에 쓴다. 새로 묶기는 무력화된 대상만 대상이 되면서 "
+        + "채널링 없이 즉시 적용으로 바뀌어 이 값을 쓰지 않는다 (#446)"
+    )]
     [SerializeField]
     private float m_channelSeconds = 3f;
 
