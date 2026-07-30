@@ -1,10 +1,10 @@
-using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
 /// ESC 일시정지 패널 (#326) — 인게임 어느 씬에서든 ESC로 열어 메인 복귀(세션 이탈)를 한다.
+/// 나가기는 곧바로 이탈하지 않고 확인창(LeaveConfirmPanel)을 이 패널 위로 겹쳐 띄워 한 번 묻는다 (#441).
 /// 씬의 ESC 진입 메뉴(IsEscMenu)라, 스택이 비었을 때 ESC로 열리고(UIManagerBase) 다시 ESC로 닫힌다.
 ///
 /// 열려 있는 동안 로컬 플레이어 입력을 정지(PlayerInputHandler.SetSuspended)해 패널 뒤 월드로 이동·시점이
@@ -19,7 +19,7 @@ public class PausePanel : PanelBase
     private Button m_resumeButton; // 계속하기 — 패널을 닫는다
 
     [SerializeField]
-    private Button m_leaveButton; // 메인으로 나가기 — 세션 이탈 후 타이틀 복귀
+    private Button m_leaveButton; // 메인으로 나가기 — 확인창을 띄운다 (이탈은 확인창이 맡는다)
 
     [SerializeField]
     private Button m_settingsButton; // 설정 — 설정 창을 이 패널 위로 겹쳐 연다
@@ -85,13 +85,10 @@ public class PausePanel : PanelBase
     // 커서·입력 정지는 이 패널이 이미 잡고 있으므로(CursorLock Push 상태) 설정 창은 아무것도 건드리지 않는다.
     private static void OpenSettings() => App.UI.Current?.OpenPanel<SettingsPanel>();
 
-    private void HandleLeave()
-    {
-        // 씬이 곧 타이틀로 넘어간다 — 연타·중복 요청을 막기 위해 버튼을 잠근다 (SessionFlow도 s_busy로 이중 방어).
-        if (m_leaveButton != null)
-            m_leaveButton.interactable = false;
-        SessionFlow.LeaveToMainAsync().Forget();
-    }
+    // 나가기는 확인창을 띄우기만 한다 — 실제 이탈 순서는 LeaveConfirmPanel이 SessionFlow에 넘긴다 (#441).
+    // 설정 창과 같은 스택 방식이라 ESC·취소로 닫으면 이 패널로 돌아오고 세션은 유지된다.
+    // 버튼을 잠그지 않는다 — 취소로 돌아왔을 때 다시 눌려야 하고, 연타 방어는 확인창이 갖고 있다.
+    private static void HandleLeave() => App.UI.Current?.OpenPanel<LeaveConfirmPanel>();
 
     // 로컬 플레이어(오너)의 입력 정지 + 커서 해제를 함께 처리한다. 씬에 플레이어가 없으면(로비 등 UI 씬)
     // 입력 정지는 no-op이지만 커서 해제는 그대로 건다 — 버튼을 눌러야 하는 건 플레이어 유무와 무관하다.

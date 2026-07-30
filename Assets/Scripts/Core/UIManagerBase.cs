@@ -115,7 +115,14 @@ public abstract class UIManagerBase : CommonManagerBase
         where T : PanelBase
     {
         if (!TryGetPanel(out T panel))
+        {
+            // 호출부는 모두 반환값을 버린다 — 씬에 패널을 두는 걸 잊으면 버튼이 조용히 죽어 원인을 찾기 어렵다.
+            // 배치 누락(또는 프리팹에 스크립트 미부착)을 콘솔에서 바로 드러낸다 (#441).
+            Debug.LogError(
+                $"[{GetType().Name}] 등록되지 않은 패널을 열려 했습니다: {typeof(T).Name} — 씬에 배치됐는지 확인하세요."
+            );
             return false;
+        }
 
         panel.OpenPanel();
         return true;
