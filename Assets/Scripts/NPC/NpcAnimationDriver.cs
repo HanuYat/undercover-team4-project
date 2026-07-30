@@ -68,6 +68,20 @@ public class NpcAnimationDriver : MonoBehaviour
     /// </summary>
     public const int k_subdueRollAnimState = 106;
 
+    /// <summary>
+    /// 유치장 좌석에 앉기 시작(Begin) 모션의 Animator 상태 번호. (#462)
+    /// 해제·일어나기와 같은 이유로 NpcState enum 값이 아니다 — 좌석까지 걷기와 앉기가 같은 FSM 상태(Jailed)
+    /// 안에서 일어나고, 그 구분은 서버 FSM 내부값이라 클라이언트가 모른다.
+    /// </summary>
+    public const int k_sitBeginAnimState = 107;
+
+    /// <summary>
+    /// 앉은 자세(Loop) 모션의 Animator 상태 번호. (#462)
+    /// Begin과 번호를 나눠 갖는 이유는 자물쇠 해제(<see cref="k_unlockingLoopAnimState"/>)와 같다 —
+    /// 하나로 두면 Loop에 들어간 뒤에도 Any State 조건이 계속 참이라 매 프레임 다시 앉기 시작한다.
+    /// </summary>
+    public const int k_sitLoopAnimState = 108;
+
     // 연행 근접 정지(#97) 모션 전환 임계값 — 실제 이동 속도(m/s) 기준.
     // 켜짐/꺼짐 경계를 다르게 둬(히스테리시스) 정지 직전 감속 구간에서 모션이 떨리는 것을 막는다.
     // 꺼짐 임계값은 걷기 최저 속도(~1.6m/s)보다 충분히 낮게 — 추종 중 순간 감속에 오작동하지 않는 선
@@ -89,6 +103,10 @@ public class NpcAnimationDriver : MonoBehaviour
     [Header("자물쇠 해제 (#261)")]
     [Tooltip("해제 시작(Begin) 모션을 유지하는 시간(초) — 이후 반복(Loop)으로 넘어간다. Begin 클립 길이(0.63초)에 맞춘 값")]
     [SerializeField] private float m_unlockBeginSeconds = 0.63f;
+
+    [Header("유치장 착석 (#462)")]
+    [Tooltip("앉기 시작(Begin) 모션을 유지하는 시간(초) — 이후 앉은 자세(Loop)로 넘어간다. Begin 클립 길이(0.7초)에 맞춘 값")]
+    [SerializeField] private float m_sitBeginSeconds = 0.7f;
 
     [Header("제압 전환 (#332)")]
     [Tooltip("도주형 제압 시 구르기 모션을 유지하는 시간(초) — 클립(Roll01) 길이 1.3초에 맞춘 값. 이후 그로기로 넘어간다")]
@@ -118,6 +136,14 @@ public class NpcAnimationDriver : MonoBehaviour
     private bool m_standingUp;
     // 직전 프레임의 끌림 여부 — 묶임/풀림이 바뀌는 순간에만 base 모션·콜라이더를 다시 시드한다 (#369).
     private bool m_ropedMotion;
+    // 직전 프레임의 착석 여부 — 앉음/일어남이 바뀌는 순간에만 모션·루트모션을 다시 시드한다 (#462).
+    // 끌림과 같은 폴링 방식이다: 상태 전이 훅만으론 놓친다 — 착석 플래그와 커스터디 전이가 별개
+    // NetworkVariable이라 원격 피어 도착 순서가 보장되지 않는다.
+    private bool m_seatedMotion;
+    // 앉기 시작(Begin) 모션을 앉은 자세(Loop)로 넘길 시각. 0 이하면 대기 중 아님 (#462)
+    private float m_sitBeginUntil;
+    // 프리팹의 루트모션 설정 — 앉는 동안만 껐다가 이 값으로 되돌린다 (아래 Update의 착석 블록) (#462)
+    private bool m_rootMotionDefault;
     // 스윙이 끝난 뒤 되돌아갈 FSM 기준 상태 — 저항(Attack)이면 버틴 자세(Idle)로 복귀한다 (#220)
     private NpcState m_baseState;
 
@@ -137,6 +163,10 @@ public class NpcAnimationDriver : MonoBehaviour
 
         if (m_animator == null)
             m_animator = GetComponentInChildren<Animator>();
+
+        // 착석 중에 끌 루트모션의 복원값 — 프리팹 설정을 그대로 기억한다 (#462)
+        if (m_animator != null)
+            m_rootMotionDefault = m_animator.applyRootMotion;
     }
 
     private void Start()
@@ -255,6 +285,10 @@ public class NpcAnimationDriver : MonoBehaviour
         {
             NpcState.Attack => m_resistMoving ? (int)NpcState.Run : (int)NpcState.Idle,
             NpcState.Intruding => (int)NpcState.Walk,
+            // 수감(Jailed)도 대응 Animator 상태가 없다 — 수갑 찬 걷기를 빌려 쓴다(HandleStateChanged가 진입 시
+            // 시드하는 것과 같은 값). 여기 값이 필요한 것은 앉기에서 빠져나올 때다: 원격 피어에서 착석 플래그가
+            // 상태 동기화보다 먼저 도착하면 base가 아직 Jailed인 채로 복귀 모션을 골라야 한다 (#462)
+            NpcState.Jailed => (int)NpcState.Escorted,
             // 오검거 페널티 상태들도 대응 Animator 상태가 없다 — 속도 기반 로코모션을 빌려 쓴다 (#277~#279).
             // 여기 값은 진입 시드일 뿐이고, 이후 Update의 UpdatePenaltyLocomotion이 속도로 갈아탄다
             NpcState.Detained => (int)NpcState.Walk,
@@ -306,6 +340,50 @@ public class NpcAnimationDriver : MonoBehaviour
             RefreshProne(); // 눕/서에 맞춰 콜라이더도 되돌린다 (#363)
             m_lastPosition = transform.position;
             m_smoothedSpeed = 0f;
+        }
+
+        // 유치장 착석 (#462) — "좌석까지 걷기 ↔ 앉기"가 한 FSM 상태(Jailed) 안에서 일어나므로 연행·해제와
+        // 같이 표현만 가른다. 다만 착석은 속도로 판별하지 않는다: 걸어와 멈춘 것과 앉은 것이 둘 다 속도 0이라
+        // 구분되지 않는다 — 서버가 확정한 플래그를 그대로 따른다.
+        //
+        // 위치 주의 — 끌림 블록보다 뒤, 끌림 조기 반환보다 앞이다. 뒤로 내리면 앉은 채 다른 상태로 넘어갈 때
+        // (탈옥 방출 → 도주) 이 블록이 실행되지 않아 루트모션이 꺼진 채로 남는다.
+        if (m_seatedMotion != m_controller.IsSeated)
+        {
+            m_seatedMotion = m_controller.IsSeated;
+
+            // 앉기 클립에는 루트 커브가 있어(hasRootCurves) 루트모션이 켜진 채 재생하면 몸이 좌석에서
+            // 밀려난다 — 특히 Loop는 반복마다 같은 방향으로 밀려 결국 벤치를 벗어난다.
+            // (권투 원본 클립이 펀치할 때 NPC를 미끄러뜨리던 것과 같은 현상 — NpcAnimatorControllerBuilder 주석)
+            // 위치는 좌석에 이미 맞춰져 있으므로(NpcJailedState가 도착 순간 Warp로 정렬) 끄는 쪽이 맞다.
+            m_animator.applyRootMotion = m_seatedMotion ? false : m_rootMotionDefault;
+
+            if (m_seatedMotion)
+            {
+                m_animator.SetInteger(s_stateHash, k_sitBeginAnimState);
+                m_sitBeginUntil = Time.time + m_sitBeginSeconds;
+            }
+            else
+            {
+                m_sitBeginUntil = 0f;
+                m_animator.SetInteger(s_stateHash, AnimatorBaseState(m_baseState));
+                m_lastPosition = transform.position; // 일어난 직후 이동량이 몰려 속도가 튀지 않게
+                m_smoothedSpeed = 0f;
+            }
+        }
+
+        if (m_seatedMotion)
+        {
+            // 시작 동작이 끝나면 앉은 자세로 넘긴다. 이 전환을 Animator의 exit time에 맡기지 않는 이유는
+            // 자물쇠 해제와 같다 — 번호가 Begin에 머물러 있으면 Loop로 넘어간 뒤에도 Any State 조건이 참이라
+            // 다시 Begin으로 끌려가 앉는 동작이 무한 반복된다.
+            if (m_sitBeginUntil > 0f && Time.time >= m_sitBeginUntil)
+            {
+                m_sitBeginUntil = 0f;
+                m_animator.SetInteger(s_stateHash, k_sitLoopAnimState);
+            }
+
+            return; // 앉아 있는 동안은 속도 기반 로코모션을 돌리지 않는다 — 앉은 자세를 대기 자세로 덮어쓴다
         }
 
         // 끌리는 동안은 속도 기반 로코모션을 돌리지 않는다 — 누운 모션을 걷기/정지로 갈아치우게 된다 (#369)

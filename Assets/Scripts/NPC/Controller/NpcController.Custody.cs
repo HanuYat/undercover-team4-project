@@ -46,6 +46,10 @@ public partial class NpcController
         if (m_agent == null)
             return;
 
+        // 앉은 자세를 워프보다 먼저 푼다 — 뒤에 두면 창살 밖으로 옮겨진 몸이 한두 프레임 앉은 채로 보인다.
+        // 수감 상태의 Exit도 같은 호출을 하지만(다른 이탈 경로 대비) 여기서 순서를 잡아 주는 것이 표현상 맞다. (#462)
+        SetSeated(false);
+
         if (exitPoint != null && !TryWarpNear(exitPoint.position))
         {
             Debug.LogWarning(
@@ -58,8 +62,7 @@ public partial class NpcController
         SetJailAccess(false);
     }
 
-    /// <summary>유치장 내부(Jail) NavMesh 영역 마스크 — 없는 프로젝트면 0.
-    /// 수감 이송이 자리 오프셋을 감옥 안으로 한정하는 데도 쓴다(NpcJailedState).</summary>
+    /// <summary>유치장 내부(Jail) NavMesh 영역 마스크 — 없는 프로젝트면 0.</summary>
     public static int JailAreaMask
     {
         get
@@ -73,24 +76,43 @@ public partial class NpcController
         }
     }
 
-    /// <summary>셀 지점 안에서 이 수감자가 설 자리의 오프셋 — <see cref="JailCell"/>과 함께 배정된다
-    /// (JailZone.ReserveCell). 지점이 null이면 의미 없다. 서버에서만 유효.</summary>
-    public Vector3 JailSlotOffset { get; private set; }
+    // ---- 착석 (#462) ----
+
+    private bool m_seated;
+
+    // 앉아 있는지를 클라이언트에도 알리는 동기화 플래그 — 서버만 기록한다(끌기 m_ropedSynced와 같은 관례).
+    // 표현 계층(NpcAnimationDriver)이 이 값으로 앉기 모션을 고른다. 속도로는 판별할 수 없다:
+    // 좌석까지 걸어와 멈춘 것과 앉은 것이 둘 다 속도 0이고, 그 구분은 서버 FSM 내부값이다.
+    private readonly NetworkVariable<bool> m_seatedSynced = new(false);
+
+    /// <summary>유치장 좌석에 앉아 있는가 — 서버·오프라인은 실제 값으로, 원격 피어는 동기화 플래그로 판정. (#462)</summary>
+    public bool IsSeated => IsSpawned && !IsServer ? m_seatedSynced.Value : m_seated;
+
+    /// <summary>착석 상태 지정 — 좌석에 도착해 앉을 때 true, 수감이 풀릴 때 false. 서버(또는 오프라인) 전용.
+    /// 호출부는 <see cref="NpcJailedState"/>다(도착 판정을 그쪽이 갖고 있다). (#462)</summary>
+    public void SetSeated(bool value)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        m_seated = value;
+        if (IsSpawned && IsServer)
+            m_seatedSynced.Value = value;
+    }
 
     /// <summary>
     /// 수감 — 인계존 판정에서 진범·경범죄로 확정된 NPC를 유치장으로 보낸다. (CustodyRouter 경유, GDD 7-2)
-    /// cell(수용 지점)까지 스스로 걸어가 그 자리에 수용된다. cell이 null이면 그 자리에서 수용된 것으로 처리한다.
-    /// slotOffset은 셀 지점을 여러 명이 나눠 쓸 때의 자리 오프셋이다 — 배정은 보내는 쪽(JailZone)이 한다.
+    /// seat(좌석)까지 스스로 걸어가 그 자리에 앉는다. seat이 null이면 그 자리에서 수용된 것으로 처리한다.
+    /// 좌석 배정은 보내는 쪽(JailZone.ReserveSeat)이 한다 — 자리 계산이 아니라 손으로 배치한 목록이다. (#462)
     /// </summary>
-    public void SendToJail(Transform cell, Vector3 slotOffset)
+    public void SendToJail(Transform seat)
     {
         // FSM 전이는 서버 권위 — StartEscort와 동일하게 클라이언트 호출은 무시한다
         if (IsSpawned && !IsServer)
             return;
 
         EscortTarget = null; // 판정 시점에 연행은 이미 풀렸지만, 참조가 남아 있으면 여기서 끊는다
-        JailCell = cell;
-        JailSlotOffset = slotOffset;
+        JailSeat = seat;
         m_stateMachine.ChangeState(NpcState.Jailed);
     }
 

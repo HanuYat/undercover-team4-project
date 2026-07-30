@@ -212,8 +212,9 @@ public class JailDoor : NetworkBehaviour, IInteractable
             if ((npcs[i].transform.position - center).sqrMagnitude > sqrRadius)
                 continue;
 
-            // 이미 유치장 안으로 들어선 대상은 문을 잡아 두지 않는다 — 셀 지점이 문에서 1.6~2.5m라
+            // 이미 유치장 안으로 들어선 대상은 문을 잡아 두지 않는다 — 수용 지점이 문에서 1.6~2.5m라
             // 반경 안에 들어와, 수용이 끝나고도 문이 영영 열려 있었다. 들어가면 등 뒤로 닫힌다.
+            // (좌석으로 바뀐 뒤에는 자리가 더 멀어졌지만(#462) 판정은 거리가 아니라 Jail 영역 안이냐다)
             if (IsInsideJailArea(npcs[i].transform.position))
                 continue;
 
@@ -309,7 +310,7 @@ public class JailDoor : NetworkBehaviour, IInteractable
 
         // 허용치는 0.2m — 실측상 Jail 영역은 문짝(z 49.70)보다 0.2m 안쪽(z 49.90)에서 시작한다.
         // 0.5m로 잡으면 문 밖 접근 지점(LockApproach)까지 "안"으로 걸려, 들어오려는 NPC 앞에서
-        // 문이 열리지 않는다. 0.02m는 반대로 셀 지점도 놓친다.
+        // 문이 열리지 않는다. 0.02m는 반대로 유치장 안 수용 지점도 놓친다.
         return NavMesh.SamplePosition(position, out NavMeshHit _, k_insideSampleRadius, mask);
     }
 }
