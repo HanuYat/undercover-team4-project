@@ -141,7 +141,7 @@ GameObject:
   - component: {fileID: 838219048372896689}
   - component: {fileID: 6989731275509960585}
   - component: {fileID: 6669295534684651231}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Label
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1209,7 +1209,7 @@ GameObject:
   m_Component:
   - component: {fileID: 7471387348862172815}
   - component: {fileID: 7299445857571860782}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: NameTag
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1399,7 +1399,7 @@ GameObject:
   - component: {fileID: 81966170184825189}
   - component: {fileID: 184805473490797555}
   - component: {fileID: 5715744757599093516}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: SpeakerIcon
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5217,7 +5217,7 @@ Camera:
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
-    m_Bits: 183
+    m_Bits: 695
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
   m_TargetDisplay: 0
