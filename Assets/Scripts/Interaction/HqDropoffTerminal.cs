@@ -9,7 +9,7 @@ using UnityEngine;
 /// 아니라 <b>밧줄</b>이다: 놓기(E)는 줄을 풀지 않으므로(#369) "누가 데려온 신병인가"가 그대로 남는다.
 /// 줄이 끊기면(먼 이탈·풀기 채널링) 다시 묶어 와야 접수된다.
 ///
-/// <b>판정을 직접 하지 않는다.</b> 요청을 끌고 있는 플레이어(<see cref="PlayerEscorter.RequestDeliver"/>)에게
+/// <b>판정을 직접 하지 않는다.</b> 요청을 끌고 있는 플레이어(<see cref="PlayerEscortCommands.RequestDeliver"/>)에게
 /// 넘기고, 서버가 <see cref="ArrestJudge.TryDeliver"/>로 상태·구역을 재검증한 뒤 판정한다
 /// (요청/실행 분리, #118 관례). 대상 NPC를 클라가 지정하지 않으므로 위조할 여지도 없고,
 /// 씬 NetworkObject가 아니어도 원격 클라이언트에서 그대로 동작한다.
@@ -49,13 +49,14 @@ public class HqDropoffTerminal : MonoBehaviour, IInteractable
     /// </summary>
     public bool CanInteract(GameObject interactor)
     {
-        PlayerEscorter escorter = FindEscorter(interactor);
-        if (escorter == null)
+        // 조기검증은 밧줄 연결 상태만 본다 — 요청(RequestDeliver)은 Interact에서 명령 쪽으로 간다.
+        PlayerEscorter tethers = FindTethers(interactor);
+        if (tethers == null)
             return false; // 내 밧줄에 묶인 대상이 없으면 넘길 것이 없다 (끌기 여부는 묻지 않는다)
 
-        for (int i = 0; i < escorter.TetheredCount; i++)
+        for (int i = 0; i < tethers.TetheredCount; i++)
         {
-            NpcController npc = escorter.GetTetheredNpc(i);
+            NpcController npc = tethers.GetTetheredNpc(i);
             if (npc == null)
                 continue;
 
@@ -79,9 +80,13 @@ public class HqDropoffTerminal : MonoBehaviour, IInteractable
             return;
 
         Debug.Log("E 입력 — 본부 인계 요청");
-        FindEscorter(interactor).RequestDeliver();
+        FindEscorter(interactor)?.RequestDeliver();
     }
 
-    private static PlayerEscorter FindEscorter(GameObject interactor) =>
+    // 요청은 명령 허브로, 조기검증은 연결 상태로 — 둘은 서로 다른 컴포넌트다 (PlayerEscortCommands / PlayerEscorter).
+    private static PlayerEscortCommands FindEscorter(GameObject interactor) =>
+        interactor != null ? interactor.GetComponentInParent<PlayerEscortCommands>() : null;
+
+    private static PlayerEscorter FindTethers(GameObject interactor) =>
         interactor != null ? interactor.GetComponentInParent<PlayerEscorter>() : null;
 }

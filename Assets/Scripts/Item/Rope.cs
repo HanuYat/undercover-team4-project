@@ -6,7 +6,7 @@ using UnityEngine;
 /// 제거됐다. 진압봉·테이저로 먼저 쓰러뜨려야 하고, 쓰러진 대상은 홀드 없이 한 번에 묶인다.
 /// 같은 좌클릭이 대상 상태로 갈린다: 체포되어 멈춘 대상(Captured)에겐 '풀어주기'다.
 /// 놓았던 대상을 다시 끄는 것은 상호작용키(E) — NpcSubdueInteractable이 담당한다.
-/// 실제 채널링·사거리·반응 판정·끌기는 서버 권위이며 PlayerEscorter가 수행한다 (수갑과 동일한 허브 패턴, #59/#118).
+/// 실제 채널링·사거리·반응 판정·끌기는 서버 권위이며 PlayerEscortCommands가 수행한다 (수갑과 동일한 허브 패턴, #59/#118).
 /// 끌기 중엔 손이 묶여 다른 아이템을 쓸 수 없고, 한 번에 1명만 확보할 수 있다.
 /// 밧줄은 소모되지 않는다 — 대상에 남지 않으므로 풀기 판정도 상태만 본다.
 ///
@@ -18,7 +18,10 @@ using UnityEngine;
 /// </summary>
 public class Rope : ItemBase
 {
-    /// <summary>이 밧줄을 든 플레이어의 연행 허브 — 요청을 서버로 넘긴다. (Handcuffs와 동일 관례, #88)</summary>
+    /// <summary>이 밧줄을 든 플레이어의 연행 요청 허브 — 묶기·풀기 요청을 서버로 넘긴다. (Handcuffs와 동일 관례, #88)</summary>
+    private PlayerEscortCommands Commands => GetComponentInParent<PlayerEscortCommands>();
+
+    /// <summary>이 밧줄을 든 플레이어의 밧줄 연결 상태 — 용량 게이트 조기검증용. (#390)</summary>
     private PlayerEscorter Escorter => GetComponentInParent<PlayerEscorter>();
 
     /// <summary>이 밧줄을 든 플레이어의 운반 허브 — 동료(Die) 대상 요청을 서버로 넘긴다. (#365)</summary>
@@ -28,10 +31,10 @@ public class Rope : ItemBase
 
     public override void Use(GameObject aimTarget)
     {
-        PlayerEscorter escorter = Escorter;
+        PlayerEscortCommands escorter = Commands;
         if (escorter == null)
         {
-            Debug.LogWarning("Rope: PlayerEscorter를 찾지 못함 — 사용 불가", this);
+            Debug.LogWarning("Rope: PlayerEscortCommands를 찾지 못함 — 사용 불가", this);
             return;
         }
 
@@ -77,7 +80,8 @@ public class Rope : ItemBase
             return;
         }
 
-        if (escorter.IsAtRopeCapacity)
+        PlayerEscorter tethers = Escorter;
+        if (tethers != null && tethers.IsAtRopeCapacity)
         {
             Debug.Log("소지한 밧줄을 전부 쓰고 있음 — 먼저 풀거나 인계할 것");
             return;
@@ -89,7 +93,8 @@ public class Rope : ItemBase
     /// <summary>Use()의 조기 검증과 동일 기준 — 조준 피드백(윤곽선)용. 묶기·풀기 어느 쪽이든 반응한다. (#184)</summary>
     public override bool CanTarget(GameObject aimTarget)
     {
-        PlayerEscorter escorter = Escorter;
+        PlayerEscortCommands escorter = Commands;
+        PlayerEscorter tethers = Escorter;
 
         // 기능 정지된 동료 — 끌 수 있는 상태이고 남는 밧줄이 있어야 한다 (서버 가드 ServerBeginCarry와 단일 기준, #365).
         // 운반은 한 번에 1명이지만 상한 자체는 NPC 끌기와 같은 자원(소지한 밧줄 개수)에서 나온다 (#390).
@@ -99,7 +104,7 @@ public class Rope : ItemBase
             PlayerCarrier carrier = Carrier;
             return carrier != null
                 && !carrier.IsCarrying
-                && (escorter == null || !escorter.IsAtRopeCapacity);
+                && (tethers == null || !tethers.IsAtRopeCapacity);
         }
 
         NpcController target = ResolveTarget(aimTarget);
@@ -115,20 +120,20 @@ public class Rope : ItemBase
 
         // 새로 묶기·합류는 소지한 밧줄 개수까지만 (서버 가드 CanBeginRopeDrag와 단일 기준, #184/#390)
         // 새로 묶기는 무력화된 대상만이라 깨어 있는 NPC에는 윤곽선도 뜨지 않는다 (#446)
-        return !escorter.IsAtRopeCapacity
+        return (tethers == null || !tethers.IsAtRopeCapacity)
             && (NpcStateRules.CanRopeBind(target)
                 || NpcStateRules.CanJoinDrag(target.CurrentState));
     }
 
     /// <summary>좌클릭 뗌 — 진행 중인 묶기/풀기 채널링 취소를 서버에 요청한다. (Handcuffs와 동일, #91)</summary>
-    public override void CancelUse() => Escorter?.CancelCapture();
+    public override void CancelUse() => Commands?.CancelCapture();
 
     /// <summary>
     /// 버리기 등 소유권 이전 경로에서 서버가 직접 채널을 끊는다 (ItemBase 훅).
-    /// 채널이 아이템이 아니라 PlayerEscorter에 있어 분리되면 Escorter를 못 찾으므로,
+    /// 채널이 아이템이 아니라 PlayerEscortCommands에 있어 분리되면 못 찾으므로,
     /// 아직 부착돼 있을 때 부르는 이 훅에서 서버 권위로 끊는다. (수갑에서 한 번 터진 버그 — 커밋 7a06861)
     /// </summary>
-    public override void ServerCancelActiveUse() => Escorter?.ServerCancelChannel();
+    public override void ServerCancelActiveUse() => Commands?.ServerCancelChannel();
 
     private static NpcController ResolveTarget(GameObject aimTarget)
     {

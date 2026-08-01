@@ -2970,6 +2970,7 @@ GameObject:
   - component: {fileID: 6985509239275209907}
   - component: {fileID: 8655701205623984669}
   - component: {fileID: 1391299578094206294}
+  - component: {fileID: 8190407101515693034}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -3377,7 +3378,6 @@ MonoBehaviour:
   m_ropeBreakDistance: 10
   m_dragSlowPerWeight: 0.25
   m_minDragSpeedFactor: 0.35
-  m_channelSeconds: 3
 --- !u!114 &6677678871598212644
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3703,6 +3703,20 @@ MonoBehaviour:
   m_downYawRange: 100
   m_downMinPitch: -80
   m_downMaxPitch: 20
+--- !u!114 &8190407101515693034
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f3fd44eba673f8d40b92a38a8f1a49dc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerEscortCommands
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_channelSeconds: 3
 --- !u!1 &5720394585047626155
 GameObject:
   m_ObjectHideFlags: 0
