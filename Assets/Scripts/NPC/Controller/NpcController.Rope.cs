@@ -41,14 +41,14 @@ public partial class NpcController
     // ---- 무게 (#398) ----
 
     // 동기화하지 않는다 — 무게를 읽는 건 서버의 페널티 계산뿐이고 결과 배율만 동기화된다
-    // (PlayerEscorter.DragSpeedFactor). 스캔·인명부 표시를 넣게 되면 그때 붙인다.
+    // (RopeDragLoad.DragSpeedFactor). 스캔·인명부 표시를 넣게 되면 그때 붙인다.
     private float m_dragWeight = 1f;
 
     /// <summary>이 NPC의 무게 — 끄는 플레이어의 속도 페널티 기준. 서버(또는 오프라인)에서만 유효. (#398)</summary>
     public float DragWeight => m_dragWeight;
 
     // 참가자 수의 클라 사본 — 목줄 반경(끊김거리 ÷ 참가자 수)을 오너가 계산해야 해서 원격 클라도
-    // 이 수를 알아야 한다 (PlayerEscorter.ConstrainByTautRopes).
+    // 이 수를 알아야 한다 (RopeDragLoad.ConstrainByTautRopes).
     private readonly NetworkVariable<byte> m_draggerCountSynced = new(0);
 
     /// <summary>지금 이 NPC에 장력을 걸고 있는 인원 수 — 페널티를 이 수로 나눈다. 전 피어에서 유효.

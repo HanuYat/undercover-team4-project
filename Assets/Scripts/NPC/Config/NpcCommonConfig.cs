@@ -23,7 +23,7 @@ public class NpcCommonConfig : ScriptableObject
     [SerializeField] private LayerMask m_knockbackObstacleMask = 1; // Default(환경)만 — 캐릭터 오판 방지 (#339)
 
     [Header("무게 (밧줄 끌기 속도 페널티) — #398")]
-    [Tooltip("스폰 시 이 중 하나를 균등 추첨해 개체 무게로 삼는다(경량/표준/중량). 끄는 플레이어의 이동속도가 이 값에 비례해 떨어진다 — 페널티 계수·하한은 PlayerEscorter에 있다. 비어 있으면 전원 1.0")]
+    [Tooltip("스폰 시 이 중 하나를 균등 추첨해 개체 무게로 삼는다(경량/표준/중량). 끄는 플레이어의 이동속도가 이 값에 비례해 떨어진다 — 페널티 계수·하한은 RopeDragLoad에 있다. 비어 있으면 전원 1.0")]
     [SerializeField] private float[] m_weightTiers = { 0.6f, 1f, 1.6f };
 
     [Header("체력 — #366")]
