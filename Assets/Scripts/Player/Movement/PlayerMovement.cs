@@ -22,6 +22,10 @@ public class PlayerMovement : NetworkBehaviour
     [Tooltip("넉백 속도가 잦아드는 감쇠율(1/초) — 클수록 빨리 멈춘다")]
     [SerializeField] private float m_knockbackDamping = 4f;
 
+    // 접지 중 유지하는 하향 속도(m/s). 0으로 두면 CharacterController가 경사·계단에서 지면을 놓쳐
+    // 접지 판정이 깜빡인다 — 살짝 눌러 붙여 둔다. 천장 상쇄(0으로 죽이기)의 반대쪽 짝이다. (#189)
+    private const float k_groundedStickVelocity = -2f;
+
     // PlayerAnimationDriver가 속도 정규화에 사용 (실제 속도 ↔ 블렌드 트리 좌표 분리)
     // 실제 이동(HandleMove)도 같은 프로퍼티를 쓴다 — 배율이 걸린 값을 한 곳에서만 내야
     // 애니메이션 블렌드가 실제 속도와 어긋나지 않는다. (#398)
@@ -193,15 +197,25 @@ public class PlayerMovement : NetworkBehaviour
 
     /// <summary>
     /// 수평 이동만 받아 중력과 함께 적용한다 — 운반 추종(<see cref="PlayerTowedMotion"/>, #365)이 쓴다.
-    /// 접지 클램프·중력 적분은 <see cref="HandleMove"/>와 같은 규칙을 따른다.
+    /// 접지 클램프·중력 적분은 <see cref="HandleMove"/>와 같은 경로(<see cref="IntegrateGravity"/>)를 쓴다.
     /// </summary>
     internal void MoveWithGravity(Vector3 horizontalStep)
     {
-        if (m_controller.isGrounded && m_verticalVelocity < 0f)
-            m_verticalVelocity = -2f;
-        m_verticalVelocity += m_gravity * Time.deltaTime;
-
+        IntegrateGravity();
         m_controller.Move(horizontalStep + Vector3.up * m_verticalVelocity * Time.deltaTime);
+    }
+
+    // 접지 유지 클램프 + 중력 적분 — 수직 속도의 유일한 적분 지점이다.
+    // 입력 이동(HandleMove)과 운반 추종(MoveWithGravity)이 같은 규칙을 써야 하므로 여기 하나만 둔다.
+    // 점프 임펄스는 이 뒤에 덮어써야 한다 — 클램프에 잡아먹히지 않게. (#189, HandleMove 참고)
+    private void IntegrateGravity()
+    {
+        if (m_controller.isGrounded && m_verticalVelocity < 0f)
+        {
+            m_verticalVelocity = k_groundedStickVelocity;
+        }
+
+        m_verticalVelocity += m_gravity * Time.deltaTime;
     }
 
     /// <summary>
@@ -274,12 +288,11 @@ public class PlayerMovement : NetworkBehaviour
             transform.right * input.x + transform.forward * input.y
         ).normalized;
 
+        // 점프 자격 판정에는 Move() 앞의 값이 맞다 — 그 시점의 마지막 확정 접지다.
+        // (착지 보고는 반대로 Move() 뒤의 신선한 값을 쓴다 — 아래 ReportGrounded 참고, #189)
         bool grounded = m_controller.isGrounded;
-        if (grounded && m_verticalVelocity < 0f)
-        {
-            m_verticalVelocity = -2f;
-        }
-        m_verticalVelocity += m_gravity * Time.deltaTime;
+
+        IntegrateGravity();
 
         // 점프 (#189) — 넉백의 상승 성분과 같은 수직 채널을 쓴다. 중력 적분 뒤에 덮어써야
         // 접지 유지용 -2f 클램프에 임펄스가 잡아먹히지 않는다.
