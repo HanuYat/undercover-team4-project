@@ -187,9 +187,9 @@ public class CriminalAssigner : CommonManagerBase
         m_wantedProfiles.Clear();
         m_totalAssignedBounty = 0;
 
-        // 스캔 UI(#39) 전까지는 로그로 배정 결과를 확인한다
-        var logBuilder = new System.Text.StringBuilder();
-        logBuilder.AppendLine($"시민 프로필 배정 완료 ({npcs.Count}명, 예비 용의자 {suspectCount}명 중 {revealCount}명 공개):");
+        // 스캔 UI(#39) 전까지 배정 결과를 콘솔로 확인한다 — 정답이 노출되므로 데모 빌드 전 제거 대상.
+        // 지우려면 이 줄과 아래 log.Add / log.Flush만 걷어내면 된다 (AssignmentLog 참고).
+        var log = new AssignmentLog(npcs.Count, suspectCount, revealCount);
 
         for (int i = 0; i < npcs.Count; i++)
         {
@@ -247,28 +247,11 @@ public class CriminalAssigner : CommonManagerBase
                 m_wantedProfiles.Add(profile);
             }
 
-            // 범인 표시는 정답이 노출되므로 데모 빌드 전에 제거할 것. 반응은 미끼 행동 확인용으로 함께 로그
-            string roleTag = isCriminal ? $"  ← 수배 공개 ({reaction})"
-                : isSuspect ? $"  ← 예비 용의자 · 미공개 ({reaction})"
-                : reaction != ReactionType.Compliant ? $"  (미끼: {reaction})"
-                : "";
-
-            // 위조 시 어느 축이 오염됐는지 함께 남겨 대조 확인에 쓴다 (데모 빌드 전 제거 대상)
-            string forgeryTag = !isForger ? ""
-                : forgedSymbol ? $"  [위조: 문양 {factory.RealSymbolIndex(profile.Faction)}→{profile.m_symbolIndexView}]"
-                : $"  [위조: {profile.CitizenName}→{profile.m_nameView}]";
-
-            string bountyTag = bounty > 0 ? $"  [현상금 {bounty}원]" : "";
-
-            logBuilder.AppendLine(
-                $"  {profile.CitizenName} | {profile.m_typeView} | {profile.m_factionView}{roleTag}{forgeryTag}{bountyTag}"
-            );
+            log.Add(identity, isSuspect, isForger, forgedSymbol, factory.RealSymbolIndex(profile.Faction));
         }
 
-        logBuilder.AppendLine($"  → 배정 현상금 총합 {m_totalAssignedBounty}원 (돌발 이벤트 수익 별도)");
-
         OnCriminalAssigned?.Invoke(m_criminalNpcs);
-        Debug.Log(logBuilder.ToString());
+        log.Flush(m_totalAssignedBounty);
     }
 
     // ---- 제보 전화 승격 (#102) ----
