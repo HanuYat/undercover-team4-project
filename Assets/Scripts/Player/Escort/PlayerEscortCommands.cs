@@ -70,11 +70,6 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
 
     private float CaptureRange => Interactor != null ? Interactor.Range : k_fallbackRange;
 
-    // 거리 기준점 — 조준 레이캐스트·윤곽선 게이트와 동일한 AimOrigin(카메라).
-    // 루트(발밑) 기준이면 카메라 오프셋만큼 사거리 경계에서 판정이 어긋난다 (#147 관례, #184)
-    private Vector3 AimOriginPosition =>
-        Interactor != null ? Interactor.AimOrigin.position : transform.position;
-
     // ---- 오너 클라 진입점 (아이템/상호작용이 호출) ----
 
     /// <summary>채널링 취소 — 오너가 호출(이동·뗌 등).</summary>
@@ -508,26 +503,10 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
 
     // ---- 공통 ----
 
-    private bool IsInRange(NpcController target)
-    {
-        // 사거리 + 가시선 — 거리만 보면 위조 RPC로 벽 너머 제압·검거가 된다 (#360).
-        // Interactor 없는 구성(테스트 등)은 종전대로 거리만 본다.
-        return (target.transform.position - AimOriginPosition).sqrMagnitude
-                <= CaptureRange * CaptureRange
-            && (Interactor == null || Interactor.HasLineOfSightTo(target.transform));
-    }
+    private bool IsInRange(NpcController target) =>
+        PlayerInteractor.IsWithinReach(Interactor, target.transform, CaptureRange, transform.position);
 
-    // 판정 로그는 서버에서 찍히므로 원격 클라 오너는 결과를 볼 수 없다 — 오너 콘솔에도 같은 로그를 전달한다 (#91).
-    // ⚠ PlayerEscorter에 같은 쌍이 하나 더 있다 — [Rpc]는 인스턴스 메서드여야 해 컴포넌트마다 필요하다.
-    private void NotifyOwner(string message)
-    {
-        Debug.Log(message); // 서버(호스트)·오프라인 콘솔
-        if (IsSpawned && IsServer && !IsOwner)
-            OwnerLogRpc(message); // 원격 클라가 오너인 경우에만 전달 (호스트 오너는 위에서 이미 찍음)
-    }
-
-    [Rpc(SendTo.Owner)]
-    private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
+    // 채널링 게이지와 오너 피드백(NotifyOwner)은 기반 ChanneledInteractionBehaviour가 제공한다. (#184/#91)
 
     public override void OnNetworkDespawn()
     {
