@@ -20,11 +20,6 @@ using UnityEngine;
 [RequireComponent(typeof(PlayerInteractor))]
 public class PlayerLoadout : NetworkBehaviour
 {
-    [Header("기본 지급 장비")]
-    [Tooltip("게임 시작 시 순서대로 지급할 아이템 프리팹(NetworkObject). 첫 항목이 기본 장착된다.")]
-    [SerializeField]
-    private List<ItemBase> m_startingGear = new List<ItemBase>();
-
     [Header("장착 위치 (비우면 플레이어 루트에 부착)")]
     [Tooltip("지급·주운 아이템 인스턴스를 붙일 부모. 비우면 이 GameObject 하위에 붙는다.")]
     [SerializeField]
@@ -46,8 +41,13 @@ public class PlayerLoadout : NetworkBehaviour
 
     // 오너 로컬 슬롯 배치 모델 — 어느 칸에 뭐가 있는지·선택 인덱스와 그 위의 대조/순환/선택/스왑은
     // 순수 인덱스 연산이라 Netcode와 무관한 LoadoutSlots<T>로 분리했다(단위 테스트 가능). 부착·소유권·
-    // 동기화는 이 컴포넌트가, 칸 배치는 모델이 담당한다. 서버 동기화는 flat list(BuildHeldItemRefs) 그대로. (#144)
+    // 동기화는 이 컴포넌트가, 칸 배치는 모델이 담당한다. 서버 동기화는 flat list(HeldItems.BuildRefs) 그대로. (#144)
     private readonly LoadoutSlots<ItemBase> m_slotModel = new LoadoutSlots<ItemBase>(k_maxHeldItems);
+
+    // 부착된 아이템 집합(서버 진실) — 개수·소속 판정·부착·디스폰은 전부 이쪽을 거친다.
+    // 부착 지점 자식을 네 군데서 따로 순회하던 것을 하나의 접근 경로로 모은 것. 이 컴포넌트에는
+    // "들 자격이 있는가"(권위·거리·가시선·용량)만 남는다.
+    private HeldItems m_held;
     private PlayerItemUser m_itemUser;
     private PlayerInputHandler m_inputHandler;
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 아이템 전환·버리기 차단용 (#105)
@@ -74,10 +74,11 @@ public class PlayerLoadout : NetworkBehaviour
     /// <summary>선택 슬롯 이동 이벤트 — 빈 칸↔빈 칸 전환처럼 장착 아이템이 안 바뀌어도 발행. UI 하이라이트(#144)가 구독.</summary>
     public event Action OnEquippedSlotChanged;
 
-    private Transform ItemParent => m_itemAnchor != null ? m_itemAnchor : transform;
-
     private void Awake()
     {
+        // 부착 지점은 직렬화 값이라 여기서 확정된다 — 런타임에 바뀌지 않는다.
+        m_held = new HeldItems(m_itemAnchor != null ? m_itemAnchor : transform);
+
         m_itemUser = GetComponent<PlayerItemUser>();
         m_inputHandler = GetComponent<PlayerInputHandler>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
@@ -88,14 +89,6 @@ public class PlayerLoadout : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        // 게임 씬에서 플레이어가 처음 만들어지는 경우만 여기서 지급한다 — 직접 Play(DevAutoHost)처럼
-        // NGO 연결 승인이 플레이어를 만드는 흐름. 정식 루프(상점→게임)의 매 라운드 지급은
-        // PlayerSpawnManager가 호출한다(둘이 겹쳐도 GrantStartingGear의 보유 검사가 막는다). (#370)
-        if (App.CurrentScene == EScene.Game)
-        {
-            ServerGrantStartingGear();
-        }
-
         // 오너만 입력을 받는다 (휠 순환·버리기). 입력 핸들러는 오너 외엔 비활성.
         if (IsOwner)
         {
@@ -113,7 +106,7 @@ public class PlayerLoadout : NetworkBehaviour
         // 씬(로비·타이틀)에서 원점에 뜬 채로 그대로 보인다. (#395)
         if (IsServer)
         {
-            int despawned = DespawnHeldItems();
+            int despawned = m_held.DespawnAll();
             if (despawned > 0)
             {
                 Debug.Log($"[PlayerLoadout] 플레이어 정리와 함께 소지 아이템 {despawned}개 디스폰");
@@ -129,138 +122,19 @@ public class PlayerLoadout : NetworkBehaviour
         }
     }
 
-    /// <summary>
-    /// 손에 든 아이템을 전부 디스폰한다 — 아이템의 수명을 플레이어와 묶는다. 서버 전용. (#395)
-    /// 월드에 버린 아이템은 대상이 아니다 — 이미 부모가 해제돼 이 밑에 없다.
-    /// 상점 복귀 회수(<see cref="ServerClearHeldItems"/>)도 이 경로를 쓴다. (#370)
-    /// </summary>
-    /// <returns>디스폰한 아이템 수.</returns>
-    private int DespawnHeldItems()
-    {
-        // 세션이 통째로 내려가는 중이면 NGO가 알아서 정리한다 — 그 와중에 Despawn을 부르면 경고만 남는다
-        NetworkManager manager = NetworkManager.Singleton;
-        if (manager == null || !manager.IsListening)
-            return 0;
-
-        Transform parent = ItemParent;
-        if (parent == null)
-            return 0;
-
-        // 디스폰하면 자식 목록이 바뀌므로 먼저 모아 둔다 (BuildHeldItemRefs와 같은 열거 방식)
-        List<NetworkObject> held = new List<NetworkObject>();
-        for (int i = 0; i < parent.childCount; i++)
-        {
-            ItemBase item = parent.GetChild(i).GetComponent<ItemBase>();
-            if (item != null && item.NetworkObject != null)
-            {
-                // 채널링 중이면 먼저 끊는다 — 드롭과 같은 이유(배터리 낭비·오완료 방지). (#370)
-                item.ServerCancelActiveUse();
-                held.Add(item.NetworkObject);
-            }
-        }
-
-        foreach (NetworkObject item in held)
-        {
-            if (item != null && item.IsSpawned)
-            {
-                item.Despawn(destroy: true);
-            }
-        }
-
-        return held.Count;
-    }
-
-    // ---- 서버: 시작 지급 (게임 씬 진입, #370) ----
+    // ---- 형제 컴포넌트(PlayerItemSupply)와 공유하는 면 ----
 
     /// <summary>
-    /// 기본 장비를 지급한다 — 게임 씬 진입 시 서버(PlayerSpawnManager)가 클라별로 호출한다. (#370)
-    /// 상점 복귀 때 <see cref="ServerClearHeldItems"/>로 전량 회수되므로 매 라운드 같은 구성으로 시작한다.
-    /// 서버 판정은 한 프레임 뒤 GrantStartingGearAsync가 한다 — 클라 호출은 거기서 걸러진다.
+    /// 부착된 아이템 집합. 라운드 경계 지급·회수를 맡는 <see cref="PlayerItemSupply"/>가 빌려 쓴다.
+    /// 집합은 플레이어당 하나여야 한다 — 각자 만들면 같은 앵커를 두 객체가 따로 들여다보게 된다.
     /// </summary>
-    public void ServerGrantStartingGear() => GrantStartingGearAsync().Forget();
-
-    // 호출 지점(스폰 처리·씬 로드 완료 콜백) 밖으로 한 프레임 미뤄 지급한다 — NGO 메시지 처리 중
-    // 스폰하면 후속 접속 클라의 씬 동기화가 중복 스폰(같은 NetworkObjectId 재생성)으로 깨진다.
-    private async UniTaskVoid GrantStartingGearAsync()
-    {
-        await UniTask.NextFrame();
-
-        // 대기 중 디스폰됐거나 더 이상 서버가 아니면 중단.
-        if (this == null || !IsSpawned || !IsServer)
-        {
-            return;
-        }
-
-        GrantStartingGear();
-    }
-
-    // 기본 장비 프리팹을 NetworkObject로 스폰해 오너 소유로 만들고 플레이어에 부착한 뒤,
-    // 오너에게 보유 목록을 동기화한다.
-    private void GrantStartingGear()
-    {
-        Transform parent = ItemParent;
-
-        // 이미 뭔가 들고 있으면 지급하지 않는다 — 게임 씬 재진입·중복 호출로 같은 장비가 겹쳐 스폰되면
-        // 슬롯(3칸)이 헛되이 차 이후 줍기가 전부 거부된다. 정상 흐름에서는 상점 복귀 때 전량 회수돼 빈손이다. (#370)
-        if (CountHeldItems() > 0)
-        {
-            Debug.LogWarning("[PlayerLoadout] 이미 아이템을 보유 중이라 기본 장비 지급을 건너뛴다.", this);
-            return;
-        }
-
-        int granted = 0;
-        foreach (ItemBase gearPrefab in m_startingGear)
-        {
-            if (gearPrefab == null)
-            {
-                continue;
-            }
-
-            // 소지 3칸 초과분은 스폰하지 않는다 (#144) — 캡을 안 두면 초과 아이템이 부착되지만
-            // 슬롯에 안 들어가 장착·드롭 불가 상태로 남고, BuildHeldItemRefs 카운트가 영구히 꽉 차
-            // 이후 모든 줍기가 거부된다.
-            if (granted >= k_maxHeldItems)
-            {
-                Debug.LogWarning(
-                    $"[PlayerLoadout] 시작 지급이 소지 한도({k_maxHeldItems})를 초과 — 초과분 무시. m_startingGear 설정 확인."
-                );
-                break;
-            }
-
-            ItemBase item = Instantiate(gearPrefab);
-            NetworkObject itemNetworkObject = item.GetComponent<NetworkObject>();
-            itemNetworkObject.SpawnWithOwnership(OwnerClientId);
-            AttachToParent(itemNetworkObject, parent);
-            granted++;
-        }
-
-        Debug.Log($"[PlayerLoadout] 기본 장비 지급 — client {OwnerClientId}, {granted}개 ({App.CurrentScene})");
-        SyncHeldItemsRpc(BuildHeldItemRefs());
-    }
-
-    // ---- 서버: 회수 (상점 복귀, #370) ----
+    internal HeldItems Held => m_held;
 
     /// <summary>
-    /// 보유 아이템을 전량 회수(디스폰)한다 — 상점 복귀 시 서버(ShopManager)가 클라별로 호출한다. (#370)
-    /// 아이템은 destroyWithScene:false로 스폰돼 씬을 넘어도 살아남으므로, 회수하지 않으면 다음 라운드
-    /// 지급분과 겹쳐 슬롯이 찬다. 라운드 사이 이월은 오브젝트 생존이 아니라 상점 구매 목록(#182)이 맡는다.
+    /// 서버가 소지품을 바꾼 뒤 오너에게 알린다. 서버 전용.
+    /// 지급·회수·줍기·버리기 네 경로의 공통 마무리 — 오너 인벤토리 재구성의 유일한 통로다.
     /// </summary>
-    public void ServerClearHeldItems()
-    {
-        if (!IsServer)
-        {
-            return;
-        }
-
-        // 디스폰 자체는 플레이어 정리(#395)와 같은 경로 — 여기서는 그 뒤 오너 동기화까지 한다.
-        // 플레이어는 살아 남아 다음 라운드에 다시 지급받으므로 슬롯을 비워 줘야 하기 때문.
-        int cleared = DespawnHeldItems();
-        Debug.Log($"[PlayerLoadout] 보유 아이템 회수 — client {OwnerClientId}, {cleared}개");
-
-        // 오너 슬롯 모델에 파괴된 참조가 남지 않도록 빈 목록으로 재구성시킨다 — 안 보내면 인벤토리 UI가
-        // 죽은 아이템 칸을 그대로 들고 있어 다음 라운드 지급분이 들어갈 칸이 없다.
-        SyncHeldItemsRpc(BuildHeldItemRefs());
-    }
+    internal void ServerNotifyHeldItemsChanged() => SyncHeldItemsRpc(m_held.BuildRefs());
 
     // ---- 줍기 (오너 요청 → 서버 실행) ----
 
@@ -306,17 +180,17 @@ public class PlayerLoadout : NetworkBehaviour
         }
 
         // 소지 3칸 제한 (#144, GDD 용량 3칸) — 꽉 차면 줍기 거부. 서버 권위 검증.
-        // 개수만 필요하므로 무할당 CountHeldItems 사용 (동기화용 refs는 부착 후 아래에서 1회 빌드).
-        if (CountHeldItems() >= k_maxHeldItems)
+        // 개수만 필요하므로 무할당 Count 사용 (동기화용 refs는 부착 후 아래에서 1회 빌드).
+        if (m_held.Count >= k_maxHeldItems)
         {
             return;
         }
 
         ulong requester = rpcParams.Receive.SenderClientId;
         itemNetworkObject.ChangeOwnership(requester);
-        AttachToParent(itemNetworkObject, ItemParent);
+        m_held.Attach(itemNetworkObject);
 
-        SyncHeldItemsRpc(BuildHeldItemRefs());
+        ServerNotifyHeldItemsChanged();
     }
 
     // ---- 버리기 (오너 요청 → 서버 실행) ----
@@ -373,7 +247,7 @@ public class PlayerLoadout : NetworkBehaviour
         }
 
         // 이 플레이어가 실제로 들고 있는(부착된) 아이템만 버릴 수 있다.
-        if (itemNetworkObject.transform.parent != ItemParent)
+        if (!m_held.Holds(itemNetworkObject))
         {
             return;
         }
@@ -405,7 +279,7 @@ public class PlayerLoadout : NetworkBehaviour
         itemNetworkObject.TrySetParent((Transform)null, true);
         itemNetworkObject.RemoveOwnership();
 
-        SyncHeldItemsRpc(BuildHeldItemRefs());
+        ServerNotifyHeldItemsChanged();
     }
 
     // 정면 드롭 지점을 구한다 — 앞이 벽이면 벽 앞으로 당긴다 (서버에서 호출).
@@ -447,63 +321,9 @@ public class PlayerLoadout : NetworkBehaviour
     /// 부착된 자식 기준이라 서버·오너 양쪽에서 같은 값이 나온다(부착은 NGO가 복제한다).
     /// 밧줄끼리는 구별하지 않는다 — 어느 줄이 어느 대상에 걸렸는지는 추적하지 않고 개수만 센다.
     /// </summary>
-    public int RopeCount
-    {
-        get
-        {
-            Transform parent = ItemParent;
-            int count = 0;
-            for (int i = 0; i < parent.childCount; i++)
-            {
-                if (parent.GetChild(i).GetComponent<Rope>() != null)
-                {
-                    count++;
-                }
-            }
-
-            return count;
-        }
-    }
+    public int RopeCount => m_held.CountOf<Rope>();
 
     // ---- 서버 → 오너: 보유 목록 동기화 ----
-
-    // 플레이어에 현재 부착된 아이템들의 참조 목록을 만든다 (서버 진실).
-    // ItemParent 자식 중 실제 보유 아이템 개수 — 용량 가드용. BuildHeldItemRefs와 달리 List/배열 무할당.
-    private int CountHeldItems()
-    {
-        Transform parent = ItemParent;
-        int count = 0;
-        for (int i = 0; i < parent.childCount; i++)
-        {
-            if (parent.GetChild(i).GetComponent<ItemBase>() != null)
-            {
-                count++;
-            }
-        }
-
-        return count;
-    }
-
-    private NetworkObjectReference[] BuildHeldItemRefs()
-    {
-        Transform parent = ItemParent;
-        List<NetworkObjectReference> refs = new List<NetworkObjectReference>();
-
-        for (int i = 0; i < parent.childCount; i++)
-        {
-            ItemBase item = parent.GetChild(i).GetComponent<ItemBase>();
-
-            // 디스폰된 아이템은 건너뛴다 — Despawn은 즉시지만 GameObject 파괴는 프레임 끝이라 회수
-            // (ServerClearHeldItems) 직후에도 자식으로 남는다. 그대로 참조를 만들면 생성자가 던져
-            // 동기화 RPC가 발송되지 않고, 오너는 파괴된 아이템을 계속 장착·표시한다. (#370)
-            if (item != null && item.NetworkObject != null && item.NetworkObject.IsSpawned)
-            {
-                refs.Add(new NetworkObjectReference(item.NetworkObject));
-            }
-        }
-
-        return refs.ToArray();
-    }
 
     // 오너가 서버 진실 목록으로 자기 인벤토리를 재구성한다 — 줍기/버리기로 목록이 바뀌어도
     // 휠 순환이 최신 목록을 대상으로 하고, 장착 중이던 아이템은 신원으로 유지된다(클로버링 방지).
@@ -518,32 +338,20 @@ public class PlayerLoadout : NetworkBehaviour
 
     private async UniTaskVoid ResolveAndRebuildAsync(NetworkObjectReference[] itemRefs)
     {
-        const int k_maxWaitFrames = 120;
-        for (int frame = 0; frame < k_maxWaitFrames && !AllResolved(itemRefs); frame++)
-        {
-            await UniTask.Yield(PlayerLoopTiming.Update);
+        // 대기 중 디스폰(퇴장 등)되면 중단 — 파괴된 객체 접근 방지.
+        EResolveResult result = await NetworkRefResolver.WaitAsync(
+            itemRefs,
+            () => this != null && IsSpawned
+        );
 
-            // 대기 중 디스폰(퇴장 등)되면 중단 — 파괴된 객체 접근 방지.
-            if (this == null || !IsSpawned)
-            {
-                return;
-            }
+        if (result == EResolveResult.Aborted)
+        {
+            return;
         }
 
+        // 상한을 넘겨도(TimedOut) 재구성은 진행한다 — 해석된 것만 반영되고, 못 푼 참조는
+        // RebuildHeldItems가 걸러 낸다. 다음 동기화 RPC가 다시 채워 줄 기회가 있다.
         RebuildHeldItems(itemRefs);
-    }
-
-    private static bool AllResolved(NetworkObjectReference[] itemRefs)
-    {
-        foreach (NetworkObjectReference itemRef in itemRefs)
-        {
-            if (!itemRef.TryGet(out _))
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     // 서버 진실 목록(flat)을 로컬 슬롯 배치와 대조(reconcile)한다 — 버린 아이템은 그 칸만 비우고,
@@ -655,15 +463,5 @@ public class PlayerLoadout : NetworkBehaviour
         {
             OnSlotsChanged?.Invoke();
         }
-    }
-
-    // ---- 공통 ----
-
-    // 스폰된 아이템을 플레이어 부모에 부착하고 로컬 원점에 맞춘다 (서버에서 호출).
-    private static void AttachToParent(NetworkObject itemNetworkObject, Transform parent)
-    {
-        itemNetworkObject.TrySetParent(parent, false);
-        itemNetworkObject.transform.localPosition = Vector3.zero;
-        itemNetworkObject.transform.localRotation = Quaternion.identity;
     }
 }

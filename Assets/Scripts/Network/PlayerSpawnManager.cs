@@ -134,7 +134,7 @@ public class PlayerSpawnManager : MonoBehaviour
         // 씬별 인스펙터 플래그를 새로 두지 않고 App의 씬 상태로 가른다(다른 스크립트와 같은 관례).
         // 이 시점엔 sceneLoaded 훅이 이미 CurrentScene을 갱신한 뒤다(Start/OnLoadComplete 모두 그 이후).
         if (App.CurrentScene == EScene.Game)
-            client.PlayerObject?.GetComponent<PlayerLoadout>()?.ServerGrantStartingGear();
+            client.PlayerObject?.GetComponent<PlayerItemSupply>()?.ServerGrantStartingGear();
     }
 
     private void SpawnPlayerFor(ulong clientId)
