@@ -35,6 +35,7 @@ public class App : Singleton<App>
     private TeamFund m_teamFund;
     private ShopPurchases m_shopPurchases;
     private FactionSymbolManager m_factionSymbolManager;
+    private SceneReadyGate m_sceneReadyGate;
 
     // UI 매니저 (씬 전환 시 교체됨)
     private UIManagerBase m_uiManager;
@@ -146,6 +147,7 @@ public class App : Singleton<App>
         public static ShopPurchases ShopPurchases => Instance.m_shopPurchases;
         public static DirectoryManager Directory => Instance.m_directoryManager;
         public static FactionSymbolManager FactionSymbol => Instance.m_factionSymbolManager;
+        public static SceneReadyGate ReadyGate => Instance.m_sceneReadyGate; // 전원 준비 완료 게이트 (#410). 게임 씬에만 있으므로 다른 씬에서는 null
     }
 
     public static class SceneFlow
