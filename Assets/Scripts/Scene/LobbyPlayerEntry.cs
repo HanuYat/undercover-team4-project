@@ -26,8 +26,15 @@ public struct LobbyPlayerEntry : INetworkSerializable, IEquatable<LobbyPlayerEnt
         serializer.SerializeValue(ref MicMuted);
     }
 
-    // clientId만으로 판정한다 — 한 접속자당 한 행이므로 이게 고유 키다 (WantedEntry가 NpcId만 보는 것과 같은 취지)
-    public bool Equals(LobbyPlayerEntry other) => ClientId == other.ClientId;
+    // NetworkList는 이 Equals로 "값이 바뀌었는가"를 판정한다 (NetworkList.Set → NetworkVariableSerialization.AreEqual).
+    // ClientId만 비교하면 같은 사람의 음소거·닉네임이 바뀌어도 "같다"로 보고 갱신을 통째로 버린다 — 복제도
+    // OnListChanged도 일어나지 않는다. 행 매칭은 LobbyRoster가 ClientId를 직접 비교하므로(중복 보고 흡수)
+    // 여기서는 값 전체를 본다. GetHashCode는 그대로 둔다 — 값이 같으면 ClientId도 같아 규약을 지킨다. (#430)
+    public bool Equals(LobbyPlayerEntry other) =>
+        ClientId == other.ClientId
+        && Nickname == other.Nickname
+        && PlayerId == other.PlayerId
+        && MicMuted == other.MicMuted;
 
     public override bool Equals(object obj) => obj is LobbyPlayerEntry other && Equals(other);
 
