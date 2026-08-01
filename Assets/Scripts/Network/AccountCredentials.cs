@@ -14,7 +14,7 @@ public static class AccountCredentials
     private const int k_minPasswordLength = 8;
     private const int k_maxPasswordLength = 30;
 
-    /// <summary>UI 입력 상한의 단일 출처 — AuthPanel이 characterLimit에 쓴다. (#249의 MaxNicknameLength와 같은 방식)</summary>
+    /// <summary>UI 입력 상한의 단일 출처 — AuthPanel이 characterLimit에 쓴다. (#249의 NicknameRules.MaxLength와 같은 방식)</summary>
     public static int MaxUsernameLength => k_maxUsernameLength;
     public static int MaxPasswordLength => k_maxPasswordLength;
 
