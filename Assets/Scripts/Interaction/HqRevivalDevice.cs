@@ -181,19 +181,19 @@ public class HqRevivalDevice : NetworkBehaviour, ICarriedBodyReceiver
 
     private void Revive()
     {
-        PlayerData data = m_occupant.GetComponent<PlayerData>();
+        PlayerHealth health = m_occupant.GetComponent<PlayerHealth>();
         PlayerIncapacitation revived = m_occupant;
         ClearOccupant(null);
 
-        if (data == null)
+        if (health == null)
         {
-            Debug.LogWarning($"[본부 부활] PlayerData가 없어 부활할 수 없다 — {revived.name}", this);
+            Debug.LogWarning($"[본부 부활] PlayerHealth가 없어 부활할 수 없다 — {revived.name}", this);
             return;
         }
 
-        // 부활은 구조와 같은 경로를 쓴다 — HP 부분 회복 + 무력화 해제 (PlayerData.ServerRevive)
-        data.ServerRevive();
-        Debug.Log($"[본부 부활] 복구 완료 — {revived.name} HP={data.CurrentHp}, 상태={revived.Cause}");
+        // 부활은 구조와 같은 경로를 쓴다 — HP 부분 회복 + 무력화 해제 (PlayerHealth.ServerRevive)
+        health.ServerRevive();
+        Debug.Log($"[본부 부활] 복구 완료 — {revived.name} HP={health.CurrentHp}, 상태={revived.Cause}");
     }
 
     private void ClearOccupant(string reason)

@@ -90,6 +90,9 @@ public class CustodyRouter : MonoBehaviour
         // 풀려난 대상은 JailZone.ReleaseInmate로 빠지므로 "끝까지 데리고 있어야 보상"은 유지된다.
         // SendToJail은 시각적 이송일 뿐 정산과 무관하다. (오검거는 여기 못 옴 = 0원 대상 아님)
         m_jailZone.Admit(npc, result.Reward);
-        npc.SendToJail(m_jailZone.ReserveCell());
+
+        // 셀 지점과 그 안에서 설 자리를 함께 받는다 — 지점 수보다 많이 수감되면 겹치지 않게 한 겹 밖이다
+        Transform cell = m_jailZone.ReserveCell(out Vector3 slotOffset);
+        npc.SendToJail(cell, slotOffset);
     }
 }

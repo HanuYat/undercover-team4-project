@@ -3316,7 +3316,6 @@ MonoBehaviour:
   m_dragSlowPerWeight: 0.25
   m_minDragSpeedFactor: 0.35
   m_channelSeconds: 3
-  m_subdueChannelSeconds: 3
 --- !u!114 &6677678871598212644
 MonoBehaviour:
   m_ObjectHideFlags: 0

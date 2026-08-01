@@ -14,13 +14,9 @@ public struct DirectoryEntry : INetworkSerializable, IEquatable<DirectoryEntry>
 
     public static DirectoryEntry FromProfile(CitizenProfile profile)
     {
-        var name = new FixedString64Bytes();
-        name.CopyFromTruncated(
-            profile != null ? (profile.CitizenName ?? string.Empty) : string.Empty
-        );
         return new DirectoryEntry
         {
-            Name = name,
+            Name = (profile != null ? profile.CitizenName : null).ToFixed64(),
             Type = profile != null ? profile.CitizenType : default,
             Faction = profile != null ? profile.Faction : default,
         };

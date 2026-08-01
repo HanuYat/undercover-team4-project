@@ -127,7 +127,7 @@ public class MisdemeanorLoiterer : MonoBehaviour
             return;
         }
 
-        PlayerData threat = SuddenEventUtil.FindNearestFieldPlayer(transform.position, k_riotThreatRadius);
+        PlayerHealth threat = SuddenEventUtil.FindNearestFieldPlayer(transform.position, k_riotThreatRadius);
         if (threat == null)
             return; // 대기 — 다음 틱에 다시 본다
 

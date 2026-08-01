@@ -615,6 +615,28 @@ public class PlayerLoadout : NetworkBehaviour
     {
         m_slotModel.SetEquippedIndex(index);
         m_itemUser.SetEquippedItem(m_slotModel.Equipped);
+
+        // 장착을 바꾸면 진행 중이던 게이지를 내린다 (#455). SetEquippedItem이 내려놓는 아이템의
+        // CancelUse로 채널링 자체는 끊지만, 테이저 충전처럼 채널링이 아닌 게이지는 그 경로로 지워지지
+        // 않는다 — 손에 없는 아이템의 진행도가 화면에 남는다. 채널링 쪽도 서버 통지를 기다리지 않고
+        // 즉시 사라져 반응이 또렷해진다.
+        //
+        // 오너에서만: 이 메서드는 서버 목록 동기화(RebuildHeldItems) 경로로도 불려 비오너 피어에서
+        // 실행되므로, 가드가 없으면 남의 아이템 정리가 내 화면 게이지를 지운다.
+        if (IsOwner)
+        {
+            App.UI.Gauge?.Hide();
+
+            // 새로 든 아이템이 진행 중인 것을 갖고 있으면 다시 띄운다 — 테이저 충전 중에 다른 걸 들었다가
+            // 돌아온 경우 (#455). 순서가 중요하다: 먼저 내려서 이전 아이템 게이지를 확실히 지운 뒤,
+            // 새 아이템이 자기 것을 올린다.
+            // EquippedItem 프로퍼티를 쓰는 이유는 Unity 파괴 참조(가짜 null) 걸러내기 — 라운드 종료
+            // 회수(#370)로 아이템이 디스폰된 직후 이 경로가 돌 수 있다.
+            ItemBase equipped = m_itemUser.EquippedItem;
+            if (equipped != null)
+                equipped.OnEquipped();
+        }
+
         OnEquippedSlotChanged?.Invoke();
     }
 

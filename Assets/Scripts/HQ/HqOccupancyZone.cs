@@ -18,7 +18,7 @@ using UnityEngine;
 public class HqOccupancyZone : MonoBehaviour
 {
     // 구역 안의 플레이어 — 콜라이더가 여러 개인 리그에서도 중복 없이 세기 위해 집합으로 관리한다
-    private readonly HashSet<PlayerData> m_occupants = new HashSet<PlayerData>();
+    private readonly HashSet<PlayerHealth> m_occupants = new HashSet<PlayerHealth>();
 
     // 무인이 된 시각(Time.time). 유인이면 의미 없음 — UnmannedSeconds가 0을 돌려준다
     private float m_unmannedSince;
@@ -46,7 +46,7 @@ public class HqOccupancyZone : MonoBehaviour
         if (!IsAuthority)
             return;
 
-        PlayerData player = other.GetComponentInParent<PlayerData>();
+        PlayerHealth player = other.GetComponentInParent<PlayerHealth>();
         if (player == null)
             return;
 
@@ -62,7 +62,7 @@ public class HqOccupancyZone : MonoBehaviour
         if (!IsAuthority)
             return;
 
-        PlayerData player = other.GetComponentInParent<PlayerData>();
+        PlayerHealth player = other.GetComponentInParent<PlayerHealth>();
         if (player == null)
             return;
 

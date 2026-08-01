@@ -74,7 +74,8 @@ public class PlayerInteractor : NetworkBehaviour
         }
 
         m_inputHandler.OnInteractPerformed += HandleInteract;
-        m_inputHandler.OnInteractCanceled += HandleInteractReleased; // 도주 제압 홀드 뗌 취소 (#332)
+        // E 뗌 구독은 제거됐다 (#436) — 도주 제압 홀드 취소 전용이었고, 그 홀드가 사라졌다.
+        // OnInteractCanceled 자체는 PlayerReviver(다운 동료 부활 홀드)가 계속 쓴다.
     }
 
     public override void OnNetworkDespawn()
@@ -82,7 +83,6 @@ public class PlayerInteractor : NetworkBehaviour
         if (!IsOwner) return;
 
         m_inputHandler.OnInteractPerformed -= HandleInteract;
-        m_inputHandler.OnInteractCanceled -= HandleInteractReleased;
     }
 
     private void Update()
@@ -326,12 +326,5 @@ public class PlayerInteractor : NetworkBehaviour
         }
 
         CurrentInteractable?.Interact(gameObject);
-    }
-
-    // E 뗌 — 도주 제압 홀드 중이면 취소한다. 서버가 채널링 종류(m_subdueChanneling)로 가드하므로
-    // 홀드 중이 아닐 때의 E 뗌은 무동작이고, 수갑 채널링(좌클릭)을 오발로 끊지도 않는다 (#332)
-    private void HandleInteractReleased()
-    {
-        m_escorter?.RequestCancelSubdue();
     }
 }

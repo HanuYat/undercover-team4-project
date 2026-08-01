@@ -348,6 +348,36 @@ public class AuthBootstrap : CommonManagerBase
         OnNicknameChanged?.Invoke();
     }
 
+    /// <summary>
+    /// 이 기기에서 계정을 분리하고 새 익명 계정으로 시작한다. (#444)
+    /// **"연동 해제"가 아니다** — UGS가 username/password 제거를 지원하지 않아 서버의 계정과
+    /// 아이디는 그대로 남고, 이 기기만 새 PlayerId로 떨어져 나온다 (account-link.md 결정 (e)).
+    /// ClearSessionToken()은 로그아웃·토큰 삭제까지만 하고 재로그인을 하지 않는다. AuthBootstrap은
+    /// 상주 오브젝트라 m_signInOnStart도 다시 돌지 않으므로, 둘을 한 쌍으로 묶어야
+    /// 로그아웃 상태로 방치되지 않는다.
+    /// </summary>
+    public async UniTask StartNewAnonymousAccountAsync()
+    {
+        if (IsNetworkConnected)
+            throw new InvalidOperationException("세션 참가 중에는 계정을 바꿀 수 없습니다.");
+        if (CanSignOut != null && !CanSignOut())
+            throw new InvalidOperationException("세션 전환 중에는 계정을 바꿀 수 없습니다.");
+        if (UnityServices.State != ServicesInitializationState.Initialized)
+            throw new InvalidOperationException("로그인 후에 계정을 바꿀 수 있습니다.");
+
+        // 재로그인보다 **먼저** 지운다. 순서가 뒤집히면 RestoreCachedNicknameAsync의 익명 경로가
+        // 옛 계정 닉네임을 새 익명 계정에 심는다 (§4).
+        PlayerPrefs.DeleteKey(NicknamePrefKey);
+        PlayerPrefs.Save();
+
+        // 가드를 새로 만들지 않는다 — 위 검사를 통과했고 사이에 await가 없어 상태가 바뀔 수 없으므로
+        // 기존 경로를 그대로 재사용한다 (내부 가드는 중복이지만 조용한 return으로 빠지지 않는다).
+        ClearSessionToken(); // SignOut + 토큰 삭제 + 연동 상태 초기화 + OnSignedOut
+
+        await InitializeAndSignInAsync(m_profile); // 토큰이 없어 새 PlayerId가 발급된다
+        Debug.Log($"[AuthBootstrap] 새 익명 계정으로 전환 / playerId: {PlayerId}");
+    }
+
     public void SignOut(bool clearCredentials = false)
     {
         if (IsNetworkConnected)

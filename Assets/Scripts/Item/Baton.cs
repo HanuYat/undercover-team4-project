@@ -36,7 +36,8 @@ public class Baton : ItemBase, IAimedWeapon
     [SerializeField]
     private float m_hitRadius = 0.35f;
 
-    // 기본값 34는 E 제압 홀드 1회(NpcCommonConfig.SubdueHitPower)와 같은 값 — MaxHp 100 기준 3대에 기절한다.
+    // 기본값 34는 구 E 제압 타격 1회와 같은 값 — MaxHp 100 기준 3대에 기절한다.
+    // E 제압이 제거되면서(#438) 이 값이 NPC 체력을 깎는 유일한 플레이어 타격 수치가 됐다.
     // 같은 수치를 공유하지만 참조하지는 않는다: 저건 'NPC가 제압당할 때 깎이는 양'이고 이건 '이 무기의 위력'이라,
     // 무기 밸런스를 만지려고 NPC 공용 config를 건드리면 제압 홀드까지 함께 움직인다.
     [Tooltip("1회 타격이 깎는 NPC 체력. 서버가 자기 프리팹 값을 쓴다 — 클라이언트가 수치를 보내지 않는다")]
