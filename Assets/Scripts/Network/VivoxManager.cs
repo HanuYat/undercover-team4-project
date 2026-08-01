@@ -1,7 +1,9 @@
 using System;
 using System.Text;
 using System.Threading;
+using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
@@ -14,11 +16,12 @@ public class VivoxManager : CommonManagerBase
 {
     [SerializeField] private string m_channelPrefix = "Radio";
     [SerializeField] private InputActionReference m_pushToTalkAction;
+    [SerializeField] private InputActionReference m_micMuteToggleAction;   // 마이크 음소거 토글 (#430)
     [SerializeField] private SessionManager m_session;   // 인스펙터에서 연결
     private bool m_loggedIn;
     private bool m_transmitting;   // PTT를 누르고 있는지 — 디버그 표시용
     private bool m_starting;
-    private string m_status = "대기 중...";
+    private string m_statusDetail = string.Empty;   // 상태에 담기지 않는 부가 설명(실패 사유 등) — 디버그 패널 전용
 
     [Header("근접 음성 (positional)")]
     [SerializeField] private string m_proximityChannelPrefix = "Proximity";
@@ -40,6 +43,36 @@ public class VivoxManager : CommonManagerBase
         && m_speakingByPlayer.TryGetValue(playerId, out var speaking)
         && speaking;
 
+    // ---- 음성 연결 상태 (#430) ----
+    // 예전에는 상태가 m_status 문자열 하나뿐이어서 디버그 패널 밖에서 "연결됨/실패"를 알 수 없었다.
+    // 값으로 올려 로비가 '음성 연결 중 / 실패'를 표시할 수 있게 한다 (실패 후 재시도는 범위 밖).
+
+    /// <summary>로컬 음성 연결 상태 — UI는 <see cref="ToLabel"/>로 문자열로 바꿔 표시한다.</summary>
+    public EVoiceState VoiceState { get; private set; } = EVoiceState.Idle;
+
+    public event Action<EVoiceState> OnVoiceStateChanged;
+
+    /// <summary>표시 문자열은 상태에서 파생한다 — 같은 문구를 UI마다 따로 쓰지 않게 한 곳에 둔다.</summary>
+    public static string ToLabel(EVoiceState state) =>
+        state switch
+        {
+            EVoiceState.LoggingIn => "음성 연결 중...",
+            EVoiceState.Joining => "음성 채널 참가 중...",
+            EVoiceState.Connected => "음성 연결됨",
+            EVoiceState.Failed => "음성 연결 실패",
+            _ => "음성 대기 중",
+        };
+
+    // detail은 상태가 그대로여도 갱신한다 — 같은 LoggingIn 안에서 초기화→로그인으로 진행이 바뀐다.
+    private void SetVoiceState(EVoiceState state, string detail = "")
+    {
+        m_statusDetail = detail;
+        if (VoiceState == state) return;
+
+        VoiceState = state;
+        OnVoiceStateChanged?.Invoke(state);
+    }
+
     private void OnEnable()
     {
         if (m_session != null)
@@ -57,6 +90,13 @@ public class VivoxManager : CommonManagerBase
             m_pushToTalkAction.action.started += OnPushToTalkStarted;
             m_pushToTalkAction.action.canceled += OnPushToTalkCanceled;
             m_pushToTalkAction.action.Enable();
+        }
+
+        // 누를 때 한 번만 뒤집는다 — PTT와 달리 뗄 때는 아무 일도 없어야 하므로 performed만 본다 (#430)
+        if (m_micMuteToggleAction != null)
+        {
+            m_micMuteToggleAction.action.performed += OnMicMuteToggled;
+            m_micMuteToggleAction.action.Enable();
         }
 
         if (m_proximityJoined) StartPositionLoop();
@@ -81,6 +121,12 @@ public class VivoxManager : CommonManagerBase
             m_pushToTalkAction.action.Disable();
         }
 
+        if (m_micMuteToggleAction != null)
+        {
+            m_micMuteToggleAction.action.performed -= OnMicMuteToggled;
+            m_micMuteToggleAction.action.Disable();
+        }
+
         m_posLoopCts?.Cancel();
     }
 
@@ -93,7 +139,7 @@ public class VivoxManager : CommonManagerBase
         {
             if (m_session == null)
             {
-                m_status = "SessionManager 미할당";
+                SetVoiceState(EVoiceState.Failed, "SessionManager 미할당");
                 Debug.LogError("[VivoxManager] SessionManager 참조가 없습니다.");
                 return;
             }
@@ -102,25 +148,26 @@ public class VivoxManager : CommonManagerBase
 
             if (!AuthenticationService.Instance.IsSignedIn)
             {
-                m_status = "로그인 안 됨 - 세션 인증 필요";
+                SetVoiceState(EVoiceState.Failed, "로그인 안 됨 - 세션 인증 필요");
                 return;
             }
 
-            m_status = "Vivox 초기화 중...";
+            SetVoiceState(EVoiceState.LoggingIn, "Vivox 초기화 중");
             await VivoxService.Instance.InitializeAsync();
 
-            m_status = "Vivox 로그인 중...";
+            SetVoiceState(EVoiceState.LoggingIn, "Vivox 로그인 중");
             await VivoxService.Instance.LoginAsync(
                 new LoginOptions { DisplayName = AuthenticationService.Instance.PlayerId });
 
             m_loggedIn = true;
             HookParticipantEvents();
 
-            m_status = "Vivox 로그인 완료";
+            // 아직 채널에는 붙지 않았다 — Connected는 참가까지 끝난 뒤에만 세운다
+            SetVoiceState(EVoiceState.LoggingIn, "Vivox 로그인 완료 — 채널 참가 전");
         }
         catch (Exception ex)
         {
-            m_status = $"로그인 실패: {ex.Message}";
+            SetVoiceState(EVoiceState.Failed, $"로그인 실패: {ex.Message}");
             Debug.LogError($"[VivoxManager] {ex}");
         }
         finally
@@ -139,7 +186,10 @@ public class VivoxManager : CommonManagerBase
         // accessToken null 예외가 난다 — 아직 세션·인증이 살아있을 때만 참가한다.
         if (m_session == null || m_session.CurrentSession == null
             || !AuthenticationService.Instance.IsSignedIn)
+        {
+            SetVoiceState(EVoiceState.Idle, "세션·인증이 먼저 정리됨");
             return;
+        }
 
         await LeaveChannelAsync();  // 재참가 대비
 
@@ -148,6 +198,8 @@ public class VivoxManager : CommonManagerBase
 
         try
         {
+            SetVoiceState(EVoiceState.Joining);
+
             // 거리 무관 무전 채널
             await VivoxService.Instance.JoinGroupChannelAsync(radio, ChatCapability.AudioOnly);
             m_radioJoined = true;
@@ -158,18 +210,18 @@ public class VivoxManager : CommonManagerBase
             m_proximityJoined = true;
             StartPositionLoop();
 
-            // 오픈마이크 장치 언뮤트 + 기본 송신은 근접 채널로만
-            VivoxService.Instance.UnmuteInputDevice();
+            // 오픈마이크 장치는 설정값대로 — 무조건 언뮤트하면 마이크를 꺼둔 사람이 채널에 붙는 순간 풀린다 (#430)
+            ApplyMicMute();
             await VivoxService.Instance.SetChannelTransmissionModeAsync(TransmissionMode.Single, m_proximityChannelName);
 
             // 로그인 전에는 출력 장치 볼륨을 걸 수 없으므로, 참가 시점에 설정값을 당겨 온다 (#225)
             ApplyVoiceVolume();
 
-            m_status = "무전 + 근접 채널 참가 완료";
+            SetVoiceState(EVoiceState.Connected);
         }
         catch (Exception ex)
         {
-            m_status = $"채널 참가 실패: {ex.Message}";
+            SetVoiceState(EVoiceState.Failed, $"채널 참가 실패: {ex.Message}");
             Debug.LogError($"[VivoxManager] {ex}");
             await LeaveChannelAsync();
         }
@@ -283,6 +335,9 @@ public class VivoxManager : CommonManagerBase
         }
         finally
         {
+            // 여기서 연결 상태를 Idle로 내리지 않는다 — 이 메서드는 재참가 직전과 참가 실패 직후에도
+            // 불려서, 내리면 방금 세운 Joining·Failed를 지운다. 음성이 끝났다는 판정은 부르는 쪽
+            // (HandleSessionLeft · LogoutAsync)이 한다. (#430)
             m_radioJoined = false;
             m_proximityJoined = false;
             m_transmitting = false;
@@ -304,8 +359,44 @@ public class VivoxManager : CommonManagerBase
         return sb.ToString();
     }
 
-    private void OnPushToTalkStarted(InputAction.CallbackContext ctx) => SetRadioTransmit(true);
-    private void OnPushToTalkCanceled(InputAction.CallbackContext ctx) => SetRadioTransmit(false);
+    /// <summary>무전 키 표시 문자열 — 로비 안내와 디버그 패널이 함께 쓴다.</summary>
+    public string PushToTalkBinding =>
+        m_pushToTalkAction != null ? m_pushToTalkAction.action.GetBindingDisplayString() : "(미할당)";
+
+    // 텍스트 입력 중에는 음성 단축키를 무시한다 — 닉네임·세션 코드를 치다가 v·m이 섞이면 무전이
+    // 나가거나 마이크가 꺼진다. Input System 액션은 UI 포커스와 무관하게 항상 살아 있어서
+    // 여기서 직접 확인해야 한다. 프로젝트의 입력 필드는 전부 TMP_InputField다. (#430)
+    //
+    // 액션을 Disable/Enable로 껐다 켜지 않는 이유: 키를 누른 채 포커스가 바뀌면 canceled를 놓쳐
+    // 송신이 켜진 채로 남는다. 콜백에서 걸러내는 편이 상태가 어긋날 여지가 없다.
+    private static bool IsTypingInUI()
+    {
+        EventSystem events = EventSystem.current;
+        GameObject selected = events != null ? events.currentSelectedGameObject : null;
+
+        return selected != null
+            && selected.TryGetComponent(out TMP_InputField input)
+            && input.isFocused;
+    }
+
+    private void OnPushToTalkStarted(InputAction.CallbackContext ctx)
+    {
+        if (IsTypingInUI()) return;
+
+        // 음소거가 이긴다 — 송신을 막는 가드는 넣지 않는다(입력 장치가 뮤트면 송신 모드와 무관하게
+        // 소리가 나가지 않아 두 경로가 자연히 독립이다). 대신 눌렀다는 사실만 알린다 — 이 안내가
+        // 없으면 음소거를 잊고 말하는 상황이 그대로 남는다. (#430)
+        if (GameSettings.MicMuted) OnMutedTalkAttempt?.Invoke();
+
+        SetRadioTransmit(true);
+    }
+
+    // 뗄 때는 타이핑 여부를 보지 않는다 — 누른 뒤 입력창을 클릭하고 떼는 순서면 송신이 켜진 채
+    // 남는다. 켜져 있을 때만 끄면 되므로 m_transmitting으로 판단한다. (#430)
+    private void OnPushToTalkCanceled(InputAction.CallbackContext ctx)
+    {
+        if (m_transmitting) SetRadioTransmit(false);
+    }
 
     private void SetRadioTransmit(bool on)
     {
@@ -321,6 +412,47 @@ public class VivoxManager : CommonManagerBase
         var mode = on ? TransmissionMode.All : TransmissionMode.Single;
         string ch = on ? null : m_proximityChannelName;
         VivoxService.Instance.SetChannelTransmissionModeAsync(mode, ch).AsUniTask().Forget();
+    }
+
+    // ---- 마이크 음소거 (#430) ----
+    // 상태는 GameSettings.MicMuted 하나가 소유한다 — 여기에 복사해 두지 않는다(설정 창·토글 키
+    // 두 경로로 바뀌므로 복사본은 반드시 어긋난다). 적용은 입력 장치 뮤트 — 송신 모드는 PTT의 것이다.
+
+    /// <summary>음소거 중에 무전 키를 눌렀다 — HUD가 "마이크가 꺼져 있습니다"를 띄운다.</summary>
+    public event Action OnMutedTalkAttempt;
+
+    /// <summary>음소거 토글 키 표시 문자열 — 안내·디버그 패널용.</summary>
+    public string MicMuteBinding =>
+        m_micMuteToggleAction != null ? m_micMuteToggleAction.action.GetBindingDisplayString() : "(미할당)";
+
+    private void OnMicMuteToggled(InputAction.CallbackContext ctx)
+    {
+        // 로그인 전에는 끌 마이크가 없다 — 타이틀에서는 음소거 표시가 어디에도 없어서(HUD는 게임,
+        // 로스터는 로비, 설정 창은 열려 있을 때만) 눌러도 반응이 없는 것처럼 보인다. 씬 이름이 아니라
+        // '음성이 살아 있는가'로 판정해 세션 전 어떤 상황에서도 같게 동작한다. 설정 창 토글은 이
+        // 제한을 받지 않으므로 접속 전에 미리 꺼두는 경로는 그대로 남는다. (#430)
+        if (!m_loggedIn) return;
+        if (IsTypingInUI()) return;
+
+        GameSettings.MicMuted = !GameSettings.MicMuted;
+    }
+
+    /// <summary>
+    /// 설정의 음소거 값을 입력 장치에 적용한다. 값을 필드로 복사하지 않고 매번 GameSettings를 읽는다
+    /// (ApplyVoiceVolume과 같은 방침 — 부르는 지점이 둘이라 복사본을 두면 어긋난다).
+    ///
+    /// 송신 모드(SetChannelTransmissionModeAsync)로 구현하지 않는다 — PTT가 그 API를 쓰므로
+    /// 무전 키를 누르는 순간 음소거가 풀린다. 입력 장치 뮤트는 PTT 경로와 겹치지 않는다.
+    ///
+    /// 로그인 전에는 걸 수 없으므로 채널 참가 시점에 다시 부른다(JoinChannelAsync) — 그러지 않으면
+    /// 마이크를 꺼둔 사람이 채널에 붙는 순간 음소거가 저절로 풀린다.
+    /// </summary>
+    public void ApplyMicMute()
+    {
+        if (!m_loggedIn) return;
+
+        if (GameSettings.MicMuted) VivoxService.Instance.MuteInputDevice();
+        else VivoxService.Instance.UnmuteInputDevice();
     }
 
     // ---- 음성 음량 (#225) ----
@@ -414,8 +546,6 @@ public class VivoxManager : CommonManagerBase
             ApplyDistortionToAll();
         else
             ClearAllDistortion();
-
-        m_status = distorted ? "음성 왜곡(먹통)" : "음성 정상";
     }
 
     private void ApplyDistortionToAll()
@@ -545,6 +675,9 @@ public class VivoxManager : CommonManagerBase
             await VivoxService.Instance.LogoutAsync();
             m_loggedIn = false;
         }
+
+        // 음성이 끝났다는 판정은 여기서 한다 — LeaveChannelAsync는 재참가 경로에도 끼어서 못 내린다 (#430)
+        SetVoiceState(EVoiceState.Idle);
     }
 
     private void HandleSessionJoined(string sessionId)
@@ -560,6 +693,7 @@ public class VivoxManager : CommonManagerBase
         // 지금은 새 씬의 DeviceBlackoutView가 초기 상태를 내려줘 우연히 풀리지만, 그 초기화에
         // 기대는 구조라 View 쪽이 바뀌면 조용히 깨진다.
         m_voiceDistorted = false;
+        SetVoiceState(EVoiceState.Idle);
         LeaveChannelAsync().Forget();
     }
 
@@ -612,15 +746,19 @@ public class VivoxManager : CommonManagerBase
         if (!m_showDebugGui) return;
         if (m_session != null && m_session.Auth != null && m_session.Auth.IsNetworkConnected) return;
 
-        GUILayout.BeginArea(new Rect(450, m_guiTopOffset, 320, 160));
+        GUILayout.BeginArea(new Rect(450, m_guiTopOffset, 320, 240));
         GUILayout.Label("Vivox 무전 — 상태");
         GUILayout.Label($"LoggedIn: {m_loggedIn}");
         GUILayout.Label($"Proximity Joined: {m_proximityJoined}");
         GUILayout.Label($"Radio Joined: {m_radioJoined}");
         GUILayout.Label($"Transmitting(PTT): {m_transmitting}");
-        GUILayout.Label($"Push To Talk: {(m_pushToTalkAction != null ? m_pushToTalkAction.action.GetBindingDisplayString() : "(미할당)")}");
+        GUILayout.Label($"Mic Muted: {GameSettings.MicMuted}");
+        GUILayout.Label($"Push To Talk: {PushToTalkBinding}");
+        GUILayout.Label($"Mic Mute Toggle: {MicMuteBinding}");
         GUILayout.Space(6);
-        GUILayout.Label(m_status);
+        GUILayout.Label($"{ToLabel(VoiceState)} ({VoiceState})");
+        if (!string.IsNullOrEmpty(m_statusDetail)) GUILayout.Label(m_statusDetail);
+        if (m_voiceDistorted) GUILayout.Label("음성 왜곡(먹통) 중");
         GUILayout.EndArea();
     }
 }

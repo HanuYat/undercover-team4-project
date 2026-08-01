@@ -46,6 +46,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::VivoxManager
   m_channelPrefix: Radio
   m_pushToTalkAction: {fileID: -3939125208035815356, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  m_micMuteToggleAction: {fileID: -975240969312698664, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_session: {fileID: 3940344131568323193}
   m_proximityChannelPrefix: Proximity
   m_conversationalDistance: 2

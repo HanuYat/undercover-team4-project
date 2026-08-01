@@ -4,7 +4,7 @@ using UnityEngine;
 
 /// <summary>
 /// 로비 접속자 로스터 (#429) — 로비 씬에 배치된 NetworkObject. 서버가 NetworkList를 소유하고,
-/// 각 클라이언트는 스폰 시 자기 닉네임·PlayerId를 보고한다(서버가 알 수 없는 로컬 값이라).
+/// 각 클라이언트는 스폰 시 자기 닉네임·PlayerId·음소거를 보고한다(서버가 알 수 없는 로컬 값이라).
 /// 늦게 들어온 클라는 NGO 씬 동기화로 이 오브젝트를 받으며 리스트 전체가 복제되지만,
 /// OnListChanged는 불리지 않으므로 OnListReady로 "지금 상태를 한 번 그려라"를 알린다 (WantedListManager와 동일).
 /// 매니저가 아니다 — 참조자가 LobbyRosterPanel 한 곳이라 App에 올리지 않고 SerializeField로 연결한다 (R3).
@@ -36,12 +36,17 @@ public class LobbyRoster : NetworkBehaviour
         // 전 피어 공통 — 이 시점엔 리스트가 초기 동기화된 상태다. late-join도 여기서 처음 그린다.
         OnListReady?.Invoke();
 
+        // 음소거를 바꾸면 다시 보고한다 — 자기 것만 올리므로 서버·클라 구분이 없다 (#430)
+        GameSettings.OnMicMutedChanged += HandleMicMutedChanged;
+
         // 자기 정보 보고. 호스트도 자기 행이 필요하므로 서버·클라 구분 없이 부른다.
         ReportSelfRpc(BuildSelf());
     }
 
     public override void OnNetworkDespawn()
     {
+        GameSettings.OnMicMutedChanged -= HandleMicMutedChanged;
+
         // 상점으로 넘어가며 로비가 언로드될 때 반드시 뗀다 — 죽은 객체를 가리키는 구독이 남는다.
         if (IsServer && NetworkManager != null)
             NetworkManager.OnClientDisconnectCallback -= HandleClientDisconnected;
@@ -78,6 +83,13 @@ public class LobbyRoster : NetworkBehaviour
         }
     }
 
+    // 음소거가 바뀌면 자기 보고를 다시 보낸다 — 전용 RPC를 만들지 않는다. ReportSelfRpc가 중복 보고를
+    // 갱신으로 흡수하므로(행이 두 개로 늘지 않는다) 상태를 나르는 경로가 하나로 유지된다. (#430)
+    private void HandleMicMutedChanged(bool _)
+    {
+        if (IsSpawned) ReportSelfRpc(BuildSelf());
+    }
+
     // 닉네임·PlayerId는 각 클라의 로컬 값이다 (AuthBootstrap — PlayerPrefs + UGS, #249)
     private static LobbyPlayerEntry BuildSelf()
     {
@@ -87,6 +99,11 @@ public class LobbyRoster : NetworkBehaviour
         var playerId = (auth != null ? auth.PlayerId : null).ToFixed64();
 
         // ClientId는 서버가 발신자로 채운다 — 여기서 넣지 않는다.
-        return new LobbyPlayerEntry { Nickname = nickname, PlayerId = playerId };
+        return new LobbyPlayerEntry
+        {
+            Nickname = nickname,
+            PlayerId = playerId,
+            MicMuted = GameSettings.MicMuted,
+        };
     }
 }

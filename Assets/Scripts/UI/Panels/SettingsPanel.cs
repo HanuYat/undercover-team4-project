@@ -4,7 +4,7 @@ using UnityEngine.Events;
 using UnityEngine.UI;
 
 /// <summary>
-/// 설정 창 (#225) — 마우스 감도 · 마스터 음량 · 음성 음량.
+/// 설정 창 (#225) — 마우스 감도 · 마스터 음량 · 음성 음량 · 마이크 음소거(#430).
 /// 설계 정본: docs/design/settings-ui.md
 ///
 /// <b>즉시 적용 모델</b> — 저장/취소 버튼이 없다. 슬라이더를 움직이면 그 순간 GameSettings에
@@ -24,6 +24,9 @@ public class SettingsPanel : PanelBase
     [SerializeField] private TextMeshProUGUI m_mouseSensitivityValue;
     [SerializeField] private TextMeshProUGUI m_masterVolumeValue;
     [SerializeField] private TextMeshProUGUI m_voiceVolumeValue;
+
+    [Header("토글")]
+    [SerializeField] private Toggle m_micMuteToggle; // 마이크 음소거 (#430)
 
     [Header("버튼")]
     [SerializeField] private Button m_closeButton; // 닫기
@@ -49,6 +52,13 @@ public class SettingsPanel : PanelBase
         SetupSlider(m_masterVolumeSlider, 0f, 1f, HandleMasterVolumeChanged);
         SetupSlider(m_voiceVolumeSlider, 0f, 1f, HandleVoiceVolumeChanged);
 
+        if (m_micMuteToggle != null)
+            m_micMuteToggle.onValueChanged.AddListener(HandleMicMuteToggled);
+
+        // 음소거는 설정 창 밖(토글 키)에서도 바뀐다 — 창을 열어둔 채 키를 눌러도 체크박스가 따라오게
+        // 구독한다. 값의 출처는 여전히 GameSettings 하나이고 여기서는 표시만 맞춘다. (#430)
+        GameSettings.OnMicMutedChanged += HandleMicMutedExternally;
+
         if (m_closeButton != null) m_closeButton.onClick.AddListener(ClosePanel);
         if (m_resetButton != null) m_resetButton.onClick.AddListener(HandleResetClicked);
     }
@@ -64,6 +74,11 @@ public class SettingsPanel : PanelBase
             m_masterVolumeSlider.onValueChanged.RemoveListener(HandleMasterVolumeChanged);
         if (m_voiceVolumeSlider != null)
             m_voiceVolumeSlider.onValueChanged.RemoveListener(HandleVoiceVolumeChanged);
+        if (m_micMuteToggle != null)
+            m_micMuteToggle.onValueChanged.RemoveListener(HandleMicMuteToggled);
+
+        GameSettings.OnMicMutedChanged -= HandleMicMutedExternally;
+
         if (m_closeButton != null)
             m_closeButton.onClick.RemoveListener(ClosePanel);
         if (m_resetButton != null)
@@ -101,11 +116,11 @@ public class SettingsPanel : PanelBase
     }
 
     /// <summary>
-    /// 슬라이더 위치를 현재 설정값으로 맞춘다.
+    /// 슬라이더 위치와 토글 상태를 현재 설정값으로 맞춘다.
     ///
     /// <b>SetValueWithoutNotify여야 한다</b> — Slider.value에 대입하면 onValueChanged가 깨어나
     /// 'UI 갱신 → 설정 대입 → UI 갱신' 되돌이가 돈다. 클램프까지 끼면 사용자가 만지지도 않은
-    /// 값이 슬라이더로 튀어 올라온다.
+    /// 값이 슬라이더로 튀어 올라온다. 토글도 같은 이유로 SetIsOnWithoutNotify를 쓴다 (#430).
     /// </summary>
     private void SyncFromSettings()
     {
@@ -115,6 +130,8 @@ public class SettingsPanel : PanelBase
             m_masterVolumeSlider.SetValueWithoutNotify(GameSettings.MasterVolume);
         if (m_voiceVolumeSlider != null)
             m_voiceVolumeSlider.SetValueWithoutNotify(GameSettings.VoiceVolume);
+        if (m_micMuteToggle != null)
+            m_micMuteToggle.SetIsOnWithoutNotify(GameSettings.MicMuted);
 
         RefreshLabels();
     }
@@ -135,6 +152,16 @@ public class SettingsPanel : PanelBase
     {
         GameSettings.VoiceVolume = value;
         RefreshLabels();
+    }
+
+    private void HandleMicMuteToggled(bool on) => GameSettings.MicMuted = on;
+
+    // 창 밖(토글 키)에서 바뀐 값을 표시에만 반영한다 — SetIsOnWithoutNotify가 아니면 onValueChanged가
+    // 깨어나 '표시 갱신 → 설정 대입 → 표시 갱신' 되돌이가 돈다 (슬라이더와 같은 이유). (#430)
+    private void HandleMicMutedExternally(bool on)
+    {
+        if (m_micMuteToggle != null)
+            m_micMuteToggle.SetIsOnWithoutNotify(on);
     }
 
     private void HandleResetClicked()
