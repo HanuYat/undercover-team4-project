@@ -124,6 +124,10 @@ public class CriminalAssigner : CommonManagerBase
 
     private readonly Dictionary<OfficialRecords.Faction, int> m_localRealIndices = new Dictionary<OfficialRecords.Faction, int>();
 
+    // 제보 전화 승격 (#102) — 예비 용의자 명단을 빌려 보고 다음 공개 대상을 판단한다.
+    // 구동 주체가 달라 분리했다: 배정은 스폰 완료로 1회, 승격은 전화마다 1명씩.
+    private SuspectRevealer m_revealer;
+
     private int m_totalAssignedBounty;
 
     /// <summary>
@@ -144,6 +148,21 @@ public class CriminalAssigner : CommonManagerBase
 
     /// <summary>배정 완료 이벤트 — 수배 UI(#58)·진범 판정(#41) 등이 구독한다. 배정된 전체 범인 목록을 넘긴다. (#127)</summary>
     public event Action<IReadOnlyList<NpcController>> OnCriminalAssigned;
+
+    protected override void Awake()
+    {
+        base.Awake(); // App 등록
+
+        // 명단은 같은 List 인스턴스를 넘긴다 — 배정이 채우면 승격 쪽에서도 그대로 보인다.
+        m_revealer = new SuspectRevealer(
+            m_criminalNpcs,
+            m_compliantWeight,
+            m_fleeWeight,
+            m_resistWeight,
+            m_criminalBountyMin,
+            m_criminalBountyMax
+        );
+    }
 
     private void Start()
     {
@@ -258,8 +277,8 @@ public class CriminalAssigner : CommonManagerBase
             // 검거 반응 — 범인은 범인 가중치로, 무고 시민은 시민 가중치로 추첨한다.
             // 시민의 도주/저항은 진범을 헷갈리게 하는 미끼 행동일 뿐 판정엔 영향이 없다 (GDD 6-1/6-3, #76/#78)
             ReactionType reaction = isCriminal
-                ? RollReaction(m_compliantWeight, m_fleeWeight, m_resistWeight)
-                : RollReaction(m_citizenCompliantWeight, m_citizenFleeWeight, m_citizenResistWeight);
+                ? ReactionRoll.Roll(m_compliantWeight, m_fleeWeight, m_resistWeight)
+                : ReactionRoll.Roll(m_citizenCompliantWeight, m_citizenFleeWeight, m_citizenResistWeight);
             identity.AssignReaction(reaction);
 
             // 현상금 확정 (#395) — 판정 시점이 아니라 여기서 뽑는다. ArrestJudge의 판정 우선순위와 같은
@@ -311,135 +330,23 @@ public class CriminalAssigner : CommonManagerBase
     // 호출자(TipCallPhone)가 서버 권위를 게이트한다 — 여기서 다시 막지 않는다.
 
     /// <summary>
-    /// 아직 공개되지 않은 예비 용의자가 남아 있는가 — 전화를 계속 걸지의 기준 (#102 설계 결정 5).
-    /// 연행·끌기 중인 대상도 '남아 있다'로 센다: 곧 판정되면 IsDelivered로 자동으로 빠지고,
-    /// 석방되면 다시 승격 후보가 된다. 여기서 빼면 마지막 예비 용의자를 끌고 가는 동안 울린
-    /// 전화 하나 때문에 그 라운드 전화가 영영 끊긴다.
+    /// 아직 공개되지 않은 예비 용의자가 남아 있는가 — 전화를 계속 걸지의 기준. (#102)
+    /// 판단은 <see cref="SuspectRevealer"/>가 한다.
     /// </summary>
-    public bool HasPendingSuspect
-    {
-        get
-        {
-            for (int i = 0; i < m_criminalNpcs.Count; i++)
-                if (IsPending(m_criminalNpcs[i]))
-                    return true;
-            return false;
-        }
-    }
+    public bool HasPendingSuspect => m_revealer != null && m_revealer.HasPending;
 
     /// <summary>
-    /// 지금 수배로 공개된 용의자 수 — 라운드 시작 직후엔 초기 공개 수이고, 제보 전화 승격마다 늘어난다. (#102)
-    /// 라운드 시작 할당량이 달성 가능한지 대조하는 기준이다(RoundManager) — 미공개 예비 용의자는 수배
-    /// 리스트에 없어 잡을 대상으로 인식되지 않으므로(잡으면 오검거) 시작 할당량에 셀 수 없다.
-    /// </summary>
-    public int RevealedCount
-    {
-        get
-        {
-            int count = 0;
-            for (int i = 0; i < m_criminalNpcs.Count; i++)
-            {
-                NpcController npc = m_criminalNpcs[i];
-                if (npc == null)
-                    continue;
-
-                CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
-                if (identity != null && identity.IsCriminal)
-                    count++;
-            }
-            return count;
-        }
-    }
-
-    /// <summary>
-    /// 대기 중인 예비 용의자 1명을 수배로 공개한다 — 제보 전화를 받았을 때 호출한다. (#102)
-    /// 성공하면 true. 지금 승격 가능한 대상이 없으면 false — 그 전화 한 번을 놓친 것일 뿐이므로
-    /// 호출자는 다음 수신을 그대로 예약하면 된다 (풀 소진 판정은 HasPendingSuspect로 따로 한다).
+    /// 대기 중인 예비 용의자 1명을 수배로 공개한다 — 제보 전화(TipCallPhone)가 호출한다. (#102)
+    /// 성공하면 true. 승격 자체는 <see cref="SuspectRevealer"/>가 하고, 여기서는 현상금 총합만
+    /// 반영한다 — 배정과 승격이 함께 더하는 값이라 소유자를 하나로 둔다 (#395).
     /// </summary>
     public bool PromoteNext()
     {
-        AppearanceAssigner appearance = App.Game.Appearance;
-        if (appearance == null)
-        {
-            // 몽타주를 발행하지 못하면 수배 리스트에 뜨지 않는다 — IsCriminal만 켜면
-            // 아무도 모르는 진범이 생기므로, 켜기 전에 막는다
-            Debug.LogWarning("CriminalAssigner: AppearanceAssigner를 찾지 못해 승격할 수 없다", this);
-            return false;
-        }
-
-        NpcController npc = FindNextPromotable();
-        if (npc == null)
+        if (m_revealer == null || !m_revealer.TryPromoteNext(out int bountyDelta))
             return false;
 
-        CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
-        identity.SetCriminal(true);
-
-        // 오검거로 이미 한 번 판정된 대상일 수 있다 — 표식을 지워야 다시 잡아 인계했을 때
-        // '첫 인계'로 잡혀 검거 수가 정상 누적된다(IsFirstDelivery, #358). 탈옥 재검거(#231)가
-        // ClearDelivered를 부르는 것과 같은 이유다.
-        npc.ClearDelivered();
-
-        // 예비 용의자는 시민 가중치로 뽑혀 있다 — 범인 가중치로 다시 뽑는다.
-        // Reaction은 서버 전용이라 바꿔도 플레이어에게 티가 나지 않는다 (#102 설계 결정 6).
-        // 이미 반응 중이면 유형만 바뀌고 진행 중인 반응은 유지된다 — CanStartReaction이 막는다 (#400)
-        identity.AssignReaction(RollReaction(m_compliantWeight, m_fleeWeight, m_resistWeight));
-
-        // 현상금도 진범 몫으로 다시 배정한다 (#395) — 대기 중에는 오검거/위조 기준 금액이 들어 있어,
-        // 그대로 두면 승격된 진범이 0원이나 소액으로 잡힌다. 재검거 리롤은 생기지 않는다: 승격 대상은
-        // IsCriminal이 꺼진 개체뿐이라(FindNextPromotable) 한 번 승격된 NPC는 다시 이 경로를 타지 않는다.
-        int promotedBounty = BountyRoll.Roll(m_criminalBountyMin, m_criminalBountyMax);
-        m_totalAssignedBounty += promotedBounty - identity.Bounty; // 대기 시 금액을 빼고 새 금액을 더한다
-        identity.AssignBounty(promotedBounty);
-
-        // 라운드 시작에 보관해 둔 몽타주를 그대로 발행한다 — WantedListManager가 이 이벤트로
-        // NetworkList 추가와 TotalWanted++ 를 한다(기존 경로 재사용)
-        appearance.RevealMontage(npc);
-
-        CitizenProfile profile = identity.Profile;
-        Debug.Log($"[제보 전화] 수배 공개: {(profile != null ? profile.CitizenName : npc.name)} ({identity.Reaction}, 현상금 {promotedBounty}원)");
+        m_totalAssignedBounty += bountyDelta;
         return true;
-    }
-
-    /// <summary>미공개 예비 용의자인가 — 살아 있고, 아직 공개 전이고, 지금 잡을 수 있다. (#102 · #392)</summary>
-    private static bool IsPending(NpcController npc)
-    {
-        // 디스폰·파괴된 대상은 Unity null로 잡힌다 — IsSpawned는 오프라인에서 항상 false라 쓸 수 없다
-        if (npc == null)
-            return false;
-
-        CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
-        if (identity == null || identity.IsCriminal)
-            return false;
-
-        // 유치장에 수감된 대상만 뺀다 — 미공개 상태에서 위조범으로 판정돼 갇힌 개체다. 수배로 올려도
-        // 본부 안에 있어 찾을 것이 없고, 이미 위조 현상금으로 정산에 계상돼 있다.
-        //
-        // 오검거로 판정된 대상은 뺐다가 되살렸다 (#392). 예전에는 IsDelivered를 영구 제외했는데
-        // 그 근거("판정이 끝난 대상은 아무도 못 잡는 유령 항목이 된다", #230)가 더 이상 맞지 않는다:
-        // 오검거당한 시민은 죽지 않고 원한 구역(Detained)에서 대기하다 추격대(Chasing)로 나가며,
-        // 재판정도 허용된다(#358 — 다시 끌어와 인계하면 판정된다). 즉 잡을 수 있는 대상인데 승격만
-        // 막고 있었고, 그 탓에 미공개 용의자를 오검거로 태울 때마다 풀이 영구히 줄어 제보 전화가
-        // 조용히 죽었다.
-        return npc.CurrentState != NpcState.Jailed;
-    }
-
-    /// <summary>지금 당장 승격시킬 수 있는 첫 후보. 없으면 null. (#102 설계 §3 가드)</summary>
-    private NpcController FindNextPromotable()
-    {
-        for (int i = 0; i < m_criminalNpcs.Count; i++)
-        {
-            NpcController npc = m_criminalNpcs[i];
-            if (!IsPending(npc))
-                continue;
-
-            // 연행·끌기 중 — 곧 판정될 대상이라 등록 직후 사라진다. 건너뛰되 풀 소진으로는 세지 않는다
-            // (FindEscorterOf는 연행과 밧줄 끌기를 둘 다 본다, #269)
-            if (PlayerEscorter.FindEscorterOf(npc) != null)
-                continue;
-
-            return npc;
-        }
-        return null;
     }
 
     /// <summary>0~total-1 인덱스를 셔플해 앞에서 count개를 뽑는다 — 중복 없는 진범 인덱스. (#127)</summary>
@@ -482,21 +389,6 @@ public class CriminalAssigner : CommonManagerBase
                     : $"{shuffled[i % shuffled.Length]} {i / shuffled.Length + 1}"; // 풀 초과분은 번호로 구분
         }
         return result;
-    }
-
-    /// <summary>순응/도주/저항 가중치 비율로 검거 반응을 추첨한다. 범인·시민이 각자의 가중치로 호출한다. (#76/#78)</summary>
-    private static ReactionType RollReaction(float compliantWeight, float fleeWeight, float resistWeight)
-    {
-        float total = compliantWeight + fleeWeight + resistWeight;
-        if (total <= 0f)
-            return ReactionType.Compliant; // 가중치가 전부 0이면 안전하게 순응
-
-        float roll = Random.Range(0f, total);
-        if (roll < compliantWeight)
-            return ReactionType.Compliant;
-        if (roll < compliantWeight + fleeWeight)
-            return ReactionType.Flee;
-        return ReactionType.Resist;
     }
 
     private static TEnum RandomEnum<TEnum>()
