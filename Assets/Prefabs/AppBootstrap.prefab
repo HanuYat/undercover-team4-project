@@ -10,6 +10,9 @@ GameObject:
   m_Component:
   - component: {fileID: 4939750292037706077}
   - component: {fileID: 9154070409139531703}
+  - component: {fileID: 6782651012148711595}
+  - component: {fileID: 8347833582320952483}
+  - component: {fileID: 1996915487525144550}
   m_Layer: 0
   m_Name: VivoxManager
   m_TagString: Untagged
@@ -45,18 +48,57 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VivoxManager
   m_channelPrefix: Radio
-  m_pushToTalkAction: {fileID: -3939125208035815356, guid: 052faaac586de48259a63d0c4782560b, type: 3}
-  m_micMuteToggleAction: {fileID: -975240969312698664, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_session: {fileID: 3940344131568323193}
+  m_distortion: {fileID: 6782651012148711595}
+  m_positionReporter: {fileID: 8347833582320952483}
+  m_input: {fileID: 1996915487525144550}
   m_proximityChannelPrefix: Proximity
   m_conversationalDistance: 2
   m_audibleDistance: 15
   m_audioFadeIntensity: 4
-  m_positionUpdateInterval: 0.1
-  m_distortProfile: {fileID: 11400000, guid: adc714cfd45c12849939ca1dc2cc3b04, type: 2}
-  m_distortProximityToo: 1
   m_showDebugGui: 0
   m_guiTopOffset: 10
+--- !u!114 &6782651012148711595
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3235269675851083799}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f11097bb90c4f7c4dba0e79c57e47959, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VoiceDistortionController
+  m_profile: {fileID: 11400000, guid: adc714cfd45c12849939ca1dc2cc3b04, type: 2}
+  m_distortProximityToo: 1
+--- !u!114 &8347833582320952483
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3235269675851083799}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4bd8a1f65d2d5c147b708188acf0ebe6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ProximityPositionReporter
+  m_updateInterval: 0.1
+--- !u!114 &1996915487525144550
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3235269675851083799}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aa00db4f8181df34d9e2e5b0ee6d6985, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VoiceInputRouter
+  m_pushToTalkAction: {fileID: -3939125208035815356, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  m_micMuteToggleAction: {fileID: -975240969312698664, guid: 052faaac586de48259a63d0c4782560b, type: 3}
 --- !u!1 &4732638935019186088
 GameObject:
   m_ObjectHideFlags: 0

@@ -1,12 +1,7 @@
 using System;
 using System.Text;
-using System.Threading;
-using TMPro;
 using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.InputSystem;
 using Cysharp.Threading.Tasks;
-using Unity.Netcode;
 using Unity.Services.Vivox;
 using Unity.Services.Authentication;
 using System.Collections.Generic;
@@ -15,11 +10,11 @@ using System.Collections.Generic;
 public class VivoxManager : CommonManagerBase
 {
     [SerializeField] private string m_channelPrefix = "Radio";
-    [SerializeField] private InputActionReference m_pushToTalkAction;
-    [SerializeField] private InputActionReference m_micMuteToggleAction;   // 마이크 음소거 토글 (#430)
     [SerializeField] private SessionManager m_session;   // 인스펙터에서 연결
+    [SerializeField] private VoiceDistortionController m_distortion;   // 먹통 음성 왜곡 부품 (#466)
+    [SerializeField] private ProximityPositionReporter m_positionReporter;   // 근접 위치 보고 부품 (#466)
+    [SerializeField] private VoiceInputRouter m_input;   // PTT·마이크 음소거 부품 (#466)
     private bool m_loggedIn;
-    private bool m_transmitting;   // PTT를 누르고 있는지 — 디버그 표시용
     private bool m_starting;
     private string m_statusDetail = string.Empty;   // 상태에 담기지 않는 부가 설명(실패 사유 등) — 디버그 패널 전용
 
@@ -28,11 +23,9 @@ public class VivoxManager : CommonManagerBase
     [SerializeField] private int m_conversationalDistance = 3;
     [SerializeField] private int m_audibleDistance = 15;
     [SerializeField] private float m_audioFadeIntensity = 1.0f; // 감쇠 강도 (테스트 중 멀어져도 크게 들리면 강도 ↑)
-    [SerializeField] private float m_positionUpdateInterval = 0.1f; // 위치 보고 주기
     private bool m_radioJoined;
     private bool m_proximityJoined;
     private string m_proximityChannelName;
-    private CancellationTokenSource m_posLoopCts;
 
     private readonly Dictionary<string, bool> m_speakingByPlayer = new();
     private bool m_participantEventsHooked;
@@ -73,6 +66,17 @@ public class VivoxManager : CommonManagerBase
         OnVoiceStateChanged?.Invoke(state);
     }
 
+    protected override void Awake()
+    {
+        base.Awake();   // App 등록 (R5)
+        if (m_distortion == null)
+            Debug.LogWarning("[VivoxManager] VoiceDistortionController 미할당 — 먹통 음성 왜곡이 걸리지 않는다", this);
+        if (m_positionReporter == null)
+            Debug.LogWarning("[VivoxManager] ProximityPositionReporter 미할당 — 근접 음성 거리 감쇠가 갱신되지 않는다", this);
+        if (m_input == null)
+            Debug.LogWarning("[VivoxManager] VoiceInputRouter 미할당 — 무전·마이크 음소거 키가 동작하지 않는다", this);
+    }
+
     private void OnEnable()
     {
         if (m_session != null)
@@ -84,22 +88,6 @@ public class VivoxManager : CommonManagerBase
             if (m_session.Auth != null)
                 m_session.Auth.OnSignedOut += HandleAuthSignedOut;
         }
-
-        if (m_pushToTalkAction != null)
-        {
-            m_pushToTalkAction.action.started += OnPushToTalkStarted;
-            m_pushToTalkAction.action.canceled += OnPushToTalkCanceled;
-            m_pushToTalkAction.action.Enable();
-        }
-
-        // 누를 때 한 번만 뒤집는다 — PTT와 달리 뗄 때는 아무 일도 없어야 하므로 performed만 본다 (#430)
-        if (m_micMuteToggleAction != null)
-        {
-            m_micMuteToggleAction.action.performed += OnMicMuteToggled;
-            m_micMuteToggleAction.action.Enable();
-        }
-
-        if (m_proximityJoined) StartPositionLoop();
     }
 
     private void OnDisable()
@@ -113,21 +101,6 @@ public class VivoxManager : CommonManagerBase
             if (m_session.Auth != null)
                 m_session.Auth.OnSignedOut -= HandleAuthSignedOut;
         }
-
-        if (m_pushToTalkAction != null)
-        {
-            m_pushToTalkAction.action.started -= OnPushToTalkStarted;
-            m_pushToTalkAction.action.canceled -= OnPushToTalkCanceled;
-            m_pushToTalkAction.action.Disable();
-        }
-
-        if (m_micMuteToggleAction != null)
-        {
-            m_micMuteToggleAction.action.performed -= OnMicMuteToggled;
-            m_micMuteToggleAction.action.Disable();
-        }
-
-        m_posLoopCts?.Cancel();
     }
 
     private async UniTask EnsureLoggedInAsync()
@@ -160,6 +133,7 @@ public class VivoxManager : CommonManagerBase
                 new LoginOptions { DisplayName = AuthenticationService.Instance.PlayerId });
 
             m_loggedIn = true;
+            m_input?.NotifyLoggedIn();
             HookParticipantEvents();
 
             // 아직 채널에는 붙지 않았다 — Connected는 참가까지 끝난 뒤에만 세운다
@@ -208,7 +182,9 @@ public class VivoxManager : CommonManagerBase
             var props = new Channel3DProperties(m_audibleDistance, m_conversationalDistance, m_audioFadeIntensity, AudioFadeModel.InverseByDistance);
             await VivoxService.Instance.JoinPositionalChannelAsync(m_proximityChannelName, ChatCapability.AudioOnly, props);
             m_proximityJoined = true;
-            StartPositionLoop();
+            m_distortion?.NotifyChannelsJoined(m_proximityChannelName);
+            m_positionReporter?.StartReporting(m_proximityChannelName);
+            m_input?.NotifyChannelsJoined(m_proximityChannelName);
 
             // 오픈마이크 장치는 설정값대로 — 무조건 언뮤트하면 마이크를 꺼둔 사람이 채널에 붙는 순간 풀린다 (#430)
             ApplyMicMute();
@@ -224,45 +200,6 @@ public class VivoxManager : CommonManagerBase
             SetVoiceState(EVoiceState.Failed, $"채널 참가 실패: {ex.Message}");
             Debug.LogError($"[VivoxManager] {ex}");
             await LeaveChannelAsync();
-        }
-    }
-
-    private void StartPositionLoop()
-    {
-        m_posLoopCts?.Cancel();
-        m_posLoopCts?.Dispose();
-        m_posLoopCts = new CancellationTokenSource();
-        PositionLoopAsync(m_posLoopCts.Token).Forget();
-    }
-
-    private async UniTaskVoid PositionLoopAsync(CancellationToken token)
-    {
-        Vector3 lastPos = Vector3.positiveInfinity;
-        Quaternion lastRot = Quaternion.identity;
-        NetworkObject local = null;
-
-        while (!token.IsCancellationRequested)
-        {
-            if (local == null)
-            {
-                var nm = NetworkManager.Singleton;
-                local = (nm != null && nm.IsClient) ? nm.LocalClient?.PlayerObject : null;
-            }
-
-            if (m_proximityJoined && local != null)
-            {
-                var t = local.transform;
-                bool moved = (t.position - lastPos).sqrMagnitude > 0.0001f || Quaternion.Angle(t.rotation, lastRot) > 0.5f;
-
-                if (moved)
-                {
-                    VivoxService.Instance.Set3DPosition(local.gameObject, m_proximityChannelName);
-                    lastPos = t.position;
-                    lastRot = t.rotation;
-                }
-            }
-
-            await UniTask.Delay(TimeSpan.FromSeconds(m_positionUpdateInterval), cancellationToken: token);
         }
     }
 
@@ -288,17 +225,14 @@ public class VivoxManager : CommonManagerBase
         participant.ParticipantSpeechDetected += () => RefreshSpeaking(participant.PlayerId);
         RefreshSpeaking(participant.PlayerId);
 
-        // 먹통 진행 중에 들어온 참가자도 왜곡을 받아야 한다 — 안 하면 그 사람 목소리만 멀쩡하다 (#372)
-        if (m_voiceDistorted && ShouldDistortChannel(participant.ChannelName))
-            ApplyDistortion(participant);
+        m_distortion?.HandleParticipantAdded(participant);
     }
 
     private void OnParticipantRemoved(VivoxParticipant participant)
     {
         RefreshSpeaking(participant.PlayerId);
 
-        // 나간 참가자의 탭 기록을 지운다 — 탭 오브젝트는 Vivox가 참가자와 함께 정리한다 (#372)
-        m_distortTaps.Remove(participant);
+        m_distortion?.HandleParticipantRemoved(participant);
     }
 
     private void RefreshSpeaking(string playerId)
@@ -340,12 +274,9 @@ public class VivoxManager : CommonManagerBase
             // (HandleSessionLeft · LogoutAsync)이 한다. (#430)
             m_radioJoined = false;
             m_proximityJoined = false;
-            m_transmitting = false;
-            m_posLoopCts?.Cancel();
-
-            // 채널을 떠나면 참가자와 탭이 함께 사라진다 — 기록만 비운다 (#372).
-            // m_voiceDistorted는 유지: 먹통 중 재접속하면 OnParticipantAdded가 다시 왜곡을 건다.
-            m_distortTaps.Clear();
+            m_positionReporter?.StopReporting();
+            m_input?.NotifyChannelsLeft();
+            m_distortion?.NotifyChannelsLeft();
         }
     }
 
@@ -359,101 +290,24 @@ public class VivoxManager : CommonManagerBase
         return sb.ToString();
     }
 
+    // ---- 음성 입력 (#430) ----
+    // PTT·마이크 음소거는 VoiceInputRouter 부품이 한다 (#466) — 여기서는 외부 진입점만 유지한다.
+
     /// <summary>무전 키 표시 문자열 — 로비 안내와 디버그 패널이 함께 쓴다.</summary>
-    public string PushToTalkBinding =>
-        m_pushToTalkAction != null ? m_pushToTalkAction.action.GetBindingDisplayString() : "(미할당)";
-
-    // 텍스트 입력 중에는 음성 단축키를 무시한다 — 닉네임·세션 코드를 치다가 v·m이 섞이면 무전이
-    // 나가거나 마이크가 꺼진다. Input System 액션은 UI 포커스와 무관하게 항상 살아 있어서
-    // 여기서 직접 확인해야 한다. 프로젝트의 입력 필드는 전부 TMP_InputField다. (#430)
-    //
-    // 액션을 Disable/Enable로 껐다 켜지 않는 이유: 키를 누른 채 포커스가 바뀌면 canceled를 놓쳐
-    // 송신이 켜진 채로 남는다. 콜백에서 걸러내는 편이 상태가 어긋날 여지가 없다.
-    private static bool IsTypingInUI()
-    {
-        EventSystem events = EventSystem.current;
-        GameObject selected = events != null ? events.currentSelectedGameObject : null;
-
-        return selected != null
-            && selected.TryGetComponent(out TMP_InputField input)
-            && input.isFocused;
-    }
-
-    private void OnPushToTalkStarted(InputAction.CallbackContext ctx)
-    {
-        if (IsTypingInUI()) return;
-
-        // 음소거가 이긴다 — 송신을 막는 가드는 넣지 않는다(입력 장치가 뮤트면 송신 모드와 무관하게
-        // 소리가 나가지 않아 두 경로가 자연히 독립이다). 대신 눌렀다는 사실만 알린다 — 이 안내가
-        // 없으면 음소거를 잊고 말하는 상황이 그대로 남는다. (#430)
-        if (GameSettings.MicMuted) OnMutedTalkAttempt?.Invoke();
-
-        SetRadioTransmit(true);
-    }
-
-    // 뗄 때는 타이핑 여부를 보지 않는다 — 누른 뒤 입력창을 클릭하고 떼는 순서면 송신이 켜진 채
-    // 남는다. 켜져 있을 때만 끄면 되므로 m_transmitting으로 판단한다. (#430)
-    private void OnPushToTalkCanceled(InputAction.CallbackContext ctx)
-    {
-        if (m_transmitting) SetRadioTransmit(false);
-    }
-
-    private void SetRadioTransmit(bool on)
-    {
-        if (!m_radioJoined || !m_proximityJoined) return;
-        m_transmitting = on;
-
-        ApplyRadioTransmission(on);
-    }
-
-    // 무전 채널 송신을 켜고 끈다 — 끄면 근접 채널로만 송신한다(참가 시 기본값과 동일).
-    private void ApplyRadioTransmission(bool on)
-    {
-        var mode = on ? TransmissionMode.All : TransmissionMode.Single;
-        string ch = on ? null : m_proximityChannelName;
-        VivoxService.Instance.SetChannelTransmissionModeAsync(mode, ch).AsUniTask().Forget();
-    }
-
-    // ---- 마이크 음소거 (#430) ----
-    // 상태는 GameSettings.MicMuted 하나가 소유한다 — 여기에 복사해 두지 않는다(설정 창·토글 키
-    // 두 경로로 바뀌므로 복사본은 반드시 어긋난다). 적용은 입력 장치 뮤트 — 송신 모드는 PTT의 것이다.
-
-    /// <summary>음소거 중에 무전 키를 눌렀다 — HUD가 "마이크가 꺼져 있습니다"를 띄운다.</summary>
-    public event Action OnMutedTalkAttempt;
+    public string PushToTalkBinding => m_input != null ? m_input.PushToTalkBinding : "(미할당)";
 
     /// <summary>음소거 토글 키 표시 문자열 — 안내·디버그 패널용.</summary>
-    public string MicMuteBinding =>
-        m_micMuteToggleAction != null ? m_micMuteToggleAction.action.GetBindingDisplayString() : "(미할당)";
+    public string MicMuteBinding => m_input != null ? m_input.MicMuteBinding : "(미할당)";
 
-    private void OnMicMuteToggled(InputAction.CallbackContext ctx)
+    /// <summary>음소거 중에 무전 키를 눌렀다 — HUD가 "마이크가 꺼져 있습니다"를 띄운다.</summary>
+    public event Action OnMutedTalkAttempt
     {
-        // 로그인 전에는 끌 마이크가 없다 — 타이틀에서는 음소거 표시가 어디에도 없어서(HUD는 게임,
-        // 로스터는 로비, 설정 창은 열려 있을 때만) 눌러도 반응이 없는 것처럼 보인다. 씬 이름이 아니라
-        // '음성이 살아 있는가'로 판정해 세션 전 어떤 상황에서도 같게 동작한다. 설정 창 토글은 이
-        // 제한을 받지 않으므로 접속 전에 미리 꺼두는 경로는 그대로 남는다. (#430)
-        if (!m_loggedIn) return;
-        if (IsTypingInUI()) return;
-
-        GameSettings.MicMuted = !GameSettings.MicMuted;
+        add { if (m_input != null) m_input.OnMutedTalkAttempt += value; }
+        remove { if (m_input != null) m_input.OnMutedTalkAttempt -= value; }
     }
 
-    /// <summary>
-    /// 설정의 음소거 값을 입력 장치에 적용한다. 값을 필드로 복사하지 않고 매번 GameSettings를 읽는다
-    /// (ApplyVoiceVolume과 같은 방침 — 부르는 지점이 둘이라 복사본을 두면 어긋난다).
-    ///
-    /// 송신 모드(SetChannelTransmissionModeAsync)로 구현하지 않는다 — PTT가 그 API를 쓰므로
-    /// 무전 키를 누르는 순간 음소거가 풀린다. 입력 장치 뮤트는 PTT 경로와 겹치지 않는다.
-    ///
-    /// 로그인 전에는 걸 수 없으므로 채널 참가 시점에 다시 부른다(JoinChannelAsync) — 그러지 않으면
-    /// 마이크를 꺼둔 사람이 채널에 붙는 순간 음소거가 저절로 풀린다.
-    /// </summary>
-    public void ApplyMicMute()
-    {
-        if (!m_loggedIn) return;
-
-        if (GameSettings.MicMuted) VivoxService.Instance.MuteInputDevice();
-        else VivoxService.Instance.UnmuteInputDevice();
-    }
+    /// <summary>설정의 음소거 값을 입력 장치에 적용한다 (#430) — GameSettings·채널 참가 두 곳이 부른다.</summary>
+    public void ApplyMicMute() => m_input?.ApplyMicMute();
 
     // ---- 음성 음량 (#225) ----
     // Vivox 출력 볼륨은 -50~50 정수 로그 스케일이고 0이 '변화 없음'이다.
@@ -479,11 +333,7 @@ public class VivoxManager : CommonManagerBase
         if (m_loggedIn)
             VivoxService.Instance.SetOutputDeviceVolume(ToVivoxVolume(volume));
 
-        foreach (AudioSource source in m_distortTaps.Values)
-        {
-            if (source != null)
-                source.volume = volume;
-        }
+        m_distortion?.ApplyVolume();
     }
 
     // 0~1 → Vivox 정수 스케일. 0은 확실한 무음으로 떨어뜨리고, 그 위는 실사용 구간으로 보간한다.
@@ -496,162 +346,10 @@ public class VivoxManager : CommonManagerBase
     }
 
     // ---- 먹통 음성 왜곡 (#372) ----
-    //
-    // 먹통 중 음성을 '끊는' 대신 '망가뜨린다'. 완전 침묵은 협동 게임에서 답답하고 버그로 오인되는데,
-    // 왜곡은 이벤트가 터졌다는 게 즉시 전달되면서 알아듣기 어려워 통신 제한 목적도 달성한다.
-    // 신호 해석기(#108)의 텍스트 경로는 여전히 또렷하므로 "먹통 시 정확한 통신 수단"이라는 역할도 남는다.
-    //
-    // 구현: Vivox 오디오 탭으로 참가자 음성을 Unity AudioSource로 끌어와 필터를 건다.
-    // silenceInChannelAudioMix=true로 Vivox 자체 믹스에서는 죽여야 소리가 두 번 나지 않는다.
-    // 전부 로컬 재생 처리라 네트워크 동기화가 없다 — 각 피어가 자기가 듣는 소리만 망가뜨린다.
-    //
-    // 어떤 필터를 어떤 값으로 얹을지는 VoiceDistortionProfile(SO)이 소유한다 — 이 매니저는
-    // '언제 왜곡할지'만 안다. 튜닝 값이 여기 늘어나면 프리셋 교체가 불가능해진다 (#372 리뷰).
+    // 실제 처리는 VoiceDistortionController 부품이 한다 (#466) — 여기서는 외부 진입점만 유지한다.
 
-    [Header("먹통 음성 왜곡 (#372)")]
-    [Tooltip("왜곡 음색 프로파일(SO) — 필터 조합·수치는 전부 이 에셋이 정한다. 비면 왜곡을 걸지 않는다")]
-    [SerializeField] private VoiceDistortionProfile m_distortProfile;
-
-    [Tooltip(
-        "근접 채널 음성도 왜곡할지. 끄면 무전 채널만 왜곡한다 — 근접은 Vivox가 자체 3D 감쇠를 처리하는데, "
-        + "탭으로 빼내면 그 감쇠가 유지되는지 확인이 필요하다(멀리 있는 사람이 크게 들리면 이 옵션을 끌 것). "
-        + "음색이 아니라 '어느 채널에 거는가'라는 Vivox 배선이라 프로파일이 아니라 여기 남는다")]
-    [SerializeField] private bool m_distortProximityToo = true;
-
-    private bool m_voiceDistorted;
-    private float m_nextGlitchTime;
-
-    // 탭을 건 참가자 → 그 참가자의 재생 AudioSource. 해제 시 전부 되돌린다.
-    private readonly Dictionary<VivoxParticipant, AudioSource> m_distortTaps = new();
-
-    /// <summary>
-    /// 먹통 음성 왜곡을 켜고 끈다 — <see cref="DeviceBlackoutView"/>가 먹통 플래그에 맞춰 호출한다. (#372)
-    /// 자기 목소리(IsSelf)는 어차피 자기에게 재생되지 않으므로 건너뛴다.
-    /// </summary>
-    public void SetVoiceDistorted(bool distorted)
-    {
-        if (m_voiceDistorted == distorted) return;
-
-        // 프로파일이 없으면 왜곡 자체를 시작하지 않는다 — 탭만 걸고 필터를 못 얹으면
-        // Vivox 믹스에서 죽인 목소리를 대신 재생해 줄 설정이 없어 그 사람이 통째로 무음이 된다.
-        if (distorted && m_distortProfile == null)
-        {
-            Debug.LogWarning("[VivoxManager] VoiceDistortionProfile 미할당 — 먹통 음성 왜곡을 건너뛴다", this);
-            return;
-        }
-
-        m_voiceDistorted = distorted;
-
-        if (distorted)
-            ApplyDistortionToAll();
-        else
-            ClearAllDistortion();
-    }
-
-    private void ApplyDistortionToAll()
-    {
-        if (!m_loggedIn) return;
-
-        foreach (var channel in VivoxService.Instance.ActiveChannels)
-        {
-            if (!ShouldDistortChannel(channel.Key)) continue;
-            foreach (VivoxParticipant participant in channel.Value)
-                ApplyDistortion(participant);
-        }
-    }
-
-    // 근접 채널 왜곡 여부는 인스펙터 토글 — 3D 감쇠 확인 전까지 끌 수 있어야 한다
-    private bool ShouldDistortChannel(string channelName)
-        => m_distortProximityToo || channelName != m_proximityChannelName;
-
-    private void ApplyDistortion(VivoxParticipant participant)
-    {
-        if (participant == null || participant.IsSelf) return;
-        if (m_distortProfile == null) return; // SetVoiceDistorted가 이미 막지만 진입점이 둘이라 여기서도 확인
-        if (m_distortTaps.ContainsKey(participant)) return; // 중복 탭 방지
-
-        // 탭이 만들어졌는지 추적한다 — 아래 어느 경로로 빠져나가든 되돌리기 위함 (실패 시 영구 무음 방지)
-        bool tapCreated = false;
-
-        try
-        {
-            // silenceInChannelAudioMix=true — Vivox 믹스에서는 죽이고 우리 AudioSource로만 재생한다.
-            // 이 호출이 성공한 순간부터 그 참가자는 Vivox 믹스에서 들리지 않는다. 따라서 이후
-            // 어느 경로로 실패하든 탭을 반드시 되돌려야 한다 — 탭만 걸리고 우리도 재생하지 않으면
-            // 그 사람 목소리가 세션 내내 완전히 사라지고, m_distortTaps에 없으니 해제 때도 못 살린다.
-            GameObject tapObject = participant.CreateVivoxParticipantTap(
-                $"BlackoutVoiceTap_{participant.PlayerId}", true);
-            tapCreated = true;
-
-            AudioSource source = participant.ParticipantTapAudioSource;
-            if (tapObject == null || source == null)
-            {
-                Debug.LogWarning($"[VivoxManager] 오디오 탭 생성 실패 — {participant.PlayerId}");
-                SafeDestroyTap(participant); // 음소거만 남기고 나가지 않는다
-                return;
-            }
-
-            // 어떤 필터를 어떤 순서·값으로 얹을지는 프로파일이 안다 (#372 리뷰)
-            m_distortProfile.Apply(tapObject, source);
-
-            // 새 AudioSource의 기본 volume은 1 — 설정값을 걸지 않으면 음소거가 풀린다 (#225)
-            source.volume = GameSettings.VoiceVolume;
-
-            m_distortTaps[participant] = source;
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError($"[VivoxManager] 음성 왜곡 적용 실패 ({participant.PlayerId}): {ex}");
-
-            // 필터를 얹다 실패했어도 탭은 이미 걸려 있을 수 있다 — 등록에 성공하지 못했다면 되돌린다.
-            // (등록됐다면 정상 경로이므로 해제는 ClearAllDistortion이 맡는다)
-            if (tapCreated && !m_distortTaps.ContainsKey(participant))
-                SafeDestroyTap(participant);
-        }
-    }
-
-    // 탭 해제 — 어느 경로에서 부르든 여기서 실패가 나머지 정리를 막지 않게 한다.
-    // 탭 GameObject가 통째로 파괴되므로 얹은 필터도 함께 사라진다.
-    private void SafeDestroyTap(VivoxParticipant participant)
-    {
-        if (participant == null) return;
-
-        try
-        {
-            participant.DestroyVivoxParticipantTap();
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError($"[VivoxManager] 탭 해제 실패 ({participant.PlayerId}): {ex}");
-        }
-    }
-
-    private void ClearAllDistortion()
-    {
-        // 키 복사본을 순회한다 — SafeDestroyTap이 Vivox 참가자 콜백을 동기로 깨우면
-        // OnParticipantRemoved가 m_distortTaps를 건드려 순회 중 수정 예외가 난다 (#372)
-        foreach (VivoxParticipant participant in new List<VivoxParticipant>(m_distortTaps.Keys))
-            SafeDestroyTap(participant);
-
-        m_distortTaps.Clear();
-    }
-
-    // 피치를 주기적으로 튀게 해 "신호가 튄다"는 인상을 준다 — 왜곡 중에만 돈다.
-    // 튀는 간격·폭은 프로파일이 정한다 (m_voiceDistorted가 켜졌다면 프로파일은 반드시 있다).
-    private void Update()
-    {
-        if (!m_voiceDistorted || m_distortTaps.Count == 0) return;
-        if (Time.time < m_nextGlitchTime) return;
-
-        m_nextGlitchTime = Time.time + m_distortProfile.NextGlitchInterval();
-        float pitch = m_distortProfile.NextGlitchPitch();
-
-        foreach (AudioSource source in m_distortTaps.Values)
-        {
-            if (source != null)
-                source.pitch = pitch;
-        }
-    }
+    /// <summary>먹통 음성 왜곡을 켜고 끈다 — <see cref="DeviceBlackoutView"/>가 먹통 플래그에 맞춰 호출한다. (#372)</summary>
+    public void SetVoiceDistorted(bool distorted) => m_distortion?.SetDistorted(distorted);
 
     // 먹통 중 무전을 '차단'하던 SetCommsJammed는 제거했다 (#372). 먹통 연출이 차단에서 왜곡으로
     // 바뀌면서 호출부가 사라졌고, 통신을 끊는 경로가 둘로 남으면 다음 사람이 어느 쪽이 살아있는지
@@ -661,8 +359,8 @@ public class VivoxManager : CommonManagerBase
     {
         UnhookParticipantEvents();
         m_speakingByPlayer.Clear();
-        m_distortTaps.Clear(); // 탭은 채널 이탈과 함께 정리된다 — 기록만 비운다 (#372)
-        m_voiceDistorted = false;
+        m_distortion?.NotifyVoiceEnded();
+        m_input?.NotifyVoiceEnded();
 
         if (m_radioJoined || m_proximityJoined)
         {
@@ -692,7 +390,7 @@ public class VivoxManager : CommonManagerBase
         // 여기서 리셋하지 않으면 다음 세션이 이유 없이 왜곡된 채 시작된다 (#372).
         // 지금은 새 씬의 DeviceBlackoutView가 초기 상태를 내려줘 우연히 풀리지만, 그 초기화에
         // 기대는 구조라 View 쪽이 바뀌면 조용히 깨진다.
-        m_voiceDistorted = false;
+        m_distortion?.NotifyVoiceEnded();
         SetVoiceState(EVoiceState.Idle);
         LeaveChannelAsync().Forget();
     }
@@ -703,8 +401,8 @@ public class VivoxManager : CommonManagerBase
     // (클라 본인 인터넷이 끊긴 진짜 드롭이면 LeaveAllChannelsAsync가 타임아웃날 수 있으나 fire-and-forget이라 무해.)
     private void HandleConnectionLost()
     {
-        m_posLoopCts?.Cancel();
-        m_transmitting = false;
+        m_positionReporter?.StopReporting();
+        m_input?.NotifyChannelsLeft();
         CleanupAsync().Forget(); // 채널 이탈 + Vivox 로그아웃 (LogoutAsync는 멱등)
     }
 
@@ -721,7 +419,6 @@ public class VivoxManager : CommonManagerBase
         base.OnDestroy(); // App 등록 해제
 
         CleanupAsync().Forget();
-        m_posLoopCts?.Cancel();
     }
 
     private async UniTaskVoid CleanupAsync()
@@ -751,14 +448,14 @@ public class VivoxManager : CommonManagerBase
         GUILayout.Label($"LoggedIn: {m_loggedIn}");
         GUILayout.Label($"Proximity Joined: {m_proximityJoined}");
         GUILayout.Label($"Radio Joined: {m_radioJoined}");
-        GUILayout.Label($"Transmitting(PTT): {m_transmitting}");
+        GUILayout.Label($"Transmitting(PTT): {m_input != null && m_input.IsTransmitting}");
         GUILayout.Label($"Mic Muted: {GameSettings.MicMuted}");
         GUILayout.Label($"Push To Talk: {PushToTalkBinding}");
         GUILayout.Label($"Mic Mute Toggle: {MicMuteBinding}");
         GUILayout.Space(6);
         GUILayout.Label($"{ToLabel(VoiceState)} ({VoiceState})");
         if (!string.IsNullOrEmpty(m_statusDetail)) GUILayout.Label(m_statusDetail);
-        if (m_voiceDistorted) GUILayout.Label("음성 왜곡(먹통) 중");
+        if (m_distortion != null && m_distortion.IsDistorted) GUILayout.Label("음성 왜곡(먹통) 중");
         GUILayout.EndArea();
     }
 }
