@@ -3,7 +3,7 @@ using UnityEngine;
 
 /// <summary>
 /// 시선 pitch를 캐릭터 머리(Neck/Head) 본에 반영한다 — 다른 플레이어 화면에서 어디를 보는지 보이게. (#348)
-/// 오너가 PlayerMovement의 pitch를 owner-write NetworkVariable로 전파하고(PlayerNameTag와 같은 패턴),
+/// 오너가 PlayerLook의 pitch를 owner-write NetworkVariable로 전파하고(PlayerNameTag와 같은 패턴),
 /// 모든 인스턴스가 LateUpdate(Animator 평가 이후)에서 본 회전을 얹는다.
 /// yaw(좌우)는 몸통 전체가 NetworkTransform으로 돌므로 여기서는 pitch만 담당한다.
 /// </summary>
@@ -36,25 +36,25 @@ public class PlayerHeadLook : NetworkBehaviour
         NetworkVariableWritePermission.Owner
     );
 
-    private PlayerMovement m_movement;
+    private PlayerLook m_look;
     private PlayerIncapacitation m_incapacitation; // 다운 중 오버라이드 차단용 — 없으면(테스트 구성) 항상 활성
     private float m_displayPitch; // 실제 본에 반영 중인 pitch — 목표값을 지수 감쇠로 추종
     private float m_weight; // 오버라이드 가중치 0~1 — 다운 중 0으로 블렌드해 쓰러짐 애니메이션과 싸우지 않게
 
     private void Awake()
     {
-        m_movement = GetComponent<PlayerMovement>();
+        m_look = GetComponent<PlayerLook>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
     }
 
     private void Update()
     {
         // 오너만 전파 — 오프라인 Play 테스트(IsSpawned=false)에서는 네트워크 변수를 건드리지 않는다
-        if (!IsSpawned || !IsOwner || m_movement == null)
+        if (!IsSpawned || !IsOwner || m_look == null)
             return;
 
-        if (Mathf.Abs(m_movement.Pitch - m_syncedPitch.Value) > k_sendThreshold)
-            m_syncedPitch.Value = m_movement.Pitch;
+        if (Mathf.Abs(m_look.Pitch - m_syncedPitch.Value) > k_sendThreshold)
+            m_syncedPitch.Value = m_look.Pitch;
     }
 
     private void LateUpdate()
@@ -63,8 +63,8 @@ public class PlayerHeadLook : NetworkBehaviour
             return;
 
         // 오너(및 오프라인 테스트)는 로컬 pitch를 직접, 원격은 동기화값을 사용
-        bool useLocal = (!IsSpawned || IsOwner) && m_movement != null;
-        float target = useLocal ? m_movement.Pitch : m_syncedPitch.Value;
+        bool useLocal = (!IsSpawned || IsOwner) && m_look != null;
+        float target = useLocal ? m_look.Pitch : m_syncedPitch.Value;
         target = Mathf.Clamp(target, -m_maxVisualPitch, m_maxVisualPitch);
 
         // 다운 중엔 가중치를 0으로 — 동기화된 상태값 폴링이라 원격 뷰도 동일하게 꺼진다 (PlayerAnimationDriver와 같은 방식)

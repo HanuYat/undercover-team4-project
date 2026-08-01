@@ -132,21 +132,21 @@ public class RopeDragView : MonoBehaviour
     }
 
     // 운반 대상의 밧줄 길이 — 늘어짐(sag) 계산의 기준. NPC는 설정 에셋에 길이가 있지만 플레이어는
-    // 끌려가는 쪽의 추종 간격(PlayerMovement.DragFollowDistance)이 곧 줄 길이라 거기서 가져온다.
+    // 끌려가는 쪽의 추종 간격(PlayerTowedMotion.DragFollowDistance)이 곧 줄 길이라 거기서 가져온다.
     // 매 프레임 GetComponent를 피하려고 대상이 바뀔 때만 다시 잡는다 (KnotSource 캐시와 같은 관례).
     private Transform m_carriedLengthSource;
     private float m_carriedRopeLength = k_fallbackCarriedRopeLength;
 
-    private const float k_fallbackCarriedRopeLength = 1.6f; // PlayerMovement가 없는 구성(테스트 등)
+    private const float k_fallbackCarriedRopeLength = 1.6f; // PlayerTowedMotion이 없는 구성(테스트 등)
 
     private float CarriedRopeLength(Transform carried)
     {
         if (carried != m_carriedLengthSource)
         {
             m_carriedLengthSource = carried;
-            PlayerMovement movement = carried.GetComponent<PlayerMovement>();
+            PlayerTowedMotion towed = carried.GetComponent<PlayerTowedMotion>();
             m_carriedRopeLength =
-                movement != null ? movement.DragFollowDistance : k_fallbackCarriedRopeLength;
+                towed != null ? towed.DragFollowDistance : k_fallbackCarriedRopeLength;
         }
 
         return m_carriedRopeLength;

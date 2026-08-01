@@ -22,26 +22,9 @@ public class PlayerMovement : NetworkBehaviour
     [Tooltip("넉백 속도가 잦아드는 감쇠율(1/초) — 클수록 빨리 멈춘다")]
     [SerializeField] private float m_knockbackDamping = 4f;
 
-    // 기능 정지(Die) 동료를 끌고 가는 연출 (#365) — 밧줄 끌기(#269)와 같은 수식·같은 감각을 쓴다.
-    // 값도 PlayerEscorter.RopeDrag의 기본값에 맞춰 두었다.
-    [Header("운반되는 쪽 — 끌려가기 (#365)")]
-    [Tooltip("끌기 간격(m) — 운반자와 이 거리 안쪽이면 끌려가지 않는다(줄이 늘어진 상태)")]
-    [SerializeField] private float m_dragFollowDistance = 1.6f;
-
-    /// <summary>끌기 간격(m) — 곧 밧줄 길이다. 밧줄 표시(RopeDragView)가 늘어짐 계산에 같은 값을 쓴다. (#365)</summary>
-    public float DragFollowDistance => m_dragFollowDistance;
-
-    [Tooltip("끌리는 몸이 목표 위치를 따라잡는 데 걸리는 시간(초) — 클수록 늦게, 크게 휘며 따라온다")]
-    [SerializeField] private float m_dragSmoothTime = 0.14f;
-
-    [Tooltip("몸이 끌리는 방향으로 도는 민감도(1/초)")]
-    [SerializeField] private float m_dragTurnSharpness = 6f;
-
-    [Tooltip("끌리며 좌우로 흔들리는 최대 각(도) — 0이면 흔들리지 않는다")]
-    [SerializeField] private float m_dragSwayAngle = 7f;
-
-    [Tooltip("흔들림 주기 — 끌린 거리 1m당 위상(라디안)")]
-    [SerializeField] private float m_dragSwayFrequency = 1.6f;
+    // 접지 중 유지하는 하향 속도(m/s). 0으로 두면 CharacterController가 경사·계단에서 지면을 놓쳐
+    // 접지 판정이 깜빡인다 — 살짝 눌러 붙여 둔다. 천장 상쇄(0으로 죽이기)의 반대쪽 짝이다. (#189)
+    private const float k_groundedStickVelocity = -2f;
 
     // PlayerAnimationDriver가 속도 정규화에 사용 (실제 속도 ↔ 블렌드 트리 좌표 분리)
     // 실제 이동(HandleMove)도 같은 프로퍼티를 쓴다 — 배율이 걸린 값을 한 곳에서만 내야
@@ -57,47 +40,6 @@ public class PlayerMovement : NetworkBehaviour
     /// </summary>
     public float SpeedFactor => m_escorter != null ? m_escorter.DragSpeedFactor : 1f;
 
-    [Header("1인칭 시점")]
-    [SerializeField]
-    private Camera playerCamera;
-
-    [Tooltip("프리팹 기준 감도 — 실제 감도는 여기에 설정 창의 감도 배율(GameSettings.MouseSensitivity)을 곱한 값이다 (#225)")]
-    [SerializeField]
-    private float m_mouseSensitivity = 1f;
-
-    [Tooltip("마우스 회전 스무딩 강도 — 클수록 반응이 빠르고 덜 부드러움. 0이면 스무딩 없음(원시 입력). (#216)")]
-    [SerializeField]
-    private float m_lookSmoothing = 20f;
-
-    [SerializeField]
-    private float m_minPitch = -80f;
-
-    [SerializeField]
-    private float m_maxPitch = 80f;
-
-    [SerializeField]
-    private Transform m_ownBodyRoot; // 내 카메라에서만 안 보이게 할 캐릭터 몸(머리) 루트
-
-    [Header("다운(무력화) 시점")]
-    [Tooltip("다운 중 카메라를 낮출 바닥 근처 높이(m)")]
-    [SerializeField] private float m_downCamHeight = 0.35f;
-
-    [Tooltip("다운 중 카메라 피치(양수=아래, 음수=위). 바닥에서 살짝 위를 보게 함")]
-    [SerializeField] private float m_downCamPitch = -20f;
-
-    [Tooltip("서기↔다운 시점 전환 보간 속도")]
-    [SerializeField] private float m_camPoseLerpSpeed = 8f;
-
-    // 쓰러진 동안에도 주변을 볼 수 있게 시야만 돌린다 (#252) — 몸은 누운 채 그대로다.
-    [Tooltip("쓰러진 동안(다운·기절) 시야를 좌우로 돌릴 수 있는 범위(±도). 몸을 돌리지 않으므로 목이 꺾여 보이지 않을 만큼만 준다")]
-    [SerializeField] private float m_downYawRange = 100f;
-
-    [Tooltip("쓰러진 동안 시야 피치 하한(음수=위). 바닥에 누워 있으니 위로는 넉넉히 열어 둔다")]
-    [SerializeField] private float m_downMinPitch = -80f;
-
-    [Tooltip("쓰러진 동안 시야 피치 상한(양수=아래). 아래로는 바닥밖에 없어 좁게 잡는다")]
-    [SerializeField] private float m_downMaxPitch = 20f;
-
     // 서버가 Connection Approval에서 지정한 스폰 포즈. 프리팹의 NetworkTransform이 Owner 권한이라,
     // 씬 동기화를 거쳐 접속하면 오너 로컬 인스턴스가 프리팹 원점에 생성된 채 권한을 잡고 원점
     // 위치를 역전파해 스폰 위치를 덮어쓴다 — 오너가 이 값을 읽어 스스로 스폰 포즈로 이동해 바로잡는다.
@@ -112,38 +54,23 @@ public class PlayerMovement : NetworkBehaviour
     private PlayerCrouch m_crouch; // 앉기 중 이동 속도·카메라 높이 조정용 (#236)
     private PlayerJump m_jump; // 점프 입력 수집·공중 상태 전파 (#189)
     private PlayerEscorter m_escorter; // 끌고 있는 무게로 깎인 이동속도 배율을 읽는다 (#398)
+    private PlayerTowedMotion m_towed; // 남이 내 몸을 옮기는 동안의 추종 — 입력 이동을 대신한다 (#279, #365)
+    private PlayerLook m_look; // 시점 회전·카메라 자세 — 몸통 yaw가 이동 방향의 기준이라 여기서 순서를 잡는다
     private RoundManager Round => App.Game.Round; // 라운드 종료 시 이동·시점 차단용 (라운드 종료 freeze)
-    private float m_pitch;
-    private Vector2 m_smoothedLook; // 지수 감쇠로 부드럽게 만든 시점 입력 — 저속 픽셀 양자화 지터 완화 (#216)
-    private float m_standCamHeight; // 평소(서기) 카메라 높이 — 프리팹 초기값에서 캡처 (#105)
-    private float m_camCrouchDrop; // 시점에 실제로 반영 중인 앉기 하강량 — 공중에서는 얼린다 (#189)
-    private float m_downCamBlend; // 서기 시점(0) ↔ 다운 시점(1) 보간 진행도 (#105)
-    private float m_downYaw;      // 쓰러진 동안 누적한 시야 좌우 각도 — 몸 회전이 아니라 카메라 로컬 (#252)
-    private bool m_downLookTaken; // 쓰러진 뒤 플레이어가 시선을 직접 움직였는가 — 그 순간부터 강제 피치를 놓는다
     private float m_verticalVelocity;
     private Vector3 m_knockbackVelocity; // 외력으로 밀려나는 수평 속도 — 매 프레임 감쇠 (#232 폭발 넉백)
     private bool m_ignoreRoundEndFreeze; // 정산 화면을 닫은 로컬 플레이어는 라운드 종료 freeze를 무시하고 움직인다 (#107)
 
-    // 끌려가기(#279) — 오검거 호송 중 오너 로컬이 끌기 NPC 2명을 추종한다. 앵커가 파괴돼도
-    // m_carried가 참인 동안은 입력 이동으로 돌아가지 않는다(서버의 종료/스냅 텔레포트가 마무리).
-    private bool m_carried;
-    private Transform m_carryAnchorA;
-    private Transform m_carryAnchorB;
-
-    // 운반되는 중(#365) — 나를 끌고 가는 플레이어. 오검거 끌려가기(위)와 달리 CharacterController를
-    // 끄지 않는다: 벽·계단·경사를 CC가 스스로 풀어 준다(밧줄 끌기의 ResolveDragPosition에 해당).
-    // (본부 부활 장치는 콜라이더 점유가 아니라 E 상호작용으로 안치를 확정하므로 여기에 기대지 않는다 — HqRevivalDevice)
-    private Transform m_dragCarrier;
-    private Vector3 m_dragVelocity;  // SmoothDamp 관성
-    private Quaternion m_dragFacing; // 흔들림을 뺀 몸 방향 — 여기에 sway를 얹어 최종 회전을 만든다
-    private float m_dragTravel;      // 끌린 누적 거리(m) — 흔들림 위상의 기준
-
     // 다운(무력화) 중 여부 — 무력화 컴포넌트가 없으면(테스트 구성 등) 항상 false
     private bool IsIncapacitated => m_incapacitation != null && m_incapacitation.IsIncapacitated;
 
-    // 라운드 종료로 정지(freeze)됐는지 — RoundManager가 없으면(단독 테스트 씬) 항상 false.
-    // 단 정산 화면을 닫은 로컬 플레이어는 예외 — 남은 카운트다운 동안 자유롭게 움직인다 (#107).
-    private bool IsRoundOver => Round != null && Round.GameplayFrozen && !m_ignoreRoundEndFreeze;
+    /// <summary>
+    /// 라운드 종료로 정지(freeze)됐는지 — RoundManager가 없으면(단독 테스트 씬) 항상 false.
+    /// 단 정산 화면을 닫은 로컬 플레이어는 예외 — 남은 카운트다운 동안 자유롭게 움직인다 (#107).
+    /// 시점 차단 판정도 같은 값을 써야 해서(<see cref="PlayerLook"/>) 이 컴포넌트가 단독으로 들고 빌려준다 —
+    /// 예외 플래그를 켜는 <see cref="SetIgnoreRoundEndFreeze"/>가 여기 있기 때문.
+    /// </summary>
+    internal bool IsRoundOver => Round != null && Round.GameplayFrozen && !m_ignoreRoundEndFreeze;
 
     /// <summary>
     /// 라운드 종료 freeze를 이 플레이어에 한해 무시할지 설정한다 — 정산 화면(SettlementPanel)을 닫으면 켜진다.
@@ -157,12 +84,6 @@ public class PlayerMovement : NetworkBehaviour
     // 앉기 중 여부 — 앉기 컴포넌트가 없으면(테스트 구성 등) 항상 false (#236)
     private bool IsCrouching => m_crouch != null && m_crouch.IsCrouching;
 
-    // 앉기 블렌딩으로 머리가 내려간 높이(m) — 카메라를 같은 만큼 낮춘다 (#236)
-    private float CrouchHeadDrop => m_crouch != null ? m_crouch.HeadDrop : 0f;
-
-    /// <summary>시선 pitch(도, +아래/-위) — PlayerHeadLook이 머리 본 회전에 사용한다. (#348)</summary>
-    public float Pitch => m_pitch;
-
     private void Awake()
     {
         m_controller = GetComponent<CharacterController>();
@@ -171,11 +92,8 @@ public class PlayerMovement : NetworkBehaviour
         m_crouch = GetComponent<PlayerCrouch>();
         m_jump = GetComponent<PlayerJump>();
         m_escorter = GetComponent<PlayerEscorter>();
-
-        if (playerCamera != null)
-        {
-            m_standCamHeight = playerCamera.transform.localPosition.y; // 서기 시점 높이 기준값
-        }
+        m_towed = GetComponent<PlayerTowedMotion>();
+        m_look = GetComponent<PlayerLook>();
     }
 
     public override void OnNetworkSpawn()
@@ -187,19 +105,16 @@ public class PlayerMovement : NetworkBehaviour
             m_serverSpawnRotation.Value = transform.rotation;
         }
 
+        // 남의 카메라 끄기·내 몸 숨기기는 시점 담당(PlayerLook)이 든다 — 카메라와 몸 루트 참조가 그쪽에 있다.
+        m_look?.ApplyOwnerView(IsOwner);
+
         if (!IsOwner)
         {
-            playerCamera.gameObject.SetActive(false);
-            enabled = false;
+            enabled = false; // 이동·시점 갱신은 오너만 — PlayerLook·PlayerTowedMotion도 이 Update가 돌린다
             return;
         }
 
         ApplyServerSpawnPose();
-
-        if (m_ownBodyRoot != null)
-        {
-            SetLayerRecursively(m_ownBodyRoot, LayerMask.NameToLayer("OwnBody")); // 내 카메라에서만 안 보이게
-        }
 
         // 게임플레이 시작 — 커서를 푸는 UI가 없으면 잠긴다. 실제 Cursor 조작은 CursorLock만 한다. (#352)
         CursorLock.SetGameplayActive(true);
@@ -215,10 +130,10 @@ public class PlayerMovement : NetworkBehaviour
             // 커서를 푼 UI가 아직 열려 있어도(디스폰 경합) CursorLock이 최종 상태를 단독으로 정한다. (#352)
             CursorLock.SetGameplayActive(false);
 
-            // 끌려가는 도중 정리(라운드 리셋·연결 종료)되면 서버의 StopCarried가 못 올 수 있다 —
-            // CharacterController 비활성 + 추종 상태가 남지 않게 여기서 안전하게 푼다. (#279 리뷰 반영)
-            EndCarriedFollow();
-            EndDraggedFollow(); // 운반되던 중 정리되면 서버의 내려놓기가 못 올 수 있다 (#365, 같은 사정)
+            // 끌려가는 도중 정리(라운드 리셋·연결 종료)되면 서버의 종료 지시(StopCarried·내려놓기)가
+            // 못 올 수 있다 — CharacterController 비활성 + 추종 상태가 남지 않게 여기서 안전하게 푼다.
+            // (#279 리뷰 반영, #365도 같은 사정)
+            m_towed?.StopAll();
         }
     }
 
@@ -276,137 +191,38 @@ public class PlayerMovement : NetworkBehaviour
     [Rpc(SendTo.Owner)]
     private void ApplyPoseRpc(Vector3 position, Quaternion rotation) => SetPose(position, rotation);
 
-    /// <summary>
-    /// 끌려가기 추종 시작 — 오너 로컬 전용, PlayerPenaltyView(오검거 호송 #279)가 호출한다.
-    /// CharacterController를 끄고 매 프레임 두 앵커(양옆 끌기 NPC — 전 피어에 NetworkTransform으로
-    /// 동기화된 위치) 중점 살짝 뒤를 따라간다 — 오너가 움직여야 내 위치가 전 피어에 전파된다.
-    /// </summary>
-    public void BeginCarriedFollow(Transform anchorA, Transform anchorB)
-    {
-        m_carried = true;
-        m_carryAnchorA = anchorA;
-        m_carryAnchorB = anchorB;
-        m_controller.enabled = false; // 직접 transform 이동 — 켜 두면 내부 캐시가 위치를 되돌린다 (SetPose와 동일 사정)
-
-        // 호송 중에는 HandleMove를 건너뛰어 접지 보고가 멈춘다 — 공중에서 붙잡히면 공중 상태가
-        // 그대로 고착돼 끌려가는 내내 낙하 애니메이션이 재생된다. 여기서 한 번 내려준다. (#189)
-        if (m_jump != null)
-        {
-            m_jump.ReportGrounded(true);
-        }
-    }
-
-    /// <summary>끌려가기 추종 종료 — 호송 종료(광장 도착·중단) 시 PlayerPenaltyView가 호출한다.</summary>
-    public void EndCarriedFollow()
-    {
-        m_carried = false;
-        m_carryAnchorA = null;
-        m_carryAnchorB = null;
-        m_controller.enabled = true;
-    }
-
-    // 끌기 NPC 추종 — 두 앵커 중점 뒤(끌리는 몸)를 부드럽게 따라간다. 한쪽이 파괴되면 남은 쪽만 따른다.
-    private void UpdateCarriedFollow()
-    {
-        Transform a = m_carryAnchorA != null ? m_carryAnchorA : m_carryAnchorB;
-        if (a == null)
-            return; // 앵커 전부 소실 — 그 자리에서 대기, 서버의 종료/스냅 텔레포트가 마무리한다
-        Transform b = m_carryAnchorB != null ? m_carryAnchorB : a;
-
-        Vector3 forward = a.forward;
-        forward.y = 0f;
-        if (forward.sqrMagnitude < 0.001f)
-            forward = transform.forward;
-        forward.Normalize();
-
-        Vector3 mid = (a.position + b.position) * 0.5f;
-        Vector3 targetPos = mid - forward * 0.75f; // 끌기 담당들 살짝 뒤 — 질질 끌리는 그림
-
-        float lerp = 12f * Time.deltaTime;
-        transform.position = Vector3.Lerp(transform.position, targetPos, lerp);
-        transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(forward), lerp);
-    }
+    // ---- 추종 컴포넌트(PlayerTowedMotion)와 공유하는 면 ----
+    // 수직 속도와 CharacterController의 소유자는 이 컴포넌트다 — 중력·점프·넉백이 모두 같은 채널을
+    // 쓰기 때문. 추종 쪽이 직접 만지면 같은 값을 두 컴포넌트가 따로 적분하게 되므로 연산만 빌려준다.
 
     /// <summary>
-    /// 운반 추종 시작 — 오너 로컬 전용, <see cref="PlayerCarrier"/>(#365)가 서버 지시로 호출한다.
-    /// 기능 정지(Die)된 몸을 동료가 끌고 가는 동안 오너가 스스로 따라가야 위치가 전 피어에 전파된다
-    /// (NetworkTransform 오너 권한 — 오검거 호송 #279와 같은 사정).
+    /// 수평 이동만 받아 중력과 함께 적용한다 — 운반 추종(<see cref="PlayerTowedMotion"/>, #365)이 쓴다.
+    /// 접지 클램프·중력 적분은 <see cref="HandleMove"/>와 같은 경로(<see cref="IntegrateGravity"/>)를 쓴다.
     /// </summary>
-    public void BeginDraggedFollow(Transform carrier)
+    internal void MoveWithGravity(Vector3 horizontalStep)
     {
-        if (carrier == null)
-            return;
-
-        m_dragCarrier = carrier;
-
-        // 새 운반의 추종 상태 초기화 — 이전 운반의 관성·위상이 남으면 첫 프레임에 튄다 (SetDragging 관례)
-        m_dragVelocity = Vector3.zero;
-        m_dragFacing = transform.rotation;
-        m_dragTravel = 0f;
-
-        // 공중에서 붙잡히면 낙하 상태가 고착돼 끌려가는 내내 낙하 애니메이션이 재생된다 (#189)
-        if (m_jump != null)
-        {
-            m_jump.ReportGrounded(true);
-        }
+        IntegrateGravity();
+        m_controller.Move(horizontalStep + Vector3.up * m_verticalVelocity * Time.deltaTime);
     }
 
-    /// <summary>운반 추종 종료 — 내려놓기·부활·운반자 소실 시 <see cref="PlayerCarrier"/>가 호출한다. (#365)</summary>
-    public void EndDraggedFollow()
+    // 접지 유지 클램프 + 중력 적분 — 수직 속도의 유일한 적분 지점이다.
+    // 입력 이동(HandleMove)과 운반 추종(MoveWithGravity)이 같은 규칙을 써야 하므로 여기 하나만 둔다.
+    // 점프 임펄스는 이 뒤에 덮어써야 한다 — 클램프에 잡아먹히지 않게. (#189, HandleMove 참고)
+    private void IntegrateGravity()
     {
-        m_dragCarrier = null;
-        m_dragVelocity = Vector3.zero;
-    }
-
-    /// <summary>운반되어 끌려가는 중인지 — 오너 로컬 판정. (#365)</summary>
-    public bool IsDraggedFollowing => m_dragCarrier != null;
-
-    // 운반자 추종 — 밧줄 끌기(PlayerEscorter.ServerUpdateDrag)와 같은 수식이다: 간격을 넘을 때만
-    // 당기고, 늦게 따라오게 해서 코너에서 몸이 바깥으로 끌려나오는 궤적을 만든다.
-    // 다른 점은 적용 방식뿐 — transform 대입이 아니라 CharacterController.Move다. NPC 쪽에서 손으로
-    // 짜야 했던 벽 스윕·미끄러짐·지면 스냅(ResolveDragPosition)을 CC가 그대로 해 준다.
-    private void UpdateDraggedFollow()
-    {
-        Vector3 self = transform.position;
-        Vector3 anchor = m_dragCarrier.position;
-
-        Vector3 toSelf = self - anchor;
-        toSelf.y = 0f;
-        float distance = toSelf.magnitude;
-
-        // 간격 안쪽이면 당기지 않는다 — 운반자가 제자리에서 돌기만 하면 몸은 가만히 있는다
-        Vector3 target = self;
-        if (distance > m_dragFollowDistance)
-            target = anchor + toSelf / distance * m_dragFollowDistance;
-        target.y = self.y; // 높이는 아래 중력이 정한다
-
-        Vector3 next = Vector3.SmoothDamp(self, target, ref m_dragVelocity, m_dragSmoothTime);
-        Vector3 step = next - self;
-        step.y = 0f;
-
-        // 중력은 그대로 유지한다 — 끌려가다 계단·경사를 만나면 CC가 붙여 준다
         if (m_controller.isGrounded && m_verticalVelocity < 0f)
-            m_verticalVelocity = -2f;
-        m_verticalVelocity += m_gravity * Time.deltaTime;
-
-        m_controller.Move(step + Vector3.up * m_verticalVelocity * Time.deltaTime);
-
-        // 몸 방향은 운반자 회전이 아니라 끌리는 방향 — 제자리에서 마우스만 돌려도 몸이 같이 돌지 않는다.
-        // 쓰러진 몸을 돌리는 것이 여기서는 맞다(끌려가는 그림) — 시야는 카메라 로컬(m_downYaw)이 따로 든다.
-        Vector3 dragDirection = anchor - transform.position;
-        dragDirection.y = 0f;
-        if (dragDirection.sqrMagnitude > 0.0001f)
         {
-            Quaternion facing = Quaternion.LookRotation(dragDirection);
-            m_dragFacing = Quaternion.Slerp(
-                m_dragFacing, facing, 1f - Mathf.Exp(-m_dragTurnSharpness * Time.deltaTime));
+            m_verticalVelocity = k_groundedStickVelocity;
         }
 
-        // 끌린 거리에 비례해 좌우로 흔들린다 — 시간이 아니라 거리 기준이라 멈추면 흔들림도 멈춘다
-        m_dragTravel += new Vector2(step.x, step.z).magnitude;
-        float sway = Mathf.Sin(m_dragTravel * m_dragSwayFrequency) * m_dragSwayAngle;
-        transform.rotation = m_dragFacing * Quaternion.Euler(0f, sway, 0f);
+        m_verticalVelocity += m_gravity * Time.deltaTime;
     }
+
+    /// <summary>
+    /// CharacterController를 껐다 켠다 — transform을 직접 옮기는 호송 추종(#279)이 쓴다.
+    /// 켠 채로 transform을 옮기면 CC 내부 캐시가 위치를 되돌린다 (<see cref="SetPose"/>와 동일 사정).
+    /// </summary>
+    internal void SetControllerEnabled(bool value) => m_controller.enabled = value;
 
     // CharacterController가 켜진 상태에서 transform을 직접 옮기면 내부 캐시가 위치를 되돌릴 수 있어 잠시 끄고 옮긴다.
     private void SetPose(Vector3 pos, Quaternion rot)
@@ -420,41 +236,27 @@ public class PlayerMovement : NetworkBehaviour
         m_verticalVelocity = 0f;
     }
 
-    // 3인칭 장착 표시(#151)도 오너 화면에서 숨기려면 같은 처리가 필요해 공개한다.
-    public static void SetLayerRecursively(Transform root, int layer)
-    {
-        root.gameObject.layer = layer;
-        foreach (Transform child in root)
-        {
-            SetLayerRecursively(child, layer);
-        }
-    }
-
+    // 오너의 매 프레임 갱신 — 시점(PlayerLook)·추종(PlayerTowedMotion)도 여기서 순서를 잡아 돌린다.
+    // 자기 Update에 맡기지 않는 이유: 시점이 몸통 yaw를 돌리고 이동이 그 yaw를 기준으로 방향을 잡으므로
+    // 같은 프레임에서 시점 → 이동 순서가 보장돼야 한다(Unity의 컴포넌트 실행 순서는 미지정).
     private void Update()
     {
-        // 끌려가는 중(#279) — 입력 이동 대신 끌기 NPC를 추종한다. 행동불능 상태라 시점 입력은 어차피
-        // 막혀 있고(IsMovementLocked), 카메라는 다운 시점(UpdateCameraPose)이 계속 담당한다.
-        // CharacterController가 꺼져 있어 HandleMove(중력 Move)를 타면 안 된다.
-        if (m_carried)
+        // 남이 내 몸을 옮기는 중(#279 호송 / #365 운반) — 입력 이동 대신 추종한다.
+        // HandleMove를 타면 안 되는 이유는 모드마다 다르다: 호송은 CharacterController가 꺼져 있고,
+        // 운반은 켜져 있지만 중력이 이중으로 적분된다. 어느 쪽이든 이동은 추종 쪽이 든다.
+        //
+        // 시점은 두 모드 모두 열어 둔다 — 쓰러져도 주변은 볼 수 있어야 한다(#252). 몸은 추종이 돌리고
+        // 시야는 카메라 로컬(PlayerLook의 다운 yaw)이 따로 드므로 서로 간섭하지 않는다.
+        if (m_towed != null && m_towed.IsActive)
         {
-            UpdateCarriedFollow();
-            UpdateCameraPose();
+            m_look?.HandleLook();
+            m_towed.Tick();
+            m_look?.UpdateCameraPose();
             return;
         }
 
-        // 동료에게 운반되는 중(#365) — 입력 이동 대신 운반자를 추종한다. 오검거 끌려가기와 달리
-        // CharacterController가 살아 있지만, HandleMove(입력+중력)를 타면 중력이 이중으로 적분되므로
-        // 추종 쪽이 중력까지 함께 든다. 시점은 쓰러진 상태 그대로(HandleLook의 IsIncapacitated 분기).
-        if (m_dragCarrier != null)
-        {
-            HandleLook();
-            UpdateDraggedFollow();
-            UpdateCameraPose();
-            return;
-        }
-
-        HandleLook();
-        UpdateCameraPose(); // 카메라 높이/피치를 매 프레임 적용 (다운 시 바닥 시점) (#105)
+        m_look?.HandleLook();
+        m_look?.UpdateCameraPose(); // 카메라 높이/피치를 매 프레임 적용 (다운 시 바닥 시점) (#105)
         HandleMove();
     }
 
@@ -478,100 +280,6 @@ public class PlayerMovement : NetworkBehaviour
             m_verticalVelocity = Mathf.Max(m_verticalVelocity, velocity.y);
     }
 
-    private void HandleLook()
-    {
-        // 라운드 종료 freeze·커서 해제 시엔 시점 회전을 막는다 — 마우스 이동이 화면을 돌리면 안 된다 (#352).
-        // 쓰러진 동안(다운·기절)은 열어 둔다 (#252) — 몸은 못 움직여도 주변은 볼 수 있어야 한다.
-        if (IsRoundOver || CursorLock.IsUnlocked)
-        {
-            m_smoothedLook = Vector2.zero; // 재개 시 잠긴 동안의 스무딩 잔여값으로 튀지 않도록 초기화 (#216)
-            return;
-        }
-
-        Vector2 look = m_inputHandler.LookInput * m_mouseSensitivity * GameSettings.MouseSensitivity;
-
-        // 프레임률 독립 지수 감쇠 — 느린 회전 시 정수 픽셀 delta(0/1/0/1…)로 생기는 계단 지터를 완만하게 한다.
-        // 감쇠 계수 0이면 원시 입력을 그대로 적용(스무딩 없음). (#216)
-        float t = m_lookSmoothing <= 0f ? 1f : 1f - Mathf.Exp(-m_lookSmoothing * Time.deltaTime);
-        m_smoothedLook = Vector2.Lerp(m_smoothedLook, look, t);
-
-        // 쓰러져 있으면 몸을 돌리지 않는다 (#252) — transform을 돌리면 누운 캐릭터가 바닥에서
-        // 제자리 회전하는 그림이 되고, 그건 다른 플레이어 화면에도 그대로 보인다.
-        // 좌우는 카메라 로컬 각도에 누적하고(범위 제한), 위아래는 누운 자세용 범위로 잡는다.
-        if (IsIncapacitated)
-        {
-            if (m_smoothedLook.sqrMagnitude > 0.0001f)
-                m_downLookTaken = true; // 이 순간부터 시선은 플레이어 것 — 바닥 시점 강제를 놓는다
-
-            m_downYaw = Mathf.Clamp(
-                m_downYaw + m_smoothedLook.x, -m_downYawRange, m_downYawRange);
-            m_pitch = Mathf.Clamp(m_pitch - m_smoothedLook.y, m_downMinPitch, m_downMaxPitch);
-            return;
-        }
-
-        transform.Rotate(Vector3.up * m_smoothedLook.x);
-
-        m_pitch = Mathf.Clamp(m_pitch - m_smoothedLook.y, m_minPitch, m_maxPitch);
-    }
-
-    // 카메라 위치(높이)와 피치를 적용한다. 다운 중에는 바닥 근처 높이 + 상방 시선으로 부드럽게 눕히고,
-    // 평소에는 서기 높이에서 시선 입력(m_pitch)을 그대로 반영한다. 구조되면 원위치로 복귀한다. (#105)
-    // 앉기 중이면 서기 높이를 머리가 내려간 만큼 낮춘 값으로 대체한다. (#236)
-    private void UpdateCameraPose()
-    {
-        if (playerCamera == null) return;
-
-        float lerp = m_camPoseLerpSpeed * Time.deltaTime;
-        bool downed = IsIncapacitated;
-
-        m_downCamBlend = Mathf.Lerp(m_downCamBlend, downed ? 1f : 0f, lerp);
-
-        // 공중에서는 앉기에 따른 시점 높이 변화를 얼린다 (#189).
-        // 몸이 웅크리는 건 다리를 접는 동작이지 머리가 내려가는 게 아닌데, 시점을 같이 내리면
-        // 상승 중에 카메라만 0.8m 꺼져 발은 계속 오르는데도 점프 힘이 죽은 것처럼 보인다.
-        // (측정: 발 0.45→0.73m 상승 구간에서 카메라 월드 높이는 2.05→1.59m로 하강)
-        // 이륙 시점의 자세를 그대로 유지하므로 앉은 채 뛰면 앉은 시점, 서서 뛰면 선 시점으로 난다.
-        //
-        // 지상에서는 CrouchHeadDrop(PlayerCrouch가 k_blendDuration으로 블렌딩한 값)을 같은 속도로
-        // 쫓아가므로 추가 지연이 붙지 않는다 — "카메라를 한 번 더 감쇠하지 않는다"는 #236 취지 유지.
-        if (m_crouch == null)
-        {
-            m_camCrouchDrop = 0f;
-        }
-        else if (m_jump == null || !m_jump.IsAirborne)
-        {
-            m_camCrouchDrop = Mathf.MoveTowards(
-                m_camCrouchDrop,
-                CrouchHeadDrop,
-                m_crouch.HeadDropRate * Time.deltaTime
-            );
-        }
-
-        float uprightHeight = m_standCamHeight - m_camCrouchDrop;
-
-        Vector3 localPos = playerCamera.transform.localPosition;
-        localPos.y = Mathf.Lerp(uprightHeight, m_downCamHeight, m_downCamBlend);
-        playerCamera.transform.localPosition = localPos;
-
-        // 쓰러지는 동안 피치를 바닥 시점으로 눕힌다 — 단 플레이어가 마우스를 움직인 뒤에는 놓는다 (#252).
-        // 계속 강제하면 올려다본 각도가 매 프레임 되돌아가 시야 조작이 먹지 않는다.
-        if (downed && !m_downLookTaken)
-        {
-            m_pitch = Mathf.Lerp(m_pitch, m_downCamPitch, lerp);
-        }
-
-        // 일어나면 시야 좌우 각도를 0으로 되돌린다 — 몸을 그 방향으로 돌리지는 않는다.
-        // 기상 모션이 정해진 방향으로 일어나므로 몸을 순간 회전시키면 모션과 어긋난다.
-        if (!downed)
-        {
-            m_downYaw = Mathf.Lerp(m_downYaw, 0f, lerp);
-            m_downLookTaken = false;
-            m_pitch = Mathf.Clamp(m_pitch, m_minPitch, m_maxPitch); // 누운 자세용 범위에서 서기 범위로 복귀
-        }
-
-        playerCamera.transform.localEulerAngles = new Vector3(m_pitch, m_downYaw, 0f);
-    }
-
     private void HandleMove()
     {
         // 다운 중·라운드 종료 시 이동 입력 차단 — 단 중력·접지는 유지해 바닥에 서 있게 한다 (#105, 라운드 종료 freeze)
@@ -580,12 +288,11 @@ public class PlayerMovement : NetworkBehaviour
             transform.right * input.x + transform.forward * input.y
         ).normalized;
 
+        // 점프 자격 판정에는 Move() 앞의 값이 맞다 — 그 시점의 마지막 확정 접지다.
+        // (착지 보고는 반대로 Move() 뒤의 신선한 값을 쓴다 — 아래 ReportGrounded 참고, #189)
         bool grounded = m_controller.isGrounded;
-        if (grounded && m_verticalVelocity < 0f)
-        {
-            m_verticalVelocity = -2f;
-        }
-        m_verticalVelocity += m_gravity * Time.deltaTime;
+
+        IntegrateGravity();
 
         // 점프 (#189) — 넉백의 상승 성분과 같은 수직 채널을 쓴다. 중력 적분 뒤에 덮어써야
         // 접지 유지용 -2f 클램프에 임펄스가 잡아먹히지 않는다.
