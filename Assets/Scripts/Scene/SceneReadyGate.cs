@@ -15,8 +15,10 @@ using UnityEngine;
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class SceneReadyGate : NetworkedManagerBase
 {
+    // 정상 대기 시간이 아니라 "안 오는 피어를 언제 포기할지"다 — 섣불리 줄이지 말 것.
+    // MPPM 다인 테스트는 클론의 프레임이 굶어 정상 동작에도 10초 이상 걸린다 (#410).
     [Tooltip("전원 보고를 기다리는 상한(초) — 넘으면 경고 후 남은 인원으로 연다")]
-    [SerializeField] private float m_readyTimeoutSeconds = 15f;
+    [SerializeField] private float m_readyTimeoutSeconds = 30f;
 
     // 서버 판정 결과. 클라는 스폰 시 false로 받으므로 초기 동기화 전에 앞질러 통과할 일이 없다.
     private readonly NetworkVariable<bool> m_openSynced = new NetworkVariable<bool>();

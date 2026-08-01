@@ -26,8 +26,7 @@ public class InGameManager : SceneManagerBase
     {
         float deadline = Time.realtimeSinceStartup + k_localReadyTimeoutSeconds;
         await UniTask.WaitUntil(
-            () => IsLocallyReady() 
-            || Time.realtimeSinceStartup >= deadline,
+            () => IsLocallyReady() || Time.realtimeSinceStartup >= deadline,
             cancellationToken: token
         );
 
