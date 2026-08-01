@@ -22,27 +22,6 @@ public class PlayerMovement : NetworkBehaviour
     [Tooltip("넉백 속도가 잦아드는 감쇠율(1/초) — 클수록 빨리 멈춘다")]
     [SerializeField] private float m_knockbackDamping = 4f;
 
-    // 기능 정지(Die) 동료를 끌고 가는 연출 (#365) — 밧줄 끌기(#269)와 같은 수식·같은 감각을 쓴다.
-    // 값도 PlayerEscorter.RopeDrag의 기본값에 맞춰 두었다.
-    [Header("운반되는 쪽 — 끌려가기 (#365)")]
-    [Tooltip("끌기 간격(m) — 운반자와 이 거리 안쪽이면 끌려가지 않는다(줄이 늘어진 상태)")]
-    [SerializeField] private float m_dragFollowDistance = 1.6f;
-
-    /// <summary>끌기 간격(m) — 곧 밧줄 길이다. 밧줄 표시(RopeDragView)가 늘어짐 계산에 같은 값을 쓴다. (#365)</summary>
-    public float DragFollowDistance => m_dragFollowDistance;
-
-    [Tooltip("끌리는 몸이 목표 위치를 따라잡는 데 걸리는 시간(초) — 클수록 늦게, 크게 휘며 따라온다")]
-    [SerializeField] private float m_dragSmoothTime = 0.14f;
-
-    [Tooltip("몸이 끌리는 방향으로 도는 민감도(1/초)")]
-    [SerializeField] private float m_dragTurnSharpness = 6f;
-
-    [Tooltip("끌리며 좌우로 흔들리는 최대 각(도) — 0이면 흔들리지 않는다")]
-    [SerializeField] private float m_dragSwayAngle = 7f;
-
-    [Tooltip("흔들림 주기 — 끌린 거리 1m당 위상(라디안)")]
-    [SerializeField] private float m_dragSwayFrequency = 1.6f;
-
     // PlayerAnimationDriver가 속도 정규화에 사용 (실제 속도 ↔ 블렌드 트리 좌표 분리)
     // 실제 이동(HandleMove)도 같은 프로퍼티를 쓴다 — 배율이 걸린 값을 한 곳에서만 내야
     // 애니메이션 블렌드가 실제 속도와 어긋나지 않는다. (#398)
@@ -112,6 +91,7 @@ public class PlayerMovement : NetworkBehaviour
     private PlayerCrouch m_crouch; // 앉기 중 이동 속도·카메라 높이 조정용 (#236)
     private PlayerJump m_jump; // 점프 입력 수집·공중 상태 전파 (#189)
     private PlayerEscorter m_escorter; // 끌고 있는 무게로 깎인 이동속도 배율을 읽는다 (#398)
+    private PlayerTowedMotion m_towed; // 남이 내 몸을 옮기는 동안의 추종 — 입력 이동을 대신한다 (#279, #365)
     private RoundManager Round => App.Game.Round; // 라운드 종료 시 이동·시점 차단용 (라운드 종료 freeze)
     private float m_pitch;
     private Vector2 m_smoothedLook; // 지수 감쇠로 부드럽게 만든 시점 입력 — 저속 픽셀 양자화 지터 완화 (#216)
@@ -123,20 +103,6 @@ public class PlayerMovement : NetworkBehaviour
     private float m_verticalVelocity;
     private Vector3 m_knockbackVelocity; // 외력으로 밀려나는 수평 속도 — 매 프레임 감쇠 (#232 폭발 넉백)
     private bool m_ignoreRoundEndFreeze; // 정산 화면을 닫은 로컬 플레이어는 라운드 종료 freeze를 무시하고 움직인다 (#107)
-
-    // 끌려가기(#279) — 오검거 호송 중 오너 로컬이 끌기 NPC 2명을 추종한다. 앵커가 파괴돼도
-    // m_carried가 참인 동안은 입력 이동으로 돌아가지 않는다(서버의 종료/스냅 텔레포트가 마무리).
-    private bool m_carried;
-    private Transform m_carryAnchorA;
-    private Transform m_carryAnchorB;
-
-    // 운반되는 중(#365) — 나를 끌고 가는 플레이어. 오검거 끌려가기(위)와 달리 CharacterController를
-    // 끄지 않는다: 벽·계단·경사를 CC가 스스로 풀어 준다(밧줄 끌기의 ResolveDragPosition에 해당).
-    // (본부 부활 장치는 콜라이더 점유가 아니라 E 상호작용으로 안치를 확정하므로 여기에 기대지 않는다 — HqRevivalDevice)
-    private Transform m_dragCarrier;
-    private Vector3 m_dragVelocity;  // SmoothDamp 관성
-    private Quaternion m_dragFacing; // 흔들림을 뺀 몸 방향 — 여기에 sway를 얹어 최종 회전을 만든다
-    private float m_dragTravel;      // 끌린 누적 거리(m) — 흔들림 위상의 기준
 
     // 다운(무력화) 중 여부 — 무력화 컴포넌트가 없으면(테스트 구성 등) 항상 false
     private bool IsIncapacitated => m_incapacitation != null && m_incapacitation.IsIncapacitated;
@@ -171,6 +137,7 @@ public class PlayerMovement : NetworkBehaviour
         m_crouch = GetComponent<PlayerCrouch>();
         m_jump = GetComponent<PlayerJump>();
         m_escorter = GetComponent<PlayerEscorter>();
+        m_towed = GetComponent<PlayerTowedMotion>();
 
         if (playerCamera != null)
         {
@@ -215,10 +182,10 @@ public class PlayerMovement : NetworkBehaviour
             // 커서를 푼 UI가 아직 열려 있어도(디스폰 경합) CursorLock이 최종 상태를 단독으로 정한다. (#352)
             CursorLock.SetGameplayActive(false);
 
-            // 끌려가는 도중 정리(라운드 리셋·연결 종료)되면 서버의 StopCarried가 못 올 수 있다 —
-            // CharacterController 비활성 + 추종 상태가 남지 않게 여기서 안전하게 푼다. (#279 리뷰 반영)
-            EndCarriedFollow();
-            EndDraggedFollow(); // 운반되던 중 정리되면 서버의 내려놓기가 못 올 수 있다 (#365, 같은 사정)
+            // 끌려가는 도중 정리(라운드 리셋·연결 종료)되면 서버의 종료 지시(StopCarried·내려놓기)가
+            // 못 올 수 있다 — CharacterController 비활성 + 추종 상태가 남지 않게 여기서 안전하게 푼다.
+            // (#279 리뷰 반영, #365도 같은 사정)
+            m_towed?.StopAll();
         }
     }
 
@@ -276,137 +243,28 @@ public class PlayerMovement : NetworkBehaviour
     [Rpc(SendTo.Owner)]
     private void ApplyPoseRpc(Vector3 position, Quaternion rotation) => SetPose(position, rotation);
 
-    /// <summary>
-    /// 끌려가기 추종 시작 — 오너 로컬 전용, PlayerPenaltyView(오검거 호송 #279)가 호출한다.
-    /// CharacterController를 끄고 매 프레임 두 앵커(양옆 끌기 NPC — 전 피어에 NetworkTransform으로
-    /// 동기화된 위치) 중점 살짝 뒤를 따라간다 — 오너가 움직여야 내 위치가 전 피어에 전파된다.
-    /// </summary>
-    public void BeginCarriedFollow(Transform anchorA, Transform anchorB)
-    {
-        m_carried = true;
-        m_carryAnchorA = anchorA;
-        m_carryAnchorB = anchorB;
-        m_controller.enabled = false; // 직접 transform 이동 — 켜 두면 내부 캐시가 위치를 되돌린다 (SetPose와 동일 사정)
-
-        // 호송 중에는 HandleMove를 건너뛰어 접지 보고가 멈춘다 — 공중에서 붙잡히면 공중 상태가
-        // 그대로 고착돼 끌려가는 내내 낙하 애니메이션이 재생된다. 여기서 한 번 내려준다. (#189)
-        if (m_jump != null)
-        {
-            m_jump.ReportGrounded(true);
-        }
-    }
-
-    /// <summary>끌려가기 추종 종료 — 호송 종료(광장 도착·중단) 시 PlayerPenaltyView가 호출한다.</summary>
-    public void EndCarriedFollow()
-    {
-        m_carried = false;
-        m_carryAnchorA = null;
-        m_carryAnchorB = null;
-        m_controller.enabled = true;
-    }
-
-    // 끌기 NPC 추종 — 두 앵커 중점 뒤(끌리는 몸)를 부드럽게 따라간다. 한쪽이 파괴되면 남은 쪽만 따른다.
-    private void UpdateCarriedFollow()
-    {
-        Transform a = m_carryAnchorA != null ? m_carryAnchorA : m_carryAnchorB;
-        if (a == null)
-            return; // 앵커 전부 소실 — 그 자리에서 대기, 서버의 종료/스냅 텔레포트가 마무리한다
-        Transform b = m_carryAnchorB != null ? m_carryAnchorB : a;
-
-        Vector3 forward = a.forward;
-        forward.y = 0f;
-        if (forward.sqrMagnitude < 0.001f)
-            forward = transform.forward;
-        forward.Normalize();
-
-        Vector3 mid = (a.position + b.position) * 0.5f;
-        Vector3 targetPos = mid - forward * 0.75f; // 끌기 담당들 살짝 뒤 — 질질 끌리는 그림
-
-        float lerp = 12f * Time.deltaTime;
-        transform.position = Vector3.Lerp(transform.position, targetPos, lerp);
-        transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(forward), lerp);
-    }
+    // ---- 추종 컴포넌트(PlayerTowedMotion)와 공유하는 면 ----
+    // 수직 속도와 CharacterController의 소유자는 이 컴포넌트다 — 중력·점프·넉백이 모두 같은 채널을
+    // 쓰기 때문. 추종 쪽이 직접 만지면 같은 값을 두 컴포넌트가 따로 적분하게 되므로 연산만 빌려준다.
 
     /// <summary>
-    /// 운반 추종 시작 — 오너 로컬 전용, <see cref="PlayerCarrier"/>(#365)가 서버 지시로 호출한다.
-    /// 기능 정지(Die)된 몸을 동료가 끌고 가는 동안 오너가 스스로 따라가야 위치가 전 피어에 전파된다
-    /// (NetworkTransform 오너 권한 — 오검거 호송 #279와 같은 사정).
+    /// 수평 이동만 받아 중력과 함께 적용한다 — 운반 추종(<see cref="PlayerTowedMotion"/>, #365)이 쓴다.
+    /// 접지 클램프·중력 적분은 <see cref="HandleMove"/>와 같은 규칙을 따른다.
     /// </summary>
-    public void BeginDraggedFollow(Transform carrier)
+    internal void MoveWithGravity(Vector3 horizontalStep)
     {
-        if (carrier == null)
-            return;
-
-        m_dragCarrier = carrier;
-
-        // 새 운반의 추종 상태 초기화 — 이전 운반의 관성·위상이 남으면 첫 프레임에 튄다 (SetDragging 관례)
-        m_dragVelocity = Vector3.zero;
-        m_dragFacing = transform.rotation;
-        m_dragTravel = 0f;
-
-        // 공중에서 붙잡히면 낙하 상태가 고착돼 끌려가는 내내 낙하 애니메이션이 재생된다 (#189)
-        if (m_jump != null)
-        {
-            m_jump.ReportGrounded(true);
-        }
-    }
-
-    /// <summary>운반 추종 종료 — 내려놓기·부활·운반자 소실 시 <see cref="PlayerCarrier"/>가 호출한다. (#365)</summary>
-    public void EndDraggedFollow()
-    {
-        m_dragCarrier = null;
-        m_dragVelocity = Vector3.zero;
-    }
-
-    /// <summary>운반되어 끌려가는 중인지 — 오너 로컬 판정. (#365)</summary>
-    public bool IsDraggedFollowing => m_dragCarrier != null;
-
-    // 운반자 추종 — 밧줄 끌기(PlayerEscorter.ServerUpdateDrag)와 같은 수식이다: 간격을 넘을 때만
-    // 당기고, 늦게 따라오게 해서 코너에서 몸이 바깥으로 끌려나오는 궤적을 만든다.
-    // 다른 점은 적용 방식뿐 — transform 대입이 아니라 CharacterController.Move다. NPC 쪽에서 손으로
-    // 짜야 했던 벽 스윕·미끄러짐·지면 스냅(ResolveDragPosition)을 CC가 그대로 해 준다.
-    private void UpdateDraggedFollow()
-    {
-        Vector3 self = transform.position;
-        Vector3 anchor = m_dragCarrier.position;
-
-        Vector3 toSelf = self - anchor;
-        toSelf.y = 0f;
-        float distance = toSelf.magnitude;
-
-        // 간격 안쪽이면 당기지 않는다 — 운반자가 제자리에서 돌기만 하면 몸은 가만히 있는다
-        Vector3 target = self;
-        if (distance > m_dragFollowDistance)
-            target = anchor + toSelf / distance * m_dragFollowDistance;
-        target.y = self.y; // 높이는 아래 중력이 정한다
-
-        Vector3 next = Vector3.SmoothDamp(self, target, ref m_dragVelocity, m_dragSmoothTime);
-        Vector3 step = next - self;
-        step.y = 0f;
-
-        // 중력은 그대로 유지한다 — 끌려가다 계단·경사를 만나면 CC가 붙여 준다
         if (m_controller.isGrounded && m_verticalVelocity < 0f)
             m_verticalVelocity = -2f;
         m_verticalVelocity += m_gravity * Time.deltaTime;
 
-        m_controller.Move(step + Vector3.up * m_verticalVelocity * Time.deltaTime);
-
-        // 몸 방향은 운반자 회전이 아니라 끌리는 방향 — 제자리에서 마우스만 돌려도 몸이 같이 돌지 않는다.
-        // 쓰러진 몸을 돌리는 것이 여기서는 맞다(끌려가는 그림) — 시야는 카메라 로컬(m_downYaw)이 따로 든다.
-        Vector3 dragDirection = anchor - transform.position;
-        dragDirection.y = 0f;
-        if (dragDirection.sqrMagnitude > 0.0001f)
-        {
-            Quaternion facing = Quaternion.LookRotation(dragDirection);
-            m_dragFacing = Quaternion.Slerp(
-                m_dragFacing, facing, 1f - Mathf.Exp(-m_dragTurnSharpness * Time.deltaTime));
-        }
-
-        // 끌린 거리에 비례해 좌우로 흔들린다 — 시간이 아니라 거리 기준이라 멈추면 흔들림도 멈춘다
-        m_dragTravel += new Vector2(step.x, step.z).magnitude;
-        float sway = Mathf.Sin(m_dragTravel * m_dragSwayFrequency) * m_dragSwayAngle;
-        transform.rotation = m_dragFacing * Quaternion.Euler(0f, sway, 0f);
+        m_controller.Move(horizontalStep + Vector3.up * m_verticalVelocity * Time.deltaTime);
     }
+
+    /// <summary>
+    /// CharacterController를 껐다 켠다 — transform을 직접 옮기는 호송 추종(#279)이 쓴다.
+    /// 켠 채로 transform을 옮기면 CC 내부 캐시가 위치를 되돌린다 (<see cref="SetPose"/>와 동일 사정).
+    /// </summary>
+    internal void SetControllerEnabled(bool value) => m_controller.enabled = value;
 
     // CharacterController가 켜진 상태에서 transform을 직접 옮기면 내부 캐시가 위치를 되돌릴 수 있어 잠시 끄고 옮긴다.
     private void SetPose(Vector3 pos, Quaternion rot)
@@ -432,23 +290,16 @@ public class PlayerMovement : NetworkBehaviour
 
     private void Update()
     {
-        // 끌려가는 중(#279) — 입력 이동 대신 끌기 NPC를 추종한다. 행동불능 상태라 시점 입력은 어차피
-        // 막혀 있고(IsMovementLocked), 카메라는 다운 시점(UpdateCameraPose)이 계속 담당한다.
-        // CharacterController가 꺼져 있어 HandleMove(중력 Move)를 타면 안 된다.
-        if (m_carried)
-        {
-            UpdateCarriedFollow();
-            UpdateCameraPose();
-            return;
-        }
-
-        // 동료에게 운반되는 중(#365) — 입력 이동 대신 운반자를 추종한다. 오검거 끌려가기와 달리
-        // CharacterController가 살아 있지만, HandleMove(입력+중력)를 타면 중력이 이중으로 적분되므로
-        // 추종 쪽이 중력까지 함께 든다. 시점은 쓰러진 상태 그대로(HandleLook의 IsIncapacitated 분기).
-        if (m_dragCarrier != null)
+        // 남이 내 몸을 옮기는 중(#279 호송 / #365 운반) — 입력 이동 대신 추종한다.
+        // HandleMove를 타면 안 되는 이유는 모드마다 다르다: 호송은 CharacterController가 꺼져 있고,
+        // 운반은 켜져 있지만 중력이 이중으로 적분된다. 어느 쪽이든 이동은 추종 쪽이 든다.
+        //
+        // 시점은 두 모드 모두 열어 둔다 — 쓰러져도 주변은 볼 수 있어야 한다(#252). 몸은 추종이 돌리고
+        // 시야는 카메라 로컬(m_downYaw)이 따로 드므로 서로 간섭하지 않는다.
+        if (m_towed != null && m_towed.IsActive)
         {
             HandleLook();
-            UpdateDraggedFollow();
+            m_towed.Tick();
             UpdateCameraPose();
             return;
         }

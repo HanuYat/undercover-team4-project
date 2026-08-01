@@ -20,7 +20,7 @@ using UnityEngine;
 /// 호루라기(#250)는 이번 범위 밖 — 격퇴 진입점(<see cref="RepelChasers"/>)만 열어 둔다.
 /// 판정·카운트·추격·호송은 모두 서버에서만 일어나고 결과(팀 카운트·NPC 상태·행동불능)만 동기화된다(#56).
 /// 행동불능 상태 자체는 PlayerIncapacitation(#105)이, 플레이어 끌려가기 표현은 오너 추종
-/// (PlayerPenaltyView→PlayerMovement.BeginCarriedFollow — NetworkTransform 오너 권한)이 담당한다.
+/// (PlayerPenaltyView→PlayerTowedMotion.BeginEscortFollow — NetworkTransform 오너 권한)이 담당한다.
 ///
 /// 개인별 오검거 집계는 정산 "최다 오검거" 코믹 스탯(GDD 7-3)용으로 팀 카운트와 별개로 유지한다.
 /// 오검거는 팀 자금·라운드 종료와 무관하다(GDD 7-3 확정) — 여기서 자금/라운드를 건드리지 않는다.

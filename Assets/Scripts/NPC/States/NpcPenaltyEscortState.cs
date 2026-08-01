@@ -4,7 +4,7 @@ using UnityEngine;
 /// 오검거 호송(PenaltyEscorting) 상태 — 포획된 플레이어를 광장(PlazaPoint)까지 끌고 간다. (#279)
 /// 대형은 WrongfulArrestPenalty가 짠다: 선두(leader=null)는 광장으로 직접 걷고,
 /// 나머지는 선두 기준 로컬 오프셋 위치를 따라간다 — 선두 옆(양옆 끌기 2명)과 뒤(뒤따름).
-/// 포획된 플레이어 본인은 오너 클라이언트가 끌기 담당 2명 사이를 추종한다(PlayerMovement.BeginCarriedFollow) —
+/// 포획된 플레이어 본인은 오너 클라이언트가 끌기 담당 2명 사이를 추종한다(PlayerTowedMotion.BeginEscortFollow) —
 /// NetworkTransform 오너 권한이라 서버(NPC)가 직접 못 끌기 때문. 광장 도착 판정은 매니저가 선두 거리로 한다.
 /// </summary>
 public class NpcPenaltyEscortState : NpcStateBase

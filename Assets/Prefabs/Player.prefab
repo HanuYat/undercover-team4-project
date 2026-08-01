@@ -2892,6 +2892,7 @@ GameObject:
   - component: {fileID: 5887233641706128439}
   - component: {fileID: 8634843281634365864}
   - component: {fileID: 6985509239275209907}
+  - component: {fileID: 8655701205623984669}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -3098,11 +3099,6 @@ MonoBehaviour:
   m_crouchSpeed: 2.5
   m_gravity: -9.81
   m_knockbackDamping: 4
-  m_dragFollowDistance: 1.6
-  m_dragSmoothTime: 0.14
-  m_dragTurnSharpness: 6
-  m_dragSwayAngle: 7
-  m_dragSwayFrequency: 1.6
   playerCamera: {fileID: 7952644528617391114}
   m_mouseSensitivity: 1
   m_lookSmoothing: 20
@@ -3600,6 +3596,23 @@ MonoBehaviour:
   - {fileID: 6465765157232573796, guid: ef3d4594c5614be42ad3cdf1ec34cb19, type: 3}
   - {fileID: 5880397347069557750, guid: d1c30cbbf1aa4ac44b4f5ad0936bd9f2, type: 3}
   - {fileID: 1048637736484071511, guid: 35764ff7639685444b8c8802043b67b1, type: 3}
+--- !u!114 &8655701205623984669
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e8863be037256164fb3bfa299ee5641c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerTowedMotion
+  m_dragFollowDistance: 1.6
+  m_dragSmoothTime: 0.14
+  m_dragTurnSharpness: 6
+  m_dragSwayAngle: 7
+  m_dragSwayFrequency: 1.6
 --- !u!1 &5720394585047626155
 GameObject:
   m_ObjectHideFlags: 0
