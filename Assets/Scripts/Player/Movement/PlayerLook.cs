@@ -20,7 +20,7 @@ public class PlayerLook : MonoBehaviour
 {
     [Header("1인칭 시점")]
     [SerializeField]
-    private Camera playerCamera;
+    private Camera m_playerCamera;
 
     [Tooltip("프리팹 기준 감도 — 실제 감도는 여기에 설정 창의 감도 배율(GameSettings.MouseSensitivity)을 곱한 값이다 (#225)")]
     [SerializeField]
@@ -90,9 +90,9 @@ public class PlayerLook : MonoBehaviour
         m_crouch = GetComponent<PlayerCrouch>();
         m_jump = GetComponent<PlayerJump>();
 
-        if (playerCamera != null)
+        if (m_playerCamera != null)
         {
-            m_standCamHeight = playerCamera.transform.localPosition.y; // 서기 시점 높이 기준값
+            m_standCamHeight = m_playerCamera.transform.localPosition.y; // 서기 시점 높이 기준값
         }
     }
 
@@ -104,9 +104,9 @@ public class PlayerLook : MonoBehaviour
     {
         if (!isOwner)
         {
-            if (playerCamera != null)
+            if (m_playerCamera != null)
             {
-                playerCamera.gameObject.SetActive(false);
+                m_playerCamera.gameObject.SetActive(false);
             }
 
             return;
@@ -163,7 +163,7 @@ public class PlayerLook : MonoBehaviour
     /// <summary>카메라 높이·피치를 매 프레임 적용한다 — 다운 시 바닥 시점, 앉기 시 하강. (#105, #236)</summary>
     public void UpdateCameraPose()
     {
-        if (playerCamera == null) return;
+        if (m_playerCamera == null) return;
 
         float lerp = m_camPoseLerpSpeed * Time.deltaTime;
         bool downed = IsIncapacitated;
@@ -193,9 +193,9 @@ public class PlayerLook : MonoBehaviour
 
         float uprightHeight = m_standCamHeight - m_camCrouchDrop;
 
-        Vector3 localPos = playerCamera.transform.localPosition;
+        Vector3 localPos = m_playerCamera.transform.localPosition;
         localPos.y = Mathf.Lerp(uprightHeight, m_downCamHeight, m_downCamBlend);
-        playerCamera.transform.localPosition = localPos;
+        m_playerCamera.transform.localPosition = localPos;
 
         // 쓰러지는 동안 피치를 바닥 시점으로 눕힌다 — 단 플레이어가 마우스를 움직인 뒤에는 놓는다 (#252).
         // 계속 강제하면 올려다본 각도가 매 프레임 되돌아가 시야 조작이 먹지 않는다.
@@ -213,7 +213,7 @@ public class PlayerLook : MonoBehaviour
             m_pitch = Mathf.Clamp(m_pitch, m_minPitch, m_maxPitch); // 누운 자세용 범위에서 서기 범위로 복귀
         }
 
-        playerCamera.transform.localEulerAngles = new Vector3(m_pitch, m_downYaw, 0f);
+        m_playerCamera.transform.localEulerAngles = new Vector3(m_pitch, m_downYaw, 0f);
     }
 
     /// <summary>
