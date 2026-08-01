@@ -27,10 +27,6 @@ public class PlayerHeldItemView : NetworkBehaviour
     /// <summary>손 본 앵커 — 손에서 뻗어 나가는 표현(밧줄 선 #269 등)이 시작점으로 쓴다. 미지정이면 null.</summary>
     public Transform HandAnchor => m_handAnchor;
 
-    // 아이템 참조 해석 대기 상한(프레임). 스폰 메시지와 NetworkVariable 도착 순서 경쟁으로
-    // 참조가 즉시 안 풀릴 수 있다 — PlayerLoadout.ResolveAndRebuildAsync와 같은 방침.
-    private const int k_maxResolveWaitFrames = 120;
-
     // 장착 아이템 — 빈손이면 default(NetworkObjectId 0). 오너가 쓰고 전 피어가 읽는다.
     private readonly NetworkVariable<NetworkObjectReference> m_equipped =
         new NetworkVariable<NetworkObjectReference>(
@@ -122,19 +118,15 @@ public class PlayerHeldItemView : NetworkBehaviour
             return;
         }
 
-        for (
-            int frame = 0;
-            frame < k_maxResolveWaitFrames && !itemRef.TryGet(out _);
-            frame++
-        )
-        {
-            await UniTask.Yield(PlayerLoopTiming.Update);
+        // 대기 중 디스폰됐거나 장착이 또 바뀌었으면 이 갱신은 폐기한다.
+        EResolveResult result = await NetworkRefResolver.WaitAsync(
+            itemRef,
+            () => this != null && IsSpawned && version == m_refreshVersion
+        );
 
-            // 대기 중 디스폰됐거나 장착이 또 바뀌었으면 이 갱신은 폐기한다.
-            if (this == null || !IsSpawned || version != m_refreshVersion)
-            {
-                return;
-            }
+        if (result != EResolveResult.Resolved)
+        {
+            return; // 폐기됐거나 상한까지 못 풀었다 — 빈손처럼 둔다
         }
 
         if (
