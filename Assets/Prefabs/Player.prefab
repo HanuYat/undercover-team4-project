@@ -2893,6 +2893,7 @@ GameObject:
   - component: {fileID: 8634843281634365864}
   - component: {fileID: 6985509239275209907}
   - component: {fileID: 8655701205623984669}
+  - component: {fileID: 1391299578094206294}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -3099,18 +3100,6 @@ MonoBehaviour:
   m_crouchSpeed: 2.5
   m_gravity: -9.81
   m_knockbackDamping: 4
-  playerCamera: {fileID: 7952644528617391114}
-  m_mouseSensitivity: 1
-  m_lookSmoothing: 20
-  m_minPitch: -80
-  m_maxPitch: 80
-  m_ownBodyRoot: {fileID: 708767735407644648}
-  m_downCamHeight: 0.35
-  m_downCamPitch: -20
-  m_camPoseLerpSpeed: 8
-  m_downYawRange: 100
-  m_downMinPitch: -80
-  m_downMaxPitch: 20
 --- !u!114 &6972632809807839780
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3613,6 +3602,30 @@ MonoBehaviour:
   m_dragTurnSharpness: 6
   m_dragSwayAngle: 7
   m_dragSwayFrequency: 1.6
+--- !u!114 &1391299578094206294
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a37395ce64ce1648818bd28b4fbd4b7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerLook
+  playerCamera: {fileID: 7952644528617391114}
+  m_mouseSensitivity: 1
+  m_lookSmoothing: 20
+  m_minPitch: -80
+  m_maxPitch: 80
+  m_ownBodyRoot: {fileID: 708767735407644648}
+  m_downCamHeight: 0.35
+  m_downCamPitch: -20
+  m_camPoseLerpSpeed: 8
+  m_downYawRange: 100
+  m_downMinPitch: -80
+  m_downMaxPitch: 20
 --- !u!1 &5720394585047626155
 GameObject:
   m_ObjectHideFlags: 0

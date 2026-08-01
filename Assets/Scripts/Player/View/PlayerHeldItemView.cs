@@ -157,11 +157,11 @@ public class PlayerHeldItemView : NetworkBehaviour
         }
 
         // 오너 화면에서는 1인칭 손 표시(#45)만 보여야 하므로 캐릭터 몸과 같은 OwnBody 레이어로 가린다.
-        // 손 본은 PlayerMovement의 m_ownBodyRoot(스킨드 메시) 바깥이라 레이어가 자동 상속되지 않는다 —
+        // 손 본은 PlayerLook의 m_ownBodyRoot(스킨드 메시) 바깥이라 레이어가 자동 상속되지 않는다 —
         // 여기서 명시적으로 찍어야 내 화면에서 3인칭 모델과 1인칭 뷰모델이 이중으로 보이지 않는다.
         if (IsOwner)
         {
-            PlayerMovement.SetLayerRecursively(
+            PlayerLook.SetLayerRecursively(
                 m_heldModelInstance.transform,
                 LayerMask.NameToLayer("OwnBody")
             );
