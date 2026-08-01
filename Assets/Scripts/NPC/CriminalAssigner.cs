@@ -90,39 +90,8 @@ public class CriminalAssigner : CommonManagerBase
     [SerializeField]
     private float m_citizenResistWeight = 0.25f;
 
-    // 임시 이름 풀 — 사이버펑크 톤. 추후 데이터 에셋으로 분리 가능
-    private static readonly string[] s_namePool =
-    {
-        "Kai Vex",
-        "Nova Lin",
-        "Rex Halden",
-        "Mira Sato",
-        "Juno Ashe",
-        "Silas Kwon",
-        "Vera Molnar",
-        "Dax Rivera",
-        "Iris Chen",
-        "Orin Blake",
-        "Lena Voss",
-        "Cyrus Nam",
-        "Tessa Rho",
-        "Egan Cole",
-        "Yuna Park",
-        "Marlo Finn",
-        "Sana Idris",
-        "Bront Keller",
-        "Hana Ryu",
-        "Odis Grant",
-        "Piper Nyx",
-        "Ravi Sol",
-        "Wren Okada",
-        "Zane Mercer",
-    };
-
     private readonly List<NpcController> m_criminalNpcs = new List<NpcController>();
     private readonly List<CitizenProfile> m_wantedProfiles = new List<CitizenProfile>();
-
-    private readonly Dictionary<OfficialRecords.Faction, int> m_localRealIndices = new Dictionary<OfficialRecords.Faction, int>();
 
     // 제보 전화 승격 (#102) — 예비 용의자 명단을 빌려 보고 다음 공개 대상을 판단한다.
     // 구동 주체가 달라 분리했다: 배정은 스폰 완료로 1회, 승격은 전화마다 1명씩.
@@ -210,7 +179,9 @@ public class CriminalAssigner : CommonManagerBase
         HashSet<int> criminalIndices = PickCriminalIndices(npcs.Count, suspectCount);
         // 위조범은 진범과 독립적으로 추첨한다 — 겹칠 수도 있다(범인이 위조 papers 소지) (#223)
         HashSet<int> forgerIndices = PickCriminalIndices(npcs.Count, Mathf.Clamp(m_forgerCount, 0, npcs.Count));
-        string[] names = BuildUniqueNames(npcs.Count);
+
+        // 이름 풀은 인원수만큼 한 번에 확정된다 — 라운드 안에서 중복이 없어야 하므로 매 라운드 새로 만든다
+        var factory = new CitizenProfileFactory(m_officialRecords, npcs.Count);
 
         m_criminalNpcs.Clear();
         m_wantedProfiles.Clear();
@@ -234,36 +205,12 @@ public class CriminalAssigner : CommonManagerBase
                 continue;
             }
 
-            // 프로필은 에셋이 아닌 런타임 인스턴스 — 라운드마다 새로 배정된다
-            OfficialRecords.Faction faction = RandomFaction();
-            int realIndex = RealSymbolIndex(faction);
+            CitizenProfile profile = factory.Create(i);
 
-            CitizenProfile profile = ScriptableObject.CreateInstance<CitizenProfile>();
-            profile.Initialize(
-                names[i],
-                RandomEnum<OfficialRecords.CitizenType>(),
-                faction,
-                realIndex,
-                m_officialRecords
-            );
-
-            // 위조범: 표시값을 정본/인명부와 어긋나게 한다. 이름·문양 중 하나만 오염한다 (#222 (a)①) —
-            // 본부가 "이름이 안 맞나 문양이 안 맞나"를 매번 새로 대조하게 만든다.
-            // 문양 variant가 2개 미만이면 가짜를 만들 수 없어 이름 위조로 폴백한다 (#222 (c)).
-            // 반드시 AssignProfile(= CitizenData 동기화 스냅샷) 이전에 적용해야 오염값이 전 클라에 전파된다 (#223)
+            // 위조범: 표시값을 정본/인명부와 어긋나게 한다 — 이름·문양 중 하나만 오염된다 (#222 (a)①).
+            // 어느 축인지는 팩토리가 정하고(문양 variant가 모자라면 이름으로 폴백), 여기서는 결과만 받는다.
             bool isForger = forgerIndices.Contains(i);
-            bool forgedSymbol = false;
-            if (isForger)
-            {
-                bool canForgeSymbol =
-                    m_officialRecords != null && m_officialRecords.GetVariantsCount(faction) >= 2;
-                forgedSymbol = canForgeSymbol && Random.value < 0.5f;
-
-                if (forgedSymbol)
-                    profile.SetSymbolIndexView(PickFakeSymbolIndex(faction, realIndex), m_officialRecords);
-                else
-                    profile.m_nameView = CorruptName(profile.CitizenName, m_forgedCharCount);
-            }
+            bool forgedSymbol = isForger && factory.ApplyForgery(profile, m_forgedCharCount);
 
             // 예비 풀은 라운드 시작에 전부 확정하고 공개만 나눈다 — 전화 시점에 몽타주를 역생성하면
             // 부합 인원 수를 통제할 수 없어 디코이 설계가 깨진다 (#102 설계 결정 1)
@@ -308,7 +255,7 @@ public class CriminalAssigner : CommonManagerBase
 
             // 위조 시 어느 축이 오염됐는지 함께 남겨 대조 확인에 쓴다 (데모 빌드 전 제거 대상)
             string forgeryTag = !isForger ? ""
-                : forgedSymbol ? $"  [위조: 문양 {realIndex}→{profile.m_symbolIndexView}]"
+                : forgedSymbol ? $"  [위조: 문양 {factory.RealSymbolIndex(profile.Faction)}→{profile.m_symbolIndexView}]"
                 : $"  [위조: {profile.CitizenName}→{profile.m_nameView}]";
 
             string bountyTag = bounty > 0 ? $"  [현상금 {bounty}원]" : "";
@@ -352,7 +299,7 @@ public class CriminalAssigner : CommonManagerBase
     /// <summary>0~total-1 인덱스를 셔플해 앞에서 count개를 뽑는다 — 중복 없는 진범 인덱스. (#127)</summary>
     private static HashSet<int> PickCriminalIndices(int total, int count)
     {
-        // 인덱스 배열 피셔-예이츠 셔플 — 이름 풀(BuildUniqueNames)과 같은 방식
+        // 인덱스 배열 피셔-예이츠 셔플 — 이름 풀(CitizenProfileFactory)과 같은 방식
         int[] indices = new int[total];
         for (int i = 0; i < total; i++)
             indices[i] = i;
@@ -367,133 +314,5 @@ public class CriminalAssigner : CommonManagerBase
         for (int i = 0; i < count; i++)
             result.Add(indices[i]);
         return result;
-    }
-
-    /// <summary>이름 풀을 섞어 중복 없는 이름 배열을 만든다. NPC가 풀보다 많으면 번호를 붙인다.</summary>
-    private static string[] BuildUniqueNames(int count)
-    {
-        // 풀 복사 후 피셔-예이츠 셔플
-        string[] shuffled = (string[])s_namePool.Clone();
-        for (int i = shuffled.Length - 1; i > 0; i--)
-        {
-            int j = Random.Range(0, i + 1);
-            (shuffled[i], shuffled[j]) = (shuffled[j], shuffled[i]);
-        }
-
-        string[] result = new string[count];
-        for (int i = 0; i < count; i++)
-        {
-            result[i] =
-                i < shuffled.Length
-                    ? shuffled[i]
-                    : $"{shuffled[i % shuffled.Length]} {i / shuffled.Length + 1}"; // 풀 초과분은 번호로 구분
-        }
-        return result;
-    }
-
-    private static TEnum RandomEnum<TEnum>()
-        where TEnum : Enum
-    {
-        Array values = Enum.GetValues(typeof(TEnum));
-        return (TEnum)values.GetValue(Random.Range(0, values.Length));
-    }
-
-    // ---- 세력 · 문양 (#222) ----
-
-    // None(무소속·문양 없음)은 위조 대조 축이 될 수 없어 배정에서 제외한다 (#222 (b)).
-    // enum에 세력을 추가하면 자동으로 후보에 포함된다 — 여기를 고칠 필요 없음.
-    private static readonly OfficialRecords.Faction[] s_assignableFactions = BuildAssignableFactions();
-
-    private static OfficialRecords.Faction[] BuildAssignableFactions()
-    {
-        var all = (OfficialRecords.Faction[])Enum.GetValues(typeof(OfficialRecords.Faction));
-        var list = new List<OfficialRecords.Faction>(all.Length);
-        foreach (OfficialRecords.Faction faction in all)
-            if (faction != OfficialRecords.Faction.None)
-                list.Add(faction);
-        return list.ToArray();
-    }
-
-    private static OfficialRecords.Faction RandomFaction() =>
-        s_assignableFactions.Length > 0
-            ? s_assignableFactions[Random.Range(0, s_assignableFactions.Length)]
-            : OfficialRecords.Faction.None;
-
-    /// <summary>이번 세션에 이 세력의 진짜 문양 index. 세션 중이면 동기화 값, 오프라인이면 로컬 폴백. (#222)</summary>
-    private int RealSymbolIndex(OfficialRecords.Faction faction)
-    {
-        FactionSymbolManager manager = App.Game.FactionSymbol;
-        if (manager != null)
-            return manager.RealIndex(faction);
-
-        if (!m_localRealIndices.TryGetValue(faction, out int index))
-        {
-            int count = m_officialRecords != null ? m_officialRecords.GetVariantsCount(faction) : 0;
-            index = count > 0 ? Random.Range(0, count) : 0;
-            m_localRealIndices[faction] = index;
-        }
-        return index;
-    }
-
-    /// <summary>진짜를 제외한 나머지 variant 중 하나 — 위조범의 가짜 문양. variant 2개 이상일 때만 호출. (#222)</summary>
-    private int PickFakeSymbolIndex(OfficialRecords.Faction faction, int realIndex)
-    {
-        int count = m_officialRecords.GetVariantsCount(faction);
-        int pick = Random.Range(0, count - 1); // 진짜 1개를 뺀 범위에서 뽑고
-        return pick >= realIndex ? pick + 1 : pick; // 진짜 자리를 건너뛴다
-    }
-
-    // ---- 이름 위조 (#223) ----
-
-    private static readonly char[] s_vowels = { 'a', 'e', 'i', 'o', 'u' };
-    private static readonly char[] s_consonants =
-        { 'b', 'c', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 't', 'v', 'w', 'x', 'y', 'z' };
-
-    /// <summary>
-    /// 이름의 알파벳 중 count글자를 같은 종류(모음↔모음, 자음↔자음)의 다른 글자로 치환한다. (#223)
-    /// 발음 가능한 자연스러운 이름을 유지한 채 정본과 어긋나게 만든다 — 대소문자 보존, 공백/기호는 건너뛴다.
-    /// count가 이름의 알파벳 수보다 크면 가능한 만큼만 오염한다.
-    /// </summary>
-    private static string CorruptName(string name, int count)
-    {
-        if (string.IsNullOrEmpty(name) || count <= 0)
-            return name;
-
-        // 알파벳 위치만 모아 셔플 → 앞에서 count개 = 중복 없는 오염 위치
-        var positions = new List<int>();
-        for (int i = 0; i < name.Length; i++)
-            if (char.IsLetter(name[i]))
-                positions.Add(i);
-        if (positions.Count == 0)
-            return name;
-
-        for (int i = positions.Count - 1; i > 0; i--)
-        {
-            int j = Random.Range(0, i + 1);
-            (positions[i], positions[j]) = (positions[j], positions[i]);
-        }
-
-        int corruptCount = Mathf.Min(count, positions.Count);
-        char[] chars = name.ToCharArray();
-        for (int k = 0; k < corruptCount; k++)
-            chars[positions[k]] = SubstituteSameClass(chars[positions[k]]);
-
-        return new string(chars);
-    }
-
-    /// <summary>알파벳 한 글자를 같은 종류(모음↔모음, 자음↔자음)의 다른 글자로 치환한다. 대소문자 보존. (#223)</summary>
-    private static char SubstituteSameClass(char original)
-    {
-        char lower = char.ToLowerInvariant(original);
-        char[] pool = Array.IndexOf(s_vowels, lower) >= 0 ? s_vowels : s_consonants;
-
-        char replacement;
-        do
-        {
-            replacement = pool[Random.Range(0, pool.Length)];
-        }
-        while (replacement == lower);
-
-        return char.IsUpper(original) ? char.ToUpperInvariant(replacement) : replacement;
     }
 }
