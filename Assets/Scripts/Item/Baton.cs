@@ -11,7 +11,9 @@ using UnityEngine;
 /// 조준 방향으로 직접 캐스트해 <b>맞으면 명중, 빗나가면 실패</b>다. 다만 근접 사거리라
 /// 점 레이캐스트는 조준이 과하게 빡빡해서 <see cref="Physics.SphereCastNonAlloc"/>로 두께를 준다.
 /// 벽·소품이 먼저 맞으면 그대로 빗나간다(가장 가까운 것만 판정 — 엄폐가 성립).
-/// 다른 플레이어를 맞추면 '빗나감'이다 — 아군 오사는 없다.
+/// <b>동료를 맞추면 아군 오사다</b> — NPC와 같은 데미지가 그대로 HP에 들어간다 (GDD 7-5, #461).
+/// 테이저 오사(5초 뒤 자력 기상, #252)와 달리 진짜 피해라, 3대면 다운(<c>IncapacitationCause.Down</c>)이
+/// 되어 동료 구조가 필요해진다. 때린 쪽에 페널티는 없다 — 쿨다운이 이미 대가다.
 ///
 /// 서버 권위 — 오너가 조준 원점·방향을 보내면 서버가 자기 물리로 캐스트해 판정한다 (#55).
 /// 클라가 보낸 원점은 서버가 아는 플레이어 위치와 대조해 검증한다 (원점 위조 = 벽 너머 타격 방지).
@@ -78,8 +80,9 @@ public class Baton : ItemBase, IAimedWeapon
     // 대신 IAimedWeapon으로 크로스헤어 색만 구동한다 (테이저와 같은 방식, 아래 HasValidAimTarget).
 
     /// <summary>
-    /// 조준선이 지금 휘두르면 맞을 NPC에 닿는지 — 오너 크로스헤어 색 예측용. (#184/#217)
+    /// 조준선이 지금 휘두르면 맞을 대상(NPC·동료)에 닿는지 — 오너 크로스헤어 색 예측용. (#184/#217)
     /// 서버 타격 판정과 <b>같은 함수</b>(<see cref="EvaluateSwing"/>)를 쓰므로 규칙이 어긋날 수 없다.
+    /// 동료를 겨눠도 켜진다 — 휘두르면 실제로 HP가 깎이므로, 오사를 피하려면 그게 보여야 한다 (#461).
     /// </summary>
     /// <remarks>
     /// 거리 비교로 흉내 내지 않는 이유: 실제 판정은 두께 있는 구체 캐스트라 사거리 안이어도
@@ -97,7 +100,7 @@ public class Baton : ItemBase, IAimedWeapon
             return false;
         }
 
-        return EvaluateSwing(origin, direction, holder.transform, out _, out _)
+        return EvaluateSwing(origin, direction, holder.transform, out _, out _, out _)
             == SwingResult.ValidTarget;
     }
 
@@ -239,7 +242,10 @@ public class Baton : ItemBase, IAimedWeapon
         Vector3 origin = holderTransform.TransformPoint(localOrigin);
         Vector3 direction = holderTransform.TransformDirection(localDirection);
 
-        switch (EvaluateSwing(origin, direction, holderTransform, out NpcController target, out RaycastHit hit))
+        switch (
+            EvaluateSwing(
+                origin, direction, holderTransform, out NpcController target,
+                out PlayerHealth playerTarget, out RaycastHit hit))
         {
             case SwingResult.NoHit:
                 NotifyOwner("진압봉 빗나감 — 허공");
@@ -248,8 +254,23 @@ public class Baton : ItemBase, IAimedWeapon
                 NotifyOwner($"진압봉 빗나감 — {hit.collider.name}에 맞음");
                 return;
             case SwingResult.TargetInvalidState:
-                NotifyOwner($"진압봉 무효 — 이미 제압됐거나 페널티 진행 중인 대상 ({target.CurrentState})");
+                NotifyOwner(
+                    playerTarget != null
+                        ? $"진압봉 무효 — 이미 무력화된 동료 ({playerTarget.name})"
+                        : $"진압봉 무효 — 이미 제압됐거나 페널티 진행 중인 대상 ({target.CurrentState})");
                 return;
+        }
+
+        // 동료를 맞췄다 — 아군 오사 (#461). NPC와 같은 데미지를 그대로 넣고, HP 0이 되면
+        // PlayerHealth.SetHp가 다운(IncapacitationCause.Down)까지 이어준다 — 여기서 따로 할 일이 없다.
+        // NPC 경로의 ServerReactTo(반격·도주 전환)는 플레이어에게 해당 없다.
+        if (playerTarget != null)
+        {
+            playerTarget.TakeDamage(m_damage, holder.gameObject);
+            NotifyOwner(
+                $"진압봉 명중 — 동료 오사! {playerTarget.name} "
+                    + $"(-{m_damage} → {playerTarget.CurrentHp}/{playerTarget.MaxHp})");
+            return;
         }
 
         // 때린 사람을 가해자로 넘긴다 — 맞은 즉시 이 사람에게 반격·도주하고(#400),
@@ -329,6 +350,8 @@ public class Baton : ItemBase, IAimedWeapon
 
     /// <summary>
     /// 조준 원점·방향으로 사거리(m_range)만큼 반경 m_hitRadius 구체를 날려 명중 결과를 분류한다.
+    /// 유효 대상은 NPC와 <b>동료</b> 둘이며(#461), 어느 쪽인지는 채워진 out 인자로 구분한다 —
+    /// 둘 다 <c>ValidTarget</c>이다(맞으면 데미지가 들어간다는 점이 같고, 크로스헤어도 같이 켜져야 한다).
     /// 마스크 ~0 + 트리거 무시. 후보 중 하나를 고르는 기준은 <see cref="AimOcclusion"/>가 단독으로
     /// 가지며, 그 기준이 벽 엄폐의 정의다 — 테이저·상호작용 가시선과 같은 규칙이다.
     ///
@@ -346,10 +369,12 @@ public class Baton : ItemBase, IAimedWeapon
         Vector3 direction,
         Transform holderRoot,
         out NpcController target,
+        out PlayerHealth playerTarget,
         out RaycastHit hit
     )
     {
         target = null;
+        playerTarget = null;
         hit = default;
 
         int count = Physics.SphereCastNonAlloc(
@@ -372,11 +397,11 @@ public class Baton : ItemBase, IAimedWeapon
         hit = s_hitBuffer[index];
 
         // 콜라이더가 NPC 루트의 자식일 수 있으므로 부모까지 탐색한다 (Taser.EvaluateAim과 동일 관례).
-        // 벽·소품·다른 플레이어를 맞췄으면 그대로 빗나감이다.
+        // 벽·소품을 맞췄으면 그대로 빗나감이고, 동료를 맞췄으면 아군 오사다 (#461).
         NpcController npc = hit.collider.GetComponentInParent<NpcController>();
         if (npc == null)
         {
-            return SwingResult.HitNonTarget;
+            return EvaluatePlayerSwing(hit, out playerTarget);
         }
 
         // 피해 게이트를 데미지 전에 본다 — TakeDamage도 같은 규칙으로 피해를 무시하지만(#366/#292),
@@ -392,6 +417,33 @@ public class Baton : ItemBase, IAimedWeapon
         }
 
         return SwingResult.ValidTarget;
+    }
+
+    /// <summary>
+    /// NPC가 아닌 것을 맞췄을 때의 분류 — 동료면 아군 오사, 그 외(벽·소품)는 빗나감. (#461)
+    /// </summary>
+    /// <remarks>
+    /// 테이저(<c>Taser.EvaluatePlayerAim</c>)와 달리 <b>자기 자신을 걸러내는 분기가 없다.</b>
+    /// 필요가 없기 때문이다 — 진압봉은 <see cref="AimOcclusion.FindNearestByPivot"/>에 소지자 계층을
+    /// 제외 루트로 넘기므로(SphereCast가 원점에 겹친 자기 콜라이더를 distance 0으로 되돌려주는 문제 때문에
+    /// 원래부터 필요했다) 자기 몸은 후보에 아예 오르지 않는다. 앉기·넉백으로 원점이 몸 밖으로 나가도
+    /// 같다. 테이저는 레이캐스트라 제외 루트를 넘기지 않아서 그 분기가 필요했던 것이다.
+    /// <b>이 함수를 제외 루트 없이 부르게 바꾸면 자기 타격 가드를 여기에 추가해야 한다.</b>
+    ///
+    /// 무력화 게이트는 <see cref="PlayerHealth.IsTargetable"/> 하나로 본다 — 다운·기절·매달기 중인
+    /// 동료를 더 때려 상태를 악화시키는 경로는 만들지 않는다 (NPC 쪽 <c>NpcStateRules.CanBeDamaged</c>와 같은 취지).
+    /// </remarks>
+    private static SwingResult EvaluatePlayerSwing(RaycastHit hit, out PlayerHealth playerTarget)
+    {
+        playerTarget = hit.collider.GetComponentInParent<PlayerHealth>();
+        if (playerTarget == null)
+        {
+            return SwingResult.HitNonTarget;
+        }
+
+        return playerTarget.IsTargetable
+            ? SwingResult.ValidTarget
+            : SwingResult.TargetInvalidState;
     }
 
     // ---- 오너 로그 피드백 ----
