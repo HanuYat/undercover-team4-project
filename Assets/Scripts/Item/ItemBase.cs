@@ -1,25 +1,12 @@
-using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Localization;
 
-/// <summary>1인칭 FP 손 손가락 프리셋 — 장착 아이템에 맞춰 손 모양을 바꾼다. PlayerHandView가 적용한다. (#265)</summary>
-// 값은 프리팹에 int로 직렬화되므로 추가는 반드시 끝에 — 중간에 끼우면 기존 아이템의 그립이 밀린다.
-public enum HandGrip
-{
-    Relaxed, // 빈손·기본 — 자연스럽게 살짝 쥔 손
-    Trigger, // 총류 — 검지 펴고 나머지 감싸 쥠
-    Wide,    // 스캐너·박스 등 큰 물건 — 손 넓게 편 채로
-    Handle,  // 진압봉 등 자루형 — 다섯 손가락으로 자루를 꽉 말아 쥐고 엄지를 그 위에 덮는다 (#217)
-}
-
 /// <summary>
-/// 모든 아이템의 공통 기반 클래스.
-/// 이름·아이콘·설명 등 공통 데이터와 사용 진입점(Use)을 정의한다.
-/// 스캐너·수갑 등 하위 아이템은 이 클래스를 상속해 Use()를 구현한다.
-/// 아이템은 독립 NetworkObject 프리팹이므로(#88) NetworkBehaviour를 상속한다 —
-/// 배터리 등 상태를 NetworkVariable로 전 클라에 동기화하고, 줍기 시 소유권이 이전된다.
-/// 채널링 게이지 피드백(#184)은 공통 기반 ChanneledInteractionBehaviour가 제공한다 —
-/// CancelUse()로 이미 채널링을 아이템 공통 개념으로 다루므로 게이지 헬퍼도 여기에 둔다.
+/// 모든 아이템의 공통 기반 — 표시용 공통 데이터와 사용 진입점(Use)을 정의한다.
+/// 스캐너·수갑 등 하위 아이템이 이 클래스를 상속해 Use()를 구현한다.
+/// 아이템은 독립 NetworkObject 프리팹이므로(#88) NetworkBehaviour 계열을 상속한다 —
+/// 배터리 등 상태를 NetworkVariable로 동기화하고, 줍기 시 소유권이 이전된다.
+/// 채널링 게이지·오너 피드백은 기반 ChanneledInteractionBehaviour가 제공한다 (#184/#91).
 /// </summary>
 public abstract class ItemBase : ChanneledInteractionBehaviour
 {
@@ -94,48 +81,43 @@ public abstract class ItemBase : ChanneledInteractionBehaviour
     public int ShopPrice => m_shopPrice;
 
     /// <summary>
-    /// 이 아이템을 지금 저 대상에 사용할 수 있는지 — 조준 피드백(윤곽선) 판정용. (#184)
+    /// 이 아이템을 지금 저 대상에 사용할 수 있는지 — 조준 피드백(윤곽선) 판정용. 기본값 false. (#184)
     /// Use()의 조기 검증과 같은 기준을 유지해야 "윤곽선이 떴는데 사용은 안 됨"이 안 생긴다.
-    /// 기본값 false — 대상 지정 사용이 없는 아이템은 재정의하지 않는다.
     /// 매 프레임 호출되므로(InteractionFeedback) 무거운 연산은 피할 것.
     /// </summary>
     public virtual bool CanTarget(GameObject aimTarget) => false;
 
     /// <summary>
-    /// 현재 아이템을 사용할 수 있는지 여부.
-    /// 기본값은 true이며, 하위 클래스가 사용 조건을 재정의한다.
-    /// (예: 스캐너는 배터리 잔량이 있을 때만 true)
-    /// UI 표시(장착 아이콘 활성/비활성 등)에 참고할 수 있으나, 사용 가능 여부의
-    /// 최종 판정은 Use() 구현부가 스스로 수행한다 — 아래 Use() 계약 참고.
+    /// 현재 아이템을 사용할 수 있는지 — UI 표시(장착 아이콘 활성/비활성 등)용 힌트. 기본값 true.
+    /// 사용 가능 여부의 최종 판정은 Use() 구현부가 스스로 수행한다 (아래 Use() 계약 참고).
     /// </summary>
     public virtual bool CanUse() => true;
 
     /// <summary>
     /// 아이템 사용 진입점. 하위 클래스가 구체 동작을 구현한다.
-    /// (예: 스캐너 3초 채널링 후 스캔 정보 로그)
-    /// 계약: 호출부(PlayerItemUser)는 CanUse()로 게이트하지 않고 이 메서드를 호출한다.
-    /// 따라서 구현부는 진입 시 스스로 CanUse()를 확인하고, 사용 불가면 사유를
-    /// 로그로 알린 뒤 반환해야 한다. (이래야 사용 불가 피드백을 아이템이 낼 수 있다)
+    /// 계약: 호출부(PlayerItemUser)는 CanUse()로 게이트하지 않고 이 메서드를 호출한다. 따라서 구현부가
+    /// 진입 시 스스로 CanUse()를 확인하고, 사용 불가면 사유를 알린 뒤 반환해야 한다 —
+    /// 이래야 "왜 안 되는지"를 아이템이 직접 낼 수 있다.
     /// </summary>
     /// <param name="target">
     /// 사용 대상 — PlayerInteractor가 겨냥한 오브젝트. 겨냥한 것이 없으면 null.
-    /// 하위 아이템이 이 대상에서 필요한 컴포넌트를 조회한다 (Scanner→CitizenProfile #34, Handcuffs→NpcController #35).
+    /// 하위 아이템이 이 대상에서 필요한 컴포넌트를 조회한다 (Scanner→CitizenIdentity #34, Handcuffs→NpcController #35).
     /// </param>
     // 네트워크 전환 패턴: 오너 입력 → 클라에서 대상 조기 검증 → ServerRpc 요청 → 서버가 실제 효과 실행/검증 후 동기화.
     // 각 하위 구현(Scanner, Handcuffs 등)이 이 패턴을 직접 담당한다 (#55).
     public abstract void Use(GameObject target);
 
     /// <summary>
-    /// 진행 중인 사용(채널링)을 중단한다. 좌클릭을 떼면 PlayerItemUser가 호출한다 (#91).
+    /// 진행 중인 사용(채널링)을 중단한다 — 좌클릭을 떼면 PlayerItemUser가 호출한다 (#91).
+    /// 오너 클라의 '의도'이므로 구현부가 서버에 취소를 요청한다 (Scanner.CancelScan 관례).
     /// 채널링이 없는 즉발 아이템은 기본 구현(무동작)을 그대로 쓴다.
     /// </summary>
-    // TODO: 네트워크 테스트 시 취소도 서버 권위로 (오너 뗌 입력 → CancelUseServerRpc → 서버가 채널링 중단)
     public virtual void CancelUse() { }
 
     /// <summary>
     /// 서버 권위로 진행 중인 사용(채널링)을 즉시 중단한다 — 소유권 이전을 동반하는 경로(버리기)에서
-    /// 서버가 직접 호출한다. <see cref="CancelUse"/>는 오너 클라의 '의도'라 소유권이 회수된 원격 드롭에선
-    /// 취소 RPC가 거부되지만(RequireOwnership), 이건 서버가 자기 채널을 직접 끊으므로 경합이 없다.
+    /// 서버가 직접 호출한다. <see cref="CancelUse"/>는 소유권이 회수된 원격 드롭에선 취소 RPC가
+    /// 거부되지만(RequireOwnership), 이건 서버가 자기 채널을 직접 끊으므로 경합이 없다.
     /// 채널링 없는 아이템은 무동작(기본).
     /// </summary>
     public virtual void ServerCancelActiveUse() { }
@@ -144,8 +126,7 @@ public abstract class ItemBase : ChanneledInteractionBehaviour
     /// 이 아이템이 손에 장착됐다 — 오너 클라에서만 호출된다(PlayerLoadout.EquipSlot). (#455)
     /// 장착 전환은 진행 중이던 게이지를 내리는데, 새로 든 아이템이 아직 진행 중인 것을 갖고 있으면
     /// 여기서 다시 띄운다(테이저 충전). 그런 상태가 없는 아이템은 무동작(기본).
-    /// 장착 해제 쪽 대응 훅은 따로 두지 않았다 — 게이지를 내리는 것은 아이템 종류와 무관해
-    /// EquipSlot이 한 번에 처리한다.
+    /// 장착 해제 쪽 대응 훅은 없다 — 게이지를 내리는 것은 아이템 종류와 무관해 EquipSlot이 한 번에 처리한다.
     /// </summary>
     public virtual void OnEquipped() { }
 }
