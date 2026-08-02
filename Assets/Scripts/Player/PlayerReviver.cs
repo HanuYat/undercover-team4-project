@@ -247,31 +247,14 @@ public class PlayerReviver : ChanneledInteractionBehaviour
 
     private void ServerCancelRevive() => m_channel.Cancel();
 
-    private bool IsInRange(PlayerHealth target)
-    {
-        float range = m_interactor != null ? m_interactor.Range : k_fallbackRange;
-        // 기준점은 조준·윤곽선 게이트와 동일한 AimOrigin(카메라) (#184)
-        Vector3 origin = m_interactor != null ? m_interactor.AimOrigin.position : transform.position;
-        // 사거리 + 가시선 — 거리만 보면 위조 RPC로 벽 너머 구조가 된다 (#360)
-        return (target.transform.position - origin).sqrMagnitude <= range * range
-            && (m_interactor == null || m_interactor.HasLineOfSightTo(target.transform));
-    }
+    private bool IsInRange(PlayerHealth target) =>
+        PlayerInteractor.IsWithinReach(
+            m_interactor,
+            target.transform,
+            PlayerInteractor.RangeOf(m_interactor, k_fallbackRange),
+            transform.position);
 
-    // ---- 오너 로그 피드백 ----
-
-    // 판정 로그는 서버에서 찍히므로 원격 클라 오너는 결과를 볼 수 없다 — 오너 콘솔에도 같은 로그를 전달한다.
-    // Scanner.NotifyOwner/PlayerEscorter.NotifyOwner와 동일 패턴 (#109).
-    private void NotifyOwner(string message)
-    {
-        Debug.Log(message); // 서버(호스트)·오프라인 콘솔
-        if (IsSpawned && IsServer && !IsOwner)
-            OwnerLogRpc(message); // 원격 클라가 오너인 경우에만 전달 (호스트 오너는 위에서 이미 찍음)
-    }
-
-    [Rpc(SendTo.Owner)]
-    private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
-
-    // 채널링 게이지 피드백(NotifyChannelGaugeStart/End)은 기반 ChanneledInteractionBehaviour가 제공한다. (#184)
+    // 채널링 게이지와 오너 피드백(NotifyOwner)은 기반 ChanneledInteractionBehaviour가 제공한다. (#184/#91)
 
     public override void OnDestroy()
     {

@@ -78,7 +78,7 @@ public class SignalDecoderHud : MonoBehaviour
     }
 
     // 입력창이 열린 채 이 HUD가 파괴·비활성되면(씬 전환, 향후 상점의 단말 회수 등) 정지된 입력을
-    // 되돌릴 기회가 사라진다 — 마지막 기회로 여기서 닫는다. (Handcuffs.OnDisable의 채널링 취소 관례)
+    // 되돌릴 기회가 사라진다 — 마지막 기회로 여기서 닫는다. (Scanner.OnDisable의 채널링 취소 관례)
     private void OnDisable()
     {
         Close();

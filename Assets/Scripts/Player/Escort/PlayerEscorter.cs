@@ -74,10 +74,6 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
 
     private float CaptureRange => Interactor != null ? Interactor.Range : k_fallbackRange;
 
-    // 거리 기준점 — 조준 레이캐스트·윤곽선 게이트와 동일한 AimOrigin(카메라).
-    // 루트(발밑) 기준이면 카메라 오프셋만큼 사거리 경계에서 판정이 어긋난다 (#147 관례, #184)
-    private Vector3 AimOriginPosition =>
-        Interactor != null ? Interactor.AimOrigin.position : transform.position;
 
     // 밧줄 연결 목록·용량 게이트(TetheredCount·IsTetheredTo·IsDraggingNpc·IsAtRopeCapacity)는
     // PlayerEscorter.RopeDrag.cs에, 장력 계산·추종 상태·밧줄 길이는 NpcController(끌리는 쪽)에 있다.
@@ -287,8 +283,8 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
     }
 
     /// <summary>
-    /// 진행 중인 체포/제압/해제 채널링을 서버 권위로 즉시 중단한다 — 수갑을 채널링 중 버리는 등
-    /// 아이템 소유권 이전 경로에서 서버가 직접 호출한다(Handcuffs.ServerCancelActiveUse).
+    /// 진행 중인 체포/제압/해제 채널링을 서버 권위로 즉시 중단한다 — 밧줄을 채널링 중 버리는 등
+    /// 아이템 소유권 이전 경로에서 서버가 직접 호출한다(Rope.ServerCancelActiveUse).
     /// 오너에 묶인 CancelCapture와 달리 소유권과 무관하므로 데디케이티드 서버에서도 동작한다. 서버(또는 오프라인) 전용.
     /// </summary>
     public void ServerCancelChannel()
@@ -379,30 +375,10 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
         target.ReleaseFromCustody();
     }
 
-    private bool IsInRange(NpcController target)
-    {
-        // 사거리 + 가시선 — 거리만 보면 위조 RPC로 벽 너머 제압·검거가 된다 (#360).
-        // Interactor 없는 구성(테스트 등)은 종전대로 거리만 본다.
-        return (target.transform.position - AimOriginPosition).sqrMagnitude
-                <= CaptureRange * CaptureRange
-            && (Interactor == null || Interactor.HasLineOfSightTo(target.transform));
-    }
+    private bool IsInRange(NpcController target) =>
+        PlayerInteractor.IsWithinReach(Interactor, target.transform, CaptureRange, transform.position);
 
-    // ---- 오너 로그 피드백 ----
-
-    // 판정 로그는 서버에서 찍히므로 원격 클라 오너는 결과를 볼 수 없다 — 오너 콘솔에도 같은 로그를 전달한다 (#91).
-    // 정식 UI 피드백(#65 계열)이 생기면 이 RPC를 그 이벤트 전달 경로로 확장한다.
-    private void NotifyOwner(string message)
-    {
-        Debug.Log(message); // 서버(호스트)·오프라인 콘솔
-        if (IsSpawned && IsServer && !IsOwner)
-            OwnerLogRpc(message); // 원격 클라가 오너인 경우에만 전달 (호스트 오너는 위에서 이미 찍음)
-    }
-
-    [Rpc(SendTo.Owner)]
-    private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
-
-    // 채널링 게이지 피드백(NotifyChannelGaugeStart/End)은 기반 ChanneledInteractionBehaviour가 제공한다. (#184)
+    // 채널링 게이지와 오너 피드백(NotifyOwner)은 기반 ChanneledInteractionBehaviour가 제공한다. (#184/#91)
 
     // ---- 서버 내부 연행 상태 조작 ----
 
