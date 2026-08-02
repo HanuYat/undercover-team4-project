@@ -247,15 +247,12 @@ public class PlayerReviver : ChanneledInteractionBehaviour
 
     private void ServerCancelRevive() => m_channel.Cancel();
 
-    private bool IsInRange(PlayerHealth target)
-    {
-        float range = m_interactor != null ? m_interactor.Range : k_fallbackRange;
-        // 기준점은 조준·윤곽선 게이트와 동일한 AimOrigin(카메라) (#184)
-        Vector3 origin = m_interactor != null ? m_interactor.AimOrigin.position : transform.position;
-        // 사거리 + 가시선 — 거리만 보면 위조 RPC로 벽 너머 구조가 된다 (#360)
-        return (target.transform.position - origin).sqrMagnitude <= range * range
-            && (m_interactor == null || m_interactor.HasLineOfSightTo(target.transform));
-    }
+    private bool IsInRange(PlayerHealth target) =>
+        PlayerInteractor.IsWithinReach(
+            m_interactor,
+            target.transform,
+            PlayerInteractor.RangeOf(m_interactor, k_fallbackRange),
+            transform.position);
 
     // 채널링 게이지와 오너 피드백(NotifyOwner)은 기반 ChanneledInteractionBehaviour가 제공한다. (#184/#91)
 

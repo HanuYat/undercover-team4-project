@@ -129,6 +129,25 @@ public class PlayerInteractor : NetworkBehaviour
         return HasLineOfSight(AimOrigin.position, point, target, "서버 판정");
     }
 
+    /// <summary>
+    /// 사거리 + 가시선을 함께 보는 서버 판정 — 거리만 보면 위조 RPC로 벽 너머 상호작용이 뚫린다 (#360).
+    /// 스캔·구조·운반·검거가 이 하나를 통과하므로, 새 상호작용도 여기로 붙여야 규칙이 갈라지지 않는다.
+    /// 기준점은 조준·윤곽선 게이트와 동일한 AimOrigin(카메라) — 루트(발밑) 기준이면 카메라 오프셋만큼
+    /// 사거리 경계에서 판정이 어긋난다 (#147 관례, #184).
+    /// interactor가 없는 구성(테스트 씬 등)은 fallbackOrigin을 기준점으로 쓰고 가시선은 생략한다.
+    /// </summary>
+    public static bool IsWithinReach(
+        PlayerInteractor interactor, Transform target, float range, Vector3 fallbackOrigin)
+    {
+        Vector3 origin = interactor != null ? interactor.AimOrigin.position : fallbackOrigin;
+        return (target.position - origin).sqrMagnitude <= range * range
+            && (interactor == null || interactor.HasLineOfSightTo(target));
+    }
+
+    /// <summary>인터랙터의 사거리 — 없는 구성(테스트 등)이면 fallback. IsWithinReach와 짝으로 쓴다.</summary>
+    public static float RangeOf(PlayerInteractor interactor, float fallback) =>
+        interactor != null ? interactor.Range : fallback;
+
     // 조준 레이캐스트는 Interactable 레이어만 보므로 벽(Default)을 그냥 통과한다 — 대상 확정 후
     // 여기서 장애물만 따로 본다. (마스크에 벽을 넣으면 본부 트리거 존이 레이를 가로채고, 트리거를
     // 무시하자니 줍기 콜라이더가 트리거라(#263) 줍기가 통째로 죽는다.)

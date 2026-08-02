@@ -74,10 +74,6 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
 
     private float CaptureRange => Interactor != null ? Interactor.Range : k_fallbackRange;
 
-    // 거리 기준점 — 조준 레이캐스트·윤곽선 게이트와 동일한 AimOrigin(카메라).
-    // 루트(발밑) 기준이면 카메라 오프셋만큼 사거리 경계에서 판정이 어긋난다 (#147 관례, #184)
-    private Vector3 AimOriginPosition =>
-        Interactor != null ? Interactor.AimOrigin.position : transform.position;
 
     // 밧줄 연결 목록·용량 게이트(TetheredCount·IsTetheredTo·IsDraggingNpc·IsAtRopeCapacity)는
     // PlayerEscorter.RopeDrag.cs에, 장력 계산·추종 상태·밧줄 길이는 NpcController(끌리는 쪽)에 있다.
@@ -379,14 +375,8 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
         target.ReleaseFromCustody();
     }
 
-    private bool IsInRange(NpcController target)
-    {
-        // 사거리 + 가시선 — 거리만 보면 위조 RPC로 벽 너머 제압·검거가 된다 (#360).
-        // Interactor 없는 구성(테스트 등)은 종전대로 거리만 본다.
-        return (target.transform.position - AimOriginPosition).sqrMagnitude
-                <= CaptureRange * CaptureRange
-            && (Interactor == null || Interactor.HasLineOfSightTo(target.transform));
-    }
+    private bool IsInRange(NpcController target) =>
+        PlayerInteractor.IsWithinReach(Interactor, target.transform, CaptureRange, transform.position);
 
     // 채널링 게이지와 오너 피드백(NotifyOwner)은 기반 ChanneledInteractionBehaviour가 제공한다. (#184/#91)
 

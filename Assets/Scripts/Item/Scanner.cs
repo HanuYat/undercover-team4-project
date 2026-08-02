@@ -327,14 +327,9 @@ public class Scanner : ItemBase
         m_channel.Cancel();
     }
 
-    private bool IsInRange(Transform target)
-    {
-        PlayerInteractor interactor = GetComponentInParent<PlayerInteractor>(); // 아이템은 주인이 바뀔 수 있으므로 주인을 캐시하지 않고 호출 시점에 해석한다. (Handcuffs.Escorter 관례).
-        Vector3 origin = interactor != null ? interactor.AimOrigin.position : transform.position;
-
-        return (target.position - origin).sqrMagnitude <= m_scanKeepRange * m_scanKeepRange
-            && (interactor == null || interactor.HasLineOfSightTo(target));
-    }
+    private bool IsInRange(Transform target) =>
+        PlayerInteractor.IsWithinReach(
+            GetComponentInParent<PlayerInteractor>(), target, m_scanKeepRange, transform.position);
 
     private static string GetScanInfo(CitizenProfile profile)
     {
