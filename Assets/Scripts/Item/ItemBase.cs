@@ -80,6 +80,10 @@ public abstract class ItemBase : ChanneledInteractionBehaviour
     /// </summary>
     public int ShopPrice => m_shopPrice;
 
+    /// <summary>이 아이템을 들고 있는 플레이어의 인터랙터. 바닥에 놓여 있으면 null.</summary>
+    // 줍기/버리기로 부모가 바뀌므로 캐시하지 않고 접근할 때마다 해석한다 — 캐시하면 전 주인을 가리킨다.
+    protected PlayerInteractor Holder => GetComponentInParent<PlayerInteractor>();
+
     /// <summary>
     /// 이 아이템을 지금 저 대상에 사용할 수 있는지 — 조준 피드백(윤곽선) 판정용. 기본값 false. (#184)
     /// Use()의 조기 검증과 같은 기준을 유지해야 "윤곽선이 떴는데 사용은 안 됨"이 안 생긴다.

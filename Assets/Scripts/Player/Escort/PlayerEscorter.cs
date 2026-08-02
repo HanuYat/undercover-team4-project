@@ -283,8 +283,8 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
     }
 
     /// <summary>
-    /// 진행 중인 체포/제압/해제 채널링을 서버 권위로 즉시 중단한다 — 수갑을 채널링 중 버리는 등
-    /// 아이템 소유권 이전 경로에서 서버가 직접 호출한다(Handcuffs.ServerCancelActiveUse).
+    /// 진행 중인 체포/제압/해제 채널링을 서버 권위로 즉시 중단한다 — 밧줄을 채널링 중 버리는 등
+    /// 아이템 소유권 이전 경로에서 서버가 직접 호출한다(Rope.ServerCancelActiveUse).
     /// 오너에 묶인 CancelCapture와 달리 소유권과 무관하므로 데디케이티드 서버에서도 동작한다. 서버(또는 오프라인) 전용.
     /// </summary>
     public void ServerCancelChannel()

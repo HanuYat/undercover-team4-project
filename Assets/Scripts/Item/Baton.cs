@@ -94,7 +94,7 @@ public class Baton : ItemBase, IAimedWeapon
     {
         // 소지자 계층은 자기 몸을 캐스트에서 걸러내는 데 필요하다 — 원점이 카메라(캡슐 안)라
         // 걸러내지 않으면 자기 콜라이더가 distance 0으로 먼저 잡힌다. (EvaluateSwing 주석 참고)
-        PlayerInteractor holder = GetComponentInParent<PlayerInteractor>();
+        PlayerInteractor holder = Holder;
         if (holder == null)
         {
             return false;
@@ -111,8 +111,7 @@ public class Baton : ItemBase, IAimedWeapon
     public override void Use(GameObject aimTarget)
     {
         // 조준 기준은 든 플레이어의 AimOrigin(카메라) — 아이템은 줍기/버리기로 부모가 바뀌므로
-        // 캐시하지 않고 사용 시점에 해석한다 (Taser.Use 관례).
-        PlayerInteractor interactor = GetComponentInParent<PlayerInteractor>();
+        PlayerInteractor interactor = Holder;
         if (interactor == null)
         {
             Debug.LogWarning("Baton: PlayerInteractor를 찾지 못함 — 조준 기준 없음", this);
@@ -165,7 +164,7 @@ public class Baton : ItemBase, IAimedWeapon
             return; // 방향이 0벡터면 캐스트를 만들 수 없다 (위조·직렬화 사고 방어)
         }
 
-        PlayerInteractor holder = GetComponentInParent<PlayerInteractor>();
+        PlayerInteractor holder = Holder;
         if (holder == null)
         {
             return; // 아무에게도 안 들린 아이템이 휘둘러질 수는 없다
@@ -233,7 +232,7 @@ public class Baton : ItemBase, IAimedWeapon
 
         // 소지자가 사라졌거나, 스윙 도중 아이템을 버렸거나 남에게 넘어갔으면 이 타격은 무효다 —
         // 손을 떠난 봉이 때리는 그림은 없다.
-        if (holder == null || GetComponentInParent<PlayerInteractor>() != holder)
+        if (holder == null || Holder != holder)
         {
             return;
         }
@@ -313,7 +312,7 @@ public class Baton : ItemBase, IAimedWeapon
     {
         if (!IsSpawned)
         {
-            ApplySwingAnimation(GetComponentInParent<PlayerInteractor>()); // 오프라인 — RPC 경로가 없다
+            ApplySwingAnimation(Holder); // 오프라인 — RPC 경로가 없다
             return;
         }
 
@@ -325,7 +324,7 @@ public class Baton : ItemBase, IAimedWeapon
     {
         // 소지자를 인자로 싣지 않는 이유: 아이템의 부착 부모는 NetworkObject 부모 동기화로 전 피어가
         // 동일하므로, 각 피어가 자기 계층에서 찾는 편이 참조 직렬화보다 싸고 어긋날 여지가 없다.
-        ApplySwingAnimation(GetComponentInParent<PlayerInteractor>());
+        ApplySwingAnimation(Holder);
     }
 
     // 드라이버는 Animator가 붙은 모델 쪽에 있을 수도, 루트에 있을 수도 있다 — 소지자 루트에서 아래로 찾는다

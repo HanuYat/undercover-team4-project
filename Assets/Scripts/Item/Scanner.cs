@@ -134,7 +134,7 @@ public class Scanner : ItemBase
             return false;
         }
 
-        // 콜라이더가 NPC 루트의 자식일 수 있으므로 부모까지 탐색한다. (Handcuffs.FindTarget과 동일 관례)
+        // 콜라이더가 NPC 루트의 자식일 수 있으므로 부모까지 탐색한다. (Rope.ResolveTarget과 동일 관례)
         CitizenIdentity identity = target.GetComponentInParent<CitizenIdentity>();
         if (identity == null)
         {
@@ -271,8 +271,7 @@ public class Scanner : ItemBase
         if (npc == null)
             return;
 
-        // 스캐너는 줍기·버리기로 부모가 바뀌므로 호출 시점에 해석한다 (IsInRange와 같은 관례)
-        PlayerInteractor interactor = GetComponentInParent<PlayerInteractor>();
+        PlayerInteractor interactor = Holder;
         npc.ServerReactTo(ReactionTrigger.Scan, interactor != null ? interactor.transform : null);
     }
 
@@ -328,8 +327,7 @@ public class Scanner : ItemBase
     }
 
     private bool IsInRange(Transform target) =>
-        PlayerInteractor.IsWithinReach(
-            GetComponentInParent<PlayerInteractor>(), target, m_scanKeepRange, transform.position);
+        PlayerInteractor.IsWithinReach(Holder, target, m_scanKeepRange, transform.position);
 
     private static string GetScanInfo(CitizenProfile profile)
     {

@@ -68,8 +68,7 @@ public class Taser : ItemBase, IAimedWeapon
     public override void Use(GameObject aimTarget)
     {
         // 조준 기준은 든 플레이어의 AimOrigin(카메라) — 아이템은 줍기/버리기로 부모가 바뀌므로
-        // 캐시하지 않고 사용 시점에 해석한다 (Scanner.IsInRange 관례).
-        PlayerInteractor interactor = GetComponentInParent<PlayerInteractor>();
+        PlayerInteractor interactor = Holder;
         if (interactor == null)
         {
             Debug.LogWarning("Taser: PlayerInteractor를 찾지 못함 — 조준 기준 없음", this);
@@ -174,7 +173,7 @@ public class Taser : ItemBase, IAimedWeapon
         }
 
         // 쏜 사람을 위협으로 넘긴다 — 기절이 풀리면 이 사람에게서 도망친다 (#269)
-        PlayerInteractor shooter = GetComponentInParent<PlayerInteractor>();
+        PlayerInteractor shooter = Holder;
         target.EnterStunned(shooter != null ? shooter.transform : null);
         NotifyOwner($"테이저 명중: {target.name} ({target.StunSeconds}초 기절)");
     }
@@ -214,7 +213,7 @@ public class Taser : ItemBase, IAimedWeapon
 
         hit = s_aimBuffer[index];
 
-        // 콜라이더가 루트의 자식일 수 있으므로 부모까지 탐색한다 (Handcuffs.ResolveTarget과 동일 관례).
+        // 콜라이더가 루트의 자식일 수 있으므로 부모까지 탐색한다 (Rope.ResolveTarget과 동일 관례).
         // 벽·소품을 맞췄으면 그대로 빗나감이고, 동료를 맞췄으면 아군 오사다 (#252).
         NpcController npc = hit.collider.GetComponentInParent<NpcController>();
         if (npc == null)
@@ -268,7 +267,7 @@ public class Taser : ItemBase, IAimedWeapon
     /// </summary>
     private bool IsOriginPlausible(Vector3 origin)
     {
-        PlayerInteractor holder = GetComponentInParent<PlayerInteractor>();
+        PlayerInteractor holder = Holder;
         if (holder == null)
         {
             return false; // 아무에게도 안 들린 아이템이 쏠 수는 없다
