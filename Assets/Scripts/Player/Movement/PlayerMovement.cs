@@ -34,11 +34,11 @@ public class PlayerMovement : NetworkBehaviour
     public float CrouchSpeed => m_crouchSpeed * SpeedFactor;
 
     /// <summary>
-    /// 이동 속도에 걸린 외부 배율 — 지금은 밧줄로 끌고 있는 무게뿐이다(<see cref="PlayerEscorter.DragSpeedFactor"/>).
+    /// 이동 속도에 걸린 외부 배율 — 지금은 밧줄로 끌고 있는 무게뿐이다(<see cref="RopeDragLoad.DragSpeedFactor"/>).
     /// 연행 컴포넌트가 없으면(단독 테스트 씬) 1. 소스가 여럿이 되면(스탯 강화 #368 등) 여기서 곱해
     /// 합성한다 — 이 프로퍼티를 거치는 한 애니메이션 정합은 따라온다. (#398)
     /// </summary>
-    public float SpeedFactor => m_escorter != null ? m_escorter.DragSpeedFactor : 1f;
+    public float SpeedFactor => m_dragLoad != null ? m_dragLoad.DragSpeedFactor : 1f;
 
     // 서버가 Connection Approval에서 지정한 스폰 포즈. 프리팹의 NetworkTransform이 Owner 권한이라,
     // 씬 동기화를 거쳐 접속하면 오너 로컬 인스턴스가 프리팹 원점에 생성된 채 권한을 잡고 원점
@@ -53,7 +53,7 @@ public class PlayerMovement : NetworkBehaviour
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 이동·시점 차단용 (#105)
     private PlayerCrouch m_crouch; // 앉기 중 이동 속도·카메라 높이 조정용 (#236)
     private PlayerJump m_jump; // 점프 입력 수집·공중 상태 전파 (#189)
-    private PlayerEscorter m_escorter; // 끌고 있는 무게로 깎인 이동속도 배율을 읽는다 (#398)
+    private RopeDragLoad m_dragLoad; // 끌고 있는 무게로 깎인 이동속도 배율·목줄 제한을 읽는다 (#398)
     private PlayerTowedMotion m_towed; // 남이 내 몸을 옮기는 동안의 추종 — 입력 이동을 대신한다 (#279, #365)
     private PlayerLook m_look; // 시점 회전·카메라 자세 — 몸통 yaw가 이동 방향의 기준이라 여기서 순서를 잡는다
     private RoundManager Round => App.Game.Round; // 라운드 종료 시 이동·시점 차단용 (라운드 종료 freeze)
@@ -91,7 +91,7 @@ public class PlayerMovement : NetworkBehaviour
         m_incapacitation = GetComponent<PlayerIncapacitation>();
         m_crouch = GetComponent<PlayerCrouch>();
         m_jump = GetComponent<PlayerJump>();
-        m_escorter = GetComponent<PlayerEscorter>();
+        m_dragLoad = GetComponent<RopeDragLoad>();
         m_towed = GetComponent<PlayerTowedMotion>();
         m_look = GetComponent<PlayerLook>();
     }
@@ -320,8 +320,8 @@ public class PlayerMovement : NetworkBehaviour
         // 팽팽해진 밧줄이 허용하는 만큼으로 입력 이동을 깎는다 — 줄다리기 힘겨루기 (#398).
         // 넉백에는 걸지 않는다: 폭발 같은 외력은 줄을 이겨야 하고, 막으면 벽과 줄 사이에 낀다.
         Vector3 inputVelocity = moveDirection * speed;
-        if (m_escorter != null)
-            inputVelocity = m_escorter.ConstrainByTautRopes(inputVelocity);
+        if (m_dragLoad != null)
+            inputVelocity = m_dragLoad.ConstrainByTautRopes(inputVelocity);
 
         // 넉백은 입력 이동과 별개로 감쇠하며 합산된다 — 다운·라운드 종료로 입력이 막혀도 폭발엔 밀려난다
         Vector3 velocity = inputVelocity + m_knockbackVelocity + Vector3.up * m_verticalVelocity;

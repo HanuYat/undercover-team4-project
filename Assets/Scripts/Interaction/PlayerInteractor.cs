@@ -47,7 +47,8 @@ public class PlayerInteractor : NetworkBehaviour
     public LayerMask LosBlockMask => m_losBlockMask;
 
     private PlayerInputHandler m_inputHandler;
-    private PlayerEscorter m_escorter;
+    private PlayerEscorter m_escorter;       // "지금 이걸 끌고 있나" 조회 (연결 상태)
+    private PlayerEscortCommands m_commands; // 놓기 요청 (명령 허브)
     private PlayerIncapacitation m_incapacitation;
     private PlayerCarrier m_carrier; // 운반 중 E의 "내려놓기" 선점 판정용 (#365)
 
@@ -62,6 +63,7 @@ public class PlayerInteractor : NetworkBehaviour
         m_inputHandler = GetComponent<PlayerInputHandler>();
         // 연행 중 E 입력의 "놓기" 선점 판정용 — 없는 구성(테스트 등)이면 null (#91)
         m_escorter = GetComponent<PlayerEscorter>();
+        m_commands = GetComponent<PlayerEscortCommands>();
         // 행동불능 중 상호작용 차단용 — 이동/아이템은 각자 게이팅하지만 E 상호작용은 공백이었다 (#101)
         m_incapacitation = GetComponent<PlayerIncapacitation>();
         m_carrier = GetComponent<PlayerCarrier>(); // 없는 구성(테스트 등)이면 null (#365)
@@ -290,7 +292,7 @@ public class PlayerInteractor : NetworkBehaviour
 
         // 밧줄 놓기는 **조준 대상 기준**이다 (#390). 여러 명을 동시에 끌 수 있어 "끌고 있으면 무조건 놓기"로는
         // 무엇을 놓을지 정할 수 없고, 끄는 동안 다른 대상에게 E(제압·끌기 재개)를 쓸 방법도 사라진다.
-        // (PlayerEscorter가 따로 입력을 구독하면 놓기+제압이 한 입력에 동시 발동하는 이중 소비가 생긴다)
+        // (연행 쪽이 따로 입력을 구독하면 놓기+제압이 한 입력에 동시 발동하는 이중 소비가 생긴다)
         NpcController aimed = CurrentTarget != null
             ? CurrentTarget.GetComponentInParent<NpcController>()
             : null;
@@ -308,7 +310,7 @@ public class PlayerInteractor : NetworkBehaviour
 
             // ReleaseDrag 직접 호출은 서버 가드에 막힌다 — 요청 API로 서버에 넘긴다 (#118)
             Debug.Log($"E 입력 — 밧줄 끌기 놓기 요청: {aimed.name}");
-            m_escorter.RequestRelease(aimed);
+            m_commands?.RequestRelease(aimed);
             return;
         }
 
