@@ -33,10 +33,10 @@ public class ItemBattery : ChanneledInteractionBehaviour, IChargeable
     public Func<bool> CanCharge;
 
     /// <summary>CanCharge가 막았을 때 오너 콘솔에 남길 사유. 본체가 자기 표현으로 덮어쓴다.</summary>
-    public string ChargeBlockedReason = "충전 실패 — 아이템 사용 중";
+    public string ChargeBlockedReason { get; set; } = "충전 실패 — 아이템 사용 중";
 
     /// <summary>완충 상태에서 충전을 시도했을 때 띄울 오너 토스트 (#309).</summary>
-    public string FullyChargedMessage = "배터리 가득 참";
+    public string FullyChargedMessage { get; set; } = "배터리 가득 참";
 
     /// <summary>오너 화면 토스트로 띄울 사유 — 본체가 자기 토스트 채널로 중계한다 (#309).</summary>
     public event Action<string> OnChargeToast;

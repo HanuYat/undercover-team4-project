@@ -44,6 +44,13 @@ public class Scanner : ItemBase
     private void Awake()
     {
         m_battery = GetComponent<ItemBattery>();
+        if (m_battery == null)
+        {
+            // RequireComponent의 자동 보정은 에디터 편의라 빌드에서는 보정되지 않는다 —
+            // 프리팹에 직렬화되지 않았으면 NullReference로 터지는 대신 원인을 먼저 알린다.
+            Debug.LogError("Scanner: ItemBattery가 프리팹에 없다 — 프리팹을 열어 추가하고 저장할 것", this);
+            return;
+        }
 
         m_battery.CanCharge = () => !m_channel.IsActive;
         m_battery.ChargeBlockedReason = "충전 실패 — 스캔 채널링 중";
@@ -72,7 +79,8 @@ public class Scanner : ItemBase
     // ---- ItemBase — 사용 요청 진입점 ----
     /// <summary>스캔 중이 아니고, 배터리가 남아 있고, 먹통이 아닐 때만 사용 가능.
     /// (UI 힌트용 — 최종 판정은 서버가 재검증. CanTarget이 이 값을 보므로 윤곽선·크로스헤어도 함께 꺼진다)</summary>
-    public override bool CanUse() => !m_pendingScan && !m_battery.IsDepleted && !IsBlackout;
+    public override bool CanUse() =>
+        !m_pendingScan && m_battery != null && !m_battery.IsDepleted && !IsBlackout;
 
     /// <summary>스캔 가능한 대상인지 — 신원(CitizenIdentity)과 배정된 프로필이 있어야 한다. (#184)
     /// 프로필까지 보는 이유(#310 후속): 이벤트 NPC(난동꾼·침입자)는 라운드 시작 배정을 타지 않아 프로필이
@@ -97,7 +105,7 @@ public class Scanner : ItemBase
         {
             if (IsBlackout)
                 NotifyOwner("스캐너 먹통 — 전자기기 장애", toast: true);
-            else if (m_battery.IsDepleted)
+            else if (m_battery != null && m_battery.IsDepleted)
                 Debug.Log($"스캐너 배터리 부족! (남은 배터리: {m_battery.CurrentBattery})");
 
             return;
