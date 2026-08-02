@@ -325,18 +325,4 @@ public class Taser : ItemBase, IAimedWeapon
         // 전체 쿨다운과 경과분을 함께 넘겨 중간부터 잇는다.
         NotifyChannelGaugeStart(m_cooldownSeconds, m_cooldownSeconds - remaining);
     }
-
-    // ---- 오너 로그 피드백 ----
-
-    // 판정 로그는 서버에서 찍히므로 원격 클라 오너는 결과를 볼 수 없다 — 오너 콘솔에도 같은 로그를 전달한다.
-    // Scanner.NotifyOwner / PlayerEscorter.NotifyOwner와 동일 패턴 (#91).
-    private void NotifyOwner(string message)
-    {
-        Debug.Log(message); // 서버(호스트)·오프라인 콘솔
-        if (IsSpawned && IsServer && !IsOwner)
-            OwnerLogRpc(message); // 원격 클라가 오너인 경우에만 전달 (호스트 오너는 위에서 이미 찍음)
-    }
-
-    [Rpc(SendTo.Owner)]
-    private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
 }

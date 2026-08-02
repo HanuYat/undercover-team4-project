@@ -257,21 +257,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
             && (m_interactor == null || m_interactor.HasLineOfSightTo(target.transform));
     }
 
-    // ---- 오너 로그 피드백 ----
-
-    // 판정 로그는 서버에서 찍히므로 원격 클라 오너는 결과를 볼 수 없다 — 오너 콘솔에도 같은 로그를 전달한다.
-    // Scanner.NotifyOwner/PlayerEscorter.NotifyOwner와 동일 패턴 (#109).
-    private void NotifyOwner(string message)
-    {
-        Debug.Log(message); // 서버(호스트)·오프라인 콘솔
-        if (IsSpawned && IsServer && !IsOwner)
-            OwnerLogRpc(message); // 원격 클라가 오너인 경우에만 전달 (호스트 오너는 위에서 이미 찍음)
-    }
-
-    [Rpc(SendTo.Owner)]
-    private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
-
-    // 채널링 게이지 피드백(NotifyChannelGaugeStart/End)은 기반 ChanneledInteractionBehaviour가 제공한다. (#184)
+    // 채널링 게이지와 오너 피드백(NotifyOwner)은 기반 ChanneledInteractionBehaviour가 제공한다. (#184/#91)
 
     public override void OnDestroy()
     {

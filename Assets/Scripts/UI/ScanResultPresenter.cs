@@ -55,6 +55,7 @@ public class ScanResultPresenter : NetworkBehaviour
     private PlayerInteractor m_interactor;
     private PlayerItemUser m_itemUser;
     private Scanner m_scanner; // 현재 장착된 스캐너 인스턴스에 바인딩. 스캐너 미장착이면 null.
+    private IChargeable m_battery; // 그 스캐너의 배터리(ItemBattery) 잔량은 옆 컴포넌트가 들고 있다.
 
     // 이 플레이어가 스캔 완료한 NPC의 NetworkObjectId. 오너 로컬 전용(동기화 없음). (#233)
     private readonly HashSet<ulong> m_scannedNpcIds = new HashSet<ulong>();
@@ -202,20 +203,23 @@ public class ScanResultPresenter : NetworkBehaviour
         if (m_scanner != null)
         {
             m_scanner.OnScanCompleted -= HandleScanCompleted;
-            m_scanner.OnCharged -= HandleBatteryChanged;
+            if (m_battery != null)
+                m_battery.OnCharged -= HandleBatteryChanged;
             m_scanner.OnScanFeedback -= HandleScanFeedback;
         }
 
         m_scanner = scanner;
+        m_battery = scanner != null ? scanner.GetComponent<IChargeable>() : null;
 
         if (m_scanner != null)
         {
             m_scanner.OnScanCompleted += HandleScanCompleted;
-            m_scanner.OnCharged += HandleBatteryChanged;      // 스캔 소모·본부 충전 반영 (#309)
+            if (m_battery != null)
+                m_battery.OnCharged += HandleBatteryChanged; // 스캔 소모·본부 충전 반영 (#309)
             m_scanner.OnScanFeedback += HandleScanFeedback;   // 범위 이탈 등 실패 토스트 (#309)
             m_lastBattery = -1;                               // 장착 시점 값을 "충전"으로 오인하지 않게 리셋
             SetActive(m_batteryPanel, true);                  // 게이지 노출
-            UpdateBattery(m_scanner.CurrentBattery);          // 초기 잔량 + 소진 시 부족 토스트
+            UpdateBattery(m_battery != null ? m_battery.CurrentBattery : 0); // 초기 잔량 + 소진 시 부족 토스트
         }
         else
         {
@@ -242,8 +246,8 @@ public class ScanResultPresenter : NetworkBehaviour
 
     private void UpdateBattery(int current)
     {
-        if (m_batteryText != null && m_scanner != null)
-            m_batteryText.text = $"배터리 {current}/{m_scanner.MaxBattery}";
+        if (m_batteryText != null && m_battery != null)
+            m_batteryText.text = $"배터리 {current}/{m_battery.MaxBattery}";
 
         bool charged = m_lastBattery >= 0 && current > m_lastBattery; // 잔량 증가 = 충전기 이용
         m_lastBattery = current;
