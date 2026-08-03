@@ -161,7 +161,7 @@ git commit -m "#492: Jail 영역 판정을 JailArea로 통합 — 마스크 사�
     ///
     /// <paramref name="near"/>에서 <b>가장 가까운 빈 좌석</b>을 고른다. 플레이어가 신병을 내려놓은
     /// 자리에서 가장 가까운 자리에 앉히기 위한 것이다 — 앞에서부터 채우면 방 반대편 좌석이 배정돼
-    /// 눈앞에서 몸이 미끄러지듯 옮겨 간다(#492에서 자동 걷기가 사라져 배정 = 최종 위치다).
+    /// 걸어가는 거리가 공연히 길어진다(실측 최대 5.6m).
     ///
     /// 정원을 넘으면 좌석을 돌려 써 겹쳐 앉힌다 — 좌석은 전부 통로 밖이라 겹쳐도 통행을 막지 않는다
     /// (팀 확정 2026-07-30). 조용히 넘어가지 않게 경고를 남긴다.
@@ -401,7 +401,7 @@ public class JailIntake : MonoBehaviour
         if (!JailArea.Contains(npc.transform.position))
             return;
 
-        // 놓은 자리에서 가장 가까운 빈 좌석 — 자동 걷기가 사라져 배정이 곧 최종 위치다
+        // 놓은 자리에서 가장 가까운 빈 좌석 — 여기서 좌석까지는 NpcJailedState가 걸어간다(1.5~5.6m)
         Transform seat = m_jailZone.ReserveSeat(npc, npc.transform.position);
         npc.SendToJail(seat);
 
@@ -550,149 +550,71 @@ git commit -m "#492: 인계존·인계 단말 제거 — 판정이 유치장으�
 
 ---
 
-## Task 4: `NpcJailedState`의 자동 걷기 제거
+## Task 4: `NpcJailedState` 주석 갱신 (로직 변경 없음)
 
-플레이어가 좌석 근처에 놓으므로 걸어갈 거리가 없다. 좌석 정렬과 착석만 남긴다.
+**좌석까지 걸어가는 것은 그대로 둔다.** 폐기한 것은 "NPC가 도시에서 유치장까지 스스로 간다"이지 "벤치까지 두 걸음 간다"가 아니다.
+
+실측하면 놓은 자리에서 가장 가까운 빈 좌석까지가 **1.5~5.6m**다(방 중앙 1.76m, 문 앞 1.51m, 앞자리가 다 찼을 때 최대 5.61m). 워프로 처리하면 눈에 띄는 순간이동이 된다. 게다가 이 걷기 코드는 #462에서 이미 다듬은 것이다 — 0.25m까지 걸어간 뒤 남은 오차만 워프로 흡수하고, 경로 실패·타임아웃에는 좌석으로 옮겨 앉히는 폴백이 있다.
+
+#462의 입구 고착이 재발하지 않는 근거: 그 버그는 절차적으로 계산한 자리가 문↔셀 통로에 떨어져 생겼다. 지금 좌석은 손으로 배치해 통로를 비켜 있고, 걷는 거리도 방 하나 안이며, 실패해도 폴백이 좌석에 앉힌다.
+
+**바뀌는 것은 주석뿐이다** — 계상 주체와 진입 경로 설명이 낡았다.
 
 **Files:**
-- Modify: `Assets/Scripts/NPC/States/NpcJailedState.cs`
+- Modify: `Assets/Scripts/NPC/States/NpcJailedState.cs` (클래스 XML 주석만)
 
-- [ ] **Step 1: 파일 전체를 아래로 교체**
+- [ ] **Step 1: 클래스 주석 교체**
+
+`Assets/Scripts/NPC/States/NpcJailedState.cs`의 클래스 XML 주석(4-14행) 전체를 아래로 교체한다. **코드는 한 줄도 건드리지 않는다.**
 
 ```csharp
-using UnityEngine;
-using UnityEngine.AI;
-
 /// <summary>
-/// 수감(Jailed) 상태 — 배정된 좌석에 앉는다. (GDD 7-2, #228/#462/#492)
+/// 수감(Jailed) 상태 — 배정된 좌석까지 걸어가 앉는다. (GDD 7-2, #228/#462/#492)
+/// 걷기 → 좌석 방향으로 돌기 → 앉기를 한 상태에서 처리하고(연행 #97과 같은 구조), 앉으면 최종 상태다.
+/// 이송 중에는 로컬 회피를 끈다 — 이유는 Enter 주석.
 ///
-/// <b>걸어가지 않는다.</b> 좌석까지 데려오는 것은 플레이어의 일이고(#492), 이 상태는 배정된 좌석에
-/// 몸을 맞춰 앉히는 것만 한다. 자동 이송(NavMesh로 좌석까지 걷기)은 제거됐다 — 배정이 "놓은 자리에서
-/// 가장 가까운 빈 좌석"이라 옮길 거리가 애초에 몇十 cm다.
+/// <b>여기 걷기는 방 하나 안에서의 마지막 몇 미터다</b> (#492). 유치장까지 데려오는 것은 플레이어의
+/// 일이고(밧줄로 끌고 들어와 좌석 근처에서 놓는다), 이 상태는 놓인 자리에서 배정된 좌석까지
+/// 1.5~5.6m를 걸어가 앉는 것만 한다. 도시에서 유치장까지 스스로 걷던 자동 이송은 폐기됐다.
 ///
-/// 앉으면 최종 상태다. 빠져나가는 경로는 둘: 탈옥 방출(JailbreakEvent)과 플레이어의 반출(JailIntake).
+/// <b>계약: 어떤 실패도 그 자리에 굳지 않는다.</b> 경로를 못 잡거나 잃거나 제 시간에 도착하지 못하면
+/// 전부 좌석으로 옮겨 앉힌다(SeatByWarp) — 그 자리에 세우던 옛 처리가 입구를 막았다 (#462).
+/// 목적지가 손으로 배치한 좌석인 근거는 JailZone.ReserveSeat 참고.
 ///
-/// 정산 계상(JailZone.Admit)은 JailIntake가 착석시키는 시점에 한다 — 여기는 연출만 담당한다.
+/// 진입 경로는 JailIntake다(#492) — 유치장 안에서 플레이어가 신병을 놓으면 좌석을 배정해 보낸다.
+/// 정산 계상(JailZone.Admit)도 그쪽이 같은 시점에 한다 — 여기는 연출만 담당한다.
+/// 빠져나가는 경로는 둘: 탈옥 방출(JailbreakEvent)과 플레이어의 반출(JailIntake.ServerExtract).
 /// </summary>
-public class NpcJailedState : NpcStateBase
-{
-    // 이송 중의 회피 설정 — 앉히는 동안 껐다가 Exit에서 이 값으로 되돌린다.
-    // 상수로 박지 않는 이유는 NpcProneCollider가 서기 캡슐을 캡처하는 것과 같다: 프리팹마다 값이
-    // 달라질 수 있고, 그때 복원값만 조용히 어긋나면 원인을 찾기 어렵다.
-    private ObstacleAvoidanceType m_travelAvoidance;
-
-    // 회전 주도권도 같은 이유로 캡처한다 — 앉는 방향을 맞추는 동안만 에이전트에서 넘겨받는다
-    private bool m_travelUpdateRotation;
-
-    public NpcJailedState(NpcController owner) : base(owner) { }
-
-    public override void Enter()
-    {
-        m_travelAvoidance = m_owner.Agent.obstacleAvoidanceType;
-        m_travelUpdateRotation = m_owner.Agent.updateRotation;
-
-        // 로컬 회피를 끈다 — 앉은 뒤까지 계속(복원은 Exit).
-        //
-        // 플레이어가 몸으로 밀어낼 수 없게 한다. 밀리는 게 물리가 아니라는 점이 핵심이다:
-        // NPC의 Rigidbody는 kinematic이라 플레이어의 CharacterController가 밀 수 없고, 반대로 플레이어가
-        // NPC 캡슐에 막힌다. 움직이는 주체는 NPC 자신이다 — 플레이어 프리팹에 달린 NavMeshObstacle을
-        // 피하려고 에이전트가 스스로 비켜나기 때문이다. 앉은 수감자가 슬금슬금 밀려나면 안 된다.
-        m_owner.Agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
-
-        // updateRotation = 에이전트가 "가는 방향"으로 몸을 자동 회전시키는 옵션. 켜져 있으면
-        // 우리가 돌려도 되돌려지므로 앉는 방향을 직접 쥔다 (복원은 Exit).
-        m_owner.Agent.updateRotation = false;
-
-        // 유치장 내부는 시민이 못 들어가는 별도 NavMesh 영역(Jail)이다 (#415).
-        // 아래 Warp가 좌석 지점의 NavMesh를 샘플링하므로 통행을 먼저 얻어야 한다.
-        m_owner.SetJailAccess(true);
-
-        StopMoving();
-        SeatNow();
-    }
-
-    // Tick은 필요 없다 — Enter에서 앉으면 최종 상태다.
-    public override void Tick() { }
-
-    public override void Exit()
-    {
-        // 앉은 자세를 먼저 푼다 — 곧 이어지는 상태 전이(반출 추종·탈옥 도주)가 새 모션을 시드할 수 있게
-        m_owner.SetSeated(false);
-
-        // 반출(#492)·탈옥(#231)으로 풀려날 경우를 대비해 이동을 복구한다
-        m_owner.Agent.obstacleAvoidanceType = m_travelAvoidance; // 회피 없이 풀려나면 군중을 뚫고 걷는다
-        m_owner.Agent.updateRotation = m_travelUpdateRotation;
-        if (m_owner.Agent.isOnNavMesh)
-        {
-            m_owner.Agent.isStopped = false;
-            m_owner.Agent.ResetPath();
-        }
-    }
-
-    // 좌석에 몸을 맞춰 앉힌다. 좌석이 없는 테스트 씬이면 그 자리에 앉는다.
-    private void SeatNow()
-    {
-        if (m_owner.JailSeat != null)
-        {
-            // Warp = 위치를 즉시 옮기고 NavMesh에 다시 붙이는 것. 놓은 자리와 좌석의 차이를 흡수한다 —
-            // 몇 cm만 어긋나도 벤치에 걸터앉은 것처럼 보인다. 에이전트를 끄지 않으므로 재부착 실패
-            // 위험은 없다(에이전트를 껐다 켜면 다시 못 붙어 NPC가 굳는 그 위험군과 다르다).
-            if (!m_owner.Agent.Warp(m_owner.JailSeat.position))
-            {
-                Debug.LogWarning(
-                    $"NpcJailedState: 좌석으로 워프 실패 — 그 자리에서 앉힌다: {m_owner.name}",
-                    m_owner
-                );
-            }
-
-            m_owner.transform.rotation = SeatRotation();
-        }
-
-        m_owner.SetSeated(true);
-    }
-
-    // 이동을 끊는다 — 좌석을 지나쳐 밀리지 않게 감속 관성까지 끊는다.
-    private void StopMoving()
-    {
-        m_owner.Agent.isStopped = true;
-        m_owner.Agent.velocity = Vector3.zero;
-        if (m_owner.Agent.isOnNavMesh)
-            m_owner.Agent.ResetPath();
-    }
-
-    // 앉아서 바라볼 방향 — 좌석 forward의 수평 성분만 쓴다(좌석이 기울어 배치돼도 몸은 안 기운다).
-    private Quaternion SeatRotation()
-    {
-        if (m_owner.JailSeat == null)
-            return m_owner.transform.rotation;
-
-        Vector3 forward = m_owner.JailSeat.forward;
-        forward.y = 0f;
-        return forward.sqrMagnitude > 0.0001f
-            ? Quaternion.LookRotation(forward)
-            : m_owner.transform.rotation;
-    }
-}
 ```
 
 - [ ] **Step 2: 컴파일 확인**
 
-기대: 에러 0.
+기대: 에러 0. (주석만 바꿨으므로 당연히 통과해야 한다 — 통과하지 않으면 코드를 잘못 건드린 것이다.)
 
-- [ ] **Step 3: 착석 확인 (Editor Play)**
+- [ ] **Step 3: `git diff`로 코드 무변경 확인**
 
-NPC를 묶어 유치장에 끌고 들어가 좌석 근처에서 E로 놓는다.
-기대: 걷지 않고 좌석으로 즉시 맞춰 앉는다. 좌석의 Z축 방향(벤치를 등지는 방향)을 본다. 몸이 벤치에 파묻히거나 허공에 뜨지 않는다.
+```bash
+git diff --stat Assets/Scripts/NPC/States/NpcJailedState.cs
+```
 
-- [ ] **Step 4: 커밋**
+기대: 주석 줄 수만큼만 바뀐다. `SeatPhase`·`TickWalk`·`TickTurn`·`SeatByWarp`·`ArriveAtSeat`가 diff에 나오면 안 된다.
+
+- [ ] **Step 4: 착석 동선 확인 (Editor Play)**
+
+NPC를 묶어 유치장에 끌고 들어가 **방 한가운데서** E로 놓는다.
+기대: 순간이동하지 않고 가장 가까운 빈 좌석까지 **걸어가서** 좌석 방향으로 돌아 앉는다. 몸이 벤치에 파묻히거나 허공에 뜨지 않는다.
+
+앞자리가 찬 상태에서 한 번 더 해 본다(먼 좌석 배정).
+기대: 더 먼 좌석까지 걸어가고, 도중에 문턱이나 다른 수감자에게 걸려 멈추지 않는다.
+
+- [ ] **Step 5: 커밋**
 
 ```bash
 git add Assets/Scripts/NPC/States/NpcJailedState.cs
-git commit -m "#492: 수감 상태의 자동 걷기 제거 — 좌석 정렬·착석만 남긴다"
+git commit -m "#492: 수감 상태 주석 갱신 — 진입 경로와 계상 주체가 JailIntake로 옮겨졌다"
 ```
 
 ---
-
 ## Task 5: 수감자 빼내기 — 밧줄 없이 따라오게 한다
 
 **Files:**
@@ -981,6 +903,7 @@ git commit -m "#492: GDD 갱신 — 판정 장소가 인계존에서 유치장�
 - [ ] 진범을 끌고 문 통과 → 판정 로그가 뜨고 **밧줄은 유지**된다
 - [ ] 그 상태로 라운드를 끝내면 **진행도 금액이 오르지 않는다** (판정 ≠ 계상)
 - [ ] 좌석 앞에서 E로 놓으면 가장 가까운 빈 좌석에 앉고 그때 금액이 오른다
+- [ ] 방 한가운데서 놓아도 **순간이동하지 않고 걸어가서** 앉는다 (배정 거리 최대 5.6m)
 - [ ] 오검거를 끌고 문 통과 → 문턱에서 판정되고 페널티로 전이, **원한 구역까지 실제로 이동한다**
       ↳ 막히면 스펙의 "구현 중 실측이 필요한 것" 참고 — 판정 지점을 문 바깥으로 빼는 것이 대안
 - [ ] 앉은 수감자에 E → 일어나 따라온다(밧줄 없음), 진행도 금액이 즉시 줄어든다

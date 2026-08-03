@@ -53,13 +53,23 @@ Jail 영역 판정은 `JailDoor.IsInsideJailArea`가 쓰는 NavMesh Jail 마스�
 | `JailIntake.cs` (신규) | R1·R2·반출 |
 | `JailZone.cs` | `ReserveSeat`에 "기준 위치에서 가장 가까운 빈 자리" 오버로드 추가 |
 | `ArrestJudge.cs` | `TryDeliver`·`m_dropoffZone` 제거, **판정 후 밧줄 강제 해제 블록 제거** |
-| `NpcJailedState.cs` | 자동 걷기(`TickWalk`/`TickTurn`/`SeatByWarp`/타임아웃/`Walking`·`Turning` 페이즈) 제거 — 좌석 정렬·착석만 남김 |
+| `NpcJailedState.cs` | **로직 변경 없음** — 주석만 갱신 (아래 참고) |
 | `NpcStateRules.cs` | `CanDeliver` 제거, `HasInteractKeyAction`에 `Jailed` 추가 |
 | `PlayerEscortCommands.cs` | `RequestDeliver`/`DeliverRpc`/`ServerDeliver` 제거, 반출 요청 RPC 추가 |
 | `NpcSubdueInteractable.cs` | `Jailed` 대상 E 분기 추가 |
 | `CustodyRouter.cs` | 수감 분기 제거 (오검거 폴백 석방만 남음) |
 | `JailDoor.cs` | 자동 개폐 일체 제거, `IsInsideJailArea`는 공용으로 이관 |
 | `PlayerEscorter.cs` | **변경 없음** — 유치장을 몰라도 된다 |
+
+### 좌석까지의 마지막 몇 미터는 계속 걸어간다
+
+폐기하는 것은 **"NPC가 도시에서 유치장까지 스스로 간다"**이지 "벤치까지 두 걸음 간다"가 아니다.
+
+실측하면 놓은 자리에서 가장 가까운 빈 좌석까지가 **1.5~5.6m**다(방 중앙 1.76m, 문 앞 1.51m, 앞자리가 다 찼을 때 최대 5.61m). 이 거리를 워프로 처리하면 눈에 띄는 순간이동이 된다.
+
+그래서 `NpcJailedState`는 **그대로 둔다**. 이미 #462에서 다듬어 둔 코드다 — 도착 판정 0.25m까지 걸어간 뒤 남은 오차만 워프로 흡수하고, 경로 실패·타임아웃에는 좌석으로 옮겨 앉히는 폴백이 있다.
+
+#462의 입구 고착이 재발하지 않는 근거: 그 버그는 절차적으로 계산한 자리가 문↔셀 통로에 떨어져 생겼다. 지금 좌석은 손으로 배치해 통로를 비켜 있고, 걷는 거리도 방 하나 안이며, 실패해도 폴백이 좌석에 앉힌다.
 
 ### 판정 시 밧줄을 풀지 않는 이유
 
@@ -121,8 +131,9 @@ Jail 영역 판정은 `JailDoor.IsInsideJailArea`가 쓰는 NavMesh Jail 마스�
 - `PlayerEscortCommands.RequestDeliver` / `DeliverRpc` / `ServerDeliver`
 - `NpcStateRules.CanDeliver`
 - `CustodyRouter`의 수감 분기
-- `NpcJailedState`의 자동 걷기 일체
 - `JailDoor`의 자동 개폐 — `IsJailBoundNpcNear` · `m_npcWasEnRoute`(#457) · `m_autoOpenRadius` · `m_proximityCheckInterval`
+
+`NpcJailedState`는 제거 대상이 아니다 — 위 "좌석까지의 마지막 몇 미터" 참고.
 
 **씬 (`Main Scene.unity`)**
 
