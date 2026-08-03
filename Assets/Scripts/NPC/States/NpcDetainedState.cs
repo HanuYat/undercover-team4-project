@@ -42,7 +42,7 @@ public class NpcDetainedState : NpcStateBase
         // 겹침 방지는 회피 대신 배정된 자리가 맡는다(WrongfulArrestPenalty → DetentionSlotOffset).
         m_owner.Agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
 
-        // 구역이 배선되지 않은 씬 — 그 자리에서 수용된 것으로 처리한다 (SendToJail의 null cell 관례)
+        // 구역이 배선되지 않은 씬 — 그 자리에서 수용된 것으로 처리한다 (SendToJail의 null seat 관례)
         if (m_owner.DetentionSpot == null)
         {
             Arrive();

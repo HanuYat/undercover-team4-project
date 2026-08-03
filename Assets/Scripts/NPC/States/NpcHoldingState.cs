@@ -22,7 +22,7 @@ public class NpcHoldingState : NpcStateBase
         m_owner.Agent.isStopped = false;
         m_owner.Agent.stoppingDistance = 0f;
 
-        // 임시 거처가 배선되지 않은 씬 — 그 자리에서 도착(소멸) 처리 (SendToJail의 null cell 관례)
+        // 임시 거처가 배선되지 않은 씬 — 그 자리에서 도착(소멸) 처리 (SendToJail의 null seat 관례)
         if (m_owner.HoldingSpot == null)
         {
             Arrive();
