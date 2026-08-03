@@ -501,6 +501,19 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
             }
         }
 
+        // <b>유치장 안에서는 석방하지 않는다</b> (#492) — 위 ReleaseDrag가 이미 Captured로 세워 뒀으므로
+        // 그대로 끝낸다. 판정을 통과한 대상이면 다음 틱에 JailIntake가 좌석에 앉히고, 안 통과했으면
+        // 그 자리에 서 있는다(다시 묶어 끌고 나가면 된다).
+        //
+        // 여기서 배회로 돌려보내면 두 가지가 깨진다: ① 판정까지 통과한 수감 대상이 계상 없이(0원)
+        // 풀려나고, ② 배회 시민이 유치장 안을 걸어 다녀 "시민은 유치장에 못 들어간다"(#415)가
+        // 없애려던 그림이 다시 생긴다. E로 놓는 것과 결과가 같아지는 것이 조작 일관성에도 맞다.
+        if (JailArea.Contains(target.transform.position))
+        {
+            NotifyOwner($"밧줄 풀기 완료 — 유치장 안이라 그 자리에 둔다: {target.name}");
+            return;
+        }
+
         // 밧줄은 소모되지 않아 대상에 남은 게 없다 — 회수할 자원 없이 배회로 돌려보내기만 한다 (#369).
         NotifyOwner($"밧줄 풀기 완료 — 배회 복귀: {target.name}");
         target.ReleaseFromCustody();
