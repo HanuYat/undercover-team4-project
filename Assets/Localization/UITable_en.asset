@@ -29,6 +29,20 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 6276845873749557335
+  - m_Id: 21543250890752
+    m_Localized: "Carrying \u2014 aim at the HQ revival device and press [E] to place
+      (otherwise [E] drops them)"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 21543317999616
+    m_Localized: Hold [E] to revive
+    m_Metadata:
+      m_Items: []
+  - m_Id: 21543317999617
+    m_Localized: "Out of action \u2014 cannot be revived. Equip the rope and left-click
+      to haul them to HQ"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

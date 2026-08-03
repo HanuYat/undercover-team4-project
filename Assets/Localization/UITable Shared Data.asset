@@ -23,6 +23,18 @@ MonoBehaviour:
     m_Key: signal.received
     m_Metadata:
       m_Items: []
+  - m_Id: 21543250890752
+    m_Key: revive.carrying
+    m_Metadata:
+      m_Items: []
+  - m_Id: 21543317999616
+    m_Key: revive.hint
+    m_Metadata:
+      m_Items: []
+  - m_Id: 21543317999617
+    m_Key: revive.dead_target
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

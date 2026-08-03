@@ -45,6 +45,8 @@ public class App : Singleton<App>
     private ChannelingGaugeUI m_channelingGaugeUI;
     private ToastView m_toastView;
     private SignalMessageView m_signalMessageView;
+    private PromptView m_promptView;
+    private DownedSkullHud m_downedSkullHud;
 #pragma warning restore CS0649
     #endregion
 
@@ -172,6 +174,8 @@ public class App : Singleton<App>
         public static ChannelingGaugeUI Gauge => Instance.m_channelingGaugeUI;
         public static ToastView Toast => Instance.m_toastView;
         public static SignalMessageView SignalMessage => Instance.m_signalMessageView;
+        public static PromptView Prompt => Instance.m_promptView;
+        public static DownedSkullHud DownedSkull => Instance.m_downedSkullHud;
 
         // 씬 전환을 덮는 상주 로딩 화면 (AppBootstrap 하위). 씬 직접 Play 등 부트스트랩이 없으면 null
         public static LoadingScreen Loading => Instance.m_loadingScreen;
