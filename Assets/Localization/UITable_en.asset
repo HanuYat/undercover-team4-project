@@ -43,6 +43,16 @@ MonoBehaviour:
       to haul them to HQ"
     m_Metadata:
       m_Items: []
+  - m_Id: 27357709668352
+    m_Localized: "Down \u2014 waiting for a teammate to revive you... ({0}s until
+      shutdown)"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845873749557335
+  - m_Id: 27357730639872
+    m_Localized: "Shut down \u2014 a teammate must haul you to HQ to restore you"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:
@@ -52,3 +62,4 @@ MonoBehaviour:
         m_Entries: 
         m_SharedEntries:
         - id: 6020387639297
+        - id: 27357709668352

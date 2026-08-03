@@ -35,6 +35,14 @@ MonoBehaviour:
     m_Key: revive.dead_target
     m_Metadata:
       m_Items: []
+  - m_Id: 27357709668352
+    m_Key: revive.downed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 27357730639872
+    m_Key: revive.self_dead
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

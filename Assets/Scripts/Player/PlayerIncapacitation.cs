@@ -109,23 +109,6 @@ public class PlayerIncapacitation : NetworkBehaviour
         }
     }
 
-    /// <summary>
-    /// 다운 → Die 진행도 0~1 (0 = 방금 다운, 1 = 곧 기능 정지). 다운이 아니면 0. (#493)
-    /// 채움 게이지(<see cref="IncapacitationSkullView"/>)용 — <see cref="RemainingUntilDie"/>만으로는
-    /// 정규화할 수 없어 전체 시간이 필요한데, 표시 쪽이 전체 시간을 따로 들고 있으면 인스펙터에서
-    /// <see cref="m_dieAfterDownSeconds"/>를 바꿨을 때 조용히 어긋난다. 그래서 여기서 계산해 준다.
-    /// </summary>
-    public float DownProgress01
-    {
-        get
-        {
-            if (!IsDowned || m_dieAfterDownSeconds <= 0f)
-                return 0f;
-
-            return Mathf.Clamp01(1f - RemainingUntilDie / m_dieAfterDownSeconds);
-        }
-    }
-
     // 카운트다운의 시간 기준 — 온라인은 서버 시각(모든 피어가 같은 값을 읽는다), 오프라인은 로컬 시각.
     // Time.time을 그대로 동기화하면 피어마다 기점이 달라 남은 시간이 어긋난다.
     private double CurrentTime =>
