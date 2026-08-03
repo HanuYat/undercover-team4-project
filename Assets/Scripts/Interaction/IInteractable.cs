@@ -12,12 +12,7 @@ public interface IInteractable
     /// </summary>
     bool CanInteract(GameObject interactor) => true;
 
-    /// <summary>
-    /// 연행·밧줄 끌기 중에도 이 대상의 E가 '놓기'보다 우선하는가 — 기본은 false. (#414)
-    /// 끌기 중 E는 놓기로 소비되는 것이 원칙이라(PlayerInteractor), 인계 단말처럼
-    /// <b>끌고 온 상태에서만 의미가 있는</b> 대상만 true로 재정의한다.
-    /// true로 두면 <see cref="CanInteract"/>가 참일 때만 우선하므로, 조건이 어긋난 순간엔
-    /// 종전대로 놓기가 동작한다 — 끌던 NPC를 놓을 방법이 사라지지 않는다.
-    /// </summary>
-    bool TakesPriorityOverRelease(GameObject interactor) => false;
+    // 끌기 중 E가 '놓기'보다 우선하는지를 여는 TakesPriorityOverRelease(#414)는 제거됐다 (#492) —
+    // 유일한 재정의자였던 인계 단말이 사라져 아무도 true를 돌려주지 않는 죽은 확장점이 됐다.
+    // 같은 취지가 다시 필요하면 운반 쪽 ICarriedBodyReceiver(PlayerInteractor)가 살아 있는 선례다.
 }

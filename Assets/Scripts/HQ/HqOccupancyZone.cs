@@ -5,7 +5,7 @@ using UnityEngine;
 
 /// <summary>
 /// 본부 상주 감지 — 본부 구역 안에 플레이어가 몇 명 있는지, 비어 있다면 얼마나 오래 비었는지를 센다. (GDD 4-1, #231)
-/// 콜라이더는 Is Trigger여야 한다. 배치 패턴은 <see cref="HqDropoffZone"/>과 같되, NPC가 아니라 <b>플레이어</b>를 본다.
+/// 콜라이더는 Is Trigger여야 한다 — 구역 안에 들어온 <b>플레이어</b>를 센다.
 ///
 /// <b>이 컴포넌트는 무인일 때 무슨 일이 일어나는지 모른다</b> — 상태만 노출하고, 그 위에 얹히는 규칙
 /// (범인 탈출 이벤트 #231, 제보 전화 등)은 각자 이 값을 읽어 스스로 판단한다.
@@ -93,7 +93,7 @@ public class HqOccupancyZone : MonoBehaviour
         OnOccupantCountChanged?.Invoke(m_occupants.Count);
     }
 
-    // 서버(또는 오프라인)에서만 센다 — HqDropoffZone과 같은 가드
+    // 서버(또는 오프라인)에서만 센다 — 구역 판정 공통 가드
     private static bool IsAuthority =>
         NetworkManager.Singleton == null || NetworkManager.Singleton.IsServer;
 }

@@ -4,6 +4,7 @@ using UnityEngine;
 /// NPC의 상호작용키(E) 반응 (#76/#91/#398) — 누르는 즉시 NPC 상태에 따라 갈린다.
 /// 체포(Captured) 상태면 재연행을 시작한다 — 연행 동작을 수갑 클릭에서 E로 이관 (#91).
 /// 남이 끌고 있는(Escorted) 대상에 내 줄이 걸려 있으면 끌기를 재개한다 — 줄다리기 복귀 (#398).
+/// 수감(Jailed) 상태면 유치장에서 빼내 따라오게 한다 — 밧줄 없이 추종만 건다 (#492).
 /// PlayerInteractor의 IInteractable 경로를 그대로 사용하므로
 /// NPC가 사거리·조준을 벗어나면 자연히 실패한다.
 /// 프롬프트 표시는 상호작용 UI 이슈(#65 계열) 후속.
@@ -32,6 +33,7 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
     /// 하지 않는다(인자가 즉시 평가되므로 CanRejoinOwnRope 안의 상태 검사로는 늦다).</summary>
     public bool CanInteract(GameObject interactor) =>
         NpcStateRules.HasInteractKeyAction(m_controller.CurrentState)
+        || NpcStateRules.IsFollowingUnroped(m_controller)
         || (
             m_controller.CurrentState == NpcState.Escorted
             && CanRejoinOwnRope(FindTethers(interactor))
@@ -69,6 +71,15 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
         switch (m_controller.CurrentState)
         {
             case NpcState.Escorted:
+                // 반출로 따라오는 수감자를 세운다 (#492) — 밧줄이 없어 아래 줄다리기 분기와 배타적이다.
+                // 유치장 안이면 JailIntake가 좌석에 다시 앉히고, 밖이면 그 자리에 선다.
+                if (NpcStateRules.IsFollowingUnroped(m_controller))
+                {
+                    Debug.Log($"E 입력 — 따라오는 수감자 정지 요청: {m_controller.name}");
+                    escorter?.RequestEscortHalt(m_controller);
+                    break;
+                }
+
                 // 남이 계속 끄는 중인 대상에 내 줄로 다시 끼기 (#398) — 서버가 줄 소유·사거리를
                 // 다시 검증하므로 여기 검사는 조기 차단일 뿐이다.
                 if (CanRejoinOwnRope(FindTethers(interactor)))
@@ -86,6 +97,13 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
                 // 중복 확보 가드(동시 1명)·밧줄 소지·사거리는 서버가 처리한다
                 Debug.Log($"E 입력 — 밧줄 끌기 재개 요청: {m_controller.name}");
                 escorter?.RequestRopeResume(m_controller);
+                break;
+
+            case NpcState.Jailed:
+                // 앉은 수감자를 일으켜 따라오게 한다 (#492) — 밧줄을 걸지 않으므로 밧줄 소지·용량과 무관하다.
+                // 좌석 반납·정산 제외는 서버(JailIntake)가 하고, 여기 검사는 조기 차단일 뿐이다.
+                Debug.Log($"E 입력 — 유치장 반출 요청: {m_controller.name}");
+                escorter?.RequestJailRelease(m_controller);
                 break;
         }
     }

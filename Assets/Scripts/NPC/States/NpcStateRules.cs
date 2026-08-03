@@ -91,6 +91,16 @@ public static class NpcStateRules
     public static bool CanRopeBind(NpcController npc) =>
         npc != null && npc.IsStunned && CanArrest(npc.CurrentState);
 
+    /// <summary>밧줄 없이 따라오는 수감자인가 — 유치장에서 반출돼 추종 중인 대상. (#492)
+    /// E를 누르면 그 자리에 세운다(Captured) — 유치장 안이면 JailIntake가 좌석에 다시 앉히고,
+    /// 밖이면 그냥 선다(팀 확정 2026-08-03 "위치로 갈린다").
+    ///
+    /// 상태 enum만으로는 못 가른다 — 밧줄 끌기도 같은 <see cref="NpcState.Escorted"/>다.
+    /// 그래서 <see cref="NpcController.IsRoped"/>를 함께 본다(<see cref="CanRopeBind"/>와 같은 이유로
+    /// NpcController를 받는다). IsRoped는 동기화 값이라 클라 조준 피드백에서도 읽을 수 있다.</summary>
+    public static bool IsFollowingUnroped(NpcController npc) =>
+        npc != null && npc.CurrentState == NpcState.Escorted && !npc.IsRoped;
+
     /// <summary>이미 남이 끌고 있는 대상에 밧줄을 <b>덧걸</b> 수 있는가 — 줄다리기 합류. (#390)
     /// 팀 결정은 "합류는 허용, 탈취는 차단"이다. 합류는 기존 끌기를 끊지 않고 참가자만 하나 늘린다.
     /// 그래서 <see cref="CanArrest"/>의 <see cref="NpcState.Escorted"/> 제외를 <b>건드리지 않고</b>
@@ -102,25 +112,22 @@ public static class NpcStateRules
     /// 밧줄은 소모형이 아니라 상태만으로 가른다(수갑 시절의 자원 유무 조건 없음). 제압만으로 잡힌 Captured도 대상.</summary>
     public static bool CanRelease(NpcState state) => state == NpcState.Captured;
 
-    /// <summary>본부 인계 단말(#414)에 넘길 수 있는 상태인가 — 밧줄에 묶여 확보된 신병.
-    /// 끌려오는 중(Escorted)뿐 아니라 <b>인계존에 내려놓은 대상(Captured)도 포함</b>한다: 끌고 선 채로는
-    /// 단말을 겨누는 동안 대상이 존을 벗어나기 쉬워, "존에 내려놓고 접수한다"가 자연스러운 동선이다.
-    /// 클라의 조준 피드백(HqDropoffTerminal.CanInteract)과 서버 판정(ArrestJudge.TryDeliver)이
-    /// 이 한 곳을 함께 본다 — 갈라 두면 "윤곽선은 뜨는데 안 먹힘"이 생긴다 (#184).</summary>
-    public static bool CanDeliver(NpcState state) =>
-        state is NpcState.Escorted or NpcState.Captured;
-
-    /// <summary>E 상호작용이 반응하는 상태인가 — 이제 <b>신병 조작 전용</b>이다. (#438)
+    /// <summary>E 상호작용이 반응하는 상태인가 — 이제 <b>신병 조작 전용</b>이다. (#438/#492)
     /// 포함 목록 방식 — 새 상태는 기본 'E 불가'이므로 열어야 하면 여기 추가할 것.
     /// NpcSubdueInteractable.Interact의 분기 집합과 반드시 일치해야 한다.
     ///
     /// 두 단계로 좁혀졌다: 도주형 3초 제압 홀드 제거(#436)로 <c>Run</c>이 타격 분기에 합쳐졌고,
     /// 제압 타격 자체가 제거(#438)되면서 배회(Idle/Walk)·도주(Run)·저항(Attack)이 전부 빠졌다.
-    /// 남은 <c>Captured</c>는 재연행이고, 끌리는 중(<c>Escorted</c>)의 줄다리기 복귀는 상태가 아니라
-    /// "누구의 줄인가"로 갈리므로 순수 함수인 여기가 아니라 호출부가 판단한다 (#398).
     /// 때리는 것은 진압봉, 즉시 무력화는 테이저, 신병 확보는 밧줄이 맡는다.
+    ///
+    /// 남은 둘: <c>Captured</c>는 재연행(밧줄 끌기 재개), <c>Jailed</c>는 <b>유치장 반출</b>이다 —
+    /// 앉은 수감자를 일으켜 밧줄 없이 따라오게 한다 (#492). 이미 확보가 끝난 대상이라
+    /// 무력화도 채널링도 요구하지 않는다.
+    /// 끌리는 중(<c>Escorted</c>)의 줄다리기 복귀는 상태가 아니라 "누구의 줄인가"로 갈리므로
+    /// 순수 함수인 여기가 아니라 호출부가 판단한다 (#398).
     ///
     /// 개명 이력: <c>HasSubdueInteraction</c> → 제압(subdue) 동작이 E에서 전부 빠져 이름이
     /// 실제 역할과 어긋나게 되어 #438에서 바꿨다.</summary>
-    public static bool HasInteractKeyAction(NpcState state) => state is NpcState.Captured;
+    public static bool HasInteractKeyAction(NpcState state) =>
+        state is NpcState.Captured or NpcState.Jailed;
 }
