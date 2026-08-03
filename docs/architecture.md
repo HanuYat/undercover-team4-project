@@ -50,6 +50,7 @@ R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단�
 
 | 코드 | 사유 |
 |---|---|
+| JailIntake → JailScanner `Find` | 장소(게이트) 오브젝트 — 매니저 아님. 유치장 밖(문 앞)에 서 있어 부모 탐색으로는 닿지 않는다. 참조 도메인은 Interaction 하나뿐이라 R3 승격 기준에 미달하고, Awake 1회 탐색이라 런타임 비용도 없다 (#492) |
 | PlayerEscortCommands → JailIntake `Find` | 장소(출입구) 오브젝트 — 매니저 아님. 참조 도메인이 Player 하나라 R3 승격 기준에 미달이고, E 입력 때만 도는 경로라 매 프레임 탐색 비용도 없다. 인계 단말이 폐기되면서 삭제된 `ArrestJudge → HqDropoffZone Find` 항목을 대체한다 (#492) |
 | RoundTimerUI → RoundTimerSync `Find` | Round 도메인 내부 부품 (HQ 타이머 표시가 생기면 승격 후보) |
 | SessionManager → AuthBootstrap `SerializeField` | 같은 오브젝트/프리팹 내 직접 연결 |
@@ -64,4 +65,4 @@ R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단�
 `refactoring/architecture` 머지 **이전에** 열린 브랜치의 코드는 규칙 위반을 지적하되 🟡(후속 조치)로 분류한다. 머지 이후 새로 작성·수정되는 코드는 정식 적용(🟠 이상).
 
 ---
-*최종 수정: 2026-08-03 (HqDropoffZone 예외 삭제 · JailIntake 예외 기재 — #492) · 2026-08-01 (SceneReadyGate 예외 기재 — #410) · 2026-07-28 (JailZone 예외 기재 — #395) · 작성 근거: refactoring/architecture 브랜치 1–2단계 (커밋 3039cd2…0b7aaab)*
+*최종 수정: 2026-08-03 (HqDropoffZone 예외 삭제 · JailIntake·JailScanner 예외 기재 — #492) · 2026-08-01 (SceneReadyGate 예외 기재 — #410) · 2026-07-28 (JailZone 예외 기재 — #395) · 작성 근거: refactoring/architecture 브랜치 1–2단계 (커밋 3039cd2…0b7aaab)*
