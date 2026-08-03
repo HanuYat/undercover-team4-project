@@ -14,9 +14,10 @@
 
 - **App** ([Assets/Scripts/Core/App.cs](../Assets/Scripts/Core/App.cs)) — 전역 매니저 접근의 단일 경로.
   - `App.Net` — SessionManager · AuthBootstrap · VivoxManager
-  - `App.Game` — RoundManager · SuddenEventManager · WantedListManager · DirectoryManager · ArrestJudge · CriminalAssigner · NpcSpawner · AppearanceAssigner · WrongfulArrestPenalty · TeamFund
+  - `App.Game` — RoundManager · SuddenEventManager · WantedListManager · DirectoryManager · ArrestJudge · CriminalAssigner · NpcSpawner · AppearanceAssigner · WrongfulArrestPenalty · TeamFund · EffectManager
   - `App.UI` — UIManagerBase(3단계 예정) · CrosshairUI · ChannelingGaugeUI
   - `App.SceneFlow` — 현재 씬의 SceneManagerBase (3단계 예정)
+  - `App.Sound` — SoundManager (그룹이 아닌 단일 프로퍼티 — 시스템 서비스 하나뿐이라 중첩 클래스를 두지 않았다. BGM·UI음이 붙으면(#483) 그때 그룹으로 승격한다)
 - **등록 메커니즘** — `CommonManagerBase`(일반) / `NetworkedManagerBase`(NetworkBehaviour)를 상속하면 Awake에서 `ManagerHandler`가 리플렉션으로 App의 같은 타입 필드에 주입하고, 파괴 시 해제한다. **App 필드에 직접 대입하는 코드를 만들지 말 것.**
 - **도메인** = `Assets/Scripts/` 하위의 **게임플레이 폴더**. 현재: Round, NPC, Player, HQ, Item, Interaction, Events, Network, Economy (게임플레이 폴더가 새로 생기면 자동 포함). 판별이 애매하면 "이 파일이 바뀌는 이유가 뭐냐"로 판단한다.
   - **도메인으로 세지 않는 폴더**: `Core`(App 인프라 자체), `UI`(각 도메인의 화면 표현), `Data`(전 도메인 공유 어휘), `Scene`(씬 진입점), `Localization`(공유 자원), `Editor`·`Test`(런타임 아님).
@@ -38,6 +39,19 @@
 | **R8** | 매니저 참조는 읽기 프로퍼티: `private X Xxx => App.그룹.X;` | 매니저를 필드에 캐싱 (파괴된 참조를 쥐는 원인). null 가드는 기존 관례대로 사용처에서 |
 
 R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단계(UI 패널 시스템) 시행 시 활성화.
+
+### 연출 전파 규칙 (소리 · 이펙트)
+
+서버 권위 이벤트의 연출을 어떻게 각 피어에 도달시킬지는 **연출이 상태인지 순간인지**로 갈린다. 둘을 섞으면 같은 종류의 연출이 코드마다 다른 방식으로 전파된다.
+
+| 성격 | 전파 | 예 |
+|---|---|---|
+| **지속 상태** — "지금 어떠하다"를 물을 수 있다 | 서버가 `NetworkVariable`로 동기화하고, 각 피어가 그 값을 보고 로컬에서 켜고 끈다 | 먹통 음성 왜곡(#372), 제보 전화 벨소리(#102), 쿨다운 표시(#488) |
+| **일회성 연출** — 동기화할 상태가 없다 | 서버 판정 지점에서 `SendTo.Everyone` RPC로 알리고, 각 피어가 로컬에서 1회 재생한다 | 타격 먼지·타격음(#478), NPC 소멸 잔상(#310), 진압봉 스윙 모션(#217) |
+
+일회성 쪽은 **연출 오브젝트를 네트워크에 싣지 않는다** — 각 피어가 자기 화면에 스스로 만들므로 `DefaultNetworkPrefabs.asset` 등록이 필요 없고, 늦게 들어온 피어가 지나간 연출을 뒤늦게 받는 일도 없다.
+
+재생은 `App.Game.Effect`(파티클)와 `App.Sound`(효과음)를 거친다. 둘 다 사용처가 없는 씬에서는 null이므로 `?.`로 가드한다.
 
 ## 3. 승격/강등 절차
 
@@ -64,4 +78,4 @@ R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단�
 `refactoring/architecture` 머지 **이전에** 열린 브랜치의 코드는 규칙 위반을 지적하되 🟡(후속 조치)로 분류한다. 머지 이후 새로 작성·수정되는 코드는 정식 적용(🟠 이상).
 
 ---
-*최종 수정: 2026-08-01 (SceneReadyGate 예외 기재 — #410) · 2026-07-28 (JailZone 예외 기재 — #395) · 작성 근거: refactoring/architecture 브랜치 1–2단계 (커밋 3039cd2…0b7aaab)*
+*최종 수정: 2026-08-03 (연출 전파 규칙 추가 · App.Sound·App.Game.Effect 등재 — #478) · 2026-08-01 (SceneReadyGate 예외 기재 — #410) · 2026-07-28 (JailZone 예외 기재 — #395) · 작성 근거: refactoring/architecture 브랜치 1–2단계 (커밋 3039cd2…0b7aaab)*
