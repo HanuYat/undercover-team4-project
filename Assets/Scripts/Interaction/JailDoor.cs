@@ -19,7 +19,9 @@ using UnityEngine;
 /// 이송 완료 시 수동 개방을 함께 풀던 처리(#457)도 같은 이유로 함께 빠졌다.
 ///
 /// 자물쇠가 풀린 동안(탈옥, #231)에는 아무도 없어도 계속 열어 둔다: "문이 열려 있다"가 탈옥을 알아채는
-/// 신호이기 때문이다.
+/// 신호이기 때문이다. <b>그 상태에서 E는 '잠그고 닫기'가 된다</b> (#492) — 자동 재잠금이 제거돼
+/// 털린 유치장을 되돌리는 것이 플레이어의 책임이 됐고, 잠그기 전에는 문이 닫히지 않으므로
+/// 두 동작을 한 번의 E로 묶는다.
 ///
 /// 씬 배치: 조준용 콜라이더를 <b>Interactable 레이어</b>에 둘 것 — PlayerInteractor의 조준 마스크가 그
 /// 레이어만 본다 (다른 상호작용물과 같은 관례).
@@ -91,9 +93,9 @@ public class JailDoor : NetworkBehaviour, IInteractable
     // 그러면 신호가 아예 안 뜬다: JailbreakEvent.ReleaseAllInmates가 자물쇠가 열리는 순간
     // 전원을 한 번에 방출하므로 같은 프레임에 인원이 0이 되고 조건이 즉시 무너진다. (#492에서 수정)
     //
-    // 그 조건이 막으려던 "영영 열려 있음"은 자물쇠 쪽이 이미 막는다 — JailZone.Admit이 새 수감자를
-    // 받을 때 ServerRelock을 부르므로, 다음 검거를 데려오는 순간 잠기고 문도 함께 닫힌다.
-    // 그 사이에 열려 있는 것이 바로 "털렸고 아직 아무도 안 잡아왔다"는 신호다.
+    // 그 조건이 막으려던 "영영 열려 있음"은 이제 플레이어가 끝낸다 — 문에 E를 누르면 잠기고 닫힌다
+    // (아래 ServerToggleManual). 자동 재잠금은 제거됐다: 털린 유치장을 되돌리는 것이 플레이어의
+    // 책임이어야 하기 때문이고, 그때까지 열려 있는 문이 "털렸고 아직 안 잠갔다"는 신호로 남는다.
     private bool IsJailbreakHoldingOpen => m_jailLock != null && !m_jailLock.IsLocked;
 
     // ---- 플레이어 상호작용 (E 토글) ----
@@ -104,7 +106,7 @@ public class JailDoor : NetworkBehaviour, IInteractable
     /// </summary>
     public bool CanInteract(GameObject interactor) => m_leaf != null;
 
-    /// <summary>E 토글 — 열려 있으면 닫고, 닫혀 있으면 연다. (#415)</summary>
+    /// <summary>E — 자물쇠가 풀려 있으면 <b>잠그고 닫는다</b>(#492), 잠겨 있으면 여닫기 토글. (#415)</summary>
     public void Interact(GameObject interactor)
     {
         if (!IsSpawned)
@@ -121,12 +123,25 @@ public class JailDoor : NetworkBehaviour, IInteractable
     [Rpc(SendTo.Server)]
     private void RequestToggleRpc() => ServerToggleManual();
 
-    // 수동 개방 래치를 뒤집는다 — 서버(또는 오프라인) 전용.
-    // 닫기를 눌러도 탈옥이 진행 중이면 문은 열린 채로 남는다 — 그건 플레이어가 막을 개폐가 아니다(탈옥 신호).
+    // E 처리 — 서버(또는 오프라인) 전용. 자물쇠 상태에 따라 두 가지로 갈린다.
+    //
+    //  · <b>자물쇠가 풀려 있으면(탈옥 이후) 먼저 잠근다.</b> 자동 재잠금이 제거돼(#492) 털린 유치장을
+    //    되돌리는 것은 플레이어의 몫이고, 그 조작이 여기다. 문을 닫는 것과 한 동작으로 묶는 이유는
+    //    순서 때문이다 — 풀린 동안은 ShouldBeOpen이 문을 계속 열어 두므로(탈옥 신호), 잠그지 않고는
+    //    애초에 닫을 수가 없다. 잠금과 개방 래치 해제를 같이 해서 한 번 누르면 "잠그고 닫힌다"가 된다.
+    //  · <b>잠겨 있으면 평소대로 여닫기 토글.</b>
     private void ServerToggleManual()
     {
         if (IsSpawned && !IsServer)
             return;
+
+        if (m_jailLock != null && !m_jailLock.IsLocked)
+        {
+            m_jailLock.ServerRelock();
+            m_manualOpen = false; // 잠근 김에 닫는다 — 두 번 누르게 하지 않는다
+            ServerSetOpen(ShouldBeOpen);
+            return;
+        }
 
         m_manualOpen = !m_manualOpen;
         ServerSetOpen(ShouldBeOpen);

@@ -28,10 +28,6 @@ public class JailZone : NetworkBehaviour
     [Tooltip("탈옥으로 방출된 수감자를 옮길 유치장 밖 지점 — 창살 안에 갇히지 않게 한다 (#415). 문 바깥 NavMesh 위에 둘 것")]
     [SerializeField] private Transform m_exitPoint;
 
-    [Header("자물쇠 (비우면 같은 오브젝트에서 자동 탐색)")]
-    [Tooltip("새 수감자를 받을 때 자동으로 다시 잠근다 — 범인 탈출 이벤트(#231)로 열린 상태를 되돌리는 경로")]
-    [SerializeField] private JailLock m_jailLock;
-
     // 서버 권위 수용 인원 — 서버만 쓰고 모든 클라이언트가 읽는다 (#56)
     private readonly NetworkVariable<int> m_inmateCount = new NetworkVariable<int>(0);
 
@@ -101,10 +97,6 @@ public class JailZone : NetworkBehaviour
 
     private void Awake()
     {
-        // 자물쇠는 같은 오브젝트에 두는 것이 기본 — 인스펙터로 따로 지정할 수도 있다
-        if (m_jailLock == null)
-            m_jailLock = GetComponent<JailLock>();
-
         // 좌석 점유 배열은 좌석 수와 1:1 — 좌석은 씬 배치라 런타임에 늘지 않으므로 여기서 한 번만 잡는다 (#462)
         m_seatOccupants = new NpcController[m_seatPoints != null ? m_seatPoints.Length : 0];
     }
@@ -239,11 +231,9 @@ public class JailZone : NetworkBehaviour
         RefreshBountyTotal();
         Debug.Log($"[유치장] 수용: {npc.name} — 현재 {InmateCount}명, 누적 현상금 {BountyTotal}원");
 
-        // 탈출 이벤트(#231)로 열린 자물쇠는 새 수감자를 받는 순간 자동으로 다시 잠긴다 —
-        // 플레이어가 따로 잠글 것이 없으면서도 연속 발동은 자연히 막힌다.
-        // 유치장이 자물쇠를 아는 방향이다(그 반대가 아니라) — 자물쇠는 수용을 몰라야 한다.
-        if (m_jailLock != null)
-            m_jailLock.ServerRelock();
+        // 자동 재잠금은 제거됐다 (#492) — 탈옥으로 열린 자물쇠는 <b>플레이어가 직접 잠가야 한다</b>
+        // (유치장 문에 E). 수감만 하면 저절로 잠기던 예전 처리는 "털렸으면 가서 잠근다"는 책임을
+        // 없애 버렸다. 열린 자물쇠는 문이 열린 채로 남아 계속 눈에 띈다(JailDoor.IsJailbreakHoldingOpen).
     }
 
     /// <summary>

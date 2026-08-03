@@ -6,8 +6,9 @@ using UnityEngine;
 /// 유치장 자물쇠 — 잠김/열림 상태만 갖는다. (GDD 7-2, #231)
 /// <see cref="JailZone"/>과 같은 오브젝트에 둔다.
 ///
-/// <b>누가 왜 여는지는 모른다</b> — 범인 탈출 이벤트(JailbreakEvent)가 열고, 새 수감자가 들어오면
-/// 유치장이 다시 잠근다. 문 열림 애니메이션·본부 경보 UI는 <see cref="OnLockChanged"/>를 구독해 붙인다.
+/// <b>누가 왜 여는지는 모른다</b> — 범인 탈출 이벤트(JailbreakEvent)가 열고, <b>플레이어가 유치장 문에
+/// E를 눌러 다시 잠근다</b>(JailDoor, #492 — 수감 시 자동 재잠금은 제거됐다).
+/// 문 열림 애니메이션·본부 경보 UI는 <see cref="OnLockChanged"/>를 구독해 붙인다.
 ///
 /// 상태는 서버 권위로 정해 NetworkVariable로 전 피어에 동기화한다 (#56) —
 /// 자물쇠가 열린 것은 본부 화면에서 보여야 하므로 클라이언트도 읽을 수 있어야 한다.
@@ -99,7 +100,8 @@ public class JailLock : NetworkBehaviour
             Debug.Log("[유치장] 자물쇠 해제됨");
     }
 
-    /// <summary>재잠금 — 새 수감자가 들어오거나(JailZone.Admit) 라운드가 정리될 때. 서버(또는 오프라인) 전용.</summary>
+    /// <summary>재잠금 — 플레이어가 유치장 문에 E를 눌렀을 때(JailDoor). 서버(또는 오프라인) 전용.
+    /// 수감 시 자동 재잠금(JailZone.Admit)은 제거됐다 (#492) — 잠그는 것은 플레이어의 책임이다.</summary>
     public void ServerRelock()
     {
         if (SetLocked(true))
