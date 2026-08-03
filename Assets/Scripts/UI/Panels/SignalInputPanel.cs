@@ -56,6 +56,10 @@ public class SignalInputPanel : PanelBase
         }
 
         m_title.StringChanged += HandleTitleChanged;
+
+        // [순서 주의] 인자를 먼저 넣고 구독한다. StringChanged 구독은 즉시 1회 해석을 일으키는데,
+        // 그 시점에 Arguments가 없으면 Smart String이 {0}/{1}을 채우지 못해 FormattingException이 난다.
+        ApplyHintArguments(0);
         m_hint.StringChanged += HandleHintChanged;
     }
 
@@ -148,10 +152,13 @@ public class SignalInputPanel : PanelBase
 
     // 남은 글자 수는 인자로 넣는다 — 서버가 어차피 자르지만, 입력 단계에서 보여야
     // "쳤는데 잘렸다"가 안 생긴다.
+    private void ApplyHintArguments(int length) =>
+        m_hint.Arguments = new object[] { length, SignalDecoder.k_maxMessageLength };
+
     private void RefreshHint(int length)
     {
-        m_hint.Arguments = new object[] { length, SignalDecoder.k_maxMessageLength };
-        m_hint.RefreshString();
+        ApplyHintArguments(length);
+        m_hint.RefreshString(); // 이미 구독 중이므로 다시 포맷만 시킨다
     }
 
     private void HandleTitleChanged(string localized)
