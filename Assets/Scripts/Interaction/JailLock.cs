@@ -35,8 +35,15 @@ public class JailLock : NetworkBehaviour
     /// </summary>
     public Transform ApproachPoint => m_approachPoint != null ? m_approachPoint : transform;
 
-    /// <summary>잠금 상태 변경 — 서버·클라이언트 모든 피어에서 발생한다. 문 연출·본부 경보 UI가 구독.</summary>
+    /// <summary>잠금 상태 변경 — 서버·클라이언트 모든 피어에서 발생한다. 문 연출·본부 경보등이 구독.</summary>
     public event Action<bool> OnLockChanged;
+
+    /// <summary>
+    /// 해제 '시도'가 시작됐다 — 서버·클라이언트 모든 피어에서 발생한다. (#311/#493)
+    /// 잠금 상태(<see cref="OnLockChanged"/>)와 달리 "성공 전의 낌새"라 NetworkVariable로 표현할 수
+    /// 없어 RPC로 전파한다. 본부 경보등(<see cref="JailAlarmBeacon"/>)이 구독해 점멸한다.
+    /// </summary>
+    public event Action OnUnlockAttempt;
 
     public override void OnNetworkSpawn()
     {
@@ -50,22 +57,13 @@ public class JailLock : NetworkBehaviour
 
     private void HandleLockedChanged(bool previous, bool current)
     {
-        // NetworkVariable 콜백은 모든 피어에서 돌므로 별도 RPC 없이 전 화면에 경보가 뜬다 (#311)
-        if (!current)
-            ShowUnlockedAlarm();
+        // NetworkVariable 콜백은 모든 피어에서 돌므로 별도 RPC 없이 전 피어의 경보등이 반응한다 (#311)
         OnLockChanged?.Invoke(current);
-    }
-
-    // 탈출 성공(자물쇠 개방) 경보 — 잠금 해제는 범인 탈출 이벤트의 성공 시점뿐이다.
-    // 재잠금(수감)에는 울리지 않는다.
-    private static void ShowUnlockedAlarm()
-    {
-        SuddenEventToastHud.Show("🚨 유치장이 열렸습니다 — 수감자가 탈출합니다!");
     }
 
     /// <summary>
     /// 해제 '시도' 전파 (#311) — 침입자가 자물쇠 앞에서 해제 채널링을 시작했을 때 탈출 이벤트가 호출한다.
-    /// 모든 피어 화면에 전역 팝업을 띄운다 — 잠금 상태와 마찬가지로
+    /// 모든 피어에 <see cref="OnUnlockAttempt"/>를 발생시킨다 — 잠금 상태와 마찬가지로
     /// "자물쇠에서 벌어지는 일은 자물쇠가 전파한다". 서버(또는 오프라인) 전용.
     /// </summary>
     public void ServerAnnounceUnlockAttempt()
@@ -73,7 +71,7 @@ public class JailLock : NetworkBehaviour
         if (IsSpawned && !IsServer)
             return;
 
-        ShowUnlockAttemptToast(); // 서버(호스트)·오프라인 자기 화면
+        OnUnlockAttempt?.Invoke(); // 서버(호스트)·오프라인 자기 쪽
         if (IsSpawned && IsServer)
             AnnounceUnlockAttemptClientRpc();
     }
@@ -81,16 +79,11 @@ public class JailLock : NetworkBehaviour
     [ClientRpc]
     private void AnnounceUnlockAttemptClientRpc()
     {
-        // 호스트는 위에서 이미 띄웠다 — 원격 클라에서만 중계 (SuddenEventManager.AnnounceEventClientRpc와 동일)
+        // 호스트는 위에서 이미 발생시켰다 — 원격 클라에서만 중계 (SuddenEventManager.AnnounceEventClientRpc와 동일)
         if (IsServer)
             return;
 
-        ShowUnlockAttemptToast();
-    }
-
-    private static void ShowUnlockAttemptToast()
-    {
-        SuddenEventToastHud.Show("⚠ 침입자가 범죄자 해방을 시도하고 있습니다!");
+        OnUnlockAttempt?.Invoke();
     }
 
     /// <summary>자물쇠 해제 — 침입자가 자물쇠에 도달했을 때 탈출 이벤트가 호출한다. 서버(또는 오프라인) 전용.</summary>
@@ -125,9 +118,7 @@ public class JailLock : NetworkBehaviour
             m_locked.Value = value; // OnValueChanged를 거쳐 모든 피어에서 이벤트 발생
         else if (!IsSpawned)
         {
-            // 오프라인 — 동기화 콜백이 없으므로 개방 경보도 여기서 직접 울린다 (#311)
-            if (!value)
-                ShowUnlockedAlarm();
+            // 오프라인 — 동기화 콜백이 없으므로 여기서 직접 알린다 (#311). 경보등이 이 이벤트를 구독한다.
             OnLockChanged?.Invoke(value);
         }
 

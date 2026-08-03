@@ -11,7 +11,7 @@ using UnityEngine;
 ///
 /// 순수 표현이다. 위치·남은 시간은 <see cref="BombDevice"/>의 동기화 상태에서 읽고 상태를 바꾸지 않는다.
 /// 폭탄 프리팹에 붙어 있어 폭탄이 스폰·디스폰될 때 함께 생기고 사라진다 — 씬 배선이 필요 없다.
-/// PlayerReviveHud·NpcSubdueGaugeHud의 임시 OnGUI 관례를 따른다 (정식 UI는 #65 계열).
+/// [임시] 아직 OnGUI로 그린다 — 캔버스 이전은 #493에 남아 있다.
 /// </summary>
 [RequireComponent(typeof(BombDevice))]
 public class BombLocatorHud : MonoBehaviour
@@ -44,7 +44,6 @@ public class BombLocatorHud : MonoBehaviour
     private string m_offScreenArrow = "";
 
     // 로컬 플레이어 시점 카메라 캐시 — Camera.main은 CCTV 오버뷰 카메라를 가리킬 수 있어 쓰지 않는다.
-    // (NpcSubdueGaugeHud와 동일한 해석 방식)
     private static Camera s_viewCamera;
 
     private static Camera ViewCamera

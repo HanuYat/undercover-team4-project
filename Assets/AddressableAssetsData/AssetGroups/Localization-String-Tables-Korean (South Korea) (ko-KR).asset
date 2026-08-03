@@ -15,6 +15,12 @@ MonoBehaviour:
   m_GroupName: Localization-String-Tables-Korean (South Korea) (ko-KR)
   m_GUID: e180dba5fc95c38418d58e9538cc8f86
   m_SerializeEntries:
+  - m_GUID: 6d8209fa98762f344986b45ba1f344ef
+    m_Address: UITable_ko-KR
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko-KR
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f25d73f432eb89442a3d3dbdf25dd81a
     m_Address: ItemTable_ko-KR
     m_ReadOnly: 1
