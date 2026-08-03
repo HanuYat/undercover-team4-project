@@ -129,14 +129,33 @@ public class ArrestJudge : CommonManagerBase
 
         LogVerdict(result);
 
-        // 판정은 신병 상태를 건드리지 않는다 (#492). 예전에는 여기서 밧줄을 강제로 풀었는데,
-        // CustodyRouter가 곧바로 Jailed로 전이시키던 것을 대비한 순서 강제였다. 이제 판정 직후
-        // 아무도 전이시키지 않으므로 풀 이유가 없고, 오히려 풀면 유치장 문을 통과하는 순간
-        // 자동으로 착석해 "좌석 앞에서 E로 놓아야 앉는다"가 깨진다.
+        // 밧줄 해제는 <b>오검거에만</b> 건다 (#492).
         //
-        // 오검거는 WrongfulArrestPenalty가 Detained로 전이시키므로, 남은 밧줄은
-        // PlayerEscorter.TickTetherCleanup의 커스터디 이탈 정리가 끊는다.
+        // 수감 판정(현상수배범·경범죄)은 판정 후에도 묶인 채 남아야 한다 — 플레이어가 좌석까지
+        // 끌고 가 E로 놓을 때 앉기 때문이다. 여기서 풀면 유치장 문을 통과하는 순간 Captured가 되어
+        // JailIntake가 즉시 착석시켜 버린다.
         //
+        // 오검거는 반대로 <b>반드시 여기서 풀어야 한다</b>. 아래 OnArrestJudged의 구독자
+        // WrongfulArrestPenalty가 그 자리에서 원한 구역으로 전이시키는데(SendToDetention),
+        // 밧줄이 걸린 동안은 NavMeshAgent가 꺼져 있어(StartRopeDrag) 전이한 상태의 Enter가
+        // 죽은 에이전트에 목적지를 걸고 조용히 실패한다 — 시민이 묶인 채 굳는다.
+        // TickTetherCleanup은 목록에서만 빼고 앵커는 떼지 않으므로 뒤늦게 풀어도 이미 늦다.
+        // 그래서 순서가 강제다: 해제 → 이벤트 발행.
+        if (verdict == ArrestVerdict.WrongfulArrest)
+        {
+            // 서버 권위로 즉시 푼다 — RequestRelease는 클라 오너 권한이 필요해 비호스트 검거에서 동작하지 않는다.
+            // 판정된 그 NPC의 줄만 전원에게서 푼다 — 같이 끌고 온 다른 대상은 계속 끌린다 (#390).
+            if (deliverers.Count > 0)
+            {
+                foreach (PlayerEscorter deliverer in deliverers)
+                    deliverer.ReleaseDrag(npc);
+            }
+            else
+            {
+                npc.StopEscort();
+            }
+        }
+
         // 수갑 회수(#307/#229)는 제거됐다 — 밧줄은 소모형이 아니라 NPC에 채워둔 자원이 없다. (#369)
 
         OnArrestJudged?.Invoke(result);
