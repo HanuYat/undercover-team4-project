@@ -58,6 +58,7 @@ public enum EAudioClip
     BatonHitMetal, // 깡 — 로봇(안드로이드 NPC · 동료 경찰)을 맞혔다
     BatonHitFlesh, // 퍽 — 인간 NPC를 맞혔다
     BatonHitWorld, // 둔탁 — 벽·소품을 맞혔다
+    TaserHit, // 지직 — 테이저 명중 (대상이 로봇이든 사람이든 같다. 전기는 몸체를 가리지 않는다)
 }
 
 /// <summary>

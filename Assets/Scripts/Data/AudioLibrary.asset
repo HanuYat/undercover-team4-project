@@ -33,3 +33,8 @@ MonoBehaviour:
     Volume: 0.85
     MinDistance: 3
     MaxDistance: 16
+  - Id: 5
+    Clip: {fileID: 8300000, guid: e4bee4645baad464c9b22e13c3c8d212, type: 3}
+    Volume: 0.9
+    MinDistance: 3
+    MaxDistance: 25
