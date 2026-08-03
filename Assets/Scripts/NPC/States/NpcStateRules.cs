@@ -91,6 +91,16 @@ public static class NpcStateRules
     public static bool CanRopeBind(NpcController npc) =>
         npc != null && npc.IsStunned && CanArrest(npc.CurrentState);
 
+    /// <summary>밧줄 없이 따라오는 수감자인가 — 유치장에서 반출돼 추종 중인 대상. (#492)
+    /// E를 누르면 그 자리에 세운다(Captured) — 유치장 안이면 JailIntake가 좌석에 다시 앉히고,
+    /// 밖이면 그냥 선다(팀 확정 2026-08-03 "위치로 갈린다").
+    ///
+    /// 상태 enum만으로는 못 가른다 — 밧줄 끌기도 같은 <see cref="NpcState.Escorted"/>다.
+    /// 그래서 <see cref="NpcController.IsRoped"/>를 함께 본다(<see cref="CanRopeBind"/>와 같은 이유로
+    /// NpcController를 받는다). IsRoped는 동기화 값이라 클라 조준 피드백에서도 읽을 수 있다.</summary>
+    public static bool IsFollowingUnroped(NpcController npc) =>
+        npc != null && npc.CurrentState == NpcState.Escorted && !npc.IsRoped;
+
     /// <summary>이미 남이 끌고 있는 대상에 밧줄을 <b>덧걸</b> 수 있는가 — 줄다리기 합류. (#390)
     /// 팀 결정은 "합류는 허용, 탈취는 차단"이다. 합류는 기존 끌기를 끊지 않고 참가자만 하나 늘린다.
     /// 그래서 <see cref="CanArrest"/>의 <see cref="NpcState.Escorted"/> 제외를 <b>건드리지 않고</b>

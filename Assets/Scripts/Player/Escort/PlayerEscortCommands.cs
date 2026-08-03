@@ -170,6 +170,23 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         JailReleaseRpc(new NetworkObjectReference(target.NetworkObject));
     }
 
+    /// <summary>따라오는 수감자 정지 요청 — 오너가 호출(반출된 수감자에 E). 밧줄과 무관한 추종을 끊는다. (#492)</summary>
+    public void RequestEscortHalt(NpcController target)
+    {
+        if (target == null)
+            return;
+        if (!IsSpawned)
+        {
+            ServerEscortHalt(target);
+            return;
+        }
+        if (!IsOwner)
+            return;
+        if (!IsTargetNetworkReady(target))
+            return;
+        EscortHaltRpc(new NetworkObjectReference(target.NetworkObject));
+    }
+
     // 원격 클라 → 서버로 대상을 넘기려면 스폰돼 있어야 한다(NetworkObjectReference 제약).
     // 스폰 안 된 NPC(씬 배치 후 미스폰 등)면 참조 생성이 예외를 던지므로 미리 걸러 경고만 남긴다.
     private bool IsTargetNetworkReady(NpcController target)
@@ -230,6 +247,18 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         )
         {
             Escorter.ReleaseDrag(target);
+        }
+    }
+
+    [Rpc(SendTo.Server)]
+    private void EscortHaltRpc(NetworkObjectReference targetRef)
+    {
+        if (
+            targetRef.TryGet(out NetworkObject targetObj)
+            && targetObj.TryGetComponent(out NpcController target)
+        )
+        {
+            ServerEscortHalt(target);
         }
     }
 
@@ -502,6 +531,27 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         }
 
         intake.ServerExtract(target, transform);
+    }
+
+    // 추종 정지 실행 — 밧줄 없이 따라오는 수감자를 그 자리에 세운다(Captured). 서버(또는 오프라인).
+    // 유치장 안이면 JailIntake가 그 Captured를 보고 좌석에 다시 앉힌다 — 여기서 유치장을 알 필요는 없다.
+    //
+    // 소유권을 묻지 않는다: 남이 꺼낸 수감자도 세울 수 있다. 밧줄 놓기(Captured 대상 풀기)가
+    // 누구에게나 열려 있는 것과 같은 취급이고, 세우는 것은 신병을 뺏는 행위가 아니라 멈추는 행위다.
+    private void ServerEscortHalt(NpcController target)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        // 밧줄 끌기 중인 대상은 여기 못 온다 — 그쪽 E는 놓기/줄다리기 복귀로 이미 갈린다
+        if (!NpcStateRules.IsFollowingUnroped(target))
+            return;
+
+        if (!IsInRange(target))
+            return;
+
+        target.StopEscort();
+        NotifyOwner($"수감자 정지: {target.name}");
     }
 
     // ---- 공통 ----

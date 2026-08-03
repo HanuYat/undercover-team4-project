@@ -33,6 +33,7 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
     /// 하지 않는다(인자가 즉시 평가되므로 CanRejoinOwnRope 안의 상태 검사로는 늦다).</summary>
     public bool CanInteract(GameObject interactor) =>
         NpcStateRules.HasInteractKeyAction(m_controller.CurrentState)
+        || NpcStateRules.IsFollowingUnroped(m_controller)
         || (
             m_controller.CurrentState == NpcState.Escorted
             && CanRejoinOwnRope(FindTethers(interactor))
@@ -70,6 +71,15 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
         switch (m_controller.CurrentState)
         {
             case NpcState.Escorted:
+                // 반출로 따라오는 수감자를 세운다 (#492) — 밧줄이 없어 아래 줄다리기 분기와 배타적이다.
+                // 유치장 안이면 JailIntake가 좌석에 다시 앉히고, 밖이면 그 자리에 선다.
+                if (NpcStateRules.IsFollowingUnroped(m_controller))
+                {
+                    Debug.Log($"E 입력 — 따라오는 수감자 정지 요청: {m_controller.name}");
+                    escorter?.RequestEscortHalt(m_controller);
+                    break;
+                }
+
                 // 남이 계속 끄는 중인 대상에 내 줄로 다시 끼기 (#398) — 서버가 줄 소유·사거리를
                 // 다시 검증하므로 여기 검사는 조기 차단일 뿐이다.
                 if (CanRejoinOwnRope(FindTethers(interactor)))
