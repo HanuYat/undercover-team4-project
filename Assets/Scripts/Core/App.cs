@@ -45,6 +45,8 @@ public class App : Singleton<App>
     // 로컬 HUD (런타임 생성 프리팹 — 생성/파괴 시 자동 등록/해제)
     private CrosshairUI m_crosshairUI;
     private ChannelingGaugeUI m_channelingGaugeUI;
+    private DamageVignetteUI m_damageVignetteUI;
+    private TaserShockUI m_taserShockUI;
 #pragma warning restore CS0649
     #endregion
 
@@ -180,6 +182,8 @@ public class App : Singleton<App>
         // 로컬 HUD — 씬 시작 시점엔 null일 수 있다 (오너 스폰 시 프리팹 생성). 사용처는 ?. 가드 필수
         public static CrosshairUI Crosshair => Instance.m_crosshairUI;
         public static ChannelingGaugeUI Gauge => Instance.m_channelingGaugeUI;
+        public static DamageVignetteUI DamageVignette => Instance.m_damageVignetteUI; // 피격 비네트·방향 아크·저체력 글리치 (#476)
+        public static TaserShockUI TaserShock => Instance.m_taserShockUI; // 감전 화면 지직 (#477)
 
         // 씬 전환을 덮는 상주 로딩 화면 (AppBootstrap 하위). 씬 직접 Play 등 부트스트랩이 없으면 null
         public static LoadingScreen Loading => Instance.m_loadingScreen;

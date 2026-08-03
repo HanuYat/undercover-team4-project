@@ -55,13 +55,61 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
     }
 
     /// <summary>
+    /// 피격 순간 <b>전 피어</b>에서 발행된다 — 표현(<see cref="PlayerHitView"/>)용. (#476)
+    /// HP는 동기화 값이라 폴링할 수 있지만 "지금 맞았다"는 순간은 값 비교로 잡을 수 없다
+    /// (같은 프레임에 여러 번 맞거나, 이미 0인 HP에 또 맞는 경우가 구분되지 않는다).
+    ///
+    /// 오너 전용이 아니라 전 피어인 이유: NPC 쪽 OnStateChanged/OnStunnedChanged와 같은 방침으로
+    /// 발행은 넓게 하고 <b>연출 컴포넌트가 각자 판단</b>한다 (#56/#292). 본부가 CCTV로 현장을 보는
+    /// 게임이라 월드 연출(피격 스파크 등)은 결국 전 피어여야 한다.
+    /// </summary>
+    public event System.Action<DamageHit> OnDamaged;
+
+    /// <summary>
     /// 피격 — 저항형 NPC 범위 타격 등 데미지 소스의 공통 경로. (#79)
     /// HP가 0이 되면 다운(무력화) 처리로 이어진다 (SetHp 내부, GDD 7-5 / #105).
+    /// 연출용 <see cref="OnDamaged"/> 브로드캐스트도 여기 하나로 모인다 — 진압봉 오사(#461)·저항형
+    /// NPC 공격·폭발이 전부 이 경로를 지나므로, 데미지 소스가 늘어도 연출은 따라온다 (#476).
     /// </summary>
     public void TakeDamage(int amount, GameObject attacker)
     {
+        if (IsSpawned && !IsServer) return; // 서버 권위 — ModifyHp도 같은 가드지만 아래 브로드캐스트를 막아야 한다
+        if (amount <= 0) return;
+
+        int before = CurrentHp;
         ModifyHp(-amount);
+
+        // '요청한 데미지'가 아니라 '실제로 깎인 양'을 싣는다 — 이미 0인 HP에 들어온 추가 피해는
+        // 0이 되어 연출 자체가 나가지 않는다(다운된 몸이 폭발에 휘말릴 때마다 화면이 번쩍이지 않게).
+        int applied = before - CurrentHp;
+        if (applied <= 0) return;
+
+        BroadcastDamaged(applied, attacker);
     }
+
+    // 연출 알림을 전 피어에 돌린다 — Baton.PlaySwing과 같은 구조(오프라인은 RPC 경로가 없어 로컬 발행).
+    private void BroadcastDamaged(int amount, GameObject attacker)
+    {
+        bool hasAttacker = attacker != null;
+        Vector3 attackerPosition = hasAttacker ? attacker.transform.position : Vector3.zero;
+
+        if (!IsSpawned)
+        {
+            RaiseDamaged(amount, attackerPosition, hasAttacker); // 오프라인 — 비네트워크 Play 테스트 폴백
+            return;
+        }
+
+        PlayDamagedRpc(amount, attackerPosition, hasAttacker);
+    }
+
+    // 가해자를 GameObject로 실을 수 없어 월드 좌표로 환산해 보낸다 — 방향 계산은 각 피어가
+    // 자기 카메라 기준으로 한다 (DamageHit 주석 참고).
+    [Rpc(SendTo.Everyone)]
+    private void PlayDamagedRpc(int amount, Vector3 attackerPosition, bool hasAttacker) =>
+        RaiseDamaged(amount, attackerPosition, hasAttacker);
+
+    private void RaiseDamaged(int amount, Vector3 attackerPosition, bool hasAttacker) =>
+        OnDamaged?.Invoke(new DamageHit(amount, attackerPosition, hasAttacker));
 
     /// <summary>
     /// 구조(리바이브) — 동료의 채널링이 성공하면 서버(또는 오프라인)에서 호출된다. (#105, GDD 7-5)

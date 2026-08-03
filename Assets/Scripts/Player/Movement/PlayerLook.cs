@@ -213,8 +213,45 @@ public class PlayerLook : MonoBehaviour
             m_pitch = Mathf.Clamp(m_pitch, m_minPitch, m_maxPitch); // 누운 자세용 범위에서 서기 범위로 복귀
         }
 
+        // 흔들림은 마지막에 최종 포즈 위에 얹는다 (#477) — 밖에서 카메라 transform을 직접 흔들면
+        // 이 메서드가 매 프레임 localPosition·localEulerAngles를 덮어써 그 프레임에 지워진다.
+        // 그래서 조립 지점을 여기 하나로 두고, 밖에서는 강도만 넘긴다.
+        if (m_shakeIntensity > 0.001f)
+        {
+            EvaluateShake(out Vector3 shakeEuler, out Vector3 shakeOffset);
+            m_playerCamera.transform.localPosition += shakeOffset;
+            m_playerCamera.transform.localEulerAngles =
+                new Vector3(m_pitch, m_downYaw, 0f) + shakeEuler;
+            return;
+        }
+
         m_playerCamera.transform.localEulerAngles = new Vector3(m_pitch, m_downYaw, 0f);
     }
+
+    // ---- 카메라 흔들림 (#477) ----
+
+    // 감전 경련의 진폭. 큰 충격이 아니라 '떨림'이라 작게 잡는다 — 5초 내내 흔들리므로 키우면 멀미가 난다.
+    // 급박함은 진폭이 아니라 주파수로 벌고, 그 주파수와 파형은 ShockShake가 손과 공유한다.
+    private const float k_shakeDegrees = 1.6f;
+    private const float k_shakeOffset = 0.012f;
+
+    private float m_shakeIntensity;
+
+    /// <summary>
+    /// 카메라 흔들림 강도 — 0이면 흔들리지 않는다. 매 프레임 갱신하는 <b>지속형</b> 값이다. (#477)
+    /// 감전(<see cref="PlayerHitView"/>)이 기절 동안 1에서 0으로 낮춰가며 잦아드는 인상을 만든다.
+    /// </summary>
+    /// <remarks>
+    /// 단발 충격(폭발 킥 등)에 쓰려면 호출부가 스스로 감쇠시켜 넣어야 한다 — 여기에 자동 감쇠를
+    /// 넣지 않은 이유는, 넣으면 지속형 사용처가 매 프레임 값을 되살려야 해서 두 방식이 싸우기 때문이다.
+    /// </remarks>
+    public void SetShakeIntensity(float intensity) =>
+        m_shakeIntensity = Mathf.Clamp01(intensity);
+
+    // 파형은 ShockShake가 갖는다 — 1인칭 팔(PlayerHandView)과 주파수가 어긋나면 두 진동이 서로
+    // 미끄러져 경련이 아니라 고장난 화면처럼 보인다. 여기서는 진폭만 정한다.
+    private void EvaluateShake(out Vector3 euler, out Vector3 offset) =>
+        ShockShake.Evaluate(m_shakeIntensity, k_shakeDegrees, k_shakeOffset, out euler, out offset);
 
     /// <summary>
     /// 하위 전체의 레이어를 바꾼다 — "어느 카메라가 이걸 보는가"를 정하는 용도.

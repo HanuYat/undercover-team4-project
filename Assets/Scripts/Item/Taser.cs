@@ -180,7 +180,13 @@ public class Taser : ItemBase, IAimedWeapon
 
         // 쏜 사람을 위협으로 넘긴다 — 기절이 풀리면 이 사람에게서 도망친다 (#269)
         PlayerInteractor shooter = Holder;
-        target.EnterStunned(shooter != null ? shooter.transform : null);
+        // 원인을 명시한다 — 감전 연출(#477)이 붙는 유일한 경로다. 체력 0 쓰러짐(#366)은 기본값
+        // Knockdown으로 남아 전기 연출 없이 지나간다(색 언어상 시안은 테이저 전용).
+        target.EnterStunned(
+            shooter != null ? shooter.transform : null,
+            null,
+            NpcStunCause.Taser
+        );
         NotifyOwner($"테이저 명중: {target.name} ({target.StunSeconds}초 기절)");
     }
 

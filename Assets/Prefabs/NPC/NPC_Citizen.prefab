@@ -24,6 +24,10 @@ GameObject:
   - component: {fileID: 2671233897693649276}
   - component: {fileID: 8244280171983730853}
   - component: {fileID: 3755396486927013622}
+  - component: {fileID: 8417339097571743145}
+  - component: {fileID: 3610354289931807031}
+  - component: {fileID: 8957818139698593311}
+  - component: {fileID: 788026564851336701}
   m_Layer: 7
   m_Name: NPC_Citizen
   m_TagString: Untagged
@@ -361,6 +365,69 @@ MonoBehaviour:
   m_proneRadius: 0.3
   m_proneHeight: 1.8
   m_proneCenter: {x: 0, y: 0.3, z: -0.1}
+--- !u!114 &8417339097571743145
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b77f0f3d97b34134fb4cde66336c5d52, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ShockArcEmitter
+  m_arcPrefab: {fileID: 3899972695854152562, guid: 3216e466bb8e705409ab12e6fd69e81b, type: 3}
+  m_arcLifetime: 0.45
+  m_minInterval: 0.12
+  m_maxInterval: 0.26
+--- !u!114 &3610354289931807031
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94e0c494572e81543bc920bd82395a90, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcShockView
+  m_flashColor: {r: 0.3, g: 0.95, b: 1, a: 1}
+  m_flashSeconds: 0.08
+  m_calmTailSeconds: 1
+  m_calmIntervalScale: 2.5
+--- !u!114 &8957818139698593311
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab92e93bbbf14544aa797e3b19a157fc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodyTint
+--- !u!114 &788026564851336701
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 50a18cecb98960e4d95281fe802ec27a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcHitView
+  m_healthyColor: {r: 1, g: 1, b: 1, a: 1}
+  m_woundedColor: {r: 1, g: 0.55, b: 0.15, a: 1}
+  m_downColor: {r: 1, g: 0.2, b: 0.15, a: 1}
+  m_flashSeconds: 0.09
+  m_woundedRatio: 0.5
+  m_sustainedDamageTint: 0
+  m_sustainedColor: {r: 1, g: 0.75, b: 0.7, a: 1}
 --- !u!1001 &2229125471116794606
 PrefabInstance:
   m_ObjectHideFlags: 0
