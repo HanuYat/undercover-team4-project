@@ -41,12 +41,9 @@ public class JailDoor : NetworkBehaviour, IInteractable
     [Tooltip("완전히 열리거나 닫히는 데 걸리는 시간(초)")]
     [SerializeField] private float m_slideSeconds = 0.7f;
 
-    [Header("자물쇠·유치장 (비우면 부모에서 자동 탐색)")]
-    [Tooltip("풀려 있고 아직 수감자가 남아 있는 동안(탈옥 진행 중, #231)에는 아무도 없어도 열어 둔다")]
+    [Header("자물쇠 (비우면 부모에서 자동 탐색)")]
+    [Tooltip("풀려 있는 동안(탈옥 진행 중, #231)에는 아무도 없어도 열어 둔다 — 열린 문이 곧 탈옥 신호다")]
     [SerializeField] private JailLock m_jailLock;
-
-    [Tooltip("수감자가 남아 있는지 확인용 — 다 빠져나간 빈 유치장이면 문을 닫는다")]
-    [SerializeField] private JailZone m_jailZone;
 
     // 서버 권위 개폐 상태 — JailLock·JailZone과 동일한 이중 구조(오프라인 폴백 로컬 값)
     private readonly NetworkVariable<bool> m_isOpenSynced = new NetworkVariable<bool>(false);
@@ -73,9 +70,6 @@ public class JailDoor : NetworkBehaviour, IInteractable
         // 자물쇠는 같은 유치장 오브젝트에 있다 — 부모 쪽에서 찾는다 (JailZone.Awake와 같은 관례)
         if (m_jailLock == null)
             m_jailLock = GetComponentInParent<JailLock>();
-
-        if (m_jailZone == null)
-            m_jailZone = GetComponentInParent<JailZone>();
     }
 
     public override void OnNetworkSpawn() => m_isOpenSynced.OnValueChanged += HandleOpenSyncedChanged;
@@ -91,12 +85,16 @@ public class JailDoor : NetworkBehaviour, IInteractable
     // 플레이어 근접도 보지 않는다: 여닫는 것은 플레이어의 명시적 입력(E)이다.
     private bool ShouldBeOpen => m_manualOpen || IsJailbreakHoldingOpen;
 
-    // 탈옥이 '진행 중'일 때만 열어 둔다 — 자물쇠가 풀렸어도 수감자가 다 빠져나갔으면 닫는다.
-    // 안 그러면 마지막 수감자가 나간 뒤 다음 수감자가 들어와 재잠금될 때까지 영영 열려 있다.
-    // Inmates는 서버 권위 집합이라 이 판단은 서버(또는 오프라인)에서만 유효하다.
-    private bool IsJailbreakHoldingOpen =>
-        m_jailLock != null && !m_jailLock.IsLocked
-        && m_jailZone != null && m_jailZone.Inmates.Count > 0;
+    // 자물쇠가 풀려 있는 동안은 계속 열어 둔다 — <b>열린 문이 곧 탈옥 신호다</b> (GDD 7-2, #231).
+    //
+    // 예전에는 여기에 "수감자가 남아 있을 때만"(Inmates.Count > 0)이 붙어 있었다 (#415).
+    // 그러면 신호가 아예 안 뜬다: JailbreakEvent.ReleaseAllInmates가 자물쇠가 열리는 순간
+    // 전원을 한 번에 방출하므로 같은 프레임에 인원이 0이 되고 조건이 즉시 무너진다. (#492에서 수정)
+    //
+    // 그 조건이 막으려던 "영영 열려 있음"은 자물쇠 쪽이 이미 막는다 — JailZone.Admit이 새 수감자를
+    // 받을 때 ServerRelock을 부르므로, 다음 검거를 데려오는 순간 잠기고 문도 함께 닫힌다.
+    // 그 사이에 열려 있는 것이 바로 "털렸고 아직 아무도 안 잡아왔다"는 신호다.
+    private bool IsJailbreakHoldingOpen => m_jailLock != null && !m_jailLock.IsLocked;
 
     // ---- 플레이어 상호작용 (E 토글) ----
 
