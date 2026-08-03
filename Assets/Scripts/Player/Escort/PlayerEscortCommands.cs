@@ -506,8 +506,8 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         target.ReleaseFromCustody();
     }
 
-    // 본부 인계 요청(#414)은 제거됐다 (#492) — 판정 트리거가 인계 단말에서 유치장 진입으로 옮겨져
-    // JailIntake가 직접 ArrestJudge.Judge를 부른다. 플레이어가 보낼 요청 자체가 없어졌다.
+    // 본부 인계 요청(#414)은 제거됐다 (#492) — 판정 트리거가 인계 단말에서 유치장 앞 보안 게이트로
+    // 옮겨져 JailIntake가 직접 ArrestJudge.Judge를 부른다. 플레이어가 보낼 요청 자체가 없어졌다.
 
     // ---- 서버 실행: 유치장 반출 (#492) ----
 
