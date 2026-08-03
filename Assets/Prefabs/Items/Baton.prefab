@@ -103,8 +103,6 @@ MonoBehaviour:
   m_damage: 34
   m_cooldownSeconds: 0.9
   m_originTolerance: 3
-  m_impactPrefab: {fileID: 6359819823661230722, guid: 179c45c838192404ab3a03413c2e1052, type: 3}
-  m_impactLifetime: 0.6
   references:
     version: 2
     RefIds: []

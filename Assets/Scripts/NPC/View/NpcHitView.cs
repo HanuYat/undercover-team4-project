@@ -11,8 +11,8 @@ using UnityEngine;
 /// 색이 맞아야 하고, 기절에서 깨어나며 체력이 회복되면(#366) 색도 함께 되돌아가야 한다.
 ///
 /// 몸 색은 직접 칠하지 않고 <see cref="BodyTint"/>에 요청한다 — 감전 발광(<see cref="NpcShockView"/>, #477)과
-/// 같은 프로퍼티를 다투지 않기 위해서다. 임팩트 링·스파크는 이 컴포넌트가 아니라 무기(<c>Baton</c>)가
-/// 낸다: 맞은 <b>지점</b>은 무기만 알고, 여기는 "맞았다"만 안다.
+/// 같은 프로퍼티를 다투지 않기 위해서다. 맞은 <b>지점</b>의 연출(먼지)은 이 컴포넌트가 아니라
+/// 무기(<c>Baton</c>)가 낸다: 지점은 무기만 알고, 여기는 "맞았다"만 안다.
 /// </summary>
 [RequireComponent(typeof(NpcController))]
 [RequireComponent(typeof(BodyTint))]

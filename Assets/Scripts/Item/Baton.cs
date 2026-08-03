@@ -59,15 +59,6 @@ public class Baton : ItemBase, IAimedWeapon
     [SerializeField]
     private float m_originTolerance = 3f;
 
-    [Header("타격 연출 (#478)")]
-    [Tooltip("명중 지점에 재생할 임팩트 프리팹(링·스파크). 비우면 연출 없음 — 판정에는 영향이 없다")]
-    [SerializeField]
-    private GameObject m_impactPrefab;
-
-    [Tooltip("임팩트 연출이 살아 있는 시간(초) — 프리팹의 파티클 수명보다 길게 잡을 것")]
-    [SerializeField]
-    private float m_impactLifetime = 0.6f;
-
     // 캐스트 결과 버퍼 — 서버 판정과 오너 크로스헤어(HasValidAimTarget)가 함께 쓰지만 공유해도 안전하다.
     // 둘 다 메인 스레드에서 동기적으로 돌고, 결과를 호출 안에서 즉시 꺼내 쓴 뒤 버퍼를 붙들지 않는다.
     // (호스트에서는 두 경로가 같은 프레임에 돌 수 있지만 겹쳐 실행되지는 않는다)
@@ -264,13 +255,13 @@ public class Baton : ItemBase, IAimedWeapon
                 NotifyOwner($"진압봉 빗나감 — {hit.collider.name}에 맞음");
                 return;
             case SwingResult.TargetInvalidState:
-                // 소리·먼지는 내되 히트마커는 띄우지 않는다 — 봉이 몸에 닿은 건 맞지만 피해는 없다.
-                // 침묵하면 입력이 씹힌 것처럼 보이고, 히트마커까지 띄우면 데미지가 들어간 것처럼 거짓말이 된다.
-                PlayImpact(hit.point, hit.normal, ImpactClipFor(target, playerTarget));
+                // 아무 연출도 내지 않는다 — 때릴 수 없는 대상이므로 허공(NoHit)과 같은 취급이다.
+                // 먼지든 타격음이든 내면 그만큼은 '때려졌다'로 읽히는데, 여기서 일어나는 일은 없다.
+                // 휘두른 것 자체는 이미 나간 스윙 모션·스윙음이 말해 준다.
                 NotifyOwner(
                     playerTarget != null
                         ? $"진압봉 무효 — 이미 무력화된 동료 ({playerTarget.name})"
-                        : $"진압봉 무효 — 이미 제압됐거나 페널티 진행 중인 대상 ({target.CurrentState})");
+                        : $"진압봉 무효 — {(target.IsStunned ? "이미 쓰러진" : "이미 제압됐거나 페널티 진행 중인")} 대상 ({target.CurrentState})");
                 return;
         }
 
@@ -284,7 +275,6 @@ public class Baton : ItemBase, IAimedWeapon
         if (playerTarget != null)
         {
             playerTarget.TakeDamage(m_damage, holder.gameObject);
-            PlayDamageVfx(hit.point, hit.normal); // 연출은 데미지 뒤 — 무효 케이스에선 나가지 않는다
             NotifyOwner(
                 $"진압봉 명중 — 동료 오사! {playerTarget.name} "
                     + $"(-{m_damage} → {playerTarget.CurrentHp}/{playerTarget.MaxHp})");
@@ -295,37 +285,8 @@ public class Baton : ItemBase, IAimedWeapon
         // 이 타격으로 기절하면 깨어난 뒤에도 이 사람에게서 도망친다 (#269).
         target.TakeDamage(m_damage, holder.gameObject);
         target.ServerReactTo(ReactionTrigger.Damage, holderTransform); // 맞은 즉시 반응 (#400)
-        PlayDamageVfx(hit.point, hit.normal);
         NotifyOwner($"진압봉 명중: {target.name} (-{m_damage} → {target.CurrentHp}/{target.MaxHp})");
     }
-
-    // ---- 타격 연출 (#478) ----
-
-    /// <summary>
-    /// 피해가 들어간 타격에만 임팩트 링을 낸다 — 전 피어(월드). 서버 판정 지점에서만 호출한다.
-    /// 먼지·타격음은 <see cref="PlayImpact(Vector3, Vector3, EAudioClip)"/>이, 히트마커는
-    /// <see cref="NotifyHit"/>가 각각 맡는다 — 여기서 같이 내면 두 번 나간다.
-    /// </summary>
-    /// <remarks>
-    /// 임팩트 지점을 <see cref="IDamageable.TakeDamage"/>에 실어 보내지 않는 이유: 인터페이스에
-    /// 좌표를 추가하면 <c>BombDevice</c> 등 모든 데미지 소스를 고쳐야 한다. 대신 역할을 나눈다 —
-    /// <b>맞은 자리</b>는 무기만 아니까 여기서 쏘고, "맞았다"는 피격자가 쏜다(<c>NpcController.OnDamaged</c>).
-    /// 덕분에 폭발로 맞아도 몸 플래시는 나오고, 임팩트 링은 진압봉 전용으로 남는다.
-    /// </remarks>
-    private void PlayDamageVfx(Vector3 point, Vector3 normal)
-    {
-        if (!IsSpawned)
-        {
-            ImpactVfx.Play(m_impactPrefab, point, normal, m_impactLifetime); // 오프라인 폴백
-            return;
-        }
-
-        PlayDamageVfxRpc(point, normal);
-    }
-
-    [Rpc(SendTo.Everyone)]
-    private void PlayDamageVfxRpc(Vector3 point, Vector3 normal) =>
-        ImpactVfx.Play(m_impactPrefab, point, normal, m_impactLifetime);
 
     // ---- 정리 ----
 
@@ -549,6 +510,16 @@ public class Baton : ItemBase, IAimedWeapon
         // 때려 기절시켜 신병에서 빼내는 우회가 생기므로, 진압봉은 좁은 쪽(타격)을 따른다.
         target = npc;
         if (!NpcStateRules.CanBeDamaged(npc.CurrentState))
+        {
+            return SwingResult.TargetInvalidState;
+        }
+
+        // 이미 쓰러져 있으면 무효타다 — 스턴은 오버레이라 CurrentState에 나타나지 않으므로(#292)
+        // 위 상태 게이트로는 걸러지지 않는다. 통과시키면 두 가지가 어긋난다: 타격으로 쓰러진 대상은
+        // HP가 이미 0이라 피해가 0인데 히트마커·"명중"이 뜨고, 테이저로 기절한 대상은 만피라
+        // 반대로 누워 있는 채 계속 깎인다. 테이저(<c>Taser.EvaluateAim</c>)가 같은 이유로 먼저
+        // 이 게이트를 갖고 있다 — 쓰러진 대상은 때리는 게 아니라 밧줄로 끌어가는 것이다.
+        if (npc.IsStunned)
         {
             return SwingResult.TargetInvalidState;
         }
