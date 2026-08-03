@@ -15,6 +15,8 @@ using UnityEngine;
 ///
 /// 표시물(<see cref="NpcHealthBarView"/>)은 NPC 프리팹의 자식이라 위치는 Transform이 알아서 따라간다.
 /// 이 프레젠터는 조준 대상이 <b>바뀔 때만</b> 이전 바를 끄고 새 바를 켠다 — 값 갱신은 바가 스스로 한다.
+///
+/// 이미 싸움이 끝난 대상(기절해 누움·밧줄 끌림)은 제외한다 — <see cref="IsOutOfFight"/>.
 /// </summary>
 public class NpcHealthBarPresenter : NetworkBehaviour
 {
@@ -81,8 +83,41 @@ public class NpcHealthBarPresenter : NetworkBehaviour
         if (npc == null)
             return null;
 
+        if (IsOutOfFight(npc))
+            return null;
+
         // 비활성 상태로 프리팹에 들어 있으므로 includeInactive로 찾는다
         return npc.GetComponentInChildren<NpcHealthBarView>(true);
+    }
+
+    /// <summary>
+    /// 이미 싸움이 끝난 대상인가 — 누워 있거나(기절) 밧줄에 끌려가는 중.
+    /// 남은 체력이 더 이상 행동 판단에 쓰이지 않고, 바닥에 깔린 몸이나 끌려가는 몸을 따라다니는
+    /// 바만 시야에 남는다. 조준 중에 상태가 바뀌어도 매 프레임 다시 판정하므로 즉시 사라진다.
+    /// </summary>
+    private bool IsOutOfFight(NpcController npc)
+    {
+        if (npc.IsRoped)
+            return true;
+
+        NpcAnimationDriver driver = DriverOf(npc);
+        return driver != null && driver.IsProne;
+    }
+
+    // 조준 대상이 바뀔 때만 다시 잡는다 — 매 프레임 GetComponent를 피한다
+    // (RopeDragView가 매듭 뼈를 캐시하는 것과 같은 관례)
+    private NpcController m_cachedNpc;
+    private NpcAnimationDriver m_cachedDriver;
+
+    private NpcAnimationDriver DriverOf(NpcController npc)
+    {
+        if (npc != m_cachedNpc)
+        {
+            m_cachedNpc = npc;
+            m_cachedDriver = npc.GetComponent<NpcAnimationDriver>();
+        }
+
+        return m_cachedDriver;
     }
 
     private void Show(NpcHealthBarView view)
