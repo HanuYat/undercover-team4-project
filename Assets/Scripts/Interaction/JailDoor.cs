@@ -1,6 +1,5 @@
 using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.AI;
 
 /// <summary>
 /// 유치장 창살 문 (#415) — 플레이어가 다가오면 저절로 열리는 미닫이 자동문. 문짝이 옆으로 미끄러진다.
@@ -215,7 +214,7 @@ public class JailDoor : NetworkBehaviour, IInteractable
             // 이미 유치장 안으로 들어선 대상은 문을 잡아 두지 않는다 — 수용 지점이 문에서 1.6~2.5m라
             // 반경 안에 들어와, 수용이 끝나고도 문이 영영 열려 있었다. 들어가면 등 뒤로 닫힌다.
             // (좌석으로 바뀐 뒤에는 자리가 더 멀어졌지만(#462) 판정은 거리가 아니라 Jail 영역 안이냐다)
-            if (IsInsideJailArea(npcs[i].transform.position))
+            if (JailArea.Contains(npcs[i].transform.position))
                 continue;
 
             return true;
@@ -279,38 +278,4 @@ public class JailDoor : NetworkBehaviour, IInteractable
         m_leaf.localPosition = Vector3.MoveTowards(m_leaf.localPosition, target, speed * Time.deltaTime);
     }
 
-    // 유치장 내부(Jail) NavMesh 영역의 마스크 — 이름으로 한 번만 해석해 캐시한다.
-    // (NpcController.JailAreaMask와 같은 관례. 0이면 Jail 영역이 없는 프로젝트라 판정을 생략한다)
-    private static int s_jailAreaMask = -1;
-
-    // Jail 영역 판정 허용치(m) — 위 IsInsideJailArea 주석의 실측 근거 참고
-    private const float k_insideSampleRadius = 0.2f;
-
-    private static int JailAreaMask
-    {
-        get
-        {
-            if (s_jailAreaMask < 0)
-            {
-                int area = NavMesh.GetAreaFromName("Jail");
-                s_jailAreaMask = area >= 0 ? 1 << area : 0;
-            }
-            return s_jailAreaMask;
-        }
-    }
-
-    // 이 지점이 유치장 내부(Jail 영역) 위인가.
-    // <b>플레이어에는 적용하지 않는다</b> — 안에 있는 플레이어까지 빼면 나가려고 문 앞에 서도 열리지
-    // 않아 갇힌다(문짝 콜라이더는 플레이어를 막는다). NPC는 문짝을 통과하므로 갇힐 일이 없다.
-    private static bool IsInsideJailArea(Vector3 position)
-    {
-        int mask = JailAreaMask;
-        if (mask == 0)
-            return false;
-
-        // 허용치는 0.2m — 실측상 Jail 영역은 문짝(z 49.70)보다 0.2m 안쪽(z 49.90)에서 시작한다.
-        // 0.5m로 잡으면 문 밖 접근 지점(LockApproach)까지 "안"으로 걸려, 들어오려는 NPC 앞에서
-        // 문이 열리지 않는다. 0.02m는 반대로 유치장 안 수용 지점도 놓친다.
-        return NavMesh.SamplePosition(position, out NavMeshHit _, k_insideSampleRadius, mask);
-    }
 }

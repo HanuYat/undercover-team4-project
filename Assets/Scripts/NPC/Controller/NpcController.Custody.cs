@@ -5,10 +5,6 @@ public partial class NpcController
 {
     // ---- 유치장 (#228) ----
 
-    // 유치장 내부(Jail) NavMesh 영역의 마스크 — 이름으로 한 번만 해석해 캐시한다.
-    // 0이면 이 프로젝트에 Jail 영역이 없다는 뜻(단독 테스트 씬 등)이라 아래 두 API가 무동작이 된다.
-    private static int s_jailAreaMask = -1;
-
     /// <summary>
     /// 유치장 내부(Jail 영역) 통행 허용/차단. (#415)
     /// 배회 시민은 프리팹 areaMask에서 Jail이 빠져 있어 감옥 안으로 걸어 들어갈 수 없고,
@@ -62,19 +58,9 @@ public partial class NpcController
         SetJailAccess(false);
     }
 
-    /// <summary>유치장 내부(Jail) NavMesh 영역 마스크 — 없는 프로젝트면 0.</summary>
-    public static int JailAreaMask
-    {
-        get
-        {
-            if (s_jailAreaMask < 0)
-            {
-                int area = UnityEngine.AI.NavMesh.GetAreaFromName("Jail");
-                s_jailAreaMask = area >= 0 ? 1 << area : 0;
-            }
-            return s_jailAreaMask;
-        }
-    }
+    /// <summary>유치장 내부(Jail) NavMesh 영역 마스크 — 없는 프로젝트면 0.
+    /// 실제 해석은 <see cref="JailArea"/>가 한다 (#492에서 사본 통합).</summary>
+    public static int JailAreaMask => JailArea.Mask;
 
     // ---- 착석 (#462) ----
 
