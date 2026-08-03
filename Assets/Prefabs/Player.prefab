@@ -3585,6 +3585,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerPenaltyView
   ShowTopMostFoldoutHeaderGroup: 1
+  m_chaseWarning:
+    m_TableReference:
+      m_TableCollectionName: UITable
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: penalty.chase_warning
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  references:
+    version: 2
+    RefIds: []
 --- !u!114 &3605863908184502176
 MonoBehaviour:
   m_ObjectHideFlags: 0

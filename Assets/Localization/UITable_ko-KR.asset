@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e9620f8c34305754d8cc9a7e49e852d9, type: 3}
+  m_Name: UITable_ko-KR
+  m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.StringTable
+  m_LocaleId:
+    m_Code: ko-KR
+  m_SharedData: {fileID: 11400000, guid: d1226f710d12ac843a44ddb0d79e8841, type: 2}
+  m_Metadata:
+    m_Items: []
+  m_TableData:
+  - m_Id: 1141968896
+    m_Localized: "\uC624\uAC80\uAC70 \uB204\uC801 \uCD08\uACFC! \uC131\uB09C \uC2DC\uBBFC\uB4E4\uC774
+      \uB2F9\uC2E0\uC744 \uB178\uB9BD\uB2C8\uB2E4 \u2014 \uC7A1\uD788\uBA74 \uAD11\uC7A5\uC73C\uB85C
+      \uB04C\uB824\uAC11\uB2C8\uB2E4"
+    m_Metadata:
+      m_Items: []
+  references:
+    version: 2
+    RefIds: []
