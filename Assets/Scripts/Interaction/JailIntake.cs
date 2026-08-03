@@ -45,6 +45,9 @@ public class JailIntake : MonoBehaviour
     // ArrestJudge가 이 경우 MarkDelivered를 부르지 않아 IsDelivered로는 걸러지지 않는다.
     private readonly HashSet<NpcController> m_unjudgeable = new HashSet<NpcController>();
 
+    // Jail 통행을 내준 대상 — 유치장을 벗어나면 회수한다. 서버(또는 오프라인) 전용.
+    private readonly HashSet<NpcController> m_jailAccessGranted = new HashSet<NpcController>();
+
     // 파괴된 대상 정리용 임시 버퍼 — 매 틱 새로 할당하지 않게 재사용한다
     private readonly List<NpcController> m_deadBuffer = new List<NpcController>();
 
@@ -79,12 +82,50 @@ public class JailIntake : MonoBehaviour
         // 검사 주기로 호출을 눌러 두었기에 목록 훑기로 충분하다 (JailDoor와 같은 판단)
         NpcController[] npcs = FindObjectsByType<NpcController>(FindObjectsSortMode.None);
 
-        // 순서 강제 — R1이 먼저다 (클래스 주석 참고)
+        // 통행이 먼저다 — R1/R2보다 앞서야 판정·착석이 유효한 바닥 위에서 일어난다
+        for (int i = 0; i < npcs.Length; i++)
+            TickJailAccess(npcs[i]);
+
+        // 순서 강제 — R1이 R2보다 먼저다 (클래스 주석 참고)
         for (int i = 0; i < npcs.Length; i++)
             TryJudgeOnEntry(npcs[i]);
 
         for (int i = 0; i < npcs.Length; i++)
             TrySeat(npcs[i]);
+    }
+
+    /// <summary>
+    /// Jail 영역 통행 관리 — 유치장 안에 있는 NPC에게 통행을 내주고, 벗어나면 회수한다. (#492)
+    ///
+    /// <b>이게 없으면 놓는 순간 몸이 창살 밖으로 튕겨 나간다.</b> 밧줄을 놓으면 NavMeshAgent가 다시
+    /// 켜지면서 <c>Warp</c>로 NavMesh에 재부착되는데(NpcController.StopRopeDrag), 부착 지점은
+    /// <b>에이전트 자신의 areaMask 안에서</b> 찾는다. 시민 마스크는 Jail이 빠져 있어(#415)
+    /// 좌석 18개 전부가 최대 1.36m 바깥 폴리곤으로 스냅된다 — 실측값이다.
+    /// 예전에는 통행을 NpcJailedState.Enter에서야 켰기 때문에 재부착이 항상 먼저였다.
+    ///
+    /// 상태가 아니라 <b>위치</b>로 판단한다: 유치장 안에 서 있는 NPC는 그 폴리곤 위에 설 수 있어야 한다.
+    /// 오검거로 판정돼 원한 구역으로 걸어 나가는 시민도 나갈 때까지는 통행이 있어야 경로가 잡힌다.
+    ///
+    /// 회수는 <b>밖으로 나간 뒤에만</b> 한다 — 안에 선 채로 회수하면 자기가 딛고 선 폴리곤이 금지돼
+    /// 경로가 아예 안 잡히고 그 자리에 굳는다. 수감자(Jailed)는 좌석이 Jail 영역이라 계속 유지한다.
+    /// </summary>
+    private void TickJailAccess(NpcController npc)
+    {
+        if (npc == null)
+            return;
+
+        bool inside = JailArea.Contains(npc.transform.position);
+
+        if (inside)
+        {
+            if (m_jailAccessGranted.Add(npc))
+                npc.SetJailAccess(true);
+            return;
+        }
+
+        // 밖으로 나갔다 — 통행을 회수해 "시민은 유치장에 못 들어간다"(#415)를 되돌린다.
+        if (npc.CurrentState != NpcState.Jailed && m_jailAccessGranted.Remove(npc))
+            npc.SetJailAccess(false);
     }
 
     // 파괴된 대상을 걷어낸다 — 라운드 종료 잔류 정리(MisdemeanorLoiterer)로 NPC가 사라져도
@@ -102,6 +143,7 @@ public class JailIntake : MonoBehaviour
             m_pendingSeat.Remove(m_deadBuffer[i]);
 
         m_unjudgeable.RemoveWhere(npc => npc == null);
+        m_jailAccessGranted.RemoveWhere(npc => npc == null);
     }
 
     // R1 — 확보된 신병이 유치장에 들어선 순간 판정한다.
