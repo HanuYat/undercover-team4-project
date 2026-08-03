@@ -30,6 +30,9 @@ public class ShopPurchases : NetworkedManagerBase
     /// <summary>이 소지형을 한 번이라도 샀는가 — 진열대 "구매함" 표시 복원용. 서버 전용.</summary>
     public bool HasCarried(ItemBase itemPrefab) => itemPrefab != null && m_carried.Contains(itemPrefab);
 
+    /// <summary>구매한 설치형 목록. 배달(ShopDelivery)이 순회한다. 서버 전용.</summary>
+    public IReadOnlyCollection<EInstallable> Installables => m_installables;
+
     /// <summary>이 설치형을 이미 샀는가 — 중복 구매 거부·표시 복원용. 서버 전용.</summary>
     public bool HasInstallable(EInstallable installable) => m_installables.Contains(installable);
 
