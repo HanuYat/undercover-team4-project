@@ -196,8 +196,17 @@ public class NpcJailedState : NpcStateBase
         // 여기서는 걸어온 끝점 오차(최대 0.25m)를 좌석 위로 흡수하는 데 쓴다 — 몇 cm만 어긋나도
         // 벤치에 걸터앉은 것처럼 보인다. 에이전트를 끄지 않으므로 NavMesh 재부착 실패 위험은 없다
         // (에이전트를 껐다 켜면 다시 못 붙어 NPC가 굳는 그 위험군 — Enter 주석).
-        if (m_owner.JailSeat != null)
-            m_owner.Agent.Warp(m_owner.JailSeat.position);
+        // 반환값을 보는 이유는 SeatByWarp와 같다: 좌석이 NavMesh 밖에 놓이면 Warp가 조용히 실패하고
+        // 걸어온 끝점(최대 0.25m 어긋남)에 그대로 앉는다 — 눈으로는 "좀 삐뚤게 앉았네"로만 보여
+        // 씬 배치 실수를 놓치기 쉽다. 앉히는 것 자체는 그대로 진행한다(고착보다 삐뚠 착석이 낫다).
+        if (m_owner.JailSeat != null && !m_owner.Agent.Warp(m_owner.JailSeat.position))
+        {
+            Debug.LogWarning(
+                $"NpcJailedState: 좌석 위치로 워프 실패 — 걸어온 자리에 앉힌다. "
+                    + $"좌석이 NavMesh 위에 있는지 확인할 것: {m_owner.JailSeat.name}",
+                m_owner
+            );
+        }
 
         m_phase = SeatPhase.Turning;
     }

@@ -42,7 +42,7 @@ public partial class NpcController
 
     /// <summary>
     /// 원한 구역 수용 — 오검거당한 시민을 석방 대신 전용 구역으로 보낸다. (#277)
-    /// spot이 null이면(구역 미배선 씬) 그 자리에서 수용된 것으로 처리한다 — SendToJail의 null cell과 동일 관례.
+    /// spot이 null이면(구역 미배선 씬) 그 자리에서 수용된 것으로 처리한다 — SendToJail의 null seat과 동일 관례.
     /// slotOffset은 구역을 여러 명이 나눠 쓸 때의 자리 오프셋이다 — 배정은 보내는 쪽(WrongfulArrestPenalty)이 한다.
     /// </summary>
     public void SendToDetention(Transform spot, Vector3 slotOffset)
