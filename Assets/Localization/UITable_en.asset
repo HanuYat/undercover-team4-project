@@ -16,13 +16,25 @@ MonoBehaviour:
     m_Code: en
   m_SharedData: {fileID: 11400000, guid: d1226f710d12ac843a44ddb0d79e8841, type: 2}
   m_Metadata:
-    m_Items: []
+    m_Items:
+    - rid: 6276845873749557335
   m_TableData:
   - m_Id: 1141968896
     m_Localized: "Too many wrongful arrests! Angry citizens are hunting you \u2014
       if they catch you, you'll be dragged to the plaza."
     m_Metadata:
       m_Items: []
+  - m_Id: 6020387639297
+    m_Localized: '[Signal Decoder] {0}'
+    m_Metadata:
+      m_Items:
+      - rid: 6276845873749557335
   references:
     version: 2
-    RefIds: []
+    RefIds:
+    - rid: 6276845873749557335
+      type: {class: SmartFormatTag, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_Entries: 
+        m_SharedEntries:
+        - id: 6020387639297

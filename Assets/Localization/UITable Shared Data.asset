@@ -19,6 +19,10 @@ MonoBehaviour:
     m_Key: penalty.chase_warning
     m_Metadata:
       m_Items: []
+  - m_Id: 6020387639297
+    m_Key: signal.received
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

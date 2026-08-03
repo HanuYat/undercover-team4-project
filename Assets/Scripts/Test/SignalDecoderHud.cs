@@ -1,25 +1,27 @@
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
-/// [임시] 신호 해석기의 화면 표현 — 입력창과 수신 메시지를 그린다. (#108)
+/// [임시] 신호 해석기의 입력창. (#108)
 /// 상태는 <see cref="SignalDecoder"/>가 들고, 이 컴포넌트는 표시만 담당한다
 /// (DeviceBlackoutEvent ↔ DeviceBlackoutView와 같은 역할 분리).
-/// PlayerReviveHud·TeamFundHud의 임시 OnGUI 관례를 따른다 — 정식 UI(#65 계열)로 대체 예정.
+/// 수신 메시지 표시는 HUD 공용 토스트(<see cref="ToastView"/>)로 넘겼고, 입력창만 IMGUI로 남아 있다 —
+/// TMP_InputField 전환은 후속 (#493).
 ///
-/// <b>IMGUI로 그리는 이유</b>: 먹통 오버레이(<see cref="DeviceBlackoutView"/>)가 IMGUI라
-/// uGUI 캔버스를 알파 0.75 어둠으로 덮는다. 이 아이템은 <b>먹통 중에 읽히는 것이 존재 이유</b>라
-/// 같은 IMGUI로 그린 뒤 <see cref="GUI.depth"/>를 낮춰 오버레이보다 위에 오게 한다.
-/// 정식 UI로 옮길 때도 이 조건(먹통 오버레이보다 위)은 반드시 유지할 것.
+/// <b>예전에 IMGUI를 강제하던 제약은 사라졌다</b>: 먹통 오버레이가 uGUI 캔버스를 덮기 때문에
+/// 같은 IMGUI로 그려 GUI.depth로 위에 올려야 했는데, 그 화면 덮기는 #434에서 제거됐다
+/// (<see cref="DeviceBlackoutView"/>는 이제 음성 왜곡만 한다). 캔버스로 옮겨도 가려지지 않는다.
 /// </summary>
 public class SignalDecoderHud : MonoBehaviour
 {
-    // 먹통 오버레이(GUI.depth 기본 0)보다 위에 그리기 위한 값 — IMGUI는 depth가 낮을수록 위에 온다.
-    private const int k_drawDepth = -100;
-
     [Header("수신 표시")]
     [Tooltip("받은 메시지를 화면에 유지하는 시간(초)")]
     [SerializeField]
     private float m_displaySeconds = 8f;
+
+    [Tooltip("수신 문구 형식 — UITable/signal.received ({0}에 받은 메시지가 들어간다)")]
+    [SerializeField]
+    private LocalizedString m_receivedFormat;
 
     private SignalDecoder m_decoder;
     private PlayerInputHandler m_input;   // 입력창을 연 플레이어의 입력 — 닫을 때 되돌린다
@@ -28,10 +30,6 @@ public class SignalDecoderHud : MonoBehaviour
     private string m_draft = string.Empty;
     private bool m_focusRequested;
 
-    private string m_message;
-    private float m_messageUntil;
-
-    private GUIStyle m_messageStyle;
     private GUIStyle m_hintStyle;
 
     /// <summary>입력창이 열려 있는지 — 열려 있는 동안 이 플레이어의 게임플레이 입력은 정지된다.</summary>
@@ -87,8 +85,11 @@ public class SignalDecoderHud : MonoBehaviour
     /// <summary>수신한 메시지를 화면에 띄운다. 전 피어에서 호출된다.</summary>
     public void ShowMessage(string message)
     {
-        m_message = message;
-        m_messageUntil = Time.time + m_displaySeconds;
+        // 받은 본문은 플레이어가 친 글이라 번역 대상이 아니다 — 형식 문구만 테이블에서 오고
+        // 본문은 Smart String 인자({0})로 끼워 넣는다. 인자를 먼저 넣어야 구독 시점의
+        // 첫 발화부터 올바른 문장이 나온다.
+        m_receivedFormat.Arguments = new object[] { message };
+        App.UI.SignalMessage?.Show(m_receivedFormat, m_displaySeconds);
     }
 
     // 입력창을 연 플레이어가 디스폰(퇴장·씬 전환)되면 정지된 입력을 되돌릴 대상이 사라진다 —
@@ -107,38 +108,11 @@ public class SignalDecoderHud : MonoBehaviour
 
     private void OnGUI()
     {
-        bool hasMessage = m_message != null && Time.time < m_messageUntil;
-        if (!m_isOpen && !hasMessage)
+        if (!m_isOpen)
             return;
 
         EnsureStyles();
-
-        int previousDepth = GUI.depth;
-        GUI.depth = k_drawDepth; // 먹통 오버레이 위에 그린다
-
-        if (hasMessage)
-            DrawMessage();
-
-        if (m_isOpen)
-            DrawInput();
-
-        GUI.depth = previousDepth;
-    }
-
-    // 수신 메시지는 화면 상단 중앙을 캔버스 HUD(타이머·남은 범인·할당량)와 돌발이벤트 토스트와
-    // 나눠 쓴다. 토스트(4초)와 이 메시지(8초)는 동시에 뜰 수 있어 위아래 띠를 갈라 잡는다 —
-    // 띠의 시작점은 SuddenEventToastHud가 단독으로 계산한다(양쪽에 상수를 두면 한쪽만 고쳤을 때 다시 겹친다).
-    private const float k_messageHeight = 34f;
-
-    private void DrawMessage()
-    {
-        const float width = 720f;
-        Rect rect = new Rect(
-            (Screen.width - width) * 0.5f,
-            SuddenEventToastHud.BandBottom,
-            width,
-            k_messageHeight);
-        GUI.Label(rect, $"[신호 해석기] {m_message}", m_messageStyle);
+        DrawInput();
     }
 
     private void DrawInput()
@@ -208,19 +182,6 @@ public class SignalDecoderHud : MonoBehaviour
 
     private void EnsureStyles()
     {
-        if (m_messageStyle == null)
-        {
-            m_messageStyle = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 20,
-                fontStyle = FontStyle.Bold,
-                wordWrap = true
-            };
-            // 먹통 오버레이(어둠) 위에서도 읽히도록 밝은 색으로 고정한다
-            m_messageStyle.normal.textColor = new Color(0.5f, 1f, 0.8f);
-        }
-
         if (m_hintStyle == null)
         {
             m_hintStyle = new GUIStyle(GUI.skin.label) { fontSize = 12 };
