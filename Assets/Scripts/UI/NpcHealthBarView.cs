@@ -16,18 +16,13 @@ using UnityEngine.UI;
 public class NpcHealthBarView : NpcWorldCard
 {
     [Header("게이지")]
-    [Tooltip("체력 바 — Image Type을 Filled로, Fill Method는 Horizontal로 설정한다")]
+    [Tooltip(
+        "체력 바 — Image Type은 Filled, Fill Method는 Horizontal. "
+            + "[주의] Sprite가 비어 있으면 Unity가 Filled 타입을 무시하고 단순 사각형을 그려 "
+            + "채움이 전혀 동작하지 않는다"
+    )]
     [SerializeField]
     private Image m_fill;
-
-    [Header("색")]
-    [Tooltip("체력이 가득할 때 — 아직 위협적이다")]
-    [SerializeField]
-    private Color m_fullColor = new Color(0.9f, 0.25f, 0.2f);
-
-    [Tooltip("제압에 가까울 때")]
-    [SerializeField]
-    private Color m_lowColor = new Color(0.25f, 0.85f, 0.3f);
 
     private NpcController m_controller;
 
@@ -59,9 +54,10 @@ public class NpcHealthBarView : NpcWorldCard
             return;
 
         int max = m_controller.MaxHp;
-        float fill = max > 0 ? Mathf.Clamp01((float)m_controller.CurrentHp / max) : 0f;
 
-        m_fill.fillAmount = fill;
-        m_fill.color = Color.Lerp(m_lowColor, m_fullColor, fill);
+        // 채운 양만 줄인다 — 색은 프리팹에 정해둔 값을 그대로 쓴다.
+        // 색까지 같이 바꾸면 "얼마나 남았나"를 두 가지 신호가 동시에 말하게 되는데, 정작 길이 쪽이
+        // 안 보이면(sprite 미지정 등) 색만 변해 원인을 찾기 어렵다. 신호는 길이 하나로 둔다.
+        m_fill.fillAmount = max > 0 ? Mathf.Clamp01((float)m_controller.CurrentHp / max) : 0f;
     }
 }
