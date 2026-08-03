@@ -39,8 +39,10 @@ public class ArrestJudge : CommonManagerBase
     /// 한 번 부른다. 상태·구역 검증은 그쪽이 이미 끝냈으므로 여기서 다시 하지 않는다 —
     /// 예전 인계 단말 경로의 TryDeliver(상태·구역 재검증)는 단말과 함께 제거됐다.
     ///
-    /// 재판정(#358)은 그대로 허용된다: 빼냈다 다시 넣으면(ClearDelivered) 다시 판정되고,
-    /// 중복 후처리는 <see cref="ArrestResult.IsFirstDelivery"/>가 건다.
+    /// 재판정(#358)은 그대로 허용되지만 <b>그 게이트는 여기가 아니다</b>: 같은 방문에 매 틱 다시
+    /// 판정되지 않게 거르는 것은 JailIntake의 방문 기록이고, 반출(ServerExtract)이 그 기록을 지워
+    /// 재판정을 연다. 반출은 <c>ClearDelivered</c>를 부르지 않는다 — 그건 탈옥 전용이다(JailIntake 주석).
+    /// 재판정 후처리 중복은 <see cref="ArrestResult.IsFirstDelivery"/>가 건다.
     /// </summary>
     public ArrestResult? Judge(NpcController npc)
     {
@@ -97,9 +99,9 @@ public class ArrestJudge : CommonManagerBase
         CitizenProfile profile = identity != null ? identity.Profile : null;
 
         // 줄다리기로 여러 명이 함께 끌고 왔을 수 있다 (#390) — 관여한 전원이 인계자다.
-        // 오검거 페널티가 이 목록 전원에게 걸린다: 밧줄이 걸린 채 인계존까지 들어갔다는 것은
+        // 오검거 페널티가 이 목록 전원에게 걸린다: 밧줄이 걸린 채 유치장까지 들어갔다는 것은
         // 막지 못했다는 뜻이고, 손을 떼는 수단(E 놓고 걸어가 줄 끊기 / 자기 줄 풀기)이 양쪽에 있다.
-        // 끌고 있지 않아도 줄이 이어져 있으면 포함된다 — 인계존에 내려놓고 E로 접수하는 경로(#414)에서도
+        // 끌고 있지 않아도 줄이 이어져 있으면 포함된다 — 유치장 안에 내려놓은 뒤 판정되는 경로(#492)에서도
         // 인계자가 '알 수 없음'이 되지 않는다.
         List<PlayerEscorter> deliverers = PlayerEscorter.FindEscortersOf(npc);
         var result = new ArrestResult(npc, verdict, profile, reward, deliverers, firstDelivery);
@@ -173,13 +175,14 @@ public readonly struct ArrestResult
     public readonly CitizenProfile Profile;
     public readonly int Reward;
 
-    /// <summary>이 대상에 밧줄을 걸고 인계존까지 들어온 플레이어 전원 — 아무도 없으면 빈 목록(자동 판정 등). (#390)
+    /// <summary>이 대상에 밧줄을 걸고 유치장까지 들어온 플레이어 전원 — 아무도 없으면 빈 목록. (#390)
+    /// 반출한 수감자가 밧줄 없이 따라 들어와 재판정되는 경로(#492)가 그 빈 목록의 실제 사례다.
     /// 줄다리기로 여러 명이 함께 끌 수 있어 단일 참조에서 목록이 됐다. 검거에 개인 보상은 없고
     /// (팀 자금은 라운드 종료에 유치장 점유로 1회 정산, #340) 이 목록은 <b>페널티 지정</b>에 쓰인다 —
     /// 오검거 개인 카운트와 추격대 대상이 여기서 나온다.</summary>
     public readonly List<PlayerEscorter> DeliveredBy;
 
-    // 이 판정이 첫 인계인지 — 재판정(같은 대상을 다시 인계존에 넣음)이면 false. 할당량·오검거 카운트처럼
+    // 이 판정이 첫 인계인지 — 재판정(같은 대상을 유치장에 다시 넣음)이면 false. 할당량·오검거 카운트처럼
     // 1회만 세어야 하는 후처리가 이 값으로 재판정을 걸러 낸다. 탈옥(ClearDelivered) 후 재검거는 다시 true. (#358)
     public readonly bool IsFirstDelivery;
 

@@ -344,7 +344,8 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     {
         m_jailZone.ReleaseInmate(inmate);
 
-        // 재검거의 핵심 — 판정 완료 표식을 지워야 인계존이 다시 판정한다 (#230)
+        // 재검거의 핵심 — 판정 완료 표식을 지운다 (#230). 재판정을 여는 것 자체는 유치장이 방문 단위로
+        // 하지만(#492), 이 표식이 남으면 IsFirstDelivery가 false라 할당량·수배 후처리가 다시 세지 않는다.
         inmate.ClearDelivered();
 
         // 진범만 할당량·수배 후처리를 되돌린다. 경범죄(난동꾼)는 할당량·수배 대상이 아니므로 건드리지 않는다

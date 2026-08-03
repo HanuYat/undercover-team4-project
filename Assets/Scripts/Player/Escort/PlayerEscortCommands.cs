@@ -417,7 +417,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     {
         Escorter.AddTether(target);
 
-        // 커스터디 상태는 수갑 연행과 같은 Escorted를 재사용한다 — 인계존·이벤트 수명·가로채기 방지가
+        // 커스터디 상태는 수갑 연행과 같은 Escorted를 재사용한다 — 유치장 판정·이벤트 수명·가로채기 방지가
         // 이미 이 상태를 기준으로 판정하기 때문. 이동은 밧줄 장력이 하고 NpcEscortedState가 IsRoped를 보고
         // 추종을 건너뛴다. (#369)
         target.StartEscort(transform);

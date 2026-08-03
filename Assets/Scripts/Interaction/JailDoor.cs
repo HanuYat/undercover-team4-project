@@ -173,9 +173,9 @@ public class JailDoor : NetworkBehaviour, IInteractable
     private void Update()
     {
         // 개폐 판단은 서버(또는 오프라인)만 한다 — 클라이언트는 동기화된 IsOpen을 보고 연출만 따라간다.
-        // 매 프레임 평가해도 부담이 없다: 자물쇠·수감 인원을 읽는 것뿐이고(근접 전체 조회는 #492에서
+        // 매 프레임 평가해도 부담이 없다: 자물쇠 상태를 읽는 것뿐이고(근접 전체 조회는 #492에서
         // 사라졌다), ServerSetOpen이 값이 같으면 조기 반환해 대역폭도 먹지 않는다.
-        // 탈옥으로 자물쇠가 풀리거나 마지막 수감자가 빠져나가는 순간을 문이 따라가야 하므로 계속 본다.
+        // 탈옥으로 자물쇠가 풀리는 순간을 문이 따라가야 하므로 계속 본다.
         if (!IsSpawned || IsServer)
             ServerSetOpen(ShouldBeOpen);
 
