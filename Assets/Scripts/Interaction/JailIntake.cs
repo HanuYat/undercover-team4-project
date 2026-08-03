@@ -41,8 +41,18 @@ public class JailIntake : MonoBehaviour
     // 서버(또는 오프라인) 전용.
     private readonly Dictionary<NpcController, int> m_pendingSeat = new Dictionary<NpcController, int>();
 
+    // 이번 방문에 이미 판정한 대상 — 유치장을 벗어나면 지운다(그래야 다시 데려오면 재판정된다, #358).
+    //
+    // <b>NpcController.IsDelivered를 쓰면 안 된다.</b> 그 플래그는 오검거당한 시민에게 영구히 남는다 —
+    // 석방(ReleaseFromCustody)은 ClearDelivered를 부르지 않기 때문이고, 그건 오검거 카운트가 매 인계마다
+    // 올라야 해서 의도된 것이다(WrongfulArrestPenalty 주석). 그걸 중복 가드로 쓰면 한 번 오검거된 시민은
+    // 다시 끌고 와도 영영 재판정되지 않는다.
+    //
+    // 옛 인계 단말 경로에는 이 문제가 없었다 — 트리거가 E 입력이라 누른 횟수만큼만 판정됐다.
+    // 폴링으로 바뀌면서(#492) 중복 가드가 필요해졌고, 그 기준은 "이번 방문"이어야 한다.
+    private readonly HashSet<NpcController> m_judgedThisVisit = new HashSet<NpcController>();
+
     // 판정 자체가 불가능했던 대상(신원·경범죄 마커 둘 다 없음) — 매 틱 재시도하면 경고가 폭주한다.
-    // ArrestJudge가 이 경우 MarkDelivered를 부르지 않아 IsDelivered로는 걸러지지 않는다.
     private readonly HashSet<NpcController> m_unjudgeable = new HashSet<NpcController>();
 
     // Jail 통행을 내준 대상 — 유치장을 벗어나면 회수한다. 서버(또는 오프라인) 전용.
@@ -125,8 +135,14 @@ public class JailIntake : MonoBehaviour
         bool inCustody =
             state == NpcState.Escorted || state == NpcState.Captured || state == NpcState.Jailed;
 
+        bool inside = JailArea.Contains(npc.transform.position);
+
+        // 유치장을 벗어나면 '이번 방문'이 끝난다 — 다시 데려오면 재판정된다 (#358)
+        if (!inside)
+            m_judgedThisVisit.Remove(npc);
+
         // 신병이거나, 신병이 아니어도 이미 유치장 안이면 내준다(안에 선 대상은 그 폴리곤을 딛어야 한다)
-        if (inCustody || JailArea.Contains(npc.transform.position))
+        if (inCustody || inside)
         {
             if (m_jailAccessGranted.Add(npc))
                 npc.SetJailAccess(true);
@@ -154,20 +170,25 @@ public class JailIntake : MonoBehaviour
 
         m_unjudgeable.RemoveWhere(npc => npc == null);
         m_jailAccessGranted.RemoveWhere(npc => npc == null);
+        m_judgedThisVisit.RemoveWhere(npc => npc == null);
     }
 
-    // R1 — 확보된 신병이 유치장에 들어선 순간 판정한다.
+    // R1 — 확보된 신병이 유치장에 들어선 순간 판정한다. 방문당 한 번.
     private void TryJudgeOnEntry(NpcController npc)
     {
-        if (npc == null || npc.IsDelivered || m_unjudgeable.Contains(npc))
+        if (npc == null || m_unjudgeable.Contains(npc))
             return;
 
         // 확보된 신병만 — 끌려오는 중(Escorted)과 내려놓은 대상(Captured) 둘 다 통과한다.
-        // 배회 시민은 애초에 Jail 영역에 못 들어오지만(NavMesh 게이팅) 상태로도 한 번 더 막는다.
+        // 앉은 수감자(Jailed)는 여기 안 걸린다 — 이미 판정이 끝난 최종 상태다.
         if (npc.CurrentState != NpcState.Escorted && npc.CurrentState != NpcState.Captured)
             return;
 
         if (!JailArea.Contains(npc.transform.position))
+            return;
+
+        // 이번 방문에 이미 판정했다 — 나갔다 다시 들어와야 재판정이다 (#358)
+        if (!m_judgedThisVisit.Add(npc))
             return;
 
         ArrestJudge judge = App.Game.ArrestJudge;
@@ -241,8 +262,15 @@ public class JailIntake : MonoBehaviour
         // 수감 대상 기록도 지운다 — 남겨두면 재판정 결과가 오검거로 바뀌어도 R2가 옛 기록을 보고 앉힌다
         m_pendingSeat.Remove(npc);
 
-        // 다시 넣으면 재판정 (#358) — 탈옥 방출(JailbreakEvent)이 같은 호출을 하는 것과 같은 이유다
-        npc.ClearDelivered();
+        // 방문 기록도 지운다 — 유치장 안에서 빼냈다가 그 자리에서 다시 앉히는 경로(밖으로 안 나감)에서도
+        // 재판정이 돌아야 한다. 팀 확정: "유치장 안에서 다시 E를 누르면 재수용되고 재판정된다".
+        m_judgedThisVisit.Remove(npc);
+
+        // <b>ClearDelivered는 부르지 않는다 — 반출은 탈옥이 아니다.</b>
+        // 재판정은 위 m_judgedThisVisit을 지우는 것으로 이미 열려 있고, 여기서 '첫 인계' 표식까지
+        // 되돌리면 반출→재착석을 반복해 진범 검거 수(RoundManager.CriminalArrestCount)를 부풀릴 수 있다.
+        // 탈옥(JailbreakEvent)이 ClearDelivered를 부르는 것은 대상이 실제로 달아나 도시에서 다시
+        // 잡아야 하는 진짜 재검거이기 때문이다 (#358) — 플레이어가 스스로 꺼낸 것과는 다르다.
 
         // 앉은 자세를 전이보다 먼저 푼다 — 뒤에 두면 일어서는 순간이 한두 프레임 앉은 채로 보인다 (#462)
         npc.SetSeated(false);
