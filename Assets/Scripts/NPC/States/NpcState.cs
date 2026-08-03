@@ -12,10 +12,10 @@ public enum NpcState
     Escorted, // 연행 중 — 체포한 플레이어를 따라 이동 (#59). enum 값 = Animator 번호이므로 반드시 끝에만 추가할 것
 
     /// <summary>
-    /// 수감 — 인계존 판정 후 유치장으로 이송·수용 (#228).
+    /// 수감 — 인계존 판정 후 유치장으로 이송·수용 (#228/#462).
     /// enum 값 = Animator 번호 규약의 예외: 이 값에 대응하는 Animator 상태는 없다.
-    /// 이송 중엔 Escorted(수갑 찬 채 걷기), 수용 후엔 Captured(수갑 찬 대기) 모션을
-    /// NpcAnimationDriver가 대신 지정한다.
+    /// 좌석까지 걷는 동안엔 Escorted 모션을 빌려 쓰고, 도착해 앉으면 전용 착석(Begin/Loop)
+    /// 모션으로 갈린다 — 둘 다 NpcAnimationDriver가 IsSeated를 보고 지정한다.
     /// </summary>
     Jailed,
 

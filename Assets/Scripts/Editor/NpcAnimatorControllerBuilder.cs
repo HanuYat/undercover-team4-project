@@ -59,6 +59,15 @@ public static class NpcAnimatorControllerBuilder
         "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Movement/HumanM@Roll01.fbx";
     private const string k_subdueRollState = "Subdued_Roll";
 
+    // 유치장 착석 모션 (#462) — 좌석에 도착해 몸을 돌린 순간 Begin, 앉아 있는 동안 Loop.
+    // 벤치 좌석 높이(SM_Prop_Bench_02, 0.44m)에 맞는 SitMedium 세트를 쓴다.
+    // Stop(일어나기)은 쓰지 않는다: 탈옥 방출은 ServerExitJail이 수감자를 창살 밖으로 워프한 뒤(#415)
+    // 도주로 전이시키므로, 앉은 자리에서 일어나는 모습이 화면에 남을 구간이 없다.
+    private const string k_sitFolder =
+        "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Misc/Sit";
+    private const string k_sitBeginState = "Jailed_Sit_Begin";
+    private const string k_sitLoopState = "Jailed_Sit_Loop";
+
     // 한 번만 내지르는 단발 타격만 고른다 — attack01(원투 2연타)·attack06(4연타 콤보)은
     // 한 클립 안에 타격이 여러 번이라 제외했다. 스윙 오버레이(#220)는 1회성 타격을 전제로 한다.
     // (판별: 팔 완전 신전 횟수 + 손 속도 버스트 교차검증. 02·03은 직선 펀치, 04·05는 훅류 단발)
@@ -126,6 +135,7 @@ public static class NpcAnimatorControllerBuilder
         SetupUnlockStates(controller);
         SetupStandUpState(controller);
         SetupSubdueStates(controller);
+        SetupSitStates(controller);
 
         EditorUtility.SetDirty(tree);
         EditorUtility.SetDirty(controller);
@@ -257,15 +267,27 @@ public static class NpcAnimatorControllerBuilder
         AnimatorStateMachine stateMachine = controller.layers[0].stateMachine;
         RemoveSubdueStates(stateMachine);
 
-        AddSubdueState(stateMachine, k_subdueGroggyState, groggy,
-            NpcAnimationDriver.k_subdueGroggyAnimState);
-        AddSubdueState(stateMachine, k_subdueRollState, roll,
-            NpcAnimationDriver.k_subdueRollAnimState);
+        AddSubdueState(
+            stateMachine,
+            k_subdueGroggyState,
+            groggy,
+            NpcAnimationDriver.k_subdueGroggyAnimState
+        );
+        AddSubdueState(
+            stateMachine,
+            k_subdueRollState,
+            roll,
+            NpcAnimationDriver.k_subdueRollAnimState
+        );
     }
 
     // 제압 전환 상태 1개 + Any State 진입 전이를 만든다 (Groggy/Roll 공통 형태)
     private static void AddSubdueState(
-        AnimatorStateMachine stateMachine, string stateName, AnimationClip clip, int animStateNumber)
+        AnimatorStateMachine stateMachine,
+        string stateName,
+        AnimationClip clip,
+        int animStateNumber
+    )
     {
         AnimatorState state = stateMachine.AddState(stateName);
         state.motion = clip;
@@ -279,13 +301,89 @@ public static class NpcAnimatorControllerBuilder
         transition.AddCondition(AnimatorConditionMode.Equals, animStateNumber, "State");
     }
 
+    /// <summary>
+    /// 유치장 착석 상태를 구성한다 — Any State → Begin(1회), Any State → Loop(반복). (#462)
+    /// 자물쇠 해제(<see cref="SetupUnlockStates"/>)와 완전히 같은 구조·같은 함정이다: Begin과 Loop가
+    /// 다른 번호로 진입하고, 드라이버가 번호를 바꿔 Begin→Loop를 직접 몬다.
+    /// 재실행 시 기존 착석 상태/전이를 지우고 다시 만들어 중복을 막는다.
+    /// </summary>
+    private static void SetupSitStates(AnimatorController controller)
+    {
+        AnimationClip begin = LoadClip($"{k_sitFolder}/HumanM@SitMedium01 - Begin.fbx");
+        AnimationClip loop = LoadClip($"{k_sitFolder}/HumanM@SitMedium01 - Loop.fbx");
+        if (begin == null || loop == null)
+        {
+            Debug.LogError(
+                "[NpcAnimatorControllerBuilder] 착석 클립을 불러오지 못해 착석 상태 구성을 건너뜀"
+            );
+            return;
+        }
+
+        AnimatorStateMachine stateMachine = controller.layers[0].stateMachine;
+        RemoveSitStates(stateMachine);
+
+        AnimatorState beginState = stateMachine.AddState(k_sitBeginState);
+        beginState.motion = begin;
+        AnimatorState loopState = stateMachine.AddState(k_sitLoopState);
+        loopState.motion = loop;
+
+        // canTransitionToSelf를 끄지 않으면 번호가 유지되는 매 프레임 재진입해 클립이 앞으로 못 나간다
+        // (해제 Begin·StandUp과 같은 함정 — 앉다 말고 계속 처음부터 다시 시작한다)
+        AnimatorStateTransition toBegin = stateMachine.AddAnyStateTransition(beginState);
+        toBegin.hasExitTime = false;
+        toBegin.duration = 0.2f; // 걸어와 멈춘 자세에서 앉기 시작으로 부드럽게
+        toBegin.canTransitionToSelf = false;
+        toBegin.AddCondition(
+            AnimatorConditionMode.Equals,
+            NpcAnimationDriver.k_sitBeginAnimState,
+            "State"
+        );
+
+        AnimatorStateTransition toLoop = stateMachine.AddAnyStateTransition(loopState);
+        toLoop.hasExitTime = false;
+        toLoop.duration = 0.1f;
+        toLoop.canTransitionToSelf = false;
+        toLoop.AddCondition(
+            AnimatorConditionMode.Equals,
+            NpcAnimationDriver.k_sitLoopAnimState,
+            "State"
+        );
+    }
+
+    /// <summary>이전 실행이 만든 착석 상태와 그 상태를 가리키는 Any State 전이를 제거한다.</summary>
+    private static void RemoveSitStates(AnimatorStateMachine stateMachine)
+    {
+        var staleTransitions = new List<AnimatorStateTransition>();
+        foreach (AnimatorStateTransition transition in stateMachine.anyStateTransitions)
+        {
+            if (transition.destinationState != null && IsSitState(transition.destinationState.name))
+                staleTransitions.Add(transition);
+        }
+        foreach (AnimatorStateTransition transition in staleTransitions)
+        {
+            stateMachine.RemoveAnyStateTransition(transition);
+        }
+
+        foreach (ChildAnimatorState child in stateMachine.states)
+        {
+            if (IsSitState(child.state.name))
+                stateMachine.RemoveState(child.state);
+        }
+    }
+
+    private static bool IsSitState(string name) =>
+        name == k_sitBeginState || name == k_sitLoopState;
+
     /// <summary>이전 실행이 만든 제압 전환 상태와 그 상태를 가리키는 Any State 전이를 제거한다.</summary>
     private static void RemoveSubdueStates(AnimatorStateMachine stateMachine)
     {
         var staleTransitions = new List<AnimatorStateTransition>();
         foreach (AnimatorStateTransition transition in stateMachine.anyStateTransitions)
         {
-            if (transition.destinationState != null && IsSubdueState(transition.destinationState.name))
+            if (
+                transition.destinationState != null
+                && IsSubdueState(transition.destinationState.name)
+            )
                 staleTransitions.Add(transition);
         }
         foreach (AnimatorStateTransition transition in staleTransitions)
@@ -309,7 +407,10 @@ public static class NpcAnimatorControllerBuilder
         var staleTransitions = new List<AnimatorStateTransition>();
         foreach (AnimatorStateTransition transition in stateMachine.anyStateTransitions)
         {
-            if (transition.destinationState != null && transition.destinationState.name == k_standUpState)
+            if (
+                transition.destinationState != null
+                && transition.destinationState.name == k_standUpState
+            )
                 staleTransitions.Add(transition);
         }
         foreach (AnimatorStateTransition transition in staleTransitions)
