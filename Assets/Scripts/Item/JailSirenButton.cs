@@ -46,12 +46,13 @@ public class JailSirenButton : InstallableItem
     /// <summary>쿨다운이 걸렸다 — 인자는 남은 시간(초). 전 피어에서 발생하고 표시가 구독한다.</summary>
     public event Action<float> OnCooldownStarted;
 
-    [Header("먹통 연동 (#434) — 팀 결정 전까지 테스트 스위치")]
-    // 켜면 먹통이 탈옥을 통과시키는 창이 되고, 끄면 산 물건이 랜덤 이벤트로 죽지 않는다.
-    // 어느 쪽이 나은지는 플레이로 재 보고 정한다 (BombDevice의 임시 스위치와 같은 관례).
-    [Tooltip("먹통 중 사이렌을 막을지 — 끄면 화면이 차단돼도 감으로 누를 수 있다")]
+    [Header("먹통 연동 (#434)")]
+    // 기본은 막지 않는다 — 먹통이면 CCTV가 차단돼 유치장이 안 보이는데 경보까지 못 울리면
+    // 할 수 있는 게 아무것도 없다. 대응 수단을 통째로 뺏는 대신, 화면 없이 무전에 기대
+    // 타이밍을 재서 누르는 쪽으로 남긴다. 밸런싱으로 되돌릴 수 있게 스위치는 둔다.
+    [Tooltip("켜면 먹통 중 사이렌이 막힌다 — 화면도 경보도 없어 손쓸 방법이 사라진다")]
     [SerializeField]
-    private bool m_blockedByBlackout = true;
+    private bool m_blockedByBlackout;
 
     // 매니저는 캐싱하지 않고 App 경유로 매번 읽는다 (R1/R8).
     private bool IsJammed =>
