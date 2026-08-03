@@ -289,6 +289,22 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         m_intruder.StartFlee(null);
     }
 
+    /// <summary>
+    /// 사이렌 원격 제지 (#488) — 진행 중인 침입을 취소시킨다. 서버(또는 오프라인) 전용.
+    /// 새 종료 경로가 아니라 제압 저지와 같은 경로다 — 침입 상태를 벗어나면 채널링이 취소되고,
+    /// 뒷정리는 HandleStateChanged가 받는다. 자물쇠가 이미 열린 뒤에는 무동작(되돌리기 방지).
+    /// </summary>
+    /// <returns>실제로 제지했는지 — 침입 중이 아니었으면 false.</returns>
+    public bool ServerRepelIntruder()
+    {
+        if (m_intruder == null || m_intruder.CurrentState != NpcState.Intruding)
+            return false;
+
+        Debug.Log("[돌발이벤트] 범인 탈출 — 사이렌에 저지당해 침입자 도주");
+        m_intruder.StartFlee(null);
+        return true;
+    }
+
     // 상태 전이 수신 — 플레이어 개입(제압·연행)은 유예 갱신, 배회 복귀는 이탈로 보고 정리한다.
     private void HandleStateChanged(NpcState state)
     {
