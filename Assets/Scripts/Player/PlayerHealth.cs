@@ -97,7 +97,7 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
         if (IsSpawned && !IsServer) return;
         SetHp(m_maxHp);
         m_incapacitation?.Recover();
-        // 오검거 호송(#279) 도중 씬 전환되면 despawn이 안 일어나 EndCarriedFollow가 안 탄다.
+        // 오검거 호송(#279) 도중 씬 전환되면 despawn이 안 일어나 PlayerTowedMotion 정리가 안 탄다.
         // 세션 유지 리셋 지점에서 끌려가기 추종도 함께 푼다 — 오너 권한이라 서버 전용 StopCarried(→ 오너 RPC)로. (#314 계열)
         m_penaltyView?.StopCarried();
     }

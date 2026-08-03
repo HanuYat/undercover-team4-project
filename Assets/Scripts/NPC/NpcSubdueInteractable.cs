@@ -34,10 +34,14 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
         NpcStateRules.HasInteractKeyAction(m_controller.CurrentState)
         || (
             m_controller.CurrentState == NpcState.Escorted
-            && CanRejoinOwnRope(FindEscorter(interactor))
+            && CanRejoinOwnRope(FindTethers(interactor))
         );
 
-    private static PlayerEscorter FindEscorter(GameObject interactor) =>
+    // 요청은 명령 허브로, "내 줄인가" 판정은 연결 상태로 — 둘은 서로 다른 컴포넌트다.
+    private static PlayerEscortCommands FindCommands(GameObject interactor) =>
+        interactor != null ? interactor.GetComponentInParent<PlayerEscortCommands>() : null;
+
+    private static PlayerEscorter FindTethers(GameObject interactor) =>
         interactor != null ? interactor.GetComponentInParent<PlayerEscorter>() : null;
 
     /// <summary>
@@ -48,15 +52,15 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
     /// 그리고 그 조건이 곧 <b>탈취 차단</b>이다: 남의 신병에는 내 줄이 없다.
     /// 이미 끌고 있으면 제외한다 — 그때 E는 '놓기'로 가로채진다(PlayerInteractor).
     /// </summary>
-    private bool CanRejoinOwnRope(PlayerEscorter escorter) =>
+    private bool CanRejoinOwnRope(PlayerEscorter tethers) =>
         m_controller.CurrentState == NpcState.Escorted
-        && escorter != null
-        && escorter.IsTetheredTo(m_controller)
-        && !escorter.IsDraggingNpc(m_controller);
+        && tethers != null
+        && tethers.IsTetheredTo(m_controller)
+        && !tethers.IsDraggingNpc(m_controller);
 
     public void Interact(GameObject interactor)
     {
-        PlayerEscorter escorter = FindEscorter(interactor);
+        PlayerEscortCommands escorter = FindCommands(interactor);
 
         // 신병이 걸린 두 상태에서만 반응한다. 배회·도주·저항은 #438에서 빠졌다 — 그 상태의
         // NPC에게 E는 아무 일도 하지 않으며, CanInteract가 false라 윤곽선도 뜨지 않는다.
@@ -67,12 +71,12 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
             case NpcState.Escorted:
                 // 남이 계속 끄는 중인 대상에 내 줄로 다시 끼기 (#398) — 서버가 줄 소유·사거리를
                 // 다시 검증하므로 여기 검사는 조기 차단일 뿐이다.
-                if (CanRejoinOwnRope(escorter))
+                if (CanRejoinOwnRope(FindTethers(interactor)))
                 {
                     Debug.Log(
                         $"E 입력 — 내 줄로 끌기 재개 요청(줄다리기 복귀): {m_controller.name}"
                     );
-                    escorter.RequestRopeResume(m_controller);
+                    escorter?.RequestRopeResume(m_controller);
                 }
                 break;
 

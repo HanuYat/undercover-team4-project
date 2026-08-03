@@ -6,6 +6,11 @@ using Unity.Services.Core;
 using Unity.Services.Core.Environments;
 using UnityEngine;
 
+/// <summary>
+/// UGS 초기화·로그인·계정 상태의 단일 창구. 사용처는 App.Net.Auth로 접근한다.
+/// 상태 없는 형식 규칙은 NicknameRules(#249)·AccountCredentials(#384)가, 테스트 씬용 수동 조작
+/// 패널은 AuthDebugGui가 담당한다 — 여기에는 상태를 가진 흐름만 둔다.
+/// </summary>
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class AuthBootstrap : CommonManagerBase
 {
@@ -18,33 +23,13 @@ public class AuthBootstrap : CommonManagerBase
     [SerializeField]
     private string m_profile = string.Empty;
 
-    private bool m_isBusy;
-    private string m_status = "대기 중...";
-    private bool m_eventsRegistered;
-
     public Func<bool> CanSignOut; // 델리게이트 (bool형 반환)
 
     public event Action OnSignedIn;
     public event Action OnSignedOut;
-
-    public bool IsSignedIn =>
-        UnityServices.State == ServicesInitializationState.Initialized
-        && AuthenticationService.Instance.IsSignedIn;
-
-    public string PlayerId => IsSignedIn ? AuthenticationService.Instance.PlayerId : string.Empty;
-    public string PlayerName =>
-        IsSignedIn ? AuthenticationService.Instance.PlayerName : string.Empty;
+    public event Action OnNicknameChanged;
 
     private const string k_nicknamePrefKeyPrefix = "player.nickname.";
-
-    /// <summary>
-    /// 닉네임 최대 글자 수 — UGS는 길이를 제한하지 않으므로 우리가 정한다. (#249)
-    /// 이름표가 FixedString64Bytes(실사용 61바이트)로 동기화되는데 한글은 UTF-8 3바이트라
-    /// 20자를 넘으면 CopyFromTruncated가 조용히 잘라낸다. 머리 위 가독성까지 고려해 여유를 뒀다.
-    /// </summary>
-    private const int k_maxNicknameLength = 12;
-
-    public static int MaxNicknameLength => k_maxNicknameLength;
 
     // ── 계정 연동 (#384) — 형식 규칙·오류 문장은 AccountCredentials가 담당 ──
     private string m_accountUsername = string.Empty;
@@ -56,30 +41,26 @@ public class AuthBootstrap : CommonManagerBase
     /// </summary>
     private bool m_accountStateKnown;
 
+    #region 상태 조회
+    public bool IsSignedIn =>
+        UnityServices.State == ServicesInitializationState.Initialized
+        && AuthenticationService.Instance.IsSignedIn;
+
+    public string PlayerId => IsSignedIn ? AuthenticationService.Instance.PlayerId : string.Empty;
+    public string PlayerName =>
+        IsSignedIn ? AuthenticationService.Instance.PlayerName : string.Empty;
+
+    /// <summary>표시용 닉네임 — UGS가 자동으로 붙이는 #1234 판별자를 제거한 이름. (#249)</summary>
+    public string Nickname => NicknameRules.StripDiscriminator(PlayerName);
+
+    /// <summary>인스펙터에 설정된 프로필 — AuthDebugGui가 Start와 같은 경로로 로그인하려고 읽는다.</summary>
+    public string Profile => m_profile;
+
     /// <summary>연동된 아이디 — 미연동이면 빈 문자열. (#384)</summary>
     public string AccountUsername => m_accountUsername;
 
     /// <summary>정식 계정으로 승격됐는가. 판별은 PlayerInfo.Username 유무. (#384)</summary>
     public bool IsLinked => m_accountStateKnown && !string.IsNullOrEmpty(m_accountUsername);
-
-    public event Action OnNicknameChanged;
-
-    /// <summary>표시용 닉네임 — UGS가 자동으로 붙이는 #1234 판별자를 제거한 이름. (#249)</summary>
-    public string Nickname
-    {
-        get
-        {
-            string full = PlayerName;
-            if (string.IsNullOrEmpty(full))
-                return string.Empty;
-
-            int hash = full.LastIndexOf('#');
-            return hash >= 0 ? full.Substring(0, hash) : full;
-        }
-    }
-
-    private string NicknamePrefKey =>
-        k_nicknamePrefKeyPrefix + (string.IsNullOrWhiteSpace(m_profile) ? "default" : m_profile);
 
     public bool SessionTokenExists =>
         UnityServices.State == ServicesInitializationState.Initialized
@@ -94,52 +75,30 @@ public class AuthBootstrap : CommonManagerBase
         }
     }
 
-    private void RegisterEvents()
-    {
-        if (m_eventsRegistered)
-            return;
+    private string NicknamePrefKey =>
+        k_nicknamePrefKeyPrefix + (string.IsNullOrWhiteSpace(m_profile) ? "default" : m_profile);
+    #endregion
 
-        m_eventsRegistered = true;
-    }
-
-    protected override void OnDestroy()
-    {
-        base.OnDestroy(); // App 등록 해제
-
-        if (!m_eventsRegistered)
-            return;
-
-        m_eventsRegistered = false;
-    }
-
+    #region 초기화 · 익명 로그인
     private void Start()
     {
         if (m_signInOnStart)
         {
-            HandleSignInAsync(m_profile).Forget();
+            SignInOnStartAsync().Forget();
         }
     }
 
-    private async UniTaskVoid HandleSignInAsync(string profile)
+    private async UniTaskVoid SignInOnStartAsync()
     {
-        if (m_isBusy)
-            return;
-
-        m_isBusy = true;
-        m_status = "초기화 + 익명 로그인 중...";
-
         try
         {
-            await InitializeAndSignInAsync(profile);
-            m_status = $"로그인 성공 - PlayerId: {PlayerId}";
+            await InitializeAndSignInAsync(m_profile);
         }
         catch (Exception ex)
         {
-            m_status = $"로그인 실패 - {ex.Message}";
-        }
-        finally
-        {
-            m_isBusy = false;
+            // UniTaskVoid라 잡지 않으면 조용히 사라진다. 개별 인증 예외는 아래에서 이미 로그를
+            // 남기지만, UnityServices 초기화 실패는 여기서만 드러난다.
+            Debug.LogError($"[AuthBootstrap] 시작 시 로그인 실패: {ex.Message}");
         }
     }
 
@@ -164,8 +123,6 @@ public class AuthBootstrap : CommonManagerBase
                 $"[AuthBootstrap] UnityServices 초기화 완료 / env: {m_environmentName}, profile: {m_profile}"
             );
         }
-
-        RegisterEvents();
 
         if (!AuthenticationService.Instance.IsSignedIn)
         {
@@ -194,29 +151,10 @@ public class AuthBootstrap : CommonManagerBase
             OnSignedIn?.Invoke();
         }
     }
+    #endregion
 
-    /// <summary>
-    /// 닉네임 입력 규칙 검사 — 위반이면 사유 문자열, 통과면 null. (#249)
-    /// UGS는 길이·문자셋을 제한하지 않고 공백만 거절하며 그 응답도 불친절해, 규칙은 우리가 정한다.
-    /// </summary>
-    private static string ValidateNickname(string trimmed)
-    {
-        if (string.IsNullOrEmpty(trimmed))
-            return "닉네임을 입력해 주세요.";
-
-        foreach (char c in trimmed)
-        {
-            if (char.IsWhiteSpace(c))
-                return "닉네임에 공백을 쓸 수 없습니다.";
-        }
-
-        if (trimmed.Length > k_maxNicknameLength)
-            return $"닉네임은 {k_maxNicknameLength}자 이하여야 합니다.";
-
-        return null;
-    }
-
-    /// <summary>닉네임 변경 — 서버 반영에 성공했을 때만 로컬 캐시를 갱신한다. (#249)</summary>
+    #region 닉네임 (#249)
+    /// <summary>닉네임 변경 — 서버 반영에 성공했을 때만 로컬 캐시를 갱신한다.</summary>
     public async UniTask SetPlayerNameAsync(string name)
     {
         if (!IsSignedIn)
@@ -226,7 +164,7 @@ public class AuthBootstrap : CommonManagerBase
         if (trimmed == Nickname)
             return; // 변경 없음 — 조용히 넘어간다
 
-        string error = ValidateNickname(trimmed);
+        string error = NicknameRules.Validate(trimmed);
         if (error != null)
             throw new ArgumentException(error);
 
@@ -239,17 +177,81 @@ public class AuthBootstrap : CommonManagerBase
     }
 
     /// <summary>
-    /// 익명 계정을 정식 계정으로 승격 — 익명 로그인 상태를 **유지한 채** 자격증명을 붙인다. (#384)
+    /// 로그인 직후 로컬 캐시와 서버 닉네임을 맞춘다.
+    /// 캐시가 없으면 서버 값을 씨딩하고, 다르면 캐시를 정본으로 삼아 서버에 밀어넣는다 —
+    /// 세션 토큰이 지워져 PlayerId가 새로 발급된 경우의 복원 경로.
+    /// </summary>
+    private async UniTask RestoreCachedNicknameAsync()
+    {
+        // 연동된 계정은 서버가 정본 — 캐시를 덮어쓰기만 하고 서버로 밀지 않는다 (§4).
+        // 이 분기가 없으면 새 기기의 낡은 익명 캐시가 계정 닉네임을 덮어쓴다.
+        if (IsLinked)
+        {
+            CacheNickname();
+            return;
+        }
+
+        // 연동 여부를 모르는 상태(조회 실패)에서는 push하지 않는다 — 계정 닉네임을 덮어쓸 위험.
+        if (!m_accountStateKnown)
+            return;
+
+        string cached = PlayerPrefs.GetString(NicknamePrefKey, string.Empty);
+
+        if (string.IsNullOrEmpty(cached))
+        {
+            CacheNickname();
+            return;
+        }
+
+        if (cached == Nickname)
+            return; // 이미 일치 — 대부분의 재접속 경로, 네트워크 호출 없음
+
+        // 규칙 도입 이전 빌드나 수동 조작으로 남은 캐시가 그대로 서버에 반영되지 않게 한 번 더 검사한다.
+        string error = NicknameRules.Validate(cached);
+        if (error != null)
+        {
+            Debug.LogWarning($"[AuthBootstrap] 캐시된 닉네임이 규칙 위반이라 폐기: {error}");
+            PlayerPrefs.DeleteKey(NicknamePrefKey);
+            PlayerPrefs.Save();
+            return;
+        }
+
+        try
+        {
+            await AuthenticationService.Instance.UpdatePlayerNameAsync(cached);
+            Debug.Log($"[AuthBootstrap] 캐시된 닉네임 복원: {cached}");
+            OnNicknameChanged?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            // 복원 실패는 치명적이지 않다 — 서버 이름을 그대로 쓰고 다음 로그인에 재시도한다.
+            // 여기서 예외가 새어 나가면 호출부의 OnSignedIn이 실행되지 않아 로그인은 됐는데
+            // UI가 갱신되지 않는 상태로 남으므로, 주석의 의도대로 모든 예외를 삼킨다.
+            Debug.LogWarning($"[AuthBootstrap] 닉네임 복원 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>서버 닉네임을 로컬 캐시에 씨딩 — 서버가 정본인 경로에서만 쓴다 (§4).</summary>
+    private void CacheNickname()
+    {
+        if (string.IsNullOrEmpty(Nickname))
+            return;
+
+        PlayerPrefs.SetString(NicknamePrefKey, Nickname);
+        PlayerPrefs.Save();
+    }
+    #endregion
+
+    #region 계정 연동 (#384)
+    /// <summary>
+    /// 익명 계정을 정식 계정으로 승격 — 익명 로그인 상태를 **유지한 채** 자격증명을 붙인다.
     /// 신규 SignUp으로 처리하면 새 PlayerId가 발급돼 닉네임이 유실된다.
     /// </summary>
     public async UniTask LinkAccountAsync(string username, string password)
     {
         if (!IsSignedIn)
             throw new InvalidOperationException("로그인 후에 연동할 수 있습니다.");
-        if (IsNetworkConnected)
-            throw new InvalidOperationException("세션 참가 중에는 계정을 연동할 수 없습니다.");
-        if (CanSignOut != null && !CanSignOut())
-            throw new InvalidOperationException("세션 전환 중에는 계정을 연동할 수 없습니다.");
+        ThrowIfAccountLocked("계정을 연동할");
         if (IsLinked)
             throw new InvalidOperationException("이미 계정이 연동되어 있습니다.");
 
@@ -269,7 +271,11 @@ public class AuthBootstrap : CommonManagerBase
         // 승격 순간만 캐시 → 서버 1회 (§4). 로그인 때의 push가 조용히 실패했을 수 있어
         // 계정에 이름을 남기는 마지막 기회다.
         string cached = PlayerPrefs.GetString(NicknamePrefKey, string.Empty);
-        if (!string.IsNullOrEmpty(cached) && cached != Nickname && ValidateNickname(cached) == null)
+        if (
+            !string.IsNullOrEmpty(cached)
+            && cached != Nickname
+            && NicknameRules.Validate(cached) == null
+        )
         {
             try
             {
@@ -284,16 +290,13 @@ public class AuthBootstrap : CommonManagerBase
     }
 
     /// <summary>
-    /// 아이디로 로그인 — 새 기기(또는 토큰이 지워진 기기)의 경로. (#384)
+    /// 아이디로 로그인 — 새 기기(또는 토큰이 지워진 기기)의 경로.
     /// m_signInOnStart로 이미 익명 로그인된 상태라 SignOut이 **선행**이어야 한다 —
     /// 안 그러면 ClientInvalidUserState가 난다.
     /// </summary>
     public async UniTask SignInWithAccountAsync(string username, string password)
     {
-        if (IsNetworkConnected)
-            throw new InvalidOperationException("세션 참가 중에는 계정을 바꿀 수 없습니다.");
-        if (CanSignOut != null && !CanSignOut())
-            throw new InvalidOperationException("세션 전환 중에는 계정을 바꿀 수 없습니다.");
+        ThrowIfAccountLocked("계정을 바꿀");
 
         string id = username?.Trim() ?? string.Empty;
         string pw = password ?? string.Empty;
@@ -336,12 +339,7 @@ public class AuthBootstrap : CommonManagerBase
         m_accountUsername = id;
         m_accountStateKnown = true;
 
-        // 연동 계정은 서버가 정본 — 캐시를 덮어쓴다 (§4)
-        if (!string.IsNullOrEmpty(Nickname))
-        {
-            PlayerPrefs.SetString(NicknamePrefKey, Nickname);
-            PlayerPrefs.Save();
-        }
+        CacheNickname(); // 연동 계정은 서버가 정본 — 캐시를 덮어쓴다 (§4)
 
         Debug.Log($"[AuthBootstrap] 계정 로그인 완료 / playerId: {PlayerId}");
         OnSignedIn?.Invoke();
@@ -349,99 +347,7 @@ public class AuthBootstrap : CommonManagerBase
     }
 
     /// <summary>
-    /// 이 기기에서 계정을 분리하고 새 익명 계정으로 시작한다. (#444)
-    /// **"연동 해제"가 아니다** — UGS가 username/password 제거를 지원하지 않아 서버의 계정과
-    /// 아이디는 그대로 남고, 이 기기만 새 PlayerId로 떨어져 나온다 (account-link.md 결정 (e)).
-    /// ClearSessionToken()은 로그아웃·토큰 삭제까지만 하고 재로그인을 하지 않는다. AuthBootstrap은
-    /// 상주 오브젝트라 m_signInOnStart도 다시 돌지 않으므로, 둘을 한 쌍으로 묶어야
-    /// 로그아웃 상태로 방치되지 않는다.
-    /// </summary>
-    public async UniTask StartNewAnonymousAccountAsync()
-    {
-        if (IsNetworkConnected)
-            throw new InvalidOperationException("세션 참가 중에는 계정을 바꿀 수 없습니다.");
-        if (CanSignOut != null && !CanSignOut())
-            throw new InvalidOperationException("세션 전환 중에는 계정을 바꿀 수 없습니다.");
-        if (UnityServices.State != ServicesInitializationState.Initialized)
-            throw new InvalidOperationException("로그인 후에 계정을 바꿀 수 있습니다.");
-
-        // 재로그인보다 **먼저** 지운다. 순서가 뒤집히면 RestoreCachedNicknameAsync의 익명 경로가
-        // 옛 계정 닉네임을 새 익명 계정에 심는다 (§4).
-        PlayerPrefs.DeleteKey(NicknamePrefKey);
-        PlayerPrefs.Save();
-
-        // 가드를 새로 만들지 않는다 — 위 검사를 통과했고 사이에 await가 없어 상태가 바뀔 수 없으므로
-        // 기존 경로를 그대로 재사용한다 (내부 가드는 중복이지만 조용한 return으로 빠지지 않는다).
-        ClearSessionToken(); // SignOut + 토큰 삭제 + 연동 상태 초기화 + OnSignedOut
-
-        await InitializeAndSignInAsync(m_profile); // 토큰이 없어 새 PlayerId가 발급된다
-        Debug.Log($"[AuthBootstrap] 새 익명 계정으로 전환 / playerId: {PlayerId}");
-    }
-
-    public void SignOut(bool clearCredentials = false)
-    {
-        if (IsNetworkConnected)
-        {
-            m_status = "세션 참가 중에는 로그아웃 불가";
-            Debug.LogWarning("[AuthBootstrap] 연결 중 SignOut 거부 - 세션 이탈 후 재시도.");
-            return;
-        }
-
-        if (CanSignOut != null && !CanSignOut())
-        {
-            m_status = "세션 전환 중 로그아웃 불가";
-            Debug.LogWarning("[AuthBootstrap] 세션 전환 중 SignOut 거부");
-            return;
-        }
-
-        if (!IsSignedIn)
-            return;
-
-        AuthenticationService.Instance.SignOut(clearCredentials);
-
-        m_accountUsername = string.Empty;
-        m_accountStateKnown = false;
-
-        OnSignedOut?.Invoke();
-        Debug.Log($"[AuthBootstrap] SignOut 완료");
-    }
-
-    public void ClearSessionToken()
-    {
-        if (IsNetworkConnected)
-        {
-            m_status = "세션 참가 중 토큰 삭제 불가";
-            Debug.LogWarning(
-                "[AuthBootstrap] 연결 중 ClearSessionToken 거부 - 세션 이탈 후 재시도."
-            );
-            return;
-        }
-
-        if (CanSignOut != null && !CanSignOut())
-        {
-            m_status = "세션 전환 중 토큰 삭제 불가";
-            Debug.LogWarning("[AuthBootstrap] 연결 중 ClearSessionToken 거부");
-            return;
-        }
-
-        if (UnityServices.State != ServicesInitializationState.Initialized)
-            return;
-
-        if (IsSignedIn)
-        {
-            m_accountUsername = string.Empty;
-            m_accountStateKnown = false;
-
-            AuthenticationService.Instance.SignOut();
-            OnSignedOut?.Invoke();
-        }
-
-        AuthenticationService.Instance.ClearSessionToken();
-        Debug.Log($"[AuthBootstrap] ClearSessionToken 완료");
-    }
-
-    /// <summary>
-    /// 서버에서 연동 상태를 확인한다 — 로그인당 1회. (#384)
+    /// 서버에서 연동 상태를 확인한다 — 로그인당 1회.
     /// §4 우선순위가 이 값에 의존하므로 RestoreCachedNicknameAsync보다 **먼저** 불러야 한다.
     /// </summary>
     private async UniTask RefreshAccountStateAsync()
@@ -466,162 +372,104 @@ public class AuthBootstrap : CommonManagerBase
             Debug.LogWarning($"[AuthBootstrap] 연동 상태 조회 실패: {ex.Message}");
         }
     }
+    #endregion
+
+    #region 로그아웃 · 계정 전환
+    /// <summary>
+    /// 계정을 건드려도 되는 상태인가 — 불가하면 사유 문장, 가능하면 null.
+    /// 세션에 참가한 채 PlayerId가 바뀌면 로비·Vivox가 옛 ID를 들고 어긋나고,
+    /// 세션 전환 중(CanSignOut)에도 같은 창이 열린다. 두 검사가 계정 조작 전부에 붙으므로 여기 모은다.
+    /// </summary>
+    private string GetAccountLockReason(string action)
+    {
+        if (IsNetworkConnected)
+            return $"세션 참가 중에는 {action} 수 없습니다.";
+
+        if (CanSignOut != null && !CanSignOut())
+            return $"세션 전환 중에는 {action} 수 없습니다.";
+
+        return null;
+    }
+
+    /// <summary>사유 문장이 그대로 AuthPanel에 표시된다 — 예외 메시지가 곧 UI 문구다. (#384)</summary>
+    private void ThrowIfAccountLocked(string action)
+    {
+        string reason = GetAccountLockReason(action);
+        if (reason != null)
+            throw new InvalidOperationException(reason);
+    }
 
     /// <summary>
-    /// 로그인 직후 로컬 캐시와 서버 닉네임을 맞춘다. (#249)
-    /// 캐시가 없으면 서버 값을 씨딩하고, 다르면 캐시를 정본으로 삼아 서버에 밀어넣는다 —
-    /// 세션 토큰이 지워져 PlayerId가 새로 발급된 경우의 복원 경로.
+    /// 이 기기에서 계정을 분리하고 새 익명 계정으로 시작한다. (#444)
+    /// **"연동 해제"가 아니다** — UGS가 username/password 제거를 지원하지 않아 서버의 계정과
+    /// 아이디는 그대로 남고, 이 기기만 새 PlayerId로 떨어져 나온다 (account-link.md 결정 (e)).
+    /// ClearSessionToken()은 로그아웃·토큰 삭제까지만 하고 재로그인을 하지 않는다. AuthBootstrap은
+    /// 상주 오브젝트라 m_signInOnStart도 다시 돌지 않으므로, 둘을 한 쌍으로 묶어야
+    /// 로그아웃 상태로 방치되지 않는다.
     /// </summary>
-    private async UniTask RestoreCachedNicknameAsync()
+    public async UniTask StartNewAnonymousAccountAsync()
     {
-        // 연동된 계정은 서버가 정본 — 캐시를 덮어쓰기만 하고 서버로 밀지 않는다 (§4).
-        // 이 분기가 없으면 새 기기의 낡은 익명 캐시가 계정 닉네임을 덮어쓴다.
-        if (IsLinked)
-        {
-            if (!string.IsNullOrEmpty(Nickname))
-            {
-                PlayerPrefs.SetString(NicknamePrefKey, Nickname);
-                PlayerPrefs.Save();
-            }
-            return;
-        }
+        ThrowIfAccountLocked("계정을 바꿀");
+        if (UnityServices.State != ServicesInitializationState.Initialized)
+            throw new InvalidOperationException("로그인 후에 계정을 바꿀 수 있습니다.");
 
-        // 연동 여부를 모르는 상태(조회 실패)에서는 push하지 않는다 — 계정 닉네임을 덮어쓸 위험.
-        if (!m_accountStateKnown)
-            return;
+        // 재로그인보다 **먼저** 지운다. 순서가 뒤집히면 RestoreCachedNicknameAsync의 익명 경로가
+        // 옛 계정 닉네임을 새 익명 계정에 심는다 (§4).
+        PlayerPrefs.DeleteKey(NicknamePrefKey);
+        PlayerPrefs.Save();
 
-        string cached = PlayerPrefs.GetString(NicknamePrefKey, string.Empty);
+        // 가드를 새로 만들지 않는다 — 위 검사를 통과했고 사이에 await가 없어 상태가 바뀔 수 없으므로
+        // 기존 경로를 그대로 재사용한다 (내부 가드는 중복이지만 조용한 return으로 빠지지 않는다).
+        ClearSessionToken(); // SignOut + 토큰 삭제 + 연동 상태 초기화 + OnSignedOut
 
-        if (string.IsNullOrEmpty(cached))
-        {
-            if (!string.IsNullOrEmpty(Nickname))
-            {
-                PlayerPrefs.SetString(NicknamePrefKey, Nickname);
-                PlayerPrefs.Save();
-            }
-            return;
-        }
-
-        if (cached == Nickname)
-            return; // 이미 일치 — 대부분의 재접속 경로, 네트워크 호출 없음
-
-        // 규칙 도입 이전 빌드나 수동 조작으로 남은 캐시가 그대로 서버에 반영되지 않게 한 번 더 검사한다.
-        string error = ValidateNickname(cached);
-        if (error != null)
-        {
-            Debug.LogWarning($"[AuthBootstrap] 캐시된 닉네임이 규칙 위반이라 폐기: {error}");
-            PlayerPrefs.DeleteKey(NicknamePrefKey);
-            PlayerPrefs.Save();
-            return;
-        }
-
-        try
-        {
-            await AuthenticationService.Instance.UpdatePlayerNameAsync(cached);
-            Debug.Log($"[AuthBootstrap] 캐시된 닉네임 복원: {cached}");
-            OnNicknameChanged?.Invoke();
-        }
-        catch (Exception ex)
-        {
-            // 복원 실패는 치명적이지 않다 — 서버 이름을 그대로 쓰고 다음 로그인에 재시도한다.
-            // 여기서 예외가 새어 나가면 호출부의 OnSignedIn이 실행되지 않아 로그인은 됐는데
-            // UI가 갱신되지 않는 상태로 남으므로, 주석의 의도대로 모든 예외를 삼킨다.
-            Debug.LogWarning($"[AuthBootstrap] 닉네임 복원 실패: {ex.Message}");
-        }
+        await InitializeAndSignInAsync(m_profile); // 토큰이 없어 새 PlayerId가 발급된다
+        Debug.Log($"[AuthBootstrap] 새 익명 계정으로 전환 / playerId: {PlayerId}");
     }
 
-    [Tooltip("OnGUI 디버그 패널 표시 — 테스트 씬 수동 조작용. 정식 UI는 AuthPanel (#247)")]
-    [SerializeField]
-    private bool m_showDebugGui;
-
-    [SerializeField]
-    private float m_guiTopOffset = 10f;
-
-    private string m_nicknameInput = string.Empty;
-
-    private void OnGUI()
+    public void SignOut(bool clearCredentials = false)
     {
-        if (!m_showDebugGui)
+        string reason = GetAccountLockReason("로그아웃할");
+        if (reason != null)
+        {
+            Debug.LogWarning($"[AuthBootstrap] SignOut 거부 — {reason}");
             return;
-        if (IsNetworkConnected)
+        }
+
+        if (!IsSignedIn)
             return;
 
-        GUILayout.BeginArea(new Rect(700, m_guiTopOffset, 380, 360));
+        AuthenticationService.Instance.SignOut(clearCredentials);
 
-        GUILayout.Label("Authentication (익명) — 상태");
+        m_accountUsername = string.Empty;
+        m_accountStateKnown = false;
 
-        bool initialized = UnityServices.State == ServicesInitializationState.Initialized;
-        GUILayout.Label($"초기화됨: {initialized}");
-        GUILayout.Label($"IsSignedIn: {IsSignedIn}");
-        GUILayout.Label($"PlayerId: {(string.IsNullOrEmpty(PlayerId) ? "(없음)" : PlayerId)}");
-        GUILayout.Label($"Nickname: {(string.IsNullOrEmpty(Nickname) ? "(없음)" : Nickname)}");
-        GUILayout.Label($"PlayerName(전체): {PlayerName}");
-
-        GUILayout.BeginHorizontal();
-        m_nicknameInput = GUILayout.TextField(m_nicknameInput, 128);
-        GUI.enabled = !m_isBusy && IsSignedIn;
-        if (GUILayout.Button("적용", GUILayout.Width(60)))
-            ApplyNicknameAsync(m_nicknameInput).Forget();
-        GUI.enabled = true;
-        GUILayout.EndHorizontal();
-
-        GUILayout.Label(
-            $"SessionTokenExists: {(initialized ? SessionTokenExists.ToString() : "(미초기화)")}"
-        );
-
-        GUILayout.Label($"연결됨(세션/NGO): {IsNetworkConnected}");
-        GUILayout.Space(8);
-
-        bool canSignOut = !m_isBusy && !IsNetworkConnected && (CanSignOut == null || CanSignOut());
-
-        GUI.enabled = !m_isBusy;
-        if (GUILayout.Button("Sign In (init + 익명 로그인)"))
-        {
-            HandleSignInAsync(string.IsNullOrWhiteSpace(m_profile) ? null : m_profile).Forget();
-        }
-
-        GUI.enabled = canSignOut;
-        if (GUILayout.Button("Sign Out"))
-        {
-            SignOut();
-        }
-
-        if (GUILayout.Button("New Player (로그아웃 + 토큰 삭제 → 새 PlayerId)"))
-        {
-            ClearSessionToken();
-        }
-
-        GUI.enabled = true;
-
-        if (IsNetworkConnected)
-        {
-            GUILayout.Label("*세션 참가 중*");
-        }
-
-        GUILayout.Space(8);
-        GUILayout.Label(m_status);
-
-        GUILayout.EndArea();
+        OnSignedOut?.Invoke();
+        Debug.Log("[AuthBootstrap] SignOut 완료");
     }
 
-    private async UniTaskVoid ApplyNicknameAsync(string name)
+    public void ClearSessionToken()
     {
-        if (m_isBusy)
+        string reason = GetAccountLockReason("토큰을 삭제할");
+        if (reason != null)
+        {
+            Debug.LogWarning($"[AuthBootstrap] ClearSessionToken 거부 — {reason}");
+            return;
+        }
+
+        if (UnityServices.State != ServicesInitializationState.Initialized)
             return;
 
-        m_isBusy = true;
-        try
+        if (IsSignedIn)
         {
-            await SetPlayerNameAsync(name);
-            m_status = $"닉네임 적용: {PlayerName}";
+            m_accountUsername = string.Empty;
+            m_accountStateKnown = false;
+
+            AuthenticationService.Instance.SignOut();
+            OnSignedOut?.Invoke();
         }
-        catch (Exception ex)
-        {
-            m_status = $"닉네임 실패 - {ex.GetType().Name}: {ex.Message}";
-        }
-        finally
-        {
-            m_isBusy = false;
-        }
+
+        AuthenticationService.Instance.ClearSessionToken();
+        Debug.Log("[AuthBootstrap] ClearSessionToken 완료");
     }
+    #endregion
 }

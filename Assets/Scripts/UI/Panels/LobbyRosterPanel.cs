@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TMPro;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
@@ -29,6 +30,11 @@ public class LobbyRosterPanel : PanelBase
 
     [Tooltip("세션이 없을 때(씬 직접 Play) 쓸 정원 표시값")]
     [SerializeField] private int m_fallbackMaxSlots = 6;
+
+    [Header("음성 (#430)")]
+    [SerializeField] private TextMeshProUGUI m_voiceStatusText; // 내 음성 연결 상태
+
+    [SerializeField] private TextMeshProUGUI m_radioKeyText; // 무전 키 안내
 
     private readonly List<LobbyRosterRowView> m_rows = new List<LobbyRosterRowView>();
 
@@ -72,7 +78,14 @@ public class LobbyRosterPanel : PanelBase
         m_roster.OnListReady += Rebuild;
 
         if (Vivox != null)
+        {
             Vivox.OnSpeakingChanged += HandleSpeakingChanged;
+            Vivox.OnVoiceStateChanged += HandleVoiceStateChanged;
+        }
+
+        // 구독 전에 이미 정해진 상태를 한 번 반영한다 — 로비에 닿을 때는 보통 연결이 이미 끝나 있다
+        RefreshVoiceStatus();
+        RefreshRadioKey();
 
         // 로스터 스폰이 패널보다 빨랐으면 OnListReady를 놓쳤으므로 지금 그린다.
         // 아직 스폰 전이어도 빈 슬롯은 그려 둔다 — 정원이 먼저 보이는 게 낫다.
@@ -88,7 +101,10 @@ public class LobbyRosterPanel : PanelBase
         }
 
         if (Vivox != null)
+        {
             Vivox.OnSpeakingChanged -= HandleSpeakingChanged;
+            Vivox.OnVoiceStateChanged -= HandleVoiceStateChanged;
+        }
     }
 
     protected override void OnDestroy()
@@ -175,5 +191,26 @@ public class LobbyRosterPanel : PanelBase
             if (row != null && !string.IsNullOrEmpty(row.PlayerId))
                 row.SetSpeaking(Vivox.IsSpeaking(row.PlayerId));
         }
+    }
+
+    private void HandleVoiceStateChanged(EVoiceState _) => RefreshVoiceStatus();
+
+    // 상태별 문구는 VivoxManager.ToLabel이 소유한다 — 같은 문장을 UI마다 다시 쓰지 않는다.
+    // 표시까지가 이 이슈의 범위다(재시도 버튼은 별건) — 지금은 로그인이 실패해도 알 방법이 없다. (#430)
+    private void RefreshVoiceStatus()
+    {
+        if (m_voiceStatusText == null)
+            return;
+
+        m_voiceStatusText.text = Vivox != null ? VivoxManager.ToLabel(Vivox.VoiceState) : string.Empty;
+    }
+
+    // 켜질 때 한 번만 세운다 — 키 리바인딩 경로가 없어 도중에 바뀌지 않는다 (settings-ui.md Phase 2)
+    private void RefreshRadioKey()
+    {
+        if (m_radioKeyText == null)
+            return;
+
+        m_radioKeyText.text = Vivox != null ? $"무전: [{Vivox.PushToTalkBinding}]" : string.Empty;
     }
 }

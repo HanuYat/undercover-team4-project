@@ -27,10 +27,6 @@ public class PlayerHeldItemView : NetworkBehaviour
     /// <summary>손 본 앵커 — 손에서 뻗어 나가는 표현(밧줄 선 #269 등)이 시작점으로 쓴다. 미지정이면 null.</summary>
     public Transform HandAnchor => m_handAnchor;
 
-    // 아이템 참조 해석 대기 상한(프레임). 스폰 메시지와 NetworkVariable 도착 순서 경쟁으로
-    // 참조가 즉시 안 풀릴 수 있다 — PlayerLoadout.ResolveAndRebuildAsync와 같은 방침.
-    private const int k_maxResolveWaitFrames = 120;
-
     // 장착 아이템 — 빈손이면 default(NetworkObjectId 0). 오너가 쓰고 전 피어가 읽는다.
     private readonly NetworkVariable<NetworkObjectReference> m_equipped =
         new NetworkVariable<NetworkObjectReference>(
@@ -122,19 +118,15 @@ public class PlayerHeldItemView : NetworkBehaviour
             return;
         }
 
-        for (
-            int frame = 0;
-            frame < k_maxResolveWaitFrames && !itemRef.TryGet(out _);
-            frame++
-        )
-        {
-            await UniTask.Yield(PlayerLoopTiming.Update);
+        // 대기 중 디스폰됐거나 장착이 또 바뀌었으면 이 갱신은 폐기한다.
+        EResolveResult result = await NetworkRefResolver.WaitAsync(
+            itemRef,
+            () => this != null && IsSpawned && version == m_refreshVersion
+        );
 
-            // 대기 중 디스폰됐거나 장착이 또 바뀌었으면 이 갱신은 폐기한다.
-            if (this == null || !IsSpawned || version != m_refreshVersion)
-            {
-                return;
-            }
+        if (result != EResolveResult.Resolved)
+        {
+            return; // 폐기됐거나 상한까지 못 풀었다 — 빈손처럼 둔다
         }
 
         if (
@@ -165,11 +157,11 @@ public class PlayerHeldItemView : NetworkBehaviour
         }
 
         // 오너 화면에서는 1인칭 손 표시(#45)만 보여야 하므로 캐릭터 몸과 같은 OwnBody 레이어로 가린다.
-        // 손 본은 PlayerMovement의 m_ownBodyRoot(스킨드 메시) 바깥이라 레이어가 자동 상속되지 않는다 —
+        // 손 본은 PlayerLook의 m_ownBodyRoot(스킨드 메시) 바깥이라 레이어가 자동 상속되지 않는다 —
         // 여기서 명시적으로 찍어야 내 화면에서 3인칭 모델과 1인칭 뷰모델이 이중으로 보이지 않는다.
         if (IsOwner)
         {
-            PlayerMovement.SetLayerRecursively(
+            PlayerLook.SetLayerRecursively(
                 m_heldModelInstance.transform,
                 LayerMask.NameToLayer("OwnBody")
             );

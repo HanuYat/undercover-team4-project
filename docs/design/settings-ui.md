@@ -16,6 +16,7 @@
 
 ### 범위 밖 (후속 이슈 후보 = Phase 2)
 - 무전/근접 음성 **분리** 볼륨, 마이크(입력) 감도
+  - **갱신 (#430, 2026-08-01):** 마이크 **음소거 토글**은 Phase 2를 기다리지 않고 구현했다 — `GameSettings.MicMuted` + 입력 장치 뮤트. 아래 결정 (i) 참고. 입력 **감도·장치 선택**은 여전히 Phase 2다(Vivox 입력 장치 열거·전환 경로가 따로 필요).
 - 그래픽 옵션(창모드·해상도·품질)
 - 언어 선택 (Localization 인프라는 이미 있음 — 저비용 추가 가능)
 - 키 리바인딩
@@ -32,6 +33,7 @@
 | (f) 저장소 형태 | `GameSettings` **static 클래스** (`Assets/Scripts/Core/`) | 씬 오브젝트·라이프사이클이 필요 없는 로컬 값. [SessionFlow](../../Assets/Scripts/Network/SessionFlow.cs)와 같은 static 진입점 선례. R2(매니저 `static Instance` 금지) 위반이 아니며, R3(App 등록) 기준의 "씬 서비스"도 아니다 |
 | (g) 감도 의미 | 설정값은 **배율** — `LookInput × 프리팹 기준값 × 설정 배율` | 프리팹/씬의 직렬화 값을 건드리지 않고, "기준값 × 사용자 취향"으로 의미가 분리된다 |
 | (h) 왜곡 구간 음성 음량 | **이 이슈에서 함께 처리** — 음성 음량을 Vivox 전역 API와 **살아 있는 오디오 탭 양쪽**에 적용 | 왜곡 중에는 Vivox 믹스가 죽고 우리 `AudioSource`로 재생돼 전역 API가 통하지 않는다. 새 탭의 기본 `volume`은 1이므로, 방치하면 **음성을 0으로 내려둔 사람도 먹통 이벤트 순간 목소리가 원래 크기로 되살아난다** — 슬라이더 무반응보다 나쁜, 음소거가 저절로 풀리는 동작 |
+| (i) 마이크 음소거 (#430) | **입력 장치 뮤트**(`MuteInputDevice`)로 구현 — 송신 모드로 구현하지 않는다. 음소거 중 PTT를 눌러도 음소거가 이기고 **안내만** 띄운다 | 송신 모드(`SetChannelTransmissionModeAsync`)는 PTT가 이미 쓴다 — 그걸로 음소거를 구현하면 무전 키를 누르는 순간 음소거가 풀린다. 입력 장치 뮤트는 PTT 경로와 겹치지 않아 두 상태가 자연히 독립이다(그래서 `SetRadioTransmit`에 가드를 넣지 않는다). 푸시투언뮤트는 도입하지 않는다 |
 
 ## 3. 구조
 
@@ -39,9 +41,12 @@
 GameSettings (Core · static)                     ← PlayerPrefs 읽기/쓰기 + 즉시 적용
    ├─ MouseSensitivity  0.2~3.0 (기본 1.0)  ──▶ PlayerMovement가 매 프레임 읽음 (구독 없음)
    ├─ MasterVolume      0~1     (기본 1.0)  ──▶ AudioListener.volume
-   └─ VoiceVolume       0~1     (기본 1.0)  ──▶ VivoxManager.SetVoiceVolume()
-                                                  ├─ 정상 경로: Vivox 전역 출력 볼륨
-                                                  └─ 왜곡 경로: 살아 있는 오디오 탭 AudioSource.volume
+   ├─ VoiceVolume       0~1     (기본 1.0)  ──▶ VivoxManager.ApplyVoiceVolume()
+   │                                              ├─ 정상 경로: Vivox 전역 출력 볼륨
+   │                                              └─ 왜곡 경로: 살아 있는 오디오 탭 AudioSource.volume
+   └─ MicMuted          bool    (기본 false) ─▶ VivoxManager.ApplyMicMute()   (#430)
+                                                  ├─ Vivox 입력 장치 Mute/Unmute (PTT와 독립)
+                                                  └─ OnMicMutedChanged ─▶ 설정 창 토글 · HUD 아이콘 · 로비 로스터 보고
 
 SettingsPanel : PanelBase                        ← 슬라이더 3 + 값 표시 + [닫기] [기본값 복원]
 SettingsCanvas.prefab                            ← Title · Lobby · Shop · Main 배치
@@ -50,6 +55,7 @@ SettingsCanvas.prefab                            ← Title · Lobby · Shop · M
 - **적용 방향은 한 방향뿐** — 슬라이더 → `GameSettings` → 각 싱크. 싱크가 설정값을 되쓰는 경로는 없다.
 - **감도는 이벤트를 쓰지 않는다.** `PlayerMovement`가 매 프레임 static 프로퍼티를 읽는다(필드 읽기 1회). 구독/해제가 없으므로 플레이어 스폰·씬 전환·오너십 경계에서 구독이 새거나 빠지는 사고가 원천적으로 없다.
 - **볼륨은 이벤트가 필요 없다.** 싱크(`AudioListener`·Vivox)가 전역이라 setter에서 바로 적용된다.
+- **예외 — 마이크 음소거만 이벤트를 쓴다 (#430).** 적용은 볼륨과 같이 전역 API 한 방향이지만, 이 항목은 **설정 창 토글과 토글 키 두 경로로 바뀌고 UI가 상태를 되읽어야** 한다(한쪽에서 바꾸면 다른 쪽 표시가 따라와야 함). 그래서 `GameSettings.OnMicMutedChanged`가 있고, 구독자는 표시만 갱신한다 — 값의 출처는 여전히 `GameSettings` 하나다. static 이벤트이므로 `Load()`에서 `null`로 리셋한다(도메인 리로드 OFF에서 죽은 구독자가 남는다).
 - **시작 시 적용**: `[RuntimeInitializeOnLoadMethod]`로 로드+적용. 도메인 리로드 OFF 대비 static 리셋은 [App](../../Assets/Scripts/Core/App.cs)·`AppBootstrap` 방침과 동일하게 둔다.
 
 ### ESC 스택에서의 위치

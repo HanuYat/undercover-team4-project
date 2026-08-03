@@ -68,8 +68,7 @@ public class Taser : ItemBase, IAimedWeapon
     public override void Use(GameObject aimTarget)
     {
         // 조준 기준은 든 플레이어의 AimOrigin(카메라) — 아이템은 줍기/버리기로 부모가 바뀌므로
-        // 캐시하지 않고 사용 시점에 해석한다 (Scanner.IsInRange 관례).
-        PlayerInteractor interactor = GetComponentInParent<PlayerInteractor>();
+        PlayerInteractor interactor = Holder;
         if (interactor == null)
         {
             Debug.LogWarning("Taser: PlayerInteractor를 찾지 못함 — 조준 기준 없음", this);
@@ -174,7 +173,7 @@ public class Taser : ItemBase, IAimedWeapon
         }
 
         // 쏜 사람을 위협으로 넘긴다 — 기절이 풀리면 이 사람에게서 도망친다 (#269)
-        PlayerInteractor shooter = GetComponentInParent<PlayerInteractor>();
+        PlayerInteractor shooter = Holder;
         target.EnterStunned(shooter != null ? shooter.transform : null);
         NotifyOwner($"테이저 명중: {target.name} ({target.StunSeconds}초 기절)");
     }
@@ -214,7 +213,7 @@ public class Taser : ItemBase, IAimedWeapon
 
         hit = s_aimBuffer[index];
 
-        // 콜라이더가 루트의 자식일 수 있으므로 부모까지 탐색한다 (Handcuffs.ResolveTarget과 동일 관례).
+        // 콜라이더가 루트의 자식일 수 있으므로 부모까지 탐색한다 (Rope.ResolveTarget과 동일 관례).
         // 벽·소품을 맞췄으면 그대로 빗나감이고, 동료를 맞췄으면 아군 오사다 (#252).
         NpcController npc = hit.collider.GetComponentInParent<NpcController>();
         if (npc == null)
@@ -268,7 +267,7 @@ public class Taser : ItemBase, IAimedWeapon
     /// </summary>
     private bool IsOriginPlausible(Vector3 origin)
     {
-        PlayerInteractor holder = GetComponentInParent<PlayerInteractor>();
+        PlayerInteractor holder = Holder;
         if (holder == null)
         {
             return false; // 아무에게도 안 들린 아이템이 쏠 수는 없다
@@ -325,18 +324,4 @@ public class Taser : ItemBase, IAimedWeapon
         // 전체 쿨다운과 경과분을 함께 넘겨 중간부터 잇는다.
         NotifyChannelGaugeStart(m_cooldownSeconds, m_cooldownSeconds - remaining);
     }
-
-    // ---- 오너 로그 피드백 ----
-
-    // 판정 로그는 서버에서 찍히므로 원격 클라 오너는 결과를 볼 수 없다 — 오너 콘솔에도 같은 로그를 전달한다.
-    // Scanner.NotifyOwner / PlayerEscorter.NotifyOwner와 동일 패턴 (#91).
-    private void NotifyOwner(string message)
-    {
-        Debug.Log(message); // 서버(호스트)·오프라인 콘솔
-        if (IsSpawned && IsServer && !IsOwner)
-            OwnerLogRpc(message); // 원격 클라가 오너인 경우에만 전달 (호스트 오너는 위에서 이미 찍음)
-    }
-
-    [Rpc(SendTo.Owner)]
-    private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
 }

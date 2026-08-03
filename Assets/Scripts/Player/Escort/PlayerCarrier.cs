@@ -9,8 +9,8 @@ using UnityEngine;
 ///
 /// 요청·검증·상태는 서버가 갖되(PlayerEscorter 관례), <b>이동은 끌려가는 쪽 오너가 한다</b> —
 /// 플레이어 위치는 NetworkTransform 오너 권한이라 서버도 운반자도 남의 몸을 직접 못 옮긴다.
-/// 그래서 서버가 대상 오너에게 RPC로 추종 지시를 내리고, 오너의 PlayerMovement가
-/// <see cref="PlayerMovement.BeginDraggedFollow"/>로 따라간다. (오검거 호송 #279와 같은 구조)
+/// 그래서 서버가 대상 오너에게 RPC로 추종 지시를 내리고, 오너의 PlayerTowedMotion이
+/// <see cref="PlayerTowedMotion.BeginDraggedFollow"/>로 따라간다. (오검거 호송 #279와 같은 구조)
 ///
 /// 복구는 운반이 아니라 본부 부활 장치(<see cref="HqRevivalDevice"/>)가 한다 — 여기는 옮기기만 한다.
 /// </summary>
@@ -30,7 +30,7 @@ public class PlayerCarrier : NetworkBehaviour
 
     private PlayerInteractor m_interactor;
     private PlayerIncapacitation m_incapacitation;
-    private PlayerMovement m_movement;
+    private PlayerTowedMotion m_towed;
     private PlayerEscorter m_escorter; // 밧줄 끌기와 동시에 못 하게 막는 게이트. 없을 수 있다(테스트 구성)
     private PlayerLoadout m_loadout; // 밧줄 소지 검증 — 위조 RPC 방어 (#369 관례)
 
@@ -88,7 +88,7 @@ public class PlayerCarrier : NetworkBehaviour
     {
         m_interactor = GetComponent<PlayerInteractor>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
-        m_movement = GetComponent<PlayerMovement>();
+        m_towed = GetComponent<PlayerTowedMotion>();
         m_escorter = GetComponent<PlayerEscorter>();
         m_loadout = GetComponent<PlayerLoadout>();
     }
@@ -274,13 +274,13 @@ public class PlayerCarrier : NetworkBehaviour
             if (IsSpawned)
                 EndDraggedRpc();
             else
-                m_movement?.EndDraggedFollow(); // 오프라인 Play 테스트 폴백
+                m_towed?.EndDraggedFollow(); // 오프라인 Play 테스트 폴백
             return;
         }
 
         if (!IsSpawned)
         {
-            m_movement?.BeginDraggedFollow(carrier.transform); // 오프라인 폴백
+            m_towed?.BeginDraggedFollow(carrier.transform); // 오프라인 폴백
             return;
         }
 
@@ -293,16 +293,16 @@ public class PlayerCarrier : NetworkBehaviour
     [Rpc(SendTo.Owner)]
     private void BeginDraggedRpc(NetworkObjectReference carrierRef)
     {
-        if (m_movement == null)
+        if (m_towed == null)
             return;
         if (!carrierRef.TryGet(out NetworkObject carrierObj))
             return; // 운반자가 이미 디스폰 — 서버의 거리 검사가 곧 운반을 끝낸다
 
-        m_movement.BeginDraggedFollow(carrierObj.transform);
+        m_towed.BeginDraggedFollow(carrierObj.transform);
     }
 
     [Rpc(SendTo.Owner)]
-    private void EndDraggedRpc() => m_movement?.EndDraggedFollow();
+    private void EndDraggedRpc() => m_towed?.EndDraggedFollow();
 
     // 끌고 있는 대상 참조 동기화 — 서버(또는 오프라인)에서만 호출된다. (PlayerEscorter.SetTethered 관례)
     private void SetCarriedRef(PlayerCarrier target)
@@ -358,15 +358,12 @@ public class PlayerCarrier : NetworkBehaviour
     // 끌려가는 쪽이 여전히 기능 정지 상태인가 — Update의 부활 감지용(서버·오프라인 실참조).
     private bool IsDeadTarget => m_incapacitation != null && m_incapacitation.IsDead;
 
-    private bool IsInRange(PlayerCarrier target)
-    {
-        float range = m_interactor != null ? m_interactor.Range : k_fallbackRange;
-        Vector3 origin = m_interactor != null ? m_interactor.AimOrigin.position : transform.position;
-
-        // 사거리 + 가시선 — 거리만 보면 위조 RPC로 벽 너머 운반이 된다 (#360, PlayerReviver.IsInRange와 동일)
-        return (target.transform.position - origin).sqrMagnitude <= range * range
-            && (m_interactor == null || m_interactor.HasLineOfSightTo(target.transform));
-    }
+    private bool IsInRange(PlayerCarrier target) =>
+        PlayerInteractor.IsWithinReach(
+            m_interactor,
+            target.transform,
+            PlayerInteractor.RangeOf(m_interactor, k_fallbackRange),
+            transform.position);
 
     // 판정 로그는 서버에서 찍히므로 원격 클라 오너는 결과를 볼 수 없다 — 오너 콘솔에도 전달한다 (#109 관례)
     private void NotifyOwner(string message)

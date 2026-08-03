@@ -9,7 +9,7 @@ using UnityEngine;
 ///  · <b>설치형</b> — 본부에 배치된 씬 인스턴스의 SetInstalled(true) 호출. 인벤토리 경로를 타지 않는다 (#108).
 ///
 /// <b>매 라운드 다시 배달한다.</b> 상점 복귀 시 ShopManager.DespawnDroppedItems(바닥에 남은 것)와
-/// PlayerLoadout.ServerClearHeldItems(들고 있던 것)가 전량 회수하므로(#370), 회수 → 재배달이 성립한다.
+/// PlayerItemSupply.ServerClearHeldItems(들고 있던 것)가 전량 회수하므로(#370), 회수 → 재배달이 성립한다.
 /// </summary>
 public class ShopDelivery : MonoBehaviour
 {

@@ -64,7 +64,7 @@ public class AuthPanel : PanelBase
         m_newAnonymousButton.onClick.AddListener(HandleNewAnonymousClicked);
 
         // 상한을 인스펙터에 중복 입력하지 않는다 — 각 규칙의 상수가 단일 출처. (#249 · #384)
-        m_nicknameInput.characterLimit = AuthBootstrap.MaxNicknameLength;
+        m_nicknameInput.characterLimit = NicknameRules.MaxLength;
         m_usernameInput.characterLimit = AccountCredentials.MaxUsernameLength;
         m_passwordInput.characterLimit = AccountCredentials.MaxPasswordLength;
         m_passwordInput.contentType = TMP_InputField.ContentType.Password;

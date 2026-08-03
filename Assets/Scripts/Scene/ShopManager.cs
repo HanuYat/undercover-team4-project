@@ -50,7 +50,7 @@ public class ShopManager : SceneManagerBase
         if (!NetworkManager.Singleton.ConnectedClients.TryGetValue(clientId, out var client))
             return;
         client.PlayerObject?.GetComponent<PlayerHealth>()?.ServerResetState();
-        client.PlayerObject?.GetComponent<PlayerLoadout>()?.ServerClearHeldItems(); // 지급 장비 회수 (#370)
+        client.PlayerObject?.GetComponent<PlayerItemSupply>()?.ServerClearHeldItems(); // 지급 장비 회수 (#370)
     }
 
     // 주인 없이 바닥에 떨어져 있는 아이템을 정리한다 — 아이템은 destroyWithScene:false로 스폰돼 안 치우면

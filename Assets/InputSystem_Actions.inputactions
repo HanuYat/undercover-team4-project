@@ -1086,6 +1086,15 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
+                },
+                {
+                    "name": "MicMuteToggle",
+                    "type": "Button",
+                    "id": "7c1f4a2e-9d63-4b58-8a1c-3e5f0b26d914",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
                 }
             ],
             "bindings": [
@@ -1097,6 +1106,17 @@
                     "processors": "",
                     "groups": "",
                     "action": "PushToTalk",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "b3e58d47-2a91-4c06-9f7d-51c8a4e6720b",
+                    "path": "<Keyboard>/m",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "MicMuteToggle",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

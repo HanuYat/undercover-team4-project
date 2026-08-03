@@ -20,6 +20,21 @@ public enum EInstallable
 }
 
 /// <summary>
+/// 로컬 음성(Vivox) 연결 상태 — 표시 문자열은 VivoxManager.ToLabel이 이 값에서 만든다. (#430)
+/// 지금까지는 상태가 private 문자열뿐이어서 Vivox 로그인이 실패해도 플레이어가 알 방법이 없었다.
+/// 실패해도 재시도 경로는 두지 않는다(표시까지) — 어느 단계에서 다시 붙어도 안전한지가 별건이다.
+/// 먹통 음성 왜곡(#372)은 여기 넣지 않는다 — 연결 여부와 직교한 축이라 섞으면 둘 다 못 읽는다.
+/// </summary>
+public enum EVoiceState
+{
+    Idle,       // 음성 연결 전 / 정리 후
+    LoggingIn,  // Vivox 초기화·로그인 중
+    Joining,    // 채널 참가 중
+    Connected,  // 무전 + 근접 채널 참가 완료
+    Failed,     // 로그인·참가 실패 (사유는 디버그 패널에만)
+}
+
+/// <summary>
 /// Awake 실행 순서 — [DefaultExecutionOrder((int)EExecutionOrder.X)]로 사용.
 /// 음수 = 일반 스크립트(0)보다 먼저. 매니저 → UI매니저 → 패널 → 일반 스크립트 순서를 보장한다.
 /// </summary>

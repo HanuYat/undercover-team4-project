@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 4193491920762029064}
   - component: {fileID: 6465765157232573796}
   - component: {fileID: 7887068396476588369}
+  - component: {fileID: 3448176560008718407}
   m_Layer: 7
   m_Name: Scanner
   m_TagString: Untagged
@@ -97,9 +98,10 @@ MonoBehaviour:
   m_heldRotationOffset: {x: 90, y: 180, z: 0}
   m_handGrip: 2
   m_targetOutlineColor: {r: 0, g: 0.25335073, b: 1, a: 1}
+  m_shopPrice: 0
   m_channelSeconds: 3
   m_scanKeepRange: 5
-  m_maxBattery: 5
+  m_reactionPoint: 0.5
   references:
     version: 2
     RefIds: []
@@ -115,3 +117,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6708c43a2175d914ea50ce6a610d3cb6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldItemPickup
+--- !u!114 &3448176560008718407
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8609137422397610967}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d168600aadf6b5343bc62d5022245179, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ItemBattery
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_maxBattery: 5
+  ChargeBlockedReason: "\uCDA9\uC804 \uC2E4\uD328 \u2014 \uC544\uC774\uD15C \uC0AC\uC6A9
+    \uC911"
+  FullyChargedMessage: "\uBC30\uD130\uB9AC \uAC00\uB4DD \uCC38"

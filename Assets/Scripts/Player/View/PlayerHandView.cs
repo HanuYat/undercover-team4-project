@@ -17,7 +17,7 @@ public class PlayerHandView : NetworkBehaviour
     private Transform m_handAnchor;
 
     [Header("1인칭 손 모델 (선택)")]
-    [Tooltip("카메라 하위에 배치할 것. PlayerMovement의 OwnBody 루트 바깥에 둬야 내 카메라에 보인다")]
+    [Tooltip("카메라 하위에 배치할 것. PlayerLook의 OwnBody 루트 바깥에 둬야 내 카메라에 보인다")]
     [SerializeField]
     private GameObject m_handsModel;
 
@@ -208,7 +208,7 @@ public class PlayerHandView : NetworkBehaviour
         int viewmodelLayer = LayerMask.NameToLayer("Viewmodel");
         if (viewmodelLayer >= 0)
         {
-            PlayerMovement.SetLayerRecursively(m_handsModel.transform, viewmodelLayer);
+            PlayerLook.SetLayerRecursively(m_handsModel.transform, viewmodelLayer);
         }
 
         if (m_handAnchor == null)
@@ -405,7 +405,7 @@ public class PlayerHandView : NetworkBehaviour
         int viewmodelLayer = LayerMask.NameToLayer("Viewmodel");
         if (viewmodelLayer >= 0)
         {
-            PlayerMovement.SetLayerRecursively(m_heldModelInstance.transform, viewmodelLayer);
+            PlayerLook.SetLayerRecursively(m_heldModelInstance.transform, viewmodelLayer);
         }
     }
 

@@ -10,12 +10,12 @@ using UnityEngine;
 ///    [임시] 표시는 OnGUI — PlayerReviveHud·SignalDecoderHud의 임시 HUD 관례를 따른다(정식 UI 후속).
 ///
 /// 2) <b>끌려가기 중계</b>: 포획 후 호송(#279)에서 서버가 끌기 담당 NPC 2명을 넘기면, 오너 클라가
-///    <see cref="PlayerMovement.BeginCarriedFollow"/>로 둘 사이를 추종하게 한다 —
+///    <see cref="PlayerTowedMotion.BeginEscortFollow"/>로 둘 사이를 추종하게 한다 —
 ///    플레이어 위치는 NetworkTransform 오너 권한이라 서버(NPC)가 직접 끌 수 없기 때문.
 /// </summary>
 public class PlayerPenaltyView : NetworkBehaviour
 {
-    private PlayerMovement m_movement; // 끌려가기 추종의 실제 이동 담당 (#279)
+    private PlayerTowedMotion m_towed; // 끌려가기 추종의 실제 이동 담당 (#279)
 
     private bool m_showing;
     private float m_deadline; // Time.time 기준 카운트다운 종료 시각
@@ -23,7 +23,7 @@ public class PlayerPenaltyView : NetworkBehaviour
 
     private void Awake()
     {
-        m_movement = GetComponent<PlayerMovement>();
+        m_towed = GetComponent<PlayerTowedMotion>();
     }
 
     // ---- 추격 경고 (#278) ----
@@ -72,8 +72,8 @@ public class PlayerPenaltyView : NetworkBehaviour
 
         if (IsSpawned)
             StartCarriedRpc(carrierA.NetworkObject, carrierB.NetworkObject);
-        else if (m_movement != null)
-            m_movement.BeginCarriedFollow(carrierA.transform, carrierB.transform); // 오프라인 폴백
+        else if (m_towed != null)
+            m_towed.BeginEscortFollow(carrierA.transform, carrierB.transform); // 오프라인 폴백
     }
 
     /// <summary>서버 전용 — 호송 종료(광장 도착·중단): 추종을 풀어 준다. 직후 서버가 광장 스냅 텔레포트로 보정한다.</summary>
@@ -81,27 +81,27 @@ public class PlayerPenaltyView : NetworkBehaviour
     {
         if (IsSpawned)
             StopCarriedRpc();
-        else if (m_movement != null)
-            m_movement.EndCarriedFollow();
+        else if (m_towed != null)
+            m_towed.EndEscortFollow();
     }
 
     // 오너 클라에서만 실행 — NetworkTransform 오너 권한이라 위치 추종은 오너가 해야 전 피어에 전파된다 (#279).
     [Rpc(SendTo.Owner)]
     private void StartCarriedRpc(NetworkObjectReference carrierA, NetworkObjectReference carrierB)
     {
-        if (m_movement == null)
+        if (m_towed == null)
             return;
         if (!carrierA.TryGet(out NetworkObject a) || !carrierB.TryGet(out NetworkObject b))
             return; // 담당 NPC가 이미 디스폰됨 — 추종 없이 서버의 스냅 텔레포트(HangAsync)에 맡긴다
 
-        m_movement.BeginCarriedFollow(a.transform, b.transform);
+        m_towed.BeginEscortFollow(a.transform, b.transform);
     }
 
     [Rpc(SendTo.Owner)]
     private void StopCarriedRpc()
     {
-        if (m_movement != null)
-            m_movement.EndCarriedFollow();
+        if (m_towed != null)
+            m_towed.EndEscortFollow();
     }
 
     // ---- 임시 OnGUI 표시 ----

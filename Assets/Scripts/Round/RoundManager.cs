@@ -4,7 +4,6 @@ using System.Threading;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 public enum RoundPhase
 {
@@ -68,9 +67,6 @@ public class RoundManager : CommonManagerBase
     [Tooltip("NPC 스폰 완료 + 전원 입장 확인 후 실제 라운드 시작까지의 대기(초). 0 이하면 즉시 시작")]
     [SerializeField] private float m_startDelaySeconds = 3f;
 
-    [Tooltip("전원 입장 확인을 기다리는 상한(초) — 넘으면 경고 후 남은 인원으로 시작한다")]
-    [SerializeField] private float m_peerWaitTimeoutSeconds = 30f;
-
     [Header("유치장 (비우면 씬에서 자동 탐색)")]
     [Tooltip("목표 진행도(누적 현상금)를 읽어올 유치장. ArrestJudge의 인계 구역 지정과 같은 관례")]
     [SerializeField] private JailZone m_jailZone;
@@ -79,9 +75,6 @@ public class RoundManager : CommonManagerBase
 
     // 준비 절차를 한 번만 돌리기 위한 래치
     private bool m_preparing;
-
-    // NGO 씬 동기화가 "이 씬을 전원이 로드했다"고 알려줬는가 (서버에서만 채워진다)
-    private bool m_allPeersLoaded;
 
     // 인스펙터에서 비워 뒀으면 씬에서 한 번 찾아 캐시한다 (ArrestJudge의 인계 구역과 같은 방식).
     // JailZone은 App에 등록된 매니저가 아니라 씬 배치 오브젝트라 App 파사드 경로가 없다.
@@ -196,37 +189,7 @@ public class RoundManager : CommonManagerBase
         if (!m_networkManager.IsServer)
             return;
 
-        // 전원 로드 완료 신호. 서버의 씬 활성화 프레임(=이 Start)이 NGO의 완료 콜백보다 먼저라 여기서 걸어도 놓치지 않는다.
-        if (m_networkManager.SceneManager != null)
-            m_networkManager.SceneManager.OnLoadEventCompleted += HandleLoadEventCompleted;
-
         BeginRoundPreparation();
-    }
-
-    protected override void OnDestroy()
-    {
-        base.OnDestroy(); // ★ 매니저 등록 해제 유지 (R5)
-
-        if (m_networkManager != null && m_networkManager.SceneManager != null)
-            m_networkManager.SceneManager.OnLoadEventCompleted -= HandleLoadEventCompleted;
-    }
-
-    // NGO 씬 동기화 완료 — 이 씬을 전원이 로드했다. 서버에서만 구독한다.
-    private void HandleLoadEventCompleted(
-        string sceneName,
-        LoadSceneMode mode,
-        List<ulong> clientsCompleted,
-        List<ulong> clientsTimedOut
-    )
-    {
-        if (sceneName != gameObject.scene.name)
-            return;
-
-        // 시간 초과 클라이언트가 있어도 진행한다 — NGO가 이미 자체 상한을 적용한 뒤이고, 여기서 더 기다려도 안 온다.
-        if (clientsTimedOut != null && clientsTimedOut.Count > 0)
-            Debug.LogWarning($"[라운드] 씬 로드 시간 초과 {clientsTimedOut.Count}명 — 남은 인원으로 진행한다", this);
-
-        m_allPeersLoaded = true;
     }
 
     // 서버 재시작 시 이전 라운드 상태를 초기화한다 — Phase·결과·진행도와 스포너 래치를 되돌려 재스폰을 허용한다.
@@ -238,7 +201,6 @@ public class RoundManager : CommonManagerBase
         CriminalArrestCount = 0;
         RemainingSeconds = float.PositiveInfinity;
         m_preparing = false;
-        m_allPeersLoaded = false;
         Spawner.ResetSpawnState(); // IsSpawnCompleted 래치 해제 + 이전 NPC 정리 → StartSpawn 재동작
     }
 
@@ -275,30 +237,34 @@ public class RoundManager : CommonManagerBase
             cancellationToken: token
         );
 
-        // 2. 전원 입장 확인 — 기다릴 상대가 실제로 있을 때만. 호스트 혼자면(솔로 플레이, DevAutoHost로 씬을
-        //    직접 Play하는 개발 흐름) NGO 씬 동기화 자체가 없어 완료 신호가 영영 오지 않으므로 여기서 걸러낸다.
-        //    정식 흐름에서는 클라가 Title/Lobby에서 이미 접속해 있어 이 시점에 ConnectedClients에 들어와 있다.
+        // 2. 전원 준비 완료 — 각 피어가 "내 화면이 실제로 준비됐다"를 보고하고 서버가 판정한다 (SceneReadyGate, #410).
+        //    씬 로드 완료(OnLoadEventCompleted)로 판정하던 것을 바꾼 것이다 — 그건 서버 관점이라, 클라에
+        //    아직 남아 있는 배치 복제 수신·첫 렌더·로딩 화면 페이드를 못 본다.
+        //    기다릴 상대가 실제로 있을 때만 본다. 호스트 혼자면(솔로 플레이, DevAutoHost로 씬을 직접
+        //    Play하는 개발 흐름) 보고할 클라가 없어 게이트가 타임아웃으로만 열리므로 여기서 걸러낸다.
         bool waitForPeers =
             m_networkManager != null
             && m_networkManager.IsListening
             && m_networkManager.ConnectedClientsIds.Count > 1;
 
-        if (waitForPeers && !m_allPeersLoaded)
+        if (waitForPeers)
         {
-            float deadline = Time.realtimeSinceStartup + m_peerWaitTimeoutSeconds;
-            await UniTask.WaitUntil(
-                () =>
-                    m_allPeersLoaded
-                    || !m_networkManager.IsListening
-                    || Time.realtimeSinceStartup >= deadline,
-                cancellationToken: token
-            );
-
-            if (!m_allPeersLoaded)
-                Debug.LogWarning(
-                    $"[라운드] 전원 입장 확인을 {m_peerWaitTimeoutSeconds}초 내에 받지 못했다 — 그대로 시작한다",
+            SceneReadyGate gate = App.Game.ReadyGate;
+            if (gate == null)
+            {
+                Debug.LogWarning("[RoundManager] SceneReadyGate를 찾지 못해 전원 준비 완료를 확인할 수 없다 - 그대로 시작.",
                     this
                 );
+            }
+            else
+            {
+                // 타임아웃은 게이트가 쥔다 — 여기서 따로 재면 두 카운트다운이 어긋나 로딩 화면과 라운드
+                // 시작 시점이 벌어진다. 세션이 도중에 끊기면 열릴 일이 없으므로 IsListening도 종료 조건에 넣는다.
+                await UniTask.WaitUntil(
+                    () => gate == null || gate.IsOpen || !m_networkManager.IsListening,
+                    cancellationToken: token
+                );
+            }
         }
 
         // 3. 시작 지연 — 라운드 종료 freeze 등으로 timeScale이 건드려져도 흐르도록 실시간 기준 (RoundEndResetter와 동일 방침)
