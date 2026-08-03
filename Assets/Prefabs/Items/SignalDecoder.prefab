@@ -156,6 +156,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SignalDecoder
   ShowTopMostFoldoutHeaderGroup: 1
+  m_id: 1
   m_installedOnStart: 0
 --- !u!114 &7249231971396022520
 MonoBehaviour:

@@ -2,10 +2,10 @@
 public enum EScene
 {
     None,
-    Title,      // 메인메뉴 — 세션 생성/참가
-    Lobby,      // 최초 대기 화면
-    Shop,       // 상점 = 인게임 허브 (라운드 사이 준비, 루프 진입점)
-    Game,       // 게임맵 - 라운드 진행 (구 InGame / "Main Scene")
+    Title, // 메인메뉴 — 세션 생성/참가
+    Lobby, // 최초 대기 화면
+    Shop, // 상점 = 인게임 허브 (라운드 사이 준비, 루프 진입점)
+    Game, // 게임맵 - 라운드 진행 (구 InGame / "Main Scene")
 }
 
 /// <summary>
@@ -15,8 +15,9 @@ public enum EScene
 /// </summary>
 public enum EInstallable
 {
-    None,          // 이 진열대는 소지형 — 프리팹 참조로 판다
+    None, // 이 진열대는 소지형 — 프리팹 참조로 판다
     SignalDecoder, // 신호 해석기 (#108)
+    JailSirenButton, // 유치장 사이렌 버튼 — 본부에서 탈옥을 원격 제지한다 (#488)
 }
 
 /// <summary>
@@ -27,11 +28,11 @@ public enum EInstallable
 /// </summary>
 public enum EVoiceState
 {
-    Idle,       // 음성 연결 전 / 정리 후
-    LoggingIn,  // Vivox 초기화·로그인 중
-    Joining,    // 채널 참가 중
-    Connected,  // 무전 + 근접 채널 참가 완료
-    Failed,     // 로그인·참가 실패 (사유는 디버그 패널에만)
+    Idle, // 음성 연결 전 / 정리 후
+    LoggingIn, // Vivox 초기화·로그인 중
+    Joining, // 채널 참가 중
+    Connected, // 무전 + 근접 채널 참가 완료
+    Failed, // 로그인·참가 실패 (사유는 디버그 패널에만)
 }
 
 /// <summary>
@@ -40,8 +41,8 @@ public enum EVoiceState
 /// </summary>
 public enum EExecutionOrder
 {
-    Bootstrap = -400,       // AppHelper (DontDestroyOnLoad 루트)
-    BaseManagement = -300,  // App 등록 매니저 전부 (Session·Round·SuddenEvent 등)
-    UIManagement = -200,    // UIManagerBase 파생 — 패널 등록을 받아야 하므로 패널보다 먼저
-    UIPanel = -100,         // PanelBase 파생 — 매니저 뒤, 일반 스크립트 앞
+    Bootstrap = -400, // AppHelper (DontDestroyOnLoad 루트)
+    BaseManagement = -300, // App 등록 매니저 전부 (Session·Round·SuddenEvent 등)
+    UIManagement = -200, // UIManagerBase 파생 — 패널 등록을 받아야 하므로 패널보다 먼저
+    UIPanel = -100, // PanelBase 파생 — 매니저 뒤, 일반 스크립트 앞
 }
