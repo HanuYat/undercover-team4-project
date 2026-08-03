@@ -4,6 +4,7 @@ using UnityEngine;
 /// NPC의 상호작용키(E) 반응 (#76/#91/#398) — 누르는 즉시 NPC 상태에 따라 갈린다.
 /// 체포(Captured) 상태면 재연행을 시작한다 — 연행 동작을 수갑 클릭에서 E로 이관 (#91).
 /// 남이 끌고 있는(Escorted) 대상에 내 줄이 걸려 있으면 끌기를 재개한다 — 줄다리기 복귀 (#398).
+/// 수감(Jailed) 상태면 유치장에서 빼내 따라오게 한다 — 밧줄 없이 추종만 건다 (#492).
 /// PlayerInteractor의 IInteractable 경로를 그대로 사용하므로
 /// NPC가 사거리·조준을 벗어나면 자연히 실패한다.
 /// 프롬프트 표시는 상호작용 UI 이슈(#65 계열) 후속.
@@ -86,6 +87,13 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
                 // 중복 확보 가드(동시 1명)·밧줄 소지·사거리는 서버가 처리한다
                 Debug.Log($"E 입력 — 밧줄 끌기 재개 요청: {m_controller.name}");
                 escorter?.RequestRopeResume(m_controller);
+                break;
+
+            case NpcState.Jailed:
+                // 앉은 수감자를 일으켜 따라오게 한다 (#492) — 밧줄을 걸지 않으므로 밧줄 소지·용량과 무관하다.
+                // 좌석 반납·정산 제외는 서버(JailIntake)가 하고, 여기 검사는 조기 차단일 뿐이다.
+                Debug.Log($"E 입력 — 유치장 반출 요청: {m_controller.name}");
+                escorter?.RequestJailRelease(m_controller);
                 break;
         }
     }

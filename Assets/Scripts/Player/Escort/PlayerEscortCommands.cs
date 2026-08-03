@@ -153,6 +153,23 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         ReleaseRpc(new NetworkObjectReference(target.NetworkObject));
     }
 
+    /// <summary>유치장 반출 요청 — 오너가 호출(앉은 수감자에 E). 밧줄을 쓰지 않으므로 용량 게이트를 타지 않는다. (#492)</summary>
+    public void RequestJailRelease(NpcController target)
+    {
+        if (target == null)
+            return;
+        if (!IsSpawned)
+        {
+            ServerJailRelease(target);
+            return;
+        }
+        if (!IsOwner)
+            return;
+        if (!IsTargetNetworkReady(target))
+            return;
+        JailReleaseRpc(new NetworkObjectReference(target.NetworkObject));
+    }
+
     // 원격 클라 → 서버로 대상을 넘기려면 스폰돼 있어야 한다(NetworkObjectReference 제약).
     // 스폰 안 된 NPC(씬 배치 후 미스폰 등)면 참조 생성이 예외를 던지므로 미리 걸러 경고만 남긴다.
     private bool IsTargetNetworkReady(NpcController target)
@@ -213,6 +230,18 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         )
         {
             Escorter.ReleaseDrag(target);
+        }
+    }
+
+    [Rpc(SendTo.Server)]
+    private void JailReleaseRpc(NetworkObjectReference targetRef)
+    {
+        if (
+            targetRef.TryGet(out NetworkObject targetObj)
+            && targetObj.TryGetComponent(out NpcController target)
+        )
+        {
+            ServerJailRelease(target);
         }
     }
 
@@ -450,6 +479,30 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
 
     // 본부 인계 요청(#414)은 제거됐다 (#492) — 판정 트리거가 인계 단말에서 유치장 진입으로 옮겨져
     // JailIntake가 직접 ArrestJudge.Judge를 부른다. 플레이어가 보낼 요청 자체가 없어졌다.
+
+    // ---- 서버 실행: 유치장 반출 (#492) ----
+
+    // 반출 실행 — 사거리만 확인하고 나머지(상태·좌석·정산)는 JailIntake가 판단한다.
+    // 유치장을 아는 것은 저쪽이고 여기는 요청 허브일 뿐이다.
+    private void ServerJailRelease(NpcController target)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        if (target == null || !IsInRange(target))
+            return;
+
+        // JailIntake는 매니저가 아니라 장소 오브젝트라 App 파사드 대상이 아니다 (JailLock·JailZone과 같은 관례).
+        // E 입력 때만 도는 경로라 매 프레임 탐색 비용도 없다.
+        JailIntake intake = FindFirstObjectByType<JailIntake>();
+        if (intake == null)
+        {
+            Debug.LogWarning("PlayerEscortCommands: JailIntake가 없어 반출할 수 없다", this);
+            return;
+        }
+
+        intake.ServerExtract(target, transform);
+    }
 
     // ---- 공통 ----
 
