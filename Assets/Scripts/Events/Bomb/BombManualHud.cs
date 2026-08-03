@@ -4,14 +4,16 @@ using UnityEngine;
 /// <summary>
 /// [임시] 폭탄 해체 매뉴얼의 화면 표현 — 본부가 상호작용하면 현재 폭탄의 규칙표를 펼친다. (#232)
 /// 상태·규칙은 <see cref="BombManual"/>이 들고(규칙은 <see cref="BombDevice.Active"/>의 퍼즐에서 읽음),
-/// 이 컴포넌트는 표시만 한다 (SignalDecoderHud ↔ SignalDecoder와 같은 역할 분리).
+/// 이 컴포넌트는 표시만 한다 (SignalInputPanel ↔ SignalDecoder와 같은 역할 분리).
 ///
-/// PlayerReviveHud·SignalDecoderHud의 임시 OnGUI 관례를 따른다 — 정식 UI(#65 계열)로 대체 예정.
-/// 여는 동안은 타이핑/이동이 섞이지 않도록 게임플레이 입력을 정지하고 커서를 푼다(SignalDecoderHud와 동일).
+/// [임시] 아직 OnGUI로 그린다 — 캔버스 이전은 #493에 남아 있다. SignalInputPanel이 같은 모양의 선례다.
+/// 여는 동안은 타이핑/이동이 섞이지 않도록 게임플레이 입력을 정지하고 커서를 푼다(SignalInputPanel과 동일).
 /// </summary>
 public class BombManualHud : MonoBehaviour
 {
-    private const int k_drawDepth = -100; // 먹통 오버레이 위에 그린다 (SignalDecoderHud와 동일)
+    // 먹통 오버레이보다 위에 그리기 위한 값. 다만 그 오버레이는 #434에서 제거됐다(DeviceBlackoutView는
+    // 지금 음성 왜곡만 한다) — 캔버스로 옮길 때 이 depth 조작은 함께 버릴 수 있다.
+    private const int k_drawDepth = -100;
 
     private BombManual m_manual;
     private PlayerInputHandler m_input;
@@ -46,7 +48,7 @@ public class BombManualHud : MonoBehaviour
 
         m_isOpen = false;
 
-        // ?. 금지 — 파괴된 Unity 오브젝트의 fake null을 우회하지 않도록 명시 비교 (SignalDecoderHud와 동일)
+        // ?. 금지 — 파괴된 Unity 오브젝트의 fake null을 우회하지 않도록 명시 비교 (SignalInputPanel과 동일)
         if (m_input != null)
             m_input.SetSuspended(false);
         CursorLock.PopUnlock();
@@ -80,7 +82,7 @@ public class BombManualHud : MonoBehaviour
         EnsureStyles();
 
         // 닫기는 Esc 전용 — 여는 키(E)를 닫기로도 읽으면 여는 그 입력에 같은 프레임에서 닫혀 UI가 안 뜬다.
-        // (SignalDecoderHud도 같은 이유로 닫기를 Esc/Enter만 쓴다)
+        // (SignalInputPanel도 같은 이유로 닫기를 Esc/Enter만 쓴다)
         Event current = Event.current;
         bool close = false;
         if (current.type == EventType.KeyDown && current.keyCode == KeyCode.Escape)

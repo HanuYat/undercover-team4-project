@@ -55,6 +55,16 @@ MonoBehaviour:
       \uC774\uC1A1\uD574\uC57C \uBCF5\uAD6C\uB41C\uB2E4"
     m_Metadata:
       m_Items: []
+  - m_Id: 54069990330368
+    m_Localized: "\uC2E0\uD638 \uD574\uC11D\uAE30 \u2014 \uC804\uC6D0\uC5D0\uAC8C
+      \uBA54\uC2DC\uC9C0 \uC804\uC1A1"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 54070032273408
+    m_Localized: "Enter \uC804\uC1A1 \xB7 Esc \uCDE8\uC18C   ({0}/{1})"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845873749557336
   references:
     version: 2
     RefIds:
@@ -65,3 +75,4 @@ MonoBehaviour:
         m_SharedEntries:
         - id: 6020387639297
         - id: 27357709668352
+        - id: 54070032273408
