@@ -129,25 +129,14 @@ public class ArrestJudge : CommonManagerBase
 
         LogVerdict(result);
 
-        // 연행 상태 물리적 해제 (플레이어에게서 분리) — NPC는 Captured로 그 자리에 선다.
-        // 이미 내려놓은(Captured) 신병이면 Release가 할 일이 없어 그대로 통과한다 — 남은 밧줄 연결은
-        // 대상이 유치장·석방으로 커스터디를 벗어날 때 TickRopeDrag가 끊는다.
-        // 반드시 OnArrestJudged보다 **먼저** 해야 한다: 구독자(CustodyRouter, #228)가 판정 결과에 따라
-        // 다음 상태(유치장 이송·석방)로 전이시키는데, 해제를 뒤에 하면 StopEscort의 Captured 전이가
-        // 그 행선지를 덮어써 NPC가 그 자리에 멈춰버린다.
-        if (deliverers.Count > 0)
-        {
-            // [리뷰 반영] RequestRelease()는 클라이언트 오너 권한이 필요하므로,
-            // 비호스트 유저 검거 시 동작하지 않습니다. 따라서 서버 권위로 즉시 풀어버리는 ReleaseDrag()를 호출합니다.
-            // 판정된 그 NPC의 줄만 전원에게서 푼다 — 같이 끌고 온 다른 대상은 계속 끌린다 (#390).
-            foreach (PlayerEscorter deliverer in deliverers)
-                deliverer.ReleaseDrag(npc);
-        }
-        else
-        {
-            npc.StopEscort();
-        }
-
+        // 판정은 신병 상태를 건드리지 않는다 (#492). 예전에는 여기서 밧줄을 강제로 풀었는데,
+        // CustodyRouter가 곧바로 Jailed로 전이시키던 것을 대비한 순서 강제였다. 이제 판정 직후
+        // 아무도 전이시키지 않으므로 풀 이유가 없고, 오히려 풀면 유치장 문을 통과하는 순간
+        // 자동으로 착석해 "좌석 앞에서 E로 놓아야 앉는다"가 깨진다.
+        //
+        // 오검거는 WrongfulArrestPenalty가 Detained로 전이시키므로, 남은 밧줄은
+        // PlayerEscorter.TickTetherCleanup의 커스터디 이탈 정리가 끊는다.
+        //
         // 수갑 회수(#307/#229)는 제거됐다 — 밧줄은 소모형이 아니라 NPC에 채워둔 자원이 없다. (#369)
 
         OnArrestJudged?.Invoke(result);

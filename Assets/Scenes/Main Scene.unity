@@ -18539,6 +18539,7 @@ GameObject:
   - component: {fileID: 467094109}
   - component: {fileID: 467094108}
   - component: {fileID: 467094107}
+  - component: {fileID: 467094111}
   m_Layer: 0
   m_Name: Jail
   m_TagString: Untagged
@@ -18640,6 +18641,20 @@ Transform:
   - {fileID: 1176999979}
   m_Father: {fileID: 594547326}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &467094111
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 467094106}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bcb6444d5eac87146905f1803f17810b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::JailIntake
+  m_jailZone: {fileID: 0}
+  m_checkInterval: 0.1
 --- !u!1001 &469349654
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -44812,7 +44827,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CustodyRouter
   m_arrestJudge: {fileID: 1334629126}
-  m_jailZone: {fileID: 467094108}
 --- !u!1001 &1095086239
 PrefabInstance:
   m_ObjectHideFlags: 0
