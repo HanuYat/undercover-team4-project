@@ -13,9 +13,10 @@ using UnityEngine;
 ///  <b>R1 판정</b> — 확보된 신병(Escorted/Captured)이 <see cref="JailScanner"/> 게이트 안에 들어서면
 ///                   그 순간 판정한다. 오검거를 좌석까지 끌고 가야 알게 되는 헛수고를 없앤다
 ///                   (팀 확정 2026-08-03).
-///  <b>R2 착석</b> — 판정에서 수감 대상으로 확정된 대상이 Jail 영역 안에서 Captured가 되면
-///                   (= 플레이어가 E로 놓으면) 가장 가까운 빈 좌석을 배정하고 계상한다.
+///  <b>R2 착석</b> — 판정에서 수감 대상으로 확정된 대상이 Jail 영역 안에서 Captured가 되고
+///                   <b>플레이어도 유치장 안에 있으면</b> 가장 가까운 빈 좌석을 배정하고 계상한다.
 ///                   좌석까지 걸어가 앉는 것은 NpcJailedState가 한다.
+///                   사람이 안에 있어야 하는 이유는 TrySeat 주석 — 문 밖에서 밀어 넣는 것을 막는다.
 ///
 /// <b>판정 장소는 유치장 문턱이 아니라 문 앞 게이트다.</b> 처음에는 Jail 영역 진입을 트리거로 썼는데,
 /// 유치장 <b>안</b>에서 오검거가 확정되면 그 시민이 신병에서 빠지는 순간 Jail 통행을 잃고, 자기가
@@ -47,6 +48,10 @@ public class JailIntake : MonoBehaviour
 
     // 다음 검사까지 남은 시간
     private float m_cooldown;
+
+    // '놓은 사람이 안에 있다' 판정의 여유(m) — 밧줄 길이에 더해 쓴다. 놓은 순간 플레이어는 밧줄 길이
+    // 안에 있지만, 검사는 최대 m_checkInterval 뒤라 그새 한두 걸음 물러날 수 있다. (#492)
+    private const float k_seatWitnessMargin = 2f;
 
     // 판정에서 수감 대상으로 확정된 대상과 그 보상액 — R2가 여기 있는 대상만 앉힌다.
     // 보상액을 함께 들고 있는 이유: Admit이 착석 시점이라 판정 결과를 그때까지 보관해야 한다.
@@ -264,6 +269,18 @@ public class JailIntake : MonoBehaviour
         if (!JailArea.Contains(npc.transform.position))
             return;
 
+        // <b>사람이 유치장 안에 있어야 앉힌다</b> (#492) — "직접 끌고 들어가 앉힌다"를 그대로 옮긴 조건이다.
+        //
+        // 이게 없으면 문 밖에 선 채로 신병을 개구부로 밀어 넣고 놓아 수용시킬 수 있다. 밧줄 끌기는
+        // 벽 스윕이 파고드는 성분만 버리고 미끄러뜨리므로(NpcController.Rope) 비비면 문틈으로 흘러
+        // 들어가고, 그 뒤는 전부 정상 경로라 좌석까지 배정된다 — 문을 열 필요조차 없었다.
+        //
+        // <b>실패해도 기록을 지우지 않는다.</b> 폴링이라 조건이 매 틱 다시 평가되므로, 밀어 넣힌 대상은
+        // 그 자리에 Captured로 서 있다가 <b>누가 실제로 들어오면 그때 앉는다</b>. 조용히 취소해 버리면
+        // 정상적으로 놓고 한 걸음 물러난 경우까지 "왜 안 앉지"가 되므로 이 편이 낫다.
+        if (!HasPlayerInsideNear(npc))
+            return;
+
         // 놓은 자리에서 가장 가까운 빈 좌석 — 여기서 좌석까지는 NpcJailedState가 걸어간다(1.5~5.6m)
         Transform seat = m_jailZone.ReserveSeat(npc, npc.transform.position);
         npc.SendToJail(seat);
@@ -271,6 +288,31 @@ public class JailIntake : MonoBehaviour
         // 계상은 착석 시점 (#492) — 판정만 받고 안 앉히면 0원이다
         m_jailZone.Admit(npc, bounty);
         m_pendingSeat.Remove(npc);
+    }
+
+    // 이 NPC를 앉힐 자격이 있는 사람이 유치장 안에 있는가 — 놓은 사람 본인을 특정하지는 않는다.
+    // 밧줄 길이 안의 '유치장 안 플레이어'면 충분하다: 동료가 안에서 받아 주는 것은 막을 이유가 없는
+    // 협동이고, 반대로 문 밖에서 밀어 넣는 사람만 있는 경우는 이 조건에 걸린다.
+    //
+    // 매 틱 전체 조회를 하지만 플레이어는 3~6명이고 검사 주기(m_checkInterval)로 눌려 있다 —
+    // NPC 조회와 같은 판단이다.
+    private static bool HasPlayerInsideNear(NpcController npc)
+    {
+        float reach = npc.RopeLength + k_seatWitnessMargin;
+        float sqrReach = reach * reach;
+        Vector3 npcPosition = npc.transform.position;
+
+        PlayerInteractor[] players = FindObjectsByType<PlayerInteractor>(FindObjectsSortMode.None);
+        for (int i = 0; i < players.Length; i++)
+        {
+            Vector3 playerPosition = players[i].transform.position;
+            if ((playerPosition - npcPosition).sqrMagnitude > sqrReach)
+                continue;
+            if (JailArea.Contains(playerPosition))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
