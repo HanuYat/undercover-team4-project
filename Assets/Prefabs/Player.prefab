@@ -3407,7 +3407,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerIncapacitation
   ShowTopMostFoldoutHeaderGroup: 1
   m_reviveHitbox: {fileID: 6891439341619729457}
-  m_dieAfterDownSeconds: 10
+  m_dieAfterDownSeconds: 60
 --- !u!114 &-6997859010805551940
 MonoBehaviour:
   m_ObjectHideFlags: 0
