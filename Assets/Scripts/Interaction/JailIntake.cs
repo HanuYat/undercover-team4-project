@@ -95,36 +95,46 @@ public class JailIntake : MonoBehaviour
     }
 
     /// <summary>
-    /// Jail 영역 통행 관리 — 유치장 안에 있는 NPC에게 통행을 내주고, 벗어나면 회수한다. (#492)
+    /// Jail 영역 통행 관리 — <b>확보된 신병</b>에게 유치장 통행을 내주고, 신병에서 풀려 밖에 있으면
+    /// 회수한다. (#492)
     ///
-    /// <b>이게 없으면 놓는 순간 몸이 창살 밖으로 튕겨 나간다.</b> 밧줄을 놓으면 NavMeshAgent가 다시
-    /// 켜지면서 <c>Warp</c>로 NavMesh에 재부착되는데(NpcController.StopRopeDrag), 부착 지점은
-    /// <b>에이전트 자신의 areaMask 안에서</b> 찾는다. 시민 마스크는 Jail이 빠져 있어(#415)
-    /// 좌석 18개 전부가 최대 1.36m 바깥 폴리곤으로 스냅된다 — 실측값이다.
-    /// 예전에는 통행을 NpcJailedState.Enter에서야 켰기 때문에 재부착이 항상 먼저였다.
+    /// 기준이 <b>신병 여부</b>인 이유는 두 진입 방식이 서로 다른 이동을 쓰기 때문이다:
     ///
-    /// 상태가 아니라 <b>위치</b>로 판단한다: 유치장 안에 서 있는 NPC는 그 폴리곤 위에 설 수 있어야 한다.
-    /// 오검거로 판정돼 원한 구역으로 걸어 나가는 시민도 나갈 때까지는 통행이 있어야 경로가 잡힌다.
+    ///  · <b>끌고 들어갈 때</b>는 밧줄이 위치를 직접 대입하므로(에이전트가 꺼져 있다) NavMesh 영역을
+    ///    타지 않는다. 대신 놓는 순간 에이전트가 켜지며 <c>Warp</c>로 재부착되는데, 그 부착 지점을
+    ///    <b>에이전트 자신의 areaMask 안에서</b> 찾는다(NpcController.StopRopeDrag). 시민 마스크는
+    ///    Jail이 빠져 있어(#415) 좌석 18개 전부가 최대 1.36m 바깥으로 스냅된다 — 실측값이다.
+    ///  · <b>반출된 수감자가 따라올 때</b>는 밧줄이 없어 제 발로 NavMesh를 걷는다
+    ///    (NpcEscortedState.SetDestination). 통행이 없으면 유치장으로 가는 경로가 문턱에서 끊겨
+    ///    <b>다시 넣을 수 없다.</b>
     ///
-    /// 회수는 <b>밖으로 나간 뒤에만</b> 한다 — 안에 선 채로 회수하면 자기가 딛고 선 폴리곤이 금지돼
-    /// 경로가 아예 안 잡히고 그 자리에 굳는다. 수감자(Jailed)는 좌석이 Jail 영역이라 계속 유지한다.
+    /// 위치로만 판단하면 두 번째가 막힌다: 밖에 있다고 회수해 버리면, 들어가야 통행을 얻고
+    /// 통행이 있어야 들어가는 교착이 된다. 그래서 신병(Escorted/Captured/Jailed)이면 위치와 무관하게
+    /// 내준다 — "경찰이 확보한 대상은 유치장에 들어갈 수 있다"가 규칙이고, 배회 시민은 여전히 못 얻는다.
+    ///
+    /// 회수는 <b>신병에서 풀렸고 + 밖에 있을 때만</b> 한다. 안에 선 채로 회수하면 자기가 딛고 선
+    /// 폴리곤이 금지돼 경로가 아예 안 잡히고 그 자리에 굳는다 — 오검거로 판정돼 원한 구역으로
+    /// 걸어 나가는 시민이 정확히 이 경우다(판정 순간 Detained라 신병에서 빠지지만 아직 유치장 안이다).
     /// </summary>
     private void TickJailAccess(NpcController npc)
     {
         if (npc == null)
             return;
 
-        bool inside = JailArea.Contains(npc.transform.position);
+        NpcState state = npc.CurrentState;
+        bool inCustody =
+            state == NpcState.Escorted || state == NpcState.Captured || state == NpcState.Jailed;
 
-        if (inside)
+        // 신병이거나, 신병이 아니어도 이미 유치장 안이면 내준다(안에 선 대상은 그 폴리곤을 딛어야 한다)
+        if (inCustody || JailArea.Contains(npc.transform.position))
         {
             if (m_jailAccessGranted.Add(npc))
                 npc.SetJailAccess(true);
             return;
         }
 
-        // 밖으로 나갔다 — 통행을 회수해 "시민은 유치장에 못 들어간다"(#415)를 되돌린다.
-        if (npc.CurrentState != NpcState.Jailed && m_jailAccessGranted.Remove(npc))
+        // 신병에서 풀렸고 밖으로 나갔다 — 회수해 "시민은 유치장에 못 들어간다"(#415)를 되돌린다.
+        if (m_jailAccessGranted.Remove(npc))
             npc.SetJailAccess(false);
     }
 
