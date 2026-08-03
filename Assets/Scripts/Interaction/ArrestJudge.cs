@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 검거 판정 — 본부로 인계된 NPC의 실제 신원을 대조해 진범/오검거를 판정한다. (GDD 7-2, #41)
-/// 인계 단말(HqDropoffTerminal)의 상호작용키 요청이 TryDeliver로 들어오면 판정하고, 결과를
-/// 로그 + OnArrestJudged로 알린다. 인계존 도달 자동 판정은 폐기됐다 (#414).
+/// 검거 판정 — 확보한 신병의 실제 신원을 대조해 진범/오검거를 판정한다. (GDD 7-2, #41)
+/// <see cref="JailIntake"/>가 신병이 유치장에 들어선 순간 <see cref="Judge"/>를 부르면 판정하고,
+/// 결과를 로그 + OnArrestJudged로 알린다.
+/// 판정 장소 이력: 인계존 도달 자동 판정(#59) → 인계 단말 E(#414) → <b>유치장 진입(#492)</b>.
 /// 실제 자금 정산(#42)·오검거 페널티(GDD 7-3)·판정 UI(#43)는 이 이벤트를 구독해 후속 구현한다.
 ///
 /// 범인 배정(CriminalAssigner)이 서버에서만 이뤄지고 아직 클라이언트에 동기화되지 않으므로(#52/#56 TODO),
@@ -20,19 +21,11 @@ public class ArrestJudge : CommonManagerBase
     // 라운드 시작에 뽑아 CitizenIdentity.Bounty에 확정해 두고, 판정은 그 값을 읽기만 한다.
     // 판정 시점에 뽑으면 재판정(#358)·탈옥 후 재검거(#231)로 금액을 리롤할 수 있게 된다.
 
-    [Header("인계 구역 (비우면 씬에서 자동 탐색)")]
-    [Tooltip("인계 요청 시 대상이 이 구역 안에 있는지 서버가 재검증한다 — 판정의 실제 기준 (#414)")]
-    [SerializeField] private HqDropoffZone m_dropoffZone;
-
     public event Action<ArrestResult> OnArrestJudged;
 
     protected override void Awake()
     {
         base.Awake(); // App.Game.ArrestJudge 등록
-
-        // HqDropoffZone은 장소 오브젝트라 App 대상이 아님 — 씬 탐색 유지 (같은 도메인 부품)
-        if (m_dropoffZone == null)
-            m_dropoffZone = FindFirstObjectByType<HqDropoffZone>();
     }
 
     // 판정 완료 표식은 NpcController.IsDelivered가 들고 있다 (#230) — NPC와 수명을 같이하므로
@@ -40,31 +33,15 @@ public class ArrestJudge : CommonManagerBase
     // (App 등록 해제는 베이스 OnDestroy가 처리 — 여기서 오버라이드할 것이 없다)
 
     /// <summary>
-    /// 인계 시도 — 인계 단말(#414)의 요청이 서버에 도달했을 때 호출된다. 상태·구역을 재검증하고
-    /// 통과하면 판정한다. <b>판정의 실제 기준은 여기 한 곳</b>이다: 단말의 CanInteract는 조준 피드백용
-    /// 클라 게이팅이라 위조 RPC를 막지 못한다 (RoundEndButton·CCTVSwitcher와 같은 관례, #362).
-    /// 서버(또는 오프라인) 전용 — 게이트는 Judge가 대상 권위로 한 번 더 건다.
+    /// 판정 — 대상의 신원을 대조해 진범/경범죄/오검거를 확정한다. 서버(또는 오프라인) 전용.
+    ///
+    /// <b>호출 시점은 <see cref="JailIntake"/>가 쥔다</b> (#492): 확보한 신병이 유치장에 들어선 순간
+    /// 한 번 부른다. 상태·구역 검증은 그쪽이 이미 끝냈으므로 여기서 다시 하지 않는다 —
+    /// 예전 인계 단말 경로의 TryDeliver(상태·구역 재검증)는 단말과 함께 제거됐다.
+    ///
+    /// 재판정(#358)은 그대로 허용된다: 빼냈다 다시 넣으면(ClearDelivered) 다시 판정되고,
+    /// 중복 후처리는 <see cref="ArrestResult.IsFirstDelivery"/>가 건다.
     /// </summary>
-    public ArrestResult? TryDeliver(NpcController npc)
-    {
-        if (npc == null) return null;
-
-        // 밧줄로 확보한 신병만 인계 대상 — 끌려오는 중(Escorted)과 인계존에 내려놓은 대상(Captured)이
-        // 모두 통과하고, 배회 시민·수감자는 걸린다. 단말의 조준 피드백과 같은 기준을 쓴다(#184).
-        // 재판정(#358)은 그대로 허용된다: 다시 데려와 E를 누르면 다시 판정되고, 중복 후처리는
-        // ArrestResult.IsFirstDelivery가 건다. 자동 트리거가 사라져 틱 중복 발화 방어는 필요 없어졌다.
-        if (!NpcStateRules.CanDeliver(npc.CurrentState))
-            return null;
-
-        if (m_dropoffZone != null && !m_dropoffZone.Contains(npc.transform.position))
-        {
-            Debug.Log($"인계 거부 — 대상이 인계 구역 밖에 있다: {npc.name}");
-            return null;
-        }
-
-        return Judge(npc);
-    }
-
     public ArrestResult? Judge(NpcController npc)
     {
         if (npc == null) return null;

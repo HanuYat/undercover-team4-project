@@ -5,8 +5,8 @@ using UnityEngine;
 
 /// <summary>
 /// 유치장 — 검거된 범인을 실제로 수용·관리하는 구역. (GDD 7-2, #228)
-/// 판정 구역(HqDropoffZone/ArrestJudge)과 분리되어 있다: 판정은 "누가 범인인가"만,
-/// 여기는 "어디에 가두고 몇 명이 있는가"만 안다. 둘을 잇는 건 CustodyRouter다.
+/// 판정(ArrestJudge)과 분리되어 있다: 판정은 "누가 범인인가"만, 여기는 "어디에 가두고 몇 명이
+/// 있는가"만 안다. 둘을 잇고 출입을 관리하는 건 <see cref="JailIntake"/>다 (#492).
 ///
 /// 수용 인원은 서버 권위로 세어 NetworkVariable로 전 피어에 동기화한다 (#56 패턴) —
 /// 본부 UI(별도 이슈)는 InmateCount/OnInmateCountChanged를 읽으면 된다.

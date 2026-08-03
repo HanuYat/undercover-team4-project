@@ -5,7 +5,7 @@ using UnityEngine;
 
 /// <summary>
 /// 검거·연행 <b>요청과 판정</b>의 서버 권위 허브. (#59, #56/#118 네트워크 전환, #269/#369)
-/// 오너 클라의 아이템/상호작용(Rope·NpcSubdueInteractable·PlayerInteractor·HqDropoffTerminal)이
+/// 오너 클라의 아이템/상호작용(Rope·NpcSubdueInteractable·PlayerInteractor)이
 /// 여기 요청 API를 호출하면, 요청을 서버로 넘겨(ServerRpc) 서버가 채널링·사거리·가시선·자원을 검증하고
 /// 그 결과 NpcController 상태 변경은 서버에서 일어난다.
 ///
@@ -153,22 +153,6 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         ReleaseRpc(new NetworkObjectReference(target.NetworkObject));
     }
 
-    /// <summary>
-    /// 본부 인계 요청 — 오너가 호출(인계 단말 E). 서버가 대상·구역을 재검증해 판정한다. (#414)
-    /// 예전엔 인계존 콜라이더가 자동으로 판정을 냈다 — 트리거가 상호작용키로 옮겨진 진입점이다.
-    /// </summary>
-    public void RequestDeliver()
-    {
-        if (!IsSpawned)
-        {
-            ServerDeliver();
-            return;
-        }
-        if (!IsOwner)
-            return;
-        DeliverRpc();
-    }
-
     // 원격 클라 → 서버로 대상을 넘기려면 스폰돼 있어야 한다(NetworkObjectReference 제약).
     // 스폰 안 된 NPC(씬 배치 후 미스폰 등)면 참조 생성이 예외를 던지므로 미리 걸러 경고만 남긴다.
     private bool IsTargetNetworkReady(NpcController target)
@@ -231,9 +215,6 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
             Escorter.ReleaseDrag(target);
         }
     }
-
-    [Rpc(SendTo.Server)]
-    private void DeliverRpc() => ServerDeliver();
 
     // ---- 서버 실행: 채널 제어 ----
 
@@ -467,39 +448,8 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         target.ReleaseFromCustody();
     }
 
-    // ---- 서버 실행: 본부 인계 (#414) ----
-
-    // 인계 실행 — 대상은 클라가 지정하지 않는다. 서버가 자기 권위 상태(밧줄 목록)에서 읽으므로
-    // "남이 데려온 NPC를 인계했다"는 위조가 성립할 수 없다. 상태·구역 검증과 판정은 ArrestJudge가 한다 —
-    // 연행 허브가 인계존을 알 필요는 없고, 판정 기준이 한 곳(#414)에 모여 있어야 하기 때문이다.
-    private void ServerDeliver()
-    {
-        if (IsSpawned && !IsServer)
-            return;
-
-        // 끌기(DraggingNpc)가 아니라 밧줄이 기준이다 — 인계존에 내려놓고 접수하는 경로에서는
-        // 끌기가 풀려 있다. 묶여 있는 동안은 끌든 놓든 같은 대상이라 이 하나로 두 경로가 모두 덮인다.
-        if (Escorter.TetheredCount == 0)
-            return; // 묶어 둔 대상이 없으면 넘길 것이 없다
-
-        ArrestJudge judge = App.Game.ArrestJudge;
-        if (judge == null)
-        {
-            Debug.LogWarning("PlayerEscortCommands: ArrestJudge가 없어 인계 판정을 할 수 없다", this);
-            return;
-        }
-
-        // 묶은 순서대로 판정한다 (#414 팀 확정 — 판정 기준이 NPC가 아니라 플레이어다).
-        // 인계존 밖이거나 상태가 맞지 않는 대상은 ArrestJudge가 걸러 내고 목록에 그대로 남는다 —
-        // 다시 데려와 E를 누르면 그때 판정된다(재판정 #358과 같은 취급).
-        //
-        // 복사해서 도는 이유: 판정에 성공한 대상은 Jailed로 넘어가고 그 순간 매 프레임 정리가
-        // 목록에서 빼므로, 원본을 그대로 순회하면 도중에 컬렉션이 바뀐다.
-        // 여러 명을 한 번에 끌고 왔으면(#390) 전부 순서대로 접수된다.
-        List<NpcController> pending = new List<NpcController>(Escorter.ServerTethered);
-        for (int i = 0; i < pending.Count; i++)
-            judge.TryDeliver(pending[i]);
-    }
+    // 본부 인계 요청(#414)은 제거됐다 (#492) — 판정 트리거가 인계 단말에서 유치장 진입으로 옮겨져
+    // JailIntake가 직접 ArrestJudge.Judge를 부른다. 플레이어가 보낼 요청 자체가 없어졌다.
 
     // ---- 공통 ----
 

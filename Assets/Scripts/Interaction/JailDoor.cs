@@ -20,7 +20,7 @@ using UnityEngine;
 /// 신호이기 때문이다.
 ///
 /// 씬 배치: 조준용 콜라이더를 <b>Interactable 레이어</b>에 둘 것 — PlayerInteractor의 조준 마스크가 그
-/// 레이어만 본다 (HqDropoffTerminal과 같은 관례).
+/// 레이어만 본다 (다른 상호작용물과 같은 관례).
 ///
 /// 서버 권위 — 개폐 판단과 상태는 서버가 정해 NetworkVariable로 전 피어에 동기화하고(#56),
 /// 미끄러지는 연출은 각 피어가 로컬로 보간한다.
