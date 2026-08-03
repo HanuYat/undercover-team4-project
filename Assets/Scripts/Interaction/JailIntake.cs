@@ -187,7 +187,8 @@ public class JailIntake : MonoBehaviour
     }
 
     // 파괴된 대상을 걷어낸다 — 라운드 종료 잔류 정리(MisdemeanorLoiterer)로 NPC가 사라져도
-    // 키가 남아 목록이 라운드마다 자란다. 위 두 규칙은 살아 있는 NPC를 훑어 도므로 스스로 지우지 못한다.
+    // 키가 남아 목록이 라운드마다 자란다. 판정·통행·착석 세 규칙은 <b>살아 있는 NPC를 훑어</b> 도므로
+    // (Update의 FindObjectsByType 결과) 사라진 대상은 스스로 지우지 못한다. 그래서 매 틱 먼저 돈다.
     private void PruneDestroyed()
     {
         m_deadBuffer.Clear();
