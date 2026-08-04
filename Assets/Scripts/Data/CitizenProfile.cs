@@ -17,8 +17,11 @@ public class CitizenProfile : ScriptableObject
     // 본부 인명부는 정본(CitizenName/Faction)을, 스캔 UI는 표시값(m_nameView/m_factionView/m_symbolView)을 쓴다.
     [Header("스캔으로 확인할 결과")]
     public string m_nameView;     // 표시 이름 — 정본과 다르면 이름 위조 (#223)
-    public string m_typeView;     // 표시 타입
-    public string m_factionView;  // 표시 세력
+
+    // 타입·세력은 enum으로 둔다 — 표기 문구는 표시 시점에 번역한다 (#497).
+    // 완성된 문자열을 담아 두면 그 문구만 번역에서 빠지고, 프로필이 만들어진 시점의 언어로 굳는다.
+    public OfficialRecords.CitizenType m_typeView;     // 표시 타입
+    public OfficialRecords.Faction m_factionView;      // 표시 세력
     public Sprite m_symbolView;   // 표시 심볼
     public int m_symbolIndexView;    // 표시 심볼의 variant index
 
@@ -34,8 +37,8 @@ public class CitizenProfile : ScriptableObject
         m_faction = faction;
 
         m_nameView = citizenName;
-        m_typeView = OfficialRecords.CitizenTypeNames[citizenType];
-        m_factionView = OfficialRecords.FactionNames[faction];
+        m_typeView = citizenType;
+        m_factionView = faction;
         m_symbolIndexView = symbolIndex;
         m_symbolView = officialRecords != null ? officialRecords.GetFactionSymbol(faction, symbolIndex) : null;
     }

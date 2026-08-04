@@ -5,6 +5,8 @@ using Cysharp.Threading.Tasks;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
+using UnityEngine.Localization.Settings;
 
 /// <summary>
 /// 스캔 결과 프레젠터. (#39 → #233)
@@ -52,6 +54,12 @@ public class ScanResultPresenter : NetworkBehaviour
     [SerializeField]
     private float m_toastSeconds = 2f;
 
+    // 배터리·토스트 문구는 조회 시점이 코드 안이라 인스펙터에서 고를 것이 없다. (#497)
+    private const string k_hudTable = "HudTable";
+    private const string k_batteryKey = "Hud.Scan.Battery";
+    private const string k_chargedKey = "Hud.Scan.Charged";
+    private const string k_lowBatteryKey = "Hud.Scan.LowBattery";
+
     private PlayerInteractor m_interactor;
     private PlayerItemUser m_itemUser;
     private Scanner m_scanner; // 현재 장착된 스캐너 인스턴스에 바인딩. 스캐너 미장착이면 null.
@@ -91,6 +99,10 @@ public class ScanResultPresenter : NetworkBehaviour
         SetActive(m_batteryPanel, false); // 스캐너 장착 전엔 숨김
         SetActive(m_toastPanel, false);
 
+        // 카드·배터리 문구가 테이블에서 오므로 언어가 바뀌면 다시 채운다 — 값은 그대로여도 표기가 바뀐다.
+        // 문구마다 StringChanged를 거는 대신 로케일 변경 한 곳에 걸어 통째로 다시 그린다 (ShopStand와 같은 방식). (#497)
+        LocalizationSettings.SelectedLocaleChanged += HandleLocaleChanged;
+
         // 인터랙터/아이템유저는 플레이어 루트에 있다 — 부모까지 탐색.
         m_interactor = GetComponentInParent<PlayerInteractor>();
         m_itemUser = GetComponentInParent<PlayerItemUser>();
@@ -115,8 +127,27 @@ public class ScanResultPresenter : NetworkBehaviour
         if (m_itemUser != null)
             m_itemUser.OnEquippedItemChanged -= HandleEquippedItemChanged;
 
+        // 종료 중에는 설정 에셋을 되살리지 않는다 — HasSettings로 먼저 확인한다 (ShopStand 관례)
+        if (LocalizationSettings.HasSettings)
+            LocalizationSettings.SelectedLocaleChanged -= HandleLocaleChanged;
+
         BindScanner(null); // 게이지·토스트 정리 포함
         HideCurrent();
+    }
+
+    // 언어가 바뀌면 지금 떠 있는 카드와 배터리 표기를 다시 채운다.
+    // 토스트는 다시 그리지 않는다 — 소진 안내는 다음 배터리 변화에 갱신되고, 나머지는 몇 초짜리다.
+    private void HandleLocaleChanged(Locale locale)
+    {
+        UpdateCurrentContent();
+
+        if (m_batteryText != null && m_battery != null)
+            m_batteryText.text = LocalizedStrings.Get(
+                k_hudTable,
+                k_batteryKey,
+                m_battery.CurrentBattery,
+                m_battery.MaxBattery
+            );
     }
 
     // 조준 대상이 바뀔 때만 호출된다 — 이전 카드를 끄고, 새 대상이 스캔 가능한 NPC면 그 카드를 켠다.
@@ -270,15 +301,21 @@ public class ScanResultPresenter : NetworkBehaviour
     private void UpdateBattery(int current)
     {
         if (m_batteryText != null && m_battery != null)
-            m_batteryText.text = $"배터리 {current}/{m_battery.MaxBattery}";
+            m_batteryText.text = LocalizedStrings.Get(
+                k_hudTable,
+                k_batteryKey,
+                current,
+                m_battery.MaxBattery
+            );
 
         bool charged = m_lastBattery >= 0 && current > m_lastBattery; // 잔량 증가 = 충전기 이용
         m_lastBattery = current;
 
         if (charged)
-            ShowToast("스캐너 충전 완료", transient: true);
+            ShowToast(LocalizedStrings.Get(k_hudTable, k_chargedKey), transient: true);
         else if (current <= 0)
-            ShowToast("스캐너 배터리 부족", transient: false); // 소진 — 장착 중 계속 노출
+            // 소진 — 장착 중 계속 노출
+            ShowToast(LocalizedStrings.Get(k_hudTable, k_lowBatteryKey), transient: false);
         else
             HideToast(); // 정상 잔량 — 배터리 관련 토스트 없음
     }

@@ -308,5 +308,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoundFundBoard
   m_fundText: {fileID: 3412016239016937745}
-  m_format: "{0:N0} / {1:N0}\uC6D0"
+  m_fundFormat:
+    m_TableReference:
+      m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
+    m_TableEntryReference:
+      m_KeyId: 7100000000303
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
   m_metColor: {r: 0.36, g: 0.85, b: 0.44, a: 1}
+  references:
+    version: 2
+    RefIds: []

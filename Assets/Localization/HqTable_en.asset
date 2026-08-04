@@ -16,8 +16,68 @@ MonoBehaviour:
     m_Code: en
   m_SharedData: {fileID: 11400000, guid: a4c8df317b247dd44b76163f41d8135a, type: 2}
   m_Metadata:
-    m_Items: []
-  m_TableData: []
+    m_Items:
+    - rid: 6276845898492543065
+  m_TableData:
+  - m_Id: 7100000000000
+    m_Localized: Citizen Directory
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000001
+    m_Localized: By Name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000002
+    m_Localized: By Faction
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000003
+    m_Localized: Prev
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000004
+    m_Localized: Next
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000005
+    m_Localized: Faction List
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000006
+    m_Localized: End Round
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000500
+    m_Localized: No channel
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000501
+    m_Localized: "\u26A0 No signal"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000502
+    m_Localized: "Power off \xB7 CH{0}"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845898492543065
+  - m_Id: 7100000000503
+    m_Localized: CH{0}
+    m_Metadata:
+      m_Items:
+      - rid: 6276845898492543065
+  - m_Id: 7100000000504
+    m_Localized: "CH{0} \xB7 {1}"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845898492543065
   references:
     version: 2
-    RefIds: []
+    RefIds:
+    - rid: 6276845898492543065
+      type: {class: SmartFormatTag, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_Entries: 
+        m_SharedEntries:
+        - id: 7100000000502
+        - id: 7100000000503
+        - id: 7100000000504

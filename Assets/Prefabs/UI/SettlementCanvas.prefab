@@ -1267,6 +1267,54 @@ MonoBehaviour:
   m_countdownSeconds: 10
   m_confirmButton: {fileID: 7487297123593961101}
   m_background: {fileID: 7472499428751743457}
+  m_fundSummary:
+    m_TableReference:
+      m_TableCollectionName: GUID:3f2fd7e385653d942b703d8de65d7d61
+    m_TableEntryReference:
+      m_KeyId: 7100000000408
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_topOffenderFormat:
+    m_TableReference:
+      m_TableCollectionName: GUID:3f2fd7e385653d942b703d8de65d7d61
+    m_TableEntryReference:
+      m_KeyId: 7100000000409
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_noOffenderText:
+    m_TableReference:
+      m_TableCollectionName: GUID:3f2fd7e385653d942b703d8de65d7d61
+    m_TableEntryReference:
+      m_KeyId: 7100000000410
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_personalFormat:
+    m_TableReference:
+      m_TableCollectionName: GUID:3f2fd7e385653d942b703d8de65d7d61
+    m_TableEntryReference:
+      m_KeyId: 7100000000411
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_countdownFormat:
+    m_TableReference:
+      m_TableCollectionName: GUID:3f2fd7e385653d942b703d8de65d7d61
+    m_TableEntryReference:
+      m_KeyId: 7100000000412
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  references:
+    version: 2
+    RefIds: []
 --- !u!114 &7487297123593961101 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 6765391398954559264, guid: 18442c01fe60d4d76ab1cffa88ed6364, type: 3}

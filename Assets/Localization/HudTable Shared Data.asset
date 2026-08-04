@@ -39,6 +39,62 @@ MonoBehaviour:
     m_Key: Hud.Penalty.ChaseWarning
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000300
+    m_Key: Hud.Ready.Waiting
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000301
+    m_Key: Hud.Criminals.Count
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000302
+    m_Key: Hud.Mic.MutedHint
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000303
+    m_Key: Hud.Round.FundProgress
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000310
+    m_Key: Hud.Verdict.WantedCriminal
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000311
+    m_Key: Hud.Verdict.WrongfulArrest
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000312
+    m_Key: Hud.Verdict.Misdemeanor
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000313
+    m_Key: Hud.Verdict.Detail
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000314
+    m_Key: Hud.Scan.Battery
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000315
+    m_Key: Hud.Scan.Charged
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000316
+    m_Key: Hud.Scan.LowBattery
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000317
+    m_Key: Hud.Scan.FieldName
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000318
+    m_Key: Hud.Scan.FieldType
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000319
+    m_Key: Hud.Scan.FieldFaction
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

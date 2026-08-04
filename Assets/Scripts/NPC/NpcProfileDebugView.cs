@@ -132,9 +132,9 @@ public class NpcProfileDebugView : MonoBehaviour
         {
             var axis = (AppearanceAxis)i;
             int index = profile.GetIndex(axis);
-            string axisName = db != null ? db.GetAxisName(axis) : axis.ToString();
+            string axisName = AppearanceDatabase.GetAxisName(axis);
             string valueName = db != null
-                ? (db.GetOption(axis, index)?.DisplayName ?? "?")
+                ? AppearanceDatabase.GetOptionName(db.GetOption(axis, index))
                 : index.ToString();
 
             if (builder.Length > 0)
@@ -149,13 +149,12 @@ public class NpcProfileDebugView : MonoBehaviour
         if (axes == null || axes.Count == 0)
             return "(없음)";
 
-        AppearanceDatabase db = Database;
         var builder = new StringBuilder();
         for (int i = 0; i < axes.Count; i++)
         {
             if (builder.Length > 0)
                 builder.Append(", ");
-            builder.Append(db != null ? db.GetAxisName(axes[i]) : axes[i].ToString());
+            builder.Append(AppearanceDatabase.GetAxisName(axes[i]));
         }
         return builder.ToString();
     }
