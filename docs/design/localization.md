@@ -58,7 +58,7 @@
 | `SettingsTable` | `Settings.` | 설정 패널 (전 씬 공용 — Title 포함 4개 씬) |
 | `PauseTable` | `Pause.` | 일시정지 패널 (인게임 전용 — Lobby·Main·Shop) |
 | `HudTable` | `Hud.` | 라운드 타이머·팀 자금·남은 범인·대기 안내·마이크 상태·토스트·검거 판정 배너·구조 프롬프트·페널티 경고 |
-| `ItemTable` | `Item.` | 아이템 이름/설명 **+ 사용 피드백**(Phase 3에서 `Item.Feedback.*` 추가) — 기존 테이블 유지 |
+| `ItemTable` | `Item.` | 아이템 이름/설명 — **소지형(인스펙터에서 고름) + 설치형(`Item.Name.<EInstallable>` 규약)**. Phase 3에서 `Item.Feedback.*` 추가 |
 | `WorldTable` | `World.` | 월드 설치물 라벨 (신호 해석기·부활 장치·스캐너 충전기·폭탄 매뉴얼·CCTV 장소명) |
 | `HqTable` | `Hq.` | 인명부·수배 리스트·세력 문양 보드·CCTV 채널 라벨·라운드 종료 버튼 |
 | `SettlementTable` | `Settlement.` | 정산 화면 (결과·종료 사유·수익 내역·복귀 카운트다운) |
@@ -145,7 +145,7 @@
 | 대상 | 개수 | 상태 |
 |------|------|------|
 | Title Scene | **17** | ✅ 완료 (`TitleTable`, 브랜치 `feature/374-localization-title`) |
-| Lobby / Shop | 6 | Lobby 2개(게임 시작·세션 나가기) 진행 중 — `LobbyTable` |
+| Lobby / Shop | 6 | Lobby 2개(게임 시작·세션 나가기) · Shop 4개(시작 버튼 + `구매함` 3개) 진행 중 |
 | Main Scene | 6 | 인명부 정렬·페이지 버튼 등 |
 | 프리팹 | 약 26 | ✅ SettingsCanvas 8 · PauseCanvas 4 · LeaveConfirm 2 / 남음: QuitConfirm·AccountConfirm 5, Directory·FactionSymbolBoard·RoundEndButton, 월드 라벨 4 |
 
@@ -163,6 +163,23 @@
 > 그래서 `LocalizedString m_defaultStatus` + 구독으로 두고, `SetStatus`의 매개변수도 `string` →
 > `LocalizedString`으로 바꿨다 — 완성된 한국어를 넘길 수 있게 두면 그 문구만 번역에서 빠지고,
 > 로딩 중에는 언어를 바꿀 방법이 없어 눈에도 안 띈다.
+
+> **`LocalizedStrings.Get(table, key, args)` 헬퍼를 뒀다** ([Assets/Scripts/Localization/LocalizedStrings.cs](../../Assets/Scripts/Localization/LocalizedStrings.cs)).
+> 표시 문구는 원칙적으로 `LocalizedString` SerializeField지만, **인스펙터에서 고를 것이 없는 자리**에는 이 헬퍼를 쓴다.
+>  · 규약 기반 키 — `접두 + enum 이름`. 결정 (h)가 매핑 에셋·인스펙터 배선을 두지 않기로 한 자리다.
+>  · 전역 단위·서식 — `Common.Unit.Money`처럼 프로젝트 전체가 한 문구를 쓰는 자리.
+>  · **같은 문구를 여러 인스턴스가 쓰는 자리** — 상점 진열대 3개가 그렇다. SerializeField로 두면 인스턴스마다
+>    같은 키를 다시 배선해야 하고, 하나만 빠지면 그 진열대만 옛 문구로 조용히 남는다.
+>
+> 이 헬퍼는 **지금 언어로 한 번 읽어 주기만 한다** — 언어 변경 갱신은 호출부가 `SelectedLocaleChanged`를
+> 구독해 다시 그려야 한다. `ShopStand`가 이미 그 방식이었고(항목별 `StringChanged`를 여럿 구독하는 대신
+> 로케일 변경 한 곳에 걸고 표시를 통째로 다시 채운다), `TeamFundBalanceView`에도 같은 훅을 넣었다.
+
+> **설치형 판매 품목의 이름·설명을 `ItemTable`로 올렸다.** `ShopStand`가 인스펙터 `string` 필드
+> (`m_installableName`/`m_installableDescription`)에 한국어를 담고 있었고 "판매 설치형이 늘면 승격한다"고
+> 미뤄 뒀는데, 이미 둘(`신호 해석기`·`경보 버튼`)이라 결정 (f)대로 승격했다. 키는 `Item.Name.<EInstallable>` ·
+> `Item.Description.<EInstallable>`이다 — 소지형이 이미 `Item.Name.*`을 쓰므로 **두 종류의 출처가 같아진다.**
+> 조준 카드에 둘이 나란히 뜨는 화면이라 여기서 갈라지면 한쪽만 번역된 상태가 그대로 보인다.
 
 > 음성 상태 5개가 **결정 (h) 규약 기반 매핑의 첫 사용처**다. `LobbyRosterPanel`이 `"Lobby.Voice." + EVoiceState`로
 > 키를 만들어 조회하므로, 상태가 늘면 `LobbyTable`에 키만 추가하면 된다 — 인스펙터 배선도 매핑 에셋도 없다.

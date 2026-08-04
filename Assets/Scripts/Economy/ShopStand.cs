@@ -32,21 +32,18 @@ public class ShopStand : NetworkBehaviour, IInteractable
     [SerializeField]
     private EInstallable m_installable = EInstallable.None;
 
-    [Header("설치형 표시 정보 (소지형은 프리팹에서 읽으므로 비워 둔다)")]
-    // 설치형은 ItemBase가 아니라 지역화 테이블 항목 자체가 없다 — 한 종뿐이라 테이블을 새로 파지 않고
-    // 인스펙터에 직접 적는다. 판매 설치형이 늘면 그때 LocalizedString으로 승격한다.
-    [Tooltip("설치형 표시 이름")]
-    [SerializeField]
-    private string m_installableName;
-
-    [Tooltip("설치형 설명 — 조준 카드에 표시된다")]
-    [TextArea]
-    [SerializeField]
-    private string m_installableDescription;
-
+    [Header("설치형 가격 (이름·설명은 ItemTable에서 온다)")]
     [Min(0)]
     [SerializeField]
     private int m_installablePrice;
+
+    // 설치형 이름·설명은 인스펙터가 아니라 ItemTable에서 온다 (#497). 키는 enum 이름으로 만든다 —
+    // 소지형이 이미 ItemBase.ItemName으로 Item.Name.* 을 쓰므로 두 종류의 출처가 같아진다.
+    // 조준 카드에 둘이 나란히 뜨는 화면이라 여기서 갈라지면 한쪽만 번역되는 상태가 눈에 보인다.
+    private const string k_itemTable = "ItemTable";
+    private const string k_shopTable = "ShopTable";
+    private const string k_nameKeyPrefix = "Item.Name.";
+    private const string k_descriptionKeyPrefix = "Item.Description.";
 
     // 가격표·카드는 같은 오브젝트의 표시 컴포넌트가 그린다 (RequireComponent 보장).
     private ShopStandView m_view;
@@ -110,17 +107,17 @@ public class ShopStand : NetworkBehaviour, IInteractable
     private string ResolveName()
     {
         if (IsInstallable)
-            return string.IsNullOrEmpty(m_installableName) ? m_installable.ToString() : m_installableName;
+            return LocalizedStrings.Get(k_itemTable, k_nameKeyPrefix + m_installable);
 
         return m_itemPrefab != null && !m_itemPrefab.ItemName.IsEmpty
             ? m_itemPrefab.ItemName.GetLocalizedString()
-            : "(품목 미지정)";
+            : LocalizedStrings.Get(k_shopTable, "Shop.Stand.NoItem");
     }
 
     private string ResolveDescription()
     {
         if (IsInstallable)
-            return m_installableDescription;
+            return LocalizedStrings.Get(k_itemTable, k_descriptionKeyPrefix + m_installable);
 
         return m_itemPrefab != null && !m_itemPrefab.ItemDescription.IsEmpty
             ? m_itemPrefab.ItemDescription.GetLocalizedString()

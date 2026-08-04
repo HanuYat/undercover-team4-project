@@ -14,7 +14,27 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.SharedTableData
   m_TableCollectionName: ShopTable
   m_TableCollectionNameGuidString: 02523d40abbc73e48bee1f7b28a81881
-  m_Entries: []
+  m_Entries:
+  - m_Id: 70274797080576
+    m_Key: Shop.Button.Start
+    m_Metadata:
+      m_Items: []
+  - m_Id: 70274809663488
+    m_Key: Shop.Stand.Purchased
+    m_Metadata:
+      m_Items: []
+  - m_Id: 70274809663489
+    m_Key: Shop.Stand.TypeInstallable
+    m_Metadata:
+      m_Items: []
+  - m_Id: 70274809663490
+    m_Key: Shop.Stand.TypeCarryable
+    m_Metadata:
+      m_Items: []
+  - m_Id: 70274809663491
+    m_Key: Shop.Stand.NoItem
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
