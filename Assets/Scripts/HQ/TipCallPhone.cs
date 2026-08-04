@@ -3,13 +3,11 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 본부 제보 전화 (#102, GDD 4-2) — 간헐적으로 울리고, 받으면 대기 중이던 예비 용의자 1명이
-/// 수배 리스트에 공개되면서 라운드 검거 할당량도 함께 1 늘어난다. 전화 내용은 없다: 받는 행위 자체가 기능이다.
-/// 이게 "본부에 최소 1명 상주"의 이유이자 "전화 오기 전까지만 현장 다녀오자"는 도박을 만든다.
+/// 본부 제보 전화 (#102) — 간헐적으로 울리고, 받으면 대기 중이던 예비 용의자 1명이
+/// 수배 리스트에 공개되면서 라운드 검거 할당량도 함께 1 늘어난다.
 ///
-/// 한 라운드에 걸려오는 횟수는 라운드 시작에 [최소, 최대] 사이에서 뽑는다 — 이번 라운드에 몇 명이 더
-/// 늘어날지 미리 알 수 없게 하기 위함이다. 횟수는 '받았을 때'가 아니라 '울릴 때' 깎이므로, 자리를 비워
-/// 놓친 전화도 한 번을 소모한다 (GDD 4-2 "자리를 비운 사이 오면 갱신 기회를 놓친다").
+/// 한 라운드에 걸려오는 횟수는 라운드 시작에 [최소, 최대] 사이에서 뽑는다 — 이번 라운드에 몇 명이 더 늘어날지 미리 알 수 없다. 횟수는 '받았을 때'가 아니라 '울릴 때' 깎이므로, 자리를 비워
+/// 놓친 전화도 한 번을 소모한다.
 ///
 /// 서버 권위 — 수신 타이머·승격은 서버(또는 오프라인)에서만 돌고, 울림 여부만 동기화한다.
 /// 벨소리·표시는 각 클라의 로컬 연출이므로 OnRingingChanged를 구독해 붙이면 된다(이 이슈 범위 밖).
@@ -67,6 +65,14 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
     /// <summary>울림 시작·종료 — 벨소리와 표시 연출이 구독할 훅. 전 피어에서 발행된다.</summary>
     public event Action OnRingingChanged;
 
+    /// <summary>
+    /// 전화를 받았다 — 받은 클라이언트의 id를 함께 넘긴다. 서버(또는 오프라인)에서만 발행된다. (#485)
+    /// 전화기는 받았다는 사실만 알린다: 비밀 청탁을 붙일지·누구에게 무엇을 시킬지는
+    /// <see cref="SecretFavorBroker"/>가 판단한다. 이 전화기에 청탁 로직까지 얹으면
+    /// 타이머·횟수·울림에 의뢰 추적까지 붙어 단일 책임을 넘긴다.
+    /// </summary>
+    public event Action<ulong> OnAnswered;
+
     // 스폰 전(오프라인 단독 Play)이면 이 피어가 곧 권위다 — SuddenEventManager와 동일
     private bool IsAuthority => !IsSpawned || IsServer;
 
@@ -86,13 +92,12 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
 
     public void Interact(GameObject interactor)
     {
-        if (!CanInteract(interactor))
-            return;
+        if (!CanInteract(interactor)) return;
 
         // 세션 밖(오프라인 단독 Play)에서는 RPC를 보낼 곳이 없다 — 이 피어가 곧 서버다
         if (!IsSpawned)
         {
-            Answer();
+            Answer(NetworkManager.ServerClientId);
             return;
         }
 
@@ -103,14 +108,14 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
     public bool CanInteract(GameObject interactor) => IsRinging;
 
     [Rpc(SendTo.Server)]
-    private void RequestAnswerRpc()
+    private void RequestAnswerRpc(RpcParams rpcParams = default)
     {
         // CanInteract는 조준 피드백용 클라이언트 게이팅이라 RPC 직접 호출을 막지 못한다.
         // 서버에서 한 번 더 검증한다 — CCTVSwitcher.RequestTogglePowerRpc와 같은 이유 (#362)
-        if (!m_isRinging)
-            return;
+        if (!m_isRinging) return;
 
-        Answer();
+        // 발신 클라이언트가 곧 '받은 사람'이다 — 비밀 청탁의 대상자 식별 근거 (#485)
+        Answer(rpcParams.Receive.SenderClientId);
     }
 
     // ---- 수신 스케줄 (서버 · 오프라인 전용) ----
@@ -201,7 +206,7 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
     }
 
     // 전화를 받았다 — 서버(또는 오프라인)에서만 돈다
-    private void Answer()
+    private void Answer(ulong answeredBy)
     {
         SetRinging(false);
 
@@ -223,6 +228,10 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
             // 여기서 멈추지 않는다 — 다음 전화 때 다시 시도한다
             Debug.Log("[제보 전화] 받았지만 지금 공개할 수 있는 용의자가 없다 — 다음 전화를 기다린다");
         }
+
+        // 수배 갱신(팀 이득)은 위에서 이미 끝났다. 청탁은 그 위에 얹히므로, 청탁이 붙어도
+        // 팀은 갱신 기회를 잃지 않는다 — "모르는 사이에 손해"를 만들지 않기 위한 순서다 (#485)
+        OnAnswered?.Invoke(answeredBy);
 
         ScheduleNext();
     }
