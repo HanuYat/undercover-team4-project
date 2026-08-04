@@ -38,10 +38,18 @@ public class ScanInfoView : NpcWorldCard
     private const string k_typeKey = "Hud.Scan.FieldType";
     private const string k_factionKey = "Hud.Scan.FieldFaction";
 
-    /// <summary>스캔 완료 NPC — 실제 프로필 값을 표시하고 카드를 켠다.</summary>
-    public void ShowReal(string citizenName, string typeView, string factionView, Sprite symbolView)
+    /// <summary>
+    /// 스캔 완료 NPC — 실제 프로필 값을 표시하고 카드를 켠다.
+    /// 타입·세력은 완성된 문자열이 아니라 enum으로 받는다 — 표기를 여기서 지금 언어로 번역한다 (#497).
+    /// </summary>
+    public void ShowReal(
+        string citizenName,
+        OfficialRecords.CitizenType typeView,
+        OfficialRecords.Faction factionView,
+        Sprite symbolView
+    )
     {
-        SetFields(citizenName, typeView, factionView);
+        SetFields(citizenName, OfficialRecords.TypeName(typeView), OfficialRecords.FactionName(factionView));
         SetSymbol(symbolView);
         SetCardActive(true);
     }

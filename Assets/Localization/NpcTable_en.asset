@@ -17,7 +17,27 @@ MonoBehaviour:
   m_SharedData: {fileID: 11400000, guid: 7e3bb98f354a36f43bb9ee6612e02e7f, type: 2}
   m_Metadata:
     m_Items: []
-  m_TableData: []
+  m_TableData:
+  - m_Id: 7100000000600
+    m_Localized: Human
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000601
+    m_Localized: Android
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000602
+    m_Localized: None
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000603
+    m_Localized: Faction A
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000604
+    m_Localized: Faction B
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

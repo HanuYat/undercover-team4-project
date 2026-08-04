@@ -14,7 +14,27 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.SharedTableData
   m_TableCollectionName: NpcTable
   m_TableCollectionNameGuidString: 7e3bb98f354a36f43bb9ee6612e02e7f
-  m_Entries: []
+  m_Entries:
+  - m_Id: 7100000000600
+    m_Key: Npc.CitizenType.Human
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000601
+    m_Key: Npc.CitizenType.Android
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000602
+    m_Key: Npc.Faction.None
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000603
+    m_Key: Npc.Faction.FactionA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000604
+    m_Key: Npc.Faction.FactionB
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

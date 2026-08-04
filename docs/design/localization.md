@@ -294,10 +294,23 @@ ToastOwner(EItemFeedback, args…)     ← 신설. RPC는 enum + 숫자 인자�
 
 ### Phase 4 — 데이터 에셋
 - [AppearanceDatabase](../../Assets/Scripts/Data/AppearanceDatabase.cs)의 `AxisDefinition.AxisName` · `AppearanceOption.DisplayName` → `LocalizedString` (몽타주 번역)
-- [OfficialRecords](../../Assets/Scripts/Data/OfficialRecords.cs)의 `CitizenTypeNames` · `FactionNames` Dictionary → `NpcTable` 조회.
-  [DirectoryEntry](../../Assets/Scripts/HQ/Directory/DirectoryEntry.cs)가 이미 **enum을 동기화**하고 클라가 로컬에서 이름으로 바꾸므로 네트워크 변경이 필요 없다
-- **곁다리 정리:** [CitizenProfile](../../Assets/Scripts/Data/CitizenProfile.cs)의 `m_typeView`/`m_factionView`가 `string`인데 실제로는 enum에서 파생된 값이다. **enum 타입으로 바꾸고 표시 시점에 번역**한다 — 위조(#223)는 이름·문양만 오염시키므로 안전하다
-- `SpawnedNpcEvent.m_displayName` · `JailbreakEvent.DisplayName` · `CCTVNode.m_locationLabel`
+- ~~[OfficialRecords](../../Assets/Scripts/Data/OfficialRecords.cs)의 `CitizenTypeNames` · `FactionNames` Dictionary → `NpcTable` 조회~~ — **완료.**
+  Dictionary를 지우고 `TypeName()`/`FactionName()` 정적 헬퍼로 바꿨다. 키는 규약(`Npc.CitizenType.` · `Npc.Faction.` + enum 이름)이고
+  두 enum에 `[LocalizedEnum]`을 붙였다. [DirectoryEntry](../../Assets/Scripts/HQ/Directory/DirectoryEntry.cs)가 이미 **enum을 동기화**하고
+  클라가 로컬에서 이름으로 바꾸므로 네트워크 변경은 없었다
+- ~~**곁다리 정리:** `CitizenProfile`의 `m_typeView`/`m_factionView` enum 승격~~ — **완료.** 위조(#223)가 이름·문양만 오염시키는 것을 확인했다
+  (`SetSymbolIndexView`와 `m_nameView` 대입뿐이고 타입·세력 표시값을 건드리는 경로는 없다)
+- `SpawnedNpcEvent.m_displayName` · `JailbreakEvent.DisplayName` — 돌발 이벤트 묶음이라 이번 범위 밖
+- `CCTVNode.m_locationLabel`
+
+> **ko 화면의 표기가 바뀐다.** `Human` · `Android` · `Faction A/B` · `None`은 한국어 화면에서도 영문이었다 —
+> `인간` · `안드로이드` · `A 세력` · `없음`으로 옮겼다. 결정 (j)가 영문으로 못 박은 것은 **시민 이름**뿐이고
+> (무전으로 부르는 고유명사), 타입·세력은 §3이 처음부터 `NpcTable` 번역 대상으로 잡아 둔 항목이다.
+>
+> **표기를 조회로 바꾸면 목록은 언어 변경을 스스로 못 따라간다.** `OfficialRecords`의 헬퍼는 지금 언어로
+> 한 번 읽어 줄 뿐이라, 이미 그려 둔 행은 그대로 남는다. 그래서 목록을 그리는 쪽
+> (`CitizenDirectoryView` · `FactionSymbolBoardView`)이 `SelectedLocaleChanged`에 걸어 다시 그린다 —
+> 수배 리스트·스캔 카드와 같은 처리다.
 
 ### Phase 5 — 검증
 - 설정 창에서 ko↔en 전환하며 전 화면 순회. **영문이 길어 생기는 버튼·라벨 잘림/오버플로**가 주 확인 대상
