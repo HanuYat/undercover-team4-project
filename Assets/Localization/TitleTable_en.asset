@@ -16,7 +16,8 @@ MonoBehaviour:
     m_Code: en
   m_SharedData: {fileID: 11400000, guid: 7d690f60dcfc30145b00d50e3596d124, type: 2}
   m_Metadata:
-    m_Items: []
+    m_Items:
+    - rid: 6276845892712267879
   m_TableData:
   - m_Id: 6994065952768
     m_Localized: One-Star Precinct
@@ -90,6 +91,51 @@ MonoBehaviour:
     m_Localized: Start with a New Guest Account
     m_Metadata:
       m_Items: []
+  - m_Id: 10788094939136
+    m_Localized: Signing in as guest...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788094939137
+    m_Localized: "Signed in \u2014 {0}"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267879
+  - m_Id: 10788103327744
+    m_Localized: Creating session...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327745
+    m_Localized: "Session created \u2014 code: {0}"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267879
+  - m_Id: 10788103327746
+    m_Localized: 'Could not create session: {0}'
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267879
+  - m_Id: 10788103327747
+    m_Localized: Joining session...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327748
+    m_Localized: Connecting...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327749
+    m_Localized: 'Could not join session: {0}'
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267879
   references:
     version: 2
-    RefIds: []
+    RefIds:
+    - rid: 6276845892712267879
+      type: {class: SmartFormatTag, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_Entries: 
+        m_SharedEntries:
+        - id: 10788094939137
+        - id: 10788103327745
+        - id: 10788103327746
+        - id: 10788103327749

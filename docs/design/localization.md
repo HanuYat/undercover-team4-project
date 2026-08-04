@@ -122,7 +122,10 @@
 > 이들은 Phase 2에서 코드 쪽이 처리하므로 **여기서 건드리지 않는다** — `LocalizeStringEvent`를 붙이면 코드 대입과 서로 덮어쓴다.
 > 판별법: 해당 문구나 그 필드에 대한 `.text =` 대입이 코드에 있는가.
 > Title 씬에서 이 기준으로 제외한 것: `AccountStatusText` · `NicknameStatusText` · `PlayerIdText`
-> (전부 [AuthPanel](../../Assets/Scripts/UI/Panels/AuthPanel.cs)이 대입한다).
+> (전부 [AuthPanel](../../Assets/Scripts/UI/Panels/AuthPanel.cs)이 대입한다) · `SessionPanel/StatusText`.
+>
+> 이 중 `StatusText`만 **Phase 2 방식으로 앞당겨 처리했다** — [SessionPanel](../../Assets/Scripts/UI/Panels/SessionPanel.cs)의
+> `SetStatus()`가 넣던 문구 8개를 `LocalizedString` 필드로 옮겼다. 나머지 셋은 Phase 2에서 `AuthPanel`을 손볼 때 함께 간다.
 
 > **입력창은 Placeholder에 붙인다.** `TMP_InputField`의 본문 텍스트가 아니라 `.../Text Area/Placeholder` 쪽이 대상이다 —
 > 본문은 사용자가 친 글이라 번역 대상이 아니고, 코드가 대입하기도 한다.

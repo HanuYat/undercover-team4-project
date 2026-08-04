@@ -16,7 +16,8 @@ MonoBehaviour:
     m_Code: ko-KR
   m_SharedData: {fileID: 11400000, guid: 7d690f60dcfc30145b00d50e3596d124, type: 2}
   m_Metadata:
-    m_Items: []
+    m_Items:
+    - rid: 6276845892712267880
   m_TableData:
   - m_Id: 6994065952768
     m_Localized: "\uBCC4\uC810 1\uC810 \uACBD\uCC30\uC11C"
@@ -89,6 +90,51 @@ MonoBehaviour:
     m_Localized: "\uC0C8 \uC775\uBA85 \uACC4\uC815\uC73C\uB85C \uC2DC\uC791"
     m_Metadata:
       m_Items: []
+  - m_Id: 10788094939136
+    m_Localized: "\uC775\uBA85 \uB85C\uADF8\uC778 \uC911..."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788094939137
+    m_Localized: "\uB85C\uADF8\uC778 \uC644\uB8CC \u2014 {0}"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267880
+  - m_Id: 10788103327744
+    m_Localized: "\uC138\uC158 \uC0DD\uC131 \uC911..."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327745
+    m_Localized: "\uC138\uC158 \uC0DD\uC131\uB428 \u2014 \uCF54\uB4DC: {0}"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267880
+  - m_Id: 10788103327746
+    m_Localized: "\uC0DD\uC131 \uC2E4\uD328: {0}"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267880
+  - m_Id: 10788103327747
+    m_Localized: "\uC138\uC158 \uCC38\uAC00 \uC911..."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327748
+    m_Localized: "\uC811\uC18D \uC911..."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327749
+    m_Localized: "\uCC38\uAC00 \uC2E4\uD328: {0}"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267880
   references:
     version: 2
-    RefIds: []
+    RefIds:
+    - rid: 6276845892712267880
+      type: {class: SmartFormatTag, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_Entries: 
+        m_SharedEntries:
+        - id: 10788094939137
+        - id: 10788103327745
+        - id: 10788103327746
+        - id: 10788103327749

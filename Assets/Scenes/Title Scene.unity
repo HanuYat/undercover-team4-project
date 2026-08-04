@@ -573,6 +573,81 @@ MonoBehaviour:
   m_joinButton: {fileID: 1182408366}
   m_codeInput: {fileID: 894602691}
   m_statusText: {fileID: 1068861818}
+  m_statusSigningIn:
+    m_TableReference:
+      m_TableCollectionName: TitleTable
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: Title.Session.Status.SigningIn
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_statusSignedIn:
+    m_TableReference:
+      m_TableCollectionName: TitleTable
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: Title.Session.Status.SignedIn
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_statusCreating:
+    m_TableReference:
+      m_TableCollectionName: TitleTable
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: Title.Session.Status.Creating
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_statusCreated:
+    m_TableReference:
+      m_TableCollectionName: TitleTable
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: Title.Session.Status.Created
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_statusCreateFailed:
+    m_TableReference:
+      m_TableCollectionName: TitleTable
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: Title.Session.Status.CreateFailed
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_statusJoining:
+    m_TableReference:
+      m_TableCollectionName: TitleTable
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: Title.Session.Status.Joining
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_statusConnecting:
+    m_TableReference:
+      m_TableCollectionName: TitleTable
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: Title.Session.Status.Connecting
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_statusJoinFailed:
+    m_TableReference:
+      m_TableCollectionName: TitleTable
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: Title.Session.Status.JoinFailed
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  references:
+    version: 2
+    RefIds: []
 --- !u!114 &308117060
 MonoBehaviour:
   m_ObjectHideFlags: 0

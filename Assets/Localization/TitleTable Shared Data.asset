@@ -83,6 +83,38 @@ MonoBehaviour:
     m_Key: Title.Auth.NewAnonymous
     m_Metadata:
       m_Items: []
+  - m_Id: 10788094939136
+    m_Key: Title.Session.Status.SigningIn
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788094939137
+    m_Key: Title.Session.Status.SignedIn
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327744
+    m_Key: Title.Session.Status.Creating
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327745
+    m_Key: Title.Session.Status.Created
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327746
+    m_Key: Title.Session.Status.CreateFailed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327747
+    m_Key: Title.Session.Status.Joining
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327748
+    m_Key: Title.Session.Status.Connecting
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327749
+    m_Key: Title.Session.Status.JoinFailed
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
