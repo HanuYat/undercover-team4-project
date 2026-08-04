@@ -41,7 +41,7 @@
 | (e) 인자가 있는 문구 | **Smart String `{0}` + `LocalizedString.Arguments`**. 인자를 먼저 넣고 구독한다 | [SignalDecoder.ShowLocal](../../Assets/Scripts/Item/SignalDecoder.cs)의 선례. 순서를 어기면 구독 시점의 첫 발화가 인자 없는 문장으로 나간다 |
 | (f) `string m_format` 필드 | **`LocalizedString`으로 타입 교체.** `string.Format` 호출을 Smart String으로 대체 | 인스펙터에 한국어 포맷이 박혀 있으면 그 필드는 영원히 번역되지 않는다. 해당 필드 8개는 §4 Phase 2 참고 |
 | (g) 네트워크로 보내는 알림 | **완성된 문장이 아니라 `enum` + 숫자 인자를 보낸다.** 수신 클라가 자기 로케일로 조회 | 서버가 자기 언어로 문장을 만들어 보내면 클라 언어와 무관하게 그 언어가 뜬다. enum은 4바이트고, 문자열보다 RPC 크기도 작다 |
-| (h) enum → 키 매핑 | **규약 기반** — `Item.Feedback.` + enum 이름. 매핑 SO를 만들지 않는다 | 매핑 에셋은 enum이 늘 때마다 같이 고쳐야 하는 두 번째 진실이 된다. 규약이면 enum 값 추가 = 테이블 키 추가로 끝 |
+| (h) enum → 키 매핑 | **규약 기반** — `Item.Feedback.` + enum 이름. 매핑 SO를 만들지 않는다. 규약은 **enum 선언부에 `[LocalizedEnum]`으로 선언**하고 에디터 검증으로 받친다 | 매핑 에셋은 enum이 늘 때마다 같이 고쳐야 하는 두 번째 진실이 된다. 규약이면 enum 값 추가 = 테이블 키 추가로 끝. 대신 컴파일러가 막아 주지 못하므로 그 구멍은 검증으로 메운다 (§7) |
 | (i) 몽타주 번역 | **번역한다.** 다만 전송 구조는 그대로 두고 `AppearanceDatabase`만 번역 (§5) | 국적이 다른 사람끼리 한 판을 하는 상황을 상정하지 않는다는 팀 결정. 이 전제에서는 전원이 같은 로케일이므로 서버가 만든 문구가 각자 언어와 일치한다 |
 | (j) 시민 이름 | **번역하지 않는다** — ko 화면에서도 영문 | 고유명사. 무전으로 이름을 부르는 것이 대조의 핵심이라 표기가 흔들리면 안 된다 |
 
@@ -58,7 +58,7 @@
 | `SettingsTable` | `Settings.` | 설정 패널 (전 씬 공용 — Title 포함 4개 씬) |
 | `PauseTable` | `Pause.` | 일시정지 패널 (인게임 전용 — Lobby·Main·Shop) |
 | `HudTable` | `Hud.` | 라운드 타이머·팀 자금·남은 범인·대기 안내·마이크 상태·토스트·검거 판정 배너·구조 프롬프트·페널티 경고 |
-| `ItemTable` | `Item.` | 아이템 이름/설명 **+ 사용 피드백**(Phase 3에서 `Item.Feedback.*` 추가) — 기존 테이블 유지 |
+| `ItemTable` | `Item.` | 아이템 이름/설명 — **소지형(인스펙터에서 고름) + 설치형(`Item.Name.<EInstallable>` 규약)**. Phase 3에서 `Item.Feedback.*` 추가 |
 | `WorldTable` | `World.` | 월드 설치물 라벨 (신호 해석기·부활 장치·스캐너 충전기·폭탄 매뉴얼·CCTV 장소명) |
 | `HqTable` | `Hq.` | 인명부·수배 리스트·세력 문양 보드·CCTV 채널 라벨·라운드 종료 버튼 |
 | `SettlementTable` | `Settlement.` | 정산 화면 (결과·종료 사유·수익 내역·복귀 카운트다운) |
@@ -140,12 +140,25 @@
 > 연결된 쪽이 텍스트를 써서 **화면은 정상으로 보인다.** 언어가 바뀔 때마다 같은 키를 두 번 조회하고
 > 다음 사람이 빈 쪽을 보고 헷갈릴 뿐이다 (PauseCanvas 버튼 2개에서 발생).
 
+> **3D `TextMeshPro`(월드공간)에는 `Localize` 메뉴가 없다 — 손으로 붙여야 한다.**
+> Localization 1.5.12가 등록하는 컨텍스트 메뉴는 `TextMeshProUGUI` · `TMP_Dropdown` · `Text` · `Image` ·
+> `RawImage` · `AudioSource`뿐이고 **3D `TextMeshPro`용은 아예 없다**(어셈블리의 `CONTEXT/*` 등록을 훑어 확인).
+> 상점 시작 버튼(`DispatchConsole/Text (TMP)`)과 팀 자금 잔액이 이 종류다. 남은 **월드 라벨 4개도 여기 해당**한다.
+>
+> 절차: `Add Component` → `Localize String Event` → `String Reference`에 테이블·키 →
+> `On Update String (String)`에서 **`+`로 항목 추가** → 오브젝트 칸에 그 TMP 자신 →
+> 함수는 위쪽 **Dynamic string** 그룹의 `text`.
+>
+> 마지막 단계에서 아래쪽 Static Parameters 쪽 `text`를 고르면 **고정 문자열이 박혀 매번 같은 값이 들어간다.**
+> 겉보기로는 정상처럼 보이므로 YAML로 확인하는 것이 가장 빠르다 — `m_Mode: 0`(Dynamic)이어야 하고
+> `m_Mode: 5`면 Static이다.
+
 **씬 파일은 동시 편집 시 머지 충돌이 크다. 씬 하나 = 브랜치 하나 = PR 하나**로 끊어 진행한다.
 
 | 대상 | 개수 | 상태 |
 |------|------|------|
 | Title Scene | **17** | ✅ 완료 (`TitleTable`, 브랜치 `feature/374-localization-title`) |
-| Lobby / Shop | 6 | Lobby 2개(게임 시작·세션 나가기) 진행 중 — `LobbyTable` |
+| Lobby / Shop | 6 | ✅ Lobby 2개(게임 시작·세션 나가기) · Shop 4개(시작 버튼 + `구매함` 3개) |
 | Main Scene | 6 | 인명부 정렬·페이지 버튼 등 |
 | 프리팹 | 약 26 | ✅ SettingsCanvas 8 · PauseCanvas 4 · LeaveConfirm 2 / 남음: QuitConfirm·AccountConfirm 5, Directory·FactionSymbolBoard·RoundEndButton, 월드 라벨 4 |
 
@@ -163,6 +176,23 @@
 > 그래서 `LocalizedString m_defaultStatus` + 구독으로 두고, `SetStatus`의 매개변수도 `string` →
 > `LocalizedString`으로 바꿨다 — 완성된 한국어를 넘길 수 있게 두면 그 문구만 번역에서 빠지고,
 > 로딩 중에는 언어를 바꿀 방법이 없어 눈에도 안 띈다.
+
+> **`LocalizedStrings.Get(table, key, args)` 헬퍼를 뒀다** ([Assets/Scripts/Localization/LocalizedStrings.cs](../../Assets/Scripts/Localization/LocalizedStrings.cs)).
+> 표시 문구는 원칙적으로 `LocalizedString` SerializeField지만, **인스펙터에서 고를 것이 없는 자리**에는 이 헬퍼를 쓴다.
+>  · 규약 기반 키 — `접두 + enum 이름`. 결정 (h)가 매핑 에셋·인스펙터 배선을 두지 않기로 한 자리다.
+>  · 전역 단위·서식 — `Common.Unit.Money`처럼 프로젝트 전체가 한 문구를 쓰는 자리.
+>  · **같은 문구를 여러 인스턴스가 쓰는 자리** — 상점 진열대 3개가 그렇다. SerializeField로 두면 인스턴스마다
+>    같은 키를 다시 배선해야 하고, 하나만 빠지면 그 진열대만 옛 문구로 조용히 남는다.
+>
+> 이 헬퍼는 **지금 언어로 한 번 읽어 주기만 한다** — 언어 변경 갱신은 호출부가 `SelectedLocaleChanged`를
+> 구독해 다시 그려야 한다. `ShopStand`가 이미 그 방식이었고(항목별 `StringChanged`를 여럿 구독하는 대신
+> 로케일 변경 한 곳에 걸고 표시를 통째로 다시 채운다), `TeamFundBalanceView`에도 같은 훅을 넣었다.
+
+> **설치형 판매 품목의 이름·설명을 `ItemTable`로 올렸다.** `ShopStand`가 인스펙터 `string` 필드
+> (`m_installableName`/`m_installableDescription`)에 한국어를 담고 있었고 "판매 설치형이 늘면 승격한다"고
+> 미뤄 뒀는데, 이미 둘(`신호 해석기`·`경보 버튼`)이라 결정 (f)대로 승격했다. 키는 `Item.Name.<EInstallable>` ·
+> `Item.Description.<EInstallable>`이다 — 소지형이 이미 `Item.Name.*`을 쓰므로 **두 종류의 출처가 같아진다.**
+> 조준 카드에 둘이 나란히 뜨는 화면이라 여기서 갈라지면 한쪽만 번역된 상태가 그대로 보인다.
 
 > 음성 상태 5개가 **결정 (h) 규약 기반 매핑의 첫 사용처**다. `LobbyRosterPanel`이 `"Lobby.Voice." + EVoiceState`로
 > 키를 만들어 조회하므로, 상태가 늘면 `LobbyTable`에 키만 추가하면 된다 — 인스펙터 배선도 매핑 에셋도 없다.
@@ -245,3 +275,36 @@ Phase 4에서 `AppearanceDatabase`를 번역해도, 서버가 `BuildMontageText`
 3. `ko-KR` · `en` **양쪽을 채운다** — 한쪽만 채우면 폴백으로 반대 언어가 그대로 노출된다
 4. 코드에서 쓰면 `LocalizedString` SerializeField, 정적 라벨이면 `LocalizeStringEvent`
 5. **서버가 클라에 보내는 문구라면 문자열을 보내지 말 것** — enum + 인자로 보내고 수신 측에서 조회한다 (결정 (g))
+
+## 7. 규약 기반 키의 검증
+
+결정 (h)는 매핑 에셋을 없애는 대신 **컴파일러가 막지 못하는 구멍**을 남긴다 — enum에 값을 추가하고
+테이블 키를 잊으면 그 값에서만 문구가 비고, 그 코드 경로를 밟기 전까지 아무 신호도 없다.
+테이블을 이름 문자열로 참조하는 것도 같은 성질이다(다른 곳은 인스펙터의 GUID 참조라 개명에 안전하다).
+
+그물을 두 겹 둔다.
+
+**① 선언 — [`[LocalizedEnum]`](../../Assets/Scripts/Localization/LocalizedEnumAttribute.cs)을 enum 선언부에 붙인다.**
+값을 추가하는 사람이 가장 먼저 보는 자리에 규약이 적혀 있게 하는 것이 목적이고, 동시에 검증의 근거가 된다.
+접두가 둘 이상이면 여러 번 붙이고, 표시 대상이 아닌 값은 `except`로 뺀다.
+
+```csharp
+[LocalizedEnum("LobbyTable", "Lobby.Voice.")]
+public enum EVoiceState { Idle, LoggingIn, Joining, Connected, Failed }
+
+[LocalizedEnum("ItemTable", "Item.Name.", nameof(EInstallable.None))]
+[LocalizedEnum("ItemTable", "Item.Description.", nameof(EInstallable.None))]
+public enum EInstallable { None, SignalDecoder, JailSirenButton }
+```
+
+**② 검사 — 에디터 메뉴 `Tools ▸ Localization ▸ 규약 키 검증`**
+([LocalizedEnumValidator](../../Assets/Scripts/Editor/LocalizedEnumValidator.cs)).
+선언이 붙은 enum을 전부 훑어 값마다 키가 있는지, 그리고 **로케일별 값이 비지 않았는지**까지 확인한다.
+검사 대상 등록표를 따로 두지 않는다 — 선언 자체가 목록이라 새 규약은 어트리뷰트만 붙이면 자동 편입된다.
+현재 기준 enum 2개 · 키 9개가 통과한다.
+
+여기에 [`LocalizedStrings.Get`](../../Assets/Scripts/Localization/LocalizedStrings.cs)이 에디터에서만
+**실제로 밟은 경로의 누락을 키마다 한 번 경고**한다. ②가 미리 훑는 그물이고 이쪽은 빠져나간 것을 잡는 그물이다.
+
+> Phase 3에서 `Item.Feedback.*` · `Shop.Reply.*`를 추가할 때도 **`EItemFeedback`·`EShopReply`에 어트리뷰트를 붙이면
+> 검증이 그대로 따라온다.** 별도 작업이 필요 없다.

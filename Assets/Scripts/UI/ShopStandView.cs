@@ -53,24 +53,36 @@ public class ShopStandView : MonoBehaviour
     // (InventoryBarView의 아이템 이름 팝업과 같은 방식)
     private int m_noticeVersion;
 
+    private const string k_shopTable = "ShopTable";
+    private const string k_commonTable = "CommonTable";
+    private const string k_moneyKey = "Common.Unit.Money"; // 금액 표기는 프로젝트 공용 서식
+
     private void Awake()
     {
         SetActive(m_cardRoot, false); // 조준 전엔 카드 숨김
         ClearNotice();
     }
 
-    /// <summary>진열대가 파는 품목을 표시에 채운다 — 스폰 시 1회. (지역화 문자열은 호출부가 해석해 넘긴다)</summary>
+    /// <summary>
+    /// 진열대가 파는 품목을 표시에 채운다 — 스폰 시 1회, 이후 언어가 바뀔 때마다 다시
+    /// (<see cref="ShopStand"/>가 로케일 변경을 구독해 통째로 다시 부른다).
+    /// 이름·설명은 호출부가 해석해 넘기고, 가격 서식과 종류 표기는 진열대마다 같은 문구라 여기서 조회한다 —
+    /// SerializeField로 두면 진열대 인스턴스마다 같은 키를 다시 배선해야 하고 하나만 빠지면 조용히 남는다. (#497)
+    /// </summary>
     public void SetContent(string itemName, string description, bool installable, int price)
     {
         if (m_tagNameText != null)
             m_tagNameText.text = itemName;
         if (m_tagPriceText != null)
-            m_tagPriceText.text = $"{price:N0}원";
+            m_tagPriceText.text = LocalizedStrings.Get(k_commonTable, k_moneyKey, price);
 
         if (m_cardNameText != null)
             m_cardNameText.text = itemName;
         if (m_cardTypeText != null)
-            m_cardTypeText.text = installable ? "설치형" : "소지형";
+            m_cardTypeText.text = LocalizedStrings.Get(
+                k_shopTable,
+                installable ? "Shop.Stand.TypeInstallable" : "Shop.Stand.TypeCarryable"
+            );
         if (m_cardDescriptionText != null)
             m_cardDescriptionText.text = description;
     }

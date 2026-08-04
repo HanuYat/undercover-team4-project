@@ -61,6 +61,26 @@ MonoBehaviour:
       them out.
     m_Metadata:
       m_Items: []
+  - m_Id: 5508625448636416
+    m_Localized: Signal Decoder
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5508625507356672
+    m_Localized: A terminal installed at HQ. Sends short messages to the whole team.
+      Stays clear even through electronic jamming.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5508625507356673
+    m_Localized: Alarm Button
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5508625507356674
+    m_Localized: 'An alarm button installed at HQ.
+
+      Sound the siren to stop
+      a jailbreak.'
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

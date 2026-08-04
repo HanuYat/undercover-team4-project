@@ -17,7 +17,29 @@ MonoBehaviour:
   m_SharedData: {fileID: 11400000, guid: 02523d40abbc73e48bee1f7b28a81881, type: 2}
   m_Metadata:
     m_Items: []
-  m_TableData: []
+  m_TableData:
+  - m_Id: 70274797080576
+    m_Localized: 'Start Game
+
+      (Host only)'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 70274809663488
+    m_Localized: Purchased
+    m_Metadata:
+      m_Items: []
+  - m_Id: 70274809663489
+    m_Localized: Installable
+    m_Metadata:
+      m_Items: []
+  - m_Id: 70274809663490
+    m_Localized: Carried
+    m_Metadata:
+      m_Items: []
+  - m_Id: 70274809663491
+    m_Localized: (No item assigned)
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

@@ -46,6 +46,11 @@ MonoBehaviour:
     m_Localized: Loading...
     m_Metadata:
       m_Items: []
+  - m_Id: 70276470607872
+    m_Localized: "\u20A9{0:N0}"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267886
   references:
     version: 2
     RefIds:
@@ -55,3 +60,4 @@ MonoBehaviour:
         m_Entries: 
         m_SharedEntries:
         - id: 60555504193536
+        - id: 70276470607872

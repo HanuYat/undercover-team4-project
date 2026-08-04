@@ -1,5 +1,7 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.Localization;
+using UnityEngine.Localization.Settings;
 
 /// <summary>
 /// 팀 자금 잔액 표시 (#486) — 상점에서 "지금 얼마 있는지"를 보여준다.
@@ -18,8 +20,10 @@ public class TeamFundBalanceView : MonoBehaviour
     [Tooltip("잔액을 표시할 TextMeshPro (UGUI, 3D)")]
     [SerializeField] private TMP_Text m_balanceText;
 
-    [Tooltip("표시 형식 - {0} = 팀 자금 잔액")]
-    [SerializeField] private string m_format = "{0:N0}원";
+    // 표시 서식은 CommonTable의 공용 금액 표기다 (#497). 인스펙터 문자열로 두면 그 필드가 영원히
+    // 번역되지 않고(문서 §2 결정 (f)), 금액 표기를 쓰는 다른 화면과도 갈린다.
+    private const string k_commonTable = "CommonTable";
+    private const string k_moneyKey = "Common.Unit.Money";
 
     // 구독해 둔 자금 홀더. TeamFund는 씬을 넘어 사는 상주 홀더(#214)라 이 씬이 로드될 때 이미
     // 스폰돼 있는 게 보통이지만, 원격 클라는 스폰 동기화가 늦게 도착할 수 있다 — 잡힐 때까지 기다린다.
@@ -33,6 +37,10 @@ public class TeamFundBalanceView : MonoBehaviour
             return;
         }
 
+        // 금액 서식이 테이블에서 오므로 언어가 바뀌면 다시 그린다 — 자금 값은 그대로여도 표기가 바뀐다.
+        // 항목이 하나뿐이라 StringChanged 대신 로케일 변경에 걸고 통째로 다시 채운다 (ShopStand와 같은 방식).
+        LocalizationSettings.SelectedLocaleChanged += HandleLocaleChanged;
+
         TryBind();
     }
 
@@ -42,6 +50,16 @@ public class TeamFundBalanceView : MonoBehaviour
         if (m_teamFund != null)
             m_teamFund.Fund.OnValueChanged -= HandleFundChanged;
         m_teamFund = null;
+
+        // 종료 중에는 설정 에셋을 되살리지 않는다 — HasSettings로 먼저 확인한다 (ShopStand 관례)
+        if (LocalizationSettings.HasSettings)
+            LocalizationSettings.SelectedLocaleChanged -= HandleLocaleChanged;
+    }
+
+    private void HandleLocaleChanged(Locale locale)
+    {
+        if (m_teamFund != null)
+            Refresh(m_teamFund.Balance);
     }
 
     // 아직 못 잡았을 때만 도는 폴링 — 잡는 즉시 이벤트 구동으로 넘어간다.
@@ -69,7 +87,8 @@ public class TeamFundBalanceView : MonoBehaviour
 
     private void HandleFundChanged(int previous, int current) => Refresh(current);
 
-    private void Refresh(int balance) => m_balanceText.text = string.Format(m_format, balance);
+    private void Refresh(int balance) =>
+        m_balanceText.text = LocalizedStrings.Get(k_commonTable, k_moneyKey, balance);
 
     // TMP 컴포넌트만 켜고 끈다 (자기 콜백을 죽이지 않도록)
     private void SetVisible(bool visible)
