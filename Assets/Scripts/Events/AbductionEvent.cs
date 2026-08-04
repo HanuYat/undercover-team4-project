@@ -131,6 +131,25 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
             Debug.LogWarning("AbductionEvent: 외곽 방치 지점이 배선되지 않아 발동하지 않는다", this);
     }
 
+    // 이벤트가 사라질 때 납치범에 걸어 둔 구독을 남기지 않는다. 보통은 씬 언로드로 NPC도 함께
+    // 파괴되지만, 해제 경로가 ReleaseAbductor 하나뿐이면 그 가정이 깨지는 구성(이벤트만 비활성화 등)에서
+    // 파괴된 대상을 부르게 된다. <b>EndPenaltyDuty까지 부르지는 않는다</b> — 파괴 중인 NPC의
+    // FSM·NavMeshAgent를 건드리게 되고, 어차피 함께 사라지는 마당에 배회로 돌려보낼 이유도 없다.
+    private void OnDestroy()
+    {
+        for (int i = 0; i < m_abductors.Count; i++)
+        {
+            NpcController abductor = m_abductors[i];
+            if (abductor == null)
+                continue;
+
+            abductor.OnPenaltyCaught -= HandleAbductionCaught;
+            abductor.OnDamaged -= HandleAbductorDamaged;
+        }
+
+        m_abductors.Clear();
+    }
+
     // 혼자 판정은 <b>이벤트가 활성이 아닐 때도</b> 계속 재야 한다 — 그 이유는 LonePlayerWatch에 적어 뒀다.
     // 여기서 정하는 것은 서버 권한과 "지금 재야 하는가"뿐이다.
     private void Update()

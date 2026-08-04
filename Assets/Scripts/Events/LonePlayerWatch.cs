@@ -35,9 +35,6 @@ public class LonePlayerWatch
     // 플레이어별 '혼자가 된 시각'(Time.time) — 값이 없으면 지금 혼자가 아니다.
     private readonly Dictionary<PlayerHealth, float> m_aloneSince = new Dictionary<PlayerHealth, float>();
 
-    // 주변 플레이어 탐색 버퍼 — 매 스캔마다 새로 할당하지 않게 재사용한다.
-    private readonly List<Transform> m_nearbyBuffer = new List<Transform>();
-
     // 사라진 플레이어 정리용 임시 버퍼.
     private readonly List<PlayerHealth> m_staleBuffer = new List<PlayerHealth>();
 
@@ -93,6 +90,10 @@ public class LonePlayerWatch
     }
 
     // 현장 플레이어 각자가 '혼자'인지 갱신한다. 혼자가 아니게 되면 타이머를 버린다(다시 혼자가 되면 처음부터).
+    //
+    // 씬 스캔은 <b>주기당 1회</b>다. 모은 배열을 반경 판정에 그대로 넘긴다 — 예전에는 여기서 한 번,
+    // 반경 판정이 플레이어마다 SuddenEventUtil.CollectFieldPlayers로 또 한 번 훑어 N명이면 주기당
+    // N+1회였다(6인이면 초당 28회 + 매번 배열 할당).
     private void TickLoneTimers()
     {
         PlayerHealth[] players = UnityEngine.Object.FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
@@ -101,7 +102,7 @@ public class LonePlayerWatch
         {
             PlayerHealth player = players[i];
 
-            if (IsLoneCandidate(player))
+            if (IsLoneCandidate(player, players))
             {
                 if (!m_aloneSince.ContainsKey(player))
                     m_aloneSince[player] = Time.time;
@@ -123,7 +124,8 @@ public class LonePlayerWatch
     }
 
     // 지금 이 순간 혼자인가 — 후보 자격의 순간 조건. 지속 시간은 타이머가 본다.
-    private bool IsLoneCandidate(PlayerHealth player)
+    // scanned는 이번 주기에 이미 모아 둔 전체 플레이어 목록이다(위 TickLoneTimers 주석 참고).
+    private bool IsLoneCandidate(PlayerHealth player, PlayerHealth[] scanned)
     {
         // 다운·기능 정지된 플레이어는 제외한다 — 이미 무력한 대상은 쓰는 쪽에서도 다룰 것이 없다
         // (SuddenEventUtil의 현장 플레이어 판정과 같은 기준)
@@ -134,8 +136,21 @@ public class LonePlayerWatch
         if (m_hqZone != null && m_hqZone.Contains(player))
             return false;
 
-        // 반경 안의 현장 플레이어를 모은다 — 자기 자신이 항상 포함되므로 1명이면 혼자다
-        SuddenEventUtil.CollectFieldPlayers(player.transform.position, m_loneRadius, m_nearbyBuffer);
-        return m_nearbyBuffer.Count <= 1;
+        // 반경 안에 다른 현장 플레이어가 하나라도 있으면 혼자가 아니다.
+        // 판정 기준(IsTargetable + 반경)은 SuddenEventUtil.CollectFieldPlayers와 같지만 스캔을 다시 돌지 않는다.
+        Vector3 origin = player.transform.position;
+        float radiusSqr = m_loneRadius * m_loneRadius;
+
+        for (int i = 0; i < scanned.Length; i++)
+        {
+            PlayerHealth other = scanned[i];
+            if (other == null || other == player || !other.IsTargetable)
+                continue;
+
+            if ((other.transform.position - origin).sqrMagnitude <= radiusSqr)
+                return false;
+        }
+
+        return true;
     }
 }

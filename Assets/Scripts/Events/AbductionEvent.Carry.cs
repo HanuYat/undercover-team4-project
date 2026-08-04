@@ -18,7 +18,9 @@ public partial class AbductionEvent
     // 체력을 다 깎을 필요는 없다: 여기서 요구하는 것은 "떼어냈다"이지 "제압했다"가 아니고,
     // 진압봉 3대(0.9초 쿨다운)를 요구하면 이미 외곽에 도착해 있다. 제압·검거는 그 다음 선택지다.
     //
-    // 데미지 소스를 가리지 않는다 — 폭발(BombDevice)에 휘말려 놓치는 것도 같은 결말이면 맞는다.
+    // 데미지 소스를 가리지 않는다 — 폭발(BombDevice)에 휘말려 놓치는 것도, 동료가 오사(#461)로 맞춘
+    // 것도 같은 결말이면 맞는다. 그래서 attacker는 보지 않는다(가해자를 가리면 "누가 구했나"를 따지는
+    // 규칙이 하나 더 생기는데, 떼어내진 사실은 누가 때렸든 같다).
     private void HandleAbductorDamaged(NpcController abductor, GameObject attacker)
     {
         ServerRepelAbductor(abductor); // 이 이벤트의 납치범인지·서버인지는 그쪽이 판정한다
