@@ -15,13 +15,63 @@ MonoBehaviour:
   m_GroupName: Localization-Assets-Shared
   m_GUID: 02bec79392be94a4983bcc5b5f05db75
   m_SerializeEntries:
-  - m_GUID: d1226f710d12ac843a44ddb0d79e8841
-    m_Address: Assets/Localization/UITable Shared Data.asset
+  - m_GUID: 02523d40abbc73e48bee1f7b28a81881
+    m_Address: Assets/Localization/ShopTable Shared Data.asset
+    m_ReadOnly: 1
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 100fd20e95db49646a9f3c01aac62cee
+    m_Address: Assets/Localization/HudTable Shared Data.asset
+    m_ReadOnly: 1
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2482529739cee144e908dc2a2e78c2c6
+    m_Address: Assets/Localization/WorldTable Shared Data.asset
+    m_ReadOnly: 1
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3f2fd7e385653d942b703d8de65d7d61
+    m_Address: Assets/Localization/SettlementTable Shared Data.asset
+    m_ReadOnly: 1
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 69f94021b201c264fb4a0a3915662935
+    m_Address: Assets/Localization/SettingsTable Shared Data.asset
+    m_ReadOnly: 1
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 71bd44b63521c594c8bf98b3fea7c4ae
+    m_Address: Assets/Localization/EventTable Shared Data.asset
+    m_ReadOnly: 1
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7d690f60dcfc30145b00d50e3596d124
+    m_Address: Assets/Localization/TitleTable Shared Data.asset
+    m_ReadOnly: 1
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7e3bb98f354a36f43bb9ee6612e02e7f
+    m_Address: Assets/Localization/NpcTable Shared Data.asset
+    m_ReadOnly: 1
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a4c8df317b247dd44b76163f41d8135a
+    m_Address: Assets/Localization/HqTable Shared Data.asset
+    m_ReadOnly: 1
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bdbbf40e3c07f834dbde635e43c53b1e
+    m_Address: Assets/Localization/LobbyTable Shared Data.asset
     m_ReadOnly: 1
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: faae75c9a0a19b441be27b8614effa3d
     m_Address: Assets/Localization/ItemTable Shared Data.asset
+    m_ReadOnly: 1
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fcf4ad2fe921de24dbc4ac35f8b789b7
+    m_Address: Assets/Localization/CommonTable Shared Data.asset
     m_ReadOnly: 1
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

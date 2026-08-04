@@ -15,14 +15,74 @@ MonoBehaviour:
   m_GroupName: Localization-String-Tables-English (en)
   m_GUID: 2e740aeced7017548bed6d4ed2f90e4f
   m_SerializeEntries:
-  - m_GUID: 9ef00e94dc39cff47859277e524c03a1
-    m_Address: UITable_en
+  - m_GUID: 06d2c90ffc2e0f7438cf1de4db2d1ecc
+    m_Address: NpcTable_en
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-en
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 29153cd7dc776cd4fbab123c345f58d6
+    m_Address: ShopTable_en
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-en
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 358b01a8ddbda4d49931696bf6809b72
+    m_Address: SettingsTable_en
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-en
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 373cab82dec07c643a253ecf1530aebf
+    m_Address: EventTable_en
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-en
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4fa877350e828024bab991dda3d49ea5
+    m_Address: LobbyTable_en
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-en
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6d6d90860b5d9c7439d4fd8a0a2952ed
+    m_Address: TitleTable_en
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-en
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9a97f1fb06af0e64f997b2a2605e5bf0
+    m_Address: WorldTable_en
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-en
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9b39d66e516fe4a409dcbfe43d760820
+    m_Address: HudTable_en
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-en
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ceaaa84fa347fa845b7394f06827e5e2
+    m_Address: SettlementTable_en
     m_ReadOnly: 1
     m_SerializedLabels:
     - Locale-en
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: dbe4e6c35d1f42c48ac37b6ba2adecfd
     m_Address: ItemTable_en
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-en
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: de869d8f9f1963048bbf98964ef44d6e
+    m_Address: CommonTable_en
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-en
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: faa0adf83e0314847a2dc2b9c6e7c10c
+    m_Address: HqTable_en
     m_ReadOnly: 1
     m_SerializedLabels:
     - Locale-en

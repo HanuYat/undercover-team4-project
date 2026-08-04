@@ -19,7 +19,7 @@ public class PlayerPenaltyView : NetworkBehaviour
     private PlayerTowedMotion m_towed; // 끌려가기 추종의 실제 이동 담당 (#279)
 
     [Header("추격 경고")]
-    [Tooltip("추격대 출동 시 띄울 문구 — UITable/penalty.chase_warning")]
+    [Tooltip("추격대 출동 시 띄울 문구 — HudTable/Hud.Penalty.ChaseWarning")]
     [SerializeField]
     private LocalizedString m_chaseWarning;
 
