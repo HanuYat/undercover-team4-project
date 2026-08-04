@@ -108,6 +108,10 @@ public class NpcAnimationDriver : MonoBehaviour
     [Tooltip("앉기 시작(Begin) 모션을 유지하는 시간(초) — 이후 앉은 자세(Loop)로 넘어간다. Begin 클립 길이(0.7초)에 맞춘 값")]
     [SerializeField] private float m_sitBeginSeconds = 0.7f;
 
+    [Header("일어나기 (#269/#513)")]
+    [Tooltip("일어나기 모션을 유지하는 시간(초) — 이 뒤에는 기준 상태 모션으로 되돌린다. NpcStunConfig.StandUpSeconds와 같은 클립이라 값도 같게 둘 것")]
+    [SerializeField] private float m_standUpSeconds = 0.585f;
+
     [Header("제압 전환 (#332)")]
     [Tooltip("도주형 제압 시 구르기 모션을 유지하는 시간(초) — 클립(Roll01) 길이 1.3초에 맞춘 값. 이후 그로기로 넘어간다")]
     [SerializeField] private float m_subdueRollSeconds = 1.3f;
@@ -131,11 +135,14 @@ public class NpcAnimationDriver : MonoBehaviour
     private float m_subdueUntil;
     // 구르기가 끝나면 곧바로 대기 자세가 아니라 짧은 그로기를 한 번 더 거친다 — 그 예약 플래그 (#332)
     private bool m_subdueRollThenGroggy;
-    // 일어나는(StandUp) 모션 재생 중인가 (#269). 시간으로 끊지 않는다 — 클립 마지막(선 자세)에서 멈추고
-    // 곧 도착하는 Idle 전이가 이어받는다. 누움 콜라이더(#363) 판정에도 쓰인다.
+    // 일어나는(StandUp) 모션 재생 중인가 (#269). 누움 콜라이더(#363) 판정에도 쓰인다.
+    // 상태 전이가 이어받으면 그쪽이 새 base 모션을 시드하고, 안 오면 아래 m_standUpUntil이 되돌린다.
     private bool m_standingUp;
-    // 직전 프레임의 끌림 여부 — 묶임/풀림이 바뀌는 순간에만 base 모션·콜라이더를 다시 시드한다 (#369).
-    private bool m_ropedMotion;
+    // 일어나기 모션을 유지할 종료 시각. 0 이하면 일어나는 중 아님 (#513) — 줄이 풀리며 일어난 뒤
+    // 상태 전이가 따라오지 않는 경로(유치장 안 풀기)에서 클립 마지막 프레임에 굳는 것을 막는다.
+    private float m_standUpUntil;
+    // 직전 프레임의 묶임 여부 — 묶임/풀림이 바뀌는 순간에만 base 모션·콜라이더를 다시 시드한다 (#369/#513).
+    private bool m_ropeBoundMotion;
     // 직전 프레임의 착석 여부 — 앉음/일어남이 바뀌는 순간에만 모션·루트모션을 다시 시드한다 (#462).
     // 끌림과 같은 폴링 방식이다: 상태 전이 훅만으론 놓친다 — 착석 플래그와 커스터디 전이가 별개
     // NetworkVariable이라 원격 피어 도착 순서가 보장되지 않는다.
@@ -148,14 +155,33 @@ public class NpcAnimationDriver : MonoBehaviour
     private NpcState m_baseState;
 
     /// <summary>
-    /// 지금 모델이 바닥에 누워 있는가 — 기절(Stunned) 중이면서 아직 일어나기 시작하지 않은 구간. (#363)
+    /// 지금 모델이 바닥에 누워 있는가 — 기절했거나 밧줄에 묶인 채로, 아직 일어나기 시작하지 않은 구간. (#363/#513)
     /// 몸통 콜라이더를 같이 눕히는 <see cref="NpcProneCollider"/>가 읽는다. FSM 상태만으로는 판별할 수 없다:
-    /// 일어나는 모션(#269) 동안에도 상태는 Stunned라, 상태만 보면 서 있는 몸에 누운 콜라이더가 남는다.
+    /// 일어나는 모션(#269) 동안에도 상태는 Stunned라 상태만 보면 서 있는 몸에 누운 콜라이더가 남고,
+    /// 반대로 묶인 채 놓인 대상은 상태가 Captured(기립 대기)라 상태만 보면 누운 몸이 서 있는 것으로 잡힌다.
     /// </summary>
     public bool IsProne { get; private set; }
 
     /// <summary>누움 여부가 바뀔 때 발행 — 표현(모션)과 콜라이더가 같은 순간에 움직이도록 한다. (#363)</summary>
     public event System.Action<bool> OnProneChanged;
+
+    /// <summary>
+    /// 밧줄이 걸려 있는가 — 끌리는 중(<c>IsRoped</c>)과 놓아둔 채 묶여만 있는 것(<c>IsTethered</c>)을
+    /// 함께 본다. (#513)
+    ///
+    /// 둘을 갈라 보면 E로 놓는 순간 묶인 몸이 벌떡 일어선다: 놓기는 <b>끌기만</b> 멈추고 줄은 그대로이며
+    /// (GDD 7-5), 밧줄은 애초에 무력화된 대상만 묶으므로(#446) 방금까지 누워 끌려온 몸이다.
+    /// </summary>
+    private bool IsRopeBound => m_controller.IsRoped || m_controller.IsTethered;
+
+    /// <summary>
+    /// 밧줄에 묶인 채 <b>바닥에 있는가</b> — 줄이 걸려 있고 아직 일어나지 않았다. 누운 모션·콜라이더의 기준. (#513)
+    ///
+    /// 묶임만으로 판정하지 않는 이유는 풀리는 순간의 순서 때문이다: 줄을 실제로 푸는 네 경로는
+    /// "일어나기 → 후속 전이(도주·배회·착석)" 순인데, 묶임 표시를 걷는 것은 <see cref="PlayerEscorter"/>의
+    /// 매 프레임 정리라 한 박자 늦게 온다. 묶임만 보면 이미 일어나 걷기 시작한 몸이 그 사이 도로 눕는다.
+    /// </summary>
+    private bool IsRopeProne => IsRopeBound && !m_standingUp;
 
     private void Awake()
     {
@@ -235,26 +261,32 @@ public class NpcAnimationDriver : MonoBehaviour
         HandleStateChanged(stunned ? NpcState.Stunned : m_controller.CurrentState);
     }
 
-    // 기절이 풀리기 직전 일어나는 모션 — 스윙과 같은 int 펄스 방식이다(트리거 오버레이는 Any State
-    // 전이에 매 프레임 끊긴다). FSM 상태는 아직 Stunned라 NPC는 제자리에 있고, 모션만 누운 자세에서
-    // 일어나는 자세로 바뀐다. 복귀는 Update가 처리한다 — 유지 시간이 끝나거나 도중에 다시 묶이면 누운 자세로.
+    // 누워 있던 몸이 일어나는 모션 — 스윙과 같은 int 펄스 방식이다(트리거 오버레이는 Any State
+    // 전이에 매 프레임 끊긴다). FSM 상태는 그대로라(기절 중이면 Stunned, 줄이 풀리는 중이면 Captured)
+    // NPC는 제자리에 있고 모션만 누운 자세에서 일어나는 자세로 바뀐다.
+    // 복귀는 Update가 처리한다 — 유지 시간이 끝나거나, 그 전에 상태 전이·재포획이 오면 그쪽이 이어받는다.
     private void HandleStandUp()
     {
         if (m_animator == null)
             return;
-        if (m_baseState != NpcState.Stunned)
-            return; // 늦게 도착한 알림 — 이미 다른 상태면 유령 모션이 된다 (스윙과 같은 방어)
+        // 늦게 도착한 알림 — 누워 있을 수 없는 기준 상태면 유령 모션이 된다 (스윙과 같은 방어).
+        // 기절(Stunned)에 더해 체포(Captured)를 받는다: 줄이 풀리며 일어나는 경로는 FSM 상태가
+        // Captured인 채로 오기 때문이다 (#513).
+        if (m_baseState != NpcState.Stunned && m_baseState != NpcState.Captured)
+            return;
 
         m_animator.SetInteger(s_stateHash, k_standUpAnimState);
         m_standingUp = true;
+        m_standUpUntil = Time.time + m_standUpSeconds;
         RefreshProne(); // 몸이 일어나기 시작했다 — 콜라이더도 같이 선다 (#363)
     }
 
-    // 누움 여부를 다시 판정해 바뀌었으면 알린다 — m_baseState/m_standingUp/IsRoped를 건드린 직후에 부른다. (#363/#369)
+    // 누움 여부를 다시 판정해 바뀌었으면 알린다 — m_baseState/m_standingUp/묶임을 건드린 직후에 부른다. (#363/#369/#513)
     private void RefreshProne()
     {
-        // 밧줄에 끌리는 중이면(누운 모션) 콜라이더도 눕는다 — 커스터디 상태는 Escorted라 아래 조건만으론 서 있게 된다 (#369)
-        bool prone = m_controller.IsRoped || (m_baseState == NpcState.Stunned && !m_standingUp);
+        // 밧줄에 묶여 있으면(끌리는 중이든 놓아둔 채든) 콜라이더도 눕는다 — 커스터디 상태는 Escorted·Captured라
+        // 상태만 보면 서 있게 된다. 일어나기 시작하면 그 순간 함께 선다.
+        bool prone = IsRopeProne || (m_baseState == NpcState.Stunned && !m_standingUp);
         if (prone == IsProne)
             return;
 
@@ -276,9 +308,10 @@ public class NpcAnimationDriver : MonoBehaviour
     // 수갑을 차지 않은 채 본부로 걸어 들어오는 그림이라 Escorted가 아니라 Walk다. (#231)
     private int AnimatorBaseState(NpcState state)
     {
-        // 밧줄에 묶여 끌리는 중이면 FSM 상태와 무관하게 누운 모션이다 (#369) — 커스터디 상태는
-        // 수갑 연행과 같은 Escorted(수갑 찬 걷기)라, 이 분기가 없으면 서서 끌려간다.
-        if (m_controller.IsRoped)
+        // 밧줄에 묶여 누워 있으면 FSM 상태와 무관하게 누운 모션이다 (#369/#513) — 커스터디 상태는
+        // 끌리는 중이면 수갑 연행과 같은 Escorted(수갑 찬 걷기)이고 놓아두면 Captured(수갑 찬 기립 대기)라,
+        // 이 분기가 없으면 서서 끌려가거나 놓는 순간 벌떡 일어선다.
+        if (IsRopeProne)
             return (int)NpcState.Stunned;
 
         return state switch
@@ -328,15 +361,37 @@ public class NpcAnimationDriver : MonoBehaviour
             }
         }
 
-        // 묶임/풀림이 바뀌는 순간 base 모션을 다시 시드한다 (#269/#369). 상태 전이 훅만으론 놓친다 —
-        // 커스터디 전이와 끌기 플래그가 별개 NetworkVariable이라 원격 피어 도착 순서가 안 보장된다.
-        if (m_ropedMotion != m_controller.IsRoped)
+        // 일어나기 유지 시간이 끝나면 기준 상태 모션으로 되돌린다 (#513). 상태 전이가 뒤따르는 경로는
+        // 그쪽이 먼저 이어받으므로 여기 오지 않고, 안 오는 경로(유치장 안에서 줄만 푼 경우)만 여기서 받는다 —
+        // 없으면 일어난 마지막 프레임에 굳는다.
+        // 누운 base(묶임·기절)로는 되돌리지 않는다 — 일어난 몸이 도로 눕는다. 기절 기상은 곧 도착할
+        // 상태 전이가 이어받으므로 그대로 두는 것이 맞다(#269의 기존 동작).
+        if (m_standUpUntil > 0f && Time.time >= m_standUpUntil)
         {
-            m_ropedMotion = m_controller.IsRoped;
-            // 일어나던 중에 묶였어도 여기서 누운 자세로 되돌아간다 — 끌려가는데 서 있으면 안 된다
-            if (m_controller.IsRoped)
+            m_standUpUntil = 0f;
+            if (!IsRopeProne && m_baseState != NpcState.Stunned)
+                m_animator.SetInteger(s_stateHash, AnimatorBaseState(m_baseState));
+        }
+
+        // 묶임/풀림이 바뀌는 순간 base 모션을 다시 시드한다 (#269/#369/#513). 상태 전이 훅만으론 놓친다 —
+        // 커스터디 전이와 묶임 플래그가 별개 NetworkVariable이라 원격 피어 도착 순서가 안 보장된다.
+        if (m_ropeBoundMotion != IsRopeBound)
+        {
+            m_ropeBoundMotion = IsRopeBound;
+            // 일어나던 중에 다시 묶였으면 누운 자세로 되돌아간다 — 끌려가는데 서 있으면 안 된다.
+            // (방치 만료로 일어나는 도중의 재포획은 커스터디 전이가 먼저 와서 아래 HandleStateChanged가 처리한다)
+            if (m_ropeBoundMotion)
+            {
                 m_standingUp = false;
-            m_animator.SetInteger(s_stateHash, AnimatorBaseState(m_baseState));
+                m_standUpUntil = 0f;
+            }
+
+            // 일어나기 모션이 재생 중이면 base로 덮어쓰지 않는다 — 줄이 빠지는 이 순간이 곧 그 모션의
+            // 시작이고, 묶임 플래그와 재생 알림(ClientRpc)은 도착 순서가 보장되지 않아 어느 쪽이
+            // 먼저 와도 같은 그림이 나와야 한다 (#513).
+            if (m_ropeBoundMotion || m_standUpUntil <= 0f)
+                m_animator.SetInteger(s_stateHash, AnimatorBaseState(m_baseState));
+
             RefreshProne(); // 눕/서에 맞춰 콜라이더도 되돌린다 (#363)
             m_lastPosition = transform.position;
             m_smoothedSpeed = 0f;
@@ -383,8 +438,8 @@ public class NpcAnimationDriver : MonoBehaviour
             return; // 앉아 있는 동안은 속도 기반 로코모션을 돌리지 않는다 — 앉은 자세를 대기 자세로 덮어쓴다
         }
 
-        // 끌리는 동안은 속도 기반 로코모션을 돌리지 않는다 — 누운 모션을 걷기/정지로 갈아치우게 된다 (#369)
-        if (m_controller.IsRoped)
+        // 묶여 누워 있는 동안은 속도 기반 로코모션을 돌리지 않는다 — 누운 모션을 걷기/정지로 갈아치우게 된다 (#369/#513)
+        if (IsRopeProne)
         {
             m_lastPosition = transform.position; // 풀린 직후 이동량이 몰려 속도가 튀지 않게
             return;
@@ -565,6 +620,17 @@ public class NpcAnimationDriver : MonoBehaviour
         m_subdueUntil = 0f; // 전환 중 다른 상태로 바뀌면(재연행 등) 전환도 끝난다
         m_subdueRollThenGroggy = false;
 
+        // 일어나기 표시는 <b>다시 누울 수 있는 상태</b>로 갈 때만 내린다 (#513).
+        // 재포획(Escorted)·재기절(Stunned)은 몸이 도로 눕는 전이라 내려야 하고 — 내리지 않으면
+        // 끌려가는 몸이 선 자세로 남는다. 다음 기절에서 누움 판정이 굳는 것도 이 정리가 막는다.
+        // 반대로 도주·수감·배회 복귀는 <b>일어난 결과</b>라 유지해야 한다: 묶임 표시를 걷는 것은
+        // PlayerEscorter의 매 프레임 정리라 한 박자 늦고, 그 사이에 내리면 그 프레임에 도로 눕는다.
+        if (state is NpcState.Stunned or NpcState.Escorted or NpcState.Captured)
+        {
+            m_standingUp = false;
+            m_standUpUntil = 0f;
+        }
+
         // 누움 판정은 여기서 끝난다(m_baseState·m_standingUp이 모두 확정) — 아래 제압 전환 분기가
         // 중간에 return하므로 그 앞에서 부른다 (#363)
         RefreshProne();
@@ -596,8 +662,10 @@ public class NpcAnimationDriver : MonoBehaviour
             m_animator.SetInteger(s_stateHash, AnimatorBaseState(state));
 
         // 연행·수감 진입 시 이동 판별을 초기화 — 직전 상태의 잔여 속도 값이 첫 판정을 오염시키지 않게 (#97/#228)
-        // 밧줄 끌기는 같은 Escorted지만 걷는 그림이 아니라 제외한다 — 위에서 시드한 누운 모션을 지키기 위해서다 (#369)
-        if (IsHandcuffedMotion(state) && !m_controller.IsRoped)
+        // 밧줄은 같은 Escorted지만 걷는 그림이 아니라 제외한다 — 위에서 시드한 누운 모션을 지키기 위해서다 (#369).
+        // 끌림이 아니라 묶임으로 보는 이유(#513): 놓아둔 대상을 E로 다시 끌면 커스터디 전이(Escorted)가
+        // 끌기 플래그보다 먼저 와서(ServerApplyRopeDrag의 강제 순서), 끌림만 보면 그 한 프레임에 벌떡 선다.
+        if (IsHandcuffedMotion(state) && !IsRopeProne)
         {
             if (m_animator != null)
                 m_animator.SetInteger(s_stateHash, (int)NpcState.Escorted);

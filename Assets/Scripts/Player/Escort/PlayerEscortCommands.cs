@@ -487,21 +487,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         if (!CanUnrope(target))
             return;
 
-        // 내 줄이 걸려 있으면 그것부터 뺀다 — 줄다리기 중이면 여기서 끝이다(남은 참가자가 계속 끈다).
-        // 마지막 한 명이었으면 대상이 커스터디에서 풀려 아래 배회 복귀로 이어진다. (#390 규칙 8)
-        if (Escorter.IsTetheredTo(target))
-        {
-            Escorter.ReleaseDrag(target);
-            Escorter.RemoveTether(target);
-
-            if (PlayerEscorter.FindEscorterOf(target) != null)
-            {
-                NotifyOwner($"내 밧줄만 풀었다 — 다른 참가자가 계속 확보 중: {target.name}");
-                return;
-            }
-        }
-
-        // <b>유치장 안에서는 석방하지 않는다</b> (#492) — 위 ReleaseDrag가 이미 Captured로 세워 뒀으므로
+        // <b>유치장 안에서는 석방하지 않는다</b> (#492) — 아래 ReleaseDrag가 이미 Captured로 세워 뒀으므로
         // 그대로 끝낸다. 판정을 통과한 대상이면 다음 틱에 JailIntake가 좌석에 앉히고, 안 통과했으면
         // 그 자리에 서 있는다(다시 묶어 끌고 나가면 된다).
         //
@@ -512,15 +498,46 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         // <b>JailArea를 직접 보는 것은 "유치장을 아는 것"이 아니다</b> — 이 허브가 유치장 오브젝트를
         // 찾아 조작하는 것은 여전히 ServerJailRelease 하나뿐이고(JailIntake에 위임), 여기 쓰는 것은
         // "이 좌표가 Jail 영역 위인가"를 답하는 정적 판정 유틸이다. 앉히는 판단은 JailIntake가 쥔다.
-        if (JailArea.Contains(target.transform.position))
+        //
+        // 밧줄은 소모되지 않아 대상에 남은 게 없다 — 회수할 자원 없이 배회로 돌려보내기만 한다 (#369).
+        bool insideJail = JailArea.Contains(target.transform.position);
+        System.Action afterStandUp = insideJail ? null : target.ReleaseFromCustody;
+
+        // 내 줄이 걸려 있으면 그것부터 뺀다 — 줄다리기 중이면 여기서 끝이다(남은 참가자가 계속 끈다).
+        // 마지막 한 명이었으면 대상이 커스터디에서 풀려 아래 배회 복귀로 이어진다. (#390 규칙 8)
+        if (Escorter.IsTetheredTo(target))
         {
-            NotifyOwner($"밧줄 풀기 완료 — 유치장 안이라 그 자리에 둔다: {target.name}");
+            // 내 줄을 빼기 전에 물어야 한다 — 뺀 뒤에는 대상의 묶임 표시가 이미 내려가
+            // "묶여 누워 있었는가"를 알 수 없다 (#513)
+            bool othersHold = Escorter.HasOtherTether(target);
+
+            Escorter.ReleaseDrag(target);
+
+            // 마지막 줄이 풀리는 순간이 곧 일어나는 순간이다 (#513) — 여기까지는 묶인 채 누워 있었다.
+            // RemoveTether보다 <b>앞</b>이어야 한다: 줄을 먼저 빼면 묶임 표시가 내려가
+            // ServerStandUpThen이 "이미 서 있다"로 오판해 일어나기가 통째로 생략된다.
+            if (!othersHold)
+                target.ServerStandUpThen(afterStandUp);
+
+            Escorter.RemoveTether(target);
+
+            if (othersHold)
+            {
+                NotifyOwner($"내 밧줄만 풀었다 — 다른 참가자가 계속 확보 중: {target.name}");
+                return;
+            }
+
+            NotifyOwner(insideJail
+                ? $"밧줄 풀기 완료 — 일어난 뒤 유치장 안 그 자리에 둔다: {target.name}"
+                : $"밧줄 풀기 완료 — 일어난 뒤 배회 복귀: {target.name}");
             return;
         }
 
-        // 밧줄은 소모되지 않아 대상에 남은 게 없다 — 회수할 자원 없이 배회로 돌려보내기만 한다 (#369).
-        NotifyOwner($"밧줄 풀기 완료 — 배회 복귀: {target.name}");
-        target.ReleaseFromCustody();
+        // 줄이 안 걸린 체포 대상(제압만으로 잡힌 Captured) — 이미 서 있으니 일어날 것도 없다.
+        NotifyOwner(insideJail
+            ? $"밧줄 풀기 완료 — 유치장 안이라 그 자리에 둔다: {target.name}"
+            : $"밧줄 풀기 완료 — 배회 복귀: {target.name}");
+        afterStandUp?.Invoke();
     }
 
     // 본부 인계 요청(#414)은 제거됐다 (#492) — 판정 트리거가 인계 단말에서 유치장 앞 보안 게이트로

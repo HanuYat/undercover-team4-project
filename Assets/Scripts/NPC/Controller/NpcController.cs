@@ -219,6 +219,10 @@ public partial class NpcController : NetworkBehaviour
         //  PlayerEscorter가 그것을 보고 끌기를 정리한다.)
         TickRopeDrag();
 
+        // 줄이 풀리며 일어나는 구간 — 밧줄 장력과 같은 이유로 아래 게이트보다 **먼저** 돈다 (#513).
+        // 뒤로 내리면 일어나는 도중 기절·넉백을 맞은 대상의 예약이 영원히 남는다.
+        TickStandUp();
+
         // 넉백 비행 중에는 FSM을 돌리지 않는다 — NavMeshAgent를 꺼 둔 채라 상태 클래스가
         // SetDestination/isStopped를 부르면 "agent not on NavMesh" 에러가 쏟아진다 (#232)
         if (m_knockbackActive)
@@ -241,6 +245,9 @@ public partial class NpcController : NetworkBehaviour
     // 서버(또는 오프라인)의 FSM 전이를 밖으로 전파한다
     private void HandleFsmStateChanged(NpcState state)
     {
+        // 커스터디를 벗어나면 묶임 표시부터 내린다 — 표현(누운 자세)이 전이와 같은 프레임에 맞아야 한다 (#513)
+        ClearTethersOnCustodyExit(state);
+
         if (!IsSpawned)
         {
             OnStateChanged?.Invoke(state); // 오프라인 — 동기화 없이 바로 로컬 이벤트

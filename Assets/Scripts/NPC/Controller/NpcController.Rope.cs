@@ -35,6 +35,67 @@ public partial class NpcController
     /// 서버·오프라인은 실제 값으로, 원격 피어는 동기화 플래그로 판정. (#269/#369)</summary>
     public bool IsRoped => IsSpawned && !IsServer ? m_ropedSynced.Value : m_roped;
 
+    // ---- 묶임 (#513) ----
+    // 끌림(IsRoped)과 묶임(IsTethered)은 다르다. E 놓기는 <b>끌기만</b> 멈추고 줄은 그대로 남으며,
+    // 실제로 푸는 건 좌클릭 3초 풀기·인계 완료·방치 탈주뿐이다(GDD 7-5). 표현이 끌림에만 매달려 있으면
+    // 놓는 순간 묶인 몸이 벌떡 일어선다 — 그래서 묶임도 별도로 알린다.
+
+    // 이 NPC에 걸린 줄 수 — 줄다리기로 여러 명이 묶으면 그 수만큼. 서버(또는 오프라인) 진실값.
+    // 수로 세는 이유: 한 명이 자기 줄만 풀어도(#390 규칙 8) 남은 줄이 있으면 여전히 묶여 있다.
+    private int m_tetherCount;
+
+    // 묶임을 클라이언트에도 알리는 동기화 플래그 — 서버만 기록한다(m_ropedSynced와 같은 관례).
+    // 묶임 목록 자체는 PlayerEscorter의 NetworkList에만 있어 표현 계층이 물을 수 없다.
+    private readonly NetworkVariable<bool> m_tetheredSynced = new(false);
+
+    /// <summary>밧줄이 묶여 있는가 — <b>끌리는 중이 아니어도</b> 참이다(E로 놓아둔 대상).
+    /// 서버·오프라인은 실제 값으로, 원격 피어는 동기화 플래그로 판정. (#513)</summary>
+    public bool IsTethered => IsSpawned && !IsServer ? m_tetheredSynced.Value : m_tetherCount > 0;
+
+    /// <summary>줄 하나가 걸렸다 — <see cref="PlayerEscorter"/>의 연결 목록이 실제로 늘어날 때만 호출한다.
+    /// 서버(또는 오프라인) 전용. 목록의 소유자가 저쪽 하나라 갱신 지점도 거기 둘뿐이다. (#513)</summary>
+    internal void AddTether()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        m_tetherCount++;
+        SyncTethered();
+    }
+
+    /// <summary>줄 하나가 풀렸다 — 연결 목록에서 실제로 빠질 때만 호출한다. 서버(또는 오프라인). (#513)</summary>
+    internal void RemoveTether()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        m_tetherCount = Mathf.Max(0, m_tetherCount - 1);
+        SyncTethered();
+    }
+
+    private void SyncTethered()
+    {
+        if (IsSpawned && IsServer)
+            m_tetheredSynced.Value = m_tetherCount > 0;
+    }
+
+    /// <summary>커스터디를 벗어나면 묶임 표시를 통째로 내린다 — 서버(또는 오프라인) FSM 전이가 부른다. (#513)
+    ///
+    /// <see cref="PlayerEscorter"/>의 매 프레임 정리가 <b>같은 조건</b>으로 줄을 걷어내므로 평소엔 중복이지만,
+    /// 끌던 플레이어가 접속을 끊으면 그 정리가 아예 돌지 않아 표시가 영영 남는다 — 그러면 배회로
+    /// 돌아간 몸이 누운 모션으로 걸어 다닌다. 여기서 먼저 내려 두면 표현이 전이와 같은 프레임에 맞는다.
+    /// <see cref="RemoveTether"/>는 0에서 더 내려가지 않으므로 한 박자 뒤에 오는 정리와 겹쳐도 안전하다.</summary>
+    private void ClearTethersOnCustodyExit(NpcState state)
+    {
+        if (state == NpcState.Escorted || state == NpcState.Captured)
+            return;
+        if (m_tetherCount == 0)
+            return;
+
+        m_tetherCount = 0;
+        SyncTethered();
+    }
+
     /// <summary>밧줄 길이(m) — 표시(늘어짐 정도)와 서버 장력 판정이 같은 값을 쓴다.</summary>
     public float RopeLength => m_ropeDragConfig.RopeLength;
 
@@ -84,6 +145,10 @@ public partial class NpcController
             if (!m_dragAnchors.Contains(dragger))
                 m_dragAnchors.Add(dragger);
         }
+
+        // 일어나던 중이었으면 되돌린다 — 방치 만료로 일어나는 도중에 달려와 E를 누른 재포획이 이 경로다.
+        // 예약된 후속 동작(도주 등)도 함께 버려진다. (#513)
+        CancelStandUp();
 
         SetRoped(true);
         SyncDraggerCount();
@@ -189,6 +254,85 @@ public partial class NpcController
             return false;
 
         return m_agent.Warp(hit.position) && m_agent.isOnNavMesh;
+    }
+
+    // ---- 풀리는 순간의 일어나기 (#513) ----
+    // 묶인 대상은 누워 있으므로, 일어나는 것은 줄이 <b>실제로 풀리는</b> 네 경로뿐이다:
+    // 방치 만료 탈주(NpcCapturedState) · 좌클릭 3초 풀기 · 유치장 착석 · 유치장 안 풀기
+    // (뒤 셋은 PlayerEscortCommands·JailIntake). 전부 대상이 체포(Captured)로 멈춰 있는 상태에서 온다.
+
+    // 일어난 뒤 할 일 — null이면 그 자리에 서기만 한다(유치장 안 풀기).
+    private System.Action m_standUpNext;
+    private bool m_standUpPending;
+    private float m_standUpRemaining;
+
+    /// <summary>지금 일어나는 모션 구간인가 — 서버(또는 오프라인) 전용.
+    /// 이 구간은 아직 묶인 채 <see cref="NpcState.Captured"/>라 E로 다시 끌 수 있는 <b>재포획 창</b>이다. (#513)
+    /// 폴링으로 부르는 쪽(JailIntake)이 후속 동작을 중복 예약하지 않도록 물어보는 값이기도 하다.</summary>
+    public bool IsStandingUp => m_standUpPending;
+
+    /// <summary>
+    /// 줄이 풀리는 순간의 일어나기 — 전 피어에 모션을 알리고, 클립 길이만큼 지난 뒤 <paramref name="next"/>를
+    /// 실행한다. 서버(또는 오프라인) 전용. (#513)
+    ///
+    /// 묶여 있지 않으면(제압만으로 잡힌 Captured 등 이미 서 있는 몸) 기다리지 않고 곧바로 실행한다 —
+    /// 호출부마다 자세를 따로 판정하지 않게 여기서 한 번에 가른다.
+    ///
+    /// 모션 길이는 기절 기상과 같은 클립을 쓰므로 <see cref="NpcStunConfig.StandUpSeconds"/>를 공유한다.
+    /// </summary>
+    public void ServerStandUpThen(System.Action next)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        if (!IsTethered && !IsRoped)
+        {
+            next?.Invoke();
+            return;
+        }
+
+        if (m_standUpPending)
+            return; // 이미 일어나는 중 — 폴링 호출부가 매 틱 불러도 한 번만 건다
+
+        m_standUpPending = true;
+        m_standUpNext = next;
+        m_standUpRemaining = m_stunConfig.StandUpSeconds;
+        RaiseStandUp(); // 전 피어에 일어나는 모션 재생을 알린다 (기절 기상과 같은 순간 이벤트)
+    }
+
+    // 일어나기 예약 취소 — 예약된 후속 동작도 함께 버린다.
+    private void CancelStandUp()
+    {
+        m_standUpPending = false;
+        m_standUpNext = null;
+        m_standUpRemaining = 0f;
+    }
+
+    /// <summary>
+    /// 일어나기 대기 — <see cref="Update"/>가 밧줄 장력 직후, 넉백·스턴 게이트보다 <b>앞</b>에서 돌린다.
+    /// 게이트 뒤로 내리면 일어나는 도중 기절한 대상의 예약이 영원히 남는다.
+    /// </summary>
+    private void TickStandUp()
+    {
+        if (!m_standUpPending)
+            return;
+
+        // 밖에서 상황이 바뀌었으면 일어나기가 성립하지 않는다 — 후속 동작도 함께 버린다.
+        // 그 상태에서 도주·석방·수감을 걸면 새 상황(넉백 비행·페널티 연행·재기절)을 덮어쓴다.
+        // 버려진 대상은 그대로 체포 상태에 남아 방치 타이머가 다시 만료시킨다.
+        if (CurrentState != NpcState.Captured || m_knockbackActive || HasStunOverlay)
+        {
+            CancelStandUp();
+            return;
+        }
+
+        m_standUpRemaining -= Time.deltaTime;
+        if (m_standUpRemaining > 0f)
+            return;
+
+        System.Action next = m_standUpNext;
+        CancelStandUp(); // 먼저 비운다 — next가 다시 예약을 걸 수 있다
+        next?.Invoke();
     }
 
     /// <summary>
