@@ -16,7 +16,8 @@ MonoBehaviour:
     m_Code: en
   m_SharedData: {fileID: 11400000, guid: a4c8df317b247dd44b76163f41d8135a, type: 2}
   m_Metadata:
-    m_Items: []
+    m_Items:
+    - rid: 6276845898492543065
   m_TableData:
   - m_Id: 7100000000000
     m_Localized: Citizen Directory
@@ -46,6 +47,37 @@ MonoBehaviour:
     m_Localized: End Round
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000500
+    m_Localized: No channel
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000501
+    m_Localized: "\u26A0 No signal"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000502
+    m_Localized: "Power off \xB7 CH{0}"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845898492543065
+  - m_Id: 7100000000503
+    m_Localized: CH{0}
+    m_Metadata:
+      m_Items:
+      - rid: 6276845898492543065
+  - m_Id: 7100000000504
+    m_Localized: "CH{0} \xB7 {1}"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845898492543065
   references:
     version: 2
-    RefIds: []
+    RefIds:
+    - rid: 6276845898492543065
+      type: {class: SmartFormatTag, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_Entries: 
+        m_SharedEntries:
+        - id: 7100000000502
+        - id: 7100000000503
+        - id: 7100000000504

@@ -240,7 +240,7 @@
 ### Phase 2 — 코드 조립 문자열 (약 60개)
 `LocalizedString` SerializeField + Smart String으로 교체. 관례는 [SignalDecoder](../../Assets/Scripts/Item/SignalDecoder.cs)와 같다.
 
-- ~~`SettlementPanel`~~ (15) · `AuthPanel`+`AccountCredentials`+`NicknameRules` (21) · ~~`ScanInfoView`~~ · ~~`ScanResultPresenter`~~ · `ShopStandView` · `CCTVChannelLabelView` · `HqRevivalDevice` · `BombTimerView`
+- ~~`SettlementPanel`~~ (15) · `AuthPanel`+`AccountCredentials`+`NicknameRules` (21) · ~~`ScanInfoView`~~ · ~~`ScanResultPresenter`~~ · `ShopStandView` · ~~`CCTVChannelLabelView`~~ · `HqRevivalDevice` · `BombTimerView`
 - ~~`SessionPanel`~~ · ~~`LeaveConfirmPanel`~~ · ~~`LobbyRosterRowView`/`LobbyRosterPanel`~~ · ~~`SessionCodePanel`~~ — **Phase 1에서 앞당겨 처리했다** (해당 씬·프리팹을 손대는 김에)
 - **`string m_format` 필드 8개** → `LocalizedString`: ~~`RoundFundHud`~~(실제 이름은 `RoundFundBoard`) · ~~`ReadyWaitHud`~~ · ~~`RemainingCriminalsHud`~~ · ~~`WantedEntryView`~~ · `BombSerialView` · ~~`MicStatusHud`~~ · `HqRevivalDevice` · `CCTVNode`
 - ~~**곁다리 정리:** 검거 판정 문구 3곳 중복~~ — **정정.** 중복은 2곳이 아니라 **번역 대상 1곳**이었다.
@@ -265,6 +265,12 @@
 > `LocalizedString.GetLocalizedString(args)`로 한 번 읽고 끝낸다 — 구독·해제 짝을 6벌 들고 있을 이유가 없다.
 > 반대로 HUD(`ReadyWaitHud` 등)는 라운드 내내 떠 있으므로 구독해야 한다. **판단 기준은 "그 문구가 언어 변경을
 > 볼 수 있는 자리인가"**다.
+>
+> **본부 코드 문구는 CCTV 채널 라벨뿐이었다.** `Assets/Scripts/HQ` 전체의 `.text =` 대입을 훑은 결과,
+> 남은 번역 대상은 `CCTVChannelLabelView`의 다섯 문구뿐이다. `DirectoryEntryView`·`FactionSymbolRowView`가
+> 쓰는 시민 타입·세력 표기는 `OfficialRecords`의 Dictionary에서 오므로 **Phase 4(데이터 에셋)** 소관이고,
+> `CitizenDirectoryView`의 페이지 라벨(`{페이지} / {전체}`)은 숫자와 구분자뿐이라 키를 두지 않았다.
+> `CH{0}`처럼 번역할 낱말이 없어 보이는 것도 키로 뺐다 — en에서 `CAM`으로 바꿀 여지를 남긴다.
 >
 > 정산의 결과 제목·복귀 도착지·종료 사유는 규약 키다 — `RoundResult`에 접두 둘(`Settlement.Result.` ·
 > `Settlement.Return.`), `RoundEndReason`에 하나(`Settlement.Reason.`)를 붙였다.
