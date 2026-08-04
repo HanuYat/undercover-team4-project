@@ -2974,6 +2974,7 @@ GameObject:
   - component: {fileID: 1988824250104969133}
   - component: {fileID: 115275667145390572}
   - component: {fileID: 1944191930658825646}
+  - component: {fileID: 159535688444442221}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -3436,6 +3437,54 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerReviveHud
   ShowTopMostFoldoutHeaderGroup: 1
+  m_downedPrompt:
+    m_TableReference:
+      m_TableCollectionName: HudTable
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: Hud.Revive.Downed
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_selfDeadPrompt:
+    m_TableReference:
+      m_TableCollectionName: HudTable
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: Hud.Revive.SelfDead
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_carryingPrompt:
+    m_TableReference:
+      m_TableCollectionName: HudTable
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: Hud.Revive.Carrying
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_revivePrompt:
+    m_TableReference:
+      m_TableCollectionName: HudTable
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: Hud.Revive.Hint
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_deadTargetPrompt:
+    m_TableReference:
+      m_TableCollectionName: HudTable
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: Hud.Revive.DeadTarget
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  references:
+    version: 2
+    RefIds: []
 --- !u!114 &6729906829730803492
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3587,6 +3636,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerPenaltyView
   ShowTopMostFoldoutHeaderGroup: 1
+  m_chaseWarning:
+    m_TableReference:
+      m_TableCollectionName: HudTable
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: Hud.Penalty.ChaseWarning
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  references:
+    version: 2
+    RefIds: []
 --- !u!114 &3605863908184502176
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3733,6 +3794,23 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_dragSlowPerWeight: 0.25
   m_minDragSpeedFactor: 0.35
+--- !u!114 &159535688444442221
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2dc0593bde296254fa6c344465ae1f3e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcHealthBarPresenter
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_probeRange: 20
+  m_probeMask:
+    serializedVersion: 2
+    m_Bits: 129
 --- !u!1 &5720394585047626155
 GameObject:
   m_ObjectHideFlags: 0

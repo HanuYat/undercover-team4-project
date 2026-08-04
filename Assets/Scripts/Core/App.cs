@@ -47,6 +47,9 @@ public class App : Singleton<App>
     private ChannelingGaugeUI m_channelingGaugeUI;
     private DamageVignetteUI m_damageVignetteUI;
     private TaserShockUI m_taserShockUI;
+    private ToastView m_toastView;
+    private SignalMessageView m_signalMessageView;
+    private PromptView m_promptView;
 #pragma warning restore CS0649
     #endregion
 
@@ -184,6 +187,9 @@ public class App : Singleton<App>
         public static ChannelingGaugeUI Gauge => Instance.m_channelingGaugeUI;
         public static DamageVignetteUI DamageVignette => Instance.m_damageVignetteUI; // 피격 비네트·방향 아크·저체력 글리치 (#476)
         public static TaserShockUI TaserShock => Instance.m_taserShockUI; // 감전 화면 지직 (#477)
+        public static ToastView Toast => Instance.m_toastView;
+        public static SignalMessageView SignalMessage => Instance.m_signalMessageView;
+        public static PromptView Prompt => Instance.m_promptView;
 
         // 씬 전환을 덮는 상주 로딩 화면 (AppBootstrap 하위). 씬 직접 Play 등 부트스트랩이 없으면 null
         public static LoadingScreen Loading => Instance.m_loadingScreen;

@@ -72,6 +72,9 @@ public class ScanResultPresenter : NetworkBehaviour
     // 마지막으로 본 배터리 값 — 증가(충전) 감지용. 미장착이면 -1. (#309)
     private int m_lastBattery = -1;
 
+    // 스캔 카드가 없다고 이미 알린 NPC — 같은 대상에 경고를 반복하지 않는다. (#505)
+    private readonly HashSet<int> m_warnedMissingCard = new HashSet<int>();
+
     public override void OnNetworkSpawn()
     {
         if (!IsOwner)
@@ -134,7 +137,10 @@ public class ScanResultPresenter : NetworkBehaviour
         // NPC 프리팹에 달린 카드(기본 비활성)를 찾는다.
         ScanInfoView view = identity.GetComponentInChildren<ScanInfoView>(true);
         if (view == null)
+        {
+            WarnMissingCardOnce(identity);
             return;
+        }
 
         NetworkObject npcObject = identity.GetComponentInParent<NetworkObject>();
 
@@ -181,6 +187,23 @@ public class ScanResultPresenter : NetworkBehaviour
         {
             m_currentView.ShowMasked();
         }
+    }
+
+    // 스캔 카드가 없는 NPC — 프로필이 배정돼 있어도 띄울 카드가 없어 아무 일도 일어나지 않는다.
+    // 조용히 지나가면 증상이 "로그에는 스캔 결과가 찍히는데 화면에는 안 보인다"로만 나타나 원인을 찾기 어렵다
+    // (#505에서 돌발 이벤트 난동꾼 프리팹 둘이 정확히 이 상태였다). 새 NPC 유형을 추가할 때 바로 드러나게 알린다.
+    //
+    // 조준이 바뀔 때마다 도는 경로라 대상당 한 번만 낸다 — 같은 NPC를 다시 보며 로그가 도배되지 않게.
+    private void WarnMissingCardOnce(CitizenIdentity identity)
+    {
+        if (!m_warnedMissingCard.Add(identity.GetInstanceID()))
+            return;
+
+        Debug.LogWarning(
+            $"ScanResultPresenter: {identity.name}에 스캔 카드(ScanInfoView)가 없어 스캔 정보를 표시할 수 없다 — "
+                + "NPC 프리팹에 ScanInfoCard.prefab을 자식으로 넣을 것 (NPC_Citizen 참고)",
+            identity
+        );
     }
 
     private void HideCurrent()

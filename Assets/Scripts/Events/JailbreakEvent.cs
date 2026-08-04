@@ -164,6 +164,15 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (SuddenEventUtil.IsNetworkSessionActive)
             m_intruder.GetComponent<NetworkObject>().Spawn();
 
+        // 신원 배정을 여기서 부르지 않는다 — CitizenIdentity가 Start에서 스스로 요청한다 (#505).
+        // 침입자도 시민과 똑같이 스캔되지만 <b>인명부에는 등재되지 않는다</b>: 런타임에 생긴 NPC는
+        // 미등록 인물이라는 규칙에 대상별 예외를 두지 않는다(팀 확정 2026-08-04). 그래서 이 이벤트가
+        // 배정 결과를 알아야 할 이유가 없어졌고, 난동꾼과 완전히 같은 경로를 탄다.
+        //
+        // 등재 안 함이 침입자를 노출시키지는 않는다 — 이름 위조범도 조회에서 "목록에 없음"으로
+        // 나오므로 조회 실패가 곧 침입자라는 뜻이 아니다. 본부가 확증하려면 걸음을 눈치채고
+        // 현장에 스캔을 요청해 이름을 대조해야 한다(GDD 5-4의 2단계 판독).
+
         // 해제 착수·완료 통보를 받아 경보/자물쇠 해제를, 상태 전이를 받아 플레이어 개입을 처리한다
         m_intruder.OnIntrudeUnlockStarted += HandleUnlockStarted;
         m_intruder.OnIntrudeFinished += HandleIntrudeFinished;
@@ -360,7 +369,8 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     {
         m_jailZone.ReleaseInmate(inmate);
 
-        // 재검거의 핵심 — 판정 완료 표식을 지워야 인계존이 다시 판정한다 (#230)
+        // 재검거의 핵심 — 판정 완료 표식을 지운다 (#230). 재판정을 여는 것 자체는 유치장이 방문 단위로
+        // 하지만(#492), 이 표식이 남으면 IsFirstDelivery가 false라 할당량·수배 후처리가 다시 세지 않는다.
         inmate.ClearDelivered();
 
         // 진범만 할당량·수배 후처리를 되돌린다. 경범죄(난동꾼)는 할당량·수배 대상이 아니므로 건드리지 않는다

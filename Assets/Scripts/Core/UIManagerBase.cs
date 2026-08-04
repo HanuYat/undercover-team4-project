@@ -16,10 +16,31 @@ public abstract class UIManagerBase : CommonManagerBase
     // 스택이 비었을 때 ESC로 여는 씬의 진입 메뉴(일시정지·종료 확인). 씬당 하나 — 패널이 스스로 등록.
     private PanelBase m_escMenuPanel;
 
+#if UNITY_EDITOR
+    // 에디터는 Game 뷰에서 ESC를 누르면 커서 잠금을 스스로 푼다(문서화된 동작).
+    // 그래서 ESC로 모달을 닫아 CursorLock이 같은 프레임에 다시 잠가도 에디터가 이겨, 커서가 풀린 채 남는다.
+    // 다음 프레임에 한 번 더 적용해 되돌린다 — 요청 수는 건드리지 않으므로 판정 결과는 그대로다.
+    // ESC로 일시정지가 열린 경우엔 그쪽이 Push한 상태라 재적용해도 계속 풀림이다(원하는 동작).
+    // 빌드에는 이 보정이 아예 들어가지 않는다.
+    private bool m_reassertCursorNextFrame;
+#endif
+
     protected virtual void Update()
     {
+#if UNITY_EDITOR
+        if (m_reassertCursorNextFrame)
+        {
+            m_reassertCursorNextFrame = false;
+            CursorLock.Reassert();
+        }
+#endif
+
         if (Keyboard.current == null || !Keyboard.current.escapeKey.wasPressedThisFrame)
             return;
+
+#if UNITY_EDITOR
+        m_reassertCursorNextFrame = true;
+#endif
 
         // 창이 쌓여 있으면 ESC는 그 창만 처리한다 — 닫든(닫기 가능) 말든 진입 메뉴로는 새지 않는다.
         if (m_escStack.TryPeek(out PanelBase top) && top != null)

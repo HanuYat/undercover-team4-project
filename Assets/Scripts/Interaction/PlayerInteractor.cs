@@ -298,16 +298,9 @@ public class PlayerInteractor : NetworkBehaviour
             : null;
         if (m_escorter != null && m_escorter.IsDraggingNpc(aimed))
         {
-            // 예외: 인계 단말처럼 '끌고 온 상태에서만 의미 있는' 대상은 놓기보다 우선한다 (#414).
-            // CanInteract를 함께 보므로 조준 윤곽선이 켜진 조건과 실제로 E가 먹히는 조건이 일치하고,
-            // 조건이 어긋나면 아래 놓기로 흘러가 끌던 NPC를 놓을 방법이 사라지지 않는다.
-            IInteractable priority = CurrentInteractable;
-            if (priority != null && priority.TakesPriorityOverRelease(gameObject) && priority.CanInteract(gameObject))
-            {
-                priority.Interact(gameObject);
-                return;
-            }
-
+            // 끌고 있는 대상을 겨눈 E는 놓기로 소비된다. '끌고 온 상태에서만 의미 있는' 대상에 선점을
+            // 열어 주던 예외(TakesPriorityOverRelease, #414)는 유일한 사용처인 인계 단말과 함께
+            // 제거됐다 (#492) — 필요해지면 아래 운반 쪽 ICarriedBodyReceiver가 같은 취지의 선례다.
             // ReleaseDrag 직접 호출은 서버 가드에 막힌다 — 요청 API로 서버에 넘긴다 (#118)
             Debug.Log($"E 입력 — 밧줄 끌기 놓기 요청: {aimed.name}");
             m_commands?.RequestRelease(aimed);
@@ -322,7 +315,7 @@ public class PlayerInteractor : NetworkBehaviour
         {
             // 몸을 받는 대상(부활 장치)은 내려놓기보다 앞선다 — 아니면 장치 앞에서 E를 눌러도 그 자리에
             // 툭 내려놓게 된다. 선점을 여는 대상은 ICarriedBodyReceiver로 한정한다(문·콘솔은 종전대로).
-            // 밧줄 쪽 TakesPriorityOverRelease와 같은 취지이며, CanInteract를 함께 보는 것도 같은 이유다.
+            // CanInteract를 함께 보므로 조준 윤곽선이 켜진 조건과 실제로 E가 먹히는 조건이 일치한다.
             if (CurrentInteractable is ICarriedBodyReceiver receiver
                 && receiver.CanInteract(gameObject))
             {

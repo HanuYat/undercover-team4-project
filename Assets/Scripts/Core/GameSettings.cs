@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Localization;
+using UnityEngine.Localization.Settings;
 
 /// <summary>
-/// 로컬 게임 설정(마우스 감도 · 음량 · 마이크) 저장소. (#225, #430)
-/// 설계 정본: docs/design/settings-ui.md
+/// 로컬 게임 설정(마우스 감도 · 음량 · 마이크 · 언어) 저장소. (#225, #430, #374)
+/// 설계 정본: docs/design/settings-ui.md · 언어는 docs/design/localization.md
 /// </summary>
 public static class GameSettings
 {
@@ -24,7 +27,7 @@ public static class GameSettings
     private const float k_defaultVoiceVolume = 1f;
     private const bool k_defaultMicMuted = false;
 
-    private static float s_mouseSensitivity = k_defaultMouseSensitivity;    // 백킹 필드
+    private static float s_mouseSensitivity = k_defaultMouseSensitivity; // 백킹 필드
     private static float s_masterVolume = k_defaultMasterVolume;
     private static float s_voiceVolume = k_defaultVoiceVolume;
     private static bool s_micMuted = k_defaultMicMuted;
@@ -92,8 +95,40 @@ public static class GameSettings
     }
 
     /// <summary>
+    /// 고를 수 있는 언어 목록 — 설정 창 드롭다운이 이 순서 그대로 항목을 만든다. (#374)
+    /// 로케일 추가는 Localization Settings에서 하며 여기 코드는 건드리지 않는다.
+    /// </summary>
+    public static IList<Locale> AvailableLocales => LocalizationSettings.AvailableLocales.Locales;
+
+    /// <summary>
+    /// 표시 언어. 다른 설정과 달리 <b>백킹 필드를 두지 않는다</b> — 현재 언어의 출처는
+    /// <see cref="LocalizationSettings.SelectedLocale"/> 하나이고, 여기 사본을 두면 F10·디버그 등
+    /// 다른 경로로 언어가 바뀌었을 때 설정 창 표시가 어긋난다.
+    ///
+    /// 영속화도 여기서 하지 않고 <see cref="PlayerPrefLocaleSelector"/>에 맡긴다. 그쪽이
+    /// <c>IStartupLocaleSelector</c>로 <b>시작 시 복원</b>까지 담당하므로, 저장 키를 양쪽이 각자
+    /// 가지면 "설정 창이 저장한 언어"와 "다음 실행에 복원되는 언어"가 갈린다. 쓰는 곳은 여기,
+    /// 키를 아는 곳은 거기 하나다.
+    /// </summary>
+    public static Locale Locale
+    {
+        get => LocalizationSettings.SelectedLocale;
+        set
+        {
+            if (value == null || value == LocalizationSettings.SelectedLocale)
+                return;
+
+            LocalizationSettings.SelectedLocale = value;
+            PlayerPrefLocaleSelector.Save(value);
+        }
+    }
+
+    /// <summary>
     /// 저장된 값을 읽어 적용한다. 플레이 시작마다 자동 실행 — 네 필드를 무조건 덮어쓰므로
     /// 도메인 리로드를 꺼도 이전 플레이 값이 남지 않는다 (App·AppBootstrap과 같은 방침).
+    ///
+    /// 언어는 여기서 건드리지 않는다 — <see cref="PlayerPrefLocaleSelector"/>가 Localization 초기화
+    /// 시점에 이미 복원한다. 여기서 또 대입하면 초기화 순서에 따라 복원값을 덮어쓸 수 있다.
     /// </summary>
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Load()
@@ -108,7 +143,12 @@ public static class GameSettings
         MicMuted = PlayerPrefs.GetInt(k_micMutedKey, k_defaultMicMuted ? 1 : 0) != 0;
     }
 
-    /// <summary>네 값을 기본값으로 되돌린다 — 설정 창의 [기본값 복원].</summary>
+    /// <summary>
+    /// 네 값을 기본값으로 되돌린다 — 설정 창의 [기본값 복원].
+    /// <b>언어는 포함하지 않는다</b> — 되돌릴 '기본 언어'가 시스템 로케일이라, 한국어로 쓰던 사람이
+    /// 이 버튼을 누르면 메뉴 언어가 통째로 바뀐다. 감도·볼륨을 되돌리려다 화면을 못 읽게 되는 쪽이
+    /// 잘못 조절한 값보다 나쁘고, 언어는 바로 위 드롭다운에서 되돌릴 수 있다. (#374)
+    /// </summary>
     public static void ResetToDefaults()
     {
         MouseSensitivity = k_defaultMouseSensitivity;

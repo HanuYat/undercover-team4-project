@@ -5,8 +5,8 @@ using UnityEngine;
 
 /// <summary>
 /// 유치장 — 검거된 범인을 실제로 수용·관리하는 구역. (GDD 7-2, #228)
-/// 판정 구역(HqDropoffZone/ArrestJudge)과 분리되어 있다: 판정은 "누가 범인인가"만,
-/// 여기는 "어디에 가두고 몇 명이 있는가"만 안다. 둘을 잇는 건 CustodyRouter다.
+/// 판정(ArrestJudge)과 분리되어 있다: 판정은 "누가 범인인가"만, 여기는 "어디에 가두고 몇 명이
+/// 있는가"만 안다. 둘을 잇고 출입을 관리하는 건 <see cref="JailIntake"/>다 (#492).
 ///
 /// 수용 인원은 서버 권위로 세어 NetworkVariable로 전 피어에 동기화한다 (#56 패턴) —
 /// 본부 UI(별도 이슈)는 InmateCount/OnInmateCountChanged를 읽으면 된다.
@@ -27,10 +27,6 @@ public class JailZone : NetworkBehaviour
     [Header("출구 지점 (비우면 유치장 자신의 위치)")]
     [Tooltip("탈옥으로 방출된 수감자를 옮길 유치장 밖 지점 — 창살 안에 갇히지 않게 한다 (#415). 문 바깥 NavMesh 위에 둘 것")]
     [SerializeField] private Transform m_exitPoint;
-
-    [Header("자물쇠 (비우면 같은 오브젝트에서 자동 탐색)")]
-    [Tooltip("새 수감자를 받을 때 자동으로 다시 잠근다 — 범인 탈출 이벤트(#231)로 열린 상태를 되돌리는 경로")]
-    [SerializeField] private JailLock m_jailLock;
 
     // 서버 권위 수용 인원 — 서버만 쓰고 모든 클라이언트가 읽는다 (#56)
     private readonly NetworkVariable<int> m_inmateCount = new NetworkVariable<int>(0);
@@ -101,10 +97,6 @@ public class JailZone : NetworkBehaviour
 
     private void Awake()
     {
-        // 자물쇠는 같은 오브젝트에 두는 것이 기본 — 인스펙터로 따로 지정할 수도 있다
-        if (m_jailLock == null)
-            m_jailLock = GetComponent<JailLock>();
-
         // 좌석 점유 배열은 좌석 수와 1:1 — 좌석은 씬 배치라 런타임에 늘지 않으므로 여기서 한 번만 잡는다 (#462)
         m_seatOccupants = new NpcController[m_seatPoints != null ? m_seatPoints.Length : 0];
     }
@@ -132,16 +124,20 @@ public class JailZone : NetworkBehaviour
     }
 
     /// <summary>
-    /// 좌석 배정 — 수감 대상 1명이 걸어가 앉을 좌석을 내준다. 서버(또는 오프라인)에서 호출. (#462)
+    /// 좌석 배정 — 수감 대상 1명이 걸어가 앉을 좌석을 내준다. 서버(또는 오프라인)에서 호출. (#462/#492)
     ///
-    /// 손으로 배치한 좌석 목록에서 <b>빈 자리를 앞에서부터</b> 고른다. 자리를 계산해 만들지 않는 것이 핵심이다 —
+    /// 손으로 배치한 좌석 목록에서 고른다. 자리를 계산해 만들지 않는 것이 핵심이다 —
     /// 예전 방식(셀 지점 돌려 쓰기 + GatherSlot 오프셋)은 인원이 늘면 자리가 문↔셀 통로 위에 떨어져
     /// NPC의 진입과 플레이어의 탈출을 막았다. 목록에 문 앞 자리가 없으면 그 사고가 구조적으로 불가능해진다.
+    ///
+    /// <paramref name="near"/>에서 <b>가장 가까운 빈 좌석</b>을 고른다 (#492). 플레이어가 신병을 내려놓은
+    /// 자리가 기준이다 — 앞에서부터 채우면 방 반대편 좌석이 배정돼 걸어가는 거리가 공연히 길어진다
+    /// (실측 최대 5.6m). 걸어가는 것 자체는 NpcJailedState가 한다.
     ///
     /// 정원을 넘으면 좌석을 돌려 써 겹쳐 앉힌다 — 좌석은 전부 통로 밖이라 겹쳐도 통행을 막지 않는다
     /// (팀 확정 2026-07-30). 조용히 넘어가지 않게 경고를 남긴다.
     /// </summary>
-    public Transform ReserveSeat(NpcController npc)
+    public Transform ReserveSeat(NpcController npc, Vector3 near)
     {
         if (npc == null || m_seatPoints == null || m_seatPoints.Length == 0)
             return transform;
@@ -151,16 +147,33 @@ public class JailZone : NetworkBehaviour
             if (m_seatOccupants[i] == npc && m_seatPoints[i] != null)
                 return m_seatPoints[i];
 
-        // 빈 자리를 앞에서부터. 점유자가 파괴됐으면(라운드 종료 잔류 정리 등) Unity의 null 비교가 빈 자리로 본다
+        // 빈 자리 중 기준 위치에서 가장 가까운 곳. 점유자가 파괴됐으면(라운드 종료 잔류 정리 등)
+        // Unity의 null 비교가 빈 자리로 본다.
+        int best = -1;
+        float bestSqrDistance = float.MaxValue;
         for (int i = 0; i < m_seatPoints.Length; i++)
         {
             if (m_seatPoints[i] == null || m_seatOccupants[i] != null)
                 continue;
 
-            m_seatOccupants[i] = npc;
-            return m_seatPoints[i];
+            float sqrDistance = (m_seatPoints[i].position - near).sqrMagnitude;
+            if (sqrDistance >= bestSqrDistance)
+                continue;
+
+            bestSqrDistance = sqrDistance;
+            best = i;
         }
 
+        if (best < 0)
+            return ShareOverflowSeat(npc);
+
+        m_seatOccupants[best] = npc;
+        return m_seatPoints[best];
+    }
+
+    // 정원 초과 — 좌석을 돌려 써 겹쳐 앉힌다. 경고는 여기 한 곳에서만 낸다.
+    private Transform ShareOverflowSeat(NpcController npc)
+    {
         Transform shared = NextOverflowSeat();
         Debug.LogWarning(
             $"[유치장] 좌석 정원({m_seatPoints.Length}석) 초과 — {npc.name}을(를) {shared.name}에 겹쳐 앉힌다. "
@@ -218,11 +231,9 @@ public class JailZone : NetworkBehaviour
         RefreshBountyTotal();
         Debug.Log($"[유치장] 수용: {npc.name} — 현재 {InmateCount}명, 누적 현상금 {BountyTotal}원");
 
-        // 탈출 이벤트(#231)로 열린 자물쇠는 새 수감자를 받는 순간 자동으로 다시 잠긴다 —
-        // 플레이어가 따로 잠글 것이 없으면서도 연속 발동은 자연히 막힌다.
-        // 유치장이 자물쇠를 아는 방향이다(그 반대가 아니라) — 자물쇠는 수용을 몰라야 한다.
-        if (m_jailLock != null)
-            m_jailLock.ServerRelock();
+        // 자동 재잠금은 제거됐다 (#492) — 탈옥으로 열린 자물쇠는 <b>플레이어가 직접 잠가야 한다</b>
+        // (유치장 문에 E). 수감만 하면 저절로 잠기던 예전 처리는 "털렸으면 가서 잠근다"는 책임을
+        // 없애 버렸다. 열린 자물쇠는 문이 열린 채로 남아 계속 눈에 띈다(JailDoor.IsJailbreakHoldingOpen).
     }
 
     /// <summary>

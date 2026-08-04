@@ -64,12 +64,14 @@ R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단�
 
 | 코드 | 사유 |
 |---|---|
-| ArrestJudge → HqDropoffZone `Find` | 장소(트리거 존) 오브젝트 — 매니저 아님 |
+| JailIntake → JailScanner `Find` | 장소(게이트) 오브젝트 — 매니저 아님. 유치장 밖(문 앞)에 서 있어 부모 탐색으로는 닿지 않는다. 참조 도메인은 Interaction 하나뿐이라 R3 승격 기준에 미달하고, Awake 1회 탐색이라 런타임 비용도 없다 (#492) |
+| PlayerEscortCommands → JailIntake `Find` | 장소(출입구) 오브젝트 — 매니저 아님. 참조 도메인이 Player 하나라 R3 승격 기준에 미달이고, E 입력 때만 도는 경로라 매 프레임 탐색 비용도 없다. 인계 단말이 폐기되면서 삭제된 `ArrestJudge → HqDropoffZone Find` 항목을 대체한다 (#492) |
 | RoundTimerUI → RoundTimerSync `Find` | Round 도메인 내부 부품 (HQ 타이머 표시가 생기면 승격 후보) |
 | SessionManager → AuthBootstrap `SerializeField` | 같은 오브젝트/프리팹 내 직접 연결 |
 | RoundEndResetter의 테스트 씬 폴백 `SceneManager.LoadScene` | EScene 매핑이 없는 테스트 씬 한정 — 정식 흐름은 App.LoadScene(Title)로 전환 완료 (#247) |
-| JailbreakEvent · CustodyRouter · RoundManager · SettlementController · RoundFundHud → JailZone `Find`/`SerializeField` | 장소(구역) 오브젝트 — 매니저 아님. HqDropoffZone과 같은 분류다. 참조 도메인이 늘어(#395로 Round·UI 추가) R3의 승격 기준은 넘지만, 본부 맵에 배치되는 설치물이라 App 상주 매니저로 올리면 씬 없는 구성(로비·타이틀)에서 빈 슬롯이 된다. 인스펙터 연결을 우선하고 비었을 때만 씬 탐색으로 폴백한다 |
+| JailbreakEvent · CustodyRouter · RoundManager · SettlementController · RoundFundHud → JailZone `Find`/`SerializeField` | 장소(구역) 오브젝트 — 매니저 아님. JailIntake·JailLock과 같은 분류다. 참조 도메인이 늘어(#395로 Round·UI 추가) R3의 승격 기준은 넘지만, 본부 맵에 배치되는 설치물이라 App 상주 매니저로 올리면 씬 없는 구성(로비·타이틀)에서 빈 슬롯이 된다. 인스펙터 연결을 우선하고 비었을 때만 씬 탐색으로 폴백한다 |
 | SceneReadyGate → `App.Game.ReadyGate` 등재 | 세어지는 참조 도메인은 Round(RoundManager) 하나라 R3 ②에 미달하지만, 실사용은 로딩 흐름(InGameManager)·표시(ReadyWaitHud)·라운드 시작(RoundManager)을 가로지르는 서버 권위 코디네이션 지점이다. 특히 ReadyWaitHud는 HUD.prefab이 오너 스폰 시 **런타임 생성**돼 씬 오브젝트를 인스펙터로 배선할 수 없어 App 경로 외 대안이 없다 (#410) |
+| **런타임 생성 HUD 표시 컴포넌트** → `App.UI.*` 등재 (`CrosshairUI` · `ChannelingGaugeUI` · `ToastView` · `SignalMessageView` · `PromptView`) | HUD.prefab은 오너 스폰 시 **런타임 생성**되므로 표시 컴포넌트를 인스펙터로 배선할 방법이 아예 없다 — SceneReadyGate 항목과 같은 사정이다. 그래서 참조 도메인이 1개(또는 0개)라도 App 경로가 유일한 대안이다. **표시 컴포넌트에 한정**한다: 상태를 들고 있는 매니저는 이 예외를 쓸 수 없고 R3를 그대로 따른다 (#493) |
 
 예외를 추가하려면 이 표에 사유와 함께 기재한다 (기재 없는 예외는 위반).
 
@@ -78,4 +80,4 @@ R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단�
 `refactoring/architecture` 머지 **이전에** 열린 브랜치의 코드는 규칙 위반을 지적하되 🟡(후속 조치)로 분류한다. 머지 이후 새로 작성·수정되는 코드는 정식 적용(🟠 이상).
 
 ---
-*최종 수정: 2026-08-03 (연출 전파 규칙 추가 · App.Sound·App.Game.Effect 등재 — #478) · 2026-08-01 (SceneReadyGate 예외 기재 — #410) · 2026-07-28 (JailZone 예외 기재 — #395) · 작성 근거: refactoring/architecture 브랜치 1–2단계 (커밋 3039cd2…0b7aaab)*
+*최종 수정: 2026-08-03 (연출 전파 규칙 추가 · App.Sound·App.Game.Effect 등재 — #478 · HqDropoffZone 예외 삭제 · JailIntake·JailScanner 예외 기재 — #492) · 2026-08-01 (SceneReadyGate 예외 기재 — #410) · 2026-07-28 (JailZone 예외 기재 — #395) · 작성 근거: refactoring/architecture 브랜치 1–2단계 (커밋 3039cd2…0b7aaab)*

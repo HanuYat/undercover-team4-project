@@ -5,14 +5,11 @@ public partial class NpcController
 {
     // ---- 유치장 (#228) ----
 
-    // 유치장 내부(Jail) NavMesh 영역의 마스크 — 이름으로 한 번만 해석해 캐시한다.
-    // 0이면 이 프로젝트에 Jail 영역이 없다는 뜻(단독 테스트 씬 등)이라 아래 두 API가 무동작이 된다.
-    private static int s_jailAreaMask = -1;
-
     /// <summary>
-    /// 유치장 내부(Jail 영역) 통행 허용/차단. (#415)
+    /// 유치장 내부(Jail 영역) 통행 허용/차단. (#415/#492)
     /// 배회 시민은 프리팹 areaMask에서 Jail이 빠져 있어 감옥 안으로 걸어 들어갈 수 없고,
-    /// <b>수감 이송에 들어가는 순간에만</b> 이 메서드로 통행을 얻는다(NpcJailedState.Enter).
+    /// <b>경찰이 신병을 확보한 동안에만</b> 이 메서드로 통행을 얻는다 — 내주고 회수하는 주체는
+    /// <see cref="JailIntake"/>다(수감 진입 시 NpcJailedState.Enter도 한 번 더 확인차 부른다).
     /// 차단은 문이 아니라 NavMesh 영역이 한다 — 유치장 내부 폴리곤이 통째로 Jail이라, 통행이 없으면
     /// 문이 열려 있어도 문턱을 넘는 경로 자체가 잡히지 않는다.
     /// 이동은 서버 권위이므로 서버(또는 오프라인)에서만 의미가 있다.
@@ -62,19 +59,9 @@ public partial class NpcController
         SetJailAccess(false);
     }
 
-    /// <summary>유치장 내부(Jail) NavMesh 영역 마스크 — 없는 프로젝트면 0.</summary>
-    public static int JailAreaMask
-    {
-        get
-        {
-            if (s_jailAreaMask < 0)
-            {
-                int area = UnityEngine.AI.NavMesh.GetAreaFromName("Jail");
-                s_jailAreaMask = area >= 0 ? 1 << area : 0;
-            }
-            return s_jailAreaMask;
-        }
-    }
+    /// <summary>유치장 내부(Jail) NavMesh 영역 마스크 — 없는 프로젝트면 0.
+    /// 실제 해석은 <see cref="JailArea"/>가 한다 (#492에서 사본 통합).</summary>
+    public static int JailAreaMask => JailArea.Mask;
 
     // ---- 착석 (#462) ----
 
@@ -100,7 +87,8 @@ public partial class NpcController
     }
 
     /// <summary>
-    /// 수감 — 인계존 판정에서 진범·경범죄로 확정된 NPC를 유치장으로 보낸다. (CustodyRouter 경유, GDD 7-2)
+    /// 수감 — 판정에서 진범·경범죄로 확정된 NPC를 좌석으로 보낸다. (<see cref="JailIntake"/> 경유, GDD 7-2)
+    /// 유치장 안에서 플레이어가 놓는 순간 불린다 (#492 — CustodyRouter가 자동 이송하던 경로는 폐기).
     /// seat(좌석)까지 스스로 걸어가 그 자리에 앉는다. seat이 null이면 그 자리에서 수용된 것으로 처리한다.
     /// 좌석 배정은 보내는 쪽(JailZone.ReserveSeat)이 한다 — 자리 계산이 아니라 손으로 배치한 목록이다. (#462)
     /// </summary>

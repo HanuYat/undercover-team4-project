@@ -99,6 +99,13 @@ public class CriminalAssigner : CommonManagerBase
 
     private int m_totalAssignedBounty;
 
+    // 라운드 시작 배정에 쓴 이름 팩토리 — 라운드 중에 스폰되는 NPC(AssignLateSpawned)도 같은
+    // 인스턴스에서 이어 뽑아야 이름이 중복되지 않는다. AssignAll 전에는 null이다. (#505)
+    private CitizenProfileFactory m_factory;
+
+    // 라운드 시작 배정이 끝났는가 — 그 전에 들어온 늦은 배정 요청은 무시한다(AssignAll이 곧 덮는다). (#505)
+    private bool m_initialAssignmentDone;
+
     /// <summary>
     /// 이번 라운드에 배정된 현상금 총합 (#395) — 진범 + 위조범. 배정 전에는 0.
     /// 라운드 목표 금액이 달성 가능한지 대조하는 기준이다(RoundManager). 돌발 이벤트로 나중에 스폰되는
@@ -180,8 +187,9 @@ public class CriminalAssigner : CommonManagerBase
         // 위조범은 진범과 독립적으로 추첨한다 — 겹칠 수도 있다(범인이 위조 papers 소지) (#223)
         HashSet<int> forgerIndices = PickCriminalIndices(npcs.Count, Mathf.Clamp(m_forgerCount, 0, npcs.Count));
 
-        // 이름 풀은 인원수만큼 한 번에 확정된다 — 라운드 안에서 중복이 없어야 하므로 매 라운드 새로 만든다
-        var factory = new CitizenProfileFactory(m_officialRecords, npcs.Count);
+        // 이름 풀은 매 라운드 새로 만든다 — 라운드 안에서 중복이 없어야 한다. 지역 변수가 아니라
+        // 필드에 남기는 이유는 라운드 중에 스폰되는 NPC도 같은 풀에서 이어 뽑기 때문이다 (#505).
+        m_factory = new CitizenProfileFactory(m_officialRecords);
 
         m_criminalNpcs.Clear();
         m_wantedProfiles.Clear();
@@ -205,12 +213,12 @@ public class CriminalAssigner : CommonManagerBase
                 continue;
             }
 
-            CitizenProfile profile = factory.Create(i);
+            CitizenProfile profile = m_factory.Create();
 
             // 위조범: 표시값을 정본/인명부와 어긋나게 한다 — 이름·문양 중 하나만 오염된다 (#222 (a)①).
             // 어느 축인지는 팩토리가 정하고(문양 variant가 모자라면 이름으로 폴백), 여기서는 결과만 받는다.
             bool isForger = forgerIndices.Contains(i);
-            bool forgedSymbol = isForger && factory.ApplyForgery(profile, m_forgedCharCount);
+            bool forgedSymbol = isForger && m_factory.ApplyForgery(profile, m_forgedCharCount);
 
             // 예비 풀은 라운드 시작에 전부 확정하고 공개만 나눈다 — 전화 시점에 몽타주를 역생성하면
             // 부합 인원 수를 통제할 수 없어 디코이 설계가 깨진다 (#102 설계 결정 1)
@@ -247,11 +255,58 @@ public class CriminalAssigner : CommonManagerBase
                 m_wantedProfiles.Add(profile);
             }
 
-            log.Add(identity, isSuspect, isForger, forgedSymbol, factory.RealSymbolIndex(profile.Faction));
+            log.Add(identity, isSuspect, isForger, forgedSymbol, m_factory.RealSymbolIndex(profile.Faction));
         }
+
+        // 여기부터 늦은 배정이 열린다 — 이 줄 앞에서 들어온 요청은 이 루프가 이미 덮었다
+        m_initialAssignmentDone = true;
 
         OnCriminalAssigned?.Invoke(m_criminalNpcs);
         log.Flush(m_totalAssignedBounty);
+    }
+
+    /// <summary>
+    /// 라운드 시작 이후에 스폰된 NPC 한 명에게 신원을 배정한다 — 돌발 이벤트 NPC(난동꾼 #106 · 탈옥
+    /// 침입자 #231)와 앞으로 런타임에 만들어질 모든 NPC가 이 경로를 탄다. 서버(또는 오프라인) 전용. (#505)
+    ///
+    /// <b>부르는 쪽은 <see cref="CitizenIdentity"/> 자신이다</b> — 프로필 없이 살아나면 스스로 요청한다.
+    /// 스폰 지점마다 배선하지 않는 이유는 새 스폰 경로가 생길 때마다 잊기 쉽고, 잊으면 증상이
+    /// "스캔이 조용히 실패한다"로만 나타나 원인을 찾기 어렵기 때문이다.
+    ///
+    /// <b>라운드 시작 배정과 다른 점 셋:</b>
+    ///  · <b>이름만 공유한다</b> — 예비 용의자·위조범·현상금·반응·외형은 배정하지 않는다. 이 NPC들은
+    ///    수배 대상이 아니고, 검거 판정은 <see cref="MisdemeanorOffender"/> 마커가 신원보다 먼저
+    ///    처리하므로(ArrestJudge) 프로필을 줘도 판정·보상이 바뀌지 않는다. 반응을 비워 두면 기본값이
+    ///    순응형이라 스캔당해도 진행 중인 소란·침입 행동이 끊기지 않는다 (#400).
+    ///  · <b>몽타주 배정에 끼지 않는다</b> — AppearanceAssigner의 디코이 인원 통제가 깨지지 않게 (#127 · #102).
+    ///  · <b>인명부에 등재되지 않는다</b> — <b>런타임에 생긴 NPC는 미등록 인물</b>이라는 것이 규칙이고
+    ///    대상별 예외가 없다(팀 확정 2026-08-04). 난동꾼도 침입자도 본부 조회에 나오지 않는다.
+    ///    <see cref="OnCriminalAssigned"/>를 발행하지 않으므로 인명부·몽타주가 다시 돌지 않는다 —
+    ///    즉 등재되지 않는 것이 이 경로의 <b>기본이자 유일한 동작</b>이며, 따로 막을 것이 없다.
+    ///    침입자를 등재해 시민으로 위장시키는 안을 검토했지만 폐기했다: 외부 침입자가 공식 시민
+    ///    명부에 있는 것이 세계관에 어긋나고, "걸음이 수상하다 → 스캔·조회로 확증"이라는 본부·현장
+    ///    2단계 판독(GDD 5-4)이 오히려 관제에 판단 근거를 준다.
+    /// </summary>
+    public void AssignLateSpawned(CitizenIdentity identity)
+    {
+        if (identity == null)
+            return;
+
+        // 이미 배정된 대상은 건드리지 않는다 — 재배정하면 CitizenData 스냅샷이 다시 전송되어
+        // 본부가 보고 있던 스캔 표시값이 이유 없이 바뀐다 (SetCriminal 주석과 같은 이유)
+        if (identity.Profile != null)
+            return;
+
+        // 라운드 시작 배정이 아직이면 그쪽이 이 NPC까지 덮는다 — 여기서 주면 이름을 두 번 소비한다
+        if (!m_initialAssignmentDone || m_factory == null)
+            return;
+
+        CitizenProfile profile = m_factory.Create();
+
+        // 진범 여부는 라운드 시작에만 정해진다 — 늦게 합류한 NPC는 수배 대상이 아니므로 항상 false
+        identity.AssignProfile(profile, false);
+
+        Debug.Log($"[신원] 늦은 배정: {identity.name} — {profile.CitizenName}");
     }
 
     // ---- 제보 전화 승격 (#102) ----

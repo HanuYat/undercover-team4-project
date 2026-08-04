@@ -5,7 +5,7 @@ using UnityEngine;
 
 /// <summary>
 /// 검거·연행 <b>요청과 판정</b>의 서버 권위 허브. (#59, #56/#118 네트워크 전환, #269/#369)
-/// 오너 클라의 아이템/상호작용(Rope·NpcSubdueInteractable·PlayerInteractor·HqDropoffTerminal)이
+/// 오너 클라의 아이템/상호작용(Rope·NpcSubdueInteractable·PlayerInteractor)이
 /// 여기 요청 API를 호출하면, 요청을 서버로 넘겨(ServerRpc) 서버가 채널링·사거리·가시선·자원을 검증하고
 /// 그 결과 NpcController 상태 변경은 서버에서 일어난다.
 ///
@@ -153,20 +153,38 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         ReleaseRpc(new NetworkObjectReference(target.NetworkObject));
     }
 
-    /// <summary>
-    /// 본부 인계 요청 — 오너가 호출(인계 단말 E). 서버가 대상·구역을 재검증해 판정한다. (#414)
-    /// 예전엔 인계존 콜라이더가 자동으로 판정을 냈다 — 트리거가 상호작용키로 옮겨진 진입점이다.
-    /// </summary>
-    public void RequestDeliver()
+    /// <summary>유치장 반출 요청 — 오너가 호출(앉은 수감자에 E). 밧줄을 쓰지 않으므로 용량 게이트를 타지 않는다. (#492)</summary>
+    public void RequestJailRelease(NpcController target)
     {
+        if (target == null)
+            return;
         if (!IsSpawned)
         {
-            ServerDeliver();
+            ServerJailRelease(target);
             return;
         }
         if (!IsOwner)
             return;
-        DeliverRpc();
+        if (!IsTargetNetworkReady(target))
+            return;
+        JailReleaseRpc(new NetworkObjectReference(target.NetworkObject));
+    }
+
+    /// <summary>따라오는 수감자 정지 요청 — 오너가 호출(반출된 수감자에 E). 밧줄과 무관한 추종을 끊는다. (#492)</summary>
+    public void RequestEscortHalt(NpcController target)
+    {
+        if (target == null)
+            return;
+        if (!IsSpawned)
+        {
+            ServerEscortHalt(target);
+            return;
+        }
+        if (!IsOwner)
+            return;
+        if (!IsTargetNetworkReady(target))
+            return;
+        EscortHaltRpc(new NetworkObjectReference(target.NetworkObject));
     }
 
     // 원격 클라 → 서버로 대상을 넘기려면 스폰돼 있어야 한다(NetworkObjectReference 제약).
@@ -233,7 +251,28 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     }
 
     [Rpc(SendTo.Server)]
-    private void DeliverRpc() => ServerDeliver();
+    private void EscortHaltRpc(NetworkObjectReference targetRef)
+    {
+        if (
+            targetRef.TryGet(out NetworkObject targetObj)
+            && targetObj.TryGetComponent(out NpcController target)
+        )
+        {
+            ServerEscortHalt(target);
+        }
+    }
+
+    [Rpc(SendTo.Server)]
+    private void JailReleaseRpc(NetworkObjectReference targetRef)
+    {
+        if (
+            targetRef.TryGet(out NetworkObject targetObj)
+            && targetObj.TryGetComponent(out NpcController target)
+        )
+        {
+            ServerJailRelease(target);
+        }
+    }
 
     // ---- 서버 실행: 채널 제어 ----
 
@@ -378,7 +417,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     {
         Escorter.AddTether(target);
 
-        // 커스터디 상태는 수갑 연행과 같은 Escorted를 재사용한다 — 인계존·이벤트 수명·가로채기 방지가
+        // 커스터디 상태는 수갑 연행과 같은 Escorted를 재사용한다 — 유치장 판정·이벤트 수명·가로채기 방지가
         // 이미 이 상태를 기준으로 판정하기 때문. 이동은 밧줄 장력이 하고 NpcEscortedState가 IsRoped를 보고
         // 추종을 건너뛴다. (#369)
         target.StartEscort(transform);
@@ -462,43 +501,74 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
             }
         }
 
+        // <b>유치장 안에서는 석방하지 않는다</b> (#492) — 위 ReleaseDrag가 이미 Captured로 세워 뒀으므로
+        // 그대로 끝낸다. 판정을 통과한 대상이면 다음 틱에 JailIntake가 좌석에 앉히고, 안 통과했으면
+        // 그 자리에 서 있는다(다시 묶어 끌고 나가면 된다).
+        //
+        // 여기서 배회로 돌려보내면 두 가지가 깨진다: ① 판정까지 통과한 수감 대상이 계상 없이(0원)
+        // 풀려나고, ② 배회 시민이 유치장 안을 걸어 다녀 "시민은 유치장에 못 들어간다"(#415)가
+        // 없애려던 그림이 다시 생긴다. E로 놓는 것과 결과가 같아지는 것이 조작 일관성에도 맞다.
+        //
+        // <b>JailArea를 직접 보는 것은 "유치장을 아는 것"이 아니다</b> — 이 허브가 유치장 오브젝트를
+        // 찾아 조작하는 것은 여전히 ServerJailRelease 하나뿐이고(JailIntake에 위임), 여기 쓰는 것은
+        // "이 좌표가 Jail 영역 위인가"를 답하는 정적 판정 유틸이다. 앉히는 판단은 JailIntake가 쥔다.
+        if (JailArea.Contains(target.transform.position))
+        {
+            NotifyOwner($"밧줄 풀기 완료 — 유치장 안이라 그 자리에 둔다: {target.name}");
+            return;
+        }
+
         // 밧줄은 소모되지 않아 대상에 남은 게 없다 — 회수할 자원 없이 배회로 돌려보내기만 한다 (#369).
         NotifyOwner($"밧줄 풀기 완료 — 배회 복귀: {target.name}");
         target.ReleaseFromCustody();
     }
 
-    // ---- 서버 실행: 본부 인계 (#414) ----
+    // 본부 인계 요청(#414)은 제거됐다 (#492) — 판정 트리거가 인계 단말에서 유치장 앞 보안 게이트로
+    // 옮겨져 JailIntake가 직접 ArrestJudge.Judge를 부른다. 플레이어가 보낼 요청 자체가 없어졌다.
 
-    // 인계 실행 — 대상은 클라가 지정하지 않는다. 서버가 자기 권위 상태(밧줄 목록)에서 읽으므로
-    // "남이 데려온 NPC를 인계했다"는 위조가 성립할 수 없다. 상태·구역 검증과 판정은 ArrestJudge가 한다 —
-    // 연행 허브가 인계존을 알 필요는 없고, 판정 기준이 한 곳(#414)에 모여 있어야 하기 때문이다.
-    private void ServerDeliver()
+    // ---- 서버 실행: 유치장 반출 (#492) ----
+
+    // 반출 실행 — 사거리만 확인하고 나머지(상태·좌석·정산)는 JailIntake가 판단한다.
+    // 유치장을 아는 것은 저쪽이고 여기는 요청 허브일 뿐이다.
+    private void ServerJailRelease(NpcController target)
     {
         if (IsSpawned && !IsServer)
             return;
 
-        // 끌기(DraggingNpc)가 아니라 밧줄이 기준이다 — 인계존에 내려놓고 접수하는 경로에서는
-        // 끌기가 풀려 있다. 묶여 있는 동안은 끌든 놓든 같은 대상이라 이 하나로 두 경로가 모두 덮인다.
-        if (Escorter.TetheredCount == 0)
-            return; // 묶어 둔 대상이 없으면 넘길 것이 없다
+        if (target == null || !IsInRange(target))
+            return;
 
-        ArrestJudge judge = App.Game.ArrestJudge;
-        if (judge == null)
+        // JailIntake는 매니저가 아니라 장소 오브젝트라 App 파사드 대상이 아니다 (JailLock·JailZone과 같은 관례).
+        // E 입력 때만 도는 경로라 매 프레임 탐색 비용도 없다.
+        JailIntake intake = FindFirstObjectByType<JailIntake>();
+        if (intake == null)
         {
-            Debug.LogWarning("PlayerEscortCommands: ArrestJudge가 없어 인계 판정을 할 수 없다", this);
+            Debug.LogWarning("PlayerEscortCommands: JailIntake가 없어 반출할 수 없다", this);
             return;
         }
 
-        // 묶은 순서대로 판정한다 (#414 팀 확정 — 판정 기준이 NPC가 아니라 플레이어다).
-        // 인계존 밖이거나 상태가 맞지 않는 대상은 ArrestJudge가 걸러 내고 목록에 그대로 남는다 —
-        // 다시 데려와 E를 누르면 그때 판정된다(재판정 #358과 같은 취급).
-        //
-        // 복사해서 도는 이유: 판정에 성공한 대상은 Jailed로 넘어가고 그 순간 매 프레임 정리가
-        // 목록에서 빼므로, 원본을 그대로 순회하면 도중에 컬렉션이 바뀐다.
-        // 여러 명을 한 번에 끌고 왔으면(#390) 전부 순서대로 접수된다.
-        List<NpcController> pending = new List<NpcController>(Escorter.ServerTethered);
-        for (int i = 0; i < pending.Count; i++)
-            judge.TryDeliver(pending[i]);
+        intake.ServerExtract(target, transform);
+    }
+
+    // 추종 정지 실행 — 밧줄 없이 따라오는 수감자를 그 자리에 세운다(Captured). 서버(또는 오프라인).
+    // 유치장 안이면 JailIntake가 그 Captured를 보고 좌석에 다시 앉힌다 — 여기서 유치장을 알 필요는 없다.
+    //
+    // 소유권을 묻지 않는다: 남이 꺼낸 수감자도 세울 수 있다. 밧줄 놓기(Captured 대상 풀기)가
+    // 누구에게나 열려 있는 것과 같은 취급이고, 세우는 것은 신병을 뺏는 행위가 아니라 멈추는 행위다.
+    private void ServerEscortHalt(NpcController target)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        // 밧줄 끌기 중인 대상은 여기 못 온다 — 그쪽 E는 놓기/줄다리기 복귀로 이미 갈린다
+        if (!NpcStateRules.IsFollowingUnroped(target))
+            return;
+
+        if (!IsInRange(target))
+            return;
+
+        target.StopEscort();
+        NotifyOwner($"수감자 정지: {target.name}");
     }
 
     // ---- 공통 ----
