@@ -37,6 +37,7 @@ public class SettlementController : MonoBehaviour
 {
     private const string k_messageName = "RoundSettlement";
     private const int k_writerSize = 128; // byte*2 + int*7 + FixedString64(최대 66) = 96 < 128
+    private const int k_personalSharePercent = 10; // 인계자 개인 몫 — 귀속 현상금의 % (#484)
 
     private RoundManager Round => App.Game.Round;
     private WrongfulArrestPenalty Penalty => App.Game.WrongfulArrestPenalty;
@@ -151,6 +152,10 @@ public class SettlementController : MonoBehaviour
         if (TeamFund != null)
             TeamFund.AddSettlement(payout);
 
+        // 개인 몫은 팀 정산액과 무관하게 별도 발생한다 (#484) — payout을 깎지 않는다
+        if (jail != null)
+            PayPersonalShares(jail);
+
         int balance = TeamFund != null ? TeamFund.Balance : 0;
         int delta = TeamFund != null ? balance - m_roundStartFund : 0;
 
@@ -172,6 +177,22 @@ public class SettlementController : MonoBehaviour
             TopOffenderName = topName,
             TopOffenderCount = topCount,
         };
+    }
+
+    // 인계자별 개인 자금 지급 — 귀속 현상금(JailZone)에 비율만 적용한다. 서버·오프라인 전용.
+    private static void PayPersonalShares(JailZone jail)
+    {
+        foreach (KeyValuePair<ulong, int> pair in jail.TallyDelivererCredits())
+        {
+            int share = pair.Value * k_personalSharePercent / 100;
+            if (share <= 0)
+                continue;
+
+            // 접속이 끊긴 인계자는 지갑이 없다 — 그 몫은 사라진다
+            PlayerWallet wallet = PlayerWallet.FindByClientId(pair.Key);
+            if (wallet != null)
+                wallet.ServerAdd(share);
+        }
     }
 
     // 개인 오검거 집계에서 최다자를 뽑아 clientId를 표시 이름으로 바꾼다. 동률이면 먼저 순회된 쪽.
