@@ -9,6 +9,10 @@ using UnityEngine;
 /// 한 라운드에 걸려오는 횟수는 라운드 시작에 [최소, 최대] 사이에서 뽑는다 — 이번 라운드에 몇 명이 더 늘어날지 미리 알 수 없다. 횟수는 '받았을 때'가 아니라 '울릴 때' 깎이므로, 자리를 비워
 /// 놓친 전화도 한 번을 소모한다.
 ///
+/// <b>이 전화기는 남의 용무로도 울린다</b> (<see cref="TryRingExternal"/>, #485). 그 벨은 이번 라운드
+/// 수신 횟수를 소모하지 않고 수배도 승격하지 않는다 — 전화기는 무엇을 위한 전화인지 모르고 요청자가
+/// 넘긴 콜백만 부른다. 벨소리·울림 시간은 같아야 한다: 겉으로 구분되면 옆 사람이 용무를 알아버린다.
+///
 /// 서버 권위 — 수신 타이머·승격은 서버(또는 오프라인)에서만 돌고, 울림 여부만 동기화한다.
 /// 벨소리·표시는 각 클라의 로컬 연출이므로 OnRingingChanged를 구독해 붙이면 된다(이 이슈 범위 밖).
 /// 씬 배치·모델·콜라이더는 Editor 작업이다 — 코드는 상호작용 경로까지만 만든다.
@@ -65,16 +69,35 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
     /// <summary>울림 시작·종료 — 벨소리와 표시 연출이 구독할 훅. 전 피어에서 발행된다.</summary>
     public event Action OnRingingChanged;
 
-    /// <summary>
-    /// 전화를 받았다 — 받은 클라이언트의 id를 함께 넘긴다. 서버(또는 오프라인)에서만 발행된다. (#485)
-    /// 전화기는 받았다는 사실만 알린다: 비밀 청탁을 붙일지·누구에게 무엇을 시킬지는
-    /// <see cref="SecretFavorBroker"/>가 판단한다. 이 전화기에 청탁 로직까지 얹으면
-    /// 타이머·횟수·울림에 의뢰 추적까지 붙어 단일 책임을 넘긴다.
-    /// </summary>
-    public event Action<ulong> OnAnswered;
-
     // 스폰 전(오프라인 단독 Play)이면 이 피어가 곧 권위다 — SuddenEventManager와 동일
     private bool IsAuthority => !IsSpawned || IsServer;
+
+    // 이번 벨을 받으면 대신 부를 콜백 — 외부 요청 벨(TryRingExternal)일 때만 채워진다.
+    // 비어 있으면 평소의 제보 전화이므로 수배를 승격한다. 서버(또는 오프라인) 전용.
+    private Action<ulong> m_externalAnswered;
+
+    /// <summary>
+    /// 외부 요청으로 벨을 울린다 — 받으면 <paramref name="onAnswered"/>에 받은 클라이언트 id가 온다.
+    /// <b>수배는 승격되지 않는다</b>: 이 벨은 요청한 쪽의 용무이고, 제보 전화 횟수(m_remainingCalls)도
+    /// 소모하지 않는다. 그래서 팀은 이 전화 때문에 갱신 기회를 잃지 않는다. (#485)
+    ///
+    /// 전화기는 무엇을 위한 전화인지 모른다 — 델리게이트만 들고 있다. 벨소리·울림 시간·표시는
+    /// 제보 전화와 완전히 같다: 겉으로 구분되면 옆에 있는 사람이 용무를 알아버린다.
+    ///
+    /// 이미 울리는 중이거나 라운드 진행 중이 아니면 false — 요청자가 나중에 다시 시도한다.
+    /// 서버(또는 오프라인) 전용.
+    /// </summary>
+    public bool TryRingExternal(Action<ulong> onAnswered)
+    {
+        if (!IsAuthority || onAnswered == null) return false;
+        if (m_isRinging) return false;
+        if (Round == null || Round.Phase != RoundPhase.InProgress) return false;
+
+        m_externalAnswered = onAnswered;
+        SetRinging(true);
+        m_ringEndTime = Time.time + m_ringDuration;
+        return true;
+    }
 
     public override void OnNetworkSpawn()
     {
@@ -144,20 +167,17 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
             m_lastPhase = phase;
         }
 
-        if (!m_scheduling)
-            return;
-
+        // 울림 처리는 스케줄 게이트보다 먼저 본다 — 외부 요청 벨(#485)은 제보 전화 횟수를 다 쓴
+        // 뒤에도 울릴 수 있고, 그때 m_scheduling은 이미 false다. 뒤에 두면 그 벨이 영영 끊기지 않는다.
         if (m_isRinging)
         {
-            // 울림 시간 초과 = 놓침. 승격 없이 다음 수신만 예약한다 — 기회는 복구되지 않는다
             if (Time.time >= m_ringEndTime)
-            {
-                SetRinging(false);
-                ScheduleNext();
-                Debug.Log("[제보 전화] 받지 않아 끊겼다 — 수배 공개 기회를 놓쳤다");
-            }
+                HandleRingTimeout();
             return;
         }
+
+        if (!m_scheduling)
+            return;
 
         if (Time.time < m_nextRingTime)
             return;
@@ -186,6 +206,26 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
         Debug.Log($"[제보 전화] 수신 — {m_ringDuration:0}초 안에 받아야 한다 (남은 수신 {m_remainingCalls}회)");
     }
 
+    // 울림 시간 초과 = 놓침. 외부 요청 벨이었으면 그 용무만 사라지고(요청자에게 알리지 않는다 —
+    // 놓친 전화에 아무 일도 일어나지 않는 것이 제보 전화와 같다) 제보 전화 횟수는 건드리지 않는다.
+    private void HandleRingTimeout()
+    {
+        bool wasExternal = m_externalAnswered != null;
+        m_externalAnswered = null;
+        SetRinging(false);
+
+        if (wasExternal)
+        {
+            DelayNextRing();
+            Debug.Log("[전화] 외부 요청 벨을 받지 않아 끊겼다 — 제보 전화 횟수는 소모되지 않았다");
+            return;
+        }
+
+        // 승격 없이 다음 수신만 예약한다 — 기회는 복구되지 않는다
+        ScheduleNext();
+        Debug.Log("[제보 전화] 받지 않아 끊겼다 — 수배 공개 기회를 놓쳤다");
+    }
+
     private void HandlePhaseChanged(RoundPhase phase)
     {
         if (phase == RoundPhase.InProgress)
@@ -201,6 +241,7 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
         {
             // 라운드가 끝났거나 준비 상태로 되돌아감 — 울리던 전화를 끊고 수신을 멈춘다
             m_scheduling = false;
+            m_externalAnswered = null; // 걸려 있던 외부 용무도 버린다 — 다음 라운드로 새지 않게
             SetRinging(false);
         }
     }
@@ -209,6 +250,17 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
     private void Answer(ulong answeredBy)
     {
         SetRinging(false);
+
+        // 외부 요청 벨(#485)이면 그쪽 용무만 처리하고 수배는 건드리지 않는다.
+        // 제보 전화 횟수도 소모되지 않았으므로 다음 수신 예약도 그대로 둔다(최소 간격만 비운다).
+        Action<ulong> external = m_externalAnswered;
+        m_externalAnswered = null;
+        if (external != null)
+        {
+            external(answeredBy);
+            DelayNextRing();
+            return;
+        }
 
         if (Assigner == null)
         {
@@ -229,10 +281,6 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
             Debug.Log("[제보 전화] 받았지만 지금 공개할 수 있는 용의자가 없다 — 다음 전화를 기다린다");
         }
 
-        // 수배 갱신(팀 이득)은 위에서 이미 끝났다. 청탁은 그 위에 얹히므로, 청탁이 붙어도
-        // 팀은 갱신 기회를 잃지 않는다 — "모르는 사이에 손해"를 만들지 않기 위한 순서다 (#485)
-        OnAnswered?.Invoke(answeredBy);
-
         ScheduleNext();
     }
 
@@ -243,6 +291,13 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
         // 첫 전화까지 startDelay + 간격이라 1~2분이 걸릴 수 있다. 이 로그가 없으면 타이머가 도는지
         // 죽었는지 구분할 방법이 없다 — 서버(또는 오프라인)에서만 찍힌다.
         Debug.Log($"[제보 전화] 다음 수신 예약 — {m_nextRingTime - Time.time:0}초 뒤");
+    }
+
+    // 외부 요청 벨이 끝난 직후를 비운다 — 제보 전화 예약 시각이 그 벨이 울리는 동안 이미 지났으면
+    // 끊긴 즉시 또 울려 두 벨이 붙어 버린다. 예약을 미루기만 하므로 이번 라운드 횟수는 그대로다.
+    private void DelayNextRing()
+    {
+        m_nextRingTime = Mathf.Max(m_nextRingTime, Time.time + m_minInterval);
     }
 
     private void SetRinging(bool value)

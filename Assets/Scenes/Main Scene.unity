@@ -53901,7 +53901,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SecretFavorBroker
   ShowTopMostFoldoutHeaderGroup: 1
   m_phone: {fileID: 1844011712}
-  m_favorChance: 1
+  m_favorChance: 0.2
   m_rewardPercent: 40
   m_minReward: 2000
   m_checkInterval: 0.2

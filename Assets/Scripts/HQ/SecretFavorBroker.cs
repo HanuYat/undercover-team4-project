@@ -1,11 +1,18 @@
+using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Localization;
 
 /// <summary>
-/// 비밀 청탁 (#485) — 제보 전화를 <b>받은 사람에게만</b> 걸리는 개인 의뢰.
+/// 비밀 청탁 (#485) — 본부 전화를 <b>받은 사람에게만</b> 걸리는 개인 의뢰.
 /// "유치장의 ○○○를 인도 지점까지 데려오면 개인 자금을 주겠다".
+///
+/// <b>제보 전화와 별개로 걸려온다.</b> 새 수감자가 앉을 때마다 "이 사람을 빼달라는 전화가 올지"를
+/// 대상별로 굴려(<see cref="m_favorChance"/>) 예약하고, 시간이 되면 <see cref="TipCallPhone.TryRingExternal"/>로
+/// 벨을 울린다. 그 벨은 제보 전화 횟수를 소모하지 않고 수배도 승격하지 않으므로, <b>팀은 이 전화 때문에
+/// 갱신 기회를 잃지 않는다</b>. 대신 받은 사람 화면에 수배가 안 늘어나는 것이 본부에 남는 희미한 단서다
+/// (승격 후보가 없어 갱신이 안 되는 경우와 구분되지 않으므로 확증은 아니다).
 ///
 /// 팀에 손해를 끼치고 나만 이득을 보는 경로다. 트레이드오프는 별도 배선 없이 성립한다:
 /// 반출(<see cref="JailIntake.ServerExtract"/>)이 정산 레코드를 지우므로 그 순간
@@ -25,7 +32,7 @@ using UnityEngine.Localization;
 /// Play에서는 청탁을 발행하지 않는다 — 테스트는 Multiplayer Play Mode로 한다.
 ///
 /// 씬 배치: NetworkObject를 가진 전용 오브젝트에 둔다(전화기와 같은 오브젝트에 두지 않는다 — 그쪽은
-/// "받았다"만 알리는 역할이다). 인도 지점은 <see cref="SecretFavorDropoff"/>로 따로 배치한다.
+/// 울리고 받는 장치일 뿐 무엇을 위한 전화인지 모른다). 인도 지점은 <see cref="SecretFavorDropoff"/>로 따로 배치한다.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
 public class SecretFavorBroker : NetworkBehaviour
@@ -34,9 +41,22 @@ public class SecretFavorBroker : NetworkBehaviour
     [SerializeField] private TipCallPhone m_phone;
 
     [Header("발생 조건")]
-    [Tooltip("전화를 받았을 때 청탁이 붙을 확률(0~1). 수감자가 1명 이상이고 진행 중인 청탁이 없을 때만 굴린다")]
+    [Tooltip(
+        "<b>수감자 한 명당</b> 그 사람을 빼달라는 전화가 올 확률(0~1). 새 수감자가 좌석에 앉을 때마다 굴린다.\n\n"
+            + "라운드 예산이 아니라 대상별 추첨이라, 유치장이 붐빌수록 제안이 잦아진다. 낮게 둘 것 — "
+            + "0.1이면 한 라운드에 5명을 잡았을 때 한 번쯤 걸려온다(41%).\n\n"
+            + "제보 전화 횟수와는 별개다: 청탁 전화는 자기 예산으로 따로 오며 수배 갱신을 하지 않는다"
+    )]
     [Range(0f, 1f)]
-    [SerializeField] private float m_favorChance = 0.35f;
+    [SerializeField] private float m_favorChance = 0.1f;
+
+    [Tooltip("대상이 수감된 뒤 청탁 전화가 걸려오기까지의 최소 대기(초) — 잡아 온 직후 바로 울리면 짜인 느낌이 난다")]
+    [Min(0f)]
+    [SerializeField] private float m_callDelayMin = 30f;
+
+    [Tooltip("최대 대기(초). 최소값보다 작으면 최소값이 쓰인다")]
+    [Min(0f)]
+    [SerializeField] private float m_callDelayMax = 90f;
 
     [Header("보상")]
     [Tooltip("대상 현상금의 몇 %를 개인 자금으로 줄 것인가. 인계 몫(10%, SettlementController)과 비교되는 값이다")]
@@ -51,6 +71,14 @@ public class SecretFavorBroker : NetworkBehaviour
     [Tooltip("검사 주기(초) — 매 프레임 돌 필요가 없다 (JailIntake와 같은 관례)")]
     [Min(0f)]
     [SerializeField] private float m_checkInterval = 0.2f;
+
+    [Tooltip(
+        "발행 후 이 시간(초)이 지나면 의뢰를 거둬들인다 — \"저쪽도 마냥 기다리지 않는다\". 0이면 만료 없음.\n\n"
+            + "이게 없으면 받은 사람이 청탁을 무시할 때 슬롯이 라운드 끝까지 잠겨, 그 뒤 들어온 수감자 전원이 "
+            + "추첨 기회를 잃는다(동시 1건이므로)"
+    )]
+    [Min(0f)]
+    [SerializeField] private float m_favorExpireSeconds = 180f;
 
     [Header("문구 (HudTable)")]
     [Tooltip("받은 순간 잠깐 뜨는 알림 — Hud.SecretFavor.Offer")]
@@ -75,8 +103,26 @@ public class SecretFavorBroker : NetworkBehaviour
     private NpcController m_target;
     private SecretFavorDropoff m_dropoff;
     private int m_reward;
+    private float m_expireTime; // 이 시각을 넘기면 의뢰를 거둬들인다 (m_favorExpireSeconds가 0이면 안 본다)
 
     private float m_cooldown;
+
+    // 청탁 전화가 예약된 대상과 그 시각 — 아직 벨이 울리지 않은 상태다. 서버(또는 오프라인) 전용.
+    private NpcController m_pendingTarget;
+    private float m_callTime;
+
+    // 이미 추첨을 거친 대상 — <b>대상 한 명은 평생 한 번만 굴린다.</b> (서버·오프라인 전용)
+    //
+    // 없으면 반출(#492)로 일으켰다 다시 앉히는 것만으로 추첨이 다시 돌아, 청탁이 뜰 때까지 리롤할 수 있다.
+    // 우연히 걸려오는 제안이라는 전제가 깨지고 배신 기회를 의도적으로 낚을 수 있게 된다.
+    // JailIntake.ServerExtract가 ClearDelivered를 일부러 부르지 않는 것과 같은 계열의 방어다.
+    //
+    // 추첨을 건너뛴 경우(이미 진행 중인 청탁이 있어서)에도 등록한다 — 건너뛴 대상을 남겨 두면
+    // 그 대상으로 리롤이 다시 열린다. 대신 그 수감자는 기회를 잃는다(아래 HandleInmateAdmitted 주석).
+    private readonly HashSet<NpcController> m_rolled = new HashSet<NpcController>();
+
+    // 유치장 — 수감 훅을 걸어 두려고 잡는다. 장소 오브젝트라 App 파사드 대상이 아니다(JailIntake와 같은 관례).
+    private JailZone m_jail;
 
     // 스폰 전(오프라인 단독 Play)이면 이 피어가 곧 권위다 — TipCallPhone.IsAuthority와 같은 판단
     private bool IsAuthority => !IsSpawned || IsServer;
@@ -87,10 +133,14 @@ public class SecretFavorBroker : NetworkBehaviour
         if (m_phone == null)
             m_phone = FindFirstObjectByType<TipCallPhone>();
 
-        if (m_phone != null)
-            m_phone.OnAnswered += HandleAnswered;
-        else
+        if (m_phone == null)
             Debug.LogWarning("SecretFavorBroker: TipCallPhone을 찾지 못해 청탁이 걸려오지 않는다", this);
+
+        m_jail = FindFirstObjectByType<JailZone>();
+        if (m_jail != null)
+            m_jail.OnInmateAdmitted += HandleInmateAdmitted;
+        else
+            Debug.LogWarning("SecretFavorBroker: JailZone을 찾지 못해 청탁이 걸려오지 않는다", this);
 
         if (Round != null)
             Round.OnRoundEnded += HandleRoundEnded;
@@ -98,8 +148,8 @@ public class SecretFavorBroker : NetworkBehaviour
 
     public override void OnDestroy()
     {
-        if (m_phone != null)
-            m_phone.OnAnswered -= HandleAnswered;
+        if (m_jail != null)
+            m_jail.OnInmateAdmitted -= HandleInmateAdmitted;
 
         if (Round != null)
             Round.OnRoundEnded -= HandleRoundEnded;
@@ -107,33 +157,89 @@ public class SecretFavorBroker : NetworkBehaviour
         base.OnDestroy();
     }
 
-    // ---- 발행 (서버 · 오프라인 전용) ----
+    // ---- 전화 예약 (서버 · 오프라인 전용) ----
 
-    // 전화를 받았다 — 조건을 보고 청탁을 얹는다. 수배 갱신은 전화기가 이미 처리했다.
-    private void HandleAnswered(ulong clientId)
+    /// 새 수감자가 앉았다 — <b>그 사람을 빼달라는 전화가 올지</b> 여기서 한 번 굴린다.
+    /// 대상을 이 시점에 정하므로 발행 때 다시 고를 일이 없고, 유치장이 붐빌수록 제안이 잦아진다.
+    ///
+    /// 이미 예약·진행 중인 청탁이 있으면 굴리지도 않는다 — 동시에 한 건만 두기 때문이다(m_active 주석).
+    /// 그 결과 확률은 "비어 있을 때만" 평가되어, 붐빌 때 제안이 쏟아지지 않는다.
+    private void HandleInmateAdmitted(NpcController npc)
     {
-        if (!IsAuthority) return;
+        if (!IsAuthority || npc == null) return;
 
         // 세션 전용 — 지급할 지갑(PlayerWallet)이 세션에만 존재한다 (#484)
-        if (!IsSpawned)
+        if (!IsSpawned) return;
+
+        // 재수감 리롤 방어 — 굴리기 전에 먼저 등록한다. 아래 게이트에 걸려 추첨을 못 해도 등록은 남는다:
+        // 그 대상은 이번 라운드에 기회를 잃지만(청탁이 이미 진행 중이었으니 기능은 돌고 있다),
+        // 남겨 두면 그 대상으로 리롤이 열린다.
+        if (!m_rolled.Add(npc)) return;
+
+        if (m_active || m_pendingTarget != null) return;
+
+        // 이름을 댈 수 없으면 지목이 성립하지 않는다
+        CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
+        if (identity == null || identity.Profile == null || string.IsNullOrEmpty(identity.Profile.CitizenName))
+            return;
+
+        if (SecretFavorDropoff.All.Count == 0)
         {
-            Debug.Log("[비밀 청탁] 세션이 아니라 청탁을 발행하지 않는다 (Multiplayer Play Mode로 테스트할 것)");
+            Debug.LogWarning("SecretFavorBroker: 씬에 인도 지점(SecretFavorDropoff)이 없어 청탁이 성립하지 않는다", this);
             return;
         }
 
-        if (m_active) return; // 이미 진행 중인 청탁이 있다
+        if (Random.value > m_favorChance) return;
 
-        NpcController target = PickTarget(FindFirstObjectByType<JailZone>());
-        if (target == null) return; // 유치장이 비었거나 이름을 댈 수 없는 대상뿐이다
+        m_pendingTarget = npc;
+        float max = Mathf.Max(m_callDelayMin, m_callDelayMax);
+        m_callTime = Time.time + Random.Range(m_callDelayMin, max);
+        Debug.Log($"[비밀 청탁] {identity.Profile.CitizenName} 건으로 전화 예약 — {m_callTime - Time.time:0}초 뒤");
+    }
+
+    // 예약된 시각이 되면 전화기에 벨을 요청한다. 대상이 그 사이 유치장에서 빠졌으면 예약을 버린다.
+    private void TickCallSchedule()
+    {
+        if (m_pendingTarget == null || m_phone == null) return;
+
+        // 탈옥·반출로 이미 나갔거나 파괴된 대상 — "유치장에 있는 ○○○"가 성립하지 않는다
+        if (m_pendingTarget.CurrentState != NpcState.Jailed)
+        {
+            Debug.Log("[비밀 청탁] 대상이 이미 유치장에서 빠져 전화 예약을 취소한다");
+            m_pendingTarget = null;
+            return;
+        }
+
+        if (Time.time < m_callTime) return;
+
+        // 제보 전화가 울리는 중이면 다음 틱에 다시 시도한다 — 두 벨이 겹치면 어느 쪽인지 알 수 없다
+        NpcController target = m_pendingTarget;
+        if (!m_phone.TryRingExternal(clientId => Issue(clientId, target))) return;
+
+        // 벨을 울린 것으로 이 예약은 소모된다 — 놓치면 그 기회는 사라진다(제보 전화와 같은 규칙).
+        // 대상은 콜백이 들고 있으므로 여기서 비워도 받았을 때 지목이 유지된다.
+        m_pendingTarget = null;
+        Debug.Log("[비밀 청탁] 청탁 전화 수신 — 받은 사람에게만 의뢰가 간다");
+    }
+
+    // ---- 발행 (서버 · 오프라인 전용) ----
+
+    // 청탁 전화를 받았다 — 받은 사람에게만 의뢰를 보낸다. 수배는 승격되지 않는다(TipCallPhone).
+    private void Issue(ulong clientId, NpcController target)
+    {
+        if (m_active) return; // 벨이 울리는 사이에 다른 청탁이 시작됐다
+
+        if (target == null || target.CurrentState != NpcState.Jailed)
+        {
+            Debug.Log("[비밀 청탁] 전화를 받았지만 대상이 이미 유치장에 없다 — 의뢰가 성립하지 않는다");
+            return;
+        }
 
         if (SecretFavorDropoff.All.Count == 0)
         {
             Debug.LogWarning("SecretFavorBroker: 씬에 인도 지점(SecretFavorDropoff)이 없어 청탁을 발행할 수 없다", this);
             return;
         }
-
-        // 확률은 조건을 다 통과한 뒤에 굴린다 — 조건 미달로 못 나온 전화가 확률을 소모하지 않게
-        if (Random.value > m_favorChance) return;
 
         SecretFavorDropoff dropoff = SecretFavorDropoff.All[Random.Range(0, SecretFavorDropoff.All.Count)];
         CitizenIdentity identity = target.GetComponent<CitizenIdentity>();
@@ -143,6 +249,7 @@ public class SecretFavorBroker : NetworkBehaviour
         m_target = target;
         m_dropoff = dropoff;
         m_reward = Mathf.Max(m_minReward, identity.Bounty * m_rewardPercent / 100);
+        m_expireTime = Time.time + m_favorExpireSeconds;
 
         // 이름은 수배 리스트·인명부와 같은 정본을 쓴다(WantedListManager도 CitizenName으로 등재한다) —
         // 표시값(m_nameView)을 쓰면 위조범이 지목됐을 때 대조로 대상을 찾을 수 없다 (#223)
@@ -156,44 +263,27 @@ public class SecretFavorBroker : NetworkBehaviour
         Debug.Log($"[비밀 청탁] {clientId}번에게 발행 — 대상 {identity.Profile.CitizenName}, 보상 {m_reward}원");
     }
 
-    // 수감자 중 무작위 1명. 이름을 댈 수 없는 대상(프로필 미배정)은 건너뛴다 — 지목이 성립하지 않는다.
-    private static NpcController PickTarget(JailZone jail)
-    {
-        if (jail == null || jail.InmateCount <= 0)
-            return null;
-
-        int skip = Random.Range(0, jail.InmateCount);
-        NpcController fallback = null;
-
-        // Inmates는 HashSet 뷰라 인덱스 접근이 없다 — 무작위 지점부터 세어 나가고, 그 뒤가 전부
-        // 부적격이면 앞에서 찾은 후보로 되돌린다(수감자가 적어 순회 비용은 무시할 수 있다)
-        foreach (NpcController inmate in jail.Inmates)
-        {
-            if (inmate == null)
-                continue;
-
-            CitizenIdentity identity = inmate.GetComponent<CitizenIdentity>();
-            if (identity == null || identity.Profile == null || string.IsNullOrEmpty(identity.Profile.CitizenName))
-                continue;
-
-            fallback ??= inmate;
-
-            if (skip-- <= 0)
-                return inmate;
-        }
-
-        return fallback;
-    }
-
     // ---- 완수 판정 (서버 · 오프라인 전용) ----
 
     private void Update()
     {
-        if (!m_active || !IsAuthority) return;
+        if (!IsAuthority) return;
 
         m_cooldown -= Time.deltaTime;
         if (m_cooldown > 0f) return;
         m_cooldown = m_checkInterval;
+
+        TickCallSchedule();
+
+        if (!m_active) return;
+
+        // 시간이 다 됐다 — 의뢰를 거둬들인다. 슬롯이 풀려 다음 수감자가 다시 추첨 대상이 된다
+        if (m_favorExpireSeconds > 0f && Time.time >= m_expireTime)
+        {
+            Debug.Log("[비밀 청탁] 시간이 지나 의뢰가 거둬들여졌다");
+            Clear();
+            return;
+        }
 
         // 대상이 사라졌다 — 라운드 종료 잔류 정리 등. 완수할 수 없으니 의뢰를 접는다
         if (m_target == null || m_dropoff == null)
@@ -249,12 +339,15 @@ public class SecretFavorBroker : NetworkBehaviour
         Debug.Log($"[비밀 청탁] 완수 — {clientId}번에게 개인 자금 {reward}원");
     }
 
-    // 라운드 종료 — 미완수 의뢰를 접는다. 다음 라운드로 새면 이미 사라진 대상을 계속 추적한다.
+    // 라운드 종료 — 미완수 의뢰와 걸려 있던 전화 예약을 접는다.
+    // 다음 라운드로 새면 이미 사라진 대상을 계속 추적하거나, 그 대상 이름으로 전화가 걸려온다.
     private void HandleRoundEnded(RoundResult result, RoundEndReason reason)
     {
         if (m_active)
             Debug.Log("[비밀 청탁] 라운드 종료 — 미완수 의뢰를 정리한다");
 
+        m_pendingTarget = null;
+        m_rolled.Clear(); // 다음 라운드는 새 판이다 — 파괴된 NPC 참조도 여기서 함께 정리된다
         Clear();
     }
 
