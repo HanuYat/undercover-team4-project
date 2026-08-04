@@ -14,7 +14,75 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.SharedTableData
   m_TableCollectionName: TitleTable
   m_TableCollectionNameGuidString: 7d690f60dcfc30145b00d50e3596d124
-  m_Entries: []
+  m_Entries:
+  - m_Id: 6994065952768
+    m_Key: Title.Header.GameTitle
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118592
+    m_Key: Title.Button.Settings
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118593
+    m_Key: Title.Button.Quit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118594
+    m_Key: Title.Session.CreateButton
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118595
+    m_Key: Title.Session.JoinButton
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118596
+    m_Key: Title.Session.CodePlaceholder
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118597
+    m_Key: Title.Auth.SignInAnonymous
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118598
+    m_Key: Title.Auth.SignOut
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118599
+    m_Key: Title.Auth.NicknamePlaceholder
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118600
+    m_Key: Title.Auth.ApplyNickname
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118601
+    m_Key: Title.Auth.AccountSectionLabel
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118602
+    m_Key: Title.Auth.AccountWarning
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118603
+    m_Key: Title.Auth.UsernamePlaceholder
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118604
+    m_Key: Title.Auth.PasswordPlaceholder
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118605
+    m_Key: Title.Auth.CreateAccount
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118606
+    m_Key: Title.Auth.AccountSignIn
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118607
+    m_Key: Title.Auth.NewAnonymous
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

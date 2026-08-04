@@ -106,11 +106,13 @@
   (다만 그 라벨들은 ko에서 서체가 바뀌어 보인다 — 미관 이슈이며 차단 요소는 아니다)
 
 ### Phase 1 — 씬·프리팹 정적 라벨 (약 45개)
-각 `TMP_Text`에 `LocalizeStringEvent`를 붙이고 키를 연결한다. 현재 프로젝트의 `LocalizeStringEvent` 개수는 **0개**다.
+각 `TMP_Text`에 `LocalizeStringEvent`를 붙이고 키를 연결한다.
 
-| 대상 | 개수 | 비고 |
+**씬 파일은 동시 편집 시 머지 충돌이 크다. 씬 하나 = 브랜치 하나 = PR 하나**로 끊어 진행한다.
+
+| 대상 | 개수 | 상태 |
 |------|------|------|
-| Title Scene | 약 16 | 버튼 11 + 제목 + 연동 안내문 + 입력창 placeholder 2 |
+| Title Scene | **17** | ✅ 완료 (`TitleTable`, 브랜치 `feature/374-localization-title`) |
 | Lobby / Shop | 6 | |
 | Main Scene | 6 | 인명부 정렬·페이지 버튼 등 |
 | 프리팹 | 약 23 | SettingsCanvas 7, PauseCanvas 1, 확인창 3종 7, Directory·FactionSymbolBoard·RoundEndButton·LoadingScreen, 월드 라벨 4 |
@@ -119,8 +121,17 @@
 > (`"라운드 성공!"`, `"김시민 — 보상 10,000원"`, `"HP: 100/100"`, `"0 / 0원"`, `"0원"`, `"현상수배범 검거!"` 등).
 > 이들은 Phase 2에서 코드 쪽이 처리하므로 **여기서 건드리지 않는다** — `LocalizeStringEvent`를 붙이면 코드 대입과 서로 덮어쓴다.
 > 판별법: 해당 문구나 그 필드에 대한 `.text =` 대입이 코드에 있는가.
+> Title 씬에서 이 기준으로 제외한 것: `AccountStatusText` · `NicknameStatusText` · `PlayerIdText`
+> (전부 [AuthPanel](../../Assets/Scripts/UI/Panels/AuthPanel.cs)이 대입한다).
 
-> 씬 파일은 동시 편집 시 머지 충돌이 크다. **담당 씬을 사람별로 못 박고** 진행할 것.
+> **입력창은 Placeholder에 붙인다.** `TMP_InputField`의 본문 텍스트가 아니라 `.../Text Area/Placeholder` 쪽이 대상이다 —
+> 본문은 사용자가 친 글이라 번역 대상이 아니고, 코드가 대입하기도 한다.
+
+#### Title 씬에서 문구가 바뀐 것 (번역하며 정정)
+| 키 | 이전 | 이후 |
+|----|------|------|
+| `Title.Button.Quit` | `Quit` (한국어 UI인데 영문) | ko `종료` / en `Quit` |
+| `Title.Auth.NicknamePlaceholder` | `Enter text...` (TMP 기본 더미) | ko `닉네임` / en `Nickname` |
 
 ### Phase 2 — 코드 조립 문자열 (약 60개)
 `LocalizedString` SerializeField + Smart String으로 교체. 관례는 [SignalDecoder](../../Assets/Scripts/Item/SignalDecoder.cs)와 같다.

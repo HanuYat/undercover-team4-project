@@ -17,7 +17,79 @@ MonoBehaviour:
   m_SharedData: {fileID: 11400000, guid: 7d690f60dcfc30145b00d50e3596d124, type: 2}
   m_Metadata:
     m_Items: []
-  m_TableData: []
+  m_TableData:
+  - m_Id: 6994065952768
+    m_Localized: One-Star Precinct
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118592
+    m_Localized: Settings
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118593
+    m_Localized: Quit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118594
+    m_Localized: Create Session (Host)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118595
+    m_Localized: Join with Code
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118596
+    m_Localized: Enter session code
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118597
+    m_Localized: Sign In as Guest
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118598
+    m_Localized: Sign Out
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118599
+    m_Localized: Nickname
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118600
+    m_Localized: Apply
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118601
+    m_Localized: Link Account
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118602
+    m_Localized: 'Linking an account lets you sign in with the same nickname on other
+      devices.
+
+      Linking cannot be undone, and if you forget your password your
+      account cannot be recovered.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118603
+    m_Localized: Username (3-20 chars, letters and numbers)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118604
+    m_Localized: Password (8+ chars, upper/lower case, number, symbol)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118605
+    m_Localized: Create Username
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118606
+    m_Localized: Sign In
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994091118607
+    m_Localized: Start with a New Guest Account
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []
