@@ -293,7 +293,9 @@ ToastOwner(EItemFeedback, args…)     ← 신설. RPC는 enum + 숫자 인자�
 - **몽타주는 이 PR에서 제외** — §5 참고
 
 ### Phase 4 — 데이터 에셋
-- [AppearanceDatabase](../../Assets/Scripts/Data/AppearanceDatabase.cs)의 `AxisDefinition.AxisName` · `AppearanceOption.DisplayName` → `LocalizedString` (몽타주 번역)
+- ~~[AppearanceDatabase](../../Assets/Scripts/Data/AppearanceDatabase.cs)의 `AxisDefinition.AxisName` · `AppearanceOption.DisplayName` → `LocalizedString`~~ — **완료** (몽타주 번역).
+  옵션 37개는 `LocalizedString`으로 바꿔 배선했고, **축 이름은 필드를 아예 없앴다** — 축은 데이터가 아니라
+  `AppearanceAxis`가 정하는 목록이라 규약 키(`Npc.Axis.` + enum 이름)로 조회한다. 배선할 곳이 6개 줄고 검증에 편입된다
 - ~~[OfficialRecords](../../Assets/Scripts/Data/OfficialRecords.cs)의 `CitizenTypeNames` · `FactionNames` Dictionary → `NpcTable` 조회~~ — **완료.**
   Dictionary를 지우고 `TypeName()`/`FactionName()` 정적 헬퍼로 바꿨다. 키는 규약(`Npc.CitizenType.` · `Npc.Faction.` + enum 이름)이고
   두 enum에 `[LocalizedEnum]`을 붙였다. [DirectoryEntry](../../Assets/Scripts/HQ/Directory/DirectoryEntry.cs)가 이미 **enum을 동기화**하고
@@ -301,7 +303,16 @@ ToastOwner(EItemFeedback, args…)     ← 신설. RPC는 enum + 숫자 인자�
 - ~~**곁다리 정리:** `CitizenProfile`의 `m_typeView`/`m_factionView` enum 승격~~ — **완료.** 위조(#223)가 이름·문양만 오염시키는 것을 확인했다
   (`SetSymbolIndexView`와 `m_nameView` 대입뿐이고 타입·세력 표시값을 건드리는 경로는 없다)
 - `SpawnedNpcEvent.m_displayName` · `JailbreakEvent.DisplayName` — 돌발 이벤트 묶음이라 이번 범위 밖
-- `CCTVNode.m_locationLabel`
+- ~~`CCTVNode.m_locationLabel`~~ — **완료.** 씬의 노드 4개(감옥·횡단보도·본부 앞·상점가 방면)를 `WorldTable`로
+
+> **'없음' 옵션 4개는 키 하나를 공유한다** (`Npc.Appearance.None`). 머리색·수염·모자·안경이 같은 낱말을 쓰고,
+> 두 언어 모두에서 같은 낱말이라 갈라 둘 이유가 없었다. 나머지는 축별로 키를 나눴다 —
+> `갈색`(머리색)과 `갈색`(피부색)처럼 지금은 같은 낱말이어도 다른 언어에서 갈릴 수 있어서다.
+>
+> **몽타주가 실제로 양쪽 언어로 조립되는 것을 확인했다** — 같은 프로필로
+> ko `머리색: 빨강 / 수염: 콧수염 / 안경: 없음`, en `Hair color: Red / Facial hair: Mustache / Eyewear: None`.
+> 다만 이 문장은 **만든 쪽의 언어로 굳는다** — 서버가 완성 문자열을 `WantedEntry`에 실어 보내는 구조는
+> 그대로다(§5의 남는 부채). 전원 같은 언어라는 전제(결정 (i)) 아래서만 성립한다.
 
 > **ko 화면의 표기가 바뀐다.** `Human` · `Android` · `Faction A/B` · `None`은 한국어 화면에서도 영문이었다 —
 > `인간` · `안드로이드` · `A 세력` · `없음`으로 옮겼다. 결정 (j)가 영문으로 못 박은 것은 **시민 이름**뿐이고

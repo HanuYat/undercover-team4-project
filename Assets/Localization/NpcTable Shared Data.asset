@@ -35,6 +35,166 @@ MonoBehaviour:
     m_Key: Npc.Faction.FactionB
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000700
+    m_Key: Npc.Axis.HairStyle
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000701
+    m_Key: Npc.Axis.HairColor
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000702
+    m_Key: Npc.Axis.SkinColor
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000703
+    m_Key: Npc.Axis.FacialHair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000704
+    m_Key: Npc.Axis.Headwear
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000705
+    m_Key: Npc.Axis.Eyewear
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000706
+    m_Key: Npc.Appearance.None
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000707
+    m_Key: Npc.Appearance.HairStyle.Bald
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000708
+    m_Key: Npc.Appearance.HairStyle.Short
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000709
+    m_Key: Npc.Appearance.HairStyle.Long
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000710
+    m_Key: Npc.Appearance.HairStyle.Tied
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000711
+    m_Key: Npc.Appearance.HairStyle.Covered
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000712
+    m_Key: Npc.Appearance.HairColor.Black
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000713
+    m_Key: Npc.Appearance.HairColor.Brown
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000714
+    m_Key: Npc.Appearance.HairColor.Blonde
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000715
+    m_Key: Npc.Appearance.HairColor.Red
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000716
+    m_Key: Npc.Appearance.HairColor.Blue
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000717
+    m_Key: Npc.Appearance.HairColor.Silver
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000718
+    m_Key: Npc.Appearance.HairColor.Teal
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000719
+    m_Key: Npc.Appearance.HairColor.Pink
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000720
+    m_Key: Npc.Appearance.SkinColor.Light
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000721
+    m_Key: Npc.Appearance.SkinColor.Peach
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000722
+    m_Key: Npc.Appearance.SkinColor.Brown
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000723
+    m_Key: Npc.Appearance.SkinColor.Blue
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000724
+    m_Key: Npc.Appearance.SkinColor.Metal
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000725
+    m_Key: Npc.Appearance.SkinColor.Neon
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000726
+    m_Key: Npc.Appearance.SkinColor.Other
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000727
+    m_Key: Npc.Appearance.FacialHair.Mustache
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000728
+    m_Key: Npc.Appearance.FacialHair.Beard
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000729
+    m_Key: Npc.Appearance.FacialHair.Sideburns
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000730
+    m_Key: Npc.Appearance.Headwear.Beanie
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000731
+    m_Key: Npc.Appearance.Headwear.Cap
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000732
+    m_Key: Npc.Appearance.Headwear.Hat
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000733
+    m_Key: Npc.Appearance.Headwear.Hood
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000734
+    m_Key: Npc.Appearance.Headwear.Headphones
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000735
+    m_Key: Npc.Appearance.Headwear.Helmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000736
+    m_Key: Npc.Appearance.Eyewear.Sunglasses
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000737
+    m_Key: Npc.Appearance.Eyewear.Visor
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000738
+    m_Key: Npc.Appearance.Eyewear.Goggles
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000739
+    m_Key: Npc.Appearance.Eyewear.GlowLens
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

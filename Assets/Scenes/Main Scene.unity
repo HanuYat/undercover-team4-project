@@ -7937,10 +7937,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0cc31949cbc4484478af9a119bfc98c4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CCTVNode
-  m_locationLabel: "\uAC10\uC625"
+  m_locationLabel:
+    m_TableReference:
+      m_TableCollectionName: GUID:2482529739cee144e908dc2a2e78c2c6
+    m_TableEntryReference:
+      m_KeyId: 7100000000800
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
   m_marker: {fileID: 0}
   m_idleColor: {r: 1, g: 0.7, b: 0, a: 1}
   m_selectedColor: {r: 0.2, g: 1, b: 0.45, a: 1}
+  references:
+    version: 2
+    RefIds: []
 --- !u!114 &204113814
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -13144,10 +13155,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0cc31949cbc4484478af9a119bfc98c4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CCTVNode
-  m_locationLabel: "\uD6A1\uB2E8\uBCF4\uB3C4"
+  m_locationLabel:
+    m_TableReference:
+      m_TableCollectionName: GUID:2482529739cee144e908dc2a2e78c2c6
+    m_TableEntryReference:
+      m_KeyId: 7100000000801
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
   m_marker: {fileID: 0}
   m_idleColor: {r: 1, g: 0.7, b: 0, a: 1}
   m_selectedColor: {r: 0.2, g: 1, b: 0.45, a: 1}
+  references:
+    version: 2
+    RefIds: []
 --- !u!1001 &344533047
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -53942,10 +53964,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0cc31949cbc4484478af9a119bfc98c4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CCTVNode
-  m_locationLabel: "\uBCF8\uBD80 \uC55E"
+  m_locationLabel:
+    m_TableReference:
+      m_TableCollectionName: GUID:2482529739cee144e908dc2a2e78c2c6
+    m_TableEntryReference:
+      m_KeyId: 7100000000802
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
   m_marker: {fileID: 0}
   m_idleColor: {r: 1, g: 0.7, b: 0, a: 1}
   m_selectedColor: {r: 0.2, g: 1, b: 0.45, a: 1}
+  references:
+    version: 2
+    RefIds: []
 --- !u!1 &1302352490
 GameObject:
   m_ObjectHideFlags: 0
@@ -78409,10 +78442,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0cc31949cbc4484478af9a119bfc98c4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CCTVNode
-  m_locationLabel: "\uC0C1\uC810\uAC00 \uBC29\uBA74"
+  m_locationLabel:
+    m_TableReference:
+      m_TableCollectionName: GUID:2482529739cee144e908dc2a2e78c2c6
+    m_TableEntryReference:
+      m_KeyId: 7100000000803
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
   m_marker: {fileID: 0}
   m_idleColor: {r: 1, g: 0.7, b: 0, a: 1}
   m_selectedColor: {r: 0.2, g: 1, b: 0.45, a: 1}
+  references:
+    version: 2
+    RefIds: []
 --- !u!1001 &1855018908
 PrefabInstance:
   m_ObjectHideFlags: 0

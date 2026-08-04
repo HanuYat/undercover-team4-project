@@ -6,6 +6,9 @@ using Unity.Netcode;
 /// 외형 특징 축 — 몽타주로 구두 전달 가능한 특징 종류.
 /// 축별 옵션(표시 이름·시각 리소스)은 AppearanceDatabase가 정의한다.
 /// </summary>
+// 값 이름이 곧 축 이름 문구의 키다 (Npc.Axis. + 이름) — 축을 추가하면 NpcTable에 같은 이름의 키를
+// 함께 넣을 것. 축은 데이터가 아니라 코드가 정하는 목록이라 AppearanceDatabase 에셋에 이름을 두지 않는다. (#497)
+[LocalizedEnum("NpcTable", "Npc.Axis.")]
 public enum AppearanceAxis
 {
     HairStyle = 0,
@@ -34,39 +37,53 @@ public struct AppearanceProfile : INetworkSerializable, IEquatable<AppearancePro
     public int EyewearIndex;
 
     // 아직 배정되지 않음(프리팹 기본 외형)을 뜻하는 값.
-    public static AppearanceProfile Unassigned => new AppearanceProfile
-    {
-        HairStyleIndex = -1,
-        HairColorIndex = -1,
-        SkinColorIndex = -1,
-        FacialHairIndex = -1,
-        HeadwearIndex = -1,
-        EyewearIndex = -1,
-    };
+    public static AppearanceProfile Unassigned =>
+        new AppearanceProfile
+        {
+            HairStyleIndex = -1,
+            HairColorIndex = -1,
+            SkinColorIndex = -1,
+            FacialHairIndex = -1,
+            HeadwearIndex = -1,
+            EyewearIndex = -1,
+        };
 
     public bool IsAssigned => HairColorIndex >= 0;
 
-    public int GetIndex(AppearanceAxis axis) => axis switch
-    {
-        AppearanceAxis.HairStyle => HairStyleIndex,
-        AppearanceAxis.HairColor => HairColorIndex,
-        AppearanceAxis.SkinColor => SkinColorIndex,
-        AppearanceAxis.FacialHair => FacialHairIndex,
-        AppearanceAxis.Headwear => HeadwearIndex,
-        AppearanceAxis.Eyewear => EyewearIndex,
-        _ => -1,
-    };
+    public int GetIndex(AppearanceAxis axis) =>
+        axis switch
+        {
+            AppearanceAxis.HairStyle => HairStyleIndex,
+            AppearanceAxis.HairColor => HairColorIndex,
+            AppearanceAxis.SkinColor => SkinColorIndex,
+            AppearanceAxis.FacialHair => FacialHairIndex,
+            AppearanceAxis.Headwear => HeadwearIndex,
+            AppearanceAxis.Eyewear => EyewearIndex,
+            _ => -1,
+        };
 
     public void SetIndex(AppearanceAxis axis, int value)
     {
         switch (axis)
         {
-            case AppearanceAxis.HairStyle: HairStyleIndex = value; break;
-            case AppearanceAxis.HairColor: HairColorIndex = value; break;
-            case AppearanceAxis.SkinColor: SkinColorIndex = value; break;
-            case AppearanceAxis.FacialHair: FacialHairIndex = value; break;
-            case AppearanceAxis.Headwear: HeadwearIndex = value; break;
-            case AppearanceAxis.Eyewear: EyewearIndex = value; break;
+            case AppearanceAxis.HairStyle:
+                HairStyleIndex = value;
+                break;
+            case AppearanceAxis.HairColor:
+                HairColorIndex = value;
+                break;
+            case AppearanceAxis.SkinColor:
+                SkinColorIndex = value;
+                break;
+            case AppearanceAxis.FacialHair:
+                FacialHairIndex = value;
+                break;
+            case AppearanceAxis.Headwear:
+                HeadwearIndex = value;
+                break;
+            case AppearanceAxis.Eyewear:
+                EyewearIndex = value;
+                break;
         }
     }
 
@@ -81,7 +98,8 @@ public struct AppearanceProfile : INetworkSerializable, IEquatable<AppearancePro
         return true;
     }
 
-    public void NetworkSerialize<TBuffer>(BufferSerializer<TBuffer> serializer) where TBuffer : IReaderWriter
+    public void NetworkSerialize<TBuffer>(BufferSerializer<TBuffer> serializer)
+        where TBuffer : IReaderWriter
     {
         serializer.SerializeValue(ref HairStyleIndex);
         serializer.SerializeValue(ref HairColorIndex);
@@ -101,7 +119,13 @@ public struct AppearanceProfile : INetworkSerializable, IEquatable<AppearancePro
 
     public override bool Equals(object obj) => obj is AppearanceProfile other && Equals(other);
 
-    public override int GetHashCode() => HashCode.Combine(
-        HairStyleIndex, HairColorIndex, SkinColorIndex,
-        FacialHairIndex, HeadwearIndex, EyewearIndex);
+    public override int GetHashCode() =>
+        HashCode.Combine(
+            HairStyleIndex,
+            HairColorIndex,
+            SkinColorIndex,
+            FacialHairIndex,
+            HeadwearIndex,
+            EyewearIndex
+        );
 }
