@@ -96,6 +96,39 @@ public class CitizenIdentity : NetworkBehaviour
     // ---- 배정 (서버 · 오프라인 전용) ----
 
     /// <summary>
+    /// 프로필 없이 살아났으면 신원 배정을 요청한다 — 라운드 시작 이후에 스폰된 NPC 전용 경로. (#505)
+    ///
+    /// <see cref="CriminalAssigner"/>의 배정은 라운드 시작 1회이고 스폰 목록(NpcSpawner.SpawnedNpcs)만
+    /// 훑으므로, 라운드 중에 만들어지는 NPC(돌발 이벤트 난동꾼 #106 · 탈옥 침입자 #231)는 그 배정을
+    /// 놓쳐 <see cref="Profile"/>이 계속 null이었다. 그러면 스캐너가 "프로필 미배정"으로 튕기는데,
+    /// 침입자의 경우 <b>스캔 실패 자체가 정체를 알려 주는 tell</b>이 되어 "시민과 구분되지 않는다"(GDD 7-5)가 깨진다.
+    ///
+    /// <b>스폰하는 쪽이 부르지 않고 여기서 요청하는 이유</b>는 스폰 경로마다 배선하면 새 경로가 생길 때
+    /// 잊기 쉽고, 잊었을 때 증상이 조용해서(스캔만 실패) 원인을 찾기 어렵기 때문이다.
+    ///
+    /// <b>Start인 이유는 둘이다.</b> ① 세션 중에는 이 시점에 <c>Spawn()</c>이 이미 끝나 있어(IsSpawned)
+    /// AssignProfile이 동기화 변수에 써 전 클라이언트로 전파된다 — Spawn 전에 배정하면 호스트에만 보인다.
+    /// ② 오프라인(미스폰)에서는 <see cref="OnNetworkSpawn"/>이 아예 불리지 않으므로 그쪽에 두면 동작하지 않는다.
+    ///
+    /// 라운드 시작 스폰분은 여기서 아무 일도 하지 않는다 — 배정이 먼저면 Profile이 채워져 있고,
+    /// 아직이면 CriminalAssigner가 요청을 무시한다(그 배정이 곧 이 NPC까지 덮는다). 순서에 기대지 않는다.
+    /// </summary>
+    private void Start()
+    {
+        // 배정은 서버 권위 — 클라이언트는 m_syncedData로 받는다 (AssignProfile과 같은 기준)
+        if (IsSpawned && !IsServer)
+            return;
+
+        if (Profile != null)
+            return;
+
+        CriminalAssigner assigner = App.Game.CriminalAssigner;
+        if (assigner != null)
+            assigner.AssignLateSpawned(this);
+    }
+
+
+    /// <summary>
     /// 프로필과 범인 여부를 배정한다. 서버(또는 오프라인)의 CriminalAssigner 전용.
     /// 공개 가능한 부분은 동기화 변수에 함께 기록되어 전 클라이언트에 전파된다 —
     /// 오프라인(미스폰)에서는 로컬 프로퍼티만으로 동작한다 (NpcController.m_networkState와 동일 이중 구조).

@@ -15,7 +15,9 @@ using Random = UnityEngine.Random;
 /// </summary>
 public sealed class CitizenProfileFactory
 {
-    // 임시 이름 풀 — 사이버펑크 톤. 추후 데이터 에셋으로 분리 가능
+    // 임시 이름 풀 — 사이버펑크 톤. 추후 데이터 에셋으로 분리 가능.
+    // 라운드 시작 인원(NpcSpawner.m_spawnCount)뿐 아니라 라운드 중에 스폰되는 돌발 이벤트
+    // NPC(#106)까지 이 풀에서 이어 뽑는다 — 여유가 없으면 NextName의 번호 폴백이 화면에 나온다 (#505).
     private static readonly string[] s_namePool =
     {
         "Kai Vex",
@@ -42,6 +44,22 @@ public sealed class CitizenProfileFactory
         "Ravi Sol",
         "Wren Okada",
         "Zane Mercer",
+        "Ada Krell",
+        "Bex Otoro",
+        "Coda Vane",
+        "Doro Kesh",
+        "Elin Marsh",
+        "Fen Alarie",
+        "Gil Vantor",
+        "Hollis Bay",
+        "Ivo Strand",
+        "Jae Corbin",
+        "Kira Lund",
+        "Lux Ferrer",
+        "Mox Danil",
+        "Nadia Sork",
+        "Oren Talis",
+        "Pax Ludwin",
     };
 
     // None(무소속·문양 없음)은 위조 대조 축이 될 수 없어 배정에서 제외한다 (#222 (b)).
@@ -49,31 +67,37 @@ public sealed class CitizenProfileFactory
     private static readonly OfficialRecords.Faction[] s_assignableFactions = BuildAssignableFactions();
 
     private readonly OfficialRecords m_records;
-    private readonly string[] m_names;
+
+    // 라운드 시작에 한 번 섞어 두는 이름 풀 — 뽑기 전에 섞어야 순서가 곧 무작위 배정이 된다.
+    private readonly string[] m_shuffledNames;
+
+    // 지금까지 내준 이름 수 = 다음에 내줄 자리. 라운드 중에 스폰되는 이벤트 NPC(#106)도 같은
+    // 인스턴스에서 이어 뽑으므로 중복 회피가 이 커서 한 곳에 남는다 (#505).
+    private int m_issuedCount;
 
     // 세션 중 세력별 '진짜' 문양 index — FactionSymbolManager가 없는 오프라인 테스트용 폴백 캐시.
     private readonly Dictionary<OfficialRecords.Faction, int> m_localRealIndices =
         new Dictionary<OfficialRecords.Faction, int>();
 
     /// <param name="records">세력 심볼 조회용 공식 기록. null이면 문양 위조가 불가능해 이름 위조로 폴백한다.</param>
-    /// <param name="citizenCount">이번 라운드 인원 — 이 수만큼 중복 없는 이름을 미리 확정한다.</param>
-    public CitizenProfileFactory(OfficialRecords records, int citizenCount)
+    public CitizenProfileFactory(OfficialRecords records)
     {
         m_records = records;
-        m_names = BuildUniqueNames(citizenCount);
+        m_shuffledNames = ShuffledPool();
     }
 
     /// <summary>
-    /// index번째 시민의 정본 프로필을 만든다 — 이름은 확정된 풀에서, 타입·세력은 추첨한다.
+    /// 다음 시민의 정본 프로필을 만든다 — 이름은 섞어 둔 풀에서 순서대로, 타입·세력은 추첨한다.
+    /// 한 인스턴스에서 뽑는 동안 이름은 중복되지 않는다 — 호출 시점이 라운드 시작이든 도중이든 같다 (#505).
     /// 프로필은 에셋이 아닌 런타임 인스턴스다 — 라운드마다 새로 배정된다.
     /// </summary>
-    public CitizenProfile Create(int index)
+    public CitizenProfile Create()
     {
         OfficialRecords.Faction faction = RandomFaction();
 
         CitizenProfile profile = ScriptableObject.CreateInstance<CitizenProfile>();
         profile.Initialize(
-            m_names[index],
+            NextName(),
             RandomEnum<OfficialRecords.CitizenType>(),
             faction,
             RealSymbolIndex(faction),
@@ -145,26 +169,27 @@ public sealed class CitizenProfileFactory
         return list.ToArray();
     }
 
-    /// <summary>이름 풀을 섞어 중복 없는 이름 배열을 만든다. NPC가 풀보다 많으면 번호를 붙인다.</summary>
-    private static string[] BuildUniqueNames(int count)
+    /// <summary>이름 풀을 피셔-예이츠로 섞은 사본. 뽑기 전에 한 번만 돌린다.</summary>
+    private static string[] ShuffledPool()
     {
-        // 풀 복사 후 피셔-예이츠 셔플
         string[] shuffled = (string[])s_namePool.Clone();
         for (int i = shuffled.Length - 1; i > 0; i--)
         {
             int j = Random.Range(0, i + 1);
             (shuffled[i], shuffled[j]) = (shuffled[j], shuffled[i]);
         }
+        return shuffled;
+    }
 
-        string[] result = new string[count];
-        for (int i = 0; i < count; i++)
-        {
-            result[i] =
-                i < shuffled.Length
-                    ? shuffled[i]
-                    : $"{shuffled[i % shuffled.Length]} {i / shuffled.Length + 1}"; // 풀 초과분은 번호로 구분
-        }
-        return result;
+    // 다음 이름 하나. 풀을 다 쓰면 번호를 붙여 재사용한다 — 보기 좋지 않지만 중복 자체는 없다.
+    // 번호가 보이기 시작하면 s_namePool을 늘릴 신호다 (#505).
+    private string NextName()
+    {
+        int index = m_issuedCount++;
+        int length = m_shuffledNames.Length;
+        return index < length
+            ? m_shuffledNames[index]
+            : $"{m_shuffledNames[index % length]} {index / length + 1}";
     }
 
     private static TEnum RandomEnum<TEnum>()

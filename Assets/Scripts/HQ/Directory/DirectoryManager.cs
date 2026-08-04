@@ -86,4 +86,27 @@ public class DirectoryManager : NetworkedManagerBase
 
         Debug.Log($"[인명부] {m_directory.Count}명 등재 완료");
     }
+
+    /// <summary>
+    /// 늦게 합류한 NPC 한 명을 인명부에 끼워 넣는다 — <b>탈옥 침입자(#231) 전용</b>. 서버 전용. (#505)
+    ///
+    /// 침입자는 라운드 시작 스폰 목록에 없어 <see cref="BuildDirectory"/>가 훑지 않는다. 그런데 등재하지
+    /// 않으면 본부가 인명부를 조회해 "기록 없음"을 보는 것만으로 침입자를 특정할 수 있고, 그러면
+    /// <b>"시민과 구분되지 않는 침입자의 걸음을 알아채는 것이 관제의 상시 임무"</b>(GDD 7-5)가 조회 한 번으로
+    /// 대체된다. 그래서 이 대상만 정본으로 등재한다 (팀 확정 2026-08-04).
+    ///
+    /// <b>돌발 이벤트 난동꾼은 부르지 않는다</b> — 난동·도주 행동으로 이미 드러나 있어 숨길 것이 없고,
+    /// '미등록 인물'이 그쪽의 특징으로 남는다. 즉 등재 여부는 <b>스폰하는 쪽의 의도</b>이므로 여기서
+    /// 판정하지 않고 부르는 쪽이 정한다.
+    /// </summary>
+    public void RegisterLateArrival(CitizenProfile profile)
+    {
+        // 인명부는 세션 중 서버 권위 — 오프라인에서는 NetworkList 자체가 동작하지 않는다
+        // (BuildDirectory도 OnNetworkSpawn의 IsServer 분기에서만 이어진다)
+        if (!IsSpawned || !IsServer || profile == null)
+            return;
+
+        m_directory.Add(DirectoryEntry.FromProfile(profile));
+        Debug.Log($"[인명부] 늦은 등재: {profile.CitizenName} — 현재 {m_directory.Count}명");
+    }
 }

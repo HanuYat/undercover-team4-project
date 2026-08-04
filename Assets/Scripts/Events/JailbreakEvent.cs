@@ -164,6 +164,21 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (SuddenEventUtil.IsNetworkSessionActive)
             m_intruder.GetComponent<NetworkObject>().Spawn();
 
+        // 신원을 배정하고 인명부에도 등재한다 — 침입자는 시민과 구분되지 않아야 한다 (GDD 7-5, #505).
+        //
+        // 배정 자체는 CitizenIdentity가 Start에서 스스로도 요청하지만(모든 런타임 스폰 NPC의 폴백),
+        // 여기서 명시적으로 부르는 이유는 <b>인명부 등재 여부가 스폰하는 쪽의 의도</b>라서다 —
+        // 등재 대상인 이 NPC만 프로필을 돌려받아 인명부에 끼워 넣는다. 난동꾼(SpawnedNpcEvent)은
+        // 이 호출이 없어 폴백 경로로 배정만 받고 미등록 인물로 남는다 (팀 확정 2026-08-04).
+        //
+        // 반드시 Spawn() 뒤여야 한다 — 앞에서 배정하면 동기화 변수에 실리지 않아 호스트에만 보이고
+        // 다른 클라이언트에서는 스캔이 계속 실패한다 (CitizenIdentity.AssignProfile).
+        CitizenProfile intruderProfile = App.Game.CriminalAssigner != null
+            ? App.Game.CriminalAssigner.AssignLateSpawned(m_intruder.GetComponent<CitizenIdentity>())
+            : null;
+        if (intruderProfile != null && App.Game.Directory != null)
+            App.Game.Directory.RegisterLateArrival(intruderProfile);
+
         // 해제 착수·완료 통보를 받아 경보/자물쇠 해제를, 상태 전이를 받아 플레이어 개입을 처리한다
         m_intruder.OnIntrudeUnlockStarted += HandleUnlockStarted;
         m_intruder.OnIntrudeFinished += HandleIntrudeFinished;
