@@ -3437,46 +3437,46 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_downedPrompt:
     m_TableReference:
-      m_TableCollectionName: UITable
+      m_TableCollectionName: HudTable
     m_TableEntryReference:
       m_KeyId: 0
-      m_Key: revive.downed
+      m_Key: Hud.Revive.Downed
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
   m_selfDeadPrompt:
     m_TableReference:
-      m_TableCollectionName: UITable
+      m_TableCollectionName: HudTable
     m_TableEntryReference:
       m_KeyId: 0
-      m_Key: revive.self_dead
+      m_Key: Hud.Revive.SelfDead
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
   m_carryingPrompt:
     m_TableReference:
-      m_TableCollectionName: UITable
+      m_TableCollectionName: HudTable
     m_TableEntryReference:
       m_KeyId: 0
-      m_Key: revive.carrying
+      m_Key: Hud.Revive.Carrying
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
   m_revivePrompt:
     m_TableReference:
-      m_TableCollectionName: UITable
+      m_TableCollectionName: HudTable
     m_TableEntryReference:
       m_KeyId: 0
-      m_Key: revive.hint
+      m_Key: Hud.Revive.Hint
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
   m_deadTargetPrompt:
     m_TableReference:
-      m_TableCollectionName: UITable
+      m_TableCollectionName: HudTable
     m_TableEntryReference:
       m_KeyId: 0
-      m_Key: revive.dead_target
+      m_Key: Hud.Revive.DeadTarget
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
@@ -3636,10 +3636,10 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_chaseWarning:
     m_TableReference:
-      m_TableCollectionName: UITable
+      m_TableCollectionName: HudTable
     m_TableEntryReference:
       m_KeyId: 0
-      m_Key: penalty.chase_warning
+      m_Key: Hud.Penalty.ChaseWarning
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []

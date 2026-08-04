@@ -15,8 +15,68 @@ MonoBehaviour:
   m_GroupName: Localization-String-Tables-Korean (South Korea) (ko-KR)
   m_GUID: e180dba5fc95c38418d58e9538cc8f86
   m_SerializeEntries:
-  - m_GUID: 6d8209fa98762f344986b45ba1f344ef
-    m_Address: UITable_ko-KR
+  - m_GUID: 3f0aba0a5d3c71642a623db49dbcd0b6
+    m_Address: CommonTable_ko-KR
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko-KR
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 41690524b91416a448b13471848d9178
+    m_Address: SettingsTable_ko-KR
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko-KR
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5e66946e04f0dee4ab63147ef9fd34b5
+    m_Address: WorldTable_ko-KR
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko-KR
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6c37a4bdb2feffc4ab62c3ef17ca4170
+    m_Address: LobbyTable_ko-KR
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko-KR
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 788a830b2ff5b634391e2774f8e09539
+    m_Address: SettlementTable_ko-KR
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko-KR
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7fcb25e425d144d4099127286f45744b
+    m_Address: NpcTable_ko-KR
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko-KR
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8c146d2f8f83eca42a1ec1d54c9e3a93
+    m_Address: ShopTable_ko-KR
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko-KR
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a3132cd769e505f42b72896b552d63ab
+    m_Address: EventTable_ko-KR
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko-KR
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: af726cd2813e57143b6a31ab8a63c082
+    m_Address: TitleTable_ko-KR
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko-KR
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bf068e8cde5bd3a488fff42e9d086419
+    m_Address: HudTable_ko-KR
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko-KR
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d80cd998e6c902a41abfd2497cd897d6
+    m_Address: HqTable_ko-KR
     m_ReadOnly: 1
     m_SerializedLabels:
     - Locale-ko-KR

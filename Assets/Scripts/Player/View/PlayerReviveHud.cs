@@ -16,24 +16,24 @@ using UnityEngine.Localization;
 public class PlayerReviveHud : NetworkBehaviour
 {
     [Header("상태 문구")]
-    [Tooltip("내가 다운됨 — UITable/revive.downed ({0}에 기능 정지까지 남은 초)")]
+    [Tooltip("내가 다운됨 — HudTable/Hud.Revive.Downed ({0}에 기능 정지까지 남은 초)")]
     [SerializeField]
     private LocalizedString m_downedPrompt;
 
-    [Tooltip("내가 기능 정지(Die) — UITable/revive.self_dead")]
+    [Tooltip("내가 기능 정지(Die) — HudTable/Hud.Revive.SelfDead")]
     [SerializeField]
     private LocalizedString m_selfDeadPrompt;
 
     [Header("행동 문구")]
-    [Tooltip("동료를 운반 중 — UITable/revive.carrying")]
+    [Tooltip("동료를 운반 중 — HudTable/Hud.Revive.Carrying")]
     [SerializeField]
     private LocalizedString m_carryingPrompt;
 
-    [Tooltip("다운된 아군을 조준 중 — UITable/revive.hint")]
+    [Tooltip("다운된 아군을 조준 중 — HudTable/Hud.Revive.Hint")]
     [SerializeField]
     private LocalizedString m_revivePrompt;
 
-    [Tooltip("기능 정지된 아군을 조준 중 — UITable/revive.dead_target")]
+    [Tooltip("기능 정지된 아군을 조준 중 — HudTable/Hud.Revive.DeadTarget")]
     [SerializeField]
     private LocalizedString m_deadTargetPrompt;
 

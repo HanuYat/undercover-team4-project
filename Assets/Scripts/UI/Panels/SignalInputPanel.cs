@@ -25,14 +25,14 @@ public class SignalInputPanel : PanelBase
     private TMP_InputField m_field;
 
     [Header("문구")]
-    [Tooltip("창 제목 — UITable/signal.input_title")]
+    [Tooltip("창 제목 — WorldTable/World.SignalDecoder.InputTitle")]
     [SerializeField]
     private LocalizedString m_title;
 
     [SerializeField]
     private TMP_Text m_titleText;
 
-    [Tooltip("조작 안내 — UITable/signal.input_hint ({0}=입력 길이, {1}=최대 길이)")]
+    [Tooltip("조작 안내 — WorldTable/World.SignalDecoder.InputHint ({0}=입력 길이, {1}=최대 길이)")]
     [SerializeField]
     private LocalizedString m_hint;
 

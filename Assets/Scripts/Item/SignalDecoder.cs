@@ -13,7 +13,7 @@ public class SignalDecoder : InstallableItem
     [SerializeField]
     private float m_displaySeconds = 8f;
 
-    [Tooltip("수신 문구 형식 — UITable/signal.received ({0}에 받은 메시지가 들어간다)")]
+    [Tooltip("수신 문구 형식 — WorldTable/World.SignalDecoder.Received ({0}에 받은 메시지가 들어간다)")]
     [SerializeField]
     private LocalizedString m_receivedFormat;
 

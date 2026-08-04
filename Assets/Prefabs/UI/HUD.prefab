@@ -433,20 +433,20 @@ MonoBehaviour:
   m_field: {fileID: 6123735122119017851}
   m_title:
     m_TableReference:
-      m_TableCollectionName: UITable
+      m_TableCollectionName: WorldTable
     m_TableEntryReference:
       m_KeyId: 0
-      m_Key: signal.input_title
+      m_Key: World.SignalDecoder.InputTitle
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
   m_titleText: {fileID: 7886804921679955108}
   m_hint:
     m_TableReference:
-      m_TableCollectionName: UITable
+      m_TableCollectionName: WorldTable
     m_TableEntryReference:
       m_KeyId: 0
-      m_Key: signal.input_hint
+      m_Key: World.SignalDecoder.InputHint
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
