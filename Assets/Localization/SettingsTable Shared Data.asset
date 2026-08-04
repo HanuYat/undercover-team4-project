@@ -47,10 +47,6 @@ MonoBehaviour:
     m_Key: Settings.Button.Reset
     m_Metadata:
       m_Items: []
-  - m_Id: 6994200000008
-    m_Key: Settings.Pause.Title
-    m_Metadata:
-      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

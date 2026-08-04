@@ -35,7 +35,7 @@
 | 항목 | 결정 | 근거 |
 |------|------|------|
 | (a) 키 규칙 | **`<Domain>.<Group>.<Name>` · PascalCase.** 도메인이 맨 앞 | 기존 `ItemTable`의 `Item.Name.Scanner`가 이미 이 형태다. `UITable`의 `signal.received`(소문자 스네이크)가 예외였고, 그쪽을 맞춘다 |
-| (b) 테이블 분리 | **도메인/화면 단위로 11개** (§3) | 테이블은 Localization의 **로드 단위**다. 하나에 몰면 타이틀 화면이 인게임 문자열까지 들고 있게 된다. 도메인 접두가 곧 테이블이라 키만 봐도 어느 테이블인지 안다 |
+| (b) 테이블 분리 | **도메인/화면 단위로 12개** (§3) | 테이블은 Localization의 **로드 단위**다. 하나에 몰면 타이틀 화면이 인게임 문자열까지 들고 있게 된다. 도메인 접두가 곧 테이블이라 키만 봐도 어느 테이블인지 안다 |
 | (c) 언어 선택 위치 | **설정 창**([SettingsPanel](../../Assets/Scripts/UI/Panels/SettingsPanel.cs))에 드롭다운 1개. `GameSettings`에 편입 | 로컬 전용 값이라는 점이 감도·음량과 완전히 같다 — [settings-ui.md](settings-ui.md) (f)의 static 저장소 선례를 그대로 쓴다. 기존 F10 토글(`LocaleSwitchTester`)은 이때 제거 |
 | (d) 언어별 텍스트 반영 | **`LocalizedString.StringChanged` 구독** — 떠 있는 중에 언어를 바꿔도 갱신된다 | [LocalizedMessageView](../../Assets/Scripts/UI/Hud/LocalizedMessageView.cs)가 #251에서 확립한 관례. 정적 라벨은 `LocalizeStringEvent` 컴포넌트가 같은 일을 한다 |
 | (e) 인자가 있는 문구 | **Smart String `{0}` + `LocalizedString.Arguments`**. 인자를 먼저 넣고 구독한다 | [SignalDecoder.ShowLocal](../../Assets/Scripts/Item/SignalDecoder.cs)의 선례. 순서를 어기면 구독 시점의 첫 발화가 인자 없는 문장으로 나간다 |
@@ -55,7 +55,8 @@
 | `TitleTable` | `Title.` | 타이틀 씬, `AuthPanel`, `AccountCredentials` 검증 메시지, `NicknameRules`, 세션 코드 패널 |
 | `LobbyTable` | `Lobby.` | 로비 씬, 로스터 행, 음성 상태 라벨 |
 | `ShopTable` | `Shop.` | 상점 씬, 진열대 카드·가격표, 구매 응답 |
-| `SettingsTable` | `Settings.` | 설정 패널, 일시정지 패널 (전 씬 공용) |
+| `SettingsTable` | `Settings.` | 설정 패널 (전 씬 공용 — Title 포함 4개 씬) |
+| `PauseTable` | `Pause.` | 일시정지 패널 (인게임 전용 — Lobby·Main·Shop) |
 | `HudTable` | `Hud.` | 라운드 타이머·팀 자금·남은 범인·대기 안내·마이크 상태·토스트·검거 판정 배너·구조 프롬프트·페널티 경고 |
 | `ItemTable` | `Item.` | 아이템 이름/설명 **+ 사용 피드백**(Phase 3에서 `Item.Feedback.*` 추가) — 기존 테이블 유지 |
 | `WorldTable` | `World.` | 월드 설치물 라벨 (신호 해석기·부활 장치·스캐너 충전기·폭탄 매뉴얼·CCTV 장소명) |
@@ -65,6 +66,11 @@
 | `EventTable` | `Event.` | 돌발 이벤트 (폭탄 해체, 탈옥, 거리 난동자) |
 
 `UITable`은 아래 이관 후 **삭제한다.**
+
+> **`PauseTable`은 Phase 1에서 갈라냈다.** 처음에는 일시정지 문구를 `SettingsTable`에 `Settings.Pause.*`로 두었는데 두 가지가 어긋났다.
+> ① `SettingsCanvas`는 Title 포함 4개 씬에 있고 `PauseCanvas`는 인게임 3개 씬에만 있어서, 합쳐 두면 **Title 씬이 절대 표시할 수 없는 문구를 로드**한다 — 결정 (b)가 테이블을 쪼갠 바로 그 이유다.
+> ② 결정 (a)는 "키 첫 마디를 보면 테이블을 안다"인데 `Settings.Pause.Title`은 그 규칙을 스스로 깬다.
+> 테이블이 작아지는 것(4엔트리)은 감수한다 — `WorldTable` 3개, `HudTable` 6개도 같은 규모다.
 
 ### 기존 키 이관표 (`UITable` → 신규) — **완료 (Phase 0)**
 
@@ -91,12 +97,25 @@
 > 앞으로 키를 개명할 때도 같은 절차가 필요하다 — 테이블에서 바꾸고 끝내지 말고,
 > `rg "m_Key: <옛 키>" Assets/Prefabs Assets/Scenes`로 참조를 찾아 함께 고칠 것.
 
+> **정정 (Phase 1) — 참조 형태가 두 가지 섞여 있다.** 위 설명은 `UITable` 시절 참조에만 맞다.
+>
+> | 형태 | 직렬화 | 개명 | 엔트리 삭제·재생성 |
+> |------|--------|------|--------------------|
+> | **이름 참조** | `m_KeyId: 0` + `m_Key: <키>` | **끊어진다** | 이름이 같으면 살아남는다 |
+> | **ID 참조** | `m_KeyId: <숫자>`, `m_Key` 빈칸 | 안전하다 | **끊어진다** |
+>
+> Editor의 `Localize` UI로 키를 고르면 **ID 참조**가 된다 — 그게 기본이다. 이름 참조는 손으로 써넣은 옛 항목들이다.
+> 그래서 개명 위험(이름 참조)과 삭제 위험(ID 참조)을 **양쪽 다** 봐야 한다.
+> Phase 1에서 `Settings.Pause.Title`을 `PauseTable`로 옮기며 엔트리를 삭제했을 때 `PauseCanvas/Window/Title`의 ID 참조가
+> 실제로 끊어졌다(`id:...8 -> 테이블에 없는 ID`). 인스펙터에는 빈칸으로만 보이고 콘솔 에러도 나지 않으므로,
+> **엔트리를 옮기거나 지울 때는 그 키를 쓰는 프리팹·씬을 반드시 다시 연결할 것.**
+
 ## 4. 단계
 
 각 Phase = PR 1개. Phase 3은 리스크가 커서 반드시 단독으로 간다.
 
 ### Phase 0 — 기반 (문구 변화 없음) — **완료**
-- 테이블 11개 생성 (`ko-KR` / `en` 양쪽)
+- 테이블 11개 생성 (`ko-KR` / `en` 양쪽) — `PauseTable`은 Phase 1에서 갈라내 12개가 됐다 (§3 주석)
 - `UITable` 키 9개를 §3 이관표대로 옮기고(값·Smart 플래그 포함), 참조 9곳 재연결 후 `UITable` 삭제
 - `GameSettings.Locale` 추가 — 백킹 필드를 두지 않고 `LocalizationSettings.SelectedLocale`을 그대로 읽으며,
   영속화는 `PlayerPrefLocaleSelector`(`selected-locale`)에 맡겨 저장 키를 한 곳에 유지했다
@@ -108,7 +127,7 @@
   일부 UI가 쓰는 Roboto 계열(Static, 한글 없음)은 TMP **전역 fallback**이 `NotoSansKR-VF SDF`라 한글도 정상 표시된다
   (다만 그 라벨들은 ko에서 서체가 바뀌어 보인다 — 미관 이슈이며 차단 요소는 아니다)
 
-### Phase 1 — 씬·프리팹 정적 라벨 (약 46개)
+### Phase 1 — 씬·프리팹 정적 라벨 (약 49개)
 각 `TMP_Text`에 `LocalizeStringEvent`를 붙이고 키를 연결한다.
 
 **씬 파일은 동시 편집 시 머지 충돌이 크다. 씬 하나 = 브랜치 하나 = PR 하나**로 끊어 진행한다.
@@ -118,7 +137,14 @@
 | Title Scene | **17** | ✅ 완료 (`TitleTable`, 브랜치 `feature/374-localization-title`) |
 | Lobby / Shop | 6 | |
 | Main Scene | 6 | 인명부 정렬·페이지 버튼 등 |
-| 프리팹 | 약 24 | SettingsCanvas 8, PauseCanvas 1, 확인창 3종 7, Directory·FactionSymbolBoard·RoundEndButton·LoadingScreen, 월드 라벨 4 |
+| 프리팹 | 약 27 | SettingsCanvas 8, PauseCanvas 4, 확인창 3종 7, Directory·FactionSymbolBoard·RoundEndButton·LoadingScreen, 월드 라벨 4 |
+
+> **PauseCanvas가 1개에서 4개로 늘었다** — 제목만 보고 세었는데 버튼 3개(`계속하기`·`설정`·`메인으로 나가기`)가 빠져 있었다.
+> 이 버튼들은 **서드파티 GUIPack 버튼 프리팹의 중첩 인스턴스**이고 문구는 인스턴스 오버라이드로 박혀 있다.
+> `LocalizeStringEvent`는 `PauseCanvas` 안의 인스턴스에 **추가 컴포넌트 오버라이드**로 붙인다 —
+> 소스 프리팹(`Assets/Imported/GUIPack-.../Button Rounded - Filled - *.prefab`)을 열어 붙이면
+> 프로젝트의 모든 버튼에 번지고 서드파티 에셋을 수정하는 것이 된다(CLAUDE.md 금지).
+> 같은 형태의 버튼을 쓰는 다른 프리팹(확인창 3종 등)도 Phase 1에서 같은 방식으로 처리한다.
 
 > SettingsCanvas가 7개에서 **8개로 늘었다** — Phase 0에서 언어 드롭다운을 넣으며 그 라벨(`LocalizationLabel`, "언어")을 함께 추가했다.
 > 위 §1의 조사 수치(약 45개)는 착수 전 시점의 기록이라 그대로 둔다.
