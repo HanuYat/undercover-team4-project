@@ -32,6 +32,9 @@ public class SettlementPanel : PanelBase
     [SerializeField]
     private TextMeshProUGUI m_topOffenderText;
 
+    [SerializeField]
+    private TextMeshProUGUI m_personalText;
+
     [Header("상점 복귀 카운트다운 (화면 중앙 상단)")]
     [SerializeField]
     private TextMeshProUGUI m_countdownText;
@@ -63,6 +66,8 @@ public class SettlementPanel : PanelBase
     // 텍스트 지연 등장 + 카운트다운 시퀀스 취소용 — 닫히거나 파괴되면 중단한다.
     private CancellationTokenSource m_revealCts;
 
+    private PlayerWallet m_wallet;
+
     protected override void Awake()
     {
         base.Awake();
@@ -78,6 +83,7 @@ public class SettlementPanel : PanelBase
     protected override void OnDestroy()
     {
         CancelReveal();
+        UnbindWallet();
 
         if (m_playerBlocked)
             SetLocalPlayerBlocked(false);
@@ -113,6 +119,8 @@ public class SettlementPanel : PanelBase
                 data.TopOffenderCount > 0
                     ? $"이번 판 최다 오검거: {data.TopOffenderName} ({data.TopOffenderCount}회)"
                     : "이번 판 오검거 없음 — 깨끗한 수사!";
+
+        BindWallet();
 
         SetResultTextsVisible(false); // 창은 바로 뜨되 텍스트·카운트다운은 지연 등장
         SetCountdownVisible(false);
@@ -165,7 +173,39 @@ public class SettlementPanel : PanelBase
         };
     }
 
-    // 결과 텍스트 4줄의 표시를 한꺼번에 켜고 끈다. (카운트다운은 별도 — 닫아도 남긴다)
+    // 개인 몫은 SettlementData에 없다 — 전원에게 가는 브로드캐스트라 실으면 "본인만"이 깨진다.
+    // 원격 클라는 NetworkVariable이 정산 메시지보다 늦게 올 수 있어 구독해 둔다.
+    private void BindWallet()
+    {
+        UnbindWallet();
+
+        m_wallet = PlayerWallet.Local;
+        if (m_wallet != null)
+            m_wallet.RoundEarnedVar.OnValueChanged += HandleRoundEarnedChanged;
+
+        RefreshPersonalText();
+    }
+
+    private void UnbindWallet()
+    {
+        if (m_wallet != null)
+            m_wallet.RoundEarnedVar.OnValueChanged -= HandleRoundEarnedChanged;
+
+        m_wallet = null;
+    }
+
+    private void HandleRoundEarnedChanged(int previous, int current) => RefreshPersonalText();
+
+    private void RefreshPersonalText()
+    {
+        if (m_personalText == null) return;
+
+        int earned = m_wallet != null ? m_wallet.RoundEarned : 0;
+        int balance = m_wallet != null ? m_wallet.Balance : 0;
+        m_personalText.text = $"내 몫  +{earned:N0}원   (개인 자금 {balance:N0}원)";
+    }
+
+    // 결과 텍스트 5줄의 표시를 한꺼번에 켜고 끈다. (카운트다운은 별도 — 닫아도 남긴다)
     private void SetResultTextsVisible(bool visible)
     {
         if (m_resultText != null)
@@ -176,6 +216,8 @@ public class SettlementPanel : PanelBase
             m_fundText.gameObject.SetActive(visible);
         if (m_topOffenderText != null)
             m_topOffenderText.gameObject.SetActive(visible);
+        if (m_personalText != null)
+            m_personalText.gameObject.SetActive(visible);
     }
 
     private void SetCountdownVisible(bool visible)
@@ -208,6 +250,7 @@ public class SettlementPanel : PanelBase
         if (m_background != null)
             m_background.SetActive(false);
         SetLocalPlayerBlocked(false);
+        UnbindWallet();
         base.ClosePanel();
     }
 
