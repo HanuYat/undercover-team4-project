@@ -29387,7 +29387,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoundManager
   m_targetFund: 8000
-  m_timeLimitSeconds: 30
+  m_timeLimitSeconds: 600
   m_startDelaySeconds: 3
   m_jailZone: {fileID: 467094108}
 --- !u!114 &708957384
