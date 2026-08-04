@@ -34,9 +34,17 @@ public partial class AbductionEvent
 
         PlayerIncapacitation incap = caught.GetComponent<PlayerIncapacitation>();
 
-        // 기능 정지된 몸은 접수하지 않는다 — 오검거와 같은 이유(#365): 본부 부활 장치에 안치해 둔 몸이
-        // 동료 눈앞에서 사라진다. 납치범은 해산하지 않으니 부활한 뒤에 다시 노려진다.
-        if (incap != null && incap.IsDead)
+        // 이미 무력화된 몸은 접수하지 않는다 — 원인을 가리지 않는다.
+        // 기능 정지(Die)를 막는 이유는 오검거와 같고(#365, 본부 부활 장치에 안치해 둔 몸이 동료 눈앞에서
+        // 사라진다), 나머지(매달기·다운·기절)까지 함께 막는 이유는 <b>무력화 원인이 하나뿐</b>이기 때문이다:
+        // Incapacitate는 Die만 덮어쓰기를 막으므로(#364) 여기서 걸러내지 않으면 오검거 호송 중인 플레이어를
+        // 접수해 Cause를 Abducted로 덮고, 두 호송이 같은 몸을 광장과 외곽 양쪽으로 끌게 된다.
+        // 실제로 열려 있는 경로다 — 추격 NPC는 '혼자' 판정을 깨지 않으므로(LonePlayerWatch는 플레이어만 센다)
+        // 혼자 있는 상태에서 오검거를 저지르면 양쪽 표적이 동시에 된다.
+        //
+        // 납치가 취소되는 것은 아니다 — 표적은 고정이고 납치범은 해산하지 않으며 추격 상태가 간격을 두고
+        // 포획을 재통보하므로, 상대 무력화가 풀린 뒤에 다시 접수된다. 오검거와 같은 '유예'다.
+        if (incap != null && incap.IsIncapacitated)
             return;
 
         m_carryTarget = caught;

@@ -270,16 +270,20 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         PlayerMovement movement = target.GetComponent<PlayerMovement>();
         PlayerIncapacitation incap = target.GetComponent<PlayerIncapacitation>();
 
-        // 기능 정지(Die)된 몸은 매달지 않는다 (#365). 아래 Incapacitate는 Die를 못 덮게 막혀 있지만(#364)
-        // <b>텔레포트는 그 가드 밖</b>이라, 안 막으면 상태만 Die로 둔 채 광장으로 옮겨진다 — 본부 부활
-        // 장치에 안치해 둔 몸이면 동료 눈앞에서 사라지고, 운반 중이었으면 이탈 거리에 걸려 줄이 끊긴다.
+        // <b>다른 사유로</b> 이미 무력화된 몸은 매달지 않는다. 아래 Incapacitate는 Die를 못 덮게 막혀 있지만
+        // (#364) <b>텔레포트는 그 가드 밖</b>이라, 안 막으면 상태만 그대로 둔 채 광장으로 옮겨진다 —
+        // Die면 본부 부활 장치에 안치해 둔 몸이 동료 눈앞에서 사라지고 운반 중이었으면 이탈 거리에 걸려
+        // 줄이 끊기며(#365), 납치 호송 중이면 끌려가던 몸이 광장으로 순간이동한다(#371).
+        //
+        // Penalty만 통과시키는 이유는 그것이 <b>자기 상태</b>이기 때문이다 — 호송 마무리 경로
+        // (CarryToPlazaAsync)는 포획 때 이미 Penalty를 걸어 두고 여기로 들어온다.
         //
         // 포획 경로는 HandlePenaltyCaught에서 이미 걸러진다. 여기가 막는 것은 추격대를 꾸리지 못해
         // 곧장 집행되는 폴백 경로다(위 LaunchSquad — 원한 구역이 빈 예외 상황).
         // 이 폴백에서는 페널티가 미뤄지는 게 아니라 이번 집행분이 넘어간다 — 예외 경로라 그대로 둔다.
-        if (incap != null && incap.IsDead)
+        if (incap != null && incap.IsIncapacitated && incap.Cause != IncapacitationCause.Penalty)
         {
-            Debug.Log($"[오검거] 매달기 건너뜀 — {target.name}은 기능 정지(Die) 상태다 (본부 부활이 우선)");
+            Debug.Log($"[오검거] 매달기 건너뜀 — {target.name}은 이미 {incap.Cause} 상태다 (그쪽이 우선)");
             return;
         }
 
@@ -309,8 +313,11 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
             return; // 매니저 파괴 — 복귀 처리 없이 종료(대상도 함께 정리되는 상황)
         }
 
-        // 자동 복귀 — 대상이 퇴장·파괴됐을 수 있어 fake-null 가드
-        if (incap != null)
+        // 자동 복귀 — 대상이 퇴장·파괴됐을 수 있어 fake-null 가드.
+        // Cause 확인이 두 번째 가드다: 30초를 기다리는 사이 다른 무력화가 이 상태를 덮어썼을 수 있는데,
+        // 그걸 이 타이머가 풀면 남의 진행 도중에 조작권이 돌아간다(납치 호송이면 끌려가는 중에 풀린다, #371).
+        // 납치 쪽 AbductionEvent.CarryToOutskirtsAsync가 쓰는 것과 같은 가드다.
+        if (incap != null && incap.Cause == IncapacitationCause.Penalty)
             incap.Recover();
     }
 
