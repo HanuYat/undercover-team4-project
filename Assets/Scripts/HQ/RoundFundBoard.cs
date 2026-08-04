@@ -4,29 +4,26 @@ using UnityEngine;
 /// <summary>
 /// 라운드 목표 금액 진행도 HUD (#395) — "지금 벌어둔 금액 / 목표 금액"을 표시한다.
 ///
-/// 진행도는 지금 유치장에 잡아둔 대상들의 현상금 합(JailZone.BountyTotal)이다. 팀 자금(TeamFund)
-/// 잔액이 아니다 — 그쪽은 세션 이월분이라 이번 라운드 성과가 아니고, 상점 구매로 줄기도 한다.
-/// 탈옥(#231)으로 수감자가 빠져나가면 이 값도 함께 줄어든다("끝까지 데리고 있어야 인정").
-///
+/// 진행도는 지금 유치장에 잡아둔 대상들의 현상금 합(JailZone.BountyTotal)이다. 팀 자금(TeamFund) 잔액이 아니다.
+/// 그쪽은 세션 이월분이라 이번 라운드 성과가 아니고, 상점 구매로 줄기도 한다.
+/// 탈옥(#231)으로 수감자가 빠져나가면 이 값도 함께 줄어든다.
+/// 
 /// 표시 전용. 목표 금액은 씬에 저장된 값이라 모든 피어에서 같고, 진행도는 서버 권위로 동기화되므로
 /// 클라이언트에서도 그대로 읽어 그린다. (RemainingCriminalsHud와 같은 구조)
 /// </summary>
-public class RoundFundHud : MonoBehaviour
+public class RoundFundBoard : MonoBehaviour
 {
     private RoundManager Round => App.Game.Round;
 
     [Header("표시")]
-    [Tooltip("목표 진행도를 표시할 TextMeshProUGUI")]
-    [SerializeField]
-    private TextMeshProUGUI m_fundText;
+    [Tooltip("목표 진행도를 표시할 TextMeshPro (UGUI, 3D)")]
+    [SerializeField] private TMP_Text m_fundText;
 
     [Tooltip("표시 형식 — {0}=지금 벌어둔 금액, {1}=목표 금액")]
-    [SerializeField]
-    private string m_format = "{0:N0} / {1:N0}원";
+    [SerializeField] private string m_format = "{0:N0} / {1:N0}원";
 
     [Tooltip("목표를 채웠을 때 입힐 색 — 본부 종료 버튼이 켜졌다는 신호와 같은 의미다")]
-    [SerializeField]
-    private Color m_metColor = new Color(0.36f, 0.85f, 0.44f);
+    [SerializeField] private Color m_metColor = new Color(0.36f, 0.85f, 0.44f);
 
     private Color m_defaultColor;
     private bool m_defaultColorCached;
@@ -42,7 +39,7 @@ public class RoundFundHud : MonoBehaviour
     {
         if (m_fundText == null)
         {
-            Debug.LogWarning("RoundFundHud: 금액 텍스트가 연결되지 않아 표시할 수 없다", this);
+            Debug.LogWarning("RoundFundBoard: 금액 텍스트가 연결되지 않아 표시할 수 없다", this);
             return;
         }
 
