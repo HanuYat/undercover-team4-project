@@ -17,7 +17,23 @@ MonoBehaviour:
   m_SharedData: {fileID: 11400000, guid: fcf4ad2fe921de24dbc4ac35f8b789b7, type: 2}
   m_Metadata:
     m_Items: []
-  m_TableData: []
+  m_TableData:
+  - m_Id: 6994400000000
+    m_Localized: Yes
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994400000001
+    m_Localized: No
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994400000002
+    m_Localized: "Closing the room will disconnect everyone.\nLeave anyway?"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994400000003
+    m_Localized: Leave the session?
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

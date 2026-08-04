@@ -14,7 +14,23 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.SharedTableData
   m_TableCollectionName: CommonTable
   m_TableCollectionNameGuidString: fcf4ad2fe921de24dbc4ac35f8b789b7
-  m_Entries: []
+  m_Entries:
+  - m_Id: 6994400000000
+    m_Key: Common.Button.Yes
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994400000001
+    m_Key: Common.Button.No
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994400000002
+    m_Key: Common.LeaveConfirm.MessageHost
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994400000003
+    m_Key: Common.LeaveConfirm.MessageClient
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
