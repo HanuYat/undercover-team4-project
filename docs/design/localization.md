@@ -160,7 +160,7 @@
 | Title Scene | **17** | ✅ 완료 (`TitleTable`, 브랜치 `feature/374-localization-title`) |
 | Lobby / Shop | 6 | ✅ Lobby 2개(게임 시작·세션 나가기) · Shop 4개(시작 버튼 + `구매함` 3개) |
 | Main Scene | **5** | ✅ 완료 (`HqTable`, 브랜치 `feature/497-localization-main`) — 인명부 제목·정렬 2·페이지 이동 2 |
-| 프리팹 | 약 26 | ✅ SettingsCanvas 8 · PauseCanvas 4 · LeaveConfirm 2 · Directory·FactionSymbolBoard·RoundEndButton 3 / 남음: QuitConfirm·AccountConfirm 5, 월드 라벨 4 |
+| 프리팹 | 약 26 | ✅ SettingsCanvas 8 · PauseCanvas 4 · LeaveConfirm 2 · Directory·FactionSymbolBoard·RoundEndButton 3 · QuitConfirm 3 · AccountConfirm 2 · 월드 라벨 3 / 남음: 폭탄 매뉴얼 라벨 1 (돌발 이벤트와 함께) |
 
 > **Main Scene은 6개가 아니라 5개였다.** 6번째로 세어진 `범인`은 `=== SYSTEMS ===/GameManagers/CriminalAssigner`에
 > 붙은 3D TMP다 — 정답을 노출하는 테스트 표시라 [TestCriminalLabel](../../Assets/Scripts/Test/TestCriminalLabel.cs)과 함께
