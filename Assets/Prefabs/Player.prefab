@@ -2975,6 +2975,7 @@ GameObject:
   - component: {fileID: 115275667145390572}
   - component: {fileID: 1944191930658825646}
   - component: {fileID: 159535688444442221}
+  - component: {fileID: 1764053349963750978}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -3811,6 +3812,19 @@ MonoBehaviour:
   m_probeMask:
     serializedVersion: 2
     m_Bits: 129
+--- !u!114 &1764053349963750978
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7fe6a23d02e321543bacfffc4d02a40f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerWallet
+  ShowTopMostFoldoutHeaderGroup: 1
 --- !u!1 &5720394585047626155
 GameObject:
   m_ObjectHideFlags: 0

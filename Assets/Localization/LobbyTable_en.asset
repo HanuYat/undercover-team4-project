@@ -16,8 +16,56 @@ MonoBehaviour:
     m_Code: en
   m_SharedData: {fileID: 11400000, guid: bdbbf40e3c07f834dbde635e43c53b1e, type: 2}
   m_Metadata:
-    m_Items: []
-  m_TableData: []
+    m_Items:
+    - rid: 6276845892712267887
+  m_TableData:
+  - m_Id: 6994300000000
+    m_Localized: Start Game
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994300000001
+    m_Localized: Leave Session
+    m_Metadata:
+      m_Items: []
+  - m_Id: 60554300428288
+    m_Localized: Connecting...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 60554329788416
+    m_Localized: Waiting...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 60554333982720
+    m_Localized: 'Radio: [{0}]'
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267887
+  - m_Id: 60554338177024
+    m_Localized: Voice idle
+    m_Metadata:
+      m_Items: []
+  - m_Id: 60554338177025
+    m_Localized: Connecting voice...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 60554338177026
+    m_Localized: Joining voice channel...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 60554338177027
+    m_Localized: Voice connected
+    m_Metadata:
+      m_Items: []
+  - m_Id: 60554338177028
+    m_Localized: Voice connection failed
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
-    RefIds: []
+    RefIds:
+    - rid: 6276845892712267887
+      type: {class: SmartFormatTag, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_Entries: 
+        m_SharedEntries:
+        - id: 60554333982720

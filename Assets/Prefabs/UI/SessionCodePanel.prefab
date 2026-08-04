@@ -188,3 +188,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SessionCodePanel
   m_panelRoot: {fileID: 0}
   m_codeText: {fileID: 249102981429736456}
+  m_codeFormat:
+    m_TableReference:
+      m_TableCollectionName: GUID:fcf4ad2fe921de24dbc4ac35f8b789b7
+    m_TableEntryReference:
+      m_KeyId: 60555504193536
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  references:
+    version: 2
+    RefIds: []
