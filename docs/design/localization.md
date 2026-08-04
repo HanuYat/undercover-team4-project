@@ -140,12 +140,25 @@
 > 연결된 쪽이 텍스트를 써서 **화면은 정상으로 보인다.** 언어가 바뀔 때마다 같은 키를 두 번 조회하고
 > 다음 사람이 빈 쪽을 보고 헷갈릴 뿐이다 (PauseCanvas 버튼 2개에서 발생).
 
+> **3D `TextMeshPro`(월드공간)에는 `Localize` 메뉴가 없다 — 손으로 붙여야 한다.**
+> Localization 1.5.12가 등록하는 컨텍스트 메뉴는 `TextMeshProUGUI` · `TMP_Dropdown` · `Text` · `Image` ·
+> `RawImage` · `AudioSource`뿐이고 **3D `TextMeshPro`용은 아예 없다**(어셈블리의 `CONTEXT/*` 등록을 훑어 확인).
+> 상점 시작 버튼(`DispatchConsole/Text (TMP)`)과 팀 자금 잔액이 이 종류다. 남은 **월드 라벨 4개도 여기 해당**한다.
+>
+> 절차: `Add Component` → `Localize String Event` → `String Reference`에 테이블·키 →
+> `On Update String (String)`에서 **`+`로 항목 추가** → 오브젝트 칸에 그 TMP 자신 →
+> 함수는 위쪽 **Dynamic string** 그룹의 `text`.
+>
+> 마지막 단계에서 아래쪽 Static Parameters 쪽 `text`를 고르면 **고정 문자열이 박혀 매번 같은 값이 들어간다.**
+> 겉보기로는 정상처럼 보이므로 YAML로 확인하는 것이 가장 빠르다 — `m_Mode: 0`(Dynamic)이어야 하고
+> `m_Mode: 5`면 Static이다.
+
 **씬 파일은 동시 편집 시 머지 충돌이 크다. 씬 하나 = 브랜치 하나 = PR 하나**로 끊어 진행한다.
 
 | 대상 | 개수 | 상태 |
 |------|------|------|
 | Title Scene | **17** | ✅ 완료 (`TitleTable`, 브랜치 `feature/374-localization-title`) |
-| Lobby / Shop | 6 | Lobby 2개(게임 시작·세션 나가기) · Shop 4개(시작 버튼 + `구매함` 3개) 진행 중 |
+| Lobby / Shop | 6 | ✅ Lobby 2개(게임 시작·세션 나가기) · Shop 4개(시작 버튼 + `구매함` 3개) |
 | Main Scene | 6 | 인명부 정렬·페이지 버튼 등 |
 | 프리팹 | 약 26 | ✅ SettingsCanvas 8 · PauseCanvas 4 · LeaveConfirm 2 / 남음: QuitConfirm·AccountConfirm 5, Directory·FactionSymbolBoard·RoundEndButton, 월드 라벨 4 |
 
