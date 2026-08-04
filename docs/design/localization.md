@@ -159,8 +159,17 @@
 |------|------|------|
 | Title Scene | **17** | ✅ 완료 (`TitleTable`, 브랜치 `feature/374-localization-title`) |
 | Lobby / Shop | 6 | ✅ Lobby 2개(게임 시작·세션 나가기) · Shop 4개(시작 버튼 + `구매함` 3개) |
-| Main Scene | 6 | 인명부 정렬·페이지 버튼 등 |
-| 프리팹 | 약 26 | ✅ SettingsCanvas 8 · PauseCanvas 4 · LeaveConfirm 2 / 남음: QuitConfirm·AccountConfirm 5, Directory·FactionSymbolBoard·RoundEndButton, 월드 라벨 4 |
+| Main Scene | **5** | ✅ 완료 (`HqTable`, 브랜치 `feature/497-localization-main`) — 인명부 제목·정렬 2·페이지 이동 2 |
+| 프리팹 | 약 26 | ✅ SettingsCanvas 8 · PauseCanvas 4 · LeaveConfirm 2 · Directory·FactionSymbolBoard·RoundEndButton 3 / 남음: QuitConfirm·AccountConfirm 5, 월드 라벨 4 |
+
+> **Main Scene은 6개가 아니라 5개였다.** 6번째로 세어진 `범인`은 `=== SYSTEMS ===/GameManagers/CriminalAssigner`에
+> 붙은 3D TMP다 — 정답을 노출하는 테스트 표시라 [TestCriminalLabel](../../Assets/Scripts/Test/TestCriminalLabel.cs)과 함께
+> 데모 빌드 전에 빠질 물건이다. 번역하지 않는다.
+>
+> **`CitizenDirectoryCanvas/Panel` 아래에 `Text`가 둘이다** — 제목(`시민 인명부`)과 페이지 라벨(`1 / 1`).
+> 뒤쪽은 `CitizenDirectoryView`가 대입하는 자리표시자라 붙이면 안 된다. 이름으로는 구분되지 않으니 문구로 볼 것.
+>
+> 인명부 제목은 씬의 UI 캔버스와 HQ의 `Directory` 보드가 같은 문구라 **키 하나(`Hq.Directory.Title`)를 공유**한다.
 
 > **`TitleTable`에서 세션 코드를 뺐다.** §3이 "세션 코드 패널"을 `TitleTable`에 넣어 뒀는데,
 > `SessionCodePanel.prefab`은 실제로 **Lobby·Shop 두 씬**에만 있고 Title 씬에는 없다.
