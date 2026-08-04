@@ -13,6 +13,10 @@ public enum EScene
 /// 설치형은 프리팹 스폰이 아니라 <b>본부에 이미 배치된 씬 인스턴스</b>를 켜는 방식이라(#108 SetInstalled),
 /// 지목 대상이 프리팹 자산이 아니다 — 그래서 프리팹 참조가 아닌 enum으로 가리킨다.
 /// </summary>
+// 표시 이름·설명은 ItemTable이 주인이다 — 소지형(ItemBase.ItemName)과 같은 네임스페이스를 쓴다.
+// 값을 추가하면 두 키(Item.Name.<이름> · Item.Description.<이름>)를 함께 넣을 것. (#497)
+[LocalizedEnum("ItemTable", "Item.Name.", nameof(EInstallable.None))]
+[LocalizedEnum("ItemTable", "Item.Description.", nameof(EInstallable.None))]
 public enum EInstallable
 {
     None, // 이 진열대는 소지형 — 프리팹 참조로 판다
@@ -30,8 +34,11 @@ public enum EInstallable
 /// 플레이어에게 보이는 문구는 그 테이블이 주인이고, 표시 측이 enum 이름으로 키를 만들어 조회한다
 /// (규약 기반 매핑 — docs/design/localization.md §2 결정 (h)). 여기 arm만 늘리면 그 상태에서만
 /// 키가 없어 화면에 키 문자열이 뜨거나 빈칸이 되고, 컴파일러는 막아 주지 않는다.
+/// 아래 <see cref="LocalizedEnumAttribute"/>가 그 규약의 선언이고, 에디터 메뉴
+/// <i>Tools ▸ Localization ▸ 규약 키 검증</i>이 값 전부에 키가 있는지 확인해 준다.
 /// `VivoxManager.ToLabel`은 디버그 GUI 전용이므로 그쪽만 고쳐도 플레이어 화면은 바뀌지 않는다. (#497)
 /// </summary>
+[LocalizedEnum("LobbyTable", "Lobby.Voice.")]
 public enum EVoiceState
 {
     Idle, // 음성 연결 전 / 정리 후

@@ -33,6 +33,10 @@ public static class LocalizedStrings
         if (!LocalizationSettings.HasSettings)
             return key;
 
+#if UNITY_EDITOR
+        WarnIfMissing(table, key);
+#endif
+
         string value =
             args != null && args.Length > 0
                 ? LocalizationSettings.StringDatabase.GetLocalizedString(table, key, args)
@@ -40,4 +44,31 @@ public static class LocalizedStrings
 
         return string.IsNullOrEmpty(value) ? key : value;
     }
+
+#if UNITY_EDITOR
+    // 실제로 밟은 경로에서 빠진 키를 알려 준다 — 규약 키는 컴파일러가 막아 주지 않으므로 이것이
+    // 두 번째 그물이다(첫 번째는 에디터 메뉴 Tools ▸ Localization ▸ 규약 키 검증).
+    // 값 조회 자체는 건드리지 않는다 — 폴백 처리는 Localization 쪽에 맡기고 진단만 얹는다.
+    private static readonly System.Collections.Generic.HashSet<string> s_warned =
+        new System.Collections.Generic.HashSet<string>();
+
+    private static void WarnIfMissing(string table, string key)
+    {
+        // 같은 키를 매 프레임 조회하는 자리도 있다(진열대 갱신) — 한 번만 짖는다
+        string id = table + "/" + key;
+        if (s_warned.Contains(id))
+            return;
+
+        var stringTable = LocalizationSettings.StringDatabase.GetTable(table);
+        if (stringTable != null && stringTable.GetEntry(key) != null)
+            return;
+
+        s_warned.Add(id);
+        UnityEngine.Debug.LogWarning(
+            $"[LocalizedStrings] '{table}'에 키 '{key}'가 없다. "
+                + "규약 기반 키라면 enum 값만 늘고 테이블 키가 빠진 것이다 — "
+                + "Tools ▸ Localization ▸ 규약 키 검증으로 전체를 확인할 것."
+        );
+    }
+#endif
 }

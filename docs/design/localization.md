@@ -41,7 +41,7 @@
 | (e) 인자가 있는 문구 | **Smart String `{0}` + `LocalizedString.Arguments`**. 인자를 먼저 넣고 구독한다 | [SignalDecoder.ShowLocal](../../Assets/Scripts/Item/SignalDecoder.cs)의 선례. 순서를 어기면 구독 시점의 첫 발화가 인자 없는 문장으로 나간다 |
 | (f) `string m_format` 필드 | **`LocalizedString`으로 타입 교체.** `string.Format` 호출을 Smart String으로 대체 | 인스펙터에 한국어 포맷이 박혀 있으면 그 필드는 영원히 번역되지 않는다. 해당 필드 8개는 §4 Phase 2 참고 |
 | (g) 네트워크로 보내는 알림 | **완성된 문장이 아니라 `enum` + 숫자 인자를 보낸다.** 수신 클라가 자기 로케일로 조회 | 서버가 자기 언어로 문장을 만들어 보내면 클라 언어와 무관하게 그 언어가 뜬다. enum은 4바이트고, 문자열보다 RPC 크기도 작다 |
-| (h) enum → 키 매핑 | **규약 기반** — `Item.Feedback.` + enum 이름. 매핑 SO를 만들지 않는다 | 매핑 에셋은 enum이 늘 때마다 같이 고쳐야 하는 두 번째 진실이 된다. 규약이면 enum 값 추가 = 테이블 키 추가로 끝 |
+| (h) enum → 키 매핑 | **규약 기반** — `Item.Feedback.` + enum 이름. 매핑 SO를 만들지 않는다. 규약은 **enum 선언부에 `[LocalizedEnum]`으로 선언**하고 에디터 검증으로 받친다 | 매핑 에셋은 enum이 늘 때마다 같이 고쳐야 하는 두 번째 진실이 된다. 규약이면 enum 값 추가 = 테이블 키 추가로 끝. 대신 컴파일러가 막아 주지 못하므로 그 구멍은 검증으로 메운다 (§7) |
 | (i) 몽타주 번역 | **번역한다.** 다만 전송 구조는 그대로 두고 `AppearanceDatabase`만 번역 (§5) | 국적이 다른 사람끼리 한 판을 하는 상황을 상정하지 않는다는 팀 결정. 이 전제에서는 전원이 같은 로케일이므로 서버가 만든 문구가 각자 언어와 일치한다 |
 | (j) 시민 이름 | **번역하지 않는다** — ko 화면에서도 영문 | 고유명사. 무전으로 이름을 부르는 것이 대조의 핵심이라 표기가 흔들리면 안 된다 |
 
@@ -262,3 +262,36 @@ Phase 4에서 `AppearanceDatabase`를 번역해도, 서버가 `BuildMontageText`
 3. `ko-KR` · `en` **양쪽을 채운다** — 한쪽만 채우면 폴백으로 반대 언어가 그대로 노출된다
 4. 코드에서 쓰면 `LocalizedString` SerializeField, 정적 라벨이면 `LocalizeStringEvent`
 5. **서버가 클라에 보내는 문구라면 문자열을 보내지 말 것** — enum + 인자로 보내고 수신 측에서 조회한다 (결정 (g))
+
+## 7. 규약 기반 키의 검증
+
+결정 (h)는 매핑 에셋을 없애는 대신 **컴파일러가 막지 못하는 구멍**을 남긴다 — enum에 값을 추가하고
+테이블 키를 잊으면 그 값에서만 문구가 비고, 그 코드 경로를 밟기 전까지 아무 신호도 없다.
+테이블을 이름 문자열로 참조하는 것도 같은 성질이다(다른 곳은 인스펙터의 GUID 참조라 개명에 안전하다).
+
+그물을 두 겹 둔다.
+
+**① 선언 — [`[LocalizedEnum]`](../../Assets/Scripts/Localization/LocalizedEnumAttribute.cs)을 enum 선언부에 붙인다.**
+값을 추가하는 사람이 가장 먼저 보는 자리에 규약이 적혀 있게 하는 것이 목적이고, 동시에 검증의 근거가 된다.
+접두가 둘 이상이면 여러 번 붙이고, 표시 대상이 아닌 값은 `except`로 뺀다.
+
+```csharp
+[LocalizedEnum("LobbyTable", "Lobby.Voice.")]
+public enum EVoiceState { Idle, LoggingIn, Joining, Connected, Failed }
+
+[LocalizedEnum("ItemTable", "Item.Name.", nameof(EInstallable.None))]
+[LocalizedEnum("ItemTable", "Item.Description.", nameof(EInstallable.None))]
+public enum EInstallable { None, SignalDecoder, JailSirenButton }
+```
+
+**② 검사 — 에디터 메뉴 `Tools ▸ Localization ▸ 규약 키 검증`**
+([LocalizedEnumValidator](../../Assets/Scripts/Editor/LocalizedEnumValidator.cs)).
+선언이 붙은 enum을 전부 훑어 값마다 키가 있는지, 그리고 **로케일별 값이 비지 않았는지**까지 확인한다.
+검사 대상 등록표를 따로 두지 않는다 — 선언 자체가 목록이라 새 규약은 어트리뷰트만 붙이면 자동 편입된다.
+현재 기준 enum 2개 · 키 9개가 통과한다.
+
+여기에 [`LocalizedStrings.Get`](../../Assets/Scripts/Localization/LocalizedStrings.cs)이 에디터에서만
+**실제로 밟은 경로의 누락을 키마다 한 번 경고**한다. ②가 미리 훑는 그물이고 이쪽은 빠져나간 것을 잡는 그물이다.
+
+> Phase 3에서 `Item.Feedback.*` · `Shop.Reply.*`를 추가할 때도 **`EItemFeedback`·`EShopReply`에 어트리뷰트를 붙이면
+> 검증이 그대로 따라온다.** 별도 작업이 필요 없다.
