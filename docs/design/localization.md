@@ -240,7 +240,7 @@
 ### Phase 2 — 코드 조립 문자열 (약 60개)
 `LocalizedString` SerializeField + Smart String으로 교체. 관례는 [SignalDecoder](../../Assets/Scripts/Item/SignalDecoder.cs)와 같다.
 
-- `SettlementPanel` (15) · `AuthPanel`+`AccountCredentials`+`NicknameRules` (21) · ~~`ScanInfoView`~~ · ~~`ScanResultPresenter`~~ · `ShopStandView` · `CCTVChannelLabelView` · `HqRevivalDevice` · `BombTimerView`
+- ~~`SettlementPanel`~~ (15) · `AuthPanel`+`AccountCredentials`+`NicknameRules` (21) · ~~`ScanInfoView`~~ · ~~`ScanResultPresenter`~~ · `ShopStandView` · `CCTVChannelLabelView` · `HqRevivalDevice` · `BombTimerView`
 - ~~`SessionPanel`~~ · ~~`LeaveConfirmPanel`~~ · ~~`LobbyRosterRowView`/`LobbyRosterPanel`~~ · ~~`SessionCodePanel`~~ — **Phase 1에서 앞당겨 처리했다** (해당 씬·프리팹을 손대는 김에)
 - **`string m_format` 필드 8개** → `LocalizedString`: ~~`RoundFundHud`~~(실제 이름은 `RoundFundBoard`) · ~~`ReadyWaitHud`~~ · ~~`RemainingCriminalsHud`~~ · ~~`WantedEntryView`~~ · `BombSerialView` · ~~`MicStatusHud`~~ · `HqRevivalDevice` · `CCTVNode`
 - ~~**곁다리 정리:** 검거 판정 문구 3곳 중복~~ — **정정.** 중복은 2곳이 아니라 **번역 대상 1곳**이었다.
@@ -259,6 +259,17 @@
 >
 > **스캔 카드 라벨은 ko에서 문구가 바뀐다** — 지금까지 한국어 화면에서도 `Name:` · `Type:` · `Faction:`이었다.
 > ko는 `이름:` · `타입:` · `세력:`으로 고쳤다 (Title 씬의 `Quit`→`종료`와 같은 종류의 정정).
+
+> **정산 패널만 `StringChanged`를 구독하지 않는다.** 결정 (d)는 "떠 있는 중에 언어를 바꿔도 갱신"이 목적인데,
+> 정산 화면은 10초짜리 결과 요약이고 그 사이 설정 창을 열 경로가 없다. 그래서 채우는 순간
+> `LocalizedString.GetLocalizedString(args)`로 한 번 읽고 끝낸다 — 구독·해제 짝을 6벌 들고 있을 이유가 없다.
+> 반대로 HUD(`ReadyWaitHud` 등)는 라운드 내내 떠 있으므로 구독해야 한다. **판단 기준은 "그 문구가 언어 변경을
+> 볼 수 있는 자리인가"**다.
+>
+> 정산의 결과 제목·복귀 도착지·종료 사유는 규약 키다 — `RoundResult`에 접두 둘(`Settlement.Result.` ·
+> `Settlement.Return.`), `RoundEndReason`에 하나(`Settlement.Reason.`)를 붙였다.
+> 복귀 도착지(성공=상점 / 실패=로비)를 `Shop`/`Lobby`가 아니라 enum 이름으로 둔 것은, 키 이름만으로 뜻이
+> 덜 드러나는 대신 **검증에 자동으로 편입**되기 때문이다 — 결과가 늘면 두 접두 모두에서 빠진 키가 잡힌다.
 
 ### Phase 3 — 네트워크 문자열 제거 (토스트만, 단독 PR)
 서버가 완성된 한국어를 RPC로 실어 보내는 경로를 enum 전송으로 바꾼다.
