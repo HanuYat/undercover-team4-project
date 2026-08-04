@@ -50,6 +50,14 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
     [Min(1f)]
     [SerializeField] private float m_ringDuration = 15f;
 
+    [Tooltip(
+        "외부 요청 벨(#485)이 끝난 뒤 제보 전화가 울리기까지 비워 두는 시간(초). 두 벨이 붙어 울리는 것만 "
+            + "막는 값이라 짧게 둔다 — 수신 간격(m_minInterval)만큼 밀면 라운드 막판에 남은 제보 전화가 "
+            + "제한시간에 걸려 못 울릴 수 있고, 팀은 그 이유를 알 수 없다"
+    )]
+    [Min(0f)]
+    [SerializeField] private float m_externalRingGrace = 8f;
+
     // 울림 여부만 동기화한다 — 타이머와 승격은 서버 안에서 끝난다
     private readonly NetworkVariable<bool> m_isRingingSynced = new(false);
 
@@ -294,10 +302,14 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
     }
 
     // 외부 요청 벨이 끝난 직후를 비운다 — 제보 전화 예약 시각이 그 벨이 울리는 동안 이미 지났으면
-    // 끊긴 즉시 또 울려 두 벨이 붙어 버린다. 예약을 미루기만 하므로 이번 라운드 횟수는 그대로다.
+    // 끊긴 즉시 또 울려 두 벨이 붙어 버린다.
+    //
+    // 유예가 짧아야 한다. 수신 간격(m_minInterval, 기본 40초)만큼 밀면 라운드 막판에 예정돼 있던
+    // 제보 전화가 제한시간을 넘겨 못 울리고, 횟수는 남아 있는데 갱신 기회만 사라진다 — 팀은 이유를
+    // 알 수 없으므로 "모르는 사이에 손해"가 된다. 그건 청탁을 제보 전화와 분리한 이유와 정면으로 어긋난다.
     private void DelayNextRing()
     {
-        m_nextRingTime = Mathf.Max(m_nextRingTime, Time.time + m_minInterval);
+        m_nextRingTime = Mathf.Max(m_nextRingTime, Time.time + m_externalRingGrace);
     }
 
     private void SetRinging(bool value)
