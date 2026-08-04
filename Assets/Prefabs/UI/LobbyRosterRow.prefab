@@ -200,6 +200,27 @@ MonoBehaviour:
   m_hostIcon: {fileID: 6629417330798257193}
   m_speakerIcon: {fileID: 1612430642803723442}
   m_micMutedIcon: {fileID: 4760598555916080695}
+  m_connectingLabel:
+    m_TableReference:
+      m_TableCollectionName: GUID:bdbbf40e3c07f834dbde635e43c53b1e
+    m_TableEntryReference:
+      m_KeyId: 60554300428288
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_emptyLabel:
+    m_TableReference:
+      m_TableCollectionName: GUID:bdbbf40e3c07f834dbde635e43c53b1e
+    m_TableEntryReference:
+      m_KeyId: 60554329788416
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  references:
+    version: 2
+    RefIds: []
 --- !u!1 &4673889474409492377
 GameObject:
   m_ObjectHideFlags: 0
