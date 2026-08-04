@@ -100,12 +100,15 @@
 - `UITable` 키 9개를 §3 이관표대로 옮기고(값·Smart 플래그 포함), 참조 9곳 재연결 후 `UITable` 삭제
 - `GameSettings.Locale` 추가 — 백킹 필드를 두지 않고 `LocalizationSettings.SelectedLocale`을 그대로 읽으며,
   영속화는 `PlayerPrefLocaleSelector`(`selected-locale`)에 맡겨 저장 키를 한 곳에 유지했다
-- `SettingsPanel`에 언어 드롭다운 추가(항목은 런타임 생성, 표시는 각 언어의 NativeName), `LocaleSwitchTester`(F10)와 그 전용 씬 오브젝트 제거
+- `SettingsPanel`에 언어 드롭다운 추가(항목은 런타임 생성, 표시는 각 언어의 NativeName), `LocaleSwitchTester`(F10)와 그 전용 씬 오브젝트 제거.
+  드롭다운은 `SettingsCanvas`의 **MicMute 행 우측**에 얹었다 — `Spacer`(flexible 1)가 좌측(마이크)과 우측(언어) 그룹을 가르고,
+  그 행의 `HorizontalLayoutGroup`은 `Child Force Expand / Width` **OFF** · `Control Child Size / Width` **ON**이어야 한다
+  (전자가 켜져 있으면 모든 자식에 flexible 1이 강제돼 지정한 폭이 무시되고, 후자가 꺼져 있으면 `LayoutElement`의 preferred/flexible을 아예 읽지 않는다)
 - 폰트 확인 결과 **문제 없음**: 기본 폰트 `NotoSansKR-VF SDF`(Dynamic)는 한글·라틴 모두 보유.
   일부 UI가 쓰는 Roboto 계열(Static, 한글 없음)은 TMP **전역 fallback**이 `NotoSansKR-VF SDF`라 한글도 정상 표시된다
   (다만 그 라벨들은 ko에서 서체가 바뀌어 보인다 — 미관 이슈이며 차단 요소는 아니다)
 
-### Phase 1 — 씬·프리팹 정적 라벨 (약 45개)
+### Phase 1 — 씬·프리팹 정적 라벨 (약 46개)
 각 `TMP_Text`에 `LocalizeStringEvent`를 붙이고 키를 연결한다.
 
 **씬 파일은 동시 편집 시 머지 충돌이 크다. 씬 하나 = 브랜치 하나 = PR 하나**로 끊어 진행한다.
@@ -115,7 +118,10 @@
 | Title Scene | **17** | ✅ 완료 (`TitleTable`, 브랜치 `feature/374-localization-title`) |
 | Lobby / Shop | 6 | |
 | Main Scene | 6 | 인명부 정렬·페이지 버튼 등 |
-| 프리팹 | 약 23 | SettingsCanvas 7, PauseCanvas 1, 확인창 3종 7, Directory·FactionSymbolBoard·RoundEndButton·LoadingScreen, 월드 라벨 4 |
+| 프리팹 | 약 24 | SettingsCanvas 8, PauseCanvas 1, 확인창 3종 7, Directory·FactionSymbolBoard·RoundEndButton·LoadingScreen, 월드 라벨 4 |
+
+> SettingsCanvas가 7개에서 **8개로 늘었다** — Phase 0에서 언어 드롭다운을 넣으며 그 라벨(`LocalizationLabel`, "언어")을 함께 추가했다.
+> 위 §1의 조사 수치(약 45개)는 착수 전 시점의 기록이라 그대로 둔다.
 
 > **자리표시자와 구분할 것.** 씬·프리팹의 TMP 텍스트 중 상당수는 코드가 런타임에 덮어쓰는 디자인타임 값이다
 > (`"라운드 성공!"`, `"김시민 — 보상 10,000원"`, `"HP: 100/100"`, `"0 / 0원"`, `"0원"`, `"현상수배범 검거!"` 등).
