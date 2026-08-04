@@ -459,7 +459,19 @@ MonoBehaviour:
   m_canvasGroup: {fileID: 2971326382923435867}
   m_spinner: {fileID: 387493791082521950}
   m_statusText: {fileID: 8925147574264602472}
+  m_defaultStatus:
+    m_TableReference:
+      m_TableCollectionName: GUID:fcf4ad2fe921de24dbc4ac35f8b789b7
+    m_TableEntryReference:
+      m_KeyId: 63292019118080
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
   m_fadeOutSeconds: 0.35
+  references:
+    version: 2
+    RefIds: []
 --- !u!1 &8050495346239108528
 GameObject:
   m_ObjectHideFlags: 0

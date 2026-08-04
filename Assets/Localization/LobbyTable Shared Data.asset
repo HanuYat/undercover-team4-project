@@ -14,7 +14,47 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.SharedTableData
   m_TableCollectionName: LobbyTable
   m_TableCollectionNameGuidString: bdbbf40e3c07f834dbde635e43c53b1e
-  m_Entries: []
+  m_Entries:
+  - m_Id: 6994300000000
+    m_Key: Lobby.Button.Start
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994300000001
+    m_Key: Lobby.Button.Leave
+    m_Metadata:
+      m_Items: []
+  - m_Id: 60554300428288
+    m_Key: Lobby.Roster.Connecting
+    m_Metadata:
+      m_Items: []
+  - m_Id: 60554329788416
+    m_Key: Lobby.Roster.Empty
+    m_Metadata:
+      m_Items: []
+  - m_Id: 60554333982720
+    m_Key: Lobby.Voice.RadioKey
+    m_Metadata:
+      m_Items: []
+  - m_Id: 60554338177024
+    m_Key: Lobby.Voice.Idle
+    m_Metadata:
+      m_Items: []
+  - m_Id: 60554338177025
+    m_Key: Lobby.Voice.LoggingIn
+    m_Metadata:
+      m_Items: []
+  - m_Id: 60554338177026
+    m_Key: Lobby.Voice.Joining
+    m_Metadata:
+      m_Items: []
+  - m_Id: 60554338177027
+    m_Key: Lobby.Voice.Connected
+    m_Metadata:
+      m_Items: []
+  - m_Id: 60554338177028
+    m_Key: Lobby.Voice.Failed
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

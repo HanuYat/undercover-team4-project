@@ -53,10 +53,15 @@ public class JailZone : NetworkBehaviour
         public readonly int Bounty;
         public readonly bool IsCriminal;
 
-        public InmateRecord(int bounty, bool isCriminal)
+        /// <summary>이 수감자를 유치장에 앉힌 인계자들의 clientId — 아무도 없으면 빈 배열. (#484)
+        /// 착석 시점 스냅샷이라 그 뒤 손이 바뀌어도 흔들리지 않는다.</summary>
+        public readonly ulong[] Deliverers;
+
+        public InmateRecord(int bounty, bool isCriminal, ulong[] deliverers)
         {
             Bounty = bounty;
             IsCriminal = isCriminal;
+            Deliverers = deliverers;
         }
     }
 
@@ -212,8 +217,10 @@ public class JailZone : NetworkBehaviour
     /// 판정 순간 바로 세므로 할당량 종료(#340)가 카운트를 앞질러 마지막 검거가 정산에서 누락되지 않는다.
     /// 탈옥해 풀려난 대상은 ReleaseInmate로 이 카운트에서 빠지므로 "끝까지 데리고 있어야 보상"은 유지된다.
     /// <paramref name="bounty"/>는 이 수감자가 라운드 종료 정산(#340)에 기여할 보상액이다(CustodyRouter가 판정 보상을 넘긴다).
+    /// <paramref name="deliverers"/>는 이 수감자를 앉힌 인계자들의 clientId — 개인 자금(#484)의 귀속 근거다.
+    /// 착석 시점에 JailIntake가 확정해 넘긴다(판정 시점이 아니다 — 그쪽 주석 참고). 아무도 없으면 빈 배열.
     /// </summary>
-    public void Admit(NpcController npc, int bounty)
+    public void Admit(NpcController npc, int bounty, ulong[] deliverers)
     {
         if (npc == null)
             return;
@@ -226,7 +233,7 @@ public class JailZone : NetworkBehaviour
             return; // 이미 수용됨 — 중복 통보 무시
 
         // 진범 여부를 수감 시점에 판정해 박제한다 — 정산 때 살아 있는 NPC를 다시 안 봐도 되게 (#358).
-        m_records[npc] = new InmateRecord(bounty, IsCriminalInmate(npc)); // 재수용 시 최신 값으로 갱신
+        m_records[npc] = new InmateRecord(bounty, IsCriminalInmate(npc), deliverers ?? Array.Empty<ulong>()); // 방출을 거친 재수용 시 최신 값으로 갱신
         SetInmateCount(m_inmates.Count);
         RefreshBountyTotal();
         Debug.Log($"[유치장] 수용: {npc.name} — 현재 {InmateCount}명, 누적 현상금 {BountyTotal}원");
@@ -278,6 +285,30 @@ public class JailZone : NetworkBehaviour
                 misdemeanors++;
         }
         return (criminals, misdemeanors, total);
+    }
+
+    /// <summary>
+    /// clientId별 귀속 현상금 — 개인 자금 정산(#484)이 읽는다.
+    /// 수감자 1명의 현상금을 그 인계자들에게 균등 분배해 합산한다(나머지 원은 버린다).
+    /// 비율(10%)은 여기서 적용하지 않는다 — TallySettlement가 할당량을 떼지 않는 것과 같은 이유로, 정책은 SettlementController 몫이다.
+    /// 인계자가 없는 수감자(반출 후 밧줄 없이 재수감, #492)는 아무에게도 계상되지 않는다.
+    /// 서버(또는 오프라인) 전용.
+    /// </summary>
+    public Dictionary<ulong, int> TallyDelivererCredits()
+    {
+        var credits = new Dictionary<ulong, int>();
+        foreach (InmateRecord record in m_records.Values)
+        {
+            if (record.Deliverers.Length == 0) continue;
+
+            int per = record.Bounty / record.Deliverers.Length;
+            if (per <= 0) continue;
+            
+            foreach (ulong clientId in record.Deliverers) 
+                credits[clientId] = credits.TryGetValue(clientId, out int sum) ? sum + per : per;
+        }
+
+        return credits;
     }
 
     // 수감 시점의 진범 여부 — 기존 정산 분류와 동일 기준(CitizenIdentity.IsCriminal, 그 외는 경범죄). (#358)

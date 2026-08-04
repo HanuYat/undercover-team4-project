@@ -58,6 +58,14 @@ public class JailIntake : MonoBehaviour
     // 서버(또는 오프라인) 전용.
     private readonly Dictionary<NpcController, int> m_pendingSeat = new Dictionary<NpcController, int>();
 
+    // 게이트 판정 후 밧줄이 걸렸던 플레이어 — 착석 시 이 집합이 인계자다. (#484)
+    // 착석 순간만 보면 E 놓기(줄 유지)와 좌클릭 풀기(줄 제거)가 서로 다른 몫을 줘, 손 떼는 방법에 따라
+    // 조용히 돈이 달라진다. 누적하면 둘이 같아진다. 창의 시작이 게이트인 이유는 유치장 문턱을 기준으로
+    // 삼으면 플레이어가 알 수 없는 선이 생기기 때문이다 — 판정은 눈에 보이는 사건이라 설명이 된다.
+    // 위치는 보지 않으므로 밖으로 다시 끌고 나가도 비우지 않는다 — 신병을 놓치거나(TickJailAccess)
+    // 착석할 때만 비운다. 서버(또는 오프라인) 전용.
+    private readonly Dictionary<NpcController, HashSet<ulong>> m_deliverers = new Dictionary<NpcController, HashSet<ulong>>();
+
     // 이번 게이트 통과에 이미 판정한 대상 — 게이트를 벗어나면 지운다(그래야 다시 통과하면 재판정된다, #358).
     //
     // <b>NpcController.IsDelivered를 쓰면 안 된다.</b> 그 플래그는 오검거당한 시민에게 영구히 남는다 —
@@ -166,7 +174,10 @@ public class JailIntake : MonoBehaviour
         // 예전에는 통행이 신병 상태에 묶여 있어 이 정리가 저절로 됐다 — 기준이 판정 결과로
         // 바뀌었으니(#492) 명시적으로 돌려놔야 한다. 다시 잡아 게이트를 통과하면 재판정된다.
         if (state != NpcState.Escorted && state != NpcState.Captured && state != NpcState.Jailed)
+        {
             m_pendingSeat.Remove(npc);
+            m_deliverers.Remove(npc); // 통제를 벗어났으면 인계자 누적도 무효 — 다시 잡아 오면 처음부터 (#484)
+        }
 
         bool qualified =
             m_pendingSeat.ContainsKey(npc)
@@ -199,7 +210,10 @@ public class JailIntake : MonoBehaviour
                 m_deadBuffer.Add(npc);
 
         for (int i = 0; i < m_deadBuffer.Count; i++)
+        {
             m_pendingSeat.Remove(m_deadBuffer[i]);
+            m_deliverers.Remove(m_deadBuffer[i]);
+        }
 
         m_unjudgeable.RemoveWhere(npc => npc == null);
         m_jailAccessGranted.RemoveWhere(npc => npc == null);
@@ -263,6 +277,9 @@ public class JailIntake : MonoBehaviour
         if (!m_pendingSeat.TryGetValue(npc, out bounty))
             return;
 
+        // 줄이 걸린 사람을 계속 모은다 — 창은 게이트 판정(m_pendingSeat 등재)부터다. 이유는 m_deliverers 주석 (#484)
+        AccumulateDeliverers(npc);
+
         // 끌려가는 중에는 앉히지 않는다 — 놓아야(Captured) 앉는다
         if (npc.CurrentState != NpcState.Captured)
             return;
@@ -282,13 +299,46 @@ public class JailIntake : MonoBehaviour
         if (!HasPlayerInsideNear(npc))
             return;
 
+        ulong[] deliverers = TakeDelivererIds(npc);
+
         // 놓은 자리에서 가장 가까운 빈 좌석 — 여기서 좌석까지는 NpcJailedState가 걸어간다(1.5~5.6m)
         Transform seat = m_jailZone.ReserveSeat(npc, npc.transform.position);
         npc.SendToJail(seat);
 
         // 계상은 착석 시점 (#492) — 판정만 받고 안 앉히면 0원이다
-        m_jailZone.Admit(npc, bounty);
+        m_jailZone.Admit(npc, bounty, deliverers);
         m_pendingSeat.Remove(npc);
+    }
+
+    // 지금 줄이 걸린 사람을 누적 집합에 더한다. 판정 시점의 ArrestResult.DeliveredBy를 쓰지 않는 이유는
+    // 게이트가 재통과마다 다시 판정돼 그 목록이 "마지막 통과" 기준이 되기 때문이다.
+    private void AccumulateDeliverers(NpcController npc)
+    {
+        List<PlayerEscorter> escorters = PlayerEscorter.FindEscortersOf(npc);
+        if (escorters.Count == 0)
+            return;
+
+        if (!m_deliverers.TryGetValue(npc, out HashSet<ulong> ids))
+        {
+            ids = new HashSet<ulong>();
+            m_deliverers[npc] = ids;
+        }
+
+        for (int i = 0; i < escorters.Count; i++)
+            ids.Add(escorters[i].OwnerClientId);
+    }
+
+    // 누적된 인계자를 꺼내며 기록을 비운다 — 착석 1회당 한 번만 쓴다.
+    private ulong[] TakeDelivererIds(NpcController npc)
+    {
+        if (!m_deliverers.TryGetValue(npc, out HashSet<ulong> ids))
+            return System.Array.Empty<ulong>();
+
+        m_deliverers.Remove(npc);
+
+        var result = new ulong[ids.Count];
+        ids.CopyTo(result);
+        return result;
     }
 
     // 이 NPC를 앉힐 자격이 있는 사람이 유치장 안에 있는가 — 놓은 사람 본인을 특정하지는 않는다.

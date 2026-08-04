@@ -10,43 +10,35 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5b11a58205ec3474ca216360e9fa74a8, type: 3}
-  m_Name: CommonTable Shared Data
+  m_Name: PauseTable Shared Data
   m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.SharedTableData
-  m_TableCollectionName: CommonTable
-  m_TableCollectionNameGuidString: fcf4ad2fe921de24dbc4ac35f8b789b7
+  m_TableCollectionName: PauseTable
+  m_TableCollectionNameGuidString: cd9a1b73624770a41b84b90d5b8675fc
   m_Entries:
-  - m_Id: 6994400000000
-    m_Key: Common.Button.Yes
+  - m_Id: 1435570176
+    m_Key: Pause.Window.Title
     m_Metadata:
       m_Items: []
-  - m_Id: 6994400000001
-    m_Key: Common.Button.No
+  - m_Id: 1469124608
+    m_Key: Pause.Button.Resume
     m_Metadata:
       m_Items: []
-  - m_Id: 6994400000002
-    m_Key: Common.LeaveConfirm.MessageHost
+  - m_Id: 1473318912
+    m_Key: Pause.Button.Settings
     m_Metadata:
       m_Items: []
-  - m_Id: 6994400000003
-    m_Key: Common.LeaveConfirm.MessageClient
-    m_Metadata:
-      m_Items: []
-  - m_Id: 60555504193536
-    m_Key: Common.Session.Code
-    m_Metadata:
-      m_Items: []
-  - m_Id: 63292019118080
-    m_Key: Common.Loading.Status
+  - m_Id: 1473318913
+    m_Key: Pause.Button.Leave
     m_Metadata:
       m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
-    rid: 6276845892712267860
+    rid: 6276845892712267881
   references:
     version: 2
     RefIds:
-    - rid: 6276845892712267860
+    - rid: 6276845892712267881
       type: {class: DistributedUIDGenerator, ns: UnityEngine.Localization.Tables, asm: Unity.Localization}
       data:
-        m_CustomEpoch: 1785807888269
+        m_CustomEpoch: 1785820336030
