@@ -40,7 +40,11 @@ public class VivoxManager : CommonManagerBase
     // 예전에는 상태가 m_status 문자열 하나뿐이어서 디버그 패널 밖에서 "연결됨/실패"를 알 수 없었다.
     // 값으로 올려 로비가 '음성 연결 중 / 실패'를 표시할 수 있게 한다 (실패 후 재시도는 범위 밖).
 
-    /// <summary>로컬 음성 연결 상태 — UI는 <see cref="ToLabel"/>로 문자열로 바꿔 표시한다.</summary>
+    /// <summary>
+    /// 로컬 음성 연결 상태. 플레이어에게 보이는 문구는 `LobbyTable`의 <c>Lobby.Voice.&lt;상태&gt;</c>가 주인이고
+    /// 표시 측(<see cref="LobbyRosterPanel"/>)이 이 값의 이름으로 키를 만들어 조회한다. (#497)
+    /// <see cref="ToLabel"/>은 디버그 GUI 전용이다.
+    /// </summary>
     public EVoiceState VoiceState { get; private set; } = EVoiceState.Idle;
 
     public event Action<EVoiceState> OnVoiceStateChanged;
