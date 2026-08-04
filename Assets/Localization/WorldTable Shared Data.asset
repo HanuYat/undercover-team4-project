@@ -27,6 +27,18 @@ MonoBehaviour:
     m_Key: World.SignalDecoder.InputHint
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000200
+    m_Key: World.SignalDecoder.Label
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000201
+    m_Key: World.ScannerCharger.Label
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000202
+    m_Key: World.RevivalDevice.Label
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
