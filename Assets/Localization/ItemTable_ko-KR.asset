@@ -62,6 +62,25 @@ MonoBehaviour:
       \uC5EC\uB7EC \uB300 \uB9DE\uD788\uBA74 \uAE30\uC808\uC2DC\uD0AC \uC218 \uC788\uB2E4."
     m_Metadata:
       m_Items: []
+  - m_Id: 5508625448636416
+    m_Localized: "\uC2E0\uD638 \uD574\uC11D\uAE30"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5508625507356672
+    m_Localized: "\uBCF8\uBD80\uC5D0 \uC124\uCE58\uB418\uB294 \uB2E8\uB9D0. \uC9E7\uC740
+      \uBA54\uC2DC\uC9C0\uB97C \uD300 \uC804\uC6D0\uC5D0\uAC8C \uBCF4\uB0B8\uB2E4.
+      \uC804\uC790\uAE30\uAE30 \uBA39\uD1B5 \uC911\uC5D0\uB3C4 \uB610\uB837\uD558\uB2E4."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5508625507356673
+    m_Localized: "\uACBD\uBCF4 \uBC84\uD2BC"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5508625507356674
+    m_Localized: "\uBCF8\uBD80\uC5D0 \uC124\uCE58\uB418\uB294 \uACBD\uBCF4 \uBC84\uD2BC.\n\uC0AC\uC774\uB80C\uC744
+      \uC6B8\uB824 \uD0C8\uC625\uC744 \uC800\uC9C0\uD560 \uC218 \uC788\uB2E4."
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

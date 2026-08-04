@@ -39,6 +39,10 @@ MonoBehaviour:
     m_Key: Common.Loading.Status
     m_Metadata:
       m_Items: []
+  - m_Id: 70276470607872
+    m_Key: Common.Unit.Money
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
