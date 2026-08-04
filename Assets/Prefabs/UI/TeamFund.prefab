@@ -11,7 +11,6 @@ GameObject:
   - component: {fileID: 6181338264821173520}
   - component: {fileID: 3455862892653891524}
   - component: {fileID: 4394554148572452788}
-  - component: {fileID: 7842441093024068078}
   - component: {fileID: -9146029795751610571}
   m_Layer: 0
   m_Name: TeamFund
@@ -75,18 +74,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TeamFund
   ShowTopMostFoldoutHeaderGroup: 1
   m_startingFund: 0
---- !u!114 &7842441093024068078
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 342132919516261196}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3ff2452218636964a8d9c07448211e90, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TeamFundHud
 --- !u!114 &-9146029795751610571
 MonoBehaviour:
   m_ObjectHideFlags: 0

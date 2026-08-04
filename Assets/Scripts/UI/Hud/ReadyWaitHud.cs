@@ -9,7 +9,7 @@ using UnityEngine;
 /// (전원 보고 또는 타임아웃) 사라지고, 그 뒤 라운드 시작 지연이 흐른다.
 ///
 /// 표시 전용 — 인원 수는 SceneReadyGate가 서버 권위로 동기화한 값이라 클라이언트에서도 그대로 읽는다.
-/// (RoundFundHud와 같은 구조)
+/// (RoundFundBoard와 같은 구조)
 /// </summary>
 public class ReadyWaitHud : MonoBehaviour
 {
@@ -17,10 +17,12 @@ public class ReadyWaitHud : MonoBehaviour
 
     [Header("표시")]
     [Tooltip("대기 상태를 표시할 TextMeshProUGUI")]
-    [SerializeField] private TextMeshProUGUI m_waitText;
+    [SerializeField]
+    private TextMeshProUGUI m_waitText;
 
     [Tooltip("표시 형식 — {0}=준비된 인원, {1}=전체 인원")]
-    [SerializeField] private string m_format = "다른 플레이어 대기 중 ({0}/{1})";
+    [SerializeField]
+    private string m_format = "다른 플레이어 대기 중 ({0}/{1})";
 
     // 마지막으로 표시한 값 — 바뀔 때만 문자열을 다시 만들어 불필요한 GC 할당을 피한다
     private int m_lastReady = int.MinValue;
