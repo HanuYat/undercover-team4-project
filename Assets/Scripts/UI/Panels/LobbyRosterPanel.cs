@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 using UnityEngine.UI;
 
 /// <summary>
@@ -35,6 +36,21 @@ public class LobbyRosterPanel : PanelBase
     [SerializeField] private TextMeshProUGUI m_voiceStatusText; // 내 음성 연결 상태
 
     [SerializeField] private TextMeshProUGUI m_radioKeyText; // 무전 키 안내
+
+    [Tooltip("무전 키 안내 — Lobby.Voice.RadioKey ({0}=키 이름)")]
+    [SerializeField] private LocalizedString m_radioKeyFormat;
+
+    // 음성 상태 문구는 enum 이름에서 키를 만든다 — 상태가 늘면 테이블에 키만 추가하면 되고
+    // 인스펙터 배선이나 매핑 에셋을 함께 고칠 일이 없다 (문서 §2 결정 (h)).
+    // 그래서 SerializeField가 아니다 — 고를 것이 없으므로 인스펙터에 내보내면 오히려 잘못 만질 여지만 생긴다.
+    private const string k_voiceTable = "LobbyTable";
+    private const string k_voiceKeyPrefix = "Lobby.Voice.";
+    private readonly LocalizedString m_voiceStatus = new LocalizedString();
+
+    // 구독 여부 플래그 — 두 문구는 참조가 고정(readonly/SerializeField)이라 SessionPanel처럼
+    // "지금 걸린 LocalizedString"을 들고 있을 필요가 없고, 걸렸는지만 알면 된다.
+    private bool m_voiceStatusBound;
+    private bool m_radioKeyBound;
 
     private readonly List<LobbyRosterRowView> m_rows = new List<LobbyRosterRowView>();
 
@@ -105,6 +121,10 @@ public class LobbyRosterPanel : PanelBase
             Vivox.OnSpeakingChanged -= HandleSpeakingChanged;
             Vivox.OnVoiceStateChanged -= HandleVoiceStateChanged;
         }
+
+        // 꺼진 패널이 언어 변경에 반응해 갱신을 돌리지 않게 끊는다 — 다시 켜질 때 OnEnable이 건다
+        UnbindVoiceStatus();
+        UnbindRadioKey();
     }
 
     protected override void OnDestroy()
@@ -195,22 +215,85 @@ public class LobbyRosterPanel : PanelBase
 
     private void HandleVoiceStateChanged(EVoiceState _) => RefreshVoiceStatus();
 
-    // 상태별 문구는 VivoxManager.ToLabel이 소유한다 — 같은 문장을 UI마다 다시 쓰지 않는다.
+    // 상태별 문구의 주인은 이제 LobbyTable이다 — VivoxManager.ToLabel은 디버그 GUI 전용으로 남는다 (#497).
     // 표시까지가 이 이슈의 범위다(재시도 버튼은 별건) — 지금은 로그인이 실패해도 알 방법이 없다. (#430)
     private void RefreshVoiceStatus()
     {
         if (m_voiceStatusText == null)
             return;
 
-        m_voiceStatusText.text = Vivox != null ? VivoxManager.ToLabel(Vivox.VoiceState) : string.Empty;
+        if (Vivox == null)
+        {
+            UnbindVoiceStatus();
+            m_voiceStatusText.text = string.Empty;
+            return;
+        }
+
+        // 끊고 다시 거는 이유는 키가 바뀌기 때문이다 — 구독을 유지한 채 참조만 갈아끼우는 것보다
+        // 재구독이 확실하고(구독 시점에 1회 발화한다) 상태 변화는 드물어 비용도 없다.
+        UnbindVoiceStatus();
+
+        m_voiceStatus.TableReference = k_voiceTable;
+        m_voiceStatus.TableEntryReference = k_voiceKeyPrefix + Vivox.VoiceState;
+        m_voiceStatus.StringChanged += HandleVoiceStatusChanged;
+        m_voiceStatusBound = true;
     }
 
-    // 켜질 때 한 번만 세운다 — 키 리바인딩 경로가 없어 도중에 바뀌지 않는다 (settings-ui.md Phase 2)
+    private void HandleVoiceStatusChanged(string localized)
+    {
+        if (m_voiceStatusText != null)
+            m_voiceStatusText.text = localized;
+    }
+
+    private void UnbindVoiceStatus()
+    {
+        if (!m_voiceStatusBound)
+            return;
+
+        m_voiceStatus.StringChanged -= HandleVoiceStatusChanged;
+        m_voiceStatusBound = false;
+    }
+
+    // 켜질 때 한 번만 세운다 — 키 리바인딩 경로가 없어 도중에 바뀌지 않는다 (settings-ui.md Phase 2).
+    // 다만 언어는 도중에 바뀌므로 대입이 아니라 구독이다 (#374).
     private void RefreshRadioKey()
     {
         if (m_radioKeyText == null)
             return;
 
-        m_radioKeyText.text = Vivox != null ? $"무전: [{Vivox.PushToTalkBinding}]" : string.Empty;
+        if (Vivox == null)
+        {
+            UnbindRadioKey();
+            m_radioKeyText.text = string.Empty;
+            return;
+        }
+
+        if (m_radioKeyFormat == null || m_radioKeyFormat.IsEmpty)
+        {
+            Debug.LogWarning("LobbyRosterPanel: 무전 키 안내 문구가 연결되지 않았습니다.", this);
+            return;
+        }
+
+        UnbindRadioKey();
+
+        // 인자를 먼저 넣어야 구독 시점의 첫 발화부터 키 이름이 들어간 문장이 나온다
+        m_radioKeyFormat.Arguments = new object[] { Vivox.PushToTalkBinding };
+        m_radioKeyFormat.StringChanged += HandleRadioKeyChanged;
+        m_radioKeyBound = true;
+    }
+
+    private void HandleRadioKeyChanged(string localized)
+    {
+        if (m_radioKeyText != null)
+            m_radioKeyText.text = localized;
+    }
+
+    private void UnbindRadioKey()
+    {
+        if (!m_radioKeyBound)
+            return;
+
+        m_radioKeyFormat.StringChanged -= HandleRadioKeyChanged;
+        m_radioKeyBound = false;
     }
 }

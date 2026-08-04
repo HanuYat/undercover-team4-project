@@ -16,7 +16,8 @@ MonoBehaviour:
     m_Code: en
   m_SharedData: {fileID: 11400000, guid: fcf4ad2fe921de24dbc4ac35f8b789b7, type: 2}
   m_Metadata:
-    m_Items: []
+    m_Items:
+    - rid: 6276845892712267886
   m_TableData:
   - m_Id: 6994400000000
     m_Localized: Yes
@@ -27,13 +28,26 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 6994400000002
-    m_Localized: "Closing the room will disconnect everyone.\nLeave anyway?"
+    m_Localized: 'Closing the room will disconnect everyone.
+
+      Leave anyway?'
     m_Metadata:
       m_Items: []
   - m_Id: 6994400000003
     m_Localized: Leave the session?
     m_Metadata:
       m_Items: []
+  - m_Id: 60555504193536
+    m_Localized: 'Session code: {0}'
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267886
   references:
     version: 2
-    RefIds: []
+    RefIds:
+    - rid: 6276845892712267886
+      type: {class: SmartFormatTag, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_Entries: 
+        m_SharedEntries:
+        - id: 60555504193536

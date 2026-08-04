@@ -45,7 +45,11 @@ public class VivoxManager : CommonManagerBase
 
     public event Action<EVoiceState> OnVoiceStateChanged;
 
-    /// <summary>표시 문자열은 상태에서 파생한다 — 같은 문구를 UI마다 따로 쓰지 않게 한 곳에 둔다.</summary>
+    /// <summary>
+    /// <b>디버그 GUI 전용</b> — 플레이어에게 보이는 음성 상태 문구는 `LobbyTable`의 <c>Lobby.Voice.&lt;상태&gt;</c>가
+    /// 주인이다(문서 §2 결정 (h)의 규약 기반 매핑). 여기 한국어는 개발자 화면에만 나오므로 번역 대상이 아니다.
+    /// 상태를 추가하면 이 switch가 아니라 <b>테이블에 키를 추가</b>해야 한다. (#497)
+    /// </summary>
     public static string ToLabel(EVoiceState state) =>
         state switch
         {

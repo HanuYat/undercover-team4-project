@@ -51,8 +51,8 @@
 
 | 테이블 | 접두 | 범위 |
 |--------|------|------|
-| `CommonTable` | `Common.` | 예/아니오·확인/취소·닫기·적용, 단위(원), 로딩 화면, 확인창 3종(Quit·Leave·AccountConfirm) |
-| `TitleTable` | `Title.` | 타이틀 씬, `AuthPanel`, `AccountCredentials` 검증 메시지, `NicknameRules`, 세션 코드 패널 |
+| `CommonTable` | `Common.` | 예/아니오·확인/취소·닫기·적용, 단위(원), 로딩 화면, 확인창 3종(Quit·Leave·AccountConfirm), **세션 코드 HUD** |
+| `TitleTable` | `Title.` | 타이틀 씬, `AuthPanel`, `AccountCredentials` 검증 메시지, `NicknameRules` |
 | `LobbyTable` | `Lobby.` | 로비 씬, 로스터 행, 음성 상태 라벨 |
 | `ShopTable` | `Shop.` | 상점 씬, 진열대 카드·가격표, 구매 응답 |
 | `SettingsTable` | `Settings.` | 설정 패널 (전 씬 공용 — Title 포함 4개 씬) |
@@ -145,9 +145,22 @@
 | 대상 | 개수 | 상태 |
 |------|------|------|
 | Title Scene | **17** | ✅ 완료 (`TitleTable`, 브랜치 `feature/374-localization-title`) |
-| Lobby / Shop | 6 | |
+| Lobby / Shop | 6 | Lobby 2개(게임 시작·세션 나가기) 진행 중 — `LobbyTable` |
 | Main Scene | 6 | 인명부 정렬·페이지 버튼 등 |
-| 프리팹 | 약 27 | SettingsCanvas 8, PauseCanvas 4, 확인창 3종 7, Directory·FactionSymbolBoard·RoundEndButton·LoadingScreen, 월드 라벨 4 |
+| 프리팹 | 약 27 | ✅ SettingsCanvas 8 · PauseCanvas 4 · LeaveConfirm 2 / 남음: QuitConfirm·AccountConfirm 5, Directory·FactionSymbolBoard·RoundEndButton·LoadingScreen, 월드 라벨 4 |
+
+> **`TitleTable`에서 세션 코드를 뺐다.** §3이 "세션 코드 패널"을 `TitleTable`에 넣어 뒀는데,
+> `SessionCodePanel.prefab`은 실제로 **Lobby·Shop 두 씬**에만 있고 Title 씬에는 없다.
+> 두 씬이 `TitleTable`을 로드하게 되므로 `CommonTable`로 옮겼다 — `PauseTable`을 갈라낸 것과 같은 이유다.
+
+> **Lobby의 Phase 2 항목을 앞당겼다.** 로비를 손대는 김에 코드가 대입하는 문구도 함께 옮겼다 —
+> `LobbyRosterRowView`(접속 중·대기 중) · `LobbyRosterPanel`(무전 키·음성 상태) · `SessionCodePanel`(세션 코드).
+> Phase 2 목록에서는 빠진다.
+>
+> 음성 상태 5개가 **결정 (h) 규약 기반 매핑의 첫 사용처**다. `LobbyRosterPanel`이 `"Lobby.Voice." + EVoiceState`로
+> 키를 만들어 조회하므로, 상태가 늘면 `LobbyTable`에 키만 추가하면 된다 — 인스펙터 배선도 매핑 에셋도 없다.
+> 그래서 그 `LocalizedString`은 `SerializeField`가 아니다(고를 것이 없다).
+> `VivoxManager.ToLabel`은 지우지 않고 **디버그 GUI 전용**으로 남겼다.
 
 > **PauseCanvas가 1개에서 4개로 늘었다** — 제목만 보고 세었는데 버튼 3개(`계속하기`·`설정`·`메인으로 나가기`)가 빠져 있었다.
 > 이 버튼들은 **서드파티 GUIPack 버튼 프리팹의 중첩 인스턴스**이고 문구는 인스턴스 오버라이드로 박혀 있다.
@@ -181,7 +194,8 @@
 ### Phase 2 — 코드 조립 문자열 (약 60개)
 `LocalizedString` SerializeField + Smart String으로 교체. 관례는 [SignalDecoder](../../Assets/Scripts/Item/SignalDecoder.cs)와 같다.
 
-- `SettlementPanel` (12) · `AuthPanel`+`AccountCredentials`+`NicknameRules` (21) · `ScanInfoView` · `ScanResultPresenter` · `ShopStandView` · `CCTVChannelLabelView` · `HqRevivalDevice` · `LobbyRosterRowView`/`LobbyRosterPanel` · `SessionCodePanel`/`SessionPanel`/`LeaveConfirmPanel` · `BombTimerView`
+- `SettlementPanel` (12) · `AuthPanel`+`AccountCredentials`+`NicknameRules` (21) · `ScanInfoView` · `ScanResultPresenter` · `ShopStandView` · `CCTVChannelLabelView` · `HqRevivalDevice` · `BombTimerView`
+- ~~`SessionPanel`~~ · ~~`LeaveConfirmPanel`~~ · ~~`LobbyRosterRowView`/`LobbyRosterPanel`~~ · ~~`SessionCodePanel`~~ — **Phase 1에서 앞당겨 처리했다** (해당 씬·프리팹을 손대는 김에)
 - **`string m_format` 필드 8개** → `LocalizedString`: `RoundFundHud` · `ReadyWaitHud` · `RemainingCriminalsHud` · `WantedEntryView` · `BombSerialView` · `MicStatusHud` · `HqRevivalDevice` · `CCTVNode`
 - **곁다리 정리:** 검거 판정 문구가 [ArrestJudge](../../Assets/Scripts/Interaction/ArrestJudge.cs) · [VerdictBanner](../../Assets/Scripts/UI/Hud/VerdictBanner.cs) · [ArrestVerdictFeedback](../../Assets/Scripts/Interaction/ArrestVerdictFeedback.cs) **3곳에 중복 정의**돼 있다. 3벌을 번역하지 말고 한 곳으로 합친 뒤 번역한다
 
