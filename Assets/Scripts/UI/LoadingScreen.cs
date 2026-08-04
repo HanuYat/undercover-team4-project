@@ -3,6 +3,7 @@ using Cysharp.Threading.Tasks;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 using UnityEngine.SceneManagement;
 
 /// <summary>
@@ -40,9 +41,15 @@ public class LoadingScreen : CommonManagerBase
     [SerializeField]
     private RectTransform m_spinner;
 
-    [Tooltip("비워도 됨 — 상태 문구. 기본 문구는 프리팹에 넣어둔다")]
+    [Tooltip("비워도 됨 — 상태 문구")]
     [SerializeField]
     private TMP_Text m_statusText;
+
+    // 라벨에 LocalizeStringEvent를 붙이지 않고 여기서 테이블을 참조한다 — SetStatus가 대입하는 자리라
+    // 컴포넌트를 붙이면 둘이 서로 덮어쓴다. 지금은 대입하는 곳이 없지만 그때 조용히 깨진다. (#497)
+    [Tooltip("기본 상태 문구 — Common.Loading.Status")]
+    [SerializeField]
+    private LocalizedString m_defaultStatus;
 
     [Header("연출")]
     [Tooltip("페이드 아웃 시간(초). 0이면 즉시 사라진다. (페이드 인은 두지 않는다 — #403)")]
@@ -55,6 +62,9 @@ public class LoadingScreen : CommonManagerBase
     // 클라이언트 자동 경로에서 로컬 로드 완료를 확인하는 씬 이름
     private string m_clientLoadedScene;
 
+    // 지금 표시 중인 상태 문구 — 구독 해제 기준
+    private LocalizedString m_boundStatus;
+
     /// <summary>이 화면이 지금 씬을 덮고 있는가 — 두 구동 경로의 중복 실행을 막는 데 쓴다.</summary>
     public bool IsBusy { get; private set; }
 
@@ -62,11 +72,13 @@ public class LoadingScreen : CommonManagerBase
     {
         base.Awake(); // ★ 매니저 등록 유지 (R5)
         SetVisible(false);
+        SetStatus(null); // 기본 문구를 걸어 둔다
     }
 
     protected override void OnDestroy()
     {
         base.OnDestroy(); // ★ 매니저 등록 해제 유지 (R5)
+        UnbindStatus();
         HookSceneManager(null);
     }
 
@@ -105,11 +117,46 @@ public class LoadingScreen : CommonManagerBase
         IsBusy = false;
     }
 
-    /// <summary>상태 문구 교체 (전원 대기 표시 등 후속 확장용). 비워두면 프리팹 기본 문구가 유지된다.</summary>
-    public void SetStatus(string status)
+    /// <summary>
+    /// 상태 문구 교체 (전원 대기 표시 등 후속 확장용). <c>null</c>을 넣으면 기본 문구로 돌아간다.
+    ///
+    /// <b>문자열이 아니라 <see cref="LocalizedString"/>을 받는다</b> — 완성된 한국어를 넘기면 그 문구만
+    /// 번역에서 빠지고, 로딩 중에 언어를 바꿀 방법도 없어 눈에 띄지도 않는다. 호출부가 테이블 키를 넘기게
+    /// 강제하는 편이 낫다. 이 화면은 상주(DontDestroyOnLoad)라 켜고 끄는 훅이 없으므로 구독 해제 기준은
+    /// 표시 중인 참조 하나다 (SessionPanel과 같은 방침). (#497)
+    /// </summary>
+    public void SetStatus(LocalizedString status)
+    {
+        LocalizedString next = status ?? m_defaultStatus;
+
+        if (m_statusText == null)
+            return;
+
+        if (next == null || next.IsEmpty)
+        {
+            Debug.LogWarning("[LoadingScreen] 상태 문구가 연결되지 않았습니다.", this);
+            return;
+        }
+
+        UnbindStatus();
+
+        m_boundStatus = next;
+        m_boundStatus.StringChanged += HandleStatusChanged; // 구독 즉시 현재 언어로 1회 발화
+    }
+
+    private void HandleStatusChanged(string localized)
     {
         if (m_statusText != null)
-            m_statusText.text = status ?? string.Empty;
+            m_statusText.text = localized;
+    }
+
+    private void UnbindStatus()
+    {
+        if (m_boundStatus == null)
+            return;
+
+        m_boundStatus.StringChanged -= HandleStatusChanged;
+        m_boundStatus = null;
     }
 
     // 페이드도 실시간 기준 — RoundEndResetter의 정산 대기와 같은 이유(timeScale 조작에 영향받지 않게)

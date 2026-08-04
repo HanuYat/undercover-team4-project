@@ -147,7 +147,7 @@
 | Title Scene | **17** | ✅ 완료 (`TitleTable`, 브랜치 `feature/374-localization-title`) |
 | Lobby / Shop | 6 | Lobby 2개(게임 시작·세션 나가기) 진행 중 — `LobbyTable` |
 | Main Scene | 6 | 인명부 정렬·페이지 버튼 등 |
-| 프리팹 | 약 27 | ✅ SettingsCanvas 8 · PauseCanvas 4 · LeaveConfirm 2 / 남음: QuitConfirm·AccountConfirm 5, Directory·FactionSymbolBoard·RoundEndButton·LoadingScreen, 월드 라벨 4 |
+| 프리팹 | 약 26 | ✅ SettingsCanvas 8 · PauseCanvas 4 · LeaveConfirm 2 / 남음: QuitConfirm·AccountConfirm 5, Directory·FactionSymbolBoard·RoundEndButton, 월드 라벨 4 |
 
 > **`TitleTable`에서 세션 코드를 뺐다.** §3이 "세션 코드 패널"을 `TitleTable`에 넣어 뒀는데,
 > `SessionCodePanel.prefab`은 실제로 **Lobby·Shop 두 씬**에만 있고 Title 씬에는 없다.
@@ -157,6 +157,13 @@
 > `LobbyRosterRowView`(접속 중·대기 중) · `LobbyRosterPanel`(무전 키·음성 상태) · `SessionCodePanel`(세션 코드).
 > Phase 2 목록에서는 빠진다.
 >
+> **`LoadingScreen`은 프리팹 목록에서 코드 쪽으로 옮겼다.** `StatusText`는 지금 프리팹 기본 문구만 쓰는 정적
+> 라벨이지만, `LoadingScreen.SetStatus`가 "전원 대기 표시 등 후속 확장용"으로 남아 있다. 여기에
+> `LocalizeStringEvent`를 붙이면 그 확장이 들어오는 순간 대입과 컴포넌트가 서로 덮어써 조용히 깨진다.
+> 그래서 `LocalizedString m_defaultStatus` + 구독으로 두고, `SetStatus`의 매개변수도 `string` →
+> `LocalizedString`으로 바꿨다 — 완성된 한국어를 넘길 수 있게 두면 그 문구만 번역에서 빠지고,
+> 로딩 중에는 언어를 바꿀 방법이 없어 눈에도 안 띈다.
+
 > 음성 상태 5개가 **결정 (h) 규약 기반 매핑의 첫 사용처**다. `LobbyRosterPanel`이 `"Lobby.Voice." + EVoiceState`로
 > 키를 만들어 조회하므로, 상태가 늘면 `LobbyTable`에 키만 추가하면 된다 — 인스펙터 배선도 매핑 에셋도 없다.
 > 그래서 그 `LocalizedString`은 `SerializeField`가 아니다(고를 것이 없다).

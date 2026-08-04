@@ -35,6 +35,10 @@ MonoBehaviour:
     m_Key: Common.Session.Code
     m_Metadata:
       m_Items: []
+  - m_Id: 63292019118080
+    m_Key: Common.Loading.Status
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
