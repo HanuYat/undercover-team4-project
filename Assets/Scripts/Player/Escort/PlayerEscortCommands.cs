@@ -533,11 +533,17 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
             return;
         }
 
-        // 줄이 안 걸린 체포 대상(제압만으로 잡힌 Captured) — 이미 서 있으니 일어날 것도 없다.
+        // <b>내</b> 줄이 안 걸린 체포 대상 — 두 경우가 섞여 있다. 묶인 적 없이 제압만으로 잡힌 대상이거나,
+        // <b>남이 묶어 놓아둔</b> 대상이다: 풀기는 Captured면 누구에게나 열려 있어(CanUnrope — 오검거 구제)
+        // 제3자도 여기로 온다. "내 목록에 없다"를 "서 있다"로 읽으면 남의 줄에 묶여 누워 있던 몸이
+        // 일어나기 없이 배회로 스냅한다 — 이 이슈가 고치려던 바로 그 그림이다. (#513)
+        //
+        // 그래서 자세 판정을 여기서 하지 않고 대상에게 맡긴다 — ServerStandUpThen이 묶임 여부를 보고
+        // 일어나기를 태울지 곧바로 실행할지 가른다 (JailIntake·NpcCapturedState와 같은 방식).
         NotifyOwner(insideJail
             ? $"밧줄 풀기 완료 — 유치장 안이라 그 자리에 둔다: {target.name}"
             : $"밧줄 풀기 완료 — 배회 복귀: {target.name}");
-        afterStandUp?.Invoke();
+        target.ServerStandUpThen(afterStandUp);
     }
 
     // 본부 인계 요청(#414)은 제거됐다 (#492) — 판정 트리거가 인계 단말에서 유치장 앞 보안 게이트로
