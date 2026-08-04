@@ -2,23 +2,7 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Localization;
 
-/// <summary>
-/// 신호 해석기 — 본부에 설치되는 단말. 타이핑한 짧은 메시지를 팀 전원에게 보낸다. (GDD 8-3/8-4/4-4, #108)
-///
-/// <b>존재 이유는 먹통 우회다.</b> '전자기기 먹통'(#106) 중에는 음성이 알아듣기 어렵게 망가지는데
-/// (<see cref="DeviceBlackoutView"/>가 <see cref="VivoxManager.SetVoiceDistorted"/>를 켠다),
-/// 이 단말은 텍스트 경로라 그 영향을 받지 않는다 — 먹통 판정을 <b>일부러 참조하지 않는다</b>.
-/// 여기에 먹통 게이트를 추가하면 아이템의 존재 이유가 사라진다.
-/// (#372에서 먹통 연출이 '무전 차단'에서 '음성 왜곡'으로 바뀌었지만, 텍스트가 먹통 중 유일하게
-/// 또렷한 통신 수단이라는 이 아이템의 역할은 그대로다 — 오히려 왜곡이 심할수록 가치가 올라간다)
-///
-/// <b>설치형</b>(GDD 8-4) — 들고 다니는 아이템이 아니라 본부에 놓인 고정 단말이다.
-/// 설치 상태·표시 토글·미설치 상호작용 차단은 <see cref="InstallableItem"/>이 전부 담당하므로
-/// 이 클래스에는 남아 있지 않다. 여기서는 <b>메시지 전송</b>만 다룬다.
-///
-/// 서버 권위 — 전송은 오너가 아닌 아무 플레이어나 할 수 있으므로(씬에 놓인 서버 소유 오브젝트)
-/// 요청 RPC는 Everyone 권한이며, 서버가 길이·설치 여부를 재검증한 뒤 전 피어에 뿌린다 (#55).
-/// </summary>
+/// <summary> 신호 해석기 — 본부에 설치되는 단말. 타이핑한 짧은 메시지를 팀 전원에게 보낸다. (GDD 8-3/8-4/4-4, #108)</summary>
 public class SignalDecoder : InstallableItem
 {
     /// <summary>전송 가능한 최대 글자 수. 서버가 이 길이로 자른다 — 클라가 보낸 문자열은 신뢰할 수 없다.</summary>
@@ -69,9 +53,6 @@ public class SignalDecoder : InstallableItem
         RequestBroadcastRpc(message);
     }
 
-    // InvokePermission = Everyone을 명시한다 — 이 단말은 씬에 놓인 서버 소유 오브젝트라
-    // 어떤 플레이어도 오너가 아니다. 기본값(오너 전용)이면 아무도 전송할 수 없다.
-    // (InstallableItem 문서가 파생에 요구하는 사항)
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void RequestBroadcastRpc(string message)
     {
