@@ -361,7 +361,7 @@ GameObject:
   - component: {fileID: 8934651660417740805}
   - component: {fileID: 1300554732174606311}
   - component: {fileID: 8060631871565202844}
-  - component: {fileID: 2261242418455482516}
+  - component: {fileID: 6465140185375635242}
   m_Layer: 5
   m_Name: Text (TMP)
   m_TagString: Untagged
@@ -488,7 +488,7 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
---- !u!114 &2261242418455482516
+--- !u!114 &6465140185375635242
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -512,7 +512,19 @@ MonoBehaviour:
   m_FormatArguments: []
   m_UpdateString:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 8060631871565202844}
+        m_TargetAssemblyTypeName: TMPro.TMP_Text, Unity.TextMeshPro
+        m_MethodName: set_text
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 1
   references:
     version: 2
     RefIds: []
@@ -820,7 +832,7 @@ GameObject:
   - component: {fileID: 2021327020201708582}
   - component: {fileID: 4852519879592788858}
   - component: {fileID: 2111986823870907360}
-  - component: {fileID: 2510461477544550568}
+  - component: {fileID: 623137307792992642}
   m_Layer: 5
   m_Name: LocalizationLabel
   m_TagString: Untagged
@@ -967,7 +979,7 @@ MonoBehaviour:
   m_FlexibleWidth: -1
   m_FlexibleHeight: -1
   m_LayoutPriority: 1
---- !u!114 &2510461477544550568
+--- !u!114 &623137307792992642
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -991,7 +1003,19 @@ MonoBehaviour:
   m_FormatArguments: []
   m_UpdateString:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 4852519879592788858}
+        m_TargetAssemblyTypeName: TMPro.TMP_Text, Unity.TextMeshPro
+        m_MethodName: set_text
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 1
   references:
     version: 2
     RefIds: []
@@ -2440,7 +2464,7 @@ GameObject:
   - component: {fileID: 637660672697777384}
   - component: {fileID: 4753534385931377056}
   - component: {fileID: 8573045458627163431}
-  - component: {fileID: 6383368834183000876}
+  - component: {fileID: 2407953565512784717}
   m_Layer: 5
   m_Name: Title
   m_TagString: Untagged
@@ -2567,7 +2591,7 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
---- !u!114 &6383368834183000876
+--- !u!114 &2407953565512784717
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -2591,7 +2615,19 @@ MonoBehaviour:
   m_FormatArguments: []
   m_UpdateString:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 8573045458627163431}
+        m_TargetAssemblyTypeName: TMPro.TMP_Text, Unity.TextMeshPro
+        m_MethodName: set_text
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 1
   references:
     version: 2
     RefIds: []
@@ -3089,7 +3125,7 @@ GameObject:
   - component: {fileID: 7710116327071658206}
   - component: {fileID: 1058351402696680542}
   - component: {fileID: 7731794325411822406}
-  - component: {fileID: 3724989689689645620}
+  - component: {fileID: 4829783454126695362}
   m_Layer: 5
   m_Name: MVLabel (1)
   m_TagString: Untagged
@@ -3236,7 +3272,7 @@ MonoBehaviour:
   m_FlexibleWidth: 1
   m_FlexibleHeight: -1
   m_LayoutPriority: 1
---- !u!114 &3724989689689645620
+--- !u!114 &4829783454126695362
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -3260,7 +3296,19 @@ MonoBehaviour:
   m_FormatArguments: []
   m_UpdateString:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1058351402696680542}
+        m_TargetAssemblyTypeName: TMPro.TMP_Text, Unity.TextMeshPro
+        m_MethodName: set_text
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 1
   references:
     version: 2
     RefIds: []
@@ -3536,7 +3584,7 @@ GameObject:
   - component: {fileID: 8320079224942286675}
   - component: {fileID: 8434937589194361790}
   - component: {fileID: 6334791183604029157}
-  - component: {fileID: 1664139882422674502}
+  - component: {fileID: 2456435788243608196}
   m_Layer: 5
   m_Name: Text (TMP)
   m_TagString: Untagged
@@ -3663,7 +3711,7 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
---- !u!114 &1664139882422674502
+--- !u!114 &2456435788243608196
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -3687,7 +3735,19 @@ MonoBehaviour:
   m_FormatArguments: []
   m_UpdateString:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 6334791183604029157}
+        m_TargetAssemblyTypeName: TMPro.TMP_Text, Unity.TextMeshPro
+        m_MethodName: set_text
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 1
   references:
     version: 2
     RefIds: []
@@ -3962,7 +4022,7 @@ GameObject:
   - component: {fileID: 3065925871555963447}
   - component: {fileID: 8059258449979853837}
   - component: {fileID: 7689906158265346016}
-  - component: {fileID: 4553249406185982564}
+  - component: {fileID: 6463530105318373932}
   m_Layer: 5
   m_Name: VVLabel (2)
   m_TagString: Untagged
@@ -4109,7 +4169,7 @@ MonoBehaviour:
   m_FlexibleWidth: 1
   m_FlexibleHeight: -1
   m_LayoutPriority: 1
---- !u!114 &4553249406185982564
+--- !u!114 &6463530105318373932
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -4133,7 +4193,19 @@ MonoBehaviour:
   m_FormatArguments: []
   m_UpdateString:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 8059258449979853837}
+        m_TargetAssemblyTypeName: TMPro.TMP_Text, Unity.TextMeshPro
+        m_MethodName: set_text
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 1
   references:
     version: 2
     RefIds: []
@@ -4844,7 +4916,7 @@ GameObject:
   - component: {fileID: 6717718269605117756}
   - component: {fileID: 2508320292688612145}
   - component: {fileID: 2444522065974943743}
-  - component: {fileID: 1835750637670842629}
+  - component: {fileID: 1828309050282800240}
   m_Layer: 5
   m_Name: MSLabel
   m_TagString: Untagged
@@ -4991,7 +5063,7 @@ MonoBehaviour:
   m_FlexibleWidth: 1
   m_FlexibleHeight: -1
   m_LayoutPriority: 1
---- !u!114 &1835750637670842629
+--- !u!114 &1828309050282800240
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -5015,7 +5087,19 @@ MonoBehaviour:
   m_FormatArguments: []
   m_UpdateString:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 2508320292688612145}
+        m_TargetAssemblyTypeName: TMPro.TMP_Text, Unity.TextMeshPro
+        m_MethodName: set_text
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 1
   references:
     version: 2
     RefIds: []
@@ -5530,7 +5614,7 @@ GameObject:
   - component: {fileID: 7049786613098239317}
   - component: {fileID: 7668438670189730506}
   - component: {fileID: 3017817229002482771}
-  - component: {fileID: 5009452898946579316}
+  - component: {fileID: 2982196814137110470}
   m_Layer: 5
   m_Name: MMLabel
   m_TagString: Untagged
@@ -5677,7 +5761,7 @@ MonoBehaviour:
   m_FlexibleWidth: -1
   m_FlexibleHeight: -1
   m_LayoutPriority: 1
---- !u!114 &5009452898946579316
+--- !u!114 &2982196814137110470
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -5701,7 +5785,19 @@ MonoBehaviour:
   m_FormatArguments: []
   m_UpdateString:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 7668438670189730506}
+        m_TargetAssemblyTypeName: TMPro.TMP_Text, Unity.TextMeshPro
+        m_MethodName: set_text
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 1
   references:
     version: 2
     RefIds: []
