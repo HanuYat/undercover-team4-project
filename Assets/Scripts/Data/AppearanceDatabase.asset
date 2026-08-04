@@ -13,205 +13,498 @@ MonoBehaviour:
   m_Name: AppearanceDatabase
   m_EditorClassIdentifier: Assembly-CSharp::AppearanceDatabase
   m_hairStyle:
-    AxisName: "\uBA38\uB9AC\uC2A4\uD0C0\uC77C"
     Options:
-    - DisplayName: "\uB300\uBA38\uB9AC"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000707
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
-    - DisplayName: "\uC9E7\uC740\uBA38\uB9AC"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000708
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 5359095326366316309, guid: 6acd4702716c64b49bd8504d04baea3b, type: 3}
       SciFiOnly: 0
-    - DisplayName: "\uAE34\uBA38\uB9AC"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000709
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 1090390649989844869, guid: d30df5bb55089ad4a989b1473c7a2293, type: 3}
       SciFiOnly: 0
-    - DisplayName: "\uBB36\uC74C\uBA38\uB9AC"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000710
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 7623271299947270949, guid: e19492d4a3b52dd408b1e4d76a214e42, type: 3}
       SciFiOnly: 0
-    - DisplayName: "\uAC00\uB9BC"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000711
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
   m_hairColor:
-    AxisName: "\uBA38\uB9AC\uC0C9"
     Options:
-    - DisplayName: "\uAC80\uC815"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000712
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.06, g: 0.06, b: 0.06, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
-    - DisplayName: "\uAC08\uC0C9"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000713
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.2264151, g: 0.18297055, b: 0.15485938, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
-    - DisplayName: "\uAE08\uBC1C"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000714
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 1, g: 0.90781844, b: 0.6933962, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
-    - DisplayName: "\uBE68\uAC15"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000715
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.72, g: 0.11, b: 0.1, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
-    - DisplayName: "\uD30C\uB791"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000716
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.16, g: 0.36, b: 0.86, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
-    - DisplayName: "\uC740\uBC1C"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000717
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.76, g: 0.78, b: 0.82, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
-    - DisplayName: "\uCCAD\uB85D"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000718
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.18, g: 0.74, b: 0.68, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
-    - DisplayName: "\uD551\uD06C"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000719
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.9, g: 0.45, b: 0.7, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
-    - DisplayName: "\uC5C6\uC74C"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000706
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
   m_skinColor:
-    AxisName: "\uD53C\uBD80\uC0C9"
     Options:
-    - DisplayName: "\uBC1D\uC74C"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000720
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.95, g: 0.85, b: 0.78, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
-    - DisplayName: "\uC0B4\uAD6C\uC0C9"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000721
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.85, g: 0.68, b: 0.55, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
-    - DisplayName: "\uAC08\uC0C9"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000722
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.55, g: 0.38, b: 0.26, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
-    - DisplayName: "\uD30C\uB791"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000723
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.35, g: 0.5, b: 0.85, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
-    - DisplayName: "\uBA54\uD0C8"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000724
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.6, g: 0.62, b: 0.66, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
-    - DisplayName: "\uB124\uC628"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000725
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.95, g: 0.35, b: 0.85, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
-    - DisplayName: "\uADF8 \uC678"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000726
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
   m_facialHair:
-    AxisName: "\uC218\uC5FC"
     Options:
-    - DisplayName: "\uC5C6\uC74C"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000706
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
-    - DisplayName: "\uCF67\uC218\uC5FC"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000727
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.15, g: 0.12, b: 0.1, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 4609227968844860818, guid: 6b5f1a42b82110e49988de1ad2a41fd9, type: 3}
       SciFiOnly: 0
-    - DisplayName: "\uD131\uC218\uC5FC"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000728
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.15, g: 0.12, b: 0.1, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 5381899529043745372, guid: 2c3db847c027ff04f9f95cf539c047de, type: 3}
       SciFiOnly: 0
-    - DisplayName: "\uAD6C\uB808\uB098\uB8FB"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000729
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.15, g: 0.12, b: 0.1, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 4158117797329843660, guid: 1d06f16f48b790548b778a5bdf7a69d6, type: 3}
       SciFiOnly: 0
   m_headwear:
-    AxisName: "\uBAA8\uC790"
     Options:
-    - DisplayName: "\uC5C6\uC74C"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000706
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
-    - DisplayName: "\uBE44\uB2C8"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000730
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.2, g: 0.2, b: 0.25, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 3818721685182870944, guid: 91a234a5ac753554e82d04a2bedc0e25, type: 3}
       SciFiOnly: 0
-    - DisplayName: "\uCEA1"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000731
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.7, g: 0.15, b: 0.15, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 7202588604819645970, guid: 72b4eb657d88d5d4ca05e983848f7bef, type: 3}
       SciFiOnly: 0
-    - DisplayName: "\uBAA8\uC790"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000732
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.3, g: 0.3, b: 0.35, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 517384152127186018, guid: 740f72d010e55ad458e797ec6483f908, type: 3}
       SciFiOnly: 0
-    - DisplayName: "\uD6C4\uB4DC"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000733
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.4, g: 0.35, b: 0.3, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
-    - DisplayName: "\uD5E4\uB4DC\uD3F0"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000734
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.15, g: 0.15, b: 0.15, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 7624828572083015622, guid: 640045eb994ac644d9f89980114f4305, type: 3}
       SciFiOnly: 0
-    - DisplayName: "\uD5EC\uBA67"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000735
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.5, g: 0.5, b: 0.55, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
   m_eyewear:
-    AxisName: "\uC548\uACBD"
     Options:
-    - DisplayName: "\uC5C6\uC74C"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000706
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
-    - DisplayName: "\uC120\uAE00\uB77C\uC2A4"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000736
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.08, g: 0.08, b: 0.08, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 8314516393528333455, guid: 1c99f1025f7ca5b41bfc6c615178cf3c, type: 3}
       SciFiOnly: 0
-    - DisplayName: "\uBC14\uC774\uC800"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000737
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.1, g: 0.1, b: 0.12, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
-    - DisplayName: "\uACE0\uAE00"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000738
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.2, g: 0.3, b: 0.2, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 5483532631979247779, guid: 04e2a0f1ad1a87f4fa83b8972846ec96, type: 3}
       SciFiOnly: 0
-    - DisplayName: "\uBC1C\uAD11\uB80C\uC988"
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+        m_TableEntryReference:
+          m_KeyId: 7100000000739
+          m_Key: 
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
       Color: {r: 0.2, g: 0.8, b: 0.8, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
+  references:
+    version: 2
+    RefIds: []

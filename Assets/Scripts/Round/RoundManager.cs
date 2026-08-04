@@ -12,6 +12,10 @@ public enum RoundPhase
     Ended
 }
 
+// 값 이름이 곧 정산 화면 문구의 키다 — 결과 제목(Settlement.Result.)과 복귀 도착지(Settlement.Return.,
+// 성공=상점 / 실패=로비) 둘 다. 값을 추가하면 SettlementTable에 같은 이름의 키를 함께 넣을 것.
+[LocalizedEnum("SettlementTable", "Settlement.Result.", nameof(RoundResult.None))]
+[LocalizedEnum("SettlementTable", "Settlement.Return.", nameof(RoundResult.None))]
 public enum RoundResult
 {
     None,       // 라운드 종료 전
@@ -19,6 +23,8 @@ public enum RoundResult
     Failure     // 목표 미달
 }
 
+// 값 이름이 곧 종료 사유 문구의 키다 (Settlement.Reason. + 이름). None은 종료 전이라 표시 대상이 아니다.
+[LocalizedEnum("SettlementTable", "Settlement.Reason.", nameof(RoundEndReason.None))]
 public enum RoundEndReason
 {
     None,           // 라운드 종료 전

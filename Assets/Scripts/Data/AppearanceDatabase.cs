@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
+using UnityEngine.Localization;
 using Random = UnityEngine.Random;
 
 // 외형 특징 축별 옵션 정의 (ScriptableObject).
@@ -14,8 +15,8 @@ public class AppearanceDatabase : ScriptableObject
     [Serializable]
     public class AppearanceOption
     {
-        [Tooltip("몽타주·무전으로 전달하는 표시 이름 (예: 빨강, 없음)")]
-        public string DisplayName;
+        [Tooltip("몽타주·무전으로 전달하는 표시 이름 — NpcTable의 Npc.Appearance.* (예: 빨강, 없음)")]
+        public LocalizedString DisplayName;
 
         [Tooltip("프롭 렌더러에 틴트되는 색 (프롭 없는 옵션에서는 무시)")]
         public Color Color = Color.white;
@@ -30,14 +31,18 @@ public class AppearanceDatabase : ScriptableObject
         public bool SciFiOnly;
     }
 
-    /// <summary>축 하나의 정의 — 몽타주 표기용 축 이름과 옵션 목록.</summary>
+    /// <summary>
+    /// 축 하나의 정의 — 옵션 목록. 축 이름은 여기 없다.
+    /// 축은 데이터가 아니라 <see cref="AppearanceAxis"/>가 정하는 목록이라, 이름은 규약 키
+    /// (<c>Npc.Axis.</c> + enum 이름)로 조회한다 — 에셋에 두면 배선할 곳이 하나 더 생긴다. (#497)
+    /// </summary>
     [Serializable]
     public class AxisDefinition
     {
-        [Tooltip("몽타주 텍스트에 쓰는 축 이름 (예: 머리색)")]
-        public string AxisName;
         public AppearanceOption[] Options;
     }
+
+    private const string k_table = "NpcTable";
 
     [Header("특징 축 (AppearanceAxis 순서와 일치)")]
     [SerializeField] private AxisDefinition m_hairStyle;
@@ -64,7 +69,15 @@ public class AppearanceDatabase : ScriptableObject
         return definition?.Options?.Length ?? 0;
     }
 
-    public string GetAxisName(AppearanceAxis axis) => GetAxis(axis)?.AxisName ?? axis.ToString();
+    /// <summary>축 이름을 지금 언어로 읽는다 — 규약 키 <c>Npc.Axis.&lt;AppearanceAxis&gt;</c>. (#497)</summary>
+    public static string GetAxisName(AppearanceAxis axis) =>
+        LocalizedStrings.Get(k_table, "Npc.Axis." + axis);
+
+    /// <summary>옵션의 표시 이름을 지금 언어로 읽는다. 배선이 빠진 옵션은 물음표로 둔다.</summary>
+    public static string GetOptionName(AppearanceOption option) =>
+        option == null || option.DisplayName == null || option.DisplayName.IsEmpty
+            ? "?"
+            : option.DisplayName.GetLocalizedString();
 
     public AppearanceOption GetOption(AppearanceAxis axis, int index)
     {
@@ -118,6 +131,10 @@ public class AppearanceDatabase : ScriptableObject
     /// <summary>
     /// 공개 축들의 특징을 글 방식 몽타주 텍스트로 만든다 (GDD 10-3).
     /// 예: "머리색: 빨강 / 수염: 콧수염" — 무전 구두 전달이 핵심 재미라 이산 값 이름만 나열한다.
+    ///
+    /// <b>여기서 만든 문장은 만든 쪽의 언어로 굳는다.</b> 서버가 완성 문자열을 WantedEntry에 실어 보내는
+    /// 구조라, 로케일이 갈리면 클라는 서버 언어의 몽타주를 본다 — 전원 같은 언어라는 전제(결정 (i)) 아래서만
+    /// 성립한다. 근본 해결(클라가 인덱스로 직접 조립)은 문서 §5의 남는 부채다.
     /// </summary>
     public string BuildMontageText(in AppearanceProfile profile, IReadOnlyList<AppearanceAxis> revealedAxes)
     {
@@ -130,7 +147,7 @@ public class AppearanceDatabase : ScriptableObject
 
             if (builder.Length > 0)
                 builder.Append(" / ");
-            builder.Append(GetAxisName(revealedAxes[i])).Append(": ").Append(option.DisplayName);
+            builder.Append(GetAxisName(revealedAxes[i])).Append(": ").Append(GetOptionName(option));
         }
         return builder.ToString();
     }
