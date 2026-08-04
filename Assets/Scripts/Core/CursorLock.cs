@@ -42,6 +42,17 @@ public static class CursorLock
         Apply();
     }
 
+    /// <summary>
+    /// 요청 수를 바꾸지 않고 현재 판정을 커서에 다시 적용한다.
+    ///
+    /// <b>에디터 보정용이다.</b> Unity 에디터는 Game 뷰에서 ESC를 누르면 커서 잠금을 스스로 푼다
+    /// (문서: "In the Editor, the cursor loses focus in Game mode when you press Escape").
+    /// 그래서 ESC로 패널을 닫아 <see cref="PopUnlock"/>이 정상적으로 다시 잠가도, 같은 프레임에
+    /// 에디터가 풀어버려 커서가 화면 밖으로 나간다. 빌드에서는 일어나지 않는다.
+    /// <see cref="UIManagerBase"/>가 ESC 다음 프레임에 이걸 한 번 불러 되돌린다.
+    /// </summary>
+    public static void Reassert() => Apply();
+
     private static void Apply()
     {
         bool unlocked = IsUnlocked;
