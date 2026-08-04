@@ -48145,6 +48145,18 @@ MonoBehaviour:
   m_negativeColor: {r: 0.8, g: 0.25, b: 0.25, a: 1}
   m_neutralColor: {r: 0.45, g: 0.45, b: 0.5, a: 1}
   m_displaySeconds: 3
+  m_detailFormat:
+    m_TableReference:
+      m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
+    m_TableEntryReference:
+      m_KeyId: 7100000000313
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  references:
+    version: 2
+    RefIds: []
 --- !u!114 &1162440653
 MonoBehaviour:
   m_ObjectHideFlags: 0
