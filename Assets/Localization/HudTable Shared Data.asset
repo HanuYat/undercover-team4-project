@@ -10,55 +10,43 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5b11a58205ec3474ca216360e9fa74a8, type: 3}
-  m_Name: UITable Shared Data
+  m_Name: HudTable Shared Data
   m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.SharedTableData
-  m_TableCollectionName: UITable
-  m_TableCollectionNameGuidString: d1226f710d12ac843a44ddb0d79e8841
+  m_TableCollectionName: HudTable
+  m_TableCollectionNameGuidString: 100fd20e95db49646a9f3c01aac62cee
   m_Entries:
-  - m_Id: 1141968896
-    m_Key: penalty.chase_warning
+  - m_Id: 3135767646208
+    m_Key: Hud.Revive.Hint
     m_Metadata:
       m_Items: []
-  - m_Id: 6020387639297
-    m_Key: signal.received
+  - m_Id: 3135780229120
+    m_Key: Hud.Revive.Downed
     m_Metadata:
       m_Items: []
-  - m_Id: 21543250890752
-    m_Key: revive.carrying
+  - m_Id: 3135780229121
+    m_Key: Hud.Revive.Carrying
     m_Metadata:
       m_Items: []
-  - m_Id: 21543317999616
-    m_Key: revive.hint
+  - m_Id: 3135780229122
+    m_Key: Hud.Revive.DeadTarget
     m_Metadata:
       m_Items: []
-  - m_Id: 21543317999617
-    m_Key: revive.dead_target
+  - m_Id: 3135784423424
+    m_Key: Hud.Revive.SelfDead
     m_Metadata:
       m_Items: []
-  - m_Id: 27357709668352
-    m_Key: revive.downed
-    m_Metadata:
-      m_Items: []
-  - m_Id: 27357730639872
-    m_Key: revive.self_dead
-    m_Metadata:
-      m_Items: []
-  - m_Id: 54069990330368
-    m_Key: signal.input_title
-    m_Metadata:
-      m_Items: []
-  - m_Id: 54070032273408
-    m_Key: signal.input_hint
+  - m_Id: 3135784423425
+    m_Key: Hud.Penalty.ChaseWarning
     m_Metadata:
       m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
-    rid: 6276845873749557248
+    rid: 6276845892712267865
   references:
     version: 2
     RefIds:
-    - rid: 6276845873749557248
+    - rid: 6276845892712267865
       type: {class: DistributedUIDGenerator, ns: UnityEngine.Localization.Tables, asm: Unity.Localization}
       data:
-        m_CustomEpoch: 1785732910950
+        m_CustomEpoch: 1785807888895

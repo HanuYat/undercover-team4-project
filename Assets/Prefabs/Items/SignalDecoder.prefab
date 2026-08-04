@@ -160,10 +160,10 @@ MonoBehaviour:
   m_displaySeconds: 8
   m_receivedFormat:
     m_TableReference:
-      m_TableCollectionName: UITable
+      m_TableCollectionName: WorldTable
     m_TableEntryReference:
       m_KeyId: 0
-      m_Key: signal.received
+      m_Key: World.SignalDecoder.Received
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []

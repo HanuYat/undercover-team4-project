@@ -10,12 +10,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5be51871efa6c3e4eae1703925c8f5ac, type: 3}
-  m_Name: UITable
+  m_Name: HqTable
   m_EditorClassIdentifier: Unity.Localization.Editor::UnityEditor.Localization.StringTableCollection
-  m_SharedTableData: {fileID: 11400000, guid: d1226f710d12ac843a44ddb0d79e8841, type: 2}
+  m_SharedTableData: {fileID: 11400000, guid: a4c8df317b247dd44b76163f41d8135a, type: 2}
   m_Tables:
-  - {fileID: 11400000, guid: 6d8209fa98762f344986b45ba1f344ef, type: 2}
-  - {fileID: 11400000, guid: 9ef00e94dc39cff47859277e524c03a1, type: 2}
+  - {fileID: 11400000, guid: d80cd998e6c902a41abfd2497cd897d6, type: 2}
+  - {fileID: 11400000, guid: faa0adf83e0314847a2dc2b9c6e7c10c, type: 2}
   m_Extensions: []
   m_Group: String Table
   references:
