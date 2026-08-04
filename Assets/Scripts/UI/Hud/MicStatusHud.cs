@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 내 마이크 상태 HUD (#430) — 음소거 아이콘 + 음소거 중 무전 키를 눌렀을 때의 안내.
@@ -12,17 +13,28 @@ using UnityEngine;
 /// </summary>
 public class MicStatusHud : MonoBehaviour
 {
-    [SerializeField] private GameObject m_mutedIcon; // 내 음소거 표시
+    [SerializeField]
+    private GameObject m_mutedIcon; // 내 음소거 표시
 
     [Header("음소거 중 무전 시도 안내")]
-    [SerializeField] private GameObject m_hintRoot;
-    [SerializeField] private TextMeshProUGUI m_hintText;
-    [SerializeField] private string m_hintMessage = "마이크가 꺼져 있습니다";
+    [SerializeField]
+    private GameObject m_hintRoot;
+
+    [SerializeField]
+    private TextMeshProUGUI m_hintText;
+
+    // 코드가 대입하는 자리라 라벨에 LocalizeStringEvent를 붙일 수 없다 — 서로 덮어쓴다. (#497)
+    [Tooltip("음소거 안내 문구 — Hud.Mic.MutedHint")]
+    [SerializeField]
+    private LocalizedString m_hintMessage;
 
     [Tooltip("안내가 화면에 남는 시간(초)")]
-    [SerializeField] private float m_hintSeconds = 2f;
+    [SerializeField]
+    private float m_hintSeconds = 2f;
 
     private float m_hintHideTime;
+
+    private bool m_bound;
 
     private VivoxManager Vivox => App.Net.Vivox; // 매니저는 필드에 캐싱하지 않는다 (R8)
 
@@ -45,6 +57,8 @@ public class MicStatusHud : MonoBehaviour
 
         if (Vivox != null)
             Vivox.OnMutedTalkAttempt -= ShowHint;
+
+        Unbind(); // 꺼진 HUD가 언어 변경에 반응하지 않게
     }
 
     private void HandleMicMutedChanged(bool muted)
@@ -59,8 +73,9 @@ public class MicStatusHud : MonoBehaviour
 
     private void ShowHint()
     {
-        if (m_hintText != null)
-            m_hintText.text = m_hintMessage;
+        // 떠 있는 2초 사이에 언어가 바뀌는 일은 없지만(설정 창을 열면 안내가 먼저 사라진다)
+        // 구독 형태로 두면 첫 발화가 곧 현재 언어 값이라 별도 조회 경로를 두지 않아도 된다.
+        Bind();
 
         if (m_hintRoot != null)
             m_hintRoot.SetActive(true);
@@ -71,14 +86,47 @@ public class MicStatusHud : MonoBehaviour
 
     private void HideHint()
     {
+        Unbind();
+
         if (m_hintRoot != null)
             m_hintRoot.SetActive(false);
     }
 
+    private void Bind()
+    {
+        if (m_hintMessage == null || m_hintMessage.IsEmpty)
+        {
+            Debug.LogWarning("MicStatusHud: 음소거 안내 문구가 연결되지 않았다", this);
+            return;
+        }
+
+        Unbind();
+
+        m_hintMessage.StringChanged += HandleHintChanged;
+        m_bound = true;
+    }
+
+    private void HandleHintChanged(string localized)
+    {
+        if (m_hintText != null)
+            m_hintText.text = localized;
+    }
+
+    private void Unbind()
+    {
+        if (!m_bound)
+            return;
+
+        m_hintMessage.StringChanged -= HandleHintChanged;
+        m_bound = false;
+    }
+
     private void Update()
     {
-        if (m_hintRoot == null || !m_hintRoot.activeSelf) return;
-        if (Time.unscaledTime < m_hintHideTime) return;
+        if (m_hintRoot == null || !m_hintRoot.activeSelf)
+            return;
+        if (Time.unscaledTime < m_hintHideTime)
+            return;
 
         HideHint();
     }

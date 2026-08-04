@@ -240,10 +240,25 @@
 ### Phase 2 — 코드 조립 문자열 (약 60개)
 `LocalizedString` SerializeField + Smart String으로 교체. 관례는 [SignalDecoder](../../Assets/Scripts/Item/SignalDecoder.cs)와 같다.
 
-- `SettlementPanel` (12) · `AuthPanel`+`AccountCredentials`+`NicknameRules` (21) · `ScanInfoView` · `ScanResultPresenter` · `ShopStandView` · `CCTVChannelLabelView` · `HqRevivalDevice` · `BombTimerView`
+- `SettlementPanel` (15) · `AuthPanel`+`AccountCredentials`+`NicknameRules` (21) · ~~`ScanInfoView`~~ · ~~`ScanResultPresenter`~~ · `ShopStandView` · `CCTVChannelLabelView` · `HqRevivalDevice` · `BombTimerView`
 - ~~`SessionPanel`~~ · ~~`LeaveConfirmPanel`~~ · ~~`LobbyRosterRowView`/`LobbyRosterPanel`~~ · ~~`SessionCodePanel`~~ — **Phase 1에서 앞당겨 처리했다** (해당 씬·프리팹을 손대는 김에)
-- **`string m_format` 필드 8개** → `LocalizedString`: `RoundFundHud` · `ReadyWaitHud` · `RemainingCriminalsHud` · `WantedEntryView` · `BombSerialView` · `MicStatusHud` · `HqRevivalDevice` · `CCTVNode`
-- **곁다리 정리:** 검거 판정 문구가 [ArrestJudge](../../Assets/Scripts/Interaction/ArrestJudge.cs) · [VerdictBanner](../../Assets/Scripts/UI/Hud/VerdictBanner.cs) · [ArrestVerdictFeedback](../../Assets/Scripts/Interaction/ArrestVerdictFeedback.cs) **3곳에 중복 정의**돼 있다. 3벌을 번역하지 말고 한 곳으로 합친 뒤 번역한다
+- **`string m_format` 필드 8개** → `LocalizedString`: ~~`RoundFundHud`~~(실제 이름은 `RoundFundBoard`) · ~~`ReadyWaitHud`~~ · ~~`RemainingCriminalsHud`~~ · ~~`WantedEntryView`~~ · `BombSerialView` · ~~`MicStatusHud`~~ · `HqRevivalDevice` · `CCTVNode`
+- ~~**곁다리 정리:** 검거 판정 문구 3곳 중복~~ — **정정.** 중복은 2곳이 아니라 **번역 대상 1곳**이었다.
+  [ArrestJudge.LogVerdict](../../Assets/Scripts/Interaction/ArrestJudge.cs)의 판정 문구는 `Debug.Log` 안에만 있어 범위 밖(§1)이고,
+  [ArrestVerdictFeedback](../../Assets/Scripts/Interaction/ArrestVerdictFeedback.cs)이 겹쳐 보인 것은 이름 폴백 `"알 수 없음"` 하나였다.
+  실제 표시는 [VerdictBanner](../../Assets/Scripts/UI/Hud/VerdictBanner.cs) 한 곳이라 합칠 것이 없어 그대로 번역했다 —
+  판정 3종은 규약 키 `Hud.Verdict.<ArrestVerdict>`이고 `ArrestVerdict`에 `[LocalizedEnum]`을 붙였다.
+
+> **`RoundFundBoard`의 키는 `HqTable`이 아니라 `HudTable`에 뒀다.** 본부 게시판이지만 §3이 '팀 자금' 표시를
+> `HudTable`에 잡아 뒀고, `HqTable`은 인명부·수배 리스트처럼 본부 화면 고유 UI를 담는 자리다.
+>
+> **여러 인스턴스가 같은 문구를 쓰는 자리 둘을 헬퍼로 돌렸다** — 수배 리스트 행의 현상금(`Common.Unit.Money`)과
+> 스캔 카드의 필드 라벨(`Hud.Scan.Field*`). 행·카드는 NPC 수만큼 생기므로 `SerializeField`로 두면 프리팹마다
+> 같은 키를 다시 배선해야 한다(상점 진열대와 같은 이유). 대신 언어 변경 갱신은 목록을 그리는 쪽
+> (`WantedListView` · `ScanResultPresenter`)이 `SelectedLocaleChanged`에 걸어 통째로 다시 그린다.
+>
+> **스캔 카드 라벨은 ko에서 문구가 바뀐다** — 지금까지 한국어 화면에서도 `Name:` · `Type:` · `Faction:`이었다.
+> ko는 `이름:` · `타입:` · `세력:`으로 고쳤다 (Title 씬의 `Quit`→`종료`와 같은 종류의 정정).
 
 ### Phase 3 — 네트워크 문자열 제거 (토스트만, 단독 PR)
 서버가 완성된 한국어를 RPC로 실어 보내는 경로를 enum 전송으로 바꾼다.

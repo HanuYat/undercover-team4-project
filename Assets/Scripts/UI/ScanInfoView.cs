@@ -30,12 +30,18 @@ public class ScanInfoView : NpcWorldCard
     // 미스캔 NPC의 미확인 필드 표기 (#233)
     private const string k_masked = "??";
 
+    // 필드 라벨은 카드마다 같은 문구이고 카드는 NPC 수만큼 있다 — SerializeField로 두면
+    // NPC 프리팹마다 같은 키를 다시 배선해야 하고 하나만 빠지면 그 NPC만 옛 표기로 남는다. (#497)
+    // 언어 변경 갱신은 ScanResultPresenter가 로케일 변경에 걸고 다시 채우는 것으로 처리한다.
+    private const string k_hudTable = "HudTable";
+    private const string k_nameKey = "Hud.Scan.FieldName";
+    private const string k_typeKey = "Hud.Scan.FieldType";
+    private const string k_factionKey = "Hud.Scan.FieldFaction";
+
     /// <summary>스캔 완료 NPC — 실제 프로필 값을 표시하고 카드를 켠다.</summary>
     public void ShowReal(string citizenName, string typeView, string factionView, Sprite symbolView)
     {
-        m_nameText.text = $"Name: {citizenName}";
-        m_typeText.text = $"Type: {typeView}";
-        m_factionText.text = $"Faction: {factionView}";
+        SetFields(citizenName, typeView, factionView);
         SetSymbol(symbolView);
         SetCardActive(true);
     }
@@ -43,11 +49,17 @@ public class ScanInfoView : NpcWorldCard
     /// <summary>미스캔 NPC — 모든 필드를 ??로 마스킹하고 카드를 켠다.</summary>
     public void ShowMasked()
     {
-        m_nameText.text = $"Name: {k_masked}";
-        m_typeText.text = $"Type: {k_masked}";
-        m_factionText.text = $"Faction: {k_masked}";
+        SetFields(k_masked, k_masked, k_masked);
         SetSymbol(null);
         SetCardActive(true);
+    }
+
+    // 실제값이든 ??든 라벨 서식은 같다 — 마스킹은 값만 바꾼다.
+    private void SetFields(string citizenName, string typeView, string factionView)
+    {
+        m_nameText.text = LocalizedStrings.Get(k_hudTable, k_nameKey, citizenName);
+        m_typeText.text = LocalizedStrings.Get(k_hudTable, k_typeKey, typeView);
+        m_factionText.text = LocalizedStrings.Get(k_hudTable, k_factionKey, factionView);
     }
 
     // 문양 스프라이트 세팅
