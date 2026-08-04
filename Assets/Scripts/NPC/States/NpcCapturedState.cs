@@ -38,8 +38,7 @@ public class NpcCapturedState : NpcStateBase
 
     public override void Tick()
     {
-        // 판정 완료 = 인계 성공. 본부에 얌전히 남는다 (#230)
-        if (m_owner.IsDelivered)
+        if (IsHandedOver)
             return;
 
         // 이미 일어나는 중 — 끝나면 도주로 이어진다. 그 사이 다시 묶이면 예약이 취소되고
@@ -62,6 +61,15 @@ public class NpcCapturedState : NpcStateBase
         m_owner.Agent.isStopped = false;
     }
 
+    /// <summary>인계가 끝났는가 — 판정 완료 = 인계 성공이라 방치 타이머에서 빠진다. 본부에 얌전히 남는다. (#230)
+    ///
+    /// 타이머 진입(<see cref="Tick"/>)과 <b>일어난 뒤 실행 직전</b>(<see cref="Flee"/>)이 같은 기준을 봐야 한다 —
+    /// 둘 사이에 일어나기 대기(약 0.6초)가 끼면서 그 사이 판정이 통과할 수 있는 창이 생겼다 (#513).
+    /// 방치된 대상이 마침 판정 게이트(JailScanner) 안에 서 있으면 폴링(0.1초)이 그 창에서 대상을
+    /// 판정해 <see cref="NpcController.MarkDelivered"/>를 부르고, 재검사가 없으면 방금 인계된 신병이
+    /// 그대로 달아난다.</summary>
+    private bool IsHandedOver => m_owner.IsDelivered;
+
     /// <summary>방치 타이머 만료 — 일어난 뒤 밧줄을 풀고 달아난다. (#513)
     ///
     /// 묶인 대상은 누워 있으므로(#513) 만료 순간 곧바로 도주하면 누운 몸이 그대로 미끄러진다.
@@ -80,6 +88,10 @@ public class NpcCapturedState : NpcStateBase
     /// <summary>일어난 뒤 실제로 달아난다.</summary>
     private void Flee()
     {
+        // 일어나는 사이에 인계가 끝났으면 달아나지 않는다 — 이유는 IsHandedOver 주석 (#513)
+        if (IsHandedOver)
+            return;
+
         // 밧줄은 소모형이 아니라 반환할 자원이 없다 — 상태 전이만으로 풀려난다. (#369)
 
         // 가장 가까운 플레이어를 위협 삼아 도주한다 — 반경은 저항 폴백(#205)·도주 회피(#213)와 같은

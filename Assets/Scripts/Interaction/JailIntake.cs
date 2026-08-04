@@ -311,6 +311,12 @@ public class JailIntake : MonoBehaviour
         // (묶인 적 없는 대상은 기다리지 않고 곧바로 실행된다 — ServerStandUpThen이 가른다)
         npc.ServerStandUpThen(() =>
         {
+            // 목격자를 다시 확인한다 — 위 검사와 이 콜백 사이에 일어나기(약 0.6초)가 끼어 그 사이
+            // 유일한 목격자가 나가 버릴 수 있다. 예전에는 확인과 착석이 한 프레임이라 원자적이었다.
+            // 실패해도 기록을 지우지 않는 것은 위와 같다 — 누가 다시 들어오면 그때 앉는다.
+            if (!HasPlayerInsideNear(npc))
+                return;
+
             ulong[] deliverers = TakeDelivererIds(npc);
 
             // 놓은 자리에서 가장 가까운 빈 좌석 — 여기서 좌석까지는 NpcJailedState가 걸어간다(1.5~5.6m)
