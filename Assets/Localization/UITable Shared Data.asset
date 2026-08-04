@@ -43,6 +43,14 @@ MonoBehaviour:
     m_Key: revive.self_dead
     m_Metadata:
       m_Items: []
+  - m_Id: 54069990330368
+    m_Key: signal.input_title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 54070032273408
+    m_Key: signal.input_hint
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

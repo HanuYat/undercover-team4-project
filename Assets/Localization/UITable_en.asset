@@ -53,6 +53,15 @@ MonoBehaviour:
     m_Localized: "Shut down \u2014 a teammate must haul you to HQ to restore you"
     m_Metadata:
       m_Items: []
+  - m_Id: 54069990330368
+    m_Localized: "Signal Decoder \u2014 broadcast to everyone"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 54070032273408
+    m_Localized: "Enter to send \xB7 Esc to cancel   ({0}/{1})"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845873749557335
   references:
     version: 2
     RefIds:
@@ -63,3 +72,4 @@ MonoBehaviour:
         m_SharedEntries:
         - id: 6020387639297
         - id: 27357709668352
+        - id: 54070032273408
