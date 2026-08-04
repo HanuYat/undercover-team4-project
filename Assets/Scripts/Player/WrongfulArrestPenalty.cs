@@ -315,7 +315,8 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
     }
 
     // ---- 정리 헬퍼 ----
-    // (호송 전용 헬퍼 ReleaseNpc/ReleaseAll/AllWithin은 WrongfulArrestPenalty.Carry.cs에 있다)
+    // (임무 해제 헬퍼 ReleaseNpc/ReleaseAll은 WrongfulArrestPenalty.Carry.cs에 있고,
+    //  수렴·대형·끌기 연출은 CarryEscortSequence로 빠졌다 — 납치 이벤트와 공용이다, #371)
 
     private static void PruneDead(List<NpcController> list) => list.RemoveAll(npc => npc == null);
 

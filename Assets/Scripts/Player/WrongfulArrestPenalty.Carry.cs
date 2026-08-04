@@ -1,12 +1,15 @@
-using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
-/// WrongfulArrestPenalty의 호송 연출 파트 (#279) — 포획 접수부터 광장 도착까지의 수렴·대형·끌기 시퀀스.
-/// 본체(WrongfulArrestPenalty.cs)는 정책(카운트·수용·출동·매달기)을, 이 파일은 연출 오케스트레이션을 든다 —
-/// partial이므로 상태(m_activeNpcs·m_carryTarget·광장 참조)는 그대로 공유한다. 이동만 했고 동작 변화는 없다.
+/// WrongfulArrestPenalty의 호송 파트 (#279) — 포획 접수와 광장 도착 후의 결말을 든다.
+/// 본체(WrongfulArrestPenalty.cs)는 정책(카운트·수용·출동·매달기)을, 이 파일은 그 정책과 호송을 잇는다 —
+/// partial이므로 상태(m_activeNpcs·m_carryTarget·광장 참조)는 그대로 공유한다.
+///
+/// <b>수렴·대형·끌기 연출 자체는 <see cref="CarryEscortSequence"/>로 빠졌다</b> (#371) — 납치 이벤트가
+/// 같은 세 안전망(수렴 상한·이동 상한·대상 소실)을 쓰기 때문이다. 여기 남은 것은 오검거만의 판단이다:
+/// 누가 페널티 독박을 쓰는지, 기능 정지된 몸은 접수하지 않는다는 규칙, 도착 후 30초 매달기.
 /// </summary>
 public partial class WrongfulArrestPenalty
 {
@@ -35,7 +38,8 @@ public partial class WrongfulArrestPenalty
 
         m_carryTarget = caught;
 
-        // 즉시 행동불능(구조 불가) — 매달기와 같은 계열의 무력화 (#101/#105)
+        // 즉시 행동불능(구조 불가) — 매달기와 같은 계열의 무력화 (#101/#105).
+        // 끌려가는 동안 걸어 나가지 못하게 하는 것이기도 하다.
         if (incap != null)
             incap.Incapacitate(IncapacitationCause.Penalty);
 
@@ -45,99 +49,37 @@ public partial class WrongfulArrestPenalty
             npc.StartPenaltyConverge(caught);
 
         Debug.Log($"[오검거] 포획 — {catcher.name} → {caught.name}, {convergers.Count}명 수렴 시작");
-        CarrySequenceAsync(caught, convergers).Forget();
+        CarryToPlazaAsync(caught, convergers).Forget();
     }
 
-    // 수렴 대기 → 대형 편성(2명 양옆 끌기 + 뒤따름) → 광장 도착 → 30초 매달기. (서버 전용)
+    // 공용 호송 시퀀스에 광장을 목적지로 넘기고, 결말(30초 매달기)을 집행한다. (서버 전용)
     // convergers = 포획 시점 스냅샷 — 수렴·대형·해산 전부 이 목록 기준. m_activeNpcs 전체가 아니다.
-    private async UniTask CarrySequenceAsync(Transform caught, List<NpcController> convergers)
+    private async UniTask CarryToPlazaAsync(Transform caught, List<NpcController> convergers)
     {
-        // ---- 수렴 대기: 전원이 모이거나 상한이 지날 때까지 — "다 모여야 끌기 시작" (#276 확정)
-        float deadline = Time.time + m_convergeTimeoutSeconds;
-        while (Time.time < deadline)
+        var settings = new CarryEscortSequence.Settings(
+            m_convergeArriveDistance,
+            m_convergeTimeoutSeconds,
+            k_carrierGap,
+            k_plazaArriveDistance,
+            k_carryTravelTimeoutSeconds);
+
+        bool arrived = await CarryEscortSequence.RunAsync(
+            caught, convergers, m_plazaPoint, settings, destroyCancellationToken);
+
+        // 정리는 도착·중단 무관하게 같다 — 수렴분만 시민으로 복귀시키고 처리 중 표시를 지운다.
+        // 호송 중 새로 출동한 추격대(m_activeNpcs에는 있지만 convergers에는 없음)는 계속 추격한다.
+        ReleaseAll(convergers);
+        m_carryTarget = null;
+
+        if (!arrived)
         {
-            PruneDead(convergers);
-            if (caught == null || convergers.Count == 0)
-            {
-                AbortCarry(convergers);
-                return;
-            }
-
-            if (AllWithin(convergers, caught.position, m_convergeArriveDistance + 1f))
-                break;
-
-            await UniTask.Delay(TimeSpan.FromSeconds(0.25), cancellationToken: destroyCancellationToken);
-        }
-
-        PruneDead(convergers);
-        if (caught == null || convergers.Count == 0)
-        {
-            AbortCarry(convergers);
+            Debug.Log("[오검거] 호송 중단 — 대상 소실");
             return;
         }
 
-        // ---- 대형 편성: 가장 가까운 2명이 양옆 끌기, 나머지는 뒤따름 (#279)
-        Vector3 caughtPos = caught.position;
-        convergers.Sort(
-            (a, b) => (a.transform.position - caughtPos).sqrMagnitude
-                .CompareTo((b.transform.position - caughtPos).sqrMagnitude));
-
-        NpcController carrierA = convergers[0];
-        NpcController carrierB = convergers.Count > 1 ? convergers[1] : null;
-
-        carrierA.StartPenaltyEscort(m_plazaPoint, null, Vector3.zero);
-        if (carrierB != null)
-            carrierB.StartPenaltyEscort(m_plazaPoint, carrierA, new Vector3(k_carrierGap, 0f, 0f));
-
-        for (int i = 2; i < convergers.Count; i++)
-        {
-            // 뒤따름 대형 — 좌우 지그재그로 한 줄씩 뒤에 선다
-            float x = i % 2 == 0 ? -0.9f : 0.9f;
-            float z = -(1.8f + (i - 2) / 2 * 1.2f);
-            convergers[i].StartPenaltyEscort(m_plazaPoint, carrierA, new Vector3(x, 0f, z));
-        }
-
-        // 플레이어 본인은 오너 클라가 끌기 담당 2명 사이를 추종한다 — NetworkTransform 오너 권한 (#279)
-        PlayerPenaltyView view = caught.GetComponent<PlayerPenaltyView>();
-        if (view != null)
-            view.StartCarried(carrierA, carrierB != null ? carrierB : carrierA);
-
-        Debug.Log($"[오검거] 호송 시작 — 끌기 {carrierA.name}{(carrierB != null ? "·" + carrierB.name : "")}, 총 {convergers.Count}명");
-
-        // ---- 광장 도착 대기 — 선두 기준. 선두 소실·광장 미배선·상한 초과면 스냅 텔레포트(HangAsync)가 보정한다
-        float travelDeadline = Time.time + k_carryTravelTimeoutSeconds;
-        while (Time.time < travelDeadline)
-        {
-            if (caught == null)
-            {
-                AbortCarry(convergers);
-                return;
-            }
-            if (carrierA == null || m_plazaPoint == null)
-                break;
-            if (Vector3.Distance(carrierA.transform.position, m_plazaPoint.position) <= k_plazaArriveDistance)
-                break;
-
-            await UniTask.Delay(TimeSpan.FromSeconds(0.25), cancellationToken: destroyCancellationToken);
-        }
-
-        // ---- 종료: 끌기 해제 → 수렴분만 시민 복귀 → 광장 스냅 + 30초 매달기 (#101 로직 재사용)
-        // 호송 중 새로 출동한 추격대(m_activeNpcs에는 있지만 convergers에는 없음)는 계속 추격한다.
-        if (view != null)
-            view.StopCarried();
-        ReleaseAll(convergers);
-        m_carryTarget = null;
-
+        // 광장 스냅 + 30초 매달기 (#101 로직 재사용) — 길이 막혀 도착하지 못한 경우의 보정도 여기가 한다.
         if (caught != null)
             await HangAsync(caught);
-    }
-
-    // 호송 중단(대상 소실 등) — 수렴 중이던 NPC만 시민으로 복귀시키고 처리 중 표시를 지운다.
-    private void AbortCarry(List<NpcController> convergers)
-    {
-        ReleaseAll(convergers);
-        m_carryTarget = null;
-        Debug.Log("[오검거] 호송 중단 — 대상 소실");
     }
 
     // ---- 호송 전용 정리 헬퍼 ----
@@ -162,17 +104,5 @@ public partial class WrongfulArrestPenalty
             ReleaseNpc(npcs[i]);
             npcs.RemoveAt(i);
         }
-    }
-
-    private static bool AllWithin(List<NpcController> npcs, Vector3 center, float radius)
-    {
-        float sqr = radius * radius;
-        foreach (NpcController npc in npcs)
-        {
-            if (npc != null && (npc.transform.position - center).sqrMagnitude > sqr)
-                return false;
-        }
-
-        return true;
     }
 }
