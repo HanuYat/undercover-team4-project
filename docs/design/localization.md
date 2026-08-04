@@ -42,7 +42,7 @@
 | (f) `string m_format` 필드 | **`LocalizedString`으로 타입 교체.** `string.Format` 호출을 Smart String으로 대체 | 인스펙터에 한국어 포맷이 박혀 있으면 그 필드는 영원히 번역되지 않는다. 해당 필드 8개는 §4 Phase 2 참고 |
 | (g) 네트워크로 보내는 알림 | **완성된 문장이 아니라 `enum` + 숫자 인자를 보낸다.** 수신 클라가 자기 로케일로 조회 | 서버가 자기 언어로 문장을 만들어 보내면 클라 언어와 무관하게 그 언어가 뜬다. enum은 4바이트고, 문자열보다 RPC 크기도 작다 |
 | (h) enum → 키 매핑 | **규약 기반** — `Item.Feedback.` + enum 이름. 매핑 SO를 만들지 않는다. 규약은 **enum 선언부에 `[LocalizedEnum]`으로 선언**하고 에디터 검증으로 받친다 | 매핑 에셋은 enum이 늘 때마다 같이 고쳐야 하는 두 번째 진실이 된다. 규약이면 enum 값 추가 = 테이블 키 추가로 끝. 대신 컴파일러가 막아 주지 못하므로 그 구멍은 검증으로 메운다 (§7) |
-| (i) 몽타주 번역 | **번역한다.** 다만 전송 구조는 그대로 두고 `AppearanceDatabase`만 번역 (§5) | 국적이 다른 사람끼리 한 판을 하는 상황을 상정하지 않는다는 팀 결정. 이 전제에서는 전원이 같은 로케일이므로 서버가 만든 문구가 각자 언어와 일치한다 |
+| (i) 몽타주 번역 | **번역한다.** `AppearanceDatabase`를 번역하고, **전송도 완성 문장 대신 원본(프로필 인덱스 + 공개 축)으로 바꿨다** (§5) | 처음에는 "전원 같은 로케일"을 전제로 전송 구조를 그대로 두었는데, 그 전제가 깨지면(호스트 en · 클라 ko) 전원이 서버 언어의 몽타주를 본다. 결정 (g)가 토스트에 적용한 규칙(문장을 보내지 말고 받는 쪽이 조회)을 몽타주에도 그대로 적용해 전제 자체를 없앴다 |
 | (j) 시민 이름 | **번역하지 않는다** — ko 화면에서도 영문 | 고유명사. 무전으로 이름을 부르는 것이 대조의 핵심이라 표기가 흔들리면 안 된다 |
 
 ## 3. 테이블 구성
@@ -311,8 +311,8 @@ ToastOwner(EItemFeedback, args…)     ← 신설. RPC는 enum + 숫자 인자�
 >
 > **몽타주가 실제로 양쪽 언어로 조립되는 것을 확인했다** — 같은 프로필로
 > ko `머리색: 빨강 / 수염: 콧수염 / 안경: 없음`, en `Hair color: Red / Facial hair: Mustache / Eyewear: None`.
-> 다만 이 문장은 **만든 쪽의 언어로 굳는다** — 서버가 완성 문자열을 `WantedEntry`에 실어 보내는 구조는
-> 그대로다(§5의 남는 부채). 전원 같은 언어라는 전제(결정 (i)) 아래서만 성립한다.
+> 이 문장은 처음에 **만든 쪽의 언어로 굳었다**(서버가 완성 문자열을 `WantedEntry`에 실어 보냈다).
+> §5에서 전송 구조까지 바꿨으므로 지금은 **보는 쪽 언어로 조립된다.**
 
 > **ko 화면의 표기가 바뀐다.** `Human` · `Android` · `Faction A/B` · `None`은 한국어 화면에서도 영문이었다 —
 > `인간` · `안드로이드` · `A 세력` · `없음`으로 옮겼다. 결정 (j)가 영문으로 못 박은 것은 **시민 이름**뿐이고
@@ -326,12 +326,34 @@ ToastOwner(EItemFeedback, args…)     ← 신설. RPC는 enum + 숫자 인자�
 ### Phase 5 — 검증
 - 설정 창에서 ko↔en 전환하며 전 화면 순회. **영문이 길어 생기는 버튼·라벨 잘림/오버플로**가 주 확인 대상
 - 멀티 접속 1회(호스트/클라 같은 로케일)로 Phase 3 enum 경로가 양쪽에 뜨는지 확인
+- 멀티 접속 1회 **호스트 en · 클라 ko**로 수배 리스트 확인 — 각자 자기 언어의 몽타주가 떠야 한다 (§5).
+  라운드 도중 한쪽만 언어를 바꿔도 그 화면만 따라 바뀌는지 함께 본다
 
-## 5. 남는 부채 — 몽타주 전송 구조 (별도 이슈)
+## 5. 몽타주 전송 구조 — **해결 완료**
 
-Phase 4에서 `AppearanceDatabase`를 번역해도, 서버가 `BuildMontageText`로 만든 **완성 문자열**을 `FixedString128Bytes`로 실어 보내는 구조는 그대로다 ([WantedEntry](../../Assets/Scripts/Data/WantedEntry.cs)). 즉 모든 클라이언트가 **서버 로케일의 문구**를 본다.
+Phase 4에서 `AppearanceDatabase`를 번역했지만, 서버가 `BuildMontageText`로 만든 **완성 문자열**을 `FixedString128Bytes`로 실어 보내는 구조가 남아 있었다 ([WantedEntry](../../Assets/Scripts/Data/WantedEntry.cs)). 그래서 호스트가 en, 클라가 ko로 설정해도 **전원이 호스트 언어의 몽타주**를 봤다. 결정 (i)의 전제(전원 같은 언어)에 기대는 대신 전제를 없앴다 — 결정 (g)를 몽타주에도 적용한 것이다.
 
-결정 (i)의 전제(전원 같은 언어) 아래서는 정상 동작하므로 이번 작업에 넣지 않는다. 근본 해결은 `WantedEntry`가 문자열 대신 `AppearanceProfile` 인덱스 + `RevealedAxes`를 동기화하고 **클라가 직접 조립**하는 것이며, 이는 `WantedEntry`의 코드 주석이 이미 예고해 둔 방향이다.
+| | 이전 | 이후 |
+|---|------|------|
+| `WantedEntry` | `FixedString128Bytes Montage` (완성 문장) | `AppearanceProfile Appearance` + `RevealedAxisSet RevealedAxes` |
+| 문장 조립 | 서버 (`AppearanceAssigner`) | 표시하는 피어 (`WantedEntryView`) |
+| 항목 크기 | 8 + 64 + 128 + 4 바이트 | 8 + 64 + 24 + 1 + 4 바이트 |
+
+정한 것들:
+
+- **공개 축은 항목마다 싣는다.** 라운드 내내 고정이고 전 범인 공통이라 `NetworkVariable` 하나로 둘 수도 있었지만,
+  그러면 같은 틱에 도착한 리스트 추가와 공개 축 변경의 **적용 순서**에 표시가 걸린다(필드 선언 순서대로 역직렬화되므로
+  `OnListChanged`가 옛 공개 축으로 먼저 발화할 수 있다). 항목 하나가 자족적이면 그 문제가 없고, 1바이트다.
+- **나열 순서는 `AppearanceAxis` 선언 순서다** ([RevealedAxisSet](../../Assets/Scripts/Data/AppearanceProfile.cs)).
+  공개 축을 뽑을 때의 셔플 순서는 전송하지 않는다 — 축의 나열 순서는 규칙상 뜻이 없고, 반대로 **어느 피어에서 조립해도
+  같은 문장**이 나오는 것은 중요하다(검거로 내렸다가 탈출로 재등재해도(#231) 본부가 기억하던 문장과 같아야 한다).
+- **비공개 축은 실어 보내지 않는다** (`AppearanceProfile.Masked`). 정답 외형은 서버 전용 값이므로
+  (`CitizenIdentity.Appearance`), 화면에 안 띄우는 것으로 끝내지 않고 애초에 패킷에서 뺀다.
+- **`AppearanceAssigner`는 문장을 보관하지 않는다.** 예비 용의자 승격(#102)이 쓰던 `m_montageTexts`를 지웠다 —
+  보관해야 할 원본은 `m_criminalProfiles`이고, 문장은 표시 시점에 만들어진다. `OnMontageGenerated`도
+  `(NpcController, string)` → `(NpcController, AppearanceProfile)`로 바뀌었다.
+- **조립에 쓰는 DB는 `App.Game.Appearance.Database`로 얻는다** (`WantedListView`). 행 프리팹에 같은 에셋을
+  또 배선하면 두 곳이 어긋날 수 있어서다. 언어 변경 갱신은 이미 걸려 있던 `SelectedLocaleChanged` 재그리기가 그대로 처리한다.
 
 ## 6. 새 문자열을 추가할 때
 

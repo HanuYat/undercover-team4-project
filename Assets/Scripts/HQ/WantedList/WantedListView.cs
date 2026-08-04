@@ -18,9 +18,13 @@ public class WantedListView : MonoBehaviour
 
     private readonly List<WantedEntryView> m_rows = new List<WantedEntryView>();
 
+    // 몽타주 문장을 조립할 옵션 정의 — 항목에는 인덱스만 실려 오므로 표시하는 쪽이 자기 언어로 만든다 (#497).
+    // 배정기가 들고 있는 것을 그대로 쓴다 — 행 프리팹에 같은 에셋을 또 배선하면 두 곳이 어긋날 수 있다.
+    private AppearanceDatabase Database => App.Game.Appearance != null ? App.Game.Appearance.Database : null;
+
     private void OnEnable()
     {
-        // 행의 현상금 표기가 테이블에서 오므로 언어가 바뀌면 다시 그린다 — 값은 그대로여도 표기가 바뀐다.
+        // 행의 몽타주·현상금 표기가 테이블에서 오므로 언어가 바뀌면 다시 그린다 — 값은 그대로여도 표기가 바뀐다.
         // 행마다 StringChanged를 걸지 않고 로케일 변경 한 곳에 걸어 통째로 다시 채운다 (ShopStand와 같은 방식). (#497)
         LocalizationSettings.SelectedLocaleChanged += HandleLocaleChanged;
 
@@ -85,7 +89,11 @@ public class WantedListView : MonoBehaviour
             m_rows.RemoveAt(last);
         }
 
+        AppearanceDatabase database = Database;
+        if (database == null && wanted.Count > 0)
+            Debug.LogWarning("WantedListView: AppearanceDatabase를 찾지 못해 몽타주를 조립할 수 없다", this);
+
         for (int i = 0; i < wanted.Count; i++)
-            m_rows[i].Bind(wanted[i]);
+            m_rows[i].Bind(wanted[i], database);
     }
 }

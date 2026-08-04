@@ -132,22 +132,22 @@ public class AppearanceDatabase : ScriptableObject
     /// 공개 축들의 특징을 글 방식 몽타주 텍스트로 만든다 (GDD 10-3).
     /// 예: "머리색: 빨강 / 수염: 콧수염" — 무전 구두 전달이 핵심 재미라 이산 값 이름만 나열한다.
     ///
-    /// <b>여기서 만든 문장은 만든 쪽의 언어로 굳는다.</b> 서버가 완성 문자열을 WantedEntry에 실어 보내는
-    /// 구조라, 로케일이 갈리면 클라는 서버 언어의 몽타주를 본다 — 전원 같은 언어라는 전제(결정 (i)) 아래서만
-    /// 성립한다. 근본 해결(클라가 인덱스로 직접 조립)은 문서 §5의 남는 부채다.
+    /// <b>문장은 만든 쪽의 언어로 나온다 — 그래서 표시하는 피어에서 조립한다.</b>
+    /// 수배 항목은 완성 문장이 아니라 프로필 인덱스 + 공개 축(<see cref="RevealedAxisSet"/>)만 실어 보내고,
+    /// 본부 화면이 이 메서드로 각자 자기 언어로 조립한다 (#497 — 호스트·클라 언어가 갈려도 각자 언어로 보인다).
     /// </summary>
-    public string BuildMontageText(in AppearanceProfile profile, IReadOnlyList<AppearanceAxis> revealedAxes)
+    public string BuildMontageText(in AppearanceProfile profile, RevealedAxisSet revealedAxes)
     {
         var builder = new StringBuilder();
-        for (int i = 0; i < revealedAxes.Count; i++)
+        foreach (AppearanceAxis axis in revealedAxes)
         {
-            AppearanceOption option = GetOption(revealedAxes[i], profile.GetIndex(revealedAxes[i]));
+            AppearanceOption option = GetOption(axis, profile.GetIndex(axis));
             if (option == null)
                 continue;
 
             if (builder.Length > 0)
                 builder.Append(" / ");
-            builder.Append(GetAxisName(revealedAxes[i])).Append(": ").Append(GetOptionName(option));
+            builder.Append(GetAxisName(axis)).Append(": ").Append(GetOptionName(option));
         }
         return builder.ToString();
     }
