@@ -55,6 +55,22 @@ MonoBehaviour:
     m_Key: Item.Description.Baton
     m_Metadata:
       m_Items: []
+  - m_Id: 5508625448636416
+    m_Key: Item.Name.SignalDecoder
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5508625507356672
+    m_Key: Item.Description.SignalDecoder
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5508625507356673
+    m_Key: Item.Name.JailSirenButton
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5508625507356674
+    m_Key: Item.Description.JailSirenButton
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

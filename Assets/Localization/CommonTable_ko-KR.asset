@@ -44,6 +44,11 @@ MonoBehaviour:
     m_Localized: "\uBD88\uB7EC\uC624\uB294 \uC911..."
     m_Metadata:
       m_Items: []
+  - m_Id: 70276470607872
+    m_Localized: "{0:N0}\uC6D0"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267889
   references:
     version: 2
     RefIds:
@@ -53,3 +58,4 @@ MonoBehaviour:
         m_Entries: 
         m_SharedEntries:
         - id: 60555504193536
+        - id: 70276470607872
