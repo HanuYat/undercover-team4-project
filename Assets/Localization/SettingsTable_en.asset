@@ -17,7 +17,43 @@ MonoBehaviour:
   m_SharedData: {fileID: 11400000, guid: 69f94021b201c264fb4a0a3915662935, type: 2}
   m_Metadata:
     m_Items: []
-  m_TableData: []
+  m_TableData:
+  - m_Id: 6994200000000
+    m_Localized: Options
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000001
+    m_Localized: Mouse Sensitivity
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000002
+    m_Localized: Master Volume
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000003
+    m_Localized: Voice Volume
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000004
+    m_Localized: Mute Microphone
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000005
+    m_Localized: Language
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000006
+    m_Localized: Close
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000007
+    m_Localized: Restore Defaults
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000008
+    m_Localized: Paused
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

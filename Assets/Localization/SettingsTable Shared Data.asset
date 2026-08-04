@@ -14,7 +14,43 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.SharedTableData
   m_TableCollectionName: SettingsTable
   m_TableCollectionNameGuidString: 69f94021b201c264fb4a0a3915662935
-  m_Entries: []
+  m_Entries:
+  - m_Id: 6994200000000
+    m_Key: Settings.Window.Title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000001
+    m_Key: Settings.Label.MouseSensitivity
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000002
+    m_Key: Settings.Label.MasterVolume
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000003
+    m_Key: Settings.Label.VoiceVolume
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000004
+    m_Key: Settings.Label.MicMute
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000005
+    m_Key: Settings.Label.Language
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000006
+    m_Key: Settings.Button.Close
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000007
+    m_Key: Settings.Button.Reset
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000008
+    m_Key: Settings.Pause.Title
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
