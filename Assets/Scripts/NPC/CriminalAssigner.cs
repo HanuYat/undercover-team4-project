@@ -279,26 +279,27 @@ public class CriminalAssigner : CommonManagerBase
     ///    처리하므로(ArrestJudge) 프로필을 줘도 판정·보상이 바뀌지 않는다. 반응을 비워 두면 기본값이
     ///    순응형이라 스캔당해도 진행 중인 소란·침입 행동이 끊기지 않는다 (#400).
     ///  · <b>몽타주 배정에 끼지 않는다</b> — AppearanceAssigner의 디코이 인원 통제가 깨지지 않게 (#127 · #102).
-    ///  · <b>인명부에 등재하지 않는다</b> — 미등록 인물이 이 NPC들의 특징이다(팀 확정 2026-08-04).
-    ///    <see cref="OnCriminalAssigned"/>를 발행하지 않으므로 인명부·몽타주가 다시 돌지 않는다.
-    ///    <b>인명부 등재는 스폰하는 쪽이 정한다</b> — 필요한 쪽(탈옥 침입자)이 돌려받은 프로필로
-    ///    <see cref="DirectoryManager.RegisterLateArrival"/>를 부른다. 여기서 인명부를 건드리면
-    ///    신원 배정이 본부 데이터까지 아는 셈이 되고, 대상별로 갈리는 규칙이 이 안에 들어온다.
+    ///  · <b>인명부에 등재되지 않는다</b> — <b>런타임에 생긴 NPC는 미등록 인물</b>이라는 것이 규칙이고
+    ///    대상별 예외가 없다(팀 확정 2026-08-04). 난동꾼도 침입자도 본부 조회에 나오지 않는다.
+    ///    <see cref="OnCriminalAssigned"/>를 발행하지 않으므로 인명부·몽타주가 다시 돌지 않는다 —
+    ///    즉 등재되지 않는 것이 이 경로의 <b>기본이자 유일한 동작</b>이며, 따로 막을 것이 없다.
+    ///    침입자를 등재해 시민으로 위장시키는 안을 검토했지만 폐기했다: 외부 침입자가 공식 시민
+    ///    명부에 있는 것이 세계관에 어긋나고, "걸음이 수상하다 → 스캔·조회로 확증"이라는 본부·현장
+    ///    2단계 판독(GDD 5-4)이 오히려 관제에 판단 근거를 준다.
     /// </summary>
-    /// <returns>배정된 프로필. 이미 배정돼 있었으면 그 프로필, 배정하지 못했으면 null.</returns>
-    public CitizenProfile AssignLateSpawned(CitizenIdentity identity)
+    public void AssignLateSpawned(CitizenIdentity identity)
     {
         if (identity == null)
-            return null;
+            return;
 
         // 이미 배정된 대상은 건드리지 않는다 — 재배정하면 CitizenData 스냅샷이 다시 전송되어
         // 본부가 보고 있던 스캔 표시값이 이유 없이 바뀐다 (SetCriminal 주석과 같은 이유)
         if (identity.Profile != null)
-            return identity.Profile;
+            return;
 
         // 라운드 시작 배정이 아직이면 그쪽이 이 NPC까지 덮는다 — 여기서 주면 이름을 두 번 소비한다
         if (!m_initialAssignmentDone || m_factory == null)
-            return null;
+            return;
 
         CitizenProfile profile = m_factory.Create();
 
@@ -306,7 +307,6 @@ public class CriminalAssigner : CommonManagerBase
         identity.AssignProfile(profile, false);
 
         Debug.Log($"[신원] 늦은 배정: {identity.name} — {profile.CitizenName}");
-        return profile;
     }
 
     // ---- 제보 전화 승격 (#102) ----

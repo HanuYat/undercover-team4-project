@@ -164,20 +164,14 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (SuddenEventUtil.IsNetworkSessionActive)
             m_intruder.GetComponent<NetworkObject>().Spawn();
 
-        // 신원을 배정하고 인명부에도 등재한다 — 침입자는 시민과 구분되지 않아야 한다 (GDD 7-5, #505).
+        // 신원 배정을 여기서 부르지 않는다 — CitizenIdentity가 Start에서 스스로 요청한다 (#505).
+        // 침입자도 시민과 똑같이 스캔되지만 <b>인명부에는 등재되지 않는다</b>: 런타임에 생긴 NPC는
+        // 미등록 인물이라는 규칙에 대상별 예외를 두지 않는다(팀 확정 2026-08-04). 그래서 이 이벤트가
+        // 배정 결과를 알아야 할 이유가 없어졌고, 난동꾼과 완전히 같은 경로를 탄다.
         //
-        // 배정 자체는 CitizenIdentity가 Start에서 스스로도 요청하지만(모든 런타임 스폰 NPC의 폴백),
-        // 여기서 명시적으로 부르는 이유는 <b>인명부 등재 여부가 스폰하는 쪽의 의도</b>라서다 —
-        // 등재 대상인 이 NPC만 프로필을 돌려받아 인명부에 끼워 넣는다. 난동꾼(SpawnedNpcEvent)은
-        // 이 호출이 없어 폴백 경로로 배정만 받고 미등록 인물로 남는다 (팀 확정 2026-08-04).
-        //
-        // 반드시 Spawn() 뒤여야 한다 — 앞에서 배정하면 동기화 변수에 실리지 않아 호스트에만 보이고
-        // 다른 클라이언트에서는 스캔이 계속 실패한다 (CitizenIdentity.AssignProfile).
-        CitizenProfile intruderProfile = App.Game.CriminalAssigner != null
-            ? App.Game.CriminalAssigner.AssignLateSpawned(m_intruder.GetComponent<CitizenIdentity>())
-            : null;
-        if (intruderProfile != null && App.Game.Directory != null)
-            App.Game.Directory.RegisterLateArrival(intruderProfile);
+        // 등재 안 함이 침입자를 노출시키지는 않는다 — 이름 위조범도 조회에서 "목록에 없음"으로
+        // 나오므로 조회 실패가 곧 침입자라는 뜻이 아니다. 본부가 확증하려면 걸음을 눈치채고
+        // 현장에 스캔을 요청해 이름을 대조해야 한다(GDD 5-4의 2단계 판독).
 
         // 해제 착수·완료 통보를 받아 경보/자물쇠 해제를, 상태 전이를 받아 플레이어 개입을 처리한다
         m_intruder.OnIntrudeUnlockStarted += HandleUnlockStarted;
