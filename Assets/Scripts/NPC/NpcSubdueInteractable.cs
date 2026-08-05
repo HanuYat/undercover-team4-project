@@ -1,10 +1,14 @@
 using UnityEngine;
 
 /// <summary>
-/// NPC의 상호작용키(E) 반응 (#76/#91/#398) — 누르는 즉시 NPC 상태에 따라 갈린다.
-/// 체포(Captured) 상태면 재연행을 시작한다 — 연행 동작을 수갑 클릭에서 E로 이관 (#91).
-/// 단 그 대상이 반출된 수감자면(#517) 밧줄이 아니라 <b>밧줄 없는 추종</b>을 재개한다 — 반출 흐름 왕복.
-/// 남이 끌고 있는(Escorted) 대상에 내 줄이 걸려 있으면 끌기를 재개한다 — 줄다리기 복귀 (#398).
+/// NPC의 상호작용키(E) 반응 (#76/#91/#398/#513) — 누르는 즉시 NPC 상태에 따라 갈린다.
+/// 체포(Captured) 상태면 <b>밧줄을 푼다</b> — 좌클릭 3초 홀드에서 E 한 번으로 옮겼다 (#513).
+/// 단 그 대상이 반출된 수감자면(#517) 풀 줄이 애초에 없으므로 <b>밧줄 없는 추종</b>을 재개한다 — 반출 흐름 왕복.
+/// 남이 끌고 있는(Escorted) 대상에 내 줄이 걸려 있으면 <b>내 줄만 뺀다</b> — 줄다리기에서 손 떼기 (#398/#513).
+///
+/// <b>E와 좌클릭의 역할이 갈렸다</b> (#513): 밧줄 좌클릭은 <b>줄을 거는 쪽</b>(묶기·합류·재개),
+/// E는 <b>손을 떼는 쪽</b>이다. 끌던 대상에 E를 누르면 놓기(줄은 묶인 채)이고, 놓아둔 대상에 한 번 더
+/// 누르면 풀기다 — 한 단계씩 풀린다.
 /// 수감(Jailed) 상태면 유치장에서 빼내 따라오게 한다 — 밧줄 없이 추종만 건다 (#492).
 /// PlayerInteractor의 IInteractable 경로를 그대로 사용하므로
 /// NPC가 사거리·조준을 벗어나면 자연히 실패한다.
@@ -48,8 +52,8 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
         interactor != null ? interactor.GetComponentInParent<PlayerEscorter>() : null;
 
     /// <summary>
-    /// 남이 계속 끌고 있는(Escorted) 대상이라도 <b>내 줄이 걸려 있으면</b> E로 다시 낄 수 있는가 —
-    /// 줄다리기에서 E로 빠졌다 복귀하는 경로다. (#398)
+    /// 남이 계속 끌고 있는(Escorted) 대상이라도 <b>내 줄이 걸려 있으면</b> E로 그 줄을 뺄 수 있는가 —
+    /// 줄다리기에서 손을 떼는 경로다. 복귀는 밧줄 좌클릭이다. (#398/#513)
     ///
     /// 상태 순수 함수인 <see cref="NpcStateRules"/>에 둘 수 없다 — "누구의 줄인가"는 요청자마다 다르다.
     /// 그리고 그 조건이 곧 <b>탈취 차단</b>이다: 남의 신병에는 내 줄이 없다.
@@ -81,20 +85,19 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
                     break;
                 }
 
-                // 남이 계속 끄는 중인 대상에 내 줄로 다시 끼기 (#398) — 서버가 줄 소유·사거리를
-                // 다시 검증하므로 여기 검사는 조기 차단일 뿐이다.
+                // 남이 계속 끄는 중인 대상에서 내 줄만 뺀다 — 줄다리기에서 손 떼기 (#398/#513).
+                // 복귀는 밧줄 좌클릭이다. 서버가 줄 소유·사거리를 다시 검증하므로 여기 검사는 조기 차단일 뿐이다.
                 if (CanRejoinOwnRope(FindTethers(interactor)))
                 {
-                    Debug.Log(
-                        $"E 입력 — 내 줄로 끌기 재개 요청(줄다리기 복귀): {m_controller.name}"
-                    );
-                    escorter?.RequestRopeResume(m_controller);
+                    Debug.Log($"E 입력 — 내 줄 빼기 요청(줄다리기 이탈): {m_controller.name}");
+                    escorter?.RequestUnrope(m_controller);
                 }
                 break;
 
             case NpcState.Captured:
                 // 반출된 수감자가 거리 이탈로 멈춘 것이면 반출 흐름을 잇는다 — 밧줄 없이 다시 따라오게 한다 (#517).
-                // 밧줄 분기보다 <b>먼저</b> 봐야 한다: 상태가 같아서 아래로 내려가면 그대로 밧줄에 묶여 눕는다.
+                // 풀기 분기보다 <b>먼저</b> 봐야 한다: 상태가 같아서 아래로 내려가면 풀 줄도 없는 대상에
+                // 풀기가 나가 그대로 배회로 돌아간다.
                 if (NpcStateRules.CanResumeUnropedEscort(m_controller))
                 {
                     Debug.Log($"E 입력 — 반출 수감자 추종 재개 요청: {m_controller.name}");
@@ -102,11 +105,11 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
                     break;
                 }
 
-                // 체포되어 멈춘 NPC를 E로 다시 끌기 시작 — 좌클릭은 같은 대상에서 '풀어주기'라 재개는 E다 (#91/#369).
+                // 놓아둔 신병의 밧줄을 푼다 — 재개는 밧줄 좌클릭으로 옮겼다 (#513).
+                // 남이 묶어 둔 대상도 풀 수 있다(오검거 구제·방해 수단) — 그 판정은 CanUnrope가 쥔다.
                 // 서버 직접 호출은 가드에 막힌다 — 요청 API로 서버에 넘긴다 (#118).
-                // 중복 확보 가드(동시 1명)·밧줄 소지·사거리는 서버가 처리한다
-                Debug.Log($"E 입력 — 밧줄 끌기 재개 요청: {m_controller.name}");
-                escorter?.RequestRopeResume(m_controller);
+                Debug.Log($"E 입력 — 밧줄 풀기 요청: {m_controller.name}");
+                escorter?.RequestUnrope(m_controller);
                 break;
 
             case NpcState.Jailed:

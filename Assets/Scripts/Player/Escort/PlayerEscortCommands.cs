@@ -26,6 +26,14 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     [SerializeField]
     private float m_channelSeconds = 3f;
 
+    [Tooltip(
+        "밧줄을 푼 뒤 쓰러진 채로 있는 시간(초) — 이 시간이 지나면 일어난다. 마지막 구간이 기상 모션이라 "
+        + "총 무력화 시간이다. 이 구간은 다시 묶을 수 있는 재포획 창이기도 하다"
+    )]
+    [Min(0f)]
+    [SerializeField]
+    private float m_unropeDownSeconds = 3f;
+
     // 사거리는 조준·윤곽선과 같은 기준을 쓴다 — PlayerInteractor.Range 재사용 (#147 패턴, #184).
     // "윤곽선은 뜨는데 체포가 안 되는" 거리 불일치를 구조적으로 차단한다.
     private const float k_fallbackRange = 3f; // 테스트 구성 등 PlayerInteractor가 없을 때
@@ -464,7 +472,10 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     // 묶기 채널링의 역방향 — 밧줄을 든 좌클릭으로 체포되어 멈춘 NPC를 풀어 배회로 돌려보낸다.
     // 묶기와 같은 m_channel·게이지·사거리 판정을 재사용한다(대상 상태가 갈라 주므로 채널 하나면 충분).
 
-    /// <summary>밧줄 풀기 진입 — 중복·사거리 검증 후 채널링 시작. 서버(또는 오프라인) 실행. (#369/#390)
+    /// <summary>밧줄 풀기 진입 — 검증 후 <b>즉시</b> 푼다. 서버(또는 오프라인) 실행. (#369/#390/#513)
+    /// 채널링은 없어졌다: 좌클릭 3초 홀드에서 E 한 번으로 옮기면서 홀드를 걸 입력이 사라졌다.
+    /// 대가를 알고 지운다 — 3초는 "남의 신병을 풀어 방해하는" 행위의 유일한 비용이었고, 이제 남는 것은
+    /// 밧줄 소지와 사거리뿐이다. 방해가 너무 싸다고 판정되면 되돌릴 곳은 여기다.
     /// 두 갈래다: 놓아둔 체포(Captured)는 <b>누구나</b> 풀어 배회로 돌려보낼 수 있고(오검거 구제·방해 수단),
     /// 끌리는 중(Escorted)이면 <b>자기 줄만</b> 뺄 수 있다 — 줄다리기에서 손을 떼는 수단이다.
     /// 남이 끌고 있는 줄까지 풀 수 있게 하면 탈취 차단의 우회로가 된다 — 뺏을 필요도 없이 다 풀어버린다.
@@ -478,9 +489,9 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         if (!CanUnrope(target))
             return; // 클라 조기검증(Rope.Use)과 단일 기준 (#184/#369)
         if (!IsInRange(target))
-            return; // 사거리 밖이면 시작조차 안 함
+            return; // 사거리 밖
 
-        ServerUnropeChannelAsync(target).Forget();
+        ServerApplyUnrope(target);
     }
 
     /// <summary>이 대상에 밧줄 풀기를 걸 수 있는가 — 서버 가드와 클라 조기검증(Rope)이 함께 쓰는 단일 기준.</summary>
@@ -488,35 +499,9 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         target != null
         && (NpcStateRules.CanRelease(target.CurrentState) || Escorter.IsTetheredTo(target));
 
-    private async UniTaskVoid ServerUnropeChannelAsync(NpcController target)
+    // 실제 풀기 — 검증이 끝난 뒤의 상태 조작만 담당한다. 서버(또는 오프라인).
+    private void ServerApplyUnrope(NpcController target)
     {
-        NotifyOwner($"밧줄 풀기 채널링 시작: {target.name} ({m_channelSeconds}초)");
-        NotifyChannelGaugeStart(m_channelSeconds);
-
-        // 체포 채널링과 동일한 keepAlive — 도중 거리 이탈은 즉시 실패시킨다.
-        ServerChannel.Result result;
-        try
-        {
-            result = await m_channel.RunAsync(
-                m_channelSeconds,
-                () => target != null && IsInRange(target)
-            );
-        }
-        finally
-        {
-            NotifyChannelGaugeEnd(); // 어떤 경로로 끝나도 게이지 숨김 보장
-        }
-
-        if (result != ServerChannel.Result.Completed)
-        {
-            NotifyOwner("밧줄 풀기 중단 (홀드 뗌 / 거리 이탈)");
-            return;
-        }
-
-        // 채널링 도중 상태가 바뀌었을 수 있다 — 완료 시점에 재확인(예: 그새 다른 플레이어가 끌기 재개).
-        if (!CanUnrope(target))
-            return;
-
         // <b>유치장 안에서는 석방하지 않는다</b> (#492) — 아래 ReleaseDrag가 이미 Captured로 세워 뒀으므로
         // 그대로 끝낸다. 판정을 통과한 대상이면 다음 틱에 JailIntake가 좌석에 앉히고, 안 통과했으면
         // 그 자리에 서 있는다(다시 묶어 끌고 나가면 된다).
@@ -547,7 +532,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
             // RemoveTether보다 <b>앞</b>이어야 한다: 줄을 먼저 빼면 묶임 표시가 내려가
             // ServerStandUpThen이 "이미 서 있다"로 오판해 일어나기가 통째로 생략된다.
             if (!othersHold)
-                target.ServerStandUpThen(afterStandUp);
+                target.ServerStandUpThen(afterStandUp, m_unropeDownSeconds);
 
             Escorter.RemoveTether(target);
 
@@ -573,7 +558,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         NotifyOwner(insideJail
             ? $"밧줄 풀기 완료 — 유치장 안이라 그 자리에 둔다: {target.name}"
             : $"밧줄 풀기 완료 — 배회 복귀: {target.name}");
-        target.ServerStandUpThen(afterStandUp);
+        target.ServerStandUpThen(afterStandUp, m_unropeDownSeconds);
     }
 
     // 본부 인계 요청(#414)은 제거됐다 (#492) — 판정 트리거가 인계 단말에서 유치장 앞 보안 게이트로
