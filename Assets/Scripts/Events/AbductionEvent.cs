@@ -8,13 +8,19 @@ using UnityEngine.AI;
 ///
 /// 오검거 페널티(#276~#279)의 호송 파이프라인을 그대로 쓴다 — 추격(<see cref="NpcController.StartPenaltyChase"/>) →
 /// 포획 통보 → 수렴 → <see cref="CarryEscortSequence"/>. 다른 점은 <b>트리거·목적지·결말</b> 셋이다:
-/// 트리거는 "혼자 있음"이고, 목적지는 광장이 아니라 외곽이며, 도착하면 매달지 않고 <b>그 자리에 버린다</b>.
-/// 페널티는 방치 시간(<see cref="m_abandonedSeconds"/>) + <b>걸어 돌아오는 시간</b> 둘이다 — 오검거의
-/// 광장 매달기(30초)보다 짧게 잡되, 끌려간 거리가 그 위에 얹힌다.
+/// 트리거는 "혼자 있음"이고, 목적지는 광장이 아니라 외곽이며, 결말은 매달기가 아니라 <b>처형</b>이다.
 ///
-/// <b>구조에 성공하면 방치가 없다</b> — 그 자리에서 즉시 풀린다. 도착과 구조의 차이가 여기서 갈린다:
-/// 둘 다 "끌기가 끝난다"는 같지만, 달려와 준 동료가 있으면 잃는 시간이 걸어 돌아오는 것뿐이어야
-/// 구조가 값어치를 갖는다.
+/// <b>결말은 3단계다</b> (팀 확정 2026-08-05):
+///  1. <b>린치</b> — 외곽에 도착하면 끌기를 끊어 피해자를 세우고(무력화는 유지 — 서 있되 아무것도 못 한다)
+///     납치범을 저항형으로 돌려 구타한다. 저항 상태(<see cref="NpcResistState"/>)를 그대로 쓴다.
+///  2. <b>처형</b> — HP가 0이 되면 기능 정지로 확정한다(<see cref="PlayerIncapacitation.ServerKillByAbduction"/>).
+///  3. <b>반출</b> — 시체를 끌고 도시 바깥으로 걸어 나가고, 맵 밖에서 납치범도 함께 사라진다.
+///     이 구간만 NavMesh를 벗어난다 — 그 이유는 <c>DisposeBodyAsync</c>에 적어 뒀다.
+/// 반출이 끝난 뒤 그 플레이어가 라운드 남은 시간에 무엇을 하는지는 이 이벤트의 몫이 아니다(별도 이슈).
+///
+/// <b>구조 창은 HP 0 이전까지다</b> — 린치 중에 납치범을 전부 떼어내면 피해자는 깎인 HP로 그 자리에서
+/// 풀려난다. HP 0을 넘기면 되돌릴 길이 없다: 반출은 결말의 연출이지 판정이 아니다. 이 선이 곧
+/// "혼자 다니면 죽는다"의 값이다 — 되돌릴 수 있는 구간을 반출까지 늘리면 외곽까지 달려갈 이유가 사라진다.
 ///
 /// <b>구조는 호송 중에도 된다</b> — 이것이 오검거와 정반대다. 오검거는 포획이 확정되면 격퇴가 무시되지만
 /// (<see cref="NpcController.ApplyChaseRepel"/>이 수렴 중을 걸러낸다 — "유예 창은 잡히기 전까지다", #278),
@@ -92,10 +98,18 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     [SerializeField] private float m_arriveDistance = 2f;
     [SerializeField] private float m_travelTimeoutSeconds = 90f;
 
-    [Header("외곽 방치")]
-    [Tooltip("외곽에 버려진 뒤 행동불능으로 남는 시간(초). 구조에 성공하면 이 시간 없이 즉시 풀린다")]
-    [Min(0f)]
-    [SerializeField] private float m_abandonedSeconds = 10f;
+    [Header("외곽 린치 · 시체 반출")]
+    [Tooltip("도착 후 구타로 HP를 소진시키지 못해도 이 시간(초)에 강제로 끝낸다 — 교착 안전망이지 연출 값이 아니다")]
+    [Min(1f)]
+    [SerializeField] private float m_lynchTimeoutSeconds = 30f;
+
+    [Tooltip("시체를 끌고 도시 바깥으로 걸어 나가는 거리(m) — 이 거리를 지나면 시체와 납치범이 함께 사라진다")]
+    [Min(1f)]
+    [SerializeField] private float m_disposalDistance = 25f;
+
+    [Tooltip("반출 이동 속도(m/s) — NavMesh 밖이라 에이전트가 아니라 이 값으로 직접 민다")]
+    [Min(0.1f)]
+    [SerializeField] private float m_disposalSpeed = 3.5f;
 
     [Header("수명")]
     [Tooltip("이 시간(초) 안에 붙잡지 못하면 납치범이 포기한다 — 잔류 시민으로 남아 언제든 검거 가능")]
@@ -304,7 +318,8 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
         if (m_carryTarget != null)
         {
             PlayerIncapacitation incap = m_carryTarget.GetComponent<PlayerIncapacitation>();
-            if (incap != null && incap.Cause == IncapacitationCause.Abducted)
+            if (incap != null
+                && (incap.Cause == IncapacitationCause.Abducted || incap.Cause == IncapacitationCause.Lynched))
                 incap.Recover();
         }
 
@@ -342,6 +357,34 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     {
         for (int i = m_abductors.Count - 1; i >= 0; i--)
             ReleaseAbductor(m_abductors[i]);
+    }
+
+    /// <summary>
+    /// 반출 완료 — 납치범을 씬에서 치운다. <see cref="ReleaseAbductor"/>와 <b>갈리는 경로</b>다:
+    /// 그쪽은 도심에 잔류 시민으로 남겨 언제든 검거할 수 있게 하지만(#310), 시체를 끌고 맵 밖까지
+    /// 나간 놈은 잔류하지 않는다(팀 확정 2026-08-05). 그래서 잔류 정리를 물려줄
+    /// <see cref="MisdemeanorLoiterer"/>도 붙이지 않는다 — 여기서 바로 사라지기 때문이다.
+    /// 반출이 도중에 실패해도 부른다: 어느 경로로 끝나든 납치범이 씬에 남지 않게 하는 것이 이 함수의 계약이다.
+    /// </summary>
+    private void DisposeAbductors()
+    {
+        for (int i = m_abductors.Count - 1; i >= 0; i--)
+        {
+            NpcController abductor = m_abductors[i];
+            if (abductor == null)
+                continue;
+
+            abductor.OnPenaltyCaught -= HandleAbductionCaught;
+            abductor.OnDamaged -= HandleAbductorDamaged;
+
+            // 끌고 있던 플레이어가 파괴된 참조를 쥐지 않게 먼저 놓게 한다 (다른 이벤트의 Despawn과 동일)
+            foreach (PlayerEscorter escorter in PlayerEscorter.FindEscortersOf(abductor))
+                escorter.ReleaseDrag(abductor);
+
+            SuddenEventUtil.DespawnOrDestroy(abductor.gameObject, playVfx: false);
+        }
+
+        m_abductors.Clear();
     }
 
     private void Finish()
