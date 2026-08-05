@@ -240,7 +240,7 @@
 ### Phase 2 — 코드 조립 문자열 (약 60개)
 `LocalizedString` SerializeField + Smart String으로 교체. 관례는 [SignalDecoder](../../Assets/Scripts/Item/SignalDecoder.cs)와 같다.
 
-- ~~`SettlementPanel`~~ (15) · `AuthPanel`+`AccountCredentials`+`NicknameRules` (21) · ~~`ScanInfoView`~~ · ~~`ScanResultPresenter`~~ · `ShopStandView` · ~~`CCTVChannelLabelView`~~ · `HqRevivalDevice` · `BombTimerView`
+- ~~`SettlementPanel`~~ (15) · ~~`AuthPanel`+`AccountCredentials`+`NicknameRules`~~ (실제 31) · ~~`ScanInfoView`~~ · ~~`ScanResultPresenter`~~ · ~~`ShopStandView`~~ · ~~`CCTVChannelLabelView`~~ · `HqRevivalDevice` · `BombTimerView`
 - ~~`SessionPanel`~~ · ~~`LeaveConfirmPanel`~~ · ~~`LobbyRosterRowView`/`LobbyRosterPanel`~~ · ~~`SessionCodePanel`~~ — **Phase 1에서 앞당겨 처리했다** (해당 씬·프리팹을 손대는 김에)
 - **`string m_format` 필드 8개** → `LocalizedString`: ~~`RoundFundHud`~~(실제 이름은 `RoundFundBoard`) · ~~`ReadyWaitHud`~~ · ~~`RemainingCriminalsHud`~~ · ~~`WantedEntryView`~~ · `BombSerialView` · ~~`MicStatusHud`~~ · `HqRevivalDevice` · `CCTVNode`
 - ~~**곁다리 정리:** 검거 판정 문구 3곳 중복~~ — **정정.** 중복은 2곳이 아니라 **번역 대상 1곳**이었다.
@@ -248,6 +248,46 @@
   [ArrestVerdictFeedback](../../Assets/Scripts/Interaction/ArrestVerdictFeedback.cs)이 겹쳐 보인 것은 이름 폴백 `"알 수 없음"` 하나였다.
   실제 표시는 [VerdictBanner](../../Assets/Scripts/UI/Hud/VerdictBanner.cs) 한 곳이라 합칠 것이 없어 그대로 번역했다 —
   판정 3종은 규약 키 `Hud.Verdict.<ArrestVerdict>`이고 `ArrestVerdict`에 `[LocalizedEnum]`을 붙였다.
+
+#### 계정·닉네임 묶음 (`AuthPanel` · `AccountCredentials` · `NicknameRules` · `AuthBootstrap`) — 완료
+
+문구 **31개**를 `TitleTable`로 옮겼다(착수 전 추산 21개보다 많다 — `AuthBootstrap`이 예외 메시지로 들고 있던
+문구가 세어지지 않았다). 이 묶음은 **문구를 만드는 곳과 띄우는 곳이 다르다**는 점이 다른 화면과 달랐다:
+규칙 검사기 둘은 UI를 모르는 순수 로직인데 완성된 한국어 문장을 돌려주고 있었고, `AuthBootstrap`은 그 문장을
+예외에 실어 던져 `AuthPanel`이 `ex.Message`를 그대로 라벨에 넣었다.
+
+- **검사기는 `enum`을 돌려준다** — `EAccountValidation`(7) · `EAccountError`(4) · `ENicknameValidation`(3).
+  키는 규약(`Title.AccountValidation.` · `Title.AccountError.` · `Title.NicknameValidation.` + 값 이름)이라
+  §7 검증에 자동으로 편입된다. 결정 (g)가 네트워크 알림에 적용한 규칙("문장 말고 enum")을 **모듈 경계**에도 쓴 것이다.
+- **길이 인자는 검사기가 채운다** (`Describe(result)`가 `LocalizedMessage`를 돌려준다). 상·하한 상수의 주인이
+  검사기라, 표시 쪽이 숫자를 알면 단일 출처가 깨진다.
+- **예외는 [`LocalizedMessageException`](../../Assets/Scripts/Localization/LocalizedMessage.cs)으로 던진다** —
+  사유를 문장이 아니라 키+인자([`LocalizedMessage`](../../Assets/Scripts/Localization/LocalizedMessage.cs))로 나른다.
+  던지는 쪽이 문장을 만들면 그 문장은 던진 시점의 언어로 굳는다. UGS SDK가 준 메시지처럼 **우리 테이블에 없는 문구**는
+  `LocalizedMessage.Literal`로 감싸 그대로 띄운다 — 번역 대상이 아님을 코드에서 구분해 둔 것이다.
+- **잠금 사유는 두 조각의 조합이다** — `Title.AccountLock.<EAccountLock>`("세션 참가 중에는 {0} 수 없습니다")에
+  `Title.AccountAction.<EAccountAction>`("계정을 연동할")을 인자로 끼운다. 조합해 두면 조작이 늘 때마다 문구가 배로 늘고,
+  ko에서만 자연스러운 어순으로 굳는다. `LocalizedMessage`의 인자에 `LocalizedMessage`를 넣으면 **읽을 때 같이 풀린다.**
+- **`AuthPanel`은 마지막 상태 문구를 키로 들고 있다.** 언어를 바꾸면 상태 줄도 따라 바뀌어야 하는데(설정 창이
+  타이틀 씬에도 있다), 문자열만 들고 있으면 그 줄만 옛 언어로 남는다. `SelectedLocaleChanged`에 걸어 다시 읽는다.
+- **`AuthPanel`의 문구는 `SerializeField`가 아니라 규약 키와 고정 키다.** 상태 줄 6종은 한 라벨의 배타적 상태라
+  enum(`Title.AuthStatus.<EAuthStatus>`)이 맞고 — 로비 음성 상태(`Lobby.Voice.`)와 같은 자리다 —, 나머지 7개
+  (`ID: {0}` · `로그인 안 됨` · 확인창 본문 2개 · 로그인/연동 상태 위반 3개)도 특정 코드 경로에 붙박이라
+  **인스펙터에서 고를 것이 없다.** 결정 (f)의 "인스펙터에 한국어가 박히는 것"과는 다른 상황이다.
+- **콘솔 전용 경로는 갈랐다.** `GetAccountLockReason(string action)`이 UI 문장과 로그 문장을 겸하고 있었다 —
+  `GetAccountLock()`이 enum을 돌려주고, 로그(SignOut·ClearSessionToken 거부)는 그 값을 그대로 찍는다(§1 범위 밖).
+- **확인창 본문은 열려 있는 동안 언어를 따라가지 않는다** — 정산 패널과 같은 판단(아래)이다. 확인창이 떠 있는 동안
+  설정 창을 열 경로가 없다.
+
+> **ko 화면의 문구가 하나 바뀐다.** `처리 중...`은 그대로지만 en은 `Working...`이다. 나머지는 뜻이 같다.
+
+> ⚠ **이 묶음은 에디터 없이 작업했다.** 테이블 엔트리 31개는 `.asset` YAML을 직접 편집해 넣었고
+> (id는 기존 최댓값 다음부터, Smart 표시가 필요한 8개는 테이블의 `SmartFormatTag` 목록에도 등록),
+> 새 스크립트 [LocalizedMessage.cs](../../Assets/Scripts/Localization/LocalizedMessage.cs)의 `.meta`는
+> 기존 스크립트 메타와 같은 최소 형식(`fileFormatVersion` + `guid`)으로 직접 만들어 뒀다 — 없이 커밋하면
+> 사람마다 다른 guid가 생긴다. 컴파일은 Roslyn 문법 검사까지만 확인했다.
+> 에디터를 열면 ① 콘솔 컴파일 에러 ② `Tools ▸ Localization ▸ 규약 키 검증` ③ 타이틀 화면에서 ko↔en 전환을
+> 순서대로 확인하면 된다.
 
 > **`RoundFundBoard`의 키는 `HqTable`이 아니라 `HudTable`에 뒀다.** 본부 게시판이지만 §3이 '팀 자금' 표시를
 > `HudTable`에 잡아 뒀고, `HqTable`은 인명부·수배 리스트처럼 본부 화면 고유 UI를 담는 자리다.
@@ -388,7 +428,8 @@ public enum EInstallable { None, SignalDecoder, JailSirenButton }
 ([LocalizedEnumValidator](../../Assets/Scripts/Editor/LocalizedEnumValidator.cs)).
 선언이 붙은 enum을 전부 훑어 값마다 키가 있는지, 그리고 **로케일별 값이 비지 않았는지**까지 확인한다.
 검사 대상 등록표를 따로 두지 않는다 — 선언 자체가 목록이라 새 규약은 어트리뷰트만 붙이면 자동 편입된다.
-현재 기준 enum 2개 · 키 9개가 통과한다.
+현재 선언은 **어트리뷰트 14개**(파일 8곳)다. 마지막으로 통과를 확인한 시점은 몽타주 옵션 배선 직후
+(enum 8 · 키 31)이고, 계정·닉네임 묶음에서 enum 6개가 늘었으므로 **다음에 에디터를 열 때 다시 돌릴 것.**
 
 여기에 [`LocalizedStrings.Get`](../../Assets/Scripts/Localization/LocalizedStrings.cs)이 에디터에서만
 **실제로 밟은 경로의 누락을 키마다 한 번 경고**한다. ②가 미리 훑는 그물이고 이쪽은 빠져나간 것을 잡는 그물이다.

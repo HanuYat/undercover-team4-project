@@ -7,6 +7,29 @@ using Unity.Services.Core.Environments;
 using UnityEngine;
 
 /// <summary>
+/// 계정 조작을 막고 있는 사유. 값 이름이 곧 문구의 키다 — <c>Title.AccountLock.</c> + 이름 (#497).
+/// 문구는 "{조작} 수 없습니다" 꼴이라 <see cref="EAccountAction"/>을 인자로 끼워 완성한다.
+/// </summary>
+[LocalizedEnum("TitleTable", "Title.AccountLock.", nameof(EAccountLock.None))]
+public enum EAccountLock
+{
+    None = 0,
+    InSession = 1,  // 세션 참가 중 — PlayerId가 바뀌면 로비·Vivox가 옛 ID를 들고 어긋난다
+    Switching = 2,  // 세션 전환 중
+}
+
+/// <summary>
+/// 잠금 문구에 끼워 넣을 조작 이름 (<c>Title.AccountAction.</c> + 이름).
+/// 로그에만 쓰이는 조작(로그아웃·토큰 삭제)은 여기 없다 — 콘솔은 번역 대상이 아니다.
+/// </summary>
+[LocalizedEnum("TitleTable", "Title.AccountAction.")]
+public enum EAccountAction
+{
+    Link = 0,
+    Switch = 1,
+}
+
+/// <summary>
 /// UGS 초기화·로그인·계정 상태의 단일 창구. 사용처는 App.Net.Auth로 접근한다.
 /// 상태 없는 형식 규칙은 NicknameRules(#249)·AccountCredentials(#384)가, 테스트 씬용 수동 조작
 /// 패널은 AuthDebugGui가 담당한다 — 여기에는 상태를 가진 흐름만 둔다.
@@ -30,6 +53,9 @@ public class AuthBootstrap : CommonManagerBase
     public event Action OnNicknameChanged;
 
     private const string k_nicknamePrefKeyPrefix = "player.nickname.";
+
+    // 계정 조작 사유 문구가 든 테이블 — 타이틀 화면의 계정 패널에서만 보인다 (#497)
+    private const string k_table = "TitleTable";
 
     // ── 계정 연동 (#384) — 형식 규칙·오류 문장은 AccountCredentials가 담당 ──
     private string m_accountUsername = string.Empty;
@@ -164,9 +190,9 @@ public class AuthBootstrap : CommonManagerBase
         if (trimmed == Nickname)
             return; // 변경 없음 — 조용히 넘어간다
 
-        string error = NicknameRules.Validate(trimmed);
-        if (error != null)
-            throw new ArgumentException(error);
+        ENicknameValidation nicknameResult = NicknameRules.Validate(trimmed);
+        if (nicknameResult != ENicknameValidation.Ok)
+            throw new LocalizedMessageException(NicknameRules.Describe(nicknameResult));
 
         await AuthenticationService.Instance.UpdatePlayerNameAsync(trimmed);
 
@@ -207,10 +233,10 @@ public class AuthBootstrap : CommonManagerBase
             return; // 이미 일치 — 대부분의 재접속 경로, 네트워크 호출 없음
 
         // 규칙 도입 이전 빌드나 수동 조작으로 남은 캐시가 그대로 서버에 반영되지 않게 한 번 더 검사한다.
-        string error = NicknameRules.Validate(cached);
-        if (error != null)
+        ENicknameValidation cachedResult = NicknameRules.Validate(cached);
+        if (cachedResult != ENicknameValidation.Ok)
         {
-            Debug.LogWarning($"[AuthBootstrap] 캐시된 닉네임이 규칙 위반이라 폐기: {error}");
+            Debug.LogWarning($"[AuthBootstrap] 캐시된 닉네임이 규칙 위반이라 폐기: {cachedResult}");
             PlayerPrefs.DeleteKey(NicknamePrefKey);
             PlayerPrefs.Save();
             return;
@@ -250,17 +276,15 @@ public class AuthBootstrap : CommonManagerBase
     public async UniTask LinkAccountAsync(string username, string password)
     {
         if (!IsSignedIn)
-            throw new InvalidOperationException("로그인 후에 연동할 수 있습니다.");
-        ThrowIfAccountLocked("계정을 연동할");
+            throw new LocalizedMessageException(Message("Title.Account.RequiresSignInToLink"));
+        ThrowIfAccountLocked(EAccountAction.Link);
         if (IsLinked)
-            throw new InvalidOperationException("이미 계정이 연동되어 있습니다.");
+            throw new LocalizedMessageException(Message("Title.Account.AlreadyLinked"));
 
         string id = username?.Trim() ?? string.Empty;
         string pw = password ?? string.Empty; // 비밀번호는 Trim하지 않는다 — 공백도 유효 문자일 수 있다
 
-        string error = AccountCredentials.Validate(id, pw);
-        if (error != null)
-            throw new ArgumentException(error);
+        ThrowIfInvalid(AccountCredentials.Validate(id, pw));
 
         await AuthenticationService.Instance.AddUsernamePasswordAsync(id, pw);
 
@@ -296,14 +320,12 @@ public class AuthBootstrap : CommonManagerBase
     /// </summary>
     public async UniTask SignInWithAccountAsync(string username, string password)
     {
-        ThrowIfAccountLocked("계정을 바꿀");
+        ThrowIfAccountLocked(EAccountAction.Switch);
 
         string id = username?.Trim() ?? string.Empty;
         string pw = password ?? string.Empty;
 
-        string error = AccountCredentials.Validate(id, pw);
-        if (error != null)
-            throw new ArgumentException(error);
+        ThrowIfInvalid(AccountCredentials.Validate(id, pw));
 
         if (UnityServices.State != ServicesInitializationState.Initialized)
             await InitializeAndSignInAsync(m_profile); // 초기화 경로 확보 — 바로 아래에서 로그아웃한다
@@ -380,24 +402,46 @@ public class AuthBootstrap : CommonManagerBase
     /// 세션에 참가한 채 PlayerId가 바뀌면 로비·Vivox가 옛 ID를 들고 어긋나고,
     /// 세션 전환 중(CanSignOut)에도 같은 창이 열린다. 두 검사가 계정 조작 전부에 붙으므로 여기 모은다.
     /// </summary>
-    private string GetAccountLockReason(string action)
+    private EAccountLock GetAccountLock()
     {
         if (IsNetworkConnected)
-            return $"세션 참가 중에는 {action} 수 없습니다.";
+            return EAccountLock.InSession;
 
         if (CanSignOut != null && !CanSignOut())
-            return $"세션 전환 중에는 {action} 수 없습니다.";
+            return EAccountLock.Switching;
 
-        return null;
+        return EAccountLock.None;
     }
 
-    /// <summary>사유 문장이 그대로 AuthPanel에 표시된다 — 예외 메시지가 곧 UI 문구다. (#384)</summary>
-    private void ThrowIfAccountLocked(string action)
+    /// <summary>
+    /// 사유가 그대로 AuthPanel에 표시된다 — 예외가 곧 UI 문구다. (#384)
+    /// 문장이 아니라 키로 던진다: 표시하는 쪽이 자기 언어로 읽는다 (#497).
+    /// 잠금 사유와 조작 이름을 따로 둔 것은 "세션 참가 중에는 {계정을 연동할} 수 없습니다"처럼
+    /// 두 조각의 조합이기 때문이다 — 조합해 두면 조작이 늘 때마다 문구가 배로 는다.
+    /// </summary>
+    private void ThrowIfAccountLocked(EAccountAction action)
     {
-        string reason = GetAccountLockReason(action);
-        if (reason != null)
-            throw new InvalidOperationException(reason);
+        EAccountLock lockReason = GetAccountLock();
+        if (lockReason == EAccountLock.None)
+            return;
+
+        throw new LocalizedMessageException(
+            Message(
+                "Title.AccountLock." + lockReason,
+                Message("Title.AccountAction." + action)
+            )
+        );
     }
+
+    /// <summary>형식 위반이면 사유를 담아 던진다 — 연동·로그인이 같은 검사를 쓴다.</summary>
+    private static void ThrowIfInvalid(EAccountValidation result)
+    {
+        if (result != EAccountValidation.Ok)
+            throw new LocalizedMessageException(AccountCredentials.Describe(result));
+    }
+
+    private static LocalizedMessage Message(string key, params object[] args) =>
+        LocalizedMessage.Of(k_table, key, args);
 
     /// <summary>
     /// 이 기기에서 계정을 분리하고 새 익명 계정으로 시작한다. (#444)
@@ -409,9 +453,9 @@ public class AuthBootstrap : CommonManagerBase
     /// </summary>
     public async UniTask StartNewAnonymousAccountAsync()
     {
-        ThrowIfAccountLocked("계정을 바꿀");
+        ThrowIfAccountLocked(EAccountAction.Switch);
         if (UnityServices.State != ServicesInitializationState.Initialized)
-            throw new InvalidOperationException("로그인 후에 계정을 바꿀 수 있습니다.");
+            throw new LocalizedMessageException(Message("Title.Account.RequiresSignInToSwitch"));
 
         // 재로그인보다 **먼저** 지운다. 순서가 뒤집히면 RestoreCachedNicknameAsync의 익명 경로가
         // 옛 계정 닉네임을 새 익명 계정에 심는다 (§4).
@@ -428,10 +472,11 @@ public class AuthBootstrap : CommonManagerBase
 
     public void SignOut(bool clearCredentials = false)
     {
-        string reason = GetAccountLockReason("로그아웃할");
-        if (reason != null)
+        // 콘솔 전용 경로 — 사유를 표시하지 않으므로 enum을 그대로 찍는다 (§1 범위 밖)
+        EAccountLock signOutLock = GetAccountLock();
+        if (signOutLock != EAccountLock.None)
         {
-            Debug.LogWarning($"[AuthBootstrap] SignOut 거부 — {reason}");
+            Debug.LogWarning($"[AuthBootstrap] SignOut 거부 — {signOutLock}");
             return;
         }
 
@@ -449,10 +494,10 @@ public class AuthBootstrap : CommonManagerBase
 
     public void ClearSessionToken()
     {
-        string reason = GetAccountLockReason("토큰을 삭제할");
-        if (reason != null)
+        EAccountLock clearLock = GetAccountLock();
+        if (clearLock != EAccountLock.None)
         {
-            Debug.LogWarning($"[AuthBootstrap] ClearSessionToken 거부 — {reason}");
+            Debug.LogWarning($"[AuthBootstrap] ClearSessionToken 거부 — {clearLock}");
             return;
         }
 

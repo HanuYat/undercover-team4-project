@@ -1,9 +1,26 @@
-using TMPro;
 using System;
-using UnityEngine;
-using UnityEngine.UI;
 using Cysharp.Threading.Tasks;
+using TMPro;
 using Unity.Services.Core;
+using UnityEngine;
+using UnityEngine.Localization;
+using UnityEngine.Localization.Settings;
+using UnityEngine.UI;
+
+/// <summary>
+/// 계정 패널의 상태 줄에 뜨는 결과 문구. 값 이름이 곧 키다 — <c>Title.AuthStatus.</c> + 이름 (#497).
+/// 한 라벨의 배타적인 상태들이라 인스펙터에서 고를 것이 없다 — 로비 음성 상태(<c>Lobby.Voice.</c>)와 같은 자리.
+/// </summary>
+[LocalizedEnum("TitleTable", "Title.AuthStatus.")]
+public enum EAuthStatus
+{
+    Busy = 0,
+    LinkSucceeded = 1,
+    SignInSucceeded = 2,
+    NewAnonymousStarted = 3,
+    ConfirmUnavailableForLink = 4, // 확인창이 없어 연동 중단 — 편도 결정을 경고 없이 실행하지 않는다 (#444)
+    ConfirmUnavailableForSwitch = 5,
+}
 
 /// <summary>
 /// 계정 상태 패널 — 우측 상단에 로그인된 PlayerId, 우측 하단에 로그인/로그아웃 버튼. (#247)
@@ -19,28 +36,63 @@ public class AuthPanel : PanelBase
     protected override bool OpenOnAwake => true;
 
     [Header("UI 참조")]
-    [SerializeField] private TMP_Text m_playerIdText; // 우측 상단
-    [SerializeField] private Button m_signInButton;   // 우측 하단
-    [SerializeField] private Button m_signOutButton;
+    [SerializeField]
+    private TMP_Text m_playerIdText; // 우측 상단
+
+    [SerializeField]
+    private Button m_signInButton; // 우측 하단
+
+    [SerializeField]
+    private Button m_signOutButton;
 
     [Header("닉네임 (#249)")]
-    [SerializeField] private TMP_InputField m_nicknameInput;
-    [SerializeField] private Button m_applyNicknameButton;
-    [SerializeField] private TMP_Text m_nicknameStatusText;
+    [SerializeField]
+    private TMP_InputField m_nicknameInput;
+
+    [SerializeField]
+    private Button m_applyNicknameButton;
+
+    [SerializeField]
+    private TMP_Text m_nicknameStatusText;
 
     [Header("계정 연동 (#384)")]
-    [SerializeField] private TMP_InputField m_usernameInput;
-    [SerializeField] private TMP_InputField m_passwordInput;
-    [SerializeField] private Button m_linkButton;          // 익명 → 정식 승격
-    [SerializeField] private Button m_accountSignInButton;  // 다른 기기에서 로그인
-    [SerializeField] private TMP_Text m_accountStatusText;
+    [SerializeField]
+    private TMP_InputField m_usernameInput;
+
+    [SerializeField]
+    private TMP_InputField m_passwordInput;
+
+    [SerializeField]
+    private Button m_linkButton; // 익명 → 정식 승격
+
+    [SerializeField]
+    private Button m_accountSignInButton; // 다른 기기에서 로그인
+
+    [SerializeField]
+    private TMP_Text m_accountStatusText;
 
     [Header("계정 전환 (#444)")]
-    [SerializeField] private Button m_newAnonymousButton;  // 이 기기에서 분리 → 새 익명 계정
-    [SerializeField] private TMP_Text m_linkWarningText;   // 연동 전 상시 경고 (결정 (e))
+    [SerializeField]
+    private Button m_newAnonymousButton; // 이 기기에서 분리 → 새 익명 계정
+
+    [SerializeField]
+    private TMP_Text m_linkWarningText; // 연동 전 상시 경고 (결정 (e))
 
     private bool m_isApplyingNickname;
     private bool m_isAccountBusy; // 연동/로그인 요청 겹침 방지 래치
+
+    // 문구는 전부 코드가 상태에 따라 고르는 자리라 인스펙터에서 고를 것이 없다 — 규약 키(enum)와
+    // 아래 고정 키를 쓴다 (#497 결정 (h)). 확인창 본문 둘도 그 조작에 붙박이라 고를 대상이 아니다.
+    private const string k_table = "TitleTable";
+    private const string k_playerIdKey = "Title.Auth.PlayerId";
+    private const string k_signedOutKey = "Title.Auth.SignedOut";
+    private const string k_linkConfirmKey = "Title.Auth.LinkConfirm";
+    private const string k_newAnonymousConfirmKey = "Title.Auth.NewAnonymousConfirm";
+    private const string k_statusPrefix = "Title.AuthStatus.";
+
+    // 마지막으로 띄운 상태 문구 — 문장이 아니라 키로 들고 있어야 언어가 바뀔 때 다시 읽을 수 있다 (#497)
+    private LocalizedMessage m_accountStatus;
+    private LocalizedMessage m_nicknameStatus;
 
     private AuthBootstrap Auth => App.Net.Auth;
 
@@ -77,6 +129,10 @@ public class AuthPanel : PanelBase
             Auth.OnNicknameChanged += Refresh;
         }
 
+        // 언어를 바꾸면 이 패널의 문구도 즉시 따라가야 한다 — 설정 창이 타이틀 씬에도 있다.
+        // 상태 줄까지 되살리려면 마지막 문구를 키로 들고 있어야 한다(위 m_accountStatus) — 결정 (d). (#497)
+        LocalizationSettings.SelectedLocaleChanged += HandleLocaleChanged;
+
         Refresh();
     }
 
@@ -95,7 +151,42 @@ public class AuthPanel : PanelBase
             Auth.OnSignedOut -= Refresh;
             Auth.OnNicknameChanged -= Refresh;
         }
+
+        // 종료 중에는 설정 에셋을 되살리지 않는다 — HasSettings로 먼저 확인한다 (ShopStand 관례)
+        if (LocalizationSettings.HasSettings)
+            LocalizationSettings.SelectedLocaleChanged -= HandleLocaleChanged;
     }
+
+    // 언어가 바뀌면 상태 줄 둘을 다시 읽고 나머지는 Refresh가 다시 채운다
+    private void HandleLocaleChanged(Locale locale)
+    {
+        RenderStatusTexts();
+        Refresh();
+    }
+
+    private void SetAccountStatus(in LocalizedMessage message)
+    {
+        m_accountStatus = message;
+        RenderStatusTexts();
+    }
+
+    private void SetNicknameStatus(in LocalizedMessage message)
+    {
+        m_nicknameStatus = message;
+        RenderStatusTexts();
+    }
+
+    private void RenderStatusTexts()
+    {
+        if (m_accountStatusText != null)
+            m_accountStatusText.text = m_accountStatus.Resolve();
+
+        if (m_nicknameStatusText != null)
+            m_nicknameStatusText.text = m_nicknameStatus.Resolve();
+    }
+
+    private static LocalizedMessage Status(EAuthStatus status) =>
+        LocalizedMessage.Of(k_table, k_statusPrefix + status);
 
     private void HandleSignInClicked() => SignInAsync().Forget();
 
@@ -136,12 +227,19 @@ public class AuthPanel : PanelBase
         try
         {
             await Auth.SetPlayerNameAsync(attempted);
-            m_nicknameStatusText.text = string.Empty;
+            SetNicknameStatus(LocalizedMessage.None);
+        }
+        catch (LocalizedMessageException ex)
+        {
+            // 규칙 위반 — 사유가 키로 온다 (#497)
+            failed = true;
+            SetNicknameStatus(ex.Reason);
         }
         catch (Exception ex)
         {
+            // UGS가 준 문구는 우리 테이블에 없다 — 그대로 띄우고 번역 대상에서 뺀다
             failed = true;
-            m_nicknameStatusText.text = ex.Message;
+            SetNicknameStatus(LocalizedMessage.Literal(ex.Message));
         }
         finally
         {
@@ -164,26 +262,24 @@ public class AuthPanel : PanelBase
         // 형식 오류로 실패하면 그 경고가 무슨 뜻이었는지 흐려진다.
         string id = m_usernameInput.text?.Trim() ?? string.Empty;
         string pw = m_passwordInput.text ?? string.Empty;
-        string error = AccountCredentials.Validate(id, pw);
-        if (error != null)
+        EAccountValidation result = AccountCredentials.Validate(id, pw);
+        if (result != EAccountValidation.Ok)
         {
-            m_accountStatusText.text = error;
+            SetAccountStatus(AccountCredentials.Describe(result));
             return;
         }
 
         if (!TryGetConfirmPanel(out AccountConfirmPanel confirm))
         {
             // 편도 결정을 경고 없이 실행하는 것이 #444가 없애려는 상태다 — 조용히 진행하지 않는다.
-            m_accountStatusText.text = "확인창을 열 수 없어 연동을 중단했습니다.";
+            SetAccountStatus(Status(EAuthStatus.ConfirmUnavailableForLink));
             return;
         }
 
         // 확정된 값을 인수로 넘긴다 — 확인창이 떠 있는 동안 입력이 바뀌어도
         // 사용자가 재확인한 그 아이디가 전송된다.
         confirm.Prepare(
-            $"'{id}' 아이디로 연동합니다.\n"
-                + "한번 연동하면 되돌릴 수 없고, 아이디도 바꿀 수 없습니다.\n"
-                + "비밀번호를 잊으면 계정을 되찾을 수 없습니다.",
+            LocalizedStrings.Get(k_table, k_linkConfirmKey, id),
             () => LinkAsync(id, pw).Forget()
         );
         confirm.OpenPanel();
@@ -200,18 +296,22 @@ public class AuthPanel : PanelBase
         try
         {
             await Auth.LinkAccountAsync(username, password);
-            m_accountStatusText.text = "계정 연동 완료";
+            SetAccountStatus(Status(EAuthStatus.LinkSucceeded));
             m_passwordInput.text = string.Empty; // 성공했으면 화면에 남겨둘 이유가 없다
         }
         catch (RequestFailedException ex)
         {
-            // UGS 응답은 불친절하다 — 실측한 코드로 문장을 가른다 (AuthenticationException도 여기)
-            m_accountStatusText.text = AccountCredentials.DescribeError(ex);
+            // UGS 응답은 불친절하다 — 실측한 코드로 사유를 가른다 (AuthenticationException도 여기)
+            SetAccountStatus(AccountCredentials.DescribeError(ex));
+        }
+        catch (LocalizedMessageException ex)
+        {
+            // 형식·상태 위반은 AuthBootstrap이 키로 던진다 (#497)
+            SetAccountStatus(ex.Reason);
         }
         catch (Exception ex)
         {
-            // 형식 위반(ArgumentException)·상태 위반(InvalidOperationException)은 메시지가 이미 사용자용
-            m_accountStatusText.text = ex.Message;
+            SetAccountStatus(LocalizedMessage.Literal(ex.Message));
         }
         finally
         {
@@ -233,16 +333,20 @@ public class AuthPanel : PanelBase
         try
         {
             await Auth.SignInWithAccountAsync(m_usernameInput.text, m_passwordInput.text);
-            m_accountStatusText.text = "로그인 완료";
+            SetAccountStatus(Status(EAuthStatus.SignInSucceeded));
             m_passwordInput.text = string.Empty;
         }
         catch (RequestFailedException ex)
         {
-            m_accountStatusText.text = AccountCredentials.DescribeError(ex);
+            SetAccountStatus(AccountCredentials.DescribeError(ex));
+        }
+        catch (LocalizedMessageException ex)
+        {
+            SetAccountStatus(ex.Reason);
         }
         catch (Exception ex)
         {
-            m_accountStatusText.text = ex.Message;
+            SetAccountStatus(LocalizedMessage.Literal(ex.Message));
         }
         finally
         {
@@ -262,14 +366,12 @@ public class AuthPanel : PanelBase
 
         if (!TryGetConfirmPanel(out AccountConfirmPanel confirm))
         {
-            m_accountStatusText.text = "확인창을 열 수 없어 전환을 중단했습니다.";
+            SetAccountStatus(Status(EAuthStatus.ConfirmUnavailableForSwitch));
             return;
         }
 
         confirm.Prepare(
-            "이 기기에서 계정을 분리하고 새 익명 계정으로 시작합니다.\n"
-                + $"계정('{Auth.AccountUsername}')과 아이디는 서버에 그대로 남아 다시 로그인할 수 있습니다.\n"
-                + "이 기기의 닉네임은 초기화됩니다.",
+            LocalizedStrings.Get(k_table, k_newAnonymousConfirmKey, Auth.AccountUsername),
             () => StartNewAnonymousAsync().Forget()
         );
         confirm.OpenPanel();
@@ -288,12 +390,16 @@ public class AuthPanel : PanelBase
             // 옛 아이디가 입력칸에 남아 있으면 새 익명 계정이 연동된 것처럼 보인다
             m_usernameInput.text = string.Empty;
             m_passwordInput.text = string.Empty;
-            m_accountStatusText.text = "새 익명 계정으로 시작했습니다.";
+            SetAccountStatus(Status(EAuthStatus.NewAnonymousStarted));
+        }
+        catch (LocalizedMessageException ex)
+        {
+            SetAccountStatus(ex.Reason);
         }
         catch (Exception ex)
         {
             // 재로그인까지 실패하면 로그아웃 상태로 남는다 — 복구는 [로그인] 버튼(위)이 담당한다
-            m_accountStatusText.text = ex.Message;
+            SetAccountStatus(LocalizedMessage.Literal(ex.Message));
         }
         finally
         {
@@ -315,14 +421,15 @@ public class AuthPanel : PanelBase
     private void Refresh()
     {
         bool signedIn = Auth != null && Auth.IsSignedIn;
-        m_playerIdText.text = signedIn ? $"ID: {Auth.PlayerId}" : "로그인 안 됨";
+        m_playerIdText.text = signedIn
+            ? LocalizedStrings.Get(k_table, k_playerIdKey, Auth.PlayerId)
+            : LocalizedStrings.Get(k_table, k_signedOutKey);
         // 요청 중에는 둘 다 잠근다 — 전환(#444)의 중간 로그아웃 상태에서 [로그인]이 눌리면
         // 같은 AuthBootstrap에서 InitializeAndSignInAsync가 두 번 돈다.
         m_signInButton.interactable = !signedIn && !AuthBusy;
         m_signOutButton.interactable = signedIn && !AuthBusy;
 
-        bool canEdit =
-            signedIn && !Auth.IsNetworkConnected && !m_isApplyingNickname && !AuthBusy;
+        bool canEdit = signedIn && !Auth.IsNetworkConnected && !m_isApplyingNickname && !AuthBusy;
         m_nicknameInput.interactable = canEdit;
         m_applyNicknameButton.interactable = canEdit;
 
@@ -354,6 +461,6 @@ public class AuthPanel : PanelBase
 
         // 요청 결과 문장(성공/실패)은 덮어쓰지 않는다 — 다음 조작 때까지 남겨 읽게 한다.
         if (m_isAccountBusy)
-            m_accountStatusText.text = "처리 중...";
+            SetAccountStatus(Status(EAuthStatus.Busy));
     }
 }
