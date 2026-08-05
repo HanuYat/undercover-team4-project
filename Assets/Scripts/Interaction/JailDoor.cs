@@ -5,8 +5,8 @@ using UnityEngine;
 /// 유치장 창살 문 (#415) — 플레이어가 상호작용키(E)로 여닫는 미닫이 게이트. 문짝이 옆으로 미끄러진다.
 ///
 /// <b>근접 자동문이다.</b> 안팎을 가리지 않고 <see cref="m_openRadius"/> 안에 열 자격이 있는 대상이
-/// 있으면 열리고, 없으면 닫힌다. 열 자격은 <b>모든 플레이어</b>와, <b>벤치에 앉은 수감자·침입자를 뺀
-/// NPC</b>다 (<see cref="CanOpen"/>에 두 예외의 근거가 있다).
+/// 있으면 열리고, 없으면 닫힌다. 열 자격은 <b>모든 플레이어</b>와, <b>앉은 수감자·포박된 신병·침입자를
+/// 뺀 NPC</b>다 (<see cref="CanOpen"/>에 세 예외의 근거가 있다).
 ///
 /// E 토글이 아니라 자동인 이유: 문짝 콜라이더는 CharacterController(플레이어)만 막고 NavMeshAgent와
 /// 밧줄 끌기(위치를 직접 세팅한다)는 그대로 지나가므로, 닫힌 문을 신병이 <b>뚫고 통과하는</b> 그림이
@@ -117,18 +117,23 @@ public class JailDoor : NetworkBehaviour, IInteractable
     }
 
     /// <summary>
-    /// 이 NPC가 문을 열 수 있는가 — 못 여는 둘을 빼면 전부 연다.
+    /// 이 NPC가 문을 열 수 있는가 — 못 여는 셋을 빼면 전부 연다.
     ///
     ///  · <b>벤치에 앉은 수감자</b>(<see cref="NpcController.IsSeated"/>) — 좌석이 문 근처라 이 예외가
     ///    없으면 수감자가 앉아 있는 내내 문이 열려 있고, 그건 유치장이 아니다.
     ///  · <b>침입자</b>(<see cref="NpcState.Intruding"/>, #231) — 자물쇠를 풀러 오는 자다. 문이 저절로
     ///    열려 주면 잠금 장치를 지나칠 수 있게 되어, 탈옥이 "자물쇠를 푼다"가 아니라 "걸어 들어간다"가
     ///    된다. 자물쇠를 실제로 풀고 나면 그때부터는 <see cref="IsJailbreakHoldingOpen"/>이 열어 준다.
+    ///  · <b>포박된 신병</b>(<see cref="NpcState.Captured"/>) — 놓인 자리에 그대로 멈춰 있어 스스로
+    ///    문을 지날 일이 없다. 이 예외가 없으면 문 앞에 신병을 놓고 떠난 순간, 아무도 없는 문이
+    ///    영영 열려 있다(반출한 수감자를 문 앞에 세워 둔 경우도 같다).
     ///
-    /// 반대로 <b>반출돼 일어선 수감자</b>는 연다 — 그 시점부터는 데리고 나가는 중이라 막을 이유가 없다.
+    /// 끌고 지나가는 중이라면 문은 <b>끄는 플레이어가</b> 연다 — 밧줄 길이(1.6m,
+    /// <see cref="NpcRopeDragConfig.RopeLength"/>)가 반경(<see cref="m_openRadius"/> 3m)보다 짧아
+    /// 신병이 문턱에 있는 동안 플레이어는 반드시 반경 안에 있다. 둘 중 하나를 조정하면 이 관계를 유지할 것.
     /// </summary>
     private static bool CanOpen(NpcController npc) =>
-        !npc.IsSeated && npc.CurrentState != NpcState.Intruding;
+        !npc.IsSeated && npc.CurrentState is not (NpcState.Intruding or NpcState.Captured);
 
     // 자물쇠가 풀려 있는 동안은 계속 열어 둔다 — <b>열린 문이 곧 탈옥 신호다</b> (GDD 7-2, #231).
     //
