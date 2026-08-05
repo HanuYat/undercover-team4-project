@@ -95,6 +95,18 @@ MonoBehaviour:
     m_Key: Hud.Scan.FieldFaction
     m_Metadata:
       m_Items: []
+  - m_Id: 95636848959488
+    m_Key: Hud.SecretFavor.Offer
+    m_Metadata:
+      m_Items: []
+  - m_Id: 95807313862656
+    m_Key: Hud.SecretFavor.Line
+    m_Metadata:
+      m_Items: []
+  - m_Id: 95878210183168
+    m_Key: Hud.SecretFavor.Complete
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
