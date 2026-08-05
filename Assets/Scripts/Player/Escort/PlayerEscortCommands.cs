@@ -363,30 +363,36 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     {
         if (m_channel.IsActive)
             return;
+        if (!CanResumeRopeDrag(target))
+            return;
         if (!IsInRange(target))
             return;
 
-        // 이미 내 줄에 묶여 있는(E로 놓아둔) 대상은 용량 게이트를 타지 않는다 — 새 밧줄을 쓰지 않으므로.
-        // 태우면 밧줄을 꽉 채워 놓아둔 순간 아무도 다시 못 끌게 된다.
-        bool ownRope = Escorter.IsTetheredTo(target);
-        if (!ownRope)
-        {
-            // 남이 묶어 둔 대상은 가져올 수 없다 — 탈취 차단.
-            // 합류는 상대가 실제로 끌고 있을 때(Escorted) 밧줄 좌클릭으로만 열린다.
-            if (PlayerEscorter.FindEscorterOf(target) != null)
-                return;
-            if (!CanBeginRopeDrag(target))
-                return;
-        }
-
-        // 기본은 체포되어 멈춘 대상(Captured)이고, 내 줄이 걸려 있으면 남이 계속 끄는 중(Escorted)도
-        // 재개할 수 있다 — 줄다리기에서 E로 빠졌다 다시 끼는 정상 플레이다 (#398).
-        // 줄이 없으면 Captured만 — 그 차이가 탈취 차단이다.
-        if (!NpcStateRules.CanRelease(target.CurrentState)
-            && !(ownRope && NpcStateRules.CanJoinDrag(target.CurrentState)))
-            return;
-
         ServerApplyRopeDrag(target);
+    }
+
+    /// <summary>이 대상에 밧줄 <b>끌기 재개</b>를 걸 수 있는가 — 서버 가드(<see cref="ServerResumeRopeDrag"/>)와
+    /// 클라 조기검증·조준 피드백(<see cref="Rope"/>)이 함께 쓰는 단일 기준. (#184/#513)
+    /// 사거리·채널 중복은 여기 없다 — 그 둘은 호출부가 각자 본다(<see cref="CanUnrope"/>와 같은 관례).</summary>
+    public bool CanResumeRopeDrag(NpcController target)
+    {
+        if (target == null)
+            return false;
+
+        // 이미 내 줄에 묶여 있는(놓아둔) 대상은 용량 게이트를 타지 않는다 — 새 밧줄을 쓰지 않으므로.
+        // 태우면 밧줄을 꽉 채워 놓아둔 순간 아무도 다시 못 끌게 된다.
+        // 그리고 내 줄이 걸려 있으면 남이 계속 끄는 중(Escorted)도 재개할 수 있다 — 줄다리기에서
+        // 손을 뗐다 다시 끼는 정상 플레이다 (#398).
+        if (Escorter.IsTetheredTo(target))
+            return NpcStateRules.CanRelease(target.CurrentState)
+                || NpcStateRules.CanJoinDrag(target.CurrentState);
+
+        // 줄이 없으면 체포되어 멈춘 대상(Captured)만 — 그 차이가 탈취 차단이다. 남이 묶어 둔 대상은
+        // 가져올 수 없고(합류는 상대가 실제로 끌고 있을 때 좌클릭으로만 열린다), 새 밧줄을 쓰므로
+        // 용량 게이트도 탄다.
+        return NpcStateRules.CanRelease(target.CurrentState)
+            && PlayerEscorter.FindEscorterOf(target) == null
+            && !Escorter.IsAtRopeCapacity;
     }
 
     // 새 대상을 묶을 수 있는가 — 자원(밧줄 개수)·중복·사거리. 상태 게이트는 호출부가 각자 건다.
