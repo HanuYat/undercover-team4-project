@@ -145,6 +145,21 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
         return found;
     }
 
+    /// <summary>
+    /// 나 말고 이 대상을 묶고 있는 사람이 있는가 — 서버(또는 오프라인) 전용. (#513)
+    /// 풀기가 <b>내 줄을 빼기 전에</b> 물어야 하는 질문이다: 뺀 뒤에 <see cref="FindEscorterOf"/>로 물으면
+    /// 답은 같지만, 그때는 대상의 묶임 표시가 이미 내려가 "묶여 누워 있었는가"를 알 수 없다.
+    /// </summary>
+    internal bool HasOtherTether(NpcController npc)
+    {
+        List<PlayerEscorter> holders = FindEscortersOf(npc);
+        for (int i = 0; i < holders.Count; i++)
+            if (holders[i] != this)
+                return true;
+
+        return false;
+    }
+
     // ---- 연결 조회 (전 피어) ----
 
     /// <summary>묶인 대상을 순번으로 얻는다 — 전 피어에서 유효한 표현·검증용. 없거나 못 찾으면 null.</summary>
@@ -224,7 +239,10 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
             return;
 
         if (!m_tethered.Contains(npc))
+        {
             m_tethered.Add(npc);
+            npc.AddTether(); // 대상도 "묶여 있음"을 알아야 놓은 뒤에도 누운 자세가 유지된다 (#513)
+        }
 
         SetTetherDragging(npc, true);
     }
@@ -269,6 +287,10 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
     {
         NpcController npc = m_tethered[index];
         m_tethered.RemoveAt(index);
+
+        // 대상의 묶임 표시도 한 칸 줄인다 — 파괴된 대상은 셀 필요가 없다 (#513)
+        if (npc != null)
+            npc.RemoveTether();
 
         if (!IsSpawned || !IsServer)
             return;

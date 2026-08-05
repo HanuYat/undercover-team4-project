@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
@@ -25,6 +25,14 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     )]
     [SerializeField]
     private float m_channelSeconds = 3f;
+
+    [Tooltip(
+        "밧줄을 푼 뒤 쓰러진 채로 있는 시간(초) — 이 시간이 지나면 일어난다. 마지막 구간이 기상 모션이라 "
+        + "총 무력화 시간이다. 이 구간은 다시 묶을 수 있는 재포획 창이기도 하다"
+    )]
+    [Min(0f)]
+    [SerializeField]
+    private float m_unropeDownSeconds = 3f;
 
     // 사거리는 조준·윤곽선과 같은 기준을 쓴다 — PlayerInteractor.Range 재사용 (#147 패턴, #184).
     // "윤곽선은 뜨는데 체포가 안 되는" 거리 불일치를 구조적으로 차단한다.
@@ -102,7 +110,8 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         RopeDragRequestRpc(new NetworkObjectReference(target.NetworkObject));
     }
 
-    /// <summary>밧줄 끌기 재개 — 오너가 호출(E, NpcSubdueInteractable). 놓아뒀던 체포 대상을 다시 끈다. (#91 재연행의 자리, #369)</summary>
+    /// <summary>밧줄 끌기 재개 — 오너가 호출(<see cref="Rope"/> 좌클릭). 놓아뒀던 체포 대상을 다시 끈다.
+    /// (#91 재연행의 자리 → #369 → #513에서 E가 아니라 좌클릭으로 옮겼다 — 좌클릭이 줄을 거는 쪽이다)</summary>
     public void RequestRopeResume(NpcController target)
     {
         if (target == null)
@@ -136,22 +145,9 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         UnropeRequestRpc(new NetworkObjectReference(target.NetworkObject));
     }
 
-    /// <summary>끌기 놓기 — 오너가 호출(E). 조준한 대상 하나만 놓는다, 나머지는 계속 끌린다. (#390)</summary>
-    public void RequestRelease(NpcController target)
-    {
-        if (target == null)
-            return;
-        if (!IsSpawned)
-        {
-            Escorter.ReleaseDrag(target);
-            return;
-        }
-        if (!IsOwner)
-            return;
-        if (!IsTargetNetworkReady(target))
-            return;
-        ReleaseRpc(new NetworkObjectReference(target.NetworkObject));
-    }
+    // 끌기 놓기 요청(RequestRelease/ReleaseRpc)은 제거했다 (#513) — '놓기'(끌기만 멈추고 줄은 유지)
+    // 자체가 없어지면서 호출부가 사라졌고, 남겨두면 이 이슈가 없애기로 한 옛 동작이 실수로 다시
+    // 연결될 수 있다. Escorter.ReleaseDrag는 그대로 남는다 — 풀기·인계 판정·라운드 종료 정리가 쓴다.
 
     /// <summary>유치장 반출 요청 — 오너가 호출(앉은 수감자에 E). 밧줄을 쓰지 않으므로 용량 게이트를 타지 않는다. (#492)</summary>
     public void RequestJailRelease(NpcController target)
@@ -239,18 +235,6 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     }
 
     [Rpc(SendTo.Server)]
-    private void ReleaseRpc(NetworkObjectReference targetRef)
-    {
-        if (
-            targetRef.TryGet(out NetworkObject targetObj)
-            && targetObj.TryGetComponent(out NpcController target)
-        )
-        {
-            Escorter.ReleaseDrag(target);
-        }
-    }
-
-    [Rpc(SendTo.Server)]
     private void EscortHaltRpc(NetworkObjectReference targetRef)
     {
         if (
@@ -325,37 +309,81 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     {
         if (m_channel.IsActive)
             return;
-        if (!IsInRange(target))
+        if (!CanResumeRopeDrag(target))
             return;
-
-        // 이미 내 줄에 묶여 있는(E로 놓아둔) 대상은 용량 게이트를 타지 않는다 — 새 밧줄을 쓰지 않으므로.
-        // 태우면 밧줄을 꽉 채워 놓아둔 순간 아무도 다시 못 끌게 된다.
-        bool ownRope = Escorter.IsTetheredTo(target);
-        if (!ownRope)
-        {
-            // 남이 묶어 둔 대상은 가져올 수 없다 — 탈취 차단.
-            // 합류는 상대가 실제로 끌고 있을 때(Escorted) 밧줄 좌클릭으로만 열린다.
-            if (PlayerEscorter.FindEscorterOf(target) != null)
-                return;
-            if (!CanBeginRopeDrag(target))
-                return;
-        }
-
-        // 기본은 체포되어 멈춘 대상(Captured)이고, 내 줄이 걸려 있으면 남이 계속 끄는 중(Escorted)도
-        // 재개할 수 있다 — 줄다리기에서 E로 빠졌다 다시 끼는 정상 플레이다 (#398).
-        // 줄이 없으면 Captured만 — 그 차이가 탈취 차단이다.
-        if (!NpcStateRules.CanRelease(target.CurrentState)
-            && !(ownRope && NpcStateRules.CanJoinDrag(target.CurrentState)))
+        if (!IsInRange(target))
             return;
 
         ServerApplyRopeDrag(target);
     }
+
+    /// <summary>이 대상에 밧줄 <b>끌기 재개</b>를 걸 수 있는가 — 서버 가드(<see cref="ServerResumeRopeDrag"/>)와
+    /// 클라 조기검증·조준 피드백(<see cref="Rope"/>)이 함께 쓰는 단일 기준. (#184/#513)
+    /// 사거리·채널 중복은 여기 없다 — 그 둘은 호출부가 각자 본다(<see cref="CanUnrope"/>와 같은 관례).</summary>
+    public bool CanResumeRopeDrag(NpcController target)
+    {
+        if (target == null)
+            return false;
+        if (IsRopeBlocked(target))
+            return false;
+
+        // 이미 내 줄에 묶여 있는(놓아둔) 대상은 용량 게이트를 타지 않는다 — 새 밧줄을 쓰지 않으므로.
+        // 태우면 밧줄을 꽉 채워 놓아둔 순간 아무도 다시 못 끌게 된다.
+        // 그리고 내 줄이 걸려 있으면 남이 계속 끄는 중(Escorted)도 재개할 수 있다 — 줄다리기에서
+        // 손을 뗐다 다시 끼는 정상 플레이다 (#398).
+        if (Escorter.IsTetheredTo(target))
+            return NpcStateRules.CanRelease(target.CurrentState)
+                || NpcStateRules.CanJoinDrag(target.CurrentState);
+
+        // 줄이 없으면 체포되어 멈춘 대상(Captured)만 — 그 차이가 탈취 차단이다. 남이 묶어 둔 대상은
+        // 가져올 수 없고(합류는 상대가 실제로 끌고 있을 때 좌클릭으로만 열린다), 새 밧줄을 쓰므로
+        // 용량 게이트도 탄다.
+        return NpcStateRules.CanRelease(target.CurrentState)
+            && PlayerEscorter.FindEscorterOf(target) == null
+            && !Escorter.IsAtRopeCapacity;
+    }
+
+    /// <summary>
+    /// 이 대상에 <b>밧줄을 걸 수 없는가</b> — 묶기·합류·재개가 전부 막힌다. 서버 가드와 클라 조기검증·조준
+    /// 피드백(<see cref="Rope"/>)이 함께 보는 단일 기준. (팀 확정 2026-08-05)
+    ///
+    /// 이유가 둘이고, 둘 다 <b>유치장에서 꺼낸 신병은 맨몸으로 다룬다</b>로 모인다:
+    ///
+    ///  · <b>유치장 안</b> — 안에서 새로 거는 조작을 막는다. 안의 신병을 밖으로 데려가려면 반출 추종(E)을
+    ///    쓴다. 훗날 수감자를 눕히는 용도가 필요해지면 그때 다시 연다.
+    ///  · <b>반출돼 따라오는 중</b>(<see cref="NpcStateRules.IsFollowingUnroped"/>) — 반출을 밧줄로 보험
+    ///    들 수 없게 해 <b>데리고 나오는 구간에 긴장</b>을 남긴다. 거리를 관리하지 않으면 멈춰 서고
+    ///    (NpcEscortedState) 밖에 방치하면 달아난다(#517).
+    ///
+    /// ⚠ 팀 확정은 "<b>방출한 신병은 무조건</b> 밧줄로 다루지 않는다"인데, 여기서는 <b>따라오는 동안만</b>
+    /// 막는다 — 거리 이탈로 멈춘 반출 대상은 상태가 <see cref="NpcState.Captured"/>라 방금 제압한 신병과
+    /// 구분되지 않고, 그것을 가리는 반출 표식(<c>NpcController.IsJailExtracted</c>)이 #517에 있다.
+    /// 그래서 멈춘 경우의 차단은 #517 쪽에서 이 함수에 한 줄을 더해 완성된다. 이 브랜치만으로는
+    /// E로 세운 뒤 묶는 우회가 남는다.
+    ///
+    /// <b>푸는 것은 막지 않는다.</b> 밖에서 묶어 유치장까지 끌고 들어가 안에서 풀면 앉는 것이 검거 흐름의
+    /// 결말이므로(#492), 여기서 풀기까지 막으면 그 흐름이 통째로 끊긴다. 이미 걸려서 끌고 들어온 줄도
+    /// 그대로 유지된다.
+    ///
+    /// <b>줄다리기 합류는 살아 있다</b> — 실제로 밧줄로 끌리는 중인 대상은 여기 걸리지 않는다. 상태만 보고
+    /// <see cref="NpcState.Escorted"/> 전체를 막으면 한 대상에 두 번째 줄을 거는 유일한 경로가 사라져
+    /// 무게를 나눠 끄는 협동(#390/#398)이 통째로 죽는다. 그 둘을 가르는 것이 <c>IsFollowingUnroped</c>다.
+    ///
+    /// <see cref="JailArea"/>를 보는 근거는 <see cref="ServerApplyUnrope"/>의 풀기 분기와 같다 —
+    /// "이 좌표가 Jail 영역인가"를 답하는 정적 판정 유틸이라, 이걸 읽는 것이 유치장을 아는 것은 아니다.
+    /// </summary>
+    public static bool IsRopeBlocked(NpcController target) =>
+        target != null
+        && (JailArea.Contains(target.transform.position)
+            || NpcStateRules.IsFollowingUnroped(target));
 
     // 새 대상을 묶을 수 있는가 — 자원(밧줄 개수)·중복·사거리. 상태 게이트는 호출부가 각자 건다.
     private bool CanBeginRopeDrag(NpcController target)
     {
         if (m_channel.IsActive)
             return false;
+        if (IsRopeBlocked(target))
+            return false; // 유치장 안에서는 새로 묶기·합류가 막힌다
         if (Escorter.IsTetheredTo(target))
             return false; // 이미 내 줄에 묶여 있다 — 좌클릭은 풀기/재개로 갈린다
         if (Escorter.IsAtRopeCapacity)
@@ -396,6 +424,8 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         // 준 경우, 합류하려던 대상을 끌던 사람이 그새 놓아버린 경우 등).
         if (target == null || Escorter.IsAtRopeCapacity)
             return;
+        if (IsRopeBlocked(target))
+            return; // 3초 사이에 유치장 안으로 들어갔거나 밧줄이 빠졌을 수 있다
         if (!NpcStateRules.CanJoinDrag(target.CurrentState))
             return;
 
@@ -434,7 +464,10 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     // 묶기 채널링의 역방향 — 밧줄을 든 좌클릭으로 체포되어 멈춘 NPC를 풀어 배회로 돌려보낸다.
     // 묶기와 같은 m_channel·게이지·사거리 판정을 재사용한다(대상 상태가 갈라 주므로 채널 하나면 충분).
 
-    /// <summary>밧줄 풀기 진입 — 중복·사거리 검증 후 채널링 시작. 서버(또는 오프라인) 실행. (#369/#390)
+    /// <summary>밧줄 풀기 진입 — 검증 후 <b>즉시</b> 푼다. 서버(또는 오프라인) 실행. (#369/#390/#513)
+    /// 채널링은 없어졌다: 좌클릭 3초 홀드에서 E 한 번으로 옮기면서 홀드를 걸 입력이 사라졌다.
+    /// 대가를 알고 지운다 — 3초는 "남의 신병을 풀어 방해하는" 행위의 유일한 비용이었고, 이제 남는 것은
+    /// 밧줄 소지와 사거리뿐이다. 방해가 너무 싸다고 판정되면 되돌릴 곳은 여기다.
     /// 두 갈래다: 놓아둔 체포(Captured)는 <b>누구나</b> 풀어 배회로 돌려보낼 수 있고(오검거 구제·방해 수단),
     /// 끌리는 중(Escorted)이면 <b>자기 줄만</b> 뺄 수 있다 — 줄다리기에서 손을 떼는 수단이다.
     /// 남이 끌고 있는 줄까지 풀 수 있게 하면 탈취 차단의 우회로가 된다 — 뺏을 필요도 없이 다 풀어버린다.
@@ -448,9 +481,9 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         if (!CanUnrope(target))
             return; // 클라 조기검증(Rope.Use)과 단일 기준 (#184/#369)
         if (!IsInRange(target))
-            return; // 사거리 밖이면 시작조차 안 함
+            return; // 사거리 밖
 
-        ServerUnropeChannelAsync(target).Forget();
+        ServerApplyUnrope(target);
     }
 
     /// <summary>이 대상에 밧줄 풀기를 걸 수 있는가 — 서버 가드와 클라 조기검증(Rope)이 함께 쓰는 단일 기준.</summary>
@@ -458,50 +491,10 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         target != null
         && (NpcStateRules.CanRelease(target.CurrentState) || Escorter.IsTetheredTo(target));
 
-    private async UniTaskVoid ServerUnropeChannelAsync(NpcController target)
+    // 실제 풀기 — 검증이 끝난 뒤의 상태 조작만 담당한다. 서버(또는 오프라인).
+    private void ServerApplyUnrope(NpcController target)
     {
-        NotifyOwner($"밧줄 풀기 채널링 시작: {target.name} ({m_channelSeconds}초)");
-        NotifyChannelGaugeStart(m_channelSeconds);
-
-        // 체포 채널링과 동일한 keepAlive — 도중 거리 이탈은 즉시 실패시킨다.
-        ServerChannel.Result result;
-        try
-        {
-            result = await m_channel.RunAsync(
-                m_channelSeconds,
-                () => target != null && IsInRange(target)
-            );
-        }
-        finally
-        {
-            NotifyChannelGaugeEnd(); // 어떤 경로로 끝나도 게이지 숨김 보장
-        }
-
-        if (result != ServerChannel.Result.Completed)
-        {
-            NotifyOwner("밧줄 풀기 중단 (홀드 뗌 / 거리 이탈)");
-            return;
-        }
-
-        // 채널링 도중 상태가 바뀌었을 수 있다 — 완료 시점에 재확인(예: 그새 다른 플레이어가 끌기 재개).
-        if (!CanUnrope(target))
-            return;
-
-        // 내 줄이 걸려 있으면 그것부터 뺀다 — 줄다리기 중이면 여기서 끝이다(남은 참가자가 계속 끈다).
-        // 마지막 한 명이었으면 대상이 커스터디에서 풀려 아래 배회 복귀로 이어진다. (#390 규칙 8)
-        if (Escorter.IsTetheredTo(target))
-        {
-            Escorter.ReleaseDrag(target);
-            Escorter.RemoveTether(target);
-
-            if (PlayerEscorter.FindEscorterOf(target) != null)
-            {
-                NotifyOwner($"내 밧줄만 풀었다 — 다른 참가자가 계속 확보 중: {target.name}");
-                return;
-            }
-        }
-
-        // <b>유치장 안에서는 석방하지 않는다</b> (#492) — 위 ReleaseDrag가 이미 Captured로 세워 뒀으므로
+        // <b>유치장 안에서는 석방하지 않는다</b> (#492) — 아래 ReleaseDrag가 이미 Captured로 세워 뒀으므로
         // 그대로 끝낸다. 판정을 통과한 대상이면 다음 틱에 JailIntake가 좌석에 앉히고, 안 통과했으면
         // 그 자리에 서 있는다(다시 묶어 끌고 나가면 된다).
         //
@@ -512,15 +505,58 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         // <b>JailArea를 직접 보는 것은 "유치장을 아는 것"이 아니다</b> — 이 허브가 유치장 오브젝트를
         // 찾아 조작하는 것은 여전히 ServerJailRelease 하나뿐이고(JailIntake에 위임), 여기 쓰는 것은
         // "이 좌표가 Jail 영역 위인가"를 답하는 정적 판정 유틸이다. 앉히는 판단은 JailIntake가 쥔다.
-        if (JailArea.Contains(target.transform.position))
+        //
+        // 밧줄은 소모되지 않아 대상에 남은 게 없다 — 회수할 자원 없이 배회로 돌려보내기만 한다 (#369).
+        bool insideJail = JailArea.Contains(target.transform.position);
+        System.Action afterStandUp = insideJail ? null : target.ReleaseFromCustody;
+
+        // <b>유치장 안에서는 쓰러진 구간을 두지 않는다</b> — 일어나 곧바로 좌석을 찾아간다 (팀 확정 2026-08-05).
+        // 밖에서 쓰러져 있는 몇 초는 <b>재포획 창</b>으로서 값을 갖지만(달려가 다시 묶을 수 있다), 안에서는
+        // 밧줄을 아예 쓸 수 없으므로(<see cref="IsRopeBlocked"/>) 그 창에 아무 선택지가 없다 —
+        // 수감이 몇 초 늦어지는 것만 남는다.
+        float downSeconds = insideJail ? 0f : m_unropeDownSeconds;
+
+        // 내 줄이 걸려 있으면 그것부터 뺀다 — 줄다리기 중이면 여기서 끝이다(남은 참가자가 계속 끈다).
+        // 마지막 한 명이었으면 대상이 커스터디에서 풀려 아래 배회 복귀로 이어진다. (#390 규칙 8)
+        if (Escorter.IsTetheredTo(target))
         {
-            NotifyOwner($"밧줄 풀기 완료 — 유치장 안이라 그 자리에 둔다: {target.name}");
+            // 내 줄을 빼기 전에 물어야 한다 — 뺀 뒤에는 대상의 묶임 표시가 이미 내려가
+            // "묶여 누워 있었는가"를 알 수 없다 (#513)
+            bool othersHold = Escorter.HasOtherTether(target);
+
+            Escorter.ReleaseDrag(target);
+
+            // 마지막 줄이 풀리는 순간이 곧 일어나는 순간이다 (#513) — 여기까지는 묶인 채 누워 있었다.
+            // RemoveTether보다 <b>앞</b>이어야 한다: 줄을 먼저 빼면 묶임 표시가 내려가
+            // ServerStandUpThen이 "이미 서 있다"로 오판해 일어나기가 통째로 생략된다.
+            if (!othersHold)
+                target.ServerStandUpThen(afterStandUp, downSeconds);
+
+            Escorter.RemoveTether(target);
+
+            if (othersHold)
+            {
+                NotifyOwner($"내 밧줄만 풀었다 — 다른 참가자가 계속 확보 중: {target.name}");
+                return;
+            }
+
+            NotifyOwner(insideJail
+                ? $"밧줄 풀기 완료 — 일어난 뒤 유치장 안 그 자리에 둔다: {target.name}"
+                : $"밧줄 풀기 완료 — 일어난 뒤 배회 복귀: {target.name}");
             return;
         }
 
-        // 밧줄은 소모되지 않아 대상에 남은 게 없다 — 회수할 자원 없이 배회로 돌려보내기만 한다 (#369).
-        NotifyOwner($"밧줄 풀기 완료 — 배회 복귀: {target.name}");
-        target.ReleaseFromCustody();
+        // <b>내</b> 줄이 안 걸린 체포 대상 — 두 경우가 섞여 있다. 묶인 적 없이 제압만으로 잡힌 대상이거나,
+        // <b>남이 묶어 놓아둔</b> 대상이다: 풀기는 Captured면 누구에게나 열려 있어(CanUnrope — 오검거 구제)
+        // 제3자도 여기로 온다. "내 목록에 없다"를 "서 있다"로 읽으면 남의 줄에 묶여 누워 있던 몸이
+        // 일어나기 없이 배회로 스냅한다 — 이 이슈가 고치려던 바로 그 그림이다. (#513)
+        //
+        // 그래서 자세 판정을 여기서 하지 않고 대상에게 맡긴다 — ServerStandUpThen이 묶임 여부를 보고
+        // 일어나기를 태울지 곧바로 실행할지 가른다 (JailIntake·NpcCapturedState와 같은 방식).
+        NotifyOwner(insideJail
+            ? $"밧줄 풀기 완료 — 유치장 안이라 그 자리에 둔다: {target.name}"
+            : $"밧줄 풀기 완료 — 배회 복귀: {target.name}");
+        target.ServerStandUpThen(afterStandUp, downSeconds);
     }
 
     // 본부 인계 요청(#414)은 제거됐다 (#492) — 판정 트리거가 인계 단말에서 유치장 앞 보안 게이트로

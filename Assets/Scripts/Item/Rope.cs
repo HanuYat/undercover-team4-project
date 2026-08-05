@@ -4,8 +4,9 @@ using UnityEngine;
 /// 밧줄 아이템 — 기본 검거 수단. 겨냥한 NPC를 좌클릭으로 묶어 누운 채 질질 끌고 다닌다. (#269 → #369)
 /// <b>묶을 수 있는 것은 무력화된 대상뿐이다</b> (#446) — 깨어 있는 NPC를 좌클릭 3초 홀드로 묶던 경로는
 /// 제거됐다. 진압봉·테이저로 먼저 쓰러뜨려야 하고, 쓰러진 대상은 홀드 없이 한 번에 묶인다.
-/// 같은 좌클릭이 대상 상태로 갈린다: 체포되어 멈춘 대상(Captured)에겐 '풀어주기'다.
-/// 놓았던 대상을 다시 끄는 것은 상호작용키(E) — NpcSubdueInteractable이 담당한다.
+/// 같은 좌클릭이 대상 상태로 갈린다: 놓아둔 체포(Captured)나 내 줄이 걸린 대상에겐 <b>끌기 재개</b>다.
+/// <b>밧줄 좌클릭은 줄을 거는 조작으로 모였다</b> (#513) — 묶기·합류·재개가 전부 이 키다.
+/// 반대로 손을 떼는 쪽(놓기·풀기)은 상호작용키(E) — NpcSubdueInteractable이 담당한다.
 /// 실제 채널링·사거리·반응 판정·끌기는 서버 권위이며 PlayerEscortCommands가 수행한다 (수갑과 동일한 허브 패턴, #59/#118).
 /// 끌기 중엔 손이 묶여 다른 아이템을 쓸 수 없고, 한 번에 1명만 확보할 수 있다.
 /// 밧줄은 소모되지 않는다 — 대상에 남지 않으므로 풀기 판정도 상태만 본다.
@@ -60,14 +61,22 @@ public class Rope : ItemBase
             return;
         }
 
-        // 같은 좌클릭이 대상에 따라 네 갈래로 갈린다 (#390). 판정 기준은 서버 가드·조준 피드백과 동일 (#184):
-        //   내 줄이 걸림 → 내 줄만 풀기 / 놓아둔 체포 → 풀어주기 / 남이 끄는 중 → 합류 / 나머지 → 새로 묶기
-
-        // 내 줄이 걸린 대상은 푼다 — 끌리는 중이어도 자기 줄은 뺄 수 있다(줄다리기에서 손 떼기).
-        // 놓아둔 체포(Captured)는 남이 묶었어도 풀어준다 — 오검거 구제·방해 수단 (수갑 해제 #290의 자리).
-        if (escorter.CanUnrope(target))
+        // 유치장에서 꺼낸 신병은 밧줄로 다루지 않는다 (팀 확정 2026-08-05) — 아래 세 갈래 전부가 막힌다.
+        // 유치장 안이거나 반출돼 따라오는 중이면 걸리고, 끌고 들어온 줄을 푸는 것(E)은 그대로다.
+        if (PlayerEscortCommands.IsRopeBlocked(target))
         {
-            escorter.RequestUnrope(target);
+            Debug.Log($"밧줄을 쓸 수 없는 대상 (유치장 안 / 반출 추종 중): {target.name}");
+            return;
+        }
+
+        // 같은 좌클릭이 대상에 따라 세 갈래로 갈린다 (#390/#513). 판정 기준은 서버 가드·조준 피드백과 동일 (#184):
+        //   놓아둔 체포·내 줄이 걸린 대상 → 끌기 재개 / 남이 끄는 중 → 합류 / 나머지 → 새로 묶기
+        // 풀기는 이 키에서 빠졌다 — E로 옮겼다 (#513).
+
+        // 놓아둔 신병을 다시 끈다. 남이 계속 끄는 중이라도 내 줄이 걸려 있으면 줄다리기에 다시 낀다 (#398).
+        if (escorter.CanResumeRopeDrag(target))
+        {
+            escorter.RequestRopeResume(target);
             return;
         }
 
@@ -90,7 +99,7 @@ public class Rope : ItemBase
         escorter.RequestRopeDrag(target);
     }
 
-    /// <summary>Use()의 조기 검증과 동일 기준 — 조준 피드백(윤곽선)용. 묶기·풀기 어느 쪽이든 반응한다. (#184)</summary>
+    /// <summary>Use()의 조기 검증과 동일 기준 — 조준 피드백(윤곽선)용. 묶기·합류·재개 어느 쪽이든 반응한다. (#184/#513)</summary>
     public override bool CanTarget(GameObject aimTarget)
     {
         PlayerEscortCommands escorter = Commands;
@@ -114,8 +123,12 @@ public class Rope : ItemBase
         if (escorter == null)
             return false;
 
-        // 풀기(내 줄 / 놓아둔 체포)는 용량과 무관하게 언제나 가능하다.
-        if (escorter.CanUnrope(target))
+        // 밧줄을 쓸 수 없는 대상에는 윤곽선도 뜨지 않는다 — Use의 조기 차단과 단일 기준 (#184)
+        if (PlayerEscortCommands.IsRopeBlocked(target))
+            return false;
+
+        // 재개(놓아둔 체포 / 내 줄)는 새 밧줄을 쓰지 않으므로 용량과 무관하게 언제나 가능하다.
+        if (escorter.CanResumeRopeDrag(target))
             return true;
 
         // 새로 묶기·합류는 소지한 밧줄 개수까지만 (서버 가드 CanBeginRopeDrag와 단일 기준, #184/#390)
@@ -125,7 +138,7 @@ public class Rope : ItemBase
                 || NpcStateRules.CanJoinDrag(target.CurrentState));
     }
 
-    /// <summary>좌클릭 뗌 — 진행 중인 묶기/풀기 채널링 취소를 서버에 요청한다. (Handcuffs와 동일, #91)</summary>
+    /// <summary>좌클릭 뗌 — 진행 중인 합류 채널링 취소를 서버에 요청한다. 풀기는 채널이 없어졌다 (#513). (#91)</summary>
     public override void CancelUse() => Commands?.CancelCapture();
 
     /// <summary>

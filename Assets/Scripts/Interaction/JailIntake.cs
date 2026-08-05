@@ -284,6 +284,11 @@ public class JailIntake : MonoBehaviour
         if (npc.CurrentState != NpcState.Captured)
             return;
 
+        // 이미 일어나는 중 — 모션이 끝나면 아래에서 예약한 착석이 이어진다. 폴링이라 매 틱 다시 오므로
+        // 여기서 걸러 두 번 예약하지 않는다 (#513)
+        if (npc.IsStandingUp)
+            return;
+
         if (!JailArea.Contains(npc.transform.position))
             return;
 
@@ -299,15 +304,29 @@ public class JailIntake : MonoBehaviour
         if (!HasPlayerInsideNear(npc))
             return;
 
-        ulong[] deliverers = TakeDelivererIds(npc);
+        // 여기서 밧줄이 실제로 풀린다 — 묶여 누워 있던 몸이 일어난 뒤 좌석까지 걸어간다 (#513).
+        // 좌석 배정·계상·기록 정리를 전부 예약 안에 두는 이유: 일어나는 도중 누가 E로 다시 끌면
+        // 예약이 통째로 취소되는데(NpcController.StartRopeDrag), 그때 좌석만 잡히거나 돈만 들어가면
+        // 어긋난다. 취소되면 아무 일도 없었던 것이 되고, 다시 놓으면 폴링이 처음부터 다시 판단한다.
+        // (묶인 적 없는 대상은 기다리지 않고 곧바로 실행된다 — ServerStandUpThen이 가른다)
+        npc.ServerStandUpThen(() =>
+        {
+            // 목격자를 다시 확인한다 — 위 검사와 이 콜백 사이에 일어나기(약 0.6초)가 끼어 그 사이
+            // 유일한 목격자가 나가 버릴 수 있다. 예전에는 확인과 착석이 한 프레임이라 원자적이었다.
+            // 실패해도 기록을 지우지 않는 것은 위와 같다 — 누가 다시 들어오면 그때 앉는다.
+            if (!HasPlayerInsideNear(npc))
+                return;
 
-        // 놓은 자리에서 가장 가까운 빈 좌석 — 여기서 좌석까지는 NpcJailedState가 걸어간다(1.5~5.6m)
-        Transform seat = m_jailZone.ReserveSeat(npc, npc.transform.position);
-        npc.SendToJail(seat);
+            ulong[] deliverers = TakeDelivererIds(npc);
 
-        // 계상은 착석 시점 (#492) — 판정만 받고 안 앉히면 0원이다
-        m_jailZone.Admit(npc, bounty, deliverers);
-        m_pendingSeat.Remove(npc);
+            // 놓은 자리에서 가장 가까운 빈 좌석 — 여기서 좌석까지는 NpcJailedState가 걸어간다(1.5~5.6m)
+            Transform seat = m_jailZone.ReserveSeat(npc, npc.transform.position);
+            npc.SendToJail(seat);
+
+            // 계상은 착석 시점 (#492) — 판정만 받고 안 앉히면 0원이다
+            m_jailZone.Admit(npc, bounty, deliverers);
+            m_pendingSeat.Remove(npc);
+        });
     }
 
     // 지금 줄이 걸린 사람을 누적 집합에 더한다. 판정 시점의 ArrestResult.DeliveredBy를 쓰지 않는 이유는
