@@ -12,7 +12,8 @@ using Random = UnityEngine.Random;
 /// 진범이 여러 명이면(#127) 몽타주도 범인 수만큼 생성된다. 다만 발행(OnMontageGenerated)은
 /// 이미 공개된 수배만 — 대기 중인 예비 용의자(#102)는 RevealMontage로 나중에 발행된다.
 /// 배정은 서버 권위 — NpcAppearance.SetProfile이 인덱스만 전 클라이언트에 동기화한다 (#56).
-/// 몽타주 텍스트(GDD 10-3 글 방식)는 범인 프로필에서 자동 생성 — 본부 수배 UI(#58)의 원본.
+/// 몽타주(GDD 10-3 글 방식)의 원본은 범인 프로필 + 공개 축이고, 문장 조립은 표시하는 쪽
+/// (본부 수배 UI #58)이 자기 언어로 한다 — 여기서 문장을 만들어 보관하지 않는다 (#497).
 /// </summary>
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class AppearanceAssigner : CommonManagerBase
@@ -32,24 +33,27 @@ public class AppearanceAssigner : CommonManagerBase
     [Tooltip("몽타주 1건당 공개 특징에 부합하는 NPC 수 — 범인 1명 + 디코이 k−1명. 클수록 스캔 검증 부담이 커진다 (난이도)")]
     [SerializeField] private int m_montageMatchCount = 3;
 
-    private readonly List<AppearanceAxis> m_revealedAxes = new List<AppearanceAxis>();
+    private RevealedAxisSet m_revealedAxes;
     private readonly List<AppearanceProfile> m_criminalProfiles = new List<AppearanceProfile>();
-    private readonly List<string> m_montageTexts = new List<string>();
 
     /// <summary>몽타주로 공개된 특징 축들. 배정 전에는 비어 있다. 전 범인 공통.</summary>
-    public IReadOnlyList<AppearanceAxis> RevealedAxes => m_revealedAxes;
+    public RevealedAxisSet RevealedAxes => m_revealedAxes;
 
     /// <summary>범인별 외형 특징 조합 — CriminalAssigner.CriminalNpcs와 같은 순서. 배정 전에는 비어 있다. (#127)</summary>
     public IReadOnlyList<AppearanceProfile> CriminalProfiles => m_criminalProfiles;
 
-    /// <summary>범인별 글 방식 몽타주 텍스트 (GDD 10-3) — CriminalNpcs와 같은 순서. 본부 수배 UI(#58)가 그대로 표시한다.</summary>
-    public IReadOnlyList<string> MontageTexts => m_montageTexts;
-
-    /// <summary>외형 축별 옵션 정의 — 인덱스를 표시 이름으로 옮길 때 쓴다(디버그/검증용 읽기 전용).</summary>
+    /// <summary>
+    /// 외형 축별 옵션 정의 — 인덱스를 표시 이름으로 옮길 때 쓴다. 읽기 전용.
+    /// 수배 UI(#58)가 몽타주 문장을 조립하는 출처이기도 하다 — 클라이언트에도 씬에 배선돼 있다 (#497).
+    /// </summary>
     public AppearanceDatabase Database => m_appearanceDatabase;
 
-    /// <summary>몽타주 생성 완료 이벤트 — 수배 UI(#58)가 구독한다. 범인마다 한 번씩 (해당 범인, 몽타주 텍스트)로 발행된다. (#127)</summary>
-    public event Action<NpcController, string> OnMontageGenerated;
+    /// <summary>
+    /// 몽타주 공개 이벤트 — 수배 UI(#58)가 구독한다. 범인마다 한 번씩 (해당 범인, 외형 프로필)로 발행된다. (#127)
+    /// 문장이 아니라 프로필을 넘긴다 — 표시하는 피어가 자기 언어로 조립하기 때문이다 (#497).
+    /// 공개 축은 <see cref="RevealedAxes"/>로 함께 읽는다(라운드 내내 고정, 전 범인 공통).
+    /// </summary>
+    public event Action<NpcController, AppearanceProfile> OnMontageGenerated;
 
     private void Start()
     {
@@ -95,7 +99,6 @@ public class AppearanceAssigner : CommonManagerBase
 
         // 1. 범인 배정
         m_criminalProfiles.Clear();
-        m_montageTexts.Clear();
         foreach (NpcController c in criminals)
         {
             NpcCatalogAppearance cat = c.GetComponent<NpcCatalogAppearance>();
@@ -135,31 +138,34 @@ public class AppearanceAssigner : CommonManagerBase
             logBuilder.AppendLine($"  {DescribeProfile(applied)}{role}");
         }
 
-        // 4. 범인별 몽타주 텍스트 — 예비 용의자분까지 전원 생성해 보관한다 (#102).
-        //    보관해 두는 이유: 승격 시 RevealMontage가 이 텍스트를 그대로 쓴다. 그 시점에 재생성하면
-        //    공개 축을 다시 뽑아야 하고, 본부에 이미 떠 있던 몽타주가 무효가 된다.
+        // 4. 몽타주 공개 — 이미 공개된 수배만 발행한다. 예비 용의자(#102)는 IsCriminal = false로
+        //    대기하다가 승격 시 RevealMontage가 m_criminalProfiles의 같은 프로필을 발행한다.
+        //    공개 축(m_revealedAxes)은 라운드 내내 고정이라 그 시점에 다시 뽑지 않는다 — 다시 뽑으면
+        //    본부에 이미 떠 있던 몽타주가 무효가 된다. 문장을 보관하지 않는 이유도 같다:
+        //    보관할 원본은 프로필이고, 문장은 표시하는 쪽이 자기 언어로 조립한다 (#497).
         int revealedCount = 0;
+        var montageLog = new StringBuilder();
         for (int i = 0; i < criminals.Count; i++)
         {
             AppearanceProfile p = m_criminalProfiles[i];
-            string montageText = m_appearanceDatabase.BuildMontageText(p, m_revealedAxes);
-            m_montageTexts.Add(montageText);
 
-            // 발행은 이미 공개된 수배만 — 예비 용의자는 IsCriminal = false로 대기하다가
-            // 제보 전화 승격 시 RevealMontage로 같은 텍스트가 나간다 (#102)
+            if (montageLog.Length > 0)
+                montageLog.Append(" / ");
+            montageLog.Append('"').Append(m_appearanceDatabase.BuildMontageText(p, m_revealedAxes)).Append('"');
+
             CitizenIdentity identity = criminals[i].GetComponent<CitizenIdentity>();
             if (identity == null || !identity.IsCriminal)
                 continue;
 
             revealedCount++;
-            OnMontageGenerated?.Invoke(criminals[i], montageText);
+            OnMontageGenerated?.Invoke(criminals[i], p);
         }
-        Debug.Log($"외형 배정 완료 ({npcs.Count}명, 용의자 {criminals.Count}명 중 공개 {revealedCount}명) | 몽타주: {string.Join(" / ", m_montageTexts.ConvertAll(t => $"\"{t}\""))}\n{logBuilder}");
+        Debug.Log($"외형 배정 완료 ({npcs.Count}명, 용의자 {criminals.Count}명 중 공개 {revealedCount}명) | 몽타주: {montageLog}\n{logBuilder}");
     }
 
     /// <summary>
     /// 대기 중이던 용의자의 몽타주를 지금 발행한다 — 제보 전화 승격(#102) 전용. 서버(또는 오프라인) 전용.
-    /// 라운드 시작에 보관해 둔 텍스트를 그대로 쓰므로 공개 축은 바뀌지 않는다.
+    /// 라운드 시작에 확정해 둔 프로필을 그대로 쓰므로 공개 축은 바뀌지 않는다.
     /// 발행 자체는 라운드 시작 때와 같은 경로(OnMontageGenerated)라, WantedListManager의
     /// NetworkList 추가와 TotalWanted++ 가 그대로 따라온다 — 별도 등록 경로를 만들지 않는 이유다.
     /// </summary>
@@ -175,19 +181,19 @@ public class AppearanceAssigner : CommonManagerBase
             return;
         }
 
-        // CriminalNpcs와 m_montageTexts는 같은 순서다 — 인덱스로 짝을 찾는다
+        // CriminalNpcs와 m_criminalProfiles는 같은 순서다 — 인덱스로 짝을 찾는다
         for (int i = 0; i < criminals.Count; i++)
         {
             if (criminals[i] != npc)
                 continue;
 
-            if (i >= m_montageTexts.Count)
+            if (i >= m_criminalProfiles.Count)
             {
-                Debug.LogWarning($"AppearanceAssigner: {npc.name}의 몽타주가 아직 생성되지 않아 공개할 수 없다", npc);
+                Debug.LogWarning($"AppearanceAssigner: {npc.name}의 외형이 아직 배정되지 않아 몽타주를 공개할 수 없다", npc);
                 return;
             }
 
-            OnMontageGenerated?.Invoke(npc, m_montageTexts[i]);
+            OnMontageGenerated?.Invoke(npc, m_criminalProfiles[i]);
             return;
         }
 
@@ -308,21 +314,23 @@ public class AppearanceAssigner : CommonManagerBase
         return Random.Range(0, catalog.Count);
     }
 
-    /// <summary>축 전체를 셔플해 앞에서 공개 수만큼 고른다.</summary>
+    /// <summary>축 전체를 셔플해 앞에서 공개 수만큼 고른다. 담기는 순서는 뜻이 없다 — 집합이다.</summary>
     private void PickRevealedAxes()
     {
-        m_revealedAxes.Clear();
+        var order = new List<AppearanceAxis>(AppearanceProfile.k_axisCount);
         for (int i = 0; i < AppearanceProfile.k_axisCount; i++)
-            m_revealedAxes.Add((AppearanceAxis)i);
+            order.Add((AppearanceAxis)i);
 
-        for (int i = m_revealedAxes.Count - 1; i > 0; i--)
+        for (int i = order.Count - 1; i > 0; i--)
         {
             int j = Random.Range(0, i + 1);
-            (m_revealedAxes[i], m_revealedAxes[j]) = (m_revealedAxes[j], m_revealedAxes[i]);
+            (order[i], order[j]) = (order[j], order[i]);
         }
 
-        int count = Mathf.Clamp(m_revealedAxisCount, 1, m_revealedAxes.Count);
-        m_revealedAxes.RemoveRange(count, m_revealedAxes.Count - count);
+        int count = Mathf.Clamp(m_revealedAxisCount, 1, order.Count);
+        m_revealedAxes.Clear();
+        for (int i = 0; i < count; i++)
+            m_revealedAxes.Add(order[i]);
     }
 
     /// <summary>
