@@ -274,7 +274,8 @@ public partial class NpcController : NetworkBehaviour
     /// 클라이언트가 알 수 없다 — 스윙(OnAttackSwing)과 같은 순간 이벤트로 전달한다. (#269)</summary>
     public event Action OnStandUp;
 
-    /// <summary>기절 해제 직전 일어나는 모션을 전 피어에 알린다 — 서버(또는 오프라인) FSM Tick에서만 호출한다. (#269)</summary>
+    /// <summary>일어나는 모션을 전 피어에 알린다 — 서버(또는 오프라인)에서만 호출한다.
+    /// 기절 해제(#269)와 밧줄 풀림(#513) 두 경로가 쓴다.</summary>
     public void RaiseStandUp()
     {
         OnStandUp?.Invoke(); // 서버·오프라인 로컬 발행

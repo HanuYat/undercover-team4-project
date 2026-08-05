@@ -302,8 +302,8 @@ public class PlayerInteractor : NetworkBehaviour
             // 열어 주던 예외(TakesPriorityOverRelease, #414)는 유일한 사용처인 인계 단말과 함께
             // 제거됐다 (#492) — 필요해지면 아래 운반 쪽 ICarriedBodyReceiver가 같은 취지의 선례다.
             // ReleaseDrag 직접 호출은 서버 가드에 막힌다 — 요청 API로 서버에 넘긴다 (#118)
-            Debug.Log($"E 입력 — 밧줄 끌기 놓기 요청: {aimed.name}");
-            m_commands?.RequestRelease(aimed);
+            Debug.Log($"E 입력 — 밧줄 풀기 요청: {aimed.name}");
+            m_commands?.RequestUnrope(aimed);
             return;
         }
 
