@@ -5,7 +5,8 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 개발용 자동 호스트 — Test Scene 전용. 메인 에디터에서 Play하면 로컬 호스트를 띄우고 라운드를
+/// 개발용 자동 호스트 — 게임 씬(Main Scene·Assets/Scenes/Maps/*)을 직접 Play할 때 쓴다.
+/// 메인 에디터에서 Play하면 로컬 호스트를 띄우고 라운드를
 /// 자동 시작해 바로 플레이한다(솔로). MPPM 가상 플레이어(클론)는 자동 호스트하지 않고
 /// '클라이언트 참가' 버튼만 띄운다 — 호스트가 뜬 뒤 눌러 접속하면 멀티 테스트가 된다.
 /// 솔로/멀티는 미리 고르는 모드가 아니라 클라이언트 참가 여부로 갈린다.
@@ -43,11 +44,17 @@ public class DevAutoHost : MonoBehaviour
 
         await UniTask.NextFrame(this.GetCancellationTokenOnDestroy()); // NGO 서버 준비 보장
 
+        // 준비 완료를 대신 보고한다 (#215) — 씬 직접 Play는 App.LoadScene 파이프라인을 타지 않아
+        // InGameManager.WaitUntilReadyAsync(안에 ReportSelfReady가 있다)가 아예 불리지 않는다. 그러면
+        // SceneReadyGate가 호스트 보고를 못 받아 30초 타임아웃까지 라운드가 시작되지 않는다.
+        // 클론은 보고하지 않아도 된다 — 게이트가 기다리는 대상은 스폰 시점의 접속자, 즉 호스트뿐이다.
+        App.Game.ReadyGate?.ReportSelfReady();
+
         // 서버 권위로 라운드 준비 시작 — LobbyManager '게임 시작' 버튼을 대신한다.
         // StartRound가 아니라 준비 진입점을 부른다 — NPC 스폰이 준비 단계로 옮겨졌다(#403).
         // 여기선 호스트 혼자라 RoundManager의 전원 입장 대기는 자동으로 건너뛴다(기다릴 상대가 없음).
         App.Game.Round?.BeginRoundPreparation();
-        Debug.Log("[DevAutoHost] 로컬 호스트 + 라운드 자동 준비 시작 (Test Scene 전용)");
+        Debug.Log("[DevAutoHost] 로컬 호스트 + 라운드 자동 준비 시작 (게임 씬 직접 Play)");
     }
 
     // MPPM 클론 전용 — 호스트(메인 에디터)가 뜬 뒤 눌러 로컬 접속한다. 접속 주소는 UnityTransport 기본값(127.0.0.1).
