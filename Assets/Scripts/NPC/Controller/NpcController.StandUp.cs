@@ -17,6 +17,8 @@ public partial class NpcController
     private System.Action m_standUpNext;
     private bool m_standUpPending;
     private float m_standUpRemaining;
+    // 일어나기 전에 쓰러진 채로 버티는 시간(초) — 0이면 곧바로 일어난다 (#513)
+    private float m_standUpDownRemaining;
 
     /// <summary>지금 일어나는 모션 구간인가 — 서버(또는 오프라인) 전용.
     /// 이 구간은 아직 묶인 채 <see cref="NpcState.Captured"/>라 E로 다시 끌 수 있는 <b>재포획 창</b>이다. (#513)
@@ -32,7 +34,10 @@ public partial class NpcController
     ///
     /// 모션 길이는 기절 기상과 같은 클립을 쓰므로 <see cref="NpcStunConfig.StandUpSeconds"/>를 공유한다.
     /// </summary>
-    public void ServerStandUpThen(System.Action next)
+    /// <param name="downSeconds">일어나기까지 쓰러져 있는 총 시간(초). 마지막 구간이 기상 모션이므로
+    /// 이 값에서 클립 길이를 뺀 만큼 누워 있다가 일어난다. 0이면 곧바로 일어난다.
+    /// 이 구간 전체가 재포획 창이다 — 밧줄은 무력화된 대상만 묶으므로(#446) 달려가면 도로 잡는다.</param>
+    public void ServerStandUpThen(System.Action next, float downSeconds = 0f)
     {
         if (IsSpawned && !IsServer)
             return;
@@ -49,7 +54,11 @@ public partial class NpcController
         m_standUpPending = true;
         m_standUpNext = next;
         m_standUpRemaining = m_stunConfig.StandUpSeconds;
-        RaiseStandUp(); // 전 피어에 일어나는 모션 재생을 알린다 (기절 기상과 같은 순간 이벤트)
+        m_standUpDownRemaining = Mathf.Max(0f, downSeconds - m_stunConfig.StandUpSeconds);
+
+        // 누워 있는 구간이 있으면 모션 알림을 그 뒤로 미룬다 — 지금 알리면 3초 내내 일어서 있게 된다
+        if (m_standUpDownRemaining <= 0f)
+            RaiseStandUp(); // 전 피어에 일어나는 모션 재생을 알린다 (기절 기상과 같은 순간 이벤트)
     }
 
     // 일어나기 예약 취소 — 예약된 후속 동작도 함께 버린다.
@@ -58,6 +67,7 @@ public partial class NpcController
         m_standUpPending = false;
         m_standUpNext = null;
         m_standUpRemaining = 0f;
+        m_standUpDownRemaining = 0f;
     }
 
     /// <summary>
@@ -76,6 +86,16 @@ public partial class NpcController
         {
             CancelStandUp();
             return;
+        }
+
+        // 먼저 쓰러진 채로 버틴다 — 다 지나야 일어나는 모션이 나간다
+        if (m_standUpDownRemaining > 0f)
+        {
+            m_standUpDownRemaining -= Time.deltaTime;
+            if (m_standUpDownRemaining > 0f)
+                return;
+
+            RaiseStandUp();
         }
 
         m_standUpRemaining -= Time.deltaTime;
