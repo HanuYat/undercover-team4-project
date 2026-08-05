@@ -18,6 +18,15 @@ public abstract class ChanneledInteractionBehaviour : NetworkBehaviour
 
     // ---- 채널링 게이지 (#184) ----
 
+    /// <summary>
+    /// 채널링을 하는 동안 오너에게 계속 들려줄 소리 — 기본은 없음. 필요한 하위만 재정의한다 (#483).
+    ///
+    /// 게이지와 같은 경로에 태우는 이유는 <b>시작과 끝이 이미 짝지어져 있기 때문</b>이다.
+    /// 게이지 숨김은 완료·취소·거리이탈 어떤 종료에서도 반드시 불리므로(아래 <see cref="NotifyChannelGaugeEnd"/>),
+    /// 소리를 여기 붙이면 "취소했는데 소리가 계속 난다"가 구조적으로 생기지 않는다.
+    /// </summary>
+    protected virtual EAudioClip ChannelLoopSound => EAudioClip.None;
+
     /// <summary>채널링 게이지 표시 — 오너 화면에. 서버·오프라인은 로컬, 원격 오너에겐 RPC.</summary>
     protected void NotifyChannelGaugeStart(float seconds) => NotifyChannelGaugeStart(seconds, 0f);
 
@@ -30,10 +39,10 @@ public abstract class ChanneledInteractionBehaviour : NetworkBehaviour
     {
         if (IsSpawned && IsServer && !IsOwner)
         {
-            ChannelGaugeStartRpc(seconds, elapsed);
+            ChannelGaugeStartRpc(seconds, elapsed, ChannelLoopSound);
             return;
         }
-        App.UI.Gauge?.Show(seconds, elapsed);
+        ShowChannelFeedback(seconds, elapsed, ChannelLoopSound);
     }
 
     /// <summary>채널링 게이지 숨김 — 완료·취소·거리이탈 등 어떤 종료 경로에서도 반드시 호출.</summary>
@@ -44,15 +53,29 @@ public abstract class ChanneledInteractionBehaviour : NetworkBehaviour
             ChannelGaugeEndRpc();
             return;
         }
-        App.UI.Gauge?.Hide();
+        HideChannelFeedback();
     }
 
     [Rpc(SendTo.Owner)]
-    private void ChannelGaugeStartRpc(float seconds, float elapsed) =>
-        App.UI.Gauge?.Show(seconds, elapsed);
+    private void ChannelGaugeStartRpc(float seconds, float elapsed, EAudioClip sound) =>
+        ShowChannelFeedback(seconds, elapsed, sound);
 
     [Rpc(SendTo.Owner)]
-    private void ChannelGaugeEndRpc() => App.UI.Gauge?.Hide();
+    private void ChannelGaugeEndRpc() => HideChannelFeedback();
+
+    // 소리를 RPC 인자로 실어 보내는 이유 — 원격 오너에서는 ChannelLoopSound를 그대로 읽어도 되지만,
+    // 게이지와 소리가 같은 한 번의 결정에서 나와야 둘이 어긋날 여지가 없다.
+    private static void ShowChannelFeedback(float seconds, float elapsed, EAudioClip sound)
+    {
+        App.UI.Gauge?.Show(seconds, elapsed);
+        App.Sound?.PlayLoop2D(sound);
+    }
+
+    private static void HideChannelFeedback()
+    {
+        App.UI.Gauge?.Hide();
+        App.Sound?.StopLoop2D();
+    }
 
     // ---- 오너 판정 피드백 (#91) ----
 

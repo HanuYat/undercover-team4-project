@@ -45,6 +45,10 @@ public class SoundManager : CommonManagerBase
     // 각 소스가 언제 재생을 시작했는지 — 전부 사용 중일 때 뺏을 대상을 고르는 기준.
     private float[] m_startTimes;
 
+    // 2D 루프 전용 소스 — 풀에서 빌리지 않는다. 풀은 오래된 것을 뺏는 정책이라 루프를 맡길 수 없다.
+    private AudioSource m_loopSource;
+    private EAudioClip m_loopId = EAudioClip.None;
+
     // BGM 소스 2개를 번갈아 쓴다 — 크로스페이드는 두 곡이 잠깐 동시에 울려야 성립한다.
     private AudioSource[] m_bgmSources;
     private int m_bgmActive = -1; // 지금 '트는 중'인 소스 (없으면 -1)
@@ -154,6 +158,69 @@ public class SoundManager : CommonManagerBase
         source.volume = entry.Volume;
         source.Play();
     }
+
+    /// <summary>
+    /// '하는 동안 계속' 나는 2D 소리를 건다 — 채널링음처럼 시작과 끝이 분명한 것.
+    /// 이미 같은 소리가 돌고 있으면 처음부터 다시 시작하지 않는다.
+    ///
+    /// <b>슬롯은 하나뿐이다</b> — 한 번에 채널링할 수 있는 행동이 하나라서다(스캔 중에 소생을 할 수 없다).
+    /// 둘 이상이 겹칠 일이 생기면 그때 슬롯을 늘릴 것.
+    /// </summary>
+    public void PlayLoop2D(EAudioClip id)
+    {
+        if (id == EAudioClip.None)
+        {
+            StopLoop2D();
+            return;
+        }
+
+        if (m_loopId == id)
+            return;
+
+        if (!m_entries.TryGetValue(id, out AudioLibrary.Entry entry))
+        {
+            WarnOnce(id, $"카탈로그에 {id} 항목이 없다");
+            return;
+        }
+
+        // 클립 미배정은 '아직 안 채움'이다 — 이전 루프는 끊어 두고 조용히 넘어간다.
+        if (entry.Clip == null)
+        {
+            StopLoop2D();
+            return;
+        }
+
+        if (m_loopSource == null)
+            return;
+
+        m_loopSource.clip = entry.Clip;
+        m_loopSource.volume = entry.Volume;
+        m_loopSource.Play();
+        m_loopId = id;
+    }
+
+    /// <summary>2D 루프를 끊는다 — 채널링이 완료·취소·중단 중 무엇으로 끝나도 불러야 한다.</summary>
+    public void StopLoop2D()
+    {
+        if (m_loopId == EAudioClip.None)
+            return;
+
+        if (m_loopSource != null)
+        {
+            m_loopSource.Stop();
+            m_loopSource.clip = null;
+        }
+
+        m_loopId = EAudioClip.None;
+    }
+
+    /// <summary>
+    /// 카탈로그 항목을 그대로 돌려준다 — 없으면 null. <b>풀로 낼 수 없는 소리</b>가 자기
+    /// <see cref="AudioSource"/>로 직접 틀 때 쓴다(발소리 루프처럼 움직이는 대상을 계속 따라다녀야
+    /// 하고 길이가 긴 것). 풀은 원샷 전용이라 오래된 소리를 뺏어 가므로 루프를 맡길 수 없다.
+    /// </summary>
+    public AudioLibrary.Entry GetSfxEntry(EAudioClip id) =>
+        m_entries.TryGetValue(id, out AudioLibrary.Entry entry) ? entry : null;
 
     // ---- BGM ----
 
@@ -315,6 +382,18 @@ public class SoundManager : CommonManagerBase
         }
 
         BuildBgmSources();
+        BuildLoopSource();
+    }
+
+    private void BuildLoopSource()
+    {
+        var host = new GameObject("Loop2DSource");
+        host.transform.SetParent(transform, false);
+
+        m_loopSource = host.AddComponent<AudioSource>();
+        m_loopSource.playOnAwake = false;
+        m_loopSource.loop = true;
+        m_loopSource.spatialBlend = 0f; // 2D — 채널링음은 하는 본인에게만 난다
     }
 
     // BGM은 효과음 풀에서 빌리지 않는다 — 루프로 계속 물고 있어야 하는데 풀은 오래된 것을 뺏는

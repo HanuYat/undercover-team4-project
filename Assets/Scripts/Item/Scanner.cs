@@ -41,6 +41,10 @@ public class Scanner : ItemBase
     // 스캐너는 줍기 시 소유권이 홀더로 이전되므로(#88) 기반의 SendTo.Owner가 정확히 든 사람에게 간다.
     protected override void RaiseOwnerToast(string message) => OnScanFeedback?.Invoke(message);
 
+    // 판독음은 채널링을 하는 동안 난다 — 결과가 나온 뒤 한 번 울리면 "읽는 중"이라는 정보가 없어
+    // 게이지만 쳐다보게 된다. 기반이 게이지와 같은 짝으로 켜고 끄므로 취소해도 소리가 남지 않는다. (#483)
+    protected override EAudioClip ChannelLoopSound => EAudioClip.ScannerScan;
+
     private void Awake()
     {
         m_battery = GetComponent<ItemBattery>();
@@ -294,10 +298,6 @@ public class Scanner : ItemBase
             Debug.LogWarning("ScanResultRpc: NPC 참조 해석 실패 또는 프로필 없음 (클라 동기화 지연?)");
             return;
         }
-
-        // 판독 완료음 — 이 RPC가 이미 오너 전용이라(GDD 5-4: 스캔 정보는 스캔한 본인 화면 전용)
-        // 여기서 내면 결과를 받은 사람에게만 들린다. 위치가 없는 확인음이라 2D다 (#483).
-        App.Sound?.PlaySfx2D(EAudioClip.ScannerScan);
 
         Debug.Log($"스캔 결과 수신: {GetScanInfo(identity.Profile)}");
         OnScanCompleted?.Invoke(identity.Profile, npcNetObj.NetworkObjectId);

@@ -147,17 +147,12 @@ public class VerdictBanner : PanelBase
         m_detailBound = false;
     }
 
-    // 톤 색과 같은 갈래다 — 진범은 성공음, 오검거는 실패음.
-    // 경범죄는 소리를 내지 않는다: 진범 검거도 오검거도 아니라 성공/실패 어느 쪽으로 울려도
-    // 잘못된 신호가 된다(톤 색이 중립인 것과 같은 이유). 별도 음이 생기면 여기에 붙일 것.
+    // 오검거만 실패음이고 나머지는 성공음이다. 경범죄는 톤 색이 중립이라 소리도 비워 뒀었는데,
+    // 실제로 잡아 보면 "제대로 처리했다"는 확인이 없어 실패한 것처럼 읽혔다 — 난동꾼 연행은 수익이
+    // 나는 정상 처리이므로 성공 쪽에 둔다. 갈리는 기준은 '보상이 있었는가'가 아니라 '잘못 잡았는가'다.
     private static EAudioClip VerdictToSound(ArrestVerdict verdict)
     {
-        return verdict switch
-        {
-            ArrestVerdict.WantedCriminal => EAudioClip.UiSuccess,
-            ArrestVerdict.WrongfulArrest => EAudioClip.UiFail,
-            _ => EAudioClip.None,
-        };
+        return verdict == ArrestVerdict.WrongfulArrest ? EAudioClip.UiFail : EAudioClip.UiSuccess;
     }
 
     private Color VerdictToColor(ArrestVerdict verdict)

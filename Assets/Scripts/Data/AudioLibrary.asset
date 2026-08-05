@@ -40,37 +40,37 @@ MonoBehaviour:
     MaxDistance: 25
   - Id: 6
     Clip: {fileID: 8300000, guid: 04db38a9964a67545bb6aafd46a3a326, type: 3}
-    Volume: 0.5
+    Volume: 0.22
     MinDistance: 2
     MaxDistance: 18
   - Id: 7
     Clip: {fileID: 8300000, guid: f05b78fc8b2900149b94f4c414275388, type: 3}
-    Volume: 0.6
+    Volume: 0.28
     MinDistance: 2
     MaxDistance: 22
   - Id: 8
     Clip: {fileID: 8300000, guid: 6508e626105d9ba419239fbeb8e79700, type: 3}
-    Volume: 0.5
+    Volume: 0.3
     MinDistance: 2
     MaxDistance: 16
   - Id: 9
     Clip: {fileID: 8300000, guid: 81fedc3f0da8b5a44a8fd818f6e27897, type: 3}
-    Volume: 0.6
+    Volume: 0.35
     MinDistance: 2
     MaxDistance: 18
   - Id: 10
     Clip: {fileID: 8300000, guid: 0ed8d2ebc75aec24a9db24973898938b, type: 3}
-    Volume: 0.7
+    Volume: 0.3
     MinDistance: 2
     MaxDistance: 25
   - Id: 11
     Clip: {fileID: 8300000, guid: 03dd5acc4d3d18443b14d6eea326a6c0, type: 3}
-    Volume: 0.7
+    Volume: 0.45
     MinDistance: 2
     MaxDistance: 25
   - Id: 12
     Clip: {fileID: 8300000, guid: 86fbb8a825129ef4ba8c5bceb3e4fd8b, type: 3}
-    Volume: 0.7
+    Volume: 0.45
     MinDistance: 2
     MaxDistance: 25
   m_bgm:
