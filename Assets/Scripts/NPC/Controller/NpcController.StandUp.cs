@@ -64,14 +64,21 @@ public partial class NpcController
         if (IsSpawned && !IsServer)
             return;
 
+        // 이미 일어나는 중 — 폴링 호출부가 매 틱 불러도 한 번만 건다.
+        //
+        // <b>아래 "이미 서 있다" 판정보다 반드시 앞이다.</b> 예약을 거는 순간 줄은 이미 빠져 있으므로
+        // (풀기 경로가 ReleaseDrag → 예약 순), 쓰러져 기다리는 재포획 창 안에서 다시 풀기가 들어오면
+        // 순서가 뒤집힌 채로는 "묶여 있지 않다 → 이미 서 있다"로 읽혀 next가 그 자리에서 실행된다 —
+        // 누워 있던 몸이 기상 모션 없이 벌떡 일어나 배회로 넘어간다. 풀기는 Captured면 누구에게나
+        // 열려 있어(CanUnrope) 이 창 안의 재호출은 정상 조작이다.
+        if (m_standUpPending)
+            return;
+
         if (!IsTethered && !IsRoped)
         {
             next?.Invoke();
             return;
         }
-
-        if (m_standUpPending)
-            return; // 이미 일어나는 중 — 폴링 호출부가 매 틱 불러도 한 번만 건다
 
         SetStandUpPending(true);
         m_standUpNext = next;
