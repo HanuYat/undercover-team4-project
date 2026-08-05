@@ -9,6 +9,7 @@ public enum BombState
 {
     Idle,     // 아직 무장 전 (스폰 직후)
     Emerging, // 상자에서 나오는 중 — 아직 움직이지도 카운트다운하지도 않는다 (등장 예고)
+    Dormant,  // 상자 앞에서 대기 — 사람이 다가올 때까지 시간이 흐르지 않는다
     Armed,    // 카운트다운 중 — 가장 가까운 현장 플레이어를 쫓는다
     Locked,   // 폭발 직전 — 그 자리에 멈춰 더는 쫓지 않는다 (폭심 확정)
     Exploded, // 시간 초과 폭발
@@ -49,9 +50,14 @@ public class BombDevice : NetworkBehaviour
     private float m_lockSeconds = 3f;
 
     [Header("추격 (인스펙터 조절)")]
-    [Tooltip("추격 속도(m/s) — 플레이어 걷기 5·달리기 8 기준. 걸어서는 간신히, 달리면 확실히 벌어지는 값으로 둘 것")]
+    [Tooltip("추격 속도(m/s) — 플레이어 걷기 5·달리기 8 기준. 걷기보다 빠르게 둘 것: 걸어서 벌 수 있으면 " +
+             "달아나는 데 아무 대가가 없어 추격이 성립하지 않는다. 달리기보다는 확실히 느려야 한다")]
     [SerializeField]
-    private float m_chaseSpeed = 4.5f;
+    private float m_chaseSpeed = 5.5f;
+
+    [Tooltip("이 반경(m) 안에 현장 인원이 들어오면 잠에서 깨어 추격과 카운트다운을 함께 시작한다")]
+    [SerializeField]
+    private float m_wakeRadius = 14f;
 
     [Tooltip("표적을 다시 고르고 목적지를 갱신하는 주기(초)")]
     [SerializeField]
@@ -129,6 +135,13 @@ public class BombDevice : NetworkBehaviour
     // NPC 넉백 대상 수집용 공유 버퍼 — 서버(또는 오프라인)에서만 쓰므로 정적으로 공유해도 안전하다
     private static readonly Collider[] s_blastColliders = new Collider[64];
 
+    // 라운드당 폭탄 1개 — 씬에 놓인 상자(BombCrate)가 "내 상자에서 나오는 폭탄인가"를 묻는 단일 참조.
+    // 매니저가 아니라 스폰물이므로 App 파사드가 아닌 이 정적 참조로 노출한다(단일 인스턴스 보장은 이벤트가 한다).
+    private static BombDevice s_active;
+
+    /// <summary>현재 씬에 살아 있는 폭탄 — 없으면 null. 상자가 여는 시점을 판단하는 진입점.</summary>
+    public static BombDevice Active => s_active;
+
     /// <summary>현재 상태 — 서버·오프라인은 실참조, 원격 피어는 동기화값.</summary>
     public BombState State => IsSpawned && !IsServer ? (BombState)m_stateSynced.Value : m_state;
 
@@ -195,6 +208,16 @@ public class BombDevice : NetworkBehaviour
     {
         m_agent = GetComponent<NavMeshAgent>();
         m_agent.speed = m_chaseSpeed;
+
+        s_active = this; // 라운드당 1개 전제 — 상자가 이 폭탄을 보고 열린다
+    }
+
+    // NetworkBehaviour.OnDestroy를 가리지 않도록 override + base 호출 (csc.rsp가 CS0114를 에러로 승격)
+    public override void OnDestroy()
+    {
+        if (s_active == this)
+            s_active = null;
+        base.OnDestroy();
     }
 
     public override void OnNetworkSpawn()
@@ -233,10 +256,26 @@ public class BombDevice : NetworkBehaviour
         if (!IsAuthority)
             return;
 
-        // 등장 중 — 상자에서 나오는 동안은 가만히 있는다. 다 나오면 그때부터 카운트다운이 돈다.
+        // 등장 중 — 상자에서 나오는 동안은 가만히 있는다. 다 나오면 대기 상태로 넘어간다.
         if (m_state == BombState.Emerging)
         {
             if (Time.time >= m_armAtLocal)
+                SetState(BombState.Dormant);
+            return;
+        }
+
+        // 대기 — 상자 앞에 서서 사람을 기다린다. 카운트다운은 아직 돌지 않는다.
+        //
+        // 시간을 여기서 흘리지 않는 이유: 아무도 없는 골목에서 30초가 지나면 폭탄은 누구도 위협하지
+        // 못한 채 혼자 터진다. "언제 터지는가"가 아니라 "누가 걸리는가"가 이 이벤트의 내용이므로,
+        // 시계는 표적이 생기는 순간부터 돈다.
+        if (m_state == BombState.Dormant)
+        {
+            if (Time.time < m_nextRetargetTime)
+                return; // 매 프레임 전수 검색하지 않는다 — 추격 재타겟과 같은 주기로 본다
+
+            m_nextRetargetTime = Time.time + m_retargetInterval;
+            if (SuddenEventUtil.FindNearestFieldPlayer(transform.position, m_wakeRadius) != null)
                 ServerArm();
             return;
         }
@@ -264,7 +303,8 @@ public class BombDevice : NetworkBehaviour
 
     /// <summary>
     /// 폭탄을 배치한다 — <see cref="BombChaseEvent"/>가 스폰 직후 서버(또는 오프라인)에서 호출.
-    /// 상자에서 나오는 동안(<see cref="BombState.Emerging"/>)은 가만히 있다가 <see cref="ServerArm"/>으로 넘어간다.
+    /// 상자에서 나오는 동안(<see cref="BombState.Emerging"/>)은 가만히 있다가 대기(<see cref="BombState.Dormant"/>)로
+    /// 넘어가고, 사람이 다가오면 그때 <see cref="ServerArm"/>이 걸린다.
     ///
     /// 등장 시간을 두는 이유는 연출 때문만이 아니다 — <b>예고</b>다. 상자가 들썩이는 동안 근처 인원이
     /// 달아날 채비를 할 수 있어야, 30초 카운트다운이 "도망칠 수 있었는데 못 갔다"가 된다.
@@ -285,8 +325,8 @@ public class BombDevice : NetworkBehaviour
     }
 
     /// <summary>
-    /// 폭탄을 무장한다 — 등장이 끝나면 스스로 호출한다(<see cref="ServerDeploy"/>).
-    /// 카운트다운을 시작하고 추격에 들어간다.
+    /// 폭탄을 무장한다 — 대기 중 현장 인원이 <see cref="m_wakeRadius"/> 안에 들어오면 스스로 호출한다.
+    /// <b>카운트다운은 여기서 시작한다</b> — 등장 시점이 아니라 표적이 생긴 시점이 기준이다.
     /// </summary>
     public void ServerArm()
     {

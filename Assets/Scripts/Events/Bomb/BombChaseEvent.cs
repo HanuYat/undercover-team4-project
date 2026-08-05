@@ -4,13 +4,17 @@ using UnityEngine.AI;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// 추격 폭탄 (돌발 이벤트 · 현장) — 등장 지점 중 한 곳에 폭탄이 나타나 가장 가까운 현장 인원을 쫓아오고,
-/// 제한시간이 끝나면 그 자리에서 폭발한다. 해체는 없다 — 달아나거나 진압봉으로 밀어내는 수밖에 없다.
-/// (GDD 6-4, #399)
+/// 추격 폭탄 (돌발 이벤트 · 현장) — 도시에 놓인 상자(<see cref="BombCrate"/>) 중 한 곳에서 폭탄이 나와
+/// 근처에 사람이 오면 쫓아오고, 제한시간이 끝나면 그 자리에서 폭발한다. 해체는 없다 — 달아나거나
+/// 진압봉으로 밀어내는 수밖에 없다. (GDD 6-4, #399)
 ///
-/// 스폰형 이벤트 — 폭탄 프리팹(<see cref="BombDevice"/>)을 스폰하고 수명·정리만 맡는다. 추격·카운트다운·
+/// 스폰형 이벤트 — 폭탄 프리팹(<see cref="BombDevice"/>)을 스폰하고 수명·정리만 맡는다. 등장·대기·추격·
 /// 폭발은 스폰물이 스스로 서버 권위로 처리하고 자기 NetworkObject로 전파한다 (ISuddenEvent 규약,
 /// JailbreakEvent ↔ NpcController와 동일 관계).
+///
+/// <b>등장 지점을 이 컴포넌트가 들고 있지 않다</b> — 씬에 놓인 상자가 곧 후보다. 상자는 평소에도 도시
+/// 소품으로 서 있어서 "저기서 나올 수 있다"를 미리 볼 수 있고, 지점을 옮기는 일이 곧 상자를 옮기는 일이라
+/// 인스펙터 배열과 실제 상자가 어긋날 여지가 없다.
 ///
 /// 라운드당 폭탄 1개 — <see cref="IsActive"/>가 폭탄이 살아 있는 동안 true라, 프레임워크가 겹쳐 발생시키지 않는다.
 /// </summary>
@@ -21,12 +25,8 @@ public class BombChaseEvent : MonoBehaviour, ISuddenEvent
     [SerializeField]
     private BombDevice m_bombPrefab;
 
-    [Header("등장 위치 (스폰 포인트)")]
-    [Tooltip("폭탄이 나타날 후보 지점들 — 발동 때마다 이 중 하나를 무작위로 골라 거기서 출발한다")]
-    [SerializeField]
-    private Transform[] m_spawnPoints;
-
-    [Tooltip("등장 지점에서 이 거리(m) 안의 NavMesh를 찾아 그 위에 올려놓는다 — 못 찾으면 발동을 취소한다")]
+    [Header("등장")]
+    [Tooltip("상자에서 이 거리(m) 안의 NavMesh를 찾아 그 위에 올려놓는다 — 못 찾으면 다음 상자를 시도한다")]
     [SerializeField]
     private float m_navSampleMaxDistance = 5f;
 
@@ -47,8 +47,8 @@ public class BombChaseEvent : MonoBehaviour, ISuddenEvent
     {
         if (m_bombPrefab == null)
             return false;
-        if (!HasUsableSpawnPoint())
-            return false;
+        if (BombCrate.All.Count == 0)
+            return false; // 씬에 상자가 없다 — 나올 곳이 없다
         // 쫓아갈 현장 플레이어가 있어야 한다 — 전원 다운이면 걸지 않는다
         return SuddenEventUtil.FindRandomFieldPlayer() != null;
     }
@@ -58,22 +58,13 @@ public class BombChaseEvent : MonoBehaviour, ISuddenEvent
         if (m_bombPrefab == null)
             return;
 
-        Transform spawnPoint = PickRandomSpawnPoint();
-        if (spawnPoint == null)
+        if (!TryPickSpawn(out Vector3 position, out Quaternion rotation))
         {
-            Debug.LogWarning("BombChaseEvent: 사용 가능한 스폰 포인트가 없어 발동 취소", this);
+            Debug.LogWarning("BombChaseEvent: 상자 주변에서 NavMesh를 찾지 못해 발동 취소", this);
             return;
         }
 
-        // NavMesh 위에 올려놓고 시작한다 — 폭탄은 NavMeshAgent로 움직이므로 등장 지점이 조금이라도 떠 있거나
-        // 인도 밖이면 에이전트가 아예 붙지 못해 그 자리에서 굳는다 (NpcSpawner와 같은 이유).
-        if (!NavMesh.SamplePosition(spawnPoint.position, out NavMeshHit hit, m_navSampleMaxDistance, NavMesh.AllAreas))
-        {
-            Debug.LogWarning($"BombChaseEvent: 등장 지점({spawnPoint.name}) 주변에서 NavMesh를 찾지 못해 발동 취소", this);
-            return;
-        }
-
-        m_bomb = Instantiate(m_bombPrefab, hit.position, spawnPoint.rotation);
+        m_bomb = Instantiate(m_bombPrefab, position, rotation);
         if (SuddenEventUtil.IsNetworkSessionActive)
             m_bomb.GetComponent<NetworkObject>().Spawn();
 
@@ -120,48 +111,38 @@ public class BombChaseEvent : MonoBehaviour, ISuddenEvent
         m_resolved = false;
     }
 
-    // 지정된 스폰 포인트 중 실제로 쓸 수 있는(null 아닌) 것이 하나라도 있는지 — 미설정 시 발동을 거른다.
-    private bool HasUsableSpawnPoint()
+    /// <summary>
+    /// 상자를 무작위로 고르고 그 자리의 NavMesh 지점을 얻는다 — 하나도 쓸 수 없으면 false.
+    ///
+    /// 폭탄은 NavMeshAgent로 움직이므로 시작 지점이 조금이라도 떠 있거나 인도 밖이면 에이전트가 아예
+    /// 붙지 못해 그 자리에서 굳는다 (NpcSpawner와 같은 이유). 그래서 상자 하나가 실패해도 이벤트를
+    /// 통째로 버리지 않고 다음 상자를 본다 — 상자 하나가 나중에 옮겨져 NavMesh를 벗어나도
+    /// 이벤트 자체가 조용히 죽지는 않는다.
+    /// </summary>
+    private bool TryPickSpawn(out Vector3 position, out Quaternion rotation)
     {
-        if (m_spawnPoints == null)
+        position = default;
+        rotation = Quaternion.identity;
+
+        int count = BombCrate.All.Count;
+        if (count == 0)
             return false;
-        for (int i = 0; i < m_spawnPoints.Length; i++)
+
+        int start = Random.Range(0, count);
+        for (int i = 0; i < count; i++)
         {
-            if (m_spawnPoints[i] != null)
-                return true;
+            BombCrate crate = BombCrate.All[(start + i) % count];
+            if (crate == null)
+                continue;
+
+            if (!NavMesh.SamplePosition(crate.SpawnPosition, out NavMeshHit hit, m_navSampleMaxDistance, NavMesh.AllAreas))
+                continue;
+
+            position = hit.position;
+            rotation = crate.SpawnRotation;
+            return true;
         }
+
         return false;
-    }
-
-    // 스폰 포인트 하나를 무작위로 고른다 — 무작위 시작 지점에서 목록을 한 바퀴 돌아 비어 있지 않은
-    // 첫 포인트를 반환한다. 중간에 null 슬롯(인스펙터 미설정)이 있어도 이벤트를 통째로 취소하지 않는다
-    // (JailbreakEvent.TryFindSpawnPosition과 같은 방식).
-    private Transform PickRandomSpawnPoint()
-    {
-        if (m_spawnPoints == null || m_spawnPoints.Length == 0)
-            return null;
-
-        int start = Random.Range(0, m_spawnPoints.Length);
-        for (int i = 0; i < m_spawnPoints.Length; i++)
-        {
-            Transform point = m_spawnPoints[(start + i) % m_spawnPoints.Length];
-            if (point != null)
-                return point;
-        }
-        return null;
-    }
-
-    // 씬 뷰에서 폭탄 등장 지점 위치를 눈으로 확인할 수 있게 기즈모를 그린다.
-    private void OnDrawGizmosSelected()
-    {
-        if (m_spawnPoints == null)
-            return;
-
-        Gizmos.color = Color.red;
-        foreach (Transform point in m_spawnPoints)
-        {
-            if (point != null)
-                Gizmos.DrawWireSphere(point.position, 0.5f);
-        }
     }
 }
