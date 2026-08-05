@@ -1,10 +1,11 @@
+﻿using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
 /// 누워 있던 몸이 일어나는 구간 (#513) — 전 피어에 모션을 알리고, 클립이 끝난 뒤 후속 동작을 실행한다.
 ///
 /// 밧줄에 묶인 대상은 놓여 있어도 누워 있으므로(<see cref="IsTethered"/>), 일어나는 것은 줄이
-/// <b>실제로 풀리는</b> 네 경로뿐이다: 방치 만료 탈주(<see cref="NpcCapturedState"/>) · 좌클릭 3초 풀기 ·
+/// <b>실제로 풀리는</b> 네 경로뿐이다: 방치 만료 탈주(<see cref="NpcCapturedState"/>) · E 풀기 ·
 /// 유치장 착석 · 유치장 안 풀기(뒤 셋은 <see cref="PlayerEscortCommands"/>·<see cref="JailIntake"/>).
 /// 전부 대상이 체포(<see cref="NpcState.Captured"/>)로 멈춰 있는 상태에서 온다.
 ///
@@ -20,10 +21,31 @@ public partial class NpcController
     // 일어나기 전에 쓰러진 채로 버티는 시간(초) — 0이면 곧바로 일어난다 (#513)
     private float m_standUpDownRemaining;
 
-    /// <summary>지금 일어나는 모션 구간인가 — 서버(또는 오프라인) 전용.
-    /// 이 구간은 아직 묶인 채 <see cref="NpcState.Captured"/>라 E로 다시 끌 수 있는 <b>재포획 창</b>이다. (#513)
-    /// 폴링으로 부르는 쪽(JailIntake)이 후속 동작을 중복 예약하지 않도록 물어보는 값이기도 하다.</summary>
-    public bool IsStandingUp => m_standUpPending;
+    // 위 예약의 클라 사본(서버만 쓴다) — 자세를 결정하는 값이라 전 피어가 알아야 한다.
+    // 지속 상태이므로 순간 이벤트(RaiseStandUp)가 아니라 NetworkVariable로 나간다 (architecture.md 연출 전파 규칙).
+    private readonly NetworkVariable<bool> m_standUpPendingSynced = new(false);
+
+    /// <summary>
+    /// 일어나기가 예약된 구간인가 — <b>쓰러져 기다리는 동안 + 기상 모션</b>을 함께 덮는다. 전 피어에서 유효. (#513)
+    ///
+    /// 이 구간은 아직 <see cref="NpcState.Captured"/>라 다시 묶을 수 있는 <b>재포획 창</b>이다.
+    /// 폴링으로 부르는 쪽(JailIntake)이 후속 동작을 중복 예약하지 않도록 물어보는 값이기도 하다.
+    ///
+    /// <b>클라도 읽어야 하는 이유</b>: 누운 자세의 근거가 밧줄 표시(<see cref="IsTethered"/>)뿐이었는데,
+    /// 풀기는 예약을 걸자마자 줄을 빼므로 <b>쓰러져 기다리는 동안 몸을 눕혀 둘 것이 아무것도 없었다</b> —
+    /// 푸는 즉시 벌떡 서고 몇 초 뒤 이미 서 있는 몸에 기상 모션이 나왔다. NpcAnimationDriver가 이 값을
+    /// 함께 보게 해서 그 구간의 자세를 여기가 든다.
+    /// </summary>
+    public bool IsStandingUp =>
+        IsSpawned && !IsServer ? m_standUpPendingSynced.Value : m_standUpPending;
+
+    // 예약 표시를 세운다/거둔다 — 서버(또는 오프라인)에서만. 동기화 값은 세션 중에만 의미가 있다.
+    private void SetStandUpPending(bool value)
+    {
+        m_standUpPending = value;
+        if (IsSpawned && IsServer)
+            m_standUpPendingSynced.Value = value;
+    }
 
     /// <summary>
     /// 줄이 풀리는 순간의 일어나기 — 전 피어에 모션을 알리고, 클립 길이만큼 지난 뒤 <paramref name="next"/>를
@@ -51,7 +73,7 @@ public partial class NpcController
         if (m_standUpPending)
             return; // 이미 일어나는 중 — 폴링 호출부가 매 틱 불러도 한 번만 건다
 
-        m_standUpPending = true;
+        SetStandUpPending(true);
         m_standUpNext = next;
         m_standUpRemaining = m_stunConfig.StandUpSeconds;
         m_standUpDownRemaining = Mathf.Max(0f, downSeconds - m_stunConfig.StandUpSeconds);
@@ -62,9 +84,11 @@ public partial class NpcController
     }
 
     // 일어나기 예약 취소 — 예약된 후속 동작도 함께 버린다.
+    // 표시를 거두는 곳이 여기 하나라, 재포획(StartRopeDrag)·넉백·재기절 이탈(TickStandUp)·정상 완료가
+    // 전부 같은 정리를 탄다 — 하나만 빠지면 그 대상이 영원히 누운 자세로 남는다.
     private void CancelStandUp()
     {
-        m_standUpPending = false;
+        SetStandUpPending(false);
         m_standUpNext = null;
         m_standUpRemaining = 0f;
         m_standUpDownRemaining = 0f;
