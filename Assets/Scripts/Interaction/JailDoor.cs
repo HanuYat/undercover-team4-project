@@ -4,24 +4,22 @@ using UnityEngine;
 /// <summary>
 /// 유치장 창살 문 (#415) — 플레이어가 상호작용키(E)로 여닫는 미닫이 게이트. 문짝이 옆으로 미끄러진다.
 ///
-/// <b>플레이어만 막는다.</b> 닫힌 문짝의 콜라이더는 CharacterController(플레이어)를 막지만
-/// NavMeshAgent(NPC)는 NavMesh만 따라가므로 통과한다 — 신병을 끌고 들어가는 흐름(밧줄 끌기는
-/// 위치를 직접 세팅한다)에도 걸리지 않는다.
-/// 시민이 유치장에 못 들어가는 것은 이 문이 아니라 NavMesh 영역(Jail) 게이팅이 담당한다.
+/// <b>근접 자동문이다.</b> 안팎을 가리지 않고 <see cref="m_openRadius"/> 안에 열 자격이 있는 대상이
+/// 있으면 열리고, 없으면 닫힌다. 열 자격은 <b>모든 플레이어</b>와, <b>벤치에 앉은 수감자·침입자를 뺀
+/// NPC</b>다 (<see cref="CanOpen"/>에 두 예외의 근거가 있다).
 ///
-/// <b>여닫는 것은 E 토글뿐이다.</b> 경찰은 유치장에 드나들 권한이 있으니 자물쇠
-/// (<see cref="JailLock"/>) 잠김과 무관하게 E가 먹힌다. 한 번 열면 다시 누를 때까지 열려 있다 —
-/// 신병을 끌고 드나드는 동안 등 뒤에서 닫히지 않게 하기 위해서다.
+/// E 토글이 아니라 자동인 이유: 문짝 콜라이더는 CharacterController(플레이어)만 막고 NavMeshAgent와
+/// 밧줄 끌기(위치를 직접 세팅한다)는 그대로 지나가므로, 닫힌 문을 신병이 <b>뚫고 통과하는</b> 그림이
+/// 나왔다 (#522에서 발견). 막는 쪽을 고치는 대신 <b>지나갈 사람이 오면 열리게</b> 했다 — 경찰은
+/// 어차피 드나들 권한이 있어 E는 확인 절차일 뿐이었고, 신병을 끌고 오는 손은 이미 밧줄에 묶여 있다.
 ///
-/// 근접 자동 개폐는 제거됐다 (#492). 그것은 <b>수감 이송(Jailed) NPC 전용</b>이었는데 —
-/// 스스로 걸어 들어가는 대상이라 열어 줄 주체가 없었다 — 자동 이송이 폐기되면서 그런 NPC가
-/// 사라졌다. 이제 신병을 데려오는 것은 사람이고, 그 사람이 문을 연다.
-/// 이송 완료 시 수동 개방을 함께 풀던 처리(#457)도 같은 이유로 함께 빠졌다.
+/// 시민이 유치장에 못 들어가는 것은 이 문이 아니라 NavMesh 영역(Jail) 게이팅이 담당한다 — 자동문이
+/// 됐다고 아무 시민이나 걸어 들어오지는 않는다.
 ///
 /// 자물쇠가 풀린 동안(탈옥, #231)에는 아무도 없어도 계속 열어 둔다: "문이 열려 있다"가 탈옥을 알아채는
-/// 신호이기 때문이다. <b>그 상태에서 E는 '잠그고 닫기'가 된다</b> (#492) — 자동 재잠금이 제거돼
-/// 털린 유치장을 되돌리는 것이 플레이어의 책임이 됐고, 잠그기 전에는 문이 닫히지 않으므로
-/// 두 동작을 한 번의 E로 묶는다.
+/// 신호이기 때문이다. <b>E가 남아 있는 경우는 이것 하나뿐이다 — '잠그고 닫기'</b> (#492).
+/// 자동 재잠금이 제거돼 털린 유치장을 되돌리는 것이 플레이어의 책임이 됐는데, 자물쇠가 풀린 동안은
+/// 근접과 무관하게 열려 있으므로 잠그지 않고는 닫을 방법이 없다. 잠겨 있을 때는 E가 아예 뜨지 않는다.
 ///
 /// 씬 배치: 조준용 콜라이더를 <b>Interactable 레이어</b>에 둘 것 — PlayerInteractor의 조준 마스크가 그
 /// 레이어만 본다 (다른 상호작용물과 같은 관례).
@@ -43,6 +41,10 @@ public class JailDoor : NetworkBehaviour, IInteractable
     [Tooltip("완전히 열리거나 닫히는 데 걸리는 시간(초)")]
     [SerializeField] private float m_slideSeconds = 0.7f;
 
+    [Header("자동 개폐")]
+    [Tooltip("이 반경(m) 안에 열 자격이 있는 대상이 있으면 열린다 — 문을 중심으로 안팎 양쪽을 함께 덮는다")]
+    [SerializeField] private float m_openRadius = 3f;
+
     [Header("자물쇠 (비우면 부모에서 자동 탐색)")]
     [Tooltip("풀려 있는 동안(탈옥 진행 중, #231)에는 아무도 없어도 열어 둔다 — 열린 문이 곧 탈옥 신호다")]
     [SerializeField] private JailLock m_jailLock;
@@ -54,9 +56,9 @@ public class JailDoor : NetworkBehaviour, IInteractable
     // 닫힌 위치 — Awake에 잡아 두고 여기에 m_openOffset을 더한 곳이 열린 위치가 된다
     private Vector3 m_closedLocalPosition;
 
-    // 플레이어가 E로 걸어 둔 개방 — 다시 누를 때까지 유지된다. 개폐 판단이 서버에서만 돌므로
-    // 동기화하지 않는다(결과인 m_isOpenSynced만 전 피어가 본다). 서버(또는 오프라인) 전용.
-    private bool m_manualOpen;
+    // 근접 조회용 공유 버퍼 — 개폐 판단은 서버(또는 오프라인)에서만 돌므로 정적으로 공유해도 안전하다.
+    // 문 하나에 한 프레임 한 번이라 32면 충분하다(넘치면 초과분이 잘릴 뿐, 가까운 것은 대개 남는다).
+    private static readonly Collider[] s_openerBuffer = new Collider[32];
 
     /// <summary>문이 열려 있는가. 세션 중에는 동기화된 값이라 클라이언트에서도 읽을 수 있다.</summary>
     public bool IsOpen => IsSpawned ? m_isOpenSynced.Value : m_localIsOpen;
@@ -82,10 +84,51 @@ public class JailDoor : NetworkBehaviour, IInteractable
 
     // ---- 자동 개폐 판단 (서버 권위) ----
 
-    // 지금 문이 열려 있어야 하는가 — 수동 개방(E)과 탈옥 진행 중 둘의 합.
-    // 근접 자동 개폐는 제거됐다 (#492) — 스스로 걸어 들어오는 수감 이송 NPC가 없어졌다.
-    // 플레이어 근접도 보지 않는다: 여닫는 것은 플레이어의 명시적 입력(E)이다.
-    private bool ShouldBeOpen => m_manualOpen || IsJailbreakHoldingOpen;
+    // 지금 문이 열려 있어야 하는가 — 근접에 열 자격자가 있거나, 탈옥으로 자물쇠가 풀려 있거나.
+    private bool ShouldBeOpen => IsJailbreakHoldingOpen || HasNearbyOpener();
+
+    /// <summary>
+    /// 반경 안에 문을 열 자격이 있는 대상이 있는가 — 서버(또는 오프라인) 전용.
+    ///
+    /// 물리 조회로 후보를 좁힌 뒤 컴포넌트로 가른다. 플레이어 목록 전수 순회(SuddenEventUtil 관례)를
+    /// 쓰지 않는 이유는 NPC도 함께 봐야 하기 때문이다 — 시민은 수십 마리라 전수 순회가 훨씬 비싸다.
+    /// </summary>
+    private bool HasNearbyOpener()
+    {
+        int count = Physics.OverlapSphereNonAlloc(
+            transform.position, m_openRadius, s_openerBuffer, ~0, QueryTriggerInteraction.Ignore);
+
+        for (int i = 0; i < count; i++)
+        {
+            Collider hit = s_openerBuffer[i];
+            if (hit == null)
+                continue;
+
+            // 콜라이더가 루트의 자식일 수 있으므로 부모까지 탐색한다 (진압봉·폭발과 같은 관례)
+            if (hit.GetComponentInParent<PlayerHealth>() != null)
+                return true; // 경찰은 언제나 드나든다 — 다운 여부도 보지 않는다(끌려 들어오는 중일 수 있다)
+
+            NpcController npc = hit.GetComponentInParent<NpcController>();
+            if (npc != null && CanOpen(npc))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 이 NPC가 문을 열 수 있는가 — 못 여는 둘을 빼면 전부 연다.
+    ///
+    ///  · <b>벤치에 앉은 수감자</b>(<see cref="NpcController.IsSeated"/>) — 좌석이 문 근처라 이 예외가
+    ///    없으면 수감자가 앉아 있는 내내 문이 열려 있고, 그건 유치장이 아니다.
+    ///  · <b>침입자</b>(<see cref="NpcState.Intruding"/>, #231) — 자물쇠를 풀러 오는 자다. 문이 저절로
+    ///    열려 주면 잠금 장치를 지나칠 수 있게 되어, 탈옥이 "자물쇠를 푼다"가 아니라 "걸어 들어간다"가
+    ///    된다. 자물쇠를 실제로 풀고 나면 그때부터는 <see cref="IsJailbreakHoldingOpen"/>이 열어 준다.
+    ///
+    /// 반대로 <b>반출돼 일어선 수감자</b>는 연다 — 그 시점부터는 데리고 나가는 중이라 막을 이유가 없다.
+    /// </summary>
+    private static bool CanOpen(NpcController npc) =>
+        !npc.IsSeated && npc.CurrentState != NpcState.Intruding;
 
     // 자물쇠가 풀려 있는 동안은 계속 열어 둔다 — <b>열린 문이 곧 탈옥 신호다</b> (GDD 7-2, #231).
     //
@@ -101,12 +144,13 @@ public class JailDoor : NetworkBehaviour, IInteractable
     // ---- 플레이어 상호작용 (E 토글) ----
 
     /// <summary>
-    /// 유치장 문은 경찰 누구나 여닫을 수 있다 — 자물쇠 잠김·수감 인원과 무관하다.
-    /// (사거리·가시선은 PlayerInteractor가 이미 걸러 준다)
+    /// <b>자물쇠가 풀려 있을 때만</b> E가 뜬다 — 남은 조작은 '잠그고 닫기' 하나뿐이기 때문이다.
+    /// 여닫기는 자동이라 평소에는 누를 것이 없다. (사거리·가시선은 PlayerInteractor가 이미 걸러 준다)
     /// </summary>
-    public bool CanInteract(GameObject interactor) => m_leaf != null;
+    public bool CanInteract(GameObject interactor) =>
+        m_leaf != null && m_jailLock != null && !m_jailLock.IsLocked;
 
-    /// <summary>E — 자물쇠가 풀려 있으면 <b>잠그고 닫는다</b>(#492), 잠겨 있으면 여닫기 토글. (#415)</summary>
+    /// <summary>E — 털린 유치장을 <b>잠그고 닫는다</b>. (#492/#522)</summary>
     public void Interact(GameObject interactor)
     {
         if (!IsSpawned)
@@ -123,27 +167,20 @@ public class JailDoor : NetworkBehaviour, IInteractable
     [Rpc(SendTo.Server)]
     private void RequestToggleRpc() => ServerToggleManual();
 
-    // E 처리 — 서버(또는 오프라인) 전용. 자물쇠 상태에 따라 두 가지로 갈린다.
+    // E 처리 — 서버(또는 오프라인) 전용. 털린 유치장을 잠근다.
     //
-    //  · <b>자물쇠가 풀려 있으면(탈옥 이후) 먼저 잠근다.</b> 자동 재잠금이 제거돼(#492) 털린 유치장을
-    //    되돌리는 것은 플레이어의 몫이고, 그 조작이 여기다. 문을 닫는 것과 한 동작으로 묶는 이유는
-    //    순서 때문이다 — 풀린 동안은 ShouldBeOpen이 문을 계속 열어 두므로(탈옥 신호), 잠그지 않고는
-    //    애초에 닫을 수가 없다. 잠금과 개방 래치 해제를 같이 해서 한 번 누르면 "잠그고 닫힌다"가 된다.
-    //  · <b>잠겨 있으면 평소대로 여닫기 토글.</b>
+    // 자동 재잠금이 제거돼(#492) 되돌리는 것은 플레이어의 몫이고, 그 조작이 여기다. 잠그기와 닫기를
+    // 한 동작으로 묶는 이유는 순서 때문이다 — 풀린 동안은 ShouldBeOpen이 문을 계속 열어 두므로
+    // (탈옥 신호), 잠그지 않고는 애초에 닫을 수가 없다. 잠근 뒤에는 근접 판단이 이어받는다.
     private void ServerToggleManual()
     {
         if (IsSpawned && !IsServer)
             return;
 
-        if (m_jailLock != null && !m_jailLock.IsLocked)
-        {
-            m_jailLock.ServerRelock();
-            m_manualOpen = false; // 잠근 김에 닫는다 — 두 번 누르게 하지 않는다
-            ServerSetOpen(ShouldBeOpen);
-            return;
-        }
+        if (m_jailLock == null || m_jailLock.IsLocked)
+            return; // 이미 잠겨 있다 — 누를 것이 없다(CanInteract가 막지만 RPC는 신뢰하지 않는다)
 
-        m_manualOpen = !m_manualOpen;
+        m_jailLock.ServerRelock();
         ServerSetOpen(ShouldBeOpen);
     }
 
@@ -173,9 +210,8 @@ public class JailDoor : NetworkBehaviour, IInteractable
     private void Update()
     {
         // 개폐 판단은 서버(또는 오프라인)만 한다 — 클라이언트는 동기화된 IsOpen을 보고 연출만 따라간다.
-        // 매 프레임 평가해도 부담이 없다: 자물쇠 상태를 읽는 것뿐이고(근접 전체 조회는 #492에서
-        // 사라졌다), ServerSetOpen이 값이 같으면 조기 반환해 대역폭도 먹지 않는다.
-        // 탈옥으로 자물쇠가 풀리는 순간을 문이 따라가야 하므로 계속 본다.
+        // 매 프레임 구 하나를 던지는 비용이고(문 하나뿐이다), ServerSetOpen이 값이 같으면 조기 반환해
+        // 대역폭도 먹지 않는다.
         if (!IsSpawned || IsServer)
             ServerSetOpen(ShouldBeOpen);
 
