@@ -10,6 +10,7 @@ using UnityEngine.AI;
 ///   직선에서는 계속 달리면 벗어날 수 있다 — 대신 범위 이탈 시 아래 재타겟으로 페널티가 전가된다.
 /// - <b>재타겟</b>: 타겟이 추격 범위(ChaseRange)를 벗어나거나 무력화되면, 범위 안의 플레이어 중
 ///   무작위 한 명으로 갈아탄다(잡히는 사람이 페널티 독박 — 부모 이슈 #276 확정 설계).
+///   단 납치 임무(<see cref="NpcController.IsAbductionDuty"/>)는 갈아타지 않는다 — 범위를 벗어나도 같은 표적을 계속 쫓는다 (#371).
 /// - <b>사냥</b>: 범위 안에 아무도 없으면 배회하며 범위에 들어오는 플레이어를 기다린다.
 /// - <b>격퇴/수렴</b>: 격퇴(ApplyChaseRepel, 호루라기 #250 예정)당하면 잠시 도주 후 사냥으로 복귀하고
 ///   그 플레이어에게 재추격 쿨다운을 건다. 누군가 포획되면(PenaltyConvergeTarget) 전원 그리로 모인다.
@@ -98,8 +99,23 @@ public class NpcChaseState : NpcStateBase
         }
 
         // ---- 타겟 유효성: 사라짐·무력화·범위 이탈·쿨다운이면 범위 안 무작위 플레이어로 갈아탄다
+        // 납치(#371)는 갈아타지도, 놓지도 않는다 — 표적이 범위를 벗어나거나 무력화돼도 같은 사람을 계속 쫓는다.
+        // 갈아타면 "혼자 있는 사람을 노린다"는 그 이벤트의 유일한 규칙이 깨지고(동료 옆의 사람을 잡는다),
+        // 반대로 놓아 버리면 뒤처진 납치범만 빠져나가 2인 호송이 1인으로 무너진다. 실패는 이벤트가
+        // 자기 추격 상한(AbductionEvent.m_maxChaseSeconds)으로 끊는다 — 상태가 판단할 일이 아니다.
         Transform target = m_owner.ChaseTarget;
-        if (!IsChaseable(target))
+
+        if (m_owner.IsAbductionDuty)
+        {
+            // 표적이 사라졌다(접속 종료·파괴) — 여기서 재타겟으로 흘리면 아래 갈아타기 금지가 무의미해진다.
+            // 배회로 두고 이벤트의 추격 상한이 끊게 한다.
+            if (target == null)
+            {
+                TickHunt();
+                return;
+            }
+        }
+        else if (!IsChaseable(target))
         {
             target = PickRandomTargetInRange();
             m_owner.SetChaseTarget(target);

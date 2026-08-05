@@ -522,8 +522,19 @@ MonoBehaviour:
   m_mutedIcon: {fileID: 4072299085450650755}
   m_hintRoot: {fileID: 3052889740162905550}
   m_hintText: {fileID: 8377988465636551246}
-  m_hintMessage: "\uB9C8\uC774\uD06C\uAC00 \uAEBC\uC838 \uC788\uC2B5\uB2C8\uB2E4"
+  m_hintMessage:
+    m_TableReference:
+      m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
+    m_TableEntryReference:
+      m_KeyId: 7100000000302
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
   m_hintSeconds: 2
+  references:
+    version: 2
+    RefIds: []
 --- !u!1 &1795779269272653135
 GameObject:
   m_ObjectHideFlags: 0
@@ -675,7 +686,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ReadyWaitHud
   m_waitText: {fileID: 2019866525146702684}
-  m_format: "\uB2E4\uB978 \uD50C\uB808\uC774\uC5B4 \uB300\uAE30 \uC911 ({0}/{1})"
+  m_waitFormat:
+    m_TableReference:
+      m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
+    m_TableEntryReference:
+      m_KeyId: 7100000000300
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  references:
+    version: 2
+    RefIds: []
 --- !u!1 &1866235432611092589
 GameObject:
   m_ObjectHideFlags: 0
@@ -2496,7 +2518,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RemainingCriminalsHud
   m_countText: {fileID: 7429684788723820136}
-  m_format: '{0} / {1}'
+  m_countFormat:
+    m_TableReference:
+      m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
+    m_TableEntryReference:
+      m_KeyId: 7100000000301
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  references:
+    version: 2
+    RefIds: []
 --- !u!1 &8614321104626141754
 GameObject:
   m_ObjectHideFlags: 0

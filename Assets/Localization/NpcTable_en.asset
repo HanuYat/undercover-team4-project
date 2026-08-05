@@ -17,7 +17,187 @@ MonoBehaviour:
   m_SharedData: {fileID: 11400000, guid: 7e3bb98f354a36f43bb9ee6612e02e7f, type: 2}
   m_Metadata:
     m_Items: []
-  m_TableData: []
+  m_TableData:
+  - m_Id: 7100000000600
+    m_Localized: Human
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000601
+    m_Localized: Android
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000602
+    m_Localized: None
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000603
+    m_Localized: Faction A
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000604
+    m_Localized: Faction B
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000700
+    m_Localized: Hair style
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000701
+    m_Localized: Hair color
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000702
+    m_Localized: Skin tone
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000703
+    m_Localized: Facial hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000704
+    m_Localized: Headwear
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000705
+    m_Localized: Eyewear
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000706
+    m_Localized: None
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000707
+    m_Localized: Bald
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000708
+    m_Localized: Short hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000709
+    m_Localized: Long hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000710
+    m_Localized: Tied back
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000711
+    m_Localized: Covered
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000712
+    m_Localized: Black
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000713
+    m_Localized: Brown
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000714
+    m_Localized: Blonde
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000715
+    m_Localized: Red
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000716
+    m_Localized: Blue
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000717
+    m_Localized: Silver
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000718
+    m_Localized: Teal
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000719
+    m_Localized: Pink
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000720
+    m_Localized: Fair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000721
+    m_Localized: Peach
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000722
+    m_Localized: Brown
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000723
+    m_Localized: Blue
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000724
+    m_Localized: Metallic
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000725
+    m_Localized: Neon
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000726
+    m_Localized: Other
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000727
+    m_Localized: Mustache
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000728
+    m_Localized: Beard
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000729
+    m_Localized: Sideburns
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000730
+    m_Localized: Beanie
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000731
+    m_Localized: Cap
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000732
+    m_Localized: Hat
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000733
+    m_Localized: Hood
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000734
+    m_Localized: Headphones
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000735
+    m_Localized: Helmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000736
+    m_Localized: Sunglasses
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000737
+    m_Localized: Visor
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000738
+    m_Localized: Goggles
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000739
+    m_Localized: Glowing lenses
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

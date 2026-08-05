@@ -1,7 +1,12 @@
 /// <summary>
 /// 검거 판정 결과 — 본부로 인계된 NPC가 올바른 체포 대상이었는지. (GDD 7-2/7-3/9-1, #41)
 /// 인계 NPC의 실제 신원(CitizenIdentity.IsCriminal)을 대조해 결정된다.
+///
+/// 값 이름이 곧 판정 배너 문구의 키다 (<c>Hud.Verdict.</c> + 이름) — 값을 추가하면
+/// <c>HudTable</c>에 같은 이름의 키를 함께 넣을 것. 아래 선언이 그 규약이고,
+/// 에디터 메뉴 <i>Tools ▸ Localization ▸ 규약 키 검증</i>이 빠진 키를 잡아 준다.
 /// </summary>
+[LocalizedEnum("HudTable", "Hud.Verdict.")]
 public enum ArrestVerdict
 {
     /// <summary>현상수배범 — 실제 범인 검거. 보상 지급 대상 (GDD 9-1: 10,000원).</summary>

@@ -5,7 +5,7 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 무력화의 원인 — 무력화는 하나가 아니라 성질이 다른 여럿이다. (#252, #364)
+/// 무력화의 원인 — 무력화는 하나가 아니라 성질이 다른 여럿이다. (#252, #364, #371, #524)
 /// 행동을 막는 것은 같지만 <b>어떻게 풀리는가</b>가 갈리므로, 운반·전멸 판정·애니메이션이 이 값으로 분기한다.
 /// </summary>
 public enum IncapacitationCause
@@ -20,12 +20,14 @@ public enum IncapacitationCause
     Penalty, // 오검거 광장 매달기 (#101) — 30초 뒤 자동 복귀
     Stun, // 테이저 피격 기절 (#252) — 시간이 지나면 스스로 일어난다
     Die, // HP 0 기능 정지 (#364, #524) — 현장 구조로는 못 일어난다. 본부 이송 부활(#365)만이 복구 경로
+    Abducted, // 납치 호송 중 (#371) — 끌려가는 동안 걸어 나가지 못하게. 외곽에 도착하면 Lynched로 넘어간다
+    Lynched, // 외곽 린치 (#371 후속) — 납치범에게 맞는 중. 행동은 막되 <b>쓰러진 자세가 아니다</b>(IsProne 제외)
     // (값은 반드시 끝에 추가한다 — NetworkVariable로 동기화되는 enum이라 순서가 곧 와이어 포맷이다)
 }
 
 /// <summary>
 /// 플레이어 행동불능(무력화) 공통 기반. (#105)
-/// HP 0 기능 정지(#105/#364/#524)·오검거 매달기(#101)·테이저 피격 기절(#252)은
+/// HP 0 기능 정지(#105/#364/#524)·오검거 매달기(#101)·테이저 피격 기절(#252)·납치 호송(#371)은
 /// 트리거만 다르고 결과=무력화로 같으므로, 무력화 상태 자체를 이 한 곳에서 서버 권위로 관리한다.
 /// 이동·아이템·상호작용 컴포넌트가 <see cref="IsIncapacitated"/>를 읽어 각자 행동을 막는다.
 ///
@@ -33,6 +35,8 @@ public enum IncapacitationCause
 ///  · Die — HP 0으로 곧바로 들어간다(#524). 현장 구조로는 못 일어나고 본부 이송 부활(#365)만
 ///    남으므로, 조준 히트박스는 켜되(운반 조준용) 구조 채널링은 거부된다.
 ///  · 매달기·기절 — 시간이 지나면 스스로 복귀하므로 운반 대상도, 전멸 판정 대상도 아니다.
+///  · 납치·린치 — 끌려가는 동안·맞는 동안 걸어 나가지 못하게 한다(#371). 동료가 납치범을 때려
+///    떼어내면 풀리고, 떼어내지 못하면 HP가 0이 되어 Die로 넘어간다 — 그 자체로는 전멸 판정 대상이 아니다.
 ///  · Down — 현장 구조가 있던 시절의 중간 단계. 지금은 발생하지 않는다(enum 주석 참고, #524).
 /// 조준 히트박스는 쓰러져 있는 동안(<see cref="IsOutOfAction"/>) 켠다.
 /// </summary>
@@ -79,6 +83,21 @@ public class PlayerIncapacitation : NetworkBehaviour
 
     /// <summary>테이저 피격 기절인지. 모션은 기능 정지와 같으므로(#252) 표시·집계처럼 원인을 구분할 때만 쓴다.</summary>
     public bool IsStunned => Cause == IncapacitationCause.Stun;
+
+    /// <summary>
+    /// <b>쓰러진 자세인가</b> — 다운 모션·바닥 시점·몸 회전 잠금이 함께 보는 값이다. (#371 후속)
+    ///
+    /// 원래 이 셋은 <see cref="IsIncapacitated"/>를 직접 봤다. "무력화는 곧 쓰러진 자세"가 참이었기 때문인데,
+    /// 외곽 린치(<see cref="IncapacitationCause.Lynched"/>)가 <b>서서 맞는</b> 무력화라 그 전제가 깨졌다.
+    ///
+    /// 세 곳이 <b>반드시 같은 값</b>을 봐야 한다는 것이 이 프로퍼티의 존재 이유다 — 하나만 갈라지면
+    /// 몸은 서 있는데 카메라는 바닥에 있는 어긋남이 난다(#252에서 이미 한 번 밟은 함정이라
+    /// PlayerAnimationDriver 주석에 경고로 남아 있었다).
+    ///
+    /// 행동 차단은 이 값이 아니라 <see cref="IsIncapacitated"/>가 계속 맡는다 — 린치 중에도
+    /// 이동·아이템·상호작용은 전부 막힌다. 갈리는 것은 자세뿐이다.
+    /// </summary>
+    public bool IsProne => IsIncapacitated && Cause != IncapacitationCause.Lynched;
 
     // 살아 있는 인스턴스 목록 — 플레이어 전원을 훑어야 하는 쪽(전멸 판정 RoundManager)이
     // FindObjectsByType으로 씬 전체를 뒤지지 않게 한다. 조회는 배열을 새로 만드는 엔진 호출이라,
@@ -141,7 +160,8 @@ public class PlayerIncapacitation : NetworkBehaviour
     }
 
     /// <summary>
-    /// 무력화 진입 — 서버(또는 오프라인)에서만. HP0 기능 정지(#105/#524)·매달기(#101)가 호출한다.
+    /// 무력화 진입 — 서버(또는 오프라인)에서만.
+    /// HP0 기능 정지(#105/#524)·매달기(#101)·납치 호송(#371)이 호출한다.
     /// 기절은 스스로 풀려야 하므로 이 경로가 아니라 <see cref="ServerStun"/>을 쓴다.
     /// 기본값을 두지 않는다 — 원인이 곧 복구 경로라, 호출자가 반드시 밝히게 한다.
     /// </summary>
@@ -188,6 +208,29 @@ public class PlayerIncapacitation : NetworkBehaviour
 
         SetCause(IncapacitationCause.Stun);
         ServerStunTimerAsync(seconds, ++m_stunEpisode).Forget();
+    }
+
+    /// <summary>
+    /// 납치 처형 — 외곽에서 린치당한 피해자를 기능 정지(Die)로 확정한다. 서버(또는 오프라인) 전용. (#371 후속)
+    ///
+    /// 보통은 이 경로를 타지 않는다 — 린치로 HP가 0이 되면 <see cref="PlayerHealth"/>가 이미 Die를
+    /// 걸어 뒀고(#524), 그때 이 메서드는 조용히 무동작으로 끝난다. 남겨 두는 이유는
+    /// <b>린치 상한 초과 폴백</b>이다: 지형에 껴서 때리지 못한 채 상한이 지나면 HP가 남아 있는데도
+    /// 결말을 집행해야 하는데(AbductionEvent.LynchAsync 참고), 그 경로에는 HP 0이 없다.
+    ///
+    /// 새 원인 값을 만들지 않는 근거는 납치 사망의 성질이 Die와 정확히 같다는 것이다 — 현장 구조로는
+    /// 못 일어나고, 구조 창은 HP 0 이전에 이미 닫혔다(납치범을 때려 떼어내는 것이 유일한 구조 수단).
+    /// </summary>
+    public void ServerKillByAbduction()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        if (Cause == IncapacitationCause.Die)
+            return; // 이미 기능 정지 — HP 0으로 먼저 확정된 보통의 경로다
+
+        Debug.Log($"[납치] 처형 — 기능 정지: {name}", this);
+        SetCause(IncapacitationCause.Die);
     }
 
     /// <summary>무력화 해제(부활·복구) — 서버(또는 오프라인)에서만.</summary>

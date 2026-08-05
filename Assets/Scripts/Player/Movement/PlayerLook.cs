@@ -77,7 +77,9 @@ public class PlayerLook : MonoBehaviour
     public float Pitch => m_pitch;
 
     // 다운(무력화) 중 여부 — 무력화 컴포넌트가 없으면(테스트 구성 등) 항상 false
-    private bool IsIncapacitated => m_incapacitation != null && m_incapacitation.IsIncapacitated;
+    // 자세 판정이라 IsIncapacitated가 아니라 IsProne을 본다 — 외곽 린치(#371 후속)는 서서 맞는
+    // 무력화라 바닥 시점·회전 잠금이 걸리면 안 된다. 이름은 쓰임(쓰러졌는가)에 맞췄다.
+    private bool IsProne => m_incapacitation != null && m_incapacitation.IsProne;
 
     // 앉기 블렌딩으로 머리가 내려간 높이(m) — 카메라를 같은 만큼 낮춘다 (#236)
     private float CrouchHeadDrop => m_crouch != null ? m_crouch.HeadDrop : 0f;
@@ -141,7 +143,7 @@ public class PlayerLook : MonoBehaviour
         // 쓰러져 있으면 몸을 돌리지 않는다 (#252) — transform을 돌리면 누운 캐릭터가 바닥에서
         // 제자리 회전하는 그림이 되고, 그건 다른 플레이어 화면에도 그대로 보인다.
         // 좌우는 카메라 로컬 각도에 누적하고(범위 제한), 위아래는 누운 자세용 범위로 잡는다.
-        if (IsIncapacitated)
+        if (IsProne)
         {
             if (m_smoothedLook.sqrMagnitude > 0.0001f)
                 m_downLookTaken = true; // 이 순간부터 시선은 플레이어 것 — 바닥 시점 강제를 놓는다
@@ -166,7 +168,7 @@ public class PlayerLook : MonoBehaviour
         if (m_playerCamera == null) return;
 
         float lerp = m_camPoseLerpSpeed * Time.deltaTime;
-        bool downed = IsIncapacitated;
+        bool downed = IsProne;
 
         m_downCamBlend = Mathf.Lerp(m_downCamBlend, downed ? 1f : 0f, lerp);
 

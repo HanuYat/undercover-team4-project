@@ -156,6 +156,7 @@ public partial class NpcController : NetworkBehaviour
     {
         m_networkState.OnValueChanged += HandleNetworkStateChanged;
         m_syncedStunned.OnValueChanged += HandleSyncedStunnedChanged; // 스턴 오버레이 표현 전파 (#292)
+        m_abductionDuty.OnValueChanged += HandleAbductionDutyChanged;  // 페널티 임무 종류 전파 (#371)
 
         if (IsServer)
         {
@@ -173,6 +174,7 @@ public partial class NpcController : NetworkBehaviour
     {
         m_networkState.OnValueChanged -= HandleNetworkStateChanged;
         m_syncedStunned.OnValueChanged -= HandleSyncedStunnedChanged;
+        m_abductionDuty.OnValueChanged -= HandleAbductionDutyChanged;
     }
 
     private void Start()
@@ -260,6 +262,12 @@ public partial class NpcController : NetworkBehaviour
     private void HandleNetworkStateChanged(NpcState previous, NpcState current)
     {
         OnStateChanged?.Invoke(current);
+    }
+
+    // 페널티 임무 종류(오검거/납치) 전파 — 앵그리 마크를 그리는 표현 계층이 모든 피어에서 다시 판정한다 (#371)
+    private void HandleAbductionDutyChanged(bool previous, bool current)
+    {
+        OnPenaltyDutyChanged?.Invoke();
     }
 
     /// <summary>기절에서 일어나기 시작할 때 발행 — 전 피어에서 발생한다(서버는 로컬 발행 + ClientRpc 중계).

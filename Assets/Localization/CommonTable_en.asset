@@ -51,6 +51,18 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 6276845892712267886
+  - m_Id: 7100000000100
+    m_Localized: Quit the game?
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000101
+    m_Localized: Cancel
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000102
+    m_Localized: Confirm
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

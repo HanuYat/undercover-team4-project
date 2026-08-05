@@ -1,6 +1,8 @@
 using System;
-using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Localization;
+using UnityEngine.Localization.Settings;
 
 /// <summary>
 /// 세력 문양 대조자료 (#222) — 이번 세션의 세력별 '진짜' 문양을 나열한다.
@@ -9,11 +11,14 @@ using System.Collections.Generic;
 public class FactionSymbolBoardView : HqPanelView
 {
     [Header("목록")]
-    [SerializeField] private OfficialRecords m_officialRecords;
+    [SerializeField]
+    private OfficialRecords m_officialRecords;
 
-    [SerializeField] private RectTransform m_rowContainer;
+    [SerializeField]
+    private RectTransform m_rowContainer;
 
-    [SerializeField] private FactionSymbolRowView m_rowPrefab;
+    [SerializeField]
+    private FactionSymbolRowView m_rowPrefab;
 
     private readonly List<FactionSymbolRowView> m_rows = new();
     private readonly List<OfficialRecords.Faction> m_shown = new();
@@ -23,16 +28,28 @@ public class FactionSymbolBoardView : HqPanelView
     protected override void OnOpened()
     {
         m_manager = App.Game.FactionSymbol;
-        if (m_manager != null) m_manager.OnRealIndicesChanged += Rebuild;
+        if (m_manager != null)
+            m_manager.OnRealIndicesChanged += Rebuild;
+
+        // 세력 표기가 테이블에서 오므로 언어가 바뀌면 다시 그린다 — 행마다 구독하는 대신
+        // 로케일 변경 한 곳에 걸고 통째로 다시 채운다 (ShopStand와 같은 방식). (#497)
+        LocalizationSettings.SelectedLocaleChanged += HandleLocaleChanged;
 
         Rebuild();
     }
 
     protected override void OnClosed()
     {
-        if (m_manager != null) m_manager.OnRealIndicesChanged -= Rebuild;
+        if (m_manager != null)
+            m_manager.OnRealIndicesChanged -= Rebuild;
         m_manager = null;
+
+        // 종료 중에는 설정 에셋을 되살리지 않는다 — HasSettings로 먼저 확인한다 (ShopStand 관례)
+        if (LocalizationSettings.HasSettings)
+            LocalizationSettings.SelectedLocaleChanged -= HandleLocaleChanged;
     }
+
+    private void HandleLocaleChanged(Locale locale) => Rebuild();
 
     private void Rebuild()
     {
