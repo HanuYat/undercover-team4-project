@@ -126,9 +126,10 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dd8cdd2b3cf5a1248a15340794bc74b2, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BombDefusalEvent
+  m_EditorClassIdentifier: Assembly-CSharp::BombChaseEvent
   m_bombPrefab: {fileID: 8953918111541867319, guid: 27813f0cd07ab3a489e202d07dbc64a2, type: 3}
   m_spawnPoints: []
+  m_navSampleMaxDistance: 5
   m_resolvedLingerSeconds: 3
 --- !u!114 &6553283234259604354
 MonoBehaviour:

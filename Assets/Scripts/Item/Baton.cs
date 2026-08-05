@@ -101,7 +101,7 @@ public class Baton : ItemBase, IAimedWeapon
             return false;
         }
 
-        return EvaluateSwing(origin, direction, holder.transform, out _, out _, out _)
+        return EvaluateSwing(origin, direction, holder.transform, out _, out _, out _, out _)
             == SwingResult.ValidTarget;
     }
 
@@ -245,7 +245,7 @@ public class Baton : ItemBase, IAimedWeapon
         switch (
             EvaluateSwing(
                 origin, direction, holderTransform, out NpcController target,
-                out PlayerHealth playerTarget, out RaycastHit hit))
+                out PlayerHealth playerTarget, out BombDevice bombTarget, out RaycastHit hit))
         {
             case SwingResult.NoHit:
                 NotifyOwner("진압봉 빗나감 — 허공");
@@ -259,6 +259,16 @@ public class Baton : ItemBase, IAimedWeapon
                         ? $"진압봉 무효 — 이미 무력화된 동료 ({playerTarget.name})"
                         : $"진압봉 무효 — 이미 제압됐거나 페널티 진행 중인 대상 ({target.CurrentState})");
                 return;
+        }
+
+        // 추격 폭탄을 맞췄다 — 데미지가 아니라 밀어내기다 (#399). 폭탄은 해체할 수 없으므로
+        // 이것이 폭심을 옮기는 유일한 수단이다. 미는 방향은 때린 사람 → 폭탄, 즉 등지고 선 쪽이다
+        // (조준 방향을 쓰면 비스듬히 때렸을 때 폭탄이 옆으로 새는데, 화면에서는 그게 오작동으로 읽힌다).
+        if (bombTarget != null)
+        {
+            bombTarget.ServerPush(bombTarget.transform.position - holderTransform.position);
+            NotifyOwner("진압봉 명중 — 폭탄을 밀어냈다");
+            return;
         }
 
         // 동료를 맞췄다 — 아군 오사 (#461). NPC와 같은 데미지를 그대로 넣고, HP 0이 되면
@@ -370,11 +380,13 @@ public class Baton : ItemBase, IAimedWeapon
         Transform holderRoot,
         out NpcController target,
         out PlayerHealth playerTarget,
+        out BombDevice bombTarget,
         out RaycastHit hit
     )
     {
         target = null;
         playerTarget = null;
+        bombTarget = null;
         hit = default;
 
         int count = Physics.SphereCastNonAlloc(
@@ -401,7 +413,7 @@ public class Baton : ItemBase, IAimedWeapon
         NpcController npc = hit.collider.GetComponentInParent<NpcController>();
         if (npc == null)
         {
-            return EvaluatePlayerSwing(hit, out playerTarget);
+            return EvaluateNonNpcSwing(hit, out playerTarget, out bombTarget);
         }
 
         // 피해 게이트를 데미지 전에 본다 — TakeDamage도 같은 규칙으로 피해를 무시하지만(#366/#292),
@@ -422,7 +434,8 @@ public class Baton : ItemBase, IAimedWeapon
     }
 
     /// <summary>
-    /// NPC가 아닌 것을 맞췄을 때의 분류 — 동료면 아군 오사, 그 외(벽·소품)는 빗나감. (#461)
+    /// NPC가 아닌 것을 맞췄을 때의 분류 — 동료면 아군 오사(#461), 추격 폭탄이면 밀어내기(#399),
+    /// 그 외(벽·소품)는 빗나감.
     /// </summary>
     /// <remarks>
     /// 테이저(<c>Taser.EvaluatePlayerAim</c>)와 달리 <b>자기 자신을 걸러내는 분기가 없다.</b>
@@ -435,16 +448,31 @@ public class Baton : ItemBase, IAimedWeapon
     /// 무력화 게이트는 <see cref="PlayerHealth.IsTargetable"/> 하나로 본다 — 다운·기절·매달기 중인
     /// 동료를 더 때려 상태를 악화시키는 경로는 만들지 않는다 (NPC 쪽 <c>NpcStateRules.CanBeDamaged</c>와 같은 취지).
     /// </remarks>
-    private static SwingResult EvaluatePlayerSwing(RaycastHit hit, out PlayerHealth playerTarget)
+    private static SwingResult EvaluateNonNpcSwing(
+        RaycastHit hit,
+        out PlayerHealth playerTarget,
+        out BombDevice bombTarget
+    )
     {
+        bombTarget = null;
+
         playerTarget = hit.collider.GetComponentInParent<PlayerHealth>();
-        if (playerTarget == null)
+        if (playerTarget != null)
         {
-            return SwingResult.HitNonTarget;
+            return playerTarget.IsTargetable
+                ? SwingResult.ValidTarget
+                : SwingResult.TargetInvalidState;
         }
 
-        return playerTarget.IsTargetable
-            ? SwingResult.ValidTarget
-            : SwingResult.TargetInvalidState;
+        // 추격 폭탄 — 때리면 데미지가 아니라 밀린다 (#399). 이미 터진 폭탄은 그냥 소품이라
+        // 빗나감으로 둔다(TargetInvalidState가 아니다 — "무효"라고 알려줄 만한 오조작이 아니다).
+        bombTarget = hit.collider.GetComponentInParent<BombDevice>();
+        if (bombTarget != null && bombTarget.CanBePushed)
+        {
+            return SwingResult.ValidTarget;
+        }
+
+        bombTarget = null;
+        return SwingResult.HitNonTarget;
     }
 }
