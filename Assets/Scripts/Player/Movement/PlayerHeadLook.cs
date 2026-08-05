@@ -38,6 +38,7 @@ public class PlayerHeadLook : NetworkBehaviour
 
     private PlayerLook m_look;
     private PlayerIncapacitation m_incapacitation; // 다운 중 오버라이드 차단용 — 없으면(테스트 구성) 항상 활성
+    private PlayerRagdoll m_ragdoll; // 사망 래그돌 — 켜져 있는 동안 가중치를 즉시 0으로 (#506)
     private float m_displayPitch; // 실제 본에 반영 중인 pitch — 목표값을 지수 감쇠로 추종
     private float m_weight; // 오버라이드 가중치 0~1 — 다운 중 0으로 블렌드해 쓰러짐 애니메이션과 싸우지 않게
 
@@ -45,6 +46,7 @@ public class PlayerHeadLook : NetworkBehaviour
     {
         m_look = GetComponent<PlayerLook>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
+        m_ragdoll = GetComponent<PlayerRagdoll>();
     }
 
     private void Update()
@@ -61,6 +63,15 @@ public class PlayerHeadLook : NetworkBehaviour
     {
         if (m_neckBone == null || m_headBone == null)
             return;
+
+        // 래그돌 중에는 블렌드를 기다리지 않고 가중치를 <b>즉시</b> 0으로 떨어뜨린다 (#506).
+        // 아래 m_weightLerpSpeed 감쇠(8/초)로는 0에 닿기까지 수백 ms가 걸리고, 그 사이 이 오버라이드가
+        // 뼈 물리(그리고 부활 블렌드)와 같은 목 본을 두고 싸워 목이 홱 돌아간다.
+        if (m_ragdoll != null && m_ragdoll.IsRagdollActive)
+        {
+            m_weight = 0f;
+            return;
+        }
 
         // 오너(및 오프라인 테스트)는 로컬 pitch를 직접, 원격은 동기화값을 사용
         bool useLocal = (!IsSpawned || IsOwner) && m_look != null;

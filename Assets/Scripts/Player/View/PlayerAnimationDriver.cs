@@ -70,6 +70,7 @@ public class PlayerAnimationDriver : MonoBehaviour
     private PlayerCrouch m_crouch; // 앉기 애니메이션 구동용 (#236)
     private PlayerJump m_jump; // 점프 애니메이션 구동용 (#189)
     private PlayerHandView m_handView; // 1인칭 팔 스윙 구동용 — 오너에서만 활성 (#217)
+    private PlayerRagdoll m_ragdoll; // 사망 래그돌 — 뼈를 쥐고 있는 동안 Down을 붙든다 (#506)
     private Vector3 m_lastPosition;
 
     private void Awake()
@@ -88,6 +89,7 @@ public class PlayerAnimationDriver : MonoBehaviour
         m_crouch = GetComponentInParent<PlayerCrouch>();
         m_jump = GetComponentInParent<PlayerJump>();
         m_handView = GetComponentInParent<PlayerHandView>();
+        m_ragdoll = GetComponentInParent<PlayerRagdoll>();
         m_lastPosition = transform.position;
     }
 
@@ -132,7 +134,14 @@ public class PlayerAnimationDriver : MonoBehaviour
         // 한쪽만 바꾸면 몸은 서 있는데 카메라는 바닥에 있는 어긋남이 난다 (#252에서 밟은 함정).
         if (m_incapacitation != null)
         {
-            bool prone = m_incapacitation.IsProne;
+            // 래그돌이 뼈를 쥐고 있는 동안에는 Down을 내리지 않는다 (#506 §3-5).
+            // 부활에서 Recover()가 블렌드보다 먼저 오는데, 그때 IsProne을 그대로 따르면 여기서 즉시
+            // false를 써 버려 정착 포즈 → 바닥 대기 자세 보간이 끝나기 전에 기상 모션이 시작된다.
+            // 래그돌이 애니메이터에 포즈를 돌려준 프레임부터 다시 IsProne을 따른다.
+            //
+            // 두 컴포넌트가 같은 Animator를 만지므로 역할을 나눠 둔다 —
+            // <b>파라미터는 이 컴포넌트만, Animator on/off와 뼈는 PlayerRagdoll만</b> 건드린다.
+            bool prone = m_incapacitation.IsProne || (m_ragdoll != null && m_ragdoll.IsRagdollActive);
             m_animator.SetBool(s_downHash, prone);
 
             // 린치로 세워지는 순간만 <b>기상 모션을 건너뛰고</b> 곧장 선다.

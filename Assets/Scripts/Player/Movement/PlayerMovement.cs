@@ -60,6 +60,7 @@ public class PlayerMovement : NetworkBehaviour
     private RopeDragLoad m_dragLoad; // 끌고 있는 무게로 깎인 이동속도 배율·목줄 제한을 읽는다 (#398)
     private PlayerTowedMotion m_towed; // 남이 내 몸을 옮기는 동안의 추종 — 입력 이동을 대신한다 (#279, #365)
     private PlayerLook m_look; // 시점 회전·카메라 자세 — 몸통 yaw가 이동 방향의 기준이라 여기서 순서를 잡는다
+    private PlayerRagdoll m_ragdoll; // 사망 래그돌 — 켜져 있는 동안 외력(넉백)을 삼킨다 (#506)
     private RoundManager Round => App.Game.Round; // 라운드 종료 시 이동·시점 차단용 (라운드 종료 freeze)
     private float m_verticalVelocity;
     private Vector3 m_knockbackVelocity; // 외력으로 밀려나는 수평 속도 — 매 프레임 감쇠 (#232 폭발 넉백)
@@ -121,6 +122,7 @@ public class PlayerMovement : NetworkBehaviour
         m_dragLoad = GetComponent<RopeDragLoad>();
         m_towed = GetComponent<PlayerTowedMotion>();
         m_look = GetComponent<PlayerLook>();
+        m_ragdoll = GetComponent<PlayerRagdoll>();
     }
 
     public override void OnNetworkSpawn()
@@ -275,6 +277,22 @@ public class PlayerMovement : NetworkBehaviour
     }
 
     /// <summary>
+    /// 쌓인 외력(넉백)과 수직 속도를 지운다 — 래그돌 진입(#506)이 부른다.
+    /// 진입 전에 이미 들어온 폭발 넉백이 남아 있으면, 뼈가 날아가는 동안 캡슐도 같이 미끄러진다.
+    /// 넉백 가드(<see cref="AddKnockback"/>)가 막는 것은 진입 <b>이후</b>의 호출뿐이라 이 짝이 필요하다.
+    /// </summary>
+    internal void ClearExternalVelocity()
+    {
+        m_knockbackVelocity = Vector3.zero;
+        m_verticalVelocity = 0f;
+    }
+
+    /// <summary>
+    /// 진단 전용 — 래그돌 튐 추적(#506)이 캡슐의 수직 속도를 함께 찍는다. 원인 확정되면 지운다.
+    /// </summary>
+    internal float DiagnosticVerticalVelocity => m_verticalVelocity;
+
+    /// <summary>
     /// CharacterController를 껐다 켠다 — transform을 직접 옮기는 호송 추종(#279)이 쓴다.
     /// 켠 채로 transform을 옮기면 CC 내부 캐시가 위치를 되돌린다 (<see cref="SetPose"/>와 동일 사정).
     /// </summary>
@@ -327,6 +345,15 @@ public class PlayerMovement : NetworkBehaviour
     public void AddKnockback(Vector3 velocity)
     {
         if (IsSpawned && !IsOwner) return;
+
+        // 래그돌 중이면 삼킨다 — 몸은 뼈 물리가 날리고 있으므로 캡슐까지 같은 폭발로 미끄러지면
+        // 시체와 판정 위치가 서로 다른 방향으로 벌어진다. (#506 §3-2)
+        //
+        // 호출부(BombExplosionView)에서 "죽은 사람은 건너뛴다"로 거르지 않는 이유: 원격 클라에서는
+        // 사망 사실(PlayerIncapacitation의 NetworkVariable)과 폭발 사실(BombDevice의 것)이 서로 다른
+        // 오브젝트에서 와 도착 순서가 보장되지 않아, 그 시점의 "이 사람 죽었나?"가 틀릴 수 있다.
+        // 들어와도 무해하게 만드는 쪽이 순서와 무관하게 항상 옳다.
+        if (m_ragdoll != null && m_ragdoll.IsRagdollActive) return;
 
         m_knockbackVelocity += new Vector3(velocity.x, 0f, velocity.z);
 
