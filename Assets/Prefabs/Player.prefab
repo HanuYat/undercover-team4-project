@@ -4633,7 +4633,7 @@ MonoBehaviour:
   m_groundProbeDistance: 1.5
   m_alignRootYawToBody: 1
   m_rootYawOffset: 0
-  m_convergeSeconds: 0.25
+  m_alignPullSpeed: 1.5
   m_blendSeconds: 0.4
   m_debugLog: 1
   m_diagnoseBounce: 1

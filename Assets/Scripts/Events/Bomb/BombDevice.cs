@@ -104,6 +104,20 @@ public class BombDevice : NetworkBehaviour
     [SerializeField]
     private float m_knockbackEdgeFalloff = 0.25f;
 
+    [Tooltip("사망자 래그돌의 수평 세기 = 넉백 수평 세기 × 이 값. 시체는 자기 캡슐이 Move()로 따라올 수 " +
+             "있는 거리 안에 떨어져야 한다 — 이름표·운반 조준·부활 히트박스가 모두 루트에 붙어 있다. " +
+             "취향이 아니라 설계 제약이다 (EvaluateRagdollImpulse 주석)")]
+    [Range(0f, 1f)]
+    [SerializeField]
+    private float m_ragdollImpulseScale = 0.1f;
+
+    [Tooltip("사망자 래그돌의 상승 세기 = 위 수평 세기 × 이 값. 1보다 커야 시체가 확실히 뜬다 — " +
+             "넉백의 0.45를 쓰면 탄도로는 납작해 바닥을 훑는다. 정점(m) ≈ (수평세기 × 이 값)² / 19.6")]
+    [Range(0f, 3f)]
+    [SerializeField]
+    private float m_ragdollLiftRatio = 1.8f;
+
+
     [Header("테스트")]
     [Tooltip("켜면 스폰/시작 시 스스로 무장한다 — 돌발 이벤트 없이 폭탄을 씬에 놓고 바로 등장·추격·폭발을 테스트할 때. " +
              "실전 배선(BombChaseEvent) 전까지의 임시 스위치 (SignalDecoder.m_installedOnStart 관례)")]
@@ -516,12 +530,43 @@ public class BombDevice : NetworkBehaviour
     // 이쪽이 먼저 와도 사망 폴링이 뒤늦게 무동작이 된다. 사망 사실(PlayerIncapacitation의
     // NetworkVariable)과 이 RPC는 서로 다른 오브젝트에서 오므로 도착 순서를 맞출 수 없다 —
     // 순서와 무관하게 결과가 같게 만드는 쪽이 항상 옳다. (#506 §3-1)
+    //
     private void ApplyBlastRagdoll(NetworkObject victim)
     {
         if (victim == null || !victim.TryGetComponent(out PlayerRagdoll ragdoll))
             return;
 
-        ragdoll.EnterRagdoll(EvaluateKnockback(victim.transform.position));
+        ragdoll.EnterRagdoll(EvaluateRagdollImpulse(victim.transform.position));
+    }
+
+    /// <summary>
+    /// 사망자 래그돌에 줄 임펄스 — <see cref="EvaluateKnockback"/>의 <b>수평 성분과 방향</b>만 가져와
+    /// 래그돌용 세기·들어올림으로 다시 세운다. 감쇠식·방향은 여전히 그쪽 한 곳이 쥔다.
+    ///
+    /// ⚠ <b>비행 거리는 취향이 아니라 설계 제약이다.</b> 시체는 <b>자기 캡슐이 따라올 수 있는 거리</b>
+    /// 안에 떨어져야 한다 — 이름표·운반 조준·부활 히트박스가 전부 루트(CharacterController)에 붙어
+    /// 있고, 캡슐은 <c>Move()</c> 스윕으로만 움직여 지형에 막힌다.
+    ///
+    /// 실측(넉백 세기를 그대로 준 경우): 임펄스 크기 32m/s → 원격 시체가 <b>38.8m</b> 이동했는데
+    /// 오너의 캡슐은 첫 장애물에 막혀 <b>0.23m</b>만 갔다. 그러면 "루트의 수평 위치 = 오너 골반의 수평
+    /// 위치"라는 캡슐 추종의 전제가 무너지고, 시체와 판정 위치가 38m 갈린 채 굳는다(이름표는 제자리,
+    /// 모델은 저 멀리). <b>골반을 동기화해도 이건 고쳐지지 않는다</b> — 원격이 오너 궤적을 완벽히
+    /// 재현해도 캡슐은 여전히 뒤에 있다.
+    ///
+    /// <b>균일하게 곱하면 안 된다</b>(그렇게 고쳤다가 되돌렸다). 상승 비율 0.45가 그대로 남아 수직만
+    /// 죽고 시체가 바닥을 훑는다 — 탄도에는 0.45가 너무 납작하다. 세기와 들어올림을 따로 잡는다.
+    ///
+    /// 기본값(0.1 / 1.8)이면 폭심에서 수평 3.0 · 상승 5.4m/s → <b>정점 약 1.5m, 비행 1.1초,
+    /// 3~4m 날아간 뒤 구른다.</b> tumbleBias가 상체에 최대 1.6배를 얹으므로 실제로는 조금 더 뜬다.
+    /// </summary>
+    private Vector3 EvaluateRagdollImpulse(Vector3 targetPosition)
+    {
+        Vector3 knockback = EvaluateKnockback(targetPosition);
+        Vector3 horizontal = new Vector3(knockback.x, 0f, knockback.z) * m_ragdollImpulseScale;
+        if (horizontal == Vector3.zero)
+            return Vector3.zero;
+
+        return horizontal + Vector3.up * (horizontal.magnitude * m_ragdollLiftRatio);
     }
 
     // 반경 내 NPC를 폭심 반대쪽으로 날린다. NPC 하나가 콜라이더 여러 개로 잡혀도

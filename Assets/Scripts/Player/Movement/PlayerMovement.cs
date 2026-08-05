@@ -277,6 +277,20 @@ public class PlayerMovement : NetworkBehaviour
     }
 
     /// <summary>
+    /// 목표 지점까지 <b>스윕으로 갈 수 있는 만큼</b> 캡슐을 옮긴다 — 래그돌 추종(#506)이 매 프레임 부른다.
+    /// 도달하지 못한 잔차는 호출자가 텔레포트로 메운다(<see cref="PlayerRagdoll.TickCapsuleFollow"/>).
+    ///
+    /// 중력을 적분하지 않고 수직 속도를 지우는 것이 <see cref="MoveWithGravity"/>와 다른 점이다 —
+    /// 래그돌 동안 수직 운동의 주인은 <b>뼈 물리</b>이고, 캡슐 쪽에 따로 쌓아 두면 정착 직후 그 속도가
+    /// 캡슐을 밀어 바닥을 파고든다(#189와 같은 사정).
+    /// </summary>
+    internal void SweepTo(Vector3 target)
+    {
+        m_controller.Move(target - transform.position);
+        m_verticalVelocity = 0f;
+    }
+
+    /// <summary>
     /// 쌓인 외력(넉백)과 수직 속도를 지운다 — 래그돌 진입(#506)이 부른다.
     /// 진입 전에 이미 들어온 폭발 넉백이 남아 있으면, 뼈가 날아가는 동안 캡슐도 같이 미끄러진다.
     /// 넉백 가드(<see cref="AddKnockback"/>)가 막는 것은 진입 <b>이후</b>의 호출뿐이라 이 짝이 필요하다.

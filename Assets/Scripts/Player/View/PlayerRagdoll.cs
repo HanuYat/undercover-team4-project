@@ -56,6 +56,18 @@ public class PlayerRagdoll : MonoBehaviour
     private const int k_solverIterations = 12;
     private const int k_solverVelocityIterations = 4;
 
+    // 지면을 못 찾아도 결국은 정착시키는 최후 배수 — m_settleTimeoutSeconds의 몇 배까지 기다릴지.
+    // 맵 밖으로 떨어져 나간 시체가 Ragdoll 상태에 영원히 갇히지 않게 하는 안전장치일 뿐이다.
+    // 이 경로로 들어오면 시체는 허공에 굳지만(위 Update 주석) 상태 기계는 계속 돈다 —
+    // 되살릴 때 판정을 쥔 것은 루트이므로 부활·라운드 리셋은 정상 동작한다.
+    private const float k_lostBodyTimeoutFactor = 4f;
+
+    // 원격 정렬이 "끝났다"로 보는 수평 잔차(m) — 이 안에 들어오면 정착해도 굳는 오프셋이 눈에 띄지 않는다.
+    private const float k_alignedTolerance = 0.05f;
+
+    // 캡슐 추종에서 "스윕이 도달했다"로 보는 잔차(m) — 이 아래면 텔레포트로 메우지 않는다.
+    private const float k_followResidualEpsilon = 0.01f;
+
     // 부활 블렌드가 물려 들어가는 상태 — PlayerAnimatorControllerBuilder의 k_groundState와 같아야 한다.
     private static readonly int s_groundStateHash = Animator.StringToHash("Knockdown_Ground");
 
@@ -101,6 +113,11 @@ public class PlayerRagdoll : MonoBehaviour
     [Tooltip("몸 방향 대비 루트 yaw 보정(도) — Knockdown_StandUp 클립이 어느 쪽을 머리로 보는지에 맞춘다. " +
              "Editor에서 부활을 눌러 보며 조정할 값이다")]
     [SerializeField] private float m_rootYawOffset;
+
+    [Tooltip("원격 피어가 착지한 시체를 오너 위치로 당겨오는 속도(m/s) — 비행 중에는 당기지 않는다. " +
+             "크게 잡으면 스냅처럼 보이고 시체 궤적을 캡슐 궤적으로 덮는다(TickAlignBonesToRoot 주석)")]
+    [SerializeField] private float m_alignPullSpeed = 1.5f;
+
 
 
     [Header("애니메이터 복귀")]
@@ -152,6 +169,15 @@ public class PlayerRagdoll : MonoBehaviour
     private bool m_skipThisEpisode;
     private bool m_polledOnce;
     private bool m_capsuleWasEnabled = true; // 캡슐 충돌 무시 재적용 판정 (IgnoreOwnCapsule 주석 참고)
+    private bool m_reportedFollowStall; // 캡슐 추종 실패를 이번 사망에서 이미 찍었는가 (임시 진단)
+
+    // 사망 시점의 루트 위치 — 정착 로그가 "캡슐이 시체를 따라 얼마나 갔나"를 찍는 기준.
+    //
+    // 이 값이 필요한 이유는 진단 경로가 반쪽이기 때문이다. 캡슐 추종은 오너에서만 돌고
+    // (TickCapsuleFollow) 그 실패 로그도 오너 콘솔에만 남는데, MPPM 가상 플레이어의 콘솔은 MCP로
+    // 읽히지 않는다(§9-8). 원격 콘솔에서 루트 이동량을 볼 수 있으면 <b>클라가 죽은 경우에도
+    // 호스트 콘솔만으로</b> 추종 성공 여부가 갈린다 — 시체가 5m 날았는데 루트 이동이 0이면 추종 실패다.
+    private Vector3 m_entryRootPosition;
 
     // 진단 전용 (아래 '임시 진단' 구역 참고)
     private Vector3[] m_diagPreviousVelocities;
@@ -479,6 +505,8 @@ public class PlayerRagdoll : MonoBehaviour
         m_state = RagdollState.Ragdoll;
         m_stillTimer = 0f;
         m_elapsedInRagdoll = 0f;
+        m_reportedFollowStall = false;
+        m_entryRootPosition = m_root.position;
 
         // 슬라이드 넉백과 이중으로 밀리지 않게 CharacterController 쪽 외력을 지운다.
         // "죽은 사람은 건너뛴다"는 판정을 BombExplosionView에 두지 않는 이유가 위 순서 문제다 —
@@ -573,9 +601,45 @@ public class PlayerRagdoll : MonoBehaviour
 
         m_stillTimer = speed <= m_settleSpeedThreshold ? m_stillTimer + Time.deltaTime : 0f;
 
-        if (m_stillTimer >= m_settleHoldSeconds || m_elapsedInRagdoll >= m_settleTimeoutSeconds)
-            Settle();
+        if (m_stillTimer < m_settleHoldSeconds && m_elapsedInRagdoll < m_settleTimeoutSeconds)
+            return;
+
+        if (!IsReadyToSettle()
+            && m_elapsedInRagdoll < m_settleTimeoutSeconds * k_lostBodyTimeoutFactor)
+            return;
+
+        Settle();
     }
+
+    /// <summary>
+    /// 정착해도 되는가 — ① 골반 밑에 지면이 있다 ② 원격이면 오너 위치로 당겨오기가 끝났다.
+    ///
+    /// 두 조건은 같은 함정의 앞뒷면이다. <b>정착은 골반을 루트에 용접하므로, 그 순간 시체가 루트에서
+    /// 떨어져 있으면 그 오프셋이 영구히 굳는다</b> — 원격은 루트를 옮길 권한이 없고 골반은 로컬
+    /// 오프셋을 물고 키네마틱이 된다.
+    ///
+    /// ① 실측: 임펄스가 과했을 때 9m 위에서 타임아웃이 터져 골반이 루트로부터 <b>+8.95m</b>로 고정돼
+    /// 시체가 허공에 매달렸다. <see cref="GroundUnder"/>의 옛 주석은 "못 찾으면 중력이 남은 차이를
+    /// 메운다"고 했지만 원격에서는 거짓이다 — <see cref="PlayerMovement"/>가 꺼져 있어 중력이 돌지 않는다.
+    ///
+    /// ② 당겨오기는 <c>m_alignPullSpeed</c>(1.5m/s)로 제한되므로 실측 1.2m면 0.8초가 걸린다. 정지
+    /// 판정은 0.3초라, 이 가드가 없으면 <b>거의 항상 당겨오는 도중에 정착</b>해 남은 델타가 굳는다.
+    /// </summary>
+    private bool IsReadyToSettle()
+    {
+        if (!HasGroundUnderHips())
+            return false;
+        if (HasMoveAuthority)
+            return true; // 오너는 캡슐이 이미 시체를 따라와 있다 (TickCapsuleFollow)
+
+        Vector3 delta = m_root.position - m_hipsBone.position;
+        delta.y = 0f;
+        return delta.sqrMagnitude <= k_alignedTolerance * k_alignedTolerance;
+    }
+
+    // 골반 밑에 지면이 있는가 — 정착 자격과 원격 정렬이 함께 쓴다. 탐색 거리는 정착 정렬과 같은 값을
+    // 쓴다 (다른 값을 쓰면 "정착해도 된다"고 판단한 뒤 정렬이 지면을 못 찾는 모순이 생긴다).
+    private bool HasGroundUnderHips() => TryGroundUnder(m_hipsBone.position, out _);
 
     // 사망 여부를 폴링한다 — 이벤트로는 잡을 수 없다.
     //
@@ -766,22 +830,57 @@ public class PlayerRagdoll : MonoBehaviour
     /// 매 프레임 따라가게 하면 텔레포트가 <b>cm 단위 잔차</b>로 줄고, 원격은 점프 대신 연속
     /// 스트림을 받는다. 수렴·릴리스 유예·되붙듦이 전부 필요 없어진다.
     ///
-    /// 이동은 <see cref="PlayerMovement.MoveWithGravity"/>에 맡긴다 — 중력·접지 클램프의 유일한
-    /// 적분 지점이라 이중 적분을 피하고(#189), <c>Move()</c>의 스윕을 타므로 <b>캡슐이 지형을
-    /// 존중한다</b>. 시체가 난간을 넘어가도 캡슐은 통행 가능한 곳에 남아 운반·부활이 살아 있다.
+    /// 이동은 <b>스윕 우선 + 막힌 잔차만 텔레포트</b>다(아래 ①②). 스윕만으로는 원리적으로 못 따라가고,
+    /// 항상 텔레포트하면 갈 수 있는 구간에서도 캡슐이 지형을 무시한다 — 둘을 합치면 평지에서는 지형을
+    /// 존중하고 난간·공중에서만 텔레포트가 개입해 추종을 보장한다.
     /// </summary>
     internal void TickCapsuleFollow()
     {
         if (m_movement == null || m_hipsBone == null)
             return;
 
-        // 수평만 따라간다 — 높이는 중력과 접지가 정한다. 시체가 공중에 있어도 캡슐은 지면에 붙어
-        // 있는 편이 옳다(캡슐이 공중이면 isGrounded가 거짓인 채 중력이 쌓인다 — §9-4의 두 번째 함정).
-        Vector3 step = m_hipsBone.position - m_root.position;
-        step.y = 0f;
-        m_movement.MoveWithGravity(step);
+        // 골반 위치를 <b>3차원</b>으로 따라간다 — 수평만 맞추면 시체가 공중에 있는 동안 루트가 시체를
+        // 대표하지 못하고, 이름표·운반 조준·부활 히트박스가 전부 루트에 붙어 있어 그만큼 어긋난다.
+        Vector3 target = m_hipsBone.position;
+
+        // ① 스윕으로 갈 수 있는 만큼 — 갈 수 있는 구간에서는 캡슐이 지형을 존중한다.
+        m_movement.SweepTo(target);
+
+        // ② 막힌 잔차는 텔레포트로 메운다.
+        //
+        // <b>스윕만으로는 원리적으로 못 따라간다.</b> 서 있는 1.8m 캡슐과 굴러가는 탄도 시체는 갈 수
+        // 있는 곳이 다르다 — 난간 너머·공중·좁은 틈. 지형이 갈리는 순간 캡슐이 뒤처지고, 그때부터
+        // 동기화되는 위치가 시체를 대표하지 않는다(실측: 시체 38.8m / 캡슐 0.23m, §9-11).
+        //
+        // 죽은 동안 <b>몸은 뼈</b>다 — 뼈가 지형과 충돌하고 물리에 구속된다. 캡슐은 "이 플레이어가
+        // 어디 있나"를 기록하는 대리값이므로, 몸이 있는 자리에 놓는 것은 물리를 속이는 것이 아니다.
+        // 호송(#279)이 CharacterController를 끄고 트랜스폼을 직접 옮기는 것과 같은 범주다.
+        Vector3 residual = target - m_root.position;
+        if (residual.sqrMagnitude > k_followResidualEpsilon * k_followResidualEpsilon)
+        {
+            SetControllerEnabled(false); // 켠 채로 옮기면 내부 캐시가 되돌린다 (SetPose와 같은 사정)
+            m_root.position = target;
+            SetControllerEnabled(true); // IgnoreCollision 재적용까지 여기서 (SetControllerEnabled 주석)
+            ReportResidualTeleport(residual);
+        }
 
         FollowBodyYaw();
+    }
+
+    // 스윕이 막혀 텔레포트로 메운 첫 순간을 찍는다 — 추종 자체는 보장되지만, 이 줄이 자주 보이면
+    // 임펄스가 지형에 비해 과하다는 신호다(캡슐이 시체를 스윕으로 못 쫓아갈 만큼 멀리 난다).
+    // (임시 진단 — §9-8 목록)
+    private void ReportResidualTeleport(Vector3 residual)
+    {
+        if (!m_debugLog || m_reportedFollowStall)
+            return;
+
+        m_reportedFollowStall = true;
+        Debug.Log(
+            $"[래그돌] 캡슐 잔차 텔레포트 — {name} 스윕이 막혀 {residual.magnitude:F2}m를 메웠다."
+                + " 추종은 유지된다",
+            this
+        );
     }
 
     // 캡슐의 yaw도 몸이 누운 방향에 맞춰 둔다.
@@ -835,12 +934,69 @@ public class PlayerRagdoll : MonoBehaviour
     /// </summary>
     private void TickAlignBonesToRoot()
     {
-        Vector3 delta = m_root.position - m_hipsBone.position;
-        delta.y = 0f; // 높이는 각 피어의 지형 충돌이 정한다 — 같은 지형이므로 편차가 작다
-
-        if (delta.sqrMagnitude < 1e-8f)
+        // ⚠ <b>비행 중에는 정렬하지 않는다.</b> 원격의 루트는 오너의 캡슐이고, 캡슐은 Move() 스윕으로
+        // 지형을 타는 <b>접지된 CharacterController</b>다. 반면 시체는 포물체다 — <b>포물체와 지면
+        // 스위퍼는 매 프레임 크게 갈라지는 것이 정상</b>이라, 그 차이를 전부 되돌리면 시체의 궤적이
+        // 캡슐의 궤적으로 덮인다. 실측: 원격에서 수직 임펄스 13.3m/s를 정상으로 받았는데도 5초간
+        // 수평 9cm만 이동했고 위로 뜨지 않았다(29m/s면 프레임당 0.5m씩 되돌리는 셈이라, 뼈가 매
+        // 프레임 지형으로 밀려 들어가며 접촉·관절 풀이가 수직 성분까지 빼갔다).
+        //
+        // 정렬이 필요한 것은 <b>최종 정착 위치</b>뿐이다 — 비행 중 피어 간 차이는 #506이 감수하기로
+        // 한 항목이고 눈에 보이지 않는다. 그래서 착지한 뒤에만 돌린다(판정은 정착 자격과 같은 것을
+        // 써서 "정렬은 안 했는데 정착은 된다"가 생기지 않게 한다).
+        // 비행 중에는 당기지 않는다 (위 ⚠ 참고) — 착지한 뒤에만 흡수한다.
+        // 캡슐 추종이 루트를 시체에 붙여 두므로(TickCapsuleFollow) 비행 중 보정할 이유가 없고,
+        // <b>보정하지 않는 것이 벽 통과를 막는 유일한 방법</b>이다 — 아래 주석 참고.
+        if (!HasGroundUnderHips())
             return;
 
+        Vector3 delta = m_root.position - m_hipsBone.position;
+        delta.y = 0f; // 높이는 각 피어의 지형 충돌이 정한다 — 같은 지형이므로 편차가 작다
+        float distance = delta.magnitude;
+        if (distance < 1e-4f)
+            return;
+
+        // 스냅이 아니라 <b>당겨오기</b>다. 착지 후 구르는 중의 델타는 실측 0.15~0.23m이므로 이 속도면
+        // 눈에 띄지 않게 흡수된다. 상한이 없으면 착지 직후 남은 수평 속도만큼을 매 프레임 되돌리게 되어
+        // 위 함정이 작은 규모로 되풀이된다.
+        float maxStep = m_alignPullSpeed * Time.deltaTime;
+        if (distance > maxStep)
+            delta *= maxStep / distance;
+
+        SnapBonesBy(ClampByWall(delta));
+    }
+
+    /// <summary>
+    /// 뼈를 옮기는 양을 벽에 막히는 지점까지로 깎는다.
+    ///
+    /// ⚠ <b>뼈의 <c>position</c> 대입은 텔레포트라 충돌을 정의상 무시한다.</b> 뼈 자체의 물리는
+    /// 레이어 매트릭스(Ragdoll×Default)와 <c>ContinuousSpeculative</c> CCD로 벽을 뚫지 않지만,
+    /// <b>우리가 옮기는 경로에는 그 둘이 관여하지 않는다</b> — 여기가 유일한 구멍이었다.
+    /// 그래서 옮기기 전에 경로를 한 번 쏴 본다. 마스크는 지면 판정과 같은 것을 쓴다(지형 = Default).
+    /// </summary>
+    private Vector3 ClampByWall(Vector3 delta)
+    {
+        const float k_skin = 0.02f; // 벽에 딱 붙이지 않고 살짝 띄운다 — 겹치면 탈출 임펄스가 생긴다
+
+        Vector3 from = m_hipsBone.position;
+        if (
+            !Physics.Linecast(
+                from,
+                from + delta,
+                out RaycastHit hit,
+                m_groundMask,
+                QueryTriggerInteraction.Ignore
+            )
+        )
+            return delta;
+
+        return delta.normalized * Mathf.Max(0f, hit.distance - k_skin);
+    }
+
+    // 전 뼈를 같은 델타로 강체 평행이동한다 — 포즈·상대속도·관절이 보존된다.
+    // 동적 바디의 position 대입은 텔레포트라 속도가 유도되지 않는다(키네마틱과 반대 — SetBodyKinematic 주석).
+    private void SnapBonesBy(Vector3 delta)
+    {
         for (int i = 0; i < m_bodies.Length; i++)
             m_bodies[i].position += delta;
     }
@@ -904,6 +1060,11 @@ public class PlayerRagdoll : MonoBehaviour
                 $"[래그돌] 정착 — {name} 골반 {landedHips.ToString("F2")} → 루트"
                     + $" {m_root.position.ToString("F2")} → {rootPosition.ToString("F2")}"
                     + $" (루트 텔레포트 {(rootPosition - m_root.position).magnitude:F2}m,"
+                    // 비행 중 시체가 간 거리 vs 캡슐이 따라간 거리 — 두 값이 비슷해야 추종이 성공한 것이다.
+                    // 시체는 갔는데 루트가 0이면 캡슐이 못 따라갔다는 뜻이고, 그때부터 루트는 시체를
+                    // 대표하지 않는다(§3-4의 전제가 깨진다).
+                    + $" 시체 이동 {HorizontalDistance(landedHips, m_entryRootPosition):F2}m,"
+                    + $" 루트 이동 {HorizontalDistance(m_root.position, m_entryRootPosition):F2}m,"
                     + $" 경과 {m_elapsedInRagdoll:F2}s"
                     + $"{(m_elapsedInRagdoll >= m_settleTimeoutSeconds ? "/타임아웃" : "/정지판정")},"
                     + $" 권한 {(HasMoveAuthority ? "오너" : "원격")})",
@@ -954,21 +1115,51 @@ public class PlayerRagdoll : MonoBehaviour
             rotation = Quaternion.Euler(0f, yaw, 0f);
     }
 
+    // 수평 거리 — 진단 로그에서 "얼마나 갔나"를 잴 때 높이를 섞지 않기 위해.
+    private static float HorizontalDistance(Vector3 a, Vector3 b)
+    {
+        Vector3 delta = a - b;
+        delta.y = 0f;
+        return delta.magnitude;
+    }
+
     // 루트 원점에서 캡슐 밑면까지의 높이 — 위 ResolveSettledRootPose 주석 참고.
     private float CapsuleBottomOffset =>
         m_controller == null ? 0f : m_controller.center.y - m_controller.height * 0.5f;
 
-    // 시체 밑 지면. 못 찾으면 골반 높이를 쓴다 — CharacterController의 중력이 남은 차이를 메운다.
+    // 정착 정렬용 지면 — 여기까지 왔다면 보통 지면이 있다(Update가 없으면 정착을 미룬다).
+    //
+    // ⚠ 못 찾는 경우는 <b>맵 밖으로 떨어진 시체</b>뿐이고, 그때는 골반 높이를 쓴다. 예전 주석은
+    // "CharacterController의 중력이 남은 차이를 메운다"고 적었지만 <b>그건 거짓이다</b> — 원격은
+    // PlayerMovement가 꺼져 있어 중력이 돌지 않고, 정착 후 골반은 로컬 오프셋을 물고 키네마틱이
+    // 되므로 시체가 허공에 굳는다. 그래서 이 경로로 오지 않게 막는 것이 Update의 지면 판정이다.
+    private Vector3 GroundUnder(Vector3 hipsPosition)
+    {
+        bool hitGround = TryGroundUnder(hipsPosition, out Vector3 point);
+
+        if (m_debugLog)
+            Debug.Log(
+                hitGround
+                    ? $"[래그돌] 지면 판정 — y={point.y:F2} (골반 y={hipsPosition.y:F2})"
+                    : $"[래그돌] 지면 판정 실패 — 골반 높이({hipsPosition.y:F2})를 쓴다."
+                        + $" 정착 대기 {k_lostBodyTimeoutFactor}배까지 넘겼다는 뜻이다"
+                        + " (맵 밖으로 떨어진 시체 / 마스크·탐색거리 확인)",
+                this
+            );
+
+        return hitGround ? point : hipsPosition;
+    }
+
+    // 골반 밑 지면 탐색 — 정착 자격 판정(HasGroundUnderHips)과 정착 정렬(GroundUnder)이 공유한다.
     //
     // 탐색 거리를 짧게(m_groundProbeDistance) 잡는 것이 중요하다. 길게 쏘면 얇은 실내 바닥을 뚫고
     // 아래층·지면을 찾아내, 시체가 정착하는 순간 한 층 밑으로 순간이동한다.
-    private Vector3 GroundUnder(Vector3 hipsPosition)
+    private bool TryGroundUnder(Vector3 hipsPosition, out Vector3 point)
     {
         const float k_probeLift = 0.5f; // 골반이 바닥에 파묻혀 있어도 레이가 지면 위에서 출발하게
-        Vector3 origin = hipsPosition + Vector3.up * k_probeLift;
 
         bool hitGround = Physics.Raycast(
-            origin,
+            hipsPosition + Vector3.up * k_probeLift,
             Vector3.down,
             out RaycastHit hit,
             k_probeLift + m_groundProbeDistance,
@@ -976,17 +1167,8 @@ public class PlayerRagdoll : MonoBehaviour
             QueryTriggerInteraction.Ignore
         );
 
-        if (m_debugLog)
-            Debug.Log(
-                hitGround
-                    ? $"[래그돌] 지면 판정 — {hit.collider.name} y={hit.point.y:F2}"
-                        + $" (골반 y={hipsPosition.y:F2})"
-                    : $"[래그돌] 지면 판정 실패 — 골반 높이({hipsPosition.y:F2})를 쓴다."
-                        + " 마스크·탐색거리를 확인할 것",
-                this
-            );
-
-        return hitGround ? hit.point : hipsPosition;
+        point = hitGround ? hit.point : hipsPosition;
+        return hitGround;
     }
 
     private void RestoreCapturedWorldPoses()
