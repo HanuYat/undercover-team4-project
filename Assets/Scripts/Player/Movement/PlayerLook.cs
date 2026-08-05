@@ -68,6 +68,7 @@ public class PlayerLook : MonoBehaviour
     private float m_pitch;
     private Vector2 m_smoothedLook; // 지수 감쇠로 부드럽게 만든 시점 입력 — 저속 픽셀 양자화 지터 완화 (#216)
     private float m_standCamHeight; // 평소(서기) 카메라 높이 — 프리팹 초기값에서 캡처 (#105)
+    private Vector2 m_camBaseLateral; // 카메라 로컬 x·z 기준값 — 흔들림을 되돌릴 자리 (#477)
     private float m_camCrouchDrop;  // 시점에 실제로 반영 중인 앉기 하강량 — 공중에서는 얼린다 (#189)
     private float m_downCamBlend;   // 서기 시점(0) ↔ 다운 시점(1) 보간 진행도 (#105)
     private float m_downYaw;        // 쓰러진 동안 누적한 시야 좌우 각도 — 몸 회전이 아니라 카메라 로컬 (#252)
@@ -94,7 +95,13 @@ public class PlayerLook : MonoBehaviour
 
         if (m_playerCamera != null)
         {
+            // 프리팹 배치값을 기준으로 기억한다. y만 쓰던 것에 x·z를 더한 이유는 흔들림(#477) 때문이다 —
+            // 오프셋을 얹으려면 매 프레임 되돌아갈 자리가 있어야 하고, 없으면 누적돼 시점이 밀린다.
             m_standCamHeight = m_playerCamera.transform.localPosition.y; // 서기 시점 높이 기준값
+            m_camBaseLateral = new Vector2(
+                m_playerCamera.transform.localPosition.x,
+                m_playerCamera.transform.localPosition.z
+            );
         }
     }
 
@@ -195,9 +202,13 @@ public class PlayerLook : MonoBehaviour
 
         float uprightHeight = m_standCamHeight - m_camCrouchDrop;
 
-        Vector3 localPos = m_playerCamera.transform.localPosition;
-        localPos.y = Mathf.Lerp(uprightHeight, m_downCamHeight, m_downCamBlend);
-        m_playerCamera.transform.localPosition = localPos;
+        // 세 축을 전부 기준값에서 다시 만든다 — 읽어서 y만 덮어쓰면 x·z가 지난 프레임 값을 이어받아,
+        // 아래 흔들림 오프셋이 매 프레임 누적돼 시점이 옆으로 밀린 채 돌아오지 않는다 (#477).
+        Vector3 localPos = new Vector3(
+            m_camBaseLateral.x,
+            Mathf.Lerp(uprightHeight, m_downCamHeight, m_downCamBlend),
+            m_camBaseLateral.y
+        );
 
         // 쓰러지는 동안 피치를 바닥 시점으로 눕힌다 — 단 플레이어가 마우스를 움직인 뒤에는 놓는다 (#252).
         // 계속 강제하면 올려다본 각도가 매 프레임 되돌아가 시야 조작이 먹지 않는다.
@@ -218,16 +229,21 @@ public class PlayerLook : MonoBehaviour
         // 흔들림은 마지막에 최종 포즈 위에 얹는다 (#477) — 밖에서 카메라 transform을 직접 흔들면
         // 이 메서드가 매 프레임 localPosition·localEulerAngles를 덮어써 그 프레임에 지워진다.
         // 그래서 조립 지점을 여기 하나로 두고, 밖에서는 강도만 넘긴다.
+        //
+        // <b>오프셋은 위에서 만든 기준 포즈에 더해 한 번만 대입한다</b> — transform을 읽어 더하면
+        // (`localPosition += ...`) 되돌아갈 자리가 없어 매 프레임 누적된다. 1인칭 팔이 같은 흔들림을
+        // m_handBasePos에서 다시 만드는 것(PlayerHandView.UpdateHandPose)과 같은 이유다.
+        Vector3 euler = new Vector3(m_pitch, m_downYaw, 0f);
+
         if (m_shakeIntensity > 0.001f)
         {
             EvaluateShake(out Vector3 shakeEuler, out Vector3 shakeOffset);
-            m_playerCamera.transform.localPosition += shakeOffset;
-            m_playerCamera.transform.localEulerAngles =
-                new Vector3(m_pitch, m_downYaw, 0f) + shakeEuler;
-            return;
+            localPos += shakeOffset;
+            euler += shakeEuler;
         }
 
-        m_playerCamera.transform.localEulerAngles = new Vector3(m_pitch, m_downYaw, 0f);
+        m_playerCamera.transform.localPosition = localPos;
+        m_playerCamera.transform.localEulerAngles = euler;
     }
 
     // ---- 카메라 흔들림 (#477) ----
