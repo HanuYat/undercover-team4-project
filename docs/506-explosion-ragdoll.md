@@ -187,16 +187,13 @@ Die 동안만:
 
 ---
 
-## 4. 데미지 거리 감쇠 (결정 2)
+## 4. 데미지 거리 감쇠 (결정 2) — **구현됨 (커밋 ③)**
 
-`EvaluateKnockback`과 같은 모양으로 `EvaluateDamage(Vector3 targetPosition)`를 만든다 — 넉백처럼 **감쇠식을 장치 한 곳에** 둔다.
+`EvaluateKnockback`과 같은 모양으로 `EvaluateDamage(Vector3 targetPosition)`를 둔다 — 넉백처럼 **감쇠식을 장치 한 곳에** 둔다. [BombDevice.cs](../Assets/Scripts/Events/Bomb/BombDevice.cs)
 
-```csharp
-// 폭심 = m_explosionDamage, 반경 끝 = m_explosionDamage * m_damageEdgeFalloff 로 선형 감쇠
-int EvaluateDamage(Vector3 targetPosition);
-```
+**거리는 3차원으로 잰다.** 넉백이 y를 지우는 것은 밀리는 **방향**이 수평이어야 하기 때문이고 피해에는 방향이 없다. 대상 수집(`SuddenEventUtil.CollectFieldPlayers`)도 3차원 거리를 쓰므로, 여기서 수평 거리를 쓰면 **수집은 됐는데 피해가 0인 대상**이 생긴다.
 
-**튜닝 기준값 제안** (플레이테스트로 확정):
+**적용 수치** (플레이테스트로 재확정할 값):
 
 | 파라미터 | 값 | 결과 |
 |---|---|---|
@@ -204,7 +201,9 @@ int EvaluateDamage(Vector3 targetPosition);
 | `m_damageEdgeFalloff` | **0.2** (신규) | 반경 끝 30 데미지 |
 | `m_explosionRadius` | 8 (유지) | — |
 
-이 값이면 **즉사 반경 ≈ 3.3m** 이다: `lerp(1, 0.2, d/8) × 150 ≥ 100` → `d ≤ 3.33`. 8m 반경 중 안쪽 3.3m는 죽고(래그돌), 그 밖은 살아서 밀린다(슬라이드 넉백). 수치를 바꿀 때 이 계산을 다시 할 것.
+이 값이면 **즉사 반경 ≈ 3.3m** 이다: `lerp(1, 0.2, d/8) × 150 ≥ 100` → `d ≤ 3.33`. 8m 반경 중 안쪽 3.3m는 죽고(래그돌), 그 밖은 살아서 밀린다(슬라이드 넉백). 수치를 바꿀 때 이 계산을 다시 할 것 — 일반식은 `반경 × (1 − 최대HP/피해) / (1 − 감쇠비율)`이고 툴팁에도 적어 뒀다.
+
+> ⚠ **프리팹의 직렬화 값이 코드 기본값을 이긴다.** `Bomb.prefab`에 `m_explosionDamage`가 저장돼 있으므로 코드 기본값만 바꾸면 적용되지 않는다 — 프리팹도 함께 고쳤다. (§9-3의 "저장되지 않는 값"과 반대 방향의 같은 함정)
 
 > **밸런스 주의:** GDD 365줄에 *"#524로 중간 완충이 사라져 한 번 쓰러지면 본부까지 왕복 — 폭발 등 기존 데미지 수치를 그대로 둘지 플레이테스트로 정한다"* 는 ⚠ 표기가 이미 있다. 6인 중 여럿이 폭심에 몰려 있으면 한 번에 전멸할 수 있다. 즉사 반경을 좁게 잡은 이유다.
 
@@ -246,10 +245,13 @@ int EvaluateDamage(Vector3 targetPosition);
 
 ### 커밋 ③ 폭발 연동 — 감쇠 데미지 + 사망자 RPC
 
-- `BombDevice.EvaluateDamage` 신설, `ServerExplode`에서 사용 (§4)
-- `ServerExplode`가 데미지 적용 직후 **죽은 사람 목록**을 모아 ClientRpc로 전파
+- `BombDevice.EvaluateDamage` 신설 + `m_damageEdgeFalloff`, `ServerExplode`에서 사용 (§4)
+- `Bomb.prefab`의 `m_explosionDamage` 150 / `m_damageEdgeFalloff` 0.2 — 프리팹 값이 코드 기본값을 이긴다
+- `ServerExplode`가 데미지 적용 직후 **죽은 사람 목록**을 모아 ClientRpc로 전파 (`NotifyBlastDeaths`)
   - 폭심·반경·세기는 이미 전 피어가 아니까 **사망자 목록만** 보낸다(`NetworkObjectReference[]`). 임펄스는 각 피어가 기존 `EvaluateKnockback`으로 계산 — "넉백 식은 장치 한 곳" 원칙 유지.
-  - 호스트 중복 발행 주의: 기존 `WrongCutClientRpc` 관례(서버는 로컬 직접 발행 + ClientRpc에서 `if (IsServer) return;`)를 따를 것.
+  - 사망 판정은 `CollectFieldPlayers`가 행동 가능한(HP>0) 플레이어만 담는다는 점을 쓴다 — 피해 후 `CurrentHp == 0`이면 이 폭발로 죽은 것이다. 피해 전 HP를 따로 기억할 필요가 없다.
+  - **RPC가 필요한 이유는 임펄스 하나뿐이다.** 사망 자체는 `PlayerRagdoll`의 폴링이 잡으므로 진압봉·린치는 RPC 없이 처리된다. "누가 이 폭발로 죽었나"만 서버가 안다 — 각 피어가 스스로 판정하면 반경 경계에 선 사람에서 갈린다.
+  - 호스트 중복 발행은 기존 `WrongCutClientRpc` 관례(서버는 로컬 직접 발행 + ClientRpc에서 `if (IsServer) return;`)를 따랐다. 오프라인은 로컬 발행만 타고 RPC를 건너뛴다.
 - `BombExplosionView`는 그대로 둔다 — 죽은 사람에게 들어가도 §3-2 가드가 삼킨다.
 
 ### 커밋 ④ 카메라 + 부활 블렌드

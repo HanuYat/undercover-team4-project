@@ -80,9 +80,15 @@ public class BombDevice : NetworkBehaviour
     [SerializeField]
     private float m_explosionRadius = 8f;
 
-    [Tooltip("반경 내 플레이어 1인당 폭발 피해량")]
+    [Tooltip("폭심에서의 피해량 — 반경 끝까지 m_damageEdgeFalloff 비율로 선형 감쇠한다")]
     [SerializeField]
-    private int m_explosionDamage = 60;
+    private int m_explosionDamage = 150;
+
+    [Tooltip("반경 끝에서 남는 피해 비율 — 폭심(1.0)에서 반경 끝까지 선형 감쇠. " +
+             "즉사 반경 = 반경 × (1 − 최대HP/피해) / (1 − 이 값). 기본값(150·0.2·8m)이면 약 3.3m")]
+    [Range(0f, 1f)]
+    [SerializeField]
+    private float m_damageEdgeFalloff = 0.2f;
 
     [Tooltip("넉백 세기(m/s) — 폭심에서 밀려나는 초기 속도")]
     [SerializeField]
@@ -119,6 +125,9 @@ public class BombDevice : NetworkBehaviour
     private float m_nextRetargetTime;
 
     private readonly List<Transform> m_blastBuffer = new List<Transform>();
+
+    // 이 폭발로 죽은 플레이어 — 래그돌 임펄스 대상(#506). 서버·오프라인에서만 채운다.
+    private readonly List<NetworkObject> m_deathBuffer = new List<NetworkObject>();
 
     // NPC 넉백 대상 수집용 공유 버퍼 — 서버(또는 오프라인)에서만 쓰므로 정적으로 공유해도 안전하다
     private static readonly Collider[] s_blastColliders = new Collider[64];
@@ -166,6 +175,32 @@ public class BombDevice : NetworkBehaviour
         float scaled = m_knockbackForce * Mathf.Lerp(1f, m_knockbackEdgeFalloff, distance / m_explosionRadius);
 
         return direction * scaled + Vector3.up * (scaled * m_knockbackUpwardRatio);
+    }
+
+    /// <summary>
+    /// 폭심에서 <paramref name="targetPosition"/>이 받는 피해량 — 반경 밖이면 0.
+    ///
+    /// <b>피해 세기의 단일 지점</b> — <see cref="EvaluateKnockback"/>과 같은 모양으로 둔다.
+    ///
+    /// 감쇠가 있어야 사망 래그돌이 성립한다(#506 §4). 균일 피해로는 값을 어떻게 잡아도 "반경 안
+    /// 전원 생존" 아니면 "전원 즉사"뿐이라, 폭심은 날아가고 가장자리는 밀리는 그림이 나오지 않는다.
+    ///
+    /// <b>거리는 3차원으로 잰다</b> — 넉백이 y를 지우는 것은 밀리는 <b>방향</b>이 수평이어야 하기
+    /// 때문이고, 피해에는 방향이 없다. 대상 수집(<see cref="SuddenEventUtil.CollectFieldPlayers"/>)도
+    /// 3차원 거리를 쓰므로 여기서 수평 거리를 쓰면 수집은 됐는데 피해가 0인 대상이 생긴다.
+    /// </summary>
+    public int EvaluateDamage(Vector3 targetPosition)
+    {
+        if (m_explosionRadius <= 0f || m_explosionDamage <= 0)
+            return 0;
+
+        float distance = (targetPosition - transform.position).magnitude;
+        if (distance > m_explosionRadius)
+            return 0;
+
+        float scaled = m_explosionDamage
+            * Mathf.Lerp(1f, m_damageEdgeFalloff, distance / m_explosionRadius);
+        return Mathf.RoundToInt(scaled);
     }
 
     /// <summary>남은 시간(초) — 카운트다운 UI용. 카운트다운 중이 아니면 0.</summary>
@@ -401,22 +436,92 @@ public class BombDevice : NetworkBehaviour
 
         StopAgent();
 
-        // 반경 내 행동 가능한 플레이어에게 피해.
+        // 반경 내 행동 가능한 플레이어에게 거리 감쇠 피해.
         // NPC는 이제 체력이 있지만(#366) 폭발 피해는 아직 연결하지 않았다 — 넉백 착지가 이미
         // Stunned로 보내고 있어 중복 정리가 필요하다(후속 이슈). 지금은 넉백만 받는다.
+        m_deathBuffer.Clear();
         SuddenEventUtil.CollectFieldPlayers(transform.position, m_explosionRadius, m_blastBuffer);
         for (int i = 0; i < m_blastBuffer.Count; i++)
         {
-            IDamageable damageable = m_blastBuffer[i].GetComponent<IDamageable>();
-            damageable?.TakeDamage(m_explosionDamage, gameObject);
+            Transform target = m_blastBuffer[i];
+            IDamageable damageable = target.GetComponent<IDamageable>();
+            damageable?.TakeDamage(EvaluateDamage(target.position), gameObject);
+
+            // CollectFieldPlayers는 행동 가능한(HP>0) 플레이어만 담으므로, 지금 0이면 이 폭발로 죽은 것이다.
+            if (target.TryGetComponent(out PlayerHealth health)
+                && health.CurrentHp == 0
+                && target.TryGetComponent(out NetworkObject victim))
+                m_deathBuffer.Add(victim);
         }
+
+        NotifyBlastDeaths();
 
         // 반경 내 NPC 넉백 — 서버 권위. 플레이어와 달리 NPC 이동은 서버의 NavMeshAgent가 쥐고
         // 클라는 NetworkTransform으로 결과만 받으므로, 뷰가 아니라 여기서 직접 날린다.
         ServerKnockbackNpcs();
 
-        Debug.Log($"[폭탄] 폭발 (반경 {m_explosionRadius}m, 피해 {m_explosionDamage})");
+        // 진압봉 즉발도 여기로 오므로 main의 '시간 초과' 문구는 쓰지 않는다 (#399 추격 폭탄).
+        Debug.Log(
+            $"[폭탄] 폭발 (반경 {m_explosionRadius}m, 폭심 피해 {m_explosionDamage},"
+                + $" 가장자리 비율 {m_damageEdgeFalloff}, 사망 {m_deathBuffer.Count}명)"
+        );
         SetState(BombState.Exploded);
+    }
+
+    // ---- 폭발 사망자 → 래그돌 임펄스 (#506) ----
+
+    /// <summary>
+    /// 이 폭발로 죽은 사람을 전 피어에 알려 래그돌 임펄스를 붙인다.
+    ///
+    /// <b>사망자 목록만 보낸다.</b> 폭심·반경·세기는 이미 전 피어가 알고 있으므로 임펄스는 각 피어가
+    /// <see cref="EvaluateKnockback"/>으로 계산한다 — "넉백 식은 장치 한 곳"을 유지한다.
+    ///
+    /// <b>왜 RPC가 필요한가.</b> 사망 자체는 <see cref="PlayerRagdoll"/>이 동기화값 폴링으로 잡아
+    /// 래그돌에 들어간다 — 그것만으로 진압봉·린치 사망은 전부 처리된다. 폭발이 다른 점은
+    /// <b>임펄스</b> 하나뿐인데, "누가 이 폭발로 죽었나"는 피해 계산을 한 서버만 안다.
+    /// 각 피어가 스스로 판정하려 들면 반경 경계에 선 사람에서 갈린다.
+    ///
+    /// 호스트 중복 발행은 <see cref="WrongCutClientRpc"/>와 같은 관례로 막는다 — 서버는 로컬에서
+    /// 직접 발행하고, ClientRpc 쪽이 <c>IsServer</c>면 물러난다.
+    /// </summary>
+    private void NotifyBlastDeaths()
+    {
+        for (int i = 0; i < m_deathBuffer.Count; i++)
+            ApplyBlastRagdoll(m_deathBuffer[i]); // 서버·오프라인 로컬 발행
+
+        if (!IsSpawned || !IsServer || m_deathBuffer.Count == 0)
+            return;
+
+        NetworkObjectReference[] victims = new NetworkObjectReference[m_deathBuffer.Count];
+        for (int i = 0; i < victims.Length; i++)
+            victims[i] = m_deathBuffer[i];
+
+        BlastDeathsClientRpc(victims);
+    }
+
+    [ClientRpc]
+    private void BlastDeathsClientRpc(NetworkObjectReference[] victims)
+    {
+        if (IsServer)
+            return; // 호스트는 위에서 이미 발행
+
+        for (int i = 0; i < victims.Length; i++)
+        {
+            if (victims[i].TryGet(out NetworkObject victim))
+                ApplyBlastRagdoll(victim);
+        }
+    }
+
+    // 래그돌 진입은 <b>멱등이다</b> — 사망 폴링이 먼저 걸려 이미 물리 중이면 임펄스만 누적되고,
+    // 이쪽이 먼저 와도 사망 폴링이 뒤늦게 무동작이 된다. 사망 사실(PlayerIncapacitation의
+    // NetworkVariable)과 이 RPC는 서로 다른 오브젝트에서 오므로 도착 순서를 맞출 수 없다 —
+    // 순서와 무관하게 결과가 같게 만드는 쪽이 항상 옳다. (#506 §3-1)
+    private void ApplyBlastRagdoll(NetworkObject victim)
+    {
+        if (victim == null || !victim.TryGetComponent(out PlayerRagdoll ragdoll))
+            return;
+
+        ragdoll.EnterRagdoll(EvaluateKnockback(victim.transform.position));
     }
 
     // 반경 내 NPC를 폭심 반대쪽으로 날린다. NPC 하나가 콜라이더 여러 개로 잡혀도
