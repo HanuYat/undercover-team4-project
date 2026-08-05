@@ -1,8 +1,10 @@
-using TMPro;
-using UnityEngine;
-using UnityEngine.UI;
-using Unity.Netcode;
 using System.Collections.Generic;
+using TMPro;
+using Unity.Netcode;
+using UnityEngine;
+using UnityEngine.Localization;
+using UnityEngine.Localization.Settings;
+using UnityEngine.UI;
 
 /// <summary>
 /// 본부 시민 인명부 패널 (#223) — E로 펼치는 열람 UI. DirectoryManager의 동기화 리스트를 읽어 행으로 그린다.
@@ -58,10 +60,14 @@ public class CitizenDirectoryView : HqPanelView
     {
         base.Awake();
 
-        if (m_sortNameButton != null) m_sortNameButton.onClick.AddListener(() => SetSort(SortKey.Name));
-        if (m_sortFactionButton != null) m_sortFactionButton.onClick.AddListener(() => SetSort(SortKey.Faction));
-        if (m_prevButton != null) m_prevButton.onClick.AddListener(() => ChangePage(-1));
-        if (m_nextButton != null) m_nextButton.onClick.AddListener(() => ChangePage(1));
+        if (m_sortNameButton != null)
+            m_sortNameButton.onClick.AddListener(() => SetSort(SortKey.Name));
+        if (m_sortFactionButton != null)
+            m_sortFactionButton.onClick.AddListener(() => SetSort(SortKey.Faction));
+        if (m_prevButton != null)
+            m_prevButton.onClick.AddListener(() => ChangePage(-1));
+        if (m_nextButton != null)
+            m_nextButton.onClick.AddListener(() => ChangePage(1));
     }
 
     private void SetSort(SortKey key)
@@ -155,12 +161,25 @@ public class CitizenDirectoryView : HqPanelView
     protected override void OnOpened()
     {
         m_page = 0;
-        if (Manager != null) Manager.Directory.OnListChanged += HandleListChanged;
+        if (Manager != null)
+            Manager.Directory.OnListChanged += HandleListChanged;
+
+        // 행의 타입·세력 표기가 테이블에서 오므로 언어가 바뀌면 다시 그린다 — 행마다 구독하는 대신
+        // 로케일 변경 한 곳에 걸고 통째로 다시 채운다 (ShopStand와 같은 방식). (#497)
+        LocalizationSettings.SelectedLocaleChanged += HandleLocaleChanged;
+
         Rebuild();
     }
 
     protected override void OnClosed()
     {
-        if (Manager != null) Manager.Directory.OnListChanged -= HandleListChanged;
+        if (Manager != null)
+            Manager.Directory.OnListChanged -= HandleListChanged;
+
+        // 종료 중에는 설정 에셋을 되살리지 않는다 — HasSettings로 먼저 확인한다 (ShopStand 관례)
+        if (LocalizationSettings.HasSettings)
+            LocalizationSettings.SelectedLocaleChanged -= HandleLocaleChanged;
     }
+
+    private void HandleLocaleChanged(Locale locale) => Rebuild();
 }

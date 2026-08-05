@@ -12,8 +12,9 @@ using UnityEngine;
 /// 점 레이캐스트는 조준이 과하게 빡빡해서 <see cref="Physics.SphereCastNonAlloc"/>로 두께를 준다.
 /// 벽·소품이 먼저 맞으면 그대로 빗나간다(가장 가까운 것만 판정 — 엄폐가 성립).
 /// <b>동료를 맞추면 아군 오사다</b> — NPC와 같은 데미지가 그대로 HP에 들어간다 (GDD 7-5, #461).
-/// 테이저 오사(5초 뒤 자력 기상, #252)와 달리 진짜 피해라, 3대면 다운(<c>IncapacitationCause.Down</c>)이
-/// 되어 동료 구조가 필요해진다. 때린 쪽에 페널티는 없다 — 쿨다운이 이미 대가다.
+/// 테이저 오사(5초 뒤 자력 기상, #252)와 달리 진짜 피해라, 3대면 기능 정지(<c>IncapacitationCause.Die</c>)가
+/// 되어 <b>본부 이송 부활</b>이 필요해진다 — 현장 구조가 사라져(#524) 오사의 대가가 그만큼 무거워졌다.
+/// 때린 쪽에 페널티는 없다 — 쿨다운이 이미 대가다.
 ///
 /// 서버 권위 — 오너가 조준 원점·방향을 보내면 서버가 자기 물리로 캐스트해 판정한다 (#55).
 /// 클라가 보낸 원점은 서버가 아는 플레이어 위치와 대조해 검증한다 (원점 위조 = 벽 너머 타격 방지).
@@ -261,7 +262,7 @@ public class Baton : ItemBase, IAimedWeapon
         }
 
         // 동료를 맞췄다 — 아군 오사 (#461). NPC와 같은 데미지를 그대로 넣고, HP 0이 되면
-        // PlayerHealth.SetHp가 다운(IncapacitationCause.Down)까지 이어준다 — 여기서 따로 할 일이 없다.
+        // PlayerHealth.SetHp가 기능 정지(IncapacitationCause.Die)까지 이어준다 — 여기서 따로 할 일이 없다.
         // NPC 경로의 ServerReactTo(반격·도주 전환)는 플레이어에게 해당 없다.
         if (playerTarget != null)
         {
@@ -409,8 +410,10 @@ public class Baton : ItemBase, IAimedWeapon
         // 스턴 게이트가 아니라 <b>타격 게이트</b>다 — #292에서 스턴이 오버레이가 되며 전 상태에 걸리게
         // 되면서 둘이 갈라졌다(구 CanBeStunned → CanBeDamaged). 타격까지 함께 열면 연행 중인 NPC를
         // 때려 기절시켜 신병에서 빼내는 우회가 생기므로, 진압봉은 좁은 쪽(타격)을 따른다.
+        // 상태 enum이 아니라 NpcController를 넘긴다 — 납치범 예외(#371)가 거기 들어 있고,
+        // 크로스헤어와 실제 타격이 같은 함수를 봐야 "떴는데 안 맞음"이 생기지 않는다.
         target = npc;
-        if (!NpcStateRules.CanBeDamaged(npc.CurrentState))
+        if (!NpcStateRules.CanBeDamaged(npc))
         {
             return SwingResult.TargetInvalidState;
         }

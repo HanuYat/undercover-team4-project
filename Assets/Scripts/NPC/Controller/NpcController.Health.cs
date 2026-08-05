@@ -1,3 +1,4 @@
+using System;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -22,6 +23,16 @@ public partial class NpcController : IDamageable
     /// <summary>현재 체력. 세션 중에는 동기화 값이라 클라이언트에서도 안전하게 읽을 수 있다. (#366)</summary>
     public int CurrentHp => IsSpawned ? m_syncedHp.Value : m_hp;
 
+    /// <summary>
+    /// 피해가 이 NPC에 적용되는 순간 발행 — 서버(또는 오프라인)에서만. 인자는 (맞은 NPC, 가해자).
+    /// 납치(<see cref="AbductionEvent"/>)가 구독해 맞은 납치범을 호송에서 떼어낸다. (#371)
+    ///
+    /// <b>HP 반영 직전</b>에 발행한다. 구독자가 상태를 바꿀 수 있어야 하고(임무 해제 → 배회),
+    /// 그 다음에 기절 전이가 얹혀야 순서가 맞기 때문이다 — 뒤에 발행하면 넉백 기절로 바뀐 상태를
+    /// 임무 해제가 덮어써 기절이 조용히 취소된다.
+    /// </summary>
+    public event Action<NpcController, GameObject> OnDamaged;
+
     /// <summary>체력 초기화 — InitBehavior에서 서버(또는 오프라인) 1회 호출된다.</summary>
     private void InitHealth()
     {
@@ -32,7 +43,7 @@ public partial class NpcController : IDamageable
     /// 피해 적용 (<see cref="IDamageable"/>) — 진압봉 타격 등 모든 데미지 소스의 공통 경로. (#366)
     ///
     /// 신병을 확보했거나 오검거 페널티가 진행 중인 상태(<see cref="NpcStateRules.CanBeDamaged"/>가 false)
-    /// 에서는 <b>피해 자체를 무시</b>한다. 이 게이트가 없으면 호송 중인 NPC를 때려 기절시켜 신병에서
+    /// 에서는 <b>피해 자체를 무시</b>한다 — 납치범은 예외다(#371, 같은 함수가 판정한다). 이 게이트가 없으면 호송 중인 NPC를 때려 기절시켜 신병에서
     /// 빼내는 우회가 생긴다. 테이저는 #292로 그 상태들에도 걸리게 됐지만(스턴은 링크를 끊지 않는다)
     /// 타격은 계속 막는다 — 팀 결정이다.
     /// 무시하는 쪽을 택한 이유: HP만 깎고 기절은 막으면 "HP 0인데 기절 아님" 상태가 생겨,
@@ -46,8 +57,11 @@ public partial class NpcController : IDamageable
             return;
         if (amount <= 0)
             return;
-        if (!NpcStateRules.CanBeDamaged(CurrentState))
+        if (!NpcStateRules.CanBeDamaged(this))
             return;
+
+        // 피해를 얹기 전에 알린다 — 위 OnDamaged 주석의 순서 근거 참고
+        OnDamaged?.Invoke(this, attacker);
 
         SetHp(Mathf.Clamp(CurrentHp - amount, 0, MaxHp), attacker);
 

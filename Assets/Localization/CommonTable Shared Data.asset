@@ -43,6 +43,18 @@ MonoBehaviour:
     m_Key: Common.Unit.Money
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000100
+    m_Key: Common.QuitConfirm.Message
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000101
+    m_Key: Common.Button.Cancel
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000102
+    m_Key: Common.Button.Confirm
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

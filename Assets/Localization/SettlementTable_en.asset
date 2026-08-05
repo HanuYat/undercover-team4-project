@@ -16,8 +16,79 @@ MonoBehaviour:
     m_Code: en
   m_SharedData: {fileID: 11400000, guid: 3f2fd7e385653d942b703d8de65d7d61, type: 2}
   m_Metadata:
-    m_Items: []
-  m_TableData: []
+    m_Items:
+    - rid: 6276845898492543062
+  m_TableData:
+  - m_Id: 7100000000400
+    m_Localized: Round cleared!
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000401
+    m_Localized: Game over
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000402
+    m_Localized: the shop
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000403
+    m_Localized: the lobby
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000404
+    m_Localized: "Time up \u2014 quota met"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000405
+    m_Localized: "Time up \u2014 quota not met"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000406
+    m_Localized: All officers down
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000407
+    m_Localized: "Investigation closed \u2014 quota met"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000408
+    m_Localized: "Earned \u20A9{0:N0}  -  Quota \u20A9{1:N0}  =  Team share \u20A9{2:N0}\nTeam
+      funds  \u20A9{3:N0}\nJail settlement: wanted {4} \xB7 misdemeanor {5}"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845898492543062
+  - m_Id: 7100000000409
+    m_Localized: 'Most wrongful arrests: {0} ({1})'
+    m_Metadata:
+      m_Items:
+      - rid: 6276845898492543062
+  - m_Id: 7100000000410
+    m_Localized: "No wrongful arrests \u2014 clean work!"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000411
+    m_Localized: "My cut  +\u20A9{0:N0}   (Personal funds \u20A9{1:N0})"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845898492543062
+  - m_Id: 7100000000412
+    m_Localized: Returning to {0} in {1}s
+    m_Metadata:
+      m_Items:
+      - rid: 6276845898492543062
+  - m_Id: 7100000000413
+    m_Localized: "Round settlement"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
-    RefIds: []
+    RefIds:
+    - rid: 6276845898492543062
+      type: {class: SmartFormatTag, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_Entries: 
+        m_SharedEntries:
+        - id: 7100000000408
+        - id: 7100000000409
+        - id: 7100000000411
+        - id: 7100000000412

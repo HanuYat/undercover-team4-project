@@ -127,6 +127,138 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 6276845892712267879
+  - m_Id: 10788103327750
+    m_Localized: "Enter an ID."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327751
+    m_Localized: "IDs must be {0}-{1} characters."
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267879
+  - m_Id: 10788103327752
+    m_Localized: "IDs can only use letters, digits, and . - @ _"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327753
+    m_Localized: "Enter a password."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327754
+    m_Localized: "Passwords must be {0}-{1} characters."
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267879
+  - m_Id: 10788103327755
+    m_Localized: "Passwords can only use letters, digits, and symbols."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327756
+    m_Localized: "Passwords need at least one uppercase letter, one lowercase letter, one digit, and one symbol."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327757
+    m_Localized: "That ID is already taken. Try another one."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327758
+    m_Localized: "This account already has an ID linked to it."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327759
+    m_Localized: "The ID or password format is invalid."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327760
+    m_Localized: "Check your ID and password. If it keeps failing, try again in a little while."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327761
+    m_Localized: "Enter a nickname."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327762
+    m_Localized: "Nicknames can't contain spaces."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327763
+    m_Localized: "Nicknames must be {0} characters or fewer."
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267879
+  - m_Id: 10788103327764
+    m_Localized: "You can't {0} while you're in a session."
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267879
+  - m_Id: 10788103327765
+    m_Localized: "You can't {0} while switching sessions."
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267879
+  - m_Id: 10788103327766
+    m_Localized: "link an account"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327767
+    m_Localized: "switch accounts"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327768
+    m_Localized: "Sign in before linking an account."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327769
+    m_Localized: "An account is already linked."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327770
+    m_Localized: "Sign in before switching accounts."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327771
+    m_Localized: "Working..."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327772
+    m_Localized: "Account linked"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327773
+    m_Localized: "Signed in"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327774
+    m_Localized: "Started with a new anonymous account."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327775
+    m_Localized: "Couldn't open the confirmation window, so linking was cancelled."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327776
+    m_Localized: "Couldn't open the confirmation window, so the switch was cancelled."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327777
+    m_Localized: "ID: {0}"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267879
+  - m_Id: 10788103327778
+    m_Localized: "Not signed in"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327779
+    m_Localized: "This will link the ID '{0}'.\nLinking is permanent - the ID can't be changed afterwards.\nIf you forget the password, the account can't be recovered."
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267879
+  - m_Id: 10788103327780
+    m_Localized: "This device will be detached from the account and start over as a new anonymous account.\nThe account ('{0}') and its ID stay on the server, so you can sign in again.\nThe nickname on this device will be reset."
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267879
   references:
     version: 2
     RefIds:
@@ -135,6 +267,14 @@ MonoBehaviour:
       data:
         m_Entries: 
         m_SharedEntries:
+        - id: 10788103327751
+        - id: 10788103327754
+        - id: 10788103327763
+        - id: 10788103327764
+        - id: 10788103327765
+        - id: 10788103327777
+        - id: 10788103327779
+        - id: 10788103327780
         - id: 10788094939137
         - id: 10788103327745
         - id: 10788103327746

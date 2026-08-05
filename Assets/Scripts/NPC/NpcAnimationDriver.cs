@@ -210,6 +210,7 @@ public class NpcAnimationDriver : MonoBehaviour
         // 로컬 FSM 이벤트가 아닌 컨트롤러의 통합 이벤트를 구독한다 — 클라이언트에서는
         // NetworkVariable 동기화가, 오프라인에서는 로컬 FSM이 이 이벤트를 발생시킨다 (#56)
         m_controller.OnStateChanged += HandleStateChanged;
+        m_controller.OnPenaltyDutyChanged += HandlePenaltyDutyChanged;
         // 스윙은 상태 전이가 아니라 순간 이벤트 — 저항 상태를 유지한 채 매 타격마다 단발 스윙을 얹는다 (#220)
         m_controller.OnAttackSwing += HandleAttackSwing;
         // 일어나기도 상태 전이가 아닌 순간 이벤트 — 기절 상태를 유지한 채 마지막 구간에만 얹는다 (#269)
@@ -224,6 +225,7 @@ public class NpcAnimationDriver : MonoBehaviour
         if (m_controller != null)
         {
             m_controller.OnStateChanged -= HandleStateChanged;
+            m_controller.OnPenaltyDutyChanged -= HandlePenaltyDutyChanged;
             m_controller.OnAttackSwing -= HandleAttackSwing;
             m_controller.OnStandUp -= HandleStandUp;
             m_controller.OnStunnedChanged -= HandleStunnedChanged;
@@ -625,6 +627,11 @@ public class NpcAnimationDriver : MonoBehaviour
         }
     }
 
+    // 임무 종류(오검거/납치)가 전파된 순간 — 마크 판정을 다시 태운다. 상태 전이와 임무 플래그는 각각
+    // 다른 NetworkVariable이라 클라이언트 도착 순서가 보장되지 않는다: 상태가 먼저 오면 마크가 잠깐
+    // 켜졌다가 여기서 꺼진다. 스턴 오버레이(#292)가 같은 방식으로 재판정을 태운다.
+    private void HandlePenaltyDutyChanged() => HandleStateChanged(m_controller.CurrentState);
+
     private void HandleStateChanged(NpcState state)
     {
         // 스턴 오버레이 중에는 밑에서 상태가 바뀌어도 화면은 계속 누워 있어야 한다 (#292).
@@ -661,8 +668,13 @@ public class NpcAnimationDriver : MonoBehaviour
         RefreshProne();
 
         // 앵그리 마크(#280) — 페널티 상태(수용~호송) 동안 머리 위에 표시한다. 이 이벤트는 동기화를 거쳐
-        // 모든 피어에서 발생하므로(#56) 원격 클라·CCTV 화면에서도 같은 시점에 켜지고 꺼진다
-        NpcPenaltyMark.SetVisible(m_controller, IsPenaltyLocomotion(state));
+        // 모든 피어에서 발생하므로(#56) 원격 클라·CCTV 화면에서도 같은 시점에 켜지고 꺼진다.
+        // 납치범(#371)은 제외한다 — 시민과 구분되지 않는 것이 그 이벤트의 재미인데, 마크를 띄우면
+        // 머리 위 표시 하나로 정체가 새어 나가고 심지어 오검거 추격대로 오인된다.
+        NpcPenaltyMark.SetVisible(
+            m_controller,
+            IsPenaltyLocomotion(state) && !m_controller.IsAbductionDuty
+        );
 
         // 저항(Attack) 진입은 추격으로 시작하는 것이 일반적이라 달리기로 시드하고 이동 판별을 초기화한다 —
         // AnimatorBaseState(Attack)가 m_resistMoving을 읽으므로 반드시 아래 SetInteger 이전에 정한다.
