@@ -329,6 +329,18 @@ public class PlayerMovement : NetworkBehaviour
             return;
         }
 
+        // 래그돌 비행 중(#506) — 몸을 끄는 주체가 자기 뼈 물리라는 점만 다른 세 번째 추종 모드다.
+        // 캡슐이 시체를 따라가지 않으면 사망 지점에 남아 있다가 정착 순간 한 번에 1m 넘게
+        // 텔레포트하고, 그 늦은 점프가 원격에서 시체를 발작시킨다 (PlayerRagdoll.TickCapsuleFollow).
+        // 위 호송·운반이 먼저다 — 남이 내 몸을 옮기는 중이면 그쪽이 위치의 주인이다.
+        if (m_ragdoll != null && m_ragdoll.IsCapsuleFollowingBody)
+        {
+            m_look?.HandleLook();
+            m_ragdoll.TickCapsuleFollow();
+            m_look?.UpdateCameraPose();
+            return;
+        }
+
         m_look?.HandleLook();
         m_look?.UpdateCameraPose(); // 카메라 높이/피치를 매 프레임 적용 (다운 시 바닥 시점) (#105)
         HandleMove();

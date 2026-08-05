@@ -93,22 +93,15 @@ public class PlayerRagdoll : MonoBehaviour
              "찾아내 시체가 한 층 밑으로 순간이동한다. 못 찾으면 골반 높이를 쓰고 남은 차이는 중력이 메운다")]
     [SerializeField] private float m_groundProbeDistance = 1.5f;
 
-    [Tooltip("루트 yaw를 몸이 누운 방향에 맞춘다 — 기상 모션이 '루트 전방을 향해 누워 있다'를 전제하므로")]
+    [Tooltip("루트 yaw를 몸이 누운 방향에 맞춘다 — 기상 모션이 '루트 전방을 향해 누워 있다'를 전제하므로. " +
+             "비행 중에도 매 프레임 맞춘다(FollowBodyYaw) — 정착 때 한 번에 돌리면 그 회전이 원격에 " +
+             "늦게 도착해 시체가 루트를 축으로 휙 돈다")]
     [SerializeField] private bool m_alignRootYawToBody = true;
 
     [Tooltip("몸 방향 대비 루트 yaw 보정(도) — Knockdown_StandUp 클립이 어느 쪽을 머리로 보는지에 맞춘다. " +
              "Editor에서 부활을 눌러 보며 조정할 값이다")]
     [SerializeField] private float m_rootYawOffset;
 
-    [Tooltip("원격 피어의 착지점 수렴 시간(초) — 로컬 착지점과 오너 확정 위치의 차이를 이만큼에 걸쳐 흡수한다")]
-    [SerializeField] private float m_convergeSeconds = 0.25f;
-
-    [Tooltip("물리 복귀를 미루는 동안 '시체가 멈췄다'로 보는 한 프레임 루트 이동량(m) " +
-             "— PinHipsOnly 주석의 유예 조건")]
-    [SerializeField] private float m_releaseStillDistance = 0.005f;
-
-    [Tooltip("위 조건을 못 만나도 이만큼 지나면 물리로 놓아준다(초) — 안전장치")]
-    [SerializeField] private float m_releaseTimeoutSeconds = 1f;
 
     [Header("애니메이터 복귀")]
     [Tooltip("정착 포즈 → 애니메이터 포즈 보간 시간(초)")]
@@ -132,9 +125,7 @@ public class PlayerRagdoll : MonoBehaviour
     private NetworkObject m_netObject;
 
     private Transform m_root; // CharacterController가 붙은 트랜스폼 = 판정·동기화의 주체
-    private Transform m_boneRoot; // 리그 최상단('Root') — 수렴 오프셋을 여기에 얹는다
-    private Vector3 m_boneRootRestPosition;
-    private Quaternion m_boneRootRestRotation;
+    private Transform m_boneRoot; // 리그 최상단('Root') — 뼈·스킨 수집 범위를 여기로 못박는다
 
     private Rigidbody[] m_bodies; // 래그돌 레이어의 뼈 Rigidbody만 (손에 든 아이템의 rb가 섞이지 않게)
     private Transform m_hipsBone; // 관절이 없는 뼈 = 래그돌 루트
@@ -155,14 +146,6 @@ public class PlayerRagdoll : MonoBehaviour
     private float m_elapsedInRagdoll;
     private float m_blendTimer;
 
-    private Vector3 m_convergeFromPosition; // Root 로컬 오프셋 — 0으로 감쇠하며 오너 위치로 수렴한다
-    private Quaternion m_convergeFromRotation;
-    private float m_convergeTimer = -1f; // 음수 = 수렴 중이 아니다
-
-    private bool m_pendingRelease; // 물리 복귀(PinHipsOnly)를 유예 중 — TickPhysicsRelease 주석 참고
-    private float m_releaseTimer;
-    private Vector3 m_releasePreviousRootPosition;
-
     // 늦게 접속했는데 대상이 이미 죽어 있던 경우 — 이번 사망은 래그돌을 건너뛴다.
     // 그때의 물리 낙하는 "죽는 순간"이 아니라 이미 끝난 과거라, 재생하면 시체가 뒤늦게 한 번 더 무너진다.
     // (PlayerIncapacitation.RefreshAimHitbox가 스폰 시 한 번 상태를 맞추는 것과 같은 계열의 처리)
@@ -181,6 +164,13 @@ public class PlayerRagdoll : MonoBehaviour
     /// 정착 후에도, 부활 블렌드 중에도 참이다 — 그 구간에도 뼈의 주인은 이쪽이다.
     /// </summary>
     public bool IsRagdollActive => m_state != RagdollState.Animated;
+
+    /// <summary>
+    /// 캡슐이 시체를 따라가야 하는 구간인가 — <see cref="PlayerMovement.Update"/>가 입력 이동 대신
+    /// <see cref="TickCapsuleFollow"/>를 돌리는 판정. 호송·운반(<c>PlayerTowedMotion</c>)이 입력 이동을
+    /// 대신하는 것과 같은 자리이고, 몸을 끄는 주체가 남이 아니라 <b>자기 뼈 물리</b>라는 점만 다르다.
+    /// </summary>
+    internal bool IsCapsuleFollowingBody => m_state == RagdollState.Ragdoll && HasMoveAuthority;
 
     // 이동 권한 — 오너(또는 세션 없는 오프라인 Play)만 루트를 옮길 수 있다.
     // 서버가 남의 캐릭터를 옮겨봤자 오너 권한 NetworkTransform이 되돌린다(BombExplosionView 주석과 같은 논리).
@@ -275,10 +265,6 @@ public class PlayerRagdoll : MonoBehaviour
         ApplyRuntimePhysics(); // 프리팹이 들고 있을 수 없는 값 — 위 상수 주석 참고
         SetUpBounceDiagnostics();
         SetKinematic(true); // 평시는 애니메이터가 포즈를 쥔다
-
-        // 원격 수렴 오프셋은 리그 최상단에 얹는다 — 여기를 옮기면 스켈레톤 전체가 강체로 따라온다.
-        m_boneRootRestPosition = m_boneRoot.localPosition;
-        m_boneRootRestRotation = m_boneRoot.localRotation;
 
         // 부활 블렌드는 물리를 받지 않은 뼈(척추 사이·목·손가락·발)까지 보간해야 한다 — 그것들은
         // 애니메이터가 꺼진 순간의 포즈에 멈춰 있어, 안 섞으면 블렌드 시작 프레임에 목과 손이 튄다.
@@ -420,10 +406,11 @@ public class PlayerRagdoll : MonoBehaviour
     //  · 넘기기 전 — 정착(<see cref="Settle"/>)이 한 프레임 안에서 키네마틱을 왕복하므로
     //    (SetKinematic(true) → <see cref="PinHipsOnly"/>) 안 지우면 정착 직전 속도가 되살아난다.
     //  · 돌려준 뒤 — <b>키네마틱인 동안에도 트랜스폼이 움직이면 PhysX는 그 이동에서 속도를
-    //    유도한다.</b> 정착 후 수렴(<see cref="TickConverge"/>)은 리그 루트를 0.25초에 걸쳐 1m 넘게
-    //    끌어오므로(실측 1.18m), 그 유도 속도를 물고 물리로 돌아가면 시체가 그대로 튄다 —
-    //    실측에서 접촉 없이 머리 7.1m/s, 어깨·팔꿈치 6.0m/s가 나왔다. 리그 루트에서 먼 뼈일수록
-    //    회전 반경이 커서 더 빨랐다는 것도 이 원인을 가리킨다.
+    //    유도하고, 그 속도는 isKinematic = false 시점에 살아난다.</b> 실측에서 접촉 없이 머리
+    //    7.1m/s, 어깨·팔꿈치 6.0m/s가 나왔다 — 리그 루트에서 먼 뼈일수록 회전 반경이 커서 더
+    //    빨랐다는 순서가 이 원인을 가리켰다. 캡슐 추종(<see cref="TickCapsuleFollow"/>)이
+    //    들어와 큰 이동 자체가 사라졌지만, 운반·밧줄로 시체가 끌려다니는 동안에도 같은 조건이
+    //    성립하므로 이 짝은 그대로 필요하다.
     private static void SetBodyKinematic(Rigidbody body, bool kinematic)
     {
         if (kinematic && !body.isKinematic)
@@ -492,9 +479,6 @@ public class PlayerRagdoll : MonoBehaviour
         m_state = RagdollState.Ragdoll;
         m_stillTimer = 0f;
         m_elapsedInRagdoll = 0f;
-        m_convergeTimer = -1f;
-        m_pendingRelease = false;
-        RestoreBoneRootRest();
 
         // 슬라이드 넉백과 이중으로 밀리지 않게 CharacterController 쪽 외력을 지운다.
         // "죽은 사람은 건너뛴다"는 판정을 BombExplosionView에 두지 않는 이유가 위 순서 문제다 —
@@ -545,10 +529,6 @@ public class PlayerRagdoll : MonoBehaviour
         // 정착 상태에서는 골반만 고정돼 있고 나머지 뼈는 물리에 남아 있다(<see cref="PinHipsOnly"/>) —
         // 애니메이터로 돌아가려면 전부 멈춰야 한다. 안 멈추면 블렌드가 놓는 포즈를 물리가 매 스텝 덮는다.
         SetKinematic(true);
-
-        m_convergeTimer = -1f;
-        m_pendingRelease = false; // 유예 중이었으면 여기서 끝난다 — 전 뼈가 이미 키네마틱이다
-        RestoreBoneRootRest();
 
         if (!blend || m_animator == null || m_state == RagdollState.BlendingToAnimator)
         {
@@ -673,8 +653,15 @@ public class PlayerRagdoll : MonoBehaviour
         if (m_diagContacts == null || index < 0 || index >= m_diagContacts.Length)
             return;
 
-        m_diagContacts[index] = $"{collision.collider.name}"
-            + $"(레이어 {collision.collider.gameObject.layer}, 충격 {collision.impulse.magnitude:F2})";
+        // 자기 캡슐은 이름으로 못 가른다 — 남의 캡슐도 "Player(Clone)"이다. 남의 캡슐과 닿는 것은
+        // 정상이지만 자기 캡슐이면 §9-1(IgnoreCollision 소실)이 재발한 것이므로 갈라 찍는다.
+        // 캡슐 추종(TickCapsuleFollow) 이후로는 시체가 항상 자기 캡슐 안에 있어 더 중요해졌다.
+        string other = collision.collider == (Collider)m_controller
+            ? "자기캡슐⚠"
+            : collision.collider.name;
+
+        m_diagContacts[index] =
+            $"{other}(레이어 {collision.collider.gameObject.layer}, 충격 {collision.impulse.magnitude:F2})";
     }
 
     // FixedUpdate는 물리 스텝 <b>앞</b>에서 돈다 — 이 시점의 linearVelocity와 m_diagContacts는
@@ -723,7 +710,8 @@ public class PlayerRagdoll : MonoBehaviour
         bool hipsKinematic =
             m_hipsBone.TryGetComponent(out Rigidbody hipsBody) && hipsBody.isKinematic;
 
-        // ⚠ Unity 콘솔 <b>목록</b>은 메시지의 앞 두 줄만 보여준다 — 판별에 필요한 값을 그 안에 다 넣는다.
+        // ⚠ <b>줄바꿈을 넣지 말 것.</b> Unity 콘솔 목록은 앞 두 줄을 보여주지만 MCP로 읽으면
+        // <b>첫 줄만</b> 온다 — 뼈별 Δv와 접촉 상대를 둘째 줄에 두면 정작 판별점이 잘려나간다.
         StringBuilder report = new StringBuilder();
         report.Append($"[래그돌/튐] t={Time.fixedTime:F2} {m_state}/{(HasMoveAuthority ? "오너" : "원격")}")
             .Append($" | 루트Δ y={rootStep.y * 1000f:+0.0;-0.0}mm")
@@ -731,8 +719,7 @@ public class PlayerRagdoll : MonoBehaviour
             .Append($" 수직속도={(m_movement != null ? m_movement.DiagnosticVerticalVelocity.ToString("F2") : "?")}")
             .Append($" 캡슐={capsule}")
             .Append($" | 골반키네={hipsKinematic} 루트↔골반={(m_hipsBone.position - m_root.position).magnitude:F2}m")
-            .Append($" 수렴={(m_convergeTimer >= 0f ? "진행중" : "없음")} 물리유예={m_pendingRelease}")
-            .Append("\n  ");
+            .Append(" | ");
 
         for (int i = 0; i < m_bodies.Length; i++)
         {
@@ -754,9 +741,108 @@ public class PlayerRagdoll : MonoBehaviour
         if (m_state == RagdollState.BlendingToAnimator)
             TickBlend();
 
-        // 수렴은 블렌드와 무관하게 계속 감쇠한다 — 정착 직후 부활이 들어와도 오프셋이 남지 않게
-        TickConverge();
-        TickPhysicsRelease();
+        // 원격의 시체를 스트리밍된 루트에 맞춘다 — 오너 쪽 짝(TickCapsuleFollow)은 PlayerMovement가
+        // 돌린다(그쪽은 이 컴포넌트가 비활성인 원격에서도 순서를 보장해야 하는 시점·이동과 얽혀 있다).
+        // 여기서 하는 이유: 원격에서는 PlayerMovement가 꺼져 있고(오너만 켜진다), NetworkTransform이
+        // 이번 프레임에 적용한 루트 위치를 LateUpdate에서 읽어야 한 프레임 늦지 않는다.
+        if (m_state == RagdollState.Ragdoll && !HasMoveAuthority)
+            TickAlignBonesToRoot();
+    }
+
+    // ---- 캡슐 추종 (#506 — 이 설계의 중심) ----
+
+    /// <summary>
+    /// 비행 중 캡슐을 시체 밑으로 끌고 간다 — <b>오너 전용</b>이고
+    /// <see cref="PlayerMovement.Update"/>가 입력 이동 대신 매 프레임 부른다.
+    ///
+    /// <b>왜 이게 중심인가.</b> 이걸 안 하면 캡슐은 사망 지점에 그대로 남고(실측: 비행 중 루트 이동
+    /// 0.0mm, 루트↔골반 0.87→1.21m), 정착 순간 <b>한 번에 1.15m 텔레포트</b>한다. 그 한 번의 늦은
+    /// 점프가 이 기능의 거의 모든 버그의 뿌리였다:
+    ///  · 오너 — 텔레포트가 캡슐을 밀고, 키네마틱 골반이 캡슐에 매달려 시체를 통째로 끌어갔다(§9-4)
+    ///  · 원격 — 그 점프가 NetworkTransform으로 <b>늦게</b> 도착해, 골반만 끌려가고 나머지 뼈는
+    ///    바닥에 눌러앉아 관절 10개가 늘어났다 되튕겼다(§9-5). 언제 도착할지는 두 피어의 물리
+    ///    발산이 정하므로 상한이 없어, 기다리는 방식으로는 맞출 수 없었다
+    ///
+    /// 매 프레임 따라가게 하면 텔레포트가 <b>cm 단위 잔차</b>로 줄고, 원격은 점프 대신 연속
+    /// 스트림을 받는다. 수렴·릴리스 유예·되붙듦이 전부 필요 없어진다.
+    ///
+    /// 이동은 <see cref="PlayerMovement.MoveWithGravity"/>에 맡긴다 — 중력·접지 클램프의 유일한
+    /// 적분 지점이라 이중 적분을 피하고(#189), <c>Move()</c>의 스윕을 타므로 <b>캡슐이 지형을
+    /// 존중한다</b>. 시체가 난간을 넘어가도 캡슐은 통행 가능한 곳에 남아 운반·부활이 살아 있다.
+    /// </summary>
+    internal void TickCapsuleFollow()
+    {
+        if (m_movement == null || m_hipsBone == null)
+            return;
+
+        // 수평만 따라간다 — 높이는 중력과 접지가 정한다. 시체가 공중에 있어도 캡슐은 지면에 붙어
+        // 있는 편이 옳다(캡슐이 공중이면 isGrounded가 거짓인 채 중력이 쌓인다 — §9-4의 두 번째 함정).
+        Vector3 step = m_hipsBone.position - m_root.position;
+        step.y = 0f;
+        m_movement.MoveWithGravity(step);
+
+        FollowBodyYaw();
+    }
+
+    // 캡슐의 yaw도 몸이 누운 방향에 맞춰 둔다.
+    //
+    // 정착 때 한 번에 돌리면 그 회전이 원격에 늦게 도착해 <b>위치 점프와 똑같은 문제가 회전으로</b>
+    // 재현된다 — 정착 후 뼈는 루트의 자식이므로 루트가 돌면 시체가 루트를 축으로 휙 돈다.
+    // 비행 중 계속 맞춰 두면 정착 시점에 이미 맞아 있어 돌릴 것이 없다.
+    //
+    // 캡슐은 yaw 대칭이라 물리적으로는 무해하다. 기상 모션(Knockdown_StandUp)이 "루트 전방을 향해
+    // 누워 있다"를 전제하므로 부활에도 이 값이 필요하다 — 같은 계산을 ResolveSettledRootPose와
+    // 공유한다(BodyYaw).
+    private void FollowBodyYaw()
+    {
+        if (!m_alignRootYawToBody || !TryGetBodyYaw(out float yaw))
+            return;
+
+        m_root.rotation = Quaternion.Euler(0f, yaw, 0f);
+    }
+
+    // 몸이 누운 방향의 yaw — 골반→머리를 지면에 투영한 값. 비행 중 추종(FollowBodyYaw)과
+    // 정착 정렬(ResolveSettledRootPose)이 같은 계산을 써야 정착 순간에 회전이 안 튄다.
+    private bool TryGetBodyYaw(out float yaw)
+    {
+        yaw = 0f;
+        if (m_headBone == null || m_hipsBone == null)
+            return false;
+
+        Vector3 lengthwise = m_headBone.position - m_hipsBone.position;
+        lengthwise.y = 0f;
+        if (lengthwise.sqrMagnitude < 0.0004f)
+            return false; // 거의 수직으로 서 있다 — 방향을 못 정하니 기존 yaw를 유지한다
+
+        yaw = Quaternion.LookRotation(lengthwise.normalized).eulerAngles.y + m_rootYawOffset;
+        return true;
+    }
+
+    /// <summary>
+    /// 원격 피어의 시체를 스트리밍된 루트에 맞춘다 — <b>원격 전용</b>, 비행 중 매 프레임.
+    ///
+    /// 오너의 캡슐이 골반을 따라오므로(<see cref="TickCapsuleFollow"/>) <b>스트리밍된 루트의 수평
+    /// 위치가 곧 오너 골반의 수평 위치다</b> — 뼈를 따로 동기화하지 않고도 원격이 오너의 궤적을
+    /// 받는다(#506 결정 4 "뼈를 동기화하지 않는다"를 지킨다).
+    ///
+    /// 리그 루트 오프셋으로는 못 고친다 — <b>동적 리지드바디는 부모 트랜스폼을 따르지 않는다.</b>
+    /// 그래서 뼈마다 같은 델타를 더해 <b>강체로 평행이동</b>한다. 포즈·상대속도·관절이 보존되고,
+    /// 동적 바디의 <c>position</c> 대입은 텔레포트라 속도가 유도되지 않는다(키네마틱과 반대 — §9-5).
+    ///
+    /// <b>매 프레임 보정하므로 발산이 누적되지 않는다.</b> 델타가 계속 작게 유지되는 것이 핵심이다 —
+    /// 그래서 마지막에 1.2m를 흡수하는 구간이 아예 생기지 않는다. 피어별 착지점 편차를 감수하기로
+    /// 한 #506 본문의 합의를 이 방식이 불필요하게 만든다.
+    /// </summary>
+    private void TickAlignBonesToRoot()
+    {
+        Vector3 delta = m_root.position - m_hipsBone.position;
+        delta.y = 0f; // 높이는 각 피어의 지형 충돌이 정한다 — 같은 지형이므로 편차가 작다
+
+        if (delta.sqrMagnitude < 1e-8f)
+            return;
+
+        for (int i = 0; i < m_bodies.Length; i++)
+            m_bodies[i].position += delta;
     }
 
     // ---- 임펄스 ----
@@ -779,16 +865,19 @@ public class PlayerRagdoll : MonoBehaviour
 
     // ---- 정착 ----
 
-    // 정착 순서를 지키지 않으면 몸이 두 번 튄다. 뼈는 루트의 자식이므로 루트를 옮기면 뼈도 딸려 간다:
+    // 정착 순서를 지키지 않으면 몸이 튄다. 뼈는 루트의 자식이므로 루트를 옮기면 뼈도 딸려 간다:
     //   ① 전 뼈의 월드 포즈를 캡처
     //   ② 전 rb를 키네마틱으로 전환
     //   ③ 루트를 골반 밑 지면으로 이동 (오너 또는 오프라인만)
     //   ④ 캡처한 월드 포즈를 뼈에 다시 적용  → 여기까지 화면은 그대로다
-    //   ⑤ 원격은 ③을 못 했으므로, 오너가 갈 자리를 로컬에서도 계산해 로컬 포즈를 맞추고
-    //      그 순간의 월드 어긋남은 리그 루트 오프셋으로 흡수해 감쇠시킨다
     //
     // ②가 이 설계의 핵심이다. 정착 후 뼈가 다시 부모를 따라가므로 동료가 시체를 운반할 때(#365)
     // 시체가 같이 따라온다 — 없으면 캡슐만 끌려가고 몸은 바닥에 남는다.
+    //
+    // ③은 비행 중 캡슐이 이미 따라와 있으므로(<see cref="TickCapsuleFollow"/>) <b>cm 단위 잔차</b>만
+    // 남는다 — 지면 높이 보정과, 지형 때문에 캡슐이 시체를 놓친 만큼이다. 원격은 아무것도 옮기지
+    // 않는다: 루트는 비행 내내 오너 값을 스트리밍받았고 뼈는 그 루트에 맞춰져 있다
+    // (<see cref="TickAlignBonesToRoot"/>). 흡수할 어긋남이 없으니 수렴도 유예도 없다.
     private void Settle()
     {
         for (int i = 0; i < m_bodies.Length; i++)
@@ -798,7 +887,6 @@ public class PlayerRagdoll : MonoBehaviour
         }
 
         Vector3 landedHips = m_hipsBone.position;
-        Vector3 landedHead = m_headBone != null ? m_headBone.position : m_hipsBone.position;
 
         SetKinematic(true);
 
@@ -809,7 +897,7 @@ public class PlayerRagdoll : MonoBehaviour
 
         Vector3 rootPosition = m_root.position;
         Quaternion rootRotation = m_root.rotation;
-        ResolveSettledRootPose(landedHips, landedHead, ref rootPosition, ref rootRotation);
+        ResolveSettledRootPose(landedHips, ref rootPosition, ref rootRotation);
 
         if (m_debugLog)
             Debug.Log(
@@ -825,31 +913,21 @@ public class PlayerRagdoll : MonoBehaviour
         if (HasMoveAuthority)
         {
             m_root.SetPositionAndRotation(rootPosition, rootRotation);
-            SetControllerEnabled(true);
 
             // 텔레포트로 도착했으니 쌓인 수직 속도를 지운다 — <see cref="PlayerMovement.SetPose"/>가
             // 같은 이유로 하는 처리다(#189: "낙하 도중 텔레포트되면 쌓인 수직 속도가 그대로 남아
             // 도착지에서 바닥을 파고들거나 튀어오른다"). 여기는 SetPose를 거치지 않고 트랜스폼을
-            // 직접 옮기므로 그 짝이 빠져 있었다 — 남은 속도가 캡슐을 밀면 <b>키네마틱 골반이
+            // 직접 옮기므로 그 짝이 필요하다 — 남은 속도가 캡슐을 밀면 <b>키네마틱 골반이
             // 매달려 있어 시체가 통째로 끌려간다.</b>
             m_movement?.ClearExternalVelocity();
-
-            RestoreCapturedWorldPoses();
-
-            // 오너는 루트를 이미 최종 자리로 옮겼으니 곧장 물리로 놓아준다 — 누운 몸이 계속 흔들리게.
-            PinHipsOnly();
         }
-        else
-        {
-            SetControllerEnabled(true);
-            // 원격: 루트는 아직 사망 지점이고, 곧 NetworkTransform이 오너가 확정한 자리로 옮겨 준다.
-            // 뼈 로컬 포즈는 '오너가 갈 자리' 기준으로 맞춰 둬야 최종 위치가 오너 값과 일치한다.
-            ApplyPosesRelativeTo(rootPosition, rootRotation);
-            BeginConvergence(rootPosition, rootRotation);
 
-            // 여기서 PinHipsOnly를 부르지 않는다 — 이유는 TickPhysicsRelease 주석에 있다.
-            BeginPhysicsRelease();
-        }
+        SetControllerEnabled(true);
+        RestoreCapturedWorldPoses();
+
+        // 루트가 더 이상 나중에 점프하지 않으므로(위 주석) 양쪽 모두 곧장 물리로 놓아준다 —
+        // 누운 몸이 계속 흔들리게. 원격의 릴리스 타이밍을 재던 유예 구간은 이 설계에서 사라졌다.
+        PinHipsOnly();
 
         m_state = RagdollState.Settled;
     }
@@ -860,7 +938,6 @@ public class PlayerRagdoll : MonoBehaviour
     // 있다"를 전제하므로, 래그돌이 옆으로 굴러 있으면 부활 블렌드에서 몸이 휙 돌아간다.
     private void ResolveSettledRootPose(
         Vector3 landedHips,
-        Vector3 landedHead,
         ref Vector3 position,
         ref Quaternion rotation
     )
@@ -872,16 +949,9 @@ public class PlayerRagdoll : MonoBehaviour
         // 있으므로 그 낙하가 시체를 통째로 끌어내린다.
         position = GroundUnder(landedHips) - Vector3.up * CapsuleBottomOffset;
 
-        if (!m_alignRootYawToBody)
-            return;
-
-        Vector3 lengthwise = landedHead - landedHips;
-        lengthwise.y = 0f;
-        if (lengthwise.sqrMagnitude < 0.0004f)
-            return; // 거의 수직으로 누웠다 — 방향을 못 정하니 기존 yaw를 유지한다
-
-        float yaw = Quaternion.LookRotation(lengthwise.normalized).eulerAngles.y + m_rootYawOffset;
-        rotation = Quaternion.Euler(0f, yaw, 0f);
+        // 비행 중 이미 맞춰 온 값이라 보통 잔차만 남는다 — 추종이 꺼져 있거나 오프라인일 때가 본작업.
+        if (m_alignRootYawToBody && TryGetBodyYaw(out float yaw))
+            rotation = Quaternion.Euler(0f, yaw, 0f);
     }
 
     // 루트 원점에서 캡슐 밑면까지의 높이 — 위 ResolveSettledRootPose 주석 참고.
@@ -928,117 +998,6 @@ public class PlayerRagdoll : MonoBehaviour
                 m_capturedPositions[i],
                 m_capturedRotations[i]
             );
-    }
-
-    // 캡처한 월드 포즈를 '가상 루트'(virtualPosition/Rotation) 기준으로 다시 놓는다.
-    // 현재 루트가 가상 루트와 다르면 화면상 몸이 그만큼 밀리는데, 그 어긋남은 BeginConvergence가 흡수한다.
-    private void ApplyPosesRelativeTo(Vector3 virtualPosition, Quaternion virtualRotation)
-    {
-        Quaternion map = m_root.rotation * Quaternion.Inverse(virtualRotation);
-        for (int i = 0; i < m_bodies.Length; i++)
-        {
-            Vector3 local = Quaternion.Inverse(virtualRotation)
-                * (m_capturedPositions[i] - virtualPosition);
-            m_bodies[i].transform.SetPositionAndRotation(
-                m_root.position + m_root.rotation * local,
-                map * m_capturedRotations[i]
-            );
-        }
-    }
-
-    // 리그 루트에 로컬 오프셋을 얹어, 방금 재배치한 몸이 화면상 '착지한 그 자리'에 머물게 한다.
-    // 그 오프셋을 m_convergeSeconds에 걸쳐 0으로 감쇠하면 몸이 오너 확정 위치로 부드럽게 미끄러진다.
-    // 피어마다 착지점이 다른 것은 감수하되(#506 합의), 최종 위치는 오너 값으로 수렴시키기 위한 장치다.
-    private void BeginConvergence(Vector3 virtualPosition, Quaternion virtualRotation)
-    {
-        if (m_boneRoot == null || m_convergeSeconds <= 0f)
-            return;
-
-        // 리그 루트가 '가상 루트의 자식'이었을 때의 로컬 포즈 = 현재 루트 기준의 보정 오프셋
-        Quaternion inverseRoot = Quaternion.Inverse(m_root.rotation);
-        m_convergeFromRotation =
-            inverseRoot * virtualRotation * m_boneRootRestRotation;
-        m_convergeFromPosition =
-            inverseRoot
-            * (virtualPosition + virtualRotation * m_boneRootRestPosition - m_root.position);
-        m_convergeTimer = 0f;
-
-        m_boneRoot.SetLocalPositionAndRotation(m_convergeFromPosition, m_convergeFromRotation);
-    }
-
-    /// <summary>
-    /// 정착했지만 <b>아직 물리로 놓아주지 않는</b> 유예 구간을 연다 — 원격 피어 전용.
-    ///
-    /// 정착 직후 원격의 시체는 아직 이동 중이다. 두 가지가 동시에 시체를 끌어온다:
-    ///  · 리그 루트 — <see cref="TickConverge"/>가 로컬 착지점과 오너 확정 위치의 차이를 흡수한다
-    ///  · 플레이어 루트 — NetworkTransform이 오너가 확정한 자리로 옮겨 준다
-    /// 착지점 차이는 작지 않다. 실측에서 <b>1.38m</b>가 나왔다(#506 본문이 감수하기로 한 편차다).
-    ///
-    /// 그 이동 중에 <see cref="PinHipsOnly"/>를 부르면 <b>골반만</b> 키네마틱이라 리그에 용접된 채
-    /// 1m 넘게 끌려가고, 나머지 뼈는 이미 바닥에 눌러앉아 물리로 버틴다 — 관절 10개가 통째로
-    /// 늘어났다 되튕기며 시체가 발작한다. 사지(Elbow·Shoulder·Head·LowerLeg)에만 Δv가 몰리고
-    /// 바닥과의 충격이 10을 넘던 것이 이 현상이다.
-    ///
-    /// 그래서 <b>움직임이 멎은 뒤에</b> 놓아준다. 유예 동안에는 전 뼈가 키네마틱이라
-    /// (<see cref="Settle"/>의 <see cref="SetKinematic"/>) 스켈레톤이 강체로 함께 미끄러진다.
-    /// </summary>
-    private void BeginPhysicsRelease()
-    {
-        m_pendingRelease = true;
-        m_releaseTimer = 0f;
-        m_releasePreviousRootPosition = m_root.position;
-    }
-
-    private void TickPhysicsRelease()
-    {
-        if (!m_pendingRelease)
-            return;
-
-        m_releaseTimer += Time.deltaTime;
-
-        bool rootStill =
-            (m_root.position - m_releasePreviousRootPosition).sqrMagnitude
-            <= m_releaseStillDistance * m_releaseStillDistance;
-        m_releasePreviousRootPosition = m_root.position;
-
-        // 타임아웃은 안전장치다 — 시체가 움직이는 무언가(달리는 차량 등) 위에 얹혀 영원히
-        // 안 멎는 경우에도 결국은 물리로 돌려놔야 운반·부활이 정상 동작한다.
-        bool settledDown = m_convergeTimer < 0f && rootStill;
-        if (!settledDown && m_releaseTimer < m_releaseTimeoutSeconds)
-            return;
-
-        m_pendingRelease = false;
-        PinHipsOnly();
-
-        if (m_debugLog)
-            Debug.Log(
-                $"[래그돌] 물리 복귀 — {name} 유예 {m_releaseTimer:F2}s"
-                    + $" ({(settledDown ? "정지확인" : "타임아웃")}),"
-                    + $" 루트↔골반 {(m_hipsBone.position - m_root.position).magnitude:F2}m",
-                this
-            );
-    }
-
-    private void TickConverge()
-    {
-        if (m_convergeTimer < 0f || m_boneRoot == null)
-            return;
-
-        m_convergeTimer += Time.deltaTime;
-        float t = Mathf.Clamp01(m_convergeTimer / m_convergeSeconds);
-        m_boneRoot.SetLocalPositionAndRotation(
-            Vector3.Lerp(m_convergeFromPosition, m_boneRootRestPosition, t),
-            Quaternion.Slerp(m_convergeFromRotation, m_boneRootRestRotation, t)
-        );
-
-        if (t >= 1f)
-            m_convergeTimer = -1f;
-    }
-
-    private void RestoreBoneRootRest()
-    {
-        if (m_boneRoot != null)
-            m_boneRoot.SetLocalPositionAndRotation(m_boneRootRestPosition, m_boneRootRestRotation);
     }
 
     // ---- 부활 블렌드 ----
