@@ -298,7 +298,7 @@ public class AuthBootstrap : CommonManagerBase
         if (
             !string.IsNullOrEmpty(cached)
             && cached != Nickname
-            && NicknameRules.Validate(cached) == null
+            && NicknameRules.Validate(cached) == ENicknameValidation.Ok
         )
         {
             try
