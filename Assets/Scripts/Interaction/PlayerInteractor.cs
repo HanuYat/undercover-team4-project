@@ -291,9 +291,9 @@ public class PlayerInteractor : NetworkBehaviour
         if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
             return;
 
-        // 밧줄 놓기는 **조준 대상 기준**이다 (#390). 여러 명을 동시에 끌 수 있어 "끌고 있으면 무조건 놓기"로는
-        // 무엇을 놓을지 정할 수 없고, 끄는 동안 다른 대상에게 E(제압·끌기 재개)를 쓸 방법도 사라진다.
-        // (연행 쪽이 따로 입력을 구독하면 놓기+제압이 한 입력에 동시 발동하는 이중 소비가 생긴다)
+        // 밧줄 풀기는 **조준 대상 기준**이다 (#390/#513). 여러 명을 동시에 끌 수 있어 "끌고 있으면 무조건 푼다"로는
+        // 무엇을 풀지 정할 수 없고, 끄는 동안 다른 대상에게 E(반출·정지)를 쓸 방법도 사라진다.
+        // (연행 쪽이 따로 입력을 구독하면 풀기와 다른 E 동작이 한 입력에 동시 발동하는 이중 소비가 생긴다)
         NpcController aimed = CurrentTarget != null
             ? CurrentTarget.GetComponentInParent<NpcController>()
             : null;
@@ -303,8 +303,8 @@ public class PlayerInteractor : NetworkBehaviour
             // 열어 주던 예외(TakesPriorityOverRelease, #414)는 유일한 사용처인 인계 단말과 함께
             // 제거됐다 (#492) — 필요해지면 아래 운반 쪽 ICarriedBodyReceiver가 같은 취지의 선례다.
             // ReleaseDrag 직접 호출은 서버 가드에 막힌다 — 요청 API로 서버에 넘긴다 (#118)
-            Debug.Log($"E 입력 — 밧줄 끌기 놓기 요청: {aimed.name}");
-            m_commands?.RequestRelease(aimed);
+            Debug.Log($"E 입력 — 밧줄 풀기 요청: {aimed.name}");
+            m_commands?.RequestUnrope(aimed);
             return;
         }
 
