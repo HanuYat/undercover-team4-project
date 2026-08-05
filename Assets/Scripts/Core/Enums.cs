@@ -75,6 +75,21 @@ public enum EAudioClip
 }
 
 /// <summary>
+/// 일회성 연출의 '순간' 식별자 — FxManager가 파티클(EEffect)·소리(EAudioClip) 조합을 찾는 키. (#532)
+/// 사용처는 무엇을 재생할지가 아니라 <b>무슨 일이 일어났는지</b>만 고른다 — 조합은 FxManager 인스펙터에 있다.
+/// 그래서 먼지를 바꾸거나 소리를 갈아도 아이템 코드는 그대로다.
+/// </summary>
+public enum EFx
+{
+    None, // 연출 없음 — 배선 누락과 구분되는 '의도적으로 안 냄'
+    BatonSwing, // 진압봉을 휘두른 순간 (명중 여부와 무관)
+    BatonHitMetal, // 진압봉이 로봇을 맞혔다 (동료 경찰 · 안드로이드 NPC)
+    BatonHitFlesh, // 진압봉이 사람을 맞혔다
+    BatonHitWorld, // 진압봉이 벽·소품을 맞혔다
+    TaserHit, // 테이저 명중
+}
+
+/// <summary>
 /// Awake 실행 순서 — [DefaultExecutionOrder((int)EExecutionOrder.X)]로 사용.
 /// 음수 = 일반 스크립트(0)보다 먼저. 매니저 → UI매니저 → 패널 → 일반 스크립트 순서를 보장한다.
 /// </summary>

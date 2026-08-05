@@ -158,7 +158,7 @@ public class Taser : ItemBase, IAimedWeapon
             case AimResult.TargetInvalidState:
                 // 소리는 낸다 — 전극은 실제로 몸에 닿았다. 침묵하면 입력이 씹힌 것처럼 보인다.
                 // (진압봉의 같은 분기와 동일한 방침, #478)
-                PlayImpact(hit.point);
+                App.Game.Fx?.PlayEverywhere(EFx.TaserHit, hit.point);
                 NotifyOwner(
                     playerTarget != null
                         ? $"테이저 무효 — 이미 무력화된 동료 ({playerTarget.name})"
@@ -167,7 +167,7 @@ public class Taser : ItemBase, IAimedWeapon
         }
 
         // 명중 — 대상이 로봇이든 사람이든 같은 소리다. 전기는 몸체를 가리지 않는다.
-        PlayImpact(hit.point);
+        App.Game.Fx?.PlayEverywhere(EFx.TaserHit, hit.point);
 
         // 동료를 맞췄다 — 아군 오사 (#252). NPC와 달리 위협 개념이 없다(도주할 상대가 아니다).
         // 구조 없이 시간이 지나면 스스로 일어나고, 전멸 판정에도 잡히지 않는다 (IncapacitationCause.Stun).
@@ -191,31 +191,13 @@ public class Taser : ItemBase, IAimedWeapon
     }
 
     // ---- 피격 연출 (#477 일부) ----
-
-    /// <summary>
-    /// 명중 지점의 감전음을 전 피어에 전파한다 — 서버 판정 지점에서만 호출한다.
-    /// <b>기절이 지속되는 동안 울리는 소리가 아니라 맞는 순간의 원샷이다.</b> 기절은 지속 상태라
-    /// 아키텍처 규칙상 동기화 값으로 구동해야 하는데(docs/architecture.md 연출 전파 규칙),
-    /// 그건 몸 전기 아크·화면 지직과 함께 #477 본체에서 다룬다. 여기서는 "맞았다"만 들려준다.
-    /// </summary>
-    private void PlayImpact(Vector3 point)
-    {
-        if (!IsSpawned)
-        {
-            ApplyImpactFeedback(point); // 오프라인 — RPC 경로가 없다
-            return;
-        }
-
-        PlayImpactRpc(point);
-    }
-
-    [Rpc(SendTo.Everyone)]
-    private void PlayImpactRpc(Vector3 point) => ApplyImpactFeedback(point);
-
-    // 매니저가 없는 구성(부트스트랩 없는 씬 직접 Play)에서는 조용히 넘어간다 (R8 관례).
-    // 먼지는 내지 않는다 — 전기는 충격이 아니라서 흙먼지가 일 이유가 없다.
-    private static void ApplyImpactFeedback(Vector3 point) =>
-        App.Sound?.PlaySfxAt(EAudioClip.TaserHit, point);
+    //
+    // EFx.TaserHit은 소리만 낸다 — 전기는 충격이 아니라서 흙먼지가 일 이유가 없다
+    // (조합은 FxManager 인스펙터에 있다, #532).
+    //
+    // 이 소리는 기절이 지속되는 동안 울리는 것이 아니라 맞는 순간의 원샷이다. 기절은 지속 상태라
+    // 아키텍처 규칙상 동기화 값으로 구동해야 하는데(docs/architecture.md 연출 전파 규칙), 그건 몸 전기
+    // 아크·화면 지직과 함께 #477 본체에서 다룬다. 여기서는 "맞았다"만 들려준다.
 
     // ---- 조준 판정 (서버 사격 · 클라 크로스헤어 공유, #328) ----
 

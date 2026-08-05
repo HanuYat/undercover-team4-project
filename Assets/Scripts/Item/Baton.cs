@@ -252,7 +252,7 @@ public class Baton : ItemBase, IAimedWeapon
                 NotifyOwner("진압봉 빗나감 — 허공");
                 return;
             case SwingResult.HitNonTarget:
-                PlayImpact(hit.point, hit.normal, EAudioClip.BatonHitWorld);
+                App.Game.Fx?.PlayEverywhere(EFx.BatonHitWorld, hit.point, hit.normal);
                 NotifyOwner($"진압봉 빗나감 — {hit.collider.name}에 맞음");
                 return;
             case SwingResult.TargetInvalidState:
@@ -267,7 +267,7 @@ public class Baton : ItemBase, IAimedWeapon
         }
 
         // 유효타 — 임팩트 연출은 전 피어, 히트마커는 때린 사람에게만.
-        PlayImpact(hit.point, hit.normal, ImpactClipFor(target, playerTarget));
+        App.Game.Fx?.PlayEverywhere(ImpactFxFor(target, playerTarget), hit.point, hit.normal);
         NotifyHit(playerTarget != null);
 
         // 동료를 맞췄다 — 아군 오사 (#461). NPC와 같은 데미지를 그대로 넣고, HP 0이 되면
@@ -356,41 +356,15 @@ public class Baton : ItemBase, IAimedWeapon
 
         // 소지자 위치에서 낸다 — 봉 끝이 아니라 몸 기준이면 충분하고(둘의 거리가 1m 안쪽이다),
         // 아이템이 손에 붙는 시점과 무관하게 항상 유효한 좌표다.
-        App.Sound?.PlaySfxAt(EAudioClip.BatonSwing, holder.transform.position);
+        // 이 함수는 이미 전 피어에서 도는 스윙 RPC 안이라 전파(PlayEverywhere)가 아니라 로컬 재생이다.
+        App.Game.Fx?.PlayHere(EFx.BatonSwing, holder.transform.position);
     }
 
     // ---- 타격 연출 (#478) ----
 
     /// <summary>
-    /// 임팩트 지점의 먼지 + 타격음을 전 피어에 전파한다 — 서버 판정 지점에서만 호출한다.
-    /// 연출 오브젝트를 네트워크에 싣지 않고 각 피어가 로컬 생성한다 (NpcDespawnVfx와 같은 방식).
-    /// 클립 종류를 서버가 정해 실어 보내는 이유는 <see cref="ImpactClipFor"/> 주석 참고.
-    /// </summary>
-    private void PlayImpact(Vector3 point, Vector3 normal, EAudioClip clip)
-    {
-        if (!IsSpawned)
-        {
-            ApplyImpactFeedback(point, normal, clip); // 오프라인 — RPC 경로가 없다
-            return;
-        }
-
-        PlayImpactRpc(point, normal, clip);
-    }
-
-    [Rpc(SendTo.Everyone)]
-    private void PlayImpactRpc(Vector3 point, Vector3 normal, EAudioClip clip) =>
-        ApplyImpactFeedback(point, normal, clip);
-
-    // 먼지는 대상과 무관하게 1종이다 — 무엇을 때렸는지는 전적으로 소리가 말한다.
-    // 매니저가 없는 구성(로비·테스트 씬·부트스트랩 없는 직접 Play)에서는 조용히 넘어간다 (R8 관례).
-    private static void ApplyImpactFeedback(Vector3 point, Vector3 normal, EAudioClip clip)
-    {
-        App.Game.Effect?.Play(EEffect.ImpactDust, point, normal);
-        App.Sound?.PlaySfxAt(clip, point);
-    }
-
-    /// <summary>
-    /// 맞은 대상에 따른 타격음 — 로봇은 깡, 사람은 퍽. (#478)
+    /// 맞은 대상에 따른 타격 연출 — 로봇은 깡, 사람은 퍽. (#478)
+    /// 먼지·소리 조합과 전 피어 전파는 <see cref="FxManager"/>가 가져갔다 (#532) — 여기서는 무엇을 맞혔는지만 고른다.
     /// </summary>
     /// <remarks>
     /// <b>클라이언트가 스스로 판단하지 않고 서버가 정해 실어 보낸다.</b> <see cref="OfficialRecords.CitizenType"/>은
@@ -401,16 +375,16 @@ public class Baton : ItemBase, IAimedWeapon
     /// 종족을 소리로 드러내도 정보가 새지 않는다 — 위조(#223)는 표시 이름·문양만 오염시키고
     /// 표시 타입(<c>m_typeView</c>)은 건드리지 않으므로, 소리와 스캔 결과가 어긋나는 일이 없다.
     /// </remarks>
-    private static EAudioClip ImpactClipFor(NpcController npc, PlayerHealth player)
+    private static EFx ImpactFxFor(NpcController npc, PlayerHealth player)
     {
         if (player != null)
         {
-            return EAudioClip.BatonHitMetal; // 동료는 전원 로봇 경찰이다 (GDD 세계관)
+            return EFx.BatonHitMetal; // 동료는 전원 로봇 경찰이다 (GDD 세계관)
         }
 
         if (npc == null)
         {
-            return EAudioClip.BatonHitWorld;
+            return EFx.BatonHitWorld;
         }
 
         // 라운드 시작 전 스폰 직후에는 프로필이 아직 없다 — 갈래를 남기지 않으려고 사람 쪽으로 고정한다.
@@ -418,8 +392,8 @@ public class Baton : ItemBase, IAimedWeapon
         CitizenProfile profile = identity != null ? identity.Profile : null;
 
         return profile != null && profile.CitizenType == OfficialRecords.CitizenType.Android
-            ? EAudioClip.BatonHitMetal
-            : EAudioClip.BatonHitFlesh;
+            ? EFx.BatonHitMetal
+            : EFx.BatonHitFlesh;
     }
 
     /// <summary>

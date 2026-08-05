@@ -38,6 +38,7 @@ public class App : Singleton<App>
     private FactionSymbolManager m_factionSymbolManager;
     private SceneReadyGate m_sceneReadyGate;
     private EffectManager m_effectManager;
+    private FxManager m_fxManager;
 
     // UI 매니저 (씬 전환 시 교체됨)
     private UIManagerBase m_uiManager;
@@ -157,7 +158,12 @@ public class App : Singleton<App>
         public static FactionSymbolManager FactionSymbol => Instance.m_factionSymbolManager;
         public static SceneReadyGate ReadyGate => Instance.m_sceneReadyGate; // 전원 준비 완료 게이트 (#410). 게임 씬에만 있으므로 다른 씬에서는 null
 
-        // 일회성 연출 재생 + 풀링 (#478). 인게임 씬 매니저라 로비·상점에서는 null — 사용처는 ?. 가드 필수
+        // 일회성 연출의 단일 창구 (#532) — "무슨 일이 일어났는가" 하나로 먼지+소리를 내고,
+        // 서버 판정이면 전 피어에 전파한다. 일회성 연출은 이쪽을 부른다.
+        // 인게임 씬 매니저라 로비·상점에서는 null — 사용처는 ?. 가드 필수
+        public static FxManager Fx => Instance.m_fxManager;
+
+        // 파티클 재생 + 풀링 (#478). Fx가 쓰는 아래 계층이다 — 소리 없이 파티클만 낼 때만 직접 부른다
         public static EffectManager Effect => Instance.m_effectManager;
     }
 

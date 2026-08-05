@@ -14,7 +14,7 @@
 
 - **App** ([Assets/Scripts/Core/App.cs](../Assets/Scripts/Core/App.cs)) — 전역 매니저 접근의 단일 경로.
   - `App.Net` — SessionManager · AuthBootstrap · VivoxManager
-  - `App.Game` — RoundManager · SuddenEventManager · WantedListManager · DirectoryManager · ArrestJudge · CriminalAssigner · NpcSpawner · AppearanceAssigner · WrongfulArrestPenalty · TeamFund · EffectManager
+  - `App.Game` — RoundManager · SuddenEventManager · WantedListManager · DirectoryManager · ArrestJudge · CriminalAssigner · NpcSpawner · AppearanceAssigner · WrongfulArrestPenalty · TeamFund · FxManager · EffectManager
   - `App.UI` — UIManagerBase(3단계 예정) · CrosshairUI · ChannelingGaugeUI
   - `App.SceneFlow` — 현재 씬의 SceneManagerBase (3단계 예정)
   - `App.Sound` — SoundManager (그룹이 아닌 단일 프로퍼티 — 시스템 서비스 하나뿐이라 중첩 클래스를 두지 않았다. BGM·UI음이 붙으면(#483) 그때 그룹으로 승격한다)
@@ -48,11 +48,14 @@ R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단�
 | 성격 | 전파 | 예 |
 |---|---|---|
 | **지속 상태** — "지금 어떠하다"를 물을 수 있다 | 서버가 `NetworkVariable`로 동기화하고, 각 피어가 그 값을 보고 로컬에서 켜고 끈다 | 먹통 음성 왜곡(#372), 제보 전화 벨소리(#102), 쿨다운 표시(#488) |
-| **일회성 연출** — 동기화할 상태가 없다 | 서버 판정 지점에서 `SendTo.Everyone` RPC로 알리고, 각 피어가 로컬에서 1회 재생한다 | 타격 먼지·타격음(#478), NPC 소멸 잔상(#310), 진압봉 스윙 모션(#217) |
+| **일회성 연출** — 동기화할 상태가 없다 | 서버 판정 지점에서 `App.Game.Fx.PlayEverywhere(EFx, 위치)` 한 줄 — 전파 RPC와 오프라인 폴백은 `FxManager`가 들고 있다 (#532) | 타격 먼지·타격음(#478), NPC 소멸 잔상(#310), 진압봉 스윙 모션(#217) |
 
 일회성 쪽은 **연출 오브젝트를 네트워크에 싣지 않는다** — 각 피어가 자기 화면에 스스로 만들므로 `DefaultNetworkPrefabs.asset` 등록이 필요 없고, 늦게 들어온 피어가 지나간 연출을 뒤늦게 받는 일도 없다.
 
-재생은 `App.Game.Effect`(파티클)와 `App.Sound`(효과음)를 거친다. 둘 다 사용처가 없는 씬에서는 null이므로 `?.`로 가드한다.
+**사용처는 `App.Game.Fx` 하나만 부른다** (#532). 어떤 순간(`EFx`)에 어떤 파티클·소리가 나는지는 씬의 `FxManager` 조합표에 있고, 재생은 그 아래의 `App.Game.Effect`(파티클)·`App.Sound`(효과음)가 한다. 덕분에 아이템마다 전파 RPC를 따로 선언하지 않고, 연출을 바꿀 때 코드를 건드리지 않는다.
+
+- 이미 전 피어에서 도는 경로(`SendTo.Everyone` RPC 안, 전 피어 이벤트 구독) 안에서는 `PlayEverywhere`가 아니라 `PlayHere`를 쓴다 — 전자를 부르면 피어마다 다시 전파돼 소리가 겹친다.
+- 파티클만 필요하고 조합이 없다면 `App.Game.Effect`를 직접 불러도 된다. 셋 다 사용처가 없는 씬에서는 null이므로 `?.`로 가드한다.
 
 ## 3. 승격/강등 절차
 
@@ -85,4 +88,4 @@ R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단�
 `refactoring/architecture` 머지 **이전에** 열린 브랜치의 코드는 규칙 위반을 지적하되 🟡(후속 조치)로 분류한다. 머지 이후 새로 작성·수정되는 코드는 정식 적용(🟠 이상).
 
 ---
-*최종 수정: 2026-08-05 (연출 전파 규칙 추가 · App.Sound·App.Game.Effect 등재 + §4 예외 기재 · Audio·Vfx 폴더 분류 — #478) · 2026-08-04 (LonePlayerWatch → HqOccupancyZone 예외 기재 — #371) · 2026-08-03 (HqDropoffZone 예외 삭제 · JailIntake·JailScanner 예외 기재 — #492) · 2026-08-01 (SceneReadyGate 예외 기재 — #410) · 2026-07-28 (JailZone 예외 기재 — #395) · 작성 근거: refactoring/architecture 브랜치 1–2단계 (커밋 3039cd2…0b7aaab)*
+*최종 수정: 2026-08-05 (일회성 연출 창구를 App.Game.Fx로 일원화 — #532 · 연출 전파 규칙 추가 · App.Sound·App.Game.Effect 등재 + §4 예외 기재 · Audio·Vfx 폴더 분류 — #478) · 2026-08-04 (LonePlayerWatch → HqOccupancyZone 예외 기재 — #371) · 2026-08-03 (HqDropoffZone 예외 삭제 · JailIntake·JailScanner 예외 기재 — #492) · 2026-08-01 (SceneReadyGate 예외 기재 — #410) · 2026-07-28 (JailZone 예외 기재 — #395) · 작성 근거: refactoring/architecture 브랜치 1–2단계 (커밋 3039cd2…0b7aaab)*
