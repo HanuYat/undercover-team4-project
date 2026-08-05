@@ -1,11 +1,13 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 누워 있던 몸이 일어나는 구간 (#513) — 전 피어에 모션을 알리고, 클립이 끝난 뒤 후속 동작을 실행한다.
 ///
 /// 밧줄에 묶인 대상은 놓여 있어도 누워 있으므로(<see cref="IsTethered"/>), 일어나는 것은 줄이
-/// <b>실제로 풀리는</b> 네 경로뿐이다: 방치 만료 탈주(<see cref="NpcCapturedState"/>) · 좌클릭 3초 풀기 ·
-/// 유치장 착석 · 유치장 안 풀기(뒤 셋은 <see cref="PlayerEscortCommands"/>·<see cref="JailIntake"/>).
+/// <b>실제로 풀리는</b> 다섯 경로뿐이다: 방치 만료 탈주(<see cref="NpcCapturedState"/>) · E 풀기 ·
+/// 유치장 착석 · 유치장 안 풀기(가운데 셋은 <see cref="PlayerEscortCommands"/>·<see cref="JailIntake"/>) ·
+/// <b>거리 초과로 줄이 끊김</b>(<see cref="PlayerEscorter"/>, #526에서 합류 — 그전에는 누운 몸이
+/// 그대로 도주로 미끄러졌다).
 /// 전부 대상이 체포(<see cref="NpcState.Captured"/>)로 멈춰 있는 상태에서 온다.
 ///
 /// 끌기(NpcController.Rope)에서 갈라 둔 이유는 관심사가 다르기 때문이다 — 저쪽은 "누가 어떻게 끄는가",

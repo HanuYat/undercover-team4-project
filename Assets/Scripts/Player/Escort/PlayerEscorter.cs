@@ -356,19 +356,44 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
             // "막힘"과 "끊김"이 매 프레임 다툰다.
             if (!IsLeashedTo(npc) && IsTooFarToTether(npc))
             {
+                // 내 줄을 빼기 <b>전에</b> 물어야 한다 — 뺀 뒤에는 대상의 묶임 표시가 이미 내려가
+                // "묶여 누워 있었는가"를 알 수 없다 (#513, ServerApplyUnrope와 같은 순서).
+                bool othersHold = HasOtherTether(npc);
+
                 ReleaseDrag(npc);
-                RemoveTetherAt(i);
 
                 // 다른 참가자가 아직 잡고 있으면 도주시키지 않는다 — 내 줄만 끊긴 것이다.
                 // 줄다리기에서 밀린 쪽이 빠지는 정상 결말이라, 여기서 도주시키면 이긴 쪽 손에서 사라진다.
-                if (FindEscorterOf(npc) != null)
+                if (othersHold)
                 {
+                    RemoveTetherAt(i);
                     NotifyOwner($"밧줄 끊김 — 내 줄만 끊겼다 (다른 참가자가 계속 확보 중): {npc.name}");
                     continue;
                 }
 
-                NotifyOwner($"밧줄 끊김 — 너무 멀어져 도주: {npc.name}");
-                npc.StartFlee(transform);
+                // 마지막 줄이 끊기는 순간이 곧 일어나는 순간이다 (#513) — 여기까지는 묶인 채 누워 있었다.
+                // 아래 두 예약 모두 <see cref="RemoveTetherAt"/>보다 <b>앞</b>이어야 한다: 줄을 먼저 빼면
+                // 묶임 표시가 내려가 ServerStandUpThen이 "이미 서 있다"로 오판해 일어나기가 통째로 생략된다.
+                //
+                // 유치장 안이거나 판정이 끝난 대상은 <b>달아나지 않는다</b> (#526) — 방치 만료와 같은 기준을
+                // 본다. 이 가드가 없으면 잠긴 유치장 안에 묶어 둔 수감자가 줄이 끊기는 순간 Jail 통행을 든 채
+                // 도주로 전환돼 창살을 통과해 나간다(창살 콜라이더는 플레이어만 막는다).
+                if (NpcStateRules.StaysPutWhenFreed(npc))
+                {
+                    NotifyOwner($"밧줄 끊김 — 달아나지 않고 그 자리에 남는다: {npc.name}");
+                    npc.ServerStandUpThen(null);
+                }
+                else
+                {
+                    // 위협은 줄이 끊긴 그 플레이어다. 예약은 일어나기가 끝난 뒤 실행되므로 그때 이
+                    // 컴포넌트가 이미 사라져 있을 수 있어 transform을 지역 변수로 잡아 둔다 —
+                    // 그새 파괴됐어도 NpcFleeState가 위협 없는 도주로 받아 준다(ThreatTarget null 검사).
+                    Transform threat = transform;
+                    NotifyOwner($"밧줄 끊김 — 너무 멀어져 도주: {npc.name}");
+                    npc.ServerStandUpThen(() => npc.StartFlee(threat));
+                }
+
+                RemoveTetherAt(i);
                 continue;
             }
 
