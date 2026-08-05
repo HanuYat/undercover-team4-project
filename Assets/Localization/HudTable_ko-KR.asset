@@ -50,6 +50,22 @@ MonoBehaviour:
       \uB04C\uB824\uAC11\uB2C8\uB2E4"
     m_Metadata:
       m_Items: []
+  - m_Id: 95636848959488
+    m_Localized: "\uC218\uD654\uAE30 \uB108\uBA38\uB85C \uB0AE\uC740 \uBAA9\uC18C\uB9AC\uAC00
+      \uAC70\uB798\uB97C \uC81C\uC548\uD55C\uB2E4."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 95807313862656
+    m_Localized: "\uCCAD\uD0C1 \u2014 \uB300\uC0C1 {0} / \uBCF4\uC0C1 {1}\uC6D0 \xB7
+      \uD45C\uC2DD\uC774 \uCF1C\uC9C4 \uACF3\uC73C\uB85C \uB370\uB824\uAC08 \uAC83."
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267876
+  - m_Id: 95878210183168
+    m_Localized: "\uCCAD\uD0C1 \uC644\uC218 \u2014 \uAC1C\uC778 \uC790\uAE08 +{0}\uC6D0"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267876
   references:
     version: 2
     RefIds:
@@ -59,3 +75,5 @@ MonoBehaviour:
         m_Entries: 
         m_SharedEntries:
         - id: 3135780229120
+        - id: 95807313862656
+        - id: 95878210183168
