@@ -151,8 +151,9 @@ public partial class AbductionEvent
         if (health.CurrentHp > 0)
             Debug.LogWarning($"[납치] 린치 상한({m_lynchTimeoutSeconds}초) 초과 — 강제로 끝낸다", this);
 
-        // HP 0에는 PlayerHealth가 이미 다운을 걸어 뒀다(Abducted → Down). 한 프레임 스쳐 가는 그 다운을
-        // 기능 정지로 확정한다 — 구조 창은 HP 0 이전에 닫혔으므로 여기서 되돌아갈 길은 없다.
+        // HP 0에는 PlayerHealth가 이미 기능 정지를 걸어 뒀으므로(#524) 보통은 여기서 할 일이 없다.
+        // 그래도 부르는 것은 위의 상한 초과 폴백 때문이다 — HP가 남은 채 끝난 경우엔 여기서만 확정된다.
+        // 구조 창은 HP 0 이전에 닫혔으므로 어느 쪽이든 되돌아갈 길은 없다.
         PlayerIncapacitation incap = caught.GetComponent<PlayerIncapacitation>();
         if (incap != null)
             incap.ServerKillByAbduction();

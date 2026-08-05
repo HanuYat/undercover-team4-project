@@ -3,8 +3,9 @@ using UnityEngine;
 using UnityEngine.Localization;
 
 /// <summary>
-/// 구조 상호작용 온스크린 프롬프트 — 오너 화면 전용. (#105/#493)
-/// 다운된 아군을 조준하면 구조 키 안내를, 내가 다운되면 대기 메시지를 띄운다.
+/// 쓰러진 동료 관련 온스크린 프롬프트 — 오너 화면 전용. (#105/#493)
+/// 기능 정지된 아군을 조준하면 운반 안내를, 내가 기능 정지되면 본부 이송 대기 메시지를 띄운다.
+/// 현장 구조(다운) 쪽 분기는 #524로 휴면 상태지만, 되살릴 때 그대로 쓰도록 남겨 뒀다.
 /// 문구는 HUD의 공용 프롬프트(<see cref="PromptView"/>)에 얹는다 — 이 클래스는 상태를 보고
 /// 어떤 문구를 띄울지만 고른다.
 ///
@@ -16,7 +17,9 @@ using UnityEngine.Localization;
 public class PlayerReviveHud : NetworkBehaviour
 {
     [Header("상태 문구")]
-    [Tooltip("내가 다운됨 — HudTable/Hud.Revive.Downed ({0}에 기능 정지까지 남은 초)")]
+    [Tooltip(
+        "내가 다운됨 — HudTable/Hud.Revive.Downed. #524로 다운이 발생하지 않아 현재는 뜨지 않는다"
+    )]
     [SerializeField]
     private LocalizedString m_downedPrompt;
 
@@ -78,17 +81,18 @@ public class PlayerReviveHud : NetworkBehaviour
             return;
         }
 
-        // 내가 다운된 경우 — 구조 대기 메시지 + Die까지 남은 시간.
+        // 내가 다운된 경우 — 구조 대기 메시지.
         // IsIncapacitated가 아니라 IsDowned를 본다 (#252): 기절·오검거 매달기도 무력화지만 스스로
         // 풀리므로 구조를 기다리라는 안내가 거짓이 된다. 아무도 오지 않는데 기다리게 만든다.
+        // #524 이후 Down은 발생하지 않아 이 분기는 휴면 상태다 — 현장 구조를 되살릴 때 같이 깨어난다.
+        // (Die까지 남은 시간을 함께 보여주던 카운트다운 인자는 제한시간 자체가 사라져 빠졌다)
         if (m_incapacitation != null && m_incapacitation.IsDowned)
         {
-            // 남은 시간을 함께 보여준다 (#364) — 안 보이면 기다리다 갑자기 기능 정지로 떨어진다
-            SetPrompt(m_downedPrompt, Mathf.CeilToInt(m_incapacitation.RemainingUntilDie));
+            SetPrompt(m_downedPrompt);
             return;
         }
 
-        // 내가 기능 정지(Die)된 경우 — 구조는 끝났고 본부 이송(#365)만 남았다는 안내 (#364)
+        // 내가 기능 정지(Die)된 경우 — 본부 이송(#365)만 남았다는 안내 (#364)
         if (m_incapacitation != null && m_incapacitation.IsDead)
         {
             SetPrompt(m_selfDeadPrompt);
@@ -102,7 +106,7 @@ public class PlayerReviveHud : NetworkBehaviour
             return;
         }
 
-        // 다운된 아군을 조준 중이면 구조 키 프롬프트
+        // 다운된 아군을 조준 중이면 구조 키 프롬프트 (#524로 휴면 — 위 IsDowned 분기와 같은 이유)
         if (m_reviver != null && m_reviver.CurrentReviveTarget != null)
         {
             SetPrompt(m_revivePrompt);

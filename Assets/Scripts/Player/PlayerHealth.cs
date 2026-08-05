@@ -6,7 +6,7 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
     [Header("스테이터스")]
     [SerializeField] private int m_maxHp = 100;
 
-    [Tooltip("구조(리바이브) 시 회복되는 HP — 부분 회복 (GDD 7-5, #105)")]
+    [Tooltip("부활 시 회복되는 HP — 부분 회복 (GDD 7-5, #105)")]
     [SerializeField] private int m_reviveHp = 50;
 
     // 서버 권위 HP — 서버만 쓰고 모든 클라이언트가 읽는다.
@@ -14,7 +14,7 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
     private readonly NetworkVariable<int> m_syncedHp = new NetworkVariable<int>();
     private int m_hp;
 
-    // HP 0 도달 시 다운시킬 무력화 컴포넌트 (#105). 같은 플레이어 오브젝트에 있음.
+    // HP 0 도달 시 쓰러뜨릴 무력화 컴포넌트 (#105). 같은 플레이어 오브젝트에 있음.
     private PlayerIncapacitation m_incapacitation;
 
     // 오검거 끌려가기(#279) 표현 컴포넌트 — 라운드 사이 리셋 시 추종 상태를 함께 푼다. 같은 오브젝트에 있음.
@@ -67,7 +67,7 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 
     /// <summary>
     /// 피격 — 저항형 NPC 범위 타격 등 데미지 소스의 공통 경로. (#79)
-    /// HP가 0이 되면 다운(무력화) 처리로 이어진다 (SetHp 내부, GDD 7-5 / #105).
+    /// HP가 0이 되면 기능 정지(무력화) 처리로 이어진다 (SetHp 내부, GDD 7-5 / #105, #524).
     /// 연출용 <see cref="OnDamaged"/> 브로드캐스트도 여기 하나로 모인다 — 진압봉 오사(#461)·저항형
     /// NPC 공격·폭발이 전부 이 경로를 지나므로, 데미지 소스가 늘어도 연출은 따라온다 (#476).
     /// </summary>
@@ -112,13 +112,14 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
         OnDamaged?.Invoke(new DamageHit(amount, attackerPosition, hasAttacker));
 
     /// <summary>
-    /// 구조(리바이브) — 동료의 채널링이 성공하면 서버(또는 오프라인)에서 호출된다. (#105, GDD 7-5)
-    /// HP를 일부 회복하고 무력화를 해제한다.
+    /// 부활 — HP를 일부 회복하고 무력화를 해제한다. 서버(또는 오프라인) 전용. (#105, GDD 7-5)
+    /// 실제 호출자는 본부 부활 장치(<c>HqRevivalDevice</c>, #365) 하나다 — HP 0이 곧 기능 정지가 된
+    /// 뒤로는 현장 구조 채널링(<c>PlayerReviver</c>)이 성립하지 않는다. (#524)
     /// </summary>
     public void ServerRevive()
     {
         if (IsSpawned && !IsServer) return; // 서버 권위 방어
-        if (CurrentHp > 0) return; // 다운(HP 0) 상태에서만 유효
+        if (CurrentHp > 0) return; // 쓰러진(HP 0) 상태에서만 유효
 
         // 회복인데 0이면 여전히 다운이므로 최소 1 보장
         SetHp(Mathf.Clamp(m_reviveHp, 1, m_maxHp));
@@ -132,11 +133,13 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
         if (IsSpawned && IsServer)
             m_syncedHp.Value = value;
 
-        // HP가 0에 도달하는 순간 다운(무력화) 진입. 서버(또는 오프라인)에서만 실행되며
+        // HP가 0에 도달하는 순간 기능 정지(Die) 진입. 서버(또는 오프라인)에서만 실행되며
         // Incapacitate 자체에도 서버 가드가 있다. (#105, GDD 7-5)
-        // 원인을 Down으로 명시한다 — 구조·전멸 판정 대상은 이 원인뿐이다 (#252).
+        // 예전에는 Down(현장 구조 가능)으로 들어가 60초 방치 시 Die로 떨어졌지만, 상태가 둘로 갈려
+        // 구조·전멸 판정·HUD·운반이 모두 두 갈래로 분기되는 값이 그 비용보다 작았다 — HP 0이 곧
+        // 기능 정지이고, 복구 경로는 본부 이송 부활 하나다. (#524)
         if (value == 0 && previous > 0)
-            m_incapacitation?.Incapacitate(IncapacitationCause.Down);
+            m_incapacitation?.Incapacitate(IncapacitationCause.Die);
     }
 
     /// <summary>라운드 사이 상태 초기화 — HP 풀 회복 + 다운 해제 + 끌려가기 해제. 서버(또는 오프라인)에서만. (상점 진입)</summary>
