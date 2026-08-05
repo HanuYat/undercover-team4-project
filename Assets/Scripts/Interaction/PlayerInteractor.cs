@@ -77,7 +77,8 @@ public class PlayerInteractor : NetworkBehaviour
 
         m_inputHandler.OnInteractPerformed += HandleInteract;
         // E 뗌 구독은 제거됐다 (#436) — 도주 제압 홀드 취소 전용이었고, 그 홀드가 사라졌다.
-        // OnInteractCanceled 자체는 PlayerReviver(다운 동료 부활 홀드)가 계속 쓴다.
+        // OnInteractCanceled 자체는 PlayerReviver(다운 동료 부활 홀드)가 구독한다 — 그 구조 경로는
+        // #524로 휴면이지만, 구독은 되살릴 때를 위해 그대로 남아 있다.
     }
 
     public override void OnNetworkDespawn()
