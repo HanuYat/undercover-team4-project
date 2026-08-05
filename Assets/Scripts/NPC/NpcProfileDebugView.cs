@@ -100,20 +100,23 @@ public class NpcProfileDebugView : MonoBehaviour
         AppearanceDatabase db = Database;
         if (assigner != null && db != null)
         {
-            IReadOnlyList<AppearanceAxis> revealed = assigner.RevealedAxes;
+            RevealedAxisSet revealed = assigner.RevealedAxes;
             report.RevealedAxesLine = FormatRevealedAxes(revealed);
 
-            if (report.HasVisual && revealed.Count > 0)
+            if (report.HasVisual && !revealed.IsEmpty)
                 report.VisualMontage = db.BuildMontageText(visual, revealed);
 
+            // 몽타주 문장은 보관되지 않는다 — 범인 프로필과 공개 축으로 여기서 다시 만든다 (#497)
             IReadOnlyList<AppearanceProfile> criminals = assigner.CriminalProfiles;
-            IReadOnlyList<string> texts = assigner.MontageTexts;
-            for (int i = 0; i < texts.Count; i++)
+            for (int i = 0; i < criminals.Count; i++)
             {
-                bool matches = report.HasVisual
-                    && i < criminals.Count
-                    && visual.MatchesOn(criminals[i], revealed);
-                report.Montages.Add(new MontageMatch { Index = i, Text = texts[i], Matches = matches });
+                bool matches = report.HasVisual && visual.MatchesOn(criminals[i], revealed);
+                report.Montages.Add(new MontageMatch
+                {
+                    Index = i,
+                    Text = db.BuildMontageText(criminals[i], revealed),
+                    Matches = matches,
+                });
             }
         }
 
@@ -144,17 +147,17 @@ public class NpcProfileDebugView : MonoBehaviour
         return builder.ToString();
     }
 
-    private string FormatRevealedAxes(IReadOnlyList<AppearanceAxis> axes)
+    private string FormatRevealedAxes(RevealedAxisSet axes)
     {
-        if (axes == null || axes.Count == 0)
+        if (axes.IsEmpty)
             return "(없음)";
 
         var builder = new StringBuilder();
-        for (int i = 0; i < axes.Count; i++)
+        foreach (AppearanceAxis axis in axes)
         {
             if (builder.Length > 0)
                 builder.Append(", ");
-            builder.Append(AppearanceDatabase.GetAxisName(axes[i]));
+            builder.Append(AppearanceDatabase.GetAxisName(axis));
         }
         return builder.ToString();
     }

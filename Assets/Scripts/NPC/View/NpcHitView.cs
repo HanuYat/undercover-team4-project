@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// NPC 타격 표현 — 맞은 순간 몸이 <b>남은 체력에 따라 다른 색으로</b> 번쩍인다. (#478)
@@ -54,11 +54,11 @@ public class NpcHitView : MonoBehaviour
         m_tint = GetComponent<BodyTint>();
     }
 
-    private void OnEnable() => m_controller.OnDamaged += HandleDamaged;
+    private void OnEnable() => m_controller.OnHit += HandleDamaged;
 
     private void OnDisable()
     {
-        m_controller.OnDamaged -= HandleDamaged;
+        m_controller.OnHit -= HandleDamaged;
         m_flashUntil = 0f;
         m_tint.ClearFlash();
         m_tint.ClearSustained();

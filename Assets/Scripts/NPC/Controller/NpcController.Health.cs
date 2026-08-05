@@ -1,3 +1,4 @@
+﻿using System;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -23,13 +24,30 @@ public partial class NpcController : IDamageable
     public int CurrentHp => IsSpawned ? m_syncedHp.Value : m_hp;
 
     /// <summary>
+    /// 피해가 이 NPC에 적용되는 순간 발행 — 서버(또는 오프라인)에서만. 인자는 (맞은 NPC, 가해자).
+    /// 납치(<see cref="AbductionEvent"/>)가 구독해 맞은 납치범을 호송에서 떼어낸다. (#371)
+    ///
+    /// <b>HP 반영 직전</b>에 발행한다. 구독자가 상태를 바꿀 수 있어야 하고(임무 해제 → 배회),
+    /// 그 다음에 기절 전이가 얹혀야 순서가 맞기 때문이다 — 뒤에 발행하면 넉백 기절로 바뀐 상태를
+    /// 임무 해제가 덮어써 기절이 조용히 취소된다.
+    ///
+    /// 연출용 순간 알림은 <see cref="OnHit"/>다 — 둘은 성격이 달라 한 이벤트로 합칠 수 없다
+    /// (이쪽은 서버 전용 + HP 반영 <b>전</b>, 저쪽은 전 피어 + 실제로 깎인 양을 싣는다).
+    /// </summary>
+    public event Action<NpcController, GameObject> OnDamaged;
+
+    /// <summary>
     /// 피격 순간 <b>전 피어</b>에서 발행된다 — 표현(<see cref="NpcHitView"/>)용. (#478)
     /// <see cref="PlayerHealth.OnDamaged"/>와 같은 구조다: HP는 동기화 값이라 폴링할 수 있지만
     /// "지금 맞았다"는 순간은 값 비교로 잡을 수 없다(같은 프레임에 여러 번 맞는 경우가 구분되지 않는다).
     ///
     /// 오너가 아니라 전 피어인 이유: 몸 플래시는 월드 연출이라 본부 CCTV에서도 보여야 한다.
+    ///
+    /// <b>이름이 PlayerHealth 쪽과 어긋나는 이유</b>: NPC에는 <c>OnDamaged</c>가 이미 서버 전용
+    /// 게임플레이 훅(#371)으로 나가 있어 그 이름을 쓸 수 없다. 플레이어에는 그 훅이 없어 저쪽만
+    /// <c>OnDamaged</c>로 남았다 — 두 이벤트를 헷갈리지 말 것.
     /// </summary>
-    public event System.Action<DamageHit> OnDamaged;
+    public event Action<DamageHit> OnHit;
 
     /// <summary>체력 초기화 — InitBehavior에서 서버(또는 오프라인) 1회 호출된다.</summary>
     private void InitHealth()
@@ -41,7 +59,7 @@ public partial class NpcController : IDamageable
     /// 피해 적용 (<see cref="IDamageable"/>) — 진압봉 타격 등 모든 데미지 소스의 공통 경로. (#366)
     ///
     /// 신병을 확보했거나 오검거 페널티가 진행 중인 상태(<see cref="NpcStateRules.CanBeDamaged"/>가 false)
-    /// 에서는 <b>피해 자체를 무시</b>한다. 이 게이트가 없으면 호송 중인 NPC를 때려 기절시켜 신병에서
+    /// 에서는 <b>피해 자체를 무시</b>한다 — 납치범은 예외다(#371, 같은 함수가 판정한다). 이 게이트가 없으면 호송 중인 NPC를 때려 기절시켜 신병에서
     /// 빼내는 우회가 생긴다. 테이저는 #292로 그 상태들에도 걸리게 됐지만(스턴은 링크를 끊지 않는다)
     /// 타격은 계속 막는다 — 팀 결정이다.
     /// 무시하는 쪽을 택한 이유: HP만 깎고 기절은 막으면 "HP 0인데 기절 아님" 상태가 생겨,
@@ -55,9 +73,13 @@ public partial class NpcController : IDamageable
             return;
         if (amount <= 0)
             return;
-        if (!NpcStateRules.CanBeDamaged(CurrentState))
+        if (!NpcStateRules.CanBeDamaged(this))
             return;
 
+        // 피해를 얹기 전에 알린다 — 위 OnDamaged 주석의 순서 근거 참고
+        OnDamaged?.Invoke(this, attacker);
+
+        // 실제로 깎인 양을 연출에 실어야 한다 — 아래 Clamp에 걸려 요청량보다 적을 수 있다 (#478)
         int before = CurrentHp;
         SetHp(Mathf.Clamp(CurrentHp - amount, 0, MaxHp), attacker);
 
@@ -93,7 +115,7 @@ public partial class NpcController : IDamageable
         RaiseDamaged(amount, attackerPosition, hasAttacker);
 
     private void RaiseDamaged(int amount, Vector3 attackerPosition, bool hasAttacker) =>
-        OnDamaged?.Invoke(new DamageHit(amount, attackerPosition, hasAttacker));
+        OnHit?.Invoke(new DamageHit(amount, attackerPosition, hasAttacker));
 
     /// <summary>
     /// 체력 완전 회복 — 기절에서 깨어나는 순간 <see cref="NpcStunnedState"/>가 호출한다. (#366)
