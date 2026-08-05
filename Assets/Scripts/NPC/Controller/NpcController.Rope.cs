@@ -35,6 +35,67 @@ public partial class NpcController
     /// 서버·오프라인은 실제 값으로, 원격 피어는 동기화 플래그로 판정. (#269/#369)</summary>
     public bool IsRoped => IsSpawned && !IsServer ? m_ropedSynced.Value : m_roped;
 
+    // ---- 묶임 (#513) ----
+    // 끌림(IsRoped)과 묶임(IsTethered)은 다르다. E 놓기는 <b>끌기만</b> 멈추고 줄은 그대로 남으며,
+    // 실제로 푸는 건 E 풀기·인계 완료·방치 탈주·거리 초과 끊김뿐이다(GDD 8-2). 표현이 끌림에만 매달려 있으면
+    // 놓는 순간 묶인 몸이 벌떡 일어선다 — 그래서 묶임도 별도로 알린다.
+
+    // 이 NPC에 걸린 줄 수 — 줄다리기로 여러 명이 묶으면 그 수만큼. 서버(또는 오프라인) 진실값.
+    // 수로 세는 이유: 한 명이 자기 줄만 풀어도(#390 규칙 8) 남은 줄이 있으면 여전히 묶여 있다.
+    private int m_tetherCount;
+
+    // 묶임을 클라이언트에도 알리는 동기화 플래그 — 서버만 기록한다(m_ropedSynced와 같은 관례).
+    // 묶임 목록 자체는 PlayerEscorter의 NetworkList에만 있어 표현 계층이 물을 수 없다.
+    private readonly NetworkVariable<bool> m_tetheredSynced = new(false);
+
+    /// <summary>밧줄이 묶여 있는가 — <b>끌리는 중이 아니어도</b> 참이다(E로 놓아둔 대상).
+    /// 서버·오프라인은 실제 값으로, 원격 피어는 동기화 플래그로 판정. (#513)</summary>
+    public bool IsTethered => IsSpawned && !IsServer ? m_tetheredSynced.Value : m_tetherCount > 0;
+
+    /// <summary>줄 하나가 걸렸다 — <see cref="PlayerEscorter"/>의 연결 목록이 실제로 늘어날 때만 호출한다.
+    /// 서버(또는 오프라인) 전용. 목록의 소유자가 저쪽 하나라 갱신 지점도 거기 둘뿐이다. (#513)</summary>
+    internal void AddTether()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        m_tetherCount++;
+        SyncTethered();
+    }
+
+    /// <summary>줄 하나가 풀렸다 — 연결 목록에서 실제로 빠질 때만 호출한다. 서버(또는 오프라인). (#513)</summary>
+    internal void RemoveTether()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        m_tetherCount = Mathf.Max(0, m_tetherCount - 1);
+        SyncTethered();
+    }
+
+    private void SyncTethered()
+    {
+        if (IsSpawned && IsServer)
+            m_tetheredSynced.Value = m_tetherCount > 0;
+    }
+
+    /// <summary>커스터디를 벗어나면 묶임 표시를 통째로 내린다 — 서버(또는 오프라인) FSM 전이가 부른다. (#513)
+    ///
+    /// <see cref="PlayerEscorter"/>의 매 프레임 정리가 <b>같은 조건</b>으로 줄을 걷어내므로 평소엔 중복이지만,
+    /// 끌던 플레이어가 접속을 끊으면 그 정리가 아예 돌지 않아 표시가 영영 남는다 — 그러면 배회로
+    /// 돌아간 몸이 누운 모션으로 걸어 다닌다. 여기서 먼저 내려 두면 표현이 전이와 같은 프레임에 맞는다.
+    /// <see cref="RemoveTether"/>는 0에서 더 내려가지 않으므로 한 박자 뒤에 오는 정리와 겹쳐도 안전하다.</summary>
+    private void ClearTethersOnCustodyExit(NpcState state)
+    {
+        if (state == NpcState.Escorted || state == NpcState.Captured)
+            return;
+        if (m_tetherCount == 0)
+            return;
+
+        m_tetherCount = 0;
+        SyncTethered();
+    }
+
     /// <summary>밧줄 길이(m) — 표시(늘어짐 정도)와 서버 장력 판정이 같은 값을 쓴다.</summary>
     public float RopeLength => m_ropeDragConfig.RopeLength;
 
@@ -84,6 +145,10 @@ public partial class NpcController
             if (!m_dragAnchors.Contains(dragger))
                 m_dragAnchors.Add(dragger);
         }
+
+        // 일어나던 중이었으면 되돌린다 — 방치 만료로 일어나는 도중에 달려와 E를 누른 재포획이 이 경로다.
+        // 예약된 후속 동작(도주 등)도 함께 버려진다. (#513)
+        CancelStandUp();
 
         SetRoped(true);
         SyncDraggerCount();

@@ -73,8 +73,7 @@ public static class NpcStateRules
 
     /// <summary>밧줄 대상에서 <b>신병·소유권 때문에</b> 빠지는 상태인가. (#269 → #369 기본 검거로 승격)
     /// 제외 목록 방식 — 이미 신병 확보(Escorted/Captured/Jailed)·타 시스템 소유(Holding·페널티)는 제외.
-    /// Captured 제외 주의: 그 상태에선 밧줄 좌클릭이 '풀어주기'로 갈리고(<see cref="CanRelease"/>),
-    /// 다시 끄는 건 E 경로다.
+    /// Captured 제외 주의: 그 상태에선 밧줄 좌클릭이 '끌기 재개'로 갈리고, 푸는 건 E다 (#513).
     ///
     /// <b>이것만으로 묶기를 판정하지 말 것</b> — 새로 묶기는 무력화까지 요구하므로
     /// <see cref="CanRopeBind"/>가 정본이고 이 함수는 그 한 조각이다 (#446).</summary>
@@ -117,7 +116,7 @@ public static class NpcStateRules
     /// 같은 이유로 놓아둔 체포(Captured)는 뺀다: 남의 소유로 서 있는 대상이라 그게 곧 탈취다.</summary>
     public static bool CanJoinDrag(NpcState state) => state == NpcState.Escorted;
 
-    /// <summary>밧줄 좌클릭으로 풀어 석방할 수 있는 상태인가 — 체포되어 멈춘 대상(Captured)만. (#290 → #369)
+    /// <summary>E로 풀어 석방할 수 있는 상태인가 — 체포되어 멈춘 대상(Captured)만. (#290 → #369 → #513)
     /// 밧줄은 소모형이 아니라 상태만으로 가른다(수갑 시절의 자원 유무 조건 없음). 제압만으로 잡힌 Captured도 대상.</summary>
     public static bool CanRelease(NpcState state) => state == NpcState.Captured;
 
