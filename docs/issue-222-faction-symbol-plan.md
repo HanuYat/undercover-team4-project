@@ -49,7 +49,7 @@
 **다음 세션 재개 지점 — 5단계.** 산출물: 인명부 책 **옆에 놓인 별도 게시판**을 E로 열면
 이번 세션의 세력별 진짜 문양 목록이 뜬다. 구성:
 - `HqPanelView`(신규 베이스) — "E로 열고 Esc로 닫는 본부 패널"의 공통 뼈대(입력 정지·커서 복구·EscMenuGuard).
-  같은 뭉치가 이미 `BombManualHud`·`CitizenDirectoryView` 두 곳에 복제돼 있어 세 번째를 만들기 전에 추출한다.
+  같은 뭉치가 이미 `BombManualHud`(추격 폭탄 개편으로 삭제, #399)·`CitizenDirectoryView` 두 곳에 복제돼 있어 세 번째를 만들기 전에 추출한다.
   `CitizenDirectoryView`를 여기로 이관(`Open`/`Close`/`Update`/`m_root` 제거 → `OnOpened`/`OnClosed` 오버라이드).
 - `FactionSymbolBoard`(상호작용 진입점, `CitizenDirectory` 패턴) / `FactionSymbolBoardView : HqPanelView` / `FactionSymbolRowView`(세력명+문양 한 줄).
 - 에디터: `FactionSymbolRow.prefab`(Image는 **Preserve Aspect** 켤 것) · Main Scene에 패널 · `FactionSymbolBoard.prefab`을 인명부 옆에 배치.
