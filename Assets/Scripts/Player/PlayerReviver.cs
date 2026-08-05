@@ -7,6 +7,14 @@ using UnityEngine;
 /// 오너가 다운된 아군을 조준한 채 상호작용 버튼을 누르고 있으면(홀드) 서버가 T초 채널링을 돌리고,
 /// 완료 시 대상의 HP를 일부 회복시켜 무력화를 해제한다(PlayerHealth.ServerRevive).
 /// 버튼을 떼거나 대상이 사거리를 벗어나면 실패. 서버 권위·RPC 구조는 PlayerEscorter를 본뜬다.
+///
+/// <b>⚠ #524로 현장 구조 채널링은 휴면 상태다.</b> HP 0이 곧 <c>Die</c>가 되어 <c>Down</c>이 발생하지
+/// 않으므로, 구조 진입점(<see cref="HandleInteractStarted"/>)이 대상을 찾지 못해 항상 무동작으로 끝난다.
+/// 지우지 않고 남긴 이유는 되살리는 값이 한 줄이기 때문이다 — <c>PlayerHealth.SetHp</c>의 무력화 원인을
+/// <c>Down</c>으로 되돌리면 이 컴포넌트와 HUD의 다운 분기가 그대로 다시 동작한다.
+///
+/// <b>프리팹에서 떼지 말 것:</b> <c>PlayerReviveHud</c>가 <c>[RequireComponent]</c>로 걸고 있고,
+/// 기능 정지된 아군 조준 안내(<see cref="CurrentDeadTarget"/>)는 지금도 살아 있는 경로다.
 /// </summary>
 [RequireComponent(typeof(PlayerInputHandler))]
 public class PlayerReviver : ChanneledInteractionBehaviour
