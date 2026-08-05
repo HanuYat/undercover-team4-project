@@ -1,6 +1,7 @@
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 현장/클라이언트 HUD에 "남은 범죄자 수 / 전체 범죄자 수"를 표시한다(#331).
@@ -17,13 +18,16 @@ public class RemainingCriminalsHud : MonoBehaviour
     [SerializeField]
     private TextMeshProUGUI m_countText;
 
-    [Tooltip("표시 형식 — {0}=잡은 수, {1}=수배된 진범 수(TotalWanted). 라운드 목표는 금액이므로(#395) 이 표시는 목표 진행도가 아니라 검거 현황이다 — 목표 진행도는 본부 게시판 RoundFundBoard가 담당")]
+    // 코드가 대입하는 자리라 라벨에 LocalizeStringEvent를 붙일 수 없다 — 서로 덮어쓴다. (#497)
+    [Tooltip("표시 형식 — Hud.Criminals.Count ({0}=잡은 수, {1}=수배된 진범 수(TotalWanted)). 라운드 목표는 금액이므로(#395) 이 표시는 목표 진행도가 아니라 검거 현황이다 — 목표 진행도는 본부 게시판 RoundFundBoard가 담당")]
     [SerializeField]
-    private string m_format = "{0} / {1}";
+    private LocalizedString m_countFormat;
 
     // 마지막으로 표시한 값 — 바뀔 때만 문자열을 다시 만들어 불필요한 GC 할당을 피한다
     private int m_lastCaught = int.MinValue;
     private int m_lastTotal = int.MinValue;
+
+    private bool m_bound;
 
     private void OnEnable()
     {
@@ -59,6 +63,11 @@ public class RemainingCriminalsHud : MonoBehaviour
             WantedList.OnTotalWantedChanged -= Refresh;
             WantedList.OnListReady -= Refresh;
         }
+
+        // 꺼진 HUD가 언어 변경에 반응하지 않게 — 다시 켜지면 Refresh가 다시 건다
+        Unbind();
+        m_lastCaught = int.MinValue;
+        m_lastTotal = int.MinValue;
     }
 
     private void HandleListChanged(NetworkListEvent<WantedEntry> _) => Refresh();
@@ -86,7 +95,39 @@ public class RemainingCriminalsHud : MonoBehaviour
 
         m_lastCaught = caught;
         m_lastTotal = total;
-        m_countText.text = string.Format(m_format, caught, total);
+        Bind(caught, total);
+    }
+
+    // 값이 바뀔 때마다 인자를 갈아끼우고 다시 구독한다 — 인자를 먼저 넣어야 구독 시점의
+    // 첫 발화부터 숫자가 들어간 문장이 나온다 (SessionCodePanel과 같은 관례).
+    private void Bind(int caught, int total)
+    {
+        if (m_countFormat == null || m_countFormat.IsEmpty)
+        {
+            Debug.LogWarning("RemainingCriminalsHud: 검거 현황 문구가 연결되지 않았다", this);
+            return;
+        }
+
+        Unbind();
+
+        m_countFormat.Arguments = new object[] { caught, total };
+        m_countFormat.StringChanged += HandleStringChanged;
+        m_bound = true;
+    }
+
+    private void HandleStringChanged(string localized)
+    {
+        if (m_countText != null)
+            m_countText.text = localized;
+    }
+
+    private void Unbind()
+    {
+        if (!m_bound)
+            return;
+
+        m_countFormat.StringChanged -= HandleStringChanged;
+        m_bound = false;
     }
 
     // TMP 컴포넌트만 켜고 끈다 (RoundTimerUI와 동일한 이유 — 자기 콜백을 죽이지 않도록)

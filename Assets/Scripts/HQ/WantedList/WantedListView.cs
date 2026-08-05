@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
+using UnityEngine.Localization.Settings;
 
 /// <summary>
 /// 본부 모니터의 수배 리스트 표시 — WantedListManager의 동기화 리스트를 구독해 항목이 추가/제거될 때마다 행을 다시 그림.
@@ -18,6 +20,10 @@ public class WantedListView : MonoBehaviour
 
     private void OnEnable()
     {
+        // 행의 현상금 표기가 테이블에서 오므로 언어가 바뀌면 다시 그린다 — 값은 그대로여도 표기가 바뀐다.
+        // 행마다 StringChanged를 걸지 않고 로케일 변경 한 곳에 걸어 통째로 다시 채운다 (ShopStand와 같은 방식). (#497)
+        LocalizationSettings.SelectedLocaleChanged += HandleLocaleChanged;
+
         if (Manager == null)
         {
             Debug.LogWarning("WantedListView: WantedListManager를 찾지 못해 표시할 수 없다", this);
@@ -42,6 +48,16 @@ public class WantedListView : MonoBehaviour
             Manager.Wanted.OnListChanged -= HandleListChanged;
             Manager.OnListReady -= Rebuild;
         }
+
+        // 종료 중에는 설정 에셋을 되살리지 않는다 — HasSettings로 먼저 확인한다 (ShopStand 관례)
+        if (LocalizationSettings.HasSettings)
+            LocalizationSettings.SelectedLocaleChanged -= HandleLocaleChanged;
+    }
+
+    private void HandleLocaleChanged(Locale locale)
+    {
+        if (Manager != null && Manager.IsSpawned)
+            Rebuild();
     }
 
     // 항목 추가/제거 시 전체를 다시 그린다.

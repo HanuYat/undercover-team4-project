@@ -48,6 +48,62 @@ MonoBehaviour:
       if they catch you, you'll be dragged to the plaza."
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000300
+    m_Localized: Waiting for other players ({0}/{1})
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000301
+    m_Localized: '{0} / {1}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000302
+    m_Localized: Your mic is muted
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000303
+    m_Localized: "\u20A9{0:N0} / \u20A9{1:N0}"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000310
+    m_Localized: 'Wanted criminal arrested!'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000311
+    m_Localized: Wrongful arrest
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000312
+    m_Localized: Misdemeanor handled
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000313
+    m_Localized: "{0}  \u2014  Reward \u20A9{1:N0}"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000314
+    m_Localized: 'Battery {0}/{1}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000315
+    m_Localized: Scanner charged
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000316
+    m_Localized: Scanner battery low
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000317
+    m_Localized: 'Name: {0}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000318
+    m_Localized: 'Type: {0}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000319
+    m_Localized: 'Faction: {0}'
+    m_Metadata:
+      m_Items: []
   - m_Id: 95807313862656
     m_Localized: "Favor \u2014 target {0} / reward {1} \xB7 take them to the marked
       spot"
@@ -72,5 +128,13 @@ MonoBehaviour:
         m_Entries: 
         m_SharedEntries:
         - id: 3135780229120
+        - id: 7100000000300
+        - id: 7100000000301
+        - id: 7100000000303
+        - id: 7100000000313
+        - id: 7100000000314
+        - id: 7100000000317
+        - id: 7100000000318
+        - id: 7100000000319
         - id: 95807313862656
         - id: 95878210183168

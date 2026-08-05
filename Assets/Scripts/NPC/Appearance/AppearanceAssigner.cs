@@ -424,7 +424,7 @@ public class AppearanceAssigner : CommonManagerBase
             AppearanceDatabase.AppearanceOption option = m_appearanceDatabase.GetOption(axis, profile.GetIndex(axis));
             if (builder.Length > 0)
                 builder.Append(" / ");
-            builder.Append(option != null ? option.DisplayName : "?");
+            builder.Append(AppearanceDatabase.GetOptionName(option));
         }
         return builder.ToString();
     }

@@ -4,6 +4,7 @@ using Cysharp.Threading.Tasks;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 using UnityEngine.UI;
 
 /// <summary>
@@ -57,6 +58,36 @@ public class SettlementPanel : PanelBase
     [SerializeField]
     private GameObject m_background;
 
+    // 문구는 채우는 순간 한 번 읽고 끝낸다 — HUD와 달리 StringChanged를 구독하지 않는다.
+    // 정산 화면은 10초짜리 결과 요약이고 그 사이 설정 창으로 언어를 바꿀 경로가 없어서다. (#497)
+    [Header("문구")]
+    [Tooltip("수익·할당량·팀 몫 요약 — Settlement.Fund.Summary ({0}=수익, {1}=할당량, {2}=팀 몫, {3}=팀 자금, {4}=현상수배 수, {5}=경범죄 수)")]
+    [SerializeField]
+    private LocalizedString m_fundSummary;
+
+    [Tooltip("최다 오검거 — Settlement.TopOffender.Some ({0}=이름, {1}=횟수)")]
+    [SerializeField]
+    private LocalizedString m_topOffenderFormat;
+
+    [Tooltip("오검거가 없을 때 — Settlement.TopOffender.None")]
+    [SerializeField]
+    private LocalizedString m_noOffenderText;
+
+    [Tooltip("개인 몫 — Settlement.Personal.Earned ({0}=이번 판 수익, {1}=개인 자금 잔액)")]
+    [SerializeField]
+    private LocalizedString m_personalFormat;
+
+    [Tooltip("복귀 카운트다운 — Settlement.Countdown ({0}=도착지, {1}=남은 초)")]
+    [SerializeField]
+    private LocalizedString m_countdownFormat;
+
+    // 결과·종료 사유·복귀 도착지는 규약 기반 키(접두 + enum 이름)라 인스펙터에서 고를 것이 없다.
+    // 규약은 RoundResult·RoundEndReason 선언부의 [LocalizedEnum]에 적혀 있다. (문서 §2 결정 (h))
+    private const string k_table = "SettlementTable";
+    private const string k_resultPrefix = "Settlement.Result.";
+    private const string k_returnPrefix = "Settlement.Return.";
+    private const string k_reasonPrefix = "Settlement.Reason.";
+
     public override bool CanCloseWithESC => true;
     public override bool IsStackable => true;
 
@@ -93,15 +124,18 @@ public class SettlementPanel : PanelBase
     }
 
     // 이번 정산의 도착지 — 성공은 상점, 실패는 로비(새 판). RoundEndResetter의 분기와 맞춘다 (#395).
-    private string m_returnLabel = "상점";
+    private string m_returnLabel = string.Empty;
 
     /// <summary>정산 데이터를 채우고 패널을 연다. 3줄 텍스트는 지연 후 등장한다.</summary>
     public void Show(SettlementData data)
     {
-        m_returnLabel = data.Result == RoundResult.Success ? "상점" : "로비";
+        // None(종료 전)으로 열릴 일은 없지만, 들어와도 키가 없는 조회로 새지 않게 실패로 접는다.
+        RoundResult result = data.Result == RoundResult.Success ? RoundResult.Success : RoundResult.Failure;
+
+        m_returnLabel = LocalizedStrings.Get(k_table, k_returnPrefix + result);
 
         if (m_resultText != null)
-            m_resultText.text = data.Result == RoundResult.Success ? "라운드 성공!" : "게임 오버";
+            m_resultText.text = LocalizedStrings.Get(k_table, k_resultPrefix + result);
 
         if (m_reasonText != null)
             m_reasonText.text = ReasonToText(data.Reason);
@@ -109,16 +143,20 @@ public class SettlementPanel : PanelBase
         if (m_fundText != null)
             // 할당량은 경찰서 납부분이라 총 수익에서 떼고 남은 초과분만 팀 몫이 된다 (#395).
             // 뺄셈을 그대로 보여줘야 "왜 이만큼밖에 안 들어왔지"가 생기지 않는다.
-            m_fundText.text =
-                $"수익 {data.GrossEarned:N0}원  -  할당량 {data.TargetFund:N0}원  =  팀 몫 {data.FundDelta:N0}원"
-                + $"\n팀 자금  {data.FundBalance:N0}원"
-                + $"\n수감 정산: 현상수배 {data.CriminalCount} · 경범죄 {data.MisdemeanorCount}";
+            m_fundText.text = m_fundSummary.GetLocalizedString(
+                data.GrossEarned,
+                data.TargetFund,
+                data.FundDelta,
+                data.FundBalance,
+                data.CriminalCount,
+                data.MisdemeanorCount
+            );
 
         if (m_topOffenderText != null)
             m_topOffenderText.text =
                 data.TopOffenderCount > 0
-                    ? $"이번 판 최다 오검거: {data.TopOffenderName} ({data.TopOffenderCount}회)"
-                    : "이번 판 오검거 없음 — 깨끗한 수사!";
+                    ? m_topOffenderFormat.GetLocalizedString(data.TopOffenderName, data.TopOffenderCount)
+                    : m_noOffenderText.GetLocalizedString();
 
         BindWallet();
 
@@ -147,12 +185,10 @@ public class SettlementPanel : PanelBase
 
             for (int sec = Mathf.CeilToInt(m_countdownSeconds); sec > 0; sec--)
             {
-                if (m_countdownText != null)
-                    m_countdownText.text = $"{m_returnLabel} 복귀까지 {sec}초";
+                SetCountdownText(sec);
                 await UniTask.Delay(TimeSpan.FromSeconds(1), ignoreTimeScale: true, cancellationToken: ct);
             }
-            if (m_countdownText != null)
-                m_countdownText.text = $"{m_returnLabel} 복귀까지 0초";
+            SetCountdownText(0);
         }
         catch (OperationCanceledException)
         {
@@ -160,17 +196,19 @@ public class SettlementPanel : PanelBase
         }
     }
 
-    // 종료 사유 문구.
+    private void SetCountdownText(int seconds)
+    {
+        if (m_countdownText != null)
+            m_countdownText.text = m_countdownFormat.GetLocalizedString(m_returnLabel, seconds);
+    }
+
+    // 종료 사유 문구 — 규약 키 Settlement.Reason.<RoundEndReason>. (다운·기능 정지(Die) 혼재는 #364)
+    // None은 라운드 종료 전이라 표시할 사유가 없다 — 키도 두지 않는다.
     private static string ReasonToText(RoundEndReason reason)
     {
-        return reason switch
-        {
-            RoundEndReason.ManualEnd => "수사 종료 — 목표 금액 달성",
-            RoundEndReason.QuotaMet => "제한시간 종료 — 목표 금액 달성",
-            RoundEndReason.TimeOver => "제한시간 초과 — 목표 금액 미달",
-            RoundEndReason.AllPlayersDown => "플레이어 전원 행동불능", // 다운·기능 정지(Die) 혼재 (#364)
-            _ => string.Empty,
-        };
+        return reason == RoundEndReason.None
+            ? string.Empty
+            : LocalizedStrings.Get(k_table, k_reasonPrefix + reason);
     }
 
     // 개인 몫은 SettlementData에 없다 — 전원에게 가는 브로드캐스트라 실으면 "본인만"이 깨진다.
@@ -202,7 +240,7 @@ public class SettlementPanel : PanelBase
 
         int earned = m_wallet != null ? m_wallet.RoundEarned : 0;
         int balance = m_wallet != null ? m_wallet.Balance : 0;
-        m_personalText.text = $"내 몫  +{earned:N0}원   (개인 자금 {balance:N0}원)";
+        m_personalText.text = m_personalFormat.GetLocalizedString(earned, balance);
     }
 
     // 결과 텍스트 5줄의 표시를 한꺼번에 켜고 끈다. (카운트다운은 별도 — 닫아도 남긴다)

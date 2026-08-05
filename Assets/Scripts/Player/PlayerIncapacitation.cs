@@ -5,7 +5,7 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 무력화의 원인 — 무력화는 하나가 아니라 성질이 다른 넷이다. (#252, #364)
+/// 무력화의 원인 — 무력화는 하나가 아니라 성질이 다른 여섯이다. (#252, #364, #371)
 /// 행동을 막는 것은 같지만 <b>어떻게 풀리는가</b>가 갈리므로, 구조·전멸 판정·애니메이션이 이 값으로 분기한다.
 /// </summary>
 public enum IncapacitationCause
@@ -15,20 +15,25 @@ public enum IncapacitationCause
     Penalty, // 오검거 광장 매달기 (#101) — 30초 뒤 자동 복귀
     Stun, // 테이저 피격 기절 (#252) — 시간이 지나면 스스로 일어난다
     Die, // 다운 방치 → 기능 정지 (#364) — 현장 구조로도 못 일어난다. 본부 이송 부활(#365)만이 복구 경로
+    Abducted, // 납치 호송 중 (#371) — 끌려가는 동안 걸어 나가지 못하게. 외곽에 도착하면 Lynched로 넘어간다
+    Lynched, // 외곽 린치 (#371 후속) — 납치범에게 맞는 중. 행동은 막되 <b>쓰러진 자세가 아니다</b>(IsProne 제외)
     // (값은 반드시 끝에 추가한다 — NetworkVariable로 동기화되는 enum이라 순서가 곧 와이어 포맷이다)
 }
 
 /// <summary>
 /// 플레이어 행동불능(무력화) 공통 기반. (#105)
-/// HP 0 다운(#105)·오검거 매달기(#101)·테이저 피격 기절(#252)·다운 방치 기능 정지(#364)는
-/// 트리거만 다르고 결과=무력화로 같으므로, 무력화 상태 자체를 이 한 곳에서 서버 권위로 관리한다.
+/// HP 0 다운(#105)·오검거 매달기(#101)·테이저 피격 기절(#252)·다운 방치 기능 정지(#364)·
+/// 납치 호송(#371)은 트리거만 다르고 결과=무력화로 같으므로, 무력화 상태 자체를 이 한 곳에서
+/// 서버 권위로 관리한다.
 /// 이동·아이템·상호작용 컴포넌트가 <see cref="IsIncapacitated"/>를 읽어 각자 행동을 막는다.
 ///
-/// 넷의 차이는 <b>풀리는 방식</b>이고, 그 구분이 <see cref="Cause"/>다:
+/// 다섯의 차이는 <b>풀리는 방식</b>이고, 그 구분이 <see cref="Cause"/>다:
 ///  · 다운 — 동료 구조(PlayerReviver)로만 일어난다. 전원 다운이면 전멸(게임오버).
 ///  · 매달기·기절 — 시간이 지나면 스스로 복귀하므로 구조 대상도, 전멸 판정 대상도 아니다.
 ///  · Die — 다운을 <see cref="m_dieAfterDownSeconds"/>초 방치하면 넘어간다(#364). 현장 구조가 막히고
 ///    본부 이송 부활(#365)만 남으므로, 구조 히트박스는 켜되(운반 조준용) 구조 채널링은 거부된다.
+///  · 납치 — 끌려가는 동안 걸어 나가지 못하게 한다(#371). 외곽 도착 후 방치 시간이 지나면 풀리고,
+///    동료가 납치범을 때려 떼어내면 즉시 풀린다 — 시간이 풀어 주므로 구조·전멸 판정 대상은 아니다.
 /// 조준 히트박스는 다운·Die에서 켠다.
 /// </summary>
 public class PlayerIncapacitation : NetworkBehaviour
@@ -92,6 +97,21 @@ public class PlayerIncapacitation : NetworkBehaviour
 
     /// <summary>테이저 피격 기절인지. 모션은 다운과 같으므로(#252) 표시·집계처럼 원인을 구분할 때만 쓴다.</summary>
     public bool IsStunned => Cause == IncapacitationCause.Stun;
+
+    /// <summary>
+    /// <b>쓰러진 자세인가</b> — 다운 모션·바닥 시점·몸 회전 잠금이 함께 보는 값이다. (#371 후속)
+    ///
+    /// 원래 이 셋은 <see cref="IsIncapacitated"/>를 직접 봤다. "무력화는 곧 쓰러진 자세"가 참이었기 때문인데,
+    /// 외곽 린치(<see cref="IncapacitationCause.Lynched"/>)가 <b>서서 맞는</b> 무력화라 그 전제가 깨졌다.
+    ///
+    /// 세 곳이 <b>반드시 같은 값</b>을 봐야 한다는 것이 이 프로퍼티의 존재 이유다 — 하나만 갈라지면
+    /// 몸은 서 있는데 카메라는 바닥에 있는 어긋남이 난다(#252에서 이미 한 번 밟은 함정이라
+    /// PlayerAnimationDriver 주석에 경고로 남아 있었다).
+    ///
+    /// 행동 차단은 이 값이 아니라 <see cref="IsIncapacitated"/>가 계속 맡는다 — 린치 중에도
+    /// 이동·아이템·상호작용은 전부 막힌다. 갈리는 것은 자세뿐이다.
+    /// </summary>
+    public bool IsProne => IsIncapacitated && Cause != IncapacitationCause.Lynched;
 
     /// <summary>
     /// Die 전환까지 남은 시간(초) — 다운이 아니면 0. 구조 압박을 보여주는 HUD용. (#364)
@@ -176,7 +196,7 @@ public class PlayerIncapacitation : NetworkBehaviour
     }
 
     /// <summary>
-    /// 무력화 진입 — 서버(또는 오프라인)에서만. HP0 다운(#105)·매달기(#101)가 호출한다.
+    /// 무력화 진입 — 서버(또는 오프라인)에서만. HP0 다운(#105)·매달기(#101)·납치 호송(#371)이 호출한다.
     /// 기절은 스스로 풀려야 하므로 이 경로가 아니라 <see cref="ServerStun"/>을 쓴다.
     /// Die는 다운 방치 타이머로만 들어가므로 여기로는 지정할 수 없다. (#364)
     /// </summary>
@@ -231,6 +251,29 @@ public class PlayerIncapacitation : NetworkBehaviour
 
         SetCause(IncapacitationCause.Stun);
         ServerStunTimerAsync(seconds, ++m_stunEpisode).Forget();
+    }
+
+    /// <summary>
+    /// 납치 처형 — 외곽에서 린치당해 HP가 0이 된 피해자를 기능 정지(Die)로 확정한다. 서버(또는 오프라인) 전용. (#371 후속)
+    ///
+    /// <see cref="Incapacitate"/>가 "Die는 밖에서 걸 수 없다"고 막는 것(#364)에 대한 <b>유일한 예외</b>다.
+    /// 뚫는 근거는 납치 사망의 성질이 Die와 정확히 같다는 것이다 — 현장 구조로는 못 일어나고,
+    /// 구조 창은 HP 0 이전에 이미 닫혔다(납치범을 때려 떼어내는 것이 유일한 구조 수단, AbductionEvent 참고).
+    /// <see cref="IncapacitationCause.Down"/>으로 두면 시체를 끌고 나가는 동안 동료 구조가 열려 그 결정이 뒤집힌다.
+    ///
+    /// #364와 다른 점은 <b>방치 타이머를 거치지 않는다</b>는 것뿐이다 — 거기는 "구조 제한시간이 지났다"가
+    /// 근거지만 여기는 "납치범이 끝냈다"가 근거다. 새 원인 값을 만들지 않는 이유이기도 하다.
+    /// </summary>
+    public void ServerKillByAbduction()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        if (Cause == IncapacitationCause.Die)
+            return; // 이미 기능 정지 — 회차만 올리고 끝나지 않게 조용히 무시한다
+
+        Debug.Log($"[납치] 처형 — 기능 정지: {name}", this);
+        SetCause(IncapacitationCause.Die);
     }
 
     /// <summary>무력화 해제(구조·복구) — 서버(또는 오프라인)에서만.</summary>

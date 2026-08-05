@@ -159,8 +159,17 @@
 |------|------|------|
 | Title Scene | **17** | ✅ 완료 (`TitleTable`, 브랜치 `feature/374-localization-title`) |
 | Lobby / Shop | 6 | ✅ Lobby 2개(게임 시작·세션 나가기) · Shop 4개(시작 버튼 + `구매함` 3개) |
-| Main Scene | 6 | 인명부 정렬·페이지 버튼 등 |
-| 프리팹 | 약 26 | ✅ SettingsCanvas 8 · PauseCanvas 4 · LeaveConfirm 2 / 남음: QuitConfirm·AccountConfirm 5, Directory·FactionSymbolBoard·RoundEndButton, 월드 라벨 4 |
+| Main Scene | **5** | ✅ 완료 (`HqTable`, 브랜치 `feature/497-localization-main`) — 인명부 제목·정렬 2·페이지 이동 2 |
+| 프리팹 | 약 26 | ✅ SettingsCanvas 8 · PauseCanvas 4 · LeaveConfirm 2 · Directory·FactionSymbolBoard·RoundEndButton 3 · QuitConfirm 3 · AccountConfirm 2 · 월드 라벨 3 / 남음: 폭탄 매뉴얼 라벨 1 (돌발 이벤트와 함께) |
+
+> **Main Scene은 6개가 아니라 5개였다.** 6번째로 세어진 `범인`은 `=== SYSTEMS ===/GameManagers/CriminalAssigner`에
+> 붙은 3D TMP다 — 정답을 노출하는 테스트 표시라 [TestCriminalLabel](../../Assets/Scripts/Test/TestCriminalLabel.cs)과 함께
+> 데모 빌드 전에 빠질 물건이다. 번역하지 않는다.
+>
+> **`CitizenDirectoryCanvas/Panel` 아래에 `Text`가 둘이다** — 제목(`시민 인명부`)과 페이지 라벨(`1 / 1`).
+> 뒤쪽은 `CitizenDirectoryView`가 대입하는 자리표시자라 붙이면 안 된다. 이름으로는 구분되지 않으니 문구로 볼 것.
+>
+> 인명부 제목은 씬의 UI 캔버스와 HQ의 `Directory` 보드가 같은 문구라 **키 하나(`Hq.Directory.Title`)를 공유**한다.
 
 > **`TitleTable`에서 세션 코드를 뺐다.** §3이 "세션 코드 패널"을 `TitleTable`에 넣어 뒀는데,
 > `SessionCodePanel.prefab`은 실제로 **Lobby·Shop 두 씬**에만 있고 Title 씬에는 없다.
@@ -231,10 +240,42 @@
 ### Phase 2 — 코드 조립 문자열 (약 60개)
 `LocalizedString` SerializeField + Smart String으로 교체. 관례는 [SignalDecoder](../../Assets/Scripts/Item/SignalDecoder.cs)와 같다.
 
-- `SettlementPanel` (12) · `AuthPanel`+`AccountCredentials`+`NicknameRules` (21) · `ScanInfoView` · `ScanResultPresenter` · `ShopStandView` · `CCTVChannelLabelView` · `HqRevivalDevice` · `BombTimerView`
+- ~~`SettlementPanel`~~ (15) · `AuthPanel`+`AccountCredentials`+`NicknameRules` (21) · ~~`ScanInfoView`~~ · ~~`ScanResultPresenter`~~ · `ShopStandView` · ~~`CCTVChannelLabelView`~~ · `HqRevivalDevice` · `BombTimerView`
 - ~~`SessionPanel`~~ · ~~`LeaveConfirmPanel`~~ · ~~`LobbyRosterRowView`/`LobbyRosterPanel`~~ · ~~`SessionCodePanel`~~ — **Phase 1에서 앞당겨 처리했다** (해당 씬·프리팹을 손대는 김에)
-- **`string m_format` 필드 8개** → `LocalizedString`: `RoundFundHud` · `ReadyWaitHud` · `RemainingCriminalsHud` · `WantedEntryView` · `BombSerialView` · `MicStatusHud` · `HqRevivalDevice` · `CCTVNode`
-- **곁다리 정리:** 검거 판정 문구가 [ArrestJudge](../../Assets/Scripts/Interaction/ArrestJudge.cs) · [VerdictBanner](../../Assets/Scripts/UI/Hud/VerdictBanner.cs) · [ArrestVerdictFeedback](../../Assets/Scripts/Interaction/ArrestVerdictFeedback.cs) **3곳에 중복 정의**돼 있다. 3벌을 번역하지 말고 한 곳으로 합친 뒤 번역한다
+- **`string m_format` 필드 8개** → `LocalizedString`: ~~`RoundFundHud`~~(실제 이름은 `RoundFundBoard`) · ~~`ReadyWaitHud`~~ · ~~`RemainingCriminalsHud`~~ · ~~`WantedEntryView`~~ · `BombSerialView` · ~~`MicStatusHud`~~ · `HqRevivalDevice` · `CCTVNode`
+- ~~**곁다리 정리:** 검거 판정 문구 3곳 중복~~ — **정정.** 중복은 2곳이 아니라 **번역 대상 1곳**이었다.
+  [ArrestJudge.LogVerdict](../../Assets/Scripts/Interaction/ArrestJudge.cs)의 판정 문구는 `Debug.Log` 안에만 있어 범위 밖(§1)이고,
+  [ArrestVerdictFeedback](../../Assets/Scripts/Interaction/ArrestVerdictFeedback.cs)이 겹쳐 보인 것은 이름 폴백 `"알 수 없음"` 하나였다.
+  실제 표시는 [VerdictBanner](../../Assets/Scripts/UI/Hud/VerdictBanner.cs) 한 곳이라 합칠 것이 없어 그대로 번역했다 —
+  판정 3종은 규약 키 `Hud.Verdict.<ArrestVerdict>`이고 `ArrestVerdict`에 `[LocalizedEnum]`을 붙였다.
+
+> **`RoundFundBoard`의 키는 `HqTable`이 아니라 `HudTable`에 뒀다.** 본부 게시판이지만 §3이 '팀 자금' 표시를
+> `HudTable`에 잡아 뒀고, `HqTable`은 인명부·수배 리스트처럼 본부 화면 고유 UI를 담는 자리다.
+>
+> **여러 인스턴스가 같은 문구를 쓰는 자리 둘을 헬퍼로 돌렸다** — 수배 리스트 행의 현상금(`Common.Unit.Money`)과
+> 스캔 카드의 필드 라벨(`Hud.Scan.Field*`). 행·카드는 NPC 수만큼 생기므로 `SerializeField`로 두면 프리팹마다
+> 같은 키를 다시 배선해야 한다(상점 진열대와 같은 이유). 대신 언어 변경 갱신은 목록을 그리는 쪽
+> (`WantedListView` · `ScanResultPresenter`)이 `SelectedLocaleChanged`에 걸어 통째로 다시 그린다.
+>
+> **스캔 카드 라벨은 ko에서 문구가 바뀐다** — 지금까지 한국어 화면에서도 `Name:` · `Type:` · `Faction:`이었다.
+> ko는 `이름:` · `타입:` · `세력:`으로 고쳤다 (Title 씬의 `Quit`→`종료`와 같은 종류의 정정).
+
+> **정산 패널만 `StringChanged`를 구독하지 않는다.** 결정 (d)는 "떠 있는 중에 언어를 바꿔도 갱신"이 목적인데,
+> 정산 화면은 10초짜리 결과 요약이고 그 사이 설정 창을 열 경로가 없다. 그래서 채우는 순간
+> `LocalizedString.GetLocalizedString(args)`로 한 번 읽고 끝낸다 — 구독·해제 짝을 6벌 들고 있을 이유가 없다.
+> 반대로 HUD(`ReadyWaitHud` 등)는 라운드 내내 떠 있으므로 구독해야 한다. **판단 기준은 "그 문구가 언어 변경을
+> 볼 수 있는 자리인가"**다.
+>
+> **본부 코드 문구는 CCTV 채널 라벨뿐이었다.** `Assets/Scripts/HQ` 전체의 `.text =` 대입을 훑은 결과,
+> 남은 번역 대상은 `CCTVChannelLabelView`의 다섯 문구뿐이다. `DirectoryEntryView`·`FactionSymbolRowView`가
+> 쓰는 시민 타입·세력 표기는 `OfficialRecords`의 Dictionary에서 오므로 **Phase 4(데이터 에셋)** 소관이고,
+> `CitizenDirectoryView`의 페이지 라벨(`{페이지} / {전체}`)은 숫자와 구분자뿐이라 키를 두지 않았다.
+> `CH{0}`처럼 번역할 낱말이 없어 보이는 것도 키로 뺐다 — en에서 `CAM`으로 바꿀 여지를 남긴다.
+>
+> 정산의 결과 제목·복귀 도착지·종료 사유는 규약 키다 — `RoundResult`에 접두 둘(`Settlement.Result.` ·
+> `Settlement.Return.`), `RoundEndReason`에 하나(`Settlement.Reason.`)를 붙였다.
+> 복귀 도착지(성공=상점 / 실패=로비)를 `Shop`/`Lobby`가 아니라 enum 이름으로 둔 것은, 키 이름만으로 뜻이
+> 덜 드러나는 대신 **검증에 자동으로 편입**되기 때문이다 — 결과가 늘면 두 접두 모두에서 빠진 키가 잡힌다.
 
 ### Phase 3 — 네트워크 문자열 제거 (토스트만, 단독 PR)
 서버가 완성된 한국어를 RPC로 실어 보내는 경로를 enum 전송으로 바꾼다.
@@ -252,11 +293,35 @@ ToastOwner(EItemFeedback, args…)     ← 신설. RPC는 enum + 숫자 인자�
 - **몽타주는 이 PR에서 제외** — §5 참고
 
 ### Phase 4 — 데이터 에셋
-- [AppearanceDatabase](../../Assets/Scripts/Data/AppearanceDatabase.cs)의 `AxisDefinition.AxisName` · `AppearanceOption.DisplayName` → `LocalizedString` (몽타주 번역)
-- [OfficialRecords](../../Assets/Scripts/Data/OfficialRecords.cs)의 `CitizenTypeNames` · `FactionNames` Dictionary → `NpcTable` 조회.
-  [DirectoryEntry](../../Assets/Scripts/HQ/Directory/DirectoryEntry.cs)가 이미 **enum을 동기화**하고 클라가 로컬에서 이름으로 바꾸므로 네트워크 변경이 필요 없다
-- **곁다리 정리:** [CitizenProfile](../../Assets/Scripts/Data/CitizenProfile.cs)의 `m_typeView`/`m_factionView`가 `string`인데 실제로는 enum에서 파생된 값이다. **enum 타입으로 바꾸고 표시 시점에 번역**한다 — 위조(#223)는 이름·문양만 오염시키므로 안전하다
-- `SpawnedNpcEvent.m_displayName` · `JailbreakEvent.DisplayName` · `CCTVNode.m_locationLabel`
+- ~~[AppearanceDatabase](../../Assets/Scripts/Data/AppearanceDatabase.cs)의 `AxisDefinition.AxisName` · `AppearanceOption.DisplayName` → `LocalizedString`~~ — **완료** (몽타주 번역).
+  옵션 37개는 `LocalizedString`으로 바꿔 배선했고, **축 이름은 필드를 아예 없앴다** — 축은 데이터가 아니라
+  `AppearanceAxis`가 정하는 목록이라 규약 키(`Npc.Axis.` + enum 이름)로 조회한다. 배선할 곳이 6개 줄고 검증에 편입된다
+- ~~[OfficialRecords](../../Assets/Scripts/Data/OfficialRecords.cs)의 `CitizenTypeNames` · `FactionNames` Dictionary → `NpcTable` 조회~~ — **완료.**
+  Dictionary를 지우고 `TypeName()`/`FactionName()` 정적 헬퍼로 바꿨다. 키는 규약(`Npc.CitizenType.` · `Npc.Faction.` + enum 이름)이고
+  두 enum에 `[LocalizedEnum]`을 붙였다. [DirectoryEntry](../../Assets/Scripts/HQ/Directory/DirectoryEntry.cs)가 이미 **enum을 동기화**하고
+  클라가 로컬에서 이름으로 바꾸므로 네트워크 변경은 없었다
+- ~~**곁다리 정리:** `CitizenProfile`의 `m_typeView`/`m_factionView` enum 승격~~ — **완료.** 위조(#223)가 이름·문양만 오염시키는 것을 확인했다
+  (`SetSymbolIndexView`와 `m_nameView` 대입뿐이고 타입·세력 표시값을 건드리는 경로는 없다)
+- `SpawnedNpcEvent.m_displayName` · `JailbreakEvent.DisplayName` — 돌발 이벤트 묶음이라 이번 범위 밖
+- ~~`CCTVNode.m_locationLabel`~~ — **완료.** 씬의 노드 4개(감옥·횡단보도·본부 앞·상점가 방면)를 `WorldTable`로
+
+> **'없음' 옵션 4개는 키 하나를 공유한다** (`Npc.Appearance.None`). 머리색·수염·모자·안경이 같은 낱말을 쓰고,
+> 두 언어 모두에서 같은 낱말이라 갈라 둘 이유가 없었다. 나머지는 축별로 키를 나눴다 —
+> `갈색`(머리색)과 `갈색`(피부색)처럼 지금은 같은 낱말이어도 다른 언어에서 갈릴 수 있어서다.
+>
+> **몽타주가 실제로 양쪽 언어로 조립되는 것을 확인했다** — 같은 프로필로
+> ko `머리색: 빨강 / 수염: 콧수염 / 안경: 없음`, en `Hair color: Red / Facial hair: Mustache / Eyewear: None`.
+> 다만 이 문장은 **만든 쪽의 언어로 굳는다** — 서버가 완성 문자열을 `WantedEntry`에 실어 보내는 구조는
+> 그대로다(§5의 남는 부채). 전원 같은 언어라는 전제(결정 (i)) 아래서만 성립한다.
+
+> **ko 화면의 표기가 바뀐다.** `Human` · `Android` · `Faction A/B` · `None`은 한국어 화면에서도 영문이었다 —
+> `인간` · `안드로이드` · `A 세력` · `없음`으로 옮겼다. 결정 (j)가 영문으로 못 박은 것은 **시민 이름**뿐이고
+> (무전으로 부르는 고유명사), 타입·세력은 §3이 처음부터 `NpcTable` 번역 대상으로 잡아 둔 항목이다.
+>
+> **표기를 조회로 바꾸면 목록은 언어 변경을 스스로 못 따라간다.** `OfficialRecords`의 헬퍼는 지금 언어로
+> 한 번 읽어 줄 뿐이라, 이미 그려 둔 행은 그대로 남는다. 그래서 목록을 그리는 쪽
+> (`CitizenDirectoryView` · `FactionSymbolBoardView`)이 `SelectedLocaleChanged`에 걸어 다시 그린다 —
+> 수배 리스트·스캔 카드와 같은 처리다.
 
 ### Phase 5 — 검증
 - 설정 창에서 ko↔en 전환하며 전 화면 순회. **영문이 길어 생기는 버튼·라벨 잘림/오버플로**가 주 확인 대상

@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 전원 준비 대기 표시 (#410) — 아직 준비를 보고하지 않은 동료가 있는 동안 "대기 중 (2/4)"를 띄운다.
@@ -20,13 +21,16 @@ public class ReadyWaitHud : MonoBehaviour
     [SerializeField]
     private TextMeshProUGUI m_waitText;
 
-    [Tooltip("표시 형식 — {0}=준비된 인원, {1}=전체 인원")]
+    // 코드가 대입하는 자리라 라벨에 LocalizeStringEvent를 붙일 수 없다 — 서로 덮어쓴다. (#497)
+    [Tooltip("표시 형식 — Hud.Ready.Waiting ({0}=준비된 인원, {1}=전체 인원)")]
     [SerializeField]
-    private string m_format = "다른 플레이어 대기 중 ({0}/{1})";
+    private LocalizedString m_waitFormat;
 
     // 마지막으로 표시한 값 — 바뀔 때만 문자열을 다시 만들어 불필요한 GC 할당을 피한다
     private int m_lastReady = int.MinValue;
     private int m_lastExpected = int.MinValue;
+
+    private bool m_bound;
 
     private void OnEnable()
     {
@@ -37,6 +41,14 @@ public class ReadyWaitHud : MonoBehaviour
         }
 
         SetVisible(false); // 게이트 상태를 확인하기 전에는 띄우지 않는다.
+    }
+
+    private void OnDisable()
+    {
+        // 꺼진 HUD가 언어 변경에 반응하지 않게 — 다시 켜질 때 값이 바뀌면 Update가 다시 건다
+        Unbind();
+        m_lastReady = int.MinValue;
+        m_lastExpected = int.MinValue;
     }
 
     // 매 프레임 폴링 — 게이트 값은 NetworkVariable이고 변경 이벤트를 따로 열어 두지 않았다.
@@ -62,7 +74,39 @@ public class ReadyWaitHud : MonoBehaviour
 
         m_lastReady = ready;
         m_lastExpected = expected;
-        m_waitText.text = string.Format(m_format, ready, expected);
+        Bind(ready, expected);
+    }
+
+    // 인원이 바뀔 때마다 인자를 갈아끼우고 다시 구독한다 — 인자를 먼저 넣어야 구독 시점의
+    // 첫 발화부터 숫자가 들어간 문장이 나온다 (SessionCodePanel과 같은 관례).
+    private void Bind(int ready, int expected)
+    {
+        if (m_waitFormat == null || m_waitFormat.IsEmpty)
+        {
+            Debug.LogWarning("[ReadyWaitHud] 대기 문구가 연결되지 않았다.", this);
+            return;
+        }
+
+        Unbind();
+
+        m_waitFormat.Arguments = new object[] { ready, expected };
+        m_waitFormat.StringChanged += HandleStringChanged;
+        m_bound = true;
+    }
+
+    private void HandleStringChanged(string localized)
+    {
+        if (m_waitText != null)
+            m_waitText.text = localized;
+    }
+
+    private void Unbind()
+    {
+        if (!m_bound)
+            return;
+
+        m_waitFormat.StringChanged -= HandleStringChanged;
+        m_bound = false;
     }
 
     private void SetVisible(bool visible)

@@ -32,6 +32,13 @@ public class HqOccupancyZone : MonoBehaviour
     /// <summary>무인이 된 뒤 경과 시간(초). 유인 상태면 0.</summary>
     public float UnmannedSeconds => IsUnmanned ? Time.time - m_unmannedSince : 0f;
 
+    /// <summary>
+    /// 이 플레이어가 본부 구역 안에 있는가. 서버(또는 오프라인) 전용 — 트리거 판정이 그쪽에서만 돈다. (#371)
+    /// 인원 수만으로는 "누가" 안에 있는지 알 수 없어, 대상별 규칙(납치는 본부 인원을 노리지 않는다)이
+    /// 이 질문을 한다. 판단은 여기서 하지 않는다 — 이 컴포넌트는 여전히 무인일 때 무슨 일이 나는지 모른다.
+    /// </summary>
+    public bool Contains(PlayerHealth player) => player != null && m_occupants.Contains(player);
+
     /// <summary>상주 인원 변경 — 본부 UI 등이 구독할 훅.</summary>
     public event Action<int> OnOccupantCountChanged;
 
