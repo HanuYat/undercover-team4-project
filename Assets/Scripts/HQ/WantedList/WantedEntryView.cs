@@ -4,6 +4,9 @@ using UnityEngine;
 /// <summary>
 /// 수배 리스트의 한 줄 — 검거 대상의 이름 / 글 방식 몽타주.
 /// 행 프리팹에 붙여 두고, WantedListView가 항목 데이터를 Bind로 채운다. 표시 전용.
+///
+/// 몽타주 문장은 항목에 실려 오지 않는다 — 여기서 <b>이 피어의 언어로</b> 조립한다 (#497).
+/// 그래서 조립에 쓰는 AppearanceDatabase를 Bind 인자로 받는다(행마다 배선하지 않기 위해).
 /// </summary>
 public class WantedEntryView : MonoBehaviour
 {
@@ -24,13 +27,15 @@ public class WantedEntryView : MonoBehaviour
     private const string k_commonTable = "CommonTable";
     private const string k_moneyKey = "Common.Unit.Money";
 
-    public void Bind(in WantedEntry entry)
+    public void Bind(in WantedEntry entry, AppearanceDatabase appearanceDatabase)
     {
         if (m_nameText != null)
             m_nameText.text = entry.Name.ToString();
 
         if (m_montageText != null)
-            m_montageText.text = entry.Montage.ToString();
+            m_montageText.text = appearanceDatabase != null
+                ? appearanceDatabase.BuildMontageText(entry.Appearance, entry.RevealedAxes)
+                : string.Empty;
 
         if (m_bountyText != null)
             m_bountyText.text = LocalizedStrings.Get(k_commonTable, k_moneyKey, entry.Bounty);

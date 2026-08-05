@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Unity.Netcode;
 
 /// <summary>
@@ -17,6 +16,87 @@ public enum AppearanceAxis
     FacialHair = 3,
     Headwear = 4,
     Eyewear = 5,
+}
+
+/// <summary>
+/// 몽타주로 공개된 축들의 집합 — 축 하나당 비트 1개(전부 합쳐 1바이트).
+///
+/// 수배 항목(<see cref="WantedEntry"/>)에 외형 프로필과 함께 실려 나가, <b>받는 쪽이 자기 언어로</b>
+/// 몽타주를 조립하게 한다 (#497). 서버가 완성 문장을 실어 보내던 구조를 대신한다.
+///
+/// 나열 순서는 담은 순서가 아니라 <see cref="AppearanceAxis"/> 선언 순서다 — 공개 축의 순서 자체는
+/// 규칙상 뜻이 없고, 반대로 <b>어느 피어에서 조립해도 같은 문장</b>이 나오는 것은 중요하다
+/// (검거로 내렸다가 탈출로 재등재해도(#231) 본부가 기억하던 문장과 어긋나면 안 된다).
+/// </summary>
+public struct RevealedAxisSet : INetworkSerializable, IEquatable<RevealedAxisSet>
+{
+    private byte m_mask; // 축별 비트합 — 1 << (int)axis
+
+    public bool IsEmpty => m_mask == 0;
+
+    /// <summary>담긴 축 수.</summary>
+    public int Count
+    {
+        get
+        {
+            int count = 0;
+            for (int i = 0; i < AppearanceProfile.k_axisCount; i++)
+            {
+                if (Contains((AppearanceAxis)i))
+                    count++;
+            }
+            return count;
+        }
+    }
+
+    public bool Contains(AppearanceAxis axis) => (m_mask & Bit(axis)) != 0;
+
+    public void Add(AppearanceAxis axis) => m_mask |= Bit(axis);
+
+    public void Clear() => m_mask = 0;
+
+    private static byte Bit(AppearanceAxis axis) => (byte)(1 << (int)axis);
+
+    /// <summary>축 선언 순서로 순회한다 — foreach 전용(할당 없는 구조체 열거자).</summary>
+    public Enumerator GetEnumerator() => new Enumerator(this);
+
+    public struct Enumerator
+    {
+        private readonly RevealedAxisSet m_set;
+        private int m_index; // 마지막으로 본 축 (-1에서 시작)
+
+        public Enumerator(RevealedAxisSet set)
+        {
+            m_set = set;
+            m_index = -1;
+            Current = default;
+        }
+
+        public AppearanceAxis Current { get; private set; }
+
+        public bool MoveNext()
+        {
+            while (++m_index < AppearanceProfile.k_axisCount)
+            {
+                var axis = (AppearanceAxis)m_index;
+                if (!m_set.Contains(axis))
+                    continue;
+
+                Current = axis;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    public void NetworkSerialize<TBuffer>(BufferSerializer<TBuffer> serializer)
+        where TBuffer : IReaderWriter => serializer.SerializeValue(ref m_mask);
+
+    public bool Equals(RevealedAxisSet other) => m_mask == other.m_mask;
+
+    public override bool Equals(object obj) => obj is RevealedAxisSet other && Equals(other);
+
+    public override int GetHashCode() => m_mask;
 }
 
 /// <summary>
@@ -87,12 +167,26 @@ public struct AppearanceProfile : INetworkSerializable, IEquatable<AppearancePro
         }
     }
 
-    // 지정한 축들에서 다른 프로필과 값이 모두 같은지 — 몽타주 부합 판정에 사용.
-    public bool MatchesOn(in AppearanceProfile other, IReadOnlyList<AppearanceAxis> axes)
+    /// <summary>
+    /// 지정한 축만 남기고 나머지를 미배정(-1)으로 지운 사본 — 네트워크로 내보낼 때 쓴다 (#497).
+    /// 정답 외형은 서버 전용 값이라(<see cref="CitizenIdentity.Appearance"/>), 몽타주에 공개되지 않은 축은
+    /// 화면에 안 띄우는 것으로 끝내지 않고 애초에 실어 보내지 않는다.
+    /// 반환값의 <see cref="IsAssigned"/>는 머리색이 공개 축이 아니면 false다 — 표시 조립 전용으로만 쓸 것.
+    /// </summary>
+    public AppearanceProfile Masked(RevealedAxisSet axes)
     {
-        for (int i = 0; i < axes.Count; i++)
+        AppearanceProfile masked = Unassigned;
+        foreach (AppearanceAxis axis in axes)
+            masked.SetIndex(axis, GetIndex(axis));
+        return masked;
+    }
+
+    // 지정한 축들에서 다른 프로필과 값이 모두 같은지 — 몽타주 부합 판정에 사용.
+    public bool MatchesOn(in AppearanceProfile other, RevealedAxisSet axes)
+    {
+        foreach (AppearanceAxis axis in axes)
         {
-            if (GetIndex(axes[i]) != other.GetIndex(axes[i]))
+            if (GetIndex(axis) != other.GetIndex(axis))
                 return false;
         }
         return true;
