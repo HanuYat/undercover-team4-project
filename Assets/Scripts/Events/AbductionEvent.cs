@@ -315,6 +315,16 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
 
     // 임무 해제 — 구독을 풀고 배회 시민으로 돌려보낸다. 스폰물을 지우지는 않는다:
     // 잔류 시민으로 남아 언제든 검거·인계할 수 있어야 한다 ("아까 놓친 그 놈", #310).
+    //
+    // 뒷정리(라운드 종료)는 <see cref="MisdemeanorLoiterer"/>가 물려받는다 — 난동꾼·침입자의
+    // ReleaseToCity와 같은 설계다. 이 한 줄이 빠지면 스폰물이 라운드를 넘겨 살아남는다:
+    // 스폰이 Spawn()(destroyWithScene 기본 false)이라 씬 언로드로도 지워지지 않고, 잔류 정리를
+    // 물려받은 데가 없어 라운드 종료 정리도 타지 않는다. 검거돼 유치장에 앉은 납치범이 다음
+    // 라운드까지 그 자리에 남아 있던 것이 이 누락이었다.
+    //
+    // 검거되는 납치범은 반드시 여기를 지난다 — 밧줄은 무력화된 대상만 묶는데(NpcStateRules.CanRopeBind)
+    // 무력화에 필요한 타격이 곧 격퇴(HandleAbductorDamaged)라 임무 해제가 먼저 일어난다.
+    // 그래서 수감 경로를 따로 잡지 않고 여기 한 곳에서 넘긴다.
     private void ReleaseAbductor(NpcController abductor)
     {
         if (abductor != null)
@@ -322,6 +332,7 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
             abductor.OnPenaltyCaught -= HandleAbductionCaught;
             abductor.OnDamaged -= HandleAbductorDamaged;
             abductor.EndPenaltyDuty();
+            MisdemeanorLoiterer.Attach(abductor, m_displayName);
         }
 
         m_abductors.Remove(abductor);
