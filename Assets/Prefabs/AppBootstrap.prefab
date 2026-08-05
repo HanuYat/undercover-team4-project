@@ -231,6 +231,7 @@ GameObject:
   m_Component:
   - component: {fileID: 3586984269218275667}
   - component: {fileID: 2438122290437966008}
+  - component: {fileID: 3954373945055400020}
   m_Layer: 0
   m_Name: SoundManager
   m_TagString: Untagged
@@ -267,6 +268,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SoundManager
   m_library: {fileID: 11400000, guid: 31ce6c300d865664da0eb38018c29cf2, type: 2}
   m_sourceCount: 16
+--- !u!114 &3954373945055400020
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7826145428637579171}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 22b2a1d2f1fa1474e81fe5e71792b3de, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BgmPlayer
+  m_fadeSeconds: 1.2
 --- !u!1 &8772099138944498732
 GameObject:
   m_ObjectHideFlags: 0
