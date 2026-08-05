@@ -87,9 +87,12 @@ public class DoubleDoor : NetworkBehaviour, IInteractable
         RequestToggleRpc();
     }
 
-    // 클라 입력을 서버로 넘긴다 — 소유권을 요구하지 않는다(씬 오브젝트이고 누구나 여닫는다).
-    // 개폐 권위는 서버에 있으므로 여기서 상태를 직접 건드리지 않는다 (JailDoor와 같은 관례, #362).
-    [Rpc(SendTo.Server)]
+    // 클라 입력을 서버로 넘긴다. 개폐 권위는 서버에 있으므로 여기서 상태를 직접 건드리지 않는다 (#362).
+    //
+    // InvokePermission = Everyone 명시 — 문은 씬에 놓인 서버 소유 오브젝트라 어떤 플레이어도 오너가
+    // 아니다. 기본값(오너 전용)이면 호스트만 문을 여닫고 나머지 클라이언트는 E가 먹지 않는다.
+    // (ShopStand.RequestPurchaseRpc·SceneReadyGate.ReportReadyRpc가 같은 이유로 이렇게 돼 있다. #55)
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void RequestToggleRpc() => ServerToggle();
 
     private void ServerToggle()
