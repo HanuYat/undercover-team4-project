@@ -295,6 +295,10 @@ public class Scanner : ItemBase
             return;
         }
 
+        // 판독 완료음 — 이 RPC가 이미 오너 전용이라(GDD 5-4: 스캔 정보는 스캔한 본인 화면 전용)
+        // 여기서 내면 결과를 받은 사람에게만 들린다. 위치가 없는 확인음이라 2D다 (#483).
+        App.Sound?.PlaySfx2D(EAudioClip.ScannerScan);
+
         Debug.Log($"스캔 결과 수신: {GetScanInfo(identity.Profile)}");
         OnScanCompleted?.Invoke(identity.Profile, npcNetObj.NetworkObjectId);
     }
