@@ -160,7 +160,22 @@
 | Title Scene | **17** | ✅ 완료 (`TitleTable`, 브랜치 `feature/374-localization-title`) |
 | Lobby / Shop | 6 | ✅ Lobby 2개(게임 시작·세션 나가기) · Shop 4개(시작 버튼 + `구매함` 3개) |
 | Main Scene | **5** | ✅ 완료 (`HqTable`, 브랜치 `feature/497-localization-main`) — 인명부 제목·정렬 2·페이지 이동 2 |
-| 프리팹 | 약 26 | ✅ SettingsCanvas 8 · PauseCanvas 4 · LeaveConfirm 2 · Directory·FactionSymbolBoard·RoundEndButton 3 · QuitConfirm 3 · AccountConfirm 2 · 월드 라벨 3 / 남음: 폭탄 매뉴얼 라벨 1 (돌발 이벤트와 함께) |
+| 프리팹 | 약 27 | ✅ SettingsCanvas 8 · PauseCanvas 4 · LeaveConfirm 2 · Directory·FactionSymbolBoard·RoundEndButton 3 · QuitConfirm 3 · AccountConfirm 2 · 월드 라벨 3 · **SettlementCanvas 창틀 제목 1** / 남음: 폭탄 매뉴얼 라벨 1 (돌발 이벤트와 함께) |
+
+> ⚠ **중첩 프리팹 인스턴스의 문구는 일반 검색에 안 걸린다 — 하나를 그렇게 놓쳤다.**
+> 정산 창의 제목 `라운드 정산`은 `SettlementCanvas` 안에 중첩된 서드파티 팝업
+> (`GUIPack-.../Popup - Dark.prefab`)의 **인스턴스 오버라이드**였다. 오버라이드는 `m_text:`가 아니라
+> `PrefabInstance`의 `m_Modification`에 `propertyPath: m_text` + `value: …` 형태로 저장되므로,
+> `rg "m_text:"`로 훑으면 보이지 않는다. **두 형태를 모두 봐야 한다:**
+>
+> ```
+> rg "m_text: .*[가-힣]" Assets/Prefabs Assets/Scenes          # 직접 값
+> rg -U "propertyPath: m_text\n\s+value: .*[가-힣]" Assets      # 인스턴스 오버라이드
+> ```
+>
+> 처리 방법은 PauseCanvas 버튼들과 같다 — `LocalizeStringEvent`를 **바깥 프리팹의 추가 컴포넌트
+> 오버라이드**로 붙인다(서드파티 원본은 건드리지 않는다). 키는 `Settlement.Window.Title`이고,
+> 같은 팝업을 쓰는 창이 늘면 창마다 자기 키를 붙이면 된다.
 
 > **Main Scene은 6개가 아니라 5개였다.** 6번째로 세어진 `범인`은 `=== SYSTEMS ===/GameManagers/CriminalAssigner`에
 > 붙은 3D TMP다 — 정답을 노출하는 테스트 표시라 [TestCriminalLabel](../../Assets/Scripts/Test/TestCriminalLabel.cs)과 함께

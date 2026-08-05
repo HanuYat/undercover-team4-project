@@ -76,6 +76,10 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 6276845898492543062
+  - m_Id: 7100000000413
+    m_Localized: "Round settlement"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:
