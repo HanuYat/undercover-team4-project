@@ -53901,10 +53901,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SecretFavorBroker
   ShowTopMostFoldoutHeaderGroup: 1
   m_phone: {fileID: 1844011712}
-  m_favorChance: 0.2
+  m_favorChance: 0.1
+  m_callDelayMin: 15
+  m_callDelayMax: 60
   m_rewardPercent: 40
   m_minReward: 2000
   m_checkInterval: 0.2
+  m_favorExpireSeconds: 180
   m_offerToast:
     m_TableReference:
       m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
