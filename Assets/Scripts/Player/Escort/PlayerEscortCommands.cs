@@ -110,7 +110,8 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         RopeDragRequestRpc(new NetworkObjectReference(target.NetworkObject));
     }
 
-    /// <summary>밧줄 끌기 재개 — 오너가 호출(E, NpcSubdueInteractable). 놓아뒀던 체포 대상을 다시 끈다. (#91 재연행의 자리, #369)</summary>
+    /// <summary>밧줄 끌기 재개 — 오너가 호출(<see cref="Rope"/> 좌클릭). 놓아뒀던 체포 대상을 다시 끈다.
+    /// (#91 재연행의 자리 → #369 → #513에서 E가 아니라 좌클릭으로 옮겼다 — 좌클릭이 줄을 거는 쪽이다)</summary>
     public void RequestRopeResume(NpcController target)
     {
         if (target == null)
@@ -144,22 +145,9 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         UnropeRequestRpc(new NetworkObjectReference(target.NetworkObject));
     }
 
-    /// <summary>끌기 놓기 — 오너가 호출(E). 조준한 대상 하나만 놓는다, 나머지는 계속 끌린다. (#390)</summary>
-    public void RequestRelease(NpcController target)
-    {
-        if (target == null)
-            return;
-        if (!IsSpawned)
-        {
-            Escorter.ReleaseDrag(target);
-            return;
-        }
-        if (!IsOwner)
-            return;
-        if (!IsTargetNetworkReady(target))
-            return;
-        ReleaseRpc(new NetworkObjectReference(target.NetworkObject));
-    }
+    // 끌기 놓기 요청(RequestRelease/ReleaseRpc)은 제거했다 (#513) — '놓기'(끌기만 멈추고 줄은 유지)
+    // 자체가 없어지면서 호출부가 사라졌고, 남겨두면 이 이슈가 없애기로 한 옛 동작이 실수로 다시
+    // 연결될 수 있다. Escorter.ReleaseDrag는 그대로 남는다 — 풀기·인계 판정·라운드 종료 정리가 쓴다.
 
     /// <summary>유치장 반출 요청 — 오너가 호출(앉은 수감자에 E). 밧줄을 쓰지 않으므로 용량 게이트를 타지 않는다. (#492)</summary>
     public void RequestJailRelease(NpcController target)
@@ -265,18 +253,6 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     }
 
     [Rpc(SendTo.Server)]
-    private void ReleaseRpc(NetworkObjectReference targetRef)
-    {
-        if (
-            targetRef.TryGet(out NetworkObject targetObj)
-            && targetObj.TryGetComponent(out NpcController target)
-        )
-        {
-            Escorter.ReleaseDrag(target);
-        }
-    }
-
-    [Rpc(SendTo.Server)]
     private void EscortResumeRpc(NetworkObjectReference targetRef)
     {
         if (
@@ -378,7 +354,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     {
         if (target == null)
             return false;
-        if (IsRopeBlockedAt(target))
+        if (IsRopeBlocked(target))
             return false;
 
         // 이미 내 줄에 묶여 있는(놓아둔) 대상은 용량 게이트를 타지 않는다 — 새 밧줄을 쓰지 않으므로.
@@ -398,28 +374,49 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     }
 
     /// <summary>
-    /// 이 대상에 <b>밧줄을 걸 수 없는 자리</b>인가 — 유치장 안에서는 묶기·합류·재개가 전부 막힌다.
-    /// 서버 가드와 클라 조기검증·조준 피드백(<see cref="Rope"/>)이 함께 보는 단일 기준. (팀 확정 2026-08-05)
+    /// 이 대상에 <b>밧줄을 걸 수 없는가</b> — 묶기·합류·재개가 전부 막힌다. 서버 가드와 클라 조기검증·조준
+    /// 피드백(<see cref="Rope"/>)이 함께 보는 단일 기준. (팀 확정 2026-08-05)
+    ///
+    /// 이유가 둘이고, 둘 다 <b>유치장에서 꺼낸 신병은 맨몸으로 다룬다</b>로 모인다:
+    ///
+    ///  · <b>유치장 안</b> — 안에서 새로 거는 조작을 막는다. 안의 신병을 밖으로 데려가려면 반출 추종(E)을
+    ///    쓴다. 훗날 수감자를 눕히는 용도가 필요해지면 그때 다시 연다.
+    ///  · <b>반출돼 따라오는 중</b>(<see cref="NpcStateRules.IsFollowingUnroped"/>) — 반출을 밧줄로 보험
+    ///    들 수 없게 해 <b>데리고 나오는 구간에 긴장</b>을 남긴다. 거리를 관리하지 않으면 멈춰 서고
+    ///    (NpcEscortedState) 밖에 방치하면 달아난다(#517).
+    ///
+    ///  · <b>반출 표식이 살아 있는 동안</b>(<see cref="NpcController.IsJailExtracted"/>, #517) — 거리 이탈로
+    ///    멈춰 서면(<see cref="NpcState.Captured"/>) 방금 제압한 신병과 상태가 같아져 위 조건에서 빠지는데,
+    ///    그때 묶을 수 있으면 "E로 세운 뒤 묶기"라는 우회 하나로 위 긴장이 전부 사라진다. 표식을 함께 봐서
+    ///    <b>방출한 신병은 무조건</b> 밧줄로 다루지 않게 못박는다 (팀 확정 2026-08-05).
+    ///
+    /// ⚠ 그래서 <c>NpcController.StartRopeDrag</c>의 표식 해제(밧줄에 묶이면 반출 흐름이 끝난다, #517)는
+    /// <b>이제 도달할 수 없는 경로</b>가 됐다 — 표식이 있는 동안 묶기가 전부 막히기 때문이다. 방어용으로
+    /// 남겨 두었고, 표식을 끄는 실제 경로는 커스터디 이탈(재착석·도주·석방)뿐이다.
     ///
     /// <b>푸는 것은 막지 않는다.</b> 밖에서 묶어 유치장까지 끌고 들어가 안에서 풀면 앉는 것이 검거 흐름의
-    /// 결말이므로(#492), 여기서 풀기까지 막으면 그 흐름이 통째로 끊긴다. 막는 것은 안에서 <b>새로 거는</b>
-    /// 조작이고, 이미 걸려서 끌고 들어온 줄은 그대로 유지된다.
+    /// 결말이므로(#492), 여기서 풀기까지 막으면 그 흐름이 통째로 끊긴다. 이미 걸려서 끌고 들어온 줄도
+    /// 그대로 유지된다.
     ///
-    /// 그래서 반출한 수감자를 다시 밖으로 데려가려면 밧줄이 아니라 반출 추종(E)을 쓴다 — "유치장 안의
-    /// 신병은 밧줄로 다루지 않는다"가 규칙이 된다. 훗날 수감자를 눕히는 용도가 필요해지면 그때 다시 연다.
+    /// <b>줄다리기 합류는 살아 있다</b> — 실제로 밧줄로 끌리는 중인 대상은 여기 걸리지 않는다. 상태만 보고
+    /// <see cref="NpcState.Escorted"/> 전체를 막으면 한 대상에 두 번째 줄을 거는 유일한 경로가 사라져
+    /// 무게를 나눠 끄는 협동(#390/#398)이 통째로 죽는다. 그 둘을 가르는 것이 <c>IsFollowingUnroped</c>다.
     ///
     /// <see cref="JailArea"/>를 보는 근거는 <see cref="ServerApplyUnrope"/>의 풀기 분기와 같다 —
     /// "이 좌표가 Jail 영역인가"를 답하는 정적 판정 유틸이라, 이걸 읽는 것이 유치장을 아는 것은 아니다.
     /// </summary>
-    public static bool IsRopeBlockedAt(NpcController target) =>
-        target != null && JailArea.Contains(target.transform.position);
+    public static bool IsRopeBlocked(NpcController target) =>
+        target != null
+        && (JailArea.Contains(target.transform.position)
+            || NpcStateRules.IsFollowingUnroped(target)
+            || target.IsJailExtracted);
 
     // 새 대상을 묶을 수 있는가 — 자원(밧줄 개수)·중복·사거리. 상태 게이트는 호출부가 각자 건다.
     private bool CanBeginRopeDrag(NpcController target)
     {
         if (m_channel.IsActive)
             return false;
-        if (IsRopeBlockedAt(target))
+        if (IsRopeBlocked(target))
             return false; // 유치장 안에서는 새로 묶기·합류가 막힌다
         if (Escorter.IsTetheredTo(target))
             return false; // 이미 내 줄에 묶여 있다 — 좌클릭은 풀기/재개로 갈린다
@@ -461,6 +458,8 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         // 준 경우, 합류하려던 대상을 끌던 사람이 그새 놓아버린 경우 등).
         if (target == null || Escorter.IsAtRopeCapacity)
             return;
+        if (IsRopeBlocked(target))
+            return; // 3초 사이에 유치장 안으로 들어갔거나 밧줄이 빠졌을 수 있다
         if (!NpcStateRules.CanJoinDrag(target.CurrentState))
             return;
 
@@ -547,7 +546,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
 
         // <b>유치장 안에서는 쓰러진 구간을 두지 않는다</b> — 일어나 곧바로 좌석을 찾아간다 (팀 확정 2026-08-05).
         // 밖에서 쓰러져 있는 몇 초는 <b>재포획 창</b>으로서 값을 갖지만(달려가 다시 묶을 수 있다), 안에서는
-        // 밧줄을 아예 쓸 수 없으므로(<see cref="IsRopeBlockedAt"/>) 그 창에 아무 선택지가 없다 —
+        // 밧줄을 아예 쓸 수 없으므로(<see cref="IsRopeBlocked"/>) 그 창에 아무 선택지가 없다 —
         // 수감이 몇 초 늦어지는 것만 남는다.
         float downSeconds = insideJail ? 0f : m_unropeDownSeconds;
 

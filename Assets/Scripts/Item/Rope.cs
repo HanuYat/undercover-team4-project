@@ -61,11 +61,11 @@ public class Rope : ItemBase
             return;
         }
 
-        // 유치장 안의 신병은 밧줄로 다루지 않는다 (팀 확정 2026-08-05) — 아래 세 갈래 전부가 막힌다.
-        // 끌고 들어온 줄을 푸는 것(E)은 그대로이고, 안에서 다시 데려가려면 반출 추종(E)을 쓴다.
-        if (PlayerEscortCommands.IsRopeBlockedAt(target))
+        // 유치장에서 꺼낸 신병은 밧줄로 다루지 않는다 (팀 확정 2026-08-05) — 아래 세 갈래 전부가 막힌다.
+        // 유치장 안이거나 반출돼 따라오는 중이면 걸리고, 끌고 들어온 줄을 푸는 것(E)은 그대로다.
+        if (PlayerEscortCommands.IsRopeBlocked(target))
         {
-            Debug.Log("유치장 안에서는 밧줄을 쓸 수 없다 — 데려가려면 반출(E), 풀려면 E");
+            Debug.Log($"밧줄을 쓸 수 없는 대상 (유치장 안 / 반출한 신병): {target.name}");
             return;
         }
 
@@ -123,8 +123,8 @@ public class Rope : ItemBase
         if (escorter == null)
             return false;
 
-        // 유치장 안에서는 밧줄을 쓸 수 없으므로 윤곽선도 뜨지 않는다 — Use의 조기 차단과 단일 기준 (#184)
-        if (PlayerEscortCommands.IsRopeBlockedAt(target))
+        // 밧줄을 쓸 수 없는 대상에는 윤곽선도 뜨지 않는다 — Use의 조기 차단과 단일 기준 (#184)
+        if (PlayerEscortCommands.IsRopeBlocked(target))
             return false;
 
         // 재개(놓아둔 체포 / 내 줄)는 새 밧줄을 쓰지 않으므로 용량과 무관하게 언제나 가능하다.
