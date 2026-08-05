@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 라운드 목표 금액 진행도 HUD (#395) — "지금 벌어둔 금액 / 목표 금액"을 표시한다.
@@ -19,8 +20,11 @@ public class RoundFundBoard : MonoBehaviour
     [Tooltip("목표 진행도를 표시할 TextMeshPro (UGUI, 3D)")]
     [SerializeField] private TMP_Text m_fundText;
 
-    [Tooltip("표시 형식 — {0}=지금 벌어둔 금액, {1}=목표 금액")]
-    [SerializeField] private string m_format = "{0:N0} / {1:N0}원";
+    // 코드가 대입하는 자리라 라벨에 LocalizeStringEvent를 붙일 수 없다 — 서로 덮어쓴다. (#497)
+    // 본부 게시판이지만 키는 HudTable에 뒀다 — 문서 §3이 '팀 자금' 표시를 HudTable로 잡았고,
+    // HqTable은 인명부·수배 리스트처럼 본부 화면 고유 UI를 담는 자리다.
+    [Tooltip("표시 형식 — Hud.Round.FundProgress ({0}=지금 벌어둔 금액, {1}=목표 금액)")]
+    [SerializeField] private LocalizedString m_fundFormat;
 
     [Tooltip("목표를 채웠을 때 입힐 색 — 본부 종료 버튼이 켜졌다는 신호와 같은 의미다")]
     [SerializeField] private Color m_metColor = new Color(0.36f, 0.85f, 0.44f);
@@ -34,6 +38,8 @@ public class RoundFundBoard : MonoBehaviour
 
     // 구독해 둔 유치장 — 라운드 도중 교체될 일이 없으므로 OnEnable에서 한 번 잡아 둔다
     private JailZone m_jail;
+
+    private bool m_bound;
 
     private void OnEnable()
     {
@@ -63,6 +69,11 @@ public class RoundFundBoard : MonoBehaviour
         if (m_jail != null)
             m_jail.OnBountyTotalChanged -= HandleBountyChanged;
         m_jail = null;
+
+        // 꺼진 게시판이 언어 변경에 반응하지 않게 — 다시 켜지면 Refresh가 다시 건다
+        Unbind();
+        m_lastCurrent = int.MinValue;
+        m_lastTarget = int.MinValue;
     }
 
     private void HandleBountyChanged(int _) => Refresh();
@@ -97,8 +108,40 @@ public class RoundFundBoard : MonoBehaviour
 
         m_lastCurrent = current;
         m_lastTarget = target;
-        m_fundText.text = string.Format(m_format, current, target);
+        Bind(current, target);
         m_fundText.color = current >= target ? m_metColor : m_defaultColor;
+    }
+
+    // 금액이 바뀔 때마다 인자를 갈아끼우고 다시 구독한다 — 인자를 먼저 넣어야 구독 시점의
+    // 첫 발화부터 금액이 들어간 문장이 나온다 (SessionCodePanel과 같은 관례).
+    private void Bind(int current, int target)
+    {
+        if (m_fundFormat == null || m_fundFormat.IsEmpty)
+        {
+            Debug.LogWarning("RoundFundBoard: 금액 문구가 연결되지 않았다", this);
+            return;
+        }
+
+        Unbind();
+
+        m_fundFormat.Arguments = new object[] { current, target };
+        m_fundFormat.StringChanged += HandleStringChanged;
+        m_bound = true;
+    }
+
+    private void HandleStringChanged(string localized)
+    {
+        if (m_fundText != null)
+            m_fundText.text = localized;
+    }
+
+    private void Unbind()
+    {
+        if (!m_bound)
+            return;
+
+        m_fundFormat.StringChanged -= HandleStringChanged;
+        m_bound = false;
     }
 
     // TMP 컴포넌트만 켜고 끈다 (RemainingCriminalsHud와 동일한 이유 — 자기 콜백을 죽이지 않도록)

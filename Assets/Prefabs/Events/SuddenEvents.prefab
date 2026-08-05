@@ -16,6 +16,7 @@ GameObject:
   - component: {fileID: 6553283234259604354}
   - component: {fileID: 812660901877859943}
   - component: {fileID: 1036064955631126747}
+  - component: {fileID: 1542303654048081899}
   m_Layer: 0
   m_Name: SuddenEvents
   m_TagString: Untagged
@@ -89,6 +90,8 @@ MonoBehaviour:
   - component: {fileID: 6553283234259604354}
     enabled: 1
   - component: {fileID: 1036064955631126747}
+    enabled: 1
+  - component: {fileID: 1542303654048081899}
     enabled: 1
 --- !u!114 &4617273519023223210
 MonoBehaviour:
@@ -187,3 +190,36 @@ MonoBehaviour:
     m_pettyCrimeRewardMin: 500
     m_pettyCrimeRewardMax: 4000
     m_maxLifetimeSeconds: 60
+--- !u!114 &1542303654048081899
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498939978214492355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 36e1baa135e234a41b1c17034d679956, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AbductionEvent
+  m_displayName: "\uB0A9\uCE58"
+  m_abductorPrefab: {fileID: 2619429540877725376, guid: 2dbe83b7777ed1f4bb1cc97416c79042, type: 3}
+  m_abductorCount: 2
+  m_spawnDistanceMin: 10
+  m_spawnDistanceMax: 18
+  m_navSampleMaxDistance: 4
+  m_maxSpawnAttempts: 8
+  m_rewardMin: 500
+  m_rewardMax: 4000
+  m_loneWatch:
+    m_loneRadius: 15
+    m_loneSeconds: 20
+    m_hqZone: {fileID: 0}
+    m_scanInterval: 0.25
+  m_outskirtPoints: []
+  m_convergeArriveDistance: 2.5
+  m_convergeTimeoutSeconds: 20
+  m_carrierGap: 1.1
+  m_arriveDistance: 2
+  m_travelTimeoutSeconds: 90
+  m_maxChaseSeconds: 60

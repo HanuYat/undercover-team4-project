@@ -1,4 +1,5 @@
 using System;
+using Unity.Netcode;
 using UnityEngine;
 
 public partial class NpcController
@@ -15,6 +16,20 @@ public partial class NpcController
 
     /// <summary>추격 대상 플레이어. 추격 중이 아니면 null. 서버에서만 유효. (#278)</summary>
     public Transform ChaseTarget { get; private set; }
+
+    // 이 페널티 임무가 납치인가 — 서버가 정하고 전 피어가 읽는다. 마크를 그리는 쪽이 표현 계층(모든 피어)이라
+    // 서버 전용 필드로는 부족하다 (#56). 오프라인(네트워크 미사용) Play는 아래 로컬 사본을 본다.
+    private readonly NetworkVariable<bool> m_abductionDuty = new NetworkVariable<bool>();
+    private bool m_abductionDutyLocal;
+
+    /// <summary>
+    /// 이 페널티 임무가 <b>납치</b>(#371)인가 — 아니면 오검거(#276~#280)다. 두 곳이 이 값을 본다:
+    /// 추격 재타겟(납치는 표적을 갈아타지 않는다)과 앵그리 마크(납치범은 시민과 구분되지 않아야 하므로 띄우지 않는다).
+    /// </summary>
+    public bool IsAbductionDuty => IsSpawned ? m_abductionDuty.Value : m_abductionDutyLocal;
+
+    /// <summary>임무 종류가 바뀐 순간 발행 — 전 피어. 표현 계층이 앵그리 마크를 다시 판정한다. (#371)</summary>
+    public event Action OnPenaltyDutyChanged;
 
     /// <summary>수렴 대상(포획된 플레이어) — 설정되면 추격 상태가 일반 추격 대신 이 대상에게 모인다. (#279)</summary>
     public Transform PenaltyConvergeTarget { get; private set; }
@@ -56,15 +71,32 @@ public partial class NpcController
         m_stateMachine.ChangeState(NpcState.Detained);
     }
 
-    /// <summary>추격 출동 — 임계치를 넘긴 플레이어를 초기 타겟으로 쫓기 시작한다. (#278)</summary>
-    public void StartPenaltyChase(Transform target)
+    /// <summary>
+    /// 추격 출동 — 임계치를 넘긴 플레이어를 초기 타겟으로 쫓기 시작한다. (#278)
+    /// abductionDuty를 켜면 납치 임무가 된다 — 표적을 갈아타지 않고 앵그리 마크도 띄우지 않는다 (#371).
+    /// </summary>
+    public void StartPenaltyChase(Transform target, bool abductionDuty = false)
     {
         if (IsSpawned && !IsServer)
             return;
 
         DetentionSpot = null;
         ChaseTarget = target;
+        SetAbductionDuty(abductionDuty); // 상태 전이보다 먼저 — 마크 판정이 임무 종류를 이미 알고 있어야 한다
         m_stateMachine.ChangeState(NpcState.Chasing);
+    }
+
+    // 임무 종류를 세우고 전 피어에 알린다. 오프라인이면 로컬 사본만 바꾸고 직접 발행한다(NetworkVariable이 안 돈다).
+    private void SetAbductionDuty(bool value)
+    {
+        if (m_abductionDutyLocal == value && (!IsSpawned || m_abductionDuty.Value == value))
+            return;
+
+        m_abductionDutyLocal = value;
+        if (IsSpawned)
+            m_abductionDuty.Value = value; // OnValueChanged가 전 피어에서 OnPenaltyDutyChanged로 이어진다
+        else
+            OnPenaltyDutyChanged?.Invoke();
     }
 
     /// <summary>추격 타겟 교체 — 범위 이탈 재타겟(NpcChaseState)·수렴 지시(매니저)가 호출한다. (#278)</summary>
@@ -127,6 +159,7 @@ public partial class NpcController
 
         DetentionSpot = null;
         ChaseTarget = null;
+        SetAbductionDuty(false);
         PenaltyConvergeTarget = null;
         ChaseRepelBy = null;
         ChaseRepelUntil = 0f;

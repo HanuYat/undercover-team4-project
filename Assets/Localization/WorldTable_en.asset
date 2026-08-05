@@ -33,6 +33,34 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 6276845892712267877
+  - m_Id: 7100000000200
+    m_Localized: Signal Decoder
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000201
+    m_Localized: Scanner Charger
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000202
+    m_Localized: Revival Bay
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000800
+    m_Localized: Jail
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000801
+    m_Localized: Crosswalk
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000802
+    m_Localized: HQ front
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000803
+    m_Localized: Toward the shops
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

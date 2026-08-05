@@ -14,7 +14,63 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.SharedTableData
   m_TableCollectionName: SettlementTable
   m_TableCollectionNameGuidString: 3f2fd7e385653d942b703d8de65d7d61
-  m_Entries: []
+  m_Entries:
+  - m_Id: 7100000000400
+    m_Key: Settlement.Result.Success
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000401
+    m_Key: Settlement.Result.Failure
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000402
+    m_Key: Settlement.Return.Success
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000403
+    m_Key: Settlement.Return.Failure
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000404
+    m_Key: Settlement.Reason.QuotaMet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000405
+    m_Key: Settlement.Reason.TimeOver
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000406
+    m_Key: Settlement.Reason.AllPlayersDown
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000407
+    m_Key: Settlement.Reason.ManualEnd
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000408
+    m_Key: Settlement.Fund.Summary
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000409
+    m_Key: Settlement.TopOffender.Some
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000410
+    m_Key: Settlement.TopOffender.None
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000411
+    m_Key: Settlement.Personal.Earned
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000412
+    m_Key: Settlement.Countdown
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000413
+    m_Key: Settlement.Window.Title
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

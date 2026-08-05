@@ -80,9 +80,9 @@ public class WantedListManager : NetworkedManagerBase
             Judge.OnArrestJudged -= HandleArrestJudged;
     }
 
-    // 몽타주 생성 완료 = 범인·외형·이름 모두 확정된 시점. 수배 항목을 리스트에 추가한다. (서버 전용)
+    // 몽타주 공개 = 범인·외형·이름 모두 확정된 시점. 수배 항목을 리스트에 추가한다. (서버 전용)
     // 진범이 여러 명이면(#127) 범인마다 한 번씩 호출되어 항목이 그만큼 추가된다.
-    private void HandleMontageGenerated(NpcController criminal, string montageText)
+    private void HandleMontageGenerated(NpcController criminal, AppearanceProfile appearance)
     {
         if (criminal == null)
         {
@@ -95,11 +95,17 @@ public class WantedListManager : NetworkedManagerBase
         CitizenProfile profile = identity != null ? identity.Profile : null;
         string wantedName = profile != null ? profile.CitizenName : criminal.name;
 
+        // 몽타주는 문장이 아니라 원본(공개 축 + 그 축의 값)으로 싣는다 — 표시하는 피어가 자기 언어로
+        // 조립하므로 호스트·클라 언어가 갈려도 각자 언어로 보인다 (#497). 비공개 축은 Masked로 지운다.
+        AppearanceAssigner assigner = Appearance;
+        RevealedAxisSet revealedAxes = assigner != null ? assigner.RevealedAxes : default;
+
         m_wanted.Add(new WantedEntry
         {
             NpcId = criminal.NetworkObjectId,
             Name = wantedName.ToFixed64(),
-            Montage = montageText.ToFixed128(),
+            Appearance = appearance.Masked(revealedAxes),
+            RevealedAxes = revealedAxes,
             // 현상금은 서버 전용 값이라 항목에 실어야 본부에서 볼 수 있다 (#395)
             Bounty = identity != null ? identity.Bounty : 0,
         });
@@ -107,6 +113,9 @@ public class WantedListManager : NetworkedManagerBase
         // ⚠ 라운드 도중 수배 리스트에 진범을 새로 추가하는 다른 경로(#102 제보 전화 '승격' 등)가 생기면,
         //   그 경로에서도 반드시 m_totalWanted를 함께 증가시켜야 HUD 전체 진범 수가 어긋나지 않는다.
         m_totalWanted.Value++;
+        // 로그용 문장은 여기서(서버 언어로) 한 번 만든다 — 콘솔은 개발자용이라 번역 대상이 아니다
+        AppearanceDatabase database = assigner != null ? assigner.Database : null;
+        string montageText = database != null ? database.BuildMontageText(appearance, revealedAxes) : "?";
         Debug.Log($"[수배] 등록: {wantedName} — \"{montageText}\" / 현상금 {(identity != null ? identity.Bounty : 0)}원 (현재 {m_wanted.Count}건)");
     }
 

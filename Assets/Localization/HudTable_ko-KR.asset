@@ -50,6 +50,78 @@ MonoBehaviour:
       \uB04C\uB824\uAC11\uB2C8\uB2E4"
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000300
+    m_Localized: "\uB2E4\uB978 \uD50C\uB808\uC774\uC5B4 \uB300\uAE30 \uC911 ({0}/{1})"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000301
+    m_Localized: '{0} / {1}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000302
+    m_Localized: "\uB9C8\uC774\uD06C\uAC00 \uAEBC\uC838 \uC788\uC2B5\uB2C8\uB2E4"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000303
+    m_Localized: "{0:N0} / {1:N0}\uC6D0"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000310
+    m_Localized: "\uD604\uC0C1\uC218\uBC30\uBC94 \uAC80\uAC70!"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000311
+    m_Localized: "\uC624\uAC80\uAC70"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000312
+    m_Localized: "\uACBD\uBC94\uC8C4 \uCC98\uB9AC"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000313
+    m_Localized: "{0}  \u2014  \uBCF4\uC0C1 {1:N0}\uC6D0"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000314
+    m_Localized: "\uBC30\uD130\uB9AC {0}/{1}"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000315
+    m_Localized: "\uC2A4\uCE90\uB108 \uCDA9\uC804 \uC644\uB8CC"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000316
+    m_Localized: "\uC2A4\uCE90\uB108 \uBC30\uD130\uB9AC \uBD80\uC871"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000317
+    m_Localized: "\uC774\uB984: {0}"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000318
+    m_Localized: "\uD0C0\uC785: {0}"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000319
+    m_Localized: "\uC138\uB825: {0}"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 95636848959488
+    m_Localized: "\uC218\uD654\uAE30 \uB108\uBA38\uB85C \uB0AE\uC740 \uBAA9\uC18C\uB9AC\uAC00
+      \uAC70\uB798\uB97C \uC81C\uC548\uD55C\uB2E4."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 95807313862656
+    m_Localized: "\uCCAD\uD0C1 \u2014 \uB300\uC0C1 {0} / \uBCF4\uC0C1 {1}\uC6D0 \xB7
+      \uD45C\uC2DD\uC774 \uCF1C\uC9C4 \uACF3\uC73C\uB85C \uB370\uB824\uAC08 \uAC83."
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267876
+  - m_Id: 95878210183168
+    m_Localized: "\uCCAD\uD0C1 \uC644\uC218 \u2014 \uAC1C\uC778 \uC790\uAE08 +{0}\uC6D0"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267876
   references:
     version: 2
     RefIds:
@@ -59,3 +131,13 @@ MonoBehaviour:
         m_Entries: 
         m_SharedEntries:
         - id: 3135780229120
+        - id: 7100000000300
+        - id: 7100000000301
+        - id: 7100000000303
+        - id: 7100000000313
+        - id: 7100000000314
+        - id: 7100000000317
+        - id: 7100000000318
+        - id: 7100000000319
+        - id: 95807313862656
+        - id: 95878210183168

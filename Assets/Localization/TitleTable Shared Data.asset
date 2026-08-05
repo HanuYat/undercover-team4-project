@@ -115,6 +115,130 @@ MonoBehaviour:
     m_Key: Title.Session.Status.JoinFailed
     m_Metadata:
       m_Items: []
+  - m_Id: 10788103327750
+    m_Key: Title.AccountValidation.UsernameEmpty
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327751
+    m_Key: Title.AccountValidation.UsernameLength
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327752
+    m_Key: Title.AccountValidation.UsernameCharset
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327753
+    m_Key: Title.AccountValidation.PasswordEmpty
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327754
+    m_Key: Title.AccountValidation.PasswordLength
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327755
+    m_Key: Title.AccountValidation.PasswordCharset
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327756
+    m_Key: Title.AccountValidation.PasswordComposition
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327757
+    m_Key: Title.AccountError.UsernameTaken
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327758
+    m_Key: Title.AccountError.AlreadyLinked
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327759
+    m_Key: Title.AccountError.InvalidFormat
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327760
+    m_Key: Title.AccountError.Unclassified
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327761
+    m_Key: Title.NicknameValidation.Empty
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327762
+    m_Key: Title.NicknameValidation.Whitespace
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327763
+    m_Key: Title.NicknameValidation.TooLong
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327764
+    m_Key: Title.AccountLock.InSession
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327765
+    m_Key: Title.AccountLock.Switching
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327766
+    m_Key: Title.AccountAction.Link
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327767
+    m_Key: Title.AccountAction.Switch
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327768
+    m_Key: Title.Account.RequiresSignInToLink
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327769
+    m_Key: Title.Account.AlreadyLinked
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327770
+    m_Key: Title.Account.RequiresSignInToSwitch
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327771
+    m_Key: Title.AuthStatus.Busy
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327772
+    m_Key: Title.AuthStatus.LinkSucceeded
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327773
+    m_Key: Title.AuthStatus.SignInSucceeded
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327774
+    m_Key: Title.AuthStatus.NewAnonymousStarted
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327775
+    m_Key: Title.AuthStatus.ConfirmUnavailableForLink
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327776
+    m_Key: Title.AuthStatus.ConfirmUnavailableForSwitch
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327777
+    m_Key: Title.Auth.PlayerId
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327778
+    m_Key: Title.Auth.SignedOut
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327779
+    m_Key: Title.Auth.LinkConfirm
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327780
+    m_Key: Title.Auth.NewAnonymousConfirm
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

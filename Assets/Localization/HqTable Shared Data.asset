@@ -14,7 +14,55 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.SharedTableData
   m_TableCollectionName: HqTable
   m_TableCollectionNameGuidString: a4c8df317b247dd44b76163f41d8135a
-  m_Entries: []
+  m_Entries:
+  - m_Id: 7100000000000
+    m_Key: Hq.Directory.Title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000001
+    m_Key: Hq.Directory.SortByName
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000002
+    m_Key: Hq.Directory.SortByFaction
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000003
+    m_Key: Hq.Directory.PrevPage
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000004
+    m_Key: Hq.Directory.NextPage
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000005
+    m_Key: Hq.FactionBoard.Title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000006
+    m_Key: Hq.RoundEnd.Button
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000500
+    m_Key: Hq.Cctv.NoChannel
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000501
+    m_Key: Hq.Cctv.NoSignal
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000502
+    m_Key: Hq.Cctv.PowerOff
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000503
+    m_Key: Hq.Cctv.Channel
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000504
+    m_Key: Hq.Cctv.ChannelWithLocation
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

@@ -87,6 +87,14 @@ public class JailZone : NetworkBehaviour
     public event Action<int> OnInmateCountChanged;
 
     /// <summary>
+    /// 새 수감자가 계상됐다 — <b>서버(또는 오프라인)에서만</b> 발생한다. 비밀 청탁(#485)이
+    /// "이 사람을 빼달라는 전화가 올지"를 그 대상별로 굴리는 훅이다.
+    /// 인원 수만 필요하면 <see cref="OnInmateCountChanged"/> 쪽을 쓸 것 — 이쪽은 대상을 넘기므로
+    /// 서버 전용 값(신원·현상금)을 읽는 용도다.
+    /// </summary>
+    public event Action<NpcController> OnInmateAdmitted;
+
+    /// <summary>
     /// 지금 유치장에 잡아둔 대상들의 현상금 합 — 라운드 목표 금액(#395)의 진행도다.
     /// 라운드 종료 정산액(<see cref="TallySettlement"/>의 total)과 같은 레코드에서 나오므로
     /// 진행 중에 보이던 금액과 최종 정산이 어긋나지 않는다. 탈옥으로 방출되면 함께 줄어든다
@@ -241,6 +249,8 @@ public class JailZone : NetworkBehaviour
         // 자동 재잠금은 제거됐다 (#492) — 탈옥으로 열린 자물쇠는 <b>플레이어가 직접 잠가야 한다</b>
         // (유치장 문에 E). 수감만 하면 저절로 잠기던 예전 처리는 "털렸으면 가서 잠근다"는 책임을
         // 없애 버렸다. 열린 자물쇠는 문이 열린 채로 남아 계속 눈에 띈다(JailDoor.IsJailbreakHoldingOpen).
+
+        OnInmateAdmitted?.Invoke(npc); // 계상이 끝난 뒤에 알린다 — 구독자가 InmateCount를 읽어도 맞게 나온다
     }
 
     /// <summary>

@@ -52,8 +52,12 @@ public class NpcPenaltyEscortState : NpcStateBase
 
         NpcController leader = m_owner.PenaltyEscortLeader;
 
-        // 선두가 없거나 소실(파괴)됐으면 스스로 광장으로 걷는다 — 호송이 길에서 멈추지 않게
-        if (leader == null)
+        // 선두가 소실(파괴)됐거나 <b>임무를 벗었으면</b> 스스로 목적지로 걷는다 — 호송이 길에서 멈추지 않게.
+        // 임무 이탈까지 보는 이유는 납치 구조(#371) 때문이다: 선두만 맞아 떨어지면 그는 배회 시민으로
+        // 돌아가는데, 파괴된 것은 아니라 예전 판정(null)에는 걸리지 않았다 — 남은 하나가 배회하는 시민을
+        // 따라다니며 플레이어를 도시 여기저기로 끌고 다녔다.
+        // EndPenaltyDuty가 지우는 PenaltyEscortGoal로 판별한다 (CarryEscortSequence의 해체 판정과 같은 기준).
+        if (leader == null || leader.PenaltyEscortGoal == null)
         {
             if (m_owner.PenaltyEscortGoal != null)
                 m_owner.Agent.SetDestination(m_owner.PenaltyEscortGoal.position);
