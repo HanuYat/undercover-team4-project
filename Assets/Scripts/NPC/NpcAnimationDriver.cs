@@ -143,6 +143,11 @@ public class NpcAnimationDriver : MonoBehaviour
     private float m_standUpUntil;
     // 직전 프레임의 묶임 여부 — 묶임/풀림이 바뀌는 순간에만 base 모션·콜라이더를 다시 시드한다 (#369/#513).
     private bool m_ropeBoundMotion;
+
+    // 위와 같은 엣지 감지를 누움 판정(IsRopeProne)에도 둔다 — 묶임 표시와 일어나기 예약 표시는 서로 다른
+    // NetworkVariable이라 원격 피어 도착 순서가 보장되지 않는다. 묶임만 보면 예약이 늦게 도착하는 순서에서
+    // 누운 몸이 잠깐 벌떡 선다. (#513)
+    private bool m_ropeProneMotion;
     // 직전 프레임의 착석 여부 — 앉음/일어남이 바뀌는 순간에만 모션·루트모션을 다시 시드한다 (#462).
     // 끌림과 같은 폴링 방식이다: 상태 전이 훅만으론 놓친다 — 착석 플래그와 커스터디 전이가 별개
     // NetworkVariable이라 원격 피어 도착 순서가 보장되지 않는다.
@@ -175,13 +180,18 @@ public class NpcAnimationDriver : MonoBehaviour
     private bool IsRopeBound => m_controller.IsRoped || m_controller.IsTethered;
 
     /// <summary>
-    /// 밧줄에 묶인 채 <b>바닥에 있는가</b> — 줄이 걸려 있고 아직 일어나지 않았다. 누운 모션·콜라이더의 기준. (#513)
+    /// 밧줄 때문에 <b>바닥에 있는가</b> — 줄이 걸려 있거나 풀린 뒤 아직 쓰러져 있고, 기상 모션이 아직
+    /// 시작되지 않았다. 누운 모션·콜라이더의 기준. (#513)
     ///
-    /// 묶임만으로 판정하지 않는 이유는 풀리는 순간의 순서 때문이다: 줄을 실제로 푸는 네 경로는
+    /// <b>예약 구간</b>(<see cref="NpcController.IsStandingUp"/>)을 함께 보는 이유: 풀기는 예약을 걸자마자
+    /// 줄을 빼므로 묶임만 보면 <b>쓰러져 기다리는 몇 초 동안 몸을 눕혀 둘 근거가 사라진다</b> — 푸는 즉시
+    /// 벌떡 서고 뒤늦게 이미 서 있는 몸에 기상 모션이 나왔다. 예약이 곧 "아직 바닥"이다.
+    ///
+    /// 반대로 <see cref="m_standingUp"/>을 빼는 이유는 풀리는 순간의 순서 때문이다: 실제로 푸는 경로는
     /// "일어나기 → 후속 전이(도주·배회·착석)" 순인데, 묶임 표시를 걷는 것은 <see cref="PlayerEscorter"/>의
-    /// 매 프레임 정리라 한 박자 늦게 온다. 묶임만 보면 이미 일어나 걷기 시작한 몸이 그 사이 도로 눕는다.
+    /// 매 프레임 정리라 한 박자 늦게 온다. 그것만 보면 이미 일어나 걷기 시작한 몸이 그 사이 도로 눕는다.
     /// </summary>
-    private bool IsRopeProne => IsRopeBound && !m_standingUp;
+    private bool IsRopeProne => (IsRopeBound || m_controller.IsStandingUp) && !m_standingUp;
 
     private void Awake()
     {
@@ -393,6 +403,21 @@ public class NpcAnimationDriver : MonoBehaviour
                 m_animator.SetInteger(s_stateHash, AnimatorBaseState(m_baseState));
 
             RefreshProne(); // 눕/서에 맞춰 콜라이더도 되돌린다 (#363)
+            m_lastPosition = transform.position;
+            m_smoothedSpeed = 0f;
+        }
+
+        // 누움 판정에는 일어나기 예약(쓰러져 대기)도 들어가므로 따로 엣지를 본다 (#513) — 위 블록은 묶임
+        // 표시만 보는데, 풀기는 예약을 걸자마자 줄을 빼고 두 표시의 도착 순서가 보장되지 않는다.
+        // 예약이 늦게 도착하는 순서에서 이 블록이 자세를 도로 눕힌다.
+        if (m_ropeProneMotion != IsRopeProne)
+        {
+            m_ropeProneMotion = IsRopeProne;
+
+            if (m_ropeProneMotion || m_standUpUntil <= 0f)
+                m_animator.SetInteger(s_stateHash, AnimatorBaseState(m_baseState));
+
+            RefreshProne();
             m_lastPosition = transform.position;
             m_smoothedSpeed = 0f;
         }

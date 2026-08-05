@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
@@ -378,6 +378,8 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     {
         if (target == null)
             return false;
+        if (IsRopeBlockedAt(target))
+            return false;
 
         // 이미 내 줄에 묶여 있는(놓아둔) 대상은 용량 게이트를 타지 않는다 — 새 밧줄을 쓰지 않으므로.
         // 태우면 밧줄을 꽉 채워 놓아둔 순간 아무도 다시 못 끌게 된다.
@@ -395,11 +397,30 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
             && !Escorter.IsAtRopeCapacity;
     }
 
+    /// <summary>
+    /// 이 대상에 <b>밧줄을 걸 수 없는 자리</b>인가 — 유치장 안에서는 묶기·합류·재개가 전부 막힌다.
+    /// 서버 가드와 클라 조기검증·조준 피드백(<see cref="Rope"/>)이 함께 보는 단일 기준. (팀 확정 2026-08-05)
+    ///
+    /// <b>푸는 것은 막지 않는다.</b> 밖에서 묶어 유치장까지 끌고 들어가 안에서 풀면 앉는 것이 검거 흐름의
+    /// 결말이므로(#492), 여기서 풀기까지 막으면 그 흐름이 통째로 끊긴다. 막는 것은 안에서 <b>새로 거는</b>
+    /// 조작이고, 이미 걸려서 끌고 들어온 줄은 그대로 유지된다.
+    ///
+    /// 그래서 반출한 수감자를 다시 밖으로 데려가려면 밧줄이 아니라 반출 추종(E)을 쓴다 — "유치장 안의
+    /// 신병은 밧줄로 다루지 않는다"가 규칙이 된다. 훗날 수감자를 눕히는 용도가 필요해지면 그때 다시 연다.
+    ///
+    /// <see cref="JailArea"/>를 보는 근거는 <see cref="ServerApplyUnrope"/>의 풀기 분기와 같다 —
+    /// "이 좌표가 Jail 영역인가"를 답하는 정적 판정 유틸이라, 이걸 읽는 것이 유치장을 아는 것은 아니다.
+    /// </summary>
+    public static bool IsRopeBlockedAt(NpcController target) =>
+        target != null && JailArea.Contains(target.transform.position);
+
     // 새 대상을 묶을 수 있는가 — 자원(밧줄 개수)·중복·사거리. 상태 게이트는 호출부가 각자 건다.
     private bool CanBeginRopeDrag(NpcController target)
     {
         if (m_channel.IsActive)
             return false;
+        if (IsRopeBlockedAt(target))
+            return false; // 유치장 안에서는 새로 묶기·합류가 막힌다
         if (Escorter.IsTetheredTo(target))
             return false; // 이미 내 줄에 묶여 있다 — 좌클릭은 풀기/재개로 갈린다
         if (Escorter.IsAtRopeCapacity)
@@ -524,6 +545,12 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         bool insideJail = JailArea.Contains(target.transform.position);
         System.Action afterStandUp = insideJail ? null : target.ReleaseFromCustody;
 
+        // <b>유치장 안에서는 쓰러진 구간을 두지 않는다</b> — 일어나 곧바로 좌석을 찾아간다 (팀 확정 2026-08-05).
+        // 밖에서 쓰러져 있는 몇 초는 <b>재포획 창</b>으로서 값을 갖지만(달려가 다시 묶을 수 있다), 안에서는
+        // 밧줄을 아예 쓸 수 없으므로(<see cref="IsRopeBlockedAt"/>) 그 창에 아무 선택지가 없다 —
+        // 수감이 몇 초 늦어지는 것만 남는다.
+        float downSeconds = insideJail ? 0f : m_unropeDownSeconds;
+
         // 내 줄이 걸려 있으면 그것부터 뺀다 — 줄다리기 중이면 여기서 끝이다(남은 참가자가 계속 끈다).
         // 마지막 한 명이었으면 대상이 커스터디에서 풀려 아래 배회 복귀로 이어진다. (#390 규칙 8)
         if (Escorter.IsTetheredTo(target))
@@ -538,7 +565,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
             // RemoveTether보다 <b>앞</b>이어야 한다: 줄을 먼저 빼면 묶임 표시가 내려가
             // ServerStandUpThen이 "이미 서 있다"로 오판해 일어나기가 통째로 생략된다.
             if (!othersHold)
-                target.ServerStandUpThen(afterStandUp, m_unropeDownSeconds);
+                target.ServerStandUpThen(afterStandUp, downSeconds);
 
             Escorter.RemoveTether(target);
 
@@ -564,7 +591,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         NotifyOwner(insideJail
             ? $"밧줄 풀기 완료 — 유치장 안이라 그 자리에 둔다: {target.name}"
             : $"밧줄 풀기 완료 — 배회 복귀: {target.name}");
-        target.ServerStandUpThen(afterStandUp, m_unropeDownSeconds);
+        target.ServerStandUpThen(afterStandUp, downSeconds);
     }
 
     // 본부 인계 요청(#414)은 제거됐다 (#492) — 판정 트리거가 인계 단말에서 유치장 앞 보안 게이트로
