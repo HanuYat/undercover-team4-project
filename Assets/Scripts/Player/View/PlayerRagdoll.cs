@@ -117,10 +117,12 @@ public class PlayerRagdoll : MonoBehaviour
              "스냅처럼 보인다. 착지 후 구르는 중의 델타는 실측 0.15~0.23m라 이 속도로 충분하다")]
     [SerializeField] private float m_alignPullSpeed = 1.5f;
 
-    [Tooltip("원격 피어가 비행 중 시체를 오너 골반으로 당겨오는 속도(m/s) — 3차원. 시체가 6m/s로 " +
-             "나므로 착지 후 값(1.5)으로는 따라붙지 못한다. 병리적 루트 점프를 뼈로 넘기지 않기 위한 " +
-             "상한이므로 정상 비행에서는 걸리지 않는다(진입 시 델타 0에서 출발)")]
-    [SerializeField] private float m_flightAlignPullSpeed = 12f;
+    [Tooltip("원격 피어가 비행 중 시체를 오너 골반으로 당겨오는 속도(m/s) — 3차원. 착지 후 값(1.5)으로는 " +
+             "따라붙지 못한다. 병리적 루트 점프를 뼈로 넘기지 않기 위한 상한이라 정상 비행에서는 " +
+             "걸리지 않는다(진입 시 델타 0에서 출발). " +
+             "⚠ <b>시체의 비행 속도와 짝이다</b> — BombDevice.m_ragdollImpulseScale을 올리면 여기도 " +
+             "같이 올릴 것. 16은 폭심 임펄스(약 10.3m/s)에 대한 여유다")]
+    [SerializeField] private float m_flightAlignPullSpeed = 16f;
 
     [Tooltip("원격 시체가 스트리밍된 루트에서 이만큼(m) 벗어나면 보정을 스냅으로 바꾼다 — 안전망이다. " +
              "정상 동작에서는 걸리지 않아야 하고, 자주 걸리면 잔차가 큰 것이므로 보정을 세게 할 게 " +
@@ -212,6 +214,17 @@ public class PlayerRagdoll : MonoBehaviour
     // (PlayerIncapacitation.RefreshAimHitbox가 스폰 시 한 번 상태를 맞추는 것과 같은 계열의 처리)
     private bool m_skipThisEpisode;
     private bool m_polledOnce;
+
+    // 이번 래그돌 에피소드에서 <b>사망을 한 번이라도 관측했는가.</b> 부활 판정의 전제다 —
+    // 아래 PollDeath의 주석에 이유가 적혀 있다.
+    private bool m_sawDeathThisEpisode;
+    private float m_awaitingDeathSeconds;
+
+    // 사망 동기화를 기다려 주는 시간(초). 이 값이 하는 일은 <b>안전망뿐</b>이다 — 정상 경로에서는
+    // 사망이 다음 몇 틱 안에 반드시 도착하므로 걸리지 않는다. 걸리는 경우는 대상이 아주 빠르게
+    // 되살아나 이 피어가 Die를 <b>아예 못 보고</b> None만 받는 병리적 순서뿐이고, 그때 이게 없으면
+    // 시체가 래그돌에 영구히 갇힌다(ExitToAnimator를 부르는 곳이 여기 하나다).
+    private const float k_deathSyncGraceSeconds = 1f;
     private bool m_capsuleWasEnabled = true; // 캡슐 충돌 무시 재적용 판정 (IgnoreOwnCapsule 주석 참고)
 
 
@@ -833,17 +846,27 @@ public class PlayerRagdoll : MonoBehaviour
         ApplyImpulse(impulse);
         ReportEntry("신규", impulse);
 
-        m_diagEntryFrames = 10; // 진입 직후 10스텝만 추적
-        m_diagEntryHips = m_hipsBone.position;
+        m_diagStartHips = m_hipsBone.position;
+        m_diagImpulse = impulse;
+        m_diagApexY = m_hipsBone.position.y;
+        m_diagTracking = true;
     }
 
-    // ---- 임시 진단: 임펄스가 안 먹는다 (#506 — 확정되면 지운다) ----
+    // ---- 임시 진단: 사망 비행 실측 (#506 — 값을 정하면 지운다) ----
     //
-    // 증상: 죽어도 시체가 안 날아가고 그 자리에서 무너진다. 후보가 셋이고 한 줄로 갈린다:
-    //  · 받은 임펄스가 0/작다        → <c>임펄스</c> 크기를 본다 (RPC·서버 계산 문제)
-    //  · 임펄스는 왔는데 속도가 안 붙음 → <c>골반v</c>가 0이다 (키네마틱 상태·적용 순서 문제)
-    //  · 속도는 붙는데 다음 프레임에 지워짐 → <c>골반v</c>는 크지만 눈에는 안 난다
-    //    (캡슐 추종이 루트를 옮기며 뼈 트랜스폼을 같이 끌어 물리를 덮어쓰는 경우)
+    // 앞선 진단(임펄스·속도·10스텝 이동)은 <b>전부 정상</b>으로 끝났다 — 실측 876mm/0.18s가
+    // 순수 탄도 예측과 일치했다. 그래서 그쪽은 걷어내고, 남은 미지수 하나만 잰다:
+    //
+    //   <b>탄도 공식이 예측한 거리와 실제로 떨어진 거리가 얼마나 다른가.</b>
+    //
+    // 공식에는 <b>구르는 사지가 먹는 지면 마찰</b>이 없다. 시체는 골반이 0.9m에서 출발하는데
+    // 다리는 이미 바닥에 있어서, 이론 사거리의 얼마가 실제로 나오는지는 재 보기 전에는 모른다.
+    // 이 값을 모르면 "세기를 얼마나 올려야 하는가"에 답할 수 없다.
+    //
+    // 함께 갈라야 하는 것 — <b>안 나는 것인지, 안 뜨는 것인지, 뜨기만 하는 것인지</b>:
+    //  · 정점은 높은데 수평이 짧다     → 발사각 문제. m_ragdollLiftRatio를 내린다
+    //  · 정점·수평 둘 다 짧다          → 세기 문제. m_ragdollImpulseScale을 올린다
+    //  · 수평은 나오는데 체감이 없다   → 임펄스가 아니라 연출(카메라·VFX·시간) 문제다
     private void ReportEntry(string kind, Vector3 impulse)
     {
         Rigidbody hips = m_hipsBody;
@@ -852,30 +875,62 @@ public class PlayerRagdoll : MonoBehaviour
                 + $" | 임펄스 {impulse.magnitude:F2} {impulse.ToString("F1")}"
                 + $" | 골반v {(hips != null ? hips.linearVelocity.magnitude : -1f):F2}"
                 + $" 키네={(hips != null && hips.isKinematic)}"
+                // ⬇ 이 두 값이 가설의 핵심이다. 임펄스가 사망 동기화보다 먼저 도착했으면
+                //   여기서 사망=False가 찍히고, 같은 프레임의 PollDeath가 래그돌을 취소한다.
+                + $" | 사망={DiagIsDead} 원인={DiagCause}"
                 + $" | 뼈 {(m_bodies != null ? m_bodies.Length : 0)}개"
                 + $" 캡슐={(m_controller != null && m_controller.enabled ? "켜짐" : "꺼짐")}",
             this
         );
     }
 
-    // 진입 직후 몇 프레임의 실제 이동을 본다 — "속도는 붙었는데 안 난다"를 가른다.
-    private int m_diagEntryFrames;
-    private Vector3 m_diagEntryHips;
+    private bool DiagIsDead => m_incapacitation != null && m_incapacitation.IsDead;
+    private string DiagCause =>
+        m_incapacitation != null ? m_incapacitation.Cause.ToString() : "없음";
 
-    private void TickEntryTrace()
+    private Vector3 m_diagStartHips;
+    private Vector3 m_diagImpulse;
+    private float m_diagApexY;
+    private bool m_diagTracking;
+
+    // 비행 중 최고점을 따라간다 — Update의 Ragdoll 분기에서 부른다.
+    private void TickFlightApex()
     {
-        if (m_diagEntryFrames <= 0 || m_hipsBone == null)
+        if (m_diagTracking && m_hipsBone != null && m_hipsBone.position.y > m_diagApexY)
+            m_diagApexY = m_hipsBone.position.y;
+    }
+
+    // 정착하는 순간 한 번 — 이 한 줄이 튜닝 방향을 정한다.
+    //
+    // 이론값은 골반이 0.9m에서 출발하는 포물선으로 계산한 것이다:
+    //   체공 t = (vy + √(vy² + 2·9.81·0.9)) / 9.81,  수평 = vx·t
+    // 실측/이론 비율이 곧 "마찰이 먹는 몫"이고, 그만큼을 세기에 얹어야 원하는 그림이 나온다.
+    private void ReportLanding()
+    {
+        if (!m_diagTracking || m_hipsBone == null)
             return;
 
-        m_diagEntryFrames--;
+        m_diagTracking = false;
+
+        Vector3 flat = m_hipsBone.position - m_diagStartHips;
+        flat.y = 0f;
+
+        float vx = new Vector2(m_diagImpulse.x, m_diagImpulse.z).magnitude;
+        float vy = m_diagImpulse.y;
+        float predictedTime = vy <= 0f
+            ? 0f
+            : (vy + Mathf.Sqrt(vy * vy + 2f * 9.81f * 0.9f)) / 9.81f;
+        float predictedFlat = vx * predictedTime;
+
         Debug.Log(
-            $"[래그돌/진입추적] {(HasMoveAuthority ? "오너" : "원격")}"
-                + $" 골반Δ {(m_hipsBone.position - m_diagEntryHips).magnitude * 1000f:F0}mm"
-                + $" 골반v {(m_hipsBody != null ? m_hipsBody.linearVelocity.magnitude : -1f):F2}"
-                + $" 키네={(m_hipsBody != null && m_hipsBody.isKinematic)}",
+            $"[래그돌/착지] {(HasMoveAuthority ? "오너" : "원격")}"
+                + $" | 임펄스 {m_diagImpulse.magnitude:F2} (수평 {vx:F2} 상승 {vy:F2})"
+                + $" | 실측 수평 {flat.magnitude:F2}m 정점 +{m_diagApexY - m_diagStartHips.y:F2}m"
+                + $" 체공 {m_elapsedInRagdoll:F2}s"
+                + $" | 이론 수평 {predictedFlat:F2}m 체공 {predictedTime:F2}s"
+                + $" | 실측/이론 {(predictedFlat > 0.01f ? flat.magnitude / predictedFlat : -1f):P0}",
             this
         );
-        m_diagEntryHips = m_hipsBone.position;
     }
 
     /// <summary>
@@ -898,6 +953,10 @@ public class PlayerRagdoll : MonoBehaviour
     {
         if (m_state == RagdollState.Animated || m_bodies == null || m_bodies.Length == 0)
             return;
+
+        // 에피소드가 여기서 끝난다 — 다음 사망은 자기 사망을 다시 관측해야 부활할 수 있다 (PollDeath).
+        m_sawDeathThisEpisode = false;
+        m_awaitingDeathSeconds = 0f;
 
         if (m_state == RagdollState.Ragdoll)
             Settle(); // 날아가는 중이면 먼저 포즈를 확정한다
@@ -949,6 +1008,7 @@ public class PlayerRagdoll : MonoBehaviour
             return;
 
         m_elapsedInRagdoll += Time.deltaTime;
+        TickFlightApex(); // 임시 진단
 
         float speed = 0f;
         for (int i = 0; i < m_bodies.Length; i++)
@@ -1018,11 +1078,53 @@ public class PlayerRagdoll : MonoBehaviour
             m_skipThisEpisode = dead;
         }
 
+        // <b>부활은 죽음을 본 뒤에만 성립한다.</b> (§9-19)
+        //
+        // 아래 <c>!dead</c> 분기는 "살아 있는데 래그돌이면 부활한 것"이라는 전제였는데, 그 전제가
+        // 원격 피어에서 깨진다. 사망 사실은 <see cref="PlayerIncapacitation"/>의 NetworkVariable로,
+        // 폭발 임펄스는 <see cref="BombDevice"/>의 ClientRpc로 온다 — <b>다른 오브젝트라 도착 순서가
+        // 보장되지 않는다.</b> 임펄스가 먼저 오면 이 피어는 "아직 살아 있는 대상이 래그돌 중"인
+        // 상태를 보고, 방금 시작한 비행을 부활로 오인해 취소한다. 그 뒤 사망이 도착하면 임펄스 0으로
+        // 다시 들어가 <b>제자리에서 무너진다.</b> (실측: 취소가 진입 후 0.00초에, 사망=False 원인=None)
+        //
+        // <see cref="EnterRagdoll"/>이 멱등으로 막아 둔 것은 "사망 → 임펄스" 순서뿐이었다.
+        // 반대 순서는 여기가 뚫려 있었다.
+        //
+        // 시간으로 맞추지 않는다 — 지연은 상한이 없다. <b>인과로</b> 막는다: 죽는 것을 한 번도 못 본
+        // 대상은 되살아날 수도 없다. 임펄스는 서버가 사망을 확정한 대상에게만 나가므로
+        // (<c>BombDevice.m_deathBuffer</c>) 사망 동기화는 반드시 뒤따라 온다.
+        if (dead)
+        {
+            m_sawDeathThisEpisode = true;
+            m_awaitingDeathSeconds = 0f;
+        }
+        else if (IsRagdollActive && !m_sawDeathThisEpisode)
+        {
+            m_awaitingDeathSeconds += Time.deltaTime;
+        }
+
         if (!dead)
         {
             m_skipThisEpisode = false;
-            if (m_state == RagdollState.Ragdoll || m_state == RagdollState.Settled)
+            bool revivalIsReal =
+                m_sawDeathThisEpisode || m_awaitingDeathSeconds >= k_deathSyncGraceSeconds;
+            if ((m_state == RagdollState.Ragdoll || m_state == RagdollState.Settled)
+                && revivalIsReal)
+            {
+                // ---- 임시 진단 (#506) ----
+                // 고친 뒤에는 <b>정상 부활에서만</b> 떠야 한다 — 사망관측=True로.
+                // 사망관측=False로 뜬다면 유예(k_deathSyncGraceSeconds)로 빠져나온 것이고,
+                // 그건 사망 동기화가 1초 넘게 안 왔거나 아예 안 온 병리적 경우다.
+                Debug.Log(
+                    $"[래그돌/취소] {(HasMoveAuthority ? "오너" : "원격")}"
+                        + $" 상태={m_state} 진입후 {m_elapsedInRagdoll:F2}s"
+                        + $" | 사망={DiagIsDead} 원인={DiagCause}"
+                        + $" 사망관측={m_sawDeathThisEpisode} 대기 {m_awaitingDeathSeconds:F2}s"
+                        + " → ExitToAnimator(부활로 처리)",
+                    this
+                );
                 ExitToAnimator(blend: true); // 부활 — 정착 포즈에서 기상으로 잇는다
+            }
             return;
         }
 
@@ -1039,7 +1141,6 @@ public class PlayerRagdoll : MonoBehaviour
     private void FixedUpdate()
     {
         TickRopeAnchor();
-        TickEntryTrace(); // 임시 진단
     }
 
     private void LateUpdate()
@@ -1302,6 +1403,8 @@ public class PlayerRagdoll : MonoBehaviour
     // (<see cref="TickAlignBonesToRoot"/>). 흡수할 어긋남이 없으니 수렴도 유예도 없다.
     private void Settle()
     {
+        ReportLanding(); // 임시 진단 — 뼈를 옮기기 전에 실제 착지 지점을 읽는다
+
         for (int i = 0; i < m_bodies.Length; i++)
         {
             m_capturedPositions[i] = m_bodies[i].transform.position;

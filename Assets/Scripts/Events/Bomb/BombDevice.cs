@@ -104,18 +104,19 @@ public class BombDevice : NetworkBehaviour
     [SerializeField]
     private float m_knockbackEdgeFalloff = 0.25f;
 
-    [Tooltip("사망자 래그돌의 수평 세기 = 넉백 수평 세기 × 이 값. 시체는 자기 캡슐이 Move()로 따라올 수 " +
-             "있는 거리 안에 떨어져야 한다 — 이름표·운반 조준·부활 히트박스가 모두 루트에 붙어 있다. " +
-             "취향이 아니라 설계 제약이다 (EvaluateRagdollImpulse 주석)")]
+    [Tooltip("사망자 래그돌의 수평 세기 = 넉백 수평 세기 × 이 값. <b>연출 노브다</b> — 크게 잡으면 " +
+             "시원하게 날아간다. 예전 주석이 말하던 '캡슐이 못 따라온다'는 제약은 이미 사라졌다 " +
+             "(EvaluateRagdollImpulse 주석)")]
     [Range(0f, 1f)]
     [SerializeField]
-    private float m_ragdollImpulseScale = 0.1f;
+    private float m_ragdollImpulseScale = 0.22f;
 
-    [Tooltip("사망자 래그돌의 상승 세기 = 위 수평 세기 × 이 값. 1보다 커야 시체가 확실히 뜬다 — " +
-             "넉백의 0.45를 쓰면 탄도로는 납작해 바닥을 훑는다. 정점(m) ≈ (수평세기 × 이 값)² / 19.6")]
+    [Tooltip("사망자 래그돌의 상승 세기 = 위 수평 세기 × 이 값. <b>곧 발사각이다</b> — 1.0이 45°로 " +
+             "사거리 최대이고, 크면 높이 뜨는 대신 가까이 떨어진다. 예전 값 1.8은 61°라 속도를 " +
+             "높이에 낭비했다. 정점(m) ≈ (수평세기 × 이 값)² / 19.6")]
     [Range(0f, 3f)]
     [SerializeField]
-    private float m_ragdollLiftRatio = 1.8f;
+    private float m_ragdollLiftRatio = 1.2f;
 
 
     [Header("테스트")]
@@ -517,6 +518,25 @@ public class BombDevice : NetworkBehaviour
         for (int i = 0; i < impulses.Length; i++)
             impulses[i] = EvaluateRagdollImpulse(m_deathBuffer[i].transform.position);
 
+        // ---- 임시 진단 (#506 — 값을 정하면 지운다) ----
+        //
+        // 재는 것: <b>사람들이 실제로 폭탄에서 몇 m에서 죽는가.</b> 사망 반경은 계산상 3.3m지만
+        // (피해 150·가장자리 0.2·반경 8 · HP 100), 실제 플레이에서 그 띠의 어디에 몰리는지는 모른다.
+        // 전원이 3m 근처에서 죽는다면 폭심 기준으로 세기를 잡는 것은 의미가 없다 — 감쇠가
+        // 그 값의 3분의 2만 남기기 때문이다. 튜닝 기준점을 정하려면 이 분포를 먼저 봐야 한다.
+        for (int i = 0; i < m_deathBuffer.Count; i++)
+        {
+            float distance = (m_deathBuffer[i].transform.position - transform.position).magnitude;
+            Debug.Log(
+                $"[폭발/사망자] 거리 {distance:F2}m (사망반경 약 3.3m, 폭발반경 {m_explosionRadius}m)"
+                    + $" | 넉백 {EvaluateKnockback(m_deathBuffer[i].transform.position).magnitude:F2}"
+                    + $" → 래그돌 임펄스 {impulses[i].magnitude:F2}"
+                    + $" (수평 {new Vector2(impulses[i].x, impulses[i].z).magnitude:F2}"
+                    + $" 상승 {impulses[i].y:F2})",
+                this
+            );
+        }
+
         for (int i = 0; i < m_deathBuffer.Count; i++)
             ApplyBlastRagdoll(m_deathBuffer[i], impulses[i]); // 서버·오프라인 로컬 발행
 
@@ -562,21 +582,40 @@ public class BombDevice : NetworkBehaviour
     /// 사망자 래그돌에 줄 임펄스 — <see cref="EvaluateKnockback"/>의 <b>수평 성분과 방향</b>만 가져와
     /// 래그돌용 세기·들어올림으로 다시 세운다. 감쇠식·방향은 여전히 그쪽 한 곳이 쥔다.
     ///
-    /// ⚠ <b>비행 거리는 취향이 아니라 설계 제약이다.</b> 시체는 <b>자기 캡슐이 따라올 수 있는 거리</b>
-    /// 안에 떨어져야 한다 — 이름표·운반 조준·부활 히트박스가 전부 루트(CharacterController)에 붙어
-    /// 있고, 캡슐은 <c>Move()</c> 스윕으로만 움직여 지형에 막힌다.
+    /// <b>비행 거리는 연출 노브다.</b> 예전 주석은 여기를 "설계 제약"이라 못박고 0.1을 정당화했는데,
+    /// <b>그 근거는 사라졌다.</b> 근거는 "캡슐이 <c>Move()</c> 스윕으로만 움직여 지형에 막힌다"
+    /// (실측: 시체 38.8m / 캡슐 0.23m, §9-11)였다. 그 뒤 <c>PlayerRagdoll.TickCapsuleFollow</c>가
+    /// 스윕을 버리고 <c>m_root.position = target</c> 직접 대입으로 바뀌었으므로(§10-0 — 대리값은
+    /// 지형을 존중할 이유가 없다) <b>캡슐은 원리적으로 뒤처질 수 없다.</b> 값을 다시 내리려거든
+    /// 이 문단부터 다시 읽을 것.
     ///
-    /// 실측(넉백 세기를 그대로 준 경우): 임펄스 크기 32m/s → 원격 시체가 <b>38.8m</b> 이동했는데
-    /// 오너의 캡슐은 첫 장애물에 막혀 <b>0.23m</b>만 갔다. 그러면 "루트의 수평 위치 = 오너 골반의 수평
-    /// 위치"라는 캡슐 추종의 전제가 무너지고, 시체와 판정 위치가 38m 갈린 채 굳는다(이름표는 제자리,
-    /// 모델은 저 멀리). <b>골반을 동기화해도 이건 고쳐지지 않는다</b> — 원격이 오너 궤적을 완벽히
-    /// 재현해도 캡슐은 여전히 뒤에 있다.
+    /// 남은 실질 상한은 <c>PlayerRagdoll.m_flightAlignPullSpeed</c> 하나다 — 원격이 비행 중 시체를
+    /// 스트리밍된 루트에 맞추는 속도라 시체가 그보다 빠르면 잔차가 벌어진다. 여기를 올리면 그쪽도
+    /// 같이 올려야 한다(둘은 짝이다).
     ///
     /// <b>균일하게 곱하면 안 된다</b>(그렇게 고쳤다가 되돌렸다). 상승 비율 0.45가 그대로 남아 수직만
     /// 죽고 시체가 바닥을 훑는다 — 탄도에는 0.45가 너무 납작하다. 세기와 들어올림을 따로 잡는다.
+    /// 반대로 들어올림이 과하면 위로만 뜨고 가까이 떨어진다 — <b>비율이 곧 발사각이라 1.0(45°)이
+    /// 사거리 최대</b>이고, 세기만 올리고 비율을 그대로 두면 높이만 자란다. 예전 1.8은 61°였다.
     ///
-    /// 기본값(0.1 / 1.8)이면 폭심에서 수평 3.0 · 상승 5.4m/s → <b>정점 약 1.5m, 비행 1.1초,
-    /// 3~4m 날아간 뒤 구른다.</b> tumbleBias가 상체에 최대 1.6배를 얹으므로 실제로는 조금 더 뜬다.
+    /// <b>탄도 공식을 그대로 믿어도 된다 (2026-08-06 실측).</b> 구르는 사지의 지면 마찰이 사거리를
+    /// 크게 먹을 것이라 의심했지만 <b>아니었다</b> — 착지 후 구르는 거리가 짧아진 공중 구간을 메운다.
+    /// <code>
+    ///   체공 t = (vy + √(vy² + 2·9.81·0.9)) / 9.81      // 골반이 지면 0.9m에서 출발
+    ///   수평 거리 ≈ vx · t · k
+    /// </code>
+    /// <b>k는 세기에 따라 커진다</b> — 세게 칠수록 착지 후 더 구르기 때문이다. 실측 두 점:
+    /// <list type="bullet">
+    ///   <item>수평 2.50 · 상승 4.50 → 실측 2.56m / 이론 2.71m = <b>94%</b></item>
+    ///   <item>수평 5.71 · 상승 6.85 → 실측 9.1m / 이론 8.66m = <b>105%</b> (오너·원격 5cm 차)</item>
+    /// </list>
+    /// 지금 쓰는 구간(기본값)에서는 <b>k ≈ 1.05</b>로 잡으면 맞다.
+    ///
+    /// <b>사망 사거리는 3.3m다</b>(피해 150·가장자리 0.2·반경 8 · HP 100) — 임펄스가 실제로 쓰이는
+    /// 구간은 폭심~3.3m뿐이고 그 밖은 살아서 넉백만 받는다. 튜닝은 이 좁은 띠만 보면 된다.
+    ///
+    /// 기본값(0.22 / 1.2)이면 <b>폭심 약 12m(정점 3.2m) · 사망 경계 약 6m(정점 1.5m)</b>다
+    /// (실측: 폭탄 1.45m에서 9.1m). tumbleBias가 상체에 더 얹어 회전을 만든다.
     /// </summary>
     private Vector3 EvaluateRagdollImpulse(Vector3 targetPosition)
     {

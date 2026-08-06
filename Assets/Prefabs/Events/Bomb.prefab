@@ -373,6 +373,8 @@ MonoBehaviour:
   m_knockbackForce: 30
   m_knockbackUpwardRatio: 0.45
   m_knockbackEdgeFalloff: 0.25
+  m_ragdollImpulseScale: 0.22
+  m_ragdollLiftRatio: 1.2
   m_armOnStart: 0
 --- !u!114 &452186133471686071
 MonoBehaviour:
