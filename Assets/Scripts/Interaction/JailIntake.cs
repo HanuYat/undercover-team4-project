@@ -141,9 +141,29 @@ public class JailIntake : MonoBehaviour
                 continue;
             }
 
-            // 수감 — 줄을 걷고 일어난 <b>뒤에</b> 순간이동한다. 묶인 적 없는 대상은 곧바로 실행된다.
+            // <b>기절을 먼저 푼다.</b> 검거는 무력화가 전제라(NpcStateRules.CanRopeBind) 여기까지 오는
+            // 대상은 거의 항상 기절 오버레이를 달고 있고, 묶인 동안은 그 타이머마저 멈춰 있다(#269).
+            //
+            // 오버레이를 단 채 일어나기를 걸면 NpcController.TickStandUp이 "일어날 수 없는 몸"으로 보고
+            // 예약을 취소하는데, 그때 <b>아래 수감 콜백까지 함께 버려진다</b>. 대상은 판정만 끝난 채
+            // (MarkDelivered) Captured에 남고, 판정이 끝났다는 이유로 방치 타이머마저 빠져
+            // (NpcStateRules.StaysPutWhenFreed) <b>영원히 그 자리에 선다</b>.
+            // SendToJail도 같은 해제를 하지만(#537) 그건 콜백 안이라 여기까지 닿지 못한다.
+            npc.ExitStun(false); // false — 밖에서 강제로 푸는 경우라 도주 전이를 걸지 않는다
+
+            // 수감 — <b>줄을 걷고, 옮기고, 감옥 안에서 일어난다.</b> 셋 다 이 프레임 안에서 끝난다.
+            //
+            // 순서가 중요하다. 예전에는 일어나기가 <b>끝난 뒤</b>에 옮겼는데, 그러면 문 앞에서 일어나는
+            // 모션이 마무리되는 순간 몸이 사라져 "일어나다 말고 증발한다"로 보였다.
+            //
+            // 그렇다고 옮기기를 앞세울 수도 없다: 밧줄이 걸린 동안은 NavMeshAgent가 꺼져 있어
+            // (PlayerEscorter.StartRopeDrag) 워프가 조용히 실패한다 — 끌기 해제가 에이전트를 되살린다.
+            //
+            // 그래서 줄부터 걷고(기상 모션이 여기서 예약된다) 곧바로 옮긴다. 둘 사이에 프레임 경계가
+            // 없으므로 화면에 그려지는 것은 <b>감옥 안에서 일어나는 모습</b> 하나뿐이다.
             int bounty = result.Value.Reward;
-            PlayerEscorter.ReleaseAllTethersOn(npc, () => ServerPlaceInJail(npc, bounty, deliverers));
+            PlayerEscorter.ReleaseAllTethersOn(npc, null);
+            ServerPlaceInJail(npc, bounty, deliverers);
         }
 
         m_admitBuffer.Clear();

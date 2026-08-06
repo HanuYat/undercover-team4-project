@@ -74,7 +74,19 @@ public partial class NpcController
         // 누워 있던 몸이 기상 모션 없이 벌떡 일어나 배회로 넘어간다. 풀기는 Captured면 누구에게나
         // 열려 있어(CanUnrope) 이 창 안의 재호출은 정상 조작이다.
         if (m_standUpPending)
+        {
+            // 예약과 타이머는 그대로 두되 <b>후속 동작만 최신 것으로 갈아 끼운다</b>. 그냥 돌아가면
+            // 새 호출자의 next가 조용히 버려지는데, 부르는 쪽은 콜백이 반드시 돈다고 보고 뒷일을
+            // 전부 거기에 싣는다(JailIntake의 수감이 그렇다). 방치 만료가 걸어 둔 도주 예약 위로
+            // 수감이 들어오는 경우가 실제로 있고, 그때 남아야 하는 것은 나중에 들어온 수감이다.
+            // 타이머를 건드리지 않으므로 "폴링 호출부가 매 틱 불러도 한 번만 건다"는 성질은 그대로다.
+            //
+            // null은 덮어쓰지 않는다 — 후속 동작 없이 자세만 세우려는 호출(오검거 해제 등)이
+            // 남의 예약을 지우면 안 된다.
+            if (next != null)
+                m_standUpNext = next;
             return;
+        }
 
         if (!IsTethered && !IsRoped)
         {
@@ -115,7 +127,12 @@ public partial class NpcController
         // 밖에서 상황이 바뀌었으면 일어나기가 성립하지 않는다 — 후속 동작도 함께 버린다.
         // 그 상태에서 도주·석방·수감을 걸면 새 상황(넉백 비행·페널티 연행·재기절)을 덮어쓴다.
         // 버려진 대상은 그대로 체포 상태에 남아 방치 타이머가 다시 만료시킨다.
-        if (CurrentState != NpcState.Captured || m_knockbackActive || HasStunOverlay)
+        // 수감(Jailed)도 받는다 — 감옥에 놓자마자 그 자리에서 일어나는 구간이 있기 때문이다
+        // (JailIntake의 수감 순서 참고). 여기서 끊으면 누운 자세를 드는 IsStandingUp이 곧바로
+        // 내려가 기상 클립이 도는 동안 몸만 먼저 서 있다.
+        if ((CurrentState != NpcState.Captured && CurrentState != NpcState.Jailed)
+            || m_knockbackActive
+            || HasStunOverlay)
         {
             CancelStandUp();
             return;
