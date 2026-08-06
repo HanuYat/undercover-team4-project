@@ -30,7 +30,10 @@ public static class AppHelper
             EScene.Title => "Title Scene", // main이 Title.unity → "Title Scene.unity"로 개명 (#214 리베이스 반영)
             EScene.Lobby => "Lobby",
             EScene.Shop => "Shop",
-            EScene.Game => "Main Scene",
+            // 라운드를 진행할 게임 맵. 맵은 여러 개(Assets/Scenes/Maps/*)지만 고르는 수단이 아직 없어
+            // 여기서 한 장을 지정한다 — 맵을 바꿔 보려면 이 줄만 고치면 된다.
+            // 로비에서 맵을 고르게 되면 이 자리를 그 선택값으로 바꾼다. (#215)
+            EScene.Game => "Map_Apocalypse",
             _ => null,
         };
 
