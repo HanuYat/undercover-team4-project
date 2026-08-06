@@ -112,9 +112,9 @@ public partial class NpcController : NetworkBehaviour
     /// (부품은 같은 어셈블리). 이 멤버가 NpcCustody로 옮겨 가면(계획서 § 8) 그때 정리된다. (#503)</summary>
     public Transform EscortTarget { get; internal set; }
 
-    /// <summary>수감 중 걸어가 앉을 유치장 좌석. 수감 중이 아니면 null. 서버에서만 유효. (#228/#462)
-    /// 좌석의 Z축(forward)이 앉아서 바라보는 방향이다 — 도착하면 그 방향으로 돌아 앉는다.</summary>
-    public Transform JailSeat { get; private set; }
+    /// <summary>수감 중 서 있을 감옥 안 배치 지점. 수감 중이 아니면 null. 서버에서만 유효. (#228/#537)
+    /// 지점의 Z축(forward)이 서서 바라보는 방향이다 — 순간이동한 뒤 그 방향으로 돌려 세운다.</summary>
+    public Transform JailSpot { get; private set; }
 
     /// <summary>침입 도메인 부품 — 목표·해제 시간·진행 이벤트를 들고 있다. (#231/#503)</summary>
     public NpcIntruder Intruder => m_intruder;

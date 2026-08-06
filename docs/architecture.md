@@ -68,8 +68,8 @@ R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단�
 
 | 코드 | 사유 |
 |---|---|
-| JailIntake → JailScanner `Find` | 장소(게이트) 오브젝트 — 매니저 아님. 유치장 밖(문 앞)에 서 있어 부모 탐색으로는 닿지 않는다. 참조 도메인은 Interaction 하나뿐이라 R3 승격 기준에 미달하고, Awake 1회 탐색이라 런타임 비용도 없다 (#492) |
-| PlayerEscortCommands → JailIntake `Find` | 장소(출입구) 오브젝트 — 매니저 아님. 참조 도메인이 Player 하나라 R3 승격 기준에 미달이고, E 입력 때만 도는 경로라 매 프레임 탐색 비용도 없다. 인계 단말이 폐기되면서 삭제된 `ArrestJudge → HqDropoffZone Find` 항목을 대체한다 (#492) |
+| JailDoor → JailIntake `Find` · JailbreakEvent → JailLock `Find` · JailRoom → JailZone `Find`(정적 캐시) | 장소(출입구·자물쇠·구역) 오브젝트 — 매니저 아님. 감옥 방이 도시에서 떨어진 별도 공간이라(#537) 부모 탐색으로는 닿지 않는다. 전부 `Awake`/`Start` 1회 또는 참조가 죽었을 때만 다시 찾는 정적 캐시라 매 프레임 비용이 없다. 인스펙터 연결을 우선하고 비었을 때만 폴백한다. 삭제된 `JailIntake → JailScanner Find` 항목을 대체한다(보안 스캐너 게이트가 문 앞 판정으로 바뀌며 `JailScanner`가 폐기됨 — #537) |
+| PlayerEscortCommands · NpcCapturedState → JailIntake `Find` | 장소(출입구) 오브젝트 — 매니저 아님. **참조 도메인은 Player·NPC 둘로 R3 ②는 넘지만**(#537로 `NpcCapturedState`가 추가됨), 위 JailZone 항목과 같은 사유로 등록하지 않는다 — 본부 맵에 배치되는 설치물이라 App 상주 매니저로 올리면 씬 없는 구성(로비·타이틀)에서 빈 슬롯이 된다. 둘 다 상시 폴링이 아니라 E 입력·`Captured` 진입당 1회만 도는 경로라 탐색 비용도 없다. 인계 단말이 폐기되면서 삭제된 `ArrestJudge → HqDropoffZone Find` 항목을 대체한다 (#492/#537) |
 | RoundTimerUI → RoundTimerSync `Find` | Round 도메인 내부 부품 (HQ 타이머 표시가 생기면 승격 후보) |
 | SessionManager → AuthBootstrap `SerializeField` | 같은 오브젝트/프리팹 내 직접 연결 |
 | RoundEndResetter의 테스트 씬 폴백 `SceneManager.LoadScene` | EScene 매핑이 없는 테스트 씬 한정 — 정식 흐름은 App.LoadScene(Title)로 전환 완료 (#247) |
@@ -88,4 +88,4 @@ R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단�
 `refactoring/architecture` 머지 **이전에** 열린 브랜치의 코드는 규칙 위반을 지적하되 🟡(후속 조치)로 분류한다. 머지 이후 새로 작성·수정되는 코드는 정식 적용(🟠 이상).
 
 ---
-*최종 수정: 2026-08-05 (일회성 연출 창구를 App.Game.Fx로 일원화 — #532 · 연출 전파 규칙 추가 · App.Sound·App.Game.Effect 등재 + §4 예외 기재 · Audio·Vfx 폴더 분류 — #478) · 2026-08-04 (LonePlayerWatch → HqOccupancyZone 예외 기재 — #371) · 2026-08-03 (HqDropoffZone 예외 삭제 · JailIntake·JailScanner 예외 기재 — #492) · 2026-08-01 (SceneReadyGate 예외 기재 — #410) · 2026-07-28 (JailZone 예외 기재 — #395) · 작성 근거: refactoring/architecture 브랜치 1–2단계 (커밋 3039cd2…0b7aaab)*
+*최종 수정: 2026-08-06 (감옥 분리에 따른 예외 갱신 — `JailScanner` 폐기 · `JailDoor`·`JailbreakEvent`·`JailRoom` 탐색 기재 · `JailIntake` 참조 도메인 2곳으로 갱신 — #537) · 2026-08-05 (일회성 연출 창구를 App.Game.Fx로 일원화 — #532 · 연출 전파 규칙 추가 · App.Sound·App.Game.Effect 등재 + §4 예외 기재 · Audio·Vfx 폴더 분류 — #478) · 2026-08-04 (LonePlayerWatch → HqOccupancyZone 예외 기재 — #371) · 2026-08-03 (HqDropoffZone 예외 삭제 · JailIntake·JailScanner 예외 기재 — #492) · 2026-08-01 (SceneReadyGate 예외 기재 — #410) · 2026-07-28 (JailZone 예외 기재 — #395) · 작성 근거: refactoring/architecture 브랜치 1–2단계 (커밋 3039cd2…0b7aaab)*

@@ -122,6 +122,15 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 6276845892712267876
+  - m_Id: 761277069221888
+    m_Localized: "\uC6A9\uC758\uC790\uB97C \uB04C\uACE0\uB294 \uB4E4\uC5B4\uAC08
+      \uC218 \uC5C6\uB2E4 \u2014 \uC606 \uD310\uC815 \uBC84\uD2BC\uC744 \uC4F8 \uAC83"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 761277106970624
+    m_Localized: "\uB370\uB824\uC628 \uC6A9\uC758\uC790\uAC00 \uC5C6\uB2E4"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

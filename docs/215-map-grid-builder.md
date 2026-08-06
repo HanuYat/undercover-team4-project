@@ -242,7 +242,7 @@ Main Scene을 **추가 로드(Additive)** 해서 복사한다.
 
 ```
 Assets/Prefabs/HQ/HQ.prefab      내부 소품 19개 + 문 2개 + PlayerSpawnPoint 포함
-Assets/Prefabs/HQ/Jail.prefab    감방·벤치·좌석 18석 + JailScanner 포함
+Assets/Prefabs/HQ/Jail.prefab    컨테이너 외형 + 문·자물쇠·판정 버튼 · 격리된 감옥 방(배치 지점 8) 포함
 ```
 
 두 프리팹은 **경계 참조가 0**이라 드래그만으로 내부가 전부 동작한다. 맵마다 채울 것은 B-5 표에 있는 것뿐.
@@ -452,7 +452,7 @@ canvas.position = dst.position + dst.rotation * offRot;
 | [Map_Apocalypse_Layout.txt](../Assets/Scenes/Maps/Map_Apocalypse_Layout.txt) | 배치도 20 × 36칸 = 100 × 180m (벽 안쪽 플레이 영역 89.4 × 169.4m) |
 | [MapPalette_Apocalypse.asset](../Assets/Scenes/Maps/MapPalette_Apocalypse.asset) | 팔레트 |
 | `Assets/Prefabs/HQ/HQ.prefab` | 본부 — 실내 19.7 × 9.7m, 소품 19개 · 문 2개 · 월드 캔버스 2개 |
-| `Assets/Prefabs/HQ/Jail.prefab` | 유치장 — 5.13 × 5.28m, 좌석 18석 · `JailScanner` 포함 |
+| `Assets/Prefabs/HQ/Jail.prefab` | 유치장 — 도시 쪽 컨테이너(문·자물쇠·판정 버튼·게시판) + 맵 밖으로 떼어낸 감옥 방(내부 7.2 × 7.2m, 배치 지점 8) (#537) |
 
 컨셉은 **격리 구역** — 봉쇄된 도심. 팔레트 규칙 6개:
 

@@ -377,10 +377,12 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     /// 이 대상에 <b>밧줄을 걸 수 없는가</b> — 묶기·합류·재개가 전부 막힌다. 서버 가드와 클라 조기검증·조준
     /// 피드백(<see cref="Rope"/>)이 함께 보는 단일 기준. (팀 확정 2026-08-05)
     ///
-    /// 이유가 둘이고, 둘 다 <b>유치장에서 꺼낸 신병은 맨몸으로 다룬다</b>로 모인다:
+    /// 이유가 둘이고, 둘 다 <b>감옥에서 꺼낸 신병은 맨몸으로 다룬다</b>로 모인다:
     ///
-    ///  · <b>유치장 안</b> — 안에서 새로 거는 조작을 막는다. 안의 신병을 밖으로 데려가려면 반출 추종(E)을
-    ///    쓴다. 훗날 수감자를 눕히는 용도가 필요해지면 그때 다시 연다.
+    ///  · <b>수감 중</b>(<see cref="NpcState.Jailed"/>) — 감옥 안 수감자에게 새로 거는 조작을 막는다.
+    ///    꺼내려면 반출 추종(E)을 쓴다. 훗날 수감자를 눕히는 용도가 필요해지면 그때 다시 연다.
+    ///    좌표 판정이던 것을 상태로 바꿨다 (#537) — 감옥 안에 있는 밧줄 대상은 수감자뿐이라
+    ///    상태가 더 정확하고, 조준 피드백이 매 프레임 부르는 경로라 위치 조회도 없앨 수 있다.
     ///  · <b>반출돼 따라오는 중</b>(<see cref="NpcStateRules.IsFollowingUnroped"/>) — 반출을 밧줄로 보험
     ///    들 수 없게 해 <b>데리고 나오는 구간에 긴장</b>을 남긴다. 거리를 관리하지 않으면 멈춰 서고
     ///    (NpcEscortedState) 밖에 방치하면 달아난다(#517).
@@ -394,20 +396,17 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     /// <b>이제 도달할 수 없는 경로</b>가 됐다 — 표식이 있는 동안 묶기가 전부 막히기 때문이다. 방어용으로
     /// 남겨 두었고, 표식을 끄는 실제 경로는 커스터디 이탈(재착석·도주·석방)뿐이다.
     ///
-    /// <b>푸는 것은 막지 않는다.</b> 밖에서 묶어 유치장까지 끌고 들어가 안에서 풀면 앉는 것이 검거 흐름의
-    /// 결말이므로(#492), 여기서 풀기까지 막으면 그 흐름이 통째로 끊긴다. 이미 걸려서 끌고 들어온 줄도
-    /// 그대로 유지된다.
+    /// <b>푸는 것은 막지 않는다.</b> 문 앞에 신병을 놓아두고 E로 넣는 조작이 정상 경로이므로(#537),
+    /// 여기서 풀기까지 막으면 그 흐름이 끊긴다.
     ///
     /// <b>줄다리기 합류는 살아 있다</b> — 실제로 밧줄로 끌리는 중인 대상은 여기 걸리지 않는다. 상태만 보고
     /// <see cref="NpcState.Escorted"/> 전체를 막으면 한 대상에 두 번째 줄을 거는 유일한 경로가 사라져
     /// 무게를 나눠 끄는 협동(#390/#398)이 통째로 죽는다. 그 둘을 가르는 것이 <c>IsFollowingUnroped</c>다.
     ///
-    /// <see cref="JailArea"/>를 보는 근거는 <see cref="ServerApplyUnrope"/>의 풀기 분기와 같다 —
-    /// "이 좌표가 Jail 영역인가"를 답하는 정적 판정 유틸이라, 이걸 읽는 것이 유치장을 아는 것은 아니다.
     /// </summary>
     public static bool IsRopeBlocked(NpcController target) =>
         target != null
-        && (JailArea.Contains(target.transform.position)
+        && (target.CurrentState == NpcState.Jailed
             || NpcStateRules.IsFollowingUnroped(target)
             || target.IsJailExtracted);
 
@@ -528,27 +527,15 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     // 실제 풀기 — 검증이 끝난 뒤의 상태 조작만 담당한다. 서버(또는 오프라인).
     private void ServerApplyUnrope(NpcController target)
     {
-        // <b>유치장 안에서는 석방하지 않는다</b> (#492) — 아래 ReleaseDrag가 이미 Captured로 세워 뒀으므로
-        // 그대로 끝낸다. 판정을 통과한 대상이면 다음 틱에 JailIntake가 좌석에 앉히고, 안 통과했으면
-        // 그 자리에 서 있는다(다시 묶어 끌고 나가면 된다).
-        //
-        // 여기서 배회로 돌려보내면 두 가지가 깨진다: ① 판정까지 통과한 수감 대상이 계상 없이(0원)
-        // 풀려나고, ② 배회 시민이 유치장 안을 걸어 다녀 "시민은 유치장에 못 들어간다"(#415)가
-        // 없애려던 그림이 다시 생긴다. E로 놓는 것과 결과가 같아지는 것이 조작 일관성에도 맞다.
-        //
-        // <b>JailArea를 직접 보는 것은 "유치장을 아는 것"이 아니다</b> — 이 허브가 유치장 오브젝트를
-        // 찾아 조작하는 것은 여전히 ServerJailRelease 하나뿐이고(JailIntake에 위임), 여기 쓰는 것은
-        // "이 좌표가 Jail 영역 위인가"를 답하는 정적 판정 유틸이다. 앉히는 판단은 JailIntake가 쥔다.
+        // <b>"유치장 안에서는 석방하지 않는다"는 분기가 사라졌다</b> (#537). 감옥이 격리 공간이 되면서
+        // 밧줄 걸린 대상이 감옥 안에 있을 수 없게 됐다 — 수감은 문 앞 순간이동이고, 그 순간
+        // JailIntake가 줄을 전부 걷어낸다(PlayerEscorter.ReleaseAllTethersOn). 감옥 안에서 밧줄을
+        // 새로 거는 것도 막혀 있다(<see cref="IsRopeBlocked"/>). 그래서 여기 오는 대상은 전부 도시에
+        // 있고, 푸는 결과는 하나뿐이다 — 일어나 배회로 돌아간다.
         //
         // 밧줄은 소모되지 않아 대상에 남은 게 없다 — 회수할 자원 없이 배회로 돌려보내기만 한다 (#369).
-        bool insideJail = JailArea.Contains(target.transform.position);
-        System.Action afterStandUp = insideJail ? null : target.ReleaseFromCustody;
-
-        // <b>유치장 안에서는 쓰러진 구간을 두지 않는다</b> — 일어나 곧바로 좌석을 찾아간다 (팀 확정 2026-08-05).
-        // 밖에서 쓰러져 있는 몇 초는 <b>재포획 창</b>으로서 값을 갖지만(달려가 다시 묶을 수 있다), 안에서는
-        // 밧줄을 아예 쓸 수 없으므로(<see cref="IsRopeBlocked"/>) 그 창에 아무 선택지가 없다 —
-        // 수감이 몇 초 늦어지는 것만 남는다.
-        float downSeconds = insideJail ? 0f : m_unropeDownSeconds;
+        System.Action afterStandUp = target.ReleaseFromCustody;
+        float downSeconds = m_unropeDownSeconds;
 
         // 내 줄이 걸려 있으면 그것부터 뺀다 — 줄다리기 중이면 여기서 끝이다(남은 참가자가 계속 끈다).
         // 마지막 한 명이었으면 대상이 커스터디에서 풀려 아래 배회 복귀로 이어진다. (#390 규칙 8)
@@ -574,9 +561,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
                 return;
             }
 
-            NotifyOwner(insideJail
-                ? $"밧줄 풀기 완료 — 일어난 뒤 유치장 안 그 자리에 둔다: {target.name}"
-                : $"밧줄 풀기 완료 — 일어난 뒤 배회 복귀: {target.name}");
+            NotifyOwner($"밧줄 풀기 완료 — 일어난 뒤 배회 복귀: {target.name}");
             return;
         }
 
@@ -587,9 +572,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         //
         // 그래서 자세 판정을 여기서 하지 않고 대상에게 맡긴다 — ServerStandUpThen이 묶임 여부를 보고
         // 일어나기를 태울지 곧바로 실행할지 가른다 (JailIntake·NpcCapturedState와 같은 방식).
-        NotifyOwner(insideJail
-            ? $"밧줄 풀기 완료 — 유치장 안이라 그 자리에 둔다: {target.name}"
-            : $"밧줄 풀기 완료 — 배회 복귀: {target.name}");
+        NotifyOwner($"밧줄 풀기 완료 — 배회 복귀: {target.name}");
         target.ServerStandUpThen(afterStandUp, downSeconds);
     }
 
@@ -644,7 +627,10 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     }
 
     // 추종 정지 실행 — 밧줄 없이 따라오는 수감자를 그 자리에 세운다(Captured). 서버(또는 오프라인).
-    // 유치장 안이면 JailIntake가 그 Captured를 보고 좌석에 다시 앉힌다 — 여기서 유치장을 알 필요는 없다.
+    //
+    // <b>감옥 안에서 세우면 그 자리에서 다시 수감된다</b> (#517/#537) — 반출을 되돌리는 조작이다.
+    // 예전에는 JailIntake의 폴링이 "Captured + 유치장 안"을 보고 알아서 재착석시켰는데, 폴링이
+    // 사라져(#537) 되돌리는 순간을 여기서 명시적으로 넘긴다. 감옥 밖이면 그냥 선다.
     //
     // 소유권을 묻지 않는다: 남이 꺼낸 수감자도 세울 수 있다. 밧줄 놓기(Captured 대상 풀기)가
     // 누구에게나 열려 있는 것과 같은 취급이고, 세우는 것은 신병을 뺏는 행위가 아니라 멈추는 행위다.
@@ -661,6 +647,16 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
             return;
 
         target.StopEscort();
+
+        // 감옥 안이면 재수감 — 아니면 아무 일도 없었던 것처럼 false를 돌려준다.
+        // JailIntake는 매니저가 아니라 장소 오브젝트라 App 파사드 대상이 아니다 (ServerJailRelease와 같은 관례).
+        JailIntake intake = FindFirstObjectByType<JailIntake>();
+        if (intake != null && intake.ServerReturnToJail(target))
+        {
+            NotifyOwner($"재수감: {target.name}");
+            return;
+        }
+
         NotifyOwner($"수감자 정지: {target.name}");
     }
 

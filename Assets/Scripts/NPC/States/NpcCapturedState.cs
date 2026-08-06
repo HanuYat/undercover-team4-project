@@ -36,12 +36,16 @@ public class NpcCapturedState : NpcStateBase
             m_owner.Agent.ResetPath();
 
         m_escapeTime = Time.time + m_config.EscapeSeconds;
+        m_rejailTried = false;
     }
 
     public override void Tick()
     {
         if (StaysPut)
+        {
+            TryReturnToJail();
             return;
+        }
 
         // 이미 일어나는 중 — 끝나면 도주로 이어진다. 그 사이 다시 묶이면 예약이 취소되고
         // 커스터디 재진입(Enter)이 타이머를 새로 잡는다. (#513)
@@ -72,10 +76,37 @@ public class NpcCapturedState : NpcStateBase
     ///
     /// 타이머 진입(<see cref="Tick"/>)과 <b>일어난 뒤 실행 직전</b>(<see cref="Flee"/>)이 같은 기준을 봐야 한다 —
     /// 둘 사이에 일어나기 대기(약 0.6초)가 끼면서 그 사이 판정이 통과할 수 있는 창이 생겼다 (#513).
-    /// 방치된 대상이 마침 판정 게이트(JailScanner) 안에 서 있으면 폴링(0.1초)이 그 창에서 대상을
+    /// 방치된 대상이 마침 감옥 문 앞에 서 있으면 그 창에서 대상을
     /// 판정해 <see cref="NpcController.MarkDelivered"/>를 부르고, 재검사가 없으면 방금 인계된 신병이
     /// 그대로 달아난다.</summary>
     private bool StaysPut => NpcStateRules.StaysPutWhenFreed(m_owner);
+
+    // 이번 Captured 동안 재수감을 이미 시도했는가 — 매 프레임 씬을 뒤지지 않게 한 번만 건다.
+    private bool m_rejailTried;
+
+    /// <summary>
+    /// 감옥 안에서 멈춘 반출 수감자를 그 자리에서 다시 수감한다. (#537)
+    ///
+    /// 이게 없으면 <b>영원히 서 있는다</b>: 감옥 안은 <see cref="StaysPut"/>이라 방치 타이머가 돌지
+    /// 않고(#526 — 잠긴 감옥에서 저절로 빠져나가지 않게 한 것), 그렇다고 수감 상태도 아니라
+    /// 배회도 하지 않는다. 거리 이탈로 추종이 끊긴 반출 대상이 정확히 이 틈에 빠진다.
+    ///
+    /// 되돌릴 근거(판정 결과)가 없으면 <see cref="JailIntake.ServerReturnToJail"/>이 false를 주고
+    /// 종전대로 그 자리에 선다 — 근거 없이 무료로 수감되지는 않는다.
+    /// </summary>
+    private void TryReturnToJail()
+    {
+        if (m_rejailTried || !m_owner.IsJailExtracted)
+            return;
+
+        m_rejailTried = true;
+
+        // JailIntake는 매니저가 아니라 장소 오브젝트라 App 파사드 대상이 아니다 (PlayerEscortCommands와 같은 관례).
+        // 이 경로는 Captured 진입당 한 번만 도므로 탐색 비용이 매 프레임 쌓이지 않는다.
+        JailIntake intake = Object.FindFirstObjectByType<JailIntake>();
+        if (intake != null)
+            intake.ServerReturnToJail(m_owner);
+    }
 
     /// <summary>방치 타이머 만료 — 일어난 뒤 풀려나 달아난다. (#513)
     ///
