@@ -75212,6 +75212,14 @@ PrefabInstance:
       propertyPath: m_Name
       value: Jail
       objectReference: {fileID: 0}
+    - target: {fileID: 6494351753860279557, guid: 0ffbea248e71d6c42a92f049f2969063, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4284079103
+      objectReference: {fileID: 0}
+    - target: {fileID: 6494351753860279557, guid: 0ffbea248e71d6c42a92f049f2969063, type: 3}
+      propertyPath: m_TextStyleHashCode
+      value: -1183493901
+      objectReference: {fileID: 0}
     - target: {fileID: 8462817419593129466, guid: 0ffbea248e71d6c42a92f049f2969063, type: 3}
       propertyPath: m_NavMeshData
       value: 
@@ -75228,6 +75236,9 @@ PrefabInstance:
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 4185200348098886572, guid: 0ffbea248e71d6c42a92f049f2969063, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 0}
     - targetCorrespondingSourceObject: {fileID: 1961428678637759094, guid: 0ffbea248e71d6c42a92f049f2969063, type: 3}
       insertIndex: -1
       addedObject: {fileID: 0}
