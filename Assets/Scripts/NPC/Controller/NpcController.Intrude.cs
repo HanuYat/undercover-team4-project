@@ -39,7 +39,7 @@ public partial class NpcController
         if (m_stateMachine.CurrentState != NpcState.Captured)
             return;
 
-        JailSeat = null;
+        JailSpot = null;
         m_stateMachine.ChangeState(NpcState.Idle);
     }
 }

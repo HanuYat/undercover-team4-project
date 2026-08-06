@@ -4,29 +4,49 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 유치장 — 검거된 범인을 실제로 수용·관리하는 구역. (GDD 7-2, #228)
+/// 감옥 — 검거된 범인을 실제로 수용·관리하는 방. (GDD 7-2, #228/#537)
 /// 판정(ArrestJudge)과 분리되어 있다: 판정은 "누가 범인인가"만, 여기는 "어디에 가두고 몇 명이
 /// 있는가"만 안다. 둘을 잇고 출입을 관리하는 건 <see cref="JailIntake"/>다 (#492).
 ///
+/// <b>이 방은 도시 맵에서 떨어진 격리 공간이다</b> (#537). 걸어서 닿는 경로가 없고 출입은
+/// <see cref="JailDoor"/>의 순간이동뿐이라, 안에 필요한 지점이 셋이다 — 수감자가 설 배치 지점,
+/// 플레이어가 들어올 입장 지점, 그리고 도시 쪽 문 밖의 퇴장 지점.
+///
+/// <b>좌석은 폐기됐다</b> (#537). 순간이동으로 배치되므로 걸어가 앉는 구간 자체가 없어졌고,
+/// 배치 지점은 "어디에 세울 것인가"만 답한다 — 겹쳐 서지 않게 하나씩 나눠 준다.
+///
 /// 수용 인원은 서버 권위로 세어 NetworkVariable로 전 피어에 동기화한다 (#56 패턴) —
-/// 본부 UI(별도 이슈)는 InmateCount/OnInmateCountChanged를 읽으면 된다.
-/// 자물쇠·탈출(별도 이슈)은 ReleaseInmate로 이 카운트에서 빠져나간다.
+/// 본부 UI는 InmateCount/OnInmateCountChanged를 읽으면 된다.
+/// 자물쇠·탈출(#231)은 ReleaseInmate로 이 카운트에서 빠져나간다.
 /// </summary>
 public class JailZone : NetworkBehaviour
 {
-    [Header("좌석 (비우면 유치장 자신의 위치)")]
+    [Header("수감자 배치 지점 (비우면 감옥 자신의 위치)")]
     [Tooltip(
-        "수감자가 걸어가 앉는 좌석 지점들. 빈 자리를 앞에서부터 배정한다 — 벤치 위, 문↔통로 동선을 비켜, "
-            + "Jail NavMesh 위에 둘 것. Z축(파랑 화살표)이 앉아서 바라보는 방향이다.\n\n"
-            + "주의: 벤치 프롭에는 NavMeshModifier의 'Ignore From Build'가 켜져 있어야 한다. "
-            + "끄고 NavMesh를 다시 구우면 벤치가 바닥을 파내서(카빙) 좌석이 걸어갈 수 없는 곳이 되고 "
-            + "수감 이송이 전부 실패한다"
+        "수감자를 세울 지점들. 빈 자리를 앞에서부터 배정한다 — 감옥 방 NavMesh 위, 문 앞 동선을 비켜 둘 것. "
+            + "Z축(파랑 화살표)이 서서 바라보는 방향이다.\n\n"
+            + "순간이동으로 배치되므로 걸어갈 경로는 필요 없지만, 배회·도주가 이 자리에서 이어지려면 "
+            + "NavMesh 위여야 한다"
     )]
-    [SerializeField] private Transform[] m_seatPoints;
+    [SerializeField] private Transform[] m_inmatePoints;
 
-    [Header("출구 지점 (비우면 유치장 자신의 위치)")]
-    [Tooltip("탈옥으로 방출된 수감자를 옮길 유치장 밖 지점 — 창살 안에 갇히지 않게 한다 (#415). 문 바깥 NavMesh 위에 둘 것")]
+    [Header("플레이어 입장 지점 (비우면 감옥 자신의 위치)")]
+    [Tooltip("문에 E를 눌러 들어온 플레이어가 서는 자리 — 감옥 방 안. 배치 지점과 겹치지 않게 둘 것")]
+    [SerializeField] private Transform m_playerEntryPoint;
+
+    [Header("퇴장 지점 (비우면 감옥 자신의 위치)")]
+    [Tooltip(
+        "감옥에서 나오는 플레이어·반출 대상이 서는 도시 쪽 자리 — 감옥 문 바깥 NavMesh 위에 둘 것. "
+            + "탈옥으로 방출된 수감자도 여기로 나온다 (#231)"
+    )]
     [SerializeField] private Transform m_exitPoint;
+
+    [Header("감옥 방 범위 (비우면 자식에서 자동 탐색)")]
+    [Tooltip(
+        "'이 좌표가 감옥 안인가'를 답하는 부피 — 문 E가 들어가기/나오기를 가르는 유일한 기준이다. "
+            + "방 전체를 덮되 도시 쪽과 겹치지 않게 둘 것. Is Trigger를 켜 둘 것(끄면 플레이어를 막는다)"
+    )]
+    [SerializeField] private BoxCollider m_roomVolume;
 
     // 서버 권위 수용 인원 — 서버만 쓰고 모든 클라이언트가 읽는다 (#56)
     private readonly NetworkVariable<int> m_inmateCount = new NetworkVariable<int>(0);
@@ -65,10 +85,10 @@ public class JailZone : NetworkBehaviour
         }
     }
 
-    // 좌석별 점유자 — 인덱스가 m_seatPoints와 1:1이다. null이면 빈 자리. 서버(또는 오프라인) 전용. (#462)
-    private NpcController[] m_seatOccupants;
+    // 배치 지점별 점유자 — 인덱스가 m_inmatePoints와 1:1이다. null이면 빈 자리. 서버(또는 오프라인) 전용. (#462/#537)
+    private NpcController[] m_placementOccupants;
 
-    // 정원 초과분을 나눠 앉힐 좌석 커서 — 좌석이 전부 찼을 때만 쓴다 (아래 ReserveSeat)
+    // 정원 초과분을 나눠 세울 커서 — 지점이 전부 찼을 때만 쓴다 (아래 ReservePlacement)
     private int m_overflowCursor;
 
     /// <summary>현재 수용 인원. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 읽을 수 있다.</summary>
@@ -78,10 +98,34 @@ public class JailZone : NetworkBehaviour
     public IReadOnlyCollection<NpcController> Inmates => m_inmates;
 
     /// <summary>
-    /// 방출된 수감자를 내보낼 유치장 밖 지점 — 미배선이면 유치장 자신의 위치. (#415)
-    /// 유치장 내부가 시민 통행 금지 영역(Jail)이라, 방출만 하고 두면 경로가 없어 창살 안에 고착된다.
+    /// 감옥에서 나오는 대상이 서는 도시 쪽 지점 — 미배선이면 감옥 자신의 위치. (#415/#537)
+    /// 감옥 방은 도시와 이어진 경로가 없으므로, 방출·반출·퇴장이 전부 여기로 순간이동한다.
     /// </summary>
     public Transform ExitPoint => m_exitPoint != null ? m_exitPoint : transform;
+
+    /// <summary>문에 E를 눌러 들어온 플레이어가 서는 감옥 안 지점 — 미배선이면 감옥 자신의 위치. (#537)</summary>
+    public Transform PlayerEntryPoint => m_playerEntryPoint != null ? m_playerEntryPoint : transform;
+
+    /// <summary>
+    /// 이 좌표가 감옥 방 안인가 — 범위가 미배선이면 항상 false(문 E가 전부 '들어가기'로 읽힌다). (#537)
+    ///
+    /// 로컬 공간에서 직접 검사한다: <see cref="Collider.bounds"/>는 회전을 무시하는 월드 AABB라
+    /// 방을 비스듬히 놓으면 판정이 어긋나고, 트랜스폼을 옮긴 직후에는 물리 동기화 전까지 낡은 값을 준다.
+    /// (옛 <c>JailScanner</c>에서 옮겨 온 판정 — 물리 쿼리도 필요 없다)
+    /// 서버·클라 구분 없는 순수 판정이라 어디서 불러도 안전하다.
+    /// </summary>
+    public bool ContainsPoint(Vector3 position)
+    {
+        if (m_roomVolume == null)
+            return false;
+
+        Vector3 local = m_roomVolume.transform.InverseTransformPoint(position) - m_roomVolume.center;
+        Vector3 half = m_roomVolume.size * 0.5f;
+
+        return Mathf.Abs(local.x) <= half.x
+            && Mathf.Abs(local.y) <= half.y
+            && Mathf.Abs(local.z) <= half.z;
+    }
 
     /// <summary>수용 인원 변경 — 서버·클라이언트 모든 피어에서 발생한다. 본부 UI(별도 이슈)가 구독.</summary>
     public event Action<int> OnInmateCountChanged;
@@ -110,8 +154,16 @@ public class JailZone : NetworkBehaviour
 
     private void Awake()
     {
-        // 좌석 점유 배열은 좌석 수와 1:1 — 좌석은 씬 배치라 런타임에 늘지 않으므로 여기서 한 번만 잡는다 (#462)
-        m_seatOccupants = new NpcController[m_seatPoints != null ? m_seatPoints.Length : 0];
+        // 점유 배열은 배치 지점 수와 1:1 — 지점은 씬 배치라 런타임에 늘지 않으므로 여기서 한 번만 잡는다 (#462)
+        m_placementOccupants = new NpcController[m_inmatePoints != null ? m_inmatePoints.Length : 0];
+
+        if (m_roomVolume == null)
+            m_roomVolume = GetComponentInChildren<BoxCollider>();
+
+        if (m_roomVolume == null)
+            Debug.LogWarning("JailZone: 감옥 방 범위(BoxCollider)가 없다 — 문 E가 나오기를 판단하지 못한다", this);
+        else if (!m_roomVolume.isTrigger)
+            Debug.LogWarning($"JailZone: 방 범위({m_roomVolume.name})의 Is Trigger가 꺼져 있다 — 플레이어가 막힌다", this);
     }
 
     public override void OnNetworkSpawn()
@@ -137,87 +189,75 @@ public class JailZone : NetworkBehaviour
     }
 
     /// <summary>
-    /// 좌석 배정 — 수감 대상 1명이 걸어가 앉을 좌석을 내준다. 서버(또는 오프라인)에서 호출. (#462/#492)
+    /// 배치 지점 배정 — 수감 대상 1명이 설 자리를 내준다. 서버(또는 오프라인)에서 호출. (#462/#492/#537)
     ///
-    /// 손으로 배치한 좌석 목록에서 고른다. 자리를 계산해 만들지 않는 것이 핵심이다 —
-    /// 예전 방식(셀 지점 돌려 쓰기 + GatherSlot 오프셋)은 인원이 늘면 자리가 문↔셀 통로 위에 떨어져
-    /// NPC의 진입과 플레이어의 탈출을 막았다. 목록에 문 앞 자리가 없으면 그 사고가 구조적으로 불가능해진다.
+    /// 손으로 배치한 지점 목록에서 <b>앞에서부터</b> 빈 자리를 고른다. 자리를 계산해 만들지 않는 것이
+    /// 핵심이다 — 예전 방식(셀 지점 돌려 쓰기 + GatherSlot 오프셋)은 인원이 늘면 자리가 문 앞 동선에
+    /// 떨어졌다. 목록에 그런 자리가 없으면 그 사고가 구조적으로 불가능해진다.
     ///
-    /// <paramref name="near"/>에서 <b>가장 가까운 빈 좌석</b>을 고른다 (#492). 플레이어가 신병을 내려놓은
-    /// 자리가 기준이다 — 앞에서부터 채우면 방 반대편 좌석이 배정돼 걸어가는 거리가 공연히 길어진다
-    /// (실측 최대 5.6m). 걸어가는 것 자체는 NpcJailedState가 한다.
+    /// <b>"놓은 자리에서 가장 가까운 곳"을 더는 보지 않는다</b> (#537). 순간이동으로 배치되므로 걸어갈
+    /// 거리라는 것이 없어졌고, 기준이 될 '놓은 자리'도 문 밖이라 방 안 좌표와 무관하다.
     ///
-    /// 정원을 넘으면 좌석을 돌려 써 겹쳐 앉힌다 — 좌석은 전부 통로 밖이라 겹쳐도 통행을 막지 않는다
+    /// 정원을 넘으면 지점을 돌려 써 겹쳐 세운다 — 지점은 전부 동선 밖이라 겹쳐도 통행을 막지 않는다
     /// (팀 확정 2026-07-30). 조용히 넘어가지 않게 경고를 남긴다.
     /// </summary>
-    public Transform ReserveSeat(NpcController npc, Vector3 near)
+    public Transform ReservePlacement(NpcController npc)
     {
-        if (npc == null || m_seatPoints == null || m_seatPoints.Length == 0)
+        if (npc == null || m_inmatePoints == null || m_inmatePoints.Length == 0)
             return transform;
 
         // 이미 자리가 있는 대상이면 그 자리를 그대로 준다 — 재판정·중복 통보로 한 명이 두 자리를 쥐지 않게
-        for (int i = 0; i < m_seatPoints.Length; i++)
-            if (m_seatOccupants[i] == npc && m_seatPoints[i] != null)
-                return m_seatPoints[i];
+        for (int i = 0; i < m_inmatePoints.Length; i++)
+            if (m_placementOccupants[i] == npc && m_inmatePoints[i] != null)
+                return m_inmatePoints[i];
 
-        // 빈 자리 중 기준 위치에서 가장 가까운 곳. 점유자가 파괴됐으면(라운드 종료 잔류 정리 등)
-        // Unity의 null 비교가 빈 자리로 본다.
-        int best = -1;
-        float bestSqrDistance = float.MaxValue;
-        for (int i = 0; i < m_seatPoints.Length; i++)
+        // 앞에서부터 빈 자리. 점유자가 파괴됐으면(라운드 종료 잔류 정리 등) Unity의 null 비교가 빈 자리로 본다.
+        for (int i = 0; i < m_inmatePoints.Length; i++)
         {
-            if (m_seatPoints[i] == null || m_seatOccupants[i] != null)
+            if (m_inmatePoints[i] == null || m_placementOccupants[i] != null)
                 continue;
 
-            float sqrDistance = (m_seatPoints[i].position - near).sqrMagnitude;
-            if (sqrDistance >= bestSqrDistance)
-                continue;
-
-            bestSqrDistance = sqrDistance;
-            best = i;
+            m_placementOccupants[i] = npc;
+            return m_inmatePoints[i];
         }
 
-        if (best < 0)
-            return ShareOverflowSeat(npc);
-
-        m_seatOccupants[best] = npc;
-        return m_seatPoints[best];
+        return ShareOverflowPlacement(npc);
     }
 
-    // 정원 초과 — 좌석을 돌려 써 겹쳐 앉힌다. 경고는 여기 한 곳에서만 낸다.
-    private Transform ShareOverflowSeat(NpcController npc)
+    // 정원 초과 — 지점을 돌려 써 겹쳐 세운다. 경고는 여기 한 곳에서만 낸다.
+    private Transform ShareOverflowPlacement(NpcController npc)
     {
-        Transform shared = NextOverflowSeat();
+        Transform shared = NextOverflowPlacement();
         Debug.LogWarning(
-            $"[유치장] 좌석 정원({m_seatPoints.Length}석) 초과 — {npc.name}을(를) {shared.name}에 겹쳐 앉힌다. "
-                + "정원을 늘리려면 유치장에 벤치·좌석 지점을 추가할 것",
+            $"[감옥] 배치 지점({m_inmatePoints.Length}개) 초과 — {npc.name}을(를) {shared.name}에 겹쳐 세운다. "
+                + "정원을 늘리려면 감옥 방에 배치 지점을 추가할 것",
             this
         );
         return shared;
     }
 
-    // 정원 초과분이 앉을 좌석 — 한 자리에 전부 몰리지 않게 커서로 나눠 준다.
-    // 점유 목록에는 올리지 않는다(그 자리 주인은 먼저 앉은 수감자다) — 그 주인이 방출되면 자리는 정상적으로 빈다.
-    private Transform NextOverflowSeat()
+    // 정원 초과분이 설 자리 — 한 자리에 전부 몰리지 않게 커서로 나눠 준다.
+    // 점유 목록에는 올리지 않는다(그 자리 주인은 먼저 온 수감자다) — 그 주인이 방출되면 자리는 정상적으로 빈다.
+    private Transform NextOverflowPlacement()
     {
-        for (int i = 0; i < m_seatPoints.Length; i++)
+        for (int i = 0; i < m_inmatePoints.Length; i++)
         {
-            Transform seat = m_seatPoints[m_overflowCursor % m_seatPoints.Length];
-            m_overflowCursor = (m_overflowCursor + 1) % m_seatPoints.Length;
+            Transform spot = m_inmatePoints[m_overflowCursor % m_inmatePoints.Length];
+            m_overflowCursor = (m_overflowCursor + 1) % m_inmatePoints.Length;
 
-            if (seat != null)
-                return seat;
+            if (spot != null)
+                return spot;
         }
 
-        return transform; // 배선된 좌석이 하나도 없다 — 유치장 자신의 위치로 폴백
+        return transform; // 배선된 지점이 하나도 없다 — 감옥 자신의 위치로 폴백
     }
 
-    // 좌석 점유 해제 — 방출·재수용으로 자리가 빈다. 비우지 않으면 정원이 조용히 줄어든다.
-    private void ReleaseSeat(NpcController npc)
+    // 배치 점유 해제 — 방출·반출로 자리가 빈다. 비우지 않으면 정원이 조용히 줄어든다.
+    private void ReleasePlacement(NpcController npc)
     {
-        for (int i = 0; i < m_seatOccupants.Length; i++)
-            if (m_seatOccupants[i] == npc)
-                m_seatOccupants[i] = null;
+        for (int i = 0; i < m_placementOccupants.Length; i++)
+            if (m_placementOccupants[i] == npc)
+                m_placementOccupants[i] = null;
     }
 
     /// <summary>
@@ -225,8 +265,8 @@ public class JailZone : NetworkBehaviour
     /// 판정 순간 바로 세므로 할당량 종료(#340)가 카운트를 앞질러 마지막 검거가 정산에서 누락되지 않는다.
     /// 탈옥해 풀려난 대상은 ReleaseInmate로 이 카운트에서 빠지므로 "끝까지 데리고 있어야 보상"은 유지된다.
     /// <paramref name="bounty"/>는 이 수감자가 라운드 종료 정산(#340)에 기여할 보상액이다(CustodyRouter가 판정 보상을 넘긴다).
-    /// <paramref name="deliverers"/>는 이 수감자를 앉힌 인계자들의 clientId — 개인 자금(#484)의 귀속 근거다.
-    /// 착석 시점에 JailIntake가 확정해 넘긴다(판정 시점이 아니다 — 그쪽 주석 참고). 아무도 없으면 빈 배열.
+    /// <paramref name="deliverers"/>는 이 수감자를 넣은 인계자들의 clientId — 개인 자금(#484)의 귀속 근거다.
+    /// 문 앞 판정 시점에 JailIntake가 확정해 넘긴다(#537 — 착석이라는 별도 시점이 없어졌다). 아무도 없으면 빈 배열.
     /// </summary>
     public void Admit(NpcController npc, int bounty, ulong[] deliverers)
     {
@@ -248,7 +288,7 @@ public class JailZone : NetworkBehaviour
 
         // 자동 재잠금은 제거됐다 (#492) — 탈옥으로 열린 자물쇠는 <b>플레이어가 직접 잠가야 한다</b>
         // (유치장 문에 E). 수감만 하면 저절로 잠기던 예전 처리는 "털렸으면 가서 잠근다"는 책임을
-        // 없애 버렸다. 열린 자물쇠는 문이 열린 채로 남아 계속 눈에 띈다(JailDoor.IsJailbreakHoldingOpen).
+        // 없애 버렸다. 열린 자물쇠는 문이 열린 채로 남고, 본부 경보등(JailAlarmBeacon)이 함께 알린다.
 
         OnInmateAdmitted?.Invoke(npc); // 계상이 끝난 뒤에 알린다 — 구독자가 InmateCount를 읽어도 맞게 나온다
     }
@@ -257,8 +297,8 @@ public class JailZone : NetworkBehaviour
     /// 이 수감자의 기록된 현상금 — 없으면 false. 서버(또는 오프라인) 전용. (#517)
     ///
     /// 반출(<see cref="JailIntake.ServerExtract"/>)이 <see cref="ReleaseInmate"/> <b>직전에</b> 읽는다.
-    /// 반출은 정산에서 대상을 빼면서 판정 결과까지 잃는데, 유치장 안에서 다시 세우면 게이트를 거치지
-    /// 않고 그 자리에서 재착석해야 한다 — 그때 같은 값으로 다시 계상하려고 꺼내 둔다.
+    /// 반출은 정산에서 대상을 빼면서 판정 결과까지 잃는데, 감옥 안에서 다시 세우면(추종 정지) 문 앞
+    /// 재판정을 거치지 않고 그 자리에서 다시 수감돼야 한다 — 그때 같은 값으로 계상하려고 꺼내 둔다. (#517/#537)
     /// </summary>
     public bool TryGetBounty(NpcController npc, out int bounty)
     {
@@ -285,8 +325,8 @@ public class JailZone : NetworkBehaviour
         if (!m_inmates.Remove(npc))
             return;
 
-        m_records.Remove(npc); // 방출된 수감자는 정산에서 빠진다 — 탈옥해 유치장에 없으면 보상 없음 (#340)
-        ReleaseSeat(npc); // 앉아 있던 좌석을 비운다 — 다음 수감자가 그 자리에 앉을 수 있게 (#462)
+        m_records.Remove(npc); // 방출된 수감자는 정산에서 빠진다 — 탈옥해 감옥에 없으면 보상 없음 (#340)
+        ReleasePlacement(npc); // 서 있던 자리를 비운다 — 다음 수감자가 그 자리를 쓸 수 있게 (#462/#537)
         SetInmateCount(m_inmates.Count);
         RefreshBountyTotal();
         Debug.Log($"[유치장] 수용 해제: {npc.name} — 현재 {InmateCount}명, 누적 현상금 {BountyTotal}원");

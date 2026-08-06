@@ -146,6 +146,26 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
     }
 
     /// <summary>
+    /// 이 대상에 걸린 밧줄을 <b>전부</b> 걷어낸다 — 끌기를 놓고 줄까지 뺀다. 서버(또는 오프라인) 전용. (#537)
+    ///
+    /// 문 앞 수감(<see cref="JailIntake"/>)이 쓴다: 대상이 감옥 안으로 순간이동해 사라지므로 줄만 허공에
+    /// 남기지 않으려면 여기서 끊어야 한다. 밧줄 좌클릭 풀기(<see cref="PlayerEscortCommands"/>)와 달리
+    /// <b>일어나기·배회 복귀를 태우지 않는다</b> — 곧바로 수감 상태로 덮어쓰기 때문이다.
+    /// </summary>
+    public static void ReleaseAllTethersOn(NpcController npc)
+    {
+        if (npc == null)
+            return;
+
+        List<PlayerEscorter> holders = FindEscortersOf(npc);
+        for (int i = 0; i < holders.Count; i++)
+        {
+            holders[i].ReleaseDrag(npc); // 끌기 해제 — 에이전트를 되살린다(순간이동이 성립하려면 필요하다)
+            holders[i].RemoveTether(npc);
+        }
+    }
+
+    /// <summary>
     /// 나 말고 이 대상을 묶고 있는 사람이 있는가 — 서버(또는 오프라인) 전용. (#513)
     /// 풀기가 <b>내 줄을 빼기 전에</b> 물어야 하는 질문이다: 뺀 뒤에 <see cref="FindEscorterOf"/>로 물으면
     /// 답은 같지만, 그때는 대상의 묶임 표시가 이미 내려가 "묶여 누워 있었는가"를 알 수 없다.

@@ -241,7 +241,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         }
 
         // 무작위 지점에서 시작해 목록을 한 바퀴 돈다 — 고른 포인트가 비어 있거나(인스펙터 미설정)
-        // 주변에 NavMesh가 없어도 이벤트를 통째로 취소하지 않고 다음 포인트로 넘어간다 (JailZone.ReserveSeat과 같은 방식).
+        // 주변에 NavMesh가 없어도 이벤트를 통째로 취소하지 않고 다음 포인트로 넘어간다 (JailZone.ReservePlacement와 같은 방식).
         int start = Random.Range(0, points.Count);
         for (int i = 0; i < points.Count; i++)
         {
@@ -385,11 +385,12 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
                 WantedList.ReinstateByNpcId(inmate.NetworkObjectId);
         }
 
-        // 유치장 내부는 시민 통행이 금지된 NavMesh 영역(Jail)이라, 방출만 하면 나갈 경로가 없어 창살 안에
-        // 고착된다 (#415) — 문 밖 출구 지점으로 내보내고 Jail 통행을 회수한 뒤 도주시킨다.
+        // 감옥은 도시와 이어진 NavMesh 경로가 아예 없는 격리 공간이라(#537), 방출만 하면 방 안에 그대로
+        // 남는다 — 문 밖 퇴장 지점으로 순간이동시킨 뒤 도주시킨다. (예전에는 Jail 통행 회수까지 함께
+        // 했는데, 통행 게이팅 자체가 사라져 워프만 남았다)
         inmate.ServerExitJail(m_jailZone.ExitPoint);
 
-        // 유치장을 뛰쳐나와 도주한다 — 침입자를 위협으로 삼아 반대로 달아난 뒤 배회로 섞여 든다.
+        // 감옥을 뛰쳐나와 도주한다 — 침입자를 위협으로 삼아 반대로 달아난 뒤 배회로 섞여 든다.
         // 근처에 플레이어가 없으면 도주 상태가 곧 배회로 복귀한다(NpcFleeState).
         inmate.StartFlee(m_intruder != null ? m_intruder.transform : null);
 

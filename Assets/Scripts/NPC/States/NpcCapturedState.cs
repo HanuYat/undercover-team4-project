@@ -72,7 +72,7 @@ public class NpcCapturedState : NpcStateBase
     ///
     /// 타이머 진입(<see cref="Tick"/>)과 <b>일어난 뒤 실행 직전</b>(<see cref="Flee"/>)이 같은 기준을 봐야 한다 —
     /// 둘 사이에 일어나기 대기(약 0.6초)가 끼면서 그 사이 판정이 통과할 수 있는 창이 생겼다 (#513).
-    /// 방치된 대상이 마침 판정 게이트(JailScanner) 안에 서 있으면 폴링(0.1초)이 그 창에서 대상을
+    /// 방치된 대상이 마침 감옥 문 앞에 서 있으면 그 창에서 대상을
     /// 판정해 <see cref="NpcController.MarkDelivered"/>를 부르고, 재검사가 없으면 방금 인계된 신병이
     /// 그대로 달아난다.</summary>
     private bool StaysPut => NpcStateRules.StaysPutWhenFreed(m_owner);

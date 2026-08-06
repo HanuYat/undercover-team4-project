@@ -4,7 +4,7 @@ using UnityEngine;
 
 /// <summary>
 /// 검거 판정 — 확보한 신병의 실제 신원을 대조해 진범/오검거를 판정한다. (GDD 7-2, #41)
-/// <see cref="JailIntake"/>가 신병이 판정 게이트(<see cref="JailScanner"/>)를 지나는 순간
+/// <see cref="JailIntake"/>가 문 앞 E로 신병을 넣는 순간
 /// <see cref="Judge"/>를 부르면 판정하고, 결과를 로그 + OnArrestJudged로 알린다.
 /// 판정 장소 이력: 인계존 도달 자동 판정(#59) → 인계 단말 E(#414) →
 /// <b>유치장 앞 보안 스캐너(#492)</b>. 중간에 '유치장 문턱(Jail 영역 진입)'을 거쳤는데, 유치장

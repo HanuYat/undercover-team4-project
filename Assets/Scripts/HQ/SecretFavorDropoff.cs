@@ -5,7 +5,7 @@ using UnityEngine;
 /// 비밀 청탁의 인도 지점 (#485) — 꺼낸 대상을 여기까지 데려오면 그 대상은 도시로 사라진다.
 ///
 /// 책임은 하나: "이 지점이 인도 범위 안인가"(<see cref="Contains"/>). 완수 판정과 소멸·지급은
-/// <see cref="SecretFavorBroker"/>가 굴린다 — <see cref="JailScanner"/>와 같은 역할 분담이다.
+/// <see cref="SecretFavorBroker"/>가 굴린다 — 범위만 답하고 판정은 남에게 맡기는 역할 분담이다.
 /// 영역 판정도 그쪽과 같은 방식이다(로컬 공간 박스 검사 — 회전을 살리고 물리 동기화를 기다리지 않는다).
 ///
 /// <b>번호로 식별한다.</b> 의뢰 전송에는 이 번호만 싣고, 수신 클라가 그 번호로 지점을 찾아 표식을 켠다.
@@ -53,7 +53,7 @@ public class SecretFavorDropoff : MonoBehaviour
             return;
         }
 
-        // 트리거가 아니면 대상을 데리고 들어갈 수가 없다 — JailScanner와 같은 사고
+        // 트리거가 아니면 대상을 데리고 들어갈 수가 없다 — 범위 콜라이더의 흔한 사고
         if (!m_zone.isTrigger)
             Debug.LogWarning($"SecretFavorDropoff({name}): 인도 범위의 Is Trigger가 꺼져 있다 — 플레이어가 막힌다", this);
     }
@@ -87,7 +87,7 @@ public class SecretFavorDropoff : MonoBehaviour
                 s_all[i].SetMarkerVisible(false);
     }
 
-    /// <summary>이 지점이 인도 범위 안인가 — 범위 미배선이면 항상 false. (JailScanner.Contains와 동일 방식)</summary>
+    /// <summary>이 지점이 인도 범위 안인가 — 범위 미배선이면 항상 false. (JailZone.ContainsPoint와 동일 방식)</summary>
     public bool Contains(Vector3 position)
     {
         if (m_zone == null)

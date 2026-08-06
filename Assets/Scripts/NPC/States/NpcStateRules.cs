@@ -138,27 +138,23 @@ public static class NpcStateRules
     /// 인계 방치 만료(<see cref="NpcCapturedState"/>)가 함께 보는 단일 기준. 서버(또는 오프라인) 전용. (#526)
     ///
     /// 두 경로가 같은 질문에 다르게 답하던 것이 #526이다. 방치 쪽에는 판정 완료 가드가 있는데
-    /// (GDD 7-6 "유치장에서 탈출하면 안 된다") 밧줄 끊김 쪽에는 없어서, 유치장 안에 묶어 둔 수감자가
-    /// 줄이 끊기는 순간 도주로 전환돼 <b>잠긴 창살을 통과해</b> 나갔다. 유치장 봉쇄는 문이 아니라
-    /// NavMesh 영역이 유일한 수단이고(<see cref="JailArea"/>·JailDoor — 창살 콜라이더는 플레이어만 막는다)
-    /// 안에 선 대상은 도주 상태가 돼도 Jail 통행을 그대로 들고 있으므로, 봉쇄의 실질은
-    /// <b>애초에 풀려나 달아나지 않게 하는 것</b>이다.
+    /// (GDD 7-6 "감옥에서 탈출하면 안 된다") 밧줄 끊김 쪽에는 없어서, 유치장 안에 묶어 둔 수감자가
+    /// 줄이 끊기는 순간 도주로 전환돼 <b>잠긴 창살을 통과해</b> 나갔다.
+    ///
+    /// <b>감옥이 격리 공간이 된 뒤로(#537) 그 탈출 자체는 불가능해졌다</b> — 도시로 나가는 NavMesh
+    /// 경로가 없어 도주 상태가 돼도 방 안을 뛰어다닐 뿐이다. 그래도 가드는 남긴다: 감옥 안에서
+    /// 수감자가 도주 상태로 돌아다니는 그림은 "가둬 뒀다"가 아니다.
     ///
     /// 둘 중 하나면 남는다:
-    ///  · <b>유치장 안</b> — 유치장 안 풀기(PlayerEscortCommands.ServerApplyUnrope)가 배회로 돌려보내지
-    ///    않고 그 자리에 세우는 것과 같은 취급이다. 안에서 달아나게 두면 "시민은 유치장에 못 들어간다"
-    ///    (#415)가 없애려던 그림이 되살아나고, 무엇보다 잠긴 유치장에서 신병이 저절로 빠져나간다.
+    ///  · <b>감옥 방 안</b>(<see cref="JailRoom"/>) — 반출해 놓고 감옥 안에 방치한 대상이 여기 걸린다.
     ///  · <b>판정이 끝난 대상</b>(<see cref="NpcController.IsDelivered"/>) — GDD 7-6의 방치 타이머 제외와
     ///    같은 이유다. 예외는 반출해 놓고 방치한 대상(<see cref="NpcController.IsJailExtracted"/>, #517):
     ///    정산·진행도에서 이미 빠져 있어 그냥 두면 팀 손실만 남긴 채 영원히 서 있으므로 달아나게 한다.
-    ///    그 대상도 유치장 안이면 위 조건에 걸려 남는다.
-    ///
-    /// <see cref="JailArea"/>를 읽는 근거는 PlayerEscortCommands의 풀기 분기와 같다 — "이 좌표가 Jail
-    /// 영역인가"를 답하는 정적 판정 유틸이라, 이걸 보는 것이 유치장을 아는 것은 아니다.
+    ///    그 대상도 감옥 안이면 위 조건에 걸려 남는다.
     /// </summary>
     public static bool StaysPutWhenFreed(NpcController npc) =>
         npc != null
-        && (JailArea.Contains(npc.transform.position)
+        && (JailRoom.Contains(npc.transform.position)
             || (npc.IsDelivered && !npc.IsJailExtracted));
 
     /// <summary>E 상호작용이 반응하는 상태인가 — 이제 <b>신병 조작 전용</b>이다. (#438/#492)
