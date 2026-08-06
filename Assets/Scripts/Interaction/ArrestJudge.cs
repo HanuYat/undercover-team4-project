@@ -47,7 +47,18 @@ public class ArrestJudge : CommonManagerBase
     /// 반출은 <c>ClearDelivered</c>를 부르지 않는다 — 그건 탈옥 전용이다(JailIntake 주석).
     /// 재판정 후처리 중복은 <see cref="ArrestResult.IsFirstDelivery"/>가 건다.
     /// </summary>
-    public ArrestResult? Judge(NpcController npc)
+    /// <param name="presser">
+    /// 수감 버튼을 누른 플레이어 — 밧줄을 걸고 있지 않아도 <b>인계자에 포함</b>된다. (#537)
+    ///
+    /// 예전에는 인계자를 밧줄에서만 뽑았다. 신병을 끌고 유치장까지 들어가는 것이 곧 인계였기
+    /// 때문이다. 문 앞 버튼으로 바뀌면서(#537) <b>줄을 풀어 문 앞에 놓고 누르는 것이 정상 경로</b>가
+    /// 됐고, 그때 밧줄 목록이 비어 판정 배너(<see cref="ArrestVerdictFeedback"/>)가 보여줄 대상을
+    /// 잃고 조용히 스킵됐다 — 누른 사람에게 결과가 안 뜬다.
+    ///
+    /// 오검거 페널티도 이 목록을 대상으로 삼으므로, 누른 사람이 함께 책임진다 —
+    /// 무고한 시민을 넣은 것은 버튼을 누른 손이다. 인계 몫(#484)의 귀속 기준과도 같다.
+    /// </param>
+    public ArrestResult? Judge(NpcController npc, PlayerEscorter presser = null)
     {
         if (npc == null) return null;
         if (npc.IsSpawned && !npc.IsServer) return null;
@@ -109,6 +120,12 @@ public class ArrestJudge : CommonManagerBase
         // 끌고 있지 않아도 줄이 이어져 있으면 포함된다 — 유치장 안에 내려놓은 뒤 판정되는 경로(#492)에서도
         // 인계자가 '알 수 없음'이 되지 않는다.
         List<PlayerEscorter> deliverers = PlayerEscorter.FindEscortersOf(npc);
+
+        // 버튼을 누른 사람도 인계자다 (#537) — 줄을 풀어 놓고 누르는 경로에서는 이 사람이 유일하다.
+        // 중복은 거른다: 자기 줄에 걸어 끌고 온 사람이 그대로 누르는 것이 가장 흔한 경우다.
+        if (presser != null && !deliverers.Contains(presser))
+            deliverers.Add(presser);
+
         var result = new ArrestResult(npc, verdict, profile, reward, deliverers, firstDelivery);
 
         LogVerdict(result);

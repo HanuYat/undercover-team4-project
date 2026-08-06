@@ -107,6 +107,36 @@ public class JailZone : NetworkBehaviour
     public Transform PlayerEntryPoint => m_playerEntryPoint != null ? m_playerEntryPoint : transform;
 
     /// <summary>
+    /// 퇴장 지점 둘레의 <paramref name="index"/>번째 자리 — <b>여럿이 한 번에 나올 때 겹치지 않게</b> 벌린다. (#537)
+    ///
+    /// 퇴장 지점 하나에 전부 내보내면 같은 좌표에 겹쳐 놓이고, 물리가 그 겹침을 풀면서 서로를
+    /// 튕겨낸다(플레이어의 CharacterController와 NPC 캡슐이 같은 자리에서 만난다).
+    ///
+    /// 좌우로 번갈아 벌리되 줄은 <b>퇴장 지점이 보는 쪽</b>(도시 방향)으로 늘어난다. 반대로 깔면
+    /// 뒤가 곧 감옥 벽이라 자리가 벽 안으로 파고들고, NavMesh 스냅이 그것을 도로 끌어내면서
+    /// 결국 같은 자리에 몰린다.
+    ///
+    /// 0번은 퇴장 지점 그 자신이다 — 데리고 나오는 플레이어가 쓰는 자리라, 동행은 1번부터 준다.
+    /// </summary>
+    public Vector3 ExitSlot(int index)
+    {
+        Transform exit = ExitPoint;
+        if (index <= 0)
+            return exit.position;
+
+        // 1,2 / 3,4 / ... 로 좌우 번갈아. 한 쌍이 찰 때마다 한 줄씩 앞으로(도시 쪽으로) 나간다.
+        int row = (index + 1) / 2;          // 1,1,2,2,3,3...
+        float side = (index % 2 == 1) ? -1f : 1f;
+
+        return exit.position
+            + exit.right * (side * k_exitSlotSpacing)
+            + exit.forward * (row * k_exitSlotSpacing);
+    }
+
+    // 퇴장 자리 간격(m) — 플레이어 캡슐(반지름 ~0.4)과 NPC가 서로 밀지 않을 만큼.
+    private const float k_exitSlotSpacing = 1.2f;
+
+    /// <summary>
     /// 이 좌표가 감옥 방 안인가 — 범위가 미배선이면 항상 false(문 E가 전부 '들어가기'로 읽힌다). (#537)
     ///
     /// 로컬 공간에서 직접 검사한다: <see cref="Collider.bounds"/>는 회전을 무시하는 월드 AABB라

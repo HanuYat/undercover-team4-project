@@ -18,6 +18,20 @@ using UnityEngine;
 /// </summary>
 public class NpcJailedState : NpcStateBase
 {
+    // 배치 지점에서 이만큼(m) 안에서만 어슬렁거린다 — 방이 좁아(내부 7.5m) 넓게 잡으면
+    // 여럿이 같은 자리로 몰려 서로를 밀어낸다.
+    private const float k_wanderRadius = 1.6f;
+
+    // 도착 판정 여유(m) — stoppingDistance에 더해 쓴다. 딱 맞추려 들면 미세하게 떨며 멈추지 못한다.
+    private const float k_arriveSlack = 0.15f;
+
+    // 다음 목적지를 고르기까지 서 있는 시간(초) 범위 — 계속 걷기만 하면 우리를 도는 로봇처럼 보인다.
+    private const float k_pauseSecondsMin = 1.5f;
+    private const float k_pauseSecondsMax = 5f;
+
+    // 다음에 움직일 시각. 서 있는 동안만 의미가 있다.
+    private float m_nextMoveTime;
+
     public NpcJailedState(NpcController owner) : base(owner) { }
 
     public override void Enter()
@@ -46,9 +60,40 @@ public class NpcJailedState : NpcStateBase
         m_owner.transform.rotation = SpotRotation();
     }
 
+    /// <summary>
+    /// 감옥 안 배회 — 배치 지점 둘레를 어슬렁거린다. 서버(또는 오프라인)에서만 실제로 움직이고,
+    /// 클라이언트는 NetworkTransform이 실어다 주는 결과만 본다.
+    ///
+    /// <b>가둬 둔 사람도 살아 있어야 한다</b> — 배치 지점에 못 박아 두면 마네킹으로 보이고,
+    /// 본부 CCTV로 감옥을 볼 때 화면이 정지 화면과 구분되지 않는다.
+    ///
+    /// 돌아다니는 범위를 <see cref="k_wanderRadius"/>로 묶는 이유는 방이 좁아서다(내부 7.5m).
+    /// 방 전체를 목표로 삼으면 여럿이 같은 문 앞에 몰려 서로를 밀어낸다 — 자기 자리 근처만
+    /// 맴돌게 하면 인원이 늘어도 고르게 흩어진 채로 남는다.
+    /// </summary>
     public override void Tick()
     {
-        // 최종 상태 — 서 있기만 한다. 감옥 안 배회는 붙이지 않았다 (#537 후속)
+        if (m_owner.JailSpot == null || !m_owner.Agent.isOnNavMesh)
+            return;
+
+        // 걷는 중 — 도착했는지만 본다
+        if (!m_owner.Agent.isStopped)
+        {
+            if (m_owner.Agent.pathPending)
+                return;
+
+            if (m_owner.Agent.remainingDistance > m_owner.Agent.stoppingDistance + k_arriveSlack)
+                return;
+
+            BeginPause();
+            return;
+        }
+
+        // 쉬는 중 — 시간이 되면 다음 목적지를 고른다
+        if (Time.time < m_nextMoveTime)
+            return;
+
+        BeginWander();
     }
 
     public override void Exit()
@@ -59,6 +104,32 @@ public class NpcJailedState : NpcStateBase
             m_owner.Agent.isStopped = false;
             m_owner.Agent.ResetPath();
         }
+    }
+
+    // 배치 지점 둘레에서 갈 수 있는 한 점을 골라 걷기 시작한다. 못 고르면 그냥 더 쉰다.
+    private void BeginWander()
+    {
+        Vector2 offset = Random.insideUnitCircle * k_wanderRadius;
+        Vector3 target = m_owner.JailSpot.position + new Vector3(offset.x, 0f, offset.y);
+
+        // 방 밖으로 새지 않게 NavMesh 위로 스냅한다 — 감옥은 별도 섬이라 이 표본이 곧 방 안이다
+        if (!UnityEngine.AI.NavMesh.SamplePosition(
+                target, out UnityEngine.AI.NavMeshHit hit, k_wanderRadius, m_owner.Agent.areaMask))
+        {
+            BeginPause();
+            return;
+        }
+
+        m_owner.Agent.isStopped = false;
+        if (!m_owner.Agent.SetDestination(hit.position))
+            BeginPause(); // 경로를 못 잡았다 — 다음 차례에 다시 고른다
+    }
+
+    // 잠시 선다 — 계속 걷기만 하면 우리 안을 도는 로봇처럼 보인다.
+    private void BeginPause()
+    {
+        StopMoving();
+        m_nextMoveTime = Time.time + Random.Range(k_pauseSecondsMin, k_pauseSecondsMax);
     }
 
     // 이동을 끊는다 — 끌려오던 관성이 남아 배치 지점에서 밀려나지 않게 속도까지 지운다.

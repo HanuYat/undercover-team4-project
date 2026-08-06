@@ -16,15 +16,15 @@ public partial class NpcController
     /// <b>Jail 영역 통행 회수는 사라졌다</b> (#537). 감옥이 별도 NavMesh 섬이 되면서 시민이 걸어
     /// 들어올 경로 자체가 없어져, 영역 마스크로 막을 일이 없다.
     /// </summary>
-    public void ServerExitJail(Transform exitPoint)
+    public void ServerExitJail(Vector3 exitPosition)
     {
         if (IsSpawned && !IsServer)
             return;
 
-        if (m_agent == null || exitPoint == null)
+        if (m_agent == null)
             return;
 
-        if (!TryWarpNear(exitPoint.position))
+        if (!TryWarpNear(exitPosition))
         {
             Debug.LogWarning(
                 $"NpcController: 감옥 퇴장 지점으로 워프 실패 — 제자리에 둔다: {name}",

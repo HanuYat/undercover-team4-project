@@ -97,7 +97,9 @@ public class JailIntake : MonoBehaviour
             return 0;
         }
 
-        ulong presserId = ClientIdOf(interactor);
+        // 누른 사람을 판정에 넘긴다 — 밧줄을 안 쥐고 있어도 인계자로 잡혀야 판정 배너가 이 사람에게 뜨고
+        // 오검거 페널티도 걸린다 (#537, ArrestJudge.Judge의 presser 주석).
+        PlayerEscorter presser = interactor.GetComponent<PlayerEscorter>();
 
         // 확보한 수를 먼저 센다 — 판정은 일어나기(약 0.6초) 뒤에 나므로 결과를 기다려 셀 수 없다.
         // 버튼이 이 수로 "확보한 신병이 없다"만 가르면 되고, 판정 결과는 각자 배너로 나간다.
@@ -115,7 +117,7 @@ public class JailIntake : MonoBehaviour
             // 뽑아 결과(ArrestResult.DeliveredBy)에 실으므로, 줄을 먼저 걷으면 목록이 비어 <b>판정 배너도
             // 오검거 페널티 대상도 사라진다</b>. 저쪽이 오검거일 때 끌기를 직접 푸는 것도 같은 이유로
             // 판정 안에서 일어나야 한다(그쪽 주석 참고).
-            ArrestResult? result = judge.Judge(npc);
+            ArrestResult? result = judge.Judge(npc, presser);
             if (result == null)
             {
                 // 신원도 경범죄 마커도 없는 대상 — 다시 물어도 답이 같으므로 한 번만 시도한다
@@ -123,9 +125,9 @@ public class JailIntake : MonoBehaviour
                 continue;
             }
 
-            // 인계 몫은 판정 직후에 잡는다 — 아래에서 줄을 빼고 나면 누가 끌고 있었는지 알 수 없다.
-            // (오검거 경로에서 ArrestJudge가 끌기를 풀어도 줄 자체는 남아 있어 여기서 여전히 보인다)
-            ulong[] deliverers = CollectDeliverers(npc, presserId);
+            // 인계 몫(#484)은 판정이 확정한 인계자를 그대로 쓴다 — 배너·페널티와 같은 목록이라
+            // "누가 넣었나"의 답이 셋으로 갈리지 않는다.
+            ulong[] deliverers = ToClientIds(result.Value.DeliveredBy);
 
             // 오검거 — 감옥에 들이지 않는다. 행선지(원한 구역 수용)는 WrongfulArrestPenalty가 같은
             // 판정 이벤트를 이미 받아 정했고, 그 매니저가 없는 씬에서는 CustodyRouter가 배회로 돌려보낸다.
@@ -194,32 +196,18 @@ public class JailIntake : MonoBehaviour
         }
     }
 
-    // 인계 몫(#484)의 귀속자 — <b>밧줄이 걸려 있던 사람 전원 + E를 누른 사람</b>. (팀 확정 2026-08-06)
-    //
-    // 예전에는 게이트 판정부터 착석까지 밧줄 보유자를 누적했다. 그 창은 "판정과 착석이 다른 시점"이라
-    // 존재했던 것이고, 둘이 한 순간이 된 지금은 누적할 구간이 없다 — 누르는 그 프레임이 전부다.
-    // 누른 사람을 함께 넣는 이유: 남이 끌고 온 신병을 문 앞에서 대신 넣어 주는 것도 인계에 든 손이다.
-    // 반대로 누른 사람만 세면 끌고 온 사람이 손해를 본다.
-    private static ulong[] CollectDeliverers(NpcController npc, ulong presserId)
+    // 인계 몫(#484)의 귀속자 — 판정이 확정한 인계자 목록(밧줄 보유자 전원 + 버튼을 누른 사람,
+    // 팀 확정 2026-08-06)을 clientId로 옮긴다. 누가 인계자인지 정하는 것은 ArrestJudge 몫이다.
+    private static ulong[] ToClientIds(List<PlayerEscorter> deliverers)
     {
         var ids = new HashSet<ulong>();
-
-        List<PlayerEscorter> escorters = PlayerEscorter.FindEscortersOf(npc);
-        for (int i = 0; i < escorters.Count; i++)
-            ids.Add(escorters[i].OwnerClientId);
-
-        ids.Add(presserId);
+        for (int i = 0; i < deliverers.Count; i++)
+            if (deliverers[i] != null)
+                ids.Add(deliverers[i].OwnerClientId);
 
         var result = new ulong[ids.Count];
         ids.CopyTo(result);
         return result;
-    }
-
-    // 누른 사람의 clientId — 오프라인 단독 테스트에서는 0이다(서버 자신).
-    private static ulong ClientIdOf(GameObject interactor)
-    {
-        NetworkObject netObject = interactor.GetComponentInParent<NetworkObject>();
-        return netObject != null ? netObject.OwnerClientId : 0UL;
     }
 
     // ---- 반출 ----
@@ -313,8 +301,10 @@ public class JailIntake : MonoBehaviour
     /// 플레이어를 문 밖 퇴장 지점으로 옮긴다 — <b>따라오던 반출 대상도 함께</b> 나온다. 서버(또는 오프라인). (#537)
     ///
     /// 대상을 먼저 옮긴다: 나중에 옮기면 한두 프레임 동안 추종이 감옥 안에 남은 몸을 문 밖으로 끌려 해
-    /// 벽을 향해 달리는 그림이 나온다. 대상은 퇴장 지점 <b>주변</b>에 붙인다(<c>TryWarpNear</c>) —
-    /// 플레이어와 같은 좌표에 겹쳐 세우지 않기 위해서다.
+    /// 벽을 향해 달리는 그림이 나온다.
+    ///
+    /// <b>자리를 나눠 준다</b> — 플레이어는 퇴장 지점 그 자리, 동행은 그 뒤 좌우로 벌어진 자리
+    /// (<see cref="JailZone.ExitSlot"/>). 전부 같은 좌표에 놓으면 겹침을 푸는 물리가 서로를 튕겨낸다.
     /// </summary>
     public void ServerExitJail(PlayerMovement mover)
     {
@@ -325,7 +315,7 @@ public class JailIntake : MonoBehaviour
 
         List<NpcController> followers = NpcController.FindFollowersOf(mover.transform);
         for (int i = 0; i < followers.Count; i++)
-            followers[i].ServerExitJail(exit);
+            followers[i].ServerExitJail(m_jailZone.ExitSlot(i + 1)); // 0번은 플레이어 자리다
 
         mover.ServerTeleport(exit.position, exit.rotation);
         Debug.Log($"[감옥] 퇴장 — {mover.name} (동행 {followers.Count}명)");

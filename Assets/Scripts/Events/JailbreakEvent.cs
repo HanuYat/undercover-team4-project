@@ -360,12 +360,12 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         }
 
         for (int i = 0; i < m_releaseBuffer.Count; i++)
-            ReleaseInmate(m_releaseBuffer[i]);
+            ReleaseInmate(m_releaseBuffer[i], i);
 
         Debug.Log($"[돌발이벤트] 범인 탈출 — 수감자 {m_releaseBuffer.Count}명 방출");
     }
 
-    private void ReleaseInmate(NpcController inmate)
+    private void ReleaseInmate(NpcController inmate, int slot)
     {
         m_jailZone.ReleaseInmate(inmate);
 
@@ -388,7 +388,9 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         // 감옥은 도시와 이어진 NavMesh 경로가 아예 없는 격리 공간이라(#537), 방출만 하면 방 안에 그대로
         // 남는다 — 문 밖 퇴장 지점으로 순간이동시킨 뒤 도주시킨다. (예전에는 Jail 통행 회수까지 함께
         // 했는데, 통행 게이팅 자체가 사라져 워프만 남았다)
-        inmate.ServerExitJail(m_jailZone.ExitPoint);
+        //
+        // 자리를 하나씩 벌린다 — 전원을 한 좌표에 쏟으면 겹침을 푸는 물리가 서로를 튕겨낸다.
+        inmate.ServerExitJail(m_jailZone.ExitSlot(slot));
 
         // 감옥을 뛰쳐나와 도주한다 — 침입자를 위협으로 삼아 반대로 달아난 뒤 배회로 섞여 든다.
         // 근처에 플레이어가 없으면 도주 상태가 곧 배회로 복귀한다(NpcFleeState).
