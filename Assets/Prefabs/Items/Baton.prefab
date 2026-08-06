@@ -94,7 +94,7 @@ MonoBehaviour:
     m_LocalVariables: []
   m_heldModelPrefab: {fileID: 6463821525030920642, guid: dfd82aa3527962e449f5d5436d594754, type: 3}
   m_heldPositionOffset: {x: 0.09, y: 0.02, z: -0.022}
-  m_heldRotationOffset: {x: 90, y: 135, z: 0}
+  m_heldRotationOffset: {x: 100, y: 135, z: 0}
   m_handGrip: 3
   m_targetOutlineColor: {r: 1, g: 0, b: 0.9479666, a: 1}
   m_shopPrice: 0
