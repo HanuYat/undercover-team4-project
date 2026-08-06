@@ -103,6 +103,14 @@ public partial class NpcController
 
         EscortTarget = null; // 판정 시점에 연행은 이미 풀렸지만, 참조가 남아 있으면 여기서 끊는다
         SetJailExtracted(false); // 반출했다 되돌린 대상 — 다시 수감됐으므로 표식을 끈다 (#517)
+
+        // <b>기절을 푼다.</b> 검거는 무력화가 전제라(NpcStateRules.CanRopeBind) 수감되는 대상은 거의
+        // 항상 기절 오버레이를 달고 들어오고, 밧줄에 묶인 동안은 그 타이머마저 멈춰 있다(#269).
+        // 오버레이가 남으면 Update의 스턴 게이트가 FSM Tick을 통째로 건너뛰어
+        // (NpcController.Update) <b>감옥 안에서 꼼짝도 하지 않는다</b> — 배회가 돌지 않는 원인이었다.
+        // resumeReaction=false — 밖에서 강제로 푸는 경우라 도주 전이를 걸지 않는다.
+        ExitStun(false);
+
         JailSpot = spot;
         m_stateMachine.ChangeState(NpcState.Jailed);
     }
