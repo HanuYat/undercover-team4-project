@@ -56,8 +56,12 @@ public class JailDoor : NetworkBehaviour, IInteractable
     [Tooltip("판정·배치·순간이동을 실제로 수행하는 쪽 — 이 문은 요청만 넘긴다")]
     [SerializeField] private JailIntake m_intake;
 
-    [Header("자물쇠 (비우면 씬에서 자동 탐색)")]
-    [Tooltip("풀려 있는 동안(탈옥 진행 중, #231)에는 문을 계속 열어 둔다 — 열린 문이 곧 탈옥 신호다")]
+    [Header("자물쇠 — 도시 쪽 문만 물린다")]
+    [Tooltip(
+        "풀려 있는 동안(탈옥 진행 중, #231)에는 문을 계속 열어 둔다 — 열린 문이 곧 탈옥 신호다.\n\n"
+            + "감옥 방 안의 출구 문은 <b>비워 둘 것</b>: 잠그는 것은 도시 쪽 조작이고, 여기에 자물쇠를 "
+            + "물리면 방 안 문도 탈옥 중에 계속 열려 있게 된다"
+    )]
     [SerializeField] private JailLock m_jailLock;
 
     [Header("거절 안내")]
@@ -95,8 +99,9 @@ public class JailDoor : NetworkBehaviour, IInteractable
         if (m_intake == null)
             Debug.LogWarning("JailDoor: JailIntake를 찾지 못했다 — 출입·수감이 동작하지 않는다", this);
 
-        if (m_jailLock == null)
-            m_jailLock = FindFirstObjectByType<JailLock>();
+        // 자물쇠는 <b>자동 탐색하지 않는다</b> — 비어 있는 것이 곧 "이 문은 잠그는 문이 아니다"라는 뜻이다.
+        // 찾아 넣으면 감옥 방 안의 출구 문까지 자물쇠를 물어, 탈옥 중에 방 안 문이 계속 열려 있고
+        // 잠그기 갈래가 위치 판정 순서에만 기대게 된다. 도시 쪽 문은 프리팹에서 직접 배선한다.
     }
 
     public override void OnNetworkSpawn() => m_isOpenSynced.OnValueChanged += HandleOpenSyncedChanged;
