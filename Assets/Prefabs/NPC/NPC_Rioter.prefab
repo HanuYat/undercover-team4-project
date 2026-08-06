@@ -23,6 +23,9 @@ GameObject:
   - component: {fileID: 6387710733866401857}
   - component: {fileID: 2738106457710375312}
   - component: {fileID: 2626146088452646355}
+  - component: {fileID: 139836200898105310}
+  - component: {fileID: 7463185610073803032}
+  - component: {fileID: 8957818139698593311}
   m_Layer: 7
   m_Name: NPC_Rioter
   m_TagString: Untagged
@@ -348,6 +351,49 @@ MonoBehaviour:
   m_proneRadius: 0.3
   m_proneHeight: 1.8
   m_proneCenter: {x: 0, y: 0.3, z: -0.1}
+--- !u!114 &139836200898105310
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b77f0f3d97b34134fb4cde66336c5d52, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ShockArcEmitter
+  m_arcPrefab: {fileID: 3899972695854152562, guid: 3216e466bb8e705409ab12e6fd69e81b, type: 3}
+  m_arcLifetime: 0.45
+  m_minInterval: 0.12
+  m_maxInterval: 0.26
+  m_calmIntervalScale: 2.5
+--- !u!114 &7463185610073803032
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94e0c494572e81543bc920bd82395a90, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcShockView
+  m_flashColor: {r: 0.3, g: 0.95, b: 1, a: 1}
+  m_flashSeconds: 0.08
+--- !u!114 &8957818139698593311
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab92e93bbbf14544aa797e3b19a157fc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodyTint
 --- !u!1001 &3679051956096844986
 PrefabInstance:
   m_ObjectHideFlags: 0

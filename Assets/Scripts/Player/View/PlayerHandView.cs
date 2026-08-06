@@ -45,6 +45,20 @@ public class PlayerHandView : NetworkBehaviour
     private const float k_swingStrikeEnd =
         PlayerAnimationDriver.k_swingImpactSeconds / PlayerAnimationDriver.k_swingSeconds; // 임팩트
 
+    // 피격 킥(#476) — 맞은 순간 팔이 한 번 튕겼다 감쇠 진동으로 돌아온다. 스윙과 달리 3인칭 짝이 없는
+    // 순수 1인칭 연출이라 공용 상수에 묶이지 않는다(맞은 몸의 3인칭 표현은 Knockdown 모션이 맡는다).
+    // 스윙(0.64초)보다 짧게 잡는다 — 길면 연타로 맞을 때 팔이 계속 흔들려 조준이 불가능해진다.
+    private const float k_hitShakeDuration = 0.22f;
+    private const float k_hitShakeDegrees = 7f; // 진폭(도). 어깨를 축으로 도는 회전이라 작아도 화면에서는 크다
+    private const float k_hitShakeOscillations = 1.5f; // 감쇠하는 동안의 진동 횟수
+    private const float k_hitShakeOffset = 0.02f; // 회전과 함께 손이 밀리는 거리(m)
+
+    // 감전 경련(#477) — 피격 킥과 달리 지속형이다. 주파수와 파형은 ShockShake가 카메라와 공유하고
+    // 여기서는 진폭만 정한다. 카메라보다 크게 잡는 이유는 손이 화면 안 물체라 같은 각도로는
+    // 덜 움직여 보이기 때문이다.
+    private const float k_convulsionDegrees = 3.2f;
+    private const float k_convulsionOffset = 0.006f;
+
     // ---- 스윙 튜닝 (인스펙터) ----
     //
     // 회전은 팔 로컬이 아니라 카메라(부모) 축 기준이다 — Update가 base 회전 <b>앞에</b> 곱한다.
@@ -164,6 +178,9 @@ public class PlayerHandView : NetworkBehaviour
     private bool m_hasHandBase; // 스폰에서 base 포즈를 캡처했는지 — Update가 스폰 전에 먼저 돌아 손을 원점으로 옮기는 것을 막는다
     private float m_bobTime;
     private float m_swingTime = -1f; // 스윙 경과 시간(초). 음수 = 진행 중 아님
+    private float m_hitShakeTime = -1f; // 피격 킥 경과 시간(초). 음수 = 진행 중 아님 (#476)
+    private Vector3 m_hitShakeAxis; // 이번 피격 킥의 회전축 — 맞을 때마다 다르게 뽑아 같은 그림이 반복되지 않게 한다
+    private float m_convulsionIntensity; // 감전 경련 강도(지속형). 0 = 떨지 않음 (#477)
 
     public override void OnNetworkSpawn()
     {
@@ -245,8 +262,39 @@ public class PlayerHandView : NetworkBehaviour
         m_swingTime = 0f;
     }
 
+    /// <summary>
+    /// 맞은 순간 1인칭 팔을 한 번 튕긴다 — <see cref="PlayerHitView"/>가 오너 화면에서만 부른다. (#476)
+    /// 스윙과 독립이라 휘두르는 도중에 맞아도 둘이 겹쳐 재생된다(Update가 두 포즈를 곱해 얹는다) —
+    /// 때리는 중에 맞는 것은 실제로 일어나는 일이므로 한쪽을 끊지 않는다.
+    /// </summary>
+    public void PlayHitShake()
+    {
+        if (!enabled || m_handsModel == null)
+        {
+            return;
+        }
+
+        // 축을 매번 다시 뽑는다 — 고정하면 연타로 맞을 때 같은 방향으로만 튕겨 기계적으로 보인다.
+        // 카메라 축 기준이므로 X=위아래, Y=좌우, Z=롤. 롤을 크게 줘 '휘청'이 잘 읽히게 한다.
+        m_hitShakeAxis = new Vector3(
+            Random.Range(-1f, 1f),
+            Random.Range(-1f, 1f),
+            Random.Range(-1f, 1f) * 1.5f
+        ).normalized;
+
+        m_hitShakeTime = 0f; // 진행 중이어도 처음부터 — 새로 맞은 것이 우선이다 (스윙과 같은 방침)
+    }
+
+    /// <summary>
+    /// 감전 경련 강도 — 0이면 떨지 않는다. 매 프레임 갱신하는 <b>지속형</b> 값이다. (#477)
+    /// 단발 감쇠 진동인 <see cref="PlayHitShake"/>와 별개로, 기절이 유지되는 내내 손이 떨린다.
+    /// 둘은 동시에 얹힐 수 있다 — 맞고 쓰러진 그 순간이 실제로 그렇다.
+    /// </summary>
+    public void SetConvulsion(float intensity) =>
+        m_convulsionIntensity = Mathf.Clamp01(intensity);
+
     // 오너 전용(비오너는 OnNetworkSpawn에서 enabled=false). 손 뷰모델에 절차적 흔들림(#265)과
-    // 타격 스윙(#217)을 얹는다.
+    // 타격 스윙(#217), 피격 킥(#476)을 얹는다.
     private void Update()
     {
         if (!m_hasHandBase || m_handsModel == null)
@@ -270,11 +318,78 @@ public class PlayerHandView : NetworkBehaviour
         AdvanceSwingTime();
         EvaluateSwingPose(out Vector3 swingOffset, out Quaternion swingRotation);
 
-        m_handsModel.transform.localPosition = m_handBasePos + new Vector3(x, y, 0f) + swingOffset;
+        // 피격 킥도 같은 방식으로 얹는다 (#476) — 스윙과 독립이라 휘두르는 도중에 맞으면 둘이 겹친다.
+        // 킥을 스윙 <b>바깥쪽</b>에 곱해 스윙 포즈 전체를 통째로 흔든다(안쪽에 넣으면 스윙의 기준
+        // 자세만 틀어져 휘두르는 궤적이 어긋나 보인다).
+        AdvanceHitShakeTime();
+        EvaluateHitShakePose(out Vector3 hitOffset, out Quaternion hitRotation);
+
+        // 감전 경련(#477)도 같은 자리에 얹는다 — 단발 킥과 동시에 걸릴 수 있다(맞고 쓰러지는 순간).
+        EvaluateConvulsionPose(out Vector3 shockOffset, out Quaternion shockRotation);
+
+        m_handsModel.transform.localPosition =
+            m_handBasePos + new Vector3(x, y, 0f) + swingOffset + hitOffset + shockOffset;
         m_handsModel.transform.localRotation =
-            swingRotation
+            shockRotation
+            * hitRotation
+            * swingRotation
             * m_handBaseRot
             * Quaternion.Euler(y * k_swayTiltDegrees, x * k_swayTiltDegrees, 0f);
+    }
+
+    /// <summary>
+    /// 지금 감전 경련 강도에 해당하는 포즈를 낸다 — 지속형이라 타이머가 없다(강도가 곧 상태). (#477)
+    /// 파형은 <see cref="ShockShake"/>가 카메라 떨림과 공유한다 — 주파수가 어긋나면 손과 시야의
+    /// 두 진동이 서로 미끄러져 경련이 아니라 고장난 화면처럼 보인다.
+    /// </summary>
+    private void EvaluateConvulsionPose(out Vector3 offset, out Quaternion rotation)
+    {
+        ShockShake.Evaluate(
+            m_convulsionIntensity,
+            k_convulsionDegrees,
+            k_convulsionOffset,
+            out Vector3 euler,
+            out offset
+        );
+        rotation = Quaternion.Euler(euler);
+    }
+
+    // 피격 킥 타이머를 한 프레임 진행시킨다 — AdvanceSwingTime과 같은 규약(프레임당 한 번만). (#476)
+    private void AdvanceHitShakeTime()
+    {
+        if (m_hitShakeTime < 0f)
+        {
+            return;
+        }
+
+        m_hitShakeTime += Time.deltaTime;
+        if (m_hitShakeTime >= k_hitShakeDuration)
+        {
+            m_hitShakeTime = -1f; // 끝 — 기준 포즈로 복귀
+        }
+    }
+
+    /// <summary>
+    /// 지금 피격 킥 진행도에 해당하는 포즈를 낸다 — 상태를 바꾸지 않는다(타이머는 AdvanceHitShakeTime 담당). (#476)
+    /// 감쇠 진동이다: 맞은 순간 최대로 튀었다가 진폭이 선형으로 줄며 기준 자세로 수렴한다.
+    /// 진행 중이 아니면 무변화(오프셋 0, 항등 회전).
+    /// </summary>
+    private void EvaluateHitShakePose(out Vector3 offset, out Quaternion rotation)
+    {
+        offset = Vector3.zero;
+        rotation = Quaternion.identity;
+
+        if (m_hitShakeTime < 0f)
+        {
+            return;
+        }
+
+        float t = m_hitShakeTime / k_hitShakeDuration; // 0 → 1
+        // sin으로 시작해야 t=0에서 진폭이 0이다 — cos으로 두면 첫 프레임에 팔이 순간이동한 것처럼 튄다.
+        float wave = Mathf.Sin(t * Mathf.PI * 2f * k_hitShakeOscillations) * (1f - t);
+
+        rotation = Quaternion.Euler(m_hitShakeAxis * (wave * k_hitShakeDegrees));
+        offset = m_hitShakeAxis * (wave * k_hitShakeOffset);
     }
 
     // 스윙 타이머를 한 프레임 진행시킨다 — Update에서 <b>프레임당 정확히 한 번만</b> 부를 것.

@@ -34,6 +34,9 @@ public static class AppHelper
             _ => null,
         };
 
+    // 이름에 없으면 씬 매니저에게 물어본다 — <b>InGameManager가 있는 씬이 곧 게임 맵</b>이다 (#215).
+    // 게임 맵은 여러 개(Assets/Scenes/Maps/*)라서 맵마다 이 스위치에 줄을 늘리지 않기 위한 것이다.
+    // 이 시점에 씬 매니저는 이미 등록돼 있다 — 호출부(sceneLoaded·InitCurrentScene)가 모두 Awake 뒤다.
     private static EScene FromSceneName(string sceneName) =>
         sceneName switch
         {
@@ -41,7 +44,7 @@ public static class AppHelper
             "Lobby" => EScene.Lobby,
             "Shop" => EScene.Shop,
             "Main Scene" => EScene.Game,
-            _ => EScene.None,
+            _ => App.SceneFlow.Game != null ? EScene.Game : EScene.None,
         };
 
     internal static async UniTask LoadSceneAsync(EScene scene, CancellationToken token)

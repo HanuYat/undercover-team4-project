@@ -65,7 +65,7 @@ public class Rope : ItemBase
         // 유치장 안이거나 반출돼 따라오는 중이면 걸리고, 끌고 들어온 줄을 푸는 것(E)은 그대로다.
         if (PlayerEscortCommands.IsRopeBlocked(target))
         {
-            Debug.Log($"밧줄을 쓸 수 없는 대상 (유치장 안 / 반출 추종 중): {target.name}");
+            Debug.Log($"밧줄을 쓸 수 없는 대상 (유치장 안 / 반출한 신병): {target.name}");
             return;
         }
 
