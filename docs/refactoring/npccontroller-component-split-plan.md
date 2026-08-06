@@ -133,10 +133,17 @@ partial 분리가 성장을 막지 못한다는 증거다.)
 5. **프리팹 배선 대상은 4개** — `NPC_Citizen` · `NPC_Citizen_Generic` · `NPC_Rioter` · `NPC_Streaker`.
    `NPC_Abductor`는 `NPC_Citizen`의 **변형(variant)** 이라 자동 상속된다. 프리팹 YAML 충돌이 나면 머지하지 말고
    **에디터에서 다시 배선**하는 쪽이 빠르고 안전하다.
-6. **도메인 멤버가 아닌 공용 헬퍼는 부품이 아니라 코어로 올린다.** `TryWarpNear`(`Rope.cs:245`, Custody가 사용)와
-   `SweepHitsObstacle`(`Knockback.cs:121`, Rope가 사용)이 해당한다. 부품에 딸려 보내면 § 2-2 결론 4의 가짜 의존이
-   생기므로, 해당 도메인 PR **직전에 코어로 옮기는 선행 커밋**을 둔다(순수 이동이라 리뷰가 싸다). 코어에서는 부품이
-   쓸 수 있게 `internal`로 열어 둔다 — 부품은 같은 어셈블리이므로 `public`까지 열 필요는 없다.
+6. **도메인 PR은 "제 집 정리" 선행 커밋으로 시작한다.** 파일 경계와 도메인 경계가 어긋난 곳을 먼저 바로잡는다.
+   전부 **같은 partial 클래스 안의 이동이라 호출부·프리팹·동작이 무변경**이고, 리뷰가 싸다. 두 종류가 있다:
+   - **남의 도메인 멤버** → 제 집 partial로 보낸다. 예: `ReleaseFromCustody`가 `Intrude.cs:35`에 있는데
+     짝인 `SendToJail`(`Custody.cs:127`)과 함께 `JailSeat`를 다루는 Custody 멤버다 → `Custody.cs`로 옮긴다.
+   - **도메인 멤버가 아닌 공용 헬퍼** → 코어로 올린다. 예: `TryWarpNear`(`Rope.cs:245`, Custody가 사용)와
+     `SweepHitsObstacle`(`Knockback.cs:121`, Rope가 사용)은 NavMesh 워프·물리 스윕 유틸이다. 부품에 딸려 보내면
+     § 2-2 결론 4의 가짜 의존이 생긴다. 코어에서는 `internal`로 열어 둔다 — 부품은 같은 어셈블리
+     (`Assembly-CSharp`, `Assets/Scripts`에 `.asmdef` 없음)이므로 `public`까지 열 필요는 없다.
+
+   정리를 미루면 **분리 후에도 옛 partial 파일이 껍데기로 남는다.** 도메인 PR의 성과는 "partial 파일 하나가
+   사라졌다"로 재는 게 정확하므로, 정리를 그 PR 안에 넣는다.
 
 ## 5. 지켜야 할 불변식
 
@@ -188,10 +195,10 @@ Knockback은 이제 **맨 마지막**이다.
 
 | # | 도메인 | 줄 수 | 비고 |
 |---|---|---|---|
-| 1 | **`NpcIntruder`** | 45 | **파일럿** — 외부 의존 0, 호출부는 `JailbreakEvent` 하나 (§ 7) |
+| 1 | **`NpcIntruder`** | 45 | **파일럿** — 외부 의존 0, 호출부는 `JailbreakEvent` 하나. 선행 커밋으로 `ReleaseFromCustody`를 `Custody.cs`에 보내 `Intrude.cs`를 삭제한다 (§ 7) |
 | 2 | `NpcHolding` | 31 | `HoldingSpot` · `OnReachedHolding` · `SendToHolding` · `NotifyReachedHolding` |
 | 3 | `NpcPenaltyAgent` | 170 | `NetworkVariable`(`m_abductionDuty`) 이관 첫 사례 |
-| 4 | `NpcCustody` (+ `Escort` 병합) | 139 + 27 | `StartEscort`가 여러 도메인의 진입점이라 함께. 오배치된 `ReleaseFromCustody`도 여기로. **선행: `TryWarpNear`를 코어로 승격**(§ 4-6) — #522로 Custody가 Rope의 private 헬퍼를 쓰게 됐다 |
+| 4 | `NpcCustody` (+ `Escort` 병합) | 139 + 27 | `StartEscort`가 여러 도메인의 진입점이라 함께. `ReleaseFromCustody`는 파일럿에서 이미 `Custody.cs`에 들어와 있다. **선행: `TryWarpNear`를 코어로 승격**(§ 4-6) — #522로 Custody가 Rope의 private 헬퍼를 쓰게 됐다 |
 | 5 | `NpcReaction` | 99 | `StartFlee` 호출부가 10파일이라 1단계 마지막 |
 
 ### 2단계 — 무력화 클러스터 (양방향 쌍은 한 PR로)
@@ -216,23 +223,31 @@ FSM 전이(`m_stateMachine.ChangeState(NpcState.Intruding)`)가 필요하므로 
 동기화 값이 없어 `NetworkBehaviour`가 꼭 필요하진 않지만, 서버 전용 가드(`IsSpawned && !IsServer`)를 그대로 쓰려면
 `NetworkBehaviour`가 편하다 — 규약 4를 따라 통일한다.
 
-### 변경 파일 (스크립트 4 + 프리팹 4)
+### 변경 파일 (스크립트 6 + 프리팹 4)
 
-| 파일 | 변경 |
-|---|---|
-| `NPC/Controller/NpcIntruder.cs` | 신규 |
-| `NPC/Controller/NpcController.Intrude.cs` | 침입 멤버 제거 — **`ReleaseFromCustody`만 남는다**(아래) |
-| `NPC/Controller/NpcController.cs` | 코어에 있던 침입 멤버 4개 제거 + `Intruder` 접근자 추가 |
-| `NPC/States/NpcIntrudeState.cs` | `m_owner.IntrudeTarget`(34·42) · `IntrudeUnlockSeconds`(85) · `NotifyIntrudeUnlockStarted`(88) · `NotifyIntrudeFinished`(97) |
-| `Events/JailbreakEvent.cs` | 구독·해제 6곳(177·178·282·283·409·410) + `StartIntrude`(197) |
-| NPC 프리팹 4개 | 컴포넌트 추가 |
+커밋 둘로 나눈다 — ① 제 집 정리(§ 4-6) ② 컴포넌트 분리. 리뷰어가 "침입 PR에 왜 Custody 파일이"를 바로 넘어간다.
+
+| 파일 | 변경 | 커밋 |
+|---|---|---|
+| `NPC/Controller/NpcController.Custody.cs` | `ReleaseFromCustody` 받기 — 짝인 `SendToJail`(127) 옆에 둔다 | ① |
+| `NPC/Controller/NpcController.Intrude.cs` | **파일 삭제**(`.meta` 함께) — 침입 멤버는 부품으로, `ReleaseFromCustody`는 Custody.cs로 | ①② |
+| `NPC/Controller/NpcIntruder.cs` | 신규 | ② |
+| `NPC/Controller/NpcController.cs` | 코어에 있던 침입 멤버 4개 제거 + `Intruder` 접근자 추가 | ② |
+| `NPC/States/NpcIntrudeState.cs` | `m_owner.IntrudeTarget`(34·42) · `IntrudeUnlockSeconds`(85) · `NotifyIntrudeUnlockStarted`(88) · `NotifyIntrudeFinished`(97) | ② |
+| `Events/JailbreakEvent.cs` | 구독·해제 6곳(177·178·282·283·409·410) + `StartIntrude`(197) | ② |
+| NPC 프리팹 4개 | 컴포넌트 추가 | ② |
 
 ### 주의 — 파일 경계 ≠ 도메인 경계
 
-`NpcController.Intrude.cs`에는 침입과 무관한 **`ReleaseFromCustody()`**(수갑 해제, #228)가 들어 있다. 이 메서드는
-`JailSeat`를 비우고 Idle로 돌리는 **Custody 도메인**이므로 4번 PR(`NpcCustody`)에서 옮긴다. 외부 호출부는
-`CustodyRouter.cs:66`과 `PlayerEscortCommands.cs:545` 두 곳이다. 따라서 파일럿 PR에서 `Intrude.cs`는 삭제되지 않고
-축소만 된다 — **다른 도메인 파일에도 같은 오배치가 있을 수 있으니 도메인 PR마다 파일 전체를 확인할 것.**
+`NpcController.Intrude.cs`에는 침입과 무관한 **`ReleaseFromCustody()`**(수갑 해제, #228)가 들어 있다. `JailSeat`를
+비우고 Idle로 돌리는 **Custody 도메인**이고, `JailSeat`를 채우는 짝(`SendToJail`, `Custody.cs:127`)과 갈라져 있다.
+
+이걸 4번 PR(`NpcCustody`)까지 미루면 파일럿 후 `Intrude.cs`가 이 메서드 하나만 든 껍데기로 남는다. 그래서 § 4-6에 따라
+**파일럿의 선행 커밋에서 `Custody.cs`로 옮기고 `Intrude.cs`를 삭제한다.** 같은 partial 클래스 안 이동이라
+외부 호출부(`CustodyRouter.cs:66` · `PlayerEscortCommands.cs:545`)는 **무변경**이고, 4번 PR이 나중에 다른 Custody
+멤버들과 함께 부품으로 데려간다.
+
+**다른 도메인 파일에도 같은 오배치가 있을 수 있으니 도메인 PR마다 파일 전체를 확인할 것.**
 
 ## 8. 코어 파일에 남아 있는 도메인 멤버
 
