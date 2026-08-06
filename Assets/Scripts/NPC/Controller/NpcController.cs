@@ -12,6 +12,7 @@ using Random = UnityEngine.Random;
 /// </summary>
 [RequireComponent(typeof(NavMeshAgent))]
 [RequireComponent(typeof(NpcIntruder))] // 도메인 부품 — 누락 시 침입 경로가 NRE로 죽는다 (#503)
+[RequireComponent(typeof(NpcPenaltyAgent))] // 도메인 부품 — 누락 시 오검거·납치 경로가 NRE로 죽는다 (#503)
 public partial class NpcController : NetworkBehaviour
 {
     [Header("상태별 튜닝 데이터 (ScriptableObject) — #259")]
@@ -32,6 +33,7 @@ public partial class NpcController : NetworkBehaviour
 
     // 도메인 부품 — 같은 GameObject에 붙는다. [RequireComponent]로 누락을 막는다. (#503)
     private NpcIntruder m_intruder;
+    private NpcPenaltyAgent m_penalty;
 
     // 넉백 비행 상태 — 서버(또는 오프라인)에서만 의미. 비행 중에는 FSM/NavMeshAgent가 정지한다. (#232)
     private Vector3 m_knockbackVelocity;
@@ -48,6 +50,10 @@ public partial class NpcController : NetworkBehaviour
 
     public NavMeshAgent Agent => m_agent;
     public NpcStateMachine StateMachine => m_stateMachine;
+
+    /// <summary>추격 튜닝 SO — 부품이 코어에서 읽는다(튜닝 SO는 코어가 계속 들고 있다, 계획서 § 4-3).
+    /// <see cref="NpcPenaltyAgent"/>가 격퇴 도주 시간을 읽는 용도다. 부품은 같은 어셈블리라 internal로 족하다. (#503)</summary>
+    internal NpcChaseConfig ChaseConfig => m_chaseConfig;
 
     /// <summary>기절 지속 시간(초) — 테이저가 명중 안내에 읽는다. (#269)</summary>
     public float StunSeconds => m_stunConfig.StunSeconds;
@@ -111,8 +117,10 @@ public partial class NpcController : NetworkBehaviour
     /// FSM 상태와 독립한 순간 이벤트라 State 동기화와 별개로 스윙 타이밍을 정확히 맞춘다. (#220)</summary>
     public event Action<int> OnAttackSwing;
 
-    /// <summary>연행 중 따라갈 대상(체포한 플레이어). 연행 중이 아니면 null. 서버에서만 유효.</summary>
-    public Transform EscortTarget { get; private set; }
+    /// <summary>연행 중 따라갈 대상(체포한 플레이어). 연행 중이 아니면 null. 서버에서만 유효.
+    /// setter가 internal인 것은 <see cref="NpcPenaltyAgent.SendToDetention"/>이 수용 직전에 이 참조를 끊기 때문이다
+    /// (부품은 같은 어셈블리). 이 멤버가 NpcCustody로 옮겨 가면(계획서 § 8) 그때 정리된다. (#503)</summary>
+    public Transform EscortTarget { get; internal set; }
 
     /// <summary>수감 중 걸어가 앉을 유치장 좌석. 수감 중이 아니면 null. 서버에서만 유효. (#228/#462)
     /// 좌석의 Z축(forward)이 앉아서 바라보는 방향이다 — 도착하면 그 방향으로 돌아 앉는다.</summary>
@@ -121,10 +129,14 @@ public partial class NpcController : NetworkBehaviour
     /// <summary>침입 도메인 부품 — 목표·해제 시간·진행 이벤트를 들고 있다. (#231/#503)</summary>
     public NpcIntruder Intruder => m_intruder;
 
+    /// <summary>페널티 임무 도메인 부품 — 오검거(#277~#279)·납치(#371)의 수용·추격·수렴·호송을 들고 있다. (#503)</summary>
+    public NpcPenaltyAgent Penalty => m_penalty;
+
     private void Awake()
     {
         m_agent = GetComponent<NavMeshAgent>();
         m_intruder = GetComponent<NpcIntruder>();
+        m_penalty = GetComponent<NpcPenaltyAgent>();
 
         m_stateMachine = new NpcStateMachine();
         m_stateMachine.AddState(NpcState.Idle, new NpcIdleState(this, m_idleConfig));
@@ -148,7 +160,6 @@ public partial class NpcController : NetworkBehaviour
     {
         m_networkState.OnValueChanged += HandleNetworkStateChanged;
         m_syncedStunned.OnValueChanged += HandleSyncedStunnedChanged; // 스턴 오버레이 표현 전파 (#292)
-        m_abductionDuty.OnValueChanged += HandleAbductionDutyChanged;  // 페널티 임무 종류 전파 (#371)
 
         if (IsServer)
         {
@@ -166,7 +177,6 @@ public partial class NpcController : NetworkBehaviour
     {
         m_networkState.OnValueChanged -= HandleNetworkStateChanged;
         m_syncedStunned.OnValueChanged -= HandleSyncedStunnedChanged;
-        m_abductionDuty.OnValueChanged -= HandleAbductionDutyChanged;
     }
 
     private void Start()
@@ -266,12 +276,6 @@ public partial class NpcController : NetworkBehaviour
     private void HandleNetworkStateChanged(NpcState previous, NpcState current)
     {
         OnStateChanged?.Invoke(current);
-    }
-
-    // 페널티 임무 종류(오검거/납치) 전파 — 앵그리 마크를 그리는 표현 계층이 모든 피어에서 다시 판정한다 (#371)
-    private void HandleAbductionDutyChanged(bool previous, bool current)
-    {
-        OnPenaltyDutyChanged?.Invoke();
     }
 
     /// <summary>기절에서 일어나기 시작할 때 발행 — 전 피어에서 발생한다(서버는 로컬 발행 + ClientRpc 중계).

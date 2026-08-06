@@ -130,7 +130,7 @@ public class NpcResistState : NpcStateBase
             m_pendingStrikeTime = k_noPendingStrike;
             // 납치 린치(#371 후속)는 여기서 빠지지 않는다 — 피해자가 쓰러져도 다음 단계가 도주가 아니라
             // 시체 반출이고, 그 지휘는 AbductionEvent가 한다. 도주로 새면 반출할 인원이 흩어진다.
-            if (SwingAttack() && !m_owner.IsAbductionDuty)
+            if (SwingAttack() && !m_owner.Penalty.IsAbductionDuty)
             {
                 Defeat("교전 플레이어 전원 무력화");
                 return;
@@ -214,7 +214,7 @@ public class NpcResistState : NpcStateBase
         // 영구히 쫓지 않는다"인데, 린치는 정확히 그 쓰러뜨린 상대를 계속 때리는 것이 결말이다.
         // 이 예외가 없으면 Abducted로 무력화된 피해자가 표적에서 즉시 빠져 구타 자체가 성립하지 않는다.
         // 거리 조건은 위에서 이미 봤다 — 표적이 멀어졌으면 납치든 아니든 놓친 것이다.
-        if (m_owner.IsAbductionDuty)
+        if (m_owner.Penalty.IsAbductionDuty)
             return true;
 
         // 위협이 플레이어가 아니면(테스트용 더미 등) 거리 조건만 본다

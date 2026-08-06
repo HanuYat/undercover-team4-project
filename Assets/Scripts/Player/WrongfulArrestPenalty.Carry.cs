@@ -53,9 +53,11 @@ public partial class WrongfulArrestPenalty
         PruneDead(m_activeNpcs);
         var convergers = new List<NpcController>(m_activeNpcs); // 포획 시점 스냅샷 — 이 호송의 수렴·해산 대상
         foreach (NpcController npc in convergers)
-            npc.StartPenaltyConverge(caught);
+            npc.Penalty.StartPenaltyConverge(caught);
 
-        Debug.Log($"[오검거] 포획 — {catcher.name} → {caught.name}, {convergers.Count}명 수렴 시작");
+        Debug.Log(
+            $"[오검거] 포획 — {catcher.name} → {caught.name}, {convergers.Count}명 수렴 시작"
+        );
         CarryToPlazaAsync(caught, convergers).Forget();
     }
 
@@ -68,10 +70,16 @@ public partial class WrongfulArrestPenalty
             m_convergeTimeoutSeconds,
             k_carrierGap,
             k_plazaArriveDistance,
-            k_carryTravelTimeoutSeconds);
+            k_carryTravelTimeoutSeconds
+        );
 
         bool arrived = await CarryEscortSequence.RunAsync(
-            caught, convergers, m_plazaPoint, settings, destroyCancellationToken);
+            caught,
+            convergers,
+            m_plazaPoint,
+            settings,
+            destroyCancellationToken
+        );
 
         // 정리는 도착·중단 무관하게 같다 — 수렴분만 시민으로 복귀시키고 처리 중 표시를 지운다.
         // 호송 중 새로 출동한 추격대(m_activeNpcs에는 있지만 convergers에는 없음)는 계속 추격한다.
@@ -96,8 +104,8 @@ public partial class WrongfulArrestPenalty
     {
         if (npc != null)
         {
-            npc.OnPenaltyCaught -= HandlePenaltyCaught;
-            npc.EndPenaltyDuty();
+            npc.Penalty.OnPenaltyCaught -= HandlePenaltyCaught;
+            npc.Penalty.EndPenaltyDuty();
         }
 
         m_activeNpcs.Remove(npc);

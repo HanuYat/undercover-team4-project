@@ -48,9 +48,9 @@ public static class NpcStateRules
     /// <b>때려서 떼어내는 것</b>이 유일한 구조 수단이라(6-4) 그 예외를 연다. 위 게이트가 막으려던
     /// "호송 중인 NPC를 때려 신병에서 빼내기"와는 방향이 반대다 — 납치범은 신병이 아니라 가해자다.
     /// 오검거 추격대는 그대로 막힌다(회피 수단은 격퇴 하나). 둘을 가르는 것이
-    /// <see cref="NpcController.IsAbductionDuty"/>이고, 동기화 값이라 클라 조준 피드백에서도 읽힌다.</summary>
+    /// <see cref="NpcPenaltyAgent.IsAbductionDuty"/>이고, 동기화 값이라 클라 조준 피드백에서도 읽힌다.</summary>
     public static bool CanBeDamaged(NpcController npc) =>
-        npc != null && (npc.IsAbductionDuty || CanBeDamaged(npc.CurrentState));
+        npc != null && (npc.Penalty.IsAbductionDuty || CanBeDamaged(npc.CurrentState));
 
     /// <summary>반응·배회군인가 — 스턴이 풀릴 때 도주로 전환되는 쪽. (#292)
     /// 여집합(확보·페널티군)은 스턴이 풀려도 아무 전이 없이 하던 일을 재개한다 —
