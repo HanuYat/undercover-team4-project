@@ -312,4 +312,22 @@ public partial class NpcController : NetworkBehaviour
             m_agent.isStopped = frozen;
     }
 
+    // 워프 기준점 주변에서 NavMesh를 찾을 때의 탐색 반경(m).
+    private const float k_warpSnapRadius = 2f;
+
+    /// <summary>
+    /// 기준점 주변에서 NavMesh 위 지점을 찾아 에이전트를 붙인다 — 붙었으면 true. (#503)
+    ///
+    /// 특정 도메인의 것이 아니라 <see cref="Agent"/>를 다루는 공용 유틸이라 코어에 둔다(계획서 § 4-6) —
+    /// 밧줄 놓기(#369)와 감옥 방출(#537)이 함께 쓴다. 부품에 딸려 보내면 "Custody가 Rope를 참조한다"는
+    /// 가짜 의존이 생긴다. 부품은 같은 어셈블리라 internal로 족하다.
+    /// 실패하면 <b>호출부가</b> 대응한다 — 대안 지점을 시도할지 제자리에 둘지는 도메인마다 다르다.
+    /// </summary>
+    internal bool TryWarpNear(Vector3 origin)
+    {
+        if (!NavMesh.SamplePosition(origin, out NavMeshHit hit, k_warpSnapRadius, NavMesh.AllAreas))
+            return false;
+
+        return m_agent.Warp(hit.position) && m_agent.isOnNavMesh;
+    }
 }
