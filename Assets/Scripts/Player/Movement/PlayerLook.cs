@@ -299,7 +299,9 @@ public class PlayerLook : MonoBehaviour
         // 감정표현 3인칭 — 카메라를 시선 뒤쪽으로 뺀다. (#219)
         // 여기서 조립하는 이유는 흔들림(#477)과 같다: 이 메서드가 매 프레임 localPosition을
         // 통째로 대입하므로 밖에서 얹은 오프셋은 그 프레임에 지워진다.
-        m_emoteCamBlend = Mathf.Lerp(m_emoteCamBlend, m_emoteView ? 1f : 0f, m_emoteCamLerpSpeed * Time.deltaTime);
+        // 쓰러지면 다운 시점이 이긴다 — 서버가 감정표현을 끊어 주지만 그 값이 돌아오기까지 왕복이 걸리고,
+        // 그 사이 두 블렌드가 겹치면 카메라가 다운 높이와 3인칭 붐 사이 엉뚱한 자리로 간다.
+        m_emoteCamBlend = Mathf.Lerp(m_emoteCamBlend, m_emoteView && !downed ? 1f : 0f, m_emoteCamLerpSpeed * Time.deltaTime);
 
         if (!m_emoteView && m_emoteCamBlend < 0.01f)
         {
