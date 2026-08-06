@@ -21,6 +21,7 @@ public class App : Singleton<App>
     private AuthBootstrap m_authBootstrap;
     private VivoxManager m_vivoxManager;
     private LoadingScreen m_loadingScreen;
+    private SoundManager m_soundManager;
 
     // 인게임 매니저 (Main Scene)
     private RoundManager m_roundManager;
@@ -36,6 +37,8 @@ public class App : Singleton<App>
     private ShopPurchases m_shopPurchases;
     private FactionSymbolManager m_factionSymbolManager;
     private SceneReadyGate m_sceneReadyGate;
+    private EffectManager m_effectManager;
+    private FxManager m_fxManager;
 
     // UI 매니저 (씬 전환 시 교체됨)
     private UIManagerBase m_uiManager;
@@ -43,6 +46,8 @@ public class App : Singleton<App>
     // 로컬 HUD (런타임 생성 프리팹 — 생성/파괴 시 자동 등록/해제)
     private CrosshairUI m_crosshairUI;
     private ChannelingGaugeUI m_channelingGaugeUI;
+    private DamageVignetteUI m_damageVignetteUI;
+    private TaserShockUI m_taserShockUI;
     private ToastView m_toastView;
     private SignalMessageView m_signalMessageView;
     private PromptView m_promptView;
@@ -152,7 +157,22 @@ public class App : Singleton<App>
         public static DirectoryManager Directory => Instance.m_directoryManager;
         public static FactionSymbolManager FactionSymbol => Instance.m_factionSymbolManager;
         public static SceneReadyGate ReadyGate => Instance.m_sceneReadyGate; // 전원 준비 완료 게이트 (#410). 게임 씬에만 있으므로 다른 씬에서는 null
+
+        // 일회성 연출의 단일 창구 (#532) — "무슨 일이 일어났는가" 하나로 먼지+소리를 내고,
+        // 서버 판정이면 전 피어에 전파한다. 일회성 연출은 이쪽을 부른다.
+        // 인게임 씬 매니저라 로비·상점에서는 null — 사용처는 ?. 가드 필수
+        public static FxManager Fx => Instance.m_fxManager;
+
+        // 파티클 재생 + 풀링 (#478). Fx가 쓰는 아래 계층이다 — 소리 없이 파티클만 낼 때만 직접 부른다
+        public static EffectManager Effect => Instance.m_effectManager;
     }
+
+    /// <summary>
+    /// 효과음 (#478). AppBootstrap 상주라 어느 씬에서도 살아 있지만, 씬을 직접 Play하면
+    /// 부트스트랩이 없어 null이다 — 사용처는 ?. 가드 필수.
+    /// BGM·UI음이 들어오면(#483) 같은 그룹에 프로퍼티가 늘어난다.
+    /// </summary>
+    public static SoundManager Sound => Instance.m_soundManager;
 
     public static class SceneFlow
     {
@@ -172,6 +192,8 @@ public class App : Singleton<App>
         // 로컬 HUD — 씬 시작 시점엔 null일 수 있다 (오너 스폰 시 프리팹 생성). 사용처는 ?. 가드 필수
         public static CrosshairUI Crosshair => Instance.m_crosshairUI;
         public static ChannelingGaugeUI Gauge => Instance.m_channelingGaugeUI;
+        public static DamageVignetteUI DamageVignette => Instance.m_damageVignetteUI; // 피격 비네트·방향 아크·저체력 글리치 (#476)
+        public static TaserShockUI TaserShock => Instance.m_taserShockUI; // 감전 화면 지직 (#477)
         public static ToastView Toast => Instance.m_toastView;
         public static SignalMessageView SignalMessage => Instance.m_signalMessageView;
         public static PromptView Prompt => Instance.m_promptView;

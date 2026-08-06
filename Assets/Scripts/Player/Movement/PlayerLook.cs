@@ -68,6 +68,7 @@ public class PlayerLook : MonoBehaviour
     private float m_pitch;
     private Vector2 m_smoothedLook; // 지수 감쇠로 부드럽게 만든 시점 입력 — 저속 픽셀 양자화 지터 완화 (#216)
     private float m_standCamHeight; // 평소(서기) 카메라 높이 — 프리팹 초기값에서 캡처 (#105)
+    private Vector2 m_camBaseLateral; // 카메라 로컬 x·z 기준값 — 흔들림을 되돌릴 자리 (#477)
     private float m_camCrouchDrop;  // 시점에 실제로 반영 중인 앉기 하강량 — 공중에서는 얼린다 (#189)
     private float m_downCamBlend;   // 서기 시점(0) ↔ 다운 시점(1) 보간 진행도 (#105)
     private float m_downYaw;        // 쓰러진 동안 누적한 시야 좌우 각도 — 몸 회전이 아니라 카메라 로컬 (#252)
@@ -94,7 +95,13 @@ public class PlayerLook : MonoBehaviour
 
         if (m_playerCamera != null)
         {
+            // 프리팹 배치값을 기준으로 기억한다. y만 쓰던 것에 x·z를 더한 이유는 흔들림(#477) 때문이다 —
+            // 오프셋을 얹으려면 매 프레임 되돌아갈 자리가 있어야 하고, 없으면 누적돼 시점이 밀린다.
             m_standCamHeight = m_playerCamera.transform.localPosition.y; // 서기 시점 높이 기준값
+            m_camBaseLateral = new Vector2(
+                m_playerCamera.transform.localPosition.x,
+                m_playerCamera.transform.localPosition.z
+            );
         }
     }
 
@@ -195,9 +202,13 @@ public class PlayerLook : MonoBehaviour
 
         float uprightHeight = m_standCamHeight - m_camCrouchDrop;
 
-        Vector3 localPos = m_playerCamera.transform.localPosition;
-        localPos.y = Mathf.Lerp(uprightHeight, m_downCamHeight, m_downCamBlend);
-        m_playerCamera.transform.localPosition = localPos;
+        // 세 축을 전부 기준값에서 다시 만든다 — 읽어서 y만 덮어쓰면 x·z가 지난 프레임 값을 이어받아,
+        // 아래 흔들림 오프셋이 매 프레임 누적돼 시점이 옆으로 밀린 채 돌아오지 않는다 (#477).
+        Vector3 localPos = new Vector3(
+            m_camBaseLateral.x,
+            Mathf.Lerp(uprightHeight, m_downCamHeight, m_downCamBlend),
+            m_camBaseLateral.y
+        );
 
         // 쓰러지는 동안 피치를 바닥 시점으로 눕힌다 — 단 플레이어가 마우스를 움직인 뒤에는 놓는다 (#252).
         // 계속 강제하면 올려다본 각도가 매 프레임 되돌아가 시야 조작이 먹지 않는다.
@@ -215,8 +226,50 @@ public class PlayerLook : MonoBehaviour
             m_pitch = Mathf.Clamp(m_pitch, m_minPitch, m_maxPitch); // 누운 자세용 범위에서 서기 범위로 복귀
         }
 
-        m_playerCamera.transform.localEulerAngles = new Vector3(m_pitch, m_downYaw, 0f);
+        // 흔들림은 마지막에 최종 포즈 위에 얹는다 (#477) — 밖에서 카메라 transform을 직접 흔들면
+        // 이 메서드가 매 프레임 localPosition·localEulerAngles를 덮어써 그 프레임에 지워진다.
+        // 그래서 조립 지점을 여기 하나로 두고, 밖에서는 강도만 넘긴다.
+        //
+        // <b>오프셋은 위에서 만든 기준 포즈에 더해 한 번만 대입한다</b> — transform을 읽어 더하면
+        // (`localPosition += ...`) 되돌아갈 자리가 없어 매 프레임 누적된다. 1인칭 팔이 같은 흔들림을
+        // m_handBasePos에서 다시 만드는 것(PlayerHandView.UpdateHandPose)과 같은 이유다.
+        Vector3 euler = new Vector3(m_pitch, m_downYaw, 0f);
+
+        if (m_shakeIntensity > 0.001f)
+        {
+            EvaluateShake(out Vector3 shakeEuler, out Vector3 shakeOffset);
+            localPos += shakeOffset;
+            euler += shakeEuler;
+        }
+
+        m_playerCamera.transform.localPosition = localPos;
+        m_playerCamera.transform.localEulerAngles = euler;
     }
+
+    // ---- 카메라 흔들림 (#477) ----
+
+    // 감전 경련의 진폭. 큰 충격이 아니라 '떨림'이라 작게 잡는다 — 5초 내내 흔들리므로 키우면 멀미가 난다.
+    // 급박함은 진폭이 아니라 주파수로 벌고, 그 주파수와 파형은 ShockShake가 손과 공유한다.
+    private const float k_shakeDegrees = 1.6f;
+    private const float k_shakeOffset = 0.012f;
+
+    private float m_shakeIntensity;
+
+    /// <summary>
+    /// 카메라 흔들림 강도 — 0이면 흔들리지 않는다. 매 프레임 갱신하는 <b>지속형</b> 값이다. (#477)
+    /// 감전(<see cref="PlayerHitView"/>)이 기절 동안 1에서 0으로 낮춰가며 잦아드는 인상을 만든다.
+    /// </summary>
+    /// <remarks>
+    /// 단발 충격(폭발 킥 등)에 쓰려면 호출부가 스스로 감쇠시켜 넣어야 한다 — 여기에 자동 감쇠를
+    /// 넣지 않은 이유는, 넣으면 지속형 사용처가 매 프레임 값을 되살려야 해서 두 방식이 싸우기 때문이다.
+    /// </remarks>
+    public void SetShakeIntensity(float intensity) =>
+        m_shakeIntensity = Mathf.Clamp01(intensity);
+
+    // 파형은 ShockShake가 갖는다 — 1인칭 팔(PlayerHandView)과 주파수가 어긋나면 두 진동이 서로
+    // 미끄러져 경련이 아니라 고장난 화면처럼 보인다. 여기서는 진폭만 정한다.
+    private void EvaluateShake(out Vector3 euler, out Vector3 offset) =>
+        ShockShake.Evaluate(m_shakeIntensity, k_shakeDegrees, k_shakeOffset, out euler, out offset);
 
     /// <summary>
     /// 하위 전체의 레이어를 바꾼다 — "어느 카메라가 이걸 보는가"를 정하는 용도.

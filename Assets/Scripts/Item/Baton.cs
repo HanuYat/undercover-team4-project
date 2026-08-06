@@ -248,18 +248,27 @@ public class Baton : ItemBase, IAimedWeapon
                 out PlayerHealth playerTarget, out RaycastHit hit))
         {
             case SwingResult.NoHit:
+                // 허공은 연출이 없다 — 이미 나간 스윙음이 '휘두르긴 했다'를 말해 주고 있다.
                 NotifyOwner("진압봉 빗나감 — 허공");
                 return;
             case SwingResult.HitNonTarget:
+                App.Game.Fx?.PlayEverywhere(EFx.BatonHitWorld, hit.point, hit.normal);
                 NotifyOwner($"진압봉 빗나감 — {hit.collider.name}에 맞음");
                 return;
             case SwingResult.TargetInvalidState:
+                // 아무 연출도 내지 않는다 — 때릴 수 없는 대상이므로 허공(NoHit)과 같은 취급이다.
+                // 먼지든 타격음이든 내면 그만큼은 '때려졌다'로 읽히는데, 여기서 일어나는 일은 없다.
+                // 휘두른 것 자체는 이미 나간 스윙 모션·스윙음이 말해 준다.
                 NotifyOwner(
                     playerTarget != null
                         ? $"진압봉 무효 — 이미 무력화된 동료 ({playerTarget.name})"
-                        : $"진압봉 무효 — 이미 제압됐거나 페널티 진행 중인 대상 ({target.CurrentState})");
+                        : $"진압봉 무효 — {(target.IsStunned ? "이미 쓰러진" : "이미 제압됐거나 페널티 진행 중인")} 대상 ({target.CurrentState})");
                 return;
         }
+
+        // 유효타 — 임팩트 연출은 전 피어, 히트마커는 때린 사람에게만.
+        App.Game.Fx?.PlayEverywhere(ImpactFxFor(target, playerTarget), hit.point, hit.normal);
+        NotifyHit(playerTarget != null);
 
         // 동료를 맞췄다 — 아군 오사 (#461). NPC와 같은 데미지를 그대로 넣고, HP 0이 되면
         // PlayerHealth.SetHp가 기능 정지(IncapacitationCause.Die)까지 이어준다 — 여기서 따로 할 일이 없다.
@@ -313,7 +322,7 @@ public class Baton : ItemBase, IAimedWeapon
     {
         if (!IsSpawned)
         {
-            ApplySwingAnimation(Holder); // 오프라인 — RPC 경로가 없다
+            ApplySwingFeedback(Holder); // 오프라인 — RPC 경로가 없다
             return;
         }
 
@@ -325,12 +334,14 @@ public class Baton : ItemBase, IAimedWeapon
     {
         // 소지자를 인자로 싣지 않는 이유: 아이템의 부착 부모는 NetworkObject 부모 동기화로 전 피어가
         // 동일하므로, 각 피어가 자기 계층에서 찾는 편이 참조 직렬화보다 싸고 어긋날 여지가 없다.
-        ApplySwingAnimation(Holder);
+        ApplySwingFeedback(Holder);
     }
 
+    // 모션 + 스윙음. 둘을 같은 함수에 두는 이유는 같은 순간에 일어나야 하기 때문이다 —
+    // 소리를 임팩트 시점으로 미루면 휘두르는 동작과 어긋난다.
     // 드라이버는 Animator가 붙은 모델 쪽에 있을 수도, 루트에 있을 수도 있다 — 소지자 루트에서 아래로 찾는다
     // (GetComponentInChildren은 자기 자신도 포함하므로 두 배치 모두 걸린다).
-    private static void ApplySwingAnimation(PlayerInteractor holder)
+    private static void ApplySwingFeedback(PlayerInteractor holder)
     {
         if (holder == null)
         {
@@ -342,7 +353,69 @@ public class Baton : ItemBase, IAimedWeapon
         {
             driver.TriggerAttack();
         }
+
+        // 소지자 위치에서 낸다 — 봉 끝이 아니라 몸 기준이면 충분하고(둘의 거리가 1m 안쪽이다),
+        // 아이템이 손에 붙는 시점과 무관하게 항상 유효한 좌표다.
+        // 이 함수는 이미 전 피어에서 도는 스윙 RPC 안이라 전파(PlayEverywhere)가 아니라 로컬 재생이다.
+        App.Game.Fx?.PlayHere(EFx.BatonSwing, holder.transform.position);
     }
+
+    // ---- 타격 연출 (#478) ----
+
+    /// <summary>
+    /// 맞은 대상에 따른 타격 연출 — 로봇은 깡, 사람은 퍽. (#478)
+    /// 먼지·소리 조합과 전 피어 전파는 <see cref="FxManager"/>가 가져갔다 (#532) — 여기서는 무엇을 맞혔는지만 고른다.
+    /// </summary>
+    /// <remarks>
+    /// <b>클라이언트가 스스로 판단하지 않고 서버가 정해 실어 보낸다.</b> <see cref="OfficialRecords.CitizenType"/>은
+    /// 전 피어에 동기화되므로(<see cref="CitizenData"/>) 각 피어가 다시 조회해도 같은 답이 나오지만,
+    /// 그러면 프로필 미배정 같은 예외 처리가 피어 수만큼 흩어진다. 판정이 이미 서버 단독이라
+    /// 결과만 얹어 보내는 편이 갈래가 한 곳에 남는다.
+    ///
+    /// 종족을 소리로 드러내도 정보가 새지 않는다 — 위조(#223)는 표시 이름·문양만 오염시키고
+    /// 표시 타입(<c>m_typeView</c>)은 건드리지 않으므로, 소리와 스캔 결과가 어긋나는 일이 없다.
+    /// </remarks>
+    private static EFx ImpactFxFor(NpcController npc, PlayerHealth player)
+    {
+        if (player != null)
+        {
+            return EFx.BatonHitMetal; // 동료는 전원 로봇 경찰이다 (GDD 세계관)
+        }
+
+        if (npc == null)
+        {
+            return EFx.BatonHitWorld;
+        }
+
+        // 라운드 시작 전 스폰 직후에는 프로필이 아직 없다 — 갈래를 남기지 않으려고 사람 쪽으로 고정한다.
+        CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
+        CitizenProfile profile = identity != null ? identity.Profile : null;
+
+        return profile != null && profile.CitizenType == OfficialRecords.CitizenType.Android
+            ? EFx.BatonHitMetal
+            : EFx.BatonHitFlesh;
+    }
+
+    /// <summary>
+    /// 명중을 때린 사람에게만 알린다 — 크로스헤어 히트마커. 아군 오사는 색이 다르다. (#478/#461)
+    /// 소리로는 동료(로봇)와 안드로이드 NPC가 둘 다 깡이라 구분되지 않으므로, 이것이 오사를 드러내는 유일한 수단이다.
+    /// </summary>
+    private void NotifyHit(bool friendlyFire)
+    {
+        if (!IsSpawned)
+        {
+            ApplyHitMarker(friendlyFire); // 오프라인 — RPC 경로가 없다
+            return;
+        }
+
+        NotifyHitRpc(friendlyFire);
+    }
+
+    [Rpc(SendTo.Owner)]
+    private void NotifyHitRpc(bool friendlyFire) => ApplyHitMarker(friendlyFire);
+
+    // 로컬 HUD라 오너 스폰 전이거나 HUD 없는 구성에서는 null이다 (App.UI.Crosshair 주석).
+    private static void ApplyHitMarker(bool friendlyFire) => App.UI.Crosshair?.ShowHit(friendlyFire);
 
     // ---- 조준 판정 ----
 
@@ -414,6 +487,16 @@ public class Baton : ItemBase, IAimedWeapon
         // 크로스헤어와 실제 타격이 같은 함수를 봐야 "떴는데 안 맞음"이 생기지 않는다.
         target = npc;
         if (!NpcStateRules.CanBeDamaged(npc))
+        {
+            return SwingResult.TargetInvalidState;
+        }
+
+        // 이미 쓰러져 있으면 무효타다 — 스턴은 오버레이라 CurrentState에 나타나지 않으므로(#292)
+        // 위 상태 게이트로는 걸러지지 않는다. 통과시키면 두 가지가 어긋난다: 타격으로 쓰러진 대상은
+        // HP가 이미 0이라 피해가 0인데 히트마커·"명중"이 뜨고, 테이저로 기절한 대상은 만피라
+        // 반대로 누워 있는 채 계속 깎인다. 테이저(<c>Taser.EvaluateAim</c>)가 같은 이유로 먼저
+        // 이 게이트를 갖고 있다 — 쓰러진 대상은 때리는 게 아니라 밧줄로 끌어가는 것이다.
+        if (npc.IsStunned)
         {
             return SwingResult.TargetInvalidState;
         }

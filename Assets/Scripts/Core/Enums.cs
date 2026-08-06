@@ -49,6 +49,47 @@ public enum EVoiceState
 }
 
 /// <summary>
+/// 일회성 이펙트 식별자 — EffectManager가 EffectLibrary에서 프리팹·수명을 찾는 키. (#478)
+/// 프리팹 참조가 아닌 enum으로 가리키는 이유는 EInstallable과 같다: 사용처(무기·NPC)가
+/// 런타임 스폰물이라 인스펙터로 프리팹을 배선할 수 없는 경우가 있고, 어떤 연출이 존재하는지
+/// 한곳에서 보이는 편이 사전 생성 개수를 조율하기도 쉽다.
+/// </summary>
+public enum EEffect
+{
+    None, // 연출 없음 — 배선 누락과 구분되는 '의도적으로 안 냄'
+    ImpactDust, // 근접 타격 먼지 — 맞은 자리에 1회 (#478)
+}
+
+/// <summary>
+/// 효과음 식별자 — SoundManager가 AudioLibrary에서 클립·볼륨·감쇠 거리를 찾는 키. (#478)
+/// 클립 파일명을 문자열로 쓰지 않는 이유는 이름을 바꿔도 조용히 깨지지 않게 하기 위함이다 (#483).
+/// </summary>
+public enum EAudioClip
+{
+    None, // 소리 없음
+    BatonSwing, // 휙 — 진압봉을 휘두르는 순간 (명중 여부와 무관)
+    BatonHitMetal, // 깡 — 로봇(안드로이드 NPC · 동료 경찰)을 맞혔다
+    BatonHitFlesh, // 퍽 — 인간 NPC를 맞혔다
+    BatonHitWorld, // 둔탁 — 벽·소품을 맞혔다
+    TaserHit, // 지직 — 테이저 명중 (대상이 로봇이든 사람이든 같다. 전기는 몸체를 가리지 않는다)
+}
+
+/// <summary>
+/// 일회성 연출의 '순간' 식별자 — FxManager가 파티클(EEffect)·소리(EAudioClip) 조합을 찾는 키. (#532)
+/// 사용처는 무엇을 재생할지가 아니라 <b>무슨 일이 일어났는지</b>만 고른다 — 조합은 FxManager 인스펙터에 있다.
+/// 그래서 먼지를 바꾸거나 소리를 갈아도 아이템 코드는 그대로다.
+/// </summary>
+public enum EFx
+{
+    None, // 연출 없음 — 배선 누락과 구분되는 '의도적으로 안 냄'
+    BatonSwing, // 진압봉을 휘두른 순간 (명중 여부와 무관)
+    BatonHitMetal, // 진압봉이 로봇을 맞혔다 (동료 경찰 · 안드로이드 NPC)
+    BatonHitFlesh, // 진압봉이 사람을 맞혔다
+    BatonHitWorld, // 진압봉이 벽·소품을 맞혔다
+    TaserHit, // 테이저 명중
+}
+
+/// <summary>
 /// Awake 실행 순서 — [DefaultExecutionOrder((int)EExecutionOrder.X)]로 사용.
 /// 음수 = 일반 스크립트(0)보다 먼저. 매니저 → UI매니저 → 패널 → 일반 스크립트 순서를 보장한다.
 /// </summary>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -30,8 +30,29 @@ public partial class NpcController : IDamageable
     /// <b>HP 반영 직전</b>에 발행한다. 구독자가 상태를 바꿀 수 있어야 하고(임무 해제 → 배회),
     /// 그 다음에 기절 전이가 얹혀야 순서가 맞기 때문이다 — 뒤에 발행하면 넉백 기절로 바뀐 상태를
     /// 임무 해제가 덮어써 기절이 조용히 취소된다.
+    ///
+    /// 연출용 순간 알림은 <see cref="OnHit"/>다 — 둘은 성격이 달라 한 이벤트로 합칠 수 없다
+    /// (이쪽은 서버 전용 + HP 반영 <b>전</b>, 저쪽은 전 피어 + 실제로 깎인 양을 싣는다).
     /// </summary>
     public event Action<NpcController, GameObject> OnDamaged;
+
+    /// <summary>
+    /// 피격 순간 <b>전 피어</b>에서 발행되는 연출용 훅. (#478)
+    /// <see cref="PlayerHealth.OnDamaged"/>와 같은 구조다: HP는 동기화 값이라 폴링할 수 있지만
+    /// "지금 맞았다"는 순간은 값 비교로 잡을 수 없다(같은 프레임에 여러 번 맞는 경우가 구분되지 않는다).
+    ///
+    /// 오너가 아니라 전 피어인 이유: 몸에 붙는 연출은 월드 연출이라 본부 CCTV에서도 보여야 한다.
+    ///
+    /// <b>지금은 구독자가 없다</b> — 유일한 소비자였던 타격 플래시를 걷어냈다(몸 전체가 물드는 그림이
+    /// 과하다는 판단). 그래도 훅과 전파(<c>PlayDamagedRpc</c>)는 남긴다: NPC 쪽 피격 연출을 다시
+    /// 붙일 때 필요한 것이 이 순간 알림 하나뿐이라, 지우면 같은 RPC를 다시 만들게 된다.
+    /// 구독자 없는 브로드캐스트가 아깝다고 판단되면 이 이벤트와 RPC를 함께 지울 것.
+    ///
+    /// <b>이름이 PlayerHealth 쪽과 어긋나는 이유</b>: NPC에는 <c>OnDamaged</c>가 이미 서버 전용
+    /// 게임플레이 훅(#371)으로 나가 있어 그 이름을 쓸 수 없다. 플레이어에는 그 훅이 없어 저쪽만
+    /// <c>OnDamaged</c>로 남았다 — 두 이벤트를 헷갈리지 말 것.
+    /// </summary>
+    public event Action<DamageHit> OnHit;
 
     /// <summary>체력 초기화 — InitBehavior에서 서버(또는 오프라인) 1회 호출된다.</summary>
     private void InitHealth()
@@ -63,12 +84,43 @@ public partial class NpcController : IDamageable
         // 피해를 얹기 전에 알린다 — 위 OnDamaged 주석의 순서 근거 참고
         OnDamaged?.Invoke(this, attacker);
 
+        // 실제로 깎인 양을 연출에 실어야 한다 — 아래 Clamp에 걸려 요청량보다 적을 수 있다 (#478)
+        int before = CurrentHp;
         SetHp(Mathf.Clamp(CurrentHp - amount, 0, MaxHp), attacker);
 
         // 피격 반응(#400)은 여기서 굴리지 않는다 — 폭발(BombDevice) 같은 환경 피해도 이 경로를 지나기
         // 때문이다. 판정은 플레이어 타격 경로(Baton.ServerSwing)가 직접 부른다 — E 제압 타격이
         // 제거되면서(#438) 이 경로는 진압봉 단독이 됐다.
+        //
+        // 반면 <b>연출은 반대로 여기가 맞다</b> (#478) — 폭발로 맞든 진압봉으로 맞든 티가 나야 한다.
+        // 반응과 연출을 가르는 기준이 정확히 반대라서 두 곳에 나눠 둔다.
+        int applied = before - CurrentHp;
+        if (applied > 0)
+            BroadcastDamaged(applied, attacker);
     }
+
+    // 연출 알림을 전 피어에 돌린다 — PlayerHealth.BroadcastDamaged와 같은 구조.
+    // 가해자를 GameObject로 실을 수 없어 월드 좌표로 환산해 보낸다 (DamageHit 주석 참고).
+    private void BroadcastDamaged(int amount, GameObject attacker)
+    {
+        bool hasAttacker = attacker != null;
+        Vector3 attackerPosition = hasAttacker ? attacker.transform.position : Vector3.zero;
+
+        if (!IsSpawned)
+        {
+            RaiseDamaged(amount, attackerPosition, hasAttacker); // 오프라인 — 비네트워크 Play 테스트 폴백
+            return;
+        }
+
+        PlayDamagedRpc(amount, attackerPosition, hasAttacker);
+    }
+
+    [Rpc(SendTo.Everyone)]
+    private void PlayDamagedRpc(int amount, Vector3 attackerPosition, bool hasAttacker) =>
+        RaiseDamaged(amount, attackerPosition, hasAttacker);
+
+    private void RaiseDamaged(int amount, Vector3 attackerPosition, bool hasAttacker) =>
+        OnHit?.Invoke(new DamageHit(amount, attackerPosition, hasAttacker));
 
     /// <summary>
     /// 체력 완전 회복 — 기절에서 깨어나는 순간 <see cref="NpcStunnedState"/>가 호출한다. (#366)
