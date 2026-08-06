@@ -7,9 +7,6 @@ public partial class NpcController
 {
     // ---- 밧줄 끌기 (#269) ----
 
-    // 밧줄을 놓은 지점에서 NavMesh를 찾을 때의 탐색 반경(m).
-    private const float k_ropeReleaseSnapRadius = 2f;
-
     // 끌리는 동안 매 프레임 바닥을 찾을 때의 탐색 반경(m) — 계단 한 칸을 넘길 만큼만.
     private const float k_dragGroundSnapRadius = 1f;
 
@@ -149,7 +146,7 @@ public partial class NpcController
         CancelStandUp();
 
         // 줄이 걸리는 순간 반출 흐름은 끝난다 — 이제 밧줄 신병이라 E는 놓기/재개로 갈린다 (#517)
-        SetJailExtracted(false);
+        m_custody.SetJailExtracted(false);
 
         SetRoped(true);
         SyncDraggerCount();
@@ -239,22 +236,6 @@ public partial class NpcController
     {
         if (IsSpawned && IsServer)
             m_draggerCountSynced.Value = (byte)m_dragAnchors.Count;
-    }
-
-    // 기준점 주변에서 NavMesh 위 지점을 찾아 에이전트를 붙인다 — 붙었으면 true.
-    private bool TryWarpNear(Vector3 origin)
-    {
-        if (
-            !NavMesh.SamplePosition(
-                origin,
-                out NavMeshHit hit,
-                k_ropeReleaseSnapRadius,
-                NavMesh.AllAreas
-            )
-        )
-            return false;
-
-        return m_agent.Warp(hit.position) && m_agent.isOnNavMesh;
     }
 
     /// <summary>

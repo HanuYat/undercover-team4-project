@@ -48,7 +48,7 @@ public class NpcJailedState : NpcStateBase
         // 미끄러지는 그림이 된다. 지난 수감에서 남은 m_nextMoveTime도 여기서 씻긴다.
         BeginPause();
 
-        if (m_owner.JailSpot == null)
+        if (m_owner.Custody.JailSpot == null)
             return; // 감옥이 배선되지 않은 테스트 씬 — 그 자리에 세운 것으로 처리한다
 
         // <b>이미 방 안이면 옮기지 않는다.</b> 아래 워프는 경로가 없는 두 NavMesh 섬을 건너는 수단이지
@@ -67,11 +67,11 @@ public class NpcJailedState : NpcStateBase
         // 에이전트를 끄지 않으므로 재부착 실패로 굳을 위험은 없다. 반환값을 보는 이유는 실패가 조용하기
         // 때문이다: 지점이 NavMesh 밖이면 워프가 실패하고 대상은 <b>문 앞에 그대로 남는다</b> —
         // 눈으로는 "수감이 안 됐네"로만 보여 씬 배치 실수를 놓치기 쉽다.
-        if (!m_owner.Agent.Warp(m_owner.JailSpot.position))
+        if (!m_owner.Agent.Warp(m_owner.Custody.JailSpot.position))
         {
             Debug.LogWarning(
                 $"NpcJailedState: 배치 지점으로 워프 실패 — 감옥 밖에 남는다. "
-                    + $"지점이 감옥 NavMesh 위에 있는지 확인할 것: {m_owner.JailSpot.name}",
+                    + $"지점이 감옥 NavMesh 위에 있는지 확인할 것: {m_owner.Custody.JailSpot.name}",
                 m_owner
             );
             return;
@@ -93,7 +93,7 @@ public class NpcJailedState : NpcStateBase
     /// </summary>
     public override void Tick()
     {
-        if (m_owner.JailSpot == null || !m_owner.Agent.isOnNavMesh)
+        if (m_owner.Custody.JailSpot == null || !m_owner.Agent.isOnNavMesh)
             return;
 
         // 일어나는 중에는 움직이지 않는다 — 기상 클립이 도는 동안 걷기 시작하면 누운 몸이 미끄러진다
@@ -158,7 +158,7 @@ public class NpcJailedState : NpcStateBase
     private bool TrySpotNeighbourhood(out Vector3 target)
     {
         Vector2 offset = Random.insideUnitCircle * k_fallbackRadius;
-        Vector3 candidate = m_owner.JailSpot.position + new Vector3(offset.x, 0f, offset.y);
+        Vector3 candidate = m_owner.Custody.JailSpot.position + new Vector3(offset.x, 0f, offset.y);
 
         if (UnityEngine.AI.NavMesh.SamplePosition(
                 candidate, out UnityEngine.AI.NavMeshHit hit, k_fallbackRadius, m_owner.Agent.areaMask))
@@ -193,7 +193,7 @@ public class NpcJailedState : NpcStateBase
     // 서서 바라볼 방향 — 지점 forward의 수평 성분만 쓴다(지점이 기울어 배치돼도 몸은 안 기운다).
     private Quaternion SpotRotation()
     {
-        Vector3 forward = m_owner.JailSpot.forward;
+        Vector3 forward = m_owner.Custody.JailSpot.forward;
         forward.y = 0f;
         return forward.sqrMagnitude > 0.0001f
             ? Quaternion.LookRotation(forward)

@@ -146,7 +146,7 @@ public partial class NpcController
         // 아니라 시스템이 진행 중인 절차라 건드리지 않는다 — 끊으면 이중 집계·타이머 리셋·
         // 매니저 desync가 그대로 돌아온다(#292가 오버레이를 택한 이유).
         if (CurrentState == NpcState.Escorted)
-            StopEscort();
+            m_custody.StopEscort();
 
         m_reaction.ThreatTarget = threat;
         m_stunDuration = seconds ?? m_stunConfig.StunSeconds;

@@ -10,7 +10,7 @@ using UnityEngine;
 /// <see cref="NpcPenaltyEscortState"/>)가 하고, 이 부품은 그 상태들이 읽을 목표·대상·대형을 들고
 /// 결과를 이벤트로 중계한다. FSM 전이가 필요하므로 코어의 <see cref="NpcController.StateMachine"/>을 쓴다.
 /// 전이는 전부 서버 권위 — 부르는 쪽(WrongfulArrestPenalty · AbductionEvent)이 서버다. 클라 호출은
-/// <see cref="NpcController.StartEscort"/>와 같은 방식으로 무시한다.
+/// <see cref="NpcCustody.StartEscort"/>와 같은 방식으로 무시한다.
 ///
 /// <b>반드시 <see cref="NpcController"/>와 같은 GameObject에 둔다</b> — 코어 쪽 [RequireComponent]가 이를 보장한다.
 /// 반대 방향으로도 걸면 순환 의존이 되어 둘 중 하나만 떼는 것이 막히므로, 선언은 코어에만 둔다.
@@ -102,7 +102,7 @@ public class NpcPenaltyAgent : NetworkBehaviour
         if (IsSpawned && !IsServer)
             return;
 
-        m_owner.EscortTarget = null;
+        m_owner.Custody.ClearEscortTarget(); // 전이는 아래에서 Detained로 — StopEscort(Captured로 간다)는 못 쓴다
         DetentionSpot = spot;
         DetentionSlotOffset = slotOffset;
         m_owner.StateMachine.ChangeState(NpcState.Detained);
