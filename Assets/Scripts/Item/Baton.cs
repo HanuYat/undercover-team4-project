@@ -266,16 +266,16 @@ public class Baton : ItemBase, IAimedWeapon
                 return;
         }
 
-        // 추격 폭탄을 맞췄다 — 데미지가 아니라 밀어내기다 (#399). 폭탄은 해체할 수 없으므로
-        // 이것이 폭심을 옮기는 유일한 수단이다. 미는 방향은 때린 사람 → 폭탄, 즉 등지고 선 쪽이다
-        // (조준 방향을 쓰면 비스듬히 때렸을 때 폭탄이 옆으로 새는데, 화면에서는 그게 오작동으로 읽힌다).
-        // 연출은 금속 타격이다 — 폭탄은 로봇이고, 밀어낸 것도 유효타이므로 히트마커가 떠야 한다 (#478).
+        // 추격 폭탄을 맞췄다 — <b>그 자리에서 즉발한다</b> (#399). 밀어내기는 없어졌다: 굴러오는
+        // 폭탄을 봉으로 쳐서 옮긴다는 그림 자체가 읽히지 않았다. 때린 사람은 폭심 바로 옆이라
+        // 피해를 온전히 받는다 — 오조작의 대가를 그 자리에서 치른다.
+        // 연출은 금속 타격이다 — 폭탄은 로봇이고, 맞은 것 자체는 유효타라 히트마커가 떠야 한다 (#478).
         if (bombTarget != null)
         {
             App.Game.Fx?.PlayEverywhere(EFx.BatonHitMetal, hit.point, hit.normal);
             NotifyHit(false);
-            bombTarget.ServerPush(bombTarget.transform.position - holderTransform.position);
-            NotifyOwner("진압봉 명중 — 폭탄을 밀어냈다");
+            bombTarget.ServerDetonate();
+            NotifyOwner("진압봉 명중 — 폭탄이 그 자리에서 터졌다");
             return;
         }
 
@@ -550,10 +550,10 @@ public class Baton : ItemBase, IAimedWeapon
                 : SwingResult.TargetInvalidState;
         }
 
-        // 추격 폭탄 — 때리면 데미지가 아니라 밀린다 (#399). 이미 터진 폭탄은 그냥 소품이라
-        // 빗나감으로 둔다(TargetInvalidState가 아니다 — "무효"라고 알려줄 만한 오조작이 아니다).
+        // 추격 폭탄 — 때리면 데미지가 아니라 즉발이다 (#399). 카운트다운 전이거나 이미 터진 폭탄은
+        // 그냥 소품이라 빗나감으로 둔다(TargetInvalidState가 아니다 — "무효"라고 알려줄 만한 오조작이 아니다).
         bombTarget = hit.collider.GetComponentInParent<BombDevice>();
-        if (bombTarget != null && bombTarget.CanBePushed)
+        if (bombTarget != null && bombTarget.CanBeStruck)
         {
             return SwingResult.ValidTarget;
         }

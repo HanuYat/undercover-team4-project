@@ -19,10 +19,13 @@ public enum BombState
 /// 추격 폭탄 — 스폰되는 폭탄 프리팹의 브레인. (GDD 6-4, #399)
 ///
 /// <b>서버 권위 · 스폰형 이벤트 액터.</b> 무장하면 NavMesh 위를 굴러 가장 가까운 현장 플레이어를 쫓고,
-/// 제한시간이 끝나면 그 자리에서 폭발한다. <b>해체는 없다</b> — 대응 수단은 두 가지뿐이다:
-/// <b>달아나기</b>(추격 속도가 달리기보다 느리다 — 걷기보다는 빠르므로 뛰어야 벌어진다)와
-/// <b>진압봉으로 밀어내기</b>(<see cref="ServerPush"/>).
+/// 제한시간이 끝나면 그 자리에서 폭발한다. <b>해체도 밀어내기도 없다</b> — 대응 수단은
+/// <b>달아나기</b> 하나뿐이다(추격 속도가 달리기보다 느리다 — 걷기보다는 빠르므로 뛰어야 벌어진다).
 /// 폭발은 반드시 일어나므로 "막는 게임"이 아니라 "폭심에서 벗어나는 게임"이다.
+///
+/// <b>진압봉으로 때리면 그 자리에서 즉발한다</b> (<see cref="ServerDetonate"/>, #399). 밀어내기를
+/// 대신하는 수단이 아니라 <b>오조작의 대가</b>다 — 때린 사람은 폭심 바로 옆이라 피해를 온전히 받는다.
+/// 무기를 들면 무엇이든 때려 보게 되는데, 폭탄은 때려서 될 물건이 아니라는 것을 값으로 가르친다.
 ///
 /// 이동은 서버의 <see cref="NavMeshAgent"/>가 쥐고 클라이언트는 NetworkTransform으로 결과만 받는다
 /// (NPC와 같은 스택). 상태·폭발 시각은 NetworkVariable로 전 피어에 전파하고, 실제 표현(카운트다운 표시·
@@ -72,19 +75,6 @@ public class BombDevice : NetworkBehaviour
     [SerializeField]
     private float m_targetSearchRadius = 300f;
 
-    [Header("밀어내기 (진압봉 대응)")]
-    [Tooltip("진압봉에 맞았을 때 밀려나는 초기 속도(m/s)")]
-    [SerializeField]
-    private float m_pushForce = 9f;
-
-    [Tooltip("밀린 속도가 잦아드는 감속(m/s²)")]
-    [SerializeField]
-    private float m_pushDrag = 12f;
-
-    [Tooltip("맞은 뒤 추격을 다시 시작하기까지의 시간(초) — 진압봉 쿨다운(0.9초)보다 짧게 둘 것, 길면 혼자서 무한 저지가 된다")]
-    [SerializeField]
-    private float m_pushRecoverSeconds = 0.6f;
-
     [Header("폭발 (인스펙터 조절)")]
     [Tooltip("이 반경(m) 안의 플레이어가 피해·넉백을 받는다")]
     [SerializeField]
@@ -128,9 +118,6 @@ public class BombDevice : NetworkBehaviour
     private PlayerHealth m_target;       // 지금 쫓는 상대 — 히스테리시스로만 바뀐다
     private float m_nextRetargetTime;
 
-    private Vector3 m_pushVelocity;      // 진압봉에 맞아 밀려나는 중의 수평 속도
-    private float m_pushRecoverAt;       // 이 시각까지는 추격을 멈춘다
-
     private readonly List<Transform> m_blastBuffer = new List<Transform>();
 
     // NPC 넉백 대상 수집용 공유 버퍼 — 서버(또는 오프라인)에서만 쓰므로 정적으로 공유해도 안전하다
@@ -149,8 +136,9 @@ public class BombDevice : NetworkBehaviour
     /// <summary>카운트다운이 도는 중인가 — 추격 중(Armed)과 폭심 확정 후(Locked)를 함께 묶는다.</summary>
     public bool IsCountingDown => State == BombState.Armed || State == BombState.Locked;
 
-    /// <summary>지금 밀어낼 수 있는 상태인가 — <see cref="Baton"/>이 타격 판정에 쓴다.</summary>
-    public bool CanBePushed => IsCountingDown;
+    /// <summary>지금 때리면 터지는 상태인가 — <see cref="Baton"/>이 타격 판정에 쓴다.
+    /// 카운트다운 전(등장·대기)과 이미 터진 뒤는 그냥 소품이라 빗나감으로 둔다.</summary>
+    public bool CanBeStruck => IsCountingDown;
 
     public float ExplosionRadius => m_explosionRadius;
     public float KnockbackForce => m_knockbackForce;
@@ -198,9 +186,6 @@ public class BombDevice : NetworkBehaviour
 
     /// <summary>폭발했다 — 전 피어. 폭발 넉백·VFX가 구독한다.</summary>
     public event Action OnExploded;
-
-    /// <summary>진압봉에 맞아 밀려났다 — 전 피어. 타격 연출용 순간 이벤트.</summary>
-    public event Action OnPushed;
 
     // 서버·오프라인에서만 권위. 스폰 전(오프라인 Play)이면 항상 권위.
     private bool IsAuthority => !IsSpawned || IsServer;
@@ -284,10 +269,7 @@ public class BombDevice : NetworkBehaviour
         if (m_state != BombState.Armed && m_state != BombState.Locked)
             return;
 
-        TickPush();
-
         // 폭심 확정 — 남은 시간이 얼마 없으면 멈춰서 "여기서 터진다"를 보여준다.
-        // 멈춘 뒤에도 밀어내기는 통한다(TickPush가 앞에서 돈다) — 마지막에 몸으로 막는 선택이 남는다.
         if (m_state == BombState.Armed && m_explodeAtLocal - Time.time <= m_lockSeconds)
         {
             StopAgent();
@@ -347,47 +329,28 @@ public class BombDevice : NetworkBehaviour
     }
 
     /// <summary>
-    /// 진압봉 타격 진입점 — 서버(또는 오프라인)에서만 호출한다. 폭탄을 <paramref name="direction"/> 쪽으로
-    /// 밀어내고 잠시 추격을 끊는다. 남은 시간은 건드리지 않는다 — 밀어내기는 <b>거리를 버는</b> 수단이지
-    /// 폭발을 미루는 수단이 아니다.
+    /// 진압봉 타격 진입점 — 서버(또는 오프라인)에서만 호출한다. <b>그 자리에서 즉발한다.</b> (#399)
+    ///
+    /// 남은 시간을 앞당기는 것이 아니라 폭발 자체를 지금 일으킨다 — 때린 순간과 터지는 순간 사이에
+    /// 틈이 있으면 "때렸더니 잠시 뒤에 터졌다"가 되어 원인이 흐려진다.
+    ///
+    /// 카운트다운 중(<see cref="CanBeStruck"/>)에만 받는다. 등장·대기 중인 폭탄까지 때려서 터뜨릴 수
+    /// 있으면 <b>아무도 쫓기지 않은 채 이벤트가 끝나</b>, 도망치는 30초라는 이벤트의 알맹이가 사라진다.
     /// </summary>
-    public void ServerPush(Vector3 direction)
+    public void ServerDetonate()
     {
         if (!IsAuthority)
             return;
-        if (m_state != BombState.Armed && m_state != BombState.Locked)
+        if (!IsCountingDown)
             return;
 
-        direction.y = 0f; // 굴러가는 물건이라 띄우지 않는다 — 뜨면 NavMesh에서 떨어진다
-        if (direction.sqrMagnitude < 0.0001f)
-            return;
-
-        m_pushVelocity = direction.normalized * m_pushForce;
-        m_pushRecoverAt = Time.time + m_pushRecoverSeconds;
-        StopAgent(); // 밀리는 동안은 경로를 버린다 — 남겨두면 에이전트가 제자리로 되끌어당긴다
-
-        NotifyPushed();
-    }
-
-    // 밀려나는 1프레임 — NavMeshAgent.Move로 옮겨 벽을 뚫거나 NavMesh 밖으로 나가지 않게 한다.
-    // NPC 넉백(NpcController.TickKnockback)처럼 에이전트를 떼어내 포물선으로 날리지 않는 이유는,
-    // 폭탄은 굴러가는 물건이라 뜰 필요가 없고 그러면 착지·복귀 경로가 통째로 필요해지기 때문이다.
-    private void TickPush()
-    {
-        if (m_pushVelocity.sqrMagnitude < 0.01f)
-            return;
-
-        if (m_agent.enabled && m_agent.isOnNavMesh)
-            m_agent.Move(m_pushVelocity * Time.deltaTime);
-
-        m_pushVelocity = Vector3.MoveTowards(m_pushVelocity, Vector3.zero, m_pushDrag * Time.deltaTime);
+        Debug.Log("[폭탄] 진압봉에 맞음 — 즉발");
+        ServerExplode();
     }
 
     // 표적 재선정 + 목적지 갱신. 표적도 움직이므로 같은 주기로 목적지를 다시 찍는다.
     private void TickChase()
     {
-        if (Time.time < m_pushRecoverAt)
-            return; // 맞고 밀려나는 중 — 이 시간이 곧 벌어준 거리다
         if (Time.time < m_nextRetargetTime)
             return;
 
@@ -452,7 +415,7 @@ public class BombDevice : NetworkBehaviour
         // 클라는 NetworkTransform으로 결과만 받으므로, 뷰가 아니라 여기서 직접 날린다.
         ServerKnockbackNpcs();
 
-        Debug.Log($"[폭탄] 시간 초과 — 폭발 (반경 {m_explosionRadius}m, 피해 {m_explosionDamage})");
+        Debug.Log($"[폭탄] 폭발 (반경 {m_explosionRadius}m, 피해 {m_explosionDamage})");
         SetState(BombState.Exploded);
     }
 
@@ -490,21 +453,6 @@ public class BombDevice : NetworkBehaviour
     {
         if (state == BombState.Exploded)
             OnExploded?.Invoke();
-    }
-
-    private void NotifyPushed()
-    {
-        OnPushed?.Invoke(); // 서버·오프라인 로컬 발행
-        if (IsSpawned && IsServer)
-            PushedClientRpc();
-    }
-
-    [ClientRpc]
-    private void PushedClientRpc()
-    {
-        if (IsServer)
-            return; // 호스트는 위에서 이미 발행
-        OnPushed?.Invoke();
     }
 
     // ---- 동기화 콜백 (원격 클라 전용) ----

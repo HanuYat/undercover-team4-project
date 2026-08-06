@@ -367,9 +367,6 @@ MonoBehaviour:
   m_retargetInterval: 0.5
   m_retargetHysteresis: 1.5
   m_targetSearchRadius: 300
-  m_pushForce: 9
-  m_pushDrag: 12
-  m_pushRecoverSeconds: 0.6
   m_explosionRadius: 8
   m_explosionDamage: 60
   m_knockbackForce: 30
