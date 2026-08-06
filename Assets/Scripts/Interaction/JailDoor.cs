@@ -13,11 +13,15 @@ using UnityEngine;
 /// 같은 키가 상황에 따라 다른 일을 하면 조준 윤곽선이 무엇을 약속하는지 흐려지기 때문이다
 /// (그쪽 주석에 근거가 있다). E는 세 갈래이고 순서가 곧 우선순위다:
 ///
-///  1. <b>자물쇠가 풀려 있으면 잠근다</b> (#492/#231) — 털린 감옥을 되돌리는 것은 플레이어의 책임이고,
-///     그 조작이 여기다. 드나들기보다 앞서는 이유: 탈옥 중에 출입부터 되면 "먼저 잠근다"는 압박이 사라진다.
-///  2. <b>감옥 안에 있으면 나온다</b> — 따라오던 반출 대상도 함께 문 밖으로 나온다. 확보한 대상이
+///  1. <b>감옥 안에 있으면 나온다</b> — 따라오던 반출 대상도 함께 문 밖으로 나온다. 확보한 대상이
 ///     없어도 언제든 나올 수 있다.
+///  2. <b>자물쇠가 풀려 있으면 잠근다</b> (#492/#231) — 털린 감옥을 되돌리는 것은 플레이어의 책임이고,
+///     그 조작이 여기다. 들어가기보다 앞서는 이유: 탈옥 중에 출입부터 되면 "먼저 잠근다"는 압박이 사라진다.
 ///  3. <b>밖에 있으면 들어간다</b> — 감옥 안 입장 지점으로 순간이동한다.
+///
+/// <b>이 컴포넌트는 두 곳에 붙는다</b> — 도시 쪽 컨테이너 문과 <b>감옥 방 안의 출구 문</b>이다.
+/// 방 안에도 조준할 대상이 있어야 나올 수 있기 때문이고, 갈래가 위치로 갈리므로 같은 스크립트로 족하다.
+/// 방 안 문에서는 1번만 성립한다(자물쇠 잠그기는 도시 쪽 일이라 안에서는 건너뛴다).
 ///
 /// <b>이 문으로 감옥에 들어가는 것은 플레이어뿐이다.</b> NPC는 상호작용을 걸 수단이 없고
 /// (E는 <see cref="PlayerInteractor"/>만 쏜다), 서버 처리도 <see cref="PlayerMovement"/>가 있는
@@ -133,14 +137,6 @@ public class JailDoor : NetworkBehaviour, IInteractable
         if (interactor == null || m_intake == null)
             return;
 
-        // 1. 털린 감옥을 잠근다 — 자물쇠가 풀린 동안은 다른 조작보다 이것이 앞선다 (#492)
-        if (m_jailLock != null && !m_jailLock.IsLocked)
-        {
-            m_jailLock.ServerRelock();
-            Debug.Log("[감옥 문] 잠그고 닫는다");
-            return;
-        }
-
         JailZone zone = m_intake.Zone;
         if (zone == null)
             return;
@@ -149,16 +145,29 @@ public class JailDoor : NetworkBehaviour, IInteractable
         if (mover == null)
             return;
 
-        BeginPassAnimation();
-
-        // 2. 안에 있으면 나온다 — 따라오던 반출 대상도 함께 (JailIntake가 동행을 찾는다)
+        // 1. 안에 있으면 나온다 — 따라오던 반출 대상도 함께 (JailIntake가 동행을 찾는다).
+        //
+        // <b>자물쇠보다 먼저 본다.</b> 잠그기는 도시 쪽 문의 일이고, 방 안에서 잠글 이유가 없다.
+        // 순서를 뒤집으면 탈옥이 진행 중일 때 방 안 문이 '잠그기'로 먹혀 <b>갇힌 것처럼 보인다</b> —
+        // 두 번 눌러야 나가지는데, 그 한 번이 무엇을 했는지 안에서는 보이지 않는다.
         if (zone.ContainsPoint(interactor.transform.position))
         {
+            BeginPassAnimation();
             m_intake.ServerExitJail(mover);
             return;
         }
 
+        // 2. 털린 감옥을 잠근다 — 자물쇠가 풀린 동안은 들어가기보다 이것이 앞선다 (#492).
+        //    탈옥 중에 출입부터 되면 "먼저 잠근다"는 압박이 사라진다.
+        if (m_jailLock != null && !m_jailLock.IsLocked)
+        {
+            m_jailLock.ServerRelock();
+            Debug.Log("[감옥 문] 잠그고 닫는다");
+            return;
+        }
+
         // 3. 밖 — 감옥 안으로 들어간다. 신병 수감은 이 문이 아니라 옆 버튼이다 (JailIntakeButton)
+        BeginPassAnimation();
         m_intake.ServerEnterJail(mover);
     }
 
