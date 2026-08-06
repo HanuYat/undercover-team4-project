@@ -479,7 +479,7 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
         // 아직 아무도 안 끌고 커스터디면 그 자리에서 Captured로 멈춘다(방치 타이머·재확보로 이어짐).
         // 이미 다른 상태로 넘어갔으면(판정 후 수감·넉백·페널티) 그 행선지를 덮어쓰지 않는다. (#230)
         if (!stillDragged && npc.CurrentState == NpcState.Escorted)
-            npc.StopEscort();
+            npc.Custody.StopEscort();
     }
 
     /// <summary>끌고 있는 대상 전부를 놓는다 — 디스폰 등 플레이어가 사라지는 경로 전용. 줄은 유지된다.</summary>

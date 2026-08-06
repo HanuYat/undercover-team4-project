@@ -67,7 +67,7 @@ public class NpcStunnedState : NpcStateBase
         // 수갑을 채우면 NpcStateRules.IsCapturable이 Stunned를 막지 않으므로(의도된 동작)
         // Stunned → Captured로 곧장 전이하는데, 이 경로는 Tick()의 "시간 다 됨" 분기를 거치지
         // 않는다. 회복을 그 분기에만 두면 이런 NPC는 HP 0인 채로 Captured에 남고, 이후
-        // NpcController.ReleaseFromCustody()(오검거 석방)나 NpcCapturedState의 인계 방치
+        // NpcCustody.ReleaseFromCustody()(오검거 석방)나 NpcCapturedState의 인계 방치
         // 타이머(Escape())가 Idle/Run으로 돌려보내도 둘 다 HP를 회복하지 않는다. 그러면
         // SetHp의 "0에 도달하는 순간"에만 걸리는 엣지 트리거가 이미 0인 값에는 다시 걸리지
         // 않아, 그 NPC는 라운드 내내 몇 대를 맞아도 두 번 다시 기절하지 않는 무적이 된다.

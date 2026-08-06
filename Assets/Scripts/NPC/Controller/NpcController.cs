@@ -11,6 +11,7 @@ using Random = UnityEngine.Random;
 /// 네트워크를 켜지 않은 로컬 Play 테스트에서는 기존처럼 단독으로 동작한다.
 /// </summary>
 [RequireComponent(typeof(NavMeshAgent))]
+[RequireComponent(typeof(NpcCustody))] // 도메인 부품 — 누락 시 연행·수감 경로가 NRE로 죽는다 (#503)
 [RequireComponent(typeof(NpcIntruder))] // 도메인 부품 — 누락 시 침입 경로가 NRE로 죽는다 (#503)
 [RequireComponent(typeof(NpcPenaltyAgent))] // 도메인 부품 — 누락 시 오검거·납치 경로가 NRE로 죽는다 (#503)
 [RequireComponent(typeof(NpcReaction))] // 도메인 부품 — 누락 시 도주·저항 경로가 NRE로 죽는다 (#503)
@@ -33,6 +34,7 @@ public partial class NpcController : NetworkBehaviour
     private NpcStateMachine m_stateMachine;
 
     // 도메인 부품 — 같은 GameObject에 붙는다. [RequireComponent]로 누락을 막는다. (#503)
+    private NpcCustody m_custody;
     private NpcIntruder m_intruder;
     private NpcPenaltyAgent m_penalty;
     private NpcReaction m_reaction;
@@ -65,40 +67,6 @@ public partial class NpcController : NetworkBehaviour
     public float StunSeconds => m_stunConfig.StunSeconds;
 
     /// <summary>
-    /// 검거 판정이 끝났는가 — <see cref="MarkDelivered"/>로 ArrestJudge가 세팅한다. (#230)
-    /// 판정 완료분은 인계 방치 타이머에서 빠진다(유치장에서 탈출하면 안 된다). 재판정 자체는 막지 않으며
-    /// (#358 — 유치장 밖으로 데려갔다 다시 들여놓으면 다시 판정된다, #492), 재판정 후처리 중복은
-    /// <see cref="ArrestResult.IsFirstDelivery"/>가 건다.
-    /// 서버(또는 오프라인)에서만 유효 — 판정·인계 검증이 모두 서버 전용이라 동기화하지 않는다.
-    /// 판정된 대상을 좌석에 앉히고 계상하는 것은 JailIntake(#492)가 가져간다.
-    /// </summary>
-    public bool IsDelivered { get; private set; }
-
-    /// <summary>인계 판정 완료로 표시 — ArrestJudge 전용. 서버(또는 오프라인)에서만 호출된다. (#230)</summary>
-    public void MarkDelivered()
-    {
-        if (IsSpawned && !IsServer)
-            return;
-
-        IsDelivered = true;
-    }
-
-    /// <summary>
-    /// 인계 판정 완료 표시를 되돌린다 — 범인 탈출 이벤트(#231) 전용. 서버(또는 오프라인)에서만 호출된다.
-    ///
-    /// <b>재검거의 핵심이다.</b> 이 플래그가 켜져 있으면 <see cref="ArrestResult.IsFirstDelivery"/>가 false가 되어,
-    /// 탈출한 범인을 다시 잡아 인계해도 <see cref="RoundManager"/> 할당량이 다시 누적되지 않는다(#358). 되돌려야
-    /// 재검거가 '첫 인계'로 잡혀 정상 카운트된다. (오검거 카운트는 IsFirstDelivery에 의존하지 않는다 — WrongfulArrestPenalty 참조)
-    /// </summary>
-    public void ClearDelivered()
-    {
-        if (IsSpawned && !IsServer)
-            return;
-
-        IsDelivered = false;
-    }
-
-    /// <summary>
     /// 현재 NPC 상태. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 안전하게 읽을 수 있다.
     /// (StateMachine.CurrentState는 서버에서만 갱신되므로 외부 코드는 반드시 이 프로퍼티를 읽을 것)
     /// </summary>
@@ -107,14 +75,8 @@ public partial class NpcController : NetworkBehaviour
     /// <summary>상태 변경 이벤트 — 서버·클라이언트 모든 피어에서 발생한다. 애니메이션 등 표현 계층이 구독. (#56)</summary>
     public event Action<NpcState> OnStateChanged;
 
-    /// <summary>연행 중 따라갈 대상(체포한 플레이어). 연행 중이 아니면 null. 서버에서만 유효.
-    /// setter가 internal인 것은 <see cref="NpcPenaltyAgent.SendToDetention"/>이 수용 직전에 이 참조를 끊기 때문이다
-    /// (부품은 같은 어셈블리). 이 멤버가 NpcCustody로 옮겨 가면(계획서 § 8) 그때 정리된다. (#503)</summary>
-    public Transform EscortTarget { get; internal set; }
-
-    /// <summary>수감 중 서 있을 감옥 안 배치 지점. 수감 중이 아니면 null. 서버에서만 유효. (#228/#537)
-    /// 지점의 Z축(forward)이 서서 바라보는 방향이다 — 순간이동한 뒤 그 방향으로 돌려 세운다.</summary>
-    public Transform JailSpot { get; private set; }
+    /// <summary>신병 도메인 부품 — 연행·인계 표식·수감·감옥 퇴장·반출 표식을 들고 있다. (#59/#228/#537/#503)</summary>
+    public NpcCustody Custody => m_custody;
 
     /// <summary>침입 도메인 부품 — 목표·해제 시간·진행 이벤트를 들고 있다. (#231/#503)</summary>
     public NpcIntruder Intruder => m_intruder;
@@ -128,6 +90,7 @@ public partial class NpcController : NetworkBehaviour
     private void Awake()
     {
         m_agent = GetComponent<NavMeshAgent>();
+        m_custody = GetComponent<NpcCustody>();
         m_intruder = GetComponent<NpcIntruder>();
         m_penalty = GetComponent<NpcPenaltyAgent>();
         m_reaction = GetComponent<NpcReaction>();
@@ -248,7 +211,7 @@ public partial class NpcController : NetworkBehaviour
         if (state != NpcState.Escorted && state != NpcState.Captured)
         {
             ClearTethers();
-            SetJailExtracted(false);
+            m_custody.SetJailExtracted(false);
         }
 
         if (!IsSpawned)

@@ -135,7 +135,7 @@ public class JailIntake : MonoBehaviour
             // 여기서는 남은 줄을 걷고 일으켜 세우기만 한다 — 누운 채 끌려가는 그림을 없앤다.
             if (result.Value.Verdict == ArrestVerdict.WrongfulArrest)
             {
-                npc.SetJailExtracted(false); // 반출했던 대상이 오검거로 뒤집힌 경우 표식을 걷어낸다 (#517)
+                npc.Custody.SetJailExtracted(false); // 반출했던 대상이 오검거로 뒤집힌 경우 표식을 걷어낸다 (#517)
                 PlayerEscorter.ReleaseAllTethersOn(npc, null);
                 Debug.Log($"[감옥] 오검거 — 감옥에 들이지 않고 문 앞에서 놓는다: {npc.name}");
                 continue;
@@ -177,7 +177,7 @@ public class JailIntake : MonoBehaviour
     private void ServerPlaceInJail(NpcController npc, int bounty, ulong[] deliverers)
     {
         Transform spot = m_jailZone.ReservePlacement(npc);
-        npc.SendToJail(spot);
+        npc.Custody.SendToJail(spot);
         m_jailZone.Admit(npc, bounty, deliverers);
 
         Debug.Log($"[감옥] 수감 — {npc.name}을(를) {spot.name}에 배치했다 (현상금 {bounty}원)");
@@ -279,8 +279,8 @@ public class JailIntake : MonoBehaviour
         // 때문이다 (#358) — 플레이어가 스스로 꺼낸 것과는 다르다.
 
         // 반출 표식 — 거리 이탈로 멈춰도(Captured) 남아, E가 밧줄이 아니라 추종 재개로 가게 한다 (#517).
-        npc.SetJailExtracted(true);
-        npc.StartEscort(follower);
+        npc.Custody.SetJailExtracted(true);
+        npc.Custody.StartEscort(follower);
 
         Debug.Log($"[감옥] 반출 — 따라오게 한다: {npc.name}");
     }
@@ -300,7 +300,7 @@ public class JailIntake : MonoBehaviour
         if (!HasServerAuthority || npc == null || m_jailZone == null)
             return false;
 
-        if (!npc.IsJailExtracted || !m_jailZone.ContainsPoint(npc.transform.position))
+        if (!npc.Custody.IsJailExtracted || !m_jailZone.ContainsPoint(npc.transform.position))
             return false;
 
         // 보관해 둔 현상금이 없으면 판정 결과를 잃은 것이다 — 0원으로 넣지 않고 문 앞 재판정에 맡긴다.
@@ -341,7 +341,7 @@ public class JailIntake : MonoBehaviour
 
         Transform exit = m_jailZone.ExitPoint;
 
-        List<NpcController> followers = NpcController.FindFollowersOf(mover.transform);
+        List<NpcCustody> followers = NpcCustody.FindFollowersOf(mover.transform);
         for (int i = 0; i < followers.Count; i++)
             followers[i].ServerExitJail(m_jailZone.ExitSlot(i + 1)); // 0번은 플레이어 자리다
 

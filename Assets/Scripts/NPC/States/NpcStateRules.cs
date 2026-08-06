@@ -112,13 +112,13 @@ public static class NpcStateRules
     /// <summary>멈춰 선 반출 수감자인가 — E로 <b>밧줄 없는 추종</b>을 재개할 수 있는 대상. (#517)
     /// 반출된 대상은 거리가 벌어지면 <see cref="NpcEscortedState"/>가 Captured로 되돌려 세우는데,
     /// 상태만 보면 방금 제압한 신병과 구분되지 않아 E가 밧줄 끌기로 샜다 — 반출 흐름으로 되돌릴 입력이
-    /// 없어지는 것이 #517의 증상이다. 그래서 상태 대신 <see cref="NpcController.IsJailExtracted"/>를
+    /// 없어지는 것이 #517의 증상이다. 그래서 상태 대신 <see cref="NpcCustody.IsJailExtracted"/>를
     /// 함께 본다(<see cref="CanRopeBind"/>·<see cref="IsFollowingUnroped"/>와 같은 이유로 NpcController를 받는다).
     ///
     /// 밧줄이 걸린 대상은 여기 오지 않는다 — 묶이는 순간 표식이 꺼져(NpcController.StartRopeDrag)
     /// E가 다시 밧줄 재개로 간다. 두 분기가 겹치지 않는 근거가 그것이다.</summary>
     public static bool CanResumeUnropedEscort(NpcController npc) =>
-        npc != null && npc.CurrentState == NpcState.Captured && npc.IsJailExtracted;
+        npc != null && npc.CurrentState == NpcState.Captured && npc.Custody.IsJailExtracted;
 
     /// <summary>이미 남이 끌고 있는 대상에 밧줄을 <b>덧걸</b> 수 있는가 — 줄다리기 합류. (#390)
     /// 팀 결정은 "합류는 허용, 탈취는 차단"이다. 합류는 기존 끌기를 끊지 않고 참가자만 하나 늘린다.
@@ -145,15 +145,15 @@ public static class NpcStateRules
     ///
     /// 둘 중 하나면 남는다:
     ///  · <b>감옥 방 안</b>(<see cref="JailRoom"/>) — 반출해 놓고 감옥 안에 방치한 대상이 여기 걸린다.
-    ///  · <b>판정이 끝난 대상</b>(<see cref="NpcController.IsDelivered"/>) — GDD 7-6의 방치 타이머 제외와
-    ///    같은 이유다. 예외는 반출해 놓고 방치한 대상(<see cref="NpcController.IsJailExtracted"/>, #517):
+    ///  · <b>판정이 끝난 대상</b>(<see cref="NpcCustody.IsDelivered"/>) — GDD 7-6의 방치 타이머 제외와
+    ///    같은 이유다. 예외는 반출해 놓고 방치한 대상(<see cref="NpcCustody.IsJailExtracted"/>, #517):
     ///    정산·진행도에서 이미 빠져 있어 그냥 두면 팀 손실만 남긴 채 영원히 서 있으므로 달아나게 한다.
     ///    그 대상도 감옥 안이면 위 조건에 걸려 남는다.
     /// </summary>
     public static bool StaysPutWhenFreed(NpcController npc) =>
         npc != null
         && (JailRoom.Contains(npc.transform.position)
-            || (npc.IsDelivered && !npc.IsJailExtracted));
+            || (npc.Custody.IsDelivered && !npc.Custody.IsJailExtracted));
 
     /// <summary>E 상호작용이 반응하는 상태인가 — 이제 <b>신병 조작 전용</b>이다. (#438/#492)
     /// 포함 목록 방식 — 새 상태는 기본 'E 불가'이므로 열어야 하면 여기 추가할 것.

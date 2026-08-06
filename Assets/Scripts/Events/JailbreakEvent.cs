@@ -29,7 +29,7 @@ using UnityEngine;
 ///     <b>여기서부터는 유치장이 비어도 접지 않는다</b> — 이 구간이 팀의 마지막 저지 기회라(위 '대응 구간'),
 ///     이미 알린 위협을 시스템이 대신 지우면 달려온 쪽에는 이유가 읽히지 않는다. 열린 자물쇠는 플레이어가 잠근다.
 ///  4. 해제 완료(OnIntrudeFinished reached=true) — 자물쇠를 열고 수감자를 전원 방출한다.
-///     · 방출: JailZone.ReleaseInmate + NpcController.ClearDelivered + StartFlee(재검거 가능하게)
+///     · 방출: JailZone.ReleaseInmate + NpcCustody.ClearDelivered + StartFlee(재검거 가능하게)
 ///     · 진범만: RoundManager.ReportCriminalEscaped + WantedListManager.ReinstateByNpcId
 ///  5. 침입자도 함께 달아난다 — 추격해 잡으면 경범죄 수익은 챙길 수 있다. 방치되면 수명 초과로 정리.
 ///
@@ -401,7 +401,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
 
         // 재검거의 핵심 — 판정 완료 표식을 지운다 (#230). 재판정을 여는 것 자체는 유치장이 방문 단위로
         // 하지만(#492), 이 표식이 남으면 IsFirstDelivery가 false라 할당량·수배 후처리가 다시 세지 않는다.
-        inmate.ClearDelivered();
+        inmate.Custody.ClearDelivered();
 
         // 진범만 할당량·수배 후처리를 되돌린다. 경범죄(난동꾼)는 할당량·수배 대상이 아니므로 건드리지 않는다
         // (난동꾼은 CitizenIdentity.IsCriminal 대조를 타지 않는다 — MisdemeanorOffender).
@@ -420,7 +420,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         // 했는데, 통행 게이팅 자체가 사라져 워프만 남았다)
         //
         // 자리를 하나씩 벌린다 — 전원을 한 좌표에 쏟으면 겹침을 푸는 물리가 서로를 튕겨낸다.
-        inmate.ServerExitJail(m_jailZone.ExitSlot(slot));
+        inmate.Custody.ServerExitJail(m_jailZone.ExitSlot(slot));
 
         // 감옥을 뛰쳐나와 도주한다 — 침입자를 위협으로 삼아 반대로 달아난 뒤 배회로 섞여 든다.
         // 근처에 플레이어가 없으면 도주 상태가 곧 배회로 복귀한다(NpcFleeState).

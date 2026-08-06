@@ -6,7 +6,7 @@ using UnityEngine;
 ///
 /// 인계 방치 타이머를 든다 (GDD 7-6, #230): 이 상태로 <see cref="NpcCapturedConfig.EscapeSeconds"/>가
 /// 지나도록 인계되지 않으면 밧줄을 풀고 도주한다 — "일단 다 잡아놓고 나중에 인계" 전략 차단.
-/// 판정이 끝난(<see cref="NpcController.IsDelivered"/>) NPC와 유치장 안에 있는 NPC는 제외한다 —
+/// 판정이 끝난(<see cref="NpcCustody.IsDelivered"/>) NPC와 유치장 안에 있는 NPC는 제외한다 —
 /// 잠긴 유치장·본부에서 탈출하면 안 되고, 그 뒤 처리는 유치장(#228) 몫이다. 예외가 하나 있다:
 /// 유치장 밖으로 반출해 놓고 방치한 대상은 판정이 끝났어도 달아난다 (#517).
 /// 판정은 <see cref="StaysPut"/> — 밧줄 끊김(PlayerEscorter)과 공유하는 단일 기준이다 (#526).
@@ -77,7 +77,7 @@ public class NpcCapturedState : NpcStateBase
     /// 타이머 진입(<see cref="Tick"/>)과 <b>일어난 뒤 실행 직전</b>(<see cref="Flee"/>)이 같은 기준을 봐야 한다 —
     /// 둘 사이에 일어나기 대기(약 0.6초)가 끼면서 그 사이 판정이 통과할 수 있는 창이 생겼다 (#513).
     /// 방치된 대상이 마침 감옥 문 앞에 서 있으면 그 창에서 대상을
-    /// 판정해 <see cref="NpcController.MarkDelivered"/>를 부르고, 재검사가 없으면 방금 인계된 신병이
+    /// 판정해 <see cref="NpcCustody.MarkDelivered"/>를 부르고, 재검사가 없으면 방금 인계된 신병이
     /// 그대로 달아난다.</summary>
     private bool StaysPut => NpcStateRules.StaysPutWhenFreed(m_owner);
 
@@ -96,7 +96,7 @@ public class NpcCapturedState : NpcStateBase
     /// </summary>
     private void TryReturnToJail()
     {
-        if (m_rejailTried || !m_owner.IsJailExtracted)
+        if (m_rejailTried || !m_owner.Custody.IsJailExtracted)
             return;
 
         m_rejailTried = true;

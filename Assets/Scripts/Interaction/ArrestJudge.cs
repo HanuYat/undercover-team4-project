@@ -30,7 +30,7 @@ public class ArrestJudge : CommonManagerBase
         base.Awake(); // App.Game.ArrestJudge 등록
     }
 
-    // 판정 완료 표식은 NpcController.IsDelivered가 들고 있다 (#230) — NPC와 수명을 같이하므로
+    // 판정 완료 표식은 NpcCustody.IsDelivered가 들고 있다 (#230) — NPC와 수명을 같이하므로
     // 씬 전환·라운드 재시작 시 수동으로 비울 static 상태가 없다.
     // (App 등록 해제는 베이스 OnDestroy가 처리 — 여기서 오버라이드할 것이 없다)
 
@@ -75,13 +75,13 @@ public class ArrestJudge : CommonManagerBase
         }
 
         // 첫 인계 여부를 표식 세우기 전에 잡아 둔다 — 할당량·오검거 카운트가 재판정으로 부풀지 않게 (#358).
-        bool firstDelivery = !npc.IsDelivered;
+        bool firstDelivery = !npc.Custody.IsDelivered;
 
         // 판정 완료로 표시 — 방치 도주 타이머(#230)를 멈춘다. 재판정 자체는 허용하므로(#358)
         // 여기서 중복을 막지 않는다. 막는 것은 <b>부르는 쪽</b>이다: JailIntake가 게이트 통과당
         // 한 번만 부른다(m_judgedThisPass). 판정이 E 입력에서 폴링으로 바뀌었으므로(#492) "누른
         // 횟수만큼만 판정된다"는 옛 근거(#414)는 더 이상 성립하지 않는다.
-        npc.MarkDelivered();
+        npc.Custody.MarkDelivered();
 
         ArrestVerdict verdict;
         int reward;
@@ -153,7 +153,7 @@ public class ArrestJudge : CommonManagerBase
             }
             else
             {
-                npc.StopEscort();
+                npc.Custody.StopEscort();
             }
         }
 

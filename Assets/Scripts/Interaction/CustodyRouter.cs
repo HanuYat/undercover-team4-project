@@ -63,7 +63,7 @@ public class CustodyRouter : MonoBehaviour
                 return;
 
             Debug.Log($"[신병 처리] 오검거 석방(페널티 매니저 없음) — 수갑 해제: {npc.name}");
-            npc.ReleaseFromCustody();
+            npc.Custody.ReleaseFromCustody();
             return;
         }
 

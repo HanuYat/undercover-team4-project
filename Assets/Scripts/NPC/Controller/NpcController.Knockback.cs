@@ -45,7 +45,7 @@ public partial class NpcController
             : NpcState.Stunned; // 그 외엔 축 늘어져 날아가 기절 상태로 착지한다
 
         if (state == NpcState.Escorted)
-            StopEscort(); // 연행만 해제(Captured 전이) — 에이전트 정리는 Escorted.Exit이 맡는다
+            m_custody.StopEscort(); // 연행만 해제(Captured 전이) — 에이전트 정리는 Escorted.Exit이 맡는다
         else
             m_stateMachine.ChangeState(m_knockbackLandingState);
 

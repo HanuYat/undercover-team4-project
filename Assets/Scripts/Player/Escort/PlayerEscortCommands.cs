@@ -387,7 +387,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     ///    들 수 없게 해 <b>데리고 나오는 구간에 긴장</b>을 남긴다. 거리를 관리하지 않으면 멈춰 서고
     ///    (NpcEscortedState) 밖에 방치하면 달아난다(#517).
     ///
-    ///  · <b>반출 표식이 살아 있는 동안</b>(<see cref="NpcController.IsJailExtracted"/>, #517) — 거리 이탈로
+    ///  · <b>반출 표식이 살아 있는 동안</b>(<see cref="NpcCustody.IsJailExtracted"/>, #517) — 거리 이탈로
     ///    멈춰 서면(<see cref="NpcState.Captured"/>) 방금 제압한 신병과 상태가 같아져 위 조건에서 빠지는데,
     ///    그때 묶을 수 있으면 "E로 세운 뒤 묶기"라는 우회 하나로 위 긴장이 전부 사라진다. 표식을 함께 봐서
     ///    <b>방출한 신병은 무조건</b> 밧줄로 다루지 않게 못박는다 (팀 확정 2026-08-05).
@@ -408,7 +408,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         target != null
         && (target.CurrentState == NpcState.Jailed
             || NpcStateRules.IsFollowingUnroped(target)
-            || target.IsJailExtracted);
+            || target.Custody.IsJailExtracted);
 
     // 새 대상을 묶을 수 있는가 — 자원(밧줄 개수)·중복·사거리. 상태 게이트는 호출부가 각자 건다.
     private bool CanBeginRopeDrag(NpcController target)
@@ -483,7 +483,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         // 커스터디 상태는 수갑 연행과 같은 Escorted를 재사용한다 — 유치장 판정·이벤트 수명·가로채기 방지가
         // 이미 이 상태를 기준으로 판정하기 때문. 이동은 밧줄 장력이 하고 NpcEscortedState가 IsRoped를 보고
         // 추종을 건너뛴다. (#369)
-        target.StartEscort(transform);
+        target.Custody.StartEscort(transform);
         target.StartRopeDrag(transform); // 끈 플레이어를 위협으로 기억 — 풀려나면 이쪽에서 도망친다
 
         // 기절한 채 묶였으면 오버레이를 걷는다 — 남겨두면 만료 해제 경로(resumeReaction: true)가
@@ -534,7 +534,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         // 있고, 푸는 결과는 하나뿐이다 — 일어나 배회로 돌아간다.
         //
         // 밧줄은 소모되지 않아 대상에 남은 게 없다 — 회수할 자원 없이 배회로 돌려보내기만 한다 (#369).
-        System.Action afterStandUp = target.ReleaseFromCustody;
+        System.Action afterStandUp = target.Custody.ReleaseFromCustody;
         float downSeconds = m_unropeDownSeconds;
 
         // 내 줄이 걸려 있으면 그것부터 뺀다 — 줄다리기 중이면 여기서 끝이다(남은 참가자가 계속 끈다).
@@ -622,7 +622,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         if (!IsInRange(target))
             return;
 
-        target.StartEscort(transform);
+        target.Custody.StartEscort(transform);
         NotifyOwner($"수감자 추종 재개: {target.name}");
     }
 
@@ -646,7 +646,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         if (!IsInRange(target))
             return;
 
-        target.StopEscort();
+        target.Custody.StopEscort();
 
         // 감옥 안이면 재수감 — 아니면 아무 일도 없었던 것처럼 false를 돌려준다.
         // JailIntake는 매니저가 아니라 장소 오브젝트라 App 파사드 대상이 아니다 (ServerJailRelease와 같은 관례).

@@ -93,7 +93,7 @@ public sealed class SuspectRevealer
         // 오검거로 이미 한 번 판정된 대상일 수 있다 — 표식을 지워야 다시 잡아 인계했을 때
         // '첫 인계'로 잡혀 검거 수가 정상 누적된다(IsFirstDelivery, #358). 탈옥 재검거(#231)가
         // ClearDelivered를 부르는 것과 같은 이유다.
-        npc.ClearDelivered();
+        npc.Custody.ClearDelivered();
 
         // 예비 용의자는 시민 가중치로 뽑혀 있다 — 범인 가중치로 다시 뽑는다.
         // Reaction은 서버 전용이라 바꿔도 플레이어에게 티가 나지 않는다 (#102 설계 결정 6).

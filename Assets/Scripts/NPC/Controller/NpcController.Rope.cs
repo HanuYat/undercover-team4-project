@@ -146,7 +146,7 @@ public partial class NpcController
         CancelStandUp();
 
         // 줄이 걸리는 순간 반출 흐름은 끝난다 — 이제 밧줄 신병이라 E는 놓기/재개로 갈린다 (#517)
-        SetJailExtracted(false);
+        m_custody.SetJailExtracted(false);
 
         SetRoped(true);
         SyncDraggerCount();

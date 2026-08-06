@@ -43,10 +43,10 @@ public class NpcEscortedState : NpcStateBase
         // 플레이어 등에 딱 붙지 않도록 추종 거리만큼 앞에서 멈춘다
         m_owner.Agent.stoppingDistance = m_config.FollowDistance;
 
-        if (m_owner.EscortTarget != null)
+        if (m_owner.Custody.EscortTarget != null)
         {
-            m_lastTargetPos = m_owner.EscortTarget.position;
-            m_owner.Agent.SetDestination(m_owner.EscortTarget.position);
+            m_lastTargetPos = m_owner.Custody.EscortTarget.position;
+            m_owner.Agent.SetDestination(m_owner.Custody.EscortTarget.position);
         }
     }
 
@@ -58,11 +58,11 @@ public class NpcEscortedState : NpcStateBase
         if (m_owner.IsRoped)
             return;
 
-        Transform target = m_owner.EscortTarget;
+        Transform target = m_owner.Custody.EscortTarget;
         if (target == null)
         {
             // 대상 소실(플레이어 파괴 등) — 그 자리에서 체포 상태로 멈춘다
-            m_owner.StopEscort();
+            m_owner.Custody.StopEscort();
             return;
         }
 
@@ -72,7 +72,7 @@ public class NpcEscortedState : NpcStateBase
         if (distance > m_config.BreakDistance)
         {
             Debug.Log($"연행 해제 — 거리 이탈 ({distance:F1}m): {m_owner.name}");
-            m_owner.StopEscort();
+            m_owner.Custody.StopEscort();
             return;
         }
 
