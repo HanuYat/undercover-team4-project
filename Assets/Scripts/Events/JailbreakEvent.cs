@@ -23,7 +23,11 @@ using UnityEngine;
 /// 흐름(전부 서버 권위 · #56):
 ///  1. <see cref="CanTrigger"/> — 자물쇠 잠김 + 수감자 존재일 때 성립 (본부 무인 조건은 #311에서 제거).
 ///  2. <see cref="ServerBegin"/> — 침입자 NPC를 도시 스폰 포인트에 스폰(다음 프레임에 StartIntrude).
+///     · 걸어오는 동안 유치장이 비면(반출) 침입을 포기하고 도심에 잔류한다 — 전제가 무너진 발동이라,
+///       그대로 두면 아무도 없는 유치장을 털어 자물쇠만 열어 놓고 끝난다.
 ///  3. 해제 착수(OnIntrudeUnlockStarted) — 본부 경보를 울린다.
+///     <b>여기서부터는 유치장이 비어도 접지 않는다</b> — 이 구간이 팀의 마지막 저지 기회라(위 '대응 구간'),
+///     이미 알린 위협을 시스템이 대신 지우면 달려온 쪽에는 이유가 읽히지 않는다. 열린 자물쇠는 플레이어가 잠근다.
 ///  4. 해제 완료(OnIntrudeFinished reached=true) — 자물쇠를 열고 수감자를 전원 방출한다.
 ///     · 방출: JailZone.ReleaseInmate + NpcController.ClearDelivered + StartFlee(재검거 가능하게)
 ///     · 진범만: RoundManager.ReportCriminalEscaped + WantedListManager.ReinstateByNpcId
@@ -80,6 +84,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     private bool m_pendingStart;  // 스폰 다음 프레임에 침입을 시작하기 위한 플래그(초기화 순서 보장)
     private bool m_hasStarted;    // 침입을 실제로 시작했는지 — 배회 복귀(이탈) 판정에 쓴다
     private bool m_releaseQueued; // 잔류 전환 확정 — 다음 틱에 이벤트가 손을 뗀다 (상태 전이 체인 안 처리 회피, #310)
+    private bool m_unlockAnnounced; // 해제 착수를 알렸는가 — '유치장이 비면 접는다'를 경보 전으로만 한정한다
     private int m_spawnFrame;
     private float m_lifetimeStart; // 방치 타이머 기준 시각 — 국면이 바뀔 때마다 갱신한다
 
@@ -180,6 +185,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
 
         m_hasStarted = false;
         m_releaseQueued = false;
+        m_unlockAnnounced = false;
         m_spawnFrame = Time.frameCount;
         m_pendingStart = true;
         m_lifetimeStart = Time.time;
@@ -204,6 +210,27 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (m_releaseQueued)
         {
             ReleaseToCity();
+            return;
+        }
+
+        // 풀어 줄 수감자가 사라졌다 — 반출로 유치장이 비면 침입은 목적을 잃는다.
+        // 전제(CanTrigger)는 발동 시점에만 보므로, 진행 중에 무너지는 것은 여기서 받는다.
+        //
+        // <b>경보가 울리기 전에만 접는다.</b> 이동 구간은 아직 아무도 이벤트를 모르니 조용히 접어도
+        // 잃는 것이 없지만, 해제 구간은 팀이 달려와 막는 마지막 기회다(#261) — 그 기회를 시스템이
+        // 대신 없애면 안 된다. 경보 뒤로는 빈 유치장이어도 끝까지 가고, 자물쇠는 플레이어가 다시 잠근다.
+        //
+        // 접는 방식은 사이렌 제지(<see cref="ServerRepelIntruder"/>)와 같은 경로다 — 침입 상태를
+        // 벗어나면 채널링이 조용히 취소되고(NpcIntrudeState 주석), 배회 복귀를 HandleStateChanged가
+        // 잔류로 받는다. 침입자는 도심에 남아 잡으면 경범죄 수익이 그대로 난다 (#310).
+        // Intruding 한정이라 이미 제압·연행된 침입자를 뿌리치게 만들지 않는다.
+        if (!m_unlockAnnounced
+            && m_intruder.CurrentState == NpcState.Intruding
+            && m_jailZone != null
+            && m_jailZone.InmateCount <= 0)
+        {
+            Debug.Log("[돌발이벤트] 범인 탈출 — 유치장이 비어 침입 포기");
+            m_intruder.StartFlee(null);
             return;
         }
 
@@ -264,6 +291,9 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     {
         if (npc != m_intruder)
             return;
+
+        // 이 시점부터 대응 구간이다 — 유치장이 비어도 침입을 접지 않는다 (ServerTick 참고)
+        m_unlockAnnounced = true;
 
         Debug.Log($"[돌발이벤트] 범인 탈출 — 자물쇠 해제 시작, {m_unlockSeconds}초 후 개방");
         if (SuddenEvents != null)
@@ -417,6 +447,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         m_pendingStart = false;
         m_hasStarted = false;
         m_releaseQueued = false;
+        m_unlockAnnounced = false;
     }
 
     // 이벤트가 손을 떼고 침입자를 도심에 남긴다 — 뒷일(인계 판정·라운드 종료 정리)은
