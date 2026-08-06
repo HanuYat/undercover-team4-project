@@ -120,11 +120,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 761277069221888
-    m_Localized: Can't enter while dragging a suspect - use the intake button
+    m_Localized: Can't enter while dragging a suspect - use the verdict button
     m_Metadata:
       m_Items: []
   - m_Id: 761277106970624
-    m_Localized: No suspect in custody
+    m_Localized: No suspect brought in
     m_Metadata:
       m_Items: []
   references:
