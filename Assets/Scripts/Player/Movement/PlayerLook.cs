@@ -59,6 +59,22 @@ public class PlayerLook : MonoBehaviour
     [Tooltip("쓰러진 동안 시야 피치 상한(양수=아래). 아래로는 바닥밖에 없어 좁게 잡는다")]
     [SerializeField] private float m_downMaxPitch = 20f;
 
+    [Header("감정표현 시점 (#219)")]
+    [Tooltip("감정표현 재생 중 카메라를 뒤로 뺄 거리(m)")]
+    [SerializeField] private float m_emoteCamDistance = 2.5f;
+
+    [Tooltip("감정표현 재생 중 카메라를 위로 올릴 높이(m)")]
+    [SerializeField] private float m_emoteCamHeight = 0.4f;
+
+    [Tooltip("1인칭↔감정표현 시점 전환 보간 속도")]
+    [SerializeField] private float m_emoteCamLerpSpeed = 6f;
+
+    [Tooltip("3인칭 카메라가 벽을 파고들지 않게 띄울 반경(m)")]
+    [SerializeField] private float m_emoteCamProbeRadius = 0.25f;
+
+    [Tooltip("3인칭 카메라 충돌 판정에 쓸 레이어 — 플레이어·트리거는 빼 둘 것")]
+    [SerializeField] private LayerMask m_emoteCamCollision = ~0;
+
     private PlayerMovement m_movement;       // 라운드 종료 freeze 판정을 빌린다 (#107 예외 포함)
     private PlayerInputHandler m_inputHandler;
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 시점 처리 분기 (#105, #252)
@@ -73,6 +89,10 @@ public class PlayerLook : MonoBehaviour
     private float m_downCamBlend;   // 서기 시점(0) ↔ 다운 시점(1) 보간 진행도 (#105)
     private float m_downYaw;        // 쓰러진 동안 누적한 시야 좌우 각도 — 몸 회전이 아니라 카메라 로컬 (#252)
     private bool m_downLookTaken;   // 쓰러진 뒤 플레이어가 시선을 직접 움직였는가 — 그 순간부터 강제 피치를 놓는다
+    private bool m_emoteView;       // 감정표현 3인칭 시점이 요청됐는가 (#219)
+    private float m_emoteCamBlend;  // 1인칭(0) ↔ 3인칭(1) 보간 진행도
+    private float m_emoteYaw;       // 감정표현 중 누적한 카메라 좌우 각 — 몸은 돌리지 않는다
+    private int m_ownBodyLayer = -1; // OwnBody 레이어 번호 캐시 (-1 = 아직 조회 전)
 
     /// <summary>시선 pitch(도, +아래/-위) — PlayerHeadLook이 머리 본 회전에 사용한다. (#348)</summary>
     public float Pitch => m_pitch;
@@ -128,6 +148,38 @@ public class PlayerLook : MonoBehaviour
     }
 
     /// <summary>
+    /// 감정표현 3인칭 시점을 켜고 끈다 — 재생 중에만 켠다. (#219)
+    ///
+    /// 1인칭에서는 <see cref="ApplyOwnerView"/>가 내 몸을 OwnBody 레이어로 옮겨 내 카메라에서
+    /// 걷어내므로, 이걸 켜지 않으면 감정표현을 발동해도 <b>내 화면에는 아무 일도 일어나지 않는다</b>.
+    ///
+    /// 컬링 마스크를 되살리는 것과 카메라를 빼는 것을 같은 진입점에 묶는 이유: 둘 중 하나만
+    /// 걸리면 "몸은 보이는데 얼굴 안쪽이 보이는" 화면이나 "뒤로 빠졌는데 아무것도 없는" 화면이 된다.
+    /// </summary>
+    public void SetEmoteView(bool active)
+    {
+        if (m_emoteView == active)
+            return;
+
+        m_emoteView = active;
+
+        if (m_playerCamera == null)
+            return;
+
+        if (m_ownBodyLayer < 0)
+            m_ownBodyLayer = LayerMask.NameToLayer("OwnBody");
+
+        if (m_ownBodyLayer < 0)
+            return; // 레이어가 없는 구성(테스트 씬 등) — 카메라만 빠지고 몸은 안 보인다
+
+        int mask = 1 << m_ownBodyLayer;
+        if (active)
+            m_playerCamera.cullingMask |= mask;
+        else
+            m_playerCamera.cullingMask &= ~mask;
+    }
+
+    /// <summary>
     /// 마우스 입력으로 시점을 돌린다 — 평상시엔 몸통 yaw + 카메라 pitch, 쓰러진 동안엔 카메라 로컬만. (#216, #252)
     /// </summary>
     public void HandleLook()
@@ -158,6 +210,16 @@ public class PlayerLook : MonoBehaviour
             m_downYaw = Mathf.Clamp(
                 m_downYaw + m_smoothedLook.x, -m_downYawRange, m_downYawRange);
             m_pitch = Mathf.Clamp(m_pitch - m_smoothedLook.y, m_downMinPitch, m_downMaxPitch);
+            return;
+        }
+
+        // 감정표현 중에는 몸을 돌리지 않는다 (#219) — 춤추는 중에 몸통이 돌면 클립이 제자리
+        // 회전하는 그림이 되고 그건 남의 화면에도 그대로 간다. 쓰러진 동안과 같은 처리다.
+        // 마우스를 움직여도 감정표현이 취소되면 안 되므로 여기서 취소를 걸지 않는다.
+        if (m_emoteView)
+        {
+            m_emoteYaw += m_smoothedLook.x; // 3인칭은 한 바퀴 돌 수 있어야 하므로 범위를 두지 않는다
+            m_pitch = Mathf.Clamp(m_pitch - m_smoothedLook.y, m_minPitch, m_maxPitch);
             return;
         }
 
@@ -233,7 +295,42 @@ public class PlayerLook : MonoBehaviour
         // <b>오프셋은 위에서 만든 기준 포즈에 더해 한 번만 대입한다</b> — transform을 읽어 더하면
         // (`localPosition += ...`) 되돌아갈 자리가 없어 매 프레임 누적된다. 1인칭 팔이 같은 흔들림을
         // m_handBasePos에서 다시 만드는 것(PlayerHandView.UpdateHandPose)과 같은 이유다.
-        Vector3 euler = new Vector3(m_pitch, m_downYaw, 0f);
+
+        // 감정표현 3인칭 — 카메라를 시선 뒤쪽으로 뺀다. (#219)
+        // 여기서 조립하는 이유는 흔들림(#477)과 같다: 이 메서드가 매 프레임 localPosition을
+        // 통째로 대입하므로 밖에서 얹은 오프셋은 그 프레임에 지워진다.
+        m_emoteCamBlend = Mathf.Lerp(m_emoteCamBlend, m_emoteView ? 1f : 0f, m_emoteCamLerpSpeed * Time.deltaTime);
+
+        if (!m_emoteView && m_emoteCamBlend < 0.01f)
+        {
+            m_emoteYaw = 0f; // 1인칭으로 완전히 돌아온 뒤에만 각도를 버린다 — 도중에 버리면 화면이 튄다
+        }
+        else if (m_emoteCamBlend > 0.001f)
+        {
+            // 붐은 카메라가 보는 방향 기준이다 — 몸통이 아니라 m_emoteYaw를 축으로 돈다.
+            Vector3 boom = Quaternion.Euler(0f, m_emoteYaw, 0f)
+                * new Vector3(0f, m_emoteCamHeight, -m_emoteCamDistance);
+
+            // 벽을 파고들지 않게 당긴다. SphereCast 1회로만 처리한다 — 맵 교체가 예정돼 있어
+            // 여기서 완벽한 충돌 대응을 만들 이유가 없다.
+            Vector3 pivot = transform.TransformPoint(localPos);
+            Vector3 direction = transform.TransformDirection(boom);
+            float distance = direction.magnitude;
+            if (distance > 0.001f)
+            {
+                direction /= distance;
+                if (Physics.SphereCast(pivot, m_emoteCamProbeRadius, direction, out RaycastHit hit,
+                        distance, m_emoteCamCollision, QueryTriggerInteraction.Ignore))
+                {
+                    boom = boom.normalized * Mathf.Max(hit.distance - m_emoteCamProbeRadius, 0f);
+                }
+            }
+
+            localPos += boom * m_emoteCamBlend;
+        }
+
+        // 좌우 각은 쓰러진 동안(m_downYaw)과 감정표현 중(m_emoteYaw) 각각 쓰이며 동시에 켜지지 않는다.
+        Vector3 euler = new Vector3(m_pitch, m_downYaw + m_emoteYaw * m_emoteCamBlend, 0f);
 
         if (m_shakeIntensity > 0.001f)
         {
