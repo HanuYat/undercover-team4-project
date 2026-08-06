@@ -10,9 +10,9 @@ using UnityEngine;
 ///
 /// <b>좌석도 폐기됐다</b> (#537). 앉기 모션과 착석 플래그가 사라지고 배치 지점에 <b>서 있는다</b>.
 ///
-/// 그래서 이 상태가 하는 일은 셋뿐이다: 이동을 끊고, 지점 위로 옮기고, 지점이 보는 방향으로 돌린다.
+/// 그래서 진입이 하는 일은 셋뿐이다: 이동을 끊고, 지점 위로 옮기고, 지점이 보는 방향으로 돌린다.
 /// 뒤의 둘은 <b>밖에서 들어올 때만</b> 한다 — 이미 방 안이면 건널 섬이 없으므로 그 자리에 선다.
-/// 매 프레임 할 일이 없어 <see cref="Tick"/>도 비어 있다.
+/// 그 뒤로는 <see cref="Tick"/>이 방 안 배회를 돌린다.
 ///
 /// 진입 경로는 <see cref="JailIntake"/>다 — 문 앞 E로 판정을 통과하면 그 순간 여기로 온다.
 /// 빠져나가는 경로는 둘: 탈옥 방출(<see cref="JailbreakEvent"/>)과 플레이어의 반출(JailIntake.ServerExtract).
@@ -32,11 +32,21 @@ public class NpcJailedState : NpcStateBase
     // 다음에 움직일 시각. 서 있는 동안만 의미가 있다.
     private float m_nextMoveTime;
 
+    // <b>걷는 중인가 — 에이전트에게 묻지 않는다.</b>
+    //
+    // NavMeshAgent.isStopped는 경로가 없으면 무조건 false를 돌려준다. 그런데 쉬는 중이 곧 경로를
+    // 지운 상태라(BeginPause → StopMoving → ResetPath), isStopped로 물으면 "쉬는 중"과
+    // "걷다가 막 도착함"이 구분되지 않는다. 그러면 Tick이 매 프레임 도착 갈래로 빠져
+    // BeginPause가 다시 걸리고, 다음 이동 시각이 끝없이 뒤로 밀려 <b>배회가 영영 착수되지 않는다</b>.
+    private bool m_walking;
+
     public NpcJailedState(NpcController owner) : base(owner) { }
 
     public override void Enter()
     {
-        StopMoving();
+        // 잠깐 선 채로 시작한다 — 배치되자마자 걷기 시작하면 순간이동한 자리에서 곧바로
+        // 미끄러지는 그림이 된다. 지난 수감에서 남은 m_nextMoveTime도 여기서 씻긴다.
+        BeginPause();
 
         if (m_owner.JailSpot == null)
             return; // 감옥이 배선되지 않은 테스트 씬 — 그 자리에 세운 것으로 처리한다
@@ -77,17 +87,21 @@ public class NpcJailedState : NpcStateBase
     /// <b>가둬 둔 사람도 살아 있어야 한다</b> — 배치 지점에 못 박아 두면 마네킹으로 보이고,
     /// 본부 CCTV로 감옥을 볼 때 화면이 정지 화면과 구분되지 않는다.
     ///
-    /// 돌아다니는 범위를 <see cref="k_wanderRadius"/>로 묶는 이유는 방이 좁아서다(내부 7.5m).
-    /// 방 전체를 목표로 삼으면 여럿이 같은 문 앞에 몰려 서로를 밀어낸다 — 자기 자리 근처만
-    /// 맴돌게 하면 인원이 늘어도 고르게 흩어진 채로 남는다.
+    /// 목적지는 <b>방 전체</b>에서 고른다 (<see cref="JailRoom.TryRandomPoint"/>) — 자기 배치 지점
+    /// 둘레만 맴돌면 갇혀 있다기보다 자리를 지키는 것처럼 보인다. 서로 비켜 가는 것은 에이전트의
+    /// 회피에 맡긴다(수감 상태는 회피를 끄지 않는다).
     /// </summary>
     public override void Tick()
     {
         if (m_owner.JailSpot == null || !m_owner.Agent.isOnNavMesh)
             return;
 
+        // 일어나는 중에는 움직이지 않는다 — 기상 클립이 도는 동안 걷기 시작하면 누운 몸이 미끄러진다
+        if (m_owner.IsStandingUp)
+            return;
+
         // 걷는 중 — 도착했는지만 본다
-        if (!m_owner.Agent.isStopped)
+        if (m_walking)
         {
             if (m_owner.Agent.pathPending)
                 return;
@@ -132,7 +146,12 @@ public class NpcJailedState : NpcStateBase
 
         m_owner.Agent.isStopped = false;
         if (!m_owner.Agent.SetDestination(target))
+        {
             BeginPause(); // 경로를 못 잡았다 — 다음 차례에 다시 고른다
+            return;
+        }
+
+        m_walking = true;
     }
 
     // 폴백 — 감옥 방 범위가 없는 씬에서 배치 지점 둘레를 쓴다.
@@ -162,6 +181,7 @@ public class NpcJailedState : NpcStateBase
     // 이동을 끊는다 — 끌려오던 관성이 남아 배치 지점에서 밀려나지 않게 속도까지 지운다.
     private void StopMoving()
     {
+        m_walking = false;
         m_owner.Agent.velocity = Vector3.zero;
         if (m_owner.Agent.isOnNavMesh)
         {
