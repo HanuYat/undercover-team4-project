@@ -339,8 +339,6 @@ public class NpcAnimationDriver : MonoBehaviour
             NpcState.Detained => (int)NpcState.Walk,
             NpcState.Chasing => (int)NpcState.Run,
             NpcState.PenaltyEscorting => (int)NpcState.Walk,
-            // 임시 거처 이송도 대응 Animator 상태가 없다 — 걷기 모션을 빌려 쓴다 (#291)
-            NpcState.Holding => (int)NpcState.Walk,
             _ => (int)state,
         };
     }

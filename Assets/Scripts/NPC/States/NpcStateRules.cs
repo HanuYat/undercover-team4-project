@@ -53,13 +53,12 @@ public static class NpcStateRules
         npc != null && (npc.IsAbductionDuty || CanBeDamaged(npc.CurrentState));
 
     /// <summary>반응·배회군인가 — 스턴이 풀릴 때 도주로 전환되는 쪽. (#292)
-    /// 여집합(확보·페널티군 + Holding)은 스턴이 풀려도 아무 전이 없이 하던 일을 재개한다 —
-    /// 상태 enum이 애초에 안 바뀌므로 호송·수감·페널티·정리 링크가 그대로 살아 있다.
+    /// 여집합(확보·페널티군)은 스턴이 풀려도 아무 전이 없이 하던 일을 재개한다 —
+    /// 상태 enum이 애초에 안 바뀌므로 호송·수감·페널티 링크가 그대로 살아 있다.
     ///
     /// 포함 목록 방식이라 <b>새 상태는 기본이 '재개'</b>다. 도주로 깨어나야 하면 여기 추가할 것.
-    /// 의도적으로 뺀 둘: <see cref="NpcState.Holding"/>(#291 — 임시 거처로 걸어가 소멸하는 정리
-    /// 대상이라 도주시키면 경로가 끊긴다)과 <see cref="NpcState.Stunned"/>(넉백 KO — 자기 상태
-    /// 클래스가 스스로 빠져나간다).</summary>
+    /// 의도적으로 뺀 것: <see cref="NpcState.Stunned"/>(넉백 KO — 자기 상태 클래스가 스스로
+    /// 빠져나간다).</summary>
     public static bool IsReactive(NpcState state) =>
         state is NpcState.Idle
             or NpcState.Walk
@@ -74,7 +73,7 @@ public static class NpcStateRules
         IsReactive(state) && state != NpcState.Run && state != NpcState.Attack;
 
     /// <summary>밧줄 대상에서 <b>신병·소유권 때문에</b> 빠지는 상태인가. (#269 → #369 기본 검거로 승격)
-    /// 제외 목록 방식 — 이미 신병 확보(Escorted/Captured/Jailed)·타 시스템 소유(Holding·페널티)는 제외.
+    /// 제외 목록 방식 — 이미 신병 확보(Escorted/Captured/Jailed)·타 시스템 소유(페널티)는 제외.
     /// Captured 제외 주의: 그 상태에선 밧줄 좌클릭이 '끌기 재개'로 갈리고, 푸는 건 E다 (#513).
     ///
     /// <b>이것만으로 묶기를 판정하지 말 것</b> — 새로 묶기는 무력화까지 요구하므로
@@ -83,7 +82,6 @@ public static class NpcStateRules
         state != NpcState.Escorted
         && state != NpcState.Captured
         && state != NpcState.Jailed
-        && state != NpcState.Holding
         && state != NpcState.Detained
         && state != NpcState.Chasing
         && state != NpcState.PenaltyEscorting;

@@ -13,6 +13,9 @@
 
 `NpcController`는 **partial 12개 파일 · 합계 1,978줄**이다(2026-08-06 실측).
 
+> 아래 표는 **착수 시점의 기준선**이다 — 분리가 진행되면서 실제 파일 수는 줄어든다.
+> 진행 상황은 § 6의 체크 표시로 추적한다(도메인 PR마다 이 표를 다시 재는 대신).
+
 | 파일 | 줄 수 | 도메인 |
 |---|---|---|
 | `NpcController.Rope.cs` | 406 | 밧줄 끌기 (#269/#369/#398) |
@@ -223,8 +226,8 @@ TickRopeDrag() → TickStandUp() → 넉백 게이트 → 스턴 게이트 → F
 
 | # | 도메인 | 줄 수 | 비고 |
 |---|---|---|---|
-| 1 | **`NpcIntruder`** | 45 | **파일럿** — 외부 의존 0, 호출부는 `JailbreakEvent` 하나. 선행 커밋으로 `ReleaseFromCustody`를 `Custody.cs`에 보내 `Intrude.cs`를 삭제한다 (§ 7) |
-| 2 | `NpcHolding` | 31 | `HoldingSpot` · `OnReachedHolding` · `SendToHolding` · `NotifyReachedHolding` |
+| 1 | ✅ **`NpcIntruder`** (#540 머지) | 45 | **파일럿** — 규약 § 4-1·4-2·4-4·4-6을 실제 코드로 확정했다. 선행 커밋으로 `ReleaseFromCustody`를 `Custody.cs`에 보내 `Intrude.cs`를 삭제 (§ 7) |
+| 2 | ~~`NpcHolding`~~ → **삭제** | 31 | **추출하지 않는다 — 도달 불가 코드였다.** `60f42aa`(#310 "경범죄자도 유치장 수감 — 임시 거처 소멸 폐지")가 `JailbreakEvent`·`MisdemeanorLoiterer`·`SpawnedNpcEvent`의 호출부·구독을 전부 지웠고(207줄), 컨트롤러 API와 FSM 상태만 고아로 남아 있었다. 뽑았으면 죽은 `NetworkBehaviour`를 프리팹 4개에 붙일 뻔했다 |
 | 3 | `NpcPenaltyAgent` | 170 | `NetworkVariable`(`m_abductionDuty`) 이관 첫 사례 |
 | 4 | `NpcCustody` (+ `Escort` 병합) | 139 + 27 | `StartEscort`가 여러 도메인의 진입점이라 함께. `ReleaseFromCustody`는 파일럿에서 이미 `Custody.cs`에 들어와 있다. **선행: `TryWarpNear`를 코어로 승격**(§ 4-6) — #522로 Custody가 Rope의 private 헬퍼를 쓰게 됐다 |
 | 5 | `NpcReaction` | 99 | `StartFlee` 호출부가 10파일이라 1단계 마지막 |
