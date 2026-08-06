@@ -115,5 +115,21 @@ public partial class NpcController
         m_stateMachine.ChangeState(NpcState.Jailed);
     }
 
+    /// <summary>
+    /// 수갑 해제 — 오검거로 판정된 무고한 시민을 풀어준다. 배회(Idle)로 복귀한다. (GDD 7-2/7-3, #228)
+    /// 체포(Captured) 상태에서만 유효 — 판정 직후 ArrestJudge가 연행을 풀어 Captured로 만들어 둔 상태를 이어받는다.
+    /// 오검거 카운트·페널티는 여기서 다루지 않는다 (ArrestJudge.OnArrestJudged를 구독하는 #101 담당).
+    /// </summary>
+    public void ReleaseFromCustody()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+        if (m_stateMachine.CurrentState != NpcState.Captured)
+            return;
+
+        JailSpot = null;
+        m_stateMachine.ChangeState(NpcState.Idle);
+    }
+
     // 수갑 소모·반환(#229)은 밧줄이 소모형이 아니게 되면서 통째로 제거됐다 — 밧줄 검거엔 회수할 자원이 없다. (#369)
 }

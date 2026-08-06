@@ -463,7 +463,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
             return;
 
         // 반응 판정은 여기서 굴리지 않는다 (#400) — 밧줄은 순수 검거 수단이 됐고, 판정은
-        // NpcController.ServerReactTo가 단독으로 갖는다.
+        // NpcReaction.ServerReactTo가 단독으로 갖는다.
         ServerApplyRopeDrag(target);
     }
 

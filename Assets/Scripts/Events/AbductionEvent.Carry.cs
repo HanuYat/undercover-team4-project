@@ -56,7 +56,7 @@ public partial class AbductionEvent
 
         PruneDead(m_abductors);
         foreach (NpcController abductor in m_abductors)
-            abductor.StartPenaltyConverge(caught);
+            abductor.Penalty.StartPenaltyConverge(caught);
 
         // 이제부터 알린다 — 구조가 관심사가 되는 시점이다 (AnnounceOnBegin이 false인 이유)
         App.Game.SuddenEvent?.Announce($"{m_displayName} — 동료가 끌려가고 있다");
@@ -117,7 +117,7 @@ public partial class AbductionEvent
 
         PruneDead(m_abductors);
         foreach (NpcController abductor in m_abductors)
-            abductor.StartResist(caught);
+            abductor.Reaction.StartResist(caught);
 
         Debug.Log($"[납치] 외곽 도착 — 린치 시작 (납치범 {m_abductors.Count}명)");
 
@@ -312,7 +312,7 @@ public partial class AbductionEvent
     /// <summary>
     /// 납치범 1명을 이 호송에서 떼어낸다 — <b>구조 진입점</b>. 서버(또는 오프라인) 전용. (#371)
     ///
-    /// 오검거의 <see cref="NpcController.ApplyChaseRepel"/>과 다르다: 그쪽은 포획 후에는 일부러 무시하지만
+    /// 오검거의 <see cref="NpcPenaltyAgent.ApplyChaseRepel"/>과 다르다: 그쪽은 포획 후에는 일부러 무시하지만
     /// (유예 창은 잡히기 전까지다, #278) 납치는 <b>끌려가는 중에 떼어내는 것이 협동의 핵심</b>이다.
     ///
     /// 2명이 끌고 있으면 하나만 떼어져도 남은 1명이 계속 끌고 간다 — 구조가 2단계다.

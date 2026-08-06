@@ -104,7 +104,7 @@ public class MisdemeanorLoiterer : MonoBehaviour
             if (state is NpcState.Attack or NpcState.Run)
             {
                 Debug.Log($"[돌발이벤트] 방출 소란 종료 — 진정: {name}");
-                m_controller.StartFlee(null); // 위협 없는 도주 — 곧 배회(Idle)로 가라앉는다
+                m_controller.Reaction.StartFlee(null); // 위협 없는 도주 — 곧 배회(Idle)로 가라앉는다
             }
             return;
         }
@@ -134,11 +134,11 @@ public class MisdemeanorLoiterer : MonoBehaviour
         switch (offender.RiotBehavior)
         {
             case SpawnedNpcEvent.Behavior.Resist:
-                m_controller.StartResist(threat.transform); // 그 자리 저항 난동 — 다가온 플레이어가 표적
+                m_controller.Reaction.StartResist(threat.transform); // 그 자리 저항 난동 — 다가온 플레이어가 표적
                 break;
 
             case SpawnedNpcEvent.Behavior.Flee:
-                m_controller.StartFlee(threat.transform); // 도주 소란 — 다가온 플레이어에게서 달아난다
+                m_controller.Reaction.StartFlee(threat.transform); // 도주 소란 — 다가온 플레이어에게서 달아난다
                 break;
         }
 

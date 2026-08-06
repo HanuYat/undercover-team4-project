@@ -55,7 +55,7 @@ public class NpcStunnedState : NpcStateBase
         // NPC가 혼자 전력 질주하지 않는다.
         // 체력 회복은 여기서 하지 않는다 — Exit()으로 옮겼다. 이유는 Exit() 주석 참고 (#366).
         if (m_timer >= m_config.StunSeconds)
-            m_owner.StartFlee(m_owner.ThreatTarget);
+            m_owner.Reaction.StartFlee(m_owner.Reaction.ThreatTarget);
     }
 
     public override void Exit()

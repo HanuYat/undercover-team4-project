@@ -280,7 +280,10 @@ public class Scanner : ItemBase
             return;
 
         PlayerInteractor interactor = Holder;
-        npc.ServerReactTo(ReactionTrigger.Scan, interactor != null ? interactor.transform : null);
+        npc.Reaction.ServerReactTo(
+            ReactionTrigger.Scan,
+            interactor != null ? interactor.transform : null
+        );
     }
 
     // 서버 → 오너: 스캔 결과 회신. 오너가 로컬 CitizenIdentity에서 프로필을 추출해 이벤트를 발행한다.

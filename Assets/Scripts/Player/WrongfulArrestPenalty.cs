@@ -170,7 +170,7 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         Vector3 slotOffset = GatherSlot.Offset(m_detained.Count, k_detentionSlotSpacing);
 
         m_detained.Add(npc);
-        npc.SendToDetention(m_detentionPoint, slotOffset);
+        npc.Penalty.SendToDetention(m_detentionPoint, slotOffset);
         Debug.Log($"[오검거] 원한 구역 수용: {npc.name} — 대기 {m_detained.Count}명");
     }
 
@@ -201,9 +201,9 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         foreach (NpcController npc in m_detained)
         {
             m_activeNpcs.Add(npc);
-            npc.OnPenaltyCaught += HandlePenaltyCaught;
+            npc.Penalty.OnPenaltyCaught += HandlePenaltyCaught;
             // null이면 사냥 모드로 시작해 범위에 드는 플레이어를 문다
-            npc.StartPenaltyChase(NearestTarget(npc.transform.position, targets));
+            npc.Penalty.StartPenaltyChase(NearestTarget(npc.transform.position, targets));
         }
         m_detained.Clear();
 
@@ -255,7 +255,7 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         foreach (NpcController npc in m_activeNpcs)
         {
             if (Vector3.Distance(npc.transform.position, user.position) <= m_repelRadius)
-                npc.ApplyChaseRepel(user);
+                npc.Penalty.ApplyChaseRepel(user);
         }
     }
 

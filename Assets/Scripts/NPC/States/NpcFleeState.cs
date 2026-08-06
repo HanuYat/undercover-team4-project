@@ -7,7 +7,7 @@ using UnityEngine.AI;
 /// 추적자와 충분히 멀어지면 도주 성공으로 보고 배회로 복귀한다.
 /// 잡는 방법: 근접 제압 홀드(NpcSubdueInteractable) 또는 테이저(후속 아이템).
 ///
-/// 도주 방향은 위협 1명이 아니라 <see cref="NpcController.ThreatSearchRadius"/> 안의 플레이어 전원을 보고 고른다 (#213) —
+/// 도주 방향은 위협 1명이 아니라 <see cref="NpcReaction.ThreatSearchRadius"/> 안의 플레이어 전원을 보고 고른다 (#213) —
 /// 협공하면 두 사람 사이로 뛰어드는 대신 옆으로 빠지고, 완전히 포위되면 저항으로 전환한다.
 ///
 /// 도주 지점은 멀리(<see cref="NpcFleeConfig.FarPointDistance"/>) 잡고 <b>도착할 때까지 커밋</b>한다 —
@@ -133,8 +133,8 @@ public class NpcFleeState : NpcStateBase
 
         // 위협 대상이 사라졌으면(연결 종료 등) 가장 가까운 추격자로 폴백한다 —
         // 도주형에는 이 폴백이 없어 Idle로 빠지던 문제 (#213). NpcResistState의 폴백(#205)과 대칭.
-        if (m_owner.ThreatTarget == null)
-            m_owner.StartFlee(nearest);
+        if (m_owner.Reaction.ThreatTarget == null)
+            m_owner.Reaction.StartFlee(nearest);
     }
 
     public override void Exit()
@@ -147,7 +147,7 @@ public class NpcFleeState : NpcStateBase
         // 지워버리면 저항이 유발자를 잃는다. NpcResistState가 ClearThreat를 Exit이 아니라
         // 체포 시점에 두는 것과 같은 이유. (#205, #213)
         if (!m_transitioningToResist)
-            m_owner.ClearThreat();
+            m_owner.Reaction.ClearThreat();
     }
 
     /// <summary>
@@ -160,12 +160,12 @@ public class NpcFleeState : NpcStateBase
     {
         Vector3 origin = m_owner.transform.position;
 
-        CollectThreats(m_owner.ThreatSearchRadius);
+        CollectThreats(m_owner.Reaction.ThreatSearchRadius);
         if (s_threatBuffer.Count == 0)
         {
             // 회피 반경 안에 아무도 없다 — 추격자는 멀리 있으니(이탈 판정은 Tick이 담당) 아무 방향으로나 계속 뛴다
-            if (m_owner.ThreatTarget != null)
-                s_threatBuffer.Add(m_owner.ThreatTarget);
+            if (m_owner.Reaction.ThreatTarget != null)
+                s_threatBuffer.Add(m_owner.Reaction.ThreatTarget);
             else
                 return;
         }
@@ -188,10 +188,22 @@ public class NpcFleeState : NpcStateBase
 
             // 먼 지점 우선(커밋 도주) — 건물 안 등으로 샘플이 실패한 방향은 가까운 지점으로 줄여 다시 시도
             if (
-                !TrySamplePoint(origin, direction, m_config.FarPointDistance,
-                    k_farNavSampleMaxDistance, m_owner.Agent.areaMask, out Vector3 point)
-                && !TrySamplePoint(origin, direction, m_config.StepDistance,
-                    k_navSampleMaxDistance, m_owner.Agent.areaMask, out point)
+                !TrySamplePoint(
+                    origin,
+                    direction,
+                    m_config.FarPointDistance,
+                    k_farNavSampleMaxDistance,
+                    m_owner.Agent.areaMask,
+                    out Vector3 point
+                )
+                && !TrySamplePoint(
+                    origin,
+                    direction,
+                    m_config.StepDistance,
+                    k_navSampleMaxDistance,
+                    m_owner.Agent.areaMask,
+                    out point
+                )
             )
                 continue; // 어느 거리로도 갈 수 없는 방향
             float pathClearanceSqr = float.MaxValue; // 경로가 플레이어를 스치는 최단거리
@@ -254,7 +266,7 @@ public class NpcFleeState : NpcStateBase
     {
         Debug.Log($"도주로 차단({reason}) — 저항 전환: {m_owner.name}");
         m_transitioningToResist = true;
-        m_owner.StartResist(m_owner.ThreatTarget);
+        m_owner.Reaction.StartResist(m_owner.Reaction.ThreatTarget);
     }
 
     /// <summary>
@@ -295,8 +307,10 @@ public class NpcFleeState : NpcStateBase
 
         // 저항 전환은 도주 진입 직후엔 막는다 — 저항에서 막 넘어온 경우 프레임마다 왕복하기
         // 때문이다 (SetFleePoint의 포위 판정과 같은 가드, #205/#213)
-        if (m_stuckRepicks >= k_maxStuckRepicks
-            && Time.time - m_fleeStartTime >= m_config.ResistCooldown)
+        if (
+            m_stuckRepicks >= k_maxStuckRepicks
+            && Time.time - m_fleeStartTime >= m_config.ResistCooldown
+        )
         {
             TransitionToResist("길막");
             return true;
@@ -304,7 +318,8 @@ public class NpcFleeState : NpcStateBase
 
         // 재추첨하면 도착점 maximin 점수가 막고 선 쪽 방향을 떨어뜨려 옆·뒤로 빠진다
         Debug.Log(
-            $"도주 막힘 — {progress:F2}m/{k_stuckCheckInterval}s, 지점 재추첨 {m_stuckRepicks}회: {m_owner.name}");
+            $"도주 막힘 — {progress:F2}m/{k_stuckCheckInterval}s, 지점 재추첨 {m_stuckRepicks}회: {m_owner.name}"
+        );
         SetFleePoint();
 
         // 재추첨이 포위로 판단해 저항으로 넘어갔으면 그것도 호출부에 알려야 한다
@@ -322,12 +337,23 @@ public class NpcFleeState : NpcStateBase
     /// <summary>origin에서 direction으로 distance만큼 간 지점을 NavMesh 위로 샘플한다 — 실패 시 false.
     /// areaMask는 도주 주체의 통행 마스크 — 못 가는 영역(Jail)으로 도주 지점을 잡지 않게 한다 (#415).</summary>
     private static bool TrySamplePoint(
-        Vector3 origin, Vector3 direction, float distance, float sampleMaxDistance, int areaMask,
-        out Vector3 point)
+        Vector3 origin,
+        Vector3 direction,
+        float distance,
+        float sampleMaxDistance,
+        int areaMask,
+        out Vector3 point
+    )
     {
         point = default;
-        if (!NavMesh.SamplePosition(
-                origin + direction * distance, out NavMeshHit hit, sampleMaxDistance, areaMask))
+        if (
+            !NavMesh.SamplePosition(
+                origin + direction * distance,
+                out NavMeshHit hit,
+                sampleMaxDistance,
+                areaMask
+            )
+        )
             return false;
 
         point = hit.position;

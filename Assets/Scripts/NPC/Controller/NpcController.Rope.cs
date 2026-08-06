@@ -139,7 +139,7 @@ public partial class NpcController
 
         if (dragger != null)
         {
-            ThreatTarget = dragger;
+            m_reaction.ThreatTarget = dragger;
             if (!m_dragAnchors.Contains(dragger))
                 m_dragAnchors.Add(dragger);
         }

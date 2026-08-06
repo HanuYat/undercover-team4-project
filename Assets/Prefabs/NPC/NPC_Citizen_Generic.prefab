@@ -3301,6 +3301,9 @@ GameObject:
   - component: {fileID: 6158578095925378395}
   - component: {fileID: 8819930586284450470}
   - component: {fileID: 8957818139698593311}
+  - component: {fileID: 7288919990303064545}
+  - component: {fileID: 6213692437447462158}
+  - component: {fileID: 195422875705201194}
   m_Layer: 7
   m_Name: NPC_Citizen_Generic
   m_TagString: Untagged
@@ -3439,6 +3442,7 @@ MonoBehaviour:
   m_swingAnimSeconds: 0.9
   m_unlockBeginSeconds: 0.63
   m_sitBeginSeconds: 0.7
+  m_standUpSeconds: 0.585
   m_subdueRollSeconds: 1.3
   m_animator: {fileID: 282655735873343081}
 --- !u!114 &3625219082931332717
@@ -3675,6 +3679,45 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ab92e93bbbf14544aa797e3b19a157fc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BodyTint
+--- !u!114 &7288919990303064545
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e334c80a06670f643ad9a2b1fe688712, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcIntruder
+  ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &6213692437447462158
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3cc52cc8084541eea4e842385aee7ce3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcPenaltyAgent
+  ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &195422875705201194
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2964de635a9efa4418e068216dfa0d04, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcReaction
+  ShowTopMostFoldoutHeaderGroup: 1
 --- !u!1 &8855344057427867759
 GameObject:
   m_ObjectHideFlags: 0
