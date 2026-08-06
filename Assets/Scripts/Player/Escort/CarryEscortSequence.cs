@@ -106,15 +106,15 @@ public static class CarryEscortSequence
         NpcController carrierA = carriers[0];
         NpcController carrierB = carriers.Count > 1 ? carriers[1] : null;
 
-        carrierA.StartPenaltyEscort(destination, null, Vector3.zero);
+        carrierA.Penalty.StartPenaltyEscort(destination, null, Vector3.zero);
         if (carrierB != null)
-            carrierB.StartPenaltyEscort(destination, carrierA, new Vector3(settings.CarrierGap, 0f, 0f));
+            carrierB.Penalty.StartPenaltyEscort(destination, carrierA, new Vector3(settings.CarrierGap, 0f, 0f));
 
         for (int i = 2; i < carriers.Count; i++)
         {
             float x = i % 2 == 0 ? -k_followSideOffset : k_followSideOffset;
             float z = -(k_followFirstRowBack + (i - 2) / 2 * k_followRowGap);
-            carriers[i].StartPenaltyEscort(destination, carrierA, new Vector3(x, 0f, z));
+            carriers[i].Penalty.StartPenaltyEscort(destination, carrierA, new Vector3(x, 0f, z));
         }
 
         // 플레이어 본인은 오너 클라가 끌기 담당 2명 사이를 추종한다 — NetworkTransform 오너 권한
@@ -179,7 +179,8 @@ public static class CarryEscortSequence
     }
 
     // 아직 이 호송에 묶여 있는가 — EndPenaltyDuty가 PenaltyEscortGoal을 지운다.
-    private static bool OnDuty(NpcController npc) => npc != null && npc.PenaltyEscortGoal != null;
+    private static bool OnDuty(NpcController npc) =>
+        npc != null && npc.Penalty.PenaltyEscortGoal != null;
 
     private static void PruneDead(List<NpcController> list) => list.RemoveAll(npc => npc == null);
 

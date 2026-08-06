@@ -43,7 +43,7 @@ public class NpcDetainedState : NpcStateBase
         m_owner.Agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
 
         // 구역이 배선되지 않은 씬 — 그 자리에서 수용된 것으로 처리한다 (SendToJail의 null seat 관례)
-        if (m_owner.DetentionSpot == null)
+        if (m_owner.Penalty.DetentionSpot == null)
         {
             Arrive();
             return;
@@ -102,8 +102,8 @@ public class NpcDetainedState : NpcStateBase
     // 유치장과 달리 영역 제한이 없다(원한 구역은 전용 NavMesh 영역이 아니다) — 전 영역에서 스냅한다.
     private Vector3 SpotDestination() =>
         GatherSlot.Resolve(
-            m_owner.DetentionSpot.position,
-            m_owner.DetentionSlotOffset,
+            m_owner.Penalty.DetentionSpot.position,
+            m_owner.Penalty.DetentionSlotOffset,
             NavMesh.AllAreas,
             k_slotSnapRadius
         );

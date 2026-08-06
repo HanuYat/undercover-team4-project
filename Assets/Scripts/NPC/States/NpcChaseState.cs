@@ -10,7 +10,7 @@ using UnityEngine.AI;
 ///   직선에서는 계속 달리면 벗어날 수 있다 — 대신 범위 이탈 시 아래 재타겟으로 페널티가 전가된다.
 /// - <b>재타겟</b>: 타겟이 추격 범위(ChaseRange)를 벗어나거나 무력화되면, 범위 안의 플레이어 중
 ///   무작위 한 명으로 갈아탄다(잡히는 사람이 페널티 독박 — 부모 이슈 #276 확정 설계).
-///   단 납치 임무(<see cref="NpcController.IsAbductionDuty"/>)는 갈아타지 않는다 — 범위를 벗어나도 같은 표적을 계속 쫓는다 (#371).
+///   단 납치 임무(<see cref="NpcPenaltyAgent.IsAbductionDuty"/>)는 갈아타지 않는다 — 범위를 벗어나도 같은 표적을 계속 쫓는다 (#371).
 /// - <b>사냥</b>: 범위 안에 아무도 없으면 배회하며 범위에 들어오는 플레이어를 기다린다.
 /// - <b>격퇴/수렴</b>: 격퇴(ApplyChaseRepel, 호루라기 #250 예정)당하면 잠시 도주 후 사냥으로 복귀하고
 ///   그 플레이어에게 재추격 쿨다운을 건다. 누군가 포획되면(PenaltyConvergeTarget) 전원 그리로 모인다.
@@ -84,7 +84,7 @@ public class NpcChaseState : NpcStateBase
         m_repathTimer -= Time.deltaTime;
 
         // ---- 수렴: 포획 확정 — 전원 포획된 플레이어에게 모인다. 추격·격퇴보다 우선한다 (#279)
-        Transform converge = m_owner.PenaltyConvergeTarget;
+        Transform converge = m_owner.Penalty.PenaltyConvergeTarget;
         if (converge != null)
         {
             TickConverge(converge);
@@ -92,7 +92,7 @@ public class NpcChaseState : NpcStateBase
         }
 
         // ---- 격퇴: 호루라기(#250 예정)에 쫓겨나 잠시 도주 — 유예 창. 끝나면 사냥/재타겟으로 이어진다
-        if (Time.time < m_owner.ChaseRepelUntil)
+        if (Time.time < m_owner.Penalty.ChaseRepelUntil)
         {
             TickRepelled();
             return;
@@ -103,9 +103,9 @@ public class NpcChaseState : NpcStateBase
         // 갈아타면 "혼자 있는 사람을 노린다"는 그 이벤트의 유일한 규칙이 깨지고(동료 옆의 사람을 잡는다),
         // 반대로 놓아 버리면 뒤처진 납치범만 빠져나가 2인 호송이 1인으로 무너진다. 실패는 이벤트가
         // 자기 추격 상한(AbductionEvent.m_maxChaseSeconds)으로 끊는다 — 상태가 판단할 일이 아니다.
-        Transform target = m_owner.ChaseTarget;
+        Transform target = m_owner.Penalty.ChaseTarget;
 
-        if (m_owner.IsAbductionDuty)
+        if (m_owner.Penalty.IsAbductionDuty)
         {
             // 표적이 사라졌다(접속 종료·파괴) — 여기서 재타겟으로 흘리면 아래 갈아타기 금지가 무의미해진다.
             // 배회로 두고 이벤트의 추격 상한이 끊게 한다.
@@ -118,7 +118,7 @@ public class NpcChaseState : NpcStateBase
         else if (!IsChaseable(target))
         {
             target = PickRandomTargetInRange();
-            m_owner.SetChaseTarget(target);
+            m_owner.Penalty.SetChaseTarget(target);
             if (target != null)
                 m_targetAcquiredTime = Time.time; // 새 타겟 — 가속을 처음부터 다시 밟는다
         }
@@ -148,7 +148,7 @@ public class NpcChaseState : NpcStateBase
         {
             // 매니저가 이미 다른 호송을 처리 중이면 통보가 무시된다 — 재시도 간격을 두고 계속 붙어 다닌다
             m_nextCatchNotifyTime = Time.time + k_catchRetrySeconds;
-            m_owner.NotifyPenaltyCaught(target);
+            m_owner.Penalty.NotifyPenaltyCaught(target);
         }
     }
 
@@ -168,22 +168,22 @@ public class NpcChaseState : NpcStateBase
     // 격퇴 도주 — 격퇴한 플레이어 반대 방향으로 달아난다. 같은 격퇴당 한 번만 재추격 쿨다운을 등록한다.
     private void TickRepelled()
     {
-        if (m_handledRepelUntil != m_owner.ChaseRepelUntil)
+        if (m_handledRepelUntil != m_owner.Penalty.ChaseRepelUntil)
         {
-            m_handledRepelUntil = m_owner.ChaseRepelUntil;
-            if (m_owner.ChaseRepelBy != null)
-                m_targetCooldowns[m_owner.ChaseRepelBy] = Time.time + m_config.RetargetCooldown;
-            m_owner.SetChaseTarget(null); // 도주가 끝나면 재타겟부터 다시 — 쿨다운 대상은 후보에서 빠진다
+            m_handledRepelUntil = m_owner.Penalty.ChaseRepelUntil;
+            if (m_owner.Penalty.ChaseRepelBy != null)
+                m_targetCooldowns[m_owner.Penalty.ChaseRepelBy] = Time.time + m_config.RetargetCooldown;
+            m_owner.Penalty.SetChaseTarget(null); // 도주가 끝나면 재타겟부터 다시 — 쿨다운 대상은 후보에서 빠진다
         }
 
         m_owner.Agent.speed = m_config.MaxSpeed;
         m_owner.Agent.stoppingDistance = 0f;
 
-        if (m_repathTimer > 0f || m_owner.ChaseRepelBy == null)
+        if (m_repathTimer > 0f || m_owner.Penalty.ChaseRepelBy == null)
             return;
 
         m_repathTimer = k_repathInterval;
-        Vector3 away = (m_owner.transform.position - m_owner.ChaseRepelBy.position).normalized;
+        Vector3 away = (m_owner.transform.position - m_owner.Penalty.ChaseRepelBy.position).normalized;
         if (away.sqrMagnitude < 0.01f)
             away = m_owner.transform.forward;
 

@@ -2,10 +2,22 @@ using System;
 using Unity.Netcode;
 using UnityEngine;
 
-public partial class NpcController
+/// <summary>
+/// 페널티 임무 도메인 부품 — 오검거 페널티(#277~#279)와 납치(#371)가 공유하는
+/// 수용 → 추격 → 수렴 → 호송 파이프라인의 데이터·API 허브다. (#503)
+///
+/// 판정과 이동은 상태 클래스(<see cref="NpcDetainedState"/> · <see cref="NpcChaseState"/> ·
+/// <see cref="NpcPenaltyEscortState"/>)가 하고, 이 부품은 그 상태들이 읽을 목표·대상·대형을 들고
+/// 결과를 이벤트로 중계한다. FSM 전이가 필요하므로 코어의 <see cref="NpcController.StateMachine"/>을 쓴다.
+/// 전이는 전부 서버 권위 — 부르는 쪽(WrongfulArrestPenalty · AbductionEvent)이 서버다. 클라 호출은
+/// <see cref="NpcController.StartEscort"/>와 같은 방식으로 무시한다.
+///
+/// <b>반드시 <see cref="NpcController"/>와 같은 GameObject에 둔다</b> — 코어 쪽 [RequireComponent]가 이를 보장한다.
+/// 반대 방향으로도 걸면 순환 의존이 되어 둘 중 하나만 떼는 것이 막히므로, 선언은 코어에만 둔다.
+/// </summary>
+public class NpcPenaltyAgent : NetworkBehaviour
 {
-    // ---- 오검거 페널티: 수용·추격·호송 (#277/#278/#279) ----
-    // FSM 전이는 전부 서버 권위 — WrongfulArrestPenalty(서버)만 호출한다. 클라 호출은 StartEscort와 같은 방식으로 무시.
+    private NpcController m_owner;
 
     /// <summary>원한 구역 수용 지점. 수용(Detained) 중이 아니면 null. 서버에서만 유효. (#277)</summary>
     public Transform DetentionSpot { get; private set; }
@@ -40,7 +52,9 @@ public partial class NpcController
     /// <summary>격퇴 도주가 끝나는 시각(Time.time). 이 시각 전에는 추격 대신 도주한다. (#278)</summary>
     public float ChaseRepelUntil { get; private set; }
 
-    /// <summary>호송 선두 NPC — null이면 자신이 선두(광장으로 직접 걷는다). (#279)</summary>
+    /// <summary>호송 선두 NPC — null이면 자신이 선두(광장으로 직접 걷는다). (#279)
+    /// 부품이 아니라 코어를 들고 있는 것은 대형 추종이 선두의 transform을 쓰기 때문이다
+    /// (<see cref="NpcPenaltyEscortState"/>) — 부르는 쪽도 NPC를 NpcController로 들고 넘긴다.</summary>
     public NpcController PenaltyEscortLeader { get; private set; }
 
     /// <summary>호송 대형에서 선두 기준 로컬 오프셋 — 선두는 무시. (#279)</summary>
@@ -49,11 +63,34 @@ public partial class NpcController
     /// <summary>호송 목적지(광장). 호송 중이 아니면 null. (#279)</summary>
     public Transform PenaltyEscortGoal { get; private set; }
 
-    /// <summary>추격 NPC가 대상을 포획한 순간 발행 — WrongfulArrestPenalty가 구독해 수렴·호송을 개시한다. 서버에서만 발생. (#278)</summary>
+    /// <summary>추격 NPC가 대상을 포획한 순간 발행 — WrongfulArrestPenalty가 구독해 수렴·호송을 개시한다. 서버에서만 발생. (#278)
+    /// 인자가 부품이 아니라 코어인 것은 구독자(WrongfulArrestPenalty · AbductionEvent)가 NPC를
+    /// NpcController 목록으로 들고 대조하기 때문이다 — NpcIntruder와 같은 관례다.</summary>
     public event Action<NpcController, Transform> OnPenaltyCaught;
 
+    private void Awake()
+    {
+        m_owner = GetComponent<NpcController>();
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        m_abductionDuty.OnValueChanged += HandleAbductionDutyChanged; // 페널티 임무 종류 전파 (#371)
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        m_abductionDuty.OnValueChanged -= HandleAbductionDutyChanged;
+    }
+
+    // 페널티 임무 종류(오검거/납치) 전파 — 앵그리 마크를 그리는 표현 계층이 모든 피어에서 다시 판정한다 (#371)
+    private void HandleAbductionDutyChanged(bool previous, bool current)
+    {
+        OnPenaltyDutyChanged?.Invoke();
+    }
+
     /// <summary>포획 통보 — NpcChaseState 전용. (#278)</summary>
-    public void NotifyPenaltyCaught(Transform caught) => OnPenaltyCaught?.Invoke(this, caught);
+    public void NotifyPenaltyCaught(Transform caught) => OnPenaltyCaught?.Invoke(m_owner, caught);
 
     /// <summary>
     /// 원한 구역 수용 — 오검거당한 시민을 석방 대신 전용 구역으로 보낸다. (#277)
@@ -65,10 +102,10 @@ public partial class NpcController
         if (IsSpawned && !IsServer)
             return;
 
-        EscortTarget = null;
+        m_owner.EscortTarget = null;
         DetentionSpot = spot;
         DetentionSlotOffset = slotOffset;
-        m_stateMachine.ChangeState(NpcState.Detained);
+        m_owner.StateMachine.ChangeState(NpcState.Detained);
     }
 
     /// <summary>
@@ -83,7 +120,7 @@ public partial class NpcController
         DetentionSpot = null;
         ChaseTarget = target;
         SetAbductionDuty(abductionDuty); // 상태 전이보다 먼저 — 마크 판정이 임무 종류를 이미 알고 있어야 한다
-        m_stateMachine.ChangeState(NpcState.Chasing);
+        m_owner.StateMachine.ChangeState(NpcState.Chasing);
     }
 
     // 임무 종류를 세우고 전 피어에 알린다. 오프라인이면 로컬 사본만 바꾸고 직접 발행한다(NetworkVariable이 안 돈다).
@@ -117,8 +154,8 @@ public partial class NpcController
             return;
 
         PenaltyConvergeTarget = caught;
-        if (m_stateMachine.CurrentState != NpcState.Chasing)
-            m_stateMachine.ChangeState(NpcState.Chasing);
+        if (m_owner.StateMachine.CurrentState != NpcState.Chasing)
+            m_owner.StateMachine.ChangeState(NpcState.Chasing);
     }
 
     /// <summary>
@@ -133,7 +170,7 @@ public partial class NpcController
             return;
 
         ChaseRepelBy = by;
-        ChaseRepelUntil = Time.time + m_chaseConfig.RepelFleeSeconds;
+        ChaseRepelUntil = Time.time + m_owner.ChaseConfig.RepelFleeSeconds;
     }
 
     /// <summary>호송 시작 — goal(광장)으로 이동. leader가 null이면 자신이 선두, 아니면 선두 기준 offset 위치를 따라간다. (#279)</summary>
@@ -145,7 +182,7 @@ public partial class NpcController
         PenaltyEscortGoal = goal;
         PenaltyEscortLeader = leader;
         PenaltyEscortOffset = offset;
-        m_stateMachine.ChangeState(NpcState.PenaltyEscorting);
+        m_owner.StateMachine.ChangeState(NpcState.PenaltyEscorting);
     }
 
     /// <summary>
@@ -165,6 +202,6 @@ public partial class NpcController
         ChaseRepelUntil = 0f;
         PenaltyEscortLeader = null;
         PenaltyEscortGoal = null;
-        m_stateMachine.ChangeState(NpcState.Idle);
+        m_owner.StateMachine.ChangeState(NpcState.Idle);
     }
 }
