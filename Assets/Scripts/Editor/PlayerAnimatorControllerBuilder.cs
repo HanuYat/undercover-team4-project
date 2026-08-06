@@ -31,6 +31,15 @@ public static class PlayerAnimatorControllerBuilder
     private const string k_combatFolder =
         "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Combat";
 
+    // 감정표현 상태 머신 (#219) — 카탈로그 순서대로 상태를 자동 생성한다.
+    // 클립 경로를 여기 적지 않는 이유: 어떤 감정표현이 있는지는 EmoteCatalog 하나가 정하고,
+    // 빌더는 그걸 읽기만 한다. 두 곳에 목록을 두면 카탈로그에 추가하고 빌더를 안 고쳐
+    // "휠에는 뜨는데 재생은 안 되는" 상태가 난다.
+    private const string k_emoteParam = "Emote";
+    private const string k_emoteIndexParam = "EmoteIndex";
+    private const string k_emoteStatePrefix = "Emote_";
+    private const string k_emoteCatalogPath = "Assets/Scripts/Data/EmoteCatalog.asset";
+
     // 기절(테이저 아군 오사)은 다운과 같은 Knockdown 상태 머신을 탄다 — 맞는 즉시 쓰러진다. (#252)
     // 한때 Stun01로 갈랐는데 그건 NPC '제압 그로기'(서서 헤롱거리는 루프)가 쓰는 클립이었다.
     // 선 채로 비틀대는 몸에 카메라만 바닥 높이로 내려가 어긋났고, NPC 기절도 실은 Knockdown01-Ground로
@@ -172,6 +181,7 @@ public static class PlayerAnimatorControllerBuilder
         BlendTree crouchTree = SetupCrouchState(controller); // 앉기 상태 추가/갱신 (#236) — 다운 전환보다 먼저
         BlendTree airCrouchTree = SetupJumpStates(controller); // 점프 상태 머신 추가/갱신 (#189) — 다운 전환보다 먼저
         SetupDownStates(controller); // 다운(무력화) 상태 머신 추가/갱신 (#105)
+        SetupEmoteStates(controller); // 감정표현 상태 추가/갱신 (#219) — 다운 상태 뒤에 와야 Fall 전이를 걸 수 있다
         RemoveLegacyStunStates(controller); // 구 기절 상태 제거 — 다운 상태 머신에 흡수됐다 (#252)
         SetupAttackLayer(controller); // 타격 상체 레이어 추가/갱신 (#217) — Base Layer가 아닌 레이어 1
 
@@ -217,6 +227,17 @@ public static class PlayerAnimatorControllerBuilder
         }
 
         controller.AddParameter(name, AnimatorControllerParameterType.Bool);
+    }
+
+    private static void EnsureIntParameter(AnimatorController controller, string name)
+    {
+        foreach (AnimatorControllerParameter parameter in controller.parameters)
+        {
+            if (parameter.name == name)
+                return;
+        }
+
+        controller.AddParameter(name, AnimatorControllerParameterType.Int);
     }
 
     private static void EnsureTriggerParameter(AnimatorController controller, string name)
@@ -720,6 +741,97 @@ public static class PlayerAnimatorControllerBuilder
         }
     }
 
+    /// <summary>
+    /// 감정표현 상태를 카탈로그 순서대로 만든다. (#219)
+    ///
+    /// <b>다운 상태 머신보다 나중에 불러야 한다</b> — 감정표현 중 쓰러질 때 Locomotion을
+    /// 경유하지 않고 곧장 Knockdown_Fall로 가야 하는데, 그 전이를 걸려면 Fall 상태가 이미
+    /// 있어야 한다. 경유하면 쓰러짐이 한 박자 늦게 보이고, Knockdown의 즉시성은
+    /// PlayerAnimationDriver가 주석으로 거듭 강조하는 지점이다.
+    ///
+    /// 비루프 클립의 종료를 exit time에 맡기지 않는 이유: 재생 여부의 진실은 서버의
+    /// NetworkVariable 하나이고, 애니메이터가 자기 판단으로 먼저 빠져나오면 서버는 아직
+    /// 재생 중인데 화면만 멈춘 상태가 난다.
+    /// </summary>
+    private static void SetupEmoteStates(AnimatorController controller)
+    {
+        var catalog = AssetDatabase.LoadAssetAtPath<EmoteCatalog>(k_emoteCatalogPath);
+        if (catalog == null)
+        {
+            Debug.LogWarning(
+                $"[PlayerAnimatorControllerBuilder] 감정표현 카탈로그가 없어 건너뜁니다: {k_emoteCatalogPath}");
+            return;
+        }
+
+        EnsureBoolParameter(controller, k_emoteParam);
+        EnsureIntParameter(controller, k_emoteIndexParam);
+
+        AnimatorStateMachine stateMachine = controller.layers[0].stateMachine;
+        RemoveEmoteStates(stateMachine); // 재실행 시 중복 방지 — 카탈로그가 줄었을 수도 있다
+
+        AnimatorState locomotion = FindState(stateMachine, k_stateName);
+        AnimatorState fallState = FindState(stateMachine, k_fallState);
+        AnimatorState jumpBegin = FindState(stateMachine, k_jumpBeginState);
+
+        int created = 0;
+        for (int index = 0; index < catalog.Count; index++)
+        {
+            EmoteDefinition definition = catalog.Get(index);
+            if (definition == null || definition.Clip == null)
+                continue; // 이모지 전용 항목은 애니메이터에 자리가 필요 없다
+
+            AnimatorState state = stateMachine.AddState($"{k_emoteStatePrefix}{index:00}");
+            state.motion = definition.Clip;
+            created++;
+
+            // Locomotion → Emote_i : Emote가 켜지고 인덱스가 맞으면 즉시 진입.
+            // 앉기·점프 상태에서는 감정표현을 시작할 수 없으므로(서버가 막는다) 진입은 Locomotion에서만 온다.
+            if (locomotion != null)
+            {
+                AnimatorStateTransition enter = locomotion.AddTransition(state);
+                enter.hasExitTime = false;
+                enter.duration = 0.15f;
+                enter.AddCondition(AnimatorConditionMode.If, 0f, k_emoteParam);
+                enter.AddCondition(AnimatorConditionMode.Equals, index, k_emoteIndexParam);
+
+                AnimatorStateTransition exit = state.AddTransition(locomotion);
+                exit.hasExitTime = false;
+                exit.duration = 0.15f;
+                exit.AddCondition(AnimatorConditionMode.IfNot, 0f, k_emoteParam);
+            }
+
+            // Emote_i → Knockdown_Fall : 춤추다 맞고 쓰러지는 순간 곧장 넘어간다.
+            if (fallState != null)
+            {
+                AnimatorStateTransition toFall = state.AddTransition(fallState);
+                toFall.hasExitTime = false;
+                toFall.duration = 0.1f;
+                toFall.AddCondition(AnimatorConditionMode.If, 0f, k_downParam);
+            }
+
+            // Emote_i → 점프 시작 : 서버가 공중 진입과 함께 감정표현을 끊지만, 애니메이터가
+            // Locomotion을 한 번 거치면 이륙 모션이 잘린다.
+            if (jumpBegin != null)
+            {
+                AnimatorStateTransition toJump = state.AddTransition(jumpBegin);
+                toJump.hasExitTime = false;
+                toJump.duration = 0.1f;
+                toJump.AddCondition(AnimatorConditionMode.If, 0f, k_airborneParam);
+            }
+        }
+
+        Debug.Log($"[PlayerAnimatorControllerBuilder] 감정표현 상태 {created}개 생성");
+    }
+
+    // 재실행 시 이전 감정표현 상태를 걷어낸다 — 카탈로그에서 항목을 빼면 그만큼 상태가 줄어야 한다.
+    private static void RemoveEmoteStates(AnimatorStateMachine stateMachine)
+    {
+        foreach (ChildAnimatorState child in stateMachine.states)
+        {
+            if (child.state != null && child.state.name.StartsWith(k_emoteStatePrefix))
+                stateMachine.RemoveState(child.state);
+        }
+    }
 
     // 이전 빌드가 남긴 기절 상태·파라미터를 걷어낸다 — 기절은 이제 다운과 같은 Knockdown 상태 머신을
     // 타므로 전용 상태가 필요 없다. (#252)
