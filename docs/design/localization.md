@@ -257,7 +257,7 @@
 
 - ~~`SettlementPanel`~~ (15) · ~~`AuthPanel`+`AccountCredentials`+`NicknameRules`~~ (실제 31) · ~~`ScanInfoView`~~ · ~~`ScanResultPresenter`~~ · ~~`ShopStandView`~~ · ~~`CCTVChannelLabelView`~~ · `HqRevivalDevice` · `BombTimerView`
 - ~~`SessionPanel`~~ · ~~`LeaveConfirmPanel`~~ · ~~`LobbyRosterRowView`/`LobbyRosterPanel`~~ · ~~`SessionCodePanel`~~ — **Phase 1에서 앞당겨 처리했다** (해당 씬·프리팹을 손대는 김에)
-- **`string m_format` 필드 8개** → `LocalizedString`: ~~`RoundFundHud`~~(실제 이름은 `RoundFundBoard`) · ~~`ReadyWaitHud`~~ · ~~`RemainingCriminalsHud`~~ · ~~`WantedEntryView`~~ · `BombSerialView` · ~~`MicStatusHud`~~ · `HqRevivalDevice` · `CCTVNode`
+- **`string m_format` 필드 8개** → `LocalizedString`: ~~`RoundFundHud`~~(실제 이름은 `RoundFundBoard`) · ~~`ReadyWaitHud`~~ · ~~`RemainingCriminalsHud`~~ · ~~`WantedEntryView`~~ · ~~`BombSerialView`~~(추격 폭탄 개편으로 삭제, #399) · ~~`MicStatusHud`~~ · `HqRevivalDevice` · `CCTVNode`
 - ~~**곁다리 정리:** 검거 판정 문구 3곳 중복~~ — **정정.** 중복은 2곳이 아니라 **번역 대상 1곳**이었다.
   [ArrestJudge.LogVerdict](../../Assets/Scripts/Interaction/ArrestJudge.cs)의 판정 문구는 `Debug.Log` 안에만 있어 범위 밖(§1)이고,
   [ArrestVerdictFeedback](../../Assets/Scripts/Interaction/ArrestVerdictFeedback.cs)이 겹쳐 보인 것은 이름 폴백 `"알 수 없음"` 하나였다.

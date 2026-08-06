@@ -6,7 +6,7 @@ using UnityEngine;
 /// <b>순수 로컬 연출이다.</b> 각 피어의 <see cref="BombExplosionView"/>가 자기 화면에 하나씩 스폰하므로
 /// 네트워크 동기화가 없다(폭발 사실 자체는 이미 <see cref="BombDevice"/>가 전파했다).
 ///
-/// 폭탄 본체는 폭발 몇 초 뒤 디스폰되므로(<see cref="BombDefusalEvent"/>의 잔류 시간), 이 오브젝트는
+/// 폭탄 본체는 폭발 몇 초 뒤 디스폰되므로(<see cref="BombChaseEvent"/>의 잔류 시간), 이 오브젝트는
 /// <b>폭탄의 자식이 아니라 월드에 독립적으로</b> 스폰되어 스스로 수명을 끝낸다 — 부모가 사라져도
 /// 연기가 중간에 끊기지 않는다.
 ///

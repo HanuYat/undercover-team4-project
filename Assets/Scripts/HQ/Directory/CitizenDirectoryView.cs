@@ -9,7 +9,7 @@ using UnityEngine.UI;
 /// <summary>
 /// 본부 시민 인명부 패널 (#223) — E로 펼치는 열람 UI. DirectoryManager의 동기화 리스트를 읽어 행으로 그린다.
 /// 정렬(이름순/세력순, 같은 버튼 재클릭 시 오름/내림 토글)과 페이지 넘김(첫 페이지=다음만, 마지막=이전만)을 제공한다.
-/// 여는 동안 게임플레이 입력을 정지하고 커서를 푼다(BombManualHud와 동일 취지). Esc로 닫는다.
+/// 여는 동안 게임플레이 입력을 정지하고 커서를 푼다 — 읽는 동안 몸이 움직이면 안 된다. Esc로 닫는다.
 /// 로컬 UI — 상호작용한 본인 클라에서만 열린다. 데이터 갱신은 NetworkList.OnListChanged로 따라간다.
 /// </summary>
 public class CitizenDirectoryView : HqPanelView

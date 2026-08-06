@@ -101,7 +101,7 @@ public class Baton : ItemBase, IAimedWeapon
             return false;
         }
 
-        return EvaluateSwing(origin, direction, holder.transform, out _, out _, out _)
+        return EvaluateSwing(origin, direction, holder.transform, out _, out _, out _, out _)
             == SwingResult.ValidTarget;
     }
 
@@ -245,7 +245,7 @@ public class Baton : ItemBase, IAimedWeapon
         switch (
             EvaluateSwing(
                 origin, direction, holderTransform, out NpcController target,
-                out PlayerHealth playerTarget, out RaycastHit hit))
+                out PlayerHealth playerTarget, out BombDevice bombTarget, out RaycastHit hit))
         {
             case SwingResult.NoHit:
                 // 허공은 연출이 없다 — 이미 나간 스윙음이 '휘두르긴 했다'를 말해 주고 있다.
@@ -264,6 +264,19 @@ public class Baton : ItemBase, IAimedWeapon
                         ? $"진압봉 무효 — 이미 무력화된 동료 ({playerTarget.name})"
                         : $"진압봉 무효 — {(target.IsStunned ? "이미 쓰러진" : "이미 제압됐거나 페널티 진행 중인")} 대상 ({target.CurrentState})");
                 return;
+        }
+
+        // 추격 폭탄을 맞췄다 — <b>그 자리에서 즉발한다</b> (#399). 밀어내기는 없어졌다: 굴러오는
+        // 폭탄을 봉으로 쳐서 옮긴다는 그림 자체가 읽히지 않았다. 때린 사람은 폭심 바로 옆이라
+        // 피해를 온전히 받는다 — 오조작의 대가를 그 자리에서 치른다.
+        // 연출은 금속 타격이다 — 폭탄은 로봇이고, 맞은 것 자체는 유효타라 히트마커가 떠야 한다 (#478).
+        if (bombTarget != null)
+        {
+            App.Game.Fx?.PlayEverywhere(EFx.BatonHitMetal, hit.point, hit.normal);
+            NotifyHit(false);
+            bombTarget.ServerDetonate();
+            NotifyOwner("진압봉 명중 — 폭탄이 그 자리에서 터졌다");
+            return;
         }
 
         // 유효타 — 임팩트 연출은 전 피어, 히트마커는 때린 사람에게만.
@@ -443,11 +456,13 @@ public class Baton : ItemBase, IAimedWeapon
         Transform holderRoot,
         out NpcController target,
         out PlayerHealth playerTarget,
+        out BombDevice bombTarget,
         out RaycastHit hit
     )
     {
         target = null;
         playerTarget = null;
+        bombTarget = null;
         hit = default;
 
         int count = Physics.SphereCastNonAlloc(
@@ -474,7 +489,7 @@ public class Baton : ItemBase, IAimedWeapon
         NpcController npc = hit.collider.GetComponentInParent<NpcController>();
         if (npc == null)
         {
-            return EvaluatePlayerSwing(hit, out playerTarget);
+            return EvaluateNonNpcSwing(hit, out playerTarget, out bombTarget);
         }
 
         // 피해 게이트를 데미지 전에 본다 — TakeDamage도 같은 규칙으로 피해를 무시하지만(#366/#292),
@@ -505,7 +520,8 @@ public class Baton : ItemBase, IAimedWeapon
     }
 
     /// <summary>
-    /// NPC가 아닌 것을 맞췄을 때의 분류 — 동료면 아군 오사, 그 외(벽·소품)는 빗나감. (#461)
+    /// NPC가 아닌 것을 맞췄을 때의 분류 — 동료면 아군 오사(#461), 추격 폭탄이면 밀어내기(#399),
+    /// 그 외(벽·소품)는 빗나감.
     /// </summary>
     /// <remarks>
     /// 테이저(<c>Taser.EvaluatePlayerAim</c>)와 달리 <b>자기 자신을 걸러내는 분기가 없다.</b>
@@ -518,16 +534,31 @@ public class Baton : ItemBase, IAimedWeapon
     /// 무력화 게이트는 <see cref="PlayerHealth.IsTargetable"/> 하나로 본다 — 다운·기절·매달기 중인
     /// 동료를 더 때려 상태를 악화시키는 경로는 만들지 않는다 (NPC 쪽 <c>NpcStateRules.CanBeDamaged</c>와 같은 취지).
     /// </remarks>
-    private static SwingResult EvaluatePlayerSwing(RaycastHit hit, out PlayerHealth playerTarget)
+    private static SwingResult EvaluateNonNpcSwing(
+        RaycastHit hit,
+        out PlayerHealth playerTarget,
+        out BombDevice bombTarget
+    )
     {
+        bombTarget = null;
+
         playerTarget = hit.collider.GetComponentInParent<PlayerHealth>();
-        if (playerTarget == null)
+        if (playerTarget != null)
         {
-            return SwingResult.HitNonTarget;
+            return playerTarget.IsTargetable
+                ? SwingResult.ValidTarget
+                : SwingResult.TargetInvalidState;
         }
 
-        return playerTarget.IsTargetable
-            ? SwingResult.ValidTarget
-            : SwingResult.TargetInvalidState;
+        // 추격 폭탄 — 때리면 데미지가 아니라 즉발이다 (#399). 카운트다운 전이거나 이미 터진 폭탄은
+        // 그냥 소품이라 빗나감으로 둔다(TargetInvalidState가 아니다 — "무효"라고 알려줄 만한 오조작이 아니다).
+        bombTarget = hit.collider.GetComponentInParent<BombDevice>();
+        if (bombTarget != null && bombTarget.CanBeStruck)
+        {
+            return SwingResult.ValidTarget;
+        }
+
+        bombTarget = null;
+        return SwingResult.HitNonTarget;
     }
 }

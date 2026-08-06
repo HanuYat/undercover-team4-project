@@ -24,9 +24,6 @@ public class BombTimerView : MonoBehaviour
     [SerializeField]
     private Color m_warnColor = new Color(1f, 0.25f, 0.2f); // 임박(빨강)
 
-    [SerializeField]
-    private Color m_safeColor = new Color(0.2f, 1f, 0.35f);
-
     private BombDevice m_device;
 
     private void Awake()
@@ -43,17 +40,15 @@ public class BombTimerView : MonoBehaviour
 
         switch (m_device.State)
         {
+            // 추격 중(Armed)과 폭심 확정 후(Locked)는 표시가 같다 — 멈췄다는 사실은 폭탄이 서 있는
+            // 모습이 이미 말해 주고, 남은 시간은 끝까지 같은 자리에서 읽혀야 한다.
             case BombState.Armed:
+            case BombState.Locked:
                 float t = m_device.RemainingSeconds;
                 int minutes = (int)(t / 60f);
                 int seconds = (int)(t % 60f);
                 m_label.text = string.Format("{0}:{1:00}", minutes, seconds);
                 m_label.color = t <= m_warnThreshold ? m_warnColor : m_normalColor;
-                break;
-
-            case BombState.Defused:
-                m_label.text = "SAFE";
-                m_label.color = m_safeColor;
                 break;
 
             case BombState.Exploded:
