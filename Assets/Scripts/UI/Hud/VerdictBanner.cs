@@ -122,6 +122,10 @@ public class VerdictBanner : PanelBase
         if (m_detailFormat == null || m_detailFormat.IsEmpty)
         {
             Debug.LogWarning("VerdictBanner: 이름·보상 문구가 연결되지 않았다", this);
+
+            // 그냥 돌아가면 직전 문구가 그대로 남는다 — 씬에 넣어 둔 디자인용 예시 문구까지 살아남아
+            // 배선 사고가 '멀쩡한 판정 결과'로 보인다. 금액은 붙일 수 없어도 이름은 진짜 값을 낸다.
+            m_detailText.text = data.CitizenName;
             return;
         }
 
