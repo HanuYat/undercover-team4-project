@@ -216,7 +216,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (Time.time - m_lifetimeStart > m_maxLifetimeSeconds)
         {
             Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 침입 포기, 잔류");
-            m_intruder.StartFlee(null); // 위협 없는 도주 — 잠깐 흩어졌다가 곧 배회로 가라앉는다
+            m_intruder.Reaction.StartFlee(null); // 위협 없는 도주 — 잠깐 흩어졌다가 곧 배회로 가라앉는다
             ReleaseToCity();
         }
     }
@@ -295,7 +295,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         // 침입자도 수감자들과 함께 달아난다 — 늦게 도착한 팀도 추격해 잡으면 경범죄 수익은 챙길 수 있다.
         // 방치 유예를 새로 줘서 도주 직후 강제 정리로 증발하지 않게 한다.
         m_lifetimeStart = Time.time;
-        m_intruder.StartFlee(null);
+        m_intruder.Reaction.StartFlee(null);
     }
 
     /// <summary>
@@ -310,7 +310,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
             return false;
 
         Debug.Log("[돌발이벤트] 범인 탈출 — 사이렌에 저지당해 침입자 도주");
-        m_intruder.StartFlee(null);
+        m_intruder.Reaction.StartFlee(null);
         return true;
     }
 
@@ -391,7 +391,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
 
         // 유치장을 뛰쳐나와 도주한다 — 침입자를 위협으로 삼아 반대로 달아난 뒤 배회로 섞여 든다.
         // 근처에 플레이어가 없으면 도주 상태가 곧 배회로 복귀한다(NpcFleeState).
-        inmate.StartFlee(m_intruder != null ? m_intruder.transform : null);
+        inmate.Reaction.StartFlee(m_intruder != null ? m_intruder.transform : null);
 
         // 방출된 난동꾼은 조용한 시민으로 남지 않는다 — 도주가 가라앉으면 원래 소란 행동을 재개한다
         // (팀 확정 2026-07-23). 침입자 등 소란 기록이 없는 개체는 무동작으로 기존대로 배회 잔류.

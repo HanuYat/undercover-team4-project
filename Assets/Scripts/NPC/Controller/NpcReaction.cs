@@ -1,11 +1,47 @@
+using System;
+using Unity.Netcode;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
-public partial class NpcController
+/// <summary>
+/// 검거 반응 도메인 부품 — 도주(#213)·저항(#205)·스윙(#220)의 판정 진입점과 위협 참조를 들고 있다. (#503)
+///
+/// 이동·전투는 상태 클래스(<see cref="NpcFleeState"/> · <see cref="NpcResistState"/>)가 하고, 이 부품은
+/// 그 상태들이 읽을 위협 대상·탐색 반경을 들고 스윙 순간을 전 피어에 중계한다. FSM 전이가 필요하므로
+/// 코어의 <see cref="NpcController.StateMachine"/>을 쓴다.
+/// 전이는 전부 서버 권위 — 클라이언트 호출은 <see cref="NpcController.StartEscort"/>와 같은 방식으로 무시한다.
+/// TODO: 아이템/상호작용 네트워크 전환(#55 계열) 시 클라 입력 → ServerRpc 경로로 연결
+///
+/// <b>반드시 <see cref="NpcController"/>와 같은 GameObject에 둔다</b> — 코어 쪽 [RequireComponent]가 이를 보장한다.
+/// 반대 방향으로도 걸면 순환 의존이 되어 둘 중 하나만 떼는 것이 막히므로, 선언은 코어에만 둔다.
+/// </summary>
+public class NpcReaction : NetworkBehaviour
 {
-    // ---- 검거 반응 (#76 → 트리거 변경 #400) ----
-    // FSM 전이는 전부 서버 권위 — 클라이언트 호출은 StartEscort와 같은 방식으로 무시한다.
-    // TODO: 아이템/상호작용 네트워크 전환(#55 계열) 시 클라 입력 → ServerRpc 경로로 연결
+    private NpcController m_owner;
+
+    /// <summary>저항·도주 중 피해 다니는 위협 대상(체포를 시도한 플레이어). 배회 등 반응 중이 아니면 null. 서버에서만 유효. (#76)
+    /// setter가 internal인 것은 끌기 시작(밧줄, #369)과 기절 진입(#292)이 그 순간의 가해자를 위협으로 기록하기 때문이다
+    /// (부품은 같은 어셈블리). 두 도메인이 부품으로 나가면(계획서 § 6 2단계 6·7번) 그때 정리된다. (#503)</summary>
+    public Transform ThreatTarget { get; internal set; }
+
+    /// <summary>
+    /// 위협(플레이어)을 찾는 반경(m) — 저항 패배 후 도주 대상 탐색(#205)과 도주 방향 산출(#213)이 같은 값을 쓴다.
+    /// 두 경로가 다른 반경을 쓰면 "도망칠 상대"와 "피할 상대"의 기준이 어긋난다.
+    /// </summary>
+    public float ThreatSearchRadius =>
+        m_owner.ResistConfig.AttackRange * m_owner.ResistConfig.ThreatSearchRadiusMultiplier;
+
+    /// <summary>공격 스윙 1회를 휘두를 때 발행 — 전 피어에서 발생한다(서버는 로컬 발행 + ClientRpc 중계).
+    /// 인자는 재생할 스윙 변형 index — 서버가 뽑아 전 피어가 같은 클립을 재생하므로, HP 감소 순간(서버가
+    /// 그 클립의 타격 오프셋으로 판정)과 화면 속 주먹이 닿는 순간이 일치한다.
+    /// 애니메이션 표현(<see cref="NpcAnimationDriver"/>)이 구독해 단발 스윙 모션을 트리거한다.
+    /// FSM 상태와 독립한 순간 이벤트라 State 동기화와 별개로 스윙 타이밍을 정확히 맞춘다. (#220)</summary>
+    public event Action<int> OnAttackSwing;
+
+    private void Awake()
+    {
+        m_owner = GetComponent<NpcController>();
+    }
 
     /// <summary>
     /// 반응 판정 진입점 — 스캔·플레이어 타격이 공유한다. 서버(또는 오프라인) 전용. (#400)
@@ -23,11 +59,11 @@ public partial class NpcController
             return;
 
         // 이미 반응 중이거나 확보·페널티 상태면 재판정하지 않는다 — 규칙은 NpcStateRules가 갖는다
-        if (!NpcStateRules.CanStartReaction(CurrentState))
+        if (!NpcStateRules.CanStartReaction(m_owner.CurrentState))
             return;
 
         // 기절 중엔 반응하지 않는다 — 쓰러진 대상은 그대로 잡힌다 (테이저 콤보)
-        if (IsStunned)
+        if (m_owner.IsStunned)
             return;
 
         CitizenIdentity identity = GetComponent<CitizenIdentity>();
@@ -70,7 +106,7 @@ public partial class NpcController
             return;
 
         ThreatTarget = threat;
-        m_stateMachine.ChangeState(NpcState.Run);
+        m_owner.StateMachine.ChangeState(NpcState.Run);
     }
 
     /// <summary>위협 참조 정리 — 반응(도주·저항)이 끝나는 지점에서 호출한다.</summary>
@@ -85,7 +121,25 @@ public partial class NpcController
         // 저항을 유발한(수갑 채우려던) 플레이어를 위협으로 기억한다 — 제압 실패 시 이 대상에게서 도주한다.
         // (도주형이 StartFlee(subduer)로 위협을 받는 것과 대칭 — #205)
         ThreatTarget = subduer;
-        m_stateMachine.ChangeState(NpcState.Attack);
+        m_owner.StateMachine.ChangeState(NpcState.Attack);
+    }
+
+    /// <summary>공격 스윙 1회를 전 피어에 알린다 — 애니메이션 표현용. 서버(또는 오프라인) FSM Tick에서만 호출한다.
+    /// 서버는 로컬 발행 + ClientRpc로 원격 클라에 중계한다. (#220)</summary>
+    public void RaiseAttackSwing(int variant)
+    {
+        OnAttackSwing?.Invoke(variant); // 서버·오프라인 로컬 발행
+        if (IsSpawned && IsServer)
+            PlayAttackSwingClientRpc(variant);
+    }
+
+    [ClientRpc]
+    private void PlayAttackSwingClientRpc(int variant)
+    {
+        // 서버(호스트)는 위에서 이미 발행했으므로 원격 클라에서만 중계
+        if (IsServer)
+            return;
+        OnAttackSwing?.Invoke(variant);
     }
 
     // E 제압 경로는 전부 제거됐다 — E는 신병 조작(재연행·줄다리기 복귀) 전용 키가 됐다.

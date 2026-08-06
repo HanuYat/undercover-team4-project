@@ -106,13 +106,13 @@ public class NpcCapturedState : NpcStateBase
         // ThreatSearchRadius를 쓴다. 기준이 어긋나면 "도망칠 상대"와 "피할 상대"가 달라진다.
         PlayerHealth nearest = SuddenEventUtil.FindNearestFieldPlayer(
             m_owner.transform.position,
-            m_owner.ThreatSearchRadius
+            m_owner.Reaction.ThreatSearchRadius
         );
 
         if (nearest != null)
         {
             Debug.Log($"인계 방치 — 풀려나 도주: {m_owner.name}");
-            m_owner.StartFlee(nearest.transform);
+            m_owner.Reaction.StartFlee(nearest.transform);
             return;
         }
 
