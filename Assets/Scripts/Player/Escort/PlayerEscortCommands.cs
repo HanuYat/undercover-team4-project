@@ -166,6 +166,24 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         JailReleaseRpc(new NetworkObjectReference(target.NetworkObject));
     }
 
+    /// <summary>멈춘 수감자 추종 재개 요청 — 오너가 호출(거리 이탈로 멈춘 반출 수감자에 E).
+    /// 정지(<see cref="RequestEscortHalt"/>)의 역방향이다 — 밧줄을 쓰지 않으므로 용량 게이트를 타지 않는다. (#517)</summary>
+    public void RequestEscortResume(NpcController target)
+    {
+        if (target == null)
+            return;
+        if (!IsSpawned)
+        {
+            ServerEscortResume(target);
+            return;
+        }
+        if (!IsOwner)
+            return;
+        if (!IsTargetNetworkReady(target))
+            return;
+        EscortResumeRpc(new NetworkObjectReference(target.NetworkObject));
+    }
+
     /// <summary>따라오는 수감자 정지 요청 — 오너가 호출(반출된 수감자에 E). 밧줄과 무관한 추종을 끊는다. (#492)</summary>
     public void RequestEscortHalt(NpcController target)
     {
@@ -231,6 +249,18 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         )
         {
             ServerBeginUnrope(target);
+        }
+    }
+
+    [Rpc(SendTo.Server)]
+    private void EscortResumeRpc(NetworkObjectReference targetRef)
+    {
+        if (
+            targetRef.TryGet(out NetworkObject targetObj)
+            && targetObj.TryGetComponent(out NpcController target)
+        )
+        {
+            ServerEscortResume(target);
         }
     }
 
@@ -355,11 +385,14 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     ///    들 수 없게 해 <b>데리고 나오는 구간에 긴장</b>을 남긴다. 거리를 관리하지 않으면 멈춰 서고
     ///    (NpcEscortedState) 밖에 방치하면 달아난다(#517).
     ///
-    /// ⚠ 팀 확정은 "<b>방출한 신병은 무조건</b> 밧줄로 다루지 않는다"인데, 여기서는 <b>따라오는 동안만</b>
-    /// 막는다 — 거리 이탈로 멈춘 반출 대상은 상태가 <see cref="NpcState.Captured"/>라 방금 제압한 신병과
-    /// 구분되지 않고, 그것을 가리는 반출 표식(<c>NpcController.IsJailExtracted</c>)이 #517에 있다.
-    /// 그래서 멈춘 경우의 차단은 #517 쪽에서 이 함수에 한 줄을 더해 완성된다. 이 브랜치만으로는
-    /// E로 세운 뒤 묶는 우회가 남는다.
+    ///  · <b>반출 표식이 살아 있는 동안</b>(<see cref="NpcController.IsJailExtracted"/>, #517) — 거리 이탈로
+    ///    멈춰 서면(<see cref="NpcState.Captured"/>) 방금 제압한 신병과 상태가 같아져 위 조건에서 빠지는데,
+    ///    그때 묶을 수 있으면 "E로 세운 뒤 묶기"라는 우회 하나로 위 긴장이 전부 사라진다. 표식을 함께 봐서
+    ///    <b>방출한 신병은 무조건</b> 밧줄로 다루지 않게 못박는다 (팀 확정 2026-08-05).
+    ///
+    /// ⚠ 그래서 <c>NpcController.StartRopeDrag</c>의 표식 해제(밧줄에 묶이면 반출 흐름이 끝난다, #517)는
+    /// <b>이제 도달할 수 없는 경로</b>가 됐다 — 표식이 있는 동안 묶기가 전부 막히기 때문이다. 방어용으로
+    /// 남겨 두었고, 표식을 끄는 실제 경로는 커스터디 이탈(재착석·도주·석방)뿐이다.
     ///
     /// <b>푸는 것은 막지 않는다.</b> 밖에서 묶어 유치장까지 끌고 들어가 안에서 풀면 앉는 것이 검거 흐름의
     /// 결말이므로(#492), 여기서 풀기까지 막으면 그 흐름이 통째로 끊긴다. 이미 걸려서 끌고 들어온 줄도
@@ -375,7 +408,8 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     public static bool IsRopeBlocked(NpcController target) =>
         target != null
         && (JailArea.Contains(target.transform.position)
-            || NpcStateRules.IsFollowingUnroped(target));
+            || NpcStateRules.IsFollowingUnroped(target)
+            || target.IsJailExtracted);
 
     // 새 대상을 묶을 수 있는가 — 자원(밧줄 개수)·중복·사거리. 상태 게이트는 호출부가 각자 건다.
     private bool CanBeginRopeDrag(NpcController target)
@@ -584,6 +618,29 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         }
 
         intake.ServerExtract(target, transform);
+    }
+
+    // 추종 재개 실행 — 거리 이탈로 멈춘 반출 수감자를 다시 따라오게 한다. 서버(또는 오프라인). (#517)
+    //
+    // 밧줄을 걸지 않는다: 반출(JailIntake.ServerExtract)과 같은 방식으로 StartEscort만 부르면
+    // NpcEscortedState의 추종·속도 부스트·거리 이탈이 그대로 동작한다. 따라서 밧줄 소지·용량과 무관하다.
+    //
+    // 소유권을 묻지 않는다 — 정지(ServerEscortHalt)와 같은 취급이다. 남이 꺼낸 수감자를 대신
+    // 데려가는 것은 신병을 뺏는 행위가 아니라 이미 정산에서 빠진 대상을 도로 넣어 주는 협동이다.
+    private void ServerEscortResume(NpcController target)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        // 상태 + 반출 표식 — 방금 제압한 신병(같은 Captured)이 이리로 새면 밧줄 없이 끌려간다
+        if (!NpcStateRules.CanResumeUnropedEscort(target))
+            return;
+
+        if (!IsInRange(target))
+            return;
+
+        target.StartEscort(transform);
+        NotifyOwner($"수감자 추종 재개: {target.name}");
     }
 
     // 추종 정지 실행 — 밧줄 없이 따라오는 수감자를 그 자리에 세운다(Captured). 서버(또는 오프라인).

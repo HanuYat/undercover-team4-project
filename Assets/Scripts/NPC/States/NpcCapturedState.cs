@@ -6,8 +6,10 @@ using UnityEngine;
 ///
 /// 인계 방치 타이머를 든다 (GDD 7-6, #230): 이 상태로 <see cref="NpcCapturedConfig.EscapeSeconds"/>가
 /// 지나도록 인계되지 않으면 밧줄을 풀고 도주한다 — "일단 다 잡아놓고 나중에 인계" 전략 차단.
-/// 판정이 끝난(<see cref="NpcController.IsDelivered"/>) NPC는 제외한다 — 본부에서 탈출하면 안 되고,
-/// 그 뒤 처리는 유치장(#228) 몫이다.
+/// 판정이 끝난(<see cref="NpcController.IsDelivered"/>) NPC와 유치장 안에 있는 NPC는 제외한다 —
+/// 잠긴 유치장·본부에서 탈출하면 안 되고, 그 뒤 처리는 유치장(#228) 몫이다. 예외가 하나 있다:
+/// 유치장 밖으로 반출해 놓고 방치한 대상은 판정이 끝났어도 달아난다 (#517).
+/// 판정은 <see cref="StaysPut"/> — 밧줄 끊김(PlayerEscorter)과 공유하는 단일 기준이다 (#526).
 ///
 /// <b>밧줄에 묶인 채 이 상태면 누워 있다</b> (#513) — E 놓기는 끌기만 멈추고 줄은 그대로다.
 /// 그래서 방치 만료는 "일어나기 → 도주" 2단이고, 그 사이가 재포획 창이다 (<see cref="Escape"/>).
@@ -38,7 +40,7 @@ public class NpcCapturedState : NpcStateBase
 
     public override void Tick()
     {
-        if (IsHandedOver)
+        if (StaysPut)
             return;
 
         // 이미 일어나는 중 — 끝나면 도주로 이어진다. 그 사이 다시 묶이면 예약이 취소되고
@@ -61,16 +63,21 @@ public class NpcCapturedState : NpcStateBase
         m_owner.Agent.isStopped = false;
     }
 
-    /// <summary>인계가 끝났는가 — 판정 완료 = 인계 성공이라 방치 타이머에서 빠진다. 본부에 얌전히 남는다. (#230)
+    /// <summary>방치돼도 그 자리에 남는 대상인가 — 판정 완료 = 인계 성공이라 방치 타이머에서 빠지고
+    /// 본부에 얌전히 남는다 (#230). 유치장 안에 있는 대상도 남는다 (#526).
+    ///
+    /// 기준 자체는 <see cref="NpcStateRules.StaysPutWhenFreed"/>가 갖는다 — 밧줄 끊김(PlayerEscorter)이
+    /// 같은 질문을 다르게 답하다 유치장 탈출을 만든 것이 #526이라, 답하는 곳을 하나로 모았다.
+    /// 반출 방치 예외(#517)도 그쪽에 있다.
     ///
     /// 타이머 진입(<see cref="Tick"/>)과 <b>일어난 뒤 실행 직전</b>(<see cref="Flee"/>)이 같은 기준을 봐야 한다 —
     /// 둘 사이에 일어나기 대기(약 0.6초)가 끼면서 그 사이 판정이 통과할 수 있는 창이 생겼다 (#513).
     /// 방치된 대상이 마침 판정 게이트(JailScanner) 안에 서 있으면 폴링(0.1초)이 그 창에서 대상을
     /// 판정해 <see cref="NpcController.MarkDelivered"/>를 부르고, 재검사가 없으면 방금 인계된 신병이
     /// 그대로 달아난다.</summary>
-    private bool IsHandedOver => m_owner.IsDelivered;
+    private bool StaysPut => NpcStateRules.StaysPutWhenFreed(m_owner);
 
-    /// <summary>방치 타이머 만료 — 일어난 뒤 밧줄을 풀고 달아난다. (#513)
+    /// <summary>방치 타이머 만료 — 일어난 뒤 풀려나 달아난다. (#513)
     ///
     /// 묶인 대상은 누워 있으므로(#513) 만료 순간 곧바로 도주하면 누운 몸이 그대로 미끄러진다.
     /// 일어나기 모션을 먼저 태우고 그 길이만큼 지난 뒤 달아난다 — <b>그 구간이 곧 재포획 창</b>이다.
@@ -88,8 +95,9 @@ public class NpcCapturedState : NpcStateBase
     /// <summary>일어난 뒤 실제로 달아난다.</summary>
     private void Flee()
     {
-        // 일어나는 사이에 인계가 끝났으면 달아나지 않는다 — 이유는 IsHandedOver 주석 (#513)
-        if (IsHandedOver)
+        // 일어나는 사이에 인계가 끝났으면 달아나지 않는다 — 이유는 StaysPut 주석 (#513).
+        // 위치도 다시 본다: 일어나는 도중 누가 유치장 안으로 옮겨 놓았을 수 있다 (#526)
+        if (StaysPut)
             return;
 
         // 밧줄은 소모형이 아니라 반환할 자원이 없다 — 상태 전이만으로 풀려난다. (#369)
@@ -103,14 +111,14 @@ public class NpcCapturedState : NpcStateBase
 
         if (nearest != null)
         {
-            Debug.Log($"인계 방치 — 밧줄 풀고 도주: {m_owner.name}");
+            Debug.Log($"인계 방치 — 풀려나 도주: {m_owner.name}");
             m_owner.StartFlee(nearest.transform);
             return;
         }
 
-        // 근처에 아무도 없으면 도망칠 이유도 없다 — 조용히 밧줄 풀고 배회로 복귀(사실상 탈출).
+        // 근처에 아무도 없으면 도망칠 이유도 없다 — 조용히 풀려나 배회로 복귀(사실상 탈출).
         // NpcResistState.Defeat의 폴백과 같은 패턴.
-        Debug.Log($"인계 방치 — 밧줄 풀고 배회 복귀(주변에 플레이어 없음): {m_owner.name}");
+        Debug.Log($"인계 방치 — 풀려나 배회 복귀(주변에 플레이어 없음): {m_owner.name}");
         m_owner.StateMachine.ChangeState(NpcState.Idle);
     }
 }
