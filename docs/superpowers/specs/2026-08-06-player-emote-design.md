@@ -2,6 +2,7 @@
 
 > 상태: 설계 확정 — 구현 플랜 대기
 > 선행: 없음 (main에서 분기)
+> 에셋: Kevin Iglesias **Human Dance Animations** — 구매 완료, 임포트 대기 (4절)
 > 관련: GDD 2-2(파티 게임 정체성) · GDD 10-2(Player 상태 enum) — enum 항목은 이 작업에서 갱신한다
 
 ## 0. 목표
@@ -74,11 +75,20 @@
 
 ### 초기 항목
 
-새 댄스 에셋 도착 전에도 배선을 끝까지 검증할 수 있도록, 기존 Kevin Iglesias 클립으로 카탈로그를 채운다:
+Kevin Iglesias **Human Dance Animations**를 임포트해(아래) 댄스와 기존 감정 클립을 섞어 8칸을 채운다:
 
-`Social/Emotions` 아래 `Cheer01` · `Cheer02` · `HandClap01` · `Angry01` · `Angry02` · `Fear01`
+- 댄스 — `Male/Social/Dance/Steps` 아래 `HumanM@Dance01~18` 중 4종. 전부 **자체 루프 클립**이라 `m_loop = true`로 그대로 쓴다
+- 제스처 — 기존 `Social/Emotions`의 `Cheer01` · `HandClap01` · `Angry01` · `Fear01`
 
-산 댄스 에셋은 **카탈로그에 항목 추가 + 애니메이터 빌더 재실행**만으로 들어간다. 코드 변경이 필요 없다.
+같은 벤더·같은 리그(HumanM)라 아바타 호환 문제가 없다. `DancePose01~07`은 Begin/Loop/Stop 3단 구조라 상태 머신이 한 겹 더 필요하므로 이번 범위에서 제외한다 — 필요해지면 후속에서 다룬다.
+
+이후 감정표현을 늘릴 때는 **카탈로그에 항목 추가 + 애니메이터 빌더 재실행**만 하면 된다. 코드 변경이 필요 없다.
+
+### 에셋 임포트
+
+`Human Dance Animations.unitypackage`는 `Assets/Kevin Iglesias/`로 풀린다. 프로젝트 관례가 `Assets/Imported/` 아래이므로 임포트 후 `Assets/Imported/Kevin Iglesias/Human Dance Animations/`로 옮긴다.
+
+**기존 `Human Animations` 폴더와 합치지 않는다** — 패키지에 `HumanM@Idle01.fbx` 중복본이 들어 있어 합치면 충돌한다. 별도 폴더로 두면 충돌이 없고 어느 패키지에서 온 클립인지도 분명해진다.
 
 ## 5. 애니메이터 확장
 
