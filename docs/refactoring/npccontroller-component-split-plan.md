@@ -91,9 +91,14 @@ partial 분리가 성장을 막지 못한다는 증거다.)
    **"상태 하나씩" 빼는 것은 불가능**하고, 분리 단위는 반드시 도메인이어야 한다.
 3. **얽힘은 여전히 무력화 5개(Health·Stun·Rope·StandUp·Knockback)에 집중돼 있고 양방향 쌍이 둘이다**
    (Health↔Stun, Rope↔StandUp). 한쪽만 먼저 빼면 "A→B는 컴포넌트 참조, B→A는 여전히 코어 내부 호출"인 어정쩡한
-   중간 상태가 남는다 → **쌍은 같은 PR로 묶는다.** 나머지 5개(Escort·Holding·Intrude·Penalty·Reaction)는
+   중간 상태가 남는다 → **쌍은 같은 PR로 묶는다.** 나머지 6개(Escort·Holding·Intrude·Penalty·Custody·Reaction)는
    밖으로 나가는 참조가 0~1건이라 하나씩 빼도 무해하다.
-   **Custody는 #522로 이 그룹에서 빠졌다** — `SetJailExtracted` ↔ `TryWarpNear`로 Rope와 양방향이 됐다.
+
+   **Custody는 #522로 Rope와 얽힌 것처럼 보이지만 실제로는 아니다** — 두 방향을 갈라 봐야 한다.
+   `Rope → Custody`(`SetJailExtracted`)는 **들어오는** 참조라 Custody를 먼저 빼는 데 걸림돌이 아니다(Rope가 코어에
+   남은 채 `m_custody.SetJailExtracted(...)`를 부르면 된다). `Custody → Rope`(`TryWarpNear`)는 나가는 참조지만
+   아래 결론 4의 **가짜 의존**이라, 헬퍼를 코어로 올리면 사라진다. 그래서 Custody는 1단계에 남되
+   **헬퍼 승격이 선행 조건으로 붙는다**(§ 6 1단계 4번).
 4. **도메인 멤버가 아닌 private 헬퍼가 파일 경계를 넘어 공유되고 있다.** `TryWarpNear`(NavMesh 워프)와
    `SweepHitsObstacle`(물리 스윕)은 선언된 파일의 도메인 소유물이 아니라 **범용 유틸**이다. 부품에 딸려 보내면
    "Custody가 Rope를 참조한다" 같은 **가짜 의존**이 생겨 위 표가 실제보다 얽혀 보이게 된다 → 규약 § 4-6.
@@ -193,14 +198,26 @@ TickRopeDrag() → TickStandUp() → 넉백 게이트 → 스턴 게이트 → F
 | #522 (반출 수감자 재연행) | ✅ **머지됨** (`209da52`) | 해제 — Custody · Rope · StandUp · 코어 |
 | #535 `feature/399-chase-bomb` (열린 PR) | Bomb 계열만 — NPC 스크립트 무변경 | 없음 |
 | `feature/423-knockback-navmesh-recovery` | 살아있다 — 8/5에 main 병합·충돌 해소까지 했고 PR만 미개설. `.Knockback.cs` +101줄 · 코어 +12줄 · `NpcStunnedState` · `NpcCommonConfig` | Knockback — **기다리지 않기로 팀 결정 (2026-08-06)** |
+| **#537** (감옥을 별도 공간으로 — 문 앞 판정 + 순간이동 수감/반출, 담당 suk558165) | 열린 이슈. **좌석 개념 자체를 폐기**하고 걸어가는 대신 순간이동으로 바꾼다 | **Custody** — 1단계 4번이 부품화하려는 `SendToJail`·`SetSeated`·`TryWarpNear`가 그 대상이다 |
+| **#401** (스턴/다운 분리 — 밧줄 검거는 다운 대상만, 담당 hyunjin0814) | 열린 이슈. `EnterStunned`·`ServerRestoreHp`·검거 게이트를 재설계한다 | **Health · Stun** — 2단계 6번이 옮기려는 바로 그 메서드들이다 |
 
 프리팹은 **모든 분리 PR의 공통 충돌면**이라, 스크립트가 안 겹쳐도 프리팹에서 만난다.
 
-**대기 조건은 전부 풀렸다.** `feature/423`은 `.Knockback.cs`를 크게 고치는 중이라 한때 Knockback을 맨 뒤로
+**브랜치 대기 조건은 전부 풀렸다.** `feature/423`은 `.Knockback.cs`를 크게 고치는 중이라 한때 Knockback을 맨 뒤로
 미뤘지만, **기다리지 않고 분리에 포함하기로 했다**(2026-08-06 결정). 따라서 Knockback은 최초 계획대로 2단계
 7번 클러스터에 **되돌아온다** — Rope가 `m_knockbackActive`와 `SweepHitsObstacle`을, StandUp이 `m_knockbackActive`를
 읽으므로 셋을 갈라 놓으면 § 2-2 결론 3이 경고한 어정쩡한 중간 상태가 남는다. 충돌은 `feature/423` 담당자와
 머지 순서로 푼다.
+
+**남은 조율 대상은 브랜치가 아니라 열린 이슈 둘이다** (#539 자동 리뷰가 짚었다). 부품화는 로직을 안 바꾸는 순수
+이동이라 순서는 어느 쪽이든 기술적으로 가능하지만, 같은 메서드를 두 브랜치에서 건드리면 충돌이 크다:
+
+- **#537 ↔ 1단계 4번(`NpcCustody`)** — #537이 좌석을 없애면 부품화한 코드를 다시 써야 한다. Custody 부품화를
+  #537 착수 **전에 끝낼지**, #537 설계가 굳은 **뒤로 미룰지** 담당자와 합의할 것.
+- **#401 ↔ 2단계 6번(`NpcHealth`+`NpcStun`)** — 착수 순서를 담당자와 맞출 것.
+
+둘 다 "먼저 부품화하고 그 위에서 기능 작업"이 유리하다 — 부품 경계가 생긴 뒤가 재설계하기 쉽다. 다만 그건
+상대 담당자의 일정이 걸린 판단이라 합의가 먼저다.
 
 ### 1단계 — 독립 도메인 (밖으로 나가는 참조 0~1건)
 
@@ -309,6 +326,8 @@ FSM 전이(`m_stateMachine.ChangeState(NpcState.Intruding)`)가 필요하므로 
 - [x] #529 · #522 머지 — 2026-08-06 확인. 2단계 6·7번 해제
 - [x] `feature/423-knockback-navmesh-recovery` — 기다리지 않고 Knockback을 분리에 포함하기로 결정(2026-08-06).
       2단계 7번 클러스터로 되돌렸다. 남은 일은 담당자와 **머지 순서**를 맞추는 것뿐이다
+- [ ] **#537 담당자와 `NpcCustody`(1단계 4번) 순서 합의** — 좌석 폐기가 부품화 대상과 정면으로 겹친다 (§ 6)
+- [ ] **#401 담당자와 `NpcHealth`+`NpcStun`(2단계 6번) 순서 합의** — 같은 메서드를 재설계한다 (§ 6)
 - [ ] `RaiseStandUp` 계열을 코어 중계로 남길지 `NpcStandUp`으로 옮길지 (§ 8 마지막 행)
 - [ ] 다른 partial에도 `ReleaseFromCustody` 같은 오배치가 있는지 (§ 7 주의) — 2026-08-06 시점에 확인된 것은
       `Intrude.cs`의 `ReleaseFromCustody` 하나
