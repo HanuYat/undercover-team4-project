@@ -26,6 +26,10 @@ public class PlayerMovement : NetworkBehaviour
     // 접지 판정이 깜빡인다 — 살짝 눌러 붙여 둔다. 천장 상쇄(0으로 죽이기)의 반대쪽 짝이다. (#189)
     private const float k_groundedStickVelocity = -2f;
 
+    // 설 수 없는 가파른 면에서 밀어내는 속도(m/s). 면에서 0.15m만 떨어지면 정상 낙하로 돌아온다
+    // (격리벽 실측) — 3m/s면 세 프레임 남짓. 왜 필요한지는 IsStablyGrounded 참고.
+    private const float k_steepSlideSpeed = 3f;
+
     // PlayerAnimationDriver가 속도 정규화에 사용 (실제 속도 ↔ 블렌드 트리 좌표 분리)
     // 실제 이동(HandleMove)도 같은 프로퍼티를 쓴다 — 배율이 걸린 값을 한 곳에서만 내야
     // 애니메이션 블렌드가 실제 속도와 어긋나지 않는다. (#398)
@@ -61,8 +65,31 @@ public class PlayerMovement : NetworkBehaviour
     private Vector3 m_knockbackVelocity; // 외력으로 밀려나는 수평 속도 — 매 프레임 감쇠 (#232 폭발 넉백)
     private bool m_ignoreRoundEndFreeze; // 정산 화면을 닫은 로컬 플레이어는 라운드 종료 freeze를 무시하고 움직인다 (#107)
 
+    // 이번 Move에서 밟은 면 중 법선이 가장 선 것 — OnControllerColliderHit이 채운다
+    private Vector3 m_groundNormal = Vector3.up;
+    private bool m_hasGroundContact;
+
     // 다운(무력화) 중 여부 — 무력화 컴포넌트가 없으면(테스트 구성 등) 항상 false
     private bool IsIncapacitated => m_incapacitation != null && m_incapacitation.IsIncapacitated;
+
+    /// <summary>
+    /// 딛고 선 면이 <see cref="CharacterController.slopeLimit"/>보다 가파른가 — 밟은 면이 없으면 false.
+    /// </summary>
+    private bool IsOnSteepSurface =>
+        m_hasGroundContact && Vector3.Angle(m_groundNormal, Vector3.up) > m_controller.slopeLimit;
+
+    /// <summary>
+    /// 실제로 딛고 설 수 있는 지면 위인가 — <b>접지를 묻는 곳은 전부 이쪽을 쓴다</b>
+    /// (점프 자격·접지 클램프·애니메이션이 갈라지면 "설 수 없는 곳에서 뛰는" 경계가 생긴다).
+    ///
+    /// <see cref="CharacterController.isGrounded"/>는 캡슐 아랫반구 접촉의 법선에 위쪽 성분이 조금이라도
+    /// 있으면 <see cref="CharacterController.slopeLimit"/>과 무관하게 접지로 친다. 맵 콜리전 껍질은
+    /// 렌더 메시에서 구운 볼록 껍질이라 벽의 '평평한' 면조차 눕어 있어(격리벽 하단 패널 실측 88.0도,
+    /// 법선 y=+0.036) 그 2도로 <b>수직 벽면 위에 서게 된다</b> — 낙하가 통째로 막히고, 접지로 잡히니
+    /// 거기서 또 뛰어 점프마다 더 높이 얹힌다. 이 프로젝트의 "벽 타기"가 정확히 이것이다.
+    /// 에셋 팩 프리팹의 80~95%가 같은 성질이라 맵을 갈아도 사라지지 않는다.
+    /// </summary>
+    private bool IsStablyGrounded => m_controller.isGrounded && !IsOnSteepSurface;
 
     /// <summary>
     /// 라운드 종료로 정지(freeze)됐는지 — RoundManager가 없으면(단독 테스트 씬) 항상 false.
@@ -202,7 +229,35 @@ public class PlayerMovement : NetworkBehaviour
     internal void MoveWithGravity(Vector3 horizontalStep)
     {
         IntegrateGravity();
-        m_controller.Move(horizontalStep + Vector3.up * m_verticalVelocity * Time.deltaTime);
+        MoveAndTrackGround(horizontalStep + Vector3.up * m_verticalVelocity * Time.deltaTime);
+    }
+
+    /// <summary>
+    /// Move하면서 밟은 면을 기록한다 — 접지 판정(<see cref="IsStablyGrounded"/>)의 재료다.
+    /// <b>Move 호출은 이 경로 하나로 모은다</b> — 지난 프레임 기록을 비우지 않으면 묵은 면을 보고 판정한다.
+    /// </summary>
+    private void MoveAndTrackGround(Vector3 displacement)
+    {
+        m_hasGroundContact = false;
+        m_controller.Move(displacement);
+    }
+
+    /// <summary>
+    /// 부딪힌 면 중 이번 프레임의 <b>지면 후보</b>를 고른다 — 벽과 바닥에 동시에 닿으면 법선이 가장 선
+    /// 쪽(= 진짜 바닥)을 남긴다. 그래야 벽에 붙어 서 있어도 발밑에 바닥이 있으면 정상 접지로 잡힌다.
+    /// </summary>
+    private void OnControllerColliderHit(ControllerColliderHit hit)
+    {
+        if (hit.normal.y <= 0f)
+        {
+            return; // 천장이거나 완전 수직 — 지면 후보가 아니다
+        }
+
+        if (!m_hasGroundContact || hit.normal.y > m_groundNormal.y)
+        {
+            m_groundNormal = hit.normal;
+            m_hasGroundContact = true;
+        }
     }
 
     // 접지 유지 클램프 + 중력 적분 — 수직 속도의 유일한 적분 지점이다.
@@ -210,7 +265,8 @@ public class PlayerMovement : NetworkBehaviour
     // 점프 임펄스는 이 뒤에 덮어써야 한다 — 클램프에 잡아먹히지 않게. (#189, HandleMove 참고)
     private void IntegrateGravity()
     {
-        if (m_controller.isGrounded && m_verticalVelocity < 0f)
+        // isGrounded가 아닌 이유 — 벽면에 얹힌 채로 클램프가 걸리면 하향 속도가 -2로 고정돼 영원히 매달린다.
+        if (IsStablyGrounded && m_verticalVelocity < 0f)
         {
             m_verticalVelocity = k_groundedStickVelocity;
         }
@@ -290,7 +346,7 @@ public class PlayerMovement : NetworkBehaviour
 
         // 점프 자격 판정에는 Move() 앞의 값이 맞다 — 그 시점의 마지막 확정 접지다.
         // (착지 보고는 반대로 Move() 뒤의 신선한 값을 쓴다 — 아래 ReportGrounded 참고, #189)
-        bool grounded = m_controller.isGrounded;
+        bool grounded = IsStablyGrounded;
 
         IntegrateGravity();
 
@@ -323,9 +379,20 @@ public class PlayerMovement : NetworkBehaviour
         if (m_dragLoad != null)
             inputVelocity = m_dragLoad.ConstrainByTautRopes(inputVelocity);
 
+        // 벽면에 얹혔으면 밀어내 흘러내리게 한다 — 중력만으로는 영원히 붙어 있다(입력을 떼고 90프레임 돌려도 0mm).
+        // 면으로 밀어 넣는 입력 성분도 함께 지운다: 남겨 두면 미는 힘이 이겨서 계속 붙어 있는다.
+        // 넉백은 건드리지 않는다 — 폭발로 벽에 처박히는 것은 의도된 결과다. (IsStablyGrounded 참고)
+        if (m_controller.isGrounded && IsOnSteepSurface)
+        {
+            Vector3 awayFromSurface = new Vector3(m_groundNormal.x, 0f, m_groundNormal.z).normalized;
+            inputVelocity =
+                Vector3.ProjectOnPlane(inputVelocity, awayFromSurface)
+                + awayFromSurface * k_steepSlideSpeed;
+        }
+
         // 넉백은 입력 이동과 별개로 감쇠하며 합산된다 — 다운·라운드 종료로 입력이 막혀도 폭발엔 밀려난다
         Vector3 velocity = inputVelocity + m_knockbackVelocity + Vector3.up * m_verticalVelocity;
-        m_controller.Move(velocity * Time.deltaTime);
+        MoveAndTrackGround(velocity * Time.deltaTime);
 
         // 천장에 머리를 박으면 상승 속도를 즉시 죽인다 — CharacterController는 이동이 막혀도 속도를
         // 스스로 지우지 않아, 그냥 두면 남은 상승 속도가 중력에 다 깎일 때까지(점프 1회면 0.4초 남짓)
@@ -342,7 +409,7 @@ public class PlayerMovement : NetworkBehaviour
         // 점프 가능 판정(위 grounded)은 반대로 프레임 앞의 값이 맞다 — 그 시점의 마지막 확정 접지다.
         if (m_jump != null)
         {
-            m_jump.ReportGrounded(m_controller.isGrounded);
+            m_jump.ReportGrounded(IsStablyGrounded);
         }
 
         // 프레임률과 무관하게 같은 곡선으로 잦아들도록 지수 감쇠
