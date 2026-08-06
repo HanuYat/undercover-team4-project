@@ -128,8 +128,8 @@ public class PlayerRagdoll : MonoBehaviour
     [SerializeField] private float m_alignSnapDistance = 2.5f;
 
     [Tooltip("밧줄 길이(m) — 운반자의 손과 시체 골반 사이의 최대 거리. 이 안에서는 시체가 자유롭고, " +
-             "넘어가면 관절이 딱 잡아 끌려온다. 강성·감쇠 노브가 없는 이유다: 밧줄은 스프링이 아니라 " +
-             "거리 제한이고, 끌리는 모양은 물리가 낸다. " +
+             "넘어가면 아래 강성·감쇠가 잡는다. 밧줄은 상시 작용하는 스프링이 아니라 거리 제한이고, " +
+             "끌리는 모양은 물리가 낸다. 길게 잡으면 장력이 덜 걸려 전체적으로 순해진다. " +
              "⚠ 앵커가 손(약 1.1m)이라 손 높이보다 짧으면 시체가 바닥에 닿지 못하고 매달린다. " +
              "바닥에 누운 채 끌리는 수평거리 = √(길이² − (손높이 − 골반높이)²) — " +
              "2.0이면 약 1.8m 뒤에서 끌린다")]
@@ -137,14 +137,34 @@ public class PlayerRagdoll : MonoBehaviour
 
     [Tooltip("밧줄이 한계를 넘었을 때 되당기는 강성 — <b>한계 바깥에서만</b> 작동한다(늘어져 있으면 " +
              "힘이 0이라 시체를 들어올리지 못한다). 0이면 하드 리밋이 되어 위반량을 한 스텝에 " +
-             "해소하며 시체를 11m/s로 튕긴다. 시체 70kg을 마찰(약 412N)에 맞서 끌려면 3000에서 " +
-             "약 14cm 늘어난다 — 밧줄이 조금 늘어나는 정도라 자연스럽다")]
-    [SerializeField] private float m_ropeLimitSpring = 3000f;
+             "해소하며 시체를 11m/s로 튕긴다. 시체 70kg을 마찰(약 412N)에 맞서 끌려면 1500에서 " +
+             "약 27cm 늘어난다 — 밧줄이 하중을 받아 늘어나는 정도라 자연스럽다")]
+    [SerializeField] private float m_ropeLimitSpring = 1500f;
 
-    [Tooltip("같은 한계의 감쇠 — 튕김을 삼킨다. 임계 감쇠는 약 2√(강성×질량) = 2√(3000×70) ≈ 900. " +
-             "그보다 조금 낮게 두면 끌릴 때 몸이 살짝 출렁여 흐느적임이 산다. 오버슛이 남으면 올리고, " +
-             "너무 뻣뻣하면 내린다")]
-    [SerializeField] private float m_ropeLimitDamper = 600f;
+    [Tooltip("같은 한계의 감쇠 — <b>과감쇠로 둔다.</b> 임계는 약 2√(강성×질량) = 2√(1500×70) ≈ 650이고 " +
+             "1000이면 ζ≈1.5다. 부족감쇠(예전 3000/600, ζ≈0.65)면 팽팽해질 때마다 오버슛으로 속도를 " +
+             "얹는데, 늘어진 반주기에는 이 감쇠가 0이라 뺄 방법이 없다 — 운반자가 제자리에서 돌면 " +
+             "회전 주기마다 에너지가 쌓여 시체가 점점 빨라지고 놓는 순간 날아간다 (§9-17)")]
+    [SerializeField] private float m_ropeLimitDamper = 1000f;
+
+    [Tooltip("밧줄에 묶인 동안 뼈에 거는 선형 감쇠(1/s) — <b>늘어진 구간의 유일한 에너지 배출구다.</b> " +
+             "한계 감쇠는 밧줄이 팽팽할 때만 작동하므로 이것이 없으면 넣기만 하고 빼지 않는 펌프가 된다. " +
+             "0.6이면 시정수 약 1.7초. 끌리는 저항이 늘어 밧줄이 조금 더 늘어난다(2m/s에서 약 84N)")]
+    [SerializeField] private float m_dragLinearDamping = 0.6f;
+
+    [Tooltip("같은 구간의 각 감쇠 — 팽이처럼 계속 도는 것을 잡는다. 평시 뼈 값은 0.05로 사실상 없다. " +
+             "너무 올리면 끌릴 때 몸이 뻣뻣해져 흐느적임이 죽으므로 선형 감쇠부터 올려 볼 것")]
+    [SerializeField] private float m_dragAngularDamping = 0.6f;
+
+    [Tooltip("밧줄에 묶인 동안 뼈 속도의 <b>하드 상한</b>(m/s) — 슬링 차단용이다. 0이면 끈다. " +
+             "감쇠로는 못 막는다: 운반자가 달리며 원을 그리면 장력이 하는 일이 ω²로 커지는데 " +
+             "감쇠 배출은 v에 비례해, 빨리 돌수록 입력이 이긴다(§9-18). 기본 8은 스프린트 속도와 " +
+             "같다 — 끌려가는 시체가 끄는 사람보다 빠를 이유는 없고, 넘는 만큼은 전부 슬링이다")]
+    [SerializeField] private float m_ropeMaxSpeed = 8f;
+
+    // ⚠ <b>감쇠는 밧줄에 묶인 동안에만 건다.</b> 상시로 걸면 사망 직후의 비행이 같이 죽는다 —
+    // 그쪽은 탄도로 남아야 하고(임펄스가 유일한 입력), 오히려 더 날려야 하는 방향이다.
+    // 걸고 푸는 자리는 밧줄의 수명과 정확히 같다: ApplyRopeTuning ↔ DetachRope.
 
 
 
@@ -162,6 +182,8 @@ public class PlayerRagdoll : MonoBehaviour
     private Transform m_boneRoot; // 리그 최상단('Root') — 뼈·스킨 수집 범위를 여기로 못박는다
 
     private Rigidbody[] m_bodies; // 래그돌 레이어의 뼈 Rigidbody만 (손에 든 아이템의 rb가 섞이지 않게)
+    private float[] m_baseLinearDamping; // 밧줄을 풀 때 되돌릴 평시 값 — 프리팹이 진실이라 상수로 박지 않는다
+    private float[] m_baseAngularDamping;
     private Transform m_hipsBone; // 관절이 없는 뼈 = 래그돌 루트
     private Rigidbody m_hipsBody; // 같은 뼈의 rb — 트레일 관절이 여기 붙는다 (§9-7)
     private Rigidbody m_ropeAnchor; // 운반자 손을 따라가는 키네마틱 앵커 — 밧줄의 끝
@@ -287,6 +309,16 @@ public class PlayerRagdoll : MonoBehaviour
 
         m_capturedPositions = new Vector3[count];
         m_capturedRotations = new Quaternion[count];
+
+        // 밧줄 감쇠를 풀 때 되돌릴 자리 — 프리팹 값(0 / 0.05)을 상수로 박으면 프리팹이 바뀌었을 때
+        // 조용히 덮어쓴다. 여기서 읽어 두면 항상 프리팹이 진실이다.
+        m_baseLinearDamping = new float[count];
+        m_baseAngularDamping = new float[count];
+        for (int i = 0; i < count; i++)
+        {
+            m_baseLinearDamping[i] = m_bodies[i].linearDamping;
+            m_baseAngularDamping[i] = m_bodies[i].angularDamping;
+        }
 
         // 골반(관절 없는 뼈)이 없으면 정착 재정렬·임펄스 기준이 없다 — 반쯤 도는 것보다 끄는 편이 낫다
         if (count == 0 || m_hipsBone == null)
@@ -511,16 +543,19 @@ public class PlayerRagdoll : MonoBehaviour
     /// 밧줄을 시체에 <b>묶는다</b> — 운반자가 움직이면 물리가 시체를 끌어온다.
     /// <see cref="PlayerTowedMotion.BeginDraggedFollow"/>가 래그돌인 대상에게만 부른다.
     ///
-    /// <b>거리 제한이지 스프링이 아니다.</b> <c>linearLimit</c>만 걸고 강성은 0으로 둔다 —
-    /// 밧줄 길이 안에서는 시체가 완전히 자유롭고(중력대로 눕고 구른다), 길이를 넘는 순간에만
-    /// 관절이 붙잡는다. 실제 밧줄이 그렇게 동작한다.
+    /// <b>거리 제한이지 스프링이 아니다.</b> <c>linearLimit</c>만 걸고, 힘은 <b>한계 바깥에서만</b>
+    /// 생긴다 — 밧줄 길이 안에서는 시체가 완전히 자유롭고(중력대로 눕고 구른다), 길이를 넘는
+    /// 순간에만 관절이 붙잡는다. 실제 밧줄이 그렇게 동작한다.
     ///
-    /// 이렇게 하면 <b>튜닝할 수치가 없다.</b> 스프링 강성으로 끌려다니게 만들려던 앞의 시도는
+    /// 이 구분이 예산 문제를 없앤다. 상시 작용하는 스프링으로 끌려다니게 만들려던 앞의 시도는
     /// 마찰(412N)·골반 무게(107N)·질량(70kg) 사이에서 답이 없었다 — 세면 뜨고 약하면 안 끌린다.
-    /// 거리 제한은 그 예산 자체를 없앤다: 하드 제약이라 마찰을 항상 이기고, 수직으로는 밧줄이
-    /// 늘어져 있는 한 아무 힘도 주지 않는다.
+    /// 거리 제한은 수평으로는 마찰을 이기면서 수직으로는 늘어져 있는 한 아무 힘도 주지 않는다.
     ///
-    /// 회전은 잡지 않는다 — 시체는 끌리면서 자유롭게 굴러야 한다.
+    /// 한계에 걸리는 <b>방식</b>(강성·감쇠·길이)과 뼈 감쇠는 <see cref="ApplyRopeTuning"/>이 쥔다 —
+    /// 거기가 이 밧줄의 유일한 튜닝 지점이고, 왜 그 조합이어야 하는지도 그쪽에 적혀 있다.
+    ///
+    /// 회전은 <b>구속</b>하지 않는다 — 시체는 끌리면서 자유롭게 굴러야 한다. 각 감쇠는 구속이
+    /// 아니라 마찰이므로 별개다(팽이처럼 도는 것만 잡는다).
     /// </summary>
     /// <param name="carrier">운반자(밧줄을 쥔 쪽). 매 프레임 이 위치를 따라 앵커가 움직인다.</param>
     public void BeginRopePull(Transform carrier)
@@ -546,24 +581,6 @@ public class PlayerRagdoll : MonoBehaviour
         m_ropeJoint.xMotion = ConfigurableJointMotion.Limited;
         m_ropeJoint.yMotion = ConfigurableJointMotion.Limited;
         m_ropeJoint.zMotion = ConfigurableJointMotion.Limited;
-        m_ropeJoint.linearLimit = new SoftJointLimit { limit = Mathf.Max(0.1f, m_ropeLength) };
-
-        // 한계를 <b>부드럽게</b> 만든다. spring=0(하드 리밋)이면 위반량을 솔버가 한 스텝에 해소하며
-        // 큰 속도를 실어준다 — 실측: 시체가 <b>11.6m/s</b>로 튀어 운반자를 지나쳐 손↔골반 2.12m →
-        // 0.33m까지 오버슛하고, 그 다음엔 장력 0으로 미끄러졌다. 그 야크가 캡슐(=루트)에 그대로
-        // 실려 원격으로 나가고, 원격의 뼈는 그 속도를 못 따라가 격차가 14.65m까지 벌어졌다.
-        //
-        // ⚠ <b>이 스프링은 한계 "바깥"에서만 작동한다</b> — 앞서 폐기한 xDrive 스프링과 범주가
-        // 다르다. 그건 상시 작용해서 시체를 들어올리거나 지면과 싸웠지만, 이건 밧줄이 늘어져 있는
-        // 동안(한계 안)에는 힘이 정확히 0이다. 그래서 세게 잡아도 시체가 뜨지 않는다.
-        //
-        // 부수 효과 — <b>흐느적임이 여기서 나온다.</b> 하드 리밋은 "가끔 크게 한 번" 당기지만
-        // 부드러운 한계는 <b>상시 장력</b>에 가까워, 걸음마다 작은 가속이 계속 들어간다.
-        m_ropeJoint.linearLimitSpring = new SoftJointLimitSpring
-        {
-            spring = m_ropeLimitSpring,
-            damper = m_ropeLimitDamper,
-        };
 
         m_ropeJoint.angularXMotion = ConfigurableJointMotion.Free;
         m_ropeJoint.angularYMotion = ConfigurableJointMotion.Free;
@@ -572,7 +589,89 @@ public class PlayerRagdoll : MonoBehaviour
         m_ropeJoint.projectionMode = JointProjectionMode.None; // §9-2 — projection은 충돌을 무시한다
         m_ropeJoint.enableCollision = false;
 
+        ApplyRopeTuning(); // 길이·강성·감쇠 — 관절 생성과 분리해 Play 중에도 다시 적용할 수 있게
         WakeBodies(); // 잠든 시체는 관절 힘만으로는 안 깨어날 수 있다
+    }
+
+    /// <summary>
+    /// 밧줄의 튜닝 값(길이·한계 스프링·뼈 감쇠)을 지금 값으로 적용한다.
+    ///
+    /// 관절 생성과 분리해 둔 이유는 <b>Play 중 인스펙터 조정</b>이다 — 예전에는 이 값들이
+    /// <see cref="BeginRopePull"/> 안에 인라인이라 밧줄을 다시 잡아야 새 값이 먹었다.
+    ///
+    /// <b>한계 스프링은 한계 "바깥"에서만 작동한다</b> — 앞서 폐기한 xDrive 스프링과 범주가 다르다.
+    /// 그건 상시 작용해서 시체를 들어올리거나 지면과 싸웠지만, 이건 밧줄이 늘어져 있는 동안
+    /// (한계 안)에는 힘이 정확히 0이다. 그래서 세게 잡아도 시체가 뜨지 않는다.
+    /// spring=0(하드 리밋)으로 두면 위반량을 솔버가 한 스텝에 해소하며 큰 속도를 실어준다 —
+    /// 실측: 시체가 <b>11.6m/s</b>로 튀어 운반자를 지나쳐 손↔골반 2.12m → 0.33m까지 오버슛했고,
+    /// 그 야크가 캡슐(=루트)에 실려 원격으로 나가 격차가 14.65m까지 벌어졌다.
+    ///
+    /// <b>뼈 감쇠가 여기 같이 있는 이유</b>(§9-17): 한계 감쇠는 팽팽할 때만 일하므로, 늘어진
+    /// 반주기에는 에너지를 뺄 수단이 하나도 없다. 운반자가 제자리에서 도는 동안 밧줄은 팽팽↔늘어짐을
+    /// 반복하는데, 팽팽 구간에서 부족감쇠 오버슛이 속도를 얹고 늘어짐 구간에서 그대로 유지되면
+    /// <b>회전 주기마다 에너지가 쌓이는 펌프</b>가 된다 — 돌릴수록 빨라지다 놓는 순간 날아간다.
+    /// 한계를 과감쇠로 만들어 주입을 없애고(위 툴팁), 뼈 감쇠로 배출구를 연다. 둘은 짝이다.
+    ///
+    /// 흐느적임은 이 스프링의 오버슛이 아니라 <b>손의 걸음 흔들림</b>이 만든다
+    /// (<c>PlayerTowedMotion.ResolveRopeAnchor</c>) — 과감쇠로 바꿔도 그쪽은 그대로 남는다.
+    /// </summary>
+    private void ApplyRopeTuning()
+    {
+        if (m_ropeJoint == null)
+            return;
+
+        m_ropeJoint.linearLimit = new SoftJointLimit { limit = Mathf.Max(0.1f, m_ropeLength) };
+        m_ropeJoint.linearLimitSpring = new SoftJointLimitSpring
+        {
+            spring = m_ropeLimitSpring,
+            damper = m_ropeLimitDamper,
+        };
+
+        SetBoneDamping(m_dragLinearDamping, m_dragAngularDamping);
+
+        m_appliedRopeTuning = new Vector4(
+            m_ropeLength, m_ropeLimitSpring, m_ropeLimitDamper, m_dragLinearDamping);
+        m_appliedDragAngularDamping = m_dragAngularDamping;
+    }
+
+    // 마지막으로 적용한 튜닝 값 — 인스펙터에서 바뀐 프레임에만 다시 쓰기 위한 비교용.
+    // (관절 프로퍼티 대입과 뼈 11개 순회를 매 물리 스텝 돌리지 않는다)
+    private Vector4 m_appliedRopeTuning;
+    private float m_appliedDragAngularDamping;
+
+    private bool RopeTuningChanged =>
+        m_appliedRopeTuning
+            != new Vector4(m_ropeLength, m_ropeLimitSpring, m_ropeLimitDamper, m_dragLinearDamping)
+        || m_appliedDragAngularDamping != m_dragAngularDamping;
+
+    // 밧줄에 묶인 동안에만 거는 감쇠 — 푸는 쪽은 프리팹에서 읽어 둔 평시 값으로 되돌린다.
+    // 사망 비행(Ragdoll 상태)에는 절대 걸지 않는다: 그 구간은 임펄스만이 입력인 탄도여야 한다.
+    private void SetBoneDamping(float linear, float angular)
+    {
+        if (m_bodies == null || m_baseLinearDamping == null)
+            return;
+
+        for (int i = 0; i < m_bodies.Length; i++)
+        {
+            if (m_bodies[i] == null)
+                continue;
+            m_bodies[i].linearDamping = linear;
+            m_bodies[i].angularDamping = angular;
+        }
+    }
+
+    private void RestoreBoneDamping()
+    {
+        if (m_bodies == null || m_baseLinearDamping == null)
+            return;
+
+        for (int i = 0; i < m_bodies.Length; i++)
+        {
+            if (m_bodies[i] == null)
+                continue;
+            m_bodies[i].linearDamping = m_baseLinearDamping[i];
+            m_bodies[i].angularDamping = m_baseAngularDamping[i];
+        }
     }
 
     /// <summary>밧줄을 푼다 — 내려놓기·부활·운반자 소실.</summary>
@@ -589,6 +688,7 @@ public class PlayerRagdoll : MonoBehaviour
 
         Destroy(m_ropeJoint);
         m_ropeJoint = null;
+        RestoreBoneDamping(); // 감쇠는 밧줄의 수명과 같다 — 풀면 다시 탄도로 돌아간다
     }
 
     // 앵커를 운반자 손 위치로 옮긴다 — 물리 스텝마다. 앵커는 키네마틱이라 이 이동이 곧 밧줄의
@@ -598,6 +698,10 @@ public class PlayerRagdoll : MonoBehaviour
         if (m_ropeAnchor == null || m_ropeCarrier == null)
             return;
 
+        // Play 중 인스펙터에서 값을 바꾸면 밧줄을 다시 잡지 않아도 바로 먹는다 (튜닝용).
+        if (RopeTuningChanged)
+            ApplyRopeTuning();
+
         m_ropeAnchor.MovePosition(m_ropeCarrier.position);
 
         // 밧줄이 팽팽해지는 순간 시체가 자고 있으면 장력을 못 받는다.
@@ -606,6 +710,44 @@ public class PlayerRagdoll : MonoBehaviour
         // 사지가 받지 않아 <b>몸이 한 덩어리로 끌려온다</b> — 흐느적임이 통째로 사라진다.
         if (m_hipsBody != null && m_hipsBody.IsSleeping())
             WakeBodies();
+
+        ClampBoneSpeed(); // 슬링 차단 — 장력을 적용한 뒤에 자른다
+    }
+
+    /// <summary>
+    /// 밧줄에 묶인 동안 뼈 속도에 <b>하드 상한</b>을 건다 — 방향은 그대로 두고 크기만 자른다.
+    ///
+    /// <b>왜 감쇠가 아니라 캡인가</b>(§9-18). 운반자가 달리며 원을 그리면 밧줄은 투석기가 된다 —
+    /// 장력은 항상 앵커 쪽(반경 방향)이지만 <b>앵커가 움직이면 그 장력이 일을 하기 때문에</b>
+    /// 시체가 가속된다. 이때 넣는 힘은 ω²로 커지는데 선형 감쇠가 빼는 양은 v에 비례하므로,
+    /// 빠르게 돌수록 입력이 이긴다 — <b>감쇠를 아무리 올려도 임계 회전속도만 밀릴 뿐 못 막는다.</b>
+    /// 현실에서 그 역할을 하는 지면 마찰도 장력이 시체를 손 높이로 들어올리면 사라진다.
+    ///
+    /// 그래서 ω와 무관하게 성립하는 상한이 필요하다. 이건 물리를 흉내 내는 값이 아니라
+    /// <b>봉투(envelope)</b>다 — k_maxDepenetrationVelocity·m_alignSnapDistance와 같은 계열이고,
+    /// 정상적인 끌기에서는 걸리지 않아야 한다. 자주 걸린다면 상한을 올릴 게 아니라 왜 시체가
+    /// 스프린트보다 빠른지를 봐야 한다.
+    ///
+    /// <b>사망 비행에는 걸리지 않는다</b> — 이 함수는 밧줄이 묶여 있을 때만 도는
+    /// <see cref="TickRopeAnchor"/>에서 불린다. 그쪽은 임펄스만이 입력인 탄도로 남아야 한다.
+    /// </summary>
+    private void ClampBoneSpeed()
+    {
+        if (m_ropeMaxSpeed <= 0f || m_bodies == null)
+            return;
+
+        float maxSqr = m_ropeMaxSpeed * m_ropeMaxSpeed;
+        for (int i = 0; i < m_bodies.Length; i++)
+        {
+            Rigidbody body = m_bodies[i];
+            if (body == null || body.isKinematic)
+                continue;
+
+            Vector3 velocity = body.linearVelocity;
+            float sqr = velocity.sqrMagnitude;
+            if (sqr > maxSqr)
+                body.linearVelocity = velocity * (m_ropeMaxSpeed / Mathf.Sqrt(sqr));
+        }
     }
 
     // 전 뼈를 깨운다 — 흐느적임은 사지가 깨어 있어야 나온다 (TickRopeAnchor 주석 참고).
