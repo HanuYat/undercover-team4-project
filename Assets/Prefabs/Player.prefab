@@ -2976,6 +2976,7 @@ GameObject:
   - component: {fileID: 1944191930658825646}
   - component: {fileID: 159535688444442221}
   - component: {fileID: 1764053349963750978}
+  - component: {fileID: 7338639710432400750}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -3410,7 +3411,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerIncapacitation
   ShowTopMostFoldoutHeaderGroup: 1
   m_reviveHitbox: {fileID: 6891439341619729457}
-  m_dieAfterDownSeconds: 60
 --- !u!114 &-6997859010805551940
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3780,6 +3780,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerEscortCommands
   ShowTopMostFoldoutHeaderGroup: 1
   m_channelSeconds: 3
+  m_unropeDownSeconds: 3
 --- !u!114 &1988824250104969133
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3795,6 +3796,36 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_dragSlowPerWeight: 0.25
   m_minDragSpeedFactor: 0.35
+--- !u!114 &115275667145390572
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e4d759928de1bdd41974ac15b4ed15db, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerHitView
+  ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &1944191930658825646
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b77f0f3d97b34134fb4cde66336c5d52, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ShockArcEmitter
+  m_arcPrefab: {fileID: 3899972695854152562, guid: 3216e466bb8e705409ab12e6fd69e81b, type: 3}
+  m_arcLifetime: 0.45
+  m_minInterval: 0.12
+  m_maxInterval: 0.26
+  m_calmIntervalScale: 2.5
 --- !u!114 &159535688444442221
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3825,6 +3856,21 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerWallet
   ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &7338639710432400750
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fa00e1557d2caf94389cb9beba52366e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerFootstepView
+  m_walkStride: 2
+  m_runStride: 2.6
+  m_runSpeedThreshold: 6.5
 --- !u!1 &5720394585047626155
 GameObject:
   m_ObjectHideFlags: 0
@@ -6441,32 +6487,3 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 3904410865140374283, guid: 51e185de9728ed04b83896cf8f810a93, type: 3}
   m_PrefabInstance: {fileID: 7329652667621578895}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &115275667145390572
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5466483465133727208}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e4d759928de1bdd41974ac15b4ed15db, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerHitView
-  ShowTopMostFoldoutHeaderGroup: 1
---- !u!114 &1944191930658825646
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5466483465133727208}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b77f0f3d97b34134fb4cde66336c5d52, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ShockArcEmitter
-  m_arcPrefab: {fileID: 3899972695854152562, guid: 3216e466bb8e705409ab12e6fd69e81b, type: 3}
-  m_arcLifetime: 0.45
-  m_minInterval: 0.12
-  m_maxInterval: 0.26

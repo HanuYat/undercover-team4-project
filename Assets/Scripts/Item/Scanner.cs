@@ -41,6 +41,10 @@ public class Scanner : ItemBase
     // 스캐너는 줍기 시 소유권이 홀더로 이전되므로(#88) 기반의 SendTo.Owner가 정확히 든 사람에게 간다.
     protected override void RaiseOwnerToast(string message) => OnScanFeedback?.Invoke(message);
 
+    // 판독음은 채널링을 하는 동안 난다 — 결과가 나온 뒤 한 번 울리면 "읽는 중"이라는 정보가 없어
+    // 게이지만 쳐다보게 된다. 기반이 게이지와 같은 짝으로 켜고 끄므로 취소해도 소리가 남지 않는다. (#483)
+    protected override EAudioClip ChannelLoopSound => EAudioClip.ScannerScan;
+
     private void Awake()
     {
         m_battery = GetComponent<ItemBattery>();

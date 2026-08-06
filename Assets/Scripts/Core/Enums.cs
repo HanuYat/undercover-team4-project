@@ -72,6 +72,32 @@ public enum EAudioClip
     BatonHitFlesh, // 퍽 — 인간 NPC를 맞혔다
     BatonHitWorld, // 둔탁 — 벽·소품을 맞혔다
     TaserHit, // 지직 — 테이저 명중 (대상이 로봇이든 사람이든 같다. 전기는 몸체를 가리지 않는다)
+
+    // 이동음 (#483) — 전부 3D다. 남의 발소리가 어디서 나는지가 곧 정보이기 때문이다
+    // (본부가 못 보는 구역에서 누가 움직이는지, 뒤에 누가 붙었는지).
+    FootstepWalk, // 저벅 — 걷는 중 한 걸음
+    FootstepRun, // 타닥 — 뛰는 중 한 걸음
+    JumpTakeoff, // 탁 — 발을 떼는 순간
+    JumpLand, // 쿵 — 착지
+
+    ScannerScan, // 삐릭 — 스캐너 판독
+    UiSuccess, // 성공 확인음
+    UiFail, // 실패 확인음
+}
+
+/// <summary>
+/// BGM 식별자 — SoundManager가 AudioLibrary에서 곡·볼륨을 찾는 키. (#483)
+///
+/// <b>씬과 1:1이 아니다.</b> 여러 씬이 같은 곡을 쓰면(타이틀·로비) 그 사이 전환에서 곡이
+/// 끊기거나 처음부터 다시 시작하지 않아야 하고, 반대로 한 씬 안에서 곡이 바뀔 수도 있다.
+/// 씬↔곡 대응은 AudioLibrary의 씬 표에 있고, 이 enum은 '어느 곡인가'만 가리킨다.
+/// </summary>
+public enum EBgm
+{
+    None, // 무음 — 배선 누락과 구분되는 '의도적으로 안 틂'
+    Title, // 타이틀·로비 — 세션을 꾸리는 동안
+    Shop, // 상점(인게임 허브) — 라운드 사이 준비
+    Round, // 라운드 진행 중
 }
 
 /// <summary>

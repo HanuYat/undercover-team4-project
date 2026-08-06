@@ -81,6 +81,11 @@ public class VerdictBanner : PanelBase
         if (m_toneTarget != null)
             m_toneTarget.color = VerdictToColor(data.Verdict);
 
+        // 판정음은 배너와 같은 자리에서 낸다 — 이 배너 자체가 이미 '검거한 본인에게만' 뜨므로
+        // 전파를 새로 고민할 것이 없고, 소리와 화면이 어긋날 여지도 없다.
+        // 위치가 없는 확인음이라 2D다 — 옆 사람에게 들리면 "내 판정"이라는 신호가 아니게 된다.
+        App.Sound?.PlaySfx2D(VerdictToSound(data.Verdict));
+
         OpenPanel();
 
         CancelHide();
@@ -140,6 +145,14 @@ public class VerdictBanner : PanelBase
 
         m_detailFormat.StringChanged -= HandleDetailChanged;
         m_detailBound = false;
+    }
+
+    // 오검거만 실패음이고 나머지는 성공음이다. 경범죄는 톤 색이 중립이라 소리도 비워 뒀었는데,
+    // 실제로 잡아 보면 "제대로 처리했다"는 확인이 없어 실패한 것처럼 읽혔다 — 난동꾼 연행은 수익이
+    // 나는 정상 처리이므로 성공 쪽에 둔다. 갈리는 기준은 '보상이 있었는가'가 아니라 '잘못 잡았는가'다.
+    private static EAudioClip VerdictToSound(ArrestVerdict verdict)
+    {
+        return verdict == ArrestVerdict.WrongfulArrest ? EAudioClip.UiFail : EAudioClip.UiSuccess;
     }
 
     private Color VerdictToColor(ArrestVerdict verdict)
