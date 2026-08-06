@@ -11,6 +11,7 @@ using Random = UnityEngine.Random;
 /// 네트워크를 켜지 않은 로컬 Play 테스트에서는 기존처럼 단독으로 동작한다.
 /// </summary>
 [RequireComponent(typeof(NavMeshAgent))]
+[RequireComponent(typeof(NpcIntruder))] // 도메인 부품 — 누락 시 침입 경로가 NRE로 죽는다 (#503)
 public partial class NpcController : NetworkBehaviour
 {
     [Header("상태별 튜닝 데이터 (ScriptableObject) — #259")]
@@ -28,6 +29,9 @@ public partial class NpcController : NetworkBehaviour
 
     private NavMeshAgent m_agent;
     private NpcStateMachine m_stateMachine;
+
+    // 도메인 부품 — 같은 GameObject에 붙는다. [RequireComponent]로 누락을 막는다. (#503)
+    private NpcIntruder m_intruder;
 
     // 넉백 비행 상태 — 서버(또는 오프라인)에서만 의미. 비행 중에는 FSM/NavMeshAgent가 정지한다. (#232)
     private Vector3 m_knockbackVelocity;
@@ -114,24 +118,13 @@ public partial class NpcController : NetworkBehaviour
     /// 좌석의 Z축(forward)이 앉아서 바라보는 방향이다 — 도착하면 그 방향으로 돌아 앉는다.</summary>
     public Transform JailSeat { get; private set; }
 
-    /// <summary>침입 중 걸어갈 목표 지점(유치장 자물쇠). 침입 중이 아니면 null. 서버에서만 유효. (#231)</summary>
-    public Transform IntrudeTarget { get; private set; }
-
-    /// <summary>자물쇠에 도달해 해제를 시작하기까지 걸리는 시간(초). 탈출 이벤트가 StartIntrude로 넘겨준다. (#231)</summary>
-    public float IntrudeUnlockSeconds { get; private set; }
-
-    /// <summary>침입 이동 종료 — reached=true 도달, false 경로 실패. 탈출 이벤트가 구독한다. 서버에서만 발생. (#231)</summary>
-    public event Action<NpcController, bool> OnIntrudeFinished;
-
-    /// <summary>
-    /// 자물쇠 해제 착수 — 목표에 도달해 해제 채널링을 시작한 순간. 탈출 이벤트가 구독해 본부 경보를 울린다.
-    /// 도달과 해제 완료(<see cref="OnIntrudeFinished"/>) 사이의 대응 구간을 여는 신호다. 서버에서만 발생. (#231)
-    /// </summary>
-    public event Action<NpcController> OnIntrudeUnlockStarted;
+    /// <summary>침입 도메인 부품 — 목표·해제 시간·진행 이벤트를 들고 있다. (#231/#503)</summary>
+    public NpcIntruder Intruder => m_intruder;
 
     private void Awake()
     {
         m_agent = GetComponent<NavMeshAgent>();
+        m_intruder = GetComponent<NpcIntruder>();
 
         m_stateMachine = new NpcStateMachine();
         m_stateMachine.AddState(NpcState.Idle, new NpcIdleState(this, m_idleConfig));

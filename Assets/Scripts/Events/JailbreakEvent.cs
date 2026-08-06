@@ -174,8 +174,8 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         // 현장에 스캔을 요청해 이름을 대조해야 한다(GDD 5-4의 2단계 판독).
 
         // 해제 착수·완료 통보를 받아 경보/자물쇠 해제를, 상태 전이를 받아 플레이어 개입을 처리한다
-        m_intruder.OnIntrudeUnlockStarted += HandleUnlockStarted;
-        m_intruder.OnIntrudeFinished += HandleIntrudeFinished;
+        m_intruder.Intruder.OnIntrudeUnlockStarted += HandleUnlockStarted;
+        m_intruder.Intruder.OnIntrudeFinished += HandleIntrudeFinished;
         m_intruder.OnStateChanged += HandleStateChanged;
 
         m_hasStarted = false;
@@ -194,7 +194,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         // 같은 프레임에 부르면 뒤이어 실행되는 InitBehavior가 Idle로 덮어쓸 수 있다.
         if (m_pendingStart && Time.frameCount > m_spawnFrame)
         {
-            m_intruder.StartIntrude(m_jailLock.ApproachPoint, m_unlockSeconds);
+            m_intruder.Intruder.StartIntrude(m_jailLock.ApproachPoint, m_unlockSeconds);
             m_pendingStart = false;
             m_hasStarted = true;
         }
@@ -279,8 +279,8 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (npc != m_intruder)
             return;
 
-        m_intruder.OnIntrudeFinished -= HandleIntrudeFinished;
-        m_intruder.OnIntrudeUnlockStarted -= HandleUnlockStarted;
+        m_intruder.Intruder.OnIntrudeFinished -= HandleIntrudeFinished;
+        m_intruder.Intruder.OnIntrudeUnlockStarted -= HandleUnlockStarted;
 
         if (!reached)
         {
@@ -406,8 +406,8 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
             return;
 
         // 이미 해제됐더라도 -=는 중복 호출이 안전하다(미구독 시 무동작)
-        m_intruder.OnIntrudeUnlockStarted -= HandleUnlockStarted;
-        m_intruder.OnIntrudeFinished -= HandleIntrudeFinished;
+        m_intruder.Intruder.OnIntrudeUnlockStarted -= HandleUnlockStarted;
+        m_intruder.Intruder.OnIntrudeFinished -= HandleIntrudeFinished;
         m_intruder.OnStateChanged -= HandleStateChanged;
 
         m_intruder = null;
