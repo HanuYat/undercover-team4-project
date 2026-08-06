@@ -158,8 +158,14 @@ public class PlayerHandView : NetworkBehaviour
     private PlayerItemUser m_itemUser;
     private GameObject m_heldModelInstance;
 
-    // FP 손 손가락 프리셋 적용용 — 장착 아이템의 HandGrip에 맞춰 손가락을 굽힌다 (#265).
-    // 손 본이 통짜 스킨드 메시라 애니메이터 없이 본을 직접 회전한다. 굽힘은 본 로컬 X축 기준.
+    // FP 손 손가락 프리셋 — 장착 아이템의 HandGrip에 맞춰 손가락을 굽힌다 (#265).
+    // 손 본이 통짜 스킨드 메시라 애니메이터 없이 본을 직접 회전한다.
+    //
+    // <b>축(#428): 굽힘 = 본 로컬 Z(+가 손바닥 안쪽), 벌림 = Y, X는 안 쓴다.</b>
+    // 이 리그의 손가락 본은 제 로컬 +X로 뻗어 있어(자식 본 localPosition이 전부 (+길이, 0, 0))
+    // X 회전은 굽힘이 아니라 길이축 롤이다 — 키워도 안 굽고 살만 꼬인다. 되돌리지 말 것.
+    // 엄지만 <b>-Y가 굽힘</b>이다. 쥘 때 엄지는 감기는 게 아니라 손바닥을 가로질러 넘어오기(대립) 때문.
+    // 근거(3관절에 ±40° 먹이고 잰 손끝↔엄지끝 거리, 기준 0.156): +Z 0.138 / -Z 0.189 / 엄지 -Y 0.090.
     private enum FingerKind { Finger, Index, Thumb }
 
     private struct FingerJoint
@@ -167,9 +173,22 @@ public class PlayerHandView : NetworkBehaviour
         public Transform Bone;
         public Quaternion BaseRotation; // 바인드 로컬 회전 — 프리셋 굽힘을 이 위에 얹는다
         public FingerKind Kind;
+        public int Depth; // 체인에서 몇 번째 마디인가(0 = 손에 붙은 뿌리). 깊이별 감쇠에 쓴다 (#428)
     }
 
     private FingerJoint[] m_fingerJoints;
+
+    // 마디별 굽힘 몫 (#428). 프리셋 각도는 '뿌리 마디 기준'이고 깊은 마디는 이 비율만큼만 굽는다 —
+    // 3마디에 같은 각을 그대로 얹으면 합이 3배가 돼 손끝이 손바닥을 뚫는다.
+    private static readonly float[] s_fingerDepthWeights = { 1f, 0.75f, 0.5f };
+
+    // 엄지 뿌리는 중수골(손목 관절)이라 크게 돌리면 엄지가 통째로 손목에서 스윙한다 — 몫을 확 줄이고
+    // 쥐는 힘은 아래 두 마디에서 낸다.
+    private static readonly float[] s_thumbDepthWeights = { 0.25f, 0.9f, 0.7f };
+
+    // 검지를 방아쇠에 맞출 때 훑는 범위·간격 (#428). 60도를 넘기면 검지가 방아쇠를 지나 총 안으로 말린다.
+    private const float k_indexAimMaxDegrees = 60f;
+    private const float k_indexAimStepDegrees = 2.5f;
 
     // 뷰모델 흔들림 상태 — 손 모델의 기준 로컬 포즈에 매 프레임 오프셋을 얹는다
     private CharacterController m_controller;
@@ -509,8 +528,14 @@ public class PlayerHandView : NetworkBehaviour
         m_heldModelInstance.transform.localPosition = item.HeldPositionOffset;
         m_heldModelInstance.transform.localRotation = Quaternion.Euler(item.HeldRotationOffset);
 
-        // 표시 전용 인스턴스 — 콜라이더가 필요 없으니 아예 제거한다. 끄기만 하면 손 본(Synty 오른손은
-        // 미러링돼 스케일이 음수)에 붙었을 때 BoxCollider가 음수 스케일 경고를 계속 뱉는다. (#265)
+        // 총이면 검지를 그 총의 방아쇠에 맞춘다 — 모델이 제자리를 잡은 뒤라야 방아쇠 위치가 확정된다 (#428)
+        if (item.HandGrip == HandGrip.Trigger)
+        {
+            AimIndexAtTrigger(m_heldModelInstance);
+        }
+
+        // 표시 전용 인스턴스 — 콜라이더가 필요 없으니 아예 제거한다. 끄기만 하면 뷰모델이 물리·레이캐스트에
+        // 계속 걸린다. (#265)
         foreach (Collider heldCollider in m_heldModelInstance.GetComponentsInChildren<Collider>(true))
         {
             Destroy(heldCollider);
@@ -537,8 +562,10 @@ public class PlayerHandView : NetworkBehaviour
         return null;
     }
 
-    // FP 손(m_handsModel)의 손가락 본을 수집하고 바인드 회전을 기억해 둔다.
-    // Synty 로우폴리 손은 손가락 그룹 3개(Finger=중지열·Index·Thumb), 각 최대 3관절.
+    // FP 손(m_handsModel)의 손가락 본을 수집하고 바인드 회전·체인 깊이를 기억해 둔다.
+    // Synty 로우폴리 손은 손가락 그룹 3개 — Finger(중지·약지·소지를 뭉친 열)·Index·Thumb.
+    // Finger/Index는 본이 4개(01~04)지만 01이 이미 너클이라 굽는 건 앞 3개고 04는 손끝 캡이다.
+    // Thumb은 본이 3개(01=중수골·02·03)뿐이라 뿌리까지 담긴다 — 그 몫은 s_thumbDepthWeights가 줄인다.
     private void CacheFingerJoints()
     {
         var joints = new System.Collections.Generic.List<FingerJoint>();
@@ -559,7 +586,13 @@ public class PlayerHandView : NetworkBehaviour
                     Transform seg = chainRoot;
                     for (int depth = 0; seg != null && depth < 3; depth++)
                     {
-                        joints.Add(new FingerJoint { Bone = seg, BaseRotation = seg.localRotation, Kind = kind });
+                        joints.Add(new FingerJoint
+                        {
+                            Bone = seg,
+                            BaseRotation = seg.localRotation,
+                            Kind = kind,
+                            Depth = depth,
+                        });
                         seg = seg.childCount > 0 ? seg.GetChild(0) : null;
                     }
                 }
@@ -568,35 +601,155 @@ public class PlayerHandView : NetworkBehaviour
         m_fingerJoints = joints.ToArray();
     }
 
-    // 장착 아이템의 그립 프리셋에 맞춰 손가락을 굽힌다. 바인드 회전 위에 로컬 X 굽힘을 얹는다.
+    // 장착 아이템의 그립 프리셋에 맞춰 손가락을 굽힌다. 바인드 회전 위에 마디별 굽힘을 얹는다.
     private void ApplyGrip(HandGrip grip)
     {
         if (m_fingerJoints == null) return;
         foreach (FingerJoint j in m_fingerJoints)
         {
             if (j.Bone == null) continue;
-            j.Bone.localRotation = j.BaseRotation * Quaternion.Euler(CurlEuler(grip, j.Kind));
+            j.Bone.localRotation = j.BaseRotation * Quaternion.Euler(CurlEuler(grip, j.Kind, j.Depth));
         }
     }
 
-    // 프리셋별 손가락 굽힘 오일러 각(도). 눈대중 초기값 — 아트가 보고 조정한다. (#265)
-    // X = 굽힘(손바닥·물건 안쪽으로 말림), Y = 비틀기, Z = 좌우 벌림(엄지를 총 밖으로 빼는 축).
-    private static Vector3 CurlEuler(HandGrip grip, FingerKind kind)
+    /// <summary>
+    /// 든 총의 방아쇠에 검지를 얹는다. (#428)
+    /// 방아쇠 위치는 총마다 달라 <see cref="CurlEuler"/>의 고정 각도로는 못 맞춘다(테이저에 45도를 고정으로
+    /// 물려 보니 5.3cm 어긋났다). Synty 총기 프리팹은 방아쇠가 이름에 "Trigger"가 든 별도 자식 메시라, 그 중심을
+    /// 목표로 검지 굽힘만 훑어 가장 가까운 각을 고른다 — 아이템 오프셋을 나중에 옮겨도 검지가 따라온다.
+    /// 거리는 손끝 점이 아니라 <b>말단 마디 선분</b>으로 잰다. 방아쇠에 닿는 건 손톱이 아니라 손가락
+    /// 바닥면이라, 점으로 재면 손끝을 방아쇠에 붙이려고 과하게 말린다.
+    /// </summary>
+    private void AimIndexAtTrigger(GameObject heldModel)
     {
+        if (m_fingerJoints == null || heldModel == null)
+        {
+            return;
+        }
+
+        Renderer trigger = null;
+        foreach (Renderer r in heldModel.GetComponentsInChildren<Renderer>(true))
+        {
+            if (r.name.IndexOf("Trigger", System.StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                trigger = r;
+                break;
+            }
+        }
+        if (trigger == null)
+        {
+            return; // 방아쇠 메시가 없는 총 — CurlEuler의 폴백 각도 그대로 둔다
+        }
+
+        // 검지 마디를 깊이 순으로 모은다 (CacheFingerJoints가 그 순서로 넣는다)
+        Transform[] bones = new Transform[s_fingerDepthWeights.Length];
+        Quaternion[] baseRotations = new Quaternion[bones.Length];
+        int count = 0;
+        foreach (FingerJoint j in m_fingerJoints)
+        {
+            if (j.Kind != FingerKind.Index || j.Bone == null || count >= bones.Length)
+            {
+                continue;
+            }
+            bones[count] = j.Bone;
+            baseRotations[count] = j.BaseRotation;
+            count++;
+        }
+        if (count < bones.Length)
+        {
+            return;
+        }
+
+        Transform lastJoint = bones[bones.Length - 1];
+        Transform tip = lastJoint.childCount > 0 ? lastJoint.GetChild(0) : lastJoint;
+        Vector3 target = trigger.bounds.center;
+
+        // ponytail: 관절 하나짜리 1차원 문제라 완전탐색이면 충분하다 — 장착할 때 한 번만 돈다.
+        // 각도가 더 필요해지면(손가락별로 다른 목표 등) 그때 이분 탐색이나 IK로 바꿀 것.
+        float bestCurl = 0f;
+        float bestDistance = float.MaxValue;
+        for (float curl = 0f; curl <= k_indexAimMaxDegrees; curl += k_indexAimStepDegrees)
+        {
+            ApplyIndexCurl(bones, baseRotations, curl);
+            float distance = DistanceToSegment(lastJoint.position, tip.position, target);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestCurl = curl;
+            }
+        }
+        ApplyIndexCurl(bones, baseRotations, bestCurl);
+    }
+
+    // 검지 체인에 굽힘 각을 얹는다 — 마디별 몫은 다른 손가락과 같은 s_fingerDepthWeights를 쓴다.
+    private static void ApplyIndexCurl(Transform[] bones, Quaternion[] baseRotations, float curl)
+    {
+        for (int i = 0; i < bones.Length; i++)
+        {
+            bones[i].localRotation =
+                baseRotations[i] * Quaternion.Euler(0f, 0f, curl * s_fingerDepthWeights[i]);
+        }
+    }
+
+    // 선분 ab와 점 p 사이의 최단 거리.
+    private static float DistanceToSegment(Vector3 a, Vector3 b, Vector3 p)
+    {
+        Vector3 ab = b - a;
+        float t = Mathf.Clamp01(Vector3.Dot(p - a, ab) / Mathf.Max(ab.sqrMagnitude, 1e-8f));
+        return Vector3.Distance(a + ab * t, p);
+    }
+
+    /// <summary>
+    /// 프리셋·손가락 종류·마디 깊이에 해당하는 굽힘 오일러 각(도)을 낸다. (#265, 축 정정 #428)
+    /// 각도는 <b>뿌리 마디 기준</b>이고 깊은 마디는 s_*DepthWeights 비율만큼만 굽는다.
+    /// 축은 FingerKind 선언부 주석 참고 — 되돌리면 손가락이 다시 비틀린다.
+    ///
+    /// 각도 감각: Finger 체인 손끝이 Hand_R 로컬로 curl 90 → (0.039, 0.032)면 주먹,
+    /// 100 → (0.040, 0.012)면 손끝이 손바닥에 닿고, 110부터 y가 음수 = 손바닥을 뚫는다.
+    /// 그래서 손가락 curl 상한은 100 언저리다.
+    /// </summary>
+    private static Vector3 CurlEuler(HandGrip grip, FingerKind kind, int depth)
+    {
+        bool isThumb = kind == FingerKind.Thumb;
+
+        // curl = 물건을 감싸는 방향으로 마는 양, spread = 손바닥 평면에서 여는 양.
+        float curl;
+        float spread = 0f;
+
         switch (grip)
         {
-            case HandGrip.Trigger: // 총류 — 검지 걸치고 나머지 감쌈, 엄지는 굽히되 바깥으로 벌려 총을 안 뚫게
-                if (kind == FingerKind.Index) return new Vector3(20f, 0f, 0f);
-                if (kind == FingerKind.Thumb) return new Vector3(50f, 0f, 30f);
-                return new Vector3(58f, 0f, 0f);
-            case HandGrip.Wide: // 큰 물건 — 손 넓게
-                return kind == FingerKind.Thumb ? new Vector3(6f, 0f, 0f) : new Vector3(8f, 0f, 0f);
-            case HandGrip.Handle: // 자루형(진압봉) — 검지까지 다섯 손가락을 같은 깊이로 말아 자루를 감싼다.
-                // Trigger보다 깊게 쥐는 이유: 걸칠 방아쇠가 없고, 스윙 중(#217) 얕게 쥐면 자루가 손에서
-                // 겉도는 게 눈에 띈다. 엄지는 Z를 음수로 줘 바깥으로 벌리지 않고 자루 위를 덮게 한다.
-                return kind == FingerKind.Thumb ? new Vector3(45f, 0f, -12f) : new Vector3(72f, 0f, 0f);
-            default: // Relaxed — 자연스럽게 살짝 쥠
-                return kind == FingerKind.Thumb ? new Vector3(15f, 0f, 0f) : new Vector3(20f, 0f, 0f);
+            case HandGrip.Trigger: // 총류 — 검지는 방아쇠에 걸치느라 덜 굽는다
+                // 엄지 spread가 총 본체와 겹치는지를 좌우한다. Taser 기준 실측(엄지 체인 7점 중 관통 수):
+                // +20 → 5점, 0 → 5점, -20 → curl 15~60 전 구간 0점.
+                // 그래도 +20을 쓴다 — 이 수치는 본 중심선 기준이라 실제 스킨과 다르고, 인게임에서 보면
+                // -20은 엄지가 총 아래로 빠져 쥔 것처럼 안 보인다. 숫자만 보고 뒤집지 말 것.
+                // 검지 20은 방아쇠 메시가 없는 총용 폴백 — 있으면 AimIndexAtTrigger가 덮어쓴다.
+                curl = isThumb ? 35f : (kind == FingerKind.Index ? 20f : 65f);
+                if (isThumb) spread = 20f;
+                break;
+            case HandGrip.Wide: // 스캐너·박스 등 큰 물건 — 거의 편 손
+                curl = isThumb ? 6f : 10f;
+                if (isThumb) spread = 5f;
+                break;
+            case HandGrip.Handle: // 자루형(진압봉) — 다섯 손가락을 같은 깊이로 말아 자루를 감싼다
+                // Trigger보다 깊게 쥔다: 걸칠 방아쇠가 없고, 스윙 중(#217) 얕게 쥐면 자루가 겉돈다.
+                // 92가 손끝이 자루를 덮는 상한이지만 거기까지 주면 마디가 파묻혀 꽉 움켜쥔 그림이 된다 —
+                // 70이 마디가 드러나면서도 헐거워 보이지 않는 지점. 엄지는 음수 spread로 자루 위를 덮는다.
+                curl = isThumb ? 52f : 70f;
+                if (isThumb) spread = -6f;
+                break;
+            default: // Relaxed — 빈손. 살짝 쥔 모양 (40을 주면 주먹에 가까워진다)
+                curl = isThumb ? 18f : 26f;
+                if (isThumb) spread = 3f;
+                break;
         }
+
+        float[] weights = isThumb ? s_thumbDepthWeights : s_fingerDepthWeights;
+        float w = depth < weights.Length ? weights[depth] : 0f;
+        curl *= w;
+        spread *= w;
+
+        // 엄지는 대립(-Y)이 굽힘이고 Z가 보조, 나머지는 Z가 굽힘·Y가 벌림. X는 길이축 롤이라 항상 0.
+        return isThumb ? new Vector3(0f, -curl, spread) : new Vector3(0f, spread, curl);
     }
 }

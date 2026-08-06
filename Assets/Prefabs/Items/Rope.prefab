@@ -46,7 +46,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3918227804
+  GlobalObjectIdHash: 1960023520
   InScenePlacedSourceGlobalObjectIdHash: 3129635724
   DeferredDespawnTick: 0
   Ownership: 1
@@ -105,9 +105,11 @@ MonoBehaviour:
     m_WaitForCompletion: 0
     m_LocalVariables: []
   m_heldModelPrefab: {fileID: 1923354129869992647, guid: 37618f8f1e3a11c40afc6dcdeba79233, type: 3}
-  m_heldPositionOffset: {x: 0.15, y: 0.02, z: 0}
+  m_heldPositionOffset: {x: 0.15, y: 0.03, z: 0}
   m_heldRotationOffset: {x: 90, y: 0, z: 0}
+  m_handGrip: 3
   m_targetOutlineColor: {r: 1, g: 0.85, b: 0.2, a: 1}
+  m_shopPrice: 0
   references:
     version: 2
     RefIds: []
