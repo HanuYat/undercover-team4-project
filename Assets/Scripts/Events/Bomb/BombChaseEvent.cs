@@ -31,9 +31,15 @@ public class BombChaseEvent : MonoBehaviour, ISuddenEvent
     private float m_navSampleMaxDistance = 5f;
 
     [Header("정리")]
-    [Tooltip("폭발 후 잔류 연출(넉백·VFX)을 보여줄 시간(초) — 지나면 폭탄을 치운다")]
+    [Tooltip(
+        "폭발 후 폭탄을 남겨 둘 시간(초) — 기본 0이면 터지는 순간 사라진다.
+
+"
+            + "연출을 붙잡아 두는 값이 아니다: 폭발 이펙트는 월드에 독립 스폰돼 자기 수명을 따로 관리하고"
+            + "(BombExplosionView) 넉백도 폭발 순간에 끝나므로, 남겨 봤자 <b>멀쩡한 폭탄 모델</b>만 서 있다"
+    )]
     [SerializeField]
-    private float m_resolvedLingerSeconds = 3f;
+    private float m_resolvedLingerSeconds;
 
     private BombDevice m_bomb;
     private bool m_resolved;
@@ -79,7 +85,12 @@ public class BombChaseEvent : MonoBehaviour, ISuddenEvent
         if (m_bomb == null)
             return;
 
-        // 폭발 후 잔류 연출 시간이 지나면 정리한다.
+        // 잔류 시간이 지나면 치운다 — 기본값(0)이면 폭발 다음 틱이라 눈으로는 터지는 순간이다.
+        //
+        // <b>폭발 콜백에서 직접 치우지 않는다.</b> HandleExploded가 도는 시점은 OnExploded를 아직
+        // 발행하는 중이라, 뒤에 오는 구독자가 이미 사라진 폭탄을 보게 된다 — 이펙트를 폭심에
+        // 스폰하고 넉백을 먹이는 BombExplosionView가 바로 그 구독자다. 한 틱 미루면 전 구독자가
+        // 끝난 뒤라 안전하고, 한 프레임 차이는 보이지 않는다.
         if (m_resolved && Time.time >= m_despawnAt)
             Despawn();
     }
