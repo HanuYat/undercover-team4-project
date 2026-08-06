@@ -4,7 +4,7 @@ using UnityEngine;
 /// 폭발 넉백 연출(플레이어) — 폭발 시 반경 안의 플레이어를 폭심에서 바깥으로 밀어낸다. (#232 표현 계층)
 ///
 /// 순수 표현이다. 피해·패닉 판정과 NPC 넉백은 서버가 <see cref="BombDevice"/>에서 이미 끝냈고,
-/// 이 뷰는 전 피어에 도달하는 <see cref="BombDevice.OnResolved"/>를 구독해
+/// 이 뷰는 전 피어에 도달하는 <see cref="BombDevice.OnExploded"/>를 구독해
 /// <b>각 피어가 자기 소유 플레이어만</b> 민다.
 ///
 /// 플레이어만 여기서 처리하는 이유: 이동 권한이 오너에게 있어(CharacterController + 오너 권한
@@ -27,19 +27,19 @@ public class BombExplosionView : MonoBehaviour
     {
         m_device = GetComponentInParent<BombDevice>();
         if (m_device != null)
-            m_device.OnResolved += HandleResolved;
+            m_device.OnExploded += HandleExploded;
     }
 
     private void OnDisable()
     {
         if (m_device != null)
-            m_device.OnResolved -= HandleResolved;
+            m_device.OnExploded -= HandleExploded;
     }
 
-    private void HandleResolved(bool defused)
+    private void HandleExploded()
     {
-        if (defused || m_device == null)
-            return; // 해체 성공은 넉백·이펙트 없음
+        if (m_device == null)
+            return;
 
         SpawnVfx();
 

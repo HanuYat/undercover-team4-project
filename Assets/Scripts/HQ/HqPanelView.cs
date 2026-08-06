@@ -46,7 +46,7 @@ public abstract class HqPanelView : MonoBehaviour
 
         OnClosed();
 
-        // ?. 금지 — 파괴된 Unity 오브젝트 fake null 우회 방지 (BombManualHud 관례)
+        // ?. 금지 — 파괴된 Unity 오브젝트 fake null 우회 방지 (CitizenDirectoryView와 같은 관례)
         if (m_input != null)
             m_input.SetSuspended(false);
         CursorLock.PopUnlock();
