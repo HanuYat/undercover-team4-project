@@ -14,6 +14,11 @@
 > 가장 큰 변화는 **#537이 열린 PR([#547](https://github.com/hyunjin0814/undercover-team4-project/pull/547))이 된 것**이다 —
 > 1단계 4번(`NpcCustody`)의 순서 판단이 "합의할 것"에서 **"#547 뒤로 미룬다"로 확정**됐다(§ 6). 그 PR이
 > 좌석 개념을 실제로 걷어내면서 4번의 이동 대상과 `NetworkVariable` 구성도 바뀐다(§ 3).
+>
+> **갱신 2026-08-06 (3차)** — **#547이 머지됐다**(`0b6c268`). 위 2차 갱신이 예고한 변화가 전부 코드가 됐으므로
+> § 1·§ 2-2·§ 3·§ 6·§ 8·§ 9·§ 10의 미래형 표현을 실측값으로 바꿨다. **1단계 4번의 대기 조건은 풀렸고**
+> (§ 6에 착수 준비 실측을 붙였다), 그 PR이 `SendToJail → ExitStun` **새 상호참조 1건**을 들여와 § 2-2가
+> 14행 15건이 됐다. 아직 4번에 착수하지는 않았다 — 이 문서만 현재 기준으로 맞춰 둔 상태다.
 
 ## 1. 현재 상태와 문제
 
@@ -22,10 +27,15 @@
 > 아래 표는 **착수 시점의 기준선**이다 — 분리가 진행되면서 실제 파일 수는 줄어든다.
 > 진행 상황은 § 6의 체크 표시로 추적한다(도메인 PR마다 이 표를 다시 재는 대신).
 >
-> **현재(2026-08-06, #545 머지 후 실측)**: 클래스 파일 **9개 → 8개 · 합계 1,621줄**(코어 315 + partial 7개).
+> **현재(2026-08-06, #547 머지 후 실측)**: 클래스 파일 **9개 → 8개 · 합계 1,618줄**(코어 315 + partial 7개).
 > 빠져나간 도메인은 부품 3개 **421줄**(`NpcPenaltyAgent` 207 · `NpcReaction` 153 · `NpcIntruder` 61)이 됐다.
 > 부품 쪽 줄 수가 원래 partial보다 큰 것은 클래스 헤더·`m_owner` 배선·코어에서 함께 데려온 멤버 때문이다.
 > (#545 PR 본문에 "10개 → 9개"로 적힌 것은 오기다 — 실제로는 9개 → 8개다.)
+>
+> #547이 partial 두 개의 크기를 바꿨다 — `Custody.cs` **139 → 135줄**(좌석 멤버 4개와 `SetJailAccess`·
+> `JailAreaMask`가 빠지고 순간이동 수감/반출이 들어왔다) · `StandUp.cs` **142 → 159줄**.
+> **클래스가 3줄 줄어든 것이 요점이 아니다** — 도메인 하나(#537)가 통째로 재설계됐는데도 파일 수는 그대로라는
+> 것이 아래 문단의 논거를 다시 확인해 준다.
 
 | 파일 | 줄 수 | 도메인 |
 |---|---|---|
@@ -71,12 +81,13 @@ partial 분리가 성장을 막지 못한다는 증거다.)
 
 `IDamageable`은 같은 GameObject에 남으므로 `GetComponent<IDamageable>()`로 찾는 폭발 데미지 경로(`BombDevice`)는 **무변경**이다.
 
-### 2-2. partial 간 상호참조: 14건 — 무력화 클러스터 + 공용 헬퍼 2개
+### 2-2. partial 간 상호참조: 15건 — 무력화 클러스터 + 공용 헬퍼 2개
 
 "도메인이 서로 얽혀서 하나씩 빼기 어렵다"는 우려를 검증하기 위해 partial 간 **실코드 상호참조를 전수 확인**했다
-(주석 제외, 코어의 Tick 호출 제외). 2026-08-06 1차 재측정에서 **11행 12건 → 15행 16건**으로 늘었고(늘어난 4건은
+(주석 제외, 코어의 Tick·Init 호출 제외). 2026-08-06 1차 재측정에서 **11행 12건 → 15행 16건**으로 늘었고(늘어난 4건은
 전부 #529·#522가 들여온 것이며 그중 2건은 **도메인 멤버가 아닌 private 헬퍼 공유**라 성격이 다르다), **#545로
-Reaction 관련 2건이 빠져 13행 14건**이 됐다. 아래는 #545 머지 후 실측이다.
+Reaction 관련 2건이 빠져 13행 14건**이 됐고, **#547이 `Custody → Stun` 1건을 들여와 14행 15건**이 됐다.
+아래는 #547 머지 후 실측이다.
 
 | 방향 | 참조 | 위치 |
 |---|---|---|
@@ -89,8 +100,9 @@ Reaction 관련 2건이 빠져 13행 14건**이 됐다. 아래는 #545 머지 �
 | Rope → StandUp | `CancelStandUp()` (재포획, #513) | `Rope.cs:149` |
 | Rope → Knockback | `m_knockbackActive` (비행 중이면 에이전트 양보) | `Rope.cs:207` |
 | Rope → Custody | `SetJailExtracted(false)` (#522 신규) | `Rope.cs:152` |
-| StandUp → Rope | `IsTethered` / `IsRoped` (누운 자세 판정) | `StandUp.cs:79` |
-| StandUp → Knockback·Stun | `m_knockbackActive` / `HasStunOverlay`(**private**) | `StandUp.cs:118` |
+| **Custody → Stun** | `ExitStun(false)` — 수감 직전 기절 오버레이를 걷는다(남으면 감옥에서 얼어붙는다, **#547 신규**) | `Custody.cs:112` |
+| StandUp → Rope | `IsTethered` / `IsRoped` (누운 자세 판정) | `StandUp.cs:91` |
+| StandUp → Knockback·Stun | `m_knockbackActive` / `HasStunOverlay`(**private**) | `StandUp.cs:134~135` |
 | **[헬퍼]** Custody → Rope | `TryWarpNear(...)` — private, Rope 도메인 멤버 아님 | `Custody.cs:50` (선언 `Rope.cs:245`) |
 | **[헬퍼]** Rope → Knockback | `SweepHitsObstacle(...)` — private, Knockback 도메인 멤버 아님 | `Rope.cs:375` (선언 `Knockback.cs:121`) |
 
@@ -122,6 +134,11 @@ Reaction 관련 2건이 빠져 13행 14건**이 됐다. 아래는 #545 머지 �
    남은 채 `m_custody.SetJailExtracted(...)`를 부르면 된다). `Custody → Rope`(`TryWarpNear`)는 나가는 참조지만
    아래 결론 4의 **가짜 의존**이라, 헬퍼를 코어로 올리면 사라진다. 그래서 Custody는 1단계에 남되
    **헬퍼 승격이 선행 조건으로 붙는다**(§ 6 1단계 4번).
+
+   **다만 #547로 Custody에 진짜 나가는 참조가 하나 생겼다** — `SendToJail`이 `ExitStun(false)`을 부른다.
+   1단계 기준(나가는 참조 0~1건) 안이라 판단은 그대로다: Stun이 아직 코어에 있으므로 부품화하면
+   `m_owner.ExitStun(false)`가 되고, 2단계 6번이 Stun을 빼갈 때 `m_stun.ExitStun(false)`로 경로만 바뀐다.
+   **순서 의존은 아니다** — 어느 쪽이 먼저 가도 한쪽은 코어 경유가 된다.
 4. **도메인 멤버가 아닌 private 헬퍼가 파일 경계를 넘어 공유되고 있다.** `TryWarpNear`(NavMesh 워프)와
    `SweepHitsObstacle`(물리 스윕)은 선언된 파일의 도메인 소유물이 아니라 **범용 유틸**이다. 부품에 딸려 보내면
    "Custody가 Rope를 참조한다" 같은 **가짜 의존**이 생겨 위 표가 실제보다 얽혀 보이게 된다 → 규약 § 4-6.
@@ -136,16 +153,16 @@ Reaction 관련 2건이 빠져 13행 14건**이 됐다. 아래는 #545 머지 �
 | `NpcStandUp` | 기상 예약 · 재포획 창 (#513) | `m_standUpPendingSynced` |
 | `NpcStun` | 스턴 오버레이 | `m_syncedStunned` |
 | `NpcPenaltyAgent` | 오검거·납치 페널티 | `m_abductionDuty` + `OnPenaltyDutyChanged` |
-| `NpcCustody` | 연행 · 유치장 · 수감 지점 · 수갑 해제 · 반출 표식 | `m_seatedSynced` · `m_jailExtractedSynced` → **#547 후엔 후자만**(아래) |
+| `NpcCustody` | 연행 · 수감(순간이동) · 감옥 퇴장 · 수갑 해제 · 반출 표식 | `m_jailExtractedSynced` (#547로 `m_seatedSynced`는 사라졌다) |
 | `NpcIntruder` | 침입 | — |
 | `NpcReaction` | 도주 · 저항 · 스윙 | 스윙 RPC |
 | `NpcController` (코어) | NavMeshAgent, FSM 구축·틱, 상태 동기화(#56), Update 게이트 순서, `SetFrozen`, `RaiseStandUp`/`RaiseAttackSwing` 중계, config SO 보관 | `m_networkState` |
 
-`NpcCustody`의 이동 대상은 **#547이 머지되면 줄어든다** — 그 PR이 좌석 개념을 걷어내며 `m_seated`·`m_seatedSynced`·
-`IsSeated`·`SetSeated`를 지우고 `SetJailAccess`·`JailAreaMask`도 함께 없앤다(브랜치 실측). `JailSeat`(코어)는
-`JailSpot`으로 이름이 바뀌고 "걸어가 앉을 좌석"이 "순간이동해 설 지점"이 된다. `TryWarpNear`는 그 PR에서도
-계속 쓰이므로 § 4-6의 헬퍼 승격은 그대로 선행 조건이다. 임시 거처(`Holding`)는 이 표에서 빠졌다 — 도달 불가
-코드로 판정돼 삭제됐다(§ 6 1단계 2번).
+`NpcCustody`의 이동 대상은 **#547로 줄었다** — 좌석 개념이 사라지며 `m_seated`·`m_seatedSynced`·`IsSeated`·
+`SetSeated`가 지워졌고 `SetJailAccess`·`JailAreaMask`도 함께 없어졌다(감옥이 별도 NavMesh 섬이 되어 영역
+마스크로 막을 일이 없다). 코어의 `JailSeat`는 `JailSpot`이 됐다 — "걸어가 앉을 좌석"이 "순간이동해 설 지점"이다.
+`TryWarpNear`는 새 `ServerExitJail`이 계속 쓰므로 § 4-6의 헬퍼 승격은 그대로 선행 조건이다.
+임시 거처(`Holding`)는 이 표에서 빠졌다 — 도달 불가 코드로 판정돼 삭제됐다(§ 6 1단계 2번).
 
 `NpcStandUp`을 별 부품으로 두는 이유: 기상 예약은 밧줄 풀림(#513)과 기절 기상(#269) **두 도메인이 공유**한다 —
 `RaiseStandUp` 순간 이벤트와 클립 길이(`NpcStunConfig.StandUpSeconds`)를 같이 쓰면서, 판정 자체는 "누가 어떻게
@@ -243,7 +260,7 @@ TickRopeDrag() → TickStandUp() → 넉백 게이트 → 스턴 게이트 → F
 |---|---|---|
 | #529 (피격 연출) · #522 (반출 재연행) | ✅ **머지됨** | 해제 — Health · Stun · Custody · Rope · StandUp · 코어 |
 | #535 (추격 폭탄) · #538 (사운드) · #544 (1인칭 손) | ✅ **머지됨** — NPC 스크립트 무변경 | 없음. #535가 진압봉을 고쳤지만(밀어내기 제거 → 폭탄 즉발) `Baton.cs`만이고, `BombDevice`의 `ServerApplyKnockback` 호출은 그대로다 |
-| **[#547] `feature/537-jail-separate-space`** (감옥을 별도 공간으로, 담당 김준영) | **열린 PR** — 리뷰 요청 상태. 실측: `Custody.cs` 132줄 · `NpcJailedState` 301줄 · `PlayerEscortCommands` 66줄 · `NpcCapturedState` 33 · `NpcStateRules` 22 · `StandUp.cs` 19 · 코어 6 + Jail 계열 대개편. **좌석 폐기가 코드로 확정**됐다(`m_seated` 계열·`SetJailAccess` 삭제, `JailSeat`→`JailSpot`) | **Custody** (+StandUp·코어 일부) — 1단계 4번의 이동 대상 그 자체다 → **4번을 이 PR 뒤로 미룬다**(아래) |
+| **#547** (감옥을 별도 공간으로, 담당 김준영) | ✅ **머지됨** (`0b6c268`) — 좌석 폐기·순간이동 수감/반출이 코드가 됐다. `Custody.cs`·`NpcJailedState`·`PlayerEscortCommands`·`NpcCapturedState`·`NpcStateRules`·`StandUp.cs`·코어 + Jail 계열 대개편 | 해제 — **Custody**. 4번의 대기 조건이 이 머지로 풀렸다(착수 준비 실측은 1단계 표 아래) |
 | `feature/423-knockback-navmesh-recovery` (담당 김준영) | PR 여전히 미개설. main 대비 `.Knockback.cs` +101줄 · 코어 +12줄 · `NpcStunnedState` · `NpcCommonConfig` · `PlayerEscortCommands` | Knockback — **기다리지 않기로 팀 결정 (2026-08-06)**. 7번과 머지 순서만 맞춘다 |
 | `feature/506-ragdoll` (담당 이현진) | 열린 브랜치. NPC 스크립트는 무변경이고 `BombDevice.cs` 161줄을 고친다(사망자 래그돌 임펄스 추가) | 없음 — 다만 7번의 **외부 참조 1건**(`BombDevice`의 `ServerApplyKnockback`)이 그 파일에 있어 머지 순서만 본다 |
 | **#401** (스턴/다운 분리 — 밧줄 검거는 다운 대상만, 담당 이현진) | 열린 이슈. **전용 브랜치는 아직 없다**(원격 브랜치 목록 기준) | **Health · Stun** — 2단계 6번이 옮기려는 `EnterStunned`·`ServerRestoreHp`·검거 게이트다 |
@@ -258,19 +275,19 @@ TickRopeDrag() → TickStandUp() → 넉백 게이트 → 스턴 게이트 → F
 
 **남은 조율은 둘인데, 성격이 갈렸다** (#539 자동 리뷰가 짚은 두 건이다):
 
-- **#547 ↔ 1단계 4번(`NpcCustody`)** — **합의 대상이 아니라 순서가 정해진 문제가 됐다.** 이미 열린 PR이
-  `Custody.cs`를 132줄 재작성하며 좌석을 걷어내므로, 지금 부품화하면 (ㄱ) 같은 파일에서 큰 충돌이 나고
-  (ㄴ) 부품으로 옮긴 좌석 코드를 곧바로 다시 지워야 한다. **4번은 #547 머지 후에 착수한다** — 그때는
-  이동 대상이 오히려 줄어 있다. 원래 계획서가 선호했던 "먼저 부품화하고 그 위에서 기능 작업"은
-  #537이 이슈 단계였을 때 유효했던 판단이고, PR이 올라온 지금은 뒤집힌다.
-- **#401 ↔ 2단계 6번(`NpcHealth`+`NpcStun`)** — 여기는 **아직 "먼저 부품화"가 유리하다.** 전용 브랜치가
+- **#547 ↔ 1단계 4번(`NpcCustody`)** — **끝난 조율이다.** 그 PR을 기다린 판단은 결과적으로 맞았다: 좌석
+  멤버 4개와 `SetJailAccess`·`JailAreaMask`가 사라져 **이동 대상이 줄어든 상태에서** 부품화하게 됐고,
+  좌석 코드를 부품으로 옮겼다 되지우는 일도 없었다. 기록으로 남길 교훈은 **"열린 PR이 대상 파일을 재작성
+  중이면 부품화를 먼저 하지 않는다"** — 반대로 이슈 단계면 "먼저 부품화" 쪽이 유리하다(아래 #401).
+- **#401 ↔ 2단계 6번(`NpcHealth`+`NpcStun`)** — 여기는 **"먼저 부품화"가 유리하다.** 전용 브랜치가
   없어 충돌면이 아직 없고, 부품 경계가 생긴 뒤가 재설계하기 쉽다. 다만 상대 담당자의 일정이 걸린
   판단이라 착수 전에 알리는 것이 먼저다.
 
-**그래서 다음에 갈 수 있는 것은 2단계다.** 1단계에 남은 4번이 막혀 있으므로 순서를 지키려 기다릴 필요는 없다 —
-1단계/2단계 구분은 "얽힘이 적은 것부터"라는 뜻이고 도메인 간 선후 의존이 아니다. 6번(Health+Stun)과
-7번(Rope+StandUp+Knockback) 중 어느 쪽이든 대기 조건은 풀려 있다. 다만 **7번은 `feature/423`, 6번은 #401**과
-머지 순서를 맞춰야 하고, #547이 `StandUp.cs`(19줄)·`NpcCapturedState`를 손대므로 7번은 그 PR과도 약하게 겹친다.
+**남은 순서 제약은 브랜치 둘뿐이다** — 7번은 `feature/423`(Knockback), `BombDevice`를 고치는 `feature/506`과
+머지 순서를 맞춘다. 6번은 #401 담당자에게 알린다. 4번은 제약이 없다.
+
+1단계/2단계 구분은 "얽힘이 적은 것부터"라는 뜻이고 **도메인 간 선후 의존이 아니다** — 4·6·7번 중 어느 것을
+먼저 해도 된다.
 
 ### 1단계 — 독립 도메인 (밖으로 나가는 참조 0~1건)
 
@@ -279,8 +296,41 @@ TickRopeDrag() → TickStandUp() → 넉백 게이트 → 스턴 게이트 → F
 | 1 | ✅ **`NpcIntruder`** (#540 머지) | 45 | **파일럿** — 규약 § 4-1·4-2·4-4·4-6을 실제 코드로 확정했다. 선행 커밋으로 `ReleaseFromCustody`를 `Custody.cs`에 보내 `Intrude.cs`를 삭제 (§ 7) |
 | 2 | ~~`NpcHolding`~~ → **삭제** | 31 | **추출하지 않는다 — 도달 불가 코드였다.** `60f42aa`(#310 "경범죄자도 유치장 수감 — 임시 거처 소멸 폐지")가 `JailbreakEvent`·`MisdemeanorLoiterer`·`SpawnedNpcEvent`의 호출부·구독을 전부 지웠고(207줄), 컨트롤러 API와 FSM 상태만 고아로 남아 있었다. 뽑았으면 죽은 `NetworkBehaviour`를 프리팹 4개에 붙일 뻔했다 |
 | 3 | ✅ **`NpcPenaltyAgent`** (#542) | 170 | `NetworkVariable`(`m_abductionDuty`) 이관 첫 사례 — 훅까지 함께 옮기는 규약(§ 4-4)과 SO를 읽는 `internal` 접근자(§ 4-3)를 확정했다. "제 집 정리" 선행 커밋은 없었다(오배치 없음) |
-| 4 | `NpcCustody` (+ `Escort` 병합) — ⏸ **#547 대기** | 155 + 27 | `StartEscort`가 여러 도메인의 진입점이라 함께. `ReleaseFromCustody`는 파일럿에서 이미 `Custody.cs`에 들어와 있다. **선행: `TryWarpNear`를 코어로 승격**(§ 4-6) — #522로 Custody가 Rope의 private 헬퍼를 쓰게 됐고, #547에서도 계속 쓴다. **열린 PR #547이 이 파일을 132줄 재작성하므로 그 뒤로 미룬다** — 머지 후엔 좌석 멤버 4개가 사라져 이동 대상이 줄어든다(§ 3) |
+| 4 | `NpcCustody` (+ `Escort` 병합) — ▶ **착수 가능** | 135 + 27 | `StartEscort`가 여러 도메인의 진입점이라 함께. `ReleaseFromCustody`는 파일럿에서 이미 `Custody.cs`에 들어와 있다. **선행: `TryWarpNear`를 코어로 승격**(§ 4-6) — #522로 Custody가 Rope의 private 헬퍼를 쓰게 됐고 #547의 `ServerExitJail`도 계속 쓴다. #547 머지로 대기 조건이 풀렸다(아래 착수 준비 실측) |
 | 5 | ✅ **`NpcReaction`** (#545) | 99 | `ClientRpc`(`PlayAttackSwingClientRpc`) 이관 첫 사례 — RPC 라우팅도 프리팹 구성이 정하는 NetworkBehaviour 인덱스를 탄다(§ 4-4). 코어의 반응 멤버 4개를 함께 데려가 § 8에서 이 도메인 행이 사라졌다. `StartFlee` 호출부가 10파일이라 1단계 마지막으로 잡았지만, **4번보다 먼저 갔다** — 4번은 #537 순서 합의가 남아 있고 5번은 대기 조건이 없다. "제 집 정리" 선행 커밋은 없었다(오배치 없음) |
+
+#### 4번 착수 준비 실측 (2026-08-06, #547 머지 후)
+
+**이동 대상 11개** — `Custody.cs` 6개(`ServerExitJail` · `FindFollowersOf` · `IsJailExtracted` · `SetJailExtracted` ·
+`SendToJail` · `ReleaseFromCustody`) + `Escort.cs` 2개(`StartEscort` · `StopEscort`) + 코어 3종(`EscortTarget` ·
+`JailSpot` · `IsDelivered`/`MarkDelivered`/`ClearDelivered`). `NetworkVariable`은 `m_jailExtractedSynced` 하나이고
+**`OnValueChanged` 훅이 없다** — 3번(#542)처럼 훅을 함께 옮길 일은 없다.
+
+**경로가 바뀌는 호출부 ≈35건 / 12파일**:
+
+| 멤버 | 호출부 |
+|---|---|
+| `StopEscort` | `ArrestJudge:156` · `NpcEscortedState:65,75` · `PlayerEscortCommands:649` · `PlayerEscorter:482` + **코어 partial 2건**(`Knockback.cs:48` · `Stun.cs:149`) |
+| `EscortTarget` | `NpcEscortedState:46,48,49,61` + **부품 1건**(`NpcPenaltyAgent:105`) |
+| `JailSpot` | `NpcJailedState` 6건 |
+| `IsJailExtracted` | `JailIntake:303` · `NpcCapturedState:99` · `NpcStateRules:121,156` · `PlayerEscortCommands:411` |
+| `IsDelivered` 계열 | `ArrestJudge:78,84` · `JailbreakEvent:404` · `SuspectRevealer:96` · `NpcStateRules:156` |
+| `StartEscort` | `JailIntake:283` · `PlayerEscortCommands:486,625` |
+| `SetJailExtracted` | `JailIntake:138,282` + **코어 2건**(`cs:251` · `Rope.cs:152`) |
+| `ServerExitJail` | `JailbreakEvent:423` · `JailIntake:346` |
+| `ReleaseFromCustody` | `CustodyRouter:66` · `PlayerEscortCommands:537` |
+| `SendToJail` | `JailIntake:180` |
+
+주의 셋:
+
+1. **`ServerExitJail`은 동명 메서드가 둘이다** — `JailIntake.ServerExitJail(PlayerMovement)`(`JailIntake:337`,
+   `JailDoor:134`가 부른다)는 **다른 것**이다. grep 결과를 그대로 세면 호출부를 과대 집계한다.
+2. **`EscortTarget`의 `internal` setter를 이번에 없앤다** — 3번 PR이 `NpcPenaltyAgent.SendToDetention`을 위해
+   열어 둔 것이고(§ 8), 부품끼리는 `npc.Custody.EscortTarget`이 아니라 **의미 있는 메서드를 통하는 편**이
+   맞는지 그 PR에서 판단한다(수용 직전에 연행을 끊는 동작이라 `StopEscort`와 겹친다).
+3. **`FindFollowersOf`는 `static`이고 `FindObjectsByType<NpcController>`를 돈다** — 부품으로 옮기면
+   `FindObjectsByType<NpcCustody>`로 바꾸는 것이 자연스럽고, 그러면 `IsJailExtracted`·`EscortTarget`을
+   같은 부품 안에서 읽어 `npc.Custody.` 경유가 사라진다.
 
 ### 2단계 — 무력화 클러스터 (양방향 쌍은 한 PR로)
 
@@ -329,6 +379,9 @@ FSM 전이(`m_stateMachine.ChangeState(NpcState.Intruding)`)가 필요하므로 
 
 **다른 도메인 파일에도 같은 오배치가 있을 수 있으니 도메인 PR마다 파일 전체를 확인할 것.**
 
+> 이 절은 **파일럿 시점(2026-08-05)의 기록**이라 이름·줄 번호가 지금과 다르다 — `JailSeat`는 #547로
+> `JailSpot`이 됐고 `SendToJail`은 `Custody.cs:98`이다. 규약을 확인하는 용도로 읽을 것.
+
 ## 8. 코어 파일에 남아 있는 도메인 멤버
 
 `NpcController.cs`(**315줄** — 착수 시 343줄)는 아직 순수 코어가 아니다. 아래 멤버들을 각 도메인 PR이 함께
@@ -337,7 +390,7 @@ FSM 전이(`m_stateMachine.ChangeState(NpcState.Intruding)`)가 필요하므로 
 | 코어의 멤버 | 갈 곳 |
 |---|---|
 | `EscortTarget` (113) | `NpcCustody` — setter가 3번 PR(#542)에서 `internal`로 열렸다(`NpcPenaltyAgent.SendToDetention`이 쓴다). 이 멤버를 가져갈 때 그 `internal`도 함께 없앤다 |
-| `JailSeat` (117) | `NpcCustody` — **#547이 `JailSpot`으로 이름을 바꾼다**(좌석 → 순간이동 지점). 4번은 그 뒤에 가므로 새 이름을 가져가게 된다 |
+| `JailSpot` (117) | `NpcCustody` — #547로 `JailSeat`에서 개명됐다(좌석 → 순간이동해 설 지점). `NpcJailedState`가 6곳에서 읽는다 |
 | `IsDelivered` · `MarkDelivered` · `ClearDelivered` (75~101) | `NpcCustody` |
 | ~~`IntrudeTarget` · `IntrudeUnlockSeconds` · `OnIntrudeFinished` · `OnIntrudeUnlockStarted`~~ | ✅ `NpcIntruder`로 이동 완료 (#540 파일럿) |
 | ~~`ThreatTarget` · `ThreatSearchRadius` · `OnAttackSwing` · `RaiseAttackSwing`~~ | ✅ `NpcReaction`로 이동 완료 (#545). `PlayAttackSwingClientRpc`도 함께 갔고, `ThreatSearchRadius`가 읽을 `ResistConfig`가 코어에 `internal`로 열렸다 |
@@ -369,9 +422,9 @@ FSM 전이(`m_stateMachine.ChangeState(NpcState.Intruding)`)가 필요하므로 
 3. **컴파일** — Unity Console 에러 0. 새 타입을 쓰기 전에 반드시 확인(`CLAUDE.md`).
 4. **Play 회귀 (MPPM 2인 이상)** — 도메인 PR마다 해당 항목 + 무력화 조합:
    배회 / 피격→기절→일어나기 / 저항·스윙(**원격 클라에서도** — 스윙은 `ClientRpc`다) / 밧줄 끌기·놓기·줄다리기 /
-   폭발 넉백 / 테이저 스턴 + 밧줄 콤보(#390) / 줄 풀림 기상과 재포획 창(#513) / 연행→수감(#547 머지 후에는
-   착석이 아니라 순간이동이다) / 탈옥 방출 / 오검거 페널티 3단 / 납치 임무(#371) / 라운드 종료 freeze
-   (임시 거처는 목록에서 빠졌다 — 도달 불가로 삭제된 도메인이다)
+   폭발 넉백 / 테이저 스턴 + 밧줄 콤보(#390) / 줄 풀림 기상과 재포획 창(#513) / 연행→**문 앞 E로 순간이동
+   수감**(#547 — 걸어가 앉히는 경로는 없어졌다) / 반출과 동행 퇴장(#517/#537) / 탈옥 방출 / 오검거 페널티 3단 /
+   납치 임무(#371) / 라운드 종료 freeze (임시 거처는 목록에서 빠졌다 — 도달 불가로 삭제된 도메인이다)
 
    **전부 다 돌릴 필요는 없다.** 순수 이동이라 위험은 ① 프리팹 배선 누락(NRE) ② `NetworkVariable`/RPC 인덱스
    ③ 그 PR에서 *쓰기 방향*이 바뀐 경로에 몰린다. 5번 PR(#545)에서는 이 기준으로 4개만 돌렸고, 남긴 항목은
@@ -389,8 +442,8 @@ FSM 전이(`m_stateMachine.ChangeState(NpcState.Intruding)`)가 필요하므로 
 - [x] #529 · #522 머지 — 2026-08-06 확인. 2단계 6·7번 해제
 - [x] `feature/423-knockback-navmesh-recovery` — 기다리지 않고 Knockback을 분리에 포함하기로 결정(2026-08-06).
       2단계 7번 클러스터로 되돌렸다. 남은 일은 담당자와 **머지 순서**를 맞추는 것뿐이다
-- [x] **`NpcCustody`(1단계 4번)는 #547 머지 후로 미룬다** — 합의가 필요한 사안이 아니라 순서가 정해진 문제다
-      (2026-08-06 2차 확인: #537이 열린 PR이 되어 `Custody.cs`를 132줄 재작성한다, § 6)
+- [x] **`NpcCustody`(1단계 4번) 대기 조건 해제** — #547이 머지됐다(2026-08-06 `0b6c268`). 이동 대상·호출부
+      실측은 § 6 "4번 착수 준비 실측"에 있다. 남은 선행 작업은 `TryWarpNear` 코어 승격 하나다
 - [ ] **#401 담당자에게 `NpcHealth`+`NpcStun`(2단계 6번) 착수를 알릴 것** — 같은 메서드를 재설계하는 이슈다.
       전용 브랜치가 아직 없어 "먼저 부품화" 쪽이 유리하다 (§ 6)
 - [ ] `feature/423`(7번) · `feature/506`(`BombDevice`) 담당자와 **머지 순서** 맞추기 (§ 6)
