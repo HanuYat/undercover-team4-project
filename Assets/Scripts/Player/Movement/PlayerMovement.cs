@@ -277,20 +277,6 @@ public class PlayerMovement : NetworkBehaviour
     }
 
     /// <summary>
-    /// 목표 지점까지 <b>스윕으로 갈 수 있는 만큼</b> 캡슐을 옮긴다 — 래그돌 추종(#506)이 매 프레임 부른다.
-    /// 도달하지 못한 잔차는 호출자가 텔레포트로 메운다(<see cref="PlayerRagdoll.TickCapsuleFollow"/>).
-    ///
-    /// 중력을 적분하지 않고 수직 속도를 지우는 것이 <see cref="MoveWithGravity"/>와 다른 점이다 —
-    /// 래그돌 동안 수직 운동의 주인은 <b>뼈 물리</b>이고, 캡슐 쪽에 따로 쌓아 두면 정착 직후 그 속도가
-    /// 캡슐을 밀어 바닥을 파고든다(#189와 같은 사정).
-    /// </summary>
-    internal void SweepTo(Vector3 target)
-    {
-        m_controller.Move(target - transform.position);
-        m_verticalVelocity = 0f;
-    }
-
-    /// <summary>
     /// 쌓인 외력(넉백)과 수직 속도를 지운다 — 래그돌 진입(#506)이 부른다.
     /// 진입 전에 이미 들어온 폭발 넉백이 남아 있으면, 뼈가 날아가는 동안 캡슐도 같이 미끄러진다.
     /// 넉백 가드(<see cref="AddKnockback"/>)가 막는 것은 진입 <b>이후</b>의 호출뿐이라 이 짝이 필요하다.
@@ -300,11 +286,6 @@ public class PlayerMovement : NetworkBehaviour
         m_knockbackVelocity = Vector3.zero;
         m_verticalVelocity = 0f;
     }
-
-    /// <summary>
-    /// 진단 전용 — 래그돌 튐 추적(#506)이 캡슐의 수직 속도를 함께 찍는다. 원인 확정되면 지운다.
-    /// </summary>
-    internal float DiagnosticVerticalVelocity => m_verticalVelocity;
 
     /// <summary>
     /// CharacterController를 껐다 켠다 — transform을 직접 옮기는 호송 추종(#279)이 쓴다.
@@ -329,6 +310,21 @@ public class PlayerMovement : NetworkBehaviour
     // 같은 프레임에서 시점 → 이동 순서가 보장돼야 한다(Unity의 컴포넌트 실행 순서는 미지정).
     private void Update()
     {
+        // 래그돌인 동안(#506) — <b>위치의 주인은 시체다.</b> 캡슐이 시체를 따라간다.
+        //
+        // ⚠ <b>이 분기가 호송·운반보다 먼저인 것이 중요하다.</b> 예전에는 반대였는데, 그러면 밧줄로
+        // 끌 때 운반 추종이 이겨서 캡슐이 먼저 끌려가고 시체는 뒤에 남는다 — 그걸 메우려고 시체를
+        // 캡슐로 당기는 스프링을 붙였다가 "세면 뜨고 약하면 안 끌린다"에 갇혔다(§9-7).
+        // 지금은 밧줄이 시체를 물리로 직접 끌고(PlayerRagdoll.BeginRopePull), 캡슐이 그 결과를
+        // 따라간다 — 권한이 사망 구간 내내 한 방향이라 서로 싸울 일이 없다.
+        if (m_ragdoll != null && m_ragdoll.IsCapsuleFollowingBody)
+        {
+            m_look?.HandleLook();
+            m_ragdoll.TickCapsuleFollow();
+            m_look?.UpdateCameraPose();
+            return;
+        }
+
         // 남이 내 몸을 옮기는 중(#279 호송 / #365 운반) — 입력 이동 대신 추종한다.
         // HandleMove를 타면 안 되는 이유는 모드마다 다르다: 호송은 CharacterController가 꺼져 있고,
         // 운반은 켜져 있지만 중력이 이중으로 적분된다. 어느 쪽이든 이동은 추종 쪽이 든다.
@@ -339,18 +335,6 @@ public class PlayerMovement : NetworkBehaviour
         {
             m_look?.HandleLook();
             m_towed.Tick();
-            m_look?.UpdateCameraPose();
-            return;
-        }
-
-        // 래그돌 비행 중(#506) — 몸을 끄는 주체가 자기 뼈 물리라는 점만 다른 세 번째 추종 모드다.
-        // 캡슐이 시체를 따라가지 않으면 사망 지점에 남아 있다가 정착 순간 한 번에 1m 넘게
-        // 텔레포트하고, 그 늦은 점프가 원격에서 시체를 발작시킨다 (PlayerRagdoll.TickCapsuleFollow).
-        // 위 호송·운반이 먼저다 — 남이 내 몸을 옮기는 중이면 그쪽이 위치의 주인이다.
-        if (m_ragdoll != null && m_ragdoll.IsCapsuleFollowingBody)
-        {
-            m_look?.HandleLook();
-            m_ragdoll.TickCapsuleFollow();
             m_look?.UpdateCameraPose();
             return;
         }

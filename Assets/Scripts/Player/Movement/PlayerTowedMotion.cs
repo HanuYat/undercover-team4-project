@@ -52,6 +52,7 @@ public class PlayerTowedMotion : MonoBehaviour
     public float DragFollowDistance => m_dragFollowDistance;
 
     private PlayerMovement m_movement;
+    private PlayerRagdoll m_ragdoll; // 사망 래그돌 — 운반을 밧줄(물리)로 넘긴다 (#506)
     private PlayerJump m_jump; // 진입 시 접지 보고 — 공중에서 붙잡히면 낙하 상태가 고착된다 (#189)
 
     // 호송(#279) — 앵커가 파괴돼도 m_escorted가 참인 동안은 입력 이동으로 돌아가지 않는다
@@ -75,6 +76,7 @@ public class PlayerTowedMotion : MonoBehaviour
     private void Awake()
     {
         m_movement = GetComponent<PlayerMovement>();
+        m_ragdoll = GetComponent<PlayerRagdoll>();
         m_jump = GetComponent<PlayerJump>();
     }
 
@@ -91,7 +93,8 @@ public class PlayerTowedMotion : MonoBehaviour
             return;
         }
 
-        if (m_dragCarrier != null)
+        // 래그돌은 밧줄이 물리로 끌고 캡슐이 그걸 따라간다 — 여기서 위치를 옮기면 둘이 싸운다.
+        if (m_dragCarrier != null && (m_ragdoll == null || !m_ragdoll.IsRagdollActive))
         {
             UpdateDraggedFollow();
         }
@@ -174,6 +177,17 @@ public class PlayerTowedMotion : MonoBehaviour
 
         m_dragCarrier = carrier;
 
+        // 래그돌이면 <b>몸을 직접 밧줄로 묶는다</b> — 아래의 위치 추종을 쓰지 않는다 (#506 §9-7).
+        //
+        // 위치 추종은 "캡슐을 목표 위치로 옮기고 몸은 알아서 따라오게" 하는 방식인데, 몸이 래그돌이면
+        // 따라올 수단이 없다(동적 리지드바디는 부모 트랜스폼을 따르지 않는다). 그래서 시체를 물리로
+        // 끌고, 캡슐은 PlayerMovement.Update의 래그돌 분기가 시체를 따라가게 둔다.
+        if (m_ragdoll != null && m_ragdoll.IsRagdollActive)
+        {
+            m_ragdoll.BeginRopePull(ResolveRopeAnchor(carrier));
+            return;
+        }
+
         // 새 운반의 추종 상태 초기화 — 이전 운반의 관성·위상이 남으면 첫 프레임에 튄다 (SetDragging 관례)
         m_dragVelocity = Vector3.zero;
         m_dragFacing = transform.rotation;
@@ -182,11 +196,40 @@ public class PlayerTowedMotion : MonoBehaviour
         ReportGroundedOnEnter();
     }
 
+    /// <summary>
+    /// 밧줄을 실제로 묶을 지점 — 운반자의 <b>손</b>이다. 루트가 아니다.
+    ///
+    /// <b>왜 손인가.</b> 세 가지가 한꺼번에 해결된다:
+    ///  · <b>보이는 밧줄과 당기는 밧줄이 같아진다.</b> <see cref="RopeDragView"/>는 이미 손
+    ///    (<see cref="PlayerHeldItemView.HandAnchor"/>)에서 줄을 그리는데, 물리는 발밑(루트)에서
+    ///    당기고 있었다 — 줄은 손에서 나가는데 몸은 발밑으로 끌려가는 그림이었다
+    ///  · <b>당기는 방향에 위 성분이 생긴다</b>(손 높이 ≈1.1m). 상체가 들리고 다리가 끌리는,
+    ///    시체를 끄는 그림이 물리로 저절로 나온다
+    ///  · <b>손은 걷기 애니메이션으로 흔들린다</b> — 매 걸음 장력이 변하니 지속적인 작은 충격이
+    ///    생긴다. 이게 <b>팔다리가 흐느적거리게 만드는 것</b>이다
+    ///
+    /// 마지막 항목이 핵심이다. 등속으로 끌면 잠깐 뒤 전 뼈가 같은 속도가 되어 뼈 사이 상대 운동이
+    /// 0이 되고, 관절이 느낄 것이 없어 <b>한 덩어리로 미끄러진다</b>. 흐느적임은 움직임이 아니라
+    /// <b>가속 차이</b>가 만든다 — 벽에 부딪힐 때만 흔들리던 것이 그 증거였다.
+    ///
+    /// 손을 못 찾으면 루트로 폴백한다(테스트 구성·아이템 뷰 없는 경우).
+    /// </summary>
+    private static Transform ResolveRopeAnchor(Transform carrier)
+    {
+        if (carrier == null)
+            return null;
+
+        PlayerHeldItemView held = carrier.GetComponent<PlayerHeldItemView>();
+        Transform hand = held != null ? held.HandAnchor : null;
+        return hand != null ? hand : carrier;
+    }
+
     /// <summary>운반 추종 종료 — 내려놓기·부활·운반자 소실 시 <see cref="PlayerCarrier"/>가 호출한다. (#365)</summary>
     public void EndDraggedFollow()
     {
         m_dragCarrier = null;
         m_dragVelocity = Vector3.zero;
+        m_ragdoll?.EndRopePull(); // 래그돌 경로였으면 밧줄을 푼다 (아니었으면 무동작)
     }
 
     // 운반자 추종 — 밧줄 끌기(PlayerEscorter.ServerUpdateDrag)와 같은 수식이다: 간격을 넘을 때만
