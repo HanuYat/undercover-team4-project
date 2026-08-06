@@ -216,7 +216,6 @@ GameObject:
   - component: {fileID: 5725889550173970188}
   - component: {fileID: 2273348512719146409}
   - component: {fileID: 4859704557310969721}
-  - component: {fileID: 4535987519796288885}
   - component: {fileID: 2528316827679711494}
   - component: {fileID: 8253353333071304543}
   m_Layer: 0
@@ -475,20 +474,6 @@ MonoBehaviour:
   SwitchTransformSpaceWhenParented: 0
   Interpolate: 1
   SlerpPosition: 0
---- !u!114 &4535987519796288885
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3451500180212419163}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8589cf5bdc1bf07489b808b1f33f0108, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MinimapTarget
-  m_iconSprite: {fileID: 0}
-  m_iconColor: {r: 0, g: 0, b: 1, a: 1}
 --- !u!114 &2528316827679711494
 MonoBehaviour:
   m_ObjectHideFlags: 0
