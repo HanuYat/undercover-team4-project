@@ -13,6 +13,7 @@ using Random = UnityEngine.Random;
 [RequireComponent(typeof(NavMeshAgent))]
 [RequireComponent(typeof(NpcIntruder))] // 도메인 부품 — 누락 시 침입 경로가 NRE로 죽는다 (#503)
 [RequireComponent(typeof(NpcPenaltyAgent))] // 도메인 부품 — 누락 시 오검거·납치 경로가 NRE로 죽는다 (#503)
+[RequireComponent(typeof(NpcReaction))] // 도메인 부품 — 누락 시 도주·저항 경로가 NRE로 죽는다 (#503)
 public partial class NpcController : NetworkBehaviour
 {
     [Header("상태별 튜닝 데이터 (ScriptableObject) — #259")]
@@ -34,6 +35,7 @@ public partial class NpcController : NetworkBehaviour
     // 도메인 부품 — 같은 GameObject에 붙는다. [RequireComponent]로 누락을 막는다. (#503)
     private NpcIntruder m_intruder;
     private NpcPenaltyAgent m_penalty;
+    private NpcReaction m_reaction;
 
     // 넉백 비행 상태 — 서버(또는 오프라인)에서만 의미. 비행 중에는 FSM/NavMeshAgent가 정지한다. (#232)
     private Vector3 m_knockbackVelocity;
@@ -55,17 +57,12 @@ public partial class NpcController : NetworkBehaviour
     /// <see cref="NpcPenaltyAgent"/>가 격퇴 도주 시간을 읽는 용도다. 부품은 같은 어셈블리라 internal로 족하다. (#503)</summary>
     internal NpcChaseConfig ChaseConfig => m_chaseConfig;
 
+    /// <summary>저항 튜닝 SO — <see cref="NpcReaction.ThreatSearchRadius"/>가 위협 탐색 반경을 산출하는 용도다.
+    /// 튜닝 SO는 코어가 계속 들고 부품이 읽는다(계획서 § 4-3). (#503)</summary>
+    internal NpcResistConfig ResistConfig => m_resistConfig;
+
     /// <summary>기절 지속 시간(초) — 테이저가 명중 안내에 읽는다. (#269)</summary>
     public float StunSeconds => m_stunConfig.StunSeconds;
-
-    /// <summary>
-    /// 위협(플레이어)을 찾는 반경(m) — 저항 패배 후 도주 대상 탐색(#205)과 도주 방향 산출(#213)이 같은 값을 쓴다.
-    /// 두 경로가 다른 반경을 쓰면 "도망칠 상대"와 "피할 상대"의 기준이 어긋난다.
-    /// </summary>
-    public float ThreatSearchRadius => m_resistConfig.AttackRange * m_resistConfig.ThreatSearchRadiusMultiplier;
-
-    /// <summary>저항·도주 중 피해 다니는 위협 대상(체포를 시도한 플레이어). 배회 등 반응 중이 아니면 null. 서버에서만 유효. (#76)</summary>
-    public Transform ThreatTarget { get; private set; }
 
     /// <summary>
     /// 검거 판정이 끝났는가 — <see cref="MarkDelivered"/>로 ArrestJudge가 세팅한다. (#230)
@@ -110,13 +107,6 @@ public partial class NpcController : NetworkBehaviour
     /// <summary>상태 변경 이벤트 — 서버·클라이언트 모든 피어에서 발생한다. 애니메이션 등 표현 계층이 구독. (#56)</summary>
     public event Action<NpcState> OnStateChanged;
 
-    /// <summary>공격 스윙 1회를 휘두를 때 발행 — 전 피어에서 발생한다(서버는 로컬 발행 + ClientRpc 중계).
-    /// 인자는 재생할 스윙 변형 index — 서버가 뽑아 전 피어가 같은 클립을 재생하므로, HP 감소 순간(서버가
-    /// 그 클립의 타격 오프셋으로 판정)과 화면 속 주먹이 닿는 순간이 일치한다.
-    /// 애니메이션 표현(<see cref="NpcAnimationDriver"/>)이 구독해 단발 스윙 모션을 트리거한다.
-    /// FSM 상태와 독립한 순간 이벤트라 State 동기화와 별개로 스윙 타이밍을 정확히 맞춘다. (#220)</summary>
-    public event Action<int> OnAttackSwing;
-
     /// <summary>연행 중 따라갈 대상(체포한 플레이어). 연행 중이 아니면 null. 서버에서만 유효.
     /// setter가 internal인 것은 <see cref="NpcPenaltyAgent.SendToDetention"/>이 수용 직전에 이 참조를 끊기 때문이다
     /// (부품은 같은 어셈블리). 이 멤버가 NpcCustody로 옮겨 가면(계획서 § 8) 그때 정리된다. (#503)</summary>
@@ -132,11 +122,15 @@ public partial class NpcController : NetworkBehaviour
     /// <summary>페널티 임무 도메인 부품 — 오검거(#277~#279)·납치(#371)의 수용·추격·수렴·호송을 들고 있다. (#503)</summary>
     public NpcPenaltyAgent Penalty => m_penalty;
 
+    /// <summary>검거 반응 도메인 부품 — 위협 대상·도주·저항·스윙을 들고 있다. (#76/#205/#213/#220/#503)</summary>
+    public NpcReaction Reaction => m_reaction;
+
     private void Awake()
     {
         m_agent = GetComponent<NavMeshAgent>();
         m_intruder = GetComponent<NpcIntruder>();
         m_penalty = GetComponent<NpcPenaltyAgent>();
+        m_reaction = GetComponent<NpcReaction>();
 
         m_stateMachine = new NpcStateMachine();
         m_stateMachine.AddState(NpcState.Idle, new NpcIdleState(this, m_idleConfig));
@@ -280,7 +274,7 @@ public partial class NpcController : NetworkBehaviour
 
     /// <summary>기절에서 일어나기 시작할 때 발행 — 전 피어에서 발생한다(서버는 로컬 발행 + ClientRpc 중계).
     /// 일어나는 구간은 FSM 상태가 여전히 Stunned라(그 동안 움직이지 않는다) 상태 동기화만으로는
-    /// 클라이언트가 알 수 없다 — 스윙(OnAttackSwing)과 같은 순간 이벤트로 전달한다. (#269)</summary>
+    /// 클라이언트가 알 수 없다 — 스윙(<see cref="NpcReaction.OnAttackSwing"/>)과 같은 순간 이벤트로 전달한다. (#269)</summary>
     public event Action OnStandUp;
 
     /// <summary>일어나는 모션을 전 피어에 알린다 — 서버(또는 오프라인)에서만 호출한다.
@@ -299,24 +293,6 @@ public partial class NpcController : NetworkBehaviour
         if (IsServer)
             return;
         OnStandUp?.Invoke();
-    }
-
-    /// <summary>공격 스윙 1회를 전 피어에 알린다 — 애니메이션 표현용. 서버(또는 오프라인) FSM Tick에서만 호출한다.
-    /// 서버는 로컬 발행 + ClientRpc로 원격 클라에 중계한다. (#220)</summary>
-    public void RaiseAttackSwing(int variant)
-    {
-        OnAttackSwing?.Invoke(variant); // 서버·오프라인 로컬 발행
-        if (IsSpawned && IsServer)
-            PlayAttackSwingClientRpc(variant);
-    }
-
-    [ClientRpc]
-    private void PlayAttackSwingClientRpc(int variant)
-    {
-        // 서버(호스트)는 위에서 이미 발행했으므로 원격 클라에서만 중계
-        if (IsServer)
-            return;
-        OnAttackSwing?.Invoke(variant);
     }
 
     /// <summary>

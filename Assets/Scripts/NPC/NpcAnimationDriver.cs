@@ -9,7 +9,7 @@ using UnityEngine;
 ///
 /// 공격만 예외다(#220): 저항(Attack) 상태의 base 모션은 "버틴 자세"(Idle)이고,
 /// Animator의 Attack 번호(3)는 <b>단발 스윙 클립</b> 전용이다. 스윙은 상태 전이가 아니라
-/// <see cref="NpcController.OnAttackSwing"/> 순간 이벤트로 오며, State int를 잠깐 Attack으로
+/// <see cref="NpcReaction.OnAttackSwing"/> 순간 이벤트로 오며, State int를 잠깐 Attack으로
 /// 펄스했다가 되돌리는 식으로 표현한다 — 로코모션이 전부 Any State(State==N) 전이라
 /// 트리거 오버레이는 스윙을 매 프레임 끊어버리기 때문이다.
 /// </summary>
@@ -120,6 +120,7 @@ public class NpcAnimationDriver : MonoBehaviour
 
     private NpcController m_controller;
     private NpcPenaltyAgent m_penalty; // 앵그리 마크 판정이 임무 종류를 읽는다 (#371/#503)
+    private NpcReaction m_reaction; // 스윙 순간 이벤트가 이 부품에서 온다 (#220/#503)
     private Vector3 m_lastPosition;
     private float m_smoothedSpeed;
     private bool m_escortMoving;
@@ -198,6 +199,7 @@ public class NpcAnimationDriver : MonoBehaviour
     {
         m_controller = GetComponent<NpcController>();
         m_penalty = GetComponent<NpcPenaltyAgent>();
+        m_reaction = GetComponent<NpcReaction>();
 
         if (m_animator == null)
             m_animator = GetComponentInChildren<Animator>();
@@ -214,7 +216,7 @@ public class NpcAnimationDriver : MonoBehaviour
         m_controller.OnStateChanged += HandleStateChanged;
         m_penalty.OnPenaltyDutyChanged += HandlePenaltyDutyChanged;
         // 스윙은 상태 전이가 아니라 순간 이벤트 — 저항 상태를 유지한 채 매 타격마다 단발 스윙을 얹는다 (#220)
-        m_controller.OnAttackSwing += HandleAttackSwing;
+        m_reaction.OnAttackSwing += HandleAttackSwing;
         // 일어나기도 상태 전이가 아닌 순간 이벤트 — 기절 상태를 유지한 채 마지막 구간에만 얹는다 (#269)
         m_controller.OnStandUp += HandleStandUp;
         // 스턴은 상태 전이가 아니라 오버레이라 OnStateChanged로 안 온다 — 따로 구독한다 (#292)
@@ -227,13 +229,15 @@ public class NpcAnimationDriver : MonoBehaviour
         if (m_controller != null)
         {
             m_controller.OnStateChanged -= HandleStateChanged;
-            m_controller.OnAttackSwing -= HandleAttackSwing;
             m_controller.OnStandUp -= HandleStandUp;
             m_controller.OnStunnedChanged -= HandleStunnedChanged;
         }
 
         if (m_penalty != null)
             m_penalty.OnPenaltyDutyChanged -= HandlePenaltyDutyChanged;
+
+        if (m_reaction != null)
+            m_reaction.OnAttackSwing -= HandleAttackSwing;
     }
 
     // 저항 NPC의 공격 스윙 1회 — Animator State를 Attack(단발 스윙 클립)으로 잠깐 펄스한다.

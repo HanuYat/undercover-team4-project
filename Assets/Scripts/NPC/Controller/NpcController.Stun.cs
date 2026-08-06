@@ -148,7 +148,7 @@ public partial class NpcController
         if (CurrentState == NpcState.Escorted)
             StopEscort();
 
-        ThreatTarget = threat;
+        m_reaction.ThreatTarget = threat;
         m_stunDuration = seconds ?? m_stunConfig.StunSeconds;
         m_stunElapsed = 0f;
         m_standingUp = false;
@@ -233,6 +233,6 @@ public partial class NpcController
             m_agent.isStopped = m_agentStoppedBefore;
 
         if (resumeReaction && NpcStateRules.IsReactive(CurrentState))
-            StartFlee(ThreatTarget);
+            m_reaction.StartFlee(m_reaction.ThreatTarget);
     }
 }

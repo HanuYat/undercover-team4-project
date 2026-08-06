@@ -117,7 +117,7 @@ public partial class AbductionEvent
 
         PruneDead(m_abductors);
         foreach (NpcController abductor in m_abductors)
-            abductor.StartResist(caught);
+            abductor.Reaction.StartResist(caught);
 
         Debug.Log($"[납치] 외곽 도착 — 린치 시작 (납치범 {m_abductors.Count}명)");
 

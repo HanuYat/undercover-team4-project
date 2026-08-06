@@ -182,7 +182,7 @@ public class SpawnedNpcEvent : ISuddenEvent
         if (Time.time - m_startTime > m_maxLifetimeSeconds)
         {
             Debug.Log($"[돌발이벤트] {m_displayName} — 소란 지속 시간 종료, 진정");
-            m_npc.StartFlee(null); // 위협 없는 도주 — 잠깐 흩어졌다가 곧 배회(Idle)로 가라앉는다
+            m_npc.Reaction.StartFlee(null); // 위협 없는 도주 — 잠깐 흩어졌다가 곧 배회(Idle)로 가라앉는다
             ReleaseToCity();
         }
     }
@@ -199,13 +199,13 @@ public class SpawnedNpcEvent : ISuddenEvent
         {
             case Behavior.Resist:
                 // 그 자리에서 버티며 저항 — 제압 대상(E로 제압)이자 소란원
-                m_npc.StartResist();
+                m_npc.Reaction.StartResist();
                 break;
 
             case Behavior.Flee:
                 // 위협(플레이어)에게서 도주하며 뛰어다녀 소란을 퍼뜨린다. 대상이 없으면 배회로 두어 곧 이탈 종료.
                 if (m_threat != null)
-                    m_npc.StartFlee(m_threat);
+                    m_npc.Reaction.StartFlee(m_threat);
                 break;
         }
     }

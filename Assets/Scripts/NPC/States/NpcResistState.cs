@@ -89,7 +89,7 @@ public class NpcResistState : NpcStateBase
             if (m_noTargetSeconds >= m_config.NoTargetIdleSeconds)
             {
                 Debug.Log($"저항 종료(표적 상실) — 배회 복귀: {m_owner.name}");
-                m_owner.ClearThreat();
+                m_owner.Reaction.ClearThreat();
                 m_owner.StateMachine.ChangeState(NpcState.Idle);
                 return;
             }
@@ -114,7 +114,7 @@ public class NpcResistState : NpcStateBase
             // 변형을 서버에서 뽑아 전 피어에 넘긴다 — 데미지는 그 클립의 타격 오프셋에 맞춰 넣고(아래),
             // 같은 index가 애니메이션에도 가므로 화면 속 주먹이 닿는 순간과 HP 감소가 일치한다. (#220)
             int variant = Random.Range(0, m_config.SwingVariantCount);
-            m_owner.RaiseAttackSwing(variant);
+            m_owner.Reaction.RaiseAttackSwing(variant);
             m_pendingStrikeTime = Time.time + m_config.SwingImpactOffset(variant);
 
             // 멈춰서 때린다 — 스윙 동안 추격 이동을 멈춰, 표적이 움직여도 미끄러지며 때리지 않는다 (팀 피드백)
@@ -178,18 +178,18 @@ public class NpcResistState : NpcStateBase
     }
 
     /// <summary>
-    /// 이번 틱의 표적 — 저항을 유발한 플레이어(<see cref="NpcController.ThreatTarget"/>)를 우선하고,
-    /// 놓쳤으면 추격 반경(<see cref="NpcController.ThreatSearchRadius"/>) 안 가장 가까운 현장 플레이어로 폴백한다.
+    /// 이번 틱의 표적 — 저항을 유발한 플레이어(<see cref="NpcReaction.ThreatTarget"/>)를 우선하고,
+    /// 놓쳤으면 추격 반경(<see cref="NpcReaction.ThreatSearchRadius"/>) 안 가장 가까운 현장 플레이어로 폴백한다.
     /// 폴백 반경은 도주(#213)와 같은 값이라 "쫓을 상대"와 "피할 상대"의 기준이 어긋나지 않는다. 서버(또는 오프라인) 전용.
     /// </summary>
     private Transform ResolveTarget()
     {
-        Transform threat = m_owner.ThreatTarget;
+        Transform threat = m_owner.Reaction.ThreatTarget;
         if (threat != null && IsStillEngaged(threat))
             return threat;
 
         PlayerHealth nearest = SuddenEventUtil.FindNearestFieldPlayer(
-            m_owner.transform.position, m_owner.ThreatSearchRadius);
+            m_owner.transform.position, m_owner.Reaction.ThreatSearchRadius);
         return nearest != null ? nearest.transform : null;
     }
 
@@ -290,20 +290,20 @@ public class NpcResistState : NpcStateBase
         // 저항을 유발한 플레이어(수갑 채우려던 자)를 우선 위협으로 삼는다 — 제한 시간 내내 붙어 싸우던
         // 상대가 판정 직전 잠깐 멀어졌다고 도주를 포기하면 안 된다(그 순간 반경 재검색은 놓치기 쉽다, #205).
         // 유발자가 사라졌을 때(연결 종료 등)만 근처 플레이어로 폴백한다.
-        // 폴백 반경은 NpcController.ThreatSearchRadius로 통일한다 — 도주가 회피 대상을 모으는 반경과
+        // 폴백 반경은 NpcReaction.ThreatSearchRadius로 통일한다 — 도주가 회피 대상을 모으는 반경과
         // 같은 값이어야 "도망칠 상대"와 "피할 상대"의 기준이 어긋나지 않는다. (#213)
-        Transform threat = m_owner.ThreatTarget;
+        Transform threat = m_owner.Reaction.ThreatTarget;
         if (threat == null)
         {
             PlayerHealth nearest = SuddenEventUtil.FindNearestFieldPlayer(
                 m_owner.transform.position,
-                m_owner.ThreatSearchRadius
+                m_owner.Reaction.ThreatSearchRadius
             );
             threat = nearest != null ? nearest.transform : null;
         }
 
         if (threat != null)
-            m_owner.StartFlee(threat);
+            m_owner.Reaction.StartFlee(threat);
         else
             m_owner.StateMachine.ChangeState(NpcState.Idle); // 유발자도 없고 주변에도 아무도 없으면 도망갈 이유가 없다
     }
