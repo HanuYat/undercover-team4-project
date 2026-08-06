@@ -156,12 +156,18 @@ public class Taser : ItemBase, IAimedWeapon
                 NotifyOwner($"테이저 빗나감 — {hit.collider.name}에 맞음");
                 return;
             case AimResult.TargetInvalidState:
+                // 소리는 낸다 — 전극은 실제로 몸에 닿았다. 침묵하면 입력이 씹힌 것처럼 보인다.
+                // (진압봉의 같은 분기와 동일한 방침, #478)
+                App.Game.Fx?.PlayEverywhere(EFx.TaserHit, hit.point);
                 NotifyOwner(
                     playerTarget != null
                         ? $"테이저 무효 — 이미 무력화된 동료 ({playerTarget.name})"
                         : $"테이저 무효 — 이미 기절한 대상 ({target.name})");
                 return;
         }
+
+        // 명중 — 대상이 로봇이든 사람이든 같은 소리다. 전기는 몸체를 가리지 않는다.
+        App.Game.Fx?.PlayEverywhere(EFx.TaserHit, hit.point);
 
         // 동료를 맞췄다 — 아군 오사 (#252). NPC와 달리 위협 개념이 없다(도주할 상대가 아니다).
         // 구조 없이 시간이 지나면 스스로 일어나고, 전멸 판정에도 잡히지 않는다 (IncapacitationCause.Stun).
@@ -174,9 +180,24 @@ public class Taser : ItemBase, IAimedWeapon
 
         // 쏜 사람을 위협으로 넘긴다 — 기절이 풀리면 이 사람에게서 도망친다 (#269)
         PlayerInteractor shooter = Holder;
-        target.EnterStunned(shooter != null ? shooter.transform : null);
+        // 원인을 명시한다 — 감전 연출(#477)이 붙는 유일한 경로다. 체력 0 쓰러짐(#366)은 기본값
+        // Knockdown으로 남아 전기 연출 없이 지나간다(색 언어상 시안은 테이저 전용).
+        target.EnterStunned(
+            shooter != null ? shooter.transform : null,
+            null,
+            NpcStunCause.Taser
+        );
         NotifyOwner($"테이저 명중: {target.name} ({target.StunSeconds}초 기절)");
     }
+
+    // ---- 피격 연출 (#477 일부) ----
+    //
+    // EFx.TaserHit은 소리만 낸다 — 전기는 충격이 아니라서 흙먼지가 일 이유가 없다
+    // (조합은 FxManager 인스펙터에 있다, #532).
+    //
+    // 이 소리는 기절이 지속되는 동안 울리는 것이 아니라 맞는 순간의 원샷이다. 기절은 지속 상태라
+    // 아키텍처 규칙상 동기화 값으로 구동해야 하는데(docs/architecture.md 연출 전파 규칙), 그건 몸 전기
+    // 아크·화면 지직과 함께 #477 본체에서 다룬다. 여기서는 "맞았다"만 들려준다.
 
     // ---- 조준 판정 (서버 사격 · 클라 크로스헤어 공유, #328) ----
 

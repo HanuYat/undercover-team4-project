@@ -66,8 +66,8 @@ public class RoundManager : CommonManagerBase
     [Tooltip("이번 라운드에 벌어야 하는 목표 금액(#395). 진행도는 유치장에 잡아둔 대상들의 현상금 합이다 — 팀 자금 잔액이 아니다")]
     [Min(1)]
     [SerializeField] private int m_targetFund = 30000;
-    [Tooltip("라운드 제한시간(초). 0 이하 = 무제한(타이머 없음)")]
-    [SerializeField] private float m_timeLimitSeconds = 180f;
+    [Tooltip("라운드 제한시간(초). 기준값은 600(10분) — GDD 3-2. 0 이하 = 무제한(타이머 없음)")]
+    [SerializeField] private float m_timeLimitSeconds = 600f;
 
     [Header("라운드 시작 조건")]
     [Tooltip("NPC 스폰 완료 + 전원 입장 확인 후 실제 라운드 시작까지의 대기(초). 0 이하면 즉시 시작")]

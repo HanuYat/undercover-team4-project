@@ -86,7 +86,8 @@ public class PlayerJump : NetworkBehaviour
     }
 
     /// <summary>
-    /// 오너가 접지 상태를 알린다 — PlayerMovement가 CharacterController.isGrounded를 매 프레임 넘긴다.
+    /// 오너가 접지 상태를 알린다 — PlayerMovement가 IsStablyGrounded(설 수 있는 지면 위인가)를 매 프레임 넘긴다.
+    /// 원본 CharacterController.isGrounded가 아니다 — 수직 벽면도 접지로 치기 때문. (PlayerMovement 참고)
     /// 값이 바뀔 때만 서버로 보내 점프 한 번에 RPC 2회(이륙/착지)로 끝낸다.
     /// </summary>
     public void ReportGrounded(bool grounded)

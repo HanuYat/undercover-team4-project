@@ -25,7 +25,7 @@ using UnityEngine.Localization;
 ///
 /// <b>들킬 위험</b>은 유치장 CCTV·사이렌(#488)과, 목표 진행 금액이 줄어드는 것(RoundFundBoard)이다.
 /// 자물쇠 경보(<see cref="JailAlarmBeacon"/>)는 울리지 않는다 — 반출은 <see cref="JailLock"/>을 건드리지 않고,
-/// 유치장 문은 애초에 경찰 누구나 E로 연다(<see cref="JailDoor"/>).
+/// 유치장 문은 애초에 다가가면 저절로 열린다(<see cref="JailDoor"/> — 근접 자동문).
 ///
 /// 서버 권위 — 발행·완수·지급은 서버(또는 오프라인)에서만 돌고, 클라이언트는 자기 화면 표시만 한다.
 /// <b>네트워크 세션 전용이다</b>: 보상 그릇인 PlayerWallet에 오프라인 폴백이 없어(#484) 오프라인 단독

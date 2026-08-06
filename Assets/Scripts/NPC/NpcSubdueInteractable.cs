@@ -3,6 +3,7 @@ using UnityEngine;
 /// <summary>
 /// NPC의 상호작용키(E) 반응 (#76/#91/#398/#513) — 누르는 즉시 NPC 상태에 따라 갈린다.
 /// 체포(Captured) 상태면 <b>밧줄을 푼다</b> — 좌클릭 3초 홀드에서 E 한 번으로 옮겼다 (#513).
+/// 단 그 대상이 반출된 수감자면(#517) 풀 줄이 애초에 없으므로 <b>밧줄 없는 추종</b>을 재개한다 — 반출 흐름 왕복.
 /// 남이 끌고 있는(Escorted) 대상에 내 줄이 걸려 있으면 <b>내 줄만 뺀다</b> — 줄다리기에서 손 떼기 (#398/#513).
 ///
 /// <b>E와 좌클릭의 역할이 갈렸다</b> (#513): 밧줄 좌클릭은 <b>줄을 거는 쪽</b>(묶기·합류·재개),
@@ -94,6 +95,16 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
                 break;
 
             case NpcState.Captured:
+                // 반출된 수감자가 거리 이탈로 멈춘 것이면 반출 흐름을 잇는다 — 밧줄 없이 다시 따라오게 한다 (#517).
+                // 풀기 분기보다 <b>먼저</b> 봐야 한다: 상태가 같아서 아래로 내려가면 풀 줄도 없는 대상에
+                // 풀기가 나가 그대로 배회로 돌아간다.
+                if (NpcStateRules.CanResumeUnropedEscort(m_controller))
+                {
+                    Debug.Log($"E 입력 — 반출 수감자 추종 재개 요청: {m_controller.name}");
+                    escorter?.RequestEscortResume(m_controller);
+                    break;
+                }
+
                 // 놓아둔 신병의 밧줄을 푼다 — 재개는 밧줄 좌클릭으로 옮겼다 (#513).
                 // 남이 묶어 둔 대상도 풀 수 있다(오검거 구제·방해 수단) — 그 판정은 CanUnrope가 쥔다.
                 // 서버 직접 호출은 가드에 막힌다 — 요청 API로 서버에 넘긴다 (#118).

@@ -61,6 +61,19 @@ public class PlayerIncapacitation : NetworkBehaviour
     // 기능 정지·매달기가 들어오면 회차가 어긋나, 낡은 타이머는 무동작으로 끝난다. (#252)
     private int m_stunEpisode;
 
+    // 기절 해제 예정 시각 — 감전 연출이 잦아드는 시점을 잡는 데 쓴다 (#477). m_cause와 같은 이중 구조.
+    // 연출용이라 없어도 규칙은 돌아가지만, 클라이언트는 기절 지속 시간(서버가 쥔 Taser 프리팹 값)을
+    // 알 방법이 이것뿐이다 — 없으면 "곧 일어난다"를 표현할 수 없다.
+    private readonly NetworkVariable<double> m_stunDeadlineSynced = new NetworkVariable<double>();
+    private double m_stunDeadline;
+
+    // 위 마감의 시간 기준 — 온라인은 서버 시각(모든 피어가 같은 값을 읽는다), 오프라인은 로컬 시각.
+    // Time.time을 그대로 동기화하면 피어마다 기점이 달라 남은 시간이 어긋난다.
+    // 원래 Die 카운트다운(#364)이 두고 쓰던 것인데 #524에서 그쪽이 폐지되며 함께 지워졌고,
+    // 기절 마감(#477)이 같은 이유로 그대로 필요해 되살렸다.
+    private double CurrentTime =>
+        IsSpawned && NetworkManager != null ? NetworkManager.ServerTime.Time : Time.timeAsDouble;
+
     /// <summary>무력화 원인. 서버·오프라인은 실참조, 원격 피어는 동기화값으로 판정. (PlayerEscorter.IsEscorting 관례)</summary>
     public IncapacitationCause Cause => IsSpawned && !IsServer ? m_causeSynced.Value : m_cause;
 
@@ -83,6 +96,23 @@ public class PlayerIncapacitation : NetworkBehaviour
 
     /// <summary>테이저 피격 기절인지. 모션은 기능 정지와 같으므로(#252) 표시·집계처럼 원인을 구분할 때만 쓴다.</summary>
     public bool IsStunned => Cause == IncapacitationCause.Stun;
+
+    /// <summary>
+    /// 기절이 풀릴 때까지 남은 시간(초) — 기절이 아니면 0. 감전 연출이 잦아드는 시점 계산용. (#477)
+    /// <b>서버 시각</b>(<see cref="CurrentTime"/>) 기준이라 모든 피어가 같은 값을 읽는다 — 늦게 접속해도
+    /// 즉시 맞는다. (Die 카운트다운이 같은 방식을 쓰다 #524에서 폐지됐고, 이 값만 남았다)
+    /// </summary>
+    public float RemainingStunSeconds
+    {
+        get
+        {
+            if (!IsStunned)
+                return 0f;
+
+            double deadline = IsSpawned && !IsServer ? m_stunDeadlineSynced.Value : m_stunDeadline;
+            return Mathf.Max(0f, (float)(deadline - CurrentTime));
+        }
+    }
 
     /// <summary>
     /// <b>쓰러진 자세인가</b> — 다운 모션·바닥 시점·몸 회전 잠금이 함께 보는 값이다. (#371 후속)
@@ -207,6 +237,7 @@ public class PlayerIncapacitation : NetworkBehaviour
             return;
 
         SetCause(IncapacitationCause.Stun);
+        SetStunDeadline(CurrentTime + seconds); // 연출용 (#477) — SetCause 뒤에 둔다(거기서 0으로 지운다)
         ServerStunTimerAsync(seconds, ++m_stunEpisode).Forget();
     }
 
@@ -274,9 +305,25 @@ public class PlayerIncapacitation : NetworkBehaviour
         if (IsSpawned && IsServer)
             m_causeSynced.Value = cause;
 
+        // 기절에서 벗어나면 마감도 지운다 — 남겨 두면 다음 기절 전까지 옛 값이 읽힌다.
+        // 기절로 '들어가는' 경우의 값은 ServerStun이 이 호출 직후에 채운다 (#477).
+        if (cause != IncapacitationCause.Stun)
+        {
+            SetStunDeadline(0d);
+        }
+
         RefreshAimHitbox();
         if (was != IsIncapacitated)
             OnIncapacitatedChanged?.Invoke(IsIncapacitated);
         OnAnyIncapacitatedChanged?.Invoke(); // 전역 훅 — RoundManager가 전원 행동불능(전멸) 여부를 재검사
+    }
+
+    // 기절 해제 예정 시각 갱신 — 실참조와 동기화값을 함께 쓴다(m_cause/m_causeSynced와 동일 관례).
+    // 연출(#477)만 읽는다.
+    private void SetStunDeadline(double deadline)
+    {
+        m_stunDeadline = deadline;
+        if (IsSpawned && IsServer)
+            m_stunDeadlineSynced.Value = deadline;
     }
 }
