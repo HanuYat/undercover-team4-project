@@ -128,8 +128,16 @@ partial 분리가 성장을 막지 못한다는 증거다.)
    (플래그 프로퍼티는 이미 `IsKnockedBack`으로 존재한다 — `Knockback.cs:9`. 새 이름을 만들지 말 것.)
 3. **튜닝 SO는 코어가 계속 들고, 부품이 코어에서 읽는다.** 인스펙터 재배선을 최소화한다(지금도 코어가 SO를 들고 상태
    클래스에 주입한다). 부품이 `[SerializeField]`로 SO를 따로 받으면 프리팹 4개 × 부품 수만큼 배선이 늘어난다.
-4. **부품은 `NetworkBehaviour`, `[RequireComponent]`로 누락을 막는다.** 같은 프리팹에 여러 `NetworkBehaviour`는 정상이다.
-   단 `[RequireComponent]`는 **이미 배선된 프리팹에 소급 적용되지 않으므로** 프리팹 4개는 수동 추가가 필요하다.
+4. **부품은 `NetworkBehaviour`, `[RequireComponent]`는 코어 → 부품 한 방향만 건다.** 같은 프리팹에 여러
+   `NetworkBehaviour`는 정상이다. 양방향으로 걸면 순환 의존이 되어 둘 중 하나만 떼는 것이 막히므로 선언은
+   코어에만 둔다 — 저장소에 순환 사례가 없고 `ShopStand.cs:23`(허브가 자기 View 부품을 요구)이 같은 구조다.
+
+   **그리고 부품은 프리팹에 명시 저장한다 — 자동 생성에 기대지 않는다.** `[RequireComponent]`는 이미 배선된
+   프리팹에도 **소급 적용된다**(파일럿 임포트 로그: `Creating missing NpcIntruder component for NpcController
+   in ...` × 4). 그러나 **그 결과가 에셋에 저장되지 않는다** — 저장소가 실제 구성을 기록하지 못하고, 나중에
+   `[RequireComponent]`를 떼면 프리팹 4개에서 조용히 사라지며, 무엇보다 **직렬화 필드를 가진 부품은 임포트마다
+   인스펙터 값이 초기값으로 돌아간다**(`NpcPenaltyAgent`·`NpcRopeDrag` 등 뒤 도메인에서 터진다).
+   인스펙터에서 부품을 한 번 껐다 켠 뒤 저장하면 에셋에 기록된다(그냥 열고 저장만 하면 dirty가 잡히지 않는다).
 5. **프리팹 배선 대상은 4개** — `NPC_Citizen` · `NPC_Citizen_Generic` · `NPC_Rioter` · `NPC_Streaker`.
    `NPC_Abductor`는 `NPC_Citizen`의 **변형(variant)** 이라 자동 상속된다. 프리팹 YAML 충돌이 나면 머지하지 말고
    **에디터에서 다시 배선**하는 쪽이 빠르고 안전하다.
@@ -184,12 +192,15 @@ TickRopeDrag() → TickStandUp() → 넉백 게이트 → 스턴 게이트 → F
 | #529 (피격 연출) | ✅ **머지됨** (`908e94e`) | 해제 — Health · Stun |
 | #522 (반출 수감자 재연행) | ✅ **머지됨** (`209da52`) | 해제 — Custody · Rope · StandUp · 코어 |
 | #535 `feature/399-chase-bomb` (열린 PR) | Bomb 계열만 — NPC 스크립트 무변경 | 없음 |
-| `feature/423-knockback-navmesh-recovery` | ⚠️ **살아있다** — 8/5에 main 병합·충돌 해소까지 했고 PR만 미개설. `.Knockback.cs` +101줄 · 코어 +12줄 · `NpcStunnedState` · `NpcCommonConfig` | **Knockback** |
+| `feature/423-knockback-navmesh-recovery` | 살아있다 — 8/5에 main 병합·충돌 해소까지 했고 PR만 미개설. `.Knockback.cs` +101줄 · 코어 +12줄 · `NpcStunnedState` · `NpcCommonConfig` | Knockback — **기다리지 않기로 팀 결정 (2026-08-06)** |
 
-프리팹은 **모든 분리 PR의 공통 충돌면**이라, 스크립트가 안 겹쳐도 프리팹에서 만난다. 지금 남은 제약은
-**Knockback 하나**다 — `feature/423`이 `.Knockback.cs`를 크게 고치는 중이라 그보다 먼저 빼면 담당자가 #259 때와
-같은 대규모 충돌을 다시 겪는다. 그래서 최초 계획의 "부담되면 Knockback을 먼저 떼도 된다"는 **뒤집혔다**:
-Knockback은 이제 **맨 마지막**이다.
+프리팹은 **모든 분리 PR의 공통 충돌면**이라, 스크립트가 안 겹쳐도 프리팹에서 만난다.
+
+**대기 조건은 전부 풀렸다.** `feature/423`은 `.Knockback.cs`를 크게 고치는 중이라 한때 Knockback을 맨 뒤로
+미뤘지만, **기다리지 않고 분리에 포함하기로 했다**(2026-08-06 결정). 따라서 Knockback은 최초 계획대로 2단계
+7번 클러스터에 **되돌아온다** — Rope가 `m_knockbackActive`와 `SweepHitsObstacle`을, StandUp이 `m_knockbackActive`를
+읽으므로 셋을 갈라 놓으면 § 2-2 결론 3이 경고한 어정쩡한 중간 상태가 남는다. 충돌은 `feature/423` 담당자와
+머지 순서로 푼다.
 
 ### 1단계 — 독립 도메인 (밖으로 나가는 참조 0~1건)
 
@@ -206,9 +217,8 @@ Knockback은 이제 **맨 마지막**이다.
 | # | 도메인 | 대기 조건 |
 |---|---|---|
 | 6 | **`NpcHealth` + `NpcStun`** (`EnterStunned` ↔ `ServerRestoreHp` 쌍) | ✅ 해제 (#529 머지). 분리 시 `ClearStunOverlay`·`HasStunOverlay`를 `internal` 이상으로 승격해야 한다 — 각각 Knockback과 StandUp·코어가 읽는다 |
-| 7 | **`NpcRopeDrag` + `NpcStandUp`** (`CancelStandUp` ↔ `IsTethered`/`IsRoped` 쌍) | ✅ 해제 (#522 머지). **선행: `SweepHitsObstacle` 코어 승격**(§ 4-6). Knockback은 아직 코어에 있으므로 `m_knockbackActive`는 기존 public 프로퍼티 `IsKnockedBack`(`Knockback.cs:9`)으로 읽는다 |
-| 8 | **`NpcKnockback`** (외부 참조는 `BombDevice`의 `ServerApplyKnockback` 1건) | ⚠️ **`feature/423` 머지 후** |
-| 9 | 코어 정리 — 남은 도메인 멤버 이동 확인, partial 0개, 이전 계획서 갱신 마무리 | — |
+| 7 | **`NpcRopeDrag` + `NpcStandUp` + `NpcKnockback`** (`CancelStandUp` + `m_knockbackActive`·`SweepHitsObstacle` 게이트로 3자 결합) | ✅ 해제 (#522 머지 · `feature/423` 대기 안 함). 부품 간 플래그 조회는 기존 public 프로퍼티 `IsKnockedBack`(`Knockback.cs:9`)을 쓴다. `SweepHitsObstacle`은 셋이 한 PR로 가므로 코어 승격이 필수는 아니지만, 도메인 유틸이 아니니 § 4-6대로 올려 두는 편이 낫다. 외부 참조는 `BombDevice`의 `ServerApplyKnockback` 1건 |
+| 8 | 코어 정리 — 남은 도메인 멤버 이동 확인, partial 0개, 이전 계획서 갱신 마무리 | — |
 
 ## 7. 파일럿 상세 — `NpcIntruder`
 
@@ -277,7 +287,8 @@ FSM 전이(`m_stateMachine.ChangeState(NpcState.Intruding)`)가 필요하므로 
 이전 계획서 § 5의 방법을 그대로 쓴다(한 번 해 본 절차다). 컴포넌트 분리에서 달라지는 부분만 적는다.
 
 1. **컴포넌트 누락 검사** — 프리팹 4개에서 부품이 붙어 있는지, `NPC_Abductor`가 상속받았는지 확인.
-   `[RequireComponent]`가 있어도 기존 프리팹에는 소급 적용되지 않는다.
+   `[RequireComponent]`가 소급 적용해 주긴 하지만 **에셋에 저장되지 않으므로**(§ 4-4) 프리팹 파일에
+   부품 guid가 실제로 들어갔는지로 확인한다 — `grep -rl <부품 guid> Assets --include=*.prefab`.
 2. **멤버 유실 검사** — 분리 전 시그니처 목록과 분리 후 합본 비교 (이전 문서 § 5의 `comm -23` 스크립트를 부품 파일까지
    포함하도록 경로만 바꿔 쓴다).
 3. **컴파일** — Unity Console 에러 0. 새 타입을 쓰기 전에 반드시 확인(`CLAUDE.md`).
@@ -287,12 +298,17 @@ FSM 전이(`m_stateMachine.ChangeState(NpcState.Intruding)`)가 필요하므로 
    임시 거처 / 라운드 종료 freeze
 5. **인스펙터 튜닝값 유실 확인** — SO를 코어에 남기므로(규약 3) 값 자체는 움직이지 않는다. 프리팹 저장 후
    config 참조가 살아 있는지만 본다.
+6. **프리팹 diff에 딸려 온 것 확인** — 부품을 저장하면 프리팹이 통째로 재직렬화되므로, 부품 추가 외의 변경이
+   함께 들어온다. 파일럿(#540)에서 둘 나왔다: ① 그동안 프리팹에 기록된 적 없던 필드가 기본값으로 쓰인다
+   (`m_standUpSeconds: 0.585` — **코드 기본값과 같은지 대조할 것**. 다르면 인스펙터에서 조정한 값이 덮인 것이다)
+   ② `GlobalObjectIdHash`가 재계산될 수 있다. `DefaultNetworkPrefabs.asset`은 프리팹을 GUID로 등록하므로
+   레지스트리는 무관하지만, **옛 해시를 참조하는 곳이 없는지 확인**하고 PR 본문에 적는다.
 
 ## 10. 착수 전 확인할 것
 
 - [x] #529 · #522 머지 — 2026-08-06 확인. 2단계 6·7번 해제
-- [ ] `feature/423-knockback-navmesh-recovery` — **살아있음 확인(8/5 main 병합)**. PR 개설·머지 시점을 담당자와
-      맞추고, Knockback 분리(2단계 8번)를 그 뒤로 둔다
+- [x] `feature/423-knockback-navmesh-recovery` — 기다리지 않고 Knockback을 분리에 포함하기로 결정(2026-08-06).
+      2단계 7번 클러스터로 되돌렸다. 남은 일은 담당자와 **머지 순서**를 맞추는 것뿐이다
 - [ ] `RaiseStandUp` 계열을 코어 중계로 남길지 `NpcStandUp`으로 옮길지 (§ 8 마지막 행)
 - [ ] 다른 partial에도 `ReleaseFromCustody` 같은 오배치가 있는지 (§ 7 주의) — 2026-08-06 시점에 확인된 것은
       `Intrude.cs`의 `ReleaseFromCustody` 하나
