@@ -103,53 +103,48 @@ public class JailIntake : MonoBehaviour
         // 버튼이 이 수로 "확보한 신병이 없다"만 가르면 되고, 판정 결과는 각자 배너로 나간다.
         int held = m_admitBuffer.Count;
 
+        ArrestJudge judge = App.Game.ArrestJudge;
+
         for (int i = 0; i < held; i++)
         {
             NpcController npc = m_admitBuffer[i];
             if (npc == null || m_unjudgeable.Contains(npc))
                 continue;
 
-            // 인계자는 <b>지금</b> 잡아 둔다 — 아래에서 줄을 빼고 나면 누가 끌고 있었는지 알 수 없다.
+            // <b>판정이 먼저다 — 줄이 걸려 있는 동안에.</b> ArrestJudge가 인계자를 그 순간의 밧줄에서
+            // 뽑아 결과(ArrestResult.DeliveredBy)에 실으므로, 줄을 먼저 걷으면 목록이 비어 <b>판정 배너도
+            // 오검거 페널티 대상도 사라진다</b>. 저쪽이 오검거일 때 끌기를 직접 푸는 것도 같은 이유로
+            // 판정 안에서 일어나야 한다(그쪽 주석 참고).
+            ArrestResult? result = judge.Judge(npc);
+            if (result == null)
+            {
+                // 신원도 경범죄 마커도 없는 대상 — 다시 물어도 답이 같으므로 한 번만 시도한다
+                m_unjudgeable.Add(npc);
+                continue;
+            }
+
+            // 인계 몫은 판정 직후에 잡는다 — 아래에서 줄을 빼고 나면 누가 끌고 있었는지 알 수 없다.
+            // (오검거 경로에서 ArrestJudge가 끌기를 풀어도 줄 자체는 남아 있어 여기서 여전히 보인다)
             ulong[] deliverers = CollectDeliverers(npc, presserId);
 
-            // 줄을 걷고 일어난 <b>뒤에</b> 판정한다 — 누운 몸이 그대로 감옥으로 순간이동하거나
-            // 누운 채 석방되는 그림을 없앤다. 묶인 적 없는 대상은 곧바로 실행된다.
-            PlayerEscorter.ReleaseAllTethersOn(npc, () => ServerResolveVerdict(npc, deliverers));
+            // 오검거 — 감옥에 들이지 않는다. 행선지(원한 구역 수용)는 WrongfulArrestPenalty가 같은
+            // 판정 이벤트를 이미 받아 정했고, 그 매니저가 없는 씬에서는 CustodyRouter가 배회로 돌려보낸다.
+            // 여기서는 남은 줄을 걷고 일으켜 세우기만 한다 — 누운 채 끌려가는 그림을 없앤다.
+            if (result.Value.Verdict == ArrestVerdict.WrongfulArrest)
+            {
+                npc.SetJailExtracted(false); // 반출했던 대상이 오검거로 뒤집힌 경우 표식을 걷어낸다 (#517)
+                PlayerEscorter.ReleaseAllTethersOn(npc, null);
+                Debug.Log($"[감옥] 오검거 — 감옥에 들이지 않고 문 앞에서 놓는다: {npc.name}");
+                continue;
+            }
+
+            // 수감 — 줄을 걷고 일어난 <b>뒤에</b> 순간이동한다. 묶인 적 없는 대상은 곧바로 실행된다.
+            int bounty = result.Value.Reward;
+            PlayerEscorter.ReleaseAllTethersOn(npc, () => ServerPlaceInJail(npc, bounty, deliverers));
         }
 
         m_admitBuffer.Clear();
         return held;
-    }
-
-    // 일어난 뒤의 판정·행선지 — 서버(또는 오프라인) 전용.
-    private void ServerResolveVerdict(NpcController npc, ulong[] deliverers)
-    {
-        if (npc == null || m_jailZone == null)
-            return;
-
-        ArrestJudge judge = App.Game.ArrestJudge;
-        if (judge == null)
-            return;
-
-        ArrestResult? result = judge.Judge(npc);
-        if (result == null)
-        {
-            // 신원도 경범죄 마커도 없는 대상 — 다시 물어도 답이 같으므로 한 번만 시도한다
-            m_unjudgeable.Add(npc);
-            return;
-        }
-
-        // 오검거 — 감옥에 들어가지 않는다. 줄은 이미 풀렸고 몸도 일어난 상태이므로 여기서는
-        // 표식만 걷고 그 자리에 둔다. 행선지(원한 구역 수용)는 WrongfulArrestPenalty가 같은
-        // 판정 이벤트를 받아 정하고, 그 매니저가 없는 씬에서는 CustodyRouter가 배회로 돌려보낸다.
-        if (result.Value.Verdict == ArrestVerdict.WrongfulArrest)
-        {
-            npc.SetJailExtracted(false); // 반출했던 대상이 오검거로 뒤집힌 경우 표식을 걷어낸다 (#517)
-            Debug.Log($"[감옥] 오검거 — 감옥에 들이지 않고 문 앞에서 놓는다: {npc.name}");
-            return;
-        }
-
-        ServerPlaceInJail(npc, result.Value.Reward, deliverers);
     }
 
     /// <summary>
