@@ -501,8 +501,10 @@ public class EmoteLoadoutTests
         var loadout = new EmoteLoadout();
         loadout.Deserialize("a|b|c|d|e|f|g|h|i|j");
 
-        Assert.AreEqual("h", loadout.GetSlot(7));
-        Assert.AreEqual(EmoteLoadout.k_slotCount, EmoteLoadout.k_slotCount); // 칸 수는 불변
+        Assert.AreEqual("h", loadout.GetSlot(7), "마지막 칸");
+        Assert.IsNull(loadout.GetSlot(EmoteLoadout.k_slotCount), "칸 수를 넘은 자리");
+        // 넘친 값이 8칸 안으로 밀려 들어오지 않았는지 — 직렬화하면 8칸치만 나와야 한다
+        Assert.AreEqual("a|b|c|d|e|f|g|h", loadout.Serialize());
     }
 
     [Test]
@@ -1723,7 +1725,6 @@ public class PlayerEmoteInput : MonoBehaviour
 
     private PlayerEmote m_emote;
     private PlayerInputHandler m_inputHandler;
-    private PlayerLoadout m_loadout;
 
     private readonly EmoteLoadout m_slots = new EmoteLoadout();
     private Vector2 m_aim;
@@ -1770,7 +1771,6 @@ public class PlayerEmoteInput : MonoBehaviour
 
     private void OpenWheel()
     {
-        // 무력화 중에는 휠 자체를 열지 않는다 — 열어 봐야 서버가 전부 거절한다.
         if (m_emote.IsEmoting)
             m_emote.CancelEmote(); // 갈아타기: 새로 고르는 동안 이전 것은 끊는다
 
@@ -2015,6 +2015,9 @@ public class EmoteWheelSlotView : MonoBehaviour
     [SerializeField]
     private float m_emptyAlpha = 0.25f;
 
+    // 지금 구독 중인 표시 이름 — 갈아끼울 때 이전 구독을 끊기 위해 들고 있는다
+    private UnityEngine.Localization.LocalizedString m_boundName;
+
     private void Awake()
     {
         if (m_root == null)
@@ -2045,14 +2048,27 @@ public class EmoteWheelSlotView : MonoBehaviour
             m_icon.color = color;
         }
 
-        if (m_label != null)
-        {
-            // LocalizedString은 비동기 조회라 즉시 값이 없을 수 있다 — 표시 문구가 준비되면 채운다.
-            if (filled)
-                definition.DisplayName.StringChanged += SetLabelText;
-            else
-                SetLabelText(string.Empty);
-        }
+        // LocalizedString은 비동기 조회라 즉시 값이 없을 수 있어 준비되면 채우도록 구독한다.
+        // 구독을 갈아끼울 때 이전 것을 반드시 끊는다 — 로비 편집에서는 같은 칸이 계속 다시
+        // Bind되므로, 안 끊으면 구독이 쌓여 한 칸에 여러 문구가 번갈아 들어온다.
+        UnsubscribeLabel();
+        m_boundName = filled ? definition.DisplayName : null;
+
+        if (m_boundName != null)
+            m_boundName.StringChanged += SetLabelText;
+        else
+            SetLabelText(string.Empty);
+    }
+
+    private void OnDestroy() => UnsubscribeLabel();
+
+    private void UnsubscribeLabel()
+    {
+        if (m_boundName == null)
+            return;
+
+        m_boundName.StringChanged -= SetLabelText;
+        m_boundName = null;
     }
 
     public void SetHighlighted(bool highlighted)
@@ -2069,7 +2085,7 @@ public class EmoteWheelSlotView : MonoBehaviour
 }
 ```
 
-> **주의:** `StringChanged` 구독은 해제해야 누수가 없다. 칸이 파괴될 때 정리하려면 `Bind`에서 이전 구독을 먼저 끊도록 마지막 정의를 필드로 기억해 두고 `OnDestroy`에서 해제할 것. 카탈로그가 8종으로 고정이고 휠이 씬 수명과 같으면 실질 누수는 없지만, 로비 편집에서 칸이 자주 바뀌면 쌓인다.
+> `StringChanged` 구독을 `m_boundName`으로 들고 있다가 `Bind` 재호출과 `OnDestroy`에서 끊는 것이 위 코드의 요지다. 로비 편집에서는 같은 칸이 계속 다시 `Bind`되므로 안 끊으면 구독이 쌓여 한 칸에 여러 문구가 번갈아 들어온다.
 
 - [ ] **Step 3: 컴파일 확인**
 
