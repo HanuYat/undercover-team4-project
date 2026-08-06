@@ -94,7 +94,9 @@
 
 **Interfaces:**
 - Consumes: 없음
-- Produces: `Assets/Imported/Kevin Iglesias/Human Dance Animations/Animations/Male/Social/Dance/Steps/HumanM@Dance01.fbx` ~ `HumanM@Dance18.fbx` — Task 4 카탈로그와 Task 5 빌더가 참조
+- Produces: `Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Social/Dance/Steps/HumanM@Dance01.fbx` ~ `HumanM@Dance18.fbx` — Task 4 카탈로그가 참조
+
+> **경로 주의:** 이 패키지는 기존 `Human Animations`와 **GUID를 공유하는 확장판**이라, `ImportPackage`가 별도 폴더를 만들지 않고 기존 트리 안으로 직접 병합한다(`Assets/Kevin Iglesias/` 임시 폴더는 생기지 않는다). 별도 폴더로 옮기려던 원안은 성립하지 않으며, 병합된 경로를 그대로 쓴다 — 같은 벤더의 같은 패키지 계열이므로 위치가 어색하지 않고, GUID가 유지돼 기존 참조도 깨지지 않는다.
 
 - [ ] **Step 1: 패키지 임포트**
 
@@ -121,30 +123,13 @@ return UnityEditor.AssetDatabase.IsValidFolder("Assets/Kevin Iglesias/Human Anim
 
 Expected: `"임포트 완료"`
 
-- [ ] **Step 3: 프로젝트 관례 경로로 이동**
-
-기존 `Assets/Imported/Kevin Iglesias/Human Animations`와 **합치지 않는다** — 패키지에 `HumanM@Idle01.fbx` 중복본이 있어 합치면 충돌한다.
-
-```csharp
-string error = UnityEditor.AssetDatabase.MoveAsset(
-    "Assets/Kevin Iglesias/Human Animations",
-    "Assets/Imported/Kevin Iglesias/Human Dance Animations");
-if (!string.IsNullOrEmpty(error))
-    return "이동 실패: " + error;
-UnityEditor.AssetDatabase.DeleteAsset("Assets/Kevin Iglesias");
-UnityEditor.AssetDatabase.Refresh();
-return "이동 완료";
-```
-
-Expected: `"이동 완료"`
-
-- [ ] **Step 4: 클립 존재 확인**
+- [ ] **Step 3: 클립 존재 확인**
 
 ```csharp
 var results = new System.Text.StringBuilder();
 for (int i = 1; i <= 18; i++)
 {
-    string path = $"Assets/Imported/Kevin Iglesias/Human Dance Animations/Animations/Male/Social/Dance/Steps/HumanM@Dance{i:00}.fbx";
+    string path = $"Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Social/Dance/Steps/HumanM@Dance{i:00}.fbx";
     var clip = UnityEditor.AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
     if (clip == null) results.Append($"{i:00} 없음; ");
 }
@@ -153,25 +138,15 @@ return results.Length == 0 ? "18종 모두 확인" : results.ToString();
 
 Expected: `"18종 모두 확인"`
 
-- [ ] **Step 5: 콘솔 에러 확인**
+- [ ] **Step 4: 콘솔 에러 확인**
 
 MCP `read_console`로 `types: ["Error"]` 조회. Expected: 임포트 관련 에러 없음.
 
-- [ ] **Step 6: 커밋**
+- [ ] **Step 5: 커밋 없음 — 확인만 하고 넘어간다**
 
-```bash
-git add "Assets/Imported/Kevin Iglesias/Human Dance Animations"
-git commit -m "$(cat <<'EOF'
-Human Dance Animations를 임포트한다 (#219)
+`.gitignore:71`의 `/[Aa]ssets/[Ii]mported/`가 서드파티 에셋 전체를 git에서 제외한다. 기존 Synty·Kevin Iglesias 에셋도 마찬가지로 **한 번도 커밋된 적이 없다**(`git log --all -- Assets/Imported` 결과 없음) — 팀원이 각자 패키지를 임포트하는 것이 이 저장소의 관례다.
 
-패키지가 Assets/Kevin Iglesias/로 풀리므로 프로젝트 관례인 Assets/Imported/
-아래로 옮긴다. 기존 Human Animations 폴더와 합치지 않는 이유는 패키지에
-HumanM@Idle01.fbx 중복본이 들어 있어서다 — 합치면 같은 경로에 두 파일이 온다.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
-EOF
-)"
-```
+따라서 이 태스크는 **커밋할 것이 없다.** 대신 팀원이 이 브랜치를 받아 실행하려면 같은 패키지를 임포트해야 한다는 사실을 설계 문서와 PR 본문에 남긴다(Task 13에서 함께 처리).
 
 ---
 
@@ -807,7 +782,7 @@ MCP `read_console`로 `types: ["Error"]` 조회. Expected: 에러 없음.
 MCP `execute_code`로:
 
 ```csharp
-const string dance = "Assets/Imported/Kevin Iglesias/Human Dance Animations/Animations/Male/Social/Dance/Steps";
+const string dance = "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Social/Dance/Steps";
 const string emotions = "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Social/Emotions";
 
 var entries = new (string id, string clipPath, bool loop)[]
@@ -2503,7 +2478,21 @@ Expected: `Assets/Scripts/Player/PlayerState.cs` 한 줄만.
 
 > `Emote` — 감정표현 재생 중. 개별 종류(댄스·환호·박수 등)는 enum이 아니라 `EmoteCatalog`(ScriptableObject)의 id로 다룬다. 애니메이션 에셋을 추가해도 코드·네트워크 계약이 바뀌지 않게 하기 위함이다. (#219)
 
-- [ ] **Step 4: 설계 문서의 컴포넌트 표 조정**
+- [ ] **Step 4: 에셋 의존성을 문서에 남긴다**
+
+`Assets/Imported/`는 `.gitignore:71`로 git에서 제외돼 있어 댄스 에셋이 저장소에 들어가지 않는다. 이 브랜치를 받은 팀원은 패키지를 직접 임포트해야 감정표현이 동작한다.
+
+설계 문서 §4 「에셋 임포트」를 다음으로 교체:
+
+```markdown
+### 에셋 임포트
+
+Kevin Iglesias **Human Dance Animations**를 임포트한다. 이 패키지는 프로젝트가 이미 쓰는 `Human Animations`와 **GUID를 공유하는 확장판**이라, `ImportPackage`가 별도 폴더를 만들지 않고 기존 `Assets/Imported/Kevin Iglesias/Human Animations/` 트리 안으로 직접 병합한다. 댄스 클립은 그 아래 `Animations/Male/Social/Dance/Steps/`에 놓인다.
+
+**이 에셋은 저장소에 들어가지 않는다.** `.gitignore`가 `Assets/Imported/` 전체를 제외하고 있고(Synty 등 기존 서드파티 에셋도 마찬가지다), 팀원이 각자 임포트하는 것이 이 저장소의 관례다. 이 브랜치를 받아 감정표현을 실행하려면 같은 패키지를 임포트해야 한다.
+```
+
+- [ ] **Step 5: 설계 문서의 컴포넌트 표 조정**
 
 `docs/superpowers/specs/2026-08-06-player-emote-design.md` §6 표에서 `PlayerEmoteCamera` 행을 지우고, §7 첫 문단을 다음으로 교체:
 
@@ -2513,7 +2502,7 @@ Expected: `Assets/Scripts/Player/PlayerState.cs` 한 줄만.
 3인칭 전환은 **`PlayerLook` 안에서** 한다(`SetEmoteView(bool)`). 별도 컴포넌트로 빼지 않는 이유는 그 파일의 클래스 주석이 이미 짚어 둔 것과 같다 — `m_pitch`·카메라 로컬 자세를 `HandleLook`과 `UpdateCameraPose`가 함께 읽고 쓰므로 나누면 값을 주고받게 된다. 게다가 `UpdateCameraPose`가 매 프레임 `localPosition`·`localEulerAngles`를 통째로 대입하므로 밖에서 얹은 오프셋은 그 프레임에 지워진다(화면 흔들림 #477이 같은 이유로 그 메서드 안에서 조립된다). 호출은 `PlayerEmoteView`가 한다.
 ```
 
-- [ ] **Step 5: 커밋**
+- [ ] **Step 6: 커밋**
 
 ```bash
 git add Assets/Scripts/Player/PlayerState.cs docs/GDD.md docs/superpowers/specs/2026-08-06-player-emote-design.md
