@@ -103,7 +103,7 @@ Reaction 관련 2건이 빠져 13행 14건**이 됐고, **#547이 `Custody → S
 | **Custody → Stun** | `ExitStun(false)` — 수감 직전 기절 오버레이를 걷는다(남으면 감옥에서 얼어붙는다, **#547 신규**) | `Custody.cs:112` |
 | StandUp → Rope | `IsTethered` / `IsRoped` (누운 자세 판정) | `StandUp.cs:91` |
 | StandUp → Knockback·Stun | `m_knockbackActive` / `HasStunOverlay`(**private**) | `StandUp.cs:134~135` |
-| **[헬퍼]** Custody → Rope | `TryWarpNear(...)` — private, Rope 도메인 멤버 아님 | `Custody.cs:50` (선언 `Rope.cs:245`) |
+| **[헬퍼]** Custody → Rope | `TryWarpNear(...)` — private, Rope 도메인 멤버 아님 | `Custody.cs:27` (선언 `Rope.cs:245`) |
 | **[헬퍼]** Rope → Knockback | `SweepHitsObstacle(...)` — private, Knockback 도메인 멤버 아님 | `Rope.cs:375` (선언 `Knockback.cs:121`) |
 
 빠진 자리에는 **부품 참조 3건**이 생겼다 — 남은 partial이 이미 나간 부품을 부르는 경로다. 숫자가 줄지 않았다고
