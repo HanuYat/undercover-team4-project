@@ -3302,6 +3302,7 @@ GameObject:
   - component: {fileID: 8819930586284450470}
   - component: {fileID: 8957818139698593311}
   - component: {fileID: 7288919990303064545}
+  - component: {fileID: 6213692437447462158}
   m_Layer: 7
   m_Name: NPC_Citizen_Generic
   m_TagString: Untagged
@@ -3689,6 +3690,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e334c80a06670f643ad9a2b1fe688712, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcIntruder
+  ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &6213692437447462158
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3cc52cc8084541eea4e842385aee7ce3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcPenaltyAgent
   ShowTopMostFoldoutHeaderGroup: 1
 --- !u!1 &8855344057427867759
 GameObject:
