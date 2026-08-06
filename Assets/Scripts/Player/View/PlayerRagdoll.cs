@@ -661,6 +661,7 @@ public class PlayerRagdoll : MonoBehaviour
         if (m_state == RagdollState.Ragdoll)
         {
             ApplyImpulse(impulse); // 늦게 도착한 폭발 정보 — 누적한다
+            ReportEntry("누적", impulse);
             return;
         }
 
@@ -688,6 +689,51 @@ public class PlayerRagdoll : MonoBehaviour
         IgnoreOwnCapsule(); // 캡슐이 꺼져 있으면 사실상 무동작이지만, 전이 순간의 안전망으로 남긴다
         SetKinematic(false);
         ApplyImpulse(impulse);
+        ReportEntry("신규", impulse);
+
+        m_diagEntryFrames = 10; // 진입 직후 10스텝만 추적
+        m_diagEntryHips = m_hipsBone.position;
+    }
+
+    // ---- 임시 진단: 임펄스가 안 먹는다 (#506 — 확정되면 지운다) ----
+    //
+    // 증상: 죽어도 시체가 안 날아가고 그 자리에서 무너진다. 후보가 셋이고 한 줄로 갈린다:
+    //  · 받은 임펄스가 0/작다        → <c>임펄스</c> 크기를 본다 (RPC·서버 계산 문제)
+    //  · 임펄스는 왔는데 속도가 안 붙음 → <c>골반v</c>가 0이다 (키네마틱 상태·적용 순서 문제)
+    //  · 속도는 붙는데 다음 프레임에 지워짐 → <c>골반v</c>는 크지만 눈에는 안 난다
+    //    (캡슐 추종이 루트를 옮기며 뼈 트랜스폼을 같이 끌어 물리를 덮어쓰는 경우)
+    private void ReportEntry(string kind, Vector3 impulse)
+    {
+        Rigidbody hips = m_hipsBody;
+        Debug.Log(
+            $"[래그돌/진입] {kind} {(HasMoveAuthority ? "오너" : "원격")}"
+                + $" | 임펄스 {impulse.magnitude:F2} {impulse.ToString("F1")}"
+                + $" | 골반v {(hips != null ? hips.linearVelocity.magnitude : -1f):F2}"
+                + $" 키네={(hips != null && hips.isKinematic)}"
+                + $" | 뼈 {(m_bodies != null ? m_bodies.Length : 0)}개"
+                + $" 캡슐={(m_controller != null && m_controller.enabled ? "켜짐" : "꺼짐")}",
+            this
+        );
+    }
+
+    // 진입 직후 몇 프레임의 실제 이동을 본다 — "속도는 붙었는데 안 난다"를 가른다.
+    private int m_diagEntryFrames;
+    private Vector3 m_diagEntryHips;
+
+    private void TickEntryTrace()
+    {
+        if (m_diagEntryFrames <= 0 || m_hipsBone == null)
+            return;
+
+        m_diagEntryFrames--;
+        Debug.Log(
+            $"[래그돌/진입추적] {(HasMoveAuthority ? "오너" : "원격")}"
+                + $" 골반Δ {(m_hipsBone.position - m_diagEntryHips).magnitude * 1000f:F0}mm"
+                + $" 골반v {(m_hipsBody != null ? m_hipsBody.linearVelocity.magnitude : -1f):F2}"
+                + $" 키네={(m_hipsBody != null && m_hipsBody.isKinematic)}",
+            this
+        );
+        m_diagEntryHips = m_hipsBone.position;
     }
 
     /// <summary>
@@ -848,7 +894,11 @@ public class PlayerRagdoll : MonoBehaviour
             Destroy(m_ropeAnchorObject);
     }
 
-    private void FixedUpdate() => TickRopeAnchor();
+    private void FixedUpdate()
+    {
+        TickRopeAnchor();
+        TickEntryTrace(); // 임시 진단
+    }
 
     private void LateUpdate()
     {
