@@ -28,6 +28,39 @@
 > 코어 승격으로 사라졌다(남은 헬퍼는 `SweepHitsObstacle` 하나). 얽힘이 § 2-2 결론 3이 예고한
 > **무력화 5개에만 남은 상태**가 실측으로 확인됐다.
 
+## 0. 이어서 하는 사람을 위한 재개 지점 (2026-08-06 기준)
+
+다른 기기·다른 세션에서 이어받을 때 **이 절만 읽고 시작할 수 있게** 유지한다.
+
+**끝난 것** — 1단계 5개 전부. `NpcIntruder`(#540) · ~~`NpcHolding`~~ 삭제(#541) · `NpcPenaltyAgent`(#542) ·
+`NpcReaction`(#545) · `NpcCustody`(#552). 클래스는 **6파일 1,418줄**이고 남은 partial 5개는 전부 무력화 클러스터다.
+
+**다음 할 것 — 2단계 6번(`NpcHealth` + `NpcStun`)**. 7번보다 6번을 먼저 하는 근거:
+
+- **7번은 실제로 막혀 있다** — `feature/423-knockback-navmesh-recovery`(담당 김준영)가 `.Knockback.cs`를
+  +101줄 고치는데 **PR이 아직 없어 머지 시점을 모른다**(2026-08-06 확인, 최신 커밋 08-05). 7번은 그 파일을
+  통째로 옮기므로 순서를 못 정한 채 시작하면 한쪽이 큰 diff를 다시 짜게 된다.
+- **6번은 통보만 남았다** — 아래 착수 조건 1.
+
+**착수 조건 둘** (코드부터 건드리지 말 것):
+
+1. **#401 담당자(이현진)에게 6번 착수를 알린다.** #401(스턴/다운 분리)이 재설계할 대상이 6번이 옮기는
+   `EnterStunned`·`ServerRestoreHp`·검거 게이트다. 2026-08-06 기준 **전용 브랜치가 없고 07-31 이후 갱신이
+   없어** "먼저 부품화" 쪽이 유리하다(§ 6) — 다만 상대 일정이 걸린 판단이라 동의가 먼저다.
+2. **실측은 이미 해 뒀다** — § 6 2단계 표 아래 "**6번 착수 준비 실측**"에 이동 대상·호출부 ≈28건·주의 다섯이
+   있다. 그 절의 **주의 1·2·3이 4번보다 무거운 지점**이다(코어에 있는 `NetworkVariable` 훅 / `IDamageable`
+   구현 이동 / `Update` 게이트 분리).
+
+**작업 순서** — 앞선 4개 도메인 PR과 동일: 브랜치 `feature/503-npc-health-stun` → (필요하면 "제 집 정리"
+선행 커밋) → 부품 분리 커밋 → **프리팹 4개 배선 커밋** → 계획서 반영 커밋. 규약은 § 4, 검증은 § 9.
+
+**환경 주의 둘**
+
+- **게임 씬이 바뀌었다** — `d98bbae`(2026-08-06, 이현석)가 게임 씬을 Apocalypse 맵으로 전환했다. NPC 스크립트·
+  프리팹은 무변경이라 6번의 충돌면은 아니지만, **Play 회귀는 새 맵에서 돌려야 하고** 감옥·문·배치 지점이
+  그 씬에 제대로 배선돼 있는지가 전제다.
+- **프리팹은 모든 분리 PR의 공통 충돌면이다**(§ 6). 6번은 프리팹 4개에 부품을 **2개씩** 붙인다.
+
 ## 1. 현재 상태와 문제
 
 `NpcController`는 **partial 12개 파일 · 합계 1,978줄**이다(2026-08-06 실측).
@@ -381,6 +414,65 @@ TickRopeDrag() → TickStandUp() → 넉백 게이트 → 스턴 게이트 → F
 | 7 | **`NpcRopeDrag` + `NpcStandUp` + `NpcKnockback`** (`CancelStandUp` + `m_knockbackActive`·`SweepHitsObstacle` 게이트로 3자 결합) | ✅ 해제 (#522 머지 · `feature/423` 대기 안 함). 부품 간 플래그 조회는 기존 public 프로퍼티 `IsKnockedBack`(`Knockback.cs:9`)을 쓴다. `SweepHitsObstacle`은 셋이 한 PR로 가므로 코어 승격이 필수는 아니지만, 도메인 유틸이 아니니 § 4-6대로 올려 두는 편이 낫다. 외부 참조는 `BombDevice`의 `ServerApplyKnockback` 1건 — 그 파일을 `feature/506`이 고치고 있어 머지 순서를 본다. `Rope.cs`의 `NpcReaction` 참조 1건(§ 2-2)도 이때 정리된다 |
 | 8 | 코어 정리 — 남은 도메인 멤버 이동 확인, partial 0개, 이전 계획서 갱신 마무리 | — |
 
+#### 6번 착수 준비 실측 (2026-08-06, #552 머지 후)
+
+**부품은 둘이다** — `NpcHealth`(153줄) · `NpcStun`(238줄). 양방향 쌍이라 **한 PR**로 가지만 컴포넌트는 갈라
+둔다(§ 3). 프리팹 4개에 **2개씩** 추가하게 된다.
+
+**이동 대상** — `Health.cs` 13개 · `Stun.cs` 15개 · 코어 3종:
+
+| 파일 | 멤버 |
+|---|---|
+| `Health.cs` | `m_syncedHp` · `m_hp` · `MaxHp` · `CurrentHp` · `OnDamaged` · `OnHit` · `InitHealth` · `TakeDamage` · `BroadcastDamaged` · `PlayDamagedRpc` · `RaiseDamaged` · `ServerRestoreHp` · `SetHp` + **`IDamageable` 구현** |
+| `Stun.cs` | `m_syncedStunned` · `m_stunned` · `IsStunned` · `HasStunOverlay` · `OnStunnedChanged` · `OnTaserStunStarted` · `SetStunned` · `HandleSyncedStunnedChanged` · `BroadcastTaserStun` · `TaserStunStartedRpc` · `m_stunElapsed` · `m_stunDuration` · `m_standingUp` · `m_agentStoppedBefore` · `EnterStunned` · `TickStun` · `ClearStunOverlay` · `ExitStun` |
+| 코어 | `StunSeconds` (67) · `m_syncedStunned.OnValueChanged` 구독·해제 (119 · 136) · `Update`의 스턴 게이트 (192~197) |
+
+**경로가 바뀌는 호출부 ≈28건**(NPC 타입 수신자만 — 동명 `PlayerHealth` 멤버는 제외했다):
+
+| 멤버 | 호출부 |
+|---|---|
+| `IsStunned` | `Baton:265,514` · `Taser:250` · `NpcAnimationDriver:430,595` · `NpcFleeState:280` · `NpcStateRules:100` + **부품 1건**(`NpcReaction:66`) |
+| `OnStunnedChanged` | `NpcAnimationDriver:208,218` · `NpcShockView:47,53` |
+| `OnDamaged` | `AbductionEvent:161,222,348,378` |
+| `ExitStun` | `JailIntake:152` · `PlayerEscortCommands:491` + **부품 1건**(`NpcCustody:129`) |
+| `OnTaserStunStarted` | `NpcShockView:46,52` |
+| `CurrentHp` · `MaxHp` | `Baton:302` · `NpcHealthBarView:56,61` |
+| `TakeDamage` | `Baton:300` (`BombDevice:411`은 **무변경** — 아래 주의 2) |
+| `EnterStunned` | `Taser:185` + **코어 partial 1건**(`Health.cs:148`) |
+| `ServerRestoreHp` | `NpcStunnedState:79` + **코어 partial 1건**(`Stun.cs:229`) |
+| `StunSeconds` | `Taser:190` |
+
+주의 다섯 — **4번보다 무거운 지점이 셋 있다**:
+
+1. **`NetworkVariable` 훅이 코어에 있다.** `m_syncedStunned.OnValueChanged` 구독·해제가 **코어의
+   `OnNetworkSpawn`/`OnNetworkDespawn`**(`cs:119` · `cs:136`)에 있다. § 4-4대로 **훅을 부품으로 함께 옮겨야
+   한다** — 코어에 남기면 코어가 부품의 private 필드를 보게 되어 분리가 무의미해진다. 4번에는 훅이 없어
+   해당 없었고, **3번(#542)의 `m_abductionDuty`가 유일한 선례**다. 그 PR을 먼저 볼 것.
+2. **`IDamageable` 구현이 `NpcHealth`로 넘어간다.** 지금은 `partial class NpcController : IDamageable`이다 →
+   `class NpcHealth : NetworkBehaviour, IDamageable`. **`BombDevice:411`은 `GetComponent<IDamageable>()`로 찾으므로
+   무변경**이고(§ 2-1의 예측이 여기서 확인된다), 대신 `Baton`은 `NpcController target`을 받아 부르므로
+   `target.Health.TakeDamage(...)`가 된다. `TakeDamage` 안의 `NpcStateRules.CanBeDamaged(this)`는 `m_owner`가 된다.
+3. **`Update` 게이트가 갈라진다.** 코어 `Update`의 스턴 게이트(`if (HasStunOverlay) { TickStun(); return; }`)는
+   § 4-2대로 **코어가 부품에 묻고 부품의 `Tick()`을 부르는** 형태가 된다 — 게이트 순서가 사양이므로(§ 5-1)
+   부품에 `Update`를 만들지 말 것. `HasStunOverlay`는 `internal` 이상으로 올려야 한다(코어·StandUp이 읽는다).
+4. **`internal`로 올릴 것 둘** — `ClearStunOverlay`(Knockback `:39`이 읽는다) · `HasStunOverlay`(StandUp `:135`,
+   코어 `Update`). 둘 다 지금 `private`이다.
+5. **Rpc 2개가 함께 간다** — `PlayDamagedRpc`(`SendTo.Everyone`) · `TaserStunStartedRpc`. 5번(#545)의
+   `ClientRpc` 사례와 같은 이유로 **프리팹 명시 저장이 중요하다**(§ 4-4) — RPC 라우팅이 NetworkBehaviour
+   인덱스를 탄다. 부품 둘이 각자 Rpc를 들고 가므로 4번보다 이 위험이 크다.
+
+**정리되는 것 둘**(§ 2-2 표에서 빠진다) — `Stun.cs`의 `NpcReaction` 참조 2건(`:151` `ThreatTarget` 쓰기 ·
+`:236` `StartFlee`)이 부품 간 참조가 되고, 그때 `NpcReaction.ThreatTarget`의 `internal` setter를 **좁힐 수 있다**
+(남는 쓰기가 `Rope.cs:139` 하나뿐이 되므로 — 7번까지 가면 완전히 닫힌다).
+
+**코어에 열어야 할 SO** — `internal NpcStunConfig StunConfig`(§ 4-3). `StunSeconds`·`EnterStunned`의 기본값·
+`KnockdownStunSeconds`가 읽는다. 코어의 `AddState(Stunned, new NpcStunnedState(this, m_stunConfig))`는 **코어에
+남는다**(FSM 구축은 코어 책임).
+
+**"제 집 정리" 점검** — `Health.cs`·`Stun.cs`에 남의 도메인 멤버는 없다. 공용 헬퍼도 없다(둘 다 자기 도메인
+멤버만 쓴다). **선행 커밋 없이 갈 것으로 보이고**, 그러면 3번·5번과 같은 모양이니 § 4-6대로 "점검했고
+없었다"를 PR 본문에 적을 것.
+
 ## 7. 파일럿 상세 — `NpcIntruder`
 
 ### 이동 대상
@@ -464,7 +556,14 @@ FSM 전이(`m_stateMachine.ChangeState(NpcState.Intruding)`)가 필요하므로 
 2. **멤버 유실 검사** — 분리 전 시그니처 목록과 분리 후 합본 비교 (이전 문서 § 5의 `comm -23` 스크립트를 부품 파일까지
    포함하도록 경로만 바꿔 쓴다).
 3. **컴파일** — Unity Console 에러 0. 새 타입을 쓰기 전에 반드시 확인(`CLAUDE.md`).
-4. **Play 회귀 (MPPM 2인 이상)** — 도메인 PR마다 해당 항목 + 무력화 조합:
+
+   **MCP를 안 쓰면** `%LOCALAPPDATA%\Unity\Editor\Editor.log`로 대조할 수 있다. 이때 **에러 건수만 세면
+   오판한다** — 로그는 append-only이고, 파일을 여러 개 고친 뒤 에디터를 열면 **첫 리프레시가 일부 파일만
+   집어 컴파일해 실패했다가 다음 리프레시가 나머지를 집어 성공**하는 일이 정상적으로 일어난다(4번에서
+   23파일 변경 → 첫 블록 에러 36건, 재컴파일 성공). 마지막
+   `CopyFiles Library/ScriptAssemblies/Assembly-CSharp.dll` **뒤에** 에러가 있는지로 판정할 것.
+4. **Play 회귀 (MPPM 2인 이상)** — 도메인 PR마다 해당 항목 + 무력화 조합.
+   **게임 씬이 Apocalypse 맵으로 바뀌었으므로**(`d98bbae`, 2026-08-06) 그 씬에서 돌린다:
    배회 / 피격→기절→일어나기 / 저항·스윙(**원격 클라에서도** — 스윙은 `ClientRpc`다) / 밧줄 끌기·놓기·줄다리기 /
    폭발 넉백 / 테이저 스턴 + 밧줄 콤보(#390) / 줄 풀림 기상과 재포획 창(#513) / 연행→**문 앞 E로 순간이동
    수감**(#547 — 걸어가 앉히는 경로는 없어졌다) / 반출과 동행 퇴장(#517/#537) / 탈옥 방출 / 오검거 페널티 3단 /
