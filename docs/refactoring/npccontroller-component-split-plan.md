@@ -151,7 +151,8 @@ partial 분리가 성장을 막지 못한다는 증거다.)
    인스펙터 값이 초기값으로 돌아간다**(`NpcPenaltyAgent`·`NpcRopeDrag` 등 뒤 도메인에서 터진다).
    인스펙터에서 부품을 한 번 껐다 켠 뒤 저장하면 에셋에 기록된다(그냥 열고 저장만 하면 dirty가 잡히지 않는다).
 
-   **`NetworkVariable`을 든 부품은 명시 저장이 더 중요하다** — 3번 PR(#542)에서 확인했다. NGO의
+   **`NetworkVariable`이나 RPC를 든 부품은 명시 저장이 더 중요하다** — 3번 PR(#542)의 `NetworkVariable`과
+   5번 PR(#545)의 `ClientRpc`에서 확인했다. NGO의
    NetworkBehaviour 인덱스는 **프리팹의 컴포넌트 구성 순서로 정해지므로**, 에셋에 기록되지 않은 구성은
    피어 간 매칭의 근거가 없다. 전 피어가 같은 프리팹을 받으면 일관되지만 그 "같은 프리팹"이 저장소에
    남아 있어야 한다. 같은 이유로 **컴포넌트 순서 정리는 도메인 PR마다 하지 말 것** — 프리팹 4개가 통째로
@@ -247,7 +248,7 @@ TickRopeDrag() → TickStandUp() → 넉백 게이트 → 스턴 게이트 → F
 | 2 | ~~`NpcHolding`~~ → **삭제** | 31 | **추출하지 않는다 — 도달 불가 코드였다.** `60f42aa`(#310 "경범죄자도 유치장 수감 — 임시 거처 소멸 폐지")가 `JailbreakEvent`·`MisdemeanorLoiterer`·`SpawnedNpcEvent`의 호출부·구독을 전부 지웠고(207줄), 컨트롤러 API와 FSM 상태만 고아로 남아 있었다. 뽑았으면 죽은 `NetworkBehaviour`를 프리팹 4개에 붙일 뻔했다 |
 | 3 | ✅ **`NpcPenaltyAgent`** (#542) | 170 | `NetworkVariable`(`m_abductionDuty`) 이관 첫 사례 — 훅까지 함께 옮기는 규약(§ 4-4)과 SO를 읽는 `internal` 접근자(§ 4-3)를 확정했다. "제 집 정리" 선행 커밋은 없었다(오배치 없음) |
 | 4 | `NpcCustody` (+ `Escort` 병합) | 139 + 27 | `StartEscort`가 여러 도메인의 진입점이라 함께. `ReleaseFromCustody`는 파일럿에서 이미 `Custody.cs`에 들어와 있다. **선행: `TryWarpNear`를 코어로 승격**(§ 4-6) — #522로 Custody가 Rope의 private 헬퍼를 쓰게 됐다 |
-| 5 | `NpcReaction` | 99 | `StartFlee` 호출부가 10파일이라 1단계 마지막 |
+| 5 | ✅ **`NpcReaction`** (#545) | 99 | `ClientRpc`(`PlayAttackSwingClientRpc`) 이관 첫 사례 — RPC 라우팅도 프리팹 구성이 정하는 NetworkBehaviour 인덱스를 탄다(§ 4-4). 코어의 반응 멤버 4개를 함께 데려가 § 8에서 이 도메인 행이 사라졌다. `StartFlee` 호출부가 10파일이라 1단계 마지막으로 잡았지만, **4번보다 먼저 갔다** — 4번은 #537 순서 합의가 남아 있고 5번은 대기 조건이 없다. "제 집 정리" 선행 커밋은 없었다(오배치 없음) |
 
 ### 2단계 — 무력화 클러스터 (양방향 쌍은 한 PR로)
 
@@ -306,7 +307,7 @@ FSM 전이(`m_stateMachine.ChangeState(NpcState.Intruding)`)가 필요하므로 
 | `JailSeat` (115) | `NpcCustody` |
 | `IsDelivered` · `MarkDelivered` · `ClearDelivered` (68~92) | `NpcCustody` |
 | `IntrudeTarget` · `IntrudeUnlockSeconds` · `OnIntrudeFinished` · `OnIntrudeUnlockStarted` (118~130) | `NpcIntruder` |
-| `ThreatTarget` (58) · `ThreatSearchRadius` (55) · `OnAttackSwing` (108) · `RaiseAttackSwing` (310) | `NpcReaction` |
+| ~~`ThreatTarget` · `ThreatSearchRadius` · `OnAttackSwing` · `RaiseAttackSwing`~~ | ✅ `NpcReaction`로 이동 완료 (#545). `PlayAttackSwingClientRpc`도 함께 갔고, `ThreatSearchRadius`가 읽을 `ResistConfig`가 코어에 `internal`로 열렸다 |
 | `StunSeconds` (49) | `NpcStun` |
 | `m_knockbackVelocity` · `m_knockbackLaunch` · `m_knockbackElapsed` · `m_knockbackActive` · `m_knockbackLandingState` (33~37) | `NpcKnockback` |
 | `OnStandUp` (288) · `RaiseStandUp` (292) · `PlayStandUpClientRpc` (300) | 판단 필요 — 기상 모션은 Stun(#269)과 StandUp(#513) 공용이라 **코어 중계로 남기는 편**이 낫다 |
@@ -350,5 +351,5 @@ FSM 전이(`m_stateMachine.ChangeState(NpcState.Intruding)`)가 필요하므로 
 - [ ] **#401 담당자와 `NpcHealth`+`NpcStun`(2단계 6번) 순서 합의** — 같은 메서드를 재설계한다 (§ 6)
 - [ ] `RaiseStandUp` 계열을 코어 중계로 남길지 `NpcStandUp`으로 옮길지 (§ 8 마지막 행)
 - [ ] 다른 partial에도 `ReleaseFromCustody` 같은 오배치가 있는지 (§ 7 주의) — 2026-08-06 시점에 확인된 것은
-      `Intrude.cs`의 `ReleaseFromCustody` 하나
+      `Intrude.cs`의 `ReleaseFromCustody` 하나. `Penalty.cs`(#542)·`Reaction.cs`(#545)는 점검 결과 없었다
 - [ ] 파일럿 PR에서 § 4 규약 6개를 실제 코드로 확정
