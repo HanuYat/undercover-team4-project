@@ -56,6 +56,11 @@ public class DroppedItemHighlight : MonoBehaviour
             return;
 
         m_outlinable.OutlineParameters.Color = k_restingColor;
+
+        // 감옥 방 안에 떨어진 아이템은 방 안에서만 보이게 한다 (#537) — 상시 하이라이트라
+        // 조준과 무관하게 켜져 있어, 이게 없으면 도시에서 그 윤곽이 벽을 뚫고 보인다.
+        InteractionFeedback.ApplyJailOutlineLayer(m_outlinable, transform.position);
+
         m_outlinable.enabled = m_grounded;
     }
 }

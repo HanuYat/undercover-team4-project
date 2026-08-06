@@ -25,6 +25,16 @@ public class InteractionFeedback : NetworkBehaviour
     private PlayerItemUser m_itemUser;
     private Outlinable m_currentOutlinable;
 
+    // 감옥 방 안 오브젝트를 담는 EPO 윤곽선 레이어 (#537).
+    //
+    // <b>EPO의 레이어는 유니티 물리 레이어와 무관한 자체 개념</b>이라, 조준 마스크(Interactable)를
+    // 건드리지 않고 "그릴지 말지"만 따로 가를 수 있다. 0번은 그 외 전부가 쓰는 기본 레이어다.
+    private const int k_jailOutlineLayer = 1;
+
+    // 플레이어 카메라의 EPO 렌더러 — 감옥 레이어를 켜고 끄는 대상. 비오너는 이 컴포넌트가 꺼지므로
+    // 각자 자기 화면 몫만 다룬다.
+    private Outliner m_outliner;
+
     public override void OnNetworkSpawn()
     {
         if (!IsOwner)
@@ -40,6 +50,7 @@ public class InteractionFeedback : NetworkBehaviour
 
         m_interactor = GetComponent<PlayerInteractor>();
         m_itemUser = GetComponent<PlayerItemUser>(); // 없는 구성(테스트 등)이면 null
+        m_outliner = GetComponentInChildren<Outliner>(true); // 카메라에 붙어 있다
     }
 
     public override void OnNetworkDespawn()
@@ -67,7 +78,48 @@ public class InteractionFeedback : NetworkBehaviour
 
     private void Update() // 비오너는 OnNetworkSpawn에서 비활성화되므로 오너만 돈다
     {
+        TickJailOutlineMask();
         Refresh();
+    }
+
+    /// <summary>
+    /// 감옥 방 윤곽선을 <b>방 안에 있을 때만</b> 그린다. (#537)
+    ///
+    /// EPO는 윤곽선을 후처리로 그리며 기본값(<c>ComplexMaskingMode.None</c>)에서는 씬 깊이를 보지
+    /// 않는다 — 벽 뒤든 400m 밖이든 대상이 목록에 있으면 실루엣이 그대로 비친다. 감옥은 맵 밖에
+    /// 따로 떨어진 공간이라(#537) 도시에서 그 윤곽이 벽을 뚫고 보였다.
+    ///
+    /// 벽을 전부 obstacle로 등록하는 정공법 대신 <b>레이어를 가른다</b>: 감옥 방 안의 대상만
+    /// <see cref="k_jailOutlineLayer"/>에 넣고(<see cref="ApplyJailOutlineLayer"/>), 보는 사람이
+    /// 방 안에 있을 때만 그 레이어를 켠다. 방 안에서는 종전대로 전부 보인다.
+    ///
+    /// 다른 비트는 건드리지 않는다 — 마스크의 나머지는 EPO 기본값(전체)이고 이 기능의 소관이 아니다.
+    /// </summary>
+    private void TickJailOutlineMask()
+    {
+        if (m_outliner == null)
+            return;
+
+        long bit = 1L << k_jailOutlineLayer;
+        long current = m_outliner.OutlineLayerMask;
+        long next = JailRoom.Contains(transform.position) ? current | bit : current & ~bit;
+
+        if (next != current)
+            m_outliner.OutlineLayerMask = next;
+    }
+
+    /// <summary>
+    /// 이 윤곽선이 감옥 방 소속인지 정해 레이어에 넣는다 — 켜는 쪽에서 매번 부른다. (#537)
+    ///
+    /// 위치로 판정하므로 아이템을 감옥 안팎으로 들고 다녀도 알아서 따라온다. 감옥이 없는 씬
+    /// (단독 테스트)에서는 <see cref="JailRoom.Contains"/>가 항상 false라 전부 기본 레이어다.
+    /// </summary>
+    public static void ApplyJailOutlineLayer(Outlinable outlinable, Vector3 worldPosition)
+    {
+        if (outlinable == null)
+            return;
+
+        outlinable.OutlineLayer = JailRoom.Contains(worldPosition) ? k_jailOutlineLayer : 0;
     }
 
     private void Refresh()
@@ -162,6 +214,7 @@ public class InteractionFeedback : NetworkBehaviour
         }
 
         outlinable.OutlineParameters.Color = color;
+        ApplyJailOutlineLayer(outlinable, root.transform.position);
         outlinable.enabled = true;
         m_currentOutlinable = outlinable;
     }
