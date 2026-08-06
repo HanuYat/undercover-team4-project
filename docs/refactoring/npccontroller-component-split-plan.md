@@ -4,7 +4,7 @@
 > 2026-07-21 [npccontroller-partial-split-plan.md](npccontroller-partial-split-plan.md)를 **대체**한다. 그 문서의 partial 분리는
 > #259로 완료됐고(현재 상태), 이 문서는 그 다음 단계인 **부품 컴포넌트 분리**를 다룬다.
 > **진행 중이다 — 1단계는 닫혔고(5개 전부) 남은 것은 2단계 6·7번과 코어 정리 8번이다**
-> (#540 · #541 · #542 · #545 · 4번). 착수 전 § 6의 진행 상황 표와 대기 조건을 먼저 확인할 것 —
+> (#540 · #541 · #542 · #545 · #552). 착수 전 § 6의 진행 상황 표와 대기 조건을 먼저 확인할 것 —
 > 남은 관문은 #401 담당자 통보(6번)와 `feature/423`·`feature/506` 머지 순서(7번)뿐이다.
 >
 > **갱신 2026-08-06** — #529·#522가 머지되며 2단계 대기 조건이 대부분 풀렸다(남은 제약은 Knockback 하나다).
@@ -22,7 +22,7 @@
 > `SendToJail → ExitStun` **새 상호참조 1건**을 들여와 § 2-2가 14행 15건이 됐다.
 > 아직 4번에 착수하지는 않았다 — 이 문서만 현재 기준으로 맞춰 둔 상태다.
 >
-> **갱신 2026-08-06 (4차)** — **1단계 4번(`NpcCustody`)이 끝났다.** 1단계가 이로써 전부 닫혔고(5개 중
+> **갱신 2026-08-06 (4차)** — **1단계 4번(`NpcCustody`)이 [#552](https://github.com/hyunjin0814/undercover-team4-project/pull/552)로 머지됐다.** 1단계가 이로써 전부 닫혔고(5개 중
 > 추출 4개 + 삭제 1개), 남은 것은 2단계 6·7번과 코어 정리 8번이다. § 1·§ 2-2·§ 6·§ 8을 재측정했다.
 > **§ 2-2가 처음으로 줄었다 — 14행 15건 → 9행 10건**이고, 그중 가짜 의존이던 헬퍼 1건은 규약 § 4-6대로
 > 코어 승격으로 사라졌다(남은 헬퍼는 `SweepHitsObstacle` 하나). 얽힘이 § 2-2 결론 3이 예고한
@@ -35,7 +35,7 @@
 > 아래 표는 **착수 시점의 기준선**이다 — 분리가 진행되면서 실제 파일 수는 줄어든다.
 > 진행 상황은 § 6의 체크 표시로 추적한다(도메인 PR마다 이 표를 다시 재는 대신).
 >
-> **현재(2026-08-06, 1단계 4번 완료 후 실측)**: 클래스 파일 **12개 → 6개 · 1,978줄 → 1,418줄**
+> **현재(2026-08-06, #552 머지 후 실측)**: 클래스 파일 **12개 → 6개 · 1,978줄 → 1,418줄**
 > (코어 296 + partial 5개 — Rope 387 · Stun 238 · Knockback 185 · StandUp 159 · Health 153).
 > 착수 기준선 대비 **-6파일 · -560줄(-28%)** 이고, 코어 자체는 343 → 296줄이다.
 > 남은 partial 5개는 **전부 무력화 클러스터**다 — 2단계 6·7번이 가져가면 partial은 0이 된다.
@@ -99,7 +99,7 @@ partial 분리가 성장을 막지 못한다는 증거다.)
 (주석 제외, 코어의 Tick·Init 호출 제외). 2026-08-06 1차 재측정에서 **11행 12건 → 15행 16건**으로 늘었고(늘어난 4건은
 전부 #529·#522가 들여온 것이며 그중 2건은 **도메인 멤버가 아닌 private 헬퍼 공유**라 성격이 다르다), #545로
 Reaction 관련 2건이 빠져 13행 14건, #547이 `Custody → Stun` 1건을 들여와 14행 15건이 됐고,
-**1단계 4번으로 5행 5건이 한꺼번에 빠져 9행 10건이 됐다** — 처음으로 줄어든 재측정이다.
+**1단계 4번(#552)으로 5행 5건이 한꺼번에 빠져 9행 10건이 됐다** — 처음으로 줄어든 재측정이다.
 아래는 4번 머지 후 실측이다.
 
 | 방향 | 참조 | 위치 |
@@ -325,7 +325,7 @@ TickRopeDrag() → TickStandUp() → 넉백 게이트 → 스턴 게이트 → F
 | 1 | ✅ **`NpcIntruder`** (#540 머지) | 45 | **파일럿** — 규약 § 4-1·4-2·4-4·4-6을 실제 코드로 확정했다. 선행 커밋으로 `ReleaseFromCustody`를 `Custody.cs`에 보내 `Intrude.cs`를 삭제 (§ 7) |
 | 2 | ~~`NpcHolding`~~ → **삭제** | 31 | **추출하지 않는다 — 도달 불가 코드였다.** `60f42aa`(#310 "경범죄자도 유치장 수감 — 임시 거처 소멸 폐지")가 `JailbreakEvent`·`MisdemeanorLoiterer`·`SpawnedNpcEvent`의 호출부·구독을 전부 지웠고(207줄), 컨트롤러 API와 FSM 상태만 고아로 남아 있었다. 뽑았으면 죽은 `NetworkBehaviour`를 프리팹 4개에 붙일 뻔했다 |
 | 3 | ✅ **`NpcPenaltyAgent`** (#542) | 170 | `NetworkVariable`(`m_abductionDuty`) 이관 첫 사례 — 훅까지 함께 옮기는 규약(§ 4-4)과 SO를 읽는 `internal` 접근자(§ 4-3)를 확정했다. "제 집 정리" 선행 커밋은 없었다(오배치 없음) |
-| 4 | ✅ **`NpcCustody`** (+ `Escort` 병합) | 135 + 27 → 237 | **§ 4-6 헬퍼 승격의 첫 사례** — 선행 커밋으로 `TryWarpNear`를 코어에 올려 가짜 의존을 지웠고(§ 2-2 결론 4), 그 결과 § 2-2 표가 처음으로 줄었다(15건 → 10건). 코어 멤버 5개를 함께 데려가 § 8에서 이 도메인 행이 전부 사라졌다. `EscortTarget`의 `internal` setter는 없애고 `internal ClearEscortTarget()`으로 닫았다(아래 주의 2의 결론) |
+| 4 | ✅ **`NpcCustody`** (#552, + `Escort` 병합) | 135 + 27 → 237 | **§ 4-6 헬퍼 승격의 첫 사례** — 선행 커밋으로 `TryWarpNear`를 코어에 올려 가짜 의존을 지웠고(§ 2-2 결론 4), 그 결과 § 2-2 표가 처음으로 줄었다(15건 → 10건). 코어 멤버 5개를 함께 데려가 § 8에서 이 도메인 행이 전부 사라졌다. `EscortTarget`의 `internal` setter는 없애고 `internal ClearEscortTarget()`으로 닫았다(아래 주의 2의 결론) |
 | 5 | ✅ **`NpcReaction`** (#545) | 99 | `ClientRpc`(`PlayAttackSwingClientRpc`) 이관 첫 사례 — RPC 라우팅도 프리팹 구성이 정하는 NetworkBehaviour 인덱스를 탄다(§ 4-4). 코어의 반응 멤버 4개를 함께 데려가 § 8에서 이 도메인 행이 사라졌다. `StartFlee` 호출부가 10파일이라 1단계 마지막으로 잡았지만, **4번보다 먼저 갔다** — 4번은 #537 순서 합의가 남아 있고 5번은 대기 조건이 없다. "제 집 정리" 선행 커밋은 없었다(오배치 없음) |
 
 #### 4번 실측과 결과 (2026-08-06 착수 전 실측 / 완료 후 대조)
@@ -429,7 +429,7 @@ FSM 전이(`m_stateMachine.ChangeState(NpcState.Intruding)`)가 필요하므로 
 
 `NpcController.cs`(**296줄** — 착수 시 343줄)는 아직 순수 코어가 아니다. 아래 멤버들을 각 도메인 PR이 함께
 데려가야 코어가 목표치(~200줄)가 된다. **남은 것은 전부 무력화 클러스터(2단계) 소관이다** — 1단계가 데려갈
-멤버는 없다. 줄 번호는 2026-08-06 4차 실측(1단계 4번 머지 후)이다.
+멤버는 없다. 줄 번호는 2026-08-06 4차 실측(#552 머지 후)이다.
 
 | 코어의 멤버 | 갈 곳 |
 |---|---|
@@ -438,7 +438,7 @@ FSM 전이(`m_stateMachine.ChangeState(NpcState.Intruding)`)가 필요하므로 
 | `OnStandUp` (241) · `RaiseStandUp` (245) · `PlayStandUpClientRpc` (253) | 판단 필요 — 기상 모션은 Stun(#269)과 StandUp(#513) 공용이라 **코어 중계로 남기는 편**이 낫다 |
 | ~~`IntrudeTarget` · `IntrudeUnlockSeconds` · `OnIntrudeFinished` · `OnIntrudeUnlockStarted`~~ | ✅ `NpcIntruder`로 이동 완료 (#540 파일럿) |
 | ~~`ThreatTarget` · `ThreatSearchRadius` · `OnAttackSwing` · `RaiseAttackSwing`~~ | ✅ `NpcReaction`로 이동 완료 (#545). `PlayAttackSwingClientRpc`도 함께 갔고, `ThreatSearchRadius`가 읽을 `ResistConfig`가 코어에 `internal`로 열렸다 |
-| ~~`EscortTarget` · `JailSpot` · `IsDelivered` · `MarkDelivered` · `ClearDelivered`~~ | ✅ `NpcCustody`로 이동 완료 (1단계 4번). `EscortTarget`의 `internal` setter는 예고대로 없앴고, 대신 `internal ClearEscortTarget()`이 부품 간 경로가 됐다(§ 6 주의 2) |
+| ~~`EscortTarget` · `JailSpot` · `IsDelivered` · `MarkDelivered` · `ClearDelivered`~~ | ✅ `NpcCustody`로 이동 완료 (#552). `EscortTarget`의 `internal` setter는 예고대로 없앴고, 대신 `internal ClearEscortTarget()`이 부품 간 경로가 됐다(§ 6 주의 2) |
 
 코어에 새로 생긴 것은 부품 배선과 공용 헬퍼뿐이다 — 부품 필드 4개(`m_custody`·`m_intruder`·`m_penalty`·
 `m_reaction`, 37~40) · 접근자 4개(79~88) · SO를 여는 `internal` 프로퍼티 2개(`ChaseConfig` 60 · `ResistConfig` 64) ·
@@ -498,7 +498,7 @@ FSM 전이(`m_stateMachine.ChangeState(NpcState.Intruding)`)가 필요하므로 
 - [x] #529 · #522 머지 — 2026-08-06 확인. 2단계 6·7번 해제
 - [x] `feature/423-knockback-navmesh-recovery` — 기다리지 않고 Knockback을 분리에 포함하기로 결정(2026-08-06).
       2단계 7번 클러스터로 되돌렸다. 남은 일은 담당자와 **머지 순서**를 맞추는 것뿐이다
-- [x] **`NpcCustody`(1단계 4번) 완료** — #547 머지로 대기 조건이 풀린 뒤 착수해 끝냈다. `TryWarpNear` 코어
+- [x] **`NpcCustody`(1단계 4번) 완료 (#552)** — #547 머지로 대기 조건이 풀린 뒤 착수해 끝냈다. `TryWarpNear` 코어
       승격은 선행 커밋으로 처리(§ 4-6 첫 사례). 실측·결론은 § 6 "4번 실측과 결과"에 있다
 - [ ] **#401 담당자에게 `NpcHealth`+`NpcStun`(2단계 6번) 착수를 알릴 것** — 같은 메서드를 재설계하는 이슈다.
       전용 브랜치가 아직 없어 "먼저 부품화" 쪽이 유리하다 (§ 6). **1단계가 닫혀 이제 이것이 다음 관문이다**
