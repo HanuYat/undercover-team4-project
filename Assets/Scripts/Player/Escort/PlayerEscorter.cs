@@ -146,23 +146,31 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
     }
 
     /// <summary>
-    /// 이 대상에 걸린 밧줄을 <b>전부</b> 걷어낸다 — 끌기를 놓고 줄까지 뺀다. 서버(또는 오프라인) 전용. (#537)
+    /// 이 대상에 걸린 밧줄을 <b>전부</b> 걷어내고 일으켜 세운다 — 다 일어난 뒤
+    /// <paramref name="afterStandUp"/>을 실행한다. 서버(또는 오프라인) 전용. (#537)
     ///
-    /// 문 앞 수감(<see cref="JailIntake"/>)이 쓴다: 대상이 감옥 안으로 순간이동해 사라지므로 줄만 허공에
-    /// 남기지 않으려면 여기서 끊어야 한다. 밧줄 좌클릭 풀기(<see cref="PlayerEscortCommands"/>)와 달리
-    /// <b>일어나기·배회 복귀를 태우지 않는다</b> — 곧바로 수감 상태로 덮어쓰기 때문이다.
+    /// 수감 버튼(<see cref="JailIntakeButton"/> → <see cref="JailIntake"/>)이 쓴다: 판정 대상은 묶여
+    /// 누운 채로 와 있으므로, 줄을 걷고 일어난 다음에야 그 뒤 처리(순간이동·석방)가 그림이 된다.
+    ///
+    /// <b>세 단계의 순서가 강제다</b> (#513): 끌기 해제 → 일어나기 예약 → 줄 빼기.
+    /// 줄을 먼저 빼면 대상의 묶임 표시가 내려가 <c>ServerStandUpThen</c>이 "이미 서 있다"로 오판해
+    /// 일어나기가 통째로 생략되고, 누운 몸이 그대로 미끄러진다.
+    /// (묶인 적 없이 제압만으로 잡힌 대상은 <c>ServerStandUpThen</c>이 알아서 즉시 실행한다)
     /// </summary>
-    public static void ReleaseAllTethersOn(NpcController npc)
+    public static void ReleaseAllTethersOn(NpcController npc, System.Action afterStandUp)
     {
         if (npc == null)
             return;
 
         List<PlayerEscorter> holders = FindEscortersOf(npc);
+
         for (int i = 0; i < holders.Count; i++)
-        {
             holders[i].ReleaseDrag(npc); // 끌기 해제 — 에이전트를 되살린다(순간이동이 성립하려면 필요하다)
+
+        npc.ServerStandUpThen(afterStandUp);
+
+        for (int i = 0; i < holders.Count; i++)
             holders[i].RemoveTether(npc);
-        }
     }
 
     /// <summary>

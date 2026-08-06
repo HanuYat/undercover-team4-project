@@ -66,13 +66,17 @@ public class JailIntake : MonoBehaviour
     // ---- 수감 (문 앞 E) ----
 
     /// <summary>
-    /// 문 앞 수감 — <paramref name="interactor"/>가 확보 중인 신병을 그 자리에서 판정하고,
-    /// 범죄자만 감옥 안으로 순간이동시켜 계상한다. 처리한 대상 수를 돌려준다. 서버(또는 오프라인) 전용. (#537)
+    /// 수감 버튼 처리 — <paramref name="interactor"/>가 확보 중인 신병을 <b>줄을 걷고 일으켜 세운 뒤</b>
+    /// 판정하고, 범죄자만 감옥 안으로 순간이동시켜 계상한다. 서버(또는 오프라인) 전용. (#537)
     ///
-    /// <b>확보의 기준은 둘이다</b> — 이 사람의 밧줄에 걸린 대상 전부, 그리고 문 앞
+    /// 돌려주는 값은 <b>확보한 대상 수</b>이지 수감된 수가 아니다 — 판정이 일어나기 뒤에 나오므로
+    /// 이 시점에는 결과를 모른다. 부르는 쪽(<see cref="JailIntakeButton"/>)이 "확보한 신병이 없다"만
+    /// 가르는 데 쓴다.
+    ///
+    /// <b>확보의 기준은 둘이다</b> — 이 사람의 밧줄에 걸린 대상 전부, 그리고 버튼 앞
     /// <see cref="m_admitReach"/> 안에 놓아둔 <see cref="NpcState.Captured"/>. 후자를 넣는 이유는
-    /// 밧줄을 풀어 문 앞에 세워 둔 뒤 E를 누르는 조작이 자연스럽기 때문이고, 여럿을 끌고 왔으면
-    /// <b>한 번의 E로 전부 판정된다</b>(팀 확정 2026-08-06).
+    /// 밧줄을 풀어 문 앞에 세워 둔 뒤 누르는 조작이 자연스럽기 때문이고, 여럿을 끌고 왔으면
+    /// <b>한 번에 전부 판정된다</b>(팀 확정 2026-08-06).
     ///
     /// 오검거는 감옥에 들이지 않고 그 자리에서 놓는다 — <see cref="WrongfulArrestPenalty"/>가
     /// Detained로 가져가 페널티를 굴린다(#101/#277). 감옥이 격리 공간이 된 뒤로는 "안에서 확정된
@@ -87,8 +91,7 @@ public class JailIntake : MonoBehaviour
         if (m_admitBuffer.Count == 0)
             return 0;
 
-        ArrestJudge judge = App.Game.ArrestJudge;
-        if (judge == null)
+        if (App.Game.ArrestJudge == null)
         {
             Debug.LogWarning("JailIntake: ArrestJudge가 없어 판정할 수 없다", this);
             return 0;
@@ -96,54 +99,65 @@ public class JailIntake : MonoBehaviour
 
         ulong presserId = ClientIdOf(interactor);
 
-        int handled = 0;
-        for (int i = 0; i < m_admitBuffer.Count; i++)
+        // 확보한 수를 먼저 센다 — 판정은 일어나기(약 0.6초) 뒤에 나므로 결과를 기다려 셀 수 없다.
+        // 버튼이 이 수로 "확보한 신병이 없다"만 가르면 되고, 판정 결과는 각자 배너로 나간다.
+        int held = m_admitBuffer.Count;
+
+        for (int i = 0; i < held; i++)
         {
-            if (ServerJudgeOne(m_admitBuffer[i], judge, presserId))
-                handled++;
+            NpcController npc = m_admitBuffer[i];
+            if (npc == null || m_unjudgeable.Contains(npc))
+                continue;
+
+            // 인계자는 <b>지금</b> 잡아 둔다 — 아래에서 줄을 빼고 나면 누가 끌고 있었는지 알 수 없다.
+            ulong[] deliverers = CollectDeliverers(npc, presserId);
+
+            // 줄을 걷고 일어난 <b>뒤에</b> 판정한다 — 누운 몸이 그대로 감옥으로 순간이동하거나
+            // 누운 채 석방되는 그림을 없앤다. 묶인 적 없는 대상은 곧바로 실행된다.
+            PlayerEscorter.ReleaseAllTethersOn(npc, () => ServerResolveVerdict(npc, deliverers));
         }
 
         m_admitBuffer.Clear();
-        return handled;
+        return held;
     }
 
-    // 대상 하나를 판정해 수감하거나 놓아준다 — 판정이 불가능했으면 false.
-    private bool ServerJudgeOne(NpcController npc, ArrestJudge judge, ulong presserId)
+    // 일어난 뒤의 판정·행선지 — 서버(또는 오프라인) 전용.
+    private void ServerResolveVerdict(NpcController npc, ulong[] deliverers)
     {
-        if (npc == null || m_unjudgeable.Contains(npc))
-            return false;
+        if (npc == null || m_jailZone == null)
+            return;
+
+        ArrestJudge judge = App.Game.ArrestJudge;
+        if (judge == null)
+            return;
 
         ArrestResult? result = judge.Judge(npc);
         if (result == null)
         {
             // 신원도 경범죄 마커도 없는 대상 — 다시 물어도 답이 같으므로 한 번만 시도한다
             m_unjudgeable.Add(npc);
-            return false;
+            return;
         }
 
-        // 오검거 — 감옥에 들어가지 않고 그 자리에서 풀려난다. 뒤처리는 WrongfulArrestPenalty가 한다.
+        // 오검거 — 감옥에 들어가지 않는다. 줄은 이미 풀렸고 몸도 일어난 상태이므로 여기서는
+        // 표식만 걷고 그 자리에 둔다. 행선지(원한 구역 수용)는 WrongfulArrestPenalty가 같은
+        // 판정 이벤트를 받아 정하고, 그 매니저가 없는 씬에서는 CustodyRouter가 배회로 돌려보낸다.
         if (result.Value.Verdict == ArrestVerdict.WrongfulArrest)
         {
             npc.SetJailExtracted(false); // 반출했던 대상이 오검거로 뒤집힌 경우 표식을 걷어낸다 (#517)
-            Debug.Log($"[감옥] 오검거 — 감옥에 들이지 않고 그 자리에서 놓는다: {npc.name}");
-            return true;
+            Debug.Log($"[감옥] 오검거 — 감옥에 들이지 않고 문 앞에서 놓는다: {npc.name}");
+            return;
         }
 
-        ServerPlaceInJail(npc, result.Value.Reward, CollectDeliverers(npc, presserId));
-        return true;
+        ServerPlaceInJail(npc, result.Value.Reward, deliverers);
     }
 
     /// <summary>
-    /// 대상을 감옥 안 배치 지점으로 옮기고 계상한다 — 서버(또는 오프라인) 전용. (#537)
-    ///
-    /// 밧줄이 걸려 있으면 먼저 전부 푼다: 순간이동으로 끌던 대상이 사라지면 줄만 허공에 남는다.
-    /// 일어나기(#513)를 태우지 않는 이유는 감옥 안에서는 쓰러진 구간에 아무 선택지가 없기 때문이다
-    /// (밧줄을 쓸 수 없다 — 팀 확정 2026-08-05). 옮겨진 몸은 곧바로 선 자세로 배치된다.
+    /// 대상을 감옥 안 배치 지점으로 순간이동시키고 계상한다 — 서버(또는 오프라인) 전용. (#537)
+    /// 밧줄은 이 앞 단계에서 이미 걷혔고(<see cref="PlayerEscorter.ReleaseAllTethersOn"/>) 몸도 서 있다.
     /// </summary>
     private void ServerPlaceInJail(NpcController npc, int bounty, ulong[] deliverers)
     {
-        PlayerEscorter.ReleaseAllTethersOn(npc);
-
         Transform spot = m_jailZone.ReservePlacement(npc);
         npc.SendToJail(spot);
         m_jailZone.Admit(npc, bounty, deliverers);
