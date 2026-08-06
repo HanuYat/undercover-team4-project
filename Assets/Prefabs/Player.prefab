@@ -4635,6 +4635,7 @@ MonoBehaviour:
   m_rootYawOffset: 0
   m_alignPullSpeed: 1.5
   m_flightAlignPullSpeed: 12
+  m_alignSnapDistance: 2.5
   m_ropeLength: 2
   m_ropeLimitSpring: 3000
   m_ropeLimitDamper: 600

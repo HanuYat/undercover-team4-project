@@ -485,10 +485,19 @@ public class BombDevice : NetworkBehaviour
     // ---- 폭발 사망자 → 래그돌 임펄스 (#506) ----
 
     /// <summary>
-    /// 이 폭발로 죽은 사람을 전 피어에 알려 래그돌 임펄스를 붙인다.
+    /// 이 폭발로 죽은 사람과 <b>그에게 줄 임펄스</b>를 전 피어에 알린다.
     ///
-    /// <b>사망자 목록만 보낸다.</b> 폭심·반경·세기는 이미 전 피어가 알고 있으므로 임펄스는 각 피어가
-    /// <see cref="EvaluateKnockback"/>으로 계산한다 — "넉백 식은 장치 한 곳"을 유지한다.
+    /// <b>임펄스를 서버가 계산해 함께 보낸다.</b> 예전에는 사망자 목록만 보내고 임펄스는 각 피어가
+    /// <see cref="EvaluateKnockback"/>으로 직접 계산했는데, 그게 <b>피어마다 다른 값을 냈다</b>:
+    /// 감쇠식은 대상 위치까지의 거리를 쓰고, 원격 피어가 보는 <c>victim.transform.position</c>은
+    /// NetworkTransform 보간값이라 오너가 보는 값과 다르다. 결과적으로 <b>세기와 방향이 갈린 채</b>
+    /// 각 피어가 자기 래그돌을 날려서, 같은 물리를 돌려도 궤적이 처음부터 벌어졌다.
+    ///
+    /// 래그돌은 뼈를 동기화하지 않고 각 피어가 로컬로 시뮬레이션하므로(#506 결정 4),
+    /// <b>입력이 같아야 결과가 대체로 같다</b> — 그 입력 중 하나가 이 임펄스다. (§10-3)
+    ///
+    /// "넉백 식은 장치 한 곳"은 그대로다 — 식은 여전히 <see cref="EvaluateRagdollImpulse"/> 하나이고,
+    /// 그것을 <b>서버에서만</b> 부른다는 점이 달라졌다.
     ///
     /// <b>왜 RPC가 필요한가.</b> 사망 자체는 <see cref="PlayerRagdoll"/>이 동기화값 폴링으로 잡아
     /// 래그돌에 들어간다 — 그것만으로 진압봉·린치 사망은 전부 처리된다. 폭발이 다른 점은
@@ -500,29 +509,39 @@ public class BombDevice : NetworkBehaviour
     /// </summary>
     private void NotifyBlastDeaths()
     {
-        for (int i = 0; i < m_deathBuffer.Count; i++)
-            ApplyBlastRagdoll(m_deathBuffer[i]); // 서버·오프라인 로컬 발행
+        if (m_deathBuffer.Count == 0)
+            return;
 
-        if (!IsSpawned || !IsServer || m_deathBuffer.Count == 0)
+        // 서버(또는 오프라인)가 임펄스를 확정한다 — 이 값이 전 피어의 공통 입력이 된다.
+        Vector3[] impulses = new Vector3[m_deathBuffer.Count];
+        for (int i = 0; i < impulses.Length; i++)
+            impulses[i] = EvaluateRagdollImpulse(m_deathBuffer[i].transform.position);
+
+        for (int i = 0; i < m_deathBuffer.Count; i++)
+            ApplyBlastRagdoll(m_deathBuffer[i], impulses[i]); // 서버·오프라인 로컬 발행
+
+        if (!IsSpawned || !IsServer)
             return;
 
         NetworkObjectReference[] victims = new NetworkObjectReference[m_deathBuffer.Count];
         for (int i = 0; i < victims.Length; i++)
             victims[i] = m_deathBuffer[i];
 
-        BlastDeathsClientRpc(victims);
+        BlastDeathsClientRpc(victims, impulses);
     }
 
     [ClientRpc]
-    private void BlastDeathsClientRpc(NetworkObjectReference[] victims)
+    private void BlastDeathsClientRpc(NetworkObjectReference[] victims, Vector3[] impulses)
     {
         if (IsServer)
             return; // 호스트는 위에서 이미 발행
 
-        for (int i = 0; i < victims.Length; i++)
+        // 길이는 서버가 맞춰 보내지만, 직렬화 경계를 믿지 않고 짧은 쪽까지만 돈다.
+        int count = Mathf.Min(victims.Length, impulses.Length);
+        for (int i = 0; i < count; i++)
         {
             if (victims[i].TryGet(out NetworkObject victim))
-                ApplyBlastRagdoll(victim);
+                ApplyBlastRagdoll(victim, impulses[i]);
         }
     }
 
@@ -531,12 +550,12 @@ public class BombDevice : NetworkBehaviour
     // NetworkVariable)과 이 RPC는 서로 다른 오브젝트에서 오므로 도착 순서를 맞출 수 없다 —
     // 순서와 무관하게 결과가 같게 만드는 쪽이 항상 옳다. (#506 §3-1)
     //
-    private void ApplyBlastRagdoll(NetworkObject victim)
+    private void ApplyBlastRagdoll(NetworkObject victim, Vector3 impulse)
     {
         if (victim == null || !victim.TryGetComponent(out PlayerRagdoll ragdoll))
             return;
 
-        ragdoll.EnterRagdoll(EvaluateRagdollImpulse(victim.transform.position));
+        ragdoll.EnterRagdoll(impulse);
     }
 
     /// <summary>

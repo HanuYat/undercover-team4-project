@@ -122,6 +122,11 @@ public class PlayerRagdoll : MonoBehaviour
              "상한이므로 정상 비행에서는 걸리지 않는다(진입 시 델타 0에서 출발)")]
     [SerializeField] private float m_flightAlignPullSpeed = 12f;
 
+    [Tooltip("원격 시체가 스트리밍된 루트에서 이만큼(m) 벗어나면 보정을 스냅으로 바꾼다 — 안전망이다. " +
+             "정상 동작에서는 걸리지 않아야 하고, 자주 걸리면 잔차가 큰 것이므로 보정을 세게 할 게 " +
+             "아니라 입력(임펄스·밧줄)이 어긋난 것을 봐야 한다")]
+    [SerializeField] private float m_alignSnapDistance = 2.5f;
+
     [Tooltip("밧줄 길이(m) — 운반자의 손과 시체 골반 사이의 최대 거리. 이 안에서는 시체가 자유롭고, " +
              "넘어가면 관절이 딱 잡아 끌려온다. 강성·감쇠 노브가 없는 이유다: 밧줄은 스프링이 아니라 " +
              "거리 제한이고, 끌리는 모양은 물리가 낸다. " +
@@ -493,30 +498,11 @@ public class PlayerRagdoll : MonoBehaviour
     {
         IgnoreOwnCapsule(); // 뼈를 다시 물리로 놓아주기 전에 — 정착 중 캡슐 토글이 무시를 지웠을 수 있다
 
-        // <b>원격은 여기서 뼈를 굳힌다.</b> 키네마틱 뼈는 트랜스폼 계층을 따르므로, 스트리밍된
-        // 루트가 움직이면 시체가 <b>공짜로 정확히</b> 따라온다 — 쫓아갈 것이 없다.
-        //
-        // <b>왜 원격만인가.</b> 이 프로젝트의 모든 이동 시스템(호송 #279·운반 #365·밧줄 #398·스폰)이
-        // "루트를 옮기면 몸이 따라온다"에 기대는데, 그게 성립했던 이유는 뼈가 애니메이터가 쥔
-        // <b>키네마틱</b>이라 계층을 공짜로 따라왔기 때문이다. 래그돌은 정확히 그 전제를 깬다 —
-        // 동적 리지드바디는 부모 트랜스폼을 따르지 않는다. 오너는 자기 물리가 움직임을 만드니
-        // 문제가 없지만, <b>원격은 루트 위치만 받으므로 그 전제가 깨지는 순간 몸이 안 온다.</b>
-        //
-        // 쫓아가게 만드는 시도는 원리적으로 실패한다 — 골반만 끌면 질량비(12~21%)밖에 안 움직여
-        // 격차가 12.6m까지 발산했고, 전 뼈를 끌면 포즈가 굳어 어차피 흐느적임이 없다. 굳히는 쪽이
-        // 같은 대가로 <b>위치를 정확히</b> 얻는다.
-        //
-        // 잃는 것은 남의 화면에서 시체가 흔들리지 않는 것 하나다. 그건 원격에도 밧줄을 묶으면
-        // (BeginDraggedRpc를 전 피어로) 되찾을 수 있고, 그때는 위치가 이미 맞으므로 실패해도
-        // 손해가 없다. §3-3의 "전부 키네마틱 — 몸이 한 자세로 굳는다"는 <b>오너 기준의 기각</b>이었다.
-        if (!HasMoveAuthority)
-        {
-            SnapBonesToRootOnce(); // 남은 잔차를 지금 없앤다 — 굳으면 영구 오프셋이 된다
-            SetKinematic(true);
-            return;
-        }
-
-        SetKinematic(false); // 오너만 물리 — 밧줄이 끌고 캡슐이 따라간다
+        // <b>전 피어가 물리를 유지한다.</b> 원격에서 뼈를 키네마틱으로 굳혔다가 되돌렸다 —
+        // 굳히면 시체가 루트 높이 하나에 매달린 조각상이 되어, 그 높이가 조금이라도 틀리면
+        // 흡수할 수단이 없어 바닥에 박히거나 공중에 뜬다. 물리가 있으면 중력·접촉이 흡수한다.
+        // 그리고 R4(끌릴 때 흐느적)는 원격에서 물리가 돌아야 성립한다. (§10-3)
+        SetKinematic(false);
     }
 
     // ---- 밧줄 (#365 운반 / #398 드래그) ----
@@ -884,7 +870,10 @@ public class PlayerRagdoll : MonoBehaviour
         // 범주가 다르다. 원격의 로컬 물리는 <b>포즈</b>만 만들고 <b>궤적</b>은 오너에게서 받는다.
         // <b>비행 중에만 정렬한다.</b> 정착 후에는 원격의 뼈가 키네마틱이라(RestToPhysics) 계층이
         // 루트를 따라간다 — 여기서 또 옮기면 그 위에 오프셋이 얹혀 이중으로 움직인다.
-        if (!HasMoveAuthority && m_state == RagdollState.Ragdoll)
+        // 비행·정착 양쪽에서 돈다. 단 <b>동력이 아니라 표류 방지</b>다 — 몸을 움직이는 것은 각 피어의
+        // 로컬 물리(임펄스·밧줄)이고, 여기서 하는 일은 그 결과가 스트리밍된 루트에서 서서히 벗어나는
+        // 것을 막는 것뿐이다. 입력이 같아지면 잔차가 작아 보정이 눈에 띄지 않는다. (§10-5)
+        if (!HasMoveAuthority && (m_state == RagdollState.Ragdoll || m_state == RagdollState.Settled))
             TickAlignBonesToRoot();
     }
 
@@ -1034,7 +1023,14 @@ public class PlayerRagdoll : MonoBehaviour
         // 빠른 상한이 필요한 두 경우 — 어느 쪽도 1.5m/s로는 따라붙지 못하고 뒤로 처진다:
         //  · <b>비행 중</b> — 시체가 6m/s로 난다 (다만 델타가 0에서 출발해 작게 유지되므로 잘 안 걸린다)
         //  · <b>정착 후</b> — 밧줄로 끌면 운반자가 약 2m/s로 간다
+        // 접지 후에는 느린 상한 — 보정은 동력이 아니라 표류 방지다(§10-5). 몸은 밧줄이 끈다.
+        // 상한을 올려 "끌어오게" 만들려던 시도가 §9-16에서 발산으로 끝났다.
         float maxStep = (grounded ? m_alignPullSpeed : m_flightAlignPullSpeed) * Time.deltaTime;
+
+        // 잔차가 임계를 넘으면 스냅한다 — 그 상태는 이미 눈에 띄게 틀렸으므로 포즈 보존이 의미가
+        // 없고, 느린 상한으로는 영구히 못 따라잡는다(§10-5 규칙 6). 안전망이므로 봉투 바깥에 둔다.
+        if (distance > m_alignSnapDistance)
+            maxStep = distance;
         if (distance > maxStep)
             delta *= maxStep / distance;
 
@@ -1049,22 +1045,6 @@ public class PlayerRagdoll : MonoBehaviour
         // 몸을 5m/s로 옮기려면 골반에 32m/s를 명령해야 하고 그러면 §9-5의 채찍질이 재현된다.
         // 실측에서 원격 격차가 <b>12.6m까지 발산</b>했다. 위치 추적을 이 방식으로는 못 한다.
         SnapBonesBy(step);
-    }
-
-    // 정착 시점에 남은 잔차를 <b>한 번에</b> 없앤다 — 원격이 뼈를 굳히기 직전에 부른다.
-    // 안 하면 그 오프셋이 영구히 굳는다(§9-9와 같은 함정 — 배수 타임아웃으로 정착하면
-    // IsReadyToSettle의 정렬 가드를 건너뛰므로 잔차가 클 수 있다).
-    private void SnapBonesToRootOnce()
-    {
-        if (m_hipsBone == null || m_root == null)
-            return;
-
-        Vector3 delta = m_root.position - m_hipsBone.position;
-        delta.y = 0f; // 높이는 이 피어의 지형이 정한다
-        if (delta.sqrMagnitude < 1e-8f)
-            return;
-
-        SnapBonesBy(ClampByWall(delta));
     }
 
 
