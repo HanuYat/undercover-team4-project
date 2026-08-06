@@ -1017,12 +1017,41 @@ EOF
     }
 
     // 재실행 시 이전 감정표현 상태를 걷어낸다 — 카탈로그에서 항목을 빼면 그만큼 상태가 줄어야 한다.
+    // (RemoveDownStates와 같은 2단계 방식)
     private static void RemoveEmoteStates(AnimatorStateMachine stateMachine)
     {
+        // 먼저 다른 상태(Locomotion 등)에서 감정표현 상태로 향하는 전환 제거
+        // — SetupEmoteStates가 만드는 진입 전이는 Emote_i가 아니라 Locomotion이 소유하므로
+        // 상태만 지우면 destination이 null인 죽은 전이가 Locomotion에 남는다.
+        foreach (ChildAnimatorState child in stateMachine.states)
+        {
+            var toRemove = new System.Collections.Generic.List<AnimatorStateTransition>();
+            foreach (AnimatorStateTransition transition in child.state.transitions)
+            {
+                if (
+                    transition.destinationState != null
+                    && transition.destinationState.name.StartsWith(k_emoteStatePrefix)
+                )
+                {
+                    toRemove.Add(transition);
+                }
+            }
+            foreach (AnimatorStateTransition transition in toRemove)
+            {
+                child.state.RemoveTransition(transition);
+            }
+        }
+
+        // 감정표현 상태 자체 제거 (해당 상태의 나가는 전환도 함께 삭제됨)
+        var statesToRemove = new System.Collections.Generic.List<AnimatorState>();
         foreach (ChildAnimatorState child in stateMachine.states)
         {
             if (child.state != null && child.state.name.StartsWith(k_emoteStatePrefix))
-                stateMachine.RemoveState(child.state);
+                statesToRemove.Add(child.state);
+        }
+        foreach (AnimatorState state in statesToRemove)
+        {
+            stateMachine.RemoveState(state);
         }
     }
 ```
