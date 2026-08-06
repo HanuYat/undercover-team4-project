@@ -33,8 +33,8 @@ public class JailIntake : MonoBehaviour
     [SerializeField] private JailZone m_jailZone;
 
     [Tooltip(
-        "문 앞 E가 신병으로 인정하는 거리(m) — 밧줄로 끌고 있지 않아도 이 안에 놓아둔 Captured면 함께 판정한다. "
-            + "밧줄 길이(1.6m)보다 넉넉히 둘 것"
+        "판정 버튼이 신병으로 인정하는 거리(m) — 밧줄로 끌고 있지 않아도 이 안에 있는 확보 상태(놓아둔 Captured, "
+            + "남이 끌고 온 Escorted)면 함께 판정한다. 밧줄 길이(1.6m)보다 넉넉히 둘 것"
     )]
     [SerializeField] private float m_admitReach = 4f;
 
@@ -74,9 +74,10 @@ public class JailIntake : MonoBehaviour
     /// 가르는 데 쓴다.
     ///
     /// <b>확보의 기준은 둘이다</b> — 이 사람의 밧줄에 걸린 대상 전부, 그리고 버튼 앞
-    /// <see cref="m_admitReach"/> 안에 놓아둔 <see cref="NpcState.Captured"/>. 후자를 넣는 이유는
-    /// 밧줄을 풀어 문 앞에 세워 둔 뒤 누르는 조작이 자연스럽기 때문이고, 여럿을 끌고 왔으면
-    /// <b>한 번에 전부 판정된다</b>(팀 확정 2026-08-06).
+    /// <see cref="m_admitReach"/> 안에 있는 <see cref="NpcState.Captured"/>·<see cref="NpcState.Escorted"/>.
+    /// 후자를 넣는 이유는 밧줄을 풀어 세워 둔 뒤 누르는 조작이 자연스럽고 <b>남이 끌고 온 신병을 대신
+    /// 넣어 주는</b> 협동도 되어야 하기 때문이고, 여럿을 끌고 왔으면 <b>한 번에 전부 판정된다</b>
+    /// (팀 확정 2026-08-06).
     ///
     /// 오검거는 감옥에 들이지 않고 그 자리에서 놓는다 — <see cref="WrongfulArrestPenalty"/>가
     /// Detained로 가져가 페널티를 굴린다(#101/#277). 감옥이 격리 공간이 된 뒤로는 "안에서 확정된
@@ -178,8 +179,13 @@ public class JailIntake : MonoBehaviour
             }
         }
 
-        // 문 앞에 놓아둔 신병 — 기준은 <b>문</b>이 아니라 누른 사람이다. 문에서 재려면 문이 여럿일 때
-        // 어느 문인지를 또 물어야 하는데, 사거리는 이미 PlayerInteractor가 걸러 줬으므로 사람 기준이면 충분하다.
+        // 버튼 앞의 신병 — 기준은 <b>버튼</b>이 아니라 누른 사람이다. 버튼에서 재려면 버튼이 여럿일 때
+        // 어느 것인지를 또 물어야 하는데, 사거리는 이미 PlayerInteractor가 걸러 줬으므로 사람 기준이면 충분하다.
+        //
+        // <b>연행 중(Escorted)도 받는다</b> — 내 줄에 걸린 대상은 위에서 이미 잡히지만, <b>남이 끌고 온</b>
+        // 신병이나 반출돼 따라오는 대상은 이쪽으로만 들어온다. 문 앞에서 대신 넣어 주는 협동이 막히면
+        // "끌고 온 사람이 직접 눌러야 한다"는 규칙이 새로 생기는데, 그럴 이유가 없다
+        // (인계 몫은 밧줄 보유자 전원에게 가므로 가로채기도 아니다).
         Vector3 origin = interactor.transform.position;
         float sqrReach = m_admitReach * m_admitReach;
 
@@ -187,7 +193,9 @@ public class JailIntake : MonoBehaviour
         for (int i = 0; i < npcs.Length; i++)
         {
             NpcController npc = npcs[i];
-            if (npc == null || npc.CurrentState != NpcState.Captured)
+            if (npc == null)
+                continue;
+            if (npc.CurrentState != NpcState.Captured && npc.CurrentState != NpcState.Escorted)
                 continue;
             if ((npc.transform.position - origin).sqrMagnitude > sqrReach)
                 continue;
