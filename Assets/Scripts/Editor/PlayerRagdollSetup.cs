@@ -25,7 +25,7 @@ using UnityEngine;
 /// 그래서 이 스크립트는 재실행해도 위저드의 산출물을 <b>보존</b>한다.
 ///
 /// 대신 <b>검증</b>을 한다. 위저드는 뼈를 손으로 끌어다 넣는 방식이고 이 프리팹에는 뼈 이름이 완전히
-/// 같은 리그가 두 벌 있어(<see cref="PlayerRagdoll.k_boneRootName"/> 참고) 1인칭 팔 쪽을 집기 쉽다.
+/// 같은 리그가 두 벌 있어(<see cref="RagdollRig.k_defaultBoneRootName"/> 참고) 1인칭 팔 쪽을 집기 쉽다.
 /// 그러면 사망 시 1인칭 팔이 물리로 풀려 바닥에 떨어진다 — 이것도 실제로 한 번 밟았다.
 /// 전 뼈가 몸통 리그 아래인지 확인하고, 아니면 <b>아무것도 고치지 않고 중단한다.</b>
 /// </summary>
@@ -92,7 +92,7 @@ public static class PlayerRagdollSetup
     // Ragdoll 레이어를 확보한다 — 이미 있으면 그 슬롯을 그대로 쓴다(재실행 안전).
     private static int EnsureLayer()
     {
-        int existing = LayerMask.NameToLayer(PlayerRagdoll.k_layerName);
+        int existing = LayerMask.NameToLayer(RagdollRig.k_layerName);
         if (existing >= 0)
             return existing;
 
@@ -121,12 +121,12 @@ public static class PlayerRagdollSetup
             return -1;
         }
 
-        slot.stringValue = PlayerRagdoll.k_layerName;
+        slot.stringValue = RagdollRig.k_layerName;
         tagManager.ApplyModifiedProperties();
         AssetDatabase.SaveAssets();
-        Debug.Log($"[래그돌 셋업] 레이어 생성 — 슬롯 {k_layerSlot} = {PlayerRagdoll.k_layerName}");
+        Debug.Log($"[래그돌 셋업] 레이어 생성 — 슬롯 {k_layerSlot} = {RagdollRig.k_layerName}");
 
-        return LayerMask.NameToLayer(PlayerRagdoll.k_layerName);
+        return LayerMask.NameToLayer(RagdollRig.k_layerName);
     }
 
     // 충돌 매트릭스에서 Ragdoll 행을 s_collidesWith만 켠 상태로 만든다.
@@ -164,12 +164,12 @@ public static class PlayerRagdollSetup
 
     private static bool Apply(GameObject root, int layer)
     {
-        Transform boneRoot = root.transform.Find(PlayerRagdoll.k_boneRootName);
+        Transform boneRoot = root.transform.Find(RagdollRig.k_defaultBoneRootName);
         if (boneRoot == null)
         {
             Debug.LogError(
-                $"[래그돌 셋업] 몸통 리그 '{PlayerRagdoll.k_boneRootName}'를 프리팹 루트의 직속 자식에서"
-                    + " 찾지 못했다 — 리그 구조가 바뀌었으면 PlayerRagdoll.k_boneRootName을 맞출 것"
+                $"[래그돌 셋업] 몸통 리그 '{RagdollRig.k_defaultBoneRootName}'를 프리팹 루트의 직속 자식에서"
+                    + " 찾지 못했다 — 리그 구조가 바뀌었으면 RagdollRig.k_defaultBoneRootName을 맞출 것"
             );
             return false;
         }
@@ -178,7 +178,7 @@ public static class PlayerRagdollSetup
             return false;
 
         StringBuilder report = new StringBuilder();
-        report.AppendLine($"[래그돌 셋업] 뼈 {bodies.Count}개 마무리 — 레이어 {PlayerRagdoll.k_layerName}, "
+        report.AppendLine($"[래그돌 셋업] 뼈 {bodies.Count}개 마무리 — 레이어 {RagdollRig.k_layerName}, "
             + "전부 isKinematic=true (콜라이더·관절·질량은 위저드 값 그대로)");
 
         for (int i = 0; i < bodies.Count; i++)
@@ -242,7 +242,7 @@ public static class PlayerRagdollSetup
             Debug.LogError(
                 "[래그돌 셋업] CharacterJoint를 하나도 찾지 못했다 — 내장 Ragdoll Wizard를 먼저 돌릴 것.\n"
                     + $"{k_prefabPath}를 Prefab 모드로 열고 GameObject > 3D Object > Ragdoll… 에서 "
-                    + $"{PlayerRagdoll.k_boneRootName}/Hips 이하의 뼈를 지정한다."
+                    + $"{RagdollRig.k_defaultBoneRootName}/Hips 이하의 뼈를 지정한다."
             );
             return false;
         }
@@ -262,10 +262,10 @@ public static class PlayerRagdollSetup
         {
             Debug.LogError(
                 "[래그돌 셋업] 몸통 리그 밖에 붙은 래그돌 뼈가 있어 중단한다 — 위저드에서 1인칭 팔"
-                    + $"({PlayerRagdoll.k_boneRootName}이 아닌 쪽)의 동명 뼈를 집은 것이다.\n"
+                    + $"({RagdollRig.k_defaultBoneRootName}이 아닌 쪽)의 동명 뼈를 집은 것이다.\n"
                     + string.Join("\n", outside)
                     + $"\n\n해당 뼈의 Rigidbody·Collider·CharacterJoint를 지우고, {k_prefabPath}의 "
-                    + $"'{PlayerRagdoll.k_boneRootName}/Hips' 이하만 지정해 위저드를 다시 돌릴 것."
+                    + $"'{RagdollRig.k_defaultBoneRootName}/Hips' 이하만 지정해 위저드를 다시 돌릴 것."
             );
             bodies.Clear();
             return false;

@@ -1194,6 +1194,64 @@ R2·R4는 "각 피어에서 진짜 물리가 돌아야 한다"를 뜻한다. I1�
 
 ---
 
+## 11. 구조 분리 — NPC 래그돌을 위한 준비 (2026-08-06)
+
+`PlayerRagdoll`이 1545줄(코드 796 / 주석 531)까지 자라 있었고, NPC에도 래그돌을 붙이기로 하면서
+**공통이 될 부분을 먼저 갈랐다.**
+
+### 11-1. 자른 선 — "뼈를 물리에 넘기는 것" vs "누가 위치를 쥐나"
+
+| | Player | NPC |
+|---|---|---|
+| 이동 프록시 | CharacterController | **NavMeshAgent** |
+| 위치 권위 | **오너** 권한 NetworkTransform | **서버** 권한 |
+| 기존 밧줄 | — | 서버가 `transform.position` 직접 대입 |
+| 사망 | `IncapacitationCause.Die` | **없음** — HP 0 → Stun |
+| 리그 | Synty (FP 팔 때문에 두 벌) | 같은 본 이름, 한 벌 |
+
+프록시와 권위가 **둘 다** 다르므로 상속(추상 베이스)으로는 공유되는 실체가 남지 않는다 —
+거의 전부 `abstract`가 된다. **컴포지션**으로 간다.
+
+```
+Assets/Scripts/Common/Ragdoll/
+  RagdollRig    뼈·스킨 수집, 키네마틱 토글, 임펄스, 감쇠, 속도캡,
+                포즈 캡처/복원, 블렌드, 정착 판정용 평균속도, 몸 방향 yaw
+  RagdollRope   관절 밧줄 (앵커·튜닝·수명)
+
+Assets/Scripts/Player/View/
+  PlayerRagdoll 상태 기계, 사망 폴링, 캡슐 추종, 원격 정렬,
+                정착 루트 포즈, 기상 블렌드 오케스트레이션
+```
+
+**판별 기준은 하나다.** `RagdollRig`·`RagdollRope`에는 `IsOwner`·`NetworkObject`·
+`CharacterController`가 **한 번도 나오지 않는다.** 나오기 시작하면 분리가 무너진 것이다.
+
+### 11-2. 옮기면서 걸린 것
+
+- **`TryGetBodyYaw`에 클립 보정이 섞여 있었다.** `m_rootYawOffset`은 `Knockdown_StandUp`이 어느 쪽을
+  머리로 보는지에 맞추는 값이라 **그 리그의 클립 사정**이다. 리그는 순수한 몸 방향만 내고 보정은
+  소유자가 얹도록 갈랐다 — 안 그러면 NPC가 다른 기상 클립을 쓸 때 플레이어 값이 따라온다.
+- **같은 GameObject 위 컴포넌트의 `Awake` 순서는 보장되지 않는다.** `RagdollRope`와 `PlayerRagdoll`이
+  둘 다 자기 `Awake`에서 뼈를 요구하는데, 리그가 나중에 깨어나면 앵커가 안 만들어지거나 캡슐 충돌
+  무시가 안 걸린 채 **조용히** 넘어간다. 실행 순서를 프로젝트 설정으로 강제하는 대신
+  `RagdollRig.EnsureCollected()`를 멱등으로 두고 소비자가 첫머리에서 부른다.
+
+### 11-3. 밧줄은 합치지 말 것
+
+NPC에도 밧줄이 있지만(`NpcController.Rope`) **메커니즘이 다르다** — 그쪽은 서버가
+`transform.position`을 대입하고 NetworkTransform이 복제한다. 래그돌이 된 몸은 동적 리지드바디라
+그 방식이 통하지 않아(부모 트랜스폼을 따르지 않는다) 관절 방식이 필요했다.
+**두 방식을 하나로 우겨넣지 말 것** — 갈리는 기준은 "대상이 래그돌이냐 아니냐"다.
+
+### 11-4. NPC 래그돌의 선행 과제 (코드 구조가 아니다)
+
+1. **리그 빌드가 Player 전용이다.** `PlayerRagdollSetup.k_prefabPath`가
+   `Assets/Prefabs/Player.prefab` 하드코딩이고, NPC 프리팹에는 `CharacterJoint`가 하나도 없다.
+2. **NPC에 사망 개념이 없다.** HP 0이 `Stun`으로 간다 — "언제 래그돌에 들어가나"를 먼저 정해야 한다.
+   (`BombDevice.ServerExplode`의 "NPC 폭발 피해는 아직 연결하지 않았다" 주석과 같은 매듭)
+
+---
+
 ## 부록 A — #506에 달 코멘트 초안
 
 > ## 범위 변경 — 진입 조건을 "폭발 넉백"에서 "사망"으로 바꾼다
