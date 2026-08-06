@@ -22,7 +22,8 @@ public class NpcIntrudeState : NpcStateBase
     private bool m_unlocking; // 도착해 해제 채널링에 들어갔는가 — 이동/해제 두 페이즈를 가른다
     private float m_unlockEndTime; // 해제 완료 예정 시각(Time.time)
 
-    public NpcIntrudeState(NpcController owner) : base(owner) { }
+    public NpcIntrudeState(NpcController owner)
+        : base(owner) { }
 
     public override void Enter()
     {
@@ -31,17 +32,23 @@ public class NpcIntrudeState : NpcStateBase
         m_owner.Agent.isStopped = false;
         m_owner.Agent.stoppingDistance = 0f;
 
-        if (m_owner.IntrudeTarget == null)
+        if (m_owner.Intruder.IntrudeTarget == null)
         {
-            Debug.LogWarning($"NpcIntrudeState: 침입 목표가 없음 — 불발 처리: {m_owner.name}", m_owner);
+            Debug.LogWarning(
+                $"NpcIntrudeState: 침입 목표가 없음 — 불발 처리: {m_owner.name}",
+                m_owner
+            );
             Finish(false);
             return;
         }
 
         // 경로를 못 잡으면(목표가 NavMesh 밖 등) 영원히 걷는 자세로 남는다 — 불발로 통보한다
-        if (!m_owner.Agent.SetDestination(m_owner.IntrudeTarget.position))
+        if (!m_owner.Agent.SetDestination(m_owner.Intruder.IntrudeTarget.position))
         {
-            Debug.LogWarning($"NpcIntrudeState: 침입 경로 실패 — 불발 처리: {m_owner.name}", m_owner);
+            Debug.LogWarning(
+                $"NpcIntrudeState: 침입 경로 실패 — 불발 처리: {m_owner.name}",
+                m_owner
+            );
             Finish(false);
         }
     }
@@ -82,10 +89,10 @@ public class NpcIntrudeState : NpcStateBase
     private void BeginUnlock()
     {
         m_unlocking = true;
-        m_unlockEndTime = Time.time + m_owner.IntrudeUnlockSeconds;
+        m_unlockEndTime = Time.time + m_owner.Intruder.IntrudeUnlockSeconds;
 
         StopAgent();
-        m_owner.NotifyIntrudeUnlockStarted();
+        m_owner.Intruder.NotifyIntrudeUnlockStarted();
     }
 
     // 도착·실패 확정 — 그 자리에 세우고 이벤트에 결과를 알린다
@@ -94,7 +101,7 @@ public class NpcIntrudeState : NpcStateBase
         m_finished = true;
 
         StopAgent();
-        m_owner.NotifyIntrudeFinished(reached);
+        m_owner.Intruder.NotifyIntrudeFinished(reached);
     }
 
     private void StopAgent()
