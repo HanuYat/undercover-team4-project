@@ -142,7 +142,7 @@ public class RagdollRig : MonoBehaviour
         if (layer < 0)
         {
             Debug.LogError(
-                $"[래그돌] 레이어 '{k_layerName}'가 없다 — Tools > Player > Build Ragdoll을 먼저 실행할 것",
+                $"[래그돌] 레이어 '{k_layerName}'가 없다 — Tools > Player > Finish Ragdoll Setup을 먼저 실행할 것",
                 this
             );
             return;
@@ -204,7 +204,7 @@ public class RagdollRig : MonoBehaviour
             Debug.LogError(
                 $"[래그돌] {m_boneRoot.name} 아래에서 래그돌 뼈를 제대로 찾지 못했다"
                     + $" (뼈 {count}개, 골반 {(m_hipsBone == null ? "없음" : m_hipsBone.name)})"
-                    + " — Tools > Player > Build Ragdoll을 실행할 것",
+                    + " — Tools > Player > Finish Ragdoll Setup을 실행할 것",
                 this
             );
             m_bodies = new Rigidbody[0];
