@@ -18,9 +18,8 @@ using UnityEngine;
 /// </summary>
 public class NpcJailedState : NpcStateBase
 {
-    // 배치 지점에서 이만큼(m) 안에서만 어슬렁거린다 — 방이 좁아(내부 7.5m) 넓게 잡으면
-    // 여럿이 같은 자리로 몰려 서로를 밀어낸다.
-    private const float k_wanderRadius = 1.6f;
+    // 감옥 방 범위가 없는 씬(단독 테스트)에서만 쓰는 폴백 반경(m) — 배치 지점 둘레.
+    private const float k_fallbackRadius = 1.6f;
 
     // 도착 판정 여유(m) — stoppingDistance에 더해 쓴다. 딱 맞추려 들면 미세하게 떨며 멈추지 못한다.
     private const float k_arriveSlack = 0.15f;
@@ -106,23 +105,40 @@ public class NpcJailedState : NpcStateBase
         }
     }
 
-    // 배치 지점 둘레에서 갈 수 있는 한 점을 골라 걷기 시작한다. 못 고르면 그냥 더 쉰다.
+    // 다음 목적지를 골라 걷기 시작한다. 못 고르면 그냥 더 쉰다.
+    //
+    // <b>방 전체를 쓴다</b> — 자기 배치 지점 둘레만 맴돌면 갇혀 있다기보다 자리를 지키는 것처럼 보인다.
+    // 서로 비켜 가는 것은 에이전트의 회피에 맡긴다(수감 상태는 회피를 끄지 않는다).
+    // 방을 못 찾는 테스트 씬에서는 배치 지점 둘레로 물러선다.
     private void BeginWander()
     {
-        Vector2 offset = Random.insideUnitCircle * k_wanderRadius;
-        Vector3 target = m_owner.JailSpot.position + new Vector3(offset.x, 0f, offset.y);
-
-        // 방 밖으로 새지 않게 NavMesh 위로 스냅한다 — 감옥은 별도 섬이라 이 표본이 곧 방 안이다
-        if (!UnityEngine.AI.NavMesh.SamplePosition(
-                target, out UnityEngine.AI.NavMeshHit hit, k_wanderRadius, m_owner.Agent.areaMask))
+        if (!JailRoom.TryRandomPoint(m_owner.Agent.areaMask, out Vector3 target)
+            && !TrySpotNeighbourhood(out target))
         {
             BeginPause();
             return;
         }
 
         m_owner.Agent.isStopped = false;
-        if (!m_owner.Agent.SetDestination(hit.position))
+        if (!m_owner.Agent.SetDestination(target))
             BeginPause(); // 경로를 못 잡았다 — 다음 차례에 다시 고른다
+    }
+
+    // 폴백 — 감옥 방 범위가 없는 씬에서 배치 지점 둘레를 쓴다.
+    private bool TrySpotNeighbourhood(out Vector3 target)
+    {
+        Vector2 offset = Random.insideUnitCircle * k_fallbackRadius;
+        Vector3 candidate = m_owner.JailSpot.position + new Vector3(offset.x, 0f, offset.y);
+
+        if (UnityEngine.AI.NavMesh.SamplePosition(
+                candidate, out UnityEngine.AI.NavMeshHit hit, k_fallbackRadius, m_owner.Agent.areaMask))
+        {
+            target = hit.position;
+            return true;
+        }
+
+        target = Vector3.zero;
+        return false;
     }
 
     // 잠시 선다 — 계속 걷기만 하면 우리 안을 도는 로봇처럼 보인다.

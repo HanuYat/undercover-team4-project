@@ -65,7 +65,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000310
-    m_Localized: 'Wanted criminal arrested!'
+    m_Localized: Wanted criminal arrested!
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000311
@@ -81,7 +81,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000314
-    m_Localized: 'Battery {0}/{1}'
+    m_Localized: Battery {0}/{1}
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000315
@@ -117,6 +117,14 @@ MonoBehaviour:
       - rid: 6276845892712267875
   - m_Id: 95636848959488
     m_Localized: A low voice on the other end offers you a deal
+    m_Metadata:
+      m_Items: []
+  - m_Id: 761277069221888
+    m_Localized: Can't enter while dragging a suspect - use the intake button
+    m_Metadata:
+      m_Items: []
+  - m_Id: 761277106970624
+    m_Localized: No suspect in custody
     m_Metadata:
       m_Items: []
   references:

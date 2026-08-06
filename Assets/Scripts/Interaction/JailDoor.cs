@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 감옥 문 (#415/#537) — 도시와 격리된 감옥 방을 잇는 <b>순간이동 상호작용 오브젝트</b>다.
@@ -58,6 +59,13 @@ public class JailDoor : NetworkBehaviour, IInteractable
     [Header("자물쇠 (비우면 씬에서 자동 탐색)")]
     [Tooltip("풀려 있는 동안(탈옥 진행 중, #231)에는 문을 계속 열어 둔다 — 열린 문이 곧 탈옥 신호다")]
     [SerializeField] private JailLock m_jailLock;
+
+    [Header("거절 안내")]
+    [Tooltip("신병을 끌고 들어가려 할 때 누른 사람에게만 띄울 문구 — HudTable/Hud.Jail.NeedButton")]
+    [SerializeField] private LocalizedString m_needButtonMessage;
+
+    [Tooltip("안내 문구가 화면에 머무는 시간(초)")]
+    [SerializeField] private float m_messageSeconds = 2.5f;
 
     // 서버 권위 개폐 상태 — JailLock·JailZone과 동일한 이중 구조(오프라인 폴백 로컬 값)
     private readonly NetworkVariable<bool> m_isOpenSynced = new NetworkVariable<bool>(false);
@@ -177,6 +185,7 @@ public class JailDoor : NetworkBehaviour, IInteractable
         if (escorter != null && escorter.TetheredCount > 0)
         {
             Debug.Log("[감옥 문] 신병을 끌고는 들어갈 수 없다 — 옆 수감 버튼으로 넣을 것");
+            NotifyInteractor(interactor);
             return;
         }
 
@@ -184,6 +193,45 @@ public class JailDoor : NetworkBehaviour, IInteractable
         BeginPassAnimation();
         m_intake.ServerEnterJail(mover);
     }
+
+    // ---- 거절 안내 (누른 사람에게만) ----
+
+    /// <summary>
+    /// 누른 사람 <b>한 명에게만</b> 안내를 띄운다 — 서버(또는 오프라인)에서 호출. (#537)
+    ///
+    /// <c>NotifyOwner</c>(ChanneledInteractionBehaviour)를 쓸 수 없다: 그 경로는 <b>오브젝트의 오너</b>에게
+    /// 보내는데 이 문은 씬 오브젝트라 오너가 서버다 — 원격 클라가 눌러도 호스트 화면에 뜬다.
+    /// 그래서 누른 클라를 지목해 보낸다.
+    ///
+    /// <b>문구를 RPC에 싣지 않는다.</b> <see cref="LocalizedString"/>은 직렬화해 보낼 수 없기도 하고,
+    /// 애초에 각 피어가 같은 프리팹 필드를 들고 있어 보낼 이유가 없다 — "띄워라"만 보내면 된다.
+    /// </summary>
+    private void NotifyInteractor(GameObject interactor)
+    {
+        if (!IsSpawned)
+        {
+            ShowNeedButtonLocal(); // 오프라인 단독 테스트
+            return;
+        }
+
+        NetworkObject netObject = interactor.GetComponentInParent<NetworkObject>();
+        if (netObject == null)
+            return;
+
+        if (netObject.OwnerClientId == NetworkManager.LocalClientId)
+        {
+            ShowNeedButtonLocal(); // 누른 사람이 호스트 자신 — 보낼 것 없이 로컬 표시
+            return;
+        }
+
+        ShowNeedButtonRpc(RpcTarget.Single(netObject.OwnerClientId, RpcTargetUse.Temp));
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ShowNeedButtonRpc(RpcParams rpcParams) => ShowNeedButtonLocal();
+
+    // HUD가 없는 환경(데디케이티드 서버 등)에선 App.UI.Toast가 null이라 무동작 — PlayerPenaltyView와 같은 방침
+    private void ShowNeedButtonLocal() => App.UI.Toast?.Show(m_needButtonMessage, m_messageSeconds);
 
     // ---- 개폐 (서버 권위) ----
 

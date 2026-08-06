@@ -157,6 +157,31 @@ public class JailZone : NetworkBehaviour
             && Mathf.Abs(local.z) <= half.z;
     }
 
+    /// <summary>
+    /// 감옥 방 안의 임의의 좌표 — 수감자 배회(<see cref="NpcJailedState"/>)가 다음 목적지를 고를 때 쓴다. (#537)
+    /// 방 범위가 미배선이면 감옥 자신의 위치를 돌려준다(그 자리에 머문다).
+    ///
+    /// 벽에 코를 박지 않게 가장자리를 <see cref="k_roamInset"/>만큼 물린다 — 여기서 고른 점은
+    /// 부르는 쪽이 NavMesh로 한 번 더 스냅하므로, 이 함수는 "방 안 아무 데나"만 답하면 된다.
+    /// </summary>
+    public Vector3 RandomPointInRoom()
+    {
+        if (m_roomVolume == null)
+            return transform.position;
+
+        Vector3 half = m_roomVolume.size * 0.5f;
+        // UnityEngine.Random을 명시한다 — 이 파일은 System을 함께 쓰고 있어 이름이 겹친다
+        float x = UnityEngine.Random.Range(-half.x + k_roamInset, half.x - k_roamInset);
+        float z = UnityEngine.Random.Range(-half.z + k_roamInset, half.z - k_roamInset);
+
+        // 바닥 높이는 부피 아래쪽을 기준으로 잡는다 — 부피 중심은 사람 키보다 위다
+        Vector3 local = m_roomVolume.center + new Vector3(x, -half.y, z);
+        return m_roomVolume.transform.TransformPoint(local);
+    }
+
+    // 배회 목적지를 벽에서 물릴 거리(m) — 사람 반지름보다 넉넉히.
+    private const float k_roamInset = 0.9f;
+
     /// <summary>수용 인원 변경 — 서버·클라이언트 모든 피어에서 발생한다. 본부 UI(별도 이슈)가 구독.</summary>
     public event Action<int> OnInmateCountChanged;
 

@@ -263,7 +263,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4284079103
   m_fontColor: {r: 1, g: 0.86, b: 0.35, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -276,7 +276,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -785,6 +785,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::JailIntakeButton
   ShowTopMostFoldoutHeaderGroup: 1
   m_intake: {fileID: 503565219920710643}
+  m_noCustodyMessage:
+    m_TableReference:
+      m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: Hud.Jail.NoCustody
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_messageSeconds: 2.5
+  references:
+    version: 2
+    RefIds: []
 --- !u!114 &9046587239194559110
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1014,7 +1027,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3106246618
+  GlobalObjectIdHash: 1581913754
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -1227,7 +1240,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4284079103
   m_fontColor: {r: 1, g: 0.86, b: 0.35, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -1240,7 +1253,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -1594,6 +1607,19 @@ MonoBehaviour:
   m_passSeconds: 1.2
   m_intake: {fileID: 503565219920710643}
   m_jailLock: {fileID: 0}
+  m_needButtonMessage:
+    m_TableReference:
+      m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: Hud.Jail.NeedButton
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_messageSeconds: 2.5
+  references:
+    version: 2
+    RefIds: []
 --- !u!1 &6062137872692427451
 GameObject:
   m_ObjectHideFlags: 0
@@ -1824,6 +1850,19 @@ MonoBehaviour:
   m_passSeconds: 1.2
   m_intake: {fileID: 0}
   m_jailLock: {fileID: 0}
+  m_needButtonMessage:
+    m_TableReference:
+      m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: Hud.Jail.NeedButton
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_messageSeconds: 2.5
+  references:
+    version: 2
+    RefIds: []
 --- !u!114 &2503383262343420504
 MonoBehaviour:
   m_ObjectHideFlags: 0

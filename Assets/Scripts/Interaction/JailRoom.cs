@@ -20,9 +20,41 @@ public static class JailRoom
     /// <summary>이 좌표가 감옥 방 안인가 — 감옥이 없거나 방 범위가 미배선이면 항상 false.</summary>
     public static bool Contains(Vector3 position)
     {
-        if (s_zone == null)
-            s_zone = Object.FindFirstObjectByType<JailZone>();
+        return Zone != null && Zone.ContainsPoint(position);
+    }
 
-        return s_zone != null && s_zone.ContainsPoint(position);
+    /// <summary>
+    /// 방 안에서 걸어갈 수 있는 임의의 지점을 고른다 — 실패하면 false. 서버(또는 오프라인) 전용. (#537)
+    ///
+    /// 수감자 배회(<see cref="NpcJailedState"/>)가 쓴다. 방 부피에서 아무 점이나 뽑고
+    /// <paramref name="areaMask"/>로 NavMesh에 스냅하므로, 벽 안이나 가구 위가 나와도 걸어갈 수 있는
+    /// 자리로 당겨진다. 감옥이 없는 테스트 씬에서는 그냥 false다(그 자리에 서 있는다).
+    /// </summary>
+    public static bool TryRandomPoint(int areaMask, out Vector3 point)
+    {
+        point = Vector3.zero;
+        if (Zone == null)
+            return false;
+
+        Vector3 candidate = Zone.RandomPointInRoom();
+        if (!UnityEngine.AI.NavMesh.SamplePosition(candidate, out UnityEngine.AI.NavMeshHit hit, k_snapRadius, areaMask))
+            return false;
+
+        point = hit.position;
+        return true;
+    }
+
+    // 뽑은 점을 NavMesh로 당길 최대 거리(m) — 방 한 칸(2.5m)보다 조금 크게 잡아 벽 안쪽이 나와도 건진다.
+    private const float k_snapRadius = 3f;
+
+    // 씬의 감옥 — 참조가 죽으면(씬 전환) 다음 호출에서 다시 찾는다
+    private static JailZone Zone
+    {
+        get
+        {
+            if (s_zone == null)
+                s_zone = Object.FindFirstObjectByType<JailZone>();
+            return s_zone;
+        }
     }
 }

@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 감옥 문 옆 수감 버튼 — <b>신병을 판정해 감옥으로 보내는</b> 조작 하나만 담당한다. (#537)
@@ -20,6 +21,13 @@ public class JailIntakeButton : NetworkBehaviour, IInteractable
     [Header("감옥 출입구 (비우면 씬에서 자동 탐색)")]
     [Tooltip("판정·배치를 실제로 수행하는 쪽 — 이 버튼은 요청만 넘긴다")]
     [SerializeField] private JailIntake m_intake;
+
+    [Header("안내")]
+    [Tooltip("확보한 신병 없이 눌렀을 때 누른 사람에게만 띄울 문구 — HudTable/Hud.Jail.NoCustody")]
+    [SerializeField] private LocalizedString m_noCustodyMessage;
+
+    [Tooltip("안내 문구가 화면에 머무는 시간(초)")]
+    [SerializeField] private float m_messageSeconds = 2.5f;
 
     /// <summary>수감이 실제로 일어났다 — 램프·소리 연출이 구독할 훅. 서버(또는 오프라인)에서 발생한다.</summary>
     public event System.Action<int> OnAdmitted;
@@ -79,9 +87,42 @@ public class JailIntakeButton : NetworkBehaviour, IInteractable
         if (handled <= 0)
         {
             Debug.Log("[감옥] 수감 버튼 — 확보한 신병이 없다");
+            NotifyInteractor(interactor);
             return;
         }
 
         OnAdmitted?.Invoke(handled);
     }
+
+    /// <summary>
+    /// 누른 사람 <b>한 명에게만</b> 안내를 띄운다 — 서버(또는 오프라인)에서 호출. (#537)
+    /// 이 버튼은 씬 오브젝트라 오너가 서버다 — <c>SendTo.Owner</c>로는 호스트 화면에 뜬다.
+    /// 그래서 누른 클라를 지목해 보낸다 (<see cref="JailDoor"/>와 같은 방식).
+    /// </summary>
+    private void NotifyInteractor(GameObject interactor)
+    {
+        if (!IsSpawned)
+        {
+            ShowNoCustodyLocal(); // 오프라인 단독 테스트
+            return;
+        }
+
+        NetworkObject netObject = interactor.GetComponentInParent<NetworkObject>();
+        if (netObject == null)
+            return;
+
+        if (netObject.OwnerClientId == NetworkManager.LocalClientId)
+        {
+            ShowNoCustodyLocal();
+            return;
+        }
+
+        ShowNoCustodyRpc(RpcTarget.Single(netObject.OwnerClientId, RpcTargetUse.Temp));
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ShowNoCustodyRpc(RpcParams rpcParams) => ShowNoCustodyLocal();
+
+    // HUD가 없는 환경(데디케이티드 서버 등)에선 App.UI.Toast가 null이라 무동작
+    private void ShowNoCustodyLocal() => App.UI.Toast?.Show(m_noCustodyMessage, m_messageSeconds);
 }
