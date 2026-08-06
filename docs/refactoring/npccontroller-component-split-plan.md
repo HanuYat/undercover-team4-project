@@ -136,6 +136,10 @@ partial 분리가 성장을 막지 못한다는 증거다.)
    (플래그 프로퍼티는 이미 `IsKnockedBack`으로 존재한다 — `Knockback.cs:9`. 새 이름을 만들지 말 것.)
 3. **튜닝 SO는 코어가 계속 들고, 부품이 코어에서 읽는다.** 인스펙터 재배선을 최소화한다(지금도 코어가 SO를 들고 상태
    클래스에 주입한다). 부품이 `[SerializeField]`로 SO를 따로 받으면 프리팹 4개 × 부품 수만큼 배선이 늘어난다.
+
+   **읽는 경로는 코어의 `internal` 프로퍼티다** — 3번 PR(#542)에서 `NpcController.ChaseConfig`로 확정했다
+   (`NpcPenaltyAgent.ApplyChaseRepel`이 `RepelFleeSeconds`를 읽는다). 부품은 같은 어셈블리라 `public`까지
+   열 필요가 없고, 이 방식은 § 4-6의 공용 헬퍼 승격과 같은 관례다. 필요한 SO마다 한 줄씩 늘려 쓴다.
 4. **부품은 `NetworkBehaviour`, `[RequireComponent]`는 코어 → 부품 한 방향만 건다.** 같은 프리팹에 여러
    `NetworkBehaviour`는 정상이다. 양방향으로 걸면 순환 의존이 되어 둘 중 하나만 떼는 것이 막히므로 선언은
    코어에만 둔다 — 저장소에 순환 사례가 없고 `ShopStand.cs:23`(허브가 자기 View 부품을 요구)이 같은 구조다.
@@ -146,6 +150,16 @@ partial 분리가 성장을 막지 못한다는 증거다.)
    `[RequireComponent]`를 떼면 프리팹 4개에서 조용히 사라지며, 무엇보다 **직렬화 필드를 가진 부품은 임포트마다
    인스펙터 값이 초기값으로 돌아간다**(`NpcPenaltyAgent`·`NpcRopeDrag` 등 뒤 도메인에서 터진다).
    인스펙터에서 부품을 한 번 껐다 켠 뒤 저장하면 에셋에 기록된다(그냥 열고 저장만 하면 dirty가 잡히지 않는다).
+
+   **`NetworkVariable`을 든 부품은 명시 저장이 더 중요하다** — 3번 PR(#542)에서 확인했다. NGO의
+   NetworkBehaviour 인덱스는 **프리팹의 컴포넌트 구성 순서로 정해지므로**, 에셋에 기록되지 않은 구성은
+   피어 간 매칭의 근거가 없다. 전 피어가 같은 프리팹을 받으면 일관되지만 그 "같은 프리팹"이 저장소에
+   남아 있어야 한다. 같은 이유로 **컴포넌트 순서 정리는 도메인 PR마다 하지 말 것** — 프리팹 4개가 통째로
+   재직렬화되는 큰 diff라 충돌면을 키운다. 필요하면 § 6 8번(코어 정리)에서 한 번에 한다.
+
+   그리고 **`NetworkVariable`은 훅까지 함께 옮긴다** — `OnValueChanged` 구독을 코어의
+   `OnNetworkSpawn`/`OnNetworkDespawn`에 남기면 코어가 부품의 private 필드를 보게 되어 분리가 무의미해진다.
+   부품이 자기 `OnNetworkSpawn`/`OnNetworkDespawn`을 갖는다 (`NpcPenaltyAgent`의 `m_abductionDuty` 사례).
 5. **프리팹 배선 대상은 4개** — `NPC_Citizen` · `NPC_Citizen_Generic` · `NPC_Rioter` · `NPC_Streaker`.
    `NPC_Abductor`는 `NPC_Citizen`의 **변형(variant)** 이라 자동 상속된다. 프리팹 YAML 충돌이 나면 머지하지 말고
    **에디터에서 다시 배선**하는 쪽이 빠르고 안전하다.
@@ -160,6 +174,9 @@ partial 분리가 성장을 막지 못한다는 증거다.)
 
    정리를 미루면 **분리 후에도 옛 partial 파일이 껍데기로 남는다.** 도메인 PR의 성과는 "partial 파일 하나가
    사라졌다"로 재는 게 정확하므로, 정리를 그 PR 안에 넣는다.
+
+   **점검은 매번 하되 선행 커밋이 늘 생기는 것은 아니다** — 3번(Penalty)은 두 종류 모두 없어 선행 커밋
+   없이 갔다(#542). 파일럿과 다른 모양이라 리뷰어가 의아해하므로, 없으면 "점검했고 없었다"를 PR 본문에 적는다.
 
 ## 5. 지켜야 할 불변식
 
@@ -228,7 +245,7 @@ TickRopeDrag() → TickStandUp() → 넉백 게이트 → 스턴 게이트 → F
 |---|---|---|---|
 | 1 | ✅ **`NpcIntruder`** (#540 머지) | 45 | **파일럿** — 규약 § 4-1·4-2·4-4·4-6을 실제 코드로 확정했다. 선행 커밋으로 `ReleaseFromCustody`를 `Custody.cs`에 보내 `Intrude.cs`를 삭제 (§ 7) |
 | 2 | ~~`NpcHolding`~~ → **삭제** | 31 | **추출하지 않는다 — 도달 불가 코드였다.** `60f42aa`(#310 "경범죄자도 유치장 수감 — 임시 거처 소멸 폐지")가 `JailbreakEvent`·`MisdemeanorLoiterer`·`SpawnedNpcEvent`의 호출부·구독을 전부 지웠고(207줄), 컨트롤러 API와 FSM 상태만 고아로 남아 있었다. 뽑았으면 죽은 `NetworkBehaviour`를 프리팹 4개에 붙일 뻔했다 |
-| 3 | `NpcPenaltyAgent` | 170 | `NetworkVariable`(`m_abductionDuty`) 이관 첫 사례 |
+| 3 | ✅ **`NpcPenaltyAgent`** (#542) | 170 | `NetworkVariable`(`m_abductionDuty`) 이관 첫 사례 — 훅까지 함께 옮기는 규약(§ 4-4)과 SO를 읽는 `internal` 접근자(§ 4-3)를 확정했다. "제 집 정리" 선행 커밋은 없었다(오배치 없음) |
 | 4 | `NpcCustody` (+ `Escort` 병합) | 139 + 27 | `StartEscort`가 여러 도메인의 진입점이라 함께. `ReleaseFromCustody`는 파일럿에서 이미 `Custody.cs`에 들어와 있다. **선행: `TryWarpNear`를 코어로 승격**(§ 4-6) — #522로 Custody가 Rope의 private 헬퍼를 쓰게 됐다 |
 | 5 | `NpcReaction` | 99 | `StartFlee` 호출부가 10파일이라 1단계 마지막 |
 
@@ -285,7 +302,7 @@ FSM 전이(`m_stateMachine.ChangeState(NpcState.Intruding)`)가 필요하므로 
 
 | 코어의 멤버 | 갈 곳 |
 |---|---|
-| `EscortTarget` (111) | `NpcCustody` |
+| `EscortTarget` (111) | `NpcCustody` — setter가 3번 PR(#542)에서 `internal`로 열렸다(`NpcPenaltyAgent.SendToDetention`이 쓴다). 이 멤버를 가져갈 때 그 `internal`도 함께 없앤다 |
 | `JailSeat` (115) | `NpcCustody` |
 | `IsDelivered` · `MarkDelivered` · `ClearDelivered` (68~92) | `NpcCustody` |
 | `IntrudeTarget` · `IntrudeUnlockSeconds` · `OnIntrudeFinished` · `OnIntrudeUnlockStarted` (118~130) | `NpcIntruder` |
