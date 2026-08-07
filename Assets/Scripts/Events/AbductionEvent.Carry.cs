@@ -27,6 +27,56 @@ public partial class AbductionEvent
         ServerRepelAbductor(abductor); // 이 이벤트의 납치범인지·서버인지는 그쪽이 판정한다
     }
 
+    // 무력화 통보 — 타격과 <b>같은 격퇴</b>다 (#554). 테이저 한 발이면 그 납치범은 이 호송에서 떨어진다.
+    // 데미지에만 물려 있던 것을 넓힌 이유는 역할 분담이다: 체력 깎기는 진압봉, 즉시 무력화는 테이저인데
+    // (#446) 격퇴가 타격 전용이면 "즉시 무력화" 담당이 정작 동료가 끌려가는 상황에서만 쓸모가 없다.
+    // 테이저는 상태 게이트(CanBeDamaged)를 타지 않으므로 추격·호송·린치 어느 단계에서도 통한다.
+    //
+    // 떨어져 나간 납치범은 <b>스턴이 유지된 채</b>다 — 그대로 밧줄로 묶어 검거할 수 있다(팀 확정 2026-08-07).
+    // 구조와 검거가 한 동작으로 이어지는 것이 테이저의 값이고, 대가는 쿨다운 5초·사거리 8m다.
+    // 진압봉도 결국 HP 0 → 기절 → 밧줄이라 종착점은 같고, 여기서만 그 앞이 짧아진다.
+    //
+    // attacker/threat를 보지 않는 것은 타격 쪽과 같은 이유다 — 떼어내진 사실은 누가 했든 같다.
+    private void HandleAbductorStunned(NpcController abductor, Transform threat)
+    {
+        ServerRepelAbductor(abductor);
+    }
+
+    /// <summary>
+    /// 끌고 가던 몸이 <b>납치 밖의 사유로</b> 쓰러졌다 — 그러면 납치는 손을 뗀다. (#554)
+    ///
+    /// 실제로 밟은 경로는 <b>폭탄</b>이다: 호송 중인 피해자가 폭발에 맞아 HP가 0이 되면
+    /// <see cref="PlayerHealth"/>가 곧바로 기능 정지(<see cref="IncapacitationCause.Die"/>)를 건다(#524).
+    /// 그런데 호송은 그 몸을 계속 끌고 갔고, 외곽에 닿으면 린치는 HP가 이미 0이라 즉시 통과해
+    /// <b>시체 반출</b>까지 이어졌다 — 폭탄으로 죽었을 뿐인 플레이어가 맵 밖으로 실려 나가
+    /// 본부 이송 부활(#365) 대상에서 조용히 사라졌다.
+    ///
+    /// 접수 단계에는 같은 가드가 이미 있다(<see cref="HandleAbductionCaught"/>의 "이미 무력화된 몸은
+    /// 접수하지 않는다"). 빠져 있던 것은 <b>접수한 뒤</b>에 원인이 바뀌는 경우다.
+    ///
+    /// <b>린치가 시작된 뒤에는 보지 않는다</b>(<see cref="m_lynching"/>) — 그 구간의 사인 변경은
+    /// 납치가 스스로 만드는 것이고(Lynched → Die), 거기서부터는 무엇이 마지막 일격이었든
+    /// HP 0이 곧 결말이다(GDD 6-4 "구조 창은 HP 0 이전까지다").
+    ///
+    /// 정적 이벤트라 <b>모든</b> 플레이어의 변경이 들어온다 — 지금 끌고 가는 대상만 본다.
+    /// </summary>
+    private void HandleVictimCauseChanged()
+    {
+        if (!HasServerAuthority || m_carryTarget == null || m_lynching || m_disposing)
+            return;
+
+        PlayerIncapacitation incap = m_carryTarget.GetComponent<PlayerIncapacitation>();
+        if (incap == null || incap.Cause == IncapacitationCause.Abducted)
+            return; // 우리가 건 무력화 그대로다
+
+        Debug.Log($"[납치] 호송 중단 — {m_carryTarget.name}이 납치 밖의 사유로 쓰러졌다 ({incap.Cause})");
+
+        // 임무만 해제한다 — 몸은 그 자리에 그대로 둔다(폭탄 사망이면 운반해 부활시킬 몸이다).
+        // 호송 시퀀스가 다음 틱에 해체를 감지해 arrived=false로 끝내고, 그 뒤는 FinishRescued가 받는다.
+        // 무력화를 여기서 풀지 않는 것도 같은 이유다 — 우리가 건 것이 아니다.
+        ReleaseAllAbductors();
+    }
+
     // 포획 통보 — 행동불능을 걸고 수렴시킨 뒤 외곽까지 끌고 간다.
     private void HandleAbductionCaught(NpcController catcher, Transform caught)
     {
@@ -109,6 +159,9 @@ public partial class AbductionEvent
     /// </summary>
     private async UniTask<bool> LynchAsync(Transform caught)
     {
+        // 여기부터는 사인이 바뀌어도 손을 떼지 않는다 — 바꾸는 것이 이 함수 자신이다 (#554)
+        m_lynching = true;
+
         // 무력화 원인을 린치로 바꾼다 — 행동 차단은 그대로 두고 <b>자세만</b> 세운다(PlayerIncapacitation.IsProne).
         // 이걸 빼면 끌려오던 자세 그대로 바닥에 누운 채 맞는다.
         PlayerIncapacitation victim = caught != null ? caught.GetComponent<PlayerIncapacitation>() : null;
@@ -184,6 +237,11 @@ public partial class AbductionEvent
     /// </summary>
     private async UniTask DisposeBodyAsync(Transform caught)
     {
+        // 이 지점부터 격퇴는 통하지 않는다 (#554) — 아래에서 프리즈 + 에이전트 off로 들어가므로,
+        // 임무 해제(배회 복귀)가 얹히면 그 상태의 Enter가 꺼진 에이전트에 isStopped를 써 에러가 난다.
+        // 규칙상으로도 맞다: 구조 창은 HP 0 이전까지이고 반출은 결말의 연출이지 판정이 아니다.
+        m_disposing = true;
+
         PruneDead(m_abductors);
         if (caught == null || m_abductors.Count == 0)
         {
@@ -271,12 +329,21 @@ public partial class AbductionEvent
     {
         ReleaseAllAbductors();
 
+        // 아래 Recover가 무력화 감시(HandleVictimCauseChanged)를 울리므로 참조를 먼저 비운다 (#554) —
+        // 남겨 두면 스스로 푼 것을 외부 사유로 오인해 중단 로그가 한 번 더 뜬다.
+        m_carryTarget = null;
+
         PlayerIncapacitation incap = caught != null ? caught.GetComponent<PlayerIncapacitation>() : null;
         if (incap != null
             && (incap.Cause == IncapacitationCause.Abducted || incap.Cause == IncapacitationCause.Lynched))
+        {
             incap.Recover();
 
-        m_carryTarget = null;
+            // 구조 성공을 알린다 — 포획 때 띄운 "동료가 끌려가고 있다"의 짝이다. 실제로 풀어 준
+            // 경우에만 낸다: 대상 소실(접속 종료 등)로 여기 들어오는 경로에는 구해 낸 사람이 없다.
+            App.Game.SuddenEvent?.Announce($"{m_displayName} — 동료를 구해냈다");
+        }
+
         Finish();
     }
 
@@ -310,7 +377,8 @@ public partial class AbductionEvent
     }
 
     /// <summary>
-    /// 납치범 1명을 이 호송에서 떼어낸다 — <b>구조 진입점</b>. 서버(또는 오프라인) 전용. (#371)
+    /// 납치범 1명을 이 호송에서 떼어낸다 — <b>구조 진입점</b>. 서버(또는 오프라인) 전용. (#371/#554)
+    /// 타격(<see cref="HandleAbductorDamaged"/>)과 무력화(<see cref="HandleAbductorStunned"/>)가 함께 들어온다.
     ///
     /// 오검거의 <see cref="NpcPenaltyAgent.ApplyChaseRepel"/>과 다르다: 그쪽은 포획 후에는 일부러 무시하지만
     /// (유예 창은 잡히기 전까지다, #278) 납치는 <b>끌려가는 중에 떼어내는 것이 협동의 핵심</b>이다.
@@ -322,6 +390,9 @@ public partial class AbductionEvent
     {
         if (!HasServerAuthority || abductor == null)
             return;
+
+        if (m_disposing)
+            return; // 반출 구간 — 결말이 확정된 뒤라 떼어낼 것이 없다 (#554)
 
         if (!m_abductors.Contains(abductor))
             return; // 이 이벤트의 납치범이 아니다

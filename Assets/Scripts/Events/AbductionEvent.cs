@@ -24,12 +24,14 @@ using UnityEngine.AI;
 ///
 /// <b>구조는 호송 중에도 된다</b> — 이것이 오검거와 정반대다. 오검거는 포획이 확정되면 격퇴가 무시되지만
 /// (<see cref="NpcPenaltyAgent.ApplyChaseRepel"/>이 수렴 중을 걸러낸다 — "유예 창은 잡히기 전까지다", #278),
-/// 납치는 동료가 끌려가는 것을 보고 달려가 때려서 떼어내는 것이 이 이벤트의 협동 지점이다.
+/// 납치는 동료가 끌려가는 것을 보고 달려가 <b>때리거나 무력화해</b> 떼어내는 것이 이 이벤트의 협동 지점이다.
 /// 그래서 <see cref="ServerRepelAbductor"/>라는 자기 경로를 갖는다. 오검거 쪽 규칙은 건드리지 않는다.
 ///
-/// 그 경로는 <see cref="NpcController.OnDamaged"/> 구독으로 연결돼 있다 — 진압봉이 이 이벤트를 알 필요가
-/// 없고, 데미지를 넣는 다른 수단이 생겨도 배선 없이 함께 동작한다. 타격이 성립하려면 게이트도 열려야
-/// 하는데(납치범은 페널티군이라 기본값이 '타격 불가'), 그 예외는 <see cref="NpcStateRules.CanBeDamaged"/>가 쥔다.
+/// 그 경로는 <see cref="NpcController.OnDamaged"/>·<see cref="NpcController.OnStunned"/> <b>두 구독</b>으로
+/// 연결돼 있다 (#554) — 진압봉도 테이저도 이 이벤트를 알 필요가 없고, 데미지나 무력화를 넣는 다른 수단이
+/// 생겨도 배선 없이 함께 동작한다. 타격이 성립하려면 게이트도 열려야 하는데(납치범은 페널티군이라
+/// 기본값이 '타격 불가'), 그 예외는 <see cref="NpcStateRules.CanBeDamaged"/>가 쥔다 —
+/// <b>무력화는 그 게이트를 타지 않는다</b>(스턴은 #292로 전 상태에 걸린다).
 ///
 /// <b>표적은 고정이다</b> — 오검거 추격은 표적이 범위를 벗어나면 범위 안의 다른 플레이어로 갈아타지만
 /// (잡히는 사람이 독박, #276), 납치가 그러면 "혼자 있는 사람을 노린다"는 이 이벤트의 유일한 규칙이 깨진다:
@@ -122,6 +124,15 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     private Transform m_carryTarget;   // 포획해 끌고 가는 중인 플레이어 — 중복 접수 방지
     private float m_chaseDeadline;
 
+    // 시체 반출(DisposeBodyAsync)에 들어갔다 — 이 구간에는 격퇴가 통하지 않는다 (#554).
+    // 결말이 이미 확정된 뒤이고(구조 창은 HP 0 이전까지다), 납치범은 프리즈 + 에이전트 off 상태라
+    // 임무 해제가 얹히면 배회 복귀 상태의 Enter가 꺼진 에이전트를 만진다.
+    private bool m_disposing;
+
+    // 외곽 린치(LynchAsync)에 들어갔다 — 이 구간부터는 피해자의 무력화 원인이 바뀌어도 손을 떼지 않는다.
+    // 린치가 스스로 Lynched → Die로 바꾸는 구간이기 때문이다 (#554, HandleVictimCauseChanged 참고).
+    private bool m_lynching;
+
     public string DisplayName => m_displayName;
 
     public bool IsActive => m_active;
@@ -141,6 +152,10 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     {
         m_loneWatch.ResolveSceneRefs();
 
+        // 끌고 가던 몸이 <b>다른 사유로</b> 쓰러지는 것을 지켜본다 (#554) — 폭탄 사망이 그것이다.
+        // 정적 이벤트라 플레이어 인스턴스가 새로 스폰돼도 배선이 끊기지 않는다(서버에서만 발행된다).
+        PlayerIncapacitation.OnAnyIncapacitatedChanged += HandleVictimCauseChanged;
+
         if (m_outskirtPoints == null || m_outskirtPoints.Length == 0)
             Debug.LogWarning("AbductionEvent: 외곽 방치 지점이 배선되지 않아 발동하지 않는다", this);
     }
@@ -151,6 +166,8 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     // FSM·NavMeshAgent를 건드리게 되고, 어차피 함께 사라지는 마당에 배회로 돌려보낼 이유도 없다.
     private void OnDestroy()
     {
+        PlayerIncapacitation.OnAnyIncapacitatedChanged -= HandleVictimCauseChanged;
+
         for (int i = 0; i < m_abductors.Count; i++)
         {
             NpcController abductor = m_abductors[i];
@@ -159,6 +176,7 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
 
             abductor.Penalty.OnPenaltyCaught -= HandleAbductionCaught;
             abductor.OnDamaged -= HandleAbductorDamaged;
+            abductor.OnStunned -= HandleAbductorStunned;
         }
 
         m_abductors.Clear();
@@ -220,6 +238,7 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
         {
             m_abductors[i].Penalty.OnPenaltyCaught += HandleAbductionCaught;
             m_abductors[i].OnDamaged += HandleAbductorDamaged;
+            m_abductors[i].OnStunned += HandleAbductorStunned;
             m_abductors[i].Penalty.StartPenaltyChase(target, abductionDuty: true);
         }
 
@@ -315,15 +334,19 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     public void ServerReset()
     {
         // 라운드 종료 등 강제 정리 — 끌려가던 플레이어를 풀어 주고 납치범을 놓는다.
-        if (m_carryTarget != null)
+        // 참조를 <b>먼저</b> 비운다: 아래 Recover가 무력화 감시(HandleVictimCauseChanged)를 울리는데,
+        // 그때 m_carryTarget이 남아 있으면 스스로 푼 것을 외부 사유로 오인해 중단 로그가 뜬다 (#554).
+        Transform released = m_carryTarget;
+        m_carryTarget = null;
+
+        if (released != null)
         {
-            PlayerIncapacitation incap = m_carryTarget.GetComponent<PlayerIncapacitation>();
+            PlayerIncapacitation incap = released.GetComponent<PlayerIncapacitation>();
             if (incap != null
                 && (incap.Cause == IncapacitationCause.Abducted || incap.Cause == IncapacitationCause.Lynched))
                 incap.Recover();
         }
 
-        m_carryTarget = null;
         ReleaseAllAbductors();
         Finish();
     }
@@ -346,6 +369,7 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
         {
             abductor.Penalty.OnPenaltyCaught -= HandleAbductionCaught;
             abductor.OnDamaged -= HandleAbductorDamaged;
+            abductor.OnStunned -= HandleAbductorStunned;
             abductor.Penalty.EndPenaltyDuty();
             MisdemeanorLoiterer.Attach(abductor, m_displayName);
         }
@@ -376,6 +400,7 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
 
             abductor.Penalty.OnPenaltyCaught -= HandleAbductionCaught;
             abductor.OnDamaged -= HandleAbductorDamaged;
+            abductor.OnStunned -= HandleAbductorStunned;
 
             // 끌고 있던 플레이어가 파괴된 참조를 쥐지 않게 먼저 놓게 한다 (다른 이벤트의 Despawn과 동일)
             foreach (PlayerEscorter escorter in PlayerEscorter.FindEscortersOf(abductor))
@@ -390,6 +415,8 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     private void Finish()
     {
         m_active = false;
+        m_disposing = false;
+        m_lynching = false;
         m_loneWatch.Reset(); // 다음 프레임부터 혼자 판정을 처음부터 다시 센다
     }
 
