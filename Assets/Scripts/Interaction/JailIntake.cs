@@ -312,6 +312,39 @@ public class JailIntake : MonoBehaviour
         return true;
     }
 
+    // ---- 반출 대상 떠나보내기 (#548) ----
+
+    /// <summary>
+    /// 반출한 수감자가 문 밖으로 나왔다 — 서버(또는 오프라인)에서만 발행한다. (#548)
+    /// 구독자는 <see cref="SecretFavorBroker"/> 하나이며, 자기 청탁 대상이면 인도 지점을 목적지로 준다.
+    /// 여기서 청탁을 <b>조회</b>하지 않고 알리기만 하는 이유는 감옥이 청탁을 모르게 두기 위해서다 —
+    /// 반대로 두면 문이 비밀 청탁의 대상·보상까지 아는 물건이 된다.
+    /// </summary>
+    public event System.Action<NpcController> OnInmateExited;
+
+    // 문을 나선 반출 대상을 떠나보낸다 — 플레이어를 따라다니던 것이 여기서 끝난다. (#548)
+    private void ServerSendOff(NpcCustody custody, Transform extractor)
+    {
+        NpcController npc = custody != null ? custody.Owner : null;
+        if (npc == null)
+            return;
+
+        // <b>문을 나서는 순간 반출 추종 국면이 끝난다.</b> 표식을 끄는 것이 곧 저지 창을 여는 일이다 —
+        // PlayerEscortCommands.IsRopeBlocked가 이 표식을 보고 밧줄을 막고 있었다(팀 확정 2026-08-05).
+        // 그 규칙의 취지는 '데리고 나오는 구간에 긴장을 남긴다'였는데, 그 구간이 문 안쪽으로 줄었다.
+        custody.SetJailExtracted(false);
+
+        OnInmateExited?.Invoke(npc);
+
+        if (custody.HasReleaseDestination)
+            return; // 청탁이 목적지를 줬다 — 인도 지점까지 스스로 걸어간다 (NpcReleasingState)
+
+        // 청탁이 없는 반출 — 갈 곳이 없으니 도시로 달아난다 (팀 확정 2026-08-07).
+        // 꺼낸 사람에게서 도망친다: 실수로 꺼냈으면 그 사람이 쫓아가 다시 잡아야 한다.
+        npc.Reaction.StartFlee(extractor);
+        Debug.Log($"[감옥] 반출 대상이 도시로 달아난다 (청탁 없음): {npc.name}");
+    }
+
     // ---- 플레이어 출입 (문 E) ----
 
     /// <summary>플레이어를 감옥 안 입장 지점으로 옮긴다. 서버(또는 오프라인) 전용. (#537)</summary>
@@ -343,7 +376,10 @@ public class JailIntake : MonoBehaviour
 
         List<NpcCustody> followers = NpcCustody.FindFollowersOf(mover.transform);
         for (int i = 0; i < followers.Count; i++)
+        {
             followers[i].ServerExitJail(m_jailZone.ExitSlot(i + 1)); // 0번은 플레이어 자리다
+            ServerSendOff(followers[i], mover.transform);
+        }
 
         mover.ServerTeleport(exit.position, exit.rotation);
         Debug.Log($"[감옥] 퇴장 — {mover.name} (동행 {followers.Count}명)");

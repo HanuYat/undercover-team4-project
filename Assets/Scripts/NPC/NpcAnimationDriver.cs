@@ -332,6 +332,9 @@ public class NpcAnimationDriver : MonoBehaviour
             NpcState.Detained => (int)NpcState.Walk,
             NpcState.Chasing => (int)NpcState.Run,
             NpcState.PenaltyEscorting => (int)NpcState.Walk,
+            // 반출 보행(Releasing)도 대응 Animator 상태가 없다 (#548) — 풀려난 몸이라
+            // 수갑 찬 걷기(Escorted)가 아니라 평범한 걷기다. 침입(Intruding)과 같은 이유다.
+            NpcState.Releasing => (int)NpcState.Walk,
             _ => (int)state,
         };
     }

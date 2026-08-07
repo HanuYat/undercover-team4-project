@@ -25,7 +25,11 @@ public static class NpcStateRules
         // 추격대를 체포해 페널티 집행을 무산시키는 우회를 막는다 (회피 수단은 격퇴(호루라기 #250)뿐)
         && state != NpcState.Detained
         && state != NpcState.Chasing
-        && state != NpcState.PenaltyEscorting;
+        && state != NpcState.PenaltyEscorting
+        // 반출돼 인도 지점으로 걸어가는 대상도 수갑으로는 못 잡는다 (#548) — 저지 수단은
+        // 도주·저항과 같다: 진압봉·테이저로 기절시킨 뒤 밧줄. 여기를 열면 걸어가는 대상을
+        // 채널링 한 번으로 세울 수 있어 '들키면 저지당한다'가 '보이면 끝난다'가 된다.
+        && state != NpcState.Releasing;
 
     /// <summary>타격 피해가 들어가는 상태인가 — <b>스턴 게이트가 아니다.</b> (#292)
     /// 스턴은 오버레이가 되면서 전 상태에 걸리게 됐지만(#292), 타격까지 함께 열면 연행 중인
