@@ -318,6 +318,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         // 합류는 제압이 아니라 이미 확보된 신병에 대한 조작이라 좌클릭 홀드가 그대로 남아 있다 (#446).
         if (NpcStateRules.CanJoinDrag(target.CurrentState))
         {
+            ServerPlayRopeBind(target);
             ServerRopeJoinChannelAsync(target).Forget();
             return;
         }
@@ -329,6 +330,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         if (!NpcStateRules.CanRopeBind(target))
             return;
 
+        ServerPlayRopeBind(target);
         ServerApplyRopeDrag(target);
     }
 
@@ -344,6 +346,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         if (!IsInRange(target))
             return;
 
+        ServerPlayRopeBind(target);
         ServerApplyRopeDrag(target);
     }
 
@@ -465,6 +468,21 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         // 반응 판정은 여기서 굴리지 않는다 (#400) — 밧줄은 순수 검거 수단이 됐고, 판정은
         // NpcReaction.ServerReactTo가 단독으로 갖는다.
         ServerApplyRopeDrag(target);
+    }
+
+    // 줄이 새로 걸릴 때 내는 소리 (#549). 줄이 실제로 조여지는 순간이 아니라 <b>거는 조작이
+    // 시작되는 순간</b>에 낸다 — 세 갈래 중 합류만 3초 채널링을 타는데, 그것 때문에 소리가 클릭에서
+    // 떨어지면 같은 좌클릭인데 갈래마다 감각이 달라진다. 채널이 거리 이탈·취소로 깨지면 걸리지 않은
+    // 줄의 소리가 남지만, 그건 '걸려다 말았다'로 읽히므로 클릭과 어긋나는 편보다 낫다고 봤다.
+    //
+    // 내 줄이 이미 걸린 대상은 조용하다 — 재개는 줄을 거는 조작이 아니라 놓았던 줄을 손에 다시
+    // 쥐는 것이라 조여질 줄이 없다(끌던 대상을 또 클릭해도 마찬가지다).
+    private void ServerPlayRopeBind(NpcController target)
+    {
+        if (target == null || Escorter.IsTetheredTo(target))
+            return;
+
+        App.Game.Fx?.PlayEverywhere(EFx.RopeBind, target.transform.position);
     }
 
     // 실제 끌기 진입 — 검증이 끝난 뒤의 상태 조작만 담당한다. 서버(또는 오프라인).
