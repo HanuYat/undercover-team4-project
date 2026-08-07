@@ -27,7 +27,7 @@ using UnityEngine.AI;
 /// 납치는 동료가 끌려가는 것을 보고 달려가 <b>때리거나 무력화해</b> 떼어내는 것이 이 이벤트의 협동 지점이다.
 /// 그래서 <see cref="ServerRepelAbductor"/>라는 자기 경로를 갖는다. 오검거 쪽 규칙은 건드리지 않는다.
 ///
-/// 그 경로는 <see cref="NpcController.OnDamaged"/>·<see cref="NpcController.OnStunned"/> <b>두 구독</b>으로
+/// 그 경로는 <see cref="NpcHealth.OnDamaged"/>·<see cref="NpcStun.OnStunned"/> <b>두 구독</b>으로
 /// 연결돼 있다 (#554) — 진압봉도 테이저도 이 이벤트를 알 필요가 없고, 데미지나 무력화를 넣는 다른 수단이
 /// 생겨도 배선 없이 함께 동작한다. 타격이 성립하려면 게이트도 열려야 하는데(납치범은 페널티군이라
 /// 기본값이 '타격 불가'), 그 예외는 <see cref="NpcStateRules.CanBeDamaged"/>가 쥔다 —
@@ -184,8 +184,8 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
                 continue;
 
             abductor.Penalty.OnPenaltyCaught -= HandleAbductionCaught;
-            abductor.OnDamaged -= HandleAbductorDamaged;
-            abductor.OnStunned -= HandleAbductorStunned;
+            abductor.Health.OnDamaged -= HandleAbductorDamaged;
+            abductor.Stun.OnStunned -= HandleAbductorStunned;
         }
 
         m_abductors.Clear();
@@ -246,8 +246,8 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
         for (int i = 0; i < m_abductors.Count; i++)
         {
             m_abductors[i].Penalty.OnPenaltyCaught += HandleAbductionCaught;
-            m_abductors[i].OnDamaged += HandleAbductorDamaged;
-            m_abductors[i].OnStunned += HandleAbductorStunned;
+            m_abductors[i].Health.OnDamaged += HandleAbductorDamaged;
+            m_abductors[i].Stun.OnStunned += HandleAbductorStunned;
             m_abductors[i].Penalty.StartPenaltyChase(target, abductionDuty: true);
         }
 
@@ -377,8 +377,8 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
         if (abductor != null)
         {
             abductor.Penalty.OnPenaltyCaught -= HandleAbductionCaught;
-            abductor.OnDamaged -= HandleAbductorDamaged;
-            abductor.OnStunned -= HandleAbductorStunned;
+            abductor.Health.OnDamaged -= HandleAbductorDamaged;
+            abductor.Stun.OnStunned -= HandleAbductorStunned;
             abductor.Penalty.EndPenaltyDuty();
             MisdemeanorLoiterer.Attach(abductor, m_displayName);
         }
@@ -408,8 +408,8 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
                 continue;
 
             abductor.Penalty.OnPenaltyCaught -= HandleAbductionCaught;
-            abductor.OnDamaged -= HandleAbductorDamaged;
-            abductor.OnStunned -= HandleAbductorStunned;
+            abductor.Health.OnDamaged -= HandleAbductorDamaged;
+            abductor.Stun.OnStunned -= HandleAbductorStunned;
 
             // 끌고 있던 플레이어가 파괴된 참조를 쥐지 않게 먼저 놓게 한다 (다른 이벤트의 Despawn과 동일)
             foreach (PlayerEscorter escorter in PlayerEscorter.FindEscortersOf(abductor))

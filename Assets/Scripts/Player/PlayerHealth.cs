@@ -67,7 +67,7 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 
     /// <summary>
     /// 피해가 적용되기 <b>직전</b>에 발행 — 서버(또는 오프라인) 전용. 인자는 (맞은 플레이어, 가해자). (#554)
-    /// <see cref="NpcController.OnDamaged"/>와 대칭인 <b>게임플레이 훅</b>이다: 위 <see cref="OnDamaged"/>는
+    /// <see cref="NpcHealth.OnDamaged"/>와 대칭인 <b>게임플레이 훅</b>이다: 위 <see cref="OnDamaged"/>는
     /// 전 피어 연출용이라 가해자를 <b>위치로만</b> 싣고(<see cref="DamageHit"/>) 누가 때렸는지는 알 수 없다.
     ///
     /// 필요해진 계기는 납치 린치다 — 외곽에서 HP가 0이 될 때 <b>마지막 일격이 납치범이었는가</b>를

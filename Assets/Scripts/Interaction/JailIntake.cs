@@ -148,15 +148,10 @@ public class JailIntake : MonoBehaviour
                 continue;
             }
 
-            // <b>기절을 먼저 푼다.</b> 검거는 무력화가 전제라(NpcStateRules.CanRopeBind) 여기까지 오는
-            // 대상은 거의 항상 기절 오버레이를 달고 있고, 묶인 동안은 그 타이머마저 멈춰 있다(#269).
-            //
-            // 오버레이를 단 채 일어나기를 걸면 NpcController.TickStandUp이 "일어날 수 없는 몸"으로 보고
-            // 예약을 취소하는데, 그때 <b>아래 수감 콜백까지 함께 버려진다</b>. 대상은 판정만 끝난 채
-            // (MarkDelivered) Captured에 남고, 판정이 끝났다는 이유로 방치 타이머마저 빠져
-            // (NpcStateRules.StaysPutWhenFreed) <b>영원히 그 자리에 선다</b>.
-            // SendToJail도 같은 해제를 하지만(#537) 그건 콜백 안이라 여기까지 닿지 못한다.
-            npc.ExitStun(false); // false — 밖에서 강제로 푸는 경우라 도주 전이를 걸지 않는다
+            // 기절 해제는 여기서 하지 않는다 — ServerStandUpThen이 예약 직전에 스스로 걷는다.
+            // 검거는 무력화가 전제라(NpcStateRules.CanRopeBind) 여기 오는 대상은 거의 항상 오버레이를
+            // 달고 있고, 그대로 두면 수감 콜백이 예약 취소와 함께 버려진다 — 위 오검거 분기도 같은 위험을
+            // 안고 있었다. 두 경로가 같은 해제를 타도록 대상 쪽 한 곳으로 모았다.
 
             // 수감 — <b>줄을 걷고, 옮기고, 감옥 안에서 일어난다.</b> 셋 다 이 프레임 안에서 끝난다.
             //

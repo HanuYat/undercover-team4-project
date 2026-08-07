@@ -471,11 +471,9 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     // 합류(남이 이미 끌고 있음)에도 그대로 쓴다: 아래 셋은 같은 상태를 다시 쓰거나 앵커를 더할 뿐이라
     // 기존 참가자를 건드리지 않는다.
     //
-    // 세 호출의 순서가 전부 강제다:
-    //   StartEscort → StartRopeDrag : 에이전트를 끈 뒤에 전이하면 직전 상태 Exit이 꺼진 에이전트에
-    //                                 isStopped를 써 에러가 난다 (넉백 ServerApplyKnockback과 같은 순서).
-    //   StartEscort → ExitStun      : EnterStunned가 Escorted를 만나면 StopEscort로 연행을 끊으므로
-    //                                 뒤집으면 방금 건 커스터디가 풀린다.
+    // StartEscort → StartRopeDrag 순서는 강제다 — 에이전트를 끈 뒤에 전이하면 직전 상태 Exit이 꺼진
+    // 에이전트에 isStopped를 써 에러가 난다 (넉백 ServerApplyKnockback과 같은 순서).
+    // (StartEscort → ExitStun 제약은 없어졌다 — EnterStunned가 더 이상 연행을 끊지 않는다, #562)
     private void ServerApplyRopeDrag(NpcController target)
     {
         Escorter.AddTether(target);
@@ -488,7 +486,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
 
         // 기절한 채 묶였으면 오버레이를 걷는다 — 남겨두면 만료 해제 경로(resumeReaction: true)가
         // StartFlee를 걸어 묶자마자 도망친다. (#292)
-        target.ExitStun(resumeReaction: false);
+        target.Stun.ExitStun(resumeReaction: false);
 
         NotifyOwner($"밧줄로 묶어 끌기 시작: {target.name} ({Escorter.TetheredCount}/{Escorter.RopeCapacity})");
     }

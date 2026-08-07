@@ -8,7 +8,7 @@ using UnityEngine;
 /// 소지형·영구형이라 배터리 같은 소모 자원이 없다 (GDD 8-4).
 ///
 /// <b>납치범을 맞히면 호송에서 떨어진다</b> (#554) — 무력화도 타격과 같은 격퇴로 친다.
-/// 그 판정은 이 아이템이 아니라 AbductionEvent가 NpcController.OnStunned를 구독해 낸다 — 진압봉과 같은 방침이다.
+/// 그 판정은 이 아이템이 아니라 AbductionEvent가 NpcStun.OnStunned를 구독해 낸다 — 진압봉과 같은 방침이다.
 ///
 /// <b>조준 사격</b> — 수갑·스캐너처럼 PlayerInteractor가 잡아준 대상을 쓰지 않는다.
 /// 그 경로는 사거리가 상호작용 레이(3m)에 묶여 원거리 무기가 될 수 없고, 겨냥만 하면 100% 명중이라
@@ -185,12 +185,12 @@ public class Taser : ItemBase, IAimedWeapon
         PlayerInteractor shooter = Holder;
         // 원인을 명시한다 — 감전 연출(#477)이 붙는 유일한 경로다. 체력 0 쓰러짐(#366)은 기본값
         // Knockdown으로 남아 전기 연출 없이 지나간다(색 언어상 시안은 테이저 전용).
-        target.EnterStunned(
+        target.Stun.EnterStunned(
             shooter != null ? shooter.transform : null,
             null,
             NpcStunCause.Taser
         );
-        NotifyOwner($"테이저 명중: {target.name} ({target.StunSeconds}초 기절)");
+        NotifyOwner($"테이저 명중: {target.name} ({target.Stun.StunSeconds}초 기절)");
     }
 
     // ---- 피격 연출 (#477 일부) ----
@@ -250,7 +250,7 @@ public class Taser : ItemBase, IAimedWeapon
 
         // 남은 무효 케이스는 하나 — 이미 기절해 있는 대상이다. EnterStunned가 no-op이라
         // 그냥 통과시키면 탄만 쓰고 "명중"이 뜬다. 크로스헤어(#328)도 이 판정을 공유한다.
-        if (npc.IsStunned)
+        if (npc.Stun.IsStunned)
             return AimResult.TargetInvalidState;
 
         return AimResult.ValidTarget;
