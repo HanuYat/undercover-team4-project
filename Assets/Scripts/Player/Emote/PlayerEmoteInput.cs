@@ -43,6 +43,38 @@ public class PlayerEmoteInput : MonoBehaviour
         m_emote = GetComponent<PlayerEmote>();
         m_inputHandler = GetComponent<PlayerInputHandler>();
         m_slots.Load();
+        FillDefaultSlotsIfEmpty();
+    }
+
+    /// <summary>
+    /// 저장된 구성이 하나도 없으면 카탈로그 앞에서부터 8칸을 채운다. (#219)
+    ///
+    /// 로비에서 한 번도 구성하지 않은 플레이어에게 <b>빈 휠</b>을 보여 주지 않기 위한 것이다.
+    /// 빈 휠은 "아직 안 골랐다"가 아니라 "기능이 고장 났다"로 읽힌다 — 눌러도 아무 일이 없으니
+    /// 원인을 짐작할 단서가 화면에 없다.
+    ///
+    /// 일부만 채운 구성은 건드리지 않는다. 칸을 <b>일부러 비워 둔 것</b>도 사용자의 선택이고,
+    /// 여기서 메워 버리면 로비에서 지운 감정표현이 되살아난다.
+    /// </summary>
+    private void FillDefaultSlotsIfEmpty()
+    {
+        EmoteCatalog catalog = m_emote.Catalog;
+        if (catalog == null)
+            return;
+
+        for (int slot = 0; slot < EmoteLoadout.k_slotCount; slot++)
+        {
+            if (!string.IsNullOrEmpty(m_slots.GetSlot(slot)))
+                return; // 하나라도 채워져 있으면 사용자 구성이다
+        }
+
+        int count = Mathf.Min(EmoteLoadout.k_slotCount, catalog.Count);
+        for (int slot = 0; slot < count; slot++)
+        {
+            EmoteDefinition definition = catalog.Get(slot);
+            if (definition != null)
+                m_slots.SetSlot(slot, definition.Id);
+        }
     }
 
     private void OnEnable()
