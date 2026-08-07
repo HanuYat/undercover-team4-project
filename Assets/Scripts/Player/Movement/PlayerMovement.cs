@@ -277,8 +277,14 @@ public class PlayerMovement : NetworkBehaviour
     }
 
     /// <summary>
-    /// 쌓인 외력(넉백)과 수직 속도를 지운다 — 래그돌 진입(#506)이 부른다.
-    /// 진입 전에 이미 들어온 폭발 넉백이 남아 있으면, 뼈가 날아가는 동안 캡슐도 같이 미끄러진다.
+    /// 쌓인 외력(넉백)과 수직 속도를 지운다 — <b>몸의 위치 권한이 넘어가는 순간</b> 부른다.
+    /// 지금 부르는 곳은 둘이다: 래그돌 진입(#506)과 추종 진입(<see cref="PlayerTowedMotion"/>, #279).
+    ///
+    /// 적용되지 못한 채 남은 속도는 몸이 자기 이동을 되찾는 순간 한꺼번에 터진다 —
+    /// <see cref="SetPose"/>가 텔레포트에서 수직 속도를 지우는 것과 같은 이유다. 날아가던 중에
+    /// 붙잡히는 경로가 실제로 있고(넉백은 무력화가 아니라 포획을 막지 않는다), 래그돌 쪽은
+    /// 뼈가 날아가는 동안 캡슐까지 같이 미끄러진다.
+    ///
     /// 넉백 가드(<see cref="AddKnockback"/>)가 막는 것은 진입 <b>이후</b>의 호출뿐이라 이 짝이 필요하다.
     /// </summary>
     internal void ClearExternalVelocity()
@@ -292,18 +298,6 @@ public class PlayerMovement : NetworkBehaviour
     /// 켠 채로 transform을 옮기면 CC 내부 캐시가 위치를 되돌린다 (<see cref="SetPose"/>와 동일 사정).
     /// </summary>
     internal void SetControllerEnabled(bool value) => m_controller.enabled = value;
-
-    /// <summary>
-    /// 쌓인 외력을 버린다 — 남이 내 몸을 쥐기 시작할 때(추종 진입) <see cref="PlayerTowedMotion"/>이 부른다.
-    /// <see cref="SetPose"/>가 텔레포트에서 수직 속도를 지우는 것과 같은 이유다: 적용되지 못한 채 남은
-    /// 속도는 몸이 자기 이동을 되찾는 순간 한꺼번에 터진다. 날아가던 중에 붙잡히는 경로가 실제로 있다
-    /// (넉백은 무력화가 아니라 포획을 막지 않는다).
-    /// </summary>
-    internal void ClearExternalVelocity()
-    {
-        m_knockbackVelocity = Vector3.zero;
-        m_verticalVelocity = 0f;
-    }
 
     // CharacterController가 켜진 상태에서 transform을 직접 옮기면 내부 캐시가 위치를 되돌릴 수 있어 잠시 끄고 옮긴다.
     private void SetPose(Vector3 pos, Quaternion rot)
