@@ -3304,6 +3304,8 @@ GameObject:
   - component: {fileID: 6213692437447462158}
   - component: {fileID: 195422875705201194}
   - component: {fileID: 1505454919141659549}
+  - component: {fileID: 5099484245708865750}
+  - component: {fileID: 2424343401596303541}
   m_Layer: 7
   m_Name: NPC_Citizen_Generic
   m_TagString: Untagged
@@ -3697,6 +3699,32 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6d0a85f3bcbdf664eb5ae62bd7d62997, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcCustody
+  ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &5099484245708865750
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 166f48051fca478478699ea49b1c3537, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcHealth
+  ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &2424343401596303541
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a253a1ad482608f4da1c8dc52eb76fc6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcStun
   ShowTopMostFoldoutHeaderGroup: 1
 --- !u!1 &8855344057427867759
 GameObject:
