@@ -409,6 +409,16 @@ public class BombDevice : NetworkBehaviour
         {
             IDamageable damageable = m_blastBuffer[i].GetComponent<IDamageable>();
             damageable?.TakeDamage(m_explosionDamage, gameObject);
+
+            // 휘말린 사람은 밧줄에서 손을 뗀다 (#559). 맞은 쪽이 NPC일 때 연행이 풀리는 것과 같은
+            // 규칙을 사람 쪽에도 맞춘 것이다(ServerApplyKnockback — 수갑은 남고 연행만 풀린다).
+            // 빠져 있던 것은 <b>사람만 반경에 든 경우</b>다: NPC는 밧줄 길이만큼 떨어져 끌려오므로
+            // 폭심이 둘 사이를 가르면 사람만 날아가고, 그러면 끌기가 날아가는 몸을 따라간다.
+            //
+            // 서버에서 하는 이유는 넉백이 오너 로컬이라(PlayerMovement.AddKnockback) 서버가 볼 수
+            // 없기 때문이다 — 반경을 아는 것은 이 자리뿐이다. 피해로 HP가 0이 된 경우는 무력화
+            // 진입에서 이미 놓았고, 두 번 불려도 무해하다(끌고 있지 않으면 그대로 돌아간다).
+            m_blastBuffer[i].GetComponent<PlayerEscorter>()?.ReleaseAllDrags();
         }
 
         // 반경 내 NPC 넉백 — 서버 권위. 플레이어와 달리 NPC 이동은 서버의 NavMeshAgent가 쥐고
