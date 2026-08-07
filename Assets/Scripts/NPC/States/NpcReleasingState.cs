@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.AI;
 
 /// <summary>
 /// 반출 보행(Releasing) 상태 — 감옥에서 꺼내진 대상이 인도 지점까지 <b>스스로</b> 걸어간다. (#548)
@@ -36,7 +37,8 @@ public class NpcReleasingState : NpcStateBase
         m_owner.Agent.isStopped = false;
         m_owner.Agent.stoppingDistance = 0f;
 
-        // 경로를 못 잡으면(목적지가 NavMesh 밖 등) 영원히 걷는 자세로 남는다 — 그 자리에 세운다.
+        // 경로를 아예 못 잡으면(목적지가 NavMesh 밖 등) 영원히 걷는 자세로 남는다 — 그 자리에 세운다.
+        // 경로가 잡히되 중간에 끊기는 경우는 여기가 아니라 Tick의 RemainingDistance가 받는다.
         // 청탁은 만료로 접히므로(SecretFavorBroker.m_favorExpireSeconds) 여기서 따로 취소하지 않는다.
         if (!m_owner.Agent.SetDestination(m_owner.Custody.ReleaseDestination))
         {
@@ -56,10 +58,30 @@ public class NpcReleasingState : NpcStateBase
         if (m_owner.Agent.pathPending)
             return;
 
-        if (m_owner.Agent.remainingDistance > k_arriveDistance)
+        if (RemainingDistance() > k_arriveDistance)
             return;
 
         StopHere();
+    }
+
+    /// <summary>
+    /// 목적지까지 남은 거리 — <b>끊긴 경로를 함께 다룬다</b>.
+    ///
+    /// <see cref="NavMeshAgent.remainingDistance"/>는 경로가 <see cref="NavMeshPathStatus.PathPartial"/>이면
+    /// 무한대를 돌려준다. 그대로 비교하면 도착 판정이 <b>영원히 성립하지 않아</b> 갈 수 있는 데까지 간 뒤에도
+    /// 걷는 자세로 제자리에 남는다. 실측에서 실제로 걸렸다 (2026-08-07): Apocalypse 맵 3번 인도 지점은
+    /// 한가운데가 인도 턱 위라 도시 쪽 NavMesh와 이어지지 않고, 경로가 1.5m 앞에서 끊긴다.
+    ///
+    /// 그럴 때는 <see cref="NavMeshAgent.pathEndPosition"/>(갈 수 있는 데까지의 끝점)까지로 잰다 —
+    /// 목적지에 못 닿아도 <b>닿을 수 있는 만큼 갔으면 거기서 멈추는 것</b>이 맞다. 인도 범위는 점이 아니라
+    /// 상자라(<see cref="SecretFavorDropoff"/>) 조금 못 미쳐 서도 완수 판정에는 들어간다.
+    /// </summary>
+    private float RemainingDistance()
+    {
+        float remaining = m_owner.Agent.remainingDistance;
+        return float.IsInfinity(remaining)
+            ? Vector3.Distance(m_owner.transform.position, m_owner.Agent.pathEndPosition)
+            : remaining;
     }
 
     public override void Exit()
