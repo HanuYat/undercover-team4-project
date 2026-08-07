@@ -321,12 +321,17 @@ public partial class NpcController : NetworkBehaviour
     // 정상 경로의 워프와 겹쳐 몸이 두 번 튄다.
     private const float k_stuckGraceSeconds = 1f;
 
-    // 회수용 탐색 반경(m) — 기본 반경으로 못 붙였을 때의 최후 수단. 8m은 실측이다: 이 맵에서 설 수 있는
-    // 지면 중 NavMesh가 2m 안에 없는 곳은 HQ 실내뿐이고(최대 5.5m) 야외는 전 구간 2m 안이다.
-    // 더 넓히면 회수 대상이 엉뚱한 곳으로 튕겨 나갈 위험만 커진다.
+    // 회수용 탐색 반경(m) — 기본 반경으로 못 붙였을 때의 최후 수단. 8m은 실측이다: 맵 <b>안쪽</b>에서
+    // 설 수 있는 지면 중 NavMesh가 2m 안에 없는 곳은 HQ 실내뿐이고(최대 5.5m) 야외는 전 구간 2m 안이다.
+    // 더 넓혀도 맵 밖으로 나간 몸(#559)에는 어차피 닿지 않고, 엉뚱한 곳으로 튕겨 나갈 위험만 커진다.
     private const float k_stuckRecoverRadius = 8f;
 
     private float m_offNavMeshSeconds;
+
+    // 회수 실패를 이미 알렸는가 — 재시도는 계속하되 로그는 굳은 구간당 한 번만 낸다.
+    // 반경 밖까지 밀려나는 경로가 실제로 있어서다(#559 — 납치 반출이 NPC를 맵 밖 25m까지 끌고 나간다).
+    // 그 경우 회수는 라운드 내내 실패하므로, 매초 LogError면 스택트레이스가 콘솔을 덮는다.
+    private bool m_stuckReported;
 
     /// <summary>
     /// <b>에이전트가 켜져 있는데 NavMesh 밖</b>인 상태를 서버가 스스로 회수한다. 서버(또는 오프라인) 전용. (#557)
@@ -343,6 +348,7 @@ public partial class NpcController : NetworkBehaviour
         if (!m_agent.enabled || m_agent.isOnNavMesh)
         {
             m_offNavMeshSeconds = 0f;
+            m_stuckReported = false; // 다음에 또 굳으면 그때는 다시 알린다
             return;
         }
 
@@ -355,11 +361,17 @@ public partial class NpcController : NetworkBehaviour
         Vector3 from = transform.position;
         if (!TryWarpNear(from, k_stuckRecoverRadius))
         {
-            Debug.LogError(
-                $"NpcController: NavMesh 밖에서 굳은 NPC를 {k_stuckRecoverRadius}m 안에서 회수하지 못했다: "
-                    + $"{name} @{from.ToString("F1")}",
-                this
-            );
+            // 재시도는 이어진다 — 몸이 다시 끌려 들어오면(밧줄 등) 그때 붙는다. 알림만 한 번이다.
+            if (!m_stuckReported)
+            {
+                m_stuckReported = true;
+                Debug.LogError(
+                    $"NpcController: NavMesh 밖에서 굳은 NPC를 {k_stuckRecoverRadius}m 안에서 회수하지 "
+                        + $"못했다 — 재시도는 계속한다: {name} @{from.ToString("F1")}",
+                    this
+                );
+            }
+
             return;
         }
 
