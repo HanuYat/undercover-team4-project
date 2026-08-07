@@ -88,6 +88,9 @@ public enum EAudioClip
     // AudioLibrary·FxManager에 정수로 직렬화돼 있어 기존 배선이 통째로 한 칸씩 밀리기 때문이다.
     TaserFire, // 파팟 — 테이저를 쏜 순간 (명중 여부와 무관)
     RopeBind, // 촥 — 밧줄이 대상에 걸려 조여진 순간
+
+    // 설비음 — 아이템이 아니라 본부 설비가 낸다. 뒤에 붙이는 이유는 위와 같다.
+    JailSiren, // 웨엥 — 유치장 경보 (#488 사이렌 버튼)
 }
 
 /// <summary>
