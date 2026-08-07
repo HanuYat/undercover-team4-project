@@ -129,9 +129,17 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     // 임무 해제가 얹히면 배회 복귀 상태의 Enter가 꺼진 에이전트를 만진다.
     private bool m_disposing;
 
-    // 외곽 린치(LynchAsync)에 들어갔다 — 이 구간부터는 피해자의 무력화 원인이 바뀌어도 손을 떼지 않는다.
-    // 린치가 스스로 Lynched → Die로 바꾸는 구간이기 때문이다 (#554, HandleVictimCauseChanged 참고).
+    // 외곽 린치(LynchAsync)에 들어갔다 — 이 구간의 사인 변경은 마지막 가해자로 갈린다
+    // (납치범 주먹이면 결말, 외부 사인이면 물러난다 — #554, HandleVictimCauseChanged 참고).
     private bool m_lynching;
+
+    // 린치 상한 폴백으로 <b>우리가</b> 처형을 집행하는 중 — 무력화 감시가 이것을 외부 사인으로 오인하지 않게. (#554)
+    private bool m_executing;
+
+    // 피해자를 마지막으로 때린 자 — 린치 결말을 가르는 근거다 (#554, HandleVictimCauseChanged 참고).
+    // 납치범 주먹이면 처형·반출로 끝나고, 폭발 같은 외부 사인이면 몸을 남기고 물러난다.
+    private PlayerHealth m_victimHealth;
+    private GameObject m_lastVictimAttacker;
 
     public string DisplayName => m_displayName;
 
@@ -167,6 +175,7 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     private void OnDestroy()
     {
         PlayerIncapacitation.OnAnyIncapacitatedChanged -= HandleVictimCauseChanged;
+        UntrackVictimDamage();
 
         for (int i = 0; i < m_abductors.Count; i++)
         {
@@ -417,6 +426,8 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
         m_active = false;
         m_disposing = false;
         m_lynching = false;
+        m_executing = false;
+        UntrackVictimDamage();
         m_loneWatch.Reset(); // 다음 프레임부터 혼자 판정을 처음부터 다시 센다
     }
 

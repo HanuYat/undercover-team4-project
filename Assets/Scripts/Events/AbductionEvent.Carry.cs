@@ -54,28 +54,71 @@ public partial class AbductionEvent
     /// 접수 단계에는 같은 가드가 이미 있다(<see cref="HandleAbductionCaught"/>의 "이미 무력화된 몸은
     /// 접수하지 않는다"). 빠져 있던 것은 <b>접수한 뒤</b>에 원인이 바뀌는 경우다.
     ///
-    /// <b>린치가 시작된 뒤에는 보지 않는다</b>(<see cref="m_lynching"/>) — 그 구간의 사인 변경은
-    /// 납치가 스스로 만드는 것이고(Lynched → Die), 거기서부터는 무엇이 마지막 일격이었든
-    /// HP 0이 곧 결말이다(GDD 6-4 "구조 창은 HP 0 이전까지다").
+    /// <b>린치 중에도 본다</b> — 다만 그 구간은 납치가 스스로 사인을 바꾸므로(Lynched → Die) 그것과
+    /// 외부 사인을 갈라야 한다. 기준은 <b>마지막 일격이 누구였나</b>다(<see cref="m_lastVictimAttacker"/>):
+    /// 납치범 주먹이면 결말이 맞으니 그대로 두고, 폭발처럼 남이 낸 죽음이면 물러난다. 여기까지 와서도
+    /// 폭탄사에 몸을 남기는 이유는 <b>결말의 대가가 다르기</b> 때문이다 — 반출은 부활 기회까지 지우므로,
+    /// 폭탄과 납치가 겹쳤다는 이유만으로 그걸 잃게 하지 않는다 (팀 확정 2026-08-07).
     ///
     /// 정적 이벤트라 <b>모든</b> 플레이어의 변경이 들어온다 — 지금 끌고 가는 대상만 본다.
     /// </summary>
     private void HandleVictimCauseChanged()
     {
-        if (!HasServerAuthority || m_carryTarget == null || m_lynching || m_disposing)
+        if (!HasServerAuthority || m_carryTarget == null || m_disposing || m_executing)
             return;
 
         PlayerIncapacitation incap = m_carryTarget.GetComponent<PlayerIncapacitation>();
-        if (incap == null || incap.Cause == IncapacitationCause.Abducted)
+        if (incap == null
+            || incap.Cause == IncapacitationCause.Abducted
+            || incap.Cause == IncapacitationCause.Lynched)
             return; // 우리가 건 무력화 그대로다
 
-        Debug.Log($"[납치] 호송 중단 — {m_carryTarget.name}이 납치 밖의 사유로 쓰러졌다 ({incap.Cause})");
+        // 린치 중 납치범이 낸 죽음이면 결말을 그대로 집행한다 — 그게 이 이벤트의 결말이다.
+        if (m_lynching && IsOurAbductor(m_lastVictimAttacker))
+            return;
+
+        Debug.Log(
+            $"[납치] {(m_lynching ? "린치" : "호송")} 중단 — {m_carryTarget.name}이 납치 밖의 사유로 쓰러졌다 ({incap.Cause})");
 
         // 임무만 해제한다 — 몸은 그 자리에 그대로 둔다(폭탄 사망이면 운반해 부활시킬 몸이다).
-        // 호송 시퀀스가 다음 틱에 해체를 감지해 arrived=false로 끝내고, 그 뒤는 FinishRescued가 받는다.
-        // 무력화를 여기서 풀지 않는 것도 같은 이유다 — 우리가 건 것이 아니다.
+        // 호송·린치 어느 쪽이든 남은 절차가 다음 틱에 "납치범이 남지 않았다"를 보고 스스로 끝내고,
+        // 그 뒤는 FinishRescued가 받는다. 무력화를 여기서 풀지 않는 것도 같은 이유다 — 우리가 건 것이 아니다.
         ReleaseAllAbductors();
     }
+
+    // 이 가해자가 지금 이 호송의 납치범인가 — 린치 결말 판정의 근거. (#554)
+    // 저항 상태가 타격에 자기 gameObject를 실어 보낸다(NpcResistState.TryAttack).
+    private bool IsOurAbductor(GameObject attacker)
+    {
+        if (attacker == null)
+            return false; // 가해자를 모르면(또는 이미 파괴됐으면) 우리 것으로 치지 않는다
+
+        NpcController npc = attacker.GetComponentInParent<NpcController>();
+        return npc != null && m_abductors.Contains(npc);
+    }
+
+    // 피해자의 피격을 지켜본다 — 마지막 가해자만 들고 있으면 결말 판정에 충분하다. (#554)
+    private void TrackVictimDamage(PlayerHealth health)
+    {
+        UntrackVictimDamage();
+
+        m_victimHealth = health;
+        if (m_victimHealth != null)
+            m_victimHealth.OnServerDamaged += HandleVictimDamaged;
+    }
+
+    // 구독 해제 + 기록 초기화. 이벤트가 끝나는 모든 경로가 지나는 Finish가 부른다.
+    private void UntrackVictimDamage()
+    {
+        if (m_victimHealth != null)
+            m_victimHealth.OnServerDamaged -= HandleVictimDamaged;
+
+        m_victimHealth = null;
+        m_lastVictimAttacker = null;
+    }
+
+    private void HandleVictimDamaged(PlayerHealth victim, GameObject attacker) =>
+        m_lastVictimAttacker = attacker;
 
     // 포획 통보 — 행동불능을 걸고 수렴시킨 뒤 외곽까지 끌고 간다.
     private void HandleAbductionCaught(NpcController catcher, Transform caught)
@@ -99,6 +142,7 @@ public partial class AbductionEvent
             return;
 
         m_carryTarget = caught;
+        TrackVictimDamage(caught.GetComponent<PlayerHealth>()); // 마지막 가해자를 지켜본다 (#554)
 
         // 끌려가는 동안 걸어 나가지 못하게. 외곽에 도착하면 방치 시간만큼 더 이어지고, 구조되면 즉시 풀린다
         if (incap != null)
@@ -159,7 +203,8 @@ public partial class AbductionEvent
     /// </summary>
     private async UniTask<bool> LynchAsync(Transform caught)
     {
-        // 여기부터는 사인이 바뀌어도 손을 떼지 않는다 — 바꾸는 것이 이 함수 자신이다 (#554)
+        // 여기부터 사인 변경은 마지막 가해자로 갈린다 (#554) — 이 함수도 사인을 바꾸므로(Lynched)
+        // 감시가 그것을 외부 사인으로 오인하지 않게 구간을 표시해 둔다.
         m_lynching = true;
 
         // 무력화 원인을 린치로 바꾼다 — 행동 차단은 그대로 두고 <b>자세만</b> 세운다(PlayerIncapacitation.IsProne).
@@ -207,9 +252,15 @@ public partial class AbductionEvent
         // HP 0에는 PlayerHealth가 이미 기능 정지를 걸어 뒀으므로(#524) 보통은 여기서 할 일이 없다.
         // 그래도 부르는 것은 위의 상한 초과 폴백 때문이다 — HP가 남은 채 끝난 경우엔 여기서만 확정된다.
         // 구조 창은 HP 0 이전에 닫혔으므로 어느 쪽이든 되돌아갈 길은 없다.
+        // 우리가 내는 죽음이라고 표시한다 (#554) — 이 경로는 HP가 남은 채로 오므로 마지막 가해자가
+        // 납치범이 아닐 수 있고, 그러면 무력화 감시가 외부 사인으로 오인해 결말을 취소한다.
         PlayerIncapacitation incap = caught.GetComponent<PlayerIncapacitation>();
         if (incap != null)
+        {
+            m_executing = true;
             incap.ServerKillByAbduction();
+            m_executing = false;
+        }
 
         return true;
     }
