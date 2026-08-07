@@ -52,6 +52,9 @@ public class NpcSpawner : CommonManagerBase
     private readonly List<NpcController> m_spawnedNpcs = new List<NpcController>();
     private bool m_isSpawning;
 
+    // StartSpawn이 받은 정지 여부 — 프레임 분산 스폰 루프가 개체마다 읽는다
+    private bool m_spawnFrozen;
+
     /// <summary>스폰된 NPC 목록. (#38 범인 랜덤 배정 등 후속 시스템에서 사용)</summary>
     public IReadOnlyList<NpcController> SpawnedNpcs => m_spawnedNpcs;
 
@@ -103,7 +106,12 @@ public class NpcSpawner : CommonManagerBase
     /// 스폰을 시작한다. 자동 스폰을 끈 경우 라운드 매니저 등 외부에서
     /// 원하는 시점(페이드인·라운드 준비 화면 중)에 호출한다.
     /// </summary>
-    public void StartSpawn()
+    /// <param name="spawnFrozen">
+    /// 스폰한 NPC를 곧바로 정지 상태로 둘지. 라운드 준비 중에는 켠다 —
+    /// 스폰은 프레임당 <see cref="m_spawnPerFrame"/>마리씩 나뉘므로 스폰 완료 후 일괄로 얼리면
+    /// 먼저 나온 개체가 이미 몇 초 배회한 뒤가 된다. 해제는 RoundManager가 라운드 시작에 건다.
+    /// </param>
+    public void StartSpawn(bool spawnFrozen = false)
     {
         // 네트워크 세션에서는 서버만 스폰한다 — 클라이언트는 NGO가 복제해주는 NPC를 받기만 함 (#56)
         if (IsNetworkSessionActive && !NetworkManager.Singleton.IsServer)
@@ -112,6 +120,7 @@ public class NpcSpawner : CommonManagerBase
         if (m_isSpawning || IsSpawnCompleted)
             return;
 
+        m_spawnFrozen = spawnFrozen;
         SpawnAllAsync().Forget();
     }
 
@@ -130,6 +139,7 @@ public class NpcSpawner : CommonManagerBase
 
         m_spawnedNpcs.Clear();
         m_isSpawning = false;
+        m_spawnFrozen = false;
         IsSpawnCompleted = false;
     }
 
@@ -181,6 +191,11 @@ public class NpcSpawner : CommonManagerBase
             // 네트워크 세션이면 전 클라이언트에 복제 (서버 권위 스폰, #56)
             if (IsNetworkSessionActive)
                 npc.GetComponent<NetworkObject>().Spawn(destroyWithScene: true);
+
+            // 준비 중 스폰이면 곧바로 정지 — Spawn()이 OnNetworkSpawn(=FSM 시동)을 동기로 마친 뒤라
+            // 여기서 얼리면 첫 Update 전에 걸려 한 걸음도 떼지 않는다
+            if (m_spawnFrozen)
+                npc.SetFrozen(true);
 
             m_spawnedNpcs.Add(npc);
             spawned++;

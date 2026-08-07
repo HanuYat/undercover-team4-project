@@ -19,6 +19,8 @@ public class ArrestJudge : CommonManagerBase
 {
     private const int k_wrongfulReward = 0;
 
+    private RoundManager Round => App.Game.Round;
+
     // 진범·위조범 보상은 여기서 정하지 않는다 (#395) — NPC마다 다른 현상금을 CriminalAssigner가
     // 라운드 시작에 뽑아 CitizenIdentity.Bounty에 확정해 두고, 판정은 그 값을 읽기만 한다.
     // 판정 시점에 뽑으면 재판정(#358)·탈옥 후 재검거(#231)로 금액을 리롤할 수 있게 된다.
@@ -62,6 +64,13 @@ public class ArrestJudge : CommonManagerBase
     {
         if (npc == null) return null;
         if (npc.IsSpawned && !npc.IsServer) return null;
+
+        // 라운드 진행 중에만 판정한다. 준비 중(Preparing)에는 먼저 입장한 플레이어가 남들이 로딩하는
+        // 사이에 검거해 진행도를 벌어둘 수 있고, 종료 후(Ended)에는 정산이 이미 스냅샷된 뒤다.
+        // 판정을 막으면 MarkDelivered도 서지 않아 라운드가 시작된 뒤 정상적으로 다시 판정된다.
+        // (RoundManager가 없는 단독 테스트 씬은 게이트하지 않는다 — MisdemeanorLoiterer와 같은 관례)
+        if (Round != null && Round.Phase != RoundPhase.InProgress)
+            return null;
 
         // 경범죄 이벤트 NPC(난동꾼)는 신원 대조 이전에 마커로 식별한다 (#106).
         MisdemeanorOffender misdemeanor = npc.GetComponent<MisdemeanorOffender>();
