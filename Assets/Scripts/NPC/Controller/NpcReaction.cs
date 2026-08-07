@@ -20,8 +20,9 @@ public class NpcReaction : NetworkBehaviour
     private NpcController m_owner;
 
     /// <summary>저항·도주 중 피해 다니는 위협 대상(체포를 시도한 플레이어). 배회 등 반응 중이 아니면 null. 서버에서만 유효. (#76)
-    /// setter가 internal인 것은 끌기 시작(밧줄, #369)과 기절 진입(#292)이 그 순간의 가해자를 위협으로 기록하기 때문이다
-    /// (부품은 같은 어셈블리). 두 도메인이 부품으로 나가면(계획서 § 6 2단계 6·7번) 그때 정리된다. (#503)</summary>
+    /// setter가 internal인 것은 끌기 시작(밧줄, #369)과 기절 진입(<see cref="NpcStun.EnterStunned"/>)이 그 순간의
+    /// 가해자를 위협으로 기록하기 때문이다 — 둘 다 같은 어셈블리다. 밧줄이 부품으로 나가면(계획서 § 6 2단계 7번)
+    /// 남는 쓰기가 부품 둘뿐이 된다. (#503)</summary>
     public Transform ThreatTarget { get; internal set; }
 
     /// <summary>
@@ -63,7 +64,7 @@ public class NpcReaction : NetworkBehaviour
             return;
 
         // 기절 중엔 반응하지 않는다 — 쓰러진 대상은 그대로 잡힌다 (테이저 콤보)
-        if (m_owner.IsStunned)
+        if (m_owner.Stun.IsStunned)
             return;
 
         CitizenIdentity identity = GetComponent<CitizenIdentity>();
@@ -148,6 +149,5 @@ public class NpcReaction : NetworkBehaviour
     // 이제 체력을 깎는 플레이어 경로는 진압봉(Baton.ServerSwing)뿐이고, 즉시 무력화는 테이저(#292),
     // 신병 확보는 밧줄(#369)이 맡는다. 피격 반응(ReactionTrigger.Damage)도 진압봉이 직접 부른다.
 
-    // 기절 진입(EnterStunned)은 NpcController.Stun.cs로 이사했다 — 상태 전이가 아니라
-    // 오버레이 플래그가 됐기 때문이다 (#292).
+    // 기절 진입(EnterStunned)은 NpcStun 부품에 있다 — 상태 전이가 아니라 오버레이 플래그가 됐기 때문이다 (#292).
 }

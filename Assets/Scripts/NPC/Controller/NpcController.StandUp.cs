@@ -88,6 +88,13 @@ public partial class NpcController
             return;
         }
 
+        // 기절 오버레이를 먼저 걷는다 — 남겨 두면 아래 TickStandUp이 "일어날 수 없는 몸"으로 보고
+        // 예약을 취소하면서 <b>next까지 함께 버린다</b>(수감·석방·도주가 통째로 사라진다).
+        // 줄을 푸는 경로는 전부 줄이 아직 걸린 채 여기로 오므로(그 순서가 강제다, #513) 기절 창 안에
+        // 풀기가 들어오면 그대로 걸린다.
+        // 위 재예약 분기보다 <b>뒤</b>다 — 예약 후에 새로 기절한 것은 취소가 맞다.
+        m_stun.ExitStun(false); // false — 밖에서 푸는 경우라 도주 전이를 걸지 않는다
+
         if (!IsTethered && !IsRoped)
         {
             next?.Invoke();
@@ -132,7 +139,7 @@ public partial class NpcController
         // 내려가 기상 클립이 도는 동안 몸만 먼저 서 있다.
         if ((CurrentState != NpcState.Captured && CurrentState != NpcState.Jailed)
             || m_knockbackActive
-            || HasStunOverlay)
+            || m_stun.HasStunOverlay)
         {
             CancelStandUp();
             return;

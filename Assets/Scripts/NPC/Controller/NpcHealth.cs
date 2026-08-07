@@ -1,0 +1,136 @@
+using System;
+using Unity.Netcode;
+using UnityEngine;
+
+/// <summary>
+/// NPC 체력 도메인 부품 (#366/#503) — 0이 되면 기절(Stunned)한다. 회복 지점은 기절에서 깨어나는
+/// 순간 하나뿐이라(<see cref="ServerRestoreHp"/>) 교전이 끝나도 깎인 체력은 남는다.
+///
+/// 서버 권위 + 오프라인 폴백 — 서버(또는 오프라인)만 값을 바꾸고 클라는 동기화 값을 읽는다 (#56 패턴).
+/// 폭발 피해(<see cref="BombDevice"/>)는 <see cref="IDamageable"/>을 GetComponent로 찾으므로 구현이
+/// 코어에서 이 부품으로 옮겨와도 같은 GameObject에 있는 한 경로가 유지된다.
+/// </summary>
+public class NpcHealth : NetworkBehaviour, IDamageable
+{
+    private NpcController m_owner;
+
+    // 서버 권위 HP — m_hp가 서버·오프라인의 진실값.
+    private readonly NetworkVariable<int> m_syncedHp = new NetworkVariable<int>();
+    private int m_hp;
+
+    /// <summary>최대 체력 — HUD가 비율 계산에 읽는다. (#366)</summary>
+    public int MaxHp => m_owner.CommonConfig.MaxHp;
+
+    /// <summary>현재 체력. 세션 중에는 동기화 값이라 클라에서도 안전하게 읽을 수 있다. (#366)</summary>
+    public int CurrentHp => IsSpawned ? m_syncedHp.Value : m_hp;
+
+    /// <summary>
+    /// 피해 적용 순간 발행 — 서버 전용. 인자는 (맞은 NPC, 가해자). 납치(<see cref="AbductionEvent"/>)가
+    /// 구독해 맞은 납치범을 호송에서 떼어낸다. (#371)
+    ///
+    /// <b>HP 반영 직전 발행이 계약이다</b> — 구독자가 상태를 바꾼 뒤에 기절 전이가 얹혀야 한다.
+    /// 뒤로 옮기면 임무 해제가 넉백 기절을 덮어써 기절이 조용히 취소된다.
+    /// </summary>
+    public event Action<NpcController, GameObject> OnDamaged;
+
+    /// <summary>
+    /// 피격 순간 <b>전 피어</b>에서 발행되는 연출용 훅 — HP 폴링으로는 "지금 맞았다"를 잡을 수 없다. (#478)
+    /// 몸에 붙는 연출은 본부 CCTV에서도 보여야 해서 오너가 아니라 전 피어다.
+    ///
+    /// <b>지금은 구독자가 없다</b>(타격 플래시를 걷어냈다). 다시 붙일 때 필요한 게 이 순간 알림
+    /// 하나뿐이라 RPC와 함께 남겨 둔다 — 아깝다고 판단되면 둘을 같이 지울 것.
+    /// <see cref="PlayerHealth.OnDamaged"/>와 이름이 어긋나는 이유는 이쪽엔 위 서버 훅이 그 이름을
+    /// 이미 쓰고 있기 때문이다.
+    /// </summary>
+    public event Action<DamageHit> OnHit;
+
+    private void Awake()
+    {
+        m_owner = GetComponent<NpcController>();
+    }
+
+    /// <summary>체력 초기화 — 코어의 InitBehavior에서 서버(또는 오프라인) 1회 호출된다.</summary>
+    internal void InitHealth()
+    {
+        SetHp(MaxHp, null);
+    }
+
+    /// <summary>
+    /// 피해 적용 (<see cref="IDamageable"/>) — 모든 데미지 소스의 공통 경로. (#366)
+    ///
+    /// <see cref="NpcStateRules.CanBeDamaged"/>가 false면 <b>피해 자체를 무시</b>한다 — HP만 깎고
+    /// 기절을 막으면 "HP 0인데 기절 아님"이 되어 아래 엣지 트리거상 영영 기절하지 않는다.
+    /// </summary>
+    /// <param name="amount">깎을 체력. 0 이하는 무시한다.</param>
+    /// <param name="attacker">가해자 — 기절 시 위협 대상으로 넘긴다. null 허용.</param>
+    public void TakeDamage(int amount, GameObject attacker)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+        if (amount <= 0)
+            return;
+        if (!NpcStateRules.CanBeDamaged(m_owner))
+            return;
+
+        // 피해를 얹기 전에 알린다 — 위 OnDamaged 주석의 순서 근거 참고
+        OnDamaged?.Invoke(m_owner, attacker);
+
+        // 실제로 깎인 양을 연출에 실어야 한다 — 아래 Clamp에 걸려 요청량보다 적을 수 있다 (#478)
+        int before = CurrentHp;
+        SetHp(Mathf.Clamp(CurrentHp - amount, 0, MaxHp), attacker);
+
+        // 피격 반응(#400)은 여기서 굴리지 않는다 — 폭발 같은 환경 피해도 이 경로를 지나므로
+        // 플레이어 타격 경로(Baton.ServerSwing)가 직접 부른다. 연출은 반대로 여기가 맞다 (#478).
+        int applied = before - CurrentHp;
+        if (applied > 0)
+            BroadcastDamaged(applied, attacker);
+    }
+
+    // 연출 알림을 전 피어에 돌린다 — 가해자를 GameObject로 실을 수 없어 월드 좌표로 환산해 보낸다.
+    private void BroadcastDamaged(int amount, GameObject attacker)
+    {
+        bool hasAttacker = attacker != null;
+        Vector3 attackerPosition = hasAttacker ? attacker.transform.position : Vector3.zero;
+
+        if (!IsSpawned)
+        {
+            RaiseDamaged(amount, attackerPosition, hasAttacker); // 오프라인 폴백
+            return;
+        }
+
+        PlayDamagedRpc(amount, attackerPosition, hasAttacker);
+    }
+
+    [Rpc(SendTo.Everyone)]
+    private void PlayDamagedRpc(int amount, Vector3 attackerPosition, bool hasAttacker) =>
+        RaiseDamaged(amount, attackerPosition, hasAttacker);
+
+    private void RaiseDamaged(int amount, Vector3 attackerPosition, bool hasAttacker) =>
+        OnHit?.Invoke(new DamageHit(amount, attackerPosition, hasAttacker));
+
+    /// <summary>체력 완전 회복 — 기절에서 깨어나는 순간 <see cref="NpcStunnedState"/>와
+    /// <see cref="NpcStun.ExitStun"/>이 호출한다. 빠지면 HP 0인 채로 깨어나 두 번 다시 기절하지 않는다. (#366)</summary>
+    public void ServerRestoreHp()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        SetHp(MaxHp, null);
+    }
+
+    // 0에 '도달하는 순간'에만 기절시킨다 — 이미 0인 대상에 대한 추가 타격이 타이머를 리셋하지 못한다.
+    private void SetHp(int value, GameObject attacker)
+    {
+        int previous = CurrentHp;
+        m_hp = value;
+        if (IsSpawned && IsServer)
+            m_syncedHp.Value = value;
+
+        // 타격으로 쓰러진 기절은 테이저보다 길다 — 밧줄로 끌 창을 따로 튜닝한다 (#400)
+        if (value == 0 && previous > 0)
+            m_owner.Stun.EnterStunned(
+                attacker != null ? attacker.transform : null,
+                m_owner.StunConfig.KnockdownStunSeconds
+            );
+    }
+}

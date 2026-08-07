@@ -318,6 +318,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         // 합류는 제압이 아니라 이미 확보된 신병에 대한 조작이라 좌클릭 홀드가 그대로 남아 있다 (#446).
         if (NpcStateRules.CanJoinDrag(target.CurrentState))
         {
+            ServerPlayRopeBind(target);
             ServerRopeJoinChannelAsync(target).Forget();
             return;
         }
@@ -329,6 +330,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         if (!NpcStateRules.CanRopeBind(target))
             return;
 
+        ServerPlayRopeBind(target);
         ServerApplyRopeDrag(target);
     }
 
@@ -344,6 +346,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         if (!IsInRange(target))
             return;
 
+        ServerPlayRopeBind(target);
         ServerApplyRopeDrag(target);
     }
 
@@ -467,15 +470,28 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         ServerApplyRopeDrag(target);
     }
 
+    // 줄이 새로 걸릴 때 내는 소리 (#549). 줄이 실제로 조여지는 순간이 아니라 <b>거는 조작이
+    // 시작되는 순간</b>에 낸다 — 세 갈래 중 합류만 3초 채널링을 타는데, 그것 때문에 소리가 클릭에서
+    // 떨어지면 같은 좌클릭인데 갈래마다 감각이 달라진다. 채널이 거리 이탈·취소로 깨지면 걸리지 않은
+    // 줄의 소리가 남지만, 그건 '걸려다 말았다'로 읽히므로 클릭과 어긋나는 편보다 낫다고 봤다.
+    //
+    // 내 줄이 이미 걸린 대상은 조용하다 — 재개는 줄을 거는 조작이 아니라 놓았던 줄을 손에 다시
+    // 쥐는 것이라 조여질 줄이 없다(끌던 대상을 또 클릭해도 마찬가지다).
+    private void ServerPlayRopeBind(NpcController target)
+    {
+        if (target == null || Escorter.IsTetheredTo(target))
+            return;
+
+        App.Game.Fx?.PlayEverywhere(EFx.RopeBind, target.transform.position);
+    }
+
     // 실제 끌기 진입 — 검증이 끝난 뒤의 상태 조작만 담당한다. 서버(또는 오프라인).
     // 합류(남이 이미 끌고 있음)에도 그대로 쓴다: 아래 셋은 같은 상태를 다시 쓰거나 앵커를 더할 뿐이라
     // 기존 참가자를 건드리지 않는다.
     //
-    // 세 호출의 순서가 전부 강제다:
-    //   StartEscort → StartRopeDrag : 에이전트를 끈 뒤에 전이하면 직전 상태 Exit이 꺼진 에이전트에
-    //                                 isStopped를 써 에러가 난다 (넉백 ServerApplyKnockback과 같은 순서).
-    //   StartEscort → ExitStun      : EnterStunned가 Escorted를 만나면 StopEscort로 연행을 끊으므로
-    //                                 뒤집으면 방금 건 커스터디가 풀린다.
+    // StartEscort → StartRopeDrag 순서는 강제다 — 에이전트를 끈 뒤에 전이하면 직전 상태 Exit이 꺼진
+    // 에이전트에 isStopped를 써 에러가 난다 (넉백 ServerApplyKnockback과 같은 순서).
+    // (StartEscort → ExitStun 제약은 없어졌다 — EnterStunned가 더 이상 연행을 끊지 않는다, #562)
     private void ServerApplyRopeDrag(NpcController target)
     {
         Escorter.AddTether(target);
@@ -488,7 +504,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
 
         // 기절한 채 묶였으면 오버레이를 걷는다 — 남겨두면 만료 해제 경로(resumeReaction: true)가
         // StartFlee를 걸어 묶자마자 도망친다. (#292)
-        target.ExitStun(resumeReaction: false);
+        target.Stun.ExitStun(resumeReaction: false);
 
         NotifyOwner($"밧줄로 묶어 끌기 시작: {target.name} ({Escorter.TetheredCount}/{Escorter.RopeCapacity})");
     }

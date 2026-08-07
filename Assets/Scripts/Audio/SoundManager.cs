@@ -93,6 +93,7 @@ public class SoundManager : CommonManagerBase
         source.spatialBlend = 1f; // 완전 3D — 거리·방향이 그대로 반영된다 (#482)
         source.clip = entry.Clip;
         source.volume = entry.Volume;
+        ApplyStartOffset(source, entry);
         source.minDistance = entry.MinDistance;
         // 최대 거리가 최소보다 작게 배선되면 Unity가 감쇠를 계산하지 못한다 — 사고를 조용히 삼키지 않고 보정한다.
         source.maxDistance = Mathf.Max(entry.MaxDistance, entry.MinDistance + 0.1f);
@@ -130,6 +131,7 @@ public class SoundManager : CommonManagerBase
         source.spatialBlend = 0f;
         source.clip = entry.Clip;
         source.volume = entry.Volume;
+        ApplyStartOffset(source, entry);
         source.Play();
     }
 
@@ -195,6 +197,16 @@ public class SoundManager : CommonManagerBase
     /// </summary>
     public AudioLibrary.Entry GetSfxEntry(EAudioClip id) =>
         m_entries.TryGetValue(id, out AudioLibrary.Entry entry) ? entry : null;
+
+    // 클립 앞의 여린 도입부를 건너뛴다 (#549). 풀에서 빌린 소스는 직전 재생의 위치가 남아 있으므로
+    // 배선값이 0이어도 매번 되돌려 준다 — 안 그러면 앞 소리의 시작 위치가 다음 소리에 새어 나간다.
+    // 클립 길이를 넘는 값이 배선되면 Unity가 예외를 던지므로 안쪽으로 묶는다.
+    private static void ApplyStartOffset(AudioSource source, AudioLibrary.Entry entry)
+    {
+        source.time = entry.StartOffset <= 0f
+            ? 0f
+            : Mathf.Min(entry.StartOffset, Mathf.Max(0f, entry.Clip.length - 0.05f));
+    }
 
     // ---- 카탈로그 ----
 

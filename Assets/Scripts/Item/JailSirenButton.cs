@@ -12,10 +12,12 @@ public class JailSirenButton : InstallableItem
     // 쿨다운이 걸려 있지 않음을 나타내는 값 — ServerTime은 0에서 시작하므로 음수를 쓴다 (RoundTimerSync와 동일).
     private const double k_noCooldown = -1d;
 
-    [Header("사이렌")]
-    [Tooltip("경보음을 낼 AudioSource — 유치장에 3D로 배치한다. 갇힌 본인에게도 들려야 억제력이 생긴다")]
-    [SerializeField]
-    private AudioSource m_sirenSource;
+    // 경보음이 울릴 자리 — 버튼이 있는 본부가 아니라 유치장이다. 갇힌 본인에게 들려야 억제력이 생긴다.
+    // 인스펙터에 배선하지 않고 찾는 이유는 맵마다 씬이 다르기 때문이다 — 배선을 두면 맵을 한 장
+    // 늘릴 때마다 사람이 기억해서 이어야 하고, 실제로 #488 이후 지금까지 어느 씬에서도 이어지지
+    // 않아 사이렌은 내내 무음이었다. 매니저가 아닌 장소·부품이라 이 탐색은 R1에 걸리지 않는다
+    // (JailbreakEvent가 유치장·자물쇠를 찾는 것과 같은 처리).
+    private JailZone m_jailZone;
 
     // 연타로 감시를 대체하지 못하게 하는 값 — 자물쇠 해제 창(JailbreakEvent.m_unlockSeconds, 기본 10초)보다
     // 넉넉히 길어야 한다. 추첨 주기 하한이 20초라 이보다 크게 올리면 다음 기회를 잡아먹는다.
@@ -136,12 +138,17 @@ public class JailSirenButton : InstallableItem
 
     private void PlayLocal()
     {
-        if (m_sirenSource == null)
+        if (m_jailZone == null)
+            m_jailZone = FindFirstObjectByType<JailZone>();
+
+        if (m_jailZone == null)
         {
-            Debug.LogWarning("JailSirenButton: 사이렌 AudioSource가 배정되지 않았다", this);
+            Debug.LogWarning("JailSirenButton: 유치장을 찾지 못해 경보음을 낼 자리가 없다", this);
             return;
         }
 
-        m_sirenSource.Play();
+        // 방 안 지점이면 어디를 잡아도 결과가 같다 — 방(7.2m)이 통째로 감쇠 없는 거리 안에 들어가게
+        // AudioLibrary의 MinDistance를 잡아 두었으므로, 서 있는 자리에 따라 크기가 달라지지 않는다.
+        App.Sound?.PlaySfxAt(EAudioClip.JailSiren, m_jailZone.PlayerEntryPoint.position);
     }
 }
