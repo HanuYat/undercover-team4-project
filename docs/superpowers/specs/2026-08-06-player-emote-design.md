@@ -75,10 +75,12 @@
 
 ### 초기 항목
 
-Kevin Iglesias **Human Dance Animations**를 임포트해(아래) 댄스와 기존 감정 클립을 섞어 8칸을 채운다:
+Kevin Iglesias **Human Dance Animations**를 임포트해(아래) 댄스와 기존 감정 클립을 섞어 **24종**을 채운다:
 
-- 댄스 — `Male/Social/Dance/Steps` 아래 `HumanM@Dance01~18` 중 4종. 전부 **자체 루프 클립**이라 `m_loop = true`로 그대로 쓴다
-- 제스처 — 기존 `Social/Emotions`의 `Cheer01` · `HandClap01` · `Angry01` · `Fear01`
+- 댄스 — `Male/Social/Dance/Steps` 아래 `HumanM@Dance01~18` **전부**. 자체 루프 클립이라 `m_loop = true`로 그대로 쓴다
+- 제스처 — 기존 `Social/Emotions`의 6종(`Cheer01` · `Cheer02` · `HandClap01` · `Angry01` · `Angry02` · `Fear01`). `Pain01`은 피격 리액션이라 뺐다
+
+> 원안은 8종(댄스 4 + 제스처 4)이었다. 휠이 8칸이므로 8종만 두면 **로비에서 고르는 단계가 무의미해진다** — 있는 것이 곧 휠 전부다. 구성이 선택다워지려면 칸 수보다 항목이 넉넉해야 한다.
 
 같은 벤더·같은 리그(HumanM)라 아바타 호환 문제가 없다. `DancePose01~07`은 Begin/Loop/Stop 3단 구조라 상태 머신이 한 겹 더 필요하므로 이번 범위에서 제외한다 — 필요해지면 후속에서 다룬다.
 
@@ -86,9 +88,9 @@ Kevin Iglesias **Human Dance Animations**를 임포트해(아래) 댄스와 기�
 
 ### 에셋 임포트
 
-`Human Dance Animations.unitypackage`는 `Assets/Kevin Iglesias/`로 풀린다. 프로젝트 관례가 `Assets/Imported/` 아래이므로 임포트 후 `Assets/Imported/Kevin Iglesias/Human Dance Animations/`로 옮긴다.
+Kevin Iglesias **Human Dance Animations**를 임포트한다. 이 패키지는 프로젝트가 이미 쓰는 `Human Animations`와 **GUID를 공유하는 확장판**이라, `ImportPackage`가 별도 폴더를 만들지 않고 기존 `Assets/Imported/Kevin Iglesias/Human Animations/` 트리 안으로 직접 병합한다. 댄스 클립은 그 아래 `Animations/Male/Social/Dance/Steps/`에 놓인다.
 
-**기존 `Human Animations` 폴더와 합치지 않는다** — 패키지에 `HumanM@Idle01.fbx` 중복본이 들어 있어 합치면 충돌한다. 별도 폴더로 두면 충돌이 없고 어느 패키지에서 온 클립인지도 분명해진다.
+**이 에셋은 본 저장소에 들어가지 않는다.** `.gitignore`가 `Assets/Imported/` 전체를 제외한다(Synty 등 기존 서드파티 에셋도 마찬가지다). 대신 그 폴더는 별도 에셋 저장소(`undercover-team4-project-assets`)의 체크아웃이고, 임포트한 패키지를 거기에 올려 뒀다 — 이 브랜치를 받아 감정표현을 실행하려면 에셋 저장소를 `pull`하면 되고 패키지를 따로 임포트할 필요는 없다.
 
 ## 5. 애니메이터 확장
 
@@ -109,7 +111,6 @@ Kevin Iglesias **Human Dance Animations**를 임포트해(아래) 댄스와 기�
 | `PlayerEmote` (NetworkBehaviour) | 서버 권위 | `m_activeEmote` 소유. `RequestEmoteServerRpc` 검증 후 세팅, `CancelEmoteServerRpc`. 비루프 클립은 길이 경과 후 서버가 자동 해제 |
 | `PlayerEmoteInput` | 오너 전용 | `T` 홀드 감지 → 휠 열기, 마우스 방향 누적, 뗄 때 발동 요청. 재생 중 취소 입력 감지 |
 | `PlayerEmoteView` | 전 피어 | `m_activeEmote` 구독 → Animator `Emote`/`EmoteIndex` 세팅 + 말풍선 표시/해제 |
-| `PlayerEmoteCamera` | 오너 전용 | 재생 중 3인칭 전환 및 복귀 (7절) |
 | `EmoteBubbleView` | 전 피어 | 머리 위 빌보드 아이콘. 기존 `PlayerNameTag` 앵커를 재사용한다 |
 | `EmoteLoadout` (순수 C#) | 로컬 | 8칸 슬롯(id 배열) + PlayerPrefs 직렬화. MonoBehaviour가 아니다 |
 | `EmoteWheelView` (UI) | 오너 | 8칸 방사형 렌더. 각도 → 인덱스 계산은 static 순수 함수로 분리 |
@@ -134,9 +135,12 @@ Kevin Iglesias **Human Dance Animations**를 임포트해(아래) 댄스와 기�
 
 `PlayerLook.ApplyOwnerView`가 자기 몸을 `OwnBody` 레이어로 옮겨 자기 카메라에서 컬링한다. 그대로 두면 감정표현을 발동해도 **내 화면에는 아무 일도 일어나지 않는다** — 머리 위 이모지도 시야 밖이다.
 
-`PlayerEmoteCamera`가 재생 중에만:
+3인칭 전환은 **`PlayerLook` 안에서** 한다(`SetEmoteView(bool)`). 별도 컴포넌트로 빼지 않는 이유는 그 파일의 클래스 주석이 이미 짚어 둔 것과 같다 — `m_pitch`·카메라 로컬 자세를 `HandleLook`과 `UpdateCameraPose`가 함께 읽고 쓰므로 나누면 값을 주고받게 된다. 게다가 `UpdateCameraPose`가 매 프레임 `localPosition`·`localEulerAngles`를 통째로 대입하므로 밖에서 얹은 오프셋은 그 프레임에 지워진다(화면 흔들림 #477이 같은 이유로 그 메서드 안에서 조립된다). 호출은 `PlayerEmoteView`가 한다.
+
+`SetEmoteView(true)`가 재생 중에만:
 
 - 카메라 cullingMask에 `OwnBody`를 되살리고, 카메라를 뒤·위로 부드럽게 뺀다 (종료 시 원위치)
+- **쓰러지면 다운 시점이 이긴다.** 서버가 무력화 시 감정표현을 끊지만 그 값이 돌아오기까지 왕복이 걸리고, 그 사이 두 블렌드가 겹치면 카메라가 다운 높이와 3인칭 붐 사이 엉뚱한 자리로 간다
 - **몸통 회전을 잠그고 카메라만 돌린다.** `PlayerLook.HandleLook`에 이미 "쓰러진 동안엔 카메라 로컬만" 도는 모드가 있으므로 그 경로를 재사용한다. 새 모드를 만들 필요가 없고, 마우스를 움직여도 취소되면 안 된다는 요구와도 맞는다
 - 벽 뚫림은 SphereCast 1회로 카메라를 당기는 수준까지만 한다 (맵 교체 예정)
 
@@ -164,6 +168,6 @@ EditMode 단위 테스트를 붙이는 대상은 순수 로직 둘이다:
 
 | 이슈 완료 기준 | 대응 |
 |---|---|
-| 감정표현 애니메이션 1종 이상 + 이모지 표시 동작 | 4절 초기 항목 6종 + 6절 `EmoteBubbleView` |
+| 감정표현 애니메이션 1종 이상 + 이모지 표시 동작 | 4절 초기 항목 24종(댄스 18 + 제스처 6) + 6절 `EmoteBubbleView` |
 | 전 피어 동기화 | 3절 `NetworkVariable<sbyte>` 상태 동기화 |
 | 상태 enum 정리 방향 확정 (GDD 10-2 반영) | 10절 |

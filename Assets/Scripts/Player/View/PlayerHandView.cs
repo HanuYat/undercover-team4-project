@@ -264,6 +264,27 @@ public class PlayerHandView : NetworkBehaviour
     }
 
     /// <summary>
+    /// 1인칭 뷰모델(팔·든 아이템)을 숨기거나 되살린다 — 감정표현 3인칭 전환이 쓴다. (#219)
+    ///
+    /// 3인칭으로 시점을 빼도 이 팔은 카메라 자식이라 <b>화면에 그대로 붙어 따라온다</b>.
+    /// 내 캐릭터의 전신이 보이는 화면에 팔 한 쌍이 허공에 떠 있는 그림이 되므로 재생 동안 감춘다.
+    ///
+    /// 레이어를 만지지 않고 오브젝트를 끄는 이유: 여기 있는 모든 것은 <see cref="SetupHandViewmodel"/>이
+    /// 이미 Viewmodel 레이어로 옮겨 뒀고, 되살릴 때 원래 레이어를 복원할 필요가 없어야 한다.
+    ///
+    /// 비오너에는 애초에 뷰모델이 없다(OnNetworkSpawn에서 비활성) — 그쪽에서 불려도 무해하다.
+    /// </summary>
+    public void SetViewmodelVisible(bool visible)
+    {
+        if (!enabled || m_handsModel == null)
+        {
+            return;
+        }
+
+        m_handsModel.SetActive(visible);
+    }
+
+    /// <summary>
     /// 1인칭 팔에 타격 스윙 1회를 재생한다 — 3인칭 상체 클립과 짝을 이루는 내 화면 몫이다. (#217)
     /// 타격 이벤트 하나로 둘이 함께 돌도록 <see cref="PlayerAnimationDriver.TriggerAttack"/>이 불러 준다.
     /// 비오너 인스턴스는 OnNetworkSpawn에서 enabled=false라 여기서 곧장 빠진다 — 남의 1인칭 팔은

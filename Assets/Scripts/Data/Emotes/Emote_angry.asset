@@ -22,10 +22,11 @@ MonoBehaviour:
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
-  m_icon: {fileID: 0}
+  m_fallbackName: "\uBD84\uB178"
+  m_icon: {fileID: 21300000, guid: 07ec3ddc6f7523e4f8d218e193fe0a28, type: 3}
   m_clip: {fileID: 3094330708855449807, guid: 752e273b7999f7e4eaa4390978480df9, type: 3}
   m_loop: 0
-  m_bubbleSprite: {fileID: 0}
+  m_bubbleSprite: {fileID: 21300000, guid: 07ec3ddc6f7523e4f8d218e193fe0a28, type: 3}
   references:
     version: 2
     RefIds: []
