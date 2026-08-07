@@ -156,7 +156,7 @@ public class JailIntake : MonoBehaviour
             // (MarkDelivered) Captured에 남고, 판정이 끝났다는 이유로 방치 타이머마저 빠져
             // (NpcStateRules.StaysPutWhenFreed) <b>영원히 그 자리에 선다</b>.
             // SendToJail도 같은 해제를 하지만(#537) 그건 콜백 안이라 여기까지 닿지 못한다.
-            npc.ExitStun(false); // false — 밖에서 강제로 푸는 경우라 도주 전이를 걸지 않는다
+            npc.Stun.ExitStun(false); // false — 밖에서 강제로 푸는 경우라 도주 전이를 걸지 않는다
 
             // 수감 — <b>줄을 걷고, 옮기고, 감옥 안에서 일어난다.</b> 셋 다 이 프레임 안에서 끝난다.
             //

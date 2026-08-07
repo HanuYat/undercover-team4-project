@@ -12,9 +12,11 @@ using Random = UnityEngine.Random;
 /// </summary>
 [RequireComponent(typeof(NavMeshAgent))]
 [RequireComponent(typeof(NpcCustody))] // 도메인 부품 — 누락 시 연행·수감 경로가 NRE로 죽는다 (#503)
+[RequireComponent(typeof(NpcHealth))] // 도메인 부품 — 누락 시 체력·피해 경로가 NRE로 죽는다 (#503)
 [RequireComponent(typeof(NpcIntruder))] // 도메인 부품 — 누락 시 침입 경로가 NRE로 죽는다 (#503)
 [RequireComponent(typeof(NpcPenaltyAgent))] // 도메인 부품 — 누락 시 오검거·납치 경로가 NRE로 죽는다 (#503)
 [RequireComponent(typeof(NpcReaction))] // 도메인 부품 — 누락 시 도주·저항 경로가 NRE로 죽는다 (#503)
+[RequireComponent(typeof(NpcStun))] // 도메인 부품 — 누락 시 기절 경로가 NRE로 죽는다 (#503)
 public partial class NpcController : NetworkBehaviour
 {
     [Header("상태별 튜닝 데이터 (ScriptableObject) — #259")]
@@ -35,9 +37,11 @@ public partial class NpcController : NetworkBehaviour
 
     // 도메인 부품 — 같은 GameObject에 붙는다. [RequireComponent]로 누락을 막는다. (#503)
     private NpcCustody m_custody;
+    private NpcHealth m_health;
     private NpcIntruder m_intruder;
     private NpcPenaltyAgent m_penalty;
     private NpcReaction m_reaction;
+    private NpcStun m_stun;
 
     // 넉백 비행 상태 — 서버(또는 오프라인)에서만 의미. 비행 중에는 FSM/NavMeshAgent가 정지한다. (#232)
     private Vector3 m_knockbackVelocity;
@@ -63,8 +67,12 @@ public partial class NpcController : NetworkBehaviour
     /// 튜닝 SO는 코어가 계속 들고 부품이 읽는다(계획서 § 4-3). (#503)</summary>
     internal NpcResistConfig ResistConfig => m_resistConfig;
 
-    /// <summary>기절 지속 시간(초) — 테이저가 명중 안내에 읽는다. (#269)</summary>
-    public float StunSeconds => m_stunConfig.StunSeconds;
+    /// <summary>기절 튜닝 SO — <see cref="NpcStun"/>이 지속 시간·기상 클립 길이를,
+    /// <see cref="NpcHealth"/>가 쓰러짐 기절 시간을 읽는다. (#503)</summary>
+    internal NpcStunConfig StunConfig => m_stunConfig;
+
+    /// <summary>공통 튜닝 SO — <see cref="NpcHealth.MaxHp"/>가 읽는다. 넉백 계열도 코어에서 직접 쓴다. (#503)</summary>
+    internal NpcCommonConfig CommonConfig => m_commonConfig;
 
     /// <summary>
     /// 현재 NPC 상태. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 안전하게 읽을 수 있다.
@@ -78,6 +86,9 @@ public partial class NpcController : NetworkBehaviour
     /// <summary>신병 도메인 부품 — 연행·인계 표식·수감·감옥 퇴장·반출 표식을 들고 있다. (#59/#228/#537/#503)</summary>
     public NpcCustody Custody => m_custody;
 
+    /// <summary>체력 도메인 부품 — HP·피해 적용·회복과 <see cref="IDamageable"/> 구현을 들고 있다. (#366/#503)</summary>
+    public NpcHealth Health => m_health;
+
     /// <summary>침입 도메인 부품 — 목표·해제 시간·진행 이벤트를 들고 있다. (#231/#503)</summary>
     public NpcIntruder Intruder => m_intruder;
 
@@ -87,13 +98,18 @@ public partial class NpcController : NetworkBehaviour
     /// <summary>검거 반응 도메인 부품 — 위협 대상·도주·저항·스윙을 들고 있다. (#76/#205/#213/#220/#503)</summary>
     public NpcReaction Reaction => m_reaction;
 
+    /// <summary>기절 도메인 부품 — 스턴 오버레이·진입·해제를 들고 있다. (#292/#503)</summary>
+    public NpcStun Stun => m_stun;
+
     private void Awake()
     {
         m_agent = GetComponent<NavMeshAgent>();
         m_custody = GetComponent<NpcCustody>();
+        m_health = GetComponent<NpcHealth>();
         m_intruder = GetComponent<NpcIntruder>();
         m_penalty = GetComponent<NpcPenaltyAgent>();
         m_reaction = GetComponent<NpcReaction>();
+        m_stun = GetComponent<NpcStun>();
 
         m_stateMachine = new NpcStateMachine();
         m_stateMachine.AddState(NpcState.Idle, new NpcIdleState(this, m_idleConfig));
@@ -116,7 +132,6 @@ public partial class NpcController : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         m_networkState.OnValueChanged += HandleNetworkStateChanged;
-        m_syncedStunned.OnValueChanged += HandleSyncedStunnedChanged; // 스턴 오버레이 표현 전파 (#292)
 
         if (IsServer)
         {
@@ -133,7 +148,6 @@ public partial class NpcController : NetworkBehaviour
     public override void OnNetworkDespawn()
     {
         m_networkState.OnValueChanged -= HandleNetworkStateChanged;
-        m_syncedStunned.OnValueChanged -= HandleSyncedStunnedChanged;
     }
 
     private void Start()
@@ -155,7 +169,7 @@ public partial class NpcController : NetworkBehaviour
         m_agent.avoidancePriority = Random.Range(30, 71);
 
         // 체력은 FSM 시동 전에 채운다 — 첫 틱부터 CurrentHp가 유효해야 한다 (#366)
-        InitHealth();
+        m_health.InitHealth();
 
         // 무게 추첨 — 라운드 내내 유지된다(재검거·탈옥 후에도 같은 값). (#398)
         InitDragWeight();
@@ -174,7 +188,7 @@ public partial class NpcController : NetworkBehaviour
             return;
 
         // 밧줄 장력 — 아래 넉백·스턴 게이트보다 **먼저** 돈다 (#390). 묶인 채 기절한 대상은 스턴
-        // 오버레이를 단 채로 끌려가야 하므로(TickStun이 IsRoped면 타이머를 멈추는 것과 짝) 게이트 뒤로
+        // 오버레이를 단 채로 끌려가야 하므로(NpcStun.Tick이 IsRoped면 타이머를 멈추는 것과 짝) 게이트 뒤로
         // 내리면 테이저→밧줄 콤보로 잡은 대상이 그 자리에 멈춘다. 끌기가 아니면 즉시 반환한다.
         // (넉백은 서로 배타적이다 — Escorted 대상이 넉백을 맞으면 StopEscort로 커스터디가 풀리고
         //  PlayerEscorter가 그것을 보고 끌기를 정리한다.)
@@ -194,9 +208,9 @@ public partial class NpcController : NetworkBehaviour
 
         // 스턴 오버레이 중에는 FSM을 돌리지 않는다 — 상태는 그대로 둔 채 제자리에 얼린다.
         // 넉백 게이트 뒤에 두는 게 중요하다: 둘이 겹치면 넉백이 이긴다 (#292)
-        if (HasStunOverlay)
+        if (m_stun.HasStunOverlay)
         {
-            TickStun();
+            m_stun.Tick();
             return;
         }
 

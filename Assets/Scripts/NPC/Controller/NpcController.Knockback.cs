@@ -36,7 +36,7 @@ public partial class NpcController
         // 스턴 오버레이와 겹치면 넉백이 이긴다 (#292). 그냥 두면 Update의 스턴 게이트가
         // 착지 후 NpcStunnedState.Tick을 가로채 깨어나지 못한다 — 게이트 순서상 오버레이가
         // FSM보다 앞이기 때문이다. 기절 시간은 넉백 기준으로 새로 흐른다.
-        ClearStunOverlay();
+        m_stun.ClearStunOverlay();
 
         // 상태 전이가 먼저다 — 에이전트를 끄기 전에 넣어야 상태 클래스가 에이전트를 정상적으로 정리한다.
         // 비행 중에는 FSM Tick을 건너뛰므로 상태별 타이머(기절 해제·인계 방치)는 착지 후부터 흐른다.

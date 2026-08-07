@@ -132,7 +132,7 @@ public partial class NpcController
         // 내려가 기상 클립이 도는 동안 몸만 먼저 서 있다.
         if ((CurrentState != NpcState.Captured && CurrentState != NpcState.Jailed)
             || m_knockbackActive
-            || HasStunOverlay)
+            || m_stun.HasStunOverlay)
         {
             CancelStandUp();
             return;

@@ -246,7 +246,7 @@ public partial class NpcController
     /// 코너를 돌면 몸이 바깥으로 끌려나오는 궤적이 생긴다.
     ///
     /// <b>호출 위치 주의</b> — Update의 넉백·스턴 게이트보다 <b>앞</b>이다. 묶인 채 기절한 대상은 스턴
-    /// 오버레이를 단 채로 끌려가야 하기 때문(TickStun이 IsRoped면 타이머를 멈추는 것과 짝) —
+    /// 오버레이를 단 채로 끌려가야 하기 때문(NpcStun.Tick이 IsRoped면 타이머를 멈추는 것과 짝) —
     /// 게이트 뒤로 내리면 테이저→밧줄 콤보로 잡은 대상이 그 자리에 멈춘다.
     /// </summary>
     private void TickRopeDrag()

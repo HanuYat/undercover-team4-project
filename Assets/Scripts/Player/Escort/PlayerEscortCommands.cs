@@ -488,7 +488,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
 
         // 기절한 채 묶였으면 오버레이를 걷는다 — 남겨두면 만료 해제 경로(resumeReaction: true)가
         // StartFlee를 걸어 묶자마자 도망친다. (#292)
-        target.ExitStun(resumeReaction: false);
+        target.Stun.ExitStun(resumeReaction: false);
 
         NotifyOwner($"밧줄로 묶어 끌기 시작: {target.name} ({Escorter.TetheredCount}/{Escorter.RopeCapacity})");
     }
