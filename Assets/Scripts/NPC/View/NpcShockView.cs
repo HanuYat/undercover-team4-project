@@ -59,8 +59,8 @@ public class NpcShockView : MonoBehaviour
         m_active = true;
         m_flashUntil = Time.time + m_flashSeconds;
 
-        // 지속 시간은 '언제부터 잦아들지'의 힌트로만 쓴다 — 밧줄에 묶이면 서버 타이머가 멈추므로(#269)
-        // 이 시각으로 종료를 판단하면 끌려가는 내내 연출이 먼저 꺼진다. 종료는 IsStunned가 알린다.
+        // 지속 시간은 '언제부터 잦아들지'의 힌트로만 쓴다 — 기절이 밖에서 먼저 풀리는 경로가 있어
+        // (밧줄 묶기·수감·넉백) 이 시각으로 종료를 판단하면 어긋난다. 종료는 IsStunned가 알린다.
         // 꼬리 길이는 ShockArcEmitter가 갖는다 — 플레이어 감전(PlayerHitView)과 같은 값이어야
         // 같은 테이저에 맞고 잦아드는 시점이 갈리지 않는다.
         m_calmFromTime = Time.time + Mathf.Max(0f, seconds - ShockArcEmitter.k_calmTailSeconds);

@@ -188,7 +188,7 @@ public partial class NpcController : NetworkBehaviour
             return;
 
         // 밧줄 장력 — 아래 넉백·스턴 게이트보다 **먼저** 돈다 (#390). 묶인 채 기절한 대상은 스턴
-        // 오버레이를 단 채로 끌려가야 하므로(NpcStun.Tick이 IsRoped면 타이머를 멈추는 것과 짝) 게이트 뒤로
+        // 오버레이를 단 채로 끌려가야 하므로(기절 중에도 장력이 돌아야 한다) 게이트 뒤로
         // 내리면 테이저→밧줄 콤보로 잡은 대상이 그 자리에 멈춘다. 끌기가 아니면 즉시 반환한다.
         // (넉백은 서로 배타적이다 — Escorted 대상이 넉백을 맞으면 StopEscort로 커스터디가 풀리고
         //  PlayerEscorter가 그것을 보고 끌기를 정리한다.)

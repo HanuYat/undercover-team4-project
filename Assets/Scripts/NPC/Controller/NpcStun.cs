@@ -58,16 +58,15 @@ public class NpcStun : NetworkBehaviour
     ///
     /// 원인을 NetworkVariable로 두지 않는 이유: 스턴 플래그와의 도착 순서에 기대게 되는데 컴포넌트가
     /// 갈리면 그 보장이 더 약하다(계획서 § 5-3). 일회성 알림은 RPC가 맞다.
-    /// <b>종료는 알리지 않는다</b> — <see cref="OnStunnedChanged"/>(false)가 그 몫이다. 밧줄에 묶이면
-    /// 타이머가 멈추므로 지속 시간만으로 종료 시점을 계산하면 어긋난다.
+    /// <b>종료는 알리지 않는다</b> — <see cref="OnStunnedChanged"/>(false)가 그 몫이다. 기절이 밖에서
+    /// 먼저 풀리는 경로가 있어(밧줄 묶기·수감·넉백) 지속 시간만으로 종료 시점을 계산하면 어긋난다.
     /// </summary>
     public event Action<float> OnTaserStunStarted;
 
-    // 경과 시간으로 센다 — 밧줄에 묶이면 멈춰야 해서 "끝나는 시각" 방식은 계산이 지저분해진다.
     private float m_stunElapsed;
-    private float m_stunDuration;       // 이번 기절의 지속 시간 — 경로마다 다르다 (테이저 vs 타격, #400)
-    private bool m_standingUp;          // 일어나는 모션을 이미 발행했는가 — 마지막 구간에서 1회만 (#269)
-    private bool m_agentStoppedBefore;  // 스턴 직전의 isStopped — 해제 시 그대로 되돌린다
+    private float m_stunDuration; // 이번 기절의 지속 시간 — 경로마다 다르다 (테이저 vs 타격, #400)
+    private bool m_standingUp; // 일어나는 모션을 이미 발행했는가 — 마지막 구간에서 1회만 (#269)
+    private bool m_agentStoppedBefore; // 스턴 직전의 isStopped — 해제 시 그대로 되돌린다
 
     private void Awake()
     {
@@ -174,13 +173,10 @@ public class NpcStun : NetworkBehaviour
     /// 부품이 자기 Update를 갖지 않는 이유는 게이트 순서가 사양이기 때문이다 (계획서 § 5-1).</summary>
     internal void Tick()
     {
-        // 밧줄로 묶여 있는 동안엔 타이머를 멈춘다 — 끌려가는 내내 깨어나지 않는다 (#269)
-        if (m_owner.IsRoped)
-        {
-            m_standingUp = false; // 일어나려던 참에 묶였으면 다시 누운 것으로 되돌린다
-            return;
-        }
-
+        // 타이머는 밧줄과 무관하게 흐른다 — 묶여 있든 끌려가든 기절은 제 시간에 풀린다.
+        // 예전에는 끌리는 동안 멈췄지만(#269) 그러면 IsStunned가 안 내려가 감전 연출이 끝나지 않고
+        // 그 대상에 테이저가 다시 걸리지도 않는다. 깨어나도 잃는 것은 없다 — 확보 상태(Escorted·
+        // Captured)는 ExitStun의 도주 전이 대상이 아니고(NpcStateRules.IsReactive) 밧줄도 그대로다.
         m_stunElapsed += Time.deltaTime;
 
         // 기절 시간의 마지막 구간을 일어나는 모션에 쓴다 — 총 무력화 시간은 그대로 둔다.
@@ -188,7 +184,12 @@ public class NpcStun : NetworkBehaviour
         if (!m_standingUp && m_stunElapsed >= standUpAt)
         {
             m_standingUp = true;
-            m_owner.RaiseStandUp(); // 전 피어에 일어나는 모션 재생을 알린다
+
+            // 밧줄이 걸려 있으면 모션을 내지 않는다 — 줄에 눕혀진 몸은 기절이 풀려도 일어날 수 없다.
+            // 알림만 건너뛴다: 기절은 아래에서 제 시간에 풀리고 대상은 묶인 채 남는다.
+            // 여기서 알리면 벌떡 섰다가 곧바로 묶임 자세로 되돌아간다.
+            if (!m_owner.IsRoped && !m_owner.IsTethered)
+                m_owner.RaiseStandUp(); // 전 피어에 일어나는 모션 재생을 알린다
         }
 
         if (m_stunElapsed >= m_stunDuration)
