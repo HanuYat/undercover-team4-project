@@ -280,6 +280,18 @@ public class PlayerMovement : NetworkBehaviour
     /// </summary>
     internal void SetControllerEnabled(bool value) => m_controller.enabled = value;
 
+    /// <summary>
+    /// 쌓인 외력을 버린다 — 남이 내 몸을 쥐기 시작할 때(추종 진입) <see cref="PlayerTowedMotion"/>이 부른다.
+    /// <see cref="SetPose"/>가 텔레포트에서 수직 속도를 지우는 것과 같은 이유다: 적용되지 못한 채 남은
+    /// 속도는 몸이 자기 이동을 되찾는 순간 한꺼번에 터진다. 날아가던 중에 붙잡히는 경로가 실제로 있다
+    /// (넉백은 무력화가 아니라 포획을 막지 않는다).
+    /// </summary>
+    internal void ClearExternalVelocity()
+    {
+        m_knockbackVelocity = Vector3.zero;
+        m_verticalVelocity = 0f;
+    }
+
     // CharacterController가 켜진 상태에서 transform을 직접 옮기면 내부 캐시가 위치를 되돌릴 수 있어 잠시 끄고 옮긴다.
     private void SetPose(Vector3 pos, Quaternion rot)
     {
@@ -327,6 +339,13 @@ public class PlayerMovement : NetworkBehaviour
     public void AddKnockback(Vector3 velocity)
     {
         if (IsSpawned && !IsOwner) return;
+
+        // 추종 중에는 외력을 받지 않는다 — 몸의 위치를 PlayerTowedMotion이 쥐고 있어 밀려날 수가
+        // 없는데, 넉백 감쇠는 HandleMove 안에 있고 추종 중에는 Update가 그 앞에서 빠져나간다.
+        // 그래서 그냥 쌓아 두면 값이 <b>감쇠 없이 얼어붙었다가</b> 추종이 끝나는 순간 한꺼번에
+        // 터진다 — 납치 호송 중 폭발이면 외곽에 도착해 린치가 시작되는 그 순간 피해자가 날아간다.
+        // (호송은 CharacterController를 꺼 두므로 수직 성분도 같이 얼어붙는다)
+        if (m_towed != null && m_towed.IsActive) return;
 
         m_knockbackVelocity += new Vector3(velocity.x, 0f, velocity.z);
 
