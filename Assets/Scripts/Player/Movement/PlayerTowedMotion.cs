@@ -122,6 +122,7 @@ public class PlayerTowedMotion : MonoBehaviour
 
         // 직접 transform 이동 — 켜 두면 CC 내부 캐시가 위치를 되돌린다 (PlayerMovement.SetPose와 동일 사정)
         m_movement.SetControllerEnabled(false);
+        m_movement.ClearExternalVelocity(); // 날아가던 중에 붙잡히면 그 속도가 감쇠 없이 남는다
         ReportGroundedOnEnter();
     }
 
@@ -193,6 +194,7 @@ public class PlayerTowedMotion : MonoBehaviour
         m_dragFacing = transform.rotation;
         m_dragTravel = 0f;
 
+        m_movement.ClearExternalVelocity(); // 호송 진입과 같은 이유 (BeginEscortFollow 참고)
         ReportGroundedOnEnter();
     }
 

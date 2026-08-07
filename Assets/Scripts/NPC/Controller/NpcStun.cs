@@ -63,6 +63,21 @@ public class NpcStun : NetworkBehaviour
     /// </summary>
     public event Action<float> OnTaserStunStarted;
 
+    /// <summary>
+    /// 이 NPC가 <b>무력화된 순간</b> 발행 — 서버(또는 오프라인) 전용. 인자는 (무력화된 NPC, 위협). (#554)
+    /// 납치(<see cref="AbductionEvent"/>)가 구독해 맞은 납치범을 호송에서 떼어낸다 —
+    /// <see cref="NpcHealth.OnDamaged"/>와 <b>대칭</b>이다: 타격이 격퇴로 이어지듯 무력화도 이어진다.
+    /// 테이저가 AbductionEvent를 알 필요가 없는 것도 같은 이유다(진압봉과 같은 방침) —
+    /// 무력화를 거는 다른 수단이 생겨도 배선 없이 함께 동작한다.
+    ///
+    /// <b>오버레이 경로 전용이다</b> — 넉백 착지 KO(<see cref="NpcState.Stunned"/>)는 여기를 지나지 않는다.
+    /// 그쪽은 데미지를 동반하므로 격퇴는 <see cref="NpcHealth.OnDamaged"/>가 이미 낸다.
+    ///
+    /// 연출용인 <see cref="OnStunnedChanged"/>·<see cref="OnTaserStunStarted"/>와 성격이 다르다:
+    /// 저 둘은 전 피어에서 발행되는 표현 훅이고, 이것은 서버가 게임플레이 판정을 넘기는 훅이다.
+    /// </summary>
+    public event Action<NpcController, Transform> OnStunned;
+
     private float m_stunElapsed;
     private float m_stunDuration; // 이번 기절의 지속 시간 — 경로마다 다르다 (테이저 vs 타격, #400)
     private bool m_standingUp; // 일어나는 모션을 이미 발행했는가 — 마지막 구간에서 1회만 (#269)
@@ -166,6 +181,12 @@ public class NpcStun : NetworkBehaviour
             agent.isStopped = true;
             agent.ResetPath();
         }
+
+        // 무력화 통보는 <b>마지막</b>이다 (#554) — 구독자(납치 격퇴)가 상태를 바꾸므로 플래그·에이전트
+        // 정리가 끝난 뒤여야 그 전이가 스턴 <b>위에</b> 얹힌다. OnDamaged가 HP 반영 '전'에 나가는 것과
+        // 순서가 반대인데 이유는 같다: 상태를 바꾸는 쪽과 무력화를 거는 쪽이 서로를 덮지 않게 하는 것.
+        // (스턴은 상태 enum을 바꾸지 않는 오버레이라 뒤에 오는 전이에 지워지지 않는다, #292)
+        OnStunned?.Invoke(m_owner, threat);
     }
 
     /// <summary>스턴 중 매 프레임 — 코어 Update의 스턴 게이트가 FSM Tick 대신 이걸 돌린다.

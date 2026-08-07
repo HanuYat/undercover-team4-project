@@ -277,8 +277,14 @@ public class PlayerMovement : NetworkBehaviour
     }
 
     /// <summary>
-    /// 쌓인 외력(넉백)과 수직 속도를 지운다 — 래그돌 진입(#506)이 부른다.
-    /// 진입 전에 이미 들어온 폭발 넉백이 남아 있으면, 뼈가 날아가는 동안 캡슐도 같이 미끄러진다.
+    /// 쌓인 외력(넉백)과 수직 속도를 지운다 — <b>몸의 위치 권한이 넘어가는 순간</b> 부른다.
+    /// 지금 부르는 곳은 둘이다: 래그돌 진입(#506)과 추종 진입(<see cref="PlayerTowedMotion"/>, #279).
+    ///
+    /// 적용되지 못한 채 남은 속도는 몸이 자기 이동을 되찾는 순간 한꺼번에 터진다 —
+    /// <see cref="SetPose"/>가 텔레포트에서 수직 속도를 지우는 것과 같은 이유다. 날아가던 중에
+    /// 붙잡히는 경로가 실제로 있고(넉백은 무력화가 아니라 포획을 막지 않는다), 래그돌 쪽은
+    /// 뼈가 날아가는 동안 캡슐까지 같이 미끄러진다.
+    ///
     /// 넉백 가드(<see cref="AddKnockback"/>)가 막는 것은 진입 <b>이후</b>의 호출뿐이라 이 짝이 필요하다.
     /// </summary>
     internal void ClearExternalVelocity()
@@ -355,6 +361,13 @@ public class PlayerMovement : NetworkBehaviour
     public void AddKnockback(Vector3 velocity)
     {
         if (IsSpawned && !IsOwner) return;
+
+        // 추종 중에는 외력을 받지 않는다 — 몸의 위치를 PlayerTowedMotion이 쥐고 있어 밀려날 수가
+        // 없는데, 넉백 감쇠는 HandleMove 안에 있고 추종 중에는 Update가 그 앞에서 빠져나간다.
+        // 그래서 그냥 쌓아 두면 값이 <b>감쇠 없이 얼어붙었다가</b> 추종이 끝나는 순간 한꺼번에
+        // 터진다 — 납치 호송 중 폭발이면 외곽에 도착해 린치가 시작되는 그 순간 피해자가 날아간다.
+        // (호송은 CharacterController를 꺼 두므로 수직 성분도 같이 얼어붙는다)
+        if (m_towed != null && m_towed.IsActive) return;
 
         // 래그돌 중이면 삼킨다 — 몸은 뼈 물리가 날리고 있으므로 캡슐까지 같은 폭발로 미끄러지면
         // 시체와 판정 위치가 서로 다른 방향으로 벌어진다. (#506 §3-2)
