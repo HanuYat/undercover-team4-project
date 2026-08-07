@@ -138,6 +138,20 @@ public class PlayerIncapacitation : NetworkBehaviour
     /// <summary>현재 씬에 존재하는 모든 플레이어의 무력화 컴포넌트. 자주 순회해도 되는 무할당 목록. (#365)</summary>
     public static IReadOnlyList<PlayerIncapacitation> All => s_instances;
 
+    // 같은 오브젝트의 밧줄 연결 — 무력화 진입에서만 쓴다. 테스트 구성 등 없을 수 있어 null 허용
+    // (PlayerEscorter가 RopeDragLoad를 지연 조회하는 것과 같은 관례).
+    private PlayerEscorter m_escorter;
+
+    private PlayerEscorter Escorter
+    {
+        get
+        {
+            if (m_escorter == null)
+                m_escorter = GetComponent<PlayerEscorter>();
+            return m_escorter;
+        }
+    }
+
     private void OnEnable() => s_instances.Add(this);
 
     private void OnDisable() => s_instances.Remove(this);
@@ -311,6 +325,21 @@ public class PlayerIncapacitation : NetworkBehaviour
         {
             SetStunDeadline(0d);
         }
+
+        // 쓰러지는 순간 밧줄에서 손을 뗀다 (#559). 무력화된 몸은 줄을 당길 수 없는데, 끌기는 <b>끄는
+        // 쪽의 트랜스폼</b>만 따라가므로 그 몸을 옮기는 다른 시스템이 NPC까지 함께 옮겨 버린다 —
+        // 납치 호송(#371)과 오검거 호송(#279)이 그렇다. 특히 납치 반출은 맵 밖으로 나가는데
+        // 끌기 위치 보정은 NavMesh로 묶이지 않아, 딸려나간 NPC는 줄이 풀릴 때 NavMesh에 다시
+        // 붙지 못하고 맵 밖에 굳는다(잡아 둔 진범이 그대로 사라진다).
+        //
+        // 호송 쪽에서 각각 놓게 하지 않고 여기 두는 이유는, 트랜스폼을 옮기는 시스템이 늘 때마다
+        // 같은 것을 기억해야 하기 때문이다. '무력화되면 손을 놓는다'는 원인을 가리지 않는다.
+        //
+        // <b>줄은 그대로 남는다</b> — ReleaseDrag는 끌기만 멈추고 묶임은 유지한다(E 놓기와 같다).
+        // 그래서 스스로 풀리는 무력화(기절·매달기)에서 깨어나면 걸어가 E로 다시 끌 수 있고,
+        // NPC는 놓인 자리에서 Captured로 멈춘다 — 그 자리는 아직 맵 안이다.
+        if (!was && IsIncapacitated)
+            Escorter?.ReleaseAllDrags();
 
         RefreshAimHitbox();
         if (was != IsIncapacitated)
