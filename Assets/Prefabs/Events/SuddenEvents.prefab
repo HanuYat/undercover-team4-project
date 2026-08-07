@@ -180,6 +180,7 @@ MonoBehaviour:
     m_maxSpawnAttempts: 8
     m_pettyCrimeRewardMin: 500
     m_pettyCrimeRewardMax: 4000
+    m_pickpocketApproachSeconds: 12
     m_maxLifetimeSeconds: 60
   - m_displayName: "\uB098\uCCB4 \uB09C\uB3D9\uAFBC"
     m_mode: 1
@@ -190,6 +191,18 @@ MonoBehaviour:
     m_maxSpawnAttempts: 8
     m_pettyCrimeRewardMin: 500
     m_pettyCrimeRewardMax: 4000
+    m_pickpocketApproachSeconds: 12
+    m_maxLifetimeSeconds: 60
+  - m_displayName: "소매치기"
+    m_mode: 2
+    m_npcPrefab: {fileID: 4452197611904741975, guid: e7cbd7673d85ce0488590f20f53288ac, type: 3}
+    m_spawnDistanceMin: 12
+    m_spawnDistanceMax: 20
+    m_navSampleMaxDistance: 4
+    m_maxSpawnAttempts: 8
+    m_pettyCrimeRewardMin: 500
+    m_pettyCrimeRewardMax: 4000
+    m_pickpocketApproachSeconds: 12
     m_maxLifetimeSeconds: 60
 --- !u!114 &1542303654048081899
 MonoBehaviour:

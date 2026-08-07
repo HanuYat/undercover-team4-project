@@ -55,6 +55,10 @@ public class SpawnedNpcEvent : ISuddenEvent
     // 이번 스폰에서 실제로 뽑힌 수익 — 마커에 실은 값과 같다 (#395)
     private int m_rolledReward;
 
+    [Header("소매치기 (#303)")]
+    [Tooltip("표적에게 다가가는 제한 시간(초) — 이 안에 붙지 못하면 포기하고 시민으로 잔류한다. 걷는 속도라 표적이 계속 움직이면 못 붙는다")]
+    [SerializeField] private float m_pickpocketApproachSeconds = 12f;
+
     [Header("소란 지속")]
     [Tooltip("제압되지 않은 채 이 시간(초)이 지나면 소란을 멈추고 진정해 배회 시민으로 잔류한다 — 마커가 남아 언제든 잡으면 경범죄 수익 (#310)")]
     [SerializeField] private float m_maxLifetimeSeconds = 60f;
@@ -72,6 +76,7 @@ public class SpawnedNpcEvent : ISuddenEvent
     private bool m_hasStarted;    // 행동을 실제로 시작했는지 — 이탈(배회 복귀) 종료 판정에 쓴다
     private bool m_captured;      // 한 번이라도 제압됐는지 — 제압 로그를 첫 진입에만 남기려고 쓴다
     private bool m_releaseQueued; // 잔류 전환 확정 — 다음 틱에 이벤트가 손을 뗀다 (상태 전이 체인 안 처리 회피, #310)
+    private float m_pickpocketGiveUpTime; // 소매치기 접근을 포기할 시각. 0 이하면 접근 중 아님 (#303)
 
     public string DisplayName => m_displayName;
 
@@ -149,6 +154,7 @@ public class SpawnedNpcEvent : ISuddenEvent
         m_hasStarted = false;
         m_captured = false;
         m_releaseQueued = false;
+        m_pickpocketGiveUpTime = 0f;
     }
 
     public void ServerTick()
@@ -171,6 +177,20 @@ public class SpawnedNpcEvent : ISuddenEvent
         {
             ReleaseToCity();
             return;
+        }
+
+        // 다가가다 못 붙으면 포기하고 시민으로 섞인다 (#303) — 걷는 속도라 표적이 계속 움직이면 영영
+        // 못 잡는데, 그동안 뒤를 졸졸 따라다니는 그림이 나온다. 훔치는 것은 스쳐 지나가는 한순간이어야 한다.
+        // 배회로 돌리면 HandleStateChanged가 이탈로 받아 잔류시킨다 — 마커가 남아 잡으면 수익은 그대로다.
+        if (m_pickpocketGiveUpTime > 0f && Time.time >= m_pickpocketGiveUpTime)
+        {
+            m_pickpocketGiveUpTime = 0f;
+            if (m_npc.Penalty.IsPickpocketDuty)
+            {
+                Debug.Log($"[돌발이벤트] {m_displayName} — 접근 실패, 포기하고 시민으로 섞임");
+                m_npc.Penalty.EndPenaltyDuty();
+                return;
+            }
         }
 
         // 연행 중에는 소란 타이머를 멈춘다 — 본부까지 데려가는 동안 이벤트가 끝나면 안 된다.
@@ -216,6 +236,7 @@ public class SpawnedNpcEvent : ISuddenEvent
                 {
                     m_npc.Penalty.OnPenaltyCaught += HandlePickpocketReach;
                     m_npc.Penalty.StartPenaltyChase(m_threat, pickpocketDuty: true);
+                    m_pickpocketGiveUpTime = Time.time + m_pickpocketApproachSeconds;
                 }
                 break;
         }
@@ -229,6 +250,7 @@ public class SpawnedNpcEvent : ISuddenEvent
 
         // 통보는 3초마다 재시도되므로(NpcChaseState) 한 번 챘으면 더 받지 않는다
         m_npc.Penalty.OnPenaltyCaught -= HandlePickpocketReach;
+        m_pickpocketGiveUpTime = 0f; // 붙었으니 접근 제한은 끝
 
         PlayerLoadout victim = caught != null ? caught.GetComponentInParent<PlayerLoadout>() : null;
         ItemBase stolen = victim != null ? victim.ServerStealRandom(m_npc.transform) : null;
@@ -307,6 +329,7 @@ public class SpawnedNpcEvent : ISuddenEvent
         m_hasStarted = false;
         m_captured = false;
         m_releaseQueued = false;
+        m_pickpocketGiveUpTime = 0f;
 
         MisdemeanorLoiterer.Attach(npc, m_displayName);
     }
@@ -349,5 +372,6 @@ public class SpawnedNpcEvent : ISuddenEvent
         m_hasStarted = false;
         m_captured = false;
         m_releaseQueued = false;
+        m_pickpocketGiveUpTime = 0f;
     }
 }
