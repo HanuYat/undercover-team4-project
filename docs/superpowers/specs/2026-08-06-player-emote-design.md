@@ -135,9 +135,10 @@ Kevin Iglesias **Human Dance Animations**를 임포트한다. 이 패키지는 �
 
 3인칭 전환은 **`PlayerLook` 안에서** 한다(`SetEmoteView(bool)`). 별도 컴포넌트로 빼지 않는 이유는 그 파일의 클래스 주석이 이미 짚어 둔 것과 같다 — `m_pitch`·카메라 로컬 자세를 `HandleLook`과 `UpdateCameraPose`가 함께 읽고 쓰므로 나누면 값을 주고받게 된다. 게다가 `UpdateCameraPose`가 매 프레임 `localPosition`·`localEulerAngles`를 통째로 대입하므로 밖에서 얹은 오프셋은 그 프레임에 지워진다(화면 흔들림 #477이 같은 이유로 그 메서드 안에서 조립된다). 호출은 `PlayerEmoteView`가 한다.
 
-`PlayerEmoteCamera`가 재생 중에만:
+`SetEmoteView(true)`가 재생 중에만:
 
 - 카메라 cullingMask에 `OwnBody`를 되살리고, 카메라를 뒤·위로 부드럽게 뺀다 (종료 시 원위치)
+- **쓰러지면 다운 시점이 이긴다.** 서버가 무력화 시 감정표현을 끊지만 그 값이 돌아오기까지 왕복이 걸리고, 그 사이 두 블렌드가 겹치면 카메라가 다운 높이와 3인칭 붐 사이 엉뚱한 자리로 간다
 - **몸통 회전을 잠그고 카메라만 돌린다.** `PlayerLook.HandleLook`에 이미 "쓰러진 동안엔 카메라 로컬만" 도는 모드가 있으므로 그 경로를 재사용한다. 새 모드를 만들 필요가 없고, 마우스를 움직여도 취소되면 안 된다는 요구와도 맞는다
 - 벽 뚫림은 SphereCast 1회로 카메라를 당기는 수준까지만 한다 (맵 교체 예정)
 
@@ -165,6 +166,6 @@ EditMode 단위 테스트를 붙이는 대상은 순수 로직 둘이다:
 
 | 이슈 완료 기준 | 대응 |
 |---|---|
-| 감정표현 애니메이션 1종 이상 + 이모지 표시 동작 | 4절 초기 항목 6종 + 6절 `EmoteBubbleView` |
+| 감정표현 애니메이션 1종 이상 + 이모지 표시 동작 | 4절 초기 항목 8종(댄스 4 + 제스처 4) + 6절 `EmoteBubbleView` |
 | 전 피어 동기화 | 3절 `NetworkVariable<sbyte>` 상태 동기화 |
 | 상태 enum 정리 방향 확정 (GDD 10-2 반영) | 10절 |
