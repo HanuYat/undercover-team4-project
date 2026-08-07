@@ -171,7 +171,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SpawnedNpcEventSet
   m_events:
-  - m_displayName: "\uAC70\uB9AC \uB09C\uB3D9\uC790"
+  - m_enabled: 1
+    m_displayName: "\uAC70\uB9AC \uB09C\uB3D9\uC790"
     m_mode: 0
     m_npcPrefab: {fileID: 4452197611904741975, guid: d683626f03b237a4da9faa4542cc57a0, type: 3}
     m_spawnDistanceMin: 12
@@ -182,7 +183,8 @@ MonoBehaviour:
     m_pettyCrimeRewardMax: 4000
     m_pickpocketApproachSeconds: 12
     m_maxLifetimeSeconds: 60
-  - m_displayName: "\uB098\uCCB4 \uB09C\uB3D9\uAFBC"
+  - m_enabled: 1
+    m_displayName: "\uB098\uCCB4 \uB09C\uB3D9\uAFBC"
     m_mode: 1
     m_npcPrefab: {fileID: 4452197611904741975, guid: 5ec59267efd14b0409911db86746a985, type: 3}
     m_spawnDistanceMin: 12
@@ -193,7 +195,8 @@ MonoBehaviour:
     m_pettyCrimeRewardMax: 4000
     m_pickpocketApproachSeconds: 12
     m_maxLifetimeSeconds: 60
-  - m_displayName: "소매치기"
+  - m_enabled: 1
+    m_displayName: "소매치기"
     m_mode: 2
     m_npcPrefab: {fileID: 4452197611904741975, guid: e7cbd7673d85ce0488590f20f53288ac, type: 3}
     m_spawnDistanceMin: 12
