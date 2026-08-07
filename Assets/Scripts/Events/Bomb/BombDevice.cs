@@ -518,25 +518,6 @@ public class BombDevice : NetworkBehaviour
         for (int i = 0; i < impulses.Length; i++)
             impulses[i] = EvaluateRagdollImpulse(m_deathBuffer[i].transform.position);
 
-        // ---- 임시 진단 (#506 — 값을 정하면 지운다) ----
-        //
-        // 재는 것: <b>사람들이 실제로 폭탄에서 몇 m에서 죽는가.</b> 사망 반경은 계산상 3.3m지만
-        // (피해 150·가장자리 0.2·반경 8 · HP 100), 실제 플레이에서 그 띠의 어디에 몰리는지는 모른다.
-        // 전원이 3m 근처에서 죽는다면 폭심 기준으로 세기를 잡는 것은 의미가 없다 — 감쇠가
-        // 그 값의 3분의 2만 남기기 때문이다. 튜닝 기준점을 정하려면 이 분포를 먼저 봐야 한다.
-        for (int i = 0; i < m_deathBuffer.Count; i++)
-        {
-            float distance = (m_deathBuffer[i].transform.position - transform.position).magnitude;
-            Debug.Log(
-                $"[폭발/사망자] 거리 {distance:F2}m (사망반경 약 3.3m, 폭발반경 {m_explosionRadius}m)"
-                    + $" | 넉백 {EvaluateKnockback(m_deathBuffer[i].transform.position).magnitude:F2}"
-                    + $" → 래그돌 임펄스 {impulses[i].magnitude:F2}"
-                    + $" (수평 {new Vector2(impulses[i].x, impulses[i].z).magnitude:F2}"
-                    + $" 상승 {impulses[i].y:F2})",
-                this
-            );
-        }
-
         for (int i = 0; i < m_deathBuffer.Count; i++)
             ApplyBlastRagdoll(m_deathBuffer[i], impulses[i]); // 서버·오프라인 로컬 발행
 

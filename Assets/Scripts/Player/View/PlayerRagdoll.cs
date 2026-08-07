@@ -285,7 +285,6 @@ public class PlayerRagdoll : MonoBehaviour
         if (m_state == RagdollState.Ragdoll)
         {
             m_rig.ApplyImpulse(impulse); // 늦게 도착한 폭발 정보 — 누적한다
-            ReportEntry("누적", impulse);
             return;
         }
 
@@ -313,78 +312,6 @@ public class PlayerRagdoll : MonoBehaviour
         IgnoreOwnCapsule(); // 캡슐이 꺼져 있으면 사실상 무동작이지만, 전이 순간의 안전망으로 남긴다
         m_rig.SetKinematic(false);
         m_rig.ApplyImpulse(impulse);
-        ReportEntry("신규", impulse);
-
-        m_diagStartHips = m_rig.Hips.position;
-        m_diagImpulse = impulse;
-        m_diagApexY = m_rig.Hips.position.y;
-        m_diagTracking = true;
-    }
-
-    // ---- 임시 진단: 사망 비행 실측 (#506 — 값을 정하면 지운다) ----
-    //
-    // 재는 것은 <b>탄도 공식이 예측한 거리와 실제로 떨어진 거리의 비</b>다. 공식에는 구르는 사지가
-    // 먹는 지면 마찰이 없어서, 이론 사거리의 얼마가 실제로 나오는지는 재 보기 전에는 몰랐다.
-    // 실측 결과 94%(약한 임펄스) ~ 105%(지금 값)로, 착지 후 구르는 거리가 짧아진 공중 구간을 메운다.
-    private void ReportEntry(string kind, Vector3 impulse)
-    {
-        Rigidbody hips = m_rig.HipsBody;
-        Debug.Log(
-            $"[래그돌/진입] {kind} {(HasMoveAuthority ? "오너" : "원격")}"
-                + $" | 임펄스 {impulse.magnitude:F2} {impulse.ToString("F1")}"
-                + $" | 골반v {(hips != null ? hips.linearVelocity.magnitude : -1f):F2}"
-                + $" 키네={(hips != null && hips.isKinematic)}"
-                + $" | 사망={DiagIsDead} 원인={DiagCause}"
-                + $" | 뼈 {m_rig.BoneCount}개"
-                + $" 캡슐={(m_controller != null && m_controller.enabled ? "켜짐" : "꺼짐")}",
-            this
-        );
-    }
-
-    private bool DiagIsDead => m_incapacitation != null && m_incapacitation.IsDead;
-    private string DiagCause =>
-        m_incapacitation != null ? m_incapacitation.Cause.ToString() : "없음";
-
-    private Vector3 m_diagStartHips;
-    private Vector3 m_diagImpulse;
-    private float m_diagApexY;
-    private bool m_diagTracking;
-
-    // 비행 중 최고점을 따라간다 — Update의 Ragdoll 분기에서 부른다.
-    private void TickFlightApex()
-    {
-        if (m_diagTracking && m_rig.Hips != null && m_rig.Hips.position.y > m_diagApexY)
-            m_diagApexY = m_rig.Hips.position.y;
-    }
-
-    // 정착하는 순간 한 번 — 이론값은 골반이 0.9m에서 출발하는 포물선이다:
-    //   체공 t = (vy + √(vy² + 2·9.81·0.9)) / 9.81,  수평 = vx·t
-    private void ReportLanding()
-    {
-        if (!m_diagTracking || m_rig.Hips == null)
-            return;
-
-        m_diagTracking = false;
-
-        Vector3 flat = m_rig.Hips.position - m_diagStartHips;
-        flat.y = 0f;
-
-        float vx = new Vector2(m_diagImpulse.x, m_diagImpulse.z).magnitude;
-        float vy = m_diagImpulse.y;
-        float predictedTime = vy <= 0f
-            ? 0f
-            : (vy + Mathf.Sqrt(vy * vy + 2f * 9.81f * 0.9f)) / 9.81f;
-        float predictedFlat = vx * predictedTime;
-
-        Debug.Log(
-            $"[래그돌/착지] {(HasMoveAuthority ? "오너" : "원격")}"
-                + $" | 임펄스 {m_diagImpulse.magnitude:F2} (수평 {vx:F2} 상승 {vy:F2})"
-                + $" | 실측 수평 {flat.magnitude:F2}m 정점 +{m_diagApexY - m_diagStartHips.y:F2}m"
-                + $" 체공 {m_elapsedInRagdoll:F2}s"
-                + $" | 이론 수평 {predictedFlat:F2}m 체공 {predictedTime:F2}s"
-                + $" | 실측/이론 {(predictedFlat > 0.01f ? flat.magnitude / predictedFlat : -1f):P0}",
-            this
-        );
     }
 
     /// <summary>
@@ -458,7 +385,6 @@ public class PlayerRagdoll : MonoBehaviour
             return;
 
         m_elapsedInRagdoll += Time.deltaTime;
-        TickFlightApex(); // 임시 진단
 
         m_stillTimer = m_rig.AverageSpeed <= m_settleSpeedThreshold
             ? m_stillTimer + Time.deltaTime
@@ -554,16 +480,6 @@ public class PlayerRagdoll : MonoBehaviour
             if ((m_state == RagdollState.Ragdoll || m_state == RagdollState.Settled)
                 && revivalIsReal)
             {
-                // ---- 임시 진단 (#506) ----
-                // 고친 뒤에는 <b>정상 부활에서만</b> 떠야 한다 — 사망관측=True로.
-                Debug.Log(
-                    $"[래그돌/취소] {(HasMoveAuthority ? "오너" : "원격")}"
-                        + $" 상태={m_state} 진입후 {m_elapsedInRagdoll:F2}s"
-                        + $" | 사망={DiagIsDead} 원인={DiagCause}"
-                        + $" 사망관측={m_sawDeathThisEpisode} 대기 {m_awaitingDeathSeconds:F2}s"
-                        + " → ExitToAnimator(부활로 처리)",
-                    this
-                );
                 ExitToAnimator(blend: true); // 부활 — 정착 포즈에서 기상으로 잇는다
             }
             return;
@@ -770,8 +686,6 @@ public class PlayerRagdoll : MonoBehaviour
     // (<see cref="TickAlignBonesToRoot"/>). 흡수할 어긋남이 없으니 수렴도 유예도 없다.
     private void Settle()
     {
-        ReportLanding(); // 임시 진단 — 뼈를 옮기기 전에 실제 착지 지점을 읽는다
-
         m_rig.CapturePose();
         Vector3 landedHips = m_rig.Hips.position;
 
