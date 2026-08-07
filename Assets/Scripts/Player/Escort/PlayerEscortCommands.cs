@@ -478,6 +478,10 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     //                                 뒤집으면 방금 건 커스터디가 풀린다.
     private void ServerApplyRopeDrag(NpcController target)
     {
+        // 줄이 이 대상에 새로 걸리는가 — 소리를 낼지 가르는 기준이다 (#549).
+        // AddTether는 이미 걸린 대상에 두 번 걸지 않으므로(멱등) 그 전에 봐야 한다.
+        bool isNewRope = !Escorter.IsTetheredTo(target);
+
         Escorter.AddTether(target);
 
         // 커스터디 상태는 수갑 연행과 같은 Escorted를 재사용한다 — 유치장 판정·이벤트 수명·가로채기 방지가
@@ -490,8 +494,11 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         // StartFlee를 걸어 묶자마자 도망친다. (#292)
         target.ExitStun(resumeReaction: false);
 
-        // 줄이 조여진 소리 — 새로 묶기·합류·끌기 재개가 전부 이 함수로 모이므로 여기 한 곳이면 된다 (#549).
-        App.Game.Fx?.PlayEverywhere(EFx.RopeBind, target.transform.position);
+        // 줄이 조여진 소리 — <b>새 줄이 걸릴 때만</b> 낸다 (#549). 내 줄이 이미 걸린 대상을 다시
+        // 클릭하는 재개는 줄을 거는 조작이 아니라 놓았던 줄을 손에 다시 쥐는 것이라 조여질 줄이 없다
+        // (끌던 대상을 또 클릭해도 마찬가지다). 줄 없는 대상을 새로 묶는 것과 합류만 남는다.
+        if (isNewRope)
+            App.Game.Fx?.PlayEverywhere(EFx.RopeBind, target.transform.position);
 
         NotifyOwner($"밧줄로 묶어 끌기 시작: {target.name} ({Escorter.TetheredCount}/{Escorter.RopeCapacity})");
     }
