@@ -368,10 +368,13 @@ MonoBehaviour:
   m_retargetHysteresis: 1.5
   m_targetSearchRadius: 300
   m_explosionRadius: 8
-  m_explosionDamage: 60
+  m_explosionDamage: 150
+  m_damageEdgeFalloff: 0.2
   m_knockbackForce: 30
   m_knockbackUpwardRatio: 0.45
   m_knockbackEdgeFalloff: 0.25
+  m_ragdollImpulseScale: 0.22
+  m_ragdollLiftRatio: 1.2
   m_armOnStart: 0
 --- !u!114 &452186133471686071
 MonoBehaviour:

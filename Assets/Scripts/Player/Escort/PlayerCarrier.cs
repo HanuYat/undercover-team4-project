@@ -292,8 +292,14 @@ public class PlayerCarrier : NetworkBehaviour
             BeginDraggedRpc(new NetworkObjectReference(carrier.NetworkObject));
     }
 
-    // 위치 변경은 오너만 할 수 있다(NetworkTransform 오너 권한) — 서버가 시키고 오너가 움직인다 (#279 관례)
-    [Rpc(SendTo.Owner)]
+    // <b>전 피어로 보낸다.</b> 위치 변경 자체는 여전히 오너만 하지만(NetworkTransform 오너 권한),
+    // 대상이 래그돌이면 이동이 아니라 <b>밧줄 관절</b>이 붙는다 — 그건 각 피어가 자기 로컬 시체에
+    // 걸어야 한다. 안 걸면 원격 시체에는 <b>끄는 힘이 아예 없어</b> 물리를 켜 둬도 따라오지 않는다.
+    //
+    // 원격에서 이 호출이 안전한 근거: PlayerTowedMotion.BeginDraggedFollow는 래그돌이면 밧줄만 묶고
+    // 곧장 반환하며, 원격은 PlayerMovement가 비활성이라(오너만 켜진다) 위치 추종 Tick 자체가 돌지
+    // 않는다. 래그돌이 아닌 폴백 경로도 같은 이유로 트랜스폼을 건드리지 못한다. (#506 §10-3)
+    [Rpc(SendTo.Everyone)]
     private void BeginDraggedRpc(NetworkObjectReference carrierRef)
     {
         if (m_towed == null)
@@ -304,7 +310,7 @@ public class PlayerCarrier : NetworkBehaviour
         m_towed.BeginDraggedFollow(carrierObj.transform);
     }
 
-    [Rpc(SendTo.Owner)]
+    [Rpc(SendTo.Everyone)]
     private void EndDraggedRpc() => m_towed?.EndDraggedFollow();
 
     // 끌고 있는 대상 참조 동기화 — 서버(또는 오프라인)에서만 호출된다. (PlayerEscorter.SetTethered 관례)
