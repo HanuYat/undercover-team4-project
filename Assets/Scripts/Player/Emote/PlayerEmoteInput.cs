@@ -28,6 +28,7 @@ public class PlayerEmoteInput : MonoBehaviour
 
     private PlayerEmote m_emote;
     private PlayerInputHandler m_inputHandler;
+    private PlayerLook m_look; // 휠 조준 중 시점 회전 정지 (#219)
 
     private readonly EmoteLoadout m_slots = new EmoteLoadout();
     private Vector2 m_aim;
@@ -42,6 +43,7 @@ public class PlayerEmoteInput : MonoBehaviour
     {
         m_emote = GetComponent<PlayerEmote>();
         m_inputHandler = GetComponent<PlayerInputHandler>();
+        m_look = GetComponent<PlayerLook>();
         m_slots.Load();
         FillDefaultSlotsIfEmpty();
     }
@@ -112,6 +114,10 @@ public class PlayerEmoteInput : MonoBehaviour
         IsWheelOpen = true;
         m_aim = Vector2.zero;
 
+        // 조준하는 동안 화면은 고정한다 — 같은 마우스 이동이 칸 선택이라 시점까지 돌면 둘이 겹친다.
+        if (m_look != null)
+            m_look.SetLookSuspended(true);
+
         if (m_wheelView != null)
             m_wheelView.Open(m_slots, m_emote.Catalog, this);
     }
@@ -149,6 +155,11 @@ public class PlayerEmoteInput : MonoBehaviour
     private void CloseWheel()
     {
         IsWheelOpen = false;
+
+        // 시점을 반드시 여기서 되살린다 — 발동하든 데드존으로 취소하든 닫는 길은 이 하나뿐이라,
+        // 어느 경로로 나가도 화면이 잠긴 채 남지 않는다.
+        if (m_look != null)
+            m_look.SetLookSuspended(false);
 
         if (m_wheelView != null)
             m_wheelView.Close();

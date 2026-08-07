@@ -89,6 +89,7 @@ public class PlayerLook : MonoBehaviour
     private float m_downCamBlend;   // 서기 시점(0) ↔ 다운 시점(1) 보간 진행도 (#105)
     private float m_downYaw;        // 쓰러진 동안 누적한 시야 좌우 각도 — 몸 회전이 아니라 카메라 로컬 (#252)
     private bool m_downLookTaken;   // 쓰러진 뒤 플레이어가 시선을 직접 움직였는가 — 그 순간부터 강제 피치를 놓는다
+    private bool m_lookSuspended;   // 시점 회전만 멈춘 상태 — 감정표현 휠 조준 중 (#219)
     private bool m_emoteView;       // 감정표현 3인칭 시점이 요청됐는가 (#219)
     private float m_emoteCamBlend;  // 1인칭(0) ↔ 3인칭(1) 보간 진행도
     private float m_emoteYaw;       // 감정표현 중 누적한 카메라 좌우 각 — 몸은 돌리지 않는다
@@ -180,13 +181,27 @@ public class PlayerLook : MonoBehaviour
     }
 
     /// <summary>
+    /// 시점 회전을 잠시 멈춘다 — 감정표현 휠처럼 <b>같은 마우스 입력을 다른 용도로 쓰는</b> UI가 켠다. (#219)
+    ///
+    /// 입력 자체를 끄는 <see cref="PlayerInputHandler.SetSuspended"/>로는 이 일을 할 수 없다.
+    /// 그쪽은 액션을 통째로 비활성화하므로 휠을 여는 홀드 입력까지 끊겨 휠이 그 순간 닫힌다.
+    /// 여기서 막는 것은 <b>시점 회전 하나뿐</b>이고, 마우스 델타는 휠 조준이 계속 읽어 간다.
+    /// </summary>
+    public void SetLookSuspended(bool suspended)
+    {
+        m_lookSuspended = suspended;
+    }
+
+    /// <summary>
     /// 마우스 입력으로 시점을 돌린다 — 평상시엔 몸통 yaw + 카메라 pitch, 쓰러진 동안엔 카메라 로컬만. (#216, #252)
     /// </summary>
     public void HandleLook()
     {
         // 라운드 종료 freeze·커서 해제 시엔 시점 회전을 막는다 — 마우스 이동이 화면을 돌리면 안 된다 (#352).
         // 쓰러진 동안(다운·기절)은 열어 둔다 (#252) — 몸은 못 움직여도 주변은 볼 수 있어야 한다.
-        if ((m_movement != null && m_movement.IsRoundOver) || CursorLock.IsUnlocked)
+        // 감정표현 휠이 열려 있는 동안도 막는다 (#219) — 같은 마우스 이동이 칸을 고르는 조준이라,
+        // 화면까지 함께 돌면 고르는 내내 시점이 휩쓸린다.
+        if ((m_movement != null && m_movement.IsRoundOver) || CursorLock.IsUnlocked || m_lookSuspended)
         {
             m_smoothedLook = Vector2.zero; // 재개 시 잠긴 동안의 스무딩 잔여값으로 튀지 않도록 초기화 (#216)
             return;

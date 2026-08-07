@@ -62,12 +62,26 @@ public class EmoteWheelSlotView : MonoBehaviour
         // 구독을 갈아끼울 때 이전 것을 반드시 끊는다 — 로비 편집에서는 같은 칸이 계속 다시
         // Bind되므로, 안 끊으면 구독이 쌓여 한 칸에 여러 문구가 번갈아 들어온다.
         UnsubscribeLabel();
-        m_boundName = filled ? definition.DisplayName : null;
 
-        if (m_boundName != null)
-            m_boundName.StringChanged += SetLabelText;
-        else
+        if (!filled)
+        {
+            m_boundName = null;
             SetLabelText(string.Empty);
+            return;
+        }
+
+        // 표시 이름 키가 아직 연결되지 않았으면 id를 대신 보여 준다.
+        // 빈 칸으로 두면 아이콘 색만으로 무엇인지 구분해야 하는데, 임시 아이콘 단계에서는
+        // 그게 사실상 구분 불가다 — 로컬라이즈 배선이 끝나기 전에도 고를 수 있어야 한다.
+        if (definition.DisplayName == null || definition.DisplayName.IsEmpty)
+        {
+            m_boundName = null;
+            SetLabelText(definition.Id);
+            return;
+        }
+
+        m_boundName = definition.DisplayName;
+        m_boundName.StringChanged += SetLabelText;
     }
 
     private void OnDestroy() => UnsubscribeLabel();

@@ -22,6 +22,7 @@ public class PlayerEmoteView : MonoBehaviour
 
     private PlayerEmote m_emote;
     private PlayerLook m_look; // 오너 3인칭 시점 전환 (#219) — 오너에만 있다
+    private PlayerHandView m_handView; // 3인칭 동안 1인칭 팔 감추기 (#219)
 
     /// <summary>표시할 감정표현이 바뀌었다 — null이면 종료. 말풍선이 구독한다.</summary>
     public event Action<EmoteDefinition> OnEmoteVisualChanged;
@@ -30,6 +31,7 @@ public class PlayerEmoteView : MonoBehaviour
     {
         m_emote = GetComponent<PlayerEmote>();
         m_look = GetComponent<PlayerLook>();
+        m_handView = GetComponent<PlayerHandView>();
 
         if (m_animator == null)
             m_animator = GetComponentInChildren<Animator>();
@@ -66,6 +68,11 @@ public class PlayerEmoteView : MonoBehaviour
         // PlayerLook은 오너 로컬 전용이라 비오너 인스턴스에는 컴포넌트가 있어도 동작하지 않는다.
         if (m_look != null)
             m_look.SetEmoteView(active);
+
+        // 3인칭으로 빠지면 1인칭 팔은 감춘다 — 카메라 자식이라 그냥 두면 전신이 보이는 화면에
+        // 팔 한 쌍이 허공에 떠 따라다닌다. 시점 전환과 한 지점에서 묶어야 한쪽만 빠뜨리지 않는다.
+        if (m_handView != null)
+            m_handView.SetViewmodelVisible(!active);
 
         OnEmoteVisualChanged?.Invoke(definition);
     }
