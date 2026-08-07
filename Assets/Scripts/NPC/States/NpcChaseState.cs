@@ -70,6 +70,10 @@ public class NpcChaseState : NpcStateBase
 
     public override void Exit()
     {
+        // 소매치기는 추격을 벗어나면 평범한 도주형이 된다 (#303) — 표식을 들고 나가면 연행·수감 뒤에도
+        // 때리거나 다시 묶을 수 있는 예외(NpcStateRules)가 열린 채로 남는다.
+        m_owner.Penalty.ClearPickpocketDuty();
+
         m_owner.Agent.speed = m_baseSpeed;
         m_owner.Agent.stoppingDistance = 0f; // 수렴 페이즈가 올린 정지 거리 원복 — 배회 복귀 시 목적지 앞 멈춤 방지
         if (m_owner.Agent.isOnNavMesh)
@@ -105,7 +109,8 @@ public class NpcChaseState : NpcStateBase
         // 자기 추격 상한(AbductionEvent.m_maxChaseSeconds)으로 끊는다 — 상태가 판단할 일이 아니다.
         Transform target = m_owner.Penalty.ChaseTarget;
 
-        if (m_owner.Penalty.IsAbductionDuty)
+        // 소매치기(#303)도 표적을 갈아타지 않는다 — 노리던 사람의 물건을 채는 것이 이벤트의 전부다.
+        if (m_owner.Penalty.IsUndercoverDuty)
         {
             // 표적이 사라졌다(접속 종료·파괴) — 여기서 재타겟으로 흘리면 아래 갈아타기 금지가 무의미해진다.
             // 배회로 두고 이벤트의 추격 상한이 끊게 한다.
@@ -132,9 +137,20 @@ public class NpcChaseState : NpcStateBase
 
         // ---- 추격: 가속하며 쫓고, 붙으면 포획을 통보한다
         m_hunting = false;
-        float elapsed = Time.time - m_targetAcquiredTime;
-        float accel = Mathf.Clamp01(elapsed / Mathf.Max(m_config.AccelSeconds, 0.01f));
-        m_owner.Agent.speed = Mathf.Lerp(m_baseSpeed, m_config.MaxSpeed, accel);
+
+        // 소매치기는 가속하지 않는다 (#303) — 시민 걸음으로 다가가야 알아채지 못한다.
+        // 달려들면 등 뒤에서 채는 그림이 아니라 그냥 추격이 되고, 정체가 걸음걸이로 새어 나간다.
+        if (m_owner.Penalty.IsPickpocketDuty)
+        {
+            m_owner.Agent.speed = m_baseSpeed;
+        }
+        else
+        {
+            float elapsed = Time.time - m_targetAcquiredTime;
+            float accel = Mathf.Clamp01(elapsed / Mathf.Max(m_config.AccelSeconds, 0.01f));
+            m_owner.Agent.speed = Mathf.Lerp(m_baseSpeed, m_config.MaxSpeed, accel);
+        }
+
         m_owner.Agent.stoppingDistance = 0f;
 
         if (m_repathTimer <= 0f)

@@ -21,8 +21,9 @@ using Random = UnityEngine.Random;
 [System.Serializable]
 public class SpawnedNpcEvent : ISuddenEvent
 {
-    /// <summary>스폰 직후 NPC가 취할 행동. Resist=그 자리 저항(난동자), Flee=플레이어에게서 도주(난동꾼).</summary>
-    public enum Behavior { Resist, Flee }
+    /// <summary>스폰 직후 NPC가 취할 행동. Resist=그 자리 저항(난동자), Flee=플레이어에게서 도주(난동꾼),
+    /// Pickpocket=시민처럼 다가가 물건을 채고 도주(소매치기, #303).</summary>
+    public enum Behavior { Resist, Flee, Pickpocket }
 
     [Header("이벤트 정의")]
     [Tooltip("로그·HUD에 표시할 이름 (예: 거리 난동자 / 나체 난동꾼)")]
@@ -207,7 +208,44 @@ public class SpawnedNpcEvent : ISuddenEvent
                 if (m_threat != null)
                     m_npc.Reaction.StartFlee(m_threat);
                 break;
+
+            case Behavior.Pickpocket:
+                // 시민 걸음으로 표적에게 다가간다 (#303). 밀착 판정·통보는 추격 상태가 이미 하므로
+                // 그 통보(OnPenaltyCaught)를 탈취 신호로 받아 쓴다.
+                if (m_threat != null)
+                {
+                    m_npc.Penalty.OnPenaltyCaught += HandlePickpocketReach;
+                    m_npc.Penalty.StartPenaltyChase(m_threat, pickpocketDuty: true);
+                }
+                break;
         }
+    }
+
+    // 소매치기가 표적에 밀착했다 — 물건 하나를 채고 곧바로 도주로 넘어간다. 서버에서만 발생.
+    private void HandlePickpocketReach(NpcController npc, Transform caught)
+    {
+        if (m_npc == null || npc != m_npc)
+            return;
+
+        // 통보는 3초마다 재시도되므로(NpcChaseState) 한 번 챘으면 더 받지 않는다
+        m_npc.Penalty.OnPenaltyCaught -= HandlePickpocketReach;
+
+        PlayerLoadout victim = caught != null ? caught.GetComponentInParent<PlayerLoadout>() : null;
+        ItemBase stolen = victim != null ? victim.ServerStealRandom(m_npc.transform) : null;
+
+        if (stolen != null)
+        {
+            m_npc.gameObject.AddComponent<StolenGoods>().ServerTake(stolen);
+            Debug.Log($"[돌발이벤트] {m_displayName} — {stolen.name} 탈취, 도주 시작");
+        }
+        else
+        {
+            // 뺏을 게 없었다(빈손·묶은 밧줄뿐) — 그래도 달아나게 둔다. 그 자리에 서 있으면 무슨 일이
+            // 일어난 건지 알 수 없고, 쫓아가 잡으면 경범죄 수익은 그대로 난다.
+            Debug.Log($"[돌발이벤트] {m_displayName} — 뺏을 소지품이 없어 빈손으로 도주");
+        }
+
+        m_npc.Reaction.StartFlee(m_threat);
     }
 
     // 상태 전이 수신 — 제압(Captured)은 연행 대기, 행동 시작 뒤 배회 복귀(Idle/Walk)는 이탈로 종료 처리
@@ -218,6 +256,10 @@ public class SpawnedNpcEvent : ISuddenEvent
 
         if (state == NpcState.Captured)
         {
+            // 훔친 물건은 제압당한 자리에 떨어진다 (#303) — 주우면 회수 끝, 본부까지 갈 것 없다
+            if (m_npc.TryGetComponent(out StolenGoods goods))
+                goods.ServerDropHere();
+
             // 제압만으로는 아무 일도 일어나지 않는다 — 본부까지 연행해야 판정·수익이 난다.
             // 연행이 끊겨 다시 Captured로 돌아온 경우에도 방치 유예를 새로 준다.
             m_startTime = Time.time;
@@ -255,6 +297,9 @@ public class SpawnedNpcEvent : ISuddenEvent
     {
         NpcController npc = m_npc;
 
+        // 물건을 든 채 놓쳤다 — 영구 손실이다 (#303). 제압당한 개체는 이미 떨어뜨려 여기선 무동작.
+        ClearPickpocket(npc);
+
         npc.OnStateChanged -= HandleStateChanged;
         m_npc = null;
         m_threat = null;
@@ -266,11 +311,27 @@ public class SpawnedNpcEvent : ISuddenEvent
         MisdemeanorLoiterer.Attach(npc, m_displayName);
     }
 
+    // 소매치기 뒷정리 — 밀착 통보 구독을 끊고, 아직 들고 있는 물건은 손실 처리한다. (#303)
+    // 이벤트가 손을 떼는 두 경로(잔류·정리)가 모두 지난다 — 하나만 빠지면 물건이 유령처럼 남는다.
+    private void ClearPickpocket(NpcController npc)
+    {
+        if (npc == null)
+            return;
+
+        npc.Penalty.OnPenaltyCaught -= HandlePickpocketReach;
+
+        if (npc.TryGetComponent(out StolenGoods goods))
+            goods.ServerLose();
+    }
+
     // 스폰한 NPC를 정리한다 — 구독 해제 후 Despawn/Destroy하고 참조·플래그를 비운다.
     private void Despawn(bool playVfx = true)
     {
         if (m_npc == null)
             return;
+
+        // 라운드 종료 등으로 통째로 정리된다 — 들고 있던 물건도 함께 사라진다 (#303)
+        ClearPickpocket(m_npc);
 
         m_npc.OnStateChanged -= HandleStateChanged;
 

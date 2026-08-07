@@ -282,6 +282,50 @@ public class PlayerLoadout : NetworkBehaviour
         ServerNotifyHeldItemsChanged();
     }
 
+    // ---- 소매치기 탈취 (#303) ----
+
+    // 탈취 후보를 모으는 버퍼 — 매 탈취마다 새 List를 만들지 않게 재사용한다.
+    private readonly List<ItemBase> m_stealCandidates = new List<ItemBase>();
+
+    /// <summary>
+    /// 소지품 하나를 무작위로 빼앗아 <paramref name="thief"/> 밑으로 옮긴다 — 소매치기(#303)가
+    /// 밀착했을 때 서버가 부른다. 빈손이거나 후보가 없으면 null.
+    ///
+    /// 부모가 바뀌는 것만으로 월드 표시·줍기가 함께 꺼진다(WorldItemPickup이 부모 유무로 판단) —
+    /// 따로 숨기거나 디스폰할 필요가 없고, 되돌려줄 때도 떼기만 하면 원래대로 돌아온다.
+    /// </summary>
+    public ItemBase ServerStealRandom(Transform thief)
+    {
+        if (!IsServer || thief == null)
+        {
+            return null;
+        }
+
+        m_held.CollectInto(m_stealCandidates);
+
+        // 묶어 둔 밧줄은 뺏지 않는다 — 손을 떠나면 묶인 NPC가 주인 없이 남는다 (버리기와 같은 이유, #369)
+        m_stealCandidates.RemoveAll(IsTetheredRope);
+
+        if (m_stealCandidates.Count == 0)
+        {
+            return null;
+        }
+
+        ItemBase stolen = m_stealCandidates[UnityEngine.Random.Range(0, m_stealCandidates.Count)];
+        NetworkObject stolenObject = stolen.NetworkObject;
+
+        // 채널링 중이면 끊는다 — 소유권을 잃은 뒤엔 오너의 취소 RPC가 막혀 배터리가 새고 오완료된다 (드롭과 같은 처리)
+        stolen.ServerCancelActiveUse();
+
+        stolenObject.RemoveOwnership();
+        stolenObject.TrySetParent(thief, false);
+        stolenObject.transform.localPosition = Vector3.zero;
+        stolenObject.transform.localRotation = Quaternion.identity;
+
+        ServerNotifyHeldItemsChanged();
+        return stolen;
+    }
+
     // 정면 드롭 지점을 구한다 — 앞이 벽이면 벽 앞으로 당긴다 (서버에서 호출).
     // 벽에 붙어 버리면 아이템이 벽 너머로 넘어가는데, 가시선 차단(#360) 이후로는 그렇게 넘어간
     // 아이템을 벽 너머로 주울 수도 없어 영영 회수 불가가 된다.

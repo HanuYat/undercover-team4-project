@@ -58,6 +58,25 @@ public sealed class HeldItems
     public bool Holds(NetworkObject item) =>
         item != null && IsUsable && item.transform.parent == m_anchor;
 
+    /// <summary>소지품을 into에 담는다(기존 내용은 지운다) — 목록이 필요한 쪽만 쓴다. (#303)</summary>
+    public void CollectInto(List<ItemBase> into)
+    {
+        into.Clear();
+        if (!IsUsable)
+        {
+            return;
+        }
+
+        for (int i = 0; i < m_anchor.childCount; i++)
+        {
+            ItemBase item = m_anchor.GetChild(i).GetComponent<ItemBase>();
+            if (item != null)
+            {
+                into.Add(item);
+            }
+        }
+    }
+
     /// <summary>
     /// 아이템을 부착하고 로컬 원점에 맞춘다. 서버에서만 호출 — 부착 자체는 NGO가 복제한다.
     /// </summary>

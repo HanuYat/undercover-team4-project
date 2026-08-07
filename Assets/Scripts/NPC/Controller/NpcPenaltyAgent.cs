@@ -40,6 +40,22 @@ public class NpcPenaltyAgent : NetworkBehaviour
     /// </summary>
     public bool IsAbductionDuty => IsSpawned ? m_abductionDuty.Value : m_abductionDutyLocal;
 
+    // 이 추격이 소매치기인가 (#303) — 납치 표식과 같은 이유로 전 피어가 읽어야 해서 동기화한다.
+    private readonly NetworkVariable<bool> m_pickpocketDuty = new NetworkVariable<bool>();
+    private bool m_pickpocketDutyLocal;
+
+    /// <summary>
+    /// 이 추격이 <b>소매치기</b>(#303)인가 — 물건만 채고 달아나는, 페널티가 아닌 임무다.
+    /// 납치와 달리 붙잡아 끌고 가지 않으므로 포획 통보(<see cref="OnPenaltyCaught"/>)가 곧 탈취 시점이다.
+    /// </summary>
+    public bool IsPickpocketDuty => IsSpawned ? m_pickpocketDuty.Value : m_pickpocketDutyLocal;
+
+    /// <summary>
+    /// 시민인 척하는 임무인가 — 납치·소매치기가 참. 앵그리 마크를 띄우지 않고 표적도 갈아타지 않는다.
+    /// 둘이 같은 답을 내야 하는 자리(마크·재타겟)가 이 이름을 읽는다.
+    /// </summary>
+    public bool IsUndercoverDuty => IsAbductionDuty || IsPickpocketDuty;
+
     /// <summary>임무 종류가 바뀐 순간 발행 — 전 피어. 표현 계층이 앵그리 마크를 다시 판정한다. (#371)</summary>
     public event Action OnPenaltyDutyChanged;
 
@@ -76,11 +92,13 @@ public class NpcPenaltyAgent : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         m_abductionDuty.OnValueChanged += HandleAbductionDutyChanged; // 페널티 임무 종류 전파 (#371)
+        m_pickpocketDuty.OnValueChanged += HandleAbductionDutyChanged; // 마크 판정이 같아 같은 핸들러 (#303)
     }
 
     public override void OnNetworkDespawn()
     {
         m_abductionDuty.OnValueChanged -= HandleAbductionDutyChanged;
+        m_pickpocketDuty.OnValueChanged -= HandleAbductionDutyChanged;
     }
 
     // 페널티 임무 종류(오검거/납치) 전파 — 앵그리 마크를 그리는 표현 계층이 모든 피어에서 다시 판정한다 (#371)
@@ -111,29 +129,49 @@ public class NpcPenaltyAgent : NetworkBehaviour
     /// <summary>
     /// 추격 출동 — 임계치를 넘긴 플레이어를 초기 타겟으로 쫓기 시작한다. (#278)
     /// abductionDuty를 켜면 납치 임무가 된다 — 표적을 갈아타지 않고 앵그리 마크도 띄우지 않는다 (#371).
+    /// pickpocketDuty는 소매치기다 (#303) — 시민 속도로 걸어가 밀착하면 포획 대신 물건만 챈다.
     /// </summary>
-    public void StartPenaltyChase(Transform target, bool abductionDuty = false)
+    public void StartPenaltyChase(
+        Transform target,
+        bool abductionDuty = false,
+        bool pickpocketDuty = false
+    )
     {
         if (IsSpawned && !IsServer)
             return;
 
         DetentionSpot = null;
         ChaseTarget = target;
-        SetAbductionDuty(abductionDuty); // 상태 전이보다 먼저 — 마크 판정이 임무 종류를 이미 알고 있어야 한다
+        // 상태 전이보다 먼저 — 마크 판정이 임무 종류를 이미 알고 있어야 한다
+        SetDutyFlag(ref m_abductionDutyLocal, m_abductionDuty, abductionDuty);
+        SetDutyFlag(ref m_pickpocketDutyLocal, m_pickpocketDuty, pickpocketDuty);
         m_owner.StateMachine.ChangeState(NpcState.Chasing);
     }
 
-    // 임무 종류를 세우고 전 피어에 알린다. 오프라인이면 로컬 사본만 바꾸고 직접 발행한다(NetworkVariable이 안 돈다).
-    private void SetAbductionDuty(bool value)
+    // 임무 표식을 세우고 전 피어에 알린다. 오프라인이면 로컬 사본만 바꾸고 직접 발행한다(NetworkVariable이 안 돈다).
+    private void SetDutyFlag(ref bool local, NetworkVariable<bool> synced, bool value)
     {
-        if (m_abductionDutyLocal == value && (!IsSpawned || m_abductionDuty.Value == value))
+        if (local == value && (!IsSpawned || synced.Value == value))
             return;
 
-        m_abductionDutyLocal = value;
+        local = value;
         if (IsSpawned)
-            m_abductionDuty.Value = value; // OnValueChanged가 전 피어에서 OnPenaltyDutyChanged로 이어진다
+            synced.Value = value; // OnValueChanged가 전 피어에서 OnPenaltyDutyChanged로 이어진다
         else
             OnPenaltyDutyChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// 소매치기 표식을 내린다 — 추격을 벗어나는 순간 <see cref="NpcChaseState.Exit"/>가 부른다. (#303)
+    /// 남겨 두면 <see cref="NpcStateRules"/>의 소매치기 예외가 계속 열려, 연행·수감된 뒤에도 때리거나
+    /// 다시 묶을 수 있게 된다 — 그 예외들이 원래 막으려던 신병 빼내기가 그대로 뚫린다.
+    /// </summary>
+    public void ClearPickpocketDuty()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        SetDutyFlag(ref m_pickpocketDutyLocal, m_pickpocketDuty, false);
     }
 
     /// <summary>추격 타겟 교체 — 범위 이탈 재타겟(NpcChaseState)·수렴 지시(매니저)가 호출한다. (#278)</summary>
@@ -196,7 +234,8 @@ public class NpcPenaltyAgent : NetworkBehaviour
 
         DetentionSpot = null;
         ChaseTarget = null;
-        SetAbductionDuty(false);
+        SetDutyFlag(ref m_abductionDutyLocal, m_abductionDuty, false);
+        SetDutyFlag(ref m_pickpocketDutyLocal, m_pickpocketDuty, false);
         PenaltyConvergeTarget = null;
         ChaseRepelBy = null;
         ChaseRepelUntil = 0f;

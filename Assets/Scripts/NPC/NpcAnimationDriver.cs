@@ -626,7 +626,7 @@ public class NpcAnimationDriver : MonoBehaviour
         // 머리 위 표시 하나로 정체가 새어 나가고 심지어 오검거 추격대로 오인된다.
         NpcPenaltyMark.SetVisible(
             m_controller,
-            IsPenaltyLocomotion(state) && !m_penalty.IsAbductionDuty
+            IsPenaltyLocomotion(state) && !m_penalty.IsUndercoverDuty
         );
 
         // 저항(Attack) 진입은 추격으로 시작하는 것이 일반적이라 달리기로 시드하고 이동 판별을 초기화한다 —
