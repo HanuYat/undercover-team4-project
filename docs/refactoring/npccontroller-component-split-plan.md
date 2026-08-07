@@ -33,26 +33,32 @@
 > 재측정했다. 이 PR은 **순수 이동이 아니다** — 회귀 테스트에서 기존 버그 하나가 나와 함께 고쳤고
 > (기절이 밧줄에 걸린 대상에서 제대로 안 풀리던 것), 밧줄 전환 잔재 하나를 걷어냈다([#562](https://github.com/hyunjin0814/undercover-team4-project/issues/562)).
 > 자세한 것은 § 6 "6번 결과".
+>
+> **갱신 2026-08-07 (6차)** — 6번이 [#563](https://github.com/hyunjin0814/undercover-team4-project/pull/563)으로
+> 머지된 뒤 **main이 7번 대상 파일을 크게 건드렸다**(#557 · #559 · #506 · #554). 코어가 310 → 385줄로 늘었고
+> **`Update` 게이트가 하나 늘었다**(§ 5-1 갱신). 7번 관문도 바뀌었다 — `feature/506`은 머지됐고
+> `feature/423`은 #557에 대체된 것으로 보인다(§ 6). § 1·§ 2-2·§ 5-1·§ 6·§ 8·§ 10을 재측정했다.
+> **§ 2-2는 5행 5건 그대로다** — main의 변경이 상호참조를 늘리지 않았다.
 
-## 0. 이어서 하는 사람을 위한 재개 지점 (2026-08-07 기준)
+## 0. 이어서 하는 사람을 위한 재개 지점 (2026-08-07 · 6번 머지 후 기준)
 
 다른 기기·다른 세션에서 이어받을 때 **이 절만 읽고 시작할 수 있게** 유지한다.
 
 **끝난 것** — 1단계 5개 전부와 2단계 6번. `NpcIntruder`(#540) · ~~`NpcHolding`~~ 삭제(#541) ·
-`NpcPenaltyAgent`(#542) · `NpcReaction`(#545) · `NpcCustody`(#552) · `NpcHealth`+`NpcStun`(6번).
-클래스는 **4파일 1,048줄**이고 남은 partial 3개(Rope · Knockback · StandUp)는 **전부 7번 소관**이다.
+`NpcPenaltyAgent`(#542) · `NpcReaction`(#545) · `NpcCustody`(#552) · `NpcHealth`+`NpcStun`([#563](https://github.com/hyunjin0814/undercover-team4-project/pull/563)).
+클래스는 **4파일 1,131줄**이고 남은 partial 3개(Rope · Knockback · StandUp)는 **전부 7번 소관**이다.
 
 **다음 할 것 — 2단계 7번(`NpcRopeDrag` + `NpcStandUp` + `NpcKnockback`)**. 이걸 끝내면 partial이 0이 되고,
-남는 것은 코어 정리 8번뿐이다.
+남는 것은 코어 정리 8번뿐이다. 실측은 § 6 "**7번 착수 준비 실측**"에 있다.
 
-**착수 조건 — 머지 순서 조율 둘** (§ 6):
+**착수 조건 — 남은 것은 확인 하나뿐이다:**
 
-1. **`feature/423-knockback-navmesh-recovery`(담당 김준영)** — `.Knockback.cs`를 크게 고친다. 기다리지 않고
-   분리에 포함하기로 했으므로(2026-08-06 결정) 남은 일은 **어느 쪽이 먼저 머지될지 정하는 것**뿐이다.
-2. **`feature/506-ragdoll`(담당 이현진)** — `BombDevice.cs`를 고친다. 7번의 유일한 외부 참조
-   (`ServerApplyKnockback`)가 그 파일에 있다.
+- **`feature/423-knockback-navmesh-recovery`(담당 김준영)가 아직 살아 있는가?** 그 브랜치의 미머지 커밋
+  주제("넉백으로 NavMesh 밖에 떨어진 NPC 자동 복귀")가 **#557로 main에 이미 들어왔다**(`TickNavMeshRecovery`).
+  대체된 것으로 보이지만 **담당자 확인 전에는 단정하지 말 것.** 살아 있으면 머지 순서만 맞추면 된다.
+- ~~`feature/506-ragdoll`~~ — 머지됐다(#565). `BombDevice`의 `ServerApplyKnockback` 호출은 그대로다.
 
-**실측은 § 6 2단계 표에 있다.** 6번에서 배운 것 둘을 먼저 볼 것:
+**6번에서 배운 것 둘을 먼저 볼 것:**
 
 - **회귀 테스트에서 기존 버그가 나올 수 있다.** 6번이 그랬다 — 부품화 자체는 무결했는데 무력화 도메인의
   기존 결함이 드러났다(§ 6 "6번 결과"). 순수 이동을 목표로 삼되, 나오면 별도 커밋으로 가른다.
@@ -64,9 +70,11 @@
 
 **환경 주의 둘**
 
-- **게임 씬이 Apocalypse 맵이다** — `d98bbae`(2026-08-06, 이현석). NPC 스크립트·프리팹은 무변경이지만
-  **Play 회귀는 이 맵에서 돌린다.**
+- **게임 씬이 Apocalypse 맵이다** — `d98bbae`(2026-08-06, 이현석). **Play 회귀는 이 맵에서 돌린다.**
+  #557이 맵 NavMesh 볼륨을 추가하고 재베이크했으므로(`46073f0`) 최신 main으로 받아 둘 것.
 - **프리팹은 모든 분리 PR의 공통 충돌면이다**(§ 6). 7번은 프리팹 4개에 부품을 **3개씩** 붙인다.
+- **main이 7번 대상 파일을 최근에 크게 고쳤다** — #557(NavMesh 회수) · #559(무력화 시 밧줄 해제) ·
+  #554(테이저 납치범 격퇴) · #506(래그돌). 착수 전에 최신 main을 받고 실측을 한 번 더 대조할 것.
 
 ## 1. 현재 상태와 문제
 
@@ -75,18 +83,20 @@
 > 아래 표는 **착수 시점의 기준선**이다 — 분리가 진행되면서 실제 파일 수는 줄어든다.
 > 진행 상황은 § 6의 체크 표시로 추적한다(도메인 PR마다 이 표를 다시 재는 대신).
 >
-> **현재(2026-08-07, 6번 완료 후 실측)**: 클래스 파일 **12개 → 4개 · 1,978줄 → 1,048줄**
-> (코어 310 + partial 3개 — Rope 387 · Knockback 185 · StandUp 166).
-> 착수 기준선 대비 **-8파일 · -930줄(-47%)** 이고, 코어 자체는 343 → 310줄이다.
+> **현재(2026-08-07, 6번 머지 후 실측)**: 클래스 파일 **12개 → 4개 · 1,978줄 → 1,131줄**
+> (코어 385 + partial 3개 — Rope 390 · Knockback 190 · StandUp 166). 부품 6개는 **1,053줄**.
+> 착수 기준선 대비 **-8파일 · -847줄(-43%)** 이고, 코어 자체는 343 → 385줄이다.
 > 남은 partial 3개는 **전부 7번 소관**이다 — 7번이 가져가면 partial은 0이 된다.
 >
-> 빠져나간 930줄의 행방: 부품 6개 **1,031줄**(`NpcStun` 238 · `NpcCustody` 236 · `NpcPenaltyAgent` 207 ·
-> `NpcReaction` 153 · `NpcHealth` 136 · `NpcIntruder` 61) + 삭제된 `Holding` 31줄. 부품 쪽 줄 수가 원래
-> partial보다 큰 것은 클래스 헤더· `m_owner` 배선·코어에서 함께 데려온 멤버 때문이다.
+> **코어가 목표치(~200줄)에서 오히려 멀어졌다.** 원인이 둘인데 성격이 다르다:
+> ① 부품 배선의 고정 비용(6번에서 296 → 310줄 — 부품 필드·접근자 2쌍 + SO를 여는 `internal` 2개),
+> ② **#557이 `TickNavMeshRecovery`를 코어에 얹었다**(310 → 385줄). ②는 세 도메인(밧줄 놓기·넉백 착지·
+> 기절 해제)이 함께 만드는 상태 하나를 보는 공용 안전망이라 **코어가 맞는 자리**다(§ 4-6과 같은 성격) —
+> 줄어들 몫이 아니라는 뜻이다. 목표치는 7번이 끝난 뒤 다시 잡는 편이 낫다.
 >
-> **클래스+부품 총량은 1,978 → 2,079줄로 +101줄 늘었다.** 이 리팩토링이 사는 것은 줄 수가 아니라
-> **컴파일러가 강제하는 경계**이고, 101줄이 그 대가다. 줄 수로 성과를 재려면 클래스 쪽(-930줄)을 봐야 한다.
-> 코어가 6번에서 296 → 310줄로 늘어난 것도 같은 성격이다(부품 필드·접근자 2쌍 + SO를 여는 `internal` 2개).
+> **분리로 빠져나간 몫만 보면** 부품 6개 1,053줄 + 삭제된 `Holding` 31줄이다. 부품 쪽 줄 수가 원래
+> partial보다 큰 것은 클래스 헤더· `m_owner` 배선·코어에서 함께 데려온 멤버 때문이다.
+> 이 리팩토링이 사는 것은 줄 수가 아니라 **컴파일러가 강제하는 경계**이고, 그 차액이 대가다.
 >
 > (#545 PR 본문에 "10개 → 9개"로 적힌 것은 오기다 — 그 시점 실제 수치는 9개 → 8개였다.)
 
@@ -149,7 +159,7 @@ Reaction 관련 2건이 빠져 13행 14건, #547이 `Custody → Stun` 1건을 �
 | Rope → Knockback | `m_knockbackActive` (비행 중이면 에이전트 양보) | `Rope.cs:204` |
 | StandUp → Rope | `IsTethered` / `IsRoped` (누운 자세 판정) | `StandUp.cs:98` |
 | StandUp → Knockback | `m_knockbackActive` (일어나기 취소 판정) | `StandUp.cs:141` |
-| **[헬퍼]** Rope → Knockback | `SweepHitsObstacle(...)` — private, Knockback 도메인 멤버 아님 | `Rope.cs:356` (선언 `Knockback.cs:121`) |
+| **[헬퍼]** Rope → Knockback | `SweepHitsObstacle(...)` — private, Knockback 도메인 멤버 아님 | `Rope.cs:359` (선언 `Knockback.cs:121`) |
 
 **남은 5건은 전부 7번 클러스터(Rope·StandUp·Knockback) 안쪽이다** — 결론 3이 예고한 그림대로다.
 7번이 셋을 가져가면 표가 통째로 비고, 남은 헬퍼도 `SweepHitsObstacle` 하나뿐이다
@@ -296,13 +306,17 @@ NavMesh 섬이 되어 영역 마스크로 막을 일이 없다). 코어의 `Jail
 코어 `Update`의 현재 순서 — 각 단계에 "이 순서여야 하는 이유"가 주석으로 박혀 있다:
 
 ```
-TickRopeDrag() → TickStandUp() → 넉백 게이트 → 스턴 게이트 → FSM Tick
+TickNavMeshRecovery() → TickRopeDrag() → TickStandUp() → 넉백 게이트 → 스턴 게이트 → FSM Tick
 ```
 
-- 밧줄은 게이트보다 **먼저** — 묶인 채 기절한 대상은 스턴 오버레이를 단 채 끌려가야 한다 (#390, `TickStun`이
-  `IsRoped`면 타이머를 멈추는 것과 짝)
+- NavMesh 회수는 **전부보다 먼저** — 뒤로 내리면 스턴 게이트에 가려 기절한 채 굳은 NPC에 영영 닿지 못한다 (#557).
+  **2026-08-07에 늘어난 단계다** — 게이트가 6개가 됐다
+- 밧줄은 게이트보다 **먼저** — 묶인 채 기절한 대상은 스턴 오버레이를 단 채 끌려가야 한다 (#390)
 - 기상 대기도 게이트보다 **먼저** — 뒤로 내리면 일어나는 도중 기절·넉백을 맞은 대상의 예약이 영원히 남는다 (#513)
 - 스턴은 넉백 **뒤** — 둘이 겹치면 넉백이 이긴다 (#292)
+
+**단계가 늘어난다는 것 자체가 이 불변식의 근거다.** #557은 새 단계를 넣으면서 "왜 맨 앞이어야 하는가"를
+주석으로 남겼다 — 부품이 각자 `Update`를 가졌다면 그 판단을 적을 자리조차 없다.
 
 부품이 각자 `Update`를 가지면 이 순서가 Unity의 컴포넌트 실행 순서에 위임된다 — **조용히 깨지는 종류의 회귀**다.
 
@@ -420,8 +434,55 @@ TickRopeDrag() → TickStandUp() → 넉백 게이트 → 스턴 게이트 → F
 | # | 도메인 | 대기 조건 |
 |---|---|---|
 | 6 | ✅ **`NpcHealth` + `NpcStun`** (`EnterStunned` ↔ `ServerRestoreHp` 쌍) | **완료** — #401 담당자(이현진) 동의를 받고 착수했다. 결과는 아래 "6번 결과" |
-| 7 | **`NpcRopeDrag` + `NpcStandUp` + `NpcKnockback`** (`CancelStandUp` + `m_knockbackActive`·`SweepHitsObstacle` 게이트로 3자 결합) | ✅ 해제 (#522 머지 · `feature/423` 대기 안 함). 부품 간 플래그 조회는 기존 public 프로퍼티 `IsKnockedBack`(`Knockback.cs:9`)을 쓴다. `SweepHitsObstacle`은 셋이 한 PR로 가므로 코어 승격이 필수는 아니지만, 도메인 유틸이 아니니 § 4-6대로 올려 두는 편이 낫다. 외부 참조는 `BombDevice`의 `ServerApplyKnockback` 1건 — 그 파일을 `feature/506`이 고치고 있어 머지 순서를 본다. `Rope.cs`의 `NpcReaction` 참조 1건(§ 2-2)도 이때 정리된다 |
+| 7 | **`NpcRopeDrag` + `NpcStandUp` + `NpcKnockback`** (`CancelStandUp` + `m_knockbackActive`·`SweepHitsObstacle` 게이트로 3자 결합) | ✅ 해제. `feature/506`은 머지됐고(#565) `feature/423`은 #557에 대체된 것으로 보인다 — **담당자 확인만 남았다**. 실측은 아래 "7번 착수 준비 실측" |
 | 8 | 코어 정리 — 남은 도메인 멤버 이동 확인, partial 0개, 이전 계획서 갱신 마무리 | — |
+
+#### 7번 착수 준비 실측 (2026-08-07, 6번 머지 후)
+
+**부품은 셋이다** — `NpcRopeDrag`(390줄) · `NpcKnockback`(190줄) · `NpcStandUp`(166줄). 3자 결합이라 한 PR로
+가되 컴포넌트는 갈라 둔다(§ 3). 프리팹 4개에 **3개씩** 추가하게 된다. 끝나면 **partial 0개**다.
+
+**이동 대상** — `Rope.cs` 24개 · `Knockback.cs` 6개 + 코어 넉백 필드 5개 · `StandUp.cs` 6개:
+
+| 파일 | 멤버 |
+|---|---|
+| `Rope.cs` | `m_ropedSynced` · `m_roped` · `m_dragAnchors` · `IsRoped` · `m_tetheredSynced` · `m_tetherCount` · `IsTethered` · `AddTether` · `RemoveTether` · `SyncTethered` · `ClearTethers` · `RopeLength` · `m_dragWeight` · `DragWeight` · `m_draggerCountSynced` · `DraggerCount` · `InitDragWeight` · `StartRopeDrag` · `IsDraggedBy` · `m_dragSlotCount` · `SetDragSlot` · `SetRoped` · `StopRopeDrag` · `PruneDeadAnchors` · `SyncDraggerCount` · `TickRopeDrag` · `ResolveDragPosition` · `k_dragGroundSnapRadius` |
+| `Knockback.cs` | `IsKnockedBack` · `ServerApplyKnockback` · `TickKnockback` · `EndKnockback` · `s_sweepBuffer` · `SweepHitsObstacle` + **코어 필드 5개**(`m_knockbackVelocity` · `m_knockbackLaunch` · `m_knockbackElapsed` · `m_knockbackActive` · `m_knockbackLandingState`) |
+| `StandUp.cs` | `m_standUpNext` · `m_standUpPending` · `m_standUpRemaining` · `m_standUpDownRemaining` · `m_standUpPendingSynced` · `IsStandingUp` · `SetStandUpPending` · `ServerStandUpThen` · `CancelStandUp` · `TickStandUp` |
+
+**`NetworkVariable`은 4개**(`m_ropedSynced` · `m_tetheredSynced` · `m_draggerCountSynced` · `m_standUpPendingSynced`)
+이고 **`OnValueChanged` 훅은 하나도 없다** — 전부 폴링으로 읽힌다(§ 5-3이 근거로 든 #369·#462가 그것이다).
+6번의 주의 1(훅 이관)이 여기서는 해당 없다. **Rpc도 0개**라 6번의 주의 5도 없다.
+
+**경로가 바뀌는 호출부 49건 / 15파일:**
+
+| 멤버 | 건수 | 호출부 |
+|---|---|---|
+| `IsRoped` | 11 | `NpcAnimationDriver` · `NpcEscortedState` · `NpcStateRules` · `PlayerEscorter` · `RopeDragView` · `RopeTether` · `NpcHealthBarPresenter` + **부품 1건**(`NpcStun`) |
+| `ServerStandUpThen` | 7 | `NpcCapturedState` · `PlayerEscortCommands` · `PlayerEscorter` |
+| `StartRopeDrag` | 6 | `AbductionEvent.Carry` · `JailIntake` · `NpcCapturedState` · `NpcStateRules` · `PlayerEscortCommands` |
+| `IsDraggedBy` | 6 | `PlayerEscorter` · `RopeDragLoad` · `RopeTether` |
+| `IsStandingUp` | 4 | `NpcAnimationDriver` · `NpcCapturedState` · `NpcJailedState` |
+| `RemoveTether` · `DraggerCount` | 각 3 | `PlayerEscortCommands` · `PlayerEscorter` · `RopeDragLoad` |
+| `AddTether` · `IsTethered` | 각 2 | `PlayerEscortCommands` · `PlayerEscorter` / `NpcAnimationDriver` + **부품 1건**(`NpcStun`) |
+| `RopeLength` · `DragWeight` · `SetDragSlot` · `StopRopeDrag` · `ServerApplyKnockback` | 각 1 | `RopeDragView` · `RopeDragLoad` ×2 · `PlayerEscorter` · `BombDevice` |
+| `IsKnockedBack` | **0** | 외부 참조 없음 — 아래 주의 2 |
+
+주의 넷:
+
+1. **`SweepHitsObstacle`을 코어로 올린다** (§ 4-6). 셋이 한 PR로 가므로 필수는 아니지만 도메인 유틸이
+   아니다 — `TryWarpNear`와 같은 자리다. 올려 두면 § 2-2 헬퍼 행이 마지막으로 사라진다.
+2. **`IsKnockedBack`은 외부 참조가 0건이다.** § 4-2 규약이 "새 이름을 만들지 말고 이걸 쓰라"고 지목한
+   프로퍼티인데, 정작 지금은 아무도 안 쓴다(`m_knockbackActive` 직접 참조만 3건). 분리하면 그 셋이
+   `m_knockback.IsKnockedBack`이 되어 **비로소 쓰이게 된다** — 규약이 예측한 그림이다.
+3. **`TickNavMeshRecovery`는 코어에 남는다** (#557). 밧줄 놓기·넉백 착지·기절 해제 셋이 함께 만드는
+   상태 하나를 보는 안전망이라 어느 부품의 소유물도 아니다. 다만 **`Update` 게이트 맨 앞이라는 순서가
+   사양이므로**(§ 5-1) 부품에 `Update`를 만들지 않는 규약(§ 4-2)이 여기서도 그대로 걸린다.
+4. **`TryWarpNear`가 반경 인자를 받게 바뀌었다** (#557 — `TryWarpNear(from, k_stuckRecoverRadius)`).
+   4번에서 코어로 올린 헬퍼가 실제로 두 번째 호출부를 얻은 사례다. § 4-6의 승격 판단이 옳았다는 기록.
+
+**"제 집 정리" 점검** — 세 파일에 남의 도메인 멤버는 없다. 공용 헬퍼는 `SweepHitsObstacle` 하나이고
+위 주의 1대로 선행 커밋에서 코어로 올린다. 4번(`TryWarpNear`)과 같은 모양이다.
 
 #### 6번 결과 (2026-08-07)
 
@@ -571,13 +632,18 @@ FSM 전이(`m_stateMachine.ChangeState(NpcState.Intruding)`)가 필요하므로 
 
 ## 8. 코어 파일에 남아 있는 도메인 멤버
 
-`NpcController.cs`(**310줄** — 착수 시 343줄)는 아직 순수 코어가 아니다. 아래 멤버들을 각 도메인 PR이 함께
-데려가야 코어가 목표치(~200줄)가 된다. **남은 것은 전부 7번 소관이다.** 줄 번호는 2026-08-07 실측(6번 완료 후)이다.
+`NpcController.cs`(**385줄** — 착수 시 343줄)는 아직 순수 코어가 아니다. 아래 멤버들을 7번이 함께 데려가야
+한다. 줄 번호는 2026-08-07 실측(6번 머지 후)이다.
+
+**목표치(~200줄)는 다시 잡아야 한다** — #557이 `TickNavMeshRecovery`를 얹어 코어가 오히려 커졌는데(310 → 385),
+그건 도메인 멤버가 아니라 **코어가 들고 있는 게 맞는 공용 안전망**이다(§ 1). 7번이 넉백 필드 5개를 데려가도
+코어는 350줄 안팎에 남을 것으로 보인다.
 
 | 코어의 멤버 | 갈 곳 |
 |---|---|
 | `m_knockbackVelocity` · `m_knockbackLaunch` · `m_knockbackElapsed` · `m_knockbackActive` · `m_knockbackLandingState` (46~50) | `NpcKnockback` |
-| `OnStandUp` (255) · `RaiseStandUp` (259) · `PlayStandUpClientRpc` (267) | 판단 필요 — 기상 모션은 Stun(#269)과 StandUp(#513) 공용이라 **코어 중계로 남기는 편**이 낫다. 6번이 끝난 지금 `NpcStun.Tick`이 이걸 부르므로(부품 → 코어 중계) 7번에서 `NpcStandUp`으로 옮기면 **부품 → 부품**이 된다 |
+| `OnStandUp` · `RaiseStandUp` · `PlayStandUpClientRpc` | 판단 필요 — 기상 모션은 Stun(#269)과 StandUp(#513) 공용이라 **코어 중계로 남기는 편**이 낫다. 6번이 끝난 지금 `NpcStun.Tick`이 이걸 부르므로(부품 → 코어 중계) 7번에서 `NpcStandUp`으로 옮기면 **부품 → 부품**이 된다 |
+| `TickNavMeshRecovery` · `m_offNavMeshSeconds` · `m_stuckReported` · `k_stuckGraceSeconds` · `k_stuckRecoverRadius` (#557) | **코어에 남는다** — 세 도메인이 함께 만드는 상태 하나를 보는 안전망이고, `Update` 게이트 맨 앞이라는 순서가 사양이다(§ 5-1) |
 | ~~`StunSeconds`~~ | ✅ `NpcStun`으로 이동 완료 (6번). 대신 코어가 `internal NpcStunConfig StunConfig`를 열었다 — `NpcStun`이 지속 시간·기상 클립 길이를, `NpcHealth`가 쓰러짐 기절 시간을 읽는다 |
 | ~~`m_syncedStunned.OnValueChanged` 구독·해제~~ | ✅ `NpcStun.OnNetworkSpawn/Despawn`으로 이동 완료 (6번, § 4-4). 코어 `OnNetworkSpawn`에 남은 훅은 `m_networkState` 하나다 |
 | ~~`IDamageable` 구현~~ | ✅ `NpcHealth`로 이동 완료 (6번). 코어는 더 이상 이 인터페이스를 구현하지 않는다 — 같은 GameObject라 `BombDevice`의 `GetComponent<IDamageable>()`는 무변경이었다 |
@@ -655,7 +721,9 @@ FSM 전이(`m_stateMachine.ChangeState(NpcState.Intruding)`)가 필요하므로 
       승격은 선행 커밋으로 처리(§ 4-6 첫 사례). 실측·결론은 § 6 "4번 실측과 결과"에 있다
 - [x] **#401 담당자에게 `NpcHealth`+`NpcStun`(2단계 6번) 착수를 알릴 것** — 2026-08-07 통보·동의 후 착수해
       끝냈다. "이슈 단계면 먼저 부품화"라는 판단(§ 6)은 결과적으로 맞았다 — 충돌 없었다
-- [ ] `feature/423`(7번) · `feature/506`(`BombDevice`) 담당자와 **머지 순서** 맞추기 (§ 6) — **이제 이것이 다음 관문이다**
+- [x] `feature/506`(`BombDevice`) — 머지됐다(#565). 조율할 것이 없어졌다
+- [ ] **`feature/423`이 아직 살아 있는지 김준영 님께 확인** — #557(`TickNavMeshRecovery`)이 같은 문제를
+      main에 먼저 넣어 대체된 것으로 보이지만 단정하지 말 것. **이제 이것이 7번의 유일한 관문이다**
 - [ ] `RaiseStandUp` 계열을 코어 중계로 남길지 `NpcStandUp`으로 옮길지 (§ 8 마지막 행) — 7번 PR에서 결정된다.
       6번이 끝나 지금은 `NpcStun.Tick`이 이걸 부르므로, 옮기면 부품 → 부품이 된다
 - [ ] [#562](https://github.com/hyunjin0814/undercover-team4-project/issues/562)(테이저가 밧줄 끌기를 끊던
