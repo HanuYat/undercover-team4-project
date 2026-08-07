@@ -148,6 +148,10 @@ public class NpcRopeDrag : NetworkBehaviour
         // 줄이 걸리는 순간 반출 흐름은 끝난다 — 이제 밧줄 신병이라 E는 놓기/재개로 갈린다 (#517)
         m_owner.Custody.SetJailExtracted(false);
 
+        // 걸어가던 대상을 잡았다 — 반출은 여기서 무산된다 (#548). 상태 전이는 호출부가 이미
+        // Escorted로 해 두었으므로 목적지만 지운다. 풀어 주더라도 인도 지점으로 다시 걷지 않는다.
+        m_owner.Custody.ClearRelease();
+
         SetRoped(true);
         SyncDraggerCount();
 

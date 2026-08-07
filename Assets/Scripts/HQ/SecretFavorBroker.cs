@@ -124,6 +124,9 @@ public class SecretFavorBroker : NetworkBehaviour
     // 유치장 — 수감 훅을 걸어 두려고 잡는다. 장소 오브젝트라 App 파사드 대상이 아니다(JailIntake와 같은 관례).
     private JailZone m_jail;
 
+    // 감옥 문 — 반출 대상이 문 밖으로 나오는 순간을 받으려고 잡는다 (#548).
+    private JailIntake m_intake;
+
     // 스폰 전(오프라인 단독 Play)이면 이 피어가 곧 권위다 — TipCallPhone.IsAuthority와 같은 판단
     private bool IsAuthority => !IsSpawned || IsServer;
 
@@ -142,6 +145,14 @@ public class SecretFavorBroker : NetworkBehaviour
         else
             Debug.LogWarning("SecretFavorBroker: JailZone을 찾지 못해 청탁이 걸려오지 않는다", this);
 
+        // 반출 대상이 문 밖으로 나오는 순간을 받는다 — 목적지를 아는 것은 이쪽뿐이다 (#548).
+        // JailZone과 같은 관례로 찾는다(장소 오브젝트라 App 파사드 대상이 아니다).
+        m_intake = FindFirstObjectByType<JailIntake>();
+        if (m_intake != null)
+            m_intake.OnInmateExited += HandleInmateExited;
+        else
+            Debug.LogWarning("SecretFavorBroker: JailIntake를 찾지 못해 반출 대상이 인도 지점으로 걸어가지 않는다", this);
+
         if (Round != null)
             Round.OnRoundEnded += HandleRoundEnded;
     }
@@ -150,6 +161,9 @@ public class SecretFavorBroker : NetworkBehaviour
     {
         if (m_jail != null)
             m_jail.OnInmateAdmitted -= HandleInmateAdmitted;
+
+        if (m_intake != null)
+            m_intake.OnInmateExited -= HandleInmateExited;
 
         if (Round != null)
             Round.OnRoundEnded -= HandleRoundEnded;
@@ -261,6 +275,25 @@ public class SecretFavorBroker : NetworkBehaviour
         );
 
         Debug.Log($"[비밀 청탁] {clientId}번에게 발행 — 대상 {identity.Profile.CitizenName}, 보상 {m_reward}원");
+    }
+
+    // ---- 반출 보행 (서버 · 오프라인 전용, #548) ----
+
+    // 반출 대상이 문을 나섰다 — 내 청탁 대상이면 인도 지점을 목적지로 준다.
+    // 여기서 걷기 시작하는 것이 곧 <b>저지 창이 열리는 순간</b>이다: 대상이 혼자 길 위에 나오고,
+    // 그 시간 동안 다른 플레이어가 알아채면 기절시켜 밧줄로 묶어 되돌릴 수 있다.
+    //
+    // 내 대상이 아니면 아무것도 하지 않는다 — 목적지를 못 받은 대상은 문 쪽에서 도주로 보낸다.
+    private void HandleInmateExited(NpcController npc)
+    {
+        if (!IsAuthority || !m_active)
+            return;
+
+        if (npc == null || npc != m_target || m_dropoff == null)
+            return;
+
+        npc.Custody.StartRelease(m_dropoff.Center);
+        Debug.Log($"[비밀 청탁] 대상이 인도 지점으로 걸어간다: {npc.name}");
     }
 
     // ---- 완수 판정 (서버 · 오프라인 전용) ----

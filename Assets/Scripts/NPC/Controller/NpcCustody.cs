@@ -29,6 +29,9 @@ public class NpcCustody : NetworkBehaviour
 
     // ---- 연행 (#59) ----
 
+    /// <summary>이 부품이 붙은 NPC 코어 — 부품 목록(<see cref="FindFollowersOf"/>)에서 코어로 되돌아갈 때 쓴다.</summary>
+    internal NpcController Owner => m_owner;
+
     /// <summary>연행 중 따라갈 대상(체포한 플레이어). 연행 중이 아니면 null. 서버에서만 유효.</summary>
     public Transform EscortTarget { get; private set; }
 
@@ -119,6 +122,7 @@ public class NpcCustody : NetworkBehaviour
 
         EscortTarget = null; // 판정 시점에 연행은 이미 풀렸지만, 참조가 남아 있으면 여기서 끊는다
         SetJailExtracted(false); // 반출했다 되돌린 대상 — 다시 수감됐으므로 표식을 끈다 (#517)
+        ClearRelease(); // 저지돼 다시 들어온 대상 — 인도 지점으로 다시 걸어가지 않는다 (#548)
 
         // <b>기절을 푼다.</b> 검거는 무력화가 전제라(NpcStateRules.CanRopeBind) 수감되는 대상은 거의
         // 항상 기절 오버레이를 달고 들어오고, 밧줄에 묶인 동안은 그 타이머마저 멈춰 있다(#269).
@@ -230,6 +234,46 @@ public class NpcCustody : NetworkBehaviour
         m_jailExtracted = value;
         if (IsSpawned && IsServer)
             m_jailExtractedSynced.Value = value;
+    }
+
+    // ---- 반출 보행 (#548) ----
+
+    /// <summary>인도 지점으로 걸어갈 목적지가 정해져 있는가 — <see cref="NpcState.Releasing"/>의 전제다.
+    /// 서버(또는 오프라인)에서만 유효: 목적지를 정하는 것도 걷는 판정도 전부 서버다.</summary>
+    public bool HasReleaseDestination { get; private set; }
+
+    /// <summary>걸어갈 인도 지점(월드 좌표) — <see cref="NpcReleasingState"/>가 읽는다. 서버 전용.</summary>
+    public Vector3 ReleaseDestination { get; private set; }
+
+    /// <summary>
+    /// 반출 보행 시작 — 문 밖으로 나온 대상이 인도 지점까지 <b>스스로</b> 걸어가게 한다. (#548)
+    /// 부르는 곳은 <see cref="SecretFavorBroker"/> 하나다 — 목적지를 아는 것이 청탁뿐이라서다.
+    ///
+    /// 연행 참조를 끊는다: 반출은 여기서 "따라다니게 하는 것"에서 "보내는 것"으로 성격이 바뀌고,
+    /// 참조가 남으면 <see cref="FindFollowersOf"/>가 이미 내보낸 대상을 다시 동행으로 집는다.
+    /// </summary>
+    public void StartRelease(Vector3 destination)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        EscortTarget = null;
+        HasReleaseDestination = true;
+        ReleaseDestination = destination;
+        m_owner.StateMachine.ChangeState(NpcState.Releasing);
+    }
+
+    /// <summary>
+    /// 반출 보행 취소 — 목적지를 지운다. <b>전이는 부르는 쪽이 한다</b>
+    /// (<see cref="ClearEscortTarget"/>과 같은 관례: 갈 곳이 경로마다 달라서다).
+    ///
+    /// 부르는 곳 둘 다 "저지됐다"로 모인다: 밧줄에 묶였을 때(<see cref="NpcController.StartRopeDrag"/>)와
+    /// 다시 수감될 때(<see cref="SendToJail"/>). 줄이 걸리는 순간 반출은 무산된 것으로 본다 —
+    /// 풀어 주더라도 인도 지점으로 다시 걸어가지 않는다.
+    /// </summary>
+    internal void ClearRelease()
+    {
+        HasReleaseDestination = false;
     }
 
     // 수갑 소모·반환(#229)은 밧줄이 소모형이 아니게 되면서 통째로 제거됐다 — 밧줄 검거엔 회수할 자원이 없다. (#369)

@@ -87,6 +87,11 @@ public class SecretFavorDropoff : MonoBehaviour
                 s_all[i].SetMarkerVisible(false);
     }
 
+    /// <summary>인도 범위의 한가운데(월드 좌표) — 반출 대상이 걸어올 목적지다 (#548).
+    /// 범위 미배선이면 지점 오브젝트 자리를 준다. 회전한 범위도 맞게 나오도록 로컬→월드로 옮긴다.</summary>
+    public Vector3 Center =>
+        m_zone != null ? m_zone.transform.TransformPoint(m_zone.center) : transform.position;
+
     /// <summary>이 지점이 인도 범위 안인가 — 범위 미배선이면 항상 false. (JailZone.ContainsPoint와 동일 방식)</summary>
     public bool Contains(Vector3 position)
     {
