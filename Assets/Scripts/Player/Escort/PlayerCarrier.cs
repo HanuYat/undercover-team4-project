@@ -223,6 +223,9 @@ public class PlayerCarrier : NetworkBehaviour
         target.ServerSetCarriedBy(this);
         SetCarriedRef(target);
 
+        // 동료를 묶는 것도 같은 밧줄이라 같은 소리다 (#549 · NPC 쪽은 ServerApplyRopeDrag).
+        App.Game.Fx?.PlayEverywhere(EFx.RopeBind, target.transform.position);
+
         Debug.Log($"[운반] 시작 — {name} → {target.name}");
         NotifyOwner($"밧줄로 묶어 끌기 시작: {target.name} (E로 내려놓기)");
     }

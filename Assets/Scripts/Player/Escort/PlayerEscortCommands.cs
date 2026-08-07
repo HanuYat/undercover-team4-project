@@ -490,6 +490,9 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         // StartFlee를 걸어 묶자마자 도망친다. (#292)
         target.ExitStun(resumeReaction: false);
 
+        // 줄이 조여진 소리 — 새로 묶기·합류·끌기 재개가 전부 이 함수로 모이므로 여기 한 곳이면 된다 (#549).
+        App.Game.Fx?.PlayEverywhere(EFx.RopeBind, target.transform.position);
+
         NotifyOwner($"밧줄로 묶어 끌기 시작: {target.name} ({Escorter.TetheredCount}/{Escorter.RopeCapacity})");
     }
 

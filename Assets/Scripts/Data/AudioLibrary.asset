@@ -73,6 +73,16 @@ MonoBehaviour:
     Volume: 0.45
     MinDistance: 2
     MaxDistance: 25
+  - Id: 13
+    Clip: {fileID: 8300000, guid: f9106374caa6491bbbdcf1ac30f3c1da, type: 3}
+    Volume: 0.6
+    MinDistance: 3
+    MaxDistance: 25
+  - Id: 14
+    Clip: {fileID: 8300000, guid: 87584b12b43a434b9f3dc0a69471d25e, type: 3}
+    Volume: 0.8
+    MinDistance: 2
+    MaxDistance: 16
   m_bgm:
   - Id: 1
     Clip: {fileID: 0}
