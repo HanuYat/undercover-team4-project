@@ -80,6 +80,16 @@ public class SecretFavorBroker : NetworkBehaviour
     [Min(0f)]
     [SerializeField] private float m_favorExpireSeconds = 180f;
 
+#if UNITY_EDITOR
+    [Header("개발용 (에디터 전용)")]
+    [Tooltip(
+        "이 키를 누르면 유치장 수감자 한 명으로 지금 즉시 청탁을 발행한다 — 확률·대기·전화 수신을 전부 건너뛴다.\n\n"
+            + "누른 사람에게 의뢰가 간다. 호스트(또는 오프라인 단독 Play)에서만 동작한다 — 키 입력은 로컬이고 발행은 서버 판정이라, "
+            + "MPPM 클론에서 눌러도 아무 일도 일어나지 않는다. 저지 테스트에서 부패한 쪽을 호스트로 두면 그대로 맞는다"
+    )]
+    [SerializeField] private UnityEngine.InputSystem.Key m_devIssueKey = UnityEngine.InputSystem.Key.F9;
+#endif
+
     [Header("문구 (HudTable)")]
     [Tooltip("받은 순간 잠깐 뜨는 알림 — Hud.SecretFavor.Offer")]
     [SerializeField] private LocalizedString m_offerToast;
@@ -302,6 +312,12 @@ public class SecretFavorBroker : NetworkBehaviour
     {
         if (!IsAuthority) return;
 
+#if UNITY_EDITOR
+        // 쿨다운 게이트보다 앞에 둔다 — wasPressedThisFrame은 그 프레임에만 참이라
+        // 0.2초 간격으로 보면 눌러도 대부분 놓친다.
+        DevTickIssueShortcut();
+#endif
+
         m_cooldown -= Time.deltaTime;
         if (m_cooldown > 0f) return;
         m_cooldown = m_checkInterval;
@@ -453,4 +469,72 @@ public class SecretFavorBroker : NetworkBehaviour
         SecretFavorDropoff.HideAllMarkers();
         App.UI.SecretFavor?.HideImmediate();
     }
+
+#if UNITY_EDITOR
+
+    // ---- 개발용 단축키 (에디터 전용) ----
+    //
+    // 반출 보행(#548)을 손으로 확인하려면 청탁이 떠 있어야 하는데, 정상 경로는 수감자별 추첨 →
+    // 30~90초 대기 → 전화기까지 달려가 받기다. 한 번 보려고 매번 그 셋을 통과하는 것이 테스트에서
+    // 제일 성가신 부분이라 지름길을 둔다. 발행 자체는 정상 경로와 <b>같은 Issue</b>를 타므로
+    // 이 길로 뜬 의뢰도 만료·완수·취소가 전부 평소대로 돈다.
+    //
+    // <b>빌드에는 없다</b> — 필드까지 통째로 #if UNITY_EDITOR 안이라 컴파일되지 않는다.
+
+    private void DevTickIssueShortcut()
+    {
+        UnityEngine.InputSystem.Keyboard keyboard = UnityEngine.InputSystem.Keyboard.current;
+        if (keyboard == null || !keyboard[m_devIssueKey].wasPressedThisFrame)
+            return;
+
+        DevIssueNow();
+    }
+
+    // 유치장 수감자 한 명을 골라 지금 누른 사람에게 발행한다. 서버(또는 오프라인) 전용.
+    private void DevIssueNow()
+    {
+        if (m_active)
+        {
+            Debug.Log("[비밀 청탁] 개발 단축키 — 이미 진행 중인 의뢰가 있다(동시 1건)");
+            return;
+        }
+
+        NpcController target = DevFindJailedTarget();
+        if (target == null)
+        {
+            Debug.Log("[비밀 청탁] 개발 단축키 — 유치장에 이름을 댈 수 있는 수감자가 없다");
+            return;
+        }
+
+        // 정상 경로와 같게 추첨 완료로 남긴다 — 안 그러면 이 대상으로 진짜 추첨이 나중에 또 돈다
+        m_rolled.Add(target);
+
+        // 스폰 전(오프라인 단독 Play)에는 클라이언트 개념이 없다 — 0번(호스트 자리)으로 발행한다
+        ulong clientId = IsSpawned ? NetworkManager.LocalClientId : 0UL;
+        Debug.Log($"[비밀 청탁] 개발 단축키({m_devIssueKey}) — 즉시 발행한다");
+        Issue(clientId, target);
+    }
+
+    // 이름을 댈 수 있는 수감자 — Issue가 CitizenIdentity를 그대로 참조하므로 여기서 걸러야 한다
+    // (정상 경로에서는 HandleInmateAdmitted가 같은 검사를 이미 통과시킨다).
+    private static NpcController DevFindJailedTarget()
+    {
+        NpcController[] all = FindObjectsByType<NpcController>(FindObjectsSortMode.None);
+        for (int i = 0; i < all.Length; i++)
+        {
+            NpcController npc = all[i];
+            if (npc == null || npc.CurrentState != NpcState.Jailed)
+                continue;
+
+            CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
+            if (identity == null || identity.Profile == null || string.IsNullOrEmpty(identity.Profile.CitizenName))
+                continue;
+
+            return npc;
+        }
+
+        return null;
+    }
+
+#endif
 }
