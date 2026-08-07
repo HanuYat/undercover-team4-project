@@ -92,12 +92,12 @@ public static class NpcStateRules
     /// 홀드가 없어졌으므로 이 판정을 통과한 대상은 좌클릭 한 번에 즉시 묶인다 —
     /// 원래 기절 대상에만 있던 지름길이 유일한 경로가 된 것이다 (PlayerEscorter.ServerBeginRopeDrag).
     ///
-    /// 상태 enum이 아니라 <see cref="NpcController.IsStunned"/>를 보는 이유: 스턴은 오버레이라
+    /// 상태 enum이 아니라 <see cref="NpcStun.IsStunned"/>를 보는 이유: 스턴은 오버레이라
     /// 테이저·체력 0 기절이 CurrentState를 바꾸지 않는다(넉백 KO만 <see cref="NpcState.Stunned"/>).
     /// 상태로만 보면 두 기절 경로 중 하나가 조용히 빠진다 (#292). IsStunned는 동기화 값이라
     /// 클라 조기검증·조준 피드백(Rope)에서도 읽을 수 있다.</summary>
     public static bool CanRopeBind(NpcController npc) =>
-        npc != null && npc.IsStunned && CanArrest(npc.CurrentState);
+        npc != null && npc.Stun.IsStunned && CanArrest(npc.CurrentState);
 
     /// <summary>밧줄 없이 따라오는 수감자인가 — 유치장에서 반출돼 추종 중인 대상. (#492)
     /// E를 누르면 그 자리에 세운다(Captured) — 유치장 안이면 JailIntake가 좌석에 다시 앉히고,

@@ -4,7 +4,7 @@ using UnityEngine;
 
 /// <summary>
 /// 진압봉 아이템 — 조준 방향을 근접 타격해 맞은 NPC의 체력을 깎는다. (GDD 7-4, #217)
-/// 체력이 0에 도달하면 기절(Stunned)하는데, 그 판정은 <see cref="NpcController.TakeDamage"/>의
+/// 체력이 0에 도달하면 기절(Stunned)하는데, 그 판정은 <see cref="NpcHealth.TakeDamage"/>의
 /// 엣지 트리거가 담당하므로 여기서는 데미지만 넣는다 (#366).
 ///
 /// <b>조준 타격</b> — 테이저와 같은 방식이다. PlayerInteractor가 잡아준 대상을 쓰지 않고
@@ -262,7 +262,7 @@ public class Baton : ItemBase, IAimedWeapon
                 NotifyOwner(
                     playerTarget != null
                         ? $"진압봉 무효 — 이미 무력화된 동료 ({playerTarget.name})"
-                        : $"진압봉 무효 — {(target.IsStunned ? "이미 쓰러진" : "이미 제압됐거나 페널티 진행 중인")} 대상 ({target.CurrentState})");
+                        : $"진압봉 무효 — {(target.Stun.IsStunned ? "이미 쓰러진" : "이미 제압됐거나 페널티 진행 중인")} 대상 ({target.CurrentState})");
                 return;
         }
 
@@ -297,9 +297,9 @@ public class Baton : ItemBase, IAimedWeapon
 
         // 때린 사람을 가해자로 넘긴다 — 맞은 즉시 이 사람에게 반격·도주하고(#400),
         // 이 타격으로 기절하면 깨어난 뒤에도 이 사람에게서 도망친다 (#269).
-        target.TakeDamage(m_damage, holder.gameObject);
+        target.Health.TakeDamage(m_damage, holder.gameObject);
         target.Reaction.ServerReactTo(ReactionTrigger.Damage, holderTransform); // 맞은 즉시 반응 (#400)
-        NotifyOwner($"진압봉 명중: {target.name} (-{m_damage} → {target.CurrentHp}/{target.MaxHp})");
+        NotifyOwner($"진압봉 명중: {target.name} (-{m_damage} → {target.Health.CurrentHp}/{target.Health.MaxHp})");
     }
 
     // ---- 정리 ----
@@ -511,7 +511,7 @@ public class Baton : ItemBase, IAimedWeapon
         // HP가 이미 0이라 피해가 0인데 히트마커·"명중"이 뜨고, 테이저로 기절한 대상은 만피라
         // 반대로 누워 있는 채 계속 깎인다. 테이저(<c>Taser.EvaluateAim</c>)가 같은 이유로 먼저
         // 이 게이트를 갖고 있다 — 쓰러진 대상은 때리는 게 아니라 밧줄로 끌어가는 것이다.
-        if (npc.IsStunned)
+        if (npc.Stun.IsStunned)
         {
             return SwingResult.TargetInvalidState;
         }

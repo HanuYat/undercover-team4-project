@@ -143,6 +143,11 @@ public class Taser : ItemBase, IAimedWeapon
         // 명중 판정보다 앞에 두는 이유: 빗나가도 충전은 소모되므로 게이지도 같이 떠야 한다.
         NotifyChannelGaugeStart(m_cooldownSeconds);
 
+        // 발사음도 같은 이유로 명중 판정보다 앞이다 — 빗나가도 쏜 소리는 나야 한다 (#549).
+        // 총구(조준 원점)에서 3D로 울리므로 주변 사람에게는 '저기서 누가 쐈다'가 된다.
+        // 진압봉이 명중 여부와 무관하게 내는 BatonSwing과 같은 구조다.
+        App.Game.Fx?.PlayEverywhere(EFx.TaserFire, origin);
+
         // 명중 판정은 EvaluateAim이 단일 규칙으로 수행한다 — 클라 크로스헤어(#328)와 공유해 색↔명중을 일치시킨다.
         switch (
             EvaluateAim(
@@ -182,18 +187,21 @@ public class Taser : ItemBase, IAimedWeapon
         PlayerInteractor shooter = Holder;
         // 원인을 명시한다 — 감전 연출(#477)이 붙는 유일한 경로다. 체력 0 쓰러짐(#366)은 기본값
         // Knockdown으로 남아 전기 연출 없이 지나간다(색 언어상 시안은 테이저 전용).
-        target.EnterStunned(
+        target.Stun.EnterStunned(
             shooter != null ? shooter.transform : null,
             null,
             NpcStunCause.Taser
         );
-        NotifyOwner($"테이저 명중: {target.name} ({target.StunSeconds}초 기절)");
+        NotifyOwner($"테이저 명중: {target.name} ({target.Stun.StunSeconds}초 기절)");
     }
 
     // ---- 피격 연출 (#477 일부) ----
     //
     // EFx.TaserHit은 소리만 낸다 — 전기는 충격이 아니라서 흙먼지가 일 이유가 없다
     // (조합은 FxManager 인스펙터에 있다, #532).
+    //
+    // 발사음(EFx.TaserFire, #549)은 이것과 별개다 — 총구에서 나고 명중 여부를 가리지 않는다.
+    // 명중하면 둘이 함께 들린다(총구에서 발사음, 맞은 자리에서 피격음).
     //
     // 이 소리는 기절이 지속되는 동안 울리는 것이 아니라 맞는 순간의 원샷이다. 기절은 지속 상태라
     // 아키텍처 규칙상 동기화 값으로 구동해야 하는데(docs/architecture.md 연출 전파 규칙), 그건 몸 전기
@@ -247,7 +255,7 @@ public class Taser : ItemBase, IAimedWeapon
 
         // 남은 무효 케이스는 하나 — 이미 기절해 있는 대상이다. EnterStunned가 no-op이라
         // 그냥 통과시키면 탄만 쓰고 "명중"이 뜬다. 크로스헤어(#328)도 이 판정을 공유한다.
-        if (npc.IsStunned)
+        if (npc.Stun.IsStunned)
             return AimResult.TargetInvalidState;
 
         return AimResult.ValidTarget;

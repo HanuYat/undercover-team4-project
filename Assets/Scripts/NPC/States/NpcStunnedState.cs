@@ -7,7 +7,7 @@ using UnityEngine;
 /// 않는다(#269 확정). #366 결정 5로 배회 복귀에 잠시 바뀌었다가 원복됐다.
 /// 체력 회복은 Exit()에서 처리한다 — 시간 경과뿐 아니라 수갑 채포 등 이 상태를 벗어나는
 /// 모든 경로를 덮어야 "HP 0인 채로 무적이 되는" 문제를 막을 수 있기 때문이다 (#366, Exit() 참고).
-/// 진입은 NpcController.EnterStunned() — 테이저와 체력 0 도달(NpcController.SetHp)이 호출한다.
+/// 진입은 NpcStun.EnterStunned() — 테이저와 체력 0 도달(NpcHealth.SetHp)이 호출한다.
 /// </summary>
 public class NpcStunnedState : NpcStateBase
 {
@@ -76,6 +76,6 @@ public class NpcStunnedState : NpcStateBase
         //
         // Enter()가 아니라 Exit()에 두는 이유: 기절해 있는 동안에는 HP가 0으로 유지돼야
         // "기절 중 추가 타격이 기절 타이머를 리셋하지 않는다"는 성질이 성립하기 때문이다.
-        m_owner.ServerRestoreHp();
+        m_owner.Health.ServerRestoreHp();
     }
 }

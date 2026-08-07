@@ -205,7 +205,7 @@ public class NpcAnimationDriver : MonoBehaviour
         // 일어나기도 상태 전이가 아닌 순간 이벤트 — 기절 상태를 유지한 채 마지막 구간에만 얹는다 (#269)
         m_controller.OnStandUp += HandleStandUp;
         // 스턴은 상태 전이가 아니라 오버레이라 OnStateChanged로 안 온다 — 따로 구독한다 (#292)
-        m_controller.OnStunnedChanged += HandleStunnedChanged;
+        m_controller.Stun.OnStunnedChanged += HandleStunnedChanged;
         HandleStateChanged(m_controller.CurrentState);
     }
 
@@ -215,7 +215,7 @@ public class NpcAnimationDriver : MonoBehaviour
         {
             m_controller.OnStateChanged -= HandleStateChanged;
             m_controller.OnStandUp -= HandleStandUp;
-            m_controller.OnStunnedChanged -= HandleStunnedChanged;
+            m_controller.Stun.OnStunnedChanged -= HandleStunnedChanged;
         }
 
         if (m_penalty != null)
@@ -427,7 +427,7 @@ public class NpcAnimationDriver : MonoBehaviour
 
         // 스턴 오버레이 중에는 속도 기반 로코모션을 돌리지 않는다 (#292) — 상태 enum이 그대로라
         // 연행·저항·페널티 상태에서 기절하면 아래 블록이 매 프레임 기절 포즈를 덮어쓴다.
-        if (m_controller.IsStunned)
+        if (m_controller.Stun.IsStunned)
             return;
 
         NpcState state = m_controller.CurrentState;
@@ -592,7 +592,7 @@ public class NpcAnimationDriver : MonoBehaviour
         // 매니저의 Detained→Chasing 전이 등)에서 걸린 전이는 그대로 들어온다. 그걸 그대로 받으면
         // m_baseState가 Stunned에서 벗어나 기절 중에 벌떡 서는 그림이 나오고, RefreshProne(#363)이
         // 누움을 풀어 콜라이더까지 같이 선다.
-        if (m_controller.IsStunned)
+        if (m_controller.Stun.IsStunned)
             state = NpcState.Stunned;
 
         // 제압 전환 분기용 직전 상태 — base를 덮어쓰기 전에 읽는다 (#332)

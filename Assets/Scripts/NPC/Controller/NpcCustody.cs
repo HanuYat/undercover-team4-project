@@ -125,8 +125,7 @@ public class NpcCustody : NetworkBehaviour
         // 오버레이가 남으면 Update의 스턴 게이트가 FSM Tick을 통째로 건너뛰어
         // (NpcController.Update) <b>감옥 안에서 꼼짝도 하지 않는다</b> — 배회가 돌지 않는 원인이었다.
         // resumeReaction=false — 밖에서 강제로 푸는 경우라 도주 전이를 걸지 않는다.
-        // 기절이 부품으로 나가면(계획서 § 6 2단계 6번) m_owner.Stun.ExitStun으로 경로만 바뀐다.
-        m_owner.ExitStun(false);
+        m_owner.Stun.ExitStun(false);
 
         JailSpot = spot;
         m_owner.StateMachine.ChangeState(NpcState.Jailed);

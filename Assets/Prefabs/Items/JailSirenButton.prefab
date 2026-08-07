@@ -366,7 +366,6 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_id: 2
   m_installedOnStart: 0
-  m_sirenSource: {fileID: 0}
   m_cooldownSeconds: 22
 --- !u!114 &3543575571044145694
 MonoBehaviour:
