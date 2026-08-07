@@ -277,7 +277,7 @@ public class NpcFleeState : NpcStateBase
     {
         // 기절 중엔 멈춰 있는 게 정상이다 — 스턴은 상태가 아니라 플래그라(#292) 여기서 세면
         // 테이저 한 방에 저항으로 돌변한다.
-        if (m_owner.IsStunned)
+        if (m_owner.Stun.IsStunned)
         {
             ResetStuck();
             return false;

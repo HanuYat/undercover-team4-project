@@ -182,12 +182,12 @@ public class Taser : ItemBase, IAimedWeapon
         PlayerInteractor shooter = Holder;
         // 원인을 명시한다 — 감전 연출(#477)이 붙는 유일한 경로다. 체력 0 쓰러짐(#366)은 기본값
         // Knockdown으로 남아 전기 연출 없이 지나간다(색 언어상 시안은 테이저 전용).
-        target.EnterStunned(
+        target.Stun.EnterStunned(
             shooter != null ? shooter.transform : null,
             null,
             NpcStunCause.Taser
         );
-        NotifyOwner($"테이저 명중: {target.name} ({target.StunSeconds}초 기절)");
+        NotifyOwner($"테이저 명중: {target.name} ({target.Stun.StunSeconds}초 기절)");
     }
 
     // ---- 피격 연출 (#477 일부) ----
@@ -247,7 +247,7 @@ public class Taser : ItemBase, IAimedWeapon
 
         // 남은 무효 케이스는 하나 — 이미 기절해 있는 대상이다. EnterStunned가 no-op이라
         // 그냥 통과시키면 탄만 쓰고 "명중"이 뜬다. 크로스헤어(#328)도 이 판정을 공유한다.
-        if (npc.IsStunned)
+        if (npc.Stun.IsStunned)
             return AimResult.TargetInvalidState;
 
         return AimResult.ValidTarget;
