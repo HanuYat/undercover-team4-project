@@ -26,6 +26,9 @@ public class SpawnedNpcEvent : ISuddenEvent
     public enum Behavior { Resist, Flee, Pickpocket }
 
     [Header("이벤트 정의")]
+    [Tooltip("끄면 이 항목만 추첨에서 빠진다 — 한 종류만 켜서 테스트할 때 쓴다. 매니저 쪽 토글은 Set 전체가 대상이다")]
+    [SerializeField] private bool m_enabled = true;
+
     [Tooltip("로그·HUD에 표시할 이름 (예: 거리 난동자 / 나체 난동꾼)")]
     [SerializeField] private string m_displayName = "거리 난동자";
     [Tooltip("Resist=그 자리에서 저항(거리 난동자) / Flee=플레이어에게서 도주하며 뛰어다님(나체 난동꾼)")]
@@ -77,6 +80,9 @@ public class SpawnedNpcEvent : ISuddenEvent
     private bool m_captured;      // 한 번이라도 제압됐는지 — 제압 로그를 첫 진입에만 남기려고 쓴다
     private bool m_releaseQueued; // 잔류 전환 확정 — 다음 틱에 이벤트가 손을 뗀다 (상태 전이 체인 안 처리 회피, #310)
     private float m_pickpocketGiveUpTime; // 소매치기 접근을 포기할 시각. 0 이하면 접근 중 아님 (#303)
+
+    /// <summary>이 항목을 추첨 대상에 넣는가 — Set이 풀을 만들 때 본다. (#303)</summary>
+    public bool Enabled => m_enabled;
 
     public string DisplayName => m_displayName;
 

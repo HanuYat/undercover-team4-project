@@ -43,10 +43,14 @@ public class SpawnedNpcEventSet : MonoBehaviour, ISuddenEventProvider
             m_events[i].Unsubscribe();
     }
 
-    /// <summary>리스트 항목을 이벤트 풀에 얹는다 — 비우지 않고 추가한다 (<see cref="ISuddenEventProvider"/> 계약).</summary>
+    /// <summary>리스트 항목을 이벤트 풀에 얹는다 — 비우지 않고 추가한다 (<see cref="ISuddenEventProvider"/> 계약).
+    /// 꺼 둔 항목은 뺀다 — 매니저 쪽 토글은 이 Set 전체가 대상이라 한 종류만 켜지 못한다. (#303)</summary>
     public void CollectEvents(List<ISuddenEvent> into)
     {
         for (int i = 0; i < m_events.Count; i++)
-            into.Add(m_events[i]);
+        {
+            if (m_events[i].Enabled)
+                into.Add(m_events[i]);
+        }
     }
 }
