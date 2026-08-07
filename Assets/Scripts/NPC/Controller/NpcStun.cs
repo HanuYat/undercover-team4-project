@@ -22,8 +22,8 @@ public enum NpcStunCause
 /// <see cref="NpcController.CurrentState"/> 위에 얹는 동기화 플래그로 다룬다. 상태 enum이 바뀌지
 /// 않으므로 호송·수감·페널티 링크와 상태별 타이머가 끊기지 않고, 풀리면 하던 일을 그대로 재개한다.
 ///
-/// <b>예외 하나 — 연행은 끊는다</b>(Escorted → Captured, 수갑은 유지). 그래야 연행 중인 대상을
-/// 쏘는 행동에 의미가 생긴다. 넉백이 이미 같은 처리를 한다(NpcController.Knockback).
+/// <b>아무 링크도 끊지 않는다</b> — 연행만 예외로 끊던 규칙은 밧줄 전환과 함께 걷어냈다(#562).
+/// 넉백은 여전히 끊는다(NpcController.Knockback) — 폭발로 날아가는 것은 성격이 다르다.
 ///
 /// <b>기절 경로는 둘이다.</b> 테이저와 체력 0(#366)은 이 오버레이를, 넉백 착지는
 /// <see cref="NpcState.Stunned"/> 전이를 쓴다(전이여야 이전 상태의 Exit()이 에이전트를 정리한다).
@@ -142,12 +142,11 @@ public class NpcStun : NetworkBehaviour
         if (IsStunned)
             return;
 
-        // 연행만 끊는다 — 유치장·페널티(Jailed/Detained/Chasing/PenaltyEscorting)는 플레이어가 쥔
-        // 링크가 아니라 시스템이 진행 중인 절차라 건드리지 않는다(끊으면 이중 집계·타이머 리셋·
-        // 매니저 desync가 그대로 돌아온다 — #292가 오버레이를 택한 이유).
-        if (m_owner.CurrentState == NpcState.Escorted)
-            m_owner.Custody.StopEscort();
-
+        // 아무 링크도 끊지 않는다 — 오버레이의 목적 그대로다. 연행(Escorted)만은 예외로 끊던
+        // 규칙이 있었지만(#292) 그건 수갑 연행을 전제로 한 것이고, 밧줄로 바뀐 뒤로는 '묶어 둔 것'과
+        // '끌던 것'이 같은 확보 상태라 갈라 다룰 이유가 없다. #390이 막기로 한 탈취의 뒷문이기도
+        // 했다 — 정면 탈취는 CanArrest가 Escorted를 빼서 막아 뒀는데 테이저 한 방이면 같은 결과가
+        // 났다. 기절한 채로도 밧줄 장력은 계속 돈다(게이트 순서상 TickRopeDrag가 앞이다). (#562)
         m_owner.Reaction.ThreatTarget = threat;
         m_stunDuration = seconds ?? m_owner.StunConfig.StunSeconds;
         m_stunElapsed = 0f;
