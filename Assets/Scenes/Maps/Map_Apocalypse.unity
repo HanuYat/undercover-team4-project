@@ -66994,6 +66994,12 @@ MonoBehaviour:
   - Id: 5
     Effect: 0
     Sound: 5
+  - Id: 6
+    Effect: 0
+    Sound: 13
+  - Id: 7
+    Effect: 0
+    Sound: 14
 --- !u!114 &1585279159
 MonoBehaviour:
   m_ObjectHideFlags: 0
