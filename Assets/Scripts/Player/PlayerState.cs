@@ -4,6 +4,8 @@
 /// 다운을 제한시간 안에 구조받지 못하면 넘어가는 Die가 뒤이어 생겼다(#364) — 둘은 다른 상태다.
 /// Die도 로봇이므로 파괴는 아니다: 현장 구조만 막히고 본부 이송 부활(#365)로 복구된다.
 /// (애니메이터 번호 매핑이 생기면 값 순서 = Animator 번호이므로 그때 순서 확정)
+/// Dance는 Emote로 일반화했다 (#219) — 개별 감정표현 종류는 이 enum이 아니라 EmoteCatalog의
+/// id로 다룬다. 에셋을 추가할 때마다 enum과 GDD를 함께 고치지 않기 위해서다.
 /// </summary>
 public enum PlayerState
 {
@@ -13,5 +15,5 @@ public enum PlayerState
     Attack,
     Down,
     Die,
-    Dance,
+    Emote,
 }

@@ -86,9 +86,9 @@ Kevin Iglesias **Human Dance Animations**를 임포트해(아래) 댄스와 기�
 
 ### 에셋 임포트
 
-`Human Dance Animations.unitypackage`는 `Assets/Kevin Iglesias/`로 풀린다. 프로젝트 관례가 `Assets/Imported/` 아래이므로 임포트 후 `Assets/Imported/Kevin Iglesias/Human Dance Animations/`로 옮긴다.
+Kevin Iglesias **Human Dance Animations**를 임포트한다. 이 패키지는 프로젝트가 이미 쓰는 `Human Animations`와 **GUID를 공유하는 확장판**이라, `ImportPackage`가 별도 폴더를 만들지 않고 기존 `Assets/Imported/Kevin Iglesias/Human Animations/` 트리 안으로 직접 병합한다. 댄스 클립은 그 아래 `Animations/Male/Social/Dance/Steps/`에 놓인다.
 
-**기존 `Human Animations` 폴더와 합치지 않는다** — 패키지에 `HumanM@Idle01.fbx` 중복본이 들어 있어 합치면 충돌한다. 별도 폴더로 두면 충돌이 없고 어느 패키지에서 온 클립인지도 분명해진다.
+**이 에셋은 저장소에 들어가지 않는다.** `.gitignore`가 `Assets/Imported/` 전체를 제외하고 있고(Synty 등 기존 서드파티 에셋도 마찬가지다), 팀원이 각자 임포트하는 것이 이 저장소의 관례다. 이 브랜치를 받아 감정표현을 실행하려면 같은 패키지를 임포트해야 한다.
 
 ## 5. 애니메이터 확장
 
@@ -109,7 +109,6 @@ Kevin Iglesias **Human Dance Animations**를 임포트해(아래) 댄스와 기�
 | `PlayerEmote` (NetworkBehaviour) | 서버 권위 | `m_activeEmote` 소유. `RequestEmoteServerRpc` 검증 후 세팅, `CancelEmoteServerRpc`. 비루프 클립은 길이 경과 후 서버가 자동 해제 |
 | `PlayerEmoteInput` | 오너 전용 | `T` 홀드 감지 → 휠 열기, 마우스 방향 누적, 뗄 때 발동 요청. 재생 중 취소 입력 감지 |
 | `PlayerEmoteView` | 전 피어 | `m_activeEmote` 구독 → Animator `Emote`/`EmoteIndex` 세팅 + 말풍선 표시/해제 |
-| `PlayerEmoteCamera` | 오너 전용 | 재생 중 3인칭 전환 및 복귀 (7절) |
 | `EmoteBubbleView` | 전 피어 | 머리 위 빌보드 아이콘. 기존 `PlayerNameTag` 앵커를 재사용한다 |
 | `EmoteLoadout` (순수 C#) | 로컬 | 8칸 슬롯(id 배열) + PlayerPrefs 직렬화. MonoBehaviour가 아니다 |
 | `EmoteWheelView` (UI) | 오너 | 8칸 방사형 렌더. 각도 → 인덱스 계산은 static 순수 함수로 분리 |
@@ -133,6 +132,8 @@ Kevin Iglesias **Human Dance Animations**를 임포트해(아래) 댄스와 기�
 ## 7. 3인칭 전환
 
 `PlayerLook.ApplyOwnerView`가 자기 몸을 `OwnBody` 레이어로 옮겨 자기 카메라에서 컬링한다. 그대로 두면 감정표현을 발동해도 **내 화면에는 아무 일도 일어나지 않는다** — 머리 위 이모지도 시야 밖이다.
+
+3인칭 전환은 **`PlayerLook` 안에서** 한다(`SetEmoteView(bool)`). 별도 컴포넌트로 빼지 않는 이유는 그 파일의 클래스 주석이 이미 짚어 둔 것과 같다 — `m_pitch`·카메라 로컬 자세를 `HandleLook`과 `UpdateCameraPose`가 함께 읽고 쓰므로 나누면 값을 주고받게 된다. 게다가 `UpdateCameraPose`가 매 프레임 `localPosition`·`localEulerAngles`를 통째로 대입하므로 밖에서 얹은 오프셋은 그 프레임에 지워진다(화면 흔들림 #477이 같은 이유로 그 메서드 안에서 조립된다). 호출은 `PlayerEmoteView`가 한다.
 
 `PlayerEmoteCamera`가 재생 중에만:
 
