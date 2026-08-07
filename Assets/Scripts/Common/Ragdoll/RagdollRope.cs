@@ -85,7 +85,7 @@ public class RagdollRope : MonoBehaviour
     {
         m_rig = GetComponent<RagdollRig>();
         m_rig.EnsureCollected(); // Awake 순서는 보장되지 않는다 — 뼈가 있어야 앵커를 만들 수 있다
-        SetUpAnchor(); // 밧줄 끝이 될 손잡이. 관절은 밧줄을 묶을 때 만든다
+        EnsureAnchor(); // 밧줄 끝이 될 손잡이. 관절은 밧줄을 묶을 때 만든다
     }
 
     private void OnDestroy()
@@ -97,14 +97,27 @@ public class RagdollRope : MonoBehaviour
     private void FixedUpdate() => Tick();
 
     /// <summary>
-    /// 밧줄 앵커 — <b>부모 없는 키네마틱 Rigidbody.</b>
+    /// 밧줄 앵커를 보장한다 — <b>부모 없는 키네마틱 Rigidbody.</b> <b>멱등이다.</b>
     ///
     /// 시체의 루트에 매달지 않는다 — 앵커가 따라가야 하는 것은 <b>운반자</b>이지 시체 자신이 아니다.
     /// 자기 루트의 자식으로 두면 "시체가 자기를 끄는" 꼴이 된다.
     /// 콜라이더는 붙이지 않는다 — 세계와 부딪히지 않는 순수한 손잡이다.
+    ///
+    /// ⚠ <b>Awake에서 한 번 만드는 것으로는 부족하다 — <see cref="Attach"/>에서 다시 보장한다.</b>
+    /// 부모가 없다는 것은 곧 <b>활성 씬에 놓인다</b>는 뜻이고, 씬 전환은
+    /// <c>LoadSceneMode.Single</c>이라(<c>AppHelper.LoadSceneAsync</c>) 기존 씬을 통째로 버린다.
+    /// Player는 NetworkObject라 NGO가 넘겨 주지만 <b>이 앵커는 아니라서 씬과 함께 죽는다</b> —
+    /// 그러면 <c>m_anchor</c>가 파괴된 참조로 남아 Attach가 조용히 중단되고, 시체는 끄는 힘을
+    /// 하나도 못 받는다(실제로 밟았다: 맵을 새로 만들어 붙인 뒤 그 씬에서만 안 끌렸다).
+    ///
+    /// <c>DontDestroyOnLoad</c>로 올리지 않는 이유는 앵커가 <b>시체마다 하나씩</b>이기 때문이다 —
+    /// 상주로 만들면 씬을 넘나드는 쓰레기가 쌓이고, 물리 씬이 갈리면 관절이 아예 안 걸린다.
+    /// 대신 쓰기 직전에 다시 만든다(<see cref="RagdollRig.EnsureCollected"/>와 같은 멱등 보장).
     /// </summary>
-    private void SetUpAnchor()
+    private void EnsureAnchor()
     {
+        if (m_anchor != null) // 파괴됐으면 Unity의 가짜 null이라 여기서 걸러진다
+            return;
         if (m_rig == null || !m_rig.IsValid)
             return;
 
@@ -124,6 +137,9 @@ public class RagdollRope : MonoBehaviour
         Detach();
 
         m_carrier = carrier;
+
+        // 앵커가 씬 전환에 쓸려 갔을 수 있다 — 쓰기 직전에 다시 보장한다 (EnsureAnchor 주석).
+        EnsureAnchor();
 
         if (carrier == null || m_rig == null || m_rig.HipsBody == null || m_anchor == null)
             return;
