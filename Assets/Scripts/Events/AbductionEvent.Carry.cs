@@ -230,15 +230,19 @@ public partial class AbductionEvent
             if (caught == null || health == null)
                 return false; // 접속 종료 등 — 처형할 대상이 없다
 
+            // 숨이 끊겼는지를 납치범 잔존보다 <b>먼저</b> 본다. 순서가 반대면, 마지막 일격으로 HP가
+            // 0이 된 뒤 같은 폴링 구간(0.25초) 안에 그 납치범까지 격퇴됐을 때 '납치범이 남지 않았다'가
+            // 먼저 걸려, 납치가 낸 죽음이 구조 성공으로 기록됐다. 결말은 HP가 0이 되는 순간 이미
+            // 확정된 것이라(구조 창은 그 전에 닫힌다) 뒤늦은 격퇴가 되돌릴 수 있는 것이 아니다.
+            if (health.CurrentHp <= 0)
+                break;
+
             PruneDead(m_abductors);
             if (m_abductors.Count == 0)
             {
                 Debug.Log("[납치] 린치 중단 — 납치범이 남지 않았다 (구조 성공)");
                 return false;
             }
-
-            if (health.CurrentHp <= 0)
-                break;
         }
 
         if (caught == null || health == null)
