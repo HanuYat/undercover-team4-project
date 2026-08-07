@@ -75,10 +75,12 @@
 
 ### 초기 항목
 
-Kevin Iglesias **Human Dance Animations**를 임포트해(아래) 댄스와 기존 감정 클립을 섞어 8칸을 채운다:
+Kevin Iglesias **Human Dance Animations**를 임포트해(아래) 댄스와 기존 감정 클립을 섞어 **24종**을 채운다:
 
-- 댄스 — `Male/Social/Dance/Steps` 아래 `HumanM@Dance01~18` 중 4종. 전부 **자체 루프 클립**이라 `m_loop = true`로 그대로 쓴다
-- 제스처 — 기존 `Social/Emotions`의 `Cheer01` · `HandClap01` · `Angry01` · `Fear01`
+- 댄스 — `Male/Social/Dance/Steps` 아래 `HumanM@Dance01~18` **전부**. 자체 루프 클립이라 `m_loop = true`로 그대로 쓴다
+- 제스처 — 기존 `Social/Emotions`의 6종(`Cheer01` · `Cheer02` · `HandClap01` · `Angry01` · `Angry02` · `Fear01`). `Pain01`은 피격 리액션이라 뺐다
+
+> 원안은 8종(댄스 4 + 제스처 4)이었다. 휠이 8칸이므로 8종만 두면 **로비에서 고르는 단계가 무의미해진다** — 있는 것이 곧 휠 전부다. 구성이 선택다워지려면 칸 수보다 항목이 넉넉해야 한다.
 
 같은 벤더·같은 리그(HumanM)라 아바타 호환 문제가 없다. `DancePose01~07`은 Begin/Loop/Stop 3단 구조라 상태 머신이 한 겹 더 필요하므로 이번 범위에서 제외한다 — 필요해지면 후속에서 다룬다.
 
@@ -88,7 +90,7 @@ Kevin Iglesias **Human Dance Animations**를 임포트해(아래) 댄스와 기�
 
 Kevin Iglesias **Human Dance Animations**를 임포트한다. 이 패키지는 프로젝트가 이미 쓰는 `Human Animations`와 **GUID를 공유하는 확장판**이라, `ImportPackage`가 별도 폴더를 만들지 않고 기존 `Assets/Imported/Kevin Iglesias/Human Animations/` 트리 안으로 직접 병합한다. 댄스 클립은 그 아래 `Animations/Male/Social/Dance/Steps/`에 놓인다.
 
-**이 에셋은 저장소에 들어가지 않는다.** `.gitignore`가 `Assets/Imported/` 전체를 제외하고 있고(Synty 등 기존 서드파티 에셋도 마찬가지다), 팀원이 각자 임포트하는 것이 이 저장소의 관례다. 이 브랜치를 받아 감정표현을 실행하려면 같은 패키지를 임포트해야 한다.
+**이 에셋은 본 저장소에 들어가지 않는다.** `.gitignore`가 `Assets/Imported/` 전체를 제외한다(Synty 등 기존 서드파티 에셋도 마찬가지다). 대신 그 폴더는 별도 에셋 저장소(`undercover-team4-project-assets`)의 체크아웃이고, 임포트한 패키지를 거기에 올려 뒀다 — 이 브랜치를 받아 감정표현을 실행하려면 에셋 저장소를 `pull`하면 되고 패키지를 따로 임포트할 필요는 없다.
 
 ## 5. 애니메이터 확장
 
@@ -166,6 +168,6 @@ EditMode 단위 테스트를 붙이는 대상은 순수 로직 둘이다:
 
 | 이슈 완료 기준 | 대응 |
 |---|---|
-| 감정표현 애니메이션 1종 이상 + 이모지 표시 동작 | 4절 초기 항목 8종(댄스 4 + 제스처 4) + 6절 `EmoteBubbleView` |
+| 감정표현 애니메이션 1종 이상 + 이모지 표시 동작 | 4절 초기 항목 24종(댄스 18 + 제스처 6) + 6절 `EmoteBubbleView` |
 | 전 피어 동기화 | 3절 `NetworkVariable<sbyte>` 상태 동기화 |
 | 상태 enum 정리 방향 확정 (GDD 10-2 반영) | 10절 |
