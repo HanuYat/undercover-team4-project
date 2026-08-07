@@ -215,6 +215,7 @@ public class RoundManager : CommonManagerBase
     /// 게임 씬 진입 시 서버(또는 오프라인)에서 자동 호출된다.
     /// 씬을 직접 Play하는 개발 흐름에서는 호스트를 띄운 뒤 DevAutoHost가 직접 호출한다.
     /// Phase는 이 구간 내내 Preparing이다 — 타이머·검거 판정은 StartRound부터 돈다.
+    /// NPC도 정지 상태로 스폰해 둔다 — 먼저 입장한 플레이어만 초반 동선을 보는 것을 막는다.
     /// </summary>
     public void BeginRoundPreparation()
     {
@@ -229,7 +230,8 @@ public class RoundManager : CommonManagerBase
 
         m_preparing = true;
 
-        Spawner.StartSpawn(); // 서버/오프라인만 실제 스폰 — 클라이언트 호출은 NpcSpawner가 걸러낸다 (#56)
+        // 서버/오프라인만 실제 스폰 — 클라이언트 호출은 NpcSpawner가 걸러낸다 (#56)
+        Spawner.StartSpawn(spawnFrozen: true);
         PrepareAndStartAsync().Forget();
     }
 
@@ -298,6 +300,7 @@ public class RoundManager : CommonManagerBase
 
         Phase = RoundPhase.InProgress;
         CriminalArrestCount = 0;
+        SetNpcsFrozen(false); // 준비 중 정지시켜 둔 NPC를 풀어 준다 — 세계는 여기서부터 움직인다
         // 0 이하 = 무제한 — 타이머를 아예 돌리지 않는다 (밸런싱 전 테스트·본부 단독 씬용)
         RemainingSeconds = m_timeLimitSeconds > 0f ? m_timeLimitSeconds : float.PositiveInfinity;
         Debug.Log($"[라운드] 시작 — 목표 {m_targetFund}원, 제한시간 {(float.IsPositiveInfinity(RemainingSeconds) ? "무제한" : $"{RemainingSeconds:0}초")}");
@@ -457,13 +460,14 @@ public class RoundManager : CommonManagerBase
         Phase = RoundPhase.Ended;
         Result = result;
         EndReason = reason;
-        FreezeAllNpcs(); // NPC 정지 — 플레이어 정지는 PlayerMovement가 GameplayFrozen을 읽어 처리
+        SetNpcsFrozen(true); // NPC 정지 — 플레이어 정지는 PlayerMovement가 GameplayFrozen을 읽어 처리
         Debug.Log($"[라운드] 종료 — 결과: {result} (사유: {reason})");
         OnRoundEnded?.Invoke(result, reason);
     }
 
-    // 스폰된 NPC를 전부 정지시킨다 — 서버(또는 오프라인)에서만 호출되며, 서버 정지가 전 클라이언트로 복제된다.
-    private void FreezeAllNpcs()
+    // 스폰된 NPC를 전부 정지/재개시킨다 — 서버(또는 오프라인)에서만 호출되며, 서버 정지가 전 클라이언트로 복제된다.
+    // 준비 중 정지(StartRound에서 해제)와 라운드 종료 정지가 같은 경로를 쓴다.
+    private void SetNpcsFrozen(bool frozen)
     {
         if (Spawner == null)
             return;
@@ -471,7 +475,7 @@ public class RoundManager : CommonManagerBase
         foreach (NpcController npc in Spawner.SpawnedNpcs)
         {
             if (npc != null)
-                npc.SetFrozen(true);
+                npc.SetFrozen(frozen);
         }
     }
 }

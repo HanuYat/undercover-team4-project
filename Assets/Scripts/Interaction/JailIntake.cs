@@ -88,6 +88,13 @@ public class JailIntake : MonoBehaviour
         if (!HasServerAuthority || interactor == null || m_jailZone == null)
             return 0;
 
+        // 라운드 진행 중에만 받는다. ArrestJudge도 같은 게이트를 걸지만 여기서 먼저 끊어야 한다 —
+        // 저쪽이 null을 돌려주면 아래 루프가 그 대상을 m_unjudgeable에 영구 등록해, 라운드가
+        // 시작된 뒤에도 판정되지 않는 NPC가 된다.
+        RoundManager round = App.Game.Round;
+        if (round != null && round.Phase != RoundPhase.InProgress)
+            return 0;
+
         CollectHeldBy(interactor);
         if (m_admitBuffer.Count == 0)
             return 0;

@@ -11,8 +11,13 @@ using UnityEngine;
 /// 열림 각은 ±180도 미만으로 둘 것. <see cref="Quaternion.RotateTowards"/>가 짧은 쪽 호를 타므로
 /// 200도처럼 넘겨 적으면 반대 방향(-160도)으로 돌아간다. 같은 자세라도 도는 방향이 뒤집힌다.
 ///
-/// <b>여닫는 것은 E 토글뿐이다.</b> 근접 자동 개폐는 없다 — 상태가 개폐 하나뿐이라
-/// 자물쇠·탈옥까지 함께 보는 유치장 문(<see cref="JailDoor"/>)보다 단순하다.
+/// <b>여닫는 것은 E 토글뿐이다.</b> 근접 자동 개폐는 없다 — 자물쇠·탈옥까지 함께 보는
+/// 유치장 문(<see cref="JailDoor"/>)보다 단순하다.
+///
+/// 잠금은 라운드 준비 구간 전용이다 — <see cref="m_lockedUntilRoundStart"/>를 켜면 라운드가
+/// 시작될 때까지 열리지 않는다. 본부 대문이 이걸 쓴다: 먼저 로딩을 마친 플레이어가 남들을
+/// 기다리는 동안 현장에 나가 있는 것을 막는다. 본부 <b>안</b>은 그대로 돌아다닐 수 있다.
+/// (본부 원격 단말로 여는 <see cref="InteractableDoor"/>의 상시 잠금과는 목적이 다르다)
 ///
 /// 씬 배치:
 ///  · <b>문짝 콜라이더를 Interactable 레이어에 둘 것</b> — PlayerInteractor의 조준 마스크가 그 레이어만
@@ -41,16 +46,29 @@ public class DoubleDoor : NetworkBehaviour, IInteractable
     [Tooltip("완전히 열리거나 닫히는 데 걸리는 시간(초)")]
     [SerializeField] private float m_swingSeconds = 0.7f;
 
+    [Header("잠금")]
+    [Tooltip("라운드가 시작될 때까지 잠가 둔다 — 준비 중 현장 선점을 막는 본부 대문용. 씬에 RoundManager가 없으면 무시된다")]
+    [SerializeField] private bool m_lockedUntilRoundStart = true;
+
     // 서버 권위 개폐 상태 — JailDoor와 동일한 이중 구조(오프라인 폴백 로컬 값)
     private readonly NetworkVariable<bool> m_isOpenSynced = new NetworkVariable<bool>(false);
     private bool m_localIsOpen;
+
+    // 잠금도 같은 이중 구조 — 잠금 초기값이 인스펙터 값이라 NetworkVariable 생성자에 넣을 수 없다
+    private readonly NetworkVariable<bool> m_isLockedSynced = new NetworkVariable<bool>(false);
+    private bool m_localIsLocked;
 
     // 닫힌 자세 — Awake에 잡아 두고 여기에 열림 각도를 더한 곳이 열린 자세가 된다
     private Quaternion m_closedLeft;
     private Quaternion m_closedRight;
 
+    private RoundManager Round => App.Game.Round;
+
     /// <summary>문이 열려 있는가. 세션 중에는 동기화된 값이라 클라이언트에서도 읽을 수 있다.</summary>
     public bool IsOpen => IsSpawned ? m_isOpenSynced.Value : m_localIsOpen;
+
+    /// <summary>잠겨 있는가 — 잠긴 문은 E로 열리지 않는다. 세션 중에는 동기화된 값이다.</summary>
+    public bool IsLocked => IsSpawned ? m_isLockedSynced.Value : m_localIsLocked;
 
     /// <summary>개폐 전환 — 소리·연출이 구독할 훅. 전 피어에서 발생한다.</summary>
     public event System.Action<bool> OnOpenChanged;
@@ -64,20 +82,66 @@ public class DoubleDoor : NetworkBehaviour, IInteractable
             m_closedRight = m_leafRight.localRotation;
     }
 
-    public override void OnNetworkSpawn() => m_isOpenSynced.OnValueChanged += HandleOpenSyncedChanged;
+    // 매니저 구독은 Start에서 — 모든 매니저의 Awake(=App 등록)가 끝난 뒤가 보장된다 (R6).
+    // OnRoundStarted는 서버(또는 오프라인)에서만 발행되지만, 거기서 푼 잠금이 NetworkVariable로
+    // 전 피어에 전파되므로 클라이언트가 따로 받을 것은 없다.
+    private void Start()
+    {
+        if (Round != null)
+            Round.OnRoundStarted += HandleRoundStarted;
+
+        ServerRefreshRoundLock();
+    }
+
+    public override void OnDestroy()
+    {
+        if (Round != null)
+            Round.OnRoundStarted -= HandleRoundStarted;
+
+        base.OnDestroy();
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        m_isOpenSynced.OnValueChanged += HandleOpenSyncedChanged;
+
+        // 씬 배치 오브젝트의 스폰과 Start는 순서가 보장되지 않는다 — 양쪽에서 같은 값을 세운다.
+        // ServerSetLocked가 변화 없으면 조기 반환하므로 중복 호출이 문제되지 않는다.
+        ServerRefreshRoundLock();
+    }
 
     public override void OnNetworkDespawn() => m_isOpenSynced.OnValueChanged -= HandleOpenSyncedChanged;
 
     private void HandleOpenSyncedChanged(bool previous, bool current) => OnOpenChanged?.Invoke(current);
+
+    private void HandleRoundStarted() => ServerSetLocked(false);
+
+    // 지금 라운드 단계에 맞는 잠금 상태를 세운다 — 서버(또는 오프라인) 전용.
+    // Phase를 직접 읽는 이유는 스폰이 늦어 OnRoundStarted를 놓쳤을 때도 옳은 값으로 수렴시키기 위해서다.
+    private void ServerRefreshRoundLock()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        bool locked = m_lockedUntilRoundStart && Round != null && Round.Phase == RoundPhase.Preparing;
+        ServerSetLocked(locked);
+    }
 
     // ---- 플레이어 상호작용 (E 토글) ----
 
     /// <summary>문짝이 하나라도 연결돼 있으면 여닫을 수 있다. (사거리·가시선은 PlayerInteractor가 걸러 준다)</summary>
     public bool CanInteract(GameObject interactor) => m_leafLeft != null || m_leafRight != null;
 
-    /// <summary>E — 여닫기 토글.</summary>
+    /// <summary>E — 여닫기 토글. 잠겨 있으면 거부한다.</summary>
     public void Interact(GameObject interactor)
     {
+        if (IsLocked)
+        {
+            // 거부 피드백(소리·HUD 문구)은 InteractableDoor와 함께 정리한다
+            Debug.Log("[문] 잠겨 있음 — 라운드 시작 전", this);
+            return;
+        }
+
         if (!IsSpawned)
         {
             ServerToggle(); // 오프라인 단독 테스트
@@ -100,6 +164,9 @@ public class DoubleDoor : NetworkBehaviour, IInteractable
         if (IsSpawned && !IsServer)
             return;
 
+        if (IsLocked)
+            return; // 클라 게이트는 신뢰 대상이 아니다 — 서버에서 한 번 더
+
         ServerSetOpen(!IsOpen);
     }
 
@@ -118,6 +185,24 @@ public class DoubleDoor : NetworkBehaviour, IInteractable
             m_isOpenSynced.Value = open; // OnValueChanged를 거쳐 모든 피어에서 이벤트 발생
         else if (!IsSpawned)
             OnOpenChanged?.Invoke(open);
+    }
+
+    /// <summary>잠금 설정 — 서버(또는 오프라인) 전용. 잠글 때 열려 있으면 함께 닫는다.</summary>
+    public void ServerSetLocked(bool locked)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        if (IsLocked == locked)
+            return;
+
+        m_localIsLocked = locked;
+
+        if (IsSpawned && IsServer)
+            m_isLockedSynced.Value = locked;
+
+        if (locked && IsOpen)
+            ServerSetOpen(false);
     }
 
     // ---- 연출 (전 피어 로컬) ----
