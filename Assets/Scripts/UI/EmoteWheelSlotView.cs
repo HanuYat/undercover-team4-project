@@ -70,13 +70,13 @@ public class EmoteWheelSlotView : MonoBehaviour
             return;
         }
 
-        // 표시 이름 키가 아직 연결되지 않았으면 id를 대신 보여 준다.
-        // 빈 칸으로 두면 아이콘 색만으로 무엇인지 구분해야 하는데, 임시 아이콘 단계에서는
-        // 그게 사실상 구분 불가다 — 로컬라이즈 배선이 끝나기 전에도 고를 수 있어야 한다.
+        // 표시 이름 키가 아직 연결되지 않았으면 임시 이름을 대신 보여 준다.
+        // 빈 칸으로 두면 아이콘만으로 무엇인지 알아내야 하는데, 비슷한 자세가 여럿이라
+        // 그게 어렵다 — 로컬라이즈 배선이 끝나기 전에도 고를 수 있어야 한다.
         if (definition.DisplayName == null || definition.DisplayName.IsEmpty)
         {
             m_boundName = null;
-            SetLabelText(definition.Id);
+            SetLabelText(definition.FallbackName);
             return;
         }
 

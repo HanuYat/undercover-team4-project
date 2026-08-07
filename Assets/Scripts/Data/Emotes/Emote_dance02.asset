@@ -22,6 +22,7 @@ MonoBehaviour:
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
+  m_fallbackName: "\uCDA4 2"
   m_icon: {fileID: 21300000, guid: 1269b86d41c4fed439442f9f8e3cab5f, type: 3}
   m_clip: {fileID: 7953628815959492046, guid: e5f076b9f28f36749bd359fcd1080a45, type: 3}
   m_loop: 1
