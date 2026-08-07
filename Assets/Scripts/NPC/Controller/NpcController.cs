@@ -187,6 +187,10 @@ public partial class NpcController : NetworkBehaviour
         if (m_frozen)
             return;
 
+        // NavMesh 밖에서 굳은 몸의 회수 — 아래 모든 게이트보다 **먼저** 돈다 (#557).
+        // 뒤로 내리면 스턴 게이트에 가려 기절한 채 굳은 NPC(=신고된 증상 그대로)에 영영 닿지 못한다.
+        TickNavMeshRecovery();
+
         // 밧줄 장력 — 아래 넉백·스턴 게이트보다 **먼저** 돈다 (#390). 묶인 채 기절한 대상은 스턴
         // 오버레이를 단 채로 끌려가야 하므로(기절 중에도 장력이 돌아야 한다) 게이트 뒤로
         // 내리면 테이저→밧줄 콤보로 잡은 대상이 그 자리에 멈춘다. 끌기가 아니면 즉시 반환한다.
@@ -289,7 +293,7 @@ public partial class NpcController : NetworkBehaviour
             m_agent.isStopped = frozen;
     }
 
-    // 워프 기준점 주변에서 NavMesh를 찾을 때의 탐색 반경(m).
+    // 워프 기준점 주변에서 NavMesh를 찾을 때의 기본 탐색 반경(m).
     private const float k_warpSnapRadius = 2f;
 
     /// <summary>
@@ -300,11 +304,70 @@ public partial class NpcController : NetworkBehaviour
     /// 가짜 의존이 생긴다. 부품은 같은 어셈블리라 internal로 족하다.
     /// 실패하면 <b>호출부가</b> 대응한다 — 대안 지점을 시도할지 제자리에 둘지는 도메인마다 다르다.
     /// </summary>
-    internal bool TryWarpNear(Vector3 origin)
+    /// <param name="snapRadius">탐색 반경(m) — 생략하면 <see cref="k_warpSnapRadius"/>.
+    /// 넓히는 건 최후 수단인 회수(<see cref="TickNavMeshRecovery"/>)뿐이다.</param>
+    internal bool TryWarpNear(Vector3 origin, float snapRadius = k_warpSnapRadius)
     {
-        if (!NavMesh.SamplePosition(origin, out NavMeshHit hit, k_warpSnapRadius, NavMesh.AllAreas))
+        if (!NavMesh.SamplePosition(origin, out NavMeshHit hit, snapRadius, NavMesh.AllAreas))
             return false;
 
         return m_agent.Warp(hit.position) && m_agent.isOnNavMesh;
+    }
+
+    // ---- 굳은 몸 회수 (#557) ----
+
+    // 회수를 걸기까지의 유예(초) — 기절 시간(NpcStunConfig.StunSeconds)보다 짧아야 ExitStun보다 먼저
+    // 붙어 깨어나는 경로(isStopped 복구 → StartFlee)가 이어진다. 한 프레임짜리 이탈까지 잡으면
+    // 정상 경로의 워프와 겹쳐 몸이 두 번 튄다.
+    private const float k_stuckGraceSeconds = 1f;
+
+    // 회수용 탐색 반경(m) — 기본 반경으로 못 붙였을 때의 최후 수단. 8m은 실측이다: 이 맵에서 설 수 있는
+    // 지면 중 NavMesh가 2m 안에 없는 곳은 HQ 실내뿐이고(최대 5.5m) 야외는 전 구간 2m 안이다.
+    // 더 넓히면 회수 대상이 엉뚱한 곳으로 튕겨 나갈 위험만 커진다.
+    private const float k_stuckRecoverRadius = 8f;
+
+    private float m_offNavMeshSeconds;
+
+    /// <summary>
+    /// <b>에이전트가 켜져 있는데 NavMesh 밖</b>인 상태를 서버가 스스로 회수한다. 서버(또는 오프라인) 전용. (#557)
+    ///
+    /// 이 상태를 만드는 곳은 셋인데(밧줄 놓기·넉백 착지·기절 해제) 셋 다 붙이기에 실패하면 경고만 남기고
+    /// 포기해서, 이후 <c>isStopped</c>·<c>SetDestination</c>이 조용히 실패하며 NPC가 그 자리에 굳었다
+    /// (빌드 2 이슈 E의 재발). 호출부마다 폴백을 다는 대신 <b>결과 상태 하나</b>를 여기서 보면
+    /// 앞으로 늘어날 호출부까지 함께 덮인다.
+    ///
+    /// 에이전트를 꺼 둔 구간(넉백 비행·밧줄 끌기)은 위치를 그쪽이 쥐고 있어 굳은 것이 아니다 — 건너뛴다.
+    /// </summary>
+    private void TickNavMeshRecovery()
+    {
+        if (!m_agent.enabled || m_agent.isOnNavMesh)
+        {
+            m_offNavMeshSeconds = 0f;
+            return;
+        }
+
+        m_offNavMeshSeconds += Time.deltaTime;
+        if (m_offNavMeshSeconds < k_stuckGraceSeconds)
+            return;
+
+        m_offNavMeshSeconds = 0f; // 실패해도 유예를 다시 채워 매 프레임이 아니라 매 1초로 재시도한다
+
+        Vector3 from = transform.position;
+        if (!TryWarpNear(from, k_stuckRecoverRadius))
+        {
+            Debug.LogError(
+                $"NpcController: NavMesh 밖에서 굳은 NPC를 {k_stuckRecoverRadius}m 안에서 회수하지 못했다: "
+                    + $"{name} @{from.ToString("F1")}",
+                this
+            );
+            return;
+        }
+
+        // 회수 사실 자체가 원인 추적의 유일한 단서다 — "무엇이 밖으로 밀어냈는가"는 아직 미확인이다
+        Debug.LogWarning(
+            $"NpcController: NavMesh 밖에서 굳은 NPC를 회수했다 — {name} "
+                + $"{from.ToString("F1")} → {transform.position.ToString("F1")}",
+            this
+        );
     }
 }

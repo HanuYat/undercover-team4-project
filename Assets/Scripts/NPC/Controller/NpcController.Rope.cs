@@ -213,8 +213,11 @@ public partial class NpcController
         if (releaser != null && TryWarpNear(releaser.position))
             return false;
 
+        // 여기서 포기해도 굳지는 않는다 — TickNavMeshRecovery가 1초 뒤 더 넓게 다시 붙인다 (#557).
+        // 위치를 남기는 것은 회수가 원인 지점을 조용히 덮어 버리지 않게 하기 위해서다.
         Debug.LogWarning(
-            $"NpcController: 밧줄을 놓은 지점을 NavMesh에 붙이지 못했다 — 이후 이동·상태 전이가 조용히 실패한다: {name}",
+            "NpcController: 밧줄을 놓은 지점을 NavMesh에 붙이지 못했다 — 회수 대기: "
+                + $"{name} @{transform.position.ToString("F1")}",
             this
         );
         return false;

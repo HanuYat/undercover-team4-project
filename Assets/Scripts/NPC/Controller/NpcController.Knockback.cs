@@ -169,11 +169,16 @@ public partial class NpcController
         m_agent.enabled = true;
         m_agent.Warp(landing); // 에이전트를 NavMesh 위 착지점에 다시 붙인다
 
-        // Warp가 실패했으면(착지점이 NavMesh 밖) 상태 전이를 시키지 않는다 —
-        // 상태 클래스들이 곧바로 에이전트를 건드려 에러가 난다. 다음 프레임 이후 스스로 복구되진 않으므로 남긴다.
+        // Warp가 실패했으면(착지점이 NavMesh 밖) 상태 전이를 시키지 않는다 — 상태 클래스들이 곧바로
+        // 에이전트를 건드려 에러가 난다. 에이전트는 TickNavMeshRecovery가 1초 뒤 다시 붙이지만(#557),
+        // 아래 '보정' 전이는 되살아나지 않는다 — 비행 중 상태가 바뀐 경우는 발사 시점의 상태로 남는다.
         if (!m_agent.isOnNavMesh)
         {
-            Debug.LogWarning("NpcController: 넉백 착지 지점을 NavMesh에 붙이지 못했다", this);
+            Debug.LogWarning(
+                "NpcController: 넉백 착지 지점을 NavMesh에 붙이지 못했다 — 회수 대기: "
+                    + $"{name} @{transform.position.ToString("F1")}",
+                this
+            );
             return;
         }
 
