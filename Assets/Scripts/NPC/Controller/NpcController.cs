@@ -314,6 +314,59 @@ public partial class NpcController : NetworkBehaviour
         return m_agent.Warp(hit.position) && m_agent.isOnNavMesh;
     }
 
+    // 벽 스윕 히트 버퍼 — 스윕은 서버(또는 오프라인) 전용이라 공유해도 안전하다 (프레임마다의 할당 방지)
+    private static readonly RaycastHit[] s_sweepBuffer = new RaycastHit[16];
+
+    // 이번 프레임 수평 이동 구간에 벽이 있는지 — 몸통 굵기로 훑는다.
+    // 넉백 비행(#232)과 밧줄 끌기(#369)가 함께 쓰는 공용 유틸이라 코어에 둔다 (계획서 § 4-6) —
+    // 판정만 공유하고 대응은 호출부가 정한다: 넉백은 그 자리에 떨어지고, 끌기는 벽을 따라 미끄러진다.
+    // 프레임이 튀어 한 번에 몇 미터씩 움직여도 구간 전체를 검사하므로 벽을 지나쳐 버리지 않는다.
+    // 캐릭터(플레이어·다른 NPC)는 벽으로 치지 않는다(#339): 플레이어 몸통이 환경과 같은 Default 레이어라
+    // 마스크만으로는 걸러지지 않는데, 폭발로 날아가는 NPC가 군중을 벽으로 오판하면 죄다 제자리에
+    // 툭 떨어져 넉백이 밋밋해진다 — 장애물 스윕 판정(#313)과 같은 수정.
+    internal bool SweepHitsObstacle(Vector3 direction, float distance, out RaycastHit obstacle)
+    {
+        obstacle = default;
+
+        float radius = m_agent.radius;
+        Vector3 origin = transform.position + Vector3.up * Mathf.Max(radius, m_agent.height * 0.5f);
+        int mask = m_commonConfig.KnockbackObstacleMask & ~(1 << gameObject.layer); // 자기 콜라이더에 걸리지 않게
+
+        int count = Physics.SphereCastNonAlloc(origin, radius, direction, s_sweepBuffer, distance, mask,
+                                               QueryTriggerInteraction.Ignore);
+
+        // 버퍼 포화 = 반환되지 못한 히트(그중 진짜 벽 포함 가능)가 있을 수 있다 — 나오면 확대 신호 (#313 리뷰와 동일)
+        if (count == s_sweepBuffer.Length)
+            Debug.LogWarning($"NpcController: 스윕 버퍼 포화({count}) — 히트 누락 가능", this);
+
+        bool found = false;
+        for (int i = 0; i < count; i++)
+        {
+            Collider hit = s_sweepBuffer[i].collider;
+            if (hit == null)
+                continue;
+            if (hit.GetComponentInParent<PlayerHealth>() != null)
+                continue; // 플레이어 — 벽이 아니다, 뚫고 날아간다
+            if (hit.GetComponentInParent<NpcController>() != null)
+                continue; // 다른 NPC — 군중 속 폭발에서 서로를 벽으로 보지 않게
+
+            // 시작 지점에서 이미 겹친 히트(거리 0)는 버린다 — 법선이 진행 방향 반대로 잡혀 어느 쪽으로
+            // 움직여도 계속 막히므로, 한 번 끼면 영영 빠져나오지 못한다 (밧줄 끌기에서 실제로 낀 사례, #369).
+            // 이미 안에 있는 이상 막는 것보다 빠져나갈 기회를 주는 편이 항상 낫다.
+            if (s_sweepBuffer[i].distance <= 0.001f)
+                continue;
+
+            // 캐릭터가 아닌 무언가 = 벽/환경. 여럿이면 가장 가까운 것을 남긴다.
+            if (!found || s_sweepBuffer[i].distance < obstacle.distance)
+            {
+                obstacle = s_sweepBuffer[i];
+                found = true;
+            }
+        }
+
+        return found;
+    }
+
     // ---- 굳은 몸 회수 (#557) ----
 
     // 회수를 걸기까지의 유예(초) — 기절 시간(NpcStunConfig.StunSeconds)보다 짧아야 ExitStun보다 먼저
