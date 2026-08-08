@@ -60879,6 +60879,9 @@ MonoBehaviour:
   - Id: 7
     Effect: 0
     Sound: 14
+  - Id: 8
+    Effect: 0
+    Sound: 17
 --- !u!4 &1496433913 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4744096329500722, guid: e5ea23645ddbb58408bd3bb44e10f168, type: 3}
@@ -65004,7 +65007,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BombCrate
   m_spawnPoint: {fileID: 0}
-  m_matchRadius: 1.5
   m_shakeSeconds: 0.8
   m_shakeHeight: 0.06
   m_shakeTilt: 4
@@ -80862,7 +80864,7 @@ MonoBehaviour:
   m_OverrideTileSize: 0
   m_TileSize: 256
   m_OverrideVoxelSize: 0
-  m_VoxelSize: 0.13333334
+  m_VoxelSize: 0.11666667
   m_MinRegionArea: 9
   m_NavMeshData: {fileID: 23800000, guid: a4f09f5c0689666418f46cf5cf86c04f, type: 2}
   m_BuildHeightMesh: 1

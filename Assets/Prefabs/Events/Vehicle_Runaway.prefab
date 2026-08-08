@@ -126,8 +126,9 @@ MonoBehaviour:
   m_damage: 120
   m_knockbackForward: 14
   m_knockbackUp: 6
-  m_hornDistanceBeforePass: 30
-  m_hornFx: 0
+  m_hornDistanceBeforePass: 70
+  m_hornFx: 8
+  m_engineSound: 16
 --- !u!82 &8496479357934771959
 AudioSource:
   m_ObjectHideFlags: 0
@@ -140,7 +141,7 @@ AudioSource:
   OutputAudioMixerGroup: {fileID: 0}
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
-  m_PlayOnAwake: 1
+  m_PlayOnAwake: 0
   m_Volume: 1
   m_Pitch: 1
   Loop: 1

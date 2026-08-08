@@ -15,6 +15,7 @@ using UnityEngine;
 /// 한 번 친 대상은 다시 치지 않는다(차체가 지나가는 동안 매 틱 겹치므로).
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
+[RequireComponent(typeof(AudioSource))] // 엔진음 루프 — 떼면 접근 예고가 사라진다
 public class RunawayVehicle : NetworkBehaviour
 {
     [Header("주행")]
@@ -43,6 +44,9 @@ public class RunawayVehicle : NetworkBehaviour
     [Tooltip("경적 연출 — FxManager 인스펙터에서 소리를 배선한다")]
     [SerializeField] private EFx m_hornFx = EFx.None;
 
+    [Tooltip("엔진음(루프) — 차체의 AudioSource가 직접 튼다. 카탈로그에 클립이 없으면 조용히 무음")]
+    [SerializeField] private EAudioClip m_engineSound = EAudioClip.VehicleEngine;
+
     // 서버만 쓰는 주행 상태
     private Vector3 m_endPoint;
     private Vector3 m_direction;
@@ -57,6 +61,28 @@ public class RunawayVehicle : NetworkBehaviour
 
     /// <summary>완주했거나 정리돼 더 이상 달리지 않는가 — 이벤트가 종료 판정에 쓴다.</summary>
     public bool IsFinished { get; private set; }
+
+    // 엔진음은 전 피어에서 건다 — 주행(ServerDrive)에 걸면 서버에서만 들린다.
+    // 루프라 풀을 못 쓴다(오래된 소리를 뺏는 정책) — 발소리와 같은 이유로 자기 AudioSource로 직접 튼다.
+    private void Start()
+    {
+        AudioSource source = GetComponent<AudioSource>();
+        if (source == null || m_engineSound == EAudioClip.None)
+            return;
+
+        AudioLibrary.Entry entry = App.Sound?.GetSfxEntry(m_engineSound);
+        if (entry?.Clip == null)
+            return; // 카탈로그 미배정 — 조용히 무음
+
+        source.clip = entry.Clip;
+        source.volume = entry.Volume;
+        source.minDistance = entry.MinDistance;
+        source.maxDistance = Mathf.Max(entry.MaxDistance, entry.MinDistance + 0.1f);
+        source.spatialBlend = 1f; // 완전 3D — 어느 방향에서 오는지가 예고의 전부다
+        source.rolloffMode = AudioRolloffMode.Linear;
+        source.loop = true;
+        source.Play();
+    }
 
     /// <summary>주행을 시작한다 — 서버(또는 오프라인) 전용. 스폰 직후 이벤트가 한 번 부른다.</summary>
     public void ServerDrive(Vector3 startPoint, Vector3 endPoint)
