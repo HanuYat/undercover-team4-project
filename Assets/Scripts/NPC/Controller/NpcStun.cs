@@ -23,7 +23,7 @@ public enum NpcStunCause
 /// 않으므로 호송·수감·페널티 링크와 상태별 타이머가 끊기지 않고, 풀리면 하던 일을 그대로 재개한다.
 ///
 /// <b>아무 링크도 끊지 않는다</b> — 연행만 예외로 끊던 규칙은 밧줄 전환과 함께 걷어냈다(#562).
-/// 넉백은 여전히 끊는다(NpcController.Knockback) — 폭발로 날아가는 것은 성격이 다르다.
+/// 넉백은 여전히 끊는다(<see cref="NpcKnockback"/>) — 폭발로 날아가는 것은 성격이 다르다.
 ///
 /// <b>기절 경로는 둘이다.</b> 테이저와 체력 0(#366)은 이 오버레이를, 넉백 착지는
 /// <see cref="NpcState.Stunned"/> 전이를 쓴다(전이여야 이전 상태의 Exit()이 에이전트를 정리한다).
@@ -43,7 +43,7 @@ public class NpcStun : NetworkBehaviour
     public bool IsStunned => HasStunOverlay || m_owner.CurrentState == NpcState.Stunned;
 
     /// <summary>오버레이만 — 넉백 KO는 제외한다. 코어 Update의 스턴 게이트가 이걸 봐야 넉백 KO일 때
-    /// NpcStunnedState.Tick이 정상적으로 돈다. 코어와 기상 대기(NpcController.StandUp)가 읽는다.</summary>
+    /// NpcStunnedState.Tick이 정상적으로 돈다. 코어와 기상 대기(<see cref="NpcStandUp"/>)가 읽는다.</summary>
     internal bool HasStunOverlay => IsSpawned ? m_syncedStunned.Value : m_stunned;
 
     /// <summary>기절 지속 시간(초) — 테이저가 명중 안내에 읽는다. (#269)</summary>
@@ -138,7 +138,7 @@ public class NpcStun : NetworkBehaviour
 
     /// <summary>
     /// 스턴 진입 — 상태를 바꾸지 않고 플래그만 켠다. 테이저와 체력 0 도달(#366)이 부른다.
-    /// 넉백 착지는 이 경로가 아니라 NpcState.Stunned 전이를 쓴다 (NpcController.Knockback).
+    /// 넉백 착지는 이 경로가 아니라 NpcState.Stunned 전이를 쓴다 (<see cref="NpcKnockback"/>).
     /// </summary>
     /// <param name="threat">기절시킨 상대 — 깨어날 때 이 대상에게서 도주한다. null 허용.</param>
     /// <param name="seconds">지속 시간(초). 생략하면 <see cref="NpcStunConfig.StunSeconds"/>(테이저 기준).
@@ -209,7 +209,7 @@ public class NpcStun : NetworkBehaviour
             // 밧줄이 걸려 있으면 모션을 내지 않는다 — 줄에 눕혀진 몸은 기절이 풀려도 일어날 수 없다.
             // 알림만 건너뛴다: 기절은 아래에서 제 시간에 풀리고 대상은 묶인 채 남는다.
             // 여기서 알리면 벌떡 섰다가 곧바로 묶임 자세로 되돌아간다.
-            if (!m_owner.IsRoped && !m_owner.IsTethered)
+            if (!m_owner.Rope.IsRoped && !m_owner.Rope.IsTethered)
                 m_owner.RaiseStandUp(); // 전 피어에 일어나는 모션 재생을 알린다
         }
 

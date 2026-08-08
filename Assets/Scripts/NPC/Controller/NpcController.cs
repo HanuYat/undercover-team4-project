@@ -14,8 +14,11 @@ using Random = UnityEngine.Random;
 [RequireComponent(typeof(NpcCustody))] // 도메인 부품 — 누락 시 연행·수감 경로가 NRE로 죽는다 (#503)
 [RequireComponent(typeof(NpcHealth))] // 도메인 부품 — 누락 시 체력·피해 경로가 NRE로 죽는다 (#503)
 [RequireComponent(typeof(NpcIntruder))] // 도메인 부품 — 누락 시 침입 경로가 NRE로 죽는다 (#503)
+[RequireComponent(typeof(NpcKnockback))] // 도메인 부품 — 누락 시 넉백 경로가 NRE로 죽는다 (#503)
 [RequireComponent(typeof(NpcPenaltyAgent))] // 도메인 부품 — 누락 시 오검거·납치 경로가 NRE로 죽는다 (#503)
 [RequireComponent(typeof(NpcReaction))] // 도메인 부품 — 누락 시 도주·저항 경로가 NRE로 죽는다 (#503)
+[RequireComponent(typeof(NpcRopeDrag))] // 도메인 부품 — 누락 시 밧줄 경로가 NRE로 죽는다 (#503)
+[RequireComponent(typeof(NpcStandUp))] // 도메인 부품 — 누락 시 기상 예약 경로가 NRE로 죽는다 (#503)
 [RequireComponent(typeof(NpcStun))] // 도메인 부품 — 누락 시 기절 경로가 NRE로 죽는다 (#503)
 public partial class NpcController : NetworkBehaviour
 {
@@ -39,16 +42,12 @@ public partial class NpcController : NetworkBehaviour
     private NpcCustody m_custody;
     private NpcHealth m_health;
     private NpcIntruder m_intruder;
+    private NpcKnockback m_knockback;
     private NpcPenaltyAgent m_penalty;
     private NpcReaction m_reaction;
+    private NpcRopeDrag m_rope;
+    private NpcStandUp m_standUp;
     private NpcStun m_stun;
-
-    // 넉백 비행 상태 — 서버(또는 오프라인)에서만 의미. 비행 중에는 FSM/NavMeshAgent가 정지한다. (#232)
-    private Vector3 m_knockbackVelocity;
-    private Vector3 m_knockbackLaunch;
-    private float m_knockbackElapsed;
-    private bool m_knockbackActive;
-    private NpcState m_knockbackLandingState; // 착지 후 돌아갈 상태 — 검거 중이었으면 Captured, 그 외엔 Stunned
 
     // 라운드 종료 시 정지(freeze) 플래그 — 서버(또는 오프라인)에서만 의미. 켜지면 FSM/이동을 멈춘다. (라운드 종료 freeze)
     private bool m_frozen;
@@ -71,8 +70,12 @@ public partial class NpcController : NetworkBehaviour
     /// <see cref="NpcHealth"/>가 쓰러짐 기절 시간을 읽는다. (#503)</summary>
     internal NpcStunConfig StunConfig => m_stunConfig;
 
-    /// <summary>공통 튜닝 SO — <see cref="NpcHealth.MaxHp"/>가 읽는다. 넉백 계열도 코어에서 직접 쓴다. (#503)</summary>
+    /// <summary>공통 튜닝 SO — <see cref="NpcHealth.MaxHp"/>·<see cref="NpcKnockback"/>의 비행 파라미터·
+    /// <see cref="NpcRopeDrag.InitDragWeight"/>의 무게 추첨이 읽는다. (#503)</summary>
     internal NpcCommonConfig CommonConfig => m_commonConfig;
+
+    /// <summary>밧줄 튜닝 SO — <see cref="NpcRopeDrag"/>가 길이·장력 파라미터를 읽는다. (#503)</summary>
+    internal NpcRopeDragConfig RopeDragConfig => m_ropeDragConfig;
 
     /// <summary>
     /// 현재 NPC 상태. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 안전하게 읽을 수 있다.
@@ -92,11 +95,20 @@ public partial class NpcController : NetworkBehaviour
     /// <summary>침입 도메인 부품 — 목표·해제 시간·진행 이벤트를 들고 있다. (#231/#503)</summary>
     public NpcIntruder Intruder => m_intruder;
 
+    /// <summary>넉백 도메인 부품 — 외력 비행과 착지 후 복귀 상태를 들고 있다. (#232/#503)</summary>
+    public NpcKnockback Knockback => m_knockback;
+
     /// <summary>페널티 임무 도메인 부품 — 오검거(#277~#279)·납치(#371)의 수용·추격·수렴·호송을 들고 있다. (#503)</summary>
     public NpcPenaltyAgent Penalty => m_penalty;
 
     /// <summary>검거 반응 도메인 부품 — 위협 대상·도주·저항·스윙을 들고 있다. (#76/#205/#213/#220/#503)</summary>
     public NpcReaction Reaction => m_reaction;
+
+    /// <summary>밧줄 도메인 부품 — 묶임·끌기·무게를 들고 있다. (#269/#369/#398/#503)</summary>
+    public NpcRopeDrag Rope => m_rope;
+
+    /// <summary>기상 예약 도메인 부품 — 줄이 풀리며 일어나는 구간과 재포획 창을 들고 있다. (#513/#503)</summary>
+    public NpcStandUp StandUp => m_standUp;
 
     /// <summary>기절 도메인 부품 — 스턴 오버레이·진입·해제를 들고 있다. (#292/#503)</summary>
     public NpcStun Stun => m_stun;
@@ -107,8 +119,11 @@ public partial class NpcController : NetworkBehaviour
         m_custody = GetComponent<NpcCustody>();
         m_health = GetComponent<NpcHealth>();
         m_intruder = GetComponent<NpcIntruder>();
+        m_knockback = GetComponent<NpcKnockback>();
         m_penalty = GetComponent<NpcPenaltyAgent>();
         m_reaction = GetComponent<NpcReaction>();
+        m_rope = GetComponent<NpcRopeDrag>();
+        m_standUp = GetComponent<NpcStandUp>();
         m_stun = GetComponent<NpcStun>();
 
         m_stateMachine = new NpcStateMachine();
@@ -172,7 +187,7 @@ public partial class NpcController : NetworkBehaviour
         m_health.InitHealth();
 
         // 무게 추첨 — 라운드 내내 유지된다(재검거·탈옥 후에도 같은 값). (#398)
-        InitDragWeight();
+        m_rope.InitDragWeight();
 
         m_stateMachine.ChangeState(NpcState.Idle);
     }
@@ -196,17 +211,17 @@ public partial class NpcController : NetworkBehaviour
         // 내리면 테이저→밧줄 콤보로 잡은 대상이 그 자리에 멈춘다. 끌기가 아니면 즉시 반환한다.
         // (넉백은 서로 배타적이다 — Escorted 대상이 넉백을 맞으면 StopEscort로 커스터디가 풀리고
         //  PlayerEscorter가 그것을 보고 끌기를 정리한다.)
-        TickRopeDrag();
+        m_rope.Tick();
 
         // 줄이 풀리며 일어나는 구간 — 밧줄 장력과 같은 이유로 아래 게이트보다 **먼저** 돈다 (#513).
         // 뒤로 내리면 일어나는 도중 기절·넉백을 맞은 대상의 예약이 영원히 남는다.
-        TickStandUp();
+        m_standUp.Tick();
 
         // 넉백 비행 중에는 FSM을 돌리지 않는다 — NavMeshAgent를 꺼 둔 채라 상태 클래스가
         // SetDestination/isStopped를 부르면 "agent not on NavMesh" 에러가 쏟아진다 (#232)
-        if (m_knockbackActive)
+        if (m_knockback.IsKnockedBack)
         {
-            TickKnockback();
+            m_knockback.Tick();
             return;
         }
 
@@ -228,7 +243,7 @@ public partial class NpcController : NetworkBehaviour
         // 묶임(#513)은 표현(누운 자세)이, 반출(#517)은 E 분기가 이 값을 본다.
         if (state != NpcState.Escorted && state != NpcState.Captured)
         {
-            ClearTethers();
+            m_rope.ClearTethers();
             m_custody.SetJailExtracted(false);
         }
 
@@ -320,6 +335,9 @@ public partial class NpcController : NetworkBehaviour
     // 이번 프레임 수평 이동 구간에 벽이 있는지 — 몸통 굵기로 훑는다.
     // 넉백 비행(#232)과 밧줄 끌기(#369)가 함께 쓰는 공용 유틸이라 코어에 둔다 (계획서 § 4-6) —
     // 판정만 공유하고 대응은 호출부가 정한다: 넉백은 그 자리에 떨어지고, 끌기는 벽을 따라 미끄러진다.
+    // NavMesh를 충돌 프록시로 쓰면 안 된다 — 실제 벽보다 에이전트 반지름만큼 물러나 끝나고 연석에서도
+    // 끊긴다. 실측(Test Scene)에서 벽이 11.8m 밖인 방향이 NavMesh 기준 2.0m에서 "막힘"으로 나왔고,
+    // 그걸 벽으로 치면 수평 속도가 비행 첫 프레임에 0이 되어 넉백이 제자리 점프가 된다 (#232).
     // 프레임이 튀어 한 번에 몇 미터씩 움직여도 구간 전체를 검사하므로 벽을 지나쳐 버리지 않는다.
     // 캐릭터(플레이어·다른 NPC)는 벽으로 치지 않는다(#339): 플레이어 몸통이 환경과 같은 Default 레이어라
     // 마스크만으로는 걸러지지 않는데, 폭발로 날아가는 NPC가 군중을 벽으로 오판하면 죄다 제자리에
