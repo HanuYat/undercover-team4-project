@@ -153,6 +153,10 @@ public static class NpcStateRules
     ///    같은 이유다. 예외는 반출해 놓고 방치한 대상(<see cref="NpcCustody.IsJailExtracted"/>, #517):
     ///    정산·진행도에서 이미 빠져 있어 그냥 두면 팀 손실만 남긴 채 영원히 서 있으므로 달아나게 한다.
     ///    그 대상도 감옥 안이면 위 조건에 걸려 남는다.
+    ///
+    /// <b>#548 이후 그 예외는 감옥 안에서만 걸린다</b> — 반출 표식이 문을 나서는 순간 꺼지기 때문이다
+    /// (<see cref="JailIntake"/>). 그래서 문 밖에서 저지돼 풀려난 대상은 달아나지 않고 그 자리에 선다:
+    /// 저지한 사람이 밧줄로 다시 끌어 재수감하라고 세워 두는 것이다.
     /// </summary>
     public static bool StaysPutWhenFreed(NpcController npc) =>
         npc != null
