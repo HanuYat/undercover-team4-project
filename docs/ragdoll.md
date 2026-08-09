@@ -155,14 +155,33 @@ Animated ──진입(사망)──> Ragdoll ──정착──> Settled ──�
 ## 6. 셋업
 
 리그는 **Unity 내장 Ragdoll Wizard**(`GameObject > 3D Object > Ragdoll…`)로 만들고,
-그 위에 **`Tools > Player > Finish Ragdoll Setup`**을 돌린다.
+그 위에 **`Tools > Ragdoll > Finish Setup - …`**을 돌린다 (대상별 메뉴).
+
+Synty 리그는 Humanoid라 위저드의 **Auto-Fill**이 13칸을 자동으로 채운다. 단
+**`Middle Spine`은 `Spine_02`인지 확인할 것** — Auto-Fill이 `Spine_01`(휴머노이드 Spine)을 집을 수 있다.
+`Total Mass`는 **70**, `Flip Forward Axis`는 끈다. 뼈가 되는 것은 11개이고 발(`Ankle_*`)은
+위저드가 방향·바운즈 계산에만 쓰므로 아무것도 생기지 않는 것이 정상이다.
 
 위저드는 콜라이더와 `CharacterJoint`까지만 만든다. 셋업 스크립트가 하는 나머지:
 
 1. `Ragdoll` 레이어 확보 (슬롯 10) + 충돌 매트릭스 — **지형(Default)하고만** 부딪힌다
 2. `isKinematic = true` 초기화 (위저드는 켠 채로 둬서 그대로 두면 스폰 즉시 무너진다)
 3. 보간·CCD, 관절 preprocessing 해제
-4. **검증** — 전 뼈가 몸통 리그 아래인지 확인하고, 아니면 아무것도 고치지 않고 중단한다
+4. `RagdollRig` 부착 보장 — **붙일 자리가 개체마다 다르다**(아래)
+5. **검증** — 전 뼈가 몸통 리그 아래인지 확인하고, 아니면 아무것도 고치지 않고 중단한다
+
+### 리그가 프리팹 어디에 있나 — 개체마다 다르다
+
+`RagdollRig`는 `transform.Find("Root")`로 **직속 자식**에서 리그를 찾으므로, 리그 최상단을 직속
+자식으로 가진 오브젝트에 붙어야 한다. 그 자리가 갈린다:
+
+| | 리그 소유자 | 이유 |
+|---|---|---|
+| Player | **프리팹 루트** | 리그가 프리팹에 풀려 있다 |
+| NPC | **`Model`** | 몸이 Synty 캐릭터 프리팹의 **중첩 인스턴스**이고 리그가 그 안에 있다 |
+
+그래서 셋업 메뉴가 `rigOwnerPath`를 넘긴다(`""` = 루트). NPC 쪽 수정은 중첩 인스턴스의
+오버라이드로 저장된다.
 
 ⚠ **위저드에 뼈를 넣을 때 `Root/Hips` 이하만 지정할 것.** 플레이어 프리팹에는 뼈 이름이 완전히
 같은 리그가 **두 벌** 있다(1인칭 팔이 리그 복사본이다). 잘못 집으면 사망 시 1인칭 팔이 물리로
@@ -198,16 +217,21 @@ solver 반복·겹침 탈출 속도는 프리팹에 저장되지 않아 `Ragdoll
 
 | | Player | NPC |
 |---|---|---|
-| 이동 프록시 | CharacterController (끄고 위치 대입) | **NavMeshAgent** (끄고, 정착 후 `Warp`) |
+| 이동 프록시 | CharacterController (끄고 위치 대입) | **NavMeshAgent** (끄고, **되살리지 않는다**) |
 | 위치 권위 | **오너** 권한 NetworkTransform | **서버** 권한 → 전 클라가 원격 |
-| 진입 트리거 | `PlayerIncapacitation.IsDead` | ? — 아래 참고 |
+| 진입 트리거 | `PlayerIncapacitation.IsDead` | `NpcDeath.IsDead` (= `NpcState.Dead`) |
+| 이탈(부활) | 정착 포즈 → 기상 블렌드 | **없다** — 시체는 되살아나지 않는다 |
 
-### 선행 과제 — 코드 구조가 아니다
+### 선행 과제 — 둘 다 #571에서 해소됐다
 
-1. **리그 빌드가 Player 전용이다.** `PlayerRagdollSetup.k_prefabPath`가
-   `Assets/Prefabs/Player.prefab` 하드코딩이고, NPC 프리팹에는 `CharacterJoint`가 하나도 없다.
-2. **NPC에 사망 개념이 없다.** HP 0이 `Stun`으로 간다 — "언제 래그돌에 들어가나"를 먼저 정해야 한다.
-   (`BombDevice.ServerExplode`의 "NPC 폭발 피해는 아직 연결하지 않았다" 주석과 같은 매듭)
+1. ~~**리그 빌드가 Player 전용이다.**~~ → `RagdollSetup`이 프리팹 경로와 리그 위치를 인자로 받는다 (§6).
+2. ~~**NPC에 사망 개념이 없다.**~~ → `NpcState.Dead` + `NpcDeath` 부품. 체력 임계 아래로
+   내려가면 한 번 쓰러지고(기존 기절), 0이 되면 죽는다. 회복 지점은 전부 제거됐다.
+
+부활이 없다는 것이 NPC 쪽을 크게 줄인다 — `BlendingToAnimator`·기상 클립용 루트 yaw 정렬·
+`CapsuleBottomOffset`, 그리고 **부활 오인 문제(`§9-19`) 전체가 사라진다**(되살아나지 않으면
+"살아 있는데 래그돌"이라는 전제 자체가 없다). 다만 넉다운 구간 래그돌을 나중에 붙일 여지가 있어
+블렌드 경로는 **쓰지 않되 지우지 않는다.**
 
 ### 밧줄은 합치지 말 것
 

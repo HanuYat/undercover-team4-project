@@ -19,11 +19,11 @@ using UnityEngine;
 /// </summary>
 public class RagdollRig : MonoBehaviour
 {
-    /// <summary>래그돌 뼈 콜라이더 전용 레이어 — <c>PlayerRagdollSetup</c>이 만든다.</summary>
+    /// <summary>래그돌 뼈 콜라이더 전용 레이어 — <c>RagdollSetup</c>이 만든다.</summary>
     public const string k_layerName = "Ragdoll";
 
     /// <summary>
-    /// 리그 최상단의 기본 이름 — Synty 리그 관례. 에디터 셋업(<c>PlayerRagdollSetup</c>)이 프리팹을
+    /// 리그 최상단의 기본 이름 — Synty 리그 관례. 에디터 셋업(<c>RagdollSetup</c>)이 프리팹을
     /// 검사할 때 같은 값을 써야 하므로 상수로 노출한다. 개체별로 다르면 <see cref="m_boneRootName"/>로 덮는다.
     /// </summary>
     public const string k_defaultBoneRootName = "Root";
@@ -40,7 +40,7 @@ public class RagdollRig : MonoBehaviour
     // 하나만 있어도 그 한 번의 탈출이 관절을 타고 몸 전체로 퍼져 시체가 발작하듯 튄다.
     private const float k_maxDepenetrationVelocity = 3f;
 
-    // 관절 projection을 껐기 때문에(PlayerRagdollSetup의 k_enableProjection 주석) 관절을 붙드는 일은
+    // 관절 projection을 껐기 때문에(RagdollSetup의 k_enableProjection 주석) 관절을 붙드는 일은
     // 전적으로 solver 반복이 맡는다 — 기본값 6/1로는 강한 임펄스에서 관절이 눈에 띄게 늘어난다.
     private const int k_solverIterations = 12;
     private const int k_solverVelocityIterations = 4;
