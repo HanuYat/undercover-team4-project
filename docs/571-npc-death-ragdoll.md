@@ -3,7 +3,7 @@
 **브랜치:** `feature/ragdoll-npc`
 
 한 줄 요약: **NPC 체력 규칙을 "임계에서 눕고 0에서 죽는다"로 바꾸고, 죽은 NPC에 래그돌을 입히는
-작업.** 지금까지 1~3단계(규칙·집계·리그)가 끝났고 **4단계(`NpcRagdoll` 작성)가 남았다.**
+작업.** 1~4단계 코드가 전부 들어갔고, **`NpcRagdoll`은 아직 Play로 한 번도 안 돌려봤다.**
 
 ---
 
@@ -14,9 +14,19 @@
 | 1 | HP 규칙 교체 (임계 넉다운 / 0 사망) | ✅ Play 테스트 통과 |
 | 2 | 규칙 전파 + 현상금 집계 + 이벤트 정리 | ✅ Play 테스트 통과 |
 | 3 | 리그 준비 (셋업 스크립트 일반화 + `NPC_Citizen` 리그) | ✅ 완료 |
-| **4** | **`NpcRagdoll` 작성 — 시체를 물리로 넘긴다** | ⬜ **다음 작업** |
-| 5 | 나머지 NPC 프리팹에 리그 복제 | ⬜ 4단계가 검증된 뒤 |
+| 4 | `NpcRagdoll` 작성 + `NPC_Citizen`에 부착 | ⚠️ **코드만 — 미검증** |
+| **4-1** | **Play 확인 (§7)** | ⬜ **다음 작업** |
+| 5 | 나머지 NPC 프리팹에 리그 복제 | ⬜ 4-1이 통과한 뒤 |
 | 6 | (후속) 폭발 사망 임펄스 | ⬜ 선택 |
+
+### 커밋 (전부 `origin/feature/ragdoll-npc`에 푸시됨)
+
+```
+3787599  시체를 물리에 넘기는 NpcRagdoll을 붙인다 (#571)
+340e820  래그돌 셋업을 NPC에도 쓸 수 있게 일반화하고 시민 리그를 만든다 (#571)
+9db7ec2  죽은 대상도 검거로 계상하고 시체를 붙든 참조를 끊는다 (#571)
+804361d  NPC 체력 0을 기절이 아니라 사망으로 보낸다 (#571)
+```
 
 ---
 
@@ -229,20 +239,18 @@ Elbow_L/R    4.38kg  Capsule
 
 ---
 
-## 7. 다음 작업 — 4단계 `NpcRagdoll`
+## 7. 4단계 — `NpcRagdoll` (작성됨, 미검증)
 
-`RagdollRig`·`RagdollRope`는 **한 줄도 안 고치고 그대로 쓴다.** `PlayerRagdoll`에 대응하는
-오케스트레이션만 새로 쓴다.
+`Assets/Scripts/NPC/View/NpcRagdoll.cs`. `NPC_Citizen` 프리팹에 부착됨.
+**`RagdollRig`·`RagdollRope`는 한 줄도 안 고쳤다** — 갈리는 것은 "누가 위치를 쥐나"뿐이다.
 
 | | PlayerRagdoll | NpcRagdoll |
 |---|---|---|
 | 이동 프록시 | CharacterController (끄고 위치 대입) | **NavMeshAgent** (끄고, **되살리지 않는다**) |
 | 위치 권위 | **오너** 권한 NetworkTransform | **서버** 권한 → 서버 외 전원이 원격 |
 | 진입 트리거 | `PlayerIncapacitation.IsDead` 폴링 | `NpcDeath.IsDead` 폴링 |
-| 임펄스 | 폭발이 ClientRpc로 | **1단계는 0** (그 자리에 무너짐) |
+| 임펄스 | 폭발이 ClientRpc로 | **지금은 0** (그 자리에 무너짐) |
 | 이탈(부활) | 정착 포즈 → 기상 블렌드 | **없다** |
-
-### 서버가 오너 역할을 한다
 
 ```
 서버:  NavMeshAgent OFF → 뼈 물리 ON → 매 프레임 transform.position = Hips.position
@@ -250,18 +258,49 @@ Elbow_L/R    4.38kg  Capsule
 클라:  로컬 물리로 같은 포즈를 만들고, 스트리밍된 루트로 뼈를 당겨온다(TickAlignBonesToRoot)
 ```
 
-⚠ **`NpcController.Update`는 `IsSpawned && !IsServer`에서 즉시 return하므로 클라에는 이걸 돌릴
-자리가 없다.** `NpcRagdoll`이 자기 `Update`/`LateUpdate`를 갖는 `MonoBehaviour`여야 한다
-(`PlayerRagdoll`이 NetworkBehaviour가 아닌 것과 같은 이유).
+### 작성하며 드러난 NPC 고유 함정 셋
 
-### 부활이 없어 지울 수 있는 것
+1. **루트 추종을 이 컴포넌트가 직접 돌린다.** 플레이어는 `PlayerMovement.Update`가 불러 주지만,
+   `NpcController.Update`는 클라에서 즉시 return하고 서버에서도 사망 게이트에서 끊겨 **부를 자리가
+   없다.** 그래서 `NpcRagdoll`이 자기 `Update`를 갖는 `MonoBehaviour`다.
+2. **리그를 `GetComponentInChildren`으로 찾는다.** 몸이 중첩 Synty 프리팹이라 `RagdollRig`가
+   `Model`에 붙는다 — `GetComponent`로 찾으면 **항상 null**이다.
+3. **`CapsuleBottomOffset` 보정이 없다.** 그건 CharacterController 캡슐 밑면이 루트 원점보다 위에
+   있어서 필요했던 것이고, NPC 루트 원점은 발밑이라 지면 점이 곧 루트다.
 
-`m_skipThisEpisode` · `m_sawDeathThisEpisode` · `k_deathSyncGraceSeconds` —
+### 부활이 없어 빠진 것
+
+`m_skipThisEpisode`만 남기고 `m_sawDeathThisEpisode`·`k_deathSyncGraceSeconds`는 넣지 않았다 —
 **부활 오인 문제(`docs/506-explosion-ragdoll.md` §9-19)가 통째로 사라진다.** 그 버그는 "살아 있는데
 래그돌이면 부활"이라는 전제에서 나왔는데, 되살아나지 않으면 전제 자체가 없다.
 
-기상 클립용 루트 yaw 정렬(`m_rootYawOffset`·`FollowBodyYaw`)과 `CapsuleBottomOffset`도 불필요.
-단 **블렌드 상태·`BeginBlend`/`TickBlend`는 남긴다** (§6 — 넉다운 래그돌 여지).
+**yaw 추종(`FollowBodyYaw`)도 뺐다.** 플레이어는 기상 클립이 "루트 전방을 향해 누워 있다"를
+전제해 필요했지만 시체는 일어나지 않는다. 넣으면 오히려 손해다 — 리지드바디 없는 뼈(Neck·손·발)만
+계층을 따라 돌아 목이 비틀린다.
+
+단 **넉다운 래그돌 여지 때문에 블렌드 경로는 `RagdollRig`에 그대로 남아 있다**(§6) —
+`NpcRagdoll`이 안 쓸 뿐이다.
+
+### 4-1. Play 확인 — 다음 작업
+
+임펄스가 0이라 **정착이 거의 즉시 온다.** 그래서 첫 확인이 쉽다.
+
+**오프라인 단독 (세션 없이 Play)**
+
+1. 시민을 진압봉 3대 → **그 자리에 자연스럽게 무너지는가**
+2. **시체가 화면에서 사라지지 않는가** — 안 보이면 `SetSkinsAlwaysVisible`. 래그돌의 고전적
+   함정이고, `Model` 아래 SkinnedMeshRenderer가 20개(외형 카탈로그)라 여기서 갈릴 수 있다
+3. **정착 순간 몸이 튀지 않는가** — 튀면 `Settle()`의 5단계 순서
+4. 콘솔에 NavMeshAgent 관련 에러가 없는가
+5. 시체가 지면을 뚫거나 공중에 뜨지 않는가 — `m_groundProbeDistance`
+
+**멀티 (MPPM)** — ⚠ 가상 플레이어 콘솔은 안 읽히니 호스트 콘솔 + 화면 관찰로 판단할 것
+
+6. 호스트가 죽인 시체가 클라 화면에서 **같은 자리·같은 자세**인가
+7. 클라가 죽인 경우도 마찬가지인가 (판정은 서버가 한다)
+
+막히면 `NpcRagdoll`의 상태 전이(`Animated → Ragdoll → Settled`)와 `IsReadyToSettle`의 두 조건에
+로그를 심어 어디서 멈췄는지부터 좁힐 것.
 
 ### 알아둘 것
 
@@ -279,11 +318,18 @@ Elbow_L/R    4.38kg  Capsule
 
 | 프리팹 | Model 소스 | 비고 |
 |---|---|---|
-| `NPC_Citizen` | `SM_Chr_CyberPunk_Male_01` | ✅ 리그 완료 |
+| `NPC_Citizen` | `SM_Chr_CyberPunk_Male_01` | ✅ 리그 + `RagdollRig` + `NpcRagdoll` |
 | `NPC_Abductor` | (Citizen의 **Variant**) | 상속 — 별도 작업 불필요할 것 |
 | `NPC_Rioter` | `SM_Chr_CyberPunk_Male_01` | 같은 모델 |
 | `NPC_Streaker` | **`SM_Gen_Chr_Underwear_Male_01`** | **다른 모델** — 비율 확인 필요 |
 | `NPC_Citizen_Generic` | 중첩 없음 (unpack됨) | `rigOwnerPath` 확인 필요 |
+
+프리팹마다 **세 가지**가 필요하다: ① 위저드로 리그, ② `Tools > Ragdoll > Finish Setup` (레이어·
+물리값 + `RagdollRig` 부착), ③ **`NpcRagdoll` 부착**.
+
+⚠ ③은 셋업 스크립트가 하지 않는다 — `RagdollRig`는 리그 소유자(`Model`)에 붙지만 `NpcRagdoll`은
+NPC 루트에 붙어야 해서 자리가 다르고, 프리팹이 NPC인지 플레이어인지도 그 스크립트는 모른다.
+메뉴에 대상을 추가할 때 함께 자동화할지 판단할 것.
 
 ⚠ 모델이 하나가 아니라서 **"Synty 프리팹의 Variant 하나를 만들어 전부 참조하게" 하는 안은
 성립하지 않는다.** 프리팹별로 위저드를 돌려야 한다.
@@ -301,13 +347,24 @@ Elbow_L/R    4.38kg  Capsule
 - `NpcCommonConfig.m_knockdownHpRatio = 0.4`
 - `ArrestJudge.m_jailZone` → 씬의 `Jail` (자동 탐색에 기대지 않고 명시적으로)
 - `WrongfulArrestPenalty.m_enforcePenalty = false` (🚨 병합 전 복구)
-- `NPC_Citizen` 래그돌 리그 + `RagdollRig`(on `Model`)
+- `NPC_Citizen` — 래그돌 리그 + `RagdollRig`(on `Model`) + `NpcRagdoll`(on 루트)
 - `ProjectSettings/DynamicsManager.asset` — `Ragdoll` 레이어 충돌 매트릭스
 
-## 10. 테스트 통과분
+## 10. 테스트 현황
 
-진압봉 2대 넉다운(HP 32 유지) / 3대 사망 / 누운 대상 추가 타격(게이트 제거) / 진범 사망 시
-진행도 반영 / 무고한 시민 사살 시 카운트만.
+**통과** — 진압봉 2대 넉다운(HP 32 유지) / 3대 사망 / 누운 대상 추가 타격(게이트 제거) /
+진범 사망 시 진행도 반영 / 무고한 시민 사살 시 카운트만.
+
+**미검증** — `NpcRagdoll` 전부 (§7의 4-1).
 
 **진압봉이 NPC의 유일한 피해원이다** — 폭발은 NPC에 넉백만 준다(`BombDevice`에 "NPC 폭발 피해는
 아직 연결하지 않았다" 주석). 그래서 테스트가 결정적이다.
+
+---
+
+## 11. 병합 전 체크리스트
+
+- [ ] **`WrongfulArrestPenalty.m_enforcePenalty` 기본값을 `true`로 되돌린다** (§3)
+- [ ] `NpcRagdoll` Play 검증 (§7 4-1)
+- [ ] 나머지 NPC 프리팹 4종에 리그·`NpcRagdoll` (§8)
+- [ ] 임계 비율(0.4)과 진압봉 데미지(34)를 팀과 확정 (§1 — 둘은 짝이다)
