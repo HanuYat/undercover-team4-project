@@ -46,6 +46,19 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
     [Tooltip("오검거당한 시민이 걸어가 대기하는 지점. NavMesh 위에 둘 것 — 여러 명은 이 지점 주변으로 퍼져 선다")]
     [SerializeField] private Transform m_detentionPoint;
 
+    // ⚠⚠ 임시 — 병합 전에 기본값을 true로 되돌릴 것 (#571). ⚠⚠
+    //
+    // 코드 기본값으로 끄는 이유는 <b>눈에 띄라고</b>다. 씬의 체크박스로 끄면 씬 diff에 묻혀 리뷰에서
+    // 놓치고 그대로 병합된다 — 오검거 페널티가 통째로 죽은 빌드가 나간다. 코드 상수는 PR diff에
+    // 그대로 보이고, 아래 OnNetworkSpawn의 경고가 런타임에서도 한 번 더 알린다.
+    [Header("집행 스위치 (#571 — 임시, 병합 전 되돌릴 것)")]
+    [Tooltip("끄면 <b>집계만 하고 집행은 하지 않는다</b> — 원한 구역 수용도, 추격대 출동도, 광장 매달기도 없다. " +
+             "팀 카운트와 개인 집계(정산 코믹 스탯)는 그대로 오른다.\n\n" +
+             "⚠ 래그돌 작업 브랜치에서 끄기 위한 스위치다. 추격대가 몰려오면 시체를 관찰할 수 없고, " +
+             "오검거한 시민이 원한 구역으로 걸어가 버려 그 NPC로 테스트할 수 없다. " +
+             "<b>병합 전에 다시 켤 것</b> — 켜면 예전 동작 그대로다")]
+    [SerializeField] private bool m_enforcePenalty;
+
     [Header("추격 (#278)")]
     [Tooltip("격퇴(RepelChasers, 호루라기 #250 예정)가 미치는 반경(m)")]
     [SerializeField] private float m_repelRadius = 10f;
@@ -96,6 +109,15 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
                 Judge.OnArrestJudged += HandleArrestJudged;
             else
                 Debug.LogWarning("WrongfulArrestPenalty: ArrestJudge를 찾지 못해 오검거를 집계할 수 없다", this);
+
+            // 임시 스위치가 꺼진 채 돌고 있다는 것을 라운드마다 알린다 — 병합 전에 되돌리기 위한 안전망 (#571)
+            if (!m_enforcePenalty)
+                Debug.LogWarning(
+                    "WrongfulArrestPenalty: ⚠ 집행이 꺼져 있다 (m_enforcePenalty = false, #571 임시) — "
+                        + "오검거를 세기만 하고 원한 구역 수용·추격대 출동·광장 매달기를 하지 않는다. "
+                        + "래그돌 작업용 스위치이므로 병합 전에 되돌릴 것",
+                    this
+                );
         }
     }
 
@@ -135,12 +157,62 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
 
         // 팀 카운트(페널티 게이지) +1 — 원한 구역 수용과 함께 오르므로 "구역 인원 = 팀 카운트"가 유지된다.
         m_teamCountSynced.Value += 1;
-        DetainNpc(result.Npc);
 
         Debug.Log($"[오검거] 팀 카운트 {m_teamCountSynced.Value} — {FormatPerPlayerCounts()}");
 
+        if (!m_enforcePenalty)
+            return; // 집계만 — 위 m_enforcePenalty 툴팁 참고 (#571 임시)
+
+        DetainNpc(result.Npc);
+
         if (m_teamCountSynced.Value > k_maxWrongful)
             LaunchSquad(CollectTargets(result));
+    }
+
+    /// <summary>
+    /// 오검거 대상을 <b>죽인</b> 경우의 집계 — <see cref="ArrestJudge.JudgeDeath"/>가 부른다. 서버 전용. (#571)
+    ///
+    /// <b>왜 필요한가.</b> 사망 계상은 <see cref="ArrestJudge.OnArrestJudged"/>를 발행하지 않으므로
+    /// (구독자 대부분이 신병 라우팅 = 상태 전이라 시체에 성립하지 않는다) 위
+    /// <see cref="HandleArrestJudged"/>가 돌지 않는다. 그대로 두면 <b>무고한 시민을 죽이는 것이
+    /// 오검거 페널티를 통째로 회피하는 최적 전략</b>이 된다 — 잡아서 인계하면 게이지가 오르는데
+    /// 죽이면 아무 일도 안 일어난다.
+    ///
+    /// <b>원한 구역에 수용하지 않는다.</b> 시체는 걸어갈 수 없다. 그래서 이 경로에서는
+    /// <c>"구역 인원 == 팀 카운트"</c> 불변식이 깨지는데, <see cref="LaunchSquad"/>가 이미 그 상황을
+    /// 받는다: 구역에 남은 인원만 출동하고, 아무도 없으면 광장 매달기 폴백으로 집행된다.
+    /// 원한을 품고 쫓아올 <b>그 시민 본인</b>은 없지만 팀의 기록은 남는다 — 그게 이 설계의 말이다.
+    /// </summary>
+    /// <param name="killer">죽인 쪽 — 개인 집계와 추격 대상의 근거. null이면 팀 카운트만 오른다.</param>
+    public void ServerCountWrongfulDeath(GameObject killer)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        PlayerEscorter offender =
+            killer != null ? killer.GetComponentInParent<PlayerEscorter>() : null;
+
+        // 개인 집계 — 산 채로 인계한 경우와 같은 기준이다(정산 코믹 스탯).
+        if (offender != null)
+        {
+            ulong clientId = offender.OwnerClientId;
+            m_perPlayerCounts.TryGetValue(clientId, out int prev);
+            m_perPlayerCounts[clientId] = prev + 1;
+        }
+
+        m_teamCountSynced.Value += 1;
+        Debug.Log($"[오검거] 사살 — 팀 카운트 {m_teamCountSynced.Value} — {FormatPerPlayerCounts()}");
+
+        if (!m_enforcePenalty)
+            return; // 집계만 — 위 m_enforcePenalty 툴팁 참고 (#571 임시)
+
+        if (m_teamCountSynced.Value > k_maxWrongful)
+        {
+            var targets = new List<Transform>();
+            if (offender != null)
+                targets.Add(offender.transform);
+            LaunchSquad(targets);
+        }
     }
 
     // 추격 대상 트랜스폼만 뽑아낸다 — 인계자 전원이 대상이다 (#390 규칙 5).

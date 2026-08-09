@@ -19888,6 +19888,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: df5ce1efead3d784895dc53f93f9ebef, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ArrestJudge
+  m_jailZone: {fileID: 8298609921114679384}
 --- !u!4 &461460872
 Transform:
   m_ObjectHideFlags: 0
@@ -29096,6 +29097,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_plazaPoint: {fileID: 1026613420}
   m_detentionPoint: {fileID: 433575055}
+  m_enforcePenalty: 0
   m_repelRadius: 10
   m_convergeArriveDistance: 2.5
   m_convergeTimeoutSeconds: 20

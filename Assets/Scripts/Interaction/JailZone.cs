@@ -349,6 +349,40 @@ public class JailZone : NetworkBehaviour
     }
 
     /// <summary>
+    /// 사망 계상 — 시체를 <b>정산 원장에만</b> 올린다. 서버(또는 오프라인) 전용. (#571)
+    ///
+    /// <b><see cref="Admit"/>과 갈리는 점은 점유다.</b> 저쪽은 <c>m_inmates</c>에도 넣어
+    /// <see cref="InmateCount"/>를 올리지만, 시체는 유치장에 실제로 들어와 있지 않다. 점유까지 올리면
+    /// 유치장 표지판이 없는 사람을 세고, 탈옥 이벤트가 "풀어 줄 수감자가 있다"고 오판한다
+    /// (<c>JailbreakEvent</c>의 발동 전제와 진행 중 포기 판정이 둘 다 <see cref="InmateCount"/>를 본다).
+    ///
+    /// 원장(<c>m_records</c>)만으로 정산이 되는 것은 <see cref="TallySettlement"/>·
+    /// <see cref="TallyDelivererCredits"/>가 점유가 아니라 레코드를 훑기 때문이다 — "NPC 오브젝트가
+    /// 이미 파괴됐어도 계상된다"(#358)는 성질을 그대로 물려받는다.
+    ///
+    /// <b>빠져나갈 수 없다.</b> 레코드를 지우는 <see cref="ReleaseInmate"/>는 <c>m_inmates</c> 제거에
+    /// 성공해야 진행하는데 시체는 애초에 거기 없다 — 탈옥으로도 사망 계상은 취소되지 않는다. 시체가
+    /// 달아날 수 없으니 그게 맞다.
+    /// </summary>
+    /// <param name="bounty">이 시체가 정산에 기여할 보상액 — <c>ArrestJudge</c>가 확정해 넘긴다.</param>
+    /// <param name="deliverers">공을 나눠 가질 clientId — 보통 죽인 플레이어 하나. 없으면 빈 배열.</param>
+    public void RecordDeceased(NpcController npc, int bounty, ulong[] deliverers)
+    {
+        if (npc == null)
+            return;
+
+        if (IsSpawned && !IsServer)
+            return;
+
+        if (m_records.ContainsKey(npc))
+            return; // 이미 계상됨 — 산 채로 수감됐다가 죽는 경로는 없지만(수감 중엔 피해가 안 들어간다) 멱등으로 둔다
+
+        m_records[npc] = new InmateRecord(bounty, IsCriminalInmate(npc), deliverers ?? Array.Empty<ulong>());
+        RefreshBountyTotal(); // 라운드 진행도(RoundManager.CurrentFund)가 곧 이 값이다
+        Debug.Log($"[유치장] 사망 계상: {npc.name} — 현상금 {bounty}원, 누적 {BountyTotal}원");
+    }
+
+    /// <summary>
     /// 이 수감자의 기록된 현상금 — 없으면 false. 서버(또는 오프라인) 전용. (#517)
     ///
     /// 반출(<see cref="JailIntake.ServerExtract"/>)이 <see cref="ReleaseInmate"/> <b>직전에</b> 읽는다.
@@ -388,9 +422,12 @@ public class JailZone : NetworkBehaviour
     }
 
     /// <summary>
-    /// 현재 수감자를 진범/경범죄로 나눈 인원과 보상액 합 — 라운드 종료 점유 기반 정산(#340)이 읽는다.
-    /// 진범 여부는 각 수감자의 <see cref="CitizenIdentity.IsCriminal"/>로 판별한다(그 외는 경범죄 = 난동꾼·위조범).
-    /// 서버(또는 오프라인) 전용 — Inmates가 서버 권위 집합이다.
+    /// 정산 원장을 진범/경범죄로 나눈 인원과 보상액 합 — 라운드 종료 정산(#340)이 읽는다.
+    /// 진범 여부는 수감(또는 사망 계상) 시점의 <see cref="CitizenIdentity.IsCriminal"/>로 박제된 값이다.
+    /// 서버(또는 오프라인) 전용.
+    ///
+    /// <b>'점유 기반'이 아니라 '원장 기반'이다</b> (#571) — 죽은 대상은 유치장에 들어오지 않고
+    /// 레코드에만 오르므로(<see cref="RecordDeceased"/>) 여기 합계가 <see cref="InmateCount"/>보다 클 수 있다.
     /// </summary>
     public (int criminals, int misdemeanors, int total) TallySettlement()
     {

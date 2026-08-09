@@ -12,10 +12,12 @@ public struct SettlementData
     public RoundEndReason Reason;   // 종료 사유(할당량 달성/제한시간 초과/전원 다운)
     public int FundBalance;         // 팀 자금 잔액
     public int FundDelta;           // 이번 라운드 자금 증감(현재-시작) = 팀이 실제로 챙긴 몫 (#340/#395)
-    public int GrossEarned;         // 종료 시 유치장 점유 현상금 합 = 할당량 차감 전 총 수익 (#395)
+    public int GrossEarned;         // 종료 시 정산 원장의 현상금 합 = 할당량 차감 전 총 수익 (#395)
     public int TargetFund;          // 이번 라운드 목표 금액(할당량) — 총 수익에서 이만큼 떼고 남는 게 팀 몫 (#395)
-    public int CriminalCount;       // 종료 시 유치장의 진범 수 (#340)
-    public int MisdemeanorCount;    // 종료 시 유치장의 경범죄자(난동꾼·위조범) 수 (#340)
+    // 아래 둘은 <b>유치장 점유가 아니라 정산 원장(JailZone.m_records) 기준</b>이다 (#571) —
+    // 죽은 대상도 계상되므로(JailZone.RecordDeceased) "유치장에 앉아 있는 수"보다 클 수 있다.
+    public int CriminalCount;       // 종료 시 계상된 진범 수 (#340/#571)
+    public int MisdemeanorCount;    // 종료 시 계상된 경범죄자(난동꾼·위조범) 수 (#340/#571)
     public string TopOffenderName;  // 이번 판 최다 오검거 플레이어 이름 (없으면 빈 문자열)
     public int TopOffenderCount;    // 그 플레이어의 오검거 횟수 (0이면 오검거 없음)
 }

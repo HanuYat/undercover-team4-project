@@ -19,6 +19,12 @@ public class ArrestJudge : CommonManagerBase
 {
     private const int k_wrongfulReward = 0;
 
+    [Header("유치장 (비우면 씬에서 자동 탐색)")]
+    [Tooltip("사망 계상(#571)이 정산 원장에 쓸 유치장 — 인계 판정 경로는 JailIntake가 자기 참조로 계상하므로 " +
+             "여기를 쓰지 않는다. CustodyRouter의 자동 탐색과 같은 관례")]
+    [SerializeField]
+    private JailZone m_jailZone;
+
     private RoundManager Round => App.Game.Round;
 
     // 진범·위조범 보상은 여기서 정하지 않는다 (#395) — NPC마다 다른 현상금을 CriminalAssigner가
@@ -30,6 +36,11 @@ public class ArrestJudge : CommonManagerBase
     protected override void Awake()
     {
         base.Awake(); // App.Game.ArrestJudge 등록
+
+        // 유치장은 매니저가 아니라 씬 배치 오브젝트라 App 파사드에 없다 — CustodyRouter가
+        // ArrestJudge를 찾는 것과 같은 관례로 폴백한다 (architecture.md R1은 매니저 검색 금지다).
+        if (m_jailZone == null)
+            m_jailZone = FindFirstObjectByType<JailZone>();
     }
 
     // 판정 완료 표식은 NpcCustody.IsDelivered가 들고 있다 (#230) — NPC와 수명을 같이하므로
@@ -72,56 +83,17 @@ public class ArrestJudge : CommonManagerBase
         if (Round != null && Round.Phase != RoundPhase.InProgress)
             return null;
 
-        // 경범죄 이벤트 NPC(난동꾼)는 신원 대조 이전에 마커로 식별한다 (#106).
-        MisdemeanorOffender misdemeanor = npc.GetComponent<MisdemeanorOffender>();
-        CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
-
-        // 경범죄 마커도 신원도 없으면 판정할 수 없다.
-        if (misdemeanor == null && identity == null)
-        {
-            Debug.LogWarning($"ArrestJudge: 신원(CitizenIdentity) 없음 — 판정 불가: {npc.name}", npc);
-            return null;
-        }
-
         // 첫 인계 여부를 표식 세우기 전에 잡아 둔다 — 할당량·오검거 카운트가 재판정으로 부풀지 않게 (#358).
         bool firstDelivery = !npc.Custody.IsDelivered;
+
+        if (!TryResolveVerdict(npc, out ArrestVerdict verdict, out int reward, out CitizenProfile profile))
+            return null;
 
         // 판정 완료로 표시 — 방치 도주 타이머(#230)를 멈춘다. 재판정 자체는 허용하므로(#358)
         // 여기서 중복을 막지 않는다. 막는 것은 <b>부르는 쪽</b>이다: JailIntake가 게이트 통과당
         // 한 번만 부른다(m_judgedThisPass). 판정이 E 입력에서 폴링으로 바뀌었으므로(#492) "누른
         // 횟수만큼만 판정된다"는 옛 근거(#414)는 더 이상 성립하지 않는다.
         npc.Custody.MarkDelivered();
-
-        ArrestVerdict verdict;
-        int reward;
-        if (misdemeanor != null)
-        {
-            // 난동꾼 즉결 처리 — 진범/오검거 대조를 타지 않고 경범죄로 확정, 이벤트가 정한 수익을 준다.
-            // reward는 지급이 아니라 "유치장 수감 시 실릴 정산 bounty"다 — 실제 자금은 라운드 종료 시
-            // 유치장 점유로 1회 정산된다(#340). 그래서 재검거 중복지급 방지용 Reward 비우기는 필요 없다
-            // (점유를 한 번만 세므로) — 오히려 비우면 재수감된 난동꾼이 0으로 잡혀 정산에서 누락된다.
-            verdict = ArrestVerdict.Misdemeanor;
-            reward = misdemeanor.Reward;
-        }
-        else if (identity.IsCriminal)
-        {
-            // 진범 우선 — 진범이면서 위조범인 NPC도 현상수배범으로 판정한다 (위조 판정에 가려지지 않음, #320).
-            verdict = ArrestVerdict.WantedCriminal;
-            reward = ResolveBounty(identity, npc);
-        }
-        else if (identity.IsForger)
-        {
-            // 위조범 — 난동꾼과 동일한 즉결 경범죄로 확정하고 소액 위조 보상을 준다 (#320).
-            verdict = ArrestVerdict.Misdemeanor;
-            reward = ResolveBounty(identity, npc);
-        }
-        else
-        {
-            verdict = ArrestVerdict.WrongfulArrest;
-            reward = k_wrongfulReward;
-        }
-
-        CitizenProfile profile = identity != null ? identity.Profile : null;
 
         // 줄다리기로 여러 명이 함께 끌고 왔을 수 있다 (#390) — 관여한 전원이 인계자다.
         // 오검거 페널티가 이 목록 전원에게 걸린다: 밧줄이 걸린 채 유치장까지 들어갔다는 것은
@@ -171,6 +143,133 @@ public class ArrestJudge : CommonManagerBase
         OnArrestJudged?.Invoke(result);
 
         return result;
+    }
+
+    /// <summary>
+    /// 사망 계상 — <b>죽은 대상도 검거로 인정한다.</b> 서버(또는 오프라인) 전용. (#571)
+    ///
+    /// <see cref="NpcDeath.ServerEnterDead"/>가 부른다. <see cref="Judge"/>와 <b>판별은 공유하고
+    /// 뒤처리는 공유하지 않는다</b>:
+    ///
+    /// <list type="bullet">
+    ///   <item><b><see cref="OnArrestJudged"/>를 발행하지 않는다.</b> 구독자 대부분이 "지금 신병을
+    ///   확보했다"를 전제로 <b>상태를 전이시킨다</b> — 오검거 페널티는 원한 구역으로 보내고
+    ///   (<c>WrongfulArrestPenalty</c>), <c>CustodyRouter</c>는 석방한다. 시체에는 전부 성립하지
+    ///   않고, <c>NpcStateMachine</c>이 사망 이탈을 막으므로 에러만 난다.</item>
+    ///   <item><b>유치장 점유에 넣지 않는다</b> — <see cref="JailZone.RecordDeceased"/> 주석.</item>
+    ///   <item><b>오검거는 정산이 아니라 페널티 게이지로 간다</b>
+    ///   (<see cref="WrongfulArrestPenalty.ServerCountWrongfulDeath"/>). 안 그러면 무고한 시민을
+    ///   죽이는 것이 오검거 페널티를 통째로 회피하는 최적 전략이 된다.</item>
+    /// </list>
+    ///
+    /// ⚠ <b>여기가 "죽어도 집계되는가"의 단일 분기점이다.</b> NPC별로 갈 예정인 난이도 노브는
+    /// 이 함수 앞에 조건 하나를 세우면 된다 — 계상 경로를 여기 하나로 모아 둔 이유다.
+    /// </summary>
+    /// <param name="killer">마지막 피해를 준 쪽 — 인계자(개인 몫 귀속)로 잡는다. null 허용.</param>
+    public void JudgeDeath(NpcController npc, GameObject killer)
+    {
+        if (npc == null)
+            return;
+        if (npc.IsSpawned && !npc.IsServer)
+            return;
+
+        // 라운드 진행 중에만 계상한다 — Judge와 같은 게이트다(준비 중 선점·종료 후 스냅샷 이후 방지).
+        if (Round != null && Round.Phase != RoundPhase.InProgress)
+            return;
+
+        // 이미 판정된 대상은 다시 세지 않는다. 산 채로 수감된 뒤 죽는 경로는 없지만(수감 중에는
+        // NpcStateRules.CanBeDamaged가 피해를 막는다) 탈옥해 나온 대상은 ClearDelivered로 표식이
+        // 지워져 여기 다시 올 수 있다 — 그때는 유치장 레코드에서도 빠져 있으므로 계상이 맞다.
+        if (npc.Custody.IsDelivered)
+            return;
+
+        if (!TryResolveVerdict(npc, out ArrestVerdict verdict, out int reward, out _))
+            return;
+
+        // 오검거는 정산 원장이 아니라 페널티 게이지로 간다 — 시체를 0원 레코드로 올리면 정산
+        // <b>인원수</b>에만 잡혀 조용히 틀린다(TallySettlement은 레코드 하나를 한 명으로 센다).
+        if (verdict == ArrestVerdict.WrongfulArrest)
+        {
+            npc.Custody.MarkDelivered(); // 재계상 방지 — 아래 수감 경로와 같은 표식
+            App.Game.WrongfulArrestPenalty?.ServerCountWrongfulDeath(killer);
+            Debug.Log($"[검거 판정] 사망 계상 — {npc.name}: 오검거(사살)");
+            return;
+        }
+
+        if (m_jailZone == null)
+        {
+            Debug.LogWarning($"ArrestJudge: 유치장을 찾지 못해 사망 계상을 건너뛴다: {npc.name}", npc);
+            return;
+        }
+
+        npc.Custody.MarkDelivered();
+
+        // 죽인 사람이 공을 가져간다 — 끌고 들어간 사람이 인계자인 것(Judge)과 같은 기준이다.
+        // clientId 환산은 JailIntake.ToClientIds와 같은 방식이다(IsSpawned를 따로 보지 않는다).
+        PlayerEscorter credited = killer != null ? killer.GetComponentInParent<PlayerEscorter>() : null;
+        ulong[] deliverers =
+            credited != null ? new[] { credited.OwnerClientId } : Array.Empty<ulong>();
+
+        m_jailZone.RecordDeceased(npc, reward, deliverers);
+        Debug.Log($"[검거 판정] 사망 계상 — {npc.name}: {verdict}, {reward}원");
+    }
+
+    /// <summary>
+    /// 신원을 대조해 판정과 보상액을 낸다 — <b>부수효과가 없는 순수 판별</b>이다. (#571에서 분리)
+    ///
+    /// <see cref="Judge"/>(유치장 인계)와 <see cref="JudgeDeath"/>(사망 계상)가 공유한다. 갈라 둔
+    /// 이유는 두 경로가 <b>판별은 같고 뒤처리가 전혀 다르기</b> 때문이다: 인계는 신병을 라우팅하고
+    /// (OnArrestJudged) 사망은 원장에만 올린다. 판별까지 복사하면 진범/위조범/난동꾼 우선순위가
+    /// 두 곳으로 갈린다.
+    /// </summary>
+    /// <returns>판정할 수 있으면 참 — 경범죄 마커도 신원도 없으면 거짓.</returns>
+    private static bool TryResolveVerdict(
+        NpcController npc,
+        out ArrestVerdict verdict,
+        out int reward,
+        out CitizenProfile profile
+    )
+    {
+        verdict = ArrestVerdict.WrongfulArrest;
+        reward = k_wrongfulReward;
+        profile = null;
+
+        // 경범죄 이벤트 NPC(난동꾼)는 신원 대조 이전에 마커로 식별한다 (#106).
+        MisdemeanorOffender misdemeanor = npc.GetComponent<MisdemeanorOffender>();
+        CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
+
+        // 경범죄 마커도 신원도 없으면 판정할 수 없다.
+        if (misdemeanor == null && identity == null)
+        {
+            Debug.LogWarning($"ArrestJudge: 신원(CitizenIdentity) 없음 — 판정 불가: {npc.name}", npc);
+            return false;
+        }
+
+        profile = identity != null ? identity.Profile : null;
+
+        if (misdemeanor != null)
+        {
+            // 난동꾼 즉결 처리 — 진범/오검거 대조를 타지 않고 경범죄로 확정, 이벤트가 정한 수익을 준다.
+            // reward는 지급이 아니라 "정산에 실릴 bounty"다 — 실제 자금은 라운드 종료 시 1회 정산된다
+            // (#340). 그래서 재검거 중복지급 방지용 Reward 비우기는 필요 없다(한 번만 세므로) —
+            // 오히려 비우면 재수감된 난동꾼이 0으로 잡혀 정산에서 누락된다.
+            verdict = ArrestVerdict.Misdemeanor;
+            reward = misdemeanor.Reward;
+        }
+        else if (identity.IsCriminal)
+        {
+            // 진범 우선 — 진범이면서 위조범인 NPC도 현상수배범으로 판정한다 (위조 판정에 가려지지 않음, #320).
+            verdict = ArrestVerdict.WantedCriminal;
+            reward = ResolveBounty(identity, npc);
+        }
+        else if (identity.IsForger)
+        {
+            // 위조범 — 난동꾼과 동일한 즉결 경범죄로 확정하고 소액 위조 보상을 준다 (#320).
+            verdict = ArrestVerdict.Misdemeanor;
+            reward = ResolveBounty(identity, npc);
+        }
+
+        return true;
     }
 
     // 배정된 현상금을 읽는다 (#395). 0이면 CriminalAssigner의 배정을 타지 않은 NPC라는 뜻이라 —
