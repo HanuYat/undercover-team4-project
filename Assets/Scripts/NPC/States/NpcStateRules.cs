@@ -16,7 +16,8 @@ public static class NpcStateRules
     /// (GDD 6-1/7-4, #254 · E 제압은 #436·#438에서 전부 제거) —
     /// 반응이 시작된 뒤에는 수갑 채널링이 걸리지 않아야 한다.</summary>
     public static bool IsCapturable(NpcState state) =>
-        state != NpcState.Escorted
+        state != NpcState.Dead // 시체는 검거 대상이 아니다 (#571)
+        && state != NpcState.Escorted
         && state != NpcState.Captured
         && state != NpcState.Jailed
         && state != NpcState.Run
@@ -36,7 +37,10 @@ public static class NpcStateRules
     /// 제외하는 건 이미 신병을 확보(Escorted/Captured/Jailed)했거나 오검거 페널티가 진행(Detained/
     /// Chasing/PenaltyEscorting) 중인 상태 — 도주(Run)·저항(Attack)은 주 타격 대상이라 제외하지 않는다.</summary>
     public static bool CanBeDamaged(NpcState state) =>
-        state != NpcState.Escorted
+        // 시체는 더 때릴 수 없다 (#571). 막지 않아도 HP는 이미 0이라 SetHp의 엣지가 안 걸리지만,
+        // 열어 두면 OnDamaged·피격 연출·납치 격퇴 훅이 시체에서 계속 발행된다.
+        state != NpcState.Dead
+        && state != NpcState.Escorted
         && state != NpcState.Captured
         && state != NpcState.Jailed
         && state != NpcState.Detained
@@ -49,8 +53,12 @@ public static class NpcStateRules
     /// "호송 중인 NPC를 때려 신병에서 빼내기"와는 방향이 반대다 — 납치범은 신병이 아니라 가해자다.
     /// 오검거 추격대는 그대로 막힌다(회피 수단은 격퇴 하나). 둘을 가르는 것이
     /// <see cref="NpcPenaltyAgent.IsAbductionDuty"/>이고, 동기화 값이라 클라 조준 피드백에서도 읽힌다.</summary>
+    /// ⚠ <b>사망은 납치범 예외보다 위다</b> (#571) — 임무 표식(IsAbductionDuty)은 죽어도 즉시
+    /// 내려가지 않으므로, 상태 검사에만 맡기면 죽은 납치범이 계속 맞는다.
     public static bool CanBeDamaged(NpcController npc) =>
-        npc != null && (npc.Penalty.IsAbductionDuty || CanBeDamaged(npc.CurrentState));
+        npc != null
+        && npc.CurrentState != NpcState.Dead
+        && (npc.Penalty.IsAbductionDuty || CanBeDamaged(npc.CurrentState));
 
     /// <summary>반응·배회군인가 — 스턴이 풀릴 때 도주로 전환되는 쪽. (#292)
     /// 여집합(확보·페널티군)은 스턴이 풀려도 아무 전이 없이 하던 일을 재개한다 —
@@ -58,7 +66,8 @@ public static class NpcStateRules
     ///
     /// 포함 목록 방식이라 <b>새 상태는 기본이 '재개'</b>다. 도주로 깨어나야 하면 여기 추가할 것.
     /// 의도적으로 뺀 것: <see cref="NpcState.Stunned"/>(넉백 KO — 자기 상태 클래스가 스스로
-    /// 빠져나간다).</summary>
+    /// 빠져나간다)와 <see cref="NpcState.Dead"/>(#571 — 시체는 도주하지 않는다. 사망 진입이 스턴
+    /// 오버레이를 걷으므로 ExitStun 자체가 도달하지 않지만, 포함 목록이라 가만히 둬도 닫혀 있다).</summary>
     public static bool IsReactive(NpcState state) =>
         state is NpcState.Idle
             or NpcState.Walk
@@ -79,7 +88,10 @@ public static class NpcStateRules
     /// <b>이것만으로 묶기를 판정하지 말 것</b> — 새로 묶기는 무력화까지 요구하므로
     /// <see cref="CanRopeBind"/>가 정본이고 이 함수는 그 한 조각이다 (#446).</summary>
     public static bool CanArrest(NpcState state) =>
-        state != NpcState.Escorted
+        // 시체는 묶을 수 없다 (#571). 이것이 CanRopeBind까지 함께 닫는다 — 시체를 밧줄로 끌게 할
+        // 거라면 여기가 아니라 CanRopeBind에서 사망을 무력화와 같은 급으로 열어야 한다.
+        state != NpcState.Dead
+        && state != NpcState.Escorted
         && state != NpcState.Captured
         && state != NpcState.Jailed
         && state != NpcState.Detained

@@ -207,6 +207,11 @@ public class NpcRopeDrag : NetworkBehaviour
         if (m_owner.Knockback.IsKnockedBack)
             return false;
 
+        // 죽었으면 에이전트를 되살리지 않는다 — 시체는 NavMesh로 돌아가지 않는다 (#571).
+        // 위 넉백 가드와 같은 이유이고, 이쪽은 <b>영구적</b>이라는 점만 다르다.
+        if (m_owner.Death.IsDead)
+            return false;
+
         agent.enabled = true;
 
         // NavMesh에 못 붙으면 이후 isStopped·SetDestination이 조용히 실패해 NPC가 굳는다(빌드 2 이슈 E).
@@ -224,6 +229,31 @@ public class NpcRopeDrag : NetworkBehaviour
             this
         );
         return false;
+    }
+
+    /// <summary>
+    /// 장력·묶임을 통째로 끊는다 — <b>에이전트를 되살리지 않고</b>, 참가자를 하나씩 묻지도 않는다.
+    /// 사망(<see cref="NpcDeath.ServerEnterDead"/>) 전용. 서버(또는 오프라인). (#571)
+    ///
+    /// <b><see cref="StopRopeDrag"/>로는 대신할 수 없다.</b> 저쪽은 참가자 <b>한 명</b>을 빼는
+    /// 함수라 여럿이 끌던(줄다리기 #390) 대상은 전원을 순회해야 하는데, 죽는 쪽은 그 목록의 주인이
+    /// 아니다(목록은 각 <see cref="PlayerEscorter"/>에 있다).
+    ///
+    /// ⚠ <b>사망 전이보다 반드시 앞이다.</b> <see cref="PlayerEscorter"/>의 매 프레임 정리는
+    /// "커스터디(Escorted·Captured)를 벗어났으면 연결을 지운다"인데, 그 경로는 묶임 수만 줄이고
+    /// <see cref="StopRopeDrag"/>를 부르지 않는다 — 넉백은 착지 상태가 Captured라 그 목록 안에
+    /// 남아서 문제가 안 됐지만, 사망은 목록 밖으로 나가므로 <b>여기서 직접 끊지 않으면 시체가
+    /// 끌기 상태로 남아 죽은 뒤에도 장력을 받는다.</b>
+    /// </summary>
+    internal void ServerClearDrag()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        m_dragAnchors.Clear();
+        SetRoped(false);
+        SyncDraggerCount();
+        ClearTethers();
     }
 
     // 파괴된 참가자(접속 종료 등)를 걷어낸다 — 남겨두면 장력 계산이 가짜 null을 만진다.

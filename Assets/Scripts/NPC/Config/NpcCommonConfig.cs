@@ -26,9 +26,16 @@ public class NpcCommonConfig : ScriptableObject
     [Tooltip("스폰 시 이 중 하나를 균등 추첨해 개체 무게로 삼는다(경량/표준/중량). 끄는 플레이어의 이동속도가 이 값에 비례해 떨어진다 — 페널티 계수·하한은 RopeDragLoad에 있다. 비어 있으면 전원 1.0")]
     [SerializeField] private float[] m_weightTiers = { 0.6f, 1f, 1.6f };
 
-    [Header("체력 — #366")]
-    [Tooltip("NPC 최대 체력 — 0이 되면 기절(Stunned)한다. 저항 제압 게이지(구 SubdueGaugeMax)를 대체한 값")]
+    [Header("체력 — #366/#571")]
+    [Tooltip("NPC 최대 체력 — 0이 되면 사망한다(#571). 저항 제압 게이지(구 SubdueGaugeMax)를 대체한 값")]
     [SerializeField] private int m_maxHp = 100;
+
+    [Tooltip("이 비율 아래로 체력이 내려가는 <b>순간</b> 쓰러진다(기절) — 0.4면 40%. 체력 0은 별개로 사망이다. " +
+             "⚠ <b>진압봉 데미지와 함께 봐야 한다.</b> 최대 100 · 데미지 34면 100→66→32→0이라, " +
+             "0.2로 잡으면 32→0 타격이 임계 교차와 사망을 동시에 만족해 <b>넉다운 구간이 아예 생기지 않는다</b>. " +
+             "0.4면 2대째(66→32)에 쓰러지고 3대째에 죽는다. 데미지를 바꾸면 이 값도 같이 봐야 한다")]
+    [Range(0f, 1f)]
+    [SerializeField] private float m_knockdownHpRatio = 0.4f;
     // 제압 타격량(m_subdueHitPower)은 제거됐다 (#438) — 유일한 소비처였던 E 제압 타격이 사라졌다.
     // 진압봉은 자기 Baton.m_damage(같은 34)를 쓴다 — 무기 수치는 무기가 들고 있는 편이 맞다.
 
@@ -49,4 +56,13 @@ public class NpcCommonConfig : ScriptableObject
 
     /// <summary>NPC 최대 체력 — HUD가 비율 계산에, NpcController가 초기화·회복에 읽는다. (#366)</summary>
     public int MaxHp => m_maxHp;
+
+    /// <summary>
+    /// 쓰러짐 임계 체력(HP) — 이 값 <b>아래로 내려가는 순간</b> 넉다운. 0 도달(사망)과는 별개다. (#571)
+    ///
+    /// 올림으로 환산하는 이유는 "40%면 40 이하"가 직관과 맞기 때문이다(내림이면 0.4·100 = 39.99…가
+    /// 39가 되는 부동소수 사고를 탄다). 1 미만으로는 내려가지 않게 잡는다 — 0이 되면 임계가 곧 사망이라
+    /// 넉다운이 영영 안 걸린다.
+    /// </summary>
+    public int KnockdownHp => Mathf.Max(1, Mathf.CeilToInt(m_maxHp * m_knockdownHpRatio));
 }
