@@ -57,7 +57,7 @@ public class NpcCustody : NetworkBehaviour
     /// <see cref="NpcPenaltyAgent.SendToDetention"/>이 수용 직전에 쓴다 — 갈 곳이 Detained라
     /// <see cref="StopEscort"/>(Captured로 간다)를 그대로 쓸 수 없다.
     /// 세터를 열지 않고 메서드로 두는 이유: 밖에서 연행 대상을 <b>지정</b>하는 문은
-    /// <see cref="StartEscort"/> 하나여야 한다 (계획서 § 6 4번 주의 2).</summary>
+    /// <see cref="StartEscort"/> 하나여야 한다.</summary>
     internal void ClearEscortTarget()
     {
         EscortTarget = null;
@@ -165,7 +165,7 @@ public class NpcCustody : NetworkBehaviour
         if (m_owner.Agent == null)
             return;
 
-        // 워프 유틸은 코어에 있다 — 밧줄 놓기(#369)와 공유하는 공용 헬퍼라서다 (계획서 § 4-6)
+        // 워프 유틸은 코어에 있다 — 밧줄 놓기(#369)와 공유하는 공용 헬퍼라서다 (계획서 § 3-6)
         if (!m_owner.TryWarpNear(exitPosition))
         {
             Debug.LogWarning(

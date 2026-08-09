@@ -11,16 +11,17 @@ using Random = UnityEngine.Random;
 /// 네트워크를 켜지 않은 로컬 Play 테스트에서는 기존처럼 단독으로 동작한다.
 /// </summary>
 [RequireComponent(typeof(NavMeshAgent))]
-[RequireComponent(typeof(NpcCustody))] // 도메인 부품 — 누락 시 연행·수감 경로가 NRE로 죽는다 (#503)
-[RequireComponent(typeof(NpcHealth))] // 도메인 부품 — 누락 시 체력·피해 경로가 NRE로 죽는다 (#503)
-[RequireComponent(typeof(NpcIntruder))] // 도메인 부품 — 누락 시 침입 경로가 NRE로 죽는다 (#503)
-[RequireComponent(typeof(NpcKnockback))] // 도메인 부품 — 누락 시 넉백 경로가 NRE로 죽는다 (#503)
-[RequireComponent(typeof(NpcPenaltyAgent))] // 도메인 부품 — 누락 시 오검거·납치 경로가 NRE로 죽는다 (#503)
-[RequireComponent(typeof(NpcReaction))] // 도메인 부품 — 누락 시 도주·저항 경로가 NRE로 죽는다 (#503)
-[RequireComponent(typeof(NpcRopeDrag))] // 도메인 부품 — 누락 시 밧줄 경로가 NRE로 죽는다 (#503)
-[RequireComponent(typeof(NpcStandUp))] // 도메인 부품 — 누락 시 기상 예약 경로가 NRE로 죽는다 (#503)
-[RequireComponent(typeof(NpcStun))] // 도메인 부품 — 누락 시 기절 경로가 NRE로 죽는다 (#503)
-public partial class NpcController : NetworkBehaviour
+// 도메인 부품 9개 — 누락 시 그 도메인 경로가 NRE로 죽는다 (#503)
+[RequireComponent(typeof(NpcCustody))]
+[RequireComponent(typeof(NpcHealth))]
+[RequireComponent(typeof(NpcIntruder))]
+[RequireComponent(typeof(NpcKnockback))]
+[RequireComponent(typeof(NpcPenaltyAgent))]
+[RequireComponent(typeof(NpcReaction))]
+[RequireComponent(typeof(NpcRopeDrag))]
+[RequireComponent(typeof(NpcStandUp))]
+[RequireComponent(typeof(NpcStun))]
+public class NpcController : NetworkBehaviour
 {
     [Header("상태별 튜닝 데이터 (ScriptableObject) — #259")]
     [Tooltip("각 FSM 상태가 자기 config를 주입받아 읽는다. 값 조정은 이 에셋들에서 한다.")]
@@ -49,7 +50,7 @@ public partial class NpcController : NetworkBehaviour
     private NpcStandUp m_standUp;
     private NpcStun m_stun;
 
-    // 라운드 종료 시 정지(freeze) 플래그 — 서버(또는 오프라인)에서만 의미. 켜지면 FSM/이동을 멈춘다. (라운드 종료 freeze)
+    // 라운드 종료 정지(freeze) 플래그 — 서버(또는 오프라인)에서만 의미. 켜지면 FSM/이동을 멈춘다.
     private bool m_frozen;
 
     // 서버 권위 FSM 상태 — 서버만 쓰고 모든 클라이언트가 읽는다 (#56)
@@ -58,24 +59,13 @@ public partial class NpcController : NetworkBehaviour
     public NavMeshAgent Agent => m_agent;
     public NpcStateMachine StateMachine => m_stateMachine;
 
-    /// <summary>추격 튜닝 SO — 부품이 코어에서 읽는다(튜닝 SO는 코어가 계속 들고 있다, 계획서 § 4-3).
-    /// <see cref="NpcPenaltyAgent"/>가 격퇴 도주 시간을 읽는 용도다. 부품은 같은 어셈블리라 internal로 족하다. (#503)</summary>
-    internal NpcChaseConfig ChaseConfig => m_chaseConfig;
-
-    /// <summary>저항 튜닝 SO — <see cref="NpcReaction.ThreatSearchRadius"/>가 위협 탐색 반경을 산출하는 용도다.
-    /// 튜닝 SO는 코어가 계속 들고 부품이 읽는다(계획서 § 4-3). (#503)</summary>
-    internal NpcResistConfig ResistConfig => m_resistConfig;
-
-    /// <summary>기절 튜닝 SO — <see cref="NpcStun"/>이 지속 시간·기상 클립 길이를,
-    /// <see cref="NpcHealth"/>가 쓰러짐 기절 시간을 읽는다. (#503)</summary>
-    internal NpcStunConfig StunConfig => m_stunConfig;
-
-    /// <summary>공통 튜닝 SO — <see cref="NpcHealth.MaxHp"/>·<see cref="NpcKnockback"/>의 비행 파라미터·
-    /// <see cref="NpcRopeDrag.InitDragWeight"/>의 무게 추첨이 읽는다. (#503)</summary>
-    internal NpcCommonConfig CommonConfig => m_commonConfig;
-
-    /// <summary>밧줄 튜닝 SO — <see cref="NpcRopeDrag"/>가 길이·장력 파라미터를 읽는다. (#503)</summary>
-    internal NpcRopeDragConfig RopeDragConfig => m_ropeDragConfig;
+    // 튜닝 SO는 코어가 계속 들고 부품이 여기서 읽는다 (계획서 § 3-3).
+    // 부품은 같은 어셈블리라 internal로 족하다. 뒤 주석은 읽는 부품이다. (#503)
+    internal NpcChaseConfig ChaseConfig => m_chaseConfig; // NpcPenaltyAgent — 격퇴 도주 시간
+    internal NpcResistConfig ResistConfig => m_resistConfig; // NpcReaction — 위협 탐색 반경
+    internal NpcStunConfig StunConfig => m_stunConfig; // NpcStun — 지속 시간·기상 클립 / NpcHealth — 쓰러짐 기절 시간
+    internal NpcCommonConfig CommonConfig => m_commonConfig; // NpcHealth·NpcKnockback·NpcRopeDrag
+    internal NpcRopeDragConfig RopeDragConfig => m_ropeDragConfig; // NpcRopeDrag — 길이·장력
 
     /// <summary>
     /// 현재 NPC 상태. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 안전하게 읽을 수 있다.
@@ -86,31 +76,24 @@ public partial class NpcController : NetworkBehaviour
     /// <summary>상태 변경 이벤트 — 서버·클라이언트 모든 피어에서 발생한다. 애니메이션 등 표현 계층이 구독. (#56)</summary>
     public event Action<NpcState> OnStateChanged;
 
-    /// <summary>신병 도메인 부품 — 연행·인계 표식·수감·감옥 퇴장·반출 표식을 들고 있다. (#59/#228/#537/#503)</summary>
+    // 도메인 부품 접근자 — 호출부는 npc.Rope.IsRoped처럼 부품을 거친다 (계획서 § 3-1). (#503)
+    /// <summary>신병 — 연행·인계 표식·수감·감옥 퇴장·반출 표식 (#59/#228/#537)</summary>
     public NpcCustody Custody => m_custody;
-
-    /// <summary>체력 도메인 부품 — HP·피해 적용·회복과 <see cref="IDamageable"/> 구현을 들고 있다. (#366/#503)</summary>
+    /// <summary>체력 — HP·피해 적용·회복과 <see cref="IDamageable"/> 구현 (#366)</summary>
     public NpcHealth Health => m_health;
-
-    /// <summary>침입 도메인 부품 — 목표·해제 시간·진행 이벤트를 들고 있다. (#231/#503)</summary>
+    /// <summary>침입 — 목표·해제 시간·진행 이벤트 (#231)</summary>
     public NpcIntruder Intruder => m_intruder;
-
-    /// <summary>넉백 도메인 부품 — 외력 비행과 착지 후 복귀 상태를 들고 있다. (#232/#503)</summary>
+    /// <summary>넉백 — 외력 비행과 착지 후 복귀 상태 (#232)</summary>
     public NpcKnockback Knockback => m_knockback;
-
-    /// <summary>페널티 임무 도메인 부품 — 오검거(#277~#279)·납치(#371)의 수용·추격·수렴·호송을 들고 있다. (#503)</summary>
+    /// <summary>페널티 임무 — 오검거·납치의 수용·추격·수렴·호송 (#277~#279/#371)</summary>
     public NpcPenaltyAgent Penalty => m_penalty;
-
-    /// <summary>검거 반응 도메인 부품 — 위협 대상·도주·저항·스윙을 들고 있다. (#76/#205/#213/#220/#503)</summary>
+    /// <summary>검거 반응 — 위협 대상·도주·저항·스윙 (#76/#205/#213/#220)</summary>
     public NpcReaction Reaction => m_reaction;
-
-    /// <summary>밧줄 도메인 부품 — 묶임·끌기·무게를 들고 있다. (#269/#369/#398/#503)</summary>
+    /// <summary>밧줄 — 묶임·끌기·무게 (#269/#369/#398)</summary>
     public NpcRopeDrag Rope => m_rope;
-
-    /// <summary>기상 예약 도메인 부품 — 줄이 풀리며 일어나는 구간과 재포획 창을 들고 있다. (#513/#503)</summary>
+    /// <summary>기상 예약 — 줄이 풀리며 일어나는 구간과 재포획 창 (#513)</summary>
     public NpcStandUp StandUp => m_standUp;
-
-    /// <summary>기절 도메인 부품 — 스턴 오버레이·진입·해제를 들고 있다. (#292/#503)</summary>
+    /// <summary>기절 — 스턴 오버레이·진입·해제 (#292)</summary>
     public NpcStun Stun => m_stun;
 
     private void Awake()
@@ -206,11 +189,8 @@ public partial class NpcController : NetworkBehaviour
         // 뒤로 내리면 스턴 게이트에 가려 기절한 채 굳은 NPC(=신고된 증상 그대로)에 영영 닿지 못한다.
         TickNavMeshRecovery();
 
-        // 밧줄 장력 — 아래 넉백·스턴 게이트보다 **먼저** 돈다 (#390). 묶인 채 기절한 대상은 스턴
-        // 오버레이를 단 채로 끌려가야 하므로(기절 중에도 장력이 돌아야 한다) 게이트 뒤로
-        // 내리면 테이저→밧줄 콤보로 잡은 대상이 그 자리에 멈춘다. 끌기가 아니면 즉시 반환한다.
-        // (넉백은 서로 배타적이다 — Escorted 대상이 넉백을 맞으면 StopEscort로 커스터디가 풀리고
-        //  PlayerEscorter가 그것을 보고 끌기를 정리한다.)
+        // 밧줄 장력 — 게이트보다 **먼저** (#390). 묶인 채 기절한 대상은 스턴 오버레이를 단 채 끌려가야 하므로,
+        // 뒤로 내리면 테이저→밧줄 콤보로 잡은 대상이 그 자리에 멈춘다. (넉백과는 배타적 — StopEscort가 끌기를 정리한다)
         m_rope.Tick();
 
         // 줄이 풀리며 일어나는 구간 — 밧줄 장력과 같은 이유로 아래 게이트보다 **먼저** 돈다 (#513).
@@ -291,10 +271,8 @@ public partial class NpcController : NetworkBehaviour
         OnStandUp?.Invoke();
     }
 
-    /// <summary>
-    /// 라운드 종료 정지(freeze) — 서버(또는 오프라인)에서 호출. FSM 틱과 NavMesh 이동을 멈춘다. (라운드 종료 freeze)
-    /// 서버에서 멈추면 NetworkTransform이 정지 위치를 복제하므로 모든 클라이언트에서도 멈춘 것으로 보인다.
-    /// </summary>
+    /// <summary>라운드 종료 정지 — 서버(또는 오프라인)에서 호출. FSM 틱과 NavMesh 이동을 멈춘다.
+    /// 서버에서 멈추면 NetworkTransform이 정지 위치를 복제해 모든 클라이언트에서도 멈춘 것으로 보인다.</summary>
     public void SetFrozen(bool frozen)
     {
         // FSM/이동은 서버 권위 — 클라이언트 호출은 다른 제어 메서드와 동일하게 무시한다
@@ -314,13 +292,11 @@ public partial class NpcController : NetworkBehaviour
     /// <summary>
     /// 기준점 주변에서 NavMesh 위 지점을 찾아 에이전트를 붙인다 — 붙었으면 true. (#503)
     ///
-    /// 특정 도메인의 것이 아니라 <see cref="Agent"/>를 다루는 공용 유틸이라 코어에 둔다(계획서 § 4-6) —
-    /// 밧줄 놓기(#369)와 감옥 방출(#537)이 함께 쓴다. 부품에 딸려 보내면 "Custody가 Rope를 참조한다"는
-    /// 가짜 의존이 생긴다. 부품은 같은 어셈블리라 internal로 족하다.
-    /// 실패하면 <b>호출부가</b> 대응한다 — 대안 지점을 시도할지 제자리에 둘지는 도메인마다 다르다.
+    /// 밧줄 놓기(#369)와 감옥 방출(#537)이 함께 쓰는 공용 유틸이라 코어에 둔다 (계획서 § 3-6) —
+    /// 부품에 딸려 보내면 "Custody가 Rope를 참조한다"는 가짜 의존이 생긴다.
+    /// 실패하면 <b>호출부가</b> 대응한다 — 대안 지점이냐 제자리냐는 도메인마다 다르다.
     /// </summary>
-    /// <param name="snapRadius">탐색 반경(m) — 생략하면 <see cref="k_warpSnapRadius"/>.
-    /// 넓히는 건 최후 수단인 회수(<see cref="TickNavMeshRecovery"/>)뿐이다.</param>
+    /// <param name="snapRadius">탐색 반경(m) — 넓히는 건 최후 수단인 회수(<see cref="TickNavMeshRecovery"/>)뿐이다.</param>
     internal bool TryWarpNear(Vector3 origin, float snapRadius = k_warpSnapRadius)
     {
         if (!NavMesh.SamplePosition(origin, out NavMeshHit hit, snapRadius, NavMesh.AllAreas))
@@ -333,15 +309,12 @@ public partial class NpcController : NetworkBehaviour
     private static readonly RaycastHit[] s_sweepBuffer = new RaycastHit[16];
 
     // 이번 프레임 수평 이동 구간에 벽이 있는지 — 몸통 굵기로 훑는다.
-    // 넉백 비행(#232)과 밧줄 끌기(#369)가 함께 쓰는 공용 유틸이라 코어에 둔다 (계획서 § 4-6) —
+    // 넉백 비행(#232)과 밧줄 끌기(#369)가 함께 쓰는 공용 유틸이라 코어에 둔다 (계획서 § 3-6) —
     // 판정만 공유하고 대응은 호출부가 정한다: 넉백은 그 자리에 떨어지고, 끌기는 벽을 따라 미끄러진다.
-    // NavMesh를 충돌 프록시로 쓰면 안 된다 — 실제 벽보다 에이전트 반지름만큼 물러나 끝나고 연석에서도
-    // 끊긴다. 실측(Test Scene)에서 벽이 11.8m 밖인 방향이 NavMesh 기준 2.0m에서 "막힘"으로 나왔고,
-    // 그걸 벽으로 치면 수평 속도가 비행 첫 프레임에 0이 되어 넉백이 제자리 점프가 된다 (#232).
-    // 프레임이 튀어 한 번에 몇 미터씩 움직여도 구간 전체를 검사하므로 벽을 지나쳐 버리지 않는다.
-    // 캐릭터(플레이어·다른 NPC)는 벽으로 치지 않는다(#339): 플레이어 몸통이 환경과 같은 Default 레이어라
-    // 마스크만으로는 걸러지지 않는데, 폭발로 날아가는 NPC가 군중을 벽으로 오판하면 죄다 제자리에
-    // 툭 떨어져 넉백이 밋밋해진다 — 장애물 스윕 판정(#313)과 같은 수정.
+    // NavMesh를 충돌 프록시로 쓰면 안 된다 — 실측(Test Scene)에서 벽이 11.8m 밖인 방향이 NavMesh
+    // 기준 2.0m에서 "막힘"으로 나왔고, 그걸 벽으로 치면 넉백이 제자리 점프가 된다 (#232).
+    // 캐릭터(플레이어·다른 NPC)는 벽으로 치지 않는다 — 플레이어 몸통이 환경과 같은 Default 레이어라
+    // 마스크로는 못 거르는데, 군중을 벽으로 오판하면 폭발 넉백이 죄다 제자리에 툭 떨어진다 (#339/#313).
     internal bool SweepHitsObstacle(Vector3 direction, float distance, out RaycastHit obstacle)
     {
         obstacle = default;
@@ -399,18 +372,16 @@ public partial class NpcController : NetworkBehaviour
 
     private float m_offNavMeshSeconds;
 
-    // 회수 실패를 이미 알렸는가 — 재시도는 계속하되 로그는 굳은 구간당 한 번만 낸다.
-    // 반경 밖까지 밀려나는 경로가 실제로 있어서다(#559 — 납치 반출이 NPC를 맵 밖 25m까지 끌고 나간다).
-    // 그 경우 회수는 라운드 내내 실패하므로, 매초 LogError면 스택트레이스가 콘솔을 덮는다.
+    // 회수 실패를 이미 알렸는가 — 재시도는 계속하되 로그는 굳은 구간당 한 번만. 반경 밖까지 밀려나는
+    // 경로가 실제로 있어(#559 — 납치 반출이 맵 밖 25m까지 끌고 나간다) 매초 LogError면 콘솔을 덮는다.
     private bool m_stuckReported;
 
     /// <summary>
     /// <b>에이전트가 켜져 있는데 NavMesh 밖</b>인 상태를 서버가 스스로 회수한다. 서버(또는 오프라인) 전용. (#557)
     ///
-    /// 이 상태를 만드는 곳은 셋인데(밧줄 놓기·넉백 착지·기절 해제) 셋 다 붙이기에 실패하면 경고만 남기고
-    /// 포기해서, 이후 <c>isStopped</c>·<c>SetDestination</c>이 조용히 실패하며 NPC가 그 자리에 굳었다
-    /// (빌드 2 이슈 E의 재발). 호출부마다 폴백을 다는 대신 <b>결과 상태 하나</b>를 여기서 보면
-    /// 앞으로 늘어날 호출부까지 함께 덮인다.
+    /// 이 상태를 만드는 셋(밧줄 놓기·넉백 착지·기절 해제)이 전부 실패 시 경고만 남기고 포기해, 이후
+    /// <c>isStopped</c>·<c>SetDestination</c>이 조용히 실패하며 NPC가 굳었다(빌드 2 이슈 E의 재발).
+    /// 호출부마다 폴백을 다는 대신 <b>결과 상태 하나</b>를 여기서 보면 늘어날 호출부까지 덮인다.
     ///
     /// 에이전트를 꺼 둔 구간(넉백 비행·밧줄 끌기)은 위치를 그쪽이 쥐고 있어 굳은 것이 아니다 — 건너뛴다.
     /// </summary>

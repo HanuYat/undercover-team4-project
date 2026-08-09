@@ -6,7 +6,7 @@ using UnityEngine.AI;
 /// <summary>
 /// 밧줄 도메인 부품 (#269/#369/#398/#503) — 묶임·끌기·무게를 들고 있다.
 /// 끌리는 동안에는 NavMeshAgent를 끄고 위치를 직접 대입한다(NetworkTransform이 결과를 복제).
-/// 장력 틱은 코어 Update가 넉백·스턴 게이트보다 <b>먼저</b> 돌린다 — 계획서 § 5-1.
+/// 장력 틱은 코어 Update가 넉백·스턴 게이트보다 <b>먼저</b> 돌린다 — 계획서 § 4-1.
 /// </summary>
 public class NpcRopeDrag : NetworkBehaviour
 {

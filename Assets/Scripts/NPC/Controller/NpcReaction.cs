@@ -21,8 +21,8 @@ public class NpcReaction : NetworkBehaviour
 
     /// <summary>저항·도주 중 피해 다니는 위협 대상(체포를 시도한 플레이어). 배회 등 반응 중이 아니면 null. 서버에서만 유효. (#76)
     /// setter가 internal인 것은 끌기 시작(밧줄, #369)과 기절 진입(<see cref="NpcStun.EnterStunned"/>)이 그 순간의
-    /// 가해자를 위협으로 기록하기 때문이다 — 둘 다 같은 어셈블리다. 밧줄이 부품으로 나가면(계획서 § 6 2단계 7번)
-    /// 남는 쓰기가 부품 둘뿐이 된다. (#503)</summary>
+    /// 가해자를 위협으로 기록하기 때문이다 — 둘 다 같은 어셈블리다. 분리가 끝난 지금도 그 둘이 남아
+    /// 있어 닫지 못했다 — 닫으려면 메서드로 감싸야 한다 (계획서 § 9). (#503)</summary>
     public Transform ThreatTarget { get; internal set; }
 
     /// <summary>

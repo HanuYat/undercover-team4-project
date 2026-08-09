@@ -57,7 +57,7 @@ public class NpcStun : NetworkBehaviour
     /// 테이저 기절이 <b>시작될 때</b> 전 피어에서 1회 발행 — 감전 연출(NpcShockView)용. 인자는 지속 시간(초). (#477)
     ///
     /// 원인을 NetworkVariable로 두지 않는 이유: 스턴 플래그와의 도착 순서에 기대게 되는데 컴포넌트가
-    /// 갈리면 그 보장이 더 약하다(계획서 § 5-3). 일회성 알림은 RPC가 맞다.
+    /// 갈리면 그 보장이 더 약하다(계획서 § 4-3). 일회성 알림은 RPC가 맞다.
     /// <b>종료는 알리지 않는다</b> — <see cref="OnStunnedChanged"/>(false)가 그 몫이다. 기절이 밖에서
     /// 먼저 풀리는 경로가 있어(밧줄 묶기·수감·넉백) 지속 시간만으로 종료 시점을 계산하면 어긋난다.
     /// </summary>
@@ -191,7 +191,7 @@ public class NpcStun : NetworkBehaviour
     }
 
     /// <summary>스턴 중 매 프레임 — 코어 Update의 스턴 게이트가 FSM Tick 대신 이걸 돌린다.
-    /// 부품이 자기 Update를 갖지 않는 이유는 게이트 순서가 사양이기 때문이다 (계획서 § 5-1).</summary>
+    /// 부품이 자기 Update를 갖지 않는 이유는 게이트 순서가 사양이기 때문이다 (계획서 § 4-1).</summary>
     internal void Tick()
     {
         // 타이머는 밧줄과 무관하게 흐른다 — 묶여 있든 끌려가든 기절은 제 시간에 풀린다.
