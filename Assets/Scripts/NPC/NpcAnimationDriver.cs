@@ -369,7 +369,11 @@ public class NpcAnimationDriver : MonoBehaviour
         // 없으면 일어난 마지막 프레임에 굳는다.
         // 누운 base(묶임·기절)로는 되돌리지 않는다 — 일어난 몸이 도로 눕는다. 기절 기상은 곧 도착할
         // 상태 전이가 이어받으므로 그대로 두는 것이 맞다(#269의 기존 동작).
-        if (m_standUpUntil > 0f && Time.time >= m_standUpUntil)
+        // IsStandingUp(서버가 켜 두는 "아직 일어나는 중" 표시)이 살아 있으면, 일어난 뒤에 올 상태 변경
+        // (배회 복귀·도주·수감)이 아직 안 온 것이다 — 그때 되돌리면 base가 아직 Captured라 수갑 자세가
+        // 한 프레임 스친다 (#564). 이 표시는 서버가 상태 변경과 같은 프레임에 내리므로 기다리면 맞물린다.
+        // 타이머는 끄지 않는다: 끄면 상태 변경이 아예 없는 경로가 기상 마지막 프레임에 굳는다.
+        if (m_standUpUntil > 0f && Time.time >= m_standUpUntil && !m_controller.StandUp.IsStandingUp)
         {
             m_standUpUntil = 0f;
             if (!IsRopeProne && m_baseState != NpcState.Stunned)
