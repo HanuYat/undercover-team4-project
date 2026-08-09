@@ -36,6 +36,7 @@ GameObject:
   - component: {fileID: 743135564513422629}
   - component: {fileID: 6459439272382896395}
   - component: {fileID: 8064490235713148023}
+  - component: {fileID: 4152139263146004562}
   m_Layer: 7
   m_Name: NPC_Citizen
   m_TagString: Untagged
@@ -515,6 +516,28 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 463f08c5cd8b41b40931fa44519b409b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcDeath
+--- !u!114 &4152139263146004562
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e457215489dc76d4595986f935172c7d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcRagdoll
+  m_settleSpeedThreshold: 0.15
+  m_settleHoldSeconds: 0.3
+  m_settleTimeoutSeconds: 5
+  m_groundMask:
+    serializedVersion: 2
+    m_Bits: 1
+  m_groundProbeDistance: 1.5
+  m_alignPullSpeed: 1.5
+  m_flightAlignPullSpeed: 16
+  m_alignSnapDistance: 2.5
 --- !u!1001 &2229125471116794606
 PrefabInstance:
   m_ObjectHideFlags: 0
