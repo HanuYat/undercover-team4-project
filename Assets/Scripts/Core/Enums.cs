@@ -94,6 +94,10 @@ public enum EAudioClip
 
     // UI 조작음. 뒤에 붙이는 이유는 위와 같다.
     UiClick, // 톡 — UI 버튼을 누른 순간 (버튼마다 배선하지 않고 UiClickSound가 전역으로 낸다)
+
+    // 폭주 차량 (#304). 뒤에 붙이는 이유는 위와 같다 — 정수로 직렬화돼 있다.
+    VehicleEngine, // 부우우 — 엔진음(루프). 차량 프리팹의 AudioSource가 직접 튼다
+    VehicleHorn, // 빠았 — 통과 직전 경적
 }
 
 /// <summary>
@@ -128,6 +132,9 @@ public enum EFx
     // 아이템 조작음 (#549) — EAudioClip과 같은 이유로 뒤에 붙인다(씬의 조합표에 정수로 저장된다).
     TaserFire, // 테이저를 쏜 순간 (명중 여부와 무관)
     RopeBind, // 밧줄로 묶었다 (새로 묶기·합류·끌기 재개 · 동료 운반)
+
+    // 폭주 차량 (#304)
+    VehicleHorn, // 통과 직전 경적 — 보이지 않는 방향에서 와도 알 수 있게 하는 예고
 }
 
 /// <summary>
