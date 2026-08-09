@@ -278,7 +278,7 @@ public partial class AbductionEvent
     /// (바깥쪽 조각이 도로 건너 섬이라 걸어갈 수 없다 — 실측으로 5곳 중 2곳이 그랬다).
     /// 나가는 것이 목적이면 나가면 된다.
     ///
-    /// 밧줄 끌기(<see cref="NpcController.StartRopeDrag"/>)가 지고 있는 위험 — 에이전트를 껐다 켤 때
+    /// 밧줄 끌기(<see cref="NpcRopeDrag.StartRopeDrag"/>)가 지고 있는 위험 — 에이전트를 껐다 켤 때
     /// NavMesh 재부착에 실패해 그 자리에 굳는 것 — 은 여기 없다. <b>다시 켜지 않기 때문이다.</b>
     /// 이 이동의 끝은 언제나 소멸이다.
     ///

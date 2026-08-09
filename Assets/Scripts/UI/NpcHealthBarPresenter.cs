@@ -97,7 +97,7 @@ public class NpcHealthBarPresenter : NetworkBehaviour
     /// </summary>
     private bool IsOutOfFight(NpcController npc)
     {
-        if (npc.IsRoped)
+        if (npc.Rope.IsRoped)
             return true;
 
         NpcAnimationDriver driver = DriverOf(npc);

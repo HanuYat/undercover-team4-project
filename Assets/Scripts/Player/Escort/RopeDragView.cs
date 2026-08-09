@@ -86,13 +86,13 @@ public class RopeDragView : MonoBehaviour
                 return; // 머티리얼이 없어 그릴 수 없다 — Build가 컴포넌트를 스스로 껐다
 
             visual.Line.enabled = true;
-            DrawRope(visual, handPoint, KnotPoint(visual, npc.transform), npc.RopeLength);
+            DrawRope(visual, handPoint, KnotPoint(visual, npc.transform), npc.Rope.RopeLength);
 
             // 먼지는 실제로 끌고 있을 때만 — 세워 둔 대상 발밑에서 먼지가 계속 일면 안 된다
             if (visual.Dust != null)
             {
-                if (visual.Dust.activeSelf != npc.IsRoped)
-                    visual.Dust.SetActive(npc.IsRoped);
+                if (visual.Dust.activeSelf != npc.Rope.IsRoped)
+                    visual.Dust.SetActive(npc.Rope.IsRoped);
                 visual.Dust.transform.position = npc.transform.position;
             }
         }

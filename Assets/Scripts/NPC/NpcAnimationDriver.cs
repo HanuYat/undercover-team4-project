@@ -167,13 +167,13 @@ public class NpcAnimationDriver : MonoBehaviour
     /// 둘을 갈라 보면 E로 놓는 순간 묶인 몸이 벌떡 일어선다: 놓기는 <b>끌기만</b> 멈추고 줄은 그대로이며
     /// (GDD 7-5), 밧줄은 애초에 무력화된 대상만 묶으므로(#446) 방금까지 누워 끌려온 몸이다.
     /// </summary>
-    private bool IsRopeBound => m_controller.IsRoped || m_controller.IsTethered;
+    private bool IsRopeBound => m_controller.Rope.IsRoped || m_controller.Rope.IsTethered;
 
     /// <summary>
     /// 밧줄 때문에 <b>바닥에 있는가</b> — 줄이 걸려 있거나 풀린 뒤 아직 쓰러져 있고, 기상 모션이 아직
     /// 시작되지 않았다. 누운 모션·콜라이더의 기준. (#513)
     ///
-    /// <b>예약 구간</b>(<see cref="NpcController.IsStandingUp"/>)을 함께 보는 이유: 풀기는 예약을 걸자마자
+    /// <b>예약 구간</b>(<see cref="NpcStandUp.IsStandingUp"/>)을 함께 보는 이유: 풀기는 예약을 걸자마자
     /// 줄을 빼므로 묶임만 보면 <b>쓰러져 기다리는 몇 초 동안 몸을 눕혀 둘 근거가 사라진다</b> — 푸는 즉시
     /// 벌떡 서고 뒤늦게 이미 서 있는 몸에 기상 모션이 나왔다. 예약이 곧 "아직 바닥"이다.
     ///
@@ -181,7 +181,7 @@ public class NpcAnimationDriver : MonoBehaviour
     /// "일어나기 → 후속 전이(도주·배회·착석)" 순인데, 묶임 표시를 걷는 것은 <see cref="PlayerEscorter"/>의
     /// 매 프레임 정리라 한 박자 늦게 온다. 그것만 보면 이미 일어나 걷기 시작한 몸이 그 사이 도로 눕는다.
     /// </summary>
-    private bool IsRopeProne => (IsRopeBound || m_controller.IsStandingUp) && !m_standingUp;
+    private bool IsRopeProne => (IsRopeBound || m_controller.StandUp.IsStandingUp) && !m_standingUp;
 
     private void Awake()
     {

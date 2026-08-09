@@ -629,7 +629,7 @@ public class BombDevice : NetworkBehaviour
             if (npc == null)
                 continue;
 
-            npc.ServerApplyKnockback(EvaluateKnockback(npc.transform.position));
+            npc.Knockback.ServerApplyKnockback(EvaluateKnockback(npc.transform.position));
         }
     }
 

@@ -104,10 +104,10 @@ public static class NpcStateRules
     /// 밖이면 그냥 선다(팀 확정 2026-08-03 "위치로 갈린다").
     ///
     /// 상태 enum만으로는 못 가른다 — 밧줄 끌기도 같은 <see cref="NpcState.Escorted"/>다.
-    /// 그래서 <see cref="NpcController.IsRoped"/>를 함께 본다(<see cref="CanRopeBind"/>와 같은 이유로
+    /// 그래서 <see cref="NpcRopeDrag.IsRoped"/>를 함께 본다(<see cref="CanRopeBind"/>와 같은 이유로
     /// NpcController를 받는다). IsRoped는 동기화 값이라 클라 조준 피드백에서도 읽을 수 있다.</summary>
     public static bool IsFollowingUnroped(NpcController npc) =>
-        npc != null && npc.CurrentState == NpcState.Escorted && !npc.IsRoped;
+        npc != null && npc.CurrentState == NpcState.Escorted && !npc.Rope.IsRoped;
 
     /// <summary>멈춰 선 반출 수감자인가 — E로 <b>밧줄 없는 추종</b>을 재개할 수 있는 대상. (#517)
     /// 반출된 대상은 거리가 벌어지면 <see cref="NpcEscortedState"/>가 Captured로 되돌려 세우는데,
@@ -115,7 +115,7 @@ public static class NpcStateRules
     /// 없어지는 것이 #517의 증상이다. 그래서 상태 대신 <see cref="NpcCustody.IsJailExtracted"/>를
     /// 함께 본다(<see cref="CanRopeBind"/>·<see cref="IsFollowingUnroped"/>와 같은 이유로 NpcController를 받는다).
     ///
-    /// 밧줄이 걸린 대상은 여기 오지 않는다 — 묶이는 순간 표식이 꺼져(NpcController.StartRopeDrag)
+    /// 밧줄이 걸린 대상은 여기 오지 않는다 — 묶이는 순간 표식이 꺼져(NpcRopeDrag.StartRopeDrag)
     /// E가 다시 밧줄 재개로 간다. 두 분기가 겹치지 않는 근거가 그것이다.</summary>
     public static bool CanResumeUnropedEscort(NpcController npc) =>
         npc != null && npc.CurrentState == NpcState.Captured && npc.Custody.IsJailExtracted;

@@ -39,7 +39,7 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
     // 위 목록의 클라 사본(서버만 쓴다). 표시(RopeDragView)가 선의 양 끝점을 알아야 하고,
     // 오너 조기검증(Rope.CanTarget·E 놓기 대상)도 "내가 이걸 묶었나"를 물어야 한다.
     // 항목마다 '끌고 있는가'를 싣는 이유: 줄다리기로 한 NPC에 여러 명이 걸리면
-    // NpcController.IsRoped("누구든 끌고 있다")로는 내가 놓았는지를 알 수 없다.
+    // NpcRopeDrag.IsRoped("누구든 끌고 있다")로는 내가 놓았는지를 알 수 없다.
     // ⚠ late-join 클라는 OnListChanged를 못 받는다 — 읽는 쪽이 현재 목록을 직접 훑을 것 (WantedListManager와 같은 주의).
     private readonly NetworkList<RopeTether> m_tetheredSynced = new NetworkList<RopeTether>();
 
@@ -167,7 +167,7 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
         for (int i = 0; i < holders.Count; i++)
             holders[i].ReleaseDrag(npc); // 끌기 해제 — 에이전트를 되살린다(순간이동이 성립하려면 필요하다)
 
-        npc.ServerStandUpThen(afterStandUp);
+        npc.StandUp.ServerStandUpThen(afterStandUp);
 
         for (int i = 0; i < holders.Count; i++)
             holders[i].RemoveTether(npc);
@@ -226,7 +226,7 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
 
         // 서버는 NPC의 앵커 목록이 단일 진실. 클라는 그게 실려 온 동기화 항목을 읽는다.
         if (!IsSpawned || IsServer)
-            return npc.IsDraggedBy(transform);
+            return npc.Rope.IsDraggedBy(transform);
 
         int index = IndexOfSynced(npc);
         return index >= 0 && m_tetheredSynced[index].Dragging;
@@ -269,7 +269,7 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
         if (!m_tethered.Contains(npc))
         {
             m_tethered.Add(npc);
-            npc.AddTether(); // 대상도 "묶여 있음"을 알아야 놓은 뒤에도 누운 자세가 유지된다 (#513)
+            npc.Rope.AddTether(); // 대상도 "묶여 있음"을 알아야 놓은 뒤에도 누운 자세가 유지된다 (#513)
         }
 
         SetTetherDragging(npc, true);
@@ -318,7 +318,7 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
 
         // 대상의 묶임 표시도 한 칸 줄인다 — 파괴된 대상은 셀 필요가 없다 (#513)
         if (npc != null)
-            npc.RemoveTether();
+            npc.Rope.RemoveTether();
 
         if (!IsSpawned || !IsServer)
             return;
@@ -409,7 +409,7 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
                 if (NpcStateRules.StaysPutWhenFreed(npc))
                 {
                     NotifyOwner($"밧줄 끊김 — 달아나지 않고 그 자리에 남는다: {npc.name}");
-                    npc.ServerStandUpThen(null);
+                    npc.StandUp.ServerStandUpThen(null);
                 }
                 else
                 {
@@ -418,7 +418,7 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
                     // 그새 파괴됐어도 NpcFleeState가 위협 없는 도주로 받아 준다(ThreatTarget null 검사).
                     Transform threat = transform;
                     NotifyOwner($"밧줄 끊김 — 너무 멀어져 도주: {npc.name}");
-                    npc.ServerStandUpThen(() => npc.Reaction.StartFlee(threat));
+                    npc.StandUp.ServerStandUpThen(() => npc.Reaction.StartFlee(threat));
                 }
 
                 RemoveTetherAt(i);
@@ -449,7 +449,7 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
     /// 결말이 된다. 놓아둔 줄도 제외 — 늘어나다 끊기는 것이 손을 떼는 수단이다.
     /// </summary>
     internal bool IsLeashedTo(NpcController npc) =>
-        IsDraggingNpc(npc) && npc.DraggerCount >= k_leashDraggerCount;
+        IsDraggingNpc(npc) && npc.Rope.DraggerCount >= k_leashDraggerCount;
 
     // ---- 놓기 (서버·오프라인 전용) ----
 
@@ -464,11 +464,11 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
         // 파괴된 대상은 건드리지 않는다 — 아래에서 NPC 쪽 상태를 직접 묻는다 (라운드 종료 정리 경로)
         if (npc == null)
             return;
-        if (!m_tethered.Contains(npc) || !npc.IsDraggedBy(transform))
+        if (!m_tethered.Contains(npc) || !npc.Rope.IsDraggedBy(transform))
             return; // 안 묶었거나 이미 놓은 대상
 
         // 내 앵커만 뺀다 — 남이 함께 끌고 있으면(줄다리기) 대상은 계속 끌린다.
-        bool stillDragged = npc.StopRopeDrag(transform); // 놓은 자리가 NavMesh 밖이면 이 플레이어가 선 자리로 대체 복귀
+        bool stillDragged = npc.Rope.StopRopeDrag(transform); // 놓은 자리가 NavMesh 밖이면 이 플레이어가 선 자리로 대체 복귀
         SetTetherDragging(npc, false);
 
         NotifyOwner(

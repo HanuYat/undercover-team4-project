@@ -97,7 +97,7 @@ public class NpcJailedState : NpcStateBase
             return;
 
         // 일어나는 중에는 움직이지 않는다 — 기상 클립이 도는 동안 걷기 시작하면 누운 몸이 미끄러진다
-        if (m_owner.IsStandingUp)
+        if (m_owner.StandUp.IsStandingUp)
             return;
 
         // 걷는 중 — 도착했는지만 본다
