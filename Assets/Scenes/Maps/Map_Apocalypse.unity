@@ -14104,8 +14104,9 @@ GameObject:
   - component: {fileID: 320827322}
   - component: {fileID: 320827324}
   - component: {fileID: 320827323}
+  - component: {fileID: 320827325}
   m_Layer: 0
-  m_Name: SceneReadyGate
+  m_Name: Gates
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -14166,6 +14167,19 @@ MonoBehaviour:
   AutoObjectParentSync: 1
   SyncOwnerTransformWhenParented: 1
   AllowOwnerToParent: 0
+--- !u!114 &320827325
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 320827321}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e3e23bab96f8d3f4980ef1a2ebf95ae0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SettlementConfirmGate
+  ShowTopMostFoldoutHeaderGroup: 1
 --- !u!1001 &321640395
 PrefabInstance:
   m_ObjectHideFlags: 0

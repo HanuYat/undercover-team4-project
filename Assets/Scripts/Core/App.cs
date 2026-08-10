@@ -39,6 +39,7 @@ public class App : Singleton<App>
     private MapSelection m_mapSelection;
     private FactionSymbolManager m_factionSymbolManager;
     private SceneReadyGate m_sceneReadyGate;
+    private SettlementConfirmGate m_settlementConfirmGate;
     private EffectManager m_effectManager;
     private FxManager m_fxManager;
 
@@ -96,7 +97,16 @@ public class App : Singleton<App>
             if (loading != null)
                 await loading.ShowAsync(token); // 덮은 화면이 실제로 렌더될 때까지 대기
 
-            await AppHelper.LoadSceneAsync(scene, token);
+            // 게이지바가 실측할 수 있는 구간은 여기까지다 (#582)
+            await AppHelper.LoadSceneAsync(
+                scene,
+                token,
+                loading != null ? loading.ReportSceneLoadProgress : null
+            );
+
+            // 아래 대기는 진척을 알 수 없다 — 게이지를 채우고 문구로 바꿔 알린다 (#582)
+            if (loading != null)
+                loading.BeginSceneReadyWait();
 
             // 씬 오브젝트는 활성화 프레임에 다 섰지만 런타임 스폰(NPC 등)은 아직이다 — 씬이 스스로 보고한다
             await WaitUntilSceneReadyAsync(token);
@@ -167,6 +177,7 @@ public class App : Singleton<App>
         public static DirectoryManager Directory => Instance.m_directoryManager;
         public static FactionSymbolManager FactionSymbol => Instance.m_factionSymbolManager;
         public static SceneReadyGate ReadyGate => Instance.m_sceneReadyGate; // 전원 준비 완료 게이트 (#410). 게임 씬에만 있으므로 다른 씬에서는 null
+        public static SettlementConfirmGate SettlementGate => Instance.m_settlementConfirmGate; // 전원 정산 확인 게이트 (#509). 마찬가지로 게임 씬 전용
 
         // 일회성 연출의 단일 창구 (#532) — "무슨 일이 일어났는가" 하나로 먼지+소리를 내고,
         // 서버 판정이면 전 피어에 전파한다. 일회성 연출은 이쪽을 부른다.
