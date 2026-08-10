@@ -618,6 +618,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 7179461242735521727, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2850163622966047438}
+    - targetCorrespondingSourceObject: {fileID: 7179461242735521727, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 7431493687894048913}
     - targetCorrespondingSourceObject: {fileID: 3906038093274639839, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
       insertIndex: -1
       addedObject: {fileID: 3532327774070139149}
@@ -1697,6 +1700,24 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RagdollRig
   m_boneRootName: Root
   m_tumbleBias: 0.8
+--- !u!114 &7431493687894048913
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8592544213397363225}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b3ea22c81e84bbb846b37d6a4d06898, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RagdollRope
+  m_length: 2
+  m_limitSpring: 1500
+  m_limitDamper: 1000
+  m_dragLinearDamping: 0.6
+  m_dragAngularDamping: 0.6
+  m_maxSpeed: 8
 --- !u!1 &8923528902331350812 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 8019493494360378042, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}

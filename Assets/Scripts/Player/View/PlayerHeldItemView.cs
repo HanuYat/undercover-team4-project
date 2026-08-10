@@ -27,6 +27,38 @@ public class PlayerHeldItemView : NetworkBehaviour
     /// <summary>손 본 앵커 — 손에서 뻗어 나가는 표현(밧줄 선 #269 등)이 시작점으로 쓴다. 미지정이면 null.</summary>
     public Transform HandAnchor => m_handAnchor;
 
+    /// <summary>
+    /// 시체를 묶을 밧줄의 <b>물리 앵커</b> — 운반자의 손이다. 루트가 아니다. 못 찾으면 루트로 폴백한다
+    /// (테스트 구성·아이템 뷰 없는 경우). (#365/#506 → #571에서 NPC 시체도 같은 지점을 쓴다)
+    ///
+    /// <b>왜 손인가.</b> 세 가지가 한꺼번에 해결된다:
+    /// <list type="bullet">
+    ///   <item><b>보이는 밧줄과 당기는 밧줄이 같아진다.</b> <see cref="RopeDragView"/>는 이미
+    ///   <see cref="HandAnchor"/>에서 줄을 그리는데 물리는 발밑(루트)에서 당기고 있었다 — 줄은 손에서
+    ///   나가는데 몸은 발밑으로 끌려가는 그림이었다</item>
+    ///   <item><b>당기는 방향에 위 성분이 생긴다</b>(손 높이 ≈1.1m). 상체가 들리고 다리가 끌리는,
+    ///   시체를 끄는 그림이 물리로 저절로 나온다</item>
+    ///   <item><b>손은 걷기 애니메이션으로 흔들린다</b> — 매 걸음 장력이 변하니 지속적인 작은 충격이
+    ///   생긴다. 이게 <b>팔다리가 흐느적거리게 만드는 것</b>이다</item>
+    /// </list>
+    ///
+    /// 마지막 항목이 핵심이다. 등속으로 끌면 잠깐 뒤 전 뼈가 같은 속도가 되어 뼈 사이 상대 운동이
+    /// 0이 되고, 관절이 느낄 것이 없어 <b>한 덩어리로 미끄러진다</b>. 흐느적임은 움직임이 아니라
+    /// <b>가속 차이</b>가 만든다 — 벽에 부딪힐 때만 흔들리던 것이 그 증거였다.
+    ///
+    /// <b>여기 있는 이유:</b> 부르는 쪽이 둘로 갈렸다 — 동료 운반(<see cref="PlayerTowedMotion"/>)과
+    /// NPC 시체 끌기(<see cref="NpcRopeDrag"/>). 앵커의 주인이 이 컴포넌트이므로 판정도 여기 둔다.
+    /// </summary>
+    public static Transform ResolveRopeAnchor(Transform carrier)
+    {
+        if (carrier == null)
+            return null;
+
+        PlayerHeldItemView held = carrier.GetComponent<PlayerHeldItemView>();
+        Transform hand = held != null ? held.HandAnchor : null;
+        return hand != null ? hand : carrier;
+    }
+
     // 장착 아이템 — 빈손이면 default(NetworkObjectId 0). 오너가 쓰고 전 피어가 읽는다.
     private readonly NetworkVariable<NetworkObjectReference> m_equipped =
         new NetworkVariable<NetworkObjectReference>(

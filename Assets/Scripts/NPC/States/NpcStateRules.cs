@@ -88,8 +88,11 @@ public static class NpcStateRules
     /// <b>이것만으로 묶기를 판정하지 말 것</b> — 새로 묶기는 무력화까지 요구하므로
     /// <see cref="CanRopeBind"/>가 정본이고 이 함수는 그 한 조각이다 (#446).</summary>
     public static bool CanArrest(NpcState state) =>
-        // 시체는 묶을 수 없다 (#571). 이것이 CanRopeBind까지 함께 닫는다 — 시체를 밧줄로 끌게 할
-        // 거라면 여기가 아니라 CanRopeBind에서 사망을 무력화와 같은 급으로 열어야 한다.
+        // 시체는 <b>검거</b> 대상이 아니다 (#571) — 죽는 순간 이미 계상됐고(ArrestJudge.JudgeDeath)
+        // 커스터디로 들어갈 일이 없다.
+        // ⚠ 그렇다고 시체에 줄을 못 거는 것은 아니다 — 시체 끌기는 이 함수를 거치지 않고
+        // <see cref="CanRopeBind"/>가 사망을 무력화와 같은 급으로 따로 연다. 여기를 열면 커스터디
+        // 전이(StartEscort)까지 딸려 오는데 시체는 Dead에서 나갈 수 없다.
         state != NpcState.Dead
         && state != NpcState.Escorted
         && state != NpcState.Captured
@@ -107,9 +110,29 @@ public static class NpcStateRules
     /// 상태 enum이 아니라 <see cref="NpcStun.IsStunned"/>를 보는 이유: 스턴은 오버레이라
     /// 테이저·체력 0 기절이 CurrentState를 바꾸지 않는다(넉백 KO만 <see cref="NpcState.Stunned"/>).
     /// 상태로만 보면 두 기절 경로 중 하나가 조용히 빠진다 (#292). IsStunned는 동기화 값이라
-    /// 클라 조기검증·조준 피드백(Rope)에서도 읽을 수 있다.</summary>
-    public static bool CanRopeBind(NpcController npc) =>
-        npc != null && npc.Stun.IsStunned && CanArrest(npc.CurrentState);
+    /// 클라 조기검증·조준 피드백(Rope)에서도 읽을 수 있다.
+    ///
+    /// <b>시체도 대상이다</b> (#571) — 무력화와 같은 자리에서 연다. 다만 끄는 <b>방식</b>이 갈린다:
+    /// 산 대상은 서버가 위치를 대입하고(<see cref="NpcRopeDrag.Tick"/>) 시체는 관절 밧줄이 물리로
+    /// 끈다(<see cref="RagdollRope"/>). 이 함수는 "줄을 걸 수 있나"만 답하고 그 분기는 알지 않는다.</summary>
+    public static bool CanRopeBind(NpcController npc)
+    {
+        if (npc == null)
+            return false;
+
+        // 시체 — <see cref="CanArrest"/>를 함께 보지 않는다. Dead가 종착 상태라서다: 사망 진입이
+        // 커스터디·페널티 링크를 전부 끊으므로 그 상태들과 겹칠 수 없고, Dead에서 나가지도 않는다.
+        //
+        // 대신 <b>1:1을 여기서 못박는다.</b> 시체 밧줄은 관절 하나뿐이라(RagdollRope의 앵커가 1개)
+        // 두 번째 줄이 걸리면 앞의 줄을 끊고 가로챈다(Attach가 Detach로 시작한다) — 팀 방침인
+        // "합류는 허용, 탈취는 차단"이 깨진다. 줄다리기 합류(<see cref="CanJoinDrag"/>)는
+        // Escorted 전용이라 시체에는 애초에 열리지 않으므로, 여기서 막으면 시체는 언제나 1:1이다.
+        // IsRoped는 동기화 값이라 클라 조기검증·조준 피드백에서도 읽힌다.
+        if (npc.Death.IsDead)
+            return !npc.Rope.IsRoped;
+
+        return npc.Stun.IsStunned && CanArrest(npc.CurrentState);
+    }
 
     /// <summary>밧줄 없이 따라오는 수감자인가 — 유치장에서 반출돼 추종 중인 대상. (#492)
     /// E를 누르면 그 자리에 세운다(Captured) — 유치장 안이면 JailIntake가 좌석에 다시 앉히고,

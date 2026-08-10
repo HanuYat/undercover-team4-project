@@ -201,9 +201,11 @@ public class NpcController : NetworkBehaviour
         // 자기 Update에서 로컬로 굴리고, 그건 클라에서도 돌아야 해서(이 Update는 서버 전용이다)
         // 애초에 여기 있을 수 없다.
         //
-        // 밧줄·기상 예약보다도 앞이다 — 진입(NpcDeath.ServerEnterDead)이 둘 다 정리하므로 평소엔
-        // 중복이지만, 죽은 뒤에 밖에서 다시 걸리는 경로가 생겨도 시체가 끌려다니지는 않게 하는
-        // 마지막 방어선이다.
+        // ⚠ <b>밧줄보다 앞인 것이 이제 방어선이 아니라 사양이다</b> (#571 시체 끌기). 시체에도 줄이
+        // 걸리는데(밧줄 좌클릭), 그 줄은 <b>관절</b>(RagdollRope)이라 물리가 몸을 끌고 루트는
+        // NpcRagdoll.TickRootFollow가 따라붙인다. 아래 m_rope.Tick()은 <c>transform.position</c>을
+        // 직접 대입하는 반대편 방식이라(#369), 시체에 돌면 둘이 같은 프레임에 위치를 다퉈 시체가
+        // 떨거나 몸을 두고 루트만 날아간다. <b>갈리는 기준은 "대상이 래그돌이냐"다</b>(docs/ragdoll.md §8).
         if (m_death.IsDead)
             return;
 

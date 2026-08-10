@@ -1716,6 +1716,7 @@ GameObject:
   - component: {fileID: 811847143634593482}
   - component: {fileID: 282655735873343081}
   - component: {fileID: 3368463895612249489}
+  - component: {fileID: 2697934635022075730}
   m_Layer: 0
   m_Name: Model
   m_TagString: Untagged
@@ -1788,6 +1789,24 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RagdollRig
   m_boneRootName: Root
   m_tumbleBias: 0.8
+--- !u!114 &2697934635022075730
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2460527889533595855}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b3ea22c81e84bbb846b37d6a4d06898, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RagdollRope
+  m_length: 2
+  m_limitSpring: 1500
+  m_limitDamper: 1000
+  m_dragLinearDamping: 0.6
+  m_dragAngularDamping: 0.6
+  m_maxSpeed: 8
 --- !u!1 &2479545844500329098
 GameObject:
   m_ObjectHideFlags: 0

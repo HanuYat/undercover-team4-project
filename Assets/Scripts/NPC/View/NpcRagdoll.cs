@@ -74,6 +74,7 @@ public class NpcRagdoll : MonoBehaviour
 
     private NpcController m_owner;
     private RagdollRig m_rig; // 뼈 한 벌 — 물리 조작 전부를 여기 위임한다. 리그 소유자(Model)에 붙어 있다
+    private RagdollRope m_rope; // 관절 밧줄 — 리그와 같은 오브젝트에 붙는다(RequireComponent)
     private Animator m_animator;
     private NavMeshAgent m_agent;
 
@@ -115,9 +116,26 @@ public class NpcRagdoll : MonoBehaviour
 
         m_rig.EnsureCollected(); // Awake 순서는 보장되지 않는다 — 아래에서 뼈를 요구한다
 
+        // 밧줄도 리그와 같은 오브젝트(Model)에 있다 — RagdollRope가 RagdollRig를 RequireComponent한다.
+        m_rope = m_rig.GetComponent<RagdollRope>();
+
         // 애니메이터도 리그 쪽(Model)에 있다.
         m_animator = GetComponentInChildren<Animator>(true);
     }
+
+    // ---- 밧줄 파사드 (#571 시체 끌기) ----
+    //
+    // 실물은 RagdollRope가 쥔다. 여기 파사드를 두는 이유는 <see cref="PlayerRagdoll"/>과 같다:
+    // 호출부(NpcRopeDrag)가 "래그돌인 대상에게 밧줄을 묶는다"를 표현하기 때문이다 — 밧줄 컴포넌트를
+    // 직접 찾게 하면 "래그돌이 아닐 때는 묶으면 안 된다"는 조건과 "리그가 Model에 있다"는 배치 지식이
+    // 둘 다 호출부로 새어 나간다.
+
+    /// <summary>시체에 밧줄을 묶는다 — <b>각 피어가 자기 로컬 시체에</b> 건다. 표현·물리 계층이다.</summary>
+    /// <param name="carrier">밧줄을 쥔 쪽. 보통 운반자의 손 앵커.</param>
+    public void BeginRopePull(Transform carrier) => m_rope?.Attach(carrier);
+
+    /// <summary>밧줄을 푼다 — 내려놓기·줄 끊김·운반자 소실. <b>멱등</b>(안 묶여 있으면 무동작).</summary>
+    public void EndRopePull() => m_rope?.Detach();
 
     // ---- 진입 ----
 
@@ -167,13 +185,18 @@ public class NpcRagdoll : MonoBehaviour
     {
         PollDeath();
 
-        if (m_state != RagdollState.Ragdoll)
+        if (m_state == RagdollState.Animated)
             return;
 
         // 서버가 루트를 시체에 붙인다 — 플레이어의 TickCapsuleFollow에 대응한다.
         // <b>이 컴포넌트가 직접 돌린다</b>: NpcController.Update는 클라에서 즉시 return하고
         // 서버에서도 사망 게이트에서 끊기므로 저기서는 부를 자리가 없다.
+        //
+        // <b>정착 후에도 돈다</b> — 시체는 밧줄로 끌려 움직일 수 있다 (#571 시체 끌기).
         TickRootFollow();
+
+        if (m_state != RagdollState.Ragdoll)
+            return; // 아래는 정착 판정 — 이미 정착했으면 볼 것이 없다
 
         m_elapsedInRagdoll += Time.deltaTime;
 
@@ -242,13 +265,31 @@ public class NpcRagdoll : MonoBehaviour
     /// <b>yaw는 건드리지 않는다.</b> 플레이어는 기상 클립이 "루트 전방을 향해 누워 있다"를 전제해
     /// 루트를 몸 방향으로 돌려야 했지만(FollowBodyYaw), 시체는 일어나지 않으므로 그 이유가 없다.
     /// 돌리면 오히려 손해다 — 리지드바디가 없는 뼈(Neck·손·발)만 계층을 따라 돌아 목이 비틀린다.
+    ///
+    /// <b>정착한 뒤에도 계속 돈다</b> (#571 시체 끌기). 정착을 "더 움직이지 않는다"로 읽고 여기서
+    /// 멈추면, 밧줄로 끌 때 <b>몸만 가고 루트는 죽은 자리에 남는다</b> — 실측으로 시체가 8.26m
+    /// 끌려가는 동안 루트는 0.00m였다. 그 결과가 셋이다: 이름표·상호작용 콜라이더가 시체에서 떨어지고,
+    /// 끊김 판정이 루트 거리를 재므로 멀쩡히 끌던 줄이 스스로 끊기고, <b>NetworkTransform이 복제하는
+    /// 것이 루트라 원격 피어의 시체는 죽은 자리에 그대로 남는다.</b>
+    /// (플레이어 쪽이 같은 이유로 <c>Settled</c>를 포함한다 — <see cref="PlayerRagdoll"/> §9-7)
     /// </summary>
     private void TickRootFollow()
     {
         if (!HasMoveAuthority || m_rig.Hips == null)
             return;
 
-        transform.position = m_rig.Hips.position;
+        Vector3 target = m_rig.Hips.position;
+
+        // <b>정착 후에는 루트가 지면에 앉는다</b> — 수평만 골반을 따라가고 높이는 지면이 준다.
+        // 비행 중처럼 골반 높이(지면 위 약 0.2m)에 붙여 두면 끌리며 위아래로 튀는 것이 그대로
+        // 루트 높이가 되어 동기화 스트림에 실린다.
+        //
+        // ⚠ 지면 판정은 <see cref="Settle"/>이 쓰는 것과 <b>같은 것</b>이어야 한다 — 두 곳이 다른
+        // 높이를 내면 정착하는 순간 루트가 그 차이만큼 튄다.
+        if (m_state == RagdollState.Settled && TryGroundUnder(target, out Vector3 ground))
+            target.y = ground.y;
+
+        transform.position = target;
     }
 
     /// <summary>

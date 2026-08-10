@@ -309,16 +309,24 @@ public static class RagdollSetup
     /// <c>transform.Find("Root")</c>가 null이 되어 런타임 에러 한 줄로만 드러난다.
     /// 이 함수는 방금 검증한 그 오브젝트에 붙이므로 자리가 틀릴 수 없다.
     ///
-    /// <see cref="RagdollRope"/>는 붙이지 않는다 — 시체를 밧줄로 끄는 개체에만 필요한 선택 부품이다
-    /// (플레이어는 운반 대상이라 필요하고 NPC는 아니다, #571).
+    /// <see cref="RagdollRope"/>도 같은 자리에 함께 보장한다 — <c>RagdollRig</c>를
+    /// <c>RequireComponent</c>하므로 붙일 곳이 애초에 여기뿐이다.
+    ///
+    /// <b>한때는 붙이지 않았다</b> ("시체를 밧줄로 끄는 개체에만 필요한 선택 부품 — 플레이어는 운반
+    /// 대상이라 필요하고 NPC는 아니다", #571 4단계). <b>그 전제가 뒤집혔다</b>: 시체 끌기가 들어오면서
+    /// (#571 6단계) NPC도 끌리는 쪽이 됐다. 이제 래그돌이 있는 개체는 전부 밧줄 대상이라 갈래가 없다.
     /// </summary>
     private static string EnsureRig(Transform rigOwner)
     {
-        if (rigOwner.GetComponent<RagdollRig>() != null)
-            return $"  RagdollRig — 이미 있음 ({rigOwner.name})";
+        string rig = rigOwner.GetComponent<RagdollRig>() != null ? "이미 있음" : "새로 붙임";
+        if (rigOwner.GetComponent<RagdollRig>() == null)
+            rigOwner.gameObject.AddComponent<RagdollRig>();
 
-        rigOwner.gameObject.AddComponent<RagdollRig>();
-        return $"  RagdollRig — 새로 붙임 ({rigOwner.name})";
+        string rope = rigOwner.GetComponent<RagdollRope>() != null ? "이미 있음" : "새로 붙임";
+        if (rigOwner.GetComponent<RagdollRope>() == null)
+            rigOwner.gameObject.AddComponent<RagdollRope>();
+
+        return $"  RagdollRig — {rig} / RagdollRope — {rope} ({rigOwner.name})";
     }
 
     /// <summary>
