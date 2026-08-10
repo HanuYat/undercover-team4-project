@@ -8,7 +8,7 @@ Shop(출동 전 허브)에서 **호스트가 다음 라운드 맵을 고르고**
 
 | 조각 | 자리 | 역할 |
 |------|------|------|
-| `MapSelection` | 상주 프리팹 (`SessionObjectSpawner`가 세션 시작 시 스폰) | 맵 목록 + 선택 인덱스 보유·복제 |
+| `MapSelection` | `Assets/Prefabs/SessionState.prefab` (`SessionObjectSpawner`가 세션 시작 시 스폰) | 맵 목록 + 선택 인덱스 보유·복제 |
 | `MapSelectButton` | Shop 씬 콘솔 | 이전/다음 — 호스트 전용 |
 | `MapSelectionView` | Shop 씬 콘솔 | 다음 출동지 표시 — 전원 |
 | `AppHelper.ToSceneName` | — | 로드 직전 홀더에게 씬 이름을 묻는다 |
@@ -22,8 +22,9 @@ Shop(출동 전 허브)에서 **호스트가 다음 라운드 맵을 고르고**
 ### 왜 Shop 씬이 아니라 상주 프리팹인가
 
 전환이 일어나는 순간이 곧 Shop이 언로드되는 순간이다. 선택값을 Shop 씬에 두면
-`ToSceneName`이 이름을 물으려는 그때 홀더가 이미 죽어 있다. 선택값은 씬보다 오래 살아야 한다 —
-`TeamFund` · `ShopPurchases`와 같은 계층(#214 §6 이월 구조).
+`ToSceneName`이 이름을 물으려는 그때 홀더가 이미 죽어 있다. 선택값은 씬보다 오래 살아야 하므로
+`SessionState.prefab`에 얹는다 — `TeamFund` · `ShopPurchases` · `RoundProgress`와 같은
+"세션을 넘어 사는 상태"다 (#214 §6 이월 구조, #377이 세운 기준).
 
 ### 복제하는 이유는 표시뿐
 
@@ -42,7 +43,7 @@ null이 되고, 라운드가 끝나 Shop으로 돌아오면 `ShopManager`가 새
 
 1. 씬을 만들고 아래 **씬 요건**을 채운다.
 2. `EditorBuildSettings`(Build Profiles ▸ Scene List)에 등록한다 — NGO 씬 동기화가 이름으로 로드하므로 필수다.
-3. 상주 프리팹의 `MapSelection` 인스펙터 배열에 항목을 추가한다 (씬 이름 · 표시 이름).
+3. `Assets/Prefabs/SessionState.prefab`의 `MapSelection` 인스펙터 배열에 항목을 추가한다 (씬 이름 · 표시 이름).
 
 코드는 한 줄도 고치지 않는다. `AppHelper.FromSceneName`도 이름표에 없으면
 "`InGameManager`가 있는 씬이면 `EScene.Game`"으로 떨어지므로 그대로 둔다.

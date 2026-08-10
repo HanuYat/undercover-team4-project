@@ -3015,7 +3015,6 @@ MonoBehaviour:
   m_persistentPrefabs:
   - {fileID: 3455862892653891524, guid: ee55831d23071d047a46eef925780d91, type: 3}
   - {fileID: 3852833443600366810, guid: 672472e5aa1d059459b477699c36b0f3, type: 3}
-  - {fileID: 6283097010002404965, guid: 028b69d22242fa24f9d6172e67d000a9, type: 3}
 --- !u!1 &1068861816
 GameObject:
   m_ObjectHideFlags: 0

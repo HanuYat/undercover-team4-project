@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 4394554148572452788}
   - component: {fileID: -9146029795751610571}
   - component: {fileID: 5729287333612907991}
+  - component: {fileID: 4815788148774193889}
   m_Layer: 0
   m_Name: SessionState
   m_TagString: Untagged
@@ -101,3 +102,21 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoundProgress
   ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &4815788148774193889
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 342132919516261196}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e95cd6c8087525241b04defaf63fd3c8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MapSelection
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_maps:
+  - SceneName: Map_Apocalypse
+    DisplayName: "\uC885\uB9D0 \uB3C4\uC2DC"
+  - SceneName: Main Scene
+    DisplayName: "\uAD6C \uAC1C\uBC1C \uB9F5"
