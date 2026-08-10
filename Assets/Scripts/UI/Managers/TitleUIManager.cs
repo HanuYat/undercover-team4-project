@@ -25,28 +25,37 @@ public class TitleUIManager : UIManagerBase
     private void Start()
     {
         AuthBootstrap auth = App.Net.Auth;
+
+        // 다른 매니저 구독은 Start에서 — 모든 Awake(=매니저 등록)가 끝난 뒤라야 안전하다 (R6)
+        if (auth != null)
+            auth.OnSignedOut += ReturnToAuthGate;
+
         if (auth != null && auth.HasPassedAuthGate)
             OpenPanel<SessionPanel>();
         else
             OpenPanel<AuthGatePanel>();
     }
 
+    // 구독을 Start에서 걸었으므로 해제도 OnDisable이 아니라 여기다 — 짝이 어긋나면 다시 켜질 때
+    // 구독이 살아나지 않는다. 매니저는 씬 도중 비활성화되지 않는다(R6).
+    protected override void OnDestroy()
+    {
+        if (App.Net.Auth != null)
+            App.Net.Auth.OnSignedOut -= ReturnToAuthGate;
+
+        base.OnDestroy(); // App 등록 해제 (R5)
+    }
+
     private void OnEnable()
     {
         m_quitBtn.onClick.AddListener(QuitGame);
         m_settingsBtn.onClick.AddListener(OpenSettings);
-
-        if (App.Net.Auth != null)
-            App.Net.Auth.OnSignedOut += ReturnToAuthGate;
     }
 
     private void OnDisable()
     {
         m_quitBtn.onClick.RemoveListener(QuitGame);
         m_settingsBtn.onClick.RemoveListener(OpenSettings);
-
-        if (App.Net.Auth != null)
-            App.Net.Auth.OnSignedOut -= ReturnToAuthGate;
     }
 
     /// <summary>
