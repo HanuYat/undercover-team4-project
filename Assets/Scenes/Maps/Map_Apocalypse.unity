@@ -5696,6 +5696,10 @@ PrefabInstance:
       propertyPath: m_eventEntries.Array.data[3].enabled
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_eventEntries.Array.data[4].enabled
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 498939978214492355, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_Name
       value: SuddenEvents
@@ -59583,7 +59587,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1414177698}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 366f1025f951a4e48a8ccacb70f4731c, type: 3}
   m_Name: 
