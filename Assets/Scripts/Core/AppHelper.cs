@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
@@ -50,7 +51,12 @@ public static class AppHelper
             _ => App.SceneFlow.Game != null ? EScene.Game : EScene.None,
         };
 
-    internal static async UniTask LoadSceneAsync(EScene scene, CancellationToken token)
+    /// <param name="onProgress">씬 로드 구간의 진행률(0~1)을 매 프레임 보고한다. 표시는 호출부(LoadingScreen) 담당. (#582)</param>
+    internal static async UniTask LoadSceneAsync(
+        EScene scene,
+        CancellationToken token,
+        Action<float> onProgress = null
+    )
     {
         string sceneName = ToSceneName(scene);
         if (sceneName == null)
@@ -71,16 +77,20 @@ public static class AppHelper
                 return;
             }
 
-            await LoadViaNetworkAsync(net, sceneName, token);
+            await LoadViaNetworkAsync(net, sceneName, token, onProgress);
             return;
         }
 
         // 오프라인 (에디터 단독 테스트 포함) — 로컬 로드
-        await LoadLocalAsync(sceneName, token);
+        await LoadLocalAsync(sceneName, token, onProgress);
     }
 
     // 오프라인 경로만 활성화 시점을 제어할 수 있다 — 에셋 로드가 끝난 뒤 우리가 활성화를 연다.
-    private static async UniTask LoadLocalAsync(string sceneName, CancellationToken token)
+    private static async UniTask LoadLocalAsync(
+        string sceneName,
+        CancellationToken token,
+        Action<float> onProgress
+    )
     {
         AsyncOperation op = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
         if (op == null)
@@ -90,10 +100,15 @@ public static class AppHelper
         }
 
         op.allowSceneActivation = false;
-        await UniTask.WaitUntil(
-            () => op.progress >= k_activationReadyProgress,
-            cancellationToken: token
-        );
+
+        // progress는 활성화 대기 탓에 0.9가 상한이다 — 그대로 넘기면 게이지가 90%에서 끝난다 (#582)
+        while (op.progress < k_activationReadyProgress)
+        {
+            onProgress?.Invoke(op.progress / k_activationReadyProgress);
+            await UniTask.Yield(PlayerLoopTiming.Update, token);
+        }
+
+        onProgress?.Invoke(1f);
 
         // 활성화 프레임 — 새 씬 전체의 Awake/OnEnable/Start가 여기서 한 번에 돈다(쪼갤 수 없다).
         // 이 프레임의 스파이크는 없앨 수 없고, 로딩 화면으로 가리는 것이 최선이다.
@@ -107,10 +122,25 @@ public static class AppHelper
     private static async UniTask LoadViaNetworkAsync(
         NetworkManager net,
         string sceneName,
-        CancellationToken token
+        CancellationToken token,
+        Action<float> onProgress
     )
     {
         bool localLoaded = false;
+
+        // NGO는 활성화 시점을 열어주지 않아 이 핸들은 진행률을 읽는 용도로만 쓴다 (#582)
+        AsyncOperation localOp = null;
+
+        void HandleLoad(
+            ulong clientId,
+            string loadedScene,
+            LoadSceneMode loadMode,
+            AsyncOperation operation
+        )
+        {
+            if (clientId == net.LocalClientId && loadedScene == sceneName)
+                localOp = operation;
+        }
 
         void HandleLoadComplete(ulong clientId, string loadedScene, LoadSceneMode mode)
         {
@@ -119,6 +149,7 @@ public static class AppHelper
         }
 
         // LoadScene 호출 전에 걸어야 한다 — 완료가 먼저 울려 신호를 놓치는 경우를 없앤다
+        net.SceneManager.OnLoad += HandleLoad;
         net.SceneManager.OnLoadComplete += HandleLoadComplete;
         try
         {
@@ -135,10 +166,14 @@ public static class AppHelper
             // 데드라인 폴링 — SessionFlow.WaitForNetworkShutdownAsync와 같은 방침(강제하지 않고 경고 후 진행).
             // 세션이 도중에 끊기면 완료 신호가 영영 안 오므로 IsListening도 종료 조건에 넣는다.
             float deadline = Time.realtimeSinceStartup + k_networkLoadTimeoutSeconds;
-            await UniTask.WaitUntil(
-                () => localLoaded || !net.IsListening || Time.realtimeSinceStartup >= deadline,
-                cancellationToken: token
-            );
+            while (!localLoaded && net.IsListening && Time.realtimeSinceStartup < deadline)
+            {
+                if (localOp != null)
+                    onProgress?.Invoke(localOp.progress);
+                await UniTask.Yield(PlayerLoopTiming.Update, token);
+            }
+
+            onProgress?.Invoke(1f);
 
             if (!localLoaded)
                 Debug.LogWarning(
@@ -149,7 +184,10 @@ public static class AppHelper
         {
             // 세션이 내려가면 SceneManager 자체가 사라진다
             if (net.SceneManager != null)
+            {
+                net.SceneManager.OnLoad -= HandleLoad;
                 net.SceneManager.OnLoadComplete -= HandleLoadComplete;
+            }
         }
 
         await UniTask.DelayFrame(k_firstRenderFrames, PlayerLoopTiming.Update, token);

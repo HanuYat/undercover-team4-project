@@ -5,6 +5,7 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Localization;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 /// <summary>
 /// 씬 전환을 덮는 상주 로딩 화면 (#403). AppBootstrap 프리팹 하위(DontDestroyOnLoad)에 배치한다.
@@ -25,7 +26,11 @@ public class LoadingScreen : CommonManagerBase
     // 덮은 화면이 실제로 렌더되는 것을 보장하는 최소 프레임 수.
     private const int k_settleFrames = 60;
 
-    private const float k_spinnerDegreesPerSecond = 180f;
+    // 게이지에서 씬 로드 구간이 차지하는 몫. 나머지는 런타임 스폰 대기가 끝나며 채운다 (#582).
+    private const float k_sceneLoadWeight = 0.9f;
+
+    // 표시값이 목표를 따라가는 속도(초당 비율) — 로드 진행률은 계단식으로 튄다.
+    private const float k_progressPerSecond = 2.5f;
 
     // 클라이언트 자동 경로의 무한 대기 방지 상한.
     private const float k_loadTimeoutSeconds = 30f;
@@ -37,13 +42,30 @@ public class LoadingScreen : CommonManagerBase
     [SerializeField]
     private CanvasGroup m_canvasGroup;
 
-    [Tooltip("비워도 됨 — 지정하면 로딩 중 회전한다")]
-    [SerializeField]
-    private RectTransform m_spinner;
-
     [Tooltip("비워도 됨 — 상태 문구")]
     [SerializeField]
     private TMP_Text m_statusText;
+
+    [Header("진행률 (#582)")]
+    [Tooltip("게이지바 — Image Type을 Filled로 둘 것")]
+    [SerializeField]
+    private Image m_progressFill;
+
+    [Tooltip("게이지바 우측 퍼센트 숫자")]
+    [SerializeField]
+    private TMP_Text m_percentText;
+
+    [Header("달리는 캐릭터 (#582)")]
+    [Tooltip("전용 카메라·캐릭터가 있는 무대 — 로딩 중에만 켜서 렌더 비용을 없앤다")]
+    [SerializeField]
+    private GameObject m_runnerStage;
+
+    [Tooltip("비워도 됨 — 뒤로 흘러 전진하는 느낌을 내는 배경 띠")]
+    [SerializeField]
+    private RawImage m_runnerStrip;
+
+    [SerializeField]
+    private float m_stripScrollPerSecond = 0.35f;
 
     // 라벨에 LocalizeStringEvent를 붙이지 않고 여기서 테이블을 참조한다 — SetStatus가 대입하는 자리라
     // 컴포넌트를 붙이면 둘이 서로 덮어쓴다. 지금은 대입하는 곳이 없지만 그때 조용히 깨진다. (#497)
@@ -65,6 +87,10 @@ public class LoadingScreen : CommonManagerBase
     // 지금 표시 중인 상태 문구 — 구독 해제 기준
     private LocalizedString m_boundStatus;
 
+    // 게이지의 목표값과 실제 표시값. 둘을 나눈 이유는 위 k_progressPerSecond 주석 참고.
+    private float m_targetProgress;
+    private float m_shownProgress;
+
     /// <summary>이 화면이 지금 씬을 덮고 있는가 — 두 구동 경로의 중복 실행을 막는 데 쓴다.</summary>
     public bool IsBusy { get; private set; }
 
@@ -84,9 +110,12 @@ public class LoadingScreen : CommonManagerBase
 
     private void Update()
     {
-        // timeScale이 0으로 잠겨도(돌발 이벤트 freeze) 돌아야 하므로 실시간 기준
-        if (IsBusy && m_spinner != null)
-            m_spinner.Rotate(0f, 0f, -k_spinnerDegreesPerSecond * Time.unscaledDeltaTime);
+        // timeScale이 0으로 잠겨도(돌발 이벤트 freeze) 돌아야 하므로 전부 실시간 기준
+        if (IsBusy)
+        {
+            AdvanceProgress();
+            ScrollStrip();
+        }
 
         RefreshNetworkHook();
     }
@@ -103,6 +132,9 @@ public class LoadingScreen : CommonManagerBase
     public void ShowInstant()
     {
         IsBusy = true;
+        m_targetProgress = 0f;
+        m_shownProgress = 0f;
+        RenderProgress();
         SetVisible(true);
     }
 
@@ -112,9 +144,61 @@ public class LoadingScreen : CommonManagerBase
         if (!IsBusy)
             return;
 
+        // 로드가 게이지보다 빨리 끝나면 중간값에서 사라진다 — 페이드 동안 100%가 보이게 맞춰 둔다.
+        m_targetProgress = 1f;
+        m_shownProgress = 1f;
+        RenderProgress();
+
         await FadeOutAsync(token);
         SetVisible(false);
         IsBusy = false;
+    }
+
+    /// <summary>씬 로드 구간의 진행률(0~1) 보고 — App.LoadScene 파이프라인이 매 프레임 부른다. (#582)</summary>
+    public void ReportSceneLoadProgress(float ratio01) =>
+        SetTargetProgress(Mathf.Clamp01(ratio01) * k_sceneLoadWeight);
+
+    /// <summary>씬 로드 뒤 런타임 스폰까지 끝났다 — 게이지의 남은 몫을 채운다. (#582)</summary>
+    public void ReportSceneReady() => SetTargetProgress(1f);
+
+    // 되감기 금지. 구동 경로가 둘이라(서버는 App.LoadScene, 클라는 NGO 이벤트) 늦게 도착한
+    // 낮은 값이 섞일 수 있고, 퍼센트가 줄어드는 화면은 그 자체로 고장으로 읽힌다.
+    private void SetTargetProgress(float value) =>
+        m_targetProgress = Mathf.Max(m_targetProgress, Mathf.Clamp01(value));
+
+    private void AdvanceProgress()
+    {
+        if (Mathf.Approximately(m_shownProgress, m_targetProgress))
+            return;
+
+        m_shownProgress = Mathf.MoveTowards(
+            m_shownProgress,
+            m_targetProgress,
+            k_progressPerSecond * Time.unscaledDeltaTime
+        );
+        RenderProgress();
+    }
+
+    private void RenderProgress()
+    {
+        if (m_progressFill != null)
+            m_progressFill.fillAmount = m_shownProgress;
+
+        // 숫자와 기호뿐이라 테이블을 타지 않는다 — 매 프레임 문자열을 조회할 자리도 아니다 (#497 예외).
+        if (m_percentText != null)
+            m_percentText.text = Mathf.RoundToInt(m_shownProgress * 100f) + "%";
+    }
+
+    // 캐릭터는 제자리에서 뛴다 — 전진하는 느낌은 뒤로 흐르는 이 띠가 만든다.
+    private void ScrollStrip()
+    {
+        if (m_runnerStrip == null)
+            return;
+
+        Rect uv = m_runnerStrip.uvRect;
+        uv.x += m_stripScrollPerSecond * Time.unscaledDeltaTime;
+        uv.x -= Mathf.Floor(uv.x); // 계속 키우면 float 정밀도가 떨어져 띠가 떨린다
+        m_runnerStrip.uvRect = uv;
     }
 
     /// <summary>
@@ -179,6 +263,10 @@ public class LoadingScreen : CommonManagerBase
         if (m_canvas != null)
             m_canvas.enabled = visible;
 
+        // 무대에는 전용 카메라가 있다 — 켠 채로 두면 로딩이 아닐 때도 매 프레임 RenderTexture를 그린다.
+        if (m_runnerStage != null)
+            m_runnerStage.SetActive(visible);
+
         if (m_canvasGroup == null)
             return;
 
@@ -231,7 +319,7 @@ public class LoadingScreen : CommonManagerBase
         if (clientId != net.LocalClientId || IsBusy)
             return;
 
-        CoverUntilLoadedAsync(sceneName).Forget();
+        CoverUntilLoadedAsync(sceneName, operation).Forget();
     }
 
     private void HandleNetworkLoadComplete(ulong clientId, string sceneName, LoadSceneMode mode)
@@ -241,7 +329,7 @@ public class LoadingScreen : CommonManagerBase
             m_clientLoadedScene = sceneName;
     }
 
-    private async UniTaskVoid CoverUntilLoadedAsync(string sceneName)
+    private async UniTaskVoid CoverUntilLoadedAsync(string sceneName, AsyncOperation operation)
     {
         CancellationToken token = this.GetCancellationTokenOnDestroy();
         m_clientLoadedScene = null;
@@ -249,22 +337,30 @@ public class LoadingScreen : CommonManagerBase
 
         // 데드라인 폴링 — SessionFlow.WaitForNetworkShutdownAsync와 같은 방침(강제하지 않고 경고 후 진행).
         // 세션이 도중에 끊기면 완료 신호가 영영 안 오므로 IsListening도 종료 조건에 넣는다.
+        // 폴링하는 김에 게이지도 여기서 채운다 — 클라이언트는 이 경로가 유일하다 (#582).
         float deadline = Time.realtimeSinceStartup + k_loadTimeoutSeconds;
-        await UniTask.WaitUntil(
-            () =>
-                m_clientLoadedScene == sceneName
-                || NetworkManager.Singleton == null
-                || !NetworkManager.Singleton.IsListening
-                || Time.realtimeSinceStartup >= deadline,
-            cancellationToken: token
-        );
+        while (
+            m_clientLoadedScene != sceneName
+            && NetworkManager.Singleton != null
+            && NetworkManager.Singleton.IsListening
+            && Time.realtimeSinceStartup < deadline
+        )
+        {
+            if (operation != null)
+                ReportSceneLoadProgress(operation.progress);
+
+            await UniTask.Yield(PlayerLoopTiming.Update, token);
+        }
 
         if (m_clientLoadedScene == sceneName)
         {
+            ReportSceneLoadProgress(1f);
+
             await UniTask.DelayFrame(k_settleFrames, PlayerLoopTiming.Update, token); // 첫 렌더 가리기
 
             // 런타임 스폰까지 기다린다 — 서버는 App.LoadScene이 같은 대기를 걸지만 클라는 여기가 유일한 경로
             await App.WaitUntilSceneReadyAsync(token);
+            ReportSceneReady();
         }
         else
         {

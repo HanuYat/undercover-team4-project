@@ -95,13 +95,21 @@ public class App : Singleton<App>
             if (loading != null)
                 await loading.ShowAsync(token); // 덮은 화면이 실제로 렌더될 때까지 대기
 
-            await AppHelper.LoadSceneAsync(scene, token);
+            // 게이지바는 씬 로드 구간까지만 실측할 수 있다 — 나머지는 아래 단계 완료로 채운다 (#582)
+            await AppHelper.LoadSceneAsync(
+                scene,
+                token,
+                loading != null ? loading.ReportSceneLoadProgress : null
+            );
 
             // 씬 오브젝트는 활성화 프레임에 다 섰지만 런타임 스폰(NPC 등)은 아직이다 — 씬이 스스로 보고한다
             await WaitUntilSceneReadyAsync(token);
 
             if (loading != null)
+            {
+                loading.ReportSceneReady();
                 await loading.HideAsync(token);
+            }
         }
         finally
         {
