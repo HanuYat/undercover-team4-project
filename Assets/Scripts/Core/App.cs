@@ -36,6 +36,7 @@ public class App : Singleton<App>
     private WrongfulArrestPenalty m_wrongfulArrestPenalty;
     private TeamFund m_teamFund;
     private ShopPurchases m_shopPurchases;
+    private MapSelection m_mapSelection;
     private FactionSymbolManager m_factionSymbolManager;
     private SceneReadyGate m_sceneReadyGate;
     private EffectManager m_effectManager;
@@ -159,6 +160,10 @@ public class App : Singleton<App>
             Instance.m_wrongfulArrestPenalty;
         public static TeamFund TeamFund => Instance.m_teamFund;
         public static ShopPurchases ShopPurchases => Instance.m_shopPurchases;
+
+        // 다음 라운드로 갈 맵 (#578). TeamFund와 같은 세션 상주 홀더라 어느 씬에서도 살아 있지만,
+        // 세션 없이 씬을 직접 Play하면 스폰되지 않아 null이다 — 사용처는 ?. 가드 필수
+        public static MapSelection MapSelection => Instance.m_mapSelection;
         public static DirectoryManager Directory => Instance.m_directoryManager;
         public static FactionSymbolManager FactionSymbol => Instance.m_factionSymbolManager;
         public static SceneReadyGate ReadyGate => Instance.m_sceneReadyGate; // 전원 준비 완료 게이트 (#410). 게임 씬에만 있으므로 다른 씬에서는 null
