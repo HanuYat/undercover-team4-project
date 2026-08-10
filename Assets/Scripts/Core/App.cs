@@ -25,6 +25,7 @@ public class App : Singleton<App>
 
     // 인게임 매니저 (Main Scene)
     private RoundManager m_roundManager;
+    private RoundProgress m_roundProgress;
     private SuddenEventManager m_suddenEventManager;
     private WantedListManager m_wantedListManager;
     private ArrestJudge m_arrestJudge;
@@ -141,6 +142,10 @@ public class App : Singleton<App>
     public static class Game
     {
         public static RoundManager Round => Instance.m_roundManager;
+
+        // 세션 내 라운드 진행도 (#377). 세션 시작 시 1회 스폰되는 상주 홀더라 씬을 넘어 산다(TeamFund와 같은 구조).
+        // 오프라인 단독 Play에는 상주 오브젝트가 없어 null — 사용처는 1라운드로 취급할 것
+        public static RoundProgress RoundProgress => Instance.m_roundProgress;
 
         // 개별 돌발 이벤트(먹통 등)는 App에 올리지 않는다 — 이벤트마다 필드가 늘어나는 대신
         // SuddenEvent.GetEvent<T>()로 물어본다 (#372 리뷰, R3).
