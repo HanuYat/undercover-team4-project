@@ -242,12 +242,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RunawayVehicleEvent
   m_displayName: "\uD3ED\uC8FC \uCC28\uB7C9"
-  m_vehiclePrefab: {fileID: 4629447668323065172, guid: 4a4983cf7fecd9f4181f467424a40d4a, type: 3}
-  m_roadNamePrefix: SM_Env_Road
-  m_roadSearchRadius: 45
-  m_minRunLength: 40
-  m_edgeMargin: 10
+  m_pickRadius: 100
+  m_laneHalfWidth: 2.5
+  m_warningSeconds: 2
+  m_parkedTimeoutSeconds: 60
   m_devTriggerKey: 94
-  m_devHitMeKey: 95
-  m_devGrazeKey: 96
-  m_devGrazeOffset: 3

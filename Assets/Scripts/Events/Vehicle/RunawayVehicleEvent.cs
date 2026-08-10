@@ -32,9 +32,12 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
     [SerializeField] private string m_displayName = "폭주 차량";
 
     [Header("차량 고르기 — 경로는 맵에 놓인 차가 스스로 안다")]
-    [Tooltip("현장 인원에서 이 거리(m) 안에 놓인 차만 고른다 — 멀리서 달려봐야 아무도 못 본다")]
+    [Tooltip(
+        "현장 인원에서 이 거리(m) 안에 놓인 차만 고른다 — 멀리서 달려봐야 아무도 못 본다. "
+            + "너무 좁게 두면 반경 안에 드는 차가 한 대뿐이 되어, 직전 차를 뺀 뒤 고를 것이 없어진다"
+    )]
     [Min(5f)]
-    [SerializeField] private float m_pickRadius = 60f;
+    [SerializeField] private float m_pickRadius = 100f;
 
     [Header("발동 — 선에 사람이 들어오면")]
     [Tooltip("위험 구역의 반폭(m) — 차가 달릴 직선에서 이 거리 안에 서 있으면 경고가 시작된다. 곧 플레이어가 비켜야 하는 거리다")]
@@ -102,7 +105,9 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
         RunawayVehicle vehicle = PickParkedVehicle(target.position);
         if (vehicle == null)
         {
-            Debug.Log($"[돌발이벤트] {m_displayName} — {target.name} 근처에 세워 둔 차가 없어 건너뛴다");
+            Debug.Log(
+                $"[돌발이벤트] {m_displayName} — {target.name} 근처({m_pickRadius}m)에 굴릴 차가 없어 건너뛴다"
+                    + " (직전에 굴린 차는 제외한다)");
             return;
         }
 
@@ -131,13 +136,12 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
                 m_candidates.Add(v);
         }
 
+        // 직전에 굴린 차는 <b>무조건</b> 뺀다. 예전에는 "그 차뿐이면 그대로 쓴다"로 뒀는데, 차를 넓게
+        // 퍼뜨릴수록 반경 안에 드는 차가 한 대가 되어 그 폴백이 곧 "같은 차만 계속"이 됐다.
+        // 뺀 결과 후보가 없으면 이번 추첨은 거른다 — 한 골목만 위험한 곳이 되는 것보다 낫다.
+        m_candidates.Remove(m_lastPicked);
         if (m_candidates.Count == 0)
             return null;
-
-        // 직전에 굴린 차는 뺀다 — 단 그 차뿐이면 어쩔 수 없이 그대로 쓴다(안 그러면 이벤트가 아예 안 뜬다).
-        // 반경 안에 두 대만 있어도 이것만으로 번갈아 나온다.
-        if (m_candidates.Count > 1)
-            m_candidates.Remove(m_lastPicked);
 
         RunawayVehicle picked = m_candidates[Random.Range(0, m_candidates.Count)];
         m_lastPicked = picked;
