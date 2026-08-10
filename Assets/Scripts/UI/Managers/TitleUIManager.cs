@@ -1,7 +1,10 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-/// <summary>Title 씬 UI 매니저 — 패널 등록·ESC 스택은 베이스가 전부 담당. (#247)</summary>
+/// <summary>
+/// Title 씬 UI 매니저 — 패널 등록·ESC 스택은 베이스가 전부 담당. (#247)
+/// 첫 화면(로그인 관문 / 세션 화면)을 고르는 것도 여기다 — 아래 Start 주석 참고. (#585)
+/// </summary>
 [DefaultExecutionOrder((int)EExecutionOrder.UIManagement)]
 public class TitleUIManager : UIManagerBase
 {
@@ -10,6 +13,23 @@ public class TitleUIManager : UIManagerBase
 
     [SerializeField]
     private Button m_settingsBtn;
+
+    /// <summary>
+    /// 첫 화면을 고른다 — 관문을 이미 넘었으면 세션 화면으로 바로 간다. (#585)
+    ///
+    /// <b>이 판정을 패널이 스스로 할 수 없다.</b> 두 패널 모두 OpenOnAwake가 꺼져 있어
+    /// <see cref="PanelBase.Awake"/>가 루트를 비활성화하고, <b>비활성 오브젝트에서는 Start가
+    /// 아예 실행되지 않는다</b> — 패널 쪽 Start에 두면 영원히 안 불려 빈 화면이 남는다.
+    /// 매니저는 상시 활성이고 Start는 모든 Awake(=패널 등록 완료) 뒤라 이 자리가 맞다.
+    /// </summary>
+    private void Start()
+    {
+        AuthBootstrap auth = App.Net.Auth;
+        if (auth != null && auth.HasPassedAuthGate)
+            OpenPanel<SessionPanel>();
+        else
+            OpenPanel<AuthGatePanel>();
+    }
 
     private void OnEnable()
     {

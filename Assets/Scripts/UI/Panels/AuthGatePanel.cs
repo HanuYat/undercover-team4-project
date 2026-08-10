@@ -18,10 +18,10 @@ using UnityEngine.UI;
 ///
 /// 승격은 되돌릴 수 없으므로 <see cref="AccountConfirmPanel"/> 확인창을 거친다 — #444 방침 유지.
 ///
-/// <b>OpenOnAwake를 쓰지 않는다.</b> 이미 통과한 뒤 세션에서 돌아온 경우에는 이 창을 아예
-/// 띄우지 않아야 하는데, 그 판정에는 SessionPanel이 등록을 마쳤어야 한다(같은 실행 순서라
-/// Awake 간 순서는 보장되지 않는다). 그래서 Start에서 열지 말지를 정한다 — 덕분에 건너뛰는
-/// 경우에 창이 한 프레임 스쳐 보이는 일도 없다.
+/// <b>OpenOnAwake를 쓰지 않고, 이 창을 열지 말지는 <see cref="TitleUIManager"/>가 정한다.</b>
+/// 이미 통과한 뒤 세션에서 돌아온 경우에는 아예 띄우지 않아야 하는데, 그 판정을 여기 Start에
+/// 두면 <b>영원히 실행되지 않는다</b> — PanelBase.Awake가 루트를 비활성화하고 비활성 오브젝트의
+/// Start는 호출되지 않기 때문이다(실측: 빈 화면이 떴다). 매니저는 상시 활성이라 그 자리가 맞다.
 /// </summary>
 public class AuthGatePanel : PanelBase
 {
@@ -59,19 +59,11 @@ public class AuthGatePanel : PanelBase
     // 마지막으로 띄운 사유. 문장이 아니라 키로 들고 있어야 언어가 바뀔 때 다시 읽을 수 있다 (#497)
     private LocalizedMessage m_status;
 
+    // 지금 떠 있는 것이 진행 문구(로그인 중·처리 중)인가. 진행 문구는 상황이 끝나면 스스로
+    // 비워져야 하지만 실패 사유는 다음 조작 때까지 남아야 해서, 지울 대상을 구분해 둔다.
+    private bool m_statusIsProgress;
+
     private AuthBootstrap Auth => App.Net.Auth;
-
-    private void Start()
-    {
-        // 이미 통과했으면(세션에서 돌아온 경우) 관문을 다시 세우지 않는다
-        if (Auth != null && Auth.HasPassedAuthGate)
-        {
-            Pass();
-            return;
-        }
-
-        OpenPanel();
-    }
 
     private void OnEnable()
     {
@@ -287,9 +279,19 @@ public class AuthGatePanel : PanelBase
     private static LocalizedMessage Status(EAuthStatus status) =>
         LocalizedMessage.Of(k_table, k_statusPrefix + status);
 
+    /// <summary>결과 문구 — 다음 조작 때까지 남는다.</summary>
     private void SetStatus(in LocalizedMessage message)
     {
         m_status = message;
+        m_statusIsProgress = false;
+        RenderStatus();
+    }
+
+    /// <summary>진행 문구 — 상황이 끝나면 Refresh가 지운다.</summary>
+    private void SetProgressStatus(in LocalizedMessage message)
+    {
+        m_status = message;
+        m_statusIsProgress = true;
         RenderStatus();
     }
 
@@ -314,9 +316,13 @@ public class AuthGatePanel : PanelBase
         m_passwordInput.interactable = ready;
 
         if (m_isBusy)
-            SetStatus(Status(EAuthStatus.Busy));
+            SetProgressStatus(Status(EAuthStatus.Busy));
         else if (!signedIn)
-            SetStatus(Status(EAuthStatus.SigningIn));
+            SetProgressStatus(Status(EAuthStatus.SigningIn));
+        else if (m_statusIsProgress)
+            // 자동 익명 로그인이 끝났다. 이걸 빼면 버튼은 풀리는데 문구는 "로그인 중"에
+            // 멈춰 있다(실측) — Refresh의 위 두 분기 어디에도 걸리지 않기 때문이다.
+            SetStatus(LocalizedMessage.None);
     }
     #endregion
 }
