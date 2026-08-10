@@ -83,6 +83,10 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
     // 후보 차량 버퍼 — 같은 이유로 매 발생마다 새로 만들지 않는다
     private readonly List<RunawayVehicle> m_candidates = new List<RunawayVehicle>();
 
+    // 직전에 굴린 차 — 다음 추첨에서 뺀다. 돌아와 제자리에 선 차가 곧바로 다시 뽑히면
+    // 맵에 여러 대를 놓아 둔 의미가 없고, 그 골목만 위험한 곳이 된다.
+    private RunawayVehicle m_lastPicked;
+
     public bool CanTrigger()
     {
         // 스쳐 지나갈 대상이 있어야 성립한다 — 놓인 차가 있는지는 ServerBegin이 반경까지 보고 판단한다
@@ -127,7 +131,17 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
                 m_candidates.Add(v);
         }
 
-        return m_candidates.Count == 0 ? null : m_candidates[Random.Range(0, m_candidates.Count)];
+        if (m_candidates.Count == 0)
+            return null;
+
+        // 직전에 굴린 차는 뺀다 — 단 그 차뿐이면 어쩔 수 없이 그대로 쓴다(안 그러면 이벤트가 아예 안 뜬다).
+        // 반경 안에 두 대만 있어도 이것만으로 번갈아 나온다.
+        if (m_candidates.Count > 1)
+            m_candidates.Remove(m_lastPicked);
+
+        RunawayVehicle picked = m_candidates[Random.Range(0, m_candidates.Count)];
+        m_lastPicked = picked;
+        return picked;
     }
 
     public void ServerTick()
