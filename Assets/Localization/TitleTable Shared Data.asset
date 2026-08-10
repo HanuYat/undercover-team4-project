@@ -239,6 +239,30 @@ MonoBehaviour:
     m_Key: Title.Auth.NewAnonymousConfirm
     m_Metadata:
       m_Items: []
+  - m_Id: 2261328174080000
+    m_Key: Title.AuthStatus.SigningIn
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2261328199245824
+    m_Key: Title.Gate.SignIn
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2261328199245825
+    m_Key: Title.Gate.SignUp
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2261328199245826
+    m_Key: Title.Gate.Guest
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2261328199245827
+    m_Key: Title.Gate.Account
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2261328199245828
+    m_Key: Title.Gate.Title
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

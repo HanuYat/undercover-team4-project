@@ -10,12 +10,15 @@ using UnityEngine.UI;
 /// 대기 로비가 아니다: 생성 성공 → TitleManager.StartGame()으로 호스트가 InGame을 열고,
 /// 참가 성공 → 서버가 이미 InGame이므로 NGO 씬 동기화가 곧바로 끌고 간다.
 /// 대기 공간·게임 시작은 InGame(본부)의 LobbyManager 담당 (#154).
+///
+/// <b>#585에서 첫 화면이 아니게 됐다</b> — 로그인 관문(AuthGatePanel)을 통과해야 열린다.
+/// 그래서 OpenOnAwake를 쓰지 않고 관문이 OpenPanel을 부른다. 닉네임 편집(NicknameView)과
+/// 접이식 계정 영역(AuthPanel)이 이 화면에 함께 붙는다.
 /// </summary>
 public class SessionPanel : PanelBase
 {
-    public override bool CanCloseWithESC => false; // 로비의 기본 화면 — 닫을 수 없다
+    public override bool CanCloseWithESC => false; // 세션 화면의 기본 바탕 — 닫을 수 없다
     public override bool IsStackable => false;
-    protected override bool OpenOnAwake => true;
 
     [Header("UI 참조")]
     [SerializeField]
@@ -29,6 +32,10 @@ public class SessionPanel : PanelBase
 
     [SerializeField]
     private TMP_Text m_statusText;
+
+    [Tooltip("비워도 됨 — 접이식 계정 영역(AuthPanel)을 여는 버튼 (#585)")]
+    [SerializeField]
+    private Button m_accountButton;
 
     // 상태 문구는 코드가 대입하므로 씬 라벨(LocalizeStringEvent)이 아니라 여기서 테이블을 참조한다 —
     // 컴포넌트를 붙이면 SetStatus의 대입과 서로 덮어쓴다. (#497)
@@ -75,6 +82,9 @@ public class SessionPanel : PanelBase
         m_createButton.onClick.AddListener(HandleCreateClicked);
         m_joinButton.onClick.AddListener(HandleJoinClicked);
 
+        if (m_accountButton != null)
+            m_accountButton.onClick.AddListener(HandleAccountClicked);
+
         // 익명 로그인 완료 전에는 버튼을 잠근다 — 로그인은 AuthBootstrap이 씬 시작 시 자동 수행(m_signInOnStart)
         AuthBootstrap auth = App.Net.Auth;
         if (auth != null && !auth.IsSignedIn)
@@ -89,6 +99,9 @@ public class SessionPanel : PanelBase
     {
         m_createButton.onClick.RemoveListener(HandleCreateClicked);
         m_joinButton.onClick.RemoveListener(HandleJoinClicked);
+
+        if (m_accountButton != null)
+            m_accountButton.onClick.RemoveListener(HandleAccountClicked);
 
         if (App.Net.Auth != null)
             App.Net.Auth.OnSignedIn -= HandleSignedIn;
@@ -106,6 +119,15 @@ public class SessionPanel : PanelBase
     {
         m_createButton.interactable = interactable;
         m_joinButton.interactable = interactable;
+    }
+
+    // 계정 조작은 여기서 구현하지 않는다 — AuthPanel이 그대로 담당하고 이 버튼은 열기만 한다 (#585)
+    private void HandleAccountClicked()
+    {
+        if (App.UI.Current != null && App.UI.Current.TryGetPanel(out AuthPanel account))
+            account.OpenPanel();
+        else
+            Debug.LogError("[SessionPanel] AuthPanel이 씬에 없어 계정 영역을 열지 못했습니다.", this);
     }
 
     private void HandleCreateClicked() => CreateAsync().Forget();

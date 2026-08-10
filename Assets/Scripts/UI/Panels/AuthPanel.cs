@@ -20,20 +20,24 @@ public enum EAuthStatus
     NewAnonymousStarted = 3,
     ConfirmUnavailableForLink = 4, // 확인창이 없어 연동 중단 — 편도 결정을 경고 없이 실행하지 않는다 (#444)
     ConfirmUnavailableForSwitch = 5,
+    SigningIn = 6, // 자동 익명 로그인이 끝나기를 기다리는 중 — 관문의 초기 상태 (#585)
 }
 
 /// <summary>
-/// 계정 상태 패널 — 우측 상단에 로그인된 PlayerId, 우측 하단에 로그인/로그아웃 버튼. (#247)
-/// 익명 로그인 자체는 AuthBootstrap이 씬 시작 시 자동 수행(m_signInOnStart)하고,
-/// 이 패널은 상태 표시와 수동 로그인/로그아웃 진입점만 제공한다.
-/// 계정 연동(#384)도 여기서만 다룬다 — 설정 창은 4개 씬 전체에 있어 게임 중
-/// 계정 변경 진입점이 생기고, Vivox 로그인이 PlayerId에 묶여 있어 그건 곧 버그다.
+/// 계정 상태 패널 — PlayerId 표시, 수동 로그인/로그아웃, 계정 연동(#384), 계정 전환(#444). (#247)
+/// 익명 로그인 자체는 AuthBootstrap이 씬 시작 시 자동 수행(m_signInOnStart)한다.
+/// 계정 조작을 여기로만 모으는 이유는 설정 창이 4개 씬 전체에 있어 게임 중 계정 변경
+/// 진입점이 생기고, Vivox 로그인이 PlayerId에 묶여 있어 그건 곧 버그이기 때문이다.
+///
+/// <b>#585에서 자리가 바뀌었다</b> — 타이틀 첫 화면은 AuthGatePanel이고, 이 패널은 세션 화면의
+/// 접이식 '계정' 영역이 됐다. 그래서 더 이상 씬 시작 시 열리지 않고(OpenOnAwake = false),
+/// SessionPanel의 계정 버튼이 연다. 접었다 펴는 인라인 영역이라 ESC로 닫을 수 있게 스택에 올린다.
+/// <b>닉네임 편집은 NicknameView로 떼어냈다</b> — 그쪽은 접으면 안 되기 때문이다 (#585).
 /// </summary>
 public class AuthPanel : PanelBase
 {
-    public override bool CanCloseWithESC => false;
-    public override bool IsStackable => false;
-    protected override bool OpenOnAwake => true;
+    public override bool CanCloseWithESC => true;
+    public override bool IsStackable => true;
 
     [Header("UI 참조")]
     [SerializeField]
@@ -44,16 +48,6 @@ public class AuthPanel : PanelBase
 
     [SerializeField]
     private Button m_signOutButton;
-
-    [Header("닉네임 (#249)")]
-    [SerializeField]
-    private TMP_InputField m_nicknameInput;
-
-    [SerializeField]
-    private Button m_applyNicknameButton;
-
-    [SerializeField]
-    private TMP_Text m_nicknameStatusText;
 
     [Header("계정 연동 (#384)")]
     [SerializeField]
@@ -78,7 +72,6 @@ public class AuthPanel : PanelBase
     [SerializeField]
     private TMP_Text m_linkWarningText; // 연동 전 상시 경고 (결정 (e))
 
-    private bool m_isApplyingNickname;
     private bool m_isAccountBusy; // 연동/로그인 요청 겹침 방지 래치
 
     // 문구는 전부 코드가 상태에 따라 고르는 자리라 인스펙터에서 고를 것이 없다 — 규약 키(enum)와
@@ -92,7 +85,6 @@ public class AuthPanel : PanelBase
 
     // 마지막으로 띄운 상태 문구 — 문장이 아니라 키로 들고 있어야 언어가 바뀔 때 다시 읽을 수 있다 (#497)
     private LocalizedMessage m_accountStatus;
-    private LocalizedMessage m_nicknameStatus;
 
     private AuthBootstrap Auth => App.Net.Auth;
 
@@ -110,13 +102,11 @@ public class AuthPanel : PanelBase
     {
         m_signInButton.onClick.AddListener(HandleSignInClicked);
         m_signOutButton.onClick.AddListener(HandleSignOutClicked);
-        m_applyNicknameButton.onClick.AddListener(HandleApplyNicknameClicked);
         m_linkButton.onClick.AddListener(HandleLinkClicked);
         m_accountSignInButton.onClick.AddListener(HandleAccountSignInClicked);
         m_newAnonymousButton.onClick.AddListener(HandleNewAnonymousClicked);
 
-        // 상한을 인스펙터에 중복 입력하지 않는다 — 각 규칙의 상수가 단일 출처. (#249 · #384)
-        m_nicknameInput.characterLimit = NicknameRules.MaxLength;
+        // 상한을 인스펙터에 중복 입력하지 않는다 — AccountCredentials의 상수가 단일 출처. (#384)
         m_usernameInput.characterLimit = AccountCredentials.MaxUsernameLength;
         m_passwordInput.characterLimit = AccountCredentials.MaxPasswordLength;
         m_passwordInput.contentType = TMP_InputField.ContentType.Password;
@@ -126,7 +116,6 @@ public class AuthPanel : PanelBase
         {
             Auth.OnSignedIn += Refresh;
             Auth.OnSignedOut += Refresh;
-            Auth.OnNicknameChanged += Refresh;
         }
 
         // 언어를 바꾸면 이 패널의 문구도 즉시 따라가야 한다 — 설정 창이 타이틀 씬에도 있다.
@@ -140,7 +129,6 @@ public class AuthPanel : PanelBase
     {
         m_signInButton.onClick.RemoveListener(HandleSignInClicked);
         m_signOutButton.onClick.RemoveListener(HandleSignOutClicked);
-        m_applyNicknameButton.onClick.RemoveListener(HandleApplyNicknameClicked);
         m_linkButton.onClick.RemoveListener(HandleLinkClicked);
         m_accountSignInButton.onClick.RemoveListener(HandleAccountSignInClicked);
         m_newAnonymousButton.onClick.RemoveListener(HandleNewAnonymousClicked);
@@ -149,7 +137,6 @@ public class AuthPanel : PanelBase
         {
             Auth.OnSignedIn -= Refresh;
             Auth.OnSignedOut -= Refresh;
-            Auth.OnNicknameChanged -= Refresh;
         }
 
         // 종료 중에는 설정 에셋을 되살리지 않는다 — HasSettings로 먼저 확인한다 (ShopStand 관례)
@@ -157,7 +144,7 @@ public class AuthPanel : PanelBase
             LocalizationSettings.SelectedLocaleChanged -= HandleLocaleChanged;
     }
 
-    // 언어가 바뀌면 상태 줄 둘을 다시 읽고 나머지는 Refresh가 다시 채운다
+    // 언어가 바뀌면 상태 줄을 다시 읽고 나머지는 Refresh가 다시 채운다
     private void HandleLocaleChanged(Locale locale)
     {
         RenderStatusTexts();
@@ -170,19 +157,10 @@ public class AuthPanel : PanelBase
         RenderStatusTexts();
     }
 
-    private void SetNicknameStatus(in LocalizedMessage message)
-    {
-        m_nicknameStatus = message;
-        RenderStatusTexts();
-    }
-
     private void RenderStatusTexts()
     {
         if (m_accountStatusText != null)
             m_accountStatusText.text = m_accountStatus.Resolve();
-
-        if (m_nicknameStatusText != null)
-            m_nicknameStatusText.text = m_nicknameStatus.Resolve();
     }
 
     private static LocalizedMessage Status(EAuthStatus status) =>
@@ -212,42 +190,6 @@ public class AuthPanel : PanelBase
         if (Auth != null)
             Auth.SignOut();
         Refresh();
-    }
-
-    private void HandleApplyNicknameClicked() => ApplyNicknameAsync().Forget();
-
-    private async UniTaskVoid ApplyNicknameAsync()
-    {
-        if (m_isApplyingNickname || Auth == null)
-            return;
-
-        m_isApplyingNickname = true;
-        string attempted = m_nicknameInput.text;
-        bool failed = false;
-        try
-        {
-            await Auth.SetPlayerNameAsync(attempted);
-            SetNicknameStatus(LocalizedMessage.None);
-        }
-        catch (LocalizedMessageException ex)
-        {
-            // 규칙 위반 — 사유가 키로 온다 (#497)
-            failed = true;
-            SetNicknameStatus(ex.Reason);
-        }
-        catch (Exception ex)
-        {
-            // UGS가 준 문구는 우리 테이블에 없다 — 그대로 띄우고 번역 대상에서 뺀다
-            failed = true;
-            SetNicknameStatus(LocalizedMessage.Literal(ex.Message));
-        }
-        finally
-        {
-            m_isApplyingNickname = false;
-            Refresh();
-            if (failed)
-                m_nicknameInput.text = attempted; // 거절 사유를 보며 고칠 수 있게 남긴다
-        }
     }
 
     /// <summary>
@@ -428,14 +370,6 @@ public class AuthPanel : PanelBase
         // 같은 AuthBootstrap에서 InitializeAndSignInAsync가 두 번 돈다.
         m_signInButton.interactable = !signedIn && !AuthBusy;
         m_signOutButton.interactable = signedIn && !AuthBusy;
-
-        bool canEdit = signedIn && !Auth.IsNetworkConnected && !m_isApplyingNickname && !AuthBusy;
-        m_nicknameInput.interactable = canEdit;
-        m_applyNicknameButton.interactable = canEdit;
-
-        // 입력 중 덮어쓰지 않음.
-        if (!m_nicknameInput.isFocused)
-            m_nicknameInput.text = signedIn ? Auth.Nickname : string.Empty;
 
         // ── 계정 연동 (#384) ──
         bool linked = signedIn && Auth.IsLinked;

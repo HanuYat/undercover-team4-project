@@ -85,6 +85,18 @@ public class AuthBootstrap : CommonManagerBase
     /// <summary>연동된 아이디 — 미연동이면 빈 문자열. (#384)</summary>
     public string AccountUsername => m_accountUsername;
 
+    /// <summary>
+    /// 이 실행에서 타이틀의 로그인 관문(<c>AuthGatePanel</c>)을 이미 넘었는가. (#585)
+    /// 세션에서 타이틀로 돌아올 때마다 로그인 창을 다시 보여주지 않기 위한 것이다.
+    ///
+    /// <b>플래그가 여기 있는 이유</b> — Title 씬은 돌아올 때마다 새로 만들어지므로 씬 쪽에
+    /// 두면 매번 초기화된다. 이 객체는 상주(DontDestroyOnLoad)라 앱 실행 동안 유지된다.
+    /// 로그아웃·계정 전환으로 로그인 상태가 풀려도 <b>내리지 않는다</b> — 관문은 "계정을
+    /// 어떻게 시작할지" 한 번 고르는 자리이고, 그 뒤의 계정 조작은 세션 화면의 계정 영역이
+    /// 담당한다. 다시 고르게 하려면 앱을 재시작하는 것이 맞다.
+    /// </summary>
+    public bool HasPassedAuthGate { get; private set; }
+
     /// <summary>정식 계정으로 승격됐는가. 판별은 PlayerInfo.Username 유무. (#384)</summary>
     public bool IsLinked => m_accountStateKnown && !string.IsNullOrEmpty(m_accountUsername);
 
@@ -104,6 +116,9 @@ public class AuthBootstrap : CommonManagerBase
     private string NicknamePrefKey =>
         k_nicknamePrefKeyPrefix + (string.IsNullOrWhiteSpace(m_profile) ? "default" : m_profile);
     #endregion
+
+    /// <summary>로그인 관문을 넘었다고 표시 — <c>AuthGatePanel</c>만 호출한다. (#585)</summary>
+    public void MarkAuthGatePassed() => HasPassedAuthGate = true;
 
     #region 초기화 · 익명 로그인
     private void Start()
