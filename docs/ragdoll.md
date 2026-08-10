@@ -10,15 +10,35 @@
 
 ---
 
-## 1. 구조 — 세 컴포넌트
+## 1. 구조 — 다섯 파일
 
-전부 **Player 프리팹 루트**에 붙는다 (CharacterController·PlayerIncapacitation과 같은 오브젝트).
+> ⚠ **브랜치 `ragdoll-test`에서 사망 전용 모델을 분리했다** — `RagdollRig`·`RagdollRope`가 Player
+> 루트가 아니라 `Corpse` 자식에 붙고, 리그가 두 벌이 된다. 아래 표는 그 이후 기준이다.
+> 작업 기록과 보류 항목은 [ragdoll-corpse-split.md](ragdoll-corpse-split.md).
 
-| 컴포넌트 | 위치 | 하는 일 |
-|---|---|---|
-| `RagdollRig` | `Common/Ragdoll/` | 뼈·스킨 수집, 키네마틱 토글, 임펄스, 감쇠, 속도캡, 포즈 캡처/복원, 블렌드 |
-| `RagdollRope` | `Common/Ragdoll/` | 관절 밧줄 — 시체를 물리로 끌어온다 (#365 운반 / #398 드래그) |
-| `PlayerRagdoll` | `Player/View/` | 상태 기계, 사망 폴링, 캡슐 추종, 원격 정렬, 정착 루트 포즈, 기상 블렌드 |
+```
+Player  [Animator, CharacterController, ..., PlayerRagdoll]
+├ Root                    ← 살아있는 리그. Animator 전용, 물리 없음
+├ SM_Gen_Chr_Robot_01     ← 살아있는 스킨
+└ Corpse  (비활성)        ← [RagdollRig, RagdollRope]
+  ├ Root                  ← 리그 복사본 (Rigidbody 11 + CharacterJoint 10)
+  └ SM_Gen_Chr_Robot_01   ← 스킨 복사본
+```
+
+| 컴포넌트 | 위치 | 붙는 곳 | 하는 일 |
+|---|---|---|---|
+| `RagdollRig` | `Common/Ragdoll/` | `Corpse` | 뼈·스킨 수집, 키네마틱 토글, 임펄스, 감쇠, 속도캡, 포즈 캡처/복원 |
+| `RagdollRope` | `Common/Ragdoll/` | `Corpse` | 관절 밧줄 — 시체를 물리로 끌어온다 (#365 운반 / #398 드래그) |
+| `RagdollPose` | `Common/Ragdoll/` | (static) | 두 리그 간 포즈 복사 — 사망·부활의 이음새 |
+| `RagdollPoseBlend` | `Common/Ragdoll/` | (plain class) | 기상 블렌드. **살아있는** 리그를 섞는다 |
+| `PlayerRagdoll` | `Player/View/` | Player 루트 | 상태 기계, 사망 폴링, 모델 교체, 캡슐 추종, 원격 정렬, 정착 루트 포즈 |
+
+**Animator를 끄지 않는다.** 애니메이터와 물리가 서로 다른 리그를 쥐므로 싸울 일이 없다 — 사망 시
+끄는 것은 **살아있는 스킨**뿐이고, 살아있는 뼈는 보이지 않는 채 계속 애니메이션되어 부활 블렌드의
+목표가 된다.
+
+⚠ **살아있는 `Root`를 컨테이너로 감싸지 말 것.** Player의 Animator는 루트에 있고 Avatar 바인딩이
+경로 기반이라 리그를 한 단 더 깊이 넣으면 살아있는 애니메이션이 끊긴다.
 
 ### 자른 선
 
@@ -40,12 +60,15 @@ Animated ──진입(사망)──> Ragdoll ──정착──> Settled ──�
                           날아감          물리 유지          정착포즈 → 기상포즈
 ```
 
-| 상태 | 뼈 | 캡슐(CharacterController) |
-|---|---|---|
-| `Animated` | 전부 키네마틱 (애니메이터가 포즈를 쥠) | 켜짐, 입력으로 이동 |
-| `Ragdoll` | 전부 물리 + 임펄스 | **꺼짐**, 매 프레임 골반 위치 대입 |
-| `Settled` | 전부 물리 (아무것도 안 붙듦) | 꺼짐, 골반 수평 + 지면 높이 |
-| `BlendingToAnimator` | 전부 키네마틱 | 켜짐 |
+| 상태 | 시체 모델 | 살아있는 스킨 | 캡슐(CharacterController) |
+|---|---|---|---|
+| `Animated` | **비활성** | 켜짐 | 켜짐, 입력으로 이동 |
+| `Ragdoll` | 활성, 전부 물리 + 임펄스 | **꺼짐** | **꺼짐**, 매 프레임 골반 위치 대입 |
+| `Settled` | 활성, 전부 물리 (아무것도 안 붙듦) | 꺼짐 | 꺼짐, 골반 수평 + 지면 높이 |
+| `BlendingToAnimator` | **비활성** | 켜짐 | 켜짐 |
+
+전이의 이음새는 포즈 복사 두 번이다: 시체를 켤 때 살아있는 리그 → 시체(`ShowCorpse`), 끌 때
+시체 → 살아있는 리그(`HideCorpse`). 후자가 곧 블렌드의 출발점이다.
 
 **진입 경로는 둘인데 결과는 하나다.**
 
@@ -88,6 +111,12 @@ Animated ──진입(사망)──> Ragdoll ──정착──> Settled ──�
 
 7. **원격 정렬은 동력이 아니라 표류 방지다.** 상한을 올려 "끌어오게" 만들려던 시도가 발산으로 끝났다.
    몸을 움직이는 것은 각 피어의 로컬 물리다. `§9-16` `§10-5`
+
+8. **두 리그의 포즈를 카운트로 맞추지 않는다.** 살아있는 리그는 뼈만 있는 트리가 아니다 — 장착
+   아이템 모델이 손 본 밑(`Hand_R/HeldItemAnchor`)에 런타임에 들어온다. 카운트를 대조하면 **항상**
+   불일치가 되어 포즈가 통째로 복사되지 않는다(시체가 바인드 포즈나 직전 누운 포즈로 나타남).
+   순수한 쪽(시체)에서 몰고 가며 이름으로 짝지을 것.
+   [ragdoll-corpse-split.md §3](ragdoll-corpse-split.md)
 
 ---
 
@@ -278,6 +307,13 @@ NPC에도 밧줄이 있고(`NpcController.Rope`) **시체 끌기가 들어오면
 ---
 
 ## 9. 남은 것
+
+- **부활 시 몸이 크게 회전한다 (보류 중).** `Knockdown_Ground`가 루트 전방의 반대쪽으로 눕히는 것을
+  실측했고(`클립 − 루트 = 177.6°`) `m_rootYawOffset = 180`을 넣었으나 **뒤집힘이 남아 있다** —
+  `루트 168.0°`가 오프셋을 바꿔도, 피어를 바꿔도, 사망을 바꿔도 소수점까지 같다. 별개로 호스트에서
+  `Animator.Update(0f)`가 뼈를 쓰지 않는 정황이 있다(스킨을 껐으니 컬링 의심).
+  계측 코드는 `PlayerRagdoll.m_logRevivalYaw`로 켠다 — 데이터·판독법·미해결 질문은
+  [ragdoll-corpse-split.md §4](ragdoll-corpse-split.md).
 
 - **동료 시체의 무게가 운반자를 늦추지 않는다.** `RopeDragLoad`(#398)가 NPC 견인에만 붙어 있다.
   **NPC 시체는 #571에서 해소됐다** — 연결 목록을 NPC 끌기와 공유하므로 무게가 저절로 걸린다.

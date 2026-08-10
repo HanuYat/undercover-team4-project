@@ -1,0 +1,334 @@
+# 사망 전용 모델 분리 + Hips 동기화 (브랜치 `ragdoll-test`)
+
+플레이어 래그돌을 **살아있는 모델과 시체 모델로 갈라** 코드 제어(애니메이터 on/off, 콜라이더 무시)를
+GameObject 활성/비활성으로 대체하고, 그 위에서 **Hips를 직접 동기화**해 궤적 발산을 없애려는 작업.
+
+> 이 문서는 **작업 기록**이다. "지금 어떻게 되어 있나"는 [ragdoll.md](ragdoll.md)가 정본이다.
+> 앞선 기록은 [506-explosion-ragdoll.md](506-explosion-ragdoll.md)(플레이어)와
+> [571-npc-death-ragdoll.md](571-npc-death-ragdoll.md)(NPC).
+
+---
+
+## 1. 왜 시작했나 — 궤적 발산
+
+기존 구조는 **뼈를 동기화하지 않는다**(506 불변식 1). 각 피어가 로컬 물리를 굴리고, 궤적만 오너의
+루트에서 받아 `TickAlignBonesToRoot`가 초당 1.5m로 당겨 좁힌다.
+
+사망 비행은 이게 잘 맞는다 — 입력이 임펄스 하나뿐이라 피어 간 차이가 작다(실측 9m 비행에 5cm 일치).
+**밧줄 견인은 다르다.** 앵커가 운반자의 손 본(`Hand_R/HeldItemAnchor`)이고, 그 위치는
+
+- 운반자가 원격이면 NetworkTransform **보간값**
+- 손 본에는 걸음 흔들림 **애니메이션**이 얹히고, 애니메이터도 피어마다 따로 평가된다
+
+즉 **매 물리 스텝 서로 다른 입력**이 강성 1500 / 감쇠 1000 스프링에 주입된다. 보정 속도(1.5m/s)가
+발산 속도를 못 따라가면 `m_alignSnapDistance`(2.5m)에 걸려 스냅이 뜬다.
+
+### 강사 피드백과 그 전제
+
+"Hips만 `NetworkRigidbody`로 호스트를 통해 연동해 보라"는 조언을 받았는데, 전달된 전제가
+**"Hips에 이미 NetworkTransform이 있고 부모 NetworkTransform과 물려 있다"**였다. 그 전제라면
+`NetworkRigidbody`는 교과서적으로 맞는 답이다(NT와 Rigidbody가 한 오브젝트에 있으면 둘 다 트랜스폼의
+주인이라 싸운다). **하지만 그 구성은 존재하지 않았다** — NetworkTransform은 프리팹당 하나, 루트에만
+있고 Hips는 권위 피어에서 그 루트의 **입력값**으로만 쓰인다(`TickRootFollow` / `TickCapsuleFollow`).
+
+### §9-7이 이 구성에 전이되지 않는다 (패키지 소스로 확인)
+
+처음에는 "골반만 키네마틱 = 이미 폐기된 §9-7"이라고 판단했으나 **과한 판단이었다.** §9-7이 시험한
+것은 *부모 트랜스폼을 따라가는* 키네마틱 골반이고, 원인은 **클럭 불일치**였다(골반은 Update 클럭,
+나머지는 FixedUpdate 50Hz, 보간 모드도 갈려 3m/s에서 이음새 6cm).
+
+`UseRigidBodyForMotion`이 정확히 그 클럭을 겨냥한 옵션이다. NGO 2.13.0 패키지 소스에서 확인:
+
+`Runtime/Components/NetworkTransform.cs`
+```
+4445:  OnUpdate()      → if (!IsSpawned || CanCommitToTransform || m_UseRigidbodyForMotion) return;
+4507:  OnFixedUpdate() → if (!m_UseRigidbodyForMotion || !IsSpawned || CanCommitToTransform) return;
+4243:  cachedDeltaTime = m_UseRigidbodyForMotion ? FixedDeltaTime : DeltaTime;
+2823:  m_NetworkRigidbodyInternal.MovePosition(m_InternalCurrentPosition);
+2870:  m_NetworkRigidbodyInternal.MoveRotation(m_InternalCurrentRotation);
+```
+
+`Runtime/Components/NetworkRigidBodyBase.cs` (파일명 대문자 B 주의)
+```
+ 994:  if (AutoUpdateKinematicState) SetIsKinematic(!m_IsAuthority);
+  39:  public bool AutoUpdateKinematicState = true;   // 끄면 외부 스크립트가 직접 관리
+ 849:  PostSetIsKinematic() — UseRigidBodyForMotion 이면 Rigidbody 보간을 유지
+4512:  (NetworkTransform.OnFixedUpdate) m_NetworkRigidbodyInternal.WakeIfSleeping();
+```
+
+**켜면 Update 경로가 완전히 차단되고 보간·적용이 FixedUpdate + `MovePosition`으로 간다.** 골반과
+나머지 뼈가 같은 50Hz 클럭에 놓이므로 §9-7의 원인은 사라진다.
+
+### 남는 위험 두 개
+
+1. **무한 강성.** 키네마틱은 밀어낼 수 없다. §9-7의 두 번째 실측(`Spine_02 ← 충격 121`이 수십 스텝
+   지속, 허리가 땅에 박힌 채 떨림)은 클럭이 아니라 이쪽이 원인이라 **그대로 남는다.** 원격 골반
+   높이가 네트워크에서 오면 로컬 지형 접촉이 오차를 흡수할 수단이 없다.
+2. **`InLocalSpace`를 못 쓴다.** `UseRigidBodyForMotion`이면 로컬/월드 전환 로직 자체를 건너뛰고
+   (`NetworkTransform.cs:2164`) `GetPosition()`이 `Rigidbody.position` = **월드**를 돌려준다
+   (`NetworkRigidBodyBase.cs:441`). 소스 주석이 못박는다: *"Rigidbodies do not have the concept of
+   local space"* (`:1032`). → 루트 스트림과 독립이라 이중 곱셈 걱정은 없지만, **`TickRootFollow`가
+   존재 이유를 잃는다.**
+
+### 선택지 비교
+
+| | 현행 (루트만 복제) | Hips NT + NetworkRigidbody | 포즈 스트리밍 |
+|---|---|---|---|
+| 궤적 정확도 | 보정으로 좁힘, 넘치면 2.5m 스냅 | 정확 | 정확 |
+| 신규 코드 | — | **거의 없음** | RPC·버퍼·보간 |
+| 대역폭 | 0 (추가분) | NetworkTransform 1개 | 1.1 KB/s (견인 중만) |
+| 원격 높이 오차 흡수 | 물리가 흡수 | **없음 — 골반 박힘 위험** | 해당 없음 |
+| 원격 밧줄 | 작동 | 골반엔 무효, 팔다리만 매달림 | 해당 없음 |
+
+뼈마다 NetworkTransform을 다는 안은 계산 없이 탈락 — NPC 100구 × 11개가 견인 여부와 무관하게 상시.
+
+**2번을 먼저 시험한다.** 비용이 압도적으로 싸고 궤적 발산을 직접 없앤다. 무한 강성이 실제로 나오면
+그때 3번으로 간다(`CaptureLocalPose`/`ApplyLocalPose`가 이미 있어 재료는 갖춰져 있다).
+
+---
+
+## 2. 들어간 것 — 모델 분리
+
+### 계층
+
+```
+Player  [Animator, CharacterController, NetworkObject, NetworkTransform, ..., PlayerRagdoll]
+├ Root                    ← 살아있는 리그. Animator 전용. Rigidbody·Joint·Collider 전부 제거
+├ SM_Gen_Chr_Robot_01     ← 살아있는 스킨
+└ Corpse  (비활성)        ← [RagdollRig, RagdollRope]
+  ├ Root                  ← 리그 복사본. Rigidbody 11 + CharacterJoint 10
+  └ SM_Gen_Chr_Robot_01   ← 스킨 복사본
+```
+
+NPC가 이미 `RagdollRig`를 `Model`에 두고 `GetComponentInChildren`으로 찾는 구조라, **플레이어가 NPC
+배치에 맞춰진 것**이다. 부수 효과로 1인칭 팔 리그를 잘못 집는 함정(`RagdollRig` 툴팁의 경고)이
+사라진다 — 탐색 범위가 `Corpse` 안으로 갇힌다.
+
+### ⚠ 살아있는 `Root`를 컨테이너로 감싸면 안 된다
+
+Player의 `Animator`는 **루트**에 있고 Avatar 바인딩이 **경로 기반**이다. 리그를 한 단 더 깊이 넣으면
+살아있는 애니메이션이 끊긴다. (NPC는 Animator가 `Model`에 있어서 이 제약이 없다.)
+
+그래서 사망 시 **스킨만 끈다.** 살아있는 뼈는 보이지 않는 채 계속 애니메이션되고, 그 포즈가 부활
+블렌드의 목표가 된다.
+
+### 없어진 코드 제어
+
+| 이전 | 지금 |
+|---|---|
+| `m_animator.enabled = false/true` | 살아있는 스킨 `SetActive` — Animator는 건드리지 않음 |
+| `IgnoreOwnCapsule` Awake 호출 | **시체를 켜는 순간으로 이동** (비활성 콜라이더에 `Physics.IgnoreCollision`은 에러) |
+| `SetKinematic` 왕복 | 시체 뼈는 켜지면 항상 동적 |
+
+`IgnoreOwnCapsule` 자체는 **남겼다.** 사망 중 캡슐은 꺼져 있지만 `PlayerMovement.SetPose`·호송이 그
+사이 되살릴 수 있고, 그때 시체 뼈가 캡슐 안이면 예전 증상이 재현된다.
+
+### 새 파일
+
+| 파일 | 역할 |
+|---|---|
+| `Common/Ragdoll/RagdollPose.cs` | 두 복제 리그 간 포즈 복사 (사망: 살아있는→시체, 부활: 시체→살아있는) |
+| `Common/Ragdoll/RagdollPoseBlend.cs` | 부활 블렌드. `RagdollRig`에서 분리 — 섞는 대상이 **살아있는** 리그라서 |
+
+`RagdollRig`에서 `BeginBlend`/`TickBlend`/`m_allBones`가 빠져 **물리 on/off만** 남았다.
+
+---
+
+## 3. 밟은 것 — 포즈 복사가 조용히 실패했다
+
+### 증상
+
+- **첫 사망** — 시체가 프리팹 **바인드 포즈**(T포즈)로 한 프레임 나타남
+- **두 번째 이후** — 직전에 **누워 있던 포즈** 그대로 나타남
+
+### 원인
+
+첫 구현은 두 리그의 `GetComponentsInChildren<Transform>` **길이를 대조**해서 다르면 아무것도 하지
+않고 `false`를 돌려줬다. 그런데:
+
+```
+PlayerHeldItemView.m_handAnchor = Player/Root/Hips/.../Hand_R/HeldItemAnchor
+```
+
+**장착 아이템 모델이 런타임에 살아있는 리그의 뼈 밑으로 인스턴스화된다.** 살아있는 서브트리만
+51 → 52+가 되고 시체는 51 그대로 → 항상 불일치. 플레이어는 늘 로드아웃을 들고 스폰하므로 **매번
+실패**했고, 반환값을 버려서 조용히 넘어갔다.
+
+두 증상은 같은 버그의 두 얼굴이다 — 아무것도 안 쓰니 시체는 자기가 마지막으로 있던 포즈에 남는다.
+
+### 고친 방식
+
+**받는 쪽(시체)에서 몰고 가며 이름으로 짝짓는다.** 시체 리그는 런타임에 자식이 늘지 않으므로
+(아무도 여기에 뭘 붙이지 않는다) 이걸 기준으로 돌면 살아있는 쪽에 무엇이 더 붙어도 무관하고,
+아이템 모델은 짝이 없어 방문조차 되지 않는다.
+
+그리고 `Copy`가 **실제로 값을 쓴 뼈 수를 반환**하고, `PlayerRagdoll.CopyPose`가 기대치(시체 뼈 수)와
+대조해 어긋나면 경고를 낸다. **조용히 지나갈 수 있는 실패는 다시 만들지 않는다.**
+
+### 교훈
+
+카운트 일치를 전제로 삼지 말 것. 살아있는 리그는 **뼈만 있는 트리가 아니다** — 손에 든 것, 이펙트,
+앞으로 붙을 무엇이든 들어온다. 시체 리그만 순수하다.
+
+---
+
+## 4. 보류 — 부활 시 큰 회전 (진행 중, 여기서 멈춤)
+
+### 증상
+
+누웠다가 일어날 때 몸이 **거의 180° 뒤집히며** 애니메이션으로 돌아온다.
+
+### 계측 (`m_logRevivalYaw`)
+
+재는 것은 두 방향의 차이다: **시체가 실제로 누운 방향**(골반→머리)과 **`Knockdown_Ground`가 눕히는
+방향**(애니메이터가 평가한 살아있는 리그에서 같은 계산). 클립은 루트 로컬로 작성돼 있으므로
+`클립 − 루트`는 클립의 상수이고, 두 방향을 맞추려면 `루트 = 시체 − 상수`여야 한다. 지금 루트는
+`시체 + 오프셋`이므로 **필요한 오프셋 = 루트 − 클립**이다.
+
+| # | 피어 | 시체 | 클립 | 루트 | 클립−루트 | 어긋남 | 당시 오프셋 |
+|---|---|---|---|---|---|---|---|
+| 1 | (단일) | 179.5° | 345.6° | 168.0° | +177.6° | −166.2° | 0 |
+| 2 | (단일) | 159.0° | 345.6° | 168.0° | +177.6° | +173.3° | 0 |
+| 3 | 호스트 | 46.0° | **46.0°** | 168.0° | −122.0° | **0.0°** | 180 |
+| 4 | 클라 | 196.0° | 345.6° | 168.0° | +177.6° | −149.6° | 180 |
+
+### 여기서 읽힌 것
+
+- **`클립 − 루트 = 177.6°`가 재현된다**(#1·#2·#4). `Knockdown_Ground`는 루트 전방의 **반대쪽**으로
+  눕힌다. 그래서 `m_rootYawOffset = 180`을 넣었다. → **적용됨** (프리팹에 저장 확인)
+- **그런데 `루트 168.0°`가 오프셋 0일 때도 180일 때도, 호스트·클라 양쪽에서, 서로 다른 사망에서
+  소수점까지 같다.** 오프셋이 루트에 닿지 않고 있다는 뜻이고, 이게 뒤집힘이 안 사라진 원인이다.
+- **#3(호스트)은 `시체 = 클립`이다.** 살아있는 리그가 클립 포즈가 아니라 **방금 입힌 시체 포즈**를
+  들고 있다 = `Animator.Update(0f)`가 뼈를 쓰지 않았다. 유력한 원인은 **Animator 컬링** —
+  `m_liveSkin.SetActive(false)`로 렌더러를 껐으니 자기를 화면 밖으로 판단한 것. 그렇다면 고칠 곳은
+  오프셋이 아니라 스킨을 끄는 방식이다(렌더러 `enabled = false`, 또는 `cullingMode = AlwaysAnimate`).
+  #3에서 계산된 오프셋 `122.0°`는 **의미 없는 값**이다(클립 방향이 아닌 것으로 계산했으므로).
+
+### 재개하는 법
+
+`PlayerRagdoll.m_logRevivalYaw`를 켜면 두 지점이 찍힌다.
+
+```
+[래그돌 정착 yaw] 권한=? 몸=?° 정렬=? 오프셋=?° → 목표 ?° / 루트 A° → B°
+[래그돌 부활 yaw] 시체 ?° / 클립 ?° / 루트 ?° → m_rootYawOffset = ?° (현재 ?°, 어긋남 ?°)
+                 | 권한=? 애니메이터기록=? 컬링=? 상태=?
+```
+
+보는 순서:
+
+1. **정착 로그의 `루트 A° → B°`** — A와 B가 같으면 대입이 안 먹은 것. `권한=False`면 그 피어는
+   애초에 루트를 못 건드린다(클라는 정상적으로 False). `몸=실패`면 `TryGetBodyYaw`가 실패해 정렬을
+   건너뛴 것.
+2. **부활 로그의 `애니메이터기록`·`컬링`** — `기록=False`면 `클립` 값 자체가 무의미하므로 오프셋
+   계산을 신뢰하지 말 것. 컬링이 원인으로 확정되면 스킨 끄는 방식을 먼저 고친다.
+
+### 추가 확정 (Hips 시험 중에 나온 것)
+
+부활 로그에 `애니메이터기록`·`컬링`을 붙여 재 보니:
+
+```
+호스트(원격) … | 권한=False 애니메이터기록=False 컬링=CullUpdateTransforms
+클라(오너)   … | 권한=True  애니메이터기록=True  컬링=CullUpdateTransforms
+```
+
+**의심이 사실로 확인됐다 — 원격에서는 `Animator.Update(0f)`가 뼈를 쓰지 않는다.** 살아있는 스킨을
+껐으니 컬링 모드(`CullUpdateTransforms`)가 애니메이터를 건너뛴다. 원격의 `클립` 측정값은 클립 방향이
+아니라 방금 입힌 시체 방향이므로, **원격 로그로 계산한 오프셋은 전부 무의미하다.**
+
+→ 재개할 때 **여기가 먼저다.** 스킨 끄는 방식을 바꾸거나(`cullingMode = AlwaysAnimate`) 원격에서는
+블렌드를 포기하는 쪽으로 갈라야 한다.
+
+오너 쪽은 `m_rootYawOffset = 180` 적용 후에도 `어긋남 −175.0°`가 남았고 `루트 168.0°`는 여전히
+상수다 — **오프셋이 루트에 닿지 않는다**는 관측이 재확인됐다.
+
+### 아직 답이 없는 것
+
+- **`루트 168.0°`가 왜 상수인가.** 대입이 안 먹는 것인지, `몸` 값이 정말 매번 같았던 것인지
+  정착 로그가 가른다. 후자라면 또 다른 이야기가 된다.
+- **정착 후 시체가 계속 굴러 생기는 ±10° 잔차.** #1은 루트 대비 +11.5°, #2는 −9.0°.
+  큰 회전을 없앤 뒤 이게 눈에 보이는지부터 볼 것 — 안 보이면 손대지 않는 게 맞다.
+  없애려면 부활 직전(뼈가 아직 동적일 때) 루트 yaw를 그 시점의 시체 방향으로 다시 맞추면 되는데,
+  **동적 리지드바디가 부모 회전을 따라가는지에 대해 코드 주석(`TickCapsuleFollow`의 "목이 비틀린다")과
+  판단이 엇갈린다** — 확인 없이 넣으면 몸 전체를 그만큼 돌려버릴 수 있다.
+
+---
+
+## 5. Hips 동기화 시험 (A) — **실패**
+
+### 무엇을 붙였나
+
+`Corpse/Root/Hips`에 `NetworkTransform`(`AuthorityMode = Owner`, 루트 NT와 일치) +
+`NetworkRigidbody`(`UseRigidBodyForMotion = true`, `AutoUpdateKinematicState = false`).
+`PlayerRagdoll`은 **컴포넌트 존재를 자동 감지**해(`m_hipsIsNetworkSynced`) 비권위 피어의 골반만
+키네마틱으로 유지하고 `TickAlignBonesToRoot`를 끈다. 스위치를 따로 두지 않은 것은 배선과 코드가
+어긋날 여지를 없애기 위해서다.
+
+⚠ **시체를 `SetActive(false)`로 숨길 수 없게 됐다** — NGO가 비활성 GameObject의 NetworkBehaviour를
+스폰에서 제외하고(`NetworkObject.cs:2676/2690`) **활성화돼도 만회하지 않는다**(`:2197` "not supported",
+경고문 `:2758`). 게다가 틱 루프의 `activeInHierarchy` 검사는 **NetworkObject의 오브젝트**(=Player 루트,
+항상 활성)만 보고 개별 NT는 `enabled`만 보므로(`NetworkManager.cs:394/402`), 스폰 안 된 NT가
+`OnUpdate`를 받고 `!IsSpawned`에서 조용히 반환한다 — **크래시 없이 죽어 있는** 최악의 형태다.
+그래서 시체는 항상 활성이고, 숨김은 렌더러·콜라이더 토글이 맡는다.
+
+### 실측 (호스트 = 원격 / 클라 = 오너)
+
+| | 오너 | 원격 |
+|---|---|---|
+| 골반Y | 0.441 | 0.442 |
+| 최저뼈−지면 | +0.083 → +0.085 | **−1.125 → −2.509** |
+| 평균속도 | 0.01 | **8.12 → 5.90** |
+| 상태 | Settled | Ragdoll (영원히 미정착) |
+
+- **골반 높이는 1mm 일치** → 스트림·보간 문제가 아니다
+- 사망 직후 `최저뼈−지면`은 **+0.432 / +0.116로 양수** → 바닥 아래에서 출발한 것도 아니다
+- **원격의 뼈가 초당 6~8m로 발산한다.** 골반에서 2.75m 아래는 골격이 닿을 수 없는 거리 = **관절이
+  통째로 늘어난 것.** `§9-5`("골반만 끌려가고 나머지 뼈는 눌러앉아 관절이 늘어났다")의 재현이고,
+  projection을 꺼 뒀으니(`§9-2`) 되당길 수단이 없다
+
+### 왜 실패했나 — 검증된 구성은 둘뿐이다
+
+`UseRigidBodyForMotion`은 **클럭**을 고쳐 준다(확인됨, §1). 그러나 §9-7의 원인은 클럭 하나가
+아니었다 — **고정된 앵커가 동적 관절 사슬의 머리에 있다**는 것 자체가 원인이다.
+
+기존 설계가 이 문제를 막던 방식은 패치가 아니라 **불변식**이었다:
+
+| 층 | 어디 |
+|---|---|
+| **① 어떤 뼈도 고정하지 않는다** | 전 피어에서 뼈가 전부 동적 |
+| ② `ContinuousSpeculative` CCD | `RagdollSetup.cs:267` |
+| ③ `maxDepenetrationVelocity = 3` | `RagdollRig.cs:41` |
+| ④ `enablePreprocessing = false` | `RagdollSetup.cs:272` |
+| ⑤ 보정은 몸 전체를 같은 델타로 | `RagdollRig.TranslateBy` |
+| ⑥ `ClampByWall` | `PlayerRagdoll.TickAlignBonesToRoot` |
+
+②~⑥은 전부 **①을 전제로 한 완충재**다. A는 ①을 없애고 ⑤⑥까지 껐다.
+
+**②가 켜져 있다는 것이 진단의 열쇠였다** — CCD가 있으니 뼈는 바닥을 *뚫지* 못한다. 지면 2.5m
+아래에 있다는 것은 뚫은 게 아니라 **끌려 내려간 것**이다.
+
+#571의 얼림 주석이 반대편을 말한다: *"전부 한꺼번에 얼리면 서로 당기는 관절이 없어 자세가 그대로
+굳는다."* 즉 검증된 구성은 **전부 동적**(506) 아니면 **전부 키네마틱**(571)이고,
+**하나만 고정하는 중간이 실패 지대**다.
+
+### B도 이 문제를 풀지 못한다
+
+B(별도 NetworkObject)가 바꾸는 것은 소유권·수명·NPC 확장성이다. **원격 골반이 키네마틱이라는 구조는
+그대로**이므로 같은 실패가 재현된다. B는 이 실패 모드의 답이 아니었다.
+
+---
+
+## 6. 남은 선택지
+
+| | 내용 | 판단 |
+|---|---|---|
+| **C — 포즈 스트리밍** | 원격은 **전 뼈 키네마틱**, 로컬 시뮬레이션 없음. 서버/오너가 뼈 로컬 회전 + 골반 로컬 위치를 스트리밍 | 위반될 관절이 원리적으로 없다. `CaptureLocalPose`/`ApplyLocalPose`가 이미 있다. 견인 중 **1.1 KB/s** |
+| **현행 유지** | 전부 동적 + 정렬 보정, 2.5m 넘으면 스냅 | **이 침하 문제는 없다.** 발산은 견인 중에만 드러난다 |
+
+⚠ **현행에는 이 문제가 없다** — 겪은 침하는 A가 만든 것이지 원래 있던 것이 아니다.
+되돌리려면 Hips의 `NetworkTransform`·`NetworkRigidbody` **두 컴포넌트만 빼면 된다**(코드가 자동
+감지라 그것으로 이전 동작으로 복귀한다).
+
+### 진단 코드
+
+`m_logRevivalYaw`·`m_logSinkDiagnostics`가 **켜진 채로 커밋됐다.** 재개할 때 그대로 쓰고,
+방향이 정해지면 끄거나 지울 것.
