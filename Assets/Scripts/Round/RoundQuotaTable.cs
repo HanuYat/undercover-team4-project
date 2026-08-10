@@ -13,6 +13,9 @@ using UnityEngine;
 public class RoundQuotaTable : ScriptableObject
 {
     [Tooltip("라운드 순서대로 나열한 할당량(목표 금액). 첫 항목 = 1라운드, 마지막 항목 = 그 이후 모든 라운드")]
+    // 0 이하는 아래 GetQuota에서 조용히 폴백으로 대체된다 — 인스펙터에서 아예 못 넣게 막아 둔다.
+    // (Min은 배열 원소마다 걸린다) 목표 금액 필드(RoundManager.m_targetFund)의 [Min(1)]과 같은 방침이다.
+    [Min(1)]
     [SerializeField] private int[] m_quotas = { 30000, 45000, 60000 };
 
     /// <summary>표에 실제로 굴릴 행이 있는가 — 비어 있으면 호출부는 자기 인스펙터 값을 쓴다.</summary>
@@ -27,6 +30,7 @@ public class RoundQuotaTable : ScriptableObject
         if (!HasRows) return fallback;
 
         int index = Mathf.Clamp(round - RoundProgress.k_firstRound, 0, m_quotas.Length - 1);
+        // 0 이하는 [Min(1)]로 막혀 있지만, 그 속성이 붙기 전에 저장된 에셋이 있을 수 있어 방어로 남긴다.
         int quota = m_quotas[index];
         return quota > 0 ? quota : fallback;
     }
