@@ -36,7 +36,7 @@ public class NpcEscortedState : NpcStateBase
 
         // 밧줄로 끌려오는 중이면 에이전트가 꺼져 있다 — 추종 로직을 아예 돌리지 않는다.
         // 위치는 밧줄 장력(NpcController.TickRopeDrag)이 직접 제어한다. (#369, #390에서 NPC로 이관)
-        if (m_owner.IsRoped)
+        if (m_owner.Rope.IsRoped)
             return;
 
         m_owner.Agent.isStopped = false;
@@ -55,7 +55,7 @@ public class NpcEscortedState : NpcStateBase
         // 밧줄 끌기 중에는 추종·거리 이탈 판정을 돌리지 않는다 — 에이전트가 꺼져 있어 SetDestination이
         // 조용히 실패하고, 밧줄은 길이로 거리를 스스로 유지하므로 이탈 개념 자체가 없다.
         // 끌기 해제는 PlayerEscorter.TickTetherCleanup이 상태를 보고 판단한다. (#369)
-        if (m_owner.IsRoped)
+        if (m_owner.Rope.IsRoped)
             return;
 
         Transform target = m_owner.Custody.EscortTarget;

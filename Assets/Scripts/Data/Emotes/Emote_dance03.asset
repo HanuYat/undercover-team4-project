@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 726faae8ff3bad742adfa0cc1e9b6ec9, type: 3}
+  m_Name: Emote_dance03
+  m_EditorClassIdentifier: Assembly-CSharp::EmoteDefinition
+  m_id: dance03
+  m_displayName:
+    m_TableReference:
+      m_TableCollectionName: 
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_fallbackName: "\uCDA4 3"
+  m_icon: {fileID: 21300000, guid: 6ffc2808e06925748a7b38abcd33c426, type: 3}
+  m_clip: {fileID: 8184403081425726023, guid: 74c3000d92f64c94bb8c57d8068d8d28, type: 3}
+  m_loop: 1
+  m_bubbleSprite: {fileID: 21300000, guid: 6ffc2808e06925748a7b38abcd33c426, type: 3}
+  references:
+    version: 2
+    RefIds: []

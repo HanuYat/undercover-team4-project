@@ -85,7 +85,7 @@ public class RopeDragLoad : NetworkBehaviour
             if (distance < 0.001f)
                 continue;
 
-            float radius = escorter.RopeBreakDistance / Mathf.Max(1, npc.DraggerCount);
+            float radius = escorter.RopeBreakDistance / Mathf.Max(1, npc.Rope.DraggerCount);
             if (distance < radius)
                 continue; // 아직 늘어져 있다 — 자유롭게 움직인다
 
@@ -115,7 +115,7 @@ public class RopeDragLoad : NetworkBehaviour
 
         int draggingCount = 0;
         for (int i = 0; i < tethered.Count; i++)
-            if (tethered[i].IsDraggedBy(transform))
+            if (tethered[i].Rope.IsDraggedBy(transform))
                 draggingCount++;
 
         int slot = 0;
@@ -123,15 +123,15 @@ public class RopeDragLoad : NetworkBehaviour
         for (int i = 0; i < tethered.Count; i++)
         {
             NpcController npc = tethered[i];
-            if (!npc.IsDraggedBy(transform))
+            if (!npc.Rope.IsDraggedBy(transform))
                 continue; // 묶여만 있는(E로 놓아둔) 대상은 안 끌고 있으니 무게도 지지 않는다
 
-            npc.SetDragSlot(slot, draggingCount);
+            npc.Rope.SetDragSlot(slot, draggingCount);
             slot++;
 
             // 여러 명이 같은 대상을 함께 끌면 참가자 수로 나눠 진다(다인 완화식). 여러 명을 동시에
             // 끌 때의 무게 합산도 이 누적이 그대로 한다 — 상한이 슬롯이 아니라 무게 예산이 되는 지점.
-            weightSum += npc.DragWeight / Mathf.Max(1, npc.DraggerCount);
+            weightSum += npc.Rope.DragWeight / Mathf.Max(1, npc.Rope.DraggerCount);
         }
 
         SetDragSpeedFactor(

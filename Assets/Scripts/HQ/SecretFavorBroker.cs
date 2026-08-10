@@ -306,6 +306,19 @@ public class SecretFavorBroker : NetworkBehaviour
         Debug.Log($"[비밀 청탁] 대상이 인도 지점으로 걸어간다: {npc.name}");
     }
 
+    // 의뢰가 접혔는데 대상이 아직 걷고 있거나 인도 지점에 서 있다 — 도시로 돌려보낸다 (#548).
+    // 그냥 두면 의뢰가 사라진 뒤에도 그 자리에 붙박이로 남는다. 근처에 아무도 없으면
+    // NpcFleeState가 곧 Idle로 되돌리므로 평범한 시민으로 복귀한다.
+    private void SendTargetAway()
+    {
+        if (m_target == null || !m_target.Custody.HasReleaseDestination)
+            return;
+
+        m_target.Custody.ClearRelease();
+        m_target.Reaction.StartFlee(ResolveRequester());
+        Debug.Log($"[비밀 청탁] 의뢰가 접혀 대상이 도시로 흩어진다: {m_target.name}");
+    }
+
     // ---- 완수 판정 (서버 · 오프라인 전용) ----
 
     private void Update()
@@ -330,6 +343,7 @@ public class SecretFavorBroker : NetworkBehaviour
         if (m_favorExpireSeconds > 0f && Time.time >= m_expireTime)
         {
             Debug.Log("[비밀 청탁] 시간이 지나 의뢰가 거둬들여졌다");
+            SendTargetAway();
             Clear();
             return;
         }
@@ -347,6 +361,7 @@ public class SecretFavorBroker : NetworkBehaviour
         if (requester == null)
         {
             Debug.Log("[비밀 청탁] 의뢰인이 접속을 끊어 의뢰를 취소한다");
+            SendTargetAway();
             ClearServerState();
             return;
         }

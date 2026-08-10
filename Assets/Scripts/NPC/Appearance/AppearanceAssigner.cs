@@ -314,12 +314,20 @@ public class AppearanceAssigner : CommonManagerBase
         return Random.Range(0, catalog.Count);
     }
 
-    /// <summary>축 전체를 셔플해 앞에서 공개 수만큼 고른다. 담기는 순서는 뜻이 없다 — 집합이다.</summary>
+    /// <summary>축 전체를 셔플해 앞에서 공개 수만큼 고른다. 담기는 순서는 뜻이 없다 — 집합이다.
+    /// 머리가 보이지 않는 범인이 하나라도 있으면 머리색은 후보에서 빠진다 (#556).</summary>
     private void PickRevealedAxes()
     {
+        bool skipHairColor = !AllCriminalsHaveVisibleHair();
+
         var order = new List<AppearanceAxis>(AppearanceProfile.k_axisCount);
         for (int i = 0; i < AppearanceProfile.k_axisCount; i++)
-            order.Add((AppearanceAxis)i);
+        {
+            var axis = (AppearanceAxis)i;
+            if (skipHairColor && axis == AppearanceAxis.HairColor)
+                continue;
+            order.Add(axis);
+        }
 
         for (int i = order.Count - 1; i > 0; i--)
         {
@@ -331,6 +339,24 @@ public class AppearanceAssigner : CommonManagerBase
         m_revealedAxes.Clear();
         for (int i = 0; i < count; i++)
             m_revealedAxes.Add(order[i]);
+    }
+
+    /// <summary>
+    /// 전 범인의 머리가 화면에 보이는가 — 머리색을 몽타주 힌트로 쓸 수 있는지의 기준. (#556)
+    ///
+    /// 머리 스타일이 '없음(대머리)'·'가림'이면 머리색은 화면에 나타나지 않고(NpcAppearance.TintPropAxis는
+    /// 대상 프롭이 없으면 건너뛴다) 몽타주 텍스트에만 남는다 — 현장에서 눈으로 대조할 수 없는 특징이
+    /// 무전에 실리면 대조가 성립하지 않고 그대로 오검거로 이어진다.
+    /// 공개 축은 전 범인 공통이라, 한 명이라도 어긋나면 축 전체를 쓰지 않는다.
+    /// </summary>
+    private bool AllCriminalsHaveVisibleHair()
+    {
+        foreach (AppearanceProfile profile in m_criminalProfiles)
+        {
+            if (!m_appearanceDatabase.HasVisibleHair(profile))
+                return false;
+        }
+        return true;
     }
 
     /// <summary>

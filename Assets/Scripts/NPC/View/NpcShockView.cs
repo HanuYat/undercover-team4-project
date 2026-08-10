@@ -6,7 +6,7 @@ using UnityEngine;
 /// <b>테이저 기절에만 붙는다.</b> 진압봉 KO(체력 0, #366)·폭발 넉백 KO는 같은 무력화지만 전기가
 /// 아니므로 제외된다 — 3부작 색 언어에서 시안은 테이저 전용이고, "시안이 튀면 저건 쓰러져 있고
 /// 지금 밧줄로 묶을 수 있다"가 한눈에 읽혀야 하기 때문이다. 그 구분은
-/// <see cref="NpcController.OnTaserStunStarted"/>가 해 준다(<see cref="NpcStunCause"/> 참고).
+/// <see cref="NpcStun.OnTaserStunStarted"/>가 해 준다(<see cref="NpcStunCause"/> 참고).
 ///
 /// 아크 방출 자체는 <see cref="ShockArcEmitter"/>가 맡는다 — 플레이어 감전(<see cref="PlayerHitView"/>)과
 /// 공유하는 부품이다. 몸 발광은 <see cref="BodyTint"/>에 요청한다 — 타격 플래시(#478)와 같은
@@ -43,14 +43,14 @@ public class NpcShockView : MonoBehaviour
 
     private void OnEnable()
     {
-        m_controller.OnTaserStunStarted += HandleTaserStunStarted;
-        m_controller.OnStunnedChanged += HandleStunnedChanged;
+        m_controller.Stun.OnTaserStunStarted += HandleTaserStunStarted;
+        m_controller.Stun.OnStunnedChanged += HandleStunnedChanged;
     }
 
     private void OnDisable()
     {
-        m_controller.OnTaserStunStarted -= HandleTaserStunStarted;
-        m_controller.OnStunnedChanged -= HandleStunnedChanged;
+        m_controller.Stun.OnTaserStunStarted -= HandleTaserStunStarted;
+        m_controller.Stun.OnStunnedChanged -= HandleStunnedChanged;
         Stop();
     }
 
@@ -59,8 +59,8 @@ public class NpcShockView : MonoBehaviour
         m_active = true;
         m_flashUntil = Time.time + m_flashSeconds;
 
-        // 지속 시간은 '언제부터 잦아들지'의 힌트로만 쓴다 — 밧줄에 묶이면 서버 타이머가 멈추므로(#269)
-        // 이 시각으로 종료를 판단하면 끌려가는 내내 연출이 먼저 꺼진다. 종료는 IsStunned가 알린다.
+        // 지속 시간은 '언제부터 잦아들지'의 힌트로만 쓴다 — 기절이 밖에서 먼저 풀리는 경로가 있어
+        // (밧줄 묶기·수감·넉백) 이 시각으로 종료를 판단하면 어긋난다. 종료는 IsStunned가 알린다.
         // 꼬리 길이는 ShockArcEmitter가 갖는다 — 플레이어 감전(PlayerHitView)과 같은 값이어야
         // 같은 테이저에 맞고 잦아드는 시점이 갈리지 않는다.
         m_calmFromTime = Time.time + Mathf.Max(0f, seconds - ShockArcEmitter.k_calmTailSeconds);
@@ -93,7 +93,7 @@ public class NpcShockView : MonoBehaviour
 
         // 수갑 채포 등 기절이 바깥에서 풀리는 경로가 있어 이벤트만 믿지 않는다 —
         // 늦게 오거나 유실된 알림이 있어도 여기서 스스로 멎는다.
-        if (!m_controller.IsStunned)
+        if (!m_controller.Stun.IsStunned)
         {
             Stop();
             return;
