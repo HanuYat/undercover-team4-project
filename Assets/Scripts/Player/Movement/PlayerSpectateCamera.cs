@@ -44,6 +44,7 @@ public class PlayerSpectateCamera : MonoBehaviour
 
     private bool m_active;
     private float m_blend; // 1인칭(0) ↔ 관전(1) 진행도
+    private bool m_snap;   // 다음 Tick에서 보간을 끊고 현재 상태를 즉시 반영한다
     private float m_yaw;
     private float m_pitch;
 
@@ -90,6 +91,13 @@ public class PlayerSpectateCamera : MonoBehaviour
     /// </summary>
     public float Tick()
     {
+        if (m_snap)
+        {
+            m_snap = false;
+            m_blend = m_active ? 1f : 0f;
+            return m_blend;
+        }
+
         m_blend = Mathf.Lerp(m_blend, m_active ? 1f : 0f, m_blendSpeed * Time.deltaTime);
 
         if (m_blend < 0.001f)
@@ -97,6 +105,21 @@ public class PlayerSpectateCamera : MonoBehaviour
 
         return m_blend;
     }
+
+    /// <summary>
+    /// 다음 <see cref="Tick"/>에서 보간을 끊고 현재 상태를 즉시 반영한다 — <b>몸이 순간이동했을 때</b>
+    /// 부른다(<see cref="PlayerMovement"/>의 포즈 대입). 옮겨간 자리에서 옛 화면으로 1초 쓸려 들어올
+    /// 이유가 없다.
+    ///
+    /// <b>0으로 지우는 게 아니라 목표로 튀는 것</b>이 핵심이다 — 죽은 채로 옮겨지는 경로가 실제로
+    /// 있고(본부 부활 장치 안치, #365), 거기서 0으로 지우면 아직 시체인데 화면만 1인칭으로 돌아간다.
+    ///
+    /// 즉시 대입하지 않고 한 프레임 미루는 이유는 <b>호출 순서</b>다. 세션 유지 씬 전환에서 재배치
+    /// (PlayerSpawnManager)와 부활 해제(ShopManager)가 둘 다 씬 로드에 물려 있는데 Start 순서가
+    /// 정해져 있지 않다. Unity는 그 프레임의 Start를 전부 돌린 뒤 Update를 돌리므로, Tick 시점에는
+    /// 어느 쪽이 먼저였든 상태가 확정돼 있다.
+    /// </summary>
+    public void SnapNextTick() => m_snap = true;
 
     /// <summary>
     /// 관전 카메라의 <b>월드</b> 포즈. 골반이 없으면 false — 호출자는 1인칭 포즈를 그대로 쓴다.

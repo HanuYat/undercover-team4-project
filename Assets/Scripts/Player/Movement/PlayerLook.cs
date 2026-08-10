@@ -238,6 +238,12 @@ public class PlayerLook : MonoBehaviour
     }
 
     /// <summary>
+    /// 시점 보간을 끊고 다음 프레임에 현재 상태를 즉시 반영한다 — 몸이 순간이동했을 때
+    /// <see cref="PlayerMovement"/>가 부른다. (#576)
+    /// </summary>
+    public void SnapViewBlend() => m_spectate?.SnapNextTick();
+
+    /// <summary>
     /// 시점 회전을 잠시 멈춘다 — 감정표현 휠처럼 <b>같은 마우스 입력을 다른 용도로 쓰는</b> UI가 켠다. (#219)
     ///
     /// 입력 자체를 끄는 <see cref="PlayerInputHandler.SetSuspended"/>로는 이 일을 할 수 없다.
