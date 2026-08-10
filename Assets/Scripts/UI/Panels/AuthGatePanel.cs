@@ -8,6 +8,29 @@ using UnityEngine.Localization.Settings;
 using UnityEngine.UI;
 
 /// <summary>
+/// 계정 조작 결과 문구. 값 이름이 곧 키다 — <c>Title.AuthStatus.</c> + 이름 (#497).
+/// 한 라벨의 배타적인 상태들이라 인스펙터에서 고를 것이 없다 — 로비 음성 상태(<c>Lobby.Voice.</c>)와 같은 자리.
+///
+/// <b>#585에서 <c>AuthPanel</c>이 <see cref="SignOutView"/>로 줄어들며 이리로 옮겨 왔다</b> —
+/// 이제 쓰는 곳은 <see cref="AuthGatePanel"/> 하나뿐이다.
+///
+/// <c>NewAnonymousStarted</c>·<c>ConfirmUnavailableForSwitch</c>는 #585에서 계정 전환 UI가
+/// 사라지며 쓰이지 않게 됐다. <see cref="AuthBootstrap.StartNewAnonymousAccountAsync"/>는 남아
+/// 있으므로(도달 경로만 없다) 값과 문구도 함께 남긴다 — 진입점이 다시 생기면 그대로 쓴다.
+/// </summary>
+[LocalizedEnum("TitleTable", "Title.AuthStatus.")]
+public enum EAuthStatus
+{
+    Busy = 0,
+    LinkSucceeded = 1,
+    SignInSucceeded = 2,
+    NewAnonymousStarted = 3,
+    ConfirmUnavailableForLink = 4, // 확인창이 없어 연동 중단 — 편도 결정을 경고 없이 실행하지 않는다 (#444)
+    ConfirmUnavailableForSwitch = 5,
+    SigningIn = 6, // 자동 익명 로그인이 끝나기를 기다리는 중 — 관문의 초기 상태 (#585)
+}
+
+/// <summary>
 /// 타이틀 첫 화면 — 로그인 관문. (#585)
 /// 세 갈래로 갈라진 뒤 통과하면 자기를 닫고 <see cref="SessionPanel"/>을 연다.
 ///

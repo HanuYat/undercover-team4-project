@@ -255,12 +255,12 @@ MonoBehaviour:
     m_Key: Title.Gate.Guest
     m_Metadata:
       m_Items: []
-  - m_Id: 2261328199245827
-    m_Key: Title.Gate.Account
-    m_Metadata:
-      m_Items: []
   - m_Id: 2261328199245828
     m_Key: Title.Gate.Title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2277348003635200
+    m_Key: Title.Session.Title
     m_Metadata:
       m_Items: []
   m_Metadata:

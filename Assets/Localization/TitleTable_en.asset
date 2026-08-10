@@ -290,12 +290,12 @@ MonoBehaviour:
     m_Localized: Play as Guest
     m_Metadata:
       m_Items: []
-  - m_Id: 2261328199245827
-    m_Localized: Account
-    m_Metadata:
-      m_Items: []
   - m_Id: 2261328199245828
     m_Localized: Connect
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2277348003635200
+    m_Localized: Session
     m_Metadata:
       m_Items: []
   references:
