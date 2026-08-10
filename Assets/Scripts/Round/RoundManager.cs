@@ -84,6 +84,11 @@ public class RoundManager : CommonManagerBase
     // 준비 절차를 한 번만 돌리기 위한 래치
     private bool m_preparing;
 
+    // 라운드 종료 시점의 목표 금액 스냅샷 (#377). 종료 직후 진행도가 오르면(RoundEndResetter) 표 조회
+    // 결과가 다음 라운드 값으로 바뀐다 — 정산(SettlementController)은 이번 라운드 값을 봐야 하므로 얼려 둔다.
+    // 음수 = 아직 종료 전(표를 그대로 조회한다).
+    private int m_endedTargetFund = -1;
+
     // 인스펙터에서 비워 뒀으면 씬에서 한 번 찾아 캐시한다 (ArrestJudge의 인계 구역과 같은 방식).
     // JailZone은 App에 등록된 매니저가 아니라 씬 배치 오브젝트라 App 파사드 경로가 없다.
     private JailZone Jail
@@ -118,6 +123,9 @@ public class RoundManager : CommonManagerBase
     {
         get
         {
+            // 종료 뒤에는 얼려 둔 값을 준다 — 정산·결과 UI가 다음 라운드 목표를 읽지 않게
+            if (m_endedTargetFund >= 0) return m_endedTargetFund;
+
             if (m_quotaTable == null) return m_targetFund;
 
             RoundProgress progress = App.Game.RoundProgress;
@@ -223,6 +231,7 @@ public class RoundManager : CommonManagerBase
         EndReason = RoundEndReason.None;
         CriminalArrestCount = 0;
         RemainingSeconds = float.PositiveInfinity;
+        m_endedTargetFund = -1;
         m_preparing = false;
         Spawner.ResetSpawnState(); // IsSpawnCompleted 래치 해제 + 이전 NPC 정리 → StartSpawn 재동작
     }
@@ -477,6 +486,7 @@ public class RoundManager : CommonManagerBase
         Phase = RoundPhase.Ended;
         Result = result;
         EndReason = reason;
+        m_endedTargetFund = TargetFund; // 구독자(정산)가 읽기 전에 이번 라운드 값으로 고정 (#377)
         SetNpcsFrozen(true); // NPC 정지 — 플레이어 정지는 PlayerMovement가 GameplayFrozen을 읽어 처리
         Debug.Log($"[라운드] 종료 — 결과: {result} (사유: {reason})");
         OnRoundEnded?.Invoke(result, reason);

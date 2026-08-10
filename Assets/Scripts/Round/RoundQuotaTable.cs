@@ -18,9 +18,6 @@ public class RoundQuotaTable : ScriptableObject
     /// <summary>표에 실제로 굴릴 행이 있는가 — 비어 있으면 호출부는 자기 인스펙터 값을 쓴다.</summary>
     public bool HasRows => m_quotas != null && m_quotas.Length > 0;
 
-    /// <summary>표에 정의된 마지막 라운드 번호. 이 뒤로는 같은 값이 유지된다.</summary>
-    public int LastDefinedRound => HasRows ? m_quotas.Length : 0;
-
     /// <summary>
     /// N라운드의 할당량. 표가 비었거나 해당 값이 0 이하면 <paramref name="fallback"/>을 돌려준다.
     /// 표 끝을 넘는 라운드는 마지막 행으로 clamp 한다.

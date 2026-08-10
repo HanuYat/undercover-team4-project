@@ -24,8 +24,6 @@ public class RoundProgress : NetworkedManagerBase
 
     private readonly NetworkVariable<int> m_round = new(k_firstRound);
 
-    public NetworkVariable<int> Round => m_round;
-
     /// <summary>현재 라운드 번호(1부터). 세션 중에는 클라이언트에서도 읽을 수 있다.</summary>
     public int Current => m_round.Value;
 
