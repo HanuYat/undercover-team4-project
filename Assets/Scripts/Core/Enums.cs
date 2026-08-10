@@ -91,6 +91,9 @@ public enum EAudioClip
 
     // 설비음 — 아이템이 아니라 본부 설비가 낸다. 뒤에 붙이는 이유는 위와 같다.
     JailSiren, // 웨엥 — 유치장 경보 (#488 사이렌 버튼)
+
+    // UI 조작음. 뒤에 붙이는 이유는 위와 같다.
+    UiClick, // 톡 — UI 버튼을 누른 순간 (버튼마다 배선하지 않고 UiClickSound가 전역으로 낸다)
 }
 
 /// <summary>
