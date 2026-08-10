@@ -80,6 +80,8 @@ public class PlayerLook : MonoBehaviour
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 시점 처리 분기 (#105, #252)
     private PlayerCrouch m_crouch;           // 앉기 중 카메라 높이 조정 (#236)
     private PlayerJump m_jump;               // 공중에서는 앉기 시점 변화를 얼린다 (#189)
+    private PlayerHandView m_handView;       // 3인칭 동안 1인칭 팔 감추기 (#219, #576)
+    private PlayerSpectateCamera m_spectate; // 사망 관전 오빗 (#576)
 
     private float m_pitch;
     private Vector2 m_smoothedLook; // 지수 감쇠로 부드럽게 만든 시점 입력 — 저속 픽셀 양자화 지터 완화 (#216)
@@ -93,6 +95,8 @@ public class PlayerLook : MonoBehaviour
     private bool m_emoteView;       // 감정표현 3인칭 시점이 요청됐는가 (#219)
     private float m_emoteCamBlend;  // 1인칭(0) ↔ 3인칭(1) 보간 진행도
     private float m_emoteYaw;       // 감정표현 중 누적한 카메라 좌우 각 — 몸은 돌리지 않는다
+    private bool m_spectateView;    // 사망 관전이 요청됐는가 — 오빗 각 진입/이탈 판정 (#576)
+    private bool m_spectateShown;   // 관전 표시(내 몸·1인칭 팔)가 켜져 있는가 — 블렌드가 문턱을 넘은 뒤에 따라온다
     private int m_ownBodyLayer = -1; // OwnBody 레이어 번호 캐시 (-1 = 아직 조회 전)
 
     /// <summary>시선 pitch(도, +아래/-위) — PlayerHeadLook이 머리 본 회전에 사용한다. (#348)</summary>
@@ -113,6 +117,8 @@ public class PlayerLook : MonoBehaviour
         m_incapacitation = GetComponent<PlayerIncapacitation>();
         m_crouch = GetComponent<PlayerCrouch>();
         m_jump = GetComponent<PlayerJump>();
+        m_handView = GetComponent<PlayerHandView>();
+        m_spectate = GetComponent<PlayerSpectateCamera>();
 
         if (m_playerCamera != null)
         {
@@ -163,6 +169,57 @@ public class PlayerLook : MonoBehaviour
             return;
 
         m_emoteView = active;
+        ApplyThirdPersonView();
+    }
+
+    // 관전 진입/이탈 — 오빗 각만 여기서 잡는다. 표시(몸·팔)는 아래 ShowSpectateView가 블렌드를 보고 켠다. (#576)
+    private void SetSpectateView(bool active)
+    {
+        if (m_spectate == null || m_spectateView == active)
+            return;
+
+        m_spectateView = active;
+
+        m_spectate.SetSpectating(
+            active,
+            m_playerCamera != null ? m_playerCamera.transform.eulerAngles.y : transform.eulerAngles.y
+        );
+    }
+
+    // 3인칭 표시로 보는 블렌드 문턱 — 이 아래에서는 카메라가 아직 몸 안에 있는 셈이라 1인칭 표시를 쓴다.
+    private const float k_spectateShowBlend = 0.2f;
+
+    /// <summary>
+    /// 관전 표시를 켜고 끈다 — <b>요청 상태가 아니라 블렌드 진행도</b>로 판정한다. (#576)
+    ///
+    /// 요청 상태로 걸면 부활 순간 표시만 먼저 1인칭으로 돌아가고 카메라는 1초에 걸쳐 따라온다 —
+    /// 그동안 몸은 사라졌는데 카메라는 아직 뒤에 있어 허공에 1인칭 팔만 뜬 화면이 된다.
+    /// 진입 쪽도 같은 이유로 문턱을 넘긴 뒤에 켠다(카메라가 아직 머리 안에 있을 때 몸을 되살리면
+    /// 자기 얼굴 안쪽이 화면을 덮는다).
+    /// </summary>
+    private void ShowSpectateView(bool shown)
+    {
+        if (m_spectateShown == shown)
+            return;
+
+        m_spectateShown = shown;
+        ApplyThirdPersonView();
+    }
+
+    /// <summary>
+    /// 3인칭에 딸린 표시 둘을 함께 맞춘다 — 내 몸 컬링 복원과 1인칭 팔 숨김.
+    ///
+    /// 한 곳에 묶는 이유는 <see cref="SetEmoteView"/> 주석 그대로다: 둘 중 하나만 걸리면 "뒤로
+    /// 빠졌는데 아무것도 없는" 화면이거나 "전신 위에 팔 한 쌍이 떠 있는" 화면이 된다.
+    /// 3인칭 사용처가 감정표현·사망 관전 둘로 늘어(#576) 각자 끄고 켜면 겹치는 순간 한쪽이 다른
+    /// 쪽을 되돌린다 — 죽으면서 감정표현이 끊기면 그쪽 종료 처리가 방금 감춘 팔을 되살린다.
+    /// </summary>
+    private void ApplyThirdPersonView()
+    {
+        bool thirdPerson = m_emoteView || m_spectateShown;
+
+        // 1인칭 팔은 카메라 자식이라 그냥 두면 전신이 보이는 화면에 붙어 따라온다.
+        m_handView?.SetViewmodelVisible(!thirdPerson);
 
         if (m_playerCamera == null)
             return;
@@ -174,7 +231,7 @@ public class PlayerLook : MonoBehaviour
             return; // 레이어가 없는 구성(테스트 씬 등) — 카메라만 빠지고 몸은 안 보인다
 
         int mask = 1 << m_ownBodyLayer;
-        if (active)
+        if (thirdPerson)
             m_playerCamera.cullingMask |= mask;
         else
             m_playerCamera.cullingMask &= ~mask;
@@ -213,6 +270,14 @@ public class PlayerLook : MonoBehaviour
         // 감쇠 계수 0이면 원시 입력을 그대로 적용(스무딩 없음). (#216)
         float t = m_lookSmoothing <= 0f ? 1f : 1f - Mathf.Exp(-m_lookSmoothing * Time.deltaTime);
         m_smoothedLook = Vector2.Lerp(m_smoothedLook, look, t);
+
+        // 사망 관전 중에는 몸도 시야 각도도 아닌 오빗 각을 돌린다 (#576).
+        // 아래 쓰러진 자세 분기보다 먼저 봐야 한다 — 사망도 IsProne이라, 순서가 뒤면 바닥 시점이 입력을 먼저 먹는다.
+        if (m_spectateView)
+        {
+            m_spectate.AddLook(m_smoothedLook);
+            return;
+        }
 
         // 쓰러져 있으면 몸을 돌리지 않는다 (#252) — transform을 돌리면 누운 캐릭터가 바닥에서
         // 제자리 회전하는 그림이 되고, 그건 다른 플레이어 화면에도 그대로 보인다.
@@ -253,6 +318,10 @@ public class PlayerLook : MonoBehaviour
 
         float lerp = m_camPoseLerpSpeed * Time.deltaTime;
         bool downed = IsProne;
+
+        // 사망 관전 시점 — 기능 정지(Die) 동안만 켠다 (#576). 기절·매달기·납치처럼 스스로 풀리는
+        // 무력화는 짧고 곧 일어나므로 지금의 바닥 시점을 그대로 둔다.
+        SetSpectateView(m_incapacitation != null && m_incapacitation.IsDead);
 
         m_downCamBlend = Mathf.Lerp(m_downCamBlend, downed ? 1f : 0f, lerp);
 
@@ -356,8 +425,29 @@ public class PlayerLook : MonoBehaviour
             euler += shakeEuler;
         }
 
+        Quaternion localRot = Quaternion.Euler(euler);
+
+        // 사망 관전 — 시체를 도는 3인칭으로 갈아탄다 (#576). 여기서 얹는 이유는 위 둘과 같다:
+        // 카메라 포즈를 통째로 대입하는 곳이 이 메서드 하나라, 밖에서 만들면 그 프레임에 지워진다.
+        //
+        // 피벗이 루트가 아니라 시체(골반)라 <b>월드에서 만들어 로컬로 되돌린다</b> — 래그돌 비행
+        // 중에는 루트가 제자리에 남고 yaw만 몸을 따라가므로(PlayerRagdoll의 FollowBodyYaw),
+        // 루트 기준으로 잡으면 날아가는 내 몸을 화면이 놓친다.
+        if (m_spectate != null)
+        {
+            float spectateBlend = m_spectate.Tick(); // 관전 중이 아니어도 불러야 이탈 보간이 진행된다
+            ShowSpectateView(spectateBlend > k_spectateShowBlend);
+
+            if (spectateBlend > 0.001f
+                && m_spectate.TryGetPose(out Vector3 spectatePos, out Quaternion spectateRot))
+            {
+                localPos = Vector3.Lerp(localPos, transform.InverseTransformPoint(spectatePos), spectateBlend);
+                localRot = Quaternion.Slerp(localRot, Quaternion.Inverse(transform.rotation) * spectateRot, spectateBlend);
+            }
+        }
+
         m_playerCamera.transform.localPosition = localPos;
-        m_playerCamera.transform.localEulerAngles = euler;
+        m_playerCamera.transform.localRotation = localRot;
     }
 
     // ---- 카메라 흔들림 (#477) ----
