@@ -47,6 +47,14 @@ public class RunawayVehicle : NetworkBehaviour
     [Tooltip("주행 속도(m/s) — 플레이어 전력질주보다 충분히 빨라야 '피한다'가 성립한다")]
     [SerializeField] private float m_speed = 22f;
 
+    [Tooltip(
+        "이 차가 앞으로 달리는 거리(m) — 놓인 자리에서 전방으로 이만큼 간 뒤 멈추고 제자리로 돌아온다. "
+            + "차마다 따로 두는 이유는 도로 직선 구간의 길이가 자리마다 다르기 때문이다 — "
+            + "직선보다 길게 잡으면 도로를 벗어나 건물을 통과한다"
+    )]
+    [Min(5f)]
+    [SerializeField] private float m_runDistance = 40f;
+
     [Tooltip("완주한 차가 제자리로 되돌아갈 때의 속도(m/s) — 급발진과 달리 평범한 주행이라 느리게 둔다")]
     [Min(0.1f)]
     [SerializeField] private float m_returnSpeed = 8f;
@@ -174,11 +182,13 @@ public class RunawayVehicle : NetworkBehaviour
     /// 차를 옮기지 않는다: 맵에 미리 놓인 차가 곧 출발점이고, 놓인 방향이 곧 진행 방향이다 (#304).
     /// 여기서는 아직 달리지 않는다 — 급발진 시점은 이벤트(선 위에 사람이 들어옴)가 정한다.
     /// </summary>
-    public void ServerArm(Vector3 endPoint)
+    public void ServerArm()
     {
         Vector3 startPoint = transform.position;
-        m_endPoint = endPoint;
-        m_direction = (endPoint - startPoint).normalized;
+        m_endPoint = startPoint + transform.forward * m_runDistance;
+        m_direction = transform.forward;
+        m_direction.y = 0f;
+        m_direction.Normalize();
         if (m_direction.sqrMagnitude < 0.001f)
         {
             IsFinished = true;

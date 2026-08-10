@@ -16,6 +16,7 @@ using Random = UnityEngine.Random;
 /// <b>차는 맵에 미리 놓여 있다</b> (2026-08-10 확정). 추첨될 때 만들어 내지 않고, 씬에 배치된 차
 /// 중에서 현장 인원 근처의 한 대를 골라 <b>그 자리에서</b> 무장시킨다. 그래서 경로가 따로 필요 없다 —
 /// <b>놓인 자리가 출발점이고 놓인 방향이 진행 방향</b>이며, 거기서 앞으로 곧게 달린다.
+/// 달리는 거리도 차가 들고 있다(<see cref="RunawayVehicle"/>) — 도로 직선 구간의 길이가 자리마다 다르다.
 /// 도로 타일을 읽어 직선을 찾던 방식(RoadGrid)은 이 결정으로 쓰지 않는다: 맵 제작자가 차를 도로에
 /// 놓고 방향만 맞추면 되고, 맵이 바뀌어도 타일 이름 규칙에 기대지 않는다.
 ///
@@ -30,11 +31,7 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
     [Header("표시")]
     [SerializeField] private string m_displayName = "폭주 차량";
 
-    [Header("경로 — 맵에 놓인 차가 놓인 방향으로 달린다")]
-    [Tooltip("차가 앞으로 달리는 거리(m). 놓인 자리에서 전방으로 이만큼 간 뒤 멈추고 제자리로 돌아온다")]
-    [Min(10f)]
-    [SerializeField] private float m_runDistance = 120f;
-
+    [Header("차량 고르기 — 경로는 맵에 놓인 차가 스스로 안다")]
     [Tooltip("현장 인원에서 이 거리(m) 안에 놓인 차만 고른다 — 멀리서 달려봐야 아무도 못 본다")]
     [Min(5f)]
     [SerializeField] private float m_pickRadius = 60f;
@@ -107,7 +104,7 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
 
         // 놓인 자리에서 놓인 방향 그대로 — 여기서 차를 옮기지도, 돌리지도 않는다
         m_vehicle = vehicle;
-        m_vehicle.ServerArm(vehicle.transform.position + vehicle.transform.forward * m_runDistance);
+        m_vehicle.ServerArm(); // 거리는 차가 들고 있다 — 자리마다 도로 직선 길이가 다르다
         m_phaseStartTime = Time.time;
         Debug.Log($"[돌발이벤트] {m_displayName} — {target.name} 근처의 {vehicle.name}에 시동이 걸렸다");
     }
@@ -185,7 +182,7 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
     {
         // 반경은 넉넉히 — 정확한 판정은 아래 IsOnPath가 선분 기준으로 한다
         SuddenEventUtil.CollectFieldPlayers(
-            m_vehicle.transform.position, m_runDistance, m_playerBuffer);
+            m_vehicle.transform.position, m_pickRadius, m_playerBuffer);
 
         for (int i = 0; i < m_playerBuffer.Count; i++)
         {
