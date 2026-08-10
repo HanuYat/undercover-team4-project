@@ -35,12 +35,35 @@ public class TitleUIManager : UIManagerBase
     {
         m_quitBtn.onClick.AddListener(QuitGame);
         m_settingsBtn.onClick.AddListener(OpenSettings);
+
+        if (App.Net.Auth != null)
+            App.Net.Auth.OnSignedOut += ReturnToAuthGate;
     }
 
     private void OnDisable()
     {
         m_quitBtn.onClick.RemoveListener(QuitGame);
         m_settingsBtn.onClick.RemoveListener(OpenSettings);
+
+        if (App.Net.Auth != null)
+            App.Net.Auth.OnSignedOut -= ReturnToAuthGate;
+    }
+
+    /// <summary>
+    /// 로그아웃하면 관문으로 돌려보낸다. (#585)
+    ///
+    /// 없으면 세션 화면에 그대로 남는다 — 로그아웃 버튼만 회색이 되고 나머지는 그대로라
+    /// "눌러도 아무 일도 없는" 화면이 된다(실측). 실제로는 [세션 생성]·[코드로 참가]가
+    /// 여전히 눌리는데 계정이 없어 실패하고, 관문으로 돌아갈 길도 없다.
+    ///
+    /// 첫 화면을 고르는 것과 같은 판단이라 여기 둔다 — 위 Start와 한 쌍이다.
+    /// </summary>
+    private void ReturnToAuthGate()
+    {
+        if (TryGetPanel(out SessionPanel session))
+            session.ClosePanel();
+
+        OpenPanel<AuthGatePanel>();
     }
 
     // 빌드에선 앱 종료, 에디터에선 플레이 모드 종료. (#210 OnGUI 종료 버튼 역할을 정식 메뉴로 부활 — #224)

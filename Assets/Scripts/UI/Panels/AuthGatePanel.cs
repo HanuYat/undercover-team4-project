@@ -104,6 +104,7 @@ public class AuthGatePanel : PanelBase
         {
             Auth.OnSignedIn += Refresh;
             Auth.OnSignedOut += Refresh;
+            Auth.OnSigningInChanged += Refresh;
         }
 
         LocalizationSettings.SelectedLocaleChanged += HandleLocaleChanged;
@@ -120,6 +121,7 @@ public class AuthGatePanel : PanelBase
         {
             Auth.OnSignedIn -= Refresh;
             Auth.OnSignedOut -= Refresh;
+            Auth.OnSigningInChanged -= Refresh;
         }
 
         // 종료 중에는 설정 에셋을 되살리지 않는다 — HasSettings로 먼저 확인한다 (ShopStand 관례)
@@ -327,20 +329,28 @@ public class AuthGatePanel : PanelBase
     private void Refresh()
     {
         bool signedIn = Auth != null && Auth.IsSignedIn;
+        bool signingIn = Auth != null && Auth.IsSigningIn;
 
-        // 익명 로그인이 끝나기 전에는 세 버튼을 다 잠근다. 로그인·승격 모두 그 상태에서
-        // 시작하면 InitializeAndSignInAsync가 두 번 도는 창이 열린다 (#444와 같은 사유).
-        bool ready = signedIn && !m_isBusy;
+        // 로그인이 **되는 중**일 때만 잠근다. 그 상태에서 시작하면 InitializeAndSignInAsync가
+        // 두 번 도는 창이 열리기 때문이다 (#444와 같은 사유).
+        //
+        // 처음에는 "로그인 안 됨"까지 잠갔는데, 로그아웃하고 관문으로 돌아오면 세 버튼이 모두
+        // 잠긴 채 풀리지 않았다 — 자동 익명 로그인은 앱 시작 시 한 번뿐이라 다시 로그인될 일이
+        // 없기 때문이다(실측). [게스트로 시작]과 [로그인]은 스스로 로그인하므로 잠글 이유가 없다.
+        bool ready = !signingIn && !m_isBusy;
         m_signInButton.interactable = ready;
-        m_signUpButton.interactable = ready;
         m_guestButton.interactable = ready;
+
+        // 회원가입만 예외다 — 승격(LinkAccount)은 승격시킬 익명 계정이 있어야 성립한다.
+        // 로그아웃 상태에서는 [게스트로 시작]으로 익명 계정을 되찾은 뒤라야 누를 수 있다.
+        m_signUpButton.interactable = ready && signedIn;
 
         m_usernameInput.interactable = ready;
         m_passwordInput.interactable = ready;
 
         if (m_isBusy)
             SetProgressStatus(Status(EAuthStatus.Busy));
-        else if (!signedIn)
+        else if (signingIn)
             SetProgressStatus(Status(EAuthStatus.SigningIn));
         else if (m_statusIsProgress)
             // 자동 익명 로그인이 끝났다. 이걸 빼면 버튼은 풀리는데 문구는 "로그인 중"에

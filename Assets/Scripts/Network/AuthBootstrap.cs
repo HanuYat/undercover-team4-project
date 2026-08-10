@@ -52,6 +52,12 @@ public class AuthBootstrap : CommonManagerBase
     public event Action OnSignedOut;
     public event Action OnNicknameChanged;
 
+    /// <summary>
+    /// <see cref="IsSigningIn"/>이 바뀌었다. 로그인이 <b>실패로</b> 끝나면
+    /// <see cref="OnSignedIn"/>이 오지 않으므로 "끝났다"를 알릴 신호가 따로 필요하다. (#585)
+    /// </summary>
+    public event Action OnSigningInChanged;
+
     private const string k_nicknamePrefKeyPrefix = "player.nickname.";
 
     // 계정 조작 사유 문구가 든 테이블 — 타이틀 화면의 계정 패널에서만 보인다 (#497)
@@ -91,9 +97,10 @@ public class AuthBootstrap : CommonManagerBase
     ///
     /// <b>플래그가 여기 있는 이유</b> — Title 씬은 돌아올 때마다 새로 만들어지므로 씬 쪽에
     /// 두면 매번 초기화된다. 이 객체는 상주(DontDestroyOnLoad)라 앱 실행 동안 유지된다.
-    /// 로그아웃·계정 전환으로 로그인 상태가 풀려도 <b>내리지 않는다</b> — 관문은 "계정을
-    /// 어떻게 시작할지" 한 번 고르는 자리이고, 그 뒤의 계정 조작은 세션 화면의 계정 영역이
-    /// 담당한다. 다시 고르게 하려면 앱을 재시작하는 것이 맞다.
+    ///
+    /// <b>로그아웃하면 내린다.</b> 처음에는 "관문은 한 번 고르는 자리"라고 보고 유지했는데,
+    /// 그러면 로그아웃한 뒤 세션 화면에 그대로 남아 [세션 생성]·[코드로 참가]가 눌리기만 하고
+    /// 실패하는 막다른 길이 됐다(실측). 계정이 없는 상태에서 세션 화면은 할 수 있는 일이 없다.
     /// </summary>
     public bool HasPassedAuthGate { get; private set; }
 
@@ -103,6 +110,15 @@ public class AuthBootstrap : CommonManagerBase
     public bool SessionTokenExists =>
         UnityServices.State == ServicesInitializationState.Initialized
         && AuthenticationService.Instance.SessionTokenExists;
+
+    /// <summary>
+    /// 익명 로그인이 진행 중인가. (#585)
+    ///
+    /// <b>"로그인이 안 됐다"와 "로그인이 되는 중이다"는 다르다.</b> 관문은 되는 중일 때만
+    /// 버튼을 잠가야 한다 — 안 된 상태(로그아웃 직후)까지 잠그면 [게스트로 시작]·[로그인]이
+    /// 스스로 로그인할 수 있는데도 눌리지 않아 빠져나갈 길이 없어진다.
+    /// </summary>
+    public bool IsSigningIn { get; private set; }
 
     public bool IsNetworkConnected
     {
@@ -146,51 +162,71 @@ public class AuthBootstrap : CommonManagerBase
     public async UniTask InitializeAndSignInAsync(string profile = null)
     {
         bool wasSignedIn = IsSignedIn;
-
-        if (UnityServices.State != ServicesInitializationState.Initialized)
+        SetSigningIn(true);
+        try
         {
-            var options = new InitializationOptions();
-            if (!string.IsNullOrWhiteSpace(m_environmentName))
+            if (UnityServices.State != ServicesInitializationState.Initialized)
             {
-                options.SetEnvironmentName(m_environmentName);
-            }
-            if (!string.IsNullOrWhiteSpace(profile))
-            {
-                options.SetProfile(profile);
+                var options = new InitializationOptions();
+                if (!string.IsNullOrWhiteSpace(m_environmentName))
+                {
+                    options.SetEnvironmentName(m_environmentName);
+                }
+                if (!string.IsNullOrWhiteSpace(profile))
+                {
+                    options.SetProfile(profile);
+                }
+
+                await UnityServices.InitializeAsync(options);
+                Debug.Log(
+                    $"[AuthBootstrap] UnityServices 초기화 완료 / env: {m_environmentName}, profile: {m_profile}"
+                );
             }
 
-            await UnityServices.InitializeAsync(options);
-            Debug.Log(
-                $"[AuthBootstrap] UnityServices 초기화 완료 / env: {m_environmentName}, profile: {m_profile}"
-            );
+            if (!AuthenticationService.Instance.IsSignedIn)
+            {
+                try
+                {
+                    await AuthenticationService.Instance.SignInAnonymouslyAsync();
+                    await AuthenticationService.Instance.GetPlayerNameAsync();
+                    Debug.Log($"[AuthBootstrap] 익명 로그인 완료 / playerId: {PlayerId}");
+                }
+                catch (AuthenticationException ex)
+                {
+                    Debug.LogError($"[AuthBootstrap] 인증 실패: {ex.Message}");
+                    throw;
+                }
+                catch (RequestFailedException ex)
+                {
+                    Debug.LogError($"[AuthBootstrap] 오류: {ex.Message}");
+                    throw;
+                }
+            }
+
+            if (!wasSignedIn && IsSignedIn)
+            {
+                await RefreshAccountStateAsync(); // 순서 중요 — 아래 복원이 IsLinked에 의존한다 (§4)
+                await RestoreCachedNicknameAsync();
+            }
+        }
+        finally
+        {
+            SetSigningIn(false);
         }
 
-        if (!AuthenticationService.Instance.IsSignedIn)
-        {
-            try
-            {
-                await AuthenticationService.Instance.SignInAnonymouslyAsync();
-                await AuthenticationService.Instance.GetPlayerNameAsync();
-                Debug.Log($"[AuthBootstrap] 익명 로그인 완료 / playerId: {PlayerId}");
-            }
-            catch (AuthenticationException ex)
-            {
-                Debug.LogError($"[AuthBootstrap] 인증 실패: {ex.Message}");
-                throw;
-            }
-            catch (RequestFailedException ex)
-            {
-                Debug.LogError($"[AuthBootstrap] 오류: {ex.Message}");
-                throw;
-            }
-        }
-
+        // 진행 표시를 끈 뒤에 알린다 — 구독자가 "로그인됐는데 아직 로그인 중"인 어중간한
+        // 상태를 보지 않게 한다.
         if (!wasSignedIn && IsSignedIn)
-        {
-            await RefreshAccountStateAsync(); // 순서 중요 — 아래 복원이 IsLinked에 의존한다 (§4)
-            await RestoreCachedNicknameAsync();
             OnSignedIn?.Invoke();
-        }
+    }
+
+    private void SetSigningIn(bool value)
+    {
+        if (IsSigningIn == value)
+            return;
+
+        IsSigningIn = value;
+        OnSigningInChanged?.Invoke();
     }
     #endregion
 
@@ -503,6 +539,10 @@ public class AuthBootstrap : CommonManagerBase
         m_accountUsername = string.Empty;
         m_accountStateKnown = false;
 
+        // 로그아웃했으면 관문을 다시 거쳐야 한다 — 이 표시를 남겨두면 타이틀로 돌아왔을 때
+        // 로그인 안 된 채로 세션 화면이 떠서 만들기·참가가 눌리기만 하고 실패한다. (#585)
+        HasPassedAuthGate = false;
+
         OnSignedOut?.Invoke();
         Debug.Log("[AuthBootstrap] SignOut 완료");
     }
@@ -525,6 +565,11 @@ public class AuthBootstrap : CommonManagerBase
             m_accountStateKnown = false;
 
             AuthenticationService.Instance.SignOut();
+
+            // 로그아웃했으면 관문을 다시 거쳐야 한다 — 이 표시를 남겨두면 타이틀로 돌아왔을 때
+            // 로그인 안 된 채로 세션 화면이 떠서 만들기·참가가 눌리기만 하고 실패한다. (#585)
+            HasPassedAuthGate = false;
+
             OnSignedOut?.Invoke();
         }
 
