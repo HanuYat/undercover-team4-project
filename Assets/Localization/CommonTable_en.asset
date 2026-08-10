@@ -43,7 +43,7 @@ MonoBehaviour:
       m_Items:
       - rid: 6276845892712267886
   - m_Id: 63292019118080
-    m_Localized: Loading...
+    m_Localized: Rolling out...
     m_Metadata:
       m_Items: []
   - m_Id: 70276470607872
@@ -61,6 +61,10 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 7100000000102
     m_Localized: Confirm
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2257280951738368
+    m_Localized: Getting into position...
     m_Metadata:
       m_Items: []
   references:
