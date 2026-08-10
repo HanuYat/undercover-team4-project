@@ -39,6 +39,7 @@ public class App : Singleton<App>
     private MapSelection m_mapSelection;
     private FactionSymbolManager m_factionSymbolManager;
     private SceneReadyGate m_sceneReadyGate;
+    private SettlementConfirmGate m_settlementConfirmGate;
     private EffectManager m_effectManager;
     private FxManager m_fxManager;
 
@@ -176,6 +177,7 @@ public class App : Singleton<App>
         public static DirectoryManager Directory => Instance.m_directoryManager;
         public static FactionSymbolManager FactionSymbol => Instance.m_factionSymbolManager;
         public static SceneReadyGate ReadyGate => Instance.m_sceneReadyGate; // 전원 준비 완료 게이트 (#410). 게임 씬에만 있으므로 다른 씬에서는 null
+        public static SettlementConfirmGate SettlementGate => Instance.m_settlementConfirmGate; // 전원 정산 확인 게이트 (#509). 마찬가지로 게임 씬 전용
 
         // 일회성 연출의 단일 창구 (#532) — "무슨 일이 일어났는가" 하나로 먼지+소리를 내고,
         // 서버 판정이면 전 피어에 전파한다. 일회성 연출은 이쪽을 부른다.
