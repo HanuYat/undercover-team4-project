@@ -39,10 +39,6 @@ MonoBehaviour:
     m_Key: Title.Session.CodePlaceholder
     m_Metadata:
       m_Items: []
-  - m_Id: 6994091118597
-    m_Key: Title.Auth.SignInAnonymous
-    m_Metadata:
-      m_Items: []
   - m_Id: 6994091118598
     m_Key: Title.Auth.SignOut
     m_Metadata:
@@ -55,28 +51,12 @@ MonoBehaviour:
     m_Key: Title.Auth.ApplyNickname
     m_Metadata:
       m_Items: []
-  - m_Id: 6994091118601
-    m_Key: Title.Auth.AccountSectionLabel
-    m_Metadata:
-      m_Items: []
-  - m_Id: 6994091118602
-    m_Key: Title.Auth.AccountWarning
-    m_Metadata:
-      m_Items: []
   - m_Id: 6994091118603
     m_Key: Title.Auth.UsernamePlaceholder
     m_Metadata:
       m_Items: []
   - m_Id: 6994091118604
     m_Key: Title.Auth.PasswordPlaceholder
-    m_Metadata:
-      m_Items: []
-  - m_Id: 6994091118605
-    m_Key: Title.Auth.CreateAccount
-    m_Metadata:
-      m_Items: []
-  - m_Id: 6994091118606
-    m_Key: Title.Auth.AccountSignIn
     m_Metadata:
       m_Items: []
   - m_Id: 6994091118607
@@ -221,14 +201,6 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 10788103327776
     m_Key: Title.AuthStatus.ConfirmUnavailableForSwitch
-    m_Metadata:
-      m_Items: []
-  - m_Id: 10788103327777
-    m_Key: Title.Auth.PlayerId
-    m_Metadata:
-      m_Items: []
-  - m_Id: 10788103327778
-    m_Key: Title.Auth.SignedOut
     m_Metadata:
       m_Items: []
   - m_Id: 10788103327779

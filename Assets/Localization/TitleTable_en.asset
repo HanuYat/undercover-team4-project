@@ -43,10 +43,6 @@ MonoBehaviour:
     m_Localized: Enter session code
     m_Metadata:
       m_Items: []
-  - m_Id: 6994091118597
-    m_Localized: Sign In as Guest
-    m_Metadata:
-      m_Items: []
   - m_Id: 6994091118598
     m_Localized: Sign Out
     m_Metadata:
@@ -59,32 +55,12 @@ MonoBehaviour:
     m_Localized: Apply
     m_Metadata:
       m_Items: []
-  - m_Id: 6994091118601
-    m_Localized: Link Account
-    m_Metadata:
-      m_Items: []
-  - m_Id: 6994091118602
-    m_Localized: 'Linking an account lets you sign in with the same nickname on other
-      devices.
-
-      Linking cannot be undone, and if you forget your password your
-      account cannot be recovered.'
-    m_Metadata:
-      m_Items: []
   - m_Id: 6994091118603
     m_Localized: Username (3-20 chars, letters and numbers)
     m_Metadata:
       m_Items: []
   - m_Id: 6994091118604
     m_Localized: Password (8+ chars, upper/lower case, number, symbol)
-    m_Metadata:
-      m_Items: []
-  - m_Id: 6994091118605
-    m_Localized: Create Username
-    m_Metadata:
-      m_Items: []
-  - m_Id: 6994091118606
-    m_Localized: Sign In
     m_Metadata:
       m_Items: []
   - m_Id: 6994091118607
@@ -242,15 +218,6 @@ MonoBehaviour:
     m_Localized: Couldn't open the confirmation window, so the switch was cancelled.
     m_Metadata:
       m_Items: []
-  - m_Id: 10788103327777
-    m_Localized: 'ID: {0}'
-    m_Metadata:
-      m_Items:
-      - rid: 6276845892712267879
-  - m_Id: 10788103327778
-    m_Localized: Not signed in
-    m_Metadata:
-      m_Items: []
   - m_Id: 10788103327779
     m_Localized: 'This will link the ID ''{0}''.
 
@@ -311,7 +278,6 @@ MonoBehaviour:
         - id: 10788103327763
         - id: 10788103327764
         - id: 10788103327765
-        - id: 10788103327777
         - id: 10788103327779
         - id: 10788103327780
         - id: 10788094939137
