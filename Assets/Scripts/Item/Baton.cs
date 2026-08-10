@@ -524,11 +524,12 @@ public class Baton : ItemBase, IAimedWeapon
     /// 그 외(벽·소품)는 빗나감.
     /// </summary>
     /// <remarks>
-    /// 테이저(<c>Taser.EvaluatePlayerAim</c>)와 달리 <b>자기 자신을 걸러내는 분기가 없다.</b>
-    /// 필요가 없기 때문이다 — 진압봉은 <see cref="AimOcclusion.FindNearestByPivot"/>에 소지자 계층을
-    /// 제외 루트로 넘기므로(SphereCast가 원점에 겹친 자기 콜라이더를 distance 0으로 되돌려주는 문제 때문에
-    /// 원래부터 필요했다) 자기 몸은 후보에 아예 오르지 않는다. 앉기·넉백으로 원점이 몸 밖으로 나가도
-    /// 같다. 테이저는 레이캐스트라 제외 루트를 넘기지 않아서 그 분기가 필요했던 것이다.
+    /// <b>자기 자신을 걸러내는 분기가 없다.</b> 필요가 없기 때문이다 — 진압봉은
+    /// <see cref="AimOcclusion.FindNearestByPivot"/>에 소지자 계층을 제외 루트로 넘기므로(SphereCast가
+    /// 원점에 겹친 자기 콜라이더를 distance 0으로 되돌려주는 문제 때문에 원래부터 필요했다) 자기 몸은
+    /// 후보에 아예 오르지 않는다. 앉기·넉백으로 원점이 몸 밖으로 나가도 같다.
+    /// 테이저(<c>Taser.EvaluateAim</c>)도 같은 처리를 쓴다 — 레이캐스트라 없어도 된다고 봤지만,
+    /// 살아 있는 동안에도 켜져 있는 자기 래그돌 머리 뼈에 사격이 막혔다.
     /// <b>이 함수를 제외 루트 없이 부르게 바꾸면 자기 타격 가드를 여기에 추가해야 한다.</b>
     ///
     /// 무력화 게이트는 <see cref="PlayerHealth.IsTargetable"/> 하나로 본다 — 다운·기절·매달기 중인
