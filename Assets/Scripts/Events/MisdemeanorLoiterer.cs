@@ -80,6 +80,11 @@ public class MisdemeanorLoiterer : MonoBehaviour
             foreach (PlayerEscorter escorter in PlayerEscorter.FindEscortersOf(m_controller))
                 escorter.ReleaseDrag(m_controller);
 
+            // 끝까지 못 잡았다 — 훔친 물건은 여기서 손실 확정이다 (#303).
+            // 그냥 파괴하면 구매품이 팀 배달 목록에 유령으로 남는다.
+            if (TryGetComponent(out StolenGoods goods))
+                goods.ServerLose();
+
             SuddenEventUtil.DespawnOrDestroy(gameObject, playVfx: false);
             return;
         }
@@ -92,6 +97,11 @@ public class MisdemeanorLoiterer : MonoBehaviour
         // 제압·연행·재수감되면 소란 재개는 취소된다 — 이후는 기존 재검거·수감 흐름이 이어받는다
         if (state is NpcState.Captured or NpcState.Escorted or NpcState.Jailed)
         {
+            // 놓쳤던 소매치기를 뒤늦게 잡았다 — 훔친 물건을 그 자리에 떨군다 (#303).
+            // 이벤트 본편의 제압 처리와 같은 결말이다. 두 번째부터는 들고 있는 게 없어 무동작.
+            if (TryGetComponent(out StolenGoods goods))
+                goods.ServerDropHere();
+
             m_riotPending = false;
             m_rioting = false;
             return;
@@ -138,8 +148,8 @@ public class MisdemeanorLoiterer : MonoBehaviour
                 break;
 
             case SpawnedNpcEvent.Behavior.Flee:
-            // 소매치기도 도주로 재개한다 (#303) — 이미 훔친 물건은 제압·놓침에서 결말이 났고,
-            // 탈옥한 빈손 소매치기가 다시 노리게 두면 같은 사람이 몇 번이고 털린다.
+            // 소매치기도 도주로 재개한다 (#303) — 수감되려면 제압을 거쳤으니 훔친 물건은 이미
+            // 떨궈진 뒤고, 탈옥한 빈손 소매치기가 다시 노리게 두면 같은 사람이 몇 번이고 털린다.
             case SpawnedNpcEvent.Behavior.Pickpocket:
                 m_controller.Reaction.StartFlee(threat.transform); // 도주 소란 — 다가온 플레이어에게서 달아난다
                 break;

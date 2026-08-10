@@ -329,8 +329,10 @@ public class SpawnedNpcEvent : ISuddenEvent
     {
         NpcController npc = m_npc;
 
-        // 물건을 든 채 놓쳤다 — 영구 손실이다 (#303). 제압당한 개체는 이미 떨어뜨려 여기선 무동작.
-        ClearPickpocket(npc);
+        // 물건을 든 채 놓쳤어도 여기선 없애지 않는다 (#303) — 들린 채 도심에 남는다.
+        // 나중에 우연히라도 잡으면 그 자리에 떨어뜨리므로(MisdemeanorLoiterer) 되찾을 길이 남는다.
+        // 손실 확정은 라운드가 끝날 때다.
+        UnsubscribePickpocket(npc);
 
         npc.OnStateChanged -= HandleStateChanged;
         m_npc = null;
@@ -344,16 +346,23 @@ public class SpawnedNpcEvent : ISuddenEvent
         MisdemeanorLoiterer.Attach(npc, m_displayName);
     }
 
-    // 소매치기 뒷정리 — 밀착 통보 구독을 끊고, 아직 들고 있는 물건은 손실 처리한다. (#303)
-    // 이벤트가 손을 떼는 두 경로(잔류·정리)가 모두 지난다 — 하나만 빠지면 물건이 유령처럼 남는다.
-    private void ClearPickpocket(NpcController npc)
+    // 밀착 통보 구독만 끊는다 — 이벤트가 손을 떼는 두 경로(잔류·정리)가 모두 지난다.
+    // 하나만 빠지면 이미 손 뗀 NPC의 통보를 계속 받아 두 번 훔친다. (#303)
+    private void UnsubscribePickpocket(NpcController npc)
     {
         if (npc == null)
             return;
 
         npc.Penalty.OnPenaltyCaught -= HandlePickpocketReach;
+    }
 
-        if (npc.TryGetComponent(out StolenGoods goods))
+    // 소매치기 완전 정리 — 구독을 끊고 아직 들고 있는 물건까지 없앤다. (#303)
+    // NPC가 통째로 사라지는 경로(라운드 종료 등) 전용이다 — 잔류는 물건을 들린 채 보낸다.
+    private void ClearPickpocket(NpcController npc)
+    {
+        UnsubscribePickpocket(npc);
+
+        if (npc != null && npc.TryGetComponent(out StolenGoods goods))
             goods.ServerLose();
     }
 
