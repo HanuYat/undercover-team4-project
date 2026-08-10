@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
 using Random = UnityEngine.Random;
@@ -60,6 +61,13 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
     [Min(1f)]
     [SerializeField] private float m_parkedTimeoutSeconds = 60f;
 
+    [Tooltip(
+        "완주한 차가 제자리로 돌아오기를 기다리는 상한(초). 넘기면 그 자리에서 제자리로 돌려놓고 이벤트를 끝낸다. "
+            + "길이 막혀 못 돌아가는 차에 이벤트가 묶이면 다음 추첨이 영영 안 돈다"
+    )]
+    [Min(5f)]
+    [SerializeField] private float m_returnTimeoutSeconds = 60f;
+
 #if UNITY_EDITOR
     [Header("개발용 (에디터 전용)")]
     [Tooltip("실제 발생과 같은 경로로 한 번 일으킨다 — 무작위 표적·도로")]
@@ -89,6 +97,10 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
     // 직전에 굴린 차 — 다음 추첨에서 뺀다. 돌아와 제자리에 선 차가 곧바로 다시 뽑히면
     // 맵에 여러 대를 놓아 둔 의미가 없고, 그 골목만 위험한 곳이 된다.
     private RunawayVehicle m_lastPicked;
+
+    // 이번 차에 복귀를 지시했는가 — 돌아와 Parked가 되는 순간이 이 이벤트의 끝이다.
+    // 이 표식이 없으면 돌아온 차의 Parked를 '아직 무장 중'으로 오해해 같은 차를 계속 붙들고 있게 된다.
+    private bool m_returning;
 
     public bool CanTrigger()
     {
@@ -128,8 +140,12 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
         float radiusSqr = m_pickRadius * m_pickRadius;
         for (int i = 0; i < all.Length; i++)
         {
+            // 제자리(IsHome)까지 요구하지 않는다 — 국면이 Parked면 그것으로 충분하다.
+            // 좌표 일치(0.2m·1도)를 후보 조건에 넣으면, NetworkTransform 보간이나 미세한 밀림으로
+            // 한 번 어긋난 차가 영영 후보에서 빠진다. 그러면 마지막에 돌아온 차 하나만 남아
+            // 같은 차에서만 이벤트가 반복된다. 달리는 중·돌아오는 중은 Parked가 아니라 이미 걸러진다.
             RunawayVehicle v = all[i];
-            if (v == null || v.Phase != VehiclePhase.Parked || !v.IsHome)
+            if (v == null || v.Phase != VehiclePhase.Parked)
                 continue;
 
             if ((v.transform.position - near).sqrMagnitude <= radiusSqr)
@@ -139,7 +155,16 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
         // 직전에 굴린 차는 <b>무조건</b> 뺀다. 예전에는 "그 차뿐이면 그대로 쓴다"로 뒀는데, 차를 넓게
         // 퍼뜨릴수록 반경 안에 드는 차가 한 대가 되어 그 폴백이 곧 "같은 차만 계속"이 됐다.
         // 뺀 결과 후보가 없으면 이번 추첨은 거른다 — 한 골목만 위험한 곳이 되는 것보다 낫다.
+        int before = m_candidates.Count;
         m_candidates.Remove(m_lastPicked);
+
+        // 왜 그 차가 뽑혔는지 눈으로 확인할 수 있게 남긴다 — "같은 차만 나온다"는 대부분
+        // 후보가 애초에 한 대인 상황이고, 그건 이 줄이 없으면 화면에서 구분되지 않는다.
+        Debug.Log(
+            $"[돌발이벤트] 차량 추첨 — 반경 {m_pickRadius}m 후보 {before}대"
+                + $"[{string.Join(", ", m_candidates.Select(v => v.name))}]"
+                + $" (직전 {(m_lastPicked != null ? m_lastPicked.name : "없음")} 제외 후 {m_candidates.Count}대)");
+
         if (m_candidates.Count == 0)
             return null;
 
@@ -158,6 +183,15 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
         switch (m_vehicle.Phase)
         {
             case VehiclePhase.Parked:
+                // 돌아와 제자리에 섰다 — 여기서 손을 뗀다. 그래야 다음 추첨이 다른 차를 고를 수 있다
+                if (m_returning)
+                {
+                    Debug.Log($"[돌발이벤트] {m_displayName} — {m_vehicle.name}가 제자리로 돌아왔다");
+                    m_vehicle = null;
+                    m_returning = false;
+                    break;
+                }
+
                 if (IsAnyFieldPlayerOnPath())
                 {
                     m_vehicle.ServerBeginWarning();
@@ -169,6 +203,7 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
                     // 붙잡고 있으면 다음 돌발 이벤트가 아예 걸리지 않는다
                     Debug.Log($"[돌발이벤트] {m_displayName} — 아무도 선에 들어오지 않아 시동을 껐다");
                     m_vehicle = null;
+                    m_returning = false;
                 }
                 break;
 
@@ -181,15 +216,24 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
             case VehiclePhase.Driving:
                 // 완주했으면 제자리로 운전해 돌아간다 — 씬에 놓인 차라 치우지 않는다
                 if (m_vehicle.IsFinished)
+                {
                     m_vehicle.ServerReturnHome();
+                    m_returning = true;
+                    m_phaseStartTime = Time.time;
+                }
                 break;
 
             case VehiclePhase.Returning:
-                // 제자리에 서서 원래 회전까지 맞췄으면 이 이벤트는 끝이다 — 차는 다음 추첨의 후보로 돌아간다
-                if (m_vehicle.IsHome)
+                // 돌아가는 동안은 기다린다 — 끝나는 판정은 차가 한다(제자리에 서면 스스로 Parked로 바꾼다).
+                // 다만 길이 막혀 영영 못 돌아가면 이벤트가 그 차에 묶이므로, 넉넉한 상한을 둔다.
+                if (elapsed >= m_returnTimeoutSeconds)
                 {
-                    Debug.Log($"[돌발이벤트] {m_displayName} — {m_vehicle.name}가 제자리로 돌아왔다");
+                    Debug.LogWarning(
+                        $"[돌발이벤트] {m_displayName} — {m_vehicle.name}가 {m_returnTimeoutSeconds}초 안에"
+                            + " 제자리로 못 돌아와 그대로 세운다", this);
+                    m_vehicle.ServerSnapHome();
                     m_vehicle = null;
+                    m_returning = false;
                 }
                 break;
         }
@@ -218,6 +262,7 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
         if (m_vehicle != null)
             m_vehicle.ServerSnapHome();
         m_vehicle = null;
+        m_returning = false;
     }
 #if UNITY_EDITOR
 
@@ -251,7 +296,19 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
 
     private void DevTrigger()
     {
-        if (!DevIsAuthority || !DevCanLaunch())
+        if (!DevIsAuthority)
+            return;
+
+        // 아직 시동만 걸린 채(Parked) 아무도 선에 안 들어온 상태면 손을 떼고 다시 뽑는다.
+        // 안 그러면 무장 상한(m_parkedTimeoutSeconds)이 지나기 전까지 이 키가 통째로 먹통이라
+        // "다른 차를 보고 싶다"는 테스트가 안 된다. 이미 달리거나 돌아오는 중이면 건드리지 않는다.
+        if (IsActive && !m_returning && m_vehicle.Phase == VehiclePhase.Parked)
+        {
+            Debug.Log($"[돌발이벤트] 개발 단축키 — {m_vehicle.name}의 시동을 끄고 다시 뽑는다");
+            m_vehicle = null;
+        }
+
+        if (!DevCanLaunch())
             return;
 
         ServerBegin(); // 정상 경로 그대로 — 차량 선정까지 함께 확인된다
