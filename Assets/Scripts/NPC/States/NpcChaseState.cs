@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -8,22 +7,23 @@ using UnityEngine.AI;
 ///
 /// - <b>추격</b>: 타겟을 향해 가속하며 쫓는다. 최고 속도는 플레이어 전력질주보다 낮아(ChaseMaxSpeed)
 ///   직선에서는 계속 달리면 벗어날 수 있다 — 대신 범위 이탈 시 아래 재타겟으로 페널티가 전가된다.
-/// - <b>재타겟</b>: 타겟이 추격 범위(ChaseRange)를 벗어나거나 무력화되면, 범위 안의 플레이어 중
-///   무작위 한 명으로 갈아탄다(잡히는 사람이 페널티 독박 — 부모 이슈 #276 확정 설계).
-///   단 납치 임무(<see cref="NpcPenaltyAgent.IsAbductionDuty"/>)는 갈아타지 않는다 — 범위를 벗어나도 같은 표적을 계속 쫓는다 (#371).
+/// - <b>재타겟</b>: 표적이 포기 거리를 넘거나 무력화되면 범위 안의 <b>가장 가까운</b> 사람으로 갈아탄다
+///   (잡히는 사람이 페널티 독박 — 부모 이슈 #276 확정 설계). 달리는 중이라면 눈에 띄게 더 가까운
+///   후보가 나타났을 때도 바꾼다 (#568).
+///   단 납치(<see cref="NpcPenaltyAgent.IsAbductionDuty"/>)는 갈아타지 않는다 — 범위를 벗어나도 같은 표적을 계속 쫓는다 (#371).
 /// - <b>사냥</b>: 범위 안에 아무도 없으면 배회하며 범위에 들어오는 플레이어를 기다린다.
 /// - <b>격퇴/수렴</b>: 격퇴(ApplyChaseRepel, 호루라기 #250 예정)당하면 잠시 도주 후 사냥으로 복귀하고
 ///   그 플레이어에게 재추격 쿨다운을 건다. 누군가 포획되면(PenaltyConvergeTarget) 전원 그리로 모인다.
 ///
 /// 포획은 <b>수평</b> 거리 판정 — WrongfulArrestPenalty가 OnPenaltyCaught를 구독해 수렴·호송(#279)을 지휘한다.
 ///
-/// 추격 동안에는 조향(선회 속도·가속도·오토브레이킹)을 에이전트에 덮어쓰고 Exit에서 되돌린다 —
-/// 시민 기본값으로는 선회 반경이 포획 거리보다 커서 표적 주위를 공전만 한다 (#568).
+/// <b>이 클래스는 국면 진행만 맡는다</b> (#568 후속). 세 가지는 부품이 가져갔다:
+/// 조향·리드 조준은 <see cref="ChaseSteering"/>, 도달 가능성 누적은 <see cref="ChaseReachability"/>,
+/// 표적 선정·쿨다운은 <see cref="ChaseTargeting"/>. 셋 다 FSM을 모르므로 따로 검증할 수 있다.
 /// </summary>
 public class NpcChaseState : NpcStateBase
 {
     private const float k_repathInterval = 0.2f; // 경로 재계산 최소 간격(초) — NpcEscortedState와 동일
-    private const float k_scanInterval = 0.5f; // 사냥 모드에서 범위 내 플레이어를 훑는 주기(초)
     private const float k_convergeStopDistance = 1.6f; // 수렴 시 포획된 플레이어 앞 정지 거리(m)
     private const float k_catchRetrySeconds = 3f; // 포획 통보 재시도 간격 — 매니저가 다른 호송 중이라 무시해도 스팸이 안 되게
 
@@ -33,44 +33,20 @@ public class NpcChaseState : NpcStateBase
     private const float k_farRepathInterval = 0.4f;
     private const float k_nearRepathDistance = 8f; // 이 거리(m) 안쪽이면 촘촘한 쪽을 쓴다
 
-    // 놓는 거리는 NpcChaseConfig.ReleaseDistance로 옮겼다 (#568 후속) — Range에 곱하는 상수로는
-    // "이만큼 벌어지면 갈아탄다"를 직접 정할 수 없었다(30m × 1.25 = 37.5m라 사실상 안 걸렸다).
-
     // 부분 경로가 나왔을 때 목적지를 NavMesh 위로 끌어당기는 탐색 반경(m) — 표적이 연석·계단 모서리처럼
     // 카브가 안 된 곳에 서 있는 흔한 경우를 덮는다. 진짜 도달 불가(문 뒤·다른 층)는 이걸로도 안 붙는다.
     private const float k_destinationSnapRadius = 2f;
 
-    // 스냅해도 부분 경로가 이만큼(초) 이어지면 도달 불가로 확정한다 (#568). 짧게 잡으면 모퉁이를 도는
-    // 순간의 한두 프레임짜리 부분 경로에도 표적을 놓아 추격이 툭툭 끊긴다.
-    private const float k_unreachableSeconds = 1.8f;
-
-    private readonly List<Transform> m_candidateBuffer = new List<Transform>();
-
-    // 격퇴당한 플레이어별 재추격 금지 종료 시각(Time.time). 상태 인스턴스는 NPC마다 1개라 NPC별 기록이 된다.
-    private readonly Dictionary<Transform, float> m_targetCooldowns =
-        new Dictionary<Transform, float>();
+    private readonly ChaseSteering m_steering;
+    private readonly ChaseReachability m_reachability = new ChaseReachability();
+    private readonly ChaseTargeting m_targeting;
 
     private float m_baseSpeed; // 진입 전 원래 속도 — 사냥 모드 속도이자 Exit 복원값
-    private float m_targetAcquiredTime; // 현재 타겟 확보 시각 — 가속 기준점 (타겟이 바뀌면 리셋)
+    private float m_targetAcquiredTime; // 현재 타겟 확보 시각 — 가속 기준점
     private float m_repathTimer;
-    private float m_scanTimer;
     private float m_nextCatchNotifyTime;
     private float m_handledRepelUntil; // 이미 쿨다운을 등록한 격퇴인지 — 같은 격퇴에 중복 등록 방지
     private bool m_hunting; // 사냥(배회) 모드 중인지 — 추격/사냥 간 속도·목적지 전환용
-
-    // 진입 전 조향 값 — Exit에서 그대로 되돌린다. 시민의 개체차(속도 랜덤 등)를 덮어쓰지 않기 위해
-    // 상수가 아니라 진입 시점의 실제 값을 기억한다.
-    private float m_baseTurnSpeed;
-    private float m_baseAcceleration;
-    private bool m_baseAutoBraking;
-
-    // 리드 조준용 — 직전 repath 때의 표적 위치와 그 시각. 표적이 바뀌면 리셋한다(엉뚱한 속도가 나온다).
-    private Transform m_leadTarget;
-    private Vector3 m_lastTargetPosition;
-    private float m_lastTargetSampleTime;
-
-    // 부분 경로가 시작된 시각 — 0이면 정상 경로. 이 상태가 k_unreachableSeconds 이어지면 도달 불가로 본다.
-    private float m_partialSince;
 
     private readonly NpcChaseConfig m_config;
     private readonly NpcWalkConfig m_walkConfig;
@@ -87,6 +63,9 @@ public class NpcChaseState : NpcStateBase
         m_config = config;
         m_walkConfig = walkConfig;
         m_fleeConfig = fleeConfig;
+
+        m_steering = new ChaseSteering(config);
+        m_targeting = new ChaseTargeting(config);
     }
 
     public override void Enter()
@@ -94,23 +73,15 @@ public class NpcChaseState : NpcStateBase
         m_baseSpeed = m_owner.Agent.speed;
         m_targetAcquiredTime = Time.time;
         m_repathTimer = 0f;
-        m_scanTimer = 0f;
         m_nextCatchNotifyTime = 0f;
         m_hunting = false;
-        ClearLeadSample();
-        ClearReachability();
 
-        // 이전 임무의 격퇴 이력을 다음 추격까지 끌고 가지 않는다 (#568) — 남겨 두면 새 추격에서
-        // 이유 없이 특정 플레이어가 후보에서 빠지고, 접속을 끊은 플레이어의 키도 계속 쌓인다.
-        m_targetCooldowns.Clear();
+        m_steering.ClearLeadSample();
+        m_reachability.Clear();
+        m_targeting.Reset(); // 이전 임무의 격퇴 이력을 다음 추격까지 끌고 가지 않는다 (#568)
 
-        // 조향을 추격용으로 올린다 (#568). 시민 기본값(선회 240도/초)으로는 선회 반경이 포획 거리보다
-        // 커서 플레이어가 옆으로 스텝만 밟아도 안쪽으로 못 꺾고 궤도를 돈다.
-        m_baseTurnSpeed = m_owner.Agent.angularSpeed;
-        m_baseAcceleration = m_owner.Agent.acceleration;
-        m_baseAutoBraking = m_owner.Agent.autoBraking;
-
-        ApplyChaseSteering(true);
+        m_steering.CaptureBaseline(m_owner.Agent);
+        m_steering.Apply(m_owner.Agent, true);
 
         m_owner.Agent.isStopped = false;
         m_owner.Agent.stoppingDistance = 0f;
@@ -121,7 +92,7 @@ public class NpcChaseState : NpcStateBase
         m_owner.Agent.speed = m_baseSpeed;
         m_owner.Agent.stoppingDistance = 0f; // 수렴 페이즈가 올린 정지 거리 원복 — 배회 복귀 시 목적지 앞 멈춤 방지
 
-        ApplyChaseSteering(false); // 조향 원복 — 추격을 벗어난 시민이 팽이처럼 도는 것을 막는다
+        m_steering.Apply(m_owner.Agent, false); // 조향 원복 — 추격을 벗어난 시민이 팽이처럼 도는 것을 막는다
 
         if (m_owner.Agent.isOnNavMesh)
         {
@@ -133,6 +104,7 @@ public class NpcChaseState : NpcStateBase
     public override void Tick()
     {
         m_repathTimer -= Time.deltaTime;
+        float now = Time.time;
 
         // ---- 수렴: 포획 확정 — 전원 포획된 플레이어에게 모인다. 추격·격퇴보다 우선한다 (#279)
         Transform converge = m_owner.Penalty.PenaltyConvergeTarget;
@@ -143,13 +115,13 @@ public class NpcChaseState : NpcStateBase
         }
 
         // ---- 격퇴: 호루라기(#250 예정)에 쫓겨나 잠시 도주 — 유예 창. 끝나면 사냥/재타겟으로 이어진다
-        if (Time.time < m_owner.Penalty.ChaseRepelUntil)
+        if (now < m_owner.Penalty.ChaseRepelUntil)
         {
-            TickRepelled();
+            TickRepelled(now);
             return;
         }
 
-        // ---- 타겟 유효성: 사라짐·무력화·범위 이탈·쿨다운이면 범위 안 무작위 플레이어로 갈아탄다
+        // ---- 타겟 유효성: 사라짐·무력화·포기 거리·쿨다운이면 범위 안 가장 가까운 사람으로 갈아탄다
         // 납치(#371)는 갈아타지도, 놓지도 않는다 — 표적이 범위를 벗어나거나 무력화돼도 같은 사람을 계속 쫓는다.
         // 갈아타면 "혼자 있는 사람을 노린다"는 그 이벤트의 유일한 규칙이 깨지고(동료 옆의 사람을 잡는다),
         // 반대로 놓아 버리면 뒤처진 납치범만 빠져나가 2인 호송이 1인으로 무너진다. 실패는 이벤트가
@@ -170,20 +142,12 @@ public class NpcChaseState : NpcStateBase
                 return;
             }
         }
-        else if (!IsChaseable(target))
+        else if (!m_targeting.IsChaseable(m_owner.transform.position, target, now))
         {
-            target = PickNearestTargetInRange();
+            target = m_targeting.PickNearest(m_owner.transform.position, now);
             m_owner.Penalty.SetChaseTarget(target);
             if (target != null)
-            {
-                // 가속 램프는 <b>사냥에서 돌아올 때만</b> 처음부터 밟는다 (#568 후속).
-                // 달리던 중에 표적만 바꾸는 것은 "다시 출발"이 아닌데, 매번 리셋하면 걷는 속도로
-                // 떨어졌다 8초에 걸쳐 회복하기를 반복해 갈아탈수록 추격이 느려졌다.
-                if (m_hunting)
-                    m_targetAcquiredTime = Time.time;
-
-                ClearReachability(); // 앞 표적의 도달 불가 누적을 물려받지 않는다
-            }
+                AcquireTarget(now, restartAccel: m_hunting);
         }
 
         // ---- 사냥: 범위 안에 아무도 없다 — 배회하며 기다린다 (걷는 속도)
@@ -195,28 +159,28 @@ public class NpcChaseState : NpcStateBase
 
         // ---- 추격: 가속하며 쫓고, 붙으면 포획을 통보한다
         m_hunting = false;
-        ApplyChaseSteering(true); // 사냥에서 막 돌아왔을 수 있다
-        float elapsed = Time.time - m_targetAcquiredTime;
+        m_steering.Apply(m_owner.Agent, true); // 사냥에서 막 돌아왔을 수 있다
+
+        float elapsed = now - m_targetAcquiredTime;
         float accel = Mathf.Clamp01(elapsed / Mathf.Max(m_config.AccelSeconds, 0.01f));
         m_owner.Agent.speed = Mathf.Lerp(m_baseSpeed, m_config.MaxSpeed, accel);
         m_owner.Agent.stoppingDistance = 0f;
 
-        float distance = FlatDistance(m_owner.transform.position, target.position);
+        float distance = ChaseMath.FlatDistance(m_owner.transform.position, target.position);
 
         // ---- 갈아타기: 눈에 띄게 더 가까운 사람이 나타났다 (#568 후속)
-        // 거리로 놓았다 다시 고르는 방식이 아니라 상대 비교다 — 그쪽은 놓는 순간 범위 안에서 같은
-        // 사람을 도로 물어 매 프레임 왕복했다. 바꾼 직후에는 새 표적이 더 가까우므로 되돌아갈 조건이
-        // 성립하지 않아 진동이 없다. 표적을 고정하는 임무(납치·소매치기)는 건너뛴다.
+        // 상대 비교라 왕복이 없다 — 바꾼 직후에는 새 표적이 더 가까워 되돌아갈 조건이 성립하지 않는다.
+        // 가속 램프는 건드리지 않는다: 달리던 중의 표적 교체는 "다시 출발"이 아니다.
         if (!keepsTarget)
         {
-            Transform closer = FindCloserTarget(target, distance);
+            Transform closer = m_targeting.FindCloser(
+                m_owner.transform.position, target, distance, now);
             if (closer != null)
             {
                 target = closer;
                 m_owner.Penalty.SetChaseTarget(target);
-                ClearReachability(); // 앞 표적의 도달 불가 누적을 물려받지 않는다
-                distance = FlatDistance(m_owner.transform.position, target.position);
-                // 가속 램프는 건드리지 않는다 — 달리던 중의 표적 교체라 "다시 출발"이 아니다
+                AcquireTarget(now, restartAccel: false);
+                distance = ChaseMath.FlatDistance(m_owner.transform.position, target.position);
             }
         }
 
@@ -226,48 +190,53 @@ public class NpcChaseState : NpcStateBase
             m_repathTimer = distance <= k_nearRepathDistance
                 ? k_nearRepathInterval
                 : k_farRepathInterval;
-            SetChaseDestination(target, distance);
+            SetChaseDestination(target, distance, now);
         }
 
         // ---- 도달 불가: 문 뒤·다른 층이다 (#568). 스냅으로도 안 붙은 채 시간이 흘렀다.
         // 오검거는 표적을 놓고 다른 사람을 찾는다 — 벽면을 따라 좌우로 미끄러지며 비비지 않는다.
         // 납치(#371)는 갈아타지 않는 것이 이벤트의 유일한 규칙이라 계속 다가간 채로 둔다.
-        // 실패는 이벤트가 자기 추격 상한(AbductionEvent.m_maxChaseSeconds)으로 끊는다.
-        if (IsTargetUnreachable() && !keepsTarget)
+        if (m_reachability.IsUnreachable(now) && !keepsTarget)
         {
             // 곧바로 같은 사람을 다시 고르면 붙었다 놓기를 반복한다 — 잠시 후보에서 뺀다.
             // 격퇴 쿨다운과 같은 장부를 쓴다: "이 사람은 당분간 노리지 않는다"로 뜻이 같다.
-            m_targetCooldowns[target] = Time.time + m_config.RetargetCooldown;
+            m_targeting.PutOnCooldown(target, now);
             m_owner.Penalty.SetChaseTarget(null);
-            ClearReachability();
-            ClearLeadSample();
+            m_reachability.Clear();
+            m_steering.ClearLeadSample();
             TickHunt();
             return;
         }
 
-        if (distance <= m_config.CatchDistance && Time.time >= m_nextCatchNotifyTime)
+        if (distance <= m_config.CatchDistance && now >= m_nextCatchNotifyTime)
         {
             // 매니저가 이미 다른 호송을 처리 중이면 통보가 무시된다 — 재시도 간격을 두고 계속 붙어 다닌다
-            m_nextCatchNotifyTime = Time.time + k_catchRetrySeconds;
+            m_nextCatchNotifyTime = now + k_catchRetrySeconds;
             m_owner.Penalty.NotifyPenaltyCaught(target);
         }
     }
 
-    // 조향을 추격용/평상시로 오간다 (#568). 진입 전 값을 기억해 두고 되돌리므로 개체차(시민마다 다른
-    // 속도·회피 우선순위)를 덮어쓰지 않는다. 오토브레이킹은 추격 중에만 끈다 — 목적지가 표적 발밑이라
-    // 켜져 있으면 제동거리(≈3m)부터 감속하다 목적지를 지나쳐 돌아 나온다.
-    private void ApplyChaseSteering(bool chasing)
+    /// <summary>새 표적을 문 직후의 정리 — 앞 표적의 도달 불가 누적을 물려받지 않는다.
+    /// <paramref name="restartAccel"/>은 <b>사냥에서 돌아올 때만</b> 참이다: 달리던 중의 교체까지
+    /// 리셋하면 걷는 속도로 떨어졌다 8초에 걸쳐 회복하기를 반복해 갈아탈수록 추격이 느려진다. (#568)</summary>
+    private void AcquireTarget(float now, bool restartAccel)
     {
-        m_owner.Agent.angularSpeed = chasing ? m_config.TurnSpeed : m_baseTurnSpeed;
-        m_owner.Agent.acceleration = chasing ? m_config.Acceleration : m_baseAcceleration;
-        m_owner.Agent.autoBraking = !chasing && m_baseAutoBraking;
+        if (restartAccel)
+            m_targetAcquiredTime = now;
+
+        m_reachability.Clear();
     }
 
-    // 표적이 조금 뒤에 있을 자리를 조준한다 (#568). 도달 불가로 부분 경로가 돌아왔으면 목적지를
-    // NavMesh 위로 끌어당겨 본다 — 표적 좌표만 살짝 벗어난 흔한 경우가 여기서 걷힌다.
-    private void SetChaseDestination(Transform target, float distance)
+    /// <summary>
+    /// 목적지를 잡는다 — 리드 조준한 지점으로, 부분 경로면 표적 실제 위치로 물러난다. (#568)
+    ///
+    /// <b>예측점부터 버리는 이유</b>: 부분 경로의 흔한 원인이 리드 조준 자신이다. 표적이 대각선으로
+    /// 움직이면 몇 걸음 앞을 조준한 지점이 연석·벽 너머로 넘어가기 쉽고, 그러면 우리가 만든 목적지
+    /// 때문에 도달 불가로 오판한다. 실제 위치로 되돌린 뒤 그래도 안 되면 NavMesh 위로 스냅한다.
+    /// </summary>
+    private void SetChaseDestination(Transform target, float distance, float now)
     {
-        Vector3 aim = PredictAimPoint(target, distance);
+        Vector3 aim = m_steering.PredictAimPoint(target, distance, m_owner.Agent.speed, now);
 
         // pathPending 중에는 pathStatus가 직전 경로의 낡은 값이라 함께 가드한다.
         bool partial =
@@ -275,10 +244,6 @@ public class NpcChaseState : NpcStateBase
             && m_owner.Agent.pathStatus != NavMeshPathStatus.PathComplete;
 
         // 부분 경로일 때만 샘플링하므로 정상 경로에서는 프로퍼티 읽기 두 번이 전부다.
-        //
-        // <b>예측점부터 버린다</b> (#568 후속) — 부분 경로의 흔한 원인이 리드 조준 자신이다. 표적이
-        // 대각선으로 움직이면 몇 걸음 앞을 조준한 지점이 연석·벽 너머로 넘어가기 쉽고, 그러면 우리가
-        // 만든 목적지 때문에 도달 불가로 오판한다. 표적 실제 위치로 되돌린 뒤 그래도 안 되면 스냅한다.
         if (partial)
         {
             aim = target.position;
@@ -295,69 +260,7 @@ public class NpcChaseState : NpcStateBase
         }
 
         m_owner.Agent.SetDestination(aim);
-
-        // 스냅이 먹었으면 다음 주기에 정상 경로로 돌아와 누적이 풀린다
-        if (partial)
-        {
-            if (m_partialSince <= 0f)
-                m_partialSince = Time.time;
-        }
-        else
-        {
-            m_partialSince = 0f;
-        }
-    }
-
-    // 스냅해도 부분 경로가 계속된다 — 표적이 있는 곳으로 갈 길 자체가 없다.
-    private bool IsTargetUnreachable() =>
-        m_partialSince > 0f && Time.time - m_partialSince >= k_unreachableSeconds;
-
-    private void ClearReachability() => m_partialSince = 0f;
-
-    // 직전 표본과의 차이로 표적 속도를 재고, 도달에 걸릴 시간만큼 앞을 조준한다.
-    // 현재 위치를 그대로 조준하면 최대 한 주기(0.15~0.4초) 뒤처진 지점을 쫓아 꼬리만 물게 된다.
-    private Vector3 PredictAimPoint(Transform target, float distance)
-    {
-        Vector3 current = target.position;
-        float span = Time.time - m_lastTargetSampleTime;
-
-        // 표적이 바뀌었거나 첫 표본 — 속도를 알 수 없다
-        if (m_leadTarget != target || span <= 0f)
-        {
-            RememberLeadSample(target, current);
-            return current;
-        }
-
-        Vector3 velocity = (current - m_lastTargetPosition) / span;
-        velocity.y = 0f; // 계단·경사에서 위를 조준하지 않게
-        RememberLeadSample(target, current);
-
-        // 상한이 없으면 급반전할 때 지나간 방향으로 크게 헛돈다
-        float speed = Mathf.Max(m_owner.Agent.speed, 0.1f);
-        float lead = Mathf.Min(distance / speed, m_config.MaxLeadSeconds);
-        return current + velocity * lead;
-    }
-
-    private void RememberLeadSample(Transform target, Vector3 position)
-    {
-        m_leadTarget = target;
-        m_lastTargetPosition = position;
-        m_lastTargetSampleTime = Time.time;
-    }
-
-    private void ClearLeadSample()
-    {
-        m_leadTarget = null;
-        m_lastTargetSampleTime = 0f;
-    }
-
-    // 포획·사거리는 수평 거리로 잰다 (#568) — Y를 포함하면 계단·경사면이나 피벗 높이차만으로도
-    // 수평으로 밀착한 상태가 포획 거리(1.3m)를 넘겨, 다 따라잡고도 판정이 안 붙는다.
-    private static float FlatDistance(Vector3 a, Vector3 b)
-    {
-        float dx = a.x - b.x;
-        float dz = a.z - b.z;
-        return Mathf.Sqrt(dx * dx + dz * dz);
+        m_reachability.Report(partial, now); // 스냅이 먹었으면 다음 주기에 정상 경로로 돌아와 누적이 풀린다
     }
 
     // 포획된 플레이어에게 모여 선다 — 도착 판정·호송 개시는 매니저(WrongfulArrestPenalty)가 거리로 지휘한다.
@@ -367,7 +270,7 @@ public class NpcChaseState : NpcStateBase
         m_owner.Agent.stoppingDistance = k_convergeStopDistance;
         // 수렴은 정해진 자리에 서는 이동이라 감속이 있어야 한다 — 추격용 조향(오토브레이킹 off)을 쓰면
         // 멈출 자리를 지나쳐 되돌아온다. 기존 동작 그대로 둔다.
-        ApplyChaseSteering(false);
+        m_steering.Apply(m_owner.Agent, false);
 
         if (m_repathTimer <= 0f)
         {
@@ -377,19 +280,18 @@ public class NpcChaseState : NpcStateBase
     }
 
     // 격퇴 도주 — 격퇴한 플레이어 반대 방향으로 달아난다. 같은 격퇴당 한 번만 재추격 쿨다운을 등록한다.
-    private void TickRepelled()
+    private void TickRepelled(float now)
     {
         if (m_handledRepelUntil != m_owner.Penalty.ChaseRepelUntil)
         {
             m_handledRepelUntil = m_owner.Penalty.ChaseRepelUntil;
-            if (m_owner.Penalty.ChaseRepelBy != null)
-                m_targetCooldowns[m_owner.Penalty.ChaseRepelBy] = Time.time + m_config.RetargetCooldown;
+            m_targeting.PutOnCooldown(m_owner.Penalty.ChaseRepelBy, now);
             m_owner.Penalty.SetChaseTarget(null); // 도주가 끝나면 재타겟부터 다시 — 쿨다운 대상은 후보에서 빠진다
         }
 
         m_owner.Agent.speed = m_config.MaxSpeed;
         m_owner.Agent.stoppingDistance = 0f;
-        ApplyChaseSteering(false); // 격퇴 도주는 이 이슈 범위 밖 — 기존 조향 그대로 둔다
+        m_steering.Apply(m_owner.Agent, false); // 격퇴 도주는 이 이슈 범위 밖 — 기존 조향 그대로 둔다
 
         if (m_repathTimer > 0f || m_owner.Penalty.ChaseRepelBy == null)
             return;
@@ -416,7 +318,7 @@ public class NpcChaseState : NpcStateBase
     {
         m_owner.Agent.speed = m_baseSpeed;
         m_owner.Agent.stoppingDistance = 0f;
-        ApplyChaseSteering(false); // 배회는 시민처럼 걷는 구간 — 급선회가 어울리지 않는다
+        m_steering.Apply(m_owner.Agent, false); // 배회는 시민처럼 걷는 구간 — 급선회가 어울리지 않는다
 
         if (!m_hunting)
         {
@@ -445,77 +347,4 @@ public class NpcChaseState : NpcStateBase
         )
             m_owner.Agent.SetDestination(hit.position);
     }
-
-    // 현재 타겟을 계속 쫓아도 되는가 — 존재·행동 가능·추격 범위 안·재추격 쿨다운 아님.
-    // 놓는 거리는 잡는 거리(Range)보다 넓다 — 경계에서 깜빡이면 사냥(랜덤 배회)이 끼어든다 (#568).
-    private bool IsChaseable(Transform target) =>
-        IsTargetHeld(target)
-        && FlatDistance(m_owner.transform.position, target.position) <= m_config.ReleaseDistance;
-
-    /// <summary>거리를 빼고 <b>붙들 자격만</b> 보는 판정 — 존재·행동 가능·격퇴 쿨다운 아님. (#568 후속)
-    /// <see cref="IsChaseable"/>이 여기에 거리 조건을 얹는다 — 자격과 거리를 갈라 두면
-    /// "왜 놓았는가"가 로그 없이도 읽힌다.</summary>
-    private bool IsTargetHeld(Transform target)
-    {
-        if (target == null)
-            return false;
-        if (IsOnCooldown(target))
-            return false;
-
-        PlayerHealth health = target.GetComponent<PlayerHealth>();
-        return health != null && health.IsTargetable;
-    }
-
-    /// <summary>지금 표적보다 <see cref="NpcChaseConfig.SwitchAdvantage"/>만큼 더 가까운 후보 — 없으면 null. (#568 후속)
-    /// 스캔 스로틀을 그대로 타므로 매 프레임 전 플레이어를 순회하지 않는다.</summary>
-    private Transform FindCloserTarget(Transform current, float currentDistance)
-    {
-        Transform nearest = PickNearestTargetInRange();
-        if (nearest == null || nearest == current)
-            return null;
-
-        float distance = FlatDistance(m_owner.transform.position, nearest.position);
-        return currentDistance - distance >= m_config.SwitchAdvantage ? nearest : null;
-    }
-
-    // 추격 범위 안의 행동 가능한 플레이어 중 <b>가장 가까운</b> 사람 — 쿨다운 대상 제외. 없으면 null(사냥 모드).
-    // 주기 스캔(k_scanInterval)으로 스로틀한다 — 사냥 중 매 프레임 전 플레이어 순회 방지.
-    //
-    // 무작위에서 최근접으로 바꿨다 (#568 후속) — 눈앞의 사람을 두고 멀리 있는 사람을 골라 뛰어가는
-    // 그림이 나왔다. 갈아타기는 "놓쳤으니 가까운 쪽으로"가 자연스럽지, 새로 추첨하는 것이 아니다.
-    private Transform PickNearestTargetInRange()
-    {
-        if (m_scanTimer > Time.time)
-            return null;
-        m_scanTimer = Time.time + k_scanInterval;
-
-        SuddenEventUtil.CollectFieldPlayers(
-            m_owner.transform.position,
-            m_config.Range,
-            m_candidateBuffer
-        );
-        for (int i = m_candidateBuffer.Count - 1; i >= 0; i--)
-        {
-            if (IsOnCooldown(m_candidateBuffer[i]))
-                m_candidateBuffer.RemoveAt(i);
-        }
-
-        Transform nearest = null;
-        float nearestDistance = float.MaxValue;
-        for (int i = 0; i < m_candidateBuffer.Count; i++)
-        {
-            Transform candidate = m_candidateBuffer[i];
-            float distance = FlatDistance(m_owner.transform.position, candidate.position);
-            if (distance >= nearestDistance)
-                continue;
-
-            nearestDistance = distance;
-            nearest = candidate;
-        }
-
-        return nearest;
-    }
-
-    private bool IsOnCooldown(Transform target) =>
-        m_targetCooldowns.TryGetValue(target, out float until) && Time.time < until;
 }
