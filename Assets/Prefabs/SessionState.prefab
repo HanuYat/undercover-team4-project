@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: -9146029795751610571}
   - component: {fileID: 5729287333612907991}
   m_Layer: 0
-  m_Name: TeamFund
+  m_Name: SessionState
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
