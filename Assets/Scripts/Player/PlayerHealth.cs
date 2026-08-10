@@ -66,6 +66,21 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
     public event System.Action<DamageHit> OnDamaged;
 
     /// <summary>
+    /// 피해가 적용되기 <b>직전</b>에 발행 — 서버(또는 오프라인) 전용. 인자는 (맞은 플레이어, 가해자). (#554)
+    /// <see cref="NpcHealth.OnDamaged"/>와 대칭인 <b>게임플레이 훅</b>이다: 위 <see cref="OnDamaged"/>는
+    /// 전 피어 연출용이라 가해자를 <b>위치로만</b> 싣고(<see cref="DamageHit"/>) 누가 때렸는지는 알 수 없다.
+    ///
+    /// 필요해진 계기는 납치 린치다 — 외곽에서 HP가 0이 될 때 <b>마지막 일격이 납치범이었는가</b>를
+    /// 가려야 결말이 갈린다(납치범이 낸 죽음이면 시체 반출, 폭발 같은 외부 사인이면 몸을 남긴다).
+    /// 그 판단은 <see cref="AbductionEvent"/>가 하고, 여기서는 사실만 알린다.
+    ///
+    /// <b>HP 반영 전</b>에 발행하는 것이 중요하다 — HP가 0이 되는 순간 <see cref="ModifyHp"/> 안에서
+    /// 곧바로 기능 정지가 걸리고 무력화 감시가 도는데, 그때 구독자가 이미 가해자를 알고 있어야 한다.
+    /// (NPC 쪽 OnDamaged가 같은 이유로 HP 반영 전에 나간다)
+    /// </summary>
+    public event System.Action<PlayerHealth, GameObject> OnServerDamaged;
+
+    /// <summary>
     /// 피격 — 저항형 NPC 범위 타격 등 데미지 소스의 공통 경로. (#79)
     /// HP가 0이 되면 기능 정지(무력화) 처리로 이어진다 (SetHp 내부, GDD 7-5 / #105, #524).
     /// 연출용 <see cref="OnDamaged"/> 브로드캐스트도 여기 하나로 모인다 — 진압봉 오사(#461)·저항형
@@ -75,6 +90,9 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
     {
         if (IsSpawned && !IsServer) return; // 서버 권위 — ModifyHp도 같은 가드지만 아래 브로드캐스트를 막아야 한다
         if (amount <= 0) return;
+
+        // 가해자를 먼저 알린다 — HP 반영 전이어야 하는 이유는 이벤트 문서에 적어 뒀다 (#554)
+        OnServerDamaged?.Invoke(this, attacker);
 
         int before = CurrentHp;
         ModifyHp(-amount);

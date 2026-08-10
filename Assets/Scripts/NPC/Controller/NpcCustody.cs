@@ -60,7 +60,7 @@ public class NpcCustody : NetworkBehaviour
     /// <see cref="NpcPenaltyAgent.SendToDetention"/>이 수용 직전에 쓴다 — 갈 곳이 Detained라
     /// <see cref="StopEscort"/>(Captured로 간다)를 그대로 쓸 수 없다.
     /// 세터를 열지 않고 메서드로 두는 이유: 밖에서 연행 대상을 <b>지정</b>하는 문은
-    /// <see cref="StartEscort"/> 하나여야 한다 (계획서 § 6 4번 주의 2).</summary>
+    /// <see cref="StartEscort"/> 하나여야 한다.</summary>
     internal void ClearEscortTarget()
     {
         EscortTarget = null;
@@ -129,8 +129,7 @@ public class NpcCustody : NetworkBehaviour
         // 오버레이가 남으면 Update의 스턴 게이트가 FSM Tick을 통째로 건너뛰어
         // (NpcController.Update) <b>감옥 안에서 꼼짝도 하지 않는다</b> — 배회가 돌지 않는 원인이었다.
         // resumeReaction=false — 밖에서 강제로 푸는 경우라 도주 전이를 걸지 않는다.
-        // 기절이 부품으로 나가면(계획서 § 6 2단계 6번) m_owner.Stun.ExitStun으로 경로만 바뀐다.
-        m_owner.ExitStun(false);
+        m_owner.Stun.ExitStun(false);
 
         JailSpot = spot;
         m_owner.StateMachine.ChangeState(NpcState.Jailed);
@@ -170,7 +169,7 @@ public class NpcCustody : NetworkBehaviour
         if (m_owner.Agent == null)
             return;
 
-        // 워프 유틸은 코어에 있다 — 밧줄 놓기(#369)와 공유하는 공용 헬퍼라서다 (계획서 § 4-6)
+        // 워프 유틸은 코어에 있다 — 밧줄 놓기(#369)와 공유하는 공용 헬퍼라서다 (계획서 § 3-6)
         if (!m_owner.TryWarpNear(exitPosition))
         {
             Debug.LogWarning(
@@ -268,9 +267,10 @@ public class NpcCustody : NetworkBehaviour
     /// 반출 보행 취소 — 목적지를 지운다. <b>전이는 부르는 쪽이 한다</b>
     /// (<see cref="ClearEscortTarget"/>과 같은 관례: 갈 곳이 경로마다 달라서다).
     ///
-    /// 부르는 곳 둘 다 "저지됐다"로 모인다: 밧줄에 묶였을 때(<see cref="NpcController.StartRopeDrag"/>)와
-    /// 다시 수감될 때(<see cref="SendToJail"/>). 줄이 걸리는 순간 반출은 무산된 것으로 본다 —
-    /// 풀어 주더라도 인도 지점으로 다시 걸어가지 않는다.
+    /// 부르는 곳은 셋이다. 둘은 "저지됐다"로 모인다: 밧줄에 묶였을 때
+    /// (<see cref="NpcController.StartRopeDrag"/>)와 다시 수감될 때(<see cref="SendToJail"/>) —
+    /// 줄이 걸리는 순간 반출은 무산된 것으로 보고, 풀어 주더라도 다시 걸어가지 않는다.
+    /// 나머지 하나는 의뢰가 접힌 경우다(<see cref="SecretFavorBroker"/>의 만료·의뢰인 이탈).
     /// </summary>
     internal void ClearRelease()
     {

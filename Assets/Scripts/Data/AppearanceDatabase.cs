@@ -109,6 +109,14 @@ public class AppearanceDatabase : ScriptableObject
         return result;
     }
 
+    /// <summary>
+    /// 이 조합의 머리가 화면에 보이는가 — 머리 스타일 옵션에 프롭이 있는지로 판정한다. (#556)
+    /// '없음(대머리)'·'가림'은 프롭이 없어 머리색이 화면에 나타날 자리가 없다.
+    /// SciFi 카탈로그 경로도 같은 기준이다 — 프롭을 쓰지 않지만 머리 스타일 값은 같은 옵션 목록을 가리킨다.
+    /// </summary>
+    public bool HasVisibleHair(in AppearanceProfile profile) =>
+        GetOption(AppearanceAxis.HairStyle, profile.HairStyleIndex)?.PropPrefab != null;
+
     /// <summary>Generic 경로용 랜덤 옵션 인덱스 — SciFiOnly 값은 제외한다.</summary>
     public int GetRandomGenericIndex(AppearanceAxis axis)
     {

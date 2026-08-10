@@ -9,7 +9,7 @@ using UnityEngine.UI;
 /// 체력이 가득한 NPC도 보여준다: "다친 NPC만" 규칙을 두면 바가 떴다는 사실 자체가 "얘가 그때 놓친
 /// 놈"이라는 표식이 되어, 플레이어가 추리 대신 바를 찾아다니게 된다.
 ///
-/// 값은 <see cref="NpcController.CurrentHp"/>(동기화 값)를 읽으므로 서버·클라 구분 없이 각자
+/// 값은 <see cref="NpcHealth.CurrentHp"/>(동기화 값)를 읽으므로 서버·클라 구분 없이 각자
 /// 화면에 그린다. 체력 변경 이벤트가 없어 보이는 동안만 폴링한다 — 한 번에 한 NPC만 켜져 있으니
 /// 프레임당 비교 한 번이다.
 /// </summary>
@@ -53,11 +53,11 @@ public class NpcHealthBarView : NpcWorldCard
         if (m_fill == null || m_controller == null)
             return;
 
-        int max = m_controller.MaxHp;
+        int max = m_controller.Health.MaxHp;
 
         // 채운 양만 줄인다 — 색은 프리팹에 정해둔 값을 그대로 쓴다.
         // 색까지 같이 바꾸면 "얼마나 남았나"를 두 가지 신호가 동시에 말하게 되는데, 정작 길이 쪽이
         // 안 보이면(sprite 미지정 등) 색만 변해 원인을 찾기 어렵다. 신호는 길이 하나로 둔다.
-        m_fill.fillAmount = max > 0 ? Mathf.Clamp01((float)m_controller.CurrentHp / max) : 0f;
+        m_fill.fillAmount = max > 0 ? Mathf.Clamp01((float)m_controller.Health.CurrentHp / max) : 0f;
     }
 }

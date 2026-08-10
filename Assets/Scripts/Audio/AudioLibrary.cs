@@ -5,6 +5,10 @@ using UnityEngine;
 /// 오디오 카탈로그 — 효과음(<see cref="EAudioClip"/>)과 BGM(<see cref="EBgm"/>)의 클립·볼륨. (#478, #483)
 /// <see cref="SoundManager"/>가 유일한 소비자다.
 ///
+/// <b>클립 앞을 건너뛰는 이유</b> — 라이브러리 음원은 도입부가 여린 것이 많다(밧줄이 조여지기
+/// 전의 스치는 소리 같은 것). 트리거는 제때 걸려도 <b>들리는 순간</b>이 늦어 조작과 어긋나 보인다.
+/// 음원을 잘라 두는 대신 항목에 시작 위치를 두면 인스펙터에서 귀로 맞출 수 있다. (#549)
+///
 /// <b>감쇠 거리를 항목마다 두는 이유</b> — 소리마다 들려야 할 범위가 다르다. 진압봉 스윙음은
 /// 바로 옆에서만 들리면 되지만 타격음은 조금 더 멀리 가야 "저기서 누가 치고 있다"가 읽힌다.
 /// 매니저에 고정값을 박으면 이 차이를 만들 수 없다.
@@ -28,6 +32,10 @@ public class AudioLibrary : ScriptableObject
         [Tooltip("재생 볼륨 배율. 전역 음량(GameSettings.MasterVolume)이 위에 한 번 더 곱해진다")]
         [Range(0f, 1f)]
         public float Volume = 1f;
+
+        [Tooltip("클립 앞을 이만큼(초) 건너뛰고 재생한다. 도입부가 여린 음원이 한 박자 늦게 들릴 때 쓴다 — 0이면 처음부터")]
+        [Min(0f)]
+        public float StartOffset;
 
         [Tooltip("이 거리(m)까지는 감쇠 없이 최대 볼륨")]
         [Min(0.1f)]

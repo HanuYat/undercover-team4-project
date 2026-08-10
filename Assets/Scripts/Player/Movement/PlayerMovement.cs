@@ -60,6 +60,7 @@ public class PlayerMovement : NetworkBehaviour
     private RopeDragLoad m_dragLoad; // 끌고 있는 무게로 깎인 이동속도 배율·목줄 제한을 읽는다 (#398)
     private PlayerTowedMotion m_towed; // 남이 내 몸을 옮기는 동안의 추종 — 입력 이동을 대신한다 (#279, #365)
     private PlayerLook m_look; // 시점 회전·카메라 자세 — 몸통 yaw가 이동 방향의 기준이라 여기서 순서를 잡는다
+    private PlayerRagdoll m_ragdoll; // 사망 래그돌 — 켜져 있는 동안 외력(넉백)을 삼킨다 (#506)
     private RoundManager Round => App.Game.Round; // 라운드 종료 시 이동·시점 차단용 (라운드 종료 freeze)
     private float m_verticalVelocity;
     private Vector3 m_knockbackVelocity; // 외력으로 밀려나는 수평 속도 — 매 프레임 감쇠 (#232 폭발 넉백)
@@ -121,6 +122,7 @@ public class PlayerMovement : NetworkBehaviour
         m_dragLoad = GetComponent<RopeDragLoad>();
         m_towed = GetComponent<PlayerTowedMotion>();
         m_look = GetComponent<PlayerLook>();
+        m_ragdoll = GetComponent<PlayerRagdoll>();
     }
 
     public override void OnNetworkSpawn()
@@ -275,6 +277,23 @@ public class PlayerMovement : NetworkBehaviour
     }
 
     /// <summary>
+    /// 쌓인 외력(넉백)과 수직 속도를 지운다 — <b>몸의 위치 권한이 넘어가는 순간</b> 부른다.
+    /// 지금 부르는 곳은 둘이다: 래그돌 진입(#506)과 추종 진입(<see cref="PlayerTowedMotion"/>, #279).
+    ///
+    /// 적용되지 못한 채 남은 속도는 몸이 자기 이동을 되찾는 순간 한꺼번에 터진다 —
+    /// <see cref="SetPose"/>가 텔레포트에서 수직 속도를 지우는 것과 같은 이유다. 날아가던 중에
+    /// 붙잡히는 경로가 실제로 있고(넉백은 무력화가 아니라 포획을 막지 않는다), 래그돌 쪽은
+    /// 뼈가 날아가는 동안 캡슐까지 같이 미끄러진다.
+    ///
+    /// 넉백 가드(<see cref="AddKnockback"/>)가 막는 것은 진입 <b>이후</b>의 호출뿐이라 이 짝이 필요하다.
+    /// </summary>
+    internal void ClearExternalVelocity()
+    {
+        m_knockbackVelocity = Vector3.zero;
+        m_verticalVelocity = 0f;
+    }
+
+    /// <summary>
     /// CharacterController를 껐다 켠다 — transform을 직접 옮기는 호송 추종(#279)이 쓴다.
     /// 켠 채로 transform을 옮기면 CC 내부 캐시가 위치를 되돌린다 (<see cref="SetPose"/>와 동일 사정).
     /// </summary>
@@ -297,6 +316,21 @@ public class PlayerMovement : NetworkBehaviour
     // 같은 프레임에서 시점 → 이동 순서가 보장돼야 한다(Unity의 컴포넌트 실행 순서는 미지정).
     private void Update()
     {
+        // 래그돌인 동안(#506) — <b>위치의 주인은 시체다.</b> 캡슐이 시체를 따라간다.
+        //
+        // ⚠ <b>이 분기가 호송·운반보다 먼저인 것이 중요하다.</b> 예전에는 반대였는데, 그러면 밧줄로
+        // 끌 때 운반 추종이 이겨서 캡슐이 먼저 끌려가고 시체는 뒤에 남는다 — 그걸 메우려고 시체를
+        // 캡슐로 당기는 스프링을 붙였다가 "세면 뜨고 약하면 안 끌린다"에 갇혔다(§9-7).
+        // 지금은 밧줄이 시체를 물리로 직접 끌고(PlayerRagdoll.BeginRopePull), 캡슐이 그 결과를
+        // 따라간다 — 권한이 사망 구간 내내 한 방향이라 서로 싸울 일이 없다.
+        if (m_ragdoll != null && m_ragdoll.IsCapsuleFollowingBody)
+        {
+            m_look?.HandleLook();
+            m_ragdoll.TickCapsuleFollow();
+            m_look?.UpdateCameraPose();
+            return;
+        }
+
         // 남이 내 몸을 옮기는 중(#279 호송 / #365 운반) — 입력 이동 대신 추종한다.
         // HandleMove를 타면 안 되는 이유는 모드마다 다르다: 호송은 CharacterController가 꺼져 있고,
         // 운반은 켜져 있지만 중력이 이중으로 적분된다. 어느 쪽이든 이동은 추종 쪽이 든다.
@@ -327,6 +361,22 @@ public class PlayerMovement : NetworkBehaviour
     public void AddKnockback(Vector3 velocity)
     {
         if (IsSpawned && !IsOwner) return;
+
+        // 추종 중에는 외력을 받지 않는다 — 몸의 위치를 PlayerTowedMotion이 쥐고 있어 밀려날 수가
+        // 없는데, 넉백 감쇠는 HandleMove 안에 있고 추종 중에는 Update가 그 앞에서 빠져나간다.
+        // 그래서 그냥 쌓아 두면 값이 <b>감쇠 없이 얼어붙었다가</b> 추종이 끝나는 순간 한꺼번에
+        // 터진다 — 납치 호송 중 폭발이면 외곽에 도착해 린치가 시작되는 그 순간 피해자가 날아간다.
+        // (호송은 CharacterController를 꺼 두므로 수직 성분도 같이 얼어붙는다)
+        if (m_towed != null && m_towed.IsActive) return;
+
+        // 래그돌 중이면 삼킨다 — 몸은 뼈 물리가 날리고 있으므로 캡슐까지 같은 폭발로 미끄러지면
+        // 시체와 판정 위치가 서로 다른 방향으로 벌어진다. (#506 §3-2)
+        //
+        // 호출부(BombExplosionView)에서 "죽은 사람은 건너뛴다"로 거르지 않는 이유: 원격 클라에서는
+        // 사망 사실(PlayerIncapacitation의 NetworkVariable)과 폭발 사실(BombDevice의 것)이 서로 다른
+        // 오브젝트에서 와 도착 순서가 보장되지 않아, 그 시점의 "이 사람 죽었나?"가 틀릴 수 있다.
+        // 들어와도 무해하게 만드는 쪽이 순서와 무관하게 항상 옳다.
+        if (m_ragdoll != null && m_ragdoll.IsRagdollActive) return;
 
         m_knockbackVelocity += new Vector3(velocity.x, 0f, velocity.z);
 

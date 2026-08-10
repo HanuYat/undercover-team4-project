@@ -96,22 +96,22 @@ public static class NpcStateRules
     /// 홀드가 없어졌으므로 이 판정을 통과한 대상은 좌클릭 한 번에 즉시 묶인다 —
     /// 원래 기절 대상에만 있던 지름길이 유일한 경로가 된 것이다 (PlayerEscorter.ServerBeginRopeDrag).
     ///
-    /// 상태 enum이 아니라 <see cref="NpcController.IsStunned"/>를 보는 이유: 스턴은 오버레이라
+    /// 상태 enum이 아니라 <see cref="NpcStun.IsStunned"/>를 보는 이유: 스턴은 오버레이라
     /// 테이저·체력 0 기절이 CurrentState를 바꾸지 않는다(넉백 KO만 <see cref="NpcState.Stunned"/>).
     /// 상태로만 보면 두 기절 경로 중 하나가 조용히 빠진다 (#292). IsStunned는 동기화 값이라
     /// 클라 조기검증·조준 피드백(Rope)에서도 읽을 수 있다.</summary>
     public static bool CanRopeBind(NpcController npc) =>
-        npc != null && npc.IsStunned && CanArrest(npc.CurrentState);
+        npc != null && npc.Stun.IsStunned && CanArrest(npc.CurrentState);
 
     /// <summary>밧줄 없이 따라오는 수감자인가 — 유치장에서 반출돼 추종 중인 대상. (#492)
     /// E를 누르면 그 자리에 세운다(Captured) — 유치장 안이면 JailIntake가 좌석에 다시 앉히고,
     /// 밖이면 그냥 선다(팀 확정 2026-08-03 "위치로 갈린다").
     ///
     /// 상태 enum만으로는 못 가른다 — 밧줄 끌기도 같은 <see cref="NpcState.Escorted"/>다.
-    /// 그래서 <see cref="NpcController.IsRoped"/>를 함께 본다(<see cref="CanRopeBind"/>와 같은 이유로
+    /// 그래서 <see cref="NpcRopeDrag.IsRoped"/>를 함께 본다(<see cref="CanRopeBind"/>와 같은 이유로
     /// NpcController를 받는다). IsRoped는 동기화 값이라 클라 조준 피드백에서도 읽을 수 있다.</summary>
     public static bool IsFollowingUnroped(NpcController npc) =>
-        npc != null && npc.CurrentState == NpcState.Escorted && !npc.IsRoped;
+        npc != null && npc.CurrentState == NpcState.Escorted && !npc.Rope.IsRoped;
 
     /// <summary>멈춰 선 반출 수감자인가 — E로 <b>밧줄 없는 추종</b>을 재개할 수 있는 대상. (#517)
     /// 반출된 대상은 거리가 벌어지면 <see cref="NpcEscortedState"/>가 Captured로 되돌려 세우는데,
@@ -119,7 +119,7 @@ public static class NpcStateRules
     /// 없어지는 것이 #517의 증상이다. 그래서 상태 대신 <see cref="NpcCustody.IsJailExtracted"/>를
     /// 함께 본다(<see cref="CanRopeBind"/>·<see cref="IsFollowingUnroped"/>와 같은 이유로 NpcController를 받는다).
     ///
-    /// 밧줄이 걸린 대상은 여기 오지 않는다 — 묶이는 순간 표식이 꺼져(NpcController.StartRopeDrag)
+    /// 밧줄이 걸린 대상은 여기 오지 않는다 — 묶이는 순간 표식이 꺼져(NpcRopeDrag.StartRopeDrag)
     /// E가 다시 밧줄 재개로 간다. 두 분기가 겹치지 않는 근거가 그것이다.</summary>
     public static bool CanResumeUnropedEscort(NpcController npc) =>
         npc != null && npc.CurrentState == NpcState.Captured && npc.Custody.IsJailExtracted;
@@ -153,6 +153,10 @@ public static class NpcStateRules
     ///    같은 이유다. 예외는 반출해 놓고 방치한 대상(<see cref="NpcCustody.IsJailExtracted"/>, #517):
     ///    정산·진행도에서 이미 빠져 있어 그냥 두면 팀 손실만 남긴 채 영원히 서 있으므로 달아나게 한다.
     ///    그 대상도 감옥 안이면 위 조건에 걸려 남는다.
+    ///
+    /// <b>#548 이후 그 예외는 감옥 안에서만 걸린다</b> — 반출 표식이 문을 나서는 순간 꺼지기 때문이다
+    /// (<see cref="JailIntake"/>). 그래서 문 밖에서 저지돼 풀려난 대상은 달아나지 않고 그 자리에 선다:
+    /// 저지한 사람이 밧줄로 다시 끌어 재수감하라고 세워 두는 것이다.
     /// </summary>
     public static bool StaysPutWhenFreed(NpcController npc) =>
         npc != null

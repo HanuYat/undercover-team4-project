@@ -42,6 +42,9 @@ public class PlayerInputHandler : NetworkBehaviour
     [SerializeField]
     private InputActionReference m_jumpAction;
 
+    [SerializeField]
+    private InputActionReference m_emoteAction; // T 홀드 — 감정표현 휠 (#219)
+
     public Vector2 MoveInput { get; private set; }
     public Vector2 LookInput { get; private set; }
     public bool IsSprinting { get; private set; }
@@ -58,6 +61,8 @@ public class PlayerInputHandler : NetworkBehaviour
     public event Action OnToggleInventory; // Tab — 인벤토리 편집 모드 토글 (#144)
     public event Action<bool> OnCrouchChanged; // Left Ctrl 홀드 — 누르면 true, 떼면 false (#236)
     public event Action OnJumpPressed; // Space 누름 — 홀드가 아닌 단발 입력 (#189)
+    public event Action OnEmoteWheelOpened; // T 누름 — 감정표현 휠 열기 (#219)
+    public event Action OnEmoteWheelClosed; // T 뗌 — 가리키던 칸 발동 (#219)
 
     private bool m_isSuspended;
 
@@ -90,7 +95,7 @@ public class PlayerInputHandler : NetworkBehaviour
         }
     }
 
-    // 12개 액션을 한꺼번에 켜고 끈다 — 스폰/디스폰/정지가 같은 목록을 쓰도록 한 곳에 모은다.
+    // 13개 액션을 한꺼번에 켜고 끈다 — 스폰/디스폰/정지가 같은 목록을 쓰도록 한 곳에 모은다.
     private void SetActionsEnabled(bool value)
     {
         InputActionReference[] actions =
@@ -107,6 +112,7 @@ public class PlayerInputHandler : NetworkBehaviour
             m_toggleInventoryAction,
             m_crouchAction,
             m_jumpAction,
+            m_emoteAction,
         };
 
         foreach (InputActionReference reference in actions)
@@ -150,6 +156,8 @@ public class PlayerInputHandler : NetworkBehaviour
         m_crouchAction.action.started += OnCrouchStartedHandler;
         m_crouchAction.action.canceled += OnCrouchCanceledHandler;
         m_jumpAction.action.started += OnJumpStartedHandler;
+        m_emoteAction.action.started += OnEmoteStartedHandler;
+        m_emoteAction.action.canceled += OnEmoteCanceledHandler;
     }
 
     public override void OnNetworkDespawn()
@@ -176,6 +184,8 @@ public class PlayerInputHandler : NetworkBehaviour
         m_crouchAction.action.started -= OnCrouchStartedHandler;
         m_crouchAction.action.canceled -= OnCrouchCanceledHandler;
         m_jumpAction.action.started -= OnJumpStartedHandler;
+        m_emoteAction.action.started -= OnEmoteStartedHandler;
+        m_emoteAction.action.canceled -= OnEmoteCanceledHandler;
 
         SetActionsEnabled(false);
         m_isSuspended = false; // 재접속·재스폰 시 정지 상태가 남지 않도록 초기화
@@ -230,4 +240,12 @@ public class PlayerInputHandler : NetworkBehaviour
 
     // 눌리는 순간(started)에 발화 — 홀드해도 한 번만 나가야 연타/장풍 점프가 안 생긴다. (#189)
     private void OnJumpStartedHandler(InputAction.CallbackContext ctx) => OnJumpPressed?.Invoke();
+
+    // 홀드 방식이라 started/canceled 두 지점을 모두 쓴다 — performed 하나로는 "누르고 있는 동안"을
+    // 표현할 수 없다. 크라우치(m_crouchAction)가 같은 형태다.
+    private void OnEmoteStartedHandler(InputAction.CallbackContext context) =>
+        OnEmoteWheelOpened?.Invoke();
+
+    private void OnEmoteCanceledHandler(InputAction.CallbackContext context) =>
+        OnEmoteWheelClosed?.Invoke();
 }

@@ -167,13 +167,13 @@ public class NpcAnimationDriver : MonoBehaviour
     /// 둘을 갈라 보면 E로 놓는 순간 묶인 몸이 벌떡 일어선다: 놓기는 <b>끌기만</b> 멈추고 줄은 그대로이며
     /// (GDD 7-5), 밧줄은 애초에 무력화된 대상만 묶으므로(#446) 방금까지 누워 끌려온 몸이다.
     /// </summary>
-    private bool IsRopeBound => m_controller.IsRoped || m_controller.IsTethered;
+    private bool IsRopeBound => m_controller.Rope.IsRoped || m_controller.Rope.IsTethered;
 
     /// <summary>
     /// 밧줄 때문에 <b>바닥에 있는가</b> — 줄이 걸려 있거나 풀린 뒤 아직 쓰러져 있고, 기상 모션이 아직
     /// 시작되지 않았다. 누운 모션·콜라이더의 기준. (#513)
     ///
-    /// <b>예약 구간</b>(<see cref="NpcController.IsStandingUp"/>)을 함께 보는 이유: 풀기는 예약을 걸자마자
+    /// <b>예약 구간</b>(<see cref="NpcStandUp.IsStandingUp"/>)을 함께 보는 이유: 풀기는 예약을 걸자마자
     /// 줄을 빼므로 묶임만 보면 <b>쓰러져 기다리는 몇 초 동안 몸을 눕혀 둘 근거가 사라진다</b> — 푸는 즉시
     /// 벌떡 서고 뒤늦게 이미 서 있는 몸에 기상 모션이 나왔다. 예약이 곧 "아직 바닥"이다.
     ///
@@ -181,7 +181,7 @@ public class NpcAnimationDriver : MonoBehaviour
     /// "일어나기 → 후속 전이(도주·배회·착석)" 순인데, 묶임 표시를 걷는 것은 <see cref="PlayerEscorter"/>의
     /// 매 프레임 정리라 한 박자 늦게 온다. 그것만 보면 이미 일어나 걷기 시작한 몸이 그 사이 도로 눕는다.
     /// </summary>
-    private bool IsRopeProne => (IsRopeBound || m_controller.IsStandingUp) && !m_standingUp;
+    private bool IsRopeProne => (IsRopeBound || m_controller.StandUp.IsStandingUp) && !m_standingUp;
 
     private void Awake()
     {
@@ -205,7 +205,7 @@ public class NpcAnimationDriver : MonoBehaviour
         // 일어나기도 상태 전이가 아닌 순간 이벤트 — 기절 상태를 유지한 채 마지막 구간에만 얹는다 (#269)
         m_controller.OnStandUp += HandleStandUp;
         // 스턴은 상태 전이가 아니라 오버레이라 OnStateChanged로 안 온다 — 따로 구독한다 (#292)
-        m_controller.OnStunnedChanged += HandleStunnedChanged;
+        m_controller.Stun.OnStunnedChanged += HandleStunnedChanged;
         HandleStateChanged(m_controller.CurrentState);
     }
 
@@ -215,7 +215,7 @@ public class NpcAnimationDriver : MonoBehaviour
         {
             m_controller.OnStateChanged -= HandleStateChanged;
             m_controller.OnStandUp -= HandleStandUp;
-            m_controller.OnStunnedChanged -= HandleStunnedChanged;
+            m_controller.Stun.OnStunnedChanged -= HandleStunnedChanged;
         }
 
         if (m_penalty != null)
@@ -430,7 +430,7 @@ public class NpcAnimationDriver : MonoBehaviour
 
         // 스턴 오버레이 중에는 속도 기반 로코모션을 돌리지 않는다 (#292) — 상태 enum이 그대로라
         // 연행·저항·페널티 상태에서 기절하면 아래 블록이 매 프레임 기절 포즈를 덮어쓴다.
-        if (m_controller.IsStunned)
+        if (m_controller.Stun.IsStunned)
             return;
 
         NpcState state = m_controller.CurrentState;
@@ -595,7 +595,7 @@ public class NpcAnimationDriver : MonoBehaviour
         // 매니저의 Detained→Chasing 전이 등)에서 걸린 전이는 그대로 들어온다. 그걸 그대로 받으면
         // m_baseState가 Stunned에서 벗어나 기절 중에 벌떡 서는 그림이 나오고, RefreshProne(#363)이
         // 누움을 풀어 콜라이더까지 같이 선다.
-        if (m_controller.IsStunned)
+        if (m_controller.Stun.IsStunned)
             state = NpcState.Stunned;
 
         // 제압 전환 분기용 직전 상태 — base를 덮어쓰기 전에 읽는다 (#332)

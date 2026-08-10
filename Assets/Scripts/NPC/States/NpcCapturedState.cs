@@ -49,7 +49,7 @@ public class NpcCapturedState : NpcStateBase
 
         // 이미 일어나는 중 — 끝나면 도주로 이어진다. 그 사이 다시 묶이면 예약이 취소되고
         // 커스터디 재진입(Enter)이 타이머를 새로 잡는다. (#513)
-        if (m_owner.IsStandingUp)
+        if (m_owner.StandUp.IsStandingUp)
             return;
 
         float remaining = m_escapeTime - Time.time;
@@ -113,14 +113,14 @@ public class NpcCapturedState : NpcStateBase
     /// 묶인 대상은 누워 있으므로(#513) 만료 순간 곧바로 도주하면 누운 몸이 그대로 미끄러진다.
     /// 일어나기 모션을 먼저 태우고 그 길이만큼 지난 뒤 달아난다 — <b>그 구간이 곧 재포획 창</b>이다.
     /// 아직 묶인 채 <see cref="NpcState.Captured"/>이므로 달려가 E를 누르면 끌기가 재개되고
-    /// (<see cref="NpcController.StartRopeDrag"/>가 예약을 취소한다) 자세도 누운 상태로 되돌아간다.
+    /// (<see cref="NpcRopeDrag.StartRopeDrag"/>가 예약을 취소한다) 자세도 누운 상태로 되돌아간다.
     /// "일어난다 = 곧 달아난다"가 지금은 없던 예고 신호가 된다.
     ///
     /// 이미 서 있는 대상(제압만으로 잡혀 묶인 적 없는 Captured)은 기다리지 않고 곧바로 달아난다 —
-    /// 그 판정은 <see cref="NpcController.ServerStandUpThen"/>이 한다.</summary>
+    /// 그 판정은 <see cref="NpcStandUp.ServerStandUpThen"/>이 한다.</summary>
     private void Escape()
     {
-        m_owner.ServerStandUpThen(Flee);
+        m_owner.StandUp.ServerStandUpThen(Flee);
     }
 
     /// <summary>일어난 뒤 실제로 달아난다.</summary>
