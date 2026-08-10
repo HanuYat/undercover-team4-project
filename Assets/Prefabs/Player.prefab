@@ -5146,6 +5146,7 @@ GameObject:
   - component: {fileID: 3120017538077844962}
   - component: {fileID: 914296157285595536}
   - component: {fileID: -3123601567961304525}
+  - component: {fileID: 2884170593316442071}
   - component: {fileID: 3605863908184502176}
   - component: {fileID: 3601868820283084074}
   - component: {fileID: 5887233641706128439}
@@ -5836,6 +5837,31 @@ MonoBehaviour:
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
+  references:
+    version: 2
+    RefIds: []
+--- !u!114 &2884170593316442071
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0d0a716c59b74bc47869f173c461bef3, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerTheftView
+  m_stolenToast:
+    m_TableReference:
+      m_TableCollectionName: HudTable
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: Hud.Pickpocket.Stolen
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_toastSeconds: 3
   references:
     version: 2
     RefIds: []

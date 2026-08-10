@@ -264,6 +264,10 @@ public class SpawnedNpcEvent : ISuddenEvent
         if (stolen != null)
         {
             m_npc.gameObject.AddComponent<StolenGoods>().ServerTake(stolen);
+
+            // 물건은 소리 없이 사라지므로 당사자에게 알린다 — 안 알리면 한참 뒤에야 없어진 걸 안다
+            victim.GetComponent<PlayerTheftView>()?.ShowStolen();
+
             Debug.Log($"[돌발이벤트] {m_displayName} — {stolen.name} 탈취, 도주 시작");
         }
         else
