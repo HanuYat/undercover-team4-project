@@ -27,6 +27,25 @@ public class NpcChaseConfig : ScriptableObject
     [Tooltip("표적이 이 시간(초) 뒤에 있을 위치를 조준한다. 크면 코너를 질러가고, 너무 크면 급반전에 속아 엉뚱한 데로 간다")]
     [SerializeField] private float m_maxLeadSeconds = 0.6f;
 
+    [Tooltip(
+        "쫓던 표적을 완전히 놓는 거리(m) — 여기까지 벌어지면 추격을 접고 배회로 돌아간다 (#568 후속).\n\n"
+            + "<b>반드시 추격 범위(Range)보다 넓게 둘 것.</b> 좁으면 방금 고른 표적이 그 즉시 자격을 잃어 "
+            + "물었다 놨다를 매 프레임 반복한다(범위 안에서 다시 고르기 때문). 그 사이 배회로 떨어져 "
+            + "속도가 걷기로 주저앉으므로 화면에서는 '달리다 갑자기 멈춘다'로 보인다.\n\n"
+            + "갈아타기는 이 값이 아니라 SwitchAdvantage가 맡는다 — 이쪽은 포기 거리다"
+    )]
+    [Min(1f)]
+    [SerializeField] private float m_releaseDistance = 35f;
+
+    [Tooltip(
+        "다른 후보가 지금 표적보다 이만큼(m) 더 가까우면 갈아탄다 (#568 후속).\n\n"
+            + "절대 거리로 놓았다 다시 무는 방식은 진동을 만든다 — 놓는 순간 범위 안에서 다시 고르므로 "
+            + "같은 사람을 도로 물기 쉽다. '더 가까운 사람이 나타났을 때만' 바꾸면 그 왕복이 없다.\n\n"
+            + "0에 가까우면 여럿이 붙어 있을 때 표적이 계속 바뀌어 산만해진다"
+    )]
+    [Min(0f)]
+    [SerializeField] private float m_switchAdvantage = 5f;
+
     public float MaxSpeed => m_maxSpeed;
     public float AccelSeconds => m_accelSeconds;
     public float Range => m_range;
@@ -36,4 +55,13 @@ public class NpcChaseConfig : ScriptableObject
     public float TurnSpeed => m_turnSpeed;
     public float Acceleration => m_acceleration;
     public float MaxLeadSeconds => m_maxLeadSeconds;
+
+    /// <summary>추격을 완전히 접는 거리(m) — <b><see cref="Range"/>보다 넓어야 한다</b>. (#568 후속)
+    /// 좁으면 방금 고른 표적이 즉시 자격을 잃어 물었다 놨다를 반복한다(이력이 없어진다).</summary>
+    public float ReleaseDistance => m_releaseDistance;
+
+    /// <summary>갈아타는 기준 — 다른 후보가 현재 표적보다 이만큼(m) 더 가까울 때만 바꾼다. (#568 후속)
+    /// 거리로 놓았다 다시 고르는 방식과 달리 왕복이 생기지 않는다 — 바꾼 직후에는
+    /// 새 표적이 더 가까우므로 되돌아갈 조건이 성립하지 않는다.</summary>
+    public float SwitchAdvantage => m_switchAdvantage;
 }

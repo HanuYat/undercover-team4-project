@@ -33,9 +33,8 @@ public class NpcChaseState : NpcStateBase
     private const float k_farRepathInterval = 0.4f;
     private const float k_nearRepathDistance = 8f; // 이 거리(m) 안쪽이면 촘촘한 쪽을 쓴다
 
-    // 현재 타겟을 놓는 거리는 잡는 거리보다 넓다 (#568) — 경계에서 타겟이 깜빡이면 그때마다
-    // 사냥(랜덤 배회)이 끼어들어 추격 도중 엉뚱한 방향으로 돈다.
-    private const float k_releaseRangeMultiplier = 1.25f;
+    // 놓는 거리는 NpcChaseConfig.ReleaseDistance로 옮겼다 (#568 후속) — Range에 곱하는 상수로는
+    // "이만큼 벌어지면 갈아탄다"를 직접 정할 수 없었다(30m × 1.25 = 37.5m라 사실상 안 걸렸다).
 
     // 부분 경로가 나왔을 때 목적지를 NavMesh 위로 끌어당기는 탐색 반경(m) — 표적이 연석·계단 모서리처럼
     // 카브가 안 된 곳에 서 있는 흔한 경우를 덮는다. 진짜 도달 불가(문 뒤·다른 층)는 이걸로도 안 붙는다.
@@ -173,11 +172,16 @@ public class NpcChaseState : NpcStateBase
         }
         else if (!IsChaseable(target))
         {
-            target = PickRandomTargetInRange();
+            target = PickNearestTargetInRange();
             m_owner.Penalty.SetChaseTarget(target);
             if (target != null)
             {
-                m_targetAcquiredTime = Time.time; // 새 타겟 — 가속을 처음부터 다시 밟는다
+                // 가속 램프는 <b>사냥에서 돌아올 때만</b> 처음부터 밟는다 (#568 후속).
+                // 달리던 중에 표적만 바꾸는 것은 "다시 출발"이 아닌데, 매번 리셋하면 걷는 속도로
+                // 떨어졌다 8초에 걸쳐 회복하기를 반복해 갈아탈수록 추격이 느려졌다.
+                if (m_hunting)
+                    m_targetAcquiredTime = Time.time;
+
                 ClearReachability(); // 앞 표적의 도달 불가 누적을 물려받지 않는다
             }
         }
@@ -198,6 +202,23 @@ public class NpcChaseState : NpcStateBase
         m_owner.Agent.stoppingDistance = 0f;
 
         float distance = FlatDistance(m_owner.transform.position, target.position);
+
+        // ---- 갈아타기: 눈에 띄게 더 가까운 사람이 나타났다 (#568 후속)
+        // 거리로 놓았다 다시 고르는 방식이 아니라 상대 비교다 — 그쪽은 놓는 순간 범위 안에서 같은
+        // 사람을 도로 물어 매 프레임 왕복했다. 바꾼 직후에는 새 표적이 더 가까우므로 되돌아갈 조건이
+        // 성립하지 않아 진동이 없다. 표적을 고정하는 임무(납치·소매치기)는 건너뛴다.
+        if (!keepsTarget)
+        {
+            Transform closer = FindCloserTarget(target, distance);
+            if (closer != null)
+            {
+                target = closer;
+                m_owner.Penalty.SetChaseTarget(target);
+                ClearReachability(); // 앞 표적의 도달 불가 누적을 물려받지 않는다
+                distance = FlatDistance(m_owner.transform.position, target.position);
+                // 가속 램프는 건드리지 않는다 — 달리던 중의 표적 교체라 "다시 출발"이 아니다
+            }
+        }
 
         if (m_repathTimer <= 0f)
         {
@@ -254,16 +275,24 @@ public class NpcChaseState : NpcStateBase
             && m_owner.Agent.pathStatus != NavMeshPathStatus.PathComplete;
 
         // 부분 경로일 때만 샘플링하므로 정상 경로에서는 프로퍼티 읽기 두 번이 전부다.
-        if (
-            partial
-            && NavMesh.SamplePosition(
-                aim,
-                out NavMeshHit hit,
-                k_destinationSnapRadius,
-                m_owner.Agent.areaMask
+        //
+        // <b>예측점부터 버린다</b> (#568 후속) — 부분 경로의 흔한 원인이 리드 조준 자신이다. 표적이
+        // 대각선으로 움직이면 몇 걸음 앞을 조준한 지점이 연석·벽 너머로 넘어가기 쉽고, 그러면 우리가
+        // 만든 목적지 때문에 도달 불가로 오판한다. 표적 실제 위치로 되돌린 뒤 그래도 안 되면 스냅한다.
+        if (partial)
+        {
+            aim = target.position;
+
+            if (
+                NavMesh.SamplePosition(
+                    aim,
+                    out NavMeshHit hit,
+                    k_destinationSnapRadius,
+                    m_owner.Agent.areaMask
+                )
             )
-        )
-            aim = hit.position;
+                aim = hit.position;
+        }
 
         m_owner.Agent.SetDestination(aim);
 
@@ -419,7 +448,14 @@ public class NpcChaseState : NpcStateBase
 
     // 현재 타겟을 계속 쫓아도 되는가 — 존재·행동 가능·추격 범위 안·재추격 쿨다운 아님.
     // 놓는 거리는 잡는 거리(Range)보다 넓다 — 경계에서 깜빡이면 사냥(랜덤 배회)이 끼어든다 (#568).
-    private bool IsChaseable(Transform target)
+    private bool IsChaseable(Transform target) =>
+        IsTargetHeld(target)
+        && FlatDistance(m_owner.transform.position, target.position) <= m_config.ReleaseDistance;
+
+    /// <summary>거리를 빼고 <b>붙들 자격만</b> 보는 판정 — 존재·행동 가능·격퇴 쿨다운 아님. (#568 후속)
+    /// <see cref="IsChaseable"/>이 여기에 거리 조건을 얹는다 — 자격과 거리를 갈라 두면
+    /// "왜 놓았는가"가 로그 없이도 읽힌다.</summary>
+    private bool IsTargetHeld(Transform target)
     {
         if (target == null)
             return false;
@@ -427,16 +463,27 @@ public class NpcChaseState : NpcStateBase
             return false;
 
         PlayerHealth health = target.GetComponent<PlayerHealth>();
-        if (health == null || !health.IsTargetable)
-            return false;
-
-        return FlatDistance(m_owner.transform.position, target.position)
-            <= m_config.Range * k_releaseRangeMultiplier;
+        return health != null && health.IsTargetable;
     }
 
-    // 추격 범위 안의 행동 가능한 플레이어 중 무작위 — 쿨다운 대상 제외. 없으면 null(사냥 모드).
+    /// <summary>지금 표적보다 <see cref="NpcChaseConfig.SwitchAdvantage"/>만큼 더 가까운 후보 — 없으면 null. (#568 후속)
+    /// 스캔 스로틀을 그대로 타므로 매 프레임 전 플레이어를 순회하지 않는다.</summary>
+    private Transform FindCloserTarget(Transform current, float currentDistance)
+    {
+        Transform nearest = PickNearestTargetInRange();
+        if (nearest == null || nearest == current)
+            return null;
+
+        float distance = FlatDistance(m_owner.transform.position, nearest.position);
+        return currentDistance - distance >= m_config.SwitchAdvantage ? nearest : null;
+    }
+
+    // 추격 범위 안의 행동 가능한 플레이어 중 <b>가장 가까운</b> 사람 — 쿨다운 대상 제외. 없으면 null(사냥 모드).
     // 주기 스캔(k_scanInterval)으로 스로틀한다 — 사냥 중 매 프레임 전 플레이어 순회 방지.
-    private Transform PickRandomTargetInRange()
+    //
+    // 무작위에서 최근접으로 바꿨다 (#568 후속) — 눈앞의 사람을 두고 멀리 있는 사람을 골라 뛰어가는
+    // 그림이 나왔다. 갈아타기는 "놓쳤으니 가까운 쪽으로"가 자연스럽지, 새로 추첨하는 것이 아니다.
+    private Transform PickNearestTargetInRange()
     {
         if (m_scanTimer > Time.time)
             return null;
@@ -453,10 +500,20 @@ public class NpcChaseState : NpcStateBase
                 m_candidateBuffer.RemoveAt(i);
         }
 
-        if (m_candidateBuffer.Count == 0)
-            return null;
+        Transform nearest = null;
+        float nearestDistance = float.MaxValue;
+        for (int i = 0; i < m_candidateBuffer.Count; i++)
+        {
+            Transform candidate = m_candidateBuffer[i];
+            float distance = FlatDistance(m_owner.transform.position, candidate.position);
+            if (distance >= nearestDistance)
+                continue;
 
-        return m_candidateBuffer[Random.Range(0, m_candidateBuffer.Count)];
+            nearestDistance = distance;
+            nearest = candidate;
+        }
+
+        return nearest;
     }
 
     private bool IsOnCooldown(Transform target) =>
