@@ -63,6 +63,10 @@ MonoBehaviour:
     m_Localized: Confirm
     m_Metadata:
       m_Items: []
+  - m_Id: 2257280951738368
+    m_Localized: Getting into position...
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

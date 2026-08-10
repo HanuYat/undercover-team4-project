@@ -26,9 +26,6 @@ public class LoadingScreen : CommonManagerBase
     // 덮은 화면이 실제로 렌더되는 것을 보장하는 최소 프레임 수.
     private const int k_settleFrames = 60;
 
-    // 게이지에서 씬 로드 구간이 차지하는 몫. 나머지는 런타임 스폰 대기가 끝나며 채운다 (#582).
-    private const float k_sceneLoadWeight = 0.9f;
-
     // 표시값이 목표를 따라가는 속도(초당 비율) — 로드 진행률은 계단식으로 튄다.
     private const float k_progressPerSecond = 2.5f;
 
@@ -66,6 +63,10 @@ public class LoadingScreen : CommonManagerBase
     [SerializeField]
     private LocalizedString m_defaultStatus;
 
+    [Tooltip("씬 로드 후 런타임 스폰을 기다리는 동안의 문구 — Common.Loading.Preparing")]
+    [SerializeField]
+    private LocalizedString m_readyWaitStatus;
+
     [Header("연출")]
     [Tooltip("페이드 아웃 시간(초). 0이면 즉시 사라진다. (페이드 인은 두지 않는다 — #403)")]
     [SerializeField]
@@ -83,6 +84,9 @@ public class LoadingScreen : CommonManagerBase
     // 게이지의 목표값과 실제 표시값. 둘을 나눈 이유는 위 k_progressPerSecond 주석 참고.
     private float m_targetProgress;
     private float m_shownProgress;
+
+    // 마지막으로 라벨에 쓴 정수 퍼센트 — 같은 값이면 문자열을 다시 만들지 않는다
+    private int m_shownPercent = -1;
 
     /// <summary>이 화면이 지금 씬을 덮고 있는가 — 두 구동 경로의 중복 실행을 막는 데 쓴다.</summary>
     public bool IsBusy { get; private set; }
@@ -124,7 +128,9 @@ public class LoadingScreen : CommonManagerBase
         IsBusy = true;
         m_targetProgress = 0f;
         m_shownProgress = 0f;
+        m_shownPercent = -1;
         RenderProgress();
+        SetStatus(null); // 지난 전환의 준비 대기 문구가 남아 있지 않게 되돌린다
         SetVisible(true);
     }
 
@@ -144,12 +150,22 @@ public class LoadingScreen : CommonManagerBase
         IsBusy = false;
     }
 
-    /// <summary>씬 로드 구간의 진행률(0~1) 보고 — App.LoadScene 파이프라인이 매 프레임 부른다. (#582)</summary>
-    public void ReportSceneLoadProgress(float ratio01) =>
-        SetTargetProgress(Mathf.Clamp01(ratio01) * k_sceneLoadWeight);
+    /// <summary>씬 로드 진행률(0~1) 보고 — App.LoadScene 파이프라인이 매 프레임 부른다. (#582)</summary>
+    public void ReportSceneLoadProgress(float ratio01) => SetTargetProgress(ratio01);
 
-    /// <summary>씬 로드 뒤 런타임 스폰까지 끝났다 — 게이지의 남은 몫을 채운다. (#582)</summary>
-    public void ReportSceneReady() => SetTargetProgress(1f);
+    /// <summary>
+    /// 씬 로드가 끝나 이제 런타임 스폰을 기다린다 — 게이지를 채우고 문구를 바꾼다. (#582)
+    ///
+    /// 이 구간을 게이지에 태우지 않는 이유는 <b>실측할 값이 없어서</b>다. 처음에는 씬 로드에 0.9를
+    /// 주고 남은 0.1을 이 구간에 배정했지만, 대기가 끝나는 즉시 HideAsync가 이어져 0.9→1.0이
+    /// 한 프레임도 못 돌았다 — 클라이언트는 k_settleFrames(약 1초)만큼 90%에 멈춰 있다가 사라졌다.
+    /// 얻는 것 없이 "90%에서 멈추는 로딩바" 인상만 남아, 진척은 게이지에서 빼고 문구로 알린다.
+    /// </summary>
+    public void BeginSceneReadyWait()
+    {
+        SetTargetProgress(1f);
+        SetStatus(m_readyWaitStatus);
+    }
 
     // 되감기 금지. 구동 경로가 둘이라(서버는 App.LoadScene, 클라는 NGO 이벤트) 늦게 도착한
     // 낮은 값이 섞일 수 있고, 퍼센트가 줄어드는 화면은 그 자체로 고장으로 읽힌다.
@@ -174,9 +190,17 @@ public class LoadingScreen : CommonManagerBase
         if (m_progressFill != null)
             m_progressFill.fillAmount = m_shownProgress;
 
-        // 숫자와 기호뿐이라 테이블을 타지 않는다 — 매 프레임 문자열을 조회할 자리도 아니다 (#497 예외).
-        if (m_percentText != null)
-            m_percentText.text = Mathf.RoundToInt(m_shownProgress * 100f) + "%";
+        if (m_percentText == null)
+            return;
+
+        // 표시값은 매 프레임 조금씩 움직이지만 정수 퍼센트는 그대로인 프레임이 대부분이다
+        int percent = Mathf.RoundToInt(m_shownProgress * 100f);
+        if (percent == m_shownPercent)
+            return;
+
+        m_shownPercent = percent;
+        // 숫자와 기호뿐이라 테이블을 타지 않는다 (#497 예외 — 방침은 #525에서 함께 정한다)
+        m_percentText.text = percent + "%";
     }
 
     /// <summary>
@@ -332,13 +356,12 @@ public class LoadingScreen : CommonManagerBase
 
         if (m_clientLoadedScene == sceneName)
         {
-            ReportSceneLoadProgress(1f);
+            BeginSceneReadyWait();
 
             await UniTask.DelayFrame(k_settleFrames, PlayerLoopTiming.Update, token); // 첫 렌더 가리기
 
             // 런타임 스폰까지 기다린다 — 서버는 App.LoadScene이 같은 대기를 걸지만 클라는 여기가 유일한 경로
             await App.WaitUntilSceneReadyAsync(token);
-            ReportSceneReady();
         }
         else
         {

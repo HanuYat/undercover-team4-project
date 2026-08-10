@@ -173,9 +173,10 @@ public static class AppHelper
                 await UniTask.Yield(PlayerLoopTiming.Update, token);
             }
 
-            onProgress?.Invoke(1f);
-
-            if (!localLoaded)
+            // 확인된 완료에만 100%를 보고한다 — 타임아웃·세션 끊김으로 빠져나온 경우는 아니다
+            if (localLoaded)
+                onProgress?.Invoke(1f);
+            else
                 Debug.LogWarning(
                     $"[AppHelper] NGO 씬 로드 완료를 확인하지 못했습니다: {sceneName} — 그대로 진행"
                 );
