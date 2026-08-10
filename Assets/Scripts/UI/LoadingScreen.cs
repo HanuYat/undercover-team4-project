@@ -60,13 +60,6 @@ public class LoadingScreen : CommonManagerBase
     [SerializeField]
     private GameObject m_runnerStage;
 
-    [Tooltip("비워도 됨 — 뒤로 흘러 전진하는 느낌을 내는 배경 띠")]
-    [SerializeField]
-    private RawImage m_runnerStrip;
-
-    [SerializeField]
-    private float m_stripScrollPerSecond = 0.35f;
-
     // 라벨에 LocalizeStringEvent를 붙이지 않고 여기서 테이블을 참조한다 — SetStatus가 대입하는 자리라
     // 컴포넌트를 붙이면 둘이 서로 덮어쓴다. 지금은 대입하는 곳이 없지만 그때 조용히 깨진다. (#497)
     [Tooltip("기본 상태 문구 — Common.Loading.Status")]
@@ -110,12 +103,9 @@ public class LoadingScreen : CommonManagerBase
 
     private void Update()
     {
-        // timeScale이 0으로 잠겨도(돌발 이벤트 freeze) 돌아야 하므로 전부 실시간 기준
+        // timeScale이 0으로 잠겨도(돌발 이벤트 freeze) 돌아야 하므로 실시간 기준
         if (IsBusy)
-        {
             AdvanceProgress();
-            ScrollStrip();
-        }
 
         RefreshNetworkHook();
     }
@@ -187,18 +177,6 @@ public class LoadingScreen : CommonManagerBase
         // 숫자와 기호뿐이라 테이블을 타지 않는다 — 매 프레임 문자열을 조회할 자리도 아니다 (#497 예외).
         if (m_percentText != null)
             m_percentText.text = Mathf.RoundToInt(m_shownProgress * 100f) + "%";
-    }
-
-    // 캐릭터는 제자리에서 뛴다 — 전진하는 느낌은 뒤로 흐르는 이 띠가 만든다.
-    private void ScrollStrip()
-    {
-        if (m_runnerStrip == null)
-            return;
-
-        Rect uv = m_runnerStrip.uvRect;
-        uv.x += m_stripScrollPerSecond * Time.unscaledDeltaTime;
-        uv.x -= Mathf.Floor(uv.x); // 계속 키우면 float 정밀도가 떨어져 띠가 떨린다
-        m_runnerStrip.uvRect = uv;
     }
 
     /// <summary>
