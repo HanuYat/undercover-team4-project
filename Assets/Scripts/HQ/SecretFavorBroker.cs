@@ -366,10 +366,13 @@ public class SecretFavorBroker : NetworkBehaviour
             return;
         }
 
-        // <b>대상과 의뢰인이 함께 인도 범위 안에 있어야 완수다.</b> 대상만 보면 남이 데려다 놓은 것으로
-        // 보상이 나가고, 의뢰인만 보면 대상 없이 지점만 밟아도 된다. 대상의 상태는 보지 않는다 —
-        // 밧줄로 끌고 왔든 따라오게 했든 세워 두고 왔든 "여기까지 데려왔다"는 사실은 같다.
-        if (!m_dropoff.Contains(m_target.transform.position) || !m_dropoff.Contains(requester.position))
+        // <b>대상이 인도 범위에 닿으면 완수다 — 의뢰인은 그 자리에 없어도 된다</b> (#548).
+        // 자율 보행이 붙기 전에는 의뢰인이 대상을 데리고 와야 했으므로 둘을 함께 봤다. 지금은 대상이
+        // 스스로 걸어가므로 의뢰인까지 요구하면 그 보행 시간이 곧 의뢰인의 대기 시간이 되고,
+        // "꺼내 보내 놓고 시치미 떼고 딴 일을 한다"는 이 기능의 그림이 사라진다 — 오히려 인도 지점에
+        // 서서 기다리는 모습이 남에게 들키는 자리가 된다.
+        // 대상의 상태는 보지 않는다 — 걸어왔든 누가 끌어다 놨든 "여기 도착했다"는 사실은 같다.
+        if (!m_dropoff.Contains(m_target.transform.position))
             return;
 
         Complete();
