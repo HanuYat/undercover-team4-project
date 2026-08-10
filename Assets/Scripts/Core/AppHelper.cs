@@ -23,6 +23,9 @@ public static class AppHelper
     // NGO 씬 동기화의 로컬 완료를 기다리는 상한. 무한 대기(로딩 화면 고착) 방지.
     private const float k_networkLoadTimeoutSeconds = 30f;
 
+    // 고른 맵이 없을 때 갈 맵. 세션 밖(에디터에서 Shop을 직접 Play)이거나 목록이 비었을 때 쓰인다.
+    private const string k_defaultGameScene = "Map_Apocalypse";
+
     /// <summary>EScene → 실제 씬 이름. 빌드 인덱스에 결합하지 않는다 (NGO도 이름 기반 로드).</summary>
     public static string ToSceneName(EScene scene) =>
         scene switch
@@ -30,10 +33,11 @@ public static class AppHelper
             EScene.Title => "Title Scene", // main이 Title.unity → "Title Scene.unity"로 개명 (#214 리베이스 반영)
             EScene.Lobby => "Lobby",
             EScene.Shop => "Shop",
-            // 라운드를 진행할 게임 맵. 맵은 여러 개(Assets/Scenes/Maps/*)지만 고르는 수단이 아직 없어
-            // 여기서 한 장을 지정한다 — 맵을 바꿔 보려면 이 줄만 고치면 된다.
-            // 로비에서 맵을 고르게 되면 이 자리를 그 선택값으로 바꾼다. (#215)
-            EScene.Game => "Map_Apocalypse",
+            // 라운드를 진행할 게임 맵. 어느 장으로 갈지는 Shop에서 호스트가 고른다 (#578).
+            // <b>맵을 늘려도 여기에 arm을 추가하지 말 것</b> — EScene.Game은 "게임 맵"이라는 뜻 그대로 두고
+            // 이름만 바꿔치운다. 맵마다 EScene 값을 늘리면 App.CurrentScene == EScene.Game 비교가
+            // 전부 깨진다(PlayerSpawnManager·PlayerItemSupply·SceneIndicatorHud). 목록은 MapSelection이 주인.
+            EScene.Game => App.Game.MapSelection?.SelectedSceneName ?? k_defaultGameScene,
             _ => null,
         };
 

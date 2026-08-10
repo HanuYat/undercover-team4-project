@@ -15,6 +15,9 @@ public class ShopManager : SceneManagerBase
     private bool IsServer => NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer;
     private bool m_dispatched;
 
+    /// <summary>이미 출동했는가 — 맵 선택 잠금 기준. 판단 근거는 <see cref="MapSelection.IsSelectable"/>. (#578)</summary>
+    public bool IsDispatched => m_dispatched;
+
     // 상점(라운드 사이)도 조인 가능 — 진입 시 잠금 해제. 게임 종료 후 복귀 시에도 다시 열린다.
     private void Start()
     {
