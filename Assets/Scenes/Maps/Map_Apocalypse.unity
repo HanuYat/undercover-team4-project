@@ -27825,6 +27825,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoundManager
   m_targetFund: 20000
+  m_quotaTable: {fileID: 11400000, guid: 27e5c2fdf24ca4b40acc205fdbd43d9c, type: 2}
   m_timeLimitSeconds: 600
   m_startDelaySeconds: 3
   m_jailZone: {fileID: 8298609921114679384}

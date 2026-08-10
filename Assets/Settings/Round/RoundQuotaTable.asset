@@ -12,4 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e1764050c73de244c87ed6b8048a684f, type: 3}
   m_Name: RoundQuotaTable
   m_EditorClassIdentifier: Assembly-CSharp::RoundQuotaTable
-  m_quotas: 204e0000c05d0000606d0000007d0000
+  m_quotas: 10270000983a0000204e0000a861000030750000b8880000409c0000c8af000050c30000d8d60000
