@@ -77,13 +77,38 @@ public static class RagdollSetup
     // "Root"를 직속 자식으로 가진 오브젝트여야 한다.
 
     private const string k_playerPrefab = "Assets/Prefabs/Player.prefab";
-    private const string k_npcCitizenPrefab = "Assets/Prefabs/NPC/NPC_Citizen.prefab";
+
+    /// <summary>NPC 리그 소유자 — 전 NPC 프리팹이 몸을 <c>Model</c> 중첩 인스턴스로 들고 있다. (#571)</summary>
+    public const string k_npcRigOwnerPath = "Model";
+
+    /// <summary>리그를 복제해 온 원본. <see cref="RagdollRigCloner"/>가 기준으로 삼는다.</summary>
+    public const string k_npcCitizenPrefab = "Assets/Prefabs/NPC/NPC_Citizen.prefab";
+
+    /// <summary>
+    /// 리그가 필요한 NPC 프리팹 전부 — <b>이 목록이 정본이다.</b> 복제(<see cref="RagdollRigCloner"/>)와
+    /// 마무리가 같은 목록을 봐야 한 쪽만 갱신되는 일이 없다.
+    ///
+    /// <c>NPC_Abductor</c>는 <b>없다</b> — <c>NPC_Citizen</c>의 Variant라 리그·<see cref="RagdollRig"/>·
+    /// <c>NpcRagdoll</c>을 전부 상속한다. 여기 넣으면 상속을 오버라이드로 덮어써서, 앞으로
+    /// Citizen 리그를 고쳐도 Abductor만 옛 값에 남는다.
+    /// </summary>
+    public static readonly string[] s_npcPrefabs =
+    {
+        k_npcCitizenPrefab,
+        "Assets/Prefabs/NPC/NPC_Citizen_Generic.prefab",
+        "Assets/Prefabs/NPC/NPC_Rioter.prefab",
+        "Assets/Prefabs/NPC/NPC_Streaker.prefab",
+    };
 
     [MenuItem("Tools/Ragdoll/Finish Setup - Player")]
     public static void RunPlayer() => Run(k_playerPrefab, rigOwnerPath: "");
 
-    [MenuItem("Tools/Ragdoll/Finish Setup - NPC Citizen")]
-    public static void RunNpcCitizen() => Run(k_npcCitizenPrefab, rigOwnerPath: "Model");
+    [MenuItem("Tools/Ragdoll/Finish Setup - NPC (전체)")]
+    public static void RunAllNpc()
+    {
+        for (int i = 0; i < s_npcPrefabs.Length; i++)
+            Run(s_npcPrefabs[i], k_npcRigOwnerPath);
+    }
 
     /// <summary>
     /// 마무리를 실행한다. 서브 메뉴가 아니라 여기로 대상을 넘긴다 — 새 개체는 메뉴 한 줄만 늘리면 된다.
