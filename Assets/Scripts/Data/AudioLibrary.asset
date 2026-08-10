@@ -111,7 +111,7 @@ MonoBehaviour:
     MaxDistance: 25
   m_bgm:
   - Id: 1
-    Clip: {fileID: 0}
+    Clip: {fileID: 8300000, guid: 0b647359afe24e34aaa330ee469e7926, type: 3}
     Volume: 0.5
   - Id: 2
     Clip: {fileID: 0}
@@ -123,7 +123,7 @@ MonoBehaviour:
   - Scene: 1
     Bgm: 1
   - Scene: 2
-    Bgm: 1
+    Bgm: 0
   - Scene: 3
     Bgm: 2
   - Scene: 4
