@@ -15,8 +15,12 @@ using UnityEngine.AI;
 /// <b>저지 구간이 이 상태의 존재 이유다.</b> 걷는 동안은 도주형 NPC와 같은 취급이라
 /// 진압봉·테이저로 때리고(<see cref="NpcStateRules.CanBeDamaged"/>) 기절시킨 뒤 밧줄로 묶을 수 있다
 /// (<see cref="NpcStateRules.CanArrest"/>). 수갑만 막힌다 — 도주(Run)·저항(Attack)과 같은 이유다.
-/// 기절해 있는 동안은 코어의 스턴 게이트가 FSM Tick을 통째로 건너뛰므로 걸음도 함께 멈추고,
-/// 풀리면 이 상태 그대로 다시 걷는다(반응·배회군이 아니라 도주로 전환되지 않는다, #292).
+///
+/// <b>쓰러뜨리면 반출은 무산된다.</b> 기절해 있는 동안은 코어의 스턴 게이트가 FSM Tick을 통째로
+/// 건너뛰어 걸음이 멈추고, 깨어나면 인도 지점으로 돌아가는 대신 <b>도주로 전환된다</b>
+/// (<see cref="NpcStun.ExitStun"/>, 2026-08-10 확정). 넉백 착지 KO도 결과가 같다 — 그쪽은
+/// <see cref="NpcState.Stunned"/>로 전이했다가 자기 상태 클래스가 도주로 내보낸다.
+/// 그러므로 완수를 되살리려면 <b>붙잡아 인도 지점까지 끌고 가는 수밖에 없다</b>.
 ///
 /// 이동/도착을 한 상태 안에서 처리하는 구조는 침입(<see cref="NpcIntrudeState"/>)·수감
 /// (<see cref="NpcJailedState"/>)과 같다. 경로 실패를 도착으로 처리하지 않는 것도 침입과 같다 —
@@ -88,6 +92,12 @@ public class NpcReleasingState : NpcStateBase
 
     public override void Exit()
     {
+        // <b>이 상태를 벗어나면 반출은 그것으로 끝난다</b> (#548) — 목적지를 여기서 지운다.
+        // 밧줄에 묶이든(Escorted) 넉백 착지 KO로 쓰러지든(Stunned) 기절에서 깨어나 달아나든(Run),
+        // 어느 경로로 나가도 인도 지점으로 다시 걷지 않는다. 나가는 자리가 여럿이라 각자 지우게 두면
+        // 하나를 빠뜨렸을 때 목적지만 살아남아 나중에 엉뚱하게 되살아난다.
+        m_owner.Custody.ClearRelease();
+
         // 밧줄에 묶이거나(Escorted) 기절해 이 상태를 벗어날 때 이동을 복구한다 (NpcIntrudeState.Exit과 동일)
         if (m_owner.Agent.isOnNavMesh)
         {

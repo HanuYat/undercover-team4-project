@@ -254,7 +254,21 @@ public class NpcStun : NetworkBehaviour
         if (agent.enabled && agent.isOnNavMesh)
             agent.isStopped = m_agentStoppedBefore;
 
-        if (resumeReaction && NpcStateRules.IsReactive(m_owner.CurrentState))
+        if (!resumeReaction)
+            return;
+
+        // 반출 보행 중이었으면 깨어나 그대로 달아난다 (#548) — 쓰러뜨린 것만으로 반출이 무산되고,
+        // 대상은 인도 지점으로 돌아가지 않는다. 목적지는 상태를 벗어날 때 NpcReleasingState.Exit이 지운다.
+        //
+        // IsReactive 목록에 넣지 않는 이유: 그쪽은 CanStartReaction의 모집합이라, 넣으면 기절 없이
+        // 스캔·타격 한 번만으로도 도주로 전환된다. 저지는 <b>쓰러뜨려야</b> 성립한다는 것이 이 기능의 규칙이다.
+        if (m_owner.CurrentState == NpcState.Releasing)
+        {
+            m_owner.Reaction.StartFlee(m_owner.Reaction.ThreatTarget);
+            return;
+        }
+
+        if (NpcStateRules.IsReactive(m_owner.CurrentState))
             m_owner.Reaction.StartFlee(m_owner.Reaction.ThreatTarget);
     }
 }
