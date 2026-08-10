@@ -265,6 +265,10 @@ MonoBehaviour:
     m_Localized: Session
     m_Metadata:
       m_Items: []
+  - m_Id: 2277348003635201
+    m_Localized: Set Nickname
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

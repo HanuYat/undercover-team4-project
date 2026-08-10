@@ -235,6 +235,10 @@ MonoBehaviour:
     m_Key: Title.Session.Title
     m_Metadata:
       m_Items: []
+  - m_Id: 2277348003635201
+    m_Key: Title.Auth.NicknameLabel
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
