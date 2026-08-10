@@ -152,10 +152,6 @@ public class NpcRopeDrag : NetworkBehaviour
         // Escorted로 해 두었으므로 목적지만 지운다. 풀어 주더라도 인도 지점으로 다시 걷지 않는다.
         m_owner.Custody.ClearRelease();
 
-        // 걸어가던 대상을 잡았다 — 반출은 여기서 무산된다 (#548). 상태 전이는 호출부가 이미
-        // Escorted로 해 두었으므로 목적지만 지운다. 풀어 주더라도 인도 지점으로 다시 걷지 않는다.
-        m_custody.ClearRelease();
-
         SetRoped(true);
         SyncDraggerCount();
 
