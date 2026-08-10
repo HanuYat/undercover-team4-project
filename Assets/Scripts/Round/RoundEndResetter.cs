@@ -25,6 +25,7 @@ public class RoundEndResetter : MonoBehaviour
     private RoundManager Round => App.Game.Round;
     private TeamFund TeamFund => App.Game.TeamFund;
     private ShopPurchases ShopPurchases => App.Game.ShopPurchases;
+    private RoundProgress RoundProgress => App.Game.RoundProgress;
 
     [Header("정산 표시")]
     // 정산 화면(#107) 연출과 맞춘다: SettlementPanel의 텍스트 지연(1.5s) + 카운트다운(10s) = 11.5s.
@@ -97,10 +98,19 @@ public class RoundEndResetter : MonoBehaviour
             // 공짜로 들고 새 판을 시작한다. (#182, TeamFund와 같은 상주 홀더라 씬 전환으로는 안 지워진다)
             ShopPurchases?.Clear();
 
+            // 라운드 진행도도 같은 이유로 되돌린다 (#377) — 실패한 판의 난이도를 새 판이 물려받지 않는다.
+            // 상주 홀더라 씬 전환만으로는 초기화되지 않는 것도 팀 자금과 같다.
+            RoundProgress?.ResetToFirst();
+
             Debug.Log("[RoundEndResetter] 라운드 실패 — 세션 유지한 채 로비 복귀 (새 판 시작)");
             App.LoadScene(EScene.Lobby);
             return;
         }
+
+        // 성공했으니 다음 라운드로 진행도를 올린다 (#377) — 할당량이 이 값을 타고 오른다.
+        // 라운드 시작이 아니라 여기서 올리는 이유: 다음 게임 씬이 로드되기 전에 값이 확정돼 복제까지 끝나야
+        // 클라이언트가 첫 프레임부터 맞는 할당량을 본다 (RoundProgress 주석 참고).
+        RoundProgress?.Advance();
 
         // 성공: 세션 유지하며 상점 씬으로 복귀. 서버만 로드하면 클라는 NGO 씬 동기화로 따라옴.
         Debug.Log("[RoundEndResetter] 라운드 성공 — 세션 유지한 채 상점(허브) 복귀");

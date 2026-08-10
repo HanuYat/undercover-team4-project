@@ -66,6 +66,8 @@ public class RoundManager : CommonManagerBase
     [Tooltip("이번 라운드에 벌어야 하는 목표 금액(#395). 진행도는 유치장에 잡아둔 대상들의 현상금 합이다 — 팀 자금 잔액이 아니다")]
     [Min(1)]
     [SerializeField] private int m_targetFund = 30000;
+    [Tooltip("라운드가 지날수록 오르는 할당량 표(#377). 비우면 위의 목표 금액을 그대로 쓴다")]
+    [SerializeField] private RoundQuotaTable m_quotaTable;
     [Tooltip("라운드 제한시간(초). 기준값은 600(10분) — GDD 3-2. 0 이하 = 무제한(타이머 없음)")]
     [SerializeField] private float m_timeLimitSeconds = 600f;
 
@@ -106,8 +108,23 @@ public class RoundManager : CommonManagerBase
     /// <summary>이번 라운드에 검거한 진범 수 — 할당량 진행도. 서버(또는 오프라인)의 진실값. (#103)</summary>
     public int CriminalArrestCount { get; private set; }
 
-    /// <summary>이번 라운드의 목표 금액 (#395). 씬에 저장된 값이라 모든 피어에서 같다 — 별도 동기화가 필요 없다.</summary>
-    public int TargetFund => m_targetFund;
+    /// <summary>
+    /// 이번 라운드의 목표 금액(할당량) (#395). 라운드가 지날수록 오른다 (#377) — 표(m_quotaTable)에서
+    /// 현재 라운드(App.Game.RoundProgress)의 행을 읽는다. 표를 안 붙였으면 인스펙터 목표 금액 그대로다.
+    /// 진행도는 NetworkVariable, 표는 씬에 저장된 에셋이라 모든 피어가 같은 값을 계산한다 — 별도 동기화가 필요 없다.
+    /// 상주 진행도가 없는 경우(오프라인 단독 Play·테스트 씬)는 1라운드로 취급한다.
+    /// </summary>
+    public int TargetFund
+    {
+        get
+        {
+            if (m_quotaTable == null) return m_targetFund;
+
+            RoundProgress progress = App.Game.RoundProgress;
+            int round = progress != null ? progress.Current : RoundProgress.k_firstRound;
+            return m_quotaTable.GetQuota(round, m_targetFund);
+        }
+    }
 
     /// <summary>
     /// 목표 진행도 — 지금 유치장에 잡아둔 대상들의 현상금 합(JailZone.BountyTotal, #395).
@@ -117,7 +134,7 @@ public class RoundManager : CommonManagerBase
     public int CurrentFund => Jail != null ? Jail.BountyTotal : 0;
 
     /// <summary>목표 금액을 채웠는가 — 종료 버튼(#395)의 활성 조건이자 제한시간 종료 시 성공 판정 기준.</summary>
-    public bool IsTargetMet => CurrentFund >= m_targetFund;
+    public bool IsTargetMet => CurrentFund >= TargetFund;
 
     /// <summary>남은 제한시간(초). 무제한이면 양의 무한대. 서버(또는 오프라인)의 진실값. (#103)</summary>
     public float RemainingSeconds { get; private set; } = float.PositiveInfinity;
@@ -303,7 +320,7 @@ public class RoundManager : CommonManagerBase
         SetNpcsFrozen(false); // 준비 중 정지시켜 둔 NPC를 풀어 준다 — 세계는 여기서부터 움직인다
         // 0 이하 = 무제한 — 타이머를 아예 돌리지 않는다 (밸런싱 전 테스트·본부 단독 씬용)
         RemainingSeconds = m_timeLimitSeconds > 0f ? m_timeLimitSeconds : float.PositiveInfinity;
-        Debug.Log($"[라운드] 시작 — 목표 {m_targetFund}원, 제한시간 {(float.IsPositiveInfinity(RemainingSeconds) ? "무제한" : $"{RemainingSeconds:0}초")}");
+        Debug.Log($"[라운드] 시작 — 목표 {TargetFund}원, 제한시간 {(float.IsPositiveInfinity(RemainingSeconds) ? "무제한" : $"{RemainingSeconds:0}초")}");
         OnRoundStarted?.Invoke();
     }
 
@@ -316,11 +333,11 @@ public class RoundManager : CommonManagerBase
             return;
 
         int assigned = Assigner.TotalAssignedBounty;
-        if (m_targetFund <= assigned)
+        if (TargetFund <= assigned)
             return;
 
         Debug.LogWarning(
-            $"RoundManager: 목표 금액({m_targetFund}원)이 이번 라운드 배정 현상금 총합({assigned}원)보다 큽니다 — "
+            $"RoundManager: 목표 금액({TargetFund}원)이 이번 라운드 배정 현상금 총합({assigned}원)보다 큽니다 — "
                 + "검거만으로는 달성 불가입니다. 돌발 이벤트 수익으로 메워야 하니 목표 금액이나 현상금 범위를 조정할 것.",
             this
         );
@@ -343,12 +360,12 @@ public class RoundManager : CommonManagerBase
         // (전원 다운(전멸)은 목표 달성 여부와 무관하게 실패다 — GDD 9-3, HandleAnyIncapacitatedChanged, #105)
         if (IsTargetMet)
         {
-            Debug.Log($"[라운드] 제한시간 종료 — 목표 달성 상태({CurrentFund}/{m_targetFund}원)로 성공 처리");
+            Debug.Log($"[라운드] 제한시간 종료 — 목표 달성 상태({CurrentFund}/{TargetFund}원)로 성공 처리");
             EndRound(RoundResult.Success, RoundEndReason.QuotaMet);
             return;
         }
 
-        Debug.Log($"[라운드] 제한시간 초과 — {CurrentFund}/{m_targetFund}원, 목표 미달");
+        Debug.Log($"[라운드] 제한시간 초과 — {CurrentFund}/{TargetFund}원, 목표 미달");
         EndRound(RoundResult.Failure, RoundEndReason.TimeOver);
     }
 
@@ -371,7 +388,7 @@ public class RoundManager : CommonManagerBase
         CriminalArrestCount++;
         // 라운드는 여기서 끝나지 않는다 (#395) — 목표는 금액이고, 종료 시점은 본부의 종료 버튼이 쥔다.
         // 현상금은 CustodyRouter가 유치장에 넘겨 JailZone.BountyTotal로 반영된다.
-        Debug.Log($"[라운드] 진범 검거 {CriminalArrestCount}명 — 목표 진행 {CurrentFund}/{m_targetFund}원");
+        Debug.Log($"[라운드] 진범 검거 {CriminalArrestCount}명 — 목표 진행 {CurrentFund}/{TargetFund}원");
     }
 
     /// <summary>
@@ -387,11 +404,11 @@ public class RoundManager : CommonManagerBase
 
         if (!IsTargetMet)
         {
-            Debug.LogWarning($"RoundManager: 목표 미달({CurrentFund}/{m_targetFund}원) 상태의 종료 요청을 거부했다", this);
+            Debug.LogWarning($"RoundManager: 목표 미달({CurrentFund}/{TargetFund}원) 상태의 종료 요청을 거부했다", this);
             return false;
         }
 
-        Debug.Log($"[라운드] 본부 종료 버튼 — {CurrentFund}/{m_targetFund}원으로 라운드를 마친다");
+        Debug.Log($"[라운드] 본부 종료 버튼 — {CurrentFund}/{TargetFund}원으로 라운드를 마친다");
         EndRound(RoundResult.Success, RoundEndReason.ManualEnd);
         return true;
     }
@@ -416,7 +433,7 @@ public class RoundManager : CommonManagerBase
             return;
 
         CriminalArrestCount--;
-        Debug.Log($"[라운드] 진범 탈출 — 진범 검거 {CriminalArrestCount}명, 목표 진행 {CurrentFund}/{m_targetFund}원");
+        Debug.Log($"[라운드] 진범 탈출 — 진범 검거 {CriminalArrestCount}명, 목표 진행 {CurrentFund}/{TargetFund}원");
     }
 
     // 플레이어 무력화 상태 변화 수신 — 전원 다운(전멸)이면 게임오버로 종료한다. (#105, 서버/오프라인에서만 발행됨)
