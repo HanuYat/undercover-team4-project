@@ -228,7 +228,9 @@ Main Scene을 **추가 로드(Additive)** 해서 복사한다.
 === UI === 통째로       캔버스 8개 + EventSystem
 ```
 
-`=== GameManagers ===` 12개: `NpcSpawner` `CriminalAssigner` `AppearanceAssigner` `ArrestJudge` `RoundManager` `WantedListManager` `CustodyRouter` `WrongfulArrestPenalty` `SuddenEvents` `DirectoryManager` `ArrestVerdictFeedback` `SceneReadyGate`
+`=== GameManagers ===` 12개: `NpcSpawner` `CriminalAssigner` `AppearanceAssigner` `ArrestJudge` `RoundManager` `WantedListManager` `CustodyRouter` `WrongfulArrestPenalty` `SuddenEvents` `DirectoryManager` `ArrestVerdictFeedback` `Gates`
+
+> `Gates`는 서버 권위 게이트 둘을 한 `NetworkObject`에 얹은 오브젝트다 — `SceneReadyGate`(전원 준비, #410) · `SettlementConfirmGate`(전원 정산 확인, #509). 이름이 `SceneReadyGate`였다가 후자가 붙으며 바뀌었다.
 
 > ⚠️ **한 덩어리로 복사할 것.** 임시 부모 하나에 모아 놓고 `Instantiate`를 **1회**만 해야 매니저↔UI 교차 참조가 자동 리맵된다. 따로따로 복사하면 참조가 원본(Main Scene)을 가리켜 씬을 닫는 순간 전부 null이 된다.
 >
