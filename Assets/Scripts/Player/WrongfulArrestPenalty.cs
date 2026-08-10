@@ -172,11 +172,15 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
     /// <summary>
     /// 오검거 대상을 <b>죽인</b> 경우의 집계 — <see cref="ArrestJudge.JudgeDeath"/>가 부른다. 서버 전용. (#571)
     ///
-    /// <b>왜 필요한가.</b> 사망 계상은 <see cref="ArrestJudge.OnArrestJudged"/>를 발행하지 않으므로
+    /// <b>왜 필요한가.</b> 사망 경로는 <see cref="ArrestJudge.OnArrestJudged"/>를 발행하지 않으므로
     /// (구독자 대부분이 신병 라우팅 = 상태 전이라 시체에 성립하지 않는다) 위
     /// <see cref="HandleArrestJudged"/>가 돌지 않는다. 그대로 두면 <b>무고한 시민을 죽이는 것이
     /// 오검거 페널티를 통째로 회피하는 최적 전략</b>이 된다 — 잡아서 인계하면 게이지가 오르는데
     /// 죽이면 아무 일도 안 일어난다.
+    ///
+    /// ⚠ <b>보상과 달리 이쪽만 즉시 센다.</b> 진범의 현상금은 시체를 유치장까지 끌고 가야 들어오지만
+    /// (<see cref="ArrestJudge.JudgeCorpse"/>) 오검거는 죽는 순간 센다. 두 방향이 대칭이 아니라서다 —
+    /// 보상은 안 가져가면 손해로 끝나고, 페널티는 안 가져가면 이득이다.
     ///
     /// <b>원한 구역에 수용하지 않는다.</b> 시체는 걸어갈 수 없다. 그래서 이 경로에서는
     /// <c>"구역 인원 == 팀 카운트"</c> 불변식이 깨지는데, <see cref="LaunchSquad"/>가 이미 그 상황을

@@ -174,6 +174,31 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
     }
 
     /// <summary>
+    /// 시체에 걸린 밧줄을 전부 걷어낸다 — <b>일으켜 세우지 않는다.</b> 서버(또는 오프라인) 전용. (#571)
+    ///
+    /// <see cref="ReleaseAllTethersOn"/>의 시체판이고, 갈리는 것은 <c>ServerStandUpThen</c> 하나다.
+    /// 그 기상 예약을 시체에 걸면 안 된다: 예약이 끝난 뒤 커스터디 전이를 거는데 <see cref="NpcState.Dead"/>
+    /// 에서는 나갈 수 없어 <c>NpcStateMachine</c>이 에러만 남기고, 그 전에 죽은 몸이 일어나는 모션이 한 번 난다.
+    /// (거리 끊김도 같은 이유로 시체를 따로 가른다 — <see cref="TickTetherCleanup"/>)
+    ///
+    /// <see cref="ReleaseDrag"/>가 관절 밧줄까지 풀어 준다(<c>NpcRopeDrag.StopRopeDrag</c>) — 시체는
+    /// 에이전트도 되살아나지 않으므로, 남는 것은 그 자리에 누운 몸뿐이다.
+    /// </summary>
+    public static void ReleaseAllTethersOnCorpse(NpcController npc)
+    {
+        if (npc == null)
+            return;
+
+        List<PlayerEscorter> holders = FindEscortersOf(npc);
+
+        for (int i = 0; i < holders.Count; i++)
+        {
+            holders[i].ReleaseDrag(npc);
+            holders[i].RemoveTether(npc); // 밧줄 칸을 돌려준다 — 안 빼면 매 프레임 정리가 돌 때까지 물린다
+        }
+    }
+
+    /// <summary>
     /// 나 말고 이 대상을 묶고 있는 사람이 있는가 — 서버(또는 오프라인) 전용. (#513)
     /// 풀기가 <b>내 줄을 빼기 전에</b> 물어야 하는 질문이다: 뺀 뒤에 <see cref="FindEscorterOf"/>로 물으면
     /// 답은 같지만, 그때는 대상의 묶임 표시가 이미 내려가 "묶여 누워 있었는가"를 알 수 없다.
@@ -449,7 +474,7 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
     ///
     /// 시체가 예외인 이유는 <b>커스터디를 쓰지 않기 때문</b>이다. 산 대상의 줄은 <c>Escorted</c>를
     /// 타지만 시체는 <see cref="NpcState.Dead"/>에서 나갈 수 없어 그 상태로 들어갈 수 없고, 들어갈
-    /// 이유도 없다 — 시체는 신병이 아니라 짐이다(현상금은 죽는 순간 이미 계상됐다).
+    /// 이유도 없다 — 시체는 신병이 아니라 짐이다(유치장 문 앞에서 계상되지만 그 경로도 커스터디를 안 쓴다).
     ///
     /// ⚠ 그래서 시체만은 상태가 아니라 <b>줄이 실제로 걸려 있는지</b>로 가른다. "죽었으면 무조건
     /// 유지"로 두면 <b>끌던 대상이 손 안에서 죽는 경로</b>가 새어 나간다: 사망 진입이 줄을 전부

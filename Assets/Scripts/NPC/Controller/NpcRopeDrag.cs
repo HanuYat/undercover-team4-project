@@ -278,6 +278,9 @@ public class NpcRopeDrag : NetworkBehaviour
     //
     // 루트는 <c>NpcRagdoll.TickRootFollow</c>가 시체에 붙이고 서버 권한 NetworkTransform이 복제한다 —
     // 즉 <b>이 밧줄이 서버의 시체를 끌면 그 궤적이 저절로 전 피어로 나간다.</b>
+    //
+    // ⚠ 그 자동 추종은 <b>걸어서 갈 수 있는 거리</b>에만 통한다 — 유치장 수감처럼 맵을 가로지르는
+    // 순간이동은 각 피어가 자기 시체를 직접 옮겨야 한다 (<c>NpcCustody.SendCorpseToJail</c>).
 
     /// <summary>
     /// 시체에 밧줄을 묶는다 — 서버(또는 오프라인) 진입점. <b>전 피어에 건다.</b>

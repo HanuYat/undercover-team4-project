@@ -36,14 +36,24 @@ public class ArrestVerdictFeedback : MonoBehaviour
     private void OnEnable()
     {
         // 판정은 서버·오프라인에서만 발행된다 — 권위 피어가 이 훅으로 표시·전파를 처리한다.
-        if (Judge != null)
-            Judge.OnArrestJudged += HandleArrestJudged;
+        if (Judge == null)
+            return;
+
+        Judge.OnArrestJudged += HandleArrestJudged;
+
+        // 시체 판정도 같은 배너로 보여준다 (#571) — 인계자에게는 "무엇을 넣었나"가 같은 질문이다.
+        // 두 훅이 갈려 있는 것은 <b>상태를 바꾸는 구독자</b> 때문이고(ArrestJudge.OnCorpseJudged),
+        // 표시만 하는 이쪽은 양쪽을 함께 받아도 된다.
+        Judge.OnCorpseJudged += HandleArrestJudged;
     }
 
     private void OnDisable()
     {
-        if (Judge != null)
-            Judge.OnArrestJudged -= HandleArrestJudged;
+        if (Judge == null)
+            return;
+
+        Judge.OnArrestJudged -= HandleArrestJudged;
+        Judge.OnCorpseJudged -= HandleArrestJudged;
     }
 
     private void Start()

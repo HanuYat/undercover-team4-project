@@ -182,6 +182,35 @@ public class JailZone : NetworkBehaviour
     // 배회 목적지를 벽에서 물릴 거리(m) — 사람 반지름보다 넉넉히.
     private const float k_roamInset = 0.9f;
 
+    /// <summary>
+    /// 감옥 방 안의 <b>바닥 높이가 맞는</b> 임의의 좌표 — 시체를 눕힐 자리다. 서버(또는 오프라인). (#571)
+    ///
+    /// ⚠ <b><see cref="RandomPointInRoom"/>을 그대로 쓰면 안 된다.</b> 저쪽은 부피 <b>밑면</b>을
+    /// 돌려주는데, 방 부피는 바닥을 조금 파고들게 잡는 것이 정상이라(실측: 부피 밑면 -0.20 / 실제
+    /// 바닥 0.25) 그 점은 <b>바닥 속</b>이다. 배회는 부르는 쪽이 NavMesh로 스냅해서 문제가 없었지만,
+    /// 시체는 스냅해 줄 에이전트가 없다 — 파묻힌 채 놓으면 겹침 탈출과 중력이 계속 다퉈
+    /// <b>바닥에서 비벼지며 떨린다.</b>
+    ///
+    /// 그래서 여기서 스냅까지 끝내 준다. NavMesh를 기준으로 삼는 이유는 방 안에서 "설 수 있는
+    /// 높이"의 단일 진실이 그것이고(수감자가 그 위를 걷는다), 밧줄 끌기도 같은 방식으로 높이를
+    /// 잡기 때문이다(<c>NpcRopeDrag.ResolveDragPosition</c>).
+    /// </summary>
+    public Vector3 RandomRestPointInRoom()
+    {
+        Vector3 point = RandomPointInRoom();
+
+        if (UnityEngine.AI.NavMesh.SamplePosition(
+                point, out UnityEngine.AI.NavMeshHit hit, k_restSnapRadius, UnityEngine.AI.NavMesh.AllAreas))
+            return hit.position;
+
+        // 방에 NavMesh가 안 깔린 구성 — 파묻히는 것보다는 부피 밑면 그대로가 낫다(위로 떠도 떨어진다).
+        Debug.LogWarning($"JailZone: 감옥 방 바닥을 NavMesh에서 찾지 못했다 — 시체가 바닥에 파묻힐 수 있다: {point:F2}", this);
+        return point;
+    }
+
+    // 바닥 스냅 탐색 반경(m) — 부피 밑면이 바닥보다 얼마나 아래인지를 덮을 만큼. 방 높이보다는 작게.
+    private const float k_restSnapRadius = 3f;
+
     /// <summary>수용 인원 변경 — 서버·클라이언트 모든 피어에서 발생한다. 본부 UI(별도 이슈)가 구독.</summary>
     public event Action<int> OnInmateCountChanged;
 
@@ -350,11 +379,14 @@ public class JailZone : NetworkBehaviour
 
     /// <summary>
     /// 사망 계상 — 시체를 <b>정산 원장에만</b> 올린다. 서버(또는 오프라인) 전용. (#571)
+    /// 부르는 곳은 시체 수감(<c>JailIntake.ServerAdmitCorpse</c>) 하나다 — 유치장 문 앞까지 끌고 와
+    /// 수감 버튼을 눌러야 여기 온다.
     ///
     /// <b><see cref="Admit"/>과 갈리는 점은 점유다.</b> 저쪽은 <c>m_inmates</c>에도 넣어
-    /// <see cref="InmateCount"/>를 올리지만, 시체는 유치장에 실제로 들어와 있지 않다. 점유까지 올리면
-    /// 유치장 표지판이 없는 사람을 세고, 탈옥 이벤트가 "풀어 줄 수감자가 있다"고 오판한다
-    /// (<c>JailbreakEvent</c>의 발동 전제와 진행 중 포기 판정이 둘 다 <see cref="InmateCount"/>를 본다).
+    /// <see cref="InmateCount"/>를 올리지만, 시체는 <b>수감자가 아니다</b>. 몸은 방 안에 있어도
+    /// 점유까지 올리면 유치장 표지판이 산 사람과 시체를 한 수로 세고, 탈옥 이벤트가 "풀어 줄 수감자가
+    /// 있다"고 오판한다 (<c>JailbreakEvent</c>의 발동 전제와 진행 중 포기 판정이 둘 다
+    /// <see cref="InmateCount"/>를 본다).
     ///
     /// 원장(<c>m_records</c>)만으로 정산이 되는 것은 <see cref="TallySettlement"/>·
     /// <see cref="TallyDelivererCredits"/>가 점유가 아니라 레코드를 훑기 때문이다 — "NPC 오브젝트가
@@ -365,7 +397,7 @@ public class JailZone : NetworkBehaviour
     /// 달아날 수 없으니 그게 맞다.
     /// </summary>
     /// <param name="bounty">이 시체가 정산에 기여할 보상액 — <c>ArrestJudge</c>가 확정해 넘긴다.</param>
-    /// <param name="deliverers">공을 나눠 가질 clientId — 보통 죽인 플레이어 하나. 없으면 빈 배열.</param>
+    /// <param name="deliverers">공을 나눠 가질 clientId — 시체를 끌고 와 넣은 사람들. 없으면 빈 배열.</param>
     public void RecordDeceased(NpcController npc, int bounty, ulong[] deliverers)
     {
         if (npc == null)

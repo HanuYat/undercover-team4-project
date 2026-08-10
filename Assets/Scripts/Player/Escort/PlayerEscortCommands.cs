@@ -497,9 +497,9 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         Escorter.AddTether(target);
 
         // <b>시체는 커스터디를 타지 않는다</b> (#571). Dead에서 나갈 수 없어 StartEscort가 애초에
-        // 불가능하고(NpcStateMachine이 거부하며 에러를 남긴다), 탈 이유도 없다 — 유치장 판정·이벤트
-        // 수명·가로채기 방지가 커스터디를 보는 이유는 전부 "아직 계상 안 된 신병"이라서인데,
-        // 시체는 죽는 순간 이미 계상됐다(ArrestJudge.JudgeDeath). 시체는 신병이 아니라 짐이다.
+        // 불가능하고(NpcStateMachine이 거부하며 에러를 남긴다), 탈 이유도 없다 — 시체는 신병이 아니라
+        // 짐이다. 유치장까지 끌고 가면 계상되지만(ArrestJudge.JudgeCorpse) 그 판정은 커스터디가 아니라
+        // "죽었는가"로 갈린다(JailIntake.ServerAdmitCorpse).
         //
         // 기절 오버레이도 걷지 않는다 — 사망 진입이 이미 걷었다(NpcDeath.ServerEnterDead ②).
         if (target.Death.IsDead)

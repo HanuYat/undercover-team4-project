@@ -482,6 +482,51 @@ public class RagdollRig : MonoBehaviour
             );
     }
 
+    // ---- 로컬 포즈 스냅샷 (#571 시체 얼림) ----
+    //
+    // <b>월드 캡처(<see cref="CapturePose"/>)와 용도가 다르다.</b> 저쪽은 "루트를 옮기는 동안 화면을
+    // 그대로 두기"라 <b>같은 피어 안에서</b> 잠깐 들고 있는 값이다. 이쪽은 <b>다른 피어로 보내는</b>
+    // 값이라 반드시 로컬(부모 기준)이어야 한다 — 원격의 루트는 다른 자리에 있으므로 월드 값을 보내면
+    // 자세가 통째로 어긋난다.
+    //
+    // 로컬 회전 + 골반 로컬 위치만으로 자세가 복원되는 것은 애니메이션과 같은 이유다: 뼈 길이(자식의
+    // 로컬 위치)는 관절이 유지하므로 바뀌지 않고, 나머지는 계층 수학이 만든다.
+    //
+    // ⚠ <b>순서가 피어마다 같아야 한다.</b> <see cref="m_bodies"/>는 같은 프리팹을 같은 방식으로
+    // 훑어(GetComponentsInChildren + 레이어 필터) 모으므로 모든 피어에서 같은 순서다. 그 전제가 깨지면
+    // 자세가 뒤섞이므로, 수집 방식을 바꿀 때 이 주석을 함께 볼 것.
+
+    /// <summary>물리를 받는 뼈의 로컬 회전을 담아 간다 — 배열 길이는 <see cref="BoneCount"/>. (#571)</summary>
+    /// <returns>담을 수 있으면 참 — 길이가 안 맞으면 거짓(아무것도 쓰지 않는다).</returns>
+    public bool CaptureLocalPose(Quaternion[] rotations, out Vector3 hipsLocalPosition)
+    {
+        hipsLocalPosition = Vector3.zero;
+        if (m_bodies == null || rotations == null || rotations.Length != m_bodies.Length)
+            return false;
+
+        for (int i = 0; i < m_bodies.Length; i++)
+            rotations[i] = m_bodies[i].transform.localRotation;
+
+        hipsLocalPosition = m_hipsBone.localPosition;
+        return true;
+    }
+
+    /// <summary>담아 온 로컬 회전을 그대로 입힌다 — 원격 피어가 얼린 자세를 재현할 때 쓴다. (#571)</summary>
+    /// <returns>입혔으면 참 — 길이가 안 맞으면 거짓.</returns>
+    public bool ApplyLocalPose(Quaternion[] rotations, Vector3 hipsLocalPosition)
+    {
+        if (m_bodies == null || rotations == null || rotations.Length != m_bodies.Length)
+            return false;
+
+        // 골반이 먼저다 — 자식들의 월드 위치가 골반의 로컬 위치 위에 얹히기 때문.
+        m_hipsBone.localPosition = hipsLocalPosition;
+
+        for (int i = 0; i < m_bodies.Length; i++)
+            m_bodies[i].transform.localRotation = rotations[i];
+
+        return true;
+    }
+
     /// <summary>지금 포즈를 블렌드 출발점으로 잡는다 — 애니메이터를 켜기 직전에 부른다.</summary>
     public void BeginBlend()
     {

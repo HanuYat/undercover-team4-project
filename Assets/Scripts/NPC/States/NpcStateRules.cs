@@ -88,8 +88,8 @@ public static class NpcStateRules
     /// <b>이것만으로 묶기를 판정하지 말 것</b> — 새로 묶기는 무력화까지 요구하므로
     /// <see cref="CanRopeBind"/>가 정본이고 이 함수는 그 한 조각이다 (#446).</summary>
     public static bool CanArrest(NpcState state) =>
-        // 시체는 <b>검거</b> 대상이 아니다 (#571) — 죽는 순간 이미 계상됐고(ArrestJudge.JudgeDeath)
-        // 커스터디로 들어갈 일이 없다.
+        // 시체는 <b>검거</b> 대상이 아니다 (#571) — 신병이 아니라 짐이라 커스터디로 들어갈 일이 없다.
+        // 유치장까지 끌고 가면 계상되지만(ArrestJudge.JudgeCorpse) 그 경로도 커스터디를 쓰지 않는다.
         // ⚠ 그렇다고 시체에 줄을 못 거는 것은 아니다 — 시체 끌기는 이 함수를 거치지 않고
         // <see cref="CanRopeBind"/>가 사망을 무력화와 같은 급으로 따로 연다. 여기를 열면 커스터디
         // 전이(StartEscort)까지 딸려 오는데 시체는 Dead에서 나갈 수 없다.
