@@ -3,7 +3,14 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 폭주 차량 본체 — 정해진 직선을 고속으로 달려 지나가고, 스치는 것을 날려 버린다. (GDD 6-4, #304)
+/// 폭주 차량 본체 — 도로에 세워져 있다가 그 선에 사람이 들어오면 경고 후 급발진해 지나간다. (GDD 6-4, #304)
+///
+/// <b>국면 셋</b>(<see cref="VehiclePhase"/>) — 세워 둠 → 경고 → 주행. 세워 둔 동안은 도시 소품과
+/// 구분되지 않고, 경고(시동음·경적)가 시작돼야 위험해진다. 경고 중에는 <b>움직이지 않는다</b> —
+/// 맞으면 즉사 수준이라 비킬 시간이 곧 이 이벤트의 공정성이다.
+///
+/// 국면은 NetworkVariable로 전 피어에 알린다 — 엔진음·경적이 클라에서도 같은 순간에 나야 하고,
+/// 소리가 곧 예고라 서버에서만 들리면 예고가 없는 것과 같다.
 ///
 /// 이동은 서버가 계산하고 NetworkTransform이 결과를 복제한다. NavMesh를 쓰지 않는다 — 도로가 아니라
 /// 좌표 직선이다(경로 마커가 없어도 어느 맵에서든 성립하게).
@@ -14,6 +21,19 @@ using UnityEngine;
 ///  · NPC 넉백은 서버 — NPC 이동 권한은 서버에 있다
 /// 한 번 친 대상은 다시 치지 않는다(차체가 지나가는 동안 매 틱 겹치므로).
 /// </summary>
+/// <summary>폭주 차량의 국면 — 전 피어가 이 값 하나로 같은 소리를 낸다. (#304)</summary>
+public enum VehiclePhase
+{
+    /// <summary>도로에 세워져 있다 — 조용하다. 도시 소품과 구분되지 않는다.</summary>
+    Parked,
+
+    /// <summary>경고 중 — 시동음·경적. 아직 움직이지 않는다.</summary>
+    Warning,
+
+    /// <summary>급발진 — 직선을 달린다.</summary>
+    Driving,
+}
+
 [RequireComponent(typeof(NetworkObject))]
 [RequireComponent(typeof(AudioSource))] // 엔진음 루프 — 떼면 접근 예고가 사라진다
 public class RunawayVehicle : NetworkBehaviour
@@ -41,6 +61,17 @@ public class RunawayVehicle : NetworkBehaviour
     [Tooltip("경적을 울릴 지점 — 목적지까지 남은 거리(m). 이 지점을 지날 때 한 번 울린다")]
     [SerializeField] private float m_hornDistanceBeforePass = 30f;
 
+    [Tooltip("경고 중 경적을 다시 울리는 간격(초) — 서 있는 차가 울리는 쪽이라 주행 중 1회와 별개다")]
+    [Min(0.1f)]
+    [SerializeField] private float m_warningHornInterval = 0.7f;
+
+    [Tooltip("경고·주행 중 켜지는 헤드라이트 — 소리를 못 듣는 상황(먹통·소음)에서 유일한 예고다")]
+    [SerializeField] private Light[] m_headlights;
+
+    [Tooltip("경고 중 헤드라이트 깜빡임 횟수(초당)")]
+    [Min(0.1f)]
+    [SerializeField] private float m_blinkFrequency = 4f;
+
     [Tooltip("경적 연출 — FxManager 인스펙터에서 소리를 배선한다")]
     [SerializeField] private EFx m_hornFx = EFx.None;
 
@@ -53,6 +84,14 @@ public class RunawayVehicle : NetworkBehaviour
     private bool m_driving;
     private bool m_hornPlayed;
 
+    // 국면 — 서버가 쓰고 전 피어가 읽는다. 소리·라이트가 이 값만 보고 돈다
+    private readonly NetworkVariable<VehiclePhase> m_phaseSynced =
+        new NetworkVariable<VehiclePhase>(VehiclePhase.Parked);
+    private VehiclePhase m_phase = VehiclePhase.Parked; // 서버·오프라인 진실값 (비네트워크 Play 폴백)
+
+    private AudioSource m_engineSource;
+    private float m_nextWarningHornAt;
+
     // 이미 친 대상 — 차체가 지나가는 동안 매 틱 겹치므로 한 번만 친다
     private readonly HashSet<Transform> m_hitPeople = new HashSet<Transform>();
     private readonly HashSet<NpcController> m_hitNpcs = new HashSet<NpcController>();
@@ -62,8 +101,14 @@ public class RunawayVehicle : NetworkBehaviour
     /// <summary>완주했거나 정리돼 더 이상 달리지 않는가 — 이벤트가 종료 판정에 쓴다.</summary>
     public bool IsFinished { get; private set; }
 
+    /// <summary>지금 국면 — 서버·오프라인은 진실값, 원격 피어는 동기화값. (DeviceBlackoutEvent와 같은 판정)</summary>
+    public VehiclePhase Phase => IsSpawned && !IsServer ? m_phaseSynced.Value : m_phase;
+
     // 엔진음은 전 피어에서 건다 — 주행(ServerDrive)에 걸면 서버에서만 들린다.
     // 루프라 풀을 못 쓴다(오래된 소리를 뺏는 정책) — 발소리와 같은 이유로 자기 AudioSource로 직접 튼다.
+    //
+    // <b>여기서 틀지는 않는다</b> — 세워 둔 차가 엔진을 돌리고 있으면 도시 소품으로 보이지 않고,
+    // 시동이 걸리는 순간이 곧 경고여야 한다. 재생은 국면이 경고로 넘어갈 때 시작한다.
     private void Start()
     {
         AudioSource source = GetComponent<AudioSource>();
@@ -81,10 +126,82 @@ public class RunawayVehicle : NetworkBehaviour
         source.spatialBlend = 1f; // 완전 3D — 어느 방향에서 오는지가 예고의 전부다
         source.rolloffMode = AudioRolloffMode.Linear;
         source.loop = true;
-        source.Play();
+        m_engineSource = source;
+
+        ApplyPhase(Phase); // 늦게 접속한 클라: 이미 달리는 중이면 그 소리부터 이어 낸다
     }
 
-    /// <summary>주행을 시작한다 — 서버(또는 오프라인) 전용. 스폰 직후 이벤트가 한 번 부른다.</summary>
+    public override void OnNetworkSpawn()
+    {
+        // 원격 피어는 서버의 Set 경로를 타지 않으므로 동기화값 변화로 소리·라이트를 건다
+        m_phaseSynced.OnValueChanged += HandlePhaseSyncedChanged;
+        ApplyPhase(Phase);
+    }
+
+    public override void OnNetworkDespawn() =>
+        m_phaseSynced.OnValueChanged -= HandlePhaseSyncedChanged;
+
+    private void HandlePhaseSyncedChanged(VehiclePhase previous, VehiclePhase next) =>
+        ApplyPhase(next);
+
+    /// <summary>
+    /// 도로에 세워 둔다 — 서버(또는 오프라인) 전용. 스폰 직후 이벤트가 한 번 부른다.
+    /// 경로는 이때 확정되고(<paramref name="startPoint"/>→<paramref name="endPoint"/>) 달리지만 않는다.
+    /// </summary>
+    public void ServerPark(Vector3 startPoint, Vector3 endPoint)
+    {
+        transform.position = startPoint;
+        m_endPoint = endPoint;
+        m_direction = (endPoint - startPoint).normalized;
+        if (m_direction.sqrMagnitude < 0.001f)
+        {
+            IsFinished = true;
+            return;
+        }
+
+        transform.rotation = Quaternion.LookRotation(m_direction, Vector3.up);
+        m_driving = false;
+        m_hornPlayed = false;
+        IsFinished = false;
+        SetPhase(VehiclePhase.Parked);
+    }
+
+    /// <summary>경고를 시작한다 — 시동음·경적·헤드라이트. 아직 움직이지 않는다. 서버 전용.</summary>
+    public void ServerBeginWarning() => SetPhase(VehiclePhase.Warning);
+
+    /// <summary>
+    /// 이 점이 차가 달릴 선 위에 있는가 — <paramref name="halfWidth"/>(m)가 위험 구역의 반폭이다.
+    /// 높이를 빼고 <b>수평</b>으로만 잰다: 연석 한 칸 차이로 판정이 갈리면 "비켰는데 맞았다"가 나온다.
+    /// 서버 전용 — 경로(<see cref="m_endPoint"/>)를 서버만 알고 있다.
+    /// </summary>
+    public bool IsOnPath(Vector3 point, float halfWidth)
+    {
+        Vector3 from = transform.position;
+        Vector3 segment = m_endPoint - from;
+        float lengthSqr = segment.sqrMagnitude;
+        if (lengthSqr < 0.001f)
+            return false;
+
+        float t = Mathf.Clamp01(Vector3.Dot(point - from, segment) / lengthSqr);
+        Vector3 closest = from + segment * t;
+
+        Vector3 flat = point - closest;
+        flat.y = 0f;
+        return flat.sqrMagnitude <= halfWidth * halfWidth;
+    }
+
+    /// <summary>세워 둔 차를 급발진시킨다 — 경로는 <see cref="ServerPark"/>에서 이미 정해져 있다. 서버 전용.</summary>
+    public void ServerStartDrive()
+    {
+        if (IsFinished || m_direction.sqrMagnitude < 0.001f)
+            return;
+
+        m_driving = true;
+        m_hornPlayed = false;
+        SetPhase(VehiclePhase.Driving);
+    }
+
+    /// <summary>주행을 시작한다 — 서버(또는 오프라인) 전용. 경로를 주고 곧바로 달리게 한다(개발 단축키).</summary>
     public void ServerDrive(Vector3 startPoint, Vector3 endPoint)
     {
         transform.position = startPoint;
@@ -100,15 +217,24 @@ public class RunawayVehicle : NetworkBehaviour
         m_driving = true;
         m_hornPlayed = false;
         IsFinished = false;
+        SetPhase(VehiclePhase.Driving);
     }
 
     private void Update()
     {
-        if (!m_driving)
+        TickHeadlights(); // 연출은 전 피어에서 — 소리를 못 듣는 상황에서 유일한 예고다
+
+        // 아래는 서버(또는 오프라인)만 — 클라는 NetworkTransform으로 결과만 받는다
+        if (IsSpawned && !IsServer)
             return;
 
-        // 서버(또는 오프라인)만 움직인다 — 클라는 NetworkTransform으로 결과만 받는다
-        if (IsSpawned && !IsServer)
+        if (m_phase == VehiclePhase.Warning)
+        {
+            TickWarningHorn(); // 경고 중에는 움직이지 않는다 — 비킬 시간이 이 이벤트의 공정성이다
+            return;
+        }
+
+        if (!m_driving)
             return;
 
         float step = m_speed * Time.deltaTime;
@@ -126,6 +252,62 @@ public class RunawayVehicle : NetworkBehaviour
 
         transform.position += m_direction * step;
         ServerApplyHits();
+    }
+
+    // 경고 중에는 경적을 되풀이한다 — 한 번으로는 서 있는 차가 왜 우는지 읽히지 않는다.
+    // FxManager 경로는 서버가 전 피어에 돌리므로(PlayEverywhere) 여기가 서버 전용인 것이 맞다.
+    private void TickWarningHorn()
+    {
+        if (m_hornFx == EFx.None || Time.time < m_nextWarningHornAt)
+            return;
+
+        m_nextWarningHornAt = Time.time + m_warningHornInterval;
+        App.Game.Fx?.PlayEverywhere(m_hornFx, transform.position);
+    }
+
+    // 경고 중에는 깜빡이고, 달리는 동안에는 켜져 있다. 세워 둔 차는 꺼져 있어야 소품으로 보인다.
+    private void TickHeadlights()
+    {
+        if (m_headlights == null || m_headlights.Length == 0)
+            return;
+
+        VehiclePhase phase = Phase;
+        bool on = phase == VehiclePhase.Driving
+            || (phase == VehiclePhase.Warning && Mathf.Repeat(Time.time * m_blinkFrequency, 1f) < 0.5f);
+
+        for (int i = 0; i < m_headlights.Length; i++)
+        {
+            if (m_headlights[i] != null)
+                m_headlights[i].enabled = on;
+        }
+    }
+
+    private void SetPhase(VehiclePhase next)
+    {
+        m_phase = next;
+
+        if (IsSpawned && IsServer)
+            m_phaseSynced.Value = next;
+
+        ApplyPhase(next); // 서버·오프라인은 동기화 콜백을 타지 않는다
+    }
+
+    // 국면에 딸린 연출만 — 판정은 어디서도 이 함수를 보지 않는다
+    private void ApplyPhase(VehiclePhase phase)
+    {
+        if (phase == VehiclePhase.Parked)
+        {
+            if (m_engineSource != null && m_engineSource.isPlaying)
+                m_engineSource.Stop();
+            return;
+        }
+
+        // 시동이 걸리는 순간이 곧 경고다 — 경고·주행 내내 엔진음을 물고 간다
+        if (m_engineSource != null && !m_engineSource.isPlaying)
+            m_engineSource.Play();
+
+        if (phase == VehiclePhase.Warning)
+            m_nextWarningHornAt = 0f; // 첫 경적은 즉시
     }
 
     // 통과 직전에 경적을 한 번 울린다 — 보이지 않는 방향에서 와도 알 수 있게 (#304 예고)

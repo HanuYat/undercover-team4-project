@@ -1,10 +1,17 @@
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// 폭주 차량 — 현장 플레이어 곁을 스쳐 지나가는 위협형 돌발 이벤트. (GDD 6-4, #304)
-/// 제압 대상이 아니다. 예고를 듣고 비키면 그만이고, 못 비키면 치인다(#220 "예고되고 피할 수 있다").
+/// 폭주 차량 — 도로에 세워 둔 차가 그 선에 들어온 사람을 향해 경고 후 급발진하는 위협형 돌발 이벤트.
+/// (GDD 6-4, #304) 제압 대상이 아니다. 예고를 듣고 비키면 그만이고, 못 비키면 치인다
+/// (#220 "예고되고 피할 수 있다").
+///
+/// <b>추첨된 순간이 아니라 사람이 선에 들어온 순간 위험해진다</b> (2026-08-10 확정). 차는 먼저 도로에
+/// 조용히 세워지고(<see cref="VehiclePhase.Parked"/>), 현장 인원이 그 직선 위에 서야 경고가 시작된다 —
+/// 아무도 없는 길을 혼자 달리고 끝나면 이 이벤트는 누구도 위협하지 못한 채 소모된다(추격 폭탄이
+/// "표적이 생긴 시점"에 시계를 켜는 것과 같은 이유). 세워 둔 차가 눈에 보이는 것 자체가 예고이기도 하다.
 ///
 /// <b>경로는 런타임에 만든다</b> — 도로 웨이포인트를 씬에 찍지 않는다(2026-08-08 확정).
 /// 맵이 교체될 예정이라 지금 찍은 마커는 버려지기 때문이다. 대신 무작위로 고른 현장 플레이어 옆을
@@ -33,8 +40,29 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
     [Tooltip("이보다 짧은 직선 구간은 쓰지 않는다(m) — 짧으면 나타나자마자 사라진다. 현재 맵의 최장 직선은 55m")]
     [SerializeField] private float m_minRunLength = 40f;
 
-    [Tooltip("도로 끝에서 이만큼(m) 더 밖에서 출발하고 반대편도 그만큼 더 가서 사라진다. 크게 두면 도로를 벗어나 건물에 걸린다")]
+    [Tooltip("도착 지점을 도로 끝에서 이만큼(m) 더 밖으로 뺀다 — 화면 밖으로 빠져나가는 그림. 크게 두면 도로를 벗어나 건물에 걸린다")]
     [SerializeField] private float m_edgeMargin = 10f;
+
+    [Header("발동 — 선에 사람이 들어오면")]
+    [Tooltip("위험 구역의 반폭(m) — 차가 달릴 직선에서 이 거리 안에 서 있으면 경고가 시작된다. 곧 플레이어가 비켜야 하는 거리다")]
+    [Min(0.5f)]
+    [SerializeField] private float m_laneHalfWidth = 2.5f;
+
+    [Tooltip(
+        "경고 시간(초) — 이 동안 차는 움직이지 않는다.\n\n"
+            + "치이면 사실상 즉사라 이 값이 곧 공정성이다. 짧으면 '피할 수 없었다'가 되고, "
+            + "길면 경고를 보고도 걸어 나가면 되는 일이 된다"
+    )]
+    [Min(0.1f)]
+    [SerializeField] private float m_warningSeconds = 2f;
+
+    [Tooltip(
+        "아무도 선에 들어오지 않을 때 차를 치우는 시간(초).\n\n"
+            + "이게 없으면 이벤트가 영원히 진행 중으로 남아 다음 돌발 이벤트가 아예 걸리지 않는다 "
+            + "(프레임워크는 IsActive가 false가 되어야 재추첨한다)"
+    )]
+    [Min(1f)]
+    [SerializeField] private float m_parkedTimeoutSeconds = 60f;
 
 #if UNITY_EDITOR
     [Header("개발용 (에디터 전용)")]
@@ -68,6 +96,12 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
 
     private RunawayVehicle m_vehicle;
 
+    // 지금 국면이 시작된 시각(서버 기준) — 대기 상한과 경고 시간을 여기서 잰다
+    private float m_phaseStartTime;
+
+    // 현장 플레이어 수집 버퍼 — 매 틱 할당을 피한다 (서버에서만 쓰므로 공유 안전)
+    private readonly List<Transform> m_playerBuffer = new List<Transform>();
+
     public bool CanTrigger()
     {
         // 스쳐 지나갈 대상이 있어야 성립한다
@@ -89,19 +123,35 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
         if (!TryPickRoute(target.position, out Vector3 forward, out Vector3 start, out Vector3 end))
             return; // 어느 방향으로도 눈에 안 띄게 들여보낼 수 없다 — 이번엔 건너뛴다
 
-        ServerLaunch(start, end, forward);
-        Debug.Log($"[돌발이벤트] {m_displayName} — {target.name} 곁을 지나간다");
+        ServerPark(start, end, forward);
+        Debug.Log($"[돌발이벤트] {m_displayName} — {target.name} 근처 도로에 세웠다");
     }
 
-    // 차량 한 대를 띄워 start→end로 달리게 한다. 완주 뒤 치우는 것은 ServerTick이 맡는다.
+    // 차량 한 대를 띄워 start에 세워 둔다. 급발진 시점은 ServerTick이 정한다.
+    private void ServerPark(Vector3 start, Vector3 end, Vector3 forward)
+    {
+        m_vehicle = Spawn(start, forward);
+        m_vehicle.ServerPark(start, end);
+        m_phaseStartTime = Time.time;
+    }
+
+    // 차량 한 대를 띄워 곧바로 start→end로 달리게 한다 — 개발 단축키 전용(경고 국면을 건너뛴다).
     private void ServerLaunch(Vector3 start, Vector3 end, Vector3 forward)
     {
-        m_vehicle = Instantiate(m_vehiclePrefab, start, Quaternion.LookRotation(forward, Vector3.up));
+        m_vehicle = Spawn(start, forward);
+        m_vehicle.ServerDrive(start, end);
+        m_phaseStartTime = Time.time;
+    }
+
+    private RunawayVehicle Spawn(Vector3 start, Vector3 forward)
+    {
+        RunawayVehicle vehicle = Instantiate(
+            m_vehiclePrefab, start, Quaternion.LookRotation(forward, Vector3.up));
 
         if (SuddenEventUtil.IsNetworkSessionActive)
-            m_vehicle.GetComponent<NetworkObject>().Spawn();
+            vehicle.GetComponent<NetworkObject>().Spawn();
 
-        m_vehicle.ServerDrive(start, end);
+        return vehicle;
     }
 
     // 표적 근처 도로의 직선 구간을 그대로 경로로 쓴다 — 도로 위만 달리므로 건물을 통과하지 않는다.
@@ -139,7 +189,8 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
         }
 
         forward = (runTo - runFrom).normalized;
-        start = runFrom - forward * m_edgeMargin;
+        // 출발은 도로 위 그대로다 — 도시 밖에 세워 두면 아무도 못 보고, 보이는 것 자체가 예고다
+        start = runFrom;
         end = runTo + forward * m_edgeMargin;
         return true;
     }
@@ -149,9 +200,52 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
         if (m_vehicle == null)
             return;
 
-        // 완주했으면 치운다 — 제압 대상이 아니라 지나가는 위협이라 여기가 유일한 종료다
-        if (m_vehicle.IsFinished)
-            Despawn();
+        float elapsed = Time.time - m_phaseStartTime;
+
+        switch (m_vehicle.Phase)
+        {
+            case VehiclePhase.Parked:
+                if (IsAnyFieldPlayerOnPath())
+                {
+                    m_vehicle.ServerBeginWarning();
+                    m_phaseStartTime = Time.time;
+                }
+                else if (elapsed >= m_parkedTimeoutSeconds)
+                {
+                    // 아무도 오지 않았다 — 조용히 치운다. 붙잡고 있으면 다음 이벤트가 걸리지 않는다
+                    Despawn(playVfx: false);
+                }
+                break;
+
+            case VehiclePhase.Warning:
+                // 경고가 시작되면 되돌리지 않는다 — 비켰다고 얌전해지면 다음부터 아무도 안 비킨다
+                if (elapsed >= m_warningSeconds)
+                    m_vehicle.ServerStartDrive();
+                break;
+
+            case VehiclePhase.Driving:
+                // 완주했으면 치운다 — 제압 대상이 아니라 지나가는 위협이라 여기가 유일한 종료다
+                if (m_vehicle.IsFinished)
+                    Despawn();
+                break;
+        }
+    }
+
+    // 차가 달릴 직선 위에 행동 가능한 현장 인원이 있는가 — 있으면 그때부터 위험해진다
+    private bool IsAnyFieldPlayerOnPath()
+    {
+        // 반경은 넉넉히 — 정확한 판정은 아래 IsOnPath가 선분 기준으로 한다
+        SuddenEventUtil.CollectFieldPlayers(
+            m_vehicle.transform.position, m_roadSearchRadius * 2f, m_playerBuffer);
+
+        for (int i = 0; i < m_playerBuffer.Count; i++)
+        {
+            if (m_playerBuffer[i] != null
+                && m_vehicle.IsOnPath(m_playerBuffer[i].position, m_laneHalfWidth))
+                return true;
+        }
+
+        return false;
     }
 
     public void ServerReset()
