@@ -32,6 +32,11 @@ public enum VehiclePhase
 
     /// <summary>급발진 — 직선을 달린다.</summary>
     Driving,
+
+    /// <summary>제자리로 돌아가는 중 — 완주한 차가 <b>운전해서</b> 원래 세워져 있던 자리로 되돌아간다.
+    /// 사람을 치지 않고 경적도 울리지 않는다. 순간이동으로 되돌리지 않는 이유는 그 편이
+    /// 도시가 스스로 정리되는 것처럼 보이기 때문이다 (#304).</summary>
+    Returning,
 }
 
 [RequireComponent(typeof(NetworkObject))]
@@ -41,6 +46,14 @@ public class RunawayVehicle : NetworkBehaviour
     [Header("주행")]
     [Tooltip("주행 속도(m/s) — 플레이어 전력질주보다 충분히 빨라야 '피한다'가 성립한다")]
     [SerializeField] private float m_speed = 22f;
+
+    [Tooltip("완주한 차가 제자리로 되돌아갈 때의 속도(m/s) — 급발진과 달리 평범한 주행이라 느리게 둔다")]
+    [Min(0.1f)]
+    [SerializeField] private float m_returnSpeed = 8f;
+
+    [Tooltip("되돌아갈 때 방향을 트는 속도(도/초) — 제자리에서 홱 돌지 않게 한다")]
+    [Min(1f)]
+    [SerializeField] private float m_turnSpeed = 120f;
 
     [Header("차체 판정")]
     [Tooltip("치임 판정 상자의 크기(m) — 실제 모델보다 조금 작게 두면 아슬아슬하게 피하는 맛이 산다")]
@@ -83,6 +96,11 @@ public class RunawayVehicle : NetworkBehaviour
     private Vector3 m_direction;
     private bool m_driving;
     private bool m_hornPlayed;
+
+    // 씬에 놓였을 때의 자리 — 완주 후 여기로 운전해 돌아간다 (#304).
+    // 런타임 스폰이 아니라 맵에 미리 배치된 차라, 이 값이 곧 '원래 있어야 할 곳'이다.
+    private Vector3 m_homePosition;
+    private Quaternion m_homeRotation;
 
     // 국면 — 서버가 쓰고 전 피어가 읽는다. 소리·라이트가 이 값만 보고 돈다
     private readonly NetworkVariable<VehiclePhase> m_phaseSynced =
@@ -131,6 +149,13 @@ public class RunawayVehicle : NetworkBehaviour
         ApplyPhase(Phase); // 늦게 접속한 클라: 이미 달리는 중이면 그 소리부터 이어 낸다
     }
 
+    // 씬에 놓인 자리를 기억해 둔다 — 이벤트가 고르기 전에 잡아야 급발진으로 옮겨진 뒤에도 남는다
+    private void Awake()
+    {
+        m_homePosition = transform.position;
+        m_homeRotation = transform.rotation;
+    }
+
     public override void OnNetworkSpawn()
     {
         // 원격 피어는 서버의 Set 경로를 타지 않으므로 동기화값 변화로 소리·라이트를 건다
@@ -145,12 +170,13 @@ public class RunawayVehicle : NetworkBehaviour
         ApplyPhase(next);
 
     /// <summary>
-    /// 도로에 세워 둔다 — 서버(또는 오프라인) 전용. 스폰 직후 이벤트가 한 번 부른다.
-    /// 경로는 이때 확정되고(<paramref name="startPoint"/>→<paramref name="endPoint"/>) 달리지만 않는다.
+    /// <b>지금 서 있는 자리에서</b> 달릴 경로를 확정한다 — 서버(또는 오프라인) 전용. 이벤트가 한 번 부른다.
+    /// 차를 옮기지 않는다: 맵에 미리 놓인 차가 곧 출발점이고, 놓인 방향이 곧 진행 방향이다 (#304).
+    /// 여기서는 아직 달리지 않는다 — 급발진 시점은 이벤트(선 위에 사람이 들어옴)가 정한다.
     /// </summary>
-    public void ServerPark(Vector3 startPoint, Vector3 endPoint)
+    public void ServerArm(Vector3 endPoint)
     {
-        transform.position = startPoint;
+        Vector3 startPoint = transform.position;
         m_endPoint = endPoint;
         m_direction = (endPoint - startPoint).normalized;
         if (m_direction.sqrMagnitude < 0.001f)
@@ -159,12 +185,38 @@ public class RunawayVehicle : NetworkBehaviour
             return;
         }
 
-        transform.rotation = Quaternion.LookRotation(m_direction, Vector3.up);
         m_driving = false;
         m_hornPlayed = false;
         IsFinished = false;
         SetPhase(VehiclePhase.Parked);
     }
+
+    /// <summary>
+    /// 완주한 차를 제자리로 <b>운전해서</b> 돌려보낸다 — 서버(또는 오프라인) 전용.
+    /// 도착하면 놓여 있던 회전까지 맞추고 <see cref="VehiclePhase.Parked"/>로 돌아가, 다음 추첨 때 다시 쓰인다.
+    /// </summary>
+    public void ServerReturnHome()
+    {
+        m_driving = false;
+        m_hornPlayed = false;
+        IsFinished = false;
+        SetPhase(VehiclePhase.Returning);
+    }
+
+    /// <summary>제자리로 즉시 되돌린다 — 라운드 종료 정리처럼 연출이 필요 없는 경로 전용. 서버 전용.</summary>
+    public void ServerSnapHome()
+    {
+        transform.SetPositionAndRotation(m_homePosition, m_homeRotation);
+        m_driving = false;
+        m_hornPlayed = false;
+        IsFinished = false;
+        SetPhase(VehiclePhase.Parked);
+    }
+
+    /// <summary>제자리로 돌아와 멈췄는가 — 이벤트가 종료 판정에 쓴다.</summary>
+    public bool IsHome =>
+        (transform.position - m_homePosition).sqrMagnitude < 0.04f
+        && Quaternion.Angle(transform.rotation, m_homeRotation) < 1f;
 
     /// <summary>경고를 시작한다 — 시동음·경적·헤드라이트. 아직 움직이지 않는다. 서버 전용.</summary>
     public void ServerBeginWarning() => SetPhase(VehiclePhase.Warning);
@@ -196,27 +248,11 @@ public class RunawayVehicle : NetworkBehaviour
         if (IsFinished || m_direction.sqrMagnitude < 0.001f)
             return;
 
-        m_driving = true;
-        m_hornPlayed = false;
-        SetPhase(VehiclePhase.Driving);
-    }
-
-    /// <summary>주행을 시작한다 — 서버(또는 오프라인) 전용. 경로를 주고 곧바로 달리게 한다(개발 단축키).</summary>
-    public void ServerDrive(Vector3 startPoint, Vector3 endPoint)
-    {
-        transform.position = startPoint;
-        m_endPoint = endPoint;
-        m_direction = (endPoint - startPoint).normalized;
-        if (m_direction.sqrMagnitude < 0.001f)
-        {
-            IsFinished = true;
-            return;
-        }
-
+        // 놓인 방향 그대로 달리므로 보통은 이미 맞아 있지만, 배치가 살짝 틀어져 있어도
+        // 급발진 순간에 진행 방향으로 맞춘다 — 옆으로 미끄러지는 그림을 막는다
         transform.rotation = Quaternion.LookRotation(m_direction, Vector3.up);
         m_driving = true;
         m_hornPlayed = false;
-        IsFinished = false;
         SetPhase(VehiclePhase.Driving);
     }
 
@@ -231,6 +267,12 @@ public class RunawayVehicle : NetworkBehaviour
         if (m_phase == VehiclePhase.Warning)
         {
             TickWarningHorn(); // 경고 중에는 움직이지 않는다 — 비킬 시간이 이 이벤트의 공정성이다
+            return;
+        }
+
+        if (m_phase == VehiclePhase.Returning)
+        {
+            TickReturn();
             return;
         }
 
@@ -252,6 +294,41 @@ public class RunawayVehicle : NetworkBehaviour
 
         transform.position += m_direction * step;
         ServerApplyHits();
+    }
+
+    // 제자리로 운전해 돌아간다 — 먼저 방향을 틀고, 향한 뒤에 굴러간다.
+    // 치임 판정(ServerApplyHits)을 부르지 않는다: 사고를 내고 돌아가는 차가 가는 길에 또 사람을
+    // 치면 "치웠다"가 아니라 "두 번째 사고"가 된다. 속도도 급발진과 달리 평범한 주행이다.
+    private void TickReturn()
+    {
+        Vector3 toHome = m_homePosition - transform.position;
+        toHome.y = 0f;
+
+        // 다 왔으면 놓여 있던 회전으로 마저 맞춘다 — 그것까지 끝나야 원래 소품으로 되돌아간 것이다
+        if (toHome.sqrMagnitude <= 0.04f)
+        {
+            transform.position = m_homePosition;
+            transform.rotation = Quaternion.RotateTowards(
+                transform.rotation, m_homeRotation, m_turnSpeed * Time.deltaTime);
+
+            if (Quaternion.Angle(transform.rotation, m_homeRotation) < 1f)
+            {
+                transform.rotation = m_homeRotation;
+                SetPhase(VehiclePhase.Parked);
+            }
+            return;
+        }
+
+        Quaternion want = Quaternion.LookRotation(toHome.normalized, Vector3.up);
+        transform.rotation = Quaternion.RotateTowards(
+            transform.rotation, want, m_turnSpeed * Time.deltaTime);
+
+        // 아직 많이 틀어져 있으면 제자리에서 방향부터 잡는다 — 옆으로 미끄러지지 않게
+        if (Quaternion.Angle(transform.rotation, want) > 20f)
+            return;
+
+        float step = Mathf.Min(m_returnSpeed * Time.deltaTime, toHome.magnitude);
+        transform.position += transform.forward * step;
     }
 
     // 경고 중에는 경적을 되풀이한다 — 한 번으로는 서 있는 차가 왜 우는지 읽히지 않는다.

@@ -13,12 +13,16 @@ using Random = UnityEngine.Random;
 /// 아무도 없는 길을 혼자 달리고 끝나면 이 이벤트는 누구도 위협하지 못한 채 소모된다(추격 폭탄이
 /// "표적이 생긴 시점"에 시계를 켜는 것과 같은 이유). 세워 둔 차가 눈에 보이는 것 자체가 예고이기도 하다.
 ///
-/// <b>경로는 런타임에 만든다</b> — 도로 웨이포인트를 씬에 찍지 않는다(2026-08-08 확정).
-/// 맵이 교체될 예정이라 지금 찍은 마커는 버려지기 때문이다. 대신 무작위로 고른 현장 플레이어 옆을
-/// 지나는 직선을 매번 새로 만든다: 시야 밖에서 출발해 플레이어 곁을 지나 반대편 시야 밖에서 사라진다.
-/// 도로를 따르지 않으므로 건물 사이를 지날 수 있다 — 맵이 확정되면 마커 경로를 얹는 것이 후속이다.
+/// <b>차는 맵에 미리 놓여 있다</b> (2026-08-10 확정). 추첨될 때 만들어 내지 않고, 씬에 배치된 차
+/// 중에서 현장 인원 근처의 한 대를 골라 <b>그 자리에서</b> 무장시킨다. 그래서 경로가 따로 필요 없다 —
+/// <b>놓인 자리가 출발점이고 놓인 방향이 진행 방향</b>이며, 거기서 앞으로 곧게 달린다.
+/// 도로 타일을 읽어 직선을 찾던 방식(RoadGrid)은 이 결정으로 쓰지 않는다: 맵 제작자가 차를 도로에
+/// 놓고 방향만 맞추면 되고, 맵이 바뀌어도 타일 이름 규칙에 기대지 않는다.
 ///
-/// 스폰·판정은 서버(또는 오프라인)에서만 — 차량은 NetworkObject로 복제된다. (#56)
+/// 달리기가 끝난 차는 사라지지 않고 <b>운전해서 제자리로 돌아간다</b>(<see cref="VehiclePhase.Returning"/>) —
+/// 도시가 스스로 정리되는 그림이고, 같은 차를 다음 추첨에 다시 쓸 수 있다.
+///
+/// 판정은 서버(또는 오프라인)에서만 — 차량은 씬에 배치된 NetworkObject라 위치가 그대로 복제된다. (#56)
 /// </summary>
 [RequireComponent(typeof(SuddenEventManager))]
 public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
@@ -26,22 +30,14 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
     [Header("표시")]
     [SerializeField] private string m_displayName = "폭주 차량";
 
-    [Header("차량")]
-    [Tooltip("스폰할 차량 프리팹 — NetworkObject + RunawayVehicle")]
-    [SerializeField] private RunawayVehicle m_vehiclePrefab;
+    [Header("경로 — 맵에 놓인 차가 놓인 방향으로 달린다")]
+    [Tooltip("차가 앞으로 달리는 거리(m). 놓인 자리에서 전방으로 이만큼 간 뒤 멈추고 제자리로 돌아온다")]
+    [Min(10f)]
+    [SerializeField] private float m_runDistance = 120f;
 
-    [Header("경로 — 씬에 깔린 도로에서 뽑는다")]
-    [Tooltip("도로 타일을 식별할 이름 접두사. 맵 에셋이 바뀌면 이 값도 맞춰야 한다")]
-    [SerializeField] private string m_roadNamePrefix = "SM_Env_Road";
-
-    [Tooltip("표적에서 이 거리(m) 안의 도로를 고른다 — 멀리서 달려봐야 아무도 못 본다")]
-    [SerializeField] private float m_roadSearchRadius = 45f;
-
-    [Tooltip("이보다 짧은 직선 구간은 쓰지 않는다(m) — 짧으면 나타나자마자 사라진다. 현재 맵의 최장 직선은 55m")]
-    [SerializeField] private float m_minRunLength = 40f;
-
-    [Tooltip("도착 지점을 도로 끝에서 이만큼(m) 더 밖으로 뺀다 — 화면 밖으로 빠져나가는 그림. 크게 두면 도로를 벗어나 건물에 걸린다")]
-    [SerializeField] private float m_edgeMargin = 10f;
+    [Tooltip("현장 인원에서 이 거리(m) 안에 놓인 차만 고른다 — 멀리서 달려봐야 아무도 못 본다")]
+    [Min(5f)]
+    [SerializeField] private float m_pickRadius = 60f;
 
     [Header("발동 — 선에 사람이 들어오면")]
     [Tooltip("위험 구역의 반폭(m) — 차가 달릴 직선에서 이 거리 안에 서 있으면 경고가 시작된다. 곧 플레이어가 비켜야 하는 거리다")]
@@ -87,97 +83,54 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
     // 현장 플레이어 수집 버퍼 — 매 틱 할당을 피한다 (서버에서만 쓰므로 공유 안전)
     private readonly List<Transform> m_playerBuffer = new List<Transform>();
 
+    // 후보 차량 버퍼 — 같은 이유로 매 발생마다 새로 만들지 않는다
+    private readonly List<RunawayVehicle> m_candidates = new List<RunawayVehicle>();
+
     public bool CanTrigger()
     {
-        // 스쳐 지나갈 대상이 있어야 성립한다
-        return m_vehiclePrefab != null && SuddenEventUtil.FindRandomFieldPlayer() != null;
+        // 스쳐 지나갈 대상이 있어야 성립한다 — 놓인 차가 있는지는 ServerBegin이 반경까지 보고 판단한다
+        return SuddenEventUtil.FindRandomFieldPlayer() != null;
     }
 
     public void ServerBegin()
     {
-        if (m_vehiclePrefab == null)
-        {
-            Debug.LogWarning("RunawayVehicleEvent: 차량 프리팹이 지정되지 않음", this);
-            return;
-        }
-
         Transform target = SuddenEventUtil.FindRandomFieldPlayer();
         if (target == null)
             return; // 발생 직전에 대상이 사라짐 — 이번엔 건너뛴다
 
-        if (!TryPickRoute(target.position, out Vector3 forward, out Vector3 start, out Vector3 end))
-            return; // 어느 방향으로도 눈에 안 띄게 들여보낼 수 없다 — 이번엔 건너뛴다
-
-        ServerPark(start, end, forward);
-        Debug.Log($"[돌발이벤트] {m_displayName} — {target.name} 근처 도로에 세웠다");
-    }
-
-    // 차량 한 대를 띄워 start에 세워 둔다. 급발진 시점은 ServerTick이 정한다.
-    private void ServerPark(Vector3 start, Vector3 end, Vector3 forward)
-    {
-        m_vehicle = Spawn(start, forward);
-        m_vehicle.ServerPark(start, end);
-        m_phaseStartTime = Time.time;
-    }
-
-    // 차량 한 대를 띄워 곧바로 start→end로 달리게 한다 — 개발 단축키 전용(경고 국면을 건너뛴다).
-    private void ServerLaunch(Vector3 start, Vector3 end, Vector3 forward)
-    {
-        m_vehicle = Spawn(start, forward);
-        m_vehicle.ServerDrive(start, end);
-        m_phaseStartTime = Time.time;
-    }
-
-    private RunawayVehicle Spawn(Vector3 start, Vector3 forward)
-    {
-        RunawayVehicle vehicle = Instantiate(
-            m_vehiclePrefab, start, Quaternion.LookRotation(forward, Vector3.up));
-
-        if (SuddenEventUtil.IsNetworkSessionActive)
-            vehicle.GetComponent<NetworkObject>().Spawn();
-
-        return vehicle;
-    }
-
-    // 표적 근처 도로의 직선 구간을 그대로 경로로 쓴다 — 도로 위만 달리므로 건물을 통과하지 않는다.
-    // 양 끝을 도로 밖으로 조금 더 늘려, 도시 밖에서 들어와 반대편으로 빠져나가는 그림을 만든다.
-    private bool TryPickRoute(Vector3 targetPosition, out Vector3 forward, out Vector3 start, out Vector3 end)
-    {
-        forward = Vector3.forward;
-        start = Vector3.zero;
-        end = Vector3.zero;
-
-        if (!RoadGrid.Build(m_roadNamePrefix))
+        RunawayVehicle vehicle = PickParkedVehicle(target.position);
+        if (vehicle == null)
         {
-            Debug.LogWarning(
-                $"RunawayVehicleEvent: '{m_roadNamePrefix}'로 시작하는 도로 타일을 찾지 못했다 — 이 맵에서는 발생하지 않는다",
-                this);
-            return false;
+            Debug.Log($"[돌발이벤트] {m_displayName} — {target.name} 근처에 세워 둔 차가 없어 건너뛴다");
+            return;
         }
 
-        if (!RoadGrid.TryFindStraightRun(
-                targetPosition, m_roadSearchRadius, m_minRunLength,
-                out Vector3 runFrom, out Vector3 runTo))
-            return false;
+        // 놓인 자리에서 놓인 방향 그대로 — 여기서 차를 옮기지도, 돌리지도 않는다
+        m_vehicle = vehicle;
+        m_vehicle.ServerArm(vehicle.transform.position + vehicle.transform.forward * m_runDistance);
+        m_phaseStartTime = Time.time;
+        Debug.Log($"[돌발이벤트] {m_displayName} — {target.name} 근처의 {vehicle.name}에 시동이 걸렸다");
+    }
 
-        // 안 보이는 쪽 끝에서 들어온다 — 눈앞에서 튀어나오지 않게 (#332 A와 같은 이유).
-        // 양쪽 다 보이거나 다 안 보이면 아무 쪽이나.
-        bool fromHidden = SuddenEventUtil.IsHiddenFromFieldPlayers(runFrom);
-        bool toHidden = SuddenEventUtil.IsHiddenFromFieldPlayers(runTo);
-        bool swapEnds = (toHidden && !fromHidden)
-            || (fromHidden == toHidden && Random.value < 0.5f);
-        if (swapEnds)
+    // 현장 인원 근처에 <b>제자리에 서 있는</b> 차 하나 — 달리는 중이거나 돌아가는 중인 차는 고르지 않는다.
+    // 씬에 놓인 차가 곧 후보다: 맵에 몇 대를 놓아 두면 그만큼 발생 지점이 늘어난다.
+    private RunawayVehicle PickParkedVehicle(Vector3 near)
+    {
+        RunawayVehicle[] all = FindObjectsByType<RunawayVehicle>(FindObjectsSortMode.None);
+        m_candidates.Clear();
+
+        float radiusSqr = m_pickRadius * m_pickRadius;
+        for (int i = 0; i < all.Length; i++)
         {
-            Vector3 swap = runFrom;
-            runFrom = runTo;
-            runTo = swap;
+            RunawayVehicle v = all[i];
+            if (v == null || v.Phase != VehiclePhase.Parked || !v.IsHome)
+                continue;
+
+            if ((v.transform.position - near).sqrMagnitude <= radiusSqr)
+                m_candidates.Add(v);
         }
 
-        forward = (runTo - runFrom).normalized;
-        // 출발은 도로 위 그대로다 — 도시 밖에 세워 두면 아무도 못 보고, 보이는 것 자체가 예고다
-        start = runFrom;
-        end = runTo + forward * m_edgeMargin;
-        return true;
+        return m_candidates.Count == 0 ? null : m_candidates[Random.Range(0, m_candidates.Count)];
     }
 
     public void ServerTick()
@@ -197,8 +150,10 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
                 }
                 else if (elapsed >= m_parkedTimeoutSeconds)
                 {
-                    // 아무도 오지 않았다 — 조용히 치운다. 붙잡고 있으면 다음 이벤트가 걸리지 않는다
-                    Despawn(playVfx: false);
+                    // 아무도 오지 않았다 — 시동을 끄고 손을 뗀다. 차는 놓인 자리에 그대로 서 있고,
+                    // 붙잡고 있으면 다음 돌발 이벤트가 아예 걸리지 않는다
+                    Debug.Log($"[돌발이벤트] {m_displayName} — 아무도 선에 들어오지 않아 시동을 껐다");
+                    m_vehicle = null;
                 }
                 break;
 
@@ -209,9 +164,18 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
                 break;
 
             case VehiclePhase.Driving:
-                // 완주했으면 치운다 — 제압 대상이 아니라 지나가는 위협이라 여기가 유일한 종료다
+                // 완주했으면 제자리로 운전해 돌아간다 — 씬에 놓인 차라 치우지 않는다
                 if (m_vehicle.IsFinished)
-                    Despawn();
+                    m_vehicle.ServerReturnHome();
+                break;
+
+            case VehiclePhase.Returning:
+                // 제자리에 서서 원래 회전까지 맞췄으면 이 이벤트는 끝이다 — 차는 다음 추첨의 후보로 돌아간다
+                if (m_vehicle.IsHome)
+                {
+                    Debug.Log($"[돌발이벤트] {m_displayName} — {m_vehicle.name}가 제자리로 돌아왔다");
+                    m_vehicle = null;
+                }
                 break;
         }
     }
@@ -221,7 +185,7 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
     {
         // 반경은 넉넉히 — 정확한 판정은 아래 IsOnPath가 선분 기준으로 한다
         SuddenEventUtil.CollectFieldPlayers(
-            m_vehicle.transform.position, m_roadSearchRadius * 2f, m_playerBuffer);
+            m_vehicle.transform.position, m_runDistance, m_playerBuffer);
 
         for (int i = 0; i < m_playerBuffer.Count; i++)
         {
@@ -235,19 +199,11 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
 
     public void ServerReset()
     {
-        Despawn(playVfx: false); // 라운드 종료 일괄 정리 — 이펙트는 끈다 (다른 이벤트와 같은 관례)
-        RoadGrid.Invalidate(); // 다음 라운드는 다른 맵일 수 있다
-    }
-
-    private void Despawn(bool playVfx = true)
-    {
-        if (m_vehicle == null)
-            return;
-
-        SuddenEventUtil.DespawnOrDestroy(m_vehicle.gameObject, playVfx);
+        // 라운드 종료 일괄 정리 — 여기서는 운전해 돌아갈 여유가 없다(곧 씬이 내려간다). 즉시 제자리로.
+        if (m_vehicle != null)
+            m_vehicle.ServerSnapHome();
         m_vehicle = null;
     }
-
 #if UNITY_EDITOR
 
     // ---- 개발용 단축키 (에디터 전용) ----
@@ -283,17 +239,11 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
         if (!DevIsAuthority || !DevCanLaunch())
             return;
 
-        ServerBegin(); // 정상 경로 그대로 — 표적·도로 선정까지 함께 확인된다
+        ServerBegin(); // 정상 경로 그대로 — 차량 선정까지 함께 확인된다
     }
 
     private bool DevCanLaunch()
     {
-        if (m_vehiclePrefab == null)
-        {
-            Debug.LogWarning("RunawayVehicleEvent: 개발 단축키 — 차량 프리팹이 지정되지 않음", this);
-            return false;
-        }
-
         if (IsActive)
         {
             Debug.Log("[돌발이벤트] 개발 단축키 — 이미 차량이 달리는 중이다");
