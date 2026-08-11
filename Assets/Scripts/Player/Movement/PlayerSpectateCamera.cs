@@ -76,29 +76,24 @@ public class PlayerSpectateCamera : MonoBehaviour
         m_input = GetComponent<PlayerInputHandler>();
     }
 
-    // 휠 전환을 그대로 빌린다 (#590) — 무력화 중에는 아이템 전환이 막히므로(PlayerLoadout.Cycle)
-    // 죽어 있는 동안 이 입력은 놀고 있다. 새 액션을 만들면 입력 에셋과 프리팹을 둘 다 건드려야 한다.
+    // 좌클릭(아이템 사용)을 그대로 빌린다 (#590) — 무력화 중에는 아이템 사용이 막히므로
+    // (PlayerItemUser) 죽어 있는 동안 이 입력은 놀고 있다. 새 액션을 만들면 입력 에셋·
+    // PlayerInputHandler·프리팹 세 곳을 건드려야 하는데, 우클릭은 아예 바인딩이 없어 그 비용이 든다.
     // 비오너 인스턴스는 PlayerInputHandler가 스스로 비활성화돼 이벤트를 발행하지 않는다.
     private void OnEnable()
     {
-        if (m_input == null)
-            return;
-
-        m_input.OnPreviousItem += CyclePrevious;
-        m_input.OnNextItem += CycleNext;
+        if (m_input != null)
+            m_input.OnUseItemStarted += CycleNext;
     }
 
     private void OnDisable()
     {
-        if (m_input == null)
-            return;
-
-        m_input.OnPreviousItem -= CyclePrevious;
-        m_input.OnNextItem -= CycleNext;
+        if (m_input != null)
+            m_input.OnUseItemStarted -= CycleNext;
     }
 
-    private void CyclePrevious() => CycleTarget(-1);
-
+    // 한 방향으로만 돈다 — 고리가 작아(보통 3~5칸) 뒤로 갈 일이 거의 없고, 역방향을 주려면
+    // 우클릭 액션을 새로 만들어야 한다. 한 바퀴 돌면 내 시체로 돌아온다.
     private void CycleNext() => CycleTarget(1);
 
     /// <summary>
