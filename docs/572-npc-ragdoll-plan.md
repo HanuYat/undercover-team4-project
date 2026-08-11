@@ -34,12 +34,19 @@
 | 브랜치 | 내용 |
 |---|---|
 | `feature/ragdoll-npc-forever` | 1단계까지. **검증된 상태**이므로 여기서 3·4단계로 가면 안 된다 (2단계를 건너뛰게 된다) |
-| `feature/572-hips-replication` | 위에서 갈라져 나온 2단계 커밋 하나 — 코드 3개 + 프리팹 4개 |
+| `feature/572-hips-replication` | 위의 **상위집합**(1단계 → 이 문서 → 2단계). 2단계 커밋 하나 — 코드 3개 + 프리팹 4개. **Play 미검증** |
 
 다른 PC에서 2단계를 이어받을 때:
 
 ```bash
 git fetch origin && git switch feature/572-hips-replication
+```
+
+**그 브랜치를 버리고 2단계를 처음부터 다시 해도 된다** — 아래 「2단계 계획」이 그것만 보고 만들 수
+있게 쓰여 있다. 그때는 1단계 브랜치에서 새로 갈라 나가면 된다:
+
+```bash
+git switch feature/ragdoll-npc-forever && git switch -c <새 브랜치>
 ```
 
 ### 1단계 — 코드는 한 줄도 안 고쳤다
@@ -55,38 +62,111 @@ git checkout 0bd6990^ -- Assets/Prefabs/NPC/NPC_Citizen.prefab ...
 플레이어 쪽 수정 셋 중 **사망 경로에 걸리는 것이 없었다** — §1의 표가 그대로 답이다.
 `NPC_Abductor`는 Variant라 상속한다.
 
-### 2단계 — 무엇이 들어갔나
+### 2단계 계획 — 시체 밧줄
 
-`NpcRagdoll`이 골반 `NetworkTransform`의 존재를 **배선에서 읽어**(`m_hipsIsNetworkSynced`) 셋을
-함께 가른다. 프리팹에서 그 컴포넌트를 빼면 셋 다 옛 동작으로 자동 복귀한다.
+> **브랜치를 버리고 처음부터 다시 해도 이 절만 보면 된다.** 아래는 "무엇이 커밋돼 있나"가 아니라
+> **"무엇을 어떻게 만드나"**다. 이미 작성된 것은 `feature/572-hips-replication`에 있고, 그걸 쓰든
+> 새로 짜든 결과물은 같아야 한다.
 
-| 자리 | 하는 일 |
+#### 왜 하나 — 전 피어가 각자 밧줄을 묶고 있다
+
+[`NpcRopeDrag.AttachCorpseRopeRpc`](../Assets/Scripts/NPC/Controller/NpcRopeDrag.cs)가
+`[Rpc(SendTo.Everyone)]`이라 **모든 피어가 자기 로컬 시체에 관절 밧줄을 건다.** 앵커 위치가 피어마다
+다르게 계산되므로(운반자가 원격이면 NetworkTransform 보간값 + 애니메이터가 얹는 걸음 흔들림, 그것도
+피어마다 따로 평가된다) **같은 관절에 서로 다른 입력**이 들어가고 결과가 발산한다. 플레이어 쪽에서
+같은 구조로 물렸고 같은 방식으로 잡았다 — §1-3, [ragdoll-corpse-split.md §7](ragdoll-corpse-split.md).
+
+#### 설계 — 골반 하나만 복제하고 밧줄을 권위 피어 전용으로
+
+시뮬레이션을 **하나로 줄이는 것**이 요점이다. 골반(뼈 11개 중 1개)만 `NetworkTransform`으로 복제하면
+궤적의 주인이 루트에서 골반으로 넘어가고, 나머지 10개는 각 피어의 로컬 물리가 관절로 만들어 낸다
+(흐느적임은 살아 있다). 그러면 **원격은 끌 이유가 없어진다** — 권위 피어가 굴린 결과가 그대로 온다.
+
+> **기각한 대안: 전원이 묶되 원격 정렬을 세게 한다.** 플레이어에서 시도했다 발산으로 끝났다 —
+> 정렬은 **동력이 아니라 표류 방지**다(불변식 7). 상한 없는 보정이 매 스텝 0.61m를 순간이동시키자
+> 뼈가 지형에 박히며 평균 속도가 15m/s까지 올라갔다.
+
+#### 바꿀 것 ① — `NpcRagdoll` (코드)
+
+배선 존재 자체를 진실로 삼는 플래그 하나가 **세 곳을 함께** 가른다. 스위치를 따로 두지 않는 이유는
+배선과 코드가 어긋날 여지를 없애기 위해서다(`PlayerRagdoll`과 같은 관례).
+
+```csharp
+// Awake — 프리팹에서 읽는다
+m_hipsIsNetworkSynced =
+    m_rig.HipsBody != null
+    && m_rig.HipsBody.GetComponent<Unity.Netcode.Components.NetworkTransform>() != null;
+
+// 신설 — EnterRagdoll·Unfreeze가 m_rig.SetKinematic(false) 대신 이걸 부른다
+private void ReleaseBonesToPhysics()
+{
+    m_rig.SetKinematic(false);
+
+    // 원격의 골반은 물리가 아니라 스트림의 소유물이다
+    if (m_hipsIsNetworkSynced && !HasMoveAuthority && m_rig.HipsBody != null)
+        m_rig.HipsBody.isKinematic = true;
+}
+
+// BeginRopePull — 녹이는 것은 전 피어, 묶는 것은 권위 피어만
+Unfreeze();
+if (m_hipsIsNetworkSynced && !HasMoveAuthority)
+    return;
+m_rope?.Attach(carrier);
+
+// LateUpdate — 골반이 복제되면 정렬을 끈다(스트림이 놓은 골반을 루트로 밀어 서로 싸운다)
+if (!m_hipsIsNetworkSynced && !HasMoveAuthority && m_state == RagdollState.Ragdoll)
+    TickAlignBonesToRoot();
+```
+
+#### 바꿀 것 ② — 프리팹 배선 (NPC 4종)
+
+붙는 자리는 **관절이 없는 뼈**(`Model/Root/Hips`). `NPC_Abductor`는 Variant라 상속한다.
+
+| 컴포넌트 | 값 |
 |---|---|
-| `ReleaseBonesToPhysics` (신설) | 비권위 피어의 **골반만** 키네마틱으로 남긴다. `EnterRagdoll`·`Unfreeze`가 함께 쓴다 |
-| `BeginRopePull` | **권위 피어만 실제로 묶는다** (§1-3의 발산 원인 제거) |
-| `LateUpdate` | 골반이 복제되면 `TickAlignBonesToRoot`를 끈다 (스트림과 싸운다) |
+| `NetworkTransform` | `AuthorityMode: 0`(**서버** — NPC 루트 NT와 같다) · `Interpolate: 1` · `InLocalSpace: 0` · 위치 XYZ · **회전 XYZ 전 축**(시체는 굴러서 3축이 다 바뀐다) · 스케일 전부 0 |
+| `NetworkRigidbody` | `UseRigidBodyForMotion: 1` · **`AutoUpdateKinematicState: 0`** |
 
-⚠ **권위 가드가 `Unfreeze()` 뒤에 있다** — 플레이어와 갈리는 유일한 지점이다. 앞에 두면 원격
-시체가 얼어붙은 채 골반만 끌려가는 조각상이 된다. 플레이어는 애초에 얼지 않아 맨 앞에서 반환해도
-됐던 자리다.
+#### 바꿀 것 ③ — 에디터 자동화 (`RagdollSetup`)
 
-골반 복제(§3-5)는 **`RagdollSetup`이 자동으로 붙인다** — 붙는 자리가 중첩 프리팹 안이라
-오버라이드로 저장되고 리그를 다시 복제하면 함께 걷히므로, 손으로 붙이면 다시 만들 때마다 잊는다.
-`Run`의 `replicateHips`에 **기본값을 두지 않은 것은 권위를 정하는 결정이기 때문이다**: 이 자동화는
-서버 권한을 쓰고, 오너 권한인 **플레이어에 켜면 조용히 뒤집힌다.**
+②를 **손으로 붙이지 않는다.** 자리가 중첩 프리팹(`Model`) 안이라 오버라이드로 저장되고, 리그를 다시
+복제하면([`RagdollRigCloner`](../Assets/Scripts/Editor/RagdollRigCloner.cs)) 함께 걷힌다 — 손으로
+붙이면 다시 만들 때마다 잊는다. `Run(prefabPath, rigOwnerPath, replicateHips)`로 받아
+`Tools > Ragdoll > Finish Setup - NPC (전체)`가 붙이게 한다.
 
-프리팹 4종에 이미 적용돼 커밋에 들어 있다(골반 NT + `NetworkRigidbody`, `AuthorityMode: 0`,
-`UseRigidBodyForMotion: 1`, **`AutoUpdateKinematicState: 0`**). 마지막 값은 반드시 꺼야 한다 —
-스폰·소유권 변경 시점에만 도는 값이라 래그돌의 키네마틱 토글과 서로 덮어쓴다.
+값은 **직렬화 이름**(`AuthorityMode`·`UseRigidBodyForMotion` …)으로 `SerializedObject`를 통해 쓴다 —
+프리팹 YAML에 실제로 남는 이름이라 패키지가 공개 필드를 바꿔도 조용히 어긋나지 않는다(없으면 경고).
 
-### 2단계에 남은 일 — 플레이테스트뿐
+#### 함정 다섯 — 여기서 물린다
+
+1. **권위 가드는 `Unfreeze()` 뒤다.** 플레이어와 갈리는 유일한 지점. 앞에 두면 원격 시체가
+   **얼어붙은 채 골반만 끌려가는 조각상**이 된다 — 플레이어는 애초에 얼지 않아 맨 앞에서 반환해도
+   됐던 자리다.
+2. **`AutoUpdateKinematicState`는 반드시 `0`.** 스폰·소유권 변경 시점에만 도는 값이라 래그돌이
+   사망·정착·밧줄에서 계속 토글하는 키네마틱과 서로 덮어쓴다.
+3. **`RagdollRigCloner.StripExistingRagdoll`이 Rigidbody보다 `NetworkRigidbody`를 먼저 걷어야 한다.**
+   `RequireComponent`라 남겨 두면 다시 복제할 때 Rigidbody 제거가 **조용히 막힌다.**
+4. **`replicateHips`에 기본값을 두지 말 것.** 권위를 정하는 결정이다 — 이 자동화는 서버 권한을 쓰고,
+   오너 권한으로 손수 배선된 **플레이어에 켜면 조용히 뒤집힌다.**
+5. **`AttachCorpseRopeRpc`는 `SendTo.Everyone` 그대로 둔다.** 호출부를 안 건드리고 `NpcRagdoll`
+   안에서만 가르는 것이 안전장치다 — 프리팹에서 골반 NT를 빼면 자동으로 옛 동작(전원이 묶음)으로
+   돌아간다.
+
+#### 검증
 
 - **오프라인** — 묶기 · 끌기 · E로 놓기 · 재결박이 #571 §11-5 그대로인가 (권위가 항상 자기라
-  옛 경로와 같아야 정상)
+  옛 경로와 같아야 정상. 여기가 깨지면 가드 위치를 의심할 것 — 함정 1)
 - **MPPM 2~3인이 본론이다** — 호스트가 끄는 시체가 클라 화면에서 **같은 궤적**을 그리는가,
   멈췄을 때 자세가 일치하는가(플레이어 실측은 정지 시 1mm 이내). 클라가 끄는 경우도
 - 놓는 순간 관성으로 미끄러지는 것은 **알려진 미해결**이다 — [571 §14](571-npc-death-ragdoll.md),
   고칠지는 따로 판단
+- 막히면 로그를 심어 좁힐 것: `m_hipsIsNetworkSynced` 값, 피어별 골반 `isKinematic`,
+  밧줄이 실제로 걸린 피어
+
+#### 되돌리는 법
+
+**프리팹에서 골반 `NetworkTransform`을 빼면 코드는 그대로 두고 옛 동작으로 돌아간다.** 조건이 전부
+그 컴포넌트 하나에 걸려 있어서다 — 되돌리려고 코드를 고칠 필요가 없다.
 
 ### 작업하며 밝혀진 것 둘
 
