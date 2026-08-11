@@ -60,6 +60,10 @@ public class AuthBootstrap : CommonManagerBase
 
     private const string k_nicknamePrefKeyPrefix = "player.nickname.";
 
+    // 로그인 관문 통과 여부를 앱 실행 사이에 기억한다 — 한 번 통과하면 다음 실행부터 세션 화면으로 바로 간다. (#585)
+    // 프로필별로 나눈다: 닉네임 캐시와 같은 방식이라 프로필을 바꾸면 관문도 다시 뜬다.
+    private const string k_gatePassedPrefKeyPrefix = "auth.gatepassed.";
+
     // 계정 조작 사유 문구가 든 테이블 — 타이틀 화면의 계정 패널에서만 보인다 (#497)
     private const string k_table = "TitleTable";
 
@@ -104,6 +108,14 @@ public class AuthBootstrap : CommonManagerBase
     /// </summary>
     public bool HasPassedAuthGate { get; private set; }
 
+    /// <summary>
+    /// 지난 실행에서 관문을 통과했는가 — PlayerPrefs에 남는다. (#585)
+    /// <see cref="HasPassedAuthGate"/>는 이번 실행 안에서만 유효하고 앱을 다시 켜면 초기화되므로,
+    /// "한 번 로그인했으면 다음부터 로그인 화면을 건너뛴다"는 실행 간 기억은 이 값이 담당한다.
+    /// 로그아웃하면 <see cref="SignOut"/>·<see cref="ClearSessionToken"/>이 함께 지운다.
+    /// </summary>
+    public bool RememberedAuthGate => PlayerPrefs.GetInt(GatePassedPrefKey, 0) == 1;
+
     /// <summary>정식 계정으로 승격됐는가. 판별은 PlayerInfo.Username 유무. (#384)</summary>
     public bool IsLinked => m_accountStateKnown && !string.IsNullOrEmpty(m_accountUsername);
 
@@ -131,10 +143,28 @@ public class AuthBootstrap : CommonManagerBase
 
     private string NicknamePrefKey =>
         k_nicknamePrefKeyPrefix + (string.IsNullOrWhiteSpace(m_profile) ? "default" : m_profile);
+
+    private string GatePassedPrefKey =>
+        k_gatePassedPrefKeyPrefix + (string.IsNullOrWhiteSpace(m_profile) ? "default" : m_profile);
     #endregion
 
-    /// <summary>로그인 관문을 넘었다고 표시 — <c>AuthGatePanel</c>만 호출한다. (#585)</summary>
-    public void MarkAuthGatePassed() => HasPassedAuthGate = true;
+    /// <summary>
+    /// 로그인 관문을 넘었다고 표시 — <c>AuthGatePanel</c>만 호출한다. (#585)
+    /// 이번 실행의 플래그와 함께 PlayerPrefs에도 남겨, 다음 실행부터 관문을 건너뛰게 한다.
+    /// </summary>
+    public void MarkAuthGatePassed()
+    {
+        HasPassedAuthGate = true;
+        PlayerPrefs.SetInt(GatePassedPrefKey, 1);
+        PlayerPrefs.Save();
+    }
+
+    /// <summary>실행 간 관문 기억을 지운다 — 로그아웃·토큰 삭제와 한 쌍이다. (#585)</summary>
+    private void ForgetAuthGate()
+    {
+        PlayerPrefs.DeleteKey(GatePassedPrefKey);
+        PlayerPrefs.Save();
+    }
 
     #region 초기화 · 익명 로그인
     private void Start()
@@ -542,6 +572,7 @@ public class AuthBootstrap : CommonManagerBase
         // 로그아웃했으면 관문을 다시 거쳐야 한다 — 이 표시를 남겨두면 타이틀로 돌아왔을 때
         // 로그인 안 된 채로 세션 화면이 떠서 만들기·참가가 눌리기만 하고 실패한다. (#585)
         HasPassedAuthGate = false;
+        ForgetAuthGate();
 
         OnSignedOut?.Invoke();
         Debug.Log("[AuthBootstrap] SignOut 완료");
@@ -569,6 +600,7 @@ public class AuthBootstrap : CommonManagerBase
             // 로그아웃했으면 관문을 다시 거쳐야 한다 — 이 표시를 남겨두면 타이틀로 돌아왔을 때
             // 로그인 안 된 채로 세션 화면이 떠서 만들기·참가가 눌리기만 하고 실패한다. (#585)
             HasPassedAuthGate = false;
+            ForgetAuthGate();
 
             OnSignedOut?.Invoke();
         }

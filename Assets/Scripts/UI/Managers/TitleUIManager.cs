@@ -30,10 +30,43 @@ public class TitleUIManager : UIManagerBase
         if (auth != null)
             auth.OnSignedOut += ReturnToAuthGate;
 
-        if (auth != null && auth.HasPassedAuthGate)
+        // 이번 실행에서 이미 통과했거나(세션에서 복귀), 지난 실행에서 통과한 기억이 있으면 관문을 건너뛴다. (#585)
+        // 단 건너뛰려면 세션 화면이 기댈 로그인이 있어야 한다 — 이미 로그인됐거나 자동 익명 로그인이
+        // 진행 중이어야 한다. 그렇지 않으면(자동 로그인 꺼짐 등) 빈 세션 화면이 남으므로 관문을 띄운다.
+        bool remembered = auth != null && (auth.HasPassedAuthGate || auth.RememberedAuthGate);
+        bool canRestoreSession =
+            auth != null && (auth.HasPassedAuthGate || auth.IsSignedIn || auth.IsSigningIn);
+
+        if (remembered && canRestoreSession)
+        {
             OpenPanel<SessionPanel>();
+
+            // 기억으로 건너뛴 경우, 자동 익명 로그인이 끝내 실패하면 세션 화면이 "로그인 중"에서
+            // 멈춘 채 버튼이 잠긴다 — 그 막다른 길 대신 관문으로 되돌린다. (#585)
+            if (!auth.HasPassedAuthGate && !auth.IsSignedIn && auth.IsSigningIn)
+                auth.OnSigningInChanged += HandleRestoreSigningChanged;
+        }
         else
+        {
             OpenPanel<AuthGatePanel>();
+        }
+    }
+
+    /// <summary>
+    /// 기억으로 관문을 건너뛴 뒤 자동 익명 로그인의 결과를 지켜본다. (#585)
+    /// 성공했으면 <see cref="SessionPanel"/>이 스스로 버튼을 푸므로 할 일이 없고,
+    /// 실패로 로그인 안 된 채 끝났으면 관문으로 되돌린다.
+    /// </summary>
+    private void HandleRestoreSigningChanged()
+    {
+        AuthBootstrap auth = App.Net.Auth;
+        if (auth == null || auth.IsSigningIn)
+            return; // 아직 진행 중 — 끝나면 다시 불린다
+
+        auth.OnSigningInChanged -= HandleRestoreSigningChanged;
+
+        if (!auth.IsSignedIn)
+            ReturnToAuthGate();
     }
 
     // 구독을 Start에서 걸었으므로 해제도 OnDisable이 아니라 여기다 — 짝이 어긋나면 다시 켜질 때
@@ -41,7 +74,10 @@ public class TitleUIManager : UIManagerBase
     protected override void OnDestroy()
     {
         if (App.Net.Auth != null)
+        {
             App.Net.Auth.OnSignedOut -= ReturnToAuthGate;
+            App.Net.Auth.OnSigningInChanged -= HandleRestoreSigningChanged;
+        }
 
         base.OnDestroy(); // App 등록 해제 (R5)
     }
