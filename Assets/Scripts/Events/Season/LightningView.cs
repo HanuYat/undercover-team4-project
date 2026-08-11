@@ -2,16 +2,24 @@ using System.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
-// 번개 날씨 표현: 비(Rain) 파티클 활성화 + 간헐적 낙뢰(Strike) 및 섬광
 public class LightningView : MonoBehaviour
 {
     public static LightningView Instance { get; private set; }
 
-    [Header("Synty Assets (Assets/Imported/Synty/...)")]
-    [SerializeField] private GameObject m_strikeParticlePrefab; // FX_LightningStrike_01
-    [SerializeField] private GameObject m_rainParticlePrefab;   // FX_Rain_01
+    [Header("Synty Assets")]
+    [SerializeField] private GameObject m_strikeParticlePrefab;
+    [SerializeField] private GameObject m_rainParticlePrefab;  
 
-    [Header("Screen Flash Settings (Optional)")]
+    [Header("Rain Settings")]
+    [SerializeField] private float m_rainScale = 2f;
+    [SerializeField] private Vector3 m_rainPositionOffset = new Vector3(0f, 5f, 5f);
+
+    [Header("Cloud Settings")]
+    [SerializeField] private GameObject m_cloudPrefab;
+    [SerializeField] private float m_cloudScale = 10f;
+    [SerializeField] private Vector3 m_cloudPositionOffset = new Vector3(0f, 20f, 0f);
+
+    [Header("Screen Flash Settings")]
     [SerializeField] private Light m_globalLight;
     [SerializeField] private float m_flashDuration = 0.1f;
     [SerializeField] private float m_maxFlashIntensity = 1.5f;
@@ -21,6 +29,7 @@ public class LightningView : MonoBehaviour
     private Coroutine m_flashCoroutine;
     
     private GameObject m_currentRainFx;
+    private GameObject m_currentCloudFx; 
 
     private void Awake()
     {
@@ -35,18 +44,9 @@ public class LightningView : MonoBehaviour
     private void Start()
     {
         m_lightningEvent = App.Game.SuddenEvent?.GetEvent<LightningEvent>();
+        if (m_lightningEvent == null) return;
 
-        if (m_lightningEvent == null)
-        {
-            Debug.LogWarning("[LightningView] LightningEvent not found in SuddenEventManager.");
-            enabled = false;
-            return;
-        }
-
-        if (m_globalLight != null)
-        {
-            m_originalLightIntensity = m_globalLight.intensity;
-        }
+        if (m_globalLight != null) m_originalLightIntensity = m_globalLight.intensity;
 
         m_lightningEvent.OnLightningChanged += OnLightningChanged;
         ToggleLightningEffects(m_lightningEvent.IsLightningActive);
@@ -54,55 +54,66 @@ public class LightningView : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (m_lightningEvent != null)
-        {
-            m_lightningEvent.OnLightningChanged -= OnLightningChanged;
-        }
-        ToggleLightningEffects(false);
+        if (m_lightningEvent != null) m_lightningEvent.OnLightningChanged -= OnLightningChanged;
+        ToggleLightningEffects(false); 
     }
 
-    private void OnLightningChanged(bool isActive)
-    {
-        ToggleLightningEffects(isActive);
-    }
+    private void OnLightningChanged(bool isActive) => ToggleLightningEffects(isActive);
 
     private void ToggleLightningEffects(bool isActive)
     {
         if (isActive)
         {
-            // 1. 비 내리기 시작 (카메라 자식으로 생성)
-            if (m_currentRainFx == null && m_rainParticlePrefab != null && Camera.main != null)
+            if (Camera.main == null) return;
+            Transform camTransform = Camera.main.transform;
+
+            // 1. 비 생성
+            if (m_currentRainFx == null && m_rainParticlePrefab != null)
             {
-                m_currentRainFx = Instantiate(m_rainParticlePrefab, Camera.main.transform);
-                m_currentRainFx.transform.localPosition = new Vector3(0f, 5f, 5f);
+                m_currentRainFx = Instantiate(m_rainParticlePrefab, camTransform);
+                m_currentRainFx.transform.localPosition = m_rainPositionOffset;
+                m_currentRainFx.transform.localScale = new Vector3(m_rainScale, m_rainScale, m_rainScale);
+                
+                // [수정됨] CS1612 에러 해결: 임시 변수에 할당 후 수정
+                foreach (var ps in m_currentRainFx.GetComponentsInChildren<ParticleSystem>())
+                {
+                    var mainModule = ps.main;
+                    mainModule.scalingMode = ParticleSystemScalingMode.Hierarchy;
+                }
+                
                 m_currentRainFx.GetComponentInChildren<ParticleSystem>()?.Play();
+            }
+
+            // 2. 먹구름 생성
+            if (m_currentCloudFx == null && m_cloudPrefab != null)
+            {
+                m_currentCloudFx = Instantiate(m_cloudPrefab, camTransform);
+                m_currentCloudFx.transform.localPosition = m_cloudPositionOffset;
+                m_currentCloudFx.transform.localScale = new Vector3(m_cloudScale, m_cloudScale, m_cloudScale);
+                
+                // [수정됨] CS1612 에러 해결: 임시 변수에 할당 후 수정
+                foreach (var ps in m_currentCloudFx.GetComponentsInChildren<ParticleSystem>())
+                {
+                    var mainModule = ps.main;
+                    mainModule.scalingMode = ParticleSystemScalingMode.Hierarchy;
+                }
             }
         }
         else
         {
-            // 1. 비 멈춤 (파티클 제거)
-            if (m_currentRainFx != null)
-            {
-                Destroy(m_currentRainFx);
-                m_currentRainFx = null;
-            }
+            if (m_currentRainFx != null) { Destroy(m_currentRainFx); m_currentRainFx = null; }
+            if (m_currentCloudFx != null) { Destroy(m_currentCloudFx); m_currentCloudFx = null; }
 
-            // 2. 섬광 라이트 원복
-            if (m_globalLight != null)
-            {
-                m_globalLight.intensity = m_originalLightIntensity;
-            }
+            if (m_globalLight != null) m_globalLight.intensity = m_originalLightIntensity;
             if (m_flashCoroutine != null) StopCoroutine(m_flashCoroutine);
         }
     }
 
-    // --- 낙뢰 이펙트 (서버 ClientRpc 수신부) ---
     public void PlayStrikeEffects(Vector3 position)
     {
         if (m_strikeParticlePrefab != null)
         {
-            GameObject fx = Instantiate(m_strikeParticlePrefab, position, Quaternion.identity);
-            Destroy(fx, 3f); 
+            Destroy(Instantiate(m_strikeParticlePrefab, position, Quaternion.identity), 3f); 
         }
 
         if (m_globalLight != null && gameObject.activeInHierarchy)
