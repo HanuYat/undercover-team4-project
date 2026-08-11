@@ -1,7 +1,6 @@
 using System;
 using Cysharp.Threading.Tasks;
 using TMPro;
-using Unity.Netcode;
 using Unity.Services.Vivox;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -27,7 +26,6 @@ public class VoiceInputRouter : MonoBehaviour
     private bool m_channelsJoined;
     private string m_proximityChannelName;
     private bool m_transmitting; // PTT를 누르고 있는지 — 디버그 표시용
-    private PlayerIncapacitation m_localIncapacitation; // 사망 중 무전 차단 판정 (#590) — 지연 캐시
 
     /// <summary>음소거 중에 무전 키를 눌렀다 — HUD가 "마이크가 꺼져 있습니다"를 띄운다.</summary>
     public event Action OnMutedTalkAttempt;
@@ -143,46 +141,10 @@ public class VoiceInputRouter : MonoBehaviour
             && input.isFocused;
     }
 
-    /// <summary>
-    /// 기능 정지(Die) 중인 로컬 플레이어는 무전을 쓸 수 없다. (#590)
-    ///
-    /// <b>근접 채널은 그대로 둔다</b> — 막는 것은 거리 무관 무전뿐이다. 죽은 사람이 동료를 관전하며
-    /// 본 것을 전원에게 부르는 경로가 밸런스를 흔들기 때문이고(#576이 순환 관전을 범위 밖으로 뺀
-    /// 이유), 근접은 시체 옆에 온 동료에게만 닿으므로 그 문제가 없다. 데리러 온 동료와는 말이
-    /// 통해야 운반(#365)이 대화가 된다.
-    ///
-    /// 로컬 플레이어를 매번 조회하지 않고 캐시한다 — 씬을 넘어도 오브젝트가 이월되므로(세션 유지
-    /// 루프) 한 번 잡으면 계속 쓸 수 있고, 파괴되면 Unity의 == null이 참이 되어 다시 잡는다.
-    /// (<see cref="ProximityPositionReporter"/>가 로컬 플레이어를 잡는 방식과 같다)
-    /// </summary>
-    private bool IsLocalPlayerDead()
-    {
-        if (m_localIncapacitation == null)
-        {
-            NetworkManager nm = NetworkManager.Singleton;
-            NetworkObject player = nm != null && nm.IsClient ? nm.LocalClient?.PlayerObject : null;
-            m_localIncapacitation =
-                player != null ? player.GetComponent<PlayerIncapacitation>() : null;
-        }
-
-        return m_localIncapacitation != null && m_localIncapacitation.IsDead;
-    }
-
-    // 누르고 있는 도중에 죽는 경로가 있다 — 그때 끊지 않으면 무전이 켜진 채로 남아, 막은 의미가
-    // 사라진다(죽기 직전에 누르고 있으면 그대로 통과). 송신 중일 때만 도는 검사라 상시 비용이 아니다.
-    private void Update()
-    {
-        if (m_transmitting && IsLocalPlayerDead())
-            SetRadioTransmit(false);
-    }
-
     private void OnPushToTalkStarted(InputAction.CallbackContext ctx)
     {
         if (IsTypingInUI())
             return;
-
-        if (IsLocalPlayerDead())
-            return; // 기능 정지 중 — 근접만 남기고 무전은 막는다 (#590)
 
         // 음소거가 이긴다 — 송신을 막는 가드는 넣지 않는다(입력 장치가 뮤트면 송신 모드와 무관하게
         // 소리가 나가지 않아 두 경로가 자연히 독립이다). 대신 눌렀다는 사실만 알린다 — 이 안내가

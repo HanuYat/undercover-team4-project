@@ -97,7 +97,6 @@ public class PlayerLook : MonoBehaviour
     private float m_emoteYaw;       // 감정표현 중 누적한 카메라 좌우 각 — 몸은 돌리지 않는다
     private bool m_spectateView;    // 사망 관전이 요청됐는가 — 오빗 각 진입/이탈 판정 (#576)
     private bool m_spectateShown;   // 관전 표시(내 몸·1인칭 팔)가 켜져 있는가 — 블렌드가 문턱을 넘은 뒤에 따라온다
-    private bool m_spectateSelf = true; // 관전 대상이 내 시체인가 — 동료를 볼 때는 내 몸을 그리지 않는다 (#590)
     private int m_ownBodyLayer = -1; // OwnBody 레이어 번호 캐시 (-1 = 아직 조회 전)
 
     /// <summary>시선 pitch(도, +아래/-위) — PlayerHeadLook이 머리 본 회전에 사용한다. (#348)</summary>
@@ -198,13 +197,12 @@ public class PlayerLook : MonoBehaviour
     /// 진입 쪽도 같은 이유로 문턱을 넘긴 뒤에 켠다(카메라가 아직 머리 안에 있을 때 몸을 되살리면
     /// 자기 얼굴 안쪽이 화면을 덮는다).
     /// </summary>
-    private void ShowSpectateView(bool shown, bool watchingSelf)
+    private void ShowSpectateView(bool shown)
     {
-        if (m_spectateShown == shown && m_spectateSelf == watchingSelf)
+        if (m_spectateShown == shown)
             return;
 
         m_spectateShown = shown;
-        m_spectateSelf = watchingSelf;
         ApplyThirdPersonView();
     }
 
@@ -223,11 +221,6 @@ public class PlayerLook : MonoBehaviour
         // 1인칭 팔은 카메라 자식이라 그냥 두면 전신이 보이는 화면에 붙어 따라온다.
         m_handView?.SetViewmodelVisible(!thirdPerson);
 
-        // 내 몸 렌더는 3인칭 여부와 <b>따로 판정한다</b> (#590) — 동료를 관전하는 동안에는 카메라가
-        // 저쪽에 가 있어 내 시체가 화면에 없다. 그런데도 컬링을 열어 두면 볼 것도 없는 몸을 계속
-        // 그리고, 대상이 내 시체 옆을 지날 때 남의 등 뒤로 내 시체가 끼어든다.
-        bool ownBodyVisible = m_emoteView || (m_spectateShown && m_spectateSelf);
-
         if (m_playerCamera == null)
             return;
 
@@ -238,7 +231,7 @@ public class PlayerLook : MonoBehaviour
             return; // 레이어가 없는 구성(테스트 씬 등) — 카메라만 빠지고 몸은 안 보인다
 
         int mask = 1 << m_ownBodyLayer;
-        if (ownBodyVisible)
+        if (thirdPerson)
             m_playerCamera.cullingMask |= mask;
         else
             m_playerCamera.cullingMask &= ~mask;
@@ -449,7 +442,7 @@ public class PlayerLook : MonoBehaviour
         if (m_spectate != null)
         {
             float spectateBlend = m_spectate.Tick(); // 관전 중이 아니어도 불러야 이탈 보간이 진행된다
-            ShowSpectateView(spectateBlend > k_spectateShowBlend, m_spectate.IsWatchingSelf);
+            ShowSpectateView(spectateBlend > k_spectateShowBlend);
 
             if (spectateBlend > 0.001f
                 && m_spectate.TryGetPose(out Vector3 spectatePos, out Quaternion spectateRot))
