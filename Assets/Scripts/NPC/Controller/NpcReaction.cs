@@ -10,7 +10,6 @@ using Random = UnityEngine.Random;
 /// 그 상태들이 읽을 위협 대상·탐색 반경을 들고 스윙 순간을 전 피어에 중계한다. FSM 전이가 필요하므로
 /// 코어의 <see cref="NpcController.StateMachine"/>을 쓴다.
 /// 전이는 전부 서버 권위 — 클라이언트 호출은 <see cref="NpcCustody.StartEscort"/>와 같은 방식으로 무시한다.
-/// TODO: 아이템/상호작용 네트워크 전환(#55 계열) 시 클라 입력 → ServerRpc 경로로 연결
 ///
 /// <b>반드시 <see cref="NpcController"/>와 같은 GameObject에 둔다</b> — 코어 쪽 [RequireComponent]가 이를 보장한다.
 /// 반대 방향으로도 걸면 순환 의존이 되어 둘 중 하나만 떼는 것이 막히므로, 선언은 코어에만 둔다.
