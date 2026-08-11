@@ -26,7 +26,7 @@ using Random = UnityEngine.Random;
 /// 가능하지만, 규약 완화(RequireComponent 제거)는 팀 결정 대기 항목이다(#291 고려사항 · PR #298 리뷰).
 /// 발생 빈도·이벤트별 수치는 전부 인스펙터 — 밸런싱 보류 항목이라 코드에 못 박지 않는다 (GDD 12장).
 /// </summary>
-// TODO: 이벤트 발생/종료 HUD 알림(본부 관제 UI, #43 계열)은 OnEventAnnounced/AnnounceEventClientRpc를 구독해 연결한다.
+// TODO: 이벤트 발생/종료 HUD 알림(본부 관제 UI)은 OnEventAnnounced/AnnounceEventClientRpc를 구독해 연결한다.
 [RequireComponent(typeof(NetworkObject))]
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class SuddenEventManager : NetworkedManagerBase
@@ -83,7 +83,7 @@ public class SuddenEventManager : NetworkedManagerBase
     private bool m_scheduling; // 라운드 InProgress 진입 시 켜진다 — Phase 폴링으로 스케줄 시작/정지를 판정
     private RoundPhase m_lastPhase = RoundPhase.Preparing;
 
-    /// <summary>이벤트 발생 알림 — 본부/현장 HUD 토스트(#43)가 구독할 훅.</summary>
+    /// <summary>이벤트 발생 알림 — 본부/현장 HUD 토스트가 구독할 훅.</summary>
     public event Action<string> OnEventAnnounced;
 
     // 서버(또는 오프라인)에서만 의미 — 이 피어가 이벤트 권위를 가지는지. 스폰 전(오프라인)이면 항상 권위.
@@ -265,7 +265,7 @@ public class SuddenEventManager : NetworkedManagerBase
     }
 
     /// <summary>
-    /// 이벤트 알림을 전 클라이언트에 발행한다 — HUD 알림(#43)용. 네트워크 세션에서만 RPC를 쏜다.
+    /// 이벤트 알림을 전 클라이언트에 발행한다 — HUD 알림용. 네트워크 세션에서만 RPC를 쏜다.
     /// 보통은 발생 시점에 매니저가 부르지만, <see cref="ISuddenEvent.AnnounceOnBegin"/>이 false인 이벤트는
     /// 알릴 시점을 스스로 정해 이 메서드를 직접 부른다. 서버(또는 오프라인) 전용.
     /// </summary>

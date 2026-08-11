@@ -58,7 +58,8 @@ public class RoundTimerUI : MonoBehaviour
     }
 
     // 남은 시간을 구한다 — 온라인은 동기화 컴포넌트, 오프라인은 RoundManager 직접.
-    // (순수 클라이언트에서는 RoundManager.Phase가 InProgress가 되지 않으므로 폴백이 오동작하지 않는다)
+    // 폴백은 권위 피어(서버·오프라인)에서만 탄다 — 클라의 Phase·RemainingSeconds는 대입되지 않는 값이라
+    // 읽어봐야 항상 "미시작"이고, 읽는 것 자체가 Phase의 서버 전용 경고를 매 프레임 밟는다.
     private bool TryGetRemainingSeconds(out float seconds)
     {
         if (m_timerSync != null && m_timerSync.TryGetRemainingSeconds(out seconds))
@@ -67,6 +68,7 @@ public class RoundTimerUI : MonoBehaviour
         seconds = 0f;
         if (
             Round == null
+            || !Round.IsPhaseAuthority
             || Round.Phase != RoundPhase.InProgress
             || float.IsPositiveInfinity(Round.RemainingSeconds)
         )

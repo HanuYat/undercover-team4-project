@@ -369,6 +369,7 @@ public class VivoxManager : CommonManagerBase
         m_speakingByPlayer.Clear();
         m_distortion?.NotifyVoiceEnded();
         m_input?.NotifyVoiceEnded();
+        m_positionReporter?.StopReporting();
 
         if (m_radioJoined || m_proximityJoined)
         {
