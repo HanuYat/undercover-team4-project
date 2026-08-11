@@ -3,8 +3,11 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// NPC 체력 도메인 부품 (#366/#503) — 0이 되면 기절(Stunned)한다. 회복 지점은 기절에서 깨어나는
-/// 순간 하나뿐이라(<see cref="ServerRestoreHp"/>) 교전이 끝나도 깎인 체력은 남는다.
+/// NPC 체력 도메인 부품 (#366/#503/#571) — <b>회복 지점이 없다.</b> 한 번 깎인 체력은 라운드가
+/// 끝날 때까지 그대로다.
+///
+/// 체력이 만드는 결과는 둘이고 둘 다 되돌아오지 않는다: 임계 비율 아래로 내려가면 한 번 쓰러졌다
+/// 일어나고(<see cref="NpcStun"/>), 0이 되면 죽는다(<see cref="NpcDeath"/>).
 ///
 /// 서버 권위 + 오프라인 폴백 — 서버(또는 오프라인)만 값을 바꾸고 클라는 동기화 값을 읽는다 (#56 패턴).
 /// 폭발 피해(<see cref="BombDevice"/>)는 <see cref="IDamageable"/>을 GetComponent로 찾으므로 구현이
@@ -108,17 +111,17 @@ public class NpcHealth : NetworkBehaviour, IDamageable
     private void RaiseDamaged(int amount, Vector3 attackerPosition, bool hasAttacker) =>
         OnHit?.Invoke(new DamageHit(amount, attackerPosition, hasAttacker));
 
-    /// <summary>체력 완전 회복 — 기절에서 깨어나는 순간 <see cref="NpcStunnedState"/>와
-    /// <see cref="NpcStun.ExitStun"/>이 호출한다. 빠지면 HP 0인 채로 깨어나 두 번 다시 기절하지 않는다. (#366)</summary>
-    public void ServerRestoreHp()
-    {
-        if (IsSpawned && !IsServer)
-            return;
+    // 체력 회복(구 ServerRestoreHp)은 #571에서 제거됐다 — 회복 지점 둘(NpcStun.ExitStun ·
+    // NpcStunnedState.Exit)이 함께 사라져 부르는 곳이 없어졌다. 이유는 그 두 곳의 주석에 있다.
 
-        SetHp(MaxHp, null);
-    }
-
-    // 0에 '도달하는 순간'에만 기절시킨다 — 이미 0인 대상에 대한 추가 타격이 타이머를 리셋하지 못한다.
+    // 체력 변화가 만드는 결과는 둘이고, 둘 다 <b>엣지</b>다 — 값이 아니라 '넘어서는 순간'을 본다.
+    // 덕분에 이미 그 아래인 대상에 추가 타격이 들어와도 기절 타이머가 리셋되지 않고, 죽은 대상이
+    // 두 번 죽지도 않는다.
+    //
+    // ⚠ <b>사망이 먼저다.</b> 한 타격이 둘 다 만족하는 경우가 실제로 생긴다 — 최대 100·임계 40에서
+    // 32→0 타격은 임계 교차이면서 동시에 0 도달이다. 순서를 뒤집으면 그 대상이 쓰러졌다가 죽는 것이
+    // 아니라 쓰러지기만 하고 사망 처리가 <b>영영 걸리지 않는다</b>(EnterStunned가 IsStunned로 물러난 뒤
+    // 다음 0 도달 엣지가 없다).
     private void SetHp(int value, GameObject attacker)
     {
         int previous = CurrentHp;
@@ -126,8 +129,17 @@ public class NpcHealth : NetworkBehaviour, IDamageable
         if (IsSpawned && IsServer)
             m_syncedHp.Value = value;
 
-        // 타격으로 쓰러진 기절은 테이저보다 길다 — 밧줄로 끌 창을 따로 튜닝한다 (#400)
         if (value == 0 && previous > 0)
+        {
+            m_owner.Death.ServerEnterDead(attacker);
+            return;
+        }
+
+        // 임계 아래로 <b>내려가는</b> 순간만 — 회복이 없어졌으므로(#571) 이 교차는 개체당 한 번뿐이다.
+        // 그게 의도다: 임계 아래로 내려간 몸이 다음에 맞으면 다시 눕는 것이 아니라 죽는다.
+        // 타격으로 쓰러진 기절은 테이저보다 길다 — 밧줄로 끌 창을 따로 튜닝한다 (#400)
+        int knockdownHp = m_owner.CommonConfig.KnockdownHp;
+        if (previous > knockdownHp && value <= knockdownHp)
             m_owner.Stun.EnterStunned(
                 attacker != null ? attacker.transform : null,
                 m_owner.StunConfig.KnockdownStunSeconds

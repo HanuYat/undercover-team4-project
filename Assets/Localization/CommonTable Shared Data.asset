@@ -55,6 +55,10 @@ MonoBehaviour:
     m_Key: Common.Button.Confirm
     m_Metadata:
       m_Items: []
+  - m_Id: 2257280951738368
+    m_Key: Common.Loading.Preparing
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

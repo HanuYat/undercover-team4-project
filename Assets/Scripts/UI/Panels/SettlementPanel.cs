@@ -17,6 +17,9 @@ using UnityEngine.UI;
 ///
 /// 열려 있는 동안 로컬 플레이어 입력을 정지(PlayerInputHandler.SetSuspended)해 정산 화면 뒤 월드로
 /// 이동·시점 입력이 새지 않게 하고, 버튼을 누를 수 있게 커서를 띄운다. 확인 버튼·ESC로 닫으면 되돌린다.
+///
+/// 닫는 것은 곧 "다 읽었다"는 확인이다 (#509) — 확인 버튼이든 ESC든 SettlementConfirmGate에 보고하고,
+/// 전원이 보고하면 카운트다운이 끝나기 전이라도 서버가 복귀를 앞당긴다. 카운트다운 문구에 그 인원을 함께 보여준다.
 /// </summary>
 public class SettlementPanel : PanelBase
 {
@@ -77,7 +80,7 @@ public class SettlementPanel : PanelBase
     [SerializeField]
     private LocalizedString m_personalFormat;
 
-    [Tooltip("복귀 카운트다운 — Settlement.Countdown ({0}=도착지, {1}=남은 초)")]
+    [Tooltip("복귀 카운트다운 — Settlement.Countdown ({0}=도착지, {1}=남은 초, {2}=확인 인원, {3}=총원)")]
     [SerializeField]
     private LocalizedString m_countdownFormat;
 
@@ -99,6 +102,17 @@ public class SettlementPanel : PanelBase
 
     private PlayerWallet m_wallet;
 
+    // 확인 인원이 바뀌어도 문구를 다시 그려야 해서 남은 초를 들고 있는다 (초 갱신과 인원 갱신이 따로 온다).
+    private int m_secondsLeft;
+
+    // 결과 3줄이 뜬 뒤부터 확인을 받는다 — 버튼과 ESC가 같은 구간을 쓴다.
+    private bool m_confirmEnabled;
+
+    // 확인 보고는 이번 정산에 한 번만 — 닫기 경로가 둘(확인 버튼·ESC)이라 래치를 둔다.
+    private bool m_confirmReported;
+
+    private SettlementConfirmGate Gate => App.Game.SettlementGate;
+
     protected override void Awake()
     {
         base.Awake();
@@ -107,6 +121,7 @@ public class SettlementPanel : PanelBase
             m_background.SetActive(false);
         SetResultTextsVisible(false);
         SetCountdownVisible(false);
+        SetConfirmEnabled(false); // 결과가 뜨기 전에는 못 누른다 (#509)
         if (m_confirmButton != null)
             m_confirmButton.onClick.AddListener(ClosePanel);
     }
@@ -115,6 +130,7 @@ public class SettlementPanel : PanelBase
     {
         CancelReveal();
         UnbindWallet();
+        UnbindGate();
 
         if (m_playerBlocked)
             SetLocalPlayerBlocked(false);
@@ -159,9 +175,14 @@ public class SettlementPanel : PanelBase
                     : m_noOffenderText.GetLocalizedString();
 
         BindWallet();
+        BindGate();
+
+        m_confirmReported = false;
+        m_secondsLeft = Mathf.CeilToInt(m_countdownSeconds);
 
         SetResultTextsVisible(false); // 창은 바로 뜨되 텍스트·카운트다운은 지연 등장
         SetCountdownVisible(false);
+        SetConfirmEnabled(false); // 확인은 결과가 뜬 뒤부터 — 못 읽고 넘기는 것을 막는다 (#509)
         OpenPanel();
 
         CancelReveal();
@@ -182,13 +203,14 @@ public class SettlementPanel : PanelBase
 
             SetResultTextsVisible(true);
             SetCountdownVisible(true);
+            SetConfirmEnabled(true);
 
             for (int sec = Mathf.CeilToInt(m_countdownSeconds); sec > 0; sec--)
             {
-                SetCountdownText(sec);
+                SetCountdownSeconds(sec);
                 await UniTask.Delay(TimeSpan.FromSeconds(1), ignoreTimeScale: true, cancellationToken: ct);
             }
-            SetCountdownText(0);
+            SetCountdownSeconds(0);
         }
         catch (OperationCanceledException)
         {
@@ -196,10 +218,28 @@ public class SettlementPanel : PanelBase
         }
     }
 
-    private void SetCountdownText(int seconds)
+    private void SetCountdownSeconds(int seconds)
     {
-        if (m_countdownText != null)
-            m_countdownText.text = m_countdownFormat.GetLocalizedString(m_returnLabel, seconds);
+        m_secondsLeft = seconds;
+        RefreshCountdownText();
+    }
+
+    // 남은 초 + 확인 인원(n/총원)을 한 문구로 그린다 (#509). 게이트가 없는 씬(테스트)은 혼자 있는 것으로 센다.
+    private void RefreshCountdownText()
+    {
+        if (m_countdownText == null)
+            return;
+
+        SettlementConfirmGate gate = Gate;
+        int confirmed = gate != null ? gate.ConfirmedCount : 0;
+        int expected = gate != null ? gate.ExpectedCount : 1;
+
+        m_countdownText.text = m_countdownFormat.GetLocalizedString(
+            m_returnLabel,
+            m_secondsLeft,
+            confirmed,
+            expected
+        );
     }
 
     // 종료 사유 문구 — 규약 키 Settlement.Reason.<RoundEndReason>. (다운·기능 정지(Die) 혼재는 #364)
@@ -234,6 +274,22 @@ public class SettlementPanel : PanelBase
 
     private void HandleRoundEarnedChanged(int previous, int current) => RefreshPersonalText();
 
+    // 확인 인원은 서버가 세어 복제한다 — 바뀔 때마다 카운트다운 문구를 다시 그린다. (#509)
+    // 창을 닫아도 카운트다운은 남으므로 구독은 파괴될 때까지 유지한다.
+    private void BindGate()
+    {
+        UnbindGate();
+
+        if (Gate != null)
+            Gate.OnCountsChanged += RefreshCountdownText;
+    }
+
+    private void UnbindGate()
+    {
+        if (Gate != null)
+            Gate.OnCountsChanged -= RefreshCountdownText;
+    }
+
     private void RefreshPersonalText()
     {
         if (m_personalText == null) return;
@@ -264,6 +320,26 @@ public class SettlementPanel : PanelBase
             m_countdownText.gameObject.SetActive(visible);
     }
 
+    // 결과가 뜨기 전에는 확인을 받지 않는다 (#509) — 버튼을 잠그고, 같은 구간의 ESC도 확인으로 세지 않는다.
+    private void SetConfirmEnabled(bool enabled)
+    {
+        m_confirmEnabled = enabled;
+        if (m_confirmButton != null)
+            m_confirmButton.interactable = enabled;
+    }
+
+    // 창을 닫는 것 = "다 읽었다" (#509). 확인 버튼이든 ESC든 같은 신호로 서버에 보고한다.
+    // 열려 있고 확인 가능한 구간일 때만 — 씬 정리로 다시 불려도 새지 않게.
+    private void ReportConfirmed()
+    {
+        if (m_confirmReported || !m_confirmEnabled || !IsOpened)
+            return;
+
+        m_confirmReported = true;
+        if (Gate != null)
+            Gate.ReportSelfConfirmed();
+    }
+
     private void CancelReveal()
     {
         if (m_revealCts == null)
@@ -283,6 +359,8 @@ public class SettlementPanel : PanelBase
 
     public override void ClosePanel()
     {
+        ReportConfirmed();
+
         // 카운트다운은 일부러 남긴다 — 창·배경을 닫아도 상점 복귀까지 남은 시간을 계속 보여준다.
         // (시퀀스를 취소하지 않으므로 카운트다운은 계속 돌고, 결과 4줄은 창이 꺼지며 함께 숨는다)
         if (m_background != null)

@@ -4,7 +4,7 @@ using Unity.Services.Core;
 using UnityEngine;
 
 /// <summary>
-/// AuthBootstrap 수동 조작용 OnGUI 디버그 패널 — 테스트 씬에만 붙인다. 정식 UI는 AuthPanel (#247).
+/// AuthBootstrap 수동 조작용 OnGUI 디버그 패널 — 테스트 씬에만 붙인다. 정식 UI는 AuthGatePanel (#247 · #585).
 /// 컴포넌트의 존재 자체가 표시 스위치다(예전 m_showDebugGui 체크박스를 대신한다).
 /// AuthBootstrap에서 분리한 이유: 진행 중 래치·상태 문자열·입력칸은 이 패널에서만 쓰이는 값인데
 /// 매니저에 남으면 프로덕션 경로와 섞인다.

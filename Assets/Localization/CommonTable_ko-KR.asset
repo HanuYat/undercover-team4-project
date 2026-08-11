@@ -41,7 +41,7 @@ MonoBehaviour:
       m_Items:
       - rid: 6276845892712267889
   - m_Id: 63292019118080
-    m_Localized: "\uBD88\uB7EC\uC624\uB294 \uC911..."
+    m_Localized: "\uCD9C\uB3D9 \uC911..."
     m_Metadata:
       m_Items: []
   - m_Id: 70276470607872
@@ -59,6 +59,10 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 7100000000102
     m_Localized: "\uD655\uC778"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2257280951738368
+    m_Localized: "\uD604\uC7A5 \uBC30\uCE58 \uC911..."
     m_Metadata:
       m_Items: []
   references:

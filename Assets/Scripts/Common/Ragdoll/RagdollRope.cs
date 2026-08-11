@@ -84,8 +84,13 @@ public class RagdollRope : MonoBehaviour
     private void Awake()
     {
         m_rig = GetComponent<RagdollRig>();
-        m_rig.EnsureCollected(); // Awake 순서는 보장되지 않는다 — 뼈가 있어야 앵커를 만들 수 있다
-        EnsureAnchor(); // 밧줄 끝이 될 손잡이. 관절은 밧줄을 묶을 때 만든다
+        m_rig.EnsureCollected(); // Awake 순서는 보장되지 않는다 — 아래 Attach가 뼈를 요구한다
+
+        // ⚠ <b>앵커를 여기서 만들지 않는다</b> — 실제로 묶는 순간(<see cref="Attach"/>)에 만든다.
+        // 앵커는 부모가 없어 씬에 그대로 떠 있는 오브젝트인데, NPC까지 밧줄 대상이 되면서(#571)
+        // 라운드당 100구가 이 컴포넌트를 들고 있다. 미리 만들면 <b>한 번도 안 쓸 앵커가 100개</b>
+        // 뜬다. Attach가 어차피 쓰기 직전에 다시 보장하므로(EnsureAnchor 주석의 씬 전환 사정)
+        // 지연시켜도 잃는 것이 없다.
     }
 
     private void OnDestroy()

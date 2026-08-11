@@ -19,11 +19,11 @@ using UnityEngine;
 /// </summary>
 public class RagdollRig : MonoBehaviour
 {
-    /// <summary>래그돌 뼈 콜라이더 전용 레이어 — <c>PlayerRagdollSetup</c>이 만든다.</summary>
+    /// <summary>래그돌 뼈 콜라이더 전용 레이어 — <c>RagdollSetup</c>이 만든다.</summary>
     public const string k_layerName = "Ragdoll";
 
     /// <summary>
-    /// 리그 최상단의 기본 이름 — Synty 리그 관례. 에디터 셋업(<c>PlayerRagdollSetup</c>)이 프리팹을
+    /// 리그 최상단의 기본 이름 — Synty 리그 관례. 에디터 셋업(<c>RagdollSetup</c>)이 프리팹을
     /// 검사할 때 같은 값을 써야 하므로 상수로 노출한다. 개체별로 다르면 <see cref="m_boneRootName"/>로 덮는다.
     /// </summary>
     public const string k_defaultBoneRootName = "Root";
@@ -40,7 +40,7 @@ public class RagdollRig : MonoBehaviour
     // 하나만 있어도 그 한 번의 탈출이 관절을 타고 몸 전체로 퍼져 시체가 발작하듯 튄다.
     private const float k_maxDepenetrationVelocity = 3f;
 
-    // 관절 projection을 껐기 때문에(PlayerRagdollSetup의 k_enableProjection 주석) 관절을 붙드는 일은
+    // 관절 projection을 껐기 때문에(RagdollSetup의 k_enableProjection 주석) 관절을 붙드는 일은
     // 전적으로 solver 반복이 맡는다 — 기본값 6/1로는 강한 임펄스에서 관절이 눈에 띄게 늘어난다.
     private const int k_solverIterations = 12;
     private const int k_solverVelocityIterations = 4;
@@ -61,13 +61,13 @@ public class RagdollRig : MonoBehaviour
     private Transform m_boneRoot; // 리그 최상단 — 뼈·스킨 수집 범위를 여기로 못박는다
 
     private Rigidbody[] m_bodies; // 래그돌 레이어의 뼈 Rigidbody만 (손에 든 아이템의 rb가 섞이지 않게)
+    private Collider[] m_boneColliders; // 위와 같은 순서 — 뼈마다 하나 (위저드가 그렇게 만든다)
     private float[] m_baseLinearDamping; // 감쇠를 풀 때 되돌릴 평시 값 — 프리팹이 진실이라 상수로 박지 않는다
     private float[] m_baseAngularDamping;
 
     private Transform m_hipsBone; // 관절이 없는 뼈 = 래그돌 루트
     private Rigidbody m_hipsBody;
     private Transform m_headBone; // 누운 방향(yaw) 계산용
-    private Transform[] m_allBones; // 리그 전체 — 블렌드는 물리를 안 받은 뼈까지 보간해야 한다
 
     // 몸통 스킨드 메시 — 래그돌 동안 컬링 바운즈를 매 프레임 재계산시켜야 한다(SetSkinsAlwaysVisible)
     private SkinnedMeshRenderer[] m_skins;
@@ -76,9 +76,23 @@ public class RagdollRig : MonoBehaviour
     private Vector3[] m_capturedPositions; // 캡처한 월드 포즈 (재정렬 전후를 잇는다)
     private Quaternion[] m_capturedRotations;
 
-    private Quaternion[] m_blendFromRotations; // 블렌드 출발점(로컬)
-    private Vector3 m_blendFromHipsLocalPosition;
-    private float m_blendTimer;
+    // ---- 바인드 포즈 (프리팹이 authoring한 자세) ----
+    //
+    // <b>왜 들고 있나.</b> 관절의 <c>connectedAnchor</c>가 자동 설정이라(프리팹 확인:
+    // <c>m_AutoConfigureConnectedAnchor: 1</c>) 관절이 처음 깨어날 때의 <b>뼈 길이</b>를 기준으로
+    // 구워진다. 그 뒤 뼈의 <c>localPosition</c>이 달라지면 관절은 첫 스텝부터 위반 상태로 출발한다.
+    //
+    // 그런데 그 길이는 <b>실제로 달라질 수 있다</b>: 물리가 관절을 늘린 채 정착하면
+    // <see cref="RestoreCapturedPose"/>가 <b>월드</b> 포즈를 쓰므로 늘어난 길이가 로컬 값에 굳고,
+    // 부활·재사망의 포즈 복사가 그것을 그대로 나른다(<c>RagdollPose.Copy</c>가 localPosition까지
+    // 옮긴다). 회전만 보는 진단으로는 안 잡힌다.
+    //
+    // <b>리지드바디 뼈만이 아니라 리그 전체</b>를 담는다 — 포즈 복사가 훑는 범위와 같아야 드리프트를
+    // 빠짐없이 재고 되돌릴 수 있다.
+    private Transform[] m_bindBones;
+    private Vector3[] m_bindPositions;
+    private Quaternion[] m_bindRotations;
+    private bool[] m_bindJointed; // 관절이 달려 있는가 — 드리프트 판정을 이 뼈들로 좁힌다
 
     /// <summary>뼈를 제대로 찾았는가 — 거짓이면 소유자는 래그돌 기능 전체를 꺼야 한다.</summary>
     public bool IsValid => m_bodies != null && m_bodies.Length > 0 && m_hipsBone != null;
@@ -94,6 +108,25 @@ public class RagdollRig : MonoBehaviour
 
     /// <summary>물리를 받는 뼈 수 — 진단·검증용.</summary>
     public int BoneCount => m_bodies != null ? m_bodies.Length : 0;
+
+    /// <summary>가장 낮은 뼈의 월드 y — 시체가 지면을 파고드는지 재는 진단용.</summary>
+    public float LowestBoneY
+    {
+        get
+        {
+            if (m_bodies == null || m_bodies.Length == 0)
+                return 0f;
+
+            float lowest = float.MaxValue;
+            for (int i = 0; i < m_bodies.Length; i++)
+            {
+                float y = m_bodies[i].position.y;
+                if (y < lowest)
+                    lowest = y;
+            }
+            return lowest;
+        }
+    }
 
     /// <summary>뼈 평균 속도(m/s) — 정착 판정에 쓴다.</summary>
     public float AverageSpeed
@@ -192,10 +225,14 @@ public class RagdollRig : MonoBehaviour
         // 조용히 덮어쓴다. 여기서 읽어 두면 항상 프리팹이 진실이다.
         m_baseLinearDamping = new float[count];
         m_baseAngularDamping = new float[count];
+
+        // 뼈 콜라이더 — 위저드가 뼈마다 하나씩 만든다. 켜고 끄는 것과 충돌 무시가 같은 배열을 쓴다.
+        m_boneColliders = new Collider[count];
         for (int i = 0; i < count; i++)
         {
             m_baseLinearDamping[i] = m_bodies[i].linearDamping;
             m_baseAngularDamping[i] = m_bodies[i].angularDamping;
+            m_boneColliders[i] = m_bodies[i].GetComponent<Collider>();
         }
 
         // 골반(관절 없는 뼈)이 없으면 정착 재정렬·임펄스 기준이 없다 — 반쯤 도는 것보다 끄는 편이 낫다
@@ -213,10 +250,7 @@ public class RagdollRig : MonoBehaviour
 
         ApplyRuntimePhysics(); // 프리팹이 들고 있을 수 없는 값 — 위 상수 주석 참고
 
-        // 블렌드는 물리를 받지 않은 뼈(척추 사이·목·손가락·발)까지 보간해야 한다 — 그것들은
-        // 애니메이터가 꺼진 순간의 포즈에 멈춰 있어, 안 섞으면 블렌드 시작 프레임에 목과 손이 튄다.
-        m_allBones = m_boneRoot.GetComponentsInChildren<Transform>(true);
-        m_blendFromRotations = new Quaternion[m_allBones.Length];
+        CaptureBindPose(); // 아직 아무도 리그를 건드리지 않은 지금이 유일한 기회다
 
         CollectSkins();
         SetKinematic(true); // 평시는 애니메이터가 포즈를 쥔다
@@ -252,6 +286,84 @@ public class RagdollRig : MonoBehaviour
         skin.rootBone != null
         && (skin.rootBone == m_boneRoot || skin.rootBone.IsChildOf(m_boneRoot));
 
+    // ---- 바인드 포즈 ----
+
+    // 프리팹이 authoring한 자세를 담아 둔다 — <see cref="Collect"/>에서만 부른다(Awake 시점이라
+    // 아직 아무도 리그를 건드리지 않았다). 나중에 부르면 그때의 오염된 자세가 "바인드"가 된다.
+    private void CaptureBindPose()
+    {
+        m_bindBones = m_boneRoot.GetComponentsInChildren<Transform>(true);
+        m_bindPositions = new Vector3[m_bindBones.Length];
+        m_bindRotations = new Quaternion[m_bindBones.Length];
+        m_bindJointed = new bool[m_bindBones.Length];
+
+        for (int i = 0; i < m_bindBones.Length; i++)
+        {
+            m_bindPositions[i] = m_bindBones[i].localPosition;
+            m_bindRotations[i] = m_bindBones[i].localRotation;
+            m_bindJointed[i] = m_bindBones[i].GetComponent<Joint>() != null;
+        }
+    }
+
+    /// <summary>
+    /// <b>관절이 달린 뼈</b>의 로컬 위치가 바인드 포즈에서 얼마나 벗어났는지(m) — 최댓값. 진단용.
+    ///
+    /// <b>이것이 관절이 보는 "뼈 길이"다.</b> 0이 아니면 관절의 <c>connectedAnchor</c>(바인드 포즈
+    /// 기준으로 구워짐)와 실제 골격이 어긋나 있다는 뜻이고, 그 상태로 물리에 넘기면 <b>첫 스텝부터
+    /// 관절이 위반된 채 출발한다</b> — 사지가 고무처럼 늘어나는 그림이 된다.
+    ///
+    /// ⚠ <b>관절 없는 뼈를 세면 안 된다.</b> 처음엔 리그 전체를 쟀는데, 거기에는 <b>골반</b>이
+    /// 들어 있다 — 골반은 래그돌 루트라 로컬 위치가 자세의 일부이고 애니메이션에 따라 정당하게
+    /// 변한다. 그래서 아무 문제가 없는데도 2cm대 값이 상시로 찍혀 경고가 무의미해졌다.
+    /// 관절이 구속하는 뼈만이 "길이가 틀어졌다"는 판정의 대상이다.
+    ///
+    /// 회전은 보지 않는다. 자세는 매번 새로 복사되므로 문제가 되는 것은 <b>길이</b>뿐이다.
+    /// </summary>
+    public float MaxBindPositionDrift
+    {
+        get
+        {
+            if (m_bindBones == null)
+                return 0f;
+
+            float worst = 0f;
+            for (int i = 0; i < m_bindBones.Length; i++)
+            {
+                if (m_bindBones[i] == null || !m_bindJointed[i])
+                    continue;
+
+                float drift = Vector3.Distance(m_bindBones[i].localPosition, m_bindPositions[i]);
+                if (drift > worst)
+                    worst = drift;
+            }
+            return worst;
+        }
+    }
+
+    /// <summary>
+    /// 리그를 프리팹의 바인드 포즈로 되돌린다 — <b>뼈 길이를 복원하는 것이 목적이다.</b>
+    ///
+    /// 부활처럼 "시체가 다음 사망까지 쉬는" 시점에 부르면, 물리가 늘려 놓은 <c>localPosition</c>이
+    /// 지워져 다음 사망이 <b>1차 사망과 같은 조건</b>에서 출발한다.
+    ///
+    /// ⚠ <b>키네마틱일 때만 의미가 있다.</b> 동적인 뼈는 트랜스폼이 진실이 아니라서 다음 물리 스텝에
+    /// 덮인다. 부르는 쪽이 순서를 맞출 것.
+    /// </summary>
+    public void RestoreBindPose()
+    {
+        if (m_bindBones == null)
+            return;
+
+        for (int i = 0; i < m_bindBones.Length; i++)
+        {
+            if (m_bindBones[i] == null)
+                continue;
+
+            m_bindBones[i].localPosition = m_bindPositions[i];
+            m_bindBones[i].localRotation = m_bindRotations[i];
+        }
+    }
+
     // 직렬화되지 않는 Rigidbody 값을 인스턴스마다 다시 건다 — 상수 주석에 이유가 적혀 있다.
     private void ApplyRuntimePhysics()
     {
@@ -265,11 +377,32 @@ public class RagdollRig : MonoBehaviour
 
     // ---- 물리 on/off ----
 
-    /// <summary>전 뼈를 키네마틱(애니메이터가 포즈를 쥠) ↔ 물리 사이에서 전환한다.</summary>
+    /// <summary>
+    /// 전 뼈를 키네마틱(애니메이터가 포즈를 쥠) ↔ 물리 사이에서 전환한다.
+    ///
+    /// <b>물리로 넘기기 전에 트랜스폼을 PhysX에 밀어 넣는다</b> — 이 프로젝트는
+    /// <c>m_AutoSyncTransforms = 0</c>이라(ProjectSettings/DynamicsManager.asset) 트랜스폼에 쓴 값이
+    /// 액터로 <b>즉시 넘어가지 않기</b> 때문이다. 키네마틱인 동안은 트랜스폼이 진실이지만 동적으로
+    /// 바뀌는 순간 <b>액터가 진실</b>이 되므로, 그 사이에 동기화하지 않으면 물리가 <b>액터가 들고
+    /// 있던 옛 포즈</b>에서 출발한다.
+    ///
+    /// 실측: 사망 순간 살아있는 리그의 포즈를 시체로 복사한 직후 <c>복사잔차 0.0°</c>(트랜스폼은
+    /// 정확)인데 <c>물리반영차 81.7°</c>였다 — 세 피어 모두. 그래서 시체가 <b>바인드 포즈(T자)에서
+    /// 무너지기 시작했다.</b>
+    ///
+    /// <b>여기가 맞는 자리인 이유:</b> 같은 전이가 네 군데다(사망 시 시체 켜기, 정착 후 물리 복귀,
+    /// NPC 래그돌 진입, 얼린 시체 녹이기). 호출부마다 동기화를 끼우면 하나 빠뜨리는 순간 같은 증상이
+    /// 조용히 돌아온다.
+    ///
+    /// 반대 방향(동적 → 키네마틱)에는 필요 없다 — 그때는 물리가 트랜스폼을 쓰고 있었으므로 이미 맞다.
+    /// </summary>
     public void SetKinematic(bool kinematic)
     {
         if (m_bodies == null)
             return;
+
+        if (!kinematic)
+            Physics.SyncTransforms();
 
         for (int i = 0; i < m_bodies.Length; i++)
             SetBodyKinematic(m_bodies[i], kinematic);
@@ -320,14 +453,49 @@ public class RagdollRig : MonoBehaviour
     /// </summary>
     public void IgnoreCollisionWith(Collider other, bool ignore)
     {
-        if (other == null || m_bodies == null)
+        if (other == null || m_boneColliders == null)
             return;
 
-        for (int i = 0; i < m_bodies.Length; i++)
+        for (int i = 0; i < m_boneColliders.Length; i++)
         {
-            Collider bone = m_bodies[i].GetComponent<Collider>();
-            if (bone != null)
-                Physics.IgnoreCollision(bone, other, ignore);
+            if (m_boneColliders[i] != null)
+                Physics.IgnoreCollision(m_boneColliders[i], other, ignore);
+        }
+    }
+
+    /// <summary>
+    /// 뼈 콜라이더를 켜고 끈다 — <b>시체를 보이지 않게 하는 방식이 GameObject 비활성이 아닐 때</b> 필요하다.
+    ///
+    /// <b>왜 오브젝트를 끄지 않는가.</b> NGO는 <b>비활성 GameObject의 NetworkBehaviour를 스폰에서
+    /// 제외하고</b>(<c>NetworkObject.InvokeBehaviourNetworkSpawn</c>), 나중에 활성화돼도 만회하지
+    /// 않는다 — 소스 주석이 "not supported"라고 못박는다. 그래서 골반에 NetworkTransform을 얹는
+    /// 구성에서는 시체 오브젝트가 <b>항상 활성</b>이어야 하고, 숨기는 일은 렌더러와 콜라이더가 맡는다.
+    ///
+    /// ⚠ <b>콜라이더를 껐다 켜면 <see cref="IgnoreCollisionWith"/> 상태가 초기화된다</b>(Unity 사양) —
+    /// 다시 거는 책임은 소유자에게 있다.
+    /// </summary>
+    public void SetBoneCollidersEnabled(bool value)
+    {
+        if (m_boneColliders == null)
+            return;
+
+        for (int i = 0; i < m_boneColliders.Length; i++)
+        {
+            if (m_boneColliders[i] != null)
+                m_boneColliders[i].enabled = value;
+        }
+    }
+
+    /// <summary>이 리그가 구동하는 스킨드 메시를 켜고 끈다 — 시체를 보이거나 숨긴다.</summary>
+    public void SetSkinsEnabled(bool value)
+    {
+        if (m_skins == null)
+            return;
+
+        for (int i = 0; i < m_skins.Length; i++)
+        {
+            if (m_skins[i] != null)
+                m_skins[i].enabled = value;
         }
     }
 
@@ -482,43 +650,53 @@ public class RagdollRig : MonoBehaviour
             );
     }
 
-    /// <summary>지금 포즈를 블렌드 출발점으로 잡는다 — 애니메이터를 켜기 직전에 부른다.</summary>
-    public void BeginBlend()
-    {
-        if (m_allBones == null)
-            return;
+    // ---- 로컬 포즈 스냅샷 (#571 시체 얼림) ----
+    //
+    // <b>월드 캡처(<see cref="CapturePose"/>)와 용도가 다르다.</b> 저쪽은 "루트를 옮기는 동안 화면을
+    // 그대로 두기"라 <b>같은 피어 안에서</b> 잠깐 들고 있는 값이다. 이쪽은 <b>다른 피어로 보내는</b>
+    // 값이라 반드시 로컬(부모 기준)이어야 한다 — 원격의 루트는 다른 자리에 있으므로 월드 값을 보내면
+    // 자세가 통째로 어긋난다.
+    //
+    // 로컬 회전 + 골반 로컬 위치만으로 자세가 복원되는 것은 애니메이션과 같은 이유다: 뼈 길이(자식의
+    // 로컬 위치)는 관절이 유지하므로 바뀌지 않고, 나머지는 계층 수학이 만든다.
+    //
+    // ⚠ <b>순서가 피어마다 같아야 한다.</b> <see cref="m_bodies"/>는 같은 프리팹을 같은 방식으로
+    // 훑어(GetComponentsInChildren + 레이어 필터) 모으므로 모든 피어에서 같은 순서다. 그 전제가 깨지면
+    // 자세가 뒤섞이므로, 수집 방식을 바꿀 때 이 주석을 함께 볼 것.
 
-        for (int i = 0; i < m_allBones.Length; i++)
-            m_blendFromRotations[i] = m_allBones[i].localRotation;
-        m_blendFromHipsLocalPosition = m_hipsBone.localPosition;
-        m_blendTimer = 0f;
+    /// <summary>물리를 받는 뼈의 로컬 회전을 담아 간다 — 배열 길이는 <see cref="BoneCount"/>. (#571)</summary>
+    /// <returns>담을 수 있으면 참 — 길이가 안 맞으면 거짓(아무것도 쓰지 않는다).</returns>
+    public bool CaptureLocalPose(Quaternion[] rotations, out Vector3 hipsLocalPosition)
+    {
+        hipsLocalPosition = Vector3.zero;
+        if (m_bodies == null || rotations == null || rotations.Length != m_bodies.Length)
+            return false;
+
+        for (int i = 0; i < m_bodies.Length; i++)
+            rotations[i] = m_bodies[i].transform.localRotation;
+
+        hipsLocalPosition = m_hipsBone.localPosition;
+        return true;
     }
 
-    /// <summary>
-    /// 블렌드 한 프레임 — <b>LateUpdate에서</b> 부른다. 그 시점의 뼈 로컬값이 곧 애니메이터가 평가한
-    /// 포즈라, 저장해 둔 정착 포즈에서 그쪽으로 끌고 가면 "누운 자세에서 대기 자세로 스르륵"이 된다.
-    /// </summary>
-    /// <returns>블렌드가 끝났으면 참.</returns>
-    public bool TickBlend(float blendSeconds)
+    /// <summary>담아 온 로컬 회전을 그대로 입힌다 — 원격 피어가 얼린 자세를 재현할 때 쓴다. (#571)</summary>
+    /// <returns>입혔으면 참 — 길이가 안 맞으면 거짓.</returns>
+    public bool ApplyLocalPose(Quaternion[] rotations, Vector3 hipsLocalPosition)
     {
-        m_blendTimer += Time.deltaTime;
-        float t = blendSeconds <= 0f ? 1f : Mathf.Clamp01(m_blendTimer / blendSeconds);
+        if (m_bodies == null || rotations == null || rotations.Length != m_bodies.Length)
+            return false;
 
-        for (int i = 0; i < m_allBones.Length; i++)
-            m_allBones[i].localRotation = Quaternion.Slerp(
-                m_blendFromRotations[i],
-                m_allBones[i].localRotation,
-                t
-            );
+        // 골반이 먼저다 — 자식들의 월드 위치가 골반의 로컬 위치 위에 얹히기 때문.
+        m_hipsBone.localPosition = hipsLocalPosition;
 
-        m_hipsBone.localPosition = Vector3.Lerp(
-            m_blendFromHipsLocalPosition,
-            m_hipsBone.localPosition,
-            t
-        );
+        for (int i = 0; i < m_bodies.Length; i++)
+            m_bodies[i].transform.localRotation = rotations[i];
 
-        return t >= 1f;
+        return true;
     }
+
+    // 부활 블렌드는 <see cref="RagdollPoseBlend"/>로 나갔다 (#571). 이 리그는 시체에 붙어 있는데
+    // 블렌드는 살아있는 리그에서 일어나므로, 여기 두면 쓸 수 없는 자리에 코드가 남는다.
 
     // ---- 질의 ----
 

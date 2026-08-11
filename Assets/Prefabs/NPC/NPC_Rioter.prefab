@@ -34,6 +34,7 @@ GameObject:
   - component: {fileID: 7096859051911610651}
   - component: {fileID: 743135564513422629}
   - component: {fileID: 6459439272382896395}
+  - component: {fileID: 3111741763584215355}
   m_Layer: 7
   m_Name: NPC_Rioter
   m_TagString: Untagged
@@ -486,6 +487,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f12533783a6c6a048866da2db7235942, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcStandUp
+  ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &3111741763584215355
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 463f08c5cd8b41b40931fa44519b409b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcDeath
   ShowTopMostFoldoutHeaderGroup: 1
 --- !u!1001 &3679051956096844986
 PrefabInstance:

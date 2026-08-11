@@ -33,6 +33,7 @@ GameObject:
   - component: {fileID: 7096859051911610651}
   - component: {fileID: 743135564513422629}
   - component: {fileID: 6459439272382896395}
+  - component: {fileID: 3324404709527055785}
   m_Layer: 7
   m_Name: NPC_Streaker
   m_TagString: Untagged
@@ -471,6 +472,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcStandUp
   ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &3324404709527055785
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 463f08c5cd8b41b40931fa44519b409b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcDeath
+  ShowTopMostFoldoutHeaderGroup: 1
 --- !u!1001 &1485141803111560614
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -479,6 +493,38 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 3692059701882310837}
     m_Modifications:
+    - target: {fileID: 224003766134837954, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 1601423118495861919, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 2439493888978393302, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 3814851816428090088, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 3906038093274639839, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 3940853436374160376, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 4090926118975300694, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 4125562017735736742, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
     - target: {fileID: 4470224562400980863, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
       propertyPath: m_Controller
       value: 
@@ -530,6 +576,18 @@ PrefabInstance:
     - target: {fileID: 7559645307028321541, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8019493494360378042, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 8117300562840129541, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 9066751361833924771, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
+      propertyPath: m_Layer
+      value: 7
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

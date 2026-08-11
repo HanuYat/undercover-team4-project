@@ -40,6 +40,7 @@ public class NpcResistState : NpcStateBase
     private float m_repathTimer;
     private Vector3 m_lastChaseDestination;
     private float m_baseSpeed; // 진입 시점의 이동 속도 — 추격 질주 배율 적용 전 값(Exit에서 복원) (#254)
+    private float m_baseAcceleration; // 진입 시점의 가속도 — 개체차를 덮어쓰지 않게 실제 값을 기억한다 (#568 후속)
 
     private readonly NpcResistConfig m_config;
     private readonly NpcFleeConfig m_fleeConfig;
@@ -59,6 +60,18 @@ public class NpcResistState : NpcStateBase
         // 걸어오지 않고 달려온다 — 도주와 같은 질주 속도를 써서 공용 Run 클립이 발 미끄러짐 없이 맞는다 (#254)
         m_baseSpeed = m_owner.Agent.speed;
         m_owner.Agent.speed = m_baseSpeed * m_fleeConfig.SpeedMultiplier;
+
+        // 가속도를 올려 선회 반경을 좁힌다 (#568 후속). 속도만 3배로 올리면 반경이 속도의 제곱으로
+        // 커져(반경 = 속도²/가속도) 시민 기본값에서는 4.5m가 된다 — 정지 거리(1.6m)보다 크니
+        // 표적이 원을 그리면 안쪽으로 못 꺾고 같이 공전한다.
+        //
+        // 각속도(angularSpeed)를 올리지 않는 이유: 바로 아래에서 updateRotation을 꺼 몸을 직접 돌리므로
+        // (FaceTarget · AttackTurnSpeed) 각속도는 궤적에 관여하지 않는다.
+        //
+        // 오토브레이킹은 그대로 둔다 — 사거리 앞에 <b>서야</b> 하는 상태라, 끄면 표적을 밀고 지나간다.
+        // 표적 발밑까지 가는 NpcChaseState(#568)가 끄는 것과 목적이 반대다.
+        m_baseAcceleration = m_owner.Agent.acceleration;
+        m_owner.Agent.acceleration = m_config.ChaseAcceleration;
 
         // 표적을 직접 바라보도록 수동 회전할 것이므로 에이전트 자동 회전을 끈다 — 안 그러면 서로 방향을 다툰다 (#220)
         m_owner.Agent.updateRotation = false;
@@ -144,6 +157,7 @@ public class NpcResistState : NpcStateBase
         m_owner.Agent.updateRotation = true; // 이동 재개 시 에이전트가 다시 진행 방향으로 돈다
         m_owner.Agent.stoppingDistance = 0f; // 추격용으로 늘린 정지 거리를 원복 (#254)
         m_owner.Agent.speed = m_baseSpeed;   // 추격 질주 배율 원복 (#254)
+        m_owner.Agent.acceleration = m_baseAcceleration; // 조향 원복 — 배회 시민이 급가속으로 튀지 않게 (#568 후속)
     }
 
     /// <summary>

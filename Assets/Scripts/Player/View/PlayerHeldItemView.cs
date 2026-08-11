@@ -27,6 +27,31 @@ public class PlayerHeldItemView : NetworkBehaviour
     /// <summary>손 본 앵커 — 손에서 뻗어 나가는 표현(밧줄 선 #269 등)이 시작점으로 쓴다. 미지정이면 null.</summary>
     public Transform HandAnchor => m_handAnchor;
 
+    /// <summary>
+    /// 시체를 묶을 밧줄의 <b>물리 앵커</b> — <b>운반자의 루트</b>다.
+    /// (#365/#506 → #571에서 NPC 시체도 같은 지점을 쓴다)
+    ///
+    /// <b>한때 손이었다가 되돌렸다.</b> 손을 고른 이유는 흐느적임이었다 — 손은 걷기 애니메이션으로
+    /// 흔들리므로 매 걸음 장력이 변하고, 그 <b>가속 차이</b>가 팔다리를 흔든다(등속으로 끌면 전 뼈가
+    /// 같은 속도가 되어 관절이 느낄 것이 없고 몸이 한 덩어리로 미끄러진다).
+    ///
+    /// 문제는 그 흔들림이 <b>애니메이터가 만든다</b>는 것이다. 애니메이터는 피어마다 따로 평가되고,
+    /// 운반자가 원격이면 그 위에 NetworkTransform 보간값까지 얹힌다 — 즉 <b>앵커 위치가 피어마다
+    /// 다르다.</b> 전 피어가 각자 밧줄을 묶던 구조에서는 그것이 곧 <b>같은 관절에 다른 입력</b>이
+    /// 되어 견인 발산의 원인이 됐다.
+    ///
+    /// 루트는 스트리밍되는 값이라 전 피어가 같다. <b>흔들림은 따로 되찾을 문제로 미뤄 둔다</b> —
+    /// 되찾을 때는 애니메이터가 아니라 <b>스트리밍된 이동거리에서 위상을 뽑아</b> 결정론적으로
+    /// 합성해야 한다(<c>PlayerTowedMotion.m_dragTravel</c>이 이미 그 값을 누적한다).
+    ///
+    /// <b>보이는 줄은 그대로 손에서 나간다</b> — <see cref="RopeDragView"/>가 <see cref="HandAnchor"/>를
+    /// 직접 읽으므로 이 함수와 무관하다. 당기는 지점만 갈렸다.
+    ///
+    /// <b>여기 있는 이유:</b> 부르는 쪽이 둘로 갈렸다 — 동료 운반(<see cref="PlayerTowedMotion"/>)과
+    /// NPC 시체 끌기(<see cref="NpcRopeDrag"/>). 앵커의 주인이 이 컴포넌트이므로 판정도 여기 둔다.
+    /// </summary>
+    public static Transform ResolveRopeAnchor(Transform carrier) => carrier;
+
     // 장착 아이템 — 빈손이면 default(NetworkObjectId 0). 오너가 쓰고 전 피어가 읽는다.
     private readonly NetworkVariable<NetworkObjectReference> m_equipped =
         new NetworkVariable<NetworkObjectReference>(
@@ -42,9 +67,26 @@ public class PlayerHeldItemView : NetworkBehaviour
     // (휠을 빠르게 굴리면 늦게 끝난 옛 갱신이 최신 모델을 덮어쓴다)
     private int m_refreshVersion;
 
+    // ---- 사망 중 숨김 (#571) ----
+    //
+    // <b>왜 필요한가.</b> <see cref="m_handAnchor"/>는 <b>살아있는 리그</b>의 손이고
+    // (<c>Player/Root/.../Hand_R/HeldItemAnchor</c>), 사망 시 꺼지는 것은 살아있는 <b>스킨</b>뿐이다 —
+    // 뼈는 계속 켜져 있다(Animator의 아바타 바인딩이 경로 기반이라 끄면 애니메이션이 끊긴다).
+    // 그래서 몸은 사라지고 시체는 굴러가는데 <b>손에 든 아이템만 죽은 자리에 떠 있는다.</b>
+    //
+    // 표현 컴포넌트가 <c>IsRagdollActive</c>를 보고 스스로 물러나는 것이 이 기능의 관례다
+    // (<see cref="PlayerAnimationDriver"/>·<see cref="PlayerMovement"/>·<see cref="PlayerHeadLook"/>).
+    //
+    // <b>폴링인 이유</b>는 모델이 <b>비동기로</b> 만들어지기 때문이다(<see cref="RefreshHeldModelAsync"/>).
+    // 사망 시점에 밀어서 숨기면 그 뒤에 해석이 끝난 모델이 다시 나타난다 — 그래서 상태를 매 프레임 보고,
+    // 만들어지는 자리에서도 한 번 맞춘다.
+    private PlayerRagdoll m_ragdoll;
+    private bool m_hiddenByRagdoll;
+
     public override void OnNetworkSpawn()
     {
         m_itemUser = GetComponent<PlayerItemUser>();
+        m_ragdoll = GetComponentInParent<PlayerRagdoll>();
 
         if (m_handAnchor == null)
         {
@@ -141,6 +183,25 @@ public class PlayerHeldItemView : NetworkBehaviour
         ShowHeldModel(item);
     }
 
+    // 래그돌 상태를 따라간다 — 위 필드 주석의 사정으로 밀어 넣기가 아니라 폴링이다.
+    private void Update()
+    {
+        bool hide = m_ragdoll != null && m_ragdoll.IsRagdollActive;
+        if (hide == m_hiddenByRagdoll)
+            return;
+
+        m_hiddenByRagdoll = hide;
+        ApplyRagdollVisibility();
+    }
+
+    // 사망 중이면 손에 든 모델을 감춘다. 오너 화면에서는 이미 OwnBody 레이어로 가려져 있으므로
+    // 이 처리가 실제로 바꾸는 것은 <b>남들에게 보이는 3인칭 표시</b>다.
+    private void ApplyRagdollVisibility()
+    {
+        if (m_heldModelInstance != null)
+            m_heldModelInstance.SetActive(!m_hiddenByRagdoll);
+    }
+
     private void ShowHeldModel(ItemBase item)
     {
         m_heldModelInstance = Instantiate(item.HeldModelPrefab, m_handAnchor, false);
@@ -166,6 +227,10 @@ public class PlayerHeldItemView : NetworkBehaviour
                 LayerMask.NameToLayer("OwnBody")
             );
         }
+
+        // 사망 중에 해석이 끝나 늦게 만들어진 모델도 곧바로 감춘다 — Update를 한 프레임 기다리면
+        // 그동안 죽은 자리에 아이템이 번쩍인다.
+        ApplyRagdollVisibility();
     }
 
     private void ClearHeldModel()

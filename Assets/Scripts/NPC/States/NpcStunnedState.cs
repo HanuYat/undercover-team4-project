@@ -5,9 +5,10 @@ using UnityEngine;
 /// 지속 시간 동안 완전 무방비로 멈추며, 이 동안 수갑을 채우면 반응 없이 즉시 연행된다.
 /// 시간이 지나면 일어나(#269 StandUp 모션) 스스로 도주한다 — 무력화가 풀린 대상은 그대로 서 있지
 /// 않는다(#269 확정). #366 결정 5로 배회 복귀에 잠시 바뀌었다가 원복됐다.
-/// 체력 회복은 Exit()에서 처리한다 — 시간 경과뿐 아니라 수갑 채포 등 이 상태를 벗어나는
-/// 모든 경로를 덮어야 "HP 0인 채로 무적이 되는" 문제를 막을 수 있기 때문이다 (#366, Exit() 참고).
-/// 진입은 NpcStun.EnterStunned() — 테이저와 체력 0 도달(NpcHealth.SetHp)이 호출한다.
+///
+/// <b>이제 이 상태로 들어오는 경로는 넉백 착지 KO 하나뿐이다</b> (#571) — 테이저와 체력 임계
+/// 넉다운은 상태를 바꾸지 않는 오버레이(<see cref="NpcStun"/>)를 쓰고, 체력 0은 사망
+/// (<see cref="NpcState.Dead"/>)으로 간다. 체력 회복은 제거됐다 — 이유는 <see cref="Exit"/> 참고.
 /// </summary>
 public class NpcStunnedState : NpcStateBase
 {
@@ -18,7 +19,8 @@ public class NpcStunnedState : NpcStateBase
 
     private readonly NpcStunConfig m_config;
 
-    public NpcStunnedState(NpcController owner, NpcStunConfig config) : base(owner)
+    public NpcStunnedState(NpcController owner, NpcStunConfig config)
+        : base(owner)
     {
         m_config = config;
     }
@@ -27,9 +29,7 @@ public class NpcStunnedState : NpcStateBase
     {
         m_timer = 0f;
         m_standingUp = false;
-        m_owner.Agent.isStopped = true;
-        if (m_owner.Agent.isOnNavMesh)
-            m_owner.Agent.ResetPath();
+        SetAgentStopped(true);
     }
 
     public override void Tick()
@@ -53,29 +53,42 @@ public class NpcStunnedState : NpcStateBase
         // 때린 플레이어가 옆에 있으면 그쪽에서 도망친다.
         // 주변에 아무도 없으면 도주 상태가 스스로 배회로 돌려보낸다 — 아무도 없는 곳에 두고 온
         // NPC가 혼자 전력 질주하지 않는다.
-        // 체력 회복은 여기서 하지 않는다 — Exit()으로 옮겼다. 이유는 Exit() 주석 참고 (#366).
         if (m_timer >= m_config.StunSeconds)
             m_owner.Reaction.StartFlee(m_owner.Reaction.ThreatTarget);
     }
 
     public override void Exit()
     {
-        m_owner.Agent.isStopped = false;
+        SetAgentStopped(false);
 
-        // 체력 회복을 Tick()이 아니라 여기(Exit)에서 하는 이유 (#366) —
-        // Stunned를 벗어나는 경로가 "시간이 다 돼 Idle로 깨어난다"만이 아니다. 기절한 NPC에
-        // 수갑을 채우면 NpcStateRules.IsCapturable이 Stunned를 막지 않으므로(의도된 동작)
-        // Stunned → Captured로 곧장 전이하는데, 이 경로는 Tick()의 "시간 다 됨" 분기를 거치지
-        // 않는다. 회복을 그 분기에만 두면 이런 NPC는 HP 0인 채로 Captured에 남고, 이후
-        // NpcCustody.ReleaseFromCustody()(오검거 석방)나 NpcCapturedState의 인계 방치
-        // 타이머(Escape())가 Idle/Run으로 돌려보내도 둘 다 HP를 회복하지 않는다. 그러면
-        // SetHp의 "0에 도달하는 순간"에만 걸리는 엣지 트리거가 이미 0인 값에는 다시 걸리지
-        // 않아, 그 NPC는 라운드 내내 몇 대를 맞아도 두 번 다시 기절하지 않는 무적이 된다.
-        // Exit()은 상태 머신이 Stunned를 빠져나가는 모든 경로에서 호출되므로 수갑 경로까지
-        // 함께 덮인다.
+        // <b>체력을 회복하지 않는다</b> (#571). 여기는 원래 회복 지점이었고, 근거는 "이 상태를
+        // 벗어나는 경로가 시간 만료만이 아니다(수갑 채포·석방·방치 만료) — 어딘가에서 회복하지
+        // 않으면 HP 0인 채로 빠져나가고, 0 도달 엣지가 이미 0인 값에는 다시 걸리지 않아 그 NPC가
+        // 라운드 내내 무적이 된다"였다.
         //
-        // Enter()가 아니라 Exit()에 두는 이유: 기절해 있는 동안에는 HP가 0으로 유지돼야
-        // "기절 중 추가 타격이 기절 타이머를 리셋하지 않는다"는 성질이 성립하기 때문이다.
-        m_owner.Health.ServerRestoreHp();
+        // <b>그 근거가 사라졌다.</b> HP 0은 이제 깨어나는 상태가 아니라 사망(NpcState.Dead)이라
+        // 애초에 이 상태로 들어오지 않는다. 여기 남는 것은 넉백 착지 KO뿐인데 그쪽은 HP를 깎지도
+        // 않으므로 회복할 것이 없다.
+    }
+
+    /// <summary>
+    /// 에이전트 정지를 <b>꺼져 있거나 NavMesh 밖일 때는 건너뛴다</b> — 그 상태에서 <c>isStopped</c>를
+    /// 만지면 Unity가 에러를 뱉는다(<see cref="NpcStun.EnterStunned"/>·<c>NpcController.SetFrozen</c>과
+    /// 같은 가드, #557).
+    ///
+    /// 예전에는 가드 없이 대입했다. 진입·이탈 시점에 에이전트가 늘 살아 있었기 때문인데, 사망(#571)이
+    /// 그 전제를 깼다: 넉백 비행 중(에이전트 꺼짐 + 상태는 이미 Stunned)에 죽으면
+    /// <see cref="NpcDeath.ServerEnterDead"/>의 사망 전이가 <b>꺼진 에이전트를 든 채로</b> 이 Exit을
+    /// 부른다.
+    /// </summary>
+    private void SetAgentStopped(bool stopped)
+    {
+        UnityEngine.AI.NavMeshAgent agent = m_owner.Agent;
+        if (agent == null || !agent.enabled || !agent.isOnNavMesh)
+            return;
+
+        agent.isStopped = stopped;
+        if (stopped)
+            agent.ResetPath();
     }
 }
