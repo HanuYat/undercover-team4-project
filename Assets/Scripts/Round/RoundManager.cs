@@ -53,8 +53,6 @@ public enum RoundEndReason
 /// 네트워크 세션에서는 서버만 스폰을 트리거하고 판정을 받는다 — 클라이언트는 관여하지 않는다. (#56 패턴)
 /// (타이머도 마찬가지 — Phase가 InProgress가 되는 곳이 서버/오프라인뿐이라 클라에서는 돌지 않는다)
 /// </summary>
-// TODO: 라운드 페이즈·결과의 클라이언트 동기화는 본부 판정/결과 UI(#43) 연결 시 NetworkVariable/ClientRpc로 추가.
-//       (ArrestJudge와 동일 방침 — 지금은 서버 로컬 상태 + 로컬 이벤트로만 둔다)
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class RoundManager : CommonManagerBase
 {
@@ -101,8 +99,37 @@ public class RoundManager : CommonManagerBase
         }
     }
 
-    /// <summary>현재 라운드 단계. 서버(또는 오프라인)의 진실값 — 클라이언트 동기화는 #43에서.</summary>
-    public RoundPhase Phase { get; private set; } = RoundPhase.Preparing;
+    // 내부에서는 이 필드를 직접 읽는다 — Update처럼 클라에서도 도는 경로가 있어 프로퍼티로 읽으면 경고가 매 프레임 뜬다.
+    private RoundPhase m_phase = RoundPhase.Preparing;
+
+    // 클라 접근 경고는 세션당 한 번만 — 매 프레임 도는 사용처가 있어 그대로 두면 콘솔이 덮인다.
+    // (스폰 직전 구간의 RoundEndButton·SuddenEventManager·TipCallPhone이 IsAuthority를 !IsSpawned로 판단해 잠깐 통과한다)
+    private bool m_warnedClientPhaseRead;
+
+    /// <summary>
+    /// 이 피어가 라운드 진행의 권위(서버 또는 오프라인)인가 — <see cref="Phase"/>를 읽어도 되는 피어인지의 기준.
+    /// </summary>
+    public bool IsPhaseAuthority =>
+        m_networkManager == null || !m_networkManager.IsListening || m_networkManager.IsServer;
+
+    /// <summary>
+    /// 현재 라운드 단계. <b>서버(또는 오프라인) 전용 상태다</b> — 대입 지점이 전부 서버 경로라
+    /// 클라이언트에서는 영원히 Preparing이다. 동기화가 빠진 게 아니라, 클라가 필요한 값은 각자 따로
+    /// 동기화받는 설계다(남은 시간은 RoundTimerSync, 종료 버튼 활성은 RoundEndButton, 진행도는 JailZone.BountyTotal).
+    /// 클라에서 읽으면 경고를 남긴다 — 새 코드가 여기에 기대면 컴파일도 되고 예외도 없이 조용히 틀리기 때문이다.
+    /// </summary>
+    public RoundPhase Phase
+    {
+        get
+        {
+            if (!IsPhaseAuthority && !m_warnedClientPhaseRead)
+            {
+                m_warnedClientPhaseRead = true;
+                Debug.LogWarning("[라운드] Phase는 서버 전용 상태다 — 클라는 동기화된 값을 쓸 것", this);
+            }
+            return m_phase;
+        }
+    }
 
     /// <summary>라운드 종료 결과. 종료 전에는 None.</summary>
     public RoundResult Result { get; private set; } = RoundResult.None;
@@ -150,26 +177,17 @@ public class RoundManager : CommonManagerBase
     /// <summary>
     /// 라운드 종료로 게임플레이가 정지(freeze)돼야 하는지 — 플레이어 이동(PlayerMovement) 등이 읽는다. (라운드 종료 freeze)
     /// 종료(Ended)이면서 이 피어가 권위(서버/오프라인)일 때만 true.
-    /// 원격 클라이언트는 아직 라운드 종료를 동기화받지 못하므로(#43 전) 항상 false를 반환해 오판으로 멈추지 않게 한다.
+    /// 원격 클라이언트는 Phase를 받지 못하므로 항상 false — 오판으로 멈추지 않게 한다.
     /// </summary>
-    // TODO(#43): 페이즈 클라 동기화가 붙으면 클라이언트도 종료 시점에 정지하도록 확장한다.
-    public bool GameplayFrozen
-    {
-        get
-        {
-            if (m_networkManager != null && m_networkManager.IsListening && !m_networkManager.IsServer)
-                return false;
-            return Phase == RoundPhase.Ended;
-        }
-    }
+    public bool GameplayFrozen => IsPhaseAuthority && m_phase == RoundPhase.Ended;
 
     /// <summary>
-    /// 라운드 시작 이벤트 — Phase가 InProgress로 넘어가는 순간 발행. UI·연출(#43 등)이 구독한다.
+    /// 라운드 시작 이벤트 — Phase가 InProgress로 넘어가는 순간 발행. UI·연출이 구독한다.
     /// NPC 스폰·범인 배정은 이 시점에 이미 끝나 있다 (준비 단계로 옮김, #403).
     /// </summary>
     public event Action OnRoundStarted;
 
-    /// <summary>라운드 종료 이벤트 — 정산(#42 후속)·결과 UI(#43)·종료 피드백(#210)이 구독한다.</summary>
+    /// <summary>라운드 종료 이벤트 — 정산(#42 후속)·종료 피드백(#210)이 구독한다.</summary>
     public event Action<RoundResult, RoundEndReason> OnRoundEnded;
 
     private void OnEnable()
@@ -200,13 +218,14 @@ public class RoundManager : CommonManagerBase
         if (Assigner != null)
             Assigner.OnCriminalAssigned += HandleCriminalAssigned;
 
+        // 스포너보다 먼저 잡는다 — Phase 접근 가드(IsPhaseAuthority)가 이 참조로 피어를 판별한다
+        m_networkManager = NetworkManager.Singleton;
+
         if (Spawner == null)
         {
             Debug.LogWarning("RoundManager: NpcSpawner를 찾지 못해 라운드를 시작할 수 없다", this);
             return;
         }
-
-        m_networkManager = NetworkManager.Singleton;
 
         // 오프라인 실행 — 전원 입장을 기다릴 상대가 없다 (기존 단독 테스트 유지)
         if (m_networkManager == null)
@@ -226,13 +245,14 @@ public class RoundManager : CommonManagerBase
     // 서버 재시작 시 이전 라운드 상태를 초기화한다 — Phase·결과·진행도와 스포너 래치를 되돌려 재스폰을 허용한다.
     private void ResetForRestart()
     {
-        Phase = RoundPhase.Preparing;
+        m_phase = RoundPhase.Preparing;
         Result = RoundResult.None;
         EndReason = RoundEndReason.None;
         CriminalArrestCount = 0;
         RemainingSeconds = float.PositiveInfinity;
         m_endedTargetFund = -1;
         m_preparing = false;
+        m_warnedClientPhaseRead = false;
         Spawner.ResetSpawnState(); // IsSpawnCompleted 래치 해제 + 이전 NPC 정리 → StartSpawn 재동작
     }
 
@@ -245,7 +265,7 @@ public class RoundManager : CommonManagerBase
     /// </summary>
     public void BeginRoundPreparation()
     {
-        if (m_preparing || Phase != RoundPhase.Preparing)
+        if (m_preparing || m_phase != RoundPhase.Preparing)
             return;
 
         if (Spawner == null)
@@ -321,10 +341,10 @@ public class RoundManager : CommonManagerBase
     /// </summary>
     public void StartRound()
     {
-        if (Phase != RoundPhase.Preparing)
+        if (m_phase != RoundPhase.Preparing)
             return;
 
-        Phase = RoundPhase.InProgress;
+        m_phase = RoundPhase.InProgress;
         CriminalArrestCount = 0;
         SetNpcsFrozen(false); // 준비 중 정지시켜 둔 NPC를 풀어 준다 — 세계는 여기서부터 움직인다
         // 0 이하 = 무제한 — 타이머를 아예 돌리지 않는다 (밸런싱 전 테스트·본부 단독 씬용)
@@ -356,7 +376,7 @@ public class RoundManager : CommonManagerBase
     {
         // 제한시간 진행 (#103). Phase가 InProgress가 되는 곳이 서버/오프라인뿐이라
         // 클라이언트에서는 이 타이머가 돌지 않는다 — 라운드 진행은 서버 권위.
-        if (Phase != RoundPhase.InProgress || float.IsPositiveInfinity(RemainingSeconds))
+        if (m_phase != RoundPhase.InProgress || float.IsPositiveInfinity(RemainingSeconds))
             return;
 
         RemainingSeconds -= Time.deltaTime;
@@ -381,7 +401,7 @@ public class RoundManager : CommonManagerBase
     // 검거 판정 결과 수신 — 진범 검거를 할당량에 누적하고, 채우면 성공 종료. (서버/오프라인에서만 발행됨, ArrestJudge)
     private void HandleArrestJudged(ArrestResult result)
     {
-        if (Phase != RoundPhase.InProgress)
+        if (m_phase != RoundPhase.InProgress)
             return;
 
         // 진범 검거만 할당량에 누적 — 오검거는 라운드를 끝내지도, 할당량을 채우지도 않는다 (GDD 9-3).
@@ -408,7 +428,7 @@ public class RoundManager : CommonManagerBase
     /// <returns>실제로 종료했으면 true. 진행 중이 아니거나 목표 미달이면 false.</returns>
     public bool TryEndRoundManually()
     {
-        if (Phase != RoundPhase.InProgress)
+        if (m_phase != RoundPhase.InProgress)
             return false;
 
         if (!IsTargetMet)
@@ -433,7 +453,7 @@ public class RoundManager : CommonManagerBase
     /// </summary>
     public void ReportCriminalEscaped()
     {
-        if (Phase != RoundPhase.InProgress)
+        if (m_phase != RoundPhase.InProgress)
             return;
 
         // 할당량을 채우는 순간 라운드가 성공 종료되므로 InProgress 중에는 0 미만이 될 수 없지만,
@@ -449,7 +469,7 @@ public class RoundManager : CommonManagerBase
     // Phase가 InProgress가 되는 곳이 서버/오프라인뿐이라 클라이언트에서는 아래 가드에 걸려 아무 일도 하지 않는다.
     private void HandleAnyIncapacitatedChanged()
     {
-        if (Phase != RoundPhase.InProgress)
+        if (m_phase != RoundPhase.InProgress)
             return;
         if (!AreAllPlayersOutOfAction())
             return;
@@ -480,10 +500,10 @@ public class RoundManager : CommonManagerBase
     /// <summary>라운드를 종료한다 — 성공(할당량 달성)·실패(제한시간 초과/전멸) 공통 경로. (#42/#103)</summary>
     public void EndRound(RoundResult result, RoundEndReason reason)
     {
-        if (Phase == RoundPhase.Ended)
+        if (m_phase == RoundPhase.Ended)
             return;
 
-        Phase = RoundPhase.Ended;
+        m_phase = RoundPhase.Ended;
         Result = result;
         EndReason = reason;
         m_endedTargetFund = TargetFund; // 구독자(정산)가 읽기 전에 이번 라운드 값으로 고정 (#377)
