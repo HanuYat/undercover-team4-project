@@ -277,10 +277,6 @@ public class PlayerRagdoll : MonoBehaviour
     {
         CopyPose(m_liveBoneRoot, m_rig.BoneRoot);
 
-        // 출발 시점을 잰다 — 정착 후 값(1초 뒤)으로는 "바닥 아래에서 출발했는지"를 알 수 없다.
-        if (m_logSinkDiagnostics)
-            LogCorpseHandoff("사망 직후(물리 전)");
-
         SetCorpseVisible(true);
         if (m_liveSkin != null)
             m_liveSkin.SetActive(false);
@@ -288,6 +284,15 @@ public class PlayerRagdoll : MonoBehaviour
         m_rig.SetSkinsAlwaysVisible(true);
         IgnoreOwnCapsule(); // 뼈 콜라이더가 이제 켜졌다 — 걸 수 있는 첫 시점이다
         ReleaseBonesToPhysics();
+
+        // 출발 시점을 잰다 — 정착 후 값(1초 뒤)으로는 "바닥 아래에서 출발했는지"를 알 수 없다.
+        //
+        // <b>물리로 넘긴 뒤에 잰다.</b> 아직 물리 스텝은 돌지 않았으므로(다음 FixedUpdate) 여전히
+        // "물리 전"이고, 대신 <c>물리반영차</c>가 <see cref="RagdollRig.SetKinematic"/>의 동기화까지
+        // 거친 <b>실제 출발 포즈</b>를 가리킨다. 동기화 전에 재면 그 값이 항상 크게 나와
+        // (실측 81.7°) 고쳤는지 아닌지를 구분할 수 없다.
+        if (m_logSinkDiagnostics)
+            LogCorpseHandoff("사망 직후(물리 전)");
     }
 
     /// <summary>
@@ -309,6 +314,21 @@ public class PlayerRagdoll : MonoBehaviour
 
         if (m_logSinkDiagnostics)
             LogCorpseHandoff("부활 직후(블렌드 전)");
+
+        // 시체가 쉬는 동안 <b>뼈 길이를 프리팹 값으로 되돌린다</b> — 자세를 되돌리는 것이 아니다.
+        //
+        // 물리가 관절을 늘린 채 정착하면 그 길이가 뼈의 로컬 위치에 굳는데, 관절의
+        // <c>connectedAnchor</c>는 <b>바인드 포즈 기준으로 구워져 있다</b>(프리팹이
+        // <c>AutoConfigureConnectedAnchor = 1</c>). 그대로 두면 다음 사망이 <b>관절이 위반된 채</b>
+        // 출발해 사지가 고무처럼 늘어나며 바닥을 뚫는다(실측: 1차 0.0055m → 2차 0.0624m로 누적,
+        // 2차에서 발이 띄워 올린 바닥을 지나 허공에 매달렸다).
+        //
+        // <b><see cref="RagdollPose.Copy"/>의 짝이다.</b> 저쪽이 <b>리그 사이 전파</b>를 막고,
+        // 이쪽이 시체 <b>자신의 누적</b>을 끊는다. 하나만으로는 다른 경로로 되돌아온다.
+        //
+        // <b>맨 뒤여야 한다.</b> 위 CopyPose가 정착 포즈를 살아있는 리그로 넘긴 뒤여야 하고
+        // (블렌드의 출발점), 뼈는 ExitToAnimator가 이미 키네마틱으로 돌려놓아 물리에 덮이지 않는다.
+        m_rig.RestoreBindPose();
     }
 
     // 시체를 켜고/끄는 순간의 높이를 남긴다 — <b>출발점을 재는 것이 목적이다.</b>
@@ -332,9 +352,105 @@ public class PlayerRagdoll : MonoBehaviour
                 + $"시체골반localY={m_rig.Hips.localPosition.y:F3} "
                 + $"| 시체골반Y={m_rig.Hips.position.y:F3} "
                 + $"지면Y={(haveGround ? ground.y.ToString("F3") : "없음")} "
-                + $"시체최저뼈-지면={(haveGround ? (lowest - ground.y).ToString("F3") : "-")}",
+                + $"시체최저뼈-지면={(haveGround ? (lowest - ground.y).ToString("F3") : "-")} "
+                + DescribeTPose(),
             this
         );
+    }
+
+    // T포즈 시작 진단 — 세 가설을 한 줄에서 가른다. (시체가 바인드 포즈에서 시뮬레이션을 시작하는 증상)
+    //
+    //  ① <c>복사잔차</c> — 살아있는 리그와 시체 리그의 최대 회전 차. 복사 직후인데 크면
+    //     <b>복사가 트랜스폼에 안 닿은 것</b>이다.
+    //  ② <c>물리반영차</c> — 시체 리지드바디(PhysX 액터)와 트랜스폼의 최대 회전 차. 크면 복사는
+    //     닿았는데 <b>물리가 옛 포즈를 들고 있는 것</b>이고, 그 상태로 isKinematic을 풀면 거기서
+    //     출발한다. 이 프로젝트는 자동 동기화가 꺼져 있어(m_AutoSyncTransforms=0) 성립 가능한 경로다.
+    //  ③ <c>손간격</c> — 두 손 사이 거리(m). T포즈는 팔이 수평이라 <b>1.4m 안팎</b>, 평시 자세는
+    //     0.5m 안팎이다. ①②가 모두 0인데 이 값이 크면 <b>살아있는 리그 자체가 T포즈</b>였다는
+    //     뜻이고(원격에서 애니메이터가 컬링돼 뼈를 못 쓰는 §4의 사정), 고칠 곳이 완전히 달라진다.
+    private string DescribeTPose()
+    {
+        float copyDelta = RagdollPose.MaxAngleDelta(m_liveBoneRoot, m_rig.BoneRoot);
+
+        Transform liveLeft = FindLiveBone("Hand_L");
+        Transform liveRight = FindLiveBone("Hand_R");
+        string liveSpan =
+            liveLeft != null && liveRight != null
+                ? Vector3.Distance(liveLeft.position, liveRight.position).ToString("F2")
+                : "?";
+
+        float drift = m_rig.MaxBindPositionDrift;
+
+        return $"| 복사잔차={copyDelta:F1}° 물리반영차={m_rig.MaxActorTransformMismatch:F1}° "
+            + $"살아있는손간격={liveSpan} 살아있는기울기={DescribeLiveTilt()} "
+            + $"| 뼈길이드리프트={drift:F4}m{(drift > 0.01f ? " ⚠관절기준어긋남" : "")}";
+    }
+
+    // 살아있는 리그가 <b>서 있는 자세인가 누운 자세인가</b> — 골반→머리를 세로축과 견준 각도(도).
+    //
+    // <b>두 번째 사망이 깨지는 가설을 가르는 값이다.</b> 부활할 때 <see cref="HideCorpse"/>가 시체의
+    // <b>누운</b> 포즈를 살아있는 리그로 넘기고(블렌드 출발점), 그 뒤 애니메이터가 기상 자세로 덮어야
+    // 한다. 그런데 원격에서는 애니메이터가 컬링돼 뼈를 쓰지 않는다는 것이 이미 확인돼 있다
+    // (corpse-split §4 "추가 확정" — <c>애니메이터기록=False</c>, <c>컬링=CullUpdateTransforms</c>).
+    //
+    // 덮이지 않으면 살아있는 리그가 <b>누운 채로 남고</b>, 다음 사망에서 그 포즈가 그대로 시체로
+    // 복사된다 — <b>서 있는 루트 위치에 누운 자세</b>를 놓는 셈이라 뼈 절반이 지면 아래에서 출발하고,
+    // 관절이 늘어나며 박힌다.
+    //
+    //  · 0~30° — 서 있다 (정상)
+    //  · 60~90° — 누워 있다 (⚠ 위 가설)
+    private string DescribeLiveTilt()
+    {
+        Transform hips = FindLiveBone("Hips");
+        Transform head = FindLiveBone("Head");
+        if (hips == null || head == null)
+            return "?";
+
+        Vector3 spine = head.position - hips.position;
+        if (spine.sqrMagnitude < 1e-6f)
+            return "?";
+
+        float tilt = Vector3.Angle(spine, Vector3.up);
+        return $"{tilt:F0}°{(tilt > 45f ? " ⚠누워있음" : "")}";
+    }
+
+    // 골반 밑과 <b>가장 낮은 뼈 밑</b>에 각각 무엇이 있는지 남긴다 — <b>층이 겹친 실내에서 시체가
+    // 바닥을 뚫은 것인지 가른다.</b>
+    //
+    // 정착 판정이 쓰는 <see cref="TryGroundUnder"/>는 <b>골반에서만</b> 쏘고 거리도 짧다
+    // (<see cref="m_groundProbeDistance"/> 1.5m). 그래서 발이 윗층 바닥을 지나 아래로 내려가 있어도
+    // 로그의 <c>지면Y</c>는 계속 <b>윗층</b>을 가리킨다 — <c>최저뼈-지면</c>이 음수인 것이 "뚫었다"는
+    // 뜻인지 "그냥 눌려 있다"는 뜻인지 그 값만으로는 알 수 없다.
+    //
+    // 그래서 최저뼈에서 <b>아래로 길게</b> 한 번 더 쏜다. 맞은 것의 이름과 높이를 함께 남기면:
+    //  · <c>발밑</c>이 <c>골반밑</c>과 <b>같은 높이</b> → 뚫은 게 아니라 그 면에 눌려 있다
+    //  · <c>발밑</c>이 훨씬 <b>아래</b> → 발이 윗층 바닥을 <b>지나쳐</b> 아래층 위에 떠 있다 = 관통
+    //  · <c>발밑=없음</c> → 아래에 아무것도 없다(맵 밖·구멍)
+    private string DescribeFloorsUnder(Vector3 hips)
+    {
+        const float k_deepProbe = 12f; // 층 하나를 훌쩍 넘기는 길이 — 진단이므로 짧게 잡을 이유가 없다
+
+        string hipsHit = ProbeDown(hips, k_deepProbe);
+        string feetHit = ProbeDown(m_rig.LowestBonePosition, k_deepProbe);
+
+        return $"| 골반밑={hipsHit} 발밑={feetHit}";
+    }
+
+    // 아래로 쏘아 맞은 것의 이름과 높이를 문자열로 — 진단 전용이라 할당을 아끼지 않는다.
+    private string ProbeDown(Vector3 from, float distance)
+    {
+        const float k_lift = 0.05f; // 표면에 정확히 붙어 있을 때 자기 발밑을 놓치지 않게 살짝 띄운다
+
+        bool hit = Physics.Raycast(
+            from + Vector3.up * k_lift,
+            Vector3.down,
+            out RaycastHit info,
+            distance + k_lift,
+            m_groundMask,
+            QueryTriggerInteraction.Ignore
+        );
+
+        return hit ? $"{info.collider.name}@{info.point.y:F3}" : "없음";
     }
 
     // 살아있는 리그에서 뼈를 이름으로 찾는다 — 진단용. 살아있는 리그에는 리지드바디가 없으므로
@@ -504,9 +620,29 @@ public class PlayerRagdoll : MonoBehaviour
 
     /// <summary>
     /// 밧줄을 시체에 묶는다 — <see cref="PlayerTowedMotion.BeginDraggedFollow"/>가 래그돌인 대상에게만 부른다.
+    ///
+    /// <b>골반이 스트림으로 오면 권위 피어만 묶는다.</b> 이 갈림이 견인 발산의 근원을 없앤다:
+    /// 지금까지는 <c>BeginDraggedRpc</c>가 <c>SendTo.Everyone</c>이라 <b>전 피어가 각자 밧줄을
+    /// 묶었고</b>, 같은 관절에 <b>서로 다른 입력</b>이 들어갔다 — 앵커가 운반자의 손 본이라 그 위치가
+    /// 피어마다 다르게 계산되기 때문이다(원격이면 NetworkTransform 보간값 + 애니메이터가 얹는 걸음
+    /// 흔들림, 그것도 피어마다 따로 평가된다). 강성 1500 스프링에 다른 입력을 넣으면 다른 궤적이
+    /// 나오고, 그 차이를 보정이 쫓다가 미끄러짐으로 보였다.
+    ///
+    /// 골반을 직접 복제하면 <b>원격은 끌 이유가 없다</b> — 권위 피어가 굴린 결과가 그대로 온다.
+    /// 시뮬레이션이 하나뿐이므로 갈릴 것이 애초에 없다.
+    ///
+    /// ⚠ <b>골반 복제가 없으면 예전대로 전원이 묶어야 한다.</b> 그때는 원격 시체에 끄는 힘이 아예
+    /// 없어 물리를 켜 둬도 따라오지 않는다(<see cref="PlayerCarrier"/>의 RPC 주석). 그래서 조건이
+    /// <see cref="m_hipsIsNetworkSynced"/>이고, 배선을 빼면 자동으로 옛 동작으로 돌아간다.
     /// </summary>
-    /// <param name="carrier">운반자(밧줄을 쥔 쪽). 보통 손 앵커다.</param>
-    public void BeginRopePull(Transform carrier) => m_rope?.Attach(carrier);
+    /// <param name="carrier">운반자(밧줄을 쥔 쪽).</param>
+    public void BeginRopePull(Transform carrier)
+    {
+        if (m_hipsIsNetworkSynced && !HasMoveAuthority)
+            return;
+
+        m_rope?.Attach(carrier);
+    }
 
     /// <summary>밧줄을 푼다 — 내려놓기·부활·운반자 소실.</summary>
     public void EndRopePull() => m_rope?.Detach();
@@ -657,23 +793,45 @@ public class PlayerRagdoll : MonoBehaviour
         m_sinkLogTimer += Time.deltaTime;
         if (m_sinkLogTimer < 1f)
             return;
+
         m_sinkLogTimer = 0f;
 
         Vector3 hips = m_rig.Hips.position;
         bool haveGround = TryGroundUnder(hips, out Vector3 ground);
         float lowest = m_rig.LowestBoneY;
 
+        // 골반에서 가장 낮은 뼈까지의 <b>수직 거리</b> — 관절이 늘어났는지를 직접 재는 값이다.
+        // 골격이 물리적으로 낼 수 있는 값에는 상한이 있다(골반에서 발끝까지, 약 0.9m). 이걸 넘으면
+        // 자세가 이상한 것이 아니라 <b>관절이 위반된 것</b>이고, A안에서는 2.75m가 나왔다.
+        float stretch = hips.y - lowest;
+
+        // 루트와 골반의 <b>수평</b> 거리 — 이름표·상호작용이 시체와 얼마나 어긋나는지를 그대로 재는 값이다.
+        // 이름표는 루트에 매달려 있고 몸은 골반을 따르므로, 이 값이 곧 화면에서 보이는 간격이다.
+        // 높이는 뺀다 — 정착 후 루트는 캡슐 밑면(지면)이고 골반은 그 위라 상시 차이가 나는 것이 정상이다.
+        Vector3 rootGap = m_root.position - hips;
+        rootGap.y = 0f;
+
         Debug.Log(
-            $"[래그돌 침하] 권한={HasMoveAuthority} 동기화={m_hipsIsNetworkSynced} 상태={m_state} "
+            $"[래그돌 침하] 권한={HasMoveAuthority} 모드={DescribeHipsMode()} 상태={m_state} "
                 + $"| 골반Y={hips.y:F3} 지면Y={(haveGround ? ground.y.ToString("F3") : "없음")} "
                 + $"골반-지면={(haveGround ? (hips.y - ground.y).ToString("F3") : "-")} "
                 + $"| 최저뼈Y={lowest:F3} "
                 + $"최저뼈-지면={(haveGround ? (lowest - ground.y).ToString("F3") : "-")} "
+                + $"| 골반↔최저뼈={stretch:F3}{(stretch > 1.2f ? " ⚠관절위반" : "")} "
+                + $"| 루트↔골반수평={rootGap.magnitude:F3}{(rootGap.magnitude > 0.3f ? " ⚠이름표어긋남" : "")} "
                 + $"| 골반키네마틱={(m_rig.HipsBody != null ? m_rig.HipsBody.isKinematic.ToString() : "?")} "
-                + $"평균속도={m_rig.AverageSpeed:F2}",
+                + $"평균속도={m_rig.AverageSpeed:F2} "
+                + $"| 뼈콜라이더={m_rig.EnabledBoneColliderCount}/{m_rig.BoneCount} "
+                + $"캡슐={(m_controller != null && m_controller.enabled ? "켜짐⚠" : "꺼짐")} "
+                + DescribeFloorsUnder(hips),
             this
         );
     }
+
+    // 골반이 스트림의 소유물인가 — 호스트·클라 로그를 나란히 놓을 때 이 한 칸이 기준이 된다.
+    // 배선(골반 NetworkTransform)에서 읽으므로, 프리팹을 바꾸면 로그도 따라온다.
+    private string DescribeHipsMode() =>
+        m_hipsIsNetworkSynced ? "골반복제(권위 전용 밧줄)" : "전부동적+정렬";
 
     // ---- yaw 진단 (m_rootYawOffset 캘리브레이션) ----
 
@@ -906,7 +1064,8 @@ public class PlayerRagdoll : MonoBehaviour
         //
         // <b>골반을 직접 복제하면 이 보정을 끈다</b> — 궤적의 주인이 루트에서 골반으로 넘어가므로
         // 좁힐 잔차가 없고, 켜 두면 스트림이 놓은 골반을 매 프레임 루트 쪽으로 밀어 서로 싸운다.
-        // (그래서 이 안이 성립하면 이 함수는 통째로 사라진다)
+        // 지금 프리팹이 그 배선이라 이 함수는 <b>실제로는 돌지 않는다</b> — 남겨 둔 것은 골반 복제를
+        // 빼면 곧바로 옛 동작으로 돌아갈 수 있게 하기 위해서다.
         if (!m_hipsIsNetworkSynced
             && !HasMoveAuthority
             && (m_state == RagdollState.Ragdoll || m_state == RagdollState.Settled))

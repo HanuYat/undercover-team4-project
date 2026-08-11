@@ -28,36 +28,29 @@ public class PlayerHeldItemView : NetworkBehaviour
     public Transform HandAnchor => m_handAnchor;
 
     /// <summary>
-    /// 시체를 묶을 밧줄의 <b>물리 앵커</b> — 운반자의 손이다. 루트가 아니다. 못 찾으면 루트로 폴백한다
-    /// (테스트 구성·아이템 뷰 없는 경우). (#365/#506 → #571에서 NPC 시체도 같은 지점을 쓴다)
+    /// 시체를 묶을 밧줄의 <b>물리 앵커</b> — <b>운반자의 루트</b>다.
+    /// (#365/#506 → #571에서 NPC 시체도 같은 지점을 쓴다)
     ///
-    /// <b>왜 손인가.</b> 세 가지가 한꺼번에 해결된다:
-    /// <list type="bullet">
-    ///   <item><b>보이는 밧줄과 당기는 밧줄이 같아진다.</b> <see cref="RopeDragView"/>는 이미
-    ///   <see cref="HandAnchor"/>에서 줄을 그리는데 물리는 발밑(루트)에서 당기고 있었다 — 줄은 손에서
-    ///   나가는데 몸은 발밑으로 끌려가는 그림이었다</item>
-    ///   <item><b>당기는 방향에 위 성분이 생긴다</b>(손 높이 ≈1.1m). 상체가 들리고 다리가 끌리는,
-    ///   시체를 끄는 그림이 물리로 저절로 나온다</item>
-    ///   <item><b>손은 걷기 애니메이션으로 흔들린다</b> — 매 걸음 장력이 변하니 지속적인 작은 충격이
-    ///   생긴다. 이게 <b>팔다리가 흐느적거리게 만드는 것</b>이다</item>
-    /// </list>
+    /// <b>한때 손이었다가 되돌렸다.</b> 손을 고른 이유는 흐느적임이었다 — 손은 걷기 애니메이션으로
+    /// 흔들리므로 매 걸음 장력이 변하고, 그 <b>가속 차이</b>가 팔다리를 흔든다(등속으로 끌면 전 뼈가
+    /// 같은 속도가 되어 관절이 느낄 것이 없고 몸이 한 덩어리로 미끄러진다).
     ///
-    /// 마지막 항목이 핵심이다. 등속으로 끌면 잠깐 뒤 전 뼈가 같은 속도가 되어 뼈 사이 상대 운동이
-    /// 0이 되고, 관절이 느낄 것이 없어 <b>한 덩어리로 미끄러진다</b>. 흐느적임은 움직임이 아니라
-    /// <b>가속 차이</b>가 만든다 — 벽에 부딪힐 때만 흔들리던 것이 그 증거였다.
+    /// 문제는 그 흔들림이 <b>애니메이터가 만든다</b>는 것이다. 애니메이터는 피어마다 따로 평가되고,
+    /// 운반자가 원격이면 그 위에 NetworkTransform 보간값까지 얹힌다 — 즉 <b>앵커 위치가 피어마다
+    /// 다르다.</b> 전 피어가 각자 밧줄을 묶던 구조에서는 그것이 곧 <b>같은 관절에 다른 입력</b>이
+    /// 되어 견인 발산의 원인이 됐다.
+    ///
+    /// 루트는 스트리밍되는 값이라 전 피어가 같다. <b>흔들림은 따로 되찾을 문제로 미뤄 둔다</b> —
+    /// 되찾을 때는 애니메이터가 아니라 <b>스트리밍된 이동거리에서 위상을 뽑아</b> 결정론적으로
+    /// 합성해야 한다(<c>PlayerTowedMotion.m_dragTravel</c>이 이미 그 값을 누적한다).
+    ///
+    /// <b>보이는 줄은 그대로 손에서 나간다</b> — <see cref="RopeDragView"/>가 <see cref="HandAnchor"/>를
+    /// 직접 읽으므로 이 함수와 무관하다. 당기는 지점만 갈렸다.
     ///
     /// <b>여기 있는 이유:</b> 부르는 쪽이 둘로 갈렸다 — 동료 운반(<see cref="PlayerTowedMotion"/>)과
     /// NPC 시체 끌기(<see cref="NpcRopeDrag"/>). 앵커의 주인이 이 컴포넌트이므로 판정도 여기 둔다.
     /// </summary>
-    public static Transform ResolveRopeAnchor(Transform carrier)
-    {
-        if (carrier == null)
-            return null;
-
-        PlayerHeldItemView held = carrier.GetComponent<PlayerHeldItemView>();
-        Transform hand = held != null ? held.HandAnchor : null;
-        return hand != null ? hand : carrier;
-    }
+    public static Transform ResolveRopeAnchor(Transform carrier) => carrier;
 
     // 장착 아이템 — 빈손이면 default(NetworkObjectId 0). 오너가 쓰고 전 피어가 읽는다.
     private readonly NetworkVariable<NetworkObjectReference> m_equipped =

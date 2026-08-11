@@ -25,8 +25,27 @@ public static class RagdollPose
     /// <summary>
     /// <paramref name="from"/> 이하의 포즈를 <paramref name="to"/> 이하로 복사한다.
     ///
-    /// 회전만이 아니라 <b>로컬 위치까지</b> 옮긴다. 뼈 길이는 두 리그에서 같으니 대부분 같은 값을
-    /// 다시 쓰는 셈이지만, 골반만 예외로 골라낼 필요가 없어져 코드가 단순해진다.
+    /// <b>관절이 달린 뼈에는 로컬 위치를 옮기지 않는다 — 그건 자세가 아니라 뼈 길이다.</b>
+    ///
+    /// 예전에는 위치까지 통째로 옮겼고, 근거는 "뼈 길이는 두 리그에서 같으니 같은 값을 다시 쓰는
+    /// 셈"이었다. <b>그 전제가 물리에서 깨진다.</b> 관절이 늘어난 채 정착하면
+    /// <see cref="RagdollRig.RestoreCapturedPose"/>가 <b>월드</b> 포즈를 쓰므로 늘어난 길이가
+    /// <c>localPosition</c>에 굳고, 부활·재사망의 복사가 그것을 두 리그 사이로 실어 나른다.
+    /// 관절의 <c>connectedAnchor</c>는 <b>바인드 포즈 기준으로 구워져 있으므로</b>(프리팹이
+    /// <c>AutoConfigureConnectedAnchor = 1</c>) 어긋난 골격을 물리에 넘기면 <b>첫 스텝부터 관절이
+    /// 위반된 채 출발한다.</b>
+    ///
+    /// 실측: 1차 사망 <c>0.0055m</c> → 2차 사망 <c>0.0624m</c>로 <b>사망마다 누적</b>됐고, 2차
+    /// 사망에서 사지가 고무처럼 늘어나며 바닥을 뚫었다.
+    ///
+    /// <b>왜 "관절이 있는 뼈"가 기준인가.</b> 관절이 위치를 구속하는 뼈만 길이가 의미를 갖는다.
+    /// 관절이 없는 뼈는 둘뿐인데 둘 다 위치가 <b>진짜 자세</b>다 — 리그 최상단(리그 자체의 자리)과
+    /// 골반(래그돌 루트라 물리가 실제로 옮긴다). 리지드바디가 없는 뼈(손가락·목 등)는 물리가
+    /// 건드리지 않아 항상 바인드 값이므로 옮겨도 무해하다.
+    ///
+    /// ⚠ <b>이것만으로는 부족하다.</b> 시체 자신이 정착 때 늘어난 길이는 그대로 남으므로,
+    /// 쉬는 시점에 <see cref="RagdollRig.RestoreBindPose"/>로 되돌려야 누적이 끊긴다.
+    /// 두 조치는 짝이다 — 이쪽은 <b>리그 사이 전파</b>를, 저쪽은 <b>자기 누적</b>을 막는다.
     /// </summary>
     /// <returns>
     /// 실제로 값을 쓴 뼈 수. 호출부는 이 값을 기대치와 대조할 것 — <b>0이나 부족한 값이 조용히
@@ -37,7 +56,12 @@ public static class RagdollPose
         if (from == null || to == null)
             return 0;
 
-        to.localPosition = from.localPosition;
+        // <b>양쪽 다 본다.</b> 관절은 시체 리그에만 있고(살아있는 리그는 Rigidbody·Joint가 전부
+        // 제거돼 있다) 복사 방향은 둘이다 — 사망은 살아있는→시체, 부활은 시체→살아있는.
+        // 받는 쪽만 검사하면 부활 방향에서 그냥 통과해, 늘어난 길이가 살아있는 리그로 세탁된다.
+        if (from.GetComponent<Joint>() == null && to.GetComponent<Joint>() == null)
+            to.localPosition = from.localPosition;
+
         to.localRotation = from.localRotation;
 
         int copied = 1;
@@ -50,6 +74,38 @@ public static class RagdollPose
         }
 
         return copied;
+    }
+
+    /// <summary>
+    /// 두 리그의 <b>최대 로컬 회전 차</b>(도) — <see cref="Copy"/>가 실제로 닿았는지 재는 진단용.
+    ///
+    /// 복사 직후에 0에 가깝지 않으면 복사가 실패한 것이다. <see cref="Copy"/>의 반환값은 <b>방문한
+    /// 뼈 수</b>라 "돌긴 돌았는데 값이 안 맞는" 경우를 못 잡는데, 이 값은 결과를 직접 본다.
+    ///
+    /// 순회는 <see cref="Copy"/>와 같다 — <b>받는 쪽에서 몰고 가며 이름으로 짝짓는다.</b>
+    /// 짝이 없는 자식(장착 아이템 모델 등)은 방문하지 않으므로 결과에 섞이지 않는다.
+    /// </summary>
+    /// <returns>최대 각도 차(도). 어느 한쪽이 null이면 -1.</returns>
+    public static float MaxAngleDelta(Transform from, Transform to)
+    {
+        if (from == null || to == null)
+            return -1f;
+
+        float worst = Quaternion.Angle(from.localRotation, to.localRotation);
+
+        for (int i = 0; i < to.childCount; i++)
+        {
+            Transform target = to.GetChild(i);
+            Transform source = FindChild(from, target.name);
+            if (source == null)
+                continue;
+
+            float child = MaxAngleDelta(source, target);
+            if (child > worst)
+                worst = child;
+        }
+
+        return worst;
     }
 
     // 직속 자식만 이름으로 찾는다 — Transform.Find는 경로를 해석하므로 이름에 '/'가 없다는 전제가

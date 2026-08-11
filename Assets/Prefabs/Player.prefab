@@ -6540,7 +6540,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3828970125
+  GlobalObjectIdHash: 152330586
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -7421,6 +7421,8 @@ MonoBehaviour:
   m_alignSnapDistance: 2.5
   m_blendSeconds: 0.4
   m_logRevivalYaw: 1
+  m_logSinkDiagnostics: 1
+  m_restoreBindPoseOnRevive: 1
   m_liveSkin: {fileID: 6088151059564412096}
   m_liveBoneRoot: {fileID: 575005799806648508}
 --- !u!1 &5606094146414363504

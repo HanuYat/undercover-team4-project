@@ -5693,6 +5693,14 @@ PrefabInstance:
     m_TransformParent: {fileID: 1326152962}
     m_Modifications:
     - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_eventEntries.Array.data[0].enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_eventEntries.Array.data[2].enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_eventEntries.Array.data[3].enabled
       value: 0
       objectReference: {fileID: 0}
@@ -19888,7 +19896,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: df5ce1efead3d784895dc53f93f9ebef, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ArrestJudge
-  m_jailZone: {fileID: 8298609921114679384}
 --- !u!4 &461460872
 Transform:
   m_ObjectHideFlags: 0
