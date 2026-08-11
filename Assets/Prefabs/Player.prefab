@@ -6452,6 +6452,7 @@ GameObject:
   - component: {fileID: 2162339742825752407}
   - component: {fileID: 6647406807435162902}
   - component: {fileID: 4702139356804014045}
+  - component: {fileID: 511173363813317716}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -6540,7 +6541,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 152330586
+  GlobalObjectIdHash: 3828970125
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -7424,6 +7425,28 @@ MonoBehaviour:
   m_logSinkDiagnostics: 1
   m_liveSkin: {fileID: 6088151059564412096}
   m_liveBoneRoot: {fileID: 575005799806648508}
+--- !u!114 &511173363813317716
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2243723e77768cb4489de8f2082c540e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerSpectateCamera
+  m_pivotHeight: 0.6
+  m_distance: 3.5
+  m_minPitch: -10
+  m_maxPitch: 70
+  m_enterPitch: 20
+  m_blendSpeed: 4
+  m_probeRadius: 0.25
+  m_collisionMask:
+    serializedVersion: 2
+    m_Bits: 1
 --- !u!1 &5606094146414363504
 GameObject:
   m_ObjectHideFlags: 0
