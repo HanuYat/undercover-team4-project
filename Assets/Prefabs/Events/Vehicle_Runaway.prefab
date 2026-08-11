@@ -122,13 +122,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RunawayVehicle
   ShowTopMostFoldoutHeaderGroup: 1
   m_speed: 22
+  m_runDistance: 40
+  m_returnSpeed: 8
+  m_turnSpeed: 120
   m_hitBoxSize: {x: 2.2, y: 1.8, z: 4.5}
   m_damage: 120
   m_knockbackForward: 14
   m_knockbackUp: 6
   m_hornDistanceBeforePass: 70
+  m_warningHornInterval: 0.7
+  m_headlights: []
+  m_blinkFrequency: 4
   m_hornFx: 8
-  m_engineSound: 16
+  m_engineSound: 17
 --- !u!82 &8496479357934771959
 AudioSource:
   m_ObjectHideFlags: 0

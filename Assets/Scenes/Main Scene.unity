@@ -60881,7 +60881,7 @@ MonoBehaviour:
     Sound: 14
   - Id: 8
     Effect: 0
-    Sound: 17
+    Sound: 18
 --- !u!4 &1496433913 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4744096329500722, guid: e5ea23645ddbb58408bd3bb44e10f168, type: 3}
