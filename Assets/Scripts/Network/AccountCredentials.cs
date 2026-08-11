@@ -50,7 +50,7 @@ public static class AccountCredentials
     private const string k_validationPrefix = "Title.AccountValidation.";
     private const string k_errorPrefix = "Title.AccountError.";
 
-    /// <summary>UI 입력 상한의 단일 출처 — AuthPanel이 characterLimit에 쓴다. (#249의 NicknameRules.MaxLength와 같은 방식)</summary>
+    /// <summary>UI 입력 상한의 단일 출처 — AuthGatePanel이 characterLimit에 쓴다. (#249의 NicknameRules.MaxLength와 같은 방식)</summary>
     public static int MaxUsernameLength => k_maxUsernameLength;
     public static int MaxPasswordLength => k_maxPasswordLength;
 

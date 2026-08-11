@@ -233,6 +233,7 @@ GameObject:
   - component: {fileID: 3586984269218275667}
   - component: {fileID: 2438122290437966008}
   - component: {fileID: 3954373945055400020}
+  - component: {fileID: 7712004918233045611}
   m_Layer: 0
   m_Name: SoundManager
   m_TagString: Untagged
@@ -282,6 +283,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BgmPlayer
   m_fadeSeconds: 1.2
+--- !u!114 &7712004918233045611
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7826145428637579171}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1fc5040a87c2e23489d41cb4b85f595d, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::UiClickSound
+  m_clip: 16
 --- !u!1 &8772099138944498732
 GameObject:
   m_ObjectHideFlags: 0

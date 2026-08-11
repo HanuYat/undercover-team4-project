@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 계정 조작 확인창 (#444) — AuthPanel의 연동/계정 전환이 띄운다.
+/// 계정 조작 확인창 (#444) — AuthGatePanel의 회원가입(익명 → 정식 승격)이 띄운다.
 /// UGS는 아이디/비번 제거를 지원하지 않아 연동은 편도 결정이다 (account-link.md 결정 (e)).
 /// 되돌릴 수 없다는 사실과 **실제로 보낼 아이디**를 확정 전에 보여주는 것이 이 창의 전부다 —
 /// 연동·전환 자체는 다시 구현하지 않고 넘겨받은 콜백을 부른다 (LeaveConfirmPanel과 같은 관례).

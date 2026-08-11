@@ -69,7 +69,7 @@ public readonly struct LocalizedMessage
 
 /// <summary>
 /// 사용자에게 보일 사유를 문장이 아니라 <see cref="LocalizedMessage"/>로 나르는 예외 (#497).
-/// 예외 메시지를 그대로 화면에 띄우던 자리(<see cref="AuthBootstrap"/> → <see cref="AuthPanel"/>) 전용이다.
+/// 예외 메시지를 그대로 화면에 띄우던 자리(<see cref="AuthBootstrap"/> → <see cref="AuthGatePanel"/>) 전용이다.
 /// <see cref="Exception.Message"/>에는 키를 담는다 — 로그에서 어느 문구인지 보이게 하되 번역은 하지 않는다.
 /// </summary>
 public class LocalizedMessageException : Exception

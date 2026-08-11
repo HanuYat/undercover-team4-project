@@ -13,8 +13,8 @@ using UnityEngine;
 ///
 /// <b>씬 전환을 넘어 이어지는 근거는 상주다</b> — <see cref="SoundManager"/>가 AppBootstrap에 있어
 /// (DontDestroyOnLoad) 이 컴포넌트도 함께 산다. 씬과 함께 죽으면 곡도 끊긴다.
-/// 씬이 바뀌면 씬 표대로 곡을 갈되 <b>같은 곡이면 건드리지 않는다</b> — 타이틀→로비처럼 곡을 공유하는
-/// 구간에서 처음부터 다시 시작하면 전환이 오히려 드러난다.
+/// 씬이 바뀌면 씬 표대로 곡을 갈되 <b>같은 곡이면 건드리지 않는다</b> — 곡을 공유하는 두 씬 사이에서
+/// 처음부터 다시 시작하면 전환이 오히려 드러난다.
 /// </summary>
 public class BgmPlayer : MonoBehaviour
 {
