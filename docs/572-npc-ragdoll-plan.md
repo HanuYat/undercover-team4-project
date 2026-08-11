@@ -8,9 +8,17 @@
 > 뒤늦게 잡은 버그 셋을 반영하지 않은 채였다. [PR #599](https://github.com/hyunjin0814/undercover-team4-project/pull/599)에서
 > NPC 프리팹의 리그를 일단 떼어냈고(`0bd6990`), 이 문서는 **무엇을 반영해서 다시 붙일지**를 정리한다.
 
+> ⚠ **2026-08-11 갱신 — 범위가 커졌다.** **기절(`NpcStun`)에도 래그돌을 태우고 일정 시간 뒤 NavMesh를
+> 복구하기로 정했다.** 그건 곧 **NPC에 부활이 생긴다**는 뜻이고, 아래 §0이 "작업량이 작다"고 판단한
+> 근거 두 개가 정확히 *"NPC엔 부활이 없다"*에 기대고 있었다. 뒤집힌 문단은 **지우지 않고 표시만
+> 해 둔다** — 어떤 근거가 왜 무효가 됐는지가 다음 판단의 재료다. 새로 생긴 작업은 §2에 있다.
+
 ---
 
-## 0. 결론 — 이슈 본문이 시사하는 것보다 작업량이 작다
+## 0. ~~결론 — 이슈 본문이 시사하는 것보다 작업량이 작다~~ → 기절을 태우면 다시 커진다
+
+> **아래 판단은 "사망만 태운다"를 전제로 한 것이다. 전제가 바뀌어 결론이 뒤집혔다** — 이 절 끝의
+> 갱신된 표를 볼 것.
 
 이슈의 "할 일" 대부분(`NpcRagdoll` 신규, NavMesh 처리, Animator 역할 분리, 서버 권위, 얼림 메커니즘)은
 **#571에서 이미 끝나 있고 코드도 남아 있다.** 남은 것은 플레이어 쪽 버그 수정 세 개를 NPC에도
@@ -19,8 +27,22 @@
 | | 플레이어 쪽 수정 | NPC에 필요한가 |
 |---|---|---|
 | ① `Physics.SyncTransforms()` | `SetKinematic(false)` 앞에 추가 (T포즈 시작 방지) | **이미 적용됨.** `RagdollRig.SetKinematic`(공유 코드)에 들어 있어 `NpcRagdoll`도 자동으로 받는다. 손댈 것 없음 |
-| ② 뼈 길이 드리프트 방지 (`RagdollPose.Copy` + `RestoreBindPose`) | 살아있는 리그 ↔ 시체 리그를 오가며 뼈 길이가 누적되던 버그 | **해당 없음.** 아래 §1-2 |
+| ② 뼈 길이 드리프트 방지 (`RagdollPose.Copy` + `RestoreBindPose`) | 살아있는 리그 ↔ 시체 리그를 오가며 뼈 길이가 누적되던 버그 | ~~해당 없음~~ → **절반이 필요하다.** 아래 §1-2 |
 | ③ 밧줄 권위 전용 + 골반 복제 | 전 피어가 각자 밧줄을 묶어 발산하던 버그 | **포팅 필요.** 아래 §1-3 |
+
+### 갱신된 전체 그림
+
+| | 무엇 | 상태 |
+|---|---|---|
+| ① `SyncTransforms` | — | 공짜 (§1-1) |
+| ② 뼈 길이 드리프트 | 기상 시 `RestoreBindPose()` | **필요** (§1-2) |
+| ③ 밧줄 권위 전용 + 골반 복제 | `NpcRagdoll` 안에서 가르기 | 필요 (§1-3) |
+| ④ **기절 래그돌 진입** | `PollDeath`를 사망 + 기절로 확장 | **신규** (§2-1) |
+| ⑤ **기상 = NavMesh 복구 경로** | `NpcKnockback.EndKnockback`의 형제 | **신규** (§2-2·2-3) |
+| ⑥ **기상 클립 타이밍 정합** | `RaiseStandUp` 시점 ↔ 애니메이터 복귀 | **신규** (§2-4) |
+| ⑦ **밧줄의 에이전트 재활성 가드** | `StopRopeDrag`에 래그돌 가드 한 줄 | **신규** (§2-3-3) |
+
+④~⑦은 이슈 본문에도, 이 문서의 원래 판단에도 없던 작업이다.
 
 ---
 
@@ -33,23 +55,42 @@
 `Physics.SyncTransforms()` 호출은 호출부와 무관하게 걸리므로, NPC가 `EnterRagdoll`이나 `Unfreeze`에서
 `m_rig.SetKinematic(false)`를 부르는 순간 이미 적용된다.
 
-### 1-2. ② 뼈 길이 드리프트 — NPC 구조상 발생하지 않는다
+### 1-2. ② 뼈 길이 드리프트 — ⚠ **뒤집혔다: 이제 해당된다**
 
-이 버그는 정확히 두 조건이 겹쳐야 나온다:
+> **원래 판단 (무효):** 이 버그는 정확히 두 조건이 겹쳐야 나온다 — (1) **살아있는 리그와 시체 리그가
+> 별도 오브젝트**라 `RagdollPose.Copy`로 포즈를 왕복 복사한다 (2) **부활해서 같은 리그를 다시 쓴다**.
+> NPC는 리그가 하나뿐이고 부활이 없으므로 둘 다 없다 — 포팅할 코드가 없다.
+>
+> **무효가 된 곳: 조건 (2)다.** 기절 래그돌은 정의상 부활이다. NPC는 죽으면
+> [`NpcSpawner.ResetSpawnState`](../Assets/Scripts/NPC/NpcSpawner.cs#L132)가 `Destroy`하고 다음
+> 라운드는 [`Instantiate`](../Assets/Scripts/NPC/NpcSpawner.cs#L188)로 새로 만들지만, **기절은 같은
+> 인스턴스가 몇 번이고 깨어난다.**
 
-1. **살아있는 리그와 시체 리그가 별도 오브젝트**라 `RagdollPose.Copy`로 포즈를(그리고 예전엔 뼈
-   길이까지) 왕복 복사한다
-2. **부활해서 같은 리그를 다시 쓴다** — 그래서 누적된다
+그리고 **리그가 하나라는 것이 여기서는 면제가 아니라 "걸러 줄 코드가 없다"는 뜻이다.** 조건 (1)이
+없다는 것은 `RagdollPose.Copy`를 안 쓴다는 뜻인데, 플레이어의 고침 **두 조치 중 하나가 바로 그
+`Copy`**였다([ragdoll-corpse-split.md §8-2](ragdoll-corpse-split.md)). NPC엔 그 필터가 놓일 자리가 없다.
 
-NPC는 둘 다 없다:
+리그 하나짜리 누적 경로:
 
-- 리그가 하나뿐이다. 죽으면 그 자리에서 `m_animator.enabled = false`로 애니메이터만 끄고, 별도
-  시체 모델로 바꿔치기하지 않는다(`NpcRagdoll.StopAnimator`). `RagdollPose.Copy`를 아예 안 쓴다
-- 부활이 없다. NPC는 죽으면 끝이고, 라운드가 바뀌면 그 인스턴스 자체가 사라진다 —
-  [`NpcSpawner.ResetSpawnState`](../Assets/Scripts/NPC/NpcSpawner.cs#L132)가 `Destroy(npc.gameObject)`,
-  다음 라운드는 [`Instantiate`](../Assets/Scripts/NPC/NpcSpawner.cs#L188)로 새로 만든다
+```
+1차 래그돌   물리가 관절을 늘린다 → 뼈 localPosition이 바인드 포즈에서 벗어난다
+기상        애니메이터 복귀 — 애니메이터는 회전만 쓴다 → 늘어난 길이가 그대로 남는다
+2차 래그돌   connectedAnchor는 바인드 포즈 기준으로 구워져 있으므로
+            (프리팹이 AutoConfigureConnectedAnchor: 1)
+            첫 물리 스텝부터 관절이 위반된 채 출발 → 사지가 늘어나며 바닥을 뚫는다
+```
 
-그래서 뼈 길이가 리그 사이를 오갈 경로 자체가 없다. 포팅할 코드가 없다.
+**고침 — 플레이어의 짝 중 뒤쪽만 필요하다.** 재료는 공유 코드에 이미 있다:
+
+| | 위치 | NPC에 필요한가 |
+|---|---|---|
+| `RagdollPose.Copy`가 관절 달린 뼈의 `localPosition`을 안 옮긴다 | `Common/Ragdoll/RagdollPose.cs` | **해당 없음** — `Copy`를 안 쓴다 |
+| 부활 시 `RagdollRig.RestoreBindPose()` | [RagdollRig.cs#L352](../Assets/Scripts/Common/Ragdoll/RagdollRig.cs#L352) | **필요** — 기상 시 부른다 |
+| 진단값 `MaxBindPositionDrift` | [RagdollRig.cs#L322](../Assets/Scripts/Common/Ragdoll/RagdollRig.cs#L322) | 검증에 쓴다 (§6) |
+
+⚠ **`뼈길이드리프트` 진단을 반드시 켜고 검증할 것.** 이 버그는 1차에서 0.0055m, 2차에서 0.0624m처럼
+**조용히 누적된 다음 터진다** — 플레이어 쪽에서 회전만 재던 진단이 세 번이나 "복사는 정상"이라고
+말하는 동안 뼈 길이가 11배로 늘고 있었다(같은 문서 §8-2 "이 아크의 교훈").
 
 ### 1-3. ③ 밧줄 권위 전용 — 그대로 필요하다
 
@@ -69,19 +110,201 @@ NPC는 둘 다 없다:
 
 ---
 
-## 2. 작업 순서
+## 2. 기절 래그돌 — 새로 만들 것
 
-### 2-1. 골반 복제를 NPC 리그에 추가
+### 2-1. 진입 — `PollDeath`를 사망 + 기절로 확장
 
-`Model/Root/Hips`(NPC 리그 골반)에 `NetworkTransform` + `NetworkRigidbody`(`UseRigidBodyForMotion`)를
-추가한다. 플레이어의 `Corpse/Root/Hips`와 같은 구성.
+[`NpcRagdoll.PollDeath`](../Assets/Scripts/NPC/View/NpcRagdoll.cs#L377)는 지금 `m_owner.Death.IsDead`
+하나만 본다. 주석이 **"부활 분기가 없다"**고 명시하고, 클래스 주석도 *"부활이 없으므로 기상 블렌드·
+기상 클립용 루트 yaw 정렬이 전부 필요 없고, 부활 오인 문제(506 §9-19)가 통째로 사라진다"*고 쓴다.
+**두 문단 다 갱신 대상이다.**
 
-`RagdollSetup.cs`의 NPC 경로(`rigOwnerPath = "Model"`)에 이 두 컴포넌트 부착을 자동화할지, 4개
-프리팹에 수동으로 붙일지 정한다 — 자동화하면 리그를 다시 만들 때마다 안 잊는다.
+기절 쪽 조건값은 [`NpcStun.IsStunned`](../Assets/Scripts/NPC/Controller/NpcStun.cs#L43)를 쓴다 —
+경로를 가리지 않는 일반 질문으로 이미 설계돼 있고(오버레이 + 넉백 착지 KO를 함께 답한다) 세션 중
+동기화 값이라 전 피어가 같은 값을 본다. 폴링 구조가 그대로 맞는다.
 
-### 2-2. `NpcRagdoll`에 권위 판정 이식
+⚠ **`m_skipThisEpisode`(늦게 접속한 피어는 이번 사망을 건너뛴다)를 기절에 그대로 쓰면 안 된다.**
+사망은 한 번이라 "이미 지난 과거"로 통째로 건너뛰는 것이 맞지만, 기절은 반복되므로 그 플래그가
+켜진 채 남으면 **그 피어는 이후 모든 기절 래그돌을 영구히 건너뛴다.** 에피소드 단위로 리셋되게 갈라야
+한다.
 
-`PlayerRagdoll`의 패턴을 그대로 미러링한다:
+### 2-2. 이탈 — NavMesh 복구는 `NpcKnockback.EndKnockback`의 형제다
+
+찾던 패턴이 [`NpcKnockback.EndKnockback`](../Assets/Scripts/NPC/Controller/NpcKnockback.cs#L153)에
+이미 구현돼 있다. **새로 설계할 것이 아니라 이 함수가 넉백 비행에 대해 하는 일을 래그돌 기절에 대해
+하는 것이다:**
+
+```csharp
+// 통행 마스크로 착지점을 찾는다 — 못 가는 영역(Jail)에 Warp되면 경로가 안 잡혀 고착된다 (#415)
+NavMesh.SamplePosition(transform.position, out NavMeshHit ground,
+                       config.KnockbackLandSampleDistance, agent.areaMask)
+agent.enabled = true;
+agent.Warp(landing);          // NavMesh 위 착지점에 다시 붙인다
+if (!agent.isOnNavMesh) { 경고 + 상태 전이 포기 }   // TickNavMeshRecovery(#557)가 1초 뒤 재시도
+```
+
+이 함수에는 **이미 값을 치른 판단이 두 개** 박혀 있다 — `areaMask`를 쓰는 이유(Jail 같은 통행 불가
+영역에 `Warp`하면 고착, #415)와 `Warp` 실패 시 상태 전이를 안 시키는 이유(상태 클래스가 곧바로
+에이전트를 건드려 에러). 기절 기상도 같은 함정을 지나므로 그대로 따른다.
+
+기상 시 해야 할 일 세 가지:
+
+1. `RestoreBindPose()` — §1-2
+2. 애니메이터 복귀 (`m_animator.enabled = true` + `SetSkinsAlwaysVisible(false)`)
+3. 위 NavMesh 재부착
+
+### 2-3. ⚠ NavMesh 복구 주체가 지금 어긋나 있다 — 조용히 실패한다
+
+[`NpcStun.EnterStunned`](../Assets/Scripts/NPC/Controller/NpcStun.cs#L178)는 에이전트를 **끄지 않는다** —
+`isStopped = true` + `ResetPath()`만 하고 직전 `isStopped`를 `m_agentStoppedBefore`에 기억해 둔다.
+반면 [`NpcRagdoll.EnterRagdoll`](../Assets/Scripts/NPC/View/NpcRagdoll.cs#L311)은
+`m_agent.enabled = false`를 강제한다(켜져 있으면 매 프레임 NavMesh 위로 끌어내려 몸이 못 눕는다).
+
+기절이 래그돌을 타면 [`ExitStun`](../Assets/Scripts/NPC/Controller/NpcStun.cs#L258)의 복구가
+
+```csharp
+if (agent.enabled && agent.isOnNavMesh)   // ← enabled가 false라 조용히 건너뛴다
+    agent.isStopped = m_agentStoppedBefore;
+```
+
+**경고 한 줄 없이 통과한다.** 에이전트는 영원히 꺼진 채고, 물리로 굴러간 몸은 NavMesh 밖일 수도 있다.
+(`isOnNavMesh` 검사는 NavMesh 밖에서 `isStopped`를 읽으면 Unity가 에러를 뱉는 것을 막으려 들어간
+것이다, #557 — 이 실패를 감추려던 것이 아니다.)
+
+**복구 주체 = A안(`NpcRagdoll`이 되돌린다). 확정됐다** — 아래 §2-3-1의 인벤토리가 근거다.
+
+### 2-3-1. 에이전트 소유권 인벤토리 (조사 결과, 서버 기준)
+
+| 구간 | 끄는 곳 | 켜는 곳 |
+|---|---|---|
+| 클라이언트 전체 | [NpcController.cs#L148](../Assets/Scripts/NPC/Controller/NpcController.cs#L148) | 없음 — **영구** (이동은 NetworkTransform이 쥔다) |
+| 넉백 비행 | [NpcKnockback.cs#L78](../Assets/Scripts/NPC/Controller/NpcKnockback.cs#L78) | [#L159](../Assets/Scripts/NPC/Controller/NpcKnockback.cs#L159) + `Warp` |
+| 밧줄 끌기 | [NpcRopeDrag.cs#L158](../Assets/Scripts/NPC/Controller/NpcRopeDrag.cs#L158) | [#L222](../Assets/Scripts/NPC/Controller/NpcRopeDrag.cs#L222) + `TryWarpNear` 2단 폴백 |
+| 사망 | [NpcDeath.cs#L122](../Assets/Scripts/NPC/Controller/NpcDeath.cs#L122) | 없음 — **영구, 의도적** ("시체는 NavMesh 위로 돌아가지 않는다") |
+| 기절 오버레이 | **끄지 않는다** — `isStopped`만 | `ExitStun`이 `isStopped` 복구 |
+| **래그돌 진입** | [NpcRagdoll.cs#L311](../Assets/Scripts/NPC/View/NpcRagdoll.cs#L311) | **없음** ← 구멍 |
+
+**규칙은 "끈 쪽이 켠다"이고 3/3 예외가 없다.** `NpcRagdoll`이 네 번째 소유자이므로 그쪽이 되돌린다.
+
+**B안(`ExitStun`이 한다)은 탈락.** `ExitStun`은 자기가 끈 것이 아니라 진입 시 기억한
+`m_agentStoppedBefore`만 되돌리는 대칭 구조다. 여기에 `enabled` 복구를 넣으면 *끄지도 않은 것을 켜는*
+함수가 되고, `NpcDeath`가 **영구히** 꺼 둔 에이전트까지 되살릴 수 있다 — `ExitStun`은 사망 경로에서도
+불린다([NpcCustody.cs#L129](../Assets/Scripts/NPC/Controller/NpcCustody.cs#L129),
+[NpcStandUp.cs#L88](../Assets/Scripts/NPC/Controller/NpcStandUp.cs#L88)).
+**C안(전용 부품)도 불필요** — `NpcRagdoll`이 이미 그 부품이다.
+
+### 2-3-2. ⚠ 회수 안전망이 이 경우를 잡지 않는다
+
+[`NpcController.TickNavMeshRecovery`](../Assets/Scripts/NPC/Controller/NpcController.cs#L410)는
+
+```csharp
+if (!m_agent.enabled || m_agent.isOnNavMesh) { 리셋; return; }
+```
+
+로 시작하고, 주석이 못박는다 — *"에이전트를 **꺼 둔 구간**(넉백 비행·밧줄 끌기)은 위치를 그쪽이 쥐고
+있어 굳은 것이 아니다 — **건너뛴다.**"*
+
+즉 회수는 **`enabled == true`인데 NavMesh 밖**만 잡는다. **래그돌이 꺼 놓고 아무도 켜지 않으면 회수는
+영원히 오지 않는다.** `TickNavMeshRecovery`는 `enabled = true`로 되돌린 **다음의** 폴백이지, 안 켜도
+되는 이유가 아니다.
+
+> 덧붙여 그 주석이 이 상태를 만드는 셋을 *"밧줄 놓기·넉백 착지·**기절 해제**"*로 열거하는데,
+> 기절 해제가 거기 있는 이유는 **지금 기절이 에이전트를 안 끄기 때문**이다. 래그돌을 태우면 기절이
+> 그 목록에서 "꺼 둔 구간"으로 옮겨가 회수 대상에서 벗어난다 — **저 주석도 갱신 대상이다.**
+
+### 2-3-3. ⚠ 밧줄과 이중 소유가 충돌한다
+
+[`NpcRopeDrag.StopRopeDrag`](../Assets/Scripts/NPC/Controller/NpcRopeDrag.cs#L222)는 되살리기 전에
+가드 둘을 둔다:
+
+```csharp
+if (m_owner.Knockback.IsKnockedBack) return false;   // 넉백이 쥐고 있다
+if (m_owner.Death.IsDead) return false;              // 시체는 안 돌아온다
+agent.enabled = true;
+```
+
+**래그돌 기절 가드가 없다.** 기절해 누운 NPC를 묶었다 놓으면 `StopRopeDrag`가 에이전트를 켜고,
+`EnterRagdoll` 주석이 경고한 그 상태가 된다 — *"켜져 있으면 매 프레임 NavMesh 위로 끌어내려 몸이 못
+눕는다."* **세 번째 가드가 필요하다:**
+
+```csharp
+if (m_ragdoll != null && m_ragdoll.IsRagdollActive) return false;   // 래그돌이 쥐고 있다
+```
+
+`m_ragdoll`은 이미 필드로 있다([NpcRopeDrag.cs#L14](../Assets/Scripts/NPC/Controller/NpcRopeDrag.cs#L14) —
+리그 없는 프리팹에서 null 허용이 관례). 넉백 가드와 **정확히 같은 성격**이다(일시적 소유권 양보).
+
+### 2-3-4. 순서 제약 — 상태 전이가 에이전트보다 먼저다
+
+[`NpcDeath.ServerEnterDead`](../Assets/Scripts/NPC/Controller/NpcDeath.cs#L105) 주석 ⑤:
+*"상태 전이 — 에이전트를 끄기 **전**이다. 직전 상태의 `Exit()`이 살아 있는 에이전트를 정리해야 한다."*
+[`NpcStunnedState.SetAgentStopped`](../Assets/Scripts/NPC/States/NpcStunnedState.cs#L87)가 이 전제가
+깨졌던 이력(#571 — 넉백 비행 중 사망하면 꺼진 에이전트를 든 채 `Exit`이 불렸다)을 주석에 남기고 가드를
+달아 뒀다. **기상도 같은 순서다.**
+
+### 2-3-5. `ExitStun`을 부르는 경로 전부가 래그돌 이탈을 타야 한다
+
+A안이라 복구 주체는 `NpcRagdoll`이지만, **기절이 풀리는 사실을 알아채는 지점**은 여전히 여럿이다.
+`PollDeath`가 폴링이라 값만 보면 자동으로 덮이지만(그래서 폴링이 유리하다), 이탈 시점이 기상 클립과
+맞아야 하므로(§2-4) 각 경로가 어떤 시점에 오는지는 확인해야 한다:
+
+| 호출부 | 상황 | `resumeReaction` |
+|---|---|---|
+| [NpcStun.Tick#L217](../Assets/Scripts/NPC/Controller/NpcStun.cs#L217) | 시간 만료 — 정상 기상 | `true` |
+| [NpcStandUp#L88](../Assets/Scripts/NPC/Controller/NpcStandUp.cs#L88) | 줄이 풀려 일어나기 예약 | `false` |
+| [NpcCustody#L129](../Assets/Scripts/NPC/Controller/NpcCustody.cs#L129) | 수감 | `false` |
+| [PlayerEscortCommands#L523](../Assets/Scripts/Player/Escort/PlayerEscortCommands.cs#L523) | 연행 시작 | `false` |
+| `ClearStunOverlay` — [NpcDeath#L98](../Assets/Scripts/NPC/Controller/NpcDeath.cs#L98) | 사망이 오버레이를 걷는다 | — (사망 래그돌로 이어짐) |
+| `ClearStunOverlay` — [NpcKnockback#L53](../Assets/Scripts/NPC/Controller/NpcKnockback.cs#L53) | 넉백이 오버레이를 이긴다 | — (§2-6③의 이중 위험) |
+
+### 2-4. 기상 클립 타이밍 정합
+
+[`NpcStun.Tick`](../Assets/Scripts/NPC/Controller/NpcStun.cs#L204)이 `m_stunDuration - StandUpSeconds`
+지점에서 `RaiseStandUp()`으로 **기상 클립을 전 피어에 재생**한다. 래그돌이 그보다 늦게 풀리면 클립은
+이미 돌고 있는데 뼈는 아직 물리에 있다 — 애니메이터가 꺼져 있으니 화면에는 아무 일도 안 일어나고,
+풀리는 순간 클립 중간부터 튄다.
+
+즉 **래그돌 이탈 시점 = `RaiseStandUp()` 시점**이어야 한다. `NpcStun.Tick`의 그 분기가 이미
+"밧줄이 걸려 있으면 모션을 내지 않는다"로 갈라져 있으므로(줄에 눕혀진 몸은 일어날 수 없다) 래그돌
+이탈도 같은 자리에서 같은 조건으로 가르는 것이 맞다.
+
+### 2-5. 물려받는 미해결 — 부활 시 큰 회전
+
+[ragdoll-corpse-split.md §4](ragdoll-corpse-split.md)가 **미해결**로 남긴 것: 플레이어가 누웠다가
+일어날 때 몸이 **거의 180° 뒤집히며** 애니메이션으로 돌아온다. 원인 규명이 *"원격에서 애니메이터가
+컬링돼(`CullUpdateTransforms`) `Animator.Update(0f)`가 뼈를 쓰지 않아 블렌드 목표를 못 만든다"*에서
+멈춰 있고, `m_rootYawOffset`이 루트에 닿지 않는 이유도 아직 모른다.
+
+기상 블렌드를 NPC에 넣으면 **아직 아무도 못 고친 문제를 NPC에서 다시 만난다.**
+
+**다만 NPC가 유리한 점이 하나 있다 — 스킨을 끌 필요가 없다.** 플레이어에서 컬링이 걸린 원인은
+`m_liveSkin.SetActive(false)`(시체 모델과 살아있는 모델이 갈려 있어서)인데, NPC는 리그가 하나라 끌
+살아있는 스킨이 없다. `StopAnimator`가 이미 `SetSkinsAlwaysVisible(true)`를 부르고 있어 컬링 함정
+자체를 피할 여지가 있다.
+
+→ **NPC 쪽이 플레이어 §4의 대조군이 될 수 있다.** 같은 블렌드를 컬링 없는 조건에서 돌려 보면 "컬링이
+원인"이라는 가설이 갈린다. 순서상 NPC를 먼저 하는 편이 이득일 수 있다.
+
+### 2-6. 정해야 할 것
+
+| | 항목 | 후보 |
+|---|---|---|
+| ① | 기상에 포즈 블렌드를 넣나 | (a) `RagdollPoseBlend`를 NPC에도 — 부드럽지만 §2-5를 물려받는다 (b) 블렌드 없이 즉시 애니메이터 복귀 — 한 프레임 튀지만 단순하다. **(b)로 시작해 필요하면 올리는 쪽을 권한다** |
+| ② | ~~NavMesh 복구 주체~~ | **확정 — A안(`NpcRagdoll`이 되돌린다).** 근거·부산물은 §2-3-1~2-3-5 |
+| ③ | 기절 경로 전부를 태우나 | `NpcStun` 오버레이(테이저·체력 0 넉다운)와 `NpcState.Stunned`(넉백 착지 KO)가 갈려 있다. 넉백 착지는 `NpcKnockback`이 이미 물리 비행을 굴리므로 **이중이 될 수 있다** |
+| ④ | 짧은 기절에도 태우나 | 테이저 기절이 짧으면 눕고 일어나느라 무력화 시간이 다 간다. `StunSeconds` 실측 후 하한을 둘지 결정 |
+
+---
+
+## 3. 작업 순서
+
+### 3-1. 조준 마스크 확인 — §5 참고
+
+리그를 다시 붙이기 **전에** 확인해야 한다. 아래 §5. (부활과 무관해 순서가 바뀌지 않았다.)
+
+### 3-2. `NpcRagdoll`에 권위 판정 이식
+
+`PlayerRagdoll`의 패턴을 그대로 미러링한다. **부활과 무관하므로 원안 그대로다.**
 
 ```csharp
 // Awake — PlayerRagdoll과 같은 자동 감지
@@ -93,7 +316,7 @@ m_hipsIsNetworkSynced = m_rig.HipsBody?.GetComponent<NetworkTransform>() != null
 - `EnterRagdoll`·`Unfreeze`가 `m_rig.SetKinematic(false)`를 부른 직후, 골반이 네트워크 동기화 중이면
   비권위 피어의 골반만 다시 키네마틱으로 되돌린다(`PlayerRagdoll.ReleaseBonesToPhysics`와 같은 자리)
 
-### 2-3. 밧줄을 권위 피어 전용으로
+### 3-3. 밧줄을 권위 피어 전용으로
 
 `NpcRagdoll.BeginRopePull`에 가드 하나:
 
@@ -108,32 +331,54 @@ public void BeginRopePull(Transform carrier)
 ```
 
 ⚠ `NpcRopeDrag.AttachCorpseRopeRpc`는 `SendTo.Everyone` 그대로 둔다 — 플레이어 때처럼 호출부를 안
-건드리고 `NpcRagdoll` 안에서만 가른다. 조건이 `m_hipsIsNetworkSynced`라서, 골반 복제(2-1)를 프리팹에서
+건드리고 `NpcRagdoll` 안에서만 가른다. 조건이 `m_hipsIsNetworkSynced`라서, 골반 복제(3-5)를 프리팹에서
 빼면 자동으로 옛 동작(전원이 묶음)으로 돌아가는 안전장치가 그대로 유지된다.
 
-### 2-4. 프리팹에 리그 재부착
+### 3-4. **기절 진입·이탈 신설** (신규)
+
+§2 전체. 순서상 여기가 맞는 이유는 3-2·3-3이 사망 경로만 건드려 **되돌리기 쉬운 상태에서 먼저
+끝나기** 때문이다. 이 단계에서 코드가 가장 많이 늘어난다.
+
+- 진입: `PollDeath` → 사망 + 기절 (§2-1, `m_skipThisEpisode` 갈라내기 포함)
+- 이탈: `RestoreBindPose` + 애니메이터 복귀 + NavMesh 재부착 — **`NpcRagdoll`이 한다** (§2-2·2-3-1)
+- `NpcRopeDrag.StopRopeDrag`에 래그돌 가드 추가 (§2-3-3)
+- `TickNavMeshRecovery`의 "이 상태를 만드는 셋" 주석 갱신 (§2-3-2)
+- `ExitStun`을 부르는 경로 6개가 각각 어떤 시점에 오는지 확인 (§2-3-5)
+
+### 3-5. 골반 복제를 NPC 리그에 추가
+
+`Model/Root/Hips`(NPC 리그 골반)에 `NetworkTransform` + `NetworkRigidbody`(`UseRigidBodyForMotion`)를
+추가한다. 플레이어의 `Corpse/Root/Hips`와 같은 구성.
+
+`RagdollSetup.cs`의 NPC 경로(`rigOwnerPath = "Model"`)에 이 두 컴포넌트 부착을 자동화할지, 4개
+프리팹에 수동으로 붙일지 정한다 — 자동화하면 리그를 다시 만들 때마다 안 잊는다.
+
+### 3-6. 기상 클립 타이밍 정합
+
+§2-4. 프리팹에 리그를 붙인 뒤에야 실제로 보이는 문제라 3-7과 왕복할 수 있다.
+
+### 3-7. 프리팹에 리그 재부착
 
 `RagdollRigCloner` + `RagdollSetup`을 4개 프리팹(`NPC_Citizen`/`_Generic`/`Rioter`/`Streaker`)에 다시
-돌린다 — `0bd6990`에서 뗀 것과 같은 작업의 역방향. 이번엔 2-1~2-3이 반영된 상태로 진행한다.
+돌린다 — `0bd6990`에서 뗀 것과 같은 작업의 역방향. 이번엔 3-2~3-5가 반영된 상태로 진행한다.
 
-### 2-5. 조준 마스크 확인 — §4 참고
-
-리그를 다시 붙이기 **전에** 확인해야 한다. 아래 §4.
+> `NPC_Abductor`는 `0bd6990`이 건드리지 않았다 = 원래 리그가 없었다. 이번에도 뺄지 확인할 것.
 
 ---
 
-## 3. 이슈의 "정해야 할 것" 현황
+## 4. 이슈의 "정해야 할 것" 현황
 
 | 항목 | 상태 |
 |---|---|
-| ① 진입 조건 | **이미 결정됨.** `NpcRagdoll.PollDeath`가 사망(`Die`) 하나로만 진입시킨다. 기절은 안 태운다 |
-| ② 넉백과의 관계 | 미정. `EnterRagdoll(Vector3 impulse)`가 임펄스 인자를 이미 받게 설계돼 있어 넉백 경로를 연결할 자리는 있다. 연결 여부만 결정하면 된다 |
+| ① 진입 조건 | ⚠ **뒤집혔다.** 원래는 *"이미 결정됨 — `NpcRagdoll.PollDeath`가 사망(`Die`) 하나로만 진입시킨다. 기절은 안 태운다"*였다. **기절도 태우기로 정했다** → §2 전체가 그 결과다 |
+| ② 넉백과의 관계 | 미정, **그리고 더 중요해졌다.** `EnterRagdoll(Vector3 impulse)`가 임펄스 인자를 이미 받아 연결할 자리는 있다. 다만 넉백 착지 KO는 `NpcKnockback`이 물리 비행을 이미 굴리므로 래그돌과 **이중이 될 수 있다** (§2-6③) |
 | ③ 시체 수명 | 유치장 배치(`NpcCustody.SendCorpseToJail` → `NpcRagdoll.ServerPlaceCorpse`)는 이미 구현돼 있다. 라운드 끝까지 유지하는지, 동시 활성 상한을 두는지는 미정 |
-| ④ #567(시체 떨림) 선행 여부 | **재검토됨.** 떨림의 유력한 원인이던 것들(밧줄 발산, 뼈 길이 누적)이 이번 플레이어 작업으로 규명됐다. NPC는 애초에 뼈 길이 누적 버그가 없으므로(§1-2), §2-3(밧줄 권위화)만으로 떨림도 같이 사라질 가능성이 있다 — 따로 먼저 잡을 필요 없이 이 작업에 합칠 수 있어 보인다 |
+| ④ #567(시체 떨림) 선행 여부 | **재검토됨.** 떨림의 유력한 원인이던 것들(밧줄 발산, 뼈 길이 누적)이 플레이어 작업으로 규명됐다. §3-3(밧줄 권위화)만으로 떨림도 같이 사라질 가능성이 있어 따로 먼저 잡을 필요 없이 합칠 수 있어 보인다. ⚠ 단 **뼈 길이 누적은 이제 NPC에도 해당되므로**(§1-2) "NPC엔 그 버그가 없다"는 근거는 더 못 쓴다 |
+| ⑤ **기상 블렌드 / NavMesh 복구 주체** | **신규.** §2-6 |
 
 ---
 
-## 4. 새로 발견한 것 — 조준 판정 마스크가 걸릴 수 있다
+## 5. 조준 판정 마스크가 걸릴 수 있다
 
 이슈의 "`NpcProneCollider`(#363)와의 충돌 정리" 항목을 확인하다가 나왔다.
 
@@ -152,24 +397,40 @@ public void BeginRopePull(Transform carrier)
 - 완료 기준의 "누운 시체를 겨냥하면 조준이 맞는다"를 충족하려면 마스크에서 `Ragdoll` 레이어를 빼야
   하는지, 아니면 다른 방식으로 갈라야 하는지
 
+⚠ **기절 래그돌이 이 항목의 무게를 키운다.** 사망만 태울 때는 "시체를 겨냥"이 부수적이었지만,
+**기절한 NPC는 검거 대상이다** — 조준이 안 맞으면 기절시켜 놓고 잡을 수가 없다. 게임플레이가 막히는
+경로이므로 §3-1을 건너뛰지 말 것.
+
 ---
 
-## 5. 검증 계획
+## 6. 검증 계획
 
 플레이어 때 썼던 것과 같은 패턴:
 
 - MPPM 3인, `Map_Apocalypse`
 - NPC를 죽이고 **부하가 걸리는 조건**(견인, 계단·경사, 실내 층 겹침)에서 관찰
 - `골반↔최저뼈`·`루트↔골반수평` 같은 침하 진단(`PlayerRagdoll.TickSinkDiagnostics` 패턴)을 NPC에도
-  임시로 넣어 실측 — `뼈길이드리프트`는 §1-2에 따라 뺄 수 있다
-- 조준 판정(상호작용 레이·테이저·윤곽선)이 누운 시체를 맞히는지 — §4
+  임시로 넣어 실측
+- **`뼈길이드리프트`(`RagdollRig.MaxBindPositionDrift`)를 반드시 포함한다** — §1-2에 따라 이제
+  해당되므로 원래 계획에서 "뺄 수 있다"고 한 것이 뒤집혔다
+- 조준 판정(상호작용 레이·테이저·윤곽선)이 누운 시체를 맞히는지 — §5
 - 계단·경사·실내에서 지형을 뚫거나 허공에 굳지 않는지 (맵 밖으로 떨어진 경우의 최후 배수 포함)
 - NPC 여러 체가 동시에 쓰러져도 프레임이 무너지지 않는지
+
+### 기절 전용 (신규)
+
+- **같은 NPC를 3회 이상 반복 기절**시키고 매번 `뼈길이드리프트`가 0인지 — §1-2의 누적은 2차부터
+  드러난다. 1회만 보면 통과한다
+- 기상 후 **NavMesh로 실제 복귀**하는지 (걷기 재개, `isOnNavMesh`) — §2-3의 조용한 실패를 잡는 지점
+- 기상 클립이 뼈 복귀와 맞는지 (튐·중간부터 재생) — §2-4
+- **NavMesh 밖에서 기상**시켰을 때 (경사에서 굴러 떨어진 뒤) 회수되는지 — `TickNavMeshRecovery`(#557)
+- 기절 중 밧줄·수감·재기절이 겹칠 때 (`ExitStun` 경로 전부, §2-3)
+- **기상 시 큰 회전이 나오는지** — 안 나오면 플레이어 §4의 "컬링이 원인" 가설이 강해진다 (§2-5)
 
 ---
 
 ## 관련 문서
 
 - [571-npc-death-ragdoll.md](571-npc-death-ragdoll.md) — NPC 기절/사망 분리 + 래그돌 코드의 원래 진행 기록. §14(시체를 놓을 때 관성) 같은 알려진 이슈가 남아 있다
-- [ragdoll-corpse-split.md](ragdoll-corpse-split.md) — 플레이어 쪽에서 밧줄 발산·뼈 길이 누적·T포즈 시작 버그를 잡은 기록. §7·§8이 이 문서 §1의 근거다
+- [ragdoll-corpse-split.md](ragdoll-corpse-split.md) — 플레이어 쪽에서 밧줄 발산·뼈 길이 누적·T포즈 시작 버그를 잡은 기록. §7·§8이 이 문서 §1의 근거이고, **§4(부활 시 큰 회전)가 §2-5의 미해결 상속분**이다
 - [ragdoll.md](ragdoll.md) — 래그돌 불변식 정본. 특히 불변식 8(밧줄 권위 전용)·10(뼈 길이는 포즈가 아니다)·11(`SyncTransforms`)
