@@ -496,6 +496,22 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     {
         Escorter.AddTether(target);
 
+        // <b>시체는 커스터디를 타지 않는다</b> (#571). Dead에서 나갈 수 없어 StartEscort가 애초에
+        // 불가능하고(NpcStateMachine이 거부하며 에러를 남긴다), 탈 이유도 없다 — 시체는 신병이 아니라
+        // 짐이다. 유치장까지 끌고 가면 계상되지만(ArrestJudge.JudgeCorpse) 그 판정은 커스터디가 아니라
+        // "죽었는가"로 갈린다(JailIntake.ServerAdmitCorpse).
+        //
+        // 기절 오버레이도 걷지 않는다 — 사망 진입이 이미 걷었다(NpcDeath.ServerEnterDead ②).
+        if (target.Death.IsDead)
+        {
+            target.Rope.StartRopeDrag(transform);
+            NotifyOwner(
+                $"시체를 밧줄로 묶어 끌기 시작: {target.name} "
+                    + $"({Escorter.TetheredCount}/{Escorter.RopeCapacity})"
+            );
+            return;
+        }
+
         // 커스터디 상태는 수갑 연행과 같은 Escorted를 재사용한다 — 유치장 판정·이벤트 수명·가로채기 방지가
         // 이미 이 상태를 기준으로 판정하기 때문. 이동은 밧줄 장력이 하고 NpcEscortedState가 IsRoped를 보고
         // 추종을 건너뛴다. (#369)
@@ -543,6 +559,20 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     // 실제 풀기 — 검증이 끝난 뒤의 상태 조작만 담당한다. 서버(또는 오프라인).
     private void ServerApplyUnrope(NpcController target)
     {
+        // <b>시체는 내려놓기가 전부다</b> (#571) — 일어나지도, 배회로 돌아가지도 않는다.
+        // 아래 본문은 전부 "풀면 일어나 배회로 돌아간다"를 전제로 짜여 있어 시체에는 하나도 맞지 않는다:
+        // ServerStandUpThen은 기상 예약을 걸고, 그 뒤 ReleaseFromCustody가 상태 전이를 시도하는데
+        // Dead에서는 나갈 수 없어 NpcStateMachine이 거부하며 에러만 남긴다.
+        //
+        // 줄다리기 분기도 필요 없다 — 시체 밧줄은 언제나 1:1이다 (NpcStateRules.CanRopeBind).
+        if (target.Death.IsDead)
+        {
+            Escorter.ReleaseDrag(target); // 관절 밧줄을 푼다 (NpcRopeDrag.StopRopeDrag → 전 피어)
+            Escorter.RemoveTether(target);
+            NotifyOwner($"시체를 내려놓았다: {target.name}");
+            return;
+        }
+
         // <b>"유치장 안에서는 석방하지 않는다"는 분기가 사라졌다</b> (#537). 감옥이 격리 공간이 되면서
         // 밧줄 걸린 대상이 감옥 안에 있을 수 없게 됐다 — 수감은 문 앞 순간이동이고, 그 순간
         // JailIntake가 줄을 전부 걷어낸다(PlayerEscorter.ReleaseAllTethersOn). 감옥 안에서 밧줄을

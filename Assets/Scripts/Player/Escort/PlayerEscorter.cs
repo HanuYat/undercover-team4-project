@@ -174,6 +174,31 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
     }
 
     /// <summary>
+    /// 시체에 걸린 밧줄을 전부 걷어낸다 — <b>일으켜 세우지 않는다.</b> 서버(또는 오프라인) 전용. (#571)
+    ///
+    /// <see cref="ReleaseAllTethersOn"/>의 시체판이고, 갈리는 것은 <c>ServerStandUpThen</c> 하나다.
+    /// 그 기상 예약을 시체에 걸면 안 된다: 예약이 끝난 뒤 커스터디 전이를 거는데 <see cref="NpcState.Dead"/>
+    /// 에서는 나갈 수 없어 <c>NpcStateMachine</c>이 에러만 남기고, 그 전에 죽은 몸이 일어나는 모션이 한 번 난다.
+    /// (거리 끊김도 같은 이유로 시체를 따로 가른다 — <see cref="TickTetherCleanup"/>)
+    ///
+    /// <see cref="ReleaseDrag"/>가 관절 밧줄까지 풀어 준다(<c>NpcRopeDrag.StopRopeDrag</c>) — 시체는
+    /// 에이전트도 되살아나지 않으므로, 남는 것은 그 자리에 누운 몸뿐이다.
+    /// </summary>
+    public static void ReleaseAllTethersOnCorpse(NpcController npc)
+    {
+        if (npc == null)
+            return;
+
+        List<PlayerEscorter> holders = FindEscortersOf(npc);
+
+        for (int i = 0; i < holders.Count; i++)
+        {
+            holders[i].ReleaseDrag(npc);
+            holders[i].RemoveTether(npc); // 밧줄 칸을 돌려준다 — 안 빼면 매 프레임 정리가 돌 때까지 물린다
+        }
+    }
+
+    /// <summary>
     /// 나 말고 이 대상을 묶고 있는 사람이 있는가 — 서버(또는 오프라인) 전용. (#513)
     /// 풀기가 <b>내 줄을 빼기 전에</b> 물어야 하는 질문이다: 뺀 뒤에 <see cref="FindEscorterOf"/>로 물으면
     /// 답은 같지만, 그때는 대상의 묶임 표시가 이미 내려가 "묶여 누워 있었는가"를 알 수 없다.
@@ -371,8 +396,7 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
 
             // 대상이 커스터디를 벗어나면 밧줄 연결도 끊는다 — 인계 판정(→Jailed)·방치 탈주·풀기(→Idle)·
             // 라운드 종료 파괴가 전부 여기로 수렴한다(참조가 Unity 가짜 null이 되는 파괴 경로 포함, #356).
-            if (npc == null
-                || (npc.CurrentState != NpcState.Escorted && npc.CurrentState != NpcState.Captured))
+            if (npc == null || !IsTetherableState(npc))
             {
                 RemoveTetherAt(i);
                 continue;
@@ -384,6 +408,18 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
             // "막힘"과 "끊김"이 매 프레임 다툰다.
             if (!IsLeashedTo(npc) && IsTooFarToTether(npc))
             {
+                // 시체는 일어나지도 달아나지도 않는다 (#571) — 줄만 끊고 그 자리에 남긴다.
+                // 아래 두 갈래(도주 / 그 자리에 남기)는 둘 다 ServerStandUpThen을 태우는데, 그건
+                // 시체에 걸면 안 된다: 기상 예약이 끝난 뒤 커스터디 전이를 거는데 Dead에서는 나갈 수
+                // 없어 NpcStateMachine이 에러만 남긴다.
+                if (npc.Death.IsDead)
+                {
+                    ReleaseDrag(npc);
+                    NotifyOwner($"밧줄 끊김 — 시체를 놓쳤다: {npc.name}");
+                    RemoveTetherAt(i);
+                    continue;
+                }
+
                 // 내 줄을 빼기 <b>전에</b> 물어야 한다 — 뺀 뒤에는 대상의 묶임 표시가 이미 내려가
                 // "묶여 누워 있었는가"를 알 수 없다 (#513, ServerApplyUnrope와 같은 순서).
                 bool othersHold = HasOtherTether(npc);
@@ -426,10 +462,31 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
             }
 
             // 외부 요인으로 커스터디에서 벗어났으면(넉백·페널티 등 강제 상태 전이) 끌기만 정리한다 — 줄은 유지.
-            if (npc.CurrentState != NpcState.Escorted)
+            // 시체는 여기 걸리지 않는다 — 애초에 Escorted로 들어가지 않으므로 이 검사로는 매 프레임
+            // 끌기가 해제된다. 시체의 끌기 종료는 E(풀기)·거리 끊김·운반자 소실뿐이다. (#571)
+            if (!npc.Death.IsDead && npc.CurrentState != NpcState.Escorted)
                 ReleaseDrag(npc);
         }
     }
+
+    /// <summary>
+    /// 줄을 계속 걸어 둘 수 있는 대상인가 — 커스터디(연행·체포) <b>또는 시체</b>. (#571)
+    ///
+    /// 시체가 예외인 이유는 <b>커스터디를 쓰지 않기 때문</b>이다. 산 대상의 줄은 <c>Escorted</c>를
+    /// 타지만 시체는 <see cref="NpcState.Dead"/>에서 나갈 수 없어 그 상태로 들어갈 수 없고, 들어갈
+    /// 이유도 없다 — 시체는 신병이 아니라 짐이다(유치장 문 앞에서 계상되지만 그 경로도 커스터디를 안 쓴다).
+    ///
+    /// ⚠ 그래서 시체만은 상태가 아니라 <b>줄이 실제로 걸려 있는지</b>로 가른다. "죽었으면 무조건
+    /// 유지"로 두면 <b>끌던 대상이 손 안에서 죽는 경로</b>가 새어 나간다: 사망 진입이 줄을 전부
+    /// 끊는데(<see cref="NpcDeath.ServerEnterDead"/> ④ <c>ServerClearDrag</c>) 이 목록에는 남아,
+    /// 플레이어가 있지도 않은 줄에 밧줄 칸을 영영 물린 채 아무것도 못 묶게 된다.
+    /// 그 경로로 죽은 시체는 <b>다시 묶어야</b> 끌 수 있다 — 산 대상의 줄(위치 대입)과 시체의
+    /// 줄(관절)은 다른 물건이라 이어 붙지 않는다.
+    /// </summary>
+    private static bool IsTetherableState(NpcController npc) =>
+        npc.Death.IsDead
+            ? npc.Rope.IsTethered
+            : npc.CurrentState == NpcState.Escorted || npc.CurrentState == NpcState.Captured;
 
     // 끊김 판정 — 수평 거리만 본다(끌기 장력과 같은 기준, 계단·경사에서 y차로 오작동하지 않게).
     private bool IsTooFarToTether(NpcController npc)

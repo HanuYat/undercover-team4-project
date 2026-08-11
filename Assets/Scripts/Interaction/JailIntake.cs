@@ -34,7 +34,7 @@ public class JailIntake : MonoBehaviour
 
     [Tooltip(
         "판정 버튼이 신병으로 인정하는 거리(m) — 밧줄로 끌고 있지 않아도 이 안에 있는 확보 상태(놓아둔 Captured, "
-            + "남이 끌고 온 Escorted)면 함께 판정한다. 밧줄 길이(1.6m)보다 넉넉히 둘 것"
+            + "남이 끌고 온 Escorted, 내려놓은 시체)면 함께 판정한다. 밧줄 길이(1.6m)보다 넉넉히 둘 것"
     )]
     [SerializeField] private float m_admitReach = 4f;
 
@@ -74,10 +74,13 @@ public class JailIntake : MonoBehaviour
     /// 가르는 데 쓴다.
     ///
     /// <b>확보의 기준은 둘이다</b> — 이 사람의 밧줄에 걸린 대상 전부, 그리고 버튼 앞
-    /// <see cref="m_admitReach"/> 안에 있는 <see cref="NpcState.Captured"/>·<see cref="NpcState.Escorted"/>.
+    /// <see cref="m_admitReach"/> 안에 있는 <see cref="IsAdmittableState"/>.
     /// 후자를 넣는 이유는 밧줄을 풀어 세워 둔 뒤 누르는 조작이 자연스럽고 <b>남이 끌고 온 신병을 대신
     /// 넣어 주는</b> 협동도 되어야 하기 때문이고, 여럿을 끌고 왔으면 <b>한 번에 전부 판정된다</b>
     /// (팀 확정 2026-08-06).
+    ///
+    /// <b>시체도 받는다</b> (#571) — 죽은 대상은 죽는 순간이 아니라 여기서 계상된다. 판정·배치가
+    /// 통째로 다른 갈래라 <see cref="ServerAdmitCorpse"/>가 따로 받는다.
     ///
     /// 오검거는 감옥에 들이지 않고 그 자리에서 놓는다 — <see cref="WrongfulArrestPenalty"/>가
     /// Detained로 가져가 페널티를 굴린다(#101/#277). 감옥이 격리 공간이 된 뒤로는 "안에서 확정된
@@ -120,6 +123,14 @@ public class JailIntake : MonoBehaviour
             NpcController npc = m_admitBuffer[i];
             if (npc == null || m_unjudgeable.Contains(npc))
                 continue;
+
+            // 시체는 갈래가 통째로 다르다 (#571) — 판정 이벤트도, 기상도, 커스터디 전이도 없다.
+            if (npc.Death.IsDead)
+            {
+                if (!ServerAdmitCorpse(npc, presser))
+                    m_unjudgeable.Add(npc); // 신원도 경범죄 마커도 없는 시체 — 다시 물어도 답이 같다
+                continue;
+            }
 
             // <b>판정이 먼저다 — 줄이 걸려 있는 동안에.</b> ArrestJudge가 인계자를 그 순간의 밧줄에서
             // 뽑아 결과(ArrestResult.DeliveredBy)에 실으므로, 줄을 먼저 걷으면 목록이 비어 <b>판정 배너도
@@ -185,6 +196,50 @@ public class JailIntake : MonoBehaviour
         Debug.Log($"[감옥] 수감 — {npc.name}을(를) {spot.name}에 배치했다 (현상금 {bounty}원)");
     }
 
+    // ---- 시체 수감 (#571) ----
+
+    /// <summary>
+    /// 시체 하나를 판정해 감옥 안에 눕힌다 — 서버(또는 오프라인) 전용. (#571)
+    ///
+    /// <b>산 신병 경로와 셋이 갈린다.</b> ① 판정이 <see cref="ArrestJudge.JudgeCorpse"/>다
+    /// (<c>OnArrestJudged</c>를 발행하지 않는다 — 구독자가 전부 상태 전이라 시체에 성립하지 않는다),
+    /// ② 줄을 걷을 때 일으켜 세우지 않는다, ③ 배치가 순간이동이 아니라 <b>몸을 통째로 옮기는</b> 것이다.
+    ///
+    /// <b>오검거는 여기 오지 않는다</b> — 죽는 순간 이미 세고 표식을 세워 두므로
+    /// (<see cref="ArrestJudge.JudgeDeath"/>) 판정이 null로 끊긴다. 무고한 시민의 시체를 끌고 와도
+    /// 문 앞에 놓일 뿐이다.
+    /// </summary>
+    /// <returns>판정이 성립했으면 참 — 거짓이면 다시 눌러도 결과가 같은 시체다(신원 없음·이미 계상됨).</returns>
+    private bool ServerAdmitCorpse(NpcController npc, PlayerEscorter presser)
+    {
+        ArrestResult? result = App.Game.ArrestJudge?.JudgeCorpse(npc, presser);
+        if (result == null)
+            return false;
+
+        ulong[] deliverers = ToClientIds(result.Value.DeliveredBy);
+        int bounty = result.Value.Reward;
+
+        // 줄부터 걷는다 — 관절 밧줄이 걸린 채 옮기면 운반자의 손과 감옥 사이에 관절이 늘어난 채로
+        // 남아, 물리가 그 장력으로 시체를 문 밖으로 도로 끌어낸다.
+        PlayerEscorter.ReleaseAllTethersOnCorpse(npc);
+
+        // 배치 지점(ReservePlacement)을 쓰지 않는다 — 그 목록은 <b>산 수감자가 설 자리</b>의 정원이고,
+        // 시체가 한 칸씩 차지하면 자리를 영영 물린다(반납은 ReleaseInmate 경로뿐인데 시체는 거기 없다).
+        // 시체는 아무것도 막지 않으므로(래그돌 레이어는 지형하고만 충돌한다) 방 안 아무 데나 누우면 된다.
+        //
+        // ⚠ <c>RandomPointInRoom</c>이 아니라 <c>RandomRestPointInRoom</c>이다 — 저쪽은 부피 밑면이라
+        // 바닥 속이고, 시체에는 스냅해 줄 에이전트가 없다(그쪽 주석).
+        Vector3 spot = m_jailZone.RandomRestPointInRoom();
+        npc.Custody.SendCorpseToJail(spot);
+
+        // 점유(m_inmates)가 아니라 원장(m_records)에만 올린다 — 시체는 유치장 표지판이 세는 인원도,
+        // 탈옥이 풀어 줄 수감자도 아니다 (JailZone.RecordDeceased 주석).
+        m_jailZone.RecordDeceased(npc, bounty, deliverers);
+
+        Debug.Log($"[감옥] 시체 수감 — {npc.name}을(를) 감옥 안에 눕혔다 (현상금 {bounty}원)");
+        return true;
+    }
+
     // 이 플레이어가 확보 중인 대상을 모은다 — 자기 밧줄에 걸린 전부 + 문 앞에 놓아둔 Captured.
     private void CollectHeldBy(GameObject interactor)
     {
@@ -217,7 +272,7 @@ public class JailIntake : MonoBehaviour
             NpcController npc = npcs[i];
             if (npc == null)
                 continue;
-            if (npc.CurrentState != NpcState.Captured && npc.CurrentState != NpcState.Escorted)
+            if (!IsAdmittableState(npc.CurrentState))
                 continue;
             if ((npc.transform.position - origin).sqrMagnitude > sqrReach)
                 continue;
@@ -225,6 +280,17 @@ public class JailIntake : MonoBehaviour
                 m_admitBuffer.Add(npc);
         }
     }
+
+    /// <summary>
+    /// 버튼 앞에 놓아둔 것만으로 판정 대상이 되는 상태인가 — 밧줄로 끌고 온 대상은 이 판정을 타지 않는다.
+    ///
+    /// <see cref="NpcState.Dead"/>가 들어 있는 이유는 산 신병과 같다 (#571): 문 앞에 <b>내려놓고</b>
+    /// 누르는 조작이 자연스럽고, 남이 끌고 온 시체를 대신 넣어 주는 것도 되어야 한다.
+    /// 시체 밧줄은 E로 내려놓으면 관절이 풀리므로(순수 운반이라 '놓아둔 Captured' 같은 중간이 없다)
+    /// 이 갈래가 없으면 <b>줄을 쥔 채로만</b> 넣을 수 있게 된다.
+    /// </summary>
+    private static bool IsAdmittableState(NpcState state) =>
+        state is NpcState.Captured or NpcState.Escorted or NpcState.Dead;
 
     // 인계 몫(#484)의 귀속자 — 판정이 확정한 인계자 목록(밧줄 보유자 전원 + 버튼을 누른 사람,
     // 팀 확정 2026-08-06)을 clientId로 옮긴다. 누가 인계자인지 정하는 것은 ArrestJudge 몫이다.

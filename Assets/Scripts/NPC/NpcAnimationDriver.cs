@@ -291,7 +291,12 @@ public class NpcAnimationDriver : MonoBehaviour
     {
         // 밧줄에 묶여 있으면(끌리는 중이든 놓아둔 채든) 콜라이더도 눕는다 — 커스터디 상태는 Escorted·Captured라
         // 상태만 보면 서 있게 된다. 일어나기 시작하면 그 순간 함께 선다.
-        bool prone = IsRopeProne || (m_baseState == NpcState.Stunned && !m_standingUp);
+        // 사망(#571)은 <b>일어나기와 무관하게</b> 항상 누움이다 — m_standingUp을 함께 보는 기절과
+        // 다른 점이다. 죽는 순간 진행 중이던 기상 모션은 취소되어야 하고, 시체가 다시 서는 일은 없다.
+        bool prone =
+            m_baseState == NpcState.Dead
+            || IsRopeProne
+            || (m_baseState == NpcState.Stunned && !m_standingUp);
         if (prone == IsProne)
             return;
 
@@ -322,6 +327,10 @@ public class NpcAnimationDriver : MonoBehaviour
         return state switch
         {
             NpcState.Attack => m_resistMoving ? (int)NpcState.Run : (int)NpcState.Idle,
+            // 사망(#571)도 대응 Animator 상태가 없다 — 누운 기절 모션을 빌려 쓴다. <b>임시다</b>:
+            // 래그돌(NpcRagdoll)이 붙으면 Animator를 통째로 끄므로 이 값은 쓰이지 않는다.
+            // 그때까지도 시체가 서 있으면 안 되니 남겨 둔다.
+            NpcState.Dead => (int)NpcState.Stunned,
             NpcState.Intruding => (int)NpcState.Walk,
             // 수감(Jailed)도 대응 Animator 상태가 없다 — 수갑 찬 걷기를 빌려 쓴다(HandleStateChanged가 진입 시
             // 시드하는 것과 같은 값). 여기 값이 필요한 것은 앉기에서 빠져나올 때다: 원격 피어에서 착석 플래그가
@@ -614,7 +623,8 @@ public class NpcAnimationDriver : MonoBehaviour
         // 끌려가는 몸이 선 자세로 남는다. 다음 기절에서 누움 판정이 굳는 것도 이 정리가 막는다.
         // 반대로 도주·수감·배회 복귀는 <b>일어난 결과</b>라 유지해야 한다: 묶임 표시를 걷는 것은
         // PlayerEscorter의 매 프레임 정리라 한 박자 늦고, 그 사이에 내리면 그 프레임에 도로 눕는다.
-        if (state is NpcState.Stunned or NpcState.Escorted or NpcState.Captured)
+        // 사망(#571)도 '다시 눕는' 쪽이다 — 일어나던 도중에 죽으면 그 모션이 끊기고 그대로 쓰러진다.
+        if (state is NpcState.Stunned or NpcState.Escorted or NpcState.Captured or NpcState.Dead)
         {
             m_standingUp = false;
             m_standUpUntil = 0f;

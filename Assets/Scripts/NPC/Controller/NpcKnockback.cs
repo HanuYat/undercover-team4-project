@@ -79,6 +79,20 @@ public class NpcKnockback : NetworkBehaviour
         }
     }
 
+    /// <summary>
+    /// 비행을 중단한다 — <b>착지 처리를 하지 않는다.</b> 사망(<see cref="NpcDeath"/>) 전용. (#571)
+    ///
+    /// <see cref="EndKnockback"/>과 갈라 둔 이유가 전부다: 저쪽은 NavMesh 위 착지점을 찾아 에이전트를
+    /// 되살리고 상태를 전이시키는데, 죽은 몸에는 셋 다 틀렸다. 여기서는 플래그만 내려 코어 Update의
+    /// 넉백 게이트에서 빠져나오게 하고, 에이전트·상태는 부르는 쪽(사망)이 정한다.
+    /// 에이전트는 이미 <see cref="ServerApplyKnockback"/>이 꺼 뒀으므로 그대로 두면 된다.
+    /// </summary>
+    internal void ServerAbortFlight()
+    {
+        m_knockbackActive = false;
+        m_knockbackVelocity = Vector3.zero;
+    }
+
     // 포물선 비행 1프레임. 착지하면 NavMesh 위로 되돌리고 발사 시점에 정한 상태로 넘긴다.
     internal void Tick()
     {

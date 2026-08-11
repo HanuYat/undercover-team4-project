@@ -358,6 +358,21 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
             return;
         }
 
+        // 죽었다 — 배회 복귀와 같은 갈래로 받는다 (#571). <b>m_hasStarted를 보지 않는다</b>:
+        // 이동 구간에서 죽든 해제 중에 죽든 이벤트가 시체를 붙들 이유가 없고, 여기서 놓지 않으면
+        // 아래 잔류 타이머가 만료될 때까지 이벤트가 늘어졌다가 시체에 StartFlee를 걸어
+        // NpcStateMachine의 사망 이탈 가드에 걸린다.
+        //
+        // 납치범(AbductionEvent)에는 이 대응이 필요 없다 — 그쪽은 NpcHealth.OnDamaged를 구독하고
+        // 그 훅이 <b>HP 반영 직전</b>에 발행되므로, 죽이는 타격에서도 격퇴가 먼저 돌아 이미 임무가
+        // 풀려 있다. 여기는 상태 전이만 보고 있어서 새 상태를 알아보지 못한 것이다.
+        if (state == NpcState.Dead)
+        {
+            Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 사망, 추적 종료");
+            m_releaseQueued = true;
+            return;
+        }
+
         // 침입을 시작한 뒤 배회로 돌아왔다 = 뿌리치고 달아나 진정했거나(저지 실패) 도주가 끝났다.
         // 소멸시키지 않고 배회 시민으로 도심에 남긴다 (#310) — 마커가 남아 언제든 잡아 인계하면 수익이 난다.
         if (m_hasStarted && (state == NpcState.Idle || state == NpcState.Walk))

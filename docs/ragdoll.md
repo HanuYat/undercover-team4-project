@@ -10,15 +10,35 @@
 
 ---
 
-## 1. 구조 — 세 컴포넌트
+## 1. 구조 — 다섯 파일
 
-전부 **Player 프리팹 루트**에 붙는다 (CharacterController·PlayerIncapacitation과 같은 오브젝트).
+> ⚠ **브랜치 `ragdoll-test`에서 사망 전용 모델을 분리했다** — `RagdollRig`·`RagdollRope`가 Player
+> 루트가 아니라 `Corpse` 자식에 붙고, 리그가 두 벌이 된다. 아래 표는 그 이후 기준이다.
+> 작업 기록과 보류 항목은 [ragdoll-corpse-split.md](ragdoll-corpse-split.md).
 
-| 컴포넌트 | 위치 | 하는 일 |
-|---|---|---|
-| `RagdollRig` | `Common/Ragdoll/` | 뼈·스킨 수집, 키네마틱 토글, 임펄스, 감쇠, 속도캡, 포즈 캡처/복원, 블렌드 |
-| `RagdollRope` | `Common/Ragdoll/` | 관절 밧줄 — 시체를 물리로 끌어온다 (#365 운반 / #398 드래그) |
-| `PlayerRagdoll` | `Player/View/` | 상태 기계, 사망 폴링, 캡슐 추종, 원격 정렬, 정착 루트 포즈, 기상 블렌드 |
+```
+Player  [Animator, CharacterController, ..., PlayerRagdoll]
+├ Root                    ← 살아있는 리그. Animator 전용, 물리 없음
+├ SM_Gen_Chr_Robot_01     ← 살아있는 스킨
+└ Corpse  (비활성)        ← [RagdollRig, RagdollRope]
+  ├ Root                  ← 리그 복사본 (Rigidbody 11 + CharacterJoint 10)
+  └ SM_Gen_Chr_Robot_01   ← 스킨 복사본
+```
+
+| 컴포넌트 | 위치 | 붙는 곳 | 하는 일 |
+|---|---|---|---|
+| `RagdollRig` | `Common/Ragdoll/` | `Corpse` | 뼈·스킨 수집, 키네마틱 토글, 임펄스, 감쇠, 속도캡, 포즈 캡처/복원 |
+| `RagdollRope` | `Common/Ragdoll/` | `Corpse` | 관절 밧줄 — 시체를 물리로 끌어온다 (#365 운반 / #398 드래그) |
+| `RagdollPose` | `Common/Ragdoll/` | (static) | 두 리그 간 포즈 복사 — 사망·부활의 이음새 |
+| `RagdollPoseBlend` | `Common/Ragdoll/` | (plain class) | 기상 블렌드. **살아있는** 리그를 섞는다 |
+| `PlayerRagdoll` | `Player/View/` | Player 루트 | 상태 기계, 사망 폴링, 모델 교체, 캡슐 추종, 원격 정렬, 정착 루트 포즈 |
+
+**Animator를 끄지 않는다.** 애니메이터와 물리가 서로 다른 리그를 쥐므로 싸울 일이 없다 — 사망 시
+끄는 것은 **살아있는 스킨**뿐이고, 살아있는 뼈는 보이지 않는 채 계속 애니메이션되어 부활 블렌드의
+목표가 된다.
+
+⚠ **살아있는 `Root`를 컨테이너로 감싸지 말 것.** Player의 Animator는 루트에 있고 Avatar 바인딩이
+경로 기반이라 리그를 한 단 더 깊이 넣으면 살아있는 애니메이션이 끊긴다.
 
 ### 자른 선
 
@@ -40,12 +60,15 @@ Animated ──진입(사망)──> Ragdoll ──정착──> Settled ──�
                           날아감          물리 유지          정착포즈 → 기상포즈
 ```
 
-| 상태 | 뼈 | 캡슐(CharacterController) |
-|---|---|---|
-| `Animated` | 전부 키네마틱 (애니메이터가 포즈를 쥠) | 켜짐, 입력으로 이동 |
-| `Ragdoll` | 전부 물리 + 임펄스 | **꺼짐**, 매 프레임 골반 위치 대입 |
-| `Settled` | 전부 물리 (아무것도 안 붙듦) | 꺼짐, 골반 수평 + 지면 높이 |
-| `BlendingToAnimator` | 전부 키네마틱 | 켜짐 |
+| 상태 | 시체 모델 | 살아있는 스킨 | 캡슐(CharacterController) |
+|---|---|---|---|
+| `Animated` | **비활성** | 켜짐 | 켜짐, 입력으로 이동 |
+| `Ragdoll` | 활성, 전부 물리 + 임펄스 | **꺼짐** | **꺼짐**, 매 프레임 골반 위치 대입 |
+| `Settled` | 활성, 전부 물리 (아무것도 안 붙듦) | 꺼짐 | 꺼짐, 골반 수평 + 지면 높이 |
+| `BlendingToAnimator` | **비활성** | 켜짐 | 켜짐 |
+
+전이의 이음새는 포즈 복사 두 번이다: 시체를 켤 때 살아있는 리그 → 시체(`ShowCorpse`), 끌 때
+시체 → 살아있는 리그(`HideCorpse`). 후자가 곧 블렌드의 출발점이다.
 
 **진입 경로는 둘인데 결과는 하나다.**
 
@@ -63,8 +86,17 @@ Animated ──진입(사망)──> Ragdoll ──정착──> Settled ──�
 
 각 항목 뒤 `§`는 실제로 밟았던 기록이다.
 
-1. **뼈를 동기화하지 않는다.** 각 피어가 로컬로 시뮬레이션하고, 궤적은 오너의 루트에서 받는다.
+1. **뼈를 매 틱 동기화하지 않는다.** 각 피어가 로컬로 시뮬레이션하고, 궤적은 오너의 루트에서 받는다.
    따라서 **입력(임펄스)이 같아야 결과가 같다.** 실측으로 9m를 날고도 두 피어가 5cm 안에서 일치했다. `§10-3`
+
+   > **NPC 시체는 정착하는 순간 자세를 1회 보낸다** (#571, `docs/571 §13`). 매 틱이 아니라
+   > **얼릴 때 한 번**이라 이 불변식과 어긋나지 않는다 — 얼면 자세가 상수가 되어 보낼 것이
+   > 없어지는 쪽에 가깝다.
+   >
+   > ⚠ **플레이어는 골반 하나를 복제한다** — `Corpse/Root/Hips`에 `NetworkTransform` +
+   > `NetworkRigidbody`(`UseRigidBodyForMotion`). 뼈 11개가 아니라 **1개**라 대역폭은 NT 하나이고,
+   > 나머지 10개는 여전히 각 피어의 로컬 물리가 만든다. 비권위 피어의 골반은 키네마틱으로 남는다
+   > (`ReleaseBonesToPhysics`). [ragdoll-corpse-split.md §7](ragdoll-corpse-split.md)
 
 2. **캡슐은 매 프레임 골반을 따라간다** (`TickCapsuleFollow`). 스윕을 쓰지 않고 위치를 직접 대입한다 —
    대리값은 지형을 존중할 이유가 없다. 이걸 안 하면 정착 순간 캡슐이 한 번에 텔레포트하고,
@@ -85,6 +117,45 @@ Animated ──진입(사망)──> Ragdoll ──정착──> Settled ──�
 7. **원격 정렬은 동력이 아니라 표류 방지다.** 상한을 올려 "끌어오게" 만들려던 시도가 발산으로 끝났다.
    몸을 움직이는 것은 각 피어의 로컬 물리다. `§9-16` `§10-5`
 
+   > 골반을 복제하는 지금 배선에서는 **`TickAlignBonesToRoot`가 아예 돌지 않는다**(궤적의 주인이
+   > 골반이라 좁힐 잔차가 없다). 코드는 남겨 뒀다 — 골반 NT를 빼면 자동으로 옛 동작으로 돌아간다.
+   > 이 규칙을 다시 어기면 어떻게 되는지는 최근에 또 확인됐다: 상한 없는 보정이 매 스텝 0.61m를
+   > 순간이동시키자 아래쪽 뼈가 지형에 박히며 뼈 평균 속도가 15m/s까지 올라갔다.
+
+8. **밧줄은 권위 피어만 묶는다** — 골반을 복제하는 동안. 전 피어가 각자 묶으면 같은 관절에
+   **피어마다 다른 입력**이 들어간다(앵커가 애니메이터·NT 보간에 좌우되므로). 그게 견인 발산의
+   원인이었고, 시뮬레이션을 하나로 줄이자 3피어가 정지 시 **1mm 이내**로 일치했다.
+   같은 이유로 밧줄 앵커는 손이 아니라 **운반자 루트**다(스트리밍되는 값).
+   [ragdoll-corpse-split.md §7](ragdoll-corpse-split.md)
+
+   > ⚠ 골반 NT가 없으면 반대로 **전원이 묶어야 한다** — 원격 시체에 끄는 힘이 아예 없어진다.
+   > 조건이 `m_hipsIsNetworkSynced`인 이유가 그것이다.
+
+9. **두 리그의 포즈를 카운트로 맞추지 않는다.** 살아있는 리그는 뼈만 있는 트리가 아니다 — 장착
+   아이템 모델이 손 본 밑(`Hand_R/HeldItemAnchor`)에 런타임에 들어온다. 카운트를 대조하면 **항상**
+   불일치가 되어 포즈가 통째로 복사되지 않는다(시체가 바인드 포즈나 직전 누운 포즈로 나타남).
+   순수한 쪽(시체)에서 몰고 가며 이름으로 짝지을 것.
+   [ragdoll-corpse-split.md §3](ragdoll-corpse-split.md)
+
+10. **뼈 길이는 포즈가 아니다.** 관절이 달린 뼈의 `localPosition`을 복사하지 말 것 — 그건 자세가
+    아니라 골격이고, 관절의 `connectedAnchor`는 **바인드 포즈 기준으로 구워져 있다**(프리팹이
+    `AutoConfigureConnectedAnchor: 1`). 어긋난 골격을 물리에 넘기면 **첫 스텝부터 관절이 위반된 채
+    출발**해 사지가 고무처럼 늘어나며 바닥을 뚫는다.
+
+    물리가 관절을 늘린 채 정착하면 그 길이가 로컬 위치에 굳으므로, 막는 자리가 **둘이고 짝이다** —
+    `RagdollPose.Copy`가 리그 사이 전파를, 부활 시 `RagdollRig.RestoreBindPose()`가 시체 자신의
+    누적을 끊는다. 하나만으로는 다른 경로로 되돌아온다. (실측 1차 0.0055m → 2차 0.0624m로 누적)
+    [ragdoll-corpse-split.md §8-2](ragdoll-corpse-split.md)
+
+11. **물리로 넘기기 전에 `Physics.SyncTransforms()`.** 이 프로젝트는 `m_AutoSyncTransforms: 0`이라
+    (`ProjectSettings/DynamicsManager.asset`) 트랜스폼에 쓴 값이 PhysX 액터로 즉시 넘어가지 않는다.
+    키네마틱인 동안은 트랜스폼이 진실이지만 동적으로 바뀌는 순간 **액터가 진실**이 되므로, 그 사이에
+    동기화하지 않으면 물리가 **액터가 들고 있던 옛 포즈**에서 출발한다(실측 81.7° 차이 — 시체가
+    T자에서 무너지기 시작했다).
+
+    `RagdollRig.SetKinematic(false)`가 대신 한다. **호출부에 끼우지 말 것** — 같은 전이가 네 군데라
+    하나 빠뜨리면 조용히 돌아온다. [ragdoll-corpse-split.md §8-1](ragdoll-corpse-split.md)
+
 ---
 
 ## 4. 튜닝 노브
@@ -103,7 +174,7 @@ Animated ──진입(사망)──> Ragdoll ──정착──> Settled ──�
 
 | 필드 | 값 | 뜻 |
 |---|---|---|
-| `m_length` | 2 | 손↔골반 최대 거리. 길수록 장력이 덜 걸려 순해진다 |
+| `m_length` | 2 | **운반자 루트**↔골반 최대 거리. 길수록 장력이 덜 걸려 순해진다 |
 | `m_limitSpring` | 1500 | 한계 **바깥에서만** 작동. 늘어져 있으면 힘이 0이다 |
 | `m_limitDamper` | 1000 | **과감쇠로 둔다**(ζ≈1.5). 부족감쇠면 회전 시 에너지가 쌓인다 `§9-17` |
 | `m_dragLinearDamping` | 0.6 | 밧줄이 늘어진 반주기의 **유일한** 에너지 배출구 |
@@ -111,6 +182,13 @@ Animated ──진입(사망)──> Ragdoll ──정착──> Settled ──�
 | `m_maxSpeed` | 8 | 슬링 차단 **하드 캡**. 감쇠로는 원리적으로 못 막는다 `§9-18` |
 
 **Play 중 인스펙터에서 바꾸면 밧줄을 다시 잡지 않아도 바로 먹는다.**
+
+⚠ **앵커가 손이 아니라 운반자 루트다** (불변식 8). 한때 손이었고 이유는 흐느적임이었다 — 손은 걷기
+애니메이션으로 흔들려 매 걸음 장력이 변하고, 그 **가속 차이**가 팔다리를 흔든다. 그런데 그 흔들림을
+만드는 애니메이터가 피어마다 따로 평가돼 앵커 위치가 갈렸다. **흐느적임은 되찾을 문제로 남아
+있고**, 되찾을 때는 애니메이터가 아니라 **스트리밍된 이동거리에서 위상을 뽑아** 결정론적으로
+합성할 것(`PlayerTowedMotion.m_dragTravel`이 이미 그 값을 누적한다).
+보이는 줄은 `RopeDragView`가 `HandAnchor`를 직접 읽으므로 그대로 손에서 나간다.
 
 ### 정착·정렬 — `PlayerRagdoll`
 
@@ -155,14 +233,47 @@ Animated ──진입(사망)──> Ragdoll ──정착──> Settled ──�
 ## 6. 셋업
 
 리그는 **Unity 내장 Ragdoll Wizard**(`GameObject > 3D Object > Ragdoll…`)로 만들고,
-그 위에 **`Tools > Player > Finish Ragdoll Setup`**을 돌린다.
+그 위에 **`Tools > Ragdoll > Finish Setup - …`**을 돌린다 (대상별 메뉴).
+
+Synty 리그는 Humanoid라 위저드의 **Auto-Fill**이 13칸을 자동으로 채운다. 단
+**`Middle Spine`은 `Spine_02`인지 확인할 것** — Auto-Fill이 `Spine_01`(휴머노이드 Spine)을 집을 수 있다.
+`Total Mass`는 **70**, `Flip Forward Axis`는 끈다. 뼈가 되는 것은 11개이고 발(`Ankle_*`)은
+위저드가 방향·바운즈 계산에만 쓰므로 아무것도 생기지 않는 것이 정상이다.
 
 위저드는 콜라이더와 `CharacterJoint`까지만 만든다. 셋업 스크립트가 하는 나머지:
 
 1. `Ragdoll` 레이어 확보 (슬롯 10) + 충돌 매트릭스 — **지형(Default)하고만** 부딪힌다
 2. `isKinematic = true` 초기화 (위저드는 켠 채로 둬서 그대로 두면 스폰 즉시 무너진다)
 3. 보간·CCD, 관절 preprocessing 해제
-4. **검증** — 전 뼈가 몸통 리그 아래인지 확인하고, 아니면 아무것도 고치지 않고 중단한다
+4. `RagdollRig` 부착 보장 — **붙일 자리가 개체마다 다르다**(아래)
+5. **검증** — 전 뼈가 몸통 리그 아래인지 확인하고, 아니면 아무것도 고치지 않고 중단한다
+
+### 리그가 프리팹 어디에 있나 — 개체마다 다르다
+
+`RagdollRig`는 `transform.Find("Root")`로 **직속 자식**에서 리그를 찾으므로, 리그 최상단을 직속
+자식으로 가진 오브젝트에 붙어야 한다. 그 자리가 갈린다:
+
+| | 리그 소유자 | 이유 |
+|---|---|---|
+| Player | **프리팹 루트** | 리그가 프리팹에 풀려 있다 |
+| NPC | **`Model`** | 몸이 Synty 캐릭터 프리팹의 **중첩 인스턴스**이고 리그가 그 안에 있다 |
+
+그래서 셋업 메뉴가 `rigOwnerPath`를 넘긴다(`""` = 루트). NPC 쪽 수정은 중첩 인스턴스의
+오버라이드로 저장된다.
+
+### 뼈대가 같으면 위저드를 다시 돌리지 않는다
+
+**Synty 캐릭터 넷(`NPC_Citizen`/`_Generic`/`Rioter`/`Streaker`)은 뼈대를 공유한다** — `Model` 기준
+뼈 로컬 좌표 편차가 **0.00cm**이고, 메시가 다른 `Streaker`(`SM_Gen_Chr_Underwear_Male_01`)까지
+그렇다. 그래서 완성된 리그를 그대로 복제할 수 있다:
+
+```
+Tools > Ragdoll > Clone Rig - NPC (Citizen 기준)
+```
+
+`RagdollRigCloner`가 리그 복제 → `RagdollSetup` 마무리 → `NpcRagdoll` 부착까지 한 번에 한다(멱등).
+⚠ **체형이 다른 캐릭터에는 쓰면 안 된다** — 복제 전에 뼈 좌표를 대조하고 1mm라도 어긋나면 그
+프리팹은 아무것도 고치지 않고 건너뛴다. 그때는 위저드가 맞다.
 
 ⚠ **위저드에 뼈를 넣을 때 `Root/Hips` 이하만 지정할 것.** 플레이어 프리팹에는 뼈 이름이 완전히
 같은 리그가 **두 벌** 있다(1인칭 팔이 리그 복사본이다). 잘못 집으면 사망 시 1인칭 팔이 물리로
@@ -189,38 +300,75 @@ solver 반복·겹침 탈출 속도는 프리팹에 저장되지 않아 `Ragdoll
 
 ---
 
-## 8. NPC로 확장할 때
+## 8. NPC 래그돌 (#571 — 들어갔다)
 
-`RagdollRig`·`RagdollRope`는 그대로 쓸 수 있다. NPC 리그는 플레이어와 **같은 Synty 본 이름**
-(`Root`/`Hips`/`Head`/`Spine_02`)을 쓰고, 리그가 한 벌뿐이라 FP 팔 함정도 없다.
+`RagdollRig`·`RagdollRope`를 **한 줄도 고치지 않고** 그대로 쓴다. NPC 리그는 플레이어와 **같은
+Synty 본 이름**(`Root`/`Hips`/`Head`/`Spine_02`)을 쓰고, 리그가 한 벌뿐이라 FP 팔 함정도 없다.
 
-새로 써야 하는 것은 `PlayerRagdoll`에 대응하는 오케스트레이션이다:
+새로 쓴 것은 `PlayerRagdoll`에 대응하는 오케스트레이션 `NpcRagdoll`(`NPC/View/`) 하나다:
 
 | | Player | NPC |
 |---|---|---|
-| 이동 프록시 | CharacterController (끄고 위치 대입) | **NavMeshAgent** (끄고, 정착 후 `Warp`) |
+| 이동 프록시 | CharacterController (끄고 위치 대입) | **NavMeshAgent** (끄고, **되살리지 않는다**) |
 | 위치 권위 | **오너** 권한 NetworkTransform | **서버** 권한 → 전 클라가 원격 |
-| 진입 트리거 | `PlayerIncapacitation.IsDead` | ? — 아래 참고 |
+| 진입 트리거 | `PlayerIncapacitation.IsDead` | `NpcDeath.IsDead` (= `NpcState.Dead`) |
+| 이탈(부활) | 정착 포즈 → 기상 블렌드 | **없다** — 시체는 되살아나지 않는다 |
 
-### 선행 과제 — 코드 구조가 아니다
+부활이 없다는 것이 NPC 쪽을 크게 줄인다 — `BlendingToAnimator`·기상 클립용 루트 yaw 정렬·
+`CapsuleBottomOffset`, 그리고 **부활 오인 문제(`§9-19`) 전체가 사라진다**(되살아나지 않으면
+"살아 있는데 래그돌"이라는 전제 자체가 없다). 다만 넉다운 구간 래그돌을 나중에 붙일 여지가 있어
+블렌드 경로는 **쓰지 않되 지우지 않는다.**
 
-1. **리그 빌드가 Player 전용이다.** `PlayerRagdollSetup.k_prefabPath`가
-   `Assets/Prefabs/Player.prefab` 하드코딩이고, NPC 프리팹에는 `CharacterJoint`가 하나도 없다.
-2. **NPC에 사망 개념이 없다.** HP 0이 `Stun`으로 간다 — "언제 래그돌에 들어가나"를 먼저 정해야 한다.
-   (`BombDevice.ServerExplode`의 "NPC 폭발 피해는 아직 연결하지 않았다" 주석과 같은 매듭)
+**루트 추종을 `NpcRagdoll`이 직접 돌린다.** 플레이어는 `PlayerMovement.Update`가 불러 주지만
+`NpcController.Update`는 클라에서 즉시 return하고 서버에서도 사망 게이트에서 끊겨 부를 자리가 없다.
 
-### 밧줄은 합치지 말 것
+⚠ **뼈 좌표로 물리를 판단하지 말 것.** 이 프로젝트는 `Physics.autoSyncTransforms`가 꺼져 있어,
+루트 추종이 대입한 값이 PhysX에 써지지 않고 다음 FixedUpdate가 되돌린다. 트랜스폼을 읽는 계측에는
+진입 첫 프레임에 골반이 한 뼘 솟은 것처럼 보이는데 **물리에는 그런 일이 없다.**
+(#571에서 한 번 헛짚었다 — `docs/571-npc-death-ragdoll.md` §7-1)
 
-NPC에도 밧줄이 있지만(`NpcController.Rope`) **메커니즘이 다르다** — 그쪽은 서버가
-`transform.position`을 직접 대입하고 NetworkTransform이 복제한다. 래그돌이 된 몸은 동적
-리지드바디라 그 방식이 통하지 않아(부모 트랜스폼을 따르지 않는다) 관절 방식이 필요했다.
+세부 근거·실측은 [571-npc-death-ragdoll.md](571-npc-death-ragdoll.md)에 있다.
+
+### 밧줄은 둘 다 쓰되 합치지는 말 것
+
+NPC에도 밧줄이 있고(`NpcController.Rope`) **시체 끌기가 들어오면서 둘 다 쓰게 됐다**(#571 6단계).
+그래도 **메커니즘은 다르다**:
+
+| 대상 | 끄는 방식 |
+|---|---|
+| 산 NPC | 서버가 `transform.position`을 직접 대입 → NetworkTransform이 복제 (`NpcRopeDrag.Tick`) |
+| 시체 (= 래그돌) | **관절 밧줄**(`RagdollRope`)이 물리로 끌고, 루트가 골반을 따라간다 |
+
+래그돌이 된 몸은 동적 리지드바디라 위치 대입이 통하지 않는다(부모 트랜스폼을 따르지 않는다).
 **갈리는 기준은 "대상이 래그돌이냐 아니냐"다.**
+
+⚠ 그래서 코어 Update의 사망 게이트가 `NpcRopeDrag.Tick`을 막는 것이 **방어선이 아니라 사양이다** —
+둘이 같은 프레임에 돌면 위치를 다퉈 시체가 떨거나 몸을 두고 루트만 날아간다.
+
+연결 관리(밧줄 용량·줄 표시·끊김 거리·무게)는 `PlayerEscorter`를 **그대로 공유한다**. 갈리는 것은
+장력 방식과 상태(시체는 커스터디를 안 쓴다), 그리고 푸는 결과(시체는 안 일어난다) 셋뿐이다.
+자세한 것은 [571-npc-death-ragdoll.md](571-npc-death-ragdoll.md) §11.
 
 ---
 
 ## 9. 남은 것
 
-- **시체 무게가 운반자를 늦추지 않는다.** `RopeDragLoad`(#398)가 NPC 견인에만 붙어 있어, 70kg을
-  끌면서도 스프린트로 원을 그릴 수 있다. 붙이면 슬링 캡(`m_maxSpeed`)에 걸릴 일 자체가 줄지만,
-  무게는 ω를 줄일 뿐 상한을 보장하지 않으므로 **캡은 그대로 남겨야 한다.**
-- **NPC 래그돌** — 위 §8.
+- **부활 시 몸이 크게 회전한다 (보류 중).** `Knockdown_Ground`가 루트 전방의 반대쪽으로 눕히는 것을
+  실측했고(`클립 − 루트 = 177.6°`) `m_rootYawOffset = 180`을 넣었으나 **뒤집힘이 남아 있다** —
+  `루트 168.0°`가 오프셋을 바꿔도, 피어를 바꿔도, 사망을 바꿔도 소수점까지 같다. 별개로 호스트에서
+  `Animator.Update(0f)`가 뼈를 쓰지 않는 정황이 있다(스킨을 껐으니 컬링 의심).
+  계측 코드는 `PlayerRagdoll.m_logRevivalYaw`로 켠다 — 데이터·판독법·미해결 질문은
+  [ragdoll-corpse-split.md §4](ragdoll-corpse-split.md).
+
+- **동료 시체의 무게가 운반자를 늦추지 않는다.** `RopeDragLoad`(#398)가 NPC 견인에만 붙어 있다.
+  **NPC 시체는 #571에서 해소됐다** — 연결 목록을 NPC 끌기와 공유하므로 무게가 저절로 걸린다.
+  남은 것은 `PlayerCarrier`로 끄는 **플레이어** 시체뿐이고, 70kg을 끌면서도 스프린트로 원을 그릴 수
+  있다. 붙이면 슬링 캡(`m_maxSpeed`)에 걸릴 일 자체가 줄지만, 무게는 ω를 줄일 뿐 상한을 보장하지
+  않으므로 **캡은 그대로 남겨야 한다.**
+- **NPC 폭발 사망 임펄스가 없다.** NPC 사망은 지금 전부 임펄스 0(그 자리에 무너짐)이다 —
+  폭발은 NPC에 넉백만 주고 피해를 주지 않는다(`BombDevice`). 연결하면 `NpcRagdoll.EnterRagdoll`이
+  이미 멱등이라 받을 준비는 돼 있고, `m_flightAlignPullSpeed`를 임펄스와 짝으로 올려야 한다.
+- **NPC 넉다운 구간 래그돌.** 지금은 사망만 래그돌이다. 붙이면 부활 블렌드가 돌아온다 —
+  선택지 셋의 비교는 `docs/571-npc-death-ragdoll.md` §6.
+- **정착한 시체가 완전히 잠들지 않는다.** 9구 기준 뼈 99개 중 33개가 깨어 있었다. 지금 규모에서는
+  문제로 보이지 않아 강제 수면은 넣지 않았다.

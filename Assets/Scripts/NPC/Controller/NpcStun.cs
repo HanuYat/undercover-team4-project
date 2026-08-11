@@ -233,8 +233,14 @@ public class NpcStun : NetworkBehaviour
     }
 
     /// <summary>
-    /// 스턴 해제. 체력을 회복하고 플래그를 내린다 — 상태 enum은 애초에 바뀐 적이 없으므로
-    /// 확보·페널티군은 다음 Tick부터 하던 일을 그대로 재개한다.
+    /// 스턴 해제. 플래그를 내린다 — 상태 enum은 애초에 바뀐 적이 없으므로 확보·페널티군은 다음
+    /// Tick부터 하던 일을 그대로 재개한다.
+    ///
+    /// <b>체력은 회복하지 않는다</b> (#571). 예전에는 여기가 회복 지점이었고, 근거는 "HP 0인 채로
+    /// 깨어나면 <c>SetHp</c>의 0 도달 엣지가 다시 안 걸려 두 번 다시 기절하지 않는 무적이 된다"였다.
+    /// <b>그 근거가 통째로 사라졌다</b> — 이제 HP 0은 깨어나는 상태가 아니라 사망이라 그 경로 자체가
+    /// 없다. 넉다운도 임계를 <b>내려가는</b> 순간의 한 방향 엣지라 개체당 한 번인 것이 의도다:
+    /// 임계 아래로 내려간 몸이 다음에 맞으면 다시 눕는 것이 아니라 죽는다.
     /// </summary>
     /// <param name="resumeReaction">
     /// 스스로 깨어난 경우 true — 반응·배회군은 도주로 전환한다(#269/#366). 수갑 채포처럼 <b>바깥에서
@@ -247,7 +253,6 @@ public class NpcStun : NetworkBehaviour
         if (!HasStunOverlay)
             return; // 넉백 KO는 NpcStunnedState가 스스로 빠져나간다
 
-        m_owner.Health.ServerRestoreHp(); // 오버레이 경로의 회복 지점 — 넉백 KO는 NpcStunnedState.Exit (#366)
         SetStunned(false);
 
         NavMeshAgent agent = m_owner.Agent;
