@@ -83,7 +83,7 @@ public class SuddenEventManager : NetworkedManagerBase
     private bool m_scheduling; // 라운드 InProgress 진입 시 켜진다 — Phase 폴링으로 스케줄 시작/정지를 판정
     private RoundPhase m_lastPhase = RoundPhase.Preparing;
 
-    /// <summary>이벤트 발생 알림 — 본부/현장 HUD 토스트(#43)가 구독할 훅.</summary>
+    /// <summary>이벤트 발생 알림 — 본부/현장 HUD 토스트가 구독할 훅.</summary>
     public event Action<string> OnEventAnnounced;
 
     // 서버(또는 오프라인)에서만 의미 — 이 피어가 이벤트 권위를 가지는지. 스폰 전(오프라인)이면 항상 권위.
@@ -265,7 +265,7 @@ public class SuddenEventManager : NetworkedManagerBase
     }
 
     /// <summary>
-    /// 이벤트 알림을 전 클라이언트에 발행한다 — HUD 알림(#43)용. 네트워크 세션에서만 RPC를 쏜다.
+    /// 이벤트 알림을 전 클라이언트에 발행한다 — HUD 알림용. 네트워크 세션에서만 RPC를 쏜다.
     /// 보통은 발생 시점에 매니저가 부르지만, <see cref="ISuddenEvent.AnnounceOnBegin"/>이 false인 이벤트는
     /// 알릴 시점을 스스로 정해 이 메서드를 직접 부른다. 서버(또는 오프라인) 전용.
     /// </summary>

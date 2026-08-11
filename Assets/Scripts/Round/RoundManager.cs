@@ -102,15 +102,25 @@ public class RoundManager : CommonManagerBase
     // 내부에서는 이 필드를 직접 읽는다 — Update처럼 클라에서도 도는 경로가 있어 프로퍼티로 읽으면 경고가 매 프레임 뜬다.
     private RoundPhase m_phase = RoundPhase.Preparing;
 
-    // 클라 접근 경고는 세션당 한 번만 — 매 프레임 도는 사용처가 있어 그대로 두면 콘솔이 덮인다.
-    // (스폰 직전 구간의 RoundEndButton·SuddenEventManager·TipCallPhone이 IsAuthority를 !IsSpawned로 판단해 잠깐 통과한다)
-    private bool m_warnedClientPhaseRead;
+    // 클라 접근 경고를 이미 남긴 읽기 지점 — "읽은 메서드마다 1회"로 거른다.
+    // 단일 플래그로 두면 스폰 직전 구간에 정상적으로 한 번 읽는 쪽(DoubleDoor·RoundEndButton·
+    // SuddenEventManager·TipCallPhone이 권위를 !IsSpawned로 판단한다)이 그 1회를 먹어, 정작 잘못 읽는
+    // 새 코드가 조용해진다 — 가드가 존재하는 이유가 사라지는 것이라 지점별로 나눠 센다.
+    private readonly HashSet<string> m_warnedPhaseReaders = new HashSet<string>();
 
     /// <summary>
     /// 이 피어가 라운드 진행의 권위(서버 또는 오프라인)인가 — <see cref="Phase"/>를 읽어도 되는 피어인지의 기준.
+    /// 캐시(m_networkManager)가 아니라 싱글턴을 직접 본다 — 캐시는 이 매니저의 Start에서 채워지므로,
+    /// 그 전에 도는 남의 Awake·OnNetworkSpawn에서는 클라가 권위로 오판된다(가장 이른 코드가 가장 안 잡힌다).
     /// </summary>
-    public bool IsPhaseAuthority =>
-        m_networkManager == null || !m_networkManager.IsListening || m_networkManager.IsServer;
+    public bool IsPhaseAuthority
+    {
+        get
+        {
+            NetworkManager net = NetworkManager.Singleton;
+            return net == null || !net.IsListening || net.IsServer;
+        }
+    }
 
     /// <summary>
     /// 현재 라운드 단계. <b>서버(또는 오프라인) 전용 상태다</b> — 대입 지점이 전부 서버 경로라
@@ -122,13 +132,30 @@ public class RoundManager : CommonManagerBase
     {
         get
         {
-            if (!IsPhaseAuthority && !m_warnedClientPhaseRead)
-            {
-                m_warnedClientPhaseRead = true;
-                Debug.LogWarning("[라운드] Phase는 서버 전용 상태다 — 클라는 동기화된 값을 쓸 것", this);
-            }
+            if (!IsPhaseAuthority)
+                WarnClientPhaseRead();
             return m_phase;
         }
+    }
+
+    // 클라가 Phase를 읽었다 — 읽은 지점마다 1회씩 알린다. 스택 조회는 이 경로에서만 도는데,
+    // 스폰이 끝나면 사용처들이 자기 권위 가드에서 먼저 끊겨 여기까지 오지 않으므로 접속 초반 몇 번뿐이다.
+    private void WarnClientPhaseRead()
+    {
+        // 프레임 2 = 프로퍼티 getter를 부른 쪽. 인라이닝으로 어긋날 수 있어 이름은 참고용으로만 쓴다.
+        System.Reflection.MethodBase reader = new System.Diagnostics.StackTrace(2, false)
+            .GetFrame(0)
+            ?.GetMethod();
+        string where =
+            reader != null ? $"{reader.DeclaringType?.Name}.{reader.Name}" : "알 수 없는 지점";
+
+        if (!m_warnedPhaseReaders.Add(where))
+            return;
+
+        Debug.LogWarning(
+            $"[라운드] Phase는 서버 전용 상태다 — 클라는 동기화된 값을 쓸 것 (읽은 곳: {where})",
+            this
+        );
     }
 
     /// <summary>라운드 종료 결과. 종료 전에는 None.</summary>
@@ -218,14 +245,13 @@ public class RoundManager : CommonManagerBase
         if (Assigner != null)
             Assigner.OnCriminalAssigned += HandleCriminalAssigned;
 
-        // 스포너보다 먼저 잡는다 — Phase 접근 가드(IsPhaseAuthority)가 이 참조로 피어를 판별한다
-        m_networkManager = NetworkManager.Singleton;
-
         if (Spawner == null)
         {
             Debug.LogWarning("RoundManager: NpcSpawner를 찾지 못해 라운드를 시작할 수 없다", this);
             return;
         }
+
+        m_networkManager = NetworkManager.Singleton;
 
         // 오프라인 실행 — 전원 입장을 기다릴 상대가 없다 (기존 단독 테스트 유지)
         if (m_networkManager == null)
@@ -252,7 +278,7 @@ public class RoundManager : CommonManagerBase
         RemainingSeconds = float.PositiveInfinity;
         m_endedTargetFund = -1;
         m_preparing = false;
-        m_warnedClientPhaseRead = false;
+        m_warnedPhaseReaders.Clear();
         Spawner.ResetSpawnState(); // IsSpawnCompleted 래치 해제 + 이전 NPC 정리 → StartSpawn 재동작
     }
 
