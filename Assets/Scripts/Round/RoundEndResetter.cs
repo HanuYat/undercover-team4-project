@@ -119,6 +119,10 @@ public class RoundEndResetter : MonoBehaviour
             // 상주 홀더라 씬 전환만으로는 초기화되지 않는 것도 팀 자금과 같다.
             RoundProgress?.ResetToFirst();
 
+            // 판이 끝났으니 세이브도 지운다 (#373) — 위에서 되돌린 상태가 곧 새 판이라, 남겨 두면
+            // '이어하기'가 이미 끝난 판을 되살린다. 실패해도 게임 흐름은 막지 않는다.
+            SaveService.DeleteAsync().Forget();
+
             Debug.Log("[RoundEndResetter] 라운드 실패 — 세션 유지한 채 로비 복귀 (새 판 시작)");
             App.LoadScene(EScene.Lobby);
             return;
@@ -128,6 +132,10 @@ public class RoundEndResetter : MonoBehaviour
         // 라운드 시작이 아니라 여기서 올리는 이유: 다음 게임 씬이 로드되기 전에 값이 확정돼 복제까지 끝나야
         // 클라이언트가 첫 프레임부터 맞는 할당량을 본다 (RoundProgress 주석 참고).
         RoundProgress?.Advance();
+
+        // 진행도를 올린 뒤에 저장한다 (#373) — 이어했을 때 방금 깬 라운드를 다시 하지 않게.
+        // 상태는 호출 즉시 스냅샷되므로 씬 전환을 붙잡지 않고 던져도 값이 흔들리지 않는다.
+        SaveService.SaveAsync().Forget();
 
         // 성공: 세션 유지하며 상점 씬으로 복귀. 서버만 로드하면 클라는 NGO 씬 동기화로 따라옴.
         Debug.Log("[RoundEndResetter] 라운드 성공 — 세션 유지한 채 상점(허브) 복귀");

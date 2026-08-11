@@ -13,6 +13,7 @@
     "com.unity.netcode.gameobjects": "2.13.0",
     "com.unity.render-pipelines.core": "17.3.0",
     "com.unity.render-pipelines.universal": "17.3.0",
+    "com.unity.services.cloudsave": "3.4.1",
     "com.unity.services.multiplayer": "2.2.4",
     "com.unity.services.vivox": "16.11.0",
     "com.unity.shadergraph": "17.3.0",

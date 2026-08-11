@@ -87,6 +87,12 @@ public class ShopManager : SceneManagerBase
         if (!IsServer || m_dispatched)
             return;
         m_dispatched = true;
+
+        // 상점에서 쓴 돈과 산 물건이 확정되는 지점이라 여기서 한 번 저장한다 (#373).
+        // 라운드 종료 저장만 있으면 장비를 다 사고 라운드 중에 끊겼을 때 그 구매가 통째로 사라진다.
+        // 상태는 호출 즉시 스냅샷되므로 출동을 붙잡지 않고 던진다.
+        SaveService.SaveAsync().Forget();
+
         Session?.SetLockedAsync(true).Forget();
         MoveToNextScene(EScene.Game);
     }
