@@ -257,11 +257,13 @@ public class NpcStun : NetworkBehaviour
         if (!resumeReaction)
             return;
 
-        // 반출 보행 중이었으면 깨어나 그대로 달아난다 (#548) — 쓰러뜨린 것만으로 반출이 무산되고,
-        // 대상은 인도 지점으로 돌아가지 않는다. 목적지는 상태를 벗어날 때 NpcReleasingState.Exit이 지운다.
+        // 반출 보행 중이었으면 깨어나 그대로 달아난다 (#548) — 대상은 인도 지점으로 돌아가지 않는다.
+        // 목적지는 상태를 벗어날 때 NpcReleasingState.Exit이 지운다.
         //
-        // IsReactive 목록에 넣지 않는 이유: 그쪽은 CanStartReaction의 모집합이라, 넣으면 기절 없이
-        // 스캔·타격 한 번만으로도 도주로 전환된다. 저지는 <b>쓰러뜨려야</b> 성립한다는 것이 이 기능의 규칙이다.
+        // 타격은 이제 기절을 거치지 않고 곧바로 반응으로 돌린다(NpcStateRules.CanReactToDamage) —
+        // 그래서 여기 남는 것은 <b>피해 없이 무력화하는 경로</b>다: 테이저가 그 경우다.
+        // IsReactive 목록에 넣지 않는 이유는 그대로다 — 그쪽은 스캔까지 함께 열려, 쳐다보기만 해도
+        // 반출이 무산된다.
         if (m_owner.CurrentState == NpcState.Releasing)
         {
             m_owner.Reaction.StartFlee(m_owner.Reaction.ThreatTarget);

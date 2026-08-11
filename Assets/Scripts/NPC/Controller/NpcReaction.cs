@@ -59,8 +59,12 @@ public class NpcReaction : NetworkBehaviour
         if (IsSpawned && !IsServer)
             return;
 
-        // 이미 반응 중이거나 확보·페널티 상태면 재판정하지 않는다 — 규칙은 NpcStateRules가 갖는다
-        if (!NpcStateRules.CanStartReaction(m_owner.CurrentState))
+        // 이미 반응 중이거나 확보·페널티 상태면 재판정하지 않는다 — 규칙은 NpcStateRules가 갖는다.
+        // 피격만 반출 보행(Releasing)까지 연다 (#548) — 스캔으로는 안 되고 때려야 돌아선다.
+        bool allowed = trigger == ReactionTrigger.Damage
+            ? NpcStateRules.CanReactToDamage(m_owner.CurrentState)
+            : NpcStateRules.CanStartReaction(m_owner.CurrentState);
+        if (!allowed)
             return;
 
         // 기절 중엔 반응하지 않는다 — 쓰러진 대상은 그대로 잡힌다 (테이저 콤보)

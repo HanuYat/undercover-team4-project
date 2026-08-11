@@ -76,6 +76,19 @@ public static class NpcStateRules
     public static bool CanStartReaction(NpcState state) =>
         IsReactive(state) && state != NpcState.Run && state != NpcState.Attack;
 
+    /// <summary>맞았을 때 반응(도주·저항)으로 돌아설 수 있는가 — <see cref="CanStartReaction"/>에
+    /// <b>반출 보행 예외</b>를 얹은 것. (#548, 2026-08-11 확정)
+    ///
+    /// 반출 대상은 <see cref="IsReactive"/>에 없어 스캔으로는 꿈쩍하지 않는다 — 인도 지점까지 가는 것이
+    /// 그 대상의 임무라, 쳐다봤다고 그만두면 저지가 너무 싸진다. 하지만 <b>때리면</b> 돌아선다:
+    /// 배정된 유형대로 달아나거나 맞서고, 순응형이면 그 자리에서 둘 중 하나로 굳는다(시민과 같은 규칙).
+    ///
+    /// 이전에는 <b>쓰러뜨려야만</b> 저지가 성립했고(깨어날 때 도주로 전환) 그 사이 대상은 맞으면서도
+    /// 목적지로 계속 걸었다 — 맞고도 아무 일 없이 걸어가는 그림이 "저지당했다"로 읽히지 않았다.
+    /// 이제 첫 타격이 곧 무산이라, 쓰러뜨리기는 <b>붙잡기</b> 위한 수단으로만 남는다.</summary>
+    public static bool CanReactToDamage(NpcState state) =>
+        CanStartReaction(state) || state == NpcState.Releasing;
+
     /// <summary>밧줄 대상에서 <b>신병·소유권 때문에</b> 빠지는 상태인가. (#269 → #369 기본 검거로 승격)
     /// 제외 목록 방식 — 이미 신병 확보(Escorted/Captured/Jailed)·타 시스템 소유(페널티)는 제외.
     /// Captured 제외 주의: 그 상태에선 밧줄 좌클릭이 '끌기 재개'로 갈리고, 푸는 건 E다 (#513).
