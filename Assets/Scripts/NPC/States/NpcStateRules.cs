@@ -16,7 +16,8 @@ public static class NpcStateRules
     /// (GDD 6-1/7-4, #254 · E 제압은 #436·#438에서 전부 제거) —
     /// 반응이 시작된 뒤에는 수갑 채널링이 걸리지 않아야 한다.</summary>
     public static bool IsCapturable(NpcState state) =>
-        state != NpcState.Escorted
+        state != NpcState.Dead // 시체는 검거 대상이 아니다 (#571)
+        && state != NpcState.Escorted
         && state != NpcState.Captured
         && state != NpcState.Jailed
         && state != NpcState.Run
@@ -40,7 +41,10 @@ public static class NpcStateRules
     /// 제외하는 건 이미 신병을 확보(Escorted/Captured/Jailed)했거나 오검거 페널티가 진행(Detained/
     /// Chasing/PenaltyEscorting) 중인 상태 — 도주(Run)·저항(Attack)은 주 타격 대상이라 제외하지 않는다.</summary>
     public static bool CanBeDamaged(NpcState state) =>
-        state != NpcState.Escorted
+        // 시체는 더 때릴 수 없다 (#571). 막지 않아도 HP는 이미 0이라 SetHp의 엣지가 안 걸리지만,
+        // 열어 두면 OnDamaged·피격 연출·납치 격퇴 훅이 시체에서 계속 발행된다.
+        state != NpcState.Dead
+        && state != NpcState.Escorted
         && state != NpcState.Captured
         && state != NpcState.Jailed
         && state != NpcState.Detained
@@ -53,8 +57,12 @@ public static class NpcStateRules
     /// "호송 중인 NPC를 때려 신병에서 빼내기"와는 방향이 반대다 — 납치범은 신병이 아니라 가해자다.
     /// 오검거 추격대는 그대로 막힌다(회피 수단은 격퇴 하나). 둘을 가르는 것이
     /// <see cref="NpcPenaltyAgent.IsAbductionDuty"/>이고, 동기화 값이라 클라 조준 피드백에서도 읽힌다.</summary>
+    /// ⚠ <b>사망은 납치범 예외보다 위다</b> (#571) — 임무 표식(IsAbductionDuty)은 죽어도 즉시
+    /// 내려가지 않으므로, 상태 검사에만 맡기면 죽은 납치범이 계속 맞는다.
     public static bool CanBeDamaged(NpcController npc) =>
-        npc != null && (npc.Penalty.IsAbductionDuty || CanBeDamaged(npc.CurrentState));
+        npc != null
+        && npc.CurrentState != NpcState.Dead
+        && (npc.Penalty.IsAbductionDuty || CanBeDamaged(npc.CurrentState));
 
     /// <summary>반응·배회군인가 — 스턴이 풀릴 때 도주로 전환되는 쪽. (#292)
     /// 여집합(확보·페널티군)은 스턴이 풀려도 아무 전이 없이 하던 일을 재개한다 —
@@ -62,7 +70,8 @@ public static class NpcStateRules
     ///
     /// 포함 목록 방식이라 <b>새 상태는 기본이 '재개'</b>다. 도주로 깨어나야 하면 여기 추가할 것.
     /// 의도적으로 뺀 것: <see cref="NpcState.Stunned"/>(넉백 KO — 자기 상태 클래스가 스스로
-    /// 빠져나간다).</summary>
+    /// 빠져나간다)와 <see cref="NpcState.Dead"/>(#571 — 시체는 도주하지 않는다. 사망 진입이 스턴
+    /// 오버레이를 걷으므로 ExitStun 자체가 도달하지 않지만, 포함 목록이라 가만히 둬도 닫혀 있다).</summary>
     public static bool IsReactive(NpcState state) =>
         state is NpcState.Idle
             or NpcState.Walk
@@ -96,7 +105,13 @@ public static class NpcStateRules
     /// <b>이것만으로 묶기를 판정하지 말 것</b> — 새로 묶기는 무력화까지 요구하므로
     /// <see cref="CanRopeBind"/>가 정본이고 이 함수는 그 한 조각이다 (#446).</summary>
     public static bool CanArrest(NpcState state) =>
-        state != NpcState.Escorted
+        // 시체는 <b>검거</b> 대상이 아니다 (#571) — 신병이 아니라 짐이라 커스터디로 들어갈 일이 없다.
+        // 유치장까지 끌고 가면 계상되지만(ArrestJudge.JudgeCorpse) 그 경로도 커스터디를 쓰지 않는다.
+        // ⚠ 그렇다고 시체에 줄을 못 거는 것은 아니다 — 시체 끌기는 이 함수를 거치지 않고
+        // <see cref="CanRopeBind"/>가 사망을 무력화와 같은 급으로 따로 연다. 여기를 열면 커스터디
+        // 전이(StartEscort)까지 딸려 오는데 시체는 Dead에서 나갈 수 없다.
+        state != NpcState.Dead
+        && state != NpcState.Escorted
         && state != NpcState.Captured
         && state != NpcState.Jailed
         && state != NpcState.Detained
@@ -112,9 +127,29 @@ public static class NpcStateRules
     /// 상태 enum이 아니라 <see cref="NpcStun.IsStunned"/>를 보는 이유: 스턴은 오버레이라
     /// 테이저·체력 0 기절이 CurrentState를 바꾸지 않는다(넉백 KO만 <see cref="NpcState.Stunned"/>).
     /// 상태로만 보면 두 기절 경로 중 하나가 조용히 빠진다 (#292). IsStunned는 동기화 값이라
-    /// 클라 조기검증·조준 피드백(Rope)에서도 읽을 수 있다.</summary>
-    public static bool CanRopeBind(NpcController npc) =>
-        npc != null && npc.Stun.IsStunned && CanArrest(npc.CurrentState);
+    /// 클라 조기검증·조준 피드백(Rope)에서도 읽을 수 있다.
+    ///
+    /// <b>시체도 대상이다</b> (#571) — 무력화와 같은 자리에서 연다. 다만 끄는 <b>방식</b>이 갈린다:
+    /// 산 대상은 서버가 위치를 대입하고(<see cref="NpcRopeDrag.Tick"/>) 시체는 관절 밧줄이 물리로
+    /// 끈다(<see cref="RagdollRope"/>). 이 함수는 "줄을 걸 수 있나"만 답하고 그 분기는 알지 않는다.</summary>
+    public static bool CanRopeBind(NpcController npc)
+    {
+        if (npc == null)
+            return false;
+
+        // 시체 — <see cref="CanArrest"/>를 함께 보지 않는다. Dead가 종착 상태라서다: 사망 진입이
+        // 커스터디·페널티 링크를 전부 끊으므로 그 상태들과 겹칠 수 없고, Dead에서 나가지도 않는다.
+        //
+        // 대신 <b>1:1을 여기서 못박는다.</b> 시체 밧줄은 관절 하나뿐이라(RagdollRope의 앵커가 1개)
+        // 두 번째 줄이 걸리면 앞의 줄을 끊고 가로챈다(Attach가 Detach로 시작한다) — 팀 방침인
+        // "합류는 허용, 탈취는 차단"이 깨진다. 줄다리기 합류(<see cref="CanJoinDrag"/>)는
+        // Escorted 전용이라 시체에는 애초에 열리지 않으므로, 여기서 막으면 시체는 언제나 1:1이다.
+        // IsRoped는 동기화 값이라 클라 조기검증·조준 피드백에서도 읽힌다.
+        if (npc.Death.IsDead)
+            return !npc.Rope.IsRoped;
+
+        return npc.Stun.IsStunned && CanArrest(npc.CurrentState);
+    }
 
     /// <summary>밧줄 없이 따라오는 수감자인가 — 유치장에서 반출돼 추종 중인 대상. (#492)
     /// E를 누르면 그 자리에 세운다(Captured) — 유치장 안이면 JailIntake가 좌석에 다시 앉히고,

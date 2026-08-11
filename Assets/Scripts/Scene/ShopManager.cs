@@ -15,6 +15,9 @@ public class ShopManager : SceneManagerBase
     private bool IsServer => NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer;
     private bool m_dispatched;
 
+    /// <summary>이미 출동했는가 — 맵 선택 잠금 기준. 판단 근거는 <see cref="MapSelection.IsSelectable"/>. (#578)</summary>
+    public bool IsDispatched => m_dispatched;
+
     // 상점(라운드 사이)도 조인 가능 — 진입 시 잠금 해제. 게임 종료 후 복귀 시에도 다시 열린다.
     private void Start()
     {
@@ -84,6 +87,12 @@ public class ShopManager : SceneManagerBase
         if (!IsServer || m_dispatched)
             return;
         m_dispatched = true;
+
+        // 상점에서 쓴 돈과 산 물건이 확정되는 지점이라 여기서 한 번 저장한다 (#373).
+        // 라운드 종료 저장만 있으면 장비를 다 사고 라운드 중에 끊겼을 때 그 구매가 통째로 사라진다.
+        // 상태는 호출 즉시 스냅샷되므로 출동을 붙잡지 않고 던진다.
+        SaveService.SaveAsync().Forget();
+
         Session?.SetLockedAsync(true).Forget();
         MoveToNextScene(EScene.Game);
     }

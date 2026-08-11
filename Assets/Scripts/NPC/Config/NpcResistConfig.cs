@@ -31,6 +31,16 @@ public class NpcResistConfig : ScriptableObject
     [Tooltip("위협 탐색 반경 배율 — AttackRange에 곱한다. 저항 패배 후 도주 대상 탐색(#205)·도주 방향 산출(#213)이 공유")]
     [SerializeField] private float m_threatSearchRadiusMultiplier = 5f;
 
+    [Tooltip(
+        "저항 추격 중 가속도(m/s²) — 진입 시 에이전트에 덮어쓰고 Exit에서 원복한다 (#568 후속).\n\n"
+            + "선회 반경 = 속도² / 이 값이다. 저항 중에는 updateRotation을 꺼 두고 몸을 직접 돌리므로"
+            + "(AttackTurnSpeed) 궤적을 제약하는 것은 각속도가 아니라 이 값이다.\n\n"
+            + "시민 기본값(8)이면 저항 속도 6m/s에서 반경 4.5m — 정지 거리(AttackRange×0.8=1.6m)보다 커서"
+            + "표적이 원을 그리면 안쪽으로 파고들지 못하고 같이 공전한다. 30이면 반경 1.2m로 그 안에 들어온다"
+    )]
+    [Min(0.1f)]
+    [SerializeField] private float m_chaseAcceleration = 30f;
+
     public float AttackInterval => m_attackInterval;
     public float AttackRange => m_attackRange;
     public int AttackDamage => m_attackDamage;
@@ -44,6 +54,11 @@ public class NpcResistConfig : ScriptableObject
     public float AttackTurnSpeed => m_attackTurnSpeed;
     public float SwingHoldSeconds => m_swingHoldSeconds;
     public float ThreatSearchRadiusMultiplier => m_threatSearchRadiusMultiplier;
+
+    /// <summary>저항 추격 중 에이전트 가속도 — 곧 <b>선회 반경</b>이다(반경 = 속도² / 이 값). (#568 후속)
+    /// <see cref="AttackTurnSpeed"/>와 혼동하지 말 것: 저쪽은 부채꼴 기준 방향을 맞추는 <b>몸통 회전</b>이고,
+    /// 이쪽은 <b>이동 궤적</b>을 정한다. 저항 중에는 updateRotation이 꺼져 있어 각속도가 궤적에 관여하지 않는다.</summary>
+    public float ChaseAcceleration => m_chaseAcceleration;
 
     /// <summary>스윙 변형 개수 — 오프셋 배열 길이(=블렌드 트리 클립 수). 비어 있으면 단일 변형(0)으로 폴백. (#220)</summary>
     public int SwingVariantCount =>

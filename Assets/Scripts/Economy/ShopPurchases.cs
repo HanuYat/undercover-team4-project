@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
@@ -13,6 +14,9 @@ using UnityEngine;
 /// <b>서버 전용 컬렉션 2개 — 네트워크 동기화하지 않는다.</b> 클라가 목록을 알 필요가 없기 때문이다:
 /// 중복 구매는 서버가 거부하고, 진열대의 "구매함" 표시는 진열대 자신의 bool NetworkVariable이 낸다.
 /// 그래서 품목 id 체계도, 카탈로그 자산도 필요 없다.
+///
+/// 세이브(#373)만은 목록을 문자열로 적어야 하지만, 그 id도 <b>여기서 들지 않는다</b> — 프리팹 이름을
+/// 그대로 쓰고 되찾는 일은 SaveItemLookup이 NGO 등록 명부로 한다. 위 전제는 그대로다.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
@@ -26,6 +30,37 @@ public class ShopPurchases : NetworkedManagerBase
 
     /// <summary>구매한 소지형 아이템 프리팹 목록(중복 포함). 배달(ShopDelivery)이 순회한다. 서버 전용.</summary>
     public IReadOnlyList<ItemBase> Carried => m_carried;
+
+    /// <summary>
+    /// 이어하기로 시작했으면 저장된 구매 목록을 되살린다 (#373). 세션 시작 시 1회.
+    /// 프리팹은 이름으로 되찾는다(SaveItemLookup) — 이 홀더가 id 체계를 들지 않는다는 전제는 그대로 유지된다.
+    /// </summary>
+    public override void OnNetworkSpawn()
+    {
+        if (!IsServer) return;
+
+        SessionSaveData save = SaveService.Pending;
+        if (save == null) return;
+
+        foreach (string id in save.CarriedItems)
+        {
+            ItemBase prefab = SaveItemLookup.Find(id);
+            if (prefab != null)
+                m_carried.Add(prefab);
+            else
+                Debug.LogWarning($"[상점] 세이브의 소지형 '{id}'을(를) 찾지 못해 건너뛴다 — 프리팹 이름이 바뀌었는가?", this);
+        }
+
+        foreach (string installableName in save.Installables)
+        {
+            if (Enum.TryParse(installableName, out EInstallable installable) && installable != EInstallable.None)
+                m_installables.Add(installable);
+            else
+                Debug.LogWarning($"[상점] 세이브의 설치형 '{installableName}'을(를) 알 수 없어 건너뛴다", this);
+        }
+
+        Debug.Log($"[상점] 세이브 복원 — 소지형 {m_carried.Count}개, 설치형 {m_installables.Count}종");
+    }
 
     /// <summary>이 소지형을 한 번이라도 샀는가 — 진열대 "구매함" 표시 복원용. 서버 전용.</summary>
     public bool HasCarried(ItemBase itemPrefab) => itemPrefab != null && m_carried.Contains(itemPrefab);

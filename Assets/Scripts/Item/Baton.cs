@@ -259,10 +259,12 @@ public class Baton : ItemBase, IAimedWeapon
                 // 아무 연출도 내지 않는다 — 때릴 수 없는 대상이므로 허공(NoHit)과 같은 취급이다.
                 // 먼지든 타격음이든 내면 그만큼은 '때려졌다'로 읽히는데, 여기서 일어나는 일은 없다.
                 // 휘두른 것 자체는 이미 나간 스윙 모션·스윙음이 말해 준다.
+                // NPC 쪽 사유는 이제 <b>상태 하나</b>다 — "이미 쓰러진" 갈래는 그 게이트를 걷으면서
+                // 함께 사라졌다(#571, EvaluateSwing 주석). 쓰러진 대상은 이제 유효타다.
                 NotifyOwner(
                     playerTarget != null
                         ? $"진압봉 무효 — 이미 무력화된 동료 ({playerTarget.name})"
-                        : $"진압봉 무효 — {(target.Stun.IsStunned ? "이미 쓰러진" : "이미 제압됐거나 페널티 진행 중인")} 대상 ({target.CurrentState})");
+                        : $"진압봉 무효 — {(target.CurrentState == NpcState.Dead ? "이미 죽은" : "이미 제압됐거나 페널티 진행 중인")} 대상 ({target.CurrentState})");
                 return;
         }
 
@@ -506,15 +508,21 @@ public class Baton : ItemBase, IAimedWeapon
             return SwingResult.TargetInvalidState;
         }
 
-        // 이미 쓰러져 있으면 무효타다 — 스턴은 오버레이라 CurrentState에 나타나지 않으므로(#292)
-        // 위 상태 게이트로는 걸러지지 않는다. 통과시키면 두 가지가 어긋난다: 타격으로 쓰러진 대상은
-        // HP가 이미 0이라 피해가 0인데 히트마커·"명중"이 뜨고, 테이저로 기절한 대상은 만피라
-        // 반대로 누워 있는 채 계속 깎인다. 테이저(<c>Taser.EvaluateAim</c>)가 같은 이유로 먼저
-        // 이 게이트를 갖고 있다 — 쓰러진 대상은 때리는 게 아니라 밧줄로 끌어가는 것이다.
-        if (npc.Stun.IsStunned)
-        {
-            return SwingResult.TargetInvalidState;
-        }
+        // <b>쓰러진 대상도 때릴 수 있다</b> (#571) — 여기 있던 "이미 쓰러졌으면 무효타" 게이트를 걷었다.
+        //
+        // 그 게이트의 근거는 둘이었고 <b>둘 다 더는 성립하지 않는다</b>:
+        //  · "타격으로 쓰러진 대상은 HP가 이미 0이라 피해가 0인데 명중이 뜬다" — <b>거짓이 됐다.</b>
+        //    쓰러짐 기준이 HP 0에서 <b>임계 비율 하향 교차</b>로 바뀌어(NpcCommonConfig.KnockdownHp),
+        //    넉다운된 대상에는 체력이 남아 있다(기본값에서 100 → 66 → 32에 쓰러진다).
+        //  · "테이저로 기절한 대상은 만피라 누워 있는 채 계속 깎인다" — 사실이지만 <b>이제 그게 의도다.</b>
+        //    쓰러뜨린 뒤 마저 때려 죽이는 것이 사망(#571)으로 가는 주 경로다.
+        //
+        // <b>테이저(<c>Taser.EvaluateAim</c>)의 같은 게이트는 그대로 둔다</b> — 두 무기의 근거가 여기서
+        // 갈린다. 테이저는 무력화가 목적이라 이미 무력화된 대상에 쏘는 것이 진짜 무효타이고
+        // (<c>NpcStun.EnterStunned</c>가 IsStunned로 물러난다), 진압봉은 체력을 깎는 것이 목적이라
+        // 쓰러진 대상에도 할 일이 남아 있다.
+        //
+        // 죽은 대상은 위 <see cref="NpcStateRules.CanBeDamaged"/>가 막으므로 여기까지 오지 않는다.
 
         return SwingResult.ValidTarget;
     }
@@ -524,11 +532,12 @@ public class Baton : ItemBase, IAimedWeapon
     /// 그 외(벽·소품)는 빗나감.
     /// </summary>
     /// <remarks>
-    /// 테이저(<c>Taser.EvaluatePlayerAim</c>)와 달리 <b>자기 자신을 걸러내는 분기가 없다.</b>
-    /// 필요가 없기 때문이다 — 진압봉은 <see cref="AimOcclusion.FindNearestByPivot"/>에 소지자 계층을
-    /// 제외 루트로 넘기므로(SphereCast가 원점에 겹친 자기 콜라이더를 distance 0으로 되돌려주는 문제 때문에
-    /// 원래부터 필요했다) 자기 몸은 후보에 아예 오르지 않는다. 앉기·넉백으로 원점이 몸 밖으로 나가도
-    /// 같다. 테이저는 레이캐스트라 제외 루트를 넘기지 않아서 그 분기가 필요했던 것이다.
+    /// <b>자기 자신을 걸러내는 분기가 없다.</b> 필요가 없기 때문이다 — 진압봉은
+    /// <see cref="AimOcclusion.FindNearestByPivot"/>에 소지자 계층을 제외 루트로 넘기므로(SphereCast가
+    /// 원점에 겹친 자기 콜라이더를 distance 0으로 되돌려주는 문제 때문에 원래부터 필요했다) 자기 몸은
+    /// 후보에 아예 오르지 않는다. 앉기·넉백으로 원점이 몸 밖으로 나가도 같다.
+    /// 테이저(<c>Taser.EvaluateAim</c>)도 같은 처리를 쓴다 — 레이캐스트라 없어도 된다고 봤지만,
+    /// 살아 있는 동안에도 켜져 있는 자기 래그돌 머리 뼈에 사격이 막혔다.
     /// <b>이 함수를 제외 루트 없이 부르게 바꾸면 자기 타격 가드를 여기에 추가해야 한다.</b>
     ///
     /// 무력화 게이트는 <see cref="PlayerHealth.IsTargetable"/> 하나로 본다 — 다운·기절·매달기 중인

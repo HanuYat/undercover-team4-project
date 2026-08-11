@@ -69,9 +69,9 @@
 - 서버는 두 경로 모두에 걸리므로 `IsBusy` + `IsServer` 체크로 클라이언트용 자동 경로를 막는다.
 - **NGO SceneManager 재훅:** 세션마다 새로 만들어지고 이 객체는 상주 → 생성 시 한 번 걸어둘 수 없다. `Update`에서 참조 비교로 **대상이 바뀐 프레임에만** 다시 건다(`RefreshNetworkHook`).
 - **페이드 인은 없다.** 대신 `k_settleFrames`(60프레임) 흘려 "덮은 화면이 최소 한 번 렌더됐다"를 보장한다.
-- 페이드 아웃 `m_fadeOutSeconds`(기본 0.35초). 스피너 회전·페이드 모두 **`Time.unscaledDeltaTime`** 기준 — 돌발 이벤트 freeze로 `timeScale`이 0이어도 돈다.
+- 페이드 아웃 `m_fadeOutSeconds`(기본 0.35초). 스피너 회전·페이드 모두 **`Time.unscaledDeltaTime`** 기준 — 돌발 이벤트 freeze로 `timeScale`이 0이어도 돈다. (→ #582에서 스피너가 사라지고 그 자리를 달리는 캐릭터와 게이지바가 대신한다. 실시간 기준은 그대로 유지. 9장 참고)
 - `SetVisible`은 `canvas.enabled` + `CanvasGroup`(alpha/blocksRaycasts/interactable) 동시 제어 → 아래 씬 UI로 클릭이 새지 않는다.
-- `SetStatus(string)` — 상태 문구 교체 API(전원 대기 표시 등 후속 확장용). 비워두면 프리팹 기본 문구 유지.
+- `SetStatus(string)` — 상태 문구 교체 API(전원 대기 표시 등 후속 확장용). 비워두면 프리팹 기본 문구 유지. (→ #497에서 인수가 `LocalizedString`으로 바뀌었고, #582가 이 API의 첫 사용처를 만들었다 — 9장 참고)
 
 ### 2-5. `SceneManagerBase.WaitUntilReadyAsync` 훅 ([SceneManagerBase.cs](../Assets/Scripts/Core/SceneManagerBase.cs))
 
@@ -88,6 +88,8 @@ NPC는 활성화 프레임 이후에 채워지므로 override 했고, **서버�
 ### 2-7. 프리팹
 
 Canvas(ScreenSpaceOverlay, **sortingOrder 1000**) + CanvasScaler + CanvasGroup + `LoadingScreen` 컴포넌트, 하위에 `Background`(Image) / `Spinner`(Dot0~Dot2 Image) / `StatusText`(TMP). 직렬화 참조 4개(`m_canvas`/`m_canvasGroup`/`m_spinner`/`m_statusText`)와 `m_fadeOutSeconds = 0.35`가 채워져 있다.
+
+> **#582에서 계층이 바뀌었다** — `Spinner`·`Dot0~Dot2`는 삭제되고 `Runner`(RawImage) / `ProgressTrack` + `ProgressFill` / `PercentText`가 추가됐다. 직렬화 참조는 6개(`m_canvas`/`m_canvasGroup`/`m_statusText`/`m_progressFill`/`m_percentText`/`m_runnerStage`) + 문구 2개(`m_defaultStatus`/`m_readyWaitStatus`). 9장 참고.
 
 처음엔 `AppBootstrap.prefab`에 계층을 직접 넣었지만, 커밋 `6b091af`에서 **`Assets/Prefabs/UI/LoadingScreen.prefab`으로 분리**하고 AppBootstrap은 그것을 중첩 참조하도록 바꿨다 — UI를 AppBootstrap 열지 않고 따로 편집할 수 있다.
 
@@ -145,7 +147,8 @@ Canvas(ScreenSpaceOverlay, **sortingOrder 1000**) + CanvasScaler + CanvasGroup +
 | `AppHelper` | `k_networkLoadTimeoutSeconds` | 30초 | NGO 로컬 로드 완료 확인 상한 |
 | `LoadingScreen` | `k_settleFrames` | 60 | 덮은 화면의 렌더 보장 프레임 |
 | `LoadingScreen` | `k_loadTimeoutSeconds` | 30초 | 클라 자동 경로 상한 |
-| `LoadingScreen` | `k_spinnerDegreesPerSecond` | 180 | 스피너 회전 속도 |
+| `LoadingScreen` | ~~`k_spinnerDegreesPerSecond`~~ | ~~180~~ | 스피너 회전 속도 — **#582에서 스피너가 삭제되며 함께 제거** |
+| `LoadingScreen` | `k_progressPerSecond` | 2.5 | 게이지 표시값이 목표를 따라가는 속도 (#582) |
 | `InGameManager` | `k_readyTimeoutSeconds` | 20초 | 씬 준비 완료 대기 상한 |
 | `RoundManager` | `m_peerWaitTimeoutSeconds` | 30초 | 전원 입장 확인 상한 |
 | `RoundManager` | `m_startDelaySeconds` | 3초 | 시작 지연 |
@@ -158,7 +161,7 @@ Canvas(ScreenSpaceOverlay, **sortingOrder 1000**) + CanvasScaler + CanvasGroup +
 
 **뺀 것 (후속 판단):**
 - **페이드 인** — `k_settleFrames`로 렌더 보장만 한다. 페이드 인을 넣으면 그 시간만큼 전환이 늘어난다.
-- **진행바 / 셰이더 프리워밍**(`ShaderVariantCollection.WarmUp`) — `SetStatus`만 뚫어두고 실제 진행률 표시는 넣지 않았다.
+- ~~**진행바**~~ / **셰이더 프리워밍**(`ShaderVariantCollection.WarmUp`) — `SetStatus`만 뚫어두고 실제 진행률 표시는 넣지 않았다. → **진행바는 #582에서 해소**(9장). 셰이더 프리워밍은 여전히 미착수.
 - **로딩 화면은 NPC 스폰 완료까지만 덮는다** — 전원 입장 대기 + 3초 지연은 덮지 않는다(플레이어가 맵을 보며 기다리는 그림).
 
 **한계:**
@@ -212,3 +215,65 @@ Canvas(ScreenSpaceOverlay, **sortingOrder 1000**) + CanvasScaler + CanvasGroup +
 
 - 구조 규칙: [docs/architecture.md](architecture.md) — R1(App 파사드), R4(매니저 등록), R5(`base` 호출), R7(`App.LoadScene` 단일 경로)
 - 관련 이슈: **#403**(본건), #395(라운드 목표를 금액으로 — 리베이스 충돌 상대), #410(전원 준비 판정 후속), #56(스폰 서버 권위), #214(로비 별도 씬), #43(라운드 UI 동기화)
+---
+
+## 9. 후속 — #582 진행률 게이지바 + 달리는 캐릭터
+
+- **날짜:** 2026-08-10 · **브랜치:** `feature/582-loading-screen-revamp` · **이슈:** #582 · **PR:** #583
+- 5장의 보류 항목 **"진행바"** 를 해소하고, 검은 배경 + 회전 스피너를 야간 경찰서 배경 + 달리는 로봇으로 교체했다.
+
+### 9-1. 진행률은 새로 만든 값이 아니다
+
+세 로드 경로가 이미 `AsyncOperation`을 손에 들고 있었고, 그중 클라이언트 경로는 `LoadingScreen.HandleNetworkLoad`가 **인자로 받아 버리고 있었다.** 새 폴링이나 RPC 없이 그 값을 화면까지 전달한다.
+
+| 경로 | 진행률 출처 | 주의 |
+|---|---|---|
+| 오프라인 | `LoadLocalAsync`의 `op.progress` | 활성화 대기 탓에 **0.9가 상한**이라 `k_activationReadyProgress`로 나눠 0~1로 편다 |
+| 서버 NGO | `SceneManager.OnLoad`를 새로 구독해 로컬 핸들만 집는다 | NGO는 활성화 시점을 열어주지 않아 **읽기 전용**이다. 확인된 완료(`localLoaded`)에만 100%를 보고한다 — 타임아웃·세션 끊김에는 보고하지 않는다 |
+| 클라이언트 NGO | `HandleNetworkLoad`가 받던 `AsyncOperation` | 이 경로가 클라의 **유일한** 진행률 출처다 (클라는 `App.LoadScene`을 타지 않는다) |
+
+전달 수단은 `AppHelper.LoadSceneAsync(scene, token, Action<float> onProgress)`다. BCL 델리게이트라 `AppHelper`가 UI를 알지 않는다.
+
+### 9-2. 게이지에 태우는 구간과 태우지 않는 구간
+
+**씬 로드가 게이지 전체(0~100%)를 쓴다.** 그 뒤의 런타임 스폰 대기는 게이지에 태우지 않고 문구로 알린다(`BeginSceneReadyWait` → `Common.Loading.Preparing`).
+
+처음에는 씬 로드에 0.9를 주고 남은 0.1을 스폰 대기에 배정했으나 **얻는 것이 없어 되돌렸다.** 대기가 끝나는 즉시 `HideAsync`가 이어져 0.9→1.0이 한 프레임도 돌지 못하고, 클라이언트는 `k_settleFrames`(약 1초)만큼 90%에 멈춰 있다가 사라졌다. "90%에서 멈추는 로딩바"라는 인상만 남는 구조였다. (PR #583 리뷰 🟠-1)
+
+- 진척을 실제로 알 수 있게 되면(#410 `SceneReadyGate`가 `대기 중 (2/4)`를 내주는 방향 — 5장 참고) 그때 게이지로 되돌릴 여지가 있다.
+- 표시값은 목표를 `MoveTowards`로 추종한다(`k_progressPerSecond = 2.5`) — 로드 진행률은 계단식으로 튀어 그대로 대면 바가 순간이동한다.
+- **되감기 금지**(`SetTargetProgress`의 `Mathf.Max`). 구동 경로가 둘이라 늦게 도착한 낮은 값이 섞일 수 있고, 줄어드는 퍼센트는 그 자체로 고장으로 읽힌다. **이 가드를 "불필요한 방어"로 보고 지우지 말 것.**
+
+### 9-3. 달리는 캐릭터 — 별도 무대 + RenderTexture
+
+2D 런사이클 스프라이트가 프로젝트에 없어 3D를 쓴다. `Assets/Prefabs/UI/LoadingRunnerStage.prefab`(신규)이 `AppBootstrap` 하위 **y=-5000**에 붙고, `LoadingScreen.SetVisible`이 무대를 함께 토글한다(켠 채 두면 로딩이 아닐 때도 매 프레임 `RenderTexture`를 그린다).
+
+| 설정 | 값 | 이유 |
+|---|---|---|
+| 레이어 | `LoadingStage` (슬롯 11) | 카메라 `cullingMask`를 이 레이어로 제한. y=-5000 거리와 함께 이중으로 게임 카메라에서 떼어 놓는다 |
+| 카메라 | 직교, 배경 알파 0 | UI 그라데이션/배경 위에 합성된다 |
+| 머티리얼 | **URP/Unlit** | Synty 셰이더는 씬 조명을 받는데, 로딩 중은 하필 씬이 언로드·로드되며 조명이 오락가락하는 구간이라 캐릭터 밝기가 튄다. 조명 컬링 마스크로 막으려면 **씬마다 손을 대야 하고 새 씬은 조용히 빠진다** — 아예 조명에서 뗐다. 대가는 음영 없는 평평한 룩 |
+| `Animator.updateMode` | `UnscaledTime` | 이 화면 전체가 실시간 기준이다(2-4 참고) |
+| `Animator.cullingMode` | `AlwaysAnimate` | 메인 카메라에 안 보이는 위치라 기본 컬링이면 T포즈로 굳는다 |
+| `SkinnedMeshRenderer.updateWhenOffscreen` | true | 같은 이유 |
+
+Synty 원본(`SM_Gen_Chr_Robot_01.prefab`)은 **수정하지 않았다** — 중첩 프리팹 인스턴스로 두고 레이어·머티리얼만 오버라이드했다.
+
+캐릭터 위치는 눈대중이 아니라 역산했다. `RenderTexture`(512²) 안에서 달리기 사이클이 쓰는 세로 구간이 27~466이므로, 크기 `S`일 때 **사이클 최저 발 = 중심 − 0.4473·S**다. 게이지바 윗변에서 12만큼 위에 두려면 `y = -214 + 0.4473·S` (현재 `S = 180`). 크기를 바꾸면 이 식으로 y를 다시 계산할 것.
+
+### 9-4. 배경
+
+`Assets/Art/Loading/LoadingBackdrop_Precinct.png` — 야간 경찰서 로비 일러스트. 그림이 4:3, 화면이 16:9라 `AspectRatioFitter`(EnvelopeParent)로 채우고 넘치는 위아래를 버린다(천장 램프·앞쪽 바닥 일부가 잘린다).
+
+밝은 낮 버전을 먼저 넣어 봤으나 폐기했다 — 흰 게이지바가 밝은 타일 바닥에 묻히고 Unlit 회색 로봇도 배경에 녹는다. 야간 버전으로 확정하며 UI 색을 반전했다(문구·퍼센트를 밝은 흰색, 트랙을 흰색 22%).
+
+> ⚠️ **#584(상점 씬을 `PolygonPoliceStation`으로 제작)와 조율 대상.** 이 배경은 경찰서 실내 일러스트고 #584는 같은 공간을 3D로 짓는다. 방치하면 로딩 화면의 경찰서와 실제 상점이 서로 다른 장소로 보인다. 어차피 4:3 크롭 때문에 한 번 손댈 자리이므로, #584의 3D 실내가 완성된 뒤 그 스크린샷으로 교체하는 방향이 크롭 문제까지 함께 해소한다.
+
+### 9-5. 남은 것
+
+- **퍼센트 문구가 로컬라이제이션 테이블을 우회한다** — `Mathf.RoundToInt(...) + "%"`. 숫자+기호뿐이라 예외로 뒀으나 방침은 **#525(#497 Phase 3)** 에서 함께 정한다. 표시 정수가 바뀔 때만 문자열을 만든다.
+- **`"출동 중"` 문구가 모든 전환에 쓰인다** — Shop 복귀에도 "출동 중"이 뜬다. **#509**(정산 → 상점 복귀)가 그 경로를 건드리므로 함께 정리하면 좋다. `SetStatus`가 `LocalizedString`을 받으므로 호출부만 늘리면 된다.
+- **러너가 플레이어 색을 반영하지 않는다** — 고정 Unlit 머티리얼이다. **#432**(로봇 색 커스터마이징)가 색을 인덱스로 `PlayerPrefs`에 저장하므로 읽을 수는 있지만, 게임 쪽 색칠 경로와 별개로 손대야 한다.
+- **셰이더 프리워밍** — 5장의 보류 항목 중 이쪽은 그대로 남았다.
+- `LoadingScreen` 실코드 약 240줄 — 기준선(250) 바로 아래다. `[Header]` 4그룹으로 관심사가 나뉘어 있고(참조/진행률/캐릭터/연출), 다음에 무엇을 더 얹으면 분리 검토 대상이 된다.
+

@@ -1,4 +1,3 @@
-using System;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
@@ -18,6 +17,9 @@ using UnityEngine.SceneManagement;
 ///    서버가 로비를 로드하면 클라는 NGO 씬 동기화로 함께 이동한다 — 클라는 여기서 아무 것도 하지 않는다.
 ///  · EScene 매핑이 없는 테스트 씬은 App 흐름 밖 — 세션 없이 자기 씬을 재로드한다(기존 폴백).
 ///
+/// 정산 대기는 상한이다 (#509) — 접속 중인 전원이 정산을 확인하면 그 전에 복귀한다.
+/// 확인 집계는 SettlementConfirmGate가 하고, 복귀를 부르는 것은 지금처럼 여기(서버·오프라인)뿐이다.
+///
 /// 비자발 드롭(호스트 이탈·세션 삭제)은 이 컴포넌트가 다루지 않는다 — 상주 ConnectionLostReturner가 전 씬 공통으로 처리한다. (#429)
 /// </summary>
 public class RoundEndResetter : MonoBehaviour
@@ -25,12 +27,17 @@ public class RoundEndResetter : MonoBehaviour
     private RoundManager Round => App.Game.Round;
     private TeamFund TeamFund => App.Game.TeamFund;
     private ShopPurchases ShopPurchases => App.Game.ShopPurchases;
+    private RoundProgress RoundProgress => App.Game.RoundProgress;
+    private SettlementConfirmGate SettlementGate => App.Game.SettlementGate;
+
+    // 게이트가 없는 씬(테스트)이면 조기 복귀도 없다 — 상한을 그대로 채운다.
+    private bool AllConfirmed => SettlementGate != null && SettlementGate.AllConfirmed;
 
     [Header("정산 표시")]
-    // 정산 화면(#107) 연출과 맞춘다: SettlementPanel의 텍스트 지연(1.5s) + 카운트다운(10s) = 11.5s.
-    // 카운트다운이 0에 닿는 순간 상점(허브)으로 복귀하도록 이 값을 그 합과 같게 유지할 것.
+    // 정산 화면(#107) 연출과 맞춘다 — SettlementPanel의 텍스트 지연 + 카운트다운의 합으로 유지할 것.
+    // 이 값은 대기의 상한이다: 전원이 정산 확인을 누르면(#509) 카운트다운이 0에 닿기 전에 복귀한다.
     [Tooltip(
-        "라운드 종료 후 상점(허브) 복귀까지의 대기(초) — 정산 텍스트 지연+카운트다운과 맞춘다. 0이면 즉시"
+        "라운드 종료 후 상점(허브) 복귀까지의 대기 상한(초) — 정산 텍스트 지연+카운트다운과 맞춘다. 0이면 즉시"
     )]
     [SerializeField]
     private float m_resetDelaySeconds = 11.5f;
@@ -60,16 +67,27 @@ public class RoundEndResetter : MonoBehaviour
         EndRoundAsync(result).Forget();
     }
 
+    // 대기 상한까지, 또는 접속 중인 전원이 정산을 확인할 때까지 (#509).
+    // 판정은 게이트가 서버 권위로 하고 여기서는 그 결과만 본다.
+    private async UniTask WaitForSettlementAsync()
+    {
+        float deadline = Time.realtimeSinceStartup + m_resetDelaySeconds;
+
+        await UniTask.WaitUntil(
+            () => Time.realtimeSinceStartup >= deadline || AllConfirmed,
+            cancellationToken: this.GetCancellationTokenOnDestroy()
+        );
+
+        if (AllConfirmed)
+            Debug.Log($"[RoundEndResetter] 전원 정산 확인({SettlementGate.ConfirmedCount}명) — 대기 상한 전에 복귀한다");
+    }
+
     private async UniTaskVoid EndRoundAsync(RoundResult result)
     {
         // 정산을 잠깐 보여줄 여유. freeze로 timeScale이 건드려져도 흐르도록 실시간 기준.
         // 대기 중 씬 언로드로 파괴되면 취소한다. (#247)
         if (m_resetDelaySeconds > 0f)
-            await UniTask.Delay(
-                TimeSpan.FromSeconds(m_resetDelaySeconds),
-                ignoreTimeScale: true,
-                cancellationToken: this.GetCancellationTokenOnDestroy()
-            );
+            await WaitForSettlementAsync();
 
         // 테스트 씬(App 흐름 밖, 오프라인): 세션이 없으니 NGO만 내리고 자기 씬 재로드. (기존 폴백)
         if (App.CurrentScene == EScene.None)
@@ -97,10 +115,27 @@ public class RoundEndResetter : MonoBehaviour
             // 공짜로 들고 새 판을 시작한다. (#182, TeamFund와 같은 상주 홀더라 씬 전환으로는 안 지워진다)
             ShopPurchases?.Clear();
 
+            // 라운드 진행도도 같은 이유로 되돌린다 (#377) — 실패한 판의 난이도를 새 판이 물려받지 않는다.
+            // 상주 홀더라 씬 전환만으로는 초기화되지 않는 것도 팀 자금과 같다.
+            RoundProgress?.ResetToFirst();
+
+            // 판이 끝났으니 세이브도 지운다 (#373) — 위에서 되돌린 상태가 곧 새 판이라, 남겨 두면
+            // '이어하기'가 이미 끝난 판을 되살린다. 실패해도 게임 흐름은 막지 않는다.
+            SaveService.DeleteAsync().Forget();
+
             Debug.Log("[RoundEndResetter] 라운드 실패 — 세션 유지한 채 로비 복귀 (새 판 시작)");
             App.LoadScene(EScene.Lobby);
             return;
         }
+
+        // 성공했으니 다음 라운드로 진행도를 올린다 (#377) — 할당량이 이 값을 타고 오른다.
+        // 라운드 시작이 아니라 여기서 올리는 이유: 다음 게임 씬이 로드되기 전에 값이 확정돼 복제까지 끝나야
+        // 클라이언트가 첫 프레임부터 맞는 할당량을 본다 (RoundProgress 주석 참고).
+        RoundProgress?.Advance();
+
+        // 진행도를 올린 뒤에 저장한다 (#373) — 이어했을 때 방금 깬 라운드를 다시 하지 않게.
+        // 상태는 호출 즉시 스냅샷되므로 씬 전환을 붙잡지 않고 던져도 값이 흔들리지 않는다.
+        SaveService.SaveAsync().Forget();
 
         // 성공: 세션 유지하며 상점 씬으로 복귀. 서버만 로드하면 클라는 NGO 씬 동기화로 따라옴.
         Debug.Log("[RoundEndResetter] 라운드 성공 — 세션 유지한 채 상점(허브) 복귀");

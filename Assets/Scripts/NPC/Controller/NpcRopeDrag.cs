@@ -11,6 +11,7 @@ using UnityEngine.AI;
 public class NpcRopeDrag : NetworkBehaviour
 {
     private NpcController m_owner;
+    private NpcRagdoll m_ragdoll; // 시체 밧줄용 — 리그가 없는 프리팹에서는 null일 수 있다
 
     // ---- 밧줄 끌기 (#269) ----
 
@@ -35,6 +36,7 @@ public class NpcRopeDrag : NetworkBehaviour
     private void Awake()
     {
         m_owner = GetComponent<NpcController>();
+        m_ragdoll = GetComponent<NpcRagdoll>();
     }
 
     /// <summary>밧줄로 묶여 <b>누군가에게</b> 끌리는 중인가 — 참가자별 판정은 <see cref="IsDraggedBy"/>.
@@ -158,6 +160,10 @@ public class NpcRopeDrag : NetworkBehaviour
         NavMeshAgent agent = m_owner.Agent;
         if (agent != null && agent.enabled)
             agent.enabled = false;
+
+        // 시체는 여기부터 갈린다 — 위치 대입(Tick)이 아니라 관절 밧줄이 끈다 (#571, 아래 §시체 밧줄).
+        if (m_owner.Death.IsDead)
+            ServerAttachCorpseRope(dragger);
     }
 
     /// <summary>이 플레이어가 지금 이 NPC에 장력을 걸고 있는가 — 서버(또는 오프라인) 전용.
@@ -201,6 +207,7 @@ public class NpcRopeDrag : NetworkBehaviour
             return true;
 
         SetRoped(false);
+        ServerDetachCorpseRope(); // 시체가 아니면 무동작 (#571)
 
         NavMeshAgent agent = m_owner.Agent;
         if (agent == null)
@@ -209,6 +216,11 @@ public class NpcRopeDrag : NetworkBehaviour
         // 넉백 비행 중이면 에이전트는 넉백이 쥐고 있다 — 여기서 되살리면 날아가던 몸을 NavMesh로 도로
         // 끌어내린다. 착지할 때 EndKnockback이 붙인다. (끌던 중 폭발에 맞은 경우)
         if (m_owner.Knockback.IsKnockedBack)
+            return false;
+
+        // 죽었으면 에이전트를 되살리지 않는다 — 시체는 NavMesh로 돌아가지 않는다 (#571).
+        // 위 넉백 가드와 같은 이유이고, 이쪽은 <b>영구적</b>이라는 점만 다르다.
+        if (m_owner.Death.IsDead)
             return false;
 
         agent.enabled = true;
@@ -229,6 +241,113 @@ public class NpcRopeDrag : NetworkBehaviour
         );
         return false;
     }
+
+    /// <summary>
+    /// 장력·묶임을 통째로 끊는다 — <b>에이전트를 되살리지 않고</b>, 참가자를 하나씩 묻지도 않는다.
+    /// 사망(<see cref="NpcDeath.ServerEnterDead"/>) 전용. 서버(또는 오프라인). (#571)
+    ///
+    /// <b><see cref="StopRopeDrag"/>로는 대신할 수 없다.</b> 저쪽은 참가자 <b>한 명</b>을 빼는
+    /// 함수라 여럿이 끌던(줄다리기 #390) 대상은 전원을 순회해야 하는데, 죽는 쪽은 그 목록의 주인이
+    /// 아니다(목록은 각 <see cref="PlayerEscorter"/>에 있다).
+    ///
+    /// ⚠ <b>사망 전이보다 반드시 앞이다.</b> <see cref="PlayerEscorter"/>의 매 프레임 정리는
+    /// "커스터디(Escorted·Captured)를 벗어났으면 연결을 지운다"인데, 그 경로는 묶임 수만 줄이고
+    /// <see cref="StopRopeDrag"/>를 부르지 않는다 — 넉백은 착지 상태가 Captured라 그 목록 안에
+    /// 남아서 문제가 안 됐지만, 사망은 목록 밖으로 나가므로 <b>여기서 직접 끊지 않으면 시체가
+    /// 끌기 상태로 남아 죽은 뒤에도 장력을 받는다.</b>
+    /// </summary>
+    internal void ServerClearDrag()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        m_dragAnchors.Clear();
+        SetRoped(false);
+        SyncDraggerCount();
+        ClearTethers();
+
+        // 사망 진입 경로에서는 아직 상태가 Dead가 아니라(ServerEnterDead ④는 전이 ⑤보다 앞이다)
+        // 아래가 무동작이고, 그게 맞다 — 그때 걸려 있던 것은 산 대상의 위치 대입 밧줄이라 풀 관절이 없다.
+        // 시체를 끌던 줄을 밖에서 끊는 경로(라운드 종료 등)가 생기면 여기가 받아 준다.
+        ServerDetachCorpseRope();
+    }
+
+    // ---- 시체 밧줄 (#571) ----
+    //
+    // <b>산 NPC와 끄는 방식이 다르다.</b> 저쪽은 서버가 <see cref="Tick"/>에서 transform.position을
+    // 대입하고 NetworkTransform이 복제한다(#369). 시체는 동적 리지드바디라 그 방식이 통하지 않아
+    // (부모 트랜스폼을 따르지 않는다) 관절 밧줄(<see cref="RagdollRope"/>)이 물리로 끈다.
+    // 그래서 코어 Update의 사망 게이트가 <see cref="Tick"/>을 막는 것이 사양이다 —
+    // 둘이 같이 돌면 같은 프레임에 위치를 다툰다. 갈리는 기준은 "대상이 래그돌이냐"다.
+    //
+    // 루트는 <c>NpcRagdoll.TickRootFollow</c>가 시체에 붙이고 서버 권한 NetworkTransform이 복제한다 —
+    // 즉 <b>이 밧줄이 서버의 시체를 끌면 그 궤적이 저절로 전 피어로 나간다.</b>
+    //
+    // ⚠ 그 자동 추종은 <b>걸어서 갈 수 있는 거리</b>에만 통한다 — 유치장 수감처럼 맵을 가로지르는
+    // 순간이동은 각 피어가 자기 시체를 직접 옮겨야 한다 (<c>NpcCustody.SendCorpseToJail</c>).
+
+    /// <summary>
+    /// 시체에 밧줄을 묶는다 — 서버(또는 오프라인) 진입점. <b>전 피어에 건다.</b>
+    ///
+    /// 각 피어가 <b>자기 로컬 시체에</b> 걸어야 한다. 안 걸면 원격 시체에는 끄는 힘이 하나도 없어,
+    /// 서버가 보내 주는 루트만 가고 몸은 제자리에 남는다 — 그 뒤를
+    /// <c>NpcRagdoll.TickAlignBonesToRoot</c>가 표류 방지 속도(접지 시 1.5m/s)로 따라잡지 못해
+    /// 스냅 거리에 계속 걸린다. 정렬은 동력이 아니라 표류 방지이기 때문이다.
+    /// (<see cref="PlayerCarrier"/>의 운반 RPC가 같은 이유로 <c>SendTo.Everyone</c>이다)
+    ///
+    /// 서버 권한과 어긋나지 않는다: 각 피어의 로컬 물리는 <b>포즈</b>만 만들고 <b>궤적</b>은
+    /// 스트리밍된 루트가 준다.
+    /// </summary>
+    private void ServerAttachCorpseRope(Transform dragger)
+    {
+        if (dragger == null)
+            return;
+
+        if (!IsSpawned)
+        {
+            AttachCorpseRope(dragger); // 오프라인 Play 폴백
+            return;
+        }
+
+        // 스폰된 운반자만 참조로 넘길 수 있다(NetworkObjectReference 제약).
+        NetworkObject carrier = dragger.GetComponentInParent<NetworkObject>();
+        if (carrier == null || !carrier.IsSpawned)
+            return;
+
+        AttachCorpseRopeRpc(new NetworkObjectReference(carrier));
+    }
+
+    /// <summary>시체 밧줄을 푼다 — 서버(또는 오프라인) 진입점. 시체가 아니면 무동작. <b>멱등</b>.</summary>
+    private void ServerDetachCorpseRope()
+    {
+        if (!m_owner.Death.IsDead)
+            return;
+
+        if (!IsSpawned)
+        {
+            DetachCorpseRope(); // 오프라인 Play 폴백
+            return;
+        }
+
+        DetachCorpseRopeRpc();
+    }
+
+    [Rpc(SendTo.Everyone)]
+    private void AttachCorpseRopeRpc(NetworkObjectReference carrierRef)
+    {
+        // 운반자가 이미 디스폰됐으면 걸지 않는다 — 서버의 끊김 판정(PlayerEscorter)이 곧 정리한다
+        if (carrierRef.TryGet(out NetworkObject carrier))
+            AttachCorpseRope(carrier.transform);
+    }
+
+    [Rpc(SendTo.Everyone)]
+    private void DetachCorpseRopeRpc() => DetachCorpseRope();
+
+    // 실제 묶기·풀기 — 전 피어에서 로컬로 돈다. 묶는 지점은 운반자의 <b>손</b>이다(근거는 저쪽 주석).
+    private void AttachCorpseRope(Transform carrier) =>
+        m_ragdoll?.BeginRopePull(PlayerHeldItemView.ResolveRopeAnchor(carrier));
+
+    private void DetachCorpseRope() => m_ragdoll?.EndRopePull();
 
     // 파괴된 참가자(접속 종료 등)를 걷어낸다 — 남겨두면 장력 계산이 가짜 null을 만진다.
     private void PruneDeadAnchors()

@@ -20,4 +20,9 @@ MonoBehaviour:
   m_knockbackObstacleMask:
     serializedVersion: 2
     m_Bits: 1
+  m_weightTiers:
+  - 0.6
+  - 1
+  - 1.6
   m_maxHp: 100
+  m_knockdownHpRatio: 0.4

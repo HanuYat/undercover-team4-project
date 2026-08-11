@@ -20,7 +20,7 @@
   - `App.Sound` — SoundManager (그룹이 아닌 단일 프로퍼티 — 시스템 서비스 하나뿐이라 중첩 클래스를 두지 않았다. BGM·UI음이 붙으면(#483) 그때 그룹으로 승격한다)
 - **등록 메커니즘** — `CommonManagerBase`(일반) / `NetworkedManagerBase`(NetworkBehaviour)를 상속하면 Awake에서 `ManagerHandler`가 리플렉션으로 App의 같은 타입 필드에 주입하고, 파괴 시 해제한다. **App 필드에 직접 대입하는 코드를 만들지 말 것.**
 - **도메인** = `Assets/Scripts/` 하위의 **게임플레이 폴더**. 현재: Round, NPC, Player, HQ, Item, Interaction, Events, Network, Economy (게임플레이 폴더가 새로 생기면 자동 포함). 판별이 애매하면 "이 파일이 바뀌는 이유가 뭐냐"로 판단한다.
-  - **도메인으로 세지 않는 폴더**: `Core`(App 인프라 자체), `UI`(각 도메인의 화면 표현), `Data`(전 도메인 공유 어휘), `Scene`(씬 진입점), `Localization`(공유 자원), `Audio`·`Vfx`(전 도메인이 쓰는 연출 재생 기반 — `UI`와 같은 취급, #478), `Editor`·`Test`(런타임 아님).
+  - **도메인으로 세지 않는 폴더**: `Core`(App 인프라 자체), `UI`(각 도메인의 화면 표현), `Data`(전 도메인 공유 어휘), `Scene`(씬 진입점), `Localization`(공유 자원), `Audio`·`Vfx`(전 도메인이 쓰는 연출 재생 기반 — `UI`와 같은 취급, #478), `Common`(도메인에 속하지 않는 공유 부품 — 지금은 `Ragdoll`(#506), Player·NPC가 같은 리그를 쓴다(#572)), `Editor`·`Test`(런타임 아님).
   - 폴더가 새로 생기면 **도메인인지 아닌지를 먼저 이 목록에 적는다** — R3 ②(참조 도메인 수)의 집계가 이 분류에 달려 있어, 미분류 폴더가 있으면 같은 타입의 등록 타당성이 리뷰마다 다르게 계산된다.
   - **참조를 셀 때**: (a) **실제 코드 의존성만** 센다 — 주석·독스트링의 언급(`<see cref=...>` 포함)은 제외. (b) 같은 도메인 내부의 다른 파일 참조는 세지 않는다. (c) 같은 오브젝트에 강제된 컴포넌트(`[RequireComponent]`) 배선은 같은 도메인으로 본다 (별도 도메인이 아님).
 
@@ -80,6 +80,7 @@ R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단�
 | **연출 재생 기반** → `App.Sound`(SoundManager) · `App.Game.Effect`(EffectManager) 등재 | 참조 도메인은 `Item`(Baton·Taser) 하나뿐이라 R3 ②에 미달하지만, 사용처가 **런타임 스폰되는 아이템 프리팹**이라 인스펙터로 매니저를 배선할 방법이 없다 — 위 SceneReadyGate·HUD 항목과 같은 사정이다. 연출 종류가 늘면 참조 도메인은 NPC·Events로 자연히 퍼진다(그때는 예외가 아니라 정규 등록이 된다). **재생 기반에 한정**한다: 연출 규칙·상태를 들고 있는 쪽은 이 예외를 쓸 수 없다 (#478) |
 | **런타임 생성 HUD 표시 컴포넌트** → `App.UI.*` 등재 (`CrosshairUI` · `ChannelingGaugeUI` · `ToastView` · `SignalMessageView` · `PromptView` · `SecretFavorHud` · `DamageVignetteUI` · `TaserShockUI`) | HUD.prefab은 오너 스폰 시 **런타임 생성**되므로 표시 컴포넌트를 인스펙터로 배선할 방법이 아예 없다 — SceneReadyGate 항목과 같은 사정이다. 그래서 참조 도메인이 1개(또는 0개)라도 App 경로가 유일한 대안이다. **표시 컴포넌트에 한정**한다: 상태를 들고 있는 매니저는 이 예외를 쓸 수 없고 R3를 그대로 따른다 (#493) |
 
+| **세션 상주 홀더** → `App.Game.TeamFund` · `App.Game.ShopPurchases` · `App.Game.RoundProgress` 등재 | `SessionObjectSpawner`가 **Title 씬에서 런타임 스폰**해 씬을 넘어 사는 오브젝트들(`SessionState.prefab` 하나에 셋이 얹혀 있다 — 담긴 것이 늘면서 `TeamFund.prefab`에서 이름을 바꿨다)이라, 게임 씬의 인스펙터로 배선할 방법이 아예 없다 — SceneReadyGate·HUD 항목과 같은 사정이다. 셋 다 도메인 밖 코드 참조가 Round 하나뿐이라 **R3 ②에는 미달**한다(`TeamFund`에 대한 HQ·Interaction의 언급은 전부 주석이다 — 참조를 셀 때 §1의 (a)에 걸린다). 세션을 넘어 사는 상태를 다루는 홀더가 늘어나면 이 항목에 함께 적는다. 참조 도메인이 둘 이상으로 퍼지면 예외가 아니라 정규 등록이 된다 (#214·#377) |
 
 예외를 추가하려면 이 표에 사유와 함께 기재한다 (기재 없는 예외는 위반).
 
@@ -88,4 +89,4 @@ R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단�
 `refactoring/architecture` 머지 **이전에** 열린 브랜치의 코드는 규칙 위반을 지적하되 🟡(후속 조치)로 분류한다. 머지 이후 새로 작성·수정되는 코드는 정식 적용(🟠 이상).
 
 ---
-*최종 수정: 2026-08-06 (감옥 분리에 따른 예외 갱신 — `JailScanner` 폐기 · `JailDoor`·`JailbreakEvent`·`JailRoom` 탐색 기재 · `JailIntake` 참조 도메인 2곳으로 갱신 — #537) · 2026-08-05 (일회성 연출 창구를 App.Game.Fx로 일원화 — #532 · 연출 전파 규칙 추가 · App.Sound·App.Game.Effect 등재 + §4 예외 기재 · Audio·Vfx 폴더 분류 — #478) · 2026-08-04 (LonePlayerWatch → HqOccupancyZone 예외 기재 — #371) · 2026-08-03 (HqDropoffZone 예외 삭제 · JailIntake·JailScanner 예외 기재 — #492) · 2026-08-01 (SceneReadyGate 예외 기재 — #410) · 2026-07-28 (JailZone 예외 기재 — #395) · 작성 근거: refactoring/architecture 브랜치 1–2단계 (커밋 3039cd2…0b7aaab)*
+*최종 수정: 2026-08-10 (세션 상주 홀더 `TeamFund`·`ShopPurchases`·`RoundProgress` 예외 기재 — #214·#377) · 2026-08-06 (감옥 분리에 따른 예외 갱신 — `JailScanner` 폐기 · `JailDoor`·`JailbreakEvent`·`JailRoom` 탐색 기재 · `JailIntake` 참조 도메인 2곳으로 갱신 — #537) · 2026-08-05 (일회성 연출 창구를 App.Game.Fx로 일원화 — #532 · 연출 전파 규칙 추가 · App.Sound·App.Game.Effect 등재 + §4 예외 기재 · Audio·Vfx 폴더 분류 — #478) · 2026-08-04 (LonePlayerWatch → HqOccupancyZone 예외 기재 — #371) · 2026-08-03 (HqDropoffZone 예외 삭제 · JailIntake·JailScanner 예외 기재 — #492) · 2026-08-01 (SceneReadyGate 예외 기재 — #410) · 2026-07-28 (JailZone 예외 기재 — #395) · 작성 근거: refactoring/architecture 브랜치 1–2단계 (커밋 3039cd2…0b7aaab)*

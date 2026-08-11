@@ -21,10 +21,12 @@ using UnityEngine;
 public class NpcCustody : NetworkBehaviour
 {
     private NpcController m_owner;
+    private NpcRagdoll m_ragdoll; // 시체 수감용 — 리그가 없는 프리팹에서는 null일 수 있다 (NpcRopeDrag와 같은 관례)
 
     private void Awake()
     {
         m_owner = GetComponent<NpcController>();
+        m_ragdoll = GetComponent<NpcRagdoll>();
     }
 
     // ---- 연행 (#59) ----
@@ -133,6 +135,31 @@ public class NpcCustody : NetworkBehaviour
 
         JailSpot = spot;
         m_owner.StateMachine.ChangeState(NpcState.Jailed);
+    }
+
+    /// <summary>
+    /// 시체 수감 — 판정된 시체를 감옥 안 자리로 옮긴다. 서버(또는 오프라인) 전용. (#571)
+    ///
+    /// <b><see cref="SendToJail"/>과 갈리는 점은 상태다.</b> 저쪽은 <see cref="NpcState.Jailed"/>로
+    /// 전이시켜 수감자가 방 안을 배회하게 하지만, 시체는 <see cref="NpcState.Dead"/>에서 나갈 수 없고
+    /// (<c>NpcStateMachine</c>이 사망 이탈을 거부한다) 나갈 이유도 없다 — 옮기기만 하면 된다.
+    /// 그래서 여기서 하는 일은 <b>순간이동 하나</b>다: 커스터디도, 기절 해제도, 배치 상태도 없다.
+    ///
+    /// <b>원격에 따로 보낼 것이 없다</b> (#571 권위 반전). 배치가 시체를 <b>얼리고</b> 옮기는데,
+    /// 얼린 뼈는 루트의 키네마틱 자식이라 루트를 따라오고 그 루트는 NetworkTransform이 이미 복제한다.
+    /// 자세는 얼리는 순간 1회 나간다(<see cref="NpcDeath.ServerSendFrozenPose"/>).
+    /// </summary>
+    /// <param name="position">시체가 놓일 감옥 안 지점 — 유치장이 정한다. <b>바닥에 스냅된 좌표여야
+    /// 한다</b>: 얼린 시체는 스스로 바닥을 찾지 않는다(<see cref="JailZone.RandomRestPointInRoom"/>).</param>
+    public void SendCorpseToJail(Vector3 position)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        if (m_ragdoll != null)
+            m_ragdoll.ServerPlaceCorpse(position);
+        else
+            transform.position = position; // 리그가 없는 프리팹 — 옮길 뼈가 없다
     }
 
     /// <summary>

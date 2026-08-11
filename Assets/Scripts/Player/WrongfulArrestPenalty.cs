@@ -135,12 +135,60 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
 
         // 팀 카운트(페널티 게이지) +1 — 원한 구역 수용과 함께 오르므로 "구역 인원 = 팀 카운트"가 유지된다.
         m_teamCountSynced.Value += 1;
-        DetainNpc(result.Npc);
 
         Debug.Log($"[오검거] 팀 카운트 {m_teamCountSynced.Value} — {FormatPerPlayerCounts()}");
 
+        DetainNpc(result.Npc);
+
         if (m_teamCountSynced.Value > k_maxWrongful)
             LaunchSquad(CollectTargets(result));
+    }
+
+    /// <summary>
+    /// 오검거 대상을 <b>죽인</b> 경우의 집계 — <see cref="ArrestJudge.JudgeDeath"/>가 부른다. 서버 전용. (#571)
+    ///
+    /// <b>왜 필요한가.</b> 사망 경로는 <see cref="ArrestJudge.OnArrestJudged"/>를 발행하지 않으므로
+    /// (구독자 대부분이 신병 라우팅 = 상태 전이라 시체에 성립하지 않는다) 위
+    /// <see cref="HandleArrestJudged"/>가 돌지 않는다. 그대로 두면 <b>무고한 시민을 죽이는 것이
+    /// 오검거 페널티를 통째로 회피하는 최적 전략</b>이 된다 — 잡아서 인계하면 게이지가 오르는데
+    /// 죽이면 아무 일도 안 일어난다.
+    ///
+    /// ⚠ <b>보상과 달리 이쪽만 즉시 센다.</b> 진범의 현상금은 시체를 유치장까지 끌고 가야 들어오지만
+    /// (<see cref="ArrestJudge.JudgeCorpse"/>) 오검거는 죽는 순간 센다. 두 방향이 대칭이 아니라서다 —
+    /// 보상은 안 가져가면 손해로 끝나고, 페널티는 안 가져가면 이득이다.
+    ///
+    /// <b>원한 구역에 수용하지 않는다.</b> 시체는 걸어갈 수 없다. 그래서 이 경로에서는
+    /// <c>"구역 인원 == 팀 카운트"</c> 불변식이 깨지는데, <see cref="LaunchSquad"/>가 이미 그 상황을
+    /// 받는다: 구역에 남은 인원만 출동하고, 아무도 없으면 광장 매달기 폴백으로 집행된다.
+    /// 원한을 품고 쫓아올 <b>그 시민 본인</b>은 없지만 팀의 기록은 남는다 — 그게 이 설계의 말이다.
+    /// </summary>
+    /// <param name="killer">죽인 쪽 — 개인 집계와 추격 대상의 근거. null이면 팀 카운트만 오른다.</param>
+    public void ServerCountWrongfulDeath(GameObject killer)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        PlayerEscorter offender =
+            killer != null ? killer.GetComponentInParent<PlayerEscorter>() : null;
+
+        // 개인 집계 — 산 채로 인계한 경우와 같은 기준이다(정산 코믹 스탯).
+        if (offender != null)
+        {
+            ulong clientId = offender.OwnerClientId;
+            m_perPlayerCounts.TryGetValue(clientId, out int prev);
+            m_perPlayerCounts[clientId] = prev + 1;
+        }
+
+        m_teamCountSynced.Value += 1;
+        Debug.Log($"[오검거] 사살 — 팀 카운트 {m_teamCountSynced.Value} — {FormatPerPlayerCounts()}");
+
+        if (m_teamCountSynced.Value > k_maxWrongful)
+        {
+            var targets = new List<Transform>();
+            if (offender != null)
+                targets.Add(offender.transform);
+            LaunchSquad(targets);
+        }
     }
 
     // 추격 대상 트랜스폼만 뽑아낸다 — 인계자 전원이 대상이다 (#390 규칙 5).

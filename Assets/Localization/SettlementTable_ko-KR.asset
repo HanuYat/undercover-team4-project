@@ -76,7 +76,7 @@ MonoBehaviour:
       m_Items:
       - rid: 6276845898492543061
   - m_Id: 7100000000412
-    m_Localized: "{0} \uBCF5\uADC0\uAE4C\uC9C0 {1}\uCD08"
+    m_Localized: "{0} \uBCF5\uADC0\uAE4C\uC9C0 {1}\uCD08 ({2}/{3} \uD655\uC778)"
     m_Metadata:
       m_Items:
       - rid: 6276845898492543061

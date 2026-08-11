@@ -11,8 +11,9 @@ using Random = UnityEngine.Random;
 /// 네트워크를 켜지 않은 로컬 Play 테스트에서는 기존처럼 단독으로 동작한다.
 /// </summary>
 [RequireComponent(typeof(NavMeshAgent))]
-// 도메인 부품 9개 — 누락 시 그 도메인 경로가 NRE로 죽는다 (#503)
+// 도메인 부품 10개 — 누락 시 그 도메인 경로가 NRE로 죽는다 (#503)
 [RequireComponent(typeof(NpcCustody))]
+[RequireComponent(typeof(NpcDeath))]
 [RequireComponent(typeof(NpcHealth))]
 [RequireComponent(typeof(NpcIntruder))]
 [RequireComponent(typeof(NpcKnockback))]
@@ -41,6 +42,7 @@ public class NpcController : NetworkBehaviour
 
     // 도메인 부품 — 같은 GameObject에 붙는다. [RequireComponent]로 누락을 막는다. (#503)
     private NpcCustody m_custody;
+    private NpcDeath m_death;
     private NpcHealth m_health;
     private NpcIntruder m_intruder;
     private NpcKnockback m_knockback;
@@ -79,6 +81,8 @@ public class NpcController : NetworkBehaviour
     // 도메인 부품 접근자 — 호출부는 npc.Rope.IsRoped처럼 부품을 거친다 (계획서 § 3-1). (#503)
     /// <summary>신병 — 연행·인계 표식·수감·감옥 퇴장·반출 표식 (#59/#228/#537)</summary>
     public NpcCustody Custody => m_custody;
+    /// <summary>사망 — 체력 0에서 되돌아오지 않는 끝으로 넘긴다 (#571)</summary>
+    public NpcDeath Death => m_death;
     /// <summary>체력 — HP·피해 적용·회복과 <see cref="IDamageable"/> 구현 (#366)</summary>
     public NpcHealth Health => m_health;
     /// <summary>침입 — 목표·해제 시간·진행 이벤트 (#231)</summary>
@@ -100,6 +104,7 @@ public class NpcController : NetworkBehaviour
     {
         m_agent = GetComponent<NavMeshAgent>();
         m_custody = GetComponent<NpcCustody>();
+        m_death = GetComponent<NpcDeath>();
         m_health = GetComponent<NpcHealth>();
         m_intruder = GetComponent<NpcIntruder>();
         m_knockback = GetComponent<NpcKnockback>();
@@ -123,6 +128,7 @@ public class NpcController : NetworkBehaviour
         m_stateMachine.AddState(NpcState.Chasing, new NpcChaseState(this, m_chaseConfig, m_walkConfig, m_fleeConfig));
         m_stateMachine.AddState(NpcState.PenaltyEscorting, new NpcPenaltyEscortState(this, m_escortConfig));
         m_stateMachine.AddState(NpcState.Releasing, new NpcReleasingState(this, m_fleeConfig));
+        m_stateMachine.AddState(NpcState.Dead, new NpcDeadState(this));
 
         // FSM 전이(서버/오프라인에서만 발생)를 동기화 변수 또는 로컬 이벤트로 흘려보낸다
         m_stateMachine.OnStateChanged += HandleFsmStateChanged;
@@ -189,6 +195,20 @@ public class NpcController : NetworkBehaviour
         // NavMesh 밖에서 굳은 몸의 회수 — 아래 모든 게이트보다 **먼저** 돈다 (#557).
         // 뒤로 내리면 스턴 게이트에 가려 기절한 채 굳은 NPC(=신고된 증상 그대로)에 영영 닿지 못한다.
         TickNavMeshRecovery();
+
+        // 사망 — <b>모든 게이트보다 먼저 끝낸다</b> (#571). 죽은 몸은 아무 틱도 돌지 않는다.
+        //
+        // 다른 게이트들과 달리 여기서 대신 돌릴 Tick이 없다: 시체의 표현은 래그돌(NpcRagdoll)이
+        // 자기 Update에서 로컬로 굴리고, 그건 클라에서도 돌아야 해서(이 Update는 서버 전용이다)
+        // 애초에 여기 있을 수 없다.
+        //
+        // ⚠ <b>밧줄보다 앞인 것이 이제 방어선이 아니라 사양이다</b> (#571 시체 끌기). 시체에도 줄이
+        // 걸리는데(밧줄 좌클릭), 그 줄은 <b>관절</b>(RagdollRope)이라 물리가 몸을 끌고 루트는
+        // NpcRagdoll.TickRootFollow가 따라붙인다. 아래 m_rope.Tick()은 <c>transform.position</c>을
+        // 직접 대입하는 반대편 방식이라(#369), 시체에 돌면 둘이 같은 프레임에 위치를 다퉈 시체가
+        // 떨거나 몸을 두고 루트만 날아간다. <b>갈리는 기준은 "대상이 래그돌이냐"다</b>(docs/ragdoll.md §8).
+        if (m_death.IsDead)
+            return;
 
         // 밧줄 장력 — 게이트보다 **먼저** (#390). 묶인 채 기절한 대상은 스턴 오버레이를 단 채 끌려가야 하므로,
         // 뒤로 내리면 테이저→밧줄 콤보로 잡은 대상이 그 자리에 멈춘다. (넉백과는 배타적 — StopEscort가 끌기를 정리한다)

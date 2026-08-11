@@ -237,9 +237,15 @@ public class Taser : ItemBase, IAimedWeapon
         int count = Physics.RaycastNonAlloc(
             origin, direction.normalized, s_aimBuffer, m_range, ~0, QueryTriggerInteraction.Ignore);
 
-        // 제외 계층은 넘기지 않는다 — 레이는 원점을 감싼 콜라이더를 애초에 감지하지 않고,
-        // 자기 자신을 맞추는 예외는 EvaluatePlayerAim이 명시적으로 걸러낸다.
-        int index = AimOcclusion.FindNearestByPivot(origin, s_aimBuffer, count, null);
+        // 쏜 본인(과 그가 들고 있는 것들)은 제외 계층으로 넘긴다 — 진압봉과 같은 처리다.
+        // "레이는 원점을 감싼 콜라이더를 감지하지 않으니 필요 없다"는 전제가 래그돌에서 깨진다:
+        // 살아 있는 동안에도 뼈 콜라이더는 켜져 있고(RagdollRig는 Rigidbody만 키네마틱으로 돌린다)
+        // 레이어가 ~0 마스크에 그대로 걸리는데, 앉기(카메라 최대 0.8m 하강)·머리 뼈 pitch 회전
+        // (PlayerHeadLook)으로 카메라가 머리 구 밖으로 나가는 순간 자기 머리가 후보에 올라온다.
+        // 그 피봇은 원점 코앞이라 무조건 최근접이 돼, 조준이 맞아도 "Head에 맞음"으로 빗나간다.
+        PlayerInteractor holder = Holder;
+        int index = AimOcclusion.FindNearestByPivot(
+            origin, s_aimBuffer, count, holder != null ? holder.transform : null);
         if (index < 0)
             return AimResult.NoHit;
 
@@ -264,19 +270,13 @@ public class Taser : ItemBase, IAimedWeapon
         return AimResult.ValidTarget;
     }
 
-    // 동료 명중 판정 (#252). 소지자 자신은 대상이 아니다 — 카메라 원점이 자기 캡슐 안이라 보통 안 맞지만,
-    // 앉기·넉백으로 원점이 몸 밖으로 나가는 순간 자기를 쏠 수 있어 명시적으로 막는다.
+    // 동료 명중 판정 (#252). 소지자 자신을 걸러내는 분기는 없다 — 진압봉과 같이 EvaluateAim이
+    // 소지자 계층을 제외 루트로 넘기므로 자기 몸(캡슐·래그돌 뼈)은 후보에 아예 오르지 않는다.
     private AimResult EvaluatePlayerAim(RaycastHit hit, out PlayerIncapacitation playerTarget)
     {
         playerTarget = hit.collider.GetComponentInParent<PlayerIncapacitation>();
         if (playerTarget == null)
             return AimResult.HitNonTarget;
-
-        if (playerTarget == GetComponentInParent<PlayerIncapacitation>())
-        {
-            playerTarget = null;
-            return AimResult.HitNonTarget; // 자기 자신
-        }
 
         // 이미 무력화된 동료는 무효 — 다운을 기절로 덮어써 구조 대상에서 빼버리면 안 된다
         // (ServerStun도 같은 가드를 갖지만, 여기서 걸러야 탄만 쓰고 '명중'이 뜨지 않는다)

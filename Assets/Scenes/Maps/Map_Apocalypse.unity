@@ -5693,7 +5693,19 @@ PrefabInstance:
     m_TransformParent: {fileID: 1326152962}
     m_Modifications:
     - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_eventEntries.Array.data[0].enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_eventEntries.Array.data[2].enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_eventEntries.Array.data[3].enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_eventEntries.Array.data[4].enabled
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 498939978214492355, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
@@ -14100,8 +14112,9 @@ GameObject:
   - component: {fileID: 320827322}
   - component: {fileID: 320827324}
   - component: {fileID: 320827323}
+  - component: {fileID: 320827325}
   m_Layer: 0
-  m_Name: SceneReadyGate
+  m_Name: Gates
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -14162,6 +14175,19 @@ MonoBehaviour:
   AutoObjectParentSync: 1
   SyncOwnerTransformWhenParented: 1
   AllowOwnerToParent: 0
+--- !u!114 &320827325
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 320827321}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e3e23bab96f8d3f4980ef1a2ebf95ae0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SettlementConfirmGate
+  ShowTopMostFoldoutHeaderGroup: 1
 --- !u!1001 &321640395
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -27825,6 +27851,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoundManager
   m_targetFund: 20000
+  m_quotaTable: {fileID: 11400000, guid: 27e5c2fdf24ca4b40acc205fdbd43d9c, type: 2}
   m_timeLimitSeconds: 600
   m_startDelaySeconds: 3
   m_jailZone: {fileID: 8298609921114679384}
@@ -59582,7 +59609,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1414177698}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 366f1025f951a4e48a8ccacb70f4731c, type: 3}
   m_Name: 
