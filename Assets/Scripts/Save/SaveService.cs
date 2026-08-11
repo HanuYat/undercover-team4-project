@@ -29,8 +29,9 @@ using UnityEngine;
 /// </summary>
 public static class SaveService
 {
-    // 저장소에 남는 식별자라 배포 후 변경 금지 — 바꾸면 기존 세이브를 못 읽는다. (GameSettings 키 관례와 동일)
-    private const string k_key = "session.progress";
+    // 배포 후 변경 금지 — 바꾸면 기존 세이브를 못 읽는다.
+    // Cloud Save 키는 영숫자·대시·언더스코어만 허용한다(마침표를 쓰면 validation error).
+    private const string k_key = "session_progress";
 
     // 마지막으로 클라우드에서 읽은(또는 방금 쓴) 세이브. 두 가지 용도다:
     //  · 타이틀의 '이어하기' 노출 판정
