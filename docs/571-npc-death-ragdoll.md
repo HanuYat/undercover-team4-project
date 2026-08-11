@@ -7,6 +7,27 @@
 얼려 루트 권위로 반전)는 작성만 끝나 Play 검증이 남았다.** 그 밖에 남은 것은 멀티 확인, 병합 전
 복구 하나, 그리고 알려진 이슈 하나(§14 — 시체를 놓을 때 관성)다.
 
+> ## ⚠ 이 PR에서 **NPC 래그돌은 빠졌다** — 프리팹에 붙이지 않았다
+>
+> **빠진 것:** NPC 프리팹 4종(`NPC_Citizen`/`_Generic`/`Rioter`/`Streaker`)에서
+> `NpcRagdoll`·`RagdollRig`·`RagdollRope` 컴포넌트와 복제된 리그(Rigidbody 11 + CharacterJoint 10 +
+> Collider 11, 뼈 레이어는 `Ragdoll`(10) → NPC(7)로 되돌림)를 전부 제거했다.
+>
+> **올라간 것:** NPC 기절/사망 분리(`NpcDeath`·`NpcDeadState`·체력 규칙)와 검거·현상금 계상은
+> 그대로 있다. 아래 문서의 1·2·7단계에 해당한다.
+>
+> **코드는 남겼다.** `NpcRagdoll.cs`·`RagdollRigCloner.cs`·`RagdollSetup`의 NPC 일반화는 그대로다 —
+> 다시 붙일 때 쓸 도구라서. 호출부(`NpcCustody`·`NpcDeath`·`NpcRopeDrag`)가 전부
+> `GetComponent<NpcRagdoll>()` **null 허용**으로 짜여 있어, 프리팹에서 떼기만 해도 폴백으로 동작한다
+> (시체 수감은 `transform.position` 대입, 밧줄은 무동작).
+>
+> **왜 뺐나.** 플레이어 래그돌에서 이후에 잡은 수정들(`Physics.SyncTransforms` 타이밍, 뼈 길이 누적,
+> 밧줄 권위 전용 — [ragdoll-corpse-split.md §7·§8](ragdoll-corpse-split.md))을 NPC 쪽에도 **같은
+> 방식으로 다시** 적용해야 해서, 지금 리그를 얹어 두면 어차피 걷어내고 새로 해야 한다.
+>
+> **다시 붙이는 법:** `Tools > Ragdoll` 메뉴(`RagdollSetup`)와 `RagdollRigCloner`가 그대로 있으니
+> 아래 3·4단계를 그대로 따라가면 된다. 그때 위 세 수정을 반영할 것.
+
 ---
 
 ## 0. 지금 어디까지 됐나
