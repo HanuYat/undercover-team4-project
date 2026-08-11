@@ -285,8 +285,12 @@ public static class SaveService
     }
 
 #if UNITY_EDITOR
-    /// <summary>개발 도구 전용 — 마지막으로 조회·저장한 세이브. SaveDevWindow가 편집 폼을 채울 때 읽는다.</summary>
-    public static SessionSaveData DevKnown => s_known;
+    /// <summary>
+    /// 개발 도구 전용 — 마지막으로 조회·저장한 세이브의 <b>사본</b>. SaveDevWindow가 편집 폼을 채울 때 읽는다.
+    /// 원본을 내보내면 창에서 만진 값이 다음 저장의 지갑 병합 출처(s_known)를 조용히 오염시킨다.
+    /// </summary>
+    public static SessionSaveData DevKnown =>
+        s_known == null ? null : JsonUtility.FromJson<SessionSaveData>(JsonUtility.ToJson(s_known));
 
     /// <summary>
     /// 개발 도구 전용 — 손으로 만든 세이브를 클라우드에 덮어쓴다 (SaveDevWindow).

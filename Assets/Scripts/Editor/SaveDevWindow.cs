@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
+using Unity.Netcode;
 using UnityEditor;
 using UnityEngine;
 
@@ -51,6 +52,17 @@ public class SaveDevWindow : EditorWindow
     private static AuthBootstrap Auth => Application.isPlaying ? App.Net.Auth : null;
 
     private static bool IsReady => Auth != null && Auth.IsSignedIn;
+
+    // '지금 판 상태로 저장'만 조건이 하나 더 붙는다 — 세션 밖(타이틀)에서 부르면 상주 홀더가 아직 없어
+    // 기본값(1라운드·자금 0·빈 구매 목록)이 '저장 완료' 로그와 함께 세이브를 덮는다. 실패로 보이지도 않는다.
+    private static bool CanSaveLive
+    {
+        get
+        {
+            NetworkManager nm = NetworkManager.Singleton;
+            return IsReady && nm != null && nm.IsListening && nm.IsServer;
+        }
+    }
 
     private void OnGUI()
     {
@@ -119,6 +131,32 @@ public class SaveDevWindow : EditorWindow
         var added = (ItemBase)EditorGUILayout.ObjectField("추가", null, typeof(ItemBase), false);
         if (added != null)
             m_carried.Add(added);
+
+        WarnUnregistered();
+    }
+
+    // 복원은 NGO 등록 명부에 있는 프리팹만 된다 — 미등록 프리팹은 올라가기는 하고 복원 시점에 조용히 사라진다.
+    // 명부는 런타임 상태라 플레이 중에만 물어볼 수 있다(선형 탐색이지만 목록이 짧아 그릴 때마다 훑어도 된다).
+    private void WarnUnregistered()
+    {
+        if (!Application.isPlaying)
+            return;
+
+        var unknown = new List<string>();
+        foreach (ItemBase item in m_carried)
+        {
+            string id = SaveItemLookup.GetId(item);
+            if (!string.IsNullOrEmpty(id) && SaveItemLookup.Find(id) == null)
+                unknown.Add(id);
+        }
+
+        if (unknown.Count > 0)
+        {
+            EditorGUILayout.HelpBox(
+                $"DefaultNetworkPrefabs에 없어 복원되지 않는다: {string.Join(", ", unknown)}",
+                MessageType.Warning
+            );
+        }
     }
 
     private void DrawInstallables()
@@ -190,12 +228,26 @@ public class SaveDevWindow : EditorWindow
 
             EditorGUILayout.BeginHorizontal();
 
-            if (GUILayout.Button("클라우드에서 불러오기"))
+            // 창에 적어 둔 값을 통째로 날리는 방향이라 한 번 묻는다.
+            if (
+                GUILayout.Button("클라우드에서 불러오기")
+                && EditorUtility.DisplayDialog(
+                    "클라우드에서 불러오기",
+                    "창에 적어 둔 값이 저장된 세이브로 전부 덮인다. 계속할까?",
+                    "불러오기",
+                    "취소"
+                )
+            )
+            {
                 LoadAsync().Forget();
+            }
 
-            // 지금 진행 중인 판을 그대로 굳힌다 — 실제 저장 경로(SaveAsync)라 호스트에서만 의미가 있다.
-            if (GUILayout.Button("지금 판 상태로 저장"))
-                SaveService.SaveAsync().Forget();
+            // 지금 진행 중인 판을 그대로 굳힌다 — 실제 저장 경로(SaveAsync)다. 세션이 서 있을 때만 켜진다.
+            using (new EditorGUI.DisabledScope(!CanSaveLive))
+            {
+                if (GUILayout.Button("지금 판 상태로 저장"))
+                    SaveService.SaveAsync().Forget();
+            }
 
             if (GUILayout.Button("세이브 지우기"))
                 SaveService.DeleteAsync().Forget();
