@@ -133,8 +133,12 @@ public static class SaveService
         if (!IsReady)
             return;
 
-        SessionSaveData data = Capture();
+        await WriteAsync(Capture());
+    }
 
+    // 세이브 한 벌을 키에 덮어쓴다. 실패는 경고만 남긴다 — 저장 실패로 게임 흐름을 막지 않는다.
+    private static async UniTask WriteAsync(SessionSaveData data)
+    {
         try
         {
             await CloudSaveService.Instance.Data.Player.SaveAsync(
@@ -279,6 +283,26 @@ public static class SaveService
 
         return result;
     }
+
+#if UNITY_EDITOR
+    /// <summary>개발 도구 전용 — 마지막으로 조회·저장한 세이브. SaveDevWindow가 편집 폼을 채울 때 읽는다.</summary>
+    public static SessionSaveData DevKnown => s_known;
+
+    /// <summary>
+    /// 개발 도구 전용 — 손으로 만든 세이브를 클라우드에 덮어쓴다 (SaveDevWindow).
+    /// 실제 저장과 같은 키·같은 직렬화를 쓰므로, 올라간 뒤의 흐름은 진짜 세이브와 구분되지 않는다.
+    /// </summary>
+    public static async UniTask DevOverwriteAsync(SessionSaveData data)
+    {
+        if (data == null || !IsReady)
+        {
+            Debug.LogWarning("[세이브] 개발용 덮어쓰기 불가 — 로그인된 플레이 모드에서만 된다");
+            return;
+        }
+
+        await WriteAsync(data);
+    }
+#endif
 
     // 도메인 리로드를 꺼도 이전 플레이의 세이브 상태가 남지 않도록 리셋 (App.ResetStatics와 같은 이유)
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
