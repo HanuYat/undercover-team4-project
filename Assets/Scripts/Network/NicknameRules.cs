@@ -28,7 +28,7 @@ public static class NicknameRules
     private const string k_table = "TitleTable";
     private const string k_validationPrefix = "Title.NicknameValidation.";
 
-    /// <summary>UI 입력 상한의 단일 출처 — AuthPanel이 characterLimit에 쓴다.</summary>
+    /// <summary>UI 입력 상한의 단일 출처 — NicknameView가 characterLimit에 쓴다.</summary>
     public static int MaxLength => k_maxLength;
 
     /// <summary>입력 규칙 검사 — 통과면 <see cref="ENicknameValidation.Ok"/>.</summary>

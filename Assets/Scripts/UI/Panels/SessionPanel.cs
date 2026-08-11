@@ -10,12 +10,18 @@ using UnityEngine.UI;
 /// 대기 로비가 아니다: 생성 성공 → TitleManager.StartGame()으로 호스트가 InGame을 열고,
 /// 참가 성공 → 서버가 이미 InGame이므로 NGO 씬 동기화가 곧바로 끌고 간다.
 /// 대기 공간·게임 시작은 InGame(본부)의 LobbyManager 담당 (#154).
+///
+/// <b>#585에서 첫 화면이 아니게 됐다</b> — 로그인 관문(AuthGatePanel)을 통과해야 열린다.
+/// 그래서 OpenOnAwake를 쓰지 않고 관문이 OpenPanel을 부른다.
+///
+/// 루트는 화면 전체를 덮고 실제 창은 자식 Window다. 닉네임 편집(NicknameView)은 창 안에,
+/// 로그아웃(SignOutView)은 창 밖 화면 하단 [종료]·[설정] 옆에 붙는다 — 후자를 이 패널 아래
+/// 두는 이유는 관문을 통과해야 보여야 하기 때문이다. 사유는 SignOutView 주석에 적었다.
 /// </summary>
 public class SessionPanel : PanelBase
 {
-    public override bool CanCloseWithESC => false; // 로비의 기본 화면 — 닫을 수 없다
+    public override bool CanCloseWithESC => false; // 세션 화면의 기본 바탕 — 닫을 수 없다
     public override bool IsStackable => false;
-    protected override bool OpenOnAwake => true;
 
     [Header("UI 참조")]
     [SerializeField]
