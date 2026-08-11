@@ -198,6 +198,13 @@ public class RunawayVehicle : NetworkBehaviour
         m_driving = false;
         m_hornPlayed = false;
         IsFinished = false;
+
+        // 명중 장부를 비운다 — <b>한 번의 주행 안에서만</b> 중복을 막는 것이 원래 목적이다(차체가
+        // 지나가는 동안 매 틱 겹친다). 이 차는 완주 후 제자리로 돌아와 다음 추첨에 다시 쓰이므로,
+        // 비우지 않으면 지난 사고에서 한 번 치인 사람은 그 차에 <b>영영 다시 치이지 않는다</b>.
+        m_hitPeople.Clear();
+        m_hitNpcs.Clear();
+
         SetPhase(VehiclePhase.Parked);
     }
 
