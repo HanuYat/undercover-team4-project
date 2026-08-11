@@ -22,6 +22,12 @@ public class PlayerMovement : NetworkBehaviour
     [Tooltip("넉백 속도가 잦아드는 감쇠율(1/초) — 클수록 빨리 멈춘다")]
     [SerializeField] private float m_knockbackDamping = 4f;
 
+    [Header("날씨 효과 (눈)")]
+    [Tooltip("기본 이동 마찰 계수 (보간 속도)")]
+    [SerializeField] private float m_defaultFriction = 15f;
+    [Tooltip("눈 올 때의 마찰 계수 (미끄러짐)")]
+    [SerializeField] private float m_snowFriction = 2f;
+
     // 접지 중 유지하는 하향 속도(m/s). 0으로 두면 CharacterController가 경사·계단에서 지면을 놓쳐
     // 접지 판정이 깜빡인다 — 살짝 눌러 붙여 둔다. 천장 상쇄(0으로 죽이기)의 반대쪽 짝이다. (#189)
     private const float k_groundedStickVelocity = -2f;
@@ -64,7 +70,10 @@ public class PlayerMovement : NetworkBehaviour
     private RoundManager Round => App.Game.Round; // 라운드 종료 시 이동·시점 차단용 (라운드 종료 freeze)
     private float m_verticalVelocity;
     private Vector3 m_knockbackVelocity; // 외력으로 밀려나는 수평 속도 — 매 프레임 감쇠 (#232 폭발 넉백)
+    private Vector3 m_currentHorizontalVelocity; // 미끄러짐(관성) 구현을 위한 현재 수평 속도 (#227)
     private bool m_ignoreRoundEndFreeze; // 정산 화면을 닫은 로컬 플레이어는 라운드 종료 freeze를 무시하고 움직인다 (#107)
+
+    private SnowEvent m_snowEvent; // 눈 날씨 이벤트 캐싱용 (#227)
 
     // 이번 Move에서 밟은 면 중 법선이 가장 선 것 — OnControllerColliderHit이 채운다
     private Vector3 m_groundNormal = Vector3.up;
@@ -123,6 +132,12 @@ public class PlayerMovement : NetworkBehaviour
         m_towed = GetComponent<PlayerTowedMotion>();
         m_look = GetComponent<PlayerLook>();
         m_ragdoll = GetComponent<PlayerRagdoll>();
+    }
+
+    private void Start()
+    {
+        // App 싱글톤을 통한 날씨 이벤트 초기화 (Awake 시점에서는 App이 준비되지 않을 수 있음)
+        m_snowEvent = App.Game.SuddenEvent?.GetEvent<SnowEvent>();
     }
 
     public override void OnNetworkSpawn()
@@ -279,18 +294,12 @@ public class PlayerMovement : NetworkBehaviour
     /// <summary>
     /// 쌓인 외력(넉백)과 수직 속도를 지운다 — <b>몸의 위치 권한이 넘어가는 순간</b> 부른다.
     /// 지금 부르는 곳은 둘이다: 래그돌 진입(#506)과 추종 진입(<see cref="PlayerTowedMotion"/>, #279).
-    ///
-    /// 적용되지 못한 채 남은 속도는 몸이 자기 이동을 되찾는 순간 한꺼번에 터진다 —
-    /// <see cref="SetPose"/>가 텔레포트에서 수직 속도를 지우는 것과 같은 이유다. 날아가던 중에
-    /// 붙잡히는 경로가 실제로 있고(넉백은 무력화가 아니라 포획을 막지 않는다), 래그돌 쪽은
-    /// 뼈가 날아가는 동안 캡슐까지 같이 미끄러진다.
-    ///
-    /// 넉백 가드(<see cref="AddKnockback"/>)가 막는 것은 진입 <b>이후</b>의 호출뿐이라 이 짝이 필요하다.
     /// </summary>
     internal void ClearExternalVelocity()
     {
         m_knockbackVelocity = Vector3.zero;
         m_verticalVelocity = 0f;
+        m_currentHorizontalVelocity = Vector3.zero; // 추종/래그돌 시 미끄러짐 관성(눈 효과 등) 완전히 제거
     }
 
     /// <summary>
@@ -309,25 +318,16 @@ public class PlayerMovement : NetworkBehaviour
         // 낙하·점프 도중 텔레포트되면 쌓인 수직 속도가 그대로 남아 도착지에서 바닥을 파고들거나
         // 튀어오른다 — 도착 즉시 접지 판정으로 이어지도록 초기화한다. (#189)
         m_verticalVelocity = 0f;
+        m_currentHorizontalVelocity = Vector3.zero; // 텔레포트 직후 관성에 의해 밀리는 현상 방지
 
-        // 진행 중인 시점 보간도 같은 이유로 끊는다 (#576) — 세션 유지 씬 전환에서 플레이어는
-        // 이월되므로, 죽은 채로 라운드가 끝나면 사망 관전 블렌드가 상점까지 따라와 도착하자마자
-        // 3인칭이 1초에 걸쳐 쓸려 들어온다. 옮겨간 자리에서 옛 화면을 이어 그릴 이유가 없다.
+        // 진행 중인 시점 보간도 같은 이유로 끊는다 (#576)
         m_look?.SnapViewBlend();
     }
 
     // 오너의 매 프레임 갱신 — 시점(PlayerLook)·추종(PlayerTowedMotion)도 여기서 순서를 잡아 돌린다.
-    // 자기 Update에 맡기지 않는 이유: 시점이 몸통 yaw를 돌리고 이동이 그 yaw를 기준으로 방향을 잡으므로
-    // 같은 프레임에서 시점 → 이동 순서가 보장돼야 한다(Unity의 컴포넌트 실행 순서는 미지정).
     private void Update()
     {
         // 래그돌인 동안(#506) — <b>위치의 주인은 시체다.</b> 캡슐이 시체를 따라간다.
-        //
-        // ⚠ <b>이 분기가 호송·운반보다 먼저인 것이 중요하다.</b> 예전에는 반대였는데, 그러면 밧줄로
-        // 끌 때 운반 추종이 이겨서 캡슐이 먼저 끌려가고 시체는 뒤에 남는다 — 그걸 메우려고 시체를
-        // 캡슐로 당기는 스프링을 붙였다가 "세면 뜨고 약하면 안 끌린다"에 갇혔다(§9-7).
-        // 지금은 밧줄이 시체를 물리로 직접 끌고(PlayerRagdoll.BeginRopePull), 캡슐이 그 결과를
-        // 따라간다 — 권한이 사망 구간 내내 한 방향이라 서로 싸울 일이 없다.
         if (m_ragdoll != null && m_ragdoll.IsCapsuleFollowingBody)
         {
             m_look?.HandleLook();
@@ -337,11 +337,6 @@ public class PlayerMovement : NetworkBehaviour
         }
 
         // 남이 내 몸을 옮기는 중(#279 호송 / #365 운반) — 입력 이동 대신 추종한다.
-        // HandleMove를 타면 안 되는 이유는 모드마다 다르다: 호송은 CharacterController가 꺼져 있고,
-        // 운반은 켜져 있지만 중력이 이중으로 적분된다. 어느 쪽이든 이동은 추종 쪽이 든다.
-        //
-        // 시점은 두 모드 모두 열어 둔다 — 쓰러져도 주변은 볼 수 있어야 한다(#252). 몸은 추종이 돌리고
-        // 시야는 카메라 로컬(PlayerLook의 다운 yaw)이 따로 드므로 서로 간섭하지 않는다.
         if (m_towed != null && m_towed.IsActive)
         {
             m_look?.HandleLook();
@@ -357,36 +352,16 @@ public class PlayerMovement : NetworkBehaviour
 
     /// <summary>
     /// 외력으로 밀어낸다 — 폭발 넉백 등(<see cref="BombExplosionView"/>). 세기는 m/s 단위 속도로 준다.
-    ///
-    /// <b>오너 로컬 전용.</b> 이동 권한이 오너에게 있어(CharacterController + 오너 권한 NetworkTransform)
-    /// 남의 인스턴스에서 밀어봤자 오너의 다음 위치 전파에 덮인다 — 그래서 오너가 아니면 조용히 무시한다.
-    /// 각 피어가 자기 플레이어에만 적용하는 전제로 호출자가 전수 순회해도 되게 만든 방어다.
-    /// (세션이 없는 오프라인 테스트에서는 IsOwner가 false이므로 스폰 여부로 먼저 거른다)
     /// </summary>
     public void AddKnockback(Vector3 velocity)
     {
         if (IsSpawned && !IsOwner) return;
 
-        // 추종 중에는 외력을 받지 않는다 — 몸의 위치를 PlayerTowedMotion이 쥐고 있어 밀려날 수가
-        // 없는데, 넉백 감쇠는 HandleMove 안에 있고 추종 중에는 Update가 그 앞에서 빠져나간다.
-        // 그래서 그냥 쌓아 두면 값이 <b>감쇠 없이 얼어붙었다가</b> 추종이 끝나는 순간 한꺼번에
-        // 터진다 — 납치 호송 중 폭발이면 외곽에 도착해 린치가 시작되는 그 순간 피해자가 날아간다.
-        // (호송은 CharacterController를 꺼 두므로 수직 성분도 같이 얼어붙는다)
         if (m_towed != null && m_towed.IsActive) return;
-
-        // 래그돌 중이면 삼킨다 — 몸은 뼈 물리가 날리고 있으므로 캡슐까지 같은 폭발로 미끄러지면
-        // 시체와 판정 위치가 서로 다른 방향으로 벌어진다. (#506 §3-2)
-        //
-        // 호출부(BombExplosionView)에서 "죽은 사람은 건너뛴다"로 거르지 않는 이유: 원격 클라에서는
-        // 사망 사실(PlayerIncapacitation의 NetworkVariable)과 폭발 사실(BombDevice의 것)이 서로 다른
-        // 오브젝트에서 와 도착 순서가 보장되지 않아, 그 시점의 "이 사람 죽었나?"가 틀릴 수 있다.
-        // 들어와도 무해하게 만드는 쪽이 순서와 무관하게 항상 옳다.
         if (m_ragdoll != null && m_ragdoll.IsRagdollActive) return;
 
         m_knockbackVelocity += new Vector3(velocity.x, 0f, velocity.z);
 
-        // 위로 띄우는 성분은 중력과 같은 채널로 넣어야 접지 판정·낙하가 자연스럽게 이어진다.
-        // 이미 더 크게 튀어오른 중이면 덮어쓰지 않는다(연쇄 폭발이 상승을 잘라먹지 않게).
         if (velocity.y > 0f)
             m_verticalVelocity = Mathf.Max(m_verticalVelocity, velocity.y);
     }
@@ -400,74 +375,65 @@ public class PlayerMovement : NetworkBehaviour
         ).normalized;
 
         // 점프 자격 판정에는 Move() 앞의 값이 맞다 — 그 시점의 마지막 확정 접지다.
-        // (착지 보고는 반대로 Move() 뒤의 신선한 값을 쓴다 — 아래 ReportGrounded 참고, #189)
         bool grounded = IsStablyGrounded;
 
         IntegrateGravity();
 
-        // 점프 (#189) — 넉백의 상승 성분과 같은 수직 채널을 쓴다. 중력 적분 뒤에 덮어써야
-        // 접지 유지용 -2f 클램프에 임펄스가 잡아먹히지 않는다.
-        // 앉은 채로도 뛴다 — 애니메이터가 Crouch → Jump_Begin → Jump_Air_Crouch로 웅크린 자세를
-        // 유지해 주고, 콜라이더도 눌림 여부를 따라 계속 작은 상태다(PlayerCrouch.UpdateBlend).
+        // 점프 (#189)
         if (m_jump != null)
         {
             if (m_jump.ConsumeJumpRequest() && grounded && !IsMovementLocked)
             {
-                // v = sqrt(2gh) — 중력을 튜닝해도 목표 높이가 유지된다.
-                // m_gravity가 잘못 0 이상으로 설정돼도 NaN이 나지 않게 바닥을 깐다.
                 m_verticalVelocity = Mathf.Sqrt(
                     2f * m_jump.JumpHeight * Mathf.Max(-m_gravity, 0.01f)
                 );
             }
         }
 
-        // 앉기가 달리기보다 우선 — Ctrl을 누르는 동안은 Shift를 눌러도 앉은 채 느리게 이동한다.
-        // (앉은 채 달리는 애니메이션 클립이 에셋에 없어 자세와 속도가 어긋나는 것도 막는다) (#236)
-        // 상수가 아니라 프로퍼티 — 무게 배율(#398)이 곱해져 있고 애니메이션 블렌드도 같은 값을 읽는다.
+        // 앉기가 달리기보다 우선
         float speed = IsCrouching ? CrouchSpeed
             : m_inputHandler.IsSprinting ? SprintSpeed
             : MoveSpeed;
 
-        // 팽팽해진 밧줄이 허용하는 만큼으로 입력 이동을 깎는다 — 줄다리기 힘겨루기 (#398).
-        // 넉백에는 걸지 않는다: 폭발 같은 외력은 줄을 이겨야 하고, 막으면 벽과 줄 사이에 낀다.
-        Vector3 inputVelocity = moveDirection * speed;
+        // 목표 수평 속도 계산 (미끄러짐 보간을 위해 inputVelocity를 targetVelocity로 취급)
+        Vector3 targetVelocity = moveDirection * speed;
+        
+        // 팽팽해진 밧줄이 허용하는 만큼으로 목표 속도를 깎는다.
         if (m_dragLoad != null)
-            inputVelocity = m_dragLoad.ConstrainByTautRopes(inputVelocity);
+            targetVelocity = m_dragLoad.ConstrainByTautRopes(targetVelocity);
 
-        // 벽면에 얹혔으면 밀어내 흘러내리게 한다 — 중력만으로는 영원히 붙어 있다(입력을 떼고 90프레임 돌려도 0mm).
-        // 면으로 밀어 넣는 입력 성분도 함께 지운다: 남겨 두면 미는 힘이 이겨서 계속 붙어 있는다.
-        // 넉백은 건드리지 않는다 — 폭발로 벽에 처박히는 것은 의도된 결과다. (IsStablyGrounded 참고)
+        // 벽면에 얹혔으면 밀어내 흘러내리게 한다.
         if (m_controller.isGrounded && IsOnSteepSurface)
         {
             Vector3 awayFromSurface = new Vector3(m_groundNormal.x, 0f, m_groundNormal.z).normalized;
-            inputVelocity =
-                Vector3.ProjectOnPlane(inputVelocity, awayFromSurface)
+            targetVelocity =
+                Vector3.ProjectOnPlane(targetVelocity, awayFromSurface)
                 + awayFromSurface * k_steepSlideSpeed;
         }
 
-        // 넉백은 입력 이동과 별개로 감쇠하며 합산된다 — 다운·라운드 종료로 입력이 막혀도 폭발엔 밀려난다
-        Vector3 velocity = inputVelocity + m_knockbackVelocity + Vector3.up * m_verticalVelocity;
+        // 눈 이벤트 여부에 따른 마찰력 결정 (#227)
+        float currentFriction = (m_snowEvent != null && m_snowEvent.IsSnow) ? m_snowFriction : m_defaultFriction;
+        
+        // 방향 전환·정지가 즉각적이지 않도록 현재 속도를 목표 속도로 부드럽게 보간 (관성/미끄러짐 구현)
+        m_currentHorizontalVelocity = Vector3.Lerp(m_currentHorizontalVelocity, targetVelocity, currentFriction * Time.deltaTime);
+
+        // 넉백은 입력 이동(보간된 속도)과 별개로 합산된다.
+        Vector3 velocity = m_currentHorizontalVelocity + m_knockbackVelocity + Vector3.up * m_verticalVelocity;
         MoveAndTrackGround(velocity * Time.deltaTime);
 
-        // 천장에 머리를 박으면 상승 속도를 즉시 죽인다 — CharacterController는 이동이 막혀도 속도를
-        // 스스로 지우지 않아, 그냥 두면 남은 상승 속도가 중력에 다 깎일 때까지(점프 1회면 0.4초 남짓)
-        // 천장에 붙어 있는다. 실내 천장이 낮은 경찰서에서 바로 드러난다. (#189)
-        // 접지 쪽 -2f 클램프와 같은 역할을 위쪽에 해 주는 것.
+        // 천장에 머리를 박으면 상승 속도를 즉시 죽인다.
         if ((m_controller.collisionFlags & CollisionFlags.Above) != 0 && m_verticalVelocity > 0f)
         {
             m_verticalVelocity = 0f;
         }
 
-        // 접지 보고는 반드시 Move() 뒤의 신선한 값으로 한다 (#189).
-        // isGrounded는 Move()가 갱신하므로 프레임 앞에서 읽으면 직전 프레임 결과가 나온다 —
-        // 그만큼 착지 판정이 한 프레임 밀려 착지 모션이 늦게 뜨는 것으로 보인다.
-        // 점프 가능 판정(위 grounded)은 반대로 프레임 앞의 값이 맞다 — 그 시점의 마지막 확정 접지다.
+        // 접지 보고는 반드시 Move() 뒤의 신선한 값으로 한다.
         if (m_jump != null)
         {
             m_jump.ReportGrounded(IsStablyGrounded);
         }
 
-        // 프레임률과 무관하게 같은 곡선으로 잦아들도록 지수 감쇠
+        // 넉백 지수 감쇠
         m_knockbackVelocity *= Mathf.Exp(-m_knockbackDamping * Time.deltaTime);
         if (m_knockbackVelocity.sqrMagnitude < 0.01f)
             m_knockbackVelocity = Vector3.zero;
