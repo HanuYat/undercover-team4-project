@@ -67,9 +67,26 @@ public class PlayerHeldItemView : NetworkBehaviour
     // (휠을 빠르게 굴리면 늦게 끝난 옛 갱신이 최신 모델을 덮어쓴다)
     private int m_refreshVersion;
 
+    // ---- 사망 중 숨김 (#571) ----
+    //
+    // <b>왜 필요한가.</b> <see cref="m_handAnchor"/>는 <b>살아있는 리그</b>의 손이고
+    // (<c>Player/Root/.../Hand_R/HeldItemAnchor</c>), 사망 시 꺼지는 것은 살아있는 <b>스킨</b>뿐이다 —
+    // 뼈는 계속 켜져 있다(Animator의 아바타 바인딩이 경로 기반이라 끄면 애니메이션이 끊긴다).
+    // 그래서 몸은 사라지고 시체는 굴러가는데 <b>손에 든 아이템만 죽은 자리에 떠 있는다.</b>
+    //
+    // 표현 컴포넌트가 <c>IsRagdollActive</c>를 보고 스스로 물러나는 것이 이 기능의 관례다
+    // (<see cref="PlayerAnimationDriver"/>·<see cref="PlayerMovement"/>·<see cref="PlayerHeadLook"/>).
+    //
+    // <b>폴링인 이유</b>는 모델이 <b>비동기로</b> 만들어지기 때문이다(<see cref="RefreshHeldModelAsync"/>).
+    // 사망 시점에 밀어서 숨기면 그 뒤에 해석이 끝난 모델이 다시 나타난다 — 그래서 상태를 매 프레임 보고,
+    // 만들어지는 자리에서도 한 번 맞춘다.
+    private PlayerRagdoll m_ragdoll;
+    private bool m_hiddenByRagdoll;
+
     public override void OnNetworkSpawn()
     {
         m_itemUser = GetComponent<PlayerItemUser>();
+        m_ragdoll = GetComponentInParent<PlayerRagdoll>();
 
         if (m_handAnchor == null)
         {
@@ -166,6 +183,25 @@ public class PlayerHeldItemView : NetworkBehaviour
         ShowHeldModel(item);
     }
 
+    // 래그돌 상태를 따라간다 — 위 필드 주석의 사정으로 밀어 넣기가 아니라 폴링이다.
+    private void Update()
+    {
+        bool hide = m_ragdoll != null && m_ragdoll.IsRagdollActive;
+        if (hide == m_hiddenByRagdoll)
+            return;
+
+        m_hiddenByRagdoll = hide;
+        ApplyRagdollVisibility();
+    }
+
+    // 사망 중이면 손에 든 모델을 감춘다. 오너 화면에서는 이미 OwnBody 레이어로 가려져 있으므로
+    // 이 처리가 실제로 바꾸는 것은 <b>남들에게 보이는 3인칭 표시</b>다.
+    private void ApplyRagdollVisibility()
+    {
+        if (m_heldModelInstance != null)
+            m_heldModelInstance.SetActive(!m_hiddenByRagdoll);
+    }
+
     private void ShowHeldModel(ItemBase item)
     {
         m_heldModelInstance = Instantiate(item.HeldModelPrefab, m_handAnchor, false);
@@ -191,6 +227,10 @@ public class PlayerHeldItemView : NetworkBehaviour
                 LayerMask.NameToLayer("OwnBody")
             );
         }
+
+        // 사망 중에 해석이 끝나 늦게 만들어진 모델도 곧바로 감춘다 — Update를 한 프레임 기다리면
+        // 그동안 죽은 자리에 아이템이 번쩍인다.
+        ApplyRagdollVisibility();
     }
 
     private void ClearHeldModel()
