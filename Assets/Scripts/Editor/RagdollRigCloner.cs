@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text;
+using Unity.Netcode.Components;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
@@ -74,7 +75,7 @@ public static class RagdollRigCloner
         // 마무리(레이어·물리값·RagdollRig)는 정본에 맡긴다 — 복제가 그 규칙을 두 벌 갖지 않게.
         // 복제에 성공한 프리팹만 돌린다: 건너뛴 프리팹에 돌려 봤자 뼈가 없어 에러만 한 줄 더 난다.
         for (int i = 0; i < cloned.Count; i++)
-            RagdollSetup.Run(cloned[i], RagdollSetup.k_npcRigOwnerPath);
+            RagdollSetup.Run(cloned[i], RagdollSetup.k_npcRigOwnerPath, replicateHips: true);
     }
 
     // ---- 복제 ----
@@ -188,6 +189,17 @@ public static class RagdollRigCloner
         for (int i = 0; i < targetBones.Count; i++)
             foreach (CharacterJoint joint in targetBones[i].GetComponents<CharacterJoint>())
                 Object.DestroyImmediate(joint, true);
+
+        // 골반 복제(#572)를 Rigidbody보다 <b>먼저</b> 걷는다 — NetworkRigidbody가 Rigidbody를
+        // RequireComponent하므로, 남겨 두면 아래에서 Rigidbody를 지우지 못하고 조용히 막힌다.
+        // RagdollSetup이 마무리 단계에서 다시 붙이므로 결과는 같다.
+        for (int i = 0; i < targetBones.Count; i++)
+        {
+            foreach (NetworkRigidbody netBody in targetBones[i].GetComponents<NetworkRigidbody>())
+                Object.DestroyImmediate(netBody, true);
+            foreach (NetworkTransform netTransform in targetBones[i].GetComponents<NetworkTransform>())
+                Object.DestroyImmediate(netTransform, true);
+        }
 
         for (int i = 0; i < targetBones.Count; i++)
         {

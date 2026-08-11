@@ -98,6 +98,17 @@ public class NpcRagdoll : MonoBehaviour
     private Animator m_animator;
     private NavMeshAgent m_agent;
 
+    // 골반이 NetworkTransform으로 직접 복제되는가 — <b>프리팹 배선에서 읽는다.</b> (#572)
+    //
+    // <b>스위치를 따로 두지 않는다</b>(<see cref="PlayerRagdoll"/>과 같은 관례) — 배선과 코드가
+    // 어긋날 여지를 없애려고 컴포넌트 존재 자체를 진실로 삼는다. 참이면 궤적의 주인이 루트에서
+    // 골반으로 넘어가므로 셋이 함께 바뀐다: 원격 정렬이 필요 없어지고(오히려 싸운다), 비권위 피어의
+    // 골반은 키네마틱으로 남아야 하고, 밧줄은 권위 피어만 묶는다.
+    //
+    // 프리팹에서 NetworkTransform을 빼면 셋 다 자동으로 옛 동작(전원이 각자 묶고 정렬로 좁힌다)으로
+    // 돌아간다 — 그게 이 조건을 배선에서 읽는 이유다.
+    private bool m_hipsIsNetworkSynced;
+
     private RagdollState m_state = RagdollState.Animated;
     private float m_stillTimer;
     private float m_elapsedInRagdoll;
@@ -142,6 +153,32 @@ public class NpcRagdoll : MonoBehaviour
 
         // 애니메이터도 리그 쪽(Model)에 있다.
         m_animator = GetComponentInChildren<Animator>(true);
+
+        m_hipsIsNetworkSynced =
+            m_rig.HipsBody != null
+            && m_rig.HipsBody.GetComponent<Unity.Netcode.Components.NetworkTransform>() != null;
+    }
+
+    /// <summary>
+    /// 뼈를 물리로 놓아준다 — <b>골반만은 비권위 피어에서 키네마틱으로 남긴다.</b> (#572)
+    ///
+    /// 골반을 NetworkTransform이 복제하는 구성에서는 원격의 골반이 <b>물리가 아니라 스트림</b>의
+    /// 소유물이다. <c>NetworkRigidbody</c>의 <c>AutoUpdateKinematicState</c>는 스폰·소유권 변경
+    /// 시점에만 도는 값이라 래그돌의 토글과 어긋나므로 프리팹에서 꺼 두고 여기서 직접 관리한다.
+    ///
+    /// 나머지 뼈는 원격에서도 <b>동적으로 둔다</b> — 스트리밍된 골반에 관절로 매달려 각 피어의 로컬
+    /// 물리가 흐느적임을 만든다. 전부 키네마틱으로 굳히면 시체가 골반을 따라 통째로 미끄러지는
+    /// 조각상이 된다.
+    ///
+    /// <see cref="RagdollRig"/>가 아니라 여기서 하는 이유는 분리의 기준이다 — 저쪽에는
+    /// <c>IsOwner</c>·<c>NetworkObject</c>가 한 번도 나오지 않는다.
+    /// </summary>
+    private void ReleaseBonesToPhysics()
+    {
+        m_rig.SetKinematic(false);
+
+        if (m_hipsIsNetworkSynced && !HasMoveAuthority && m_rig.HipsBody != null)
+            m_rig.HipsBody.isKinematic = true;
     }
 
     // ---- 밧줄 파사드 (#571 시체 끌기) ----
@@ -158,11 +195,27 @@ public class NpcRagdoll : MonoBehaviour
     /// 키네마틱인 채로는 장력이 하나도 안 걸린다(<see cref="RagdollRope.Attach"/>가 <c>WakeAll</c>까지
     /// 부르는 이유가 그것이다). 여기가 <c>Frozen → Ragdoll</c> 복귀의 유일한 문이고, 줄을 놓으면
     /// 정착 판정이 다시 돌아 알아서 얼어붙는다.
+    ///
+    /// <b>골반이 스트림으로 오면 실제로 묶는 것은 권위 피어뿐이다</b> (#572, 불변식 8). 이 갈림이
+    /// 견인 발산의 근원을 없앤다: <c>AttachCorpseRopeRpc</c>가 <c>SendTo.Everyone</c>이라 지금까지는
+    /// <b>전 피어가 각자 밧줄을 묶었고</b>, 같은 관절에 <b>서로 다른 입력</b>이 들어갔다 — 앵커 위치가
+    /// 피어마다 다르게 계산되기 때문이다(운반자가 원격이면 NetworkTransform 보간값 + 애니메이터가
+    /// 얹는 걸음 흔들림, 그것도 피어마다 따로 평가된다). 강성 스프링에 다른 입력을 넣으면 다른 궤적이
+    /// 나오고, 그 차이를 보정이 쫓다가 미끄러짐으로 보였다. 골반을 직접 복제하면 <b>원격은 끌 이유가
+    /// 없다</b> — 권위 피어가 굴린 결과가 그대로 온다.
+    ///
+    /// ⚠ <b>녹이는 것은 전 피어가 한다.</b> 가드가 <see cref="Unfreeze"/> <b>뒤</b>에 있는 이유다 —
+    /// 여기서 통째로 돌아가면 원격의 시체는 얼어붙은 채 골반만 끌려가는 조각상이 된다.
+    /// (<see cref="PlayerRagdoll.BeginRopePull"/>은 애초에 얼지 않아 맨 앞에서 돌아간다)
     /// </summary>
     /// <param name="carrier">밧줄을 쥔 쪽. 보통 운반자의 손 앵커.</param>
     public void BeginRopePull(Transform carrier)
     {
         Unfreeze();
+
+        if (m_hipsIsNetworkSynced && !HasMoveAuthority)
+            return;
+
         m_rope?.Attach(carrier);
     }
 
@@ -214,7 +267,7 @@ public class NpcRagdoll : MonoBehaviour
         m_stillTimer = 0f;
         m_elapsedInRagdoll = 0f;
 
-        m_rig.SetKinematic(false);
+        ReleaseBonesToPhysics();
     }
 
     /// <summary>
@@ -310,7 +363,7 @@ public class NpcRagdoll : MonoBehaviour
         if (m_agent != null && m_agent.enabled)
             m_agent.enabled = false;
 
-        m_rig.SetKinematic(false);
+        ReleaseBonesToPhysics();
         m_rig.ApplyImpulse(impulse);
     }
 
@@ -363,7 +416,12 @@ public class NpcRagdoll : MonoBehaviour
         // 정확히 붙여 주고, 자세는 서버가 뿌린 그대로다 — 좁힐 차이가 없다.
         // 예전에는 정착 후에도 계속 당겼는데, 그것이 원격 리지드바디를 <b>영영 못 자게 만들어</b>
         // 바닥에서 비벼지는 원인이었다.
-        if (!HasMoveAuthority && m_state == RagdollState.Ragdoll)
+        //
+        // <b>골반을 직접 복제하면 이 보정을 끈다</b> (#572) — 궤적의 주인이 루트에서 골반으로
+        // 넘어가므로 좁힐 잔차가 없고, 켜 두면 스트림이 놓은 골반을 매 프레임 루트 쪽으로 밀어 서로
+        // 싸운다. 지금 프리팹이 그 배선이라 이 함수는 <b>실제로는 돌지 않는다</b> — 남겨 둔 것은
+        // 골반 복제를 빼면 곧바로 옛 동작으로 돌아갈 수 있게 하기 위해서다. (PlayerRagdoll과 같다)
+        if (!m_hipsIsNetworkSynced && !HasMoveAuthority && m_state == RagdollState.Ragdoll)
             TickAlignBonesToRoot();
     }
 

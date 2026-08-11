@@ -485,6 +485,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 463f08c5cd8b41b40931fa44519b409b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcDeath
+  ShowTopMostFoldoutHeaderGroup: 1
 --- !u!114 &1134059981017232228
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -627,6 +628,12 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 3906038093274639839, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2480655110169691797}
+    - targetCorrespondingSourceObject: {fileID: 3906038093274639839, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6567571564654157084}
+    - targetCorrespondingSourceObject: {fileID: 3906038093274639839, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4249723682717395334}
     - targetCorrespondingSourceObject: {fileID: 4125562017735736742, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
       insertIndex: -1
       addedObject: {fileID: 6933756703790547447}
@@ -1173,6 +1180,69 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.32299513, y: 0.27836922, z: 0.38197827}
   m_Center: {x: -0.12033978, y: 0.0010077655, z: 0.00000013411045}
+--- !u!114 &6567571564654157084
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2497598294701332601}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e96cb6065543e43c4a752faaa1468eb1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.Components.NetworkTransform
+  ShowTopMostFoldoutHeaderGroup: 1
+  NetworkTransformExpanded: 0
+  AutoOwnerAuthorityTickOffset: 1
+  PositionInterpolationType: 0
+  RotationInterpolationType: 0
+  ScaleInterpolationType: 0
+  PositionLerpSmoothing: 1
+  PositionMaxInterpolationTime: 0.1
+  RotationLerpSmoothing: 1
+  RotationMaxInterpolationTime: 0.1
+  ScaleLerpSmoothing: 1
+  ScaleMaxInterpolationTime: 0.1
+  AuthorityMode: 0
+  TickSyncChildren: 0
+  UseUnreliableDeltas: 0
+  SyncPositionX: 1
+  SyncPositionY: 1
+  SyncPositionZ: 1
+  SyncRotAngleX: 1
+  SyncRotAngleY: 1
+  SyncRotAngleZ: 1
+  SyncScaleX: 0
+  SyncScaleY: 0
+  SyncScaleZ: 0
+  PositionThreshold: 0.001
+  RotAngleThreshold: 0.01
+  ScaleThreshold: 0.01
+  UseQuaternionSynchronization: 0
+  UseQuaternionCompression: 0
+  UseHalfFloatPrecision: 0
+  InLocalSpace: 0
+  SwitchTransformSpaceWhenParented: 0
+  Interpolate: 1
+  SlerpPosition: 0
+--- !u!114 &4249723682717395334
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2497598294701332601}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f6c0be61502bb534f922ebb746851216, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.Components.NetworkRigidbody
+  ShowTopMostFoldoutHeaderGroup: 1
+  NetworkRigidbodyBaseExpanded: 0
+  UseRigidBodyForMotion: 1
+  AutoUpdateKinematicState: 0
+  AutoSetKinematicOnDespawn: 1
 --- !u!95 &3068399505254570713 stripped
 Animator:
   m_CorrespondingSourceObject: {fileID: 4470224562400980863, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
