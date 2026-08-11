@@ -239,6 +239,14 @@ MonoBehaviour:
     m_Key: Title.Auth.NicknameLabel
     m_Metadata:
       m_Items: []
+  - m_Id: 10788103327781
+    m_Key: Title.Session.ContinueButton
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327782
+    m_Key: Title.Session.Status.SaveFound
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

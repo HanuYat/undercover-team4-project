@@ -1,3 +1,4 @@
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -32,6 +33,35 @@ public class PlayerWallet : NetworkBehaviour
     // 이번 라운드 개인 몫
     public NetworkVariable<int> RoundEarnedVar => m_roundEarned;
     public int RoundEarned => m_roundEarned.Value;
+
+    // 이 지갑 주인의 UGS PlayerId — 세이브의 키다 (#373). 오너가 스폰 시 보고해야 서버가 안다.
+    // clientId는 세션마다 재발급되므로 판을 넘어 사람을 가리키지 못한다. 서버에서만 채워진다.
+    private string m_ownerPlayerId;
+
+    /// <summary>이 지갑 주인의 UGS PlayerId — 세이브 기록용. 보고 전이거나 서버가 아니면 빈 문자열.</summary>
+    public string OwnerPlayerId => m_ownerPlayerId;
+
+    public override void OnNetworkSpawn()
+    {
+        // 서버가 알 수 없는 로컬 값이라 오너가 올린다 — LobbyRoster가 닉네임·PlayerId를 올리는 것과 같은 구조.
+        if (IsOwner)
+            ReportPlayerIdRpc((App.Net.Auth != null ? App.Net.Auth.PlayerId : null).ToFixed64());
+    }
+
+    // 플레이어 오브젝트는 오너가 이 클라이언트라 기본 권한(오너만 발신)으로 충분하다.
+    [Rpc(SendTo.Server)]
+    private void ReportPlayerIdRpc(FixedString64Bytes playerId)
+    {
+        m_ownerPlayerId = playerId.ToString();
+
+        // 이어하기로 시작한 판이면 저장된 잔액을 여기서 한 번 돌려준다 (#373).
+        // 세이브에 없는 사람(새로 합류)은 0에서 시작한다 — 그 판정은 SaveService가 한다.
+        if (SaveService.TryTakeWalletBalance(m_ownerPlayerId, out int saved))
+        {
+            m_balance.Value = saved;
+            Debug.Log($"[개인 자금] 세이브 복원 — {OwnerClientId}번 잔액 {saved}");
+        }
+    }
 
     /// <summary>로컬 플레이어의 지갑 — 표시 전용. 잔액은 오너만 읽으므로 남의 지갑을 잡으면 0만 보인다.</summary>
     public static PlayerWallet Local

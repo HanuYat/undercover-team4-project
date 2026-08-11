@@ -31,8 +31,8 @@ public class RoundProgress : NetworkedManagerBase
     {
         if (!IsServer) return;
 
-        // 세션 시작 시 1회 초기화
-        m_round.Value = k_firstRound;
+        // 세션 시작 시 1회 초기화 — '이어하기'로 시작했으면 저장된 라운드부터 (#373)
+        m_round.Value = SaveService.Pending?.Round ?? k_firstRound;
     }
 
     /// <summary>다음 라운드로 넘긴다 — 라운드 성공 종료 시 RoundEndResetter가 호출한다. 서버(또는 오프라인) 전용.</summary>

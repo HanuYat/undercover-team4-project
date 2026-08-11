@@ -24,8 +24,8 @@ public class TeamFund : NetworkedManagerBase
     {
         if (!IsServer) return;
 
-        // 세션 시작 시 1회 초기화
-        m_fund.Value = m_startingFund;
+        // 세션 시작 시 1회 초기화 — '이어하기'로 시작했으면 저장된 잔액부터 (#373)
+        m_fund.Value = SaveService.Pending?.TeamFund ?? m_startingFund;
     }
 
     // 검거 보상은 판정 즉시가 아니라 라운드 종료 시 유치장 점유 기반으로 정산된다(#340) — SettlementController가

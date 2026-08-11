@@ -72,6 +72,14 @@ public class MapSelection : NetworkedManagerBase
 
     public override void OnNetworkSpawn()
     {
+        // 이어하기로 시작했으면 지난번에 골라 둔 맵이 그대로 선택된 채로 시작한다 (#373).
+        // 맵 목록이 줄어든 뒤의 세이브일 수 있으므로 범위를 벗어나면 첫 칸으로 떨어뜨린다.
+        if (IsServer && SaveService.Pending != null)
+        {
+            int saved = SaveService.Pending.MapIndex;
+            m_selectedIndex.Value = saved >= 0 && saved < MapCount ? saved : 0;
+        }
+
         m_selectedIndex.OnValueChanged += HandleSelectedIndexChanged;
         OnSelectionChanged?.Invoke();
     }

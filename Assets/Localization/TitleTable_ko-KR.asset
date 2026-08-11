@@ -273,14 +273,24 @@ MonoBehaviour:
     m_Localized: "\uB2C9\uB124\uC784 \uC124\uC815"
     m_Metadata:
       m_Items: []
+  - m_Id: 10788103327781
+    m_Localized: "이어하기"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 10788103327782
+    m_Localized: "저장된 판이 있습니다 — {0}라운드부터"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267880
   references:
     version: 2
     RefIds:
     - rid: 6276845892712267880
       type: {class: SmartFormatTag, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_Entries: 
+        m_Entries:
         m_SharedEntries:
+        - id: 10788103327782
         - id: 10788103327751
         - id: 10788103327754
         - id: 10788103327763
