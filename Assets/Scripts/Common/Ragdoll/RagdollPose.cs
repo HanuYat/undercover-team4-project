@@ -76,38 +76,6 @@ public static class RagdollPose
         return copied;
     }
 
-    /// <summary>
-    /// 두 리그의 <b>최대 로컬 회전 차</b>(도) — <see cref="Copy"/>가 실제로 닿았는지 재는 진단용.
-    ///
-    /// 복사 직후에 0에 가깝지 않으면 복사가 실패한 것이다. <see cref="Copy"/>의 반환값은 <b>방문한
-    /// 뼈 수</b>라 "돌긴 돌았는데 값이 안 맞는" 경우를 못 잡는데, 이 값은 결과를 직접 본다.
-    ///
-    /// 순회는 <see cref="Copy"/>와 같다 — <b>받는 쪽에서 몰고 가며 이름으로 짝짓는다.</b>
-    /// 짝이 없는 자식(장착 아이템 모델 등)은 방문하지 않으므로 결과에 섞이지 않는다.
-    /// </summary>
-    /// <returns>최대 각도 차(도). 어느 한쪽이 null이면 -1.</returns>
-    public static float MaxAngleDelta(Transform from, Transform to)
-    {
-        if (from == null || to == null)
-            return -1f;
-
-        float worst = Quaternion.Angle(from.localRotation, to.localRotation);
-
-        for (int i = 0; i < to.childCount; i++)
-        {
-            Transform target = to.GetChild(i);
-            Transform source = FindChild(from, target.name);
-            if (source == null)
-                continue;
-
-            float child = MaxAngleDelta(source, target);
-            if (child > worst)
-                worst = child;
-        }
-
-        return worst;
-    }
-
     // 직속 자식만 이름으로 찾는다 — Transform.Find는 경로를 해석하므로 이름에 '/'가 없다는 전제가
     // 붙고, 여기서는 그냥 자식 순회가 더 정직하다. 형제끼리 이름이 겹치는 뼈는 Synty 리그에 없다.
     private static Transform FindChild(Transform parent, string name)

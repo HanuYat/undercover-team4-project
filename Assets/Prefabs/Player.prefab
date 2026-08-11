@@ -7422,7 +7422,6 @@ MonoBehaviour:
   m_blendSeconds: 0.4
   m_logRevivalYaw: 1
   m_logSinkDiagnostics: 1
-  m_restoreBindPoseOnRevive: 1
   m_liveSkin: {fileID: 6088151059564412096}
   m_liveBoneRoot: {fileID: 575005799806648508}
 --- !u!1 &5606094146414363504

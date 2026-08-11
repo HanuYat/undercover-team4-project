@@ -137,6 +137,25 @@ Animated ──진입(사망)──> Ragdoll ──정착──> Settled ──�
    순수한 쪽(시체)에서 몰고 가며 이름으로 짝지을 것.
    [ragdoll-corpse-split.md §3](ragdoll-corpse-split.md)
 
+10. **뼈 길이는 포즈가 아니다.** 관절이 달린 뼈의 `localPosition`을 복사하지 말 것 — 그건 자세가
+    아니라 골격이고, 관절의 `connectedAnchor`는 **바인드 포즈 기준으로 구워져 있다**(프리팹이
+    `AutoConfigureConnectedAnchor: 1`). 어긋난 골격을 물리에 넘기면 **첫 스텝부터 관절이 위반된 채
+    출발**해 사지가 고무처럼 늘어나며 바닥을 뚫는다.
+
+    물리가 관절을 늘린 채 정착하면 그 길이가 로컬 위치에 굳으므로, 막는 자리가 **둘이고 짝이다** —
+    `RagdollPose.Copy`가 리그 사이 전파를, 부활 시 `RagdollRig.RestoreBindPose()`가 시체 자신의
+    누적을 끊는다. 하나만으로는 다른 경로로 되돌아온다. (실측 1차 0.0055m → 2차 0.0624m로 누적)
+    [ragdoll-corpse-split.md §8-2](ragdoll-corpse-split.md)
+
+11. **물리로 넘기기 전에 `Physics.SyncTransforms()`.** 이 프로젝트는 `m_AutoSyncTransforms: 0`이라
+    (`ProjectSettings/DynamicsManager.asset`) 트랜스폼에 쓴 값이 PhysX 액터로 즉시 넘어가지 않는다.
+    키네마틱인 동안은 트랜스폼이 진실이지만 동적으로 바뀌는 순간 **액터가 진실**이 되므로, 그 사이에
+    동기화하지 않으면 물리가 **액터가 들고 있던 옛 포즈**에서 출발한다(실측 81.7° 차이 — 시체가
+    T자에서 무너지기 시작했다).
+
+    `RagdollRig.SetKinematic(false)`가 대신 한다. **호출부에 끼우지 말 것** — 같은 전이가 네 군데라
+    하나 빠뜨리면 조용히 돌아온다. [ragdoll-corpse-split.md §8-1](ragdoll-corpse-split.md)
+
 ---
 
 ## 4. 튜닝 노브

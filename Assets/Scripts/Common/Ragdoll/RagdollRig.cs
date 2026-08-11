@@ -109,24 +109,6 @@ public class RagdollRig : MonoBehaviour
     /// <summary>물리를 받는 뼈 수 — 진단·검증용.</summary>
     public int BoneCount => m_bodies != null ? m_bodies.Length : 0;
 
-    /// <summary>가장 낮은 뼈의 월드 위치 — 그 밑에 무엇이 있는지 쏘아 보는 진단용.</summary>
-    public Vector3 LowestBonePosition
-    {
-        get
-        {
-            if (m_bodies == null || m_bodies.Length == 0)
-                return Vector3.zero;
-
-            Vector3 lowest = m_bodies[0].position;
-            for (int i = 1; i < m_bodies.Length; i++)
-            {
-                if (m_bodies[i].position.y < lowest.y)
-                    lowest = m_bodies[i].position;
-            }
-            return lowest;
-        }
-    }
-
     /// <summary>가장 낮은 뼈의 월드 y — 시체가 지면을 파고드는지 재는 진단용.</summary>
     public float LowestBoneY
     {
@@ -143,62 +125,6 @@ public class RagdollRig : MonoBehaviour
                     lowest = y;
             }
             return lowest;
-        }
-    }
-
-    /// <summary>
-    /// 리지드바디(PhysX 액터)가 든 포즈와 트랜스폼이 든 포즈의 <b>최대 회전 차</b>(도) — 진단용.
-    ///
-    /// <b>왜 갈릴 수 있나.</b> 이 프로젝트는 <c>m_AutoSyncTransforms = 0</c>이라
-    /// (ProjectSettings/DynamicsManager.asset) 트랜스폼에 쓴 값이 PhysX로 <b>즉시 넘어가지 않는다.</b>
-    /// 포즈를 복사한 뒤 같은 프레임에 <c>isKinematic</c>을 풀면, 물리는 트랜스폼이 아니라 <b>액터가
-    /// 들고 있던 옛 포즈</b>에서 출발할 수 있다 — 시체가 바인드 포즈(T자)에서 시뮬레이션을 시작하는
-    /// 증상이 그렇게 설명된다.
-    ///
-    /// 0에 가까우면 그 가설은 기각이고, 크면 <c>Physics.SyncTransforms()</c>를 끼울 자리가 있다는 뜻이다.
-    /// </summary>
-    public float MaxActorTransformMismatch
-    {
-        get
-        {
-            if (m_bodies == null)
-                return 0f;
-
-            float worst = 0f;
-            for (int i = 0; i < m_bodies.Length; i++)
-            {
-                if (m_bodies[i] == null)
-                    continue;
-
-                float angle = Quaternion.Angle(
-                    m_bodies[i].rotation,
-                    m_bodies[i].transform.rotation
-                );
-                if (angle > worst)
-                    worst = angle;
-            }
-            return worst;
-        }
-    }
-
-    /// <summary>
-    /// 지금 켜져 있는 뼈 콜라이더 수 — 진단용. <see cref="BoneCount"/>와 다르면 몸의 일부가
-    /// 세계와 부딪히지 않고 있다는 뜻이고, 그러면 그 뼈는 지면을 그냥 통과한다.
-    /// </summary>
-    public int EnabledBoneColliderCount
-    {
-        get
-        {
-            if (m_boneColliders == null)
-                return 0;
-
-            int count = 0;
-            for (int i = 0; i < m_boneColliders.Length; i++)
-            {
-                if (m_boneColliders[i] != null && m_boneColliders[i].enabled)
-                    count++;
-            }
-            return count;
         }
     }
 
