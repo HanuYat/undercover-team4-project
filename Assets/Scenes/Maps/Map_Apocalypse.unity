@@ -29104,7 +29104,6 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_plazaPoint: {fileID: 1026613420}
   m_detentionPoint: {fileID: 433575055}
-  m_enforcePenalty: 0
   m_repelRadius: 10
   m_convergeArriveDistance: 2.5
   m_convergeTimeoutSeconds: 20

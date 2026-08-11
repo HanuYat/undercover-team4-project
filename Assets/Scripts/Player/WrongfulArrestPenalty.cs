@@ -46,19 +46,6 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
     [Tooltip("오검거당한 시민이 걸어가 대기하는 지점. NavMesh 위에 둘 것 — 여러 명은 이 지점 주변으로 퍼져 선다")]
     [SerializeField] private Transform m_detentionPoint;
 
-    // ⚠⚠ 임시 — 병합 전에 기본값을 true로 되돌릴 것 (#571). ⚠⚠
-    //
-    // 코드 기본값으로 끄는 이유는 <b>눈에 띄라고</b>다. 씬의 체크박스로 끄면 씬 diff에 묻혀 리뷰에서
-    // 놓치고 그대로 병합된다 — 오검거 페널티가 통째로 죽은 빌드가 나간다. 코드 상수는 PR diff에
-    // 그대로 보이고, 아래 OnNetworkSpawn의 경고가 런타임에서도 한 번 더 알린다.
-    [Header("집행 스위치 (#571 — 임시, 병합 전 되돌릴 것)")]
-    [Tooltip("끄면 <b>집계만 하고 집행은 하지 않는다</b> — 원한 구역 수용도, 추격대 출동도, 광장 매달기도 없다. " +
-             "팀 카운트와 개인 집계(정산 코믹 스탯)는 그대로 오른다.\n\n" +
-             "⚠ 래그돌 작업 브랜치에서 끄기 위한 스위치다. 추격대가 몰려오면 시체를 관찰할 수 없고, " +
-             "오검거한 시민이 원한 구역으로 걸어가 버려 그 NPC로 테스트할 수 없다. " +
-             "<b>병합 전에 다시 켤 것</b> — 켜면 예전 동작 그대로다")]
-    [SerializeField] private bool m_enforcePenalty;
-
     [Header("추격 (#278)")]
     [Tooltip("격퇴(RepelChasers, 호루라기 #250 예정)가 미치는 반경(m)")]
     [SerializeField] private float m_repelRadius = 10f;
@@ -109,15 +96,6 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
                 Judge.OnArrestJudged += HandleArrestJudged;
             else
                 Debug.LogWarning("WrongfulArrestPenalty: ArrestJudge를 찾지 못해 오검거를 집계할 수 없다", this);
-
-            // 임시 스위치가 꺼진 채 돌고 있다는 것을 라운드마다 알린다 — 병합 전에 되돌리기 위한 안전망 (#571)
-            if (!m_enforcePenalty)
-                Debug.LogWarning(
-                    "WrongfulArrestPenalty: ⚠ 집행이 꺼져 있다 (m_enforcePenalty = false, #571 임시) — "
-                        + "오검거를 세기만 하고 원한 구역 수용·추격대 출동·광장 매달기를 하지 않는다. "
-                        + "래그돌 작업용 스위치이므로 병합 전에 되돌릴 것",
-                    this
-                );
         }
     }
 
@@ -159,9 +137,6 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         m_teamCountSynced.Value += 1;
 
         Debug.Log($"[오검거] 팀 카운트 {m_teamCountSynced.Value} — {FormatPerPlayerCounts()}");
-
-        if (!m_enforcePenalty)
-            return; // 집계만 — 위 m_enforcePenalty 툴팁 참고 (#571 임시)
 
         DetainNpc(result.Npc);
 
@@ -206,9 +181,6 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
 
         m_teamCountSynced.Value += 1;
         Debug.Log($"[오검거] 사살 — 팀 카운트 {m_teamCountSynced.Value} — {FormatPerPlayerCounts()}");
-
-        if (!m_enforcePenalty)
-            return; // 집계만 — 위 m_enforcePenalty 툴팁 참고 (#571 임시)
 
         if (m_teamCountSynced.Value > k_maxWrongful)
         {
