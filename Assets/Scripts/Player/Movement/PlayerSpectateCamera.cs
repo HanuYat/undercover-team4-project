@@ -161,11 +161,10 @@ public class PlayerSpectateCamera : MonoBehaviour
         if (m_target.isActiveAndEnabled && !m_target.IsDead)
             return;
 
+        // 살아 있는 동료가 하나도 없으면 자연히 내 시체로 돌아온다 — 따로 받아낼 필요가 없다.
+        // 고리는 RebuildRing이 매번 새로 만들고(비활성 인스턴스는 PlayerIncapacitation.OnDisable에서
+        // 목록을 떠난다) 0번은 항상 내 시체라, 남는 칸이 그것뿐이면 거기로 간다.
         CycleTarget(1);
-
-        // 한 바퀴 돌아도 살아 있는 동료가 없으면 CycleTarget이 같은 자리에 남길 수 있다.
-        if (m_target != null && (!m_target.isActiveAndEnabled || m_target.IsDead))
-            SetTarget(null);
     }
 
     // 좌우 각의 기준값 — 동료를 볼 때는 그 동료의 yaw(뒤통수 기준), 내 시체는 월드 절대각(0).
