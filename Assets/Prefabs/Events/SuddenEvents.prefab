@@ -17,6 +17,7 @@ GameObject:
   - component: {fileID: 812660901877859943}
   - component: {fileID: 1036064955631126747}
   - component: {fileID: 1542303654048081899}
+  - component: {fileID: 5499711423042293484}
   m_Layer: 0
   m_Name: SuddenEvents
   m_TagString: Untagged
@@ -93,6 +94,8 @@ MonoBehaviour:
     enabled: 1
   - component: {fileID: 1542303654048081899}
     enabled: 1
+  - component: {fileID: 5499711423042293484}
+    enabled: 1
 --- !u!114 &4617273519023223210
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -128,7 +131,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BombChaseEvent
   m_bombPrefab: {fileID: 8953918111541867319, guid: 27813f0cd07ab3a489e202d07dbc64a2, type: 3}
-  m_spawnPoints: []
   m_navSampleMaxDistance: 5
   m_resolvedLingerSeconds: 0
 --- !u!114 &6553283234259604354
@@ -223,4 +225,26 @@ MonoBehaviour:
   m_carrierGap: 1.1
   m_arriveDistance: 2
   m_travelTimeoutSeconds: 90
+  m_lynchTimeoutSeconds: 30
+  m_disposalDistance: 25
+  m_disposalSpeed: 3.5
   m_maxChaseSeconds: 60
+--- !u!114 &5499711423042293484
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498939978214492355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d5f94bf267989d40b3be79cdd3e3287, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RunawayVehicleEvent
+  m_displayName: "\uD3ED\uC8FC \uCC28\uB7C9"
+  m_pickRadius: 100
+  m_laneHalfWidth: 2.5
+  m_warningSeconds: 2
+  m_parkedTimeoutSeconds: 60
+  m_returnTimeoutSeconds: 60
+  m_devTriggerKey: 94
