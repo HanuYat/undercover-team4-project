@@ -50,8 +50,24 @@ public class NpcFleeState : NpcStateBase
     // 이탈 판정(위협 스캔)의 최소 간격(초) — 씬 전체 검색이라 매 프레임 돌리지 않는다.
     // 도주 지점 재계산에는 쓰지 않는다 — 지점은 도착까지 커밋한다 (팀 피드백, 구 #96 실시간 재계산 제거)
 
+    // 도달 가능성 확인 횟수 상한 — 점수 높은 후보부터 이만큼만 CalculatePath로 검사한다.
+    // 16방향 전부에 돌리면 지점 하나 뽑는 데 경로 계산이 16번이라 배보다 배꼽이 커진다.
+    private const int k_maxReachabilityProbes = 4;
+
     // 서버에서만 Tick되므로 버퍼 공유 안전 — 매 재계산마다의 할당 방지 (NpcResistState와 같은 방식)
     private static readonly List<Transform> s_threatBuffer = new List<Transform>(8);
+
+    // 통과 후보를 점수와 함께 모아 둔다 — 1등이 도달 불가일 때 차선으로 내려가기 위해서다.
+    private static readonly List<FleeCandidate> s_candidates = new List<FleeCandidate>(k_directionSampleCount);
+
+    // 경로 계산용 재사용 인스턴스 — NavMeshPath는 할당이 비싸다.
+    private static NavMeshPath s_pathProbe;
+
+    private struct FleeCandidate
+    {
+        public Vector3 Point;
+        public float Score;
+    }
 
     private float m_baseSpeed;
     private Vector3 m_lastProgressPosition;
@@ -170,11 +186,9 @@ public class NpcFleeState : NpcStateBase
 
         float clearanceSqr = m_config.ClearanceRadius * m_config.ClearanceRadius;
 
-        Vector3 bestPoint = Vector3.zero;
-        float bestScore = float.NegativeInfinity; // 필터를 통과한 후보의 도착점 maximin
+        s_candidates.Clear();
         Vector3 fallbackPoint = Vector3.zero;
         float fallbackClearance = float.NegativeInfinity; // 전부 탈락했을 때를 위한 '그나마 나은' 후보
-        bool hasBest = false;
         bool hasFallback = false;
 
         for (int i = 0; i < k_directionSampleCount; i++)
@@ -233,17 +247,30 @@ public class NpcFleeState : NpcStateBase
                 continue;
             }
 
-            if (arrivalNearestSqr > bestScore)
-            {
-                bestScore = arrivalNearestSqr;
-                bestPoint = point;
-                hasBest = true;
-            }
+            s_candidates.Add(new FleeCandidate { Point = point, Score = arrivalNearestSqr });
         }
 
-        if (hasBest)
+        // 점수 높은 순으로 도달 가능한 첫 지점을 쓴다. SamplePosition은 "거기에 NavMesh가 있는가"만
+        // 답하지 벽 너머인지는 모른다 — 그대로 SetDestination하면 부분 경로가 나와 벽에 붙어 제자리
+        // 달리기가 된다. 지점은 도착까지 커밋이라 스스로 못 빠져나온다(막힘 감시가 1초 뒤에야 깨운다).
+        // 추격이 #568에서 같은 문제를 pathStatus로 거른 것과 같은 방향이다.
+        s_candidates.Sort(static (a, b) => b.Score.CompareTo(a.Score));
+
+        int probes = Mathf.Min(k_maxReachabilityProbes, s_candidates.Count);
+        for (int i = 0; i < probes; i++)
         {
-            m_owner.Agent.SetDestination(bestPoint);
+            if (!IsReachable(origin, s_candidates[i].Point))
+                continue;
+
+            m_owner.Agent.SetDestination(s_candidates[i].Point);
+            return;
+        }
+
+        // 상한까지 봤는데 전부 도달 불가 — 검사하지 않은 나머지가 있으면 예전대로 1등을 그냥 쓴다.
+        // 여기서 저항으로 넘겨 버리면 검사 상한이 곧 포위 판정이 돼 오탐이 는다.
+        if (s_candidates.Count > probes)
+        {
+            m_owner.Agent.SetDestination(s_candidates[probes].Point);
             return;
         }
 
@@ -328,6 +355,15 @@ public class NpcFleeState : NpcStateBase
         m_lastProgressPosition = m_owner.transform.position;
         m_stuckStrikes = 0;
         m_stuckRepicks = 0;
+    }
+
+    /// <summary>origin에서 point까지 <b>끊기지 않는</b> 경로가 있는가 — 부분 경로는 도달 불가로 본다.</summary>
+    private bool IsReachable(Vector3 origin, Vector3 point)
+    {
+        s_pathProbe ??= new NavMeshPath();
+
+        return NavMesh.CalculatePath(origin, point, m_owner.Agent.areaMask, s_pathProbe)
+            && s_pathProbe.status == NavMeshPathStatus.PathComplete;
     }
 
     /// <summary>origin에서 direction으로 distance만큼 간 지점을 NavMesh 위로 샘플한다 — 실패 시 false.
