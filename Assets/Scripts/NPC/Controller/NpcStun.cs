@@ -262,16 +262,16 @@ public class NpcStun : NetworkBehaviour
         if (!resumeReaction)
             return;
 
-        // 반출 보행 중이었으면 <b>깨어나 가던 길을 잇는다</b> (#548, 2026-08-12 확정) — 쓰러뜨리기는
-        // 무산 수단이 아니라 붙잡기 위한 수단이라, 저지하려면 이 창에 밧줄로 묶어야 한다(GDD 6-1).
-        // 여기서 할 일은 없다: 목적지는 상태가 안 바뀌어 살아 있고(NpcController의 상태 훅), 경로는
-        // 다음 FSM Tick에서 NpcReleasingState가 다시 건다. 그 두 자리가 이 return의 짝이다.
-        //
-        // 쓰러지지 않는 타격은 여전히 무산이다 — 기절을 거치지 않고 곧바로 반응으로 돌아선다
-        // (NpcStateRules.CanReactToDamage). IsReactive에 넣지 않는 이유도 그대로다: 그쪽은 스캔까지
-        // 함께 열려 쳐다보기만 해도 반출이 무산된다.
-        if (m_owner.CurrentState == NpcState.Releasing)
+        // 방출 대상은 <b>깨어나면 도주가 아니라 반출 보행으로 돌아간다</b> (#548, 2026-08-12 확정) —
+        // 맞고 도주·저항으로 돌변한 뒤여도 마찬가지다. 쓰러뜨리기는 무산 수단이 아니라 묶을 창을 여는
+        // 수단이라(GDD 6-1), 목적지가 여기까지 살아 있다(NpcController의 상태 훅).
+        // 이미 Releasing이면 전이 없이 둔다 — 경로는 NpcReleasingState가 다음 Tick에 다시 건다.
+        if (m_owner.Custody.HasReleaseDestination)
+        {
+            if (m_owner.CurrentState != NpcState.Releasing)
+                m_owner.StateMachine.ChangeState(NpcState.Releasing);
             return;
+        }
 
         if (NpcStateRules.IsReactive(m_owner.CurrentState))
             m_owner.Reaction.StartFlee(m_owner.Reaction.ThreatTarget);
