@@ -24,15 +24,11 @@ using UnityEngine.AI;
 /// </summary>
 public class NpcChaseState : NpcStateBase
 {
-    private const float k_repathInterval = 0.2f; // 경로 재계산 최소 간격(초) — NpcEscortedState와 동일
     private const float k_convergeStopDistance = 1.6f; // 수렴 시 포획된 플레이어 앞 정지 거리(m)
     private const float k_catchRetrySeconds = 3f; // 포획 통보 재시도 간격 — 매니저가 다른 호송 중이라 무시해도 스팸이 안 되게
 
     // 추격 중 경로 재계산 간격 — 붙었을 때만 촘촘히 본다. 총 계산 횟수는 고정 0.2초보다 오히려 줄면서
     // 접근전 정밀도만 오른다 (#568).
-    private const float k_nearRepathInterval = 0.15f;
-    private const float k_farRepathInterval = 0.4f;
-    private const float k_nearRepathDistance = 8f; // 이 거리(m) 안쪽이면 촘촘한 쪽을 쓴다
 
     // 부분 경로가 나왔을 때 목적지를 NavMesh 위로 끌어당기는 탐색 반경(m) — 표적이 연석·계단 모서리처럼
     // 카브가 안 된 곳에 서 있는 흔한 경우를 덮는다. 진짜 도달 불가(문 뒤·다른 층)는 이걸로도 안 붙는다.
@@ -44,7 +40,6 @@ public class NpcChaseState : NpcStateBase
 
     private float m_baseSpeed; // 진입 전 원래 속도 — 사냥 모드 속도이자 Exit 복원값
     private float m_targetAcquiredTime; // 현재 타겟 확보 시각 — 가속 기준점
-    private float m_repathTimer;
     private float m_nextCatchNotifyTime;
     private float m_handledRepelUntil; // 이미 쿨다운을 등록한 격퇴인지 — 같은 격퇴에 중복 등록 방지
     private bool m_hunting; // 사냥(배회) 모드 중인지 — 추격/사냥 간 속도·목적지 전환용
@@ -66,14 +61,14 @@ public class NpcChaseState : NpcStateBase
         m_fleeConfig = fleeConfig;
 
         m_steering = new ChaseSteering(config);
-        m_targeting = new ChaseTargeting(config);
+        m_targeting = new ChaseTargeting(config, owner.Repath);
     }
 
     public override void Enter()
     {
         m_baseSpeed = m_owner.Agent.speed;
         m_targetAcquiredTime = Time.time;
-        m_repathTimer = 0f;
+        m_owner.Repath.ForceDue(NpcRepathChannel.Repath); // 진입 직후 1회는 바로 잡는다
         m_nextCatchNotifyTime = 0f;
         m_hunting = false;
 
@@ -108,7 +103,6 @@ public class NpcChaseState : NpcStateBase
 
     public override void Tick()
     {
-        m_repathTimer -= Time.deltaTime;
         float now = Time.time;
 
         // ---- 수렴: 포획 확정 — 전원 포획된 플레이어에게 모인다. 추격·격퇴보다 우선한다 (#279)
@@ -199,14 +193,9 @@ public class NpcChaseState : NpcStateBase
             }
         }
 
-        if (m_repathTimer <= 0f)
-        {
-            // 붙었을 때만 촘촘히 — 멀리서 0.2초마다 다시 재는 것은 낭비다
-            m_repathTimer = distance <= k_nearRepathDistance
-                ? k_nearRepathInterval
-                : k_farRepathInterval;
+        // 거리 티어는 스케줄러가 잡는다 (#573) — 붙었을 때만 촘촘히 도는 성질은 그대로다
+        if (m_owner.Repath.Due(NpcRepathChannel.Repath))
             SetChaseDestination(target, distance, now);
-        }
 
         // ---- 도달 불가: 문 뒤·다른 층이다 (#568). 스냅으로도 안 붙은 채 시간이 흘렀다.
         // 오검거는 표적을 놓고 다른 사람을 찾는다 — 벽면을 따라 좌우로 미끄러지며 비비지 않는다.
@@ -287,11 +276,8 @@ public class NpcChaseState : NpcStateBase
         // 멈출 자리를 지나쳐 되돌아온다. 기존 동작 그대로 둔다.
         m_steering.Apply(m_owner.Agent, false);
 
-        if (m_repathTimer <= 0f)
-        {
-            m_repathTimer = k_repathInterval;
+        if (m_owner.Repath.Due(NpcRepathChannel.Repath))
             m_owner.Agent.SetDestination(converge.position);
-        }
     }
 
     // 격퇴 도주 — 격퇴한 플레이어 반대 방향으로 달아난다. 같은 격퇴당 한 번만 재추격 쿨다운을 등록한다.
@@ -308,10 +294,10 @@ public class NpcChaseState : NpcStateBase
         m_owner.Agent.stoppingDistance = 0f;
         m_steering.Apply(m_owner.Agent, false); // 격퇴 도주는 이 이슈 범위 밖 — 기존 조향 그대로 둔다
 
-        if (m_repathTimer > 0f || m_owner.Penalty.ChaseRepelBy == null)
+        // 격퇴 대상을 먼저 본다 — 없으면 게이트를 소모하지 않는다
+        if (m_owner.Penalty.ChaseRepelBy == null || !m_owner.Repath.Due(NpcRepathChannel.Repath))
             return;
 
-        m_repathTimer = k_repathInterval;
         Vector3 away = (m_owner.transform.position - m_owner.Penalty.ChaseRepelBy.position).normalized;
         if (away.sqrMagnitude < 0.01f)
             away = m_owner.transform.forward;

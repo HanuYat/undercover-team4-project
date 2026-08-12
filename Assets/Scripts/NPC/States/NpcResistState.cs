@@ -22,7 +22,6 @@ public class NpcResistState : NpcStateBase
 
     // 추격 이동 (#254)
     private const float k_stopDistanceFactor = 0.8f;       // 사거리 안쪽 이 비율 지점에 멈춰 타격 사거리를 유지
-    private const float k_chaseRepathInterval = 0.25f;     // 목적지 재계산 최소 간격(초) — NpcFleeState와 같은 스로틀
     private const float k_chaseRepathMoveThreshold = 0.5f; // 표적이 이만큼(m) 움직였을 때만 재계산
     private static readonly Vector3 k_noDestination = new Vector3(float.PositiveInfinity, 0f, 0f);
 
@@ -37,7 +36,6 @@ public class NpcResistState : NpcStateBase
     private float m_swingHoldUntil;
 
     // 추격 재경로 스로틀 상태 (#254)
-    private float m_repathTimer;
     private Vector3 m_lastChaseDestination;
     private float m_baseSpeed; // 진입 시점의 이동 속도 — 추격 질주 배율 적용 전 값(Exit에서 복원) (#254)
     private float m_baseAcceleration; // 진입 시점의 가속도 — 개체차를 덮어쓰지 않게 실제 값을 기억한다 (#568 후속)
@@ -81,7 +79,6 @@ public class NpcResistState : NpcStateBase
         m_pendingStrikeTime = k_noPendingStrike; // 직전 저항의 예약이 남아 첫 타격이 앞당겨지지 않게
         m_swingHoldUntil = 0f;
 
-        m_repathTimer = 0f;
         m_lastChaseDestination = k_noDestination; // 첫 Tick에 무조건 목적지를 새로 잡게 한다
     }
 
@@ -255,13 +252,13 @@ public class NpcResistState : NpcStateBase
 
         m_owner.Agent.isStopped = false;
 
-        m_repathTimer += Time.deltaTime;
+        // 주기가 됐거나 목표가 충분히 움직였으면 — 둘 중 하나면 다시 잡는다 (기존 OR 동작 유지)
         bool moved = (target.position - m_lastChaseDestination).sqrMagnitude
             >= k_chaseRepathMoveThreshold * k_chaseRepathMoveThreshold;
-        if (m_repathTimer < k_chaseRepathInterval && !moved)
+        if (!moved && !m_owner.Repath.Due(NpcRepathChannel.Repath))
             return;
 
-        m_repathTimer = 0f;
+        m_owner.Repath.MarkDone(NpcRepathChannel.Repath);
         m_lastChaseDestination = target.position;
         if (m_owner.Agent.isOnNavMesh)
             m_owner.Agent.SetDestination(target.position);

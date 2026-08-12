@@ -36,7 +36,6 @@ public class NpcFleeState : NpcStateBase
     // 커밋이라 방향을 다시 뽑는 경로가 없어 제자리 달리기로 굳는다.
     // Agent.velocity로는 못 잡는다 — 로컬 회피가 장애물 표면을 따라 좌우로 미끄러져 속도가 0으로
     // 떨어지지 않기 때문이다(NPC Rigidbody는 kinematic이라 물리로 멈추는 것도 아니다).
-    private const float k_stuckCheckInterval = 0.5f;
 
     // 한 구간에 이 거리(m)도 못 갔으면 막힘 — 도주 속도 6m/s면 0.5초에 3m는 간다
     private const float k_stuckMinProgress = 0.5f;
@@ -50,14 +49,11 @@ public class NpcFleeState : NpcStateBase
 
     // 이탈 판정(위협 스캔)의 최소 간격(초) — 씬 전체 검색이라 매 프레임 돌리지 않는다.
     // 도주 지점 재계산에는 쓰지 않는다 — 지점은 도착까지 커밋한다 (팀 피드백, 구 #96 실시간 재계산 제거)
-    private const float k_scanInterval = 0.25f;
 
     // 서버에서만 Tick되므로 버퍼 공유 안전 — 매 재계산마다의 할당 방지 (NpcResistState와 같은 방식)
     private static readonly List<Transform> s_threatBuffer = new List<Transform>(8);
 
     private float m_baseSpeed;
-    private float m_scanTimer;
-    private float m_stuckCheckTimer;
     private Vector3 m_lastProgressPosition;
     private int m_stuckStrikes;
     private int m_stuckRepicks;
@@ -78,7 +74,6 @@ public class NpcFleeState : NpcStateBase
         m_baseSpeed = m_owner.Agent.speed;
         m_owner.Agent.speed = m_baseSpeed * m_config.SpeedMultiplier;
 
-        m_scanTimer = 0f;
         ResetStuck();
         m_fleeStartTime = Time.time;
         m_transitioningToResist = false;
@@ -88,7 +83,6 @@ public class NpcFleeState : NpcStateBase
 
     public override void Tick()
     {
-        m_scanTimer += Time.deltaTime;
 
         // 도주 지점 도착 판정 — Agent 내부 값만 읽으므로 매 프레임 확인해도 공짜다 (기존 동작)
         bool arrived =
@@ -114,10 +108,10 @@ public class NpcFleeState : NpcStateBase
 
         // 위협 스캔(CollectThreats)은 씬 전체 FindObjectsByType이라 매 프레임 돌리면
         // 도주 중인 NPC 수만큼 비용이 누적된다(범인 다수 + 미끼 시민 + 난동꾼) — 주기로 묶는다.
-        // 이탈 판정이 최대 k_scanInterval만큼 늦어지지만 게임 상 차이는 없다.
-        if (m_scanTimer < k_scanInterval)
+        // 이탈 판정이 최대 ThreatScan 주기만큼 늦어지지만 게임 상 차이는 없다.
+        // 그래서 이 채널은 거리 티어를 타지 않는다 — 늘리면 최적화가 아니라 판정이 느려지는 것이 된다 (#573).
+        if (!m_owner.Repath.Due(NpcRepathChannel.ThreatScan))
             return;
-        m_scanTimer = 0f;
 
         // 이탈 판정은 도주 방향 산출과 반경이 다르다 — 방향은 근처(ThreatSearchRadius) 플레이어만 보면 되지만,
         // 이탈은 FleeEscapeDistance(25m)까지 아무도 없어야 성립한다.
@@ -283,10 +277,8 @@ public class NpcFleeState : NpcStateBase
             return false;
         }
 
-        m_stuckCheckTimer += Time.deltaTime;
-        if (m_stuckCheckTimer < k_stuckCheckInterval)
+        if (!m_owner.Repath.Due(NpcRepathChannel.StuckCheck))
             return false;
-        m_stuckCheckTimer = 0f;
 
         Vector3 position = m_owner.transform.position;
         float progress = Vector3.Distance(position, m_lastProgressPosition);
@@ -318,7 +310,7 @@ public class NpcFleeState : NpcStateBase
 
         // 재추첨하면 도착점 maximin 점수가 막고 선 쪽 방향을 떨어뜨려 옆·뒤로 빠진다
         Debug.Log(
-            $"도주 막힘 — {progress:F2}m/{k_stuckCheckInterval}s, 지점 재추첨 {m_stuckRepicks}회: {m_owner.name}"
+            $"도주 막힘 — {progress:F2}m/{m_owner.Repath.IntervalOf(NpcRepathChannel.StuckCheck)}s, 지점 재추첨 {m_stuckRepicks}회: {m_owner.name}"
         );
         SetFleePoint();
 
@@ -328,7 +320,7 @@ public class NpcFleeState : NpcStateBase
 
     private void ResetStuck()
     {
-        m_stuckCheckTimer = 0f;
+        m_owner.Repath.MarkDone(NpcRepathChannel.StuckCheck);
         m_lastProgressPosition = m_owner.transform.position;
         m_stuckStrikes = 0;
         m_stuckRepicks = 0;
