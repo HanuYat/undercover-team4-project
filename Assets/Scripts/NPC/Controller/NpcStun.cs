@@ -53,6 +53,10 @@ public class NpcStun : NetworkBehaviour
     /// <b>밧줄이 걸리지 않는다</b> — <see cref="NpcStateRules.CanRopeBind"/>가 이 값을 본다.
     /// 안 막으면 일어나던 몸을 묶어 도로 눕히게 되고, 그 그림이 어색하다는 것이 이 구간을
     /// 기절 뒤로 뺀 이유 중 하나다.
+    ///
+    /// <b>묶여 있으면 켜지지 않는다</b> — 줄에 눕혀진 몸은 기상 모션 자체가 나가지 않으므로
+    /// (<see cref="Tick"/>) 여기서 켜면 "모션이 도는 중"이 거짓이 되고, 그 시간만큼 밧줄 조작이
+    /// 아무 이유 없이 막힌다. 표시와 모션은 반드시 같은 가드 안에 있어야 한다.
     /// </summary>
     public bool IsRising => IsSpawned ? m_syncedRising.Value : m_rising;
 
@@ -236,13 +240,24 @@ public class NpcStun : NetworkBehaviour
         if (!m_standingUp && m_stunElapsed >= m_stunDuration)
         {
             m_standingUp = true;
-            SetRising(true);
 
             // 밧줄이 걸려 있으면 모션을 내지 않는다 — 줄에 눕혀진 몸은 기절이 풀려도 일어날 수 없다.
             // 알림만 건너뛴다: 기절은 아래에서 제 시간에 풀리고 대상은 묶인 채 남는다.
             // 여기서 알리면 벌떡 섰다가 곧바로 묶임 자세로 되돌아간다.
+            //
+            // ⚠ <b>기상 표시도 함께 건너뛴다</b> — 모션이 안 도는데 <see cref="IsRising"/>만 켜면
+            // 그 구간 내내 <see cref="NpcStateRules.IsPlayingStandUp"/>이 참이 돼 밧줄 조작이
+            // 통째로 막힌다(끌기 재개·줄다리기 합류·새로 묶기 + 조준 윤곽선 —
+            // <c>PlayerEscortCommands.IsRopeBlocked</c>). 묶어 둔 대상은 묶는 순간
+            // <c>ServerApplyRopeDrag</c>가 기절을 풀어 놓으므로 테이저가 다시 걸리고,
+            // 그 기절이 끝나는 순간 이 창이 열린다. 몸은 계속 누워 있고 기상 모션도 없으니
+            // 플레이어에게는 입력이 이유 없이 씹히는 것으로만 보인다.
+            // 프로퍼티 정의("모션이 도는 중")대로 가르면 그 창 자체가 생기지 않는다.
             if (!m_owner.Rope.IsRoped && !m_owner.Rope.IsTethered)
+            {
+                SetRising(true);
                 m_owner.RaiseStandUp(); // 전 피어에 일어나는 모션 재생을 알린다
+            }
         }
 
         // 기상 구간이 끝나야 오버레이를 걷는다 — <b>오버레이를 유지하는 것이 핵심이다.</b>
