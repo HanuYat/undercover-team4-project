@@ -411,8 +411,14 @@ public class PlayerMovement : NetworkBehaviour
                 + awayFromSurface * k_steepSlideSpeed;
         }
 
-        // 눈 이벤트 여부에 따른 마찰력 결정 (#227)
-        float currentFriction = (m_snowEvent != null && m_snowEvent.IsSnow) ? m_snowFriction : m_defaultFriction;
+        // 마찰력은 <b>쌓인 빙판만큼</b> 낮아진다 (#227) — 켜짐/꺼짐이 아니라 비율이다.
+        //
+        // 예전에는 IsSnow 이진 스위치라 눈이 내리는 순간 바로 미끄럽고 그치는 순간 바로 정상이었다.
+        // 그러면 "오래 내려서 길이 얼었다"가 아니라 "눈 파티클이 보이면 미끄럽다"가 되어, 누적이라는
+        // 규칙이 몸으로 읽히지 않는다. 지금은 SnowEvent가 굴리는 누적 비율(IceRatio)로 보간한다:
+        // 내리기 시작해도 한동안은 평소와 같고, 그친 뒤에도 녹을 때까지는 미끄럽다.
+        float iceRatio = m_snowEvent != null ? m_snowEvent.IceRatio : 0f;
+        float currentFriction = Mathf.Lerp(m_defaultFriction, m_snowFriction, iceRatio);
         
         // 방향 전환·정지가 즉각적이지 않도록 현재 속도를 목표 속도로 부드럽게 보간 (관성/미끄러짐 구현)
         m_currentHorizontalVelocity = Vector3.Lerp(m_currentHorizontalVelocity, targetVelocity, currentFriction * Time.deltaTime);

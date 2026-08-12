@@ -22,6 +22,7 @@ GameObject:
   - component: {fileID: 2813280441832589395}
   - component: {fileID: 5245668954543797378}
   - component: {fileID: 7324548653836035078}
+  - component: {fileID: 8086958310135529847}
   m_Layer: 0
   m_Name: SuddenEvents
   m_TagString: Untagged
@@ -270,6 +271,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SnowEvent
   ShowTopMostFoldoutHeaderGroup: 1
   m_durationSeconds: 30
+  m_iceOnsetSeconds: 20
+  m_iceFullSeconds: 50
+  m_thawSeconds: 45
 --- !u!114 &2813280441832589395
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -335,3 +339,20 @@ MonoBehaviour:
   m_flashDuration: 0.45
   m_strikeFxSeconds: 3
   m_stopFadeSeconds: 4
+--- !u!114 &8086958310135529847
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498939978214492355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1be3cddf7ae680343bc962f79b0ed384, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IceView
+  m_iceMaterial: {fileID: 2100000, guid: 3fd34e1041b28a349bbc622009791705, type: 2}
+  m_patchSize: 12
+  m_gridRadius: 2
+  m_projectionDepth: 8
+  m_maxOpacity: 0.7
