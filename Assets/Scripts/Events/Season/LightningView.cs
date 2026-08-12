@@ -25,24 +25,24 @@ public class LightningView : MonoBehaviour
     [SerializeField] private GameObject m_cloudPrefab;
 
     [Header("하늘 배치")]
-    [Tooltip("카메라 기준 먹구름 높이(m)")]
-    [SerializeField] private float m_cloudHeight = 20f;
+    [Tooltip("카메라 기준 먹구름층 높이(m) — 낮으면 하늘이 아니라 '거리 위 연기'로 보인다")]
+    [SerializeField] private float m_cloudHeight = 80f;
 
-    [Tooltip("구름에서 비가 방출되기 시작하는 지점까지의 낙차(m) — 구름 두께만큼 내려 뿌린다")]
-    [SerializeField] private float m_precipitationDrop = 4f;
+    [Tooltip("비가 방출되는 높이(m) — 구름 높이와 따로 준다. 너무 높으면 화면에 닿기까지 오래 걸린다")]
+    [SerializeField] private float m_precipitationHeight = 14f;
 
     [Header("크기")]
     [SerializeField] private float m_rainScale = 2f;
     [SerializeField] private float m_cloudScale = 10f;
 
     [Header("먹구름 — 하늘 덮기")]
-    [Tooltip("구름을 한 변 몇 장으로 깔 것인가 — 3이면 9장, 5면 25장")]
-    [Range(1, 5)]
-    [SerializeField] private int m_cloudTiles = 5;
+    [Tooltip("구름을 한 변 몇 장으로 깔 것인가 — 9면 81장")]
+    [Range(1, 11)]
+    [SerializeField] private int m_cloudTiles = 9;
 
-    [Tooltip("구름 장 사이 간격(m)")]
+    [Tooltip("구름 장 사이 간격(m) — 구름 크기보다 좁게 둬야 겹쳐서 틈이 안 보인다")]
     [Min(1f)]
-    [SerializeField] private float m_cloudSpacing = 45f;
+    [SerializeField] private float m_cloudSpacing = 70f;
 
     [Header("비 진하기")]
     [Tooltip("빗줄기 크기 배율")]
@@ -163,7 +163,7 @@ public class LightningView : MonoBehaviour
 
         // 카메라가 아직 없어도 만든다 — 리그가 매 프레임 카메라를 다시 본다.
         // 예전에는 여기서 Camera.main이 null이면 return해, 그 이벤트 내내 비가 안 내렸다.
-        m_rig = WeatherSkyRig.Create("WeatherSky_Rain", m_cloudHeight, m_precipitationDrop);
+        m_rig = WeatherSkyRig.Create("WeatherSky_Rain", m_cloudHeight, m_precipitationHeight);
         m_rig.SetCloudSnap(m_cloudSpacing); // 하늘은 월드에 고정 — 구름 한 덩이가 따라오는 그림을 막는다
 
         if (m_cloudPrefab != null)

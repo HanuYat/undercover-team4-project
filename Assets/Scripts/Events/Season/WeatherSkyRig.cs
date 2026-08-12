@@ -36,21 +36,23 @@ public class WeatherSkyRig : MonoBehaviour
     /// 리그를 만든다 — <b>씬 배선이 필요 없다</b>. 뷰가 날씨를 켤 때 만들고 끌 때 없앤다.
     /// </summary>
     /// <param name="label">하이어라키에 보일 이름 — 어느 날씨의 리그인지 구분하려고 받는다.</param>
-    /// <param name="cloudHeight">카메라 기준 구름 높이(m).</param>
-    /// <param name="precipitationDrop">구름에서 강수 방출 지점까지의 낙차(m). 구름 두께만큼 내려 방출한다.</param>
-    public static WeatherSkyRig Create(string label, float cloudHeight, float precipitationDrop)
+    /// <param name="cloudHeight">카메라 기준 구름층 높이(m) — 하늘로 읽히려면 높아야 한다.</param>
+    /// <param name="precipitationHeight">
+    /// 카메라 기준 강수 방출 높이(m) — <b>구름 높이와 따로 준다</b>.
+    ///
+    /// 예전에는 "구름에서 낙차만큼 내린 지점"으로 묶여 있었는데, 그러면 구름을 하늘까지 올리는 순간
+    /// 강수도 함께 올라가 눈·비가 머리 위 수십 미터에서 뿌려진다 — 화면에 닿기까지 오래 걸려 안 내리는 것처럼 보인다.
+    /// 구름은 하늘에, 강수는 플레이어 근처에 두는 것이 맞다: "구름에서 떨어진다"는 느낌은 둘이 붙어 있어서가
+    /// 아니라 위에서 아래로 흐르는 그림이 이어져서 생긴다.
+    /// </param>
+    public static WeatherSkyRig Create(string label, float cloudHeight, float precipitationHeight)
     {
         GameObject root = new GameObject(label);
         WeatherSkyRig rig = root.AddComponent<WeatherSkyRig>();
         rig.m_cloudHeight = cloudHeight;
 
         rig.CloudAnchor = CreateAnchor(root.transform, "Cloud", cloudHeight);
-        // 구름 아래에서 방출한다 — 음수로 내려가지 않게 막는다(낙차가 높이보다 크면 카메라 아래에서 비가 솟는다)
-        rig.PrecipitationAnchor = CreateAnchor(
-            root.transform,
-            "Precipitation",
-            Mathf.Max(0f, cloudHeight - precipitationDrop)
-        );
+        rig.PrecipitationAnchor = CreateAnchor(root.transform, "Precipitation", Mathf.Max(0f, precipitationHeight));
 
         rig.SnapToCamera(); // 첫 프레임부터 제자리 — 원점에서 날아오는 것이 보이지 않게
         return rig;
