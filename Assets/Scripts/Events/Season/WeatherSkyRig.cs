@@ -64,9 +64,40 @@ public class WeatherSkyRig : MonoBehaviour
         return anchor;
     }
 
+    // 구름층을 월드 격자에 스냅하는 칸 크기(m). 0이면 스냅하지 않는다.
+    private float m_cloudSnap;
+
+    /// <summary>
+    /// 구름층을 월드 격자에 스냅한다 — <b>하늘이 맵에 걸려 있는 느낌</b>을 만든다.
+    ///
+    /// 스냅이 없으면 구름이 카메라를 그대로 따라와, 어디로 가도 같은 구름이 머리 위에 붙어 있다.
+    /// 그러면 "구름 한 덩이가 나를 쫓아온다"로 읽히고 하늘이 넓게 덮인 느낌이 안 난다. 격자에 스냅하면
+    /// 구름은 월드에 고정된 채 있고 칸을 넘을 때만 재배치되므로, 걸어갈 때 하늘이 지나간다.
+    /// 칸 크기가 구름 배치 간격의 배수라 이음매가 눈에 띄지 않는다 (IcePatch 격자와 같은 수법).
+    /// </summary>
+    public void SetCloudSnap(float snapSize) => m_cloudSnap = Mathf.Max(0f, snapSize);
+
     // 카메라가 움직인 뒤에 맞춘다 — Cinemachine이 Update 구간에서 카메라를 옮기므로,
     // Update에서 맞추면 리그가 한 프레임 뒤처져 빠르게 돌 때 하늘이 따라오다 밀리는 것이 보인다.
-    private void LateUpdate() => SnapToCamera();
+    private void LateUpdate()
+    {
+        SnapToCamera();
+        SnapCloudLayer();
+    }
+
+    // 구름층만 월드 격자로 되돌린다 — 리그(=강수)는 카메라를 부드럽게 따라가고 하늘만 고정된다
+    private void SnapCloudLayer()
+    {
+        if (CloudAnchor == null || m_cloudSnap <= 0f)
+            return;
+
+        Vector3 world = transform.position;
+        CloudAnchor.position = new Vector3(
+            Mathf.Round(world.x / m_cloudSnap) * m_cloudSnap,
+            world.y + m_cloudHeight,
+            Mathf.Round(world.z / m_cloudSnap) * m_cloudSnap
+        );
+    }
 
     private void SnapToCamera()
     {
@@ -105,6 +136,51 @@ public class WeatherSkyRig : MonoBehaviour
         {
             ParticleSystem.MainModule main = ps.main;
             main.scalingMode = ParticleSystemScalingMode.Local;
+        }
+    }
+
+    /// <summary>
+    /// FX를 <paramref name="tiles"/>×<paramref name="tiles"/> 격자로 여러 장 깐다 — <b>하늘을 넓게 덮는 용도</b>.
+    /// 한 장을 크게 키우는 것과 다르다: 파티클 프리팹은 방출 볼륨이 정해져 있어 스케일만 올리면 입자가
+    /// 같이 커져 구름 한 덩이가 부풀 뿐이고, 여러 장을 벌려 깔아야 하늘이 이어진 것처럼 보인다.
+    /// </summary>
+    /// <param name="tiles">한 변의 장수. 3이면 9장, 5면 25장.</param>
+    /// <param name="spacing">장 사이 간격(m).</param>
+    public static void AttachTiled(GameObject prefab, Transform anchor, float scale, int tiles, float spacing)
+    {
+        if (prefab == null || anchor == null)
+            return;
+
+        int radius = Mathf.Max(0, tiles / 2);
+        for (int x = -radius; x <= radius; x++)
+        {
+            for (int z = -radius; z <= radius; z++)
+            {
+                GameObject fx = Instantiate(prefab);
+                Attach(fx, anchor, scale);
+                fx.transform.localPosition = new Vector3(x * spacing, 0f, z * spacing);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 방출량·입자 크기를 배율로 키운다 — 프리팹 원본을 건드리지 않고 이 인스턴스만 바꾼다.
+    /// Synty FX는 근거리 연출 기준으로 만들어져 하늘을 덮는 용도로는 양이 부족하다(눈이 잘 안 보이는 원인).
+    /// </summary>
+    public static void Boost(GameObject fx, float sizeMultiplier, float rateMultiplier)
+    {
+        if (fx == null)
+            return;
+
+        foreach (ParticleSystem ps in fx.GetComponentsInChildren<ParticleSystem>())
+        {
+            ParticleSystem.MainModule main = ps.main;
+            main.startSizeMultiplier *= sizeMultiplier;
+            // 상한도 함께 올린다 — 방출을 늘리면 기본 상한(보통 1000)에 걸려 조용히 잘린다
+            main.maxParticles = Mathf.Max(main.maxParticles, (int)(main.maxParticles * rateMultiplier));
+
+            ParticleSystem.EmissionModule emission = ps.emission;
+            emission.rateOverTimeMultiplier *= rateMultiplier;
         }
     }
 

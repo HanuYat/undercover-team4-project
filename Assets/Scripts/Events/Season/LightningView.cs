@@ -35,6 +35,24 @@ public class LightningView : MonoBehaviour
     [SerializeField] private float m_rainScale = 2f;
     [SerializeField] private float m_cloudScale = 10f;
 
+    [Header("먹구름 — 하늘 덮기")]
+    [Tooltip("구름을 한 변 몇 장으로 깔 것인가 — 3이면 9장, 5면 25장")]
+    [Range(1, 5)]
+    [SerializeField] private int m_cloudTiles = 5;
+
+    [Tooltip("구름 장 사이 간격(m)")]
+    [Min(1f)]
+    [SerializeField] private float m_cloudSpacing = 45f;
+
+    [Header("비 진하기")]
+    [Tooltip("빗줄기 크기 배율")]
+    [Min(0.1f)]
+    [SerializeField] private float m_rainSizeBoost = 1.5f;
+
+    [Tooltip("비 방출량 배율 — 상한(maxParticles)도 함께 올라간다")]
+    [Min(1f)]
+    [SerializeField] private float m_rainRateBoost = 4f;
+
     [Header("먹구름 — 어두워지기")]
     [Tooltip(
         "비가 오는 동안 어둡게 할 라이트. <b>비워 두는 것이 기본이다</b> — 비어 있으면 씬의 태양"
@@ -146,12 +164,17 @@ public class LightningView : MonoBehaviour
         // 카메라가 아직 없어도 만든다 — 리그가 매 프레임 카메라를 다시 본다.
         // 예전에는 여기서 Camera.main이 null이면 return해, 그 이벤트 내내 비가 안 내렸다.
         m_rig = WeatherSkyRig.Create("WeatherSky_Rain", m_cloudHeight, m_precipitationDrop);
+        m_rig.SetCloudSnap(m_cloudSpacing); // 하늘은 월드에 고정 — 구름 한 덩이가 따라오는 그림을 막는다
 
         if (m_cloudPrefab != null)
-            WeatherSkyRig.Attach(Instantiate(m_cloudPrefab), m_rig.CloudAnchor, m_cloudScale);
+            WeatherSkyRig.AttachTiled(m_cloudPrefab, m_rig.CloudAnchor, m_cloudScale, m_cloudTiles, m_cloudSpacing);
 
         if (m_rainParticlePrefab != null)
-            WeatherSkyRig.Attach(Instantiate(m_rainParticlePrefab), m_rig.PrecipitationAnchor, m_rainScale);
+        {
+            GameObject rain = Instantiate(m_rainParticlePrefab);
+            WeatherSkyRig.Attach(rain, m_rig.PrecipitationAnchor, m_rainScale);
+            WeatherSkyRig.Boost(rain, m_rainSizeBoost, m_rainRateBoost);
+        }
 
         StartOvercast(m_baseIntensity * m_overcastIntensityScale);
     }

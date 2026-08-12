@@ -30,6 +30,24 @@ public class SnowView : MonoBehaviour
     [SerializeField] private float m_snowScale = 1f;
     [SerializeField] private float m_cloudScale = 10f;
 
+    [Header("먹구름 — 하늘 덮기")]
+    [Tooltip("구름을 한 변 몇 장으로 깔 것인가 — 3이면 9장, 5면 25장. 한 장을 키우는 것과 달리 하늘이 이어져 보인다")]
+    [Range(1, 5)]
+    [SerializeField] private int m_cloudTiles = 5;
+
+    [Tooltip("구름 장 사이 간격(m)")]
+    [Min(1f)]
+    [SerializeField] private float m_cloudSpacing = 45f;
+
+    [Header("눈 진하기")]
+    [Tooltip("눈송이 크기 배율 — Synty FX는 근거리 기준이라 하늘용으로는 작다")]
+    [Min(0.1f)]
+    [SerializeField] private float m_snowSizeBoost = 2.5f;
+
+    [Tooltip("눈 방출량 배율 — 화면이 눈으로 차게. 상한(maxParticles)도 함께 올라간다")]
+    [Min(1f)]
+    [SerializeField] private float m_snowRateBoost = 6f;
+
     [Header("그치는 연출")]
     [Tooltip("눈이 그칠 때 방출만 멈추고 이 시간(초) 뒤에 리그를 없앤다 — 공중의 눈이 끝까지 떨어지게")]
     [Min(0f)]
@@ -70,12 +88,18 @@ public class SnowView : MonoBehaviour
         // 카메라가 아직 없어도 만든다 — 리그가 매 프레임 카메라를 다시 보므로 늦게 생겨도 따라잡는다.
         // 예전에는 여기서 Camera.main이 null이면 return해, 그 이벤트 내내 눈이 한 송이도 안 내렸다.
         m_rig = WeatherSkyRig.Create("WeatherSky_Snow", m_cloudHeight, m_precipitationDrop);
+        m_rig.SetCloudSnap(m_cloudSpacing); // 하늘은 월드에 고정 — 구름 한 덩이가 따라오는 그림을 막는다
 
+        // 구름은 넓게 깔아야 "하늘이 덮였다"로 읽힌다 — 한 장을 키우면 덩이가 부풀 뿐이다
         if (m_cloudPrefab != null)
-            WeatherSkyRig.Attach(Instantiate(m_cloudPrefab), m_rig.CloudAnchor, m_cloudScale);
+            WeatherSkyRig.AttachTiled(m_cloudPrefab, m_rig.CloudAnchor, m_cloudScale, m_cloudTiles, m_cloudSpacing);
 
         if (m_snowParticlePrefab != null)
-            WeatherSkyRig.Attach(Instantiate(m_snowParticlePrefab), m_rig.PrecipitationAnchor, m_snowScale);
+        {
+            GameObject snow = Instantiate(m_snowParticlePrefab);
+            WeatherSkyRig.Attach(snow, m_rig.PrecipitationAnchor, m_snowScale);
+            WeatherSkyRig.Boost(snow, m_snowSizeBoost, m_snowRateBoost); // 눈이 잘 안 보이던 원인
+        }
     }
 
     private void HideSnow()
