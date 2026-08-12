@@ -79,6 +79,10 @@ public class SessionPanel : PanelBase
     [SerializeField]
     private LocalizedString m_statusJoinFailed;
 
+    [Tooltip("게임 버전 불일치 — Title.Session.Status.VersionMismatch ({0}=내 버전, {1}=방 버전)")]
+    [SerializeField]
+    private LocalizedString m_statusVersionMismatch;
+
     private bool m_isBusy; // 생성/참가 요청 겹침 방지 래치 (SessionManager m_isBusy와 같은 방침)
 
     // 지금 표시 중인 문구 — 구독 해제 기준. 언어를 바꿔도 떠 있는 상태 문구가 따라오게 한다 (#251 관례).
@@ -204,6 +208,13 @@ public class SessionPanel : PanelBase
             await App.Net.Session.JoinByCodeAsync(m_codeInput.text.Trim());
             SetStatus(m_statusConnecting);
             // 씬 전환은 하지 않는다 — 서버 권위. NGO 씬 동기화가 InGame으로 끌고 간다.
+        }
+        catch (SessionVersionMismatchException e)
+        {
+            // 할 일이 정해진 실패라 예외 메시지 대신 전용 문구를 띄운다 — 어느 쪽이 구버전인지
+            // 바로 보이도록 양쪽 버전을 함께 넣는다. (#586)
+            SetStatus(m_statusVersionMismatch, e.LocalVersion, e.SessionVersion);
+            m_isBusy = false;
         }
         catch (Exception e)
         {

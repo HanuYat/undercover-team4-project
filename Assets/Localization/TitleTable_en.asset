@@ -278,6 +278,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 6276845892712267879
+  - m_Id: 10788103327783
+    m_Localized: "Game version mismatch - yours {0} / room {1}"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267879
   references:
     version: 2
     RefIds:
@@ -286,6 +291,7 @@ MonoBehaviour:
       data:
         m_Entries:
         m_SharedEntries:
+        - id: 10788103327783
         - id: 10788103327782
         - id: 10788103327751
         - id: 10788103327754

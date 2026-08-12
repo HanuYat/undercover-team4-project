@@ -1638,6 +1638,15 @@ MonoBehaviour:
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
+  m_statusVersionMismatch:
+    m_TableReference:
+      m_TableCollectionName: GUID:7d690f60dcfc30145b00d50e3596d124
+    m_TableEntryReference:
+      m_KeyId: 10788103327783
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
   references:
     version: 2
     RefIds: []

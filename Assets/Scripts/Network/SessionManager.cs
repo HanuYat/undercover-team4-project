@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using Unity.Services.Multiplayer;
@@ -7,6 +8,13 @@ using UnityEngine;
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class SessionManager : CommonManagerBase
 {
+    // 게임 버전을 담는 세션 프로퍼티 키 (#586). 값은 NetworkProtocol.VersionString.
+    private const string k_versionProperty = "ver";
+
+    // 프로퍼티가 아예 없는 세션 — #586 이전 빌드가 만든 방이다. 값이 다른 것과 똑같이 취급하되
+    // 표시만 구분한다(빈 문자열이면 "방 버전 " 뒤가 비어 무슨 말인지 알 수 없다).
+    private const string k_unknownVersion = "?";
+
     [SerializeField]
     private int m_maxPlayer = 6;
 
@@ -55,6 +63,14 @@ public class SessionManager : CommonManagerBase
         {
             MaxPlayers = maxPlayer,
             Type = "Session",
+            // Public이어야 참가자가 Properties로 읽을 수 있다 (#586)
+            SessionProperties = new Dictionary<string, SessionProperty>
+            {
+                [k_versionProperty] = new SessionProperty(
+                    NetworkProtocol.VersionString,
+                    VisibilityPropertyOptions.Public
+                ),
+            },
         }.WithRelayNetwork();
         ISession session = await MultiplayerService.Instance.CreateSessionAsync(options);
         AdoptSession(session);
@@ -69,8 +85,60 @@ public class SessionManager : CommonManagerBase
     {
         await EnsureSignedInAsync();
         ISession session = await MultiplayerService.Instance.JoinSessionByCodeAsync(code);
+
+        // 버전 검사는 AdoptSession보다 먼저 — 채택하면 OnSessionJoined가 발화해 Vivox가 음성 채널까지
+        // 붙는다. 여기까지 await 없이 이어지므로 참가와 검사 사이에 NGO가 한 프레임도 돌지 않는다. (#586)
+        string sessionVersion = ReadVersion(session);
+        if (sessionVersion != NetworkProtocol.VersionString)
+        {
+            Debug.LogWarning(
+                $"[SessionManager] 버전 불일치로 참가 취소 / 내 버전: {NetworkProtocol.VersionString}, 방 버전: {sessionVersion}"
+            );
+            await AbandonAsync(session);
+            throw new SessionVersionMismatchException(
+                NetworkProtocol.VersionString,
+                sessionVersion
+            );
+        }
+
         AdoptSession(session);
         Debug.Log($"[SessionManager] 세션 참가 완료 / Id: {session.Id}, Code: {session.Code}");
+    }
+
+    private static string ReadVersion(ISession session)
+    {
+        if (
+            session.Properties != null
+            && session.Properties.TryGetValue(k_versionProperty, out SessionProperty property)
+            && !string.IsNullOrEmpty(property.Value)
+        )
+        {
+            return property.Value;
+        }
+
+        return k_unknownVersion;
+    }
+
+    /// <summary>
+    /// 버전이 다른 세션에서 즉시 물러난다 (#586). NGO를 먼저 끊는 이유는 LeaveAsync(HTTP 왕복)를
+    /// 기다리는 사이 호스트의 씬 동기화가 도착해 인게임 씬 로드가 시작되기 때문이다 — 그러면
+    /// 실패 문구를 띄울 SessionPanel이 이미 파괴된 뒤다.
+    /// 아직 AdoptSession 전이라 m_session이 없어 HandleConnectionLost(드롭 복귀)는 걸리지 않는다.
+    /// </summary>
+    private static async UniTask AbandonAsync(ISession session)
+    {
+        if (NetworkManager.Singleton != null)
+            NetworkManager.Singleton.Shutdown();
+
+        try
+        {
+            await session.LeaveAsync();
+        }
+        catch (Exception ex)
+        {
+            // 사용자에게 전할 말은 버전 불일치지 나가기 실패가 아니다 — 삼키고 원래 예외를 올린다
+            Debug.LogWarning($"[SessionManager] 버전 불일치 세션 나가기 실패(무시): {ex.Message}");
+        }
     }
 
     public async UniTask LeaveAsync()
