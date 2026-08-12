@@ -118,6 +118,7 @@ public class LightningView : MonoBehaviour
 
     private LightningEvent m_lightningEvent;
     private WeatherSkyRig m_rig;
+    private bool m_overcastPushed; // 내가 먹구름을 요청해 둔 상태인가 — Push/Pop 짝을 뷰가 직접 센다
 
     // 이벤트가 켜지기 전의 밝기 — 되돌릴 기준값. 섬광·먹구름이 모두 이 값을 기준으로 움직인다.
     private float m_baseIntensity;
@@ -148,7 +149,20 @@ public class LightningView : MonoBehaviour
         }
 
         // 밝기는 되돌려 놓고 떠난다 — 뷰가 사라졌다고 씬이 어두운 채로 남으면 안 된다
+        // 비가 켜진 채 파괴되면(호스트 종료·씬 전환 강제 정리) 요청이 영원히 남는다 — 여기서 짝을 맞춘다
+        PopOvercast(0f);
+
         RestoreIntensity();
+    }
+
+    // 먹구름 요청을 뺀다 — 요청해 둔 적이 있을 때만. 짝 없는 Pop은 같이 오는 눈의 어둠까지 걷어 버린다.
+    private void PopOvercast(float fadeSeconds)
+    {
+        if (!m_overcastPushed)
+            return;
+
+        m_overcastPushed = false;
+        WeatherOvercast.Pop(fadeSeconds);
     }
 
     // 라이트를 나중에 배선해도 기준값을 놓치지 않게, 처음 쓸 때 한 번 잡는다
@@ -210,7 +224,11 @@ public class LightningView : MonoBehaviour
             WeatherSkyRig.Boost(rain, m_rainSizeBoost, m_rainRateBoost, 1f, 1f);
         }
 
-        WeatherOvercast.Push(m_overcastIntensityScale, m_overcastFadeSeconds);
+        if (!m_overcastPushed)
+        {
+            m_overcastPushed = true;
+            WeatherOvercast.Push(m_overcastIntensityScale, m_overcastFadeSeconds);
+        }
     }
 
     private void HideRain()
@@ -222,7 +240,7 @@ public class LightningView : MonoBehaviour
         }
 
         StopFlash();
-        WeatherOvercast.Pop(m_overcastFadeSeconds);
+        PopOvercast(m_overcastFadeSeconds);
     }
 
     // 낙뢰 — 지점에 파티클을 터뜨리고 화면을 번쩍인다. 전 피어에서 불린다.

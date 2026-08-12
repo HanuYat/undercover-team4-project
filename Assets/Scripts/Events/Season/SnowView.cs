@@ -107,6 +107,7 @@ public class SnowView : MonoBehaviour
 
     private SnowEvent m_snowEvent;
     private WeatherSkyRig m_rig;
+    private bool m_overcastPushed; // 내가 먹구름을 요청해 둔 상태인가 — Push/Pop 짝을 뷰가 직접 센다
 
     private void Start()
     {
@@ -122,6 +123,19 @@ public class SnowView : MonoBehaviour
     {
         if (m_snowEvent != null)
             m_snowEvent.OnSnowChanged -= HandleSnowChanged;
+
+        // 눈이 켜진 채 파괴되면(호스트 종료·씬 전환 강제 정리) 요청이 영원히 남는다 — 여기서 짝을 맞춘다
+        PopOvercast(0f);
+    }
+
+    // 먹구름 요청을 뺀다 — 요청해 둔 적이 있을 때만. 짝 없는 Pop은 같이 오는 비의 어둠까지 걷어 버린다.
+    private void PopOvercast(float fadeSeconds)
+    {
+        if (!m_overcastPushed)
+            return;
+
+        m_overcastPushed = false;
+        WeatherOvercast.Pop(fadeSeconds);
     }
 
     private void HandleSnowChanged(bool isSnowing)
@@ -149,7 +163,11 @@ public class SnowView : MonoBehaviour
         if (m_useCloudFx && m_cloudPrefab != null)
             WeatherSkyRig.AttachTiled(m_cloudPrefab, m_rig.CloudAnchor, m_cloudScale, m_cloudTiles, m_cloudSpacing);
 
-        WeatherOvercast.Push(m_overcastIntensityScale, m_overcastFadeSeconds);
+        if (!m_overcastPushed)
+        {
+            m_overcastPushed = true;
+            WeatherOvercast.Push(m_overcastIntensityScale, m_overcastFadeSeconds);
+        }
 
         if (m_snowParticlePrefab != null)
         {
@@ -173,6 +191,6 @@ public class SnowView : MonoBehaviour
 
         m_rig.StopAndDispose(m_stopFadeSeconds);
         m_rig = null;
-        WeatherOvercast.Pop(m_overcastFadeSeconds);
+        PopOvercast(m_overcastFadeSeconds);
     }
 }
