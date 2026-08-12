@@ -12,20 +12,18 @@ using UnityEngine;
 /// </summary>
 public class ChaseTargeting
 {
-    // 범위 내 플레이어를 훑는 주기(초) — 매 프레임 전수 순회 방지
-    private const float k_scanInterval = 0.5f;
 
     private readonly NpcChaseConfig m_config;
+    private readonly NpcRepathScheduler m_repath;
     private readonly List<Transform> m_candidateBuffer = new List<Transform>();
 
     // 격퇴당한 플레이어별 재추격 금지 종료 시각. 부품 인스턴스가 NPC마다 1개라 NPC별 기록이 된다.
     private readonly Dictionary<Transform, float> m_cooldowns = new Dictionary<Transform, float>();
 
-    private float m_scanTimer;
-
-    public ChaseTargeting(NpcChaseConfig config)
+    public ChaseTargeting(NpcChaseConfig config, NpcRepathScheduler repath)
     {
         m_config = config;
+        m_repath = repath;
     }
 
     /// <summary>스캔 주기와 쿨다운 장부를 비운다 — 상태 진입 시.
@@ -33,8 +31,11 @@ public class ChaseTargeting
     /// 접속을 끊은 플레이어의 키도 계속 쌓인다. (#568)</summary>
     public void Reset()
     {
-        m_scanTimer = 0f;
         m_cooldowns.Clear();
+
+        // 진입 직후 첫 훑기는 미루지 않는다 — 예전 m_scanTimer = 0f가 "다음 호출에서 즉시"였다.
+        // 채널은 NPC마다 하나라 최근에 소모됐으면 표적 획득이 한 주기만큼 늦는다.
+        m_repath.ForceDue(NpcRepathChannel.TargetScan);
     }
 
     /// <summary>이 플레이어를 당분간 노리지 않는다 — 격퇴, 그리고 도달 불가로 놓은 경우.</summary>
@@ -88,9 +89,8 @@ public class ChaseTargeting
     /// </summary>
     public Transform PickNearest(Vector3 from, float now)
     {
-        if (m_scanTimer > now)
+        if (!m_repath.Due(NpcRepathChannel.TargetScan))
             return null;
-        m_scanTimer = now + k_scanInterval;
 
         SuddenEventUtil.CollectFieldPlayers(from, m_config.Range, m_candidateBuffer);
         for (int i = m_candidateBuffer.Count - 1; i >= 0; i--)

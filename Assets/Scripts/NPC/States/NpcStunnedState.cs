@@ -38,10 +38,11 @@ public class NpcStunnedState : NpcStateBase
         // 기절 타이머 정지 분기는 그 전이와 함께 제거됐다. (#369)
         m_timer += Time.deltaTime;
 
-        // 기절 시간의 마지막 구간을 일어나는 모션에 쓴다 — 총 무력화 시간(StunSeconds)은 그대로 두고
-        // "누워 있다 → 일어난다 → 배회"가 이어지게 한다. 이 구간에도 상태는 Stunned라 움직이지 않는다.
-        float standUpAt = Mathf.Max(0f, m_config.StunSeconds - m_config.StandUpSeconds);
-        if (!m_standingUp && m_timer >= standUpAt)
+        // <b>기상은 기절이 다 끝난 뒤에 덧붙는다</b> (#572 후속) — 오버레이 경로(<see cref="NpcStun"/>)와
+        // 같은 구조다. 예전에는 마지막 구간을 잘라 썼는데, 그러면 <b>클립 길이가 곧 누워 있는 시간을
+        // 깎는다</b>: 기상을 정상 속도로 늦추자(0.585 → 1.17초) 이 경로의 무력화 창도 함께 줄었다.
+        // 이 구간에도 상태는 Stunned라 움직이지 않는다.
+        if (!m_standingUp && m_timer >= m_config.StunSeconds)
         {
             m_standingUp = true;
             m_owner.RaiseStandUp(); // 전 피어에 일어나는 모션 재생을 알린다
@@ -53,7 +54,7 @@ public class NpcStunnedState : NpcStateBase
         // 때린 플레이어가 옆에 있으면 그쪽에서 도망친다.
         // 주변에 아무도 없으면 도주 상태가 스스로 배회로 돌려보낸다 — 아무도 없는 곳에 두고 온
         // NPC가 혼자 전력 질주하지 않는다.
-        if (m_timer >= m_config.StunSeconds)
+        if (m_timer >= m_config.StunSeconds + m_config.StandUpSeconds)
             m_owner.Reaction.StartFlee(m_owner.Reaction.ThreatTarget);
     }
 

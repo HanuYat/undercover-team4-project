@@ -150,6 +150,11 @@ public class NpcRopeDrag : NetworkBehaviour
         // 줄이 걸리는 순간 반출 흐름은 끝난다 — 이제 밧줄 신병이라 E는 놓기/재개로 갈린다 (#517)
         m_owner.Custody.SetJailExtracted(false);
 
+        // 걸어가던 대상을 잡았다 — 반출은 여기서 무산된다 (#548). 풀어 주더라도 인도 지점으로 다시
+        // 걷지 않는다. 호출부가 이미 Escorted로 전이해 뒀으므로 NpcController의 상태 훅이 목적지를
+        // 지운 뒤지만, 시체 끌기처럼 전이 없이 여기로 오는 경로가 있어 방어선으로 남긴다(멱등).
+        m_owner.Custody.ClearRelease();
+
         SetRoped(true);
         SyncDraggerCount();
 
@@ -226,6 +231,20 @@ public class NpcRopeDrag : NetworkBehaviour
         // 죽었으면 에이전트를 되살리지 않는다 — 시체는 NavMesh로 돌아가지 않는다 (#571).
         // 위 넉백 가드와 같은 이유이고, 이쪽은 <b>영구적</b>이라는 점만 다르다.
         if (m_owner.Death.IsDead)
+            return false;
+
+        // ⚠ <b>래그돌이 쥐고 있으면 손대지 않는다</b> — 넉백 가드와 정확히 같은 성격이다(일시적
+        // 소유권 양보). 되살리는 것은 래그돌이 일어날 때 자기 자리에서 한다
+        // (<c>NpcRagdoll.ServerReattachToNavMesh</c> — "뗀 쪽이 되돌린다").
+        //
+        // <b>실측으로 잡은 버그다</b> (#572 후속). 여기서 Warp하면 루트가 NavMesh 표면으로 끌려가고
+        // (실측: 0.140 → 0.062) 다음 프레임에 <c>TickRootFollow</c>가 골반으로 도로 올려, 놓을 때마다
+        // 몸이 6~8cm 잡아당겨졌다 돌아왔다. 바닥의 정의가 둘이라는 것이 그 6cm다 — 정착은
+        // 레이캐스트 지면(0.000)에 붙이고 이쪽은 NavMesh 표면(0.062)에 붙인다.
+        //
+        // 시체가 멀쩡했던 이유도 이것이다: 위 <c>IsDead</c> 가드가 Warp를 아예 막고 있었다.
+        // 기절 래그돌이 생기며 "산 채로 래그돌인 몸"이 처음 나타나 그 틈이 드러났다 (계획서 §2-3-3).
+        if (m_ragdoll != null && m_ragdoll.IsRagdollActive)
             return false;
 
         agent.enabled = true;

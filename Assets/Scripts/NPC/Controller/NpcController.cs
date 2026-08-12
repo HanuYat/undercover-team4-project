@@ -36,9 +36,11 @@ public class NpcController : NetworkBehaviour
     [SerializeField] private NpcChaseConfig m_chaseConfig;
     [SerializeField] private NpcCommonConfig m_commonConfig;
     [SerializeField] private NpcRopeDragConfig m_ropeDragConfig;
+    [SerializeField] private NpcRepathConfig m_repathConfig;
 
     private NavMeshAgent m_agent;
     private NpcStateMachine m_stateMachine;
+    private NpcRepathScheduler m_repath;
 
     // 도메인 부품 — 같은 GameObject에 붙는다. [RequireComponent]로 누락을 막는다. (#503)
     private NpcCustody m_custody;
@@ -63,6 +65,9 @@ public class NpcController : NetworkBehaviour
 
     public NavMeshAgent Agent => m_agent;
     public NpcStateMachine StateMachine => m_stateMachine;
+
+    /// <summary>재탐색·훑기 주기 게이트 — 상태 클래스가 "지금 다시 계산할 때인가"를 묻는다. (#573)</summary>
+    public NpcRepathScheduler Repath => m_repath;
 
     // 튜닝 SO는 코어가 계속 들고 부품이 여기서 읽는다 (계획서 § 3-3).
     // 부품은 같은 어셈블리라 internal로 족하다. 뒤 주석은 읽는 부품이다. (#503)
@@ -118,6 +123,9 @@ public class NpcController : NetworkBehaviour
         m_standUp = GetComponent<NpcStandUp>();
         m_stun = GetComponent<NpcStun>();
 
+        // 상태보다 먼저 만든다 — 상태 클래스가 생성자에서 게이트를 잡을 수 있게. 위상은 여기서 한 번만 흔뿌려진다 (#573)
+        m_repath = new NpcRepathScheduler(m_repathConfig, transform);
+
         m_stateMachine = new NpcStateMachine();
         m_stateMachine.AddState(NpcState.Idle, new NpcIdleState(this, m_idleConfig));
         m_stateMachine.AddState(NpcState.Walk, new NpcWalkState(this, m_walkConfig));
@@ -131,6 +139,7 @@ public class NpcController : NetworkBehaviour
         m_stateMachine.AddState(NpcState.Detained, new NpcDetainedState(this));
         m_stateMachine.AddState(NpcState.Chasing, new NpcChaseState(this, m_chaseConfig, m_walkConfig, m_fleeConfig));
         m_stateMachine.AddState(NpcState.PenaltyEscorting, new NpcPenaltyEscortState(this, m_escortConfig));
+        m_stateMachine.AddState(NpcState.Releasing, new NpcReleasingState(this, m_fleeConfig));
         m_stateMachine.AddState(NpcState.Dead, new NpcDeadState(this));
 
         // FSM 전이(서버/오프라인에서만 발생)를 동기화 변수 또는 로컬 이벤트로 흘려보낸다
@@ -261,6 +270,18 @@ public class NpcController : NetworkBehaviour
             m_rope.ClearTethers();
             m_custody.SetJailExtracted(false);
         }
+
+        // 반출 목적지(#548)도 같은 자리에서 내린다 — 단 <b>도주·저항·기절로는 지우지 않는다</b>
+        // (2026-08-12 확정). 맞아서 돌변한 것은 그 순간의 반응일 뿐이고, 쓰러뜨려 재우면 깨어나 다시
+        // 인도 지점으로 뛴다(NpcStun.ExitStun). 무산은 신병을 잡았을 때뿐 — 밧줄·재수감·사망 (GDD 6-1).
+        // NpcReleasingState.Exit이 아니라 여기인 이유: Exit은 "어디로 나가는지"를 모른다.
+        if (
+            state != NpcState.Releasing
+            && state != NpcState.Stunned
+            && state != NpcState.Run
+            && state != NpcState.Attack
+        )
+            m_custody.ClearRelease();
 
         if (!IsSpawned)
         {

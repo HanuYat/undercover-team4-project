@@ -99,7 +99,7 @@ MonoBehaviour:
   m_handGrip: 2
   m_targetOutlineColor: {r: 0, g: 0.25335073, b: 1, a: 1}
   m_shopPrice: 0
-  m_channelSeconds: 3
+  m_channelSeconds: 0
   m_scanKeepRange: 5
   m_reactionPoint: 0.5
   references:

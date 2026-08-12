@@ -69,7 +69,7 @@ R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단�
 | 코드 | 사유 |
 |---|---|
 | JailDoor → JailIntake `Find` · JailbreakEvent → JailLock `Find` · JailRoom → JailZone `Find`(정적 캐시) | 장소(출입구·자물쇠·구역) 오브젝트 — 매니저 아님. 감옥 방이 도시에서 떨어진 별도 공간이라(#537) 부모 탐색으로는 닿지 않는다. 전부 `Awake`/`Start` 1회 또는 참조가 죽었을 때만 다시 찾는 정적 캐시라 매 프레임 비용이 없다. 인스펙터 연결을 우선하고 비었을 때만 폴백한다. 삭제된 `JailIntake → JailScanner Find` 항목을 대체한다(보안 스캐너 게이트가 문 앞 판정으로 바뀌며 `JailScanner`가 폐기됨 — #537) |
-| PlayerEscortCommands · NpcCapturedState → JailIntake `Find` | 장소(출입구) 오브젝트 — 매니저 아님. **참조 도메인은 Player·NPC 둘로 R3 ②는 넘지만**(#537로 `NpcCapturedState`가 추가됨), 위 JailZone 항목과 같은 사유로 등록하지 않는다 — 본부 맵에 배치되는 설치물이라 App 상주 매니저로 올리면 씬 없는 구성(로비·타이틀)에서 빈 슬롯이 된다. 둘 다 상시 폴링이 아니라 E 입력·`Captured` 진입당 1회만 도는 경로라 탐색 비용도 없다. 인계 단말이 폐기되면서 삭제된 `ArrestJudge → HqDropoffZone Find` 항목을 대체한다 (#492/#537) |
+| PlayerEscortCommands · NpcCapturedState · SecretFavorBroker → JailIntake `Find` | 장소(출입구) 오브젝트 — 매니저 아님. **참조 도메인은 Player·NPC·HQ 셋으로 R3 ②는 넘지만**(#537로 `NpcCapturedState`, #548로 `SecretFavorBroker`가 추가됨), 위 JailZone 항목과 같은 사유로 등록하지 않는다 — 본부 맵에 배치되는 설치물이라 App 상주 매니저로 올리면 씬 없는 구성(로비·타이틀)에서 빈 슬롯이 된다. 셋 다 상시 폴링이 아니라 E 입력·`Captured` 진입·`Start` 1회만 도는 경로라 탐색 비용도 없다. 인계 단말이 폐기되면서 삭제된 `ArrestJudge → HqDropoffZone Find` 항목을 대체한다 (#492/#537) |
 | RoundTimerUI → RoundTimerSync `Find` | Round 도메인 내부 부품 (HQ 타이머 표시가 생기면 승격 후보) |
 | SessionManager → AuthBootstrap `SerializeField` | 같은 오브젝트/프리팹 내 직접 연결 |
 | RoundEndResetter의 테스트 씬 폴백 `SceneManager.LoadScene` | EScene 매핑이 없는 테스트 씬 한정 — 정식 흐름은 App.LoadScene(Title)로 전환 완료 (#247) |

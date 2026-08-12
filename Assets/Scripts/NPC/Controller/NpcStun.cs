@@ -38,9 +38,29 @@ public class NpcStun : NetworkBehaviour
     private readonly NetworkVariable<bool> m_syncedStunned = new NetworkVariable<bool>();
     private bool m_stunned;
 
+    // 기상 구간인가 — 오버레이는 아직 켜져 있지만 몸은 일어나는 중이다. 클라도 읽어야 한다:
+    // 밧줄 조기검증·조준 피드백이 CanRopeBind를 통해 이 값을 본다 (m_standUpPendingSynced와 같은 이유).
+    private readonly NetworkVariable<bool> m_syncedRising = new NetworkVariable<bool>();
+
     /// <summary>기절해 있는가 — <b>경로를 가리지 않는 일반 질문.</b> 오버레이와 넉백 KO를 함께 답한다.
     /// 세션 중에는 동기화 값이라 클라에서도 읽을 수 있다. (#292)</summary>
     public bool IsStunned => HasStunOverlay || m_owner.CurrentState == NpcState.Stunned;
+
+    /// <summary>
+    /// 일어나는 모션이 도는 중인가 — <b>기절이 다 끝난 뒤에 덧붙는 구간</b>이다. (#572 후속)
+    ///
+    /// 이 동안에도 오버레이는 켜져 있다(FSM을 계속 막아야 몸이 걸어 나가지 않는다). 대신
+    /// <b>밧줄이 걸리지 않는다</b> — <see cref="NpcStateRules.CanRopeBind"/>가 이 값을 본다.
+    /// 안 막으면 일어나던 몸을 묶어 도로 눕히게 되고, 그 그림이 어색하다는 것이 이 구간을
+    /// 기절 뒤로 뺀 이유 중 하나다.
+    ///
+    /// <b>묶여 있으면 켜지지 않는다</b> — 줄에 눕혀진 몸은 기상 모션 자체가 나가지 않으므로
+    /// (<see cref="Tick"/>) 여기서 켜면 "모션이 도는 중"이 거짓이 되고, 그 시간만큼 밧줄 조작이
+    /// 아무 이유 없이 막힌다. 표시와 모션은 반드시 같은 가드 안에 있어야 한다.
+    /// </summary>
+    public bool IsRising => IsSpawned ? m_syncedRising.Value : m_rising;
+
+    private bool m_rising;
 
     /// <summary>오버레이만 — 넉백 KO는 제외한다. 코어 Update의 스턴 게이트가 이걸 봐야 넉백 KO일 때
     /// NpcStunnedState.Tick이 정상적으로 돈다. 코어와 기상 대기(<see cref="NpcStandUp"/>)가 읽는다.</summary>
@@ -96,6 +116,15 @@ public class NpcStun : NetworkBehaviour
     public override void OnNetworkDespawn()
     {
         m_syncedStunned.OnValueChanged -= HandleSyncedStunnedChanged;
+    }
+
+    // 기상 구간 표시 — 서버 진실값과 동기화 변수에 함께 기록한다 (SetStunned와 같은 구조).
+    // 표현 이벤트가 없는 것이 저쪽과 다른 점이다: 자세는 이미 RaiseStandUp이 알린다.
+    private void SetRising(bool value)
+    {
+        m_rising = value;
+        if (IsSpawned && IsServer)
+            m_syncedRising.Value = value;
     }
 
     // 서버 진실값과 동기화 변수에 함께 기록한다 — HandleFsmStateChanged와 같은 구조 (#56)
@@ -166,6 +195,7 @@ public class NpcStun : NetworkBehaviour
         m_stunDuration = seconds ?? m_owner.StunConfig.StunSeconds;
         m_stunElapsed = 0f;
         m_standingUp = false;
+        SetRising(false);
         SetStunned(true);
 
         // 위 재진입 가드를 통과한 '새 기절'에서만 나가므로 중복되지 않는다 (#477)
@@ -200,20 +230,40 @@ public class NpcStun : NetworkBehaviour
         // Captured)는 ExitStun의 도주 전이 대상이 아니고(NpcStateRules.IsReactive) 밧줄도 그대로다.
         m_stunElapsed += Time.deltaTime;
 
-        // 기절 시간의 마지막 구간을 일어나는 모션에 쓴다 — 총 무력화 시간은 그대로 둔다.
-        float standUpAt = Mathf.Max(0f, m_stunDuration - m_owner.StunConfig.StandUpSeconds);
-        if (!m_standingUp && m_stunElapsed >= standUpAt)
+        // <b>기상은 기절이 다 끝난 뒤에 덧붙는다</b> (#572 후속). 예전에는 기절 시간의 마지막
+        // 구간을 잘라 썼는데("총 무력화 시간은 그대로 둔다"), 그러면 <b>클립 길이가 곧 검거 창을
+        // 깎는다</b> — 기상을 정상 속도로 늦추자 테이저의 누운 시간이 2.09초에서 1.50초로 줄었다.
+        // 무력화 시간은 난이도 손잡이인데(NpcStunConfig 주석) 연출 튜닝이 그걸 건드리면 안 된다.
+        //
+        // <see cref="NpcStandUp"/>이 이미 이 구조다 — 누워 버티기 → 기상 재생 → 후속 동작 순서로,
+        // 기상 시간이 <b>덧붙는</b> 구간이다. 기절 경로만 예외였던 것을 맞춘다.
+        if (!m_standingUp && m_stunElapsed >= m_stunDuration)
         {
             m_standingUp = true;
 
             // 밧줄이 걸려 있으면 모션을 내지 않는다 — 줄에 눕혀진 몸은 기절이 풀려도 일어날 수 없다.
             // 알림만 건너뛴다: 기절은 아래에서 제 시간에 풀리고 대상은 묶인 채 남는다.
             // 여기서 알리면 벌떡 섰다가 곧바로 묶임 자세로 되돌아간다.
+            //
+            // ⚠ <b>기상 표시도 함께 건너뛴다</b> — 모션이 안 도는데 <see cref="IsRising"/>만 켜면
+            // 그 구간 내내 <see cref="NpcStateRules.IsPlayingStandUp"/>이 참이 돼 밧줄 조작이
+            // 통째로 막힌다(끌기 재개·줄다리기 합류·새로 묶기 + 조준 윤곽선 —
+            // <c>PlayerEscortCommands.IsRopeBlocked</c>). 묶어 둔 대상은 묶는 순간
+            // <c>ServerApplyRopeDrag</c>가 기절을 풀어 놓으므로 테이저가 다시 걸리고,
+            // 그 기절이 끝나는 순간 이 창이 열린다. 몸은 계속 누워 있고 기상 모션도 없으니
+            // 플레이어에게는 입력이 이유 없이 씹히는 것으로만 보인다.
+            // 프로퍼티 정의("모션이 도는 중")대로 가르면 그 창 자체가 생기지 않는다.
             if (!m_owner.Rope.IsRoped && !m_owner.Rope.IsTethered)
+            {
+                SetRising(true);
                 m_owner.RaiseStandUp(); // 전 피어에 일어나는 모션 재생을 알린다
+            }
         }
 
-        if (m_stunElapsed >= m_stunDuration)
+        // 기상 구간이 끝나야 오버레이를 걷는다 — <b>오버레이를 유지하는 것이 핵심이다.</b>
+        // 여기서 먼저 걷으면 코어 Update의 스턴 게이트가 풀려 FSM이 되살아나고, 일어나는 클립이
+        // 도는 동안 몸이 걸어 나간다. 대신 그 구간에는 밧줄이 걸리지 않는다 — <see cref="IsRising"/>.
+        if (m_stunElapsed >= m_stunDuration + m_owner.StunConfig.StandUpSeconds)
             ExitStun(resumeReaction: true);
     }
 
@@ -228,6 +278,7 @@ public class NpcStun : NetworkBehaviour
             return;
 
         SetStunned(false);
+        SetRising(false);
         m_stunElapsed = 0f;
         m_standingUp = false;
     }
@@ -254,12 +305,27 @@ public class NpcStun : NetworkBehaviour
             return; // 넉백 KO는 NpcStunnedState가 스스로 빠져나간다
 
         SetStunned(false);
+        SetRising(false);
 
         NavMeshAgent agent = m_owner.Agent;
         if (agent.enabled && agent.isOnNavMesh)
             agent.isStopped = m_agentStoppedBefore;
 
-        if (resumeReaction && NpcStateRules.IsReactive(m_owner.CurrentState))
+        if (!resumeReaction)
+            return;
+
+        // 방출 대상은 <b>깨어나면 도주가 아니라 반출 보행으로 돌아간다</b> (#548, 2026-08-12 확정) —
+        // 맞고 도주·저항으로 돌변한 뒤여도 마찬가지다. 쓰러뜨리기는 무산 수단이 아니라 묶을 창을 여는
+        // 수단이라(GDD 6-1), 목적지가 여기까지 살아 있다(NpcController의 상태 훅).
+        // 이미 Releasing이면 전이 없이 둔다 — 경로는 NpcReleasingState가 다음 Tick에 다시 건다.
+        if (m_owner.Custody.HasReleaseDestination)
+        {
+            if (m_owner.CurrentState != NpcState.Releasing)
+                m_owner.StateMachine.ChangeState(NpcState.Releasing);
+            return;
+        }
+
+        if (NpcStateRules.IsReactive(m_owner.CurrentState))
             m_owner.Reaction.StartFlee(m_owner.Reaction.ThreatTarget);
     }
 }

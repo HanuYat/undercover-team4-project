@@ -80,6 +80,16 @@ public class SecretFavorBroker : NetworkBehaviour
     [Min(0f)]
     [SerializeField] private float m_favorExpireSeconds = 180f;
 
+#if UNITY_EDITOR
+    [Header("개발용 (에디터 전용)")]
+    [Tooltip(
+        "이 키를 누르면 유치장 수감자 한 명으로 지금 즉시 청탁을 발행한다 — 확률·대기·전화 수신을 전부 건너뛴다.\n\n"
+            + "누른 사람에게 의뢰가 간다. 호스트(또는 오프라인 단독 Play)에서만 동작한다 — 키 입력은 로컬이고 발행은 서버 판정이라, "
+            + "MPPM 클론에서 눌러도 아무 일도 일어나지 않는다. 저지 테스트에서 부패한 쪽을 호스트로 두면 그대로 맞는다"
+    )]
+    [SerializeField] private UnityEngine.InputSystem.Key m_devIssueKey = UnityEngine.InputSystem.Key.F9;
+#endif
+
     [Header("문구 (HudTable)")]
     [Tooltip("받은 순간 잠깐 뜨는 알림 — Hud.SecretFavor.Offer")]
     [SerializeField] private LocalizedString m_offerToast;
@@ -124,6 +134,14 @@ public class SecretFavorBroker : NetworkBehaviour
     // 유치장 — 수감 훅을 걸어 두려고 잡는다. 장소 오브젝트라 App 파사드 대상이 아니다(JailIntake와 같은 관례).
     private JailZone m_jail;
 
+    // 감옥 문 — 반출 대상이 문 밖으로 나오는 순간을 받으려고 잡는다 (#548).
+    private JailIntake m_intake;
+
+    /// <summary>이번 대상이 <b>발행 시점에</b> 시체였는가 — 시체는 걷지 못해 밧줄로 끌고 가야 완수다. (#597)
+    /// 발행 시점으로 못박는 것이 핵심이다: 산 대상이 도중에 죽으면 여전히 무산이라(아래 사망 가드)
+    /// "빼내 달라"를 죽여서 이행하는 우회가 열리지 않는다.</summary>
+    private bool m_targetIsCorpse;
+
     // 스폰 전(오프라인 단독 Play)이면 이 피어가 곧 권위다 — TipCallPhone.IsAuthority와 같은 판단
     private bool IsAuthority => !IsSpawned || IsServer;
 
@@ -138,9 +156,23 @@ public class SecretFavorBroker : NetworkBehaviour
 
         m_jail = FindFirstObjectByType<JailZone>();
         if (m_jail != null)
+        {
             m_jail.OnInmateAdmitted += HandleInmateAdmitted;
+
+            // 시체도 같은 추첨을 탄다 (#597) — "빼달라"는 청탁은 살아 있든 아니든 성립한다.
+            // 다만 시체는 스스로 걸어 나가지 못하므로 이행 방법이 갈린다(HandleInmateExited·IsCorpseFavor).
+            m_jail.OnDeceasedRecorded += HandleInmateAdmitted;
+        }
         else
             Debug.LogWarning("SecretFavorBroker: JailZone을 찾지 못해 청탁이 걸려오지 않는다", this);
+
+        // 반출 대상이 문 밖으로 나오는 순간을 받는다 — 목적지를 아는 것은 이쪽뿐이다 (#548).
+        // JailZone과 같은 관례로 찾는다(장소 오브젝트라 App 파사드 대상이 아니다).
+        m_intake = FindFirstObjectByType<JailIntake>();
+        if (m_intake != null)
+            m_intake.OnInmateExited += HandleInmateExited;
+        else
+            Debug.LogWarning("SecretFavorBroker: JailIntake를 찾지 못해 반출 대상이 인도 지점으로 걸어가지 않는다", this);
 
         if (Round != null)
             Round.OnRoundEnded += HandleRoundEnded;
@@ -149,7 +181,13 @@ public class SecretFavorBroker : NetworkBehaviour
     public override void OnDestroy()
     {
         if (m_jail != null)
+        {
             m_jail.OnInmateAdmitted -= HandleInmateAdmitted;
+            m_jail.OnDeceasedRecorded -= HandleInmateAdmitted;
+        }
+
+        if (m_intake != null)
+            m_intake.OnInmateExited -= HandleInmateExited;
 
         if (Round != null)
             Round.OnRoundEnded -= HandleRoundEnded;
@@ -203,7 +241,7 @@ public class SecretFavorBroker : NetworkBehaviour
         if (m_pendingTarget == null || m_phone == null) return;
 
         // 탈옥·반출로 이미 나갔거나 파괴된 대상 — "유치장에 있는 ○○○"가 성립하지 않는다
-        if (m_pendingTarget.CurrentState != NpcState.Jailed)
+        if (!IsInJail(m_pendingTarget))
         {
             Debug.Log("[비밀 청탁] 대상이 이미 유치장에서 빠져 전화 예약을 취소한다");
             m_pendingTarget = null;
@@ -229,7 +267,7 @@ public class SecretFavorBroker : NetworkBehaviour
     {
         if (m_active) return; // 벨이 울리는 사이에 다른 청탁이 시작됐다
 
-        if (target == null || target.CurrentState != NpcState.Jailed)
+        if (!IsInJail(target))
         {
             Debug.Log("[비밀 청탁] 전화를 받았지만 대상이 이미 유치장에 없다 — 의뢰가 성립하지 않는다");
             return;
@@ -247,6 +285,7 @@ public class SecretFavorBroker : NetworkBehaviour
         m_active = true;
         m_clientId = clientId;
         m_target = target;
+        m_targetIsCorpse = target.Death.IsDead; // 발행 시점에 못박는다 (아래 프로퍼티 주석)
         m_dropoff = dropoff;
         m_reward = Mathf.Max(m_minReward, identity.Bounty * m_rewardPercent / 100);
         m_expireTime = Time.time + m_favorExpireSeconds;
@@ -263,11 +302,78 @@ public class SecretFavorBroker : NetworkBehaviour
         Debug.Log($"[비밀 청탁] {clientId}번에게 발행 — 대상 {identity.Profile.CitizenName}, 보상 {m_reward}원");
     }
 
+    // ---- 반출 보행 (서버 · 오프라인 전용, #548) ----
+
+    // 반출 대상이 문을 나섰다 — 내 청탁 대상이면 인도 지점을 목적지로 준다.
+    // 여기서 걷기 시작하는 것이 곧 <b>저지 창이 열리는 순간</b>이다: 대상이 혼자 길 위에 나오고,
+    // 그 시간 동안 다른 플레이어가 알아채면 기절시켜 밧줄로 묶어 되돌릴 수 있다.
+    //
+    // 내 대상이 아니면 아무것도 하지 않는다 — 목적지를 못 받은 대상은 문 쪽에서 도주로 보낸다.
+    private void HandleInmateExited(NpcController npc)
+    {
+        if (!IsAuthority || !m_active)
+            return;
+
+        if (npc == null || npc != m_target || m_dropoff == null)
+            return;
+
+        // 시체는 걷지 않는다 (#597) — Releasing으로 전이할 수도 없다(사망은 종착 상태).
+        // 완수 판정은 위치로 하므로, 끌고 가서 인도 범위에 넣으면 그대로 잡힌다.
+        if (npc.Death.IsDead)
+        {
+            Debug.Log($"[비밀 청탁] 시체 대상 — 인도 지점까지 직접 끌고 가야 한다: {npc.name}");
+            return;
+        }
+
+        npc.Custody.StartRelease(m_dropoff.Center);
+        Debug.Log($"[비밀 청탁] 대상이 인도 지점으로 걸어간다: {npc.name}");
+    }
+
+    /// <summary>아직 감옥 안에 있는가 — 산 수감자와 시체를 함께 답한다. (#597)
+    /// 시체는 <see cref="NpcState.Jailed"/>를 타지 않으므로(사망이 종착 상태라 Dead로 남는다)
+    /// <b>방 안에 누워 있는가</b>로 묻는다 — 끌려 나가면 그 순간 밖이다.</summary>
+    private static bool IsInJail(NpcController npc)
+    {
+        if (npc == null)
+            return false;
+
+        return npc.Death.IsDead
+            ? JailRoom.Contains(npc.transform.position)
+            : npc.CurrentState == NpcState.Jailed;
+    }
+
+    // 의뢰가 접혔는데 대상이 아직 걷고 있거나 인도 지점에 서 있다 — 도시로 돌려보낸다 (#548).
+    // 그냥 두면 의뢰가 사라진 뒤에도 그 자리에 붙박이로 남는다. 근처에 아무도 없으면
+    // NpcFleeState가 곧 Idle로 되돌리므로 평범한 시민으로 복귀한다.
+    private void SendTargetAway()
+    {
+        if (m_target == null || !m_target.Custody.HasReleaseDestination)
+            return;
+
+        // 시체는 흩어지지 않는다 (#571) — 사망은 종착 상태라 도주 전이가 거부되고 경고만 남는다.
+        // 목적지만 지워 두면 몸은 쓰러진 자리에 그대로 남는다.
+        if (m_target.Death.IsDead)
+        {
+            m_target.Custody.ClearRelease();
+            return;
+        }
+
+        m_target.Custody.ClearRelease();
+        m_target.Reaction.StartFlee(ResolveRequester());
+        Debug.Log($"[비밀 청탁] 의뢰가 접혀 대상이 도시로 흩어진다: {m_target.name}");
+    }
+
     // ---- 완수 판정 (서버 · 오프라인 전용) ----
 
     private void Update()
     {
         if (!IsAuthority) return;
+
+#if UNITY_EDITOR
+        // 쿨다운 게이트보다 앞에 둔다 — wasPressedThisFrame은 그 프레임에만 참이라
+        // 0.2초 간격으로 보면 눌러도 대부분 놓친다.
+        DevTickIssueShortcut();
+#endif
 
         m_cooldown -= Time.deltaTime;
         if (m_cooldown > 0f) return;
@@ -281,6 +387,7 @@ public class SecretFavorBroker : NetworkBehaviour
         if (m_favorExpireSeconds > 0f && Time.time >= m_expireTime)
         {
             Debug.Log("[비밀 청탁] 시간이 지나 의뢰가 거둬들여졌다");
+            SendTargetAway();
             Clear();
             return;
         }
@@ -298,14 +405,35 @@ public class SecretFavorBroker : NetworkBehaviour
         if (requester == null)
         {
             Debug.Log("[비밀 청탁] 의뢰인이 접속을 끊어 의뢰를 취소한다");
+            SendTargetAway();
             ClearServerState();
             return;
         }
 
-        // <b>대상과 의뢰인이 함께 인도 범위 안에 있어야 완수다.</b> 대상만 보면 남이 데려다 놓은 것으로
-        // 보상이 나가고, 의뢰인만 보면 대상 없이 지점만 밟아도 된다. 대상의 상태는 보지 않는다 —
-        // 밧줄로 끌고 왔든 따라오게 했든 세워 두고 왔든 "여기까지 데려왔다"는 사실은 같다.
-        if (!m_dropoff.Contains(m_target.transform.position) || !m_dropoff.Contains(requester.position))
+        // <b>대상이 죽으면 그것으로 무산이다</b> (#571 사망 + #548 반출 보행).
+        // 아래 완수 판정이 대상의 상태를 보지 않으므로, 이 가드가 없으면 <b>시체를 인도 지점까지 끌고 가
+        // 보상을 받을 수 있다</b> — 부패한 쪽이 "빼내 달라"를 죽여서 이행하는 우회가 된다. 청탁은 산 사람을
+        // 빼내는 일이고, 시체 인도는 그 이행이 아니다.
+        //
+        // 만료(m_favorExpireSeconds)까지 매달아 두지 않고 즉시 접는 이유: 되살릴 길이 없는데 의뢰인은
+        // 왜 안 되는지 모른 채 남은 시간을 기다린다. 실패를 바로 알려 다음 판단을 하게 한다.
+        // SendTargetAway는 부르지 않는다 — 시체는 흩어질 수 없고, 목적지는 사망 전이를 받은
+        // NpcController의 상태 훅이 이미 지웠다.
+        // 처음부터 시체였던 건은 여기 걸리지 않는다 (#597) — 그쪽은 시체 인도가 곧 이행이다.
+        if (m_target.Death.IsDead && !m_targetIsCorpse)
+        {
+            Debug.Log($"[비밀 청탁] 대상이 사망해 의뢰가 무산됐다: {m_target.name}");
+            Clear();
+            return;
+        }
+
+        // <b>대상이 인도 범위에 닿으면 완수다 — 의뢰인은 그 자리에 없어도 된다</b> (#548).
+        // 자율 보행이 붙기 전에는 의뢰인이 대상을 데리고 와야 했으므로 둘을 함께 봤다. 지금은 대상이
+        // 스스로 걸어가므로 의뢰인까지 요구하면 그 보행 시간이 곧 의뢰인의 대기 시간이 되고,
+        // "꺼내 보내 놓고 시치미 떼고 딴 일을 한다"는 이 기능의 그림이 사라진다 — 오히려 인도 지점에
+        // 서서 기다리는 모습이 남에게 들키는 자리가 된다.
+        // 대상의 상태는 보지 않는다 — 걸어왔든 누가 끌어다 놨든 "여기 도착했다"는 사실은 같다.
+        if (!m_dropoff.Contains(m_target.transform.position))
             return;
 
         Complete();
@@ -420,4 +548,84 @@ public class SecretFavorBroker : NetworkBehaviour
         SecretFavorDropoff.HideAllMarkers();
         App.UI.SecretFavor?.HideImmediate();
     }
+
+#if UNITY_EDITOR
+
+    // ---- 개발용 단축키 (에디터 전용) ----
+    //
+    // 반출 보행(#548)을 손으로 확인하려면 청탁이 떠 있어야 하는데, 정상 경로는 수감자별 추첨 →
+    // 30~90초 대기 → 전화기까지 달려가 받기다. 한 번 보려고 매번 그 셋을 통과하는 것이 테스트에서
+    // 제일 성가신 부분이라 지름길을 둔다. 발행 자체는 정상 경로와 <b>같은 Issue</b>를 타므로
+    // 이 길로 뜬 의뢰도 만료·완수·취소가 전부 평소대로 돈다.
+    //
+    // <b>빌드에는 없다</b> — 필드까지 통째로 #if UNITY_EDITOR 안이라 컴파일되지 않는다.
+
+    private void DevTickIssueShortcut()
+    {
+        UnityEngine.InputSystem.Keyboard keyboard = UnityEngine.InputSystem.Keyboard.current;
+        if (keyboard == null || !keyboard[m_devIssueKey].wasPressedThisFrame)
+            return;
+
+        DevIssueNow();
+    }
+
+    // 유치장 수감자 한 명을 골라 지금 누른 사람에게 발행한다. 서버(또는 오프라인) 전용.
+    private void DevIssueNow()
+    {
+        if (m_active)
+        {
+            Debug.Log("[비밀 청탁] 개발 단축키 — 이미 진행 중인 의뢰가 있다(동시 1건)");
+            return;
+        }
+
+        NpcController target = DevFindJailedTarget();
+        if (target == null)
+        {
+            Debug.Log("[비밀 청탁] 개발 단축키 — 감옥에 이름을 댈 수 있는 수감자도 시체도 없다");
+            return;
+        }
+
+        // 정상 경로와 같게 추첨 완료로 남긴다 — 안 그러면 이 대상으로 진짜 추첨이 나중에 또 돈다
+        m_rolled.Add(target);
+
+        // 스폰 전(오프라인 단독 Play)에는 클라이언트 개념이 없다 — 0번(호스트 자리)으로 발행한다
+        ulong clientId = IsSpawned ? NetworkManager.LocalClientId : 0UL;
+        Debug.Log($"[비밀 청탁] 개발 단축키({m_devIssueKey}) — 즉시 발행한다");
+        Issue(clientId, target);
+    }
+
+    // 이름을 댈 수 있는 수감자 — Issue가 CitizenIdentity를 그대로 참조하므로 여기서 걸러야 한다
+    // (정상 경로에서는 HandleInmateAdmitted가 같은 검사를 이미 통과시킨다).
+    //
+    // 산 수감자와 시체를 함께 찾되 <b>시체를 먼저 고른다</b> (#597) — 둘 다 있을 때 산 대상이 잡히면
+    // 시체 청탁(밧줄로 끌고 가기)을 손으로 확인할 방법이 없다. 판정은 정상 경로와 같은 IsInJail이다.
+    private static NpcController DevFindJailedTarget()
+    {
+        NpcController[] all = FindObjectsByType<NpcController>(FindObjectsSortMode.None);
+
+        NpcController living = null;
+        for (int i = 0; i < all.Length; i++)
+        {
+            NpcController npc = all[i];
+            if (!IsInJail(npc) || !HasName(npc))
+                continue;
+
+            if (npc.Death.IsDead)
+                return npc;
+
+            living ??= npc;
+        }
+
+        return living;
+    }
+
+    private static bool HasName(NpcController npc)
+    {
+        CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
+        return identity != null
+            && identity.Profile != null
+            && !string.IsNullOrEmpty(identity.Profile.CitizenName);
+    }
+
+#endif
 }

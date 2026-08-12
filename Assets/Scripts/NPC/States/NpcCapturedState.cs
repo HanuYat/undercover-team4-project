@@ -30,10 +30,17 @@ public class NpcCapturedState : NpcStateBase
 
     public override void Enter()
     {
-        // 이동을 멈추고 진행 중이던 배회 경로도 제거한다
-        m_owner.Agent.isStopped = true;
-        if (m_owner.Agent.isOnNavMesh)
+        // 이동을 멈추고 진행 중이던 배회 경로도 제거한다.
+        //
+        // ⚠ <b>에이전트가 살아 있을 때만</b> — 꺼져 있거나 NavMesh 밖이면 isStopped 접근이 예외를
+        // 던진다(#557). 예전에는 이 상태로 오는 길이 전부 에이전트를 든 채였지만, 밧줄을 놓는 경로가
+        // 그 전제를 깼다: 래그돌인 몸은 놓아도 에이전트를 되살리지 않고(NpcRopeDrag.StopRopeDrag의
+        // 래그돌 가드) <b>일어날 때</b> 래그돌이 직접 붙인다 — 그 사이에 이 전이가 온다. (#572 후속)
+        if (m_owner.AgentReady)
+        {
+            m_owner.Agent.isStopped = true;
             m_owner.Agent.ResetPath();
+        }
 
         m_escapeTime = Time.time + m_config.EscapeSeconds;
         m_rejailTried = false;
@@ -63,8 +70,10 @@ public class NpcCapturedState : NpcStateBase
 
     public override void Exit()
     {
-        // 향후 이송·석방 등으로 풀릴 경우를 대비해 이동을 복구한다
-        m_owner.Agent.isStopped = false;
+        // 향후 이송·석방 등으로 풀릴 경우를 대비해 이동을 복구한다 —
+        // 살아 있을 때만이다(Enter와 같은 이유). 꺼진 채 나가면 되살리는 쪽이 붙일 때 함께 푼다.
+        if (m_owner.AgentReady)
+            m_owner.Agent.isStopped = false;
     }
 
     /// <summary>방치돼도 그 자리에 남는 대상인가 — 판정 완료 = 인계 성공이라 방치 타이머에서 빠지고

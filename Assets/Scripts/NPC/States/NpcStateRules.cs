@@ -26,7 +26,11 @@ public static class NpcStateRules
         // 추격대를 체포해 페널티 집행을 무산시키는 우회를 막는다 (회피 수단은 격퇴(호루라기 #250)뿐)
         && state != NpcState.Detained
         && state != NpcState.Chasing
-        && state != NpcState.PenaltyEscorting;
+        && state != NpcState.PenaltyEscorting
+        // 반출돼 인도 지점으로 걸어가는 대상도 수갑으로는 못 잡는다 (#548) — 저지 수단은
+        // 도주·저항과 같다: 진압봉·테이저로 기절시킨 뒤 밧줄. 여기를 열면 걸어가는 대상을
+        // 채널링 한 번으로 세울 수 있어 '들키면 저지당한다'가 '보이면 끝난다'가 된다.
+        && state != NpcState.Releasing;
 
     /// <summary>타격 피해가 들어가는 상태인가 — <b>스턴 게이트가 아니다.</b> (#292)
     /// 스턴은 오버레이가 되면서 전 상태에 걸리게 됐지만(#292), 타격까지 함께 열면 연행 중인
@@ -87,6 +91,16 @@ public static class NpcStateRules
     public static bool CanStartReaction(NpcState state) =>
         IsReactive(state) && state != NpcState.Run && state != NpcState.Attack;
 
+    /// <summary>맞았을 때 반응(도주·저항)으로 돌아설 수 있는가 — <see cref="CanStartReaction"/>에
+    /// <b>반출 보행 예외</b>를 얹은 것. (#548) 반출 대상은 스캔에는 꿈쩍하지 않지만(IsReactive에 없다)
+    /// 때리면 배정된 유형대로 돌아선다 — 쳐다봤다고 그만두면 저지가 너무 싸진다.
+    ///
+    /// <b>돌아서도 반출은 살아 있다</b> (2026-08-12 확정) — 목적지는 반응군에서도 유지되고
+    /// (<see cref="NpcController"/>의 상태 훅) 쓰러뜨려 재우면 깨어나 다시 인도 지점으로 뛴다.
+    /// 타격은 시간을 버는 수단이고, 무산시키려면 밧줄로 묶어야 한다.</summary>
+    public static bool CanReactToDamage(NpcState state) =>
+        CanStartReaction(state) || state == NpcState.Releasing;
+
     /// <summary>밧줄 대상에서 <b>신병·소유권 때문에</b> 빠지는 상태인가. (#269 → #369 기본 검거로 승격)
     /// 제외 목록 방식 — 이미 신병 확보(Escorted/Captured/Jailed)·타 시스템 소유(페널티)는 제외.
     /// Captured 제외 주의: 그 상태에선 밧줄 좌클릭이 '끌기 재개'로 갈리고, 푸는 건 E다 (#513).
@@ -137,8 +151,29 @@ public static class NpcStateRules
         if (npc.Death.IsDead)
             return !npc.Rope.IsRoped;
 
-        return npc.Stun.IsStunned && CanArrest(npc); // 오버로드 쪽이라 소매치기 예외를 함께 탄다 (#303)
+        // ⚠ <b>일어나는 중에는 못 묶는다</b> — 아래 <see cref="IsPlayingStandUp"/>. (#572 후속)
+        // 기절 기상 구간에도 오버레이는 켜져 있어(FSM을 계속 막아야 몸이 걸어 나가지 않는다)
+        // <see cref="NpcStun.IsStunned"/>만 보면 <b>일어나던 몸을 묶어 도로 눕히게 된다.</b>
+        //
+        // 그래서 검거 창은 <b>정확히 누워 있는 시간</b>과 같다 — 연출(클립 길이)이 난이도를
+        // 건드리지 않는다는 것이 이 구조의 요점이다.
+        return npc.Stun.IsStunned && !IsPlayingStandUp(npc) && CanArrest(npc); // 오버로드 쪽이라 소매치기 예외를 함께 탄다 (#303)
     }
+
+    /// <summary>
+    /// 일어나는 <b>모션이 실제로 도는</b> 중인가 — <b>재포획 창의 끝</b>이다. (#572 후속)
+    ///
+    /// 기상 경로가 둘이라 여기서 합친다: 기절이 끝나 일어나는 것(<see cref="NpcStun.IsRising"/>)과
+    /// 줄이 풀려 일어나는 것(<see cref="NpcStandUp.IsPlayingStandUp"/>). 밖에서는 "지금 일어나는
+    /// 중인가" 하나만 물으면 된다 — <see cref="NpcStun.IsStunned"/>가 두 기절 경로를 합치는 것과 같다.
+    ///
+    /// ⚠ <b>쓰러져 기다리는 구간은 포함하지 않는다.</b> 줄을 풀고 일어나기까지 누워 있는 동안은
+    /// 다시 묶을 수 있어야 한다 — #513이 열어 둔 재포획 창이고, <c>NpcRopeDrag.StartRopeDrag</c>가
+    /// <c>CancelStandUp</c>을 부르는 것이 그 경로다. 닫는 것은 <b>몸이 실제로 일어나기 시작한
+    /// 뒤</b>뿐이다: 그때 묶으면 일어나던 몸이 도로 눕는 그림이 나온다.
+    /// </summary>
+    public static bool IsPlayingStandUp(NpcController npc) =>
+        npc != null && (npc.Stun.IsRising || npc.StandUp.IsPlayingStandUp);
 
     /// <summary>밧줄 없이 따라오는 수감자인가 — 유치장에서 반출돼 추종 중인 대상. (#492)
     /// E를 누르면 그 자리에 세운다(Captured) — 유치장 안이면 JailIntake가 좌석에 다시 앉히고,
@@ -190,6 +225,10 @@ public static class NpcStateRules
     ///    같은 이유다. 예외는 반출해 놓고 방치한 대상(<see cref="NpcCustody.IsJailExtracted"/>, #517):
     ///    정산·진행도에서 이미 빠져 있어 그냥 두면 팀 손실만 남긴 채 영원히 서 있으므로 달아나게 한다.
     ///    그 대상도 감옥 안이면 위 조건에 걸려 남는다.
+    ///
+    /// <b>#548 이후 그 예외는 감옥 안에서만 걸린다</b> — 반출 표식이 문을 나서는 순간 꺼지기 때문이다
+    /// (<see cref="JailIntake"/>). 그래서 문 밖에서 저지돼 풀려난 대상은 달아나지 않고 그 자리에 선다:
+    /// 저지한 사람이 밧줄로 다시 끌어 재수감하라고 세워 두는 것이다.
     /// </summary>
     public static bool StaysPutWhenFreed(NpcController npc) =>
         npc != null

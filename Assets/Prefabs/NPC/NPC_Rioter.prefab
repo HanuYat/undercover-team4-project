@@ -132,6 +132,7 @@ MonoBehaviour:
   m_chaseConfig: {fileID: 11400000, guid: 9ed1e2d21e0bab04ab936f0ee96d01a4, type: 2}
   m_commonConfig: {fileID: 11400000, guid: 53e1f2f00b63a3d49adad69104609b9a, type: 2}
   m_ropeDragConfig: {fileID: 11400000, guid: 9c639e90181e9db4ca493e0f39a823c5, type: 2}
+  m_repathConfig: {fileID: 11400000, guid: 11ea4a6e39bdd5e4da29011c342802cf, type: 2}
 --- !u!54 &161675701295816944
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -173,7 +174,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NpcAnimationDriver
   m_swingAnimSeconds: 0.9
   m_unlockBeginSeconds: 0.63
-  m_standUpSeconds: 0.585
+  m_standUpSeconds: 1.17
   m_subdueRollSeconds: 1.3
   m_animator: {fileID: 0}
 --- !u!114 &3625219082931332717

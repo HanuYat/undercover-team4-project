@@ -28,6 +28,12 @@ public class NpcStandUp : NetworkBehaviour
     // 지속 상태이므로 NetworkVariable로 나간다 (architecture.md 연출 전파 규칙).
     private readonly NetworkVariable<bool> m_standUpPendingSynced = new(false);
 
+    // 기상 <b>모션이 실제로 도는</b> 구간인가 — 위 예약(m_standUpPending)의 <b>뒷부분</b>만이다.
+    // 앞부분(쓰러진 채 버티기)과 갈라야 하는 이유는 재포획 창이 거기까지이기 때문이다. 클라도
+    // 읽어야 한다: 밧줄 조기검증·조준 피드백이 이 값을 본다.
+    private readonly NetworkVariable<bool> m_playingStandUpSynced = new(false);
+    private bool m_playingStandUp;
+
     private void Awake()
     {
         m_owner = GetComponent<NpcController>();
@@ -50,6 +56,24 @@ public class NpcStandUp : NetworkBehaviour
         m_standUpPending = value;
         if (IsSpawned && IsServer)
             m_standUpPendingSynced.Value = value;
+    }
+
+    /// <summary>
+    /// 일어나는 <b>모션이 도는 중</b>인가 — 예약 구간의 뒷부분. 전 피어에서 유효. (#572 후속)
+    ///
+    /// <see cref="IsStandingUp"/>과 갈라 두는 이유는 <b>재포획 창의 끝</b>이 여기이기 때문이다.
+    /// 쓰러져 기다리는 동안은 다시 묶을 수 있어야 하지만(#513이 연 문), 몸이 실제로 일어나기
+    /// 시작한 뒤에 묶으면 <b>일어나던 몸이 도로 눕는 그림</b>이 나온다.
+    /// (<see cref="NpcStun.IsRising"/>이 기절 기상에 대해 하는 일과 같다)
+    /// </summary>
+    public bool IsPlayingStandUp =>
+        IsSpawned && !IsServer ? m_playingStandUpSynced.Value : m_playingStandUp;
+
+    private void SetPlayingStandUp(bool value)
+    {
+        m_playingStandUp = value;
+        if (IsSpawned && IsServer)
+            m_playingStandUpSynced.Value = value;
     }
 
     /// <summary>
@@ -110,6 +134,7 @@ public class NpcStandUp : NetworkBehaviour
     internal void CancelStandUp()
     {
         SetStandUpPending(false);
+        SetPlayingStandUp(false);
         m_standUpNext = null;
         m_standUpRemaining = 0f;
         m_standUpDownRemaining = 0f;
@@ -145,6 +170,7 @@ public class NpcStandUp : NetworkBehaviour
                 return;
 
             m_owner.RaiseStandUp();
+            SetPlayingStandUp(true); // 여기부터 재포획 창이 닫힌다 (#572 후속)
         }
 
         m_standUpRemaining -= Time.deltaTime;
