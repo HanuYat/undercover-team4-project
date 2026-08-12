@@ -7,14 +7,12 @@ using UnityEngine;
 /// </summary>
 public class NpcEscortedState : NpcStateBase
 {
-    private const float k_repathInterval = 0.2f; // 경로 재계산 최소 간격(초) — 매 프레임 재계산 방지
     private const float k_repathMoveThreshold = 0.5f; // 목표가 이만큼(m) 움직였을 때만 재계산
 
     // 근접 정지 히스테리시스(m) — 멈춘 뒤 추종 거리보다 이만큼 더 멀어져야 재추종한다.
     // 정지/추종 경계가 하나면 그 근처에서 매 프레임 상태가 뒤집혀 떨림(jitter)이 생긴다 (#97)
     private const float k_resumeDistanceOffset = 0.75f;
 
-    private float m_repathTimer;
     private Vector3 m_lastTargetPos;
     private float m_baseSpeed;
     private bool m_isHolding; // 플레이어 근접으로 정지 중인지 (#97)
@@ -31,7 +29,6 @@ public class NpcEscortedState : NpcStateBase
     {
         // 원복용 기준 속도는 밧줄 분기보다 먼저 잡는다 — 안 그러면 Exit이 0으로 되돌려 놓는다
         m_baseSpeed = m_owner.Agent.speed;
-        m_repathTimer = 0f;
         m_isHolding = false;
 
         // 밧줄로 끌려오는 중이면 에이전트가 꺼져 있다 — 추종 로직을 아예 돌리지 않는다.
@@ -53,6 +50,7 @@ public class NpcEscortedState : NpcStateBase
         {
             m_lastTargetPos = m_owner.Custody.EscortTarget.position;
             m_owner.Agent.SetDestination(m_owner.Custody.EscortTarget.position);
+            m_owner.Repath.MarkDone(NpcRepathChannel.Repath);
         }
     }
 
@@ -93,9 +91,9 @@ public class NpcEscortedState : NpcStateBase
             {
                 m_isHolding = false;
                 m_owner.Agent.isStopped = false;
-                m_repathTimer = 0f;
                 m_lastTargetPos = target.position;
                 m_owner.Agent.SetDestination(target.position);
+                m_owner.Repath.MarkDone(NpcRepathChannel.Repath);
             }
             return; // 정지 유지 — 아래 추종 로직은 건너뛴다
         }
@@ -117,14 +115,12 @@ public class NpcEscortedState : NpcStateBase
                 : m_baseSpeed;
 
         // 경로 재계산은 "주기 경과 + 목표가 충분히 움직임" 둘 다 만족할 때만 (비용 절약)
-        m_repathTimer += Time.deltaTime;
-        if (
-            m_repathTimer >= k_repathInterval
-            && (target.position - m_lastTargetPos).sqrMagnitude
-                >= k_repathMoveThreshold * k_repathMoveThreshold
-        )
+        // 목표 이동을 먼저 본다 — 안 움직였으면 게이트를 소모하지 않고 넘긴다(움직이는 즉시 반응하도록)
+        bool moved =
+            (target.position - m_lastTargetPos).sqrMagnitude
+            >= k_repathMoveThreshold * k_repathMoveThreshold;
+        if (moved && m_owner.Repath.Due(NpcRepathChannel.Repath))
         {
-            m_repathTimer = 0f;
             m_lastTargetPos = target.position;
             m_owner.Agent.SetDestination(target.position);
         }

@@ -9,11 +9,9 @@ using UnityEngine;
 /// </summary>
 public class NpcPenaltyEscortState : NpcStateBase
 {
-    private const float k_repathInterval = 0.15f; // 추종 오프셋 갱신 간격(초) — 선두가 움직이므로 연행보다 촘촘히
     private const float k_leaderStopDistance = 1.2f; // 선두의 광장 앞 정지 거리(m)
 
     private float m_baseSpeed;
-    private float m_repathTimer;
 
     private readonly NpcEscortConfig m_config;
 
@@ -26,7 +24,7 @@ public class NpcPenaltyEscortState : NpcStateBase
     public override void Enter()
     {
         m_baseSpeed = m_owner.Agent.speed; // 호송은 걷는 속도 — 추격 가속을 쓰지 않는다 (질질 끌고 가는 그림)
-        m_repathTimer = 0f;
+        m_owner.Repath.ForceDue(NpcRepathChannel.Repath); // 진입 직후 1회는 바로 잡는다
 
         m_owner.Agent.isStopped = false;
         m_owner.Agent.stoppingDistance =
@@ -45,10 +43,8 @@ public class NpcPenaltyEscortState : NpcStateBase
 
     public override void Tick()
     {
-        m_repathTimer -= Time.deltaTime;
-        if (m_repathTimer > 0f)
+        if (!m_owner.Repath.Due(NpcRepathChannel.Repath))
             return;
-        m_repathTimer = k_repathInterval;
 
         NpcController leader = m_owner.Penalty.PenaltyEscortLeader;
 
