@@ -121,6 +121,8 @@ public class NpcAnimationDriver : MonoBehaviour
     private float m_smoothedSpeed;
     private bool m_escortMoving;
     private bool m_resistMoving; // 저항(Attack) 추격 중 이동/정지 판별 — 걷기 ↔ 버틴 자세 전환 (#254)
+    // 반출 보행(Releasing) 이동/정지 판별 — 달리기 ↔ 선 자세 전환 (#548)
+    private bool m_releaseMoving;
     // 침입(Intruding) 이동/해제 판별 — 자물쇠까지 걷기 ↔ 도착 후 해제 모션 전환 (#261)
     private bool m_intrudeMoving;
     // 오검거 페널티 상태의 현재 로코모션 모션 번호(Idle/Walk/Run) — 속도 히스테리시스 전환용 (#277~#279)
@@ -341,6 +343,11 @@ public class NpcAnimationDriver : MonoBehaviour
             NpcState.Detained => (int)NpcState.Walk,
             NpcState.Chasing => (int)NpcState.Run,
             NpcState.PenaltyEscorting => (int)NpcState.Walk,
+            // 반출(Releasing)도 대응 Animator 상태가 없다 (#548) — 풀려난 몸이라 수갑 찬 걷기(Escorted)가
+            // 아니다. 걷기가 아니라 <b>달리기</b>를 빌려 쓴다: 실제 이동이 도주와 같은 질주 배율이라
+            // (NpcReleasingState) 걷기 모션을 씌우면 발이 미끄러진다.
+            // 저항과 같이 이동 여부로 갈린다 — 멈춰 선 동안에도 달리기가 돌면 제자리 질주가 된다.
+            NpcState.Releasing => m_releaseMoving ? (int)NpcState.Run : (int)NpcState.Idle,
             _ => (int)state,
         };
     }
@@ -449,6 +456,7 @@ public class NpcAnimationDriver : MonoBehaviour
             && !IsPenaltyLocomotion(state)
             && state != NpcState.Attack
             && state != NpcState.Intruding
+            && state != NpcState.Releasing
         )
             return;
 
@@ -467,6 +475,16 @@ public class NpcAnimationDriver : MonoBehaviour
         if (IsPenaltyLocomotion(state))
         {
             UpdatePenaltyLocomotion();
+            return;
+        }
+
+        // 반출 보행(Releasing): 인도 지점까지 달려가지만 <b>실제로 멈춰 서는 구간이 있다</b> (#548) —
+        // 문 밖 워프 직후 경로가 잡히기까지, 좁은 퇴장 지점에서 회피로 밀릴 때, 경로가 끊겨 그 자리에
+        // 세울 때. 달리기를 빌려 쓰는 상태라 그동안에도 모션이 돌면 <b>제자리 질주</b>가 된다 —
+        // 침입(Intruding)의 해제 구간과 같은 이유로 속도로 가른다.
+        if (state == NpcState.Releasing)
+        {
+            UpdateReleaseMotion();
             return;
         }
 
@@ -532,6 +550,22 @@ public class NpcAnimationDriver : MonoBehaviour
             m_resistMoving = true;
             if (!swinging)
                 m_animator.SetInteger(s_stateHash, (int)NpcState.Run);
+        }
+    }
+
+    // 반출 보행(Releasing) 이동/정지 모션 전환 — 달려가는 중이면 달리기, 멈춰 서면 선 자세. (#548)
+    // 저항(UpdateResistMotion)과 같은 2단 전환이지만 스윙 점유가 없어 그대로 base를 갈아탄다.
+    private void UpdateReleaseMotion()
+    {
+        if (m_releaseMoving && m_smoothedSpeed < k_escortMoveOffSpeed)
+        {
+            m_releaseMoving = false;
+            m_animator.SetInteger(s_stateHash, (int)NpcState.Idle);
+        }
+        else if (!m_releaseMoving && m_smoothedSpeed > k_escortMoveOnSpeed)
+        {
+            m_releaseMoving = true;
+            m_animator.SetInteger(s_stateHash, (int)NpcState.Run);
         }
     }
 
@@ -649,6 +683,16 @@ public class NpcAnimationDriver : MonoBehaviour
         if (state == NpcState.Attack)
         {
             m_resistMoving = true;
+            m_lastPosition = transform.position;
+            m_smoothedSpeed = k_escortMoveOnSpeed;
+        }
+
+        // 반출 보행(Releasing)도 같은 방식으로 달리기로 시드한다 (#548) — 문을 나서자마자 뛰는 것이
+        // 정상이라, 경로가 잡히는 한두 프레임 때문에 선 자세로 시작하면 출발이 끊겨 보인다.
+        // 그 뒤로도 못 움직이면 Update의 UpdateReleaseMotion이 선 자세로 낮춘다.
+        if (state == NpcState.Releasing)
+        {
+            m_releaseMoving = true;
             m_lastPosition = transform.position;
             m_smoothedSpeed = k_escortMoveOnSpeed;
         }

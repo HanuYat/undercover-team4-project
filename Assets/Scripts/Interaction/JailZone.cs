@@ -374,7 +374,36 @@ public class JailZone : NetworkBehaviour
         // (유치장 문에 E). 수감만 하면 저절로 잠기던 예전 처리는 "털렸으면 가서 잠근다"는 책임을
         // 없애 버렸다. 열린 자물쇠는 문이 열린 채로 남고, 본부 경보등(JailAlarmBeacon)이 함께 알린다.
 
+        // 수감 중 사망을 지켜본다 — 죽으면 점유에서 빼야 한다 (아래 HandleInmateDied)
+        npc.Death.OnDied += HandleInmateDied;
+
         OnInmateAdmitted?.Invoke(npc); // 계상이 끝난 뒤에 알린다 — 구독자가 InmateCount를 읽어도 맞게 나온다
+    }
+
+    /// <summary>
+    /// 수감 중 사망 — <b>점유에서만 뺀다.</b> 원장(<c>m_records</c>)은 그대로 남겨 정산에 계상된다.
+    ///
+    /// <see cref="RecordDeceased"/>가 배달된 시체에 적용한 "시체는 수감자가 아니다"를 <b>사망 시점</b>에도
+    /// 같게 적용하는 것이다. 점유에 남겨 두면 유치장 표지판이 시체를 한 수로 세고,
+    /// <c>JailbreakEvent</c>가 "풀어 줄 수감자가 있다"고 오판해 시체를 방출하려 든다 —
+    /// 사망은 종착 상태라(<c>NpcStateMachine</c>) 도주 전이가 거부되고 자물쇠만 열린 채 끝난다.
+    ///
+    /// <see cref="ReleaseInmate"/>와 갈리는 점이 원장이다: 저쪽은 탈옥해 <b>빠져나간</b> 대상이라
+    /// 레코드를 지우지만(보상 없음), 시체는 방 안에 그대로 있으니 계상은 유지된다.
+    /// </summary>
+    private void HandleInmateDied(NpcController npc, GameObject killer)
+    {
+        if (npc == null)
+            return;
+
+        npc.Death.OnDied -= HandleInmateDied;
+
+        if (!m_inmates.Remove(npc))
+            return; // 이미 방출된 뒤에 죽었다 — 점유에서 뺄 것이 없다
+
+        ReleasePlacement(npc); // 서 있던 자리를 비운다 — 몸은 남지만 다음 수감자가 그 자리를 쓴다
+        SetInmateCount(m_inmates.Count);
+        Debug.Log($"[유치장] 수감 중 사망: {npc.name} — 현재 {InmateCount}명 (정산 계상은 유지)");
     }
 
     /// <summary>
@@ -412,7 +441,14 @@ public class JailZone : NetworkBehaviour
         m_records[npc] = new InmateRecord(bounty, IsCriminalInmate(npc), deliverers ?? Array.Empty<ulong>());
         RefreshBountyTotal(); // 라운드 진행도(RoundManager.CurrentFund)가 곧 이 값이다
         Debug.Log($"[유치장] 사망 계상: {npc.name} — 현상금 {bounty}원, 누적 {BountyTotal}원");
+
+        OnDeceasedRecorded?.Invoke(npc); // 계상이 끝난 뒤에 알린다 (OnInmateAdmitted와 같은 순서)
     }
+
+    /// <summary>시체가 계상된 순간 — 서버(또는 오프라인) 전용. 비밀 청탁이 대상 추첨에 쓴다. (#597)
+    /// <see cref="OnInmateAdmitted"/>와 갈라 두는 이유: 시체는 수감자가 아니라(점유·탈옥·표지판이
+    /// 전부 산 사람만 센다) 한 이벤트로 묶으면 구독하는 쪽이 시체를 한 수로 세게 된다.</summary>
+    public event Action<NpcController> OnDeceasedRecorded;
 
     /// <summary>
     /// 이 수감자의 기록된 현상금 — 없으면 false. 서버(또는 오프라인) 전용. (#517)
@@ -445,6 +481,8 @@ public class JailZone : NetworkBehaviour
 
         if (!m_inmates.Remove(npc))
             return;
+
+        npc.Death.OnDied -= HandleInmateDied; // 더 이상 수감자가 아니다 — 밖에서 죽어도 점유와 무관하다
 
         m_records.Remove(npc); // 방출된 수감자는 정산에서 빠진다 — 탈옥해 감옥에 없으면 보상 없음 (#340)
         ReleasePlacement(npc); // 서 있던 자리를 비운다 — 다음 수감자가 그 자리를 쓸 수 있게 (#462/#537)

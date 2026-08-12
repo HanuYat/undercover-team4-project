@@ -26,7 +26,11 @@ public static class NpcStateRules
         // 추격대를 체포해 페널티 집행을 무산시키는 우회를 막는다 (회피 수단은 격퇴(호루라기 #250)뿐)
         && state != NpcState.Detained
         && state != NpcState.Chasing
-        && state != NpcState.PenaltyEscorting;
+        && state != NpcState.PenaltyEscorting
+        // 반출돼 인도 지점으로 걸어가는 대상도 수갑으로는 못 잡는다 (#548) — 저지 수단은
+        // 도주·저항과 같다: 진압봉·테이저로 기절시킨 뒤 밧줄. 여기를 열면 걸어가는 대상을
+        // 채널링 한 번으로 세울 수 있어 '들키면 저지당한다'가 '보이면 끝난다'가 된다.
+        && state != NpcState.Releasing;
 
     /// <summary>타격 피해가 들어가는 상태인가 — <b>스턴 게이트가 아니다.</b> (#292)
     /// 스턴은 오버레이가 되면서 전 상태에 걸리게 됐지만(#292), 타격까지 함께 열면 연행 중인
@@ -86,6 +90,16 @@ public static class NpcStateRules
     /// 들어와도 진행 중인 반응을 갈아엎지 않는다. 확보·페널티군은 IsReactive가 이미 걸러 준다.</summary>
     public static bool CanStartReaction(NpcState state) =>
         IsReactive(state) && state != NpcState.Run && state != NpcState.Attack;
+
+    /// <summary>맞았을 때 반응(도주·저항)으로 돌아설 수 있는가 — <see cref="CanStartReaction"/>에
+    /// <b>반출 보행 예외</b>를 얹은 것. (#548) 반출 대상은 스캔에는 꿈쩍하지 않지만(IsReactive에 없다)
+    /// 때리면 배정된 유형대로 돌아선다 — 쳐다봤다고 그만두면 저지가 너무 싸진다.
+    ///
+    /// <b>돌아서도 반출은 살아 있다</b> (2026-08-12 확정) — 목적지는 반응군에서도 유지되고
+    /// (<see cref="NpcController"/>의 상태 훅) 쓰러뜨려 재우면 깨어나 다시 인도 지점으로 뛴다.
+    /// 타격은 시간을 버는 수단이고, 무산시키려면 밧줄로 묶어야 한다.</summary>
+    public static bool CanReactToDamage(NpcState state) =>
+        CanStartReaction(state) || state == NpcState.Releasing;
 
     /// <summary>밧줄 대상에서 <b>신병·소유권 때문에</b> 빠지는 상태인가. (#269 → #369 기본 검거로 승격)
     /// 제외 목록 방식 — 이미 신병 확보(Escorted/Captured/Jailed)·타 시스템 소유(페널티)는 제외.
@@ -211,6 +225,10 @@ public static class NpcStateRules
     ///    같은 이유다. 예외는 반출해 놓고 방치한 대상(<see cref="NpcCustody.IsJailExtracted"/>, #517):
     ///    정산·진행도에서 이미 빠져 있어 그냥 두면 팀 손실만 남긴 채 영원히 서 있으므로 달아나게 한다.
     ///    그 대상도 감옥 안이면 위 조건에 걸려 남는다.
+    ///
+    /// <b>#548 이후 그 예외는 감옥 안에서만 걸린다</b> — 반출 표식이 문을 나서는 순간 꺼지기 때문이다
+    /// (<see cref="JailIntake"/>). 그래서 문 밖에서 저지돼 풀려난 대상은 달아나지 않고 그 자리에 선다:
+    /// 저지한 사람이 밧줄로 다시 끌어 재수감하라고 세워 두는 것이다.
     /// </summary>
     public static bool StaysPutWhenFreed(NpcController npc) =>
         npc != null

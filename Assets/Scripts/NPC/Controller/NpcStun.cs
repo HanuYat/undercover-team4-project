@@ -311,7 +311,21 @@ public class NpcStun : NetworkBehaviour
         if (agent.enabled && agent.isOnNavMesh)
             agent.isStopped = m_agentStoppedBefore;
 
-        if (resumeReaction && NpcStateRules.IsReactive(m_owner.CurrentState))
+        if (!resumeReaction)
+            return;
+
+        // 방출 대상은 <b>깨어나면 도주가 아니라 반출 보행으로 돌아간다</b> (#548, 2026-08-12 확정) —
+        // 맞고 도주·저항으로 돌변한 뒤여도 마찬가지다. 쓰러뜨리기는 무산 수단이 아니라 묶을 창을 여는
+        // 수단이라(GDD 6-1), 목적지가 여기까지 살아 있다(NpcController의 상태 훅).
+        // 이미 Releasing이면 전이 없이 둔다 — 경로는 NpcReleasingState가 다음 Tick에 다시 건다.
+        if (m_owner.Custody.HasReleaseDestination)
+        {
+            if (m_owner.CurrentState != NpcState.Releasing)
+                m_owner.StateMachine.ChangeState(NpcState.Releasing);
+            return;
+        }
+
+        if (NpcStateRules.IsReactive(m_owner.CurrentState))
             m_owner.Reaction.StartFlee(m_owner.Reaction.ThreatTarget);
     }
 }

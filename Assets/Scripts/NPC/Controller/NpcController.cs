@@ -131,6 +131,7 @@ public class NpcController : NetworkBehaviour
         m_stateMachine.AddState(NpcState.Detained, new NpcDetainedState(this));
         m_stateMachine.AddState(NpcState.Chasing, new NpcChaseState(this, m_chaseConfig, m_walkConfig, m_fleeConfig));
         m_stateMachine.AddState(NpcState.PenaltyEscorting, new NpcPenaltyEscortState(this, m_escortConfig));
+        m_stateMachine.AddState(NpcState.Releasing, new NpcReleasingState(this, m_fleeConfig));
         m_stateMachine.AddState(NpcState.Dead, new NpcDeadState(this));
 
         // FSM 전이(서버/오프라인에서만 발생)를 동기화 변수 또는 로컬 이벤트로 흘려보낸다
@@ -261,6 +262,18 @@ public class NpcController : NetworkBehaviour
             m_rope.ClearTethers();
             m_custody.SetJailExtracted(false);
         }
+
+        // 반출 목적지(#548)도 같은 자리에서 내린다 — 단 <b>도주·저항·기절로는 지우지 않는다</b>
+        // (2026-08-12 확정). 맞아서 돌변한 것은 그 순간의 반응일 뿐이고, 쓰러뜨려 재우면 깨어나 다시
+        // 인도 지점으로 뛴다(NpcStun.ExitStun). 무산은 신병을 잡았을 때뿐 — 밧줄·재수감·사망 (GDD 6-1).
+        // NpcReleasingState.Exit이 아니라 여기인 이유: Exit은 "어디로 나가는지"를 모른다.
+        if (
+            state != NpcState.Releasing
+            && state != NpcState.Stunned
+            && state != NpcState.Run
+            && state != NpcState.Attack
+        )
+            m_custody.ClearRelease();
 
         if (!IsSpawned)
         {
