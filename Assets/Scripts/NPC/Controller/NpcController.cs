@@ -248,6 +248,17 @@ public class NpcController : NetworkBehaviour
             m_custody.SetJailExtracted(false);
         }
 
+        // 반출 목적지(#548)도 같은 자리에서 내린다 — <b>살아남는 것은 기절해 있는 동안뿐이다</b>
+        // (2026-08-12 확정). 쓰러뜨리기는 무산 수단이 아니라 붙잡기 위한 수단이라(GDD 6-1) 깨어난
+        // 대상은 가던 길을 잇고, 그 밖의 상태로 나가면 무산이다 — 타격에 돌아섬·밧줄·재수감·사망.
+        //
+        // 나가는 자리가 여럿이라 여기 하나로 모았다. NpcReleasingState.Exit에서는 안 된다 —
+        // ChangeState가 CurrentState 갱신 전에 Exit을 불러 "어디로 나가는지"를 알 수 없다.
+        // 오버레이 기절(테이저·넉다운)은 상태를 안 바꿔 여기를 지나지 않으므로, 예외가 필요한 것은
+        // 전이로 눕는 넉백 착지 KO(Stunned)뿐이다.
+        if (state != NpcState.Releasing && state != NpcState.Stunned)
+            m_custody.ClearRelease();
+
         if (!IsSpawned)
         {
             OnStateChanged?.Invoke(state); // 오프라인 — 동기화 없이 바로 로컬 이벤트

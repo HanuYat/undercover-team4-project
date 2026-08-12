@@ -47,14 +47,26 @@ public class NpcStunnedState : NpcStateBase
             m_owner.RaiseStandUp(); // 전 피어에 일어나는 모션 재생을 알린다
         }
 
+        if (m_timer < m_config.StunSeconds)
+            return;
+
+        // 반출 보행 중에 날아왔다면 <b>가던 길을 잇는다</b> (#548, 2026-08-12 확정) — 쓰러뜨리기는
+        // 무산 수단이 아니라 붙잡기 위한 수단이라, 폭발에 휩쓸렸다고 청탁이 무산되지는 않는다.
+        // 목적지가 여기까지 살아남는 것은 NpcController의 상태 훅이 Stunned를 예외로 두기 때문이고,
+        // 전이라 NpcReleasingState.Enter가 다시 돌아 질주 배율·경로를 새로 건다.
+        if (m_owner.Custody.HasReleaseDestination)
+        {
+            m_owner.StateMachine.ChangeState(NpcState.Releasing);
+            return;
+        }
+
         // 깨어나면 배회가 아니라 도주다 (#269 확정 — #366 결정 5의 배회 복귀에서 원복).
         // 위협은 기절시킨 상대(테이저 사수·진압봉 타격자)이거나 밧줄로 끌고 다닌 플레이어다.
         // 위협이 null로 남는 경우에도 NpcFleeState가 EscapeDistance 안 추격자를 스캔해 폴백하므로,
         // 때린 플레이어가 옆에 있으면 그쪽에서 도망친다.
         // 주변에 아무도 없으면 도주 상태가 스스로 배회로 돌려보낸다 — 아무도 없는 곳에 두고 온
         // NPC가 혼자 전력 질주하지 않는다.
-        if (m_timer >= m_config.StunSeconds)
-            m_owner.Reaction.StartFlee(m_owner.Reaction.ThreatTarget);
+        m_owner.Reaction.StartFlee(m_owner.Reaction.ThreatTarget);
     }
 
     public override void Exit()

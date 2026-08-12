@@ -262,18 +262,16 @@ public class NpcStun : NetworkBehaviour
         if (!resumeReaction)
             return;
 
-        // 반출 보행 중이었으면 깨어나 그대로 달아난다 (#548) — 대상은 인도 지점으로 돌아가지 않는다.
-        // 목적지는 상태를 벗어날 때 NpcReleasingState.Exit이 지운다.
+        // 반출 보행 중이었으면 <b>깨어나 가던 길을 잇는다</b> (#548, 2026-08-12 확정) — 쓰러뜨리기는
+        // 무산 수단이 아니라 붙잡기 위한 수단이라, 저지하려면 이 창에 밧줄로 묶어야 한다(GDD 6-1).
+        // 여기서 할 일은 없다: 목적지는 상태가 안 바뀌어 살아 있고(NpcController의 상태 훅), 경로는
+        // 다음 FSM Tick에서 NpcReleasingState가 다시 건다. 그 두 자리가 이 return의 짝이다.
         //
-        // 타격은 이제 기절을 거치지 않고 곧바로 반응으로 돌린다(NpcStateRules.CanReactToDamage) —
-        // 그래서 여기 남는 것은 <b>피해 없이 무력화하는 경로</b>다: 테이저가 그 경우다.
-        // IsReactive 목록에 넣지 않는 이유는 그대로다 — 그쪽은 스캔까지 함께 열려, 쳐다보기만 해도
-        // 반출이 무산된다.
+        // 쓰러지지 않는 타격은 여전히 무산이다 — 기절을 거치지 않고 곧바로 반응으로 돌아선다
+        // (NpcStateRules.CanReactToDamage). IsReactive에 넣지 않는 이유도 그대로다: 그쪽은 스캔까지
+        // 함께 열려 쳐다보기만 해도 반출이 무산된다.
         if (m_owner.CurrentState == NpcState.Releasing)
-        {
-            m_owner.Reaction.StartFlee(m_owner.Reaction.ThreatTarget);
             return;
-        }
 
         if (NpcStateRules.IsReactive(m_owner.CurrentState))
             m_owner.Reaction.StartFlee(m_owner.Reaction.ThreatTarget);

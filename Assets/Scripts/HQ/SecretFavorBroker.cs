@@ -381,8 +381,8 @@ public class SecretFavorBroker : NetworkBehaviour
         //
         // 만료(m_favorExpireSeconds)까지 매달아 두지 않고 즉시 접는 이유: 되살릴 길이 없는데 의뢰인은
         // 왜 안 되는지 모른 채 남은 시간을 기다린다. 실패를 바로 알려 다음 판단을 하게 한다.
-        // SendTargetAway는 부르지 않는다 — 시체는 흩어질 수 없고, 목적지는 사망 전이가 이 상태를 벗어날 때
-        // NpcReleasingState.Exit이 이미 지웠다.
+        // SendTargetAway는 부르지 않는다 — 시체는 흩어질 수 없고, 목적지는 사망 전이를 받은
+        // NpcController의 상태 훅이 이미 지웠다.
         if (m_target.Death.IsDead)
         {
             Debug.Log($"[비밀 청탁] 대상이 사망해 의뢰가 무산됐다: {m_target.name}");

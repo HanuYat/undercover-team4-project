@@ -298,10 +298,10 @@ public class NpcCustody : NetworkBehaviour
     /// 반출 보행 취소 — 목적지를 지운다. <b>전이는 부르는 쪽이 한다</b>
     /// (<see cref="ClearEscortTarget"/>과 같은 관례: 갈 곳이 경로마다 달라서다).
     ///
-    /// 부르는 곳은 셋이다. 둘은 "저지됐다"로 모인다: 밧줄에 묶였을 때
-    /// (<see cref="NpcController.StartRopeDrag"/>)와 다시 수감될 때(<see cref="SendToJail"/>) —
-    /// 줄이 걸리는 순간 반출은 무산된 것으로 보고, 풀어 주더라도 다시 걸어가지 않는다.
-    /// 나머지 하나는 의뢰가 접힌 경우다(<see cref="SecretFavorBroker"/>의 만료·의뢰인 이탈).
+    /// <b>정본은 상태 훅 하나다</b> (2026-08-12 확정) — <see cref="NpcController"/>가 FSM 전이를 받아
+    /// <see cref="NpcState.Releasing"/>·<see cref="NpcState.Stunned"/>가 아닌 곳으로 나가면 지운다.
+    /// 그래서 도주·저항 전환, 밧줄 묶기, 재수감, 사망이 배선 없이 무산으로 이어지고, 기절만 예외로
+    /// 남아 깨어난 대상이 가던 길을 잇는다. 멱등이라 다른 곳에 남은 호출은 그 자리의 방어선이다.
     /// </summary>
     internal void ClearRelease()
     {
