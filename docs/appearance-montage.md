@@ -146,20 +146,46 @@ Synty `Generic_Standard`/`Generic_Basic`는 부위별 마스크 틴트를 지원
 | 같은 모델/프로필 중복 스폰 | 둘 다 | 동일 몽타주 |
 | revealedAxisCount(부분 공개) | 둘 다 | 공개 축 수 |
 
-## 7. 몽타주 표시 3모드 (병행 구축 → 플레이로 확정)
+## 7. 몽타주 표시 — 레이어 포트레이트 (#607, 2026-08-12 확정)
 
-전부 **같은 렌더 파이프라인**(NPC 조립 결과를 정면 포트레이트로 렌더)에서 파생. 텍스트만 §3 축 vocabulary 정리 필요, 이미지 2종은 출처 무관·일치 자동.
+> 3모드(텍스트/픽셀/실루엣) 병행 실험 계획을 대체한다. "NPC를 통째로 렌더해 뭉갠다"가 아니라
+> **축별 레이어를 겹쳐 그리는** 방식으로 갔다 — 통짜 렌더는 공개되지 않은 축까지 그려 버려
+> 부분 공개(§6-3 난이도 레버)와 몽타주 부합 인원 k의 보장이 무너지기 때문이다.
 
-| 모드 | 생성 | 장점 | 단점 |
-|---|---|---|---|
-| 텍스트 | `BuildMontageText(Profile)` | 무전 구두전달, 부분공개 쉬움 | 축 어휘 정리 필요 |
-| 픽셀(모자이크) | 저해상도 렌더→nearest 업스케일 | 색·형태 보존, 뭉갬으로 난이도 조절 | 색 정보 다소 누출 |
-| 실루엣 | 검은 unlit + 흰 배경 렌더 | 형태만으로 구분(아이코닉), 하드모드 | **색 정보 완전 소멸** |
+무채색 두상 위에 **공개된 축만** 얹어 그린다. 말하지 않은 축은 그리지 않으므로, 안 그려진 자리는
+'없음'이 아니라 '미상'으로 읽힌다. 그림이 말하는 것이 공개 축 딱 그만큼이라 k 보장이 그대로 성립한다.
 
-- **SciFi**: 20종 고정 → 스프라이트 **프리베이크** 가능.
-- **Generic**: 조합 무한 → **런타임 렌더**(스폰 시 RT→스프라이트 1회 굽기).
-- 생성 툴: 방금 검증한 execute_code 로직을 **에디터 메뉴 스크립트**로 정착(워밍업 렌더 1회로 첫 프레임 글리치 방지).
-- 수배 UI(#58)에 **표시 모드 토글**(텍스트/픽셀/실루엣) → 같은 세션서 갈아끼며 비교.
+| 레이어 | 굽는 법 | 표시 |
+|---|---|---|
+| 살(베이스) | 마네킹 바디를 **평면 흰색**으로 렌더 | 피부색으로 칠함 |
+| 이목구비 | 조명 렌더에서 피부보다 어두운 픽셀만 추출 | 칠하지 않음 |
+| 머리스타일 | 프롭을 **흰 실루엣**으로 | **머리색으로 칠함** |
+| 수염·모자·안경 | 프롭을 **실제 머티리얼 + 옵션 색**으로 | 칠하지 않음 |
+
+- 프롭 레이어는 바디를 **검정 오클루더**로 남긴 채 렌더한다 — 바디를 끄면 머리 뒤로 넘어간
+  뒷머리·모자 뒤통수까지 찍혀 얼굴을 덮는다. 색은 실물 렌더에서, 알파는 흰색 렌더에서 가져와 합친다.
+- **미공개 색 축은 반투명**으로 표시한다. 무채색으로만 두면 은발(0.76,0.78,0.82)과 구분되지 않아
+  미공개가 실제 축 값 하나를 사칭하게 된다.
+- 이미지는 수배 항목에 싣지 않는다 — 재료(공개 축 + 값)만 실려 오고 각 피어가 조립한다 (#497과 같은 규칙).
+- 생성 툴: **`Tools/몽타주 레이어 굽기`** 에디터 메뉴. 런타임 렌더가 없으므로 첫 프레임 글리치 문제도 없다.
+- 글 방식은 표시에서 빠지고 행 프리팹의 토글(`m_showMontageText`)로만 남는다.
+
+### 7-1. SciFi 전용 값 (미해결)
+
+SciFi 바디는 통짜 메시라 부위를 떼어낼 수 없고, Generic 프롭도 없어 레이어를 굽지 못한다.
+그림이 없는 값은 `AppearanceDatabase.CanDepict`가 **그 범인의 공개 축 후보에서 뺀다** — 그림을 채우면
+저절로 후보로 돌아온다. 남은 값과 대안:
+
+| 값 | 쓰는 모델 | 대안 프롭 |
+|---|---|---|
+| `Headwear[6]` 헬멧 | 04, 14 | PoliceStation `Helmet_01~04`, Apocalypse `RiotCop_Male_Helmet_01` |
+| `Eyewear[4]` 발광렌즈 | 11, 16, 19 | PoliceStation `Goggles_01/02`, Apocalypse `Soldier_Male_Glass_01` |
+| `Headwear[4]` 후드 | 13 | **없음** — 어느 팩에도 후드 부착물이 없다 |
+| `Eyewear[2]` 바이저 | **없음** | 죽은 값 — 어떤 모델도 안 쓴다. 모델에 배정하거나 어휘에서 뺄 것 |
+
+- `HairStyle[4]` 가림은 **그리지 않는 것이 곧 그 값**이라 그림이 필요 없다(대머리와 같은 취급).
+- SciFiOnly 값에 프롭을 꽂아도 Generic NPC는 그 값을 뽑지 않는다(`GetGenericSelectableIndices`가 제외).
+  다만 **SciFi 범인의 Generic 디코이**는 공개 축을 베끼므로 그 프롭을 실제로 착용한다 — 맞춤 확인 필요.
 
 ## 8. 이슈 #222 — Faction(문양) 대조
 
@@ -188,7 +214,9 @@ Synty `Generic_Standard`/`Generic_Basic`는 부위별 마스크 틴트를 지원
 | 네트워크 등록 (DefaultNetworkPrefabs, 해시 충돌 없음) | ✅ 완료 |
 | **머리색 중립베이스 머티리얼** (Generic 머리색 선명) | ☐ 폴리시 미구현 |
 | `m_colorVariantIndex` 색 노이즈 (Generic, §6-2) | ☐ 미착수 |
-| 몽타주 포트레이트 생성 툴 + 표시 모드 토글 (§7) | ☐ 미착수 |
+| 몽타주 포트레이트 레이어 + 굽기 툴 (§7) | ✅ 완료 (#607 — 레이어 15장, `Assets/Imported/Art/Montage/Layers`) |
+| 공개 축을 범인별로 분리 (§7·#556 제약 완화) | ✅ 완료 (#607) |
+| SciFi 전용 값 레이어 (§7-1 — 헬멧·발광렌즈·후드) | ☐ 미착수 |
 | v1 정밀화 (다중범인 중복부합, SciFi 디코이 부족 처리) | ☐ 미착수 |
 | `AppearanceAssigner` revealedAxisCount / 종속축(가림·대머리→머리색 '없음' 반영됨) | ☐ 재검토 |
 
@@ -222,7 +250,9 @@ Synty `Generic_Standard`/`Generic_Basic`는 부위별 마스크 틴트를 지원
 | [IAppearanceProfileSource.cs](../Assets/Scripts/NPC/IAppearanceProfileSource.cs) | 소비 측 공통 접점 (`Profile`) |
 | [NpcAppearance.cs](../Assets/Scripts/NPC/NpcAppearance.cs) | **Generic 경로** — 바디 토글 + 프롭/틴트 (`SetProfile`) |
 | [NpcCatalogAppearance.cs](../Assets/Scripts/Data/NpcCatalogAppearance.cs) | **SciFi 경로** — 모델 토글 + 카탈로그 룩업 (`SetModelIndex`·`ModelIndex`·`Catalog`) |
-| [AppearanceAssigner.cs](../Assets/Scripts/NPC/AppearanceAssigner.cs) | 배정기 — 두 경로 공존(`RealizeCriminal/Decoy/NonMatching`), 디코이 k 보장, 몽타주 생성 |
+| [AppearanceAssigner.cs](../Assets/Scripts/NPC/Appearance/AppearanceAssigner.cs) | 배정기 — 두 경로 공존(`RealizeCriminal/Decoy/NonMatching`), 디코이 k 보장, **범인별** 공개 축 선택 |
+| [MontagePortraitView.cs](../Assets/Scripts/HQ/WantedList/MontagePortraitView.cs) | 수배 행의 그림 몽타주 — 공개 축 레이어를 겹쳐 그린다 (§7) |
+| [MontageLayerBaker.cs](../Assets/Scripts/Editor/MontageLayerBaker.cs) | 레이어 굽기 에디터 툴 — `Tools/몽타주 레이어 굽기` |
 | [NpcSpawner.cs](../Assets/Scripts/NPC/NpcSpawner.cs) | `m_npcPrefab`(SciFi)+`m_npcPrefabAlt`(Generic)+`m_altRatio` 혼합 스폰 |
 | `Assets/Prefabs/NPC/NPC_Citizen.prefab` | SciFi NPC (20 통짜 바디 토글, `NpcCatalogAppearance`) |
 | `Assets/Prefabs/NPC/NPC_Citizen_Generic.prefab` | Generic NPC (민머리 옷 바디 13종 + `NpcAppearance`, Animator=NPC 컨트롤러 휴머노이드 리타깃) |
@@ -236,7 +266,7 @@ Synty `Generic_Standard`/`Generic_Basic`는 부위별 마스크 틴트를 지원
 ### 다음 작업 (우선순위 순, 전부 폴리시/다양성)
 1. **머리색 중립베이스 머티리얼** (Generic) — 머리 프롭 기본 텍스처가 어두워 `_BaseColor` 곱셈틴트하면 밝은색(금발·은발·흰)이 탁함. `NpcAppearance`가 머리 프롭 인스턴스화 시 **밝은 중립 머티리얼**을 깔고 틴트하면 선명(렌더로 검증됨). 색 어휘/카탈로그는 이미 선명값 기준.
 2. **색 노이즈** `m_colorVariantIndex` (§6-2) — Alts 아틀라스 `접미사 A/B/C=피부톤 × 숫자 01~04=옷배색`. 옷색만 흔드는 비몽타주 노이즈. (Generic 경로)
-3. **몽타주 표시 모드** (§7) — 텍스트/픽셀/실루엣 포트레이트 생성 툴 + 수배UI 토글. 플레이로 방식 확정.
+3. ~~**몽타주 표시 모드** (§7)~~ ✅ 그림 방식으로 확정 (#607). 남은 것은 **SciFi 전용 값 레이어**(§7-1)와 어휘 확장.
 4. **v1 정밀화** — 다중 범인 시 디코이 중복부합, SciFi 디코이 일치모델 부족 시 처리.
 5. **#222 Faction** (§8).
 
