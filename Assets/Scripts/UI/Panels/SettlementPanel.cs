@@ -373,9 +373,6 @@ public class SettlementPanel : PanelBase
     // 로컬 플레이어(오너)의 입력 정지 + 커서 해제를 함께 처리한다.
     // 정산 화면 뒤 월드로 이동·시점이 새지 않게 입력을 멈추고(SetSuspended), 버튼을 누를 수 있게
     // 커서를 푼다(CursorLock.PushUnlock — 닫을 때 Pop).
-    // ponytail: 호스트는 라운드 종료 후 RoundManager.GameplayFrozen(Phase==Ended)으로도 이동이 막혀 있어
-    //           닫아도 계속 못 움직인다(원격 클라는 GameplayFrozen이 false라 닫으면 움직임). 페이즈 클라 동기화(#43)가
-    //           붙으면 자연히 일관돼진다 — 그 전까진 호스트 한정 잔상으로 둔다.
     private void SetLocalPlayerBlocked(bool blocked)
     {
         // 같은 값으로 두 번 불려도(PanelBase.OpenPanel엔 재진입 가드가 없다) 커서 Push/Pop이 어긋나지 않게 한다 (#352)

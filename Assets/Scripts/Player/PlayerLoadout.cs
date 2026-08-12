@@ -15,7 +15,7 @@ using UnityEngine;
 /// - 오너: 줍기/버리기 입력 발신, 휠 순환 장착, 손 표시.
 /// 3인칭(타 플레이어) 장착 표시는 이 이슈 범위 밖 — 후속.
 /// </summary>
-// TODO: #55 서버권위 전환 시 장착/사용 실행도 서버 기준으로 (지금은 장착 상태가 오너 로컬)
+// TODO: 장착/사용 실행을 서버 권위로 옮긴다 (지금은 장착 상태가 오너 로컬)
 [RequireComponent(typeof(PlayerItemUser))]
 [RequireComponent(typeof(PlayerInteractor))]
 public class PlayerLoadout : NetworkBehaviour

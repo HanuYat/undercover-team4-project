@@ -264,7 +264,7 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
         Debug.Log($"[납치] 발동 — 표적 {target.name}, 납치범 {m_abductors.Count}명");
     }
 
-    // 2인조가 함께 나올 지점 — 난동꾼(SpawnedNpcEvent)과 같은 경로다.
+    // 2인조가 함께 나올 지점 — 난동꾼(SpawnedNpcEventBase)과 같은 경로다.
     // 1순위는 보이지 않는 지점이다. 다만 뻥 뚫린 거리에서는 링(min~max) 안에 가려주는 지형이 없어
     // 전 시도가 탈락하기 쉬운데, 여기서 포기하면 발동 자체가 조용히 불발된다. 대형이 깨지는 것보다
     // 팝인이 보이는 편이 낫다 — 거리는 어차피 지켜지므로 눈앞에 솟지는 않는다.

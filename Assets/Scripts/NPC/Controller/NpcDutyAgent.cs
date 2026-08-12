@@ -9,7 +9,7 @@ using UnityEngine;
 /// 판정과 이동은 상태 클래스(<see cref="NpcDetainedState"/> · <see cref="NpcChaseState"/> ·
 /// <see cref="NpcPenaltyEscortState"/>)가 하고, 이 부품은 그 상태들이 읽을 목표·대상·대형을 들고
 /// 결과를 이벤트로 중계한다. FSM 전이가 필요하므로 코어의 <see cref="NpcController.StateMachine"/>을 쓴다.
-/// 전이는 전부 서버 권위 — 부르는 쪽(WrongfulArrestPenalty · AbductionEvent · SpawnedNpcEvent)이 서버다.
+/// 전이는 전부 서버 권위 — 부르는 쪽(WrongfulArrestPenalty · AbductionEvent · PickpocketEvent)이 서버다.
 /// 클라 호출은 <see cref="NpcCustody.StartEscort"/>와 같은 방식으로 무시한다.
 ///
 /// <b>임무별 행동은 여기 없다</b> — 이 부품은 "지금 어떤 임무인가"(<see cref="Duty"/>)만 들고 있고,
@@ -87,7 +87,7 @@ public class NpcDutyAgent : NetworkBehaviour
     public Transform PenaltyEscortGoal { get; private set; }
 
     /// <summary>추격 NPC가 대상을 포획한 순간 발행 — WrongfulArrestPenalty가 구독해 수렴·호송을 개시한다. 서버에서만 발생. (#278)
-    /// 인자가 부품이 아니라 코어인 것은 구독자(WrongfulArrestPenalty · AbductionEvent · SpawnedNpcEvent)가 NPC를
+    /// 인자가 부품이 아니라 코어인 것은 구독자(WrongfulArrestPenalty · AbductionEvent · PickpocketEvent)가 NPC를
     /// NpcController 목록으로 들고 대조하기 때문이다 — NpcIntruder와 같은 관례다.</summary>
     public event Action<NpcController, Transform> OnPenaltyCaught;
 
@@ -254,7 +254,7 @@ public class NpcDutyAgent : NetworkBehaviour
 /// 멤버가 늘지 않고, "표식이 전부 꺼짐"이 임무 없음인지 오검거인지 모호했던 것도 <see cref="None"/>으로 갈린다.
 ///
 /// 동기화 값이라(NetworkVariable) 클라의 조준 피드백·앵그리 마크도 이 값을 읽는다.
-/// 파일을 따로 두지 않은 것은 <see cref="SpawnedNpcEvent.Behavior"/>와 같은 관례 — 소유 클래스 옆에 붙여 둔다.
+/// 파일을 따로 두지 않은 것은 소유 클래스 옆에 붙여 두는 편이 읽기 쉬워서다 — 이 enum만 쓰는 곳이 그 클래스다.
 /// </summary>
 public enum NpcDutyKind
 {

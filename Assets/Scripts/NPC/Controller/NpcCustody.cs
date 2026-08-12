@@ -13,7 +13,6 @@ using UnityEngine;
 /// <see cref="NpcCapturedState"/>)가 하고, 이 부품은 그 상태들이 읽을 참조·표식을 들고 전이를 건다.
 /// FSM 전이가 필요하므로 코어의 <see cref="NpcController.StateMachine"/>을 쓴다.
 /// 전이는 전부 서버 권위 — 클라이언트 호출은 무시한다.
-/// TODO: 아이템(수갑) 네트워크화 시 클라 입력 → ServerRpc 경로로 호출되도록 연결 (#56에서는 서버 가드만)
 ///
 /// <b>반드시 <see cref="NpcController"/>와 같은 GameObject에 둔다</b> — 코어 쪽 [RequireComponent]가 이를 보장한다.
 /// 반대 방향으로도 걸면 순환 의존이 되어 둘 중 하나만 떼는 것이 막히므로, 선언은 코어에만 둔다.

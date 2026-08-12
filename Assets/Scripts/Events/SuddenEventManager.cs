@@ -19,14 +19,14 @@ using Random = UnityEngine.Random;
 ///
 /// 이벤트 풀은 인스펙터 <b>명시 리스트</b>(m_eventEntries)로 구성한다 — 자동수집을 쓰지 않는다 (#291).
 ///  · <see cref="ISuddenEvent"/> 컴포넌트 — 1개 = 1종 (전자기기 먹통 등).
-///  · <see cref="ISuddenEventProvider"/> 컴포넌트 — 1개가 여러 종을 품는다 (스폰형: <see cref="SpawnedNpcEventSet"/>).
+///  · <see cref="ISuddenEventProvider"/> 컴포넌트 — 1개가 여러 종을 품는다 (현재 구현체 없음 — #303에서 스폰형이 이벤트별 컴포넌트로 갈렸다).
 /// 항목마다 enabled 토글이 있어 특정 이벤트만 켜서 추첨할 수 있다(테스트·튜토리얼).
 /// <b>이벤트 컴포넌트는 반드시 이 오브젝트에 둔다</b> — 전부 [RequireComponent(typeof(SuddenEventManager))]라
 /// 다른 오브젝트에 붙이면 거기에 두 번째 매니저가 자동 생성된다. 리스트 구조 자체는 타 오브젝트 참조가
 /// 가능하지만, 규약 완화(RequireComponent 제거)는 팀 결정 대기 항목이다(#291 고려사항 · PR #298 리뷰).
 /// 발생 빈도·이벤트별 수치는 전부 인스펙터 — 밸런싱 보류 항목이라 코드에 못 박지 않는다 (GDD 12장).
 /// </summary>
-// TODO: 이벤트 발생/종료 HUD 알림(본부 관제 UI, #43 계열)은 OnEventAnnounced/AnnounceEventClientRpc를 구독해 연결한다.
+// TODO: 이벤트 발생/종료 HUD 알림(본부 관제 UI)은 OnEventAnnounced/AnnounceEventClientRpc를 구독해 연결한다.
 [RequireComponent(typeof(NetworkObject))]
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class SuddenEventManager : NetworkedManagerBase
@@ -58,7 +58,7 @@ public class SuddenEventManager : NetworkedManagerBase
     private class SuddenEventEntry
     {
         [Tooltip(
-            "ISuddenEvent 또는 ISuddenEventProvider를 구현한 컴포넌트 (예: DeviceBlackoutEvent, SpawnedNpcEventSet, JailbreakEvent)"
+            "ISuddenEvent 또는 ISuddenEventProvider를 구현한 컴포넌트 (예: DeviceBlackoutEvent, RioterEvent, JailbreakEvent)"
         )]
         public MonoBehaviour component;
 
@@ -83,7 +83,7 @@ public class SuddenEventManager : NetworkedManagerBase
     private bool m_scheduling; // 라운드 InProgress 진입 시 켜진다 — Phase 폴링으로 스케줄 시작/정지를 판정
     private RoundPhase m_lastPhase = RoundPhase.Preparing;
 
-    /// <summary>이벤트 발생 알림 — 본부/현장 HUD 토스트(#43)가 구독할 훅.</summary>
+    /// <summary>이벤트 발생 알림 — 본부/현장 HUD 토스트가 구독할 훅.</summary>
     public event Action<string> OnEventAnnounced;
 
     // 서버(또는 오프라인)에서만 의미 — 이 피어가 이벤트 권위를 가지는지. 스폰 전(오프라인)이면 항상 권위.
@@ -103,7 +103,7 @@ public class SuddenEventManager : NetworkedManagerBase
                 continue;
 
             if (entry.component is ISuddenEventProvider provider)
-                provider.CollectEvents(m_events); // 제공자형: 1개가 여러 종 (SpawnedNpcEventSet)
+                provider.CollectEvents(m_events); // 제공자형: 1개가 여러 종 (현재 구현체 없음 — 확장 지점)
             else if (entry.component is ISuddenEvent evt)
                 m_events.Add(evt); // 컴포넌트형: 1개 = 1종
             else
@@ -265,7 +265,7 @@ public class SuddenEventManager : NetworkedManagerBase
     }
 
     /// <summary>
-    /// 이벤트 알림을 전 클라이언트에 발행한다 — HUD 알림(#43)용. 네트워크 세션에서만 RPC를 쏜다.
+    /// 이벤트 알림을 전 클라이언트에 발행한다 — HUD 알림용. 네트워크 세션에서만 RPC를 쏜다.
     /// 보통은 발생 시점에 매니저가 부르지만, <see cref="ISuddenEvent.AnnounceOnBegin"/>이 false인 이벤트는
     /// 알릴 시점을 스스로 정해 이 메서드를 직접 부른다. 서버(또는 오프라인) 전용.
     /// </summary>
