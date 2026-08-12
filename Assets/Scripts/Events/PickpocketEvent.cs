@@ -32,6 +32,13 @@ public class PickpocketEvent : SpawnedNpcEventBase
             return; // 표적이 사라졌다 — 배회로 두면 공통 골격이 이탈(잔류)로 끝낸다
 
         m_npc.Penalty.OnPenaltyCaught += HandleReach;
+
+        // 무력화되는 순간을 직접 받는다 — <b>여기가 "제압당했다"의 실제 순간</b>이다.
+        // 예전에는 Captured 전이에만 걸어 뒀는데, 스턴은 오버레이라 CurrentState를 바꾸지 않는다(#292):
+        // 진압봉으로 때려 쓰러뜨려도 상태는 Run 그대로여서 물건이 떨어지지 않았고, 밧줄로 묶었다(Escorted)
+        // 놓아준 순간(Captured)에야 나왔다. 테이저로 재운 경우도 같은 이유로 안 떨어졌다.
+        m_npc.Stun.OnStunned += HandleStunned;
+
         m_npc.Penalty.StartPenaltyChase(m_threat, NpcDutyKind.Pickpocket);
         m_giveUpTime = Time.time + m_approachSeconds;
     }
@@ -84,10 +91,23 @@ public class PickpocketEvent : SpawnedNpcEventBase
         m_npc.Reaction.StartFlee(m_threat);
     }
 
-    // 훔친 물건은 제압당한 자리에 떨어진다 — 주우면 회수 끝, 본부까지 갈 것 없다
-    protected override void OnCaptured(NpcController npc)
+    // 무력화되면 그 자리에 떨군다 — 진압봉으로 쓰러뜨렸든 테이저로 재웠든 같다. 서버에서만 발생.
+    private void HandleStunned(NpcController npc, Transform by)
     {
-        if (npc.TryGetComponent(out Pickpocket thief))
+        if (m_npc == null || npc != m_npc)
+            return;
+
+        DropStolen(npc);
+    }
+
+    // 신병으로 잡힌 순간에도 떨군다 — <b>폴백이다.</b>
+    // 무력화를 거치지 않고 Captured에 이르는 경로(밧줄 놓아두기 등)가 남아 있고,
+    // ServerDropStolenItem은 들고 있는 게 없으면 무동작이라 두 번 불려도 안전하다.
+    protected override void OnCaptured(NpcController npc) => DropStolen(npc);
+
+    private static void DropStolen(NpcController npc)
+    {
+        if (npc != null && npc.TryGetComponent(out Pickpocket thief))
             thief.ServerDropStolenItem();
     }
 
@@ -118,6 +138,7 @@ public class PickpocketEvent : SpawnedNpcEventBase
             return;
 
         npc.Penalty.OnPenaltyCaught -= HandleReach;
+        npc.Stun.OnStunned -= HandleStunned;
     }
 
     // 탈취 행동 부품을 얹는다 — 이미 붙어 있으면 그것을 쓴다.
