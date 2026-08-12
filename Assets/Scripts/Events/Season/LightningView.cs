@@ -42,7 +42,14 @@ public class LightningView : MonoBehaviour
     [SerializeField] private float m_rainScale = 2f;
     [SerializeField] private float m_cloudScale = 10f;
 
-    [Header("먹구름 — 하늘 덮기")]
+    [Header("먹구름")]
+    [Tooltip(
+        "구름 파티클을 실제로 띄울지. <b>기본은 끔</b> — 하늘을 덮으려면 파티클 시스템이 수십 개 필요해 "
+            + "프레임이 크게 떨어진다. 끄면 먹구름은 '하늘이 어두워지는 것'으로만 표현된다"
+    )]
+    [SerializeField] private bool m_useCloudFx;
+
+    [Header("먹구름 파티클 (m_useCloudFx가 켜졌을 때만)")]
     [Tooltip("구름을 한 변 몇 장으로 깔 것인가 — 9면 81장")]
     [Range(1, 11)]
     [SerializeField] private int m_cloudTiles = 9;
@@ -174,7 +181,8 @@ public class LightningView : MonoBehaviour
         m_rig.SetCloudSnap(m_cloudSpacing); // 하늘은 월드에 고정 — 구름 한 덩이가 따라오는 그림을 막는다
         m_rig.SetPrecipitationFacesView(m_rainFollowsView, m_rainForwardOffset); // 비는 보는 쪽에만
 
-        if (m_cloudPrefab != null)
+        // 구름 파티클은 기본으로 띄우지 않는다 — 프레임 부담이 커서, 먹구름은 밝기로 표현한다
+        if (m_useCloudFx && m_cloudPrefab != null)
             WeatherSkyRig.AttachTiled(m_cloudPrefab, m_rig.CloudAnchor, m_cloudScale, m_cloudTiles, m_cloudSpacing);
 
         if (m_rainParticlePrefab != null)
@@ -184,7 +192,7 @@ public class LightningView : MonoBehaviour
             WeatherSkyRig.Boost(rain, m_rainSizeBoost, m_rainRateBoost);
         }
 
-        StartOvercast(m_baseIntensity * m_overcastIntensityScale);
+        WeatherOvercast.Push(m_overcastIntensityScale, m_overcastFadeSeconds);
     }
 
     private void HideRain()
@@ -196,45 +204,7 @@ public class LightningView : MonoBehaviour
         }
 
         StopFlash();
-        StartOvercast(m_baseIntensity); // 밝기를 원래대로 되돌린다(서서히)
-    }
-
-    // 먹구름 밝기를 target으로 서서히 옮긴다 — 섬광이 도는 중이면 섬광이 끝난 뒤 이어받는다
-    private void StartOvercast(float target)
-    {
-        if (m_globalLight == null || !m_hasBaseIntensity)
-            return;
-
-        if (m_overcastRoutine != null)
-            StopCoroutine(m_overcastRoutine);
-
-        m_overcastRoutine = StartCoroutine(FadeIntensityRoutine(target, m_overcastFadeSeconds));
-    }
-
-    private IEnumerator FadeIntensityRoutine(float target, float seconds)
-    {
-        float from = m_globalLight.intensity;
-
-        if (seconds <= 0f)
-        {
-            m_globalLight.intensity = target;
-            m_overcastRoutine = null;
-            yield break;
-        }
-
-        for (float t = 0f; t < seconds; t += Time.deltaTime)
-        {
-            // 섬광이 밝기를 쥐고 있는 동안은 물러난다 — 두 코루틴이 같은 값을 밀면 깜빡임이 뭉개진다
-            if (m_flashRoutine == null)
-                m_globalLight.intensity = Mathf.Lerp(from, target, t / seconds);
-
-            yield return null;
-        }
-
-        if (m_flashRoutine == null)
-            m_globalLight.intensity = target;
-
-        m_overcastRoutine = null;
+        WeatherOvercast.Pop(m_overcastFadeSeconds);
     }
 
     // 낙뢰 — 지점에 파티클을 터뜨리고 화면을 번쩍인다. 전 피어에서 불린다.
@@ -274,8 +244,10 @@ public class LightningView : MonoBehaviour
 
         m_flashRoutine = null;
 
-        // 섬광이 끝나면 지금 국면의 밝기로 돌아간다 — 비가 계속 오면 먹구름 밝기, 그쳤으면 원래 밝기
-        StartOvercast(m_rig != null ? m_baseIntensity * m_overcastIntensityScale : m_baseIntensity);
+        // 섬광이 끝나면 지금 국면의 밝기로 돌아간다 — 먹구름 요청이 살아 있으면 그 어둠, 없으면 원래 밝기.
+        // 목표를 공유 클래스가 들고 있어 눈·비가 겹쳐 있어도 어긋나지 않는다.
+        if (WeatherOvercast.HasSun)
+            m_globalLight.intensity = WeatherOvercast.CurrentTarget;
     }
 
     // 낙뢰 밝기 곡선 (0~1 입력, 0~1 출력) — 봉우리 둘과 감쇠 꼬리.

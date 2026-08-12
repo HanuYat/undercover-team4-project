@@ -24,7 +24,8 @@ public class WeatherSkyRig : MonoBehaviour
     // 리그를 만든 쪽이 넘긴 값 — 런타임 생성이라 SerializeField가 아니다(씬 배선 없이 뷰가 만든다)
     private float m_cloudHeight;
 
-    private Camera m_camera;
+    // 따라갈 기준 — 로컬 플레이어(1순위) 또는 Camera.main(폴백). ResolveView 참고.
+    private Transform m_view;
 
     /// <summary>먹구름을 매다는 자리 — 카메라 위 <c>cloudHeight</c>.</summary>
     public Transform CloudAnchor { get; private set; }
@@ -112,12 +113,13 @@ public class WeatherSkyRig : MonoBehaviour
     // 강수 방출 지점을 시야 앞으로 밀고 수평 방향만 맞춘다 — 낙하 방향은 건드리지 않는다.
     private void FacePrecipitationToView()
     {
-        if (PrecipitationAnchor == null || !m_precipitationFacesView || m_camera == null)
+        if (PrecipitationAnchor == null || !m_precipitationFacesView || m_view == null)
             return;
 
-        // 카메라 정면에서 수평 성분만 뽑는다. 위를 보고 있으면 forward가 하늘을 가리키므로
+        // 보는 쪽의 수평 성분만 뽑는다. 위를 보고 있으면 forward가 하늘을 가리키므로
         // 그대로 쓰면 방출 지점이 머리 위로 솟는다 — y를 버려야 시야 '앞'이 된다.
-        Vector3 flatForward = m_camera.transform.forward;
+        // 기준이 플레이어면 몸통 정면인데, 시점 회전이 몸통 yaw를 돌리므로(PlayerLook) 결과가 같다.
+        Vector3 flatForward = m_view.forward;
         flatForward.y = 0f;
         if (flatForward.sqrMagnitude < 0.001f)
             flatForward = Vector3.forward; // 정수리를 보고 있다 — 방향이 없으니 기본값
@@ -147,15 +149,40 @@ public class WeatherSkyRig : MonoBehaviour
 
     private void SnapToCamera()
     {
-        // 파괴됐거나(리스폰) 꺼졌으면(CCTV 전환) 다시 찾는다 — Camera.main은 활성 카메라를 돌려준다
-        if (m_camera == null || !m_camera.isActiveAndEnabled)
-            m_camera = Camera.main;
+        ResolveView();
 
-        if (m_camera == null)
-            return; // 아직 카메라가 없다 — 다음 프레임에 다시 본다
+        if (m_view == null)
+            return; // 아직 기준이 없다 — 다음 프레임에 다시 본다
 
         // <b>위치만</b> 따라간다. 회전을 건드리지 않아 월드 정렬로 남는다.
-        transform.position = m_camera.transform.position;
+        transform.position = m_view.position;
+    }
+
+    /// <summary>
+    /// 따라갈 기준을 정한다 — <b>로컬 플레이어가 1순위, Camera.main은 폴백이다.</b>
+    ///
+    /// ⚠ <c>Camera.main</c>만 믿으면 안 된다: <c>Player.prefab</c>의 시점 카메라는 <b>Untagged</b>라
+    /// Camera.main으로 잡히지 않는다. 그러면 씬에 놓인 고정 <c>Main Camera</c>가 잡혀 리그가 그 자리에
+    /// 굳고, 비·눈이 <b>맵의 한 지점에서만 내린다</b>(실측된 증상). 시점을 돌리면 그 지점이 화면에서
+    /// 벗어나 "안 내린다"로 보인다.
+    ///
+    /// 그래서 세션의 로컬 플레이어 오브젝트를 먼저 쓴다. 오프라인 단독 Play나 관전처럼 플레이어가 없는
+    /// 구성에서는 Camera.main으로 물러난다.
+    /// </summary>
+    private void ResolveView()
+    {
+        if (m_view != null)
+            return; // 이미 잡았다 — 파괴되면 아래에서 다시 찾는다(Unity 파괴 참조는 null로 비교된다)
+
+        Unity.Netcode.NetworkManager manager = Unity.Netcode.NetworkManager.Singleton;
+        if (manager != null && manager.IsListening && manager.LocalClient.PlayerObject != null)
+        {
+            m_view = manager.LocalClient.PlayerObject.transform;
+            return;
+        }
+
+        if (Camera.main != null)
+            m_view = Camera.main.transform;
     }
 
     /// <summary>

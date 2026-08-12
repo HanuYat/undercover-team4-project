@@ -270,8 +270,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SnowEvent
   ShowTopMostFoldoutHeaderGroup: 1
   m_durationSeconds: 30
-  m_iceOnsetSeconds: 20
-  m_iceFullSeconds: 50
+  m_iceOnsetSeconds: 5
+  m_iceFullSeconds: 20
   m_thawSeconds: 45
 --- !u!114 &2813280441832589395
 MonoBehaviour:
@@ -308,15 +308,18 @@ MonoBehaviour:
   m_snowParticlePrefab: {fileID: 2817993819076210315, guid: 6301baffa72b44d98036ef53bb31ef6a, type: 3}
   m_cloudPrefab: {fileID: 1023308068024276, guid: d368169865e447d4eb38c5700ff9856e, type: 3}
   m_cloudHeight: 80
-  m_precipitationHeight: 14
+  m_precipitationHeight: 6
   m_snowFollowsView: 1
-  m_snowForwardOffset: 8
+  m_snowForwardOffset: 3
   m_snowScale: 1
   m_cloudScale: 25
+  m_useCloudFx: 0
+  m_overcastIntensityScale: 0.6
+  m_overcastFadeSeconds: 3
   m_cloudTiles: 9
   m_cloudSpacing: 70
-  m_snowSizeBoost: 2.5
-  m_snowRateBoost: 6
+  m_snowSizeBoost: 2
+  m_snowRateBoost: 2
   m_stopFadeSeconds: 6
 --- !u!114 &7324548653836035078
 MonoBehaviour:
@@ -334,17 +337,18 @@ MonoBehaviour:
   m_rainParticlePrefab: {fileID: 1988216202477046, guid: b99f1f7e52de4c7ba8366ddd75d22d85, type: 3}
   m_cloudPrefab: {fileID: 1023308068024276, guid: d368169865e447d4eb38c5700ff9856e, type: 3}
   m_cloudHeight: 80
-  m_precipitationHeight: 14
+  m_precipitationHeight: 10
   m_rainFollowsView: 1
-  m_rainForwardOffset: 8
+  m_rainForwardOffset: 6
   m_rainScale: 2
   m_cloudScale: 25
+  m_useCloudFx: 0
   m_cloudTiles: 9
   m_cloudSpacing: 70
-  m_rainSizeBoost: 1.5
-  m_rainRateBoost: 4
+  m_rainSizeBoost: 1.2
+  m_rainRateBoost: 2
   m_globalLight: {fileID: 0}
-  m_overcastIntensityScale: 0.55
+  m_overcastIntensityScale: 0.5
   m_overcastFadeSeconds: 2.5
   m_maxFlashIntensity: 3
   m_flashDuration: 0.45

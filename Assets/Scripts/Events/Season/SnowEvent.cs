@@ -120,8 +120,12 @@ public class SnowEvent : NetworkBehaviour, ISuddenEvent
 
     public void ServerTick()
     {
-        // 내리는 동안 누적 — 오래 내리면 빙판이 깔린다
-        m_snowSeconds += Time.deltaTime;
+        // 내리는 동안 누적 — 오래 내리면 빙판이 깔린다.
+        //
+        // <b>최대치에서 멈춘다.</b> 상한을 안 두면 눈 지속(30초)이 최대 도달 시간(5초)보다 길 때
+        // 누적이 계속 자라, 비율은 1에서 멈춰 있어도 해빙이 그 초과분부터 되감아야 해서
+        // 실제로 녹는 데 m_thawSeconds의 몇 배가 걸린다(30초 누적이면 270초).
+        m_snowSeconds = Mathf.Min(m_snowSeconds + Time.deltaTime, m_iceFullSeconds);
         RefreshIceRatio();
 
         if (m_snow && Time.time >= m_endTime)
