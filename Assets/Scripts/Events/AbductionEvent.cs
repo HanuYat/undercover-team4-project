@@ -6,7 +6,7 @@ using UnityEngine.AI;
 /// <summary>
 /// 플레이어 납치 — <b>혼자 다니는 현장 플레이어</b>를 납치범 NPC 2명이 쫓아가 붙잡고 도시 외곽까지 끌고 간다. (GDD 6-4, #371)
 ///
-/// 오검거 페널티(#276~#279)의 호송 파이프라인을 그대로 쓴다 — 추격(<see cref="NpcPenaltyAgent.StartPenaltyChase"/>) →
+/// 오검거 페널티(#276~#279)의 호송 파이프라인을 그대로 쓴다 — 추격(<see cref="NpcDutyAgent.StartPenaltyChase"/>) →
 /// 포획 통보 → 수렴 → <see cref="CarryEscortSequence"/>. 다른 점은 <b>트리거·목적지·결말</b> 셋이다:
 /// 트리거는 "혼자 있음"이고, 목적지는 광장이 아니라 외곽이며, 결말은 매달기가 아니라 <b>처형</b>이다.
 ///
@@ -23,7 +23,7 @@ using UnityEngine.AI;
 /// "혼자 다니면 죽는다"의 값이다 — 되돌릴 수 있는 구간을 반출까지 늘리면 외곽까지 달려갈 이유가 사라진다.
 ///
 /// <b>구조는 호송 중에도 된다</b> — 이것이 오검거와 정반대다. 오검거는 포획이 확정되면 격퇴가 무시되지만
-/// (<see cref="NpcPenaltyAgent.ApplyChaseRepel"/>이 수렴 중을 걸러낸다 — "유예 창은 잡히기 전까지다", #278),
+/// (<see cref="NpcDutyAgent.ApplyChaseRepel"/>이 수렴 중을 걸러낸다 — "유예 창은 잡히기 전까지다", #278),
 /// 납치는 동료가 끌려가는 것을 보고 달려가 <b>때리거나 무력화해</b> 떼어내는 것이 이 이벤트의 협동 지점이다.
 /// 그래서 <see cref="ServerRepelAbductor"/>라는 자기 경로를 갖는다. 오검거 쪽 규칙은 건드리지 않는다.
 ///
@@ -36,7 +36,7 @@ using UnityEngine.AI;
 /// <b>표적은 고정이다</b> — 오검거 추격은 표적이 범위를 벗어나면 범위 안의 다른 플레이어로 갈아타지만
 /// (잡히는 사람이 독박, #276), 납치가 그러면 "혼자 있는 사람을 노린다"는 이 이벤트의 유일한 규칙이 깨진다:
 /// 도망친 표적 대신 동료와 붙어 있던 사람을 잡아 곧바로 구조되는 결말이 난다. 그래서
-/// <see cref="NpcPenaltyAgent.StartPenaltyChase"/>에 납치 임무 표식을 켜고, 범위를 벗어나도 같은 표적을
+/// <see cref="NpcDutyAgent.StartPenaltyChase"/>에 납치 임무 표식을 켜고, 범위를 벗어나도 같은 표적을
 /// 계속 쫓게 한다. 놓쳤을 때의 결말은 아래 <see cref="m_maxChaseSeconds"/>가 낸다 — 개별 납치범이
 /// 스스로 빠지면 남은 하나가 혼자 끌고 가 2인 호송이 무너진다. 오검거 쪽 재타겟은 그대로 둔다.
 ///
@@ -248,7 +248,7 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
             m_abductors[i].Penalty.OnPenaltyCaught += HandleAbductionCaught;
             m_abductors[i].Health.OnDamaged += HandleAbductorDamaged;
             m_abductors[i].Stun.OnStunned += HandleAbductorStunned;
-            m_abductors[i].Penalty.StartPenaltyChase(target, abductionDuty: true);
+            m_abductors[i].Penalty.StartPenaltyChase(target, NpcDutyKind.Abduction);
         }
 
         if (m_abductors.Count < m_abductorCount)
@@ -264,7 +264,7 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
         Debug.Log($"[납치] 발동 — 표적 {target.name}, 납치범 {m_abductors.Count}명");
     }
 
-    // 2인조가 함께 나올 지점 — 난동꾼(SpawnedNpcEvent)과 같은 경로다.
+    // 2인조가 함께 나올 지점 — 난동꾼(SpawnedNpcEventBase)과 같은 경로다.
     // 1순위는 보이지 않는 지점이다. 다만 뻥 뚫린 거리에서는 링(min~max) 안에 가려주는 지형이 없어
     // 전 시도가 탈락하기 쉬운데, 여기서 포기하면 발동 자체가 조용히 불발된다. 대형이 깨지는 것보다
     // 팝인이 보이는 편이 낫다 — 거리는 어차피 지켜지므로 눈앞에 솟지는 않는다.

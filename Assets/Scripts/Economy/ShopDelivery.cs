@@ -74,6 +74,10 @@ public class ShopDelivery : MonoBehaviour
                 continue;
 
             ItemBase item = Instantiate(itemPrefab, ResolveDropPosition(index++), Quaternion.identity);
+
+            // 구매품 표식 — 소매치기에게 잃으면 구매 목록에서도 빼야 한다 (#303)
+            item.gameObject.AddComponent<ShopDeliveredItem>().SourcePrefab = itemPrefab;
+
             // 아이템은 씬을 넘어 살아남는 관례(PlayerLoadout 지급과 동일) — 회수는 상점 복귀 시 일괄 처리한다.
             item.NetworkObject.Spawn(destroyWithScene: false);
         }

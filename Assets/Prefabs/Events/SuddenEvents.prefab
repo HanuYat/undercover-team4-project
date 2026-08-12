@@ -15,9 +15,11 @@ GameObject:
   - component: {fileID: 3457248640073257328}
   - component: {fileID: 6553283234259604354}
   - component: {fileID: 812660901877859943}
-  - component: {fileID: 1036064955631126747}
   - component: {fileID: 1542303654048081899}
   - component: {fileID: 5499711423042293484}
+  - component: {fileID: 4391990372060924147}
+  - component: {fileID: 7866726753952495387}
+  - component: {fileID: 3850008261326609235}
   m_Layer: 0
   m_Name: SuddenEvents
   m_TagString: Untagged
@@ -90,11 +92,15 @@ MonoBehaviour:
     enabled: 1
   - component: {fileID: 6553283234259604354}
     enabled: 1
-  - component: {fileID: 1036064955631126747}
-    enabled: 1
   - component: {fileID: 1542303654048081899}
     enabled: 1
   - component: {fileID: 5499711423042293484}
+    enabled: 1
+  - component: {fileID: 4391990372060924147}
+    enabled: 1
+  - component: {fileID: 7866726753952495387}
+    enabled: 1
+  - component: {fileID: 3850008261326609235}
     enabled: 1
 --- !u!114 &4617273519023223210
 MonoBehaviour:
@@ -160,39 +166,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DeviceBlackoutView
   m_blackout: {fileID: 0}
---- !u!114 &1036064955631126747
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 498939978214492355}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6beb6a5727fc0044492574c65748868e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SpawnedNpcEventSet
-  m_events:
-  - m_displayName: "\uAC70\uB9AC \uB09C\uB3D9\uC790"
-    m_mode: 0
-    m_npcPrefab: {fileID: 4452197611904741975, guid: d683626f03b237a4da9faa4542cc57a0, type: 3}
-    m_spawnDistanceMin: 12
-    m_spawnDistanceMax: 20
-    m_navSampleMaxDistance: 4
-    m_maxSpawnAttempts: 8
-    m_pettyCrimeRewardMin: 500
-    m_pettyCrimeRewardMax: 4000
-    m_maxLifetimeSeconds: 60
-  - m_displayName: "\uB098\uCCB4 \uB09C\uB3D9\uAFBC"
-    m_mode: 1
-    m_npcPrefab: {fileID: 4452197611904741975, guid: 5ec59267efd14b0409911db86746a985, type: 3}
-    m_spawnDistanceMin: 12
-    m_spawnDistanceMax: 20
-    m_navSampleMaxDistance: 4
-    m_maxSpawnAttempts: 8
-    m_pettyCrimeRewardMin: 500
-    m_pettyCrimeRewardMax: 4000
-    m_maxLifetimeSeconds: 60
 --- !u!114 &1542303654048081899
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -248,3 +221,67 @@ MonoBehaviour:
   m_parkedTimeoutSeconds: 60
   m_returnTimeoutSeconds: 60
   m_devTriggerKey: 94
+--- !u!114 &4391990372060924147
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498939978214492355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 34c7e058d259989488b34aa61615597a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RioterEvent
+  m_displayName: "\uAC70\uB9AC \uB09C\uB3D9\uC790"
+  m_npcPrefab: {fileID: 4452197611904741975, guid: d683626f03b237a4da9faa4542cc57a0, type: 3}
+  m_spawnDistanceMin: 12
+  m_spawnDistanceMax: 20
+  m_navSampleMaxDistance: 4
+  m_maxSpawnAttempts: 8
+  m_pettyCrimeRewardMin: 500
+  m_pettyCrimeRewardMax: 4000
+  m_maxLifetimeSeconds: 60
+--- !u!114 &7866726753952495387
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498939978214492355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5238645868ec65847aad9a99ae72f6e4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StreakerEvent
+  m_displayName: "\uB098\uCCB4 \uB09C\uB3D9\uAFBC"
+  m_npcPrefab: {fileID: 4452197611904741975, guid: 5ec59267efd14b0409911db86746a985, type: 3}
+  m_spawnDistanceMin: 12
+  m_spawnDistanceMax: 20
+  m_navSampleMaxDistance: 4
+  m_maxSpawnAttempts: 8
+  m_pettyCrimeRewardMin: 500
+  m_pettyCrimeRewardMax: 4000
+  m_maxLifetimeSeconds: 60
+--- !u!114 &3850008261326609235
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498939978214492355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3069eeadb2166774db2d51f54b3bd3f6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PickpocketEvent
+  m_displayName: "\uC18C\uB9E4\uCE58\uAE30"
+  m_npcPrefab: {fileID: 4452197611904741975, guid: e7cbd7673d85ce0488590f20f53288ac, type: 3}
+  m_spawnDistanceMin: 12
+  m_spawnDistanceMax: 20
+  m_navSampleMaxDistance: 4
+  m_maxSpawnAttempts: 8
+  m_pettyCrimeRewardMin: 500
+  m_pettyCrimeRewardMax: 4000
+  m_maxLifetimeSeconds: 60
+  m_approachSeconds: 12

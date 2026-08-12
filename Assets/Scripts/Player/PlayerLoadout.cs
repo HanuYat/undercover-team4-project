@@ -282,6 +282,19 @@ public class PlayerLoadout : NetworkBehaviour
         ServerNotifyHeldItemsChanged();
     }
 
+    /// <summary>
+    /// 손에서 떼어 낼 수 있는 소지품을 <paramref name="into"/>에 담는다(기존 내용은 지운다).
+    /// 기준은 버리기와 같다 — 묶어 둔 밧줄은 빠진다(손을 떠나면 묶인 NPC가 주인 없이 남는다, #369).
+    ///
+    /// <b>목록만 돌려준다</b> — 무엇을 어떻게 가져가는지는 부르는 쪽의 행동이다.
+    /// 지금 읽는 쪽은 소매치기 탈취(<see cref="Pickpocket.ServerStealFrom"/>, #303) 하나다.
+    /// </summary>
+    public void CollectDetachableItems(List<ItemBase> into)
+    {
+        m_held.CollectInto(into);
+        into.RemoveAll(IsTetheredRope);
+    }
+
     // 정면 드롭 지점을 구한다 — 앞이 벽이면 벽 앞으로 당긴다 (서버에서 호출).
     // 벽에 붙어 버리면 아이템이 벽 너머로 넘어가는데, 가시선 차단(#360) 이후로는 그렇게 넘어간
     // 아이템을 벽 너머로 주울 수도 없어 영영 회수 불가가 된다.

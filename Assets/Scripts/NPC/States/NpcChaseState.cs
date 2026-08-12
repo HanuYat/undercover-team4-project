@@ -10,7 +10,8 @@ using UnityEngine.AI;
 /// - <b>재타겟</b>: 표적이 포기 거리를 넘거나 무력화되면 범위 안의 <b>가장 가까운</b> 사람으로 갈아탄다
 ///   (잡히는 사람이 페널티 독박 — 부모 이슈 #276 확정 설계). 달리는 중이라면 눈에 띄게 더 가까운
 ///   후보가 나타났을 때도 바꾼다 (#568).
-///   단 납치(<see cref="NpcPenaltyAgent.IsAbductionDuty"/>)는 갈아타지 않는다 — 범위를 벗어나도 같은 표적을 계속 쫓는다 (#371).
+///   단 시민인 척하는 임무(<see cref="NpcDutyAgent.IsUndercoverDuty"/> — 납치 #371·소매치기 #303)는
+///   갈아타지 않는다 — 범위를 벗어나도 같은 표적을 계속 쫓는다.
 /// - <b>사냥</b>: 범위 안에 아무도 없으면 배회하며 범위에 들어오는 플레이어를 기다린다.
 /// - <b>격퇴/수렴</b>: 격퇴(ApplyChaseRepel, 호루라기 #250 예정)당하면 잠시 도주 후 사냥으로 복귀하고
 ///   그 플레이어에게 재추격 쿨다운을 건다. 누군가 포획되면(PenaltyConvergeTarget) 전원 그리로 모인다.
@@ -89,6 +90,10 @@ public class NpcChaseState : NpcStateBase
 
     public override void Exit()
     {
+        // 소매치기는 추격을 벗어나면 평범한 도주형이 된다 (#303) — 표식을 들고 나가면 연행·수감 뒤에도
+        // 때리거나 다시 묶을 수 있는 예외(NpcStateRules)가 열린 채로 남는다.
+        m_owner.Penalty.ClearDuty(NpcDutyKind.Pickpocket);
+
         m_owner.Agent.speed = m_baseSpeed;
         m_owner.Agent.stoppingDistance = 0f; // 수렴 페이즈가 올린 정지 거리 원복 — 배회 복귀 시 목적지 앞 멈춤 방지
 
@@ -128,9 +133,9 @@ public class NpcChaseState : NpcStateBase
         // 자기 추격 상한(AbductionEvent.m_maxChaseSeconds)으로 끊는다 — 상태가 판단할 일이 아니다.
         Transform target = m_owner.Penalty.ChaseTarget;
 
-        // 표적을 갈아타지 않는 임무인가 — 아래 도달 불가 처리도 이 값을 그대로 본다.
-        // 판단을 한 곳에만 두는 이유: 갈아타지 않는 임무가 늘면(소매치기 #303) 이 줄만 고치면 된다.
-        bool keepsTarget = m_owner.Penalty.IsAbductionDuty;
+        // 표적을 갈아타지 않는 임무인가 — 아래 도달 불가 처리·근접 갈아타기 판정도 이 값을 그대로 본다.
+        // 소매치기(#303)도 표적을 갈아타지 않는다 — 노리던 사람의 물건을 채는 것이 이벤트의 전부다.
+        bool keepsTarget = m_owner.Penalty.IsUndercoverDuty;
 
         if (keepsTarget)
         {
@@ -161,9 +166,19 @@ public class NpcChaseState : NpcStateBase
         m_hunting = false;
         m_steering.Apply(m_owner.Agent, true); // 사냥에서 막 돌아왔을 수 있다
 
-        float elapsed = now - m_targetAcquiredTime;
-        float accel = Mathf.Clamp01(elapsed / Mathf.Max(m_config.AccelSeconds, 0.01f));
-        m_owner.Agent.speed = Mathf.Lerp(m_baseSpeed, m_config.MaxSpeed, accel);
+        // 소매치기는 가속하지 않는다 (#303) — 시민 걸음으로 다가가야 알아채지 못한다.
+        // 달려들면 등 뒤에서 채는 그림이 아니라 그냥 추격이 되고, 정체가 걸음걸이로 새어 나간다.
+        if (m_owner.Penalty.IsPickpocketDuty)
+        {
+            m_owner.Agent.speed = m_baseSpeed;
+        }
+        else
+        {
+            float elapsed = now - m_targetAcquiredTime;
+            float accel = Mathf.Clamp01(elapsed / Mathf.Max(m_config.AccelSeconds, 0.01f));
+            m_owner.Agent.speed = Mathf.Lerp(m_baseSpeed, m_config.MaxSpeed, accel);
+        }
+
         m_owner.Agent.stoppingDistance = 0f;
 
         float distance = ChaseMath.FlatDistance(m_owner.transform.position, target.position);
