@@ -26,13 +26,13 @@ public class MontageLayerBaker : EditorWindow
 
     [SerializeField] private Material m_flatMaterial;
 
-    [SerializeField] private int m_resolution = 64;
+    [SerializeField] private int m_resolution = 16;
 
     [SerializeField] private float m_orthoSize = 0.16f;
 
-    // Synty 휴머노이드의 Head 본은 두개골 밑동에 있다 — 머리 중심은 거기서 10cm쯤 위다.
+    // Synty 휴머노이드의 Head 본은 두개골 밑동에 있다 — 머리 중심은 거기서 9cm쯤 위다.
     // 낮게 잡으면 정수리가 잘리고 대신 목·어깨가 프레임에 들어와 이목구비 추출의 밝기 기준까지 흐린다.
-    [SerializeField] private float m_headOffset = 0.1f;
+    [SerializeField] private float m_headOffset = 0.09f;
 
     [SerializeField] private float m_cameraDistance = 1.5f;
 
@@ -40,6 +40,10 @@ public class MontageLayerBaker : EditorWindow
 
     // 이미지는 전부 Imported 공유 저장소에 둔다 (2026-08-12 에셋 폴더 정리)
     [SerializeField] private string m_outputFolder = "Assets/Imported/Art/Montage/Layers";
+
+    [SerializeField] private GameObject m_sciFiPrefab;
+
+    [SerializeField] private int m_sciFiModelIndex = 13;
 
     [SerializeField] private Vector2 m_scroll;
 
@@ -88,7 +92,77 @@ public class MontageLayerBaker : EditorWindow
                 Bake();
         }
 
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("SciFi 전용 값 레이어", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox(
+            "후드·헬멧·발광렌즈는 Generic 프롭이 없어 위 굽기로 나오지 않는다. SciFi 모델은 머리·모자가 메시에 통짜로 구워져 있어 부위만 떼어낼 수 없으므로,\n"
+                + "여기서 모델 하나를 같은 프레임으로 렌더한 뒤 이미지 편집기에서 그 부위만 남기고 지운다.",
+            MessageType.None
+        );
+
+        m_sciFiPrefab = (GameObject)
+            EditorGUILayout.ObjectField("SciFi 프리팹", m_sciFiPrefab, typeof(GameObject), false);
+        m_sciFiModelIndex = EditorGUILayout.IntField(
+            new GUIContent("모델 인덱스", "후드=13 / 헬멧=4,14 / 발광렌즈=11,16,19 (AppearanceModelCatalog 기준)"),
+            m_sciFiModelIndex
+        );
+
+        using (new EditorGUI.DisabledScope(m_sciFiPrefab == null))
+        {
+            if (GUILayout.Button("SciFi 모델 렌더"))
+                RenderSciFiModel();
+        }
+
         EditorGUILayout.EndScrollView();
+    }
+
+    /// <summary>
+    /// SciFi 모델 하나를 프롭 레이어와 같은 프레임으로 렌더해 PNG로 뽑는다 (#607).
+    /// 통짜 메시라 부위를 코드로 떼어낼 수 없어 <b>사람이 지워서</b> 레이어를 만든다 —
+    /// 그래도 화면의 그 모델을 그대로 찍은 그림이라 몽타주가 실물과 어긋나지 않는다.
+    /// </summary>
+    private void RenderSciFiModel()
+    {
+        var rig = new GameObject("~MontageSciFiRig") { hideFlags = HideFlags.HideAndDontSave };
+        rig.transform.position = new Vector3(0f, -10000f, 0f);
+
+        try
+        {
+            GameObject model = (GameObject)PrefabUtility.InstantiatePrefab(m_sciFiPrefab, rig.transform);
+            model.transform.localPosition = Vector3.zero;
+            model.transform.localRotation = Quaternion.identity;
+
+            // NpcCatalogAppearance와 같은 규칙 — 계층 순서의 SkinnedMeshRenderer 하나만 켠다
+            SkinnedMeshRenderer[] bodies = model.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            if (m_sciFiModelIndex < 0 || m_sciFiModelIndex >= bodies.Length)
+            {
+                Debug.LogError($"MontageLayerBaker: 모델 인덱스 {m_sciFiModelIndex}가 범위를 벗어났다 (바디 {bodies.Length}종)");
+                return;
+            }
+            for (int i = 0; i < bodies.Length; i++)
+                bodies[i].gameObject.SetActive(i == m_sciFiModelIndex);
+
+            Transform head = ResolveHead(model.transform);
+            if (head == null)
+            {
+                Debug.LogError("MontageLayerBaker: SciFi 모델에서 머리 본을 찾지 못했다");
+                return;
+            }
+
+            Camera camera = CreateCamera(rig.transform, model.transform, head);
+            CreateLight(rig.transform, model.transform);
+
+            Directory.CreateDirectory(m_outputFolder);
+            AssetDatabase.Refresh();
+
+            string fileName = $"Montage_SciFi_{m_sciFiModelIndex:00}";
+            SavePixels(RenderPixels(camera), fileName);
+            Debug.Log($"[몽타주] SciFi 모델 {m_sciFiModelIndex} 렌더 → {m_outputFolder}/{fileName}.png — 필요한 부위만 남기고 지운 뒤 해당 옵션의 MontageLayer에 꽂을 것");
+        }
+        finally
+        {
+            DestroyImmediate(rig);
+        }
     }
 
     private void Bake()
