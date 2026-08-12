@@ -1,4 +1,5 @@
 using System;
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -23,6 +24,10 @@ public class LobbyRoster : NetworkBehaviour
 
     /// <summary>이 피어에서 리스트가 스폰·초기 동기화된 시점 — late-join 빈 화면 방지.</summary>
     public event Action OnListReady;
+
+    /// <summary>누군가 로비를 떠났다 — 남은 사람들에게 알리려고 각 피어에서 발행한다. 인자는 떠난 사람 닉네임. (#598)
+    /// 표시는 <see cref="LobbyRosterPanel"/>이 맡는다 — 로스터는 무엇이 일어났는지만 알린다.</summary>
+    public event Action<string> OnPlayerLeft;
 
     public override void OnNetworkSpawn()
     {
@@ -78,9 +83,21 @@ public class LobbyRoster : NetworkBehaviour
     {
         for (int i = m_players.Count - 1; i >= 0; i--)
         {
-            if (m_players[i].ClientId == clientId)
-                m_players.RemoveAt(i);
+            if (m_players[i].ClientId != clientId)
+                continue;
+
+            // 닉네임은 지우기 전에 챙긴다 — 지우고 나면 누가 나갔는지 알릴 방법이 없다 (#598)
+            FixedString64Bytes nickname = m_players[i].Nickname;
+            m_players.RemoveAt(i);
+            AnnounceLeftRpc(nickname);
         }
+    }
+
+    // 지금 붙어 있는 사람들에게만 간다 — 나간 뒤에 들어온 사람은 받지 않는다(RPC 특성 그대로가 요구사항이다). (#598)
+    [Rpc(SendTo.ClientsAndHost)]
+    private void AnnounceLeftRpc(FixedString64Bytes nickname)
+    {
+        OnPlayerLeft?.Invoke(nickname.ToString());
     }
 
     // 음소거가 바뀌면 자기 보고를 다시 보낸다 — 전용 RPC를 만들지 않는다. ReportSelfRpc가 중복 보고를

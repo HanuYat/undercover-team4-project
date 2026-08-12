@@ -40,6 +40,16 @@ public class LobbyRosterPanel : PanelBase
     [Tooltip("무전 키 안내 — Lobby.Voice.RadioKey ({0}=키 이름)")]
     [SerializeField] private LocalizedString m_radioKeyFormat;
 
+    [Tooltip("퇴장 알림 — Lobby.Roster.Left ({0}=닉네임). 조사(이/가)를 피하려 \"님이\"로 적는다 (#598)")]
+    [SerializeField] private LocalizedString m_playerLeftToast;
+
+    [Tooltip("퇴장 알림이 떠 있는 시간(초)")]
+    [Min(0.5f)]
+    [SerializeField] private float m_playerLeftToastSeconds = 3f;
+
+    [Tooltip("카드에 넣을 얼굴을 굽는 무대 (#598). 비워 두면 얼굴 칸 없이 이름만 나온다")]
+    [SerializeField] private LobbyPortraitStage m_portraitStage;
+
     // 음성 상태 문구는 enum 이름에서 키를 만든다 — 상태가 늘면 테이블에 키만 추가하면 되고
     // 인스펙터 배선이나 매핑 에셋을 함께 고칠 일이 없다 (문서 §2 결정 (h)).
     // 그래서 SerializeField가 아니다 — 고를 것이 없으므로 인스펙터에 내보내면 오히려 잘못 만질 여지만 생긴다.
@@ -92,6 +102,7 @@ public class LobbyRosterPanel : PanelBase
         m_roster.Players.OnListChanged += HandleListChanged;
         // NetworkList는 late-join 클라에 초기 내용을 OnListChanged로 알리지 않는다 — 이 이벤트로 최초 1회를 받는다
         m_roster.OnListReady += Rebuild;
+        m_roster.OnPlayerLeft += HandlePlayerLeft;
 
         if (Vivox != null)
         {
@@ -114,6 +125,7 @@ public class LobbyRosterPanel : PanelBase
         {
             m_roster.Players.OnListChanged -= HandleListChanged;
             m_roster.OnListReady -= Rebuild;
+            m_roster.OnPlayerLeft -= HandlePlayerLeft;
         }
 
         if (Vivox != null)
@@ -134,6 +146,26 @@ public class LobbyRosterPanel : PanelBase
         if (m_leaveButton != null)
             m_leaveButton.onClick.RemoveListener(HandleLeave);
         base.OnDestroy();
+    }
+
+    // 누군가 나갔다 — 남아 있는 사람 화면에만 뜬다. 나간 본인은 이미 이 씬을 떠났고,
+    // 그 뒤에 들어온 사람은 RPC를 받지 않으므로 "입장 이후의 퇴장만" 이 저절로 성립한다. (#598)
+    private void HandlePlayerLeft(string nickname)
+    {
+        if (string.IsNullOrEmpty(nickname))
+            return; // 닉네임 보고가 닿기 전에 끊긴 경우 — 알릴 이름이 없으면 조용히 넘어간다
+
+        if (m_playerLeftToast == null || m_playerLeftToast.IsEmpty)
+        {
+            Debug.LogWarning("LobbyRosterPanel: 퇴장 알림 문구가 연결되지 않았습니다.", this);
+            return;
+        }
+
+        // 인자를 먼저 넣는다 — 무전 키 안내(RefreshRadioKey)와 같은 순서다.
+        m_playerLeftToast.Arguments = new object[] { nickname };
+
+        // HUD가 없는 환경(데디케이티드 서버 등)에선 App.UI.Toast가 null이라 무동작 — PlayerTheftView와 같은 방침
+        App.UI.Toast?.Show(m_playerLeftToast, m_playerLeftToastSeconds);
     }
 
     private void HandleStart()
@@ -178,6 +210,9 @@ public class LobbyRosterPanel : PanelBase
             {
                 LobbyPlayerEntry entry = m_roster.Players[i];
                 m_rows[i].Bind(entry, m_roster.IsHostEntry(entry));
+
+                // 지금은 무대가 한 장만 굽는다 — 외형이 개인별로 갈리면(#432) 여기서 사람별 텍스처가 나간다
+                m_rows[i].SetPortrait(m_portraitStage != null ? m_portraitStage.Portrait : null);
             }
             else
             {

@@ -55,6 +55,10 @@ MonoBehaviour:
     m_Key: Lobby.Voice.Failed
     m_Metadata:
       m_Items: []
+  - m_Id: 2994373374074880
+    m_Key: Lobby.Roster.Left
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
