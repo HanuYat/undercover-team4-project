@@ -13,13 +13,13 @@ using UnityEngine;
 /// 프롭 레이어는 평면 실루엣으로 굽고 색은 런타임에 입힌다(옵션 색 / 머리색). 프롭 원본 아틀라스가
 /// 어두워 그대로 구우면 곱셈 틴트가 탁해지는 문제(NpcAppearance의 중립 베이스와 같은 이유)를 피한다.
 ///
-/// SciFi 전용 값(가림·후드·풀헬멧·특수 안경)은 프롭이 없어 여기서 나오지 않는다 — 손으로 채워야 하고,
+/// 렌더 자체는 <see cref="MontageBakeRig"/>가 맡는다. 여기 남은 것은 어느 값을 굽고 어디에 꽂느냐다.
+///
+/// SciFi 전용 값(가림·후드·풀헬멧·특수 안경)은 프롭이 없어 자동으로 나오지 않는다 — 손으로 채워야 하고,
 /// 채우기 전까지는 AppearanceDatabase.CanDepict가 그 축을 공개 후보에서 빼 준다.
 /// </summary>
 public class MontageLayerBaker : EditorWindow
 {
-    private const float k_featureSoftness = 0.08f; // 이목구비 컷오프 경계 폭 — 계단을 살짝 뭉개 톱니를 막는다
-
     private const float k_unknownHairCapRatio = 0.3f; // 형태 미상 머리가 정수리에서 덮는 깊이 (두상 높이 대비)
 
     [SerializeField] private AppearanceDatabase m_database;
@@ -40,12 +40,36 @@ public class MontageLayerBaker : EditorWindow
 
     [SerializeField] private float m_featureThreshold = 0.25f;
 
+    // 정면에서 거의 안 보이는 프롭(뒤로 넘긴 묶음머리·번)은 구워도 빈 그림이 나온다. 그걸 꽂으면
+    // CanDepict가 "그릴 수 있다"고 판단해 공개 축으로 뽑고, 본부는 대머리와 구분 안 되는 그림을 본다. (#619)
+    [SerializeField] private float m_minLayerCoverage = 0.06f;
+
     // 이미지는 전부 Imported 공유 저장소에 둔다 (2026-08-12 에셋 폴더 정리)
     [SerializeField] private string m_outputFolder = "Assets/Imported/Art/Montage/Layers";
 
     [SerializeField] private GameObject m_sciFiPrefab;
 
     [SerializeField] private int m_sciFiModelIndex = 13;
+
+    [SerializeField] private Material[] m_sciFiMaterials;
+
+    [Header("해상도 비교 시트 (#619)")]
+    [SerializeField] private AppearanceAxis m_compareAxis = AppearanceAxis.HairStyle;
+
+    [SerializeField] private int[] m_compareResolutions = { 16 };
+
+    // 프레임을 위로 올려 정수리 위를 담고 목을 버리는 실험용 — 묶은 머리·번이 프레임 위로 잘려 나간다 (#619)
+    [SerializeField] private float[] m_compareOffsets = { 0.09f };
+
+    [SerializeField] private GameObject[] m_compareProps;
+
+    [SerializeField] private GameObject m_comparePairedProp;
+
+    [SerializeField] private int m_compareCell = 96;
+
+    [SerializeField] private Color m_compareBackground = new Color(0.5f, 0.5f, 0.52f, 1f);
+
+    [SerializeField] private string m_compareFolder = "Assets/Imported/Art/Montage/Compare";
 
     [SerializeField] private Vector2 m_scroll;
 
@@ -84,6 +108,12 @@ public class MontageLayerBaker : EditorWindow
             0.05f,
             0.7f
         );
+        m_minLayerCoverage = EditorGUILayout.Slider(
+            new GUIContent("확인 문턱", "구운 그림이 프레임에서 이보다 적게 차지하면 로그로 알린다(꽂기는 한다). 정면에서 '없음'과 구분되지 않는지 사람이 보고 판단할 후보를 골라 주는 용도 — 구분이 안 되면 그 옵션의 ExcludeFromMontage를 켠다"),
+            m_minLayerCoverage,
+            0f,
+            0.2f
+        );
         m_outputFolder = EditorGUILayout.TextField("저장 폴더", m_outputFolder);
 
         EditorGUILayout.Space();
@@ -94,6 +124,65 @@ public class MontageLayerBaker : EditorWindow
                 Bake();
         }
 
+        DrawCompareSection();
+        DrawSciFiSection();
+
+        EditorGUILayout.EndScrollView();
+    }
+
+    /// <summary>
+    /// 해상도 비교 시트 (#619) — 어휘를 몇 개까지 늘릴 수 있는지는 <b>해상도가 정한다</b>.
+    /// 16px에서 머리는 10픽셀 남짓이라 단발과 스포츠머리가 같은 덩어리가 되고, 해상도를 올리면
+    /// 값은 늘릴 수 있지만 뭉갬을 난이도 레버로 쓰던 것과 맞바꾼다. 그 맞바꿈을 눈으로 보고 정하는 자리다.
+    /// </summary>
+    private void DrawCompareSection()
+    {
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("해상도 비교 시트", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox(
+            "같은 프롭을 여러 해상도로 구워 한 장에 나란히 붙인다 — 가로는 프롭, 세로는 해상도(위가 낮은 쪽). DB는 건드리지 않는다.\n"
+                + "왼쪽 첫 칸은 프롭 없는 맨 두상이다 (안 그린 자리가 어떻게 읽히는지의 기준).\n"
+                + "후보 프롭에는 아직 어휘에 없는 것을 넣는다 — 미사용 Generic 부착물(Hair_05/06/08/09/09_alt/10/11, Bun_01, Beard_01),\n"
+                + "다른 팩 프롭(PoliceStation Helmet·Goggles, Apocalypse RiotCop_Male_Helmet_01 등). 다른 팩 프롭은 이 시트가 Generic 두상 맞춤 확인도 겸한다.",
+            MessageType.None
+        );
+
+        m_compareAxis = (AppearanceAxis)EditorGUILayout.EnumPopup(
+            new GUIContent("비교할 축", "이 축의 DB 프롭이 먼저 깔리고 뒤에 후보 프롭이 붙는다. 머리스타일은 실루엣으로(머리색이 칠할 자리라), 나머지는 실제 색으로 굽는다"),
+            m_compareAxis
+        );
+
+        var serialized = new SerializedObject(this);
+        EditorGUILayout.PropertyField(serialized.FindProperty("m_compareResolutions"), new GUIContent("해상도들"), true);
+        EditorGUILayout.PropertyField(
+            serialized.FindProperty("m_compareOffsets"),
+            new GUIContent("머리 오프셋들", "프레임을 위로 올려 정수리 위를 담고 목을 버리는 실험용. 줄은 해상도 × 오프셋 조합만큼 생긴다"),
+            true
+        );
+        EditorGUILayout.PropertyField(serialized.FindProperty("m_compareProps"), new GUIContent("후보 프롭"), true);
+        serialized.ApplyModifiedProperties();
+
+        m_comparePairedProp = (GameObject)
+            EditorGUILayout.ObjectField(
+                new GUIContent("같이 붙일 프롭", "모든 칸에 함께 붙여 검정 가림막으로 쓴다 — 결과에는 이 프롭 밖으로 나온 부분만 남는다. 모자를 넣고 머리 축을 구우면 어느 머리가 모자를 뚫는지 보인다"),
+                m_comparePairedProp,
+                typeof(GameObject),
+                false
+            );
+
+        m_compareCell = EditorGUILayout.IntField(new GUIContent("칸 크기", "시트에서 한 칸이 차지하는 픽셀. 해상도의 정수배로 확대해 넣는다 — 96이면 16/24/32가 각각 6·4·3배"), m_compareCell);
+        m_compareBackground = EditorGUILayout.ColorField(new GUIContent("배경색", "빈 자리를 채우는 색. 검은 머리와 밝은 머리가 둘 다 보이는 중간 톤으로 둘 것"), m_compareBackground);
+        m_compareFolder = EditorGUILayout.TextField("시트 저장 폴더", m_compareFolder);
+
+        using (new EditorGUI.DisabledScope(m_mannequinPrefab == null))
+        {
+            if (GUILayout.Button("비교 시트 굽기"))
+                BakeCompareSheet();
+        }
+    }
+
+    private void DrawSciFiSection()
+    {
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("SciFi 전용 값 레이어", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox(
@@ -115,7 +204,88 @@ public class MontageLayerBaker : EditorWindow
                 RenderSciFiModel();
         }
 
-        EditorGUILayout.EndScrollView();
+        EditorGUILayout.Space();
+        EditorGUILayout.HelpBox(
+            "모델 시트는 20모델을 한 장에 나열한다 — 카탈로그(AppearanceModelCatalog)가 적어 둔 값이 실물과 맞는지 대조하는 용도다.\n"
+                + "아틀라스를 넣으면 대신 '모델 인덱스' 하나를 그 머티리얼 수만큼 굽는다 — Alts 24종이 무엇을 흔드는지(옷인지 피부인지) 보는 용도.",
+            MessageType.None
+        );
+
+        var serialized = new SerializedObject(this);
+        EditorGUILayout.PropertyField(
+            serialized.FindProperty("m_sciFiMaterials"),
+            new GUIContent("아틀라스 (선택)", "PolygonSciFiCity/Materials/Alts 의 머티리얼들. 비우면 모델을 나열한다"),
+            true
+        );
+        serialized.ApplyModifiedProperties();
+
+        using (new EditorGUI.DisabledScope(m_sciFiPrefab == null))
+        {
+            if (GUILayout.Button("SciFi 모델 시트"))
+                BakeSciFiSheet();
+        }
+    }
+
+    /// <summary>
+    /// SciFi 모델(또는 아틀라스 변형)을 한 장에 나열한다 (#619).
+    /// 통짜 메시라 축을 떼어낼 수 없으니 카탈로그가 손으로 적은 값이 정본인데, 그 값이 실물과 맞는지
+    /// 확인할 길이 지금 없다 — 모델을 한 줄로 세워 눈으로 대조하는 것이 그 길이다.
+    /// </summary>
+    private void BakeSciFiSheet()
+    {
+        using var rig = new MontageBakeRig(m_sciFiPrefab, m_flatMaterial, m_resolution, m_orthoSize, m_headOffset, m_cameraDistance);
+        if (!rig.IsValid)
+        {
+            Debug.LogError("MontageLayerBaker: SciFi 모델에서 머리 본을 찾지 못했다");
+            return;
+        }
+
+        bool byAtlas = m_sciFiMaterials != null && m_sciFiMaterials.Length > 0;
+        int columns = byAtlas ? m_sciFiMaterials.Length : rig.BodyCount;
+        if (columns == 0)
+        {
+            Debug.LogWarning("MontageLayerBaker: 구울 모델이 없다");
+            return;
+        }
+
+        int cellSize = Mathf.Max(m_compareCell, m_resolution);
+        int width = columns * cellSize;
+
+        var sheet = new Color[width * cellSize];
+        for (int i = 0; i < sheet.Length; i++)
+            sheet[i] = m_compareBackground;
+
+        if (byAtlas && !rig.SelectBody(m_sciFiModelIndex))
+            return;
+
+        var labels = new List<string>(columns);
+        for (int column = 0; column < columns; column++)
+        {
+            if (byAtlas)
+            {
+                labels.Add(m_sciFiMaterials[column] != null ? m_sciFiMaterials[column].name : "(빈 칸)");
+            }
+            else
+            {
+                if (!rig.SelectBody(column))
+                    return;
+                labels.Add(column.ToString("00"));
+            }
+
+            Color[] pixels = rig.RenderSubject(byAtlas ? m_sciFiMaterials[column] : null);
+            var cell = new Color[pixels.Length];
+            for (int i = 0; i < cell.Length; i++)
+                cell[i] = Over(m_compareBackground, pixels[i]);
+
+            BlitCell(sheet, width, cellSize, cellSize, cell, m_resolution, column, 0);
+        }
+
+        Directory.CreateDirectory(m_compareFolder);
+        AssetDatabase.Refresh();
+
+        string fileName = byAtlas ? $"Montage_SciFi_Atlas_{m_sciFiModelIndex:00}" : "Montage_SciFi_Models";
+        SavePixels(sheet, width, cellSize, m_compareFolder, fileName);
+        Debug.Log($"[몽타주] SciFi 시트 → {m_compareFolder}/{fileName}.png\n  가로(왼→오른): {string.Join(", ", labels)}");
     }
 
     /// <summary>
@@ -125,46 +295,21 @@ public class MontageLayerBaker : EditorWindow
     /// </summary>
     private void RenderSciFiModel()
     {
-        var rig = new GameObject("~MontageSciFiRig") { hideFlags = HideFlags.HideAndDontSave };
-        rig.transform.position = new Vector3(0f, -10000f, 0f);
-
-        try
+        using var rig = new MontageBakeRig(m_sciFiPrefab, m_flatMaterial, m_resolution, m_orthoSize, m_headOffset, m_cameraDistance);
+        if (!rig.IsValid)
         {
-            GameObject model = (GameObject)PrefabUtility.InstantiatePrefab(m_sciFiPrefab, rig.transform);
-            model.transform.localPosition = Vector3.zero;
-            model.transform.localRotation = Quaternion.identity;
-
-            // NpcCatalogAppearance와 같은 규칙 — 계층 순서의 SkinnedMeshRenderer 하나만 켠다
-            SkinnedMeshRenderer[] bodies = model.GetComponentsInChildren<SkinnedMeshRenderer>(true);
-            if (m_sciFiModelIndex < 0 || m_sciFiModelIndex >= bodies.Length)
-            {
-                Debug.LogError($"MontageLayerBaker: 모델 인덱스 {m_sciFiModelIndex}가 범위를 벗어났다 (바디 {bodies.Length}종)");
-                return;
-            }
-            for (int i = 0; i < bodies.Length; i++)
-                bodies[i].gameObject.SetActive(i == m_sciFiModelIndex);
-
-            Transform head = ResolveHead(model.transform);
-            if (head == null)
-            {
-                Debug.LogError("MontageLayerBaker: SciFi 모델에서 머리 본을 찾지 못했다");
-                return;
-            }
-
-            Camera camera = CreateCamera(rig.transform, model.transform, head);
-            CreateLight(rig.transform, model.transform);
-
-            Directory.CreateDirectory(m_outputFolder);
-            AssetDatabase.Refresh();
-
-            string fileName = $"Montage_SciFi_{m_sciFiModelIndex:00}";
-            SavePixels(RenderPixels(camera), fileName);
-            Debug.Log($"[몽타주] SciFi 모델 {m_sciFiModelIndex} 렌더 → {m_outputFolder}/{fileName}.png — 필요한 부위만 남기고 지운 뒤 해당 옵션의 MontageLayer에 꽂을 것");
+            Debug.LogError("MontageLayerBaker: SciFi 모델에서 머리 본을 찾지 못했다");
+            return;
         }
-        finally
-        {
-            DestroyImmediate(rig);
-        }
+        if (!rig.SelectBody(m_sciFiModelIndex))
+            return;
+
+        Directory.CreateDirectory(m_outputFolder);
+        AssetDatabase.Refresh();
+
+        string fileName = $"Montage_SciFi_{m_sciFiModelIndex:00}";
+        SavePixels(rig.RenderSubject(), m_resolution, m_resolution, m_outputFolder, fileName);
+        Debug.Log($"[몽타주] SciFi 모델 {m_sciFiModelIndex} 렌더 → {m_outputFolder}/{fileName}.png — 필요한 부위만 남기고 지운 뒤 해당 옵션의 MontageLayer에 꽂을 것");
     }
 
     private void Bake()
@@ -178,280 +323,283 @@ public class MontageLayerBaker : EditorWindow
         Directory.CreateDirectory(m_outputFolder);
         AssetDatabase.Refresh(); // 새로 만든 폴더를 인식시켜야 아래 ImportAsset이 먹는다
 
-        // DontSave — 굽는 동안만 존재하는 리그라 열려 있는 씬을 더럽히지 않는다
-        var rig = new GameObject("~MontageBakeRig") { hideFlags = HideFlags.HideAndDontSave };
-        rig.transform.position = new Vector3(0f, -10000f, 0f); // 씬의 다른 것이 화면에 들어오지 않게 멀리 둔다
-        var baked = new List<string>();
-
-        // 프롭을 굽는 동안 바디를 덮을 검정 머티리얼 — 가림만 남기고 색으로 걷어내기 위한 것
-        Material occluder = m_flatMaterial != null ? new Material(m_flatMaterial) : null;
-        if (occluder != null)
+        using var rig = new MontageBakeRig(m_mannequinPrefab, m_flatMaterial, m_resolution, m_orthoSize, m_headOffset, m_cameraDistance);
+        if (!rig.IsValid)
         {
-            occluder.hideFlags = HideFlags.HideAndDontSave;
-            // 셰이더에 따라 색 프로퍼티 이름이 갈린다 (URP는 _BaseColor, 레거시 Unlit은 _Color)
-            if (occluder.HasProperty("_BaseColor"))
-                occluder.SetColor("_BaseColor", Color.black);
-            if (occluder.HasProperty("_Color"))
-                occluder.SetColor("_Color", Color.black);
+            Debug.LogError("MontageLayerBaker: 마네킹에서 머리 본을 찾지 못했다 — 프리팹의 휴머노이드 리그 또는 'Head' 이름 자식을 확인할 것");
+            return;
         }
 
-        try
-        {
-            GameObject mannequin = (GameObject)PrefabUtility.InstantiatePrefab(m_mannequinPrefab, rig.transform);
-            mannequin.transform.localPosition = Vector3.zero;
-            mannequin.transform.localRotation = Quaternion.identity;
+        var baked = new List<string>();
+        var excluded = new List<string>();
+        var faint = new List<string>();
 
-            Transform head = ResolveHead(mannequin.transform);
-            if (head == null)
+        // ① 이목구비 — 살과 분리해 둬야 살 레이어를 통짜로 피부색으로 칠할 수 있다
+        Sprite faceSprite = SaveLayer(rig.RenderFace(m_featureThreshold), "Montage_Face");
+        if (faceSprite != null)
+        {
+            SetPrivateSprite("m_montageFace", faceSprite);
+            baked.Add("이목구비");
+        }
+
+        // ② 살
+        Color[] basePixels = rig.RenderBase();
+        Sprite baseSprite = SaveLayer(basePixels, "Montage_Base");
+        if (baseSprite != null)
+        {
+            SetPrivateSprite("m_montageBase", baseSprite);
+            baked.Add("살");
+        }
+
+        // ③ 형태 미상 머리 — 머리 프롭을 쓰지 않고 두상에서 뽑는다 (BuildUnknownHair 참고)
+        Sprite unknownHair = SaveLayer(BuildUnknownHair(basePixels), "Montage_HairUnknown");
+        if (unknownHair != null)
+        {
+            SetPrivateSprite("m_montageUnknownHair", unknownHair);
+            baked.Add("형태 미상 머리");
+        }
+
+        // ④ 프롭 레이어
+        foreach (AppearanceAxis axis in PropAxes())
+        {
+            int count = m_database.GetOptionCount(axis);
+            for (int i = 0; i < count; i++)
+            {
+                AppearanceDatabase.AppearanceOption option = m_database.GetOption(axis, i);
+                if (option?.PropPrefab == null)
+                    continue;
+
+                // 몽타주에서 뺀 값은 그림을 꽂지 않는다 — 꽂으면 CanDepict가 공개 축 후보로 되살린다
+                if (option.ExcludeFromMontage)
+                {
+                    option.MontageLayer = null; // 예전에 꽂아 둔 그림이 있으면 걷어낸다
+                    excluded.Add($"{axis}[{i}] {option.PropPrefab.name}");
+                    continue;
+                }
+
+                Color[] pixels = rig.RenderProp(option.PropPrefab, option.Color, IsSilhouetteAxis(axis));
+
+                // 노출이 적은 프롭은 꽂되 알린다 — 자를지 말지는 사람이 굽은 그림을 보고 정할 몫이다.
+                // 면적이 곧 구분 가능성은 아니라서다: 콧수염은 5%대여도 '없음'과 확실히 구분된다.
+                float coverage = Coverage(pixels);
+                if (coverage < m_minLayerCoverage)
+                    faint.Add($"{axis}[{i}] {option.PropPrefab.name} ({coverage:P1})");
+
+                Sprite sprite = SaveLayer(pixels, $"Montage_{axis}_{i}");
+                if (sprite == null)
+                    continue;
+
+                option.MontageLayer = sprite;
+                baked.Add($"{axis}[{i}]");
+            }
+        }
+
+        EditorUtility.SetDirty(m_database);
+        AssetDatabase.SaveAssets();
+
+        Debug.Log(
+            $"[몽타주] 레이어 {baked.Count}장 구움 → {m_outputFolder}\n  {string.Join(", ", baked)}"
+                + (excluded.Count > 0
+                    ? $"\n  몽타주 제외(ExcludeFromMontage) — 공개 축 후보에서 빠진다:\n    {string.Join("\n    ", excluded)}"
+                    : string.Empty)
+                + (faint.Count > 0
+                    ? $"\n  ⚠ 노출이 {m_minLayerCoverage:P0} 미만이라 꽂긴 했지만 확인 요망 — '없음'과 구분되지 않으면 ExcludeFromMontage를 켤 것:\n    {string.Join("\n    ", faint)}"
+                    : string.Empty)
+        );
+    }
+
+    /// <summary>
+    /// 해상도별로 리그를 세워 같은 프롭을 굽고 한 장에 붙인다 (#619). DB에는 아무것도 꽂지 않는다 —
+    /// 어휘 예산을 정하려고 보는 그림이라, 보는 동안 지금 어휘가 깨지면 안 된다.
+    /// </summary>
+    private void BakeCompareSheet()
+    {
+        if (m_flatMaterial == null)
+        {
+            Debug.LogError("MontageLayerBaker: 평면 머티리얼이 없으면 실루엣을 오려낼 수 없다 — 흰색 URP/Unlit 머티리얼을 지정할 것");
+            return;
+        }
+        if (m_compareResolutions == null || m_compareResolutions.Length == 0)
+        {
+            Debug.LogError("MontageLayerBaker: 비교할 해상도가 없다");
+            return;
+        }
+
+        var props = new List<GameObject>();
+        var colors = new List<Color>();
+
+        // 지금 어휘가 이 해상도에서 서로 구분되는지가 기준선이다 — DB 값을 먼저 깐다
+        int optionCount = m_database != null ? m_database.GetOptionCount(m_compareAxis) : 0;
+        for (int i = 0; i < optionCount; i++)
+        {
+            AppearanceDatabase.AppearanceOption option = m_database.GetOption(m_compareAxis, i);
+            if (option?.PropPrefab == null)
+                continue;
+
+            props.Add(option.PropPrefab);
+            colors.Add(option.Color);
+        }
+
+        if (m_compareProps != null)
+        {
+            foreach (GameObject prefab in m_compareProps)
+            {
+                if (prefab == null)
+                    continue;
+
+                props.Add(prefab);
+                colors.Add(Color.white); // 아직 어휘에 없어 옵션 색이 없다
+            }
+        }
+
+        if (props.Count == 0)
+        {
+            Debug.LogWarning("MontageLayerBaker: 비교할 프롭이 없다 — 축을 바꾸거나 후보 프롭을 넣을 것");
+            return;
+        }
+
+        bool silhouette = IsSilhouetteAxis(m_compareAxis);
+        Color skinColor = FirstOptionColor(AppearanceAxis.SkinColor, new Color(0.85f, 0.68f, 0.55f));
+        Color hairColor = FirstOptionColor(AppearanceAxis.HairColor, new Color(0.06f, 0.06f, 0.06f));
+
+        // 줄은 해상도 × 머리 오프셋 조합이다 — 둘 다 "무엇이 프레임에 담기나"를 정하는 노브라 같이 봐야 한다
+        var rowSetups = new List<(int Resolution, float Offset)>();
+        foreach (int resolution in m_compareResolutions)
+        {
+            foreach (float offset in Offsets())
+                rowSetups.Add((Mathf.Max(1, resolution), offset));
+        }
+
+        int columns = props.Count + 1; // 맨 두상 한 칸
+        int rows = rowSetups.Count;
+
+        // 칸이 원본보다 작으면 축소해야 하는데, 축소는 곧 이 시트가 판단하려는 뭉갬을 한 번 더 먹이는 것이다.
+        // 그래서 칸은 가장 큰 해상도보다 작아지지 않는다.
+        int cellSize = Mathf.Max(1, m_compareCell);
+        foreach (var setup in rowSetups)
+            cellSize = Mathf.Max(cellSize, setup.Resolution);
+
+        int width = columns * cellSize;
+        int height = rows * cellSize;
+
+        var sheet = new Color[width * height];
+        for (int i = 0; i < sheet.Length; i++)
+            sheet[i] = m_compareBackground;
+
+        for (int row = 0; row < rows; row++)
+        {
+            (int resolution, float offset) = rowSetups[row];
+            using var rig = new MontageBakeRig(m_mannequinPrefab, m_flatMaterial, resolution, m_orthoSize, offset, m_cameraDistance);
+            if (!rig.IsValid)
             {
                 Debug.LogError("MontageLayerBaker: 마네킹에서 머리 본을 찾지 못했다 — 프리팹의 휴머노이드 리그 또는 'Head' 이름 자식을 확인할 것");
                 return;
             }
 
-            Camera camera = CreateCamera(rig.transform, mannequin.transform, head);
-            Light light = CreateLight(rig.transform, mannequin.transform);
+            // 굽기와 같은 순서로 찍는다 (이목구비 → 살 → 프롭) — 시트가 실물과 다르면 보고 정할 이유가 없다
+            Color[] facePixels = rig.RenderFace(m_featureThreshold);
+            Color[] basePixels = rig.RenderBase();
 
-            Renderer[] bodyRenderers = mannequin.GetComponentsInChildren<Renderer>(true);
+            // 같이 붙일 프롭은 자기 색으로 한 번 그려 두고, 후보 프롭을 찍을 땐 검정 가림막으로 쓴다
+            Color[] pairedLayer = m_comparePairedProp != null
+                ? rig.RenderProp(m_comparePairedProp, Color.white, false)
+                : null;
 
-            // ① 이목구비 — 조명 렌더에서 주변 피부보다 어두운 픽셀만 남긴다.
-            //    살과 분리해 둬야 살 레이어를 통짜로 피부색으로 칠할 수 있다.
-            Sprite faceSprite = SavePixels(ExtractFeatures(RenderPixels(camera)), "Montage_Face");
-            if (faceSprite != null)
+            for (int column = 0; column < columns; column++)
             {
-                SetPrivateSprite("m_montageFace", faceSprite);
-                baked.Add("이목구비");
+                Color[] layer = column == 0
+                    ? null
+                    : rig.RenderProp(props[column - 1], colors[column - 1], silhouette, m_comparePairedProp);
+                Color[] cell = ComposeCell(basePixels, facePixels, pairedLayer, layer, skinColor, silhouette ? hairColor : Color.white);
+                BlitCell(sheet, width, height, cellSize, cell, resolution, column, row);
             }
-
-            // ② 살 — 평면 실루엣. 피부색 곱셈 틴트가 원본 살색·명암에 눌리면 안 되므로 순백으로 굽는다
-            ApplyMaterial(bodyRenderers, m_flatMaterial);
-            light.enabled = false;
-
-            Color[] basePixels = RenderPixels(camera);
-            Sprite baseSprite = SavePixels(basePixels, "Montage_Base");
-            if (baseSprite != null)
-            {
-                SetPrivateSprite("m_montageBase", baseSprite);
-                baked.Add("살");
-            }
-
-            // ③ 형태 미상 머리 — 머리 프롭을 쓰지 않고 두상에서 뽑는다 (BuildUnknownHair 참고)
-            Sprite unknownHair = SavePixels(BuildUnknownHair(basePixels), "Montage_HairUnknown");
-            if (unknownHair != null)
-            {
-                SetPrivateSprite("m_montageUnknownHair", unknownHair);
-                baked.Add("형태 미상 머리");
-            }
-
-            // ④ 프롭 레이어 — 바디를 끄지 않고 검정으로 남긴다.
-            //    끄면 머리 뒤에 가려야 할 뒷머리·모자 뒤통수까지 찍혀서 얼굴 위를 덮는다.
-            //    검정으로 두면 가림(depth)은 그대로 살고, 평면 렌더의 밝기로 프롭만 오려낼 수 있다.
-            ApplyMaterial(bodyRenderers, occluder);
-            light.enabled = true;
-
-            foreach (AppearanceAxis axis in PropAxes())
-            {
-                int count = m_database.GetOptionCount(axis);
-                for (int i = 0; i < count; i++)
-                {
-                    AppearanceDatabase.AppearanceOption option = m_database.GetOption(axis, i);
-                    if (option?.PropPrefab == null)
-                        continue;
-
-                    Sprite sprite = SavePixels(BakeProp(camera, head, option, axis), $"Montage_{axis}_{i}");
-                    if (sprite == null)
-                        continue;
-
-                    option.MontageLayer = sprite;
-                    baked.Add($"{axis}[{i}]");
-                }
-            }
-
-            EditorUtility.SetDirty(m_database);
-            AssetDatabase.SaveAssets();
         }
-        finally
+
+        Directory.CreateDirectory(m_compareFolder);
+        AssetDatabase.Refresh();
+
+        string fileName = $"Montage_Compare_{m_compareAxis}";
+        SavePixels(sheet, width, height, m_compareFolder, fileName);
+
+        var names = new List<string>(props.Count) { "(맨 두상)" };
+        foreach (GameObject prop in props)
+            names.Add(prop.name);
+        var rowLabels = new List<string>(rows);
+        foreach (var setup in rowSetups)
+            rowLabels.Add($"{setup.Resolution}px/오프셋 {setup.Offset:0.###}");
+        Debug.Log(
+            $"[몽타주] 비교 시트 → {m_compareFolder}/{fileName}.png"
+                + (m_comparePairedProp != null ? $"  (같이 붙임: {m_comparePairedProp.name} — 이 프롭 밖으로 나온 부분만 남는다)" : string.Empty)
+                + $"\n  세로(위→아래): {string.Join(", ", rowLabels)}\n"
+                + $"  가로(왼→오른): {string.Join(", ", names)}"
+        );
+    }
+
+    /// <summary>포트레이트와 같은 순서로 한 칸을 합성한다 — 배경 → 살(피부색) → 이목구비 → 같이 붙인 프롭 → 후보 프롭.</summary>
+    private Color[] ComposeCell(
+        Color[] basePixels,
+        Color[] facePixels,
+        Color[] pairedPixels,
+        Color[] layerPixels,
+        Color skinColor,
+        Color layerTint
+    )
+    {
+        var cell = new Color[basePixels.Length];
+        for (int i = 0; i < cell.Length; i++)
         {
-            DestroyImmediate(rig);
-            if (occluder != null)
-                DestroyImmediate(occluder);
+            Color pixel = Over(m_compareBackground, Tint(basePixels[i], skinColor));
+            pixel = Over(pixel, facePixels[i]);
+            if (pairedPixels != null)
+                pixel = Over(pixel, pairedPixels[i]);
+            if (layerPixels != null)
+                pixel = Over(pixel, Tint(layerPixels[i], layerTint));
+            cell[i] = pixel;
         }
-
-        Debug.Log($"[몽타주] 레이어 {baked.Count}장 구움 → {m_outputFolder}\n  {string.Join(", ", baked)}");
+        return cell;
     }
 
-    private static IEnumerable<AppearanceAxis> PropAxes()
+    /// <summary>비교할 머리 오프셋 목록 — 비어 있으면 굽기와 같은 값 하나.</summary>
+    private IEnumerable<float> Offsets()
     {
-        yield return AppearanceAxis.HairStyle;
-        yield return AppearanceAxis.FacialHair;
-        yield return AppearanceAxis.Headwear;
-        yield return AppearanceAxis.Eyewear;
-    }
-
-    /// <summary>
-    /// 프롭 레이어 한 장 — 실루엣과 색을 따로 렌더해 합친다.
-    ///
-    /// 머리스타일만 흰 실루엣이다(머리색 축이 칠할 자리라). 나머지 프롭은 <b>실제 머티리얼에 옵션 색까지
-    /// 얹어</b> 굽는다 — 노랑·검정 고글처럼 두 색으로 된 프롭을 단색 틴트로 칠하면 화면과 어긋난다.
-    /// 색을 실물로 구우면 바디(검정)와 밝기로 구분할 수 없으므로, 같은 프롭을 흰색으로 한 번 더 찍어
-    /// 그것을 오려내는 마스크로 쓴다.
-    /// </summary>
-    private Color[] BakeProp(Camera camera, Transform head, AppearanceDatabase.AppearanceOption option, AppearanceAxis axis)
-    {
-        bool silhouette = axis == AppearanceAxis.HairStyle;
-
-        Color[] color = null;
-        if (!silhouette)
+        if (m_compareOffsets == null || m_compareOffsets.Length == 0)
         {
-            GameObject lit = InstantiateProp(option.PropPrefab, head, null);
-            TintProp(lit, option.Color);
-            color = RenderPixels(camera);
-            DestroyImmediate(lit);
+            yield return m_headOffset;
+            yield break;
         }
 
-        GameObject flat = InstantiateProp(option.PropPrefab, head, m_flatMaterial);
-        Color[] mask = RenderPixels(camera);
-        DestroyImmediate(flat);
-
-        return CutOutProp(mask, color);
+        foreach (float offset in m_compareOffsets)
+            yield return offset;
     }
 
-    // 실제 NPC와 같은 방식으로 붙여야 위치가 어긋나지 않는다 (NpcAppearance.ApplyPropAxis와 동일)
-    private static GameObject InstantiateProp(GameObject prefab, Transform head, Material material)
-    {
-        GameObject prop = (GameObject)PrefabUtility.InstantiatePrefab(prefab, head);
-        prop.transform.localPosition = Vector3.zero;
-        prop.transform.localRotation = Quaternion.identity;
-        prop.transform.localScale = Vector3.one;
+    private static Color Tint(Color source, Color tint) =>
+        new Color(source.r * tint.r, source.g * tint.g, source.b * tint.b, source.a * tint.a);
 
-        if (material != null)
-            ApplyMaterial(prop.GetComponentsInChildren<Renderer>(true), material);
-        return prop;
-    }
+    private static Color Over(Color under, Color over) =>
+        new Color(
+            over.r * over.a + under.r * (1f - over.a),
+            over.g * over.a + under.g * (1f - over.a),
+            over.b * over.a + under.b * (1f - over.a),
+            1f
+        );
 
-    // NpcAppearance.TintRenderers와 같은 방식 — 공유 머티리얼을 건드리지 않는다
-    private static void TintProp(GameObject prop, Color color)
+    /// <summary>한 칸을 정수배로 확대해 시트에 박는다 — 픽셀 그림이라 보간하면 판단이 흐려진다.</summary>
+    private static void BlitCell(Color[] sheet, int sheetWidth, int sheetHeight, int cellSize, Color[] cell, int size, int column, int row)
     {
-        var block = new MaterialPropertyBlock();
-        foreach (Renderer renderer in prop.GetComponentsInChildren<Renderer>(true))
+        int scale = Mathf.Max(1, cellSize / size);
+        int drawn = size * scale;
+        int offsetX = column * cellSize + (cellSize - drawn) / 2;
+        // 픽셀 배열은 아래가 0행이라, 위에서 아래로 해상도가 커지게 하려면 뒤집어 넣는다
+        int offsetY = sheetHeight - (row + 1) * cellSize + (cellSize - drawn) / 2;
+
+        for (int y = 0; y < drawn; y++)
         {
-            renderer.GetPropertyBlock(block);
-            block.SetColor("_BaseColor", color);
-            renderer.SetPropertyBlock(block);
+            int sourceRow = (y / scale) * size;
+            int targetRow = (offsetY + y) * sheetWidth + offsetX;
+            for (int x = 0; x < drawn; x++)
+                sheet[targetRow + x] = cell[sourceRow + x / scale];
         }
     }
-
-    private static void ApplyMaterial(Renderer[] renderers, Material material)
-    {
-        foreach (Renderer renderer in renderers)
-        {
-            if (renderer == null)
-                continue;
-
-            var materials = new Material[renderer.sharedMaterials.Length];
-            for (int i = 0; i < materials.Length; i++)
-                materials[i] = material;
-            renderer.sharedMaterials = materials;
-        }
-    }
-
-    private Camera CreateCamera(Transform parent, Transform mannequin, Transform head)
-    {
-        var go = new GameObject("~BakeCamera");
-        go.transform.SetParent(parent, false);
-
-        Camera camera = go.AddComponent<Camera>();
-        camera.orthographic = true;
-        camera.orthographicSize = m_orthoSize;
-        camera.clearFlags = CameraClearFlags.SolidColor;
-        camera.nearClipPlane = 0.01f;
-        camera.farClipPlane = m_cameraDistance * 4f;
-        camera.enabled = false; // Render()로만 돈다
-
-        Vector3 focus = head.position + Vector3.up * m_headOffset;
-        go.transform.position = focus + mannequin.forward * m_cameraDistance;
-        go.transform.rotation = Quaternion.LookRotation(focus - go.transform.position, Vector3.up);
-        return camera;
-    }
-
-    private static Light CreateLight(Transform parent, Transform mannequin)
-    {
-        var go = new GameObject("~BakeLight");
-        go.transform.SetParent(parent, false);
-        go.transform.rotation = Quaternion.LookRotation(-mannequin.forward + Vector3.down * 0.35f);
-
-        Light light = go.AddComponent<Light>();
-        light.type = LightType.Directional;
-        light.intensity = 1.2f;
-        return light;
-    }
-
-    /// <summary>
-    /// 한 장 렌더해 픽셀로 돌려준다.
-    /// 배경을 흰색·검정 두 번 찍어 알파를 역산한다 — URP는 불투명 패스가 알파를 그대로 두지 않아
-    /// 투명 배경으로 한 번 찍는 방식이 파이프라인 설정에 따라 통째로 불투명하게 나온다.
-    /// </summary>
-    private Color[] RenderPixels(Camera camera)
-    {
-        int size = m_resolution;
-        var rt = new RenderTexture(size, size, 24, RenderTextureFormat.ARGB32) { antiAliasing = 1 };
-        Texture2D onWhite = Capture(camera, rt, Color.white);
-        Texture2D onBlack = Capture(camera, rt, Color.black);
-
-        Color[] white = onWhite.GetPixels();
-        Color[] black = onBlack.GetPixels();
-        var pixels = new Color[white.Length];
-
-        for (int i = 0; i < pixels.Length; i++)
-        {
-            float alpha = 1f - ((white[i].r - black[i].r) + (white[i].g - black[i].g) + (white[i].b - black[i].b)) / 3f;
-            pixels[i] = alpha <= 0.004f
-                ? Color.clear
-                : new Color(black[i].r / alpha, black[i].g / alpha, black[i].b / alpha, Mathf.Clamp01(alpha));
-        }
-
-        DestroyImmediate(onWhite);
-        DestroyImmediate(onBlack);
-        rt.Release();
-        DestroyImmediate(rt);
-        return pixels;
-    }
-
-    /// <summary>
-    /// 조명 렌더에서 이목구비만 남긴다 — 얼굴 밝기의 중앙값을 피부로 보고, 그보다 문턱만큼 어두운
-    /// 픽셀의 알파만 남긴다. 눈·눈썹·입은 피부보다 훨씬 어두워 살아남고 완만한 명암은 걸러진다.
-    /// </summary>
-    private Color[] ExtractFeatures(Color[] pixels)
-    {
-        var luminances = new List<float>(pixels.Length);
-        foreach (Color pixel in pixels)
-        {
-            if (pixel.a > 0.5f)
-                luminances.Add(Luminance(pixel));
-        }
-
-        if (luminances.Count == 0)
-            return pixels;
-
-        luminances.Sort();
-        float skin = luminances[luminances.Count / 2];
-        if (skin <= 0.001f)
-            return pixels;
-
-        var result = new Color[pixels.Length];
-        for (int i = 0; i < pixels.Length; i++)
-        {
-            // 문턱 바로 위에서 불투명해지게 좁은 경계를 쓴다 — 위쪽 끝을 완전 검정(1)으로 잡으면
-            // 눈·입의 어두움이 0.5~0.8이라 늘 반투명하게 나오고, 문턱은 농도만 흔드는 노브가 된다
-            float darkness = (skin - Luminance(pixels[i])) / skin;
-            float alpha = pixels[i].a * Mathf.InverseLerp(m_featureThreshold, m_featureThreshold + k_featureSoftness, darkness);
-            result[i] = alpha <= 0.004f
-                ? Color.clear
-                : new Color(pixels[i].r, pixels[i].g, pixels[i].b, alpha);
-        }
-        return result;
-    }
-
-    private static float Luminance(Color color) => 0.2126f * color.r + 0.7152f * color.g + 0.0722f * color.b;
 
     /// <summary>
     /// 형태 미상 머리 — 머리 스타일이 미공개일 때 까는 레이어. 머리색을 얹을 자리를 만들되 어느 스타일도
@@ -545,7 +693,6 @@ public class MontageLayerBaker : EditorWindow
         return result;
     }
 
-    /// <summary>마스크의 테두리 한 겹 — 바깥과 맞닿은 픽셀만 남긴다.</summary>
     private static bool[] EdgeOf(bool[] mask, int size)
     {
         var edge = new bool[mask.Length];
@@ -570,59 +717,52 @@ public class MontageLayerBaker : EditorWindow
         return edge;
     }
 
-    /// <summary>
-    /// 흰색 렌더(mask)에서 <b>바디에 가려지지 않은</b> 부분만 오려낸다 — 바디는 검정으로 찍혀 오므로
-    /// 밝은 픽셀이 곧 보이는 프롭이다. 머리 뒤로 넘어간 뒷머리·모자 뒤통수는 바디에 가려 걷힌다.
-    /// color를 주면 그 색을, 안 주면 흰색(표시할 때 칠할 실루엣)을 쓴다.
-    /// </summary>
-    private static Color[] CutOutProp(Color[] mask, Color[] color)
+    /// <summary>레이어가 프레임에서 차지하는 비율 — 정면에서 얼마나 보이는가.</summary>
+    private static float Coverage(Color[] pixels)
     {
-        var result = new Color[mask.Length];
-        for (int i = 0; i < mask.Length; i++)
+        int opaque = 0;
+        foreach (Color pixel in pixels)
         {
-            float alpha = Luminance(mask[i]) >= 0.5f ? mask[i].a : 0f;
-            if (alpha <= 0.004f)
-            {
-                result[i] = Color.clear;
-                continue;
-            }
-
-            result[i] = color != null
-                ? new Color(color[i].r, color[i].g, color[i].b, alpha)
-                : new Color(1f, 1f, 1f, alpha);
+            if (pixel.a > 0.5f)
+                opaque++;
         }
-        return result;
+        return pixels.Length > 0 ? (float)opaque / pixels.Length : 0f;
     }
 
-    private Sprite SavePixels(Color[] pixels, string fileName)
+    /// <summary>이 축의 프롭을 실루엣으로 굽는가 — 머리스타일만 그렇다(머리색 축이 칠할 자리라).</summary>
+    private static bool IsSilhouetteAxis(AppearanceAxis axis) => axis == AppearanceAxis.HairStyle;
+
+    private static IEnumerable<AppearanceAxis> PropAxes()
     {
-        var texture = new Texture2D(m_resolution, m_resolution, TextureFormat.RGBA32, false);
+        yield return AppearanceAxis.HairStyle;
+        yield return AppearanceAxis.FacialHair;
+        yield return AppearanceAxis.Headwear;
+        yield return AppearanceAxis.Eyewear;
+    }
+
+    /// <summary>비교 시트에서 살·머리를 칠할 색 — 어휘의 첫 값을 쓴다. 값이 없으면 폴백.</summary>
+    private Color FirstOptionColor(AppearanceAxis axis, Color fallback)
+    {
+        AppearanceDatabase.AppearanceOption option = m_database != null ? m_database.GetOption(axis, 0) : null;
+        return option != null ? option.Color : fallback;
+    }
+
+    private Sprite SaveLayer(Color[] pixels, string fileName) =>
+        SavePixels(pixels, m_resolution, m_resolution, m_outputFolder, fileName);
+
+    private static Sprite SavePixels(Color[] pixels, int width, int height, string folder, string fileName)
+    {
+        var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
         texture.SetPixels(pixels);
         texture.Apply();
 
-        string path = $"{m_outputFolder}/{fileName}.png";
+        string path = $"{folder}/{fileName}.png";
         File.WriteAllBytes(path, texture.EncodeToPNG());
         DestroyImmediate(texture);
 
         AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
         ApplyImportSettings(path);
         return AssetDatabase.LoadAssetAtPath<Sprite>(path);
-    }
-
-    private static Texture2D Capture(Camera camera, RenderTexture rt, Color background)
-    {
-        camera.backgroundColor = background;
-        camera.targetTexture = rt;
-        camera.Render();
-        camera.targetTexture = null;
-
-        RenderTexture previous = RenderTexture.active;
-        RenderTexture.active = rt;
-        var texture = new Texture2D(rt.width, rt.height, TextureFormat.RGBA32, false);
-        texture.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
-        texture.Apply();
-        RenderTexture.active = previous;
-        return texture;
     }
 
     // 픽셀 몽타주라 확대해도 뭉개지지 않게 Point 필터·무압축으로 둔다
@@ -654,23 +794,5 @@ public class MontageLayerBaker : EditorWindow
 
         property.objectReferenceValue = sprite;
         serialized.ApplyModifiedProperties();
-    }
-
-    private static Transform ResolveHead(Transform root)
-    {
-        Animator animator = root.GetComponentInChildren<Animator>();
-        if (animator != null && animator.isHuman)
-        {
-            Transform bone = animator.GetBoneTransform(HumanBodyBones.Head);
-            if (bone != null)
-                return bone;
-        }
-
-        foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
-        {
-            if (child.name.Contains("Head"))
-                return child;
-        }
-        return null;
     }
 }

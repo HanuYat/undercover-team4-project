@@ -32,6 +32,9 @@ public class AppearanceDatabase : ScriptableObject
 
         [Tooltip("몽타주 포트레이트에서 이 값을 그리는 레이어 그림 (#607). 프롭이 있는 값은 Tools/몽타주 레이어 굽기로 자동 생성된다. 색 축(머리색·피부색)은 그림 없이 다른 레이어를 Color로 칠하므로 비운다. '없음/대머리'도 비운다 — 안 그리는 것이 곧 그 값이다")]
         public Sprite MontageLayer;
+
+        [Tooltip("정면에서 '없음'과 구분되지 않아 몽타주에 그리지 않는 값 (#619 — 뒤로 넘긴 묶음머리 등). 화면에는 그대로 착용하지만 이 축은 공개 축 후보에서 빠진다. 굽기 툴도 이 값의 레이어를 꽂지 않는다. 면적이 작다고 켤 것이 아니라, 굽어 보고 '없음'과 구분되지 않을 때만 켠다 — 콧수염은 작아도 구분된다")]
+        public bool ExcludeFromMontage;
     }
 
     /// <summary>
@@ -155,6 +158,10 @@ public class AppearanceDatabase : ScriptableObject
 
         AppearanceOption option = GetOption(axis, index);
         if (option == null)
+            return false;
+
+        // 정면에서 '없음'과 구분되지 않는 값 — 그리면 본부가 대머리와 같은 그림을 받는다 (#619)
+        if (option.ExcludeFromMontage)
             return false;
 
         if (option.MontageLayer != null)
