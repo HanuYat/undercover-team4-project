@@ -29,6 +29,9 @@ public class AppearanceDatabase : ScriptableObject
 
         [Tooltip("SciFi 카탈로그 전용 값 — Generic 경로엔 프롭이 없어 표현 불가하므로 Generic 랜덤 배정에서 제외한다 (예: 머리 '가림', 후드/헬멧, 특수 피부색). 몽타주 텍스트·SciFi 카탈로그에는 그대로 쓰인다")]
         public bool SciFiOnly;
+
+        [Tooltip("몽타주 포트레이트에서 이 값을 그리는 레이어 그림 (#607). 프롭이 있는 값은 Tools/몽타주 레이어 굽기로 자동 생성된다. 색 축(머리색·피부색)은 그림 없이 다른 레이어를 Color로 칠하므로 비운다. '없음/대머리'도 비운다 — 안 그리는 것이 곧 그 값이다")]
+        public Sprite MontageLayer;
     }
 
     /// <summary>
@@ -51,6 +54,25 @@ public class AppearanceDatabase : ScriptableObject
     [SerializeField] private AxisDefinition m_facialHair;
     [SerializeField] private AxisDefinition m_headwear;   // 기존 m_accessory에서 개명
     [SerializeField] private AxisDefinition m_eyewear;
+
+    [Header("몽타주 포트레이트 (#607) — 축에 속하지 않는 공용 레이어")]
+    [Tooltip("맨 아래에 깔리는 두상 실루엣. 피부색이 공개 축이면 이 그림이 그 색으로 칠해진다 — 그래서 명암·질감 없는 순백이어야 색이 제대로 나온다")]
+    [SerializeField] private Sprite m_montageBase;
+
+    [Tooltip("살 실루엣 위에 얹는 이목구비(눈·눈썹·입). 피부색과 무관하므로 칠하지 않는다 — 살 레이어를 통짜로 칠할 수 있는 것이 이걸 분리한 이유다")]
+    [SerializeField] private Sprite m_montageFace;
+
+    [Tooltip("머리 스타일은 미공개인데 머리색만 공개일 때 칠할 '형태 미상' 머리. 스타일을 말하지 않으면서 색을 얹을 자리를 만든다")]
+    [SerializeField] private Sprite m_montageUnknownHair;
+
+    /// <summary>포트레이트 바닥 레이어 — 피부색을 칠하는 대상.</summary>
+    public Sprite MontageBase => m_montageBase;
+
+    /// <summary>살 위에 얹는 이목구비 레이어 — 틴트하지 않는다.</summary>
+    public Sprite MontageFace => m_montageFace;
+
+    /// <summary>머리 스타일 미공개용 머리 레이어 — 머리색만 공개된 몽타주에서 색을 얹는 자리.</summary>
+    public Sprite MontageUnknownHair => m_montageUnknownHair;
 
     public AxisDefinition GetAxis(AppearanceAxis axis) => axis switch
     {
@@ -116,6 +138,34 @@ public class AppearanceDatabase : ScriptableObject
     /// </summary>
     public bool HasVisibleHair(in AppearanceProfile profile) =>
         GetOption(AppearanceAxis.HairStyle, profile.HairStyleIndex)?.PropPrefab != null;
+
+    /// <summary>
+    /// 이 값을 몽타주 포트레이트로 그릴 수 있는가 (#607) — 공개 축 후보를 거르는 기준이다 (#556과 같은 취지).
+    /// SciFi 전용 값(가림·후드·풀헬멧·특수 안경)은 Generic 프롭이 없어 레이어를 자동 생성할 수 없다 —
+    /// 그림이 없는 값이 공개되면 본부 화면이 빈 채로 남는다. 나중에 그림을 채우면 저절로 후보로 돌아온다.
+    /// 색 축은 다른 레이어를 칠할 뿐이라 언제나 가능하고, '없음/대머리'는 안 그리는 것이 곧 그 값이다.
+    /// </summary>
+    public bool CanDepict(AppearanceAxis axis, int index)
+    {
+        if (axis == AppearanceAxis.HairColor || axis == AppearanceAxis.SkinColor)
+            return true;
+
+        AppearanceOption option = GetOption(axis, index);
+        if (option == null)
+            return false;
+
+        if (option.MontageLayer != null)
+            return true;
+
+        // 머리 스타일은 프롭이 없다는 것이 곧 '머리가 화면에 안 보인다'(대머리·가림)이고,
+        // 그건 안 그리는 것으로 정확히 표현된다 — 무엇이 덮었는지는 모자 축이 말할 몫이다.
+        if (axis == AppearanceAxis.HairStyle)
+            return option.PropPrefab == null;
+
+        // 나머지 축에서 프롭 없는 SciFi 전용 값(후드·헬멧·바이저·발광렌즈)은 '그릴 것이 있는데
+        // 그림이 없는' 경우다 — 안 그리면 '없음'으로 읽혀 화면과 어긋난다.
+        return option.PropPrefab == null && !option.SciFiOnly;
+    }
 
     /// <summary>Generic 경로용 랜덤 옵션 인덱스 — SciFiOnly 값은 제외한다.</summary>
     public int GetRandomGenericIndex(AppearanceAxis axis)

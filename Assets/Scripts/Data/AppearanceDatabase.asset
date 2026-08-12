@@ -27,6 +27,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -40,6 +41,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 5359095326366316309, guid: 6acd4702716c64b49bd8504d04baea3b, type: 3}
       SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: be7260de6e71a424a918673d987a6321, type: 3}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -53,6 +55,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 1090390649989844869, guid: d30df5bb55089ad4a989b1473c7a2293, type: 3}
       SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: bd22de5938fd4a242afbb451d36ee435, type: 3}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -66,6 +69,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 7623271299947270949, guid: e19492d4a3b52dd408b1e4d76a214e42, type: 3}
       SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 40067728ede3d894d9f714eddf05d9af, type: 3}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -79,6 +83,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
+      MontageLayer: {fileID: 0}
   m_hairColor:
     Options:
     - DisplayName:
@@ -94,6 +99,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -107,6 +113,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -120,6 +127,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -133,6 +141,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -146,6 +155,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -159,6 +169,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -172,6 +183,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -185,6 +197,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -198,6 +211,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
+      MontageLayer: {fileID: 0}
   m_skinColor:
     Options:
     - DisplayName:
@@ -213,6 +227,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -226,6 +241,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -239,6 +255,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -252,6 +269,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -265,6 +283,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -278,6 +297,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -291,6 +311,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
+      MontageLayer: {fileID: 0}
   m_facialHair:
     Options:
     - DisplayName:
@@ -306,6 +327,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -319,6 +341,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 4609227968844860818, guid: 6b5f1a42b82110e49988de1ad2a41fd9, type: 3}
       SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 4fd28d3db29b80245835e45e63c596b5, type: 3}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -332,6 +355,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 5381899529043745372, guid: 2c3db847c027ff04f9f95cf539c047de, type: 3}
       SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: dba82c26b5baa9445ba1900fb97a82ce, type: 3}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -345,6 +369,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 4158117797329843660, guid: 1d06f16f48b790548b778a5bdf7a69d6, type: 3}
       SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 9dd6334ac360e1141bf45fa08d4301e8, type: 3}
   m_headwear:
     Options:
     - DisplayName:
@@ -360,6 +385,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -373,6 +399,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 3818721685182870944, guid: 91a234a5ac753554e82d04a2bedc0e25, type: 3}
       SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: a2dad2e472019434193b694e908d7486, type: 3}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -386,6 +413,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 7202588604819645970, guid: 72b4eb657d88d5d4ca05e983848f7bef, type: 3}
       SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 76d7acd0c1f470645bff6b8548c05a42, type: 3}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -399,6 +427,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 517384152127186018, guid: 740f72d010e55ad458e797ec6483f908, type: 3}
       SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 5a1e6502508f6c3449cb85ee783aaadd, type: 3}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -412,6 +441,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -425,6 +455,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 7624828572083015622, guid: 640045eb994ac644d9f89980114f4305, type: 3}
       SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: b3ea196566ba8bc4bbcc98fc54b20380, type: 3}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -438,6 +469,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
+      MontageLayer: {fileID: 0}
   m_eyewear:
     Options:
     - DisplayName:
@@ -453,6 +485,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 0
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -466,6 +499,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 8314516393528333455, guid: 1c99f1025f7ca5b41bfc6c615178cf3c, type: 3}
       SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 2d4a5e5d24126ff42bb179910685b0f7, type: 3}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -479,6 +513,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
+      MontageLayer: {fileID: 0}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -492,6 +527,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 5483532631979247779, guid: 04e2a0f1ad1a87f4fa83b8972846ec96, type: 3}
       SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: a8eb25e60ff20ab40844a79e27182235, type: 3}
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -505,6 +541,10 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
+      MontageLayer: {fileID: 0}
+  m_montageBase: {fileID: 21300000, guid: c45d2eea083118a468c8798fff0c31b9, type: 3}
+  m_montageFace: {fileID: 21300000, guid: e1d606e7374c9394fba0477ed5936b95, type: 3}
+  m_montageUnknownHair: {fileID: 21300000, guid: 23f6ac8740d48f04393d4a77cf98d4e9, type: 3}
   references:
     version: 2
     RefIds: []

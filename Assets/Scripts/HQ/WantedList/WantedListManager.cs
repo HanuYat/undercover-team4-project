@@ -82,7 +82,7 @@ public class WantedListManager : NetworkedManagerBase
 
     // 몽타주 공개 = 범인·외형·이름 모두 확정된 시점. 수배 항목을 리스트에 추가한다. (서버 전용)
     // 진범이 여러 명이면(#127) 범인마다 한 번씩 호출되어 항목이 그만큼 추가된다.
-    private void HandleMontageGenerated(NpcController criminal, AppearanceProfile appearance)
+    private void HandleMontageGenerated(NpcController criminal, AppearanceProfile appearance, RevealedAxisSet revealedAxes)
     {
         if (criminal == null)
         {
@@ -97,8 +97,8 @@ public class WantedListManager : NetworkedManagerBase
 
         // 몽타주는 문장이 아니라 원본(공개 축 + 그 축의 값)으로 싣는다 — 표시하는 피어가 자기 언어로
         // 조립하므로 호스트·클라 언어가 갈려도 각자 언어로 보인다 (#497). 비공개 축은 Masked로 지운다.
+        // 공개 축은 범인마다 다르므로 이벤트가 실어 준 것을 그대로 쓴다 — 여기서 다시 조회하지 않는다.
         AppearanceAssigner assigner = Appearance;
-        RevealedAxisSet revealedAxes = assigner != null ? assigner.RevealedAxes : default;
 
         m_wanted.Add(new WantedEntry
         {
