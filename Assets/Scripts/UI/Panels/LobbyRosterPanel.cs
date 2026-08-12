@@ -7,7 +7,8 @@ using UnityEngine.UI;
 
 /// <summary>
 /// 로비 접속자 목록 패널 (#429) — 상시 노출이라 ESC로 닫히지 않고 스택에도 쌓이지 않는다 (SessionCodePanel 선례).
-/// LobbyRoster는 App에 올리지 않고 같은 씬에서 SerializeField로 연결한다 (참조자가 여기 한 곳 — R3).
+/// 명부는 세션 상주라 씬에 없다 — App.Game.Roster로 잡는다 (#598).
+/// 입퇴장 토스트는 이 패널이 띄우지 않는다 — 로비 밖에서도 떠야 해서 PlayerPresenceToastView로 옮겼다 (#598).
 /// 최대 6인이라 행을 풀링하지 않고 변경 시 전체를 다시 바인딩한다 (WantedListView와 동일).
 /// </summary>
 public class LobbyRosterPanel : PanelBase
@@ -20,9 +21,6 @@ public class LobbyRosterPanel : PanelBase
     [SerializeField] private Button m_startButton;
 
     [SerializeField] private Button m_leaveButton; // 호스트·클라 공통 — 항상 보인다
-
-    [Header("로스터 — 같은 씬의 LobbyRoster 오브젝트를 연결")]
-    [SerializeField] private LobbyRoster m_roster;
 
     [Header("UI 참조")]
     [SerializeField] private RectTransform m_rowContainer; // 행 부모 (Vertical Layout Group)
@@ -40,6 +38,9 @@ public class LobbyRosterPanel : PanelBase
     [Tooltip("무전 키 안내 — Lobby.Voice.RadioKey ({0}=키 이름)")]
     [SerializeField] private LocalizedString m_radioKeyFormat;
 
+    [Tooltip("카드에 넣을 얼굴을 굽는 무대 (#598). 비워 두면 얼굴 칸 없이 이름만 나온다")]
+    [SerializeField] private LobbyPortraitStage m_portraitStage;
+
     // 음성 상태 문구는 enum 이름에서 키를 만든다 — 상태가 늘면 테이블에 키만 추가하면 되고
     // 인스펙터 배선이나 매핑 에셋을 함께 고칠 일이 없다 (문서 §2 결정 (h)).
     // 그래서 SerializeField가 아니다 — 고를 것이 없으므로 인스펙터에 내보내면 오히려 잘못 만질 여지만 생긴다.
@@ -53,6 +54,10 @@ public class LobbyRosterPanel : PanelBase
     private bool m_radioKeyBound;
 
     private readonly List<LobbyRosterRowView> m_rows = new List<LobbyRosterRowView>();
+
+    // 접속자 명부. 세션 상주라 씬에 없다 — App 경유로 잡는다 (#598). 로비에 닿을 때는 보통 이미
+    // 스폰돼 있지만, 원격 클라는 스폰 동기화가 늦게 도착할 수 있어 잡힐 때까지 기다린다.
+    private SessionRoster m_roster;
 
     private VivoxManager Vivox => App.Net.Vivox;
     private SessionManager Session => App.Net.Session;
@@ -83,15 +88,7 @@ public class LobbyRosterPanel : PanelBase
         if (m_startButton != null)
             m_startButton.gameObject.SetActive(IsServer);
 
-        if (m_roster == null)
-        {
-            Debug.LogError("LobbyRosterPanel: LobbyRoster가 연결되지 않았습니다.", this);
-            return;
-        }
-
-        m_roster.Players.OnListChanged += HandleListChanged;
-        // NetworkList는 late-join 클라에 초기 내용을 OnListChanged로 알리지 않는다 — 이 이벤트로 최초 1회를 받는다
-        m_roster.OnListReady += Rebuild;
+        TryBindRoster();
 
         if (Vivox != null)
         {
@@ -103,18 +100,47 @@ public class LobbyRosterPanel : PanelBase
         RefreshVoiceStatus();
         RefreshRadioKey();
 
-        // 로스터 스폰이 패널보다 빨랐으면 OnListReady를 놓쳤으므로 지금 그린다.
-        // 아직 스폰 전이어도 빈 슬롯은 그려 둔다 — 정원이 먼저 보이는 게 낫다.
+        // 명부 스폰이 패널보다 빨랐으면 OnListReady를 놓쳤으므로 지금 그린다.
+        // 아직 명부를 못 잡았어도 빈 슬롯은 그려 둔다 — 정원이 먼저 보이는 게 낫다.
+        Rebuild();
+    }
+
+    // 초상은 LobbyPortraitStage가 Awake에서 굽는다. 실행 순서로 앞세워 뒀지만(EExecutionOrder.UIContent)
+    // 그것 하나에 기대면 순서가 어긋나는 날 얼굴 없는 카드가 조용히 굳는다 — 혼자 있으면 명단이
+    // 바뀌지 않아 다시 그릴 계기가 없기 때문이다. 모든 Awake가 끝난 뒤 한 번 더 그린다.
+    private void Start() => Rebuild();
+
+    // 아직 못 잡았을 때만 도는 폴링 — 잡는 즉시 이벤트 구동으로 넘어간다 (TeamFundBalanceView와 같은 방식)
+    private void Update()
+    {
+        if (m_roster == null)
+            TryBindRoster();
+    }
+
+    private void TryBindRoster()
+    {
+        SessionRoster roster = App.Game.Roster;
+        if (roster == null)
+            return; // 세션 없이 씬을 직접 Play하는 경우도 여기로 — 빈 슬롯만 그린 채 넘어간다
+
+        m_roster = roster;
+        m_roster.Players.OnListChanged += HandleListChanged;
+        // NetworkList는 late-join 클라에 초기 내용을 OnListChanged로 알리지 않는다 — 이 이벤트로 최초 1회를 받는다
+        m_roster.OnListReady += Rebuild;
+
+        // 폴링으로 늦게 잡았으면 그 사이의 변경을 놓쳤다 — 잡은 김에 현재 상태로 그린다
         Rebuild();
     }
 
     private void OnDisable()
     {
+        // ?. 금지 — 파괴된 Unity 오브젝트 fake null 우회 방지 (HqPanelView 관례)
         if (m_roster != null)
         {
             m_roster.Players.OnListChanged -= HandleListChanged;
             m_roster.OnListReady -= Rebuild;
         }
+        m_roster = null;
 
         if (Vivox != null)
         {
@@ -178,6 +204,9 @@ public class LobbyRosterPanel : PanelBase
             {
                 LobbyPlayerEntry entry = m_roster.Players[i];
                 m_rows[i].Bind(entry, m_roster.IsHostEntry(entry));
+
+                // 지금은 무대가 한 장만 굽는다 — 외형이 개인별로 갈리면(#432) 여기서 사람별 텍스처가 나간다
+                m_rows[i].SetPortrait(m_portraitStage != null ? m_portraitStage.Portrait : null);
             }
             else
             {

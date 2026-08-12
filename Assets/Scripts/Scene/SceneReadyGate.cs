@@ -47,7 +47,7 @@ public class SceneReadyGate : NetworkedManagerBase
         if (!IsServer)
             return;
 
-        // 같은 실행에서 세션을 다시 만들면 씬 오브젝트에 이전 세션 값이 남는다 (LobbyRoster와 같은 방침)
+        // 같은 실행에서 세션을 다시 만들면 씬 오브젝트에 이전 세션 값이 남는다 (SessionRoster와 같은 방침)
         m_expected.Clear();
         m_ready.Clear();
         m_openSynced.Value = false;
@@ -81,7 +81,7 @@ public class SceneReadyGate : NetworkedManagerBase
     }
 
     // InvokePermission = Everyone 명시 — 씬에 놓인 서버 소유 오브젝트라 어떤 플레이어도 오너가 아니다.
-    // 기본값(오너 전용)이면 클라가 보고할 수 없다. (LobbyRoster.ReportSelfRpc와 같은 이유)
+    // 기본값(오너 전용)이면 클라가 보고할 수 없다. (SessionRoster.ReportSelfRpc와 같은 이유)
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void ReportReadyRpc(RpcParams rpcParams = default)
     {
