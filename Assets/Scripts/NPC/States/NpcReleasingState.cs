@@ -26,8 +26,27 @@ public class NpcReleasingState : NpcStateBase
     // 목적지에 이만큼(m) 다가오면 도착으로 본다 — NpcIntrudeState·NpcJailedState와 같은 기준
     private const float k_arriveDistance = 0.5f;
 
+    // 온전하지 않은 경로(끊김·실패)를 다시 걸어 보는 횟수와 간격(초) — 아래 m_pathRetries 참고
+    private const int k_maxPathRetries = 3;
+    private const float k_pathRetryInterval = 0.35f;
+
     // 도착(또는 경로 실패)해 멈춰 섰는가 — 멈춘 뒤 매 프레임 다시 판정하지 않으려는 래치
     private bool m_stopped;
+
+    // 목적지를 아직 안 걸었다 — <b>진입 프레임에는 걸지 않는다</b>. 반출 대상은 문 밖으로 워프된
+    // 직후에 이 상태로 들어오는데(JailIntake.ServerExitPlayer → NpcCustody.ServerExitJail),
+    // 같은 프레임에 SetDestination을 부르면 에이전트가 아직 <b>워프 전 위치</b>(감옥 안)에 있어
+    // 경로가 그쪽에서 계산된다. 감옥은 도시와 이어지지 않은 별도 NavMesh 섬이라(#537) 그 경로는
+    // 끊긴 경로로 잡히고, 대상은 문 앞에서 몇 발짝 만에 '도착'해 굳는다. 한 프레임 미루면
+    // 워프가 반영된 자리에서 계산된다 — JailbreakEvent가 스폰 다음 프레임에 침입을 거는 것과 같은 이유.
+    private bool m_pendingDestination;
+
+    // 온전한 경로를 못 받았을 때 다시 걸어 본 횟수 — 워프 정착·NavMesh 질의 타이밍으로 한두 번은
+    // 끊긴 경로가 나올 수 있어서다. 상한을 두는 이유는 인도 지점이 <b>진짜로</b> 도시 NavMesh와
+    // 떨어진 배치일 수 있기 때문(Apocalypse 3번) — 그때는 닿는 데까지 가서 서는 기존 폴백으로 넘긴다.
+    private int m_pathRetries;
+    private float m_nextRetryTime;
+    private bool m_brokenPathReported; // 끊긴 경로 경고는 한 번만
 
     private float m_baseSpeed; // 진입 전 원래 속도 — Exit 복원값
 
@@ -43,6 +62,10 @@ public class NpcReleasingState : NpcStateBase
     public override void Enter()
     {
         m_stopped = false;
+        m_pendingDestination = true; // 워프가 반영된 다음 틱에 건다 (필드 주석 참고)
+        m_pathRetries = 0;
+        m_nextRetryTime = 0f;
+        m_brokenPathReported = false;
         m_owner.Agent.isStopped = false;
         m_owner.Agent.stoppingDistance = 0f;
 
@@ -51,8 +74,6 @@ public class NpcReleasingState : NpcStateBase
         // 배율은 도주와 같은 것을 쓴다 — 같은 "달아나는 걸음"이라 따로 조율할 값을 늘리지 않는다.
         m_baseSpeed = m_owner.Agent.speed;
         m_owner.Agent.speed = m_baseSpeed * m_fleeConfig.SpeedMultiplier;
-
-        SetDestinationOrStop();
     }
 
     public override void Tick()
@@ -60,24 +81,58 @@ public class NpcReleasingState : NpcStateBase
         if (m_stopped)
             return;
 
+        if (m_pendingDestination)
+        {
+            m_pendingDestination = false;
+            SetDestinationOrStop();
+            return;
+        }
+
         if (m_owner.Agent.pathPending)
             return;
 
-        // <b>기절이 지운 경로를 다시 건다</b> (2026-08-12 확정). 오버레이 기절(테이저·넉다운)은
-        // 상태를 안 바꿔 Enter가 다시 불리지 않으므로, 깨어나 걸음을 잇는 자리는 여기뿐이다
-        // (NpcStun.EnterStunned가 ResetPath로 경로를 버린다).
-        // 없으면 경로 없는 에이전트의 남은 거리가 0으로 읽혀 <b>깨어난 그 자리가 곧 도착</b>이 된다 —
-        // 대상이 길 한복판에 굳어 완수도 무산도 아닌 상태로 남는다.
-        if (!m_owner.Agent.hasPath)
+        // <b>온전한 경로가 아니면 다시 걸어 본다</b> (2026-08-12 확정). 여기 걸리는 경우가 둘이다:
+        //  · 경로 없음 — 기절이 지웠다(NpcStun.EnterStunned의 ResetPath). 오버레이 기절은 상태를
+        //    안 바꿔 Enter가 다시 불리지 않으므로, 깨어나 걸음을 잇는 자리는 여기뿐이다. 다시 걸지
+        //    않으면 남은 거리가 0으로 읽혀 <b>깨어난 그 자리가 곧 도착</b>이 된다.
+        //  · 끊긴 경로 — 워프 정착이나 NavMesh 질의 타이밍으로 한두 번 나올 수 있다.
+        // 상한까지 다시 걸어도 안 되면 아래 도착 판정으로 넘긴다 — 닿는 데까지 가서 서는 기존 폴백이다.
+        if (!m_owner.Agent.hasPath || m_owner.Agent.pathStatus != NavMeshPathStatus.PathComplete)
         {
-            SetDestinationOrStop();
-            return;
+            if (m_pathRetries < k_maxPathRetries && Time.time >= m_nextRetryTime)
+            {
+                m_pathRetries++;
+                m_nextRetryTime = Time.time + k_pathRetryInterval;
+                SetDestinationOrStop();
+                return;
+            }
+
+            ReportBrokenPathOnce();
+        }
+        else
+        {
+            m_pathRetries = 0; // 온전히 잡혔다 — 다음에 또 끊기면 그때 다시 재시도분을 준다
         }
 
         if (RemainingDistance() > k_arriveDistance)
             return;
 
         StopHere();
+    }
+
+    // 끊긴 경로를 로그로 드러낸다 — 조용히 굳으면 "목적지를 못 찾는다"로만 보이고, 원인이 배치인지
+    // 타이밍인지 구분할 단서가 남지 않는다. 인도 지점을 NavMesh에 붙이는 배치 정리의 신호다.
+    private void ReportBrokenPathOnce()
+    {
+        if (m_brokenPathReported)
+            return;
+        m_brokenPathReported = true;
+
+        Debug.LogWarning(
+            $"NpcReleasingState: 인도 지점까지 경로가 온전하지 않다({m_owner.Agent.pathStatus}) — "
+                + $"닿는 데까지만 간다: {m_owner.name}",
+            m_owner
+        );
     }
 
     // 인도 지점을 목적지로 건다 — 경로를 아예 못 잡으면(목적지가 NavMesh 밖 등) 영원히 걷는 자세로
