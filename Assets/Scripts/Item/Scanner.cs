@@ -3,19 +3,25 @@ using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
 
-/// <summary>스캐너 아이템. 3초 채널링 후 대상 시민의 스캔 정보를 오너 화면에 출력한다.
+/// <summary>스캐너 아이템. 겨냥하고 좌클릭하면 <b>즉시</b> 대상 시민의 스캔 정보가 오너 화면에 뜬다 (#608).
 /// 배터리는 옆에 붙은 <see cref="ItemBattery"/>가 들고 있고, 스캔 1회당 1 소모한다. (GDD 5-1/5-2)
-/// 채널링·배터리·충전은 서버 권위(#55). 좌클릭 홀드로 채널링, 뗌·거리 이탈 시 취소된다 (#91).</summary>
+/// 판정·배터리·충전은 서버 권위(#55).
+///
+/// 채널링 경로는 <b>지우지 않고 남겨 뒀다</b> — <see cref="m_channelSeconds"/>가 0보다 크면 예전처럼
+/// 홀드 채널링으로 동작한다. 플레이테스트로 되돌릴 수 있게 하기 위한 것이다(#608 본문).</summary>
 [RequireComponent(typeof(ItemBattery))]
 public class Scanner : ItemBase
 {
     [Header("스캐너 설정")]
-    [SerializeField] private float m_channelSeconds = 3f;
+    [Tooltip("스캔 채널링 시간(초). 0이면 즉시 스캔 — 게이지·판독음 없이 겨냥 즉시 결과가 나온다 (#608). "
+        + "0보다 크면 예전 홀드 채널링으로 돌아간다(되돌리기용)")]
+    [Min(0f)]
+    [SerializeField] private float m_channelSeconds;
 
     [Tooltip("채널링 도중 대상이 이 거리(m)를 벗어나면 스캔 실패로 처리한다 (#91)")]
     [SerializeField] private float m_scanKeepRange = 5f;
 
-    [Tooltip("스캔 진행률이 이 지점(0~1)을 넘으면 대상이 반응한다 (#400). 도주형은 여기서 달아나기 시작하므로, 남은 구간 동안 따라붙어야 스캔이 완료된다")]
+    [Tooltip("스캔 진행률이 이 지점(0~1)을 넘으면 대상이 반응한다 (#400). 즉시 스캔(채널링 0)에서는 진행률이 없어 결과 직전에 한 번 발화한다 (#608)")]
     [Range(0f, 1f)]
     [SerializeField] private float m_reactionPoint = 0.5f;
 
@@ -41,9 +47,10 @@ public class Scanner : ItemBase
     // 스캐너는 줍기 시 소유권이 홀더로 이전되므로(#88) 기반의 SendTo.Owner가 정확히 든 사람에게 간다.
     protected override void RaiseOwnerToast(string message) => OnScanFeedback?.Invoke(message);
 
-    // 판독음은 채널링을 하는 동안 난다 — 결과가 나온 뒤 한 번 울리면 "읽는 중"이라는 정보가 없어
-    // 게이지만 쳐다보게 된다. 기반이 게이지와 같은 짝으로 켜고 끄므로 취소해도 소리가 남지 않는다. (#483)
-    protected override EAudioClip ChannelLoopSound => EAudioClip.ScannerScan;
+    // 즉시 스캔에는 "읽는 중" 구간이 없어 루프 판독음이 울릴 자리가 없다 — 결과가 나오는 순간
+    // 1회 울린다(#608). 채널링을 되살리면(m_channelSeconds > 0) 그때만 루프도 함께 돌아온다. (#483)
+    protected override EAudioClip ChannelLoopSound =>
+        m_channelSeconds > 0f ? EAudioClip.ScannerScan : EAudioClip.None;
 
     private void Awake()
     {
@@ -225,44 +232,53 @@ public class Scanner : ItemBase
         // 프로필은 시작 시점 값으로 고정 — 채널링 도중 재배정될 일은 없다
         CitizenProfile profile = identity.Profile;
 
-        NotifyOwner($"스캔 채널링 시작: {identity.name} ({m_channelSeconds}초)");
-        NotifyChannelGaugeStart(m_channelSeconds);
-
-        ServerChannel.Result result;
-        try
+        // 즉시 스캔 (#608) — 게이지·채널링을 통째로 건너뛴다. 0초로 RunAsync를 태우면 루프가 한 번도
+        // 돌지 않으면서 게이지 표시/숨김만 한 프레임 깜빡이고 판독음도 켰다 끄는 딸꾹질이 난다.
+        // 사거리·먹통은 바로 위 ServerBeginScan이 이미 봤으므로 여기서 다시 보지 않는다.
+        if (m_channelSeconds <= 0f)
         {
-            // 먹통을 keepAlive에 포함한다 — 없으면 먹통 직전에 시작한 스캔이 먹통 한복판에서 성공한다 (#372).
-            // 스캔 중간에 대상이 반응한다 (#400). 시작이면 도주형은 사거리 이탈로 영영 스캔되지 않고,
-            // 완료 후면 대가 없이 정보를 얻는다 — 중간이라야 남은 구간을 따라붙어야 정보가 나온다.
-            result = await m_channel.RunAsync(
-                m_channelSeconds,
-                () => identity != null && IsInRange(identity.transform) && !IsBlackout,
-                m_reactionPoint,
-                () => ServerTriggerScanReaction(identity));
+            // 반응은 결과보다 먼저 굴린다 — 채널링 시절 반응이 결과 앞(진행률 50%)에 있던 순서를 지킨다.
+            // 정보는 즉시 얻되 대상은 그 자리에서 달아나므로 "스캔하면 흔든다"가 남는다 (#400 · #608 결정).
+            ServerTriggerScanReaction(identity);
         }
-        finally
+        else
         {
-            // 완료·뗌·거리이탈·예외 어떤 경로로 끝나도 게이지 숨김을 보장한다 (#184)
-            NotifyChannelGaugeEnd();
-        }
+            NotifyOwner($"스캔 채널링 시작: {identity.name} ({m_channelSeconds}초)");
+            NotifyChannelGaugeStart(m_channelSeconds);
 
-        // 실패로 끝나도 오너의 in-flight 플래그를 풀어야 재시도가 된다 (#91)
-        switch (result)
-        {
-            case ServerChannel.Result.OutOfRange:
-                // 공용 ServerChannel.Result는 이탈 사유를 하나로 묶어 주므로, 먹통 여부를 여기서 갈라
-                // "먹통으로 끊겼는데 범위 이탈로 표시되는" 어긋남을 막는다 (#372).
-                // (Result에 사유를 늘리면 Escorter·Reviver까지 건드리게 되므로 해석은 이쪽 몫이다)
-                NotifyOwner(
-                    IsBlackout ? "스캔 중단 — 전자기기 먹통" : "스캔 실패 — 대상이 범위를 벗어남",
-                    toast: true);
-                ClearPendingRpc();
-                return;
+            ServerChannel.Result result;
+            try
+            {
+                // 먹통을 keepAlive에 포함한다 — 없으면 먹통 직전에 시작한 스캔이 먹통 한복판에서 성공한다 (#372).
+                result = await m_channel.RunAsync(
+                    m_channelSeconds,
+                    () => identity != null && IsInRange(identity.transform) && !IsBlackout,
+                    m_reactionPoint,
+                    () => ServerTriggerScanReaction(identity));
+            }
+            finally
+            {
+                // 완료·뗌·거리이탈·예외 어떤 경로로 끝나도 게이지 숨김을 보장한다 (#184)
+                NotifyChannelGaugeEnd();
+            }
 
-            case ServerChannel.Result.Canceled:
-                NotifyOwner("스캔 취소됨 (홀드 뗌)");
-                ClearPendingRpc();
-                return;
+            // 실패로 끝나도 오너의 in-flight 플래그를 풀어야 재시도가 된다 (#91)
+            switch (result)
+            {
+                case ServerChannel.Result.OutOfRange:
+                    // 공용 ServerChannel.Result는 이탈 사유를 하나로 묶어 주므로, 먹통 여부를 여기서 갈라
+                    // "먹통으로 끊겼는데 범위 이탈로 표시되는" 어긋남을 막는다 (#372).
+                    NotifyOwner(
+                        IsBlackout ? "스캔 중단 — 전자기기 먹통" : "스캔 실패 — 대상이 범위를 벗어남",
+                        toast: true);
+                    ClearPendingRpc();
+                    return;
+
+                case ServerChannel.Result.Canceled:
+                    NotifyOwner("스캔 취소됨 (홀드 뗌)");
+                    ClearPendingRpc();
+                    return;
+            }
         }
 
         m_battery.ServerConsume();
@@ -301,6 +317,9 @@ public class Scanner : ItemBase
             Debug.LogWarning("ScanResultRpc: NPC 참조 해석 실패 또는 프로필 없음 (클라 동기화 지연?)");
             return;
         }
+
+        // 판독음 1회 — 오너 화면 전용 결과라 2D로 낸다 (#608). 루프였던 것을 여기로 옮겼다.
+        App.Sound?.PlaySfx2D(EAudioClip.ScannerScan);
 
         Debug.Log($"스캔 결과 수신: {GetScanInfo(identity.Profile)}");
         OnScanCompleted?.Invoke(identity.Profile, npcNetObj.NetworkObjectId);
