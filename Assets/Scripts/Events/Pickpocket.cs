@@ -65,8 +65,16 @@ public class Pickpocket : MonoBehaviour
         return stolen;
     }
 
+    // 몸에서 옆으로 밀어내는 거리(m)와 높이(m).
+    //
+    // 몸 안쪽(transform.position)에 두면 쓰러진 소매치기와 겹쳐 <b>조준·줍기가 막힌다</b> —
+    // 줍기는 조준 레이와 가시선을 보므로(WorldItemPickup·PlayerInteractor) 시체 같은 큰 콜라이더에
+    // 파묻힌 아이템은 눈에도 안 보이고 집히지도 않는다. 옆에 내려놓으면 바로 보이고 바로 집힌다.
+    private const float k_dropSideDistance = 0.8f;
+    private const float k_dropHeight = 0.2f;
+
     /// <summary>
-    /// 지금 자리에 떨어뜨린다 — 제압당했을 때. 떨어진 물건은 기존 줍기로 회수한다.
+    /// <b>몸 옆에</b> 떨어뜨린다 — 무력화된 순간. 떨어진 물건은 기존 줍기로 회수한다.
     /// 위치를 먼저 옮기고 떼는 순서가 중요하다: 아이템엔 NetworkTransform이 없어 분리 시 나가는
     /// ParentSyncMessage가 위치를 복제하는 유일한 수단이다 (#361).
     /// </summary>
@@ -81,8 +89,30 @@ public class Pickpocket : MonoBehaviour
         if (stolenObject == null || !stolenObject.IsSpawned)
             return;
 
-        stolenObject.transform.SetPositionAndRotation(transform.position, Quaternion.identity);
+        stolenObject.transform.SetPositionAndRotation(ResolveDropPosition(), Quaternion.identity);
         stolenObject.TrySetParent((Transform)null, true);
+    }
+
+    // 몸 옆 바닥 지점 — 좌우 중 벽에 막히지 않은 쪽을 고른다.
+    // 골목에서 옆이 벽이면 아이템이 벽 너머로 넘어가 영영 회수 불가가 된다(버리기 #360과 같은 사정).
+    private Vector3 ResolveDropPosition()
+    {
+        Vector3 origin = transform.position + Vector3.up * k_dropHeight;
+
+        // 쓰러진 몸은 forward가 눕어 있을 수 있어 right를 수평으로 다시 세운다
+        Vector3 side = transform.right;
+        side.y = 0f;
+        if (side.sqrMagnitude < 0.01f)
+            side = Vector3.right;
+        side.Normalize();
+
+        foreach (Vector3 dir in new[] { side, -side })
+        {
+            if (!Physics.Raycast(origin, dir, k_dropSideDistance, ~0, QueryTriggerInteraction.Ignore))
+                return origin + dir * k_dropSideDistance;
+        }
+
+        return origin; // 양쪽이 다 막혔다 — 발밑이 벽 너머보다 낫다
     }
 
     /// <summary>놓쳤다 — 물건을 없앤다. 구매품이면 다음 라운드 배달 목록에서도 빼 영구 손실로 만든다.</summary>
