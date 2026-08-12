@@ -48,6 +48,10 @@ public class PlayerLoadout : NetworkBehaviour
     // 부착 지점 자식을 네 군데서 따로 순회하던 것을 하나의 접근 경로로 모은 것. 이 컴포넌트에는
     // "들 자격이 있는가"(권위·거리·가시선·용량)만 남는다.
     private HeldItems m_held;
+
+    // 부착 지점의 자식 변화 훅 — 부착 지점에 런타임으로 붙인다. Awake에서 확정되고 바뀌지 않는다. (#487)
+    private HeldItemsWatcher m_heldWatcher;
+
     private PlayerItemUser m_itemUser;
     private PlayerInputHandler m_inputHandler;
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 아이템 전환·버리기 차단용 (#105)
@@ -74,10 +78,36 @@ public class PlayerLoadout : NetworkBehaviour
     /// <summary>선택 슬롯 이동 이벤트 — 빈 칸↔빈 칸 전환처럼 장착 아이템이 안 바뀌어도 발행. UI 하이라이트(#144)가 구독.</summary>
     public event Action OnEquippedSlotChanged;
 
+    /// <summary>
+    /// 부착 목록(무엇을 들고 있나)이 바뀔 때 — <b>전 피어에서</b> 발행된다. (#487)
+    ///
+    /// <see cref="OnSlotsChanged"/>와 혼동하지 말 것. 그쪽은 서버 동기화 RPC(<c>SendTo.Owner</c>)에서
+    /// 나오는 <b>오너 로컬</b> 이벤트라 남의 화면에는 오지 않고, 대신 칸 배치까지 반영된 뒤에 온다.
+    /// 자기 인벤토리 표시는 그쪽을, <b>남의 소지품</b>을 들여다보는 쪽(약탈 창)은 이쪽을 쓴다.
+    /// 이쪽은 칸 배치를 모른다 — 부착 순서만 안다.
+    /// </summary>
+    public event Action OnHeldItemsChangedAnyPeer
+    {
+        add
+        {
+            if (m_heldWatcher != null)
+                m_heldWatcher.OnChanged += value;
+        }
+        remove
+        {
+            if (m_heldWatcher != null)
+                m_heldWatcher.OnChanged -= value;
+        }
+    }
+
     private void Awake()
     {
         // 부착 지점은 직렬화 값이라 여기서 확정된다 — 런타임에 바뀌지 않는다.
-        m_held = new HeldItems(m_itemAnchor != null ? m_itemAnchor : transform);
+        Transform anchor = m_itemAnchor != null ? m_itemAnchor : transform;
+        m_held = new HeldItems(anchor);
+
+        // 부착 목록 변화를 '전 피어에서' 잡는 훅 (#487) — 자세한 사정은 HeldItemsWatcher 문서 주석.
+        m_heldWatcher = anchor.gameObject.AddComponent<HeldItemsWatcher>();
 
         m_itemUser = GetComponent<PlayerItemUser>();
         m_inputHandler = GetComponent<PlayerInputHandler>();
