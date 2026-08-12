@@ -302,9 +302,20 @@ public class NpcController : NetworkBehaviour
         m_frozen = frozen;
 
         // 에이전트를 멈춘다 — 비활성/NavMesh 밖이면 isStopped 접근이 예외를 던지므로 가드
-        if (m_agent != null && m_agent.enabled && m_agent.isOnNavMesh)
+        if (AgentReady)
             m_agent.isStopped = frozen;
     }
+
+    /// <summary>
+    /// 지금 에이전트를 <b>만져도 되는가</b> — <c>isStopped</c>·<c>SetDestination</c>·<c>ResetPath</c>는
+    /// 비활성이거나 NavMesh 밖이면 Unity가 예외를 던진다. (#557)
+    ///
+    /// ⚠ <b>"왜 못 쓰는가"가 아니라 "쓸 수 있는가"를 묻는 값이다.</b> 에이전트를 꺼 두는 구간이
+    /// 넷으로 늘었고(넉백 비행·밧줄 끌기·사망·<b>기절 래그돌</b>, #572) 앞으로도 늘 수 있어서,
+    /// 원인을 열거해 추론하면 새 구간이 생길 때마다 조용히 틀린다 —
+    /// <c>NpcEscortedState.Enter</c>가 <c>IsRoped</c>로 추론하다 정확히 그렇게 깨졌다.
+    /// </summary>
+    public bool AgentReady => m_agent != null && m_agent.enabled && m_agent.isOnNavMesh;
 
     // 워프 기준점 주변에서 NavMesh를 찾을 때의 기본 탐색 반경(m).
     private const float k_warpSnapRadius = 2f;
@@ -399,11 +410,18 @@ public class NpcController : NetworkBehaviour
     /// <summary>
     /// <b>에이전트가 켜져 있는데 NavMesh 밖</b>인 상태를 서버가 스스로 회수한다. 서버(또는 오프라인) 전용. (#557)
     ///
-    /// 이 상태를 만드는 셋(밧줄 놓기·넉백 착지·기절 해제)이 전부 실패 시 경고만 남기고 포기해, 이후
-    /// <c>isStopped</c>·<c>SetDestination</c>이 조용히 실패하며 NPC가 굳었다(빌드 2 이슈 E의 재발).
-    /// 호출부마다 폴백을 다는 대신 <b>결과 상태 하나</b>를 여기서 보면 늘어날 호출부까지 덮인다.
+    /// 이 상태를 만드는 넷(밧줄 놓기·넉백 착지·기절 해제·<b>래그돌 기상</b>)이 전부 실패 시 경고만
+    /// 남기고 포기해, 이후 <c>isStopped</c>·<c>SetDestination</c>이 조용히 실패하며 NPC가 굳었다
+    /// (빌드 2 이슈 E의 재발). 호출부마다 폴백을 다는 대신 <b>결과 상태 하나</b>를 여기서 보면
+    /// 늘어날 호출부까지 덮인다.
     ///
-    /// 에이전트를 꺼 둔 구간(넉백 비행·밧줄 끌기)은 위치를 그쪽이 쥐고 있어 굳은 것이 아니다 — 건너뛴다.
+    /// 에이전트를 꺼 둔 구간(넉백 비행·밧줄 끌기·<b>래그돌</b>)은 위치를 그쪽이 쥐고 있어 굳은 것이
+    /// 아니다 — 건너뛴다.
+    ///
+    /// ⚠ <b>그래서 꺼 둔 쪽은 반드시 스스로 켜야 한다.</b> 이 회수는 <c>enabled == true</c>인데
+    /// NavMesh 밖인 경우만 잡으므로, 꺼 놓고 아무도 켜지 않으면 회수가 <b>영영 오지 않는다.</b>
+    /// 켜는 것은 이 함수의 <b>전제</b>이지 생략해도 되는 이유가 아니다
+    /// (<see cref="NpcRagdoll"/>의 기상이 실패해도 에이전트를 켜 두는 이유가 이것이다, #572).
     /// </summary>
     private void TickNavMeshRecovery()
     {
