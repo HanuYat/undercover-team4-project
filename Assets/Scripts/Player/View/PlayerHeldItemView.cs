@@ -15,7 +15,7 @@ using UnityEngine;
 /// 스폰 시점에 현재 값을 그대로 받아야 기존 플레이어들의 장착이 올바르게 보인다.
 /// RPC 브로드캐스트는 접속 전에 발행된 장착 변경을 받을 방법이 없다.
 /// </summary>
-// TODO: #55 장착이 서버 권위로 넘어가면 쓰기 권한을 Owner → Server로 옮긴다.
+// TODO: 장착이 서버 권위로 넘어가면 쓰기 권한을 Owner → Server로 옮긴다.
 [RequireComponent(typeof(PlayerItemUser))]
 public class PlayerHeldItemView : NetworkBehaviour
 {
