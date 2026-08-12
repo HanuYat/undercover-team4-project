@@ -411,7 +411,12 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         target != null
         && (target.CurrentState == NpcState.Jailed
             || NpcStateRules.IsFollowingUnroped(target)
-            || target.Custody.IsJailExtracted);
+            || target.Custody.IsJailExtracted
+            // 일어나는 모션이 도는 중 — <b>재개까지 함께 막아야 한다.</b> (#572 후속)
+            // 새로 묶기는 CanRopeBind가 이미 막지만 <b>재개는 그쪽을 아예 지나지 않아</b>
+            // (CanResumeRopeDrag) 거기서만 막으면 줄을 풀고 일어나는 몸을 다시 묶어 눕히게 된다.
+            // 쓰러져 기다리는 구간은 여전히 열려 있다 — 재포획 창은 거기까지다 (#513).
+            || NpcStateRules.IsPlayingStandUp(target));
 
     // 새 대상을 묶을 수 있는가 — 자원(밧줄 개수)·중복·사거리. 상태 게이트는 호출부가 각자 건다.
     private bool CanBeginRopeDrag(NpcController target)

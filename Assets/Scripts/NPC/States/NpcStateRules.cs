@@ -151,8 +151,29 @@ public static class NpcStateRules
         if (npc.Death.IsDead)
             return !npc.Rope.IsRoped;
 
-        return npc.Stun.IsStunned && CanArrest(npc); // 오버로드 쪽이라 소매치기 예외를 함께 탄다 (#303)
+        // ⚠ <b>일어나는 중에는 못 묶는다</b> — 아래 <see cref="IsPlayingStandUp"/>. (#572 후속)
+        // 기절 기상 구간에도 오버레이는 켜져 있어(FSM을 계속 막아야 몸이 걸어 나가지 않는다)
+        // <see cref="NpcStun.IsStunned"/>만 보면 <b>일어나던 몸을 묶어 도로 눕히게 된다.</b>
+        //
+        // 그래서 검거 창은 <b>정확히 누워 있는 시간</b>과 같다 — 연출(클립 길이)이 난이도를
+        // 건드리지 않는다는 것이 이 구조의 요점이다.
+        return npc.Stun.IsStunned && !IsPlayingStandUp(npc) && CanArrest(npc); // 오버로드 쪽이라 소매치기 예외를 함께 탄다 (#303)
     }
+
+    /// <summary>
+    /// 일어나는 <b>모션이 실제로 도는</b> 중인가 — <b>재포획 창의 끝</b>이다. (#572 후속)
+    ///
+    /// 기상 경로가 둘이라 여기서 합친다: 기절이 끝나 일어나는 것(<see cref="NpcStun.IsRising"/>)과
+    /// 줄이 풀려 일어나는 것(<see cref="NpcStandUp.IsPlayingStandUp"/>). 밖에서는 "지금 일어나는
+    /// 중인가" 하나만 물으면 된다 — <see cref="NpcStun.IsStunned"/>가 두 기절 경로를 합치는 것과 같다.
+    ///
+    /// ⚠ <b>쓰러져 기다리는 구간은 포함하지 않는다.</b> 줄을 풀고 일어나기까지 누워 있는 동안은
+    /// 다시 묶을 수 있어야 한다 — #513이 열어 둔 재포획 창이고, <c>NpcRopeDrag.StartRopeDrag</c>가
+    /// <c>CancelStandUp</c>을 부르는 것이 그 경로다. 닫는 것은 <b>몸이 실제로 일어나기 시작한
+    /// 뒤</b>뿐이다: 그때 묶으면 일어나던 몸이 도로 눕는 그림이 나온다.
+    /// </summary>
+    public static bool IsPlayingStandUp(NpcController npc) =>
+        npc != null && (npc.Stun.IsRising || npc.StandUp.IsPlayingStandUp);
 
     /// <summary>밧줄 없이 따라오는 수감자인가 — 유치장에서 반출돼 추종 중인 대상. (#492)
     /// E를 누르면 그 자리에 세운다(Captured) — 유치장 안이면 JailIntake가 좌석에 다시 앉히고,

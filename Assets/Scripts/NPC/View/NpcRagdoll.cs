@@ -80,6 +80,11 @@ public class NpcRagdoll : MonoBehaviour
     [Tooltip("정착 판정 타임아웃(초) — 지형에 껴서 영원히 떨리는 경우의 안전장치")]
     [SerializeField] private float m_settleTimeoutSeconds = 5f;
 
+    [Header("기상 블렌드")]
+    [Tooltip("래그돌 자세에서 애니메이터 자세로 섞는 시간(초) — 0이면 즉시 복귀(예전 동작). " +
+             "줄을 풀거나 기절이 끝나 일어설 때 몸이 한 프레임에 튀는 것을 없앤다")]
+    [SerializeField] private float m_blendSeconds = 0.3f;
+
     [Header("정착 후 정렬")]
     [Tooltip("시체 밑 지면을 찾는 레이캐스트 마스크 — 지형(Default). 래그돌 뼈는 다른 레이어라 걸리지 않는다")]
     [SerializeField] private LayerMask m_groundMask = 1;
@@ -106,6 +111,12 @@ public class NpcRagdoll : MonoBehaviour
     private Animator m_animator;
     private NavMeshAgent m_agent;
     private NpcAnimationDriver m_driver; // 기상 시점의 진실값 — IsProne (#572 3단계)
+
+    // 기상 블렌드 — 래그돌 자세에서 <b>지금 애니메이터가 놓는 자세</b>로 끌고 간다. 순수 보간이라
+    // MonoBehaviour가 아니다(그쪽 클래스 주석). 리그가 하나뿐인 NPC는 <b>같은 리그</b>를 섞는다 —
+    // 플레이어는 시체/살아있는 리그가 갈려 있어 살아있는 쪽을 섞는 것이 유일한 차이다.
+    private RagdollPoseBlend m_blend;
+    private bool m_blending;
 
     // 기상 시 NavMesh를 다시 찾는 반경(m). 넉백 착지와 같은 성격이라 값도 비슷하게 잡는다.
     // 튜닝 손잡이가 아니라 "누운 자리 바로 밑"을 뜻하는 값이라 상수다.
@@ -169,6 +180,10 @@ public class NpcRagdoll : MonoBehaviour
 
         // 드라이버는 루트에 있다(이 컴포넌트와 같은 오브젝트) — 기상 시점을 여기서 읽는다.
         m_driver = GetComponent<NpcAnimationDriver>();
+
+        // ⚠ 섞는 대상은 <b>리그 최상단 이하 전 트랜스폼</b>이다 — 물리를 안 받는 뼈(목·손가락·발)까지
+        // 포함해야 한다. 그것들은 래그돌 자세에 멈춰 있어, 빼놓으면 블렌드 첫 프레임에 목과 손이 튄다.
+        m_blend = new RagdollPoseBlend(m_rig.BoneRoot);
 
         m_hipsIsNetworkSynced =
             m_rig.HipsBody != null
@@ -416,10 +431,15 @@ public class NpcRagdoll : MonoBehaviour
         m_stillTimer = 0f;
         m_elapsedInRagdoll = 0f;
 
+        // 블렌드 중에 다시 쓰러지면(재기절) 섞던 것을 버린다 — 안 버리면 무너지는 몸을
+        // 애니메이터 자세로 도로 끌어당긴다.
+        m_blending = false;
+
         ReleaseAgentForRagdoll();
 
         ReleaseBonesToPhysics();
         m_rig.ApplyImpulse(impulse);
+
     }
 
     // ---- 매 프레임 ----
@@ -492,6 +512,13 @@ public class NpcRagdoll : MonoBehaviour
 
     private void LateUpdate()
     {
+        // 기상 블렌드 — <b>LateUpdate여야 한다.</b> 이번 프레임에 애니메이터가 이미 놓은 자세가
+        // 곧 블렌드의 목표라, 여기서 읽어야 재생 중인 기상 클립을 향해 <b>살아있는 목표</b>로
+        // 수렴한다. 목표를 시작 시점에 고정하면 클립은 흘러가는데 블렌드만 옛 프레임을 향해 가서
+        // 끝나는 순간 툭 튄다(RagdollPoseBlend 클래스 주석).
+        if (m_blending && m_blend.Tick(m_blendSeconds))
+            m_blending = false;
+
         // 원격의 시체를 스트리밍된 루트에 맞춘다. LateUpdate인 이유는 NetworkTransform이 이번
         // 프레임에 적용한 루트 위치를 읽어야 한 프레임 늦지 않기 때문이다.
         //
@@ -562,31 +589,41 @@ public class NpcRagdoll : MonoBehaviour
         if (m_owner.Death.IsDead)
             return true;
 
-        // <b>바닥에 있어야 할 이유가 하나라도 있으면 래그돌이다</b> — 기절이거나, 밧줄에 눕혀졌거나.
+        // ⚠ <b>진입 조건과 유지 조건을 갈라 묻는다.</b> 하나로 합치면 "누울 이유"가 사라지는 순간
+        // 몸이 벌떡 서는데, <b>누워 있어야 하는 이유는 진입 이유보다 오래 간다.</b>
+        //
+        // 대표적인 경로가 밧줄이다: <c>ServerApplyRopeDrag</c>가 묶자마자 <c>ExitStun</c>을 불러
+        // 오버레이를 걷고(#292 — 안 걷으면 묶자마자 도망친다), 줄을 풀면 묶임 표시도 곧바로 빠진다.
+        // 진입 조건(기절)만 보면 그 두 지점에서 각각 래그돌이 풀려 <b>바닥에 누운 몸이 그 자리에서
+        // 애니메이션 클립으로 갈아끼워진다.</b>
+        if (IsRagdollActive)
+        {
+            // 이미 래그돌이면 묻는 것은 하나다 — <b>아직 바닥에 있어야 하는가.</b>
+            //
+            // <see cref="NpcAnimationDriver.IsProne"/>이 그 답을 통째로 든다: 기절해 누운 것,
+            // 줄에 눕혀진 것, <b>줄이 풀린 뒤 일어나기를 기다리는 구간</b>(<c>StandUp.IsStandingUp</c>)이
+            // 전부 참이고, <b>기상 모션이 실제로 나가는 순간</b> 거짓이 된다
+            // (<c>HandleStandUp</c>이 <c>RefreshProne</c>을 부른다).
+            //
+            // 그래서 §2-4가 요구한 "래그돌 이탈 시점 = 기상 모션 시점"이 값 하나로 표현되고,
+            // 몸은 <b>래그돌로 누워 있다가 일어날 때가 되어서야</b> 애니메이터에 넘어간다 —
+            // 그 순간 재생되는 클립이 "바닥에 누움 → 일어남"이라 그림이 이어진다.
+            return m_driver == null || m_driver.IsProne;
+        }
+
+        // 아직 애니메이터가 쥐고 있다 — <b>새로 태울 이유</b>가 있는지 묻는다.
         //
         // <b>기절은 오버레이만 태운다</b>(팀 확정). 넉백 착지 KO(<see cref="NpcState.Stunned"/>)를
         // 빼는 이유는 에이전트 소유권이 정면으로 부딪히기 때문이다: 래그돌은 에이전트에서 손을 떼야
         // 몸이 눕는데(<see cref="EnterRagdoll"/>), 넉백은 착지 시 <c>EndKnockback</c>이 에이전트를
         // <b>켜면서 Warp</b>한다. IsStunned가 아니라 HasStunOverlay를 보는 것이 그 갈림이다.
         //
-        // ⚠ <b>밧줄을 오버레이와 <u>함께</u> 봐야 한다</b> (#572). 산 대상의 밧줄도 시체와 같은
-        // 관절 밧줄로 끌기로 했으므로 묶여 있는 동안 래그돌이 유지돼야 하는데,
-        // <c>PlayerEscortCommands.ServerApplyRopeDrag</c>가 <b>묶자마자 <c>ExitStun</c></b>을 불러
-        // 오버레이를 걷는다(#292 — 안 걷으면 묶자마자 도망친다). 오버레이만 보면 묶는 그 순간
-        // 래그돌이 풀려 몸이 클립 자세로 튄다 — 실측으로 나온 증상이 정확히 이것이다.
-        if (
-            !m_owner.Stun.HasStunOverlay
-            && !m_owner.Rope.IsRoped
-            && !m_owner.Rope.IsTethered
-        )
+        // 밧줄은 진입 이유가 아니다 — 묶기는 <b>이미 무력화된 대상</b>에만 걸리므로(#446) 그때는
+        // 위 유지 분기에 있다.
+        if (!m_owner.Stun.HasStunOverlay)
             return false;
 
-        // <b>기상 모션이 시작되면 내려온다.</b> <see cref="NpcAnimationDriver.IsProne"/>이 정확히 그
-        // 순간 거짓이 된다(<c>HandleStandUp</c>이 <c>RefreshProne</c>을 부른다) — §2-4가 요구한
-        // "래그돌 이탈 시점 = RaiseStandUp 시점"이 이 값 하나로 표현된다.
-        //
-        // 값 하나에 얹는 덕에 밧줄까지 공짜로 덮인다: 줄에 눕혀진 몸은 <c>IsRopeProne</c> 때문에
-        // 계속 참이고, 줄이 풀려 기상이 예약되면 그 순간 거짓이 된다.
+        // 기상 모션이 이미 나간 뒤라면(짧은 기절의 끝자락) 태우지 않는다 — 일어나는 몸을 다시 눕힌다.
         return m_driver == null || m_driver.IsProne;
     }
 
@@ -608,11 +645,20 @@ public class NpcRagdoll : MonoBehaviour
         //    다음 물리 스텝이 PhysX의 결과로 덮는다.
         m_rig.SetKinematic(true);
 
+        // ⚠ <b>출발점은 지금 이 래그돌 자세다</b> — 아래 두 줄(바인드 포즈 복원·애니메이터 복귀)보다
+        //    반드시 먼저 잡는다. 뒤로 밀면 이미 갈아끼워진 자세에서 출발해 블렌드가 아무 일도 안 한다.
+        bool blending = m_blendSeconds > 0f && m_blend != null && m_blend.IsValid;
+        if (blending)
+            m_blend.Begin();
+
         // ⚠ <b>뼈 길이를 되돌린다</b> (§1-2). 물리가 관절을 늘려 놓은 localPosition은 애니메이터가
         //    고쳐 주지 않는다 — 애니메이터는 <b>회전만</b> 쓰기 때문이다. 리그가 하나뿐인 NPC에는
         //    플레이어의 RagdollPose.Copy 필터가 놓일 자리가 없어, 안 되돌리면 기절할 때마다
         //    누적되다 2차·3차에서 사지가 늘어나며 바닥을 뚫는다.
+        //
+        // 블렌드가 이 복원까지 부드럽게 만든다 — 늘어난 뼈 길이가 한 프레임에 튀지 않고 섞여 돌아온다.
         m_rig.RestoreBindPose();
+
 
         if (m_animator != null)
             m_animator.enabled = true;
@@ -620,6 +666,7 @@ public class NpcRagdoll : MonoBehaviour
         m_rig.SetSkinsAlwaysVisible(false); // StopAnimator가 켠 것을 되돌린다
 
         m_state = RagdollState.Animated;
+        m_blending = blending;
         m_stillTimer = 0f;
         m_elapsedInRagdoll = 0f;
 
@@ -819,13 +866,18 @@ public class NpcRagdoll : MonoBehaviour
     /// 얼리면 세 가지가 한꺼번에 끝난다: 바닥에서 비벼질 접촉이 사라지고, 뼈가 루트의 자식으로
     /// 되돌아와 <b>루트만 옮기면 몸이 따라오고</b>, 자세가 상수가 되어 원격에 1회만 보내면 된다.
     ///
-    /// 순서를 지키지 않으면 몸이 튄다. <b>키네마틱 뼈는 루트를 따라가므로</b>(동적일 때와 정반대):
+    /// 순서를 지키지 않으면 몸이 튄다. <b>동적 뼈는 루트를 따라가지 않고 키네마틱 뼈는 따라가므로</b>,
+    /// 옮기는 일을 <b>전환 앞</b>에 두는 것이 요점이다:
     /// <list type="number">
     ///   <item>전 뼈의 월드 포즈를 캡처</item>
+    ///   <item><b>루트를 골반 밑 지면으로 이동</b> — 아직 동적이라 뼈는 그대로 있다</item>
     ///   <item>전 rb를 키네마틱으로 전환 — 이 순간부터 뼈가 루트에 매인다</item>
-    ///   <item>루트를 골반 밑 지면으로 이동 (뼈가 딸려 간다)</item>
-    ///   <item>캡처한 월드 포즈를 뼈에 다시 적용 → 화면은 그대로, 루트만 지면에 앉았다</item>
+    ///   <item>캡처한 월드 포즈를 다시 적용 (안전망 — 보통 무동작)</item>
     /// </list>
+    ///
+    /// ⚠ ②와 ③이 뒤바뀌어 있었다 (#572 후속). 그러면 <b>몸 전체가 루트를 따라 내려갔다가 ④에서
+    /// 도로 올라온다</b> — 같은 프레임 안의 왕복이지만, 내려놓을 때마다 한 프레임 뜨는 것처럼
+    /// 보이는 원인이었다. 실측으로 매 정착마다 14.6cm를 오르내리고 있었다.
     ///
     /// 예전에는 ⑤로 <b>다시 물리에 풀어 줬다</b>(<c>RestToPhysics</c> — 플레이어 쪽에는 아직 남아 있다).
     /// 그 근거는 "골반을 붙들면 몸이
@@ -841,8 +893,22 @@ public class NpcRagdoll : MonoBehaviour
         m_rig.CapturePose();
         Vector3 landedHips = m_rig.Hips.position;
 
-        m_rig.SetKinematic(true);
+        // ⚠ <b>루트를 먼저 옮기고 나서 얼린다</b> (#572 후속). 순서가 뒤집혀 있었다.
+        //
+        // 예전에는 얼린 다음 루트를 옮겼는데, 그러면 <b>이미 키네마틱이 된 뼈가 루트를 따라
+        // 14.6cm 내려갔다가</b> 아래 <c>RestoreCapturedPose</c>로 도로 올라왔다 — 같은 프레임
+        // 안이지만 <b>몸 전체를 내렸다 올리는 왕복</b>이 실제로 들어 있었고, 내려놓을 때마다
+        // 한 프레임 뜨는 것처럼 보이는 원인이었다.
+        //
+        // <b>동적 리지드바디는 부모 트랜스폼을 따라가지 않는다</b> — 이 클래스가 곳곳에서 기대는
+        // 바로 그 성질이다. 그래서 얼리기 <b>전</b>에 옮기면 뼈는 아무 데도 안 간다.
         transform.position = GroundUnder(landedHips);
+
+        m_rig.SetKinematic(true);
+
+        // 이제는 안전망이다 — 뼈가 움직이지 않았으므로 보통 무동작이다. 남겨 두는 이유는 골반보다
+        // <b>위</b>에 있는 무관절 트랜스폼(리그 루트)이 계층을 따라 내려가기 때문이다: 그 밑의 뼈는
+        // 월드 포즈를 쥔 리지드바디라 영향이 없지만, 한 줄로 못박아 두는 편이 안전하다.
         m_rig.RestoreCapturedPose();
 
         m_state = RagdollState.Frozen;

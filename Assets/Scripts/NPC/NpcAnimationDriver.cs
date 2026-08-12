@@ -105,8 +105,8 @@ public class NpcAnimationDriver : MonoBehaviour
     [SerializeField] private float m_unlockBeginSeconds = 0.63f;
 
     [Header("일어나기 (#269/#513)")]
-    [Tooltip("일어나기 모션을 유지하는 시간(초) — 이 뒤에는 기준 상태 모션으로 되돌린다. NpcStunConfig.StandUpSeconds와 같은 클립이라 값도 같게 둘 것")]
-    [SerializeField] private float m_standUpSeconds = 0.585f;
+    [Tooltip("일어나기 모션을 유지하는 시간(초) — 이 뒤에는 기준 상태 모션으로 되돌린다. NpcStunConfig.StandUpSeconds와 같은 클립이라 값도 같게 둘 것 (2배속을 걷으며 0.585→1.17, #572)")]
+    [SerializeField] private float m_standUpSeconds = 1.17f;
 
     [Header("제압 전환 (#332)")]
     [Tooltip("도주형 제압 시 구르기 모션을 유지하는 시간(초) — 클립(Roll01) 길이 1.3초에 맞춘 값. 이후 그로기로 넘어간다")]

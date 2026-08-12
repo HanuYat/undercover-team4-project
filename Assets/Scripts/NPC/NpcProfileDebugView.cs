@@ -13,7 +13,7 @@ using UnityEditor;
 ///   6축 표시 이름으로 나열한다. 둘이 어긋나면(=시각 조립 오류) 경고를 띄운다.
 ///   Appearance는 서버 전용이라 <b>호스트에서만</b> 채워진다(클라이언트에선 미표시).
 /// - 이 NPC의 화면 외형으로 몽타주를 다시 만들어 보여 준다(BuildMontageText) — 실제 몽타주와 눈으로 대조용.
-/// - 공개 축(AppearanceAssigner.RevealedAxes) 기준으로 이 NPC가 각 범인 몽타주에 부합하는지 표시한다.
+/// - 각 범인의 공개 축(AppearanceAssigner.CriminalRevealedAxes) 기준으로 이 NPC가 그 몽타주에 부합하는지 표시한다.
 ///
 /// 게임 로직에 전혀 관여하지 않는 읽기 전용 뷰다. 표시 로직(Scene 라벨)은 에디터에서만 동작하므로
 /// 릴리스 빌드에는 영향이 없다. 검증이 끝나면 NPC 프리팹/오브젝트에서 이 컴포넌트만 떼면 된다.
@@ -100,21 +100,30 @@ public class NpcProfileDebugView : MonoBehaviour
         AppearanceDatabase db = Database;
         if (assigner != null && db != null)
         {
-            RevealedAxisSet revealed = assigner.RevealedAxes;
-            report.RevealedAxesLine = FormatRevealedAxes(revealed);
+            // 공개 축은 범인마다 다르다 — 요약 줄은 합집합으로, 부합 판정은 각 범인의 축으로 한다
+            IReadOnlyList<AppearanceProfile> criminals = assigner.CriminalProfiles;
+            IReadOnlyList<RevealedAxisSet> criminalAxes = assigner.CriminalRevealedAxes;
 
-            if (report.HasVisual && !revealed.IsEmpty)
-                report.VisualMontage = db.BuildMontageText(visual, revealed);
+            RevealedAxisSet union = default;
+            foreach (RevealedAxisSet axes in criminalAxes)
+            {
+                foreach (AppearanceAxis axis in axes)
+                    union.Add(axis);
+            }
+            report.RevealedAxesLine = union.IsEmpty ? "(없음)" : $"{FormatRevealedAxes(union)} (범인별 합집합)";
+
+            if (report.HasVisual && !union.IsEmpty)
+                report.VisualMontage = db.BuildMontageText(visual, union);
 
             // 몽타주 문장은 보관되지 않는다 — 범인 프로필과 공개 축으로 여기서 다시 만든다 (#497)
-            IReadOnlyList<AppearanceProfile> criminals = assigner.CriminalProfiles;
             for (int i = 0; i < criminals.Count; i++)
             {
-                bool matches = report.HasVisual && visual.MatchesOn(criminals[i], revealed);
+                RevealedAxisSet axes = i < criminalAxes.Count ? criminalAxes[i] : default;
+                bool matches = report.HasVisual && !axes.IsEmpty && visual.MatchesOn(criminals[i], axes);
                 report.Montages.Add(new MontageMatch
                 {
                     Index = i,
-                    Text = db.BuildMontageText(criminals[i], revealed),
+                    Text = db.BuildMontageText(criminals[i], axes),
                     Matches = matches,
                 });
             }
