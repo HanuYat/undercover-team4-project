@@ -7290,7 +7290,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerEscortCommands
   ShowTopMostFoldoutHeaderGroup: 1
-  m_channelSeconds: 3
+  m_channelSeconds: 0
   m_unropeDownSeconds: 3
 --- !u!114 &1988824250104969133
 MonoBehaviour:

@@ -20,11 +20,13 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
 {
     [Header("밧줄 채널링 (서버 권위)")]
     [Tooltip(
-        "밧줄 채널링 시간(초) — 줄다리기 합류와 풀기에 쓴다. 새로 묶기는 무력화된 대상만 대상이 되면서 "
-        + "채널링 없이 즉시 적용으로 바뀌어 이 값을 쓰지 않는다 (#446)"
+        "줄다리기 합류 채널링 시간(초). 0이면 좌클릭 한 번에 즉시 합류한다 (#608). "
+        + "0보다 크면 예전 홀드 채널링으로 돌아간다(되돌리기용). "
+        + "새로 묶기는 무력화된 대상만 대상이 되면서 이미 즉시 적용이고(#446), 풀기 홀드도 제거됐다"
     )]
+    [Min(0f)]
     [SerializeField]
-    private float m_channelSeconds = 3f;
+    private float m_channelSeconds;
 
     [Tooltip(
         "밧줄을 푼 뒤 쓰러진 채로 있는 시간(초) — 이 시간이 지나면 일어난다. 마지막 구간이 기상 모션이라 "
@@ -314,12 +316,21 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
             return;
 
         // 남이 끌고 있는 대상에는 밧줄을 덧건다 — 줄다리기 합류. 기존 끌기는 끊지 않는다(탈취 차단).
-        // 이미 커스터디라 반응 판정이 필요 없어 채널링만 태우고 바로 붙인다.
-        // 합류는 제압이 아니라 이미 확보된 신병에 대한 조작이라 좌클릭 홀드가 그대로 남아 있다 (#446).
+        // 이미 커스터디라 반응 판정이 필요 없다.
+        //
+        // 합류도 좌클릭 한 번에 붙는다 (#608). 마지막까지 남아 있던 홀드였는데, 제압이 아니라 이미
+        // 확보된 신병에 손을 보태는 조작이라 3초를 기다릴 이유가 없었다 — 무게를 나눠 끄는 협동(#390/#398)
+        // 진입만 굼떠졌다. 채널링이 끝나고 하던 재검증은 그 3초 사이에 상태가 바뀔 수 있어서 필요했던
+        // 것이라, 즉시 적용에는 다시 볼 것이 없다(위 CanBeginRopeDrag가 자원·중복·사거리를 이미 봤다).
         if (NpcStateRules.CanJoinDrag(target.CurrentState))
         {
             ServerPlayRopeBind(target);
-            ServerRopeJoinChannelAsync(target).Forget();
+
+            if (m_channelSeconds <= 0f)
+                ServerApplyRopeDrag(target);
+            else
+                ServerRopeJoinChannelAsync(target).Forget();
+
             return;
         }
 
