@@ -33,6 +33,9 @@ public class NpcRepathScheduler
     private static readonly List<Transform> s_players = new List<Transform>();
     private static int s_playersFrame = -1;
 
+    // 배선이 빠졌을 때 쓰는 코드 기본값 — NPC 전체가 공유한다.
+    private static NpcRepathConfig s_fallbackConfig;
+
     private readonly NpcRepathConfig m_config;
     private readonly Transform m_owner;
     private readonly float[] m_nextDue = new float[k_channelCount];
@@ -42,7 +45,7 @@ public class NpcRepathScheduler
 
     public NpcRepathScheduler(NpcRepathConfig config, Transform owner)
     {
-        m_config = config;
+        m_config = Resolve(config, owner);
         m_owner = owner;
 
         // 위상 분산 — 첫 만료를 [0, interval) 안의 임의 시점으로 흩뿌린다.
@@ -52,6 +55,24 @@ public class NpcRepathScheduler
 
         // 티어 표본도 같이 흩뿌린다 — 안 그러면 표본 채집이 한 프레임에 몰린다.
         m_nextTierSample = now + Random.Range(0f, m_config.TierSampleInterval);
+    }
+
+    // 설정이 비어 있으면 코드 기본값으로 버틴다. 예전에는 주기가 const라 실패할 수 없던 자리인데,
+    // SO로 옮기면서 "배선 누락 = Awake에서 NRE = 그 NPC가 통째로 죽는다"가 됐다. 새 SerializeField는
+    // 기존 프리팹에 자동 전파되지 않으므로 나중에 만들어지는 프리팹이 조용히 이걸 밟는다.
+    // 조용히 넘기지는 않는다 — 어느 오브젝트가 비었는지 에러로 남겨 프리팹을 고치게 한다.
+    private static NpcRepathConfig Resolve(NpcRepathConfig config, Transform owner)
+    {
+        if (config != null)
+            return config;
+
+        s_fallbackConfig ??= ScriptableObject.CreateInstance<NpcRepathConfig>();
+        Debug.LogError(
+            $"NpcRepathConfig가 비어 있다 — 코드 기본값으로 대체한다. NpcController의 m_repathConfig를 채울 것: {owner.name}",
+            owner
+        );
+
+        return s_fallbackConfig;
     }
 
     /// <summary>
@@ -170,7 +191,9 @@ public class NpcRepathScheduler
 
         s_players.Clear();
 
-        // 다운된 플레이어도 넣는다 — 화면은 살아 있어서 그 주변 NPC는 여전히 촘촘해야 한다.
+        // SuddenEventUtil.CollectFieldPlayers와 <b>기준이 다르다</b> — 저쪽은 IsTargetable만 모으지만
+        // 여기는 다운된 플레이어도 넣는다. 티어는 "누구를 노릴 수 있는가"가 아니라 "누가 보고 있는가"라
+        // 쓰러진 플레이어 주변도 촘촘해야 하기 때문이다. 저쪽과 합치지 않는 이유가 이것이다.
         PlayerHealth[] found = Object.FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
         for (int i = 0; i < found.Length; i++)
             s_players.Add(found[i].transform);

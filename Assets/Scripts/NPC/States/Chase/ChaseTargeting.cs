@@ -32,6 +32,10 @@ public class ChaseTargeting
     public void Reset()
     {
         m_cooldowns.Clear();
+
+        // 진입 직후 첫 훑기는 미루지 않는다 — 예전 m_scanTimer = 0f가 "다음 호출에서 즉시"였다.
+        // 채널은 NPC마다 하나라 최근에 소모됐으면 표적 획득이 한 주기만큼 늦는다.
+        m_repath.ForceDue(NpcRepathChannel.TargetScan);
     }
 
     /// <summary>이 플레이어를 당분간 노리지 않는다 — 격퇴, 그리고 도달 불가로 놓은 경우.</summary>
