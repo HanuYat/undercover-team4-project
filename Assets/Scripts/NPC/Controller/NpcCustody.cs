@@ -155,7 +155,12 @@ public class NpcCustody : NetworkBehaviour
     /// </summary>
     /// <param name="position">시체가 놓일 감옥 안 지점 — 유치장이 정한다. <b>바닥에 스냅된 좌표여야
     /// 한다</b>: 얼린 시체는 스스로 바닥을 찾지 않는다(<see cref="JailZone.RandomRestPointInRoom"/>).</param>
-    public void SendCorpseToJail(Vector3 position)
+    public void SendCorpseToJail(Vector3 position) => ServerMoveCorpse(position);
+
+    /// <summary>시체를 통째로 옮긴다 — 서버(또는 오프라인) 전용. 수감·퇴장이 함께 쓴다. (#571/#597)
+    /// 산 대상의 <see cref="ServerExitJail"/>과 갈린다: 시체는 에이전트가 없어 워프가 아니고,
+    /// 옮길 것도 루트가 아니라 뼈 전부다.</summary>
+    public void ServerMoveCorpse(Vector3 position)
     {
         if (IsSpawned && !IsServer)
             return;

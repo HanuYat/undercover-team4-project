@@ -137,6 +137,11 @@ public class SecretFavorBroker : NetworkBehaviour
     // 감옥 문 — 반출 대상이 문 밖으로 나오는 순간을 받으려고 잡는다 (#548).
     private JailIntake m_intake;
 
+    /// <summary>이번 대상이 <b>발행 시점에</b> 시체였는가 — 시체는 걷지 못해 밧줄로 끌고 가야 완수다. (#597)
+    /// 발행 시점으로 못박는 것이 핵심이다: 산 대상이 도중에 죽으면 여전히 무산이라(아래 사망 가드)
+    /// "빼내 달라"를 죽여서 이행하는 우회가 열리지 않는다.</summary>
+    private bool m_targetIsCorpse;
+
     // 스폰 전(오프라인 단독 Play)이면 이 피어가 곧 권위다 — TipCallPhone.IsAuthority와 같은 판단
     private bool IsAuthority => !IsSpawned || IsServer;
 
@@ -151,7 +156,13 @@ public class SecretFavorBroker : NetworkBehaviour
 
         m_jail = FindFirstObjectByType<JailZone>();
         if (m_jail != null)
+        {
             m_jail.OnInmateAdmitted += HandleInmateAdmitted;
+
+            // 시체도 같은 추첨을 탄다 (#597) — "빼달라"는 청탁은 살아 있든 아니든 성립한다.
+            // 다만 시체는 스스로 걸어 나가지 못하므로 이행 방법이 갈린다(HandleInmateExited·IsCorpseFavor).
+            m_jail.OnDeceasedRecorded += HandleInmateAdmitted;
+        }
         else
             Debug.LogWarning("SecretFavorBroker: JailZone을 찾지 못해 청탁이 걸려오지 않는다", this);
 
@@ -170,7 +181,10 @@ public class SecretFavorBroker : NetworkBehaviour
     public override void OnDestroy()
     {
         if (m_jail != null)
+        {
             m_jail.OnInmateAdmitted -= HandleInmateAdmitted;
+            m_jail.OnDeceasedRecorded -= HandleInmateAdmitted;
+        }
 
         if (m_intake != null)
             m_intake.OnInmateExited -= HandleInmateExited;
@@ -227,7 +241,7 @@ public class SecretFavorBroker : NetworkBehaviour
         if (m_pendingTarget == null || m_phone == null) return;
 
         // 탈옥·반출로 이미 나갔거나 파괴된 대상 — "유치장에 있는 ○○○"가 성립하지 않는다
-        if (m_pendingTarget.CurrentState != NpcState.Jailed)
+        if (!IsInJail(m_pendingTarget))
         {
             Debug.Log("[비밀 청탁] 대상이 이미 유치장에서 빠져 전화 예약을 취소한다");
             m_pendingTarget = null;
@@ -253,7 +267,7 @@ public class SecretFavorBroker : NetworkBehaviour
     {
         if (m_active) return; // 벨이 울리는 사이에 다른 청탁이 시작됐다
 
-        if (target == null || target.CurrentState != NpcState.Jailed)
+        if (!IsInJail(target))
         {
             Debug.Log("[비밀 청탁] 전화를 받았지만 대상이 이미 유치장에 없다 — 의뢰가 성립하지 않는다");
             return;
@@ -271,6 +285,7 @@ public class SecretFavorBroker : NetworkBehaviour
         m_active = true;
         m_clientId = clientId;
         m_target = target;
+        m_targetIsCorpse = target.Death.IsDead; // 발행 시점에 못박는다 (아래 프로퍼티 주석)
         m_dropoff = dropoff;
         m_reward = Mathf.Max(m_minReward, identity.Bounty * m_rewardPercent / 100);
         m_expireTime = Time.time + m_favorExpireSeconds;
@@ -302,8 +317,29 @@ public class SecretFavorBroker : NetworkBehaviour
         if (npc == null || npc != m_target || m_dropoff == null)
             return;
 
+        // 시체는 걷지 않는다 (#597) — Releasing으로 전이할 수도 없다(사망은 종착 상태).
+        // 완수 판정은 위치로 하므로, 끌고 가서 인도 범위에 넣으면 그대로 잡힌다.
+        if (npc.Death.IsDead)
+        {
+            Debug.Log($"[비밀 청탁] 시체 대상 — 인도 지점까지 직접 끌고 가야 한다: {npc.name}");
+            return;
+        }
+
         npc.Custody.StartRelease(m_dropoff.Center);
         Debug.Log($"[비밀 청탁] 대상이 인도 지점으로 걸어간다: {npc.name}");
+    }
+
+    /// <summary>아직 감옥 안에 있는가 — 산 수감자와 시체를 함께 답한다. (#597)
+    /// 시체는 <see cref="NpcState.Jailed"/>를 타지 않으므로(사망이 종착 상태라 Dead로 남는다)
+    /// <b>방 안에 누워 있는가</b>로 묻는다 — 끌려 나가면 그 순간 밖이다.</summary>
+    private static bool IsInJail(NpcController npc)
+    {
+        if (npc == null)
+            return false;
+
+        return npc.Death.IsDead
+            ? JailRoom.Contains(npc.transform.position)
+            : npc.CurrentState == NpcState.Jailed;
     }
 
     // 의뢰가 접혔는데 대상이 아직 걷고 있거나 인도 지점에 서 있다 — 도시로 돌려보낸다 (#548).
@@ -383,7 +419,8 @@ public class SecretFavorBroker : NetworkBehaviour
         // 왜 안 되는지 모른 채 남은 시간을 기다린다. 실패를 바로 알려 다음 판단을 하게 한다.
         // SendTargetAway는 부르지 않는다 — 시체는 흩어질 수 없고, 목적지는 사망 전이를 받은
         // NpcController의 상태 훅이 이미 지웠다.
-        if (m_target.Death.IsDead)
+        // 처음부터 시체였던 건은 여기 걸리지 않는다 (#597) — 그쪽은 시체 인도가 곧 이행이다.
+        if (m_target.Death.IsDead && !m_targetIsCorpse)
         {
             Debug.Log($"[비밀 청탁] 대상이 사망해 의뢰가 무산됐다: {m_target.name}");
             Clear();
@@ -544,7 +581,7 @@ public class SecretFavorBroker : NetworkBehaviour
         NpcController target = DevFindJailedTarget();
         if (target == null)
         {
-            Debug.Log("[비밀 청탁] 개발 단축키 — 유치장에 이름을 댈 수 있는 수감자가 없다");
+            Debug.Log("[비밀 청탁] 개발 단축키 — 감옥에 이름을 댈 수 있는 수감자도 시체도 없다");
             return;
         }
 
@@ -559,23 +596,35 @@ public class SecretFavorBroker : NetworkBehaviour
 
     // 이름을 댈 수 있는 수감자 — Issue가 CitizenIdentity를 그대로 참조하므로 여기서 걸러야 한다
     // (정상 경로에서는 HandleInmateAdmitted가 같은 검사를 이미 통과시킨다).
+    //
+    // 산 수감자와 시체를 함께 찾되 <b>시체를 먼저 고른다</b> (#597) — 둘 다 있을 때 산 대상이 잡히면
+    // 시체 청탁(밧줄로 끌고 가기)을 손으로 확인할 방법이 없다. 판정은 정상 경로와 같은 IsInJail이다.
     private static NpcController DevFindJailedTarget()
     {
         NpcController[] all = FindObjectsByType<NpcController>(FindObjectsSortMode.None);
+
+        NpcController living = null;
         for (int i = 0; i < all.Length; i++)
         {
             NpcController npc = all[i];
-            if (npc == null || npc.CurrentState != NpcState.Jailed)
+            if (!IsInJail(npc) || !HasName(npc))
                 continue;
 
-            CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
-            if (identity == null || identity.Profile == null || string.IsNullOrEmpty(identity.Profile.CitizenName))
-                continue;
+            if (npc.Death.IsDead)
+                return npc;
 
-            return npc;
+            living ??= npc;
         }
 
-        return null;
+        return living;
+    }
+
+    private static bool HasName(NpcController npc)
+    {
+        CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
+        return identity != null
+            && identity.Profile != null
+            && !string.IsNullOrEmpty(identity.Profile.CitizenName);
     }
 
 #endif

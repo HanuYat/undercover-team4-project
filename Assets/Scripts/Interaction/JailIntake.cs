@@ -449,7 +449,32 @@ public class JailIntake : MonoBehaviour
             ServerSendOff(followers[i], mover.transform);
         }
 
+        // 밧줄에 걸린 시체도 함께 나온다 (#597) — 안 옮기면 줄만 벽을 뚫고 늘어나고 몸은 방에 남는다.
+        int corpses = ServerExitRopedCorpses(mover, followers.Count + 1);
+
         mover.ServerTeleport(exit.position, exit.rotation);
-        Debug.Log($"[감옥] 퇴장 — {mover.name} (동행 {followers.Count}명)");
+        Debug.Log($"[감옥] 퇴장 — {mover.name} (동행 {followers.Count}명, 시체 {corpses}구)");
+    }
+
+    // 이 플레이어 줄에 걸린 시체를 퇴장 자리로 옮긴다 — 산 신병은 FindFollowersOf가 이미 집었다.
+    // 시체는 에이전트가 없어 워프가 아니라 뼈째 옮긴다(NpcCustody.ServerMoveCorpse).
+    private int ServerExitRopedCorpses(PlayerMovement mover, int firstSlot)
+    {
+        PlayerEscorter escorter = mover.GetComponent<PlayerEscorter>();
+        if (escorter == null)
+            return 0;
+
+        int moved = 0;
+        for (int i = 0; i < escorter.TetheredCount; i++)
+        {
+            NpcController npc = escorter.GetTetheredNpc(i);
+            if (npc == null || !npc.Death.IsDead)
+                continue;
+
+            npc.Custody.ServerMoveCorpse(m_jailZone.ExitSlot(firstSlot + moved));
+            moved++;
+        }
+
+        return moved;
     }
 }

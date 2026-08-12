@@ -441,7 +441,14 @@ public class JailZone : NetworkBehaviour
         m_records[npc] = new InmateRecord(bounty, IsCriminalInmate(npc), deliverers ?? Array.Empty<ulong>());
         RefreshBountyTotal(); // 라운드 진행도(RoundManager.CurrentFund)가 곧 이 값이다
         Debug.Log($"[유치장] 사망 계상: {npc.name} — 현상금 {bounty}원, 누적 {BountyTotal}원");
+
+        OnDeceasedRecorded?.Invoke(npc); // 계상이 끝난 뒤에 알린다 (OnInmateAdmitted와 같은 순서)
     }
+
+    /// <summary>시체가 계상된 순간 — 서버(또는 오프라인) 전용. 비밀 청탁이 대상 추첨에 쓴다. (#597)
+    /// <see cref="OnInmateAdmitted"/>와 갈라 두는 이유: 시체는 수감자가 아니라(점유·탈옥·표지판이
+    /// 전부 산 사람만 센다) 한 이벤트로 묶으면 구독하는 쪽이 시체를 한 수로 세게 된다.</summary>
+    public event Action<NpcController> OnDeceasedRecorded;
 
     /// <summary>
     /// 이 수감자의 기록된 현상금 — 없으면 false. 서버(또는 오프라인) 전용. (#517)
