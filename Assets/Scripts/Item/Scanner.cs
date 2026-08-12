@@ -342,6 +342,11 @@ public class Scanner : ItemBase
     /// <summary>진행 중인 스캔 채널링을 취소한다. (이동·피격 등 방해 시 호출)</summary>
     public void CancelScan()
     {
+        // 즉시 스캔에는 끊을 채널이 없다 (#608). 이 가드가 없으면 원격 클라가 좌클릭을 뗄 때마다
+        // 아무것도 하지 않을 취소 RPC가 서버로 한 번씩 나간다 — 스캔은 순간이라 뗌은 항상 그 뒤다.
+        if (m_channelSeconds <= 0f)
+            return;
+
         if (HasServerAuthority)
         {
             m_channel.Cancel();
