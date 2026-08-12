@@ -127,6 +127,10 @@ MonoBehaviour:
     m_Localized: No suspect brought in
     m_Metadata:
       m_Items: []
+  - m_Id: 761277106970625
+    m_Localized: You've been pickpocketed
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

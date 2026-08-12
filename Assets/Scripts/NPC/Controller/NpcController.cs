@@ -17,7 +17,7 @@ using Random = UnityEngine.Random;
 [RequireComponent(typeof(NpcHealth))]
 [RequireComponent(typeof(NpcIntruder))]
 [RequireComponent(typeof(NpcKnockback))]
-[RequireComponent(typeof(NpcPenaltyAgent))]
+[RequireComponent(typeof(NpcDutyAgent))]
 [RequireComponent(typeof(NpcReaction))]
 [RequireComponent(typeof(NpcRopeDrag))]
 [RequireComponent(typeof(NpcStandUp))]
@@ -46,9 +46,12 @@ public class NpcController : NetworkBehaviour
     private NpcHealth m_health;
     private NpcIntruder m_intruder;
     private NpcKnockback m_knockback;
-    private NpcPenaltyAgent m_penalty;
+    private NpcDutyAgent m_penalty;
     private NpcReaction m_reaction;
     private NpcRopeDrag m_rope;
+
+    // 래그돌 — 밧줄 틱을 돌릴지 가르는 데 쓴다. 리그 없는 프리팩에서는 null이다 (#572).
+    private NpcRagdoll m_ragdoll;
     private NpcStandUp m_standUp;
     private NpcStun m_stun;
 
@@ -63,7 +66,7 @@ public class NpcController : NetworkBehaviour
 
     // 튜닝 SO는 코어가 계속 들고 부품이 여기서 읽는다 (계획서 § 3-3).
     // 부품은 같은 어셈블리라 internal로 족하다. 뒤 주석은 읽는 부품이다. (#503)
-    internal NpcChaseConfig ChaseConfig => m_chaseConfig; // NpcPenaltyAgent — 격퇴 도주 시간
+    internal NpcChaseConfig ChaseConfig => m_chaseConfig; // NpcDutyAgent — 격퇴 도주 시간
     internal NpcResistConfig ResistConfig => m_resistConfig; // NpcReaction — 위협 탐색 반경
     internal NpcStunConfig StunConfig => m_stunConfig; // NpcStun — 지속 시간·기상 클립 / NpcHealth — 쓰러짐 기절 시간
     internal NpcCommonConfig CommonConfig => m_commonConfig; // NpcHealth·NpcKnockback·NpcRopeDrag
@@ -89,8 +92,8 @@ public class NpcController : NetworkBehaviour
     public NpcIntruder Intruder => m_intruder;
     /// <summary>넉백 — 외력 비행과 착지 후 복귀 상태 (#232)</summary>
     public NpcKnockback Knockback => m_knockback;
-    /// <summary>페널티 임무 — 오검거·납치의 수용·추격·수렴·호송 (#277~#279/#371)</summary>
-    public NpcPenaltyAgent Penalty => m_penalty;
+    /// <summary>특수 임무 — 오검거·납치·소매치기의 수용·추격·수렴·호송 (#277~#279/#371/#303)</summary>
+    public NpcDutyAgent Penalty => m_penalty;
     /// <summary>검거 반응 — 위협 대상·도주·저항·스윙 (#76/#205/#213/#220)</summary>
     public NpcReaction Reaction => m_reaction;
     /// <summary>밧줄 — 묶임·끌기·무게 (#269/#369/#398)</summary>
@@ -108,9 +111,10 @@ public class NpcController : NetworkBehaviour
         m_health = GetComponent<NpcHealth>();
         m_intruder = GetComponent<NpcIntruder>();
         m_knockback = GetComponent<NpcKnockback>();
-        m_penalty = GetComponent<NpcPenaltyAgent>();
+        m_penalty = GetComponent<NpcDutyAgent>();
         m_reaction = GetComponent<NpcReaction>();
         m_rope = GetComponent<NpcRopeDrag>();
+        m_ragdoll = GetComponent<NpcRagdoll>();
         m_standUp = GetComponent<NpcStandUp>();
         m_stun = GetComponent<NpcStun>();
 
@@ -211,7 +215,18 @@ public class NpcController : NetworkBehaviour
 
         // 밧줄 장력 — 게이트보다 **먼저** (#390). 묶인 채 기절한 대상은 스턴 오버레이를 단 채 끌려가야 하므로,
         // 뒤로 내리면 테이저→밧줄 콤보로 잡은 대상이 그 자리에 멈춘다. (넉백과는 배타적 — StopEscort가 끌기를 정리한다)
-        m_rope.Tick();
+        //
+        // ⚠ <b>래그돌인 대상에는 돌리지 않는다</b> (#572 3단계). 위 사망 게이트 주석이 적어 둔 기준
+        // ("갈리는 기준은 대상이 래그돌이냐다")을 그대로 적용한 것이다 — 예전에는 래그돌 = 시체라
+        // 사망 게이트 하나로 같은 효과가 났지만, 기절에도 래그돌이 붙으면서 둘이 갈렸다.
+        // 래그돌인 몸은 <b>관절 밧줄</b>(RagdollRope)이 물리로 끌고 루트는 NpcRagdoll.TickRootFollow가
+        // 따라붙인다. 여기서 <c>transform.position</c>을 함께 대입하면 같은 프레임에 위치를 다퉈
+        // 몸이 떨거나 몸을 두고 루트만 날아간다.
+        //
+        // <b>return이 아니라 건너뛰기다</b> — 아래 m_stun.Tick()이 기절 타이머를 굴리므로 여기서
+        // 끊으면 끌려가는 동안 기절이 영영 안 풀린다.
+        if (m_ragdoll == null || !m_ragdoll.IsRagdollActive)
+            m_rope.Tick();
 
         // 줄이 풀리며 일어나는 구간 — 밧줄 장력과 같은 이유로 아래 게이트보다 **먼저** 돈다 (#513).
         // 뒤로 내리면 일어나는 도중 기절·넉백을 맞은 대상의 예약이 영원히 남는다.
@@ -302,9 +317,20 @@ public class NpcController : NetworkBehaviour
         m_frozen = frozen;
 
         // 에이전트를 멈춘다 — 비활성/NavMesh 밖이면 isStopped 접근이 예외를 던지므로 가드
-        if (m_agent != null && m_agent.enabled && m_agent.isOnNavMesh)
+        if (AgentReady)
             m_agent.isStopped = frozen;
     }
+
+    /// <summary>
+    /// 지금 에이전트를 <b>만져도 되는가</b> — <c>isStopped</c>·<c>SetDestination</c>·<c>ResetPath</c>는
+    /// 비활성이거나 NavMesh 밖이면 Unity가 예외를 던진다. (#557)
+    ///
+    /// ⚠ <b>"왜 못 쓰는가"가 아니라 "쓸 수 있는가"를 묻는 값이다.</b> 에이전트를 꺼 두는 구간이
+    /// 넷으로 늘었고(넉백 비행·밧줄 끌기·사망·<b>기절 래그돌</b>, #572) 앞으로도 늘 수 있어서,
+    /// 원인을 열거해 추론하면 새 구간이 생길 때마다 조용히 틀린다 —
+    /// <c>NpcEscortedState.Enter</c>가 <c>IsRoped</c>로 추론하다 정확히 그렇게 깨졌다.
+    /// </summary>
+    public bool AgentReady => m_agent != null && m_agent.enabled && m_agent.isOnNavMesh;
 
     // 워프 기준점 주변에서 NavMesh를 찾을 때의 기본 탐색 반경(m).
     private const float k_warpSnapRadius = 2f;
@@ -399,11 +425,18 @@ public class NpcController : NetworkBehaviour
     /// <summary>
     /// <b>에이전트가 켜져 있는데 NavMesh 밖</b>인 상태를 서버가 스스로 회수한다. 서버(또는 오프라인) 전용. (#557)
     ///
-    /// 이 상태를 만드는 셋(밧줄 놓기·넉백 착지·기절 해제)이 전부 실패 시 경고만 남기고 포기해, 이후
-    /// <c>isStopped</c>·<c>SetDestination</c>이 조용히 실패하며 NPC가 굳었다(빌드 2 이슈 E의 재발).
-    /// 호출부마다 폴백을 다는 대신 <b>결과 상태 하나</b>를 여기서 보면 늘어날 호출부까지 덮인다.
+    /// 이 상태를 만드는 넷(밧줄 놓기·넉백 착지·기절 해제·<b>래그돌 기상</b>)이 전부 실패 시 경고만
+    /// 남기고 포기해, 이후 <c>isStopped</c>·<c>SetDestination</c>이 조용히 실패하며 NPC가 굳었다
+    /// (빌드 2 이슈 E의 재발). 호출부마다 폴백을 다는 대신 <b>결과 상태 하나</b>를 여기서 보면
+    /// 늘어날 호출부까지 덮인다.
     ///
-    /// 에이전트를 꺼 둔 구간(넉백 비행·밧줄 끌기)은 위치를 그쪽이 쥐고 있어 굳은 것이 아니다 — 건너뛴다.
+    /// 에이전트를 꺼 둔 구간(넉백 비행·밧줄 끌기·<b>래그돌</b>)은 위치를 그쪽이 쥐고 있어 굳은 것이
+    /// 아니다 — 건너뛴다.
+    ///
+    /// ⚠ <b>그래서 꺼 둔 쪽은 반드시 스스로 켜야 한다.</b> 이 회수는 <c>enabled == true</c>인데
+    /// NavMesh 밖인 경우만 잡으므로, 꺼 놓고 아무도 켜지 않으면 회수가 <b>영영 오지 않는다.</b>
+    /// 켜는 것은 이 함수의 <b>전제</b>이지 생략해도 되는 이유가 아니다
+    /// (<see cref="NpcRagdoll"/>의 기상이 실패해도 에이전트를 켜 두는 이유가 이것이다, #572).
     /// </summary>
     private void TickNavMeshRecovery()
     {

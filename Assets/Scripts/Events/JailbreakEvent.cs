@@ -206,7 +206,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         }
 
         // 잔류 전환 확정분을 상태 전이 체인 밖(다음 틱)에서 처리한다 — OnStateChanged 안에서 곧바로
-        // 상태를 갈아타면 전이 통지가 중첩된다 (SpawnedNpcEvent와 같은 이유). (#310)
+        // 상태를 갈아타면 전이 통지가 중첩된다 (SpawnedNpcEventBase와 같은 이유). (#310)
         if (m_releaseQueued)
         {
             ReleaseToCity();
@@ -239,7 +239,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (m_intruder.CurrentState == NpcState.Escorted)
             m_lifetimeStart = Time.time;
 
-        // 잔류 전환 시간이 다하면 침입을 포기하고 배회 시민으로 잔류한다 (SpawnedNpcEvent와 동일 설계).
+        // 잔류 전환 시간이 다하면 침입을 포기하고 배회 시민으로 잔류한다 (SpawnedNpcEventBase와 동일 설계).
         if (Time.time - m_lifetimeStart > m_maxLifetimeSeconds)
         {
             Debug.Log("[돌발이벤트] 범인 탈출 — 침입자 침입 포기, 잔류");
@@ -466,7 +466,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     }
 
     // 이벤트가 손을 떼고 침입자를 도심에 남긴다 — 뒷일(인계 판정·라운드 종료 정리)은
-    // MisdemeanorLoiterer가 물려받는다 (SpawnedNpcEvent.ReleaseToCity와 동일 설계). (#310)
+    // MisdemeanorLoiterer가 물려받는다 (SpawnedNpcEventBase.ReleaseToCity와 동일 설계). (#310)
     private void ReleaseToCity()
     {
         NpcController intruder = m_intruder;

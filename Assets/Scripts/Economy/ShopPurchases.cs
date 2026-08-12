@@ -100,6 +100,23 @@ public class ShopPurchases : NetworkedManagerBase
     }
 
     /// <summary>
+    /// 소지형 구매 기록 1개를 지운다 — 소매치기에게 뺏긴 채 놓치면 영구 손실이다 (#303).
+    /// 같은 프리팹을 여러 개 샀으면 하나만 빠진다(중복 구매 허용이라 List).
+    /// </summary>
+    public void RemoveCarried(ItemBase itemPrefab)
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning("ShopPurchases.RemoveCarried는 서버에서만", this);
+            return;
+        }
+        if (itemPrefab == null) return;
+
+        if (m_carried.Remove(itemPrefab))
+            Debug.Log($"[상점] 구매품 소실 — {itemPrefab.name} (남은 {m_carried.Count}개)");
+    }
+
+    /// <summary>
     /// 구매 목록을 비운다 — 라운드 실패로 판이 끝났을 때 호출한다 (#395, TeamFund.ResetToStarting과 같은 자리).
     /// 이 홀더는 씬을 넘어 유지되므로(#214) 새 판을 시작해도 스스로는 초기화되지 않는다.
     /// </summary>
