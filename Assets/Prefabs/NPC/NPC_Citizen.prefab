@@ -174,7 +174,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NpcAnimationDriver
   m_swingAnimSeconds: 0.9
   m_unlockBeginSeconds: 0.63
-  m_standUpSeconds: 0.585
+  m_standUpSeconds: 1.17
   m_subdueRollSeconds: 1.3
   m_animator: {fileID: 0}
 --- !u!114 &3625219082931332717
