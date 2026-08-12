@@ -17,7 +17,7 @@ using Random = UnityEngine.Random;
 [RequireComponent(typeof(NpcHealth))]
 [RequireComponent(typeof(NpcIntruder))]
 [RequireComponent(typeof(NpcKnockback))]
-[RequireComponent(typeof(NpcPenaltyAgent))]
+[RequireComponent(typeof(NpcDutyAgent))]
 [RequireComponent(typeof(NpcReaction))]
 [RequireComponent(typeof(NpcRopeDrag))]
 [RequireComponent(typeof(NpcStandUp))]
@@ -46,7 +46,7 @@ public class NpcController : NetworkBehaviour
     private NpcHealth m_health;
     private NpcIntruder m_intruder;
     private NpcKnockback m_knockback;
-    private NpcPenaltyAgent m_penalty;
+    private NpcDutyAgent m_penalty;
     private NpcReaction m_reaction;
     private NpcRopeDrag m_rope;
     private NpcStandUp m_standUp;
@@ -63,7 +63,7 @@ public class NpcController : NetworkBehaviour
 
     // 튜닝 SO는 코어가 계속 들고 부품이 여기서 읽는다 (계획서 § 3-3).
     // 부품은 같은 어셈블리라 internal로 족하다. 뒤 주석은 읽는 부품이다. (#503)
-    internal NpcChaseConfig ChaseConfig => m_chaseConfig; // NpcPenaltyAgent — 격퇴 도주 시간
+    internal NpcChaseConfig ChaseConfig => m_chaseConfig; // NpcDutyAgent — 격퇴 도주 시간
     internal NpcResistConfig ResistConfig => m_resistConfig; // NpcReaction — 위협 탐색 반경
     internal NpcStunConfig StunConfig => m_stunConfig; // NpcStun — 지속 시간·기상 클립 / NpcHealth — 쓰러짐 기절 시간
     internal NpcCommonConfig CommonConfig => m_commonConfig; // NpcHealth·NpcKnockback·NpcRopeDrag
@@ -89,8 +89,8 @@ public class NpcController : NetworkBehaviour
     public NpcIntruder Intruder => m_intruder;
     /// <summary>넉백 — 외력 비행과 착지 후 복귀 상태 (#232)</summary>
     public NpcKnockback Knockback => m_knockback;
-    /// <summary>페널티 임무 — 오검거·납치의 수용·추격·수렴·호송 (#277~#279/#371)</summary>
-    public NpcPenaltyAgent Penalty => m_penalty;
+    /// <summary>특수 임무 — 오검거·납치·소매치기의 수용·추격·수렴·호송 (#277~#279/#371/#303)</summary>
+    public NpcDutyAgent Penalty => m_penalty;
     /// <summary>검거 반응 — 위협 대상·도주·저항·스윙 (#76/#205/#213/#220)</summary>
     public NpcReaction Reaction => m_reaction;
     /// <summary>밧줄 — 묶임·끌기·무게 (#269/#369/#398)</summary>
@@ -108,7 +108,7 @@ public class NpcController : NetworkBehaviour
         m_health = GetComponent<NpcHealth>();
         m_intruder = GetComponent<NpcIntruder>();
         m_knockback = GetComponent<NpcKnockback>();
-        m_penalty = GetComponent<NpcPenaltyAgent>();
+        m_penalty = GetComponent<NpcDutyAgent>();
         m_reaction = GetComponent<NpcReaction>();
         m_rope = GetComponent<NpcRopeDrag>();
         m_standUp = GetComponent<NpcStandUp>();

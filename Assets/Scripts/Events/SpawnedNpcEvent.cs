@@ -241,7 +241,7 @@ public class SpawnedNpcEvent : ISuddenEvent
                 if (m_threat != null)
                 {
                     m_npc.Penalty.OnPenaltyCaught += HandlePickpocketReach;
-                    m_npc.Penalty.StartPenaltyChase(m_threat, pickpocketDuty: true);
+                    m_npc.Penalty.StartPenaltyChase(m_threat, NpcDutyKind.Pickpocket);
                     m_pickpocketGiveUpTime = Time.time + m_pickpocketApproachSeconds;
                 }
                 break;
@@ -258,13 +258,12 @@ public class SpawnedNpcEvent : ISuddenEvent
         m_npc.Penalty.OnPenaltyCaught -= HandlePickpocketReach;
         m_pickpocketGiveUpTime = 0f; // 붙었으니 접근 제한은 끝
 
+        // 훔치는 것도 뒷일(떨구기·손실)도 소매치기 자신의 행동이다 — 이 이벤트는 대상만 넘긴다 (#303)
         PlayerLoadout victim = caught != null ? caught.GetComponentInParent<PlayerLoadout>() : null;
-        ItemBase stolen = victim != null ? victim.ServerStealRandom(m_npc.transform) : null;
+        ItemBase stolen = victim != null ? GetOrAddPickpocket(m_npc).ServerStealFrom(victim) : null;
 
         if (stolen != null)
         {
-            m_npc.gameObject.AddComponent<StolenGoods>().ServerTake(stolen);
-
             // 물건은 소리 없이 사라지므로 당사자에게 알린다 — 안 알리면 한참 뒤에야 없어진 걸 안다
             victim.GetComponent<PlayerTheftView>()?.ShowStolen();
 
@@ -289,8 +288,8 @@ public class SpawnedNpcEvent : ISuddenEvent
         if (state == NpcState.Captured)
         {
             // 훔친 물건은 제압당한 자리에 떨어진다 (#303) — 주우면 회수 끝, 본부까지 갈 것 없다
-            if (m_npc.TryGetComponent(out StolenGoods goods))
-                goods.ServerDropHere();
+            if (m_npc.TryGetComponent(out Pickpocket thief))
+                thief.ServerDropStolenItem();
 
             // 제압만으로는 아무 일도 일어나지 않는다 — 본부까지 연행해야 판정·수익이 난다.
             // 연행이 끊겨 다시 Captured로 돌아온 경우에도 방치 유예를 새로 준다.
@@ -346,6 +345,11 @@ public class SpawnedNpcEvent : ISuddenEvent
         MisdemeanorLoiterer.Attach(npc, m_displayName);
     }
 
+    // 탈취 행동 부품을 얹는다 — 이미 붙어 있으면 그것을 쓴다. (#303)
+    // 매번 새로 붙이면 TryGetComponent가 첫 번째만 돌려주므로, NPC 재사용 경로가 생기는 순간 조용히 어긋난다.
+    private static Pickpocket GetOrAddPickpocket(NpcController npc) =>
+        npc.TryGetComponent(out Pickpocket thief) ? thief : npc.gameObject.AddComponent<Pickpocket>();
+
     // 밀착 통보 구독만 끊는다 — 이벤트가 손을 떼는 두 경로(잔류·정리)가 모두 지난다.
     // 하나만 빠지면 이미 손 뗀 NPC의 통보를 계속 받아 두 번 훔친다. (#303)
     private void UnsubscribePickpocket(NpcController npc)
@@ -362,8 +366,8 @@ public class SpawnedNpcEvent : ISuddenEvent
     {
         UnsubscribePickpocket(npc);
 
-        if (npc != null && npc.TryGetComponent(out StolenGoods goods))
-            goods.ServerLose();
+        if (npc != null && npc.TryGetComponent(out Pickpocket thief))
+            thief.ServerLoseStolenItem();
     }
 
     // 스폰한 NPC를 정리한다 — 구독 해제 후 Despawn/Destroy하고 참조·플래그를 비운다.

@@ -282,48 +282,17 @@ public class PlayerLoadout : NetworkBehaviour
         ServerNotifyHeldItemsChanged();
     }
 
-    // ---- 소매치기 탈취 (#303) ----
-
-    // 탈취 후보를 모으는 버퍼 — 매 탈취마다 새 List를 만들지 않게 재사용한다.
-    private readonly List<ItemBase> m_stealCandidates = new List<ItemBase>();
-
     /// <summary>
-    /// 소지품 하나를 무작위로 빼앗아 <paramref name="thief"/> 밑으로 옮긴다 — 소매치기(#303)가
-    /// 밀착했을 때 서버가 부른다. 빈손이거나 후보가 없으면 null.
+    /// 손에서 떼어 낼 수 있는 소지품을 <paramref name="into"/>에 담는다(기존 내용은 지운다).
+    /// 기준은 버리기와 같다 — 묶어 둔 밧줄은 빠진다(손을 떠나면 묶인 NPC가 주인 없이 남는다, #369).
     ///
-    /// 부모가 바뀌는 것만으로 월드 표시·줍기가 함께 꺼진다(WorldItemPickup이 부모 유무로 판단) —
-    /// 따로 숨기거나 디스폰할 필요가 없고, 되돌려줄 때도 떼기만 하면 원래대로 돌아온다.
+    /// <b>목록만 돌려준다</b> — 무엇을 어떻게 가져가는지는 부르는 쪽의 행동이다.
+    /// 지금 읽는 쪽은 소매치기 탈취(<see cref="Pickpocket.ServerStealFrom"/>, #303) 하나다.
     /// </summary>
-    public ItemBase ServerStealRandom(Transform thief)
+    public void CollectDetachableItems(List<ItemBase> into)
     {
-        if (!IsServer || thief == null)
-        {
-            return null;
-        }
-
-        m_held.CollectInto(m_stealCandidates);
-
-        // 묶어 둔 밧줄은 뺏지 않는다 — 손을 떠나면 묶인 NPC가 주인 없이 남는다 (버리기와 같은 이유, #369)
-        m_stealCandidates.RemoveAll(IsTetheredRope);
-
-        if (m_stealCandidates.Count == 0)
-        {
-            return null;
-        }
-
-        ItemBase stolen = m_stealCandidates[UnityEngine.Random.Range(0, m_stealCandidates.Count)];
-        NetworkObject stolenObject = stolen.NetworkObject;
-
-        // 채널링 중이면 끊는다 — 소유권을 잃은 뒤엔 오너의 취소 RPC가 막혀 배터리가 새고 오완료된다 (드롭과 같은 처리)
-        stolen.ServerCancelActiveUse();
-
-        stolenObject.RemoveOwnership();
-        stolenObject.TrySetParent(thief, false);
-        stolenObject.transform.localPosition = Vector3.zero;
-        stolenObject.transform.localRotation = Quaternion.identity;
-
-        ServerNotifyHeldItemsChanged();
-        return stolen;
+        m_held.CollectInto(into);
+        into.RemoveAll(IsTetheredRope);
     }
 
     // 정면 드롭 지점을 구한다 — 앞이 벽이면 벽 앞으로 당긴다 (서버에서 호출).

@@ -52,20 +52,17 @@ public static class NpcStateRules
     /// <b>때려서 떼어내는 것</b>이 유일한 구조 수단이라(6-4) 그 예외를 연다. 위 게이트가 막으려던
     /// "호송 중인 NPC를 때려 신병에서 빼내기"와는 방향이 반대다 — 납치범은 신병이 아니라 가해자다.
     /// 오검거 추격대는 그대로 막힌다(회피 수단은 격퇴 하나). 둘을 가르는 것이
-    /// <see cref="NpcPenaltyAgent.IsAbductionDuty"/>이고, 동기화 값이라 클라 조준 피드백에서도 읽힌다.
-    ///
+    /// <see cref="NpcDutyAgent.IsUndercoverDuty"/>이고, 동기화 값이라 클라 조준 피드백에서도 읽힌다.
     /// 소매치기(#303)도 같은 예외를 탄다 — 시민인 척 걸어오는 대상이라 시민과 똑같이 다룰 수 있어야 한다.
-    /// 막아 두면 눈치챈 플레이어가 미리 대응할 방법이 사라진다(정체를 모르는 것과 손댈 수 없는 것은 다르다).
-    /// ⚠ <b>사망은 위 예외보다 위다</b> (#571) — 임무 표식(IsUndercoverDuty)은 죽어도 즉시
-    /// 내려가지 않으므로, 상태 검사에만 맡기면 죽은 납치범·소매치기가 계속 맞는다.</summary>
+    /// ⚠ <b>사망은 위 예외보다 위다</b> (#571) — 임무 표식은 죽어도 즉시 내려가지 않으므로,
+    /// 상태 검사에만 맡기면 죽은 납치범·소매치기가 계속 맞는다.</summary>
     public static bool CanBeDamaged(NpcController npc) =>
         npc != null
         && npc.CurrentState != NpcState.Dead
         && (npc.Penalty.IsUndercoverDuty || CanBeDamaged(npc.CurrentState));
 
     /// <summary>이 NPC를 지금 밧줄로 묶을 수 있는가 — 상태 규칙에 <b>소매치기 예외</b>를 얹은 정본. (#303)
-    /// 소매치기는 Chasing이라 상태만 보면 막히는데, 접근 중에 무력화했으면 당연히 잡을 수 있어야 한다.
-    /// 오검거 추격대·납치범은 그대로 막힌다 — 그쪽은 신병 확보 대상이 아니라 진행 중인 연출이다.</summary>
+    /// Chasing이라 상태만 보면 막히지만, 접근 중에 무력화했으면 잡을 수 있어야 한다. 오검거·납치는 그대로 막힌다.</summary>
     public static bool CanArrest(NpcController npc) =>
         npc != null && (npc.Penalty.IsPickpocketDuty || CanArrest(npc.CurrentState));
 
@@ -140,9 +137,7 @@ public static class NpcStateRules
         if (npc.Death.IsDead)
             return !npc.Rope.IsRoped;
 
-        // 소매치기(#303)는 npc.CurrentState 대신 CanArrest(npc)를 본다 — Chasing 상태라도
-        // 임무 표식(IsPickpocketDuty)이면 무력화 후 묶을 수 있어야 한다.
-        return npc.Stun.IsStunned && CanArrest(npc);
+        return npc.Stun.IsStunned && CanArrest(npc); // 오버로드 쪽이라 소매치기 예외를 함께 탄다 (#303)
     }
 
     /// <summary>밧줄 없이 따라오는 수감자인가 — 유치장에서 반출돼 추종 중인 대상. (#492)

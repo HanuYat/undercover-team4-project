@@ -56,7 +56,7 @@ public class NpcCustody : NetworkBehaviour
     }
 
     /// <summary>연행 참조만 끊는다 — 전이는 부르는 쪽이 한다. 다른 부품이 쓰는 경로다(같은 어셈블리라 internal).
-    /// <see cref="NpcPenaltyAgent.SendToDetention"/>이 수용 직전에 쓴다 — 갈 곳이 Detained라
+    /// <see cref="NpcDutyAgent.SendToDetention"/>이 수용 직전에 쓴다 — 갈 곳이 Detained라
     /// <see cref="StopEscort"/>(Captured로 간다)를 그대로 쓸 수 없다.
     /// 세터를 열지 않고 메서드로 두는 이유: 밖에서 연행 대상을 <b>지정</b>하는 문은
     /// <see cref="StartEscort"/> 하나여야 한다.</summary>

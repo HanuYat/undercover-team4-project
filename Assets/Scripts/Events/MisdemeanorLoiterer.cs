@@ -82,8 +82,8 @@ public class MisdemeanorLoiterer : MonoBehaviour
 
             // 끝까지 못 잡았다 — 훔친 물건은 여기서 손실 확정이다 (#303).
             // 그냥 파괴하면 구매품이 팀 배달 목록에 유령으로 남는다.
-            if (TryGetComponent(out StolenGoods goods))
-                goods.ServerLose();
+            if (TryGetComponent(out Pickpocket thief))
+                thief.ServerLoseStolenItem();
 
             SuddenEventUtil.DespawnOrDestroy(gameObject, playVfx: false);
             return;
@@ -99,8 +99,8 @@ public class MisdemeanorLoiterer : MonoBehaviour
         {
             // 놓쳤던 소매치기를 뒤늦게 잡았다 — 훔친 물건을 그 자리에 떨군다 (#303).
             // 이벤트 본편의 제압 처리와 같은 결말이다. 두 번째부터는 들고 있는 게 없어 무동작.
-            if (TryGetComponent(out StolenGoods goods))
-                goods.ServerDropHere();
+            if (TryGetComponent(out Pickpocket thief))
+                thief.ServerDropStolenItem();
 
             m_riotPending = false;
             m_rioting = false;
