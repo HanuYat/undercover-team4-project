@@ -75,6 +75,11 @@ public class NpcFleeState : NpcStateBase
         m_owner.Agent.speed = m_baseSpeed * m_config.SpeedMultiplier;
 
         ResetStuck();
+        // 진입 직후 한 주기는 이탈 판정을 미룬다 — 예전 m_scanTimer = 0f와 같은 뜻이다.
+        // 이게 없으면 채널이 이미 만료돼 있을 때 첫 프레임에 판정이 돌고, 그 순간 추격자가
+        // 사거리 밖이면 도주를 시작하자마자 Idle로 빠진다.
+        m_owner.Repath.MarkDone(NpcRepathChannel.ThreatScan);
+
         m_fleeStartTime = Time.time;
         m_transitioningToResist = false;
 
@@ -83,7 +88,6 @@ public class NpcFleeState : NpcStateBase
 
     public override void Tick()
     {
-
         // 도주 지점 도착 판정 — Agent 내부 값만 읽으므로 매 프레임 확인해도 공짜다 (기존 동작)
         bool arrived =
             !m_owner.Agent.pathPending
