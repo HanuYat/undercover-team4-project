@@ -5693,44 +5693,8 @@ PrefabInstance:
     m_TransformParent: {fileID: 1326152962}
     m_Modifications:
     - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
-      propertyPath: m_startDelay
-      value: 3
-      objectReference: {fileID: 0}
-    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
-      propertyPath: m_maxInterval
-      value: 30
-      objectReference: {fileID: 0}
-    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
-      propertyPath: m_minInterval
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
-      propertyPath: m_eventEntries.Array.data[0].enabled
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
-      propertyPath: m_eventEntries.Array.data[1].enabled
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
-      propertyPath: m_eventEntries.Array.data[2].enabled
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
-      propertyPath: m_eventEntries.Array.data[3].enabled
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
-      propertyPath: m_eventEntries.Array.data[4].enabled
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
-      propertyPath: m_eventEntries.Array.data[5].enabled
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_eventEntries.Array.data[6].enabled
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_eventEntries.Array.data[7].enabled
@@ -5739,14 +5703,6 @@ PrefabInstance:
     - target: {fileID: 498939978214492355, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_Name
       value: SuddenEvents
-      objectReference: {fileID: 0}
-    - target: {fileID: 1542303654048081899, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
-      propertyPath: m_rewardMin
-      value: 2000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1542303654048081899, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
-      propertyPath: m_outskirtPoints.Array.size
-      value: 6
       objectReference: {fileID: 0}
     - target: {fileID: 1542303654048081899, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: 'm_outskirtPoints.Array.data[0]'
@@ -5780,25 +5736,9 @@ PrefabInstance:
       propertyPath: m_jailZone
       value: 
       objectReference: {fileID: 8298609921114679384}
-    - target: {fileID: 4617273519023223210, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
-      propertyPath: m_unlockSeconds
-      value: 7
-      objectReference: {fileID: 0}
-    - target: {fileID: 4617273519023223210, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
-      propertyPath: m_intruderRewardMin
-      value: 1000
-      objectReference: {fileID: 0}
     - target: {fileID: 5897735017321614696, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: GlobalObjectIdHash
       value: 481684432
-      objectReference: {fileID: 0}
-    - target: {fileID: 5897735017321614696, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
-      propertyPath: InScenePlacedSourceGlobalObjectIdHash
-      value: 601321265
-      objectReference: {fileID: 0}
-    - target: {fileID: 6553283234259604354, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
-      propertyPath: m_durationSeconds
-      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 9176822252311413070, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_LocalPosition.x

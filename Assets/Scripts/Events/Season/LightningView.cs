@@ -96,6 +96,21 @@ public class LightningView : MonoBehaviour
     [Min(0.1f)]
     [SerializeField] private float m_strikeFxSeconds = 3f;
 
+    [Header("실내 차단")]
+    [Tooltip(
+        "머리 위로 이 거리(m) 안에 지붕이 있으면 비를 그친다 — 0이면 실내에서도 내린다.\n\n"
+            + "건물 높이보다 넉넉히 잡을 것. 판정은 방출 지점의 수평 위치에서 위로 쏘는 레이 하나다"
+    )]
+    [Min(0f)]
+    [SerializeField] private float m_shelterProbeHeight = 25f;
+
+    [Tooltip("하늘을 막는 것으로 칠 레이어 — 건물은 Default다")]
+    [SerializeField] private LayerMask m_shelterMask = 1;
+
+    [Tooltip("문을 드나들 때 비가 여닫히는 시간(초) — 0이면 툭 끊긴다")]
+    [Min(0f)]
+    [SerializeField] private float m_shelterFadeSeconds = 0.35f;
+
     [Header("그치는 연출")]
     [Tooltip("비가 그칠 때 방출만 멈추고 이 시간(초) 뒤에 리그를 없앤다 — 공중의 비가 끝까지 떨어지게")]
     [Min(0f)]
@@ -180,6 +195,7 @@ public class LightningView : MonoBehaviour
         m_rig = WeatherSkyRig.Create("WeatherSky_Rain", m_cloudHeight, m_precipitationHeight);
         m_rig.SetCloudSnap(m_cloudSpacing); // 하늘은 월드에 고정 — 구름 한 덩이가 따라오는 그림을 막는다
         m_rig.SetPrecipitationFacesView(m_rainFollowsView, m_rainForwardOffset); // 비는 보는 쪽에만
+        m_rig.SetShelterProbe(m_shelterMask, m_shelterProbeHeight, m_shelterFadeSeconds); // 지붕 아래에선 그친다
 
         // 구름 파티클은 기본으로 띄우지 않는다 — 프레임 부담이 커서, 먹구름은 밝기로 표현한다
         if (m_useCloudFx && m_cloudPrefab != null)
@@ -189,7 +205,9 @@ public class LightningView : MonoBehaviour
         {
             GameObject rain = Instantiate(m_rainParticlePrefab);
             WeatherSkyRig.Attach(rain, m_rig.PrecipitationAnchor, m_rainScale);
-            WeatherSkyRig.Boost(rain, m_rainSizeBoost, m_rainRateBoost);
+            // 낙하 속도·방출 볼륨은 1 — 비의 튜닝은 지금 것을 그대로 둔다. 눈에만 올린 값이라
+            // (SnowView) 여기도 필요해지면 같은 인자를 노출하면 된다.
+            WeatherSkyRig.Boost(rain, m_rainSizeBoost, m_rainRateBoost, 1f, 1f);
         }
 
         WeatherOvercast.Push(m_overcastIntensityScale, m_overcastFadeSeconds);

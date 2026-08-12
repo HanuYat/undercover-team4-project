@@ -44,11 +44,58 @@ public class PlayerMovement : NetworkBehaviour
     public float CrouchSpeed => m_crouchSpeed * SpeedFactor;
 
     /// <summary>
-    /// 이동 속도에 걸린 외부 배율 — 지금은 밧줄로 끌고 있는 무게뿐이다(<see cref="RopeDragLoad.DragSpeedFactor"/>).
-    /// 연행 컴포넌트가 없으면(단독 테스트 씬) 1. 소스가 여럿이 되면(스탯 강화 #368 등) 여기서 곱해
-    /// 합성한다 — 이 프로퍼티를 거치는 한 애니메이션 정합은 따라온다. (#398)
+    /// 이동 속도에 걸린 외부 배율 — 밧줄로 끌고 있는 무게(<see cref="RopeDragLoad.DragSpeedFactor"/>)와
+    /// 낙뢰 버프(<see cref="BuffSpeedFactor"/>)를 곱해 합성한다. 연행 컴포넌트가 없으면(단독 테스트 씬)
+    /// 무게는 1. 소스가 더 늘어도 여기서 곱하면 된다 — 이 프로퍼티를 거치는 한 애니메이션 정합은
+    /// 따라온다. (#398/#227)
     /// </summary>
-    public float SpeedFactor => m_dragLoad != null ? m_dragLoad.DragSpeedFactor : 1f;
+    public float SpeedFactor =>
+        (m_dragLoad != null ? m_dragLoad.DragSpeedFactor : 1f) * BuffSpeedFactor;
+
+    // 낙뢰 속도 버프 (#227) — 서버가 만료를 관리하고 배율만 동기화한다(RopeDragLoad와 같은 구조).
+    // 남의 화면 애니메이션도 같은 배율을 써야 걸음이 실제 속도와 어긋나지 않아 NetworkVariable이다.
+    private readonly NetworkVariable<float> m_buffSpeedFactorSynced = new NetworkVariable<float>(1f);
+    private float m_buffSpeedFactor = 1f;
+    private float m_buffEndTime;
+
+    /// <summary>속도 버프 배율 — 걸려 있지 않으면 1. (#227)</summary>
+    public float BuffSpeedFactor =>
+        IsSpawned && !IsServer ? m_buffSpeedFactorSynced.Value : m_buffSpeedFactor;
+
+    /// <summary>
+    /// 속도 버프를 건다 — 서버(또는 오프라인) 전용. 낙뢰(<see cref="LightningEvent"/>)가 부른다. (#227)
+    /// 겹쳐 걸리면 배율은 <b>큰 쪽</b>을, 만료는 <b>늦은 쪽</b>을 남긴다 — 연달아 맞은 사람의 버프가
+    /// 약한 값으로 덮이거나 먼저 끊기지 않게 한다.
+    /// </summary>
+    public void ServerApplySpeedBuff(float multiplier, float seconds)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+        if (multiplier <= 0f || seconds <= 0f)
+            return;
+
+        SetBuffSpeedFactor(Mathf.Max(m_buffSpeedFactor, multiplier));
+        m_buffEndTime = Mathf.Max(m_buffEndTime, Time.time + seconds);
+    }
+
+    // 만료를 서버가 센다 — Update 맨 앞이라 래그돌·피견인 분기에 걸려도 버프는 제때 풀린다.
+    private void TickSpeedBuff()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+        if (m_buffEndTime <= 0f || Time.time < m_buffEndTime)
+            return;
+
+        m_buffEndTime = 0f;
+        SetBuffSpeedFactor(1f);
+    }
+
+    private void SetBuffSpeedFactor(float factor)
+    {
+        m_buffSpeedFactor = factor;
+        if (IsSpawned && IsServer)
+            m_buffSpeedFactorSynced.Value = factor;
+    }
 
     // 서버가 Connection Approval에서 지정한 스폰 포즈. 프리팹의 NetworkTransform이 Owner 권한이라,
     // 씬 동기화를 거쳐 접속하면 오너 로컬 인스턴스가 프리팹 원점에 생성된 채 권한을 잡고 원점
@@ -327,6 +374,8 @@ public class PlayerMovement : NetworkBehaviour
     // 오너의 매 프레임 갱신 — 시점(PlayerLook)·추종(PlayerTowedMotion)도 여기서 순서를 잡아 돌린다.
     private void Update()
     {
+        TickSpeedBuff(); // 만료는 아래 분기와 무관하게 흐른다 (#227)
+
         // 래그돌인 동안(#506) — <b>위치의 주인은 시체다.</b> 캡슐이 시체를 따라간다.
         if (m_ragdoll != null && m_ragdoll.IsCapsuleFollowingBody)
         {

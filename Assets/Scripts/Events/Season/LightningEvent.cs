@@ -33,6 +33,19 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
     [SerializeField]
     private float m_buffDuration = 5f; // 버프 지속 시간
 
+    [Header("실내 차단")]
+    [Tooltip(
+        "머리 위로 이 거리(m) 안에 지붕이 있는 플레이어에게는 낙뢰가 떨어지지 않는다 — 0이면 실내에도 떨어진다.\n\n"
+            + "건물 높이보다 넉넉히 잡을 것. 비·눈이 그치는 판정과 같은 규칙을 쓴다(WeatherShelter)"
+    )]
+    [Min(0f)]
+    [SerializeField]
+    private float m_shelterProbeHeight = 25f;
+
+    [Tooltip("하늘을 막는 것으로 칠 레이어 — 건물은 Default다")]
+    [SerializeField]
+    private LayerMask m_shelterMask = 1;
+
     // --- 상태 및 동기화 ---
     // 클라이언트 표현용 동기화 변수 (Server 권한 최신 NGO 문법 적용 완료)
     private NetworkVariable<bool> m_lightningSynced = new NetworkVariable<bool>(
@@ -183,7 +196,14 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
         PlayStrikeVFXClientRpc(strikePosition);
     }
 
-    // PlayerHealth 컴포넌트를 기반으로 씬에 있는 플레이어를 무작위로 찾습니다.
+    // 씬의 플레이어 중 <b>하늘이 뚫린 곳에 있는</b> 사람만 후보로 두고 무작위로 하나 고른다.
+    //
+    // 지붕 아래를 빼는 이유는 그림이 말이 안 되기 때문이다 — 건물 안에 서 있는데 벼락을 맞는다.
+    // 비·눈이 그치는 판정과 <b>같은 규칙</b>을 쓴다(WeatherShelter): 한쪽만 고치면 "비는 그쳤는데
+    // 벼락은 떨어진다"가 된다.
+    //
+    // 전원이 실내면 이번 낙뢰는 거른다 — 밖에 있는 사람이 없으면 떨어질 곳도 없다. 주기는 그대로
+    // 흐르므로(ScheduleNextStrike) 누군가 나오면 다음 주기에 다시 후보가 된다.
     private PlayerHealth GetRandomPlayerField()
     {
         PlayerHealth[] players = FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
@@ -191,27 +211,52 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
         if (players == null || players.Length == 0)
             return null;
 
-        return players[Random.Range(0, players.Length)];
+        s_exposed.Clear();
+        for (int i = 0; i < players.Length; i++)
+        {
+            PlayerHealth player = players[i];
+            if (player == null)
+                continue;
+
+            // 발밑이 아니라 몸 높이에서 쏜다 — 바닥에서 쏘면 자기가 선 바닥에 걸리는 맵이 있다.
+            Vector3 origin = player.transform.position + Vector3.up * k_shelterProbeOriginHeight;
+            if (WeatherShelter.IsSheltered(origin, m_shelterMask, m_shelterProbeHeight))
+                continue;
+
+            s_exposed.Add(player);
+        }
+
+        if (s_exposed.Count == 0)
+            return null;
+
+        return s_exposed[Random.Range(0, s_exposed.Count)];
     }
 
+    // 실내 판정 레이의 시작 높이(m) — 사람 가슴께. 발밑에서 쏘면 자기 바닥에 걸린다.
+    private const float k_shelterProbeOriginHeight = 1f;
+
+    // 후보 버퍼 — 서버에서만 도는 경로라 공유해도 안전하다(프레임마다의 할당 방지, NpcFleeState와 같은 수법)
+    private static readonly System.Collections.Generic.List<PlayerHealth> s_exposed =
+        new System.Collections.Generic.List<PlayerHealth>();
+
+    // 가해자를 null로 넘긴다 — 하늘에서 떨어진 것이라 피격 방향 표시(PlayerHitView)가 가리킬 곳이 없다.
+    // TakeDamage가 null 가해자를 이미 다루므로(BroadcastDamaged의 hasAttacker) 별도 분기가 필요 없다.
     private void ApplyDamage(PlayerHealth healthComponent)
     {
-        if (healthComponent != null)
-        {
-            // TODO: 실제 프로젝트의 PlayerHealth 데미지 적용 API 호출 (주석 해제 후 이름 맞추기)
-            // healthComponent.TakeDamageServer(m_damageAmount);
-        }
+        if (healthComponent == null)
+            return;
+
+        healthComponent.TakeDamage(m_damageAmount, null);
     }
 
     private void ApplySpeedBuff(PlayerHealth healthComponent)
     {
-        // PlayerHealth와 동일한 오브젝트에 붙어있는 PlayerMovement를 가져옵니다.
-        var movement = healthComponent.GetComponent<PlayerMovement>();
-        if (movement != null)
-        {
-            // TODO: 실제 프로젝트의 PlayerMovement 버프 적용 API 호출 (주석 해제 후 이름 맞추기)
-            // movement.ApplySpeedBuffServer(m_buffMultiplier, m_buffDuration);
-        }
+        // PlayerHealth와 같은 오브젝트에 붙은 PlayerMovement가 배율을 든다 (#227).
+        PlayerMovement movement = healthComponent.GetComponent<PlayerMovement>();
+        if (movement == null)
+            return;
+
+        movement.ServerApplySpeedBuff(m_buffMultiplier, m_buffDuration);
     }
 
     // --- 표현 RPC ---

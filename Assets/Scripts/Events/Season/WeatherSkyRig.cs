@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -108,6 +109,99 @@ public class WeatherSkyRig : MonoBehaviour
         SnapToCamera();
         SnapCloudLayer();
         FacePrecipitationToView();
+        TickShelter();
+    }
+
+    // ---- 실내 차단 (2026-08-12 확정) ----
+    //
+    // 강수는 시야 앞 볼륨에서 그냥 쏟아지므로 <b>지붕을 모른다</b> — 건물 안에 서 있어도 천장 위에서
+    // 생성돼 그대로 뚫고 내려온다(실측 증상: 실내에서도 비가 온다).
+    //
+    // 파티클 충돌(Collision 모듈)로 지붕에 맞혀 없애는 방법도 있는데, 지붕마다 콜라이더가 정확해야 하고
+    // 입자 수만큼 비용이 붙는다. 대신 <b>머리 위로 레이 하나</b>를 쏴 하늘이 막혔는지만 보고 방출을
+    // 여닫는다 — 리그당 한 번이라 사실상 공짜다.
+    //
+    // 원점을 시야가 아니라 <b>방출 지점의 수평 위치</b>로 잡는 것이 중요하다: 문간에 서서 밖을 볼 때
+    // 시야 기준이면 머리 위 처마에 걸려 밖에도 비가 그친다. 방출 지점은 시야 앞으로 밀려 있으므로
+    // 그 자리를 보면 "실제로 비가 내릴 곳이 뚫려 있는가"를 묻게 된다.
+
+    private LayerMask m_shelterMask;
+    private float m_shelterProbeHeight;
+    private float m_shelterFadeSeconds;
+    private bool m_shelterEnabled;
+
+    // 1 = 하늘이 뚫려 있다, 0 = 지붕 아래. 문을 드나들 때 툭 끊기지 않게 보간한다.
+    private float m_shelterFactor = 1f;
+
+    // 방출 배율의 기준값 — Boost가 이미 곱해 둔 값이라 여기서 다시 계산하지 않고 붙잡아 둔다
+    private readonly List<ParticleSystem> m_precipitationSystems = new List<ParticleSystem>();
+    private readonly List<float> m_precipitationBaseRates = new List<float>();
+    private bool m_precipitationCached;
+
+    /// <summary>
+    /// 지붕 아래에서는 강수를 그치게 한다 — 뷰가 켤 때 한 번 부른다. (2026-08-12 확정)
+    /// </summary>
+    /// <param name="blockMask">하늘을 막는 것으로 칠 레이어 — 건물은 <c>Default</c>다.</param>
+    /// <param name="probeHeight">머리 위로 이만큼(m) 안에 뭔가 있으면 실내로 본다. 건물 높이보다 넉넉히.</param>
+    /// <param name="fadeSeconds">여닫는 데 걸리는 시간(초). 0이면 즉시.</param>
+    public void SetShelterProbe(LayerMask blockMask, float probeHeight, float fadeSeconds)
+    {
+        m_shelterEnabled = probeHeight > 0f;
+        m_shelterMask = blockMask;
+        m_shelterProbeHeight = Mathf.Max(0f, probeHeight);
+        m_shelterFadeSeconds = Mathf.Max(0f, fadeSeconds);
+    }
+
+    private void TickShelter()
+    {
+        if (!m_shelterEnabled || m_view == null)
+            return;
+
+        CachePrecipitationSystems();
+
+        float target = IsSheltered() ? 0f : 1f;
+        m_shelterFactor =
+            m_shelterFadeSeconds <= 0f
+                ? target
+                : Mathf.MoveTowards(m_shelterFactor, target, Time.deltaTime / m_shelterFadeSeconds);
+
+        for (int i = 0; i < m_precipitationSystems.Count; i++)
+        {
+            ParticleSystem ps = m_precipitationSystems[i];
+            if (ps == null)
+                continue;
+
+            ParticleSystem.EmissionModule emission = ps.emission;
+            emission.rateOverTimeMultiplier = m_precipitationBaseRates[i] * m_shelterFactor;
+        }
+    }
+
+    // 방출 지점의 수평 위치에서 시야 높이로 위를 본다 (위 주석의 문간 사례).
+    // 판정 자체는 낙뢰와 공유한다 — 둘이 다르게 답하면 "비는 그쳤는데 벼락은 떨어진다"가 된다.
+    private bool IsSheltered()
+    {
+        Vector3 origin = m_view.position;
+        if (PrecipitationAnchor != null)
+        {
+            Vector3 anchor = PrecipitationAnchor.position;
+            origin = new Vector3(anchor.x, origin.y, anchor.z);
+        }
+
+        return WeatherShelter.IsSheltered(origin, m_shelterMask, m_shelterProbeHeight);
+    }
+
+    // 붙은 파티클을 한 번만 훑는다 — Boost까지 끝난 뒤인 첫 LateUpdate에 잡아야 기준값이 맞다.
+    private void CachePrecipitationSystems()
+    {
+        if (m_precipitationCached || PrecipitationAnchor == null)
+            return;
+
+        m_precipitationCached = true;
+        foreach (ParticleSystem ps in PrecipitationAnchor.GetComponentsInChildren<ParticleSystem>(true))
+        {
+            m_precipitationSystems.Add(ps);
+            m_precipitationBaseRates.Add(ps.emission.rateOverTimeMultiplier);
+        }
     }
 
     // 강수 방출 지점을 시야 앞으로 밀고 수평 방향만 맞춘다 — 낙하 방향은 건드리지 않는다.
@@ -159,30 +253,49 @@ public class WeatherSkyRig : MonoBehaviour
     }
 
     /// <summary>
-    /// 따라갈 기준을 정한다 — <b>로컬 플레이어가 1순위, Camera.main은 폴백이다.</b>
+    /// 따라갈 기준을 정한다 — <b>로컬 플레이어의 시점 카메라가 1순위, Camera.main은 폴백이다.</b>
     ///
     /// ⚠ <c>Camera.main</c>만 믿으면 안 된다: <c>Player.prefab</c>의 시점 카메라는 <b>Untagged</b>라
     /// Camera.main으로 잡히지 않는다. 그러면 씬에 놓인 고정 <c>Main Camera</c>가 잡혀 리그가 그 자리에
-    /// 굳고, 비·눈이 <b>맵의 한 지점에서만 내린다</b>(실측된 증상). 시점을 돌리면 그 지점이 화면에서
-    /// 벗어나 "안 내린다"로 보인다.
+    /// 굳고, 비·눈이 <b>맵의 한 지점에서만 내린다</b>. 그래서 세션의 로컬 플레이어를 먼저 쓴다.
     ///
-    /// 그래서 세션의 로컬 플레이어 오브젝트를 먼저 쓴다. 오프라인 단독 Play나 관전처럼 플레이어가 없는
-    /// 구성에서는 Camera.main으로 물러난다.
+    /// <b>몸통이 아니라 그 아래 카메라를 잡는다</b> (2026-08-12 확정). 몸통 yaw는 시점을 <b>따라오는</b>
+    /// 값이라 빠르게 돌리면 한 박자 늦고, 강수 볼륨이 시야 앞이 아니라 옆에 남아 "눈이 안 내린다"로
+    /// 보인다(<see cref="FacePrecipitationToView"/>가 이 기준의 forward를 쓴다). 카메라를 기준으로
+    /// 삼으면 그 지연이 원천에서 사라진다.
+    ///
+    /// 카메라가 꺼지면(관전 전환·CCTV) 다시 찾는다 — 한 번 잡고 끝내면 꺼진 카메라를 따라간다.
     /// </summary>
     private void ResolveView()
     {
-        if (m_view != null)
-            return; // 이미 잡았다 — 파괴되면 아래에서 다시 찾는다(Unity 파괴 참조는 null로 비교된다)
+        // 파괴된 참조는 null로 비교된다. 꺼진 것은 살아 있어도 화면을 그리지 않으므로 함께 본다.
+        if (m_view != null && m_view.gameObject.activeInHierarchy)
+            return;
+
+        m_view = null;
 
         Unity.Netcode.NetworkManager manager = Unity.Netcode.NetworkManager.Singleton;
         if (manager != null && manager.IsListening && manager.LocalClient.PlayerObject != null)
         {
-            m_view = manager.LocalClient.PlayerObject.transform;
+            Transform player = manager.LocalClient.PlayerObject.transform;
+            m_view = FindActiveCamera(player) ?? player; // 카메라가 아직 없으면 몸통으로 버틴다
             return;
         }
 
         if (Camera.main != null)
             m_view = Camera.main.transform;
+    }
+
+    // 켜져 있는 카메라를 고른다 — 관전 오빗(#590) 등으로 여러 대가 달려 있을 수 있다.
+    private static Transform FindActiveCamera(Transform root)
+    {
+        foreach (Camera camera in root.GetComponentsInChildren<Camera>(true))
+        {
+            if (camera.isActiveAndEnabled)
+                return camera.transform;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -237,10 +350,21 @@ public class WeatherSkyRig : MonoBehaviour
     }
 
     /// <summary>
-    /// 방출량·입자 크기를 배율로 키운다 — 프리팹 원본을 건드리지 않고 이 인스턴스만 바꾼다.
-    /// Synty FX는 근거리 연출 기준으로 만들어져 하늘을 덮는 용도로는 양이 부족하다(눈이 잘 안 보이는 원인).
+    /// 방출량·입자 크기·낙하 속도·방출 볼륨을 배율로 키운다 — 프리팹 원본을 건드리지 않고 이 인스턴스만 바꾼다.
+    /// Synty FX는 근거리 연출 기준으로 만들어져 하늘을 덮는 용도로는 전부 부족하다(눈이 잘 안 보이는 원인).
     /// </summary>
-    public static void Boost(GameObject fx, float sizeMultiplier, float rateMultiplier)
+    /// <param name="speedMultiplier">낙하 속도 배율 — 성기게 흩날리던 눈을 <b>쏟아지는</b> 눈으로 바꾸는 값이다.
+    /// 빨라지면 같은 높이를 더 빨리 지나가 화면에 남는 수가 줄므로 <paramref name="rateMultiplier"/>도 함께 올려야 한다.</param>
+    /// <param name="volumeMultiplier">방출 볼륨(shape) 배율 — 시야 앞 한 덩이만 뿌리는 구성에서
+    /// (<see cref="SetPrecipitationFacesView"/>) 볼륨이 좁으면 <b>시점을 빠르게 돌릴 때 그 덩이가 화면 밖으로
+    /// 밀려난다</b>. 화각보다 넓게 잡아 두면 돌리는 도중에도 눈이 끊기지 않는다.</param>
+    public static void Boost(
+        GameObject fx,
+        float sizeMultiplier,
+        float rateMultiplier,
+        float speedMultiplier,
+        float volumeMultiplier
+    )
     {
         if (fx == null)
             return;
@@ -249,11 +373,24 @@ public class WeatherSkyRig : MonoBehaviour
         {
             ParticleSystem.MainModule main = ps.main;
             main.startSizeMultiplier *= sizeMultiplier;
+            main.startSpeedMultiplier *= speedMultiplier;
+            main.gravityModifierMultiplier *= speedMultiplier; // 중력으로 떨어지는 프리팹도 함께 빨라진다
+
             // 상한도 함께 올린다 — 방출을 늘리면 기본 상한(보통 1000)에 걸려 조용히 잘린다
             main.maxParticles = Mathf.Max(main.maxParticles, (int)(main.maxParticles * rateMultiplier));
 
             ParticleSystem.EmissionModule emission = ps.emission;
             emission.rateOverTimeMultiplier *= rateMultiplier;
+
+            // 방출 상자를 넓힌다 — radius/scale 중 어느 쪽을 쓰는 shape인지 프리팹마다 달라 둘 다 건드린다
+            // (안 쓰는 쪽은 무해하게 무시된다).
+            ParticleSystem.ShapeModule shape = ps.shape;
+            shape.radius *= volumeMultiplier;
+            shape.scale = new Vector3(
+                shape.scale.x * volumeMultiplier,
+                shape.scale.y,
+                shape.scale.z * volumeMultiplier
+            );
         }
     }
 

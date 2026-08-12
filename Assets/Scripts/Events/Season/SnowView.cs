@@ -70,9 +70,35 @@ public class SnowView : MonoBehaviour
     [Min(0.1f)]
     [SerializeField] private float m_snowSizeBoost = 2.5f;
 
-    [Tooltip("눈 방출량 배율 — 시야 앞 좁은 볼륨만 채우므로 크게 올릴 필요가 없다")]
+    [Tooltip("눈 방출량 배율 — 낙하가 빨라지면 화면에 남는 수가 줄므로 속도 배율과 함께 올린다")]
     [Min(1f)]
-    [SerializeField] private float m_snowRateBoost = 2f;
+    [SerializeField] private float m_snowRateBoost = 4f;
+
+    [Tooltip("눈 낙하 속도 배율 — 성기게 흩날리는 눈을 쏟아지는 눈으로 바꾸는 값")]
+    [Min(0.1f)]
+    [SerializeField] private float m_snowFallSpeedBoost = 2.5f;
+
+    [Tooltip(
+        "눈 방출 볼륨 배율 — 시야 앞 한 덩이만 뿌리므로 볼륨이 좁으면 시점을 빠르게 돌릴 때 "
+            + "그 덩이가 화면 밖으로 밀려나 눈이 끊긴다. 화각보다 넓게 잡아 둘 것"
+    )]
+    [Min(1f)]
+    [SerializeField] private float m_snowVolumeBoost = 2.5f;
+
+    [Header("실내 차단")]
+    [Tooltip(
+        "머리 위로 이 거리(m) 안에 지붕이 있으면 눈을 그친다 — 0이면 실내에서도 내린다.\n\n"
+            + "건물 높이보다 넉넉히 잡을 것. 판정은 방출 지점의 수평 위치에서 위로 쏘는 레이 하나다"
+    )]
+    [Min(0f)]
+    [SerializeField] private float m_shelterProbeHeight = 25f;
+
+    [Tooltip("하늘을 막는 것으로 칠 레이어 — 건물은 Default다")]
+    [SerializeField] private LayerMask m_shelterMask = 1;
+
+    [Tooltip("문을 드나들 때 눈이 여닫히는 시간(초) — 0이면 툭 끊긴다")]
+    [Min(0f)]
+    [SerializeField] private float m_shelterFadeSeconds = 0.35f;
 
     [Header("그치는 연출")]
     [Tooltip("눈이 그칠 때 방출만 멈추고 이 시간(초) 뒤에 리그를 없앤다 — 공중의 눈이 끝까지 떨어지게")]
@@ -116,6 +142,7 @@ public class SnowView : MonoBehaviour
         m_rig = WeatherSkyRig.Create("WeatherSky_Snow", m_cloudHeight, m_precipitationHeight);
         m_rig.SetCloudSnap(m_cloudSpacing); // 하늘은 월드에 고정 — 구름 한 덩이가 따라오는 그림을 막는다
         m_rig.SetPrecipitationFacesView(m_snowFollowsView, m_snowForwardOffset); // 눈은 보는 쪽에만
+        m_rig.SetShelterProbe(m_shelterMask, m_shelterProbeHeight, m_shelterFadeSeconds); // 지붕 아래에선 그친다
 
         // 구름 파티클은 기본으로 띄우지 않는다 — 하늘을 덮으려면 수십 개가 필요해 프레임이 떨어진다.
         // 먹구름은 아래 밝기 배율(=하늘이 어두워지는 것)로 표현한다.
@@ -128,7 +155,14 @@ public class SnowView : MonoBehaviour
         {
             GameObject snow = Instantiate(m_snowParticlePrefab);
             WeatherSkyRig.Attach(snow, m_rig.PrecipitationAnchor, m_snowScale);
-            WeatherSkyRig.Boost(snow, m_snowSizeBoost, m_snowRateBoost); // 눈이 잘 안 보이던 원인
+            // 눈이 잘 안 보이던 원인 — 크기·양뿐 아니라 낙하 속도와 방출 볼륨까지 함께 키운다
+            WeatherSkyRig.Boost(
+                snow,
+                m_snowSizeBoost,
+                m_snowRateBoost,
+                m_snowFallSpeedBoost,
+                m_snowVolumeBoost
+            );
         }
     }
 
