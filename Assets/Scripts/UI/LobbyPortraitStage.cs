@@ -38,8 +38,8 @@ public class LobbyPortraitStage : MonoBehaviour
     [Range(10f, 60f)]
     [SerializeField] private float m_fieldOfView = 28f;
 
-    [Tooltip("초상 텍스처 한 변 크기(px)")]
-    [SerializeField] private int m_textureSize = 256;
+    [Tooltip("초상 텍스처 크기(px) — 카드 사진 창과 같은 세로 비율로 굽는다. 정사각으로 구워 창에 늘리면 얼굴이 눌린다")]
+    [SerializeField] private Vector2Int m_textureSize = new Vector2Int(256, 348);
 
     private RenderTexture m_texture;
     private Camera m_camera;
@@ -85,7 +85,7 @@ public class LobbyPortraitStage : MonoBehaviour
             head = model.transform;
         }
 
-        m_texture = new RenderTexture(m_textureSize, m_textureSize, 16, RenderTextureFormat.ARGB32)
+        m_texture = new RenderTexture(m_textureSize.x, m_textureSize.y, 16, RenderTextureFormat.ARGB32)
         {
             name = "LobbyPortrait",
             antiAliasing = 2,

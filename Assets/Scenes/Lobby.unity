@@ -1467,10 +1467,10 @@ MonoBehaviour:
   m_characterPrefab: {fileID: 2242111600426174931, guid: a7543fce49601494489b3edcae2284ae, type: 3}
   m_stageOrigin: {x: 0, y: -500, z: 0}
   m_headBoneName: Head
-  m_distance: 0.55
-  m_heightOffset: 0.06
+  m_distance: 0.78
+  m_heightOffset: 0.02
   m_fieldOfView: 28
-  m_textureSize: 256
+  m_textureSize: {x: 256, y: 348}
 --- !u!4 &637075662
 Transform:
   m_ObjectHideFlags: 0
