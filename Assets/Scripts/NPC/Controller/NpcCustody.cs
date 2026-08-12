@@ -132,6 +132,11 @@ public class NpcCustody : NetworkBehaviour
         // resumeReaction=false — 밖에서 강제로 푸는 경우라 도주 전이를 걸지 않는다.
         m_owner.Stun.ExitStun(false);
 
+        // 체력도 만으로 되돌린다 — 검거는 무력화가 전제라 수감되는 대상은 거의 항상 임계 아래로 깎여
+        // 들어온다. 그대로 두면 탈옥으로 풀려난 수감자가 진압봉 한 대에 죽는다(#571의 "다음에 맞으면
+        // 죽는다"는 전투 중인 몸을 겨눈 규칙이고, 판정까지 끝나 수감된 몸은 그 자리가 아니다).
+        m_owner.Health.ServerRestoreFull();
+
         JailSpot = spot;
         m_owner.StateMachine.ChangeState(NpcState.Jailed);
     }

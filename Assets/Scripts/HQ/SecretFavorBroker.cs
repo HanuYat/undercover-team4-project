@@ -314,6 +314,14 @@ public class SecretFavorBroker : NetworkBehaviour
         if (m_target == null || !m_target.Custody.HasReleaseDestination)
             return;
 
+        // 시체는 흩어지지 않는다 (#571) — 사망은 종착 상태라 도주 전이가 거부되고 경고만 남는다.
+        // 목적지만 지워 두면 몸은 쓰러진 자리에 그대로 남는다.
+        if (m_target.Death.IsDead)
+        {
+            m_target.Custody.ClearRelease();
+            return;
+        }
+
         m_target.Custody.ClearRelease();
         m_target.Reaction.StartFlee(ResolveRequester());
         Debug.Log($"[비밀 청탁] 의뢰가 접혀 대상이 도시로 흩어진다: {m_target.name}");
@@ -363,6 +371,22 @@ public class SecretFavorBroker : NetworkBehaviour
             Debug.Log("[비밀 청탁] 의뢰인이 접속을 끊어 의뢰를 취소한다");
             SendTargetAway();
             ClearServerState();
+            return;
+        }
+
+        // <b>대상이 죽으면 그것으로 무산이다</b> (#571 사망 + #548 반출 보행).
+        // 아래 완수 판정이 대상의 상태를 보지 않으므로, 이 가드가 없으면 <b>시체를 인도 지점까지 끌고 가
+        // 보상을 받을 수 있다</b> — 부패한 쪽이 "빼내 달라"를 죽여서 이행하는 우회가 된다. 청탁은 산 사람을
+        // 빼내는 일이고, 시체 인도는 그 이행이 아니다.
+        //
+        // 만료(m_favorExpireSeconds)까지 매달아 두지 않고 즉시 접는 이유: 되살릴 길이 없는데 의뢰인은
+        // 왜 안 되는지 모른 채 남은 시간을 기다린다. 실패를 바로 알려 다음 판단을 하게 한다.
+        // SendTargetAway는 부르지 않는다 — 시체는 흩어질 수 없고, 목적지는 사망 전이가 이 상태를 벗어날 때
+        // NpcReleasingState.Exit이 이미 지웠다.
+        if (m_target.Death.IsDead)
+        {
+            Debug.Log($"[비밀 청탁] 대상이 사망해 의뢰가 무산됐다: {m_target.name}");
+            Clear();
             return;
         }
 
