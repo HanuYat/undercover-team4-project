@@ -115,7 +115,7 @@ public class NpcAnimationDriver : MonoBehaviour
     [SerializeField] private Animator m_animator;
 
     private NpcController m_controller;
-    private NpcPenaltyAgent m_penalty; // 앵그리 마크 판정이 임무 종류를 읽는다 (#371/#503)
+    private NpcDutyAgent m_penalty; // 앵그리 마크 판정이 임무 종류를 읽는다 (#371/#503)
     private NpcReaction m_reaction; // 스윙 순간 이벤트가 이 부품에서 온다 (#220/#503)
     private Vector3 m_lastPosition;
     private float m_smoothedSpeed;
@@ -188,7 +188,7 @@ public class NpcAnimationDriver : MonoBehaviour
     private void Awake()
     {
         m_controller = GetComponent<NpcController>();
-        m_penalty = GetComponent<NpcPenaltyAgent>();
+        m_penalty = GetComponent<NpcDutyAgent>();
         m_reaction = GetComponent<NpcReaction>();
 
         if (m_animator == null)
@@ -674,7 +674,7 @@ public class NpcAnimationDriver : MonoBehaviour
         // 머리 위 표시 하나로 정체가 새어 나가고 심지어 오검거 추격대로 오인된다.
         NpcPenaltyMark.SetVisible(
             m_controller,
-            IsPenaltyLocomotion(state) && !m_penalty.IsAbductionDuty
+            IsPenaltyLocomotion(state) && !m_penalty.IsUndercoverDuty
         );
 
         // 저항(Attack) 진입은 추격으로 시작하는 것이 일반적이라 달리기로 시드하고 이동 판별을 초기화한다 —

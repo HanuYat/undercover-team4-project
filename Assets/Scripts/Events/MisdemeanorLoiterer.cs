@@ -80,6 +80,11 @@ public class MisdemeanorLoiterer : MonoBehaviour
             foreach (PlayerEscorter escorter in PlayerEscorter.FindEscortersOf(m_controller))
                 escorter.ReleaseDrag(m_controller);
 
+            // 끝까지 못 잡았다 — 훔친 물건은 여기서 손실 확정이다 (#303).
+            // 그냥 파괴하면 구매품이 팀 배달 목록에 유령으로 남는다.
+            if (TryGetComponent(out Pickpocket thief))
+                thief.ServerLoseStolenItem();
+
             SuddenEventUtil.DespawnOrDestroy(gameObject, playVfx: false);
             return;
         }
@@ -92,6 +97,11 @@ public class MisdemeanorLoiterer : MonoBehaviour
         // 제압·연행·재수감되면 소란 재개는 취소된다 — 이후는 기존 재검거·수감 흐름이 이어받는다
         if (state is NpcState.Captured or NpcState.Escorted or NpcState.Jailed)
         {
+            // 놓쳤던 소매치기를 뒤늦게 잡았다 — 훔친 물건을 그 자리에 떨군다 (#303).
+            // 이벤트 본편의 제압 처리와 같은 결말이다. 두 번째부터는 들고 있는 게 없어 무동작.
+            if (TryGetComponent(out Pickpocket thief))
+                thief.ServerDropStolenItem();
+
             m_riotPending = false;
             m_rioting = false;
             return;
@@ -133,11 +143,11 @@ public class MisdemeanorLoiterer : MonoBehaviour
 
         switch (offender.RiotBehavior)
         {
-            case SpawnedNpcEvent.Behavior.Resist:
+            case ERiotBehavior.Resist:
                 m_controller.Reaction.StartResist(threat.transform); // 그 자리 저항 난동 — 다가온 플레이어가 표적
                 break;
 
-            case SpawnedNpcEvent.Behavior.Flee:
+            case ERiotBehavior.Flee:
                 m_controller.Reaction.StartFlee(threat.transform); // 도주 소란 — 다가온 플레이어에게서 달아난다
                 break;
         }

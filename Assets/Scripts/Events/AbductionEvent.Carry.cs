@@ -435,7 +435,7 @@ public partial class AbductionEvent
     /// 납치범 1명을 이 호송에서 떼어낸다 — <b>구조 진입점</b>. 서버(또는 오프라인) 전용. (#371/#554)
     /// 타격(<see cref="HandleAbductorDamaged"/>)과 무력화(<see cref="HandleAbductorStunned"/>)가 함께 들어온다.
     ///
-    /// 오검거의 <see cref="NpcPenaltyAgent.ApplyChaseRepel"/>과 다르다: 그쪽은 포획 후에는 일부러 무시하지만
+    /// 오검거의 <see cref="NpcDutyAgent.ApplyChaseRepel"/>과 다르다: 그쪽은 포획 후에는 일부러 무시하지만
     /// (유예 창은 잡히기 전까지다, #278) 납치는 <b>끌려가는 중에 떼어내는 것이 협동의 핵심</b>이다.
     ///
     /// 2명이 끌고 있으면 하나만 떼어져도 남은 1명이 계속 끌고 간다 — 구조가 2단계다.

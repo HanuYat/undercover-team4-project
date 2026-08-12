@@ -32,13 +32,21 @@ using UnityEngine.AI;
 /// 그래서 얼리는 시점은 "물리가 이미 정착시킨 순간"이고, 명시적 배치는 바닥에 스냅된 좌표를 받는다
 /// (<see cref="JailZone.RandomRestPointInRoom"/>).
 ///
-/// <b><see cref="PlayerRagdoll"/>과 갈리는 두 가지</b>
+/// <b>진입은 둘이다 — 사망과 기절</b> (#572 3단계). 성격이 정반대라 이 클래스를 읽을 때 함께 봐야 한다:
+/// <list type="bullet">
+///   <item><b>사망은 한 번이고 영구다.</b> 시체는 일어나지 않으므로 이탈 경로가 없다.</item>
+///   <item><b>기절은 반복된다.</b> 같은 인스턴스가 몇 번이고 눕고 일어난다 — 그래서 이탈
+///   (<see cref="ExitRagdoll"/>)과 <b>에피소드 단위 리셋</b>이 필요하다. 태우는 것은
+///   <see cref="NpcStun.HasStunOverlay"/>(테이저·넉다운)뿐이고 넉백 착지 KO는 <b>뺀다</b> —
+///   근거는 <see cref="WantsRagdoll"/>.</item>
+/// </list>
+///
+/// <b><see cref="PlayerRagdoll"/>과 갈리는 것</b>
 /// <list type="bullet">
 ///   <item><b>권위가 서버다.</b> 플레이어는 오너가 캡슐로 시체를 따라가고 그 루트를 스트리밍하지만,
 ///   NPC에는 오너가 없어 <b>서버가 그 역할</b>을 한다. 서버 외 전원이 원격이다.</item>
-///   <item><b>부활이 없다.</b> 시체는 되살아나지 않으므로 기상 블렌드·기상 클립용 루트 yaw 정렬이
-///   전부 필요 없고, <b>부활 오인 문제(506 §9-19)가 통째로 사라진다</b> — "살아 있는데 래그돌이면
-///   부활"이라는 전제 자체가 없다.</item>
+///   <item><b>기상 블렌드가 없다.</b> 애니메이터로 <b>즉시</b> 돌아간다(계획서 §2-6①(b)) — 한 프레임
+///   튀는 대신 플레이어가 아직 못 고친 "부활 시 큰 회전"(corpse-split §4)을 물려받지 않는다.</item>
 /// </list>
 ///
 /// <b>붙이는 곳: NPC 프리팹 루트</b>(<see cref="NpcController"/>와 같은 오브젝트).
@@ -97,6 +105,22 @@ public class NpcRagdoll : MonoBehaviour
     private RagdollRope m_rope; // 관절 밧줄 — 리그와 같은 오브젝트에 붙는다(RequireComponent)
     private Animator m_animator;
     private NavMeshAgent m_agent;
+    private NpcAnimationDriver m_driver; // 기상 시점의 진실값 — IsProne (#572 3단계)
+
+    // 기상 시 NavMesh를 다시 찾는 반경(m). 넉백 착지와 같은 성격이라 값도 비슷하게 잡는다.
+    // 튜닝 손잡이가 아니라 "누운 자리 바로 밑"을 뜻하는 값이라 상수다.
+    private const float k_navMeshSampleDistance = 2f;
+
+    // 골반이 NetworkTransform으로 직접 복제되는가 — <b>프리팹 배선에서 읽는다.</b> (#572)
+    //
+    // <b>스위치를 따로 두지 않는다</b>(<see cref="PlayerRagdoll"/>과 같은 관례) — 배선과 코드가
+    // 어긋날 여지를 없애려고 컴포넌트 존재 자체를 진실로 삼는다. 참이면 궤적의 주인이 루트에서
+    // 골반으로 넘어가므로 셋이 함께 바뀐다: 원격 정렬이 필요 없어지고(오히려 싸운다), 비권위 피어의
+    // 골반은 키네마틱으로 남아야 하고, 밧줄은 권위 피어만 묶는다.
+    //
+    // 프리팹에서 NetworkTransform을 빼면 셋 다 자동으로 옛 동작(전원이 각자 묶고 정렬로 좁힌다)으로
+    // 돌아간다 — 그게 이 조건을 배선에서 읽는 이유다.
+    private bool m_hipsIsNetworkSynced;
 
     private RagdollState m_state = RagdollState.Animated;
     private float m_stillTimer;
@@ -142,6 +166,35 @@ public class NpcRagdoll : MonoBehaviour
 
         // 애니메이터도 리그 쪽(Model)에 있다.
         m_animator = GetComponentInChildren<Animator>(true);
+
+        // 드라이버는 루트에 있다(이 컴포넌트와 같은 오브젝트) — 기상 시점을 여기서 읽는다.
+        m_driver = GetComponent<NpcAnimationDriver>();
+
+        m_hipsIsNetworkSynced =
+            m_rig.HipsBody != null
+            && m_rig.HipsBody.GetComponent<Unity.Netcode.Components.NetworkTransform>() != null;
+    }
+
+    /// <summary>
+    /// 뼈를 물리로 놓아준다 — <b>골반만은 비권위 피어에서 키네마틱으로 남긴다.</b> (#572)
+    ///
+    /// 골반을 NetworkTransform이 복제하는 구성에서는 원격의 골반이 <b>물리가 아니라 스트림</b>의
+    /// 소유물이다. <c>NetworkRigidbody</c>의 <c>AutoUpdateKinematicState</c>는 스폰·소유권 변경
+    /// 시점에만 도는 값이라 래그돌의 토글과 어긋나므로 프리팹에서 꺼 두고 여기서 직접 관리한다.
+    ///
+    /// 나머지 뼈는 원격에서도 <b>동적으로 둔다</b> — 스트리밍된 골반에 관절로 매달려 각 피어의 로컬
+    /// 물리가 흐느적임을 만든다. 전부 키네마틱으로 굳히면 시체가 골반을 따라 통째로 미끄러지는
+    /// 조각상이 된다.
+    ///
+    /// <see cref="RagdollRig"/>가 아니라 여기서 하는 이유는 분리의 기준이다 — 저쪽에는
+    /// <c>IsOwner</c>·<c>NetworkObject</c>가 한 번도 나오지 않는다.
+    /// </summary>
+    private void ReleaseBonesToPhysics()
+    {
+        m_rig.SetKinematic(false);
+
+        if (m_hipsIsNetworkSynced && !HasMoveAuthority && m_rig.HipsBody != null)
+            m_rig.HipsBody.isKinematic = true;
     }
 
     // ---- 밧줄 파사드 (#571 시체 끌기) ----
@@ -158,17 +211,36 @@ public class NpcRagdoll : MonoBehaviour
     /// 키네마틱인 채로는 장력이 하나도 안 걸린다(<see cref="RagdollRope.Attach"/>가 <c>WakeAll</c>까지
     /// 부르는 이유가 그것이다). 여기가 <c>Frozen → Ragdoll</c> 복귀의 유일한 문이고, 줄을 놓으면
     /// 정착 판정이 다시 돌아 알아서 얼어붙는다.
+    ///
+    /// <b>골반이 스트림으로 오면 실제로 묶는 것은 권위 피어뿐이다</b> (#572, 불변식 8). 이 갈림이
+    /// 견인 발산의 근원을 없앤다: <c>AttachCorpseRopeRpc</c>가 <c>SendTo.Everyone</c>이라 지금까지는
+    /// <b>전 피어가 각자 밧줄을 묶었고</b>, 같은 관절에 <b>서로 다른 입력</b>이 들어갔다 — 앵커 위치가
+    /// 피어마다 다르게 계산되기 때문이다(운반자가 원격이면 NetworkTransform 보간값 + 애니메이터가
+    /// 얹는 걸음 흔들림, 그것도 피어마다 따로 평가된다). 강성 스프링에 다른 입력을 넣으면 다른 궤적이
+    /// 나오고, 그 차이를 보정이 쫓다가 미끄러짐으로 보였다. 골반을 직접 복제하면 <b>원격은 끌 이유가
+    /// 없다</b> — 권위 피어가 굴린 결과가 그대로 온다.
+    ///
+    /// ⚠ <b>녹이는 것은 전 피어가 한다.</b> 가드가 <see cref="Unfreeze"/> <b>뒤</b>에 있는 이유다 —
+    /// 여기서 통째로 돌아가면 원격의 시체는 얼어붙은 채 골반만 끌려가는 조각상이 된다.
+    /// (<see cref="PlayerRagdoll.BeginRopePull"/>은 애초에 얼지 않아 맨 앞에서 돌아간다)
     /// </summary>
     /// <param name="carrier">밧줄을 쥔 쪽. 보통 운반자의 손 앵커.</param>
     public void BeginRopePull(Transform carrier)
     {
         Unfreeze();
+
+        if (m_hipsIsNetworkSynced && !HasMoveAuthority)
+            return;
+
         m_rope?.Attach(carrier);
     }
 
     /// <summary>밧줄을 푼다 — 내려놓기·줄 끊김·운반자 소실. <b>멱등</b>(안 묶여 있으면 무동작).
     /// 얼리지 않는다 — 놓은 몸은 마저 무너져야 하므로 정착 판정에 맡긴다.</summary>
-    public void EndRopePull() => m_rope?.Detach();
+    public void EndRopePull()
+    {
+        m_rope?.Detach();
+    }
 
     // ---- 얼림 / 녹임 (#571 권위 반전) ----
 
@@ -214,7 +286,7 @@ public class NpcRagdoll : MonoBehaviour
         m_stillTimer = 0f;
         m_elapsedInRagdoll = 0f;
 
-        m_rig.SetKinematic(false);
+        ReleaseBonesToPhysics();
     }
 
     /// <summary>
@@ -233,11 +305,38 @@ public class NpcRagdoll : MonoBehaviour
         // 아직 무너지지도 않은 몸(늦게 접속해 이번 사망을 건너뛴 피어)도 여기서 시체가 된다.
         StopAnimator();
 
+        // ⚠ <b>골반이 복제되는 구성에서는 원격이 얼지 않는다</b> (#572). 자세도 쓰지 않는다.
+        //
+        // 굳히면 시체가 <b>루트 높이 하나에 매달린 조각상</b>이 되고, 그 높이가 조금이라도 틀리면
+        // 흡수할 수단이 없어 바닥에 박히거나 공중에 뜬다. 실측(클라): 정착 직후 골반 로컬 오프셋이
+        // 0.234 → −0.001로 무너지며 최저 뼈가 지면 −0.141까지 내려갔다. 원인은 골반
+        // <c>NetworkTransform</c>이 얼린 뒤에도 골반을 계속 쓰기 때문인데, <b>그걸 매 프레임 도로
+        // 덮는 것은 스트림과 싸우는 것이라 미끄러진다.</b>
+        //
+        // <b>플레이어가 같은 길을 먼저 갔다 되돌아왔다</b> — <c>PlayerRagdoll</c>에는 얼림 상태도
+        // 포즈 브로드캐스트도 <b>아예 없다</b>(정착 = <c>RestToPhysics</c>). 그쪽 주석이 근거다:
+        // "원격에서 뼈를 키네마틱으로 굳혔다가 되돌렸다 — 물리가 있으면 중력·접촉이 흡수한다."
+        //
+        // 그래서 원격은 <b>골반만 스트림에 매인 키네마틱</b>으로 두고 나머지 열 개는 물리에 맡긴다.
+        // 자세를 맞출 필요가 없다: 궤적은 골반이 주고, 흐느적임은 각 피어의 로컬 물리가 만든다 —
+        // 그것이 2단계가 골반을 복제한 이유 그 자체다.
+        if (m_hipsIsNetworkSynced && !HasMoveAuthority)
+        {
+            // 늦게 접속해 아직 애니메이터를 쥐고 있던 몸만 물리로 내려놓는다. 이미 무너지는
+            // 중이었으면 그대로 둔다 — 건드릴수록 궤적이 끊긴다.
+            if (m_state == RagdollState.Animated)
+            {
+                m_state = RagdollState.Ragdoll;
+                ReleaseBonesToPhysics();
+            }
+
+            return;
+        }
+
         // <b>얼리는 것이 먼저다.</b> 동적인 채로 자세를 쓰면 다음 물리 스텝이 PhysX의 포즈로 덮는다 —
         // 키네마틱으로 바꾸고 나서야 트랜스폼이 진실이 된다. 아래가 실패해도 얼어 있는 편이 낫다
         // (그 피어의 로컬 물리 자세로 굳을 뿐, 계속 흔들리지는 않는다).
         Freeze();
-
         if (!m_rig.ApplyLocalPose(boneRotations, hipsLocalPosition))
         {
             Debug.LogWarning(
@@ -257,8 +356,17 @@ public class NpcRagdoll : MonoBehaviour
     /// (예전에는 뼈를 피어마다 평행이동시키고 정렬을 0.5초 재워야 했다)
     ///
     /// 끌고 온 시체는 밧줄 때문에 녹아 있으므로(<see cref="BeginRopePull"/>) 여기서 다시 얼린다.
-    /// 정착 판정을 기다리지 않는 이유는 <b>기다릴 이유가 없어서</b>다 — 어디에 눕힐지는 유치장이
-    /// 이미 정했고, 그 좌표는 바닥에 스냅돼 있다.
+    ///
+    /// <b>옮긴 뒤에는 다시 녹인다</b> (#572). 얼린 자세는 <b>끌려오던 순간의 자세</b>라 감옥 바닥과
+    /// 맞지 않는다 — 팔이 들린 채로 박제되고, 얼린 시체는 스스로 바닥을 찾지 않는다. 물리를 한 번 더
+    /// 돌려 바닥에 맞게 무너뜨리고 정착 판정이 다시 얼리게 둔다. 자세도 그때 한 번 더 나간다.
+    ///
+    /// ⚠ <b>"그럼 처음부터 얼리지 말지"가 안 되는 이유</b>: 옮기는 <b>동안</b>에는 반드시 얼어 있어야
+    /// 한다. 동적 리지드바디는 부모 트랜스폼을 따라가지 않아 녹인 채 루트만 옮기면 <b>루트만 가고 몸은
+    /// 남는다.</b> 얼림은 순간이동의 <b>수단</b>이고, 여기 녹임은 그 뒤처리다.
+    ///
+    /// 녹여도 밧줄이 되살아나지는 않는다 — 수감 경로가 배치 <b>전에</b> 관절까지 걷는다
+    /// (<c>JailIntake.ServerAdmitCorpse</c> → <c>PlayerEscorter.ReleaseAllTethersOnCorpse</c>).
     /// </summary>
     /// <param name="position">시체가 놓일 지면 지점 — 루트(발밑) 기준이다.</param>
     public void ServerPlaceCorpse(Vector3 position)
@@ -273,6 +381,9 @@ public class NpcRagdoll : MonoBehaviour
             ServerFreezeInPlace();
 
         transform.position = position;
+
+        // 놓인 자리에서 마저 무너지게 한다 — 정착 판정이 다시 돌아 알아서 얼어붙는다.
+        Unfreeze();
     }
 
     // ---- 진입 ----
@@ -305,12 +416,9 @@ public class NpcRagdoll : MonoBehaviour
         m_stillTimer = 0f;
         m_elapsedInRagdoll = 0f;
 
-        // 에이전트는 서버에서 NpcDeath가 이미 껐고 클라에서는 애초에 꺼져 있다(NpcController.OnNetworkSpawn).
-        // 그래도 여기서 한 번 더 확인한다 — 켜져 있으면 매 프레임 NavMesh 위로 끌어내려 시체가 못 눕는다.
-        if (m_agent != null && m_agent.enabled)
-            m_agent.enabled = false;
+        ReleaseAgentForRagdoll();
 
-        m_rig.SetKinematic(false);
+        ReleaseBonesToPhysics();
         m_rig.ApplyImpulse(impulse);
     }
 
@@ -318,7 +426,7 @@ public class NpcRagdoll : MonoBehaviour
 
     private void Update()
     {
-        PollDeath();
+        PollRagdollTriggers();
 
         // 얼어 있으면 볼 것이 없다 — 루트가 주인이고 자세는 상수다. 이 조기 반환이 곧
         // "정착한 시체는 매 프레임 아무 비용도 쓰지 않는다"는 뜻이다.
@@ -337,6 +445,34 @@ public class NpcRagdoll : MonoBehaviour
         // 이제는 서버가 정착시켜 그 자세를 한 번 뿌리고, 원격은 받아서 갈아끼운다.
         if (!HasMoveAuthority)
             return;
+
+        // <b>끌리는 동안에는 정착 판정을 돌리지 않는다.</b> (#572)
+        //
+        // 정착은 "몸이 스스로 멈췄다"를 재는 것이고 타임아웃은 그 위의 안전장치 — <b>지형에 껴서
+        // 영원히 떨리는 몸</b>을 위한 것이다. 끌리는 몸은 낀 것이 아니라 정상적으로 움직이는 중이라
+        // 둘 다 대상이 아니다.
+        //
+        // 얼면 골반이 키네마틱이 되어 <b>관절 밧줄의 장력이 하나도 안 걸린다</b>
+        // (<see cref="BeginRopePull"/> 주석). 그런데 녹이는 것은 <b>묶는 순간뿐</b>이라 묶인 뒤에
+        // 얼면 되돌릴 사람이 없다 — 실측으로 두 경로가 다 나왔다: 초속 7.73m로 끌려가다 5초
+        // 타임아웃에 얼어붙었고, 죽자마자 묶어 세워 두면 0.3초 만에 "멈춤"으로 얼어붙었다.
+        // 둘 다 시체는 고정되고 밧줄만 늘어났다.
+        //
+        // <b>플레이어에는 없는 문제다</b> — 저쪽 정착은 <c>RestToPhysics</c>로 끝나 뼈가 동적으로
+        // 남으므로 정착한 시체도 그대로 끌린다. NPC만 "정착 = 얼림"이라(#571 8단계 권위 반전)
+        // 정착이 밧줄과 배타적이 됐고, 그 사실이 판정에 반영돼 있지 않았다.
+        //
+        // 타이머를 <b>0으로 되돌린다</b> — 놓는 순간부터 다시 재야 한다. 누적을 남기면 오래 끌던
+        // 시체가 놓자마자 굳어 마저 무너지지 못한다(<see cref="EndRopePull"/>의 "정착 판정에 맡긴다").
+        //
+        // ⚠ <c>IsAttached</c>가 아니라 <c>IsBeingCarried</c>다. 운반자가 사라져도 관절은 남으므로
+        // (그쪽 주석) 그걸로 미루면 <b>시체가 영영 안 굳는다.</b>
+        if (m_rope != null && m_rope.IsBeingCarried)
+        {
+            m_stillTimer = 0f;
+            m_elapsedInRagdoll = 0f;
+            return;
+        }
 
         m_elapsedInRagdoll += Time.deltaTime;
 
@@ -363,33 +499,217 @@ public class NpcRagdoll : MonoBehaviour
         // 정확히 붙여 주고, 자세는 서버가 뿌린 그대로다 — 좁힐 차이가 없다.
         // 예전에는 정착 후에도 계속 당겼는데, 그것이 원격 리지드바디를 <b>영영 못 자게 만들어</b>
         // 바닥에서 비벼지는 원인이었다.
-        if (!HasMoveAuthority && m_state == RagdollState.Ragdoll)
+        //
+        // <b>골반을 직접 복제하면 이 보정을 끈다</b> (#572) — 궤적의 주인이 루트에서 골반으로
+        // 넘어가므로 좁힐 잔차가 없고, 켜 두면 스트림이 놓은 골반을 매 프레임 루트 쪽으로 밀어 서로
+        // 싸운다. 지금 프리팹이 그 배선이라 이 함수는 <b>실제로는 돌지 않는다</b> — 남겨 둔 것은
+        // 골반 복제를 빼면 곧바로 옛 동작으로 돌아갈 수 있게 하기 위해서다. (PlayerRagdoll과 같다)
+        if (!m_hipsIsNetworkSynced && !HasMoveAuthority && m_state == RagdollState.Ragdoll)
             TickAlignBonesToRoot();
+
+        // 얼린 뒤에는 반대로 골반 스트림을 눌러야 한다 — 그쪽이 계속 골반을 쓰면 얼린 자세가 무너진다.
+        // 위 정렬과 정확히 반대 구간(Frozen)에서 돌고, 조건도 반대다(골반 복제일 때만). (#572)
     }
 
-    // 사망 여부를 폴링한다 — 상태 enum이 동기화 값이라 전 피어가 같은 값을 본다.
+    // 래그돌이어야 하는지를 폴링한다 — 읽는 값이 전부 동기화 값이라 전 피어가 같은 답을 얻는다.
     //
     // 이벤트가 아니라 폴링인 이유는 플레이어 쪽과 같다(PlayerRagdoll.PollDeath): 표현 계층이
-    // 동기화 값을 매 프레임 읽는 편이 도착 순서에 기대지 않아 단순하다.
+    // 동기화 값을 매 프레임 읽는 편이 도착 순서에 기대지 않아 단순하다. 기절이 붙으면서 이점이
+    // 더 커졌다 — 기절을 푸는 경로가 여섯이나 되는데(시간 만료·수감·연행·줄 풀림·사망·넉백)
+    // <b>값만 보면 전부 자동으로 덮인다.</b>
     //
-    // <b>부활 분기가 없다.</b> 시체는 되살아나지 않으므로 "살아 있는데 래그돌이면 부활"이라는
-    // 판정 자체가 필요 없고, 그 전제가 원격에서 깨져 생기던 문제(506 §9-19)도 함께 사라진다.
-    private void PollDeath()
+    // ⚠ <b>폴링이 이벤트보다 안전한 지점이 하나 더 있다.</b> 저 경로들은 오버레이를 걷은 <b>뒤에</b>
+    // 상태를 바꾸는데, 그 사이가 전부 <b>하나의 동기 호출</b>이라 Update가 중간 상태를 볼 수 없다.
+    // 사망이 대표적이다(NpcDeath.ServerEnterDead ②가 오버레이를 걷고 ⑤가 Dead로 전이한다):
+    // OnStunnedChanged를 구독했다면 ②에서 "기절이 풀렸다"로 읽어 몸을 <b>한 번 일으켰다가</b>
+    // 곧바로 다시 무너뜨렸을 것이다. 폴링은 ⑦까지 끝난 뒤에 보므로 그 튐이 아예 없다.
+    private void PollRagdollTriggers()
     {
-        bool dead = m_owner.Death.IsDead;
+        bool wants = WantsRagdoll();
 
-        // 접속 직후 이미 죽어 있었다면 이번 사망은 건너뛴다 — 낙하는 이미 끝난 과거다.
+        // 접속 직후 이미 쓰러져 있었다면 이번 에피소드는 건너뛴다 — 그 무너짐은 "지금"이 아니라
+        // 이미 끝난 과거라, 재생하면 몸이 뒤늦게 한 번 더 무너진다.
         if (!m_polledOnce)
         {
             m_polledOnce = true;
-            m_skipThisEpisode = dead;
+            m_skipThisEpisode = wants;
         }
 
-        if (!dead)
+        if (!wants)
+        {
+            // ⚠ <b>에피소드가 끝나면 반드시 내린다.</b> 사망은 한 번이라 켜진 채 둬도 됐지만 기절은
+            // 반복되므로, 안 내리면 그 피어는 <b>이후 모든 기절 래그돌을 영구히 건너뛴다</b>(§2-1).
+            // 죽은 몸은 wants가 계속 참이라 여기로 오지 않는다 — 시체의 skip은 그대로 보존된다.
+            m_skipThisEpisode = false;
+
+            ExitRagdoll();
             return;
+        }
 
         if (!m_skipThisEpisode && m_state == RagdollState.Animated)
-            EnterRagdoll(Vector3.zero); // 힘없이 무너지는 사망. 폭발은 임펄스를 따로 준다(후속)
+            EnterRagdoll(Vector3.zero); // 힘없이 무너진다. 폭발은 임펄스를 따로 준다(후속)
+    }
+
+    /// <summary>
+    /// 지금 이 몸이 래그돌이어야 하는가 — <b>진입과 이탈을 같은 식 하나로 답한다.</b> (#572 3단계)
+    ///
+    /// 조건을 한 곳에 모으는 이유는 기절이 <b>반복되기</b> 때문이다. 진입 조건과 이탈 조건을 따로
+    /// 쓰면 둘이 어긋나는 순간 몸이 눕지도 서지도 못한 채 낀다.
+    /// </summary>
+    private bool WantsRagdoll()
+    {
+        // 사망은 영구다 — 시체는 일어나지 않으므로 이 분기가 곧 "이탈 없음"이다.
+        if (m_owner.Death.IsDead)
+            return true;
+
+        // <b>바닥에 있어야 할 이유가 하나라도 있으면 래그돌이다</b> — 기절이거나, 밧줄에 눕혀졌거나.
+        //
+        // <b>기절은 오버레이만 태운다</b>(팀 확정). 넉백 착지 KO(<see cref="NpcState.Stunned"/>)를
+        // 빼는 이유는 에이전트 소유권이 정면으로 부딪히기 때문이다: 래그돌은 에이전트에서 손을 떼야
+        // 몸이 눕는데(<see cref="EnterRagdoll"/>), 넉백은 착지 시 <c>EndKnockback</c>이 에이전트를
+        // <b>켜면서 Warp</b>한다. IsStunned가 아니라 HasStunOverlay를 보는 것이 그 갈림이다.
+        //
+        // ⚠ <b>밧줄을 오버레이와 <u>함께</u> 봐야 한다</b> (#572). 산 대상의 밧줄도 시체와 같은
+        // 관절 밧줄로 끌기로 했으므로 묶여 있는 동안 래그돌이 유지돼야 하는데,
+        // <c>PlayerEscortCommands.ServerApplyRopeDrag</c>가 <b>묶자마자 <c>ExitStun</c></b>을 불러
+        // 오버레이를 걷는다(#292 — 안 걷으면 묶자마자 도망친다). 오버레이만 보면 묶는 그 순간
+        // 래그돌이 풀려 몸이 클립 자세로 튄다 — 실측으로 나온 증상이 정확히 이것이다.
+        if (
+            !m_owner.Stun.HasStunOverlay
+            && !m_owner.Rope.IsRoped
+            && !m_owner.Rope.IsTethered
+        )
+            return false;
+
+        // <b>기상 모션이 시작되면 내려온다.</b> <see cref="NpcAnimationDriver.IsProne"/>이 정확히 그
+        // 순간 거짓이 된다(<c>HandleStandUp</c>이 <c>RefreshProne</c>을 부른다) — §2-4가 요구한
+        // "래그돌 이탈 시점 = RaiseStandUp 시점"이 이 값 하나로 표현된다.
+        //
+        // 값 하나에 얹는 덕에 밧줄까지 공짜로 덮인다: 줄에 눕혀진 몸은 <c>IsRopeProne</c> 때문에
+        // 계속 참이고, 줄이 풀려 기상이 예약되면 그 순간 거짓이 된다.
+        return m_driver == null || m_driver.IsProne;
+    }
+
+    /// <summary>
+    /// 애니메이터에게 몸을 돌려준다 — 기절에서 깨어나는 유일한 문. 이미 <c>Animated</c>면 무동작. (#572)
+    ///
+    /// <b>블렌드 없이 즉시 돌아간다</b>(계획서 §2-6①(b)). 한 프레임 튀지만, 플레이어가 아직 못 고친
+    /// "부활 시 큰 회전"(corpse-split §4)을 물려받지 않는다.
+    ///
+    /// <b>표현과 위치를 가른다.</b> 뼈·애니메이터는 전 피어가 되돌리고, NavMesh 재부착은 권위 피어만
+    /// 한다 — 원격의 에이전트는 스폰 때부터 영구히 꺼져 있다(<c>NpcController.OnNetworkSpawn</c>).
+    /// </summary>
+    private void ExitRagdoll()
+    {
+        if (m_state == RagdollState.Animated)
+            return;
+
+        // ① 뼈를 애니메이터에게 돌려준다 — <b>키네마틱이 먼저다.</b> 동적인 채로 포즈를 쓰면
+        //    다음 물리 스텝이 PhysX의 결과로 덮는다.
+        m_rig.SetKinematic(true);
+
+        // ⚠ <b>뼈 길이를 되돌린다</b> (§1-2). 물리가 관절을 늘려 놓은 localPosition은 애니메이터가
+        //    고쳐 주지 않는다 — 애니메이터는 <b>회전만</b> 쓰기 때문이다. 리그가 하나뿐인 NPC에는
+        //    플레이어의 RagdollPose.Copy 필터가 놓일 자리가 없어, 안 되돌리면 기절할 때마다
+        //    누적되다 2차·3차에서 사지가 늘어나며 바닥을 뚫는다.
+        m_rig.RestoreBindPose();
+
+        if (m_animator != null)
+            m_animator.enabled = true;
+
+        m_rig.SetSkinsAlwaysVisible(false); // StopAnimator가 켠 것을 되돌린다
+
+        m_state = RagdollState.Animated;
+        m_stillTimer = 0f;
+        m_elapsedInRagdoll = 0f;
+
+        // ② 위치·에이전트는 권위 피어만
+        if (HasMoveAuthority)
+            ServerReattachToNavMesh();
+    }
+
+    /// <summary>
+    /// 에이전트에게서 몸을 넘겨받는다 — 눕기 전에 <b>반드시</b>. (#572 3단계)
+    ///
+    /// <b>기절은 에이전트를 끄지 않는다.</b> 막아야 하는 것은 "에이전트가 매 프레임 트랜스폼을
+    /// NavMesh 위로 써 버리는 것"뿐인데, 그건 <c>updatePosition</c>이 하는 일이라 그것만 떼면 된다.
+    /// 통째로 끄면 <c>enabled == false</c>가 되어 <c>isStopped</c>·<c>SetDestination</c>이 예외를 던지고,
+    /// <b>그 사이에 일어나는 상태 전이가 통째로 깨진다</b> — 실측으로 <c>NpcResistState.Exit</c>과
+    /// <c>NpcEscortedState.Enter</c>가 각각 터졌다. 코드베이스의 전제가 <b>"전이 시점에 에이전트는
+    /// 살아 있다"</b>이고(<c>NpcRopeDrag.StartRopeDrag</c> 주석), 기절 래그돌은 <b>산 NPC에</b>
+    /// 얹히므로 그 전제 안에 있어야 한다.
+    ///
+    /// <b>사망은 반대로 통째로 끈다</b> — 시체는 NavMesh로 돌아가지 않고(#571), 죽은 몸에는 깨질
+    /// 전이도 없다(상태 기계가 사망 이탈을 거부한다). 여기는 확인 사살이다:
+    /// <c>NpcDeath.ServerEnterDead</c> ⑥이 이미 껐다.
+    /// </summary>
+    private void ReleaseAgentForRagdoll()
+    {
+        if (m_agent == null)
+            return;
+
+        if (m_owner.Death.IsDead)
+        {
+            if (m_agent.enabled)
+                m_agent.enabled = false;
+            return;
+        }
+
+        // 산 몸 — 켜 둔 채로 손만 뗀다. 되돌리는 것은 ExitRagdoll이다.
+        m_agent.updatePosition = false;
+        m_agent.updateRotation = false;
+    }
+
+    /// <summary>
+    /// 깨어난 몸을 NavMesh에 다시 붙인다 — <b>서버(또는 오프라인) 전용.</b> (#572)
+    /// <c>NpcKnockback.EndKnockback</c>이 넉백 비행에 대해 하는 일을 기절 래그돌에 대해 한다.
+    ///
+    /// <b>규칙은 "뗀 쪽이 되돌린다"다.</b> 위치 갱신을 뗀 것은
+    /// <see cref="ReleaseAgentForRagdoll"/>이므로 되돌리는 것도 여기다 — 기절 해제
+    /// (<c>NpcStun.ExitStun</c>)에 맡기면 <b>떼지도 않은 것을 되돌리는</b> 함수가 되고, 그쪽은 사망
+    /// 경로에서도 불려 시체의 에이전트까지 되살릴 수 있다.
+    /// </summary>
+    private void ServerReattachToNavMesh()
+    {
+        if (m_agent == null)
+            return;
+
+        // ⚠ <b>플래그는 무조건 되돌린다 — 아래 가드보다 먼저다.</b> 이건 우리가 뗀 것이라 밧줄·넉백이
+        // 에이전트를 쥐고 있든 말든 우리 몫이고, 떼어 둔 채 넘기면 그쪽이 나중에 에이전트를 켜도
+        // 위치 갱신이 꺼진 채라 <b>그 NPC는 영영 걷지 못한다.</b>
+        m_agent.updatePosition = true;
+        m_agent.updateRotation = true;
+
+        // 위치는 다른 구간이 쥐고 있으면 손대지 않는다 — 그쪽이 끝날 때 자기 자리에서 붙인다
+        // (<c>NpcRopeDrag.StopRopeDrag</c> / <c>NpcKnockback.EndKnockback</c>).
+        if (m_owner.Rope.IsRoped || m_owner.Knockback.IsKnockedBack)
+            return;
+
+        // ⚠ <b>실패해도 켠다.</b> 회수 안전망(<c>NpcController.TickNavMeshRecovery</c>)은
+        // <c>enabled == false</c>인 구간을 <b>건너뛰므로</b>, 꺼 둔 채 두면 회수가 영영 오지 않는다.
+        // 켜 두면 붙이지 못한 몸도 1초 뒤 더 넓은 반경으로 다시 시도된다 (#557).
+        // 기절 경로에서는 애초에 켜져 있어 무동작이다 — 멱등하게 둔다.
+        m_agent.enabled = true;
+
+        // 통행 마스크로 착지점을 찾는다 — 못 가는 영역(Jail)에 Warp되면 경로가 안 잡혀 고착된다 (#415)
+        if (
+            NavMesh.SamplePosition(
+                transform.position,
+                out NavMeshHit ground,
+                k_navMeshSampleDistance,
+                m_agent.areaMask
+            )
+        )
+            m_agent.Warp(ground.position);
+
+        if (!m_agent.isOnNavMesh)
+        {
+            Debug.LogWarning(
+                "NpcRagdoll: 기절에서 깨어난 자리를 NavMesh에 붙이지 못했다 — 회수 대기: "
+                    + $"{name} @{transform.position.ToString("F1")}",
+                this
+            );
+        }
     }
 
     // ---- 루트 추종 (서버 전용) ----
@@ -518,7 +838,6 @@ public class NpcRagdoll : MonoBehaviour
             return;
 
         StopAnimator(); // 무너지지 않은 몸을 그대로 얼리는 경로(유치장 배치)가 있다
-
         m_rig.CapturePose();
         Vector3 landedHips = m_rig.Hips.position;
 

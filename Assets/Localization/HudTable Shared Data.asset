@@ -115,6 +115,10 @@ MonoBehaviour:
     m_Key: Hud.Jail.NoCustody
     m_Metadata:
       m_Items: []
+  - m_Id: 761277106970625
+    m_Key: Hud.Pickpocket.Stolen
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

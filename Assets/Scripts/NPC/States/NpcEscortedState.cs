@@ -36,7 +36,13 @@ public class NpcEscortedState : NpcStateBase
 
         // 밧줄로 끌려오는 중이면 에이전트가 꺼져 있다 — 추종 로직을 아예 돌리지 않는다.
         // 위치는 밧줄 장력(NpcController.TickRopeDrag)이 직접 제어한다. (#369, #390에서 NPC로 이관)
-        if (m_owner.Rope.IsRoped)
+        //
+        // ⚠ <b><c>IsRoped</c>만으로는 부족하다</b> (#572 3단계). 이 전이는 <c>StartRopeDrag</c>
+        // <b>앞에</b> 오는 것이 계약이라(그쪽 주석 — 뒤에 하면 직전 상태의 Exit이 꺼진 에이전트를
+        // 건드린다) 묶이는 순간에는 아직 거짓이다. 예전에는 그래도 에이전트가 살아 있어 무해했지만
+        // (다음 줄에서 어차피 꺼져 SetDestination도 버려졌다) 기절 래그돌이 <b>먼저</b> 꺼 두면서
+        // 그 전제가 깨졌다. 그래서 원인(밧줄)이 아니라 <b>결과</b>(에이전트를 쓸 수 있는가)를 본다.
+        if (m_owner.Rope.IsRoped || !m_owner.AgentReady)
             return;
 
         m_owner.Agent.isStopped = false;
