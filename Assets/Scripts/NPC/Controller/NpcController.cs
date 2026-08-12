@@ -49,6 +49,9 @@ public class NpcController : NetworkBehaviour
     private NpcPenaltyAgent m_penalty;
     private NpcReaction m_reaction;
     private NpcRopeDrag m_rope;
+
+    // 래그돌 — 밧줄 틱을 돌릴지 가르는 데 쓴다. 리그 없는 프리팩에서는 null이다 (#572).
+    private NpcRagdoll m_ragdoll;
     private NpcStandUp m_standUp;
     private NpcStun m_stun;
 
@@ -111,6 +114,7 @@ public class NpcController : NetworkBehaviour
         m_penalty = GetComponent<NpcPenaltyAgent>();
         m_reaction = GetComponent<NpcReaction>();
         m_rope = GetComponent<NpcRopeDrag>();
+        m_ragdoll = GetComponent<NpcRagdoll>();
         m_standUp = GetComponent<NpcStandUp>();
         m_stun = GetComponent<NpcStun>();
 
@@ -211,7 +215,18 @@ public class NpcController : NetworkBehaviour
 
         // 밧줄 장력 — 게이트보다 **먼저** (#390). 묶인 채 기절한 대상은 스턴 오버레이를 단 채 끌려가야 하므로,
         // 뒤로 내리면 테이저→밧줄 콤보로 잡은 대상이 그 자리에 멈춘다. (넉백과는 배타적 — StopEscort가 끌기를 정리한다)
-        m_rope.Tick();
+        //
+        // ⚠ <b>래그돌인 대상에는 돌리지 않는다</b> (#572 3단계). 위 사망 게이트 주석이 적어 둔 기준
+        // ("갈리는 기준은 대상이 래그돌이냐다")을 그대로 적용한 것이다 — 예전에는 래그돌 = 시체라
+        // 사망 게이트 하나로 같은 효과가 났지만, 기절에도 래그돌이 붙으면서 둘이 갈렸다.
+        // 래그돌인 몸은 <b>관절 밧줄</b>(RagdollRope)이 물리로 끌고 루트는 NpcRagdoll.TickRootFollow가
+        // 따라붙인다. 여기서 <c>transform.position</c>을 함께 대입하면 같은 프레임에 위치를 다퉈
+        // 몸이 떨거나 몸을 두고 루트만 날아간다.
+        //
+        // <b>return이 아니라 건너뛰기다</b> — 아래 m_stun.Tick()이 기절 타이머를 굴리므로 여기서
+        // 끊으면 끌려가는 동안 기절이 영영 안 풀린다.
+        if (m_ragdoll == null || !m_ragdoll.IsRagdollActive)
+            m_rope.Tick();
 
         // 줄이 풀리며 일어나는 구간 — 밧줄 장력과 같은 이유로 아래 게이트보다 **먼저** 돈다 (#513).
         // 뒤로 내리면 일어나는 도중 기절·넉백을 맞은 대상의 예약이 영원히 남는다.

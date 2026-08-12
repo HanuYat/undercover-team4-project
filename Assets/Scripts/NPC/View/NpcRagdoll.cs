@@ -237,7 +237,10 @@ public class NpcRagdoll : MonoBehaviour
 
     /// <summary>밧줄을 푼다 — 내려놓기·줄 끊김·운반자 소실. <b>멱등</b>(안 묶여 있으면 무동작).
     /// 얼리지 않는다 — 놓은 몸은 마저 무너져야 하므로 정착 판정에 맡긴다.</summary>
-    public void EndRopePull() => m_rope?.Detach();
+    public void EndRopePull()
+    {
+        m_rope?.Detach();
+    }
 
     // ---- 얼림 / 녹임 (#571 권위 반전) ----
 
@@ -302,11 +305,38 @@ public class NpcRagdoll : MonoBehaviour
         // 아직 무너지지도 않은 몸(늦게 접속해 이번 사망을 건너뛴 피어)도 여기서 시체가 된다.
         StopAnimator();
 
+        // ⚠ <b>골반이 복제되는 구성에서는 원격이 얼지 않는다</b> (#572). 자세도 쓰지 않는다.
+        //
+        // 굳히면 시체가 <b>루트 높이 하나에 매달린 조각상</b>이 되고, 그 높이가 조금이라도 틀리면
+        // 흡수할 수단이 없어 바닥에 박히거나 공중에 뜬다. 실측(클라): 정착 직후 골반 로컬 오프셋이
+        // 0.234 → −0.001로 무너지며 최저 뼈가 지면 −0.141까지 내려갔다. 원인은 골반
+        // <c>NetworkTransform</c>이 얼린 뒤에도 골반을 계속 쓰기 때문인데, <b>그걸 매 프레임 도로
+        // 덮는 것은 스트림과 싸우는 것이라 미끄러진다.</b>
+        //
+        // <b>플레이어가 같은 길을 먼저 갔다 되돌아왔다</b> — <c>PlayerRagdoll</c>에는 얼림 상태도
+        // 포즈 브로드캐스트도 <b>아예 없다</b>(정착 = <c>RestToPhysics</c>). 그쪽 주석이 근거다:
+        // "원격에서 뼈를 키네마틱으로 굳혔다가 되돌렸다 — 물리가 있으면 중력·접촉이 흡수한다."
+        //
+        // 그래서 원격은 <b>골반만 스트림에 매인 키네마틱</b>으로 두고 나머지 열 개는 물리에 맡긴다.
+        // 자세를 맞출 필요가 없다: 궤적은 골반이 주고, 흐느적임은 각 피어의 로컬 물리가 만든다 —
+        // 그것이 2단계가 골반을 복제한 이유 그 자체다.
+        if (m_hipsIsNetworkSynced && !HasMoveAuthority)
+        {
+            // 늦게 접속해 아직 애니메이터를 쥐고 있던 몸만 물리로 내려놓는다. 이미 무너지는
+            // 중이었으면 그대로 둔다 — 건드릴수록 궤적이 끊긴다.
+            if (m_state == RagdollState.Animated)
+            {
+                m_state = RagdollState.Ragdoll;
+                ReleaseBonesToPhysics();
+            }
+
+            return;
+        }
+
         // <b>얼리는 것이 먼저다.</b> 동적인 채로 자세를 쓰면 다음 물리 스텝이 PhysX의 포즈로 덮는다 —
         // 키네마틱으로 바꾸고 나서야 트랜스폼이 진실이 된다. 아래가 실패해도 얼어 있는 편이 낫다
         // (그 피어의 로컬 물리 자세로 굳을 뿐, 계속 흔들리지는 않는다).
         Freeze();
-
         if (!m_rig.ApplyLocalPose(boneRotations, hipsLocalPosition))
         {
             Debug.LogWarning(
@@ -476,6 +506,9 @@ public class NpcRagdoll : MonoBehaviour
         // 골반 복제를 빼면 곧바로 옛 동작으로 돌아갈 수 있게 하기 위해서다. (PlayerRagdoll과 같다)
         if (!m_hipsIsNetworkSynced && !HasMoveAuthority && m_state == RagdollState.Ragdoll)
             TickAlignBonesToRoot();
+
+        // 얼린 뒤에는 반대로 골반 스트림을 눌러야 한다 — 그쪽이 계속 골반을 쓰면 얼린 자세가 무너진다.
+        // 위 정렬과 정확히 반대 구간(Frozen)에서 돌고, 조건도 반대다(골반 복제일 때만). (#572)
     }
 
     // 래그돌이어야 하는지를 폴링한다 — 읽는 값이 전부 동기화 값이라 전 피어가 같은 답을 얻는다.
@@ -529,26 +562,31 @@ public class NpcRagdoll : MonoBehaviour
         if (m_owner.Death.IsDead)
             return true;
 
+        // <b>바닥에 있어야 할 이유가 하나라도 있으면 래그돌이다</b> — 기절이거나, 밧줄에 눕혀졌거나.
+        //
         // <b>기절은 오버레이만 태운다</b>(팀 확정). 넉백 착지 KO(<see cref="NpcState.Stunned"/>)를
-        // 빼는 이유는 에이전트 소유권이 정면으로 부딪히기 때문이다: 래그돌은 에이전트를 <b>꺼야</b>
-        // 몸이 눕는데(<see cref="EnterRagdoll"/>), 넉백은 착지 시 <c>EndKnockback</c>이 그걸
+        // 빼는 이유는 에이전트 소유권이 정면으로 부딪히기 때문이다: 래그돌은 에이전트에서 손을 떼야
+        // 몸이 눕는데(<see cref="EnterRagdoll"/>), 넉백은 착지 시 <c>EndKnockback</c>이 에이전트를
         // <b>켜면서 Warp</b>한다. IsStunned가 아니라 HasStunOverlay를 보는 것이 그 갈림이다.
-        if (!m_owner.Stun.HasStunOverlay)
-            return false;
-
-        // <b>밧줄이 걸리면 물러난다.</b> 산 대상의 밧줄은 관절이 아니라 <b>위치 대입</b>으로 끈다
-        // (<c>NpcRopeDrag.Tick</c>) — 래그돌이 켜져 있으면 <see cref="TickRootFollow"/>와 그 대입이
-        // 같은 프레임에 루트를 다툰다. 관절 밧줄은 시체 전용이다(#571).
-        if (m_owner.Rope.IsRoped || m_owner.Rope.IsTethered)
+        //
+        // ⚠ <b>밧줄을 오버레이와 <u>함께</u> 봐야 한다</b> (#572). 산 대상의 밧줄도 시체와 같은
+        // 관절 밧줄로 끌기로 했으므로 묶여 있는 동안 래그돌이 유지돼야 하는데,
+        // <c>PlayerEscortCommands.ServerApplyRopeDrag</c>가 <b>묶자마자 <c>ExitStun</c></b>을 불러
+        // 오버레이를 걷는다(#292 — 안 걷으면 묶자마자 도망친다). 오버레이만 보면 묶는 그 순간
+        // 래그돌이 풀려 몸이 클립 자세로 튄다 — 실측으로 나온 증상이 정확히 이것이다.
+        if (
+            !m_owner.Stun.HasStunOverlay
+            && !m_owner.Rope.IsRoped
+            && !m_owner.Rope.IsTethered
+        )
             return false;
 
         // <b>기상 모션이 시작되면 내려온다.</b> <see cref="NpcAnimationDriver.IsProne"/>이 정확히 그
         // 순간 거짓이 된다(<c>HandleStandUp</c>이 <c>RefreshProne</c>을 부른다) — §2-4가 요구한
         // "래그돌 이탈 시점 = RaiseStandUp 시점"이 이 값 하나로 표현된다.
         //
-        // 값 하나에 얹는 덕에 예외도 공짜로 따라온다: 줄에 묶여 기상 모션이 <b>안 나가는</b> 경우
-        // (<c>NpcStun.Tick</c>의 밧줄 분기)에는 IsProne이 참으로 남는다 — 위 밧줄 가드가 먼저
-        // 걸러내지만, 조건이 서로 어긋나지 않는다는 뜻이다.
+        // 값 하나에 얹는 덕에 밧줄까지 공짜로 덮인다: 줄에 눕혀진 몸은 <c>IsRopeProne</c> 때문에
+        // 계속 참이고, 줄이 풀려 기상이 예약되면 그 순간 거짓이 된다.
         return m_driver == null || m_driver.IsProne;
     }
 
@@ -800,7 +838,6 @@ public class NpcRagdoll : MonoBehaviour
             return;
 
         StopAnimator(); // 무너지지 않은 몸을 그대로 얼리는 경로(유치장 배치)가 있다
-
         m_rig.CapturePose();
         Vector3 landedHips = m_rig.Hips.position;
 
