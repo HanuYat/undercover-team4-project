@@ -20,6 +20,12 @@ GameObject:
   - component: {fileID: 4391990372060924147}
   - component: {fileID: 7866726753952495387}
   - component: {fileID: 3850008261326609235}
+  - component: {fileID: 862986553070729493}
+  - component: {fileID: 2813280441832589395}
+  - component: {fileID: 5245668954543797378}
+  - component: {fileID: 7324548653836035078}
+  - component: {fileID: 1732464363476530770}
+  - component: {fileID: 2421280246905754952}
   m_Layer: 0
   m_Name: SuddenEvents
   m_TagString: Untagged
@@ -101,6 +107,12 @@ MonoBehaviour:
   - component: {fileID: 7866726753952495387}
     enabled: 1
   - component: {fileID: 3850008261326609235}
+    enabled: 1
+  - component: {fileID: 862986553070729493}
+    enabled: 1
+  - component: {fileID: 2813280441832589395}
+    enabled: 1
+  - component: {fileID: 2421280246905754952}
     enabled: 1
 --- !u!114 &4617273519023223210
 MonoBehaviour:
@@ -285,3 +297,143 @@ MonoBehaviour:
   m_pettyCrimeRewardMax: 4000
   m_maxLifetimeSeconds: 60
   m_approachSeconds: 12
+--- !u!114 &862986553070729493
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498939978214492355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 78e368a046ce69d4ea3f2f20b87c5f3b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SnowEvent
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_durationSeconds: 30
+  m_iceOnsetSeconds: 5
+  m_iceFullSeconds: 20
+  m_thawSeconds: 45
+--- !u!114 &2813280441832589395
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498939978214492355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 931e224c1cb260a46a0777a4b83015ad, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LightningEvent
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_durationSeconds: 15
+  m_strikeIntervalMin: 2
+  m_strikeIntervalMax: 5
+  m_damageChance: 0.5
+  m_damageAmount: 45
+  m_buffMultiplier: 1.5
+  m_buffDuration: 5
+--- !u!114 &5245668954543797378
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498939978214492355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 67e10fbd940401e43afcd0712a02fb32, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SnowView
+  m_snowParticlePrefab: {fileID: 2817993819076210315, guid: 6301baffa72b44d98036ef53bb31ef6a, type: 3}
+  m_cloudPrefab: {fileID: 1023308068024276, guid: d368169865e447d4eb38c5700ff9856e, type: 3}
+  m_cloudHeight: 80
+  m_precipitationHeight: 6
+  m_snowFollowsView: 1
+  m_snowForwardOffset: 3
+  m_snowScale: 1
+  m_cloudScale: 25
+  m_useCloudFx: 0
+  m_overcastIntensityScale: 0.6
+  m_overcastFadeSeconds: 3
+  m_cloudTiles: 9
+  m_cloudSpacing: 70
+  m_snowSizeBoost: 2
+  m_snowRateBoost: 4
+  m_snowFallSpeedBoost: 2.5
+  m_snowVolumeBoost: 2.5
+  m_shelterProbeHeight: 25
+  m_shelterMask:
+    serializedVersion: 2
+    m_Bits: 1
+  m_shelterFadeSeconds: 0.35
+  m_stopFadeSeconds: 6
+--- !u!114 &7324548653836035078
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498939978214492355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fd9f3525865d02745bc9dc3d88e51768, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LightningView
+  m_strikeParticlePrefab: {fileID: 1251993928265596, guid: c445b201205907b4f90b242a07f4dbc9, type: 3}
+  m_rainParticlePrefab: {fileID: 1988216202477046, guid: b99f1f7e52de4c7ba8366ddd75d22d85, type: 3}
+  m_cloudPrefab: {fileID: 1023308068024276, guid: d368169865e447d4eb38c5700ff9856e, type: 3}
+  m_cloudHeight: 80
+  m_precipitationHeight: 10
+  m_rainFollowsView: 1
+  m_rainForwardOffset: 6
+  m_rainScale: 2
+  m_cloudScale: 25
+  m_useCloudFx: 0
+  m_cloudTiles: 9
+  m_cloudSpacing: 70
+  m_rainSizeBoost: 1.2
+  m_rainRateBoost: 2
+  m_globalLight: {fileID: 0}
+  m_overcastIntensityScale: 0.5
+  m_overcastFadeSeconds: 2.5
+  m_maxFlashIntensity: 5
+  m_flashDuration: 0.45
+  m_strikeFxSeconds: 3
+  m_shelterProbeHeight: 25
+  m_shelterMask:
+    serializedVersion: 2
+    m_Bits: 1
+  m_shelterFadeSeconds: 0.35
+  m_stopFadeSeconds: 4
+--- !u!114 &1732464363476530770
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498939978214492355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ca0793c1c07ac334b87bc1599cd50d65, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FogView
+  m_fog: {fileID: 0}
+  m_fogColor: {r: 0.6, g: 0.62, b: 0.66, a: 1}
+  m_fogDensity: 0.03
+  m_fogVfx: []
+--- !u!114 &2421280246905754952
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498939978214492355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 14e803e6b0f720a4da1296f547714640, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FogEvent
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_durationSeconds: 30
