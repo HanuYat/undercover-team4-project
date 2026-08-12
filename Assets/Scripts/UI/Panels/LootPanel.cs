@@ -61,6 +61,7 @@ public class LootPanel : PanelBase
     private PlayerLooter m_looter;
     private PlayerLootable m_victim;
     private PlayerInputHandler m_input; // 창을 연 플레이어의 입력 — 닫을 때 되돌린다
+    private PlayerIncapacitation m_looterIncapacitation; // 터던 사람이 쓰러지면 창을 닫는 판정
     private PlayerLoadout m_watched; // 부착 변화를 구독 중인 대상의 소지품 — 해제 기준
 
     // 커서 Push/Pop 짝을 지키는 래치. OpenPanel/ClosePanel엔 재진입 가드가 없어 같은 값으로 두 번
@@ -79,15 +80,18 @@ public class LootPanel : PanelBase
     {
         base.Awake();
 
-        m_lastShown = new ItemBase[m_slotViews != null ? m_slotViews.Length : 0];
+        // 배선이 빠진 구성에서도 아래 순회들이 0칸으로 그냥 돌게 한다 — 칸 배열의 null 가드를
+        // 여기 한 곳으로 모은다. RefreshSlots·HasChanged·ClearSlots가 매번 다시 확인하면
+        // 기준이 갈라져, Awake만 살아남고 Open 순간에 터지는 구성이 생긴다.
+        if (m_slotViews == null)
+            m_slotViews = new LootSlotView[0];
 
-        if (m_slotViews != null)
+        m_lastShown = new ItemBase[m_slotViews.Length];
+
+        foreach (LootSlotView slot in m_slotViews)
         {
-            foreach (LootSlotView slot in m_slotViews)
-            {
-                if (slot != null)
-                    slot.Setup(this);
-            }
+            if (slot != null)
+                slot.Setup(this);
         }
 
         if (m_fundsView != null)
@@ -130,6 +134,7 @@ public class LootPanel : PanelBase
         m_looter = looter;
         m_victim = victim;
         m_input = looter.GetComponent<PlayerInputHandler>();
+        m_looterIncapacitation = looter.GetComponent<PlayerIncapacitation>();
 
         // 대상의 부착 목록이 바뀌면 다시 그린다 — 내가 가져갔든, 다른 동료가 같은 시체를 털었든,
         // 아이템이 디스폰됐든 원인을 가리지 않는다 (#487).
@@ -172,8 +177,14 @@ public class LootPanel : PanelBase
 
         SetBlocked(false);
 
-        // 구독 해제 기준을 m_victim이 아니라 이 참조로 잡는다 — 대상이 파괴되면 Unity 가짜 null이라
-        // 대상 기준 해제가 통째로 스킵되고 구독이 남는다. (InventorySlotView.m_boundName과 같은 사정)
+        // 구독 해제 기준을 m_victim이 아니라 구독한 그 대상으로 잡는다 — 창이 다른 시체로 옮겨 갔거나
+        // 대상의 Loadout이 도중에 바뀌어도 "구독한 곳에서 뗀다"가 성립한다.
+        //
+        // 단, 이건 InventorySlotView.m_boundName과 같은 사정이 아니다: 그쪽 LocalizedString은 순수
+        // C# 객체라 대상이 파괴돼도 참조가 살아 있지만, m_watched는 PlayerLoadout(UnityEngine.Object)라
+        // 대상과 함께 파괴되면 여기도 똑같이 가짜 null이 되어 이 해제가 스킵된다. 그래도 새지 않는 이유는
+        // 델리게이트를 들고 있는 HeldItemsWatcher가 같은 순간에 함께 파괴되기 때문이다 —
+        // 참조 종류가 아니라 수명이 같다는 점이 근거다.
         if (m_watched != null)
             m_watched.OnHeldItemsChangedAnyPeer -= HandleVictimItemsChanged;
         m_watched = null;
@@ -181,6 +192,7 @@ public class LootPanel : PanelBase
         m_looter = null;
         m_victim = null;
         m_input = null;
+        m_looterIncapacitation = null;
 
         // 칸이 죽은 아이템 참조와 지역화 구독을 들고 있지 않게 비운다
         ClearSlots();
@@ -237,6 +249,12 @@ public class LootPanel : PanelBase
     {
         // 창을 연 플레이어가 디스폰(퇴장·라운드 종료)되면 정지된 입력을 되돌릴 대상이 사라진다
         if (m_looter == null || m_input == null)
+            return false;
+
+        // 터던 사람이 쓰러졌다 — 서버는 이미 거부하지만(PlayerLooter.CanLoot) 창은 그 사실을 모른다.
+        // 이 검사가 없으면 동작하지 않는 창을 띄운 채 입력이 정지된 상태로 쓰러져 있게 된다:
+        // 오브젝트는 파괴되지 않고 대상도 그대로이며 스스로 움직일 수 없어 거리 조건도 유지되기 때문이다.
+        if (m_looterIncapacitation != null && m_looterIncapacitation.IsIncapacitated)
             return false;
 
         // 대상이 부활했거나(본부 이송 #365) 사라졌으면 털 것이 없다

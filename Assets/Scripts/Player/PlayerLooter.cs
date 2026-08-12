@@ -216,7 +216,10 @@ public class PlayerLooter : ChanneledInteractionBehaviour
         if (!HasServerAuthority)
             return;
         if (!CanLoot(victim))
+        {
+            NotifyOwnerLootRejected();
             return;
+        }
         if (victim.Wallet == null || m_wallet == null)
             return;
 
@@ -235,7 +238,10 @@ public class PlayerLooter : ChanneledInteractionBehaviour
         if (!HasServerAuthority)
             return;
         if (!CanLoot(victim))
+        {
+            NotifyOwnerLootRejected();
             return;
+        }
         if (itemObject == null || !itemObject.IsSpawned)
             return;
 
@@ -256,6 +262,7 @@ public class PlayerLooter : ChanneledInteractionBehaviour
         // 약탈자가 의도하지 않은 아이템이 바닥에 떨어지는 편이 못 가져가는 것보다 나쁘다.
         if (m_loadout.Held.Count >= PlayerLoadout.k_maxHeldItems)
         {
+            // 화면 표시가 아니라 로그인 이유는 NotifyOwnerLootRejected 주석 참고 (#525와 함께 붙인다)
             NotifyOwner("약탈 실패 — 소지 슬롯이 꽉 찼다 (먼저 버릴 것)");
             return;
         }
@@ -298,6 +305,24 @@ public class PlayerLooter : ChanneledInteractionBehaviour
         m_candidates.Clear(); // 파괴된 아이템 참조를 들고 있지 않는다
         return found;
     }
+
+    /// <summary>
+    /// 칸을 눌렀는데 <see cref="CanLoot"/>에 걸렸다 — 왜 아무 일도 안 났는지 약탈자에게 알린다.
+    ///
+    /// <b>조용히 return하면 안 되는 자리다.</b> 창 자동 닫기(4.5m)가 서버 도달 거리(3m)보다 넉넉하고
+    /// 서버는 가시선까지 보므로(<see cref="PlayerInteractor.IsWithinReach"/>), 창이 떠 있는데 클릭이
+    /// 전부 거부되는 구간이 실제로 존재한다 — 스스로는 못 움직여도 <b>남이 대상을 밧줄로 끌어갈 수
+    /// 있다</b>(#365). 자금 0 케이스를 굳이 알리는 것(<see cref="ServerTakeFunds"/>)과 같은 이유다.
+    ///
+    /// <b>지금은 로그뿐이다.</b> 토스트로 띄우려면 <c>toast: true</c>만으로는 안 된다 —
+    /// <see cref="ChanneledInteractionBehaviour.RaiseOwnerToast"/>의 기반 구현이 무동작이라
+    /// 하위가 자기 토스트 채널을 갖고 재정의해야 하고(<see cref="Scanner"/>·<see cref="ItemBattery"/>가 그렇다),
+    /// 그 채널인 <c>App.UI.Toast.Show</c>는 <c>LocalizedString</c>만 받는다. 즉 HudTable 항목과
+    /// 프리팹 배선이 함께 필요하고, 그 문구는 #525(완성 문장 → enum 전송)의 대상이기도 하다.
+    /// 화면 표시는 그쪽에서 한꺼번에 붙이는 편이 맞다.
+    /// </summary>
+    private void NotifyOwnerLootRejected() =>
+        NotifyOwner("약탈 실패 — 대상에 손이 닿지 않는다 (거리·가시선·대상 상태)");
 
     // ---- 약탈자 쪽 결과 (서버 → 오너) ----
 
