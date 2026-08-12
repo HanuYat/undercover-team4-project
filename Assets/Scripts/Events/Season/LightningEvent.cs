@@ -9,23 +9,37 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
 {
     // --- 인스펙터 노출 수치 ---
     [Header("Settings")]
-    [SerializeField] private float m_durationSeconds = 15f;    // 이벤트 총 지속 시간
-    
+    [SerializeField]
+    private float m_durationSeconds = 15f; // 이벤트 총 지속 시간
+
     [Header("Strike Interval (Seconds)")]
-    [SerializeField] private float m_strikeIntervalMin = 2f; // 낙뢰 최소 주기
-    [SerializeField] private float m_strikeIntervalMax = 5f; // 낙뢰 최대 주기
+    [SerializeField]
+    private float m_strikeIntervalMin = 2f; // 낙뢰 최소 주기
+
+    [SerializeField]
+    private float m_strikeIntervalMax = 5f; // 낙뢰 최대 주기
 
     [Header("Strike Effects")]
     [Range(0f, 1f)]
-    [SerializeField] private float m_damageChance = 0.5f;   // 피해 발생 확률 (나머지는 버프)
-    [SerializeField] private int m_damageAmount = 1;        // 피해량
-    [SerializeField] private float m_buffMultiplier = 1.5f;  // 이속 버프 배수
-    [SerializeField] private float m_buffDuration = 5f;      // 버프 지속 시간
+    [SerializeField]
+    private float m_damageChance = 0.5f; // 피해 발생 확률 (나머지는 버프)
+
+    [SerializeField]
+    private int m_damageAmount = 1; // 피해량
+
+    [SerializeField]
+    private float m_buffMultiplier = 1.5f; // 이속 버프 배수
+
+    [SerializeField]
+    private float m_buffDuration = 5f; // 버프 지속 시간
 
     // --- 상태 및 동기화 ---
     // 클라이언트 표현용 동기화 변수 (Server 권한 최신 NGO 문법 적용 완료)
     private NetworkVariable<bool> m_lightningSynced = new NetworkVariable<bool>(
-        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+        false,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
 
     // 서버/오프라인 진실값
     private bool m_lightning = false;
@@ -35,17 +49,28 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
     // 클라이언트 표현 컴포넌트 구독용 이벤트
     public event Action<bool> OnLightningChanged;
 
+    /// <summary>
+    /// 낙뢰가 떨어진 순간 발행 — 인자는 떨어진 지점. <b>전 피어</b>에서 발생한다
+    /// (<see cref="PlayStrikeVFXClientRpc"/>가 중계한다). <see cref="LightningView"/>가 구독해 섬광·파티클을 낸다.
+    ///
+    /// 뷰를 직접 부르지 않고 이벤트로 돌리는 이유: 예전에는 <c>LightningView.Instance</c>를 거쳤는데
+    /// 새 <c>static Instance</c> 싱글톤은 아키텍처 규칙 R2가 금지한다(docs/architecture.md).
+    /// 이벤트로 두면 뷰가 없어도(전용 서버·연출 끈 구성) 이벤트가 그대로 돌고, 구독자를 더 붙일 수도 있다.
+    /// </summary>
+    public event Action<Vector3> OnStrike;
+
     // --- ISuddenEvent 구현 ---
     public string DisplayName => "번개";
     public bool IsActive => m_lightning;
 
     // 클라이언트에서 현재 번개 상태 조회
-    public bool IsLightningActive => (!IsSpawned || IsServer) ? m_lightning : m_lightningSynced.Value;
+    public bool IsLightningActive =>
+        (!IsSpawned || IsServer) ? m_lightning : m_lightningSynced.Value;
 
     public override void OnNetworkSpawn()
     {
         m_lightningSynced.OnValueChanged += OnSyncValueChanged;
-        
+
         // Late-join 처리
         if (m_lightningSynced.Value)
         {
@@ -71,7 +96,7 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
     {
         m_endTime = Time.time + m_durationSeconds;
         SetLightning(true);
-        
+
         // 첫 낙뢰 시간 예약
         ScheduleNextStrike();
         Debug.Log($"[LightningEvent] ServerBegin. Ends at {m_endTime}s.");
@@ -79,7 +104,8 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
 
     public void ServerTick()
     {
-        if (!m_lightning) return;
+        if (!m_lightning)
+            return;
 
         // 지속 시간 종료 체크
         if (Time.time >= m_endTime)
@@ -105,7 +131,8 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
 
     private void SetLightning(bool value)
     {
-        if (m_lightning == value) return;
+        if (m_lightning == value)
+            return;
 
         m_lightning = value;
 
@@ -127,12 +154,14 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
     // --- 핵심 낙뢰 로직 (서버 권위) ---
     private void PerformLightningStrike()
     {
-        if (!IsServer) return;
+        if (!IsServer)
+            return;
 
         // 1. 대상 선정: 씬의 PlayerHealth 중 무작위 1명
         PlayerHealth target = GetRandomPlayerField();
-        
-        if (target == null) return; // 대상 없으면 패스
+
+        if (target == null)
+            return; // 대상 없으면 패스
 
         Vector3 strikePosition = target.transform.position;
 
@@ -158,9 +187,10 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
     private PlayerHealth GetRandomPlayerField()
     {
         PlayerHealth[] players = FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
-        
-        if (players == null || players.Length == 0) return null;
-        
+
+        if (players == null || players.Length == 0)
+            return null;
+
         return players[Random.Range(0, players.Length)];
     }
 
@@ -189,9 +219,10 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
     private void PlayStrikeVFXClientRpc(Vector3 position)
     {
         // 서버는 perform 로직에서 이미 로그를 찍었으므로, 호스트/클라 표현만 처리
-        if (IsServer && !IsHost) return; 
+        if (IsServer && !IsHost)
+            return;
 
-        // LightningView를 통해 섬광 및 파티클 재생 명령
-        LightningView.Instance?.PlayStrikeEffects(position);
+        // 구독자(LightningView)가 섬광·파티클을 낸다 — 뷰를 직접 알지 않는다 (위 OnStrike 주석)
+        OnStrike?.Invoke(position);
     }
 }
