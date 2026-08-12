@@ -146,5 +146,6 @@ public enum EExecutionOrder
     Bootstrap = -400, // AppHelper (DontDestroyOnLoad 루트)
     BaseManagement = -300, // App 등록 매니저 전부 (Session·Round·SuddenEvent 등)
     UIManagement = -200, // UIManagerBase 파생 — 패널 등록을 받아야 하므로 패널보다 먼저
+    UIContent = -150, // 패널이 첫 그리기에서 읽어가는 UI 재료(초상 무대 등) — 패널보다 먼저 준비돼야 한다
     UIPanel = -100, // PanelBase 파생 — 매니저 뒤, 일반 스크립트 앞
 }
