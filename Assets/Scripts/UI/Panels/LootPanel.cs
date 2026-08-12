@@ -4,8 +4,11 @@ using UnityEngine;
 using UnityEngine.Localization;
 
 /// <summary>
-/// 약탈 창 — 기능 정지(Die)된 동료의 소지품을 보고 골라 가져간다. (#487)
+/// 약탈 창 — 기능 정지(Die)된 동료의 <b>소지품과 개인 자금을 확인하고</b> 골라 가져간다. (#487)
 /// 약탈을 시작한 본인 클라이언트에서만 열린다(<see cref="PlayerLooter"/>가 서버 확인을 받은 뒤 호출).
+///
+/// <b>E는 확인용이고, 가져가는 것은 전부 칸 클릭이다</b> — 소지품은 <see cref="LootSlotView"/>,
+/// 자금은 <see cref="LootFundsView"/>. 열어 보고 아무것도 안 가져간 채 떠날 수 있다.
 ///
 /// <b>이 창은 권한이 아니다.</b> 열려 있다는 사실은 서버에서 아무것도 보장하지 않는다 — 칸을 누르면
 /// 매번 서버가 처음부터 다시 검증한다(<see cref="PlayerLooter"/>). 아래의 자동 닫기는 순전히 UX이고,
@@ -14,8 +17,11 @@ using UnityEngine.Localization;
 /// <b>목록은 로컬에서 읽는다.</b> 소지는 곧 부모 부착이고 부착은 NGO가 복제하므로 남의 소지품도
 /// 이 클라에서 같은 답이 나온다(<see cref="HeldItems"/> 문서 주석) — 동기화 RPC가 따로 필요 없다.
 /// 대신 <b>칸 배치</b>(피해자 화면의 1·2·3번 중 어디)는 오너 로컬이라 알 수 없어, 부착 순서대로 채운다.
-/// 그래서 변화 감지도 이벤트가 아니라 폴링이다 — <see cref="PlayerLoadout.OnSlotsChanged"/>는
-/// 그 소지품 주인의 클라에서만 발행되어 약탈자 화면에는 오지 않는다.
+///
+/// <b>갱신 신호는 <see cref="PlayerLoadout.OnHeldItemsChangedAnyPeer"/>다</b> — 부착 지점의 자식 변화라
+/// 전 피어에서 발생하고 원인을 가리지 않는다(내 약탈·남의 약탈·디스폰). <see cref="PlayerLoadout.OnSlotsChanged"/>와
+/// 혼동하지 말 것: 그쪽은 서버 동기화 RPC(<c>SendTo.Owner</c>)에서 나오는 <b>오너 로컬</b> 이벤트라
+/// 약탈자 화면에는 오지 않는다.
 ///
 /// 입력 정지·커서 해제는 <see cref="PanelBase"/>가 다루지 않으므로 여기서 직접 한다
 /// (<see cref="SignalInputPanel"/>과 같은 방침). <b>터는 동안은 움직이지 못한다</b> — 등 뒤가
@@ -31,6 +37,10 @@ public class LootPanel : PanelBase
     [Tooltip("소지 3칸(GDD 10-1)에 맞춘 칸 뷰. 부착 순서대로 채운다")]
     [SerializeField]
     private LootSlotView[] m_slotViews;
+
+    [Tooltip("개인 자금 칸 — 누르면 전액 가져간다. 없어도 소지품 약탈은 동작한다")]
+    [SerializeField]
+    private LootFundsView m_fundsView;
 
     [Header("문구")]
     [Tooltip("창 제목 — 예: HudTable/Hud.Loot.Title. 비우면 제목을 건드리지 않는다")]
@@ -80,6 +90,9 @@ public class LootPanel : PanelBase
             }
         }
 
+        if (m_fundsView != null)
+            m_fundsView.Setup(this);
+
         if (!m_title.IsEmpty)
             m_title.StringChanged += HandleTitleChanged;
     }
@@ -100,9 +113,16 @@ public class LootPanel : PanelBase
 
     /// <summary>
     /// 약탈 창을 연다 — 서버가 대상을 확인해 준 뒤 <see cref="PlayerLooter"/>가 오너 클라에서 부른다.
-    /// 개인 자금은 이 시점에 이미 넘어와 있다(열기의 일부다).
+    ///
+    /// <b>여는 것만으로는 아무것도 넘어오지 않는다.</b> 소지품도 자금도 칸을 눌러야 옮겨진다 —
+    /// 열어 보고 그냥 떠날 수 있다.
     /// </summary>
-    public void Open(PlayerLooter looter, PlayerLootable victim)
+    /// <param name="availableFunds">
+    /// 대상의 잔액. 서버가 <b>이 약탈자에게만</b> 실어 보낸 값이다 — 잔액 NetworkVariable의 읽기 권한은
+    /// 여전히 Owner라(#484) 클라가 스스로 읽은 것이 아니다. 연 순간의 <b>스냅숏</b>이므로 남이 먼저
+    /// 털어 가면 어긋날 수 있고, 그때는 눌러도 서버가 실제 잔액(0)만 옮긴다.
+    /// </param>
+    public void Open(PlayerLooter looter, PlayerLootable victim, int availableFunds)
     {
         if (IsOpened || looter == null || victim == null)
             return;
@@ -119,8 +139,24 @@ public class LootPanel : PanelBase
 
         RefreshSlots(force: true);
 
+        if (m_fundsView != null)
+            m_fundsView.Bind(availableFunds);
+
         SetBlocked(true);
         OpenPanel();
+    }
+
+    /// <summary>
+    /// 자금 칸을 갱신한다 — 서버가 이전 결과를 알려 줄 때 <see cref="PlayerLooter"/>가 부른다.
+    /// 창이 그 사이 다른 시체로 옮겨 갔을 수 있어 <b>대상을 대조한다</b>.
+    /// </summary>
+    internal void SetFunds(PlayerLootable victim, int amount)
+    {
+        if (!IsOpened || victim == null || victim != m_victim)
+            return;
+
+        if (m_fundsView != null)
+            m_fundsView.Bind(amount);
     }
 
     /// <summary>
@@ -254,6 +290,9 @@ public class LootPanel : PanelBase
             if (m_slotViews[i] != null)
                 m_slotViews[i].Bind(null);
         }
+
+        if (m_fundsView != null)
+            m_fundsView.Bind(0);
     }
 
     /// <summary>
@@ -267,5 +306,17 @@ public class LootPanel : PanelBase
             return;
 
         m_looter.RequestTakeItem(m_victim, item);
+    }
+
+    /// <summary>
+    /// 자금 칸을 눌렀다 — 전액 가져가기를 서버에 요청한다. <see cref="LootFundsView"/>가 호출.
+    /// 결과(옮긴 금액)는 서버가 오너에게 돌려주고, 그때 <see cref="SetFunds"/>로 칸이 비워진다.
+    /// </summary>
+    internal void RequestTakeFunds()
+    {
+        if (m_looter == null || m_victim == null)
+            return;
+
+        m_looter.RequestTakeFunds(m_victim);
     }
 }

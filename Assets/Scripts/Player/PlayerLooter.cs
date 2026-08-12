@@ -45,11 +45,13 @@ public class PlayerLooter : ChanneledInteractionBehaviour
 
     /// <summary>
     /// 약탈 열기 요청 — 쓰러진 동료를 겨냥한 E가 부른다 (<see cref="LootableBodyInteractable"/>).
-    /// 서버가 대상을 확인하면 <b>개인 자금은 그 자리에서 전액 넘어오고</b>, 소지품은 창에서 골라 가져간다.
     ///
-    /// 자금을 고르게 하지 않는 이유는 표시할 방법이 없기 때문이다 — 개인 잔액은 읽기 권한이
-    /// Owner라(#484) 약탈자 클라가 남의 잔액을 읽을 경로 자체가 없다. 결과 금액만 서버가
-    /// 양쪽 오너에게 알린다.
+    /// <b>열기는 아무것도 옮기지 않는다.</b> E는 확인용이고, 소지품도 자금도 창에서 눌러 가져간다.
+    /// 그래서 시체를 열어 보기만 하고 그냥 떠날 수 있다 — 훔칠지 말지를 내용을 보고 정한다.
+    ///
+    /// 자금 금액은 서버가 <b>약탈자에게만</b> 실어 보낸다. 잔액 NetworkVariable의 읽기 권한은
+    /// 여전히 Owner이므로(#484 — #485/#487의 정보 비대칭) 약탈자 클라가 스스로 읽는 것이 아니라,
+    /// 쓰러진 몸에 손이 닿은 사람에게 서버가 한정해서 알려 주는 것이다.
     /// </summary>
     public void RequestOpenLoot(PlayerLootable victim)
     {
@@ -68,6 +70,31 @@ public class PlayerLooter : ChanneledInteractionBehaviour
             return;
 
         OpenLootRpc(new NetworkObjectReference(victim.NetworkObject));
+    }
+
+    /// <summary>
+    /// 개인 자금을 가져가는 요청 — 약탈 창의 자금 칸을 누르면 부른다. (#487)
+    ///
+    /// <b>전액이다.</b> 부분 이전을 열어 두면 "몇 번 더 털기"가 최적 플레이가 되어, 한 번의 선택이어야
+    /// 할 것이 반복 작업이 된다. 버튼을 따로 둔 것은 <b>가져갈지 정하게</b> 하려는 것이지 금액을
+    /// 나누려는 것이 아니다.
+    /// </summary>
+    public void RequestTakeFunds(PlayerLootable victim)
+    {
+        if (victim == null)
+            return;
+
+        if (HasServerAuthority)
+        {
+            ServerTakeFunds(victim);
+            return;
+        }
+        if (!IsOwner)
+            return;
+        if (!IsNetworkReady(victim))
+            return;
+
+        TakeFundsRpc(new NetworkObjectReference(victim.NetworkObject));
     }
 
     /// <summary>소지품 하나를 가져가는 요청 — 약탈 창에서 항목을 고르면 부른다. (#487)</summary>
@@ -116,16 +143,28 @@ public class PlayerLooter : ChanneledInteractionBehaviour
     }
 
     [Rpc(SendTo.Server)]
+    private void TakeFundsRpc(NetworkObjectReference victimRef)
+    {
+        if (TryResolveVictim(victimRef, out PlayerLootable victim))
+            ServerTakeFunds(victim);
+    }
+
+    [Rpc(SendTo.Server)]
     private void TakeItemRpc(NetworkObjectReference victimRef, NetworkObjectReference itemRef)
     {
-        if (TryResolveVictim(victimRef, out PlayerLootable victim)
-            && itemRef.TryGet(out NetworkObject itemObject))
+        if (
+            TryResolveVictim(victimRef, out PlayerLootable victim)
+            && itemRef.TryGet(out NetworkObject itemObject)
+        )
         {
             ServerTakeItem(victim, itemObject);
         }
     }
 
-    private static bool TryResolveVictim(NetworkObjectReference victimRef, out PlayerLootable victim)
+    private static bool TryResolveVictim(
+        NetworkObjectReference victimRef,
+        out PlayerLootable victim
+    )
     {
         victim = null;
         return victimRef.TryGet(out NetworkObject victimObject)
@@ -160,15 +199,35 @@ public class PlayerLooter : ChanneledInteractionBehaviour
         if (!CanLoot(victim))
             return;
 
-        // 개인 자금은 여는 순간 전액 넘어온다 — 이전이라 총량은 늘지 않는다 (PlayerWallet.ServerTransferAllTo)
-        int stolenFunds = 0;
-        if (victim.Wallet != null && m_wallet != null)
-            stolenFunds = victim.Wallet.ServerTransferAllTo(m_wallet);
+        // 열기는 아무것도 옮기지 않는다 — 얼마가 있는지만 약탈자에게 알린다. 실제 이전은 ServerTakeFunds다.
+        // 이 금액은 그 순간의 스냅숏이다: 창이 떠 있는 동안 남이 먼저 털어 갈 수 있고, 그때는 눌러도
+        // 0이 옮겨진다(§4-3 — 창은 권한이 아니다). 서버 잔액이 언제나 진실이다.
+        int availableFunds = victim.Wallet != null ? victim.Wallet.Balance : 0;
 
-        if (stolenFunds > 0)
-            victim.ServerNotifyRobbedFunds(stolenFunds);
+        NotifyLootOpened(victim, availableFunds);
+    }
 
-        NotifyLootOpened(victim, stolenFunds);
+    /// <summary>
+    /// 개인 자금 이전 — 창의 자금 칸을 눌렀을 때만 돈다. 열기와 <b>같은 관문</b>(<see cref="CanLoot"/>)을
+    /// 다시 통과해야 한다: 창을 띄워 둔 채 대상이 부활하거나 멀어졌으면 여기서 거부된다.
+    /// </summary>
+    private void ServerTakeFunds(PlayerLootable victim)
+    {
+        if (!HasServerAuthority)
+            return;
+        if (!CanLoot(victim))
+            return;
+        if (victim.Wallet == null || m_wallet == null)
+            return;
+
+        // 전액 이전 — 발행이 아니라 이전이라 총량이 늘지 않는다 (PlayerWallet.ServerTransferAllTo)
+        int taken = victim.Wallet.ServerTransferAllTo(m_wallet);
+
+        if (taken > 0)
+            victim.ServerNotifyRobbedFunds(taken);
+
+        // 0이어도 알린다 — 약탈자 창의 자금 칸을 비워 줘야 "눌렀는데 아무 일도 안 났다"가 되지 않는다.
+        NotifyFundsTaken(victim, taken);
     }
 
     private void ServerTakeItem(PlayerLootable victim, NetworkObject itemObject)
@@ -216,7 +275,9 @@ public class PlayerLooter : ChanneledInteractionBehaviour
         m_loadout.ServerNotifyHeldItemsChanged();
 
         victim.ServerNotifyRobbedItem();
-        NotifyOwner($"[약탈] 소지품 확보 — {(item != null ? item.name : itemObject.name)} ({victim.name})");
+        NotifyOwner(
+            $"[약탈] 소지품 확보 — {(item != null ? item.name : itemObject.name)} ({victim.name})"
+        );
     }
 
     // 손에서 떼어 낼 수 있는 소지품인가 — 기준은 버리기·소매치기와 같다 (PlayerLoadout.CollectDetachableItems).
@@ -242,40 +303,71 @@ public class PlayerLooter : ChanneledInteractionBehaviour
 
     // 서버가 대상을 확인해 준 뒤에야 창이 열린다 — 클라가 혼자 판단해 열면 서버가 거부할 대상 앞에서도
     // 창이 뜬다. (PlayerCarrier의 오너 피드백과 같은 분기)
-    private void NotifyLootOpened(PlayerLootable victim, int stolenFunds)
+    private void NotifyLootOpened(PlayerLootable victim, int availableFunds)
     {
         if (IsSpawned && IsServer && !IsOwner)
         {
-            LootOpenedRpc(new NetworkObjectReference(victim.NetworkObject), stolenFunds);
+            LootOpenedRpc(new NetworkObjectReference(victim.NetworkObject), availableFunds);
             return;
         }
 
-        ShowLoot(victim, stolenFunds);
+        ShowLoot(victim, availableFunds);
     }
 
     [Rpc(SendTo.Owner)]
-    private void LootOpenedRpc(NetworkObjectReference victimRef, int stolenFunds)
+    private void LootOpenedRpc(NetworkObjectReference victimRef, int availableFunds)
     {
         if (TryResolveVictim(victimRef, out PlayerLootable victim))
-            ShowLoot(victim, stolenFunds);
+            ShowLoot(victim, availableFunds);
     }
 
-    // 약탈자 오너 로컬 — 창을 열고, 자금 결과를 로그로 남긴다.
-    private void ShowLoot(PlayerLootable victim, int stolenFunds)
+    // 약탈자 오너 로컬 — 창을 연다. 이 시점에는 아무것도 옮기지 않는다.
+    private void ShowLoot(PlayerLootable victim, int availableFunds)
     {
-        // 개인 자금은 표시할 화면이 없다(잔액 읽기 권한이 Owner라 애초에 남의 것을 못 읽는다) —
-        // 로그가 유일한 확인 경로라 창이 열리든 말든 남긴다.
-        if (stolenFunds > 0)
-            Debug.Log($"[약탈] 개인 자금 강탈 — {victim.name}에게서 {stolenFunds}");
+        // 창이 곧 유일한 조작 경로다 — 자금까지 창에서 가져가게 된 뒤로는, 창을 못 찾으면 소지품도
+        // 자금도 손에 넣을 수 없다. (열기가 자금을 옮기던 시절과 달라진 점)
+        if (App.UI.Current != null && App.UI.Current.TryGetPanel(out LootPanel panel))
+        {
+            panel.Open(this, victim, availableFunds);
+            return;
+        }
+
+        Debug.LogWarning(
+            $"[약탈] 약탈 창(LootPanel)을 찾지 못했다 — {victim.name}의 소지품·자금({availableFunds})을 가져갈 수 없다"
+        );
+    }
+
+    // 자금 이전 결과 — 창의 자금 칸을 비우고 로그를 남긴다.
+    private void NotifyFundsTaken(PlayerLootable victim, int taken)
+    {
+        if (IsSpawned && IsServer && !IsOwner)
+        {
+            FundsTakenRpc(new NetworkObjectReference(victim.NetworkObject), taken);
+            return;
+        }
+
+        ShowFundsTaken(victim, taken);
+    }
+
+    [Rpc(SendTo.Owner)]
+    private void FundsTakenRpc(NetworkObjectReference victimRef, int taken)
+    {
+        if (TryResolveVictim(victimRef, out PlayerLootable victim))
+            ShowFundsTaken(victim, taken);
+    }
+
+    private void ShowFundsTaken(PlayerLootable victim, int taken)
+    {
+        // 잔액 표시 UI가 없어(GDD 9-2 ⏸) 오간 금액은 아직 로그가 유일한 확인 경로다.
+        if (taken > 0)
+            Debug.Log($"[약탈] 개인 자금 강탈 — {victim.name}에게서 {taken}");
         else
             Debug.Log($"[약탈] {victim.name}의 개인 자금은 비어 있다");
 
-        // 소지품 목록·가져가기는 창이 맡는다. 창이 없는 구성(HUD 없는 씬)에서도 자금은 이미 넘어왔다 —
-        // 여는 것과 자금 이전은 서버에서 한 동작이고, 창은 그 결과의 표시일 뿐이다.
+        // 전액 이전이라 남은 금액은 언제나 0이다 — 남이 먼저 털어 0을 받았어도 결과는 같다.
+        // 어느 대상의 결과인지 창이 직접 대조한다(창이 그 사이 다른 시체로 옮겨 갔을 수 있다).
         if (App.UI.Current != null && App.UI.Current.TryGetPanel(out LootPanel panel))
-            panel.Open(this, victim);
-        else
-            Debug.LogWarning("[약탈] 약탈 창(LootPanel)을 찾지 못했다 — 소지품을 가져갈 수 없다");
+            panel.SetFunds(victim, 0);
     }
 
     private bool IsInRange(PlayerLootable victim) =>
