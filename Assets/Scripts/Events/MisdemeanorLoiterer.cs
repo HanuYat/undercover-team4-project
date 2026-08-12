@@ -143,14 +143,11 @@ public class MisdemeanorLoiterer : MonoBehaviour
 
         switch (offender.RiotBehavior)
         {
-            case SpawnedNpcEvent.Behavior.Resist:
+            case ERiotBehavior.Resist:
                 m_controller.Reaction.StartResist(threat.transform); // 그 자리 저항 난동 — 다가온 플레이어가 표적
                 break;
 
-            case SpawnedNpcEvent.Behavior.Flee:
-            // 소매치기도 도주로 재개한다 (#303) — 수감되려면 제압을 거쳤으니 훔친 물건은 이미
-            // 떨궈진 뒤고, 탈옥한 빈손 소매치기가 다시 노리게 두면 같은 사람이 몇 번이고 털린다.
-            case SpawnedNpcEvent.Behavior.Pickpocket:
+            case ERiotBehavior.Flee:
                 m_controller.Reaction.StartFlee(threat.transform); // 도주 소란 — 다가온 플레이어에게서 달아난다
                 break;
         }
