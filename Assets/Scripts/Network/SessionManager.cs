@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using Unity.Services.Multiplayer;
@@ -7,6 +8,13 @@ using UnityEngine;
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class SessionManager : CommonManagerBase
 {
+    // 게임 버전을 담는 세션 프로퍼티 키 (#586). 값은 NetworkProtocol.VersionString.
+    private const string k_versionProperty = "ver";
+
+    // 프로퍼티가 아예 없는 세션 — #586 이전 빌드가 만든 방이다. 값이 다른 것과 똑같이 취급하되
+    // 표시만 구분한다(빈 문자열이면 "방 버전 " 뒤가 비어 무슨 말인지 알 수 없다).
+    private const string k_unknownVersion = "?";
+
     [SerializeField]
     private int m_maxPlayer = 6;
 
@@ -21,6 +29,21 @@ public class SessionManager : CommonManagerBase
     public event Action OnSessionLeft;
     public event Action OnConnectionLost; // 비자발 끊김
     private bool m_isLeaving; // 자발적 LeaveAsync 진행 중 표시
+
+    /// <summary>
+    /// 버전 불일치로 물러난 사유 — 참가 화면이 띄울 때까지 매니저가 들고 있는다 (#586).
+    /// 참가가 끝난 시점엔 호스트 씬 동기화가 이미 클라를 로비로 끌고 간 뒤일 수 있어,
+    /// 예외를 받을 SessionPanel이 씬과 함께 사라져 있다. 그래서 사유를 씬 밖에 둔다.
+    /// </summary>
+    public SessionVersionMismatchException PendingVersionMismatch { get; private set; }
+
+    /// <summary>안내를 띄우면서 비운다 — 다음에 타이틀에 올 때 지난 실패가 다시 뜨지 않게.</summary>
+    public SessionVersionMismatchException TakePendingVersionMismatch()
+    {
+        SessionVersionMismatchException pending = PendingVersionMismatch;
+        PendingVersionMismatch = null;
+        return pending;
+    }
 
     private void OnEnable()
     {
@@ -55,6 +78,14 @@ public class SessionManager : CommonManagerBase
         {
             MaxPlayers = maxPlayer,
             Type = "Session",
+            // Public이어야 참가자가 Properties로 읽을 수 있다 (#586)
+            SessionProperties = new Dictionary<string, SessionProperty>
+            {
+                [k_versionProperty] = new SessionProperty(
+                    NetworkProtocol.VersionString,
+                    VisibilityPropertyOptions.Public
+                ),
+            },
         }.WithRelayNetwork();
         ISession session = await MultiplayerService.Instance.CreateSessionAsync(options);
         AdoptSession(session);
@@ -69,8 +100,85 @@ public class SessionManager : CommonManagerBase
     {
         await EnsureSignedInAsync();
         ISession session = await MultiplayerService.Instance.JoinSessionByCodeAsync(code);
+
+        // 버전 검사는 AdoptSession보다 먼저 — 채택하면 OnSessionJoined가 발화해 Vivox가 음성 채널까지
+        // 붙는다. 여기까지 await 없이 이어지므로 참가와 검사 사이에 NGO가 한 프레임도 돌지 않는다. (#586)
+        string sessionVersion = ReadVersion(session);
+        if (sessionVersion != NetworkProtocol.VersionString)
+        {
+            Debug.LogWarning(
+                $"[SessionManager] 버전 불일치로 참가 취소 / 내 버전: {NetworkProtocol.VersionString}, 방 버전: {sessionVersion}"
+            );
+            var mismatch = new SessionVersionMismatchException(
+                NetworkProtocol.VersionString,
+                sessionVersion
+            );
+            PendingVersionMismatch = mismatch; // 씬이 갈려도 사유가 남게 — 먼저 넣고 물러난다
+            Abandon(session);
+            throw mismatch;
+        }
+
         AdoptSession(session);
         Debug.Log($"[SessionManager] 세션 참가 완료 / Id: {session.Id}, Code: {session.Code}");
+    }
+
+    private static string ReadVersion(ISession session)
+    {
+        if (
+            session.Properties != null
+            && session.Properties.TryGetValue(k_versionProperty, out SessionProperty property)
+            && !string.IsNullOrEmpty(property.Value)
+        )
+        {
+            return property.Value;
+        }
+
+        return k_unknownVersion;
+    }
+
+    /// <summary>
+    /// 버전이 다른 세션에서 즉시 물러난다 (#586). NGO를 먼저 끊는 이유는 나가기(HTTP 왕복)를
+    /// 기다리는 사이 호스트의 씬 동기화가 도착해 인게임 씬 로드가 시작되기 때문이다 — 그러면
+    /// 실패 문구를 띄울 SessionPanel이 이미 파괴된 뒤다.
+    /// </summary>
+    private static void Abandon(ISession session)
+    {
+        if (NetworkManager.Singleton != null)
+            NetworkManager.Singleton.Shutdown();
+
+        // 나가기를 기다리지 않는다 — 방금 NGO를 끊었으므로 SDK가 종료 완료를 기다리다 돌아오지 않을
+        // 수 있고, 그러면 불일치 예외가 UI까지 못 올라가 화면이 "참가 중…"에 멈춘다.
+        // 사용자에게 이유를 보여 주는 일이 세션 정리를 기다릴 이유는 없다.
+        LeaveQuietlyAsync(session).Forget();
+        ReturnToTitleAsync().Forget();
+    }
+
+    /// <summary>
+    /// 불일치로 물러난 뒤 타이틀 복귀 (#586). 참가 await이 풀린 시점엔 이미 씬 동기화로 로비에
+    /// 끌려간 뒤일 수 있는데, 방금 NGO를 끊었으므로 아무도 되돌려 주지 않는다 — 드롭 복귀
+    /// (ConnectionLostReturner)는 AdoptSession 전이라 걸리지 않는다.
+    /// NGO가 다 내려간 뒤에 로드해야 한다: 아직 IsListening이면 App.LoadScene이 씬 동기화 분기를
+    /// 타고, 클라는 로드 권한이 없어 고착된다 (#326).
+    /// </summary>
+    private static async UniTaskVoid ReturnToTitleAsync()
+    {
+        await SessionFlow.WaitForNetworkShutdownAsync();
+        if (App.CurrentScene != EScene.Title)
+            App.LoadScene(EScene.Title);
+    }
+
+    /// <summary>버전 불일치로 물러난 세션의 뒷정리 — 실패해도 사용자에게 전할 말은 버전 불일치다.</summary>
+    private static async UniTaskVoid LeaveQuietlyAsync(ISession session)
+    {
+        try
+        {
+            await session.LeaveAsync();
+            Debug.Log("[SessionManager] 버전 불일치 세션에서 나감");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[SessionManager] 버전 불일치 세션 나가기 실패(무시): {ex.Message}");
+        }
     }
 
     public async UniTask LeaveAsync()

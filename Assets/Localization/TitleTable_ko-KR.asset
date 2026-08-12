@@ -282,6 +282,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 6276845892712267880
+  - m_Id: 10788103327783
+    m_Localized: "게임 버전이 달라 참가할 수 없습니다 — 내 버전 {0} / 방 버전 {1}"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267880
   references:
     version: 2
     RefIds:
@@ -290,6 +295,7 @@ MonoBehaviour:
       data:
         m_Entries:
         m_SharedEntries:
+        - id: 10788103327783
         - id: 10788103327782
         - id: 10788103327751
         - id: 10788103327754
