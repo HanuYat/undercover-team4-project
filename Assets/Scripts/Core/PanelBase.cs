@@ -11,6 +11,12 @@ public abstract class PanelBase : MonoBehaviour
     [SerializeField]
     protected GameObject m_panelRoot;
 
+    // 딤 배경은 패널 루트 바깥(형제)에 있어 m_panelRoot 토글로 함께 꺼지지 않는다 — 그래서 별도 필드다.
+    // 여섯 패널이 같은 토글을 각자 들고 있던 것을 여기로 올렸다 (#598 리뷰).
+    [Tooltip("패널과 함께 켜고 끄는 딤 배경 (쓰지 않으면 비워 둔다)")]
+    [SerializeField]
+    protected GameObject m_background;
+
     public bool IsOpened => m_panelRoot != null && m_panelRoot.activeSelf;
 
     /// <summary>ESC로 닫을 수 있는가.</summary>
@@ -34,6 +40,7 @@ public abstract class PanelBase : MonoBehaviour
             m_panelRoot = gameObject;
 
         m_panelRoot.SetActive(OpenOnAwake);
+        SetBackgroundActive(OpenOnAwake);
 
         if (App.UI.Current == null)
         {
@@ -59,6 +66,7 @@ public abstract class PanelBase : MonoBehaviour
         if (IsStackable && !IsOpened && App.UI.Current != null)
             App.UI.Current.PushUIStack(this);
 
+        SetBackgroundActive(true);
         m_panelRoot.SetActive(true);
     }
 
@@ -67,6 +75,13 @@ public abstract class PanelBase : MonoBehaviour
         if (IsStackable && IsOpened && App.UI.Current != null)
             App.UI.Current.PopUIStack(this);
 
+        SetBackgroundActive(false);
         m_panelRoot.SetActive(false);
+    }
+
+    private void SetBackgroundActive(bool active)
+    {
+        if (m_background != null)
+            m_background.SetActive(active);
     }
 }
