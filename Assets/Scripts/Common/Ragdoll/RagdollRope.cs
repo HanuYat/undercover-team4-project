@@ -77,6 +77,14 @@ public class RagdollRope : MonoBehaviour
     /// <summary>지금 밧줄이 묶여 있는가.</summary>
     public bool IsAttached => m_joint != null;
 
+    /// <summary>묶여 있고 <b>운반자도 살아 있는가</b> — "지금 실제로 끌리는 중"이라는 뜻이다.
+    ///
+    /// <see cref="IsAttached"/>와 갈라 두는 이유는 <see cref="Tick"/>이 운반자를 잃으면 <b>관절을
+    /// 남긴 채 조용히 쉬기</b> 때문이다(정리는 호출부 몫이다 — <c>NpcRopeDrag</c> 주석). 그 상태를
+    /// "끌리는 중"으로 세면 <b>영영 끝나지 않는 견인</b>이 되므로, 견인을 이유로 무언가를 미루는
+    /// 쪽(정착 판정 등)은 이 값을 봐야 한다.</summary>
+    public bool IsBeingCarried => m_joint != null && m_carrier != null;
+
     private bool TuningChanged =>
         m_appliedTuning != new Vector4(m_length, m_limitSpring, m_limitDamper, m_dragLinearDamping)
         || m_appliedAngularDamping != m_dragAngularDamping;

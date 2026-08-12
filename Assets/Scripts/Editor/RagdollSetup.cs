@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text;
+using Unity.Netcode.Components;
 using UnityEditor;
 using UnityEngine;
 
@@ -100,14 +101,17 @@ public static class RagdollSetup
         "Assets/Prefabs/NPC/NPC_Streaker.prefab",
     };
 
+    // ⚠ 플레이어는 <b>골반 복제를 여기서 건드리지 않는다</b>(replicateHips: false). 이미 손으로
+    // 배선돼 있고 <b>오너 권한</b>인데, 아래 자동화는 <b>서버 권한</b>을 쓴다(NPC 루트 NT와 같은 값).
+    // 켜면 플레이어 시체의 권위가 조용히 뒤집힌다.
     [MenuItem("Tools/Ragdoll/Finish Setup - Player")]
-    public static void RunPlayer() => Run(k_playerPrefab, rigOwnerPath: "");
+    public static void RunPlayer() => Run(k_playerPrefab, rigOwnerPath: "", replicateHips: false);
 
     [MenuItem("Tools/Ragdoll/Finish Setup - NPC (전체)")]
     public static void RunAllNpc()
     {
         for (int i = 0; i < s_npcPrefabs.Length; i++)
-            Run(s_npcPrefabs[i], k_npcRigOwnerPath);
+            Run(s_npcPrefabs[i], k_npcRigOwnerPath, replicateHips: true);
     }
 
     /// <summary>
@@ -118,7 +122,12 @@ public static class RagdollSetup
     /// 프리팹 루트 기준, <see cref="RagdollRig"/>가 붙을 오브젝트의 경로. 빈 문자열이면 루트다.
     /// 이 오브젝트의 <b>직속 자식</b>이 리그 최상단(<see cref="RagdollRig.k_defaultBoneRootName"/>)이어야 한다.
     /// </param>
-    public static void Run(string prefabPath, string rigOwnerPath)
+    /// <param name="replicateHips">
+    /// 골반에 <c>NetworkTransform</c> + <c>NetworkRigidbody</c>를 보장할지 — <b>NPC 전용으로 켠다</b>. (#572)
+    /// 기본값을 두지 않는 것은 호출부마다 <b>권위를 정하는 결정</b>이기 때문이다: 이 자동화가 쓰는
+    /// 서버 권한은 NPC에만 맞고, 플레이어(오너 권한)에 켜면 조용히 뒤집힌다.
+    /// </param>
+    public static void Run(string prefabPath, string rigOwnerPath, bool replicateHips)
     {
         int layer = EnsureLayer();
         if (layer < 0)
@@ -135,7 +144,7 @@ public static class RagdollSetup
 
         try
         {
-            if (Apply(root, prefabPath, rigOwnerPath, layer))
+            if (Apply(root, prefabPath, rigOwnerPath, layer, replicateHips))
                 PrefabUtility.SaveAsPrefabAsset(root, prefabPath);
         }
         finally
@@ -220,7 +229,13 @@ public static class RagdollSetup
 
     // ---- 프리팹 ----
 
-    private static bool Apply(GameObject root, string prefabPath, string rigOwnerPath, int layer)
+    private static bool Apply(
+        GameObject root,
+        string prefabPath,
+        string rigOwnerPath,
+        int layer,
+        bool replicateHips
+    )
     {
         Transform rigOwner = ResolveRigOwner(root.transform, prefabPath, rigOwnerPath);
         if (rigOwner == null)
@@ -276,8 +291,131 @@ public static class RagdollSetup
             report.AppendLine(Describe(root.transform, body, joint));
         }
 
+        if (replicateHips)
+            report.AppendLine(EnsureHipsReplication(bodies));
+
         Debug.Log(report.ToString());
         return true;
+    }
+
+    // ---- 골반 복제 (#572) ----
+
+    /// <summary>
+    /// 골반에 <c>NetworkTransform</c> + <c>NetworkRigidbody</c>를 보장한다 — <b>멱등</b>.
+    ///
+    /// <b>왜 골반 하나만 복제하나.</b> 뼈 11개를 전부 동기화하는 것이 아니라 <b>골반 1개</b>만 보낸다 —
+    /// 나머지 열은 각 피어의 로컬 물리가 관절로 만들어 낸다. 대역폭은 NetworkTransform 하나이고,
+    /// 얻는 것은 <b>궤적의 단일 진실</b>이다: 밧줄을 권위 피어만 묶어도 원격이 같은 길을 간다
+    /// (<see cref="NpcRagdoll.BeginRopePull"/>).
+    ///
+    /// <b>왜 손으로 붙이지 않고 여기서 하나.</b> 붙는 자리가 <b>중첩 프리팹 안</b>이라(NPC는 몸이
+    /// Synty 프리팹 인스턴스다) 오버라이드로 저장되고, 리그를 다시 복제하면
+    /// (<see cref="RagdollRigCloner"/>) 함께 걷힌다. 손으로 붙이면 다시 만들 때마다 잊는다.
+    ///
+    /// 대상은 <b>관절이 없는 뼈</b> — <see cref="RagdollRig"/>가 골반을 찾는 규칙과 같다.
+    /// </summary>
+    private static string EnsureHipsReplication(List<Rigidbody> bodies)
+    {
+        Rigidbody hips = null;
+        for (int i = 0; i < bodies.Count; i++)
+        {
+            if (bodies[i].GetComponent<CharacterJoint>() == null)
+            {
+                hips = bodies[i];
+                break;
+            }
+        }
+
+        if (hips == null)
+        {
+            return "  ⚠ 골반 복제 — 관절 없는 뼈를 찾지 못해 건너뛴다 (리그가 깨졌을 수 있다)";
+        }
+
+        NetworkTransform netTransform = hips.GetComponent<NetworkTransform>();
+        string transformNote = netTransform != null ? "이미 있음" : "새로 붙임";
+        if (netTransform == null)
+            netTransform = hips.gameObject.AddComponent<NetworkTransform>();
+        ConfigureHipsTransform(netTransform);
+
+        NetworkRigidbody netBody = hips.GetComponent<NetworkRigidbody>();
+        string bodyNote = netBody != null ? "이미 있음" : "새로 붙임";
+        if (netBody == null)
+            netBody = hips.gameObject.AddComponent<NetworkRigidbody>();
+        ConfigureHipsRigidbody(netBody);
+
+        return $"  골반 복제({hips.name}) — NetworkTransform {transformNote} / "
+            + $"NetworkRigidbody {bodyNote} (서버 권한 · 보간 · UseRigidBodyForMotion)";
+    }
+
+    // 값을 <b>직렬화 이름</b>으로 쓴다 — 프리팹 YAML에 실제로 남는 이름이라, 패키지가 공개 필드를
+    // 바꿔도 여기가 조용히 어긋나지 않는다(없어지면 아래가 경고를 낸다).
+    private static void ConfigureHipsTransform(NetworkTransform component)
+    {
+        SerializedObject serialized = new SerializedObject(component);
+
+        // NPC는 위치 권한이 <b>서버</b>다 — 루트 NetworkTransform과 같은 값이어야 한다.
+        // (플레이어 시체는 오너 권한이라 이 자동화를 쓰지 않는다 — 메뉴 쪽 주석)
+        SetSerialized(serialized, "AuthorityMode", 0);
+        SetSerialized(serialized, "Interpolate", 1);
+        SetSerialized(serialized, "InLocalSpace", 0); // 월드 — 원격의 부모(루트)가 다른 자리에 있다
+
+        // 위치·회전 전 축. 루트는 yaw만 보내면 되지만(서 있는 몸) 시체는 굴러서 3축이 다 바뀐다.
+        SetSerialized(serialized, "SyncPositionX", 1);
+        SetSerialized(serialized, "SyncPositionY", 1);
+        SetSerialized(serialized, "SyncPositionZ", 1);
+        SetSerialized(serialized, "SyncRotAngleX", 1);
+        SetSerialized(serialized, "SyncRotAngleY", 1);
+        SetSerialized(serialized, "SyncRotAngleZ", 1);
+
+        // 스케일은 보내지 않는다 — 래그돌은 크기가 변하지 않는다. NPC 루트도 같은 값이다.
+        SetSerialized(serialized, "SyncScaleX", 0);
+        SetSerialized(serialized, "SyncScaleY", 0);
+        SetSerialized(serialized, "SyncScaleZ", 0);
+
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+    }
+
+    private static void ConfigureHipsRigidbody(NetworkRigidbody component)
+    {
+        SerializedObject serialized = new SerializedObject(component);
+
+        // 트랜스폼이 아니라 Rigidbody로 움직인다 — 물리 중인 뼈라 물리 쪽 값이 진실이다.
+        SetSerialized(serialized, "UseRigidBodyForMotion", 1);
+
+        // ⚠ <b>반드시 끈다.</b> 이 값은 스폰·소유권 변경 시점에만 도는데, 래그돌은 사망·정착·밧줄에서
+        // 키네마틱을 계속 토글한다 — 켜 두면 서로 덮어써서 비권위 피어의 골반이 물리로 풀린다.
+        // 키네마틱 관리는 NpcRagdoll.ReleaseBonesToPhysics가 직접 한다.
+        SetSerialized(serialized, "AutoUpdateKinematicState", 0);
+
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+    }
+
+    // bool·enum·int를 한 자리에서 쓴다 — 직렬화 타입이 셋으로 갈려 있어서다.
+    // 프로퍼티가 없어지면(패키지 업그레이드) <b>조용히 넘어가지 않고</b> 경고를 남긴다.
+    private static void SetSerialized(SerializedObject serialized, string path, int value)
+    {
+        SerializedProperty property = serialized.FindProperty(path);
+        if (property == null)
+        {
+            Debug.LogWarning(
+                $"[래그돌 셋업] 골반 복제 설정 '{path}'를 찾지 못했다 — Netcode 패키지가 필드 이름을 "
+                    + "바꿨을 수 있다. 인스펙터에서 직접 확인할 것"
+            );
+            return;
+        }
+
+        switch (property.propertyType)
+        {
+            case SerializedPropertyType.Boolean:
+                property.boolValue = value != 0;
+                break;
+            case SerializedPropertyType.Enum:
+                property.enumValueIndex = value;
+                break;
+            default:
+                property.intValue = value;
+                break;
+        }
     }
 
     // 리그 소유자를 찾는다 — 빈 경로면 프리팹 루트다.

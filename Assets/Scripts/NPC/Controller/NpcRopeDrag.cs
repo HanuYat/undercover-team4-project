@@ -157,10 +157,19 @@ public class NpcRopeDrag : NetworkBehaviour
         if (agent != null && agent.enabled)
             agent.enabled = false;
 
-        // 시체는 여기부터 갈린다 — 위치 대입(Tick)이 아니라 관절 밧줄이 끈다 (#571, 아래 §시체 밧줄).
-        if (m_owner.Death.IsDead)
+        // 래그돌인 몸은 여기부터 갈린다 — 위치 대입(Tick)이 아니라 관절 밧줄이 끈다
+        // (#571 시체 / #572 기절). 기준이 <b>사망이 아니라 래그돌</b>인 이유는 코어 Update의
+        // 게이트 주석과 같다: 위치 대입과 물리가 같은 프레임에 루트를 다투면 안 된다.
+        if (UsesRagdollRope)
             ServerAttachCorpseRope(dragger);
     }
+
+    /// <summary>이 밧줄이 <b>관절</b>로 끄는가 — 대상이 래그돌이면 그렇다. (#571/#572)
+    /// 거짓이면 <see cref="Tick"/>의 위치 대입이 끈다. 둘은 <b>배타적</b>이다.</summary>
+    private bool UsesRagdollRope => m_ragdoll != null && m_ragdoll.IsRagdollActive;
+
+    // 관절 밧줄을 실제로 걸었는가 — 풀 때 불필요한 RPC를 막는다. 서버(또는 오프라인) 전용.
+    private bool m_corpseRopeAttached;
 
     /// <summary>이 플레이어가 지금 이 NPC에 장력을 걸고 있는가 — 서버(또는 오프라인) 전용.
     /// 끄는 쪽(PlayerEscorter)의 "내가 이걸 끌고 있나"가 이 값을 그대로 쓴다 — 따로 두면 어긋난다.</summary>
@@ -299,6 +308,8 @@ public class NpcRopeDrag : NetworkBehaviour
         if (dragger == null)
             return;
 
+        m_corpseRopeAttached = true;
+
         if (!IsSpawned)
         {
             AttachCorpseRope(dragger); // 오프라인 Play 폴백
@@ -316,8 +327,13 @@ public class NpcRopeDrag : NetworkBehaviour
     /// <summary>시체 밧줄을 푼다 — 서버(또는 오프라인) 진입점. 시체가 아니면 무동작. <b>멱등</b>.</summary>
     private void ServerDetachCorpseRope()
     {
-        if (!m_owner.Death.IsDead)
+        // 건 적이 없으면 풀 것도 없다 — 예전의 <c>IsDead</c> 가드를 대신한다. 대상이 끌리는
+        // 도중에 래그돌을 벗어날 수 있으므로(기절이 풀리며 일어난다) <b>지금 상태가 아니라
+        // 걸었다는 사실</b>을 봐야 한다. (#572)
+        if (!m_corpseRopeAttached)
             return;
+
+        m_corpseRopeAttached = false;
 
         if (!IsSpawned)
         {
