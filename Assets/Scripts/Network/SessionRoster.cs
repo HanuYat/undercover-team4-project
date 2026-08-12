@@ -82,7 +82,12 @@ public class SessionRoster : NetworkedManagerBase
         {
             if (m_players[i].ClientId == entry.ClientId)
             {
+                bool hadNickname = !m_players[i].Nickname.IsEmpty;
                 m_players[i] = entry; // 중복 보고는 갱신으로 흡수 (행이 두 개로 늘지 않게)
+
+                // 이름이 이제야 도착했으면 지금이 알릴 때다 — 추가 시점엔 이름이 없어 미뤄 뒀다.
+                if (!hadNickname && !entry.Nickname.IsEmpty)
+                    AnnounceJoinedRpc(entry.Nickname, entry.ClientId);
                 return;
             }
         }
@@ -91,7 +96,10 @@ public class SessionRoster : NetworkedManagerBase
 
         // 명부에 없던 사람이 처음 보고했다 = 세션 입장이다 (#598). OnClientConnectedCallback이 아닌 이유는
         // 그 시점엔 서버가 닉네임을 모르기 때문 — 음소거 변경 등의 재보고는 위 갱신 분기로 빠진다.
-        AnnounceJoinedRpc(entry.Nickname, entry.ClientId);
+        // 이름이 아직 비어 있으면(인증이 늦은 클라) 알리지 않고 이름이 채워지는 보고까지 미룬다 —
+        // 여기서 알려 버리면 빈 이름이라 표시 쪽에서 조용히 버려져 입장 알림이 통째로 사라진다.
+        if (!entry.Nickname.IsEmpty)
+            AnnounceJoinedRpc(entry.Nickname, entry.ClientId);
     }
 
     // 끊긴 클라의 행을 서버가 지운다. 로비엔 플레이어 오브젝트가 없어(#214) 엔트리를 회수해 줄 주인이 없다.
