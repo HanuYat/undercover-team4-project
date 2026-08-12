@@ -309,6 +309,8 @@ MonoBehaviour:
   m_cloudPrefab: {fileID: 1023308068024276, guid: d368169865e447d4eb38c5700ff9856e, type: 3}
   m_cloudHeight: 80
   m_precipitationHeight: 14
+  m_snowFollowsView: 1
+  m_snowForwardOffset: 8
   m_snowScale: 1
   m_cloudScale: 25
   m_cloudTiles: 9
@@ -333,6 +335,8 @@ MonoBehaviour:
   m_cloudPrefab: {fileID: 1023308068024276, guid: d368169865e447d4eb38c5700ff9856e, type: 3}
   m_cloudHeight: 80
   m_precipitationHeight: 14
+  m_rainFollowsView: 1
+  m_rainForwardOffset: 8
   m_rainScale: 2
   m_cloudScale: 25
   m_cloudTiles: 9

@@ -69,6 +69,27 @@ public class WeatherSkyRig : MonoBehaviour
     // 구름층을 월드 격자에 스냅하는 칸 크기(m). 0이면 스냅하지 않는다.
     private float m_cloudSnap;
 
+    // 강수를 시야 앞으로 밀어내는 거리(m). 0이면 카메라 위에서 그대로 뿌린다.
+    private float m_precipitationForward;
+    private bool m_precipitationFacesView;
+
+    /// <summary>
+    /// 강수를 <b>보고 있는 쪽</b>으로 붙인다 — 맵 전체에 뿌리는 대신 시야에만 내리게 하는 방식.
+    ///
+    /// 날씨는 표현 계층이라 각 피어가 자기 화면에만 만든다(복제하지 않는다). 그래서 월드를 넓게 채울
+    /// 이유가 없고, 시야 앞 한 덩이만 있으면 어디를 보든 내리는 것처럼 보인다 — 파티클 수도 훨씬 적다.
+    ///
+    /// <b>yaw만 맞춘다.</b> 카메라 회전을 전부 물려받으면 고개를 드는 순간 강수 볼륨이 기울어 비가
+    /// 옆으로 흐른다(원래 코드의 문제였다). 수평 방향만 돌리면 낙하는 월드 -Y로 남고, 방출 상자는
+    /// 늘 보는 쪽을 덮는다.
+    /// </summary>
+    /// <param name="forwardOffset">시야 앞으로 밀 거리(m) — 카메라 바로 앞에서 뿌리면 입자가 눈앞에 붙는다.</param>
+    public void SetPrecipitationFacesView(bool facesView, float forwardOffset)
+    {
+        m_precipitationFacesView = facesView;
+        m_precipitationForward = Mathf.Max(0f, forwardOffset);
+    }
+
     /// <summary>
     /// 구름층을 월드 격자에 스냅한다 — <b>하늘이 맵에 걸려 있는 느낌</b>을 만든다.
     ///
@@ -85,6 +106,29 @@ public class WeatherSkyRig : MonoBehaviour
     {
         SnapToCamera();
         SnapCloudLayer();
+        FacePrecipitationToView();
+    }
+
+    // 강수 방출 지점을 시야 앞으로 밀고 수평 방향만 맞춘다 — 낙하 방향은 건드리지 않는다.
+    private void FacePrecipitationToView()
+    {
+        if (PrecipitationAnchor == null || !m_precipitationFacesView || m_camera == null)
+            return;
+
+        // 카메라 정면에서 수평 성분만 뽑는다. 위를 보고 있으면 forward가 하늘을 가리키므로
+        // 그대로 쓰면 방출 지점이 머리 위로 솟는다 — y를 버려야 시야 '앞'이 된다.
+        Vector3 flatForward = m_camera.transform.forward;
+        flatForward.y = 0f;
+        if (flatForward.sqrMagnitude < 0.001f)
+            flatForward = Vector3.forward; // 정수리를 보고 있다 — 방향이 없으니 기본값
+        flatForward.Normalize();
+
+        PrecipitationAnchor.localPosition =
+            new Vector3(0f, PrecipitationAnchor.localPosition.y, 0f)
+            + transform.InverseTransformDirection(flatForward) * m_precipitationForward;
+
+        // yaw만 — 낙하는 월드 -Y로 남는다
+        PrecipitationAnchor.rotation = Quaternion.LookRotation(flatForward, Vector3.up);
     }
 
     // 구름층만 월드 격자로 되돌린다 — 리그(=강수)는 카메라를 부드럽게 따라가고 하늘만 고정된다

@@ -26,6 +26,17 @@ public class SnowView : MonoBehaviour
     [Tooltip("눈이 방출되는 높이(m) — 구름 높이와 따로 준다. 너무 높으면 화면에 닿기까지 오래 걸려 안 내리는 것처럼 보인다")]
     [SerializeField] private float m_precipitationHeight = 14f;
 
+    [Tooltip(
+        "켜면 눈을 <b>보는 쪽</b>에만 뿌린다 — 맵을 넓게 채우는 대신 시야 앞 한 덩이로 해결한다.\n\n"
+            + "날씨는 각 피어가 자기 화면에만 만드는 표현이라 월드를 채울 필요가 없고, 파티클 수가 훨씬 적다. "
+            + "수평 방향만 따라가므로 낙하는 그대로 아래다"
+    )]
+    [SerializeField] private bool m_snowFollowsView = true;
+
+    [Tooltip("시야 앞으로 밀 거리(m) — 0이면 카메라 위에서 뿌려 눈앞에 붙는다")]
+    [Min(0f)]
+    [SerializeField] private float m_snowForwardOffset = 8f;
+
     [Header("크기")]
     [SerializeField] private float m_snowScale = 1f;
     [SerializeField] private float m_cloudScale = 10f;
@@ -89,6 +100,7 @@ public class SnowView : MonoBehaviour
         // 예전에는 여기서 Camera.main이 null이면 return해, 그 이벤트 내내 눈이 한 송이도 안 내렸다.
         m_rig = WeatherSkyRig.Create("WeatherSky_Snow", m_cloudHeight, m_precipitationHeight);
         m_rig.SetCloudSnap(m_cloudSpacing); // 하늘은 월드에 고정 — 구름 한 덩이가 따라오는 그림을 막는다
+        m_rig.SetPrecipitationFacesView(m_snowFollowsView, m_snowForwardOffset); // 눈은 보는 쪽에만
 
         // 구름은 넓게 깔아야 "하늘이 덮였다"로 읽힌다 — 한 장을 키우면 덩이가 부풀 뿐이다
         if (m_cloudPrefab != null)

@@ -31,6 +31,13 @@ public class LightningView : MonoBehaviour
     [Tooltip("비가 방출되는 높이(m) — 구름 높이와 따로 준다. 너무 높으면 화면에 닿기까지 오래 걸린다")]
     [SerializeField] private float m_precipitationHeight = 14f;
 
+    [Tooltip("켜면 비를 보는 쪽에만 뿌린다 — 시야 앞 한 덩이로 해결한다(수평 방향만 따라가므로 낙하는 그대로 아래)")]
+    [SerializeField] private bool m_rainFollowsView = true;
+
+    [Tooltip("시야 앞으로 밀 거리(m)")]
+    [Min(0f)]
+    [SerializeField] private float m_rainForwardOffset = 8f;
+
     [Header("크기")]
     [SerializeField] private float m_rainScale = 2f;
     [SerializeField] private float m_cloudScale = 10f;
@@ -165,6 +172,7 @@ public class LightningView : MonoBehaviour
         // 예전에는 여기서 Camera.main이 null이면 return해, 그 이벤트 내내 비가 안 내렸다.
         m_rig = WeatherSkyRig.Create("WeatherSky_Rain", m_cloudHeight, m_precipitationHeight);
         m_rig.SetCloudSnap(m_cloudSpacing); // 하늘은 월드에 고정 — 구름 한 덩이가 따라오는 그림을 막는다
+        m_rig.SetPrecipitationFacesView(m_rainFollowsView, m_rainForwardOffset); // 비는 보는 쪽에만
 
         if (m_cloudPrefab != null)
             WeatherSkyRig.AttachTiled(m_cloudPrefab, m_rig.CloudAnchor, m_cloudScale, m_cloudTiles, m_cloudSpacing);
