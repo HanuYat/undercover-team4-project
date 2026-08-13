@@ -20,11 +20,18 @@ public abstract class TimedMessageView : LocalizedMessageView
     /// 표시 — 이미 떠 있으면 문구·시간을 덮어쓴다(중첩 없이 최신 하나만).
     /// seconds는 카운트다운이 아니라 문구가 화면에 머무는 시간이다.
     /// </summary>
-    public void Show(LocalizedString message, float seconds)
+    public void Show(LocalizedString message, float seconds) => Show(message, seconds, null);
+
+    /// <summary>
+    /// 배경색을 지정해 표시한다 — 색을 주지 않는 <see cref="Show(LocalizedString, float)"/>는
+    /// 프리팹 기본색으로 되돌린다. (#616)
+    /// </summary>
+    public void Show(LocalizedString message, float seconds, Color? tone)
     {
         if (seconds <= 0f)
             return;
 
+        ApplyTone(tone);
         ShowMessage(message);
         m_hideTime = Time.time + seconds;
     }

@@ -43,6 +43,9 @@ public class ArrestNoticeBroadcaster : MonoBehaviour
     [Min(0f)]
     [SerializeField] private float m_noticeSeconds = 3f;
 
+    [Tooltip("알림 배경색 — 판정 배너(VerdictBanner)의 '진범 검거' 초록과 맞춘 값")]
+    [SerializeField] private Color m_noticeTone = new Color(0.20f, 0.70f, 0.35f, 0.95f);
+
     private ArrestJudge Judge => App.Game.ArrestJudge;
     private WantedListManager WantedList => App.Game.WantedList;
 
@@ -219,6 +222,6 @@ public class ArrestNoticeBroadcaster : MonoBehaviour
         m_noticeMessage.Arguments = new object[] { citizenName, remaining };
 
         // HUD가 없는 환경(데디케이티드 서버 등)에선 App.UI.Toast가 null이라 무동작.
-        App.UI.Toast?.Show(m_noticeMessage, m_noticeSeconds);
+        App.UI.Toast?.Show(m_noticeMessage, m_noticeSeconds, m_noticeTone);
     }
 }

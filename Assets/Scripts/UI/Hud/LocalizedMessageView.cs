@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.Localization;
+using UnityEngine.UI;
 
 /// <summary>
 /// 번역된 한 줄을 화면 한 자리에 띄우는 HUD 표시의 공통 뼈대 — 구독·표시·숨김만 담당한다. (#493)
@@ -26,6 +27,14 @@ public abstract class LocalizedMessageView : CommonManagerBase
     [SerializeField]
     private TMP_Text m_label;
 
+    [Tooltip("톤 색을 입힐 배경 그래픽 — 비어 있으면 색을 건드리지 않는다")]
+    [SerializeField]
+    private Graphic m_toneTarget;
+
+    // 프리팹에 설정해 둔 배경색 — 톤을 지정하지 않은 표시는 여기로 되돌린다. 되돌리지 않으면
+    // 앞선 표시의 색이 남아 다음 문구의 성격을 잘못 알린다(검거 초록 뒤에 오는 경고 등).
+    private Color m_defaultTone = Color.white;
+
     // 지금 표시 중인 문구 — Hide(message)가 "내가 띄운 게 아직 떠 있는가"를 이걸로 판별한다
     private LocalizedString m_bound;
 
@@ -38,6 +47,10 @@ public abstract class LocalizedMessageView : CommonManagerBase
     protected override void Awake()
     {
         base.Awake(); // App에 등록
+
+        if (m_toneTarget != null)
+            m_defaultTone = m_toneTarget.color;
+
         SetVisible(false);
     }
 
@@ -66,6 +79,19 @@ public abstract class LocalizedMessageView : CommonManagerBase
 
         IsShowing = true;
         SetVisible(true);
+    }
+
+    /// <summary>
+    /// 배경 톤을 정한다 — null이면 프리팹 기본색으로 되돌린다. (#616)
+    /// 판정 배너가 판정 종류마다 색을 바꾸는 것과 같은 취지로, 한 자리를 여러 기능이 공유할 때
+    /// "무슨 성격의 알림인가"를 색으로 가른다.
+    /// </summary>
+    protected void ApplyTone(Color? tone)
+    {
+        if (m_toneTarget == null)
+            return;
+
+        m_toneTarget.color = tone ?? m_defaultTone;
     }
 
     /// <summary>
