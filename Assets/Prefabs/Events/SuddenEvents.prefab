@@ -26,6 +26,7 @@ GameObject:
   - component: {fileID: 7324548653836035078}
   - component: {fileID: 1732464363476530770}
   - component: {fileID: 2421280246905754952}
+  - component: {fileID: 5950034930960708939}
   m_Layer: 0
   m_Name: SuddenEvents
   m_TagString: Untagged
@@ -232,7 +233,7 @@ MonoBehaviour:
   m_warningSeconds: 2
   m_parkedTimeoutSeconds: 60
   m_returnTimeoutSeconds: 60
-  m_devTriggerKey: 94
+  m_devTriggerKey: 0
 --- !u!114 &4391990372060924147
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -334,6 +335,10 @@ MonoBehaviour:
   m_damageAmount: 45
   m_buffMultiplier: 1.5
   m_buffDuration: 5
+  m_shelterProbeHeight: 25
+  m_shelterMask:
+    serializedVersion: 2
+    m_Bits: 1
 --- !u!114 &5245668954543797378
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -437,3 +442,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FogEvent
   ShowTopMostFoldoutHeaderGroup: 1
   m_durationSeconds: 30
+--- !u!114 &5950034930960708939
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498939978214492355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a2de1a9ccf44004cb82a87ee207135c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SuddenEventDevHotkeys
+  m_enabled: 1
+  m_logMappingOnStart: 1
