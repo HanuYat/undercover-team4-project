@@ -19,6 +19,12 @@ public class LightningView : MonoBehaviour
     [Tooltip("낙뢰 지점에 터지는 파티클")]
     [SerializeField] private GameObject m_strikeParticlePrefab;
 
+    [Tooltip(
+        "떨어질 자리에 미리 띄우는 예고 파티클 (#647) — 벼락이 떨어질 때 치운다.\n\n"
+            + "비워 두면 예고 연출이 없다. 판정은 그대로 예고 시간 뒤에 나므로 회피는 성립한다"
+    )]
+    [SerializeField] private GameObject m_warningPrefab;
+
     [Tooltip("내리는 비 파티클")]
     [SerializeField] private GameObject m_rainParticlePrefab;
 
@@ -128,6 +134,9 @@ public class LightningView : MonoBehaviour
     // 돌고 있는 섬광을 끊는 손잡이 — 낙뢰가 겹치면 앞엣것을 끊고 다시 친다.
     private CancellationTokenSource m_flashCts;
 
+    // 떠 있는 예고 연출 — 벼락이 떨어지거나 비가 그치면 치운다. 한 번에 하나뿐이다 (#647)
+    private GameObject m_warningFx;
+
     private void Start()
     {
         m_lightningEvent = App.Game.SuddenEvent?.GetEvent<LightningEvent>();
@@ -137,6 +146,7 @@ public class LightningView : MonoBehaviour
         CaptureBaseIntensity();
 
         m_lightningEvent.OnLightningChanged += HandleLightningChanged;
+        m_lightningEvent.OnStrikeWarning += HandleStrikeWarning;
         m_lightningEvent.OnStrike += HandleStrike;
         HandleLightningChanged(m_lightningEvent.IsLightningActive); // 늦게 들어온 클라 — 이미 오는 중이면 지금 띄운다
     }
@@ -146,8 +156,12 @@ public class LightningView : MonoBehaviour
         if (m_lightningEvent != null)
         {
             m_lightningEvent.OnLightningChanged -= HandleLightningChanged;
+            m_lightningEvent.OnStrikeWarning -= HandleStrikeWarning;
             m_lightningEvent.OnStrike -= HandleStrike;
         }
+
+        ClearWarningFx();
+        App.Sound?.StopAmbient2D(EAudioClip.RainLoop); // 비가 켜진 채 파괴되면 소리만 남는다
 
         // 밝기는 되돌려 놓고 떠난다 — 뷰가 사라졌다고 씬이 어두운 채로 남으면 안 된다
         // 비가 켜진 채 파괴되면(호스트 종료·씬 전환 강제 정리) 요청이 영원히 남는다 — 여기서 짝을 맞춘다
@@ -231,6 +245,8 @@ public class LightningView : MonoBehaviour
             m_overcastPushed = true;
             WeatherOvercast.Push(m_overcastIntensityScale, m_overcastFadeSeconds);
         }
+
+        App.Sound?.PlayAmbient2D(EAudioClip.RainLoop); // 비 소리는 실내에서도 들린다 (#647)
     }
 
     private void HideRain()
@@ -242,12 +258,37 @@ public class LightningView : MonoBehaviour
         }
 
         StopFlash();
+        ClearWarningFx();
         PopOvercast(m_overcastFadeSeconds);
+
+        App.Sound?.StopAmbient2D(EAudioClip.RainLoop);
+    }
+
+    // 예고 — 떨어질 자리에 표시를 띄운다. 전 피어에서 불린다. (#647)
+    private void HandleStrikeWarning(Vector3 position)
+    {
+        ClearWarningFx(); // 앞 예고가 남아 있으면 치우고 — 한 번에 하나다
+
+        if (m_warningPrefab != null)
+            m_warningFx = Instantiate(m_warningPrefab, position, Quaternion.identity);
+    }
+
+    private void ClearWarningFx()
+    {
+        if (m_warningFx != null)
+            Destroy(m_warningFx);
+
+        m_warningFx = null;
     }
 
     // 낙뢰 — 지점에 파티클을 터뜨리고 화면을 번쩍인다. 전 피어에서 불린다.
     private void HandleStrike(Vector3 position)
     {
+        ClearWarningFx();
+
+        // 떨어진 자리에서 난다 — 멀리서도 방향이 읽혀야 어디에 쳤는지 안다 (#647)
+        App.Sound?.PlaySfxAt(EAudioClip.LightningStrike, position);
+
         if (m_strikeParticlePrefab != null)
             Destroy(Instantiate(m_strikeParticlePrefab, position, Quaternion.identity), m_strikeFxSeconds);
 
