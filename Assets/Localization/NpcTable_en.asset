@@ -230,6 +230,18 @@ MonoBehaviour:
     m_Localized: Very short
     m_Metadata:
       m_Items: []
+  - m_Id: 3345650039709696
+    m_Localized: Goatee
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3345650081652736
+    m_Localized: Stubble
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3345650081652737
+    m_Localized: Bushy beard
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

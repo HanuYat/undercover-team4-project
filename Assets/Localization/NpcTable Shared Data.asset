@@ -227,6 +227,18 @@ MonoBehaviour:
     m_Key: Npc.Appearance.HairStyle.VeryShort
     m_Metadata:
       m_Items: []
+  - m_Id: 3345650039709696
+    m_Key: Npc.Appearance.FacialHair.Goatee
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3345650081652736
+    m_Key: Npc.Appearance.FacialHair.Stubble
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3345650081652737
+    m_Key: Npc.Appearance.FacialHair.Bushy
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
