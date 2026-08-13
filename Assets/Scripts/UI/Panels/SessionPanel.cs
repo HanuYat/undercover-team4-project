@@ -79,7 +79,14 @@ public class SessionPanel : PanelBase
     [SerializeField]
     private LocalizedString m_statusJoinFailed;
 
+    [Tooltip("게임 버전 불일치 — Title.Session.Status.VersionMismatch ({0}=내 버전, {1}=방 버전)")]
+    [SerializeField]
+    private LocalizedString m_statusVersionMismatch;
+
     private bool m_isBusy; // 생성/참가 요청 겹침 방지 래치 (SessionManager m_isBusy와 같은 방침)
+
+    // 버전 불일치 안내를 띄운 상태 — 늦게 도착하는 세이브 조회 결과가 이 문구를 덮지 않게 한다 (#586)
+    private bool m_showingMismatch;
 
     // 지금 표시 중인 문구 — 구독 해제 기준. 언어를 바꿔도 떠 있는 상태 문구가 따라오게 한다 (#251 관례).
     private LocalizedString m_boundStatus;
@@ -131,6 +138,28 @@ public class SessionPanel : PanelBase
         SetButtonsInteractable(true);
         SetStatus(m_statusSignedIn, App.Net.Auth.PlayerId);
         RefreshSaveAsync().Forget();
+        ShowPendingVersionMismatch(); // 있으면 로그인 완료 문구를 덮는다 — 왜 튕겨 나왔는지가 먼저다 (#586)
+    }
+
+    /// <summary>
+    /// 버전 불일치로 참가가 물러난 사유를 띄운다 (#586). 이 화면에서 곧바로 실패했을 수도 있고,
+    /// 씬 동기화에 로비까지 끌려갔다가 타이틀로 되돌아온 뒤일 수도 있어 사유는 SessionManager가 들고 있다.
+    /// </summary>
+    private void ShowPendingVersionMismatch()
+    {
+        // 이 화면이 이미 씬과 함께 갈렸으면 소비하지 않는다 — 타이틀에서 새로 열릴 때 띄워야 한다
+        if (m_statusText == null || App.Net.Session == null)
+            return;
+
+        SessionVersionMismatchException pending = App.Net.Session.TakePendingVersionMismatch();
+        if (pending == null)
+            return;
+
+        Debug.Log(
+            $"[SessionPanel] 버전 불일치 안내 / 내 버전 {pending.LocalVersion}, 방 버전 {pending.SessionVersion}"
+        );
+        SetStatus(m_statusVersionMismatch, pending.LocalVersion, pending.SessionVersion);
+        m_showingMismatch = true;
     }
 
     // 세이브 유무를 물어 '이어하기' 노출을 정한다 (#373). 조회가 실패하면 없는 것으로 친다 — 새 판은 언제나 가능하다.
@@ -140,7 +169,7 @@ public class SessionPanel : PanelBase
 
         // 조회가 도는 동안 타이틀을 떠났거나(파괴) 이미 세션을 만들기 시작했을 수 있다 —
         // 그때는 손대지 않는다. 늦게 도착한 결과가 "세션 생성 중..." 문구를 덮으면 안 된다.
-        if (m_continueButton == null || m_isBusy)
+        if (m_continueButton == null || m_isBusy || m_showingMismatch)
             return;
 
         m_continueButton.interactable = hasSave;
@@ -198,12 +227,20 @@ public class SessionPanel : PanelBase
         if (m_isBusy)
             return;
         m_isBusy = true;
+        m_showingMismatch = false;
         SetStatus(m_statusJoining);
         try
         {
             await App.Net.Session.JoinByCodeAsync(m_codeInput.text.Trim());
             SetStatus(m_statusConnecting);
             // 씬 전환은 하지 않는다 — 서버 권위. NGO 씬 동기화가 InGame으로 끌고 간다.
+        }
+        catch (SessionVersionMismatchException)
+        {
+            // 아직 타이틀에 남아 있는 경우의 빠른 길 — 이미 로비로 끌려갔다면 여기서는 못 띄우고,
+            // 타이틀로 되돌아가 새로 열린 화면이 같은 사유를 집어 띄운다. (#586)
+            ShowPendingVersionMismatch();
+            m_isBusy = false;
         }
         catch (Exception e)
         {

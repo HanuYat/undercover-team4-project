@@ -139,6 +139,14 @@ MonoBehaviour:
     m_Localized: '{0} has left'
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000320
+    m_Localized: Loot
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000321
+    m_Localized: Funds
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

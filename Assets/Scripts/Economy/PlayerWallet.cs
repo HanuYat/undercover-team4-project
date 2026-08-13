@@ -89,6 +89,37 @@ public class PlayerWallet : NetworkBehaviour
         Debug.Log($"[개인 자금] {OwnerClientId}번 + {amount} -> 잔액 {m_balance.Value}");
     }
 
+    /// <summary>
+    /// 잔액 전액을 다른 지갑으로 옮긴다 — 아군 약탈(#487)의 유일한 자금 이동 경로. 서버 전용.
+    ///
+    /// <b>발행이 아니라 이전이다.</b> 약탈로 자금이 새로 생기지 않으므로 두 사람이 서로 번갈아 털어도
+    /// 총량이 늘지 않는다 — #487이 경고한 무한 증식은 이 한 가지 성질로 막힌다. 그래서 "동료를
+    /// 눕힌 대가로 자금을 준다"(발행)는 경로는 만들지 않았다.
+    ///
+    /// <b>전액인 이유</b>는 부분 이전이면 "몇 번 더 털기"가 최적 플레이가 되기 때문이다.
+    ///
+    /// 뺏은 쪽의 <see cref="RoundEarned"/>는 늘지만(<see cref="ServerAdd"/>) 털린 쪽은 줄지 않는다 —
+    /// 그 값은 "이번 라운드에 번 금액"이라, 뺏겼다고 벌지 않은 것이 되지는 않는다.
+    /// </summary>
+    /// <returns>실제로 옮긴 금액. 빈 지갑이면 0.</returns>
+    public int ServerTransferAllTo(PlayerWallet to)
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning("PlayerWallet.ServerTransferAllTo는 서버에서만", this);
+            return 0;
+        }
+        if (to == null || to == this) return 0;
+
+        int amount = m_balance.Value;
+        if (amount <= 0) return 0;
+
+        m_balance.Value = 0;
+        to.ServerAdd(amount);
+        Debug.Log($"[개인 자금] 이전 — {OwnerClientId}번 → {to.OwnerClientId}번, {amount}");
+        return amount;
+    }
+
     public void ServerResetRound()
     {
         if (!IsServer) return;
