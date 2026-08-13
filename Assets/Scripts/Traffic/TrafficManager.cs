@@ -34,9 +34,14 @@ public class TrafficManager : MonoBehaviour
     [SerializeField] private float m_gapMarginSeconds = 2f;
 
     [Header("풀")]
-    [Tooltip("차종마다 미리 만들어 둘 인스턴스 수 — 첫 배출의 Instantiate 히칭을 없앤다")]
+    [Tooltip("(차종마다 미리 만들어 둘 인스턴스 수 — 첫 배출의 Instantiate 히칭을 없앤다.\n" +
+            "⚠ 0으로 두는 것이 맞다 (#634, 2026-08-13 확정). 0보다 크면 Awake가 맵 씬 안에 비활성 " +
+            "NetworkObject를 만들어 두는데, NGO의 씬 동기화가 그걸 'in-scene placed'로 입양해 버린다. " +
+            "그러면 클라의 despawn이 프리팹 핸들러를 건너뛰어 차가 풀로 안 돌아오고, 같은 인스턴스가 " +
+            "여러 NetworkObjectId로 스폰돼 \\\"Object-N is already spawned!\\\"가 쏟아진다. " +
+            "되살리려면 VehiclePool.Prewarm 주석을 먼저 읽을 것")]
     [Min(0)]
-    [SerializeField] private int m_prewarmPerPrefab = 2;
+    [SerializeField] private int m_prewarmPerPrefab;
 
     [Header("교통 on/off")]
     [Tooltip("끄면 새 차가 나오지 않는다 (디버그·튜토리얼용). 이미 달리는 차는 끝까지 간다")]
@@ -202,7 +207,14 @@ public class TrafficManager : MonoBehaviour
         if (IsNetworkSessionActive)
         {
             NetworkObject netObj = vehicle.GetComponent<NetworkObject>();
-            if (netObj != null && !netObj.IsSpawned)
+
+            // 이미 스폰된 차를 만나면 <b>조용히 넘기지 않는다</b>. 예전에는 여기서 그냥 건너뛰었는데,
+            // 그러면 서버는 아무 일 없다는 듯 그 차를 계속 굴리고 깨진 사실은 클라 콘솔의
+            // "Object-N is already spawned!"로만 남았다 — 원인이 서버 쪽에서 안 보인 이유다.
+            // 풀 가드(Rent/Return)가 먼저 걸러 주므로, 여기 걸리면 풀 밖의 다른 경로가 있다는 뜻이다.
+            if (netObj != null && netObj.IsSpawned)
+                Debug.LogError($"TrafficManager: 이미 스폰된 차를 다시 배출하려 했다 ({vehicle.name})", vehicle);
+            else if (netObj != null)
                 netObj.Spawn(destroyWithScene: true);
         }
 
@@ -296,6 +308,20 @@ public class TrafficManager : MonoBehaviour
 
         public TrafficVehicle Prefab => m_prefab;
 
+        /// <summary>
+        /// 미리 만들어 둘 차를 찍어낸다 — <b>지금은 쓰지 않는다</b> (m_prewarmPerPrefab = 0).
+        ///
+        /// ⚠ <b>여기서 만든 차는 맵 씬에 속한다.</b> Awake에서 이걸 돌리면 NGO의 씬 동기화 스캔이
+        /// (비활성 오브젝트까지 훑는다) 이 클론들을 in-scene placed NetworkObject로 입양한다.
+        /// 그러면 <see cref="NetworkObject"/>.InScenePlaced가 true가 되고, 서버는 DestroyObjectMessage에
+        /// DestroyGameObject=false를 실어 보낸다(NetworkObject.cs:1639) — 클라의 despawn이 프리팹 핸들러를
+        /// 건너뛰어(NetworkSpawnManager.cs:1913) 차가 풀로 돌아오지 않는다. 결과가 같은 인스턴스를
+        /// 여러 NetworkObjectId로 스폰하는 "already spawned" 폭탄이었다. (#634)
+        ///
+        /// 되살리려면 <b>씬 스캔이 닿지 않는 자리</b>에서 만들어야 한다(DontDestroyOnLoad 등).
+        /// 다만 실측으로는 한 판에 Instantiate 18건이 띄엄띄엄 날 뿐 한 번에 몰리지 않았다 —
+        /// 히칭을 줄이려다 그 버그를 다시 들이지 말 것. 프리웜은 이 고장을 만든 최적화다.
+        /// </summary>
         public void Prewarm(int count)
         {
             for (int i = 0; i < count; i++)
@@ -310,7 +336,22 @@ public class TrafficManager : MonoBehaviour
         {
             TrafficVehicle vehicle = null;
             while (m_idle.Count > 0 && vehicle == null)
+            {
                 vehicle = m_idle.Dequeue(); // 씬 언로드로 파괴된 것은 건너뛴다
+
+                // <b>아직 스폰돼 있는 차가 큐에 있다 = 반납이 어긋나 같은 인스턴스가 두 번 들어왔다.</b>
+                // 그대로 내주면 물리 인스턴스 하나가 서로 다른 NetworkObjectId 둘로 스폰되고,
+                // 클라가 "Object-N is already spawned!"를 뱉는다. 한 번 깨지면 자기 회복이 안 돼
+                // 그 뒤로 계속 찍힌다 — 그래서 여기서 끊는다.
+                // 대여하지 않고 버린다. 이미 큐에서 빠졌으므로 다음 Rent부터는 정상 인스턴스가 나온다.
+                if (vehicle != null && IsStillSpawned(vehicle))
+                {
+                    Debug.LogError(
+                        $"TrafficManager: 스폰 상태인 차가 풀에 있다 — 반납 경로가 어긋났다 ({vehicle.name})",
+                        vehicle);
+                    vehicle = null;
+                }
+            }
 
             if (vehicle == null)
                 return Object.Instantiate(m_prefab, position, rotation);
@@ -326,8 +367,24 @@ public class TrafficManager : MonoBehaviour
             if (vehicle == null)
                 return;
 
+            // 두 번 반납되면 큐에 같은 인스턴스가 둘 들어가고, 그때부터 Rent가 그것을 동시에 두 번
+            // 내준다 — 위 Rent 주석의 그 고장이다. 원인을 여기서 이름 붙여 남긴다.
+            // 큐 길이가 차종당 몇 대라 Contains 비용은 문제되지 않는다.
+            if (m_idle.Contains(vehicle))
+            {
+                Debug.LogError($"TrafficManager: 이미 반납된 차를 또 반납했다 ({vehicle.name})", vehicle);
+                return;
+            }
+
             vehicle.gameObject.SetActive(false);
             m_idle.Enqueue(vehicle);
+        }
+
+        // 이 차의 NetworkObject가 아직 스폰 상태인가 — 풀 불변식 검사용.
+        private static bool IsStillSpawned(TrafficVehicle vehicle)
+        {
+            NetworkObject netObj = vehicle.GetComponent<NetworkObject>();
+            return netObj != null && netObj.IsSpawned;
         }
 
         NetworkObject INetworkPrefabInstanceHandler.Instantiate(
