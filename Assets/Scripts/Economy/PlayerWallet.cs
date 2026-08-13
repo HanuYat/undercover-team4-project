@@ -43,7 +43,7 @@ public class PlayerWallet : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        // 서버가 알 수 없는 로컬 값이라 오너가 올린다 — LobbyRoster가 닉네임·PlayerId를 올리는 것과 같은 구조.
+        // 서버가 알 수 없는 로컬 값이라 오너가 올린다 — SessionRoster가 닉네임·PlayerId를 올리는 것과 같은 구조.
         if (IsOwner)
             ReportPlayerIdRpc((App.Net.Auth != null ? App.Net.Auth.PlayerId : null).ToFixed64());
     }

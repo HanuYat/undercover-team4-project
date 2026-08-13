@@ -158,6 +158,7 @@ GameObject:
   - component: {fileID: 4559333319471191761}
   - component: {fileID: 1633400896758511009}
   - component: {fileID: 4939167295646235530}
+  - component: {fileID: 9057865823287007814}
   m_Layer: 0
   m_Name: AppBootstrap
   m_TagString: Untagged
@@ -222,6 +223,40 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cea26822c715f7d468c3e34d1374b3ed, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ConnectionLostReturner
+--- !u!114 &9057865823287007814
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6309785483521376438}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ac1d90dba61de1e4e8e8c3d767fd2eae, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerPresenceToastView
+  m_joinedToast:
+    m_TableReference:
+      m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
+    m_TableEntryReference:
+      m_KeyId: 3051723777540096
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_leftToast:
+    m_TableReference:
+      m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
+    m_TableEntryReference:
+      m_KeyId: 3051723915952128
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_toastSeconds: 3
+  references:
+    version: 2
+    RefIds: []
 --- !u!1 &7826145428637579171
 GameObject:
   m_ObjectHideFlags: 0
@@ -293,7 +328,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1fc5040a87c2e23489d41cb4b85f595d, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UiClickSound
   m_clip: 16
 --- !u!1 &8772099138944498732

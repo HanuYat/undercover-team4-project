@@ -56,11 +56,6 @@ public class SettlementPanel : PanelBase
     [SerializeField]
     private Button m_confirmButton;
 
-    [Header("배경 딤 (패널과 함께 켜고 끔)")]
-    [Tooltip("정산 화면 뒤를 어둡게 덮는 풀스크린 오버레이 — 패널이 열리면 켜지고 닫히면 꺼진다")]
-    [SerializeField]
-    private GameObject m_background;
-
     // 문구는 채우는 순간 한 번 읽고 끝낸다 — HUD와 달리 StringChanged를 구독하지 않는다.
     // 정산 화면은 10초짜리 결과 요약이고 그 사이 설정 창으로 언어를 바꿀 경로가 없어서다. (#497)
     [Header("문구")]
@@ -116,9 +111,7 @@ public class SettlementPanel : PanelBase
     protected override void Awake()
     {
         base.Awake();
-        // 배경 딤·연출 대상들도 패널과 같은 시작 상태(닫힘)로 맞춘다.
-        if (m_background != null)
-            m_background.SetActive(false);
+        // 연출 대상들도 패널과 같은 시작 상태(닫힘)로 맞춘다 (딤 배경은 PanelBase가 맞춘다).
         SetResultTextsVisible(false);
         SetCountdownVisible(false);
         SetConfirmEnabled(false); // 결과가 뜨기 전에는 못 누른다 (#509)
@@ -351,8 +344,6 @@ public class SettlementPanel : PanelBase
 
     public override void OpenPanel()
     {
-        if (m_background != null)
-            m_background.SetActive(true);
         base.OpenPanel();
         SetLocalPlayerBlocked(true);
     }
@@ -363,8 +354,6 @@ public class SettlementPanel : PanelBase
 
         // 카운트다운은 일부러 남긴다 — 창·배경을 닫아도 상점 복귀까지 남은 시간을 계속 보여준다.
         // (시퀀스를 취소하지 않으므로 카운트다운은 계속 돌고, 결과 4줄은 창이 꺼지며 함께 숨는다)
-        if (m_background != null)
-            m_background.SetActive(false);
         SetLocalPlayerBlocked(false);
         UnbindWallet();
         base.ClosePanel();

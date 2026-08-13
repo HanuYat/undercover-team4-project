@@ -14,7 +14,12 @@ using UnityEngine;
 ///
 /// 무대는 씬 밖 먼 곳에 세운다 — 전용 레이어를 새로 파지 않으려는 것이다. 카메라 far clip이
 /// 짧아 주변에 아무것도 안 잡히고, 로비에는 3D 씬 자체가 없어 가릴 것도 없다.
+///
+/// 실행 순서를 패널보다 앞에 둔다 — LobbyRosterPanel이 첫 그리기에서 <see cref="Portrait"/>를
+/// 읽어가는데, 기본 순서로 두면 그때 아직 안 구워져 얼굴 없는 카드가 그려진다. 혼자 있으면
+/// 명단이 바뀔 일이 없어 다시 그리지 않으므로 그대로 굳는다.
 /// </summary>
+[DefaultExecutionOrder((int)EExecutionOrder.UIContent)]
 public class LobbyPortraitStage : MonoBehaviour
 {
     [Header("무대")]
