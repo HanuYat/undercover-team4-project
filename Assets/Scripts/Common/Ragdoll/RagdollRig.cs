@@ -726,41 +726,6 @@ public class RagdollRig : MonoBehaviour
         return true;
     }
 
-    /// <summary>
-    /// 같은 자세를 <b>골반을 건드리지 않고</b> 입힌다 — 골반이 스트림 소유일 때 쓴다. (#572 후속)
-    ///
-    /// <b><see cref="ApplyLocalPose"/>와 갈리는 한 가지</b>: 저쪽은 골반의 <b>로컬</b> 위치·회전을
-    /// 쓰므로 몸이 결국 <b>루트에</b> 매달린다. 골반에 <c>NetworkTransform</c>이 붙은 배선에서는
-    /// 그것이 두 가지를 한꺼번에 망친다 — 스트림이 매 프레임 쓰는 값과 싸우고, 몸의 높이가 루트의
-    /// 지면 판정 오차를 그대로 물려받는다(#572가 실측한 −0.141이 그 모양이다).
-    ///
-    /// 여기서는 골반을 <b>스트림에 맡긴 채</b> 나머지 뼈의 로컬 회전만 입힌다. 키네마틱 뼈는 부모를
-    /// 따라가므로 몸은 <b>권위 피어가 확정한 골반 위치에</b> 매달리고, 루트 높이는 식에서 빠진다.
-    ///
-    /// 골반 자신의 회전도 건너뛴다 — 그것도 <c>NetworkTransform</c>이 복제하는 값이다.
-    /// </summary>
-    /// <returns>입혔으면 참 — 길이가 안 맞거나 골반을 못 찾으면 거짓.</returns>
-    public bool ApplyLocalPoseAroundHips(Quaternion[] rotations)
-    {
-        if (
-            m_bodies == null
-            || m_hipsBone == null
-            || rotations == null
-            || rotations.Length != m_bodies.Length
-        )
-            return false;
-
-        for (int i = 0; i < m_bodies.Length; i++)
-        {
-            if (m_bodies[i].transform == m_hipsBone)
-                continue;
-
-            m_bodies[i].transform.localRotation = rotations[i];
-        }
-
-        return true;
-    }
-
     // 부활 블렌드는 <see cref="RagdollPoseBlend"/>로 나갔다 (#571). 이 리그는 시체에 붙어 있는데
     // 블렌드는 살아있는 리그에서 일어나므로, 여기 두면 쓸 수 없는 자리에 코드가 남는다.
 

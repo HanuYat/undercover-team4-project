@@ -233,21 +233,6 @@ public class NpcRagdoll : MonoBehaviour
     /// </summary>
     internal void BeginTeleportBracket()
     {
-        // ⚠ <b>임시 A/B 스위치</b> — 브래킷이 아직 필요한지 재는 중이다.
-        //
-        // 브래킷이 사는 구간은 <b>도착 프레임부터 서버 재정착까지 ~0.3초</b>뿐이다. 그 뒤는
-        // <see cref="ApplyFrozenPose"/>가 자세를 갈아끼우고 뼈 길이까지 되돌린 뒤 얼리므로,
-        // 영구히 남던 두 가지(엉뚱한 자리·늘어난 리그)가 <b>브래킷 없이도 덮인다.</b>
-        // 남는 것은 그 0.3초의 발작이 눈에 보이느냐뿐이다.
-        //
-        // 거짓으로 두고 §6-3(클라 최대v)을 재서 통과하면 <b>이 클래스와
-        // <see cref="NpcCorpseHipsTransform"/>, 프리팹 4종의 컴포넌트 교체를 전부 지운다.</b>
-        // 필요하다고 나오면 이 상수와 주석만 지운다.
-        const bool k_bracketEnabled = false;
-
-        if (!k_bracketEnabled)
-            return;
-
         if (m_rig == null || !m_rig.IsValid)
             return;
 
@@ -421,43 +406,44 @@ public class NpcRagdoll : MonoBehaviour
         // 아직 무너지지도 않은 몸(늦게 접속해 이번 사망을 건너뛴 피어)도 여기서 시체가 된다.
         StopAnimator();
 
-        // ⚠ <b>골반이 복제되는 구성에서는 몸을 골반에 매단다</b> — 루트가 아니라. (#572 후속)
+        // ⚠ <b>원격은 자세를 받지 않는다 — 골반만 스트림, 팔다리는 로컬 물리다.</b> (#572)
         //
-        // <b>#572는 여기서 원격을 통째로 되돌렸었다.</b> 근거는 "굳히면 시체가 <b>루트 높이 하나에
-        // 매달린 조각상</b>이 되고, 그 높이가 틀리면 흡수할 수단이 없다"였고 실측이 −0.141이었다.
-        // 그 진단은 맞았지만 <b>원인은 얼림이 아니라 매다는 자리</b>였다: 자세를 골반의 <b>로컬</b>
-        // 위치로 복원하면(<c>ApplyLocalPose</c>) 몸이 결국 루트에 매달리고, 루트 높이는 각 피어가
-        // 로컬 레이캐스트로 정하므로 그 오차가 곧 몸의 높이 오차가 된다.
+        // <b>한때 여기서 원격도 얼렸다가 되돌렸다</b>(2026-08-14). 근거는 "원격에 종착 상태가 없다"
+        // (얼림=0/212, 순간이동 1.95초 뒤에도 4.17 m/s)였는데, <b>그 실측은 순간이동이 클라에서
+        // 6261 m/s로 터지던 때 찍은 것이다</b> — 폭발한 몸이 안 멈추는 것은 당연하고, 종착 상태의
+        // 부재가 아니라 <b>도착이 깨끗하지 않은 것</b>이 병이었다. 그쪽을 고치고 나면 로컬 물리는
+        // 스스로 가라앉고 PhysX가 재운다.
         //
-        // <b>그 뒤에 골반이 월드 공간 <c>NetworkTransform</c>으로 복제되기 시작했다</b>(#572 2단계).
-        // 이제 몸을 <b>골반에</b> 매달면 높이의 주인이 권위 피어가 되고 루트는 식에서 빠진다 —
-        // −0.141을 만든 메커니즘이 사라진다. 그것이 <see cref="RagdollRig.ApplyLocalPoseAroundHips"/>다.
+        // 그리고 원격을 영구히 얼리면 <b>두 가지가 새로 생긴다</b>: 정착 순간 자세가 호스트 것으로
+        // 갈아끼워지는 튐과, 키네마틱이 된 뼈가 <b>계층을 따라가</b> 루트 하강에 끌려 땅에
+        // 들어갔다 나오는 것(실측: 7프레임 동안 골반y가 루트y를 그대로 따라 0.402 → 0.278).
+        // 둘 다 <b>동적 뼈는 부모를 따라가지 않는다</b>는 이 파일의 전제를 깨서 생긴다.
         //
-        // <b>원격에 종착 상태를 되돌려 주는 것이 이 분기의 요점이다.</b> 되돌리기 전까지 원격은
-        // 정착 판정도(<see cref="Update"/>가 비권위에서 끊긴다) 얼림도 없어 <b>끝나는 지점이
-        // 없었다</b> — 실측에서 얼림=1이 212줄 중 0회였고, 순간이동 1.95초 뒤에도 뼈가 4.17 m/s로
-        // 계속 떨었다. 로컬 물리가 만든 결과가 무엇이든 그것이 영구히 남는 구조였다.
-        bool hangsOnHips = m_hipsIsNetworkSynced && !HasMoveAuthority;
+        // <b>동기화는 순간이동 순간에만 한다</b> — <see cref="BeginTeleportBracket"/>이 골반이
+        // 점프하는 그 프레임만 얼려 몸을 함께 옮기고, 끝나면 곧바로 물리로 돌려준다.
+        if (m_hipsIsNetworkSynced && !HasMoveAuthority)
+        {
+            // 늦게 접속해 아직 애니메이터를 쥐고 있던 몸만 물리로 내려놓는다. 이미 무너지는
+            // 중이었으면 그대로 둔다 — 건드릴수록 궤적이 끊긴다.
+            if (m_state == RagdollState.Animated)
+            {
+                m_state = RagdollState.Ragdoll;
+                ReleaseBonesToPhysics();
+            }
+
+            return;
+        }
 
         // <b>얼리는 것이 먼저다.</b> 동적인 채로 자세를 쓰면 다음 물리 스텝이 PhysX의 포즈로 덮는다 —
         // 키네마틱으로 바꾸고 나서야 트랜스폼이 진실이 된다. 아래가 실패해도 얼어 있는 편이 낫다
         // (그 피어의 로컬 물리 자세로 굳을 뿐, 계속 흔들리지는 않는다).
         Freeze();
 
-        // ⚠ <b>뼈 길이를 먼저 되돌린다 — 전 피어가.</b> 오가는 자세는 로컬 <b>회전</b>뿐이고
-        // "뼈 길이는 관절이 유지한다"를 전제하는데(<see cref="RagdollRig.CaptureLocalPose"/>), 시체는
-        // <c>ExitRagdoll</c>을 영영 타지 않아 <c>RestoreBindPose</c>가 한 번도 안 돈다 — 물리가 늘려
-        // 놓은 길이가 <b>영구히 남는다.</b> 여기서 한 번 그 전제를 실제로 참으로 만든다.
-        //
-        // <b>보내는 쪽도 함께 되돌리는 것이 요점이다</b>(서버도 자기 RPC를 받는다). 한쪽만 되돌리면
-        // 같은 회전이 서로 다른 골격에 얹혀 피어마다 다른 몸이 나온다.
+        // 뼈 길이를 되돌린다 — 시체는 <c>ExitRagdoll</c>을 영영 타지 않아 <c>RestoreBindPose</c>가
+        // 한 번도 안 돌고, 그래서 물리가 늘려 놓은 길이가 <b>영구히 남는다.</b>
         m_rig.RestoreBindBoneLengths();
 
-        bool applied = hangsOnHips
-            ? m_rig.ApplyLocalPoseAroundHips(boneRotations)
-            : m_rig.ApplyLocalPose(boneRotations, hipsLocalPosition);
-
-        if (!applied)
+        if (!m_rig.ApplyLocalPose(boneRotations, hipsLocalPosition))
         {
             Debug.LogWarning(
                 $"NpcRagdoll: 받은 자세의 뼈 수가 맞지 않아 버린다 — {name} "
