@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -161,6 +162,45 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
     {
         ApplyProfile(current);
     }
+
+    /// <summary>
+    /// 바디를 다시 뽑는다 — 서버 전용. <paramref name="allowFemale"/>가 false면 여성 바디를 후보에서 뺀다.
+    ///
+    /// 수염이 붙는 NPC의 바디를 고르는 데 쓴다 (#619). 반대 방향(바디를 보고 수염을 지우는 것)으로 하면
+    /// 프로필이 바뀌어 디코이가 범인의 공개 축을 복사하는 경로가 깨진다 — 프로필은 그대로 두고
+    /// <b>바디를 프로필에 맞추는</b> 쪽이 몽타주 부합 보장을 건드리지 않는다.
+    /// </summary>
+    public void ServerPickBody(bool allowFemale)
+    {
+        SkinnedMeshRenderer[] variants = BodyVariants;
+        if (variants.Length == 0 || (IsSpawned && !IsServer))
+            return;
+
+        var candidates = new List<int>(variants.Length);
+        for (int i = 0; i < variants.Length; i++)
+        {
+            if (variants[i] == null)
+                continue;
+            if (allowFemale || !IsFemaleBody(variants[i]))
+                candidates.Add(i);
+        }
+
+        // 후보가 없으면(여성 바디만 있는 프리팹) 제한을 버린다 — 바디 없는 NPC보다 낫다
+        int picked = candidates.Count > 0
+            ? candidates[Random.Range(0, candidates.Count)]
+            : Random.Range(0, variants.Length);
+
+        if (IsSpawned)
+            m_modelIndex.Value = picked; // 클라이언트는 OnValueChanged로 따라온다
+        else
+            ApplyModel(picked); // 오프라인 폴백
+    }
+
+    // Synty Generic 바디는 이름에 성별이 들어 있다 (SM_Gen_Chr_Street_Female_01 등).
+    // 성별을 따로 데이터로 두지 않는 이유는 바디 목록 자체가 프리팹 계층이라, 표를 만들면
+    // 계층과 표 둘을 맞춰야 하는 자리가 하나 더 생기기 때문이다.
+    private static bool IsFemaleBody(SkinnedMeshRenderer body) =>
+        body.name.IndexOf("Female", System.StringComparison.OrdinalIgnoreCase) >= 0;
 
     /// <summary>
     /// 바디 변형 목록에서 index번 하나만 활성화하고 나머지는 끈다.

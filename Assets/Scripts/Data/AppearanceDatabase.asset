@@ -592,6 +592,7 @@ MonoBehaviour:
       SciFiOnly: 1
       MontageLayer: {fileID: 0}
       ExcludeFromMontage: 0
+    NoneChance: 0
   m_hairColor:
     Options:
     - DisplayName:
@@ -729,6 +730,7 @@ MonoBehaviour:
       SciFiOnly: 1
       MontageLayer: {fileID: 0}
       ExcludeFromMontage: 0
+    NoneChance: 0
   m_skinColor:
     Options:
     - DisplayName:
@@ -788,7 +790,7 @@ MonoBehaviour:
       Color: {r: 0.35, g: 0.5, b: 0.85, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefabs: []
-      SciFiOnly: 0
+      SciFiOnly: 1
       MontageLayer: {fileID: 0}
       ExcludeFromMontage: 0
     - DisplayName:
@@ -818,7 +820,7 @@ MonoBehaviour:
       Color: {r: 0.95, g: 0.35, b: 0.85, a: 1}
       MaterialOverride: {fileID: 0}
       PropPrefabs: []
-      SciFiOnly: 0
+      SciFiOnly: 1
       MontageLayer: {fileID: 0}
       ExcludeFromMontage: 0
     - DisplayName:
@@ -836,6 +838,7 @@ MonoBehaviour:
       SciFiOnly: 1
       MontageLayer: {fileID: 0}
       ExcludeFromMontage: 0
+    NoneChance: 0
   m_facialHair:
     Options:
     - DisplayName:
@@ -956,6 +959,7 @@ MonoBehaviour:
       SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: f897e9d5db6d46744b2098e44d487fc5, type: 3}
       ExcludeFromMontage: 0
+    NoneChance: 0.6
   m_headwear:
     Options:
     - DisplayName:
@@ -1068,6 +1072,7 @@ MonoBehaviour:
       SciFiOnly: 1
       MontageLayer: {fileID: 21300000, guid: 33921450add733b4da6279af994df9dd, type: 3}
       ExcludeFromMontage: 0
+    NoneChance: 0
   m_eyewear:
     Options:
     - DisplayName:
@@ -1150,7 +1155,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefabs:
       - {fileID: 4006197424663581794, guid: 9a54c446d1b3eec46b3f4448a457ef00, type: 3}
-      SciFiOnly: 1
+      SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: 350489dd60023ef4496fc908bbfd6134, type: 3}
       ExcludeFromMontage: 0
     - DisplayName:
@@ -1185,6 +1190,7 @@ MonoBehaviour:
       SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: b0b21f924c4d60b45999903f76c0cfb4, type: 3}
       ExcludeFromMontage: 0
+    NoneChance: 0
   m_montageBase: {fileID: 21300000, guid: c45d2eea083118a468c8798fff0c31b9, type: 3}
   m_montageFace: {fileID: 21300000, guid: e1d606e7374c9394fba0477ed5936b95, type: 3}
   m_montageUnknownHair: {fileID: 21300000, guid: 23f6ac8740d48f04393d4a77cf98d4e9, type: 3}

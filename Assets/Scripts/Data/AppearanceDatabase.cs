@@ -75,6 +75,16 @@ public class AppearanceDatabase : ScriptableObject
     public class AxisDefinition
     {
         public AppearanceOption[] Options;
+
+        [Tooltip(
+            "이 축이 '없음'(0번 값 — 대머리·수염 없음 등)으로 뽑힐 확률. 0이면 다른 값들과 같이 1/n로만 나온다.\n"
+                + "어휘를 늘리면 '없음'이 묻히는 것이 문제다 — 수염이 7값이 되면서 시민의 86%가 수염을 달았다.\n"
+                + "몽타주 난이도와는 무관하다(우연 부합은 CreateNonMatchingProfile이 이미 없앤다). 화면에 어떤 도시가\n"
+                + "보이는지를 정하는 값이다.\n"
+                + "색 축(머리색·피부색)은 '없음'이 0번이 아니므로 이 값을 쓰지 않는다."
+        )]
+        [Range(0f, 1f)]
+        public float NoneChance;
     }
 
     private const string k_table = "NpcTable";
@@ -206,12 +216,26 @@ public class AppearanceDatabase : ScriptableObject
         return option.MontageProp == null && !option.SciFiOnly;
     }
 
-    /// <summary>Generic 경로용 랜덤 옵션 인덱스 — SciFiOnly 값은 제외한다.</summary>
+    /// <summary>
+    /// Generic 경로용 랜덤 옵션 인덱스 — SciFiOnly 값은 제외하고, 축에 <see cref="AxisDefinition.NoneChance"/>가
+    /// 있으면 '없음'(0번)을 그 확률로 먼저 뽑는다. 색 축은 0번이 '없음'이 아니라 그냥 균등이다.
+    /// </summary>
     public int GetRandomGenericIndex(AppearanceAxis axis)
     {
         List<int> indices = GetGenericSelectableIndices(axis);
-        return indices.Count > 0 ? indices[Random.Range(0, indices.Count)] : 0;
+        if (indices.Count == 0)
+            return 0;
+
+        float noneChance = HasNoneValue(axis) ? GetAxis(axis)?.NoneChance ?? 0f : 0f;
+        if (noneChance > 0f && indices.Count > 1 && indices[0] == 0)
+            return Random.value < noneChance ? 0 : indices[Random.Range(1, indices.Count)];
+
+        return indices[Random.Range(0, indices.Count)];
     }
+
+    /// <summary>0번 값이 '없음'(대머리·수염 없음 등)인 축인가 — 색 축은 0번도 실제 색이라 아니다.</summary>
+    public static bool HasNoneValue(AppearanceAxis axis) =>
+        axis != AppearanceAxis.HairColor && axis != AppearanceAxis.SkinColor;
 
     /// <summary>Generic 경로용 랜덤 프로필 — 축마다 SciFiOnly가 아닌 옵션에서만 뽑는다. 옵션이 없는 축은 0.</summary>
     public AppearanceProfile CreateRandomProfile()

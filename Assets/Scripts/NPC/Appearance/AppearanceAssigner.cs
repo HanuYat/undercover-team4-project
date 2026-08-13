@@ -32,6 +32,11 @@ public class AppearanceAssigner : CommonManagerBase
     // 비부합 프로필 재추첨 한도 — 옵션 수 대비 범인이 많으면 몇 번은 실패한다
     private const int k_nonMatchingAttempts = 16;
 
+    [Header("바디 성별")]
+    [Tooltip("수염이 붙은 NPC가 여성 바디를 받을 확률. Generic 바디 13개 중 8개가 여성이라, 수염 값이 흔하면 도시가 남성으로 쏠린다 — 이 확률만큼은 여성에게도 수염을 남긴다. 0이면 수염=여성이 절대 안 겹친다")]
+    [Range(0f, 1f)]
+    [SerializeField] private float m_femaleFacialHairChance = 0.03f;
+
     [Header("몽타주 부합 인원 k (범인 포함)")]
     [Tooltip("몽타주 1건당 공개 특징에 부합하는 NPC 수 — 범인 1명 + 디코이 k−1명. 클수록 스캔 검증 부담이 커진다 (난이도)")]
     [SerializeField] private int m_montageMatchCount = 3;
@@ -278,7 +283,15 @@ public class AppearanceAssigner : CommonManagerBase
     private AppearanceProfile RealizeGeneric(NpcController npc, AppearanceProfile profile)
     {
         NpcAppearance app = npc.GetComponent<NpcAppearance>();
-        if (app != null) app.SetProfile(profile);
+        if (app != null)
+        {
+            // 바디를 프로필에 맞춘다 — 수염이 붙었으면 남성 바디에서 뽑는다 (#619).
+            // 반대로 바디를 보고 수염을 지우면 프로필이 바뀌어, 디코이가 범인의 공개 축을 복사해 두는
+            // 몽타주 부합 보장이 깨진다. 프로필은 그대로 두고 바디를 맞추는 쪽은 그 보장을 안 건드린다.
+            bool hasFacialHair = profile.FacialHairIndex > 0;
+            app.ServerPickBody(!hasFacialHair || Random.value < m_femaleFacialHairChance);
+            app.SetProfile(profile);
+        }
         else Debug.LogWarning($"AppearanceAssigner: {npc.name}에 외형 컴포넌트가 없어 시각 적용 생략", npc);
         AssignIdentity(npc, profile);
         return profile;
