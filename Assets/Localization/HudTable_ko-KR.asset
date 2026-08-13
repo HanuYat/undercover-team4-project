@@ -144,7 +144,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000322
-    m_Localized: "\uD604\uC0C1\uC218\uBC30\uBC94 \uAC80\uAC70 \u2014 \uB0A8\uC740 \uC218\uBC30\uC790 {0}\uBA85"
+    m_Localized: "{0} \uAC80\uAC70 \u2014 \uB0A8\uC740 \uC218\uBC30\uC790 {1}\uBA85"
     m_Metadata:
       m_Items: []
   references:

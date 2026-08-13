@@ -59,7 +59,13 @@ public class WantedListManager : NetworkedManagerBase
                 Debug.LogWarning("WantedListManager: AppearanceAssigner를 찾지 못해 수배 항목을 등록할 수 없다", this);
 
             if (Judge != null)
+            {
                 Judge.OnArrestJudged += HandleArrestJudged;
+                // 시체 인계도 같은 처리다 (#616) — 문 앞 판정으로 현상금이 계상되므로 수배 항목도
+                // 함께 내려가야 남은 수가 맞는다. 이 구독자는 리스트 항목만 지우고 NPC 상태를
+                // 건드리지 않아 OnCorpseJudged의 제약(상태를 바꾸지 말 것)에 걸리지 않는다.
+                Judge.OnCorpseJudged += HandleArrestJudged;
+            }
             else
                 Debug.LogWarning("WantedListManager: ArrestJudge를 찾지 못해 검거 시 항목을 지울 수 없다", this);
         }
@@ -77,7 +83,10 @@ public class WantedListManager : NetworkedManagerBase
             Appearance.OnMontageGenerated -= HandleMontageGenerated;
 
         if (Judge != null)
+        {
             Judge.OnArrestJudged -= HandleArrestJudged;
+            Judge.OnCorpseJudged -= HandleArrestJudged;
+        }
     }
 
     // 몽타주 공개 = 범인·외형·이름 모두 확정된 시점. 수배 항목을 리스트에 추가한다. (서버 전용)
@@ -119,7 +128,8 @@ public class WantedListManager : NetworkedManagerBase
         Debug.Log($"[수배] 등록: {wantedName} — \"{montageText}\" / 현상금 {(identity != null ? identity.Bounty : 0)}원 (현재 {m_wanted.Count}건)");
     }
 
-    // 검거 판정 수신 — 진범을 검거했을 때만 해당 개체의 수배 항목을 지운다. (서버 전용)
+    // 검거·시체 판정 수신 — 진범일 때만 해당 개체의 수배 항목을 지운다. (서버 전용)
+    // 산 신병이든 시체든 유치장에 들어간 이상 더 찾을 대상이 아니다 (#616).
     private void HandleArrestJudged(ArrestResult result)
     {
         if (result.Verdict != ArrestVerdict.WantedCriminal || result.Npc == null) 

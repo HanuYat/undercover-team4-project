@@ -35,11 +35,14 @@ public class ArrestJudge : CommonManagerBase
     /// 시체 판정이 났다 — <b>표시 전용 훅이다.</b> 서버(또는 오프라인)에서만 발생한다. (#571)
     ///
     /// <see cref="OnArrestJudged"/>와 <b>일부러</b> 갈라 뒀다. 저쪽 구독자 대부분은 "지금 신병을
-    /// 확보했다"를 전제로 <b>상태를 전이시키는데</b>(오검거 수용·석방·수배 목록 갱신) 시체에는 전부
-    /// 성립하지 않고, <see cref="NpcStateMachine"/>이 사망 이탈을 막으므로 에러만 난다.
+    /// 확보했다"를 전제로 <b>상태를 전이시키는데</b>(오검거 수용·석방) 시체에는 성립하지 않고,
+    /// <see cref="NpcStateMachine"/>이 사망 이탈을 막으므로 에러만 난다. 상태를 건드리지 않는
+    /// 후처리(수배 항목 제거·표시)는 양쪽을 함께 구독한다 (#616).
     ///
-    /// ⚠ <b>여기에 상태를 바꾸는 구독자를 붙이지 말 것.</b> 지금 구독자는 판정 배너
-    /// (<see cref="ArrestVerdictFeedback"/>) 하나이고, 그 성격을 유지해야 한다.
+    /// ⚠ <b>여기에 NPC 상태를 바꾸는 구독자를 붙이지 말 것.</b> 지금 구독자는 판정 배너
+    /// (<see cref="ArrestVerdictFeedback"/>) · 전체 알림(<see cref="ArrestNoticeBroadcaster"/>) ·
+    /// 수배 항목 제거(<see cref="WantedListManager"/>)뿐이다 (#616). 셋 다 표시·기록만 손대고
+    /// 신병 라우팅을 하지 않는다 — 그 성격을 유지해야 한다.
     /// </summary>
     public event Action<ArrestResult> OnCorpseJudged;
 
@@ -207,7 +210,8 @@ public class ArrestJudge : CommonManagerBase
     ///
     /// <list type="bullet">
     ///   <item><b><see cref="OnArrestJudged"/> 대신 <see cref="OnCorpseJudged"/>를 발행한다</b> —
-    ///   저쪽 구독자는 전부 신병 라우팅(상태 전이)이라 시체에 성립하지 않는다.</item>
+    ///   저쪽에는 신병 라우팅(상태 전이) 구독자가 섞여 있어 시체에 성립하지 않는다. 양쪽 모두에
+    ///   필요한 후처리(수배 항목 제거·표시)는 두 훅을 함께 구독한다.</item>
     ///   <item><b>재판정이 없다.</b> 산 수감자는 반출했다 다시 넣을 수 있지만(#358/#517) 시체는
     ///   유치장에서 나오는 경로가 없다 — <see cref="NpcCustody.IsDelivered"/>가 곧 최종이다.</item>
     ///   <item><b>오검거는 여기서 세지 않는다</b> — 죽는 순간 이미 셌다
