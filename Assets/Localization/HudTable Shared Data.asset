@@ -119,6 +119,14 @@ MonoBehaviour:
     m_Key: Hud.Pickpocket.Stolen
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000320
+    m_Key: Hud.Loot.Title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000321
+    m_Key: Hud.Loot.Funds
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

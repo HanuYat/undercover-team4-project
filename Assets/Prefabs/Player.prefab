@@ -6454,6 +6454,9 @@ GameObject:
   - component: {fileID: 6647406807435162902}
   - component: {fileID: 4702139356804014045}
   - component: {fileID: 511173363813317716}
+  - component: {fileID: 2002181355187889777}
+  - component: {fileID: -5847868601103535694}
+  - component: {fileID: 8718556211917965241}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -7138,8 +7141,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0d0a716c59b74bc47869f173c461bef3, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerTheftView
+  ShowTopMostFoldoutHeaderGroup: 1
   m_stolenToast:
     m_TableReference:
       m_TableCollectionName: HudTable
@@ -7473,6 +7477,44 @@ MonoBehaviour:
   m_collisionMask:
     serializedVersion: 2
     m_Bits: 1
+--- !u!114 &2002181355187889777
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 137de6808ebac0b4192b954c2eefda1f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerLootable
+  ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &-5847868601103535694
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2dff7854e91e57e44853a835dadccb73, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerLooter
+  ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &8718556211917965241
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cc7b164a8c040e5438baf20f875a9f90, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LootableBodyInteractable
 --- !u!1 &5606094146414363504
 GameObject:
   m_ObjectHideFlags: 0
