@@ -221,22 +221,42 @@ NetworkManager              루트 유지
 
 ## B-3. 매니저 묶음 · UI 캔버스 이식
 
-Main Scene을 **추가 로드(Additive)** 해서 복사한다.
+**`Map_Apocalypse`를 추가 로드(Additive)해서 복사한다.** Main Scene이 아니라 이쪽이다 — 이미 정리·검증된 묶음이고, 매니저 목록도 그쪽이 최신이다 (#605에서 이 경로로 만들었다).
 
 ```
-=== SYSTEMS === 에서   InGameManager · RoundTimerSync · === GameManagers ===
-=== UI === 통째로       캔버스 8개 + EventSystem
+=== WORLD ===  === SYSTEMS ===  === UI ===  === _TEST ===  AppBootstrap  NetworkManager
 ```
 
-`=== GameManagers ===` 12개: `NpcSpawner` `CriminalAssigner` `AppearanceAssigner` `ArrestJudge` `RoundManager` `WantedListManager` `CustodyRouter` `WrongfulArrestPenalty` `SuddenEvents` `DirectoryManager` `ArrestVerdictFeedback` `Gates`
+루트 6개를 **한 번에 선택해 Edit ▸ Duplicate** 한 뒤 새 씬으로 옮긴다(`EditorSceneManager.MoveGameObjectToScene`). `Object.Instantiate`가 아니라 Duplicate를 쓰는 이유는 **프리팹 링크가 유지되기 때문**이다 (C-10). 원본 씬은 저장하지 않고 닫는다.
+
+`=== WORLD ===`까지 같이 가져오면 앵커 오브젝트(광장·폭탄 상자·외곽 지점·CCTV·NavMeshSurface)와 그것을 가리키는 매니저 배선이 통째로 딸려온다 — 새 맵에서는 **좌표만 옮기면 된다.**
+
+> 옛 방식(Main Scene에서 필요한 것만 골라 복사)은 다음을 직접 챙겨야 했다:
+> ```
+> === SYSTEMS === 에서   InGameManager · RoundTimerSync · === GameManagers ===
+> === UI === 통째로       캔버스 8개 + EventSystem
+> ```
+
+`=== GameManagers ===` 15개: `NpcSpawner` `CriminalAssigner` `AppearanceAssigner` `ArrestJudge` `RoundManager` `WantedListManager` `CustodyRouter` `WrongfulArrestPenalty` `SuddenEvents` `DirectoryManager` `ArrestVerdictFeedback` `Gates` `SecretFavorBroker` `EffectManager` `FxManager`
 
 > `Gates`는 서버 권위 게이트 둘을 한 `NetworkObject`에 얹은 오브젝트다 — `SceneReadyGate`(전원 준비, #410) · `SettlementConfirmGate`(전원 정산 확인, #509). 이름이 `SceneReadyGate`였다가 후자가 붙으며 바뀌었다.
 
-> ⚠️ **한 덩어리로 복사할 것.** 임시 부모 하나에 모아 놓고 `Instantiate`를 **1회**만 해야 매니저↔UI 교차 참조가 자동 리맵된다. 따로따로 복사하면 참조가 원본(Main Scene)을 가리켜 씬을 닫는 순간 전부 null이 된다.
+> ⚠️ **한 덩어리로 복사할 것.** 루트를 전부 한 번에 선택해 한 번에 복제해야 매니저↔UI 교차 참조가 자동 리맵된다. 따로따로 복사하면 참조가 원본 씬을 가리켜 씬을 닫는 순간 전부 null이 된다.
 >
 > 특히 `SuddenEventManager.m_eventEntries`(이벤트 풀 명시 리스트 — 자동수집을 쓰지 않는다, #291)가 이렇게 살아온다. 빠뜨리면 돌발 이벤트가 조용히 안 뜬다.
 
-복사 후 **Main Scene은 저장하지 않고 닫는다.**
+복사 후 **원본 씬은 저장하지 않고 닫는다.**
+
+### 복사해도 안 따라오는 것 — 새 맵에서 손으로 잇는다 (#605 실측)
+
+원본 맵의 지오메트리 루트(`Map_Apocalypse`) 안을 가리키던 참조는 전부 끊긴다. 실제로 끊긴 것 넷:
+
+| 필드 | 이어줄 것 |
+|------|-----------|
+| `PlayerSpawnManager.m_spawnPoint` | `HQ/…/PlayerSpawnPoint` — **비어 있으면 플레이어가 원점에 스폰된다** |
+| `RoundManager.m_jailZone` | 새 `Jail` 인스턴스의 `JailZone` |
+| `CCTVSwitcher.m_cameras` | CCTV 4대. `HQ.prefab` 안에 있는 컴포넌트라 프리팹 기본값(빈 배열)으로 들어온다. **타입이 `Camera[]`다** — `CCTVNode`를 넣으면 조용히 무시된다 |
+| `MinimapViewer` 월드 중심·크기 | 맵 크기. 역시 `HQ.prefab` 기본값이 들어오므로 인스턴스에서 덮어쓴다 |
 
 ## B-4. 본부 · 유치장
 
@@ -323,7 +343,7 @@ NavMesh.CalculatePath(from, seat.position, 1 << 0, p);
 
 # C장 — 함정 모음
 
-전부 #215 제작 중 실제로 밟은 것들이다.
+전부 맵을 만들다 실제로 밟은 것들이다 (C-10까지 #215, C-11·C-12는 #605).
 
 ## C-1. 씬 이름이 `EScene`에 없으면 게임 씬으로 인식되지 않는다
 
@@ -434,7 +454,31 @@ canvas.position = dst.position + dst.rotation * offRot;
 | **딸려오는 잔재** | Main Scene `NpcSpawner`의 자식 스폰 포인트 3개가 함께 복사된다. 좌표가 음수(`(-2,0,17)` 등)라 새 맵에서는 허공이다. 지울 것 |
 | **프리팹 링크** | `Object.Instantiate`는 프리팹 연결을 끊는다. 프리팹이 있는 것은 `PrefabUtility.InstantiatePrefab`으로 새로 만들 것 |
 
-## C-11. NGO — 프리팹 안의 씬 배치 NetworkObject
+## C-11. 방향성 있는 타일은 한 축만 맞는다 (#605)
+
+**증상:** 횡단보도 줄무늬가 도로를 가로지르지 않고 도로와 나란히 누워 있다.
+
+**원인:** 방향을 맞춰 주는 기능은 **연석(`Edge Prefabs`)에만** 걸린다. 나머지 글자는 `Random Yaw` 아니면 전부 같은 각도로 놓인다. 그래서 십자로 교차하는 도로망에서는 한쪽 축 횡단보도만 맞는다.
+
+**조치:** 생성 후 어긋난 칸만 손으로 90도 돌린다. **피봇이 칸 모서리라 그냥 돌리면 타일이 칸 밖으로 나간다** — 돌린 뒤 경계 중심을 칸 중심에 다시 맞춰야 한다 (생성기의 `PlaceTile`이 하는 것과 같은 계산).
+
+같은 이유로 **차선이 그려진 도로 타일도 한 축만 맞는다.** `Map_Cyberpunk`는 아예 민무늬 아스팔트로 깔고 차선을 나중에 얹는 쪽을 택했다 (D장 `Road_Bare_5m`).
+
+## C-12. 벽 없이 건물로 경계를 만들 때 (#605)
+
+팔레트의 `Wall`을 전부 비우면 생성기가 경계를 만들지 않는다. 대신 외곽 한 줄에 건물을 둘러 세우는 방식인데, 그때 따라붙는 것 셋:
+
+| 할 것 | 왜 |
+|-------|-----|
+| **보이지 않는 `BoxCollider` 링** | 손배치한 건물 줄에는 틈이 생긴다. 게다가 Synty 콜리전 껍질은 옆면이 수직이 아니라(A-6) 경계로 삼기에 위험하다. 파사드 면을 따라 상자 4개를 세워 봉쇄를 보증한다 |
+| **외곽 칸의 포장 타일 제거** | 건물이 덮을 자리다. 남겨 두면 건물 바닥과 두 겹이 돼 z-fighting이 난다 |
+| **외곽 건물을 NavMesh 베이크에서 제외** | 포장을 지웠으니 그 밑엔 막을 것도 없고, 파사드 뒤 5m 통로가 NavMesh 섬으로 구워진다. `NavMeshModifier` + `Ignore From Build` + **`Apply To Children`**(C-4) |
+
+건물이 칸 밖으로 튀어나오는 것은 그냥 두면 된다 — 안에서는 자기 파사드에 가려 보이지 않는다. 외곽 줄을 두껍게 잡아 칸을 낭비하지 말 것.
+
+`BoxCollider` 링이 NavMesh에 영향을 주는지는 `NavMeshSurface`의 `Use Geometry`가 정한다. 기본값 `Render Meshes`면 콜라이더는 베이크에 잡히지 않는다 (`Map_Cyberpunk` 실측 확인).
+
+## C-13. NGO — 프리팹 안의 씬 배치 NetworkObject
 
 `HQ.prefab`에는 `NetworkObject`가 9개(소품 6 + 문 2 + …), `Jail.prefab`에는 루트에 1개 들어 있다. NGO 2.13은 이를 정식 지원한다 (`InScenePlacedSourceGlobalObjectIdHash` · `NetworkObjectRefreshTool`).
 
@@ -453,8 +497,14 @@ canvas.position = dst.position + dst.rotation * offRot;
 | [Map_Apocalypse.unity](../Assets/Scenes/Maps/Map_Apocalypse.unity) | 아포칼립스 맵 씬 |
 | [Map_Apocalypse_Layout.txt](../Assets/Scenes/Maps/Map_Apocalypse_Layout.txt) | 배치도 20 × 36칸 = 100 × 180m (벽 안쪽 플레이 영역 89.4 × 169.4m) |
 | [MapPalette_Apocalypse.asset](../Assets/Scenes/Maps/MapPalette_Apocalypse.asset) | 팔레트 |
+| [Map_Cyberpunk.unity](../Assets/Scenes/Maps/Map_Cyberpunk.unity) | 사이버펑크 맵 씬 (#605) |
+| [Map_Cyberpunk_Layout.txt](../Assets/Scenes/Maps/Map_Cyberpunk_Layout.txt) | 배치도 20 × 12칸 = 100 × 60m (건물 안쪽 플레이 영역 90 × 50m) |
+| [MapPalette_Cyberpunk.asset](../Assets/Scenes/Maps/MapPalette_Cyberpunk.asset) | 팔레트 |
+| `Assets/Prefabs/Map/Road_Bare_5m.prefab` | 5m 민무늬 아스팔트 — SciFiCity에 5 × 5 무지 도로가 없어(전부 차선이 그려져 있다) 반쪽(`SM_Env_Road_Bare_Half_01_SF` 5 × 2.5)을 z 2배로 늘린 래퍼 |
 | `Assets/Prefabs/HQ/HQ.prefab` | 본부 — 실내 19.7 × 9.7m, 소품 19개 · 문 2개 · 월드 캔버스 2개 |
 | `Assets/Prefabs/HQ/Jail.prefab` | 유치장 — 도시 쪽 컨테이너(문·자물쇠·판정 버튼·게시판) + 맵 밖으로 떼어낸 감옥 방(내부 7.2 × 7.2m, 배치 지점 8) (#537) |
+
+## D-1. Map_Apocalypse
 
 컨셉은 **격리 구역** — 봉쇄된 도심. 팔레트 규칙 6개:
 
@@ -483,12 +533,62 @@ SkyDome   SM_Generic_SkyDome_Apoco @ scale 0.5
 - 돔은 안개에 완전히 먹힌다(끝 200m < 돔 856m). 즉 **하늘색 = 안개색**이다. 하늘 톤을 바꾸려면 돔 머티리얼이 아니라 `fogColor`를 건드려야 한다
 - **포스트프로세싱은 의도적으로 안 넣었다** — 로우폴리 캐주얼엔 대부분 해롭거나 중복이다(색보정은 안개·환경광이 이미 한다)
 
+## D-2. Map_Cyberpunk (#605)
+
+컨셉은 **네온 다운타운 한 블록** — 사방이 건물로 막힌 도심 한 구역. 아포칼립스의 720칸 대비 정확히 1/3인 240칸이다.
+
+| 글자 | 뜻 | 그룹 |
+|------|-----|------|
+| `R` | 도로 (민무늬 아스팔트) | Roads |
+| `C` | 횡단보도 | Roads |
+| `.` | 인도 (연석 자동 회전) | Sidewalks |
+| `B` | 건물 부지 — 포장만 깔고 비워둔다. **외곽 한 줄도 `B`** 다 | Sidewalks |
+
+`#`(경계벽)을 쓰지 않는다. 팔레트의 `Wall`은 전부 비어 있고 경계는 외곽 건물이 맡는다 (C-12).
+
+지오메트리 777 오브젝트 (`Sidewalks 132 · Roads 48 · Buildings 123 · Props 105 · Sky 2 · Boundary 4 · HQ · Jail`).
+NavMesh 정점 3,066 / 삼각형 1,328 · NetworkObject 17.
+
+- `Buildings` = 외곽 파사드 120개(60칸 × 2층, `SM_Bld_Section_*`) + 내부 건물 3동
+- `Boundary` = 렌더러 없는 봉쇄 상자 4개 (파사드 면 x 5/95 · z 5/55, 높이 10m)
+- `Sky` = 스카이돔 + 맵 밖 스카이라인 72동(`SM_Bld_Background_*`, 높이 17~42m). 둘 다 NavMesh 제외
+- 앵커: PlazaPoint(75, 45) · DetentionPoint(25, 37.5) · NPC 스폰 8 · 폭탄 상자 3 · 외곽 지점 6 · 밀거래 지점 3 · CCTV 4
+- 미니맵: center(50, 30) size(90, 50) — **`HQ.prefab` 기본값이 아포칼립스 값이라 인스턴스에서 덮어썼다**
+
+**분위기** (화창한 낮)
+
+```
+Fog       Linear · 70~280m · (0.60, 0.74, 0.91)
+Ambient   Trilight 1.0  Sky (0.55,0.68,0.88) / Equator (0.60,0.60,0.58) / Ground (0.26,0.25,0.23)
+Sun       (1.00, 0.957, 0.878) 강도 1.25 · 각도 (52, 150) · Soft Shadow 세기 0.75
+SkyDome   PolygonSciFiCity SkyDome @ scale 6 (원본 지름 66m라 키워야 맵을 덮는다)
+가로등     Point 21개 전부 소등(Light.enabled=false) — 오브젝트는 남겨 뒀다, 야경으로 되돌릴 때 켜면 된다
+스카이라인  `Assets/Art/Materials/Buildings_Background_Day_01.mat` (_BaseColor 0.62,0.66,0.74) 로 52개 렌더러 교체
+```
+
+`SkyDome`은 `Unlit/Texture`라 조명을 안 받는다 — **하늘 색은 사실상 포그 색이 정한다**(돔이 포그 거리 밖). 밤/낮 전환의 실제 손잡이는 Fog·Ambient·Sun 세 줄이다.
+배경 스카이라인의 팩 머티리얼 `Buildings_Background_01`은 `_BaseColor`가 검정(밤 실루엣)이라 낮에는 안 맞는다. 서드파티 머티리얼을 고치는 대신 **낮용 사본을 만들어 씬 인스턴스에만 물렸다**.
+
+간판·창문의 밝은 부분은 전부 팩의 이미시브 머티리얼이다 — 광원이 아니다. **낮에도 창문이 켜져 있는데** 팩 공용 머티리얼(`PolygonScifi_01_A`)이라 고치면 다른 맵·상점 씬까지 바뀐다. 여기서도 **포스트프로세싱은 넣지 않았다**(Bloom은 URP 전역 설정이라 룩 튜닝 이슈로).
+
 ---
 
 # E장 — 다른 에셋 팩으로 맵을 만들 때
 
-1. **모듈 크기를 잰다.** 도로·보도 프리팹의 렌더러 경계를 재서 `Cell Size`에 넣는다 (PolygonApocalypse = 5m)
+1. **모듈 크기를 잰다.** 도로·보도 프리팹의 렌더러 경계를 재서 `Cell Size`에 넣는다 (PolygonApocalypse · PolygonSciFiCity 둘 다 5m)
 2. **연석 방향을 확인한다.** 연석이 로컬 +Z를 향하지 않으면 방향을 맞춘 프리팹 배리언트를 만든다
 3. **벽 조각 축을 확인한다.** 로컬 +X 두께 / −Z 길이
 4. **LODGroup 유무를 확인한다.** PolygonApocalypse·SciFiCity에는 **하나도 없다** — 정적 배칭과 Occlusion Culling에 기대야 한다. 생성기가 타일에 Batching/Occluder/Occludee Static 플래그를 미리 켜둔다
 5. **콜리전 껍질 각도를 재본다.** 옆면이 수직이 아니면 A-6의 벽 타기 문제가 재현된다
+
+## E-1. PolygonSciFiCity 실측값 (#605에서 잰 것)
+
+| 항목 | 값 |
+|------|-----|
+| 모듈 크기 | 도로·인도 전부 **5 × 5m** — `Cell Size` 5 그대로 |
+| 연석 방향 | `SM_Env_Sidewalk_Straight_01/02_SF` 연석이 **로컬 +Z** · `Sidewalk_Corner_01_SF`가 **+X·+Z** — 규약 그대로라 배리언트가 필요 없다 |
+| 무지 도로 | **없다.** 5 × 5 도로 타일은 전부 차선·화살표가 그려져 있고, 무지는 반쪽(`SM_Env_Road_Bare_Half_01_SF` 5 × 2.5)뿐이다 (D장 `Road_Bare_5m`) |
+| 경계벽 조각 | `SM_Env_Wall_Generic_01`(5 × 2.94 × 0.26)은 길이가 **로컬 +X**라 축 규약과 어긋난다 — 쓰려면 회전 배리언트가 필요하다. `SM_Bld_City_Wall_01`은 길이 11.15m라 5m 격자에 안 떨어진다 |
+| 건물 모듈 | `SM_Bld_Section_*` 세트가 **5 × 5 × 높이 3m**로 격자에 딱 맞는다. 벽면은 전부 **로컬 +Z**, 코너 조각(`Section_Corner_*`)은 **−X·+Z** 두 면. 2단으로 쌓으면 6m 파사드 |
+| 스카이라인 | `SM_Bld_Background_*` 높이 17~42m — 맵 밖 배경용 |
+| 스카이돔 | `Prefabs/Environments/SkyDome`이 지름 66m뿐이다. 맵을 덮으려면 키워야 한다 (100 × 60 맵에 scale 6) |
