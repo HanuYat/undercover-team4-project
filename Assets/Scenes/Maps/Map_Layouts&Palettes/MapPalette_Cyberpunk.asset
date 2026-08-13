@@ -1,0 +1,84 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 556f8752bc4da584dacacf81106a11c9, type: 3}
+  m_Name: MapPalette_Cyberpunk
+  m_EditorClassIdentifier: Assembly-CSharp-Editor::MapPalette
+  m_layout: {fileID: 4900000, guid: bcb89706d4500ac4b8da11ffa0cad7d3, type: 3}
+  m_cellSize: 5
+  m_seed: 605
+  m_edgeFacingSymbols: RC
+  m_entries:
+  - m_symbol: R
+    m_group: Roads
+    m_prefabs:
+    - {fileID: 979197702753175393, guid: 83b52121e33fff34fbbfb94011846f7b, type: 3}
+    m_underlayPrefabs: []
+    m_edgePrefabs: []
+    m_cornerPrefabs: []
+    m_yOffset: 0
+    m_scale: 1
+    m_randomYaw: 0
+  - m_symbol: C
+    m_group: Roads
+    m_prefabs:
+    - {fileID: 1224664707774196, guid: 1706df18b40e3b54398964cb03a14f7f, type: 3}
+    - {fileID: 1359539421128350, guid: 9315487ef0253a44e8113a1f3d74285a, type: 3}
+    m_underlayPrefabs: []
+    m_edgePrefabs: []
+    m_cornerPrefabs: []
+    m_yOffset: 0
+    m_scale: 1
+    m_randomYaw: 0
+  - m_symbol: .
+    m_group: Sidewalks
+    m_prefabs:
+    - {fileID: 1635467700069036, guid: 8e7631b36958d68408ebf64b86f272e9, type: 3}
+    - {fileID: 1165202726996246, guid: 572123d0f82b6a5479ac596709fb6d08, type: 3}
+    m_underlayPrefabs: []
+    m_edgePrefabs:
+    - {fileID: 1776786320129414, guid: 553d5ab60b93b904896a8af286bdbe32, type: 3}
+    - {fileID: 1492187450596742, guid: e65f4dbcd29530d4982fee65cdde9c76, type: 3}
+    m_cornerPrefabs:
+    - {fileID: 1035388532786480, guid: bb14082ea26e24140b490f3bf8a64d11, type: 3}
+    m_yOffset: 0
+    m_scale: 1
+    m_randomYaw: 1
+  - m_symbol: B
+    m_group: Sidewalks
+    m_prefabs:
+    - {fileID: 1635467700069036, guid: 8e7631b36958d68408ebf64b86f272e9, type: 3}
+    - {fileID: 1165202726996246, guid: 572123d0f82b6a5479ac596709fb6d08, type: 3}
+    m_underlayPrefabs: []
+    m_edgePrefabs:
+    - {fileID: 1776786320129414, guid: 553d5ab60b93b904896a8af286bdbe32, type: 3}
+    - {fileID: 1492187450596742, guid: e65f4dbcd29530d4982fee65cdde9c76, type: 3}
+    m_cornerPrefabs:
+    - {fileID: 1035388532786480, guid: bb14082ea26e24140b490f3bf8a64d11, type: 3}
+    m_yOffset: 0
+    m_scale: 1
+    m_randomYaw: 1
+  m_wall:
+    m_symbols: '#'
+    m_bottom: {fileID: 0}
+    m_gate: {fileID: 0}
+    m_gateScale: {x: 1, y: 1.55, z: 1.8}
+    m_gateInset: 0.5
+    m_top: {fileID: 0}
+    m_topY: 5
+    m_cap: {fileID: 0}
+    m_capY: 7.92
+    m_column: {fileID: 0}
+    m_inset: 0.3
+    m_useBoxCollider: 1
+    m_thickness: 1.1
+    m_height: 7.95
+    m_columnWidth: 0.9

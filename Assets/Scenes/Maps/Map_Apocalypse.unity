@@ -29506,6 +29506,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WrongfulArrestPenalty
   ShowTopMostFoldoutHeaderGroup: 1
+  m_penaltyEnabled: 0
   m_plazaPoint: {fileID: 1026613420}
   m_detentionPoint: {fileID: 433575055}
   m_repelRadius: 10
@@ -50218,6 +50219,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VerdictBanner
   m_panelRoot: {fileID: 0}
+  m_background: {fileID: 0}
   m_titleText: {fileID: 2060166252}
   m_detailText: {fileID: 1558753973}
   m_toneTarget: {fileID: 1163084070}
@@ -95033,7 +95035,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7335312846441893584, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 4.75
+      value: 3.59
       objectReference: {fileID: 0}
     - target: {fileID: 7335312846441893584, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
       propertyPath: m_LocalRotation.w

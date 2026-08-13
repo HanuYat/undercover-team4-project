@@ -121,6 +121,8 @@ MonoBehaviour:
     DisplayName: "\uC885\uB9D0 \uB3C4\uC2DC"
   - SceneName: Main Scene
     DisplayName: "\uAD6C \uAC1C\uBC1C \uB9F5"
+  - SceneName: Map_Cyberpunk
+    DisplayName: "\uC0AC\uC774\uBC84\uD391\uD06C"
 --- !u!114 &2786289631189589368
 MonoBehaviour:
   m_ObjectHideFlags: 0
