@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
@@ -7,8 +8,10 @@ using UnityEngine.Localization;
 /// 검거 성립 전체 알림 (#616) — 현상수배범이 유치장에 들어가면 전 플레이어(본부·현장) 화면에
 /// "〈이름〉 검거 — 남은 N명"을 띄운다.
 ///
-/// 개인 판정 배너(<see cref="ArrestVerdictFeedback"/>, #306)는 검거자 한 명에게 가는 개인 피드백이라
-/// 그대로 두고 이쪽을 따로 얹는다 — 자리도 상단 토스트 대 배너 패널로 갈려 겹치지 않는다.
+/// <b>검거자 본인에게는 보내지 않는다.</b> 그 자리에는 개인 판정 배너
+/// (<see cref="ArrestVerdictFeedback"/>, #306)가 이름·보상까지 더 자세히 띄운다 — 둘 다 띄우면
+/// 같은 내용이 화면에서 겹친다. 남은 수는 그 화면에도 상시 표시된다
+/// (<see cref="RemainingCriminalsHud"/>). 즉 <b>이 알림은 "검거하지 않은 사람들"용</b>이다.
 ///
 /// <b>싣는 것은 대상 이름과 남은 수까지다</b> (#616 결정). 누가 잡았는지와 보상액은 보내지 않는다 —
 /// 그것까지 자동으로 흐르면 무전으로 주고받을 것이 없어진다.
@@ -44,6 +47,10 @@ public class ArrestNoticeBroadcaster : MonoBehaviour
     private WantedListManager WantedList => App.Game.WantedList;
 
     private bool m_handlerRegistered;
+
+    // 매 검거마다 새로 만들지 않도록 재사용한다 — 서버에서만, 한 번에 하나씩 쓴다.
+    private readonly HashSet<ulong> m_arresters = new HashSet<ulong>();
+    private readonly List<ulong> m_targets = new List<ulong>();
 
     private void OnEnable()
     {
@@ -98,7 +105,7 @@ public class ArrestNoticeBroadcaster : MonoBehaviour
         m_handlerRegistered = true;
     }
 
-    // 서버: 진범 판정이 나면 대상 이름과 남은 수를 전원에게 알린다.
+    // 서버: 진범 판정이 나면 대상 이름과 남은 수를 검거자를 뺀 나머지에게 알린다.
     private void HandleArrestJudged(ArrestResult result)
     {
         if (result.Verdict != ArrestVerdict.WantedCriminal)
@@ -120,8 +127,18 @@ public class ArrestNoticeBroadcaster : MonoBehaviour
 
         string citizenName = ResolveName(result);
 
-        ShowLocal(citizenName, remaining); // 호스트 자신
-        Broadcast(citizenName, remaining); // 나머지 클라이언트
+        // 검거자는 개인 배너로 이미 안다 — 줄다리기로 여럿이 끌고 왔으면 전원이 받는다(#390).
+        m_arresters.Clear();
+        foreach (PlayerEscorter deliverer in result.DeliveredBy)
+        {
+            if (deliverer != null)
+                m_arresters.Add(deliverer.OwnerClientId);
+        }
+
+        if (!m_arresters.Contains(nm.LocalClientId))
+            ShowLocal(citizenName, remaining); // 호스트가 검거자가 아닐 때만
+
+        Broadcast(citizenName, remaining);
     }
 
     // 이름 기준은 판정 배너와 같다 — 정본 CitizenName, 없으면 NPC 이름 (ArrestJudge.LogVerdict와 동일).
@@ -154,12 +171,25 @@ public class ArrestNoticeBroadcaster : MonoBehaviour
         if (nm == null || !nm.IsServer || nm.CustomMessagingManager == null)
             return;
 
+        // 호스트는 위에서 로컬로 처리했고, 검거자는 개인 배너가 맡는다 — 남는 사람에게만 보낸다.
+        m_targets.Clear();
+        foreach (ulong clientId in nm.ConnectedClientsIds)
+        {
+            if (clientId == nm.LocalClientId || m_arresters.Contains(clientId))
+                continue;
+
+            m_targets.Add(clientId);
+        }
+
+        if (m_targets.Count == 0)
+            return;
+
         FixedString64Bytes name = citizenName.ToFixed64();
 
         using FastBufferWriter writer = new FastBufferWriter(k_writerSize, Allocator.Temp);
         writer.WriteValueSafe(remaining);
         writer.WriteValueSafe(name);
-        nm.CustomMessagingManager.SendNamedMessageToAll(k_messageName, writer, NetworkDelivery.Reliable);
+        nm.CustomMessagingManager.SendNamedMessage(k_messageName, m_targets, writer, NetworkDelivery.Reliable);
     }
 
     private void ReceiveNotice(ulong senderClientId, FastBufferReader reader)
@@ -167,7 +197,7 @@ public class ArrestNoticeBroadcaster : MonoBehaviour
         if (senderClientId != NetworkManager.ServerClientId)
             return;
 
-        // 호스트는 자기 브로드캐스트를 되받는다 — 이미 ShowLocal로 띄웠으니 무시한다.
+        // 서버는 자기 앞으로 보내지 않는다(대상 목록에서 뺀다) — 방어적 가드로만 남긴다.
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
             return;
 
