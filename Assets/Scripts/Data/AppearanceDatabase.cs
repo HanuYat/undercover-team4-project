@@ -95,6 +95,9 @@ public class AppearanceDatabase : ScriptableObject
     public static string GetAxisName(AppearanceAxis axis) =>
         LocalizedStrings.Get(k_table, "Npc.Axis." + axis);
 
+    /// <summary>공개되지 않은 축의 값 자리에 넣는 말 — "미상".</summary>
+    public static string UnknownValueName => LocalizedStrings.Get(k_table, "Npc.Appearance.Unknown");
+
     /// <summary>옵션의 표시 이름을 지금 언어로 읽는다. 배선이 빠진 옵션은 물음표로 둔다.</summary>
     public static string GetOptionName(AppearanceOption option) =>
         option == null || option.DisplayName == null || option.DisplayName.IsEmpty
@@ -197,15 +200,14 @@ public class AppearanceDatabase : ScriptableObject
     public string BuildMontageText(in AppearanceProfile profile, RevealedAxisSet revealedAxes)
     {
         var builder = new StringBuilder();
-        foreach (AppearanceAxis axis in revealedAxes)
+        for (int i = 0; i < AppearanceProfile.k_axisCount; i++)
         {
-            AppearanceOption option = GetOption(axis, profile.GetIndex(axis));
-            if (option == null)
-                continue;
-
+            var axis = (AppearanceAxis)i;
             if (builder.Length > 0)
                 builder.Append(" / ");
-            builder.Append(GetAxisName(axis)).Append(": ").Append(GetOptionName(option));
+
+            AppearanceOption option = revealedAxes.Contains(axis) ? GetOption(axis, profile.GetIndex(axis)) : null;
+            builder.Append(GetAxisName(axis)).Append(": ").Append(option != null ? GetOptionName(option) : UnknownValueName);
         }
         return builder.ToString();
     }

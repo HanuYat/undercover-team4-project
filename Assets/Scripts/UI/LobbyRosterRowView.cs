@@ -21,6 +21,10 @@ public class LobbyRosterRowView : MonoBehaviour
     [SerializeField]
     private GameObject m_micMutedIcon; // 음소거 표시 (#430)
 
+    [Tooltip("카드 왼쪽 얼굴 — LobbyPortraitStage가 구운 텍스처를 받는다 (#598)")]
+    [SerializeField]
+    private UnityEngine.UI.RawImage m_portrait;
+
     // 닉네임 자리에 들어가는 안내 문구 둘. 실제 닉네임은 사용자 입력이라 번역 대상이 아니고 이 둘만
     // 테이블에서 온다 — 그래서 라벨에 LocalizeStringEvent를 붙일 수 없다(닉네임을 덮어쓴다). (#497)
     [Header("문구 (LobbyTable)")]
@@ -69,9 +73,26 @@ public class LobbyRosterRowView : MonoBehaviour
     {
         PlayerId = string.Empty;
         BindLabel(m_emptyLabel);
+        SetPortrait(null); // 빈 자리엔 얼굴이 없다
         SetHost(false);
         SetMicMuted(false);
         SetSpeaking(false);
+    }
+
+    /// <summary>
+    /// 카드 얼굴을 건다 — null이면 얼굴 칸을 숨긴다(빈 자리·초상 준비 전).
+    ///
+    /// 텍스처를 밖에서 받는 이유: 지금은 외형이 전원 같아 한 장을 모두가 나눠 쓰지만,
+    /// 로봇 색 커스터마이징(#432)이 들어오면 사람마다 달라진다. 그때 이 자리에 각자의 텍스처가
+    /// 들어오면 되고 카드는 바뀔 것이 없다.
+    /// </summary>
+    public void SetPortrait(Texture portrait)
+    {
+        if (m_portrait == null)
+            return;
+
+        m_portrait.texture = portrait;
+        m_portrait.gameObject.SetActive(portrait != null);
     }
 
     public void SetSpeaking(bool on)

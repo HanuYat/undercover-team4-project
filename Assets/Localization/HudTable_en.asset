@@ -131,6 +131,14 @@ MonoBehaviour:
     m_Localized: You've been pickpocketed
     m_Metadata:
       m_Items: []
+  - m_Id: 3051723777540096
+    m_Localized: '{0} has joined'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3051723915952128
+    m_Localized: '{0} has left'
+    m_Metadata:
+      m_Items: []
   - m_Id: 7100000000320
     m_Localized: Loot
     m_Metadata:

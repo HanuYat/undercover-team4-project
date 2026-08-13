@@ -112,8 +112,18 @@ public class AppearanceAssigner : CommonManagerBase
         foreach (NpcController c in criminals)
         {
             NpcCatalogAppearance cat = c.GetComponent<NpcCatalogAppearance>();
-            if (cat != null && catalog != null) 
-                m_criminalProfiles.Add(catalog.GetProfile(cat.ModelIndex)); // Sci-fi
+            if (cat != null && catalog != null)
+            {
+                // 그림 몽타주가 가진 두상은 인간형 하나뿐이다 — 그 두상으로 안 읽히는 모델이 범인으로
+                // 걸리면 여기서 갈아끼운다. 프로필을 담기 전이라야 아래 실현 단계와 어긋나지 않는다.
+                int modelIndex = cat.ModelIndex;
+                if (!catalog.CanDepict(modelIndex))
+                {
+                    modelIndex = PickDepictableModel(catalog, modelIndex);
+                    cat.SetModelIndex(modelIndex);
+                }
+                m_criminalProfiles.Add(catalog.GetProfile(modelIndex)); // Sci-fi
+            }
             else
                 m_criminalProfiles.Add(m_appearanceDatabase.CreateRandomProfile()); // Generic
         }
@@ -210,13 +220,14 @@ public class AppearanceAssigner : CommonManagerBase
         Debug.LogWarning($"AppearanceAssigner: {npc.name}은(는) 용의자 목록에 없어 공개 대상이 아니다", npc);
     }
 
-    /// <summary>범인: SciFi는 스폰 모델 유지, Generic은 확정 프로필 배정. 신원엔 실제 프로필 반영.</summary>
+    /// <summary>범인: SciFi는 1단계에서 확정한 모델을 그대로 두고, Generic은 확정 프로필 배정. 신원엔 실제 프로필 반영.</summary>
     private AppearanceProfile RealizeCriminal(NpcController npc, int criminalIndex, AppearanceModelCatalog catalog)
     {
         NpcCatalogAppearance cat = npc.GetComponent<NpcCatalogAppearance>();
         if (cat != null && catalog != null)
         {
-            AppearanceProfile p = catalog.GetProfile(cat.ModelIndex);
+            // 1단계에서 담아 둔 것을 그대로 쓴다 — 모델을 갈아끼운 경우 여기서 다시 읽으면 갈라진다
+            AppearanceProfile p = m_criminalProfiles[criminalIndex];
             AssignIdentity(npc, p);
             return p;
         }
@@ -282,19 +293,39 @@ public class AppearanceAssigner : CommonManagerBase
     /// <summary>주어진 공개 축에서 criminalProfile과 모두 같은 모델 인덱스(셔플 후 첫). 없으면 -1.</summary>
     private int FindModelMatchingRevealed(AppearanceModelCatalog catalog, AppearanceProfile criminalProfile, RevealedAxisSet axes)
     {
-        var order = new List<int>(catalog.Count);
-        for (int i = 0; i < catalog.Count; i++) order.Add(i);
+        foreach (int m in ShuffledIndices(catalog.Count))
+        {
+            // 그림 몽타주로 안 그려지는 모델은 디코이가 못 된다 — 현장에서 후보로 안 보여 k가 헛돈다
+            if (!catalog.CanDepict(m)) continue;
+
+            AppearanceProfile p = catalog.GetProfile(m);
+            if (p.MatchesOn(criminalProfile, axes)) return m;
+        }
+        return -1;
+    }
+
+    /// <summary>그림 몽타주로 그릴 수 있는 모델 하나(셔플 후 첫). 하나도 없으면 fallback을 그대로 쓴다.</summary>
+    private int PickDepictableModel(AppearanceModelCatalog catalog, int fallback)
+    {
+        foreach (int m in ShuffledIndices(catalog.Count))
+        {
+            if (catalog.CanDepict(m)) return m;
+        }
+
+        Debug.LogWarning("[AppearanceAssigner] 그림 몽타주로 그릴 수 있는 모델이 없다 — 카탈로그의 NonHumanoid 체크를 확인할 것", this);
+        return fallback;
+    }
+
+    private static List<int> ShuffledIndices(int count)
+    {
+        var order = new List<int>(count);
+        for (int i = 0; i < count; i++) order.Add(i);
         for (int i = order.Count - 1; i > 0; i--)
         {
             int j = Random.Range(0, i + 1);
             (order[i], order[j]) = (order[j], order[i]);
         }
-        foreach (int m in order)
-        {
-            AppearanceProfile p = catalog.GetProfile(m);
-            if (p.MatchesOn(criminalProfile, axes)) return m;
-        }
-        return -1;
+        return order;
     }
 
     private AppearanceModelCatalog FindCatalog(IReadOnlyList<NpcController> npcs)
@@ -307,16 +338,10 @@ public class AppearanceAssigner : CommonManagerBase
         return null;
     }
 
+    // 비부합은 그냥 시민이라 NonHumanoid도 그대로 쓴다 — 도시 다양성이 여기서 유지된다
     private int PickNonMatchingModel(AppearanceModelCatalog catalog)
     {
-        var order = new List<int>(catalog.Count);
-        for (int i = 0; i < catalog.Count; i++) order.Add(i);
-        for (int i = order.Count - 1; i > 0; i--)
-        {
-            int j = Random.Range(0, i + 1);
-            (order[i], order[j]) = (order[j], order[i]);
-        }
-        foreach (int m in order)
+        foreach (int m in ShuffledIndices(catalog.Count))
         {
             AppearanceProfile p = catalog.GetProfile(m);
             if (!MatchesAnyCriminal(p)) return m;
