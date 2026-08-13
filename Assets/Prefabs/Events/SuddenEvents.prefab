@@ -388,7 +388,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LightningView
   m_strikeParticlePrefab: {fileID: 1251993928265596, guid: c445b201205907b4f90b242a07f4dbc9, type: 3}
-  m_warningPrefab: {fileID: 1242912157399330, guid: 6066b7833d493734a9af353bbd046758, type: 3}
+  m_warningPrefab: {fileID: 0}
   m_rainParticlePrefab: {fileID: 1988216202477046, guid: b99f1f7e52de4c7ba8366ddd75d22d85, type: 3}
   m_cloudPrefab: {fileID: 1023308068024276, guid: d368169865e447d4eb38c5700ff9856e, type: 3}
   m_cloudHeight: 80
