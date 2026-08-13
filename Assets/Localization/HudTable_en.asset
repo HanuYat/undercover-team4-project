@@ -139,6 +139,10 @@ MonoBehaviour:
     m_Localized: Funds
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000322
+    m_Localized: "Wanted criminal arrested \u2014 {0} still at large"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:
