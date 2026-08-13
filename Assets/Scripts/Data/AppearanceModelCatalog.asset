@@ -33,7 +33,7 @@ MonoBehaviour:
     NonHumanoid: 1
   - ModelName: Character_Android_Female_01
     Profile:
-      HairStyleIndex: 1
+      HairStyleIndex: 4
       HairColorIndex: 7
       SkinColorIndex: 4
       FacialHairIndex: 0
@@ -42,7 +42,7 @@ MonoBehaviour:
     NonHumanoid: 0
   - ModelName: Character_Augmented_Male_01
     Profile:
-      HairStyleIndex: 1
+      HairStyleIndex: 9
       HairColorIndex: 1
       SkinColorIndex: 0
       FacialHairIndex: 0
@@ -51,7 +51,7 @@ MonoBehaviour:
     NonHumanoid: 0
   - ModelName: Character_Cop_01
     Profile:
-      HairStyleIndex: 4
+      HairStyleIndex: 35
       HairColorIndex: 8
       SkinColorIndex: 6
       FacialHairIndex: 0
@@ -60,7 +60,7 @@ MonoBehaviour:
     NonHumanoid: 0
   - ModelName: Character_Cyber_Female_01
     Profile:
-      HairStyleIndex: 2
+      HairStyleIndex: 7
       HairColorIndex: 0
       SkinColorIndex: 0
       FacialHairIndex: 0
@@ -69,20 +69,20 @@ MonoBehaviour:
     NonHumanoid: 0
   - ModelName: Character_Cyber_Male_01
     Profile:
-      HairStyleIndex: 1
+      HairStyleIndex: 34
       HairColorIndex: 0
       SkinColorIndex: 0
-      FacialHairIndex: 2
+      FacialHairIndex: 5
       HeadwearIndex: 0
       EyewearIndex: 0
     NonHumanoid: 0
   - ModelName: Character_CyberPunk_Male_01
     Profile:
-      HairStyleIndex: 1
+      HairStyleIndex: 8
       HairColorIndex: 0
       SkinColorIndex: 0
       FacialHairIndex: 0
-      HeadwearIndex: 5
+      HeadwearIndex: 0
       EyewearIndex: 0
     NonHumanoid: 0
   - ModelName: Character_CyborgNinja_01
@@ -96,7 +96,7 @@ MonoBehaviour:
     NonHumanoid: 1
   - ModelName: Character_Garbage_Male_01
     Profile:
-      HairStyleIndex: 1
+      HairStyleIndex: 32
       HairColorIndex: 1
       SkinColorIndex: 0
       FacialHairIndex: 0
@@ -105,7 +105,7 @@ MonoBehaviour:
     NonHumanoid: 0
   - ModelName: Character_Hacker_Female_01
     Profile:
-      HairStyleIndex: 1
+      HairStyleIndex: 8
       HairColorIndex: 6
       SkinColorIndex: 0
       FacialHairIndex: 0
@@ -114,17 +114,17 @@ MonoBehaviour:
     NonHumanoid: 0
   - ModelName: Character_Hologram_Female_01
     Profile:
-      HairStyleIndex: 1
+      HairStyleIndex: 3
       HairColorIndex: 7
       SkinColorIndex: 5
       FacialHairIndex: 0
       HeadwearIndex: 0
-      EyewearIndex: 4
+      EyewearIndex: 0
     NonHumanoid: 0
   - ModelName: Character_Junky_Female_01
     Profile:
-      HairStyleIndex: 3
-      HairColorIndex: 2
+      HairStyleIndex: 12
+      HairColorIndex: 1
       SkinColorIndex: 0
       FacialHairIndex: 0
       HeadwearIndex: 5
@@ -132,7 +132,7 @@ MonoBehaviour:
     NonHumanoid: 0
   - ModelName: Character_Junky_Male_01
     Profile:
-      HairStyleIndex: 4
+      HairStyleIndex: 35
       HairColorIndex: 8
       SkinColorIndex: 0
       FacialHairIndex: 0
@@ -141,7 +141,7 @@ MonoBehaviour:
     NonHumanoid: 0
   - ModelName: Character_Medical_Male_01
     Profile:
-      HairStyleIndex: 4
+      HairStyleIndex: 35
       HairColorIndex: 8
       SkinColorIndex: 6
       FacialHairIndex: 0
@@ -159,28 +159,28 @@ MonoBehaviour:
     NonHumanoid: 0
   - ModelName: Character_Muscle_Male_01
     Profile:
-      HairStyleIndex: 1
+      HairStyleIndex: 23
       HairColorIndex: 0
       SkinColorIndex: 0
       FacialHairIndex: 1
       HeadwearIndex: 0
-      EyewearIndex: 4
+      EyewearIndex: 2
     NonHumanoid: 0
   - ModelName: Character_Rich_Female_01
     Profile:
-      HairStyleIndex: 3
+      HairStyleIndex: 17
       HairColorIndex: 5
       SkinColorIndex: 0
-      FacialHairIndex: 1
+      FacialHairIndex: 0
       HeadwearIndex: 0
       EyewearIndex: 0
     NonHumanoid: 0
   - ModelName: Character_Rich_Male_01
     Profile:
-      HairStyleIndex: 1
+      HairStyleIndex: 23
       HairColorIndex: 5
-      SkinColorIndex: 1
-      FacialHairIndex: 1
+      SkinColorIndex: 0
+      FacialHairIndex: 4
       HeadwearIndex: 3
       EyewearIndex: 0
     NonHumanoid: 0
