@@ -83,7 +83,7 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefab: {fileID: 0}
       SciFiOnly: 1
-      MontageLayer: {fileID: 0}
+      MontageLayer: {fileID: 21300000, guid: 23f6ac8740d48f04393d4a77cf98d4e9, type: 3}
   m_hairColor:
     Options:
     - DisplayName:

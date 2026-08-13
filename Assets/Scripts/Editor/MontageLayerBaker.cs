@@ -20,6 +20,8 @@ public class MontageLayerBaker : EditorWindow
 {
     private const float k_featureSoftness = 0.08f; // 이목구비 컷오프 경계 폭 — 계단을 살짝 뭉개 톱니를 막는다
 
+    private const float k_unknownHairCapRatio = 0.3f; // 형태 미상 머리가 정수리에서 덮는 깊이 (두상 높이 대비)
+
     [SerializeField] private AppearanceDatabase m_database;
 
     [SerializeField] private GameObject m_mannequinPrefab;
@@ -224,14 +226,23 @@ public class MontageLayerBaker : EditorWindow
             ApplyMaterial(bodyRenderers, m_flatMaterial);
             light.enabled = false;
 
-            Sprite baseSprite = SavePixels(RenderPixels(camera), "Montage_Base");
+            Color[] basePixels = RenderPixels(camera);
+            Sprite baseSprite = SavePixels(basePixels, "Montage_Base");
             if (baseSprite != null)
             {
                 SetPrivateSprite("m_montageBase", baseSprite);
                 baked.Add("살");
             }
 
-            // ③ 프롭 레이어 — 바디를 끄지 않고 검정으로 남긴다.
+            // ③ 형태 미상 머리 — 머리 프롭을 쓰지 않고 두상에서 뽑는다 (BuildUnknownHair 참고)
+            Sprite unknownHair = SavePixels(BuildUnknownHair(basePixels), "Montage_HairUnknown");
+            if (unknownHair != null)
+            {
+                SetPrivateSprite("m_montageUnknownHair", unknownHair);
+                baked.Add("형태 미상 머리");
+            }
+
+            // ④ 프롭 레이어 — 바디를 끄지 않고 검정으로 남긴다.
             //    끄면 머리 뒤에 가려야 할 뒷머리·모자 뒤통수까지 찍혀서 얼굴 위를 덮는다.
             //    검정으로 두면 가림(depth)은 그대로 살고, 평면 렌더의 밝기로 프롭만 오려낼 수 있다.
             ApplyMaterial(bodyRenderers, occluder);
@@ -252,30 +263,6 @@ public class MontageLayerBaker : EditorWindow
 
                     option.MontageLayer = sprite;
                     baked.Add($"{axis}[{i}]");
-                }
-            }
-
-            // 형태 미상 머리 — 머리 프롭을 전부 겹쳐 한 덩어리로 굽는다. 어느 스타일도 지목하지 않으면서
-            // 머리색만 공개된 몽타주에 색을 얹을 자리를 만든다. 머리색으로 칠할 것이므로 실루엣이다.
-            var union = new List<GameObject>();
-            int hairCount = m_database.GetOptionCount(AppearanceAxis.HairStyle);
-            for (int i = 0; i < hairCount; i++)
-            {
-                AppearanceDatabase.AppearanceOption option = m_database.GetOption(AppearanceAxis.HairStyle, i);
-                if (option?.PropPrefab != null)
-                    union.Add(InstantiateProp(option.PropPrefab, head, m_flatMaterial));
-            }
-
-            if (union.Count > 0)
-            {
-                Sprite unknown = SavePixels(CutOutProp(RenderPixels(camera), null), "Montage_HairUnknown");
-                foreach (GameObject prop in union)
-                    DestroyImmediate(prop);
-
-                if (unknown != null)
-                {
-                    SetPrivateSprite("m_montageUnknownHair", unknown);
-                    baked.Add("형태 미상 머리");
                 }
             }
 
@@ -465,6 +452,123 @@ public class MontageLayerBaker : EditorWindow
     }
 
     private static float Luminance(Color color) => 0.2126f * color.r + 0.7152f * color.g + 0.0722f * color.b;
+
+    /// <summary>
+    /// 형태 미상 머리 — 머리 스타일이 미공개일 때 까는 레이어. 머리색을 얹을 자리를 만들되 어느 스타일도
+    /// 지목하지 않아야 한다. 살 실루엣에서 정수리 쪽 일부를 떼어 캡으로 쓴다.
+    ///
+    /// 머리 프롭을 전부 겹친 합집합으로 굽던 것을 바꾼 것이다 — 합집합은 정의상 가장 바깥 포락선이라
+    /// 긴머리 외곽선을 그대로 물려받고, 미상이 장발이라는 말한 적 없는 정보를 사칭했다. 정수리 캡은
+    /// 어느 스타일에나 공통이라 길이를 주장하지 않는다.
+    ///
+    /// 캡은 채우지 않고 <b>윤곽만</b> 남긴다 — 통짜로 칠하면 이번엔 짧은머리 하나로 읽힌다. 바깥 한 겹은
+    /// 체크무늬로 솎아 윤곽까지 흐린다(미공개 색을 반투명으로 두는 것과 같은 취지 — 농도로 말한다).
+    /// 윤곽의 아랫변은 뺀다: 이마를 가로지르는 띠는 모자·이마밴드로 읽혀 Headwear 축과 섞이고,
+    /// 머리 레이어가 이목구비 위에 깔리는 탓에 눈썹까지 덮는다.
+    /// </summary>
+    private Color[] BuildUnknownHair(Color[] basePixels)
+    {
+        int size = m_resolution;
+        var head = new bool[basePixels.Length];
+        int top = -1;
+        int bottom = -1;
+
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                if (basePixels[y * size + x].a <= 0.5f)
+                    continue;
+
+                head[y * size + x] = true;
+                if (bottom < 0)
+                    bottom = y;
+                top = y;
+            }
+        }
+
+        if (top < 0)
+        {
+            Debug.LogWarning("MontageLayerBaker: 살 레이어가 비어 형태 미상 머리를 만들 수 없다");
+            return new Color[basePixels.Length];
+        }
+
+        // 깊이는 두상 높이의 비율로 잡는다 — 해상도를 바꿔도 캡이 이마 아래로 내려오지 않는다
+        int depth = Mathf.Max(2, Mathf.RoundToInt((top - bottom + 1) * k_unknownHairCapRatio));
+
+        int capBottom = Mathf.Max(0, top - depth + 1);
+        var cap = new bool[basePixels.Length];
+        for (int y = capBottom; y <= top; y++)
+        {
+            for (int x = 0; x < size; x++)
+                cap[y * size + x] = head[y * size + x];
+        }
+
+        // 굽는 크기에 비례해 부풀려야 해상도를 올려도 윤곽 두께가 같아 보인다
+        bool[] grown = (bool[])cap.Clone();
+        int thickness = Mathf.Max(1, Mathf.RoundToInt(size / 16f));
+        for (int step = 0; step < thickness; step++)
+        {
+            var next = (bool[])grown.Clone();
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    if (!grown[y * size + x])
+                        continue;
+
+                    if (y + 1 < size)
+                        next[(y + 1) * size + x] = true;
+                    if (x > 0)
+                        next[y * size + x - 1] = true;
+                    if (x + 1 < size)
+                        next[y * size + x + 1] = true;
+                }
+            }
+            grown = next;
+        }
+
+        bool[] capEdge = EdgeOf(cap, size);
+        bool[] grownEdge = EdgeOf(grown, size);
+
+        var result = new Color[basePixels.Length];
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                int i = y * size + x;
+                bool outline = capEdge[i] && y > capBottom;
+                bool fuzz = grownEdge[i] && ((x + y) & 1) == 0;
+                result[i] = outline || fuzz ? Color.white : Color.clear; // 머리색으로 칠할 것이므로 흰색이다
+            }
+        }
+        return result;
+    }
+
+    /// <summary>마스크의 테두리 한 겹 — 바깥과 맞닿은 픽셀만 남긴다.</summary>
+    private static bool[] EdgeOf(bool[] mask, int size)
+    {
+        var edge = new bool[mask.Length];
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                if (!mask[y * size + x])
+                    continue;
+
+                edge[y * size + x] =
+                    x == 0
+                    || x + 1 == size
+                    || y == 0
+                    || y + 1 == size
+                    || !mask[y * size + x - 1]
+                    || !mask[y * size + x + 1]
+                    || !mask[(y - 1) * size + x]
+                    || !mask[(y + 1) * size + x];
+            }
+        }
+        return edge;
+    }
 
     /// <summary>
     /// 흰색 렌더(mask)에서 <b>바디에 가려지지 않은</b> 부분만 오려낸다 — 바디는 검정으로 찍혀 오므로
