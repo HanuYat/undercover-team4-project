@@ -161,6 +161,7 @@ public class LightningView : MonoBehaviour
         }
 
         ClearWarningFx();
+        App.Sound?.StopAmbient2D(EAudioClip.RainLoop); // 비가 켜진 채 파괴되면 소리만 남는다
 
         // 밝기는 되돌려 놓고 떠난다 — 뷰가 사라졌다고 씬이 어두운 채로 남으면 안 된다
         // 비가 켜진 채 파괴되면(호스트 종료·씬 전환 강제 정리) 요청이 영원히 남는다 — 여기서 짝을 맞춘다
@@ -244,6 +245,8 @@ public class LightningView : MonoBehaviour
             m_overcastPushed = true;
             WeatherOvercast.Push(m_overcastIntensityScale, m_overcastFadeSeconds);
         }
+
+        App.Sound?.PlayAmbient2D(EAudioClip.RainLoop); // 비 소리는 실내에서도 들린다 (#647)
     }
 
     private void HideRain()
@@ -257,6 +260,8 @@ public class LightningView : MonoBehaviour
         StopFlash();
         ClearWarningFx();
         PopOvercast(m_overcastFadeSeconds);
+
+        App.Sound?.StopAmbient2D(EAudioClip.RainLoop);
     }
 
     // 예고 — 떨어질 자리에 표시를 띄운다. 전 피어에서 불린다. (#647)
@@ -280,6 +285,9 @@ public class LightningView : MonoBehaviour
     private void HandleStrike(Vector3 position)
     {
         ClearWarningFx();
+
+        // 떨어진 자리에서 난다 — 멀리서도 방향이 읽혀야 어디에 쳤는지 안다 (#647)
+        App.Sound?.PlaySfxAt(EAudioClip.LightningStrike, position);
 
         if (m_strikeParticlePrefab != null)
             Destroy(Instantiate(m_strikeParticlePrefab, position, Quaternion.identity), m_strikeFxSeconds);
