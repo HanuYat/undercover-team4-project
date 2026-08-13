@@ -34,6 +34,13 @@ public class FogEvent : NetworkBehaviour, ISuddenEvent
     // (매니저가 IsActive를 읽는 것은 서버·오프라인에서뿐이므로 서버 진실값을 그대로 준다)
     public bool IsActive => m_fog;
 
+    /// <summary>
+    /// 조용히 시작한다 (팀 확정 2026-08-13) — 날씨는 <b>보면 안다</b>. 하늘이 바뀌고 시야가 줄어드는 것
+    /// 자체가 알림이라, 토스트를 얹으면 같은 사실을 두 번 말하는 셈이다. 돌발 이벤트 토스트는
+    /// "지금 대응할 일이 생겼다"를 위해 아껴 둔다 — 날씨까지 끼면 그 신호가 묽어진다.
+    /// </summary>
+    public bool AnnounceOnBegin => false;
+
     /// <summary>안개가 활성인지 — 서버·오프라인은 실참조, 원격 피어는 동기화값으로 판정.</summary>
     public bool IsFog => IsSpawned && !IsServer ? m_fogSynced.Value : m_fog;
 

@@ -106,6 +106,12 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
     /// </summary>
     public virtual bool AnnounceOnBegin => true;
 
+    /// <summary>
+    /// 알림 문구 키 — 파생이 자기 문장을 정한다. <b>virtual인 이유는 AnnounceOnBegin과 같다</b>:
+    /// 인터페이스 기본 구현에 기대면 매핑이 이 클래스에서 고정돼 파생이 덮어도 반영되지 않는다.
+    /// </summary>
+    public virtual string NoticeKey => null;
+
     // ---- 파생 클래스가 채우는 부분 ----
 
     /// <summary>

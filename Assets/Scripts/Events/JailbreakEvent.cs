@@ -102,6 +102,8 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     /// </summary>
     public bool AnnounceOnBegin => false;
 
+    public string NoticeKey => "Hud.Event.Notice.Jailbreak";
+
     private void Awake()
     {
         // 매니저가 아닌 장소·부품만 여기서 찾는다 (자물쇠·유치장).
@@ -332,7 +334,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         // 여기가 토스트 시점이다 — 자물쇠가 열리고 수감자가 실제로 빠져나간, 결말이 난 순간.
         // 연출(HUD·사운드)은 OnEventAnnounced 구독으로 붙인다 (#43).
         if (SuddenEvents != null)
-            SuddenEvents.Announce(DisplayName);
+            SuddenEvents.Announce(DisplayName, NoticeKey);
 
         // 침입자도 수감자들과 함께 달아난다 — 늦게 도착한 팀도 추격해 잡으면 경범죄 수익은 챙길 수 있다.
         // 방치 유예를 새로 줘서 도주 직후 강제 정리로 증발하지 않게 한다.

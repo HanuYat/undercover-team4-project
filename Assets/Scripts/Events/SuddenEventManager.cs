@@ -82,8 +82,8 @@ public class SuddenEventManager : NetworkedManagerBase
     private bool m_scheduling; // 라운드 InProgress 진입 시 켜진다 — Phase 폴링으로 스케줄 시작/정지를 판정
     private RoundPhase m_lastPhase = RoundPhase.Preparing;
 
-    /// <summary>이벤트 발생 알림 — 본부/현장 HUD 토스트가 구독할 훅.</summary>
-    public event Action<string> OnEventAnnounced;
+    /// <summary>이벤트 발생 알림 — 본부/현장 HUD 토스트가 구독할 훅. (표시 이름, 문구 키)</summary>
+    public event Action<string, string> OnEventAnnounced;
 
     // 서버(또는 오프라인)에서만 의미 — 이 피어가 이벤트 권위를 가지는지. 스폰 전(오프라인)이면 항상 권위.
     private bool IsAuthority => !IsSpawned || IsServer;
@@ -125,6 +125,16 @@ public class SuddenEventManager : NetworkedManagerBase
     /// </summary>
     public T GetEvent<T>()
         where T : class, ISuddenEvent => m_events.Find(e => e is T) as T;
+
+    /// <summary>풀에 담긴 이벤트 수 — 개발자 단축키가 인덱스 범위를 알아야 한다 (#609).</summary>
+    public int EventCount => m_events.Count;
+
+    /// <summary>
+    /// index번 이벤트의 표시 이름 — 범위 밖이면 null. <b>디버그 표시 전용</b>이다.
+    /// 이벤트 자체를 넘기지 않는 이유는 GetEvent와 같다 — 밖에서 풀을 헤집게 두지 않는다.
+    /// </summary>
+    public string EventNameAt(int index) =>
+        index >= 0 && index < m_events.Count ? m_events[index].DisplayName : null;
 
     private void Update()
     {
@@ -214,7 +224,7 @@ public class SuddenEventManager : NetworkedManagerBase
 
         // 조용히 시작하는 이벤트(AnnounceOnBegin=false)는 자기가 원하는 시점에 Announce를 직접 부른다
         if (chosen.AnnounceOnBegin)
-            Announce(chosen.DisplayName);
+            Announce(chosen.DisplayName, chosen.NoticeKey);
     }
 
     /// <summary>
@@ -243,7 +253,7 @@ public class SuddenEventManager : NetworkedManagerBase
 
         evt.ServerBegin();
         if (evt.IsActive && evt.AnnounceOnBegin)
-            Announce(evt.DisplayName);
+            Announce(evt.DisplayName, evt.NoticeKey);
         Debug.Log($"[돌발이벤트] 강제발동 — {evt.DisplayName}");
     }
 
@@ -268,20 +278,20 @@ public class SuddenEventManager : NetworkedManagerBase
     /// 보통은 발생 시점에 매니저가 부르지만, <see cref="ISuddenEvent.AnnounceOnBegin"/>이 false인 이벤트는
     /// 알릴 시점을 스스로 정해 이 메서드를 직접 부른다. 서버(또는 오프라인) 전용.
     /// </summary>
-    public void Announce(string displayName)
+    public void Announce(string displayName, string noticeKey = null)
     {
-        OnEventAnnounced?.Invoke(displayName); // 서버·오프라인 로컬 발행
+        OnEventAnnounced?.Invoke(displayName, noticeKey); // 서버·오프라인 로컬 발행
         if (IsSpawned && IsServer)
-            AnnounceEventClientRpc(displayName);
+            AnnounceEventClientRpc(displayName, noticeKey ?? string.Empty);
     }
 
     [ClientRpc]
-    private void AnnounceEventClientRpc(string displayName)
+    private void AnnounceEventClientRpc(string displayName, string noticeKey)
     {
         // 서버(호스트)는 위에서 이미 발행했으므로 원격 클라에서만 중계
         if (IsServer)
             return;
         Debug.Log($"[돌발이벤트] 발생 알림 — {displayName}");
-        OnEventAnnounced?.Invoke(displayName);
+        OnEventAnnounced?.Invoke(displayName, string.IsNullOrEmpty(noticeKey) ? null : noticeKey);
     }
 }

@@ -152,6 +152,8 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     // 알림은 표적이 누구인지는 말하지 않으므로, 새는 것은 "어딘가에서 시작됐다"까지다.
     public bool AnnounceOnBegin => true;
 
+    public string NoticeKey => "Hud.Event.Notice.Abduction";
+
     // 이벤트 프레임워크는 서버에서만 돌지만, 아래 Update는 스스로 도므로 직접 게이트한다 (JailIntake와 같은 패턴)
     private static bool HasServerAuthority =>
         NetworkManager.Singleton == null

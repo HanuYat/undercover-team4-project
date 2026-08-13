@@ -155,6 +155,26 @@ MonoBehaviour:
     m_Localized: "\u26A0 {0}"
     m_Metadata:
       m_Items: []
+  - m_Id: 3338714365911040
+    m_Localized: "\u26A0 A rioter has appeared"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3338714399465472
+    m_Localized: "\u26A0 A streaker has appeared"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3338714399465473
+    m_Localized: "\u26A0 Abductors have appeared"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3338714399465474
+    m_Localized: "\u26A0 Devices have gone dark"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3338714399465475
+    m_Localized: "\u26A0 The inmates have escaped"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

@@ -59,10 +59,10 @@ public class SuddenEventToastView : MonoBehaviour
         m_manager = null;
     }
 
-    private void HandleEventAnnounced(string displayName)
+    private void HandleEventAnnounced(string displayName, string noticeKey)
     {
-        if (string.IsNullOrEmpty(displayName))
-            return; // 이름 없는 알림은 띄울 것이 없다
+        if (string.IsNullOrEmpty(displayName) && string.IsNullOrEmpty(noticeKey))
+            return; // 이름도 키도 없는 알림은 띄울 것이 없다
 
         if (m_noticeMessage == null || m_noticeMessage.IsEmpty)
         {
@@ -70,6 +70,19 @@ public class SuddenEventToastView : MonoBehaviour
             return;
         }
 
+        // 이벤트가 자기 문구 키를 줬으면 그 문장을 통째로 쓴다 — 조사(이/가)가 이름마다 달라
+        // "{0}가 나타났습니다" 같은 공용 포맷으로는 문장이 깨진다 (ISuddenEvent.NoticeKey 참고).
+        // 키는 배선된 문구와 <b>같은 테이블</b>에서 찾는다 — 테이블 참조를 따로 배선하지 않으려는 것이다.
+        if (!string.IsNullOrEmpty(noticeKey))
+        {
+            App.UI.Toast?.Show(
+                new LocalizedString(m_noticeMessage.TableReference, noticeKey),
+                m_noticeSeconds,
+                m_noticeTone);
+            return;
+        }
+
+        // 키가 없는 이벤트는 예전처럼 이름을 공용 포맷에 끼운다.
         // 인자를 먼저 넣는다 — PlayerPresenceToastView와 같은 순서다.
         m_noticeMessage.Arguments = new object[] { displayName };
 

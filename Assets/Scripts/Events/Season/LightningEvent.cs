@@ -76,6 +76,13 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
     public string DisplayName => "번개";
     public bool IsActive => m_lightning;
 
+    /// <summary>
+    /// 조용히 시작한다 (팀 확정 2026-08-13) — 날씨는 <b>보면 안다</b>. 하늘이 바뀌고 시야가 줄어드는 것
+    /// 자체가 알림이라, 토스트를 얹으면 같은 사실을 두 번 말하는 셈이다. 돌발 이벤트 토스트는
+    /// "지금 대응할 일이 생겼다"를 위해 아껴 둔다 — 날씨까지 끼면 그 신호가 묽어진다.
+    /// </summary>
+    public bool AnnounceOnBegin => false;
+
     // 클라이언트에서 현재 번개 상태 조회
     public bool IsLightningActive =>
         (!IsSpawned || IsServer) ? m_lightning : m_lightningSynced.Value;

@@ -7,6 +7,8 @@
 /// </summary>
 public class StreakerEvent : SpawnedNpcEventBase
 {
+    public override string NoticeKey => "Hud.Event.Notice.Streaker";
+
     protected override ERiotBehavior RiotBehavior => ERiotBehavior.Flee;
 
     protected override void ApplyBehavior()

@@ -21,6 +21,15 @@ public interface ISuddenEvent
     /// </summary>
     bool AnnounceOnBegin => true;
 
+    /// <summary>
+    /// 이 이벤트의 알림 문구 키 (HudTable) — 비우면 <see cref="DisplayName"/>을 일반 포맷에 끼워 넣는다.
+    ///
+    /// 이벤트마다 키를 따로 두는 이유는 <b>한국어 조사</b> 때문이다: "난동자<b>가</b>" / "난동꾼<b>이</b>"처럼
+    /// 받침에 따라 갈려서 "{0}가 나타났습니다" 하나로는 문장이 깨진다. 문장 전체를 키에 담으면
+    /// 조사도 번역도 테이블 안에서 끝난다.
+    /// </summary>
+    string NoticeKey => null;
+
     /// <summary>지금 발생 가능한지 — 선행 조건(예: 현장 플레이어 존재) 검사. 서버(또는 오프라인)에서만 호출된다.</summary>
     bool CanTrigger();
 

@@ -143,6 +143,26 @@ MonoBehaviour:
     m_Key: Hud.Event.Notice
     m_Metadata:
       m_Items: []
+  - m_Id: 3338714365911040
+    m_Key: Hud.Event.Notice.Rioter
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3338714399465472
+    m_Key: Hud.Event.Notice.Streaker
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3338714399465473
+    m_Key: Hud.Event.Notice.Abduction
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3338714399465474
+    m_Key: Hud.Event.Notice.Blackout
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3338714399465475
+    m_Key: Hud.Event.Notice.Jailbreak
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

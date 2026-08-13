@@ -159,6 +159,26 @@ MonoBehaviour:
     m_Localized: "\u26A0 {0}"
     m_Metadata:
       m_Items: []
+  - m_Id: 3338714365911040
+    m_Localized: "\u26A0 \uAC70\uB9AC \uB09C\uB3D9\uC790\uAC00 \uB098\uD0C0\uB0AC\uC2B5\uB2C8\uB2E4"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3338714399465472
+    m_Localized: "\u26A0 \uB098\uCCB4 \uB09C\uB3D9\uAFBC\uC774 \uB098\uD0C0\uB0AC\uC2B5\uB2C8\uB2E4"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3338714399465473
+    m_Localized: "\u26A0 \uB0A9\uCE58\uBC94\uC774 \uB098\uD0C0\uB0AC\uC2B5\uB2C8\uB2E4"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3338714399465474
+    m_Localized: "\u26A0 \uC804\uC790\uAE30\uAE30\uAC00 \uBA39\uD1B5\uC774 \uB418\uC5C8\uC2B5\uB2C8\uB2E4"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3338714399465475
+    m_Localized: "\u26A0 \uBC94\uC778\uB4E4\uC774 \uD0C8\uC625\uC5D0 \uC131\uACF5\uD558\uC600\uC2B5\uB2C8\uB2E4"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:
