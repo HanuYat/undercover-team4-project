@@ -60,6 +60,10 @@ MonoBehaviour:
     m_Localized: Voice connection failed
     m_Metadata:
       m_Items: []
+  - m_Id: 2994373374074880
+    m_Localized: '{0} has left'
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

@@ -38,16 +38,12 @@ public class SettingsPanel : PanelBase
     [SerializeField] private Button m_closeButton; // 닫기
     [SerializeField] private Button m_resetButton; // 기본값 복원
 
-    [SerializeField] private GameObject m_background;
-
     public override bool CanCloseWithESC => true;
     public override bool IsStackable => true;
 
     protected override void Awake()
     {
         base.Awake();
-
-        if (m_background != null) m_background.SetActive(false);
 
         SetupSlider(
             m_mouseSensitivitySlider,
@@ -113,15 +109,11 @@ public class SettingsPanel : PanelBase
         // 열 때마다 현재 설정값으로 맞춘다 — 다른 경로(기본값 복원·다음 실행 로드)로 값이 바뀌어 있을 수 있다
         SyncFromSettings();
 
-        if (m_background != null) m_background.SetActive(true);
-
         base.OpenPanel();
     }
 
     public override void ClosePanel()
     {
-        if (m_background != null) m_background.SetActive(false);
-
         GameSettings.Save();    // 디스크 기록
         base.ClosePanel();
     }

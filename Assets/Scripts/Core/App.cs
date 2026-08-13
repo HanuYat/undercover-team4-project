@@ -35,6 +35,7 @@ public class App : Singleton<App>
     private DirectoryManager m_directoryManager;
     private WrongfulArrestPenalty m_wrongfulArrestPenalty;
     private TeamFund m_teamFund;
+    private SessionRoster m_sessionRoster;
     private ShopPurchases m_shopPurchases;
     private MapSelection m_mapSelection;
     private FactionSymbolManager m_factionSymbolManager;
@@ -169,6 +170,10 @@ public class App : Singleton<App>
         public static WrongfulArrestPenalty WrongfulArrestPenalty =>
             Instance.m_wrongfulArrestPenalty;
         public static TeamFund TeamFund => Instance.m_teamFund;
+
+        // 세션 접속자 명부 (#598). TeamFund와 같은 세션 상주 홀더라 어느 씬에서도 살아 있지만,
+        // 세션 없이 씬을 직접 Play하면 스폰되지 않아 null이다 — 사용처는 ?. 가드 필수
+        public static SessionRoster Roster => Instance.m_sessionRoster;
         public static ShopPurchases ShopPurchases => Instance.m_shopPurchases;
 
         // 다음 라운드로 갈 맵 (#578). TeamFund와 같은 세션 상주 홀더라 어느 씬에서도 살아 있지만,

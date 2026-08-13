@@ -1,7 +1,6 @@
 using System;
 using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 
 /// <summary>
 /// 계정 조작 확인창 (#444) — AuthGatePanel의 회원가입(익명 → 정식 승격)이 띄운다.
@@ -11,47 +10,13 @@ using UnityEngine.UI;
 /// 문구를 인수로 받아 연동 확인과 전환 확인 둘 다 이 하나로 쓴다.
 /// Title의 ESC 진입 메뉴는 QuitConfirmPanel이므로 IsEscMenu는 켜지 않는다 — 씬당 하나만 허용된다.
 /// </summary>
-public class AccountConfirmPanel : PanelBase
+public class AccountConfirmPanel : ConfirmPanelBase
 {
     [Header("문구")]
     [SerializeField]
     private TMP_Text m_messageText;
 
-    [Header("버튼")]
-    [SerializeField]
-    private Button m_confirmButton; // 예 — 넘겨받은 동작 실행
-
-    [SerializeField]
-    private Button m_cancelButton; // 아니오 — 창 닫기
-
-    [Header("배경 딤 (패널과 함께 켜고 끔)")]
-    [SerializeField]
-    private GameObject m_background;
-
-    public override bool CanCloseWithESC => true;
-    public override bool IsStackable => true;
-
     private Action m_onConfirm;
-
-    protected override void Awake()
-    {
-        base.Awake();
-        if (m_background != null)
-            m_background.SetActive(false);
-        if (m_confirmButton != null)
-            m_confirmButton.onClick.AddListener(HandleConfirm);
-        if (m_cancelButton != null)
-            m_cancelButton.onClick.AddListener(ClosePanel);
-    }
-
-    protected override void OnDestroy()
-    {
-        if (m_confirmButton != null)
-            m_confirmButton.onClick.RemoveListener(HandleConfirm);
-        if (m_cancelButton != null)
-            m_cancelButton.onClick.RemoveListener(ClosePanel);
-        base.OnDestroy();
-    }
 
     /// <summary>열기 **전에** 문구와 확정 시 실행할 동작을 넘긴다.</summary>
     public void Prepare(string message, Action onConfirm)
@@ -61,33 +26,14 @@ public class AccountConfirmPanel : PanelBase
             m_messageText.text = message;
     }
 
-    public override void OpenPanel()
-    {
-        // 취소 후 다시 열었을 때 이전 연타 방어가 남아 있지 않게 되돌린다
-        if (m_confirmButton != null)
-            m_confirmButton.interactable = true;
-
-        if (m_background != null)
-            m_background.SetActive(true);
-
-        base.OpenPanel();
-    }
-
     public override void ClosePanel()
     {
-        if (m_background != null)
-            m_background.SetActive(false);
-
         m_onConfirm = null; // 취소(ESC 포함)로 닫혔을 때 콜백이 남지 않게
         base.ClosePanel();
     }
 
-    private void HandleConfirm()
+    protected override void OnConfirm()
     {
-        // 확정은 한 번만 — 곧 네트워크 요청이 나간다
-        if (m_confirmButton != null)
-            m_confirmButton.interactable = false;
-
         var confirmed = m_onConfirm; // ClosePanel이 m_onConfirm을 비우므로 먼저 받아둔다
         ClosePanel();
         confirmed?.Invoke();

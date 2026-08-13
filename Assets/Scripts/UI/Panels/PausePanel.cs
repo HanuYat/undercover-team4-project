@@ -24,10 +24,6 @@ public class PausePanel : PanelBase
     [SerializeField]
     private Button m_settingsButton; // 설정 — 설정 창을 이 패널 위로 겹쳐 연다
 
-    [Header("배경 딤 (패널과 함께 켜고 끔)")]
-    [SerializeField]
-    private GameObject m_background;
-
     public override bool CanCloseWithESC => true;
     public override bool IsStackable => true;
     public override bool IsEscMenu => true;
@@ -42,8 +38,6 @@ public class PausePanel : PanelBase
     protected override void Awake()
     {
         base.Awake();
-        if (m_background != null)
-            m_background.SetActive(false);
         if (m_resumeButton != null)
             m_resumeButton.onClick.AddListener(ClosePanel);
         if (m_leaveButton != null)
@@ -67,16 +61,12 @@ public class PausePanel : PanelBase
 
     public override void OpenPanel()
     {
-        if (m_background != null)
-            m_background.SetActive(true);
         base.OpenPanel();
         SetLocalPlayerBlocked(true);
     }
 
     public override void ClosePanel()
     {
-        if (m_background != null)
-            m_background.SetActive(false);
         SetLocalPlayerBlocked(false);
         base.ClosePanel();
     }
