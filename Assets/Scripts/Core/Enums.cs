@@ -98,6 +98,10 @@ public enum EAudioClip
     // 폭주 차량 (#304). 뒤에 붙이는 이유는 위와 같다 — 정수로 직렬화돼 있다.
     VehicleEngine, // 부우우 — 엔진음(루프). 차량 프리팹의 AudioSource가 직접 튼다
     VehicleHorn, // 빠았 — 통과 직전 경적
+
+    // 날씨 (#647). 뒤에 붙이는 이유는 위와 같다 — 정수로 직렬화돼 있다.
+    LightningStrike, // 콰르릉 — 벼락이 떨어진 순간
+    RainLoop, // 쏴아 — 비가 오는 동안 계속 (환경음 루프)
 }
 
 /// <summary>
