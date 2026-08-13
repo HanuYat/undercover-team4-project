@@ -25,10 +25,10 @@ using UnityEngine;
 ///  2. <see cref="ServerBegin"/> — 침입자 NPC를 도시 스폰 포인트에 스폰(다음 프레임에 StartIntrude).
 ///     · 걸어오는 동안 유치장이 비면(반출) 침입을 포기하고 도심에 잔류한다 — 전제가 무너진 발동이라,
 ///       그대로 두면 아무도 없는 유치장을 털어 자물쇠만 열어 놓고 끝난다.
-///  3. 해제 착수(OnIntrudeUnlockStarted) — 본부 경보를 울린다.
+///  3. 해제 착수(OnIntrudeUnlockStarted) — 본부 경보를 울린다(자물쇠 경보 한정 — 토스트는 4에서).
 ///     <b>여기서부터는 유치장이 비어도 접지 않는다</b> — 이 구간이 팀의 마지막 저지 기회라(위 '대응 구간'),
 ///     이미 알린 위협을 시스템이 대신 지우면 달려온 쪽에는 이유가 읽히지 않는다. 열린 자물쇠는 플레이어가 잠근다.
-///  4. 해제 완료(OnIntrudeFinished reached=true) — 자물쇠를 열고 수감자를 전원 방출한다.
+///  4. 해제 완료(OnIntrudeFinished reached=true) — 자물쇠를 열고 수감자를 전원 방출한다. 전원에게 토스트를 띄운다.
 ///     · 방출: JailZone.ReleaseInmate + NpcCustody.ClearDelivered + StartFlee(재검거 가능하게)
 ///     · 진범만: RoundManager.ReportCriminalEscaped + WantedListManager.ReinstateByNpcId
 ///  5. 침입자도 함께 달아난다 — 추격해 잡으면 경범죄 수익은 챙길 수 있다. 방치되면 수명 초과로 정리.
@@ -95,7 +95,11 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
 
     public bool IsActive => m_intruder != null;
 
-    /// <summary>조용히 시작한다 — 침입자가 자물쇠에 손댈 때까지 알리지 않아야 이동 구간이 관찰 대상이 된다. (#261)</summary>
+    /// <summary>
+    /// 조용히 시작한다 — 침입자가 자물쇠에 손댈 때까지 알리지 않아야 이동 구간이 관찰 대상이 된다. (#261)
+    /// 토스트는 <b>방출 시점</b>에 직접 부른다 (<see cref="HandleIntrudeFinished"/>) — 해제 착수 구간은
+    /// 자물쇠 경보가 맡는다.
+    /// </summary>
     public bool AnnounceOnBegin => false;
 
     private void Awake()
@@ -286,7 +290,12 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     }
 
     // 자물쇠 해제 착수 — 이 순간 본부 경보를 울린다. 발동 시점에는 알리지 않았으므로(AnnounceOnBegin=false)
-    // 팀이 침입을 처음 인지하는 지점이 여기다. 연출(HUD·사운드)은 OnEventAnnounced 구독으로 붙인다 (#43).
+    // 팀이 침입을 처음 인지하는 지점이 여기다.
+    //
+    // <b>돌발 이벤트 토스트는 여기서 띄우지 않는다</b> — 이 구간을 알리는 몫은 자물쇠 경보
+    // (<see cref="JailLock.ServerAnnounceUnlockAttempt"/>)가 이미 지고 있어, 토스트까지 얹으면 같은 순간에
+    // 두 표시가 겹쳐 뜨고 정작 <b>털린 순간</b>에는 아무 표시도 남지 않는다. 토스트는 방출 시점으로 옮겼다
+    // (<see cref="HandleIntrudeFinished"/>).
     private void HandleUnlockStarted(NpcController npc)
     {
         if (npc != m_intruder)
@@ -296,8 +305,6 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         m_unlockAnnounced = true;
 
         Debug.Log($"[돌발이벤트] 범인 탈출 — 자물쇠 해제 시작, {m_unlockSeconds}초 후 개방");
-        if (SuddenEvents != null)
-            SuddenEvents.Announce(DisplayName);
 
         // 전 플레이어 팝업 — 대응 구간이 시작됐음을 알린다 (#311)
         m_jailLock.ServerAnnounceUnlockAttempt();
@@ -321,6 +328,11 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
 
         m_jailLock.ServerUnlock();
         ReleaseAllInmates();
+
+        // 여기가 토스트 시점이다 — 자물쇠가 열리고 수감자가 실제로 빠져나간, 결말이 난 순간.
+        // 연출(HUD·사운드)은 OnEventAnnounced 구독으로 붙인다 (#43).
+        if (SuddenEvents != null)
+            SuddenEvents.Announce(DisplayName);
 
         // 침입자도 수감자들과 함께 달아난다 — 늦게 도착한 팀도 추격해 잡으면 경범죄 수익은 챙길 수 있다.
         // 방치 유예를 새로 줘서 도주 직후 강제 정리로 증발하지 않게 한다.
