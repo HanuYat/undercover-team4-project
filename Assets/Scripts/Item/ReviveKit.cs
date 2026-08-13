@@ -2,44 +2,27 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 부활 키트 — 기능 정지(<see cref="IncapacitationCause.Die"/>)된 동료를 그 자리에서 <b>즉시</b>
-/// 일으키는 일회용 소지형 아이템. 상점에서 산다(<see cref="ItemBase.ShopPrice"/>). (#613, GDD 7-5)
-///
-/// 조준하고 좌클릭하면 서버가 대상·거리를 검증하고 곧바로 <see cref="PlayerHealth.ServerRevive"/>를
-/// 부른 뒤 키트를 소모한다 — <b>채널링도 대기 시간도 없다.</b> 회복 HP는 부활 경로 공통값
-/// (<c>PlayerHealth.m_reviveHp</c>)을 그대로 쓴다: 부활은 하나의 규칙이고 경로마다 갈릴 이유가 없다.
-///
-/// 이 키트가 생기기 전 복구 경로는 본부 이송 부활(<c>HqRevivalDevice</c>, #365) 하나였다 —
-/// 시체를 본부까지 끌고 가 안치하고 30초를 기다리는 길이다. 그쪽 코드는 남아 있지만 씬에 배치하지
-/// 않으므로(#613 결정), 실질적인 부활 수단은 이 키트다.
-///
-/// 배터리(<see cref="ItemBattery"/>)는 달지 않는다 — 한 번 쓰면 사라지므로 잔량 개념이 없다.
-/// 판정·소모는 전부 서버 권위다(#55): 원격 클라가 RPC를 직접 던져도 서버가 대상 상태·거리·가시선을
-/// 다시 본다. 채널링이 없어 취소 경로(<see cref="ItemBase.CancelUse"/>)도 기본 구현(무동작)을 그대로 쓴다.
+/// 부활 키트 — Die 상태의 플레이어를 그 자리에서 즉시 부활시키는 소모성 아이템
 /// </summary>
 public class ReviveKit : ItemBase
 {
-    // 사거리는 조준·윤곽선과 같은 기준 — PlayerInteractor.Range를 재사용한다 (#147 패턴, #184).
-    // 값을 따로 두면 "윤곽선은 떴는데 서버가 거부하는" 구간이 생긴다.
+    // 사거리는 조준·윤곽선과 같은 기준 — PlayerInteractor.Range를 재사용 (#147 패턴, #184).
     private const float k_fallbackRange = 3f; // 테스트 구성 등 PlayerInteractor가 없을 때
 
     /// <summary>
     /// 이 키트로 일으킬 수 있는 대상을 조준 중인지 — 윤곽선·크로스헤어 게이트. (#184)
-    /// 서버 검증(<see cref="ServerTryRevive"/>)과 같은 기준을 써야 어긋나지 않는다.
     /// </summary>
     public override bool CanTarget(GameObject aimTarget) => ResolveTarget(aimTarget) != null;
 
     /// <summary>
-    /// 사용 진입점 — 오너의 의도를 서버로 넘긴다. 대상 해석은 조기 반환·진단 로그를 위해 클라에서도
-    /// 하지만, 실제 부활과 소모는 서버가 한다 (Scanner.Use와 같은 구조, #55).
+    /// 사용 진입점 — 오너의 의도를 서버로 넘긴다. 실제 부활과 소모는 서버가 한다 (Scanner.Use와 같은 구조, #55).
     /// </summary>
     public override void Use(GameObject target)
     {
         PlayerHealth revivable = ResolveTarget(target);
         if (revivable == null)
         {
-            // 살아 있는 동료·NPC·자기 자신·빈 조준이 전부 여기로 떨어진다 — 사유를 나누지 않는 이유는
-            // 조준 윤곽선(CanTarget)이 이미 "쓸 수 있는 대상"을 색으로 알려주고 있기 때문이다.
+            // 살아 있는 동료·NPC·자기 자신·빈 조준이 전부 여기로 떨어진다
             Debug.Log("부활 실패: 기능 정지된 동료를 조준해야 한다");
             return;
         }
