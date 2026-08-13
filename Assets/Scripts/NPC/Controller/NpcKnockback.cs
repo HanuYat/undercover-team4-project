@@ -34,6 +34,14 @@ public class NpcKnockback : NetworkBehaviour
     ///
     /// 수감·침입은 제외한다 — 이벤트가 그 NPC의 진행(수용·자물쇠 해제)을 쥐고 있어서 중간에 날아가면
     /// 판정 경로가 끊긴다. 체포·연행 중인 NPC는 수갑을 찬 채 날아가 착지 후에도 체포 상태로 남는다.
+    ///
+    /// <b>시체도 제외한다</b> (#634). 시체는 사라지지 않고 그 자리에 남으므로 <b>같은 자리를 지나는
+    /// 외력이 계속 들어온다</b> — 상시 교통에서는 도로에 쓰러진 시민을 다음 차가 매번 다시 친다.
+    /// 막지 않으면 셋이 어긋난다: ① 아래 상태 전이가 시체를 Stunned로 되돌리려다 FSM에 거부당해
+    /// 매번 에러가 찍히고, ② 시체가 날아가고, ③ 착지 처리가 <b>에이전트를 다시 켜</b>
+    /// <see cref="NpcDeath.ServerEnterDead"/> ⑥("시체는 NavMesh 위로 돌아가지 않는다")을 정면으로
+    /// 뒤집는다 — 회수 로직이 시체를 NavMesh로 끌어다 붙인다.
+    /// 피해 쪽은 이미 <see cref="NpcStateRules.CanBeDamaged"/>가 같은 이유로 시체를 막고 있다.
     /// </summary>
     public void ServerApplyKnockback(Vector3 velocity)
     {
@@ -45,7 +53,7 @@ public class NpcKnockback : NetworkBehaviour
             return;
 
         NpcState state = m_owner.StateMachine.CurrentState; // 서버 진실값 — 동기화 지연 없이 판정
-        if (state == NpcState.Jailed || state == NpcState.Intruding)
+        if (state == NpcState.Dead || state == NpcState.Jailed || state == NpcState.Intruding)
             return;
 
         // 스턴 오버레이와 겹치면 넉백이 이긴다 (#292). 그냥 두면 Update의 스턴 게이트가 착지 후

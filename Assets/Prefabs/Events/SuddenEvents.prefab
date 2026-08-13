@@ -16,7 +16,6 @@ GameObject:
   - component: {fileID: 6553283234259604354}
   - component: {fileID: 812660901877859943}
   - component: {fileID: 1542303654048081899}
-  - component: {fileID: 5499711423042293484}
   - component: {fileID: 4391990372060924147}
   - component: {fileID: 7866726753952495387}
   - component: {fileID: 3850008261326609235}
@@ -99,8 +98,6 @@ MonoBehaviour:
   - component: {fileID: 6553283234259604354}
     enabled: 1
   - component: {fileID: 1542303654048081899}
-    enabled: 1
-  - component: {fileID: 5499711423042293484}
     enabled: 1
   - component: {fileID: 4391990372060924147}
     enabled: 1
@@ -214,25 +211,6 @@ MonoBehaviour:
   m_disposalDistance: 25
   m_disposalSpeed: 3.5
   m_maxChaseSeconds: 60
---- !u!114 &5499711423042293484
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 498939978214492355}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7d5f94bf267989d40b3be79cdd3e3287, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RunawayVehicleEvent
-  m_displayName: "\uD3ED\uC8FC \uCC28\uB7C9"
-  m_pickRadius: 100
-  m_laneHalfWidth: 2.5
-  m_warningSeconds: 2
-  m_parkedTimeoutSeconds: 60
-  m_returnTimeoutSeconds: 60
-  m_devTriggerKey: 94
 --- !u!114 &4391990372060924147
 MonoBehaviour:
   m_ObjectHideFlags: 0
