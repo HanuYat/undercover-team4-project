@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -62,7 +62,35 @@ public class TrafficVehicle : NetworkBehaviour
     private readonly HashSet<Transform> m_hitPeople = new HashSet<Transform>();
     private readonly HashSet<NpcController> m_hitNpcs = new HashSet<NpcController>();
 
-    private static readonly Collider[] s_overlap = new Collider[32];
+    // 사람을 찾는 쿼리라 <b>래그돌 본을 뺀다.</b> 한 사람이 본만 11개를 들고 있어(플레이어·시민 동일)
+    // 마스크를 열어 두면 차체 5 + 도로 2 + 사람 둘이면 벌써 31개다 — OverlapBox는 버퍼가 넘치면
+    // <b>잘린 개수만 돌려주고 넘쳤다고 알려주지 않으므로</b> 정면으로 치인 사람이 조용히 살아남는다.
+    // 시체가 도로에 남는 설계라 그 포화는 라운드가 갈수록 상시가 된다.
+    // 어느 본에 맞아도 GetComponentInParent가 같은 대상으로 올라가므로 판정력은 그대로다.
+    private static int s_hitLayers; // 0 = 아직 조회 전
+
+    private static readonly Collider[] s_overlap = new Collider[64]; // 폭탄(BombDevice)과 같은 크기
+
+    /// <summary>
+    /// 치임 판정에 쓰는 레이어 마스크 — 래그돌 본을 뺀 전 레이어.
+    ///
+    /// ⚠ <b>필드 초기화로 못 만든다.</b> <see cref="LayerMask.NameToLayer"/>는 MonoBehaviour의
+    /// 생성자·필드 초기화(= static 생성자가 그 시점에 걸리는 경우 포함)에서 호출이 <b>금지</b>돼 있어
+    /// 예외가 난다 — 풀이 차를 미리 만드는 순간 정확히 그 시점이다. 그래서 첫 사용 시점에 늦게
+    /// 조회한다(<see cref="NpcNavAreas.RoadMask"/>와 같은 패턴).
+    /// </summary>
+    private static int HitLayers
+    {
+        get
+        {
+            if (s_hitLayers == 0)
+            {
+                int ragdoll = LayerMask.NameToLayer("Ragdoll");
+                s_hitLayers = ragdoll >= 0 ? ~(1 << ragdoll) : ~0; // 레이어가 없으면 전 레이어로 폴백
+            }
+            return s_hitLayers;
+        }
+    }
 
     /// <summary>주행 거리를 다 썼는가 — <see cref="TrafficManager"/>가 회수 판정에 쓴다. 서버 전용.</summary>
     public bool IsFinished { get; private set; }
@@ -128,16 +156,18 @@ public class TrafficVehicle : NetworkBehaviour
         float step = m_speed * Time.deltaTime;
         Vector3 remaining = m_endPoint - transform.position;
 
-        if (remaining.sqrMagnitude <= step * step)
+        bool arrived = remaining.sqrMagnitude <= step * step;
+
+        transform.position = arrived ? m_endPoint : transform.position + m_direction * step;
+
+        // 도착 프레임에도 판정을 돌린다 — 종점이 도로 끝이라 그 자리에 사람이 서 있을 수 있다
+        ServerApplyHits();
+
+        if (arrived)
         {
-            transform.position = m_endPoint;
             m_driving = false;
             IsFinished = true; // 회수는 스폰한 쪽(TrafficManager)이 한다 — 풀의 주인이 하나여야 한다
-            return;
         }
-
-        transform.position += m_direction * step;
-        ServerApplyHits();
     }
 
     private void SetHeadlights(bool on)
@@ -202,9 +232,13 @@ public class TrafficVehicle : NetworkBehaviour
             m_hitBoxSize * 0.5f,
             s_overlap,
             transform.rotation,
-            ~0,
+            HitLayers,
             QueryTriggerInteraction.Ignore
         );
+
+        // 넘쳤으면 누군가는 잘렸다 — 조용히 안 맞는 것보다 로그가 남는 편이 낫다
+        if (count == s_overlap.Length)
+            Debug.LogWarning("TrafficVehicle: 치임 판정 버퍼가 찼다 — 뒤로 밀린 대상이 잘렸을 수 있다", this);
 
         for (int i = 0; i < count; i++)
         {

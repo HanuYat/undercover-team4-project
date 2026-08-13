@@ -44158,7 +44158,7 @@ MonoBehaviour:
   m_lanes: []
   m_crossSpeed: 5
   m_gapMarginSeconds: 2
-  m_prewarmPerPrefab: 2
+  m_prewarmPerPrefab: 4
   m_enabled: 1
 --- !u!1001 &1005209810
 PrefabInstance:
