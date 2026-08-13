@@ -364,6 +364,37 @@ public class RagdollRig : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// <b>뼈 길이만</b> 바인드로 되돌린다 — 자세(회전)는 손대지 않는다.
+    ///
+    /// <see cref="RestoreBindPose"/>를 쓸 수 없는 자리를 위한 것이다. 저쪽은 회전까지 되돌리므로
+    /// <b>물리를 안 받는 뼈</b>(목·손가락·발)가 T자 방향으로 튀는데, 원격이 받는 자세
+    /// (<see cref="ApplyLocalPoseAroundHips"/>)에는 그 뼈들이 들어 있지 않아 되돌릴 짝이 없다.
+    ///
+    /// <b>왜 원격에 필요한가.</b> 시체는 <c>ExitRagdoll</c>을 영영 타지 않아 <see cref="RestoreBindPose"/>가
+    /// 한 번도 돌지 않는다 — 물리가 관절을 늘려 놓으면 그 길이가 <b>영구히 남는다.</b> 그런데 받는
+    /// 자세는 로컬 <b>회전</b>뿐이라(길이는 관절이 유지한다는 전제) 늘어난 리그에 입히면 보낸 쪽과
+    /// 다른 몸이 나온다. 갈아끼우기 직전에 길이를 되돌려 그 전제를 실제로 참으로 만든다.
+    ///
+    /// 대상은 <b>관절이 달린 뼈</b>뿐이다 — 골반의 로컬 위치는 자세의 일부라 되돌리면 안 된다
+    /// (<see cref="MaxBindPositionDrift"/>가 골반을 빼는 것과 같은 이유).
+    ///
+    /// ⚠ <see cref="RestoreBindPose"/>와 같이 <b>키네마틱일 때만</b> 의미가 있다.
+    /// </summary>
+    public void RestoreBindBoneLengths()
+    {
+        if (m_bindBones == null)
+            return;
+
+        for (int i = 0; i < m_bindBones.Length; i++)
+        {
+            if (m_bindBones[i] == null || !m_bindJointed[i])
+                continue;
+
+            m_bindBones[i].localPosition = m_bindPositions[i];
+        }
+    }
+
     // 직렬화되지 않는 Rigidbody 값을 인스턴스마다 다시 건다 — 상수 주석에 이유가 적혀 있다.
     private void ApplyRuntimePhysics()
     {
@@ -691,6 +722,41 @@ public class RagdollRig : MonoBehaviour
 
         for (int i = 0; i < m_bodies.Length; i++)
             m_bodies[i].transform.localRotation = rotations[i];
+
+        return true;
+    }
+
+    /// <summary>
+    /// 같은 자세를 <b>골반을 건드리지 않고</b> 입힌다 — 골반이 스트림 소유일 때 쓴다. (#572 후속)
+    ///
+    /// <b><see cref="ApplyLocalPose"/>와 갈리는 한 가지</b>: 저쪽은 골반의 <b>로컬</b> 위치·회전을
+    /// 쓰므로 몸이 결국 <b>루트에</b> 매달린다. 골반에 <c>NetworkTransform</c>이 붙은 배선에서는
+    /// 그것이 두 가지를 한꺼번에 망친다 — 스트림이 매 프레임 쓰는 값과 싸우고, 몸의 높이가 루트의
+    /// 지면 판정 오차를 그대로 물려받는다(#572가 실측한 −0.141이 그 모양이다).
+    ///
+    /// 여기서는 골반을 <b>스트림에 맡긴 채</b> 나머지 뼈의 로컬 회전만 입힌다. 키네마틱 뼈는 부모를
+    /// 따라가므로 몸은 <b>권위 피어가 확정한 골반 위치에</b> 매달리고, 루트 높이는 식에서 빠진다.
+    ///
+    /// 골반 자신의 회전도 건너뛴다 — 그것도 <c>NetworkTransform</c>이 복제하는 값이다.
+    /// </summary>
+    /// <returns>입혔으면 참 — 길이가 안 맞거나 골반을 못 찾으면 거짓.</returns>
+    public bool ApplyLocalPoseAroundHips(Quaternion[] rotations)
+    {
+        if (
+            m_bodies == null
+            || m_hipsBone == null
+            || rotations == null
+            || rotations.Length != m_bodies.Length
+        )
+            return false;
+
+        for (int i = 0; i < m_bodies.Length; i++)
+        {
+            if (m_bodies[i].transform == m_hipsBone)
+                continue;
+
+            m_bodies[i].transform.localRotation = rotations[i];
+        }
 
         return true;
     }

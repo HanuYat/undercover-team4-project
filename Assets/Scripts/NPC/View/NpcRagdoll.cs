@@ -105,6 +105,10 @@ public class NpcRagdoll : MonoBehaviour
              "정상 동작에서는 걸리지 않아야 하고, 자주 걸리면 입력(임펄스)이 어긋난 것을 봐야 한다")]
     [SerializeField] private float m_alignSnapDistance = 2.5f;
 
+    [Tooltip("원격 피어의 뼈 속도 상한(m/s). 튜닝 손잡이가 아니라 발산 차단선이다 — " +
+             "권위 피어는 건드리지 않으므로 판정·궤적은 그대로다. 0이면 끈다")]
+    [SerializeField] private float m_remoteSpeedClamp = 20f;
+
     private NpcController m_owner;
     private RagdollRig m_rig; // 뼈 한 벌 — 물리 조작 전부를 여기 위임한다. 리그 소유자(Model)에 붙어 있다
     private RagdollRope m_rope; // 관절 밧줄 — 리그와 같은 오브젝트에 붙는다(RequireComponent)
@@ -132,6 +136,21 @@ public class NpcRagdoll : MonoBehaviour
     // 프리팹에서 NetworkTransform을 빼면 셋 다 자동으로 옛 동작(전원이 각자 묶고 정렬로 좁힌다)으로
     // 돌아간다 — 그게 이 조건을 배선에서 읽는 이유다.
     private bool m_hipsIsNetworkSynced;
+
+    // 골반·루트의 NetworkTransform — 순간이동을 <b>보간 없이</b> 보내는 데 쓴다(ServerPlaceCorpse).
+    // 배선에서 읽는 것은 m_hipsIsNetworkSynced와 같은 이유다(위 주석) — 컴포넌트 존재가 진실이다.
+    private Unity.Netcode.Components.NetworkTransform m_hipsNetTransform;
+    private Unity.Netcode.Components.NetworkTransform m_rootNetTransform;
+
+    // 원격 순간이동을 감싸는 일시 얼림이 남은 프레임 수 (0이면 감싸는 중이 아니다).
+    // <b>상태(m_state)를 건드리지 않는다</b> — Frozen은 "정착했다"는 뜻이고 여기는 이동 중이다.
+    private int m_teleportBracketFrames;
+
+    // 감싸는 길이 — 골반 상태가 적용되고 몸이 그 자리에 도착하는 데 필요한 프레임.
+    // 순간이동은 1프레임이지만, 골반 NT와 루트 NT의 상태가 <b>같은 프레임에 온다는 보장이 없어</b>
+    // 여유를 둔다. 얼어 있는 동안 시체는 자세가 굳은 채 도착하므로 이 값이 커도 어색하지 않다
+    // (호스트도 정착까지 0.3초를 굳은 채 보낸다) — 대신 짧으면 위반이 새므로 넉넉한 쪽으로 잡는다.
+    private const int k_teleportBracketFrames = 4;
 
     private RagdollState m_state = RagdollState.Animated;
     private float m_stillTimer;
@@ -185,9 +204,84 @@ public class NpcRagdoll : MonoBehaviour
         // 포함해야 한다. 그것들은 래그돌 자세에 멈춰 있어, 빼놓으면 블렌드 첫 프레임에 목과 손이 튄다.
         m_blend = new RagdollPoseBlend(m_rig.BoneRoot);
 
-        m_hipsIsNetworkSynced =
+        m_hipsNetTransform =
             m_rig.HipsBody != null
-            && m_rig.HipsBody.GetComponent<Unity.Netcode.Components.NetworkTransform>() != null;
+                ? m_rig.HipsBody.GetComponent<Unity.Netcode.Components.NetworkTransform>()
+                : null;
+        m_hipsIsNetworkSynced = m_hipsNetTransform != null;
+
+        m_rootNetTransform = GetComponent<Unity.Netcode.Components.NetworkTransform>();
+    }
+
+    // ---- 원격 순간이동 (계획서 §4) ----
+
+    /// <summary>
+    /// 원격의 순간이동을 <b>얼림으로 감싼다</b> — <see cref="NpcCorpseHipsTransform"/> 전용 진입점.
+    /// 골반 NT가 순간이동 상태를 적용하는 <b>그 프레임에</b> 불린다.
+    ///
+    /// <b>이것이 원격에 없던 얼림이다.</b> 뼈는 전부 골반의 자식이고 키네마틱 뼈는 부모 트랜스폼을
+    /// 따라가므로, 얼린 채 골반이 점프하면 몸이 통째로 도착한다. 얼리지 않으면 <b>동적 뼈 열 개가
+    /// 제자리에 남아</b> 관절이 전량 위반되고, 솔버가 그것을 메우며 초속 6261m을 뼈에 먹인다
+    /// (계획서 §3-3 실측).
+    ///
+    /// <b>상태를 <see cref="RagdollState.Frozen"/>으로 바꾸지 않는다.</b> 저 상태는 "정착했다"는
+    /// 뜻이고 여기는 이동 중이다 — 바꾸면 <see cref="Update"/>의 조기 반환이 걸려 도착 후 정착
+    /// 판정이 돌지 않는다. 속도는 <see cref="RagdollRig.SetKinematic"/>이 양방향에서 지운다.
+    ///
+    /// <b>멱등</b>이다 — 감싸는 중에 상태가 한 번 더 오면 창을 다시 연다(골반·루트 NT의 상태가
+    /// 같은 프레임에 온다는 보장이 없다).
+    /// </summary>
+    internal void BeginTeleportBracket()
+    {
+        // ⚠ <b>임시 A/B 스위치</b> — 브래킷이 아직 필요한지 재는 중이다.
+        //
+        // 브래킷이 사는 구간은 <b>도착 프레임부터 서버 재정착까지 ~0.3초</b>뿐이다. 그 뒤는
+        // <see cref="ApplyFrozenPose"/>가 자세를 갈아끼우고 뼈 길이까지 되돌린 뒤 얼리므로,
+        // 영구히 남던 두 가지(엉뚱한 자리·늘어난 리그)가 <b>브래킷 없이도 덮인다.</b>
+        // 남는 것은 그 0.3초의 발작이 눈에 보이느냐뿐이다.
+        //
+        // 거짓으로 두고 §6-3(클라 최대v)을 재서 통과하면 <b>이 클래스와
+        // <see cref="NpcCorpseHipsTransform"/>, 프리팹 4종의 컴포넌트 교체를 전부 지운다.</b>
+        // 필요하다고 나오면 이 상수와 주석만 지운다.
+        const bool k_bracketEnabled = false;
+
+        if (!k_bracketEnabled)
+            return;
+
+        if (m_rig == null || !m_rig.IsValid)
+            return;
+
+        // 얼어 있는 몸은 이미 루트의 키네마틱 자식이다 — 감쌀 것이 없다.
+        if (m_state == RagdollState.Frozen)
+            return;
+
+        if (m_teleportBracketFrames <= 0)
+            m_rig.SetKinematic(true);
+
+        m_teleportBracketFrames = k_teleportBracketFrames;
+    }
+
+    // 감싸기를 끝낸다 — 도착한 자리에서 물리로 되돌린다. 그 뒤는 각 피어의 로컬 물리가 바닥에
+    // 맞게 무너뜨린다.
+    //
+    // <b>원격도 여기서 끝나지 않는다</b> — 권위 피어가 도착지에서 다시 정착하며 자세를 뿌리고
+    // (<see cref="ServerFreezeInPlace"/> → <see cref="ApplyFrozenPose"/>), 원격은 그것을 받아
+    // 얼어붙는다. 이 감싸기가 메우는 것은 그 <b>사이 구간</b>뿐이다: 골반이 점프하는 프레임에
+    // 동적 뼈가 제자리에 남아 관절이 전량 위반되는 것(실측 6261 m/s)을 막는다.
+    private void TickTeleportBracket()
+    {
+        if (m_teleportBracketFrames <= 0)
+            return;
+
+        m_teleportBracketFrames--;
+        if (m_teleportBracketFrames > 0)
+            return;
+
+        // 이 프레임에 이미 얼었다면(정착) 되돌리지 않는다 — 그쪽이 더 확정적인 상태다.
+        if (m_state == RagdollState.Frozen)
+            return;
+
+        ReleaseBonesToPhysics();
     }
 
     /// <summary>
@@ -305,12 +399,19 @@ public class NpcRagdoll : MonoBehaviour
     }
 
     /// <summary>
-    /// 얼린 자세를 받아 그대로 재현한다 — <b>원격 피어 전용</b> 진입점. (#571)
-    /// <see cref="NpcDeath"/>가 서버의 정착 브로드캐스트를 받아 부른다.
+    /// 얼린 자세를 받아 그대로 재현한다 — 정착 브로드캐스트의 수신구. (#571)
+    /// <see cref="NpcDeath"/>가 부르고, <b>서버도 자기 것을 받는다</b>(그쪽 RPC 주석).
     ///
     /// 여기서 로컬 물리의 결과를 <b>버린다.</b> 각 피어가 따로 굴린 몸은 조금씩 다른 자리에
     /// 누워 있는데, 그 차이를 매 프레임 당겨서 좁히던 것이 예전 구조다(정렬). 이제는 서버가
     /// 확정한 자세로 한 번에 갈아끼우고 얼린다 — 그 뒤로는 어긋날 여지가 없다.
+    ///
+    /// <b>이것이 원격의 종착 상태다</b> (#572 후속). 원격에는 정착 판정도 얼림도 없으므로
+    /// (<see cref="Update"/>가 비권위에서 끊긴다) 이 수신이 없으면 시체가 <b>끝나는 지점을 갖지
+    /// 못한다</b> — 실측에서 순간이동 1.95초 뒤에도 뼈가 4.17 m/s로 계속 떨었다.
+    ///
+    /// <b>매다는 자리가 피어마다 갈린다</b> — 아래 <c>hangsOnHips</c>. 골반이 복제되는 배선에서
+    /// 원격은 몸을 <b>골반에</b> 매달고, 그 외에는 예전대로 루트에 매단다.
     /// </summary>
     public void ApplyFrozenPose(Quaternion[] boneRotations, Vector3 hipsLocalPosition)
     {
@@ -320,39 +421,43 @@ public class NpcRagdoll : MonoBehaviour
         // 아직 무너지지도 않은 몸(늦게 접속해 이번 사망을 건너뛴 피어)도 여기서 시체가 된다.
         StopAnimator();
 
-        // ⚠ <b>골반이 복제되는 구성에서는 원격이 얼지 않는다</b> (#572). 자세도 쓰지 않는다.
+        // ⚠ <b>골반이 복제되는 구성에서는 몸을 골반에 매단다</b> — 루트가 아니라. (#572 후속)
         //
-        // 굳히면 시체가 <b>루트 높이 하나에 매달린 조각상</b>이 되고, 그 높이가 조금이라도 틀리면
-        // 흡수할 수단이 없어 바닥에 박히거나 공중에 뜬다. 실측(클라): 정착 직후 골반 로컬 오프셋이
-        // 0.234 → −0.001로 무너지며 최저 뼈가 지면 −0.141까지 내려갔다. 원인은 골반
-        // <c>NetworkTransform</c>이 얼린 뒤에도 골반을 계속 쓰기 때문인데, <b>그걸 매 프레임 도로
-        // 덮는 것은 스트림과 싸우는 것이라 미끄러진다.</b>
+        // <b>#572는 여기서 원격을 통째로 되돌렸었다.</b> 근거는 "굳히면 시체가 <b>루트 높이 하나에
+        // 매달린 조각상</b>이 되고, 그 높이가 틀리면 흡수할 수단이 없다"였고 실측이 −0.141이었다.
+        // 그 진단은 맞았지만 <b>원인은 얼림이 아니라 매다는 자리</b>였다: 자세를 골반의 <b>로컬</b>
+        // 위치로 복원하면(<c>ApplyLocalPose</c>) 몸이 결국 루트에 매달리고, 루트 높이는 각 피어가
+        // 로컬 레이캐스트로 정하므로 그 오차가 곧 몸의 높이 오차가 된다.
         //
-        // <b>플레이어가 같은 길을 먼저 갔다 되돌아왔다</b> — <c>PlayerRagdoll</c>에는 얼림 상태도
-        // 포즈 브로드캐스트도 <b>아예 없다</b>(정착 = <c>RestToPhysics</c>). 그쪽 주석이 근거다:
-        // "원격에서 뼈를 키네마틱으로 굳혔다가 되돌렸다 — 물리가 있으면 중력·접촉이 흡수한다."
+        // <b>그 뒤에 골반이 월드 공간 <c>NetworkTransform</c>으로 복제되기 시작했다</b>(#572 2단계).
+        // 이제 몸을 <b>골반에</b> 매달면 높이의 주인이 권위 피어가 되고 루트는 식에서 빠진다 —
+        // −0.141을 만든 메커니즘이 사라진다. 그것이 <see cref="RagdollRig.ApplyLocalPoseAroundHips"/>다.
         //
-        // 그래서 원격은 <b>골반만 스트림에 매인 키네마틱</b>으로 두고 나머지 열 개는 물리에 맡긴다.
-        // 자세를 맞출 필요가 없다: 궤적은 골반이 주고, 흐느적임은 각 피어의 로컬 물리가 만든다 —
-        // 그것이 2단계가 골반을 복제한 이유 그 자체다.
-        if (m_hipsIsNetworkSynced && !HasMoveAuthority)
-        {
-            // 늦게 접속해 아직 애니메이터를 쥐고 있던 몸만 물리로 내려놓는다. 이미 무너지는
-            // 중이었으면 그대로 둔다 — 건드릴수록 궤적이 끊긴다.
-            if (m_state == RagdollState.Animated)
-            {
-                m_state = RagdollState.Ragdoll;
-                ReleaseBonesToPhysics();
-            }
-
-            return;
-        }
+        // <b>원격에 종착 상태를 되돌려 주는 것이 이 분기의 요점이다.</b> 되돌리기 전까지 원격은
+        // 정착 판정도(<see cref="Update"/>가 비권위에서 끊긴다) 얼림도 없어 <b>끝나는 지점이
+        // 없었다</b> — 실측에서 얼림=1이 212줄 중 0회였고, 순간이동 1.95초 뒤에도 뼈가 4.17 m/s로
+        // 계속 떨었다. 로컬 물리가 만든 결과가 무엇이든 그것이 영구히 남는 구조였다.
+        bool hangsOnHips = m_hipsIsNetworkSynced && !HasMoveAuthority;
 
         // <b>얼리는 것이 먼저다.</b> 동적인 채로 자세를 쓰면 다음 물리 스텝이 PhysX의 포즈로 덮는다 —
         // 키네마틱으로 바꾸고 나서야 트랜스폼이 진실이 된다. 아래가 실패해도 얼어 있는 편이 낫다
         // (그 피어의 로컬 물리 자세로 굳을 뿐, 계속 흔들리지는 않는다).
         Freeze();
-        if (!m_rig.ApplyLocalPose(boneRotations, hipsLocalPosition))
+
+        // ⚠ <b>뼈 길이를 먼저 되돌린다 — 전 피어가.</b> 오가는 자세는 로컬 <b>회전</b>뿐이고
+        // "뼈 길이는 관절이 유지한다"를 전제하는데(<see cref="RagdollRig.CaptureLocalPose"/>), 시체는
+        // <c>ExitRagdoll</c>을 영영 타지 않아 <c>RestoreBindPose</c>가 한 번도 안 돈다 — 물리가 늘려
+        // 놓은 길이가 <b>영구히 남는다.</b> 여기서 한 번 그 전제를 실제로 참으로 만든다.
+        //
+        // <b>보내는 쪽도 함께 되돌리는 것이 요점이다</b>(서버도 자기 RPC를 받는다). 한쪽만 되돌리면
+        // 같은 회전이 서로 다른 골격에 얹혀 피어마다 다른 몸이 나온다.
+        m_rig.RestoreBindBoneLengths();
+
+        bool applied = hangsOnHips
+            ? m_rig.ApplyLocalPoseAroundHips(boneRotations)
+            : m_rig.ApplyLocalPose(boneRotations, hipsLocalPosition);
+
+        if (!applied)
         {
             Debug.LogWarning(
                 $"NpcRagdoll: 받은 자세의 뼈 수가 맞지 않아 버린다 — {name} "
@@ -372,16 +477,16 @@ public class NpcRagdoll : MonoBehaviour
     ///
     /// 끌고 온 시체는 밧줄 때문에 녹아 있으므로(<see cref="BeginRopePull"/>) 여기서 다시 얼린다.
     ///
-    /// <b>옮긴 뒤에는 다시 녹인다</b> (#572). 얼린 자세는 <b>끌려오던 순간의 자세</b>라 감옥 바닥과
-    /// 맞지 않는다 — 팔이 들린 채로 박제되고, 얼린 시체는 스스로 바닥을 찾지 않는다. 물리를 한 번 더
-    /// 돌려 바닥에 맞게 무너뜨리고 정착 판정이 다시 얼리게 둔다. 자세도 그때 한 번 더 나간다.
+    /// <b>얼린 채로 끝낸다 — 도착지에서 물리를 다시 돌리지 않는다.</b> (실측 2026-08-14)
+    /// 예전에는 "끌려오던 자세가 바닥과 안 맞는다"며 녹였는데, 실측된 도착 여유가 +0.005다(이미
+    /// 맞아 있다). 반대로 그 녹임이 <b>감옥에서 264 m/s를 만들어 시체를 벽에 박았다</b> — 근거는
+    /// 아래 ④ 뒤 주석이다. 얼림은 순간이동의 <b>수단이자 종착</b>이 됐다.
     ///
-    /// ⚠ <b>"그럼 처음부터 얼리지 말지"가 안 되는 이유</b>: 옮기는 <b>동안</b>에는 반드시 얼어 있어야
-    /// 한다. 동적 리지드바디는 부모 트랜스폼을 따라가지 않아 녹인 채 루트만 옮기면 <b>루트만 가고 몸은
-    /// 남는다.</b> 얼림은 순간이동의 <b>수단</b>이고, 여기 녹임은 그 뒤처리다.
+    /// <b>계속 끌려갈 시체만 물리로 돌아간다</b> — 관절 밧줄은 키네마틱 골반에 장력이 안 걸려
+    /// <see cref="BeginRopePull"/>이 스스로 녹이기 때문이다. 그래서 퇴장은 녹고 수감은 얼어 있는다.
     ///
-    /// 녹여도 밧줄이 되살아나지는 않는다 — 수감 경로가 배치 <b>전에</b> 관절까지 걷는다
-    /// (<c>JailIntake.ServerAdmitCorpse</c> → <c>PlayerEscorter.ReleaseAllTethersOnCorpse</c>).
+    /// ⚠ <b>옮기는 동안 얼어 있어야 하는 것은 여전하다</b>: 동적 리지드바디는 부모 트랜스폼을
+    /// 따라가지 않아 녹인 채 루트만 옮기면 <b>루트만 가고 몸은 남는다.</b>
     /// </summary>
     /// <param name="position">시체가 놓일 지면 지점 — 루트(발밑) 기준이다.</param>
     public void ServerPlaceCorpse(Vector3 position)
@@ -392,13 +497,197 @@ public class NpcRagdoll : MonoBehaviour
             return;
         }
 
+        LogPlacement("①진입", position);
+
         if (!IsFrozen)
             ServerFreezeInPlace();
 
+        // ⚠ <b>줄을 먼저 끊는다 — 이것이 없으면 시체가 발사된다.</b> (계획서 §5-4)
+        //
+        // 관절 밧줄은 골반을 <b>운반자의 앵커에</b> 묶는다. 그 상태로 시체만 수백 m 옮기면 관절이 그
+        // 거리만큼 위반되고, 다음 물리 스텝에서 솔버가 그것을 메우며 거대한 임펄스를 먹인다 —
+        // 실측(호스트, 퇴장): <b>237 m/s</b>. 시체는 목표 지점에서 8m를 날아가 지형에 박혔다.
+        //
+        // <b>수감 경로는 우연히 무사했다</b>: <c>PlayerEscorter.ReleaseAllTethersOnCorpse</c>가 배치
+        // 전에 관절까지 걷기 때문이다. 하지만 그 해제는 <b>운반자를 찾아내야</b> 성립하므로 다인에서
+        // 빗나갈 수 있고, 실제로 수감이 같은 증상으로 터진 라운드가 있었다(실측 253 m/s).
+        // 그래서 <b>배치하는 이 자리</b>에서 한 번 더 보장한다 — 호출부가 무엇을 놓쳤든 상관없게.
+        EndRopePull();
+
+        LogPlacement("②얼린뒤", position);
+
         transform.position = position;
 
-        // 놓인 자리에서 마저 무너지게 한다 — 정착 판정이 다시 돌아 알아서 얼어붙는다.
-        Unfreeze();
+        LogPlacement("③루트이동뒤", position);
+
+        // ⚠ <b>뼈 액터를 먼저 따라오게 한다 — 골반만 혼자 가는 것을 막는다.</b>
+        //
+        // 이 프로젝트는 <c>m_AutoSyncTransforms = 0</c>이라 위 한 줄은 <b>트랜스폼만</b> 옮긴다.
+        // 그런데 아래 <see cref="ServerTeleportNetTransforms"/>의 골반 <c>Teleport</c>는
+        // <c>NetworkRigidbody.UseRigidBodyForMotion = 1</c> 때문에 <b>액터</b>를 쓴다 — 즉 골반
+        // 액터만 573m를 가고 나머지 열 개는 출발지에 남는다. 실측이 그대로 찍혔다(③④ 뼈분기최대
+        // 575.114, ④ 골반 rb차 0.000).
+        //
+        // 그 상태로 <see cref="Unfreeze"/>가 물리에 돌려주면 <c>SetKinematic</c>의
+        // <c>SyncTransforms</c>가 <b>나머지 열 개를 뒤늦게</b> 573m 옮기고, 그 이동이 키네마틱
+        // 타깃으로 잡혀 첫 물리 스텝에 속도로 살아난다 — 도착 프레임 <b>278 m/s</b>가 그것이다.
+        // (예전에는 <c>Teleport</c>가 없어 열한 개가 <b>같이</b> 옮겨졌고, 그래서 호스트가 멀쩡했다)
+        //
+        // 여기서 한 줄 밀어 두면 <c>Teleport</c>가 쓸 델타가 0이 되어 그 갈림이 성립하지 않는다.
+        Physics.SyncTransforms();
+
+        // <b>얼어 있는 지금 보낸다</b> — 뼈가 루트의 키네마틱 자식이라 위 한 줄로 이미 함께 왔고,
+        // 그래서 여기서 읽는 골반 위치가 곧 도착 자세다. 녹인 뒤에 보내면 물리가 한 스텝 굴러
+        // 보내는 값과 원격이 재현할 자세가 어긋난다.
+        ServerTeleportNetTransforms();
+
+        LogPlacement("④Teleport뒤", position);
+
+        // ⚠ <b>여기서 녹이지 않는다 — 얼린 채로 끝낸다.</b> (실측 2026-08-14)
+        //
+        // 예전에는 "얼린 자세는 끌려오던 자세라 감옥 바닥과 안 맞으니 물리로 한 번 더 무너뜨린다"며
+        // 무조건 <c>Unfreeze()</c>를 불렀다. <b>실측이 그 전제를 부쉈다</b> — 얼린 채 도착한 시점의
+        // 여유(최저뼈y − 바닥y)가 <b>+0.005</b>다. 이미 맞아 있다. <see cref="ServerFreezeInPlace"/>가
+        // 루트를 골반 밑 지면에 스냅해 두고, 목적지 좌표도 지면에 스냅된 값이라
+        // (<c>JailZone.RandomRestPointInRoom</c>) 그 관계가 그대로 옮겨오기 때문이다.
+        //
+        // <b>그리고 그 녹임이 남은 사고의 유일한 출처였다.</b> 배치 시퀀스 ①~⑤는 양쪽 경로 모두
+        // 깨끗한데(뼈v최대=0.00, 뼈분기최대=0.000), 속도는 전부 <b>녹인 뒤 첫 물리 스텝</b>에서
+        // 태어났다. 열린 지형(퇴장)은 살아남지만 <b>사방이 막힌 감옥은 아니다</b>: 수감 도착
+        // 프레임에 264 m/s가 들어가 몸이 1.3m 솟아 벽에 박혔고, 그 자리에서는 아래로 쏜 지면
+        // 레이가 아무것도 못 잡아(여유=NaN) <b>정착 판정이 영영 돌지 않는다.</b>
+        //
+        // 시체는 일어나지 않으므로 물리를 한 번 더 돌려서 얻는 것은 <b>자세의 자연스러움뿐</b>이고,
+        // 잃는 것은 배치의 결정성이다. 그 거래를 반대로 한다.
+        //
+        // ⚠ <b>퇴장도 예외가 아니다 — 줄을 다시 매지 않는다.</b> (실측 2026-08-14)
+        //
+        // 여기에는 "끌려오던 시체는 계속 끌 수 있어야 하니 끊은 줄을 같은 운반자에게 다시 맨다"가
+        // 있었다. 그런데 <see cref="BeginRopePull"/>은 <b>묶기 전에 녹인다</b>(키네마틱 골반에는
+        // 장력이 안 걸린다) — 즉 그 한 줄이 <b>퇴장 경로에만 물리 복귀를 되살리고 있었다.</b>
+        //
+        // <b>그리고 터지는 쪽은 정확히 그쪽이다.</b> 같은 실행에서 두 경로가 갈렸다:
+        // <list type="bullet">
+        //   <item>수감(얼린 채 유지) — 여유 +0.047 · 최대v <b>0.00</b> · 90프레임 내내 얼림=1</item>
+        //   <item>퇴장(물리 복귀) — 최대v <b>417.07</b> · 최저뼈y −2.127 · 얼림=0으로 안 멈춘다</item>
+        // </list>
+        // 폭발 시점의 줄=0·끌림=0이라 <b>장력 때문이 아니다</b> — 순간이동 직후 물리로 돌아간 것
+        // 자체가 원인이고, 그래서 수감에서 <c>Unfreeze()</c>를 없앤 근거가 여기에도 그대로 적용된다.
+        //
+        // ⚠ <b>이건 동작 변경이다</b>: 퇴장하면 줄이 풀린 채 시체가 문 밖에 눕는다. 계속 끌려면
+        // 다시 잡아야 한다 — 그때는 순간이동 직후가 아니라 평범한 자리에서 녹으므로 안전하다.
+        // 되돌리려면 아래 두 줄을 살리되, 먼저 "순간이동 직후 물리 복귀"를 안전하게 만들 것.
+        //
+        //   if (carrier != null)
+        //       BeginRopePull(carrier);
+
+        LogPlacement("⑤배치완료", position);
+    }
+
+    // ⚠ <b>임시 계측</b> — 3인 세션에서 반출 위치가 피어마다 갈리는 문제를 좁히는 중이다.
+    // 확인되면 이 메서드와 호출부 다섯 줄을 지운다.
+    //
+    // <b>보는 것은 트랜스폼과 액터의 분기다.</b> 이 프로젝트는 <c>m_AutoSyncTransforms = 0</c>이라
+    // (ProjectSettings/DynamicsManager.asset) 트랜스폼에 쓴 값이 PhysX 액터로 즉시 넘어가지 않는데,
+    // 골반의 <c>NetworkRigidbody</c>는 <c>UseRigidBodyForMotion = 1</c>이라 <c>Teleport</c>가
+    // <b>액터</b>를 쓴다. 둘이 갈리면 골반만 목적지로 가고 나머지 뼈는 출발지에 남는다.
+    private void LogPlacement(string stage, Vector3 requested)
+    {
+        Vector3 root = transform.position;
+        Vector3 hips = m_rig != null && m_rig.Hips != null ? m_rig.Hips.position : Vector3.zero;
+        Vector3 hipsRb = m_rig != null && m_rig.HipsBody != null ? m_rig.HipsBody.position : hips;
+
+#if UNITY_EDITOR
+        // 서버 틱·NetworkObjectId는 계측(CorpseTeleportDiag)의 줄과 짝지을 키다 — 그쪽도 같은 둘을 찍는다.
+        // <b>콘솔이 아니라 공용 기록기로 보낸다</b>: 예전에는 Debug.Log라 서버 콘솔에만 남아
+        // 프레임 표본과 같이 볼 수가 없었다. 이제 같은 파일에 들어가고
+        // Tools > Ragdoll > 시체 진단 로그 모으기 가 피어별 파일을 틱 순으로 합친다.
+        CorpseDiagLog.Write(
+            $"[시체배치] {stage} {name} id={(m_owner.IsSpawned ? m_owner.NetworkObjectId : 0UL)} "
+                + $"틱={CorpseDiagLog.ServerTick()} "
+                + $"요청=({requested.x:F2},{requested.y:F3},{requested.z:F2}) "
+                + $"루트=({root.x:F2},{root.y:F3},{root.z:F2}) "
+                + $"골반=({hips.x:F2},{hips.y:F3},{hips.z:F2}) "
+                + $"골반rb=({hipsRb.x:F2},{hipsRb.y:F3},{hipsRb.z:F2}) "
+                + $"rb차={Vector3.Distance(hips, hipsRb):F3} 요청거리={Vector3.Distance(root, requested):F2} "
+                + $"얼림={(IsFrozen ? 1 : 0)} 평균v={(m_rig != null ? m_rig.AverageSpeed : 0f):F2} "
+                + BoneSplitReport()
+        );
+#endif
+    }
+
+#if UNITY_EDITOR
+    // ⚠ 임시 계측 — 골반 하나가 아니라 <b>전 뼈</b>의 트랜스폼↔액터 분기와 속도를 잰다.
+    //
+    // <b>왜 필요한가.</b> ④에서 골반 rb차가 0으로 돌아오는 것은 확인했지만, 그것은
+    // <c>NetworkTransform.Teleport</c>가 <b>골반 액터 하나만</b> 옮겼기 때문일 수 있다. 나머지 열
+    // 개가 출발지에 남아 있으면 관절이 그대로 위반이고, 그게 배치 직후의 253 m/s를 설명한다.
+    //
+    // <b>속도를 함께 재는 것이 판별점이다.</b> ⑤(녹인 직후)에 이미 속도가 있으면 <c>Unfreeze</c>가
+    // 만든 것이고, ⑤가 0인데 같은 프레임 LateUpdate에서 크면 그 뒤 물리 스텝이 만든 것이다.
+    private string BoneSplitReport()
+    {
+        if (m_rig == null || m_rig.BoneRoot == null)
+            return "뼈분기=? 뼈v=?";
+
+        Rigidbody[] bones = m_rig.BoneRoot.GetComponentsInChildren<Rigidbody>(true);
+        int layer = LayerMask.NameToLayer(RagdollRig.k_layerName);
+
+        float maxSplit = 0f;
+        float maxSpeed = 0f;
+        int counted = 0;
+
+        for (int i = 0; i < bones.Length; i++)
+        {
+            if (bones[i].gameObject.layer != layer)
+                continue;
+
+            counted++;
+            float split = Vector3.Distance(bones[i].transform.position, bones[i].position);
+            if (split > maxSplit)
+                maxSplit = split;
+
+            float speed = bones[i].linearVelocity.magnitude;
+            if (speed > maxSpeed)
+                maxSpeed = speed;
+        }
+
+        // ⚠ <b>바인드 드리프트</b> — 물리가 관절을 늘려 놓은 뼈 길이다. 시체는 <c>ExitRagdoll</c>을
+        // 영영 타지 않으므로 <c>RestoreBindPose()</c>가 한 번도 안 돌고, 그래서 이 값은 <b>한 번
+        // 늘어나면 영구히 남는다.</b> 늘어난 리그는 녹일 때마다 관절이 위반 상태에서 출발하므로,
+        // 배치가 아무리 깨끗해도(⑤ 전부 0) 그 뒤 물리 스텝이 몸을 뒤튼다 — 지금 남은 증상의 모양이다.
+        return $"뼈수={counted} 뼈분기최대={maxSplit:F3} 뼈v최대={maxSpeed:F2} "
+            + $"바인드드리프트={m_rig.MaxBindPositionDrift:F4}";
+    }
+#endif
+
+    /// <summary>
+    /// 순간이동을 <b>보간 없이</b> 원격에 보낸다 — 서버 전용. (계획서 §4-1)
+    ///
+    /// <c>Teleport</c>는 해당 상태 갱신 1회에 대해 보간을 끄는 NGO 기본기다. 안 쓰면 원격이 이 거리를
+    /// <b>여러 프레임에 걸쳐 보간하고</b>(실측 573.94m을 21프레임 / ~0.5초), 그 구간 전체가 관절
+    /// 위반으로 남는다.
+    ///
+    /// <b>루트와 골반 둘 다 보낸다.</b> 실측에서 <b>루트 NT도 같이 보간했다</b> — 골반만 스냅시키면
+    /// 루트가 뒤늦게 따라와 스캔·이름표·상호작용 콜라이더가 한동안 옛 자리에 남는다.
+    ///
+    /// 이 호출이 원격에서 <see cref="NpcCorpseHipsTransform"/>의 얼림을 깨우는 신호이기도 하다 —
+    /// 그쪽은 <c>IsTeleportingNextFrame</c>을 보고 감싼다. <b>둘은 같은 이벤트의 양쪽 끝이다.</b>
+    /// </summary>
+    private void ServerTeleportNetTransforms()
+    {
+        // 세션이 아니면 보낼 곳이 없다 — 오프라인 Play에서는 위 한 줄이 곧 이동의 전부다.
+        if (m_owner == null || !m_owner.IsSpawned)
+            return;
+
+        if (m_rootNetTransform != null)
+            m_rootNetTransform.Teleport(transform.position, transform.rotation, transform.localScale);
+
+        if (m_hipsNetTransform != null && m_rig.Hips != null)
+        {
+            Transform hips = m_rig.Hips;
+            m_hipsNetTransform.Teleport(hips.position, hips.rotation, hips.localScale);
+        }
     }
 
     // ---- 진입 ----
@@ -464,7 +753,18 @@ public class NpcRagdoll : MonoBehaviour
         // 그래서 피어마다 다른 자세로 굳은 뒤 그 차이를 매 프레임 정렬로 좁혀야 했다.
         // 이제는 서버가 정착시켜 그 자세를 한 번 뿌리고, 원격은 받아서 갈아끼운다.
         if (!HasMoveAuthority)
+        {
+            // ⚠ <b>원격 전용 발산 차단선.</b> 원인 수정이 아니라 값싼 방어선이다 — 원격의 뼈는
+            // 스트리밍된 골반에 관절로 매달려 있어서, 골반이 크게 움직이는 순간(순간이동·급한 견인)
+            // 관절 위반을 솔버가 메우며 <b>중력으로는 나올 수 없는 속도</b>를 먹인다. 실측 6261 m/s.
+            //
+            // <b>권위 피어에는 걸지 않는다.</b> 저쪽 속도는 정착 판정의 입력이자 실제 궤적이라
+            // 자르면 판정이 바뀐다. 원격의 속도는 표현일 뿐이라 잘라도 잃는 것이 없다.
+            //
+            // 얼어 있을 때는 돌지 않는다 — 이 조기 반환보다 위에서 이미 끊긴다(뼈가 키네마틱이다).
+            m_rig.ClampSpeed(m_remoteSpeedClamp);
             return;
+        }
 
         // <b>끌리는 동안에는 정착 판정을 돌리지 않는다.</b> (#572)
         //
@@ -534,8 +834,15 @@ public class NpcRagdoll : MonoBehaviour
         if (!m_hipsIsNetworkSynced && !HasMoveAuthority && m_state == RagdollState.Ragdoll)
             TickAlignBonesToRoot();
 
-        // 얼린 뒤에는 반대로 골반 스트림을 눌러야 한다 — 그쪽이 계속 골반을 쓰면 얼린 자세가 무너진다.
-        // 위 정렬과 정확히 반대 구간(Frozen)에서 돌고, 조건도 반대다(골반 복제일 때만). (#572)
+        // ⚠ <b>얼린 뒤에도 골반 스트림은 누르지 않는다.</b> 여기 "얼린 자세가 스트림에 밀리니
+        // 매 프레임 도로 덮어야 한다"는 주석이 구현 없이 남아 있었다 — <b>거꾸로 읽은 것이다.</b>
+        // 원격의 얼린 몸은 <b>골반에</b> 매달려 있으므로(<see cref="ApplyFrozenPose"/>) 스트림이
+        // 골반을 쓰는 것이 곧 몸을 제자리에 두는 일이고, 덮으면 그때부터 스트림과 싸운다.
+        // 자세에서 스트림이 쥐지 않는 부분(뼈 로컬 회전)은 상수라 눌러 줄 것이 없다.
+
+        // 순간이동 감싸기를 마무리한다 — <b>LateUpdate여야 한다.</b> 골반 NT가 이번 프레임에 적용한
+        // 위치에서 물리로 되돌려야, 되돌리는 순간의 자세가 곧 도착한 자세가 된다.
+        TickTeleportBracket();
     }
 
     // 래그돌이어야 하는지를 폴링한다 — 읽는 값이 전부 동기화 값이라 전 피어가 같은 답을 얻는다.

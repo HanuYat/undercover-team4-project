@@ -2331,8 +2331,8 @@ GameObject:
   - component: {fileID: 4904278029985001156}
   - component: {fileID: 6411286668176044618}
   - component: {fileID: 4675676041639630104}
-  - component: {fileID: 2902081306255579700}
-  - component: {fileID: 5563305692965901500}
+  - component: {fileID: 4924317659541260774}
+  - component: {fileID: 5343333938358887480}
   m_Layer: 10
   m_Name: Hips
   m_TagString: Untagged
@@ -2406,7 +2406,7 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.32299513, y: 0.27836922, z: 0.38197827}
   m_Center: {x: -0.12033978, y: 0.0010077655, z: 0.00000013411045}
---- !u!114 &2902081306255579700
+--- !u!114 &4924317659541260774
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -2415,9 +2415,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 3571386007782904810}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e96cb6065543e43c4a752faaa1468eb1, type: 3}
+  m_Script: {fileID: 11500000, guid: b5d14420c2a44424ab18d25b9b564e90, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.Components.NetworkTransform
+  m_EditorClassIdentifier: Assembly-CSharp::NpcCorpseHipsTransform
   ShowTopMostFoldoutHeaderGroup: 1
   NetworkTransformExpanded: 0
   AutoOwnerAuthorityTickOffset: 1
@@ -2452,7 +2452,7 @@ MonoBehaviour:
   SwitchTransformSpaceWhenParented: 0
   Interpolate: 1
   SlerpPosition: 0
---- !u!114 &5563305692965901500
+--- !u!114 &5343333938358887480
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -4738,6 +4738,7 @@ MonoBehaviour:
   m_settleSpeedThreshold: 0.15
   m_settleHoldSeconds: 0.3
   m_settleTimeoutSeconds: 5
+  m_blendSeconds: 0.3
   m_groundMask:
     serializedVersion: 2
     m_Bits: 1
