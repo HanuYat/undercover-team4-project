@@ -31,7 +31,7 @@ public class MontagePortraitView : MonoBehaviour
             return;
         }
 
-        SetLayer(m_baseImage, database.MontageBase, TintOf(AppearanceAxis.SkinColor, profile, revealedAxes, database));
+        BindBase(profile, revealedAxes, database);
         SetLayer(m_faceImage, database.MontageFace, Color.white);
         BindHair(profile, revealedAxes, database);
         BindPropAxis(m_facialHairImage, AppearanceAxis.FacialHair, profile, revealedAxes, database);
@@ -39,17 +39,31 @@ public class MontagePortraitView : MonoBehaviour
         BindPropAxis(m_eyewearImage, AppearanceAxis.Eyewear, profile, revealedAxes, database);
     }
 
-    /// <summary>머리는 스타일 축과 색 축이 한 레이어를 나눠 쓴다 — 스타일이 미공개인데 색만 공개면
-    /// 색을 얹을 자리가 없으므로 형태 미상 머리를 대신 깐다.</summary>
+    /// <summary>
+    /// 피부색이 미공개면 두상을 칠하지 않고 흰색으로 둔다.
+    ///
+    /// 다른 축과 달리 '안 그리는 것'으로 미상을 말할 수 없다 — 바닥은 늘 깔리고 늘 어떤 색이든 띤다.
+    /// 반투명은 뒤의 어두운 패널이 비쳐 어두운 피부를 사칭하고, 어둡게 칠하면 그 위에 실제 프롭 색
+    /// 그대로 얹히는 수염·안경(대부분 어둡다)이 묻힌다. 그래서 밝기를 지키는 흰색으로 두고,
+    /// 미상이라는 말 자체는 몽타주 글이 한다 (AppearanceDatabase.BuildMontageText).
+    /// </summary>
+    private void BindBase(in AppearanceProfile profile, RevealedAxisSet revealedAxes, AppearanceDatabase database)
+    {
+        Color tint = revealedAxes.Contains(AppearanceAxis.SkinColor)
+            ? TintOf(AppearanceAxis.SkinColor, profile, revealedAxes, database)
+            : Color.white;
+
+        SetLayer(m_baseImage, database.MontageBase, tint);
+    }
+
+    /// <summary>머리는 스타일 축과 색 축이 한 레이어를 나눠 쓴다 — 스타일이 미공개면 색 공개 여부와
+    /// 무관하게 형태 미상 머리를 깐다. 비워 두면 빈 정수리가 '미상'이 아니라 대머리로 읽힌다.
+    /// 대머리는 스타일 축이 공개됐을 때 레이어가 없는 것으로 말한다 (안 그리는 것이 곧 그 값).</summary>
     private void BindHair(in AppearanceProfile profile, RevealedAxisSet revealedAxes, AppearanceDatabase database)
     {
-        Sprite sprite;
-        if (revealedAxes.Contains(AppearanceAxis.HairStyle))
-            sprite = database.GetOption(AppearanceAxis.HairStyle, profile.HairStyleIndex)?.MontageLayer;
-        else if (revealedAxes.Contains(AppearanceAxis.HairColor))
-            sprite = database.MontageUnknownHair;
-        else
-            sprite = null;
+        Sprite sprite = revealedAxes.Contains(AppearanceAxis.HairStyle)
+            ? database.GetOption(AppearanceAxis.HairStyle, profile.HairStyleIndex)?.MontageLayer
+            : database.MontageUnknownHair;
 
         SetLayer(m_hairImage, sprite, TintOf(AppearanceAxis.HairColor, profile, revealedAxes, database));
     }

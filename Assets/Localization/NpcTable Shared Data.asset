@@ -195,6 +195,10 @@ MonoBehaviour:
     m_Key: Npc.Appearance.Eyewear.GlowLens
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000740
+    m_Key: Npc.Appearance.Unknown
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

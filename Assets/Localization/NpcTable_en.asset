@@ -198,6 +198,10 @@ MonoBehaviour:
     m_Localized: Glowing lenses
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000740
+    m_Localized: Unknown
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []
