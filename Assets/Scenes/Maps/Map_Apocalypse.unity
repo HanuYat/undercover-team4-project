@@ -5740,6 +5740,10 @@ PrefabInstance:
       propertyPath: GlobalObjectIdHash
       value: 481684432
       objectReference: {fileID: 0}
+    - target: {fileID: 5897735017321614696, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: InScenePlacedSourceGlobalObjectIdHash
+      value: 601321265
+      objectReference: {fileID: 0}
     - target: {fileID: 9176822252311413070, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -27049,6 +27053,64 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4270579384956852, guid: 4e063b93fa1f20144b765209a55a4130, type: 3}
   m_PrefabInstance: {fileID: 614654923}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &616000011
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 616000012}
+  - component: {fileID: 616000013}
+  m_Layer: 0
+  m_Name: ArrestNoticeBroadcaster
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &616000012
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 616000011}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1326152962}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &616000013
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 616000011}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f68bbb38de294959af0c67e6d257b083, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ArrestNoticeBroadcaster
+  m_noticeMessage:
+    m_TableReference:
+      m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
+    m_TableEntryReference:
+      m_KeyId: 7100000000322
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_noticeSeconds: 3
+  m_noticeTone: {r: 0.2, g: 0.7, b: 0.35, a: 0.95}
+  references:
+    version: 2
+    RefIds: []
 --- !u!4 &616926021 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4361854606638056, guid: cab42ffeac4dd5a4d87e025f3968f7f4, type: 3}
@@ -57431,6 +57493,7 @@ Transform:
   - {fileID: 2093293294}
   - {fileID: 1684315537}
   - {fileID: 1585279160}
+  - {fileID: 616000012}
   m_Father: {fileID: 757967211}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1328904308
@@ -92227,6 +92290,7 @@ MonoBehaviour:
   m_minReward: 2000
   m_checkInterval: 0.2
   m_favorExpireSeconds: 180
+  m_devIssueKey: 102
   m_offerToast:
     m_TableReference:
       m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
