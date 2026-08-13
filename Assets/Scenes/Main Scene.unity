@@ -28754,6 +28754,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoundManager
   m_targetFund: 8000
+  m_quotaTable: {fileID: 0}
   m_timeLimitSeconds: 600
   m_startDelaySeconds: 3
   m_jailZone: {fileID: 1808693748}
@@ -30543,6 +30544,10 @@ PrefabInstance:
     - target: {fileID: 7375177701528345575, guid: baf4df2519ff879428e75cbf40473c5c, type: 3}
       propertyPath: m_Name
       value: HqRevivalDevice
+      objectReference: {fileID: 0}
+    - target: {fileID: 7375177701528345575, guid: baf4df2519ff879428e75cbf40473c5c, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7479144071490447906, guid: baf4df2519ff879428e75cbf40473c5c, type: 3}
       propertyPath: m_LocalPosition.x
@@ -52387,6 +52392,7 @@ MonoBehaviour:
   m_minReward: 2000
   m_checkInterval: 0.2
   m_favorExpireSeconds: 180
+  m_devIssueKey: 102
   m_offerToast:
     m_TableReference:
       m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
@@ -89762,6 +89768,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 8501669290076253, guid: 719f666d4571ca94ca2b4f5a029c960b, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8501669290076253, guid: 719f666d4571ca94ca2b4f5a029c960b, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8501669290076253, guid: 719f666d4571ca94ca2b4f5a029c960b, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 2193270077844097952, guid: 719f666d4571ca94ca2b4f5a029c960b, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0

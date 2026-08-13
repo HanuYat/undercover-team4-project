@@ -35,12 +35,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 3135780229122
-    m_Localized: "Out of action \u2014 cannot be revived. Equip the rope and left-click
-      to haul them to HQ"
+    m_Localized: "Out of action \u2014 equip a revive kit and left-click to bring them back"
     m_Metadata:
       m_Items: []
   - m_Id: 3135784423424
-    m_Localized: "Shut down \u2014 a teammate must haul you to HQ to restore you"
+    m_Localized: "Shut down \u2014 a teammate needs a revive kit to bring you back"
     m_Metadata:
       m_Items: []
   - m_Id: 3135784423425

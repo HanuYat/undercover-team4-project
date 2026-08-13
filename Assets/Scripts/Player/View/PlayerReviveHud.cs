@@ -4,7 +4,7 @@ using UnityEngine.Localization;
 
 /// <summary>
 /// 쓰러진 동료 관련 온스크린 프롬프트 — 오너 화면 전용. (#105/#493)
-/// 기능 정지된 아군을 조준하면 운반 안내를, 내가 기능 정지되면 본부 이송 대기 메시지를 띄운다.
+/// 기능 정지된 아군을 조준하면 부활 키트 안내를, 내가 기능 정지되면 키트를 기다리라는 메시지를 띄운다 (#613).
 /// 현장 구조(다운) 쪽 분기는 #524로 휴면 상태지만, 되살릴 때 그대로 쓰도록 남겨 뒀다.
 /// 문구는 HUD의 공용 프롬프트(<see cref="PromptView"/>)에 얹는다 — 이 클래스는 상태를 보고
 /// 어떤 문구를 띄울지만 고른다.
@@ -92,7 +92,7 @@ public class PlayerReviveHud : NetworkBehaviour
             return;
         }
 
-        // 내가 기능 정지(Die)된 경우 — 본부 이송(#365)만 남았다는 안내 (#364)
+        // 내가 기능 정지(Die)된 경우 — 동료의 부활 키트를 기다려야 한다는 안내 (#364/#613)
         if (m_incapacitation != null && m_incapacitation.IsDead)
         {
             SetPrompt(m_selfDeadPrompt);
@@ -113,7 +113,7 @@ public class PlayerReviveHud : NetworkBehaviour
             return;
         }
 
-        // 기능 정지된 아군을 조준 중 — 구조가 아니라 운반이 답이다 (#364/#365)
+        // 기능 정지된 아군을 조준 중 — 구조 채널링이 아니라 부활 키트가 답이다 (#364/#613)
         if (m_reviver != null && m_reviver.CurrentDeadTarget != null)
         {
             SetPrompt(m_deadTargetPrompt);

@@ -127,6 +127,49 @@ public abstract class ItemBase : ChanneledInteractionBehaviour
     public virtual void ServerCancelActiveUse() { }
 
     /// <summary>
+    /// 이 아이템을 <b>소모</b>한다 — 손에서 빼 디스폰하고, 상점 구매품이면 다음 라운드 배달 목록에서도
+    /// 뺀다. 서버(또는 오프라인) 전용. 일회용 소지품이 자기 사용을 마치며 스스로 부른다. (#613)
+    ///
+    /// 소모형의 첫 사례가 부활 키트(<see cref="ReviveKit"/>)라 경로를 여기 판다 — 뒤에 올 소모형
+    /// (구역 스캔 #490 등)도 이걸 그대로 쓴다. 아이템 종류와 무관한 처리라 하위가 아니라 기반에 둔다.
+    ///
+    /// <b>구매 목록에서 빼는 것이 핵심이다.</b> 배달(ShopDelivery)은 매 라운드 구매 목록을 다시
+    /// 훑으므로, 빼지 않으면 쓴 키트가 다음 라운드에 또 배달돼 일회용이 아니게 된다.
+    /// 잃어버린 구매품을 목록에서 빼는 소매치기(<c>Pickpocket.ServerLoseStolenItem</c>, #303)와 같은 처리다.
+    /// </summary>
+    public void ServerConsume()
+    {
+        if (IsSpawned && !IsServer)
+            return; // 서버 권위 방어
+
+        // 기본 지급품에는 표식이 없다 — 그쪽은 어차피 매 라운드 다시 지급되므로 뺄 목록도 없다
+        if (TryGetComponent(out ShopDeliveredItem delivered))
+        {
+            App.Game.ShopPurchases?.RemoveCarried(delivered.SourcePrefab);
+        }
+
+        // 손에 있으면 주인이 디스폰하고 오너 인벤토리까지 갱신한다 — 소지품 변경 통지는 주인 몫이다.
+        // 바닥에 놓인 것을 소모하는 경로는 아직 없지만(사용은 든 상태에서만 일어난다), 주인을 못 찾았다고
+        // 아이템이 살아남으면 "썼는데 그대로 있는" 상태가 되므로 스스로 디스폰한다.
+        PlayerInteractor holder = Holder;
+        PlayerLoadout loadout = holder != null ? holder.GetComponent<PlayerLoadout>() : null;
+        if (loadout != null)
+        {
+            loadout.ServerConsumeHeldItem(this);
+            return;
+        }
+
+        if (NetworkObject != null && NetworkObject.IsSpawned)
+        {
+            NetworkObject.Despawn(destroy: true);
+        }
+        else
+        {
+            Destroy(gameObject); // 비네트워크 Play 테스트 폴백
+        }
+    }
+
+    /// <summary>
     /// 이 아이템이 손에 장착됐다 — 오너 클라에서만 호출된다(PlayerLoadout.EquipSlot). (#455)
     /// 장착 전환은 진행 중이던 게이지를 내리는데, 새로 든 아이템이 아직 진행 중인 것을 갖고 있으면
     /// 여기서 다시 띄운다(테이저 충전). 그런 상태가 없는 아이템은 무동작(기본).
