@@ -24,8 +24,37 @@ public class AppearanceDatabase : ScriptableObject
         [Tooltip("지정하면 대상 머티리얼 슬롯을 통째로 교체한다 (프롭이 없을 때만)")]
         public Material MaterialOverride;
 
-        [Tooltip("지정하면 머리 앵커에 부착하는 프롭 (머리카락·수염·모자·안경 등). 색은 Color로 틴트된다")]
-        public GameObject PropPrefab;
+        [Tooltip(
+            "머리 앵커에 부착하는 프롭 (머리카락·수염·모자·안경 등). 색은 Color로 틴트된다.\n"
+                + "여럿 넣으면 NPC마다 그중 하나를 쓴다 — 화면 다양성은 늘리되 몽타주는 한 값으로 남는다 (#619).\n"
+                + "⚠ 여기 함께 넣는 메시는 반드시 몽타주에서 서로 구분되지 않아야 한다. 그림은 0번으로 한 장만 굽기 때문에,\n"
+                + "구분되는 메시를 섞으면 그림이 실물과 어긋나 §1이 깨진다."
+        )]
+        public GameObject[] PropPrefabs;
+
+        /// <summary>
+        /// 몽타주가 대표로 쓰는 프롭 — 그림을 굽고 '이 값에 프롭이 있는가'를 판정하는 기준.
+        /// 여러 메시를 물려도 그림은 한 장이라 대표가 하나여야 한다 (#619).
+        /// </summary>
+        public GameObject MontageProp =>
+            PropPrefabs != null && PropPrefabs.Length > 0 ? PropPrefabs[0] : null;
+
+        /// <summary>
+        /// 이 NPC가 쓸 메시 하나. <paramref name="seed"/>가 같으면 어느 피어에서도 같은 것이 나온다 —
+        /// 변형은 <see cref="AppearanceProfile"/>에 없어 네트워크로 오지 않으므로, 이미 동기화된 값
+        /// (NetworkObjectId)에서 결정론적으로 뽑아야 전 클라이언트가 같은 외형을 본다 (#56).
+        /// </summary>
+        public GameObject PickProp(ulong seed)
+        {
+            if (PropPrefabs == null || PropPrefabs.Length == 0)
+                return null;
+            if (PropPrefabs.Length == 1)
+                return PropPrefabs[0];
+
+            // 곱셈 해시 — 인접한 NetworkObjectId가 같은 변형으로 몰리지 않게 흩는다
+            ulong mixed = seed * 2654435761UL + 1013904223UL;
+            return PropPrefabs[(int)(mixed % (ulong)PropPrefabs.Length)];
+        }
 
         [Tooltip("SciFi 카탈로그 전용 값 — Generic 경로엔 프롭이 없어 표현 불가하므로 Generic 랜덤 배정에서 제외한다 (예: 머리 '가림', 후드/헬멧, 특수 피부색). 몽타주 텍스트·SciFi 카탈로그에는 그대로 쓰인다")]
         public bool SciFiOnly;
@@ -33,7 +62,7 @@ public class AppearanceDatabase : ScriptableObject
         [Tooltip("몽타주 포트레이트에서 이 값을 그리는 레이어 그림 (#607). 프롭이 있는 값은 Tools/몽타주 레이어 굽기로 자동 생성된다. 색 축(머리색·피부색)은 그림 없이 다른 레이어를 Color로 칠하므로 비운다. '없음/대머리'도 비운다 — 안 그리는 것이 곧 그 값이다")]
         public Sprite MontageLayer;
 
-        [Tooltip("정면에서 '없음'과 구분되지 않아 몽타주에 그리지 않는 값 (#619 — 뒤로 넘긴 묶음머리 등). 화면에는 그대로 착용하지만 이 축은 공개 축 후보에서 빠진다. 굽기 툴도 이 값의 레이어를 꽂지 않는다. 면적이 작다고 켤 것이 아니라, 굽어 보고 '없음'과 구분되지 않을 때만 켠다 — 콧수염은 작아도 구분된다")]
+        [Tooltip("몽타주에서 이 값을 통째로 뺀다 — 그림도 안 꽂고 이 축이 공개 축 후보에서도 빠진다. 화면에는 그대로 착용한다.\n켜면 글로도 못 말하게 되는 것이 대가다. 그래서 정면 그림이 희미한 것만으로는 켜지 않는다 — 구분은 글이 하고, 희미한 정면 투영은 사실이라 그림이 거짓말을 하는 게 아니다. 머리 축에서 이 이유로 아무 값도 켜지 않았다 (#619, docs §13-7).\n켤 자리는 화면에서 무엇이 보이는지를 그림·글 어느 쪽으로도 옳게 말할 수 없는 값이다")]
         public bool ExcludeFromMontage;
     }
 
@@ -143,7 +172,7 @@ public class AppearanceDatabase : ScriptableObject
     /// SciFi 카탈로그 경로도 같은 기준이다 — 프롭을 쓰지 않지만 머리 스타일 값은 같은 옵션 목록을 가리킨다.
     /// </summary>
     public bool HasVisibleHair(in AppearanceProfile profile) =>
-        GetOption(AppearanceAxis.HairStyle, profile.HairStyleIndex)?.PropPrefab != null;
+        GetOption(AppearanceAxis.HairStyle, profile.HairStyleIndex)?.MontageProp != null;
 
     /// <summary>
     /// 이 값을 몽타주 포트레이트로 그릴 수 있는가 (#607) — 공개 축 후보를 거르는 기준이다 (#556과 같은 취지).
@@ -170,11 +199,11 @@ public class AppearanceDatabase : ScriptableObject
         // 머리 스타일은 프롭이 없다는 것이 곧 '머리가 화면에 안 보인다'(대머리·가림)이고,
         // 그건 안 그리는 것으로 정확히 표현된다 — 무엇이 덮었는지는 모자 축이 말할 몫이다.
         if (axis == AppearanceAxis.HairStyle)
-            return option.PropPrefab == null;
+            return option.MontageProp == null;
 
         // 나머지 축에서 프롭 없는 SciFi 전용 값(후드·헬멧·바이저·발광렌즈)은 '그릴 것이 있는데
         // 그림이 없는' 경우다 — 안 그리면 '없음'으로 읽혀 화면과 어긋난다.
-        return option.PropPrefab == null && !option.SciFiOnly;
+        return option.MontageProp == null && !option.SciFiOnly;
     }
 
     /// <summary>Generic 경로용 랜덤 옵션 인덱스 — SciFiOnly 값은 제외한다.</summary>

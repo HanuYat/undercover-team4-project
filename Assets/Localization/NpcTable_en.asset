@@ -71,11 +71,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000708
-    m_Localized: Short hair
+    m_Localized: Short
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000709
-    m_Localized: Long hair
+    m_Localized: Long straight
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000710
@@ -200,6 +200,34 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 7100000000740
     m_Localized: Unknown
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000741
+    m_Localized: Bob
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000742
+    m_Localized: Medium bob
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000743
+    m_Localized: Dreadlocks
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000744
+    m_Localized: Shaggy
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000745
+    m_Localized: Mohawk
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000746
+    m_Localized: Asymmetric
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000747
+    m_Localized: Very short
     m_Metadata:
       m_Items: []
   references:

@@ -40,8 +40,8 @@ public class MontageLayerBaker : EditorWindow
 
     [SerializeField] private float m_featureThreshold = 0.25f;
 
-    // 정면에서 거의 안 보이는 프롭(뒤로 넘긴 묶음머리·번)은 구워도 빈 그림이 나온다. 그걸 꽂으면
-    // CanDepict가 "그릴 수 있다"고 판단해 공개 축으로 뽑고, 본부는 대머리와 구분 안 되는 그림을 본다. (#619)
+    // 정면에서 거의 안 보이는 프롭(뒤로 넘긴 묶음머리·번)을 알리는 선이다. 자를지 말지의 기준은 아니다 —
+    // 희미해도 구분은 글이 하므로 그대로 꽂는 쪽으로 정했다 (#619, docs §13-7). 여기 걸리면 사람이 보고 판단한다.
     [SerializeField] private float m_minLayerCoverage = 0.06f;
 
     // 이미지는 전부 Imported 공유 저장소에 둔다 (2026-08-12 에셋 폴더 정리)
@@ -381,24 +381,24 @@ public class MontageLayerBaker : EditorWindow
             for (int i = 0; i < count; i++)
             {
                 AppearanceDatabase.AppearanceOption option = m_database.GetOption(axis, i);
-                if (option?.PropPrefab == null)
+                if (option?.MontageProp == null)
                     continue;
 
                 // 몽타주에서 뺀 값은 그림을 꽂지 않는다 — 꽂으면 CanDepict가 공개 축 후보로 되살린다
                 if (option.ExcludeFromMontage)
                 {
                     option.MontageLayer = null; // 예전에 꽂아 둔 그림이 있으면 걷어낸다
-                    excluded.Add($"{axis}[{i}] {option.PropPrefab.name}");
+                    excluded.Add($"{axis}[{i}] {option.MontageProp.name}");
                     continue;
                 }
 
-                Color[] pixels = rig.RenderProp(option.PropPrefab, option.Color, IsSilhouetteAxis(axis));
+                Color[] pixels = rig.RenderProp(option.MontageProp, option.Color, IsSilhouetteAxis(axis));
 
                 // 노출이 적은 프롭은 꽂되 알린다 — 자를지 말지는 사람이 굽은 그림을 보고 정할 몫이다.
                 // 면적이 곧 구분 가능성은 아니라서다: 콧수염은 5%대여도 '없음'과 확실히 구분된다.
                 float coverage = Coverage(pixels);
                 if (coverage < m_minLayerCoverage)
-                    faint.Add($"{axis}[{i}] {option.PropPrefab.name} ({coverage:P1})");
+                    faint.Add($"{axis}[{i}] {option.MontageProp.name} ({coverage:P1})");
 
                 Sprite sprite = SaveLayer(pixels, $"Montage_{axis}_{i}");
                 if (sprite == null)
@@ -448,10 +448,10 @@ public class MontageLayerBaker : EditorWindow
         for (int i = 0; i < optionCount; i++)
         {
             AppearanceDatabase.AppearanceOption option = m_database.GetOption(m_compareAxis, i);
-            if (option?.PropPrefab == null)
+            if (option?.MontageProp == null)
                 continue;
 
-            props.Add(option.PropPrefab);
+            props.Add(option.MontageProp);
             colors.Add(option.Color);
         }
 

@@ -199,6 +199,34 @@ MonoBehaviour:
     m_Key: Npc.Appearance.Unknown
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000741
+    m_Key: Npc.Appearance.HairStyle.Bob
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000742
+    m_Key: Npc.Appearance.HairStyle.MidBob
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000743
+    m_Key: Npc.Appearance.HairStyle.Dreads
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000744
+    m_Key: Npc.Appearance.HairStyle.Shaggy
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000745
+    m_Key: Npc.Appearance.HairStyle.Mohawk
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000746
+    m_Key: Npc.Appearance.HairStyle.Asymmetric
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000747
+    m_Key: Npc.Appearance.HairStyle.VeryShort
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

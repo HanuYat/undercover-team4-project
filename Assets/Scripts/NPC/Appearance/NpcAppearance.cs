@@ -216,7 +216,12 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
             Destroy(m_axisProps[slot]);
         m_axisProps[slot] = null;
 
-        if (option?.PropPrefab == null)
+        // 한 값이 메시를 여럿 가질 수 있다 (#619). 어느 것을 쓸지는 프로필에 없어 네트워크로 오지 않으므로,
+        // 이미 동기화된 NetworkObjectId에서 결정론적으로 뽑는다 — 안 그러면 피어마다 다른 머리가 보인다.
+        // 축을 섞는 것은 한 NPC의 모든 축이 같은 자리 변형으로 몰리지 않게 하기 위한 것이다.
+        ulong seed = (IsSpawned ? NetworkObjectId : (ulong)GetInstanceID()) * 31UL + (ulong)axis;
+        GameObject prefab = option?.PickProp(seed);
+        if (prefab == null)
             return;
 
         Transform anchor = ResolveHeadAnchor();
@@ -226,7 +231,7 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
             return;
         }
 
-        GameObject prop = Instantiate(option.PropPrefab, anchor, false);
+        GameObject prop = Instantiate(prefab, anchor, false);
         // 머리 프롭은 밝은 중립 베이스로 갈아끼워야 HairColor 곱셈 틴트가 선명하다 (#221)
         if (axis == AppearanceAxis.HairStyle && m_hairBaseMaterial != null)
             ApplyBaseMaterial(prop, m_hairBaseMaterial);
