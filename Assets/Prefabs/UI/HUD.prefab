@@ -398,6 +398,7 @@ GameObject:
   - component: {fileID: 2988551367704962467}
   - component: {fileID: 1367815365054906490}
   - component: {fileID: 7655725688926184458}
+  - component: {fileID: 1794719840692684875}
   m_Layer: 5
   m_Name: HUD
   m_TagString: Untagged
@@ -597,6 +598,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SignalInputPanel
   m_panelRoot: {fileID: 2442732107264167474}
+  m_background: {fileID: 0}
   m_field: {fileID: 6123735122119017851}
   m_title:
     m_TableReference:
@@ -687,6 +689,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LootPanel
   m_panelRoot: {fileID: 3795780146221054217}
+  m_background: {fileID: 0}
   m_slotViews:
   - {fileID: 3403280469360935945}
   - {fileID: 787217913368606610}
@@ -703,6 +706,32 @@ MonoBehaviour:
     m_LocalVariables: []
   m_titleText: {fileID: 824350361951244764}
   m_keepOpenRange: 4.5
+  references:
+    version: 2
+    RefIds: []
+--- !u!114 &1794719840692684875
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 704170744150459061}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: df2feba32bda1e043b1b77355d82f8cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SuddenEventToastView
+  m_noticeMessage:
+    m_TableReference:
+      m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
+    m_TableEntryReference:
+      m_KeyId: 3314501777186816
+      m_Key: Hud.Event.Notice
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_noticeSeconds: 3
+  m_noticeTone: {r: 0.8, g: 0.42, b: 0.1, a: 0.95}
   references:
     version: 2
     RefIds: []

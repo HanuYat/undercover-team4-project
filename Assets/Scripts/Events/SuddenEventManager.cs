@@ -26,7 +26,6 @@ using Random = UnityEngine.Random;
 /// 가능하지만, 규약 완화(RequireComponent 제거)는 팀 결정 대기 항목이다(#291 고려사항 · PR #298 리뷰).
 /// 발생 빈도·이벤트별 수치는 전부 인스펙터 — 밸런싱 보류 항목이라 코드에 못 박지 않는다 (GDD 12장).
 /// </summary>
-// TODO: 이벤트 발생/종료 HUD 알림(본부 관제 UI)은 OnEventAnnounced/AnnounceEventClientRpc를 구독해 연결한다.
 [RequireComponent(typeof(NetworkObject))]
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class SuddenEventManager : NetworkedManagerBase

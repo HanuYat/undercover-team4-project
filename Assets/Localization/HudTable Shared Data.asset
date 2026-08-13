@@ -139,6 +139,10 @@ MonoBehaviour:
     m_Key: Hud.Arrest.Notice
     m_Metadata:
       m_Items: []
+  - m_Id: 3314501777186816
+    m_Key: Hud.Event.Notice
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
