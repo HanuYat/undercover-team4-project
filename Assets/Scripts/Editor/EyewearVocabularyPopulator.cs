@@ -6,19 +6,17 @@ using UnityEngine.Localization;
 using UnityEngine.Localization.Tables;
 
 /// <summary>
-/// 수염 어휘 배선 (#619) — 메뉴: Tools/수염 어휘 배선
+/// 안경 어휘 배선 (#619) — 메뉴: Tools/안경 어휘 배선
 ///
-/// 수염 축을 아래 표대로 통째로 다시 쓴다. <see cref="HairVocabularyPopulator"/>와 같은 이유로 코드에 표를 둔다:
-/// Synty 부착물이 FBX의 <b>프리팹 변형</b>이라 참조를 텍스트로 쓸 수 없고, 값·이름·메시의 대응이
-/// 문서(appearance-montage.md §13-10)와 어긋나면 안 되기 때문이다.
+/// 안경 축을 아래 표대로 통째로 다시 쓴다. <see cref="HairVocabularyPopulator"/>와 같은 이유로 코드에 표를 둔다.
 ///
-/// 값 묶음은 <c>Tools/몽타주 레이어 굽기</c>의 비교 시트를 16px로 보고 정했다 — 몽타주에서 갈리는 것은
-/// <b>덮는 범위</b> 세 단계(얇게 깔림 / 턱 덩어리 / 뺨까지)와 자리(입술 위만 / 양옆만)다.
-/// 한 값에 함께 넣은 메시는 그 해상도에서 서로 구분되지 않는 것들이고, 그림은 0번으로 한 장만 굽는다.
+/// 값 묶음은 비교 시트를 16px로 재서 정했다 — 기존 값들끼리 26~60칸 떨어져 있고, 후보는 가장 가까운 값과의
+/// 거리로 붙였다(3~28칸). 눈으로 본 것과 결론이 갈린 곳이 있는데(<c>PS_Glasses_02</c>는 32px에서 검은
+/// 선글라스처럼 보이지만 16px에서는 바이저와 8칸 차이) <b>묶는 기준은 몽타주 해상도</b>라 측정을 따랐다.
 ///
 /// 배선 후에는 <c>Tools/몽타주 레이어 굽기</c>로 레이어를 다시 구워야 새 값의 그림이 생긴다.
 /// </summary>
-public static class FacialHairVocabularyPopulator
+public static class EyewearVocabularyPopulator
 {
     private const string k_generic = "Assets/Imported/Synty/PolygonGeneric/Prefabs/Characters/Attachments/SM_Gen_Chr_Attach_";
     private const string k_police = "Assets/Imported/Synty/PolygonPoliceStation/Prefabs/Characters/Chr_Attach/SM_Chr_Attach_";
@@ -26,75 +24,93 @@ public static class FacialHairVocabularyPopulator
 
     private const string k_table = "NpcTable";
 
-    // 머리와 달리 실루엣으로 굽지 않는 축이라(MontageLayerBaker.IsSilhouetteAxis) 값이 색을 직접 들고 있다.
-    // 기존 세 값이 쓰던 색을 그대로 쓴다 — 수염은 머리색 축의 틴트를 받지 않으므로 이 색이 곧 화면 색이다.
-    private static readonly Color k_beardColor = new Color(0.15f, 0.12f, 0.1f, 1f);
-
-    /// <summary>값 하나 — 이름 키(+없으면 새로 팔 번역) + 그 값이 쓰는 메시들(0번이 몽타주 대표).</summary>
+    /// <summary>값 하나 — 이름 키(+없으면 새로 팔 번역), 틴트 색, 그 값이 쓰는 메시들(0번이 몽타주 대표).</summary>
     private readonly struct Value
     {
         public readonly string Key;
         public readonly string Ko;
         public readonly string En;
+        public readonly Color Color;
+        public readonly bool SciFiOnly;
         public readonly string[] Meshes;
 
-        public Value(string key, string ko, string en, params string[] meshes)
+        public Value(string key, string ko, string en, Color color, bool sciFiOnly, params string[] meshes)
         {
             Key = key;
             Ko = ko;
             En = en;
+            Color = color;
+            SciFiOnly = sciFiOnly;
             Meshes = meshes;
         }
     }
 
-    // 순서가 곧 인덱스다. 기존 네 값(없음·콧수염·턱수염·구레나룻)의 자리를 그대로 두고 뒤에 셋만 붙인다 —
-    // AppearanceModelCatalog가 인덱스로 이 축을 가리키므로, 자리를 유지하면 카탈로그를 고치지 않아도 된다.
+    // 순서가 곧 인덱스다. 기존 네 키를 버리지 않고 자리만 옮겼다 — [2]는 메시를 그대로 두고 이름을
+    // 바이저→안경으로, [3]은 고글→바이저로 고쳤다(눈 전체를 덮는 판이라 그게 맞다). '고글' 키는
+    // 진짜 고글 메시가 들어온 [5]로 갔다. AppearanceModelCatalog에서 [3]을 쓰던 모델은 확인이 필요하다.
+    //
+    // 한 값에 묶은 메시는 같은 색으로 틴트한다 — 색이 그림에 들어가는 축이라(실루엣 축이 아니다)
+    // 색을 통일해야 그림이 어느 메시든 맞다.
     private static readonly Value[] s_values =
     {
-        new Value("Npc.Appearance.None", "없음", "None"), // [0] 프롭 없음
+        new Value("Npc.Appearance.None", "없음", "None", Color.white, false),
 
         new Value(
-            "Npc.Appearance.FacialHair.Mustache",
-            "콧수염",
-            "Moustache",
-            k_generic + "Moustache_01",
-            k_police + "Moustache_01",
-            k_police + "Moustache_02"
+            "Npc.Appearance.Eyewear.Sunglasses",
+            "선글라스",
+            "Sunglasses",
+            new Color(0.08f, 0.08f, 0.08f, 1f),
+            false,
+            k_generic + "Sunglasses_01",
+            k_police + "Glasses_02",
+            k_police + "Glasses_01"
         ),
         new Value(
-            "Npc.Appearance.FacialHair.Beard",
-            "턱수염",
-            "Beard",
-            k_apocalypse + "Homeless_Male_Beard_01",
-            k_apocalypse + "Wanderer_Male_Beard_01"
+            "Npc.Appearance.Eyewear.Glasses",
+            "안경",
+            "Glasses",
+            Color.white,
+            false,
+            k_police + "Glasses_03",
+            k_apocalypse + "Soldier_Male_Glass_01",
+            k_apocalypse + "Nerd_Female_Glasses_01"
         ),
-        new Value("Npc.Appearance.FacialHair.Sideburns", "구레나룻", "Sideburns", k_generic + "Chops_01"),
+        new Value(
+            "Npc.Appearance.Eyewear.Visor",
+            "바이저",
+            "Visor",
+            new Color(0.2f, 0.3f, 0.2f, 1f),
+            false,
+            k_generic + "Headset_01"
+        ),
+        new Value(
+            "Npc.Appearance.Eyewear.GlowLens",
+            "발광렌즈",
+            "Glowing lens",
+            new Color(0.2f, 0.8f, 0.8f, 1f),
+            true,
+            k_police + "Goggles_01"
+        ),
+        new Value(
+            "Npc.Appearance.Eyewear.Goggles",
+            "고글",
+            "Goggles",
+            Color.white,
+            false,
+            k_police + "Goggles_02"
+        ),
 
         new Value(
-            "Npc.Appearance.FacialHair.Goatee",
-            "염소수염",
-            "Goatee",
-            k_apocalypse + "Criminal_Male_Beard_01",
-            k_apocalypse + "Biker_Male_Beard_01"
-        ),
-        new Value(
-            "Npc.Appearance.FacialHair.Stubble",
-            "짧은 수염",
-            "Stubble",
-            k_apocalypse + "Hunter_Male_Beard_01",
-            k_apocalypse + "Zombie_Male_Beard_01"
-        ),
-        new Value(
-            "Npc.Appearance.FacialHair.Bushy",
-            "덥수룩한 수염",
-            "Bushy beard",
-            k_generic + "Beard_01",
-            k_generic + "Beard_02",
-            k_apocalypse + "RiotCop_Male_Beard_01"
+            "Npc.Appearance.Eyewear.Eyepatch",
+            "안대",
+            "Eyepatch",
+            Color.white, // 메시 자체가 검은 가죽이라 틴트하지 않는다
+            false,
+            k_apocalypse + "Press_Male_Eyepatch_01"
         ),
     };
 
-    [MenuItem("Tools/수염 어휘 배선")]
+    [MenuItem("Tools/안경 어휘 배선")]
     private static void Populate()
     {
         AppearanceDatabase database = LoadDatabase();
@@ -104,7 +120,7 @@ public static class FacialHairVocabularyPopulator
         StringTableCollection collection = LocalizationEditorSettings.GetStringTableCollection(k_table);
         if (collection == null)
         {
-            Debug.LogError($"[수염 어휘] {k_table} 문자열 테이블을 찾지 못했다");
+            Debug.LogError($"[안경 어휘] {k_table} 문자열 테이블을 찾지 못했다");
             return;
         }
 
@@ -121,21 +137,20 @@ public static class FacialHairVocabularyPopulator
                 new AppearanceDatabase.AppearanceOption
                 {
                     DisplayName = new LocalizedString(k_table, value.Key),
-                    Color = value.Meshes.Length == 0 ? Color.white : k_beardColor,
+                    Color = value.Color,
                     PropPrefabs = LoadMeshes(value.Meshes, missing),
+                    SciFiOnly = value.SciFiOnly,
                 }
             );
         }
 
         if (missing.Count > 0)
         {
-            Debug.LogError($"[수염 어휘] 찾지 못한 프리팹 {missing.Count}개 — 배선 중단\n  {string.Join("\n  ", missing)}");
+            Debug.LogError($"[안경 어휘] 찾지 못한 프리팹 {missing.Count}개 — 배선 중단\n  {string.Join("\n  ", missing)}");
             return;
         }
 
-        // Options는 직렬화되는 public 필드라 그대로 갈아끼우면 된다. 새 값은 MontageLayer가 비어 있으니
-        // 굽기 전까지 CanDepict가 그 값을 공개 축 후보에서 빼 준다 — 그림 없는 값이 공개되는 일은 없다.
-        database.GetAxis(AppearanceAxis.FacialHair).Options = options.ToArray();
+        database.GetAxis(AppearanceAxis.Eyewear).Options = options.ToArray();
         EditorUtility.SetDirty(database);
         AssetDatabase.SaveAssets();
 
@@ -151,7 +166,7 @@ public static class FacialHairVocabularyPopulator
         if (created.Count > 0)
             log.Append("\n  새로 판 이름 키: ").Append(string.Join(", ", created));
 
-        Debug.Log($"[수염 어휘] 값 {options.Count}개 배선 완료 — 이제 Tools/몽타주 레이어 굽기로 레이어를 다시 구울 것{log}");
+        Debug.Log($"[안경 어휘] 값 {options.Count}개 배선 완료 — 이제 Tools/몽타주 레이어 굽기로 레이어를 다시 구울 것{log}");
     }
 
     /// <summary>이름 키가 없으면 판다 — id는 테이블의 생성기가 발급해야 나중에 겹치지 않는다.</summary>
@@ -191,7 +206,7 @@ public static class FacialHairVocabularyPopulator
         string[] guids = AssetDatabase.FindAssets("t:AppearanceDatabase");
         if (guids.Length == 0)
         {
-            Debug.LogError("[수염 어휘] AppearanceDatabase 에셋을 찾지 못했다");
+            Debug.LogError("[안경 어휘] AppearanceDatabase 에셋을 찾지 못했다");
             return null;
         }
         return AssetDatabase.LoadAssetAtPath<AppearanceDatabase>(AssetDatabase.GUIDToAssetPath(guids[0]));

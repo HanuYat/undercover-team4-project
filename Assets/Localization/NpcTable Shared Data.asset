@@ -239,6 +239,14 @@ MonoBehaviour:
     m_Key: Npc.Appearance.FacialHair.Bushy
     m_Metadata:
       m_Items: []
+  - m_Id: 3360218921099264
+    m_Key: Npc.Appearance.Eyewear.Glasses
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3360218958848000
+    m_Key: Npc.Appearance.Eyewear.Eyepatch
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

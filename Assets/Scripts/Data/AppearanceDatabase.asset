@@ -952,6 +952,7 @@ MonoBehaviour:
       PropPrefabs:
       - {fileID: 3252513830353061635, guid: 5552d13d2d0636b4b84403bca027f0c0, type: 3}
       - {fileID: 5381899529043745372, guid: 2c3db847c027ff04f9f95cf539c047de, type: 3}
+      - {fileID: 1581130366870158, guid: 8edd783432f985d4f9fbb2b783edf4b5, type: 3}
       SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: f897e9d5db6d46744b2098e44d487fc5, type: 3}
       ExcludeFromMontage: 0
@@ -1071,10 +1072,10 @@ MonoBehaviour:
     Options:
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000706
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.None
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
@@ -1086,10 +1087,10 @@ MonoBehaviour:
       ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000736
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Eyewear.Sunglasses
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
@@ -1097,15 +1098,17 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefabs:
       - {fileID: 8314516393528333455, guid: 1c99f1025f7ca5b41bfc6c615178cf3c, type: 3}
+      - {fileID: 5209497880523665370, guid: f8e1d3adfcb22e241a7e2165b45efe54, type: 3}
+      - {fileID: 6677916711081199845, guid: 70d31d0cc68a06149af8b2dd5a45c658, type: 3}
       SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: 2d4a5e5d24126ff42bb179910685b0f7, type: 3}
       ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000737
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Eyewear.Glasses
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
@@ -1113,15 +1116,17 @@ MonoBehaviour:
       MaterialOverride: {fileID: 0}
       PropPrefabs:
       - {fileID: 3860012359358968461, guid: cf9e2c8328ba74c4bacc6c702f34efd2, type: 3}
+      - {fileID: 1045987657176564, guid: aa5f2e968fd816a41b17507454628ca2, type: 3}
+      - {fileID: 1820540005688216, guid: 8cf66dd84dfae2f43bf13f5bc03719cd, type: 3}
       SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: 74785bc8fee7fc847b708dc19fdf177f, type: 3}
       ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000738
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Eyewear.Visor
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
@@ -1134,10 +1139,10 @@ MonoBehaviour:
       ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000739
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Eyewear.GlowLens
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
@@ -1147,6 +1152,38 @@ MonoBehaviour:
       - {fileID: 4006197424663581794, guid: 9a54c446d1b3eec46b3f4448a457ef00, type: 3}
       SciFiOnly: 1
       MontageLayer: {fileID: 21300000, guid: 350489dd60023ef4496fc908bbfd6134, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Eyewear.Goggles
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 6098579402017106291, guid: 799ab89f49c013c4b9b48b582689e45d, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 02b767e6a258d4843a89b918f6236a42, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Eyewear.Eyepatch
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1383984616894412, guid: 7d48d216c91790d4aa4a52afcce8ce58, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: b0b21f924c4d60b45999903f76c0cfb4, type: 3}
       ExcludeFromMontage: 0
   m_montageBase: {fileID: 21300000, guid: c45d2eea083118a468c8798fff0c31b9, type: 3}
   m_montageFace: {fileID: 21300000, guid: e1d606e7374c9394fba0477ed5936b95, type: 3}

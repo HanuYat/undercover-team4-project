@@ -242,6 +242,14 @@ MonoBehaviour:
     m_Localized: Bushy beard
     m_Metadata:
       m_Items: []
+  - m_Id: 3360218921099264
+    m_Localized: Glasses
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3360218958848000
+    m_Localized: Eyepatch
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []
