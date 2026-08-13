@@ -365,8 +365,8 @@ MonoBehaviour:
   m_overcastFadeSeconds: 3
   m_cloudTiles: 9
   m_cloudSpacing: 70
-  m_snowSizeBoost: 2
-  m_snowRateBoost: 4
+  m_snowSizeBoost: 3.5
+  m_snowRateBoost: 10
   m_snowFallSpeedBoost: 2.5
   m_snowVolumeBoost: 2.5
   m_shelterProbeHeight: 25
