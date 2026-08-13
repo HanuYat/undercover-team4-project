@@ -22,6 +22,12 @@ using UnityEngine;
 /// 행동불능 상태 자체는 PlayerIncapacitation(#105)이, 플레이어 끌려가기 표현은 오너 추종
 /// (PlayerPenaltyView→PlayerTowedMotion.BeginEscortFollow — NetworkTransform 오너 권한)이 담당한다.
 ///
+/// <b>⚠ 발동은 기본적으로 꺼져 있다 (#612).</b> 추격·호송·매달기가 정보 격차를 망가뜨린다는 판단으로
+/// 게임에서 뺐지만, 클래스와 호송 파이프라인은 남는다 — 납치 이벤트(#371)가 통째로 재사용하기 때문이다
+/// (<see cref="NpcDutyAgent"/>·<see cref="CarryEscortSequence"/>·PlayerTowedMotion). 인스펙터의
+/// m_penaltyEnabled를 켜면 아래 흐름이 그대로 되살아난다. 꺼진 동안 오검거는 <b>집계만</b> 되고
+/// 시민은 그 자리에서 석방된다 — 정산 "최다 오검거"는 계속 나온다.
+///
 /// 개인별 오검거 집계는 정산 "최다 오검거" 코믹 스탯(GDD 7-3)용으로 팀 카운트와 별개로 유지한다.
 /// 오검거는 팀 자금·라운드 종료와 무관하다(GDD 7-3 확정) — 여기서 자금/라운드를 건드리지 않는다.
 /// </summary>
@@ -37,6 +43,11 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
     private const float k_carryTravelTimeoutSeconds = 90f; // 호송 이동 안전 상한(초) — 넘으면 스냅 텔레포트로 마무리
     private const float k_warningSeconds = 8f;       // 출동 알림 표시 시간(초) — 카운트다운이 아니라 잠깐 뜨는 경고
     private const float k_detentionSlotSpacing = 1.1f; // 원한 구역에서 시민끼리 벌어질 간격(m) — 캡슐 지름 0.8m + 여유
+
+    [Header("페널티 발동 (#612)")]
+    [Tooltip("끄면 원한 구역 수용·추격대 출동·호송·광장 매달기를 전부 하지 않고 오검거 시민을 그 자리에서 석방한다. "
+        + "오검거 집계(정산 '최다 오검거')는 켜짐/꺼짐과 무관하게 그대로 쌓인다")]
+    [SerializeField] private bool m_penaltyEnabled;
 
     [Header("광장 (매달기 지점) — 비우면 원점")]
     [Tooltip("페널티 확정 시 끌려가/이송될 맵 중앙 지점. 씬의 빈 GameObject를 지정한다")]
@@ -133,6 +144,21 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
             m_perPlayerCounts[clientId] = prev + 1;
         }
 
+        // 발동이 꺼져 있으면(#612 — 기본값) 여기서 끝난다: 집계만 남고 추격·호송·매달기는 없다.
+        // 팀 카운트(게이지)도 올리지 않는다 — 안 쓰이는 채로 쌓여 있다가 플레이테스트 도중 다시 켜는 순간
+        // 임계치를 넘겨 빈 원한 구역 폴백(텔레포트 매달기)이 터지는 것을 막는다.
+        //
+        // 석방을 여기서 직접 하는 이유: 매니저가 살아 있으므로 CustodyRouter의 석방 폴백은 막혀 있다
+        // (그쪽은 App.Game.WrongfulArrestPenalty가 null인 씬만 처리한다). 신병을 이쪽에 넘긴 이상
+        // 배회 복귀까지 이쪽 책임이다 — 안 풀면 시민이 Captured로 굳는다.
+        if (!m_penaltyEnabled)
+        {
+            Debug.Log($"[오검거] 집계만 — 페널티 발동 꺼짐(#612), 석방한다. {FormatPerPlayerCounts()}");
+            if (result.Npc != null)
+                result.Npc.Custody.ReleaseFromCustody();
+            return;
+        }
+
         // 팀 카운트(페널티 게이지) +1 — 원한 구역 수용과 함께 오르므로 "구역 인원 = 팀 카운트"가 유지된다.
         m_teamCountSynced.Value += 1;
 
@@ -177,6 +203,14 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
             ulong clientId = offender.OwnerClientId;
             m_perPlayerCounts.TryGetValue(clientId, out int prev);
             m_perPlayerCounts[clientId] = prev + 1;
+        }
+
+        // 산 채로 인계한 경로와 같은 가름 — 발동이 꺼져 있으면 집계만 남는다 (#612).
+        // 시체는 원한 구역에 보내지도, 석방하지도 않는다(NpcDeath가 이미 그 상태를 든다).
+        if (!m_penaltyEnabled)
+        {
+            Debug.Log($"[오검거] 사살 — 집계만, 페널티 발동 꺼짐(#612). {FormatPerPlayerCounts()}");
+            return;
         }
 
         m_teamCountSynced.Value += 1;

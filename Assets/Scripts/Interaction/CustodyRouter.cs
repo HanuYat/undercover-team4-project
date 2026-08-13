@@ -59,6 +59,7 @@ public class CustodyRouter : MonoBehaviour
             // 오검거 신병은 오검거 페널티(#277)가 원한 구역 수용까지 책임진다 — 카운트·수용·출동이
             // 한 구독자 안에서 순서 보장되어야 해서(같은 이벤트의 구독자 간 순서는 보장이 없다) 여기서 넘긴다.
             // 페널티 매니저가 없는 씬(단독 테스트 등)에서만 기존대로 석방한다 — Captured로 방치되지 않게.
+            // 매니저가 있는데 발동이 꺼진 경우(#612 — 현재 기본값)는 그쪽이 집계 후 직접 석방한다.
             if (App.Game.WrongfulArrestPenalty != null)
                 return;
 
