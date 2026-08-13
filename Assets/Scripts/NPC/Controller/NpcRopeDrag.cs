@@ -165,6 +165,11 @@ public class NpcRopeDrag : NetworkBehaviour
         // 래그돌인 몸은 여기부터 갈린다 — 위치 대입(Tick)이 아니라 관절 밧줄이 끈다
         // (#571 시체 / #572 기절). 기준이 <b>사망이 아니라 래그돌</b>인 이유는 코어 Update의
         // 게이트 주석과 같다: 위치 대입과 물리가 같은 프레임에 루트를 다투면 안 된다.
+        //
+        // 참가자마다 <b>자기 가닥</b>이 걸린다 (#638) — 관절이 하나뿐이던 시절에는 합류가 곧
+        // 앞사람 줄의 탈취였고("합류는 허용, 탈취는 차단"이 이 경로에서만 뒤집혀 있었다, GDD 8-3),
+        // 그 사람이 놓으면 관절이 떠난 손에 남아 몸이 계속 따라갔다. 이제 가닥이 여럿이라
+        // 서로 다른 방향으로 당기면 그 차이가 힘겨루기가 된다.
         if (UsesRagdollRope)
             ServerAttachCorpseRope(dragger);
     }
@@ -212,12 +217,17 @@ public class NpcRopeDrag : NetworkBehaviour
             m_dragAnchors.Remove(releaser);
         PruneDeadAnchors();
 
+        // 관절 밧줄이라면 이 사람의 가닥만 뗀다 — 남은 참가자의 가닥은 계속 몸을 끈다 (#638).
+        // 마지막 한 명이면 아래에서 어차피 전부 걷으므로 여기서는 자기 것만 신경 쓴다.
+        if (m_corpseRopeAttached && releaser != null)
+            ServerDetachCorpseRope(releaser);
+
         // 아직 잡고 있는 사람이 남아 있으면 끌기는 이어진다 — 멈추면 줄다리기가 성립하지 않는다
         if (m_dragAnchors.Count > 0)
             return true;
 
         SetRoped(false);
-        ServerDetachCorpseRope(); // 시체가 아니면 무동작 (#571)
+        ServerDetachAllCorpseRopes(); // 시체가 아니면 무동작 (#571)
 
         NavMeshAgent agent = m_owner.Agent;
         if (agent == null)
@@ -293,7 +303,7 @@ public class NpcRopeDrag : NetworkBehaviour
         // 사망 진입 경로에서는 아직 상태가 Dead가 아니라(ServerEnterDead ④는 전이 ⑤보다 앞이다)
         // 아래가 무동작이고, 그게 맞다 — 그때 걸려 있던 것은 산 대상의 위치 대입 밧줄이라 풀 관절이 없다.
         // 시체를 끌던 줄을 밖에서 끊는 경로(라운드 종료 등)가 생기면 여기가 받아 준다.
-        ServerDetachCorpseRope();
+        ServerDetachAllCorpseRopes();
     }
 
     // ---- 시체 밧줄 (#571) ----
@@ -343,8 +353,28 @@ public class NpcRopeDrag : NetworkBehaviour
         AttachCorpseRopeRpc(new NetworkObjectReference(carrier));
     }
 
-    /// <summary>시체 밧줄을 푼다 — 서버(또는 오프라인) 진입점. 시체가 아니면 무동작. <b>멱등</b>.</summary>
-    private void ServerDetachCorpseRope()
+    /// <summary>이 참가자의 시체 밧줄 <b>한 가닥</b>을 푼다 — 서버(또는 오프라인) 진입점. <b>멱등</b>. (#638)
+    /// 남은 참가자의 가닥은 그대로 둔다 — 줄다리기에서 한 명이 손을 떼는 경로다.</summary>
+    private void ServerDetachCorpseRope(Transform dragger)
+    {
+        if (dragger == null)
+            return;
+
+        if (!IsSpawned)
+        {
+            DetachCorpseRope(dragger); // 오프라인 Play 폴백
+            return;
+        }
+
+        NetworkObject carrier = dragger.GetComponentInParent<NetworkObject>();
+        if (carrier == null || !carrier.IsSpawned)
+            return;
+
+        DetachCorpseRopeRpc(new NetworkObjectReference(carrier));
+    }
+
+    /// <summary>걸린 시체 밧줄을 <b>전부</b> 푼다 — 서버(또는 오프라인) 진입점. 시체가 아니면 무동작. <b>멱등</b>.</summary>
+    private void ServerDetachAllCorpseRopes()
     {
         // 건 적이 없으면 풀 것도 없다 — 예전의 <c>IsDead</c> 가드를 대신한다. 대상이 끌리는
         // 도중에 래그돌을 벗어날 수 있으므로(기절이 풀리며 일어난다) <b>지금 상태가 아니라
@@ -356,11 +386,11 @@ public class NpcRopeDrag : NetworkBehaviour
 
         if (!IsSpawned)
         {
-            DetachCorpseRope(); // 오프라인 Play 폴백
+            DetachAllCorpseRopes(); // 오프라인 Play 폴백
             return;
         }
 
-        DetachCorpseRopeRpc();
+        DetachAllCorpseRopesRpc();
     }
 
     [Rpc(SendTo.Everyone)]
@@ -372,13 +402,24 @@ public class NpcRopeDrag : NetworkBehaviour
     }
 
     [Rpc(SendTo.Everyone)]
-    private void DetachCorpseRopeRpc() => DetachCorpseRope();
+    private void DetachCorpseRopeRpc(NetworkObjectReference carrierRef)
+    {
+        if (carrierRef.TryGet(out NetworkObject carrier))
+            DetachCorpseRope(carrier.transform);
+    }
+
+    [Rpc(SendTo.Everyone)]
+    private void DetachAllCorpseRopesRpc() => DetachAllCorpseRopes();
 
     // 실제 묶기·풀기 — 전 피어에서 로컬로 돈다. 묶는 지점은 운반자의 <b>손</b>이다(근거는 저쪽 주석).
+    // ⚠ 풀 때도 <b>같은 변환</b>을 거쳐야 한다 — 가닥은 이 Transform을 키로 찾는다 (#638).
     private void AttachCorpseRope(Transform carrier) =>
         m_ragdoll?.BeginRopePull(PlayerHeldItemView.ResolveRopeAnchor(carrier));
 
-    private void DetachCorpseRope() => m_ragdoll?.EndRopePull();
+    private void DetachCorpseRope(Transform carrier) =>
+        m_ragdoll?.EndRopePull(PlayerHeldItemView.ResolveRopeAnchor(carrier));
+
+    private void DetachAllCorpseRopes() => m_ragdoll?.EndRopePull();
 
     // 파괴된 참가자(접속 종료 등)를 걷어낸다 — 남겨두면 장력 계산이 가짜 null을 만진다.
     private void PruneDeadAnchors()

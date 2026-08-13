@@ -257,6 +257,28 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
         return index >= 0 && m_tetheredSynced[index].Dragging;
     }
 
+    /// <summary>지금 <b>끌고 있는</b> 대상이 하나라도 있는가 — 전 피어에서 유효. (#638)
+    /// 겨냥 없는 E가 '손 떼기'로 소비될지를 오너가 미리 가르는 데 쓴다 — 끄는 것이 없으면
+    /// E는 평소 상호작용으로 그대로 흘러가야 한다. 판정 기준은 <see cref="IsDraggingNpc"/>와 같다.</summary>
+    public bool IsDraggingAny
+    {
+        get
+        {
+            if (!IsSpawned || IsServer)
+            {
+                for (int i = 0; i < m_tethered.Count; i++)
+                    if (m_tethered[i] != null && m_tethered[i].Rope.IsDraggedBy(transform))
+                        return true;
+                return false;
+            }
+
+            for (int i = 0; i < m_tetheredSynced.Count; i++)
+                if (m_tetheredSynced[i].Dragging)
+                    return true;
+            return false;
+        }
+    }
+
     // 이 NPC가 내 목록의 몇 번째인가 — 없으면 -1. 전 피어에서 유효하되 인덱스는 서버·클라가 다를 수 있다
     // (미스폰 NPC는 서버 목록에만 들어가 길이가 어긋난다).
     private int IndexOfTether(NpcController npc)

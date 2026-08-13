@@ -291,27 +291,29 @@ public class PlayerInteractor : NetworkBehaviour
         if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
             return;
 
-        // 밧줄 풀기는 **조준 대상 기준**이다 (#390/#513). 여러 명을 동시에 끌 수 있어 "끌고 있으면 무조건 푼다"로는
-        // 무엇을 풀지 정할 수 없고, 끄는 동안 다른 대상에게 E(반출·정지)를 쓸 방법도 사라진다.
+        // 겨냥한 상호작용이 지금 실제로 동작하는가 — 아래 '손 떼기'보다 앞서는 조건이다 (#638).
+        // 윤곽선 판정(CanInteract)을 그대로 쓴다: 배회하는 시민처럼 E가 아무 일도 하지 않는 대상을
+        // 겨눴다는 이유로 끌던 줄이 안 풀리면, 무엇을 보고 있느냐에 따라 E가 죽는 구간이 생긴다.
+        bool aimedInteraction = CurrentInteractable != null && CurrentInteractable.CanInteract(gameObject);
+
+        // 끌고 있는 대상을 겨눈 E는 **그 한 명만** 푼다 (#390/#513) — 여러 명을 끌 때 하나만 놓는 수단이다.
+        // 겨냥이 비면 아래에서 전원 풀기로 간다 (#638): 끌리는 몸은 늘 등 뒤에 있어서, 겨냥을 요구하면
+        // 놓을 때마다 뒤를 돌아봐야 했다.
         // (연행 쪽이 따로 입력을 구독하면 풀기와 다른 E 동작이 한 입력에 동시 발동하는 이중 소비가 생긴다)
         NpcController aimed = CurrentTarget != null
             ? CurrentTarget.GetComponentInParent<NpcController>()
             : null;
         if (m_escorter != null && m_escorter.IsDraggingNpc(aimed))
         {
-            // 끌고 있는 대상을 겨눈 E는 놓기로 소비된다. '끌고 온 상태에서만 의미 있는' 대상에 선점을
-            // 열어 주던 예외(TakesPriorityOverRelease, #414)는 유일한 사용처인 인계 단말과 함께
-            // 제거됐다 (#492) — 필요해지면 아래 운반 쪽 ICarriedBodyReceiver가 같은 취지의 선례다.
+            // '끌고 온 상태에서만 의미 있는' 대상에 선점을 열어 주던 예외(TakesPriorityOverRelease, #414)는
+            // 유일한 사용처인 인계 단말과 함께 제거됐다 (#492) — 필요해지면 아래 운반 쪽
+            // ICarriedBodyReceiver가 같은 취지의 선례다.
             // ReleaseDrag 직접 호출은 서버 가드에 막힌다 — 요청 API로 서버에 넘긴다 (#118)
-            Debug.Log($"E 입력 — 밧줄 풀기 요청: {aimed.name}");
+            Debug.Log($"E 입력 — 밧줄 풀기 요청(겨냥): {aimed.name}");
             m_commands?.RequestUnrope(aimed);
             return;
         }
 
-        // 동료 운반 중 내려놓기도 밧줄 놓기와 같은 규칙 — **조준 대상 기준**이다 (#365 → #390).
-        // 처음엔 "운반 중이면 E는 무조건 내려놓기"였다. 그때는 운반과 NPC 끌기가 배타라 그걸로 충분했지만,
-        // 이제 둘은 밧줄을 한 칸씩 나눠 쓰며 동시에 성립한다 — 무조건 소비하면 위 놓기와 똑같은 이유로
-        // 업고 가는 동안 문·콘솔·제압에 E를 쓸 방법이 사라진다.
         if (m_carrier != null && m_carrier.IsCarrying)
         {
             // 몸을 받는 대상(부활 장치)은 내려놓기보다 앞선다 — 아니면 장치 앞에서 E를 눌러도 그 자리에
@@ -324,20 +326,42 @@ public class PlayerInteractor : NetworkBehaviour
                 return;
             }
 
-            // 내려놓기는 업은 동료를 겨냥했을 때, 또는 겨냥한 상호작용 대상이 없을 때만.
-            // 뒤에 끌려오는 몸을 매번 돌아볼 수는 없으니 후자가 사실상 기본 동선이고,
-            // 무언가를 겨냥한 E는 그쪽으로 흘러가 운반 중에도 평소 상호작용이 그대로 살아 있다.
+            // 업은 동료를 겨눈 E는 그 몸만 내려놓는다 — 겨냥으로 하나를 고르는 위 밧줄 갈래와 같은 취지.
             Transform carried = m_carrier.CarriedTransform;
-            bool aimingAtCarried = carried != null
-                && CurrentTarget != null
-                && CurrentTarget.transform.IsChildOf(carried);
-
-            if (aimingAtCarried || CurrentInteractable == null)
+            if (carried != null && CurrentTarget != null && CurrentTarget.transform.IsChildOf(carried))
             {
-                Debug.Log("E 입력 — 내려놓기 요청 (운반)");
+                Debug.Log("E 입력 — 내려놓기 요청 (운반, 겨냥)");
                 m_carrier.RequestDrop();
                 return;
             }
+        }
+
+        // ---- 손 떼기 — 겨냥 없는 E (#638) ----
+        // 지금 손에 쥔 것을 전부 놓는다: 끌던 대상의 밧줄과 업은 동료. 둘은 밧줄 칸을 나눠 쓰는
+        // 같은 조작이라(#365/#390) 한 입력으로 함께 놓는다.
+        // 겨냥한 상호작용이 있으면 그쪽이 이긴다 — 끌고 가며 문·콘솔·유치장을 다루는 동선을 지킨다.
+        if (!aimedInteraction)
+        {
+            bool released = false;
+
+            if (m_escorter != null && m_escorter.IsDraggingAny)
+            {
+                Debug.Log("E 입력 — 끌던 대상 전원 밧줄 풀기 요청");
+                m_commands?.RequestUnropeAll();
+                released = true;
+            }
+
+            if (m_carrier != null && m_carrier.IsCarrying)
+            {
+                Debug.Log("E 입력 — 내려놓기 요청 (운반)");
+                m_carrier.RequestDrop();
+                released = true;
+            }
+
+            // 놓을 것이 없으면 평소 상호작용으로 흘려보낸다 — CanInteract가 false여도 Interact를
+            // 불러 주던 종전 동작(잠긴 문의 거부 피드백 등)이 그대로 살아 있어야 한다.
+            if (released)
+                return;
         }
 
         CurrentInteractable?.Interact(gameObject);

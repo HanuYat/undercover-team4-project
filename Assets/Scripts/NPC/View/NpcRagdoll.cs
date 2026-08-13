@@ -108,6 +108,7 @@ public class NpcRagdoll : MonoBehaviour
     private NpcController m_owner;
     private RagdollRig m_rig; // 뼈 한 벌 — 물리 조작 전부를 여기 위임한다. 리그 소유자(Model)에 붙어 있다
     private RagdollRope m_rope; // 관절 밧줄 — 리그와 같은 오브젝트에 붙는다(RequireComponent)
+
     private Animator m_animator;
     private NavMeshAgent m_agent;
     private NpcAnimationDriver m_driver; // 기상 시점의 진실값 — IsProne (#572 3단계)
@@ -250,7 +251,15 @@ public class NpcRagdoll : MonoBehaviour
         m_rope?.Attach(carrier);
     }
 
-    /// <summary>밧줄을 푼다 — 내려놓기·줄 끊김·운반자 소실. <b>멱등</b>(안 묶여 있으면 무동작).
+    /// <summary>이 사람이 쥔 가닥만 푼다 — 줄다리기에서 한 명이 손을 뗄 때. <b>멱등</b>. (#638)
+    /// 남은 참가자의 가닥은 그대로 끌기를 이어간다.</summary>
+    /// <param name="carrier">푸는 쪽. <see cref="BeginRopePull"/>에 넘긴 것과 같은 기준이어야 한다.</param>
+    public void EndRopePull(Transform carrier)
+    {
+        m_rope?.Detach(carrier);
+    }
+
+    /// <summary>걸린 밧줄을 <b>전부</b> 푼다 — 내려놓기·줄 끊김·운반자 소실. <b>멱등</b>(안 묶여 있으면 무동작).
     /// 얼리지 않는다 — 놓은 몸은 마저 무너져야 하므로 정착 판정에 맡긴다.</summary>
     public void EndRopePull()
     {

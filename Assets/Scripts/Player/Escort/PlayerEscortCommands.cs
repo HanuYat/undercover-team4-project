@@ -147,6 +147,23 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         UnropeRequestRpc(new NetworkObjectReference(target.NetworkObject));
     }
 
+    /// <summary>지금 끌고 있는 대상 <b>전원</b>의 밧줄 풀기 — 오너가 호출(겨냥 없는 E). (#638)
+    /// 겨냥으로 대상을 고르는 <see cref="RequestUnrope"/>의 짝이다: 끌리는 몸은 늘 등 뒤에 있어
+    /// 놓을 때마다 뒤를 돌아봐야 했던 것을 없앤다. 여러 명을 끌던 중이면 한 번에 다 놓는다 —
+    /// 한 명만 놓고 싶으면 그 대상을 겨냥하는 쪽을 쓴다.
+    /// 요청이 하나라 RPC도 한 번이다(대상마다 보내지 않는다) — 순회는 서버가 한다.</summary>
+    public void RequestUnropeAll()
+    {
+        if (!IsSpawned || IsServer)
+        {
+            ServerUnropeAllDragged();
+            return;
+        }
+        if (!IsOwner)
+            return;
+        UnropeAllRequestRpc();
+    }
+
     // 끌기 놓기 요청(RequestRelease/ReleaseRpc)은 제거했다 (#513) — '놓기'(끌기만 멈추고 줄은 유지)
     // 자체가 없어지면서 호출부가 사라졌고, 남겨두면 이 이슈가 없애기로 한 옛 동작이 실수로 다시
     // 연결될 수 있다. Escorter.ReleaseDrag는 그대로 남는다 — 풀기·인계 판정·라운드 종료 정리가 쓴다.
@@ -253,6 +270,9 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
             ServerBeginUnrope(target);
         }
     }
+
+    [Rpc(SendTo.Server)]
+    private void UnropeAllRequestRpc() => ServerUnropeAllDragged();
 
     [Rpc(SendTo.Server)]
     private void EscortResumeRpc(NetworkObjectReference targetRef)
@@ -567,6 +587,39 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         ServerApplyUnrope(target);
     }
 
+    /// <summary>
+    /// 지금 <b>끌고 있는</b> 대상 전원의 밧줄을 푼다 — 겨냥 없는 E. 서버(또는 오프라인) 실행. (#638)
+    ///
+    /// 겨냥 경로(<see cref="ServerBeginUnrope"/>)와 갈리는 것은 <b>사거리·가시선을 보지 않는다</b>는 점
+    /// 하나다. 위조 RPC로 얻을 것이 없어서다 — 대상은 이미 <b>내 줄에 매달려 끌려오는 중</b>이라
+    /// 벽 너머 남의 신병에는 애초에 닿지 않고(<see cref="PlayerEscorter.IsDraggingNpc"/>), 손을 놓는
+    /// 방향이라 멀리서 이득을 볼 것도 없다. 오히려 가시선을 걸면 등 뒤로 끌려오던 몸이 코너에 가린
+    /// 순간 풀기가 조용히 실패한다 — 겨냥을 없앤 의미가 사라진다.
+    ///
+    /// 묶여만 있고 <b>안 끌던</b> 줄은 남긴다 — "지금 끌고 다니는 것을 놓는다"가 이 입력의 뜻이다.
+    /// 그 대상들은 그 자리에 서 있으니 겨냥해서 푸는 쪽(E)이 그대로 성립한다.
+    /// </summary>
+    private void ServerUnropeAllDragged()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+        if (m_channel.IsActive)
+            return; // 묶기/풀기 채널링 중복 방지 (겨냥 경로와 같은 가드)
+        if (Loadout != null && !Loadout.HasRope)
+            return; // 밧줄을 들고 있어야 풀 수 있다 (겨냥 경로와 같은 가드)
+
+        // 푸는 동안 목록이 줄어든다(ServerApplyUnrope → RemoveTether) — 복사해서 돈다.
+        var dragged = new List<NpcController>(Escorter.ServerTethered);
+        for (int i = 0; i < dragged.Count; i++)
+        {
+            NpcController target = dragged[i];
+            if (target == null || !Escorter.IsDraggingNpc(target))
+                continue;
+
+            ServerApplyUnrope(target);
+        }
+    }
+
     /// <summary>이 대상에 밧줄 풀기를 걸 수 있는가 — 서버 가드와 클라 조기검증(Rope)이 함께 쓰는 단일 기준.</summary>
     public bool CanUnrope(NpcController target) =>
         target != null
@@ -580,10 +633,14 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         // ServerStandUpThen은 기상 예약을 걸고, 그 뒤 ReleaseFromCustody가 상태 전이를 시도하는데
         // Dead에서는 나갈 수 없어 NpcStateMachine이 거부하며 에러만 남긴다.
         //
-        // 줄다리기 분기도 필요 없다 — 시체 밧줄은 언제나 1:1이다 (NpcStateRules.CanRopeBind).
+        // <b>여럿이 끌던 시체도 여기서 갈라진다</b> (#638 — 예전엔 1:1이라 분기가 필요 없었다).
+        // 아래 두 호출이 <b>내 것만</b> 건드리므로 남은 참가자는 그대로 계속 끈다:
+        // ReleaseDrag는 내 앵커와 내 관절 가닥만 빼고(NpcRopeDrag.StopRopeDrag), RemoveTether는
+        // 내 목록에서만 지운다. 산 대상 쪽의 "마지막 한 명인가"(othersHold) 판정이 필요 없는 것은
+        // 그 판정이 오직 <b>기상 예약</b>을 걸기 위한 것이기 때문이다 — 시체는 일어나지 않는다.
         if (target.Death.IsDead)
         {
-            Escorter.ReleaseDrag(target); // 관절 밧줄을 푼다 (NpcRopeDrag.StopRopeDrag → 전 피어)
+            Escorter.ReleaseDrag(target); // 내 관절 가닥만 푼다 (NpcRopeDrag.StopRopeDrag → 전 피어)
             Escorter.RemoveTether(target);
             NotifyOwner($"시체를 내려놓았다: {target.name}");
             return;
