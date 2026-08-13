@@ -50,11 +50,27 @@ public class TrafficVehicle : NetworkBehaviour
     [Tooltip("엔진음(루프) — 차체의 AudioSource가 직접 튼다. 카탈로그에 클립이 없으면 조용히 무음")]
     [SerializeField] private EAudioClip m_engineSound = EAudioClip.VehicleEngine;
 
+    [Tooltip("경적 연출 — FxManager 조합표에서 소리를 배선한다. None이면 울리지 않는다")]
+    [SerializeField] private EFx m_hornFx = EFx.VehicleHorn;
+
+    [Tooltip("전방 이 거리(m) 안에 플레이어가 있으면 경적을 울린다 — 22m/s에서 30m가 충돌 1.4초 전이다")]
+    [Min(0f)]
+    [SerializeField] private float m_hornDistance = 30f;
+
+    [Tooltip("경적을 울릴 좌우 폭(m) — 진행선에서 이만큼 벗어난 사람은 대상이 아니다. 도로 반폭 + 여유")]
+    [Min(0.5f)]
+    [SerializeField] private float m_hornHalfWidth = 3f;
+
+    [Tooltip("경적을 다시 울리는 간격(초) — 앞에 사람이 계속 있으면 이 간격으로 되풀이한다")]
+    [Min(0.1f)]
+    [SerializeField] private float m_hornInterval = 1.2f;
+
     // 서버만 쓰는 주행 상태 — 레인이 정해 준다 (ServerBeginRun)
     private Vector3 m_endPoint;
     private Vector3 m_direction;
     private float m_speed;
     private bool m_driving;
+    private float m_nextHornAt;
 
     private AudioSource m_engineSource;
 
@@ -67,6 +83,8 @@ public class TrafficVehicle : NetworkBehaviour
     // <b>잘린 개수만 돌려주고 넘쳤다고 알려주지 않으므로</b> 정면으로 치인 사람이 조용히 살아남는다.
     // 시체가 도로에 남는 설계라 그 포화는 라운드가 갈수록 상시가 된다.
     // 어느 본에 맞아도 GetComponentInParent가 같은 대상으로 올라가므로 판정력은 그대로다.
+    private static readonly List<Transform> s_hornScan = new List<Transform>();
+
     private static int s_hitLayers; // 0 = 아직 조회 전
 
     private static readonly Collider[] s_overlap = new Collider[64]; // 폭탄(BombDevice)과 같은 크기
@@ -117,6 +135,7 @@ public class TrafficVehicle : NetworkBehaviour
         m_hitNpcs.Clear();
 
         m_driving = false;
+        m_nextHornAt = 0f;
         IsFinished = false;
     }
 
@@ -143,6 +162,7 @@ public class TrafficVehicle : NetworkBehaviour
         m_endPoint = transform.position + m_direction * runDistance;
         m_speed = speed;
         m_driving = true;
+        m_nextHornAt = 0f; // 첫 경적은 앞에 사람이 보이는 즉시
         IsFinished = false;
     }
 
@@ -167,7 +187,10 @@ public class TrafficVehicle : NetworkBehaviour
         {
             m_driving = false;
             IsFinished = true; // 회수는 스폰한 쪽(TrafficManager)이 한다 — 풀의 주인이 하나여야 한다
+            return;
         }
+
+        ServerTickHorn();
     }
 
     private void SetHeadlights(bool on)
@@ -222,6 +245,53 @@ public class TrafficVehicle : NetworkBehaviour
         source.loop = true;
         m_engineSource = source;
         return true;
+    }
+
+    /// <summary>
+    /// 앞에 사람이 있으면 경적을 울린다. 서버 전용.
+    ///
+    /// <b>대낮에는 헤드라이트가 거의 읽히지 않는다</b> — 그래서 즉사의 예고를 지는 가시성 축
+    /// (GDD 6-6)의 실질은 소리가 진다. 한 번만 울리면 눈치채기 전에 지나가므로 앞에 사람이 있는
+    /// 동안 간격을 두고 되풀이한다.
+    ///
+    /// 대상은 <b>플레이어뿐이다</b> — 시민은 경적에 반응하지 않고, 예고는 피할 수 있는 쪽에만 뜻이 있다.
+    ///
+    /// ⚠ <b>쿨다운을 먼저 본다.</b> 아래 훑기가 FindObjectsByType이라 매 프레임 돌리면 동시 주행
+    /// 대수만큼 곱해진다 — 이 순서면 차 한 대가 <see cref="m_hornInterval"/>에 한 번만 훑는다.
+    /// </summary>
+    private void ServerTickHorn()
+    {
+        if (m_hornFx == EFx.None || Time.time < m_nextHornAt)
+            return;
+
+        if (!IsPlayerAhead())
+            return;
+
+        m_nextHornAt = Time.time + m_hornInterval;
+        App.Game.Fx?.PlayEverywhere(m_hornFx, transform.position);
+    }
+
+    // 진행선 앞쪽으로 m_hornDistance 안, 좌우 m_hornHalfWidth 안에 행동 가능한 플레이어가 있는가.
+    // 반경으로 먼저 좁히고(유틸이 다운된 사람을 걸러 준다) 진행 축에 투영해 앞/옆을 가른다.
+    private bool IsPlayerAhead()
+    {
+        SuddenEventUtil.CollectFieldPlayers(transform.position, m_hornDistance, s_hornScan);
+
+        for (int i = 0; i < s_hornScan.Count; i++)
+        {
+            Vector3 offset = s_hornScan[i].position - transform.position;
+            offset.y = 0f;
+
+            float ahead = Vector3.Dot(offset, m_direction);
+            if (ahead <= 0f) // 이미 지나친 사람에게 울릴 이유가 없다
+                continue;
+
+            Vector3 lateral = offset - m_direction * ahead;
+            if (lateral.sqrMagnitude <= m_hornHalfWidth * m_hornHalfWidth)
+                return true;
+        }
+
+        return false;
     }
 
     // 차체와 겹친 사람·NPC를 친다. 서버 전용.
