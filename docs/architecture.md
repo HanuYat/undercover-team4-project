@@ -57,6 +57,19 @@ R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단�
 - 이미 전 피어에서 도는 경로(`SendTo.Everyone` RPC 안, 전 피어 이벤트 구독) 안에서는 `PlayEverywhere`가 아니라 `PlayHere`를 쓴다 — 전자를 부르면 피어마다 다시 전파돼 소리가 겹친다.
 - 파티클만 필요하고 조합이 없다면 `App.Game.Effect`를 직접 불러도 된다. 셋 다 사용처가 없는 씬에서는 null이므로 `?.`로 가드한다.
 
+### 비동기 대기 규칙 (코루틴 금지)
+
+프레임을 넘겨 기다리는 코드는 **UniTask로 쓴다** — `StartCoroutine`/`IEnumerator`는 새로 쓰지 않는다. 관례는 `private async UniTaskVoid XxxAsync()` + 호출부 `XxxAsync().Forget()`이고, 대기에는 `this.GetCancellationTokenOnDestroy()`를 넘긴다 (오브젝트가 죽은 뒤에도 도는 대기 방지).
+
+| 기다릴 것 | 쓸 것 |
+|---|---|
+| 다음 프레임 (모든 Awake/Start가 끝난 뒤) | `await UniTask.NextFrame(token)` |
+| **렌더링까지 끝난** 프레임 끝 | `await UniTask.WaitForEndOfFrame(token)` |
+| 시간 | `await UniTask.Delay(TimeSpan.FromSeconds(x), cancellationToken: token)` |
+| 조건 | `await UniTask.WaitUntil(() => 조건, cancellationToken: token)` |
+
+`NextFrame`·`DelayFrame`의 기본 타이밍(`PlayerLoopTiming.Update`)은 **렌더링 전**이다. 렌더 결과에 기대는 코드 — 카메라를 RenderTexture에 굽는 등 — 는 `WaitForEndOfFrame`이어야 한다 (Unity 2023.1+ 에서 이 오버로드는 `Awaitable.EndOfFrameAsync`로 간다). URP는 조명·환경 셰이더 상수를 렌더 루프 안에서 채우므로, 첫 프레임이 끝나기 전에 구우면 에디터에선 멀쩡하고 빌드에선 실행마다 결과가 달라진다 (`LobbyPortraitStage`).
+
 ## 3. 승격/강등 절차
 
 - **승격**: R3의 ①을 이미 만족하는 클래스에 두 번째 도메인의 참조가 생기는 순간 App에 올린다. 비용은 App 필드+프로퍼티 2줄 + 베이스 상속.
@@ -89,4 +102,4 @@ R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단�
 `refactoring/architecture` 머지 **이전에** 열린 브랜치의 코드는 규칙 위반을 지적하되 🟡(후속 조치)로 분류한다. 머지 이후 새로 작성·수정되는 코드는 정식 적용(🟠 이상).
 
 ---
-*최종 수정: 2026-08-12 (세션 상주 홀더에 `SessionRoster` 추가 · ToastView 예외 사유에 로비 씬 배치 단서 — #598) · 2026-08-10 (세션 상주 홀더 `TeamFund`·`ShopPurchases`·`RoundProgress` 예외 기재 — #214·#377) · 2026-08-06 (감옥 분리에 따른 예외 갱신 — `JailScanner` 폐기 · `JailDoor`·`JailbreakEvent`·`JailRoom` 탐색 기재 · `JailIntake` 참조 도메인 2곳으로 갱신 — #537) · 2026-08-05 (일회성 연출 창구를 App.Game.Fx로 일원화 — #532 · 연출 전파 규칙 추가 · App.Sound·App.Game.Effect 등재 + §4 예외 기재 · Audio·Vfx 폴더 분류 — #478) · 2026-08-04 (LonePlayerWatch → HqOccupancyZone 예외 기재 — #371) · 2026-08-03 (HqDropoffZone 예외 삭제 · JailIntake·JailScanner 예외 기재 — #492) · 2026-08-01 (SceneReadyGate 예외 기재 — #410) · 2026-07-28 (JailZone 예외 기재 — #395) · 작성 근거: refactoring/architecture 브랜치 1–2단계 (커밋 3039cd2…0b7aaab)*
+*최종 수정: 2026-08-13 (비동기 대기 규칙 추가 — 코루틴 금지·UniTask 관례·WaitForEndOfFrame 주의) · 2026-08-12 (세션 상주 홀더에 `SessionRoster` 추가 · ToastView 예외 사유에 로비 씬 배치 단서 — #598) · 2026-08-10 (세션 상주 홀더 `TeamFund`·`ShopPurchases`·`RoundProgress` 예외 기재 — #214·#377) · 2026-08-06 (감옥 분리에 따른 예외 갱신 — `JailScanner` 폐기 · `JailDoor`·`JailbreakEvent`·`JailRoom` 탐색 기재 · `JailIntake` 참조 도메인 2곳으로 갱신 — #537) · 2026-08-05 (일회성 연출 창구를 App.Game.Fx로 일원화 — #532 · 연출 전파 규칙 추가 · App.Sound·App.Game.Effect 등재 + §4 예외 기재 · Audio·Vfx 폴더 분류 — #478) · 2026-08-04 (LonePlayerWatch → HqOccupancyZone 예외 기재 — #371) · 2026-08-03 (HqDropoffZone 예외 삭제 · JailIntake·JailScanner 예외 기재 — #492) · 2026-08-01 (SceneReadyGate 예외 기재 — #410) · 2026-07-28 (JailZone 예외 기재 — #395) · 작성 근거: refactoring/architecture 브랜치 1–2단계 (커밋 3039cd2…0b7aaab)*

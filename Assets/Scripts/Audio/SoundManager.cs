@@ -44,6 +44,11 @@ public class SoundManager : CommonManagerBase
     private AudioSource m_loopSource;
     private EAudioClip m_loopId = EAudioClip.None;
 
+    // 환경음 전용 슬롯 — 채널링 루프와 따로 둔다 (#647). 비가 오는 중에 스캔을 하면
+    // 한 슬롯으로는 서로를 끄고, 스캔이 끝날 때 비까지 그친다.
+    private AudioSource m_ambientSource;
+    private EAudioClip m_ambientId = EAudioClip.None;
+
     // 배선 사고를 알리되 매 프레임 도배하지 않는다.
     private readonly HashSet<EAudioClip> m_warned = new();
 
@@ -191,6 +196,59 @@ public class SoundManager : CommonManagerBase
     }
 
     /// <summary>
+    /// 환경음 2D 루프를 건다 — 비·눈처럼 <b>세상이 내는</b> 소리용. (#647)
+    /// 채널링 루프(<see cref="PlayLoop2D"/>)와 슬롯이 달라 서로를 끄지 않는다.
+    /// </summary>
+    public void PlayAmbient2D(EAudioClip id)
+    {
+        if (id == EAudioClip.None)
+        {
+            StopAmbient2D();
+            return;
+        }
+
+        if (m_ambientId == id)
+            return; // 이미 같은 소리가 돌고 있다 — 처음부터 다시 시작하지 않는다
+
+        if (!m_entries.TryGetValue(id, out AudioLibrary.Entry entry))
+        {
+            WarnOnce(id, $"카탈로그에 {id} 항목이 없다");
+            return;
+        }
+
+        if (entry.Clip == null)
+        {
+            WarnOnce(id, $"{id} 항목에 클립이 배정되지 않았다");
+            StopAmbient2D();
+            return;
+        }
+
+        if (m_ambientSource == null)
+            return;
+
+        m_ambientSource.clip = entry.Clip;
+        m_ambientSource.volume = entry.Volume;
+        m_ambientSource.Play();
+        m_ambientId = id;
+    }
+
+    /// <summary>환경음 루프를 끊는다 — 날씨가 그치거나 뷰가 사라질 때 부른다.</summary>
+    public void StopAmbient2D(EAudioClip id = EAudioClip.None)
+    {
+        // 남이 건 소리는 끄지 않는다 — 비가 그칠 때 눈 소리를 끊으면 안 된다
+        if (m_ambientId == EAudioClip.None || (id != EAudioClip.None && m_ambientId != id))
+            return;
+
+        if (m_ambientSource != null)
+        {
+            m_ambientSource.Stop();
+            m_ambientSource.clip = null;
+        }
+
+        m_ambientId = EAudioClip.None;
+    }
+
+    /// <summary>
     /// 카탈로그 항목을 그대로 돌려준다 — 없으면 null. <b>풀로 낼 수 없는 소리</b>가 자기
     /// <see cref="AudioSource"/>로 직접 틀 때 쓴다(발소리 루프처럼 움직이는 대상을 계속 따라다녀야
     /// 하고 길이가 긴 것). 풀은 원샷 전용이라 오래된 소리를 뺏어 가므로 루프를 맡길 수 없다.
@@ -256,13 +314,20 @@ public class SoundManager : CommonManagerBase
 
     private void BuildLoopSource()
     {
-        var host = new GameObject("Loop2DSource");
+        m_loopSource = BuildLoopSource("Loop2DSource");
+        m_ambientSource = BuildLoopSource("Ambient2DSource");
+    }
+
+    private AudioSource BuildLoopSource(string label)
+    {
+        var host = new GameObject(label);
         host.transform.SetParent(transform, false);
 
-        m_loopSource = host.AddComponent<AudioSource>();
-        m_loopSource.playOnAwake = false;
-        m_loopSource.loop = true;
-        m_loopSource.spatialBlend = 0f; // 2D — 채널링음은 하는 본인에게만 난다
+        AudioSource source = host.AddComponent<AudioSource>();
+        source.playOnAwake = false;
+        source.loop = true;
+        source.spatialBlend = 0f; // 2D — 채널링음은 하는 본인에게만, 환경음은 어디 서 있든 같게 난다
+        return source;
     }
 
     // 노는 소스를 우선 쓰고, 전부 사용 중이면 가장 오래 재생 중인 것을 뺏는다.

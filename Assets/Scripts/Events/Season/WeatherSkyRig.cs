@@ -121,9 +121,7 @@ public class WeatherSkyRig : MonoBehaviour
     // 입자 수만큼 비용이 붙는다. 대신 <b>머리 위로 레이 하나</b>를 쏴 하늘이 막혔는지만 보고 방출을
     // 여닫는다 — 리그당 한 번이라 사실상 공짜다.
     //
-    // 원점을 시야가 아니라 <b>방출 지점의 수평 위치</b>로 잡는 것이 중요하다: 문간에 서서 밖을 볼 때
-    // 시야 기준이면 머리 위 처마에 걸려 밖에도 비가 그친다. 방출 지점은 시야 앞으로 밀려 있으므로
-    // 그 자리를 보면 "실제로 비가 내릴 곳이 뚫려 있는가"를 묻게 된다.
+    // 레이는 <b>보는 자리와 방출 지점 두 곳</b>에 쏜다 — 어느 한쪽이라도 막혔으면 실내다 (#647).
 
     private LayerMask m_shelterMask;
     private float m_shelterProbeHeight;
@@ -176,18 +174,25 @@ public class WeatherSkyRig : MonoBehaviour
         }
     }
 
-    // 방출 지점의 수평 위치에서 시야 높이로 위를 본다 (위 주석의 문간 사례).
+    // 보는 자리와 방출 지점 <b>둘 중 하나라도</b> 막혔으면 실내로 본다 (#647).
+    // 방출 지점만 보면 방 안에서 벽 쪽을 볼 때 그 앞(=건물 밖)이 뚫린 것으로 읽혀 실내에 비가 쏟아진다.
+    // 대가로 처마 밑에서 밖을 봐도 그친다 — 실내에 내리는 것보다 낫다고 보고 감수한다.
     // 판정 자체는 낙뢰와 공유한다 — 둘이 다르게 답하면 "비는 그쳤는데 벼락은 떨어진다"가 된다.
     private bool IsSheltered()
     {
-        Vector3 origin = m_view.position;
-        if (PrecipitationAnchor != null)
-        {
-            Vector3 anchor = PrecipitationAnchor.position;
-            origin = new Vector3(anchor.x, origin.y, anchor.z);
-        }
+        Vector3 view = m_view.position;
+        if (WeatherShelter.IsSheltered(view, m_shelterMask, m_shelterProbeHeight))
+            return true;
 
-        return WeatherShelter.IsSheltered(origin, m_shelterMask, m_shelterProbeHeight);
+        if (PrecipitationAnchor == null)
+            return false;
+
+        Vector3 anchor = PrecipitationAnchor.position;
+        return WeatherShelter.IsSheltered(
+            new Vector3(anchor.x, view.y, anchor.z),
+            m_shelterMask,
+            m_shelterProbeHeight
+        );
     }
 
     // 붙은 파티클을 한 번만 훑는다 — Boost까지 끝난 뒤인 첫 LateUpdate에 잡아야 기준값이 맞다.

@@ -1,4 +1,8 @@
+using System.Threading;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 /// <summary>
 /// 로비 명단 카드에 넣을 <b>캐릭터 얼굴</b>을 만든다 — 무대에 캐릭터를 세우고 머리만 잡아
@@ -17,7 +21,12 @@ using UnityEngine;
 ///
 /// 실행 순서를 패널보다 앞에 둔다 — LobbyRosterPanel이 첫 그리기에서 <see cref="Portrait"/>를
 /// 읽어가는데, 기본 순서로 두면 그때 아직 안 구워져 얼굴 없는 카드가 그려진다. 혼자 있으면
-/// 명단이 바뀔 일이 없어 다시 그리지 않으므로 그대로 굳는다.
+/// 명단이 바뀔 일이 없어 다시 그리지 않으므로 그대로 굳는다. 텍스처 자체는 Awake에서 만들어
+/// 두고 그림만 나중에 채우므로, 굽는 시점을 늦춰도 카드 배선은 그대로다.
+///
+/// <b>Awake에서 굽지 않는다</b> — URP가 첫 프레임을 그리기 전에는 조명/환경 상수와 스카이박스
+/// 환경광·기본 반사가 아직 준비되지 않아, 그때 구우면 빌드에서 실행할 때마다 얼굴 밝기와 색이
+/// 달라진다(에디터는 이미 그려 둔 상태라 티가 안 난다). 첫 프레임이 끝난 뒤에 굽는다.
 /// </summary>
 [DefaultExecutionOrder((int)EExecutionOrder.UIContent)]
 public class LobbyPortraitStage : MonoBehaviour
@@ -96,6 +105,13 @@ public class LobbyPortraitStage : MonoBehaviour
             antiAliasing = 2,
         };
 
+        // 굽기 전까지 카드에 걸릴 텍스처다 — 새 RenderTexture의 내용은 보장되지 않아 명시적으로 비운다
+        m_texture.Create();
+        RenderTexture prev = RenderTexture.active;
+        RenderTexture.active = m_texture;
+        GL.Clear(true, true, Color.clear);
+        RenderTexture.active = prev;
+
         var camGo = new GameObject("PortraitCamera");
         camGo.transform.SetParent(stage.transform, false);
         m_camera = camGo.AddComponent<Camera>();
@@ -113,7 +129,36 @@ public class LobbyPortraitStage : MonoBehaviour
 
         // 모델도 카메라도 움직이지 않으므로 한 번만 그린다 — 켜 둔 채로 두면 매 프레임 다시 그린다.
         m_camera.enabled = false;
-        m_camera.Render();
+        BakeAsync().Forget();
+    }
+
+    // 조명이 확정된 뒤에 굽는다 (클래스 주석 참고).
+    private async UniTaskVoid BakeAsync()
+    {
+        CancellationToken token = this.GetCancellationTokenOnDestroy();
+
+        // URP가 첫 프레임을 온전히 끝낼 때까지 기다린다 — 그래야 조명/환경 셰이더 상수가 채워져 있다
+        await UniTask.WaitForEndOfFrame(token);
+
+        // 스카이박스 환경광과 기본 반사를 지금 확정한다 — 로드 직후엔 아직 갱신 전일 수 있다.
+        // 갱신은 프레임 끝에 반영되므로 한 프레임 더 기다린 뒤 굽는다.
+        DynamicGI.UpdateEnvironment();
+        await UniTask.WaitForEndOfFrame(token);
+
+        RenderPortrait();
+    }
+
+    // SRP에서 Camera.Render()는 파이프라인 밖 경로다 — URP가 지원하는 렌더 요청을 먼저 쓴다.
+    private void RenderPortrait()
+    {
+        if (m_camera == null || m_texture == null)
+            return;
+
+        var request = new UniversalRenderPipeline.SingleCameraRequest { destination = m_texture };
+        if (RenderPipeline.SupportsRenderRequest(m_camera, request))
+            RenderPipeline.SubmitRenderRequest(m_camera, request);
+        else
+            m_camera.Render();
     }
 
     // 본 이름은 계층 어디에 있을지 모른다 — 이름으로 깊이 우선 탐색한다.

@@ -19,6 +19,20 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
     [SerializeField]
     private float m_strikeIntervalMax = 5f; // 낙뢰 최대 주기
 
+    [Header("예고 낙하 (#647)")]
+    [Tooltip("지점을 알린 뒤 벼락이 떨어지기까지의 시간(초) — 0이면 예고 없이 즉발이다")]
+    [Min(0f)]
+    [SerializeField]
+    private float m_warningSeconds = 0.6f;
+
+    [Tooltip(
+        "낙뢰 지점에서 이 거리(m) 안에 있으면 맞는다 — 수평 거리다.\n\n"
+            + "예고 시간 × 걷기 속도(5m/s)보다 작아야 움직여서 빠져나갈 수 있다"
+    )]
+    [Min(0.1f)]
+    [SerializeField]
+    private float m_strikeRadius = 2.5f;
+
     [Header("Strike Effects")]
     [Range(0f, 1f)]
     [SerializeField]
@@ -59,6 +73,11 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
     private float m_endTime;
     private float m_nextStrikeTime;
 
+    // 예고를 걸어 둔 낙뢰 — 지점은 예고 때 굳고, 맞을 사람은 떨어지는 순간에 정해진다 (#647)
+    private bool m_hasPendingStrike;
+    private Vector3 m_pendingStrikePosition;
+    private float m_pendingStrikeTime;
+
     // 클라이언트 표현 컴포넌트 구독용 이벤트
     public event Action<bool> OnLightningChanged;
 
@@ -71,6 +90,12 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
     /// 이벤트로 두면 뷰가 없어도(전용 서버·연출 끈 구성) 이벤트가 그대로 돌고, 구독자를 더 붙일 수도 있다.
     /// </summary>
     public event Action<Vector3> OnStrike;
+
+    /// <summary>
+    /// 벼락이 떨어질 지점을 미리 알린다 — <see cref="OnStrike"/>보다 예고 시간만큼 앞선다. 전 피어에서 발생한다. (#647)
+    /// 판정은 떨어지는 순간에 이 지점 반경으로 하므로, 이 사이에 자리를 뜨면 맞지 않는다.
+    /// </summary>
+    public event Action<Vector3> OnStrikeWarning;
 
     // --- ISuddenEvent 구현 ---
     public string DisplayName => "번개";
@@ -117,7 +142,7 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
         m_endTime = Time.time + m_durationSeconds;
         SetLightning(true);
 
-        // 첫 낙뢰 시간 예약
+        // 첫 낙뢰 예고 시간 예약
         ScheduleNextStrike();
         Debug.Log($"[LightningEvent] ServerBegin. Ends at {m_endTime}s.");
     }
@@ -127,6 +152,10 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
         if (!m_lightning)
             return;
 
+        // 예고해 둔 벼락이 먼저다 — 종료 체크보다 앞에 둬야 예고만 하고 안 떨어지는 일이 없다
+        if (m_hasPendingStrike && Time.time >= m_pendingStrikeTime)
+            ResolvePendingStrike();
+
         // 지속 시간 종료 체크
         if (Time.time >= m_endTime)
         {
@@ -135,10 +164,10 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
             return;
         }
 
-        // 주기적 낙뢰 발생 처리
+        // 주기적 낙뢰 예고 처리
         if (Time.time >= m_nextStrikeTime)
         {
-            PerformLightningStrike();
+            BeginStrikeWarning();
             ScheduleNextStrike();
         }
     }
@@ -156,6 +185,9 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
 
         m_lightning = value;
 
+        if (!value)
+            m_hasPendingStrike = false; // 이벤트가 끝났다 — 예고해 둔 벼락은 취소한다
+
         // 서버 전용: NetworkVariable 갱신 -> 클라 동기화
         if (IsServer)
         {
@@ -172,71 +204,105 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
     }
 
     // --- 핵심 낙뢰 로직 (서버 권위) ---
-    private void PerformLightningStrike()
+    //
+    // 예고 → 낙하 두 단계다 (#647). 예전에는 대상을 뽑아 같은 프레임에 판정하고 연출을 나중에 보냈다 —
+    // 화면이 번쩍일 땐 이미 맞은 뒤라 구조적으로 못 피했다. 지금은 지점을 먼저 알리고, 떨어지는 순간에
+    // 그 자리에 아직 남아 있는 사람을 친다.
+
+    // 떨어질 지점을 정해 전 피어에 알린다 — 여기서는 아무도 맞지 않는다.
+    private void BeginStrikeWarning()
     {
-        if (!IsServer)
+        if (!IsServer || m_hasPendingStrike)
             return;
 
-        // 1. 대상 선정: 씬의 PlayerHealth 중 무작위 1명
-        PlayerHealth target = GetRandomPlayerField();
+        // 이벤트가 먼저 끝나면 예고만 남는다 — 아예 걸지 않는다
+        if (Time.time + m_warningSeconds > m_endTime)
+            return;
 
-        if (target == null)
-            return; // 대상 없으면 패스
+        PlayerHealth aim = PickExposedPlayer();
+        if (aim == null)
+            return; // 밖에 아무도 없다 — 겨눌 자리가 없으니 이번 주기는 거른다
 
-        Vector3 strikePosition = target.transform.position;
+        m_pendingStrikePosition = aim.transform.position;
+        m_pendingStrikeTime = Time.time + m_warningSeconds;
+        m_hasPendingStrike = true;
 
-        // 2. 효과 롤 (Random.value < m_damageChance)
+        PlayStrikeWarningClientRpc(m_pendingStrikePosition);
+    }
+
+    // 예고한 지점에 실제로 떨어뜨린다 — 반경 안에 남아 있는 사람만 맞는다.
+    private void ResolvePendingStrike()
+    {
+        m_hasPendingStrike = false;
+
+        Vector3 strikePosition = m_pendingStrikePosition;
+
+        // 효과 롤은 벼락 한 번에 한 번 — 같이 맞은 사람은 같은 결과다
         bool isDamage = Random.value < m_damageChance;
 
-        if (isDamage)
+        CollectExposedPlayers(strikePosition, m_strikeRadius);
+        for (int i = 0; i < s_exposed.Count; i++)
         {
-            ApplyDamage(target);
-            Debug.Log($"[LightningEvent] Strike DAMAGE at {strikePosition}");
-        }
-        else
-        {
-            ApplySpeedBuff(target);
-            Debug.Log($"[LightningEvent] Strike BUFF at {strikePosition}");
+            if (isDamage)
+                ApplyDamage(s_exposed[i]);
+            else
+                ApplySpeedBuff(s_exposed[i]);
         }
 
-        // 3. VFX 표현: 전 클라에 RPC 전송
+        Debug.Log(
+            $"[LightningEvent] Strike {(isDamage ? "DAMAGE" : "BUFF")} at {strikePosition} — hit {s_exposed.Count}"
+        );
+
+        // 아무도 안 맞았어도 연출은 떨어뜨린다 — 빗나가는 그림이 보여야 회피가 성립한다
         PlayStrikeVFXClientRpc(strikePosition);
     }
 
-    // 씬의 플레이어 중 <b>하늘이 뚫린 곳에 있는</b> 사람만 후보로 두고 무작위로 하나 고른다.
+    // 겨눌 사람을 고른다 — 실외에 있는 사람 중 무작위 1명. 없으면 이번 주기는 거른다
+    // (주기는 그대로 흐르므로 누군가 나오면 다음에 다시 후보가 된다).
+    private PlayerHealth PickExposedPlayer()
+    {
+        CollectExposedPlayers(Vector3.zero, -1f);
+        return s_exposed.Count == 0 ? null : s_exposed[Random.Range(0, s_exposed.Count)];
+    }
+
+    // 씬의 플레이어 중 <b>하늘이 뚫린 곳에 있는</b> 사람을 s_exposed에 모은다.
+    // <paramref name="radius"/>가 양수면 <paramref name="center"/>에서 그 <b>수평</b> 거리 안만 남긴다
+    // (음수면 거리 제한 없음). 벼락은 지면에 떨어지므로 높이 차는 보지 않는다.
     //
     // 지붕 아래를 빼는 이유는 그림이 말이 안 되기 때문이다 — 건물 안에 서 있는데 벼락을 맞는다.
     // 비·눈이 그치는 판정과 <b>같은 규칙</b>을 쓴다(WeatherShelter): 한쪽만 고치면 "비는 그쳤는데
-    // 벼락은 떨어진다"가 된다.
-    //
-    // 전원이 실내면 이번 낙뢰는 거른다 — 밖에 있는 사람이 없으면 떨어질 곳도 없다. 주기는 그대로
-    // 흐르므로(ScheduleNextStrike) 누군가 나오면 다음 주기에 다시 후보가 된다.
-    private PlayerHealth GetRandomPlayerField()
+    // 벼락은 떨어진다"가 된다. 실내 판정을 낙하 순간에 다시 하므로 예고를 보고 뛰어든 사람도 산다.
+    private void CollectExposedPlayers(Vector3 center, float radius)
     {
-        PlayerHealth[] players = FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
-
-        if (players == null || players.Length == 0)
-            return null;
-
         s_exposed.Clear();
+
+        PlayerHealth[] players = FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
+        if (players == null)
+            return;
+
+        float sqrRadius = radius * radius;
         for (int i = 0; i < players.Length; i++)
         {
             PlayerHealth player = players[i];
             if (player == null)
                 continue;
 
+            Vector3 position = player.transform.position;
+
+            if (radius > 0f)
+            {
+                Vector2 flat = new Vector2(position.x - center.x, position.z - center.z);
+                if (flat.sqrMagnitude > sqrRadius)
+                    continue;
+            }
+
             // 발밑이 아니라 몸 높이에서 쏜다 — 바닥에서 쏘면 자기가 선 바닥에 걸리는 맵이 있다.
-            Vector3 origin = player.transform.position + Vector3.up * k_shelterProbeOriginHeight;
+            Vector3 origin = position + Vector3.up * k_shelterProbeOriginHeight;
             if (WeatherShelter.IsSheltered(origin, m_shelterMask, m_shelterProbeHeight))
                 continue;
 
             s_exposed.Add(player);
         }
-
-        if (s_exposed.Count == 0)
-            return null;
-
-        return s_exposed[Random.Range(0, s_exposed.Count)];
     }
 
     // 실내 판정 레이의 시작 높이(m) — 사람 가슴께. 발밑에서 쏘면 자기 바닥에 걸린다.
@@ -267,6 +333,16 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
     }
 
     // --- 표현 RPC ---
+    [ClientRpc]
+    private void PlayStrikeWarningClientRpc(Vector3 position)
+    {
+        // 전용 서버는 뷰가 없다 — 아래 VFX RPC와 같은 가드다
+        if (IsServer && !IsHost)
+            return;
+
+        OnStrikeWarning?.Invoke(position);
+    }
+
     [ClientRpc]
     private void PlayStrikeVFXClientRpc(Vector3 position)
     {
