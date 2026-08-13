@@ -63,6 +63,11 @@ public class MontageLayerBaker : EditorWindow
 
     [SerializeField] private GameObject[] m_compareProps;
 
+    // 대상 주위를 도는 각도들 — 0이 정면. 묶은 머리처럼 뒤로 넘어간 것은 정면에 안 나온다 (#619)
+    [SerializeField] private float[] m_compareAngles = { 0f };
+
+    [SerializeField] private bool m_compareLit;
+
     [SerializeField] private GameObject m_comparePairedProp;
 
     [SerializeField] private int m_compareCell = 96;
@@ -159,8 +164,18 @@ public class MontageLayerBaker : EditorWindow
             new GUIContent("머리 오프셋들", "프레임을 위로 올려 정수리 위를 담고 목을 버리는 실험용. 줄은 해상도 × 오프셋 조합만큼 생긴다"),
             true
         );
+        EditorGUILayout.PropertyField(
+            serialized.FindProperty("m_compareAngles"),
+            new GUIContent("각도들", "대상 주위를 도는 각도(도). 0=정면, 90=옆, 180=뒤. 묶은 머리는 정면에 안 나오니 실물을 눈으로 분류할 땐 옆·뒤를 함께 볼 것"),
+            true
+        );
         EditorGUILayout.PropertyField(serialized.FindProperty("m_compareProps"), new GUIContent("후보 프롭"), true);
         serialized.ApplyModifiedProperties();
+
+        m_compareLit = EditorGUILayout.Toggle(
+            new GUIContent("실물 색으로", "머리스타일 축도 실루엣 대신 실제 머티리얼로 굽는다. 몽타주에 쓸 그림이 아니라 사람이 메시를 눈으로 분류하려고 볼 때 켠다"),
+            m_compareLit
+        );
 
         m_comparePairedProp = (GameObject)
             EditorGUILayout.ObjectField(
@@ -458,16 +473,20 @@ public class MontageLayerBaker : EditorWindow
             return;
         }
 
-        bool silhouette = IsSilhouetteAxis(m_compareAxis);
+        // 실물 색으로 켜면 실루엣을 안 쓴다 — 몽타주용 그림이 아니라 사람이 메시를 보려는 시트다
+        bool silhouette = IsSilhouetteAxis(m_compareAxis) && !m_compareLit;
         Color skinColor = FirstOptionColor(AppearanceAxis.SkinColor, new Color(0.85f, 0.68f, 0.55f));
         Color hairColor = FirstOptionColor(AppearanceAxis.HairColor, new Color(0.06f, 0.06f, 0.06f));
 
         // 줄은 해상도 × 머리 오프셋 조합이다 — 둘 다 "무엇이 프레임에 담기나"를 정하는 노브라 같이 봐야 한다
-        var rowSetups = new List<(int Resolution, float Offset)>();
+        var rowSetups = new List<(int Resolution, float Offset, float Angle)>();
         foreach (int resolution in m_compareResolutions)
         {
             foreach (float offset in Offsets())
-                rowSetups.Add((Mathf.Max(1, resolution), offset));
+            {
+                foreach (float angle in Angles())
+                    rowSetups.Add((Mathf.Max(1, resolution), offset, angle));
+            }
         }
 
         int columns = props.Count + 1; // 맨 두상 한 칸
@@ -488,8 +507,8 @@ public class MontageLayerBaker : EditorWindow
 
         for (int row = 0; row < rows; row++)
         {
-            (int resolution, float offset) = rowSetups[row];
-            using var rig = new MontageBakeRig(m_mannequinPrefab, m_flatMaterial, resolution, m_orthoSize, offset, m_cameraDistance);
+            (int resolution, float offset, float angle) = rowSetups[row];
+            using var rig = new MontageBakeRig(m_mannequinPrefab, m_flatMaterial, resolution, m_orthoSize, offset, m_cameraDistance, angle);
             if (!rig.IsValid)
             {
                 Debug.LogError("MontageLayerBaker: 마네킹에서 머리 본을 찾지 못했다 — 프리팹의 휴머노이드 리그 또는 'Head' 이름 자식을 확인할 것");
@@ -526,7 +545,7 @@ public class MontageLayerBaker : EditorWindow
             names.Add(prop.name);
         var rowLabels = new List<string>(rows);
         foreach (var setup in rowSetups)
-            rowLabels.Add($"{setup.Resolution}px/오프셋 {setup.Offset:0.###}");
+            rowLabels.Add($"{setup.Resolution}px/오프셋 {setup.Offset:0.###}/각도 {setup.Angle:0}°");
         Debug.Log(
             $"[몽타주] 비교 시트 → {m_compareFolder}/{fileName}.png"
                 + (m_comparePairedProp != null ? $"  (같이 붙임: {m_comparePairedProp.name} — 이 프롭 밖으로 나온 부분만 남는다)" : string.Empty)
@@ -557,6 +576,19 @@ public class MontageLayerBaker : EditorWindow
             cell[i] = pixel;
         }
         return cell;
+    }
+
+    /// <summary>비교할 각도 목록 — 비어 있으면 정면 하나.</summary>
+    private IEnumerable<float> Angles()
+    {
+        if (m_compareAngles == null || m_compareAngles.Length == 0)
+        {
+            yield return 0f;
+            yield break;
+        }
+
+        foreach (float angle in m_compareAngles)
+            yield return angle;
     }
 
     /// <summary>비교할 머리 오프셋 목록 — 비어 있으면 굽기와 같은 값 하나.</summary>

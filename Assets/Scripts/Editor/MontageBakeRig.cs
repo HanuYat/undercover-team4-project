@@ -51,7 +51,8 @@ public sealed class MontageBakeRig : System.IDisposable
         int resolution,
         float orthoSize,
         float headOffset,
-        float cameraDistance
+        float cameraDistance,
+        float yaw = 0f
     )
     {
         m_resolution = resolution;
@@ -85,7 +86,7 @@ public sealed class MontageBakeRig : System.IDisposable
                 m_occluderMaterial.SetColor("_Color", Color.black);
         }
 
-        m_camera = CreateCamera(orthoSize, headOffset, cameraDistance);
+        m_camera = CreateCamera(orthoSize, headOffset, cameraDistance, yaw);
         m_light = CreateLight();
     }
 
@@ -264,7 +265,7 @@ public sealed class MontageBakeRig : System.IDisposable
         renderer.sharedMaterials = materials;
     }
 
-    private Camera CreateCamera(float orthoSize, float headOffset, float cameraDistance)
+    private Camera CreateCamera(float orthoSize, float headOffset, float cameraDistance, float yaw)
     {
         var go = new GameObject("~BakeCamera");
         go.transform.SetParent(m_root.transform, false);
@@ -277,8 +278,12 @@ public sealed class MontageBakeRig : System.IDisposable
         camera.farClipPlane = cameraDistance * 4f;
         camera.enabled = false; // Render()로만 돈다
 
+        // yaw는 대상 주위를 도는 각도다 — 0이 정면. 묶은 머리처럼 뒤로 넘어간 것은 정면 렌더에
+        // 안 나오므로, 실물을 눈으로 분류할 때는 옆·뒤도 봐야 한다 (#619).
+        Vector3 view = Quaternion.AngleAxis(yaw, Vector3.up) * m_subject.transform.forward;
+
         Vector3 focus = m_head.position + Vector3.up * headOffset;
-        go.transform.position = focus + m_subject.transform.forward * cameraDistance;
+        go.transform.position = focus + view * cameraDistance;
         go.transform.rotation = Quaternion.LookRotation(focus - go.transform.position, Vector3.up);
         return camera;
     }
