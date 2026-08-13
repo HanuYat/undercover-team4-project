@@ -8,8 +8,8 @@ using UnityEngine.UI;
 /// 열면 라운드 중에 휠 구성이 바뀌는 경우를 재생 상태와 함께 다뤄야 한다. 그 값어치가 아직 없다.
 ///
 /// <b>구성은 네트워크로 올리지 않는다.</b> 남이 알아야 하는 것은 "지금 무엇을 재생 중인가"뿐이고,
-/// 내가 몇 번 칸에 뭘 넣었는지는 아무도 볼 일이 없다. PlayerPrefs에 로컬 저장하므로 다음 실행
-/// 에도 유지된다.
+/// 내가 몇 번 칸에 뭘 넣었는지는 아무도 볼 일이 없다. PlayerPrefs에 <b>계정별로</b> 로컬 저장하므로
+/// 다음 실행에도 유지되고, 한 PC를 여러 계정이(MPPM 가상 플레이어 포함) 써도 서로 덮지 않는다 (#640).
 ///
 /// 조작: 왼쪽 카탈로그 목록에서 하나 고르고 → 오른쪽 8칸 중 하나를 누르면 그 칸에 들어간다.
 /// 선택 없이 칸을 누르면 그 칸을 비운다.
@@ -39,7 +39,8 @@ public class EmoteLoadoutPanel : PanelBase
     [SerializeField]
     private Button m_closeButton;
 
-    private readonly EmoteLoadout m_loadout = new EmoteLoadout();
+    // 저장 칸이 계정별로 갈리므로 PlayerId를 알 수 있는 Awake에서 만든다 (#640)
+    private EmoteLoadout m_loadout;
     private int m_selectedCatalogIndex = -1;
 
     public override bool CanCloseWithESC => true;
@@ -49,6 +50,7 @@ public class EmoteLoadoutPanel : PanelBase
     {
         base.Awake();
 
+        m_loadout = new EmoteLoadout(App.Net.Auth != null ? App.Net.Auth.PlayerId : null);
         m_loadout.Load();
         BuildCatalogList();
         RefreshSlots();
@@ -66,8 +68,8 @@ public class EmoteLoadoutPanel : PanelBase
 
     public override void ClosePanel()
     {
-        // 닫을 때 저장한다 — 칸을 누를 때마다 저장하면 디스크 쓰기가 잦고, 저장 버튼을 따로 두면
-        // 안 누르고 나가는 길이 생긴다.
+        // 마무리로 한 번 더 — 칸을 누를 때 이미 PlayerPrefs에 넣었으므로 여기 남은 일은
+        // 디스크로 밀어내는 것뿐이다 (#640).
         m_loadout.Save();
         base.ClosePanel();
     }
@@ -107,6 +109,13 @@ public class EmoteLoadoutPanel : PanelBase
 
         // 고른 것이 없으면 그 칸을 비운다 — 별도의 '지우기' 조작을 만들지 않기 위한 규칙이다.
         m_loadout.SetSlot(slot, definition != null ? definition.Id : null);
+
+        // 칸을 만질 때마다 저장한다 — 닫을 때만 저장하면 패널을 열어 둔 채로 호스트가 게임을
+        // 시작하거나 앱이 종료될 때 편집이 통째로 사라진다. 백드롭이 화면을 막고 있어 본인은
+        // 뒤로 누를 뿐이지만, 호스트가 시작 버튼을 누르는 타이밍은 막을 수 없다. 디스크 쓰기는
+        // 닫을 때 한 번으로 미루므로 칸을 누를 때의 비용은 메모리 쓰기뿐이다 (#640).
+        m_loadout.Save(flush: false);
+
         RefreshSlots();
     }
 

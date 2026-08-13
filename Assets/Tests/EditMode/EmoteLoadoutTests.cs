@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using UnityEngine;
 
 /// <summary>
 /// 로비에서 구성한 8칸 배치의 저장·복원. 사용자가 공들여 맞춘 구성이 조용히 날아가는 것이
@@ -6,6 +7,21 @@ using NUnit.Framework;
 /// </summary>
 public class EmoteLoadoutTests
 {
+    // 저장 키 형식을 테스트에서 못박는다 — 형식이 바뀌면 이미 저장된 구성을 못 읽는다 (#640).
+    private const string k_prefsKeyPrefix = "Emote.Loadout.";
+
+    // 실재하지 않는 계정 id — 이 테스트가 개발자 본인의 저장값을 건드리지 않게 한다.
+    private const string k_ownerA = "test-owner-a";
+    private const string k_ownerB = "test-owner-b";
+
+    [TearDown]
+    public void 테스트가_쓴_저장값을_지운다()
+    {
+        PlayerPrefs.DeleteKey(k_prefsKeyPrefix + k_ownerA);
+        PlayerPrefs.DeleteKey(k_prefsKeyPrefix + k_ownerB);
+        PlayerPrefs.Save();
+    }
+
     [Test]
     public void 새_구성은_전부_비어있다()
     {
@@ -97,5 +113,41 @@ public class EmoteLoadoutTests
     {
         var loadout = new EmoteLoadout();
         Assert.DoesNotThrow(() => loadout.Deserialize(null));
+    }
+
+    [Test]
+    public void 계정이_다르면_저장이_섞이지_않는다()
+    {
+        // 한 PC의 두 인스턴스(MPPM 가상 플레이어·호스트)가 서로의 구성을 덮어쓴 버그 (#640)
+        var first = new EmoteLoadout(k_ownerA);
+        first.SetSlot(0, "dance01");
+        first.Save();
+
+        var second = new EmoteLoadout(k_ownerB);
+        second.SetSlot(0, "cheer01");
+        second.Save();
+
+        var reloaded = new EmoteLoadout(k_ownerA);
+        reloaded.Load();
+
+        Assert.AreEqual("dance01", reloaded.GetSlot(0), "다른 계정의 저장이 덮어썼다");
+        Assert.IsTrue(
+            PlayerPrefs.HasKey(k_prefsKeyPrefix + k_ownerA),
+            "계정별 키 형식이 바뀌었다 — 기존 저장값을 못 읽게 된다"
+        );
+    }
+
+    [Test]
+    public void flush를_미뤄도_저장한_값은_읽힌다()
+    {
+        // 칸을 누를 때마다 하는 저장 — 디스크 쓰기만 미루고 값은 바로 들어가 있어야 한다 (#640)
+        var loadout = new EmoteLoadout(k_ownerA);
+        loadout.SetSlot(2, "clap01");
+        loadout.Save(flush: false);
+
+        var reloaded = new EmoteLoadout(k_ownerA);
+        reloaded.Load();
+
+        Assert.AreEqual("clap01", reloaded.GetSlot(2));
     }
 }
