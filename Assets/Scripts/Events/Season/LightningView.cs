@@ -1,4 +1,5 @@
-using System.Collections;
+using System.Threading;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
@@ -124,8 +125,8 @@ public class LightningView : MonoBehaviour
     private float m_baseIntensity;
     private bool m_hasBaseIntensity;
 
-    private Coroutine m_flashRoutine;
-    private Coroutine m_overcastRoutine;
+    // 돌고 있는 섬광을 끊는 손잡이 — 낙뢰가 겹치면 앞엣것을 끊고 다시 친다.
+    private CancellationTokenSource m_flashCts;
 
     private void Start()
     {
@@ -152,6 +153,7 @@ public class LightningView : MonoBehaviour
         // 비가 켜진 채 파괴되면(호스트 종료·씬 전환 강제 정리) 요청이 영원히 남는다 — 여기서 짝을 맞춘다
         PopOvercast(0f);
 
+        StopFlash(); // 되돌리기 전에 끊는다 — 돌던 섬광이 복원한 밝기를 덮어쓰지 않게
         RestoreIntensity();
     }
 
@@ -254,10 +256,11 @@ public class LightningView : MonoBehaviour
 
         CaptureBaseIntensity();
 
-        if (m_flashRoutine != null)
-            StopCoroutine(m_flashRoutine);
+        StopFlash();
 
-        m_flashRoutine = StartCoroutine(FlashRoutine());
+        // 파괴 토큰과 묶는다 — 뷰가 죽은 뒤에도 섬광이 씬 라이트를 계속 건드리지 않게
+        m_flashCts = CancellationTokenSource.CreateLinkedTokenSource(this.GetCancellationTokenOnDestroy());
+        FlashAsync(m_flashCts.Token).Forget();
     }
 
     /// <summary>
@@ -265,7 +268,7 @@ public class LightningView : MonoBehaviour
     /// 그건 번개가 아니라 "형광등 깜빡임"으로 읽힌다. 실제 낙뢰는 한 번 터지고 잠깐 죽었다가 더 세게
     /// 터진 뒤 서서히 잦아든다 — 그 봉우리 두 개와 감쇠 꼬리를 곡선으로 만든다.
     /// </summary>
-    private IEnumerator FlashRoutine()
+    private async UniTaskVoid FlashAsync(CancellationToken token)
     {
         // 시간 비율 → 밝기 배율. 첫 봉우리(0.35) → 죽음(0.15) → 둘째 봉우리(1.0) → 감쇠.
         float dark = m_hasBaseIntensity ? m_globalLight.intensity : 0f;
@@ -275,10 +278,8 @@ public class LightningView : MonoBehaviour
             float p = t / m_flashDuration;
             float strength = StrikeEnvelope(p);
             m_globalLight.intensity = Mathf.Lerp(dark, m_maxFlashIntensity, strength);
-            yield return null;
+            await UniTask.NextFrame(token);
         }
-
-        m_flashRoutine = null;
 
         // 섬광이 끝나면 지금 국면의 밝기로 돌아간다 — 먹구름 요청이 살아 있으면 그 어둠, 없으면 원래 밝기.
         // 목표를 공유 클래스가 들고 있어 눈·비가 겹쳐 있어도 어긋나지 않는다.
@@ -300,10 +301,11 @@ public class LightningView : MonoBehaviour
 
     private void StopFlash()
     {
-        if (m_flashRoutine != null)
-        {
-            StopCoroutine(m_flashRoutine);
-            m_flashRoutine = null;
-        }
+        if (m_flashCts == null)
+            return;
+
+        m_flashCts.Cancel();
+        m_flashCts.Dispose();
+        m_flashCts = null;
     }
 }

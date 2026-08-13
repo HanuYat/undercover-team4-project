@@ -1,4 +1,5 @@
-using System.Collections;
+using System.Threading;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
@@ -14,11 +15,14 @@ using UnityEngine;
 /// 대상은 <see cref="RenderSettings.sun"/>(Lighting 창의 Sun Source)이다 — 씬마다 다른 라이트를
 /// 프리팹이 직렬화로 물 수 없어 런타임에 찾는다. 태양이 없는 씬에서는 조용히 아무 일도 하지 않는다.
 ///
+/// 페이드는 UniTask가 PlayerLoop에서 돌린다 — 씬을 넘겨도 끊기지 않는다. 예전에는 코루틴을
+/// 태우려고 <c>DontDestroyOnLoad</c> 러너 오브젝트를 만들었는데, 이제 그릇이 필요 없다.
+///
 /// 표현 계층이라 각 피어에서 따로 돈다 — 복제하지 않는다.
 /// 낙뢰 섬광은 이 값을 건드리지 않고 <see cref="LightningView"/>가 직접 쥔다(짧은 순간의 덮어쓰기라
 /// 계수에 넣으면 오히려 어긋난다) — 섬광이 끝나면 이 클래스의 현재 목표로 되돌린다.
 /// </summary>
-public class WeatherOvercast : MonoBehaviour
+public static class WeatherOvercast
 {
     // 살아 있는 요청 수와 그중 가장 어두운 배율. 정적이지만 매니저가 아니라 밝기 하나를 조정하는
     // 표현 상태다 — App 파사드(R1) 대상이 아니고 씬 오브젝트도 아니다.
@@ -29,8 +33,7 @@ public class WeatherOvercast : MonoBehaviour
     private static float s_baseIntensity;
     private static bool s_hasBase;
 
-    private static WeatherOvercast s_runner; // 페이드 코루틴을 돌릴 그릇 — 첫 요청에서 만든다
-    private static Coroutine s_fade;
+    private static CancellationTokenSource s_fadeCts; // 새 요청이 돌던 페이드를 끊는다
 
     /// <summary>어둡게 하기를 요청한다 — 같은 날씨가 두 번 켜지지 않는 한 뷰당 한 번.</summary>
     public static void Push(float intensityScale, float fadeSeconds)
@@ -61,17 +64,11 @@ public class WeatherOvercast : MonoBehaviour
         if (!ResolveSun())
             return;
 
-        if (s_runner == null)
-        {
-            GameObject go = new GameObject("WeatherOvercast");
-            s_runner = go.AddComponent<WeatherOvercast>();
-            DontDestroyOnLoad(go); // 씬을 넘겨도 페이드가 끊기지 않게
-        }
+        s_fadeCts?.Cancel();
+        s_fadeCts?.Dispose();
+        s_fadeCts = new CancellationTokenSource();
 
-        if (s_fade != null)
-            s_runner.StopCoroutine(s_fade);
-
-        s_fade = s_runner.StartCoroutine(FadeTo(s_baseIntensity * s_scale, fadeSeconds));
+        FadeToAsync(s_baseIntensity * s_scale, fadeSeconds, s_fadeCts.Token).Forget();
     }
 
     private static bool ResolveSun()
@@ -94,19 +91,18 @@ public class WeatherOvercast : MonoBehaviour
         return true;
     }
 
-    private static IEnumerator FadeTo(float target, float seconds)
+    // 끊긴 페이드는 목표값을 찍지 않고 그 자리에서 멈춘다 — 뒤이은 요청이 지금 밝기에서 이어 간다.
+    private static async UniTaskVoid FadeToAsync(float target, float seconds, CancellationToken token)
     {
         float from = s_sun != null ? s_sun.intensity : target;
 
         for (float t = 0f; t < seconds && s_sun != null; t += Time.deltaTime)
         {
             s_sun.intensity = Mathf.Lerp(from, target, t / seconds);
-            yield return null;
+            await UniTask.NextFrame(token);
         }
 
         if (s_sun != null)
             s_sun.intensity = target;
-
-        s_fade = null;
     }
 }
