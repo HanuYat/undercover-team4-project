@@ -131,8 +131,10 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 
     /// <summary>
     /// 부활 — HP를 일부 회복하고 무력화를 해제한다. 서버(또는 오프라인) 전용. (#105, GDD 7-5)
-    /// 실제 호출자는 본부 부활 장치(<c>HqRevivalDevice</c>, #365) 하나다 — HP 0이 곧 기능 정지가 된
-    /// 뒤로는 현장 구조 채널링(<c>PlayerReviver</c>)이 성립하지 않는다. (#524)
+    /// 호출자는 부활 키트(<c>ReviveKit</c>, #613)와 본부 부활 장치(<c>HqRevivalDevice</c>, #365)다.
+    /// 현장 구조 채널링(<c>PlayerReviver</c>)은 HP 0이 곧 기능 정지가 된 뒤로 성립하지 않는다 (#524) —
+    /// 지금 실제로 쓰이는 경로는 키트뿐이다(장치는 코드만 남기고 씬에서 뺐다, #613).
+    /// 회복량은 경로를 가리지 않고 <see cref="m_reviveHp"/> 하나다 — 부활은 하나의 규칙이다.
     /// </summary>
     public void ServerRevive()
     {

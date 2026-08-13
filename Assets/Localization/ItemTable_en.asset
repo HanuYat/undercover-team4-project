@@ -81,6 +81,14 @@ MonoBehaviour:
       a jailbreak.'
     m_Metadata:
       m_Items: []
+  - m_Id: 5508625507356675
+    m_Localized: "Revive Kit"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5508625507356676
+    m_Localized: "Brings a shut-down teammate back on the spot. Single use."
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

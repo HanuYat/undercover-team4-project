@@ -312,6 +312,52 @@ public class PlayerLoadout : NetworkBehaviour
         ServerNotifyHeldItemsChanged();
     }
 
+    // ---- 소모 (아이템이 서버에서 스스로 호출) ----
+
+    /// <summary>
+    /// 소지품 하나를 소모한다 — 디스폰하고 오너 인벤토리를 다시 맞춘다. 서버(또는 오프라인) 전용. (#613)
+    ///
+    /// 버리기(<see cref="DropRpc"/>)와 다른 점은 <b>월드에 남기지 않는다</b>는 것뿐이라 위치 보정도
+    /// 소유권 반납도 없다. 부르는 쪽은 일회용 아이템 자신이고(<see cref="ItemBase.ServerConsume"/>),
+    /// 구매 목록 정리는 거기서 이미 끝났다.
+    ///
+    /// 서버가 소지품을 바꾸는 경로가 하나 늘었다(지급·회수·줍기·버리기·소모) — 다섯 경로 모두
+    /// <see cref="ServerNotifyHeldItemsChanged"/>로 수렴한다는 규칙은 그대로다.
+    /// </summary>
+    public void ServerConsumeHeldItem(ItemBase item)
+    {
+        if (IsSpawned && !IsServer)
+        {
+            return;
+        }
+
+        if (item == null)
+        {
+            return;
+        }
+
+        NetworkObject itemNetworkObject = item.NetworkObject;
+
+        // 이 플레이어가 실제로 들고 있는 것만 소모할 수 있다 — 버리기와 같은 권한 검증.
+        if (itemNetworkObject == null || !m_held.Holds(itemNetworkObject))
+        {
+            return;
+        }
+
+        if (itemNetworkObject.IsSpawned)
+        {
+            itemNetworkObject.Despawn(destroy: true);
+        }
+        else
+        {
+            Destroy(item.gameObject); // 비네트워크 Play 테스트 폴백
+        }
+
+        // 파괴된 참조가 오너 슬롯에 남지 않게 한다 — 회수(#370)가 빈 목록을 보내는 것과 같은 이유.
+        // 디스폰은 즉시지만 GameObject 파괴는 프레임 끝이라, BuildRefs가 스폰 여부로 걸러 준다.
+        ServerNotifyHeldItemsChanged();
+    }
+
     /// <summary>
     /// 손에서 떼어 낼 수 있는 소지품을 <paramref name="into"/>에 담는다(기존 내용은 지운다).
     /// 기준은 버리기와 같다 — 묶어 둔 밧줄은 빠진다(손을 떠나면 묶인 NPC가 주인 없이 남는다, #369).

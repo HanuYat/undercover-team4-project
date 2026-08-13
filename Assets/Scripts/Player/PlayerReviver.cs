@@ -184,7 +184,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
             // (둘 다 히트박스가 꺼져 조준도 안 되지만 위조 RPC 방어로 여기서도 본다)
             // Die는 히트박스가 켜져 있어 실제로 여기까지 온다 — 조준·홀드가 되는데 침묵하면 버그로 보인다 (#364)
             if (targetIncap != null && targetIncap.IsDead)
-                NotifyOwner($"구조 불가 — {target.name}은 기능 정지 상태다. 본부로 이송해야 복구된다");
+                NotifyOwner($"구조 불가 — {target.name}은 기능 정지 상태다. 부활 키트로 일으켜야 한다 (#613)");
             return;
         }
         if (!IsInRange(target))
