@@ -329,6 +329,10 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
     [ClientRpc]
     private void PlayStrikeWarningClientRpc(Vector3 position)
     {
+        // 전용 서버는 뷰가 없다 — 아래 VFX RPC와 같은 가드다
+        if (IsServer && !IsHost)
+            return;
+
         OnStrikeWarning?.Invoke(position);
     }
 
