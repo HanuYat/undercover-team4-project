@@ -4518,7 +4518,7 @@ MonoBehaviour:
   m_headAnchor: {fileID: 5952187903795718013}
   m_overrideMaterialSlot: 0
   m_colorPropertyName: _BaseColor
-  m_hairColorPropertyName: _Hair_Color
+  m_hairColorPropertyName: _BaseColor
   m_hairBaseMaterial: {fileID: 2100000, guid: 4625364858fb08d479fa095a5cbcd9a1, type: 2}
   m_skinColorPropertyName: _Skin_Color
 --- !u!114 &5678977034810245416
@@ -4738,6 +4738,7 @@ MonoBehaviour:
   m_settleSpeedThreshold: 0.15
   m_settleHoldSeconds: 0.3
   m_settleTimeoutSeconds: 5
+  m_blendSeconds: 0.3
   m_groundMask:
     serializedVersion: 2
     m_Bits: 1

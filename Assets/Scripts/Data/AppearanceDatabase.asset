@@ -1072,7 +1072,7 @@ MonoBehaviour:
       SciFiOnly: 1
       MontageLayer: {fileID: 21300000, guid: 33921450add733b4da6279af994df9dd, type: 3}
       ExcludeFromMontage: 0
-    NoneChance: 0
+    NoneChance: 0.7
   m_eyewear:
     Options:
     - DisplayName:
@@ -1190,7 +1190,7 @@ MonoBehaviour:
       SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: b0b21f924c4d60b45999903f76c0cfb4, type: 3}
       ExcludeFromMontage: 0
-    NoneChance: 0
+    NoneChance: 0.65
   m_montageBase: {fileID: 21300000, guid: c45d2eea083118a468c8798fff0c31b9, type: 3}
   m_montageFace: {fileID: 21300000, guid: e1d606e7374c9394fba0477ed5936b95, type: 3}
   m_montageUnknownHair: {fileID: 21300000, guid: 23f6ac8740d48f04393d4a77cf98d4e9, type: 3}
