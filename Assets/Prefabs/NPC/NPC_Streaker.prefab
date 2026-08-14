@@ -35,6 +35,7 @@ GameObject:
   - component: {fileID: 6459439272382896395}
   - component: {fileID: 3324404709527055785}
   - component: {fileID: 1134059981017232228}
+  - component: {fileID: 7416309468039645568}
   m_Layer: 7
   m_Name: NPC_Streaker
   m_TagString: Untagged
@@ -510,6 +511,20 @@ MonoBehaviour:
   m_alignPullSpeed: 1.5
   m_flightAlignPullSpeed: 16
   m_alignSnapDistance: 2.5
+  m_remoteSpeedClamp: 20
+--- !u!114 &7416309468039645568
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aacde1776e69526428d86afcd07df51a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcHurtVoice
+  m_minInterval: 0.5
 --- !u!1001 &1485141803111560614
 PrefabInstance:
   m_ObjectHideFlags: 0

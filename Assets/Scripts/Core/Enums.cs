@@ -102,6 +102,9 @@ public enum EAudioClip
     // 날씨 (#647). 뒤에 붙이는 이유는 위와 같다 — 정수로 직렬화돼 있다.
     LightningStrike, // 콰르릉 — 벼락이 떨어진 순간
     RainLoop, // 쏴아 — 비가 오는 동안 계속 (환경음 루프)
+
+    // 피격 신음. 뒤에 붙이는 이유는 위와 같다 — 정수로 직렬화돼 있다.
+    NpcHurtHuman, // 윽 — 인간 NPC가 피해를 입은 순간 (가해 수단과 무관)
 }
 
 /// <summary>

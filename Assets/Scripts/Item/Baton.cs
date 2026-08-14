@@ -402,11 +402,11 @@ public class Baton : ItemBase, IAimedWeapon
             return EFx.BatonHitWorld;
         }
 
-        // 라운드 시작 전 스폰 직후에는 프로필이 아직 없다 — 갈래를 남기지 않으려고 사람 쪽으로 고정한다.
+        // 판정은 CitizenIdentity가 갖는다 — 피격 신음(NpcHurtVoice)이 같은 기준을 봐야 하기 때문이다.
+        // 프로필 미배정 구간을 사람으로 보는 것도 그쪽 규칙이다.
         CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
-        CitizenProfile profile = identity != null ? identity.Profile : null;
 
-        return profile != null && profile.CitizenType == OfficialRecords.CitizenType.Android
+        return identity != null && identity.IsAndroidBody
             ? EFx.BatonHitMetal
             : EFx.BatonHitFlesh;
     }
