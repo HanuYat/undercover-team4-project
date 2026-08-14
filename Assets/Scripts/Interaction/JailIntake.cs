@@ -274,6 +274,8 @@ public class JailIntake : MonoBehaviour
                 continue;
             if (!IsAdmittableState(npc.CurrentState))
                 continue;
+            if (!IsSecuredByAnyone(npc))
+                continue;
             if ((npc.transform.position - origin).sqrMagnitude > sqrReach)
                 continue;
             if (!m_admitBuffer.Contains(npc))
@@ -284,13 +286,34 @@ public class JailIntake : MonoBehaviour
     /// <summary>
     /// 버튼 앞에 놓아둔 것만으로 판정 대상이 되는 상태인가 — 밧줄로 끌고 온 대상은 이 판정을 타지 않는다.
     ///
-    /// <see cref="NpcState.Dead"/>가 들어 있는 이유는 산 신병과 같다 (#571): 문 앞에 <b>내려놓고</b>
-    /// 누르는 조작이 자연스럽고, 남이 끌고 온 시체를 대신 넣어 주는 것도 되어야 한다.
-    /// 시체 밧줄은 E로 내려놓으면 관절이 풀리므로(순수 운반이라 '놓아둔 Captured' 같은 중간이 없다)
-    /// 이 갈래가 없으면 <b>줄을 쥔 채로만</b> 넣을 수 있게 된다.
+    /// <b><see cref="NpcState.Dead"/>는 빠졌다</b> (#637). 예전에는 문 앞에 내려놓은 시체도 받았지만
+    /// (#571), 시체 수감은 <b>되돌릴 수 없다</b> — 반출도 재판정도 없어 실수로 넣으면 그 라운드 내내
+    /// 그대로다(<see cref="ArrestJudge.JudgeCorpse"/>). 실제로 옆에 쓰러져 있던 경범죄자가 휩쓸려
+    /// 들어간 사고가 있었다. 그래서 시체는 <b>줄을 쥐고 있을 때만</b> 받는다(위 ① 갈래).
     /// </summary>
     private static bool IsAdmittableState(NpcState state) =>
-        state is NpcState.Captured or NpcState.Escorted or NpcState.Dead;
+        state is NpcState.Captured or NpcState.Escorted;
+
+    /// <summary>
+    /// 누군가 확보한 대상인가 — 버튼 앞 반경 스캔이 <b>지나가던 NPC를 휩쓸지 않게</b> 하는 문지기. (#637)
+    ///
+    /// 상태와 거리만으로는 "끌고 온 신병"과 "그냥 거기 쓰러져 있던 대상"이 똑같아 보인다. 셋 중
+    /// 하나라도 있으면 누군가 손을 댄 것이다:
+    /// <list type="bullet">
+    ///   <item><see cref="NpcCustody.EscortTarget"/> — 지금 누군가를 따라오는 중(남이 끌고 온 신병·반출 대상)</item>
+    ///   <item><see cref="NpcCustody.IsJailExtracted"/> — 반출됐다 거리 이탈로 멈춘 대상 (#517)</item>
+    ///   <item><see cref="NpcCustody.WasSecuredByPlayer"/> — 밧줄을 풀어 문 앞에 세워 둔 신병 (#637)</item>
+    /// </list>
+    ///
+    /// <b>누가 확보했는지는 묻지 않는다</b> — 남이 끌고 온 신병을 대신 넣어 주는 협동이 설계에 있다
+    /// (팀 확정 2026-08-06). 걸러내려는 것은 <b>아무도 손대지 않은</b> 대상이다.
+    /// </summary>
+    private static bool IsSecuredByAnyone(NpcController npc)
+    {
+        NpcCustody custody = npc.Custody;
+        return custody != null
+            && (custody.EscortTarget != null || custody.IsJailExtracted || custody.WasSecuredByPlayer);
+    }
 
     // 인계 몫(#484)의 귀속자 — 판정이 확정한 인계자 목록(밧줄 보유자 전원 + 버튼을 누른 사람,
     // 팀 확정 2026-08-06)을 clientId로 옮긴다. 누가 인계자인지 정하는 것은 ArrestJudge 몫이다.

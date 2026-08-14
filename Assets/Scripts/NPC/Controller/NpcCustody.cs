@@ -260,6 +260,29 @@ public class NpcCustody : NetworkBehaviour
     public bool IsJailExtracted =>
         IsSpawned && !IsServer ? m_jailExtractedSynced.Value : m_jailExtracted;
 
+    /// <summary>
+    /// <b>플레이어가 확보했던 대상인가</b> — 수감 버튼이 "끌고 온 신병"과 "그냥 거기 쓰러져 있던
+    /// 대상"을 가르는 기준이다. 서버(또는 오프라인) 전용. (#637)
+    ///
+    /// <see cref="IsJailExtracted"/>·<see cref="EscortTarget"/>으로는 못 가린다 — 밧줄을 완전히 풀어
+    /// 문 앞에 세워 둔 신병은 둘 다 비어 있고 상태도 그냥 <c>Captured</c>라, 길에 쓰러진 대상과
+    /// 구분되지 않는다. 그 조작(풀어 두고 누르기)을 살리려면 표식이 하나 더 필요했다.
+    ///
+    /// <b>누가 확보했는지는 담지 않는다</b> — 남이 끌고 온 신병을 대신 넣어 주는 협동이 설계에 있고
+    /// (팀 확정 2026-08-06), 인계 몫도 밧줄 보유자 전원에게 가므로 가로채기가 성립하지 않는다.
+    /// </summary>
+    public bool WasSecuredByPlayer { get; private set; }
+
+    /// <summary>확보 표식 지정 — 켜는 곳은 밧줄 묶임(<see cref="NpcRopeDrag"/>) 하나다. (#637)
+    /// 끄는 곳은 커스터디 이탈(<see cref="NpcController"/>의 상태 훅) — 도주·배회로 돌아가면 남의 몸이다.</summary>
+    public void SetSecuredByPlayer(bool value)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        WasSecuredByPlayer = value;
+    }
+
     /// <summary>반출 표식 지정 — 켜는 곳은 <see cref="JailIntake"/>의 반출 하나뿐이다. 서버(또는 오프라인). (#517)
     /// 끄는 곳은 셋이다: 커스터디 이탈(재수감·도주·석방), 밧줄에 묶임, 그리고 여기 직접 호출.</summary>
     public void SetJailExtracted(bool value)
