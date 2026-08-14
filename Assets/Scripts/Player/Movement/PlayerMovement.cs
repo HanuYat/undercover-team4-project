@@ -105,6 +105,21 @@ public class PlayerMovement : NetworkBehaviour
         Quaternion.identity
     );
 
+    // 재배치 회차 (#656) — 서버가 <see cref="ServerReposition"/>마다 올리고, 오너가 그 포즈를 실제로
+    // 적용하면 여기에 맞춘다. "내 몸이 이 씬의 제자리로 갔는가"를 답하는 유일한 신호다.
+    //
+    // <b>좌표 비교로 대신할 수 없다.</b> 도착 좌표는 스폰 포인트에서 인원수만큼 벌어지고
+    // (PlayerSpawnManager.GetSpreadOffset) 적용 직후에도 중력·접지 보정으로 미세하게 어긋난다.
+    // 회차는 정수라 그 흔들림을 타지 않는다.
+    private readonly NetworkVariable<int> m_repositionEpoch = new NetworkVariable<int>();
+    private int m_appliedRepositionEpoch;
+
+    /// <summary>
+    /// 서버가 지시한 재배치를 내 몸이 이미 적용했는가 — 씬 진입 로딩 화면이 이걸 기다린다. (#656)
+    /// 세션이 없으면(오프라인 Play) 기다릴 서버가 없으므로 항상 참이다.
+    /// </summary>
+    public bool IsRepositionApplied => !IsSpawned || m_appliedRepositionEpoch >= m_repositionEpoch.Value;
+
     private CharacterController m_controller;
     private PlayerInputHandler m_inputHandler;
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 이동·시점 차단용 (#105)
@@ -231,6 +246,11 @@ public class PlayerMovement : NetworkBehaviour
     private void ApplyServerSpawnPose()
     {
         SetPose(m_serverSpawnPosition.Value, m_serverSpawnRotation.Value);
+
+        // 이 경로도 '서버가 지정한 자리로 갔다'이므로 회차를 맞춘다 (#656). 안 맞추면 RPC를 못 받고
+        // 이쪽으로 자세를 잡은 오너가 이미 끝난 재배치를 계속 기다려, 로딩 화면이 상한까지 걸린다.
+        m_appliedRepositionEpoch = m_repositionEpoch.Value;
+
         Debug.Log($"[PlayerMovement] 서버 지정 스폰 포즈 적용 — Owner {OwnerClientId}, 위치 {transform.position}");
     }
 
@@ -248,10 +268,19 @@ public class PlayerMovement : NetworkBehaviour
         m_serverSpawnPosition.Value = position;
         m_serverSpawnRotation.Value = rotation;
 
+        // 회차를 올린 뒤 그 값을 실어 보낸다 — 오너가 적용하면서 같은 값을 기록해야 짝이 맞는다.
+        int epoch = m_repositionEpoch.Value + 1;
+        m_repositionEpoch.Value = epoch;
+
         if (IsOwner)
-            SetPose(position, rotation);       // 호스트(서버=오너): 즉시 적용
+        {
+            SetPose(position, rotation); // 호스트(서버=오너): 즉시 적용
+            m_appliedRepositionEpoch = epoch;
+        }
         else
-            ApplyPoseRpc(position, rotation);  // 원격 클라: 오너가 스스로 적용 (NetworkTransform 오너 권한)
+        {
+            ApplyPoseRpc(position, rotation, epoch); // 원격 클라: 오너가 스스로 적용 (NetworkTransform 오너 권한)
+        }
     }
 
     /// <summary>
@@ -270,7 +299,9 @@ public class PlayerMovement : NetworkBehaviour
         {
             m_serverSpawnPosition.Value = position;
             m_serverSpawnRotation.Value = rotation;
-            ApplyPoseRpc(position, rotation); // 오너(호스트 포함)가 스스로 적용
+            // 회차는 올리지 않는다 — 이건 씬 진입 재배치가 아니라 도중 순간이동이라, 로딩 화면이
+            // 기다리는 대상이 아니다. 현재 값을 그대로 실어 오너 기록이 뒤로 밀리지 않게 한다.
+            ApplyPoseRpc(position, rotation, m_repositionEpoch.Value); // 오너(호스트 포함)가 스스로 적용
         }
         else
         {
@@ -280,7 +311,11 @@ public class PlayerMovement : NetworkBehaviour
 
     // 오너에서만 실행 — NetworkTransform 오너 권한이라 위치 변경은 오너가 해야 전 피어에 전파된다.
     [Rpc(SendTo.Owner)]
-    private void ApplyPoseRpc(Vector3 position, Quaternion rotation) => SetPose(position, rotation);
+    private void ApplyPoseRpc(Vector3 position, Quaternion rotation, int epoch)
+    {
+        SetPose(position, rotation);
+        m_appliedRepositionEpoch = epoch;
+    }
 
     // ---- 추종 컴포넌트(PlayerTowedMotion)와 공유하는 면 ----
     // 수직 속도와 CharacterController의 소유자는 이 컴포넌트다 — 중력·점프·넉백이 모두 같은 채널을
