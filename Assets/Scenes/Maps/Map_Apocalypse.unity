@@ -60023,7 +60023,7 @@ MonoBehaviour:
   m_forgerCount: 0
   m_forgedCharCount: 1
   m_criminalBountyMin: 8000
-  m_criminalBountyMax: 10000
+  m_criminalBountyMax: 12000
   m_forgeryBountyMin: 1000
   m_forgeryBountyMax: 2500
   m_compliantWeight: 0.2
