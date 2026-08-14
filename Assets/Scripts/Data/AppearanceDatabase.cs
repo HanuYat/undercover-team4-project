@@ -36,8 +36,7 @@ public class AppearanceDatabase : ScriptableObject
         /// 몽타주가 대표로 쓰는 프롭 — 그림을 굽고 '이 값에 프롭이 있는가'를 판정하는 기준.
         /// 여러 메시를 물려도 그림은 한 장이라 대표가 하나여야 한다 (#619).
         /// </summary>
-        public GameObject MontageProp =>
-            PropPrefabs != null && PropPrefabs.Length > 0 ? PropPrefabs[0] : null;
+        public GameObject MontageProp => FirstPropFrom(0);
 
         /// <summary>
         /// 이 NPC가 쓸 메시 하나. <paramref name="seed"/>가 같으면 어느 피어에서도 같은 것이 나온다 —
@@ -48,12 +47,29 @@ public class AppearanceDatabase : ScriptableObject
         {
             if (PropPrefabs == null || PropPrefabs.Length == 0)
                 return null;
-            if (PropPrefabs.Length == 1)
-                return PropPrefabs[0];
 
             // 곱셈 해시 — 인접한 NetworkObjectId가 같은 변형으로 몰리지 않게 흩는다
             ulong mixed = seed * 2654435761UL + 1013904223UL;
-            return PropPrefabs[(int)(mixed % (ulong)PropPrefabs.Length)];
+            return FirstPropFrom((int)(mixed % (ulong)PropPrefabs.Length));
+        }
+
+        /// <summary>
+        /// <paramref name="start"/>부터 돌면서 처음 만나는 빈칸 아닌 프롭. 배열의 빈칸은 인스펙터 손편집으로만
+        /// 생기는데, 걸러 주지 않으면 그 자리에 걸린 NPC만 프롭 없이 나오고 몽타주는 대표 그림을 그려
+        /// §1이 조용히 깨진다. 건너뛰는 순서가 배열 순서라 어느 피어에서 계산해도 결과가 같다.
+        /// </summary>
+        private GameObject FirstPropFrom(int start)
+        {
+            if (PropPrefabs == null || PropPrefabs.Length == 0)
+                return null;
+
+            for (int i = 0; i < PropPrefabs.Length; i++)
+            {
+                GameObject prop = PropPrefabs[(start + i) % PropPrefabs.Length];
+                if (prop != null)
+                    return prop;
+            }
+            return null;
         }
 
         [Tooltip("SciFi 카탈로그 전용 값 — Generic 경로엔 프롭이 없어 표현 불가하므로 Generic 랜덤 배정에서 제외한다 (예: 머리 '가림', 후드/헬멧, 특수 피부색). 몽타주 텍스트·SciFi 카탈로그에는 그대로 쓰인다")]

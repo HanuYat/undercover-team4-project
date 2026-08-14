@@ -44,9 +44,9 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
     [SerializeField]
     private string m_colorPropertyName = "_BaseColor";
 
-    [Tooltip("머리 프롭의 머리색 틴트에 쓰는 셰이더 프로퍼티. Synty Generic_Standard 셰이더는 머리 마스크 영역을 _Hair_Color로 칠하므로, _BaseColor로 틴트하면 머티리얼의 _Hair_Color(갈색)에 눌려 탁해진다. 이 채널로 직접 칠해야 순수한 머리색이 나온다")]
+    [Tooltip("머리 프롭의 머리색 틴트에 쓰는 셰이더 프로퍼티. 베이스 머티리얼의 셰이더와 짝이다 — 마스크를 쓰는 Synty 캐릭터 셰이더면 _Hair_Color, 마스크 없는 URP/Lit이면 _BaseColor.\n마스크 채널(_Hair_Color)은 마스크 텍스처가 그린 팩의 UV에서만 먹는다. 어휘에 다른 팩 부착물이 섞이면 그 메시에서 틴트가 통째로 무시되므로(#619 — docs §13-13) 지금은 마스크를 안 쓰는 쪽으로 간다")]
     [SerializeField]
-    private string m_hairColorPropertyName = "_Hair_Color";
+    private string m_hairColorPropertyName = "_BaseColor";
 
     [Tooltip(
         "머리 프롭에 깔 밝은 중립 베이스 머티리얼. 프롭 기본 아틀라스가 어두워 곱셈 틴트하면 밝은 머리색(금발·은발)이 탁해지므로, 머리 프롭 머티리얼을 이 중립 머티리얼로 교체한 뒤 HairColor를 틴트한다. 비우면 원본에 그대로 틴트(기존 동작)"
@@ -234,7 +234,8 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
         ApplyPropAxis(AppearanceAxis.Headwear, profile);
         ApplyPropAxis(AppearanceAxis.Eyewear, profile);
 
-        // 2) 머리색 — Synty 셰이더의 머리 채널(_Hair_Color)로 칠해야 갈색 마스크에 눌리지 않는다
+        // 2) 머리색 — 베이스 머티리얼을 통째로 칠한다. 마스크 채널로 칠하면 마스크를 그린 팩의 메시에만
+        //    먹어서, 다른 팩 부착물이 섞인 어휘에서는 색이 통째로 무시된다 (#619 — docs §13-13)
         TintPropAxis(AppearanceAxis.HairColor, AppearanceAxis.HairStyle, profile, m_hairColorPropertyName);
 
         // 3) 피부색
