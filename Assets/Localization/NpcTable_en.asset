@@ -250,6 +250,46 @@ MonoBehaviour:
     m_Localized: Eyepatch
     m_Metadata:
       m_Items: []
+  - m_Id: 3617861581463552
+    m_Localized: Football helmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3617861627600896
+    m_Localized: Soldier helmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3622266951229440
+    m_Localized: Brim hat
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3622267009949696
+    m_Localized: Beret
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3622267009949697
+    m_Localized: Wide-brim hat
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3622267009949698
+    m_Localized: Motorcycle helmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3622267009949699
+    m_Localized: Tactical helmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3622267009949700
+    m_Localized: Camo cap
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3622267009949701
+    m_Localized: Hunting hat
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3622267009949702
+    m_Localized: Aviator cap
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []
