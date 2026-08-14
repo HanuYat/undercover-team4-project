@@ -76,7 +76,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TeamFund
   ShowTopMostFoldoutHeaderGroup: 1
-  m_startingFund: 0
+  m_startingFund: 25000
 --- !u!114 &-9146029795751610571
 MonoBehaviour:
   m_ObjectHideFlags: 0

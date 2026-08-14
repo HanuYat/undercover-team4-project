@@ -4413,7 +4413,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_eventEntries.Array.data[0].enabled
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_eventEntries.Array.data[2].enabled
@@ -4425,6 +4425,14 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_eventEntries.Array.data[4].enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_eventEntries.Array.data[5].enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_eventEntries.Array.data[6].enabled
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 498939978214492355, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
@@ -23586,6 +23594,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WrongfulArrestPenalty
   ShowTopMostFoldoutHeaderGroup: 1
+  m_penaltyEnabled: 0
   m_plazaPoint: {fileID: 1026613420}
   m_detentionPoint: {fileID: 433575055}
   m_repelRadius: 10
@@ -40699,6 +40708,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VerdictBanner
   m_panelRoot: {fileID: 0}
+  m_background: {fileID: 0}
   m_titleText: {fileID: 2060166252}
   m_detailText: {fileID: 1558753973}
   m_toneTarget: {fileID: 1163084070}
@@ -48364,8 +48374,8 @@ MonoBehaviour:
   m_officialRecords: {fileID: 11400000, guid: 1b5b7a3bc8cc725468fa2e0d915c05cb, type: 2}
   m_maxWantedCount: 5
   m_initialRevealCount: 2
-  m_forgerCount: 7
-  m_forgedCharCount: 3
+  m_forgerCount: 0
+  m_forgedCharCount: 1
   m_criminalBountyMin: 6000
   m_criminalBountyMax: 10000
   m_forgeryBountyMin: 1000
@@ -69447,6 +69457,7 @@ MonoBehaviour:
   m_minReward: 2000
   m_checkInterval: 0.2
   m_favorExpireSeconds: 180
+  m_devIssueKey: 102
   m_offerToast:
     m_TableReference:
       m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
