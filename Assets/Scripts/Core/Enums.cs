@@ -110,6 +110,9 @@ public enum EAudioClip
     BombCountdownSlow, // 삐 … 삐 — 카운트다운 평상시 (루프)
     BombCountdownFast, // 삐삐삐 — 폭발 임박 (루프)
     BombExplosion, // 쾅 — 터진 순간
+
+    // 상점. 뒤에 붙이는 이유는 위와 같다 — 정수로 직렬화돼 있다.
+    ShopPurchase, // 짤랑 — 구매가 성립한 순간 (산 사람에게만)
 }
 
 /// <summary>
