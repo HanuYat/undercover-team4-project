@@ -638,6 +638,23 @@ public class PlayerRagdoll : MonoBehaviour
         m_state = RagdollState.BlendingToAnimator;
     }
 
+    /// <summary>
+    /// 씬 진입 재배치를 위해 즉시 일으킨다 — <see cref="PlayerMovement"/>의 재배치 경로 전용. (#656)
+    ///
+    /// <see cref="ExitToAnimator"/>만으로는 부족하다. 재배치는 서버가 RPC로 지시하는데 <b>사망 해제
+    /// (HP)는 NetworkVariable이라 도착 순서가 갈릴 수 있다</b> — RPC가 먼저 오면 몸을 일으킨 직후
+    /// 프레임에 <see cref="PollDeath"/>가 아직 dead를 보고 <see cref="EnterRagdoll"/>로 다시 눕힌다.
+    /// 스폰 지점에서 한 번 더 무너지는 그림이다.
+    ///
+    /// 그래서 <see cref="m_skipThisEpisode"/>를 함께 세운다 — "이번 사망은 래그돌을 건너뛴다"가
+    /// 정확히 이 플래그의 뜻이고, 사망 해제가 도착하는 순간 PollDeath가 스스로 내린다.
+    /// </summary>
+    public void ExitForReposition()
+    {
+        ExitToAnimator(blend: false);
+        m_skipThisEpisode = true;
+    }
+
     // ---- 지면 파고듦 진단 (Hips 동기화 검증) ----
 
     private float m_sinkLogTimer;

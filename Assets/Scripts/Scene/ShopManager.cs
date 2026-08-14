@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
@@ -11,9 +12,61 @@ using UnityEngine.SceneManagement;
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class ShopManager : SceneManagerBase
 {
+    // 내 몸이 제자리로 가기를 기다리는 상한 — 안 오면 경고하고 진행한다(InGameManager와 같은 방침).
+    private const float k_localReadyTimeoutSeconds = 10f;
+
     private SessionManager Session => App.Net.Session;
     private bool IsServer => NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer;
     private bool m_dispatched;
+
+    /// <summary>
+    /// 상점 준비 완료 대기 (#656) — <b>내 플레이어가 스폰 지점으로 재배치될 때까지</b> 로딩 화면을 유지한다.
+    ///
+    /// 상점은 로비와 달리 플레이어를 유지하고 옮긴다(m_spawnPlayers=true). 재배치는 서버가 내
+    /// 로드 완료를 보고 RPC로 지시하므로 왕복이 붙는다.
+    ///
+    /// 플레이어는 destroyWithScene:false라 씬을 넘어와 <b>직전 맵 좌표에 서 있다.</b> 호스트는
+    /// Start에서 동기적으로 정리하지만 클라는 그 지시가 네트워크로 와야 해서, 먼저 화면을 내리면
+    /// 그 사이가 맵 밖으로 튕겨 나가는 것으로 보인다.
+    ///
+    /// 프레임 수만 세면(LoadingScreen.k_settleFrames) fps가 높고 RTT가 붙는 빌드에서 진다 —
+    /// 에디터에서 재현되지 않던 이유다. 그래서 시간이 아니라 조건을 기다린다.
+    /// </summary>
+    public override async UniTask WaitUntilReadyAsync(CancellationToken token)
+    {
+        float deadline = Time.realtimeSinceStartup + k_localReadyTimeoutSeconds;
+        await UniTask.WaitUntil(
+            () => IsLocallyReady() || Time.realtimeSinceStartup >= deadline,
+            cancellationToken: token
+        );
+
+        if (!IsLocallyReady())
+            Debug.LogWarning(
+                $"[ShopManager] 플레이어 재배치를 {k_localReadyTimeoutSeconds}초 내에 확인하지 못했다 — 그대로 진행한다",
+                this
+            );
+    }
+
+    // 내 몸이 도착했고, 서버가 지시한 재배치를 적용했어야 준비 완료다.
+    // 로비에서 처음 들어올 때는 재배치가 아니라 새로 스폰되는데(PlayerSpawnManager.SpawnPlayerFor),
+    // 그 경우 회차가 0으로 맞아떨어져 몸이 도착하는 즉시 통과한다.
+    private static bool IsLocallyReady()
+    {
+        NetworkManager net = NetworkManager.Singleton;
+        if (net == null || !net.IsListening)
+            return true; // 세션 밖(오프라인·씬 직접 Play) — 옮겨 줄 서버가 없다
+
+        NetworkClient local = net.LocalClient;
+        if (local == null)
+            return true;
+
+        NetworkObject player = local.PlayerObject;
+        if (player == null)
+            return false; // 아직 내 몸이 도착하지 않았다
+
+        PlayerMovement movement = player.GetComponent<PlayerMovement>();
+        return movement == null || movement.IsRepositionApplied;
+    }
 
     /// <summary>이미 출동했는가 — 맵 선택 잠금 기준. 판단 근거는 <see cref="MapSelection.IsSelectable"/>. (#578)</summary>
     public bool IsDispatched => m_dispatched;
