@@ -247,6 +247,46 @@ MonoBehaviour:
     m_Key: Npc.Appearance.Eyewear.Eyepatch
     m_Metadata:
       m_Items: []
+  - m_Id: 3617861581463552
+    m_Key: Npc.Appearance.Headwear.FootballHelmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3617861627600896
+    m_Key: Npc.Appearance.Headwear.SoldierHelmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3622266951229440
+    m_Key: Npc.Appearance.Headwear.BrimHat
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3622267009949696
+    m_Key: Npc.Appearance.Headwear.Beret
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3622267009949697
+    m_Key: Npc.Appearance.Headwear.WideBrimHat
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3622267009949698
+    m_Key: Npc.Appearance.Headwear.MotorcycleHelmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3622267009949699
+    m_Key: Npc.Appearance.Headwear.TacticalHelmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3622267009949700
+    m_Key: Npc.Appearance.Headwear.CamoCap
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3622267009949701
+    m_Key: Npc.Appearance.Headwear.HuntingHat
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3622267009949702
+    m_Key: Npc.Appearance.Headwear.AviatorCap
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

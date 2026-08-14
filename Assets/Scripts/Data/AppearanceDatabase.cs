@@ -208,16 +208,17 @@ public class AppearanceDatabase : ScriptableObject
     /// </summary>
     public bool CanDepict(AppearanceAxis axis, int index)
     {
-        if (axis == AppearanceAxis.HairColor || axis == AppearanceAxis.SkinColor)
-            return true;
-
         AppearanceOption option = GetOption(axis, index);
         if (option == null)
             return false;
 
-        // 정면에서 '없음'과 구분되지 않는 값 — 그리면 본부가 대머리와 같은 그림을 받는다 (#619)
+        // 정면에서 '없음'과 구분되지 않는 값 — 그리면 본부가 대머리와 같은 그림을 받는다 (#619).
+        // 색 축보다 먼저 본다 — 피부색을 축째로 몽타주에서 빼는 자리다 (docs §13-17)
         if (option.ExcludeFromMontage)
             return false;
+
+        if (axis == AppearanceAxis.HairColor || axis == AppearanceAxis.SkinColor)
+            return true;
 
         if (option.MontageLayer != null)
             return true;
@@ -279,6 +280,9 @@ public class AppearanceDatabase : ScriptableObject
         for (int i = 0; i < AppearanceProfile.k_axisCount; i++)
         {
             var axis = (AppearanceAxis)i;
+            if (!IsMontageAxis(axis))
+                continue;
+
             if (builder.Length > 0)
                 builder.Append(" / ");
 
@@ -286,5 +290,23 @@ public class AppearanceDatabase : ScriptableObject
             builder.Append(GetAxisName(axis)).Append(": ").Append(option != null ? GetOptionName(option) : UnknownValueName);
         }
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// 몽타주가 말할 수 있는 축인가 — 값이 하나도 그려지지 않으면 축째로 뺀 것이다(피부색, docs §13-17).
+    /// '미상'은 "이 축을 모른다"는 정보인데 영영 공개될 일 없는 축에 붙으면 잡음이라, 문장에서도 뺀다.
+    /// </summary>
+    public bool IsMontageAxis(AppearanceAxis axis)
+    {
+        AppearanceOption[] options = GetAxis(axis)?.Options;
+        if (options == null)
+            return false;
+
+        for (int i = 0; i < options.Length; i++)
+        {
+            if (CanDepict(axis, i))
+                return true;
+        }
+        return false;
     }
 }

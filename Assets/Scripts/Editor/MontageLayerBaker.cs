@@ -22,6 +22,8 @@ public class MontageLayerBaker : EditorWindow
 {
     private const float k_unknownHairCapRatio = 0.3f; // 형태 미상 머리가 정수리에서 덮는 깊이 (두상 높이 대비)
 
+    private const int k_closePairsPerAxis = 8; // 구분 문턱에 걸린 쌍을 축마다 이만큼만 로그에 적는다
+
     [SerializeField] private AppearanceDatabase m_database;
 
     [SerializeField] private GameObject m_mannequinPrefab;
@@ -43,6 +45,11 @@ public class MontageLayerBaker : EditorWindow
     // 정면에서 거의 안 보이는 프롭(뒤로 넘긴 묶음머리·번)을 알리는 선이다. 자를지 말지의 기준은 아니다 —
     // 희미해도 구분은 글이 하므로 그대로 꽂는 쪽으로 정했다 (#619, docs §13-7). 여기 걸리면 사람이 보고 판단한다.
     [SerializeField] private float m_minLayerCoverage = 0.06f;
+
+    // 구운 레이어끼리 얼마나 갈리는지의 선 — 같은 축의 두 값이 이보다 덜 다르면 알린다.
+    // 비교 시트를 대신하는 자리다: 시트는 배선 '전' 후보를 보는 그림인데, 어휘를 그냥 다 넣기로 한 축(색으로
+    // 굽는 축)에서는 배선 '후' 실제 레이어로 재는 것이 정확하다. 걸린 쌍은 ExcludeFromMontage 후보다.
+    [SerializeField] private float m_minPairDistance = 0.12f;
 
     // 이미지는 전부 Imported 공유 저장소에 둔다 (2026-08-12 에셋 폴더 정리)
     [SerializeField] private string m_outputFolder = "Assets/Imported/Art/Montage/Layers";
@@ -118,6 +125,12 @@ public class MontageLayerBaker : EditorWindow
             m_minLayerCoverage,
             0f,
             0.2f
+        );
+        m_minPairDistance = EditorGUILayout.Slider(
+            new GUIContent("구분 문턱", "같은 축의 두 값이 이보다 덜 다르면 로그로 알린다. 본부가 그림으로 두 값을 못 가리면 그 축이 후보를 못 좁히므로, 걸린 쌍 중 하나는 ExcludeFromMontage를 켤 후보다"),
+            m_minPairDistance,
+            0f,
+            0.3f
         );
         m_outputFolder = EditorGUILayout.TextField("저장 폴더", m_outputFolder);
 
@@ -348,6 +361,8 @@ public class MontageLayerBaker : EditorWindow
         var baked = new List<string>();
         var excluded = new List<string>();
         var faint = new List<string>();
+        var close = new List<string>();
+        var groups = new List<string>();
 
         // ① 이목구비 — 살과 분리해 둬야 살 레이어를 통짜로 피부색으로 칠할 수 있다
         Sprite faceSprite = SaveLayer(rig.RenderFace(m_featureThreshold), "Montage_Face");
@@ -377,6 +392,7 @@ public class MontageLayerBaker : EditorWindow
         // ④ 프롭 레이어
         foreach (AppearanceAxis axis in PropAxes())
         {
+            var layers = new List<(int Index, Color[] Pixels)>();
             int count = m_database.GetOptionCount(axis);
             for (int i = 0; i < count; i++)
             {
@@ -405,8 +421,12 @@ public class MontageLayerBaker : EditorWindow
                     continue;
 
                 option.MontageLayer = sprite;
+                layers.Add((i, pixels));
                 baked.Add($"{axis}[{i}]");
             }
+
+            CollectClosePairs(axis, layers, close);
+            CollectGroups(axis, layers, groups);
         }
 
         EditorUtility.SetDirty(m_database);
@@ -419,6 +439,12 @@ public class MontageLayerBaker : EditorWindow
                     : string.Empty)
                 + (faint.Count > 0
                     ? $"\n  ⚠ 노출이 {m_minLayerCoverage:P0} 미만이라 꽂긴 했지만 확인 요망 — '없음'과 구분되지 않으면 ExcludeFromMontage를 켤 것:\n    {string.Join("\n    ", faint)}"
+                    : string.Empty)
+                + (close.Count > 0
+                    ? $"\n  ⚠ 서로 {m_minPairDistance:P0} 미만으로만 갈리는 값 쌍 — 본부가 그림으로 못 가리는 쌍이다:\n    {string.Join("\n    ", close)}"
+                    : string.Empty)
+                + (groups.Count > 0
+                    ? $"\n  값이 실제로 몇 갈래로 갈리는가 (구분 문턱 {m_minPairDistance:P0} 기준):\n    {string.Join("\n    ", groups)}"
                     : string.Empty)
         );
     }
@@ -747,6 +773,139 @@ public class MontageLayerBaker : EditorWindow
             }
         }
         return edge;
+    }
+
+    /// <summary>
+    /// 같은 축의 값끼리 재서 구분 문턱에 걸린 쌍만 가까운 순으로 모은다 (#619).
+    /// '없음'은 레이어가 없어(안 그리는 것이 곧 그 값이다) 여기 안 들어온다 — 그쪽은 노출 문턱이 본다.
+    /// </summary>
+    private void CollectClosePairs(AppearanceAxis axis, List<(int Index, Color[] Pixels)> layers, List<string> close)
+    {
+        int cells = m_resolution * m_resolution;
+        var found = new List<(int Cells, int A, int B)>();
+
+        for (int a = 0; a < layers.Count; a++)
+        {
+            for (int b = a + 1; b < layers.Count; b++)
+            {
+                int different = DifferentCells(layers[a].Pixels, layers[b].Pixels);
+                if (different < cells * m_minPairDistance)
+                    found.Add((different, layers[a].Index, layers[b].Index));
+            }
+        }
+
+        found.Sort((left, right) => left.Cells.CompareTo(right.Cells));
+
+        // 축마다 가까운 쪽 몇 쌍만 찍는다 — 값이 늘면 쌍은 제곱으로 늘어 로그가 통째로 잘린다.
+        // 잘라낸 수는 함께 적는다: 안 적으면 "이게 전부"로 읽힌다.
+        int shown = Mathf.Min(k_closePairsPerAxis, found.Count);
+        for (int i = 0; i < shown; i++)
+        {
+            (int cellCount, int a, int b) = found[i];
+            close.Add($"{axis}[{a}] ↔ {axis}[{b}] — {cellCount}/{cells}칸 ({(float)cellCount / cells:P1})");
+        }
+        if (found.Count > shown)
+            close.Add($"{axis} — 그 밖 {found.Count - shown}쌍 더 (가까운 순으로 {shown}쌍만 적었다)");
+    }
+
+    /// <summary>
+    /// 값들이 실제로 몇 갈래로 갈리는지 센다 (#619) — 어휘 예산을 정하는 숫자다.
+    /// <b>완전연결</b>이다: 한 갈래 안의 모든 쌍이 구분 문턱 미만이어야 합친다. 가까운 쌍 하나만 보고
+    /// 사슬로 이으면 서로 멀리 떨어진 값까지 한 갈래로 빨려 들어가 실태가 과장된다.
+    /// </summary>
+    private void CollectGroups(AppearanceAxis axis, List<(int Index, Color[] Pixels)> layers, List<string> groups)
+    {
+        if (layers.Count < 2)
+            return;
+
+        int cells = m_resolution * m_resolution;
+        float threshold = cells * m_minPairDistance;
+
+        int[,] distance = new int[layers.Count, layers.Count];
+        for (int a = 0; a < layers.Count; a++)
+        {
+            for (int b = a + 1; b < layers.Count; b++)
+                distance[a, b] = distance[b, a] = DifferentCells(layers[a].Pixels, layers[b].Pixels);
+        }
+
+        var buckets = new List<List<int>>(layers.Count);
+        for (int i = 0; i < layers.Count; i++)
+            buckets.Add(new List<int> { i });
+
+        // 합칠 수 있는 것 중 가장 가까운 둘을 합치기를, 합칠 게 없어질 때까지 반복한다
+        while (true)
+        {
+            int bestWorst = int.MaxValue;
+            int bestA = -1;
+            int bestB = -1;
+
+            for (int a = 0; a < buckets.Count; a++)
+            {
+                for (int b = a + 1; b < buckets.Count; b++)
+                {
+                    int worst = 0;
+                    foreach (int left in buckets[a])
+                    {
+                        foreach (int right in buckets[b])
+                            worst = Mathf.Max(worst, distance[left, right]);
+                    }
+                    if (worst < threshold && worst < bestWorst)
+                    {
+                        bestWorst = worst;
+                        bestA = a;
+                        bestB = b;
+                    }
+                }
+            }
+
+            if (bestA < 0)
+                break;
+
+            buckets[bestA].AddRange(buckets[bestB]);
+            buckets.RemoveAt(bestB);
+        }
+
+        groups.Add($"{axis} — 레이어 {layers.Count}장이 {buckets.Count}갈래");
+        foreach (List<int> bucket in buckets)
+        {
+            if (bucket.Count < 2)
+                continue;
+
+            bucket.Sort();
+            string members = string.Join(", ", bucket.ConvertAll(slot => $"[{layers[slot].Index}]"));
+            groups.Add($"  한 갈래로 뭉친 {bucket.Count}값: {members}");
+        }
+    }
+
+    /// <summary>두 레이어가 몇 칸에서 다르게 보이는가 — 있고 없음이 갈리거나, 둘 다 보이는데 색이 갈리는 칸.</summary>
+    private static int DifferentCells(Color[] left, Color[] right)
+    {
+        const float k_visible = 0.5f; // 이 알파부터 그림으로 보인다
+        const float k_colorStep = 0.1f; // 채널 하나라도 이만큼 다르면 다른 칸으로 센다
+
+        int different = 0;
+        int cells = Mathf.Min(left.Length, right.Length);
+        for (int i = 0; i < cells; i++)
+        {
+            bool leftVisible = left[i].a > k_visible;
+            bool rightVisible = right[i].a > k_visible;
+            if (leftVisible != rightVisible)
+            {
+                different++;
+                continue;
+            }
+            if (!leftVisible)
+                continue;
+
+            float delta = Mathf.Max(
+                Mathf.Abs(left[i].r - right[i].r),
+                Mathf.Abs(left[i].g - right[i].g),
+                Mathf.Abs(left[i].b - right[i].b)
+            );
+            if (delta > k_colorStep)
+                different++;
+        }
+        return different;
     }
 
     /// <summary>레이어가 프레임에서 차지하는 비율 — 정면에서 얼마나 보이는가.</summary>
