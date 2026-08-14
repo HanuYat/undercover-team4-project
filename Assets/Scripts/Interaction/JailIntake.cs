@@ -429,8 +429,13 @@ public class JailIntake : MonoBehaviour
     /// <summary>
     /// 플레이어를 문 밖 퇴장 지점으로 옮긴다 — <b>따라오던 반출 대상도 함께</b> 나온다. 서버(또는 오프라인). (#537)
     ///
-    /// 대상을 먼저 옮긴다: 나중에 옮기면 한두 프레임 동안 추종이 감옥 안에 남은 몸을 문 밖으로 끌려 해
-    /// 벽을 향해 달리는 그림이 나온다.
+    /// <b>순서가 셋으로 갈린다: 산 동행 → 플레이어 → 밧줄 시체.</b> 앞뒤 이유가 정반대다.
+    /// <list type="bullet">
+    ///   <item><b>산 동행이 먼저</b> — NavMesh로 <b>따라오므로</b>, 뒤에 남으면 한두 프레임 동안
+    ///   감옥 안에서 문 밖의 플레이어를 향해 벽으로 달린다.</item>
+    ///   <item><b>밧줄 시체가 나중</b> — 관절로 <b>매여 있으므로</b>, 운반자가 뒤에 남으면 줄이
+    ///   수백 m로 늘어나고 그 위반이 시체를 발사한다(실측 237 m/s).</item>
+    /// </list>
     ///
     /// <b>자리를 나눠 준다</b> — 플레이어는 퇴장 지점 그 자리, 동행은 그 뒤 좌우로 벌어진 자리
     /// (<see cref="JailZone.ExitSlot"/>). 전부 같은 좌표에 놓으면 겹침을 푸는 물리가 서로를 튕겨낸다.
@@ -449,10 +454,16 @@ public class JailIntake : MonoBehaviour
             ServerSendOff(followers[i], mover.transform);
         }
 
+        // ⚠ <b>플레이어를 시체보다 먼저 옮긴다.</b> 산 동행과 순서가 반대인데, 이유도 반대다:
+        // 동행은 NavMesh로 <b>따라오므로</b> 뒤에 남으면 벽을 향해 달리지만, 밧줄 시체는 관절로
+        // <b>매여 있어</b> 운반자가 뒤에 남으면 그 줄이 수백 m로 늘어난다.
+        //
+        // 배치는 줄을 끊었다 다시 매는데(<c>NpcRagdoll.ServerPlaceCorpse</c>), 다시 맬 때 운반자가
+        // 아직 감옥 안이면 <b>방금 없앤 위반을 그대로 다시 만든다.</b>
+        mover.ServerTeleport(exit.position, exit.rotation);
+
         // 밧줄에 걸린 시체도 함께 나온다 (#597) — 안 옮기면 줄만 벽을 뚫고 늘어나고 몸은 방에 남는다.
         int corpses = ServerExitRopedCorpses(mover, followers.Count + 1);
-
-        mover.ServerTeleport(exit.position, exit.rotation);
         Debug.Log($"[감옥] 퇴장 — {mover.name} (동행 {followers.Count}명, 시체 {corpses}구)");
     }
 

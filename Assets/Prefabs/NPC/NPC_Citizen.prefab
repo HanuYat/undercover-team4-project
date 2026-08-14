@@ -533,6 +533,7 @@ MonoBehaviour:
   m_settleSpeedThreshold: 0.15
   m_settleHoldSeconds: 0.3
   m_settleTimeoutSeconds: 5
+  m_blendSeconds: 0.3
   m_groundMask:
     serializedVersion: 2
     m_Bits: 1
@@ -1156,10 +1157,10 @@ PrefabInstance:
       addedObject: {fileID: 6528311569994302803}
     - targetCorrespondingSourceObject: {fileID: 1866527831239772, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 7895721098853613155}
+      addedObject: {fileID: 6103932380497589478}
     - targetCorrespondingSourceObject: {fileID: 1866527831239772, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 8526002212046320094}
+      addedObject: {fileID: 7476827684870708363}
     - targetCorrespondingSourceObject: {fileID: 1800122538505114, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
       insertIndex: -1
       addedObject: {fileID: 8495414409861511203}
@@ -1405,7 +1406,7 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 3
---- !u!114 &7895721098853613155
+--- !u!114 &6103932380497589478
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1414,9 +1415,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 3677259301703117030}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e96cb6065543e43c4a752faaa1468eb1, type: 3}
+  m_Script: {fileID: 11500000, guid: b5d14420c2a44424ab18d25b9b564e90, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.Components.NetworkTransform
+  m_EditorClassIdentifier: Assembly-CSharp::NpcCorpseHipsTransform
   ShowTopMostFoldoutHeaderGroup: 1
   NetworkTransformExpanded: 0
   AutoOwnerAuthorityTickOffset: 1
@@ -1451,7 +1452,7 @@ MonoBehaviour:
   SwitchTransformSpaceWhenParented: 0
   Interpolate: 1
   SlerpPosition: 0
---- !u!114 &8526002212046320094
+--- !u!114 &7476827684870708363
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
