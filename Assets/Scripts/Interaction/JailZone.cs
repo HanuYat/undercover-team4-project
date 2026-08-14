@@ -421,9 +421,10 @@ public class JailZone : NetworkBehaviour
     /// <see cref="TallyDelivererCredits"/>가 점유가 아니라 레코드를 훑기 때문이다 — "NPC 오브젝트가
     /// 이미 파괴됐어도 계상된다"(#358)는 성질을 그대로 물려받는다.
     ///
-    /// <b>빠져나갈 수 없다.</b> 레코드를 지우는 <see cref="ReleaseInmate"/>는 <c>m_inmates</c> 제거에
-    /// 성공해야 진행하는데 시체는 애초에 거기 없다 — 탈옥으로도 사망 계상은 취소되지 않는다. 시체가
-    /// 달아날 수 없으니 그게 맞다.
+    /// <b>탈옥으로는 빠져나가지 않는다.</b> 레코드를 지우는 <see cref="ReleaseInmate"/>는
+    /// <c>m_inmates</c> 제거에 성공해야 진행하는데 시체는 애초에 거기 없다 — 시체가 스스로 달아날 수
+    /// 없으니 그게 맞다. 다만 <b>플레이어가 들고 나가는 것은 별개다</b>: 밧줄에 걸린 시체는 문으로
+    /// 함께 끌려 나오므로(#597) 그 경로만 <see cref="ReleaseDeceased"/>로 계상을 취소한다.
     /// </summary>
     /// <param name="bounty">이 시체가 정산에 기여할 보상액 — <c>ArrestJudge</c>가 확정해 넘긴다.</param>
     /// <param name="deliverers">공을 나눠 가질 clientId — 시체를 끌고 와 넣은 사람들. 없으면 빈 배열.</param>
@@ -443,6 +444,39 @@ public class JailZone : NetworkBehaviour
         Debug.Log($"[유치장] 사망 계상: {npc.name} — 현상금 {bounty}원, 누적 {BountyTotal}원");
 
         OnDeceasedRecorded?.Invoke(npc); // 계상이 끝난 뒤에 알린다 (OnInmateAdmitted와 같은 순서)
+    }
+
+    /// <summary>
+    /// 사망 계상 취소 — 감옥 밖으로 나간 시체를 정산 원장에서 뺀다. 서버(또는 오프라인) 전용.
+    ///
+    /// <see cref="RecordDeceased"/>의 역이고, 부르는 곳은 시체 반출
+    /// (<c>JailIntake.ServerExitRopedCorpses</c>) 하나다. 저쪽 주석의 "빠져나갈 수 없다"는 전제는
+    /// <b>밧줄에 걸린 시체가 문으로 함께 끌려 나오면서</b>(#597) 깨졌다 — 몸이 방에 없는데 계상만
+    /// 남으면 정산이 줄지 않고, 그 상태로 다시 넣을 수도 없다(그쪽 <c>ServerReleaseCorpse</c> 주석).
+    ///
+    /// <b>산 수감자는 여기서 손대지 않는다.</b> 그쪽 방출은 배치 반납·인원 카운트·사망 구독 해제까지
+    /// 함께 되돌려야 하므로 <see cref="ReleaseInmate"/> 몫이다. 수감 중 사망한 대상
+    /// (<see cref="HandleInmateDied"/>)은 이미 점유에서 빠져 있어 시체와 같은 취급을 받는다 —
+    /// 그 몸을 끌고 나가도 계상이 정상적으로 취소된다.
+    /// </summary>
+    /// <returns>원장에서 실제로 뺐으면 참 — 계상된 적 없는 시체면 거짓.</returns>
+    public bool ReleaseDeceased(NpcController npc)
+    {
+        if (npc == null)
+            return false;
+
+        if (IsSpawned && !IsServer)
+            return false;
+
+        if (m_inmates.Contains(npc))
+            return false; // 산 수감자의 레코드다 — ReleaseInmate를 거쳐야 한다
+
+        if (!m_records.Remove(npc))
+            return false;
+
+        RefreshBountyTotal();
+        Debug.Log($"[유치장] 사망 계상 취소: {npc.name} — 감옥 밖으로 나갔다, 누적 현상금 {BountyTotal}원");
+        return true;
     }
 
     /// <summary>시체가 계상된 순간 — 서버(또는 오프라인) 전용. 비밀 청탁이 대상 추첨에 쓴다. (#597)

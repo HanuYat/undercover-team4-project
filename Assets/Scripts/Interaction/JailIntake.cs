@@ -483,9 +483,49 @@ public class JailIntake : MonoBehaviour
                 continue;
 
             npc.Custody.ServerMoveCorpse(m_jailZone.ExitSlot(firstSlot + moved));
+            ServerReleaseCorpse(npc);
             moved++;
         }
 
         return moved;
+    }
+
+    /// <summary>
+    /// 시체 반출 — 문 밖으로 끌고 나온 시체를 <b>정산에서 빼고 재판정을 연다.</b> 서버(또는 오프라인) 전용.
+    ///
+    /// 시체 수감(<see cref="ServerAdmitCorpse"/>)의 역이다. 저쪽이 세운 것이 둘이라 되돌릴 것도 둘이다:
+    /// <list type="bullet">
+    ///   <item><b>정산 원장</b>(<see cref="JailZone.RecordDeceased"/>) — 안 지우면 몸은 문 밖에 있는데
+    ///   현상금은 그대로 잡혀, 반출해도 정산 금액이 줄지 않는다.</item>
+    ///   <item><b>판정 표식</b>(<see cref="NpcCustody.IsDelivered"/>) — 안 지우면
+    ///   <see cref="ArrestJudge.JudgeCorpse"/>가 '이미 계상됨'으로 끊어, 문 앞에 다시 놓고 눌러도
+    ///   영영 들어가지 않는다.</item>
+    /// </list>
+    ///
+    /// <b>산 수감자의 반출(<see cref="ServerExtract"/>)이 <c>ClearDelivered</c>를 부르지 않는 것과
+    /// 갈린다</b> — 되돌릴 대상이 다르기 때문이다. 저쪽은 '첫 인계' 표식이 할당량
+    /// (<see cref="RoundManager.CriminalArrestCount"/>)에 물려 있어 반출→재수감 반복으로 부풀 수 있지만,
+    /// 시체 판정은 할당량을 건드리지 않고(<c>OnCorpseJudged</c> 구독자에 RoundManager가 없다) 계상 근거가
+    /// 원장 하나뿐이라, 원장을 지웠으면 표식도 함께 지워야 짝이 맞는다.
+    ///
+    /// <b>계상된 적 없는 시체에는 아무것도 하지 않는다</b> — 원장 제거 성공이 곧 그 게이트다.
+    /// 오검거로 사살된 시체(<see cref="ArrestJudge.JudgeDeath"/>가 표식만 세우고 계상은 안 한다)를
+    /// 들고 들어갔다 나와도 그 표식이 풀리지 않아, 페널티 취소나 재계상이 열리지 않는다.
+    /// </summary>
+    private void ServerReleaseCorpse(NpcController npc)
+    {
+        if (npc == null || m_jailZone == null)
+            return;
+
+        if (!m_jailZone.ReleaseDeceased(npc))
+            return; // 계상된 적 없는 시체 — 그냥 들고 지나가는 중이다
+
+        npc.Custody.ClearDelivered();
+
+        // 판정 불가 기억에서도 뺀다 — 원장에 오른 채로 버튼을 눌러 봤다면 '다시 물어도 답이 같다'로
+        // 등록됐을 수 있는데(ServerAdmitCorpse의 false 경로), 표식을 걷은 지금은 답이 달라졌다.
+        m_unjudgeable.Remove(npc);
+
+        Debug.Log($"[감옥] 시체 반출 — 정산에서 빼고 재판정을 연다: {npc.name}");
     }
 }
