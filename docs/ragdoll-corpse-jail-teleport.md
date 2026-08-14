@@ -358,8 +358,8 @@ f+00 루트y=0.197 골반로컬y=0.014 최저뼈y=-10.171 Δ루트=110.15 평균
 - **퇴장 경로 미검증** — 2를 걷어낸 뒤 아직 안 돌렸다. §6-6이 그대로 남아 있다
 - **브래킷은 불필요가 확정** — run1·run3 모두 브래킷 OFF로 클라 도착 최대v=0.00이었다.
   `NpcCorpseHipsTransform` + `BeginTeleportBracket`(A/B 상수 포함) + 프리팹 4종 컴포넌트 교체를 지운다
-- **진단 코드 제거** — `Assets/Scripts/Diagnostics/`, `Editor/CorpseDiagCollector.cs`,
-  `NpcRagdoll.LogPlacement`/`BoneSplitReport`와 호출부
+- ~~**진단 코드 제거**~~ — 완료. `Assets/Scripts/Diagnostics/`, `Editor/CorpseDiagCollector.cs`,
+  `NpcRagdoll.LogPlacement`/`BoneSplitReport`와 호출부, `NpcCorpseHipsTransform`의 임시 로그를 지웠다
 
 ---
 
@@ -404,18 +404,27 @@ f+00 루트y=0.197 골반로컬y=0.014 최저뼈y=-10.171 Δ루트=110.15 평균
 **골반 로컬 오프셋은 지표에서 뺐다** — 클라에서 무너지지 않고 호스트와 같은 0.143으로 수렴한다(§3-3).
 #572의 0.234 → −0.001은 이 버그의 실패 신호가 아니다.
 
-계측 도구는 [`Assets/Scripts/Diagnostics/CorpseTeleportDiag.cs`](../Assets/Scripts/Diagnostics/CorpseTeleportDiag.cs)
-**한 파일**이고, 프로덕션 코드를 건드리지 않는다(프리팹 부착 없음 —
-`RuntimeInitializeOnLoadMethod`가 스스로 하나 만들고 공개 API만 읽는다). 루트가 한 프레임에 0.5m
-이상 움직이면 자동으로, 놓치면 **F9**로 캡처를 연다. **통과 후 이 파일을 지우면 흔적이 없다.**
+### 계측 도구 — 지웠다. 필요하면 브랜치 이력에서 되살린다
 
-⚠ **읽는 경로가 중요하다.** 정작 필요한 쪽이 클라인데 **MPPM 가상 플레이어 콘솔은 도구로 못 읽는다.**
-그래서 콘솔과 파일 양쪽에 쓰고, 파일이 정본이다 — 역할별로 갈린다:
+위 수치를 찍은 도구(`Assets/Scripts/Diagnostics/CorpseTeleportDiag.cs` · `CorpseDiagLog.cs` ·
+`Editor/CorpseDiagCollector.cs`와 `NpcRagdoll.LogPlacement`)는 **트리에서 제거했다.** 임시 계측을
+main에 들이지 않기 위해서이고, 설계상 **프로덕션 코드를 건드리지 않았으므로**(프리팹 부착 없음 —
+`RuntimeInitializeOnLoadMethod`가 스스로 하나 만들고 공개 API만 읽었다) 지우는 것으로 흔적이 없다.
+
+다시 재야 하면 `feature/ragdoll-hotfix` 브랜치의 커밋 `9fcf6d77`에서 그대로 꺼내 쓸 것:
+
+```bash
+git checkout 9fcf6d77 -- Assets/Scripts/Diagnostics Assets/Scripts/Editor/CorpseDiagCollector.cs
+```
+
+그때 알아 둘 것 — ⚠ **읽는 경로가 중요하다.** 정작 필요한 쪽이 클라인데 **MPPM 가상 플레이어
+콘솔은 도구로 못 읽는다.** 그래서 콘솔과 파일 양쪽에 쓰고, 파일이 정본이다:
 
 - 호스트: `Logs/corpse-diag-호스트.log`
 - 클라: `Library/VP/<가상플레이어>/Logs/corpse-diag-클라<N>.log`
 
-콘솔 한 줄 제약(MCP `read_console`이 첫 줄만 가져온다)도 그대로 지킨다 — 한 샘플이 한 줄이다.
+캡처는 루트가 한 프레임에 0.5m 이상 움직이면 자동으로, 놓치면 **F9**로 연다. 콘솔 한 줄 제약
+(MCP `read_console`이 첫 줄만 가져온다)도 그대로다 — 한 샘플이 한 줄이다.
 
 ---
 

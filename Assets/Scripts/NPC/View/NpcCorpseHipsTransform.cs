@@ -29,10 +29,6 @@ using UnityEngine;
 /// </summary>
 public class NpcCorpseHipsTransform : NetworkTransform
 {
-    // ⚠ <b>임시 검증 로그</b> — 이 훅이 <b>비권위 피어에서도</b> 불리는지가 이 설계의 전제다.
-    // MPPM 2인으로 한 번 확인하면 지운다 (계획서 §7).
-    private const bool k_logTeleportStates = true;
-
     private NpcRagdoll m_ragdoll;
 
     // ⚠ <b><c>protected override</c> + <c>base</c> 호출이다.</b> <see cref="NetworkTransform"/>이
@@ -61,16 +57,6 @@ public class NpcCorpseHipsTransform : NetworkTransform
         base.OnNetworkTransformStateUpdated(ref oldState, ref newState);
 
         bool teleporting = newState.IsTeleportingNextFrame || newState.WasTeleported;
-
-        if (k_logTeleportStates && teleporting)
-        {
-            // 한 줄이다 — MCP read_console이 첫 줄만 가져온다.
-            Debug.Log(
-                $"[골반순간이동] {name} 권위={CanCommitToTransform} "
-                    + $"IsTeleportingNextFrame={newState.IsTeleportingNextFrame} "
-                    + $"WasTeleported={newState.WasTeleported} 래그돌={(m_ragdoll != null)}"
-            );
-        }
 
         if (!teleporting || m_ragdoll == null)
             return;

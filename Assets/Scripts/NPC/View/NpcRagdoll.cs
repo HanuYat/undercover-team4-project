@@ -483,8 +483,6 @@ public class NpcRagdoll : MonoBehaviour
             return;
         }
 
-        LogPlacement("①진입", position);
-
         if (!IsFrozen)
             ServerFreezeInPlace();
 
@@ -500,11 +498,7 @@ public class NpcRagdoll : MonoBehaviour
         // 그래서 <b>배치하는 이 자리</b>에서 한 번 더 보장한다 — 호출부가 무엇을 놓쳤든 상관없게.
         EndRopePull();
 
-        LogPlacement("②얼린뒤", position);
-
         transform.position = position;
-
-        LogPlacement("③루트이동뒤", position);
 
         // ⚠ <b>뼈 액터를 먼저 따라오게 한다 — 골반만 혼자 가는 것을 막는다.</b>
         //
@@ -526,8 +520,6 @@ public class NpcRagdoll : MonoBehaviour
         // 그래서 여기서 읽는 골반 위치가 곧 도착 자세다. 녹인 뒤에 보내면 물리가 한 스텝 굴러
         // 보내는 값과 원격이 재현할 자세가 어긋난다.
         ServerTeleportNetTransforms();
-
-        LogPlacement("④Teleport뒤", position);
 
         // ⚠ <b>여기서 녹이지 않는다 — 얼린 채로 끝낸다.</b> (실측 2026-08-14)
         //
@@ -566,86 +558,7 @@ public class NpcRagdoll : MonoBehaviour
         //
         //   if (carrier != null)
         //       BeginRopePull(carrier);
-
-        LogPlacement("⑤배치완료", position);
     }
-
-    // ⚠ <b>임시 계측</b> — 3인 세션에서 반출 위치가 피어마다 갈리는 문제를 좁히는 중이다.
-    // 확인되면 이 메서드와 호출부 다섯 줄을 지운다.
-    //
-    // <b>보는 것은 트랜스폼과 액터의 분기다.</b> 이 프로젝트는 <c>m_AutoSyncTransforms = 0</c>이라
-    // (ProjectSettings/DynamicsManager.asset) 트랜스폼에 쓴 값이 PhysX 액터로 즉시 넘어가지 않는데,
-    // 골반의 <c>NetworkRigidbody</c>는 <c>UseRigidBodyForMotion = 1</c>이라 <c>Teleport</c>가
-    // <b>액터</b>를 쓴다. 둘이 갈리면 골반만 목적지로 가고 나머지 뼈는 출발지에 남는다.
-    private void LogPlacement(string stage, Vector3 requested)
-    {
-        Vector3 root = transform.position;
-        Vector3 hips = m_rig != null && m_rig.Hips != null ? m_rig.Hips.position : Vector3.zero;
-        Vector3 hipsRb = m_rig != null && m_rig.HipsBody != null ? m_rig.HipsBody.position : hips;
-
-#if UNITY_EDITOR
-        // 서버 틱·NetworkObjectId는 계측(CorpseTeleportDiag)의 줄과 짝지을 키다 — 그쪽도 같은 둘을 찍는다.
-        // <b>콘솔이 아니라 공용 기록기로 보낸다</b>: 예전에는 Debug.Log라 서버 콘솔에만 남아
-        // 프레임 표본과 같이 볼 수가 없었다. 이제 같은 파일에 들어가고
-        // Tools > Ragdoll > 시체 진단 로그 모으기 가 피어별 파일을 틱 순으로 합친다.
-        CorpseDiagLog.Write(
-            $"[시체배치] {stage} {name} id={(m_owner.IsSpawned ? m_owner.NetworkObjectId : 0UL)} "
-                + $"틱={CorpseDiagLog.ServerTick()} "
-                + $"요청=({requested.x:F2},{requested.y:F3},{requested.z:F2}) "
-                + $"루트=({root.x:F2},{root.y:F3},{root.z:F2}) "
-                + $"골반=({hips.x:F2},{hips.y:F3},{hips.z:F2}) "
-                + $"골반rb=({hipsRb.x:F2},{hipsRb.y:F3},{hipsRb.z:F2}) "
-                + $"rb차={Vector3.Distance(hips, hipsRb):F3} 요청거리={Vector3.Distance(root, requested):F2} "
-                + $"얼림={(IsFrozen ? 1 : 0)} 평균v={(m_rig != null ? m_rig.AverageSpeed : 0f):F2} "
-                + BoneSplitReport()
-        );
-#endif
-    }
-
-#if UNITY_EDITOR
-    // ⚠ 임시 계측 — 골반 하나가 아니라 <b>전 뼈</b>의 트랜스폼↔액터 분기와 속도를 잰다.
-    //
-    // <b>왜 필요한가.</b> ④에서 골반 rb차가 0으로 돌아오는 것은 확인했지만, 그것은
-    // <c>NetworkTransform.Teleport</c>가 <b>골반 액터 하나만</b> 옮겼기 때문일 수 있다. 나머지 열
-    // 개가 출발지에 남아 있으면 관절이 그대로 위반이고, 그게 배치 직후의 253 m/s를 설명한다.
-    //
-    // <b>속도를 함께 재는 것이 판별점이다.</b> ⑤(녹인 직후)에 이미 속도가 있으면 <c>Unfreeze</c>가
-    // 만든 것이고, ⑤가 0인데 같은 프레임 LateUpdate에서 크면 그 뒤 물리 스텝이 만든 것이다.
-    private string BoneSplitReport()
-    {
-        if (m_rig == null || m_rig.BoneRoot == null)
-            return "뼈분기=? 뼈v=?";
-
-        Rigidbody[] bones = m_rig.BoneRoot.GetComponentsInChildren<Rigidbody>(true);
-        int layer = LayerMask.NameToLayer(RagdollRig.k_layerName);
-
-        float maxSplit = 0f;
-        float maxSpeed = 0f;
-        int counted = 0;
-
-        for (int i = 0; i < bones.Length; i++)
-        {
-            if (bones[i].gameObject.layer != layer)
-                continue;
-
-            counted++;
-            float split = Vector3.Distance(bones[i].transform.position, bones[i].position);
-            if (split > maxSplit)
-                maxSplit = split;
-
-            float speed = bones[i].linearVelocity.magnitude;
-            if (speed > maxSpeed)
-                maxSpeed = speed;
-        }
-
-        // ⚠ <b>바인드 드리프트</b> — 물리가 관절을 늘려 놓은 뼈 길이다. 시체는 <c>ExitRagdoll</c>을
-        // 영영 타지 않으므로 <c>RestoreBindPose()</c>가 한 번도 안 돌고, 그래서 이 값은 <b>한 번
-        // 늘어나면 영구히 남는다.</b> 늘어난 리그는 녹일 때마다 관절이 위반 상태에서 출발하므로,
-        // 배치가 아무리 깨끗해도(⑤ 전부 0) 그 뒤 물리 스텝이 몸을 뒤튼다 — 지금 남은 증상의 모양이다.
-        return $"뼈수={counted} 뼈분기최대={maxSplit:F3} 뼈v최대={maxSpeed:F2} "
-            + $"바인드드리프트={m_rig.MaxBindPositionDrift:F4}";
-    }
-#endif
 
     /// <summary>
     /// 순간이동을 <b>보간 없이</b> 원격에 보낸다 — 서버 전용. (계획서 §4-1)
