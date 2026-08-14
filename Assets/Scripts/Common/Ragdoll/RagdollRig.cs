@@ -38,7 +38,7 @@ public class RagdollRig : MonoBehaviour
 
     // 겹침 탈출 속도 상한 — 안 걸면 기본값 10m/s로 튕겨나간다. 착지 순간 지형에 깊게 파고든 뼈가
     // 하나만 있어도 그 한 번의 탈출이 관절을 타고 몸 전체로 퍼져 시체가 발작하듯 튄다.
-    private const float k_maxDepenetrationVelocity = 3f;
+    private const float k_maxDepenetrationVelocity = 0.5f;
 
     // 관절 projection을 껐기 때문에(RagdollSetup의 k_enableProjection 주석) 관절을 붙드는 일은
     // 전적으로 solver 반복이 맡는다 — 기본값 6/1로는 강한 임펄스에서 관절이 눈에 띄게 늘어난다.
