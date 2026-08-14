@@ -95,6 +95,23 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
 
     public bool IsActive => m_npc != null;
 
+    /// <summary>
+    /// 발생 즉시 전 클라에 알릴지 — 스폰형의 기본은 <b>알린다</b>(소란은 알려져야 소란이다).
+    /// 조용히 다가가는 종류만 이것을 덮는다 (<see cref="PickpocketEvent"/>).
+    ///
+    /// <b>virtual로 여기 둔 이유</b>: <see cref="ISuddenEvent"/>의 기본 구현(default interface member)에
+    /// 기대면 인터페이스 매핑이 인터페이스를 선언한 <b>이 클래스</b>에서 고정된다 — 파생에서 같은 이름의
+    /// 프로퍼티를 새로 선언해도 매니저가 ISuddenEvent로 읽을 때는 여전히 기본값(true)이 나오고,
+    /// 컴파일 에러 없이 조용히 어긋난다. 파생이 덮을 수 있게 하려면 이 자리에 실제 멤버가 있어야 한다.
+    /// </summary>
+    public virtual bool AnnounceOnBegin => true;
+
+    /// <summary>
+    /// 알림 문구 키 — 파생이 자기 문장을 정한다. <b>virtual인 이유는 AnnounceOnBegin과 같다</b>:
+    /// 인터페이스 기본 구현에 기대면 매핑이 이 클래스에서 고정돼 파생이 덮어도 반영되지 않는다.
+    /// </summary>
+    public virtual string NoticeKey => null;
+
     // ---- 파생 클래스가 채우는 부분 ----
 
     /// <summary>

@@ -48,6 +48,15 @@ public class BombChaseEvent : MonoBehaviour, ISuddenEvent
 
     public bool IsActive => m_bomb != null;
 
+    /// <summary>
+    /// 조용히 시작한다 (팀 확정 2026-08-13) — 폭탄은 <b>자기 연출로 알린다</b>. 상자에서 솟는 등장
+    /// (<see cref="BombEmergeView"/>) · 머리 위 타이머(<see cref="BombTimerView"/>) · 위치 표시
+    /// (<see cref="BombLocatorHud"/>)가 이미 "지금 어디서 무슨 일이 벌어지는지"를 전부 말한다.
+    /// 그 위에 토스트를 얹으면 같은 사실을 두 번 말하는 셈이고, <b>본부에도 그대로 새어</b>
+    /// 상자를 눈으로 찾을 이유가 없어진다 — 등장 지점을 미리 보여 주는 상자 설계(위 문서)와 어긋난다.
+    /// </summary>
+    public bool AnnounceOnBegin => false;
+
     public bool CanTrigger()
     {
         if (m_bombPrefab == null)

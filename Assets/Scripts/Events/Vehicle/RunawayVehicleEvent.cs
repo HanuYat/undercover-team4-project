@@ -70,9 +70,14 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
 
 #if UNITY_EDITOR
     [Header("개발용 (에디터 전용)")]
-    [Tooltip("실제 발생과 같은 경로로 한 번 일으킨다 — 무작위 표적·도로")]
+    [Tooltip(
+        "실제 발생과 같은 경로로 한 번 일으킨다 — 무작위 표적·도로. "
+            + "기본값은 None(꺼짐)이다. 발동 자체는 SuddenEventDevHotkeys가 F1~F12로 전부 담당하므로 "
+            + "이 키는 그것과 겹치면 안 된다(같은 키면 한 번 눌러 두 이벤트가 뜬다). "
+            + "이 키에만 있는 것은 '시동만 걸린 차를 버리고 다시 뽑기'뿐이니, 그게 필요할 때만 "
+            + "F1~F12·F9(청탁)를 피해서 배정할 것")]
     [SerializeField] private UnityEngine.InputSystem.Key m_devTriggerKey =
-        UnityEngine.InputSystem.Key.F1;
+        UnityEngine.InputSystem.Key.None;
 #endif
 
     /// <summary>알림을 띄우지 않는다 — 예고는 엔진음·경적으로만 한다 (#304 확정).
@@ -284,6 +289,10 @@ public class RunawayVehicleEvent : MonoBehaviour, ISuddenEvent
     {
         UnityEngine.InputSystem.Keyboard keyboard = UnityEngine.InputSystem.Keyboard.current;
         if (keyboard == null)
+            return;
+
+        // None이면 이 키는 꺼진 것이다 — 인덱서에 None을 넘기지 않는다
+        if (m_devTriggerKey == UnityEngine.InputSystem.Key.None)
             return;
 
         if (keyboard[m_devTriggerKey].wasPressedThisFrame)
