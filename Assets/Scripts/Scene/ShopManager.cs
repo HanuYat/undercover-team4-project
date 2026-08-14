@@ -22,18 +22,15 @@ public class ShopManager : SceneManagerBase
     /// <summary>
     /// 상점 준비 완료 대기 (#656) — <b>내 플레이어가 스폰 지점으로 재배치될 때까지</b> 로딩 화면을 유지한다.
     ///
-    /// 상점은 로비와 달리 플레이어를 유지하고 옮긴다(PlayerSpawnManager의 m_spawnPlayers=true).
-    /// 재배치는 서버가 내 로드 완료를 보고 RPC로 지시하므로 왕복이 붙는다.
+    /// 상점은 로비와 달리 플레이어를 유지하고 옮긴다(m_spawnPlayers=true). 재배치는 서버가 내
+    /// 로드 완료를 보고 RPC로 지시하므로 왕복이 붙는다.
     ///
-    /// 플레이어는 destroyWithScene:false라 씬이 바뀌어도 살아남고, 새 씬이 켜진 순간
-    /// <b>직전 맵 좌표에 그대로 서 있다.</b> 서버가 보내는 정리가 도착하기 전까지 오너의
-    /// PlayerMovement는 그 자리에서 중력을 적분하고 카메라도 그 몸에 붙어 있다.
+    /// 플레이어는 destroyWithScene:false라 씬을 넘어와 <b>직전 맵 좌표에 서 있다.</b> 호스트는
+    /// Start에서 동기적으로 정리하지만 클라는 그 지시가 네트워크로 와야 해서, 먼저 화면을 내리면
+    /// 그 사이가 맵 밖으로 튕겨 나가는 것으로 보인다.
     ///
-    /// 호스트는 Start에서 동기적으로 정리하므로 창이 없지만, 클라는 그 지시가 네트워크로 와야 한다.
-    /// 화면을 먼저 내리면 그 사이가 <b>맵 밖으로 튕겨 나가는 것</b>으로 보인다.
-    ///
-    /// 조건 없이 프레임 수만 세면(LoadingScreen.k_settleFrames) fps가 높고 RTT가 붙는 빌드에서
-    /// 간헐적으로 진다 — 에디터에서 재현되지 않았던 이유다. 그래서 시간이 아니라 조건을 기다린다.
+    /// 프레임 수만 세면(LoadingScreen.k_settleFrames) fps가 높고 RTT가 붙는 빌드에서 진다 —
+    /// 에디터에서 재현되지 않던 이유다. 그래서 시간이 아니라 조건을 기다린다.
     /// </summary>
     public override async UniTask WaitUntilReadyAsync(CancellationToken token)
     {

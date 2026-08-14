@@ -105,19 +105,12 @@ public class PlayerMovement : NetworkBehaviour
         Quaternion.identity
     );
 
-    // 재배치 회차 (#656) — 서버가 <see cref="ServerReposition"/>마다 올리고, 오너가 그 포즈를 실제로
-    // 적용하면 여기에 맞춘다. "내 몸이 이 씬의 제자리로 갔는가"를 답하는 유일한 신호다.
-    //
-    // <b>좌표 비교로 대신할 수 없다.</b> 도착 좌표는 스폰 포인트에서 인원수만큼 벌어지고
-    // (PlayerSpawnManager.GetSpreadOffset) 적용 직후에도 중력·접지 보정으로 미세하게 어긋난다.
-    // 회차는 정수라 그 흔들림을 타지 않는다.
+    // 재배치 회차 (#656) — 서버가 ServerReposition마다 올리고 오너가 적용하며 맞춘다.
+    // 좌표 비교로는 안 된다: 도착점이 인원수만큼 벌어지고(GetSpreadOffset) 접지 보정으로도 흔들린다.
     private readonly NetworkVariable<int> m_repositionEpoch = new NetworkVariable<int>();
     private int m_appliedRepositionEpoch;
 
-    /// <summary>
-    /// 서버가 지시한 재배치를 내 몸이 이미 적용했는가 — 씬 진입 로딩 화면이 이걸 기다린다. (#656)
-    /// 세션이 없으면(오프라인 Play) 기다릴 서버가 없으므로 항상 참이다.
-    /// </summary>
+    /// <summary>서버가 지시한 재배치를 적용했는가 — 씬 진입 로딩 화면이 기다린다. 세션 밖이면 항상 참. (#656)</summary>
     public bool IsRepositionApplied => !IsSpawned || m_appliedRepositionEpoch >= m_repositionEpoch.Value;
 
     private CharacterController m_controller;
@@ -247,8 +240,7 @@ public class PlayerMovement : NetworkBehaviour
     {
         SetPose(m_serverSpawnPosition.Value, m_serverSpawnRotation.Value);
 
-        // 이 경로도 '서버가 지정한 자리로 갔다'이므로 회차를 맞춘다 (#656). 안 맞추면 RPC를 못 받고
-        // 이쪽으로 자세를 잡은 오너가 이미 끝난 재배치를 계속 기다려, 로딩 화면이 상한까지 걸린다.
+        // 이 경로도 서버가 지정한 자리다 — 회차를 안 맞추면 로딩 화면이 이미 끝난 재배치를 기다린다 (#656)
         m_appliedRepositionEpoch = m_repositionEpoch.Value;
 
         Debug.Log($"[PlayerMovement] 서버 지정 스폰 포즈 적용 — Owner {OwnerClientId}, 위치 {transform.position}");
@@ -274,12 +266,14 @@ public class PlayerMovement : NetworkBehaviour
 
         if (IsOwner)
         {
+            EndRagdollForReposition(); // SetPose보다 먼저 — 아래 주석 참고
             SetPose(position, rotation); // 호스트(서버=오너): 즉시 적용
             m_appliedRepositionEpoch = epoch;
         }
         else
         {
-            ApplyPoseRpc(position, rotation, epoch); // 원격 클라: 오너가 스스로 적용 (NetworkTransform 오너 권한)
+            // 원격 클라: 오너가 스스로 적용 (NetworkTransform 오너 권한)
+            ApplyPoseRpc(position, rotation, epoch, endRagdoll: true);
         }
     }
 
@@ -299,9 +293,9 @@ public class PlayerMovement : NetworkBehaviour
         {
             m_serverSpawnPosition.Value = position;
             m_serverSpawnRotation.Value = rotation;
-            // 회차는 올리지 않는다 — 이건 씬 진입 재배치가 아니라 도중 순간이동이라, 로딩 화면이
-            // 기다리는 대상이 아니다. 현재 값을 그대로 실어 오너 기록이 뒤로 밀리지 않게 한다.
-            ApplyPoseRpc(position, rotation, m_repositionEpoch.Value); // 오너(호스트 포함)가 스스로 적용
+            // 회차를 올리지도, 래그돌을 끝내지도 않는다 — 도중 순간이동은 로딩 화면이 기다릴 대상이
+            // 아니고, 시체를 옮기는 데도 쓰인다(오검거 매달기).
+            ApplyPoseRpc(position, rotation, m_repositionEpoch.Value, endRagdoll: false); // 오너(호스트 포함)가 스스로 적용
         }
         else
         {
@@ -311,11 +305,24 @@ public class PlayerMovement : NetworkBehaviour
 
     // 오너에서만 실행 — NetworkTransform 오너 권한이라 위치 변경은 오너가 해야 전 피어에 전파된다.
     [Rpc(SendTo.Owner)]
-    private void ApplyPoseRpc(Vector3 position, Quaternion rotation, int epoch)
+    private void ApplyPoseRpc(Vector3 position, Quaternion rotation, int epoch, bool endRagdoll)
     {
+        if (endRagdoll)
+            EndRagdollForReposition();
+
         SetPose(position, rotation);
         m_appliedRepositionEpoch = epoch;
     }
+
+    /// <summary>
+    /// 재배치 직전에 래그돌을 끝낸다 (#656). 죽어 있으면 몸의 주인이 캡슐이 아니라 시체라
+    /// <see cref="PlayerRagdoll.TickCapsuleFollow"/>가 매 프레임 루트를 골반으로 되돌린다 — 옮겨 놔도
+    /// 끌려가고, 뼈는 리지드바디라 그 좌표가 <b>직전 맵에서 죽은 자리</b>다.
+    ///
+    /// <b>SetPose보다 먼저</b> 불러야 한다 — ExitToAnimator가 캡슐을 켜며 시체 자리를 그대로 써서,
+    /// 뒤집으면 순간이동이 지워진다. 기상 연출은 로딩 화면 뒤라 blend:false. 살아 있으면 무동작이다.
+    /// </summary>
+    private void EndRagdollForReposition() => m_ragdoll?.ExitToAnimator(blend: false);
 
     // ---- 추종 컴포넌트(PlayerTowedMotion)와 공유하는 면 ----
     // 수직 속도와 CharacterController의 소유자는 이 컴포넌트다 — 중력·점프·넉백이 모두 같은 채널을
