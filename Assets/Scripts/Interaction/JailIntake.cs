@@ -34,8 +34,9 @@ public class JailIntake : MonoBehaviour
 
     [Tooltip(
         "판정 버튼이 신병으로 인정하는 거리(m) — 손이 빈 사람이 눌렀을 때만 쓴다. 이 안의 확보 상태"
-            + "(놓아둔 Captured, 남이 끌고 온 Escorted)를 함께 판정하되, 아무도 손대지 않은 대상과 시체는 "
-            + "빠진다. 줄을 쥐고 있으면 밧줄에 걸린 대상만 판정한다(#637). 밧줄 길이(1.6m)보다 넉넉히 둘 것"
+            + "(놓아둔 Captured, 남이 끌고 온 Escorted, 내려놓은 시체)를 함께 판정하되, 아무도 손대지 "
+            + "않은 대상은 빠진다. 줄을 쥐고 있으면 밧줄에 걸린 대상만 판정한다(#637). "
+            + "밧줄 길이(1.6m)보다 넉넉히 둘 것"
     )]
     [SerializeField] private float m_admitReach = 4f;
 
@@ -81,6 +82,9 @@ public class JailIntake : MonoBehaviour
     ///
     /// ②는 손이 빈 사람 몫이다: 밧줄을 풀어 세워 둔 뒤 누르는 조작, <b>남이 끌고 온 신병을 대신
     /// 넣어 주는</b> 협동, 그리고 여럿을 세워 뒀으면 <b>한 번에 전부 판정</b> (팀 확정 2026-08-06).
+    ///
+    /// <b>시체도 산 신병과 같은 규칙을 탄다</b> (#571) — 죽은 대상은 죽는 순간이 아니라 여기서
+    /// 계상되고, 판정·배치가 통째로 다른 갈래라 <see cref="ServerAdmitCorpse"/>가 따로 받는다.
     ///
     /// <b>시체는 ①로만 받는다</b> (#571/#637) — 죽은 대상은 죽는 순간이 아니라 여기서 계상되고,
     /// 판정·배치가 통째로 다른 갈래라 <see cref="ServerAdmitCorpse"/>가 따로 받는다.
@@ -295,13 +299,17 @@ public class JailIntake : MonoBehaviour
     /// <summary>
     /// 버튼 앞에 놓아둔 것만으로 판정 대상이 되는 상태인가 — 밧줄로 끌고 온 대상은 이 판정을 타지 않는다.
     ///
-    /// <b><see cref="NpcState.Dead"/>는 빠졌다</b> (#637). 예전에는 문 앞에 내려놓은 시체도 받았지만
-    /// (#571), 시체 수감은 <b>되돌릴 수 없다</b> — 반출도 재판정도 없어 실수로 넣으면 그 라운드 내내
-    /// 그대로다(<see cref="ArrestJudge.JudgeCorpse"/>). 실제로 옆에 쓰러져 있던 경범죄자가 휩쓸려
-    /// 들어간 사고가 있었다. 그래서 시체는 <b>줄을 쥐고 있을 때만</b> 받는다(위 ① 갈래).
+    /// <see cref="NpcState.Dead"/>가 들어 있는 이유는 산 신병과 같다 (#571): 문 앞에 <b>내려놓고</b>
+    /// 누르는 조작이 자연스럽고, 남이 끌고 온 시체를 대신 넣어 주는 것도 되어야 한다.
+    /// 시체 밧줄은 E로 내려놓으면 관절이 풀리므로(순수 운반이라 '놓아둔 Captured' 같은 중간이 없다)
+    /// 이 갈래가 없으면 <b>줄을 쥔 채로만</b> 넣을 수 있게 된다.
+    ///
+    /// <b>휩쓸림은 소유 조건이 막는다</b> (#637) — 끌고 와서 내려놓은 시체는
+    /// <see cref="NpcCustody.WasSecuredByPlayer"/>가 남지만, 길에 사살해 둔 시체는 셋 다 비어
+    /// <see cref="IsSecuredByAnyone"/>에서 걸러진다. 사고가 난 것이 후자였다.
     /// </summary>
     private static bool IsAdmittableState(NpcState state) =>
-        state is NpcState.Captured or NpcState.Escorted;
+        state is NpcState.Captured or NpcState.Escorted or NpcState.Dead;
 
     /// <summary>
     /// 누군가 확보한 대상인가 — 버튼 앞 반경 스캔이 <b>지나가던 NPC를 휩쓸지 않게</b> 하는 문지기. (#637)

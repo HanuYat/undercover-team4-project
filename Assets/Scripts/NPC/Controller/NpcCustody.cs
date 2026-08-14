@@ -274,7 +274,9 @@ public class NpcCustody : NetworkBehaviour
     public bool WasSecuredByPlayer { get; private set; }
 
     /// <summary>확보 표식 지정 — 켜는 곳은 밧줄 묶임(<see cref="NpcRopeDrag"/>) 하나다. (#637)
-    /// 끄는 곳은 커스터디 이탈(<see cref="NpcController"/>의 상태 훅) — 도주·배회로 돌아가면 남의 몸이다.</summary>
+    /// 끄는 곳은 커스터디 이탈(<see cref="NpcController"/>의 상태 훅) — 도주·배회로 돌아가면 남의 몸이다.
+    /// 시체는 사망 진입에서 한 번 꺼지고, 그 몸을 묶으면 다시 켜져 남는다 — "끌고 와서 내려놓은 시체"와
+    /// "길에 사살해 둔 시체"를 가르는 것이 그 차이다.</summary>
     public void SetSecuredByPlayer(bool value)
     {
         if (IsSpawned && !IsServer)
