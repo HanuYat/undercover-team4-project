@@ -999,10 +999,33 @@ public class NpcRagdoll : MonoBehaviour
         if (!HasMoveAuthority || m_rig.Hips == null)
             return;
 
+        // ⚠ <b>루트를 옮기기 전에 뼈를 잡아 두고, 옮긴 뒤 되돌린다.</b>
+        //
+        // "동적 리지드바디는 부모 트랜스폼을 따라가지 않는다"는 이 파일의 전제는 <b>다음 물리
+        // 스텝이 포즈를 되써 준 뒤부터</b> 참이다. PhysX가 월드 포즈를 써 넣으면 Unity는 그것을
+        // <b>그 시점의 부모 기준 로컬</b>로 저장하므로, 그 뒤 Update에서 부모를 옮기면 자식의
+        // 월드는 부모 × 로컬로 <b>같이 끌려간다.</b> 렌더는 Update·LateUpdate 다음이라 그 어긋난
+        // 몸이 한 프레임 그려지고, 다음 FixedUpdate에서 되쓰이며 툭 내려온다.
+        //
+        // <b>진입 프레임이 그 한 번이다.</b> 평소 이 함수는 잔차 몇 cm를 따라가지만 진입 때는
+        // 루트가 발밑(y≈0)에서 골반(y≈0.9)으로 <b>한 방에 뛴다</b> — 그 프레임에 몸 전체가
+        // 골반 높이만큼 떠서 그려진다. 물리를 거치지 않으므로 겹침 탈출 속도 상한
+        // (<see cref="RagdollRig"/>의 k_maxDepenetrationVelocity)으로는 줄지 않는다.
+        //
+        // <b><see cref="ServerFreezeInPlace"/> ①④와 같은 패턴이다</b> — 저쪽은 얼리는 순간의
+        // 같은 왕복(실측 14.6cm)을 이 방식으로 잡았고, 진입 쪽에만 빠져 있었다.
+        //
+        // 되돌리는 대입은 <b>렌더 전용</b>이다: 이 프로젝트는 <c>m_AutoSyncTransforms = 0</c>이라
+        // 트랜스폼에 쓴 값이 액터로 넘어가지 않는다. PhysX의 포즈는 손대지 않은 채, 화면에
+        // 그려지는 자리만 제자리로 돌린다.
+        m_rig.CapturePose();
+
         // 골반 높이를 그대로 쓴다 — 지면 보정은 얼리는 순간 한 번만 한다(ServerFreezeInPlace).
         // 매 프레임 지면을 찾아 루트 높이를 고치던 예전 처리는 <b>원격에서 그 오차가 곧 몸의 높이
         // 오차</b>가 됐다(정렬이 루트를 따라가므로). 지금은 원격이 자세를 통째로 받으므로 필요 없다.
         transform.position = m_rig.Hips.position;
+
+        m_rig.RestoreCapturedPose();
     }
 
     private bool HasGroundUnderHips() => TryGroundUnder(m_rig.Hips.position, out _);
