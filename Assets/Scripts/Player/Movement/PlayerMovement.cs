@@ -319,10 +319,11 @@ public class PlayerMovement : NetworkBehaviour
     /// <see cref="PlayerRagdoll.TickCapsuleFollow"/>가 매 프레임 루트를 골반으로 되돌린다 — 옮겨 놔도
     /// 끌려가고, 뼈는 리지드바디라 그 좌표가 <b>직전 맵에서 죽은 자리</b>다.
     ///
-    /// <b>SetPose보다 먼저</b> 불러야 한다 — ExitToAnimator가 캡슐을 켜며 시체 자리를 그대로 써서,
-    /// 뒤집으면 순간이동이 지워진다. 기상 연출은 로딩 화면 뒤라 blend:false. 살아 있으면 무동작이다.
+    /// <b>SetPose보다 먼저</b> 불러야 한다 — 일으키는 쪽이 캡슐을 켜며 시체 자리를 그대로 써서,
+    /// 뒤집으면 순간이동이 지워진다. 살아 있으면 무동작이다. 사망 해제가 재배치보다 늦게 와도
+    /// 다시 눕지 않는 이유는 <see cref="PlayerRagdoll.ExitForReposition"/>에 있다.
     /// </summary>
-    private void EndRagdollForReposition() => m_ragdoll?.ExitToAnimator(blend: false);
+    private void EndRagdollForReposition() => m_ragdoll?.ExitForReposition();
 
     // ---- 추종 컴포넌트(PlayerTowedMotion)와 공유하는 면 ----
     // 수직 속도와 CharacterController의 소유자는 이 컴포넌트다 — 중력·점프·넉백이 모두 같은 채널을
