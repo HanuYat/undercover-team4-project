@@ -33,9 +33,9 @@ public class JailIntake : MonoBehaviour
     [SerializeField] private JailZone m_jailZone;
 
     [Tooltip(
-        "판정 버튼이 신병으로 인정하는 거리(m) — 밧줄로 끌고 있지 않아도 이 안에 있는 확보 상태(놓아둔 Captured, "
-            + "남이 끌고 온 Escorted)면 함께 판정한다. 아무도 손대지 않은 대상과 시체는 빠진다(#637 — 시체는 "
-            + "줄을 쥐고 있을 때만). 밧줄 길이(1.6m)보다 넉넉히 둘 것"
+        "판정 버튼이 신병으로 인정하는 거리(m) — 손이 빈 사람이 눌렀을 때만 쓴다. 이 안의 확보 상태"
+            + "(놓아둔 Captured, 남이 끌고 온 Escorted)를 함께 판정하되, 아무도 손대지 않은 대상과 시체는 "
+            + "빠진다. 줄을 쥐고 있으면 밧줄에 걸린 대상만 판정한다(#637). 밧줄 길이(1.6m)보다 넉넉히 둘 것"
     )]
     [SerializeField] private float m_admitReach = 4f;
 
@@ -74,12 +74,13 @@ public class JailIntake : MonoBehaviour
     /// 이 시점에는 결과를 모른다. 부르는 쪽(<see cref="JailIntakeButton"/>)이 "확보한 신병이 없다"만
     /// 가르는 데 쓴다.
     ///
-    /// <b>확보의 기준은 갈래 둘이다</b> — ① 이 사람의 밧줄에 걸린 대상 전부, ② 버튼 앞
-    /// <see cref="m_admitReach"/> 안에서 <see cref="IsAdmittableState"/>이면서
-    /// <see cref="IsSecuredByAnyone"/>인 대상. ②를 넣는 이유는 밧줄을 풀어 세워 둔 뒤 누르는 조작이
-    /// 자연스럽고 <b>남이 끌고 온 신병을 대신 넣어 주는</b> 협동도 되어야 하기 때문이고, 여럿을 끌고
-    /// 왔으면 <b>한 번에 전부 판정된다</b> (팀 확정 2026-08-06). 아무도 손대지 않은 대상은 ②의 소유
-    /// 조건에서 걸러진다 (#637).
+    /// <b>확보의 기준은 갈래 둘이고, ①이 있으면 ②는 돌지 않는다</b> (#637) — ① 이 사람의 밧줄에
+    /// 걸린 대상 전부, ② 버튼 앞 <see cref="m_admitReach"/> 안에서 <see cref="IsAdmittableState"/>이면서
+    /// <see cref="IsSecuredByAnyone"/>인 대상. 줄을 쥔 것이 곧 "이것을 넣겠다"는 선택이므로 그 위에
+    /// 반경 스캔을 얹지 않는다 — 옆에 놓아둔 대상이 함께 검거되던 사고가 그 경로였다.
+    ///
+    /// ②는 손이 빈 사람 몫이다: 밧줄을 풀어 세워 둔 뒤 누르는 조작, <b>남이 끌고 온 신병을 대신
+    /// 넣어 주는</b> 협동, 그리고 여럿을 세워 뒀으면 <b>한 번에 전부 판정</b> (팀 확정 2026-08-06).
     ///
     /// <b>시체는 ①로만 받는다</b> (#571/#637) — 죽은 대상은 죽는 순간이 아니라 여기서 계상되고,
     /// 판정·배치가 통째로 다른 갈래라 <see cref="ServerAdmitCorpse"/>가 따로 받는다.
@@ -242,7 +243,7 @@ public class JailIntake : MonoBehaviour
         return true;
     }
 
-    // 이 플레이어가 확보 중인 대상을 모은다 — 자기 밧줄에 걸린 전부 + 문 앞에 놓아둔 Captured.
+    // 이 플레이어가 확보 중인 대상을 모은다 — 줄을 쥐고 있으면 거기 걸린 전부, 손이 비었으면 문 앞에 놓아둔 신병.
     private void CollectHeldBy(GameObject interactor)
     {
         m_admitBuffer.Clear();
@@ -257,6 +258,12 @@ public class JailIntake : MonoBehaviour
                     m_admitBuffer.Add(roped);
             }
         }
+
+        // <b>줄을 쥐고 있으면 거기서 끝이다</b> (#637) — 밧줄이 곧 "이것을 넣겠다"는 명시적 선택이라,
+        // 반경 스캔이 그 위에 다른 대상을 얹으면 고른 적 없는 것이 함께 들어간다. 반경 갈래는 손이
+        // 빈 사람 몫이다: 풀어 세워 둔 신병을 누르거나 남이 끌고 온 신병을 대신 넣어 주는 조작.
+        if (m_admitBuffer.Count > 0)
+            return;
 
         // 버튼 앞의 신병 — 기준은 <b>버튼</b>이 아니라 누른 사람이다. 버튼에서 재려면 버튼이 여럿일 때
         // 어느 것인지를 또 물어야 하는데, 사거리는 이미 PlayerInteractor가 걸러 줬으므로 사람 기준이면 충분하다.
