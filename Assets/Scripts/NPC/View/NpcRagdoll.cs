@@ -60,6 +60,11 @@ public class NpcRagdoll : MonoBehaviour
     // 영원히 갇히지 않게 하는 안전장치. 이 경로로 오면 시체는 허공에 굳지만 상태 기계는 계속 돈다.
     private const float k_lostBodyTimeoutFactor = 4f;
 
+    // "몸이 바닥에 있다"로 보는 골반 높이(m) — 이 안이면 루트 높이를 골반이 아니라 <b>지면</b>이 준다
+    // (<see cref="TickRootFollow"/>). 누운 시체의 골반은 약 0.15~0.25m이고, 서 있거나 날아가는 몸은
+    // 그보다 훨씬 높다. 정확한 경계가 필요한 값이 아니라 <b>그 둘을 가르기만</b> 하면 되는 값이다.
+    private const float k_groundedHipsHeight = 0.5f;
+
     // 원격의 "당겨오기가 끝났는지" 잔차 판정은 없어졌다 (#571) — 정착은 이제 권위 피어만 하고,
     // 원격은 그 결과(자세)를 받아 갈아끼우므로 스스로 정착 자격을 물을 일이 없다.
 
@@ -108,6 +113,16 @@ public class NpcRagdoll : MonoBehaviour
     [Tooltip("원격 피어의 뼈 속도 상한(m/s). 튜닝 손잡이가 아니라 발산 차단선이다 — " +
              "권위 피어는 건드리지 않으므로 판정·궤적은 그대로다. 0이면 끈다")]
     [SerializeField] private float m_remoteSpeedClamp = 20f;
+
+    [Header("진단")]
+    [Tooltip("루트 추종·얼림·배치·기상을 실측해 콘솔에 남긴다 — <b>루트 높이의 주인이 골반인지 지면인지</b>를 " +
+             "가르는 계측이다. 눈으로는 애매한 네 가지를 숫자로 갈라 준다:\n\n" +
+             "· [루트추종] 비행 중에는 스냅=N·루트↔골반Y=0(3차원 추종), 바닥에서는 스냅=Y (임계값 검증)\n" +
+             "· [얼림] 루트낙차 — 이것이 0이어야 클라의 침하가 없다 (B의 판정 기준)\n" +
+             "· [배치] 여유 = 최저뼈Y − 바닥Y. 수감 도착 실측 기준값이 +0.005다\n" +
+             "· [기상] NavMesh 샘플 거리 — 루트가 바닥에 있으면 짧아야 한다\n\n" +
+             "확정되면 끈다")]
+    [SerializeField] private bool m_logRootFollow;
 
     private NpcController m_owner;
     private RagdollRig m_rig; // 뼈 한 벌 — 물리 조작 전부를 여기 위임한다. 리그 소유자(Model)에 붙어 있다
@@ -389,7 +404,24 @@ public class NpcRagdoll : MonoBehaviour
         m_stillTimer = 0f;
         m_elapsedInRagdoll = 0f;
 
+        // 진단 — 물리가 몸을 되받는 순간의 상태. <b>녹임은 결백하다는 것이 실측으로 확인됐다</b>:
+        // "얼어 있을 때 고친 트랜스폼이 여기 <c>SyncTransforms</c>에서 액터로 넘어가며 뼈가
+        // 순간이동한다"는 가설을 세웠지만, 여유가 <c>−0.019 → −0.019</c>로 <b>변하지 않았다</b>.
+        // 사이클마다 몸이 움직인 원인은 전부 얼림 쪽이었다(<see cref="ApplyFrozenPose"/>의 주석).
+        float driftBefore = m_rig.MaxBindPositionDrift;
+        float clearanceBefore = LowestBoneClearance();
+
         ReleaseBonesToPhysics();
+
+        if (m_logRootFollow)
+        {
+            Debug.Log(
+                $"[래그돌 녹임] {name} 권한={HasMoveAuthority} "
+                    + $"드리프트={driftBefore:F4} 여유 {clearanceBefore:F3} → {LowestBoneClearance():F3} "
+                    + $"| 평균속도={m_rig.AverageSpeed:F2}",
+                this
+            );
+        }
     }
 
     /// <summary>
@@ -450,7 +482,20 @@ public class NpcRagdoll : MonoBehaviour
 
         // 뼈 길이를 되돌린다 — 시체는 <c>ExitRagdoll</c>을 영영 타지 않아 <c>RestoreBindPose</c>가
         // 한 번도 안 돌고, 그래서 물리가 늘려 놓은 길이가 <b>영구히 남는다.</b>
+        float driftBefore = m_rig.MaxBindPositionDrift;
         m_rig.RestoreBindBoneLengths();
+
+        if (m_logRootFollow)
+        {
+            Debug.Log(
+                $"[래그돌 길이복원] {name} 권한={HasMoveAuthority} "
+                    + $"드리프트 {driftBefore:F4} → {m_rig.MaxBindPositionDrift:F4} "
+                    + $"여유={LowestBoneClearance():F3} "
+                    + $"| 이 값이 곧 팔다리가 한 프레임에 이동하는 거리다"
+                    + $"{(driftBefore > 0.02f ? " ⚠눈에 보인다" : " (안 보임)")}",
+                this
+            );
+        }
 
         if (!m_rig.ApplyLocalPose(boneRotations, hipsLocalPosition))
         {
@@ -529,6 +574,21 @@ public class NpcRagdoll : MonoBehaviour
         // 그래서 여기서 읽는 골반 위치가 곧 도착 자세다. 녹인 뒤에 보내면 물리가 한 스텝 굴러
         // 보내는 값과 원격이 재현할 자세가 어긋난다.
         ServerTeleportNetTransforms();
+
+        // 도착 상태 — <b>여유(최저뼈Y − 바닥Y)가 기준값이다.</b> 실측 +0.005로 "이미 맞아 있다"가
+        // 확인돼 이 함수가 Unfreeze를 버렸으므로(아래 주석), 루트 높이를 건드리면 여기가 먼저 깨진다.
+        // 속도는 얼어 있으므로 0이어야 한다 — 0이 아니면 어딘가에서 물리로 풀린 것이다.
+        if (m_logRootFollow)
+        {
+            float clearance = LowestBoneClearance();
+            Debug.Log(
+                $"[래그돌 배치] {name} 목표={position.ToString("F2")} 루트={transform.position.ToString("F2")} "
+                    + $"| 여유={clearance:F3}"
+                    + $"{(float.IsNaN(clearance) ? " ⚠바닥을 못 찾았다(정착 판정이 영영 안 돈다)" : clearance < -0.02f ? " ⚠바닥에 박혔다" : clearance > 0.15f ? " ⚠떠 있다" : " (정상)")}"
+                    + $" | 얼림={IsFrozen} 평균속도={m_rig.AverageSpeed:F2} 줄={m_rope != null && m_rope.IsAttached}",
+                this
+            );
+        }
 
         // ⚠ <b>여기서 녹이지 않는다 — 얼린 채로 끝낸다.</b> (실측 2026-08-14)
         //
@@ -631,6 +691,9 @@ public class NpcRagdoll : MonoBehaviour
         // 블렌드 중에 다시 쓰러지면(재기절) 섞던 것을 버린다 — 안 버리면 무너지는 몸을
         // 애니메이터 자세로 도로 끌어당긴다.
         m_blending = false;
+
+        m_haveClientSample = false; // 진단 — 지난 에피소드 값과 비교해 가짜 점프가 찍히지 않게
+        m_dipTraceFrames = 0;
 
         ReleaseAgentForRagdoll();
 
@@ -751,6 +814,10 @@ public class NpcRagdoll : MonoBehaviour
         // 순간이동 감싸기를 마무리한다 — <b>LateUpdate여야 한다.</b> 골반 NT가 이번 프레임에 적용한
         // 위치에서 물리로 되돌려야, 되돌리는 순간의 자세가 곧 도착한 자세가 된다.
         TickTeleportBracket();
+
+        // 클라의 침하를 <b>직접</b> 잰다 — 여기가 마지막 표집 지점이다(다음이 렌더).
+        if (m_logRootFollow && !HasMoveAuthority && IsRagdollActive)
+            TickClientDipProbe();
     }
 
     // 래그돌이어야 하는지를 폴링한다 — 읽는 값이 전부 동기화 값이라 전 피어가 같은 답을 얻는다.
@@ -954,15 +1021,28 @@ public class NpcRagdoll : MonoBehaviour
         m_agent.enabled = true;
 
         // 통행 마스크로 착지점을 찾는다 — 못 가는 영역(Jail)에 Warp되면 경로가 안 잡혀 고착된다 (#415)
-        if (
-            NavMesh.SamplePosition(
-                transform.position,
-                out NavMeshHit ground,
-                k_navMeshSampleDistance,
-                m_agent.areaMask
-            )
-        )
+        Vector3 sampleFrom = transform.position;
+        bool sampled = NavMesh.SamplePosition(
+            sampleFrom,
+            out NavMeshHit ground,
+            k_navMeshSampleDistance,
+            m_agent.areaMask
+        );
+        if (sampled)
             m_agent.Warp(ground.position);
+
+        // 기상 — <b>샘플 거리가 루트 높이의 결과다.</b> 루트가 골반 높이에 있으면 NavMesh를 위에서
+        // 찾게 되어 거리가 길고, 바닥에 있으면 짧아야 한다. 반경(k_navMeshSampleDistance = 2m)에
+        // 가까워지면 실패가 나기 시작한다.
+        if (m_logRootFollow)
+        {
+            Debug.Log(
+                $"[래그돌 기상] {name} 샘플={(sampled ? "성공" : "실패")} "
+                    + $"거리={(sampled ? Vector3.Distance(sampleFrom, ground.position).ToString("F3") : "-")} "
+                    + $"반경={k_navMeshSampleDistance:F1} | onNavMesh={m_agent.isOnNavMesh}",
+                this
+            );
+        }
 
         if (!m_agent.isOnNavMesh)
         {
@@ -1020,12 +1100,156 @@ public class NpcRagdoll : MonoBehaviour
         // 그려지는 자리만 제자리로 돌린다.
         m_rig.CapturePose();
 
-        // 골반 높이를 그대로 쓴다 — 지면 보정은 얼리는 순간 한 번만 한다(ServerFreezeInPlace).
-        // 매 프레임 지면을 찾아 루트 높이를 고치던 예전 처리는 <b>원격에서 그 오차가 곧 몸의 높이
-        // 오차</b>가 됐다(정렬이 루트를 따라가므로). 지금은 원격이 자세를 통째로 받으므로 필요 없다.
-        transform.position = m_rig.Hips.position;
+        Vector3 target = m_rig.Hips.position;
+
+        // <b>몸이 바닥에 있으면 루트 높이는 지면이 준다</b> — 골반 높이를 쓰는 것은 <b>공중에 있는
+        // 동안만</b>이다. <see cref="PlayerRagdoll.TickCapsuleFollow"/>의 <c>Settled</c> 분기와 같은
+        // 처리이고, NPC만 안 받고 있었다.
+        //
+        // <b>얼릴 때의 낙차를 미리 없애는 것이 목적이다.</b> <see cref="ServerFreezeInPlace"/>는
+        // 루트를 골반 밑 지면으로 내리는데, 그때까지 루트가 골반 높이(누운 시체 약 0.2m)에 있었으면
+        // 그 0.2m가 <b>한 프레임에</b> 떨어진다. 서버는 ①④(CapturePose/RestoreCapturedPose)가 감싸
+        // 무사하지만 <b>클라에는 그 감싸기가 없다</b> — 클라의 골반은 키네마틱이라(비권위 피어,
+        // <see cref="ReleaseBonesToPhysics"/>) 루트의 자식으로서 <b>따라 내려가고</b>, 골반 NT가
+        // 자기 월드 위치를 다시 쓸 때까지 몸 전체가 가라앉아 보인다. 미리 지면에 있으면 낙차가 0이라
+        // 끌 것이 애초에 없다.
+        //
+        // ⚠ <b>여기 "골반 높이를 그대로 쓴다"가 있었다.</b> 근거는 "매 프레임 지면을 찾아 루트
+        // 높이를 고치면 원격에서 그 오차가 곧 몸의 높이 오차가 된다(정렬이 루트를 따라가므로)"였는데,
+        // <b>그 정렬(<see cref="TickAlignBonesToRoot"/>)은 지금 배선에서 한 번도 돌지 않는다</b> —
+        // 골반이 직접 복제되면서(#572) 조건에서 걸러진다. 몸은 루트가 아니라 <b>스트리밍된 골반</b>에
+        // 매달려 있으므로 루트의 높이 오차가 몸으로 전파될 경로가 없어졌다.
+        //
+        // <b>지면 판정은 <see cref="ServerFreezeInPlace"/>와 같은 것을 쓴다</b>(<see cref="GroundUnder"/>
+        // 와 같은 <see cref="TryGroundUnder"/>) — 두 곳이 다른 높이를 내면 얼리는 순간 그 차이가
+        // 그대로 낙차로 남아 이 처리가 무의미해진다.
+        bool haveGround = TryGroundUnder(target, out Vector3 ground);
+        float hipsHeight = haveGround ? target.y - ground.y : float.NaN;
+        bool snapped = haveGround && hipsHeight <= k_groundedHipsHeight;
+        if (snapped)
+            target.y = ground.y;
+
+        transform.position = target;
 
         m_rig.RestoreCapturedPose();
+
+        if (m_logRootFollow)
+            TickRootFollowLog(hipsHeight, snapped);
+    }
+
+    // ---- 진단 (m_logRootFollow) ----
+    //
+    // 네 지점을 각각 <b>불변식 하나씩</b>으로 잰다. 눈으로 "정상인 것 같다"와 숫자로 "0.000이다"를
+    // 가르는 것이 목적이라, 한 줄에 판정까지 붙여 둔다(⚠ 표시). 확정되면 통째로 지운다.
+
+    private float m_rootFollowLogTimer;
+
+    // 클라 침하 탐지용 직전 프레임 값 — 에피소드마다 리셋한다(EnterRagdoll). 안 하면 지난 사망의
+    // 값과 비교해 첫 프레임에 가짜 점프가 찍힌다.
+    private float m_prevClientRootY;
+    private float m_prevClientHipsY;
+    private bool m_haveClientSample;
+    private int m_dipTraceFrames;
+
+    /// <summary>
+    /// <b>클라가 실제로 무엇을 보는지</b> 잰다 — 원격 전용, <c>LateUpdate</c> 맨 끝(다음이 렌더).
+    ///
+    /// 호스트 쪽 <c>[래그돌 얼림]</c>은 <b>원인</b>(루트가 뛰었나)만 재고, 이 침하는 <b>클라의 렌더
+    /// 결과</b>다. 둘은 다른 것이라 따로 재야 한다.
+    ///
+    /// 세 값이 각각 다른 것을 가른다:
+    /// <list type="bullet">
+    ///   <item><c>루트Δ</c> — 스트림된 루트가 이 프레임에 뛰었는가. 이것이 침하의 방아쇠다.</item>
+    ///   <item><c>골반Δ</c> — 화면에 그려지는 몸이 이 프레임에 내려갔는가. <b>이게 증상 그 자체다.</b></item>
+    ///   <item><c>렌더−물리</c> — 골반의 트랜스폼과 PhysX 액터 포즈의 차이. 0이 아니면 몸이
+    ///   <b>계층에 끌려간 것</b>이고(물리는 안 움직였는데 트랜스폼만 이동), 그것이 이 버그의 서명이다.</item>
+    /// </list>
+    ///
+    /// 조용할 때는 아무것도 찍지 않는다 — 뛰거나 내려간 프레임과 그 뒤 3프레임(회복 구간)만 남긴다.
+    /// </summary>
+    private void TickClientDipProbe()
+    {
+        if (m_rig == null || m_rig.Hips == null)
+            return;
+
+        float rootY = transform.position.y;
+        float hipsY = m_rig.Hips.position.y; // 렌더 트랜스폼 = 화면에 그려지는 자리
+        float hipsRbY = m_rig.HipsBody != null ? m_rig.HipsBody.position.y : float.NaN; // PhysX 액터
+
+        if (m_haveClientSample)
+        {
+            float rootDelta = rootY - m_prevClientRootY;
+            float hipsDelta = hipsY - m_prevClientHipsY;
+
+            // ⚠ <b>루트가 움직인 것을 방아쇠로 쓰면 안 된다.</b> 끌려가는 시체는 루트가 매 프레임
+            // 움직이므로(2m/s면 프레임당 0.033m) 로그가 도배된다. 재려는 것은 "루트가 움직였나"가
+            // 아니라 <b>"화면의 몸이 내려갔나"</b>다 — 방아쇠는 그쪽에 둔다.
+            //
+            // 둘 중 하나면 찍는다:
+            //  · <c>골반Δ</c>가 아래로 튐 — 증상 그 자체. 바닥을 따라 끌리는 수평 이동은 걸리지 않는다
+            //  · <c>렌더−물리</c>가 벌어짐 — <b>계층에 끌려간 것의 서명</b>. 물리는 가만있는데
+            //    트랜스폼만 움직였다는 뜻이라, 정상 동작에서는 0에 붙어 있어야 한다
+            bool hipsDipped = hipsDelta < -0.02f;
+            bool draggedByHierarchy =
+                !float.IsNaN(hipsRbY) && Mathf.Abs(hipsY - hipsRbY) > 0.02f;
+
+            if (hipsDipped || draggedByHierarchy || m_dipTraceFrames > 0)
+            {
+                Debug.Log(
+                    $"[래그돌 클라] {name} 루트Δ={rootDelta:F3} 골반Δ={hipsDelta:F3} "
+                        + $"| 루트Y={rootY:F3} 골반렌더Y={hipsY:F3} 골반물리Y={hipsRbY:F3} "
+                        + $"렌더-물리={hipsY - hipsRbY:F3} "
+                        + $"| 상태={m_state} 골반키네마틱="
+                        + $"{(m_rig.HipsBody != null ? m_rig.HipsBody.isKinematic.ToString() : "?")}"
+                        + $"{(hipsDipped ? " ⚠골반하강" : "")}"
+                        + $"{(draggedByHierarchy ? " ⚠계층에끌려감(물리는안움직였다)" : "")}",
+                    this
+                );
+
+                m_dipTraceFrames = hipsDipped || draggedByHierarchy ? 3 : m_dipTraceFrames - 1;
+            }
+        }
+
+        m_prevClientRootY = rootY;
+        m_prevClientHipsY = hipsY;
+        m_haveClientSample = true;
+    }
+
+    // 시체 밑 여유 — <b>최저뼈Y − 바닥Y.</b> 음수면 몸이 바닥을 파고들었다.
+    // 수감 도착의 기준값이 +0.005다(ServerPlaceCorpse 주석의 실측).
+    private float LowestBoneClearance()
+    {
+        if (!TryGroundUnder(m_rig.Hips.position, out Vector3 ground))
+            return float.NaN;
+
+        return m_rig.LowestBoneY - ground.y;
+    }
+
+    // 루트 높이의 주인이 지금 누구인가 — 1초에 한 줄.
+    //
+    // 비행 중이면 <c>스냅=N</c>이고 <c>루트↔골반Y=0.000</c>이어야 한다(루트가 골반을 3차원으로
+    // 따라간다). 바닥에 있으면 <c>스냅=Y</c>이고 루트↔골반Y가 음수(루트가 골반보다 아래 = 지면)다.
+    // <b>임계값 k_groundedHipsHeight가 맞는지 재는 유일한 계측이다</b> — 날아가는 시체가 스냅=Y로
+    // 찍히면 임계값이 너무 크고, 바닥에 누운 시체가 스냅=N이면 너무 작다.
+    private void TickRootFollowLog(float hipsHeight, bool snapped)
+    {
+        m_rootFollowLogTimer += Time.deltaTime;
+        if (m_rootFollowLogTimer < 1f)
+            return;
+
+        m_rootFollowLogTimer = 0f;
+
+        float rootToHipsY = transform.position.y - m_rig.Hips.position.y;
+        bool carried = m_rope != null && m_rope.IsBeingCarried;
+
+        Debug.Log(
+            $"[래그돌 루트추종] {name} 권한={HasMoveAuthority} 끌림={carried} "
+                + $"| 골반높이={hipsHeight:F3} 임계={k_groundedHipsHeight:F2} 스냅={(snapped ? "Y" : "N")} "
+                + $"| 루트↔골반Y={rootToHipsY:F3}"
+                + $"{(!snapped && Mathf.Abs(rootToHipsY) > 0.01f ? " ⚠비행인데 루트가 골반과 어긋났다" : "")}"
+                + $" | 여유={LowestBoneClearance():F3} 평균속도={m_rig.AverageSpeed:F2}",
+            this
+        );
     }
 
     private bool HasGroundUnderHips() => TryGroundUnder(m_rig.Hips.position, out _);
@@ -1131,6 +1355,11 @@ public class NpcRagdoll : MonoBehaviour
         m_rig.CapturePose();
         Vector3 landedHips = m_rig.Hips.position;
 
+        // ⚠ <b>이 낙차가 B의 판정 기준이다.</b> 루트가 여기서 뛰면 그 점프가 클라로 나가고, 클라의
+        // 키네마틱 골반이 계층을 따라 끌려 내려간다(그쪽에는 아래 ①④ 감싸기가 없다).
+        // TickRootFollow가 루트를 미리 지면에 놓아 두면 0.000이어야 한다.
+        float rootYBeforeFreeze = transform.position.y;
+
         // ⚠ <b>루트를 먼저 옮기고 나서 얼린다</b> (#572 후속). 순서가 뒤집혀 있었다.
         //
         // 예전에는 얼린 다음 루트를 옮겼는데, 그러면 <b>이미 키네마틱이 된 뼈가 루트를 따라
@@ -1150,6 +1379,18 @@ public class NpcRagdoll : MonoBehaviour
         m_rig.RestoreCapturedPose();
 
         m_state = RagdollState.Frozen;
+
+        if (m_logRootFollow)
+        {
+            float drop = transform.position.y - rootYBeforeFreeze;
+            Debug.Log(
+                $"[래그돌 얼림] {name} 루트낙차={drop:F3}"
+                    + $"{(Mathf.Abs(drop) > 0.02f ? " ⚠클라가 이만큼 끌려 내려간다" : " (클라 침하 없음)")}"
+                    + $" | 골반높이={landedHips.y - transform.position.y:F3} 여유={LowestBoneClearance():F3} "
+                    + $"평균속도={m_rig.AverageSpeed:F2}",
+                this
+            );
+        }
 
         ServerBroadcastPose();
     }
