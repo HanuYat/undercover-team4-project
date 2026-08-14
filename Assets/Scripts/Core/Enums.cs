@@ -105,6 +105,11 @@ public enum EAudioClip
 
     // 피격 신음. 뒤에 붙이는 이유는 위와 같다 — 정수로 직렬화돼 있다.
     NpcHurtHuman, // 윽 — 인간 NPC가 피해를 입은 순간 (가해 수단과 무관)
+
+    // 폭탄 (#232). 뒤에 붙이는 이유는 위와 같다 — 정수로 직렬화돼 있다.
+    BombCountdownSlow, // 삐 … 삐 — 카운트다운 평상시 (루프)
+    BombCountdownFast, // 삐삐삐 — 폭발 임박 (루프)
+    BombExplosion, // 쾅 — 터진 순간
 }
 
 /// <summary>
