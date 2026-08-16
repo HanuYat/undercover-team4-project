@@ -338,12 +338,22 @@ public class NpcChaseState : NpcStateBase
         Vector2 dir = Random.insideUnitCircle.normalized;
         float dist = Random.Range(m_walkConfig.MinWanderDistance, m_walkConfig.WanderRadius);
         Vector3 candidate = m_owner.transform.position + new Vector3(dir.x, 0f, dir.y) * dist;
+
+        // 도로는 목적지에서 뺀다 — 배회이므로 <see cref="NpcWalkState"/>와 같은 규칙이다 (#634 후속).
+        //
+        // 여기가 특히 문제가 되는 자리다: 표적이 <b>다른 이유로</b> 죽으면(차 사고 등) 납치는 표적을
+        // 갈아타지도 놓지도 않으므로 상태가 Chasing에 머물고, 이 사냥 배회가 최대 60초
+        // (AbductionEvent.m_maxChaseSeconds) 계속 돈다. 그동안 통행 마스크는 전체라
+        // NpcController의 도로 이탈이 걸리지 않는데(추격은 도로를 써도 되는 상태다),
+        // 목적지까지 도로를 허용하면 <b>차도 한복판을 배회 지점으로 잡고 그 자리에 멈춰 선다.</b>
+        //
+        // 마스크 자체는 건드리지 않는다 — 순찰 중 도로를 건너는 것은 그대로다. 서지만 않게 한다.
         if (
             NavMesh.SamplePosition(
                 candidate,
                 out NavMeshHit hit,
                 m_walkConfig.WanderRadius,
-                m_owner.Agent.areaMask
+                NpcNavAreas.ExcludeRoad(m_owner.Agent.areaMask)
             )
         )
             m_owner.Agent.SetDestination(hit.position);
