@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.AI;
 
 public class NpcWalkState : NpcStateBase
@@ -68,8 +68,11 @@ public class NpcWalkState : NpcStateBase
             Vector3 direction = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
             Vector3 candidate = m_owner.transform.position + direction * distance;
 
-            // 통행 마스크로 샘플 — 에이전트가 못 가는 영역(Jail)을 뽑으면 경로가 문 앞에서 끊긴다 (#415)
-            if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, 2f, m_owner.Agent.areaMask))
+            // 통행 마스크로 샘플 — 에이전트가 못 가는 영역(Jail)을 뽑으면 경로가 문 앞에서 끊긴다 (#415).
+            // 도로는 여기서만 뺀다 — 배회하다 도로 한복판을 목적지로 잡으면 거기 멈춰 서서 치인다.
+            // 에이전트 마스크 자체는 그대로라 <b>건너가는 경로는 여전히 도로를 지난다</b> (#634).
+            if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, 2f,
+                    NpcNavAreas.ExcludeRoad(m_owner.Agent.areaMask)))
             {
                 m_owner.Agent.SetDestination(hit.position);
                 return;

@@ -165,6 +165,8 @@ public class ArrestJudge : CommonManagerBase
     /// <b><see cref="OnArrestJudged"/>는 발행하지 않는다</b> — 구독자 대부분이 신병 라우팅(상태 전이)이라
     /// 시체에 성립하지 않는다. 표시가 필요한 쪽은 <see cref="OnCorpseJudged"/>를 쓴다.
     ///
+    /// <b>환경이 죽인 것은 세지 않는다</b> (#634) — 아래 <see cref="IsPlayerKiller"/> 참고.
+    ///
     /// ⚠ <b>여기가 "죽으면 어떻게 되는가"의 단일 분기점이다.</b> NPC별로 갈 예정인 난이도 노브는
     /// 이 함수 앞에 조건 하나를 세우면 된다 — 사망 경로를 여기 하나로 모아 둔 이유다.
     /// </summary>
@@ -174,6 +176,13 @@ public class ArrestJudge : CommonManagerBase
         if (npc == null)
             return;
         if (npc.IsSpawned && !npc.IsServer)
+            return;
+
+        // 사람이 죽인 것이 아니면 여기서 끝난다 — 경찰의 기록에 남을 일이 아니다 (#634).
+        // 표식(MarkDelivered)도 세우지 않는다: 시체는 여전히 아무 판정도 받지 않은 상태이고,
+        // 누군가 그 시체를 굳이 유치장까지 끌고 가면 그건 <b>그 사람의 선택</b>이라 JudgeCorpse가
+        // 정상적으로 판정한다.
+        if (!IsPlayerKiller(killer))
             return;
 
         // 라운드 진행 중에만 센다 — Judge와 같은 게이트다(준비 중 선점·종료 후 스냅샷 이후 방지).
@@ -201,6 +210,21 @@ public class ArrestJudge : CommonManagerBase
         App.Game.WrongfulArrestPenalty?.ServerCountWrongfulDeath(killer);
         Debug.Log($"[검거 판정] 사망 — {npc.name}: 오검거(사살)");
     }
+
+    /// <summary>
+    /// 이 죽음을 <b>사람이 냈는가</b> — 오검거 집계의 문턱이다. (#634)
+    ///
+    /// 환경이 죽인 시민(차에 치임·폭발에 휘말림 등)까지 팀 카운트에 얹으면, 플레이어가 아무 짓도
+    /// 하지 않아도 라운드가 저절로 망가진다 — 상시 교통이 들어오면서 그게 <b>라운드마다 확실히</b>
+    /// 일어나게 됐다. 차량만 따로 빼지 않고 여기서 일반 규칙으로 세운 이유는, 같은 사정이 폭탄·낙사
+    /// 등 모든 환경 피해에 똑같이 성립하기 때문이다.
+    ///
+    /// 판별을 <see cref="PlayerEscorter"/>로 하는 것은 <see cref="WrongfulArrestPenalty.ServerCountWrongfulDeath"/>의
+    /// 개인 집계와 <b>같은 탐침을 쓰기 위해서다</b> — 둘이 어긋나면 "팀 카운트는 올랐는데 아무에게도
+    /// 안 붙는" 죽음이 생긴다.
+    /// </summary>
+    private static bool IsPlayerKiller(GameObject killer) =>
+        killer != null && killer.GetComponentInParent<PlayerEscorter>() != null;
 
     /// <summary>
     /// 시체 판정 — 유치장 문 앞까지 끌고 온 시체를 판정한다. 서버(또는 오프라인) 전용. (#571)

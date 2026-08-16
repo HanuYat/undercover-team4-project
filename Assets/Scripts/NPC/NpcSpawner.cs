@@ -175,7 +175,10 @@ public class NpcSpawner : CommonManagerBase
             // 프리팹을 먼저 고른다 — 아래 NavMesh 보정에 그 에이전트의 통행 마스크를 써야 하기 때문 (#415)
             NpcController prefab = (m_npcPrefabAlt != null && Random.value < m_altRatio) ? m_npcPrefabAlt : m_npcPrefab;
             NavMeshAgent prefabAgent = prefab.GetComponent<NavMeshAgent>();
-            int spawnAreaMask = prefabAgent != null ? prefabAgent.areaMask : NavMesh.AllAreas;
+            // 도로는 뺀다 — 라운드 시작부터 도로 한복판에 서 있으면 첫 차에 그대로 치인다 (#634)
+            int spawnAreaMask = NpcNavAreas.ExcludeRoad(
+                prefabAgent != null ? prefabAgent.areaMask : NavMesh.AllAreas
+            );
 
             // NavMesh 위 지점으로 보정 — NavMesh 밖에 스폰되면 NavMeshAgent가 동작하지 않아 배회가 멈춘다.
             // 못 가는 영역(Jail)에 붙여 놓으면 경로가 안 잡혀 그 자리에서 고착되므로 마스크를 건다 (#415)
