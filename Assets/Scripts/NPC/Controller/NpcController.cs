@@ -60,6 +60,13 @@ public class NpcController : NetworkBehaviour
     // 라운드 종료 정지(freeze) 플래그 — 서버(또는 오프라인)에서만 의미. 켜지면 FSM/이동을 멈춘다.
     private bool m_frozen;
 
+    // 프리팹이 정한 통행 마스크 — 도로를 빼고 되돌릴 때의 기준값 (#634 후속). Awake에서 1회 확정.
+    private int m_baseAreaMask;
+
+    // 도로 위라 아직 마스크를 좁히지 못했다 — 벗어나는 즉시 좁힌다 (TickRoadEgress)
+    private bool m_roadEgressPending;
+    private float m_roadEgressProbeSeconds;
+
     // 서버 권위 FSM 상태 — 서버만 쓰고 모든 클라이언트가 읽는다 (#56)
     private readonly NetworkVariable<NpcState> m_networkState = new NetworkVariable<NpcState>(NpcState.Idle);
 
@@ -111,6 +118,12 @@ public class NpcController : NetworkBehaviour
     private void Awake()
     {
         m_agent = GetComponent<NavMeshAgent>();
+
+        // 프리팹이 정한 통행 마스크를 <b>좁히기 전에</b> 잡아 둔다 (#634 후속).
+        // 되돌릴 때 NavMesh.AllAreas로 복구하면 프리팹이 일부러 뺀 영역(Jail, #415)까지 되살아나고,
+        // 좁아진 뒤의 m_agent.areaMask를 기준으로 삼으면 한 번 좁힌 뒤 영영 못 되돌린다.
+        m_baseAreaMask = m_agent.areaMask;
+
         m_custody = GetComponent<NpcCustody>();
         m_death = GetComponent<NpcDeath>();
         m_health = GetComponent<NpcHealth>();
@@ -141,6 +154,10 @@ public class NpcController : NetworkBehaviour
         m_stateMachine.AddState(NpcState.PenaltyEscorting, new NpcPenaltyEscortState(this, m_escortConfig));
         m_stateMachine.AddState(NpcState.Releasing, new NpcReleasingState(this, m_fleeConfig));
         m_stateMachine.AddState(NpcState.Dead, new NpcDeadState(this));
+
+        // 도로 통행 정책은 새 상태의 Enter()가 목적지를 잡기 <b>전에</b> 걸려야 한다 — 그래서
+        // OnStateChanged가 아니라 OnBeforeEnter다 (#634 후속)
+        m_stateMachine.OnBeforeEnter += ApplyRoadPolicy;
 
         // FSM 전이(서버/오프라인에서만 발생)를 동기화 변수 또는 로컬 이벤트로 흘려보낸다
         m_stateMachine.OnStateChanged += HandleFsmStateChanged;
@@ -207,6 +224,11 @@ public class NpcController : NetworkBehaviour
         // NavMesh 밖에서 굳은 몸의 회수 — 아래 모든 게이트보다 **먼저** 돈다 (#557).
         // 뒤로 내리면 스턴 게이트에 가려 기절한 채 굳은 NPC(=신고된 증상 그대로)에 영영 닿지 못한다.
         TickNavMeshRecovery();
+
+        // 도로를 벗어나면 통행 마스크를 좁힌다 — 회수와 같은 이유로 게이트보다 먼저 돈다 (#634 후속).
+        // 도로 위에서 기절·넉백을 맞으면 그 구간 내내 대기 상태로 남는데, 그동안 움직이지 않으므로
+        // 판정은 계속 "도로 위"고 좁혀지지 않는다 — 깨어나 걸어 나가면 그때 좁는다.
+        TickRoadEgress();
 
         // 사망 — <b>모든 게이트보다 먼저 끝낸다</b> (#571). 죽은 몸은 아무 틱도 돌지 않는다.
         //
@@ -424,6 +446,99 @@ public class NpcController : NetworkBehaviour
         }
 
         return found;
+    }
+
+    // ---- 도로 통행 정책 (#634 후속) ----
+
+    /// <summary>
+    /// 프리팹이 정한 통행 마스크 — <b>도로 정책이 적용되기 전</b>의 값이다.
+    ///
+    /// "이 몸을 NavMesh 어디에 놓을 수 있는가"를 묻는 쪽(넉백 착지·래그돌 기상)이 쓴다.
+    /// 그건 "지금 걸어도 되는 곳인가"와 다른 질문이라 <see cref="NavMeshAgent.areaMask"/>를
+    /// 쓰면 안 된다 — 배회 중이라 마스크가 좁아진 몸이 도로 위에 떨어지면 착지점을 못 찾는다.
+    /// (Jail 제외는 이 값에도 살아 있어 #415의 이유는 그대로 지켜진다)
+    /// </summary>
+    internal int BaseAreaMask => m_baseAreaMask;
+
+    // 도로 이탈 확인 주기(초) — 대기 중인 개체만, 그것도 간격을 두고 본다.
+    // 매 프레임 NavMesh를 샘플하면 군중 규모에서 그대로 비용이 된다.
+    private const float k_roadEgressProbeInterval = 0.25f;
+
+    /// <summary>
+    /// 상태에 맞는 통행 마스크를 건다 — <see cref="NpcStateMachine.OnBeforeEnter"/>에서 호출. (#634 후속)
+    ///
+    /// 도로를 밟으면 안 되는 상태인데 <b>지금 도로 위</b>라면 좁히지 않고 미룬다:
+    /// 서 있는 폴리곤이 마스크 밖이 되면 경로 계산이 통째로 실패해(<c>PathInvalid</c>)
+    /// <b>차도 한복판에서 영영 굳는다</b> — 고치려던 것보다 나쁜 증상이다.
+    /// 미루는 동안에도 목적지 쪽은 이미 도로를 빼고 뽑으므로(<see cref="NpcWalkState"/>·
+    /// <see cref="NpcSpawner"/>가 <c>NpcNavAreas.ExcludeRoad</c>를 쓴다) 스스로 도로를 벗어난다.
+    /// </summary>
+    private void ApplyRoadPolicy(NpcState next)
+    {
+        if (NpcNavAreas.AllowsRoad(next))
+        {
+            m_roadEgressPending = false;
+            SetAreaMask(m_baseAreaMask);
+            return;
+        }
+
+        if (NpcNavAreas.IsOnRoad(transform.position))
+        {
+            m_roadEgressPending = true;
+            m_roadEgressProbeSeconds = 0f;
+            SetAreaMask(m_baseAreaMask); // 벗어날 때까지는 도로를 쓸 수 있어야 나갈 수 있다
+            return;
+        }
+
+        m_roadEgressPending = false;
+        SetAreaMask(NpcNavAreas.ExcludeRoad(m_baseAreaMask));
+    }
+
+    /// <summary>
+    /// 도로를 벗어나기를 기다렸다가 마스크를 좁힌다 — 서버(또는 오프라인) 전용. (#634 후속)
+    /// 추격이 끝나 배회로 돌아온 NPC가 마침 차도 위였던 경우가 이 경로다.
+    /// </summary>
+    private void TickRoadEgress()
+    {
+        if (!m_roadEgressPending)
+            return;
+
+        m_roadEgressProbeSeconds += Time.deltaTime;
+        if (m_roadEgressProbeSeconds < k_roadEgressProbeInterval)
+            return;
+        m_roadEgressProbeSeconds = 0f;
+
+        // 그새 도로를 밟아도 되는 상태로 바뀌었다면 대기 자체가 무의미하다.
+        // (ApplyRoadPolicy가 이미 껐겠지만, 전이 없이 여기까지 오는 경로가 생겨도 새지 않게 둔다)
+        if (NpcNavAreas.AllowsRoad(m_stateMachine.CurrentState))
+        {
+            m_roadEgressPending = false;
+            return;
+        }
+
+        if (NpcNavAreas.IsOnRoad(transform.position))
+            return;
+
+        m_roadEgressPending = false;
+        SetAreaMask(NpcNavAreas.ExcludeRoad(m_baseAreaMask));
+    }
+
+    /// <summary>
+    /// 통행 마스크를 갈아 끼우고, 바뀌었으면 <b>지금 경로를 다시 계산시킨다.</b>
+    ///
+    /// <c>areaMask</c>를 바꿔도 이미 계산된 경로는 그대로 남는다 — 도로를 지나는 옛 경로가 살아 있으면
+    /// 좁힌 의미가 없다. 다시 계산해 부분 경로가 나오면 각 상태의 막힘 감지가 목적지를 새로 뽑는다
+    /// (<see cref="NpcWalkState"/>는 제자리 2초로 잡는다).
+    /// </summary>
+    private void SetAreaMask(int mask)
+    {
+        if (m_agent.areaMask == mask)
+            return;
+
+        m_agent.areaMask = mask;
+
+        if (AgentReady && m_agent.hasPath)
+            m_agent.SetDestination(m_agent.destination);
     }
 
     // ---- 굳은 몸 회수 (#557) ----
