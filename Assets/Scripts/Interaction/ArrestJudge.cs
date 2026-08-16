@@ -167,10 +167,12 @@ public class ArrestJudge : CommonManagerBase
     ///   <item><b><see cref="OnArrestJudged"/> 대신 <see cref="OnCorpseJudged"/>를 발행한다</b> —
     ///   저쪽에는 신병 라우팅(상태 전이) 구독자가 섞여 있어 시체에 성립하지 않는다. 양쪽 모두에
     ///   필요한 후처리(수배 항목 제거·표시)는 두 훅을 함께 구독한다.</item>
-    ///   <item><b>재판정 경로가 하나뿐이다.</b> 산 수감자는 문 앞에서 다시 누르면 언제든 재판정되지만
-    ///   (#358/#517), 시체는 <see cref="NpcCustody.IsDelivered"/>가 여기를 막으므로 그 표식을 걷는
-    ///   <b>밧줄 반출</b>(<c>JailIntake.ServerReleaseCorpse</c>)을 거쳐야만 다시 넣을 수 있다.
-    ///   정산 원장에서 빠지는 것과 표식이 풀리는 것이 그 한 곳에서 함께 일어난다.</item>
+    ///   <item><b>재판정이 판정 종류로 갈린다.</b> <see cref="NpcCustody.IsDelivered"/>가 막는 것은
+    ///   <b>계상</b>이지 판정이 아니다 — 계상되는 쪽(진범·경범죄)은 원장에 두 번 오르면 현상금이
+    ///   겹치므로 한 번만 받고, 그 표식을 걷는 <b>밧줄 반출</b>(<c>JailIntake.ServerReleaseCorpse</c>)을
+    ///   거쳐야 다시 넣을 수 있다. <b>오검거는 이 가드를 타지 않는다</b>: 감옥에 들어가지 않아 원장에
+    ///   없고 계상 대신 횟수만 세므로 막을 중복이 없다. 산 신병과 같은 규칙이다 — 다시 인계하면
+    ///   또 한 번의 오검거다 (#358).</item>
     ///   <item><b>오검거도 여기서 센다.</b> 예전에는 죽는 순간 셌고(JudgeDeath) 그 표식이 무고한 시민의
     ///   시체를 이 함수에 들어오지도 못하게 막았다 — 버튼을 눌러도 아무 결과가 안 나오던 원인이다.
     ///   이제 산 신병과 같은 기준으로 <b>인계자</b>에게 붙는다: 시체를 문 앞까지 끌고 와 누른 사람이
@@ -178,7 +180,7 @@ public class ArrestJudge : CommonManagerBase
     /// </list>
     /// </summary>
     /// <param name="presser">수감 버튼을 누른 플레이어 — 밧줄을 쥔 사람들과 함께 인계자가 된다.</param>
-    /// <returns>판정 결과 — 판정할 수 없거나 이미 계상된 시체면 null.</returns>
+    /// <returns>판정 결과 — 판정할 수 없거나 이미 <b>계상된</b> 시체면 null (오검거는 매번 성립한다).</returns>
     public ArrestResult? JudgeCorpse(NpcController npc, PlayerEscorter presser)
     {
         if (npc == null)
@@ -191,15 +193,23 @@ public class ArrestJudge : CommonManagerBase
         if (Round != null && Round.Phase != RoundPhase.InProgress)
             return null;
 
-        // 이미 계상된 시체 — 한 번 판정된 시체가 여기 걸린다. 되돌리는 경로는 밧줄 반출 하나다
-        // (JailIntake.ServerReleaseCorpse가 원장과 표식을 함께 걷는다).
-        if (npc.Custody.IsDelivered)
-            return null;
+        // 표식은 판별보다 <b>먼저</b> 읽는다 — 아래 계상 가드와 결과의 IsFirstDelivery가 같은 값을 봐야 한다.
+        bool firstDelivery = !npc.Custody.IsDelivered;
 
         if (!TryResolveVerdict(npc, out ArrestVerdict verdict, out int reward, out CitizenProfile profile))
             return null;
 
-        npc.Custody.MarkDelivered();
+        // 이미 계상된 시체는 다시 계상하지 않는다 — 원장에 두 번 오르면 현상금이 겹친다. 되돌리는
+        // 경로는 밧줄 반출 하나다(JailIntake.ServerReleaseCorpse가 원장과 표식을 함께 걷는다).
+        //
+        // <b>오검거는 여기를 지난다.</b> 감옥에 들어가지 않아 원장에 없고, 계상 대신 횟수만 세므로
+        // 막을 중복이 없다 — 막으면 무고한 시민의 시체가 한 번 판정된 뒤 영영 결과를 못 내게 된다.
+        if (!firstDelivery && verdict != ArrestVerdict.WrongfulArrest)
+            return null;
+
+        // 표식도 계상되는 쪽에만 세운다 — 오검거에 세우면 위 가드를 스스로 닫아 재판정이 막힌다.
+        if (verdict != ArrestVerdict.WrongfulArrest)
+            npc.Custody.MarkDelivered();
 
         // 인계자 기준은 산 신병과 같다 (#537) — 줄을 쥔 전원 + 버튼을 누른 사람.
         // 시체 밧줄은 1:1이라(NpcStateRules.CanRopeBind) 목록은 보통 한둘이다.
@@ -207,11 +217,13 @@ public class ArrestJudge : CommonManagerBase
         if (presser != null && !deliverers.Contains(presser))
             deliverers.Add(presser);
 
-        var result = new ArrestResult(npc, verdict, profile, reward, deliverers, true);
+        var result = new ArrestResult(npc, verdict, profile, reward, deliverers, firstDelivery);
 
-        // 오검거 집계는 산 신병과 같은 기준·같은 대상이다 — 다만 훅이 갈려 있어(OnCorpseJudged에는
-        // 페널티 매니저가 구독하지 않는다) 여기서 직접 부른다. 저쪽 구독을 늘리지 않는 이유는
-        // OnCorpseJudged의 성격(표시·기록 전용, 상태를 안 건드림)을 지키기 위해서다.
+        // 오검거 집계는 산 신병과 같은 기준·같은 대상이고, <b>인계마다</b> 오른다 (#358 — 저쪽
+        // HandleArrestJudged가 IsFirstDelivery로 막지 않는 것과 같은 이유).
+        // 훅이 갈려 있어(OnCorpseJudged에는 페널티 매니저가 구독하지 않는다) 여기서 직접 부른다 —
+        // 저쪽 구독을 늘리지 않는 이유는 OnCorpseJudged의 성격(표시·기록 전용, 상태를 안 건드림)을
+        // 지키기 위해서다.
         if (verdict == ArrestVerdict.WrongfulArrest)
             App.Game.WrongfulArrestPenalty?.ServerCountWrongfulCorpse(deliverers);
 
