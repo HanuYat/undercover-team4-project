@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -16,6 +17,12 @@ using UnityEngine;
 ///
 /// 회전은 <b>구속</b>하지 않는다 — 시체는 끌리면서 자유롭게 굴러야 한다. 각 감쇠는 구속이 아니라
 /// 마찰이므로 별개다(팽이처럼 도는 것만 잡는다).
+///
+/// <b>여러 가닥이 동시에 걸린다</b> (#638). 쥔 사람 하나당 한 가닥이고, 각 가닥이 자기 거리 제한을
+/// 따로 건다 — 두 사람이 반대로 걸어가면 두 제한이 동시에 위반돼 힘이 상쇄되고 몸이 <b>가운데서
+/// 멈춘다</b>(줄다리기, #390/#398). 같은 방향이면 강성이 합쳐져 덜 늘어난다.
+/// 한 가닥만 두던 시절에는 나중에 건 사람이 <b>앞사람의 줄을 통째로 가져갔고</b>, 그 사람이 놓으면
+/// 관절이 떠난 손에 남아 몸이 계속 따라갔다(#638 실측).
 ///
 /// ⚠ <b>NPC의 기존 밧줄(<c>NpcRopeDrag</c>)과 다른 물건이다.</b> 그쪽은 서버가
 /// <c>transform.position</c>을 직접 대입하고 NetworkTransform이 복제하는 방식이다. 래그돌이 된 몸은
@@ -64,26 +71,60 @@ public class RagdollRope : MonoBehaviour
     // 걸고 푸는 자리는 밧줄의 수명과 정확히 같다: ApplyTuning ↔ Detach.
 
     private RagdollRig m_rig;
-    private Rigidbody m_anchor; // 운반자 손을 따라가는 키네마틱 앵커 — 밧줄의 끝
-    private GameObject m_anchorObject; // 파괴용 — 앵커는 부모가 없어 씬에 남는다
-    private ConfigurableJoint m_joint; // 골반 ↔ 앵커, 거리 제한(= 밧줄)
-    private Transform m_carrier; // 밧줄을 쥔 쪽
+
+    // 밧줄 한 가닥 — 쥔 사람 하나당 하나다. (#638)
+    private class Strand
+    {
+        public Transform Carrier; // 밧줄을 쥔 쪽(보통 운반자의 손 앵커)
+        public Rigidbody Anchor; // 그 손을 따라가는 키네마틱 앵커 — 밧줄의 끝
+        public GameObject AnchorObject; // 파괴용 — 앵커는 부모가 없어 씬에 남는다
+        public ConfigurableJoint Joint; // 골반 ↔ 앵커, 거리 제한(= 밧줄)
+    }
+
+    // 지금 이 몸에 걸린 가닥들 — 줄다리기면 여럿이다. 순서는 걸린 순서일 뿐 의미는 없다.
+    private readonly List<Strand> m_strands = new List<Strand>();
 
     // 마지막으로 적용한 튜닝 값 — 인스펙터에서 바뀐 프레임에만 다시 쓰기 위한 비교용.
     // (관절 프로퍼티 대입과 뼈 순회를 매 물리 스텝 돌리지 않는다)
     private Vector4 m_appliedTuning;
     private float m_appliedAngularDamping;
 
-    /// <summary>지금 밧줄이 묶여 있는가.</summary>
-    public bool IsAttached => m_joint != null;
+    /// <summary>밧줄이 <b>한 가닥이라도</b> 묶여 있는가.</summary>
+    public bool IsAttached => m_strands.Count > 0;
+
+    /// <summary>이 사람이 쥔 가닥이 걸려 있는가. (#638)</summary>
+    public bool IsAttachedTo(Transform carrier) => IndexOf(carrier) >= 0;
 
     /// <summary>묶여 있고 <b>운반자도 살아 있는가</b> — "지금 실제로 끌리는 중"이라는 뜻이다.
     ///
     /// <see cref="IsAttached"/>와 갈라 두는 이유는 <see cref="Tick"/>이 운반자를 잃으면 <b>관절을
     /// 남긴 채 조용히 쉬기</b> 때문이다(정리는 호출부 몫이다 — <c>NpcRopeDrag</c> 주석). 그 상태를
     /// "끌리는 중"으로 세면 <b>영영 끝나지 않는 견인</b>이 되므로, 견인을 이유로 무언가를 미루는
-    /// 쪽(정착 판정 등)은 이 값을 봐야 한다.</summary>
-    public bool IsBeingCarried => m_joint != null && m_carrier != null;
+    /// 쪽(정착 판정 등)은 이 값을 봐야 한다. 여러 가닥이면 <b>하나라도</b> 살아 있으면 참이다.</summary>
+    public bool IsBeingCarried
+    {
+        get
+        {
+            for (int i = 0; i < m_strands.Count; i++)
+                if (m_strands[i].Joint != null && m_strands[i].Carrier != null)
+                    return true;
+
+            return false;
+        }
+    }
+
+    // 이 사람의 가닥이 몇 번째인가 — 없으면 -1. 파괴된 운반자는 Unity 가짜 null이라 자연히 안 맞는다.
+    private int IndexOf(Transform carrier)
+    {
+        if (carrier == null)
+            return -1;
+
+        for (int i = 0; i < m_strands.Count; i++)
+            if (m_strands[i].Carrier == carrier)
+                return i;
+
+        return -1;
+    }
 
     /// <summary>지금 줄을 쥔 쪽 — 안 묶여 있으면 null.
     ///
@@ -110,8 +151,9 @@ public class RagdollRope : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (m_anchorObject != null)
-            Destroy(m_anchorObject);
+        for (int i = 0; i < m_strands.Count; i++)
+            if (m_strands[i].AnchorObject != null)
+                Destroy(m_strands[i].AnchorObject);
     }
 
     private void FixedUpdate() => Tick();
@@ -134,93 +176,146 @@ public class RagdollRope : MonoBehaviour
     /// 상주로 만들면 씬을 넘나드는 쓰레기가 쌓이고, 물리 씬이 갈리면 관절이 아예 안 걸린다.
     /// 대신 쓰기 직전에 다시 만든다(<see cref="RagdollRig.EnsureCollected"/>와 같은 멱등 보장).
     /// </summary>
-    private void EnsureAnchor()
+    private Rigidbody CreateAnchor(Strand strand)
     {
-        if (m_anchor != null) // 파괴됐으면 Unity의 가짜 null이라 여기서 걸러진다
-            return;
         if (m_rig == null || !m_rig.IsValid)
-            return;
+            return null;
 
         GameObject anchor = new GameObject($"RopeAnchor ({name})");
-        m_anchor = anchor.AddComponent<Rigidbody>();
-        m_anchor.isKinematic = true;
-        m_anchor.useGravity = false;
-        m_anchorObject = anchor;
+        Rigidbody body = anchor.AddComponent<Rigidbody>();
+        body.isKinematic = true;
+        body.useGravity = false;
+
+        strand.AnchorObject = anchor;
+        strand.Anchor = body;
+        return body;
     }
 
-    /// <summary>밧줄을 시체에 <b>묶는다</b> — 운반자가 움직이면 물리가 시체를 끌어온다.</summary>
+    /// <summary>밧줄을 시체에 <b>한 가닥 묶는다</b> — 운반자가 움직이면 물리가 시체를 끌어온다.
+    /// 이미 이 사람의 가닥이 있으면 무동작이다(멱등) — 다시 걸면 관절이 새로 만들어지며
+    /// 그 순간의 상대 포즈가 기준으로 굳어, 늘어나 있던 줄이 확 되감긴다. (#638)</summary>
     /// <param name="carrier">운반자(밧줄을 쥔 쪽). 매 물리 스텝 이 위치를 따라 앵커가 움직인다.</param>
     public void Attach(Transform carrier)
     {
-        // ⚠ <b>Detach가 먼저다.</b> 멱등을 위해 기존 관절을 끊고 감쇠를 되돌리는데, 그 과정에서
-        // m_carrier를 지우므로 순서를 뒤집으면 방금 받은 운반자가 곧바로 날아간다(밧줄이 안 따라간다).
-        Detach();
+        if (carrier == null || m_rig == null || m_rig.HipsBody == null)
+            return;
+        if (IsAttachedTo(carrier))
+            return;
 
-        m_carrier = carrier;
+        var strand = new Strand { Carrier = carrier };
 
-        // 앵커가 씬 전환에 쓸려 갔을 수 있다 — 쓰기 직전에 다시 보장한다 (EnsureAnchor 주석).
-        EnsureAnchor();
-
-        if (carrier == null || m_rig == null || m_rig.HipsBody == null || m_anchor == null)
+        // 앵커는 가닥마다 하나다. 씬 전환에 쓸려 가도 여기서 새로 만들어지므로 따로 보장할 것이 없다
+        // (예전 EnsureAnchor 주석의 사정 — 앵커는 부모가 없어 씬과 함께 죽는다).
+        if (CreateAnchor(strand) == null)
             return;
 
         // 앵커를 운반자 자리에 먼저 옮긴다. 관절은 만들어진 순간의 상대 포즈를 기준으로 삼으므로
         // 순서가 뒤바뀌면 엉뚱한 기준이 굳는다 (그렇게 만들었다가 시체가 0.88m 떠올랐다).
-        m_anchor.position = carrier.position;
+        strand.Anchor.position = carrier.position;
 
-        m_joint = m_rig.HipsBody.gameObject.AddComponent<ConfigurableJoint>();
-        m_joint.autoConfigureConnectedAnchor = false;
-        m_joint.anchor = Vector3.zero; // 골반 피벗
-        m_joint.connectedAnchor = Vector3.zero; // 앵커 원점
-        m_joint.connectedBody = m_anchor;
+        ConfigurableJoint joint = m_rig.HipsBody.gameObject.AddComponent<ConfigurableJoint>();
+        joint.autoConfigureConnectedAnchor = false;
+        joint.anchor = Vector3.zero; // 골반 피벗
+        joint.connectedAnchor = Vector3.zero; // 앵커 원점
+        joint.connectedBody = strand.Anchor;
 
         // 전 축 Limited + 반경 = 밧줄 길이. 구면 안에서는 자유, 표면에서 잡힌다.
-        m_joint.xMotion = ConfigurableJointMotion.Limited;
-        m_joint.yMotion = ConfigurableJointMotion.Limited;
-        m_joint.zMotion = ConfigurableJointMotion.Limited;
+        joint.xMotion = ConfigurableJointMotion.Limited;
+        joint.yMotion = ConfigurableJointMotion.Limited;
+        joint.zMotion = ConfigurableJointMotion.Limited;
 
-        m_joint.angularXMotion = ConfigurableJointMotion.Free;
-        m_joint.angularYMotion = ConfigurableJointMotion.Free;
-        m_joint.angularZMotion = ConfigurableJointMotion.Free;
+        joint.angularXMotion = ConfigurableJointMotion.Free;
+        joint.angularYMotion = ConfigurableJointMotion.Free;
+        joint.angularZMotion = ConfigurableJointMotion.Free;
 
-        m_joint.projectionMode = JointProjectionMode.None; // §9-2 — projection은 충돌을 무시한다
-        m_joint.enableCollision = false;
+        joint.projectionMode = JointProjectionMode.None; // §9-2 — projection은 충돌을 무시한다
+        joint.enableCollision = false;
 
+        strand.Joint = joint;
+        m_strands.Add(strand);
+
+        // 골반 하나에 관절이 여럿 붙는다 — 같은 몸을 여러 명이 끄는 그림이 여기서 나온다 (#638).
+        // 각 관절이 자기 앵커와의 거리 제한을 독립으로 걸고, 솔버가 그 제약들을 함께 푼다.
         ApplyTuning(); // 길이·강성·감쇠 — 관절 생성과 분리해 Play 중에도 다시 적용할 수 있게
         m_rig.WakeAll(); // 잠든 시체는 관절 힘만으로는 안 깨어날 수 있다
     }
 
-    /// <summary>밧줄을 푼다 — 내려놓기·부활·운반자 소실.</summary>
-    public void Detach()
+    /// <summary>이 사람의 가닥만 푼다 — 줄다리기에서 한 명이 손을 뗄 때. 없으면 무동작(멱등). (#638)
+    /// 남은 가닥은 그대로 끌기를 이어간다.</summary>
+    public void Detach(Transform carrier)
     {
-        m_carrier = null;
-
-        if (m_joint == null)
+        int index = IndexOf(carrier);
+        if (index < 0)
             return;
 
-        Destroy(m_joint);
-        m_joint = null;
+        DestroyStrand(m_strands[index]);
+        m_strands.RemoveAt(index);
+
+        // 감쇠는 <b>마지막 가닥</b>의 수명과 같다 — 한 명이 빠졌다고 되돌리면 남은 사람이 끄는
+        // 동안 흔들림·슬링 대책이 사라진다.
+        if (m_strands.Count == 0)
+            m_rig?.RestoreDamping();
+    }
+
+    /// <summary>걸린 가닥을 <b>전부</b> 푼다 — 내려놓기·부활·사망 정리.</summary>
+    public void Detach()
+    {
+        if (m_strands.Count == 0)
+            return;
+
+        for (int i = 0; i < m_strands.Count; i++)
+            DestroyStrand(m_strands[i]);
+
+        m_strands.Clear();
         m_rig?.RestoreDamping(); // 감쇠는 밧줄의 수명과 같다 — 풀면 다시 탄도로 돌아간다
+    }
+
+    // 가닥 하나의 실물(관절 + 앵커 오브젝트)을 치운다. 목록에서 빼는 것은 호출부 몫이다.
+    private void DestroyStrand(Strand strand)
+    {
+        if (strand.Joint != null)
+            Destroy(strand.Joint);
+        if (strand.AnchorObject != null)
+            Destroy(strand.AnchorObject); // 앵커는 부모가 없어 안 지우면 씬에 남는다
+
+        strand.Joint = null;
+        strand.Anchor = null;
+        strand.AnchorObject = null;
+        strand.Carrier = null;
     }
 
     // 앵커를 운반자 손 위치로 옮긴다 — 물리 스텝마다. 앵커는 키네마틱이라 이 이동이 곧 밧줄의
     // 장력이 되고, 시체는 그 장력에 끌린다. 우리가 시체 위치를 계산하지 않는 것이 핵심이다.
     private void Tick()
     {
-        if (m_anchor == null || m_carrier == null)
+        if (m_strands.Count == 0)
             return;
 
         // Play 중 인스펙터에서 값을 바꾸면 밧줄을 다시 잡지 않아도 바로 먹는다 (튜닝용).
         if (TuningChanged)
             ApplyTuning();
 
-        m_anchor.MovePosition(m_carrier.position);
+        // 가닥마다 자기 앵커를 자기 운반자에게 붙인다 — 서로 다른 방향으로 끌면 그 차이가
+        // 관절들 사이의 힘겨루기가 된다(줄다리기, #638).
+        bool anyCarried = false;
+        for (int i = 0; i < m_strands.Count; i++)
+        {
+            Strand strand = m_strands[i];
+            if (strand.Anchor == null || strand.Carrier == null)
+                continue; // 운반자를 잃은 가닥은 관절을 남긴 채 쉰다 — 정리는 호출부 몫 (IsBeingCarried 주석)
+
+            anyCarried = true;
+            strand.Anchor.MovePosition(strand.Carrier.position);
+        }
+
+        if (!anyCarried)
+            return;
 
         // 밧줄이 팽팽해지는 순간 시체가 자고 있으면 장력을 못 받는다.
         if (m_rig.HipsBody != null && m_rig.HipsBody.IsSleeping())
             m_rig.WakeAll();
 
-        m_rig.ClampSpeed(m_maxSpeed); // 슬링 차단 — 장력을 적용한 뒤에 자른다
+        m_rig.ClampSpeed(m_maxSpeed); // 슬링 차단 — 장력을 적용한 뒤에 자른다(가닥 수와 무관하게 한 번)
     }
 
     /// <summary>
@@ -247,15 +342,24 @@ public class RagdollRope : MonoBehaviour
     /// </summary>
     private void ApplyTuning()
     {
-        if (m_joint == null)
+        if (m_strands.Count == 0)
             return;
 
-        m_joint.linearLimit = new SoftJointLimit { limit = Mathf.Max(0.1f, m_length) };
-        m_joint.linearLimitSpring = new SoftJointLimitSpring
+        // 가닥마다 같은 값을 건다 — 줄은 다 같은 밧줄이다. 여러 가닥이 같은 방향으로 당기면
+        // 강성이 합쳐져 늘어남이 1/n로 줄고, 반대로 당기면 서로 상쇄된다. (#638)
+        for (int i = 0; i < m_strands.Count; i++)
         {
-            spring = m_limitSpring,
-            damper = m_limitDamper,
-        };
+            ConfigurableJoint joint = m_strands[i].Joint;
+            if (joint == null)
+                continue;
+
+            joint.linearLimit = new SoftJointLimit { limit = Mathf.Max(0.1f, m_length) };
+            joint.linearLimitSpring = new SoftJointLimitSpring
+            {
+                spring = m_limitSpring,
+                damper = m_limitDamper,
+            };
+        }
 
         m_rig.SetDamping(m_dragLinearDamping, m_dragAngularDamping);
 
