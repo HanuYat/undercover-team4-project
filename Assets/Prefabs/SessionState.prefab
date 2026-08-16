@@ -119,8 +119,14 @@ MonoBehaviour:
   m_maps:
   - SceneName: Map_Apocalypse
     DisplayName: "\uC885\uB9D0 \uB3C4\uC2DC"
+    Preview: {fileID: 21300000, guid: 2884320ad28e2aa4fa9e56773da7b172, type: 3}
+    NpcCount: 100
+    PreviewRotated: 1
   - SceneName: Map_Cyberpunk
     DisplayName: "\uC0AC\uC774\uBC84\uD391\uD06C"
+    Preview: {fileID: 21300000, guid: 0c68b300db5cd354a870afd491e91b71, type: 3}
+    NpcCount: 30
+    PreviewRotated: 0
 --- !u!114 &2786289631189589368
 MonoBehaviour:
   m_ObjectHideFlags: 0
