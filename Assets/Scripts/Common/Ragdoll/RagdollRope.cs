@@ -126,12 +126,10 @@ public class RagdollRope : MonoBehaviour
         return -1;
     }
 
-    /// <summary>지금 줄을 쥔 쪽 — 안 묶여 있으면 null.
-    ///
-    /// <b>왜 읽을 수 있어야 하나.</b> 시체를 순간이동시키는 쪽이 <b>줄을 끊었다 같은 운반자에게 다시
-    /// 매기</b> 위해서다(<see cref="NpcRagdoll.ServerPlaceCorpse"/>). 관절을 건 채로 수백 m를 옮기면
-    /// 그 위반을 솔버가 메우며 시체를 발사한다 — 실측 237 m/s.</summary>
-    public Transform Carrier => m_carrier;
+    // 쥔 쪽을 하나만 돌려주던 <c>Carrier</c> 프로퍼티는 없앴다. 존재 이유였던 "순간이동 쪽이 줄을
+    // 끊었다 같은 운반자에게 다시 맨다"가 사라졌고(도착지의 무조건 Unfreeze·재부착을 걷어냈다 — 그게
+    // 실측 264/417 m/s의 출처였다), 이제 쥔 쪽은 <b>가닥마다</b> 있어 하나로 답할 수도 없다 (#638).
+    // 필요해지면 묻는 쪽이 <see cref="IsAttachedTo"/>로 자기 가닥을 확인하는 것이 맞는 형태다.
 
     private bool TuningChanged =>
         m_appliedTuning != new Vector4(m_length, m_limitSpring, m_limitDamper, m_dragLinearDamping)
