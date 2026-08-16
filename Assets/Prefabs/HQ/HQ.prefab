@@ -1947,6 +1947,8 @@ MonoBehaviour:
   m_mapRect: {fileID: 4895499700660949980}
   m_iconContainer: {fileID: 4895499700660949980}
   m_iconPrefab: {fileID: 5698290347383743024, guid: e1ffd24007d473845a05c3d95f226b68, type: 3}
+  m_areaPrefab: {fileID: 5698290347383743024, guid: 41ac604fe4079214a9b55c9283195142, type: 3}
+  m_areaContainer: {fileID: 0}
 --- !u!1 &9173665674205553012
 GameObject:
   m_ObjectHideFlags: 0
