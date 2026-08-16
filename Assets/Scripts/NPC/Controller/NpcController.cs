@@ -269,6 +269,7 @@ public class NpcController : NetworkBehaviour
         {
             m_rope.ClearTethers();
             m_custody.SetJailExtracted(false);
+            m_custody.SetSecuredByPlayer(false); // 도주·배회로 돌아갔다 — 더는 누구의 신병도 아니다 (#637)
         }
 
         // 반출 목적지(#548)도 같은 자리에서 내린다 — 단 <b>도주·저항·기절로는 지우지 않는다</b>
