@@ -57,6 +57,7 @@ public class PlayerHitView : NetworkBehaviour
         if (IsLocalOwner)
         {
             App.UI.DamageVignette?.ClearAll();
+            App.UI.SpeedVignette?.ClearAll(); // 달리던 중 디스폰되면 속도 비네트가 그대로 남는다 (#665)
             ApplyShock(0f); // 감전 중 디스폰되면 화면 지직·카메라 떨림이 그대로 남는다 (#477)
         }
 

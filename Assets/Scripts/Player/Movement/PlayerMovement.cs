@@ -419,6 +419,11 @@ public class PlayerMovement : NetworkBehaviour
     {
         TickSpeedBuff(); // 만료는 아래 분기와 무관하게 흐른다 (#227)
 
+        // 속도 비네트 — 내 화면에만 (#665). 여기 두면 아래 분기 전부를 덮는다:
+        // 끌려가거나 래그돌인 동안은 이 속도가 0이라 저쪽에서 알아서 걷힌다.
+        if (!IsSpawned || IsOwner)
+            App.UI.SpeedVignette?.UpdateSpeed(m_currentHorizontalVelocity.magnitude, SprintSpeed);
+
         // 래그돌인 동안(#506) — <b>위치의 주인은 시체다.</b> 캡슐이 시체를 따라간다.
         if (m_ragdoll != null && m_ragdoll.IsCapsuleFollowingBody)
         {

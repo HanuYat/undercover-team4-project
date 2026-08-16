@@ -17,34 +17,42 @@ using UnityEngine;
 public class PlayerSpectateCamera : MonoBehaviour
 {
     [Tooltip("시체(골반)에서 카메라가 도는 중심까지의 높이(m)")]
-    [SerializeField] private float m_pivotHeight = 0.6f;
+    [SerializeField]
+    private float m_pivotHeight = 0.6f;
 
     [Tooltip("중심에서 카메라까지의 거리(m)")]
-    [SerializeField] private float m_distance = 3.5f;
+    [SerializeField]
+    private float m_distance = 3.5f;
 
     [Tooltip("오빗 피치 하한(음수=카메라가 중심보다 낮아진다). 너무 낮추면 바닥을 파고든다")]
-    [SerializeField] private float m_minPitch = -10f;
+    [SerializeField]
+    private float m_minPitch = -10f;
 
     [Tooltip("오빗 피치 상한(양수=위에서 내려다본다). 시체를 내려다보는 쪽을 넉넉히 연다")]
-    [SerializeField] private float m_maxPitch = 70f;
+    [SerializeField]
+    private float m_maxPitch = 70f;
 
     [Tooltip("관전 진입 시 시작 피치 — 살짝 내려다보는 각에서 출발한다")]
-    [SerializeField] private float m_enterPitch = 20f;
+    [SerializeField]
+    private float m_enterPitch = 20f;
 
-    [Tooltip("1인칭↔관전 전환 보간 속도. 4면 약 1초에 걸쳐 뒤로 빠진다")]
-    [SerializeField] private float m_blendSpeed = 4f;
+    [Tooltip("1인칭↔관전 전환 보간 속도. 클수록 빨리 빠진다 — 7이면 약 0.5초 (#665)")]
+    [SerializeField]
+    private float m_blendSpeed = 7f;
 
     [Tooltip("카메라가 벽을 파고들지 않게 띄울 반경(m)")]
-    [SerializeField] private float m_probeRadius = 0.25f;
+    [SerializeField]
+    private float m_probeRadius = 0.25f;
 
     [Tooltip("카메라 충돌 판정 레이어 — 플레이어·트리거는 빼 둘 것 (감정표현 3인칭과 같은 값)")]
-    [SerializeField] private LayerMask m_collisionMask = ~0;
+    [SerializeField]
+    private LayerMask m_collisionMask = ~0;
 
     private RagdollRig m_rig; // 피벗으로 쓸 골반 뼈
 
     private bool m_active;
     private float m_blend; // 1인칭(0) ↔ 관전(1) 진행도
-    private bool m_snap;   // 다음 Tick에서 보간을 끊고 현재 상태를 즉시 반영한다
+    private bool m_snap; // 다음 Tick에서 보간을 끊고 현재 상태를 즉시 반영한다
     private float m_yaw;
     private float m_pitch;
 
@@ -98,7 +106,9 @@ public class PlayerSpectateCamera : MonoBehaviour
             return m_blend;
         }
 
-        m_blend = Mathf.Lerp(m_blend, m_active ? 1f : 0f, m_blendSpeed * Time.deltaTime);
+        // 주사율이 달라도 같은 속도로 붙게 — PlayerLook.Damp와 같은 식이다. (#665)
+        float t = m_blendSpeed <= 0f ? 1f : 1f - Mathf.Exp(-m_blendSpeed * Time.deltaTime);
+        m_blend = Mathf.Lerp(m_blend, m_active ? 1f : 0f, t);
 
         if (m_blend < 0.001f)
             m_blend = 0f;
@@ -140,8 +150,17 @@ public class PlayerSpectateCamera : MonoBehaviour
         // 예정돼 있어 여기서 완벽한 충돌 대응을 만들 이유가 없다.
         Vector3 back = rotation * Vector3.back;
         float distance = m_distance;
-        if (Physics.SphereCast(pivot, m_probeRadius, back, out RaycastHit hit,
-                distance, m_collisionMask, QueryTriggerInteraction.Ignore))
+        if (
+            Physics.SphereCast(
+                pivot,
+                m_probeRadius,
+                back,
+                out RaycastHit hit,
+                distance,
+                m_collisionMask,
+                QueryTriggerInteraction.Ignore
+            )
+        )
         {
             distance = Mathf.Max(hit.distance - m_probeRadius, 0f);
         }

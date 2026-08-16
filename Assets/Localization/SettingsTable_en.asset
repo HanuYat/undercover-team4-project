@@ -50,6 +50,22 @@ MonoBehaviour:
     m_Localized: Restore Defaults
     m_Metadata:
       m_Items: []
+  - m_Id: 6994200000008
+    m_Localized: View Smoothing
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000009
+    m_Localized: Field of View
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000010
+    m_Localized: Screen Shake
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000011
+    m_Localized: Motion Vignette
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []
