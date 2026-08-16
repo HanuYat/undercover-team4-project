@@ -7080,6 +7080,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MinimapTarget
   m_iconSprite: {fileID: 0}
   m_iconColor: {r: 0, g: 0, b: 1, a: 1}
+  m_areaRadius: 0
+  m_areaColor: {r: 1, g: 0.25, b: 0.25, a: 0.25}
 --- !u!114 &202130629
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9687,6 +9689,10 @@ PrefabInstance:
       propertyPath: SceneMigrationSynchronization
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 922322044007907061, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
+      propertyPath: m_Sprite
+      value: 
+      objectReference: {fileID: 21300000, guid: 0c68b300db5cd354a870afd491e91b71, type: 3}
     - target: {fileID: 1087867614526941361, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
       propertyPath: GlobalObjectIdHash
       value: 2784987687
@@ -9783,17 +9789,37 @@ PrefabInstance:
       propertyPath: GlobalObjectIdHash
       value: 1920113068
       objectReference: {fileID: 0}
+    - target: {fileID: 7335312846441893584, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 1090.909
+      objectReference: {fileID: 0}
+    - target: {fileID: 7335312846441893584, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 727.2727
+      objectReference: {fileID: 0}
+    - target: {fileID: 7335312846441893584, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: -3.019
+      objectReference: {fileID: 0}
+    - target: {fileID: 7335312846441893584, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 1.547
+      objectReference: {fileID: 0}
     - target: {fileID: 7379441242556890429, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
       propertyPath: m_worldSizeX
-      value: 90
+      value: 120
       objectReference: {fileID: 0}
     - target: {fileID: 7379441242556890429, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
       propertyPath: m_worldSizeZ
-      value: 50
+      value: 80
       objectReference: {fileID: 0}
     - target: {fileID: 7379441242556890429, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
       propertyPath: m_worldCenterZ
       value: 30
+      objectReference: {fileID: 0}
+    - target: {fileID: 7902794744654951057, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -1.752
       objectReference: {fileID: 0}
     - target: {fileID: 8615647344756761491, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
       propertyPath: m_Name
@@ -13585,6 +13611,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MinimapTarget
   m_iconSprite: {fileID: 0}
   m_iconColor: {r: 0, g: 0, b: 1, a: 1}
+  m_areaRadius: 0
+  m_areaColor: {r: 1, g: 0.25, b: 0.25, a: 0.25}
 --- !u!114 &375386995
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -28672,6 +28700,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MinimapTarget
   m_iconSprite: {fileID: 0}
   m_iconColor: {r: 0, g: 0, b: 1, a: 1}
+  m_areaRadius: 0
+  m_areaColor: {r: 1, g: 0.25, b: 0.25, a: 0.25}
 --- !u!114 &813528394
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -51927,6 +51957,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MinimapTarget
   m_iconSprite: {fileID: 0}
   m_iconColor: {r: 0, g: 0, b: 1, a: 1}
+  m_areaRadius: 0
+  m_areaColor: {r: 1, g: 0.25, b: 0.25, a: 0.25}
 --- !u!114 &1543622383
 MonoBehaviour:
   m_ObjectHideFlags: 0

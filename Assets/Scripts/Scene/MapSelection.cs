@@ -33,6 +33,25 @@ public class MapSelection : NetworkedManagerBase
 
         [Tooltip("콘솔에 표시할 이름. 비우면 씬 이름을 그대로 쓴다")]
         public string DisplayName;
+
+        [Tooltip(
+            "콘솔에 띄울 항공뷰 이미지. 에디터에서 맵 위에 직교 카메라를 놓고 한 번 렌더해 둔 스프라이트다"
+                + " — 런타임 생성이 아니다. 비우면 이미지 없이 이름만 뜬다"
+        )]
+        public Sprite Preview;
+
+        [Tooltip(
+            "이 맵에 스폰될 NPC 수. 손으로 적는 값이다 — 고르는 시점(Shop)에는 맵 씬이 로드돼 있지 않아"
+                + " 스포너에서 읽을 수 없다. 맵 씬의 NpcSpawner.m_spawnCount를 바꾸면 여기도 함께 고칠 것"
+        )]
+        [Min(0)]
+        public int NpcCount;
+
+        [Tooltip(
+            "미리보기를 90도 눕혀서 보여준다 — 세로로 긴 맵을 가로 프레임에 크게 담을 때 켠다."
+                + " 본부 미니맵도 같은 맵을 눕혀 띄우고 있어야 두 화면의 방향이 어긋나지 않는다"
+        )]
+        public bool PreviewRotated;
     }
 
     [Tooltip("고를 수 있는 맵 목록 — 순서가 곧 콘솔의 이전/다음 순서다. 첫 칸이 기본 선택")]
@@ -59,6 +78,15 @@ public class MapSelection : NetworkedManagerBase
 
     /// <summary>선택된 맵의 표시 이름 — 비워 뒀으면 씬 이름으로 대신한다. 콘솔 표시용.</summary>
     public string SelectedDisplayName => NullIfBlank(Selected?.DisplayName) ?? SelectedSceneName;
+
+    /// <summary>선택된 맵의 항공뷰 이미지 — 배선하지 않았으면 <c>null</c>. 콘솔은 이름만 표시로 떨어진다. (#611)</summary>
+    public Sprite SelectedPreview => Selected?.Preview;
+
+    /// <summary>선택된 맵에 스폰될 NPC 수 — 칸이 비어 있으면 0. (#611)</summary>
+    public int SelectedNpcCount => Selected?.NpcCount ?? 0;
+
+    /// <summary>선택된 맵의 미리보기를 눕혀 그릴지 — 세로로 긴 맵용. (#611)</summary>
+    public bool SelectedPreviewRotated => Selected?.PreviewRotated ?? false;
 
     // 인덱스를 받는 조회는 두지 않는다 — 이 콘솔은 목록이 아니라 고른 한 장만 보여준다.
     // 전체 목록을 찍게 되면 그때 RemoteDoorConsole.GetDoor(int) 같은 걸 다시 열면 된다.
