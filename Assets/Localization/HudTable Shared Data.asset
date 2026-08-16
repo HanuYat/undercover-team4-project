@@ -259,6 +259,10 @@ MonoBehaviour:
     m_Key: Hud.Interact.Reason.Escorting
     m_Metadata:
       m_Items: []
+  - m_Id: 4406443624529946
+    m_Key: Hud.Interact.Reason.NoCustody
+    m_Metadata:
+      m_Items: []
   - m_Id: 4408458459119616
     m_Key: Hud.Interact.Decoder
     m_Metadata:

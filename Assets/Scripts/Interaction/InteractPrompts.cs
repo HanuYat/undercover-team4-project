@@ -63,6 +63,7 @@ public static class InteractPrompts
     // ---- 막힌 사유 ----
     public static readonly LocalizedString ReasonLocked = Of("Hud.Interact.Reason.Locked");
     public static readonly LocalizedString ReasonEscorting = Of("Hud.Interact.Reason.Escorting");
+    public static readonly LocalizedString ReasonNoCustody = Of("Hud.Interact.Reason.NoCustody");
 
     private static LocalizedString Of(string key) => new LocalizedString(k_table, key);
 }
