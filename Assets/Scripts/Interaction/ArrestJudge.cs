@@ -12,8 +12,8 @@ using UnityEngine;
 /// 실제 자금 정산(#42)·오검거 페널티(GDD 7-3)·판정 UI(#43)는 이 이벤트를 구독해 후속 구현한다.
 ///
 /// <b>시체도 같은 문을 지난다</b> (#571): 죽은 대상은 죽는 순간이 아니라 유치장 문 앞 버튼에서
-/// 판정된다(<see cref="JudgeCorpse"/>). 죽는 순간 하는 일은 오검거를 세는 것 하나뿐이다
-/// (<see cref="JudgeDeath"/>) — 그쪽 주석에 대칭이 깨진 이유가 있다.
+/// 판정된다(<see cref="JudgeCorpse"/>). <b>죽는 순간에는 아무것도 하지 않는다</b> — 현상금도
+/// 오검거도 전부 그 버튼에서 확정된다.
 ///
 /// 범인 배정(CriminalAssigner)이 서버에서만 이뤄지고 아직 클라이언트에 동기화되지 않으므로(#52/#56 TODO),
 /// 판정도 서버(또는 오프라인)에서만 수행한다 — 인계 NPC의 네트워크 권위로 게이트한다.
@@ -148,83 +148,14 @@ public class ArrestJudge : CommonManagerBase
         return result;
     }
 
-    /// <summary>
-    /// 사망 시점 판정 — <b>보상은 미루고 오검거만 즉시 센다.</b> 서버(또는 오프라인) 전용. (#571)
-    ///
-    /// <see cref="NpcDeath.ServerEnterDead"/>가 부른다. 죽는 순간 현상금을 원장에 올리던 자동 계상은
-    /// 폐기됐다 — <b>시체도 유치장 문 앞까지 끌고 가 수감 버튼을 눌러야 계상된다</b>
-    /// (<see cref="JudgeCorpse"/>). 죽이는 것이 인계를 건너뛰는 지름길이 되지 않게 하는 것이 목적이고,
-    /// 시체 운반 수단(밧줄)은 이미 있다.
-    ///
-    /// <b>오검거만 여기서 센다.</b> 이쪽까지 미루면 무고한 시민을 죽이고 시체를 버리는 것이 페널티를
-    /// 통째로 회피하는 최적 전략이 된다 — 보상은 안 가져가면 손해로 끝나지만 페널티는 안 가져가면
-    /// 이득이라, 두 방향이 대칭이 아니다. 그래서 <see cref="WrongfulArrestPenalty.ServerCountWrongfulDeath"/>로
-    /// 그 자리에서 게이지를 올리고 <see cref="NpcCustody.MarkDelivered"/>로 재계상을 막는다
-    /// (그 표식이 <see cref="JudgeCorpse"/>도 함께 막아, 시체를 끌고 가도 다시 세지 않는다).
-    ///
-    /// <b><see cref="OnArrestJudged"/>는 발행하지 않는다</b> — 구독자 대부분이 신병 라우팅(상태 전이)이라
-    /// 시체에 성립하지 않는다. 표시가 필요한 쪽은 <see cref="OnCorpseJudged"/>를 쓴다.
-    ///
-    /// <b>환경이 죽인 것은 세지 않는다</b> (#634) — 아래 <see cref="IsPlayerKiller"/> 참고.
-    ///
-    /// ⚠ <b>여기가 "죽으면 어떻게 되는가"의 단일 분기점이다.</b> NPC별로 갈 예정인 난이도 노브는
-    /// 이 함수 앞에 조건 하나를 세우면 된다 — 사망 경로를 여기 하나로 모아 둔 이유다.
-    /// </summary>
-    /// <param name="killer">마지막 피해를 준 쪽 — 오검거 개인 집계의 근거. null 허용.</param>
-    public void JudgeDeath(NpcController npc, GameObject killer)
-    {
-        if (npc == null)
-            return;
-        if (npc.IsSpawned && !npc.IsServer)
-            return;
-
-        // 사람이 죽인 것이 아니면 여기서 끝난다 — 경찰의 기록에 남을 일이 아니다 (#634).
-        // 표식(MarkDelivered)도 세우지 않는다: 시체는 여전히 아무 판정도 받지 않은 상태이고,
-        // 누군가 그 시체를 굳이 유치장까지 끌고 가면 그건 <b>그 사람의 선택</b>이라 JudgeCorpse가
-        // 정상적으로 판정한다.
-        if (!IsPlayerKiller(killer))
-            return;
-
-        // 라운드 진행 중에만 센다 — Judge와 같은 게이트다(준비 중 선점·종료 후 스냅샷 이후 방지).
-        if (Round != null && Round.Phase != RoundPhase.InProgress)
-            return;
-
-        // 이미 판정된 대상은 다시 세지 않는다. 산 채로 수감된 뒤 죽는 경로는 없지만(수감 중에는
-        // NpcStateRules.CanBeDamaged가 피해를 막는다) 탈옥해 나온 대상은 ClearDelivered로 표식이
-        // 지워져 여기 다시 올 수 있다.
-        if (npc.Custody.IsDelivered)
-            return;
-
-        if (!TryResolveVerdict(npc, out ArrestVerdict verdict, out _, out _))
-            return;
-
-        // 진범·경범죄는 여기서 아무 일도 하지 않는다 — 표식도 세우지 않아야 시체를 끌고 갔을 때
-        // JudgeCorpse가 정상적으로 판정한다. 시체를 버리면 그대로 0원이다.
-        if (verdict != ArrestVerdict.WrongfulArrest)
-        {
-            Debug.Log($"[검거 판정] 사망 — {npc.name}: 계상 보류 (유치장에 넣어야 현상금이 들어온다)");
-            return;
-        }
-
-        npc.Custody.MarkDelivered(); // 재계상 방지 — 시체를 끌고 가도 JudgeCorpse가 여기서 막힌다
-        App.Game.WrongfulArrestPenalty?.ServerCountWrongfulDeath(killer);
-        Debug.Log($"[검거 판정] 사망 — {npc.name}: 오검거(사살)");
-    }
-
-    /// <summary>
-    /// 이 죽음을 <b>사람이 냈는가</b> — 오검거 집계의 문턱이다. (#634)
-    ///
-    /// 환경이 죽인 시민(차에 치임·폭발에 휘말림 등)까지 팀 카운트에 얹으면, 플레이어가 아무 짓도
-    /// 하지 않아도 라운드가 저절로 망가진다 — 상시 교통이 들어오면서 그게 <b>라운드마다 확실히</b>
-    /// 일어나게 됐다. 차량만 따로 빼지 않고 여기서 일반 규칙으로 세운 이유는, 같은 사정이 폭탄·낙사
-    /// 등 모든 환경 피해에 똑같이 성립하기 때문이다.
-    ///
-    /// 판별을 <see cref="PlayerEscorter"/>로 하는 것은 <see cref="WrongfulArrestPenalty.ServerCountWrongfulDeath"/>의
-    /// 개인 집계와 <b>같은 탐침을 쓰기 위해서다</b> — 둘이 어긋나면 "팀 카운트는 올랐는데 아무에게도
-    /// 안 붙는" 죽음이 생긴다.
-    /// </summary>
-    private static bool IsPlayerKiller(GameObject killer) =>
-        killer != null && killer.GetComponentInParent<PlayerEscorter>() != null;
+    // <b>사망 시점 판정(JudgeDeath)은 없어졌다.</b> 죽는 순간 오검거를 즉시 세던 경로였는데, 그 근거가
+    // "죽여서 페널티를 회피하는 것이 최적 전략이 되면 안 된다"였다. 오검거가 페널티 없이 <b>횟수 집계만</b>
+    // 하게 되면서 회피할 대상이 사라졌고, 즉시 집계가 세우던 표식(MarkDelivered)은 <see cref="JudgeCorpse"/>를
+    // 함께 막아 <b>시체를 문 앞까지 끌고 가도 판정이 조용히 끊기는</b> 부작용을 내고 있었다.
+    // 이제 산 신병과 시체가 같은 문 하나를 지난다 — 결과는 수감 버튼에서만 나온다.
+    //
+    // 환경사(차·폭발)를 걸러 내던 IsPlayerKiller도 함께 사라졌다 (#634). 같은 일을 인계자 기준이 대신 한다:
+    // 아무도 시체를 문 앞까지 끌고 가지 않으면 판정 자체가 일어나지 않는다.
 
     /// <summary>
     /// 시체 판정 — 유치장 문 앞까지 끌고 온 시체를 판정한다. 서버(또는 오프라인) 전용. (#571)
@@ -240,8 +171,10 @@ public class ArrestJudge : CommonManagerBase
     ///   (#358/#517), 시체는 <see cref="NpcCustody.IsDelivered"/>가 여기를 막으므로 그 표식을 걷는
     ///   <b>밧줄 반출</b>(<c>JailIntake.ServerReleaseCorpse</c>)을 거쳐야만 다시 넣을 수 있다.
     ///   정산 원장에서 빠지는 것과 표식이 풀리는 것이 그 한 곳에서 함께 일어난다.</item>
-    ///   <item><b>오검거는 여기서 세지 않는다</b> — 죽는 순간 이미 셌다
-    ///   (<see cref="JudgeDeath"/>). 그 표식 때문에 무고한 시민의 시체는 이 함수에 들어오지도 못한다.</item>
+    ///   <item><b>오검거도 여기서 센다.</b> 예전에는 죽는 순간 셌고(JudgeDeath) 그 표식이 무고한 시민의
+    ///   시체를 이 함수에 들어오지도 못하게 막았다 — 버튼을 눌러도 아무 결과가 안 나오던 원인이다.
+    ///   이제 산 신병과 같은 기준으로 <b>인계자</b>에게 붙는다: 시체를 문 앞까지 끌고 와 누른 사람이
+    ///   무고한 시민을 넣은 것이다. 끌고 가지 않으면 아무 일도 일어나지 않는다.</item>
     /// </list>
     /// </summary>
     /// <param name="presser">수감 버튼을 누른 플레이어 — 밧줄을 쥔 사람들과 함께 인계자가 된다.</param>
@@ -258,7 +191,8 @@ public class ArrestJudge : CommonManagerBase
         if (Round != null && Round.Phase != RoundPhase.InProgress)
             return null;
 
-        // 이미 계상된 시체 — 오검거 사살(JudgeDeath)과 이미 넣은 시체가 둘 다 여기 걸린다.
+        // 이미 계상된 시체 — 한 번 판정된 시체가 여기 걸린다. 되돌리는 경로는 밧줄 반출 하나다
+        // (JailIntake.ServerReleaseCorpse가 원장과 표식을 함께 걷는다).
         if (npc.Custody.IsDelivered)
             return null;
 
@@ -275,6 +209,12 @@ public class ArrestJudge : CommonManagerBase
 
         var result = new ArrestResult(npc, verdict, profile, reward, deliverers, true);
 
+        // 오검거 집계는 산 신병과 같은 기준·같은 대상이다 — 다만 훅이 갈려 있어(OnCorpseJudged에는
+        // 페널티 매니저가 구독하지 않는다) 여기서 직접 부른다. 저쪽 구독을 늘리지 않는 이유는
+        // OnCorpseJudged의 성격(표시·기록 전용, 상태를 안 건드림)을 지키기 위해서다.
+        if (verdict == ArrestVerdict.WrongfulArrest)
+            App.Game.WrongfulArrestPenalty?.ServerCountWrongfulCorpse(deliverers);
+
         LogVerdict(result);
         OnCorpseJudged?.Invoke(result);
 
@@ -284,8 +224,8 @@ public class ArrestJudge : CommonManagerBase
     /// <summary>
     /// 신원을 대조해 판정과 보상액을 낸다 — <b>부수효과가 없는 순수 판별</b>이다. (#571에서 분리)
     ///
-    /// <see cref="Judge"/>(산 신병 인계)·<see cref="JudgeDeath"/>(사망)·<see cref="JudgeCorpse"/>
-    /// (시체 인계)가 공유한다. 갈라 둔 이유는 셋이 <b>판별은 같고 뒤처리가 전혀 다르기</b> 때문이다.
+    /// <see cref="Judge"/>(산 신병 인계)와 <see cref="JudgeCorpse"/>(시체 인계)가 공유한다.
+    /// 갈라 둔 이유는 둘이 <b>판별은 같고 뒤처리가 전혀 다르기</b> 때문이다.
     /// 판별까지 복사하면 진범/위조범/난동꾼 우선순위가 여러 곳으로 갈린다.
     /// </summary>
     /// <returns>판정할 수 있으면 참 — 경범죄 마커도 신원도 없으면 거짓.</returns>
