@@ -236,8 +236,10 @@ public class ArrestJudge : CommonManagerBase
     ///   <item><b><see cref="OnArrestJudged"/> 대신 <see cref="OnCorpseJudged"/>를 발행한다</b> —
     ///   저쪽에는 신병 라우팅(상태 전이) 구독자가 섞여 있어 시체에 성립하지 않는다. 양쪽 모두에
     ///   필요한 후처리(수배 항목 제거·표시)는 두 훅을 함께 구독한다.</item>
-    ///   <item><b>재판정이 없다.</b> 산 수감자는 반출했다 다시 넣을 수 있지만(#358/#517) 시체는
-    ///   유치장에서 나오는 경로가 없다 — <see cref="NpcCustody.IsDelivered"/>가 곧 최종이다.</item>
+    ///   <item><b>재판정 경로가 하나뿐이다.</b> 산 수감자는 문 앞에서 다시 누르면 언제든 재판정되지만
+    ///   (#358/#517), 시체는 <see cref="NpcCustody.IsDelivered"/>가 여기를 막으므로 그 표식을 걷는
+    ///   <b>밧줄 반출</b>(<c>JailIntake.ServerReleaseCorpse</c>)을 거쳐야만 다시 넣을 수 있다.
+    ///   정산 원장에서 빠지는 것과 표식이 풀리는 것이 그 한 곳에서 함께 일어난다.</item>
     ///   <item><b>오검거는 여기서 세지 않는다</b> — 죽는 순간 이미 셌다
     ///   (<see cref="JudgeDeath"/>). 그 표식 때문에 무고한 시민의 시체는 이 함수에 들어오지도 못한다.</item>
     /// </list>

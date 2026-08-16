@@ -23,12 +23,38 @@ public class EmoteLoadout
     /// <summary>휠 칸 수 — EmoteWheelGeometry.k_slotCount와 같아야 한다.</summary>
     public const int k_slotCount = EmoteWheelGeometry.k_slotCount;
 
-    private const string k_prefsKey = "Emote.Loadout";
+    // 뒤에 계정 식별자가 붙는다 — 아래 생성자 주석 참고.
+    private const string k_prefsKeyPrefix = "Emote.Loadout.";
+
+    // 계정을 모르는 경로(로그인 전·세션 없이 씬 직접 Play)가 쓸 자리.
+    private const string k_unknownOwner = "local";
 
     // id에 들어갈 수 없는 문자여야 한다. 카탈로그 id는 영숫자·밑줄만 쓴다는 전제.
     private const char k_separator = '|';
 
     private readonly string[] m_slots = new string[k_slotCount];
+
+    private readonly string m_prefsKey;
+
+    /// <summary>
+    /// <paramref name="ownerId"/>는 저장 칸을 가르는 계정 식별자다 — 사용처는 UGS PlayerId를 넘긴다.
+    ///
+    /// <b>왜 나눠야 하는가:</b> PlayerPrefs는 한 PC에 하나뿐인 저장소라 그 PC의 모든 인스턴스가
+    /// 같은 값을 놓고 쓴다. 전역 키 하나로 두면 MPPM 가상 플레이어와 호스트가 서로의 구성을
+    /// 덮어써, 로컬 2인 테스트에서 "저장이 안 된다"로 보인다(#640). 한 PC를 여러 계정이 쓸 때도
+    /// 같은 문제다. AuthBootstrap이 닉네임·관문 통과를 프로필별로 나눠 두는 것과 같은 이유다.
+    ///
+    /// <b>왜 여기서 직접 읽지 않는가:</b> 이 어셈블리(Undercover.Emote)는 UGS도 App도 참조하지
+    /// 않는다 — 순수 인덱스 연산이라 Unity·Netcode와 무관하게 단위 테스트할 수 있다는 성질을
+    /// 지키기 위해, 계정을 아는 쪽이 넘겨주는 형태로 둔다.
+    ///
+    /// 비워 두면 계정 없는 자리(<c>local</c>)에 저장한다 — 로그인 전 편집도 어딘가에는 남아야 한다.
+    /// </summary>
+    public EmoteLoadout(string ownerId = null)
+    {
+        m_prefsKey =
+            k_prefsKeyPrefix + (string.IsNullOrWhiteSpace(ownerId) ? k_unknownOwner : ownerId);
+    }
 
     /// <summary>칸에 든 감정표현 id — 비었거나 범위 밖이면 null.</summary>
     public string GetSlot(int slot) => slot >= 0 && slot < k_slotCount ? m_slots[slot] : null;
@@ -70,16 +96,24 @@ public class EmoteLoadout
             SetSlot(slot, parts[slot]);
     }
 
-    /// <summary>구성을 로컬에 저장한다 — 로비에서 편집을 마칠 때 부른다.</summary>
-    public void Save()
+    /// <summary>
+    /// 구성을 로컬에 저장한다 — 칸을 만질 때마다 부른다.
+    ///
+    /// <paramref name="flush"/>를 끄면 디스크 쓰기(<see cref="PlayerPrefs.Save"/>)를 미룬다.
+    /// 값은 이미 PlayerPrefs에 들어가 있어 앱이 정상 종료하거나 다시 읽을 때 그대로 나오므로,
+    /// 칸을 누를 때마다 디스크를 두드리지 않기 위한 것이다. 편집을 마칠 때 한 번 flush한다.
+    /// </summary>
+    public void Save(bool flush = true)
     {
-        PlayerPrefs.SetString(k_prefsKey, Serialize());
-        PlayerPrefs.Save();
+        PlayerPrefs.SetString(m_prefsKey, Serialize());
+
+        if (flush)
+            PlayerPrefs.Save();
     }
 
     /// <summary>저장된 구성을 읽는다. 저장된 적이 없으면 전 칸이 빈 상태로 남는다.</summary>
     public void Load()
     {
-        Deserialize(PlayerPrefs.GetString(k_prefsKey, string.Empty));
+        Deserialize(PlayerPrefs.GetString(m_prefsKey, string.Empty));
     }
 }

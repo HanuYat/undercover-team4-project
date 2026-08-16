@@ -169,7 +169,7 @@ public class ShopStand : NetworkBehaviour, IInteractable
         // (소지형은 중복 구매 허용 — 산 개수만큼 매 라운드 배달된다)
         if (IsInstallable && purchases.HasInstallable(m_installable))
         {
-            ReplyRpc("이미 구매한 장비", RpcTarget.Single(requester, RpcTargetUse.Temp));
+            ReplyRpc("이미 구매한 장비", EAudioClip.None, RpcTarget.Single(requester, RpcTargetUse.Temp));
             return;
         }
 
@@ -177,7 +177,7 @@ public class ShopStand : NetworkBehaviour, IInteractable
         // 부족하면 차감 없이 false, 잔액은 0 밑으로 내려가지 않는다 (#104).
         if (!fund.TrySpend(Price))
         {
-            ReplyRpc("팀 자금 부족", RpcTarget.Single(requester, RpcTargetUse.Temp));
+            ReplyRpc("팀 자금 부족", EAudioClip.None, RpcTarget.Single(requester, RpcTargetUse.Temp));
             return;
         }
 
@@ -187,13 +187,25 @@ public class ShopStand : NetworkBehaviour, IInteractable
             purchases.AddCarried(m_itemPrefab);
 
         m_purchased.Value = true;
-        ReplyRpc("구매 완료 — 다음 라운드에 본부로 배달된다", RpcTarget.Single(requester, RpcTargetUse.Temp));
+        ReplyRpc("구매 완료 — 다음 라운드에 본부로 배달된다", EAudioClip.ShopPurchase, RpcTarget.Single(requester, RpcTargetUse.Temp));
     }
 
     // 구매 결과는 요청자에게만. 표시는 진열대 자신의 카드가 맡는다 — 카드는 클라마다 로컬 오브젝트라
     // 남의 화면에는 뜨지 않는다. 그래서 별도 HUD 배선이 필요 없다.
+    //
+    // 소리를 문구와 함께 싣는 이유는 판정이 서버에만 있기 때문이다 — 성공과 거절을 클라가 다시
+    // 가리려면 문구를 문자열로 비교해야 하고, 그러면 문구를 고칠 때마다 소리가 조용히 어긋난다.
+    // 요청자에게만 가는 RPC라 2D다: 확인음이지 세상에 난 소리가 아니다.
+    //
+    // <b>거절은 무음이다</b> — 잔액이 부족해도 눌러서 사유를 볼 수 있게 열어 둔 진열대라(CanInteract가
+    // 항상 true다) 값만 보려고 누르는 일이 잦고, 그때마다 실패음이 나면 잘못한 것처럼 들린다.
+    // 문구는 이미 카드에 뜬다. 그래서 EAudioClip.None을 명시로 넣는다 — 배선을 빠뜨린 게 아니다.
     [Rpc(SendTo.SpecifiedInParams)]
-    private void ReplyRpc(string message, RpcParams rpcParams) => m_view.ShowNotice(message);
+    private void ReplyRpc(string message, EAudioClip sound, RpcParams rpcParams)
+    {
+        m_view.ShowNotice(message);
+        App.Sound?.PlaySfx2D(sound);
+    }
 
     // ---- 조준 카드 토글 (ShopStandPresenter가 호출, 오너 로컬) ----
 

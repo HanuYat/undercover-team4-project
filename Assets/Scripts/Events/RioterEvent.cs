@@ -7,6 +7,8 @@
 /// </summary>
 public class RioterEvent : SpawnedNpcEventBase
 {
+    public override string NoticeKey => "Hud.Event.Notice.Rioter";
+
     protected override ERiotBehavior RiotBehavior => ERiotBehavior.Resist;
 
     protected override void ApplyBehavior()

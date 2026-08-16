@@ -76,7 +76,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TeamFund
   ShowTopMostFoldoutHeaderGroup: 1
-  m_startingFund: 0
+  m_startingFund: 25000
 --- !u!114 &-9146029795751610571
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -119,8 +119,6 @@ MonoBehaviour:
   m_maps:
   - SceneName: Map_Apocalypse
     DisplayName: "\uC885\uB9D0 \uB3C4\uC2DC"
-  - SceneName: Main Scene
-    DisplayName: "\uAD6C \uAC1C\uBC1C \uB9F5"
   - SceneName: Map_Cyberpunk
     DisplayName: "\uC0AC\uC774\uBC84\uD391\uD06C"
 --- !u!114 &2786289631189589368

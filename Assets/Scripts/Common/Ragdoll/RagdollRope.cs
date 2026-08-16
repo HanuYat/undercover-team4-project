@@ -85,6 +85,13 @@ public class RagdollRope : MonoBehaviour
     /// 쪽(정착 판정 등)은 이 값을 봐야 한다.</summary>
     public bool IsBeingCarried => m_joint != null && m_carrier != null;
 
+    /// <summary>지금 줄을 쥔 쪽 — 안 묶여 있으면 null.
+    ///
+    /// <b>왜 읽을 수 있어야 하나.</b> 시체를 순간이동시키는 쪽이 <b>줄을 끊었다 같은 운반자에게 다시
+    /// 매기</b> 위해서다(<see cref="NpcRagdoll.ServerPlaceCorpse"/>). 관절을 건 채로 수백 m를 옮기면
+    /// 그 위반을 솔버가 메우며 시체를 발사한다 — 실측 237 m/s.</summary>
+    public Transform Carrier => m_carrier;
+
     private bool TuningChanged =>
         m_appliedTuning != new Vector4(m_length, m_limitSpring, m_limitDamper, m_dragLinearDamping)
         || m_appliedAngularDamping != m_dragAngularDamping;

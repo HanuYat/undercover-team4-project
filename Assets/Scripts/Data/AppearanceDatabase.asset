@@ -16,74 +16,583 @@ MonoBehaviour:
     Options:
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000707
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Bald
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 0
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000708
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Bob
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 5359095326366316309, guid: 6acd4702716c64b49bd8504d04baea3b, type: 3}
+      PropPrefabs:
+      - {fileID: 5359095326366316309, guid: 6acd4702716c64b49bd8504d04baea3b, type: 3}
+      - {fileID: 3331492727679041586, guid: 460174f6fb6cdb841bd0f562d9221ac3, type: 3}
       SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: be7260de6e71a424a918673d987a6321, type: 3}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000709
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Bob
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 1090390649989844869, guid: d30df5bb55089ad4a989b1473c7a2293, type: 3}
+      PropPrefabs:
+      - {fileID: 1363398342439722, guid: c470064cae2a66c4e96dd0a6634aa6d8, type: 3}
       SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: bd22de5938fd4a242afbb451d36ee435, type: 3}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000710
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Bob
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 7623271299947270949, guid: e19492d4a3b52dd408b1e4d76a214e42, type: 3}
+      PropPrefabs:
+      - {fileID: 1829513965571216, guid: 0d77532d4b2214548920f03040639976, type: 3}
       SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: 40067728ede3d894d9f714eddf05d9af, type: 3}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000711
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.MidBob
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1720249481327532, guid: 7102d34f3ecd4e1428dce761245bd09a, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 037b7b773921e524db4f825d387340e7, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Dreads
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1090390649989844869, guid: d30df5bb55089ad4a989b1473c7a2293, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 158abbff7ef03c348b9477d246e12f4c, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Shaggy
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1213043109083764429, guid: d8091c7a2d9d8f2448b954f8720e99d5, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 60eace46254ffce42bcc4662f98fde25, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Asymmetric
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1479791549021918, guid: eeaeacf9dd46ac1488347bb658fa4cda, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 662b65ee65accdb43a525db78a03c1d3, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Mohawk
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1141398449851310, guid: 5efb9876cfa995d47adf71426aad16ba, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 186ba64ff3b6f8d408398679cdc56b9d, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Mohawk
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 7115782643550198046, guid: 9a6417b5c945a8146a73f09a71074180, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 21938e50f14eb1d42bf4e232693a55a2, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Tied
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 7623271299947270949, guid: e19492d4a3b52dd408b1e4d76a214e42, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 27fc22518f410e1488c8a396e334f589, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Tied
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1505924036543802, guid: f2de21c8c8b9119468acbf5f3d780338, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 4c1f381f9eee9494ba98cebaae7bc5d6, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Tied
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1044262502575656, guid: 0b99d8112fdd2b540bfb14083c0168b0, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: d900b95d7174ebe418eaae7cd4c66508, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Tied
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1774260335537172, guid: 965919ca5e4c723479ab332d8871ecda, type: 3}
+      - {fileID: 1646284094649658, guid: ee7b99102ba48fb408b8737efb9ad50d, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 38f3ef420c1c5bb4ca542c2bdcf706c8, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Tied
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1843814800920674, guid: 8378e5891b2ef134481be82dee2304be, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: bbb99829778de0f47ae4fe05d1bddafd, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Tied
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1291178325198250, guid: 39b2aee7005224941bc24c5840617e56, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 12d5c6c2ba0bdfc4b8cec5f31807acab, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Tied
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1539468828766142, guid: b7cbd6c3a9218794b83de6dfad840c38, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: f2c70521a64e8304ebb88379f6b4a03b, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Tied
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 8957110818406405829, guid: 62fbaeee5d7238f4388681e9f47f8014, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: e610ced9a6d516b4e911aa963adec54b, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Tied
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 9208320333937898530, guid: 86837125e52341243b19904accdb227c, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: edc9eee37d785f4428a27bc678a0b979, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Short
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1273219497479296, guid: 4e16a36b4396a144e91f06cd2ee97f64, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 49de90ccae932034095788698c5fb54f, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Short
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1281026825425692, guid: e16ee3dc07819ce448792b5e851a914c, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: a857fcbd3eb852148a67718704197f34, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Short
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1702361829957950, guid: 5132530adc417b74695120afcca18062, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 1a1680ccc56f84844a9063288e4bf334, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Short
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1314032043797924, guid: 567bfdf2baf14d44fa3244fa7aaa9a2e, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: f6d55099b2fcf0d45a309941d0f99461, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Short
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1743873750134902, guid: 45e0aa2ec6697d44ba6f15484012ce55, type: 3}
+      - {fileID: 593454656204496684, guid: 8f87914eee5a99b4381f0a1c7fdcd158, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: d5307a62d1e49374e9466dce4ef71617, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Short
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 4248136288128711640, guid: 6599356a61fd47a4eaaeed1ac887d65a, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 05dc6fee2ff9b574897705207485920c, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Short
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 3144055226244190488, guid: 81833c6e4ca54144cbff6b5308615310, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: be751fa2e0f9053448539ba7a8d1fb19, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Short
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 739940415414312546, guid: a22a32a70c38eb24a81848b9734bf13a, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: fc1eb031a4abd0e478f73bc0caf9a8f8, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.VeryShort
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1747250199882298, guid: 86569b40f8c00f84d81b611a184d0e0f, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 1e3cf3d966b59b240b1ec726013f7b11, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.VeryShort
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1497383388872384, guid: 1d6be16d8d19c3f448566c2989ed2155, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 1c101c40cea730543bfeb26d9a412012, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.VeryShort
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1881869024244744, guid: ecc4ea5a7a617064b919cd4350d2a239, type: 3}
+      - {fileID: 1272386763867106638, guid: 515a24c6c0ff2404782d8d7c7de093af, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 277b4e53aa777c6448a21a59f7afa2b1, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.VeryShort
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 3051544637601550317, guid: 69ac49a48a29c9448ac5a507d38a3301, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 0d2168ef9b76eee40944220bd4fc626a, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.VeryShort
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1816054855935763832, guid: 260657d29bfb17c47841ae7a62fcf3f4, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 1d7f450c597e6d940ba83608b51b7a38, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.VeryShort
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 2074971989285459620, guid: dd75f616e7b85a74eaf8e8173f6362c4, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: baef4d400fb64c74ca54f373a745b292, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.VeryShort
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 7823938551063974223, guid: 05f9ae415485ebe4ba0e447d465a2f72, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: a4101f86e65c08349a4a7c50b570359d, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.VeryShort
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 2939341915203406562, guid: c53579a7885968f43b57565b33c2a4fb, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 65175318bba24bc47b5347079e1fbb69, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.HairStyle.Covered
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 1
-      MontageLayer: {fileID: 21300000, guid: 23f6ac8740d48f04393d4a77cf98d4e9, type: 3}
+      MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 0
+    NoneChance: 0
   m_hairColor:
     Options:
     - DisplayName:
@@ -97,9 +606,10 @@ MonoBehaviour:
         m_LocalVariables: []
       Color: {r: 0.06, g: 0.06, b: 0.06, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 0
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -111,9 +621,10 @@ MonoBehaviour:
         m_LocalVariables: []
       Color: {r: 0.4528302, g: 0.29696345, b: 0.22000714, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 0
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -125,9 +636,10 @@ MonoBehaviour:
         m_LocalVariables: []
       Color: {r: 1, g: 0.90781844, b: 0.6933962, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 0
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -139,9 +651,10 @@ MonoBehaviour:
         m_LocalVariables: []
       Color: {r: 0.72, g: 0.11, b: 0.1, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 0
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -153,9 +666,10 @@ MonoBehaviour:
         m_LocalVariables: []
       Color: {r: 0.16, g: 0.36, b: 0.86, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 0
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -167,9 +681,10 @@ MonoBehaviour:
         m_LocalVariables: []
       Color: {r: 0.76, g: 0.78, b: 0.82, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 0
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -181,9 +696,10 @@ MonoBehaviour:
         m_LocalVariables: []
       Color: {r: 0.18, g: 0.74, b: 0.68, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 0
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -195,9 +711,10 @@ MonoBehaviour:
         m_LocalVariables: []
       Color: {r: 0.9, g: 0.45, b: 0.7, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 0
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -209,9 +726,11 @@ MonoBehaviour:
         m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 1
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 0
+    NoneChance: 0
   m_skinColor:
     Options:
     - DisplayName:
@@ -225,9 +744,10 @@ MonoBehaviour:
         m_LocalVariables: []
       Color: {r: 0.95, g: 0.85, b: 0.78, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 0
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 1
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -239,9 +759,10 @@ MonoBehaviour:
         m_LocalVariables: []
       Color: {r: 0.85, g: 0.68, b: 0.55, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 0
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 1
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -253,9 +774,10 @@ MonoBehaviour:
         m_LocalVariables: []
       Color: {r: 0.55, g: 0.38, b: 0.26, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 0
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 1
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -267,9 +789,10 @@ MonoBehaviour:
         m_LocalVariables: []
       Color: {r: 0.35, g: 0.5, b: 0.85, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 1
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 1
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -281,9 +804,10 @@ MonoBehaviour:
         m_LocalVariables: []
       Color: {r: 0.6, g: 0.62, b: 0.66, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
-      SciFiOnly: 1
+      PropPrefabs: []
+      SciFiOnly: 0
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 1
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -295,9 +819,10 @@ MonoBehaviour:
         m_LocalVariables: []
       Color: {r: 0.95, g: 0.35, b: 0.85, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 1
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 1
     - DisplayName:
         m_TableReference:
           m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
@@ -309,239 +834,557 @@ MonoBehaviour:
         m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 1
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 1
+    NoneChance: 0
   m_facialHair:
     Options:
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000706
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.None
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 0
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000727
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.FacialHair.Mustache
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 0.15, g: 0.12, b: 0.1, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 4609227968844860818, guid: 6b5f1a42b82110e49988de1ad2a41fd9, type: 3}
+      PropPrefabs:
+      - {fileID: 4609227968844860818, guid: 6b5f1a42b82110e49988de1ad2a41fd9, type: 3}
+      - {fileID: 1853604886322321471, guid: af656c641aec3d149b4fc14c9523f136, type: 3}
+      - {fileID: 8028676757273446071, guid: dc76a6b941586c344aff7bdc438a9d0d, type: 3}
       SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: 4fd28d3db29b80245835e45e63c596b5, type: 3}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000728
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.FacialHair.Beard
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 0.15, g: 0.12, b: 0.1, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 5381899529043745372, guid: 2c3db847c027ff04f9f95cf539c047de, type: 3}
+      PropPrefabs:
+      - {fileID: 1804288729015674, guid: 035f91499cefa6e45b91d745ca05c160, type: 3}
+      - {fileID: 1914645918229522, guid: 993a57d2d07c75f429ac0988c30342f9, type: 3}
       SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: dba82c26b5baa9445ba1900fb97a82ce, type: 3}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000729
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.FacialHair.Sideburns
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 0.15, g: 0.12, b: 0.1, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 4158117797329843660, guid: 1d06f16f48b790548b778a5bdf7a69d6, type: 3}
+      PropPrefabs:
+      - {fileID: 4158117797329843660, guid: 1d06f16f48b790548b778a5bdf7a69d6, type: 3}
       SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: 9dd6334ac360e1141bf45fa08d4301e8, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.FacialHair.Goatee
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 0.15, g: 0.12, b: 0.1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1245408505807004, guid: 45e10a3679df19a4095eb3ca48e802e3, type: 3}
+      - {fileID: 1789149566344868, guid: 7f0398d0724dba0459941bdd04b5b932, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 0e13db8409b88da479beb9a37eb7385b, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.FacialHair.Stubble
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 0.15, g: 0.12, b: 0.1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1221908863626948, guid: 92b8b23d249f87d4baf5cb9922f2fb92, type: 3}
+      - {fileID: 1243390637784702, guid: 4e1a7c36bd4d70f4ea20225ff8dc94fb, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: abfe0cc0294fce340912af7abcc17ce0, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.FacialHair.Bushy
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 0.15, g: 0.12, b: 0.1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 3252513830353061635, guid: 5552d13d2d0636b4b84403bca027f0c0, type: 3}
+      - {fileID: 5381899529043745372, guid: 2c3db847c027ff04f9f95cf539c047de, type: 3}
+      - {fileID: 1581130366870158, guid: 8edd783432f985d4f9fbb2b783edf4b5, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: f897e9d5db6d46744b2098e44d487fc5, type: 3}
+      ExcludeFromMontage: 0
+    NoneChance: 0.6
   m_headwear:
     Options:
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000706
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.None
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 0
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000730
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Headwear.Beanie
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 0.2, g: 0.2, b: 0.25, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 3818721685182870944, guid: 91a234a5ac753554e82d04a2bedc0e25, type: 3}
+      PropPrefabs:
+      - {fileID: 3818721685182870944, guid: 91a234a5ac753554e82d04a2bedc0e25, type: 3}
       SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: a2dad2e472019434193b694e908d7486, type: 3}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000731
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Headwear.Cap
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 0.7, g: 0.15, b: 0.15, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 7202588604819645970, guid: 72b4eb657d88d5d4ca05e983848f7bef, type: 3}
+      PropPrefabs:
+      - {fileID: 7202588604819645970, guid: 72b4eb657d88d5d4ca05e983848f7bef, type: 3}
       SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: 76d7acd0c1f470645bff6b8548c05a42, type: 3}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000732
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Headwear.Hat
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 0.3, g: 0.3, b: 0.35, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 517384152127186018, guid: 740f72d010e55ad458e797ec6483f908, type: 3}
+      PropPrefabs:
+      - {fileID: 517384152127186018, guid: 740f72d010e55ad458e797ec6483f908, type: 3}
       SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: 5a1e6502508f6c3449cb85ee783aaadd, type: 3}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000733
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Headwear.Hood
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 0.4, g: 0.35, b: 0.3, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs: []
       SciFiOnly: 1
       MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000734
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Headwear.Headphones
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 0.15, g: 0.15, b: 0.15, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 7624828572083015622, guid: 640045eb994ac644d9f89980114f4305, type: 3}
+      PropPrefabs:
+      - {fileID: 7624828572083015622, guid: 640045eb994ac644d9f89980114f4305, type: 3}
+      - {fileID: 5227127319859647404, guid: 21dad38b0b9135341917d7e03ebbea06, type: 3}
+      - {fileID: 48689385531747018, guid: 457a762f26e91a5459cad782cf914121, type: 3}
       SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: b3ea196566ba8bc4bbcc98fc54b20380, type: 3}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000735
-          m_Key: 
-        m_FallbackState: 0
-        m_WaitForCompletion: 0
-        m_LocalVariables: []
-      Color: {r: 0.5, g: 0.5, b: 0.55, a: 1}
-      MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
-      SciFiOnly: 1
-      MontageLayer: {fileID: 0}
-  m_eyewear:
-    Options:
-    - DisplayName:
-        m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
-        m_TableEntryReference:
-          m_KeyId: 7100000000706
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Headwear.Helmet
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1153852152701694, guid: cfe86ff67def9cd4bb8dc14105e1b710, type: 3}
       SciFiOnly: 0
-      MontageLayer: {fileID: 0}
+      MontageLayer: {fileID: 21300000, guid: 33921450add733b4da6279af994df9dd, type: 3}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000736
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Headwear.BrimHat
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 8107115506053629476, guid: b54960b9d358e8c478c5be96654bcce2, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 2326d6fcb6ea7b949af97ed1398c7791, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Headwear.Beret
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 7166963648985502887, guid: 7086c082138757d4f959470d508029a7, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 5021187dbe88bee40b7c0ea6c9e89857, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Headwear.WideBrimHat
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 4702421061912569429, guid: b5b597609c4874b488519f32fe044559, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 4870d96ec858ba847b5be5874bb59968, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Headwear.MotorcycleHelmet
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 6395561500722760390, guid: 89b3a0548ea974047ba201d0cea7a05f, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 268ebafb94cd32e4ab6b645c8cc56ea5, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Headwear.TacticalHelmet
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 5699044084418629124, guid: 501f7562674da9a489c767526768fbd1, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: db2d1786466c56040984ceb10daad1d4, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Headwear.CamoCap
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1492510654237128, guid: 141fc51930b1a2c4b85d8d213c3bf3a8, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: d71ba0ca03ca6a740bdb81f5b14916d7, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Headwear.HuntingHat
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1047459337565606, guid: e0ff2b7754429c247b07161caf8257c2, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: bf1b01eee1b4c0a4b9c074078b781aca, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Headwear.AviatorCap
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1210444806839874, guid: 27d7347987dcd1f48be7c4b55465a67e, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 495813adebc0b924480b8c2050a8a65b, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Headwear.WideBrimHat
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1316900337513976, guid: 0b1f413d21bd67f47b77f5a929998e7b, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: ca3fa1f8f1d0b3544bc989bf75c9ab81, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Headwear.Cap
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1845809259272838, guid: 36ba4215d6821874888242285a932912, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: a5251833fa440574dad668b1ca8d04d2, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Headwear.FootballHelmet
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1262996259358930, guid: 7dea907e69fa1db4888c36ce5482a775, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 0e7742d4415b47e429abe52bd8eea899, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Headwear.SoldierHelmet
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1261275721562882, guid: 65109d3ce3670da4598172f14c39a8b2, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: ef5fb3d9219fa484fbe593dc2600c301, type: 3}
+      ExcludeFromMontage: 0
+    NoneChance: 0.7
+  m_eyewear:
+    Options:
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.None
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs: []
+      SciFiOnly: 0
+      MontageLayer: {fileID: 0}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Eyewear.Sunglasses
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 0.08, g: 0.08, b: 0.08, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 8314516393528333455, guid: 1c99f1025f7ca5b41bfc6c615178cf3c, type: 3}
+      PropPrefabs:
+      - {fileID: 8314516393528333455, guid: 1c99f1025f7ca5b41bfc6c615178cf3c, type: 3}
+      - {fileID: 5209497880523665370, guid: f8e1d3adfcb22e241a7e2165b45efe54, type: 3}
+      - {fileID: 6677916711081199845, guid: 70d31d0cc68a06149af8b2dd5a45c658, type: 3}
       SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: 2d4a5e5d24126ff42bb179910685b0f7, type: 3}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000737
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Eyewear.Glasses
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
-      Color: {r: 0.1, g: 0.1, b: 0.12, a: 1}
+      Color: {r: 1, g: 1, b: 1, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
-      SciFiOnly: 1
-      MontageLayer: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 3860012359358968461, guid: cf9e2c8328ba74c4bacc6c702f34efd2, type: 3}
+      - {fileID: 1045987657176564, guid: aa5f2e968fd816a41b17507454628ca2, type: 3}
+      - {fileID: 1820540005688216, guid: 8cf66dd84dfae2f43bf13f5bc03719cd, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 74785bc8fee7fc847b708dc19fdf177f, type: 3}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000738
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Eyewear.Visor
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 0.2, g: 0.3, b: 0.2, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 5483532631979247779, guid: 04e2a0f1ad1a87f4fa83b8972846ec96, type: 3}
+      PropPrefabs:
+      - {fileID: 5483532631979247779, guid: 04e2a0f1ad1a87f4fa83b8972846ec96, type: 3}
       SciFiOnly: 0
       MontageLayer: {fileID: 21300000, guid: a8eb25e60ff20ab40844a79e27182235, type: 3}
+      ExcludeFromMontage: 0
     - DisplayName:
         m_TableReference:
-          m_TableCollectionName: GUID:7e3bb98f354a36f43bb9ee6612e02e7f
+          m_TableCollectionName: NpcTable
         m_TableEntryReference:
-          m_KeyId: 7100000000739
-          m_Key: 
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Eyewear.GlowLens
         m_FallbackState: 0
         m_WaitForCompletion: 0
         m_LocalVariables: []
       Color: {r: 0.2, g: 0.8, b: 0.8, a: 1}
       MaterialOverride: {fileID: 0}
-      PropPrefab: {fileID: 0}
-      SciFiOnly: 1
-      MontageLayer: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 4006197424663581794, guid: 9a54c446d1b3eec46b3f4448a457ef00, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 350489dd60023ef4496fc908bbfd6134, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Eyewear.Goggles
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 6098579402017106291, guid: 799ab89f49c013c4b9b48b582689e45d, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: 02b767e6a258d4843a89b918f6236a42, type: 3}
+      ExcludeFromMontage: 0
+    - DisplayName:
+        m_TableReference:
+          m_TableCollectionName: NpcTable
+        m_TableEntryReference:
+          m_KeyId: 0
+          m_Key: Npc.Appearance.Eyewear.Eyepatch
+        m_FallbackState: 0
+        m_WaitForCompletion: 0
+        m_LocalVariables: []
+      Color: {r: 1, g: 1, b: 1, a: 1}
+      MaterialOverride: {fileID: 0}
+      PropPrefabs:
+      - {fileID: 1383984616894412, guid: 7d48d216c91790d4aa4a52afcce8ce58, type: 3}
+      SciFiOnly: 0
+      MontageLayer: {fileID: 21300000, guid: b0b21f924c4d60b45999903f76c0cfb4, type: 3}
+      ExcludeFromMontage: 0
+    NoneChance: 0.65
   m_montageBase: {fileID: 21300000, guid: c45d2eea083118a468c8798fff0c31b9, type: 3}
   m_montageFace: {fileID: 21300000, guid: e1d606e7374c9394fba0477ed5936b95, type: 3}
   m_montageUnknownHair: {fileID: 21300000, guid: 23f6ac8740d48f04393d4a77cf98d4e9, type: 3}

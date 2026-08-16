@@ -22,6 +22,15 @@ public class PickpocketEvent : SpawnedNpcEventBase
     // 접근을 포기할 시각. 0 이하면 접근 중 아님.
     private float m_giveUpTime;
 
+    /// <summary>
+    /// 조용히 시작한다 (팀 확정 2026-08-13) — 스폰형 중 <b>이것만</b> 알리지 않는다.
+    /// 난동자·나체 난동꾼은 애초에 눈에 띄라고 있는 소란이라 토스트가 그 소란의 일부지만, 소매치기는
+    /// <b>시민 걸음으로 다가와 스쳐 지나가는</b> 것이 전부다 — 발생을 알려 버리면 현장이 주위를 경계하게
+    /// 되고, 알아채지 못한 사이에 털린다는 이 이벤트의 유일한 장치가 사라진다.
+    /// 당한 사실은 그 순간 당사자에게만 알린다(<see cref="PlayerTheftView.ShowStolen"/>).
+    /// </summary>
+    public override bool AnnounceOnBegin => false;
+
     // 탈옥으로 방출되면 도주로 재개한다 — 수감되려면 제압을 거쳤으니 훔친 물건은 이미 떨궈진 뒤고,
     // 빈손 소매치기가 다시 노리게 두면 같은 사람이 몇 번이고 털린다.
     protected override ERiotBehavior RiotBehavior => ERiotBehavior.Flee;

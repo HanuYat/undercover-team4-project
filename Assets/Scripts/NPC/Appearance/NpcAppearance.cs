@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -43,9 +44,9 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
     [SerializeField]
     private string m_colorPropertyName = "_BaseColor";
 
-    [Tooltip("머리 프롭의 머리색 틴트에 쓰는 셰이더 프로퍼티. Synty Generic_Standard 셰이더는 머리 마스크 영역을 _Hair_Color로 칠하므로, _BaseColor로 틴트하면 머티리얼의 _Hair_Color(갈색)에 눌려 탁해진다. 이 채널로 직접 칠해야 순수한 머리색이 나온다")]
+    [Tooltip("머리 프롭의 머리색 틴트에 쓰는 셰이더 프로퍼티. 베이스 머티리얼의 셰이더와 짝이다 — 마스크를 쓰는 Synty 캐릭터 셰이더면 _Hair_Color, 마스크 없는 URP/Lit이면 _BaseColor.\n마스크 채널(_Hair_Color)은 마스크 텍스처가 그린 팩의 UV에서만 먹는다. 어휘에 다른 팩 부착물이 섞이면 그 메시에서 틴트가 통째로 무시되므로(#619 — docs §13-13) 지금은 마스크를 안 쓰는 쪽으로 간다")]
     [SerializeField]
-    private string m_hairColorPropertyName = "_Hair_Color";
+    private string m_hairColorPropertyName = "_BaseColor";
 
     [Tooltip(
         "머리 프롭에 깔 밝은 중립 베이스 머티리얼. 프롭 기본 아틀라스가 어두워 곱셈 틴트하면 밝은 머리색(금발·은발)이 탁해지므로, 머리 프롭 머티리얼을 이 중립 머티리얼로 교체한 뒤 HairColor를 틴트한다. 비우면 원본에 그대로 틴트(기존 동작)"
@@ -163,6 +164,45 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
     }
 
     /// <summary>
+    /// 바디를 다시 뽑는다 — 서버 전용. <paramref name="allowFemale"/>가 false면 여성 바디를 후보에서 뺀다.
+    ///
+    /// 수염이 붙는 NPC의 바디를 고르는 데 쓴다 (#619). 반대 방향(바디를 보고 수염을 지우는 것)으로 하면
+    /// 프로필이 바뀌어 디코이가 범인의 공개 축을 복사하는 경로가 깨진다 — 프로필은 그대로 두고
+    /// <b>바디를 프로필에 맞추는</b> 쪽이 몽타주 부합 보장을 건드리지 않는다.
+    /// </summary>
+    public void ServerPickBody(bool allowFemale)
+    {
+        SkinnedMeshRenderer[] variants = BodyVariants;
+        if (variants.Length == 0 || (IsSpawned && !IsServer))
+            return;
+
+        var candidates = new List<int>(variants.Length);
+        for (int i = 0; i < variants.Length; i++)
+        {
+            if (variants[i] == null)
+                continue;
+            if (allowFemale || !IsFemaleBody(variants[i]))
+                candidates.Add(i);
+        }
+
+        // 후보가 없으면(여성 바디만 있는 프리팹) 제한을 버린다 — 바디 없는 NPC보다 낫다
+        int picked = candidates.Count > 0
+            ? candidates[Random.Range(0, candidates.Count)]
+            : Random.Range(0, variants.Length);
+
+        if (IsSpawned)
+            m_modelIndex.Value = picked; // 클라이언트는 OnValueChanged로 따라온다
+        else
+            ApplyModel(picked); // 오프라인 폴백
+    }
+
+    // Synty Generic 바디는 이름에 성별이 들어 있다 (SM_Gen_Chr_Street_Female_01 등).
+    // 성별을 따로 데이터로 두지 않는 이유는 바디 목록 자체가 프리팹 계층이라, 표를 만들면
+    // 계층과 표 둘을 맞춰야 하는 자리가 하나 더 생기기 때문이다.
+    private static bool IsFemaleBody(SkinnedMeshRenderer body) =>
+        body.name.IndexOf("Female", System.StringComparison.OrdinalIgnoreCase) >= 0;
+
+    /// <summary>
     /// 바디 변형 목록에서 index번 하나만 활성화하고 나머지는 끈다.
     /// 모든 바디가 같은 Root 스켈레톤에 이미 바인딩돼 있어(프리팹 토글 방식)
     /// mesh 교체 없이 SetActive만으로 외형이 바뀌고 본 배열이 유지된다.
@@ -194,7 +234,8 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
         ApplyPropAxis(AppearanceAxis.Headwear, profile);
         ApplyPropAxis(AppearanceAxis.Eyewear, profile);
 
-        // 2) 머리색 — Synty 셰이더의 머리 채널(_Hair_Color)로 칠해야 갈색 마스크에 눌리지 않는다
+        // 2) 머리색 — 베이스 머티리얼을 통째로 칠한다. 마스크 채널로 칠하면 마스크를 그린 팩의 메시에만
+        //    먹어서, 다른 팩 부착물이 섞인 어휘에서는 색이 통째로 무시된다 (#619 — docs §13-13)
         TintPropAxis(AppearanceAxis.HairColor, AppearanceAxis.HairStyle, profile, m_hairColorPropertyName);
 
         // 3) 피부색
@@ -216,7 +257,12 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
             Destroy(m_axisProps[slot]);
         m_axisProps[slot] = null;
 
-        if (option?.PropPrefab == null)
+        // 한 값이 메시를 여럿 가질 수 있다 (#619). 어느 것을 쓸지는 프로필에 없어 네트워크로 오지 않으므로,
+        // 이미 동기화된 NetworkObjectId에서 결정론적으로 뽑는다 — 안 그러면 피어마다 다른 머리가 보인다.
+        // 축을 섞는 것은 한 NPC의 모든 축이 같은 자리 변형으로 몰리지 않게 하기 위한 것이다.
+        ulong seed = (IsSpawned ? NetworkObjectId : (ulong)GetInstanceID()) * 31UL + (ulong)axis;
+        GameObject prefab = option?.PickProp(seed);
+        if (prefab == null)
             return;
 
         Transform anchor = ResolveHeadAnchor();
@@ -226,7 +272,7 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
             return;
         }
 
-        GameObject prop = Instantiate(option.PropPrefab, anchor, false);
+        GameObject prop = Instantiate(prefab, anchor, false);
         // 머리 프롭은 밝은 중립 베이스로 갈아끼워야 HairColor 곱셈 틴트가 선명하다 (#221)
         if (axis == AppearanceAxis.HairStyle && m_hairBaseMaterial != null)
             ApplyBaseMaterial(prop, m_hairBaseMaterial);

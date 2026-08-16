@@ -429,8 +429,13 @@ public class JailIntake : MonoBehaviour
     /// <summary>
     /// 플레이어를 문 밖 퇴장 지점으로 옮긴다 — <b>따라오던 반출 대상도 함께</b> 나온다. 서버(또는 오프라인). (#537)
     ///
-    /// 대상을 먼저 옮긴다: 나중에 옮기면 한두 프레임 동안 추종이 감옥 안에 남은 몸을 문 밖으로 끌려 해
-    /// 벽을 향해 달리는 그림이 나온다.
+    /// <b>순서가 셋으로 갈린다: 산 동행 → 플레이어 → 밧줄 시체.</b> 앞뒤 이유가 정반대다.
+    /// <list type="bullet">
+    ///   <item><b>산 동행이 먼저</b> — NavMesh로 <b>따라오므로</b>, 뒤에 남으면 한두 프레임 동안
+    ///   감옥 안에서 문 밖의 플레이어를 향해 벽으로 달린다.</item>
+    ///   <item><b>밧줄 시체가 나중</b> — 관절로 <b>매여 있으므로</b>, 운반자가 뒤에 남으면 줄이
+    ///   수백 m로 늘어나고 그 위반이 시체를 발사한다(실측 237 m/s).</item>
+    /// </list>
     ///
     /// <b>자리를 나눠 준다</b> — 플레이어는 퇴장 지점 그 자리, 동행은 그 뒤 좌우로 벌어진 자리
     /// (<see cref="JailZone.ExitSlot"/>). 전부 같은 좌표에 놓으면 겹침을 푸는 물리가 서로를 튕겨낸다.
@@ -449,10 +454,16 @@ public class JailIntake : MonoBehaviour
             ServerSendOff(followers[i], mover.transform);
         }
 
+        // ⚠ <b>플레이어를 시체보다 먼저 옮긴다.</b> 산 동행과 순서가 반대인데, 이유도 반대다:
+        // 동행은 NavMesh로 <b>따라오므로</b> 뒤에 남으면 벽을 향해 달리지만, 밧줄 시체는 관절로
+        // <b>매여 있어</b> 운반자가 뒤에 남으면 그 줄이 수백 m로 늘어난다.
+        //
+        // 배치는 줄을 끊었다 다시 매는데(<c>NpcRagdoll.ServerPlaceCorpse</c>), 다시 맬 때 운반자가
+        // 아직 감옥 안이면 <b>방금 없앤 위반을 그대로 다시 만든다.</b>
+        mover.ServerTeleport(exit.position, exit.rotation);
+
         // 밧줄에 걸린 시체도 함께 나온다 (#597) — 안 옮기면 줄만 벽을 뚫고 늘어나고 몸은 방에 남는다.
         int corpses = ServerExitRopedCorpses(mover, followers.Count + 1);
-
-        mover.ServerTeleport(exit.position, exit.rotation);
         Debug.Log($"[감옥] 퇴장 — {mover.name} (동행 {followers.Count}명, 시체 {corpses}구)");
     }
 
@@ -472,9 +483,49 @@ public class JailIntake : MonoBehaviour
                 continue;
 
             npc.Custody.ServerMoveCorpse(m_jailZone.ExitSlot(firstSlot + moved));
+            ServerReleaseCorpse(npc);
             moved++;
         }
 
         return moved;
+    }
+
+    /// <summary>
+    /// 시체 반출 — 문 밖으로 끌고 나온 시체를 <b>정산에서 빼고 재판정을 연다.</b> 서버(또는 오프라인) 전용.
+    ///
+    /// 시체 수감(<see cref="ServerAdmitCorpse"/>)의 역이다. 저쪽이 세운 것이 둘이라 되돌릴 것도 둘이다:
+    /// <list type="bullet">
+    ///   <item><b>정산 원장</b>(<see cref="JailZone.RecordDeceased"/>) — 안 지우면 몸은 문 밖에 있는데
+    ///   현상금은 그대로 잡혀, 반출해도 정산 금액이 줄지 않는다.</item>
+    ///   <item><b>판정 표식</b>(<see cref="NpcCustody.IsDelivered"/>) — 안 지우면
+    ///   <see cref="ArrestJudge.JudgeCorpse"/>가 '이미 계상됨'으로 끊어, 문 앞에 다시 놓고 눌러도
+    ///   영영 들어가지 않는다.</item>
+    /// </list>
+    ///
+    /// <b>산 수감자의 반출(<see cref="ServerExtract"/>)이 <c>ClearDelivered</c>를 부르지 않는 것과
+    /// 갈린다</b> — 되돌릴 대상이 다르기 때문이다. 저쪽은 '첫 인계' 표식이 할당량
+    /// (<see cref="RoundManager.CriminalArrestCount"/>)에 물려 있어 반출→재수감 반복으로 부풀 수 있지만,
+    /// 시체 판정은 할당량을 건드리지 않고(<c>OnCorpseJudged</c> 구독자에 RoundManager가 없다) 계상 근거가
+    /// 원장 하나뿐이라, 원장을 지웠으면 표식도 함께 지워야 짝이 맞는다.
+    ///
+    /// <b>계상된 적 없는 시체에는 아무것도 하지 않는다</b> — 원장 제거 성공이 곧 그 게이트다.
+    /// 오검거로 사살된 시체(<see cref="ArrestJudge.JudgeDeath"/>가 표식만 세우고 계상은 안 한다)를
+    /// 들고 들어갔다 나와도 그 표식이 풀리지 않아, 페널티 취소나 재계상이 열리지 않는다.
+    /// </summary>
+    private void ServerReleaseCorpse(NpcController npc)
+    {
+        if (npc == null || m_jailZone == null)
+            return;
+
+        if (!m_jailZone.ReleaseDeceased(npc))
+            return; // 계상된 적 없는 시체 — 그냥 들고 지나가는 중이다
+
+        npc.Custody.ClearDelivered();
+
+        // 판정 불가 기억에서도 뺀다 — 원장에 오른 채로 버튼을 눌러 봤다면 '다시 물어도 답이 같다'로
+        // 등록됐을 수 있는데(ServerAdmitCorpse의 false 경로), 표식을 걷은 지금은 답이 달라졌다.
+        m_unjudgeable.Remove(npc);
+
+        Debug.Log($"[감옥] 시체 반출 — 정산에서 빼고 재판정을 연다: {npc.name}");
     }
 }

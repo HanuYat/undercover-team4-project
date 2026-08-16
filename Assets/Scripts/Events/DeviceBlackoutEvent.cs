@@ -38,6 +38,8 @@ public class DeviceBlackoutEvent : NetworkBehaviour, ISuddenEvent
 
     public string DisplayName => "전자기기 먹통";
 
+    public string NoticeKey => "Hud.Event.Notice.Blackout";
+
     // 먹통이 켜져 있는 동안이 곧 이벤트 진행 중 — 매니저는 이 값이 false가 될 때까지 재발생시키지 않는다.
     // (매니저가 IsActive를 읽는 것은 서버·오프라인에서뿐이므로 서버 진실값을 그대로 준다)
     public bool IsActive => m_blackout;

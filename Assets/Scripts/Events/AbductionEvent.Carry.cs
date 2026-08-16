@@ -152,8 +152,9 @@ public partial class AbductionEvent
         foreach (NpcController abductor in m_abductors)
             abductor.Penalty.StartPenaltyConverge(caught);
 
-        // 이제부터 알린다 — 구조가 관심사가 되는 시점이다 (AnnounceOnBegin이 false인 이유)
-        App.Game.SuddenEvent?.Announce($"{m_displayName} — 동료가 끌려가고 있다");
+        // 여기서는 알리지 않는다 — 토스트는 스폰 시점 한 번뿐이다(AnnounceOnBegin, 팀 확정 2026-08-13).
+        // 이미 "납치가 시작됐다"를 띄운 뒤라 포획 토스트는 같은 사실을 두 번 말하는 셈이고,
+        // 끌려가는 것 자체는 화면에서 보인다. 서버 로그는 남긴다 — 디버깅에는 이 순간이 필요하다.
         Debug.Log($"[납치] 포획 — {catcher.name} → {caught.name}");
 
         CarryToOutskirtsAsync(caught).Forget();
@@ -394,9 +395,10 @@ public partial class AbductionEvent
         {
             incap.Recover();
 
-            // 구조 성공을 알린다 — 포획 때 띄운 "동료가 끌려가고 있다"의 짝이다. 실제로 풀어 준
-            // 경우에만 낸다: 대상 소실(접속 종료 등)로 여기 들어오는 경로에는 구해 낸 사람이 없다.
-            App.Game.SuddenEvent?.Announce($"{m_displayName} — 동료를 구해냈다");
+            // 구조 성공도 토스트로 알리지 않는다 (팀 확정 2026-08-13) — 이 이벤트의 토스트는
+            // 스폰 시점 하나뿐이다. 구해 낸 쪽은 현장에 있었으므로 결과가 보이고,
+            // 나머지에게는 "끝났다"만 남는 알림이라 판단에 쓰이지 않는다.
+            Debug.Log($"[납치] 구조 성공 — {caught.name} 풀려남");
         }
 
         Finish();

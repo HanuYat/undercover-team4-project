@@ -27,6 +27,17 @@ public class CitizenIdentity : NetworkBehaviour
     public CitizenProfile Profile { get; private set; }
 
     /// <summary>
+    /// 몸체가 기계인가 — <b>타격 표현이 갈리는 기준</b>이다. 진압봉 타격음(깡/퍽, <see cref="EFx"/>)과
+    /// 피격 신음(<see cref="NpcHurtVoice"/>)이 이 하나를 본다. 둘이 각자 판정하면 같은 NPC가
+    /// 깡 소리를 내면서 신음하는 어긋남이 생긴다.
+    ///
+    /// <see cref="Profile"/>이 전 피어 동기화라(#52) 클라이언트에서도 같은 답이 나온다.
+    /// 배정 전(스폰 직후 잠깐)에는 false — 갈래를 남기지 않으려고 사람 쪽으로 고정한다.
+    /// </summary>
+    public bool IsAndroidBody =>
+        Profile != null && Profile.CitizenType == OfficialRecords.CitizenType.Android;
+
+    /// <summary>
     /// 실제 범인 여부 — 진범 판정(#41)의 정답 기준. 서버 전용 (클라이언트에서는 항상 false).
     /// 곧 공개 플래그이기도 하다 (#102): 라운드 시작에 확정된 예비 용의자는 false로 대기하다가
     /// 제보 전화 승격 시 켜진다. 대기 중에 잡으면 오검거로 판정된다 (GDD 7-3과 일치).

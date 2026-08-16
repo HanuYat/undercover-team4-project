@@ -30,7 +30,8 @@ public class PlayerEmoteInput : MonoBehaviour
     private PlayerInputHandler m_inputHandler;
     private PlayerLook m_look; // 휠 조준 중 시점 회전 정지 (#219)
 
-    private readonly EmoteLoadout m_slots = new EmoteLoadout();
+    // 저장 칸이 계정별로 갈리므로 PlayerId를 알 수 있는 Awake에서 만든다 (#640)
+    private EmoteLoadout m_slots;
     private Vector2 m_aim;
 
     /// <summary>휠이 열려 있는가 — 휠 UI와 취소 판정이 본다.</summary>
@@ -44,6 +45,7 @@ public class PlayerEmoteInput : MonoBehaviour
         m_emote = GetComponent<PlayerEmote>();
         m_inputHandler = GetComponent<PlayerInputHandler>();
         m_look = GetComponent<PlayerLook>();
+        m_slots = new EmoteLoadout(App.Net.Auth != null ? App.Net.Auth.PlayerId : null);
         m_slots.Load();
         FillDefaultSlotsIfEmpty();
     }

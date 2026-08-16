@@ -364,6 +364,37 @@ public class RagdollRig : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// <b>뼈 길이만</b> 바인드로 되돌린다 — 자세(회전)는 손대지 않는다.
+    ///
+    /// <see cref="RestoreBindPose"/>를 쓸 수 없는 자리를 위한 것이다. 저쪽은 회전까지 되돌리므로
+    /// <b>물리를 안 받는 뼈</b>(목·손가락·발)가 T자 방향으로 튀는데, 원격이 받는 자세
+    /// (<see cref="ApplyLocalPoseAroundHips"/>)에는 그 뼈들이 들어 있지 않아 되돌릴 짝이 없다.
+    ///
+    /// <b>왜 원격에 필요한가.</b> 시체는 <c>ExitRagdoll</c>을 영영 타지 않아 <see cref="RestoreBindPose"/>가
+    /// 한 번도 돌지 않는다 — 물리가 관절을 늘려 놓으면 그 길이가 <b>영구히 남는다.</b> 그런데 받는
+    /// 자세는 로컬 <b>회전</b>뿐이라(길이는 관절이 유지한다는 전제) 늘어난 리그에 입히면 보낸 쪽과
+    /// 다른 몸이 나온다. 갈아끼우기 직전에 길이를 되돌려 그 전제를 실제로 참으로 만든다.
+    ///
+    /// 대상은 <b>관절이 달린 뼈</b>뿐이다 — 골반의 로컬 위치는 자세의 일부라 되돌리면 안 된다
+    /// (<see cref="MaxBindPositionDrift"/>가 골반을 빼는 것과 같은 이유).
+    ///
+    /// ⚠ <see cref="RestoreBindPose"/>와 같이 <b>키네마틱일 때만</b> 의미가 있다.
+    /// </summary>
+    public void RestoreBindBoneLengths()
+    {
+        if (m_bindBones == null)
+            return;
+
+        for (int i = 0; i < m_bindBones.Length; i++)
+        {
+            if (m_bindBones[i] == null || !m_bindJointed[i])
+                continue;
+
+            m_bindBones[i].localPosition = m_bindPositions[i];
+        }
+    }
+
     // 직렬화되지 않는 Rigidbody 값을 인스턴스마다 다시 건다 — 상수 주석에 이유가 적혀 있다.
     private void ApplyRuntimePhysics()
     {

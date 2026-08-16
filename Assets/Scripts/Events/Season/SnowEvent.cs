@@ -60,6 +60,13 @@ public class SnowEvent : NetworkBehaviour, ISuddenEvent
     /// </summary>
     public bool IsActive => m_snow;
 
+    /// <summary>
+    /// 조용히 시작한다 (팀 확정 2026-08-13) — 날씨는 <b>보면 안다</b>. 하늘이 바뀌고 시야가 줄어드는 것
+    /// 자체가 알림이라, 토스트를 얹으면 같은 사실을 두 번 말하는 셈이다. 돌발 이벤트 토스트는
+    /// "지금 대응할 일이 생겼다"를 위해 아껴 둔다 — 날씨까지 끼면 그 신호가 묽어진다.
+    /// </summary>
+    public bool AnnounceOnBegin => false;
+
     // 원격 클라이언트면 동기화 값을, 서버(또는 오프라인)면 진실값을 사용
     public bool IsSnow => (!IsSpawned || IsServer) ? m_snow : m_snowSynced.Value;
 

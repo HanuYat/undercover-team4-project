@@ -145,10 +145,14 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
 
     public bool IsActive => m_active;
 
-    // 스폰·추격은 조용히 시작한다 — 납치범이 시민과 구분되지 않는 것이 이 이벤트의 재미이고,
-    // 발생 즉시 전 플레이어에게 알리면 "지금 누가 노려지고 있다"가 공짜로 새어 나간다.
-    // 알림은 포획 순간에 직접 발행한다(그때부터 구조가 관심사가 된다).
-    public bool AnnounceOnBegin => false;
+    // <b>스폰 순간에 알린다</b> (팀 확정 2026-08-13) — 기본값(true)이지만 한 번 뒤집었다 되돌린 자리라 명시해 둔다.
+    // 원래는 조용히 시작하고 포획 순간에야 알렸다: 납치범이 시민과 구분되지 않는 것이 이 이벤트의 재미이고
+    // "지금 누가 노려지고 있다"를 공짜로 흘리지 않으려는 것이었다. 그 대가가 컸다 — 끌려가기 시작한 뒤에야
+    // 알리면 동료가 달려갈 거리는 이미 벌어져 있고, 구조라는 협동 지점이 사실상 닫힌다.
+    // 알림은 표적이 누구인지는 말하지 않으므로, 새는 것은 "어딘가에서 시작됐다"까지다.
+    public bool AnnounceOnBegin => true;
+
+    public string NoticeKey => "Hud.Event.Notice.Abduction";
 
     // 이벤트 프레임워크는 서버에서만 돌지만, 아래 Update는 스스로 도므로 직접 게이트한다 (JailIntake와 같은 패턴)
     private static bool HasServerAuthority =>

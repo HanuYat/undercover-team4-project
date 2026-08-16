@@ -331,10 +331,29 @@ public static class RagdollSetup
             return "  ⚠ 골반 복제 — 관절 없는 뼈를 찾지 못해 건너뛴다 (리그가 깨졌을 수 있다)";
         }
 
-        NetworkTransform netTransform = hips.GetComponent<NetworkTransform>();
+        // ⚠ <b>붙이는 것은 서브클래스다</b> — 순간이동을 원격에 알리는 훅이 거기 있다
+        // (<see cref="NpcCorpseHipsTransform"/>, ragdoll-corpse-jail-teleport §4). 소재 타입
+        // <c>NetworkTransform</c>이 남아 있으면 <b>걷어낸다</b>: 한 오브젝트에 둘이 같이 있으면
+        // 같은 트랜스폼에 두 스트림이 들어가 서로 덮는다.
+        //
+        // ⚠ <b>순서가 있다.</b> <c>NetworkRigidbody</c>가 <c>NetworkTransform</c>을
+        // <c>RequireComponent</c>하므로, 그것을 먼저 떼지 않으면 Unity가 파괴를 거부한다. 아래에서
+        // 다시 붙이므로 결과는 같다.
+        NetworkTransform legacy = hips.GetComponent<NetworkTransform>();
+        if (legacy != null && legacy is not NpcCorpseHipsTransform)
+        {
+            NetworkRigidbody blocking = hips.GetComponent<NetworkRigidbody>();
+            if (blocking != null)
+                Object.DestroyImmediate(blocking);
+
+            Object.DestroyImmediate(legacy);
+            legacy = null;
+        }
+
+        NpcCorpseHipsTransform netTransform = legacy as NpcCorpseHipsTransform;
         string transformNote = netTransform != null ? "이미 있음" : "새로 붙임";
         if (netTransform == null)
-            netTransform = hips.gameObject.AddComponent<NetworkTransform>();
+            netTransform = hips.gameObject.AddComponent<NpcCorpseHipsTransform>();
         ConfigureHipsTransform(netTransform);
 
         NetworkRigidbody netBody = hips.GetComponent<NetworkRigidbody>();

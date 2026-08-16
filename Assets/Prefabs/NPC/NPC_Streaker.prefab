@@ -35,6 +35,7 @@ GameObject:
   - component: {fileID: 6459439272382896395}
   - component: {fileID: 3324404709527055785}
   - component: {fileID: 1134059981017232228}
+  - component: {fileID: 7416309468039645568}
   m_Layer: 7
   m_Name: NPC_Streaker
   m_TagString: Untagged
@@ -502,6 +503,7 @@ MonoBehaviour:
   m_settleSpeedThreshold: 0.15
   m_settleHoldSeconds: 0.3
   m_settleTimeoutSeconds: 5
+  m_blendSeconds: 0.3
   m_groundMask:
     serializedVersion: 2
     m_Bits: 1
@@ -509,6 +511,19 @@ MonoBehaviour:
   m_alignPullSpeed: 1.5
   m_flightAlignPullSpeed: 16
   m_alignSnapDistance: 2.5
+--- !u!114 &7416309468039645568
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aacde1776e69526428d86afcd07df51a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcHurtVoice
+  m_minInterval: 0.5
 --- !u!1001 &1485141803111560614
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -631,10 +646,10 @@ PrefabInstance:
       addedObject: {fileID: 2480655110169691797}
     - targetCorrespondingSourceObject: {fileID: 3906038093274639839, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 6567571564654157084}
+      addedObject: {fileID: 7243327327353724558}
     - targetCorrespondingSourceObject: {fileID: 3906038093274639839, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 4249723682717395334}
+      addedObject: {fileID: 7455822853475084230}
     - targetCorrespondingSourceObject: {fileID: 4125562017735736742, guid: 36763523c31ee7840bfd9fe0473b5259, type: 3}
       insertIndex: -1
       addedObject: {fileID: 6933756703790547447}
@@ -1181,7 +1196,7 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.32299513, y: 0.27836922, z: 0.38197827}
   m_Center: {x: -0.12033978, y: 0.0010077655, z: 0.00000013411045}
---- !u!114 &6567571564654157084
+--- !u!114 &7243327327353724558
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1190,9 +1205,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 2497598294701332601}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e96cb6065543e43c4a752faaa1468eb1, type: 3}
+  m_Script: {fileID: 11500000, guid: b5d14420c2a44424ab18d25b9b564e90, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.Components.NetworkTransform
+  m_EditorClassIdentifier: Assembly-CSharp::NpcCorpseHipsTransform
   ShowTopMostFoldoutHeaderGroup: 1
   NetworkTransformExpanded: 0
   AutoOwnerAuthorityTickOffset: 1
@@ -1227,7 +1242,7 @@ MonoBehaviour:
   SwitchTransformSpaceWhenParented: 0
   Interpolate: 1
   SlerpPosition: 0
---- !u!114 &4249723682717395334
+--- !u!114 &7455822853475084230
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
