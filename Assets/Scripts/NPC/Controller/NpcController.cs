@@ -516,11 +516,141 @@ public class NpcController : NetworkBehaviour
             return;
         }
 
-        if (NpcNavAreas.IsOnRoad(transform.position))
+        if (!NpcNavAreas.IsOnRoad(transform.position))
+        {
+            m_roadEgressPending = false;
+            SetAreaMask(NpcNavAreas.ExcludeRoad(m_baseAreaMask));
+            return;
+        }
+
+        DriveOffRoad();
+    }
+
+    // 도로에서 물러날 거리(m) — <b>가장 가까운 도로 밖이 아니다.</b> 그건 경계선 바로 너머
+    // 몇 cm라, 한 발짝 떼자마자 도착 판정이 나 NPC가 차도 경계에 붙어 선다(관측된 증상).
+    // 폭 10m 도로 한복판에서 인도까지가 5m이므로(실측) 10m면 수직으로 나갈 때 5m 안쪽에 선다.
+    private const float k_roadEgressDistance = 10f;
+
+    // 목적지에 요구하는 도로 여유(m) — 이 반경 안에 도로가 없어야 "충분히 물러났다"고 본다.
+    // <b>후보를 거리로 고르면 안 되는 이유가 여기 있다:</b> 후보는 전부 등거리라 거리로는
+    // 우열이 안 갈리고, 실제로 대각선 후보가 뽑혀 여유 0.7m에 서는 것이 관측됐다.
+    // 값은 실측 상한에 맞춘다 — 한복판에서 10m 수직 이동의 여유가 5m이므로 그보다 낮아야 한다.
+    private const float k_roadEgressClearance = 2.5f;
+
+    // 이탈 목적지 후보 방향 수 — 도로는 띠 모양이라 어느 쪽이 가까운 인도인지 모른다. 빙 둘러 보고
+    // 도로 밖으로 나온 것 중 가장 가까운 것을 쓴다.
+    private const int k_roadEgressDirections = 8;
+
+    // 후보를 NavMesh에 붙일 때의 스냅 반경(m) — 넓히면 후보가 죄다 같은 지점으로 뭉친다.
+    private const float k_roadEgressSnapRadius = 2f;
+
+    /// <summary>
+    /// 도로에서 <b>걸어 나가게 한다</b> — 기다리는 것만으로는 못 나오기 때문이다. (#634 후속)
+    ///
+    /// <b>Idle이 문제다.</b> 추격이 끝나면 <see cref="NpcDutyAgent.EndPenaltyDuty"/>가 Idle로
+    /// 되돌리는데, <see cref="NpcIdleState"/>는 <c>isStopped = true</c>로 1~3초(15% 확률로 5~10초)
+    /// 서 있는다. 그 자리가 차도 한복판이면 그 시간이 그대로 사망이다 — 실제로 관측된 증상이 이것이고,
+    /// 마스크를 좁히지 못해 굳는 것과 <b>보이는 그림이 똑같아</b> 더 나쁘다.
+    ///
+    /// <b>그래서 정지를 덮어쓰는 게 아니라 상태를 옮긴다.</b> 에이전트만 밀면 FSM은 Idle인 채
+    /// 몸만 이동해 <b>미끄러진다</b> — <see cref="NpcAnimationDriver"/>는 NpcState 값을 그대로
+    /// Animator 번호로 쓰므로 Idle이면 속도와 무관하게 Idle 모션이 나온다. 걸어 나가는 중이면
+    /// 그건 Walk다. 상태를 맞춰 두면 모션은 따라오고 드라이버는 손댈 필요가 없다.
+    ///
+    /// 목적지는 Walk가 스스로 뽑은 배회 지점이 아니라 <b>가장 가까운 도로 밖</b>으로 덮어쓴다 —
+    /// 배회 지점은 반경 3~10m라 도로 폭(10m)을 넘어 건너편이 걸릴 수 있고, 차도 위에서 그건
+    /// 가장 오래 걸리는 경로다.
+    /// </summary>
+    private void DriveOffRoad()
+    {
+        if (!AgentReady)
             return;
 
-        m_roadEgressPending = false;
-        SetAreaMask(NpcNavAreas.ExcludeRoad(m_baseAreaMask));
+        // 이미 도로 밖을 향해 걷고 있으면 놔둔다 — 매 틱 목적지를 새로 잡으면 경로가 계속 리셋된다
+        if (!m_agent.isStopped && m_agent.hasPath && !NpcNavAreas.IsOnRoad(m_agent.destination))
+            return;
+
+        // 나갈 곳을 먼저 찾는다 — 못 찾았는데 상태부터 옮기면 Idle↔Walk를 오가며 떨기만 한다
+        if (!TryFindRoadExit(out Vector3 exit))
+            return; // 다음 틱에 다시 시도한다
+
+        // Walk로 옮긴 뒤 목적지를 덮는다 — 순서가 중요하다. ChangeState는 Enter()까지 돌고 오므로
+        // (NpcWalkState.Enter가 자기 배회 지점을 잡는다) 먼저 걸면 그쪽이 이겨 버린다.
+        if (m_stateMachine.CurrentState == NpcState.Idle)
+            m_stateMachine.ChangeState(NpcState.Walk);
+
+        m_agent.isStopped = false;
+        m_agent.SetDestination(exit);
+    }
+
+    /// <summary>
+    /// 도로를 벗어나 <b>충분히 안쪽</b>에 있는 지점을 찾는다 — 빙 둘러 보고 고른다.
+    ///
+    /// 가장 가까운 도로 밖 지점(<c>SamplePosition</c> 한 번)으로는 안 된다: 그건 경계선 바로 너머라
+    /// 한 발짝 만에 도착 판정이 나고, NPC가 차도 경계에 붙어 선 채 Idle로 돌아간다.
+    ///
+    /// 후보 사이의 우열은 <b>거리가 아니라 도로 여유</b>로 가른다 — 후보는 전부 등거리라 거리로는
+    /// 갈리지 않고, 그렇게 두면 도로를 비스듬히 스치는 대각선 후보가 뽑힌다.
+    /// 여유를 갖춘 후보가 하나도 없으면(좁은 골목 등) 도로 밖이기만 한 후보라도 쓴다 —
+    /// 차도에 서 있는 것보다는 언제나 낫다.
+    /// </summary>
+    private bool TryFindRoadExit(out Vector3 exit)
+    {
+        exit = default;
+
+        int offRoadMask = NpcNavAreas.ExcludeRoad(m_baseAreaMask);
+        Vector3 origin = transform.position;
+
+        float bestClearSqr = float.MaxValue;
+        bool foundClear = false;
+
+        Vector3 fallback = default;
+        float bestAnySqr = float.MaxValue;
+        bool foundAny = false;
+
+        for (int i = 0; i < k_roadEgressDirections; i++)
+        {
+            float angle = i * (Mathf.PI * 2f / k_roadEgressDirections);
+            Vector3 candidate = origin
+                + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * k_roadEgressDistance;
+
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, k_roadEgressSnapRadius, offRoadMask))
+                continue;
+
+            // 스냅이 도로로 되돌아온 후보는 버린다 — 마스크로 걸러도 경계에 걸치면 다시 도로다
+            if (NpcNavAreas.IsOnRoad(hit.position))
+                continue;
+
+            float sqr = (hit.position - origin).sqrMagnitude;
+
+            // 도로에서 충분히 떨어졌는가 — 반경 안에 도로가 <b>없어야</b> 한다.
+            // 여기서는 Road 마스크로 직접 샘플하는 것이 맞다: 묻는 것이 "이 폴리곤이 도로인가"가
+            // 아니라 "이 근처에 도로가 있는가"이기 때문이다 (NpcNavAreas.IsOnRoad와 반대다).
+            if (!NavMesh.SamplePosition(hit.position, out NavMeshHit _, k_roadEgressClearance,
+                                        NpcNavAreas.RoadMask))
+            {
+                if (sqr < bestClearSqr)
+                {
+                    bestClearSqr = sqr;
+                    exit = hit.position;
+                    foundClear = true;
+                }
+                continue;
+            }
+
+            if (sqr < bestAnySqr)
+            {
+                bestAnySqr = sqr;
+                fallback = hit.position;
+                foundAny = true;
+            }
+        }
+
+        if (foundClear)
+            return true;
+
+        exit = fallback;
+        return foundAny;
     }
 
     /// <summary>
