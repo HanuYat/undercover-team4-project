@@ -200,10 +200,10 @@ public class InteractionFeedback : NetworkBehaviour
     }
 
     /// <summary>
-    /// 조준한 대상의 키 + 동작을 띄운다 — 윤곽선과 같은 판정을 그대로 쓴다. (#664)
-    /// 순서도 윤곽선과 같다: 아이템(좌클릭)이 먼저고, 그다음이 E다 — 색이 이미 그 순서로 "어떤 키가
-    /// 먹히는지"를 말하고 있어(Refresh의 ①②) 안내가 다른 순서를 쓰면 색과 글이 어긋난다.
-    /// 그 사이에 윤곽선 없는 갈래가 하나 있다 — 손에 쥔 것을 겨눈 E(<see cref="HeldTargetPrompt"/>).
+    /// 조준한 대상의 키 + 동작을 띄운다 — 대상 판정은 윤곽선과 같은 값을 쓴다. (#664)
+    /// 순서는 손에 쥔 것(E) → 아이템(좌클릭) → 상호작용(E)이다. <b>윤곽선 순서와 다른 곳이 하나
+    /// 있다</b>: 놓기 안내가 아이템 문구를 이긴다. 색은 무엇을 할 수 있는지를 말하지만 놓기는
+    /// 손에 든 것을 잃는 쪽이라, 한 줄뿐인 자리에서는 잃는 쪽을 먼저 알린다(팀 결정).
     /// </summary>
     private void TickPrompt(IInteractable interactable, ItemBase item)
     {
@@ -221,7 +221,20 @@ public class InteractionFeedback : NetworkBehaviour
             return;
         }
 
-        // ① 아이템 경로 — 키가 좌클릭이라 표기도 그쪽에서 읽는다. 막힘 사유는 두지 않는다
+        string key = m_input != null ? m_input.InteractBinding : string.Empty;
+
+        // ① 손에 쥔 것을 겨눈 E — 막힐 일이 없는 갈래라 사유도 없다.
+        //    아이템 문구보다 앞이다: 밧줄로 묶을 수 있는 대상(기절·시체)은 CanInteract가 false라
+        //    바로 그 자리에서 E가 '전부 놓기'로 나간다. 아이템 문구에 가리면 끌던 대상을
+        //    놓치는 것을 화면 어디에서도 예고하지 못한다.
+        LocalizedString held = HeldTargetPrompt();
+        if (held != null)
+        {
+            view.ShowPrompt(key, held, null);
+            return;
+        }
+
+        // ② 아이템 경로 — 키가 좌클릭이라 표기도 그쪽에서 읽는다. 막힘 사유는 두지 않는다
         //    (쓸 수 없으면 CanTarget이 false라 안내째 사라진다).
         if (item != null)
         {
@@ -238,16 +251,6 @@ public class InteractionFeedback : NetworkBehaviour
                 view.HidePrompt();
             }
 
-            return;
-        }
-
-        string key = m_input != null ? m_input.InteractBinding : string.Empty;
-
-        // ② 손에 쥔 것을 겨눈 E — 상호작용보다 앞선다. 막힐 일이 없는 갈래라 사유도 없다.
-        LocalizedString held = HeldTargetPrompt();
-        if (held != null)
-        {
-            view.ShowPrompt(key, held, null);
             return;
         }
 

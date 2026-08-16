@@ -34,7 +34,9 @@ public class InteractPromptView : LocalizedMessageView
     /// 지금 조준 안내가 떠 있는가 — 상태 안내(<see cref="PlayerReviveHud"/>)가 겹쳐 뜨지 않으려고 본다.
     /// 조준 안내가 이미 "무슨 키로 무엇을 하는지"를 말하고 있으면 상태 줄은 같은 말을 반복한다. (#664)
     /// </summary>
-    public bool IsPromptShowing => m_shownAction != null;
+    /// 실제로 그려졌는지(IsShowing)까지 본다 — 형식 문구 배선이 비어 Apply가 중단되면 문구를 잡고도
+    /// 화면은 비는데, 그걸 "떠 있다"로 답하면 상태 줄까지 접혀 안내가 통째로 사라진다.
+    public bool IsPromptShowing => m_shownAction != null && IsShowing;
 
     protected override void Awake()
     {

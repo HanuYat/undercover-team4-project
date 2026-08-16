@@ -95,6 +95,15 @@ public class PlayerReviveHud : NetworkBehaviour
             return;
         }
 
+        // 무력화 중에는 조준 안내를 적지 않는다 (#664). 위 두 분기가 걸러 낸 다운·기능 정지 말고도
+        // 기절·페널티·납치가 여기로 내려오는데, 그동안은 좌클릭도 E도 가드에 막혀 아무것도 못 한다.
+        // 조준 안내(InteractionFeedback)가 같은 상황에서 사라지므로 기준을 맞춘다.
+        if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
+        {
+            ClearPrompt();
+            return;
+        }
+
         // 여기부터는 조준 중에 뜨는 안내다 — 조준 안내(#664)가 이미 떠 있으면 띄우지 않는다.
         // 같은 화면에 두 줄이 뜨고, 심하면 서로 다른 말을 한다(밧줄을 들고 기능 정지된 동료를
         // 겨누면 실제로 먹히는 것은 '업기'인데 이쪽은 '부활 키트를 들고'를 계속 적는다).
