@@ -33,8 +33,10 @@ public class JailIntake : MonoBehaviour
     [SerializeField] private JailZone m_jailZone;
 
     [Tooltip(
-        "판정 버튼이 신병으로 인정하는 거리(m) — 밧줄로 끌고 있지 않아도 이 안에 있는 확보 상태(놓아둔 Captured, "
-            + "남이 끌고 온 Escorted, 내려놓은 시체)면 함께 판정한다. 밧줄 길이(1.6m)보다 넉넉히 둘 것"
+        "판정 버튼이 신병으로 인정하는 거리(m) — 손이 빈 사람이 눌렀을 때만 쓴다. 이 안의 확보 상태"
+            + "(놓아둔 Captured, 남이 끌고 온 Escorted, 내려놓은 시체)를 함께 판정하되, 아무도 손대지 "
+            + "않은 대상은 빠진다. 줄을 쥐고 있으면 밧줄에 걸린 대상만 판정한다(#637). "
+            + "밧줄 길이(1.6m)보다 넉넉히 둘 것"
     )]
     [SerializeField] private float m_admitReach = 4f;
 
@@ -73,14 +75,19 @@ public class JailIntake : MonoBehaviour
     /// 이 시점에는 결과를 모른다. 부르는 쪽(<see cref="JailIntakeButton"/>)이 "확보한 신병이 없다"만
     /// 가르는 데 쓴다.
     ///
-    /// <b>확보의 기준은 둘이다</b> — 이 사람의 밧줄에 걸린 대상 전부, 그리고 버튼 앞
-    /// <see cref="m_admitReach"/> 안에 있는 <see cref="IsAdmittableState"/>.
-    /// 후자를 넣는 이유는 밧줄을 풀어 세워 둔 뒤 누르는 조작이 자연스럽고 <b>남이 끌고 온 신병을 대신
-    /// 넣어 주는</b> 협동도 되어야 하기 때문이고, 여럿을 끌고 왔으면 <b>한 번에 전부 판정된다</b>
-    /// (팀 확정 2026-08-06).
+    /// <b>확보의 기준은 갈래 둘이고, ①이 있으면 ②는 돌지 않는다</b> (#637) — ① 이 사람의 밧줄에
+    /// 걸린 대상 전부, ② 버튼 앞 <see cref="m_admitReach"/> 안에서 <see cref="IsAdmittableState"/>이면서
+    /// <see cref="IsSecuredByAnyone"/>인 대상. 줄을 쥔 것이 곧 "이것을 넣겠다"는 선택이므로 그 위에
+    /// 반경 스캔을 얹지 않는다 — 옆에 놓아둔 대상이 함께 검거되던 사고가 그 경로였다.
     ///
-    /// <b>시체도 받는다</b> (#571) — 죽은 대상은 죽는 순간이 아니라 여기서 계상된다. 판정·배치가
-    /// 통째로 다른 갈래라 <see cref="ServerAdmitCorpse"/>가 따로 받는다.
+    /// ②는 손이 빈 사람 몫이다: 밧줄을 풀어 세워 둔 뒤 누르는 조작, <b>남이 끌고 온 신병을 대신
+    /// 넣어 주는</b> 협동, 그리고 여럿을 세워 뒀으면 <b>한 번에 전부 판정</b> (팀 확정 2026-08-06).
+    ///
+    /// <b>시체도 산 신병과 같은 규칙을 탄다</b> (#571) — 죽은 대상은 죽는 순간이 아니라 여기서
+    /// 계상되고, 판정·배치가 통째로 다른 갈래라 <see cref="ServerAdmitCorpse"/>가 따로 받는다.
+    ///
+    /// <b>시체는 ①로만 받는다</b> (#571/#637) — 죽은 대상은 죽는 순간이 아니라 여기서 계상되고,
+    /// 판정·배치가 통째로 다른 갈래라 <see cref="ServerAdmitCorpse"/>가 따로 받는다.
     ///
     /// 오검거는 감옥에 들이지 않고 그 자리에서 놓는다 — <see cref="WrongfulArrestPenalty"/>가
     /// Detained로 가져가 페널티를 굴린다(#101/#277). 감옥이 격리 공간이 된 뒤로는 "안에서 확정된
@@ -240,7 +247,7 @@ public class JailIntake : MonoBehaviour
         return true;
     }
 
-    // 이 플레이어가 확보 중인 대상을 모은다 — 자기 밧줄에 걸린 전부 + 문 앞에 놓아둔 Captured.
+    // 이 플레이어가 확보 중인 대상을 모은다 — 줄을 쥐고 있으면 거기 걸린 전부, 손이 비었으면 문 앞에 놓아둔 신병.
     private void CollectHeldBy(GameObject interactor)
     {
         m_admitBuffer.Clear();
@@ -255,6 +262,12 @@ public class JailIntake : MonoBehaviour
                     m_admitBuffer.Add(roped);
             }
         }
+
+        // <b>줄을 쥐고 있으면 거기서 끝이다</b> (#637) — 밧줄이 곧 "이것을 넣겠다"는 명시적 선택이라,
+        // 반경 스캔이 그 위에 다른 대상을 얹으면 고른 적 없는 것이 함께 들어간다. 반경 갈래는 손이
+        // 빈 사람 몫이다: 풀어 세워 둔 신병을 누르거나 남이 끌고 온 신병을 대신 넣어 주는 조작.
+        if (m_admitBuffer.Count > 0)
+            return;
 
         // 버튼 앞의 신병 — 기준은 <b>버튼</b>이 아니라 누른 사람이다. 버튼에서 재려면 버튼이 여럿일 때
         // 어느 것인지를 또 물어야 하는데, 사거리는 이미 PlayerInteractor가 걸러 줬으므로 사람 기준이면 충분하다.
@@ -274,6 +287,8 @@ public class JailIntake : MonoBehaviour
                 continue;
             if (!IsAdmittableState(npc.CurrentState))
                 continue;
+            if (!IsSecuredByAnyone(npc))
+                continue;
             if ((npc.transform.position - origin).sqrMagnitude > sqrReach)
                 continue;
             if (!m_admitBuffer.Contains(npc))
@@ -288,9 +303,34 @@ public class JailIntake : MonoBehaviour
     /// 누르는 조작이 자연스럽고, 남이 끌고 온 시체를 대신 넣어 주는 것도 되어야 한다.
     /// 시체 밧줄은 E로 내려놓으면 관절이 풀리므로(순수 운반이라 '놓아둔 Captured' 같은 중간이 없다)
     /// 이 갈래가 없으면 <b>줄을 쥔 채로만</b> 넣을 수 있게 된다.
+    ///
+    /// <b>휩쓸림은 소유 조건이 막는다</b> (#637) — 끌고 와서 내려놓은 시체는
+    /// <see cref="NpcCustody.WasSecuredByPlayer"/>가 남지만, 길에 사살해 둔 시체는 셋 다 비어
+    /// <see cref="IsSecuredByAnyone"/>에서 걸러진다. 사고가 난 것이 후자였다.
     /// </summary>
     private static bool IsAdmittableState(NpcState state) =>
         state is NpcState.Captured or NpcState.Escorted or NpcState.Dead;
+
+    /// <summary>
+    /// 누군가 확보한 대상인가 — 버튼 앞 반경 스캔이 <b>지나가던 NPC를 휩쓸지 않게</b> 하는 문지기. (#637)
+    ///
+    /// 상태와 거리만으로는 "끌고 온 신병"과 "그냥 거기 쓰러져 있던 대상"이 똑같아 보인다. 셋 중
+    /// 하나라도 있으면 누군가 손을 댄 것이다:
+    /// <list type="bullet">
+    ///   <item><see cref="NpcCustody.EscortTarget"/> — 지금 누군가를 따라오는 중(남이 끌고 온 신병·반출 대상)</item>
+    ///   <item><see cref="NpcCustody.IsJailExtracted"/> — 반출됐다 거리 이탈로 멈춘 대상 (#517)</item>
+    ///   <item><see cref="NpcCustody.WasSecuredByPlayer"/> — 밧줄을 풀어 문 앞에 세워 둔 신병 (#637)</item>
+    /// </list>
+    ///
+    /// <b>누가 확보했는지는 묻지 않는다</b> — 남이 끌고 온 신병을 대신 넣어 주는 협동이 설계에 있다
+    /// (팀 확정 2026-08-06). 걸러내려는 것은 <b>아무도 손대지 않은</b> 대상이다.
+    /// </summary>
+    private static bool IsSecuredByAnyone(NpcController npc)
+    {
+        NpcCustody custody = npc.Custody;
+        return custody != null
+            && (custody.EscortTarget != null || custody.IsJailExtracted || custody.WasSecuredByPlayer);
+    }
 
     // 인계 몫(#484)의 귀속자 — 판정이 확정한 인계자 목록(밧줄 보유자 전원 + 버튼을 누른 사람,
     // 팀 확정 2026-08-06)을 clientId로 옮긴다. 누가 인계자인지 정하는 것은 ArrestJudge 몫이다.
