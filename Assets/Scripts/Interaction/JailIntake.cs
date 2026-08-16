@@ -212,9 +212,9 @@ public class JailIntake : MonoBehaviour
     /// (<c>OnArrestJudged</c>를 발행하지 않는다 — 구독자가 전부 상태 전이라 시체에 성립하지 않는다),
     /// ② 줄을 걷을 때 일으켜 세우지 않는다, ③ 배치가 순간이동이 아니라 <b>몸을 통째로 옮기는</b> 것이다.
     ///
-    /// <b>오검거는 여기 오지 않는다</b> — 죽는 순간 이미 세고 표식을 세워 두므로
-    /// (<see cref="ArrestJudge.JudgeDeath"/>) 판정이 null로 끊긴다. 무고한 시민의 시체를 끌고 와도
-    /// 문 앞에 놓일 뿐이다.
+    /// <b>오검거 시체도 여기로 온다</b> — 예전에는 죽는 순간 이미 세고 표식을 세워 판정이 null로
+    /// 끊겼는데, 그래서 <b>버튼을 눌러도 아무 결과가 안 나왔다</b>. 이제 산 신병과 같은 문을 지난다:
+    /// 판정은 정상적으로 나고(배너·집계), 다만 <b>감옥에는 들이지 않는다</b>.
     /// </summary>
     /// <returns>판정이 성립했으면 참 — 거짓이면 다시 눌러도 결과가 같은 시체다(신원 없음·이미 계상됨).</returns>
     private bool ServerAdmitCorpse(NpcController npc, PlayerEscorter presser)
@@ -222,6 +222,19 @@ public class JailIntake : MonoBehaviour
         ArrestResult? result = App.Game.ArrestJudge?.JudgeCorpse(npc, presser);
         if (result == null)
             return false;
+
+        // 오검거 시체 — 감옥에 들이지 않는다. 산 신병의 오검거와 같은 규칙이고(위 ServerAdmitHeldBy),
+        // 되돌릴 수 없는 쪽이라 더 지켜야 한다: 한 번 눕히면 시체를 꺼내는 경로는 밧줄 반출뿐이다.
+        // 원장(RecordDeceased)에도 올리지 않으므로 정산에 0원짜리 항목이 남지 않고, 산 수감자용
+        // 자리도 축내지 않는다. 오검거 집계는 판정이 이미 했다(ArrestJudge.JudgeCorpse).
+        //
+        // 줄은 걷는다 — 안 걷으면 관절이 남아 운반자를 계속 따라다닌다(아래 수감 경로와 같은 사정).
+        if (result.Value.Verdict == ArrestVerdict.WrongfulArrest)
+        {
+            PlayerEscorter.ReleaseAllTethersOnCorpse(npc);
+            Debug.Log($"[감옥] 오검거 시체 — 감옥에 들이지 않고 문 앞에 둔다: {npc.name}");
+            return true;
+        }
 
         ulong[] deliverers = ToClientIds(result.Value.DeliveredBy);
         int bounty = result.Value.Reward;
@@ -549,8 +562,8 @@ public class JailIntake : MonoBehaviour
     /// 원장 하나뿐이라, 원장을 지웠으면 표식도 함께 지워야 짝이 맞는다.
     ///
     /// <b>계상된 적 없는 시체에는 아무것도 하지 않는다</b> — 원장 제거 성공이 곧 그 게이트다.
-    /// 오검거로 사살된 시체(<see cref="ArrestJudge.JudgeDeath"/>가 표식만 세우고 계상은 안 한다)를
-    /// 들고 들어갔다 나와도 그 표식이 풀리지 않아, 페널티 취소나 재계상이 열리지 않는다.
+    /// 오검거로 판정된 시체는 감옥에 들어가지 않아 원장에도 없으므로(<see cref="ServerAdmitCorpse"/>),
+    /// 들고 들어갔다 나와도 표식이 풀리지 않는다 — 오검거 집계를 되돌려 다시 세는 길이 열리지 않는다.
     /// </summary>
     private void ServerReleaseCorpse(NpcController npc)
     {

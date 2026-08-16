@@ -122,17 +122,17 @@ public class NpcDeath : NetworkBehaviour
             agent.enabled = false;
         }
 
-        // ⑦ 사망 판정 — 판별·기록은 검거 판정 정본에 위임한다 (App 파사드 단일 경로, architecture.md R1).
-        //    <b>현상금은 여기서 들어오지 않는다</b> (#571): 시체도 유치장까지 끌고 가 수감 버튼을 눌러야
-        //    계상된다(ArrestJudge.JudgeCorpse). 여기서 끝나는 것은 오검거 사살 집계 하나다.
-        //    "죽으면 어떻게 되는가"를 NPC별로 나눌 자리도 저쪽이다 — 여기서 갈래를 만들면 사망이
-        //    정산 규칙을 알게 된다.
+        // ⑦ <b>사망은 아무것도 판정하지 않는다.</b> 현상금도 오검거도 유치장 문 앞 수감 버튼에서만
+        //    확정된다(ArrestJudge.JudgeCorpse) — 죽은 시민도 산 신병과 같은 문을 지난다.
         //
-        //    ⑧보다 <b>앞</b>이다: OnDied 구독자가 이벤트 뒷정리로 대상을 despawn할 수 있는데
-        //    (AbductionEvent.DisposeAbductors), 그 뒤에 판정하면 사라진 NPC를 판정하게 된다.
-        App.Game.ArrestJudge?.JudgeDeath(m_owner, killer);
+        //    예전에는 여기서 오검거 사살을 즉시 셌다(#571). 근거는 "죽여서 페널티를 회피하는 것이
+        //    최적 전략이 되면 안 된다"였는데, 오검거가 페널티 없이 <b>횟수 집계만</b> 하게 되면서
+        //    회피할 대상 자체가 없어졌다. 그리고 그 즉시 집계는 표식(MarkDelivered)을 세워
+        //    <b>시체를 끌고 가도 판정이 조용히 끊기게</b> 만들고 있었다 — 버튼을 눌러도 배너가
+        //    안 뜨던 원인이다.
 
-        // ⑧ 통보는 마지막 — 위 주석 참고.
+        // ⑧ 통보 — OnDied 구독자가 이벤트 뒷정리로 대상을 despawn할 수 있으므로(AbductionEvent.DisposeAbductors)
+        //    이 뒤에 NPC를 건드리는 일을 두지 말 것.
         OnDied?.Invoke(m_owner, killer);
     }
 }
