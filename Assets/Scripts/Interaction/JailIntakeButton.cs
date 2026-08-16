@@ -51,6 +51,10 @@ public class JailIntakeButton : NetworkBehaviour, IInteractable
     /// </summary>
     public bool CanInteract(GameObject interactor) => m_intake != null;
 
+    // 조준 안내 (#664). 확보한 신병이 없을 때를 사유로 달지 않는다 — 판정 대상 선별은
+    // JailIntake가 서버에서 하고, 그 기준(#637)이 여기서 그대로 읽히지 않는다.
+    public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.JailAdmit;
+
     /// <summary>E — 확보한 신병을 그 자리에서 판정해 감옥으로 보낸다. (#537)</summary>
     public void Interact(GameObject interactor)
     {
