@@ -56,14 +56,14 @@ MonoBehaviour:
     MinDistance: 2
     MaxDistance: 22
   - Id: 8
-    Clip: {fileID: 8300000, guid: 6508e626105d9ba419239fbeb8e79700, type: 3}
-    Volume: 0.3
+    Clip: {fileID: 8300000, guid: cf361a38aec47624895ffa60888bb497, type: 3}
+    Volume: 0.28
     StartOffset: 0
     MinDistance: 2
     MaxDistance: 16
   - Id: 9
-    Clip: {fileID: 8300000, guid: 81fedc3f0da8b5a44a8fd818f6e27897, type: 3}
-    Volume: 0.35
+    Clip: {fileID: 8300000, guid: 18933207296d10d48936571d3cf372ac, type: 3}
+    Volume: 0.22
     StartOffset: 0
     MinDistance: 2
     MaxDistance: 18
@@ -131,6 +131,36 @@ MonoBehaviour:
     Clip: {fileID: 8300000, guid: e8ab70e6dc355624fab819c6e4af7d4c, type: 3}
     Volume: 0.45
     StartOffset: 0
+    MinDistance: 2
+    MaxDistance: 25
+  - Id: 21
+    Clip: {fileID: 8300000, guid: 825fa390a1124f1409959e1b9302682f, type: 3}
+    Volume: 1
+    StartOffset: 0.15
+    MinDistance: 3
+    MaxDistance: 25
+  - Id: 22
+    Clip: {fileID: 8300000, guid: e361b3f7eb8723847b26afccfa6a2971, type: 3}
+    Volume: 0.8
+    StartOffset: 0
+    MinDistance: 6
+    MaxDistance: 45
+  - Id: 23
+    Clip: {fileID: 8300000, guid: 484ee9428a80fff44a368c285aa137cc, type: 3}
+    Volume: 0.9
+    StartOffset: 0
+    MinDistance: 8
+    MaxDistance: 55
+  - Id: 24
+    Clip: {fileID: 8300000, guid: fe81190b94ddac040be2c3a6856d6627, type: 3}
+    Volume: 0.8
+    StartOffset: 0
+    MinDistance: 20
+    MaxDistance: 140
+  - Id: 25
+    Clip: {fileID: 8300000, guid: 30a7bbcc76dccd242a4aef6713fac436, type: 3}
+    Volume: 0.7
+    StartOffset: 0.04
     MinDistance: 2
     MaxDistance: 25
   m_bgm:
