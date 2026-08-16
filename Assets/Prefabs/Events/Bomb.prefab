@@ -220,6 +220,7 @@ GameObject:
   - component: {fileID: 8253353333071304543}
   - component: {fileID: 5127383852089812994}
   - component: {fileID: 8565072869674927600}
+  - component: {fileID: 1427932592967260107}
   m_Layer: 0
   m_Name: Bomb
   m_TagString: Untagged
@@ -621,6 +622,22 @@ MonoBehaviour:
   m_slowSound: 22
   m_fastSound: 23
   m_fastThresholdSeconds: 3
+--- !u!114 &1427932592967260107
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3451500180212419163}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8589cf5bdc1bf07489b808b1f33f0108, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MinimapTarget
+  m_iconSprite: {fileID: 0}
+  m_iconColor: {r: 1, g: 0, b: 0, a: 1}
+  m_areaRadius: 8
+  m_areaColor: {r: 1, g: 0.25, b: 0.25, a: 0.25}
 --- !u!1001 &2473239888170800502
 PrefabInstance:
   m_ObjectHideFlags: 0
