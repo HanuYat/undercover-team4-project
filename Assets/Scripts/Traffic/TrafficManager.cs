@@ -1,11 +1,19 @@
 using System.Collections.Generic;
+using Unity.AI.Navigation;
 using Unity.Netcode;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// 도로에 차를 흘려보내는 스포너 (#634). 추첨이 없다 — 라운드가 도는 동안 각
-/// <see cref="TrafficLane"/>이 자기 간격으로 계속 차를 낸다.
+/// 도로에 차를 흘려보내는 스포너 (#634).
+///
+/// <b>간격은 맵 전체 하나다</b> (#673). 예전에는 레인마다 자기 간격으로 냈는데, 레인이 8개라
+/// 레인당 40초로 늘려도 맵 어딘가에서는 5초마다 한 대가 나왔다 — "가끔 온다"가 성립하지 않았다.
+/// 지금은 <see cref="m_spawnIntervalSeconds"/>마다 <b>레인 하나를 랜덤으로 뽑아</b> 거기서만 낸다.
+/// 그래서 이 값이 곧 플레이어가 체감하는 "차를 보는 빈도"다.
+///
+/// 레인이 지던 하한(건널 창의 보장)은 그대로 남아 <b>같은 레인이 연달아 뽑히는 경우</b>만 거른다 —
+/// 전체 간격이 하한보다 훨씬 커서 평소에는 걸리지 않지만, 값을 줄였을 때 보장이 조용히 사라지지 않는다.
 ///
 /// 풀은 NGO의 프리팹 핸들러에 물린다(#634 판단 1-a) — 서버의 Spawn/Despawn이 그대로 대여/반납이 되고
 /// 클라이언트도 같은 핸들러를 지나 자기 풀에서 꺼낸다. 그래서 이 컴포넌트는 전 피어에 있어야 하고,
@@ -23,6 +31,15 @@ public class TrafficManager : MonoBehaviour
     [Header("레인")]
     [Tooltip("비워 두면 이 오브젝트의 자식에서 TrafficLane을 전부 모아 쓴다")]
     [SerializeField] private TrafficLane[] m_lanes;
+
+    [Header("배출 간격")]
+    [Tooltip("맵 전체에서 차 한 대가 나오는 평균 간격(초) — 레인당이 아니다 (#673). 이 값이 곧 플레이어가 차를 보는 빈도다")]
+    [Min(0.5f)]
+    [SerializeField] private float m_spawnIntervalSeconds = 20f;
+
+    [Tooltip("위 간격에 얹는 흔들림(비율) — 0.25면 ±25%(15~25초)다. 0이면 정확히 같은 간격으로 나와 박자가 읽힌다")]
+    [Range(0f, 0.9f)]
+    [SerializeField] private float m_intervalJitter = 0.25f;
 
     [Header("배출 간격 하한의 근거")]
     [Tooltip("건너는 사람의 이동 속도(m/s) — 전력질주(8)가 아니라 걷기 기준이어야 걸어서 건너는 사람도 산다")]
@@ -52,7 +69,9 @@ public class TrafficManager : MonoBehaviour
     private readonly List<VehiclePool> m_pools = new List<VehiclePool>(); // 차종마다 하나
     private readonly List<ActiveVehicle> m_active = new List<ActiveVehicle>();
 
-    private float[] m_nextSpawnAt;
+    private float m_nextSpawnAt; // 맵 전체 하나 (#673)
+    private float[] m_lastSpawnAt; // 레인마다 — 하한 검사용
+    private readonly List<int> m_eligible = new List<int>(); // 추첨 후보 레인 인덱스. 매 배출마다 재사용
     private bool m_flowing;
     private bool m_handlersRegistered;
     private RoundPhase m_lastPhase = RoundPhase.Preparing;
@@ -75,9 +94,28 @@ public class TrafficManager : MonoBehaviour
         if (m_lanes == null || m_lanes.Length == 0)
             m_lanes = GetComponentsInChildren<TrafficLane>(true);
 
-        m_nextSpawnAt = new float[m_lanes.Length];
+        m_lastSpawnAt = new float[m_lanes.Length];
 
+        ResolveLaneCrossWidths();
         BuildPools();
+    }
+
+    // 레인이 각자 씬을 훑지 않게 볼륨 목록을 여기서 한 번만 모아 넘긴다 (#673).
+    // 매니저가 아니라 씬 배치물을 찾는 탐색이라 R1의 대상이 아니다 (JailZone·TipCallPhone과 같은 분류).
+    private void ResolveLaneCrossWidths()
+    {
+        // 꺼져 있는 것까지 본다 — 이 볼륨은 베이크 때만 일하므로 구운 뒤 꺼 둬도 도로는 그대로다.
+        // 활성만 훑으면 그런 맵에서 폭을 조용히 놓친다.
+        NavMeshModifierVolume[] volumes = FindObjectsByType<NavMeshModifierVolume>(
+            FindObjectsInactive.Include,
+            FindObjectsSortMode.None
+        );
+
+        for (int i = 0; i < m_lanes.Length; i++)
+        {
+            if (m_lanes[i] != null)
+                m_lanes[i].ResolveCrossWidth(volumes);
+        }
     }
 
     private void Start() => EnsureHandlersRegistered();
@@ -158,9 +196,12 @@ public class TrafficManager : MonoBehaviour
         {
             m_flowing = true;
 
-            // 첫 배출 시각을 레인마다 흩는다 — 안 흩으면 시작 프레임에 전 레인이 동시에 낸다
-            for (int i = 0; i < m_lanes.Length; i++)
-                m_nextSpawnAt[i] = Time.time + Random.Range(0f, IntervalOf(m_lanes[i]));
+            // 첫 배출을 간격 안 아무 때나로 흩는다 — 라운드 시작 프레임에 바로 한 대가 나오지 않게
+            m_nextSpawnAt = Time.time + Random.Range(0f, NextInterval());
+
+            // 하한 검사가 라운드 시작 직후를 "방금 냈다"로 읽지 않게 되돌린다
+            for (int i = 0; i < m_lastSpawnAt.Length; i++)
+                m_lastSpawnAt[i] = float.NegativeInfinity;
             return;
         }
 
@@ -168,23 +209,47 @@ public class TrafficManager : MonoBehaviour
         RecycleAll();
     }
 
-    private float IntervalOf(TrafficLane lane) =>
-        lane != null ? lane.NextIntervalSeconds(m_crossSpeed, m_gapMarginSeconds) : 1f;
+    private float NextInterval() =>
+        m_spawnIntervalSeconds * Random.Range(1f - m_intervalJitter, 1f + m_intervalJitter);
 
+    // 맵 전체에서 한 대 — 레인은 그때그때 뽑는다 (#673)
     private void TrySpawn()
     {
-        if (!m_enabled || m_pools.Count == 0)
+        if (!m_enabled || m_pools.Count == 0 || Time.time < m_nextSpawnAt)
             return;
+
+        TrafficLane lane = PickLane();
+
+        // 뽑을 레인이 없으면(전부 하한 안) 이번 차례를 거른다 — 다음 간격에 다시 본다.
+        // 여기서 하한을 무시하고 억지로 내면 건널 창의 보장이 깨진다.
+        if (lane != null)
+            SpawnOn(lane);
+
+        m_nextSpawnAt = Time.time + NextInterval();
+    }
+
+    // 하한을 지난 레인 중 하나를 균등하게 뽑는다. 하한은 "앞차가 지나간 뒤 건널 창이 열린다"는
+    // 약속이라(TrafficLane.MinGapSeconds) 같은 레인이 연달아 뽑혀도 그 창은 지켜진다.
+    private TrafficLane PickLane()
+    {
+        m_eligible.Clear();
 
         for (int i = 0; i < m_lanes.Length; i++)
         {
             TrafficLane lane = m_lanes[i];
-            if (lane == null || Time.time < m_nextSpawnAt[i])
+            if (lane == null)
                 continue;
 
-            SpawnOn(lane);
-            m_nextSpawnAt[i] = Time.time + IntervalOf(lane);
+            if (Time.time - m_lastSpawnAt[i] >= lane.MinGapSeconds(m_crossSpeed, m_gapMarginSeconds))
+                m_eligible.Add(i);
         }
+
+        if (m_eligible.Count == 0)
+            return null;
+
+        int picked = m_eligible[Random.Range(0, m_eligible.Count)];
+        m_lastSpawnAt[picked] = Time.time;
+        return m_lanes[picked];
     }
 
     private void SpawnOn(TrafficLane lane)
