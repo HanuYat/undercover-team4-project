@@ -40,6 +40,9 @@ public class App : Singleton<App>
     private MapSelection m_mapSelection;
     private FactionSymbolManager m_factionSymbolManager;
     private SceneReadyGate m_sceneReadyGate;
+    private JailZone m_jailZone;
+    private JailIntake m_jailIntake;
+    private JailLock m_jailLock;
     private SettlementConfirmGate m_settlementConfirmGate;
     private EffectManager m_effectManager;
     private FxManager m_fxManager;
@@ -56,6 +59,7 @@ public class App : Singleton<App>
     private ToastView m_toastView;
     private SignalMessageView m_signalMessageView;
     private PromptView m_promptView;
+    private InteractPromptView m_interactPromptView;
     private SecretFavorHud m_secretFavorHud;
 #pragma warning restore CS0649
     #endregion
@@ -185,6 +189,12 @@ public class App : Singleton<App>
         public static SceneReadyGate ReadyGate => Instance.m_sceneReadyGate; // 전원 준비 완료 게이트 (#410). 게임 씬에만 있으므로 다른 씬에서는 null
         public static SettlementConfirmGate SettlementGate => Instance.m_settlementConfirmGate; // 전원 정산 확인 게이트 (#509). 마찬가지로 게임 씬 전용
 
+        // 감옥 시설 셋 — 같은 오브젝트(Jail.prefab)에 얹혀 있고 게임 씬에만 있다. 다른 씬에서는 null이라
+        // 읽는 쪽이 ?. 로 받는다 (ReadyGate·SettlementGate와 같은 방침). (#592)
+        public static JailZone Jail => Instance.m_jailZone;
+        public static JailIntake JailIntake => Instance.m_jailIntake;
+        public static JailLock JailLock => Instance.m_jailLock;
+
         // 일회성 연출의 단일 창구 (#532) — "무슨 일이 일어났는가" 하나로 먼지+소리를 내고,
         // 서버 판정이면 전 피어에 전파한다. 일회성 연출은 이쪽을 부른다.
         // 인게임 씬 매니저라 로비·상점에서는 null — 사용처는 ?. 가드 필수
@@ -225,6 +235,7 @@ public class App : Singleton<App>
         public static ToastView Toast => Instance.m_toastView;
         public static SignalMessageView SignalMessage => Instance.m_signalMessageView;
         public static PromptView Prompt => Instance.m_promptView;
+        public static InteractPromptView InteractPrompt => Instance.m_interactPromptView; // 조준 대상 조작키 안내 (#664)
         public static SecretFavorHud SecretFavor => Instance.m_secretFavorHud; // 비밀 청탁 한 줄 (#485)
 
         // 씬 전환을 덮는 상주 로딩 화면 (AppBootstrap 하위). 씬 직접 Play 등 부트스트랩이 없으면 null
