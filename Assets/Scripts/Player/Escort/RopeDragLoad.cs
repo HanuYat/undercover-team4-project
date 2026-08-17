@@ -32,6 +32,12 @@ public class RopeDragLoad : NetworkBehaviour
     [SerializeField]
     private float m_minDragSpeedFactor = 0.35f;
 
+    [Tooltip(
+        "기능 정지된 동료 1명을 운반할 때 지는 무게 — NPC의 표준 무게(1.0)와 같다. NPC처럼 3티어 추첨을 하지 않는 이유는 플레이어 로봇이 전부 같은 몸이라 개체차를 둘 근거가 없기 때문이다"
+    )]
+    [SerializeField]
+    private float m_carriedPlayerWeight = 1f;
+
     // 끌고 있는 무게로 깎인 이동속도 배율 — 서버(또는 오프라인) 진실. 매 프레임 다시 계산된다.
     private float m_dragSpeedFactor = 1f;
 
@@ -133,6 +139,14 @@ public class RopeDragLoad : NetworkBehaviour
             // 끌 때의 무게 합산도 이 누적이 그대로 한다 — 상한이 슬롯이 아니라 무게 예산이 되는 지점.
             weightSum += npc.Rope.DragWeight / Mathf.Max(1, npc.Rope.DraggerCount);
         }
+
+        // 운반하는 동료도 같은 밧줄이 끄는 짐이다 (#546, GDD 7-5). 나누지 않는 이유는 나눌 참가자가
+        // 없어서다 — 운반은 한 대상에 한 명뿐이라 위의 다인 완화식이 성립하지 않는다.
+        //
+        // ⚠ 끌려가는 동료에게 딸린 NPC는 세지 않는다 — 셀 것이 없다. 무력화 진입이 그 사람의 끌기를
+        // 이미 놓게 하므로(PlayerIncapacitation.SetCause → ReleaseAllDrags, #559) 딸려오지 않는다.
+        if (Escorter.IsCarryingPlayer)
+            weightSum += m_carriedPlayerWeight;
 
         SetDragSpeedFactor(
             Mathf.Clamp(1f - m_dragSlowPerWeight * weightSum, m_minDragSpeedFactor, 1f)

@@ -77,9 +77,12 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
     // 기능 정지된 동료를 끄는 중인가 (#365) — 운반도 밧줄 한 개를 쓰므로 용량 계산(RopesInUse)에 들어간다.
     // '한 번에 1명'이 폐기된 뒤(#390) 운반과 NPC 끌기는 배타가 아니라 같은 자원을 나눠 쓰는 관계다.
     // 없는 구성(테스트 등)이면 false.
+    //
+    // 무게 계산(<see cref="RopeDragLoad.ServerTickWeight"/>, #546)도 같은 값을 읽는다 — 줄 한 개를
+    // 쓰는 것과 그만큼 무거워지는 것은 같은 사실의 양면이라, 두 곳이 각자 조회하면 갈라질 수 있다.
     private PlayerCarrier m_carrier;
 
-    private bool IsCarryingPlayer
+    internal bool IsCarryingPlayer
     {
         get
         {
