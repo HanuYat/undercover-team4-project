@@ -718,6 +718,7 @@ public class NpcRagdoll : MonoBehaviour
 
         m_haveClientSample = false; // 진단 — 지난 에피소드 값과 비교해 가짜 점프가 찍히지 않게
         m_dipTraceFrames = 0;
+        m_haveSnapSample = false;
 
         ReleaseAgentForRagdoll();
 
@@ -1150,15 +1151,21 @@ public class NpcRagdoll : MonoBehaviour
         bool haveGround = TryGroundUnder(target, out Vector3 ground);
         float hipsHeight = haveGround ? target.y - ground.y : float.NaN;
         bool snapped = haveGround && hipsHeight <= k_groundedHipsHeight;
+
+        float followY = target.y; // 스냅이 없었다면 갔을 자리 — 경계 로그가 이것과 실제를 가른다
         if (snapped)
             target.y = ground.y;
 
+        float rootYBefore = transform.position.y;
         transform.position = target;
 
         m_rig.RestoreCapturedPose();
 
         if (m_logRootFollow)
+        {
+            LogSnapEdge(hipsHeight, snapped, rootYBefore, followY, target.y);
             TickRootFollowLog(hipsHeight, snapped);
+        }
     }
 
     // ---- 진단 (m_logRootFollow) ----
@@ -1174,6 +1181,53 @@ public class NpcRagdoll : MonoBehaviour
     private float m_prevClientHipsY;
     private bool m_haveClientSample;
     private int m_dipTraceFrames;
+
+    // 스냅 경계를 넘은 프레임을 가려내기 위한 직전 값 — 위와 같이 에피소드마다 리셋한다.
+    private bool m_prevSnapped;
+    private bool m_haveSnapSample;
+
+    /// <summary>
+    /// <b>경계를 넘는 그 프레임만</b> 찍는다 — 권위 피어 전용(<see cref="TickRootFollow"/> 안).
+    ///
+    /// <b>1초에 한 줄인 <c>[래그돌 루트추종]</c>으로는 이걸 못 잡는다.</b> 저쪽은 "지금 루트 높이의
+    /// 주인이 누구인가"를 훑는 로그라 <b>바뀌는 순간</b>을 놓친다 — 골반이 임계값을 지나는 것은
+    /// 한 프레임짜리 사건이다.
+    ///
+    /// 재려는 것은 하나다: <b>루트가 이 프레임에 얼마나 뛰었나.</b> 그 값이 그대로 클라로
+    /// 스트리밍되고, 클라의 키네마틱 골반이 계층을 따라 그만큼 끌려 내려간다 — 이 PR이 얼림
+    /// 시점에서 없앤 것과 <b>같은 낙차</b>다(<see cref="ServerFreezeInPlace"/>의 <c>루트낙차</c>).
+    ///
+    /// ⚠ <b>루트가 움직인 것 자체는 증거가 아니다.</b> 무너지는 몸을 따라가느라 루트는 매 프레임
+    /// 움직인다. 그래서 <b>스냅이 없었다면 갔을 자리</b>(<paramref name="followY"/>)를 나란히 찍어
+    /// 정상적인 낙하와 <b>경계가 만든 계단</b>을 가른다 — 둘의 차이가 곧 불연속의 크기다.
+    /// </summary>
+    private void LogSnapEdge(
+        float hipsHeight,
+        bool snapped,
+        float rootYBefore,
+        float followY,
+        float rootY
+    )
+    {
+        if (m_haveSnapSample && snapped != m_prevSnapped)
+        {
+            float step = rootY - rootYBefore; // 실제로 스트리밍된 한 프레임 이동
+            float continuous = followY - rootYBefore; // 예전 동작(골반 그대로 따라가기)이었다면
+            float discontinuity = step - continuous;
+
+            Debug.Log(
+                $"[래그돌 경계] {name} 스냅 {(m_prevSnapped ? "Y→N" : "N→Y")} "
+                    + $"| 골반높이={hipsHeight:F3} 임계={k_groundedHipsHeight:F2} "
+                    + $"| 루트Y {rootYBefore:F3} → {rootY:F3} "
+                    + $"(Δ={step:F3}, 연속이었다면 Δ={continuous:F3}) 계단={discontinuity:F3}"
+                    + $"{(Mathf.Abs(discontinuity) > 0.02f ? " ⚠클라가 이만큼 끌려간다" : " (무시할 크기)")}",
+                this
+            );
+        }
+
+        m_prevSnapped = snapped;
+        m_haveSnapSample = true;
+    }
 
     /// <summary>
     /// <b>클라가 실제로 무엇을 보는지</b> 잰다 — 원격 전용, <c>LateUpdate</c> 맨 끝(다음이 렌더).
