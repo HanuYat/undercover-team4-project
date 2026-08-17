@@ -35,9 +35,9 @@ public class TrafficManager : MonoBehaviour
     [Header("배출 간격")]
     [Tooltip("맵 전체에서 차 한 대가 나오는 평균 간격(초) — 레인당이 아니다 (#673). 이 값이 곧 플레이어가 차를 보는 빈도다")]
     [Min(0.5f)]
-    [SerializeField] private float m_spawnIntervalSeconds = 20f;
+    [SerializeField] private float m_spawnIntervalSeconds = 10f;
 
-    [Tooltip("위 간격에 얹는 흔들림(비율) — 0.25면 ±25%(15~25초)다. 0이면 정확히 같은 간격으로 나와 박자가 읽힌다")]
+    [Tooltip("위 간격에 얹는 흔들림(비율) — 0.25면 ±25%(7.5~12.5초)다. 0이면 정확히 같은 간격으로 나와 박자가 읽힌다")]
     [Range(0f, 0.9f)]
     [SerializeField] private float m_intervalJitter = 0.25f;
 
