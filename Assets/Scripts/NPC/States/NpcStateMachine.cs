@@ -12,6 +12,19 @@ public class NpcStateMachine
     // 상태 전이 훅 — 이후 애니메이션·Netcode 동기화(NetworkVariable)를 여기에 연결한다
     public event Action<NpcState> OnStateChanged;
 
+    /// <summary>
+    /// 전이 훅 — <b>새 상태의 <c>Enter()</c> 직전</b>에 발행한다 (<see cref="OnStateChanged"/>보다 먼저).
+    ///
+    /// <b>왜 따로 필요한가.</b> <c>Enter()</c>에서 이미 <c>SetDestination</c>을 부르는 상태가 있다
+    /// (<see cref="NpcWalkState"/>). 그래서 "그 경로 계산에 영향을 주는" 설정 — 통행 마스크가
+    /// 대표적이다 — 을 <see cref="OnStateChanged"/>에 붙이면 <b>첫 목적지만 옛 값으로</b> 잡히고
+    /// 두 번째부터 맞는, 재현이 들쭉날쭉한 버그가 된다. 그런 설정은 여기서 건다.
+    ///
+    /// 표현 계층(애니메이션·동기화)은 여전히 <see cref="OnStateChanged"/>를 쓴다 — 이쪽은 상태가
+    /// 아직 <c>Enter()</c>를 돌지 않은 시점이라 상태 클래스가 잡은 값을 읽을 수 없다.
+    /// </summary>
+    public event Action<NpcState> OnBeforeEnter;
+
     public void AddState(NpcState state, NpcStateBase stateInstance)
     {
         m_states[state] = stateInstance;
@@ -43,6 +56,7 @@ public class NpcStateMachine
         m_currentState?.Exit();
         CurrentState = state;
         m_currentState = m_states[state];
+        OnBeforeEnter?.Invoke(state); // Enter()가 거는 경로 계산에 반영되어야 한다 — 순서가 계약이다
         m_currentState.Enter();
         OnStateChanged?.Invoke(state);
     }

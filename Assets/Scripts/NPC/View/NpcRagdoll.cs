@@ -1045,13 +1045,15 @@ public class NpcRagdoll : MonoBehaviour
         // 기절 경로에서는 애초에 켜져 있어 무동작이다 — 멱등하게 둔다.
         m_agent.enabled = true;
 
-        // 통행 마스크로 착지점을 찾는다 — 못 가는 영역(Jail)에 Warp되면 경로가 안 잡혀 고착된다 (#415)
+        // 기준 마스크로 착지점을 찾는다 — 못 가는 영역(Jail)에 Warp되면 경로가 안 잡혀 고착된다 (#415).
+        // 현재 통행 마스크가 아니라 기준값인 이유: 배회 중이면 도로가 빠져 있어(#634 후속) 차도 위에
+        // 쓰러진 몸이 깨어날 자리를 못 찾는다. 도로 위에 붙는 것은 정상이다 — 걸어 나가면 그때 좁는다.
         Vector3 sampleFrom = transform.position;
         bool sampled = NavMesh.SamplePosition(
             sampleFrom,
             out NavMeshHit ground,
             k_navMeshSampleDistance,
-            m_agent.areaMask
+            m_owner.BaseAreaMask
         );
         if (sampled)
             m_agent.Warp(ground.position);

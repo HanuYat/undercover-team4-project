@@ -136,13 +136,15 @@ public class NpcKnockback : NetworkBehaviour
         if (!timedOut && m_knockbackVelocity.y > 0f)
             return; // 아직 상승 중 — 착지 판정은 내려올 때부터
 
-        // 통행 마스크로 착지점을 찾는다 — 못 가는 영역(Jail)에 Warp되면 경로가 안 잡혀 고착된다 (#415)
+        // 기준 마스크로 착지점을 찾는다 — 못 가는 영역(Jail)에 Warp되면 경로가 안 잡혀 고착된다 (#415).
+        // 현재 통행 마스크가 아니라 기준값인 이유: 배회 중이면 도로가 빠져 있어(#634 후속) 차도 위로
+        // 날아간 몸이 착지점을 못 찾고, 찾더라도 수 미터 옆 인도로 튕겨 착지 판정('아직 공중')이 어긋난다.
         if (
             NavMesh.SamplePosition(
                 transform.position,
                 out NavMeshHit ground,
                 config.KnockbackLandSampleDistance,
-                m_owner.Agent.areaMask
+                m_owner.BaseAreaMask
             )
         )
         {

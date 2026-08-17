@@ -107,6 +107,17 @@ public class MisdemeanorLoiterer : MonoBehaviour
             return;
         }
 
+        // ⚠ <b>무력화 중에는 소란에 손대지 않는다.</b> 기절은 상태 enum을 바꾸지 않는 오버레이라
+        // (#292) 밑에 깔린 Idle/Walk가 그대로 보이고, 그러면 아래 점화·진정이 <b>쓰러진 몸에 상태
+        // 전이를 건다</b> — 실측으로 기절 2프레임 뒤 Idle→Attack이 걸리고 ThreatTarget까지 잡혔다.
+        // 위 제압 분기로는 못 걸러진다: 그건 신병을 확보한 상태들이고, 기절은 아직 아무 상태도 아니다.
+        //
+        // <b>소란 시간은 계속 흐른다</b> — 쓰러뜨리기는 시간을 버는 수단이고 무산 수단은 밧줄이라는
+        // 규칙(<see cref="NpcStateRules"/> CanReactToDamage 주석)을 그대로 따른다. 여기서 멈추면
+        // 기절이 무산 수단이 되어 그 규칙과 어긋난다.
+        if (m_controller.Stun.IsStunned)
+            return;
+
         // 소란 시간이 다하면 진정하고 배회 잔류로 되돌아간다 (이벤트 본편과 동일한 수명 규칙)
         if (m_rioting && Time.time >= m_riotEndTime)
         {
