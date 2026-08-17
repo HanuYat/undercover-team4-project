@@ -242,6 +242,12 @@ public class TrafficVehicle : NetworkBehaviour
         source.maxDistance = Mathf.Max(entry.MaxDistance, entry.MinDistance + 0.1f);
         source.spatialBlend = 1f; // 완전 3D — 어느 방향에서 오는지가 예고의 전부다
         source.rolloffMode = AudioRolloffMode.Linear;
+
+        // 도플러를 끈다 (#673). 22m/s면 통과 전후로 피치가 ±7% 흔들리는데, 클라에서는 차의 위치를
+        // NetworkTransform 보간으로 받아 프레임별 속도가 고르지 않아 그 피치가 떤다 — 예고로 쓰는
+        // 소리가 불안정하게 들린다. 다가오는 것은 음량이 이미 알려 주므로 피치까지 쓰지 않는다.
+        source.dopplerLevel = 0f;
+
         source.loop = true;
         m_engineSource = source;
         return true;
