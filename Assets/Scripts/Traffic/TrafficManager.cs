@@ -9,8 +9,12 @@ using Random = UnityEngine.Random;
 ///
 /// <b>간격은 맵 전체 하나다</b> (#673). 예전에는 레인마다 자기 간격으로 냈는데, 레인이 8개라
 /// 레인당 40초로 늘려도 맵 어딘가에서는 5초마다 한 대가 나왔다 — "가끔 온다"가 성립하지 않았다.
-/// 지금은 <see cref="m_spawnIntervalSeconds"/>마다 <b>레인 하나를 랜덤으로 뽑아</b> 거기서만 낸다.
+/// 지금은 <see cref="m_spawnIntervalSeconds"/>마다 <b>레인을 랜덤으로 뽑아</b> 거기서만 낸다.
 /// 그래서 이 값이 곧 플레이어가 체감하는 "차를 보는 빈도"다.
+///
+/// 한 차례에 몇 대가 나오는지는 따로 잡는다(<see cref="m_vehiclesPerSpawnMin"/>). 간격을 줄이는
+/// 것과 대수를 늘리는 것은 <b>총량은 같아도 그림이 다르다</b> — 간격을 줄이면 한 대씩 끊임없이
+/// 지나가고, 대수를 늘리면 여러 도로에 한꺼번에 흐르다 잠잠해진다. 후자가 도시처럼 보인다.
 ///
 /// 레인이 지던 하한(건널 창의 보장)은 그대로 남아 <b>같은 레인이 연달아 뽑히는 경우</b>만 거른다 —
 /// 전체 간격이 하한보다 훨씬 커서 평소에는 걸리지 않지만, 값을 줄였을 때 보장이 조용히 사라지지 않는다.
@@ -40,6 +44,13 @@ public class TrafficManager : MonoBehaviour
     [Tooltip("위 간격에 얹는 흔들림(비율) — 0.25면 ±25%(7.5~12.5초)다. 0이면 정확히 같은 간격으로 나와 박자가 읽힌다")]
     [Range(0f, 0.9f)]
     [SerializeField] private float m_intervalJitter = 0.25f;
+
+    [Tooltip("한 번의 배출에서 내보내는 대수 — 최소/최대 사이에서 매번 뽑는다. 2 이상이면 서로 다른 레인에 동시에 나온다 (같은 레인에 겹쳐 내면 앞뒤로 붙는다)")]
+    [Min(1)]
+    [SerializeField] private int m_vehiclesPerSpawnMin = 2;
+
+    [Min(1)]
+    [SerializeField] private int m_vehiclesPerSpawnMax = 3;
 
     [Header("배출 간격 하한의 근거")]
     [Tooltip("건너는 사람의 이동 속도(m/s) — 전력질주(8)가 아니라 걷기 기준이어야 걸어서 건너는 사람도 산다")]
@@ -212,18 +223,26 @@ public class TrafficManager : MonoBehaviour
     private float NextInterval() =>
         m_spawnIntervalSeconds * Random.Range(1f - m_intervalJitter, 1f + m_intervalJitter);
 
-    // 맵 전체에서 한 대 — 레인은 그때그때 뽑는다 (#673)
+    // 맵 전체에서 한 차례 — 레인은 그때그때 뽑는다 (#673)
     private void TrySpawn()
     {
         if (!m_enabled || m_pools.Count == 0 || Time.time < m_nextSpawnAt)
             return;
 
-        TrafficLane lane = PickLane();
+        int count = Random.Range(m_vehiclesPerSpawnMin, Mathf.Max(m_vehiclesPerSpawnMin, m_vehiclesPerSpawnMax) + 1);
 
-        // 뽑을 레인이 없으면(전부 하한 안) 이번 차례를 거른다 — 다음 간격에 다시 본다.
-        // 여기서 하한을 무시하고 억지로 내면 건널 창의 보장이 깨진다.
-        if (lane != null)
+        for (int i = 0; i < count; i++)
+        {
+            TrafficLane lane = PickLane();
+
+            // 뽑을 레인이 없으면(전부 하한 안) 나머지를 접는다 — 다음 차례에 다시 본다.
+            // 여기서 하한을 무시하고 억지로 내면 건널 창의 보장이 깨진다.
+            // 한 차례 안에서는 방금 뽑힌 레인이 곧바로 하한에 걸리므로 자연히 서로 다른 레인이 된다.
+            if (lane == null)
+                break;
+
             SpawnOn(lane);
+        }
 
         m_nextSpawnAt = Time.time + NextInterval();
     }
