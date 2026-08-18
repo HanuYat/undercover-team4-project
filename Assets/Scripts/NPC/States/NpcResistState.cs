@@ -75,7 +75,16 @@ public class NpcResistState : NpcStateBase
         m_owner.Agent.updateRotation = false;
 
         m_noTargetSeconds = 0f;
-        m_nextAttackTime = Time.time + m_config.AttackInterval;
+
+        // 첫 타격은 대기 없이 연다 (#692). 예전에는 여기서 AttackInterval(1.5초)을 얹었는데, 진입
+        // 시점에 이미 사거리 안이면 그 1.5초 동안 ChaseTarget이 정지 거리 안이라 세우고 FaceTarget만
+        // 도니 "때렸는데 잠깐 쳐다보다가 그제야 덤빈다"로 보였다. 피격 → 저항 전이 자체는 이미
+        // 즉시라(NpcReaction.ServerReactTo) 지연은 오직 이 타이머였다.
+        //
+        // 연타가 빨라지는 변경이 아니다 — 두 번째부터는 스윙 시점에 다시 AttackInterval을 얹는다(Tick).
+        // 사거리 밖에서 진입했으면 기존대로 추격해 사거리에 드는 첫 Tick에 나간다.
+        m_nextAttackTime = Time.time;
+
         m_pendingStrikeTime = k_noPendingStrike; // 직전 저항의 예약이 남아 첫 타격이 앞당겨지지 않게
         m_swingHoldUntil = 0f;
 
