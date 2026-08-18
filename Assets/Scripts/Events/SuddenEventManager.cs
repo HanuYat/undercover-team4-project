@@ -31,6 +31,7 @@ using Random = UnityEngine.Random;
 public class SuddenEventManager : NetworkedManagerBase
 {
     private RoundManager Round => App.Game.Round;
+    private RoundProgress Progress => App.Game.RoundProgress;
 
     [Header("발생 스케줄 (초)")]
     [Tooltip(
@@ -72,15 +73,34 @@ public class SuddenEventManager : NetworkedManagerBase
     [SerializeField]
     private List<SuddenEventEntry> m_eventEntries = new List<SuddenEventEntry>();
 
+    [Header("라운드 날씨 (#700)")]
+    [Tooltip(
+        "라운드별 맑음 확률·날씨별 가중치 표. 이 맵의 표를 꽂는다 — 안 꽂으면 아래 폴백 확률 하나로 돈다"
+    )]
+    [SerializeField]
+    private RoundWeatherTable m_weatherTable;
+
+    [Tooltip("표를 안 꽂았을 때 쓸 맑음 확률(%) — 표 미장착 씬이 깨지지 않게 하는 값이다")]
+    [Range(0, 100)]
+    [SerializeField]
+    private int m_clearPercentFallback = 50;
+
     // 명시 리스트에서 구성한 이벤트 풀 (Awake에서 1회)
     private readonly List<ISuddenEvent> m_events = new List<ISuddenEvent>();
 
     // 발생 후보 임시 버퍼 — 매 추첨마다의 할당을 피한다 (서버/오프라인에서만 쓰므로 공유 안전)
     private readonly List<ISuddenEvent> m_eligibleBuffer = new List<ISuddenEvent>();
 
+    // 날씨 추첨 후보 버퍼 — 위와 갈라 둔다. 라운드당 1회라 겹칠 일은 없지만 담기는 것이 다르다 (#700)
+    private readonly List<IRoundWeather> m_weatherBuffer = new List<IRoundWeather>();
+
     private float m_nextTriggerTime;
     private bool m_scheduling; // 라운드 InProgress 진입 시 켜진다 — Phase 폴링으로 스케줄 시작/정지를 판정
     private RoundPhase m_lastPhase = RoundPhase.Preparing;
+
+    // 현재 페이즈를 한 번이라도 처리했는가 — 씬 진입 시점이 이미 Preparing이라 위 초기값과 같아
+    // 전이가 감지되지 않고, 그러면 날씨를 뽑는 자리가 통째로 없어진다 (#700).
+    private bool m_phaseSeen;
 
     /// <summary>이벤트 발생 알림 — 본부/현장 HUD 토스트가 구독할 훅. (표시 이름, 문구 키)</summary>
     public event Action<string, string> OnEventAnnounced;
@@ -144,10 +164,12 @@ public class SuddenEventManager : NetworkedManagerBase
         if (Round == null)
             return;
 
-        // 라운드 페이즈 전이 감지 — InProgress 진입 시 스케줄 시작, 이탈 시 진행 이벤트를 정리하고 멈춘다
+        // 라운드 페이즈 전이 감지 — InProgress 진입 시 스케줄 시작, 이탈 시 진행 이벤트를 정리하고 멈춘다.
+        // 첫 프레임은 전이가 없어도 1회 처리한다 — 씬 진입 시점(Preparing)이 날씨를 뽑는 자리다 (#700)
         RoundPhase phase = Round.Phase;
-        if (phase != m_lastPhase)
+        if (!m_phaseSeen || phase != m_lastPhase)
         {
+            m_phaseSeen = true;
             HandlePhaseChanged(phase);
             m_lastPhase = phase;
         }
@@ -165,13 +187,17 @@ public class SuddenEventManager : NetworkedManagerBase
         {
             m_scheduling = true;
             ScheduleNext(m_startDelay); // 시작 직후 유예를 두고 첫 이벤트를 잡는다
+            return;
         }
-        else
-        {
-            // 라운드가 끝났거나 준비 상태로 되돌아감 — 진행 중이던 이벤트를 강제 정리하고 스케줄을 멈춘다
-            m_scheduling = false;
-            ResetAllEvents();
-        }
+
+        // 라운드가 끝났거나 준비 상태로 되돌아감 — 진행 중이던 이벤트를 강제 정리하고 스케줄을 멈춘다
+        m_scheduling = false;
+        ResetAllEvents();
+
+        // 준비 단계 진입이 오늘 날씨를 뽑는 자리다 (#700). ⚠ 위 정리 뒤여야 한다 — 앞에 두면
+        // 방금 뽑은 날씨를 ResetAllEvents가 곧바로 끈다. 종료(Ended)는 정산 화면이라 뽑지 않는다.
+        if (phase == RoundPhase.Preparing)
+            TryBeginRoundWeather();
     }
 
     // 활성 이벤트를 매 프레임 서버에서 진행시킨다 — 각자 지속/자동 해제를 관리한다
@@ -202,6 +228,12 @@ public class SuddenEventManager : NetworkedManagerBase
         for (int i = 0; i < m_events.Count; i++)
         {
             ISuddenEvent evt = m_events[i];
+
+            // 날씨는 주기 추첨을 타지 않는다 — 라운드 시작에 한 번만 뽑힌다 (#700).
+            // 틱·정리(TickActiveEvents·ResetAllEvents)는 그대로 태우므로 여기서만 뺀다.
+            if (evt is IRoundWeather)
+                continue;
+
             if (!evt.IsActive && evt.CanTrigger())
                 m_eligibleBuffer.Add(evt);
         }
@@ -227,6 +259,88 @@ public class SuddenEventManager : NetworkedManagerBase
             Announce(chosen.DisplayName, chosen.NoticeKey);
     }
 
+    // ---- 라운드 날씨 (#700) ----
+
+    // 오늘의 날씨를 뽑아 시작한다 — 라운드당 1회, 준비 단계. 맑음이면 아무것도 시작하지 않는다.
+    // 매니저가 아는 것은 IRoundWeather라는 범주와 확률 표뿐이다 — 날씨가 몇 종인지·무엇을 하는지는
+    // 구현체가 자기 Kind로 표를 가리키게 해서 밖에 둔다.
+    private void TryBeginRoundWeather()
+    {
+        if (!m_enabled)
+            return;
+
+        m_weatherBuffer.Clear();
+        for (int i = 0; i < m_events.Count; i++)
+        {
+            if (m_events[i] is IRoundWeather weather && !weather.IsActive && weather.CanTrigger())
+                m_weatherBuffer.Add(weather);
+        }
+
+        if (m_weatherBuffer.Count == 0)
+            return; // 이 씬 풀에 날씨가 없다 — 맑은 라운드와 결과가 같다
+
+        // 오프라인 단독 Play에는 상주 진행도가 없다 — 1라운드로 친다 (RoundProgress 주석의 기존 규약)
+        int round = Progress != null ? Progress.Current : RoundProgress.k_firstRound;
+        int clearPercent =
+            m_weatherTable != null
+                ? m_weatherTable.GetClearPercent(round, m_clearPercentFallback)
+                : m_clearPercentFallback;
+
+        if (Random.Range(0, 100) < clearPercent)
+        {
+            Debug.Log($"[날씨] {round}라운드 — 맑음 (맑음 확률 {clearPercent}%)");
+            return;
+        }
+
+        IRoundWeather chosen = PickWeighted();
+        if (chosen == null)
+        {
+            // 후보는 있는데 가중치 합이 0 — 이 맵에서 나올 수 있는 날씨를 전부 막아 둔 구성이다
+            Debug.Log($"[날씨] {round}라운드 — 후보 가중치가 전부 0이라 맑음으로 간다");
+            return;
+        }
+
+        chosen.ServerBegin();
+
+        // 이벤트가 내부 사정으로 발동을 접었을 수 있다 — TryTriggerRandom과 같은 이유로 IsActive를 확인한다
+        if (!chosen.IsActive)
+        {
+            Debug.Log($"[날씨] 발동 불발 — {chosen.DisplayName}");
+            return;
+        }
+
+        Debug.Log($"[날씨] {round}라운드 — {chosen.DisplayName} (맑음 확률 {clearPercent}%)");
+
+        // 날씨 3종은 전부 AnnounceOnBegin=false(조용히 시작, 2026-08-13)지만 규약대로 따른다
+        if (chosen.AnnounceOnBegin)
+            Announce(chosen.DisplayName, chosen.NoticeKey);
+    }
+
+    // m_weatherBuffer에서 가중치 비례로 하나 뽑는다. 표가 없으면 전부 1(균등)이다.
+    // 합이 0이면 null — 뽑을 수 있는 날씨가 없다는 뜻이라 호출부가 맑음으로 처리한다.
+    private IRoundWeather PickWeighted()
+    {
+        float total = 0f;
+        for (int i = 0; i < m_weatherBuffer.Count; i++)
+            total += WeightOf(m_weatherBuffer[i]);
+
+        if (total <= 0f)
+            return null;
+
+        float roll = Random.value * total;
+        for (int i = 0; i < m_weatherBuffer.Count; i++)
+        {
+            roll -= WeightOf(m_weatherBuffer[i]);
+            if (roll <= 0f)
+                return m_weatherBuffer[i];
+        }
+
+        return m_weatherBuffer[m_weatherBuffer.Count - 1]; // 부동소수 오차로 끝까지 샌 경우
+    }
+
+    private float WeightOf(IRoundWeather weather) =>
+        m_weatherTable != null ? m_weatherTable.WeightOf(weather.Kind) : 1f;
+
     /// <summary>
     /// 디버그 — 풀의 index번 이벤트를 즉시 발동한다(밸런싱·테스트용). 서버(또는 오프라인)에서만 동작하며
     /// 이미 활성이거나 발생 불가(CanTrigger=false)면 무시한다. (#291)
@@ -251,10 +365,29 @@ public class SuddenEventManager : NetworkedManagerBase
             return;
         }
 
+        // 날씨 강제 발동은 <b>교체</b>다 (#700) — 켜져 있던 날씨를 먼저 걷는다.
+        // 안 걷으면 눈 위에 안개를 얹어 한 라운드에 날씨가 둘이 되는데, 그건 이 기능이 없애려던 상태다.
+        if (evt is IRoundWeather)
+            ResetOtherWeather(evt);
+
         evt.ServerBegin();
         if (evt.IsActive && evt.AnnounceOnBegin)
             Announce(evt.DisplayName, evt.NoticeKey);
         Debug.Log($"[돌발이벤트] 강제발동 — {evt.DisplayName}");
+    }
+
+    // keep 말고 활성인 날씨를 전부 끈다 — 강제 발동 교체 전용.
+    private void ResetOtherWeather(ISuddenEvent keep)
+    {
+        for (int i = 0; i < m_events.Count; i++)
+        {
+            ISuddenEvent evt = m_events[i];
+            if (evt == keep || !(evt is IRoundWeather) || !evt.IsActive)
+                continue;
+
+            evt.ServerReset();
+            Debug.Log($"[날씨] 강제 교체로 걷힘 — {evt.DisplayName}");
+        }
     }
 
     [ContextMenu("Debug/Force Trigger First Event")]

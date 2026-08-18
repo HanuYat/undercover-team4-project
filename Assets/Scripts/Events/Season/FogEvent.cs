@@ -6,31 +6,22 @@ using UnityEngine;
 /// 안개 (돌발 이벤트 · 전역 · 날씨) — 시야가 제한되는 기상 이변. (GDD 6-4, #227)
 /// 활성 플래그를 <b>스스로 소유</b>해 서버 권위로 켜고 끄며, NetworkVariable로 전 클라에 동기화한다.
 /// 실제 표현(거리 안개·파티클)은 이 플래그를 구독하는 <see cref="FogView"/>가 각 피어에서 담당한다.
-/// 시간이 지나면 자동으로 걷힌다 — <see cref="DeviceBlackoutEvent"/>와 같은 전역형 패턴(#106/#372).
-///
-/// 서버 권위(#56): 발생·해제 판정은 서버(또는 오프라인)에서만. 프레임워크(<see cref="SuddenEventManager"/>)가
-/// ServerBegin/Tick/Reset을 서버에서만 부르므로 이 안에서는 권위를 다시 검사하지 않는다.
-///
-/// 날씨는 <b>새 매니저·프레임워크 변경 없이</b> 붙는다 — 전역 이벤트 자리에 그대로 들어가고,
-/// 매니저 인스펙터의 이벤트 풀에 등록하면 스케줄러가 추첨한다.
+/// 서버 권위(#56): 프레임워크가 ServerBegin/Tick/Reset을 서버에서만 부르므로 여기서 다시 검사하지 않는다.
+/// <b>라운드 지속형이다</b> (#700) — 준비 단계에 뽑혀 라운드 끝까지 유지되고, 걷는 것은
+/// <see cref="ServerReset"/> 하나뿐이다. 근거는 <see cref="IRoundWeather"/>.
 /// </summary>
 [RequireComponent(typeof(SuddenEventManager))]
-public class FogEvent : NetworkBehaviour, ISuddenEvent
+public class FogEvent : NetworkBehaviour, IRoundWeather
 {
-    [Header("지속 시간(초)")]
-    [Tooltip("안개가 유지되는 시간 — 지나면 자동으로 걷힌다")]
-    [SerializeField]
-    private float m_durationSeconds = 30f;
-
     // 안개 전역 상태 — 서버만 쓰고 모든 클라가 읽는다. (DeviceBlackoutEvent.m_blackoutSynced와 동일 이중 구조)
     private readonly NetworkVariable<bool> m_fogSynced = new NetworkVariable<bool>();
     private bool m_fog; // 서버·오프라인의 진실값 (비네트워크 Play 폴백)
 
-    private float m_endTime;
-
     public string DisplayName => "안개";
 
-    // 안개가 켜져 있는 동안이 곧 이벤트 진행 중 — 매니저는 false가 될 때까지 재발생시키지 않는다.
+    public WeatherKind Kind => WeatherKind.Fog;
+
+    // 안개가 켜져 있는 동안이 곧 이벤트 진행 중 — 라운드 지속형이라 이 값은 라운드 내내 true다.
     // (매니저가 IsActive를 읽는 것은 서버·오프라인에서뿐이므로 서버 진실값을 그대로 준다)
     public bool IsActive => m_fog;
 
@@ -70,26 +61,13 @@ public class FogEvent : NetworkBehaviour, ISuddenEvent
         OnFogChanged?.Invoke(current);
     }
 
-    // 전역 이벤트라 특별한 선행 조건이 없다 — 프레임워크가 라운드 진행 중에만 호출한다
+    // 전역 이벤트라 특별한 선행 조건이 없다 — 프레임워크가 라운드 준비 단계에 1회 호출한다
     public bool CanTrigger() => true;
 
-    public void ServerBegin()
-    {
-        m_endTime = Time.time + m_durationSeconds;
-        SetFog(true);
-    }
+    public void ServerBegin() => SetFog(true);
 
-    public void ServerTick()
-    {
-        if (!m_fog)
-            return;
-
-        if (Time.time >= m_endTime)
-        {
-            Debug.Log("[돌발이벤트] 안개 — 시간 경과로 걷힘");
-            SetFog(false);
-        }
-    }
+    // 비어 있다 — 안개는 켜고 끄는 것이 전부인데 라운드 지속형이 되며 시간 경과 해제까지 사라졌다 (#700)
+    public void ServerTick() { }
 
     public void ServerReset()
     {

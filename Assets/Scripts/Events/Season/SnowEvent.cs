@@ -5,7 +5,8 @@ using UnityEngine;
 /// <summary>
 /// 눈 이벤트 (#227) — 일정 시간 눈을 내리고, <b>오래 내리면 빙판이 깔린다</b>.
 ///
-/// 빙판은 눈과 별개의 값이다: 눈은 켜짐/꺼짐이지만 빙판은 <see cref="IceRatio"/>(0~1)로 자란다.
+/// 빙판은 눈과 별개의 값이다: 눈은 켜짐/꺼짐이지만 빙판은 <see cref="IceRatio"/>로 자란다
+/// (0 ~ <see cref="m_iceMaxRatio"/>).
 /// 눈이 내리는 동안 쌓이고 그친 뒤에는 서서히 녹으므로, 눈이 그쳤다고 길이 곧바로 안전해지지 않는다 —
 /// "한참 내렸다"는 사실이 길에 남는 것이 이 이벤트의 값이다.
 ///
@@ -15,27 +16,29 @@ using UnityEngine;
 /// 값이라 그대로 흘리면 대역폭만 먹는다.
 ///
 /// ⚠ <b>초안 — 팀 검토 필요.</b> 빙판·미끄러짐은 GDD에 근거가 없다(6-4 이벤트 표·8장 어디에도 없음).
-/// 수치(<see cref="m_iceOnsetSeconds"/> 등)는 밸런싱 보류로 인스펙터에 두었고, 규칙 자체를 GDD에 한 줄
-/// 올려야 한다 — 라운드 진행을 바꾸는 규칙이라 값이 아니라 설계다.
+/// 수치는 밸런싱 보류로 인스펙터에 두었고, 규칙 자체를 GDD에 한 줄 올려야 한다.
+///
+/// <b>라운드 지속형이다</b> (#700) — 준비 단계에 뽑혀 라운드 끝까지 내리고, 빙판 누적은 InProgress부터
+/// 시작된다(매니저가 그때부터 ServerTick을 돌린다). 근거는 <see cref="IRoundWeather"/>.
 /// </summary>
 [RequireComponent(typeof(SuddenEventManager))]
-public class SnowEvent : NetworkBehaviour, ISuddenEvent
+public class SnowEvent : NetworkBehaviour, IRoundWeather
 {
     // 이만큼 달라져야 동기화 값을 다시 쓴다 — 0.02면 화면에서 구분되지 않는 차이다
     private const float k_ratioEpsilon = 0.02f;
-
-    [Header("눈")]
-    [Tooltip("한 번 발생했을 때 눈이 내리는 시간(초)")]
-    [SerializeField] private float m_durationSeconds = 30f;
 
     [Header("빙판 (초안 — 팀 검토 필요)")]
     [Tooltip("눈이 이만큼(초) 누적되면 빙판이 생기기 시작한다 — 이 전에는 미끄럽지 않다")]
     [Min(0f)]
     [SerializeField] private float m_iceOnsetSeconds = 20f;
 
-    [Tooltip("누적이 이만큼(초)이면 빙판이 최대치(IceRatio=1)가 된다")]
+    [Tooltip("누적이 이만큼(초)이면 빙판이 상한(아래 Ice Max Ratio)에 닿는다")]
     [Min(1f)]
     [SerializeField] private float m_iceFullSeconds = 50f;
+
+    [Tooltip("빙판이 도달할 수 있는 최대치 — 1이면 완전 빙판. 눈이 라운드 내내 내리므로(#700) 여기서 민다")]
+    [Range(0f, 1f)]
+    [SerializeField] private float m_iceMaxRatio = 0.6f;
 
     [Tooltip("눈이 그친 뒤 빙판이 완전히 녹는 데 걸리는 시간(초) — 그쳐도 길은 한동안 미끄럽다")]
     [Min(1f)]
@@ -55,7 +58,6 @@ public class SnowEvent : NetworkBehaviour, ISuddenEvent
     // 동기화 플래그 및 서버/오프라인용 진실값
     private readonly NetworkVariable<bool> m_snowSynced = new NetworkVariable<bool>(false);
     private bool m_snow;
-    private float m_endTime;
 
     // 빙판 — 서버가 누적을 굴리고 비율만 전 피어에 흘린다
     private readonly NetworkVariable<float> m_iceRatioSynced = new NetworkVariable<float>(0f);
@@ -64,9 +66,11 @@ public class SnowEvent : NetworkBehaviour, ISuddenEvent
 
     public string DisplayName => "눈";
 
+    public WeatherKind Kind => WeatherKind.Snow;
+
     /// <summary>
-    /// 이벤트가 진행 중인가 — <b>눈이 내리는 동안만</b>이다. 빙판이 남아 녹는 구간은 활성이 아니다:
-    /// 활성으로 두면 매니저가 다음 이벤트를 못 뽑아 녹는 45초 동안 돌발 이벤트가 멈춘다.
+    /// 이벤트가 진행 중인가 — <b>눈이 내리는 동안만</b>이다. 라운드 지속형이라 이 값은 라운드 내내
+    /// true이고, <see cref="ServerReset"/>으로 꺼진 뒤 남은 빙판이 녹는 구간은 활성이 아니다.
     /// 녹이는 것은 <see cref="ServerTickThaw"/>가 비활성 중에도 돌려 준다.
     /// </summary>
     public bool IsActive => m_snow;
@@ -150,24 +154,16 @@ public class SnowEvent : NetworkBehaviour, ISuddenEvent
 
     public bool CanTrigger() => true;
 
-    public void ServerBegin()
-    {
-        m_endTime = Time.time + m_durationSeconds;
-        SetSnow(true);
-    }
+    public void ServerBegin() => SetSnow(true);
 
     public void ServerTick()
     {
         // 내리는 동안 누적 — 오래 내리면 빙판이 깔린다.
-        //
-        // <b>최대치에서 멈춘다.</b> 상한을 안 두면 눈 지속(30초)이 최대 도달 시간(5초)보다 길 때
-        // 누적이 계속 자라, 비율은 1에서 멈춰 있어도 해빙이 그 초과분부터 되감아야 해서
-        // 실제로 녹는 데 m_thawSeconds의 몇 배가 걸린다(30초 누적이면 270초).
+        // <b>최대치에서 멈춘다.</b> 상한이 없으면 누적이 라운드 내내 자라, 비율은 1에서 멈춰 있어도
+        // 해빙이 그 초과분부터 되감아야 해서 녹는 데 m_thawSeconds의 몇 배가 걸린다.
+        // 라운드 지속형이 되며 이 상한이 더 중요해졌다 (#700) — 눈이 그치지 않는다.
         m_snowSeconds = Mathf.Min(m_snowSeconds + Time.deltaTime, m_iceFullSeconds);
         RefreshIceRatio();
-
-        if (m_snow && Time.time >= m_endTime)
-            SetSnow(false);
     }
 
     public void ServerReset()
@@ -197,8 +193,13 @@ public class SnowEvent : NetworkBehaviour, ISuddenEvent
             ? Mathf.Clamp01((m_snowSeconds - m_iceOnsetSeconds) / (m_iceFullSeconds - m_iceOnsetSeconds))
             : (m_snowSeconds >= m_iceOnsetSeconds ? 1f : 0f);
 
-        // 0과 1은 경계라 반드시 도달시킨다 — epsilon으로 걸러 0.98에서 멈추면 "다 녹았다"가 안 된다
-        bool boundary = (ratio <= 0f || ratio >= 1f) && !Mathf.Approximately(ratio, m_iceRatioLocal);
+        // 상한에서 멈춘다 (#700) — 눈이 그치지 않으므로 상한을 안 두면 라운드 내내 완전 빙판이 된다.
+        // 누적(m_snowSeconds)은 그대로 두고 <b>결과만</b> 자른다: 해빙이 되감을 거리가 달라지지 않는다.
+        ratio = Mathf.Min(ratio, m_iceMaxRatio);
+
+        // 0과 상한은 경계라 반드시 도달시킨다 — epsilon으로 걸러 상한 직전에 멈추면 "다 깔렸다"가 안 된다
+        bool boundary =
+            (ratio <= 0f || ratio >= m_iceMaxRatio) && !Mathf.Approximately(ratio, m_iceRatioLocal);
         if (!boundary && Mathf.Abs(ratio - m_iceRatioLocal) < k_ratioEpsilon)
             return;
 
