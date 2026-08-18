@@ -4412,6 +4412,10 @@ PrefabInstance:
     m_TransformParent: {fileID: 1326152962}
     m_Modifications:
     - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_weatherTable
+      value: 
+      objectReference: {fileID: 11400000, guid: d82ec2c44e38aa44ea7a1d2c4398bbe5, type: 2}
+    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_eventEntries.Array.data[0].enabled
       value: 1
       objectReference: {fileID: 0}

@@ -4,14 +4,12 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 
 // GDD 6-4 날씨 이벤트: 번개
+// 라운드 지속형이다 (#700) — 준비 단계에 뽑혀 라운드 끝까지 이어지고, 낙뢰는 InProgress부터 떨어진다
+// (매니저가 그때부터 ServerTick을 돌린다). 근거는 IRoundWeather.
 [RequireComponent(typeof(SuddenEventManager))]
-public class LightningEvent : NetworkBehaviour, ISuddenEvent
+public class LightningEvent : NetworkBehaviour, IRoundWeather
 {
     // --- 인스펙터 노출 수치 ---
-    [Header("Settings")]
-    [SerializeField]
-    private float m_durationSeconds = 15f; // 이벤트 총 지속 시간
-
     [Header("Strike Interval (Seconds)")]
     [SerializeField]
     private float m_strikeIntervalMin = 2f; // 낙뢰 최소 주기
@@ -70,8 +68,8 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
 
     // 서버/오프라인 진실값
     private bool m_lightning = false;
-    private float m_endTime;
     private float m_nextStrikeTime;
+    private bool m_strikeScheduled; // 첫 예약을 InProgress의 첫 틱으로 미루는 래치 (#700 — ServerBegin 주석)
 
     // 예고를 걸어 둔 낙뢰 — 지점은 예고 때 굳고, 맞을 사람은 떨어지는 순간에 정해진다 (#647)
     private bool m_hasPendingStrike;
@@ -100,6 +98,7 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
     // --- ISuddenEvent 구현 ---
     public string DisplayName => "번개";
     public bool IsActive => m_lightning;
+    public WeatherKind Kind => WeatherKind.Lightning;
 
     /// <summary>
     /// 조용히 시작한다 (팀 확정 2026-08-13) — 날씨는 <b>보면 안다</b>. 하늘이 바뀌고 시야가 줄어드는 것
@@ -139,12 +138,11 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
 
     public void ServerBegin()
     {
-        m_endTime = Time.time + m_durationSeconds;
         SetLightning(true);
 
-        // 첫 낙뢰 예고 시간 예약
-        ScheduleNextStrike();
-        Debug.Log($"[LightningEvent] ServerBegin. Ends at {m_endTime}s.");
+        // ⚠ 여기서 첫 낙뢰를 예약하지 않는다 (#700) — 시작이 준비 단계라 Time.time은 계속 흐르는데
+        // ServerTick은 InProgress부터라, 예약해 두면 그 사이에 시각이 지나 라운드 시작과 동시에 떨어진다.
+        m_strikeScheduled = false;
     }
 
     public void ServerTick()
@@ -152,17 +150,17 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
         if (!m_lightning)
             return;
 
-        // 예고해 둔 벼락이 먼저다 — 종료 체크보다 앞에 둬야 예고만 하고 안 떨어지는 일이 없다
-        if (m_hasPendingStrike && Time.time >= m_pendingStrikeTime)
-            ResolvePendingStrike();
-
-        // 지속 시간 종료 체크
-        if (Time.time >= m_endTime)
+        // 첫 틱 = InProgress 시작 — 낙뢰 주기는 여기서부터 흐른다
+        if (!m_strikeScheduled)
         {
-            SetLightning(false);
-            Debug.Log("[LightningEvent] ServerEnd by duration.");
+            ScheduleNextStrike();
+            m_strikeScheduled = true;
             return;
         }
+
+        // 예고해 둔 벼락이 먼저다 — 뒤로 미루면 예고만 하고 안 떨어지는 프레임이 생긴다
+        if (m_hasPendingStrike && Time.time >= m_pendingStrikeTime)
+            ResolvePendingStrike();
 
         // 주기적 낙뢰 예고 처리
         if (Time.time >= m_nextStrikeTime)
@@ -213,10 +211,6 @@ public class LightningEvent : NetworkBehaviour, ISuddenEvent
     private void BeginStrikeWarning()
     {
         if (!IsServer || m_hasPendingStrike)
-            return;
-
-        // 이벤트가 먼저 끝나면 예고만 남는다 — 아예 걸지 않는다
-        if (Time.time + m_warningSeconds > m_endTime)
             return;
 
         PlayerHealth aim = PickExposedPlayer();
