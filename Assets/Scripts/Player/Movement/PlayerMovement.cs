@@ -61,6 +61,7 @@ public class PlayerMovement : NetworkBehaviour
     private readonly NetworkVariable<float> m_buffSpeedFactorSynced = new NetworkVariable<float>(1f);
     private float m_buffSpeedFactor = 1f;
     private float m_buffEndTime;
+    private bool m_buffTickHooked; // 서버가 오너 아닌 캐릭터의 만료를 대신 틱하는 중인가 (#706)
 
     /// <summary>속도 버프 배율 — 걸려 있지 않으면 1. (#227)</summary>
     public float BuffSpeedFactor =>
@@ -93,6 +94,9 @@ public class PlayerMovement : NetworkBehaviour
         m_buffEndTime = 0f;
         SetBuffSpeedFactor(1f);
     }
+
+    // 오너 아닌 캐릭터용 서버 틱 경로 (#706) — enabled=false라 안 도는 Update() 대신 여기서 만료를 센다.
+    private void OnServerBuffTick() => TickSpeedBuff();
 
     private void SetBuffSpeedFactor(float factor)
     {
@@ -213,6 +217,16 @@ public class PlayerMovement : NetworkBehaviour
 
         if (!IsOwner)
         {
+            // 서버가 오너 아닌 캐릭터(원격 클라·데디케이티드 서버 시점)의 버프 만료를 대신 센다 (#706).
+            // 바로 아래에서 컴포넌트를 통째로 끄면 Update()의 TickSpeedBuff도 함께 멈추는데, 만료
+            // 권한은 서버에 있어 그 서버가 소유하지 않은 캐릭터의 버프가 영원히 안 풀렸다. 오너 쪽은
+            // Update()가 이미 커버하므로(호스트 자신의 캐릭터 포함) 여기서는 훅하지 않는다.
+            if (IsServer && NetworkManager != null)
+            {
+                NetworkManager.NetworkTickSystem.Tick += OnServerBuffTick;
+                m_buffTickHooked = true;
+            }
+
             enabled = false; // 이동·시점 갱신은 오너만 — PlayerLook·PlayerTowedMotion도 이 Update가 돌린다
             return;
         }
@@ -225,6 +239,13 @@ public class PlayerMovement : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
+        if (m_buffTickHooked)
+        {
+            if (NetworkManager != null)
+                NetworkManager.NetworkTickSystem.Tick -= OnServerBuffTick;
+            m_buffTickHooked = false;
+        }
+
         if (IsOwner)
         {
             // 오너 로컬 플레이어가 사라지면(라운드 종료 리셋·연결 종료 등) 게임플레이가 끝난 것으로 보고 커서를 푼다.
