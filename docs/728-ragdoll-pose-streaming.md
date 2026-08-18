@@ -188,7 +188,7 @@ NPC = `Server`, 플레이어 = `Owner`(루트 NT의 `AuthorityMode`와 일치). 
 | **1** | `RagdollPoseStreamer` 신설 — 캡처·송신·수신·버퍼·보간 | 컴파일 ✅ |
 | **2** | NPC 프리팹 4종에 부착 + 진입/정착/기상에서 Begin/End/Stop. **원격을 전 뼈 키네마틱으로 전환** + 골반을 월드로 스트림이 쥔다 (§1-3) | MPPM 2인 ✅ — 손실 0 · 초당 25~26 · 자세 일치 |
 | ~~3~~ | ~~원격 전 뼈 키네마틱~~ — **2단계로 합쳤다.** ⚠ 원격 뼈가 **동적인 채로** 스트림이 트랜스폼을 대입하는 중간 상태는 존재하면 안 된다: 그게 정확히 유치장 버그에서 6261 m/s를 만든 동작이라, 대조군이 아니라 폭발만 본다 | — |
-| **3** | **삭제 — 골반 NT·`NetworkRigidbody`·`NpcCorpseHipsTransform`·순간이동 브래킷·`TickAlignBonesToRoot`·원격 속도 상한·`NpcDeath`의 1회 방송.** 그 자리에 **원격 얼림**을 넣는다(`OnSettledPoseReceived` → `Freeze`). 순 삭제 655줄 | MPPM 2인 ✅ — 육안 확인, 회귀 없음 |
+| **3** | **삭제 — 골반 NT·`NetworkRigidbody`·`NpcCorpseHipsTransform`·순간이동 브래킷·`TickAlignBonesToRoot`·원격 속도 상한·`NpcDeath`의 1회 방송.** 그 자리에 **원격 얼림**을 넣는다(`OnSettledPoseReceived` → `Freeze`). 순 삭제 726줄(C# 코드 429 · 프리팹 YAML 288 · 기타 9) | MPPM 2인 ✅ — 육안 확인, 회귀 없음 |
 | ~~4~~ | ~~유치장 수감·퇴장~~ — **3단계 검증에 포함됐다.** 브래킷을 지우고도 회귀가 없었다 | ✅ |
 | **5** | 늦은 접속(late join) — 이미 얼어 있는 시체의 자세를 받는 경로 | §5-5 |
 | **6** | 압축·송신주기 조이기 + 대역폭 실측 | §1-6 표 |
