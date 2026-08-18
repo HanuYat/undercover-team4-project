@@ -89,6 +89,10 @@ public class RagdollRope : MonoBehaviour
     private Vector4 m_appliedTuning;
     private float m_appliedAngularDamping;
 
+    /// <summary>관절이 실제로 잡는 거리(m) — 표시가 늘어짐을 이 값으로 계산한다. (#644)
+    /// 묻는 쪽은 파사드(<c>NpcRagdoll</c>/<c>PlayerRagdoll</c>)를 거친다 — 리그 배치 지식이 새지 않게.</summary>
+    public float Length => m_length;
+
     /// <summary>밧줄이 <b>한 가닥이라도</b> 묶여 있는가.</summary>
     public bool IsAttached => m_strands.Count > 0;
 

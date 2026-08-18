@@ -314,6 +314,9 @@ public class NpcRagdoll : MonoBehaviour
     // 직접 찾게 하면 "래그돌이 아닐 때는 묶으면 안 된다"는 조건과 "리그가 Model에 있다"는 배치 지식이
     // 둘 다 호출부로 새어 나간다.
 
+    /// <summary>관절 밧줄의 길이(m) — 리그가 아직 안 잡혔으면 0. 묻는 쪽이 대신 쓸 값을 정한다. (#644)</summary>
+    public float RopeLength => m_rope != null ? m_rope.Length : 0f;
+
     /// <summary>
     /// 시체에 밧줄을 묶는다 — <b>각 피어가 자기 로컬 시체에</b> 건다. 표현·물리 계층이다.
     ///

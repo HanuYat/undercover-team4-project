@@ -48,8 +48,12 @@ public class PlayerTowedMotion : MonoBehaviour
     private const float k_escortTrailDistance = 0.75f;
     private const float k_escortLerpSpeed = 12f;
 
-    /// <summary>끌기 간격(m) — 곧 밧줄 길이다. 밧줄 표시(RopeDragView)가 늘어짐 계산에 같은 값을 쓴다. (#365)</summary>
-    public float DragFollowDistance => m_dragFollowDistance;
+    /// <summary>지금 이 몸을 잡고 있는 밧줄의 길이(m) — 밧줄 표시(<c>RopeDragView</c>)의 늘어짐 기준이다.
+    /// <see cref="NpcRopeDrag.RopeLength"/>와 같은 갈림이고, 그쪽 주석이 근거를 갖는다. (#365/#644)</summary>
+    public float RopeLength =>
+        m_ragdoll != null && m_ragdoll.IsRagdollActive && m_ragdoll.RopeLength > 0f
+            ? m_ragdoll.RopeLength
+            : m_dragFollowDistance;
 
     private PlayerMovement m_movement;
     private PlayerRagdoll m_ragdoll; // 사망 래그돌 — 운반을 밧줄(물리)로 넘긴다 (#506)
