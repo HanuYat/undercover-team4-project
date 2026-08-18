@@ -352,11 +352,8 @@ public class NpcResistState : NpcStateBase
     /// <summary>
     /// 반경 내 PlayerHealth를 중복 없이 s_playerBuffer에 모은다.
     ///
-    /// <b>래그돌 본을 뺀다</b> (#692). 사람 하나가 본만 11개라(플레이어 13 · 시민 12) 마스크를 열고
-    /// 16칸으로 재면 때리는 자기 몸 12개가 버퍼를 먼저 채워, 플레이어가 남는 4칸에 들어갈지는 운이었다.
-    /// <see cref="Physics.OverlapSphereNonAlloc"/>은 넘쳐도 잘린 개수만 돌려주므로 그대로 조용히 빗나갔다
-    /// (차량 치임 #673과 같은 함정). 어느 콜라이더에 걸려도 GetComponentInParent가 같은 대상으로 올라가
-    /// 판정력은 그대로다.
+    /// <b>래그돌 본을 뺀다</b> (#692) — 사람 하나가 본만 11개라 16칸 버퍼는 때리는 자기 몸으로 먼저
+    /// 찼다. 넘쳐도 잘린 개수만 돌아와 조용히 빗나간다(차량 치임 #673과 같은 함정).
     /// </summary>
     private void CollectPlayersInRange(float radius)
     {
