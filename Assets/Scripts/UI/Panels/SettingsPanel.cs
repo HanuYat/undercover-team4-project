@@ -6,7 +6,8 @@ using UnityEngine.Localization;
 using UnityEngine.UI;
 
 /// <summary>
-/// 설정 창 (#225) — 마우스 감도 · 마스터 음량 · 음성 음량 · 마이크 음소거(#430) · 언어(#374).
+/// 설정 창 (#225) — 마우스 감도 · 시점 스무딩 · 시야각 · 화면 흔들림 · 속도 비네트(#665) ·
+/// 마스터 음량 · 음성 음량 · 마이크 음소거(#430) · 언어(#374).
 /// 설계 정본: docs/design/settings-ui.md · 언어는 docs/design/localization.md
 ///
 /// <b>즉시 적용 모델</b> — 저장/취소 버튼이 없다. 슬라이더를 움직이면 그 순간 GameSettings에
@@ -19,16 +20,27 @@ public class SettingsPanel : PanelBase
 {
     [Header("슬라이더")]
     [SerializeField] private Slider m_mouseSensitivitySlider;
+
+    [Tooltip("시점 스무딩 강도 — 0이면 원시 입력. 멀미가 나면 낮춘다 (#665)")]
+    [SerializeField] private Slider m_lookSmoothingSlider;
+
+    [Tooltip("시야각(수직, 도). 좁을수록 멀미가 심해진다 (#665)")]
+    [SerializeField] private Slider m_fovSlider;
+
     [SerializeField] private Slider m_masterVolumeSlider;
     [SerializeField] private Slider m_voiceVolumeSlider;
 
     [Header("값 표시")]
     [SerializeField] private TextMeshProUGUI m_mouseSensitivityValue;
+    [SerializeField] private TextMeshProUGUI m_lookSmoothingValue;
+    [SerializeField] private TextMeshProUGUI m_fovValue;
     [SerializeField] private TextMeshProUGUI m_masterVolumeValue;
     [SerializeField] private TextMeshProUGUI m_voiceVolumeValue;
 
     [Header("토글")]
     [SerializeField] private Toggle m_micMuteToggle; // 마이크 음소거 (#430)
+    [SerializeField] private Toggle m_screenShakeToggle; // 화면 흔들림 (#665)
+    [SerializeField] private Toggle m_speedVignetteToggle; // 속도 비네트 (#665)
 
     [Header("언어 (#374)")]
     [Tooltip("표시 언어 선택. 항목은 Localization Settings의 로케일 목록에서 런타임에 채운다 — 인스펙터에 항목을 적지 말 것")]
@@ -51,11 +63,24 @@ public class SettingsPanel : PanelBase
             GameSettings.k_maxMouseSensitivity,
             HandleMouseSensitivityChanged
         );
+        SetupSlider(
+            m_lookSmoothingSlider,
+            GameSettings.k_minLookSmoothing,
+            GameSettings.k_maxLookSmoothing,
+            HandleLookSmoothingChanged
+        );
+        SetupSlider(m_fovSlider, GameSettings.k_minFov, GameSettings.k_maxFov, HandleFovChanged);
         SetupSlider(m_masterVolumeSlider, 0f, 1f, HandleMasterVolumeChanged);
         SetupSlider(m_voiceVolumeSlider, 0f, 1f, HandleVoiceVolumeChanged);
 
         if (m_micMuteToggle != null)
             m_micMuteToggle.onValueChanged.AddListener(HandleMicMuteToggled);
+
+        if (m_screenShakeToggle != null)
+            m_screenShakeToggle.onValueChanged.AddListener(HandleScreenShakeToggled);
+
+        if (m_speedVignetteToggle != null)
+            m_speedVignetteToggle.onValueChanged.AddListener(HandleSpeedVignetteToggled);
 
         if (m_languageDropdown != null)
             m_languageDropdown.onValueChanged.AddListener(HandleLanguageChanged);
@@ -75,12 +100,20 @@ public class SettingsPanel : PanelBase
 
         if (m_mouseSensitivitySlider != null)
             m_mouseSensitivitySlider.onValueChanged.RemoveListener(HandleMouseSensitivityChanged);
+        if (m_lookSmoothingSlider != null)
+            m_lookSmoothingSlider.onValueChanged.RemoveListener(HandleLookSmoothingChanged);
+        if (m_fovSlider != null)
+            m_fovSlider.onValueChanged.RemoveListener(HandleFovChanged);
         if (m_masterVolumeSlider != null)
             m_masterVolumeSlider.onValueChanged.RemoveListener(HandleMasterVolumeChanged);
         if (m_voiceVolumeSlider != null)
             m_voiceVolumeSlider.onValueChanged.RemoveListener(HandleVoiceVolumeChanged);
         if (m_micMuteToggle != null)
             m_micMuteToggle.onValueChanged.RemoveListener(HandleMicMuteToggled);
+        if (m_screenShakeToggle != null)
+            m_screenShakeToggle.onValueChanged.RemoveListener(HandleScreenShakeToggled);
+        if (m_speedVignetteToggle != null)
+            m_speedVignetteToggle.onValueChanged.RemoveListener(HandleSpeedVignetteToggled);
         if (m_languageDropdown != null)
             m_languageDropdown.onValueChanged.RemoveListener(HandleLanguageChanged);
 
@@ -129,12 +162,20 @@ public class SettingsPanel : PanelBase
     {
         if (m_mouseSensitivitySlider != null)
             m_mouseSensitivitySlider.SetValueWithoutNotify(GameSettings.MouseSensitivity);
+        if (m_lookSmoothingSlider != null)
+            m_lookSmoothingSlider.SetValueWithoutNotify(GameSettings.LookSmoothing);
+        if (m_fovSlider != null)
+            m_fovSlider.SetValueWithoutNotify(GameSettings.Fov);
         if (m_masterVolumeSlider != null)
             m_masterVolumeSlider.SetValueWithoutNotify(GameSettings.MasterVolume);
         if (m_voiceVolumeSlider != null)
             m_voiceVolumeSlider.SetValueWithoutNotify(GameSettings.VoiceVolume);
         if (m_micMuteToggle != null)
             m_micMuteToggle.SetIsOnWithoutNotify(GameSettings.MicMuted);
+        if (m_screenShakeToggle != null)
+            m_screenShakeToggle.SetIsOnWithoutNotify(GameSettings.ScreenShake);
+        if (m_speedVignetteToggle != null)
+            m_speedVignetteToggle.SetIsOnWithoutNotify(GameSettings.SpeedVignette);
 
         SyncLanguageDropdown();
         RefreshLabels();
@@ -180,6 +221,18 @@ public class SettingsPanel : PanelBase
         RefreshLabels();
     }
 
+    private void HandleLookSmoothingChanged(float value)
+    {
+        GameSettings.LookSmoothing = value;
+        RefreshLabels();
+    }
+
+    private void HandleFovChanged(float value)
+    {
+        GameSettings.Fov = value;
+        RefreshLabels();
+    }
+
     private void HandleMasterVolumeChanged(float value)
     {
         GameSettings.MasterVolume = value;
@@ -193,6 +246,10 @@ public class SettingsPanel : PanelBase
     }
 
     private void HandleMicMuteToggled(bool on) => GameSettings.MicMuted = on;
+
+    private void HandleScreenShakeToggled(bool on) => GameSettings.ScreenShake = on;
+
+    private void HandleSpeedVignetteToggled(bool on) => GameSettings.SpeedVignette = on;
 
     // 드롭다운 항목 순서 = GameSettings.AvailableLocales 순서 (SyncLanguageDropdown이 그대로 만든다).
     private void HandleLanguageChanged(int index)
@@ -222,6 +279,13 @@ public class SettingsPanel : PanelBase
     {
         if (m_mouseSensitivityValue != null) 
             m_mouseSensitivityValue.text = $"x{GameSettings.MouseSensitivity:0.00}";
+
+        // 0%가 곧 '스무딩 끔'이다 — 음량과 같은 표기라 문구를 따로 두지 않는다.
+        if (m_lookSmoothingValue != null)
+            m_lookSmoothingValue.text = $"{GameSettings.LookSmoothing * 100f:0}%";
+
+        if (m_fovValue != null)
+            m_fovValue.text = $"{GameSettings.Fov:0}°";
 
         if (m_masterVolumeValue != null)
             m_masterVolumeValue.text = $"{GameSettings.MasterVolume * 100f:0}%";

@@ -60,6 +60,13 @@ public class NpcController : NetworkBehaviour
     // 라운드 종료 정지(freeze) 플래그 — 서버(또는 오프라인)에서만 의미. 켜지면 FSM/이동을 멈춘다.
     private bool m_frozen;
 
+    // 프리팹이 정한 통행 마스크 — 도로를 빼고 되돌릴 때의 기준값 (#634 후속). Awake에서 1회 확정.
+    private int m_baseAreaMask;
+
+    // 도로 위라 아직 마스크를 좁히지 못했다 — 벗어나는 즉시 좁힌다 (TickRoadEgress)
+    private bool m_roadEgressPending;
+    private float m_roadEgressProbeSeconds;
+
     // 서버 권위 FSM 상태 — 서버만 쓰고 모든 클라이언트가 읽는다 (#56)
     private readonly NetworkVariable<NpcState> m_networkState = new NetworkVariable<NpcState>(NpcState.Idle);
 
@@ -111,6 +118,12 @@ public class NpcController : NetworkBehaviour
     private void Awake()
     {
         m_agent = GetComponent<NavMeshAgent>();
+
+        // 프리팹이 정한 통행 마스크를 <b>좁히기 전에</b> 잡아 둔다 (#634 후속).
+        // 되돌릴 때 NavMesh.AllAreas로 복구하면 프리팹이 일부러 뺀 영역(Jail, #415)까지 되살아나고,
+        // 좁아진 뒤의 m_agent.areaMask를 기준으로 삼으면 한 번 좁힌 뒤 영영 못 되돌린다.
+        m_baseAreaMask = m_agent.areaMask;
+
         m_custody = GetComponent<NpcCustody>();
         m_death = GetComponent<NpcDeath>();
         m_health = GetComponent<NpcHealth>();
@@ -141,6 +154,10 @@ public class NpcController : NetworkBehaviour
         m_stateMachine.AddState(NpcState.PenaltyEscorting, new NpcPenaltyEscortState(this, m_escortConfig));
         m_stateMachine.AddState(NpcState.Releasing, new NpcReleasingState(this, m_fleeConfig));
         m_stateMachine.AddState(NpcState.Dead, new NpcDeadState(this));
+
+        // 도로 통행 정책은 새 상태의 Enter()가 목적지를 잡기 <b>전에</b> 걸려야 한다 — 그래서
+        // OnStateChanged가 아니라 OnBeforeEnter다 (#634 후속)
+        m_stateMachine.OnBeforeEnter += ApplyRoadPolicy;
 
         // FSM 전이(서버/오프라인에서만 발생)를 동기화 변수 또는 로컬 이벤트로 흘려보낸다
         m_stateMachine.OnStateChanged += HandleFsmStateChanged;
@@ -207,6 +224,11 @@ public class NpcController : NetworkBehaviour
         // NavMesh 밖에서 굳은 몸의 회수 — 아래 모든 게이트보다 **먼저** 돈다 (#557).
         // 뒤로 내리면 스턴 게이트에 가려 기절한 채 굳은 NPC(=신고된 증상 그대로)에 영영 닿지 못한다.
         TickNavMeshRecovery();
+
+        // 도로를 벗어나면 통행 마스크를 좁힌다 — 회수와 같은 이유로 게이트보다 먼저 돈다 (#634 후속).
+        // 도로 위에서 기절·넉백을 맞으면 그 구간 내내 대기 상태로 남는데, 그동안 움직이지 않으므로
+        // 판정은 계속 "도로 위"고 좁혀지지 않는다 — 깨어나 걸어 나가면 그때 좁는다.
+        TickRoadEgress();
 
         // 사망 — <b>모든 게이트보다 먼저 끝낸다</b> (#571). 죽은 몸은 아무 틱도 돌지 않는다.
         //
@@ -424,6 +446,229 @@ public class NpcController : NetworkBehaviour
         }
 
         return found;
+    }
+
+    // ---- 도로 통행 정책 (#634 후속) ----
+
+    /// <summary>
+    /// 프리팹이 정한 통행 마스크 — <b>도로 정책이 적용되기 전</b>의 값이다.
+    ///
+    /// "이 몸을 NavMesh 어디에 놓을 수 있는가"를 묻는 쪽(넉백 착지·래그돌 기상)이 쓴다.
+    /// 그건 "지금 걸어도 되는 곳인가"와 다른 질문이라 <see cref="NavMeshAgent.areaMask"/>를
+    /// 쓰면 안 된다 — 배회 중이라 마스크가 좁아진 몸이 도로 위에 떨어지면 착지점을 못 찾는다.
+    /// (Jail 제외는 이 값에도 살아 있어 #415의 이유는 그대로 지켜진다)
+    /// </summary>
+    internal int BaseAreaMask => m_baseAreaMask;
+
+    // 도로 이탈 확인 주기(초) — 대기 중인 개체만, 그것도 간격을 두고 본다.
+    // 매 프레임 NavMesh를 샘플하면 군중 규모에서 그대로 비용이 된다.
+    private const float k_roadEgressProbeInterval = 0.25f;
+
+    /// <summary>
+    /// 상태에 맞는 통행 마스크를 건다 — <see cref="NpcStateMachine.OnBeforeEnter"/>에서 호출. (#634 후속)
+    ///
+    /// 도로를 밟으면 안 되는 상태인데 <b>지금 도로 위</b>라면 좁히지 않고 미룬다:
+    /// 서 있는 폴리곤이 마스크 밖이 되면 경로 계산이 통째로 실패해(<c>PathInvalid</c>)
+    /// <b>차도 한복판에서 영영 굳는다</b> — 고치려던 것보다 나쁜 증상이다.
+    /// 미루는 동안에도 목적지 쪽은 이미 도로를 빼고 뽑으므로(<see cref="NpcWalkState"/>·
+    /// <see cref="NpcSpawner"/>가 <c>NpcNavAreas.ExcludeRoad</c>를 쓴다) 스스로 도로를 벗어난다.
+    /// </summary>
+    private void ApplyRoadPolicy(NpcState next)
+    {
+        if (NpcNavAreas.AllowsRoad(next))
+        {
+            m_roadEgressPending = false;
+            SetAreaMask(m_baseAreaMask);
+            return;
+        }
+
+        if (NpcNavAreas.IsOnRoad(transform.position))
+        {
+            m_roadEgressPending = true;
+            m_roadEgressProbeSeconds = 0f;
+            SetAreaMask(m_baseAreaMask); // 벗어날 때까지는 도로를 쓸 수 있어야 나갈 수 있다
+            return;
+        }
+
+        m_roadEgressPending = false;
+        SetAreaMask(NpcNavAreas.ExcludeRoad(m_baseAreaMask));
+    }
+
+    /// <summary>
+    /// 도로를 벗어나기를 기다렸다가 마스크를 좁힌다 — 서버(또는 오프라인) 전용. (#634 후속)
+    /// 추격이 끝나 배회로 돌아온 NPC가 마침 차도 위였던 경우가 이 경로다.
+    /// </summary>
+    private void TickRoadEgress()
+    {
+        if (!m_roadEgressPending)
+            return;
+
+        m_roadEgressProbeSeconds += Time.deltaTime;
+        if (m_roadEgressProbeSeconds < k_roadEgressProbeInterval)
+            return;
+        m_roadEgressProbeSeconds = 0f;
+
+        // 그새 도로를 밟아도 되는 상태로 바뀌었다면 대기 자체가 무의미하다.
+        // (ApplyRoadPolicy가 이미 껐겠지만, 전이 없이 여기까지 오는 경로가 생겨도 새지 않게 둔다)
+        if (NpcNavAreas.AllowsRoad(m_stateMachine.CurrentState))
+        {
+            m_roadEgressPending = false;
+            return;
+        }
+
+        if (!NpcNavAreas.IsOnRoad(transform.position))
+        {
+            m_roadEgressPending = false;
+            SetAreaMask(NpcNavAreas.ExcludeRoad(m_baseAreaMask));
+            return;
+        }
+
+        DriveOffRoad();
+    }
+
+    // 도로에서 물러날 거리(m) — <b>가장 가까운 도로 밖이 아니다.</b> 그건 경계선 바로 너머
+    // 몇 cm라, 한 발짝 떼자마자 도착 판정이 나 NPC가 차도 경계에 붙어 선다(관측된 증상).
+    // 폭 10m 도로 한복판에서 인도까지가 5m이므로(실측) 10m면 수직으로 나갈 때 5m 안쪽에 선다.
+    private const float k_roadEgressDistance = 10f;
+
+    // 목적지에 요구하는 도로 여유(m) — 이 반경 안에 도로가 없어야 "충분히 물러났다"고 본다.
+    // <b>후보를 거리로 고르면 안 되는 이유가 여기 있다:</b> 후보는 전부 등거리라 거리로는
+    // 우열이 안 갈리고, 실제로 대각선 후보가 뽑혀 여유 0.7m에 서는 것이 관측됐다.
+    // 값은 실측 상한에 맞춘다 — 한복판에서 10m 수직 이동의 여유가 5m이므로 그보다 낮아야 한다.
+    private const float k_roadEgressClearance = 2.5f;
+
+    // 이탈 목적지 후보 방향 수 — 도로는 띠 모양이라 어느 쪽이 가까운 인도인지 모른다. 빙 둘러 보고
+    // 도로 밖으로 나온 것 중 가장 가까운 것을 쓴다.
+    private const int k_roadEgressDirections = 8;
+
+    // 후보를 NavMesh에 붙일 때의 스냅 반경(m) — 넓히면 후보가 죄다 같은 지점으로 뭉친다.
+    private const float k_roadEgressSnapRadius = 2f;
+
+    /// <summary>
+    /// 도로에서 <b>걸어 나가게 한다</b> — 기다리는 것만으로는 못 나오기 때문이다. (#634 후속)
+    ///
+    /// <b>Idle이 문제다.</b> 추격이 끝나면 <see cref="NpcDutyAgent.EndPenaltyDuty"/>가 Idle로
+    /// 되돌리는데, <see cref="NpcIdleState"/>는 <c>isStopped = true</c>로 1~3초(15% 확률로 5~10초)
+    /// 서 있는다. 그 자리가 차도 한복판이면 그 시간이 그대로 사망이다 — 실제로 관측된 증상이 이것이고,
+    /// 마스크를 좁히지 못해 굳는 것과 <b>보이는 그림이 똑같아</b> 더 나쁘다.
+    ///
+    /// <b>그래서 정지를 덮어쓰는 게 아니라 상태를 옮긴다.</b> 에이전트만 밀면 FSM은 Idle인 채
+    /// 몸만 이동해 <b>미끄러진다</b> — <see cref="NpcAnimationDriver"/>는 NpcState 값을 그대로
+    /// Animator 번호로 쓰므로 Idle이면 속도와 무관하게 Idle 모션이 나온다. 걸어 나가는 중이면
+    /// 그건 Walk다. 상태를 맞춰 두면 모션은 따라오고 드라이버는 손댈 필요가 없다.
+    ///
+    /// 목적지는 Walk가 스스로 뽑은 배회 지점이 아니라 <b>가장 가까운 도로 밖</b>으로 덮어쓴다 —
+    /// 배회 지점은 반경 3~10m라 도로 폭(10m)을 넘어 건너편이 걸릴 수 있고, 차도 위에서 그건
+    /// 가장 오래 걸리는 경로다.
+    /// </summary>
+    private void DriveOffRoad()
+    {
+        if (!AgentReady)
+            return;
+
+        // 이미 도로 밖을 향해 걷고 있으면 놔둔다 — 매 틱 목적지를 새로 잡으면 경로가 계속 리셋된다
+        if (!m_agent.isStopped && m_agent.hasPath && !NpcNavAreas.IsOnRoad(m_agent.destination))
+            return;
+
+        // 나갈 곳을 먼저 찾는다 — 못 찾았는데 상태부터 옮기면 Idle↔Walk를 오가며 떨기만 한다
+        if (!TryFindRoadExit(out Vector3 exit))
+            return; // 다음 틱에 다시 시도한다
+
+        // Walk로 옮긴 뒤 목적지를 덮는다 — 순서가 중요하다. ChangeState는 Enter()까지 돌고 오므로
+        // (NpcWalkState.Enter가 자기 배회 지점을 잡는다) 먼저 걸면 그쪽이 이겨 버린다.
+        if (m_stateMachine.CurrentState == NpcState.Idle)
+            m_stateMachine.ChangeState(NpcState.Walk);
+
+        m_agent.isStopped = false;
+        m_agent.SetDestination(exit);
+    }
+
+    /// <summary>
+    /// 도로를 벗어나 <b>충분히 안쪽</b>에 있는 지점을 찾는다 — 빙 둘러 보고 고른다.
+    ///
+    /// 가장 가까운 도로 밖 지점(<c>SamplePosition</c> 한 번)으로는 안 된다: 그건 경계선 바로 너머라
+    /// 한 발짝 만에 도착 판정이 나고, NPC가 차도 경계에 붙어 선 채 Idle로 돌아간다.
+    ///
+    /// 후보 사이의 우열은 <b>거리가 아니라 도로 여유</b>로 가른다 — 후보는 전부 등거리라 거리로는
+    /// 갈리지 않고, 그렇게 두면 도로를 비스듬히 스치는 대각선 후보가 뽑힌다.
+    /// 여유를 갖춘 후보가 하나도 없으면(좁은 골목 등) 도로 밖이기만 한 후보라도 쓴다 —
+    /// 차도에 서 있는 것보다는 언제나 낫다.
+    /// </summary>
+    private bool TryFindRoadExit(out Vector3 exit)
+    {
+        exit = default;
+
+        int offRoadMask = NpcNavAreas.ExcludeRoad(m_baseAreaMask);
+        Vector3 origin = transform.position;
+
+        float bestClearSqr = float.MaxValue;
+        bool foundClear = false;
+
+        Vector3 fallback = default;
+        float bestAnySqr = float.MaxValue;
+        bool foundAny = false;
+
+        for (int i = 0; i < k_roadEgressDirections; i++)
+        {
+            float angle = i * (Mathf.PI * 2f / k_roadEgressDirections);
+            Vector3 candidate = origin
+                + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * k_roadEgressDistance;
+
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, k_roadEgressSnapRadius, offRoadMask))
+                continue;
+
+            // 스냅이 도로로 되돌아온 후보는 버린다 — 마스크로 걸러도 경계에 걸치면 다시 도로다
+            if (NpcNavAreas.IsOnRoad(hit.position))
+                continue;
+
+            float sqr = (hit.position - origin).sqrMagnitude;
+
+            // 도로에서 충분히 떨어졌는가 — 반경 안에 도로가 <b>없어야</b> 한다.
+            // 여기서는 Road 마스크로 직접 샘플하는 것이 맞다: 묻는 것이 "이 폴리곤이 도로인가"가
+            // 아니라 "이 근처에 도로가 있는가"이기 때문이다 (NpcNavAreas.IsOnRoad와 반대다).
+            if (!NavMesh.SamplePosition(hit.position, out NavMeshHit _, k_roadEgressClearance,
+                                        NpcNavAreas.RoadMask))
+            {
+                if (sqr < bestClearSqr)
+                {
+                    bestClearSqr = sqr;
+                    exit = hit.position;
+                    foundClear = true;
+                }
+                continue;
+            }
+
+            if (sqr < bestAnySqr)
+            {
+                bestAnySqr = sqr;
+                fallback = hit.position;
+                foundAny = true;
+            }
+        }
+
+        if (foundClear)
+            return true;
+
+        exit = fallback;
+        return foundAny;
+    }
+
+    /// <summary>
+    /// 통행 마스크를 갈아 끼우고, 바뀌었으면 <b>지금 경로를 다시 계산시킨다.</b>
+    ///
+    /// <c>areaMask</c>를 바꿔도 이미 계산된 경로는 그대로 남는다 — 도로를 지나는 옛 경로가 살아 있으면
+    /// 좁힌 의미가 없다. 다시 계산해 부분 경로가 나오면 각 상태의 막힘 감지가 목적지를 새로 뽑는다
+    /// (<see cref="NpcWalkState"/>는 제자리 2초로 잡는다).
+    /// </summary>
+    private void SetAreaMask(int mask)
+    {
+        if (m_agent.areaMask == mask)
+            return;
+
+        m_agent.areaMask = mask;
+
+        if (AgentReady && m_agent.hasPath)
+            m_agent.SetDestination(m_agent.destination);
     }
 
     // ---- 굳은 몸 회수 (#557) ----

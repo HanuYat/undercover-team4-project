@@ -22,13 +22,13 @@ public class PlayerLook : MonoBehaviour
     [SerializeField]
     private Camera m_playerCamera;
 
-    [Tooltip("프리팹 기준 감도 — 실제 감도는 여기에 설정 창의 감도 배율(GameSettings.MouseSensitivity)을 곱한 값이다 (#225)")]
+    [Tooltip("기준 감도(도/픽셀) — 여기에 설정 창의 배율을 곱한다. 실제 속도를 정하는 것은 이 값이고, "
+        + "배율은 '기본보다 몇 배'만 고른다 (#225/#665)")]
     [SerializeField]
     private float m_mouseSensitivity = 1f;
 
-    [Tooltip("마우스 회전 스무딩 강도 — 클수록 반응이 빠르고 덜 부드러움. 0이면 스무딩 없음(원시 입력). (#216)")]
-    [SerializeField]
-    private float m_lookSmoothing = 20f;
+    // 스무딩 강도·시야각은 프리팹이 아니라 설정 창에 있다 (GameSettings, #665) —
+    // 멀미는 사람마다 달라서 기본값 하나로 맞출 수 없다.
 
     [SerializeField]
     private float m_minPitch = -80f;
@@ -46,8 +46,8 @@ public class PlayerLook : MonoBehaviour
     [Tooltip("다운 중 카메라 피치(양수=아래, 음수=위). 바닥에서 살짝 위를 보게 함")]
     [SerializeField] private float m_downCamPitch = -20f;
 
-    [Tooltip("서기↔다운 시점 전환 보간 속도")]
-    [SerializeField] private float m_camPoseLerpSpeed = 8f;
+    [Tooltip("서기↔다운 시점 전환 보간 속도. 클수록 빨리 붙는다 — 낮으면 화면이 길게 미끄러져 멀미가 난다 (#665)")]
+    [SerializeField] private float m_camPoseLerpSpeed = 14f;
 
     // 쓰러진 동안에도 주변을 볼 수 있게 시야만 돌린다 (#252) — 몸은 누운 채 그대로다.
     [Tooltip("쓰러진 동안(다운·기절) 시야를 좌우로 돌릴 수 있는 범위(±도). 몸을 돌리지 않으므로 목이 꺾여 보이지 않을 만큼만 준다")]
@@ -66,8 +66,8 @@ public class PlayerLook : MonoBehaviour
     [Tooltip("감정표현 재생 중 카메라를 위로 올릴 높이(m)")]
     [SerializeField] private float m_emoteCamHeight = 0.4f;
 
-    [Tooltip("1인칭↔감정표현 시점 전환 보간 속도")]
-    [SerializeField] private float m_emoteCamLerpSpeed = 6f;
+    [Tooltip("1인칭↔감정표현 시점 전환 보간 속도. 클수록 빨리 붙는다 (#665)")]
+    [SerializeField] private float m_emoteCamLerpSpeed = 10f;
 
     [Tooltip("3인칭 카메라가 벽을 파고들지 않게 띄울 반경(m)")]
     [SerializeField] private float m_emoteCamProbeRadius = 0.25f;
@@ -256,6 +256,13 @@ public class PlayerLook : MonoBehaviour
     }
 
     /// <summary>
+    /// 이 클래스의 보간 계수는 전부 이걸 쓴다. 0이면 보간 없이 즉시. (#665)
+    /// <c>rate * Time.deltaTime</c>을 Lerp에 그대로 넣으면 주사율마다 붙는 속도가 달라진다.
+    /// </summary>
+    private static float Damp(float rate) =>
+        rate <= 0f ? 1f : 1f - Mathf.Exp(-rate * Time.deltaTime);
+
+    /// <summary>
     /// 마우스 입력으로 시점을 돌린다 — 평상시엔 몸통 yaw + 카메라 pitch, 쓰러진 동안엔 카메라 로컬만. (#216, #252)
     /// </summary>
     public void HandleLook()
@@ -272,10 +279,10 @@ public class PlayerLook : MonoBehaviour
 
         Vector2 look = m_inputHandler.LookInput * m_mouseSensitivity * GameSettings.MouseSensitivity;
 
-        // 프레임률 독립 지수 감쇠 — 느린 회전 시 정수 픽셀 delta(0/1/0/1…)로 생기는 계단 지터를 완만하게 한다.
-        // 감쇠 계수 0이면 원시 입력을 그대로 적용(스무딩 없음). (#216)
-        float t = m_lookSmoothing <= 0f ? 1f : 1f - Mathf.Exp(-m_lookSmoothing * Time.deltaTime);
-        m_smoothedLook = Vector2.Lerp(m_smoothedLook, look, t);
+        // 천천히 돌릴 때 마우스 delta가 0/1/0/1로 튀는 계단 지터를 깎는다. 0이면 스무딩 없음. (#216)
+        // 깎는 대상이 각도가 아니라 delta라, 강하게 걸면 마우스를 멈춘 뒤에도 남은 delta가 몇 프레임
+        // 더 실려 화면이 더 돈다 — 그래서 설정에서 줄일 수 있게 열어 뒀다. (#665)
+        m_smoothedLook = Vector2.Lerp(m_smoothedLook, look, Damp(GameSettings.LookSmoothingRate));
 
         // 사망 관전 중에는 몸도 시야 각도도 아닌 오빗 각을 돌린다 (#576).
         // 아래 쓰러진 자세 분기보다 먼저 봐야 한다 — 사망도 IsProne이라, 순서가 뒤면 바닥 시점이 입력을 먼저 먹는다.
@@ -322,7 +329,12 @@ public class PlayerLook : MonoBehaviour
     {
         if (m_playerCamera == null) return;
 
-        float lerp = m_camPoseLerpSpeed * Time.deltaTime;
+        // 시야각은 설정이 정본이다 — 프리팹 값은 쓰지 않는다. 매 프레임 보는 것은 슬라이더를 끄는
+        // 동안 바로 보이게 하려는 것이고, 값이 같으면 대입하지 않는다. (#665)
+        if (!Mathf.Approximately(m_playerCamera.fieldOfView, GameSettings.Fov))
+            m_playerCamera.fieldOfView = GameSettings.Fov;
+
+        float lerp = Damp(m_camPoseLerpSpeed);
         bool downed = IsProne;
 
         // 사망 관전 시점 — 기능 정지(Die) 동안만 켠다 (#576). 기절·매달기·납치처럼 스스로 풀리는
@@ -391,7 +403,7 @@ public class PlayerLook : MonoBehaviour
         // 통째로 대입하므로 밖에서 얹은 오프셋은 그 프레임에 지워진다.
         // 쓰러지면 다운 시점이 이긴다 — 서버가 감정표현을 끊어 주지만 그 값이 돌아오기까지 왕복이 걸리고,
         // 그 사이 두 블렌드가 겹치면 카메라가 다운 높이와 3인칭 붐 사이 엉뚱한 자리로 간다.
-        m_emoteCamBlend = Mathf.Lerp(m_emoteCamBlend, m_emoteView && !downed ? 1f : 0f, m_emoteCamLerpSpeed * Time.deltaTime);
+        m_emoteCamBlend = Mathf.Lerp(m_emoteCamBlend, m_emoteView && !downed ? 1f : 0f, Damp(m_emoteCamLerpSpeed));
 
         if (!m_emoteView && m_emoteCamBlend < 0.01f)
         {
@@ -424,7 +436,8 @@ public class PlayerLook : MonoBehaviour
         // 좌우 각은 쓰러진 동안(m_downYaw)과 감정표현 중(m_emoteYaw) 각각 쓰이며 동시에 켜지지 않는다.
         Vector3 euler = new Vector3(m_pitch, m_downYaw + m_emoteYaw * m_emoteCamBlend, 0f);
 
-        if (m_shakeIntensity > 0.001f)
+        // 설정에서 끌 수 있다 — 꺼도 손 떨림(PlayerHandView)은 남는다. (#665)
+        if (GameSettings.ScreenShake && m_shakeIntensity > 0.001f)
         {
             EvaluateShake(out Vector3 shakeEuler, out Vector3 shakeOffset);
             localPos += shakeOffset;

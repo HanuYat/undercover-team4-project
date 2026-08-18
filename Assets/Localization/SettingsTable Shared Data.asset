@@ -47,6 +47,22 @@ MonoBehaviour:
     m_Key: Settings.Button.Reset
     m_Metadata:
       m_Items: []
+  - m_Id: 6994200000008
+    m_Key: Settings.Label.LookSmoothing
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000009
+    m_Key: Settings.Label.Fov
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000010
+    m_Key: Settings.Label.ScreenShake
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000011
+    m_Key: Settings.Label.SpeedVignette
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

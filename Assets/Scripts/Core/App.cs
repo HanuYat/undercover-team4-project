@@ -54,6 +54,7 @@ public class App : Singleton<App>
     private CrosshairUI m_crosshairUI;
     private ChannelingGaugeUI m_channelingGaugeUI;
     private DamageVignetteUI m_damageVignetteUI;
+    private SpeedVignetteUI m_speedVignetteUI;
     private TaserShockUI m_taserShockUI;
     private ToastView m_toastView;
     private SignalMessageView m_signalMessageView;
@@ -229,6 +230,7 @@ public class App : Singleton<App>
         public static CrosshairUI Crosshair => Instance.m_crosshairUI;
         public static ChannelingGaugeUI Gauge => Instance.m_channelingGaugeUI;
         public static DamageVignetteUI DamageVignette => Instance.m_damageVignetteUI; // 피격 비네트·방향 아크·저체력 글리치 (#476)
+        public static SpeedVignetteUI SpeedVignette => Instance.m_speedVignetteUI; // 이동 속도 비네트 — 멀미 완화 (#665)
         public static TaserShockUI TaserShock => Instance.m_taserShockUI; // 감전 화면 지직 (#477)
         public static ToastView Toast => Instance.m_toastView;
         public static SignalMessageView SignalMessage => Instance.m_signalMessageView;

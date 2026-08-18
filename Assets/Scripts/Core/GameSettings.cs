@@ -5,34 +5,71 @@ using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
 
 /// <summary>
-/// 로컬 게임 설정(마우스 감도 · 음량 · 마이크 · 언어) 저장소. (#225, #430, #374)
+/// 로컬 게임 설정(마우스 감도 · 시점 스무딩 · 시야각 · 화면 흔들림 · 속도 비네트 · 음량 · 마이크 · 언어) 저장소.
+/// (#225, #430, #374, #665)
 /// 설계 정본: docs/design/settings-ui.md · 언어는 docs/design/localization.md
 /// </summary>
 public static class GameSettings
 {
     // PlayerPrefs 키 — 점 계층 접두사로 묶는다 (AuthBootstrap의 "player.nickname." 관례).
     // 값은 저장소에 남는 식별자라 배포 후 변경 금지 — 바꾸면 기존 저장값을 못 읽는다.
-    private const string k_mouseSensitivityKey = "settings.mouseSensitivity";
+    // ⚠ 뒤에 v2가 붙은 이유 — 감도 밑값이 바뀌어(1 → 0.08) 예전에 저장된 배율이 그대로 살면
+    // 전혀 다른 속도가 된다. 키를 갈아 옛 값을 버리고 기본값에서 다시 시작하게 한다. (#665)
+    private const string k_mouseSensitivityKey = "settings.mouseSensitivity.v2";
+    private const string k_lookSmoothingKey = "settings.lookSmoothing";
+    private const string k_fovKey = "settings.fov";
+    private const string k_screenShakeKey = "settings.screenShake";
+    private const string k_speedVignetteKey = "settings.speedVignette";
     private const string k_masterVolumeKey = "settings.masterVolume";
     private const string k_voiceVolumeKey = "settings.voiceVolume";
     private const string k_micMutedKey = "settings.micMuted";
 
-    // 감도는 '배율'이다 — 프리팹의 기준 감도에 곱한다 (PlayerMovement.HandleLook).
+    // 감도는 '배율'이다 — 프리팹의 기준 감도에 곱한다 (PlayerLook.HandleLook).
     // 슬라이더 min/max도 이 상수로 맞춰 인스펙터 값과 어긋나지 않게 한다.
-    public const float k_minMouseSensitivity = 0.2f;
+    //
+    // 밑값을 프리팹에서 1 → 0.08로 내렸다 (#665) — 배율 최저(0.2)에서도 화면이 빨랐다.
+    // 그래서 여기 배율은 x1.00이 기본으로 읽히게 되돌린다: 실제 감도는 밑값이 정하고,
+    // 이 슬라이더는 '기본보다 몇 배'만 고른다.
+    public const float k_minMouseSensitivity = 0.25f;
     public const float k_maxMouseSensitivity = 3f;
 
+    // 스무딩은 강도(0~1)로 내보낸다 — 실제로 쓰는 계수는 클수록 덜 부드러워서 슬라이더로 두면
+    // 방향이 거꾸로 읽힌다. 0이면 스무딩 없음. (#665)
+    public const float k_minLookSmoothing = 0f;
+    public const float k_maxLookSmoothing = 1f;
+
+    // 강도를 옮겨 담을 계수 구간 — 10이 가장 부드럽고 늦게 붙는 쪽, 60이 거의 즉시 붙는 쪽이다.
+    private const float k_slowestLookRate = 10f;
+    private const float k_fastestLookRate = 60f;
+
     private const float k_defaultMouseSensitivity = 1f;
+
+    // 계수로 40 — 예전 값 20은 마우스를 멈춘 뒤에도 화면이 더 도는 게 느껴졌다 (#665).
+    private const float k_defaultLookSmoothing = 0.4f;
+
+    // 시야각은 Unity 관례대로 세로 기준이다 (Camera.fieldOfView). 16:9에서 세로 70 ≈ 가로 104도.
+    // 좁을수록 멀미가 심해진다 — 하한은 예전 프리팹 값(60)에 맞췄다. (#665)
+    public const float k_minFov = 60f;
+    public const float k_maxFov = 100f;
+
+    private const float k_defaultFov = 70f;
+    private const bool k_defaultScreenShake = true;
+    private const bool k_defaultSpeedVignette = true;
+
     private const float k_defaultMasterVolume = 1f;
     private const float k_defaultVoiceVolume = 1f;
     private const bool k_defaultMicMuted = false;
 
     private static float s_mouseSensitivity = k_defaultMouseSensitivity; // 백킹 필드
+    private static float s_lookSmoothing = k_defaultLookSmoothing;
+    private static float s_fov = k_defaultFov;
+    private static bool s_screenShake = k_defaultScreenShake;
+    private static bool s_speedVignette = k_defaultSpeedVignette;
     private static float s_masterVolume = k_defaultMasterVolume;
     private static float s_voiceVolume = k_defaultVoiceVolume;
     private static bool s_micMuted = k_defaultMicMuted;
 
-    /// <summary>마우스 감도 배율 (0.2~3.0). 프리팹 기준 감도에 곱해진다.</summary>
+    /// <summary>마우스 감도 배율 (0.25~3.0, 기본 1.0). 프리팹 기준 감도에 곱해진다.</summary>
     public static float MouseSensitivity
     {
         get => s_mouseSensitivity;
@@ -40,6 +77,71 @@ public static class GameSettings
         {
             s_mouseSensitivity = Mathf.Clamp(value, k_minMouseSensitivity, k_maxMouseSensitivity);
             PlayerPrefs.SetFloat(k_mouseSensitivityKey, s_mouseSensitivity);
+        }
+    }
+
+    /// <summary>
+    /// 시점 스무딩 강도 (0~1). 0이면 마우스 입력을 그대로 쓰고, 올릴수록 부드러운 대신 늦게 따라온다.
+    /// 감도와 달리 배율이 아니라 값 자체다 — 프리팹마다 다를 이유가 없는 취향값이다. (#665)
+    /// </summary>
+    public static float LookSmoothing
+    {
+        get => s_lookSmoothing;
+        set
+        {
+            s_lookSmoothing = Mathf.Clamp(value, k_minLookSmoothing, k_maxLookSmoothing);
+            PlayerPrefs.SetFloat(k_lookSmoothingKey, s_lookSmoothing);
+        }
+    }
+
+    /// <summary>
+    /// <see cref="LookSmoothing"/>을 <see cref="PlayerLook"/>이 쓰는 계수로 바꾼 값. 0이면 스무딩 없음.
+    /// 강도와 방향이 반대다 — 강도를 올리면 계수는 내려간다. (#665)
+    /// </summary>
+    public static float LookSmoothingRate =>
+        s_lookSmoothing <= 0.001f
+            ? 0f
+            : Mathf.Lerp(k_fastestLookRate, k_slowestLookRate, s_lookSmoothing);
+
+    /// <summary>
+    /// 시야각(세로, 도). <see cref="PlayerLook"/>이 카메라에 넣는다. (#665)
+    /// 1인칭 팔은 뷰모델 전용 카메라가 따로 그리므로(#265) 여기를 올려도 손 크기는 그대로다.
+    /// </summary>
+    public static float Fov
+    {
+        get => s_fov;
+        set
+        {
+            s_fov = Mathf.Clamp(value, k_minFov, k_maxFov);
+            PlayerPrefs.SetFloat(k_fovKey, s_fov);
+        }
+    }
+
+    /// <summary>
+    /// 카메라를 흔들 것인가. 꺼도 손 떨림(<see cref="PlayerHandView"/>)은 남는다 —
+    /// "감전됐다"는 정보는 두고 멀미가 나는 화면 흔들림만 뺀다. (#665)
+    /// </summary>
+    public static bool ScreenShake
+    {
+        get => s_screenShake;
+        set
+        {
+            s_screenShake = value;
+            PlayerPrefs.SetInt(k_screenShakeKey, s_screenShake ? 1 : 0);
+        }
+    }
+
+    /// <summary>
+    /// 빠르게 움직일 때 화면 가장자리를 좁힐 것인가 — 멀미를 줄이지만 시야도 함께 줄어든다.
+    /// 켜고 끄는 것이 전제인 연출이라 설정에 낸다. (<see cref="SpeedVignetteUI"/>, #665)
+    /// </summary>
+    public static bool SpeedVignette
+    {
+        get => s_speedVignette;
+        set
+        {
+            s_speedVignette = value;
+            PlayerPrefs.SetInt(k_speedVignetteKey, s_speedVignette ? 1 : 0);
         }
     }
 
@@ -124,7 +226,7 @@ public static class GameSettings
     }
 
     /// <summary>
-    /// 저장된 값을 읽어 적용한다. 플레이 시작마다 자동 실행 — 네 필드를 무조건 덮어쓰므로
+    /// 저장된 값을 읽어 적용한다. 플레이 시작마다 자동 실행 — 언어 외 전부를 무조건 덮어쓰므로
     /// 도메인 리로드를 꺼도 이전 플레이 값이 남지 않는다 (App·AppBootstrap과 같은 방침).
     ///
     /// 언어는 여기서 건드리지 않는다 — <see cref="PlayerPrefLocaleSelector"/>가 Localization 초기화
@@ -138,13 +240,17 @@ public static class GameSettings
         OnMicMutedChanged = null;
 
         MouseSensitivity = PlayerPrefs.GetFloat(k_mouseSensitivityKey, k_defaultMouseSensitivity);
+        LookSmoothing = PlayerPrefs.GetFloat(k_lookSmoothingKey, k_defaultLookSmoothing);
+        Fov = PlayerPrefs.GetFloat(k_fovKey, k_defaultFov);
+        ScreenShake = PlayerPrefs.GetInt(k_screenShakeKey, k_defaultScreenShake ? 1 : 0) != 0;
+        SpeedVignette = PlayerPrefs.GetInt(k_speedVignetteKey, k_defaultSpeedVignette ? 1 : 0) != 0;
         MasterVolume = PlayerPrefs.GetFloat(k_masterVolumeKey, k_defaultMasterVolume);
         VoiceVolume = PlayerPrefs.GetFloat(k_voiceVolumeKey, k_defaultVoiceVolume);
         MicMuted = PlayerPrefs.GetInt(k_micMutedKey, k_defaultMicMuted ? 1 : 0) != 0;
     }
 
     /// <summary>
-    /// 네 값을 기본값으로 되돌린다 — 설정 창의 [기본값 복원].
+    /// 언어를 뺀 전부를 기본값으로 되돌린다 — 설정 창의 [기본값 복원].
     /// <b>언어는 포함하지 않는다</b> — 되돌릴 '기본 언어'가 시스템 로케일이라, 한국어로 쓰던 사람이
     /// 이 버튼을 누르면 메뉴 언어가 통째로 바뀐다. 감도·볼륨을 되돌리려다 화면을 못 읽게 되는 쪽이
     /// 잘못 조절한 값보다 나쁘고, 언어는 바로 위 드롭다운에서 되돌릴 수 있다. (#374)
@@ -152,6 +258,10 @@ public static class GameSettings
     public static void ResetToDefaults()
     {
         MouseSensitivity = k_defaultMouseSensitivity;
+        LookSmoothing = k_defaultLookSmoothing;
+        Fov = k_defaultFov;
+        ScreenShake = k_defaultScreenShake;
+        SpeedVignette = k_defaultSpeedVignette;
         MasterVolume = k_defaultMasterVolume;
         VoiceVolume = k_defaultVoiceVolume;
         MicMuted = k_defaultMicMuted;
