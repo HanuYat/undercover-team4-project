@@ -154,6 +154,9 @@ public class WeatherSkyRig : MonoBehaviour
     // 막힌 자리에서 물러설 거리(m) — 그 콜라이더 안에서 하늘 검사를 시작하지 않게 한다.
     private const float k_windowSurfaceBackoff = 0.5f;
 
+    // 다시 보일 때 앞당겨 굴릴 시간(초) — 방출 높이에서 눈이 내려오는 데 걸리는 만큼.
+    private const float k_refillPrewarmSeconds = 1.5f;
+
     // 창밖으로 확정된 지점 — m_placement가 BeyondWindow일 때만 유효하다.
     private Vector3 m_windowPoint;
 
@@ -198,10 +201,21 @@ public class WeatherSkyRig : MonoBehaviour
                 ? target
                 : Mathf.MoveTowards(m_shelterFactor, target, Time.deltaTime / m_shelterFadeSeconds);
 
-        // 방출을 막아도 이미 떠 있던 입자는 남으므로, 방출 지점이 순간이동하는 전환에서는 지운다 —
-        // 완전히 가려지는 순간(#734)과 배치가 바뀌는 순간(#733)이다. 안 지우면 남은 입자가 새 자리로 끌려간다.
+        // 완전히 가려지는 순간에만 지운다 (#734) — 방출을 막아도 떠 있던 입자는 남고, Local 공간이라
+        // 앵커를 따라 카메라에 실려 다닌다.
         bool justFullySheltered = previousFactor > 0f && m_shelterFactor <= 0f;
-        bool clearParticles = justFullySheltered || previousPlacement != m_placement;
+
+        // 다시 보이기 시작하거나 방출 지점이 <b>멀리 튀는</b> 전환 — 지우고 이미 내리던 상태로 채워 넣는다.
+        //
+        // ⚠ 배치가 바뀔 때마다 지우면 안 된다. 기둥을 스쳐 보면 AheadOfView↔AtView가 왔다갔다 하는데,
+        // 그때마다 비우면 새 입자가 방출 높이에서 내려올 때까지 눈이 없어 <b>"돌리면 눈이 늦게 온다"</b>가
+        // 된다. 그 둘은 앵커가 3m 옮겨질 뿐이라 Local 입자가 살짝 밀리는 것으로 충분하다.
+        // 창 너머 모드는 다르다: 앵커가 창밖으로 튀고 시뮬레이션 공간까지 갈리므로 남은 입자가 튄다.
+        bool windowModeChanged =
+            (previousPlacement == EPrecipitationPlacement.BeyondWindow)
+            != (m_placement == EPrecipitationPlacement.BeyondWindow);
+        bool justExposed = previousFactor <= 0f && m_shelterFactor > 0f;
+        bool refill = !justFullySheltered && (windowModeChanged || justExposed);
 
         for (int i = 0; i < m_precipitationSystems.Count; i++)
         {
@@ -219,8 +233,16 @@ public class WeatherSkyRig : MonoBehaviour
                 ? ParticleSystemSimulationSpace.World
                 : m_precipitationBaseSpaces[i];
 
-            if (clearParticles)
+            if (justFullySheltered)
+            {
                 ps.Clear(withChildren: true);
+            }
+            else if (refill)
+            {
+                // 앞당겨 굴려 놓는다 — 방출 높이에서 내려오는 시간을 기다리지 않고 처음부터 차 있게 보인다
+                ps.Simulate(k_refillPrewarmSeconds, withChildren: true, restart: true);
+                ps.Play(withChildren: true);
+            }
         }
     }
 
