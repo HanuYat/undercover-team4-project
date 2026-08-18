@@ -569,7 +569,6 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_authority: 0
   m_sendEveryFixedSteps: 2
-  m_logStream: 1
   m_interpolationDelay: 0.08
 --- !u!1001 &2229125471116794606
 PrefabInstance:

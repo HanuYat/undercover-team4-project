@@ -62,19 +62,11 @@ public class RagdollPoseStreamer : NetworkBehaviour
 
     [Header("송신")]
     [Tooltip("몇 번의 물리 스텝마다 한 번 보내는가 — 50Hz 기준 2면 25Hz, 4면 12.5Hz.\n\n" +
-             "<b>대역폭의 유일한 1차 손잡이다</b>(계획서 §1-6). 시체 1구당 원격 1인 기준 약 " +
-             "2.1KB/s(25Hz)이고, 서버 업링크는 여기에 <b>동시 시체 수 × 원격 수</b>가 곱해진다. " +
-             "예산이 빠듯하면 여기부터 올린다 — 잃는 것은 보간 지연뿐이고 정착 자세는 그대로다")]
+             "<b>대역폭의 유일한 1차 손잡이다</b>(계획서 §1-6). 실측으로 시체 1구당 원격 1인 기준 " +
+             "<b>1.5KB/s</b>(25Hz · 페이로드 62B)이고, 서버 업링크는 여기에 <b>동시 시체 수 × 원격 " +
+             "수</b>가 곱해진다. 예산이 빠듯하면 여기부터 올린다 — 잃는 것은 보간 지연뿐이고 " +
+             "정착 자세는 그대로다")]
     [SerializeField] private int m_sendEveryFixedSteps = 2;
-
-    [Header("진단")]
-    [Tooltip("자세 스트림의 송·수신을 콘솔에 남긴다 — <b>손실인지 애초에 안 오는지를 가르는 계측이다.</b>\n\n" +
-             "· [송신] 권위 피어가 초당 몇 개를 쐈는가\n" +
-             "· [수신] 원격이 초당 몇 개를 받았는가 + <b>결손</b>(시퀀스 구멍 = 진짜 패킷 손실) + " +
-             "<b>역순</b>(늦게 도착해 버린 것)\n" +
-             "· [대기] 래그돌인데 <b>한 개도 안 온다</b> — 손실이 아니라 배선·권위 문제다\n\n" +
-             "⚠ 한 샘플이 한 줄이다(여러 줄로 쓰면 MPPM 로그에서 잘린다). 확정되면 끈다")]
-    [SerializeField] private bool m_logStream;
 
     [Header("수신")]
     [Tooltip("원격이 얼마나 뒤처진 시점을 그리는가(초) — 송신 주기의 2배가 기본값이다.\n\n" +
@@ -90,7 +82,9 @@ public class RagdollPoseStreamer : NetworkBehaviour
     private bool m_streaming;
     private ushort m_sequence;
     private int m_stepsSinceSend;
-    private Quaternion[] m_sendBuffer; // 매 스텝 새로 할당할 이유가 없다
+    private Quaternion[] m_sendBuffer;  // 캐처용 — 매 스텝 새로 할당할 이유가 없다
+    private uint[] m_packedBuffer;      // 실제로 선에 실리는 것 — 쿼터니언당 4바이트
+    private Quaternion[] m_unpackBuffer; // 수신 쪽 — 푸는 자리
 
     // ---- 수신 상태 (원격) ----
 
@@ -108,24 +102,13 @@ public class RagdollPoseStreamer : NetworkBehaviour
 
     private Quaternion[] m_applyBuffer; // 두 스냅샷을 섞어 담는 자리
 
-    // ---- 진단 (m_logStream) ----
+    // ---- 국면 추적 ----
     //
-    // <b>이 셋이 서로 다른 고장을 가리킨다.</b> 결손은 진짜 패킷 손실이고, 역순은 언리라이어블의
-    // 정상적인 재정렬이며, "대기"는 손실이 아니라 <b>배선이 끊긴 것</b>이다 — 원격이 래그돌에
-    // 들어갔는데 한 개도 못 받으면 손실률을 말할 수 없다(분모가 0이다).
+    // <b>둘을 가르는 이유는 <see cref="IsAwaitingFirstPose"/>에 적혀 있다</b> — "아직 안 왔다"와
+    // "다 받고 끝났다"를 하나로 물으면 정착 자세가 진입 자세로 덮인다.
     private bool m_expectingStream; // 전 피어 — 지금 자세가 흘러야 하는 국면인가
-    private bool m_hasReceivedPose; // 원격 — 이번 국면에 한 개라도 받았는가 (IsAwaitingFirstPose)
-    private int m_sentTotal;
-    private int m_receivedTotal;
-    private int m_lostTotal;    // 시퀀스 구멍 — 손실
-    private int m_staleTotal;   // 옛 패킷이 늦게 와서 버린 것 — 재정렬
-    private int m_appliedTotal; // 실제로 뼈에 입힌 프레임 수
-    private int m_sentWindow;
-    private int m_receivedWindow;
-    private int m_appliedWindow;
-    private float m_logTimer;
-    private float m_lastReceiveTime = -1f;
-    private bool m_loggedSpawn;
+    private bool m_hasReceivedPose;    // 원격 — 이번 국면에 한 개라도 받았는가
+    private bool m_warnedBoneMismatch; // 배선 불일치 경고를 한 번만 내기 위해
 
     private struct Snapshot
     {
@@ -227,16 +210,12 @@ public class RagdollPoseStreamer : NetworkBehaviour
         // 말할 수 없다(분모가 0이다). 실제 송신은 아래 권위 게이트가 막는다.
         m_expectingStream = true;
         m_hasReceivedPose = false; // 새 국면 — 이번 무너짐의 첫 패킷을 다시 기다린다
-        LogSpawnOnce();
 
         if (!IsPoseAuthority)
             return;
 
         m_streaming = true;
         m_stepsSinceSend = 0;
-
-        if (m_logStream)
-            Debug.Log($"[자세스트림] {name} 송신 시작 (뼈={m_rig.BoneCount} 주기={m_sendEveryFixedSteps}스텝)", this);
     }
 
     /// <summary>
@@ -258,15 +237,12 @@ public class RagdollPoseStreamer : NetworkBehaviour
         m_streaming = false;
         m_expectingStream = false;
 
-        if (m_logStream)
-            Debug.Log($"[자세스트림] {name} 송신 종료 — 정착 자세 1회 발사 (총송신={m_sentTotal})", this);
-
         if (!IsSpawned || m_rig == null || !m_rig.IsValid)
             return;
 
         EnsureSendBuffer();
         if (m_rig.CaptureLocalPose(m_sendBuffer, out Vector3 hipsLocal))
-            FinalPoseRpc(hipsLocal, m_sendBuffer);
+            FinalPoseRpc(hipsLocal, Pack(m_sendBuffer));
     }
 
     /// <summary>
@@ -282,15 +258,6 @@ public class RagdollPoseStreamer : NetworkBehaviour
     /// </summary>
     public void StopStreaming()
     {
-        if (m_logStream && (m_streaming || m_streamDriven || m_expectingStream))
-        {
-            Debug.Log(
-                $"[자세스트림] {name} 중단(기상) — 총송신={m_sentTotal} 총수신={m_receivedTotal} "
-                    + $"결손={m_lostTotal} 역순={m_staleTotal}",
-                this
-            );
-        }
-
         m_streaming = false;
         m_expectingStream = false;
 
@@ -327,17 +294,52 @@ public class RagdollPoseStreamer : NetworkBehaviour
             return;
 
         m_sequence = unchecked((ushort)(m_sequence + 1));
-        StreamPoseRpc(m_sequence, m_rig.Hips.position, m_sendBuffer);
+        StreamPoseRpc(m_sequence, m_rig.Hips.position, Pack(m_sendBuffer));
 
-        m_sentTotal++;
-        m_sentWindow++;
     }
 
     private void EnsureSendBuffer()
     {
         if (m_sendBuffer == null || m_sendBuffer.Length != m_rig.BoneCount)
             m_sendBuffer = new Quaternion[m_rig.BoneCount];
+
+        if (m_packedBuffer == null || m_packedBuffer.Length != m_rig.BoneCount)
+            m_packedBuffer = new uint[m_rig.BoneCount];
     }
+
+    // ---- 압축 ----
+    //
+    // <b>쿼터니언 하나를 16B → 4B로 줄인다</b>(smallest-three). NGO가 자기
+    // <c>NetworkTransform</c>에 쓰는 것과 <b>같은</b> 유틸리티라 직접 짜지 않았다.
+    //
+    // 오차는 성분당 10비트라 약 0.1°다 — 무너지는 시체에서 보이는 크기가 아니고,
+    // 정착 자세도 같은 압축을 쓴다(둘을 가르면 마지막 스트림과 정착 사이에
+    // 그 0.1°만큼 튀는 이음샐이 생긴다).
+    private uint[] Pack(Quaternion[] rotations)
+    {
+        for (int i = 0; i < rotations.Length; i++)
+        {
+            Quaternion rotation = rotations[i];
+            m_packedBuffer[i] = QuaternionCompressor.CompressQuaternion(ref rotation);
+        }
+
+        return m_packedBuffer;
+    }
+
+    // 푸는 자리 — 버퍼를 돌려주므로 호출부는 <b>바로 써야 한다</b>(다음 패킷이 덮어쓴다).
+    private Quaternion[] Unpack(uint[] packed)
+    {
+        if (m_unpackBuffer == null || m_unpackBuffer.Length != packed.Length)
+            m_unpackBuffer = new Quaternion[packed.Length];
+
+        for (int i = 0; i < packed.Length; i++)
+            QuaternionCompressor.DecompressQuaternion(ref m_unpackBuffer[i], packed[i]);
+
+        return m_unpackBuffer;
+    }
+
+
+
 
     // ---- 수신 (원격) ----
 
@@ -354,49 +356,40 @@ public class RagdollPoseStreamer : NetworkBehaviour
     /// 감싸는 것이고, 호출부는 바뀌지 않는다.
     /// </summary>
     [Rpc(SendTo.NotMe, Delivery = RpcDelivery.Unreliable)]
-    private void StreamPoseRpc(ushort sequence, Vector3 hipsWorld, Quaternion[] rotations)
+    private void StreamPoseRpc(ushort sequence, Vector3 hipsWorld, uint[] packed)
     {
-        if (m_rig == null || !m_rig.IsValid || rotations == null)
+        if (m_rig == null || !m_rig.IsValid || packed == null)
             return;
 
-        if (rotations.Length != m_rig.BoneCount)
+        if (packed.Length != m_rig.BoneCount)
         {
-            // 조용히 넘기면 "안 온다"와 구분이 안 된다 — 이건 손실이 아니라 배선 불일치다.
-            if (m_logStream)
-                Debug.LogWarning($"[자세스트림] {name} 뼈 수 불일치 — 받은={rotations.Length} 내리그={m_rig.BoneCount}", this);
+            // ⚠ <b>조용히 넘기지 않는다.</b> 자세가 안 오는 것과 화면상 증상이 같아지므로
+            // 배선이 어긋난 것임을 말해 줘야 한다. 매 패킷 터지므로 <b>한 번만</b> 낸다.
+            if (!m_warnedBoneMismatch)
+            {
+                m_warnedBoneMismatch = true;
+                Debug.LogWarning(
+                    $"RagdollPoseStreamer: 뼈 수가 달라 자세를 버린다 — {name} "
+                        + $"받은={packed.Length} 내리그={m_rig.BoneCount}. 피어마다 리그가 다른 프리팩이다",
+                    this
+                );
+            }
+
             return;
         }
 
-        m_receivedTotal++;
-        m_receivedWindow++;
         m_hasReceivedPose = true;
-        m_lastReceiveTime = Time.time;
 
         // ⚠ 옛 패킷을 버린다. 언리라이어블은 순서를 보장하지 않으므로, 이 검사가 없으면 시체가
         // 이따금 한 스냅샷 뒤로 튄다.
         if (m_haveSequence && !IsNewer(sequence, m_newestSequence))
-        {
-            m_staleTotal++;
             return;
-        }
-
-        if (m_haveSequence)
-        {
-            // 시퀀스 구멍이 곧 <b>손실</b>이다 — 역순(위)과 다른 현상이라 따로 센다.
-            int gap = unchecked((ushort)(sequence - m_newestSequence)) - 1;
-            if (gap > 0)
-                m_lostTotal += gap;
-        }
-        else if (m_logStream)
-        {
-            Debug.Log($"[자세스트림] {name} 첫 수신 seq={sequence} — 배선 정상", this);
-        }
 
         m_newestSequence = sequence;
         m_haveSequence = true;
         m_streamDriven = true;
 
-        PushSnapshot(hipsWorld, rotations);
+        PushSnapshot(hipsWorld, Unpack(packed));
     }
 
     /// <summary>
@@ -408,22 +401,13 @@ public class RagdollPoseStreamer : NetworkBehaviour
     /// 계획서 6단계에서 닫는다(권위 피어가 마지막 자세를 캐시했다가 새 접속자에게만 다시 쏜다).
     /// </summary>
     [Rpc(SendTo.NotMe)]
-    private void FinalPoseRpc(Vector3 hipsLocal, Quaternion[] rotations)
+    private void FinalPoseRpc(Vector3 hipsLocal, uint[] packed)
     {
-        if (m_rig == null || !m_rig.IsValid || rotations == null)
+        if (m_rig == null || !m_rig.IsValid || packed == null)
             return;
 
-        if (rotations.Length != m_rig.BoneCount)
+        if (packed.Length != m_rig.BoneCount)
             return;
-
-        if (m_logStream)
-        {
-            Debug.Log(
-                $"[자세스트림] {name} 정착 자세 수신 — 재생 종료. 총수신={m_receivedTotal} "
-                    + $"결손={m_lostTotal} 역순={m_staleTotal} 입힌프레임={m_appliedTotal}",
-                this
-            );
-        }
 
         // 재생 중이던 보간을 통째로 버린다 — 이 자세가 확정이라 섞을 것이 없다.
         //
@@ -436,7 +420,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
         m_expectingStream = false;
         m_hasReceivedPose = true;
 
-        m_rig.ApplyLocalPose(rotations, hipsLocal);
+        m_rig.ApplyLocalPose(Unpack(packed), hipsLocal);
 
         // <b>자세를 입힌 뒤에 알린다</b> — 구독자가 이 자세를 얼리므로, 먼저 알리면 직전(스트림)
         // 자세가 굳는다.
@@ -492,90 +476,13 @@ public class RagdollPoseStreamer : NetworkBehaviour
     // 렌더 주기에 맞춰 그려야 부드럽다.
     private void Update()
     {
-        TickLog();
-
         if (!m_streamDriven || IsPoseAuthority)
             return;
 
         TickApply();
-        m_appliedTotal++;
-        m_appliedWindow++;
     }
 
-    // 1초에 한 줄 — <b>한 샘플이 한 줄이다</b>(여러 줄로 쓰면 MPPM 로그에서 잘린다).
-    //
-    // 세 줄로 갈리는 것이 이 계측의 전부다:
-    //  · [송신] 권위가 쏘고 있는가 — 여기가 0이면 원격을 볼 필요가 없다
-    //  · [수신] 오고 있는가, 그중 얼마가 새는가(결손)
-    //  · [대기] 래그돌인데 <b>한 개도 안 왔다</b> — 손실이 아니라 배선이 끊긴 것이다
-    private void TickLog()
-    {
-        if (!m_logStream)
-            return;
 
-        if (!m_streaming && !m_streamDriven && !m_expectingStream)
-            return;
-
-        m_logTimer += Time.deltaTime;
-        if (m_logTimer < 1f)
-            return;
-
-        m_logTimer = 0f;
-
-        if (IsPoseAuthority)
-        {
-            Debug.Log(
-                $"[자세스트림 송신] {name} 초당={m_sentWindow} seq={m_sequence} 총={m_sentTotal}",
-                this
-            );
-        }
-        else if (m_receivedTotal == 0)
-        {
-            // ⚠ <b>손실이 아니다.</b> 한 개도 안 왔으면 분모가 0이라 손실률을 말할 수 없다 —
-            // RPC가 안 나갔거나, 라우팅이 안 되거나, 권위 설정이 어긋난 것이다.
-            Debug.LogWarning(
-                $"[자세스트림 대기] {name} 래그돌인데 한 개도 못 받았다 — "
-                    + $"스폰={IsSpawned} 서버={IsServer} 오너={IsOwner} 설정={m_authority} 뼈={m_rig.BoneCount}",
-                this
-            );
-        }
-        else
-        {
-            float since = m_lastReceiveTime >= 0f ? Time.time - m_lastReceiveTime : -1f;
-            Debug.Log(
-                $"[자세스트림 수신] {name} 초당={m_receivedWindow} 결손={m_lostTotal} 역순={m_staleTotal} "
-                    + $"버퍼={m_snapshotCount} 재생={m_appliedWindow}/초 마지막수신={since:F2}초전 총={m_receivedTotal}",
-                this
-            );
-        }
-
-        m_sentWindow = 0;
-        m_receivedWindow = 0;
-        m_appliedWindow = 0;
-    }
-
-    // 첫 진입에 한 번 — 권위 배선이 의도대로 풀렸는지. 여기가 틀리면 나머지 계측이 전부 무의미하다.
-    private void LogSpawnOnce()
-    {
-        if (!m_logStream || m_loggedSpawn)
-            return;
-
-        m_loggedSpawn = true;
-
-        // ⚠ 스폰 전에는 IsServer·IsOwner를 묻지 않는다 — NetworkManager가 없는 오프라인 Play에서
-        // 그 프로퍼티들이 안전하지 않다. 그 경우 권위는 정의상 자기 자신이다.
-        if (!IsSpawned)
-        {
-            Debug.Log($"[자세스트림] {name} 진입 — 세션 아님(오프라인) 뼈={m_rig.BoneCount}", this);
-            return;
-        }
-
-        Debug.Log(
-            $"[자세스트림] {name} 진입 — 권위={IsPoseAuthority} 설정={m_authority} "
-                + $"서버={IsServer} 오너={IsOwner} 뼈={m_rig.BoneCount}",
-            this
-        );
-    }
 
     // 재생 시점을 <see cref="m_interpolationDelay"/>만큼 뒤로 물려 두 스냅샷 사이를 섞는다.
     //
