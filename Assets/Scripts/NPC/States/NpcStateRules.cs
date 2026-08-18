@@ -65,6 +65,12 @@ public static class NpcStateRules
         && npc.CurrentState != NpcState.Dead
         && (npc.Penalty.IsUndercoverDuty || CanBeDamaged(npc.CurrentState));
 
+    /// <summary>환경 피해(차량·폭발 등)가 들어가는 상태인가 — <see cref="CanBeDamaged"/>와 다른 게이트다 (#690).
+    /// 그쪽은 신병 빼내기 우회를 막으려 연행 중을 제외하지만, 차·폭발은 신병 상태를 가리지 않는다.
+    /// 여기는 죽은 대상만 막는다.</summary>
+    public static bool CanTakeEnvironmentalDamage(NpcController npc) =>
+        npc != null && npc.CurrentState != NpcState.Dead;
+
     /// <summary>이 NPC를 지금 밧줄로 묶을 수 있는가 — 상태 규칙에 <b>소매치기 예외</b>를 얹은 정본. (#303)
     /// Chasing이라 상태만 보면 막히지만, 접근 중에 무력화했으면 잡을 수 있어야 한다. 오검거·납치는 그대로 막힌다.</summary>
     public static bool CanArrest(NpcController npc) =>
