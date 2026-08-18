@@ -22,11 +22,9 @@ public class NpcResistState : NpcStateBase
     private static int s_hitLayers; // 0 = 아직 조회 전
 
     /// <summary>
-    /// 타격 판정에 쓰는 레이어 마스크 — 래그돌 본을 뺀 전 레이어. (#692)
-    ///
-    /// ⚠ <b>필드 초기화로 못 만든다.</b> <see cref="LayerMask.NameToLayer"/>는 생성자·필드 초기화에서
-    /// 호출이 금지돼 있어(= static 생성자가 그 시점에 걸리는 경우 포함) 예외가 난다. 그래서 첫 사용
-    /// 시점에 늦게 조회한다 — <see cref="TrafficVehicle"/>·<see cref="NpcNavAreas.RoadMask"/>와 같은 패턴.
+    /// 타격 판정용 레이어 마스크 — 래그돌 본을 뺀 전 레이어. (#692)
+    /// ⚠ <see cref="LayerMask.NameToLayer"/>는 필드 초기화에서 호출이 금지돼 있어 첫 사용 시점에 늦게
+    /// 조회한다 (<see cref="TrafficVehicle"/>·<see cref="NpcNavAreas.RoadMask"/>와 같은 패턴).
     /// </summary>
     private static int HitLayers
     {
@@ -100,13 +98,8 @@ public class NpcResistState : NpcStateBase
 
         m_noTargetSeconds = 0f;
 
-        // 첫 타격은 대기 없이 연다 (#692). 예전에는 여기서 AttackInterval(1.5초)을 얹었는데, 진입
-        // 시점에 이미 사거리 안이면 그 1.5초 동안 ChaseTarget이 정지 거리 안이라 세우고 FaceTarget만
-        // 도니 "때렸는데 잠깐 쳐다보다가 그제야 덤빈다"로 보였다. 피격 → 저항 전이 자체는 이미
-        // 즉시라(NpcReaction.ServerReactTo) 지연은 오직 이 타이머였다.
-        //
-        // 연타가 빨라지는 변경이 아니다 — 두 번째부터는 스윙 시점에 다시 AttackInterval을 얹는다(Tick).
-        // 사거리 밖에서 진입했으면 기존대로 추격해 사거리에 드는 첫 Tick에 나간다.
+        // 첫 타격은 대기 없이 연다 (#692) — AttackInterval을 얹으면 사거리 안에서 저항에 들어가도
+        // 1.5초를 쳐다보기만 했다. 연타가 빨라지진 않는다: 두 번째부터는 스윙 시점에 다시 얹는다(Tick).
         m_nextAttackTime = Time.time;
 
         m_pendingStrikeTime = k_noPendingStrike; // 직전 저항의 예약이 남아 첫 타격이 앞당겨지지 않게
@@ -144,23 +137,23 @@ public class NpcResistState : NpcStateBase
 
         ChaseTarget(target);
 
-        // 스윙 중에는 <b>몸을 돌리지 않는다</b> (#692). 예전에는 이동만 멈추고 회전은 계속 돌았는데,
-        // AttackTurnSpeed가 540°/s라 가장 짧은 와인드업(0.44초)에도 237°를 돌 수 있어 120° 부채꼴이
-        // 플레이어를 끝까지 따라왔다 — 옆으로 빠지는 회피가 원천적으로 성립하지 않았다.
-        //
-        // #220이 "준비 중 벗어난 플레이어는 빗나가게 한다"고 적어 둔 창은 방향을 잠가야 실제로 열린다.
-        // 잠그는 구간을 스윙 홀드와 같게 두어(ChaseTarget의 조건과 동일) 스윙 동안 발과 몸이 함께 선다 —
-        // 홀드가 타격 프레임(최대 0.73초)보다 길어(0.9초) 판정 시점까지 방향이 확실히 고정된다.
+        // 스윙 중에는 몸을 돌리지 않는다 (#692). 회전이 계속 돌면 540°/s가 120° 부채꼴을 플레이어에
+        // 붙여 놔 옆으로 빠지는 회피가 성립하지 않는다 — #220의 "준비 중 벗어나면 빗나간다"는 방향을
+        // 잠가야 열리는 창이다. 구간은 스윙 홀드와 같다(0.9초 > 타격 프레임 0.73초).
         if (Time.time >= m_swingHoldUntil)
             FaceTarget(target);
 
-        // 주기적 스윙 — 표적이 사거리 안일 때만 휘두른다. 추격 중(사거리 밖)엔 스윙하지 않아
-        // 헛스윙·스윙 중 미끄러짐을 막는다 (#254). 애니메이션을 먼저 발행하고 데미지는 타격 프레임까지
-        // 미뤄, 눈에 보이는 준비 동작과 HP 감소 순간을 맞추고 준비 중 벗어난 플레이어는 빗나가게 한다 (#220)
-        bool targetInRange = target != null
+        // 주기적 스윙 — <b>닿을 수 있을 때만</b> 휘두른다(사거리 안 + 정면 부채꼴 안). 추격 중엔 스윙하지
+        // 않아 헛스윙·미끄러짐을 막고(#254), 애니메이션을 먼저 발행해 데미지는 타격 프레임까지 미룬다 (#220).
+        //
+        // 부채꼴 조건은 등 뒤 피격 때문에 필요하다 (#692) — 첫 타격이 즉시가 되고 방향까지 잠기면서,
+        // 뒤에서 맞은 NPC가 한 프레임분(9°)만 돌고 등을 보인 채 허공을 쳤다. 돌아선 뒤에 휘두르면
+        // 정면은 즉시, 등 뒤는 0.33초 돌고 나간다. 판정과 같은 부채꼴을 쓴다 — 다르면 한쪽이 거짓말이 된다.
+        bool canStrike = target != null
             && (target.position - m_owner.transform.position).sqrMagnitude
-                <= m_config.AttackRange * m_config.AttackRange;
-        if (targetInRange && Time.time >= m_nextAttackTime)
+                <= m_config.AttackRange * m_config.AttackRange
+            && IsInFrontCone(target.position);
+        if (canStrike && Time.time >= m_nextAttackTime)
         {
             m_nextAttackTime = Time.time + m_config.AttackInterval;
             // 변형을 서버에서 뽑아 전 피어에 넘긴다 — 데미지는 그 클립의 타격 오프셋에 맞춰 넣고(아래),
@@ -364,14 +357,11 @@ public class NpcResistState : NpcStateBase
     /// <summary>
     /// 반경 내 PlayerHealth를 중복 없이 s_playerBuffer에 모은다.
     ///
-    /// <b>래그돌 본을 뺀다</b> (#692). 사람 하나가 본만 11개를 들고 있어(플레이어 13 · 시민 12),
-    /// 마스크를 열고 16칸 버퍼로 재면 <b>때리는 자기 몸 12개가 먼저 버퍼를 채워</b> 남는 자리가 4칸이었다 —
-    /// 플레이어 콜라이더가 그 안에 들어갈지는 물리 쿼리 순서에 달린 문제라 사실상 운이었고, 옆에 시민이
-    /// 하나만 있어도 확실히 포화됐다. <see cref="Physics.OverlapSphereNonAlloc"/>은 넘쳐도 <b>잘린 개수만
-    /// 돌려주고 알려주지 않으므로</b> 그대로 조용히 빗나갔다(차량 치임의 #673과 같은 함정).
-    ///
-    /// 어느 콜라이더에 걸려도 GetComponentInParent가 같은 대상으로 올라가므로 판정력은 그대로다 —
-    /// 플레이어는 본을 빼도 Default·Interactable 콜라이더가 남는다.
+    /// <b>래그돌 본을 뺀다</b> (#692). 사람 하나가 본만 11개라(플레이어 13 · 시민 12) 마스크를 열고
+    /// 16칸으로 재면 때리는 자기 몸 12개가 버퍼를 먼저 채워, 플레이어가 남는 4칸에 들어갈지는 운이었다.
+    /// <see cref="Physics.OverlapSphereNonAlloc"/>은 넘쳐도 잘린 개수만 돌려주므로 그대로 조용히 빗나갔다
+    /// (차량 치임 #673과 같은 함정). 어느 콜라이더에 걸려도 GetComponentInParent가 같은 대상으로 올라가
+    /// 판정력은 그대로다.
     /// </summary>
     private void CollectPlayersInRange(float radius)
     {
