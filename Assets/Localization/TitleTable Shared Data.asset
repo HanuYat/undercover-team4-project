@@ -251,6 +251,10 @@ MonoBehaviour:
     m_Key: Title.Session.Status.VersionMismatch
     m_Metadata:
       m_Items: []
+  - m_Id: 5095342092115968
+    m_Key: Title.Session.Status.NoSave
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
