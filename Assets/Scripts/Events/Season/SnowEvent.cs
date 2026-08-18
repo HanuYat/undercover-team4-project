@@ -41,6 +41,17 @@ public class SnowEvent : NetworkBehaviour, ISuddenEvent
     [Min(1f)]
     [SerializeField] private float m_thawSeconds = 45f;
 
+    [Header("실내 차단")]
+    [Tooltip(
+        "머리 위로 이 거리(m) 안에 지붕이 있으면 그 자리에는 빙판이 없다 — 0이면 실내에서도 미끄럽다.\n\n"
+            + "눈 표현(SnowView)의 같은 이름 값과 맞춰 둘 것. 건물 높이보다 넉넉히"
+    )]
+    [Min(0f)]
+    [SerializeField] private float m_shelterProbeHeight = 25f;
+
+    [Tooltip("하늘을 막는 것으로 칠 레이어 — 건물은 Default다")]
+    [SerializeField] private LayerMask m_shelterMask = 1;
+
     // 동기화 플래그 및 서버/오프라인용 진실값
     private readonly NetworkVariable<bool> m_snowSynced = new NetworkVariable<bool>(false);
     private bool m_snow;
@@ -75,6 +86,26 @@ public class SnowEvent : NetworkBehaviour, ISuddenEvent
     /// 시각 표현과 미끄러짐 판정이 같은 값을 읽는다 — 보이는 것과 밟히는 것이 어긋나지 않게.
     /// </summary>
     public float IceRatio => (!IsSpawned || IsServer) ? m_iceRatioLocal : m_iceRatioSynced.Value;
+
+    /// <summary>
+    /// <b>그 자리의</b> 빙판 정도 — 지붕 아래면 0이다. 미끄러짐 판정은 <see cref="IceRatio"/> 대신 이쪽을 쓴다.
+    ///
+    /// 빙판은 하늘에서 내린 눈이 쌓인 것이라 실내 바닥에는 생길 이유가 없다. 눈 표현은 이미 지붕 아래에서
+    /// 그치므로(<see cref="SnowView"/>), 판정만 전역 값을 보면 <b>눈 한 송이 안 오는 실내에서 바닥만 어는</b>
+    /// 상태가 된다 — 보이는 것과 밟히는 것이 어긋난다. (#699)
+    ///
+    /// 실내 판정은 강수·낙뢰와 같은 규칙(<see cref="WeatherShelter"/>)을 쓴다. 두 곳이 다르게 답하면
+    /// "눈은 안 오는데 길은 얼었다"가 된다.
+    /// </summary>
+    /// <param name="position">발밑이 아니라 <b>몸이 있는 높이</b>를 넘길 것 — 바닥에서 쏘면 자기가 선 바닥에 걸린다.</param>
+    public float IceRatioAt(Vector3 position)
+    {
+        float ratio = IceRatio;
+        if (ratio <= 0f)
+            return 0f; // 깔린 빙판이 없으면 실내든 실외든 답이 같다 — 레이를 아낀다
+
+        return WeatherShelter.IsSheltered(position, m_shelterMask, m_shelterProbeHeight) ? 0f : ratio;
+    }
 
     public event Action<bool> OnSnowChanged;
 

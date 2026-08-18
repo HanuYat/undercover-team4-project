@@ -36,6 +36,10 @@ public class PlayerMovement : NetworkBehaviour
     // (격리벽 실측) — 3m/s면 세 프레임 남짓. 왜 필요한지는 IsStablyGrounded 참고.
     private const float k_steepSlideSpeed = 3f;
 
+    // 빙판 실내 판정 레이의 시작 높이(m) — 가슴께. 발밑에서 쏘면 자기가 선 바닥에 걸린다.
+    // (LightningEvent의 같은 상수와 짝) (#699)
+    private const float k_shelterProbeOriginHeight = 1f;
+
     // PlayerAnimationDriver가 속도 정규화에 사용 (실제 속도 ↔ 블렌드 트리 좌표 분리)
     // 실제 이동(HandleMove)도 같은 프로퍼티를 쓴다 — 배율이 걸린 값을 한 곳에서만 내야
     // 애니메이션 블렌드가 실제 속도와 어긋나지 않는다. (#398)
@@ -514,7 +518,12 @@ public class PlayerMovement : NetworkBehaviour
         // 그러면 "오래 내려서 길이 얼었다"가 아니라 "눈 파티클이 보이면 미끄럽다"가 되어, 누적이라는
         // 규칙이 몸으로 읽히지 않는다. 지금은 SnowEvent가 굴리는 누적 비율(IceRatio)로 보간한다:
         // 내리기 시작해도 한동안은 평소와 같고, 그친 뒤에도 녹을 때까지는 미끄럽다.
-        float iceRatio = m_snowEvent != null ? m_snowEvent.IceRatio : 0f;
+        //
+        // 비율은 <b>내가 선 자리</b>로 묻는다 (#699) — 지붕 아래에는 빙판이 없다. 눈 표현은 이미 실내에서
+        // 그치므로 여기서 전역 값을 읽으면 눈이 안 오는 실내에서 바닥만 어는다.
+        float iceRatio = m_snowEvent != null
+            ? m_snowEvent.IceRatioAt(transform.position + Vector3.up * k_shelterProbeOriginHeight)
+            : 0f;
         float currentFriction = Mathf.Lerp(m_defaultFriction, m_snowFriction, iceRatio);
         
         // 방향 전환·정지가 즉각적이지 않도록 현재 속도를 목표 속도로 부드럽게 보간 (관성/미끄러짐 구현)
