@@ -12,10 +12,32 @@ using UnityEngine;
 /// </summary>
 public class NpcResistState : NpcStateBase
 {
-    private const int k_maxOverlapHits = 16;
+    // 폭탄(BombDevice)·차량(TrafficVehicle)과 같은 크기. 16이었을 때 타격이 <b>가끔 빗나갔다</b> (#692) —
+    // 아래 CollectPlayersInRange 주석 참고.
+    private const int k_maxOverlapHits = 64;
 
     // 서버에서만 Tick되므로 버퍼 공유 안전 — 매 타격마다의 할당 방지
     private static readonly Collider[] s_overlapBuffer = new Collider[k_maxOverlapHits];
+
+    private static int s_hitLayers; // 0 = 아직 조회 전
+
+    /// <summary>
+    /// 타격 판정용 레이어 마스크 — 래그돌 본을 뺀 전 레이어. (#692)
+    /// ⚠ <see cref="LayerMask.NameToLayer"/>는 필드 초기화에서 호출이 금지돼 있어 첫 사용 시점에 늦게
+    /// 조회한다 (<see cref="TrafficVehicle"/>·<see cref="NpcNavAreas.RoadMask"/>와 같은 패턴).
+    /// </summary>
+    private static int HitLayers
+    {
+        get
+        {
+            if (s_hitLayers == 0)
+            {
+                int ragdoll = LayerMask.NameToLayer("Ragdoll");
+                s_hitLayers = ragdoll >= 0 ? ~(1 << ragdoll) : ~0; // 레이어가 없으면 전 레이어로 폴백
+            }
+            return s_hitLayers;
+        }
+    }
     private static readonly List<PlayerHealth> s_playerBuffer = new List<PlayerHealth>(8);
 
     private const float k_noPendingStrike = -1f;
@@ -75,7 +97,11 @@ public class NpcResistState : NpcStateBase
         m_owner.Agent.updateRotation = false;
 
         m_noTargetSeconds = 0f;
-        m_nextAttackTime = Time.time + m_config.AttackInterval;
+
+        // 첫 타격은 대기 없이 연다 (#692) — AttackInterval을 얹으면 사거리 안에서 저항에 들어가도
+        // 1.5초를 쳐다보기만 했다. 연타가 빨라지진 않는다: 두 번째부터는 스윙 시점에 다시 얹는다(Tick).
+        m_nextAttackTime = Time.time;
+
         m_pendingStrikeTime = k_noPendingStrike; // 직전 저항의 예약이 남아 첫 타격이 앞당겨지지 않게
         m_swingHoldUntil = 0f;
 
@@ -110,15 +136,19 @@ public class NpcResistState : NpcStateBase
         }
 
         ChaseTarget(target);
-        FaceTarget(target);
 
-        // 주기적 스윙 — 표적이 사거리 안일 때만 휘두른다. 추격 중(사거리 밖)엔 스윙하지 않아
-        // 헛스윙·스윙 중 미끄러짐을 막는다 (#254). 애니메이션을 먼저 발행하고 데미지는 타격 프레임까지
-        // 미뤄, 눈에 보이는 준비 동작과 HP 감소 순간을 맞추고 준비 중 벗어난 플레이어는 빗나가게 한다 (#220)
-        bool targetInRange = target != null
+        // 스윙 중에는 몸도 세운다 (#692) — 계속 돌면 540°/s가 부채꼴을 플레이어에 붙여 놔 #220의
+        // 회피 창이 닫힌다. 구간은 스윙 홀드(0.9초 > 타격 프레임 0.73초).
+        if (Time.time >= m_swingHoldUntil)
+            FaceTarget(target);
+
+        // 주기적 스윙 — 닿을 수 있을 때만(사거리 + 정면 부채꼴). 발행이 먼저, 데미지는 타격 프레임에 (#254·#220).
+        // 부채꼴을 빼면 등 뒤에서 맞은 NPC가 9°만 돌고 허공을 친다 — 판정과 같은 각도를 쓴다 (#692).
+        bool canStrike = target != null
             && (target.position - m_owner.transform.position).sqrMagnitude
-                <= m_config.AttackRange * m_config.AttackRange;
-        if (targetInRange && Time.time >= m_nextAttackTime)
+                <= m_config.AttackRange * m_config.AttackRange
+            && IsInFrontCone(target.position);
+        if (canStrike && Time.time >= m_nextAttackTime)
         {
             m_nextAttackTime = Time.time + m_config.AttackInterval;
             // 변형을 서버에서 뽑아 전 피어에 넘긴다 — 데미지는 그 클립의 타격 오프셋에 맞춰 넣고(아래),
@@ -319,11 +349,22 @@ public class NpcResistState : NpcStateBase
             m_owner.StateMachine.ChangeState(NpcState.Idle); // 유발자도 없고 주변에도 아무도 없으면 도망갈 이유가 없다
     }
 
-    /// <summary>반경 내 PlayerHealth를 중복 없이 s_playerBuffer에 모은다.</summary>
+    /// <summary>
+    /// 반경 내 PlayerHealth를 중복 없이 s_playerBuffer에 모은다.
+    ///
+    /// <b>래그돌 본을 뺀다</b> (#692) — 사람 하나가 본만 11개라 16칸 버퍼는 때리는 자기 몸으로 먼저
+    /// 찼다. 넘쳐도 잘린 개수만 돌아와 조용히 빗나간다(차량 치임 #673과 같은 함정).
+    /// </summary>
     private void CollectPlayersInRange(float radius)
     {
         s_playerBuffer.Clear();
-        int hitCount = Physics.OverlapSphereNonAlloc(m_owner.transform.position, radius, s_overlapBuffer);
+        int hitCount = Physics.OverlapSphereNonAlloc(
+            m_owner.transform.position, radius, s_overlapBuffer, HitLayers);
+
+        // 넘쳤으면 누군가는 잘렸다 — 조용히 안 맞는 것보다 로그가 남는 편이 낫다 (TrafficVehicle과 같은 방침)
+        if (hitCount == s_overlapBuffer.Length)
+            Debug.LogWarning($"저항 타격 판정 버퍼가 찼다 — 뒤로 밀린 대상이 잘렸을 수 있다: {m_owner.name}");
+
         for (int i = 0; i < hitCount; i++)
         {
             PlayerHealth player = s_overlapBuffer[i].GetComponentInParent<PlayerHealth>();

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: NpcResistConfig
   m_EditorClassIdentifier: Assembly-CSharp::NpcResistConfig
   m_attackInterval: 1.5
-  m_attackRange: 2
+  m_attackRange: 1.7
   m_attackDamage: 10
   m_noTargetIdleSeconds: 5
   m_giveUpDistance: 25
@@ -26,4 +26,5 @@ MonoBehaviour:
   m_attackConeAngle: 120
   m_attackTurnSpeed: 540
   m_swingHoldSeconds: 0.9
-  m_threatSearchRadiusMultiplier: 5
+  m_threatSearchRadiusMultiplier: 5.9
+  m_chaseAcceleration: 30
