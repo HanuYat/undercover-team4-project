@@ -158,6 +158,9 @@ public class NpcRagdoll : MonoBehaviour
     private Unity.Netcode.Components.NetworkTransform m_hipsNetTransform;
     private Unity.Netcode.Components.NetworkTransform m_rootNetTransform;
 
+    // 전 뼈 자세 스트림 (계획서 2단계) — 없을 수 있다(부착 전 프리팹).
+    private RagdollPoseStreamer m_streamer;
+
     // 원격 순간이동을 감싸는 일시 얼림이 남은 프레임 수 (0이면 감싸는 중이 아니다).
     // <b>상태(m_state)를 건드리지 않는다</b> — Frozen은 "정착했다"는 뜻이고 여기는 이동 중이다.
     private int m_teleportBracketFrames;
@@ -227,6 +230,12 @@ public class NpcRagdoll : MonoBehaviour
         m_hipsIsNetworkSynced = m_hipsNetTransform != null;
 
         m_rootNetTransform = GetComponent<Unity.Netcode.Components.NetworkTransform>();
+
+        // 자세 스트리머는 <b>루트</b>에 있다 — NGO가 비활성 GameObject의 NetworkBehaviour를 스폰에서
+        // 제외하므로 리그 쪽(Model)이 아니라 NetworkObject와 같은 오브젝트여야 한다.
+        // ⚠ null을 허용한다: 계획서 2단계는 <b>기존 골반 NT 경로를 남긴 채</b> 스트림을 얹는
+        // 전환기라, 아직 부착되지 않은 프리팹이 그대로 옛 동작으로 돌아야 한다.
+        m_streamer = GetComponent<RagdollPoseStreamer>();
     }
 
     // ---- 원격 순간이동 (계획서 §4) ----
@@ -301,6 +310,26 @@ public class NpcRagdoll : MonoBehaviour
     /// </summary>
     private void ReleaseBonesToPhysics()
     {
+        // ⚠ <b>자세를 스트림으로 받는 피어는 물리를 아예 돌리지 않는다 — 전 뼈 키네마틱.</b>
+        // (계획서 2단계)
+        //
+        // <b>이 분기가 위 문단 전체를 대체한다.</b> 골반 하나만 스트림으로 고정하고 나머지 열 개를
+        // 동적으로 두는 것이 지금까지의 구성이었고, 그래서 골반이 크게 움직일 때마다 관절이 위반돼
+        // 솔버가 <b>중력으로는 나올 수 없는 속도</b>를 먹였다(실측 6261 m/s). 전부 키네마틱이면
+        // <b>위반될 관절이 원리적으로 없다</b> — 관절은 동적 바디 사이에서만 힘을 만든다.
+        //
+        // 흐느적임을 로컬 물리로 만들던 것을 잃지만, 그 흐느적임이 곧 피어마다 다른 몸이었다.
+        // 이제는 권위 피어가 만든 진짜 흐느적임이 스트림으로 온다.
+        if (m_streamer != null && !HasMoveAuthority)
+        {
+            m_rig.SetKinematic(true);
+
+            // <b>첫 패킷이 오기 전까지 붙들 자세를 잡아 둔다</b> (<see cref="TickHoldPoseUntilStream"/>).
+            // 스트림이 몸을 쥐기 전 이 구간에도 루트는 이미 움직이고, 키네마틱 뼈는 그것을 따라간다.
+            m_rig.CapturePose();
+            return;
+        }
+
         m_rig.SetKinematic(false);
 
         if (m_hipsIsNetworkSynced && !HasMoveAuthority && m_rig.HipsBody != null)
@@ -412,6 +441,10 @@ public class NpcRagdoll : MonoBehaviour
         float clearanceBefore = LowestBoneClearance();
 
         ReleaseBonesToPhysics();
+
+        // 몸이 다시 물리로 움직이므로 스트림을 재개한다 — 얼림이 끝나는 유일한 문이 여기다
+        // (밧줄을 묶는 순간). 재개하지 않으면 끌려가는 시체가 원격에서 마지막 정착 자세로 굳는다.
+        m_streamer?.BeginStreaming();
 
         if (m_logRootFollow)
         {
@@ -725,6 +758,8 @@ public class NpcRagdoll : MonoBehaviour
         ReleaseBonesToPhysics();
         m_rig.ApplyImpulse(impulse);
 
+        // 자세를 흘려보내기 시작한다 — 권위가 아니면 스스로 무동작이다(그쪽 주석).
+        m_streamer?.BeginStreaming();
     }
 
     // ---- 매 프레임 ----
@@ -840,9 +875,39 @@ public class NpcRagdoll : MonoBehaviour
         // 위치에서 물리로 되돌려야, 되돌리는 순간의 자세가 곧 도착한 자세가 된다.
         TickTeleportBracket();
 
+        // 스트림이 아직 몸을 쥐기 전이면 진입 시점의 자세를 붙든다 — <b>루트에 끌려가지 않게.</b>
+        TickHoldPoseUntilStream();
+
         // 클라의 침하를 <b>직접</b> 잰다 — 여기가 마지막 표집 지점이다(다음이 렌더).
         if (m_logRootFollow && !HasMoveAuthority && IsRagdollActive)
             TickClientDipProbe();
+    }
+
+    /// <summary>
+    /// 원격에서 <b>첫 자세 패킷이 오기 전</b> 구간을 메운다 — 진입 시점의 월드 자세를 그대로 붙든다.
+    ///
+    /// <b>왜 빈 구간이 생기나.</b> 래그돌 진입은 동기화된 상태를 읽는 폴링이라 전 피어가 거의 같은
+    /// 프레임에 들어가지만, 자세는 <b>왕복 지연 + 보간 지연</b>만큼 늦게 온다. 그 사이 원격의 뼈는
+    /// 이미 키네마틱이고 루트는 <see cref="TickRootFollow"/>가 만든 점프를 스트림으로 받고 있다 —
+    /// <b>키네마틱 뼈는 계층을 따라가므로 몸이 통째로 딸려 올라간다.</b> 진입 프레임의 그 점프가
+    /// 발밑에서 골반까지, 서 있는 몸 기준 약 0.9m다.
+    ///
+    /// <b>서버가 같은 문제를 푸는 방식과 같다</b> — <see cref="TickRootFollow"/>가 루트를 옮기기 전후로
+    /// <c>CapturePose</c>/<c>RestoreCapturedPose</c>로 감싸는 것과 정확히 같은 처리이고, 다만 여기는
+    /// 감쌀 한 프레임이 아니라 <b>패킷이 올 때까지의 여러 프레임</b>이라 매 LateUpdate에 되돌린다.
+    ///
+    /// <b>렌더 전용이다</b> — 이 프로젝트는 <c>m_AutoSyncTransforms = 0</c>이라 여기 쓴 값이 PhysX로
+    /// 넘어가지 않는다. 어차피 원격의 뼈는 물리에 참여하지 않으므로 잃는 것도 없다.
+    /// </summary>
+    private void TickHoldPoseUntilStream()
+    {
+        if (m_streamer == null || HasMoveAuthority)
+            return;
+
+        if (m_state != RagdollState.Ragdoll || m_streamer.IsStreamDriven)
+            return;
+
+        m_rig.RestoreCapturedPose();
     }
 
     // 래그돌이어야 하는지를 폴링한다 — 읽는 값이 전부 동기화 값이라 전 피어가 같은 답을 얻는다.
@@ -947,6 +1012,12 @@ public class NpcRagdoll : MonoBehaviour
     {
         if (m_state == RagdollState.Animated)
             return;
+
+        // 스트림을 <b>아무것도 보내지 않고</b> 끊는다 — 기상에는 종착 자세가 없다(그쪽 주석).
+        // <b>전 피어가 각자 부른다</b>: 기상 트리거가 동기화된 상태에서 읽는 값이라 원격도 같은
+        // 프레임에 여기 오고, 그래서 재생 정지에 RPC가 필요 없다. 안 끊으면 원격에서 스트림이
+        // 기상 블렌드를 매 프레임 덮어쓴다.
+        m_streamer?.StopStreaming();
 
         // ① 뼈를 애니메이터에게 돌려준다 — <b>키네마틱이 먼저다.</b> 동적인 채로 포즈를 쓰면
         //    다음 물리 스텝이 PhysX의 결과로 덮는다.
@@ -1473,6 +1544,13 @@ public class NpcRagdoll : MonoBehaviour
         }
 
         ServerBroadcastPose();
+
+        // 스트림을 끊고 <b>마지막 자세를 로컬 좌표로</b> 한 번 보낸다 (계획서 §1-3).
+        //
+        // ⚠ <b>바로 위 <see cref="ServerBroadcastPose"/>와 지금은 겹친다</b> — 둘이 같은 자세를 같은
+        // 순간에 보낸다. 전환기라 의도한 것이고(계획서 2~4단계 분리), 같은 값을 두 번 입힐 뿐이라
+        // 무해하다. 4단계에서 위쪽을 지운다.
+        m_streamer?.EndStreaming();
     }
 
     // 얼린 자세를 원격에 1회 보낸다 — 세션이 아니면(오프라인 Play) 보낼 곳이 없다.

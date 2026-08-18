@@ -36,6 +36,7 @@ GameObject:
   - component: {fileID: 3324404709527055785}
   - component: {fileID: 1134059981017232228}
   - component: {fileID: 7416309468039645568}
+  - component: {fileID: 7792933700023001247}
   m_Layer: 7
   m_Name: NPC_Streaker
   m_TagString: Untagged
@@ -526,6 +527,23 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcHurtVoice
   m_minInterval: 0.5
+--- !u!114 &7792933700023001247
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5893b3a49353f654190c52fc74a933eb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RagdollPoseStreamer
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_authority: 0
+  m_sendEveryFixedSteps: 2
+  m_logStream: 1
+  m_interpolationDelay: 0.08
 --- !u!1001 &1485141803111560614
 PrefabInstance:
   m_ObjectHideFlags: 0
