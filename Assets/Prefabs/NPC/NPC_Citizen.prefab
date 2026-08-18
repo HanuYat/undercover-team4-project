@@ -38,6 +38,7 @@ GameObject:
   - component: {fileID: 8064490235713148023}
   - component: {fileID: 4152139263146004562}
   - component: {fileID: 2208455432558358453}
+  - component: {fileID: 4170001419849907619}
   m_Layer: 7
   m_Name: NPC_Citizen
   m_TagString: Untagged
@@ -539,10 +540,6 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 1
   m_groundProbeDistance: 1.5
-  m_alignPullSpeed: 1.5
-  m_flightAlignPullSpeed: 16
-  m_alignSnapDistance: 2.5
-  m_remoteSpeedClamp: 20
   m_logRootFollow: 0
 --- !u!114 &2208455432558358453
 MonoBehaviour:
@@ -557,6 +554,22 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcHurtVoice
   m_minInterval: 0.5
+--- !u!114 &4170001419849907619
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5893b3a49353f654190c52fc74a933eb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RagdollPoseStreamer
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_authority: 0
+  m_sendEveryFixedSteps: 2
+  m_interpolationDelay: 0.08
 --- !u!1001 &2229125471116794606
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1171,12 +1184,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 1866527831239772, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
       insertIndex: -1
       addedObject: {fileID: 6528311569994302803}
-    - targetCorrespondingSourceObject: {fileID: 1866527831239772, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 6103932380497589478}
-    - targetCorrespondingSourceObject: {fileID: 1866527831239772, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 7476827684870708363}
     - targetCorrespondingSourceObject: {fileID: 1800122538505114, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}
       insertIndex: -1
       addedObject: {fileID: 8495414409861511203}
@@ -1422,69 +1429,6 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 3
---- !u!114 &6103932380497589478
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3677259301703117030}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b5d14420c2a44424ab18d25b9b564e90, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NpcCorpseHipsTransform
-  ShowTopMostFoldoutHeaderGroup: 1
-  NetworkTransformExpanded: 0
-  AutoOwnerAuthorityTickOffset: 1
-  PositionInterpolationType: 0
-  RotationInterpolationType: 0
-  ScaleInterpolationType: 0
-  PositionLerpSmoothing: 1
-  PositionMaxInterpolationTime: 0.1
-  RotationLerpSmoothing: 1
-  RotationMaxInterpolationTime: 0.1
-  ScaleLerpSmoothing: 1
-  ScaleMaxInterpolationTime: 0.1
-  AuthorityMode: 0
-  TickSyncChildren: 0
-  UseUnreliableDeltas: 0
-  SyncPositionX: 1
-  SyncPositionY: 1
-  SyncPositionZ: 1
-  SyncRotAngleX: 1
-  SyncRotAngleY: 1
-  SyncRotAngleZ: 1
-  SyncScaleX: 0
-  SyncScaleY: 0
-  SyncScaleZ: 0
-  PositionThreshold: 0.001
-  RotAngleThreshold: 0.01
-  ScaleThreshold: 0.01
-  UseQuaternionSynchronization: 0
-  UseQuaternionCompression: 0
-  UseHalfFloatPrecision: 0
-  InLocalSpace: 0
-  SwitchTransformSpaceWhenParented: 0
-  Interpolate: 1
-  SlerpPosition: 0
---- !u!114 &7476827684870708363
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3677259301703117030}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f6c0be61502bb534f922ebb746851216, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.Components.NetworkRigidbody
-  ShowTopMostFoldoutHeaderGroup: 1
-  NetworkRigidbodyBaseExpanded: 0
-  UseRigidBodyForMotion: 1
-  AutoUpdateKinematicState: 0
-  AutoSetKinematicOnDespawn: 1
 --- !u!1 &3677422288680985540 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1770576858638206, guid: 4493b9786df76d64fad99c1e9ac91ace, type: 3}

@@ -4214,8 +4214,6 @@ GameObject:
   - component: {fileID: 4904278029985001156}
   - component: {fileID: 6411286668176044618}
   - component: {fileID: 4675676041639630104}
-  - component: {fileID: 4924317659541260774}
-  - component: {fileID: 5343333938358887480}
   m_Layer: 10
   m_Name: Hips
   m_TagString: Untagged
@@ -4289,69 +4287,6 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.32299513, y: 0.27836922, z: 0.38197827}
   m_Center: {x: -0.12033978, y: 0.0010077655, z: 0.00000013411045}
---- !u!114 &4924317659541260774
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3571386007782904810}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b5d14420c2a44424ab18d25b9b564e90, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NpcCorpseHipsTransform
-  ShowTopMostFoldoutHeaderGroup: 1
-  NetworkTransformExpanded: 0
-  AutoOwnerAuthorityTickOffset: 1
-  PositionInterpolationType: 0
-  RotationInterpolationType: 0
-  ScaleInterpolationType: 0
-  PositionLerpSmoothing: 1
-  PositionMaxInterpolationTime: 0.1
-  RotationLerpSmoothing: 1
-  RotationMaxInterpolationTime: 0.1
-  ScaleLerpSmoothing: 1
-  ScaleMaxInterpolationTime: 0.1
-  AuthorityMode: 0
-  TickSyncChildren: 0
-  UseUnreliableDeltas: 0
-  SyncPositionX: 1
-  SyncPositionY: 1
-  SyncPositionZ: 1
-  SyncRotAngleX: 1
-  SyncRotAngleY: 1
-  SyncRotAngleZ: 1
-  SyncScaleX: 0
-  SyncScaleY: 0
-  SyncScaleZ: 0
-  PositionThreshold: 0.001
-  RotAngleThreshold: 0.01
-  ScaleThreshold: 0.01
-  UseQuaternionSynchronization: 0
-  UseQuaternionCompression: 0
-  UseHalfFloatPrecision: 0
-  InLocalSpace: 0
-  SwitchTransformSpaceWhenParented: 0
-  Interpolate: 1
-  SlerpPosition: 0
---- !u!114 &5343333938358887480
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3571386007782904810}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f6c0be61502bb534f922ebb746851216, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.Components.NetworkRigidbody
-  ShowTopMostFoldoutHeaderGroup: 1
-  NetworkRigidbodyBaseExpanded: 0
-  UseRigidBodyForMotion: 1
-  AutoUpdateKinematicState: 0
-  AutoSetKinematicOnDespawn: 1
 --- !u!1 &3705667090675746778
 GameObject:
   m_ObjectHideFlags: 0
@@ -9400,6 +9335,7 @@ GameObject:
   - component: {fileID: 340701316345904586}
   - component: {fileID: 3682379434406593806}
   - component: {fileID: 6852879000339947848}
+  - component: {fileID: 1233929782180222401}
   m_Layer: 7
   m_Name: NPC_Citizen_Generic
   m_TagString: Untagged
@@ -9893,10 +9829,6 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 1
   m_groundProbeDistance: 1.5
-  m_alignPullSpeed: 1.5
-  m_flightAlignPullSpeed: 16
-  m_alignSnapDistance: 2.5
-  m_remoteSpeedClamp: 20
   m_logRootFollow: 0
 --- !u!114 &6852879000339947848
 MonoBehaviour:
@@ -9911,6 +9843,22 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcHurtVoice
   m_minInterval: 0.5
+--- !u!114 &1233929782180222401
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5893b3a49353f654190c52fc74a933eb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RagdollPoseStreamer
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_authority: 0
+  m_sendEveryFixedSteps: 2
+  m_interpolationDelay: 0.08
 --- !u!1 &8855344057427867759
 GameObject:
   m_ObjectHideFlags: 0

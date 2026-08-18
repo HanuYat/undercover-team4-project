@@ -11,19 +11,14 @@ using UnityEngine.AI;
 /// 전이를 쓴다. 그래서 이 부품에는 동기화 값이 없다 — 사망 사실은 코어의 <c>m_networkState</c>가
 /// 이미 전 피어에 복제하고, <see cref="IsDead"/>는 그것을 읽을 뿐이다.
 ///
-/// <b>얼린 자세를 뿌리는 통로다</b> (#571 권위 반전). 시체가 정착하는 순간 서버가 그 자세를
-/// <b>1회</b> 전 피어에 보내고, 받은 쪽은 자기 로컬 물리의 결과를 버리고 그 자세로 갈아끼운 뒤 얼린다
-/// (<see cref="NpcRagdoll.ApplyFrozenPose"/>). 매 틱 뼈를 동기화하는 것이 아니라 <b>얼리는 순간
-/// 자세가 상수가 되어 보낼 것이 한 번뿐</b>이라는 점이 핵심이다.
-///
-/// <b>그래서 <c>NetworkBehaviour</c>가 됐다.</b> 원래는 "들 것이 없다"는 이유로 유일한
-/// <c>MonoBehaviour</c> 부품이었는데, 이 자세가 바로 그 들 것이다. 래그돌 본체
-/// (<see cref="NpcRagdoll"/>)가 직접 쏘지 않는 것은 그쪽이 표현 계층이라 전 피어에서 로컬로 도는
-/// 컴포넌트여야 하기 때문이고, 밧줄이 같은 이유로 <see cref="NpcRopeDrag"/>를 통해 나가는 것과 같다.
-///
 /// <b>NavMesh로 돌아가지 않는다</b> — 시체는 에이전트를 끈 채 그 자리에 남는다. 기절이 깨어나며
 /// 체력을 회복하고 에이전트를 되살리던 경로와 갈리는 지점이 여기다.
 /// </summary>
+// ⚠ <b>NetworkBehaviour인 근거가 사라졌다.</b> 얼린 자세를 뿌리는 RPC 하나를 들고 있어서
+// 이 부품만 NetworkBehaviour였는데, 그 역할을 <c>RagdollPoseStreamer</c>가 가져갔다.
+// 지금은 네트워크 멤버가 하나도 없다 — MonoBehaviour로 되돌릴 수 있지만, 그러면 같은
+// NetworkObject 위 다른 NetworkBehaviour들의 인덱스가 밀리므로 래그돌 검증과 섞지 않게
+// 따로 넘긴다.
 public class NpcDeath : NetworkBehaviour
 {
     private NpcController m_owner;
@@ -45,32 +40,6 @@ public class NpcDeath : NetworkBehaviour
     private void Awake()
     {
         m_owner = GetComponent<NpcController>();
-        m_ragdoll = GetComponent<NpcRagdoll>();
-    }
-
-    // ---- 얼린 자세 전파 (#571) ----
-
-    /// <summary>
-    /// 정착한 시체의 자세를 전 피어에 <b>1회</b> 보낸다 — <see cref="NpcRagdoll"/> 전용 통로.
-    /// 서버(또는 오프라인)에서만 부른다. 세션이 아니면 보낼 곳이 없어 무동작이다.
-    /// </summary>
-    /// <param name="boneRotations">뼈 <b>로컬</b> 회전 — 월드로 보내면 원격의 루트가 다른 자리라 어긋난다.</param>
-    /// <param name="hipsLocalPosition">골반의 로컬 위치 — 나머지 뼈 길이는 관절이 유지하므로 이것 하나면 된다.</param>
-    internal void ServerSendFrozenPose(Quaternion[] boneRotations, Vector3 hipsLocalPosition)
-    {
-        if (!IsSpawned || !IsServer)
-            return;
-
-        ApplyFrozenPoseRpc(boneRotations, hipsLocalPosition);
-    }
-
-    // 서버 자신도 받는다 — 이미 그 자세로 얼어 있으므로 같은 값을 다시 입힐 뿐이고(무해),
-    // SendTo.Everyone이라 원격만 거르는 분기를 따로 두지 않는다. (밧줄 RPC와 같은 관례)
-    [Rpc(SendTo.Everyone)]
-    private void ApplyFrozenPoseRpc(Quaternion[] boneRotations, Vector3 hipsLocalPosition)
-    {
-        if (m_ragdoll != null)
-            m_ragdoll.ApplyFrozenPose(boneRotations, hipsLocalPosition);
     }
 
     /// <summary>

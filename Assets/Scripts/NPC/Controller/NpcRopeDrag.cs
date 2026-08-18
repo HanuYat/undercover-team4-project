@@ -344,7 +344,7 @@ public class NpcRopeDrag : NetworkBehaviour
     ///
     /// 각 피어가 <b>자기 로컬 시체에</b> 걸어야 한다. 안 걸면 원격 시체에는 끄는 힘이 하나도 없어,
     /// 서버가 보내 주는 루트만 가고 몸은 제자리에 남는다 — 그 뒤를
-    /// <c>NpcRagdoll.TickAlignBonesToRoot</c>가 표류 방지 속도(접지 시 1.5m/s)로 따라잡지 못해
+    /// 원격의 표류 보정(지금은 사라진 <c>TickAlignBonesToRoot</c>, 접지 시 1.5m/s)가 따라잡지 못해
     /// 스냅 거리에 계속 걸린다. 정렬은 동력이 아니라 표류 방지이기 때문이다.
     /// (<see cref="PlayerCarrier"/>의 운반 RPC가 같은 이유로 <c>SendTo.Everyone</c>이다)
     ///

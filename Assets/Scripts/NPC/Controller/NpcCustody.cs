@@ -184,7 +184,7 @@ public class NpcCustody : NetworkBehaviour
     ///
     /// <b>원격에 따로 보낼 것이 없다</b> (#571 권위 반전). 배치가 시체를 <b>얼리고</b> 옮기는데,
     /// 얼린 뼈는 루트의 키네마틱 자식이라 루트를 따라오고 그 루트는 NetworkTransform이 이미 복제한다.
-    /// 자세는 얼리는 순간 1회 나간다(<see cref="NpcDeath.ServerSendFrozenPose"/>).
+    /// 자세는 <see cref="RagdollPoseStreamer"/>가 보낸다 — 무너지는 동안 스트림으로, 얼리는 순간 1회로.
     /// </summary>
     /// <param name="position">시체가 놓일 감옥 안 지점 — 유치장이 정한다. <b>바닥에 스냅된 좌표여야
     /// 한다</b>: 얼린 시체는 스스로 바닥을 찾지 않는다(<see cref="JailZone.RandomRestPointInRoom"/>).</param>
