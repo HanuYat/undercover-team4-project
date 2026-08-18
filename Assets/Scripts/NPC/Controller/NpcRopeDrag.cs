@@ -98,8 +98,20 @@ public class NpcRopeDrag : NetworkBehaviour
         SyncTethered();
     }
 
-    /// <summary>밧줄 길이(m) — 표시(늘어짐 정도)와 서버 장력 판정이 같은 값을 쓴다.</summary>
-    public float RopeLength => m_owner.RopeDragConfig.RopeLength;
+    /// <summary>지금 이 대상을 잡고 있는 밧줄의 길이(m) — 표시(<c>RopeDragView</c>)의 늘어짐 기준이다. (#644)
+    ///
+    /// 장력을 거는 쪽은 각자 자기 길이를 직접 읽는다(<see cref="Tick"/>은 설정 에셋, 관절은
+    /// <see cref="RagdollRope"/>의 필드) — 이 프로퍼티는 그 둘 중 <b>지금 유효한 쪽</b>을 고를 뿐이라,
+    /// 밖에서 보는 길이가 실제로 잡는 길이와 어긋나지 않는다.
+    ///
+    /// <b>끄는 방식이 갈리면 길이도 갈린다</b>(<see cref="UsesRagdollRope"/>) — 래그돌은 관절 밧줄이
+    /// 잡고, 설정 에셋의 길이는 <see cref="Tick"/>의 위치 대입 경로에만 쓰인다. 갈라 두지 않으면
+    /// 시체·기절한 몸을 끄는 내내 표시가 <b>남의 길이</b>로 늘어짐을 계산한다 — 관절 밧줄이 들어온
+    /// #571 이후 실제로 어긋나 있었다. 길이가 0이면 리그를 못 잡은 프레임이라 설정값으로 버틴다.</summary>
+    public float RopeLength =>
+        UsesRagdollRope && m_ragdoll.RopeLength > 0f
+            ? m_ragdoll.RopeLength
+            : m_owner.RopeDragConfig.RopeLength;
 
     // ---- 무게 (#398) ----
 

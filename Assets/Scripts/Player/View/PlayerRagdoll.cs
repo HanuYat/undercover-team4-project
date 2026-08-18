@@ -484,6 +484,9 @@ public class PlayerRagdoll : MonoBehaviour
     // 대상에게 밧줄을 묶는다"를 표현하기 때문이다 — 밧줄 컴포넌트를 직접 찾게 하면 "래그돌이 아닐 때는
     // 묶으면 안 된다"는 조건이 호출부로 새어 나간다.
 
+    /// <summary>관절 밧줄의 길이(m) — 리그가 아직 안 잡혔으면 0. 묻는 쪽이 대신 쓸 값을 정한다. (#644)</summary>
+    public float RopeLength => m_rope != null ? m_rope.Length : 0f;
+
     /// <summary>
     /// 밧줄을 시체에 묶는다 — <see cref="PlayerTowedMotion.BeginDraggedFollow"/>가 래그돌인 대상에게만 부른다.
     ///
