@@ -3,7 +3,7 @@ using UnityEngine;
 
 /// <summary>
 /// 래그돌 자세를 <b>전 뼈 통째로</b> 원격에 흘려보낸다 — 권위 피어가 굴린 물리를 나머지가 재생한다.
-/// (계획서 <c>docs/ragdoll-pose-streaming-plan.md</c> 1단계)
+/// (계획서 <c>docs/728-ragdoll-pose-streaming.md</c> 1단계)
 ///
 /// <b>기존 구조의 불변식 1을 뒤집는 부품이다.</b> 지금까지는 각 피어가 자기 물리를 굴리고 궤적만
 /// 골반 하나로 받았다(<c>docs/ragdoll.md</c> 불변식 1). 그래서 피어마다 몸이 갈렸고, 그 차이를
@@ -26,9 +26,8 @@ using UnityEngine;
 ///   딸려 온다. 유치장 순간이동이 성립하는 자리가 여기다.</description></item>
 /// </list>
 ///
-/// <b>기존 <c>NpcDeath.ServerSendFrozenPose</c>가 하던 일의 상위집합이다.</b> 저쪽은 정착 순간
-/// <b>1회</b>만 보냈고, 이 부품은 그 1회를 스트림의 <b>마지막 패킷</b>으로 흡수한다. 그래서 전환기에
-/// 둘이 함께 돌아도 무해하다 — 같은 자세를 두 번 입힐 뿐이다. (계획서 3단계 표의 2~4단계 분리)
+/// <b><c>NpcDeath</c>가 정착 자세를 1회 뿌리던 경로를 흡수했다.</b> 그쪽은 지웠고, 그 1회는
+/// 이제 스트림의 <b>마지막 패킷</b>(<see cref="EndStreaming"/>)이다 — 자세가 가는 통로는 하나만 남긴다.
 /// </summary>
 [DisallowMultipleComponent]
 public class RagdollPoseStreamer : NetworkBehaviour
@@ -168,6 +167,14 @@ public class RagdollPoseStreamer : NetworkBehaviour
     /// 다 쓰러진 시체가 마지막에 벌떡 선 자세로 바뀐다.
     /// </summary>
     public bool IsAwaitingFirstPose => m_expectingStream && !m_hasReceivedPose;
+
+    /// <summary>
+    /// 정착 자세를 받아 입혔다 — <b>원격에서만 발행된다.</b> 소유자가 여기서 몸을 얼린다.
+    ///
+    /// 자세 자체는 이 부품이 이미 입혔으므로 구독자가 할 일은 <b>상태 전이</b>뿐이다. 그 분업이
+    /// 이 클래스가 물리를 모르는 이유이기도 하다 — 무엇이 "얼림"인지는 소유자만 안다.
+    /// </summary>
+    public event System.Action OnSettledPoseReceived;
 
     // ⚠ <b>여기 "골반 위치는 옛 배선(골반 NT)에 맡긴다"는 전환기 스위치가 있었다 — 걷어냈다.</b>
     //
@@ -397,7 +404,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
     /// 받는 즉시 갈아끼우고 스트림 재생을 끝낸다 — 그때부터 몸은 루트 계층이 옮긴다.
     ///
     /// ⚠ <b>늦게 접속한 피어에는 오지 않는다</b>(신뢰 RPC의 성질). 이미 누워 있던 시체를 자세 없이
-    /// 보게 되는 구멍이고, <b>현행 <c>NpcDeath.ApplyFrozenPoseRpc</c>도 똑같이 뚫려 있다</b> —
+    /// 보게 되는 구멍이고, <b>지우기 전 <c>NpcDeath</c>의 1회 방송도 똑같이 뚫려 있었다</b> —
     /// 계획서 6단계에서 닫는다(권위 피어가 마지막 자세를 캐시했다가 새 접속자에게만 다시 쏜다).
     /// </summary>
     [Rpc(SendTo.NotMe)]
@@ -430,6 +437,10 @@ public class RagdollPoseStreamer : NetworkBehaviour
         m_hasReceivedPose = true;
 
         m_rig.ApplyLocalPose(rotations, hipsLocal);
+
+        // <b>자세를 입힌 뒤에 알린다</b> — 구독자가 이 자세를 얼리므로, 먼저 알리면 직전(스트림)
+        // 자세가 굳는다.
+        OnSettledPoseReceived?.Invoke();
     }
 
     private void PushSnapshot(Vector3 hipsWorld, Quaternion[] rotations)

@@ -75,7 +75,7 @@ public static class RagdollRigCloner
         // 마무리(레이어·물리값·RagdollRig)는 정본에 맡긴다 — 복제가 그 규칙을 두 벌 갖지 않게.
         // 복제에 성공한 프리팹만 돌린다: 건너뛴 프리팹에 돌려 봤자 뼈가 없어 에러만 한 줄 더 난다.
         for (int i = 0; i < cloned.Count; i++)
-            RagdollSetup.Run(cloned[i], RagdollSetup.k_npcRigOwnerPath, replicateHips: true);
+            RagdollSetup.Run(cloned[i], RagdollSetup.k_npcRigOwnerPath, stripHipsReplication: true);
     }
 
     // ---- 복제 ----
