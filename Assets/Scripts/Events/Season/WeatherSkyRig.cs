@@ -275,8 +275,8 @@ public class WeatherSkyRig : MonoBehaviour
     {
         if (!WeatherShelter.IsSheltered(m_view.position, m_shelterMask, m_shelterProbeHeight))
         {
-            // 실외 — 시야 앞으로 밀어 둘 자리가 지붕 아래면 밀지 않는다
-            placement = IsAheadOfViewSheltered()
+            // 실외 — 시야 앞으로 밀어 둘 자리를 쓸 수 없으면 밀지 않는다
+            placement = IsAheadOfViewBlocked()
                 ? EPrecipitationPlacement.AtView
                 : EPrecipitationPlacement.AheadOfView;
             return true;
@@ -292,12 +292,29 @@ public class WeatherSkyRig : MonoBehaviour
         return false;
     }
 
-    // 시야 앞으로 밀어 둘 자리의 하늘이 막혔는가 — 기둥·처마·건물 벽면이 걸리는 경우다.
-    private bool IsAheadOfViewSheltered()
+    // 시야 앞으로 밀어 둘 자리를 쓸 수 없는가 — 둘을 본다.
+    private bool IsAheadOfViewBlocked()
     {
+        Vector3 origin = m_view.position;
         Vector3 ahead = AheadOfViewPosition();
+
+        // ① 나와 그 자리 사이가 막혔나 — 기둥을 마주 보면 방출 볼륨이 기둥 <b>속에</b> 박혀 눈이 가려진다.
+        // 위로 쏘는 ②로는 못 잡는다: 레이가 콜라이더 안에서 시작하면 그 콜라이더를 맞히지 않기 때문이다.
+        Vector3 toAhead = ahead - origin;
+        if (
+            Physics.Raycast(
+                origin,
+                toAhead.normalized,
+                toAhead.magnitude,
+                m_shelterMask,
+                QueryTriggerInteraction.Ignore
+            )
+        )
+            return true;
+
+        // ② 그 자리가 지붕 아래인가 — 건물 안으로 강수를 쏟지 않으려던 #647의 목적이다.
         return WeatherShelter.IsSheltered(
-            new Vector3(ahead.x, m_view.position.y, ahead.z),
+            new Vector3(ahead.x, origin.y, ahead.z),
             m_shelterMask,
             m_shelterProbeHeight
         );
