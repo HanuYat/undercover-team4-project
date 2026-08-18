@@ -553,9 +553,15 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
         bool stillDragged = npc.Rope.StopRopeDrag(transform); // 놓은 자리가 NavMesh 밖이면 이 플레이어가 선 자리로 대체 복귀
         SetTetherDragging(npc, false);
 
+        // 내가 커스터디 장부의 주인이었으면 남은 참가자에게 넘긴다 — 안 넘기면 손 뗀 사람이 계속
+        // EscortTarget으로 남는다(#643).
+        Transform successor = stillDragged ? npc.Rope.AnyDragger : null;
+        bool handedOver = npc.Custody.HandOverEscortTarget(transform, successor);
+
         NotifyOwner(
             stillDragged
                 ? $"밧줄 끌기 놓기: {npc.name} — 다른 참가자가 계속 끌고 있다 (줄은 그대로)"
+                    + (handedOver ? $" · 커스터디를 {successor.name}에게 넘겼다" : "")
                 : $"밧줄 끌기 놓기: {npc.name} — 묶인 채 그 자리에 정지 (줄은 그대로)");
 
         // 아직 아무도 안 끌고 커스터디면 그 자리에서 Captured로 멈춘다(방치 타이머·재확보로 이어짐).

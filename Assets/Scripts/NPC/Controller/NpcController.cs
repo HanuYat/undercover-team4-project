@@ -292,6 +292,7 @@ public class NpcController : NetworkBehaviour
             m_rope.ClearTethers();
             m_custody.SetJailExtracted(false);
             m_custody.SetSecuredByPlayer(false); // 도주·배회로 돌아갔다 — 더는 누구의 신병도 아니다 (#637)
+            m_custody.ClearEscortTarget(); // 사망·넉백처럼 ReleaseDrag를 안 거치는 이탈도 장부를 남기지 않는다 (#643)
         }
 
         // 반출 목적지(#548)도 같은 자리에서 내린다 — 단 <b>도주·저항·기절로는 지우지 않는다</b>
