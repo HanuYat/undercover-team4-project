@@ -98,7 +98,11 @@ public class NpcRopeDrag : NetworkBehaviour
         SyncTethered();
     }
 
-    /// <summary>지금 이 대상을 잡고 있는 밧줄의 길이(m) — 표시(늘어짐)와 장력 판정이 같은 값을 본다. (#644)
+    /// <summary>지금 이 대상을 잡고 있는 밧줄의 길이(m) — 표시(<c>RopeDragView</c>)의 늘어짐 기준이다. (#644)
+    ///
+    /// 장력을 거는 쪽은 각자 자기 길이를 직접 읽는다(<see cref="Tick"/>은 설정 에셋, 관절은
+    /// <see cref="RagdollRope"/>의 필드) — 이 프로퍼티는 그 둘 중 <b>지금 유효한 쪽</b>을 고를 뿐이라,
+    /// 밖에서 보는 길이가 실제로 잡는 길이와 어긋나지 않는다.
     ///
     /// <b>끄는 방식이 갈리면 길이도 갈린다</b>(<see cref="UsesRagdollRope"/>) — 래그돌은 관절 밧줄이
     /// 잡고, 설정 에셋의 길이는 <see cref="Tick"/>의 위치 대입 경로에만 쓰인다. 갈라 두지 않으면
