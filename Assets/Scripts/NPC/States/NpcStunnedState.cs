@@ -29,6 +29,7 @@ public class NpcStunnedState : NpcStateBase
     {
         m_timer = 0f;
         m_standingUp = false;
+        m_owner.Stun.SetRising(false);
         SetAgentStopped(true);
     }
 
@@ -45,6 +46,7 @@ public class NpcStunnedState : NpcStateBase
         if (!m_standingUp && m_timer >= m_config.StunSeconds)
         {
             m_standingUp = true;
+            m_owner.Stun.SetRising(true); // #624 — 이 구간에도 CanRopeBind를 막는다
             m_owner.RaiseStandUp(); // 전 피어에 일어나는 모션 재생을 알린다
         }
 
@@ -61,6 +63,7 @@ public class NpcStunnedState : NpcStateBase
     public override void Exit()
     {
         SetAgentStopped(false);
+        m_owner.Stun.SetRising(false); // #624 — 이 상태를 벗어나는 모든 경로에서 rising을 걷는다
 
         // <b>체력을 회복하지 않는다</b> (#571). 여기는 원래 회복 지점이었고, 근거는 "이 상태를
         // 벗어나는 경로가 시간 만료만이 아니다(수갑 채포·석방·방치 만료) — 어딘가에서 회복하지
