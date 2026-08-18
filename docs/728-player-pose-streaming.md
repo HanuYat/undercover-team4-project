@@ -1,0 +1,216 @@
+# 전 뼈 포즈 스트리밍 — 플레이어 이관 (#728 후속, 계획)
+
+> 브랜치: `feature/728-player-pose-streaming` · **NPC는 끝났다**(PR #735, `main` 병합)
+>
+> 선행 문서(읽는 순서): [728-ragdoll-pose-streaming.md](728-ragdoll-pose-streaming.md)(설계 정본,
+> 특히 **§1-3 · §4 · §7**) → [ragdoll-corpse-split.md](ragdoll-corpse-split.md) §4(부활 회전)
+>
+> 이 문서는 **계획서**다. 진행하며 실측이 붙으면 여기에 덧쓴다.
+
+---
+
+## 0. 한 줄
+
+NPC에서 검증된 `RagdollPoseStreamer`를 **플레이어 시체에 그대로 붙인다.** 새 부품은 없다 —
+스트리머는 한 줄도 고치지 않고, 바뀌는 것은 `PlayerRagdoll`과 `Player.prefab`뿐이다.
+
+[선행 계획서 §7](728-ragdoll-pose-streaming.md)이 "대부분 배선"이라고 적어 둔 그 작업이고, 거기
+남겨 둔 **유일한 설계 미정**(정착 처리)에 §2에서 답을 낸다.
+
+---
+
+## 1. NPC와 다른 것 — 실제 코드로 채운 표
+
+| | NPC (완료) | 플레이어 (이번) | 근거 |
+|---|---|---|---|
+| 권위 | `PoseAuthority.Server` | **`PoseAuthority.Owner`** | 루트 NT가 `AuthorityMode: 1`(Owner) — `Player.prefab:6904`의 컴포넌트, 값은 `:6917`. 골반 NT(`:5294`)도 같은 값(`:5307`)이라 일관된다 |
+| RPC 방향 | 서버 → 전원 | **오너 → (서버 프록시) → 전원** | ⚠ §4 함정 1 |
+| 리그 | 한 벌 (`Model` 밑) | **두 벌** — 살아있는 리그 + `Corpse` 밑 시체 리그 | 스트리머의 `GetComponentInChildren<RagdollRig>(true)`가 시체 리그만 잡는다(`RagdollRig`는 `Corpse`에만 붙어 있다 — 프리팹 확인 완료) |
+| 정착 | `Freeze()` — 전 뼈 키네마틱 | **`RestToPhysics()` — 권위 피어는 계속 동적** | §2 |
+| 이탈 | 없다 (시체는 안 일어난다) | **부활 블렌드** (`ExitToAnimator(blend: true)`) | §3-4 |
+| 정착 판정을 도는 피어 | 서버만 (`NpcDeath`) | **전 피어** (`PlayerRagdoll.Update`) — ⚠ 게이트를 새로 달아야 한다 | §4 함정 2 |
+| 루트를 끄는 것 | `TickRootFollow` (컴포넌트 자체) | `TickCapsuleFollow` (`PlayerMovement`가 돌린다, 오너 전용) | 진입 시 발밑→골반 점프는 **양쪽 다 있다** → §4 함정 3 |
+
+---
+
+## 2. 설계 미정에 답한다 — 정착해도 얼리지 않고, 스트림만 끊는다
+
+[§7 마지막 칸](728-ragdoll-pose-streaming.md)이 남겨 둔 질문이다. NPC는 정착 = `Freeze`(전 뼈
+키네마틱)라 "얼릴 때 골반을 로컬로 넘기고 스트림을 끊는다"가 자연스럽게 성립했는데,
+**플레이어는 정착해도 뼈가 물리에 남는다**(`RestToPhysics` — 그 함수 주석에 왜 얼리면 안 되는지가
+네 가지 시도의 실패 기록으로 적혀 있다). 짝이 없다.
+
+**답: 얼림과 스트림 종료를 분리한다.** NPC에서 둘이 붙어 있었을 뿐, 스트리머가 요구하는 것은
+얼림이 아니라 **"권위 피어의 몸이 더 이상 유의미하게 움직이지 않는다"**뿐이다.
+
+| | 권위 피어 (오너) | 원격 피어 |
+|---|---|---|
+| 무너짐·비행·견인 | 동적, 25Hz 송신 | 전 뼈 키네마틱, 스트림 재생 |
+| 정착 | **동적 유지**(`RestToPhysics`) + `EndStreaming()` 1회 | 마지막 자세를 **로컬**로 받아 입히고 재생 정지. 이후 몸은 루트 계층이 옮긴다 |
+| 밧줄 견인 시작 | `BeginStreaming()` 재개 | 재생 재개 |
+| 부활 | `StopStreaming()` (보낼 자세 없음) | 각자 같은 프레임에 `StopStreaming()` |
+
+즉 NPC 코드에서 `Freeze()`만 `RestToPhysics()`로 바꾸면 나머지 배선이 그대로 맞는다.
+`BeginRopePull`에서 스트림을 재개하는 것도 NPC와 **같은 자리**다(NPC는 거기서 녹이고, 플레이어는
+녹일 것이 없어 재개만 한다).
+
+### ⚠ 이 답이 남기는 구멍 하나 — 정착 후 권위 피어의 몸은 아직 밀릴 수 있다
+
+NPC 시체는 얼어 있어 외력이 안 통하지만, **플레이어 시체는 정착 후에도 동적이다.** 스트림이
+끊긴 뒤에 뭔가가 몸을 밀면 원격은 그것을 못 본다.
+
+무엇이 밀 수 있나 — 뼈는 `Ragdoll` 레이어(10)이고 **레이어 매트릭스가 `Default`하고만 충돌시킨다**
+(`ProjectSettings/DynamicsManager.asset`). 그래서 다른 플레이어·NPC(`OwnBody`·`Interactable`)는
+못 민다. 남는 것은 **`Default` 레이어의 물체** — 지형(정적이라 무해), 그리고 **떨어뜨린 아이템·
+트래픽 차량**이다.
+
+**1차에서는 열어 둔다.** 값이 실제로 얼마나 벌어지는지 모르는 채로 안전망을 먼저 다는 것은
+이 작업의 나머지와 성격이 다르다. 대신 **재개 조건을 한 곳(`Update`)에 모아 두어** 필요해지면
+한 줄로 닫는다 — 정착 후 `m_rig.AverageSpeed`가 `m_settleSpeedThreshold`를 다시 넘으면
+`BeginStreaming()`. (3-5, 선택)
+
+---
+
+## 3. 단계 (커밋 단위)
+
+각 단계 끝에 컴파일을 확인한다:
+
+```bash
+dotnet build Assembly-CSharp.csproj
+```
+
+### 3-1. 프록시 RPC 스모크 테스트 — **먼저 한다**
+
+코드를 쓰기 전에 §4 함정 1(오너 → 서버 → 전원 프록시)이 실제로 도는지만 확인한다. NPC는
+**서버 → 전원**만 써 봤고, 이 방향은 이 프로젝트에서 한 번도 안 탔다. 여기서 막히면 설계가
+바뀌므로 순서가 맨 앞이다.
+
+MPPM 2인, 클라가 오너인 플레이어에서 `StreamPoseRpc`가 호스트와 다른 클라에 도착하는지.
+언리라이어블 + 배열 페이로드 그대로 볼 것.
+
+### 3-2. 스트리머 부착 + `PlayerRagdoll` 배선
+
+- `Player.prefab` 루트에 `RagdollPoseStreamer` 추가, `m_authority = Owner`
+- `PlayerRagdoll.Awake`에서 `GetComponent<RagdollPoseStreamer>()` + `OnSettledPoseReceived` 구독
+- `EnterRagdoll` → `BeginStreaming()` / `Settle` → `EndStreaming()` / `ExitToAnimator` → `StopStreaming()`
+- `BeginRopePull` → `BeginStreaming()`
+- **원격을 전 뼈 키네마틱으로** — `ReleaseBonesToPhysics`의 골반 예외를 NPC와 같은 모양으로 교체
+- **정착 판정에 권위 게이트** + 원격은 `OnSettledPoseReceived`로 정착 (§4 함정 2)
+- **첫 패킷 전 자세 붙들기** — `TickHoldPoseUntilStream` 이식 (§4 함정 3)
+
+⚠ 3-3과 합치지 않는다. [선행 계획서 3단계 주석](728-ragdoll-pose-streaming.md)과 같은 이유로,
+**원격 뼈가 동적인 채 스트림이 트랜스폼을 대입하는 중간 상태는 존재하면 안 된다.**
+단 골반 NT는 이 단계에서 남아 있어도 된다(대역폭만 낭비하고 화면에는 스트림 값이 보인다).
+
+### 3-3. 삭제
+
+| 지우는 것 | 위치 | 왜 |
+|---|---|---|
+| 골반 `NetworkTransform` + `NetworkRigidbody` | `Player.prefab` — `Hips`(`5294` · `5340`) | 전 뼈 스트림이 대체 |
+| `m_hipsIsNetworkSynced` | `147` · `216` · `367` · `505` · `510` · `726` | 배선이 사라진다 |
+| `TickAlignBonesToRoot` · `ClampByWall` | `1082` · `1129` | 좁힐 잔차가 없다 |
+| `m_alignPullSpeed` · `m_flightAlignPullSpeed` · `m_alignSnapDistance` · `k_alignedTolerance` | `47` · `96` · `103` · `108` | 위 함수 전용 |
+| `IsReadyToSettle`의 ②(당겨오기 완료 대기) | `850` | 원격은 이제 판정을 안 돈다 |
+| `m_logSinkDiagnostics` · `TickSinkDiagnostics` · `DescribeHipsMode` | `121` · `682` · `725` | **골반 동기화 검증 전용** 진단이라 목적이 함께 사라진다 |
+| `BeginRopePull`의 `m_hipsIsNetworkSynced &&` | `510` | 조건 없이 권위 전용 |
+| `LateUpdate`의 정렬 호출 | `964` | 위 함수와 함께 |
+
+`m_logRevivalYaw`는 **남긴다** — 부활 회전 진단이라 이 작업과 무관하다.
+
+### 3-4. 부활 블렌드 확인
+
+원격도 이제 **정확한 정착 자세**를 갖는다 — [corpse-split §4 "부활 시 큰 회전"](ragdoll-corpse-split.md)의
+변수 하나가 줄어드는 자리다. 고치는 단계가 아니라 **회귀가 없는지 보고, 남은 회전이 얼마인지
+기록하는** 단계다.
+
+### 3-5. (선택) 정착 후 재개 안전망 — §2의 구멍
+
+### 3-6. 늦은 접속 (#728 5단계, 미완) — §6
+
+### 3-7. 문서 — `ragdoll.md` 불변식 다시 쓰기 (#728 7단계, 미완) — §6
+
+---
+
+## 4. 함정 — 플레이어 고유
+
+1. ⚠ **RPC 방향이 뒤집힌다.** NPC는 서버가 보냈지만 플레이어 시체의 권위는 **오너(클라)**다.
+   `[Rpc(SendTo.NotMe)]`를 클라가 부르면 NGO가 **서버를 거쳐 프록시**하는데, 이 프로젝트에서
+   한 번도 안 탄 경로다. 언리라이어블 + `uint[]` 배열이 그대로 가는지, 지연이 한 홉만큼
+   늘어나는지(보간 지연 80ms로 흡수되는지)를 **3-1에서 먼저 본다.** 여기가 이번 작업의
+   유일한 미지수다.
+2. ⚠ **정착 판정을 전 피어가 돈다** — 선행 계획서 §4 함정 8이 플레이어에서 **실제 버그가 된다.**
+   NPC는 정착을 서버(`NpcDeath`)만 판정해서 게이트가 이미 있었지만, `PlayerRagdoll.Update`는
+   `MonoBehaviour`라 전 피어에서 돌고 `m_rig.AverageSpeed`를 그대로 읽는다(`812`~`838`).
+   원격 뼈가 키네마틱이 되면 그 값이 **항상 0**이라 → `m_settleHoldSeconds`(0.3초) 뒤
+   **무조건 정착**한다. 반드시 `HasMoveAuthority`로 막고, 원격은 `OnSettledPoseReceived`로만
+   정착시킬 것.
+3. **진입 시 0.9m 점프가 플레이어에도 있다.** NPC는 `TickRootFollow`가 루트를 골반으로 끌어
+   생겼는데, 플레이어는 `TickCapsuleFollow`가 **캡슐을 골반 위치로 3차원 추종**시켜 똑같이
+   생긴다 — 발밑에서 골반까지. 원격의 키네마틱 뼈는 그 루트를 계층으로 따라가므로
+   `TickHoldPoseUntilStream`이 **여기도 필요하다.**
+4. **`RagdollRig`가 두 벌이 아니라 한 벌이다** — 살아있는 뼈에는 `RagdollRig` 컴포넌트가 없고
+   `m_liveBoneRoot`(Transform)로만 잡힌다. 스트리머의 `GetComponentInChildren<RagdollRig>(true)`가
+   시체 리그를 정확히 집는 것을 프리팹에서 확인했다. ⚠ 살아있는 쪽에 `RagdollRig`를 붙이는 변경이
+   생기면 **탐색 순서에 조용히 걸린다.**
+5. **`Corpse`를 다시 `SetActive(false)`로 숨길 수 있게 된다** — 항상 켜 두던 유일한 이유가 골반
+   NT였다([선행 계획서 §4 함정 1](728-ragdoll-pose-streaming.md)). ⚠ **이번 브랜치에서는 안 한다.**
+   지금 숨김은 렌더러·콜라이더로 하고 있어(`SetCorpseVisible`) 바꾸면 별개의 변경이 된다.
+6. **`BombDevice`의 임펄스 ClientRpc** — 선행 계획서가 "플레이어 단계에서 같이 본다"로 미뤄 둔 것.
+   원격은 뼈가 키네마틱이라 임펄스가 무해하게 무시되므로 **급하지 않다.** 권위 전용으로 좁히는 것은
+   대역폭 정리이지 버그 수정이 아니다 — 3-3에 넣지 말고 별도로 판단한다.
+7. **오프라인 Play** — `!IsSpawned`면 `IsPoseAuthority`가 항상 참이라 지금 동작 그대로다. 회귀만 볼 것.
+
+---
+
+## 5. 검증 — MPPM 2인(호스트 + 클라 1)이 최소 구성
+
+**⚠ 이번에는 클라가 오너인 구성이 본작업이다.** NPC는 호스트=권위였지만 여기서는
+**클라의 플레이어가 죽는 경우**가 프록시 RPC를 타는 경로다. 두 방향을 모두 본다.
+
+| # | 항목 | 기준 |
+|---|---|---|
+| 1 | 클라 플레이어 사망 → 호스트 화면 | 자세가 육안으로 같다. **프록시 RPC 경로** |
+| 2 | 호스트 플레이어 사망 → 클라 화면 | 같은 기준 |
+| 3 | 원격 뼈 최고 속도 | **정확히 0** |
+| 4 | 정착 후 양쪽 골반 위치 | 1mm 이내 |
+| 5 | 진입 순간 원격 시체 | 뜨지 않는다 (함정 3) |
+| 6 | 원격이 혼자 먼저 정착하지 않는다 | 함정 2 — 0.3초 뒤 튀면 게이트가 샌 것 |
+| 7 | 밧줄 견인 / 운반(#365) 중 원격 화면 | 미끄러짐·떨림 없음. **대역폭을 여기서 잰다** |
+| 8 | 부활 블렌드 | 회귀 없음 + 남은 회전량 기록 (3-4) |
+| 9 | 라운드 리셋 · 씬 전환 (`ExitForReposition`) | 회귀 없음 |
+| 10 | 늦은 접속 | ⚠ **지금도 뚫려 있다** — §6 |
+| 11 | 오프라인 Play | 회귀 없음 |
+
+계측 도구는 NPC와 같은 것을 되살려 쓴다 —
+[jail-teleport §6](ragdoll-corpse-jail-teleport.md). ⚠ MPPM 가상 플레이어 콘솔은 도구로 못 읽고
+`Library/VP/<가상플레이어>/Logs/`가 정본이다.
+
+### 대역폭 — NPC 실측을 그대로 쓸 수 있다
+
+시체 1구·원격 1인 기준 **1.5 KB/s**([선행 계획서 §1-6](728-ragdoll-pose-streaming.md), 25Hz ·
+페이로드 62B). 플레이어는 **동시 시체가 최대 6구**로 상한이 명확하고, 정착하면 스트림이 끊기므로
+상시 스트리밍은 보통 0~2구다. **최악은 6명 전원이 동시에 죽어 끌려가는 경우**로 NPC 표의 "6구"
+행과 같은 ~63 KB/s. NPC 시체와 **합산된다**는 것만 새롭다.
+
+---
+
+## 6. ⚠ #728이 안 끝내고 닫힌 것 — 이 브랜치의 결정 사항
+
+[선행 계획서 §3의 단계표](728-ragdoll-pose-streaming.md)에서 **두 개가 남았다.** 이슈는 닫혔고
+`main`에는 안 들어갔다.
+
+| 단계 | 상태 | 확인 |
+|---|---|---|
+| 5 — 늦은 접속(권위가 마지막 자세를 캐시 → `OnClientConnected`에서 재전송) | **미구현** | `RagdollPoseStreamer`에 `OnClientConnected`가 없다. `FinalPoseRpc` 주석이 "6단계에서 닫는다"로 미루고 있다 |
+| 7 — `ragdoll.md` 불변식 다시 쓰기 | **절반** | PR #737(리뷰 후속)이 **머리에 배너**를 달아 NPC에 무효가 된 불변식 1·4·7·8을 표로 짚었다. 본문은 아직 플레이어 기준 그대로다 — 전면 재작성이 남았다 |
+
+> **갱신 (2026-08-19)** — 이 문서를 처음 쓸 때는 `ragdoll.md`가 아무 표시 없이 거짓이었으나,
+> PR #737이 배너를 달아 **"NPC는 다르다"까지는 읽힌다.** 그래서 3-7의 성격이 바뀌었다:
+> 급한 오독 방지는 이미 됐고, 남은 것은 **NPC·플레이어가 같은 구조가 된 뒤 본문을 한 번에
+> 다시 쓰는 것**이다. 이 브랜치가 끝나야 그 시점이 온다.
+
+늦은 접속은 **NPC·플레이어 공통 부품**(`RagdollPoseStreamer`)에서 닫히므로 여기서 하는 것이 맞다.
+다만 **3-2/3-3이 끝난 뒤**에 붙인다 — 먼저 하면 검증 대상이 두 겹이 된다.
+
+`ragdoll.md`는 **지금이 고칠 시점이 아니다.** 이 브랜치가 끝나야 NPC·플레이어 양쪽이 같은 구조가
+되고, 그때 불변식을 한 번에 다시 쓸 수 있다. 3-7이 그 자리다.
