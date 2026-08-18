@@ -59,11 +59,9 @@ public class NpcHealth : NetworkBehaviour, IDamageable
     }
 
     /// <summary>
-    /// 피해 적용 (<see cref="IDamageable"/>) — 플레이어 타격의 공통 경로. (#366)
-    ///
-    /// <see cref="NpcStateRules.CanBeDamaged"/>가 false면 <b>피해 자체를 무시</b>한다 — 연행 중인
-    /// 신병을 때려 신병에서 빼내는 우회를 막는 게이트다. 차·폭발 같은 환경 피해는 이 게이트를
-    /// 타지 않는다 — <see cref="TakeEnvironmentalDamage"/> 참고 (#690).
+    /// 피해 적용 (<see cref="IDamageable"/>) — 플레이어 타격 전용. (#366)
+    /// <see cref="NpcStateRules.CanBeDamaged"/>가 신병 빼내기 우회를 막는다. 환경 피해는
+    /// <see cref="TakeEnvironmentalDamage"/>로 간다 (#690).
     /// </summary>
     /// <param name="amount">깎을 체력. 0 이하는 무시한다.</param>
     /// <param name="attacker">가해자 — 기절 시 위협 대상으로 넘긴다. null 허용.</param>
@@ -80,11 +78,8 @@ public class NpcHealth : NetworkBehaviour, IDamageable
     }
 
     /// <summary>
-    /// 환경 피해 적용(차량·폭발 등) — <see cref="TakeDamage"/>와 <b>다른 게이트</b>를 쓴다. (#690)
-    ///
-    /// 연행 중(Escorted 등)인 신병도 그대로 맞는다 — <see cref="NpcStateRules.CanBeDamaged"/>가 막는 것은
-    /// "때려서 신병에서 빼내는 우회"인데, 차나 폭발은 신병 상태를 가리지 않는다. 밧줄에 묶여 도로 위로
-    /// 끌려가던 시민이 지나가는 차에 안 죽던 문제(#690)가 이 게이트를 그대로 타서 생겼다.
+    /// 환경 피해 적용(차량·폭발 등) — 연행 중인 신병도 그대로 맞는다 (#690). 차·폭발은 신병
+    /// 상태를 가리지 않는데 <see cref="TakeDamage"/>의 우회 방지 게이트에 함께 막히고 있었다.
     /// </summary>
     /// <param name="amount">깎을 체력. 0 이하는 무시한다.</param>
     /// <param name="attacker">가해자 — 기절 시 위협 대상으로 넘긴다. null 허용.</param>

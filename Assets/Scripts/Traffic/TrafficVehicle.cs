@@ -336,9 +336,8 @@ public class TrafficVehicle : NetworkBehaviour
 
     // 시민도 플레이어와 같은 피해를 받는다 (#634 확정) — 예전에는 넘어지기만 했다.
     //
-    // <b>피해는 TakeEnvironmentalDamage로 넣는다</b> (#690) — 밧줄에 묶여 끌려가던 신병은
-    // TakeDamage의 게이트(CanBeDamaged)에 막혀 차에 치여도 죽지 않았다. 그 게이트는 "때려서
-    // 신병에서 빼내는 우회"를 막으려는 것이라 플레이어 타격용이지, 차는 신병 상태를 가리지 않는다.
+    // 피해는 TakeEnvironmentalDamage로 넣는다 (#690) — 밧줄 신병은 TakeDamage의 우회 방지 게이트에
+    // 막혀 차에 치여도 죽지 않았다. 그 게이트는 플레이어 타격용이지 차는 신병 상태를 가리지 않는다.
     //
     // ⚠ <b>넉백이 피해보다 먼저다.</b> 피해가 먼저 가면 대상이 죽어 상태가 Dead가 되는데
     // ServerApplyKnockback은 그 상태를 거르지 않아 시체를 Stunned로 되살린다. 이 순서면

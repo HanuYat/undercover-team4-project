@@ -65,11 +65,9 @@ public static class NpcStateRules
         && npc.CurrentState != NpcState.Dead
         && (npc.Penalty.IsUndercoverDuty || CanBeDamaged(npc.CurrentState));
 
-    /// <summary>환경 피해(차량·폭발 등)가 들어가는 상태인가 — <see cref="CanBeDamaged"/>와 <b>다른 게이트</b>다. (#690)
-    /// 그쪽이 막는 것은 "때려서 신병에서 빼내는 우회"라 연행 중(Escorted/Captured/Detained/Chasing/
-    /// PenaltyEscorting)을 제외하는데, 차나 폭발은 신병 상태를 알지도 가리지도 않는다 — 도로 위에
-    /// 묶여 끌려가던 시민도 지나가는 차에는 똑같이 치인다. 그래서 여기는 <b>죽은 대상만</b> 막는다
-    /// (더 때려도 무의미하고, 열어 두면 OnDamaged 등이 시체에서 계속 발행된다).</summary>
+    /// <summary>환경 피해(차량·폭발 등)가 들어가는 상태인가 — <see cref="CanBeDamaged"/>와 다른 게이트다 (#690).
+    /// 그쪽은 신병 빼내기 우회를 막으려 연행 중을 제외하지만, 차·폭발은 신병 상태를 가리지 않는다.
+    /// 여기는 죽은 대상만 막는다.</summary>
     public static bool CanTakeEnvironmentalDamage(NpcController npc) =>
         npc != null && npc.CurrentState != NpcState.Dead;
 
