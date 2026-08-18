@@ -40,6 +40,10 @@ using UnityEngine.AI;
 /// 계속 쫓게 한다. 놓쳤을 때의 결말은 아래 <see cref="m_maxChaseSeconds"/>가 낸다 — 개별 납치범이
 /// 스스로 빠지면 남은 하나가 혼자 끌고 가 2인 호송이 무너진다. 오검거 쪽 재타겟은 그대로 둔다.
 ///
+/// <b>표적이 포획 전에 다른 사유로 죽으면 그 자리에서 무산한다</b> (#679). 추격 중에는 납치범이 아직
+/// 손을 대지 못했으니(때리는 것은 포획 후 린치뿐) 이 단계의 죽음은 언제나 납치 밖의 사유다 — 60초
+/// 상한을 기다리지 않고 <see cref="HandleVictimCauseChanged"/>가 즉시 해산시킨다.
+///
 /// 같은 표식이 <b>앵그리 마크(#280)를 끈다</b> — 오검거 추격대를 알아보게 하는 머리 위 표시인데,
 /// 납치범에게 뜨면 시민과 구분되지 않는다는 전제가 표시 하나로 깨진다.
 ///
@@ -121,6 +125,7 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     private readonly List<NpcController> m_abductors = new List<NpcController>();
 
     private bool m_active;
+    private Transform m_chaseTarget;   // 포획 전 추격 표적 — 다른 사유로 죽으면 추격을 무산한다 (#679)
     private Transform m_carryTarget;   // 포획해 끌고 가는 중인 플레이어 — 중복 접수 방지
     private float m_chaseDeadline;
 
@@ -262,6 +267,7 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
         }
 
         m_active = true;
+        m_chaseTarget = target;
         m_chaseDeadline = Time.time + m_maxChaseSeconds;
         m_loneWatch.Reset(); // 이번 판정은 소비했다 — 끝난 뒤 처음부터 다시 센다
 
@@ -428,6 +434,7 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     private void Finish()
     {
         m_active = false;
+        m_chaseTarget = null;
         m_disposing = false;
         m_lynching = false;
         m_executing = false;

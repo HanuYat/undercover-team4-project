@@ -43,28 +43,43 @@ public partial class AbductionEvent
     }
 
     /// <summary>
-    /// 끌고 가던 몸이 <b>납치 밖의 사유로</b> 쓰러졌다 — 그러면 납치는 손을 뗀다. (#554)
+    /// 끌고 가던(또는 아직 쫓는 중인) 표적이 <b>납치 밖의 사유로</b> 쓰러졌다 — 그러면 납치는 손을 뗀다. (#554/#679)
     ///
-    /// 실제로 밟은 경로는 <b>폭탄</b>이다: 호송 중인 피해자가 폭발에 맞아 HP가 0이 되면
-    /// <see cref="PlayerHealth"/>가 곧바로 기능 정지(<see cref="IncapacitationCause.Die"/>)를 건다(#524).
-    /// 그런데 호송은 그 몸을 계속 끌고 갔고, 외곽에 닿으면 린치는 HP가 이미 0이라 즉시 통과해
-    /// <b>시체 반출</b>까지 이어졌다 — 폭탄으로 죽었을 뿐인 플레이어가 맵 밖으로 실려 나가
-    /// 본부 이송 부활(#365) 대상에서 조용히 사라졌다.
+    /// <b>포획 전</b> — 추격 중인 표적이 죽으면(차 사고 등) 즉시 무산한다 (#679). 납치범은 포획해야
+    /// 때릴 수 있으니(린치는 포획 후) 이 단계의 죽음은 항상 외부 사인이다. 표적이 그 자리에 쓰러져
+    /// 있을 뿐 오브젝트가 파괴되진 않아 <see cref="NpcChaseState"/>가 스스로 눈치채지 못하므로,
+    /// 기존 60초 상한을 기다리지 않게 여기서 앞당겨 끊는다.
     ///
-    /// 접수 단계에는 같은 가드가 이미 있다(<see cref="HandleAbductionCaught"/>의 "이미 무력화된 몸은
-    /// 접수하지 않는다"). 빠져 있던 것은 <b>접수한 뒤</b>에 원인이 바뀌는 경우다.
+    /// <b>포획 후</b> — 실제로 밟은 경로는 폭탄이다: 호송 중인 피해자가 폭발에 맞아 HP가 0이 되면
+    /// <see cref="PlayerHealth"/>가 곧바로 기능 정지를 건다(#524). 접수 단계 가드(<see cref="HandleAbductionCaught"/>)만
+    /// 으로는 <b>접수한 뒤</b> 원인이 바뀌는 경우를 못 잡아, 폭탄사에도 시체가 계속 끌려가 반출까지
+    /// 이어지고 있었다. <b>린치 중</b>에는 납치 스스로도 사인을 바꾸므로(Lynched → Die) 마지막 가해자로
+    /// (<see cref="m_lastVictimAttacker"/>) 갈라 낸다 — 납치범 주먹이면 결말을 그대로 두고, 외부 사인이면
+    /// 물러난다. 반출은 부활 기회까지 지우므로 폭탄과 겹쳤다는 이유만으로 그걸 잃게 하지 않는다 (2026-08-07).
     ///
-    /// <b>린치 중에도 본다</b> — 다만 그 구간은 납치가 스스로 사인을 바꾸므로(Lynched → Die) 그것과
-    /// 외부 사인을 갈라야 한다. 기준은 <b>마지막 일격이 누구였나</b>다(<see cref="m_lastVictimAttacker"/>):
-    /// 납치범 주먹이면 결말이 맞으니 그대로 두고, 폭발처럼 남이 낸 죽음이면 물러난다. 여기까지 와서도
-    /// 폭탄사에 몸을 남기는 이유는 <b>결말의 대가가 다르기</b> 때문이다 — 반출은 부활 기회까지 지우므로,
-    /// 폭탄과 납치가 겹쳤다는 이유만으로 그걸 잃게 하지 않는다 (팀 확정 2026-08-07).
-    ///
-    /// 정적 이벤트라 <b>모든</b> 플레이어의 변경이 들어온다 — 지금 끌고 가는 대상만 본다.
+    /// 정적 이벤트라 <b>모든</b> 플레이어의 변경이 들어온다 — 지금 쫓거나 끌고 가는 대상만 본다.
     /// </summary>
     private void HandleVictimCauseChanged()
     {
-        if (!HasServerAuthority || m_carryTarget == null || m_disposing || m_executing)
+        if (!HasServerAuthority)
+            return;
+
+        if (m_carryTarget == null)
+        {
+            if (m_chaseTarget == null)
+                return;
+
+            PlayerIncapacitation chaseIncap = m_chaseTarget.GetComponent<PlayerIncapacitation>();
+            if (chaseIncap != null && chaseIncap.Cause == IncapacitationCause.Die)
+            {
+                Debug.Log($"[납치] 추격 무산 — 표적이 납치 밖의 사유로 사망: {m_chaseTarget.name}");
+                ReleaseAllAbductors();
+                Finish();
+            }
+            return;
+        }
+
+        if (m_disposing || m_executing)
             return;
 
         PlayerIncapacitation incap = m_carryTarget.GetComponent<PlayerIncapacitation>();
