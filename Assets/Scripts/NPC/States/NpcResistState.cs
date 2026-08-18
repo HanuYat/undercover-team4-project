@@ -12,10 +12,34 @@ using UnityEngine;
 /// </summary>
 public class NpcResistState : NpcStateBase
 {
-    private const int k_maxOverlapHits = 16;
+    // 폭탄(BombDevice)·차량(TrafficVehicle)과 같은 크기. 16이었을 때 타격이 <b>가끔 빗나갔다</b> (#692) —
+    // 아래 CollectPlayersInRange 주석 참고.
+    private const int k_maxOverlapHits = 64;
 
     // 서버에서만 Tick되므로 버퍼 공유 안전 — 매 타격마다의 할당 방지
     private static readonly Collider[] s_overlapBuffer = new Collider[k_maxOverlapHits];
+
+    private static int s_hitLayers; // 0 = 아직 조회 전
+
+    /// <summary>
+    /// 타격 판정에 쓰는 레이어 마스크 — 래그돌 본을 뺀 전 레이어. (#692)
+    ///
+    /// ⚠ <b>필드 초기화로 못 만든다.</b> <see cref="LayerMask.NameToLayer"/>는 생성자·필드 초기화에서
+    /// 호출이 금지돼 있어(= static 생성자가 그 시점에 걸리는 경우 포함) 예외가 난다. 그래서 첫 사용
+    /// 시점에 늦게 조회한다 — <see cref="TrafficVehicle"/>·<see cref="NpcNavAreas.RoadMask"/>와 같은 패턴.
+    /// </summary>
+    private static int HitLayers
+    {
+        get
+        {
+            if (s_hitLayers == 0)
+            {
+                int ragdoll = LayerMask.NameToLayer("Ragdoll");
+                s_hitLayers = ragdoll >= 0 ? ~(1 << ragdoll) : ~0; // 레이어가 없으면 전 레이어로 폴백
+            }
+            return s_hitLayers;
+        }
+    }
     private static readonly List<PlayerHealth> s_playerBuffer = new List<PlayerHealth>(8);
 
     private const float k_noPendingStrike = -1f;
@@ -328,11 +352,28 @@ public class NpcResistState : NpcStateBase
             m_owner.StateMachine.ChangeState(NpcState.Idle); // 유발자도 없고 주변에도 아무도 없으면 도망갈 이유가 없다
     }
 
-    /// <summary>반경 내 PlayerHealth를 중복 없이 s_playerBuffer에 모은다.</summary>
+    /// <summary>
+    /// 반경 내 PlayerHealth를 중복 없이 s_playerBuffer에 모은다.
+    ///
+    /// <b>래그돌 본을 뺀다</b> (#692). 사람 하나가 본만 11개를 들고 있어(플레이어 13 · 시민 12),
+    /// 마스크를 열고 16칸 버퍼로 재면 <b>때리는 자기 몸 12개가 먼저 버퍼를 채워</b> 남는 자리가 4칸이었다 —
+    /// 플레이어 콜라이더가 그 안에 들어갈지는 물리 쿼리 순서에 달린 문제라 사실상 운이었고, 옆에 시민이
+    /// 하나만 있어도 확실히 포화됐다. <see cref="Physics.OverlapSphereNonAlloc"/>은 넘쳐도 <b>잘린 개수만
+    /// 돌려주고 알려주지 않으므로</b> 그대로 조용히 빗나갔다(차량 치임의 #673과 같은 함정).
+    ///
+    /// 어느 콜라이더에 걸려도 GetComponentInParent가 같은 대상으로 올라가므로 판정력은 그대로다 —
+    /// 플레이어는 본을 빼도 Default·Interactable 콜라이더가 남는다.
+    /// </summary>
     private void CollectPlayersInRange(float radius)
     {
         s_playerBuffer.Clear();
-        int hitCount = Physics.OverlapSphereNonAlloc(m_owner.transform.position, radius, s_overlapBuffer);
+        int hitCount = Physics.OverlapSphereNonAlloc(
+            m_owner.transform.position, radius, s_overlapBuffer, HitLayers);
+
+        // 넘쳤으면 누군가는 잘렸다 — 조용히 안 맞는 것보다 로그가 남는 편이 낫다 (TrafficVehicle과 같은 방침)
+        if (hitCount == s_overlapBuffer.Length)
+            Debug.LogWarning($"저항 타격 판정 버퍼가 찼다 — 뒤로 밀린 대상이 잘렸을 수 있다: {m_owner.name}");
+
         for (int i = 0; i < hitCount; i++)
         {
             PlayerHealth player = s_overlapBuffer[i].GetComponentInParent<PlayerHealth>();
