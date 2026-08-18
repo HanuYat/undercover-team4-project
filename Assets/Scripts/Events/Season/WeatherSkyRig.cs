@@ -24,6 +24,7 @@ public class WeatherSkyRig : MonoBehaviour
 {
     // 리그를 만든 쪽이 넘긴 값 — 런타임 생성이라 SerializeField가 아니다(씬 배선 없이 뷰가 만든다)
     private float m_cloudHeight;
+    private float m_precipitationHeight;
 
     // 따라갈 기준 — 로컬 플레이어(1순위) 또는 Camera.main(폴백). ResolveView 참고.
     private Transform m_view;
@@ -52,9 +53,10 @@ public class WeatherSkyRig : MonoBehaviour
         GameObject root = new GameObject(label);
         WeatherSkyRig rig = root.AddComponent<WeatherSkyRig>();
         rig.m_cloudHeight = cloudHeight;
+        rig.m_precipitationHeight = Mathf.Max(0f, precipitationHeight);
 
         rig.CloudAnchor = CreateAnchor(root.transform, "Cloud", cloudHeight);
-        rig.PrecipitationAnchor = CreateAnchor(root.transform, "Precipitation", Mathf.Max(0f, precipitationHeight));
+        rig.PrecipitationAnchor = CreateAnchor(root.transform, "Precipitation", rig.m_precipitationHeight);
 
         rig.SnapToCamera(); // 첫 프레임부터 제자리 — 원점에서 날아오는 것이 보이지 않게
         return rig;
@@ -108,8 +110,11 @@ public class WeatherSkyRig : MonoBehaviour
     {
         SnapToCamera();
         SnapCloudLayer();
-        FacePrecipitationToView();
+
+        // 셸터가 <b>배치보다 먼저</b>다 (#733) — 창 너머 모드인지를 여기서 정하고, 그 결과를 보고
+        // 아래에서 방출 지점을 시야 앞이 아니라 창밖으로 옮긴다.
         TickShelter();
+        FacePrecipitationToView();
     }
 
     // ---- 실내 차단 (2026-08-12 확정) ----
@@ -134,7 +139,26 @@ public class WeatherSkyRig : MonoBehaviour
     // 방출 배율의 기준값 — Boost가 이미 곱해 둔 값이라 여기서 다시 계산하지 않고 붙잡아 둔다
     private readonly List<ParticleSystem> m_precipitationSystems = new List<ParticleSystem>();
     private readonly List<float> m_precipitationBaseRates = new List<float>();
+    private readonly List<ParticleSystemSimulationSpace> m_precipitationBaseSpaces =
+        new List<ParticleSystemSimulationSpace>();
     private bool m_precipitationCached;
+
+    // ---- 창문/문 너머 노출 (#733) ----
+    //
+    // 지붕만 보고 그치면 <b>창밖이 보이는 자리에서도 날씨가 사라진다</b>. 시야 방향으로 레이를 하나 더 쏴
+    // "저 앞 기둥은 바깥인가"를 묻고, 바깥이면 그치지 않고 <b>방출 지점을 그 창밖으로 옮긴다</b>.
+    //
+    // 벽이 렌더링으로 가려 주므로 클리핑 로직이 없다 — 방 안에 입자가 떠 있지 않은 근거가 이것이다.
+
+    // 시야 방향으로 창을 찾는 최대 거리(m). 이보다 먼 창은 찾지 않는다.
+    private const float k_windowProbeDistance = 20f;
+
+    // 막힌 자리에서 물러설 거리(m) — 그 콜라이더 안에서 하늘 검사를 시작하지 않게 한다.
+    private const float k_windowSurfaceBackoff = 0.5f;
+
+    // 창밖으로 확정된 지점(방출 높이는 별도) — m_hasWindow가 참일 때만 유효하다.
+    private Vector3 m_windowPoint;
+    private bool m_hasWindow;
 
     /// <summary>
     /// 지붕 아래에서는 강수를 그치게 한다 — 뷰가 켤 때 한 번 부른다. (2026-08-12 확정)
@@ -157,17 +181,25 @@ public class WeatherSkyRig : MonoBehaviour
 
         CachePrecipitationSystems();
 
+        bool sheltered = IsSheltered();
+
+        // 지붕 아래면 창을 찾아본다 — 창이 있으면 그치지 않고 그 너머에 내린다 (#733)
+        bool hadWindow = m_hasWindow;
+        m_hasWindow = sheltered && TryFindWindow(out m_windowPoint);
+
         float previousFactor = m_shelterFactor;
-        float target = IsSheltered() ? 0f : 1f;
+        float target = !sheltered || m_hasWindow ? 1f : 0f;
         m_shelterFactor =
             m_shelterFadeSeconds <= 0f
                 ? target
                 : Mathf.MoveTowards(m_shelterFactor, target, Time.deltaTime / m_shelterFadeSeconds);
 
-        // 완전히 가려진 순간 한 번만 — 방출은 막아도 이미 떠 있던 입자는 그대로 살아남는데,
-        // 파티클이 Local 공간이라 앵커가 매 프레임 시점을 따라가는 한 그 입자들이 카메라에
-        // 실려 다닌다(#734). 방출량만으로는 못 지운다.
+        // 방출은 막아도 이미 떠 있던 입자는 그대로 살아남는다 — 그래서 <b>방출 지점이 순간이동하는
+        // 전환에서는 지운다</b>. 완전히 가려지는 순간(#734)과 창 너머 모드가 켜지고 꺼지는 순간(#733)이
+        // 그 둘이다: 앵커가 튀는데 입자가 남아 있으면 그 입자들이 새 자리로 끌려가는 것이 보인다.
         bool justFullySheltered = previousFactor > 0f && m_shelterFactor <= 0f;
+        bool windowModeChanged = hadWindow != m_hasWindow;
+        bool clearParticles = justFullySheltered || windowModeChanged;
 
         for (int i = 0; i < m_precipitationSystems.Count; i++)
         {
@@ -178,9 +210,56 @@ public class WeatherSkyRig : MonoBehaviour
             ParticleSystem.EmissionModule emission = ps.emission;
             emission.rateOverTimeMultiplier = m_precipitationBaseRates[i] * m_shelterFactor;
 
-            if (justFullySheltered)
+            // 창 너머 모드에서만 World 공간으로 돌린다 — Local이면 고개를 돌릴 때마다 창밖에 이미 떨어지고
+            // 있던 눈이 앵커를 따라 함께 미끄러진다. World면 뿌려진 눈은 제자리에서 떨어지고 새 입자만
+            // 옮겨진 자리에서 난다. 창 안 볼 때는 원래 공간으로 되돌려 기존 연출을 건드리지 않는다.
+            ParticleSystem.MainModule main = ps.main;
+            main.simulationSpace = m_hasWindow
+                ? ParticleSystemSimulationSpace.World
+                : m_precipitationBaseSpaces[i];
+
+            if (clearParticles)
                 ps.Clear(withChildren: true);
         }
+    }
+
+    /// <summary>
+    /// 시야 방향에 창(또는 열린 문)이 있는가 — 있으면 그 <b>창밖 지점</b>을 돌려준다. (#733)
+    ///
+    /// 2단이다. ① 보는 쪽으로 레이를 쏴 시선이 닿는 끝 지점을 잡는다. ② 그 지점에서 다시 위로 쏴
+    /// <b>거기가 바깥인지</b> 확인한다. ②가 핵심이다 — 없으면 천장이 있는 큰 실내 홀도 창으로 읽힌다
+    /// (레이가 20m를 날아가도 아무것도 안 맞기 때문에). 실내 벽을 보고 있으면 그 벽 위엔 지붕이 있어
+    /// ②에서 걸러진다.
+    ///
+    /// forward는 <b>수평으로 눕히지 않는다</b> — 올려보거나 내려보는 창도 잡아야 하므로
+    /// <see cref="FacePrecipitationToView"/>의 수평 투영과는 다른 벡터를 쓴다.
+    /// </summary>
+    private bool TryFindWindow(out Vector3 outsidePoint)
+    {
+        outsidePoint = default;
+
+        Vector3 origin = m_view.position;
+        Vector3 forward = m_view.forward;
+
+        Vector3 candidate = Physics.Raycast(
+            origin,
+            forward,
+            out RaycastHit hit,
+            k_windowProbeDistance,
+            m_shelterMask,
+            QueryTriggerInteraction.Ignore
+        )
+            ? hit.point - forward * k_windowSurfaceBackoff
+            : origin + forward * k_windowProbeDistance;
+
+        // 높이는 <b>보는 높이</b>로 맞춘다 — IsSheltered가 방출 지점을 검사하는 방식과 같다.
+        // 창을 올려보든 내려보든 묻는 것은 "저 x/z 기둥이 바깥인가"다.
+        Vector3 probe = new Vector3(candidate.x, origin.y, candidate.z);
+        if (WeatherShelter.IsSheltered(probe, m_shelterMask, m_shelterProbeHeight))
+            return false;
+
+        outsidePoint = probe;
+        return true;
     }
 
     // 보는 자리와 방출 지점 <b>둘 중 하나라도</b> 막혔으면 실내로 본다 (#647).
@@ -215,14 +294,36 @@ public class WeatherSkyRig : MonoBehaviour
         {
             m_precipitationSystems.Add(ps);
             m_precipitationBaseRates.Add(ps.emission.rateOverTimeMultiplier);
+            m_precipitationBaseSpaces.Add(ps.main.simulationSpace); // 창 너머 모드에서 World로 바꾼 뒤 되돌릴 기준값
         }
     }
 
     // 강수 방출 지점을 시야 앞으로 밀고 수평 방향만 맞춘다 — 낙하 방향은 건드리지 않는다.
     private void FacePrecipitationToView()
     {
-        if (PrecipitationAnchor == null || !m_precipitationFacesView || m_view == null)
+        if (PrecipitationAnchor == null || m_view == null)
             return;
+
+        // 창 너머 모드 — 시야 앞이 아니라 <b>창밖 그 자리</b>에 뿌린다 (#733). 벽이 가려 주므로
+        // 방 안에서는 창틀 안쪽으로만 보인다. 높이는 원래 방출 높이를 그대로 쓴다(위에서 내려와야 하므로).
+        if (m_hasWindow)
+        {
+            PrecipitationAnchor.position = new Vector3(
+                m_windowPoint.x,
+                transform.position.y + m_precipitationHeight,
+                m_windowPoint.z
+            );
+            PrecipitationAnchor.rotation = Quaternion.identity; // 낙하는 월드 -Y
+            return;
+        }
+
+        if (!m_precipitationFacesView)
+        {
+            // 시야 추종을 끈 구성 — 창 너머 모드에서 옮겨 둔 자리를 제자리로 되돌린다
+            PrecipitationAnchor.localPosition = new Vector3(0f, m_precipitationHeight, 0f);
+            PrecipitationAnchor.localRotation = Quaternion.identity;
+            return;
+        }
 
         // 보는 쪽의 수평 성분만 뽑는다. 위를 보고 있으면 forward가 하늘을 가리키므로
         // 그대로 쓰면 방출 지점이 머리 위로 솟는다 — y를 버려야 시야 '앞'이 된다.
@@ -233,8 +334,10 @@ public class WeatherSkyRig : MonoBehaviour
             flatForward = Vector3.forward; // 정수리를 보고 있다 — 방향이 없으니 기본값
         flatForward.Normalize();
 
+        // 높이는 캐시한 원래 값을 쓴다 — 창 너머 모드가 localPosition을 통째로 덮어쓰므로
+        // 지금 값에서 읽으면 창을 한 번 본 뒤로 높이가 어긋난다.
         PrecipitationAnchor.localPosition =
-            new Vector3(0f, PrecipitationAnchor.localPosition.y, 0f)
+            new Vector3(0f, m_precipitationHeight, 0f)
             + transform.InverseTransformDirection(flatForward) * m_precipitationForward;
 
         // yaw만 — 낙하는 월드 -Y로 남는다

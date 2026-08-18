@@ -112,6 +112,8 @@ MonoBehaviour:
     enabled: 1
   - component: {fileID: 2421280246905754952}
     enabled: 1
+  m_weatherTable: {fileID: 0}
+  m_clearPercentFallback: 50
 --- !u!114 &4617273519023223210
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -289,10 +291,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SnowEvent
   ShowTopMostFoldoutHeaderGroup: 1
-  m_durationSeconds: 30
   m_iceOnsetSeconds: 5
   m_iceFullSeconds: 20
+  m_iceMaxRatio: 0.6
   m_thawSeconds: 45
+  m_shelterProbeHeight: 25
+  m_shelterMask:
+    serializedVersion: 2
+    m_Bits: 1
 --- !u!114 &2813280441832589395
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -306,7 +312,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LightningEvent
   ShowTopMostFoldoutHeaderGroup: 1
-  m_durationSeconds: 15
   m_strikeIntervalMin: 2
   m_strikeIntervalMax: 5
   m_warningSeconds: 0.6
@@ -346,7 +351,7 @@ MonoBehaviour:
   m_cloudSpacing: 70
   m_snowSizeBoost: 3.5
   m_snowRateBoost: 10
-  m_snowFallSpeedBoost: 2.5
+  m_snowFallSpeedBoost: 4
   m_snowVolumeBoost: 2.5
   m_shelterProbeHeight: 25
   m_shelterMask:
@@ -422,7 +427,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FogEvent
   ShowTopMostFoldoutHeaderGroup: 1
-  m_durationSeconds: 30
 --- !u!114 &5950034930960708939
 MonoBehaviour:
   m_ObjectHideFlags: 0
