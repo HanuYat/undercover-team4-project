@@ -65,7 +65,11 @@ public class TrafficVehicle : NetworkBehaviour
     [Min(0.1f)]
     [SerializeField] private float m_hornInterval = 1.2f;
 
-    // 서버만 쓰는 주행 상태 — 레인이 정해 준다 (ServerBeginRun)
+    // 서버만 쓰는 주행 상태 — 레인이 정해 준다 (ServerBeginRun).
+    // 위치는 <b>누적하지 않고</b> 시작점·시작시각에서 매번 새로 푼다 (#717 — ServerDriveStep 주석).
+    private Vector3 m_startPoint;
+    private float m_startTime;
+    private float m_runDistance;
     private Vector3 m_endPoint;
     private Vector3 m_direction;
     private float m_speed;
@@ -73,6 +77,8 @@ public class TrafficVehicle : NetworkBehaviour
     private float m_nextHornAt;
 
     private AudioSource m_engineSource;
+
+    private bool m_tickHooked; // 틱 구독 여부 — 풀에서 재사용되므로 해제를 흘리면 구독이 겹친다
 
     // 이미 친 대상 — 차체가 지나가는 동안 매 틱 겹치므로 한 번만 친다
     private readonly HashSet<Transform> m_hitPeople = new HashSet<Transform>();
@@ -109,6 +115,30 @@ public class TrafficVehicle : NetworkBehaviour
             return s_hitLayers;
         }
     }
+
+    // 세션에서는 주행을 <b>네트워크 틱에서</b> 굴린다 (#717) — NetworkTransform이 값을 찍는 바로 그 주기다.
+    public override void OnNetworkSpawn()
+    {
+        if (!IsServer || NetworkManager == null)
+            return;
+
+        NetworkManager.NetworkTickSystem.Tick += OnServerTick;
+        m_tickHooked = true;
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        if (!m_tickHooked)
+            return;
+
+        if (NetworkManager != null)
+            NetworkManager.NetworkTickSystem.Tick -= OnServerTick;
+        m_tickHooked = false;
+    }
+
+    // 틱 1회 = 주행 1스텝. NetworkTransform이 값을 찍는 주기와 같아야 복제되는 이동량이 균일해진다.
+    private void OnServerTick() => ServerDriveStep((float)NetworkManager.ServerTime.Time);
+
 
     /// <summary>주행 거리를 다 썼는가 — <see cref="TrafficManager"/>가 회수 판정에 쓴다. 서버 전용.</summary>
     public bool IsFinished { get; private set; }
@@ -159,28 +189,61 @@ public class TrafficVehicle : NetworkBehaviour
         m_direction.Normalize();
         transform.rotation = Quaternion.LookRotation(m_direction, Vector3.up);
 
-        m_endPoint = transform.position + m_direction * runDistance;
+        m_startPoint = transform.position;
+        m_runDistance = runDistance;
+        m_startTime = ServerNow();
+        m_endPoint = m_startPoint + m_direction * runDistance;
         m_speed = speed;
         m_driving = true;
         m_nextHornAt = 0f; // 첫 경적은 앞에 사람이 보이는 즉시
         IsFinished = false;
     }
 
+    // 세션에서는 주행이 틱에서 돈다(OnServerTick) — 여기는 <b>오프라인 폴백</b> 전용이다.
+    // 클라는 m_driving이 꺼져 있어 어차피 들어오지 않는다.
     private void Update()
     {
-        // 클라는 NetworkTransform으로 결과만 받는다 — m_driving은 서버에서만 켜지므로 이 가드는
-        // 사실상 중복이지만, 오프라인 폴백과 서버를 같은 조건으로 읽게 남겨 둔다
-        if (!m_driving || (IsSpawned && !IsServer))
+        if (!m_driving)
             return;
 
-        float step = m_speed * Time.deltaTime;
-        Vector3 remaining = m_endPoint - transform.position;
+        if (IsSpawned)
+        {
+            ServerRenderStep();
+            return;
+        }
 
-        bool arrived = remaining.sqrMagnitude <= step * step;
+        ServerDriveStep(Time.time);
+    }
 
-        transform.position = arrived ? m_endPoint : transform.position + m_direction * step;
+    // 호스트 화면만을 위한 프레임 보간 (#717) — 위치를 렌더 시각으로 당겨 그린다.
+    // <b>판정·도착·경적은 건드리지 않는다</b>: 그건 틱이 소유하고, 여기는 그리는 자리일 뿐이다.
+    // 틱이 매번 자기 시각의 값으로 되돌려 놓으므로 이 덧그리기가 복제값을 흔들지 않는다.
+    private void ServerRenderStep()
+    {
+        float travelled = Mathf.Min(m_speed * (ServerNow() - m_startTime), m_runDistance);
+        transform.position = m_startPoint + m_direction * travelled;
+    }
 
-        // 도착 프레임에도 판정을 돌린다 — 종점이 도로 끝이라 그 자리에 사람이 서 있을 수 있다
+    // 서버(또는 오프라인)의 주행 1스텝 — 시각을 받아 그 시각의 위치를 <b>새로 푼다</b>.
+    //
+    // ⚠ <b>누적하지 않는 것이 요점이다</b> (#717). 예전에는 매 Update마다 speed*deltaTime을 더했는데,
+    // NetworkTransform은 틱에 그 값을 찍어 보내므로 틱당 이동량이 <b>프레임레이트에서 파생</b>됐다 —
+    // 실측 0.000~2.324m(기대 0.733m)로 흔들려 클라가 그 속도 변동을 그대로 재생했다.
+    // 시작점·시작시각에서 풀면 틱당 이동량이 speed÷tickRate로 고정된다.
+    private void ServerDriveStep(float now)
+    {
+        // Update()와 같은 가드 — 주행이 끝난 뒤 회수(TrafficManager.RecycleFinished)되기 전까지
+        // 틱마다 이 함수가 계속 불리므로(OnServerTick은 m_driving을 보지 않는다), 여기서 막지 않으면
+        // 회수 타이밍이 바뀔 때 조용히 어긋난다.
+        if (!m_driving)
+            return;
+
+        float travelled = m_speed * (now - m_startTime);
+        bool arrived = travelled >= m_runDistance;
+
+        transform.position = arrived ? m_endPoint : m_startPoint + m_direction * travelled;
+
+        // 도착 스텝에도 판정을 돌린다 — 종점이 도로 끝이라 그 자리에 사람이 서 있을 수 있다
         ServerApplyHits();
 
         if (arrived)
@@ -192,6 +255,10 @@ public class TrafficVehicle : NetworkBehaviour
 
         ServerTickHorn();
     }
+
+    // 주행 시계 — 세션은 서버 네트워크 시각, 오프라인은 로컬 시각. 시작시각과 스텝이 같은 시계를 봐야 한다.
+    private float ServerNow() =>
+        IsSpawned && NetworkManager != null ? (float)NetworkManager.ServerTime.Time : Time.time;
 
     private void SetHeadlights(bool on)
     {
