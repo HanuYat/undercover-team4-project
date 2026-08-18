@@ -111,8 +111,7 @@ public class WeatherSkyRig : MonoBehaviour
         SnapToCamera();
         SnapCloudLayer();
 
-        // 셸터가 <b>배치보다 먼저</b>다 (#733) — 창 너머 모드인지를 여기서 정하고, 그 결과를 보고
-        // 아래에서 방출 지점을 시야 앞이 아니라 창밖으로 옮긴다.
+        // 셸터가 배치보다 먼저다 (#733) — 여기서 정한 배치를 아래가 그대로 따른다.
         TickShelter();
         FacePrecipitationToView();
     }
@@ -145,20 +144,28 @@ public class WeatherSkyRig : MonoBehaviour
 
     // ---- 창문/문 너머 노출 (#733) ----
     //
-    // 지붕만 보고 그치면 <b>창밖이 보이는 자리에서도 날씨가 사라진다</b>. 시야 방향으로 레이를 하나 더 쏴
-    // "저 앞 기둥은 바깥인가"를 묻고, 바깥이면 그치지 않고 <b>방출 지점을 그 창밖으로 옮긴다</b>.
-    //
-    // 벽이 렌더링으로 가려 주므로 클리핑 로직이 없다 — 방 안에 입자가 떠 있지 않은 근거가 이것이다.
+    // 지붕만 보고 그치면 창밖이 보이는 자리에서도 날씨가 사라진다. 시야 방향으로 레이를 하나 더 쏴
+    // 그 앞이 바깥인지 묻고, 바깥이면 방출 지점을 그 창밖으로 옮긴다. 벽이 렌더링으로 가려 주므로
+    // 클리핑 로직이 없다.
 
-    // 시야 방향으로 창을 찾는 최대 거리(m). 이보다 먼 창은 찾지 않는다.
+    // 시야 방향으로 창을 찾는 최대 거리(m).
     private const float k_windowProbeDistance = 20f;
 
     // 막힌 자리에서 물러설 거리(m) — 그 콜라이더 안에서 하늘 검사를 시작하지 않게 한다.
     private const float k_windowSurfaceBackoff = 0.5f;
 
-    // 창밖으로 확정된 지점(방출 높이는 별도) — m_hasWindow가 참일 때만 유효하다.
+    // 창밖으로 확정된 지점 — m_placement가 BeyondWindow일 때만 유효하다.
     private Vector3 m_windowPoint;
-    private bool m_hasWindow;
+
+    // 방출 지점을 어디에 둘 것인가 — TickShelter가 정하고 FacePrecipitationToView가 따른다.
+    private enum EPrecipitationPlacement
+    {
+        AheadOfView, // 평소 — 시야 앞으로 밀어 화면을 덮는다
+        AtView, // 시야 앞이 막혔다(기둥·처마) — 밀지 않고 제자리에서 뿌린다
+        BeyondWindow, // 실내에서 창을 보고 있다 — 창밖에 뿌린다
+    }
+
+    private EPrecipitationPlacement m_placement = EPrecipitationPlacement.AheadOfView;
 
     /// <summary>
     /// 지붕 아래에서는 강수를 그치게 한다 — 뷰가 켤 때 한 번 부른다. (2026-08-12 확정)
@@ -181,25 +188,20 @@ public class WeatherSkyRig : MonoBehaviour
 
         CachePrecipitationSystems();
 
-        bool sheltered = IsSheltered();
-
-        // 지붕 아래면 창을 찾아본다 — 창이 있으면 그치지 않고 그 너머에 내린다 (#733)
-        bool hadWindow = m_hasWindow;
-        m_hasWindow = sheltered && TryFindWindow(out m_windowPoint);
+        EPrecipitationPlacement previousPlacement = m_placement;
+        bool exposed = ResolveExposure(out m_placement);
 
         float previousFactor = m_shelterFactor;
-        float target = !sheltered || m_hasWindow ? 1f : 0f;
+        float target = exposed ? 1f : 0f;
         m_shelterFactor =
             m_shelterFadeSeconds <= 0f
                 ? target
                 : Mathf.MoveTowards(m_shelterFactor, target, Time.deltaTime / m_shelterFadeSeconds);
 
-        // 방출은 막아도 이미 떠 있던 입자는 그대로 살아남는다 — 그래서 <b>방출 지점이 순간이동하는
-        // 전환에서는 지운다</b>. 완전히 가려지는 순간(#734)과 창 너머 모드가 켜지고 꺼지는 순간(#733)이
-        // 그 둘이다: 앵커가 튀는데 입자가 남아 있으면 그 입자들이 새 자리로 끌려가는 것이 보인다.
+        // 방출을 막아도 이미 떠 있던 입자는 남으므로, 방출 지점이 순간이동하는 전환에서는 지운다 —
+        // 완전히 가려지는 순간(#734)과 배치가 바뀌는 순간(#733)이다. 안 지우면 남은 입자가 새 자리로 끌려간다.
         bool justFullySheltered = previousFactor > 0f && m_shelterFactor <= 0f;
-        bool windowModeChanged = hadWindow != m_hasWindow;
-        bool clearParticles = justFullySheltered || windowModeChanged;
+        bool clearParticles = justFullySheltered || previousPlacement != m_placement;
 
         for (int i = 0; i < m_precipitationSystems.Count; i++)
         {
@@ -210,11 +212,10 @@ public class WeatherSkyRig : MonoBehaviour
             ParticleSystem.EmissionModule emission = ps.emission;
             emission.rateOverTimeMultiplier = m_precipitationBaseRates[i] * m_shelterFactor;
 
-            // 창 너머 모드에서만 World 공간으로 돌린다 — Local이면 고개를 돌릴 때마다 창밖에 이미 떨어지고
-            // 있던 눈이 앵커를 따라 함께 미끄러진다. World면 뿌려진 눈은 제자리에서 떨어지고 새 입자만
-            // 옮겨진 자리에서 난다. 창 안 볼 때는 원래 공간으로 되돌려 기존 연출을 건드리지 않는다.
+            // 창 너머 모드만 World로 — Local이면 고개를 돌릴 때 창밖에 떨어지던 눈이 앵커를 따라 미끄러진다.
+            // 그 밖에는 원래 공간으로 되돌려 기존 연출을 건드리지 않는다.
             ParticleSystem.MainModule main = ps.main;
-            main.simulationSpace = m_hasWindow
+            main.simulationSpace = m_placement == EPrecipitationPlacement.BeyondWindow
                 ? ParticleSystemSimulationSpace.World
                 : m_precipitationBaseSpaces[i];
 
@@ -226,13 +227,11 @@ public class WeatherSkyRig : MonoBehaviour
     /// <summary>
     /// 시야 방향에 창(또는 열린 문)이 있는가 — 있으면 그 <b>창밖 지점</b>을 돌려준다. (#733)
     ///
-    /// 2단이다. ① 보는 쪽으로 레이를 쏴 시선이 닿는 끝 지점을 잡는다. ② 그 지점에서 다시 위로 쏴
-    /// <b>거기가 바깥인지</b> 확인한다. ②가 핵심이다 — 없으면 천장이 있는 큰 실내 홀도 창으로 읽힌다
-    /// (레이가 20m를 날아가도 아무것도 안 맞기 때문에). 실내 벽을 보고 있으면 그 벽 위엔 지붕이 있어
-    /// ②에서 걸러진다.
+    /// 2단이다. ① 보는 쪽으로 레이를 쏴 시선이 닿는 끝 지점을 잡고, ② 그 지점에서 다시 위로 쏴 거기가
+    /// 바깥인지 확인한다. ②가 핵심이다 — 없으면 천장 있는 큰 실내 홀도 창으로 읽힌다(레이가 끝까지
+    /// 날아가도 아무것도 안 맞으므로). 실내 벽을 보고 있으면 그 위엔 지붕이 있어 ②에서 걸러진다.
     ///
-    /// forward는 <b>수평으로 눕히지 않는다</b> — 올려보거나 내려보는 창도 잡아야 하므로
-    /// <see cref="FacePrecipitationToView"/>의 수평 투영과는 다른 벡터를 쓴다.
+    /// forward는 수평으로 눕히지 않는다 — 올려보거나 내려보는 창도 잡아야 한다.
     /// </summary>
     private bool TryFindWindow(out Vector3 outsidePoint)
     {
@@ -252,8 +251,7 @@ public class WeatherSkyRig : MonoBehaviour
             ? hit.point - forward * k_windowSurfaceBackoff
             : origin + forward * k_windowProbeDistance;
 
-        // 높이는 <b>보는 높이</b>로 맞춘다 — IsSheltered가 방출 지점을 검사하는 방식과 같다.
-        // 창을 올려보든 내려보든 묻는 것은 "저 x/z 기둥이 바깥인가"다.
+        // 높이는 보는 높이로 맞춘다 — 창을 올려보든 내려보든 묻는 것은 "저 x/z 기둥이 바깥인가"다.
         Vector3 probe = new Vector3(candidate.x, origin.y, candidate.z);
         if (WeatherShelter.IsSheltered(probe, m_shelterMask, m_shelterProbeHeight))
             return false;
@@ -262,22 +260,44 @@ public class WeatherSkyRig : MonoBehaviour
         return true;
     }
 
-    // 보는 자리와 방출 지점 <b>둘 중 하나라도</b> 막혔으면 실내로 본다 (#647).
-    // 방출 지점만 보면 방 안에서 벽 쪽을 볼 때 그 앞(=건물 밖)이 뚫린 것으로 읽혀 실내에 비가 쏟아진다.
-    // 대가로 처마 밑에서 밖을 봐도 그친다 — 실내에 내리는 것보다 낫다고 보고 감수한다.
-    // 판정 자체는 낙뢰와 공유한다 — 둘이 다르게 답하면 "비는 그쳤는데 벼락은 떨어진다"가 된다.
-    private bool IsSheltered()
+    /// <summary>
+    /// 강수를 보일지와 <b>어디에 뿌릴지</b>를 함께 정한다.
+    ///
+    /// 예전에는 "보는 자리"와 "방출 지점" 둘 중 하나라도 막히면 그쳤는데(#647), 그러면 밖에 서 있어도
+    /// 시야 앞 한 점이 기둥에 걸리는 순간 눈·비가 통째로 멈춘다(기둥 옆 실측). 방출 지점이 막힌 것은
+    /// 그칠 이유가 아니라 <b>옮길 이유</b>다 — 그래서 실내 판정은 머리 위만 보고, 나머지는 배치로 푼다.
+    /// 건물 안으로 눈을 쏟지 않으려던 #647의 목적은 <see cref="EPrecipitationPlacement.AtView"/>
+    /// 폴백이 대신 지킨다.
+    ///
+    /// 낙뢰 판정(<see cref="WeatherShelter.IsSheltered"/>)은 건드리지 않는다 — 벼락은 여전히 머리 위로만 갈린다.
+    /// </summary>
+    private bool ResolveExposure(out EPrecipitationPlacement placement)
     {
-        Vector3 view = m_view.position;
-        if (WeatherShelter.IsSheltered(view, m_shelterMask, m_shelterProbeHeight))
+        if (!WeatherShelter.IsSheltered(m_view.position, m_shelterMask, m_shelterProbeHeight))
+        {
+            // 실외 — 시야 앞으로 밀어 둘 자리가 지붕 아래면 밀지 않는다
+            placement = IsAheadOfViewSheltered()
+                ? EPrecipitationPlacement.AtView
+                : EPrecipitationPlacement.AheadOfView;
             return true;
+        }
 
-        if (PrecipitationAnchor == null)
-            return false;
+        if (TryFindWindow(out m_windowPoint))
+        {
+            placement = EPrecipitationPlacement.BeyondWindow;
+            return true;
+        }
 
-        Vector3 anchor = PrecipitationAnchor.position;
+        placement = EPrecipitationPlacement.AtView; // 방출이 0이라 어디든 무관 — 값만 정해 둔다
+        return false;
+    }
+
+    // 시야 앞으로 밀어 둘 자리의 하늘이 막혔는가 — 기둥·처마·건물 벽면이 걸리는 경우다.
+    private bool IsAheadOfViewSheltered()
+    {
+        Vector3 ahead = AheadOfViewPosition();
         return WeatherShelter.IsSheltered(
-            new Vector3(anchor.x, view.y, anchor.z),
+            new Vector3(ahead.x, m_view.position.y, ahead.z),
             m_shelterMask,
             m_shelterProbeHeight
         );
@@ -298,50 +318,56 @@ public class WeatherSkyRig : MonoBehaviour
         }
     }
 
-    // 강수 방출 지점을 시야 앞으로 밀고 수평 방향만 맞춘다 — 낙하 방향은 건드리지 않는다.
+    // 강수 방출 지점을 배치(m_placement)에 맞춰 옮긴다 — 낙하 방향은 어느 경우에도 월드 -Y로 남는다.
     private void FacePrecipitationToView()
     {
         if (PrecipitationAnchor == null || m_view == null)
             return;
 
-        // 창 너머 모드 — 시야 앞이 아니라 <b>창밖 그 자리</b>에 뿌린다 (#733). 벽이 가려 주므로
-        // 방 안에서는 창틀 안쪽으로만 보인다. 높이는 원래 방출 높이를 그대로 쓴다(위에서 내려와야 하므로).
-        if (m_hasWindow)
+        // 창밖 그 자리에 뿌린다 (#733) — 벽이 가려 주므로 방 안에서는 창틀 안쪽으로만 보인다.
+        if (m_placement == EPrecipitationPlacement.BeyondWindow)
         {
             PrecipitationAnchor.position = new Vector3(
                 m_windowPoint.x,
                 transform.position.y + m_precipitationHeight,
                 m_windowPoint.z
             );
-            PrecipitationAnchor.rotation = Quaternion.identity; // 낙하는 월드 -Y
+            PrecipitationAnchor.rotation = Quaternion.identity;
             return;
         }
 
-        if (!m_precipitationFacesView)
+        // 밀지 않는 경우 — 앞이 막혔거나(AtView) 시야 추종을 끈 구성. 옮겨 둔 자리를 제자리로 되돌린다.
+        if (m_placement == EPrecipitationPlacement.AtView || !m_precipitationFacesView)
         {
-            // 시야 추종을 끈 구성 — 창 너머 모드에서 옮겨 둔 자리를 제자리로 되돌린다
             PrecipitationAnchor.localPosition = new Vector3(0f, m_precipitationHeight, 0f);
             PrecipitationAnchor.localRotation = Quaternion.identity;
             return;
         }
 
-        // 보는 쪽의 수평 성분만 뽑는다. 위를 보고 있으면 forward가 하늘을 가리키므로
-        // 그대로 쓰면 방출 지점이 머리 위로 솟는다 — y를 버려야 시야 '앞'이 된다.
-        // 기준이 플레이어면 몸통 정면인데, 시점 회전이 몸통 yaw를 돌리므로(PlayerLook) 결과가 같다.
-        Vector3 flatForward = m_view.forward;
-        flatForward.y = 0f;
-        if (flatForward.sqrMagnitude < 0.001f)
-            flatForward = Vector3.forward; // 정수리를 보고 있다 — 방향이 없으니 기본값
-        flatForward.Normalize();
-
-        // 높이는 캐시한 원래 값을 쓴다 — 창 너머 모드가 localPosition을 통째로 덮어쓰므로
-        // 지금 값에서 읽으면 창을 한 번 본 뒤로 높이가 어긋난다.
+        Vector3 flatForward = FlatViewForward();
         PrecipitationAnchor.localPosition =
             new Vector3(0f, m_precipitationHeight, 0f)
             + transform.InverseTransformDirection(flatForward) * m_precipitationForward;
-
-        // yaw만 — 낙하는 월드 -Y로 남는다
         PrecipitationAnchor.rotation = Quaternion.LookRotation(flatForward, Vector3.up);
+    }
+
+    // 시야 앞으로 밀어 둘 방출 지점(월드) — 판정과 배치가 같은 값을 봐야 한다.
+    private Vector3 AheadOfViewPosition()
+    {
+        Vector3 basePosition = transform.position + Vector3.up * m_precipitationHeight;
+        return m_precipitationFacesView
+            ? basePosition + FlatViewForward() * m_precipitationForward
+            : basePosition;
+    }
+
+    // 보는 쪽의 수평 성분. 위를 보고 있으면 forward가 하늘을 가리켜 방출 지점이 머리 위로 솟으므로 y를 버린다.
+    private Vector3 FlatViewForward()
+    {
+        Vector3 flat = m_view.forward;
+        flat.y = 0f;
+        if (flat.sqrMagnitude < 0.001f)
+            flat = Vector3.forward; // 정수리를 보고 있다 — 방향이 없으니 기본값
+        return flat.normalized;
     }
 
     // 구름층만 월드 격자로 되돌린다 — 리그(=강수)는 카메라를 부드럽게 따라가고 하늘만 고정된다

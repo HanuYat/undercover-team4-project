@@ -76,8 +76,7 @@ public class SnowView : MonoBehaviour
 
     [Tooltip(
         "눈 낙하 속도 배율 — 성기게 흩날리는 눈을 쏟아지는 눈으로 바꾸는 값.\n\n"
-            + "창 너머로도 눈이 오는 것이 읽히려면 빨라야 한다 (#733) — 멀리 있는 입자는 화면에서 움직임이 "
-            + "작아 보여서, 근거리 기준으로 맞추면 창밖이 거의 정지 화면처럼 보인다"
+            + "창 너머(#733)로도 읽히려면 빨라야 한다 — 멀리 있는 입자는 화면에서 움직임이 작아 보인다"
     )]
     [Min(0.1f)]
     [SerializeField] private float m_snowFallSpeedBoost = 4f;
