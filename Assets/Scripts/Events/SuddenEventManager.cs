@@ -5,26 +5,17 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// 돌발 이벤트 프레임워크 — 라운드 진행 중 불규칙하게 <see cref="ISuddenEvent"/>를 서버 권위로 발생시킨다. (GDD 6-4/7-4, #106)
-/// 수사와 무관하게 세계관(치안 붕괴)을 반영하는 이벤트(거리 난동자·전자기기 먹통 등)를 관리한다.
+/// 돌발 이벤트 프레임워크 — <see cref="ISuddenEvent"/>를 서버 권위로 발생·틱·정리시킨다. (GDD 6-4/7-4, #106)
+/// 주기 추첨은 라운드 진행 중에만 돌고, 라운드 날씨(<see cref="IRoundWeather"/>)만 준비 단계에 따로 뽑는다 (#700).
+/// 서버(또는 오프라인) 전용 — <see cref="RoundManager.Phase"/>를 서버만 굴리므로 클라에선 스케줄러가 안 돈다 (#56).
 ///
-/// 서버 권위(#56 패턴):
-///  · 발생 타이밍·판정은 서버(또는 오프라인)에서만 돈다 — <see cref="RoundManager.Phase"/>가 InProgress가 되는 곳이 서버뿐이라
-///    클라이언트에서는 스케줄러가 아예 돌지 않는다.
-///  · 네트워크가 없는 로컬 Play 테스트에서는 스폰 없이 단독으로 동작한다.
+/// <b>이 매니저는 어떤 이벤트가 있는지 모른다</b> — "언제 발생시킬지"만 정한다. 효과·상태·전 클라 전파는
+/// 구현체가 소유하므로(스폰형은 자기 NetworkObject, 전역형은 자기 NetworkVariable) 이벤트를 늘려도 이 파일은 그대로다.
 ///
-/// <b>이 매니저는 어떤 이벤트가 있는지 모른다</b> — <see cref="ISuddenEvent"/> 뒤에서 "언제 발생시킬지"만 정하고
-/// 발생·틱·정리를 호출할 뿐이다. 이벤트의 효과·상태·전 클라 전파는 전부 각 구현체가 스스로 소유한다
-/// (스폰형은 자기 NetworkObject, 전역형은 자기 NetworkVariable). 이벤트를 늘리거나 지워도 이 파일은 그대로다.
-///
-/// 이벤트 풀은 인스펙터 <b>명시 리스트</b>(m_eventEntries)로 구성한다 — 자동수집을 쓰지 않는다 (#291).
-///  · <see cref="ISuddenEvent"/> 컴포넌트 — 1개 = 1종 (전자기기 먹통 등).
-///  · <see cref="ISuddenEventProvider"/> 컴포넌트 — 1개가 여러 종을 품는다 (현재 구현체 없음 — #303에서 스폰형이 이벤트별 컴포넌트로 갈렸다).
-/// 항목마다 enabled 토글이 있어 특정 이벤트만 켜서 추첨할 수 있다(테스트·튜토리얼).
-/// <b>이벤트 컴포넌트는 반드시 이 오브젝트에 둔다</b> — 전부 [RequireComponent(typeof(SuddenEventManager))]라
-/// 다른 오브젝트에 붙이면 거기에 두 번째 매니저가 자동 생성된다. 리스트 구조 자체는 타 오브젝트 참조가
-/// 가능하지만, 규약 완화(RequireComponent 제거)는 팀 결정 대기 항목이다(#291 고려사항 · PR #298 리뷰).
-/// 발생 빈도·이벤트별 수치는 전부 인스펙터 — 밸런싱 보류 항목이라 코드에 못 박지 않는다 (GDD 12장).
+/// 이벤트 풀은 인스펙터 <b>명시 리스트</b>(m_eventEntries)다 — 자동수집을 쓰지 않고 항목마다 enabled 토글이 있다 (#291).
+/// ⚠ <b>이벤트 컴포넌트는 반드시 이 오브젝트에 둔다</b> — 전부 [RequireComponent(typeof(SuddenEventManager))]라
+/// 다른 오브젝트에 붙이면 거기에 두 번째 매니저가 생긴다. 완화는 팀 결정 대기 (#291 고려사항 · PR #298 리뷰).
+/// 수치는 전부 인스펙터 — 밸런싱 보류 항목이라 코드에 못 박지 않는다 (GDD 12장).
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
