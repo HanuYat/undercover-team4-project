@@ -217,10 +217,8 @@ public class PlayerMovement : NetworkBehaviour
 
         if (!IsOwner)
         {
-            // 서버가 오너 아닌 캐릭터(원격 클라·데디케이티드 서버 시점)의 버프 만료를 대신 센다 (#706).
-            // 바로 아래에서 컴포넌트를 통째로 끄면 Update()의 TickSpeedBuff도 함께 멈추는데, 만료
-            // 권한은 서버에 있어 그 서버가 소유하지 않은 캐릭터의 버프가 영원히 안 풀렸다. 오너 쪽은
-            // Update()가 이미 커버하므로(호스트 자신의 캐릭터 포함) 여기서는 훅하지 않는다.
+            // 서버가 오너 아닌 캐릭터의 버프 만료를 대신 센다 (#706) — 아래서 컴포넌트를 끄면
+            // TickSpeedBuff가 도는 Update()도 함께 멈춘다. 오너 쪽은 Update()가 이미 커버한다.
             if (IsServer && NetworkManager != null)
             {
                 NetworkManager.NetworkTickSystem.Tick += OnServerBuffTick;
