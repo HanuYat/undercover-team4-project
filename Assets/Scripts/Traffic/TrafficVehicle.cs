@@ -242,6 +242,11 @@ public class TrafficVehicle : NetworkBehaviour
         source.maxDistance = Mathf.Max(entry.MaxDistance, entry.MinDistance + 0.1f);
         source.spatialBlend = 1f; // 완전 3D — 어느 방향에서 오는지가 예고의 전부다
         source.rolloffMode = AudioRolloffMode.Linear;
+
+        // 도플러를 끈다 (#673). 클라에서는 위치를 NetworkTransform 보간으로 받아 프레임별 속도가
+        // 고르지 않아 피치가 떤다 — 예고용 소리는 다가오는 것을 음량이 이미 알려 준다.
+        source.dopplerLevel = 0f;
+
         source.loop = true;
         m_engineSource = source;
         return true;
