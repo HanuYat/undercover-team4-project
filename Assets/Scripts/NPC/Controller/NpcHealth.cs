@@ -59,10 +59,11 @@ public class NpcHealth : NetworkBehaviour, IDamageable
     }
 
     /// <summary>
-    /// 피해 적용 (<see cref="IDamageable"/>) — 모든 데미지 소스의 공통 경로. (#366)
+    /// 피해 적용 (<see cref="IDamageable"/>) — 플레이어 타격의 공통 경로. (#366)
     ///
-    /// <see cref="NpcStateRules.CanBeDamaged"/>가 false면 <b>피해 자체를 무시</b>한다 — HP만 깎고
-    /// 기절을 막으면 "HP 0인데 기절 아님"이 되어 아래 엣지 트리거상 영영 기절하지 않는다.
+    /// <see cref="NpcStateRules.CanBeDamaged"/>가 false면 <b>피해 자체를 무시</b>한다 — 연행 중인
+    /// 신병을 때려 신병에서 빼내는 우회를 막는 게이트다. 차·폭발 같은 환경 피해는 이 게이트를
+    /// 타지 않는다 — <see cref="TakeEnvironmentalDamage"/> 참고 (#690).
     /// </summary>
     /// <param name="amount">깎을 체력. 0 이하는 무시한다.</param>
     /// <param name="attacker">가해자 — 기절 시 위협 대상으로 넘긴다. null 허용.</param>
@@ -75,6 +76,33 @@ public class NpcHealth : NetworkBehaviour, IDamageable
         if (!NpcStateRules.CanBeDamaged(m_owner))
             return;
 
+        ApplyDamage(amount, attacker);
+    }
+
+    /// <summary>
+    /// 환경 피해 적용(차량·폭발 등) — <see cref="TakeDamage"/>와 <b>다른 게이트</b>를 쓴다. (#690)
+    ///
+    /// 연행 중(Escorted 등)인 신병도 그대로 맞는다 — <see cref="NpcStateRules.CanBeDamaged"/>가 막는 것은
+    /// "때려서 신병에서 빼내는 우회"인데, 차나 폭발은 신병 상태를 가리지 않는다. 밧줄에 묶여 도로 위로
+    /// 끌려가던 시민이 지나가는 차에 안 죽던 문제(#690)가 이 게이트를 그대로 타서 생겼다.
+    /// </summary>
+    /// <param name="amount">깎을 체력. 0 이하는 무시한다.</param>
+    /// <param name="attacker">가해자 — 기절 시 위협 대상으로 넘긴다. null 허용.</param>
+    public void TakeEnvironmentalDamage(int amount, GameObject attacker)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+        if (amount <= 0)
+            return;
+        if (!NpcStateRules.CanTakeEnvironmentalDamage(m_owner))
+            return;
+
+        ApplyDamage(amount, attacker);
+    }
+
+    // 두 진입점(TakeDamage · TakeEnvironmentalDamage)이 게이트만 다르고 이후는 같다 — 여기서 합친다.
+    private void ApplyDamage(int amount, GameObject attacker)
+    {
         // 피해를 얹기 전에 알린다 — 위 OnDamaged 주석의 순서 근거 참고
         OnDamaged?.Invoke(m_owner, attacker);
 
@@ -82,7 +110,7 @@ public class NpcHealth : NetworkBehaviour, IDamageable
         int before = CurrentHp;
         SetHp(Mathf.Clamp(CurrentHp - amount, 0, MaxHp), attacker);
 
-        // 피격 반응(#400)은 여기서 굴리지 않는다 — 폭발 같은 환경 피해도 이 경로를 지나므로
+        // 피격 반응(#400)은 여기서 굴리지 않는다 — 환경 피해도 이 경로를 지나므로
         // 플레이어 타격 경로(Baton.ServerSwing)가 직접 부른다. 연출은 반대로 여기가 맞다 (#478).
         int applied = before - CurrentHp;
         if (applied > 0)

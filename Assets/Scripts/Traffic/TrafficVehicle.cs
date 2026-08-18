@@ -336,22 +336,25 @@ public class TrafficVehicle : NetworkBehaviour
 
     // 시민도 플레이어와 같은 피해를 받는다 (#634 확정) — 예전에는 넘어지기만 했다.
     //
+    // <b>피해는 TakeEnvironmentalDamage로 넣는다</b> (#690) — 밧줄에 묶여 끌려가던 신병은
+    // TakeDamage의 게이트(CanBeDamaged)에 막혀 차에 치여도 죽지 않았다. 그 게이트는 "때려서
+    // 신병에서 빼내는 우회"를 막으려는 것이라 플레이어 타격용이지, 차는 신병 상태를 가리지 않는다.
+    //
     // ⚠ <b>넉백이 피해보다 먼저다.</b> 피해가 먼저 가면 대상이 죽어 상태가 Dead가 되는데
     // ServerApplyKnockback은 그 상태를 거르지 않아 시체를 Stunned로 되살린다. 이 순서면
     // 사망 처리(NpcDeath.ServerEnterDead ①)가 비행을 스스로 끊는다 — 즉 <b>죽는 시민은 그 자리에
-    // 무너지고</b>, 피해를 못 받는 대상(NpcStateRules.CanBeDamaged가 막는 수감자 등)만 날아간다.
-    // 시체를 날리는 임펄스는 폭발(#506)과 같은 전 피어 통로가 필요해 여기서는 걸지 않는다.
+    // 무너진다.</b> 시체를 날리는 임펄스는 폭발(#506)과 같은 전 피어 통로가 필요해 여기서는 걸지 않는다.
     //
     // <b>장부는 시체를 못 막는다.</b> m_hitNpcs는 이 차의 한 번의 주행 안에서만 유효한데, 시체는
     // 도로에 남으므로 <b>다음 차가 같은 시체를 다시 친다</b>. 그래서 시체 거르기는 여기가 아니라
-    // 맞는 쪽에 있다 — 피해는 NpcStateRules.CanBeDamaged가, 넉백은 ServerApplyKnockback이 막는다.
+    // 맞는 쪽에 있다 — 피해는 NpcStateRules.CanTakeEnvironmentalDamage가, 넉백은 ServerApplyKnockback이 막는다.
     private void ServerHitNpc(NpcController npc)
     {
         if (!m_hitNpcs.Add(npc))
             return;
 
         npc.Knockback.ServerApplyKnockback(BuildKnockback());
-        npc.Health.TakeDamage(m_damage, gameObject);
+        npc.Health.TakeEnvironmentalDamage(m_damage, gameObject);
     }
 
     private void ServerHitPlayer(PlayerHealth player)
