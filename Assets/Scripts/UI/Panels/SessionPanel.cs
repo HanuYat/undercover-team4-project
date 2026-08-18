@@ -27,7 +27,7 @@ public class SessionPanel : PanelBase
     [SerializeField]
     private Button m_createButton;
 
-    [Tooltip("이어하기 — 저장된 판이 있을 때만 켜진다 (#373)")]
+    [Tooltip("이어하기 — 저장된 판이 없으면 눌렀을 때 사유를 띄운다 (#373·#704)")]
     [SerializeField]
     private Button m_continueButton;
 
@@ -54,6 +54,10 @@ public class SessionPanel : PanelBase
     [Tooltip("이어할 판이 있음 — Title.Session.Status.SaveFound ({0}=라운드 번호)")]
     [SerializeField]
     private LocalizedString m_statusSaveFound;
+
+    [Tooltip("이어할 판이 없음 — Title.Session.Status.NoSave")]
+    [SerializeField]
+    private LocalizedString m_statusNoSave;
 
     [Tooltip("세션 생성 중 — Title.Session.Status.Creating")]
     [SerializeField]
@@ -88,6 +92,11 @@ public class SessionPanel : PanelBase
     // 버전 불일치 안내를 띄운 상태 — 늦게 도착하는 세이브 조회 결과가 이 문구를 덮지 않게 한다 (#586)
     private bool m_showingMismatch;
 
+    // 진행 중이거나 끝난 세이브 조회. Preserve()로 여러 번 await할 수 있게 해서, 조회가 도는 중에
+    // [이어하기]를 눌러도 결과를 기다린 뒤 판단한다 — 아직 모르는 것을 "없음"으로 답하지 않게. (#704)
+    // 조회 전 기본값(default)은 곧바로 false로 완료된 상태다 — 그 구간에는 버튼이 잠겨 있어 눌리지 않는다.
+    private UniTask<bool> m_saveCheck;
+
     // 지금 표시 중인 문구 — 구독 해제 기준. 언어를 바꿔도 떠 있는 상태 문구가 따라오게 한다 (#251 관례).
     private LocalizedString m_boundStatus;
 
@@ -96,9 +105,6 @@ public class SessionPanel : PanelBase
         m_createButton.onClick.AddListener(HandleCreateClicked);
         m_continueButton.onClick.AddListener(HandleContinueClicked);
         m_joinButton.onClick.AddListener(HandleJoinClicked);
-
-        // 이어하기는 세이브 조회가 끝나야 켤 수 있다 — 그 전까지는 꺼 둔다 (#373)
-        m_continueButton.interactable = false;
 
         // 이 화면이 열릴 때 로그인이 끝나 있는지는 어느 길로 왔느냐에 갈린다 (#585):
         //  · 관문(AuthGatePanel)을 넘어 왔으면 — 세 갈래 전부 로그인 뒤에 Pass()하므로 이미 끝나 있다.
@@ -162,17 +168,16 @@ public class SessionPanel : PanelBase
         m_showingMismatch = true;
     }
 
-    // 세이브 유무를 물어 '이어하기' 노출을 정한다 (#373). 조회가 실패하면 없는 것으로 친다 — 새 판은 언제나 가능하다.
+    // 세이브 유무를 미리 물어 둔다 (#373). 조회가 실패하면 없는 것으로 친다 — 새 판은 언제나 가능하다.
     private async UniTaskVoid RefreshSaveAsync()
     {
-        bool hasSave = await SaveService.RefreshAsync();
+        m_saveCheck = SaveService.RefreshAsync().Preserve();
+        bool hasSave = await m_saveCheck;
 
         // 조회가 도는 동안 타이틀을 떠났거나(파괴) 이미 세션을 만들기 시작했을 수 있다 —
         // 그때는 손대지 않는다. 늦게 도착한 결과가 "세션 생성 중..." 문구를 덮으면 안 된다.
-        if (m_continueButton == null || m_isBusy || m_showingMismatch)
+        if (m_statusText == null || m_isBusy || m_showingMismatch)
             return;
-
-        m_continueButton.interactable = hasSave;
 
         if (hasSave)
             SetStatus(m_statusSaveFound, SaveService.SavedRound);
@@ -181,16 +186,41 @@ public class SessionPanel : PanelBase
     private void SetButtonsInteractable(bool interactable)
     {
         m_createButton.interactable = interactable;
+        m_continueButton.interactable = interactable;
         m_joinButton.interactable = interactable;
-
-        // 이어하기는 세이브가 있을 때만 켜진다 — 로그인만으로는 켜지 않는다. 켜는 곳은 RefreshSaveAsync 하나.
-        if (!interactable)
-            m_continueButton.interactable = false;
     }
 
     private void HandleCreateClicked() => CreateAsync(continueSave: false).Forget();
 
-    private void HandleContinueClicked() => CreateAsync(continueSave: true).Forget();
+    private void HandleContinueClicked() => ContinueAsync().Forget();
+
+    /// <summary>
+    /// 이어하기 (#704). 세이브가 없으면 세션을 만들지 않고 사유를 띄운다.
+    ///
+    /// 예전에는 세이브가 있을 때만 버튼을 켜는 것이 유일한 안내였는데, 이 화면의 버튼은 Transition이 없어
+    /// 잠긴 티가 나지 않는다 — 평소와 같은 모양으로 눌리지 않아 "고장난 버튼"으로 보였다.
+    /// 그래서 버튼은 나머지 둘과 같이 열어 두고, 없다는 사실을 눌렀을 때 문구로 답한다.
+    /// </summary>
+    private async UniTaskVoid ContinueAsync()
+    {
+        if (m_isBusy)
+            return;
+
+        // 조회가 아직 돌고 있으면 기다린다 — 결과를 모르는 채로 "없다"고 답하지 않는다
+        bool hasSave = await m_saveCheck;
+
+        // 기다리는 사이 화면이 갈렸을 수 있다(로그아웃·씬 전환) — 그때는 손대지 않는다
+        if (m_statusText == null || !isActiveAndEnabled)
+            return;
+
+        if (!hasSave)
+        {
+            SetStatus(m_statusNoSave);
+            return;
+        }
+
+        CreateAsync(continueSave: true).Forget();
+    }
 
     private void HandleJoinClicked() => JoinAsync().Forget();
 

@@ -16,7 +16,7 @@ using UnityEngine;
 /// 기록해 두는 이유이기도 하다(누가 방장이든 각자 자기 잔액을 되찾는다).
 ///
 /// 흐름:
-///  · 타이틀 — <see cref="RefreshAsync"/>로 세이브 유무를 조회해 '이어하기' 노출을 정한다.
+///  · 타이틀 — <see cref="RefreshAsync"/>로 세이브 유무를 미리 조회해 둔다. 없으면 '이어하기'가 사유를 띄운다 (#704).
 ///  · 이어하기 <see cref="UseSave"/> / 새로 시작 <see cref="StartFresh"/> — <b>세션 생성 전에</b> 부른다.
 ///    상주 홀더는 세션이 켜지는 순간(OnServerStarted) 스폰되면서 <see cref="Pending"/>을 읽기 때문이다.
 ///  · 저장 <see cref="SaveAsync"/> — 씬을 넘는 두 길목에서 각각 1회(서버·호스트).
