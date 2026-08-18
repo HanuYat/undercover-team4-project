@@ -232,6 +232,12 @@ public class TrafficVehicle : NetworkBehaviour
     // 시작점·시작시각에서 풀면 틱당 이동량이 speed÷tickRate로 고정된다.
     private void ServerDriveStep(float now)
     {
+        // Update()와 같은 가드 — 주행이 끝난 뒤 회수(TrafficManager.RecycleFinished)되기 전까지
+        // 틱마다 이 함수가 계속 불리므로(OnServerTick은 m_driving을 보지 않는다), 여기서 막지 않으면
+        // 회수 타이밍이 바뀔 때 조용히 어긋난다.
+        if (!m_driving)
+            return;
+
         float travelled = m_speed * (now - m_startTime);
         bool arrived = travelled >= m_runDistance;
 
