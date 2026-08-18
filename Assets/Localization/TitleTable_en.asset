@@ -270,26 +270,30 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 10788103327781
-    m_Localized: "Continue"
+    m_Localized: Continue
     m_Metadata:
       m_Items: []
   - m_Id: 10788103327782
-    m_Localized: "Saved run found - starts at round {0}"
+    m_Localized: Saved run found - starts at round {0}
     m_Metadata:
       m_Items:
       - rid: 6276845892712267879
   - m_Id: 10788103327783
-    m_Localized: "Game version mismatch - yours {0} / room {1}"
+    m_Localized: Game version mismatch - yours {0} / room {1}
     m_Metadata:
       m_Items:
       - rid: 6276845892712267879
+  - m_Id: 5095342092115968
+    m_Localized: No saved run to continue - start a new session
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:
     - rid: 6276845892712267879
       type: {class: SmartFormatTag, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_Entries:
+        m_Entries: 
         m_SharedEntries:
         - id: 10788103327783
         - id: 10788103327782
