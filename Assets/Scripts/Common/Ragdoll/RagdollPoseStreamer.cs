@@ -82,7 +82,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
     private bool m_streaming;
     private ushort m_sequence;
     private int m_stepsSinceSend;
-    private Quaternion[] m_sendBuffer;  // 캐처용 — 매 스텝 새로 할당할 이유가 없다
+    private Quaternion[] m_sendBuffer;  // 캡처용 — 매 스텝 새로 할당할 이유가 없다
     private uint[] m_packedBuffer;      // 실제로 선에 실리는 것 — 쿼터니언당 4바이트
     private Quaternion[] m_unpackBuffer; // 수신 쪽 — 푸는 자리
 
@@ -205,9 +205,9 @@ public class RagdollPoseStreamer : NetworkBehaviour
         if (m_rig == null || !m_rig.IsValid)
             return;
 
-        // ⚠ <b>이 한 줄은 원격에서도 세운다</b> — 진단이 "손실"과 "애초에 안 온다"를 가르려면
-        // 원격이 <b>지금 자세를 기다리는 국면인지</b>를 알아야 한다. 한 개도 안 오면 손실률을
-        // 말할 수 없다(분모가 0이다). 실제 송신은 아래 권위 게이트가 막는다.
+        // ⚠ <b>이 두 줄은 원격에서도 세운다</b> — 소유자가 <see cref="IsAwaitingFirstPose"/>로
+        // "첫 패킷이 오기 전 빈 구간"을 메우는데, 그 판정에 <b>지금이 자세를 기다리는 국면인가</b>가
+        // 필요하기 때문이다. 실제 송신은 아래 권위 게이트가 막는다.
         m_expectingStream = true;
         m_hasReceivedPose = false; // 새 국면 — 이번 무너짐의 첫 패킷을 다시 기다린다
 
@@ -314,7 +314,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
     //
     // 오차는 성분당 10비트라 약 0.1°다 — 무너지는 시체에서 보이는 크기가 아니고,
     // 정착 자세도 같은 압축을 쓴다(둘을 가르면 마지막 스트림과 정착 사이에
-    // 그 0.1°만큼 튀는 이음샐이 생긴다).
+    // 그 0.1°만큼 튀는 이음새이 생긴다).
     private uint[] Pack(Quaternion[] rotations)
     {
         for (int i = 0; i < rotations.Length; i++)
@@ -350,10 +350,8 @@ public class RagdollPoseStreamer : NetworkBehaviour
     /// 완전한 상태를 들고 오므로 재전송은 늦은 정보를 늦게 배달할 뿐이다. 반대로 마지막
     /// 정착 자세(<see cref="FinalPoseRpc"/>)는 <b>뒤가 없어서</b> 신뢰 전송이어야 한다.
     ///
-    /// ⚠ <b>압축은 아직 없다</b>(계획서 7단계). 지금은 쿼터니언 무압축 16B × 뼈 수라
-    /// 25Hz에서 시체당 약 4.4KB/s다 — 압축(4B/개)을 넣으면 2.1KB/s로 떨어진다. 대역폭 판단은
-    /// <b>압축 후 값으로</b> 할 것. 넣을 자리는 이 시그니처를 <c>INetworkSerializable</c> 구조체로
-    /// 감싸는 것이고, 호출부는 바뀌지 않는다.
+    /// 회전은 <b>압축해서</b> 온다 — 쿼터니언당 4B(<see cref="Pack"/>·<see cref="Unpack"/>).
+    /// 페이로드는 62B이고 실측으로 시체 1구당 원격 1인 기준 1.5KB/s다(25Hz).
     /// </summary>
     [Rpc(SendTo.NotMe, Delivery = RpcDelivery.Unreliable)]
     private void StreamPoseRpc(ushort sequence, Vector3 hipsWorld, uint[] packed)
@@ -370,7 +368,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
                 m_warnedBoneMismatch = true;
                 Debug.LogWarning(
                     $"RagdollPoseStreamer: 뼈 수가 달라 자세를 버린다 — {name} "
-                        + $"받은={packed.Length} 내리그={m_rig.BoneCount}. 피어마다 리그가 다른 프리팩이다",
+                        + $"받은={packed.Length} 내리그={m_rig.BoneCount}. 피어마다 리그가 다른 프리팹이다",
                     this
                 );
             }
