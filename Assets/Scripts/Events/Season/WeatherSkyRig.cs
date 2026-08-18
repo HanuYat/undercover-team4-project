@@ -215,7 +215,10 @@ public class WeatherSkyRig : MonoBehaviour
             (previousPlacement == EPrecipitationPlacement.BeyondWindow)
             != (m_placement == EPrecipitationPlacement.BeyondWindow);
         bool justExposed = previousFactor <= 0f && m_shelterFactor > 0f;
-        bool refill = !justFullySheltered && (windowModeChanged || justExposed);
+
+        // exposed를 함께 본다 — 꺼지는 방향 전환에는 채울 이유가 없다. 이걸 빼면 창을 보다 벽으로
+        // 돌리는 순간(창 모드가 풀리는데 페이드는 아직 진행 중) 실내 앵커에 눈 한 덩이가 뿌려진다.
+        bool refill = exposed && !justFullySheltered && (windowModeChanged || justExposed);
 
         for (int i = 0; i < m_precipitationSystems.Count; i++)
         {
@@ -239,9 +242,16 @@ public class WeatherSkyRig : MonoBehaviour
             }
             else if (refill)
             {
-                // 앞당겨 굴려 놓는다 — 방출 높이에서 내려오는 시간을 기다리지 않고 처음부터 차 있게 보인다
+                // 앞당겨 굴려 놓는다 — 방출 높이에서 내려오는 시간을 기다리지 않고 처음부터 차 있게 보인다.
+                //
+                // ⚠ 채우는 동안만 <b>원래 방출량</b>으로 돌려놓는다. 이 전환이 걸리는 프레임의 페이드는
+                // 아직 0에 가까워(dt/fadeSeconds ≈ 5%) 그 값으로 굴리면 몇 알만 생겨 효과가 없다.
+                emission.rateOverTimeMultiplier = m_precipitationBaseRates[i];
                 ps.Simulate(k_refillPrewarmSeconds, withChildren: true, restart: true);
                 ps.Play(withChildren: true);
+
+                // 채운 뒤에는 이번 프레임의 페이드 값으로 되돌린다 — 이후 방출은 원래대로 서서히 오른다
+                emission.rateOverTimeMultiplier = m_precipitationBaseRates[i] * m_shelterFactor;
             }
         }
     }
