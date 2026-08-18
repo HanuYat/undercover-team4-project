@@ -74,9 +74,10 @@ public class JailIntake : CommonManagerBase
     /// 수감 버튼 처리 — <paramref name="interactor"/>가 확보 중인 신병을 <b>줄을 걷고 일으켜 세운 뒤</b>
     /// 판정하고, 범죄자만 감옥 안으로 순간이동시켜 계상한다. 서버(또는 오프라인) 전용. (#537)
     ///
-    /// 돌려주는 값은 <b>확보한 대상 수</b>이지 수감된 수가 아니다 — 판정이 일어나기 뒤에 나오므로
-    /// 이 시점에는 결과를 모른다. 부르는 쪽(<see cref="JailIntakeButton"/>)이 "확보한 신병이 없다"만
-    /// 가르는 데 쓴다.
+    /// 돌려주는 값은 <b>실제로 판정을 시도한 대상 수</b>이지 수감된 수가 아니다 — 판정이 일어나기
+    /// 뒤에 나오므로 이 시점에는 결과를 모른다. 부르는 쪽(<see cref="JailIntakeButton"/>)이 "확보한
+    /// 신병이 없다"만 가르는 데 쓴다. <c>m_unjudgeable</c>에 걸려 통째로 건너뛴 시도는 세지 않는다 —
+    /// 안 그러면 전부 건너뛴 누름도 "성공"으로 잡혀 그 안내가 나가지 않는다 (#705).
     ///
     /// <b>확보의 기준은 갈래 둘이고, ①이 있으면 ②는 돌지 않는다</b> (#637) — ① 이 사람의 밧줄에
     /// 걸린 대상 전부, ② 버튼 앞 <see cref="m_admitReach"/> 안에서 <see cref="IsAdmittableState"/>이면서
@@ -125,6 +126,7 @@ public class JailIntake : CommonManagerBase
         // 확보한 수를 먼저 센다 — 판정은 일어나기(약 0.6초) 뒤에 나므로 결과를 기다려 셀 수 없다.
         // 버튼이 이 수로 "확보한 신병이 없다"만 가르면 되고, 판정 결과는 각자 배너로 나간다.
         int held = m_admitBuffer.Count;
+        int handled = 0;
 
         ArrestJudge judge = App.Game.ArrestJudge;
 
@@ -137,10 +139,24 @@ public class JailIntake : CommonManagerBase
             // 시체는 갈래가 통째로 다르다 (#571) — 판정 이벤트도, 기상도, 커스터디 전이도 없다.
             if (npc.Death.IsDead)
             {
-                if (!ServerAdmitCorpse(npc, presser))
-                    m_unjudgeable.Add(npc); // 신원도 경범죄 마커도 없는 시체 — 다시 물어도 답이 같다
+                // '이미 계상됨'으로 실패한 것이면 기억하지 않는다 (#705) — 반출로 답이 달라질 수 있다.
+                bool wasDelivered = npc.Custody.IsDelivered;
+                if (ServerAdmitCorpse(npc, presser))
+                {
+                    handled++;
+                }
+                else if (!wasDelivered)
+                {
+                    m_unjudgeable.Add(npc);
+                }
+                else
+                {
+                    Debug.Log($"[감옥] 수감 버튼 — 이미 계상된 시체: {npc.name}");
+                }
                 continue;
             }
+
+            handled++;
 
             // <b>판정이 먼저다 — 줄이 걸려 있는 동안에.</b> ArrestJudge가 인계자를 그 순간의 밧줄에서
             // 뽑아 결과(ArrestResult.DeliveredBy)에 실으므로, 줄을 먼저 걷으면 목록이 비어 <b>판정 배너도
@@ -190,7 +206,7 @@ public class JailIntake : CommonManagerBase
         }
 
         m_admitBuffer.Clear();
-        return held;
+        return handled;
     }
 
     /// <summary>
@@ -598,27 +614,24 @@ public class JailIntake : CommonManagerBase
     /// <b>산 수감자의 반출(<see cref="ServerExtract"/>)이 <c>ClearDelivered</c>를 부르지 않는 것과
     /// 갈린다</b> — 되돌릴 대상이 다르기 때문이다. 저쪽은 '첫 인계' 표식이 할당량
     /// (<see cref="RoundManager.CriminalArrestCount"/>)에 물려 있어 반출→재수감 반복으로 부풀 수 있지만,
-    /// 시체 판정은 할당량을 건드리지 않고(<c>OnCorpseJudged</c> 구독자에 RoundManager가 없다) 계상 근거가
-    /// 원장 하나뿐이라, 원장을 지웠으면 표식도 함께 지워야 짝이 맞는다.
+    /// 시체 판정은 할당량을 건드리지 않는다(<c>OnCorpseJudged</c> 구독자에 RoundManager가 없다).
     ///
-    /// <b>계상된 적 없는 시체에는 아무것도 하지 않는다</b> — 원장 제거 성공이 곧 그 게이트다.
-    /// 오검거로 판정된 시체는 감옥에 들어가지 않아 원장에도 없으므로(<see cref="ServerAdmitCorpse"/>),
-    /// 들고 들어갔다 나와도 표식이 풀리지 않는다 — 오검거 집계를 되돌려 다시 세는 길이 열리지 않는다.
+    /// <b>표식·기억은 원장 제거 성공과 무관하게 걷는다</b> (#705) — 예전에는 원장 제거가 실패하면
+    /// <c>ClearDelivered</c>도 안 불려 재판정이 영영 막혔다.
     /// </summary>
     private void ServerReleaseCorpse(NpcController npc)
     {
         if (npc == null || m_jailZone == null)
             return;
 
-        if (!m_jailZone.ReleaseDeceased(npc))
-            return; // 계상된 적 없는 시체 — 그냥 들고 지나가는 중이다
-
         npc.Custody.ClearDelivered();
-
-        // 판정 불가 기억에서도 뺀다 — 원장에 오른 채로 버튼을 눌러 봤다면 '다시 물어도 답이 같다'로
-        // 등록됐을 수 있는데(ServerAdmitCorpse의 false 경로), 표식을 걷은 지금은 답이 달라졌다.
         m_unjudgeable.Remove(npc);
 
-        Debug.Log($"[감옥] 시체 반출 — 정산에서 빼고 재판정을 연다: {npc.name}");
+        bool ledgerCleared = m_jailZone.ReleaseDeceased(npc);
+        Debug.Log(
+            ledgerCleared
+                ? $"[감옥] 시체 반출 — 정산에서 빼고 재판정을 연다: {npc.name}"
+                : $"[감옥] 시체 반출 — 원장에는 없었지만 판정 표식은 걷는다: {npc.name}"
+        );
     }
 }

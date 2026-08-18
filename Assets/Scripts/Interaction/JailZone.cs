@@ -472,10 +472,16 @@ public class JailZone : NetworkedManagerBase
             return false;
 
         if (m_inmates.Contains(npc))
-            return false; // 산 수감자의 레코드다 — ReleaseInmate를 거쳐야 한다
+        {
+            Debug.LogWarning($"[유치장] 사망 계상 취소 실패 — 산 수감자다(ReleaseInmate를 쓸 것): {npc.name}", this);
+            return false;
+        }
 
         if (!m_records.Remove(npc))
+        {
+            Debug.Log($"[유치장] 사망 계상 취소 대상 아님 — 원장에 없다: {npc.name}");
             return false;
+        }
 
         RefreshBountyTotal();
         Debug.Log($"[유치장] 사망 계상 취소: {npc.name} — 감옥 밖으로 나갔다, 누적 현상금 {BountyTotal}원");
