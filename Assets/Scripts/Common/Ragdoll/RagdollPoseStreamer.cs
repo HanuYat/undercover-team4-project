@@ -115,6 +115,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
     // 정상적인 재정렬이며, "대기"는 손실이 아니라 <b>배선이 끊긴 것</b>이다 — 원격이 래그돌에
     // 들어갔는데 한 개도 못 받으면 손실률을 말할 수 없다(분모가 0이다).
     private bool m_expectingStream; // 전 피어 — 지금 자세가 흘러야 하는 국면인가
+    private bool m_hasReceivedPose; // 원격 — 이번 국면에 한 개라도 받았는가 (IsAwaitingFirstPose)
     private int m_sentTotal;
     private int m_receivedTotal;
     private int m_lostTotal;    // 시퀀스 구멍 — 손실
@@ -156,6 +157,17 @@ public class RagdollPoseStreamer : NetworkBehaviour
     /// 소유자가 "내가 물리로 건드려도 되는가"를 묻는 자리다.
     /// </summary>
     public bool IsStreamDriven => m_streamDriven;
+
+    /// <summary>
+    /// 원격이 <b>아직 첫 자세를 못 받았는가</b> — 소유자가 그 빈 구간을 메울지 묻는 자리다.
+    ///
+    /// ⚠ <b><see cref="IsStreamDriven"/>의 반대가 아니다.</b> 저것이 거짓인 경우는 둘인데 뜻이
+    /// 정반대다: <b>아직 안 왔다</b>(메워야 한다)와 <b>다 오고 끝났다</b>(정착 자세가 확정이니
+    /// 건드리면 안 된다). 하나로 물으면 정착 자세를 받은 직후 다시 메우기가 켜져 <b>진입 시점의
+    /// 자세(서 있는 몸)가 정착 자세를 덮어쓴다</b> — 실측된 증상이 정확히 그것이었다:
+    /// 다 쓰러진 시체가 마지막에 벌떡 선 자세로 바뀐다.
+    /// </summary>
+    public bool IsAwaitingFirstPose => m_expectingStream && !m_hasReceivedPose;
 
     // ⚠ <b>여기 "골반 위치는 옛 배선(골반 NT)에 맡긴다"는 전환기 스위치가 있었다 — 걷어냈다.</b>
     //
@@ -207,6 +219,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
         // 원격이 <b>지금 자세를 기다리는 국면인지</b>를 알아야 한다. 한 개도 안 오면 손실률을
         // 말할 수 없다(분모가 0이다). 실제 송신은 아래 권위 게이트가 막는다.
         m_expectingStream = true;
+        m_hasReceivedPose = false; // 새 국면 — 이번 무너짐의 첫 패킷을 다시 기다린다
         LogSpawnOnce();
 
         if (!IsPoseAuthority)
@@ -349,6 +362,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
 
         m_receivedTotal++;
         m_receivedWindow++;
+        m_hasReceivedPose = true;
         m_lastReceiveTime = Time.time;
 
         // ⚠ 옛 패킷을 버린다. 언리라이어블은 순서를 보장하지 않으므로, 이 검사가 없으면 시체가
@@ -405,10 +419,15 @@ public class RagdollPoseStreamer : NetworkBehaviour
         }
 
         // 재생 중이던 보간을 통째로 버린다 — 이 자세가 확정이라 섞을 것이 없다.
+        //
+        // ⚠ <c>m_expectingStream</c>을 내리는 것이 <b>이 자세를 지키는 일이다</b>: 소유자의
+        // 빈 구간 메우기가 <see cref="IsAwaitingFirstPose"/>를 보므로, 여기서 안 내리면 그쪽이
+        // 다시 켜져 진입 시점의 자세로 덮어쓴다.
         m_snapshotCount = 0;
         m_streamDriven = false;
         m_haveSequence = false;
         m_expectingStream = false;
+        m_hasReceivedPose = true;
 
         m_rig.ApplyLocalPose(rotations, hipsLocal);
     }

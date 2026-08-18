@@ -901,10 +901,14 @@ public class NpcRagdoll : MonoBehaviour
     /// </summary>
     private void TickHoldPoseUntilStream()
     {
-        if (m_streamer == null || HasMoveAuthority)
+        if (m_streamer == null || HasMoveAuthority || m_state != RagdollState.Ragdoll)
             return;
 
-        if (m_state != RagdollState.Ragdoll || m_streamer.IsStreamDriven)
+        // ⚠ <b><c>!IsStreamDriven</c>으로 묻지 않는다.</b> 그것이 거짓인 경우가 둘인데 뜻이 정반대다:
+        // <b>아직 안 왔다</b>(메워야 한다)와 <b>정착 자세까지 다 받고 끝났다</b>(확정이라 건드리면
+        // 안 된다). 실제로 그렇게 물었다가 <b>다 쓰러진 시체가 마지막에 벌떡 선 자세로 바뀌었다</b> —
+        // 정착 패킷이 재생을 끄는 순간 이 메우기가 되살아나 진입 시점 자세를 덮어쓴 것이다.
+        if (!m_streamer.IsAwaitingFirstPose)
             return;
 
         m_rig.RestoreCapturedPose();
