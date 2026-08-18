@@ -50,6 +50,22 @@ MonoBehaviour:
     m_Localized: "\uAE30\uBCF8\uAC12 \uBCF5\uC6D0"
     m_Metadata:
       m_Items: []
+  - m_Id: 6994200000008
+    m_Localized: "\uC2DC\uC810 \uBD80\uB4DC\uB7EC\uC6C0"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000009
+    m_Localized: "\uC2DC\uC57C\uAC01"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000010
+    m_Localized: "\uD654\uBA74 \uD754\uB4E4\uB9BC"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000011
+    m_Localized: "\uC18D\uB3C4 \uBE44\uB124\uD2B8"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []
