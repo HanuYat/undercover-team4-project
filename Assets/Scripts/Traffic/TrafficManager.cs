@@ -7,17 +7,15 @@ using Random = UnityEngine.Random;
 /// <summary>
 /// 도로에 차를 흘려보내는 스포너 (#634).
 ///
-/// <b>간격은 맵 전체 하나다</b> (#673). 예전에는 레인마다 자기 간격으로 냈는데, 레인이 8개라
-/// 레인당 40초로 늘려도 맵 어딘가에서는 5초마다 한 대가 나왔다 — "가끔 온다"가 성립하지 않았다.
-/// 지금은 <see cref="m_spawnIntervalSeconds"/>마다 <b>레인을 랜덤으로 뽑아</b> 거기서만 낸다.
-/// 그래서 이 값이 곧 플레이어가 체감하는 "차를 보는 빈도"다.
+/// <b>간격은 맵 전체 하나다</b> (#673). 레인마다 자기 간격으로 내던 시절엔 레인이 8개라 레인당
+/// 40초로 늘려도 맵 어딘가에선 5초마다 한 대가 나왔다. 지금은 <see cref="m_spawnIntervalSeconds"/>마다
+/// 레인을 랜덤으로 뽑아 거기서만 내므로, 이 값이 곧 체감 빈도다.
 ///
-/// 한 차례에 몇 대가 나오는지는 따로 잡는다(<see cref="m_vehiclesPerSpawnMin"/>). 간격을 줄이는
-/// 것과 대수를 늘리는 것은 <b>총량은 같아도 그림이 다르다</b> — 간격을 줄이면 한 대씩 끊임없이
-/// 지나가고, 대수를 늘리면 여러 도로에 한꺼번에 흐르다 잠잠해진다. 후자가 도시처럼 보인다.
+/// 한 차례의 대수는 따로 잡는다(<see cref="m_vehiclesPerSpawnMin"/>) — 총량이 같아도 간격을 줄이면
+/// 한 대씩 끊임없이 지나가고, 대수를 늘리면 여러 도로에 몰렸다 잠잠해진다. 후자가 도시처럼 보인다.
 ///
-/// 레인이 지던 하한(건널 창의 보장)은 그대로 남아 <b>같은 레인이 연달아 뽑히는 경우</b>만 거른다 —
-/// 전체 간격이 하한보다 훨씬 커서 평소에는 걸리지 않지만, 값을 줄였을 때 보장이 조용히 사라지지 않는다.
+/// 레인별 하한(건널 창 보장)은 남아 같은 레인이 연달아 뽑히는 경우만 거른다 — 평소엔 안 걸리지만
+/// 전체 간격을 줄였을 때 보장이 조용히 사라지지 않는다.
 ///
 /// 풀은 NGO의 프리팹 핸들러에 물린다(#634 판단 1-a) — 서버의 Spawn/Despawn이 그대로 대여/반납이 되고
 /// 클라이언트도 같은 핸들러를 지나 자기 풀에서 꺼낸다. 그래서 이 컴포넌트는 전 피어에 있어야 하고,
@@ -115,8 +113,7 @@ public class TrafficManager : MonoBehaviour
     // 매니저가 아니라 씬 배치물을 찾는 탐색이라 R1의 대상이 아니다 (JailZone·TipCallPhone과 같은 분류).
     private void ResolveLaneCrossWidths()
     {
-        // 꺼져 있는 것까지 본다 — 이 볼륨은 베이크 때만 일하므로 구운 뒤 꺼 둬도 도로는 그대로다.
-        // 활성만 훑으면 그런 맵에서 폭을 조용히 놓친다.
+        // 꺼져 있는 것까지 본다 — 베이크 때만 일하는 볼륨이라 구운 뒤 꺼 둔 맵에서 폭을 놓치지 않게.
         NavMeshModifierVolume[] volumes = FindObjectsByType<NavMeshModifierVolume>(
             FindObjectsInactive.Include,
             FindObjectsSortMode.None
@@ -235,9 +232,8 @@ public class TrafficManager : MonoBehaviour
         {
             TrafficLane lane = PickLane();
 
-            // 뽑을 레인이 없으면(전부 하한 안) 나머지를 접는다 — 다음 차례에 다시 본다.
-            // 여기서 하한을 무시하고 억지로 내면 건널 창의 보장이 깨진다.
-            // 한 차례 안에서는 방금 뽑힌 레인이 곧바로 하한에 걸리므로 자연히 서로 다른 레인이 된다.
+            // 전부 하한 안이면 나머지를 접는다 — 억지로 내면 건널 창의 보장이 깨진다.
+            // (방금 뽑힌 레인은 곧바로 하한에 걸리므로 한 차례 안에서는 자연히 서로 다른 레인이 된다)
             if (lane == null)
                 break;
 
@@ -247,8 +243,8 @@ public class TrafficManager : MonoBehaviour
         m_nextSpawnAt = Time.time + NextInterval();
     }
 
-    // 하한을 지난 레인 중 하나를 균등하게 뽑는다. 하한은 "앞차가 지나간 뒤 건널 창이 열린다"는
-    // 약속이라(TrafficLane.MinGapSeconds) 같은 레인이 연달아 뽑혀도 그 창은 지켜진다.
+    // 하한을 지난 레인 중 하나를 균등하게 뽑는다 — 하한이 "앞차 뒤 건널 창"을 보장하므로
+    // (TrafficLane.MinGapSeconds) 같은 레인이 연달아 뽑혀도 그 창은 지켜진다.
     private TrafficLane PickLane()
     {
         m_eligible.Clear();
