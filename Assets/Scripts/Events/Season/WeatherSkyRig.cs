@@ -157,11 +157,17 @@ public class WeatherSkyRig : MonoBehaviour
 
         CachePrecipitationSystems();
 
+        float previousFactor = m_shelterFactor;
         float target = IsSheltered() ? 0f : 1f;
         m_shelterFactor =
             m_shelterFadeSeconds <= 0f
                 ? target
                 : Mathf.MoveTowards(m_shelterFactor, target, Time.deltaTime / m_shelterFadeSeconds);
+
+        // 완전히 가려진 순간 한 번만 — 방출은 막아도 이미 떠 있던 입자는 그대로 살아남는데,
+        // 파티클이 Local 공간이라 앵커가 매 프레임 시점을 따라가는 한 그 입자들이 카메라에
+        // 실려 다닌다(#734). 방출량만으로는 못 지운다.
+        bool justFullySheltered = previousFactor > 0f && m_shelterFactor <= 0f;
 
         for (int i = 0; i < m_precipitationSystems.Count; i++)
         {
@@ -171,6 +177,9 @@ public class WeatherSkyRig : MonoBehaviour
 
             ParticleSystem.EmissionModule emission = ps.emission;
             emission.rateOverTimeMultiplier = m_precipitationBaseRates[i] * m_shelterFactor;
+
+            if (justFullySheltered)
+                ps.Clear(withChildren: true);
         }
     }
 
