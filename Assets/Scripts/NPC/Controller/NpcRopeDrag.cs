@@ -202,6 +202,9 @@ public class NpcRopeDrag : NetworkBehaviour
     public bool IsDraggedBy(Transform dragger) =>
         dragger != null && m_dragAnchors.Contains(dragger);
 
+    /// <summary>지금 끌고 있는 참가자 중 아무나 하나 — 없으면 null. 커스터디 인계 대상 선정용(#643).</summary>
+    internal Transform AnyDragger => m_dragAnchors.Count > 0 ? m_dragAnchors[0] : null;
+
     // 부채꼴 배치용 자리 번호 — 끄는 쪽이 매 프레임 알려준다.
     private int m_dragSlot;
     private int m_dragSlotCount = 1;

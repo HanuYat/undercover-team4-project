@@ -85,6 +85,21 @@ public class NpcCustody : NetworkBehaviour
         SetEscortTarget(null);
     }
 
+    /// <summary>참조만 <paramref name="from"/>에서 <paramref name="to"/>로 넘긴다(전이 없음) — 장부가
+    /// <paramref name="from"/>일 때만 옮기고 옮겼으면 true. 줄다리기에서 손을 뗀 사람의 참조를 남은
+    /// 참가자에게 돌려주는 문이다(#643). <see cref="StartEscort"/>를 다시 쓰지 않는 이유는 새로
+    /// 세우는 문은 하나여야 해서다.</summary>
+    internal bool HandOverEscortTarget(Transform from, Transform to)
+    {
+        if (IsSpawned && !IsServer)
+            return false;
+        if (to == null || m_escortTarget != from)
+            return false;
+
+        SetEscortTarget(to);
+        return true;
+    }
+
     // ---- 인계 판정 표식 (#230) ----
 
     /// <summary>
