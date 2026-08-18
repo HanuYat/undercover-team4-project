@@ -120,7 +120,8 @@ public class NpcStun : NetworkBehaviour
 
     // 기상 구간 표시 — 서버 진실값과 동기화 변수에 함께 기록한다 (SetStunned와 같은 구조).
     // 표현 이벤트가 없는 것이 저쪽과 다른 점이다: 자세는 이미 RaiseStandUp이 알린다.
-    private void SetRising(bool value)
+    // internal: 넉백 착지 KO 경로(NpcStunnedState)도 재사용한다 (#624) — 내리는 책임은 그쪽이 진다.
+    internal void SetRising(bool value)
     {
         m_rising = value;
         if (IsSpawned && IsServer)
