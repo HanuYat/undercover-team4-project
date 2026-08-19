@@ -164,6 +164,13 @@ Animated ──진입(사망)──> Ragdoll ──정착──> Settled ──�
     누적을 끊는다. 하나만으로는 다른 경로로 되돌아온다. (실측 1차 0.0055m → 2차 0.0624m로 누적)
     [ragdoll-corpse-split.md §8-2](ragdoll-corpse-split.md)
 
+    **예외는 하나다: 원격 피어에 길이를 실어 보내는 것**(`RagdollPoseStreamer`의 정착·순간이동
+    패킷 → `RagdollRig.ApplyBoneLengths`). 받는 쪽 뼈는 **키네마틱이라 물리에 넘어가지 않으므로**
+    이 불변식이 막는 사고("첫 스텝부터 관절이 위반된 채 출발")가 원리적으로 안 난다. 애니메이터가
+    몸을 되받는 경로에는 위의 `RestoreBindPose`가 전 피어에서 돌아 실어 온 길이를 지운다.
+    안 보내면 **원격이 다른 골격에 같은 회전을 입은 몸**이 된다 — 실측 최대 0.17m.
+    [npc-ragdoll.md §8](npc-ragdoll.md)
+
 11. **물리로 넘기기 전에 `Physics.SyncTransforms()`.** 이 프로젝트는 `m_AutoSyncTransforms: 0`이라
     (`ProjectSettings/DynamicsManager.asset`) 트랜스폼에 쓴 값이 PhysX 액터로 즉시 넘어가지 않는다.
     키네마틱인 동안은 트랜스폼이 진실이지만 동적으로 바뀌는 순간 **액터가 진실**이 되므로, 그 사이에

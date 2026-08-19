@@ -360,6 +360,8 @@ public class NpcRagdoll : MonoBehaviour
         if (HasMoveAuthority)
             LogFloorPenetration("진입");
 
+        LogBoneLengthDrift("진입"); // 진단 ⑧ (임시)
+
         m_riseProbeFrame = -1; // 진단 ⑦ (임시) — 진입 로그가 이 프레임을 이미 찍었다
 
         ReleaseAgentForRagdoll();
@@ -502,12 +504,17 @@ public class NpcRagdoll : MonoBehaviour
         m_settled = true;
 
         LogFloorPenetration("정착"); // 진단 ⑥ (임시)
+        LogBoneLengthDrift("정착"); // 진단 ⑧ (임시)
 
         // 스트림을 끊고 마지막 자세를 한 번 더 보낸다 — 이것이 원격의 종착 상태다.
         // ⚠ <b>좌표계는 바뀌지 않는다 — 스트리밍과 같은 월드다.</b> 그래서 원격은 이 패킷을 받아도
         // 화면이 변하지 않는다. 옛 구조는 여기서 로컬로 갈아타 몸을 루트에 매달았고, 그 전환이
         // 정착 순간의 점프였다.
         m_streamer?.EndStreaming();
+
+        // 진단 ⑨ (임시) — 방금 보낸 <b>종착 자세</b>가 원격에서 어떤 몸이 되는가. 이 시체는 여기서
+        // 멈추므로, 이 한 줄이 곧 클라 화면에 남는 차이다.
+        LogRemoteReconstructionError("정착");
     }
 
     // 잠든 몸이 다시 움직이기 시작했다 — 서버 전용. 밟힘·폭발·밧줄 어느 쪽이든 여기로 모인다.
@@ -577,14 +584,26 @@ public class NpcRagdoll : MonoBehaviour
 
         WakeCorpse();
         m_rope?.Attach(carrier);
+
+        LogBoneLengthDrift("밧줄부착"); // 진단 ⑧ (임시)
     }
 
     /// <summary>이 사람이 쥔 가닥만 푼다 — 줄다리기에서 한 명이 손을 뗄 때. <b>멱등</b>.</summary>
-    public void EndRopePull(Transform carrier) => m_rope?.Detach(carrier);
+    public void EndRopePull(Transform carrier)
+    {
+        m_rope?.Detach(carrier);
+
+        LogBoneLengthDrift("밧줄해제"); // 진단 ⑧ (임시)
+    }
 
     /// <summary>걸린 밧줄을 전부 푼다 — 내려놓기·줄 끊김·운반자 소실. <b>멱등</b>.
     /// 재우지 않는다 — 놓은 몸은 마저 무너져야 하고, 다 무너지면 물리가 알아서 잠든다.</summary>
-    public void EndRopePull() => m_rope?.Detach();
+    public void EndRopePull()
+    {
+        m_rope?.Detach();
+
+        LogBoneLengthDrift("밧줄전체해제"); // 진단 ⑧ (임시)
+    }
 
     // ---- 배치 (유치장 수감 / 퇴장) ----
 
@@ -622,6 +641,8 @@ public class NpcRagdoll : MonoBehaviour
         if (m_state != RagdollState.Ragdoll)
             EnterRagdoll(Vector3.zero);
 
+        LogBoneLengthDrift("배치전"); // 진단 ⑧ (임시)
+
         Vector3 delta = position - transform.position;
 
         transform.position = position;
@@ -642,6 +663,11 @@ public class NpcRagdoll : MonoBehaviour
         // 보간 없이 나가야 한다 — 평범한 스냅샷으로 보내면 원격이 출발지와 도착지 사이를
         // 보간하며 시체가 맵을 가로질러 날아간다(실측 573.94m을 21프레임).
         m_streamer?.SendTeleportPose();
+
+        // 진단 ⑧⑨ (임시) — ⚠ <b>방금 보낸 그 자세</b>를 재는 자리다. 아래 WakeAll이 물리를 깨우면
+        // 다음 스텝부터 몸이 달라지므로 여기서 재야 원격이 받은 것과 같은 자세를 잰다.
+        LogBoneLengthDrift("배치후");
+        LogRemoteReconstructionError("배치후");
 
         // 옮긴 몸은 깨어난 것으로 본다 — 도착지에서 다시 무너져 잠드는 과정이 원격에도 흘러야 한다.
         // 이미 잠들어 있었다면 다음 Update가 곧바로 다시 재우고 종착 패킷을 한 번 더 보낸다.
@@ -982,5 +1008,150 @@ public class NpcRagdoll : MonoBehaviour
         }
 
         Debug.Log(line.ToString(), this);
+    }
+
+    // 진단 ⑧ (임시) — <b>물리가 뼈를 얼마나 늘려 놨는가.</b>
+    //
+    // 스트림은 뼈 <b>길이</b>를 싣지 않는다 — "관절이 유지하므로 상수"가 그 설계의 전제다
+    // (docs/728-ragdoll-pose-streaming.md §1-2). 그런데 관절 projection이 꺼져 있어 붙드는 일이
+    // 전적으로 solver 반복 몫이고(<c>RagdollRig</c>의 solver 상수 주석), 강한 임펄스나 밧줄 장력에서는
+    // 눈에 띄게 늘어난다. <b>게다가 시체는 그 길이를 되돌릴 곳이 없다</b> — <c>RestoreBindPose</c>는
+    // <c>ExitRagdoll</c>에서만 도는데 시체는 그 문을 영영 지나지 않고,
+    // <c>RagdollRig.RestoreBindBoneLengths</c>는 지금 <b>아무도 부르지 않는다</b>(옛 키네마틱 정착과
+    // 함께 호출부가 사라졌다).
+    //
+    // <b>읽는 법.</b> 진입에서 0에 가깝다가 밧줄·배치를 지나며 커지면, 그 값이 곧 원격과 갈릴 수 있는
+    // 폭의 상한이다. 끝까지 0에 가까우면 이 가설은 기각이고 진단 ⑨도 함께 0으로 나온다.
+    private System.Collections.Generic.List<(string Bone, float Drift)> m_driftProbe;
+
+    private void LogBoneLengthDrift(string phase)
+    {
+        if (!HasMoveAuthority || m_rig == null || !m_rig.IsValid)
+            return;
+
+        // <b>어느 뼈인지가 값보다 중요해졌다</b> — 밧줄부착 시점에 이미 0.127m였고 끌기·배치를
+        // 지나도 상수라(실측 2026-08-19), 물리가 그때그때 늘리는 것이 아니라 <b>이미 굳어 있는
+        // 오프셋</b>이다. 뼈 이름이 그것이 어느 관절에서 생겼는지를 가른다.
+        if (m_driftProbe == null)
+            m_driftProbe = new System.Collections.Generic.List<(string Bone, float Drift)>();
+
+        m_rig.CollectBindPositionDrift(m_driftProbe);
+        m_driftProbe.Sort((a, b) => b.Drift.CompareTo(a.Drift));
+
+        float drift = m_driftProbe.Count > 0 ? m_driftProbe[0].Drift : 0f;
+
+        var line = new System.Text.StringBuilder();
+        line.Append($"[진단8 뼈길이] {name} {phase} 최대드리프트={drift:F3}m 뼈={m_driftProbe.Count}");
+
+        for (int i = 0; i < Mathf.Min(m_driftProbe.Count, 3); i++)
+            line.Append($" | {m_driftProbe[i].Bone} {m_driftProbe[i].Drift:F3}");
+
+        line.Append(drift > 0.02f ? " ⚠늘어났다" : " (정상)");
+
+        Debug.Log(line.ToString(), this);
+    }
+
+    // 진단 ⑨ (임시) — <b>원격이 그리는 몸과 내 몸의 차를 뼈 단위로, 호스트 혼자서 잰다.</b>
+    //
+    // 스트림이 싣는 것은 골반 <b>월드 위치</b>와 뼈 <b>로컬 회전</b>뿐이다
+    // (<see cref="RagdollPoseStreamer"/>). 원격은 그 회전을 <b>자기 바인드 길이</b> 골격에 얹어 몸을
+    // 다시 만드는데, 권위 쪽 뼈는 물리가 늘려 놓아 길이가 다르다(진단 ⑧). 여기서 재는 것이 정확히
+    // 그 차 — <b>클라 화면과 호스트 화면이 벌어지는 폭</b>이다.
+    //
+    // <b>원격 로그 없이 판별되는 것이 요점이다</b>(MPPM 가상 플레이어는 콘솔이 안 잡힌다). 원격이 할
+    // 재구성을 호스트에서 그대로 따라 해 실제 뼈 위치와 뺀다: 골반은 <b>보내는 값</b>에 못박고,
+    // 자식으로 내려가며 <c>부모월드 × (바인드 길이 · 지금 로컬 회전)</c>으로 위치를 다시 만든다.
+    // 체인 끝(팔·손)일수록 오차가 쌓이므로 <b>상위 뼈 이름이 어디서 벌어졌는지</b>를 말해 준다.
+    //
+    // ⚠ 재지 <b>않는</b> 것 둘: ① 골반 위쪽 뼈 — 원격에서는 루트 계층이 놓는다, ② 원격 루트 NT의
+    // 보간 오차 — 루트 회전은 양쪽이 같다고 본다. 그쪽이 의심되면 진단 ⑤(클라 여유)와 함께 읽는다.
+    //
+    // ⚠⚠ <b>고친 뒤로 이 값은 "원격이 그리게 될 몸"이 아니다.</b> 신뢰 1회 패킷이 뼈 길이를 함께
+    // 나르므로(docs/npc-ragdoll.md §8) 원격은 더 이상 바인드 길이로 재구성하지 않는다. 지금 이 값이
+    // 뜻하는 것은 <b>"길이를 안 실었다면 얼마나 갈렸을까"</b> — 즉 드리프트가 커지고 있는지 보는
+    // 감시 지표다. 화면이 맞는지는 이 로그가 아니라 <b>호스트와 클라 화면을 나란히 놓고</b> 본다.
+    private Vector3[] m_reconPositions;
+    private Quaternion[] m_reconRotations;
+
+    private void LogRemoteReconstructionError(string phase, int detail = 5)
+    {
+        if (!HasMoveAuthority || m_rig == null || !m_rig.IsValid)
+            return;
+
+        Transform[] bones = m_rig.PoseBones;
+        Transform hips = m_rig.Hips;
+        if (bones == null || bones.Length == 0 || hips == null)
+            return;
+
+        if (m_reconPositions == null || m_reconPositions.Length != bones.Length)
+        {
+            m_reconPositions = new Vector3[bones.Length];
+            m_reconRotations = new Quaternion[bones.Length];
+        }
+
+        var diffs = new System.Collections.Generic.List<(string Name, float Error)>();
+        float worst = 0f;
+        float sum = 0f;
+
+        for (int i = 0; i < bones.Length; i++)
+        {
+            Transform bone = bones[i];
+            if (bone == null || !bone.IsChildOf(hips))
+                continue; // 골반 위쪽 — 원격에서는 루트 계층이 놓는 자리라 잴 대상이 아니다
+
+            if (bone == hips)
+            {
+                // 원격이 월드로 못박는 값 그대로다 — 여기서는 오차가 0이라 세지 않는다.
+                m_reconPositions[i] = hips.position;
+                m_reconRotations[i] = hips.rotation;
+                continue;
+            }
+
+            int parent = IndexOfBone(bones, bone.parent);
+            if (parent < 0 || !m_rig.TryGetBindLocalPosition(bone, out Vector3 bindLocal))
+                continue;
+
+            // 계층 수학 그대로 — 원격이 하는 일이 이것이다(회전은 받은 것, 길이는 자기 바인드).
+            m_reconRotations[i] = m_reconRotations[parent] * bone.localRotation;
+            m_reconPositions[i] =
+                m_reconPositions[parent]
+                + m_reconRotations[parent] * Vector3.Scale(bindLocal, bone.parent.lossyScale);
+
+            float error = Vector3.Distance(m_reconPositions[i], bone.position);
+            sum += error;
+            if (error > worst)
+                worst = error;
+
+            diffs.Add((bone.name, error));
+        }
+
+        diffs.Sort((a, b) => b.Error.CompareTo(a.Error)); // 큰 것부터
+
+        var line = new System.Text.StringBuilder();
+        line.Append($"[진단9 재구성] {name} {phase} 최대={worst:F3}m");
+        line.Append($" 평균={(diffs.Count > 0 ? sum / diffs.Count : 0f):F3} 뼈={diffs.Count}");
+
+        int shown = Mathf.Min(diffs.Count, detail);
+        for (int i = 0; i < shown; i++)
+            line.Append($" | {diffs[i].Name} {diffs[i].Error:F3}");
+
+        line.Append(worst > 0.05f ? " ⚠원격과 갈린다" : worst > 0.02f ? " ⚠벌어지는 중" : " (정상)");
+
+        Debug.Log(line.ToString(), this);
+    }
+
+    // 진단 ⑨ 보조 (임시) — 뼈 배열에서 부모의 자리를 찾는다. 리그당 20개 남짓이라 선형으로 충분하다.
+    private static int IndexOfBone(Transform[] bones, Transform bone)
+    {
+        if (bone == null)
+            return -1;
+
+        for (int i = 0; i < bones.Length; i++)
+        {
+            if (bones[i] == bone)
+                return i;
+        }
+
+        return -1;
     }
 }

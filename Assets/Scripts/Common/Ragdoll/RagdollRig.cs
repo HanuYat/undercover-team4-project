@@ -433,6 +433,63 @@ public class RagdollRig : MonoBehaviour
         }
     }
 
+    // ---- 진단 보조 (임시 — NpcRagdoll의 진단 ⑨가 쓴다. 그 블록과 함께 지운다) ----
+
+    /// <summary>
+    /// 스트림에 실리는 뼈 — <b>계층 순서</b>(부모가 자식보다 먼저)라 그대로 훑으면 체인이 풀린다.
+    /// 원격의 재구성을 흉내 내는 진단에만 쓴다.
+    /// </summary>
+    public Transform[] PoseBones => m_poseBones;
+
+    /// <summary>
+    /// <b>뼈마다</b>의 바인드 로컬 위치 드리프트(m) — <see cref="MaxBindPositionDrift"/>가 최댓값만
+    /// 주는 자리를 <b>어느 뼈인지</b>까지 벌려 놓은 진단용이다. 대상은 같다(관절이 달린 뼈만).
+    /// </summary>
+    /// <returns>담은 개수.</returns>
+    public int CollectBindPositionDrift(System.Collections.Generic.List<(string Bone, float Drift)> into)
+    {
+        if (into == null)
+            return 0;
+
+        into.Clear();
+        if (m_bindBones == null)
+            return 0;
+
+        for (int i = 0; i < m_bindBones.Length; i++)
+        {
+            if (m_bindBones[i] == null || !m_bindJointed[i])
+                continue;
+
+            into.Add(
+                (m_bindBones[i].name, Vector3.Distance(m_bindBones[i].localPosition, m_bindPositions[i]))
+            );
+        }
+
+        return into.Count;
+    }
+
+    /// <summary>
+    /// 이 뼈의 <b>바인드 로컬 위치</b> — 원격이 자세를 입힐 때 실제로 쓰는 뼈 길이다(스트림은 회전만
+    /// 싣는다). 리그의 뼈가 아니면 거짓.
+    /// </summary>
+    public bool TryGetBindLocalPosition(Transform bone, out Vector3 bindLocal)
+    {
+        bindLocal = Vector3.zero;
+        if (m_bindBones == null || bone == null)
+            return false;
+
+        for (int i = 0; i < m_bindBones.Length; i++)
+        {
+            if (m_bindBones[i] != bone)
+                continue;
+
+            bindLocal = m_bindPositions[i];
+            return true;
+        }
+
+        return false;
+    }
+
     /// <summary>
     /// 리그를 프리팹의 바인드 포즈로 되돌린다 — <b>뼈 길이를 복원하는 것이 목적이다.</b>
     ///
@@ -896,6 +953,59 @@ public class RagdollRig : MonoBehaviour
 
         for (int i = 0; i < m_poseBones.Length; i++)
             m_poseBones[i].localRotation = rotations[i];
+
+        return true;
+    }
+
+    // ---- 뼈 길이 (#728 후속 5) ----
+    //
+    // <b>"뼈 길이는 관절이 유지하므로 상수다"가 시체에서는 거짓이다.</b> 그 전제로 회전만 보내다가
+    // 실측(2026-08-19)에서 갈렸다: 래그돌 <b>진입 시점 0.000m</b>이던 드리프트가 무너져 정착하고 나면
+    // <b>0.036~0.206m</b>다(최악은 항상 <c>Spine_02</c>). 겹침 탈출과 솔버가 무너지는 동안 뼈를 늘려
+    // 놓는데, 시체는 <see cref="RestoreBindPose"/>를 도는 <c>ExitRagdoll</c>을 영영 지나지 않아
+    // <b>그 길이가 영구히 남는다.</b>
+    //
+    // 그래서 원격은 <b>바인드 길이 골격에 권위 쪽 회전</b>을 입히게 되고, 체인을 따라 오차가 쌓여
+    // 팔·머리에서 최대 0.17m 다른 몸이 나온다 — 호스트에서는 등이 바닥에 붙어 있는데 클라에서는 떠
+    // 보이던 증상이 이것이다.
+    //
+    // <b>실어 보내는 것은 신뢰 1회 패킷뿐이다</b>(정착·순간이동 — <c>RagdollPoseStreamer</c>).
+    // 길이는 무너지는 동안 변하고 정착하면 상수인데, 화면에 오래 남는 것은 정착 자세다. 25Hz 스트림에
+    // 매번 실으면 대역폭이 2.4배가 되고 얻는 것은 <b>이미 빠르게 움직이는 동안의</b> 정확도뿐이다.
+
+    /// <summary>전 자세 뼈의 <b>로컬 위치</b>(= 뼈 길이)를 담아 간다 — 배열 길이는 <see cref="BoneCount"/>.</summary>
+    /// <returns>담았으면 참 — 길이가 안 맞으면 거짓(아무것도 쓰지 않는다).</returns>
+    public bool CaptureBoneLengths(Vector3[] lengths)
+    {
+        if (m_poseBones == null || lengths == null || lengths.Length != m_poseBones.Length)
+            return false;
+
+        for (int i = 0; i < m_poseBones.Length; i++)
+            lengths[i] = m_poseBones[i].localPosition;
+
+        return true;
+    }
+
+    /// <summary>
+    /// 담아 온 뼈 길이를 입힌다 — 원격 전용(키네마틱일 때만 의미가 있다).
+    ///
+    /// ⚠ <b>골반은 건너뛴다.</b> 골반의 로컬 위치는 길이가 아니라 <b>자세</b>이고
+    /// (<see cref="MaxBindPositionDrift"/>가 골반을 빼는 것과 같은 이유), 원격에서는 스트리머가
+    /// 월드로 못박으므로 여기서 손대면 그 값과 싸운다.
+    /// </summary>
+    /// <returns>입혔으면 참 — 길이가 안 맞으면 거짓.</returns>
+    public bool ApplyBoneLengths(Vector3[] lengths)
+    {
+        if (m_poseBones == null || lengths == null || lengths.Length != m_poseBones.Length)
+            return false;
+
+        for (int i = 0; i < m_poseBones.Length; i++)
+        {
+            if (m_poseBones[i] == m_hipsBone)
+                continue;
+
+            m_poseBones[i].localPosition = lengths[i];
+        }
 
         return true;
     }

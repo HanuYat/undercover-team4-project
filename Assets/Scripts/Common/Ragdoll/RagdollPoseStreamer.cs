@@ -86,6 +86,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
     private ushort m_sequence;
     private int m_stepsSinceSend;
     private Quaternion[] m_sendBuffer;  // 캡처용 — 매 스텝 새로 할당할 이유가 없다
+    private Vector3[] m_lengthBuffer;   // 뼈 길이 — 신뢰 1회 패킷에만 실린다 (docs/npc-ragdoll.md §8)
     private uint[] m_packedBuffer;      // 실제로 선에 실리는 것 — 쿼터니언당 4바이트
     private Quaternion[] m_unpackBuffer; // 수신 쪽 — 푸는 자리
 
@@ -267,8 +268,12 @@ public class RagdollPoseStreamer : NetworkBehaviour
         if (!m_rig.CaptureLocalPose(m_sendBuffer, out _))
             return;
 
+        // ⚠ <b>뼈 길이를 함께 싣는다</b> — 이 패킷이 원격의 종착 상태라, 여기가 틀리면 그 시체는
+        // 끝까지 다른 몸으로 남는다 (docs/npc-ragdoll.md §8).
+        m_rig.CaptureBoneLengths(m_lengthBuffer);
+
         m_sequence = unchecked((ushort)(m_sequence + 1));
-        FinalPoseRpc(m_sequence, m_rig.Hips.position, Pack(m_sendBuffer));
+        FinalPoseRpc(m_sequence, m_rig.Hips.position, Pack(m_sendBuffer), m_lengthBuffer);
     }
 
     /// <summary>
@@ -303,8 +308,12 @@ public class RagdollPoseStreamer : NetworkBehaviour
         if (!m_rig.CaptureLocalPose(m_sendBuffer, out _))
             return;
 
+        // 길이도 함께 — 옮겨 놓은 몸을 원격이 <b>도착 즉시</b> 같은 모양으로 그리게 한다. 안 실으면
+        // 다시 무너져 정착할 때까지(수 초) 바인드 길이 몸으로 누워 있다 (docs/npc-ragdoll.md §8).
+        m_rig.CaptureBoneLengths(m_lengthBuffer);
+
         m_sequence = unchecked((ushort)(m_sequence + 1));
-        TeleportPoseRpc(m_sequence, m_rig.Hips.position, Pack(m_sendBuffer));
+        TeleportPoseRpc(m_sequence, m_rig.Hips.position, Pack(m_sendBuffer), m_lengthBuffer);
     }
 
     public void StopStreaming()
@@ -357,6 +366,9 @@ public class RagdollPoseStreamer : NetworkBehaviour
 
         if (m_packedBuffer == null || m_packedBuffer.Length != m_rig.BoneCount)
             m_packedBuffer = new uint[m_rig.BoneCount];
+
+        if (m_lengthBuffer == null || m_lengthBuffer.Length != m_rig.BoneCount)
+            m_lengthBuffer = new Vector3[m_rig.BoneCount];
     }
 
     // ---- 압축 ----
@@ -417,21 +429,25 @@ public class RagdollPoseStreamer : NetworkBehaviour
     /// "여기서 멈춘다"를 <b>유실 없이</b> 알릴 뿐이다. 예전에는 여기서 로컬 좌표로 갈아타며 몸을
     /// 루트에 매달았고, 그 전환이 정착 순간의 점프였다(<see cref="EndStreaming"/> 주석).
     ///
+    /// <b>뼈 길이를 함께 나른다</b>(<paramref name="lengths"/>) — 권위 쪽 시체는 무너지는 동안 뼈가
+    /// 늘어나고 그 길이가 영구히 남는데(실측 0.036~0.206m), 원격은 물리를 안 굴려 바인드 그대로라
+    /// 안 보내면 <b>같은 회전을 다른 골격에 입힌 몸</b>이 된다. 근거·실측은 docs/npc-ragdoll.md §8.
+    ///
     /// ⚠ <b>늦게 접속한 피어에는 오지 않는다</b>(신뢰 RPC의 성질). 이미 누워 있던 시체를 자세 없이
     /// 보게 되는 구멍이고, 계획서 6단계에서 닫는다(권위 피어가 마지막 자세를 캐시했다가 새
     /// 접속자에게만 다시 쏜다).
     /// </summary>
     [Rpc(SendTo.NotMe)]
-    private void FinalPoseRpc(ushort sequence, Vector3 hipsWorld, uint[] packed)
-        => ReceivePose(sequence, hipsWorld, packed, terminal: true);
+    private void FinalPoseRpc(ushort sequence, Vector3 hipsWorld, uint[] packed, Vector3[] lengths)
+        => ReceivePose(sequence, hipsWorld, packed, terminal: true, lengths);
 
     /// <summary>시체를 통째로 옮겼다 — 보간을 끊고 이 자세만 남긴다. (<see cref="SendTeleportPose"/>)</summary>
     [Rpc(SendTo.NotMe)]
-    private void TeleportPoseRpc(ushort sequence, Vector3 hipsWorld, uint[] packed)
+    private void TeleportPoseRpc(ushort sequence, Vector3 hipsWorld, uint[] packed, Vector3[] lengths)
     {
         m_snapshotCount = 0; // 출발지 스냅샷을 버린다 — 안 버리면 그 사이를 보간하며 날아간다
         m_haveSequence = false;
-        ReceivePose(sequence, hipsWorld, packed, terminal: false);
+        ReceivePose(sequence, hipsWorld, packed, terminal: false, lengths);
     }
 
     /// <summary>
@@ -441,7 +457,13 @@ public class RagdollPoseStreamer : NetworkBehaviour
     /// 이어지고, 재생을 끊거나 좌표계를 갈아탈 이유가 없다. 뒤늦게 도착한 언리라이어블 스냅샷은
     /// <b>시퀀스 가드가 알아서 버린다</b> — 정착 패킷도 번호를 달고 오기 때문이다.
     /// </summary>
-    private void ReceivePose(ushort sequence, Vector3 hipsWorld, uint[] packed, bool terminal)
+    private void ReceivePose(
+        ushort sequence,
+        Vector3 hipsWorld,
+        uint[] packed,
+        bool terminal,
+        Vector3[] lengths = null
+    )
     {
         if (m_rig == null || !m_rig.IsValid || packed == null)
             return;
@@ -477,6 +499,14 @@ public class RagdollPoseStreamer : NetworkBehaviour
         m_newestSequence = sequence;
         m_haveSequence = true;
         m_streamDriven = true;
+
+        // ⚠ <b>길이가 자세보다 먼저다.</b> 자세는 회전뿐이라 팔다리 <b>위치</b>는 이 길이 위에
+        // 얹혀 계층 수학으로 만들어진다 — 순서가 뒤집히면 이번 프레임은 옛 길이로 그려진다.
+        //
+        // 한 번 쓰면 남는다(원격의 뼈는 키네마틱이라 아무도 덮지 않는다). 그래서 <b>신뢰 1회
+        // 패킷에만</b> 실어도 그 뒤 흘러오는 스냅샷이 같은 골격 위에서 재생된다.
+        if (lengths != null && lengths.Length == m_rig.BoneCount)
+            m_rig.ApplyBoneLengths(lengths);
 
         PushSnapshot(hipsWorld, Unpack(packed));
 
