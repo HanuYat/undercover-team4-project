@@ -45,6 +45,10 @@ public class NpcSpawner : CommonManagerBase
     [Tooltip("보정으로 후보가 수평으로 이 거리(m)보다 멀리 끌려가면 그 위치를 버리고 다시 뽑는다. 0 이하면 검사하지 않는다 (#714)")]
     [SerializeField] private float m_maxSnapDistance = 1.5f;
 
+    [Header("도로 여유 거리")]
+    [Tooltip("스폰 자리에서 이 거리(m) 안에 도로가 있으면 버리고 다시 뽑는다. 연석에 발을 걸친 채 시작해 차에 치이는 것을 막는다. 0 이하면 검사하지 않는다 (#660)")]
+    [SerializeField] private float m_roadClearance = 0.5f;
+
     [Header("최소 스폰 간격")]
     [Tooltip("이미 스폰된 NPC와 이 거리(m)보다 가까우면 그 위치를 버리고 다시 뽑는다. 0 이하면 검사하지 않는다 (#660)")]
     [SerializeField] private float m_minSpawnSeparation = 1.5f;
@@ -231,6 +235,13 @@ public class NpcSpawner : CommonManagerBase
                 if (snapDelta.sqrMagnitude > m_maxSnapDistance * m_maxSnapDistance)
                     continue;
             }
+
+            // 마스크에서 도로를 빼도 도로 위 후보는 버려지지 않고 "가장 가까운 인도 지점" =
+            // <b>연석 경계선</b>으로 끌려온다. 그 자리는 발밑 폴리곤이 도로라(실측: 100마리 중 7~9마리)
+            // NpcNavAreas.IsOnRoad가 참이 되고, 그러면 배회 중에도 마스크에서 도로가 빠지지 않아
+            // (#634의 경로 실패 가드) 차도로 걸어 들어간다. 도로에서 떨어진 자리만 받는다.
+            if (NpcNavAreas.HasRoadWithin(hit.position, m_roadClearance))
+                continue;
 
             // 스폰 포인트 하나에 수십 마리가 몰리면 반경 안이 포화돼 서로 겹쳐 선다 — 실측(아포칼립스,
             // 포인트당 12.5마리)으로 100마리 중 46마리가 1m 안에 이웃을 두고 나왔다. 이미 놓은 자리와
