@@ -15,7 +15,6 @@ public class MontagePortraitView : MonoBehaviour
 {
     [Header("레이어 (뒤에서 앞 순서로 배치할 것)")]
     [SerializeField] private Image m_baseImage;      // 살 실루엣 — 피부색을 칠하는 자리
-    [SerializeField] private Image m_faceImage;      // 이목구비 — 피부색과 무관해 칠하지 않는다
     [SerializeField] private Image m_hairImage;
     [SerializeField] private Image m_facialHairImage;
     [SerializeField] private Image m_headwearImage;
@@ -39,7 +38,6 @@ public class MontagePortraitView : MonoBehaviour
         MontageClarityStep clarity = ClarityStepOf(database);
 
         BindBase(profile, revealedAxes, database, clarity);
-        SetLayer(m_faceImage, database.MontageFace, Color.white, clarity);
         BindHair(profile, revealedAxes, database, clarity);
         BindPropAxis(m_facialHairImage, AppearanceAxis.FacialHair, profile, revealedAxes, database, clarity);
         BindPropAxis(m_headwearImage, AppearanceAxis.Headwear, profile, revealedAxes, database, clarity);
@@ -142,7 +140,6 @@ public class MontagePortraitView : MonoBehaviour
     {
         var noDegrade = default(MontageClarityStep);
         SetLayer(m_baseImage, null, Color.white, noDegrade);
-        SetLayer(m_faceImage, null, Color.white, noDegrade);
         SetLayer(m_hairImage, null, Color.white, noDegrade);
         SetLayer(m_facialHairImage, null, Color.white, noDegrade);
         SetLayer(m_headwearImage, null, Color.white, noDegrade);

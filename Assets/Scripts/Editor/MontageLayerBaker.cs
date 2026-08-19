@@ -35,12 +35,10 @@ public class MontageLayerBaker : EditorWindow
     [SerializeField] private float m_orthoSize = 0.16f;
 
     // Synty 휴머노이드의 Head 본은 두개골 밑동에 있다 — 머리 중심은 거기서 9cm쯤 위다.
-    // 낮게 잡으면 정수리가 잘리고 대신 목·어깨가 프레임에 들어와 이목구비 추출의 밝기 기준까지 흐린다.
+    // 낮게 잡으면 정수리가 잘리고 대신 목·어깨가 프레임에 들어와 실루엣이 커진다.
     [SerializeField] private float m_headOffset = 0.09f;
 
     [SerializeField] private float m_cameraDistance = 1.5f;
-
-    [SerializeField] private float m_featureThreshold = 0.25f;
 
     // 정면에서 거의 안 보이는 프롭(뒤로 넘긴 묶음머리·번)을 알리는 선이다. 자를지 말지의 기준은 아니다 —
     // 희미해도 구분은 글이 하므로 그대로 꽂는 쪽으로 정했다 (#619, docs §13-7). 여기 걸리면 사람이 보고 판단한다.
@@ -117,12 +115,6 @@ public class MontageLayerBaker : EditorWindow
         m_orthoSize = EditorGUILayout.FloatField(new GUIContent("프레임 크기", "직교 카메라 크기 — 작을수록 머리를 크게 잡는다"), m_orthoSize);
         m_headOffset = EditorGUILayout.FloatField(new GUIContent("머리 오프셋", "머리 본보다 이만큼 위를 화면 중심으로 잡는다"), m_headOffset);
         m_cameraDistance = EditorGUILayout.FloatField("카메라 거리", m_cameraDistance);
-        m_featureThreshold = EditorGUILayout.Slider(
-            new GUIContent("이목구비 문턱", "피부보다 이만큼 어두운 픽셀만 이목구비 레이어로 남긴다. 낮추면 명암까지 딸려오고, 높이면 눈·입이 사라진다"),
-            m_featureThreshold,
-            0.05f,
-            0.7f
-        );
         m_minLayerCoverage = EditorGUILayout.Slider(
             new GUIContent("확인 문턱", "구운 그림이 프레임에서 이보다 적게 차지하면 로그로 알린다(꽂기는 한다). 정면에서 '없음'과 구분되지 않는지 사람이 보고 판단할 후보를 골라 주는 용도 — 구분이 안 되면 그 옵션의 ExcludeFromMontage를 켠다"),
             m_minLayerCoverage,
@@ -374,15 +366,7 @@ public class MontageLayerBaker : EditorWindow
         var close = new List<string>();
         var groups = new List<string>();
 
-        // ① 이목구비 — 살과 분리해 둬야 살 레이어를 통짜로 피부색으로 칠할 수 있다
-        Sprite faceSprite = SaveLayer(rig.RenderFace(m_featureThreshold), "Montage_Face");
-        if (faceSprite != null)
-        {
-            SetPrivateSprite("m_montageFace", faceSprite);
-            baked.Add("이목구비");
-        }
-
-        // ② 살
+        // ① 살
         Color[] basePixels = rig.RenderBase();
         Sprite baseSprite = SaveLayer(basePixels, "Montage_Base");
         if (baseSprite != null)
@@ -391,7 +375,7 @@ public class MontageLayerBaker : EditorWindow
             baked.Add("살");
         }
 
-        // ③ 형태 미상 머리 — 머리 프롭을 쓰지 않고 두상에서 뽑는다 (BuildUnknownHair 참고)
+        // ② 형태 미상 머리 — 머리 프롭을 쓰지 않고 두상에서 뽑는다 (BuildUnknownHair 참고)
         Sprite unknownHair = SaveLayer(BuildUnknownHair(basePixels), "Montage_HairUnknown");
         if (unknownHair != null)
         {
@@ -399,7 +383,7 @@ public class MontageLayerBaker : EditorWindow
             baked.Add("형태 미상 머리");
         }
 
-        // ④ 프롭 레이어
+        // ③ 프롭 레이어
         foreach (AppearanceAxis axis in PropAxes())
         {
             var layers = new List<(int Index, Color[] Pixels)>();
@@ -552,8 +536,7 @@ public class MontageLayerBaker : EditorWindow
                 return;
             }
 
-            // 굽기와 같은 순서로 찍는다 (이목구비 → 살 → 프롭) — 시트가 실물과 다르면 보고 정할 이유가 없다
-            Color[] facePixels = rig.RenderFace(m_featureThreshold);
+            // 굽기와 같은 순서로 찍는다 (살 → 프롭) — 시트가 실물과 다르면 보고 정할 이유가 없다
             Color[] basePixels = rig.RenderBase();
 
             // 같이 붙일 프롭은 자기 색으로 한 번 그려 두고, 후보 프롭을 찍을 땐 검정 가림막으로 쓴다
@@ -566,7 +549,7 @@ public class MontageLayerBaker : EditorWindow
                 Color[] layer = column == 0
                     ? null
                     : rig.RenderProp(props[column - 1], colors[column - 1], silhouette, m_comparePairedProp);
-                Color[] cell = ComposeCell(basePixels, facePixels, pairedLayer, layer, skinColor, silhouette ? hairColor : Color.white);
+                Color[] cell = ComposeCell(basePixels, pairedLayer, layer, skinColor, silhouette ? hairColor : Color.white);
                 BlitCell(sheet, width, height, cellSize, cell, resolution, column, row);
             }
         }
@@ -591,10 +574,9 @@ public class MontageLayerBaker : EditorWindow
         );
     }
 
-    /// <summary>포트레이트와 같은 순서로 한 칸을 합성한다 — 배경 → 살(피부색) → 이목구비 → 같이 붙인 프롭 → 후보 프롭.</summary>
+    /// <summary>포트레이트와 같은 순서로 한 칸을 합성한다 — 배경 → 살(피부색) → 같이 붙인 프롭 → 후보 프롭.</summary>
     private Color[] ComposeCell(
         Color[] basePixels,
-        Color[] facePixels,
         Color[] pairedPixels,
         Color[] layerPixels,
         Color skinColor,
@@ -605,7 +587,6 @@ public class MontageLayerBaker : EditorWindow
         for (int i = 0; i < cell.Length; i++)
         {
             Color pixel = Over(m_compareBackground, Tint(basePixels[i], skinColor));
-            pixel = Over(pixel, facePixels[i]);
             if (pairedPixels != null)
                 pixel = Over(pixel, pairedPixels[i]);
             if (layerPixels != null)
@@ -680,8 +661,7 @@ public class MontageLayerBaker : EditorWindow
     ///
     /// 캡은 채우지 않고 <b>윤곽만</b> 남긴다 — 통짜로 칠하면 이번엔 짧은머리 하나로 읽힌다. 바깥 한 겹은
     /// 체크무늬로 솎아 윤곽까지 흐린다(미공개 색을 반투명으로 두는 것과 같은 취지 — 농도로 말한다).
-    /// 윤곽의 아랫변은 뺀다: 이마를 가로지르는 띠는 모자·이마밴드로 읽혀 Headwear 축과 섞이고,
-    /// 머리 레이어가 이목구비 위에 깔리는 탓에 눈썹까지 덮는다.
+    /// 윤곽의 아랫변은 뺀다: 이마를 가로지르는 띠는 모자·이마밴드로 읽혀 Headwear 축과 섞인다.
     /// </summary>
     private Color[] BuildUnknownHair(Color[] basePixels)
     {
