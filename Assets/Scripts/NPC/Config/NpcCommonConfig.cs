@@ -39,6 +39,12 @@ public class NpcCommonConfig : ScriptableObject
     // 제압 타격량(m_subdueHitPower)은 제거됐다 (#438) — 유일한 소비처였던 E 제압 타격이 사라졌다.
     // 진압봉은 자기 Baton.m_damage(같은 34)를 쓴다 — 무기 수치는 무기가 들고 있는 편이 맞다.
 
+    [Header("방치 회복 — #707")]
+    [Tooltip("마지막 피해로부터 이 시간(초)이 지나야 회복이 시작된다. 그 전에 다시 맞으면 처음부터 다시 잰다")]
+    [SerializeField] private float m_regenDelaySeconds = 20f;
+    [Tooltip("회복 속도(초당 HP) — MaxHp까지 오른다. 팀 결정(2026-08-19, #707): 상한을 KnockdownHp로 묶지 않고 반복 넉다운을 허용한다")]
+    [SerializeField] private float m_regenHpPerSecond = 2f;
+
     public float SpawnSpeedMultiplierMin => m_spawnSpeedMultiplierMin;
     public float SpawnSpeedMultiplierMax => m_spawnSpeedMultiplierMax;
     public float KnockbackGravity => m_knockbackGravity;
@@ -65,4 +71,10 @@ public class NpcCommonConfig : ScriptableObject
     /// 넉다운이 영영 안 걸린다.
     /// </summary>
     public int KnockdownHp => Mathf.Max(1, Mathf.CeilToInt(m_maxHp * m_knockdownHpRatio));
+
+    /// <summary>방치 회복이 시작되기까지의 대기 시간(초) — NpcHealth가 마지막 피해 이후 잰다. (#707)</summary>
+    public float RegenDelaySeconds => m_regenDelaySeconds;
+
+    /// <summary>방치 회복 속도(초당 HP) — NpcHealth가 MaxHp까지 적용한다. (#707)</summary>
+    public float RegenHpPerSecond => m_regenHpPerSecond;
 }

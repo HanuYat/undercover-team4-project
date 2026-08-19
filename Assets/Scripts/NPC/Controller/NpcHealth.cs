@@ -21,6 +21,12 @@ public class NpcHealth : NetworkBehaviour, IDamageable
     private readonly NetworkVariable<int> m_syncedHp = new NetworkVariable<int>();
     private int m_hp;
 
+    // 방치 회복 타이머 — 마지막 피해 이후 경과 시간. ApplyDamage가 리셋한다 (#707)
+    private float m_secondsSinceDamage;
+
+    // 초당 회복량의 소수 부분 누적 — 프레임마다 정수로 잘리는 손실을 막는다 (#707)
+    private float m_regenAccumulator;
+
     /// <summary>최대 체력 — HUD가 비율 계산에 읽는다. (#366)</summary>
     public int MaxHp => m_owner.CommonConfig.MaxHp;
 
@@ -110,6 +116,10 @@ public class NpcHealth : NetworkBehaviour, IDamageable
         int applied = before - CurrentHp;
         if (applied > 0)
             BroadcastDamaged(applied, attacker);
+
+        // 방치 타이머 리셋 — 회복 중 다시 맞으면 처음부터 다시 잰다 (#707)
+        m_secondsSinceDamage = 0f;
+        m_regenAccumulator = 0f;
     }
 
     // 연출 알림을 전 피어에 돌린다 — 가해자를 GameObject로 실을 수 없어 월드 좌표로 환산해 보낸다.
@@ -136,6 +146,32 @@ public class NpcHealth : NetworkBehaviour, IDamageable
 
     // 체력 회복(구 ServerRestoreHp)은 #571에서 제거됐다 — 회복 지점 둘(NpcStun.ExitStun ·
     // NpcStunnedState.Exit)이 함께 사라져 부르는 곳이 없어졌다. 이유는 그 두 곳의 주석에 있다.
+    // #707이 방치 회복이라는 새 지점을 아래에 연다.
+
+    /// <summary>방치 회복 틱 — NpcController.Update가 사망 게이트 통과 직후 매 프레임 부른다. 서버(또는 오프라인) 전용. (#707)</summary>
+    internal void Tick()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        m_secondsSinceDamage += Time.deltaTime;
+
+        if (CurrentHp >= MaxHp)
+            return;
+        if (m_secondsSinceDamage < m_owner.CommonConfig.RegenDelaySeconds)
+            return;
+        if (!NpcStateRules.CanRegenerate(m_owner))
+            return;
+
+        // 소수 누적 — 낮은 회복 속도에서 매 프레임 FloorToInt로 잘리는 손실 방지
+        m_regenAccumulator += m_owner.CommonConfig.RegenHpPerSecond * Time.deltaTime;
+        int wholeHp = Mathf.FloorToInt(m_regenAccumulator);
+        if (wholeHp <= 0)
+            return;
+
+        m_regenAccumulator -= wholeHp;
+        SetHp(Mathf.Min(CurrentHp + wholeHp, MaxHp), null);
+    }
 
     /// <summary>
     /// 체력을 만으로 되돌린다 — <b>수감 지점 전용</b>. 서버(또는 오프라인)에서만 의미. (#571 후속)
