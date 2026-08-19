@@ -27,6 +27,7 @@ public class PlayerLooter : ChanneledInteractionBehaviour
     private PlayerIncapacitation m_incapacitation; // 쓰러진 내가 남을 털지 못하게
     private PlayerLoadout m_loadout; // 가져온 것을 받을 내 소지품
     private PlayerWallet m_wallet; // 뺏은 자금이 들어올 내 지갑
+    private PlayerInputHandler m_input; // R 입력 구독 (#725)
 
     // 약탈 가능 소지품 후보 버퍼 — 요청마다 새 List를 만들지 않게 재사용한다 (Pickpocket과 같은 관례).
     // 서버 검증 전용이다. 오너 표시 쪽(ShowLoot)은 자기 목록을 따로 만든다 — 호스트에서는 둘이 같은
@@ -39,14 +40,55 @@ public class PlayerLooter : ChanneledInteractionBehaviour
         m_incapacitation = GetComponent<PlayerIncapacitation>();
         m_loadout = GetComponent<PlayerLoadout>();
         m_wallet = GetComponent<PlayerWallet>();
+        m_input = GetComponent<PlayerInputHandler>();
     }
 
-    // ---- 오너 클라 진입점 (LootableBodyInteractable·약탈 창이 호출) ----
+    public override void OnNetworkSpawn()
+    {
+        if (!IsOwner)
+            return; // 원격 클라는 서버 실행·채널링 피드백만 필요 — 입력은 오너만 구독한다
+
+        if (m_input != null)
+            m_input.OnLootPerformed += HandleLootPerformed;
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        if (IsOwner && m_input != null)
+            m_input.OnLootPerformed -= HandleLootPerformed;
+    }
+
+    // ---- 오너 입력 핸들러 (R, #725) ----
+
+    private void HandleLootPerformed()
+    {
+        if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
+            return; // 쓰러진 내가 남을 털 수는 없다 — 서버 CanLoot과 같은 기준
+
+        LootableBodyInteractable target = FindLootTarget();
+        if (target != null)
+            RequestOpenLoot(target.Body);
+    }
+
+    // 조준 중인 대상이 약탈 가능한 몸이면 그 컴포넌트를, 아니면 null을 반환한다.
+    // (PlayerReviver.FindAllyTarget과 같은 패턴 — #725)
+    private LootableBodyInteractable FindLootTarget()
+    {
+        GameObject targetObj = m_interactor != null ? m_interactor.CurrentTarget : null;
+        if (targetObj == null)
+            return null;
+
+        LootableBodyInteractable target =
+            targetObj.GetComponentInParent<LootableBodyInteractable>();
+        return target != null && target.CanLoot(gameObject) ? target : null;
+    }
+
+    // ---- 오너 클라 진입점 (R 입력·약탈 창이 호출) ----
 
     /// <summary>
-    /// 약탈 열기 요청 — 쓰러진 동료를 겨냥한 E가 부른다 (<see cref="LootableBodyInteractable"/>).
+    /// 약탈 열기 요청 — 쓰러진 동료를 겨냥한 R이 부른다(<see cref="HandleLootPerformed"/>).
     ///
-    /// <b>열기는 아무것도 옮기지 않는다.</b> E는 확인용이고, 소지품도 자금도 창에서 눌러 가져간다.
+    /// <b>열기는 아무것도 옮기지 않는다.</b> R은 확인용이고, 소지품도 자금도 창에서 눌러 가져간다.
     /// 그래서 시체를 열어 보기만 하고 그냥 떠날 수 있다 — 훔칠지 말지를 내용을 보고 정한다.
     ///
     /// 자금 금액은 서버가 <b>약탈자에게만</b> 실어 보낸다. 잔액 NetworkVariable의 읽기 권한은
@@ -177,7 +219,7 @@ public class PlayerLooter : ChanneledInteractionBehaviour
     /// 공통 관문 — 열기·가져가기가 <b>매번</b> 통과해야 한다. 자금과 아이템이 같은 검증을 쓰는 것이
     /// 중요하다: 둘로 갈라 두면 한쪽만 조건이 밀려도 티가 나지 않는다.
     /// 위조 RPC로 멀쩡한 동료를 털거나 벽 너머로 손을 뻗는 것을 여기서 막는다 (#487 완료 기준 4번).
-    /// 클라 조기검증(<see cref="LootableBodyInteractable.CanInteract"/>)과 같은 기준이라
+    /// 클라 조기검증(<see cref="LootableBodyInteractable.CanLoot"/>)과 같은 기준이라
     /// "윤곽선은 뜨는데 눌러도 반응이 없는" 어긋남이 생기지 않는다 (#184).
     /// </summary>
     private bool CanLoot(PlayerLootable victim)
@@ -187,7 +229,7 @@ public class PlayerLooter : ChanneledInteractionBehaviour
         if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
             return false; // 쓰러진 사람이 남을 털 수는 없다
         if (!victim.CanBeLooted)
-            return false; // 기능 정지(Die)만 — 멀쩡한 동료·기절한 동료는 대상이 아니다
+            return false; // 다운·기능 정지만 — 멀쩡한 동료·기절한 동료는 대상이 아니다(#725)
 
         return IsInRange(victim);
     }

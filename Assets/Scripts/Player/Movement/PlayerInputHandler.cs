@@ -16,6 +16,9 @@ public class PlayerInputHandler : NetworkBehaviour
     private InputActionReference m_interactAction;
 
     [SerializeField]
+    private InputActionReference m_lootAction; // R — 쓰러진 동료 뒤지기 (#725)
+
+    [SerializeField]
     private InputActionReference m_sprintAction;
 
     [SerializeField]
@@ -80,6 +83,18 @@ public class PlayerInputHandler : NetworkBehaviour
         }
     }
 
+    /// <summary>뒤지기(R) 키 표시 문자열 — 조준 안내용. (#725)</summary>
+    public string LootBinding
+    {
+        get
+        {
+            if (m_lootBinding == null)
+                m_lootBinding = BindingDisplay(m_lootAction);
+
+            return m_lootBinding;
+        }
+    }
+
     /// <summary>
     /// 안내에 적을 키 표기 하나를 고른다 — 키보드·마우스 스킴의 첫 바인딩. 타깃이 PC라서다(GDD). (#664)
     /// 인자 없는 GetBindingDisplayString은 못 쓴다: 바인딩을 전부 이어 붙여 상호작용은 "E | Y",
@@ -109,7 +124,7 @@ public class PlayerInputHandler : NetworkBehaviour
 
     public event Action OnInteractStarted; // 상호작용 버튼 누름
     public event Action OnInteractPerformed; // 상호작용 발동 — 순수 Button이라 누르는 즉시 발화 (즉시발동)
-    public event Action OnInteractCanceled; // 상호작용 버튼 뗌
+    public event Action OnLootPerformed; // R — 쓰러진 동료 뒤지기, 즉시발동 (#725)
     public event Action OnUseItemStarted; // 아이템 사용 시작 (좌클릭 누름 — 채널링 시작, #91)
     public event Action OnUseItemCanceled; // 아이템 사용 중단 (좌클릭 뗌 — 채널링 취소, #91)
     public event Action OnPreviousItem; // 마우스 휠 위 — 이전 아이템으로 전환 (#46)
@@ -135,6 +150,7 @@ public class PlayerInputHandler : NetworkBehaviour
     // 키 표기 캐시 — null이면 다음 요청 때 다시 만든다 (#664)
     private string m_interactBinding;
     private string m_useItemBinding;
+    private string m_lootBinding;
 
     /// <summary>
     /// 게임플레이 입력이 정지된 상태인지 — 텍스트 입력 UI(신호 해석기 #108) 등이 켠다.
@@ -178,7 +194,7 @@ public class PlayerInputHandler : NetworkBehaviour
         m_isPeekingTeamStatus = peeking;
     }
 
-    // 14개 액션을 한꺼번에 켜고 끈다 — 스폰/디스폰/정지가 같은 목록을 쓰도록 한 곳에 모은다.
+    // 15개 액션을 한꺼번에 켜고 끈다 — 스폰/디스폰/정지가 같은 목록을 쓰도록 한 곳에 모은다.
     private void SetActionsEnabled(bool value)
     {
         InputActionReference[] actions =
@@ -186,6 +202,7 @@ public class PlayerInputHandler : NetworkBehaviour
             m_moveAction,
             m_lookAction,
             m_interactAction,
+            m_lootAction,
             m_sprintAction,
             m_useItemAction,
             m_previousAction,
@@ -227,7 +244,7 @@ public class PlayerInputHandler : NetworkBehaviour
         m_lookAction.action.canceled += OnLook;
         m_interactAction.action.started += OnInteractStartedHandler;
         m_interactAction.action.performed += OnInteractPerformedHandler;
-        m_interactAction.action.canceled += OnInteractCanceledHandler;
+        m_lootAction.action.performed += OnLootPerformedHandler;
         m_sprintAction.action.performed += OnSprintPerformed;
         m_sprintAction.action.canceled += OnSprintCanceled;
         m_useItemAction.action.started += OnUseItemStartedHandler;
@@ -259,7 +276,7 @@ public class PlayerInputHandler : NetworkBehaviour
         m_lookAction.action.canceled -= OnLook;
         m_interactAction.action.started -= OnInteractStartedHandler;
         m_interactAction.action.performed -= OnInteractPerformedHandler;
-        m_interactAction.action.canceled -= OnInteractCanceledHandler;
+        m_lootAction.action.performed -= OnLootPerformedHandler;
         m_sprintAction.action.performed -= OnSprintPerformed;
         m_sprintAction.action.canceled -= OnSprintCanceled;
         m_useItemAction.action.started -= OnUseItemStartedHandler;
@@ -292,6 +309,7 @@ public class PlayerInputHandler : NetworkBehaviour
 
         m_interactBinding = null;
         m_useItemBinding = null;
+        m_lootBinding = null;
     }
 
     private void OnMove(InputAction.CallbackContext ctx) => MoveInput = ctx.ReadValue<Vector2>();
@@ -304,8 +322,8 @@ public class PlayerInputHandler : NetworkBehaviour
     private void OnInteractPerformedHandler(InputAction.CallbackContext ctx) =>
         OnInteractPerformed?.Invoke();
 
-    private void OnInteractCanceledHandler(InputAction.CallbackContext ctx) =>
-        OnInteractCanceled?.Invoke();
+    private void OnLootPerformedHandler(InputAction.CallbackContext ctx) =>
+        OnLootPerformed?.Invoke();
 
     private void OnSprintPerformed(InputAction.CallbackContext ctx) => IsSprinting = true;
 

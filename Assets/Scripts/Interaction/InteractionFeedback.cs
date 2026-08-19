@@ -8,6 +8,7 @@ using UnityEngine.Localization;
 /// "지금 실제로 할 수 있는 행동이 있는 대상"에만 윤곽선을 표시한다:
 ///   - 장착 아이템이 대상에 사용 가능(ItemBase.CanTarget) → 아이템별 색 (우선)
 ///   - E 상호작용 가능(IInteractable.CanInteract) → 기본색
+///   - 쓰러진 동료 몸(일으키기·뒤지기 대상) → 기본색. IInteractable이 아니라 따로 판정한다(#725)
 /// 조준 유지 중에도 NPC 상태·배터리·장착 아이템이 변하므로 매 프레임 재평가한다.
 /// Outlinable은 첫 조준 시 런타임 부착 후 캐시(비활성 유지)되므로 대상 프리팹 사전 작업이 필요 없다.
 /// </summary>
@@ -16,11 +17,15 @@ public class InteractionFeedback : NetworkBehaviour
 {
     [Header("HUD")]
     [Tooltip("씬에 HUD가 없으면 오너 스폰 시 이 프리팹을 생성한다")]
-    [SerializeField] private GameObject m_hudPrefab;
+    [SerializeField]
+    private GameObject m_hudPrefab;
 
     [Header("아웃라인 (EPO)")]
-    [Tooltip("E 상호작용 대상의 기본 윤곽선 색 — 아이템 사용 대상은 ItemBase.TargetOutlineColor를 쓴다")]
-    [SerializeField] private Color m_outlineColor = new Color(1f, 0.85f, 0.2f, 1f);
+    [Tooltip(
+        "E 상호작용 대상의 기본 윤곽선 색 — 아이템 사용 대상은 ItemBase.TargetOutlineColor를 쓴다"
+    )]
+    [SerializeField]
+    private Color m_outlineColor = new Color(1f, 0.85f, 0.2f, 1f);
 
     private PlayerInteractor m_interactor;
     private PlayerItemUser m_itemUser;
@@ -71,7 +76,8 @@ public class InteractionFeedback : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
-        if (!IsOwner) return;
+        if (!IsOwner)
+            return;
 
         App.OnSceneLoaded -= HandleSceneLoaded;
         SetOutlined(null, Color.clear);
@@ -146,9 +152,12 @@ public class InteractionFeedback : NetworkBehaviour
         // 무기가 늘어도 이 파일을 고치지 않게 한다.
         ItemBase equipped = m_itemUser != null ? m_itemUser.EquippedItem : null;
         bool holdingAimedWeapon = equipped is IAimedWeapon;
-        bool weaponOnTarget = equipped is IAimedWeapon aimedWeapon
+        bool weaponOnTarget =
+            equipped is IAimedWeapon aimedWeapon
             && aimedWeapon.HasValidAimTarget(
-                m_interactor.AimOrigin.position, m_interactor.AimOrigin.forward);
+                m_interactor.AimOrigin.position,
+                m_interactor.AimOrigin.forward
+            );
 
         GameObject aimTarget = m_interactor.CurrentTarget;
         IInteractable interactable = m_interactor.CurrentInteractable;
@@ -163,7 +172,8 @@ public class InteractionFeedback : NetworkBehaviour
         if (root != null)
         {
             float range = m_interactor.Range;
-            inRange = (root.transform.position - m_interactor.AimOrigin.position).sqrMagnitude
+            inRange =
+                (root.transform.position - m_interactor.AimOrigin.position).sqrMagnitude
                 <= range * range;
         }
 
@@ -172,8 +182,20 @@ public class InteractionFeedback : NetworkBehaviour
         bool itemUsable = inRange && equipped != null && equipped.CanTarget(aimTarget);
 
         // ② E 상호작용 경로 — 지금 상태에서 E가 실제로 동작하는가 (기본색)
-        bool interactUsable = inRange && !itemUsable
-            && interactable != null && interactable.CanInteract(gameObject);
+        bool interactUsable =
+            inRange && !itemUsable && interactable != null && interactable.CanInteract(gameObject);
+
+        // ③ 쓰러진 동료 몸 — 일으키기(E)·뒤지기(R) 둘 다 IInteractable이 아니라 여기서 따로 본다 (#725).
+        //    조준 히트박스(자식)엔 렌더러가 없으므로 윤곽선은 플레이어 루트(PlayerIncapacitation)에 건다.
+        PlayerIncapacitation aimedIncap =
+            aimTarget != null ? aimTarget.GetComponentInParent<PlayerIncapacitation>() : null;
+        bool allyBodyTargetable =
+            inRange
+            && !itemUsable
+            && !interactUsable
+            && aimedIncap != null
+            && aimedIncap.IsOutOfAction;
+        GameObject allyBodyRoot = allyBodyTargetable ? aimedIncap.gameObject : null;
 
         // 조준 무기를 든 동안엔 NPC 윤곽선만 끈다 (#328/#363/#217). 상호작용 레이(3m) 기준 윤곽선이
         // 무기의 실제 사거리와 어긋나고(테이저 8m로 더 멀고, 진압봉 2m로 더 가깝다), 겨냥한 몸이
@@ -181,7 +203,11 @@ public class InteractionFeedback : NetworkBehaviour
         // 끄는 범위를 NPC로 좁힌 것이 #363의 수정 — 예전에는 조기 return이라 인명부·콘솔 같은
         // 사격과 무관한 E 상호작용물까지 통째로 표시가 죽었다. 이 무기들의 대상은 NPC뿐이므로,
         // NPC만 빼면 오조준 설계는 그대로 유지된다.
-        if (holdingAimedWeapon && root != null && root.GetComponentInParent<NpcController>() != null)
+        if (
+            holdingAimedWeapon
+            && root != null
+            && root.GetComponentInParent<NpcController>() != null
+        )
         {
             itemUsable = false;
             interactUsable = false;
@@ -193,10 +219,13 @@ public class InteractionFeedback : NetworkBehaviour
         {
             itemUsable = false;
             interactUsable = false;
+            allyBodyTargetable = false;
         }
 
         if (itemUsable || interactUsable)
             SetOutlined(root, itemUsable ? equipped.TargetOutlineColor : m_outlineColor);
+        else if (allyBodyTargetable)
+            SetOutlined(allyBodyRoot, m_outlineColor);
         else
             SetOutlined(null, Color.clear);
 
@@ -205,7 +234,7 @@ public class InteractionFeedback : NetworkBehaviour
         if (weaponOnTarget)
             App.UI.Crosshair?.SetWeaponTargeting(true);
         else
-            App.UI.Crosshair?.SetInteractable(itemUsable || interactUsable);
+            App.UI.Crosshair?.SetInteractable(itemUsable || interactUsable || allyBodyTargetable);
 
         TickPrompt(interactUsable ? interactable : null, itemUsable ? equipped : null);
     }
@@ -225,8 +254,10 @@ public class InteractionFeedback : NetworkBehaviour
         // 입력이 죽은 구간에서는 안내도 내린다. 무력화 중엔 E도 좌클릭도 각자 가드에 막히고
         // (PlayerInteractor·PlayerItemUser), 입력 정지 중엔 액션 자체가 꺼져 있다.
         // 이 자리를 열어 두면 이 이슈가 없애려던 "떠 있는데 눌러도 반응 없음"이 그대로 남는다.
-        if (m_incapacitation != null && m_incapacitation.IsIncapacitated
-            || m_input != null && m_input.IsSuspended)
+        if (
+            m_incapacitation != null && m_incapacitation.IsIncapacitated
+            || m_input != null && m_input.IsSuspended
+        )
         {
             view.HidePrompt();
             return;
@@ -253,7 +284,10 @@ public class InteractionFeedback : NetworkBehaviour
             if (itemAction != null)
             {
                 view.ShowPrompt(
-                    m_input != null ? m_input.UseItemBinding : string.Empty, itemAction, null);
+                    m_input != null ? m_input.UseItemBinding : string.Empty,
+                    itemAction,
+                    null
+                );
             }
             else
             {
@@ -341,7 +375,8 @@ public class InteractionFeedback : NetworkBehaviour
         }
         m_currentOutlinable = null;
 
-        if (root == null) return;
+        if (root == null)
+            return;
 
         var outlinable = root.GetComponent<Outlinable>();
         if (outlinable == null)

@@ -78,6 +78,16 @@ public static class PlayerAnimatorControllerBuilder
     // 더 이상 만들지 않는 구 착지 상태 — 이전 빌드가 남긴 것을 재실행 시 지우기 위해서만 쓴다.
     private const string k_legacyJumpLandState = "Jump_Land";
 
+    // 구조 채널링 모션 (#725) — NPC 탈옥 침입자의 자물쇠 해제(NpcAnimatorControllerBuilder의
+    // Unlocking_Begin/Loop)와 같은 클립을 재사용한다. 저쪽은 Any State + int 파라미터로 드라이버가
+    // Begin→Loop 전환 시점을 직접 몰지만, 여기는 다운 상태(Fall→Ground)와 같은 exitTime 자동 전환으로
+    // 충분하다 — 정확한 임팩트 타이밍을 맞출 필요가 없는 루프 모션이라서다.
+    private const string k_revivingParam = "Reviving";
+    private const string k_revivingBeginState = "Reviving_Begin";
+    private const string k_revivingLoopState = "Reviving_Loop";
+    private const string k_revivingFolder =
+        "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Misc/Open";
+
     // 타격(진압봉) 상체 레이어 — 이동·점프·앉기를 유지한 채 상체만 스윙으로 덮는다. (#217)
     // Base Layer에 상태로 넣지 않는 이유: 그러면 공격 중 하체가 멈춰 점프·앉은 채 공격이 불가능해진다.
     // 구조는 NPC.controller의 UpperBodyCuffed 레이어와 동일하다 — 마스크 + Override + weight 1 고정에,
@@ -181,6 +191,7 @@ public static class PlayerAnimatorControllerBuilder
         BlendTree crouchTree = SetupCrouchState(controller); // 앉기 상태 추가/갱신 (#236) — 다운 전환보다 먼저
         BlendTree airCrouchTree = SetupJumpStates(controller); // 점프 상태 머신 추가/갱신 (#189) — 다운 전환보다 먼저
         SetupDownStates(controller); // 다운(무력화) 상태 머신 추가/갱신 (#105)
+        SetupRevivingState(controller); // 구조 채널링 모션 추가/갱신 (#725) — 다운 상태 뒤에 와야 Fall 전이를 걸 수 있다
         SetupEmoteStates(controller); // 감정표현 상태 추가/갱신 (#219) — 다운 상태 뒤에 와야 Fall 전이를 걸 수 있다
         RemoveLegacyStunStates(controller); // 구 기절 상태 제거 — 다운 상태 머신에 흡수됐다 (#252)
         SetupAttackLayer(controller); // 타격 상체 레이어 추가/갱신 (#217) — Base Layer가 아닌 레이어 1
@@ -201,7 +212,7 @@ public static class PlayerAnimatorControllerBuilder
             $"[PlayerAnimatorControllerBuilder] {(isNew ? "생성" : "갱신")} 완료: {k_outputPath} "
                 + $"(Idle 중앙 / Walk 반경 {PlayerAnimationDriver.k_walkParam} 8방향 / "
                 + $"Run 반경 {PlayerAnimationDriver.k_runParam} 8방향, 총 17모션 + 다운 3상태(기절 공용) "
-                + $"+ 앉기 9모션 + 점프 3상태(공중 웅크림 9모션) + 타격 상체 레이어 1)"
+                + $"+ 앉기 9모션 + 점프 3상태(공중 웅크림 9모션) + 타격 상체 레이어 1 + 구조 채널링 2상태)"
         );
 
         Selection.activeObject = controller;
@@ -742,6 +753,91 @@ public static class PlayerAnimatorControllerBuilder
     }
 
     /// <summary>
+    /// 구조 채널링 모션을 구성한다. (#725)
+    /// Reviving(bool)=true면 Locomotion → Begin(1회) → Loop(반복), false가 되면(완료·취소 무관)
+    /// 곧장 Locomotion으로 복귀한다 — Begin 도중 취소되는 경우도 있어 Begin→Locomotion도 열어 둔다.
+    /// 재실행 시 기존 상태/전환을 지우고 다시 만들어 중복을 막는다.
+    /// </summary>
+    private static void SetupRevivingState(AnimatorController controller)
+    {
+        AnimationClip begin = LoadClip($"{k_revivingFolder}/HumanM@Opening01 - Begin.fbx");
+        AnimationClip loop = LoadClip($"{k_revivingFolder}/HumanM@Opening01 - Loop.fbx");
+        if (begin == null || loop == null)
+            return;
+
+        EnsureBoolParameter(controller, k_revivingParam);
+
+        AnimatorStateMachine stateMachine = controller.layers[0].stateMachine;
+        RemoveRevivingState(stateMachine);
+
+        AnimatorState locomotion = FindState(stateMachine, k_stateName);
+        AnimatorState beginState = stateMachine.AddState(k_revivingBeginState);
+        beginState.motion = begin;
+        AnimatorState loopState = stateMachine.AddState(k_revivingLoopState);
+        loopState.motion = loop;
+
+        if (locomotion == null)
+            return;
+
+        // Locomotion → Begin : E로 채널링을 시작하는 순간.
+        AnimatorStateTransition toBegin = locomotion.AddTransition(beginState);
+        toBegin.hasExitTime = false;
+        toBegin.duration = 0.15f;
+        toBegin.AddCondition(AnimatorConditionMode.If, 0f, k_revivingParam);
+
+        // Begin → Loop : 시작 모션이 끝나면 자동으로 반복 자세로 (다운 Fall→Ground와 같은 방식)
+        AnimatorStateTransition toLoop = beginState.AddTransition(loopState);
+        toLoop.hasExitTime = true;
+        toLoop.exitTime = 0.9f;
+        toLoop.duration = 0.1f;
+
+        // Begin/Loop → Locomotion : 완료·취소 무관하게 Reviving이 꺼지는 순간 복귀.
+        // Begin에서 빠지는 경로가 필요한 이유는 채널링이 시작 모션 도중 취소될 수 있어서다
+        // (이동·다른 입력·E 재입력 — PlayerReviver.HandleCancelTrigger).
+        foreach (AnimatorState source in new[] { beginState, loopState })
+        {
+            AnimatorStateTransition toLocomotion = source.AddTransition(locomotion);
+            toLocomotion.hasExitTime = false;
+            toLocomotion.duration = 0.15f;
+            toLocomotion.AddCondition(AnimatorConditionMode.IfNot, 0f, k_revivingParam);
+        }
+    }
+
+    // 구조 채널링 상태(2종)와 그 상태로 향하는 전환을 모두 제거한다. (RemoveDownStates와 동일 구조)
+    private static void RemoveRevivingState(AnimatorStateMachine stateMachine)
+    {
+        foreach (ChildAnimatorState child in stateMachine.states)
+        {
+            var toRemove = new System.Collections.Generic.List<AnimatorStateTransition>();
+            foreach (AnimatorStateTransition transition in child.state.transitions)
+            {
+                if (
+                    transition.destinationState != null
+                    && IsRevivingState(transition.destinationState.name)
+                )
+                {
+                    toRemove.Add(transition);
+                }
+            }
+            foreach (AnimatorStateTransition transition in toRemove)
+            {
+                child.state.RemoveTransition(transition);
+            }
+        }
+
+        foreach (ChildAnimatorState child in stateMachine.states)
+        {
+            if (IsRevivingState(child.state.name))
+            {
+                stateMachine.RemoveState(child.state);
+            }
+        }
+    }
+
+    private static bool IsRevivingState(string name) =>
+        name == k_revivingBeginState || name == k_revivingLoopState;
+
+    /// <summary>
     /// 감정표현 상태를 카탈로그 순서대로 만든다. (#219)
     ///
     /// <b>다운 상태 머신보다 나중에 불러야 한다</b> — 감정표현 중 쓰러질 때 Locomotion을
@@ -759,7 +855,8 @@ public static class PlayerAnimatorControllerBuilder
         if (catalog == null)
         {
             Debug.LogWarning(
-                $"[PlayerAnimatorControllerBuilder] 감정표현 카탈로그가 없어 건너뜁니다: {k_emoteCatalogPath}");
+                $"[PlayerAnimatorControllerBuilder] 감정표현 카탈로그가 없어 건너뜁니다: {k_emoteCatalogPath}"
+            );
             return;
         }
 

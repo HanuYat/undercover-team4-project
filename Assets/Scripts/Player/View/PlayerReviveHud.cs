@@ -3,11 +3,10 @@ using UnityEngine;
 using UnityEngine.Localization;
 
 /// <summary>
-/// 쓰러진 동료 관련 온스크린 프롬프트 — 오너 화면 전용. (#105/#493)
-/// 기능 정지된 아군을 조준하면 부활 키트 안내를, 내가 기능 정지되면 키트를 기다리라는 메시지를 띄운다 (#613).
-/// 현장 구조(다운) 쪽 분기는 #524로 휴면 상태지만, 되살릴 때 그대로 쓰도록 남겨 뒀다.
-/// 문구는 HUD의 공용 프롬프트(<see cref="PromptView"/>)에 얹는다 — 이 클래스는 상태를 보고
-/// 어떤 문구를 띄울지만 고른다.
+/// 쓰러진 동료 관련 온스크린 프롬프트 — 오너 화면 전용. (#105/#493, #725)
+/// 다운(유예)·기능 정지(Die) 각각을 조준하면 일으키기/부활 키트 + 뒤지기 안내를, 내가 쓰러지면
+/// 상태 안내(유예 잔여 또는 "재부팅 중")를 띄운다. 문구는 HUD의 공용 프롬프트
+/// (<see cref="PromptView"/>)에 얹는다 — 이 클래스는 상태를 보고 어떤 문구를 띄울지만 고른다.
 ///
 /// <b>월드 아이콘(채워지는 해골)을 시도했다가 되돌렸다</b>: 평면 스프라이트라 옆에서 보면 보이지
 /// 않고, 상태를 알리는 수단으로 텍스트보다 나을 게 없었다. 시각화로 다시 갈 거면 평면 이미지가
@@ -17,22 +16,28 @@ using UnityEngine.Localization;
 public class PlayerReviveHud : NetworkBehaviour
 {
     [Header("상태 문구")]
-    [Tooltip(
-        "내가 다운됨 — HudTable/Hud.Revive.Downed. #524로 다운이 발생하지 않아 현재는 뜨지 않는다"
-    )]
+    [Tooltip("내가 다운(유예) 중 — HudTable/Hud.Revive.Downed. {0}=완전 사망까지 남은 초")]
     [SerializeField]
     private LocalizedString m_downedPrompt;
+
+    [Tooltip(
+        "동료가 나를 구조하는 중 — HudTable/Hud.Revive.BeingRevived. 유예 시계가 멈췄다는 신호"
+    )]
+    [SerializeField]
+    private LocalizedString m_beingRevivedPrompt;
 
     [Tooltip("내가 기능 정지(Die) — HudTable/Hud.Revive.SelfDead")]
     [SerializeField]
     private LocalizedString m_selfDeadPrompt;
 
     [Header("행동 문구")]
-    [Tooltip("다운된 아군을 조준 중 — HudTable/Hud.Revive.Hint")]
+    [Tooltip("다운된 아군을 조준 중 — HudTable/Hud.Revive.Hint. {0}=일으키기 키, {1}=뒤지기 키")]
     [SerializeField]
     private LocalizedString m_revivePrompt;
 
-    [Tooltip("기능 정지된 아군을 조준 중 — HudTable/Hud.Revive.DeadTarget")]
+    [Tooltip(
+        "기능 정지된 아군을 조준 중 — HudTable/Hud.Revive.DeadTarget. {0}=부활 키트 키, {1}=뒤지기 키"
+    )]
     [SerializeField]
     private LocalizedString m_deadTargetPrompt;
 
@@ -43,8 +48,9 @@ public class PlayerReviveHud : NetworkBehaviour
     // 지금 띄워 둔 문구 — 매 프레임 같은 것을 다시 띄워 재구독하지 않도록 기억한다
     private LocalizedString m_shown;
 
-    // 문구에 마지막으로 끼운 키 표기. null은 키를 적지 않는 문구. (#664)
+    // 문구에 마지막으로 끼운 키 표기(들). null은 그 자리를 안 쓰는 문구. (#664)
     private string m_shownKey;
+    private string m_shownKey2;
 
     public override void OnNetworkSpawn()
     {
@@ -69,9 +75,11 @@ public class PlayerReviveHud : NetworkBehaviour
     {
         // 라운드 정산 화면이 떠 있으면 그 위로 겹쳐 그리지 않는다.
         // (전원 다운으로 라운드가 끝나면 나는 여전히 무력화 상태라 "다운됨"이 정산 위로 샌다)
-        if (App.UI.Current != null
+        if (
+            App.UI.Current != null
             && App.UI.Current.TryGetPanel(out SettlementPanel settlement)
-            && settlement.IsOpened)
+            && settlement.IsOpened
+        )
         {
             ClearPrompt();
             return;
@@ -80,11 +88,14 @@ public class PlayerReviveHud : NetworkBehaviour
         // 내가 다운된 경우 — 구조 대기 메시지.
         // IsIncapacitated가 아니라 IsDowned를 본다 (#252): 기절·오검거 매달기도 무력화지만 스스로
         // 풀리므로 구조를 기다리라는 안내가 거짓이 된다. 아무도 오지 않는데 기다리게 만든다.
-        // #524 이후 Down은 발생하지 않아 이 분기는 휴면 상태다 — 현장 구조를 되살릴 때 같이 깨어난다.
-        // (Die까지 남은 시간을 함께 보여주던 카운트다운은 제한시간 자체가 사라져 문구에서도 빠졌다)
+        // 동료가 채널링 중이면(IsBeingRevived) 문구 자체를 바꾼다 — 화면이 그 밝기에서 멈추는 것과
+        // 같은 신호를 글자로도 준다. 아니면 완전 사망까지 남은 초를 보여준다. (#725)
         if (m_incapacitation != null && m_incapacitation.IsDowned)
         {
-            SetPrompt(m_downedPrompt);
+            if (m_incapacitation.IsBeingRevived)
+                SetPrompt(m_beingRevivedPrompt);
+            else
+                SetPrompt(m_downedPrompt, keyLabel: RemainingSecondsLabel);
             return;
         }
 
@@ -113,18 +124,18 @@ public class PlayerReviveHud : NetworkBehaviour
             return;
         }
 
-        // 다운된 아군을 조준 중이면 구조 키 프롬프트 (#524로 휴면 — 위 IsDowned 분기와 같은 이유)
+        // 다운된 아군을 조준 중 — 일으키기(E) + 뒤지기(R) 한 줄로 함께 안내한다. 유예 중인 몸은
+        // 둘 다 되므로(#725) 한 줄에 합쳐 읽는 부담을 줄인다(팀 결정).
         if (m_reviver != null && m_reviver.CurrentReviveTarget != null)
         {
-            SetPrompt(m_revivePrompt, keyLabel: InteractKey);
+            SetPrompt(m_revivePrompt, InteractKey, LootKey);
             return;
         }
 
-        // 기능 정지된 아군을 조준 중 — 구조 채널링이 아니라 부활 키트가 답이다 (#364/#613).
-        // 여기만 아이템 사용 키다 — 키트는 들고 쓰는 물건이라 E가 아니라 좌클릭이 답이다.
+        // 기능 정지된 아군을 조준 중 — 부활 키트(좌클릭) + 뒤지기(R) 한 줄. (#364/#613/#725)
         if (m_reviver != null && m_reviver.CurrentDeadTarget != null)
         {
-            SetPrompt(m_deadTargetPrompt, keyLabel: UseItemKey);
+            SetPrompt(m_deadTargetPrompt, UseItemKey, LootKey);
             return;
         }
 
@@ -136,41 +147,52 @@ public class PlayerReviveHud : NetworkBehaviour
 
     private string UseItemKey => m_input != null ? m_input.UseItemBinding : "?";
 
+    private string LootKey => m_input != null ? m_input.LootBinding : "?";
+
+    // 완전 사망까지 남은 초 — 다운(비-구조 중) 프롬프트의 인자. 정수로 반올림해 초 단위로 보여준다.
+    private string RemainingSecondsLabel =>
+        m_incapacitation != null
+            ? Mathf.CeilToInt(m_incapacitation.RemainingUntilDie).ToString()
+            : "?";
+
     /// <summary>
-    /// keyLabel이 있으면 문구의 인자({0}) 자리에 키 표기를 끼운다. (#664)
-    /// 남은 초를 끼우던 갈래는 없앴다 — 제한시간이 사라져 인자는 빠졌는데(#524) 문구에 {0}이 남아
-    /// "기능 정지까지 초"로 렌더되고 있었다. 다운을 되살릴 땐 문구와 인자를 같이 되돌린다.
+    /// keyLabel(들)이 있으면 문구의 인자({0}, {1})에 끼운다. (#664, #725)
     /// </summary>
-    private void SetPrompt(LocalizedString prompt, string keyLabel = null)
+    private void SetPrompt(LocalizedString prompt, string keyLabel = null, string keyLabel2 = null)
     {
         if (prompt == null || prompt.IsEmpty)
             return;
 
         if (ReferenceEquals(m_shown, prompt))
         {
-            // 같은 문구다 — 키 표기만 바뀌었으면(재바인딩) 재구독 없이 갱신한다.
+            // 같은 문구다 — 인자만 바뀌었으면(재바인딩·남은 초 갱신) 재구독 없이 다시 포맷만 한다.
             // 매 프레임 Show를 다시 부르면 초당 수십 번 구독을 갈아치운다.
-            if (keyLabel != m_shownKey)
+            if (keyLabel != m_shownKey || keyLabel2 != m_shownKey2)
             {
                 m_shownKey = keyLabel;
-                ApplyArguments(prompt, keyLabel);
+                m_shownKey2 = keyLabel2;
+                ApplyArguments(prompt, keyLabel, keyLabel2);
                 prompt.RefreshString(); // 이미 구독 중이므로 다시 포맷만 시킨다
             }
             return;
         }
 
         // 인자를 먼저 넣어야 구독 시점의 첫 발화부터 올바른 문장이 나온다
-        ApplyArguments(prompt, keyLabel);
+        ApplyArguments(prompt, keyLabel, keyLabel2);
 
         m_shown = prompt;
         m_shownKey = keyLabel;
+        m_shownKey2 = keyLabel2;
         App.UI.Prompt?.Show(prompt);
     }
 
-    private static void ApplyArguments(LocalizedString prompt, string keyLabel)
+    private static void ApplyArguments(LocalizedString prompt, string keyLabel, string keyLabel2)
     {
-        if (keyLabel != null)
-            prompt.Arguments = new object[] { keyLabel };
+        if (keyLabel == null)
+            return;
+
+        prompt.Arguments =
+            keyLabel2 == null ? new object[] { keyLabel } : new object[] { keyLabel, keyLabel2 };
     }
 
     private void ClearPrompt()
@@ -182,5 +204,6 @@ public class PlayerReviveHud : NetworkBehaviour
         App.UI.Prompt?.Hide(m_shown);
         m_shown = null;
         m_shownKey = null;
+        m_shownKey2 = null;
     }
 }

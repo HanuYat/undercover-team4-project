@@ -20,20 +20,25 @@ MonoBehaviour:
     - rid: 6276845892712267875
   m_TableData:
   - m_Id: 3135767646208
-    m_Localized: Hold [{0}] to revive
+    m_Localized: "[{0}] Revive \xB7 [{1}] Search"
     m_Metadata:
       m_Items: []
   - m_Id: 3135780229120
-    m_Localized: "Down \u2014 waiting for a teammate to revive you..."
+    m_Localized: "Down \u2014 {0}s until shutdown, waiting for a teammate to revive
+      you..."
     m_Metadata:
       m_Items: []
   - m_Id: 3135780229122
     m_Localized: "Out of action \u2014 equip a revive kit and press [{0}] to bring
-      them back"
+      them back, or [{1}] to search"
     m_Metadata:
       m_Items: []
   - m_Id: 3135784423424
     m_Localized: "Shut down \u2014 a teammate needs a revive kit to bring you back"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3135784423426
+    m_Localized: "Rebooting... a teammate is reviving you"
     m_Metadata:
       m_Items: []
   - m_Id: 3135784423425

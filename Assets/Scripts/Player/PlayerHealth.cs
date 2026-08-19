@@ -4,10 +4,12 @@ using UnityEngine;
 public class PlayerHealth : NetworkBehaviour, IDamageable
 {
     [Header("스테이터스")]
-    [SerializeField] private int m_maxHp = 100;
+    [SerializeField]
+    private int m_maxHp = 100;
 
     [Tooltip("부활 시 회복되는 HP — 부분 회복 (GDD 7-5, #105)")]
-    [SerializeField] private int m_reviveHp = 50;
+    [SerializeField]
+    private int m_reviveHp = 50;
 
     // 서버 권위 HP — 서버만 쓰고 모든 클라이언트가 읽는다.
     // m_hp는 서버·오프라인의 진실값 (NpcController의 상태/게이지 이중 구조와 동일 패턴, #79)
@@ -49,7 +51,8 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
     // 서버 권위로만 실제 값 변경. (데미지 소스가 클라라면 별도 ServerRpc로 요청)
     public void ModifyHp(int delta)
     {
-        if (IsSpawned && !IsServer) return;
+        if (IsSpawned && !IsServer)
+            return;
 
         SetHp(Mathf.Clamp(CurrentHp + delta, 0, m_maxHp));
     }
@@ -82,17 +85,27 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 
     /// <summary>
     /// 피격 — 저항형 NPC 범위 타격 등 데미지 소스의 공통 경로. (#79)
-    /// HP가 0이 되면 기능 정지(무력화) 처리로 이어진다 (SetHp 내부, GDD 7-5 / #105, #524).
+    /// HP가 0이 되면 다운(무력화) 처리로 이어진다 (SetHp 내부, GDD 7-5 / #105, #725).
+    /// 이미 유예 중인 대상이 또 맞으면 유예를 건너뛰고 즉시 완전 사망으로 확정한다 — 확인사살(#725).
     /// 연출용 <see cref="OnDamaged"/> 브로드캐스트도 여기 하나로 모인다 — 진압봉 오사(#461)·저항형
     /// NPC 공격·폭발이 전부 이 경로를 지나므로, 데미지 소스가 늘어도 연출은 따라온다 (#476).
     /// </summary>
     public void TakeDamage(int amount, GameObject attacker)
     {
-        if (IsSpawned && !IsServer) return; // 서버 권위 — ModifyHp도 같은 가드지만 아래 브로드캐스트를 막아야 한다
-        if (amount <= 0) return;
+        if (IsSpawned && !IsServer)
+            return; // 서버 권위 — ModifyHp도 같은 가드지만 아래 브로드캐스트를 막아야 한다
+        if (amount <= 0)
+            return;
 
         // 가해자를 먼저 알린다 — HP 반영 전이어야 하는 이유는 이벤트 문서에 적어 뒀다 (#554)
         OnServerDamaged?.Invoke(this, attacker);
+
+        // 유예 중인 대상에게 추가 피해 — 환경·NPC·아군 진압봉 모두 즉시 완전 사망으로 확정한다 (#725)
+        if (m_incapacitation != null && m_incapacitation.IsDowned)
+        {
+            m_incapacitation.ServerFinishOff();
+            return;
+        }
 
         int before = CurrentHp;
         ModifyHp(-amount);
@@ -100,7 +113,8 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
         // '요청한 데미지'가 아니라 '실제로 깎인 양'을 싣는다 — 이미 0인 HP에 들어온 추가 피해는
         // 0이 되어 연출 자체가 나가지 않는다(다운된 몸이 폭발에 휘말릴 때마다 화면이 번쩍이지 않게).
         int applied = before - CurrentHp;
-        if (applied <= 0) return;
+        if (applied <= 0)
+            return;
 
         BroadcastDamaged(applied, attacker);
     }
@@ -131,15 +145,16 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 
     /// <summary>
     /// 부활 — HP를 일부 회복하고 무력화를 해제한다. 서버(또는 오프라인) 전용. (#105, GDD 7-5)
-    /// 호출자는 부활 키트(<c>ReviveKit</c>, #613)와 본부 부활 장치(<c>HqRevivalDevice</c>, #365)다.
-    /// 현장 구조 채널링(<c>PlayerReviver</c>)은 HP 0이 곧 기능 정지가 된 뒤로 성립하지 않는다 (#524) —
-    /// 지금 실제로 쓰이는 경로는 키트뿐이다(장치는 코드만 남기고 씬에서 뺐다, #613).
-    /// 회복량은 경로를 가리지 않고 <see cref="m_reviveHp"/> 하나다 — 부활은 하나의 규칙이다.
+    /// 호출자는 현장 구조 채널링(<c>PlayerReviver</c>, 다운 유예 중, #725)과 부활 키트(<c>ReviveKit</c>,
+    /// #613) 둘 — 본부 부활 장치(<c>HqRevivalDevice</c>)는 코드만 있고 씬에는 없다(#613).
+    /// 회복량은 경로를 가리지 않고 <see cref="m_reviveHp"/> 하나다.
     /// </summary>
     public void ServerRevive()
     {
-        if (IsSpawned && !IsServer) return; // 서버 권위 방어
-        if (CurrentHp > 0) return; // 쓰러진(HP 0) 상태에서만 유효
+        if (IsSpawned && !IsServer)
+            return; // 서버 권위 방어
+        if (CurrentHp > 0)
+            return; // 쓰러진(HP 0) 상태에서만 유효
 
         // 회복인데 0이면 여전히 다운이므로 최소 1 보장
         SetHp(Mathf.Clamp(m_reviveHp, 1, m_maxHp));
@@ -153,19 +168,17 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
         if (IsSpawned && IsServer)
             m_syncedHp.Value = value;
 
-        // HP가 0에 도달하는 순간 기능 정지(Die) 진입. 서버(또는 오프라인)에서만 실행되며
-        // Incapacitate 자체에도 서버 가드가 있다. (#105, GDD 7-5)
-        // 예전에는 Down(현장 구조 가능)으로 들어가 60초 방치 시 Die로 떨어졌지만, 상태가 둘로 갈려
-        // 구조·전멸 판정·HUD·운반이 모두 두 갈래로 분기되는 값이 그 비용보다 작았다 — HP 0이 곧
-        // 기능 정지이고, 복구 경로는 본부 이송 부활 하나다. (#524)
+        // HP가 0에 도달하는 순간 다운(유예) 진입 — 60초 안에 구조되지 않으면 PlayerIncapacitation의
+        // 내부 타이머가 스스로 Die로 떨어뜨린다. (#105, #725)
         if (value == 0 && previous > 0)
-            m_incapacitation?.Incapacitate(IncapacitationCause.Die);
+            m_incapacitation?.Incapacitate(IncapacitationCause.Down);
     }
 
     /// <summary>라운드 사이 상태 초기화 — HP 풀 회복 + 다운 해제 + 끌려가기 해제. 서버(또는 오프라인)에서만. (상점 진입)</summary>
     public void ServerResetState()
     {
-        if (IsSpawned && !IsServer) return;
+        if (IsSpawned && !IsServer)
+            return;
         SetHp(m_maxHp);
         m_incapacitation?.Recover();
         // 오검거 호송(#279) 도중 씬 전환되면 despawn이 안 일어나 PlayerTowedMotion 정리가 안 탄다.

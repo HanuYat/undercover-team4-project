@@ -12,14 +12,12 @@ public enum IncapacitationCause
 {
     None, // 무력화 아님
 
-    // HP 0 다운 (#105) — 동료의 현장 구조로 일어나던 상태.
-    // #524로 진입 경로가 끊겨 <b>현재는 발생하지 않는다</b> — HP 0은 곧바로 Die가 된다.
-    // 값을 남기는 이유는 둘이다: ① NetworkVariable로 동기화되는 enum이라 순서가 곧 와이어 포맷이고,
-    // ② 현장 구조를 되살릴 때 PlayerHealth.SetHp의 원인만 이걸로 되돌리면 그대로 다시 동작한다.
+    // HP 0 다운 (#105, #725) — 동료가 부활 키트 없이 맨손으로 일으킬 수 있는 유예 상태.
+    // m_dieAfterDownSeconds 동안 방치되면 Die로 넘어간다. 전멸(게임오버) 판정 대상.
     Down,
     Penalty, // 오검거 광장 매달기 (#101) — 30초 뒤 자동 복귀
     Stun, // 테이저 피격 기절 (#252) — 시간이 지나면 스스로 일어난다
-    Die, // HP 0 기능 정지 (#364, #524) — 현장 구조로는 못 일어난다. 복구는 동료의 부활 키트(#613)
+    Die, // 다운 방치 또는 확인사살로 기능 정지 (#364, #725) — 복구는 동료의 부활 키트(#613)
     Abducted, // 납치 호송 중 (#371) — 끌려가는 동안 걸어 나가지 못하게. 외곽에 도착하면 Lynched로 넘어간다
     Lynched, // 외곽 린치 (#371 후속) — 납치범에게 맞는 중. 행동은 막되 <b>쓰러진 자세가 아니다</b>(IsProne 제외)
     // (값은 반드시 끝에 추가한다 — NetworkVariable로 동기화되는 enum이라 순서가 곧 와이어 포맷이다)
@@ -27,17 +25,17 @@ public enum IncapacitationCause
 
 /// <summary>
 /// 플레이어 행동불능(무력화) 공통 기반. (#105)
-/// HP 0 기능 정지(#105/#364/#524)·오검거 매달기(#101)·테이저 피격 기절(#252)·납치 호송(#371)은
+/// HP 0 다운(#105/#725)·오검거 매달기(#101)·테이저 피격 기절(#252)·납치 호송(#371)은
 /// 트리거만 다르고 결과=무력화로 같으므로, 무력화 상태 자체를 이 한 곳에서 서버 권위로 관리한다.
 /// 이동·아이템·상호작용 컴포넌트가 <see cref="IsIncapacitated"/>를 읽어 각자 행동을 막는다.
 ///
 /// 차이는 <b>풀리는 방식</b>이고, 그 구분이 <see cref="Cause"/>다:
-///  · Die — HP 0으로 곧바로 들어간다(#524). 현장 구조 채널링으로는 못 일어나고 동료가 부활 키트를
-///    써야 한다(#613). 조준 히트박스는 켜되(키트·운반 조준용) 구조 채널링은 거부된다.
+///  · Down — HP 0으로 들어간다(#725). m_dieAfterDownSeconds초 안에 동료가 맨손으로 구조하면
+///    (<see cref="ServerSetBeingRevived"/>) 복귀하고, 방치되면 Die로 넘어간다.
+///  · Die — 다운 방치 또는 확인사살(<see cref="ServerFinishOff"/>)로 들어간다. 부활 키트로만 복구된다(#613).
 ///  · 매달기·기절 — 시간이 지나면 스스로 복귀하므로 운반 대상도, 전멸 판정 대상도 아니다.
 ///  · 납치·린치 — 끌려가는 동안·맞는 동안 걸어 나가지 못하게 한다(#371). 동료가 납치범을 때려
-///    떼어내면 풀리고, 떼어내지 못하면 HP가 0이 되어 Die로 넘어간다 — 그 자체로는 전멸 판정 대상이 아니다.
-///  · Down — 현장 구조가 있던 시절의 중간 단계. 지금은 발생하지 않는다(enum 주석 참고, #524).
+///    떼어내면 풀리고, 떼어내지 못하면 HP가 0이 되어 Down으로 넘어간다 — 그 자체로는 전멸 판정 대상이 아니다.
 /// 조준 히트박스는 쓰러져 있는 동안(<see cref="IsOutOfAction"/>) 켠다.
 /// </summary>
 public class PlayerIncapacitation : NetworkBehaviour
@@ -48,6 +46,16 @@ public class PlayerIncapacitation : NetworkBehaviour
     // 필드명은 구조 전용이던 시절 그대로다 — 프리팹 직렬화가 이름으로 묶여 있어 바꾸면 인스펙터 참조가 끊긴다.
     [SerializeField]
     private GameObject m_reviveHitbox;
+
+    [Header("다운 유예 (#725)")]
+    [Tooltip(
+        "다운 상태로 이 시간(초)이 지나면 Die(기능 정지)로 전환된다 — 동료가 맨손으로 구조할 수 있는 제한시간"
+    )]
+    [SerializeField]
+    private float m_dieAfterDownSeconds = 60f;
+
+    /// <summary>다운 유예 전체 시간(초) — 화면 어두워짐이 <see cref="RemainingUntilDie"/>와 함께 비율을 낸다. (#725)</summary>
+    public float DieAfterDownSeconds => m_dieAfterDownSeconds;
 
     // 서버 권위 무력화 원인 — 서버만 쓰고 모든 클라가 읽는다. (PlayerHealth.m_syncedHp와 동일 패턴)
     // 예전에는 bool 두 개(무력화 여부 + 구조 가능 여부)였는데, 기절이 들어오며 '구조 불가'가 둘로
@@ -69,10 +77,25 @@ public class PlayerIncapacitation : NetworkBehaviour
 
     // 위 마감의 시간 기준 — 온라인은 서버 시각(모든 피어가 같은 값을 읽는다), 오프라인은 로컬 시각.
     // Time.time을 그대로 동기화하면 피어마다 기점이 달라 남은 시간이 어긋난다.
-    // 원래 Die 카운트다운(#364)이 두고 쓰던 것인데 #524에서 그쪽이 폐지되며 함께 지워졌고,
-    // 기절 마감(#477)이 같은 이유로 그대로 필요해 되살렸다.
+    // Die 카운트다운(#364)·기절 마감(#477)·구조 완료 시각(#725)이 모두 이 기준을 공유한다.
     private double CurrentTime =>
         IsSpawned && NetworkManager != null ? NetworkManager.ServerTime.Time : Time.timeAsDouble;
+
+    // Die 타이머 회차 토큰 — 원인이 바뀔 때마다 올라간다. 기절 회차(m_stunEpisode)와 같은 장치. (#364, #725)
+    private int m_causeEpisode;
+
+    // Die 전환 예정 시각 — 다운이 아니면 0. m_stunDeadlineSynced와 같은 이중 구조. (#725)
+    private readonly NetworkVariable<double> m_downDeadlineSynced = new NetworkVariable<double>();
+    private double m_downDeadline;
+
+    // 구조 채널링 중 얼어붙은 잔여 시간 — 채널링 시작/종료 시 한 번씩만 쓴다. (#725)
+    private readonly NetworkVariable<float> m_downFrozenRemainingSynced =
+        new NetworkVariable<float>();
+    private float m_downFrozenRemaining;
+
+    // 구조 완료 예정 시각 — 0이면 구조 중이 아니다. 재부팅 진행 링이 이 값을 읽는다. (#725)
+    private readonly NetworkVariable<double> m_reviveEndSynced = new NetworkVariable<double>();
+    private double m_reviveEnd;
 
     /// <summary>무력화 원인. 서버·오프라인은 실참조, 원격 피어는 동기화값으로 판정. (PlayerEscorter.IsEscorting 관례)</summary>
     public IncapacitationCause Cause => IsSpawned && !IsServer ? m_causeSynced.Value : m_cause;
@@ -80,17 +103,18 @@ public class PlayerIncapacitation : NetworkBehaviour
     /// <summary>무력화(행동불능) 여부 — 이동·아이템·상호작용 게이트가 읽는다. 원인을 가리지 않는다.</summary>
     public bool IsIncapacitated => Cause != IncapacitationCause.None;
 
-    /// <summary>현장 구조 대상인 HP 0 다운인지 — <b>#524 이후로는 항상 false</b>다(Down 진입 경로가 없다).
-    /// 현장 구조를 되살릴 때를 위해 남겨 둔 판정이다. 쓰러졌는지 보려면 <see cref="IsOutOfAction"/>.</summary>
+    /// <summary>현장 구조 대상인 HP 0 다운인지 — <b>구조(리바이브) 대상은 이것만</b>이다. 매달기·기절은
+    /// 스스로 풀리고, Die는 현장 구조로 못 일어난다(부활 키트만, #364/#613/#725).</summary>
     public bool IsDowned => Cause == IncapacitationCause.Down;
 
-    /// <summary>HP 0으로 기능 정지(Die)됐는지 — 운반·본부 부활(#365)의 대상 판정용. (#364, #524)</summary>
+    /// <summary>다운 방치 또는 확인사살로 기능 정지(Die)됐는지 — 운반·본부 부활(#365)의 대상 판정용. (#364, #725)</summary>
     public bool IsDead => Cause == IncapacitationCause.Die;
 
     /// <summary>
-    /// 스스로도 남의 손으로도 곧 일어나지 못하는 상태 — 기능 정지(또는 휴면 상태인 다운). (#364)
-    /// <b>전멸(게임오버) 판정과 조준 히트박스</b>가 이걸 본다. 매달기·기절은 시간이 지나면 스스로
-    /// 풀리므로 포함하지 않는다 — 곧 일어날 사람을 세면 아무도 잃지 않았는데 게임오버가 뜬다. (#252)
+    /// 스스로도 남의 손으로도 곧 일어나지 못하는 상태 — 다운 또는 Die. (#364, #725)
+    /// <b>전멸(게임오버) 판정과 조준 히트박스</b>가 이걸 본다: 다운만 세면 전원이 Die로 넘어간 순간
+    /// 판정이 통과하지 못해 게임오버가 영영 뜨지 않는다(RoundManager.AreAllPlayersOutOfAction).
+    /// 매달기·기절은 시간이 지나면 스스로 풀리므로 포함하지 않는다. (#252)
     /// </summary>
     public bool IsOutOfAction => IsDowned || IsDead;
 
@@ -100,7 +124,7 @@ public class PlayerIncapacitation : NetworkBehaviour
     /// <summary>
     /// 기절이 풀릴 때까지 남은 시간(초) — 기절이 아니면 0. 감전 연출이 잦아드는 시점 계산용. (#477)
     /// <b>서버 시각</b>(<see cref="CurrentTime"/>) 기준이라 모든 피어가 같은 값을 읽는다 — 늦게 접속해도
-    /// 즉시 맞는다. (Die 카운트다운이 같은 방식을 쓰다 #524에서 폐지됐고, 이 값만 남았다)
+    /// 즉시 맞는다. Die 카운트다운(<see cref="RemainingUntilDie"/>)이 같은 방식을 쓴다.
     /// </summary>
     public float RemainingStunSeconds
     {
@@ -111,6 +135,43 @@ public class PlayerIncapacitation : NetworkBehaviour
 
             double deadline = IsSpawned && !IsServer ? m_stunDeadlineSynced.Value : m_stunDeadline;
             return Mathf.Max(0f, (float)(deadline - CurrentTime));
+        }
+    }
+
+    /// <summary>
+    /// Die 전환까지 남은 시간(초) — 다운이 아니면 0. 화면 어두워짐과 HUD 카운트다운이 같은 값을 읽는다. (#364, #725)
+    /// 구조 채널링 중에는(<see cref="IsBeingRevived"/>) 얼어붙은 값을 그대로 돌려준다 — 시계가 멈춘 것으로 보인다.
+    /// </summary>
+    public float RemainingUntilDie
+    {
+        get
+        {
+            if (!IsDowned)
+                return 0f;
+
+            if (IsBeingRevived)
+                return IsSpawned && !IsServer
+                    ? m_downFrozenRemainingSynced.Value
+                    : m_downFrozenRemaining;
+
+            double deadline = IsSpawned && !IsServer ? m_downDeadlineSynced.Value : m_downDeadline;
+            return Mathf.Max(0f, (float)(deadline - CurrentTime));
+        }
+    }
+
+    /// <summary>
+    /// 구조 채널링이 진행 중인지 — 쓰러진 본인의 재부팅 진행 표시(진행 링)가 이 값을 본다. (#725)
+    /// 참인 동안 <see cref="RemainingUntilDie"/>가 얼어붙는다.
+    /// </summary>
+    public bool IsBeingRevived => RemainingReviveSeconds > 0f;
+
+    /// <summary>구조 채널링이 끝날 때까지 남은 시간(초) — 구조 중이 아니면 0. 재부팅 진행 링 계산용. (#725)</summary>
+    public float RemainingReviveSeconds
+    {
+        get
+        {
+            double end = IsSpawned && !IsServer ? m_reviveEndSynced.Value : m_reviveEnd;
+            return Mathf.Max(0f, (float)(end - CurrentTime));
         }
     }
 
@@ -195,8 +256,8 @@ public class PlayerIncapacitation : NetworkBehaviour
             OnIncapacitatedChanged?.Invoke(now);
     }
 
-    // 조준 히트박스 = 쓰러져 있는 동안만 켠다. 서버·원격·오프라인 모든 인스턴스에서 실행된다.
-    // 켜는 이유는 운반(#365) 조준이다 — 구조가 사라진 뒤로는(#524) 그게 유일한 용도다.
+    // 조준 히트박스 = 쓰러져 있는 동안(다운·Die)만 켠다. 서버·원격·오프라인 모든 인스턴스에서 실행된다.
+    // 다운은 구조자가, Die는 운반자·부활 키트 사용자가 조준해야 하므로 둘 다 켠다. (#105, #364, #725)
     private void RefreshAimHitbox()
     {
         if (m_reviveHitbox != null)
@@ -205,7 +266,7 @@ public class PlayerIncapacitation : NetworkBehaviour
 
     /// <summary>
     /// 무력화 진입 — 서버(또는 오프라인)에서만.
-    /// HP0 기능 정지(#105/#524)·매달기(#101)·납치 호송(#371)이 호출한다.
+    /// HP0 다운(#105/#725)·매달기(#101)·납치 호송(#371)이 호출한다.
     /// 기절은 스스로 풀려야 하므로 이 경로가 아니라 <see cref="ServerStun"/>을 쓴다.
     /// 기본값을 두지 않는다 — 원인이 곧 복구 경로라, 호출자가 반드시 밝히게 한다.
     /// </summary>
@@ -223,14 +284,13 @@ public class PlayerIncapacitation : NetworkBehaviour
             return;
         }
 
-        // Die는 다른 무력화로 덮이지 않는다 — 덮으면 그 원인의 자동 해제에 딸려 공짜로 살아난다.
+        // 다운·Die는 다른 무력화로 덮이지 않는다 — 덮으면 그 원인의 자동 해제에 딸려 공짜로 살아난다.
         // 실제 경로가 있다: 오검거 매달기 폴백(WrongfulArrestPenalty.HangAsync)은 대상이 이미
-        // 무력화됐는지 보지 않고 Penalty를 걸어, 30초 뒤 Recover()로 Die까지 함께 풀어 버린다. (#364)
-        // 모든 HP 0이 곧 Die가 된 뒤로는(#524) 이 가드가 걸릴 상황이 그만큼 늘었다.
-        if (Cause == IncapacitationCause.Die)
+        // 무력화됐는지 보지 않고 Penalty를 걸어, 30초 뒤 Recover()로 다운·Die까지 함께 풀어 버린다. (#364, #725)
+        if (Cause == IncapacitationCause.Die || Cause == IncapacitationCause.Down)
         {
             Debug.Log(
-                $"[Die] 무력화 덮어쓰기 무시 — {name}은 기능 정지 상태다 (요청 원인: {cause})",
+                $"[다운/Die] 무력화 덮어쓰기 무시 — {name}은 이미 쓰러져 있다 (요청 원인: {cause})",
                 this
             );
             return;
@@ -258,13 +318,10 @@ public class PlayerIncapacitation : NetworkBehaviour
     /// <summary>
     /// 납치 처형 — 외곽에서 린치당한 피해자를 기능 정지(Die)로 확정한다. 서버(또는 오프라인) 전용. (#371 후속)
     ///
-    /// 보통은 이 경로를 타지 않는다 — 린치로 HP가 0이 되면 <see cref="PlayerHealth"/>가 이미 Die를
-    /// 걸어 뒀고(#524), 그때 이 메서드는 조용히 무동작으로 끝난다. 남겨 두는 이유는
-    /// <b>린치 상한 초과 폴백</b>이다: 지형에 껴서 때리지 못한 채 상한이 지나면 HP가 남아 있는데도
-    /// 결말을 집행해야 하는데(AbductionEvent.LynchAsync 참고), 그 경로에는 HP 0이 없다.
-    ///
-    /// 새 원인 값을 만들지 않는 근거는 납치 사망의 성질이 Die와 정확히 같다는 것이다 — 현장 구조로는
-    /// 못 일어나고, 구조 창은 HP 0 이전에 이미 닫혔다(납치범을 때려 떼어내는 것이 유일한 구조 수단).
+    /// 린치로 HP가 0이 되면 <see cref="PlayerHealth"/>가 이미 Down을 걸어 뒀는데(#725), 이 메서드는
+    /// 그 유예를 건너뛰고 곧장 Die로 확정한다 — 상한까지 못 뗀 납치에는 구조 유예를 줄 이유가 없다.
+    /// 남겨 두는 또 다른 이유는 <b>린치 상한 초과 폴백</b>이다: HP가 남았는데도 결말을 집행해야 하는
+    /// 경로(AbductionEvent.LynchAsync)에는 HP 0이 없어 이 메서드가 유일한 진입점이다.
     /// </summary>
     public void ServerKillByAbduction()
     {
@@ -272,10 +329,54 @@ public class PlayerIncapacitation : NetworkBehaviour
             return;
 
         if (Cause == IncapacitationCause.Die)
-            return; // 이미 기능 정지 — HP 0으로 먼저 확정된 보통의 경로다
+            return; // 이미 기능 정지 — 중복 호출 방어
 
         Debug.Log($"[납치] 처형 — 기능 정지: {name}", this);
         SetCause(IncapacitationCause.Die);
+    }
+
+    /// <summary>
+    /// 유예 중인 몸을 즉시 완전 사망으로 — 유예 중 확인사살(환경·NPC·아군 진압봉 모두). 서버(또는 오프라인) 전용. (#725)
+    /// </summary>
+    public void ServerFinishOff()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+        if (!IsDowned)
+            return; // 유예 중이 아니면 확인사살할 대상이 없다
+
+        Debug.Log($"[Die] 유예 확인사살 — 기능 정지: {name}", this);
+        SetCause(IncapacitationCause.Die);
+    }
+
+    /// <summary>
+    /// 구조 채널링 시작/종료를 알린다 — <see cref="PlayerReviver"/>가 호출한다. 서버(또는 오프라인) 전용. (#725)
+    /// 시작하면 Die 타이머를 얼리고, 종료하면(완료·취소 무관) 얼어붙은 잔여로 되살려 다시 건다 —
+    /// <b>시계는 멈출 뿐 되감기지 않는다.</b>
+    /// </summary>
+    /// <param name="active">채널링 시작이면 true, 종료면 false.</param>
+    /// <param name="channelSeconds">시작 시에만 의미 있음 — 재부팅 진행 링 계산용 채널링 소요 시간.</param>
+    public void ServerSetBeingRevived(bool active, float channelSeconds = 0f)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+        if (!IsDowned)
+            return; // 유예 중이 아니면 구조 대상이 아니다
+
+        if (active)
+        {
+            // 얼기 전 값을 스냅샷 — SetReviveEnd 이후엔 RemainingUntilDie가 이 값을 읽게 된다
+            m_downFrozenRemaining = RemainingUntilDie;
+            SetDownFrozenRemaining(m_downFrozenRemaining);
+            SetReviveEnd(CurrentTime + channelSeconds);
+            m_causeEpisode++; // 돌던 ServerDieTimerAsync 무효화
+        }
+        else
+        {
+            SetDownDeadline(CurrentTime + m_downFrozenRemaining);
+            SetReviveEnd(0d);
+            ServerDieTimerAsync(m_downFrozenRemaining, ++m_causeEpisode).Forget();
+        }
     }
 
     /// <summary>무력화 해제(부활·복구) — 서버(또는 오프라인)에서만.</summary>
@@ -301,11 +402,36 @@ public class PlayerIncapacitation : NetworkBehaviour
             return; // 파괴·퇴장 — 복구할 대상이 이미 없다
         }
 
-        // 내가 건 기절이 그대로일 때만 푼다 — 그 사이 기능 정지·매달기가 들어왔으면 남의 상태다
+        // 내가 건 기절이 그대로일 때만 푼다 — 그 사이 다운·기능 정지·매달기가 들어왔으면 남의 상태다
         if (m_stunEpisode != episode || m_cause != IncapacitationCause.Stun)
             return;
 
         Recover();
+    }
+
+    // 다운 유예 → Die 전환 타이머. 기절 타이머와 같은 구조지만 방향이 반대다. seconds를 받는 이유는
+    // 초회 진입(60초)과 구조 재개(얼어붙은 잔여)가 길이만 다르기 때문이다. (#364, #725)
+    private async UniTaskVoid ServerDieTimerAsync(float seconds, int episode)
+    {
+        try
+        {
+            await UniTask.Delay(
+                TimeSpan.FromSeconds(seconds),
+                cancellationToken: destroyCancellationToken
+            );
+        }
+        catch (OperationCanceledException)
+        {
+            return; // 파괴·퇴장 — 전환할 대상이 이미 없다
+        }
+
+        // 내가 본 다운이 그대로일 때만 떨어뜨린다 — 구조됐거나 다른 무력화로 바뀌었거나 구조
+        // 채널링으로 회차가 올랐으면(m_causeEpisode 불일치) 남의 상태다
+        if (m_causeEpisode != episode || m_cause != IncapacitationCause.Down)
+            return;
+
+        Debug.Log($"[Die] 유예 시간 경과 — 기능 정지: {name} (부활 키트만 남는다)", this);
+        SetCause(IncapacitationCause.Die);
     }
 
     // 서버 권위 값 변경 + 로컬 이벤트 발행을 함께 처리 — 서버(또는 오프라인)에서만 호출된다.
@@ -324,6 +450,20 @@ public class PlayerIncapacitation : NetworkBehaviour
         if (cause != IncapacitationCause.Stun)
         {
             SetStunDeadline(0d);
+        }
+
+        // 원인이 바뀌었으니 이전 회차의 Die 타이머는 무효다 — 구조 후 재다운도 새 회차로 다시 센다. (#364, #725)
+        m_causeEpisode++;
+        if (cause == IncapacitationCause.Down)
+        {
+            SetDownDeadline(CurrentTime + m_dieAfterDownSeconds);
+            SetReviveEnd(0d);
+            ServerDieTimerAsync(m_dieAfterDownSeconds, m_causeEpisode).Forget();
+        }
+        else
+        {
+            SetDownDeadline(0d);
+            SetReviveEnd(0d);
         }
 
         // 쓰러지는 순간 밧줄에서 손을 뗀다 (#559). 무력화된 몸은 줄을 당길 수 없는데, 끌기는 <b>끄는
@@ -354,5 +494,29 @@ public class PlayerIncapacitation : NetworkBehaviour
         m_stunDeadline = deadline;
         if (IsSpawned && IsServer)
             m_stunDeadlineSynced.Value = deadline;
+    }
+
+    // Die 전환 예정 시각 갱신 — 실참조와 동기화값을 함께 쓴다(m_cause/m_causeSynced와 동일 관례). (#725)
+    private void SetDownDeadline(double deadline)
+    {
+        m_downDeadline = deadline;
+        if (IsSpawned && IsServer)
+            m_downDeadlineSynced.Value = deadline;
+    }
+
+    // 구조 채널링 중 얼어붙은 잔여 시간 갱신 — 같은 이중 구조. (#725)
+    private void SetDownFrozenRemaining(float remaining)
+    {
+        m_downFrozenRemaining = remaining;
+        if (IsSpawned && IsServer)
+            m_downFrozenRemainingSynced.Value = remaining;
+    }
+
+    // 구조 완료 예정 시각 갱신 — 같은 이중 구조. 0이면 구조 중이 아니다. (#725)
+    private void SetReviveEnd(double end)
+    {
+        m_reviveEnd = end;
+        if (IsSpawned && IsServer)
+            m_reviveEndSynced.Value = end;
     }
 }
