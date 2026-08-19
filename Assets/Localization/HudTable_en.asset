@@ -335,6 +335,30 @@ MonoBehaviour:
     m_Localized: Let go of everything
     m_Metadata:
       m_Items: []
+  - m_Id: 5472766220918784
+    m_Localized: Alive
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5472766308999168
+    m_Localized: Abducted
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5472766308999169
+    m_Localized: Dead
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5472766308999170
+    m_Localized: TEAM STATUS
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5472766308999171
+    m_Localized: OFFICERS
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5472766308999172
+    m_Localized: WANTED
+    m_Metadata:
+      m_Items: []
   - m_Id: 5439534670635008
     m_Localized: Enter recovery code
     m_Metadata:

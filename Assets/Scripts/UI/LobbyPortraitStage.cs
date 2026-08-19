@@ -58,8 +58,18 @@ public class LobbyPortraitStage : MonoBehaviour
     private RenderTexture m_texture;
     private Camera m_camera;
 
+    // 로비를 떠나도 살려 두는 얼굴 — 게임 씬에서 다시 구우면 맵 조명을 타 어둡게 나오므로,
+    // 로비에서 구운 것을 세션 내내 그대로 쓴다. 다음 로비 방문에서 새로 구울 때 놓아 준다. (#720)
+    //
+    // RenderTexture가 아니라 Texture2D인 것은 그림을 씬 너머로 들고 가야 해서다 — RenderTexture는
+    // 오브젝트만 남고 GPU 쪽은 놓여, 게임 씬에서는 IsCreated()가 false인 빈 칸이 그려졌다.
+    private static Texture2D s_sessionPortrait;
+
     /// <summary>구워진 얼굴 — 카드가 이걸 받아 표시한다. 준비 전이면 null.</summary>
     public Texture Portrait => m_texture;
+
+    /// <summary>로비에서 구워 세션 동안 유지되는 얼굴 — 게임 씬 UI가 이걸 읽는다. 준비 전이면 null. (#720)</summary>
+    public static Texture SessionPortrait => s_sessionPortrait;
 
     private void Awake()
     {
@@ -75,6 +85,7 @@ public class LobbyPortraitStage : MonoBehaviour
     private void OnDestroy()
     {
         // RenderTexture는 GC 대상이 아니다 — 씬을 오갈 때마다 쌓이지 않게 직접 놓는다.
+        // 세션용 얼굴(s_sessionPortrait)은 별도 Texture2D라 여기서 놓는 것과 상관이 없다. (#720)
         if (m_texture == null)
             return;
 
@@ -146,6 +157,35 @@ public class LobbyPortraitStage : MonoBehaviour
         await UniTask.WaitForEndOfFrame(token);
 
         RenderPortrait();
+        CaptureSessionPortrait();
+    }
+
+    // 구운 그림을 씬 너머로 들고 갈 Texture2D로 옮겨 둔다 — RenderTexture는 씬을 넘기면 내용이
+    // 날아가 게임 씬 상황판에 빈 칸이 뜬다. 로비에서 한 번만 도는 경로라 동기 읽기로 충분하다. (#720)
+    private void CaptureSessionPortrait()
+    {
+        if (m_texture == null)
+            return;
+
+        // MSAA가 걸린 판은 그대로 읽을 수 없다 — 안티에일리어싱 없는 임시 판에 한 번 옮긴다.
+        RenderTexture resolved = RenderTexture.GetTemporary(m_texture.width, m_texture.height, 0, RenderTextureFormat.ARGB32);
+        Graphics.Blit(m_texture, resolved);
+
+        RenderTexture prev = RenderTexture.active;
+        RenderTexture.active = resolved;
+
+        // 직전 것은 새 그림이 나온 뒤에 놓는다 — 굽는 도중에 카드가 읽으면 얼굴이 한 번 비게 된다.
+        Texture2D stale = s_sessionPortrait;
+
+        s_sessionPortrait = new Texture2D(m_texture.width, m_texture.height, TextureFormat.ARGB32, false, false) { name = "SessionPortrait" };
+        s_sessionPortrait.ReadPixels(new Rect(0f, 0f, m_texture.width, m_texture.height), 0, 0);
+        s_sessionPortrait.Apply();
+
+        RenderTexture.active = prev;
+        RenderTexture.ReleaseTemporary(resolved);
+
+        if (stale != null)
+            Destroy(stale);
     }
 
     // SRP에서 Camera.Render()는 파이프라인 밖 경로다 — URP가 지원하는 렌더 요청을 먼저 쓴다.
