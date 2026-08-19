@@ -2165,8 +2165,8 @@ MonoBehaviour:
   m_palette: {fileID: 11400000, guid: 7b4d0e93c1a54f6489d2e35a1c8f7b02, type: 2}
   m_stageOrigin: {x: 0, y: -500, z: 0}
   m_headBoneName: Head
-  m_distance: 1.05
-  m_heightOffset: -0.14
+  m_distance: 0.55
+  m_heightOffset: 0.06
   m_fieldOfView: 28
   m_textureSize: {x: 256, y: 348}
   m_bodyDistance: 3.4
