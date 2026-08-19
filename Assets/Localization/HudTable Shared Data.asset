@@ -323,6 +323,14 @@ MonoBehaviour:
     m_Key: Hud.Interact.ReleaseAll
     m_Metadata:
       m_Items: []
+  - m_Id: 5439534670635008
+    m_Key: Hud.Interact.BlackoutRecovery
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5439534716772352
+    m_Key: Hud.Event.Notice.BlackoutRecovered
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

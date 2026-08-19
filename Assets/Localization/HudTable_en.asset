@@ -334,6 +334,14 @@ MonoBehaviour:
     m_Localized: Let go of everything
     m_Metadata:
       m_Items: []
+  - m_Id: 5439534670635008
+    m_Localized: Enter recovery code
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5439534716772352
+    m_Localized: Devices are back online
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

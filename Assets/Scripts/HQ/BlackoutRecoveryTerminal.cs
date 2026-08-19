@@ -84,19 +84,31 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
         OnCodeChanged?.Invoke(current);
     }
 
-    private void OnEnable()
+    // 먹통 구독은 OnEnable이 아니라 Start에서 한다 — App 매니저 등록이 Awake에서 끝나야 SuddenEvent
+    // 조회가 성립하기 때문이다. OnEnable에서 물으면 씬 오브젝트 사이의 Awake 순서에 따라 null이
+    // 돌아오고, 그 판에서는 단말이 <b>영영 켜지지 않는다</b> (CCTVSwitcher와 같은 이유, #382).
+    private void Start()
     {
         DeviceBlackoutEvent blackout = Blackout;
-        if (blackout != null)
-            blackout.OnCommsBlackoutChanged += HandleBlackoutChanged;
+        if (blackout == null)
+            return; // 먹통이 인스펙터 리스트에 없는 구성 — 그 이벤트는 발생하지도 않는다
+
+        blackout.OnCommsBlackoutChanged += HandleBlackoutChanged;
+
+        // 이미 먹통이 진행 중인 경우(이벤트 도중 씬 진입)를 즉시 반영한다.
+        ApplyScreen();
     }
 
-    private void OnDisable()
+    // NetworkBehaviour.OnDestroy는 virtual이라 반드시 override + base 호출이다 —
+    // 새로 선언하면 NGO의 파괴 시 정리가 통째로 가려진다 (CCTVSwitcher와 같은 관례).
+    public override void OnDestroy()
     {
         // ?. 금지 — 파괴된 Unity 오브젝트의 fake null을 우회하지 않게 한다 (HqPanelView 관례)
         DeviceBlackoutEvent blackout = Blackout;
         if (blackout != null)
             blackout.OnCommsBlackoutChanged -= HandleBlackoutChanged;
+
+        base.OnDestroy();
     }
 
     // 먹통이 켜지면 코드를 새로 뽑고, 풀리면 화면을 끈다. 코드 발급은 서버만 한다.
