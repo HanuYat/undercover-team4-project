@@ -7714,11 +7714,11 @@ MonoBehaviour:
   m_rootYawFollowSpeed: 8
   m_rootYawOffset: 180
   m_blendSeconds: 0.4
-  m_logRevivalYaw: 1
+  m_logRevivalYaw: 0
   m_liveSkin: {fileID: 6088151059564412096}
   m_liveBoneRoot: {fileID: 575005799806648508}
   m_logSettleTrace: 0
-  m_logEntryHeadTrace: 1
+  m_logEntryHeadTrace: 0
 --- !u!114 &511173363813317716
 MonoBehaviour:
   m_ObjectHideFlags: 0
