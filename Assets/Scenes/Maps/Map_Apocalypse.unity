@@ -10424,8 +10424,9 @@ MonoBehaviour:
   m_altRatio: 0.5
   m_spawnCount: 100
   m_spawnPoints: []
-  m_spawnRadius: 8
+  m_spawnRadius: 12
   m_sampleMaxDistance: 4
+  m_minSpawnSeparation: 2.5
   m_spawnPerFrame: 3
   m_spawnOnStart: 0
 --- !u!1 &233511321 stripped
