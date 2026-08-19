@@ -163,8 +163,8 @@ MonoBehaviour:
   m_nameText: {fileID: 2490987462729018748}
   m_gauge: {fileID: 4266232313187709577}
   m_stateText: {fileID: 9018400745420289613}
-  m_normalTone: {r: 0.85, g: 0.92, b: 0.95, a: 1}
-  m_downTone: {r: 0.95, g: 0.72, b: 0.25, a: 1}
+  m_aliveTone: {r: 0.85, g: 0.92, b: 0.95, a: 1}
+  m_abductedTone: {r: 0.95, g: 0.72, b: 0.25, a: 1}
   m_deadTone: {r: 0.85, g: 0.3, b: 0.3, a: 1}
 --- !u!222 &4304233563158043417
 CanvasRenderer:

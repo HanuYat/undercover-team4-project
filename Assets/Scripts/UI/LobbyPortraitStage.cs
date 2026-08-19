@@ -58,8 +58,15 @@ public class LobbyPortraitStage : MonoBehaviour
     private RenderTexture m_texture;
     private Camera m_camera;
 
+    // 로비를 떠나도 살려 두는 얼굴 — 게임 씬에서 다시 구우면 맵 조명을 타 어둡게 나오므로,
+    // 로비에서 구운 것을 세션 내내 그대로 쓴다. 다음 로비 방문에서 새로 구울 때 놓아 준다. (#720)
+    private static RenderTexture s_sessionPortrait;
+
     /// <summary>구워진 얼굴 — 카드가 이걸 받아 표시한다. 준비 전이면 null.</summary>
     public Texture Portrait => m_texture;
+
+    /// <summary>로비에서 구워 세션 동안 유지되는 얼굴 — 게임 씬 UI가 이걸 읽는다. 준비 전이면 null. (#720)</summary>
+    public static Texture SessionPortrait => s_sessionPortrait;
 
     private void Awake()
     {
@@ -75,8 +82,12 @@ public class LobbyPortraitStage : MonoBehaviour
     private void OnDestroy()
     {
         // RenderTexture는 GC 대상이 아니다 — 씬을 오갈 때마다 쌓이지 않게 직접 놓는다.
-        if (m_texture == null)
+        // 다만 세션용으로 넘긴 것은 여기서 놓지 않는다 — 게임 씬이 계속 쓴다. (#720)
+        if (m_texture == null || m_texture == s_sessionPortrait)
+        {
+            m_texture = null;
             return;
+        }
 
         m_texture.Release();
         Destroy(m_texture);
@@ -99,11 +110,20 @@ public class LobbyPortraitStage : MonoBehaviour
             head = model.transform;
         }
 
+        // 직전 세션에서 남겨 둔 것을 여기서 놓는다 — 로비에 다시 올 때마다 한 장만 유지된다.
+        if (s_sessionPortrait != null)
+        {
+            s_sessionPortrait.Release();
+            Destroy(s_sessionPortrait);
+            s_sessionPortrait = null;
+        }
+
         m_texture = new RenderTexture(m_textureSize.x, m_textureSize.y, 16, RenderTextureFormat.ARGB32)
         {
             name = "LobbyPortrait",
             antiAliasing = 2,
         };
+        s_sessionPortrait = m_texture;
 
         // 굽기 전까지 카드에 걸릴 텍스처다 — 새 RenderTexture의 내용은 보장되지 않아 명시적으로 비운다
         m_texture.Create();

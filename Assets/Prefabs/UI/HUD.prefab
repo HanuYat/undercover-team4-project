@@ -441,7 +441,6 @@ RectTransform:
   - {fileID: 730380317725432605}
   - {fileID: 185661767983532360}
   - {fileID: 7992301664064468599}
-  - {fileID: 6817118748794489742}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -812,7 +811,7 @@ MonoBehaviour:
   m_titleText: {fileID: 4696825815392344855}
   m_membersLabel: {fileID: 2393665357484256001}
   m_montageLabel: {fileID: 5048240806109230443}
-  m_portraitStage: {fileID: 3184269813537987203}
+  m_portraitStage: {fileID: 0}
   m_rowContainer: {fileID: 5549774298528649056}
   m_rowPrefab: {fileID: 8545793901423576682, guid: 244da43c6e2b6c64ea5d9cb1a2edd64f, type: 3}
 --- !u!1 &806062944454682734
@@ -5878,61 +5877,6 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 40, y: 40}
   m_Pivot: {x: 0.5, y: 0.5}
---- !u!1 &9011288674385207602
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 6817118748794489742}
-  - component: {fileID: 3184269813537987203}
-  m_Layer: 0
-  m_Name: TeamPortraitStage
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!224 &6817118748794489742
-RectTransform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9011288674385207602}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 3893812833373143154}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 100, y: 100}
-  m_Pivot: {x: 0.5, y: 0.5}
---- !u!114 &3184269813537987203
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9011288674385207602}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9b889f4ebe6c58341a06a46934b70b3b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::LobbyPortraitStage
-  m_characterPrefab: {fileID: 2242111600426174931, guid: a7543fce49601494489b3edcae2284ae, type: 3}
-  m_stageOrigin: {x: 0, y: -500, z: 0}
-  m_headBoneName: Head
-  m_distance: 0.78
-  m_heightOffset: 0.02
-  m_fieldOfView: 28
-  m_textureSize: {x: 256, y: 348}
 --- !u!1 &9125526043188812143
 GameObject:
   m_ObjectHideFlags: 0

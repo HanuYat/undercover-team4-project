@@ -165,15 +165,10 @@ public class PlayerInputHandler : NetworkBehaviour
         }
     }
 
-    // 14개 액션을 한꺼번에 켜고 끈다 — 스폰/디스폰/정지가 같은 목록을 쓰도록 한 곳에 모은다.
     /// <summary>
-    /// 팀 상황판을 들여다보는 동안인지 알린다 — 그 사이 감정표현 휠·인벤토리 편집 입력을 흘리지 않는다. (#720)
-    ///
-    /// <b>액션을 끄지 않고 이벤트만 막는 이유:</b> 액션을 비활성화하면 진행 중이던
-    /// 입력의 canceled가 돌아, 휠을 펼친 채 Tab을 누를 때 감정표현이 그대로 발동해 버린다.
-    ///
-    /// <b><see cref="SetSuspended"/>를 쓸 수 없는 이유:</b> 그쪽은 팀 상황판 액션까지 함께 끔다 —
-    /// 홈드가 끊겨 canceled가 돌고 창이 즐시 닫힌다.
+    /// 팀 상황판을 보는 동안인지 알린다 — 그 사이 감정표현 휠·인벤토리 편집 입력을 흘리지 않는다. (#720)
+    /// 액션을 끄지 않고 이벤트만 막는다 — 끄면 진행 중이던 입력의 canceled가 돌아 감정표현이 오발동한다.
+    /// <see cref="SetSuspended"/>는 팀 상황판 액션까지 함께 꺼서 홀드가 끊기므로 쓸 수 없다.
     /// </summary>
     public void SetTeamStatusPeeking(bool peeking)
     {
@@ -183,6 +178,7 @@ public class PlayerInputHandler : NetworkBehaviour
         m_isPeekingTeamStatus = peeking;
     }
 
+    // 14개 액션을 한꺼번에 켜고 끈다 — 스폰/디스폰/정지가 같은 목록을 쓰도록 한 곳에 모은다.
     private void SetActionsEnabled(bool value)
     {
         InputActionReference[] actions =
@@ -336,8 +332,7 @@ public class PlayerInputHandler : NetworkBehaviour
         }
     }
 
-    // 상황판을 보는 동안은 무시한다 — 편집 모드는 커서를 푸는데, 인벤토리 바는
-    // 플레이어 캐버스(order 1)라 상황판(order 10) 밑에 깔려 보이지도 않는다. (#720)
+    // 상황판을 보는 동안은 무시한다 — 커서가 풀리는데 인벤토리 바는 상황판 밑에 깔려 보이지도 않는다. (#720)
     private void OnToggleInventoryHandler(InputAction.CallbackContext ctx)
     {
         if (m_isPeekingTeamStatus)
@@ -359,8 +354,7 @@ public class PlayerInputHandler : NetworkBehaviour
     // 표현할 수 없다. 크라우치(m_crouchAction)가 같은 형태다.
     private void OnEmoteStartedHandler(InputAction.CallbackContext context)
     {
-        // 여는 쪽만 막는다. 닫는 쪽(canceled)까지 막으면 상황판을 열기 전에
-        // 이미 펼쳐 있던 휠이 닫힐 길을 잃는다. (#720)
+        // 여는 쪽만 막는다 — 닫는 쪽까지 막으면 미리 펼쳐 둔 휠이 닫힐 길을 잃는다. (#720)
         if (m_isPeekingTeamStatus)
             return;
 

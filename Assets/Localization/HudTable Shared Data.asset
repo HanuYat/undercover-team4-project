@@ -324,11 +324,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 5472766220918784
-    m_Key: Hud.Team.State.Normal
+    m_Key: Hud.Team.State.Alive
     m_Metadata:
       m_Items: []
   - m_Id: 5472766308999168
-    m_Key: Hud.Team.State.Down
+    m_Key: Hud.Team.State.Abducted
     m_Metadata:
       m_Items: []
   - m_Id: 5472766308999169

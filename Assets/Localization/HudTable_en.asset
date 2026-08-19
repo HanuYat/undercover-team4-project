@@ -336,11 +336,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 5472766220918784
-    m_Localized: Active
+    m_Localized: Alive
     m_Metadata:
       m_Items: []
   - m_Id: 5472766308999168
-    m_Localized: Down
+    m_Localized: Abducted
     m_Metadata:
       m_Items: []
   - m_Id: 5472766308999169
