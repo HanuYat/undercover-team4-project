@@ -149,13 +149,15 @@ public class BodyTint : MonoBehaviour
         m_applied = true;
     }
 
-    // 서브메시별로 다른 색 — 나뉘지 않은 렌더러는 fallback 한 색으로 칠한다
+    // 서브메시별로 다른 색 — 나뉘지 않은 렌더러는 fallback 한 색으로 칠한다.
+    // 꺼진 렌더러도 칠한다: 시체 모델은 평시에 꺼져 있다가 죽을 때 켜지므로(PlayerRagdoll),
+    // 건너뛰면 그때 원래 색으로 나온다. 밑색은 색을 고를 때만 도는 경로라 비용이 문제되지 않는다. (#432)
     private void ApplyBase()
     {
         for (int i = 0; i < m_targets.Count; i++)
         {
             Renderer renderer = m_targets[i];
-            if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy)
+            if (renderer == null)
                 continue;
 
             int slots = renderer.sharedMaterials.Length;
