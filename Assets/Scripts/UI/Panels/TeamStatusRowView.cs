@@ -5,6 +5,8 @@ using UnityEngine.UI;
 /// <summary>
 /// 팀 상황판의 대원 상태 — 동료가 움직여야 하는가로만 갈린다. 기절·오검거 매달기는 스스로 풀려
 /// 생존으로 묶는다. Down은 넣지 않는다 — GDD 10-2대로 #524 이후 발생하지 않는다. (#720)
+///
+/// Dead는 GDD 7-5의 <b>기능 정지</b>다 — 로봇이라 죽는 것이 아니다. 표시 문구도 그 용어를 쓴다.
 /// </summary>
 public enum ETeamMemberState
 {
@@ -43,8 +45,18 @@ public class TeamStatusRowView : MonoBehaviour
     // 마지막으로 그린 상태 — 같은 값이면 다시 그리지 않는다.
     private ETeamMemberState m_shownState = k_noState;
 
+    // 마지막으로 그린 이름 — null은 "아직 한 번도 안 넣었다"는 뜻이다.
+    private string m_shownName;
+
+    /// <summary>이름이 들어와 있는가 — 상황판이 빈 이름만 다시 물어보게 하는 표시다. (#720)</summary>
+    public bool HasName => !string.IsNullOrEmpty(m_shownName);
+
     // 패널이 다시 열릴 때 캐시를 버린다 — 닫혀 있는 사이에 언어가 바뀌었을 수 있다.
-    private void OnEnable() => m_shownState = k_noState;
+    private void OnEnable()
+    {
+        m_shownState = k_noState;
+        m_shownName = null;
+    }
 
     /// <summary>얼굴을 넣는다. 지금은 전원이 같은 한 장을 나눠 쓴다 — 개인별 외형은 #432 몫.</summary>
     public void SetPortrait(Texture portrait)
@@ -53,11 +65,17 @@ public class TeamStatusRowView : MonoBehaviour
             m_portrait.texture = portrait;
     }
 
-    /// <summary>이름은 접속 중에 바뀌지 않으므로 행을 만들 때 한 번만 넣는다.</summary>
+    /// <summary>
+    /// 이름을 넣는다 — 접속 중에 바뀌지는 않지만 스폰과 같은 프레임에는 아직 비어 있을 수 있어,
+    /// 상황판이 빌 때마다 다시 넘긴다. 같은 값이면 TMP 메시를 건드리지 않는다. (#720)
+    /// </summary>
     public void SetName(string displayName)
     {
-        if (m_nameText != null)
-            m_nameText.text = displayName;
+        if (m_nameText == null || displayName == m_shownName)
+            return;
+
+        m_shownName = displayName;
+        m_nameText.text = displayName;
     }
 
     /// <summary>매 프레임 값만 갈아 끼운다 — 상황판이 떠 있는 동안만 불린다.</summary>

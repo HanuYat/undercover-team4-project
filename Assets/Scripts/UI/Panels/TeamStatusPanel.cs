@@ -37,6 +37,7 @@ public class TeamStatusPanel : PanelBase
     // 인원이 바뀔 때만 찾아 둔다 — 아니면 떠 있는 동안 매 프레임 인원수만큼 GetComponent가 돈다.
     private readonly List<PlayerHealth> m_health = new List<PlayerHealth>();
     private readonly List<PlayerIncapacitation> m_incapacitation = new List<PlayerIncapacitation>();
+    private readonly List<PlayerNameTag> m_nameTags = new List<PlayerNameTag>();
 
     public override void OpenPanel()
     {
@@ -125,11 +126,13 @@ public class TeamStatusPanel : PanelBase
 
         m_health.Clear();
         m_incapacitation.Clear();
+        m_nameTags.Clear();
         for (int i = 0; i < m_players.Count; i++)
         {
             NetworkObject player = m_players[i];
             m_health.Add(player != null ? player.GetComponent<PlayerHealth>() : null);
             m_incapacitation.Add(player != null ? player.GetComponent<PlayerIncapacitation>() : null);
+            m_nameTags.Add(player != null ? player.GetComponent<PlayerNameTag>() : null);
         }
 
         if (m_rowContainer == null || m_rowPrefab == null)
@@ -145,7 +148,9 @@ public class TeamStatusPanel : PanelBase
             if (!used)
                 continue;
 
-            m_rows[i].SetName(NameOf(m_players[i]));
+            // 행은 재사용하므로 여기서 한 번 덮어쓴다 — 아니면 자리를 물려받은 카드에 떠난 사람
+            // 이름이 남는다. 아직 안 온 이름은 RefreshRows가 채운다.
+            m_rows[i].SetName(NameOf(i));
 
             // 로비에서 구운 얼굴을 그대로 쓴다 — 게임 씬에서 다시 구우면 맵 조명을 타 어둡게 나온다.
             m_rows[i].SetPortrait(LobbyPortraitStage.SessionPortrait);
@@ -166,19 +171,22 @@ public class TeamStatusPanel : PanelBase
             int hp = health != null ? health.CurrentHp : 0;
 
             m_rows[i].SetStatus(hp, max, StateOf(i < m_incapacitation.Count ? m_incapacitation[i] : null));
+
+            // 이름은 비어 있는 동안만 다시 묻는다 — 오너 쓰기 NetworkVariable이라 스폰과 같은
+            // 프레임에 행을 만들면 아직 안 와 있고, 그때 한 번만 넣으면 그대로 빈 칸으로 굳는다.
+            // 채워진 뒤엔 바뀌지 않으므로 매 프레임 문자열을 만들지 않는다.
+            if (!m_rows[i].HasName)
+                m_rows[i].SetName(NameOf(i));
         }
     }
 
-    private static string NameOf(NetworkObject player)
+    private string NameOf(int index)
     {
-        if (player == null)
-            return string.Empty;
-
-        var tag = player.GetComponent<PlayerNameTag>();
+        PlayerNameTag tag = index < m_nameTags.Count ? m_nameTags[index] : null;
         return tag != null ? tag.DisplayName : string.Empty;
     }
 
-    // 기절·오검거 매달기는 스스로 풀려서 생존으로 묶는다. 동료가 움직여야 하는 것은 납치와 사망뿐이다.
+    // 기절·오검거 매달기는 스스로 풀려서 생존으로 묶는다. 동료가 움직여야 하는 것은 납치와 기능 정지뿐이다.
     // Down은 쓰지 않는다 — GDD 10-2대로 #524 이후 발생하지 않고 설정하는 곳도 없다.
     private static ETeamMemberState StateOf(PlayerIncapacitation incapacitation)
     {
