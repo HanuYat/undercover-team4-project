@@ -118,7 +118,7 @@ GameObject:
   - component: {fileID: 4304233563158043417}
   - component: {fileID: 7416604081438817452}
   m_Layer: 0
-  m_Name: TeamStatusRow
+  m_Name: TeamStatusMemberCard
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
