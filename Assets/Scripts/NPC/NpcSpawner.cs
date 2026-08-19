@@ -45,6 +45,10 @@ public class NpcSpawner : CommonManagerBase
     [Tooltip("보정으로 후보가 수평으로 이 거리(m)보다 멀리 끌려가면 그 위치를 버리고 다시 뽑는다. 0 이하면 검사하지 않는다 (#714)")]
     [SerializeField] private float m_maxSnapDistance = 1.5f;
 
+    [Header("최소 스폰 간격")]
+    [Tooltip("이미 스폰된 NPC와 이 거리(m)보다 가까우면 그 위치를 버리고 다시 뽑는다. 0 이하면 검사하지 않는다 (#660)")]
+    [SerializeField] private float m_minSpawnSeparation = 1.5f;
+
     [Header("고립 지점 검증")]
     [Tooltip("끊긴 NavMesh 조각(건물 안쪽 주머니·2층 문턱 선반)에 스폰되지 않도록, 후보에서 빠져나오는 경로가 있는지 확인하고 없으면 다시 뽑는다 (#660)")]
     [SerializeField] private bool m_validateConnectivity = true;
@@ -62,6 +66,10 @@ public class NpcSpawner : CommonManagerBase
 
     private readonly List<NpcController> m_spawnedNpcs = new List<NpcController>();
     private bool m_isSpawning;
+
+    // 최소 간격 판정용 스폰 위치 — 개체의 현재 위치가 아니라 "놓은 자리"를 들고 있어야 한다.
+    // 스폰은 여러 프레임에 걸치므로, 먼저 나온 개체가 배회로 움직인 뒤 위치를 보면 판정이 흔들린다.
+    private readonly List<Vector3> m_spawnedPositions = new List<Vector3>();
 
     // 스폰 포인트별 "본토" 기준점과 경로 계산 버퍼 — 스폰 시작 시 1회 준비한다 (#660)
     private NpcSpawnAnchors.Anchor[] m_anchors;
@@ -153,6 +161,7 @@ public class NpcSpawner : CommonManagerBase
         }
 
         m_spawnedNpcs.Clear();
+        m_spawnedPositions.Clear();
         m_isSpawning = false;
         m_spawnFrozen = false;
         IsSpawnCompleted = false;
@@ -223,6 +232,12 @@ public class NpcSpawner : CommonManagerBase
                     continue;
             }
 
+            // 스폰 포인트 하나에 수십 마리가 몰리면 반경 안이 포화돼 서로 겹쳐 선다 — 실측(아포칼립스,
+            // 포인트당 12.5마리)으로 100마리 중 46마리가 1m 안에 이웃을 두고 나왔다. 이미 놓은 자리와
+            // 너무 가까운 후보는 버려 간격을 확보한다.
+            if (m_minSpawnSeparation > 0f && IsTooCloseToSpawned(hit.position))
+                continue;
+
             // SamplePosition은 "NavMesh 위인가"만 답한다 — 끊긴 조각 위여도 참이라 그대로 두면
             // 건물 안쪽 주머니나 2층 문턱에 얹힌 채 영영 못 나온다. 기준점까지 길이 있는지 묻는다 (#660).
             // 통행은 에이전트의 전체 마스크로 본다 — 도로를 뺀 마스크로 물으면 블록 간이 전부 끊긴 것으로 나온다.
@@ -249,6 +264,7 @@ public class NpcSpawner : CommonManagerBase
                 npc.SetFrozen(true);
 
             m_spawnedNpcs.Add(npc);
+            m_spawnedPositions.Add(hit.position);
             spawned++;
             spawnedThisFrame++;
 
@@ -266,6 +282,20 @@ public class NpcSpawner : CommonManagerBase
         m_isSpawning = false;
         IsSpawnCompleted = true;
         OnSpawnCompleted?.Invoke();
+    }
+
+    // 이미 놓은 자리 중 최소 간격 안에 드는 것이 있는지
+    private bool IsTooCloseToSpawned(Vector3 position)
+    {
+        float sqrMinSeparation = m_minSpawnSeparation * m_minSpawnSeparation;
+
+        for (int i = 0; i < m_spawnedPositions.Count; i++)
+        {
+            if ((m_spawnedPositions[i] - position).sqrMagnitude < sqrMinSeparation)
+                return true;
+        }
+
+        return false;
     }
 
     // 스폰 포인트마다 "본토" 기준점을 잡아둔다 — 후보가 여기 닿지 못하면 끊긴 조각 위라는 뜻이다 (#660)
