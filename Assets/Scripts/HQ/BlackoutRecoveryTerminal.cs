@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Localization;
@@ -34,6 +35,10 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
     // 제한시간이 걸려 있지 않음 — ServerTime은 0에서 시작하므로 음수를 쓴다 (JailSirenButton과 동일).
     private const double k_noDeadline = -1d;
 
+    // 한 클라이언트가 제출을 다시 보낼 수 있는 최소 간격(초). 사람이 네 자리를 눌러 넣는 데 드는
+    // 시간보다 한참 짧아 정상 입력은 걸리지 않고, 조작된 클라가 한 프레임에 만 번을 쏘는 것만 막는다.
+    private const double k_submitCooldown = 0.2d;
+
     [Header("화면")]
     [Tooltip("먹통 중에만 켜지는 화면 루트 — 코드 표시·입력 UI가 이 아래에 있다. 비워 두면 화면 없이 동작한다")]
     [SerializeField] private GameObject m_screenRoot;
@@ -57,6 +62,9 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
     // (JailSirenButton.m_cooldownEndSynced·RoundTimerSync.m_endServerTime과 같은 방식)
     private readonly NetworkVariable<double> m_deadlineSynced = new NetworkVariable<double>(k_noDeadline);
     private double m_deadline = k_noDeadline; // 서버·오프라인의 진실값
+
+    // 클라이언트별 마지막 제출 시각 — 서버에서만 쓴다. 값이 아니라 간격만 보므로 라운드마다 비울 필요가 없다.
+    private readonly Dictionary<ulong, double> m_lastSubmit = new Dictionary<ulong, double>();
 
     // 동기화 시계 — 세션 밖에서는 로컬 시간으로 떨어진다 (PlayerIncapacitation과 동일).
     private double Now => IsSpawned && NetworkManager != null ? NetworkManager.ServerTime.Time : Time.timeAsDouble;
@@ -155,15 +163,13 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
     public bool CanInteract(GameObject interactor) => IsOnline;
 
     /// <summary>
-    /// 조준 안내 (#664) — <b>화면 앞에 앉은 뒤에는 내린다.</b> 카메라가 화면 코앞에 있어 안내가
-    /// 시야 한가운데에서 화면을 가리기 때문이다. null을 주면 <see cref="InteractPromptView"/>가
-    /// 알아서 안내를 지운다.
+    /// 조준 안내 (#664).
     ///
-    /// <see cref="CanInteract"/>는 그대로 true로 둔다 — E가 이 화면에서 <b>나가는</b> 수단이라
-    /// 여기서 막으면 앉은 채로 갇힌다.
+    /// 화면 앞에 앉은 동안 안내·윤곽선·크로스헤어를 내리는 일은 여기가 아니라
+    /// <see cref="InteractionFeedback"/>이 한다 — 셋을 한자리에서 같은 조건으로 꺼야
+    /// "글자만 사라지고 테두리는 빛나는" 어긋남이 생기지 않는다.
     /// </summary>
-    public LocalizedString PromptLabel(GameObject interactor) =>
-        IsLocalFocused ? null : InteractPrompts.BlackoutRecovery;
+    public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.BlackoutRecovery;
 
     /// <summary>
     /// E 상호작용 — 화면 앞으로 카메라를 옮기고 입력을 받는다.
@@ -198,7 +204,7 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
     {
         if (!IsSpawned || IsServer)
         {
-            ServerSubmit(code);
+            ServerSubmit(code, IsSpawned && NetworkManager != null ? NetworkManager.LocalClientId : 0ul);
             return;
         }
 
@@ -207,13 +213,21 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
 
     // Everyone 권한 — 씬(프리팹)에 놓인 서버 소유 오브젝트라 어떤 플레이어도 오너가 아니다 (JailSirenButton과 동일, #55)
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void RequestSubmitRpc(int code) => ServerSubmit(code);
+    private void RequestSubmitRpc(int code, RpcParams rpcParams = default) =>
+        ServerSubmit(code, rpcParams.Receive.SenderClientId);
 
     // 클라 게이트는 신뢰 불가 — 해킹 여부와 정답을 서버가 다시 본다.
-    private void ServerSubmit(int code)
+    private void ServerSubmit(int code, ulong sender)
     {
         if (IsSpawned && !IsServer)
             return;
+
+        // 제출 간격 제한 — 위조 RPC로 한 프레임에 만 번을 쏘면 네 자리 코드는 사실상 즉시 뚫린다.
+        // 사거리·가시선을 서버가 다시 보는 것(#360)과 같은 이유로, 빈도도 서버가 본다.
+        if (m_lastSubmit.TryGetValue(sender, out double last) && Now - last < k_submitCooldown)
+            return;
+
+        m_lastSubmit[sender] = Now;
 
         DeviceBlackoutEvent blackout = Blackout;
         if (blackout == null || !blackout.IsCommsBlackout)

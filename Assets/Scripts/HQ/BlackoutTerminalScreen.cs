@@ -3,6 +3,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Localization;
+using UnityEngine.Localization.Settings;
 using UnityEngine.UI;
 
 /// <summary>
@@ -75,17 +76,29 @@ public class BlackoutTerminalScreen : MonoBehaviour
         if (m_terminal != null)
             m_terminal.OnCodeChanged += HandleCodeChanged;
 
-        if (m_hintLabel != null)
-            m_hintLabel.text = s_hint.GetLocalizedString();
+        // 언어를 바꾸면 다시 풀어야 한다 — 화면은 해킹 내내 켜져 있어 한 번 읽고 끝내면
+        // 그 라운드 동안 이전 언어로 남는다 (InteractPromptView와 같은 이유).
+        LocalizationSettings.SelectedLocaleChanged += HandleLocaleChanged;
+        ApplyHint();
 
         Redraw();
     }
 
     private void OnDisable()
     {
+        LocalizationSettings.SelectedLocaleChanged -= HandleLocaleChanged;
+
         // ?. 금지 — 파괴된 Unity 오브젝트의 fake null을 우회하지 않게 한다 (HqPanelView 관례)
         if (m_terminal != null)
             m_terminal.OnCodeChanged -= HandleCodeChanged;
+    }
+
+    private void HandleLocaleChanged(UnityEngine.Localization.Locale locale) => ApplyHint();
+
+    private void ApplyHint()
+    {
+        if (m_hintLabel != null)
+            m_hintLabel.text = s_hint.GetLocalizedString();
     }
 
     private void Update()

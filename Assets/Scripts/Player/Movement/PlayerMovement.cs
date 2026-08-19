@@ -179,7 +179,7 @@ public class PlayerMovement : NetworkBehaviour
     public void SetIgnoreRoundEndFreeze(bool ignore) => m_ignoreRoundEndFreeze = ignore;
 
     // 카메라를 뺏는 연출 동안의 이동 잠금 — 본부 단말 포커스(#689)가 켠다.
-    // 커서 해제(CursorLock)는 시점만 멈추므로 이동은 여기서 따로 막아야 한다.
+    // 시점 정지(PlayerLook.PushLookSuspend)는 말 그대로 시점만 멈추므로 이동은 여기서 따로 막아야 한다.
     private bool m_viewLocked;
 
     /// <summary>카메라를 뺏는 연출 동안 이동을 잠근다 — <see cref="PlayerTerminalFocus"/>가 짝을 맞춰 부른다. (#689)</summary>

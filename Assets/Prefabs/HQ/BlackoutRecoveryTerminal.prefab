@@ -561,7 +561,6 @@ GameObject:
   - component: {fileID: 3273770990103591115}
   - component: {fileID: 8506124817869912920}
   - component: {fileID: 241577252173168059}
-  - component: {fileID: 3864190802583236376}
   - component: {fileID: 1570908768976367444}
   m_Layer: 7
   m_Name: Screen
@@ -640,23 +639,6 @@ MonoBehaviour:
   m_DefaultSpriteDPI: 96
   m_DynamicPixelsPerUnit: 10
   m_PresetInfoIsWorld: 1
---- !u!114 &3864190802583236376
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5687686256769093371}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dc42784cf147c0c48a680349fa168899, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.GraphicRaycaster
-  m_IgnoreReversedGraphics: 1
-  m_BlockingObjects: 0
-  m_BlockingMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
 --- !u!114 &1570908768976367444
 MonoBehaviour:
   m_ObjectHideFlags: 0

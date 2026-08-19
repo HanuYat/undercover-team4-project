@@ -61,6 +61,11 @@ public class PlayerTerminalFocus : MonoBehaviour
             return;
         }
 
+        // 다른 단말을 보고 있었다면 먼저 그쪽을 놓는다 — 안 그러면 이전 단말의 IsLocalFocused가
+        // true로 남아 그 화면이 이 클라이언트의 키 입력을 계속 받는다. 지금은 맵당 단말이 하나라
+        // 도달하지 않지만, 둘이 되는 순간 두 화면에 같은 숫자가 동시에 들어간다.
+        Release();
+
         m_terminal = terminal;
         terminal.SetLocalFocused(true); // 화면이 키 입력을 받을 주인이 생겼다
         ApplyLocks(true);
@@ -150,8 +155,15 @@ public class PlayerTerminalFocus : MonoBehaviour
 
         m_locked = active;
 
+        // Push/Pop으로 건다 — 감정표현 휠(#219)이 같은 스위치를 쓰므로, 화면 앞에서 휠을 열었다 닫으면
+        // 단일 bool 시절에는 그쪽의 해제가 이쪽 잠금까지 풀어 시점이 돌아갔다.
         if (m_look != null)
-            m_look.SetLookSuspended(active);
+        {
+            if (active)
+                m_look.PushLookSuspend();
+            else
+                m_look.PopLookSuspend();
+        }
 
         if (m_movement != null)
             m_movement.SetViewLocked(active);
