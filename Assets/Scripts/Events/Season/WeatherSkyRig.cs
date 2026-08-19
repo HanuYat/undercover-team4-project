@@ -9,7 +9,7 @@ using UnityEngine;
 /// 함께 기울어 비·눈이 옆으로 흐르고 먹구름이 머리 위가 아니라 앞쪽으로 휜다. 그래서 <b>위치만</b>
 /// 따라가고 회전은 손대지 않는다 — 강수가 언제나 월드 -Y로 떨어지는 근거가 이것이다.
 ///
-/// <b>카메라는 매 프레임 다시 확인한다.</b> 이 프로젝트는 Cinemachine과 본부 CCTV로 시점을 갈아타므로
+/// <b>카메라는 매 프레임 다시 확인한다.</b> 이 프로젝트는 1인칭 시점과 본부 CCTV로 시점을 갈아타므로
 /// 켜지는 순간 한 번만 잡으면 그 뒤로는 죽은(또는 꺼진) 카메라를 따라가고, 화면에는 아무것도 보이지 않는다.
 /// 카메라가 아직 없어도 켜기를 포기하지 않는다 — 다음 프레임에 다시 본다.
 ///
@@ -104,7 +104,7 @@ public class WeatherSkyRig : MonoBehaviour
     /// </summary>
     public void SetCloudSnap(float snapSize) => m_cloudSnap = Mathf.Max(0f, snapSize);
 
-    // 카메라가 움직인 뒤에 맞춘다 — Cinemachine이 Update 구간에서 카메라를 옮기므로,
+    // 카메라가 움직인 뒤에 맞춘다 — 시점 제어(PlayerLook)가 Update 구간에서 카메라를 옮기므로,
     // Update에서 맞추면 리그가 한 프레임 뒤처져 빠르게 돌 때 하늘이 따라오다 밀리는 것이 보인다.
     private void LateUpdate()
     {

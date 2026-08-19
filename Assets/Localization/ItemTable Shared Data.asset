@@ -15,16 +15,8 @@ MonoBehaviour:
   m_TableCollectionName: ItemTable
   m_TableCollectionNameGuidString: faae75c9a0a19b441be27b8614effa3d
   m_Entries:
-  - m_Id: 286270754816
-    m_Key: Item.Name.Handcuffs
-    m_Metadata:
-      m_Items: []
   - m_Id: 410178883584
     m_Key: Item.Name.Scanner
-    m_Metadata:
-      m_Items: []
-  - m_Id: 4498341826560
-    m_Key: Item.Description.Handcuffs
     m_Metadata:
       m_Items: []
   - m_Id: 4509783887872

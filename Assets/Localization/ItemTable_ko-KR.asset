@@ -18,16 +18,8 @@ MonoBehaviour:
   m_Metadata:
     m_Items: []
   m_TableData:
-  - m_Id: 286270754816
-    m_Localized: "\uC218\uAC11"
-    m_Metadata:
-      m_Items: []
   - m_Id: 410178883584
     m_Localized: "\uC2A4\uCE90\uB108"
-    m_Metadata:
-      m_Items: []
-  - m_Id: 4498341826560
-    m_Localized: "\uC6A9\uC758\uC790\uB97C \uCCB4\uD3EC\uD560 \uB54C \uC0AC\uC6A9\uD55C\uB2E4."
     m_Metadata:
       m_Items: []
   - m_Id: 4509783887872

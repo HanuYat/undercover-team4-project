@@ -21,7 +21,7 @@ using UnityEngine.Localization;
 /// </summary>
 public class Rope : ItemBase
 {
-    /// <summary>이 밧줄을 든 플레이어의 연행 요청 허브 — 묶기·풀기 요청을 서버로 넘긴다. (Handcuffs와 동일 관례, #88)</summary>
+    /// <summary>이 밧줄을 든 플레이어의 연행 요청 허브 — 묶기·풀기 요청을 서버로 넘긴다. (#88)</summary>
     private PlayerEscortCommands Commands => GetComponentInParent<PlayerEscortCommands>();
 
     /// <summary>이 밧줄을 든 플레이어의 밧줄 연결 상태 — 용량 게이트 조기검증용. (#390)</summary>
