@@ -38,7 +38,10 @@ public class DeviceBlackoutEvent : NetworkBehaviour, ISuddenEvent
     private readonly NetworkVariable<bool> m_blackoutSynced = new NetworkVariable<bool>();
     private bool m_blackout; // 서버·오프라인의 진실값 (비네트워크 Play 폴백)
 
-    public string DisplayName => "전자기기 먹통";
+    // 게임 내 표기는 "시스템 해킹"이다 — 클래스·키 이름(Blackout)은 코드 정본과 이슈 번호를 따라
+    // 그대로 둔다. 사람이 읽는 문구만 바꾼다: "먹통"은 고장처럼 들려 누가 무엇을 해야 하는지가
+    // 안 읽히는데, 이 이벤트는 본부가 복구 단말에서 <b>풀어야 하는</b> 일거리다.
+    public string DisplayName => "시스템 해킹";
 
     public string NoticeKey => "Hud.Event.Notice.Blackout";
 

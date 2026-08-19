@@ -161,7 +161,8 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 3338714399465474
-    m_Localized: "\u26A0 Devices have gone dark"
+    m_Localized: "\u26A0 System hacked \u2014 HQ: enter the code at the recovery
+      terminal before time runs out"
     m_Metadata:
       m_Items: []
   - m_Id: 3338714399465475
@@ -339,7 +340,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 5439534716772352
-    m_Localized: Devices are back online
+    m_Localized: "System restored \u2014 comms and surveillance are back"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5456498801598464
+    m_Localized: Type the code on the number keys
     m_Metadata:
       m_Items: []
   references:

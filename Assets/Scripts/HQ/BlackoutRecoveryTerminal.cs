@@ -5,11 +5,11 @@ using UnityEngine.Localization;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// 전자기기 먹통 복구 단말 (#689) — 본부에 놓인 컴퓨터. 먹통 중에만 켜지고, 화면에 뜬 복구 코드를
+/// 전자기기 해킹 복구 단말 (#689) — 본부에 놓인 컴퓨터. 해킹 중에만 켜지고, 화면에 뜬 복구 코드를
 /// 입력하면 <see cref="DeviceBlackoutEvent"/>가 풀린다.
 ///
 /// <b>기본 설비다</b> — <see cref="InstallableItem"/>이 아니다. 상점 구매품으로 두면 단말을 사지 않은
-/// 팀은 먹통을 <b>영영</b> 못 푼다. 이슈의 "안전망을 두지 않는다"는 관제가 복구를 못 하는 경우를 말한
+/// 팀은 해킹을 <b>영영</b> 못 푼다. 이슈의 "안전망을 두지 않는다"는 관제가 복구를 못 하는 경우를 말한
 /// 것이지 복구 수단 자체가 없는 경우가 아니다. (<see cref="RoundEndButton"/>과 같은 성격)
 ///
 /// <b>채널링이 아니다</b> — 가만히 서서 게이지를 채우는 것은 시간만 쓰고 판단이 없다. 대신 화면 앞으로
@@ -17,7 +17,7 @@ using Random = UnityEngine.Random;
 /// 주변도 못 본다. 이 이벤트가 "관제의 일거리"가 되는 지점이 여기다.
 ///
 /// <b>드롭인 프리팹이다</b> — 본부 구조가 바뀌어도 갖다 놓기만 하면 동작한다. 씬·본부 프리팹에 배선할
-/// 것이 없다: 먹통 이벤트는 <see cref="App.Game"/> 경유로 매번 찾고(R1/R8), 화면·포커스 지점은 자기
+/// 것이 없다: 해킹 이벤트는 <see cref="App.Game"/> 경유로 매번 찾고(R1/R8), 화면·포커스 지점은 자기
 /// 자식이다. <see cref="JailSirenButton"/>이 씬 배선 때문에 내내 무음이었던 전례를 따르지 않는다.
 ///
 /// 서버 권위 — 코드 생성·정답 판정·해제는 전부 서버다. 클라가 보내는 것은 입력한 숫자뿐이고,
@@ -28,12 +28,20 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
     /// <summary>복구 코드 자릿수 — 화면 표시와 입력 검증이 함께 쓴다.</summary>
     public const int k_codeDigits = 4;
 
-    // 코드가 아직 없음을 나타내는 값 — 먹통이 아닐 때의 상태다. 0은 유효한 코드("0000")라 쓸 수 없다.
+    // 코드가 아직 없음을 나타내는 값 — 해킹이 아닐 때의 상태다. 0은 유효한 코드("0000")라 쓸 수 없다.
     private const int k_noCode = -1;
+
+    // 제한시간이 걸려 있지 않음 — ServerTime은 0에서 시작하므로 음수를 쓴다 (JailSirenButton과 동일).
+    private const double k_noDeadline = -1d;
 
     [Header("화면")]
     [Tooltip("먹통 중에만 켜지는 화면 루트 — 코드 표시·입력 UI가 이 아래에 있다. 비워 두면 화면 없이 동작한다")]
     [SerializeField] private GameObject m_screenRoot;
+
+    [Header("제한시간")]
+    [Tooltip("코드 하나가 유효한 시간(초). 넘기면 서버가 새 코드를 뽑고 입력이 초기화된다")]
+    [Min(1f)]
+    [SerializeField] private float m_codeSeconds = 10f;
 
     [Header("카메라 포커스")]
     [Tooltip("상호작용하면 카메라가 이 자리로 옮겨 간다 — 화면을 정면으로 크게 보는 지점. 비우면 포커스 없이 동작한다")]
@@ -44,13 +52,36 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
     private readonly NetworkVariable<int> m_codeSynced = new NetworkVariable<int>(k_noCode);
     private int m_code = k_noCode; // 서버·오프라인의 진실값 (비네트워크 Play 폴백)
 
+    // 코드가 만료되는 시각(ServerTime 기준) — "남은 시간"이 아니라 시각을 동기화한다. 그래야 늦게
+    // 접속한 피어도 진행 중인 카운트다운을 중간부터 이어 표시하고, 매 프레임 값을 흘려보낼 필요가 없다.
+    // (JailSirenButton.m_cooldownEndSynced·RoundTimerSync.m_endServerTime과 같은 방식)
+    private readonly NetworkVariable<double> m_deadlineSynced = new NetworkVariable<double>(k_noDeadline);
+    private double m_deadline = k_noDeadline; // 서버·오프라인의 진실값
+
+    // 동기화 시계 — 세션 밖에서는 로컬 시간으로 떨어진다 (PlayerIncapacitation과 동일).
+    private double Now => IsSpawned && NetworkManager != null ? NetworkManager.ServerTime.Time : Time.timeAsDouble;
+
     /// <summary>지금 화면에 떠 있는 복구 코드 — 없으면 <c>-1</c>. 전 피어에서 유효하다.</summary>
     public int Code => IsSpawned && !IsServer ? m_codeSynced.Value : m_code;
+
+    /// <summary>코드 하나의 제한시간(초) — 화면 게이지가 진행률을 채울 때 쓴다.</summary>
+    public float CodeSeconds => m_codeSeconds;
+
+    /// <summary>지금 코드가 만료되기까지 남은 시간(초). 서버 시각에서 파생돼 전 피어가 같은 값을 본다.</summary>
+    public float RemainingSeconds =>
+        (float)System.Math.Max(0d, (IsSpawned && !IsServer ? m_deadlineSynced.Value : m_deadline) - Now);
+
+    /// <summary>
+    /// 이 클라이언트의 플레이어가 지금 이 화면 앞에 앉아 있는가 — <b>로컬 전용</b> 상태다.
+    /// 화면이 키 입력을 받을지, 조준 안내를 내릴지가 여기에 달려 있다. 동기화하지 않는다:
+    /// 다른 피어에게는 누가 화면을 보고 있는지가 아무 의미도 없다.
+    /// </summary>
+    public bool IsLocalFocused { get; private set; }
 
     /// <summary>복구 코드가 바뀌었다(발급·오입력 재발급) — 화면이 구독해 다시 그린다. 전 피어에서 발생.</summary>
     public event Action<int> OnCodeChanged;
 
-    /// <summary>단말이 지금 쓸 수 있는가 — 먹통 중일 때만이다. 화면 점등·조준 안내가 같은 값을 본다.</summary>
+    /// <summary>단말이 지금 쓸 수 있는가 — 해킹 중일 때만이다. 화면 점등·조준 안내가 같은 값을 본다.</summary>
     public bool IsOnline => Blackout != null && Blackout.IsCommsBlackout;
 
     /// <summary>카메라가 옮겨 갈 자리 — 없으면 null. 포커스 연출이 읽는다.</summary>
@@ -63,7 +94,7 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
     {
         m_codeSynced.OnValueChanged += HandleCodeSyncedChanged;
 
-        // 먹통이 진행 중일 때 들어온 피어 — 발급 통지를 놓쳤으므로 현재 코드로 화면을 맞춘다.
+        // 해킹이 진행 중일 때 들어온 피어 — 발급 통지를 놓쳤으므로 현재 코드로 화면을 맞춘다.
         if (Code != k_noCode)
             OnCodeChanged?.Invoke(Code);
 
@@ -84,18 +115,18 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
         OnCodeChanged?.Invoke(current);
     }
 
-    // 먹통 구독은 OnEnable이 아니라 Start에서 한다 — App 매니저 등록이 Awake에서 끝나야 SuddenEvent
+    // 해킹 구독은 OnEnable이 아니라 Start에서 한다 — App 매니저 등록이 Awake에서 끝나야 SuddenEvent
     // 조회가 성립하기 때문이다. OnEnable에서 물으면 씬 오브젝트 사이의 Awake 순서에 따라 null이
     // 돌아오고, 그 판에서는 단말이 <b>영영 켜지지 않는다</b> (CCTVSwitcher와 같은 이유, #382).
     private void Start()
     {
         DeviceBlackoutEvent blackout = Blackout;
         if (blackout == null)
-            return; // 먹통이 인스펙터 리스트에 없는 구성 — 그 이벤트는 발생하지도 않는다
+            return; // 해킹이 인스펙터 리스트에 없는 구성 — 그 이벤트는 발생하지도 않는다
 
         blackout.OnCommsBlackoutChanged += HandleBlackoutChanged;
 
-        // 이미 먹통이 진행 중인 경우(이벤트 도중 씬 진입)를 즉시 반영한다.
+        // 이미 해킹이 진행 중인 경우(이벤트 도중 씬 진입)를 즉시 반영한다.
         ApplyScreen();
     }
 
@@ -111,7 +142,7 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
         base.OnDestroy();
     }
 
-    // 먹통이 켜지면 코드를 새로 뽑고, 풀리면 화면을 끈다. 코드 발급은 서버만 한다.
+    // 해킹이 시작되면 코드를 새로 뽑고, 풀리면 화면을 끈다. 코드 발급은 서버만 한다.
     private void HandleBlackoutChanged(bool active)
     {
         if (!IsSpawned || IsServer)
@@ -120,11 +151,19 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
         ApplyScreen();
     }
 
-    /// <summary>먹통 중에만 상호작용이 뜬다 — 평상시에는 윤곽선도 안내도 없다. (#184/#664)</summary>
+    /// <summary>해킹 중에만 상호작용이 뜬다 — 평상시에는 윤곽선도 안내도 없다. (#184/#664)</summary>
     public bool CanInteract(GameObject interactor) => IsOnline;
 
-    /// <summary>조준 안내 (#664).</summary>
-    public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.BlackoutRecovery;
+    /// <summary>
+    /// 조준 안내 (#664) — <b>화면 앞에 앉은 뒤에는 내린다.</b> 카메라가 화면 코앞에 있어 안내가
+    /// 시야 한가운데에서 화면을 가리기 때문이다. null을 주면 <see cref="InteractPromptView"/>가
+    /// 알아서 안내를 지운다.
+    ///
+    /// <see cref="CanInteract"/>는 그대로 true로 둔다 — E가 이 화면에서 <b>나가는</b> 수단이라
+    /// 여기서 막으면 앉은 채로 갇힌다.
+    /// </summary>
+    public LocalizedString PromptLabel(GameObject interactor) =>
+        IsLocalFocused ? null : InteractPrompts.BlackoutRecovery;
 
     /// <summary>
     /// E 상호작용 — 화면 앞으로 카메라를 옮기고 입력을 받는다.
@@ -148,6 +187,9 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
         focus.Begin(this);
     }
 
+    /// <summary>화면 앞에 앉았는지 알린다 — <see cref="PlayerTerminalFocus"/>가 들고 날 때 부른다.</summary>
+    public void SetLocalFocused(bool focused) => IsLocalFocused = focused;
+
     /// <summary>
     /// 입력한 코드를 제출한다 — 화면 UI가 부른다. 상호작용한 본인의 클라이언트에서 호출된다.
     /// 판정은 서버가 다시 하므로 여기서 맞다고 판단해 미리 풀지 않는다.
@@ -167,7 +209,7 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void RequestSubmitRpc(int code) => ServerSubmit(code);
 
-    // 클라 게이트는 신뢰 불가 — 먹통 여부와 정답을 서버가 다시 본다.
+    // 클라 게이트는 신뢰 불가 — 해킹 여부와 정답을 서버가 다시 본다.
     private void ServerSubmit(int code)
     {
         if (IsSpawned && !IsServer)
@@ -190,6 +232,24 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
             SetCode(k_noCode);
     }
 
+    /// <summary>
+    /// 제한시간 감시 — 서버(또는 오프라인)만 판정한다. 클라는 동기화된 만료 시각을 읽어 표시만 한다.
+    ///
+    /// 넘기면 <b>해제되는 것이 아니라 코드가 새로 뽑힌다</b>. 시간을 넘겼다고 풀어 주면 가만히
+    /// 기다리는 것이 공략이 되고, 실패로 해킹을 끝내 버리면 복구 수단이 사라진다 — 어느 쪽도
+    /// "관제의 일거리"가 아니다. 다시 입력하면 그만이지만 그동안 CCTV는 계속 꺼져 있다.
+    /// </summary>
+    private void Update()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        if (m_code == k_noCode || m_deadline < 0d || Now < m_deadline)
+            return;
+
+        SetCode(NewCode()); // OnCodeChanged가 화면의 입력까지 비운다
+    }
+
     // 코드 발급 — 서버(또는 오프라인) 전용. 자릿수만큼의 십진수 범위에서 고른다.
     private static int NewCode()
     {
@@ -203,6 +263,10 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
     // 동기화 변수와 로컬 진실값을 함께 갱신하고 화면에 알린다 (DeviceBlackoutEvent.SetBlackout과 같은 구조)
     private void SetCode(int value)
     {
+        // 만료 시각은 코드 값이 같아도 먼저 갱신한다 — 새로 뽑은 값이 우연히 직전과 같으면(1/10000)
+        // 아래 조기 return에 걸려 제한시간이 영영 안 밀리고, Update가 매 프레임 재추첨을 돈다.
+        SetDeadline(value == k_noCode ? k_noDeadline : Now + m_codeSeconds);
+
         if (m_code == value)
             return;
 
@@ -213,7 +277,15 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
         OnCodeChanged?.Invoke(value); // 서버·오프라인 로컬 발행 (원격은 위 동기화 콜백이 담당)
     }
 
-    // 먹통 중에만 화면이 켜져 있다 — 꺼진 컴퓨터에 코드가 떠 있으면 안 된다.
+    // 만료 시각도 코드와 같은 이중 구조다 — 서버가 진실값을 들고, 동기화 변수로 전 클라에 내린다.
+    private void SetDeadline(double value)
+    {
+        m_deadline = value;
+        if (IsSpawned && IsServer)
+            m_deadlineSynced.Value = value;
+    }
+
+    // 해킹 중에만 화면이 켜져 있다 — 꺼진 컴퓨터에 코드가 떠 있으면 안 된다.
     private void ApplyScreen()
     {
         if (m_screenRoot != null)

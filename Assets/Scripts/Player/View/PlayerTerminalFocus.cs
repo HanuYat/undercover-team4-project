@@ -8,7 +8,7 @@ using UnityEngine;
 /// 카메라 transform을 밖에서 만지면 그쪽이 매 프레임 통째로 덮어써 그 프레임에 지워진다 (#477).
 ///
 /// <b>상태에서 유도한다</b> — 켜고 끄는 플래그를 밖에서 관리하지 않고, 매 틱 <see cref="Tick"/>이
-/// "지금도 포커스가 성립하는가"를 다시 묻는다. 그래서 단말이 꺼지거나(먹통 복구·라운드 종료로 인한
+/// "지금도 포커스가 성립하는가"를 다시 묻는다. 그래서 단말이 꺼지거나(해킹 복구·라운드 종료로 인한
 /// 리셋) 플레이어가 쓰러지면 별도 배선 없이 풀린다. 플래그를 들고 껐다 켜는 방식은 반드시 새는
 /// 경로가 생긴다 — 카메라가 컴퓨터에 붙은 채 남으면 그 플레이어는 라운드가 끝날 때까지 화면을 잃는다.
 ///
@@ -23,8 +23,9 @@ public class PlayerTerminalFocus : MonoBehaviour
 
     private BlackoutRecoveryTerminal m_terminal;
     private float m_blend;          // 1인칭(0) ↔ 단말 화면(1) 보간 진행도
-    private bool m_cursorPushed;    // CursorLock Push/Pop 짝을 지키는 래치 (SignalInputPanel 관례)
+    private bool m_locked;          // 시점·이동 잠금을 걸어 둔 상태인가 — 넣고 빼는 짝을 지키는 래치
 
+    private PlayerLook m_look;
     private PlayerMovement m_movement;
     private PlayerIncapacitation m_incapacitation;
 
@@ -36,14 +37,15 @@ public class PlayerTerminalFocus : MonoBehaviour
 
     private void Awake()
     {
+        m_look = GetComponent<PlayerLook>();
         m_movement = GetComponent<PlayerMovement>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
     }
 
     private void OnDisable()
     {
-        // 디스폰·비활성으로 빠져나가도 커서와 이동 잠금은 반드시 되돌린다 — 안 그러면 커서가 풀린 채
-        // 남거나(다음 라운드에서 시점이 안 돌아간다) 이동이 잠긴 채 남는다.
+        // 디스폰·비활성으로 빠져나가도 시점·이동 잠금은 반드시 되돌린다 — 안 그러면 다음 라운드에서
+        // 시점이 안 돌아가거나 이동이 잠긴 채 남는다.
         Release();
     }
 
@@ -60,14 +62,19 @@ public class PlayerTerminalFocus : MonoBehaviour
         }
 
         m_terminal = terminal;
+        terminal.SetLocalFocused(true); // 화면이 키 입력을 받을 주인이 생겼다
         ApplyLocks(true);
     }
 
     /// <summary>1인칭으로 돌아간다 — 화면의 나가기, 복구 완료, 상태 이탈이 모두 여기로 모인다.</summary>
     public void Release()
     {
-        if (m_terminal == null && !m_cursorPushed)
+        if (m_terminal == null && !m_locked)
             return;
+
+        // ?. 금지 — 파괴된 Unity 오브젝트의 fake null을 우회하지 않게 한다 (HqPanelView 관례)
+        if (m_terminal != null)
+            m_terminal.SetLocalFocused(false);
 
         m_terminal = null;
         ApplyLocks(false);
@@ -110,8 +117,8 @@ public class PlayerTerminalFocus : MonoBehaviour
     }
 
     // 포커스를 유지할 조건 — 하나라도 깨지면 즉시 풀린다.
-    // 먹통이 복구되면 단말이 오프라인이 되므로 "복구하면 저절로 화면에서 나온다"가 여기서 성립한다.
-    // 라운드 종료도 SuddenEventManager의 리셋이 먹통을 풀어 같은 경로로 빠져나온다.
+    // 해킹이 복구되면 단말이 오프라인이 되므로 "복구하면 저절로 화면에서 나온다"가 여기서 성립한다.
+    // 라운드 종료도 SuddenEventManager의 리셋이 해킹을 풀어 같은 경로로 빠져나온다.
     private bool CanKeepFocus()
     {
         if (m_terminal == null || !m_terminal.IsOnline || m_terminal.FocusPoint == null)
@@ -125,23 +132,27 @@ public class PlayerTerminalFocus : MonoBehaviour
         return true;
     }
 
-    // 커서·이동 잠금은 짝을 지켜 넣고 뺀다.
-    // 커서를 푸는 것은 화면의 키패드를 누르기 위해서고, 그 부수 효과로 시점 회전도 멈춘다
-    // (PlayerLook.HandleLook이 CursorLock.IsUnlocked를 본다) — 화면을 보는 동안 시점이 돌면 안 된다.
+    /// <summary>
+    /// 시점·이동 잠금을 짝 지어 넣고 뺀다.
+    ///
+    /// <b>커서는 풀지 않는다</b> — 예전에는 <c>CursorLock.PushUnlock</c>으로 시점 정지를 겸했다(그쪽
+    /// 부수 효과로 <see cref="PlayerLook.HandleLook"/>이 멈춘다). 그런데 커서가 풀리면
+    /// <see cref="PlayerInteractor.HandleInteract"/>가 E를 통째로 막아(#352) <b>화면에서 나갈 수단이
+    /// 화면 안 버튼밖에 남지 않는다</b>. 입력이 숫자 키로 바뀌어 커서를 풀 이유도 사라졌으므로,
+    /// 시점만 정확히 겨냥해 멈추고 커서는 잠근 채로 둔다 — E가 다른 상호작용과 같은 규칙으로 돌아온다.
+    ///
+    /// 이동은 따로 막는다. 안 막으면 화면을 보는 동안 걸어가 카메라만 컴퓨터에 남고 몸은 딴 데 가 있다.
+    /// </summary>
     private void ApplyLocks(bool active)
     {
-        if (active == m_cursorPushed)
+        if (active == m_locked)
             return;
 
-        m_cursorPushed = active;
+        m_locked = active;
 
-        if (active)
-            CursorLock.PushUnlock();
-        else
-            CursorLock.PopUnlock();
+        if (m_look != null)
+            m_look.SetLookSuspended(active);
 
-        // 이동은 따로 막아야 한다 — CursorLock은 시점만 멈춘다. 안 막으면 화면을 보는 동안 걸어가
-        // 카메라만 컴퓨터에 남고 몸은 딴 데 가 있게 된다.
         if (m_movement != null)
             m_movement.SetViewLocked(active);
     }

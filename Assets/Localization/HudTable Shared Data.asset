@@ -331,6 +331,10 @@ MonoBehaviour:
     m_Key: Hud.Event.Notice.BlackoutRecovered
     m_Metadata:
       m_Items: []
+  - m_Id: 5456498801598464
+    m_Key: Hud.Terminal.HackHint
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
