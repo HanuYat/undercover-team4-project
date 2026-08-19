@@ -42,7 +42,7 @@ public class NpcSpawner : CommonManagerBase
     [SerializeField] private float m_sampleMaxDistance = 4f;
 
     [Header("스냅 허용 거리")]
-    [Tooltip("보정으로 후보가 수평으로 이 거리(m)보다 멀리 끌려가면 그 위치를 버리고 다시 뽑는다. 0 이하면 검사하지 않는다 (#714)")]
+    [Tooltip("보정으로 후보가 수평으로 이 거리(m)보다 멀리 끌려가면 그 위치를 버리고 다시 뽑는다. 0 이하면 검사하지 않는다 (#660)")]
     [SerializeField] private float m_maxSnapDistance = 1.5f;
 
     [Header("도로 여유 거리")]
@@ -58,6 +58,7 @@ public class NpcSpawner : CommonManagerBase
     [SerializeField] private bool m_validateConnectivity = true;
 
     [Tooltip("스폰 포인트마다 기준점을 고를 때 쓰는 탐침 수. 실측상 6 미만은 기준점 자체가 섬에 앉을 수 있다")]
+    [Min(2)] // 0·음수는 Resolve가 조용히 1로 만든다 — 탐침 1개는 다수결이 성립하지 않아 검증이 무의미해진다
     [SerializeField] private int m_anchorProbeCount = NpcSpawnAnchors.k_defaultProbeCount;
 
     [Header("프레임당 스폰 수")]
@@ -196,8 +197,9 @@ public class NpcSpawner : CommonManagerBase
 
         int spawned = 0;
         int attempts = 0;
-        // 스냅 거리·연결성 기각이 겹치면 시도가 늘어난다 — 실측 최악(아포칼립스, 100마리)이 173회라
-        // 20배면 충분한 여유다. 상한에 걸리면 아래에서 미달 경고가 나간다.
+        // 기각 조건이 넷(보정 실패·스냅 거리·도로 여유·최소 간격)이라 시도가 스폰 수보다 훨씬 많아진다 —
+        // 실측 최악(아포칼립스 100마리, 시드 5회)이 517회다. 20배면 네 배 가까운 여유가 남는다.
+        // 상한에 걸리면 아래에서 미달 경고가 나간다.
         int maxAttempts = m_spawnCount * 20;
         int spawnedThisFrame = 0;
 
@@ -236,17 +238,20 @@ public class NpcSpawner : CommonManagerBase
                     continue;
             }
 
-            // 마스크에서 도로를 빼도 도로 위 후보는 버려지지 않고 "가장 가까운 인도 지점" =
-            // <b>연석 경계선</b>으로 끌려온다. 그 자리는 발밑 폴리곤이 도로라(실측: 100마리 중 7~9마리)
-            // NpcNavAreas.IsOnRoad가 참이 되고, 그러면 배회 중에도 마스크에서 도로가 빠지지 않아
-            // (#634의 경로 실패 가드) 차도로 걸어 들어간다. 도로에서 떨어진 자리만 받는다.
-            if (NpcNavAreas.HasRoadWithin(hit.position, m_roadClearance))
-                continue;
+            // 아래 기각 검사는 <b>싼 것부터</b> 둔다 — 산술 → NavMesh 질의 → 경로 계산 순이다.
+            // 어차피 버릴 후보에 비싼 질문을 먼저 던질 이유가 없다.
 
             // 스폰 포인트 하나에 수십 마리가 몰리면 반경 안이 포화돼 서로 겹쳐 선다 — 실측(아포칼립스,
             // 포인트당 12.5마리)으로 100마리 중 46마리가 1m 안에 이웃을 두고 나왔다. 이미 놓은 자리와
             // 너무 가까운 후보는 버려 간격을 확보한다.
             if (m_minSpawnSeparation > 0f && IsTooCloseToSpawned(hit.position))
+                continue;
+
+            // 마스크에서 도로를 빼도 도로 위 후보는 버려지지 않고 "가장 가까운 인도 지점" =
+            // <b>연석 경계선</b>으로 끌려온다. 그 자리는 발밑 폴리곤이 도로라(실측: 100마리 중 7~9마리)
+            // NpcNavAreas.IsOnRoad가 참이 되고, 그러면 배회 중에도 마스크에서 도로가 빠지지 않아
+            // (#634의 경로 실패 가드) 차도로 걸어 들어간다. 도로에서 떨어진 자리만 받는다.
+            if (m_roadClearance > 0f && NpcNavAreas.HasRoadWithin(hit.position, m_roadClearance))
                 continue;
 
             // SamplePosition은 "NavMesh 위인가"만 답한다 — 끊긴 조각 위여도 참이라 그대로 두면
