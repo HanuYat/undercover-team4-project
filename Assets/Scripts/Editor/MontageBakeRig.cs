@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -13,12 +12,10 @@ using UnityEngine;
 /// </summary>
 public sealed class MontageBakeRig : System.IDisposable
 {
-    private const float k_featureSoftness = 0.08f; // 이목구비 컷오프 경계 폭 — 계단을 살짝 뭉개 톱니를 막는다
-
     /// <summary>바디를 어떻게 찍을지 — 레이어마다 바디의 역할이 다르다.</summary>
     private enum EBodyState
     {
-        Original, // 프리팹 그대로 — 조명 렌더에서 이목구비를 뽑을 때
+        Original, // 프리팹 그대로 — 실물 렌더(RenderSubject)용
         Flat,     // 평면 흰색 — 살 실루엣
         Occluder, // 평면 검정 — 프롭을 찍을 때 가림(depth)만 남긴다
         Custom,   // 바깥에서 지정한 머티리얼 — 아틀라스 스왑 비교용 (#619)
@@ -108,20 +105,22 @@ public sealed class MontageBakeRig : System.IDisposable
         return true;
     }
 
-    /// <summary>이목구비 — 조명 렌더에서 주변 피부보다 어두운 픽셀만 남긴다.</summary>
-    public Color[] RenderFace(float threshold)
-    {
-        SetBodyState(EBodyState.Original);
-        m_light.enabled = true;
-        return ExtractFeatures(RenderPixels(), threshold);
-    }
-
     /// <summary>살 — 평면 실루엣. 피부색 곱셈 틴트가 원본 살색·명암에 눌리면 안 되므로 순백으로 찍는다.</summary>
     public Color[] RenderBase()
     {
         SetBodyState(EBodyState.Flat);
         m_light.enabled = false;
-        return RenderPixels();
+        return Whiten(RenderPixels());
+    }
+
+    /// <summary>알파만 남기고 RGB를 순백으로 민다 — 평면 머티리얼로 찍어도 남는 음영(입체 눈썹·눈꺼풀)이
+    /// 피부색 틴트에 회색 줄로 비쳐 마네킹 두상에 이목구비를 되살리기 때문이다.</summary>
+    private static Color[] Whiten(Color[] pixels)
+    {
+        var result = new Color[pixels.Length];
+        for (int i = 0; i < pixels.Length; i++)
+            result[i] = new Color(1f, 1f, 1f, pixels[i].a);
+        return result;
     }
 
     /// <summary>
@@ -344,41 +343,6 @@ public sealed class MontageBakeRig : System.IDisposable
         texture.Apply();
         RenderTexture.active = previous;
         return texture;
-    }
-
-    /// <summary>
-    /// 조명 렌더에서 이목구비만 남긴다 — 얼굴 밝기의 중앙값을 피부로 보고, 그보다 문턱만큼 어두운
-    /// 픽셀의 알파만 남긴다. 눈·눈썹·입은 피부보다 훨씬 어두워 살아남고 완만한 명암은 걸러진다.
-    /// </summary>
-    private static Color[] ExtractFeatures(Color[] pixels, float threshold)
-    {
-        var luminances = new List<float>(pixels.Length);
-        foreach (Color pixel in pixels)
-        {
-            if (pixel.a > 0.5f)
-                luminances.Add(Luminance(pixel));
-        }
-
-        if (luminances.Count == 0)
-            return pixels;
-
-        luminances.Sort();
-        float skin = luminances[luminances.Count / 2];
-        if (skin <= 0.001f)
-            return pixels;
-
-        var result = new Color[pixels.Length];
-        for (int i = 0; i < pixels.Length; i++)
-        {
-            // 문턱 바로 위에서 불투명해지게 좁은 경계를 쓴다 — 위쪽 끝을 완전 검정(1)으로 잡으면
-            // 눈·입의 어두움이 0.5~0.8이라 늘 반투명하게 나오고, 문턱은 농도만 흔드는 노브가 된다
-            float darkness = (skin - Luminance(pixels[i])) / skin;
-            float alpha = pixels[i].a * Mathf.InverseLerp(threshold, threshold + k_featureSoftness, darkness);
-            result[i] = alpha <= 0.004f
-                ? Color.clear
-                : new Color(pixels[i].r, pixels[i].g, pixels[i].b, alpha);
-        }
-        return result;
     }
 
     private static float Luminance(Color color) => 0.2126f * color.r + 0.7152f * color.g + 0.0722f * color.b;

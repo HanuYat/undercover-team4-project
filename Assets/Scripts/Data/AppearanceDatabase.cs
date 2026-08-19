@@ -117,9 +117,6 @@ public class AppearanceDatabase : ScriptableObject
     [Tooltip("맨 아래에 깔리는 두상 실루엣. 피부색이 공개 축이면 이 그림이 그 색으로 칠해진다 — 그래서 명암·질감 없는 순백이어야 색이 제대로 나온다")]
     [SerializeField] private Sprite m_montageBase;
 
-    [Tooltip("살 실루엣 위에 얹는 이목구비(눈·눈썹·입). 피부색과 무관하므로 칠하지 않는다 — 살 레이어를 통짜로 칠할 수 있는 것이 이걸 분리한 이유다")]
-    [SerializeField] private Sprite m_montageFace;
-
     [Tooltip("머리 스타일은 미공개인데 머리색만 공개일 때 칠할 '형태 미상' 머리. 스타일을 말하지 않으면서 색을 얹을 자리를 만든다")]
     [SerializeField] private Sprite m_montageUnknownHair;
 
@@ -128,9 +125,6 @@ public class AppearanceDatabase : ScriptableObject
 
     /// <summary>포트레이트 바닥 레이어 — 피부색을 칠하는 대상.</summary>
     public Sprite MontageBase => m_montageBase;
-
-    /// <summary>살 위에 얹는 이목구비 레이어 — 틴트하지 않는다.</summary>
-    public Sprite MontageFace => m_montageFace;
 
     /// <summary>머리 스타일 미공개용 머리 레이어 — 머리색만 공개된 몽타주에서 색을 얹는 자리.</summary>
     public Sprite MontageUnknownHair => m_montageUnknownHair;
