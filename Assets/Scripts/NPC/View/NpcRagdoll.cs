@@ -219,6 +219,8 @@ public class NpcRagdoll : MonoBehaviour
             m_blending = false;
 
         TickHoldPoseUntilStream();
+
+        TickRiseProbe(); // 진단 ⑦ (임시)
     }
 
     /// <summary>
@@ -333,6 +335,9 @@ public class NpcRagdoll : MonoBehaviour
 
         SampleAnimatorClock(); // 진단 ④ (임시) — ⚠ 애니메이터를 끄기 전에 읽어야 한다
 
+        // ⚠ 애니메이터를 끄기 전에 — 안에서 강제 평가를 한다.
+        SnapToAnimatorPoseIfBlending();
+
         StopAnimator(); // 상태를 바꾸기 전에 — Animated일 때만 도는 멱등 함수다
 
         m_state = RagdollState.Ragdoll;
@@ -350,11 +355,54 @@ public class NpcRagdoll : MonoBehaviour
         // ⚠ 몸 모양을 만드는 체인 뼈는 여기서 손대지 않는다 — 그쪽은 스트림이 싣는다(그쪽 주석의 사고).
         m_rig.RestoreUnstreamedBonesToBind();
 
+        // 진단 ⑥ (임시) — ⚠ <b>물리에 넘기기 전</b>이어야 한다. 애니메이터가 남긴 자세가 이미
+        // 얼마나 파고들어 있었는지가 이 로그의 요점이다.
+        if (HasMoveAuthority)
+            LogFloorPenetration("진입");
+
+        m_riseProbeFrame = -1; // 진단 ⑦ (임시) — 진입 로그가 이 프레임을 이미 찍었다
+
         ReleaseAgentForRagdoll();
         ReleaseBonesToPhysics();
         m_rig.ApplyImpulse(impulse);
 
         m_streamer?.BeginStreaming(); // 권위가 아니면 스스로 무동작이다
+    }
+
+    /// <summary>
+    /// 기상 블렌드 중이면 <b>애니메이터를 한 번 강제로 평가해</b> 그 자세를 물리에 넘긴다.
+    /// 블렌드 중이 아니면 무동작.
+    ///
+    /// <b>블렌드 중간 자세는 물리에 넘기면 안 된다.</b> 블렌드는 <b>로컬 회전</b>을 섞으므로
+    /// (<see cref="RagdollPoseBlend"/>) 중간 경로가 양 끝점 어느 쪽도 아닌 자세다 — 회전 보간은
+    /// 팔다리 <b>위치</b>를 보존하지 않는다. 실측(2026-08-19)으로 블렌드 24프레임 중
+    /// <b>13~17프레임(55~70%)에서 발끝이 바닥 19.7cm 아래로 내려간다.</b> 끝점 둘은 관통 0인데
+    /// 사이만 파고드는 봉우리다.
+    ///
+    /// 그 프레임에 몸을 물리에 넘기면 <b>정강이 캡슐이 박힌 채로 출발</b>하고, 겹침 탈출 상한
+    /// (0.5m/s, 중력을 빼면 실질 0.3m/s = 스텝당 6mm)으로는 빠져나오지 못한다. 발·발끝에는
+    /// 애초에 콜라이더가 없어 그쪽은 영영 안 나온다.
+    ///
+    /// ⚠ <b>"블렌드를 끝낸다"로는 안 된다.</b> 이 함수가 도는 <c>Update</c> 시점에는 애니메이터가
+    /// 아직 이번 프레임을 평가하지 않아 뼈에 <b>지난 프레임의 섞인 자세</b>가 남아 있다
+    /// (평가는 Update와 LateUpdate 사이다). <see cref="RagdollPoseBlend.Tick"/>은 "지금 뼈에 있는
+    /// 값"을 목표로 삼으므로 t=1로 끝내면 그 섞인 자세를 그대로 확정할 뿐이다. 클립 자세를
+    /// <b>직접 받아야</b> 한다.
+    ///
+    /// ⚠ <b>정착 자세로 되감지 않는다.</b> 물리가 만든 자세라 관통이 없는 것은 맞지만, 기상이
+    /// 이미 <c>ServerReattachToNavMesh</c>로 루트를 워프했을 수 있어 그때의 <b>로컬</b> 자세를
+    /// 되돌리면 옮겨진 루트 기준으로 몸이 엉뚱한 곳에 놓인다. 클립 자세는 루트 기준으로 authoring된
+    /// 것이라 루트가 어디 있든 맞는다.
+    ///
+    /// <b>전 피어가 부른다</b> — 원격도 이 자세를 첫 패킷 전까지 붙들므로
+    /// (<see cref="TickHoldPoseUntilStream"/>) 같은 자세여야 한다.
+    /// </summary>
+    private void SnapToAnimatorPoseIfBlending()
+    {
+        if (!m_blending || m_animator == null || !m_animator.enabled)
+            return;
+
+        m_animator.Update(0f); // 시간을 진행시키지 않고 지금 클립 자세만 뼈에 쓴다
     }
 
     /// <summary>
@@ -394,6 +442,8 @@ public class NpcRagdoll : MonoBehaviour
 
         if (HasMoveAuthority)
             ServerReattachToNavMesh();
+
+        BeginRiseProbe(); // 진단 ⑦ (임시)
     }
 
     // 뼈를 물리로 놓아준다 — 단, 원격에서는 놓아주지 않는다. 원격은 자세를 받아 입히기만 하므로
@@ -451,6 +501,8 @@ public class NpcRagdoll : MonoBehaviour
 
         m_settled = true;
 
+        LogFloorPenetration("정착"); // 진단 ⑥ (임시)
+
         // 스트림을 끊고 마지막 자세를 한 번 더 보낸다 — 이것이 원격의 종착 상태다.
         // ⚠ <b>좌표계는 바뀌지 않는다 — 스트리밍과 같은 월드다.</b> 그래서 원격은 이 패킷을 받아도
         // 화면이 변하지 않는다. 옛 구조는 여기서 로컬로 갈아타 몸을 루트에 매달았고, 그 전환이
@@ -499,6 +551,7 @@ public class NpcRagdoll : MonoBehaviour
         m_settled = true;
 
         LogRemoteSettledClearance(); // 진단 ⑤ (임시)
+        LogFloorPenetration("정착·원격"); // 진단 ⑥ (임시)
     }
 
     // ---- 밧줄 파사드 ----
@@ -695,6 +748,23 @@ public class NpcRagdoll : MonoBehaviour
 
     // 골반 밑 지면 탐색 — 정착 자격 판정과 정착 정렬이 <b>같은 것</b>을 써야 한다(다르면 그 차이가
     // 얼리는 순간 낙차로 남는다). 탐색 거리를 짧게 잡을 것 — 근거는 m_groundProbeDistance 툴팁.
+    // 진단 ⑥ 보조 (임시) — 그 자리에서 지면으로 잡히는 <b>오브젝트 이름</b>. 위 탐색과 같은 레이다.
+    private string TryGroundColliderUnder(Vector3 from)
+    {
+        const float k_probeLift = 0.5f;
+
+        return Physics.Raycast(
+            from + Vector3.up * k_probeLift,
+            Vector3.down,
+            out RaycastHit hit,
+            k_probeLift + m_groundProbeDistance,
+            m_groundMask,
+            QueryTriggerInteraction.Ignore
+        )
+            ? hit.collider.name
+            : "없음";
+    }
+
     private bool TryGroundUnder(Vector3 hipsPosition, out Vector3 point)
     {
         const float k_probeLift = 0.5f; // 골반이 바닥에 파묻혀 있어도 레이가 지면 위에서 출발하게
@@ -728,6 +798,113 @@ public class NpcRagdoll : MonoBehaviour
                 + $"{(float.IsNaN(clearance) ? " ⚠바닥을 못 찾았다" : clearance < -0.02f ? " ⚠바닥에 박혔다" : clearance > 0.15f ? " ⚠떠 있다" : " (정상)")}",
             this
         );
+    }
+
+    // 진단 ⑥ (임시) — <b>바닥을 파고든 뼈를 뼈 단위로 집는다.</b>
+    //
+    // 부분 잠김("상체가 잠기거나 하체가 잠김, 전신은 아니다")의 원인이 두 층으로 갈리는데
+    // <b>처방이 정반대다.</b> 어느 쪽인지 이 한 줄이 가른다:
+    //
+    //  · <b>콜라이더 없는 뼈</b>(손·발·발가락·목·쇄골) — 물리가 막을 것이 없어 원래 통과한다.
+    //    프리팹 실측으로 리지드바디 12개 = 콜라이더 12개이므로 <b>나머지 리그 전부</b>가 여기다.
+    //    처방은 RagdollSetup에 캡슐을 더하는 프리팹 작업이고 코드로 할 일이 없다
+    //  · <b>콜라이더 있는 뼈</b> — 진입 자세가 이미 파고들어 있었고
+    //    <c>RagdollRig</c>의 겹침 탈출 속도 상한(0.5m/s = 50Hz에서 스텝당 6mm, 중력을 빼면 실질
+    //    0.3m/s)으로는 못 빠져나온 것이다. 처방은 그 상수와 접촉 오프셋 튜닝이다
+    //
+    // <b>진입과 정착을 둘 다 찍는 것이 핵심이다.</b> 깊이가 줄지 않았으면 물리가 손을 못 댄 것이고,
+    // 그러면 겹침 탈출이 아니라 <b>진입 자세 자체</b>를 봐야 한다는 뜻이다.
+    //
+    // 지면은 <b>뼈마다 따로</b> 잰다 — 골반 하나로 재면 경사·계단에 걸친 몸이 통째로 틀린다.
+    private Transform[] m_penetrationProbe;
+
+    private void LogFloorPenetration(string phase, int detail = 6)
+    {
+        if (m_rig == null || m_rig.BoneRoot == null)
+            return;
+
+        if (m_penetrationProbe == null)
+            m_penetrationProbe = m_rig.BoneRoot.GetComponentsInChildren<Transform>(true);
+
+        const float k_reportBelow = -0.01f; // 1cm 아래부터 — 그보다 얕으면 접촉 오차다
+
+        var sunk = new System.Collections.Generic.List<(string Name, float Depth, bool Covered)>();
+        int covered = 0;
+
+        // 가장 깊은 뼈가 <b>무엇을</b> 지면으로 잡았는지 — 도로가 아니라 인도 턱·잔해가 나오면
+        // 이 측정이 "바닥 깊이"가 아니라 <b>모서리에 물린 것</b>을 재고 있다는 뜻이다.
+        string deepestHit = "?";
+        float deepest = 0f;
+
+        for (int i = 0; i < m_penetrationProbe.Length; i++)
+        {
+            Transform bone = m_penetrationProbe[i];
+            if (bone == null || !TryGroundUnder(bone.position, out Vector3 ground))
+                continue;
+
+            float clearance = bone.position.y - ground.y;
+            if (clearance >= k_reportBelow)
+                continue;
+
+            bool hasCollider = bone.GetComponent<Collider>() != null;
+            if (hasCollider)
+                covered++;
+
+            if (clearance < deepest)
+            {
+                deepest = clearance;
+                deepestHit = TryGroundColliderUnder(bone.position);
+            }
+
+            sunk.Add((bone.name, clearance, hasCollider));
+        }
+
+        sunk.Sort((a, b) => a.Depth.CompareTo(b.Depth)); // 깊은 것부터
+
+        var line = new System.Text.StringBuilder();
+        line.Append($"[진단6 관통] {name} {phase} 파고든뼈 {sunk.Count}");
+        line.Append($" (콜라이더유 {covered} / 무 {sunk.Count - covered})");
+
+        int shown = Mathf.Min(sunk.Count, detail);
+        for (int i = 0; i < shown; i++)
+            line.Append($" | {sunk[i].Name} {sunk[i].Depth:F3}{(sunk[i].Covered ? "(유)" : "(무)")}");
+
+        if (sunk.Count > shown)
+            line.Append($" …+{sunk.Count - shown}");
+
+        if (sunk.Count > 0)
+            line.Append($" | 최심지면={deepestHit}");
+
+        Debug.Log(line.ToString(), this);
+    }
+
+    // 진단 ⑦ (임시) — <b>기상 창을 프레임 단위로 훑는다.</b>
+    //
+    // 가설: 부활 블렌드가 뼈를 되돌리는 <b>도중</b>에 몸이 땅속으로 들어가는 구간이 있고, 그때
+    // 재래그돌되면 물리가 파묻힌 자세를 그대로 받는다.
+    //
+    // 블렌드는 <b>로컬 회전</b>을 섞는다(<see cref="RagdollPoseBlend"/>). 출발점은 물리가 만든
+    // 임의의 엎드린 자세이고 목표는 authoring된 기상 클립 자세인데, 두 자세가 다르면 <b>그 사이
+    // 보간 경로는 어느 쪽 끝점도 아닌 자세들</b>이다 — 회전 보간은 팔다리 위치를 보존하지 않으므로
+    // 중간에 양 끝점보다 더 낮은 자세가 나올 수 있다. 가설이 맞다면 여기서 <b>깊이가 솟다 가라앉는
+    // 봉우리</b>가 보인다.
+    //
+    // 창은 블렌드(0.3초)보다 넉넉히 잡는다 — 딥이 블렌드 뒤 클립 초반일 수도 있다.
+    // 권위 쪽만 찍는다: 물리가 도는 곳이 여기고, 로그 양이 절반이 된다.
+    private const int k_riseProbeFrames = 30;
+
+    private int m_riseProbeFrame = -1;
+
+    private void BeginRiseProbe() => m_riseProbeFrame = HasMoveAuthority ? 0 : -1;
+
+    private void TickRiseProbe()
+    {
+        if (m_riseProbeFrame < 0 || m_riseProbeFrame >= k_riseProbeFrames)
+            return;
+
+        // 상세는 1개만 — 30줄이 나가므로 봉우리의 <b>모양</b>을 읽을 수 있어야 한다.
+        LogFloorPenetration($"기상+{m_riseProbeFrame:00}{(m_blending ? " 블렌드" : "")}", detail: 1);
+        m_riseProbeFrame++;
     }
 
     // 진단 ④ — <b>스트림에 실리지 않는 뼈</b>가 피어마다 같은 자세인가.
