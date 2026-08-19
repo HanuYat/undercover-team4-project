@@ -59,16 +59,16 @@
 
 `CommonManagerBase` 상속 → AppBootstrap 프리팹 하위(DontDestroyOnLoad)에 배치, Awake에서 자동 등록(R4).
 
-**구동 경로 2개:**
+**구동 경로 2개:** (→ #748에서 클라이언트 쪽에 **전환 예고** 경로가 하나 늘어 셋이 됐다. 10장 참고)
 
 | 경로 | 트리거 | 흐름 |
 |---|---|---|
 | 서버·오프라인 | `App.LoadSceneAsync` | `ShowAsync` → 로드 → `HideAsync` |
 | 클라이언트 | NGO `SceneManager.OnLoad` 구독 | `ShowInstant` → `OnLoadComplete` 대기(30초 상한) → 첫 렌더 프레임 흘림 → `App.WaitUntilSceneReadyAsync` → `HideAsync` |
 
-- 서버는 두 경로 모두에 걸리므로 `IsBusy` + `IsServer` 체크로 클라이언트용 자동 경로를 막는다.
+- 서버는 두 경로 모두에 걸리므로 `IsBusy` + `IsServer` 체크로 클라이언트용 자동 경로를 막는다. (→ #748에서 클라 자동 경로의 재진입 가드가 `IsBusy`와 갈라졌다 — 예고로 먼저 덮으면 `IsBusy`가 이미 true라 그것으로 막으면 화면이 안 내려간다. 10장 참고)
 - **NGO SceneManager 재훅:** 세션마다 새로 만들어지고 이 객체는 상주 → 생성 시 한 번 걸어둘 수 없다. `Update`에서 참조 비교로 **대상이 바뀐 프레임에만** 다시 건다(`RefreshNetworkHook`).
-- **페이드 인은 없다.** 대신 `k_settleFrames`(60프레임) 흘려 "덮은 화면이 최소 한 번 렌더됐다"를 보장한다.
+- **페이드 인은 없다.** 대신 `k_settleFrames`(60프레임) 흘려 "덮은 화면이 최소 한 번 렌더됐다"를 보장한다. (→ #748에서 **3프레임**으로 줄었다. 10장 참고)
 - 페이드 아웃 `m_fadeOutSeconds`(기본 0.35초). 스피너 회전·페이드 모두 **`Time.unscaledDeltaTime`** 기준 — 돌발 이벤트 freeze로 `timeScale`이 0이어도 돈다. (→ #582에서 스피너가 사라지고 그 자리를 달리는 캐릭터와 게이지바가 대신한다. 실시간 기준은 그대로 유지. 9장 참고)
 - `SetVisible`은 `canvas.enabled` + `CanvasGroup`(alpha/blocksRaycasts/interactable) 동시 제어 → 아래 씬 UI로 클릭이 새지 않는다.
 - `SetStatus(string)` — 상태 문구 교체 API(전원 대기 표시 등 후속 확장용). 비워두면 프리팹 기본 문구 유지. (→ #497에서 인수가 `LocalizedString`으로 바뀌었고, #582가 이 API의 첫 사용처를 만들었다 — 9장 참고)
@@ -145,8 +145,9 @@ Canvas(ScreenSpaceOverlay, **sortingOrder 1000**) + CanvasScaler + CanvasGroup +
 | `AppHelper` | `k_activationReadyProgress` | 0.9 | 활성화 대기 시 progress 상한(1.0이 안 된다) |
 | `AppHelper` | `k_firstRenderFrames` | 2 | 활성화 직후 스파이크 프레임 흘림 |
 | `AppHelper` | `k_networkLoadTimeoutSeconds` | 30초 | NGO 로컬 로드 완료 확인 상한 |
-| `LoadingScreen` | `k_settleFrames` | 60 | 덮은 화면의 렌더 보장 프레임 |
+| `LoadingScreen` | `k_settleFrames` | ~~60~~ → **3** | 덮은 화면의 렌더 보장 프레임 — **#748에서 축소**(10장) |
 | `LoadingScreen` | `k_loadTimeoutSeconds` | 30초 | 클라 자동 경로 상한 |
+| `LoadingScreen` | `k_announceTimeoutSeconds` | 10초 | 전환 예고 뒤 로드가 시작되지 않을 때의 상한 (#748) |
 | `LoadingScreen` | ~~`k_spinnerDegreesPerSecond`~~ | ~~180~~ | 스피너 회전 속도 — **#582에서 스피너가 삭제되며 함께 제거** |
 | `LoadingScreen` | `k_progressPerSecond` | 2.5 | 게이지 표시값이 목표를 따라가는 속도 (#582) |
 | `InGameManager` | `k_readyTimeoutSeconds` | 20초 | 씬 준비 완료 대기 상한 |
@@ -172,7 +173,7 @@ Canvas(ScreenSpaceOverlay, **sortingOrder 1000**) + CanvasScaler + CanvasGroup +
 - **카운트다운 UI 없음** — `RoundManager`가 NetworkBehaviour가 아니라 `Phase`가 클라에 가지 않는다(코드의 `TODO(#43)`). 다만 `RoundTimerSync`의 NetworkVariable 덕에 클라도 "타이머가 돌기 시작"으로 시작 시점은 인지한다.
 - **입력 차단은 `CanvasGroup.blocksRaycasts`까지만** — Input System 액션 차단은 하지 않았다.
 - [`RoundEndResetter`](../Assets/Scripts/Round/RoundEndResetter.cs)의 NGO Shutdown 대기 구간은 덮이지 않는다 — `App.LoadScene`이 shutdown 완료 *후*에 불리기 때문. 덮으려면 호출부 수정이 필요해 이슈 완료기준("호출부 수정 0")과 충돌.
-- `k_settleFrames = 60`은 60fps 기준 약 1초 — 렌더 보장에 필요한 최소치보다 넉넉하다. 전환 체감 속도가 문제되면 줄일 여지가 있다.
+- ~~`k_settleFrames = 60`은 60fps 기준 약 1초 — 렌더 보장에 필요한 최소치보다 넉넉하다. 전환 체감 속도가 문제되면 줄일 여지가 있다.~~ → **#748에서 3프레임으로 줄이며 해소**(10장). 이 값이 서버의 전환 시작을 늦추고 있었다는 것이 그때 드러났다.
 - `App.UI.Loading`이 null인 경우(씬 직접 Play)는 **덮지 않고 그냥 로드**한다 — 개발 흐름을 막지 않기 위한 선택.
 
 ---
@@ -277,3 +278,45 @@ Synty 원본(`SM_Gen_Chr_Robot_01.prefab`)은 **수정하지 않았다** — 중
 - **셰이더 프리워밍** — 5장의 보류 항목 중 이쪽은 그대로 남았다.
 - `LoadingScreen` 실코드 약 240줄 — 기준선(250) 바로 아래다. `[Header]` 4그룹으로 관심사가 나뉘어 있고(참조/진행률/캐릭터/연출), 다음에 무엇을 더 얹으면 분리 검토 대상이 된다.
 
+---
+
+## 10. 후속 — #748 호스트·클라 로딩창 동시 전환
+
+**증상:** 세션 중 씬 전환에서 호스트 화면만 먼저 로딩창으로 바뀌고 클라이언트는 1초쯤 뒤에 바뀐다.
+
+### 10-1. 원인은 상수가 아니라 순서였다
+
+2장의 구동 경로 두 개가 **서로 다른 시점에 걸린다**는 것이 그대로 시차가 된다.
+
+| | 덮는 시점 |
+|---|---|
+| 호스트 | `App.LoadSceneAsync`가 `ShowAsync()`로 덮고 → `k_settleFrames` 대기 → **그 다음에야** `net.SceneManager.LoadScene()` |
+| 클라 | 그 `LoadScene()`이 만든 **NGO 씬 이벤트를 받고 나서야** `ShowInstant()` |
+
+클라가 덮으려면 호스트가 대기를 끝내야 한다. 즉 **`k_settleFrames`가 통째로 시차**이고, 이 구조에서는 클라가 늦는 것이 정상 동작이다 — 상수만 줄여서는 없앨 수 없다.
+
+### 10-2. 전환 예고 — 덮기 전에 먼저 알린다
+
+[`SceneTransitionAnnouncer`](../Assets/Scripts/Network/SceneTransitionAnnouncer.cs)(신규)가 서버에서 `[Rpc(SendTo.NotServer)]`를 쏘고, 받은 클라는 즉시 `LoadingScreen.CoverForIncomingSceneChange()`로 덮는다. `App.LoadSceneAsync`가 **`ShowAsync` 직전에** 부르므로 시차가 `k_settleFrames` → RTT로 줄어든다.
+
+- **자리는 `SessionState.prefab`** — 씬 전환을 알리는 쪽이 씬과 함께 죽으면 알릴 수 없다. `TeamFund`·`RoundProgress`와 같은 세션 상주 홀더고, App 등재도 같은 사정이다(런타임 스폰이라 인스펙터 배선 불가 — architecture §4 "세션 상주 홀더" 예외).
+- **덮지 않는 전환은 예고도 하지 않는다** — `ShouldCoverWithLoadingScreen` 안쪽에서 부른다(Title → Lobby 제외).
+- 세션 밖(오프라인·씬 직접 Play)에서는 `App.Net.SceneTransition`이 null이라 아무 일도 하지 않는다.
+
+### 10-3. "덮여 있다"와 "완료를 기다린다"를 갈랐다
+
+이 작업의 실질적인 함정. 클라 자동 경로의 재진입 가드가 `IsBusy`였는데, 예고로 미리 덮으면 `IsBusy`가 이미 true라 **자동 경로가 통째로 건너뛰어지고 로딩창이 영영 안 내려간다**(완료 대기·`HideAsync`가 전부 그 경로 안에 있다).
+
+가드를 `m_isTrackingNetworkLoad`(자동 경로가 도는 중인가)로 갈랐다. `IsBusy`는 "화면이 떠 있는가"로만 쓴다.
+
+- 예고와 NGO 이벤트의 **도착 순서는 뒤바뀌어도 된다** — 이벤트가 먼저면 자동 경로가 플래그를 세우고, 뒤늦은 예고는 `IsBusy`를 보고 빠진다.
+- **예고만 오고 로드가 시작되지 않는 경우**(로드 실패·세션 끊김)를 위해 `k_announceTimeoutSeconds`(10초) 감시를 붙였다. 자동 경로의 30초 상한은 그 경로에 들어간 뒤에만 돌아서 여기를 대신해 주지 못한다.
+
+### 10-4. `k_settleFrames` 60 → 3
+
+5장에 "줄일 여지"로 적어 뒀던 값이다. 렌더 보장에 필요한 것은 한두 프레임인데(`AppHelper.k_firstRenderFrames`가 2다) 60(약 1초)으로 잡혀 있었고, 그만큼 **서버의 NGO 로드 시작 자체가 늦어** 전환이 굼뜨게 느껴졌다. 예고를 넣어도 이 대기는 남으므로 함께 줄였다.
+
+### 10-5. 남은 것
+
+- 예고는 **덮기만** 알린다 — 어느 씬으로 가는지는 싣지 않는다. 클라의 문구를 목적지별로 가르려면(9-5의 "출동 중" 항목) 그때 인자를 늘리면 된다.
+- `RoundEndResetter`의 NGO Shutdown 대기 구간이 덮이지 않는 것(5장)은 그대로다 — 예고는 `App.LoadScene` 파이프라인 안쪽이라 그 구간보다 뒤에 있다.

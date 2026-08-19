@@ -38,6 +38,7 @@ public class App : Singleton<App>
     private SessionRoster m_sessionRoster;
     private ShopPurchases m_shopPurchases;
     private MapSelection m_mapSelection;
+    private SceneTransitionAnnouncer m_sceneTransitionAnnouncer;
     private FactionSymbolManager m_factionSymbolManager;
     private SceneReadyGate m_sceneReadyGate;
     private JailZone m_jailZone;
@@ -101,7 +102,13 @@ public class App : Singleton<App>
             LoadingScreen loading = ShouldCoverWithLoadingScreen(scene) ? UI.Loading : null;
 
             if (loading != null)
+            {
+                // 클라이언트가 우리보다 늦게 덮지 않게 먼저 알린다 — 클라는 NGO 씬 이벤트를 받아야
+                // 덮을 수 있는데, 그 이벤트는 아래 대기가 끝나야 나간다. (#748)
+                Net.SceneTransition?.AnnounceCover();
+
                 await loading.ShowAsync(token); // 덮은 화면이 실제로 렌더될 때까지 대기
+            }
 
             // 게이지바가 실측할 수 있는 구간은 여기까지다 (#582)
             await AppHelper.LoadSceneAsync(
@@ -154,6 +161,11 @@ public class App : Singleton<App>
         public static SessionManager Session => Instance.m_sessionManager;
         public static AuthBootstrap Auth => Instance.m_authBootstrap;
         public static VivoxManager Vivox => Instance.m_vivoxManager;
+
+        // 씬 전환 예고 (#748). TeamFund와 같은 세션 상주 홀더라 어느 씬에서도 살아 있지만,
+        // 세션 없이 씬을 직접 Play하면 스폰되지 않아 null이다 — 사용처는 ?. 가드 필수
+        public static SceneTransitionAnnouncer SceneTransition =>
+            Instance.m_sceneTransitionAnnouncer;
     }
 
     public static class Game

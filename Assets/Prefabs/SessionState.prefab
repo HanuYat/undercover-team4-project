@@ -15,6 +15,7 @@ GameObject:
   - component: {fileID: 5729287333612907991}
   - component: {fileID: 4815788148774193889}
   - component: {fileID: 2786289631189589368}
+  - component: {fileID: 394820092485849917}
   m_Layer: 0
   m_Name: SessionState
   m_TagString: Untagged
@@ -139,4 +140,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3c6d1ab1a02d7a04cb612f1b00c3c27a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SessionRoster
+  ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &394820092485849917
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 342132919516261196}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d6c2aebb59bfbbe449f620b78550ae68, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SceneTransitionAnnouncer
   ShowTopMostFoldoutHeaderGroup: 1
