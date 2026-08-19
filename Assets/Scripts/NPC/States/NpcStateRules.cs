@@ -10,28 +10,6 @@
 /// </summary>
 public static class NpcStateRules
 {
-    /// <summary>수갑 체포 채널링의 대상이 될 수 있는 상태인가.
-    /// 제외 목록 방식 — 새 상태는 기본 '체포 가능'이므로 막아야 하면 여기 추가할 것.
-    /// 도주(Run)·저항(Attack)은 수갑이 아니라 진압봉·테이저로 기절시킨 뒤 밧줄로 잡는다
-    /// (GDD 6-1/7-4, #254 · E 제압은 #436·#438에서 전부 제거) —
-    /// 반응이 시작된 뒤에는 수갑 채널링이 걸리지 않아야 한다.</summary>
-    public static bool IsCapturable(NpcState state) =>
-        state != NpcState.Dead // 시체는 검거 대상이 아니다 (#571)
-        && state != NpcState.Escorted
-        && state != NpcState.Captured
-        && state != NpcState.Jailed
-        && state != NpcState.Run
-        && state != NpcState.Attack
-        // 오검거 페널티에 얽힌 시민(수용·추격·호송)은 다시 수갑을 채울 수 없다 (#277~#279) —
-        // 추격대를 체포해 페널티 집행을 무산시키는 우회를 막는다 (회피 수단은 격퇴(호루라기 #250)뿐)
-        && state != NpcState.Detained
-        && state != NpcState.Chasing
-        && state != NpcState.PenaltyEscorting
-        // 반출돼 인도 지점으로 걸어가는 대상도 수갑으로는 못 잡는다 (#548) — 저지 수단은
-        // 도주·저항과 같다: 진압봉·테이저로 기절시킨 뒤 밧줄. 여기를 열면 걸어가는 대상을
-        // 채널링 한 번으로 세울 수 있어 '들키면 저지당한다'가 '보이면 끝난다'가 된다.
-        && state != NpcState.Releasing;
-
     /// <summary>타격 피해가 들어가는 상태인가 — <b>스턴 게이트가 아니다.</b> (#292)
     /// 스턴은 오버레이가 되면서 전 상태에 걸리게 됐지만(#292), 타격까지 함께 열면 연행 중인
     /// NPC를 때려 기절시켜 신병에서 빼내는 우회가 생긴다. 그래서 게이트를 둘로 쪼개고
