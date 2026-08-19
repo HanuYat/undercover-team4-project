@@ -109,6 +109,22 @@ public class NpcSpawner : CommonManagerBase
             for (int i = 0; i < transform.childCount; i++)
                 m_spawnPoints[i] = transform.GetChild(i);
         }
+
+        // 빈 칸을 걸러낸다. 스폰 루프에서 건너뛰는 것으로는 부족하다 — 순환 인덱스가 spawned에
+        // 묶여 있어 빈 칸을 만나면 <b>같은 인덱스를 무한 재시도</b>하며 시도만 태우고 미달로 끝난다.
+        // 목록을 빌려 쓰는 쪽(#231 범인 탈출의 침입자)도 같은 전제를 갖는다.
+        int validCount = 0;
+        for (int i = 0; i < m_spawnPoints.Length; i++)
+        {
+            if (m_spawnPoints[i] != null)
+                m_spawnPoints[validCount++] = m_spawnPoints[i];
+        }
+
+        if (validCount != m_spawnPoints.Length)
+        {
+            Debug.LogWarning($"NpcSpawner: 스폰 포인트 {m_spawnPoints.Length - validCount}칸이 비어 있어 제외한다", this);
+            Array.Resize(ref m_spawnPoints, validCount);
+        }
     }
 
     private void Start()
