@@ -323,6 +323,30 @@ MonoBehaviour:
     m_Key: Hud.Interact.ReleaseAll
     m_Metadata:
       m_Items: []
+  - m_Id: 5472766220918784
+    m_Key: Hud.Team.State.Normal
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5472766308999168
+    m_Key: Hud.Team.State.Down
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5472766308999169
+    m_Key: Hud.Team.State.Dead
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5472766308999170
+    m_Key: Hud.Team.Title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5472766308999171
+    m_Key: Hud.Team.Section.Members
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5472766308999172
+    m_Key: Hud.Team.Section.Wanted
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

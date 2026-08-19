@@ -8,7 +8,7 @@ using UnityEngine.UI;
 /// <summary>
 /// 화면 하단 인벤토리 핫바 (#144, 오너 로컬 HUD). 고정 3칸 슬롯에 보유 아이템을 표시하고
 /// 장착 슬롯을 하이라이트한다. 선택/줍기 시 아이템 이름 팝업을 띄우며,
-/// Tab 편집 모드에서는 커서를 풀어 드래그 정렬·호버 툴팁을 지원한다 (WASD 이동 시 자동 닫힘).
+/// I 편집 모드에서는 커서를 풀어 드래그 정렬·호버 툴팁을 지원한다 (WASD 이동 시 자동 닫힘).
 /// 데이터는 PlayerLoadout.Slots가 진실 — 이 클래스는 표시만 한다.
 /// </summary>
 public class InventoryBarView : NetworkBehaviour
@@ -66,7 +66,7 @@ public class InventoryBarView : NetworkBehaviour
     private int m_itemNameVersion; // 팝업 연속 발생 시 이전 숨김 예약 무효화용
     private readonly ItemBase[] m_lastSlots = new ItemBase[PlayerLoadout.k_maxHeldItems]; // 줍기 감지 스냅샷
 
-    /// <summary>Tab 편집 모드 여부 — 슬롯 드래그·툴팁이 이때만 동작한다.</summary>
+    /// <summary>I 편집 모드 여부 — 슬롯 드래그·툴팁이 이때만 동작한다.</summary>
     public bool IsEditMode => m_isEditMode;
 
     public override void OnNetworkSpawn()
@@ -200,7 +200,7 @@ public class InventoryBarView : NetworkBehaviour
         m_itemNameLabel.gameObject.SetActive(false);
     }
 
-    // ---- 편집 모드 (Tab) ----
+    // ---- 편집 모드 (I) ----
 
     private void ToggleEditMode()
     {
@@ -226,7 +226,7 @@ public class InventoryBarView : NetworkBehaviour
         // 드래그 정렬·호버 툴팁을 쓰도록 커서를 푼다 — 해제 중엔 시점 회전도 정지 (PlayerMovement).
         if (on)
         {
-            // 좌클릭을 누른 채 Tab을 치면 채널링이 그대로 완주한다 — 다른 UI는 SetSuspended가 액션을 꺼
+            // 좌클릭을 누른 채 I를 치면 채널링이 그대로 완주한다 — 다른 UI는 SetSuspended가 액션을 꺼
             // Input System이 canceled를 쏘지만, 편집 모드는 WASD를 감지해야 해 액션을 못 끈다. (#352)
             m_itemUser.CancelUse();
             CursorLock.PushUnlock();

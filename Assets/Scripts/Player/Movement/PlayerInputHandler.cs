@@ -45,6 +45,9 @@ public class PlayerInputHandler : NetworkBehaviour
     [SerializeField]
     private InputActionReference m_emoteAction; // T 홀드 — 감정표현 휠 (#219)
 
+    [SerializeField]
+    private InputActionReference m_teamStatusAction; // Tab 홀드 — 팀 상황판 (#720)
+
     public Vector2 MoveInput { get; private set; }
     public Vector2 LookInput { get; private set; }
     public bool IsSprinting { get; private set; }
@@ -113,13 +116,18 @@ public class PlayerInputHandler : NetworkBehaviour
     public event Action OnNextItem; // 마우스 휠 아래 — 다음 아이템으로 전환 (#46)
     public event Action OnDropItem; // 장착 아이템 버리기 (#88)
     public event Action<int> OnSelectSlot; // 숫자키 1~3 — 슬롯 직접 선택, 인덱스 0~2 (#144)
-    public event Action OnToggleInventory; // Tab — 인벤토리 편집 모드 토글 (#144)
+    public event Action OnToggleInventory; // I — 인벤토리 편집 모드 토글 (#144, Tab을 상황판에 내주고 옮김 #720)
     public event Action<bool> OnCrouchChanged; // Left Ctrl 홀드 — 누르면 true, 떼면 false (#236)
     public event Action OnJumpPressed; // Space 누름 — 홀드가 아닌 단발 입력 (#189)
     public event Action OnEmoteWheelOpened; // T 누름 — 감정표현 휠 열기 (#219)
     public event Action OnEmoteWheelClosed; // T 뗌 — 가리키던 칸 발동 (#219)
+    public event Action OnTeamStatusOpened; // Tab 누름 — 팀 상황판 열기 (#720)
+    public event Action OnTeamStatusClosed; // Tab 뗌 — 닫기 (#720)
 
     private bool m_isSuspended;
+
+    // 팀 상황판(Tab)을 들여다보는 중인가. (#720)
+    private bool m_isPeekingTeamStatus;
 
     // 안내에 적을 키 표기를 고르는 기준 스킴 — 타깃이 PC다 (#664, BindingDisplay 참고)
     private const string k_displayScheme = "Keyboard&Mouse";
@@ -157,7 +165,24 @@ public class PlayerInputHandler : NetworkBehaviour
         }
     }
 
-    // 13개 액션을 한꺼번에 켜고 끈다 — 스폰/디스폰/정지가 같은 목록을 쓰도록 한 곳에 모은다.
+    // 14개 액션을 한꺼번에 켜고 끈다 — 스폰/디스폰/정지가 같은 목록을 쓰도록 한 곳에 모은다.
+    /// <summary>
+    /// 팀 상황판을 들여다보는 동안인지 알린다 — 그 사이 감정표현 휠·인벤토리 편집 입력을 흘리지 않는다. (#720)
+    ///
+    /// <b>액션을 끄지 않고 이벤트만 막는 이유:</b> 액션을 비활성화하면 진행 중이던
+    /// 입력의 canceled가 돌아, 휠을 펼친 채 Tab을 누를 때 감정표현이 그대로 발동해 버린다.
+    ///
+    /// <b><see cref="SetSuspended"/>를 쓸 수 없는 이유:</b> 그쪽은 팀 상황판 액션까지 함께 끔다 —
+    /// 홈드가 끊겨 canceled가 돌고 창이 즐시 닫힌다.
+    /// </summary>
+    public void SetTeamStatusPeeking(bool peeking)
+    {
+        if (!IsOwner)
+            return;
+
+        m_isPeekingTeamStatus = peeking;
+    }
+
     private void SetActionsEnabled(bool value)
     {
         InputActionReference[] actions =
@@ -175,6 +200,7 @@ public class PlayerInputHandler : NetworkBehaviour
             m_crouchAction,
             m_jumpAction,
             m_emoteAction,
+            m_teamStatusAction,
         };
 
         foreach (InputActionReference reference in actions)
@@ -220,6 +246,8 @@ public class PlayerInputHandler : NetworkBehaviour
         m_jumpAction.action.started += OnJumpStartedHandler;
         m_emoteAction.action.started += OnEmoteStartedHandler;
         m_emoteAction.action.canceled += OnEmoteCanceledHandler;
+        m_teamStatusAction.action.started += OnTeamStatusStartedHandler;
+        m_teamStatusAction.action.canceled += OnTeamStatusCanceledHandler;
 
         InputSystem.onActionChange += HandleActionChange; // 키 표기 캐시 무효화 (#664)
     }
@@ -250,6 +278,8 @@ public class PlayerInputHandler : NetworkBehaviour
         m_jumpAction.action.started -= OnJumpStartedHandler;
         m_emoteAction.action.started -= OnEmoteStartedHandler;
         m_emoteAction.action.canceled -= OnEmoteCanceledHandler;
+        m_teamStatusAction.action.started -= OnTeamStatusStartedHandler;
+        m_teamStatusAction.action.canceled -= OnTeamStatusCanceledHandler;
 
         InputSystem.onActionChange -= HandleActionChange;
 
@@ -306,8 +336,15 @@ public class PlayerInputHandler : NetworkBehaviour
         }
     }
 
-    private void OnToggleInventoryHandler(InputAction.CallbackContext ctx) =>
+    // 상황판을 보는 동안은 무시한다 — 편집 모드는 커서를 푸는데, 인벤토리 바는
+    // 플레이어 캐버스(order 1)라 상황판(order 10) 밑에 깔려 보이지도 않는다. (#720)
+    private void OnToggleInventoryHandler(InputAction.CallbackContext ctx)
+    {
+        if (m_isPeekingTeamStatus)
+            return;
+
         OnToggleInventory?.Invoke();
+    }
 
     private void OnCrouchStartedHandler(InputAction.CallbackContext ctx) =>
         OnCrouchChanged?.Invoke(true);
@@ -320,9 +357,22 @@ public class PlayerInputHandler : NetworkBehaviour
 
     // 홀드 방식이라 started/canceled 두 지점을 모두 쓴다 — performed 하나로는 "누르고 있는 동안"을
     // 표현할 수 없다. 크라우치(m_crouchAction)가 같은 형태다.
-    private void OnEmoteStartedHandler(InputAction.CallbackContext context) =>
+    private void OnEmoteStartedHandler(InputAction.CallbackContext context)
+    {
+        // 여는 쪽만 막는다. 닫는 쪽(canceled)까지 막으면 상황판을 열기 전에
+        // 이미 펼쳐 있던 휠이 닫힐 길을 잃는다. (#720)
+        if (m_isPeekingTeamStatus)
+            return;
+
         OnEmoteWheelOpened?.Invoke();
+    }
 
     private void OnEmoteCanceledHandler(InputAction.CallbackContext context) =>
         OnEmoteWheelClosed?.Invoke();
+
+    private void OnTeamStatusStartedHandler(InputAction.CallbackContext context) =>
+        OnTeamStatusOpened?.Invoke();
+
+    private void OnTeamStatusCanceledHandler(InputAction.CallbackContext context) =>
+        OnTeamStatusClosed?.Invoke();
 }
