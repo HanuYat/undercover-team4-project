@@ -10424,8 +10424,9 @@ MonoBehaviour:
   m_altRatio: 0.5
   m_spawnCount: 100
   m_spawnPoints: []
-  m_spawnRadius: 5
+  m_spawnRadius: 8
   m_sampleMaxDistance: 4
+  m_minSpawnSeparation: 2
   m_spawnPerFrame: 3
   m_spawnOnStart: 0
 --- !u!1 &233511321 stripped
@@ -58496,7 +58497,7 @@ Transform:
   m_GameObject: {fileID: 1351554764}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 21.1, y: 0.05, z: 145.6}
+  m_LocalPosition: {x: 21.1, y: 0.05, z: 150}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

@@ -68,6 +68,22 @@ public static class NpcNavAreas
         return state != NpcState.Idle && state != NpcState.Walk;
     }
 
+    /// <summary>
+    /// 이 지점에서 <paramref name="clearance"/>(m) 안에 도로가 있는가 — 스폰 자리를 고를 때 쓴다 (#660).
+    ///
+    /// <b><see cref="IsOnRoad"/>와 묻는 것이 다르다.</b> 저쪽은 "발밑이 도로인가"라 마스크를 좁혀도
+    /// 되는지를 가르고, 이쪽은 "도로에서 충분히 떨어졌는가"라 <b>연석에 발을 걸친 자리</b>를 걸러낸다.
+    /// 그래서 여기서는 맞은 폴리곤이 아니라 도로 마스크로 <b>직접</b> 샘플하는 쪽이 맞다 —
+    /// 반경 안에 도로가 있기만 해도 참이어야 하기 때문이다.
+    /// </summary>
+    public static bool HasRoadWithin(Vector3 position, float clearance)
+    {
+        if (RoadMask == 0 || clearance <= 0f)
+            return false;
+
+        return NavMesh.SamplePosition(position, out NavMeshHit _, clearance, RoadMask);
+    }
+
     // "지금 도로 위인가" 판정 반경(m) — 발밑을 묻는 것이라 좁게 잡는다.
     private const float k_onRoadProbeRadius = 0.5f;
 
