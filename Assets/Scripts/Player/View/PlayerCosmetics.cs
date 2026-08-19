@@ -21,6 +21,9 @@ public class PlayerCosmetics : NetworkBehaviour
         NetworkVariableWritePermission.Owner
     );
 
+    /// <summary>이 플레이어가 고른 색 — 상황판이 얼굴을 찾을 때 읽는다. (#432)</summary>
+    public PlayerColorSet Colors => m_colors.Value;
+
     private BodyTint m_tint;
     private readonly Color[] m_buffer = new Color[3]; // 인덱스 = EBodyPart
 

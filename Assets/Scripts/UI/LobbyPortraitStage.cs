@@ -73,12 +73,13 @@ public class LobbyPortraitStage : MonoBehaviour
     private bool m_baking;
     private bool m_lit; // 첫 프레임(조명 확정)을 지났는가
 
-    // 로비를 떠나도 살려 두는 얼굴 — 게임 씬에서 다시 구우면 맵 조명을 타 어둡게 나오므로,
-    // 로비에서 구운 것을 세션 내내 그대로 쓴다. 다음 로비 방문에서 새로 구울 때 놓아 준다. (#720)
+    // 로비를 떠나도 살려 두는 얼굴들 — 게임 씬에서 다시 구우면 맵 조명을 타 어둡게 나오므로,
+    // 로비에서 구운 것을 세션 내내 쓴다. 다음 로비 방문에서 새로 구울 때 놓아 준다. (#720)
+    // 열쇠는 색 조합(PlayerColorSet.Key) — 게임 씬 상황판이 각 플레이어 색으로 찾아 간다. (#432)
     //
-    // RenderTexture가 아니라 Texture2D인 것은 그림을 씬 너머로 들고 가야 해서다 — RenderTexture는
-    // 오브젝트만 남고 GPU 쪽은 놓여, 게임 씬에서는 IsCreated()가 false인 빈 칸이 그려졌다.
-    private static Texture2D s_sessionPortrait;
+    // RenderTexture가 아니라 Texture2D인 것은 씬 너머로 들고 가야 해서다 — RenderTexture는
+    // 오브젝트만 남고 GPU 쪽은 놓여, 게임 씬에서는 빈 칸이 그려졌다.
+    private static readonly Dictionary<int, Texture2D> s_sessionPortraits = new Dictionary<int, Texture2D>();
 
     /// <summary>내 색으로 구운 얼굴. (#432)</summary>
     public Texture Portrait => GetPortrait(PlayerColorSet.FromSettings());
@@ -97,8 +98,12 @@ public class LobbyPortraitStage : MonoBehaviour
         }
     }
 
-    /// <summary>로비에서 구워 세션 동안 유지되는 <b>내</b> 얼굴 — 게임 씬 UI가 이걸 읽는다. 준비 전이면 null. (#720)</summary>
-    public static Texture SessionPortrait => s_sessionPortrait;
+    /// <summary>로비에서 구워 세션 동안 유지되는 <b>내</b> 얼굴. 준비 전이면 null. (#720)</summary>
+    public static Texture SessionPortrait => GetSessionPortrait(PlayerColorSet.FromSettings());
+
+    /// <summary>그 색 조합으로 로비에서 구워 둔 얼굴 — 게임 씬 UI가 읽는다. 없으면 null. (#432)</summary>
+    public static Texture GetSessionPortrait(PlayerColorSet colors) =>
+        s_sessionPortraits.TryGetValue(colors.Key, out Texture2D portrait) ? portrait : null;
 
     /// <summary>
     /// 그 색 조합으로 구운 얼굴 — 무대가 없으면 null. 처음 묻는 조합이면 빈 텍스처를 먼저 건네고
@@ -141,7 +146,7 @@ public class LobbyPortraitStage : MonoBehaviour
     private void OnDestroy()
     {
         // RenderTexture는 GC 대상이 아니다 — 씬을 오갈 때마다 쌓이지 않게 직접 놓는다.
-        // 세션용 얼굴(s_sessionPortrait)은 별도 Texture2D라 여기서 놓는 것과 상관이 없다. (#720)
+        // 세션용 얼굴은 별도 Texture2D라 여기서 놓는 것과 상관이 없다 (#720)
         foreach (RenderTexture texture in m_portraits.Values)
         {
             if (texture == null)
@@ -170,6 +175,15 @@ public class LobbyPortraitStage : MonoBehaviour
 
     private void BuildStage()
     {
+        // 지난 로비 방문에서 구운 것은 여기서 놓는다 — 세션이 이어지는 동안만 살아 있으면 된다
+        foreach (Texture2D stale in s_sessionPortraits.Values)
+        {
+            if (stale != null)
+                Destroy(stale);
+        }
+
+        s_sessionPortraits.Clear();
+
         var stage = new GameObject("PortraitStage");
         stage.transform.SetParent(transform, false);
         stage.transform.position = m_stageOrigin;
@@ -292,13 +306,13 @@ public class LobbyPortraitStage : MonoBehaviour
             Tint(m_requested[key]);
             m_camera.targetTexture = texture;
             RenderPortrait(texture);
+            CaptureSession(key, texture);
         }
 
         m_pending.Clear();
         m_camera.targetTexture = null;
 
         BakeBody();
-        CaptureSessionPortrait();
     }
 
     // 창에 띄울 전신 — 내 색으로만 그린다
@@ -326,32 +340,30 @@ public class LobbyPortraitStage : MonoBehaviour
         m_tint.SetBase(m_tintBuffer, m_tintBuffer[(int)EBodyPart.Torso]);
     }
 
-    // 씬 너머로 들고 갈 Texture2D로 옮겨 둔다 — RenderTexture는 씬을 넘기면 내용이 날아간다.
-    // 옮기는 것은 내 색 하나뿐이다. (#720/#432)
-    private void CaptureSessionPortrait()
+    // 씬 너머로 들고 갈 Texture2D로 옮겨 둔다 — RenderTexture는 씬을 넘기면 내용이 날아간다. (#720/#432)
+    private void CaptureSession(int key, RenderTexture source)
     {
-        if (!m_portraits.TryGetValue(PlayerColorSet.FromSettings().Key, out RenderTexture mine) || mine == null)
-            return;
-
-        // MSAA가 걸린 판은 그대로 읽을 수 없다 — 안티에일리어싱 없는 임시 판에 한 번 옮긴다.
-        RenderTexture resolved = RenderTexture.GetTemporary(mine.width, mine.height, 0, RenderTextureFormat.ARGB32);
-        Graphics.Blit(mine, resolved);
+        // MSAA가 걸린 판은 그대로 읽을 수 없다 — 안티에일리어싱 없는 임시 판에 한 번 옮긴다
+        RenderTexture resolved = RenderTexture.GetTemporary(source.width, source.height, 0, RenderTextureFormat.ARGB32);
+        Graphics.Blit(source, resolved);
 
         RenderTexture prev = RenderTexture.active;
         RenderTexture.active = resolved;
 
-        // 직전 것은 새 그림이 나온 뒤에 놓는다 — 굽는 도중에 카드가 읽으면 얼굴이 한 번 비게 된다.
-        Texture2D stale = s_sessionPortrait;
-
-        s_sessionPortrait = new Texture2D(mine.width, mine.height, TextureFormat.ARGB32, false, false) { name = "SessionPortrait" };
-        s_sessionPortrait.ReadPixels(new Rect(0f, 0f, mine.width, mine.height), 0, 0);
-        s_sessionPortrait.Apply();
+        var captured = new Texture2D(source.width, source.height, TextureFormat.ARGB32, false, false)
+        {
+            name = $"SessionPortrait {key}",
+        };
+        captured.ReadPixels(new Rect(0f, 0f, source.width, source.height), 0, 0);
+        captured.Apply();
 
         RenderTexture.active = prev;
         RenderTexture.ReleaseTemporary(resolved);
 
-        if (stale != null)
+        if (s_sessionPortraits.TryGetValue(key, out Texture2D stale) && stale != null)
             Destroy(stale);
+
+        s_sessionPortraits[key] = captured;
     }
 
     private void RenderPortrait(RenderTexture destination) => Render(m_camera, destination);
