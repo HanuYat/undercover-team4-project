@@ -44,8 +44,7 @@ public class InteractionFeedback : NetworkBehaviour
     // 각자 자기 화면 몫만 다룬다.
     private Outliner m_outliner;
 
-    // 본부 단말 화면 포커스 — 화면 앞에 앉은 동안 표시를 통째로 내린다 (#689). 없는 구성이면 null.
-    private PlayerTerminalFocus m_terminalFocus;
+    private PlayerTerminalFocus m_terminalFocus; // 화면 앞에서 표시를 내린다 (#689). 없는 구성이면 null
 
     public override void OnNetworkSpawn()
     {
@@ -188,10 +187,8 @@ public class InteractionFeedback : NetworkBehaviour
             interactUsable = false;
         }
 
-        // 본부 단말 화면 앞에 앉아 있는 동안은 표시를 통째로 내린다 (#689) — 카메라가 화면 코앞이라
-        // 안내는 시야 한가운데에서 화면을 가리고, 윤곽선은 모니터 테두리를 따라 빛난다.
-        // 셋(윤곽선·크로스헤어·안내)을 여기 한자리에서 같은 조건으로 끄는 이유는, 대상 쪽에서
-        // CanInteract를 false로 만들면 E까지 죽어 화면에서 나갈 수단이 사라지기 때문이다.
+        // 단말 화면 앞에서는 표시를 통째로 내린다 (#689) — 카메라가 코앞이라 안내가 화면을 가린다.
+        // 대상 쪽에서 CanInteract를 끄면 E까지 죽어 나갈 수단이 사라지므로 여기서 끈다.
         if (m_terminalFocus != null && m_terminalFocus.IsFocusing)
         {
             itemUsable = false;

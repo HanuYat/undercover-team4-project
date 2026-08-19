@@ -92,9 +92,8 @@ public class PlayerLook : MonoBehaviour
     private float m_downCamBlend;   // 서기 시점(0) ↔ 다운 시점(1) 보간 진행도 (#105)
     private float m_downYaw;        // 쓰러진 동안 누적한 시야 좌우 각도 — 몸 회전이 아니라 카메라 로컬 (#252)
     private bool m_downLookTaken;   // 쓰러진 뒤 플레이어가 시선을 직접 움직였는가 — 그 순간부터 강제 피치를 놓는다
-    // 시점 회전을 멈춰 달라고 요청한 곳의 수 — 감정표현 휠(#219)과 단말 포커스(#689)가 겹칠 수 있어
-    // bool로는 못 센다. 겹친 상태에서 한쪽이 먼저 놓으면 나머지 요청까지 풀려, 화면 앞에 앉은 채로
-    // 시점이 돌아간다. CursorLock의 Push/Pop과 같은 방식이다.
+    // 요청한 곳의 수 — 감정표현 휠(#219)과 단말 포커스(#689)가 겹칠 수 있어 bool로는 못 센다.
+    // 한쪽이 먼저 놓으면 나머지 요청까지 풀린다. CursorLock의 Push/Pop과 같은 방식이다.
     private int m_lookSuspendCount;
     private bool m_emoteView;       // 감정표현 3인칭 시점이 요청됐는가 (#219)
     private float m_emoteCamBlend;  // 1인칭(0) ↔ 3인칭(1) 보간 진행도
@@ -457,9 +456,8 @@ public class PlayerLook : MonoBehaviour
         // 피벗이 루트가 아니라 시체(골반)라 <b>월드에서 만들어 로컬로 되돌린다</b> — 래그돌 비행
         // 중에는 루트가 제자리에 남고 yaw만 몸을 따라가므로(PlayerRagdoll의 FollowBodyYaw),
         // 루트 기준으로 잡으면 날아가는 내 몸을 화면이 놓친다.
-        // 본부 단말 포커스 — 화면 앞으로 옮겨 간다 (#689). 관전보다 <b>먼저</b> 얹는 이유는
-        // 사망이 이겨야 하기 때문이다: 화면을 보다 죽으면 아래 관전이 이 포즈에서 시체 오빗으로
-        // 이어 받는다. 순서를 뒤집으면 죽은 뒤에도 카메라가 컴퓨터에 붙어 있다.
+        // 본부 단말 포커스 (#689) — 관전보다 먼저 얹어야 사망이 이긴다. 뒤집으면 죽은 뒤에도
+        // 카메라가 컴퓨터에 붙어 있다.
         if (m_terminalFocus != null)
         {
             float focusBlend = m_terminalFocus.Tick(); // 포커스 중이 아니어도 불러야 이탈 보간이 진행된다

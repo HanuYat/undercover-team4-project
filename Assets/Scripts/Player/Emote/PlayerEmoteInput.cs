@@ -114,7 +114,7 @@ public class PlayerEmoteInput : MonoBehaviour
             m_emote.CancelEmote(); // 갈아타기: 새로 고르는 동안 이전 것은 끊는다
 
         // 조준하는 동안 화면은 고정한다 — 같은 마우스 이동이 칸 선택이라 시점까지 돌면 둘이 겹친다.
-        // Push/Pop 짝을 지키려고 열림 래치를 먼저 본다 — 두 번 열리면 카운터가 새어 시점이 영영 잠긴다.
+        // 열림 래치를 먼저 보는 것은 Push/Pop 짝을 지키기 위해서다.
         if (!IsWheelOpen && m_look != null)
             m_look.PushLookSuspend();
 
@@ -157,8 +157,7 @@ public class PlayerEmoteInput : MonoBehaviour
 
     private void CloseWheel()
     {
-        // 시점을 반드시 여기서 되살린다 — 발동하든 데드존으로 취소하든 닫는 길은 이 하나뿐이라,
-        // 어느 경로로 나가도 화면이 잠긴 채 남지 않는다. 열려 있을 때만 거둬 짝을 지킨다.
+        // 발동하든 데드존으로 취소하든 닫는 길은 이 하나뿐이라 어느 경로로 나가도 짝이 맞는다.
         if (IsWheelOpen && m_look != null)
             m_look.PopLookSuspend();
 

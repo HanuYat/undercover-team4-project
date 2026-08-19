@@ -1,18 +1,13 @@
 using UnityEngine;
 
 /// <summary>
-/// 단말 포커스 시점 — 본부 컴퓨터 앞으로 카메라를 옮겨 화면을 정면으로 크게 본다. (#689)
+/// 단말 포커스 시점 — 본부 컴퓨터 앞으로 카메라를 옮긴다. (#689) 순수 로컬 표현이라 동기화할 것이 없다.
 ///
-/// <b>포즈를 스스로 대입하지 않는다</b> — <see cref="PlayerSpectateCamera"/>와 같은 계약이다.
-/// 월드 포즈를 내주기만 하고 카메라에 넣는 것은 <see cref="PlayerLook.UpdateCameraPose"/>다.
-/// 카메라 transform을 밖에서 만지면 그쪽이 매 프레임 통째로 덮어써 그 프레임에 지워진다 (#477).
+/// <b>포즈를 스스로 대입하지 않는다</b> — 월드 포즈를 내주기만 하고 카메라에 넣는 것은
+/// <see cref="PlayerLook.UpdateCameraPose"/>다. 밖에서 만지면 그쪽이 매 프레임 덮어쓴다 (#477).
 ///
-/// <b>상태에서 유도한다</b> — 켜고 끄는 플래그를 밖에서 관리하지 않고, 매 틱 <see cref="Tick"/>이
-/// "지금도 포커스가 성립하는가"를 다시 묻는다. 그래서 단말이 꺼지거나(해킹 복구·라운드 종료로 인한
-/// 리셋) 플레이어가 쓰러지면 별도 배선 없이 풀린다. 플래그를 들고 껐다 켜는 방식은 반드시 새는
-/// 경로가 생긴다 — 카메라가 컴퓨터에 붙은 채 남으면 그 플레이어는 라운드가 끝날 때까지 화면을 잃는다.
-///
-/// 순수 로컬 표현이다 — 동기화할 상태가 없다. 상호작용한 본인의 클라이언트에서만 돈다.
+/// <b>상태에서 유도한다</b> — 매 틱 <see cref="Tick"/>이 포커스 성립을 되물어, 복구·라운드 종료·사망에
+/// 별도 배선 없이 풀린다. 플래그를 껐다 켜는 방식은 반드시 새고, 그러면 카메라가 컴퓨터에 붙은 채 남는다.
 /// </summary>
 [RequireComponent(typeof(PlayerLook))]
 public class PlayerTerminalFocus : MonoBehaviour
@@ -42,12 +37,8 @@ public class PlayerTerminalFocus : MonoBehaviour
         m_incapacitation = GetComponent<PlayerIncapacitation>();
     }
 
-    private void OnDisable()
-    {
-        // 디스폰·비활성으로 빠져나가도 시점·이동 잠금은 반드시 되돌린다 — 안 그러면 다음 라운드에서
-        // 시점이 안 돌아가거나 이동이 잠긴 채 남는다.
-        Release();
-    }
+    // 디스폰·비활성으로 빠져나가도 잠금은 되돌린다 — 다음 라운드에서 시점·이동이 잠긴 채 남지 않게.
+    private void OnDisable() => Release();
 
     /// <summary>단말 화면 앞으로 간다 — 단말의 E 상호작용이 부른다.</summary>
     public void Begin(BlackoutRecoveryTerminal terminal)
@@ -61,13 +52,10 @@ public class PlayerTerminalFocus : MonoBehaviour
             return;
         }
 
-        // 다른 단말을 보고 있었다면 먼저 그쪽을 놓는다 — 안 그러면 이전 단말의 IsLocalFocused가
-        // true로 남아 그 화면이 이 클라이언트의 키 입력을 계속 받는다. 지금은 맵당 단말이 하나라
-        // 도달하지 않지만, 둘이 되는 순간 두 화면에 같은 숫자가 동시에 들어간다.
-        Release();
+        Release(); // 다른 단말을 보고 있었다면 먼저 놓는다 — 안 그러면 그 화면이 계속 내 키를 받는다
 
         m_terminal = terminal;
-        terminal.SetLocalFocused(true); // 화면이 키 입력을 받을 주인이 생겼다
+        terminal.SetLocalFocused(true);
         ApplyLocks(true);
     }
 
@@ -121,32 +109,20 @@ public class PlayerTerminalFocus : MonoBehaviour
         return true;
     }
 
-    // 포커스를 유지할 조건 — 하나라도 깨지면 즉시 풀린다.
-    // 해킹이 복구되면 단말이 오프라인이 되므로 "복구하면 저절로 화면에서 나온다"가 여기서 성립한다.
-    // 라운드 종료도 SuddenEventManager의 리셋이 해킹을 풀어 같은 경로로 빠져나온다.
+    // 하나라도 깨지면 즉시 풀린다. 복구·라운드 종료는 단말이 오프라인이 되면서, 사망은 아래에서 걸린다
+    // (포커스가 남으면 사망 관전과 같은 카메라를 두고 싸운다).
     private bool CanKeepFocus()
     {
         if (m_terminal == null || !m_terminal.IsOnline || m_terminal.FocusPoint == null)
             return false;
 
-        // 쓰러지면 화면에서 나온다 — 사망 관전(PlayerSpectateCamera)이 카메라를 가져가야 하는데
-        // 포커스가 남아 있으면 두 연출이 같은 카메라를 두고 싸운다.
-        if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
-            return false;
-
-        return true;
+        return m_incapacitation == null || !m_incapacitation.IsIncapacitated;
     }
 
     /// <summary>
-    /// 시점·이동 잠금을 짝 지어 넣고 뺀다.
-    ///
-    /// <b>커서는 풀지 않는다</b> — 예전에는 <c>CursorLock.PushUnlock</c>으로 시점 정지를 겸했다(그쪽
-    /// 부수 효과로 <see cref="PlayerLook.HandleLook"/>이 멈춘다). 그런데 커서가 풀리면
-    /// <see cref="PlayerInteractor.HandleInteract"/>가 E를 통째로 막아(#352) <b>화면에서 나갈 수단이
-    /// 화면 안 버튼밖에 남지 않는다</b>. 입력이 숫자 키로 바뀌어 커서를 풀 이유도 사라졌으므로,
-    /// 시점만 정확히 겨냥해 멈추고 커서는 잠근 채로 둔다 — E가 다른 상호작용과 같은 규칙으로 돌아온다.
-    ///
-    /// 이동은 따로 막는다. 안 막으면 화면을 보는 동안 걸어가 카메라만 컴퓨터에 남고 몸은 딴 데 가 있다.
+    /// 시점·이동 잠금을 짝 지어 넣고 뺀다. <b>커서는 풀지 않는다</b> — 커서가 풀리면
+    /// <see cref="PlayerInteractor.HandleInteract"/>가 E를 통째로 막아(#352) 화면에서 나갈 수단이
+    /// 사라진다. 이동은 시점과 별개라 따로 막는다.
     /// </summary>
     private void ApplyLocks(bool active)
     {
@@ -155,8 +131,8 @@ public class PlayerTerminalFocus : MonoBehaviour
 
         m_locked = active;
 
-        // Push/Pop으로 건다 — 감정표현 휠(#219)이 같은 스위치를 쓰므로, 화면 앞에서 휠을 열었다 닫으면
-        // 단일 bool 시절에는 그쪽의 해제가 이쪽 잠금까지 풀어 시점이 돌아갔다.
+        // Push/Pop인 이유는 감정표현 휠(#219)이 같은 스위치를 쓰기 때문이다 — 단일 bool이면 휠을 닫을 때
+        // 이쪽 잠금까지 풀린다.
         if (m_look != null)
         {
             if (active)
