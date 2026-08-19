@@ -14,12 +14,11 @@ using UnityEngine.UI;
 /// 클라이언트는 NGO 씬 동기화로 끌려올 뿐이라 그 파이프라인에 들어오지 않기 때문이다.
 ///  · 서버·오프라인 — App.LoadScene이 ShowAsync/HideAsync를 직접 호출한다.
 ///  · 클라이언트   — NGO 씬 이벤트(OnLoad/OnLoadComplete)를 구독해 스스로 덮는다.
-///  · 클라이언트   — 그보다 앞서 <b>전환 예고</b>(SceneTransitionAnnouncer)를 받아 미리 덮는다 (#748).
-/// 서버는 <see cref="HandleNetworkLoad"/>의 IsServer 검사로 뒤쪽 두 경로에서 빠진다.
+///  · 클라이언트   — 그보다 앞서 전환 예고(SceneTransitionAnnouncer)를 받아 미리 덮는다 (#748).
+/// 서버는 IsServer 검사로 뒤쪽 두 경로에서 빠진다.
 ///
-/// <b>"덮여 있는가"와 "완료를 기다리는 중인가"는 다르다</b> — 예고로 먼저 덮으면 <see cref="IsBusy"/>가
-/// 이미 true라, 그것으로 자동 경로를 막으면 완료 대기·내리기가 통째로 안 돌아 화면이 영영 남는다.
-/// 자동 경로의 재진입 가드는 <see cref="IsBusy"/>가 아니라 m_isTrackingNetworkLoad다. (#748)
+/// 자동 경로의 재진입 가드는 <see cref="IsBusy"/>가 아니라 m_isTrackingNetworkLoad다 — 예고로 먼저
+/// 덮으면 IsBusy가 이미 true라, 그걸로 막으면 완료 대기·내리기가 안 돌아 화면이 영영 남는다. (#748)
 ///
 /// 페이드 인은 두지 않는다 — 대신 로드 시작 전 k_settleFrames만큼 프레임을 흘려 "덮은 화면이 최소
 /// 한 번 렌더됐다"를 보장한다. 캔버스를 켜는 것만으로는 아직 그려진 게 아니라서, 이 대기가 없으면
@@ -28,9 +27,8 @@ using UnityEngine.UI;
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class LoadingScreen : CommonManagerBase
 {
-    // 덮은 화면이 실제로 렌더되는 것을 보장하는 최소 프레임 수. 렌더 보장에 필요한 것은 한두 프레임인데
-    // 60(약 1초)으로 잡혀 있었다 — 서버는 이 대기가 끝나야 NGO 씬 로드를 시작하므로, 그만큼 전환이
-    // 늦게 시작되고 클라이언트가 덮는 시점도 함께 밀린다. (#403 문서 5장에 줄일 여지로 적혀 있던 값, #748)
+    // 덮은 화면이 실제로 렌더되는 것을 보장하는 최소 프레임 수. 한두 프레임이면 되는데 60(약 1초)이라
+    // 서버의 NGO 로드 시작이 그만큼 늦었고, 클라가 덮는 시점도 함께 밀렸다. (#748)
     private const int k_settleFrames = 3;
 
     // 표시값이 목표를 따라가는 속도(초당 비율) — 로드 진행률은 계단식으로 튄다.
@@ -88,7 +86,7 @@ public class LoadingScreen : CommonManagerBase
     // 클라이언트 자동 경로에서 로컬 로드 완료를 확인하는 씬 이름
     private string m_clientLoadedScene;
 
-    // 클라이언트 자동 경로가 지금 돌고 있는가 — "화면이 떠 있는가"(IsBusy)와 구분한다. 이유는 클래스 주석. (#748)
+    // 클라이언트 자동 경로가 돌고 있는가 — "화면이 떠 있는가"(IsBusy)와 구분한다 (클래스 주석 참고, #748)
     private bool m_isTrackingNetworkLoad;
 
     // 지금 표시 중인 상태 문구 — 구독 해제 기준
@@ -344,10 +342,7 @@ public class LoadingScreen : CommonManagerBase
             m_clientLoadedScene = sceneName;
     }
 
-    /// <summary>
-    /// 서버의 전환 예고를 받아 미리 덮는다 (#748) — 클라이언트 전용.
-    /// 곧 도착할 NGO 씬 이벤트가 완료 대기와 내리기를 이어받는다.
-    /// </summary>
+    /// <summary>서버의 전환 예고를 받아 미리 덮는다 — 완료 대기·내리기는 뒤이어 올 씬 이벤트가 맡는다. (#748)</summary>
     public void CoverForIncomingSceneChange()
     {
         if (IsBusy)
@@ -357,9 +352,8 @@ public class LoadingScreen : CommonManagerBase
         WaitForAnnouncedLoadAsync().Forget();
     }
 
-    // 예고만 오고 씬 로드가 시작되지 않으면(로드 실패·세션 끊김) 덮은 화면이 그대로 굳는다 —
-    // 자동 경로가 이어받지 않은 채 상한을 넘기면 스스로 내린다. 자동 경로의 30초 상한은 그 경로에
-    // 들어간 뒤에만 도므로 여기를 대신해 주지 못한다.
+    // 예고만 오고 로드가 시작되지 않으면(로드 실패·세션 끊김) 덮은 화면이 굳는다 —
+    // 자동 경로가 이어받지 않은 채 상한을 넘기면 스스로 내린다.
     private async UniTaskVoid WaitForAnnouncedLoadAsync()
     {
         CancellationToken token = this.GetCancellationTokenOnDestroy();
@@ -368,7 +362,6 @@ public class LoadingScreen : CommonManagerBase
         while (!m_isTrackingNetworkLoad && IsBusy && Time.realtimeSinceStartup < deadline)
             await UniTask.Yield(PlayerLoopTiming.Update, token);
 
-        // 자동 경로가 이어받았거나 이미 내려갔으면 여기서 할 일이 없다
         if (m_isTrackingNetworkLoad || !IsBusy)
             return;
 
@@ -382,7 +375,7 @@ public class LoadingScreen : CommonManagerBase
     {
         CancellationToken token = this.GetCancellationTokenOnDestroy();
         m_clientLoadedScene = null;
-        m_isTrackingNetworkLoad = true; // 예고가 먼저 덮어 뒀더라도 완료 대기는 여기가 맡는다 (#748)
+        m_isTrackingNetworkLoad = true; // 예고가 먼저 덮었더라도 완료 대기는 여기가 맡는다 (#748)
         ShowInstant();
 
         try
