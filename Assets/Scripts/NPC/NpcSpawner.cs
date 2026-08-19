@@ -38,8 +38,19 @@ public class NpcSpawner : CommonManagerBase
     [SerializeField] private float m_spawnRadius = 5f;
 
     [Header("NavMesh 보정 최대 거리")]
-    [Tooltip("랜덤 위치에서 이 거리(m) 안에 NavMesh가 없으면 그 위치는 버리고 다시 뽑는다")]
+    [Tooltip("랜덤 위치를 이 거리(m) 안의 가장 가까운 통행 가능 지점으로 끌어당긴다. 그 안에 아무것도 없을 때만 위치를 버리고 다시 뽑는다")]
     [SerializeField] private float m_sampleMaxDistance = 4f;
+
+    [Header("스냅 허용 거리")]
+    [Tooltip("보정으로 후보가 수평으로 이 거리(m)보다 멀리 끌려가면 그 위치를 버리고 다시 뽑는다. 0 이하면 검사하지 않는다 (#714)")]
+    [SerializeField] private float m_maxSnapDistance = 1.5f;
+
+    [Header("고립 지점 검증")]
+    [Tooltip("끊긴 NavMesh 조각(건물 안쪽 주머니·2층 문턱 선반)에 스폰되지 않도록, 후보에서 빠져나오는 경로가 있는지 확인하고 없으면 다시 뽑는다 (#660)")]
+    [SerializeField] private bool m_validateConnectivity = true;
+
+    [Tooltip("스폰 포인트마다 기준점을 고를 때 쓰는 탐침 수. 실측상 6 미만은 기준점 자체가 섬에 앉을 수 있다")]
+    [SerializeField] private int m_anchorProbeCount = NpcSpawnAnchors.k_defaultProbeCount;
 
     [Header("프레임당 스폰 수")]
     [Tooltip("한 프레임에 이 수만큼만 생성하고 다음 프레임으로 넘긴다 — 대량 스폰 시 첫 프레임 끊김(히칭) 방지")]
@@ -51,6 +62,10 @@ public class NpcSpawner : CommonManagerBase
 
     private readonly List<NpcController> m_spawnedNpcs = new List<NpcController>();
     private bool m_isSpawning;
+
+    // 스폰 포인트별 "본토" 기준점과 경로 계산 버퍼 — 스폰 시작 시 1회 준비한다 (#660)
+    private NpcSpawnAnchors.Anchor[] m_anchors;
+    private NavMeshPath m_pathBuffer;
 
     // StartSpawn이 받은 정지 여부 — 프레임 분산 스폰 루프가 개체마다 읽는다
     private bool m_spawnFrozen;
@@ -141,6 +156,7 @@ public class NpcSpawner : CommonManagerBase
         m_isSpawning = false;
         m_spawnFrozen = false;
         IsSpawnCompleted = false;
+        m_anchors = null; // 씬·NavMesh가 바뀌었을 수 있으니 다음 스폰에서 다시 잡는다
     }
 
     // 네트워크 세션이 켜져 있는지 — 꺼져 있으면 기존처럼 로컬 단독 스폰으로 동작한다
@@ -158,9 +174,18 @@ public class NpcSpawner : CommonManagerBase
 
         m_isSpawning = true;
 
+        // 검증에 쓸 통행 마스크는 프리팹 에이전트에서 읽는다 — 두 프리팹은 같은 마스크를 쓴다 (#415)
+        NavMeshAgent baseAgent = m_npcPrefab.GetComponent<NavMeshAgent>();
+        int agentAreaMask = baseAgent != null ? baseAgent.areaMask : NavMesh.AllAreas;
+
+        if (m_validateConnectivity)
+            ResolveAnchors(agentAreaMask);
+
         int spawned = 0;
         int attempts = 0;
-        int maxAttempts = m_spawnCount * 10; // NavMesh 보정 실패가 반복돼도 무한 루프에 빠지지 않도록 상한을 둔다
+        // 스냅 거리·연결성 기각이 겹치면 시도가 늘어난다 — 실측 최악(아포칼립스, 100마리)이 173회라
+        // 20배면 충분한 여유다. 상한에 걸리면 아래에서 미달 경고가 나간다.
+        int maxAttempts = m_spawnCount * 20;
         int spawnedThisFrame = 0;
 
         while (spawned < m_spawnCount && attempts < maxAttempts)
@@ -168,7 +193,8 @@ public class NpcSpawner : CommonManagerBase
             attempts++;
 
             // 스폰 포인트를 순환하며 사용해 특정 지점에만 몰리는 것을 막는다
-            Transform point = m_spawnPoints[spawned % m_spawnPoints.Length];
+            int pointIndex = spawned % m_spawnPoints.Length;
+            Transform point = m_spawnPoints[pointIndex];
             Vector2 offset = Random.insideUnitCircle * m_spawnRadius;
             Vector3 candidate = point.position + new Vector3(offset.x, 0f, offset.y);
 
@@ -184,6 +210,28 @@ public class NpcSpawner : CommonManagerBase
             // 못 가는 영역(Jail)에 붙여 놓으면 경로가 안 잡혀 그 자리에서 고착되므로 마스크를 건다 (#415)
             if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, m_sampleMaxDistance, spawnAreaMask))
                 continue;
+
+            // 보정은 후보를 버리지 않고 가장 가까운 통행 가능 지점으로 끌어당긴다 — 도로 위에 뽑힌 후보가
+            // 전부 연석으로 투영돼 인도에 한 줄로 쌓인다. 너무 멀리 끌려간 것은 버려 분포를 되살린다 (#714).
+            // 수평으로만 잰다: 스폰 포인트가 지면보다 높게 놓인 경우(실측 예: y=1.06) 수직 성분이 상시로
+            // 끼어들어 그 포인트만 과도하게 기각된다. 위층 선반에 얹히는 문제는 아래 연결성 검증이 잡는다.
+            if (m_maxSnapDistance > 0f)
+            {
+                Vector3 snapDelta = hit.position - candidate;
+                snapDelta.y = 0f;
+                if (snapDelta.sqrMagnitude > m_maxSnapDistance * m_maxSnapDistance)
+                    continue;
+            }
+
+            // SamplePosition은 "NavMesh 위인가"만 답한다 — 끊긴 조각 위여도 참이라 그대로 두면
+            // 건물 안쪽 주머니나 2층 문턱에 얹힌 채 영영 못 나온다. 기준점까지 길이 있는지 묻는다 (#660).
+            // 통행은 에이전트의 전체 마스크로 본다 — 도로를 뺀 마스크로 물으면 블록 간이 전부 끊긴 것으로 나온다.
+            if (m_validateConnectivity && m_anchors != null && m_anchors[pointIndex].IsValid)
+            {
+                int pathAreaMask = prefabAgent != null ? prefabAgent.areaMask : NavMesh.AllAreas;
+                if (!NpcSpawnAnchors.IsConnected(hit.position, m_anchors[pointIndex].Position, pathAreaMask, m_pathBuffer))
+                    continue;
+            }
 
             Quaternion rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
             // 부모를 지정하지 않고 씬 루트에 생성 — NetworkObject는 비NetworkObject 아래에
@@ -218,6 +266,20 @@ public class NpcSpawner : CommonManagerBase
         m_isSpawning = false;
         IsSpawnCompleted = true;
         OnSpawnCompleted?.Invoke();
+    }
+
+    // 스폰 포인트마다 "본토" 기준점을 잡아둔다 — 후보가 여기 닿지 못하면 끊긴 조각 위라는 뜻이다 (#660)
+    private void ResolveAnchors(int agentAreaMask)
+    {
+        m_pathBuffer = new NavMeshPath();
+        m_anchors = NpcSpawnAnchors.Resolve(m_spawnPoints, m_spawnRadius, m_sampleMaxDistance,
+            NpcNavAreas.ExcludeRoad(agentAreaMask), agentAreaMask, m_anchorProbeCount);
+
+        // 기준점끼리 못 닿으면 그중 하나가 고립 구역에 앉은 것이다. 그 포인트는 정상 후보까지 전부
+        // 기각돼 "N마리만 스폰됨"으로만 드러나므로, 원인이 보이게 미리 경고한다.
+        int disconnected = NpcSpawnAnchors.CountDisconnectedPairs(m_anchors, agentAreaMask);
+        if (disconnected > 0)
+            Debug.LogWarning($"NpcSpawner: 기준점 {disconnected}쌍이 서로 닿지 않는다 — 스폰 포인트 하나가 고립 구역에 있을 수 있다 (#660)", this);
     }
 
     // 씬 뷰에서 스폰 포인트 위치와 분산 반경을 눈으로 확인할 수 있게 기즈모를 그린다
