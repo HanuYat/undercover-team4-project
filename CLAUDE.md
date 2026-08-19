@@ -42,7 +42,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **렌더링:** URP. 파이프라인 에셋은 `Assets/Settings/`에 PC(`PC_RPAsset`/`PC_Renderer`)와 Mobile 두 세트가 있음. 타깃은 PC(GDD 기준).
 - **입력:** Input System. 액션 정의는 `Assets/InputSystem_Actions.inputactions` (WASD 이동 / 마우스 회전 등).
 - **NPC AI:** AI Navigation(NavMesh). 시민/용의자는 **FSM + NavMesh** 기반 (GDD 6장, 상태 enum은 GDD 10-2).
-- **카메라:** Cinemachine. 플레이어 카메라 및 본부 **CCTV** 기능에 사용.
+- **카메라:** 플레이어 시점은 `PlayerLook`이 직접 제어한다(마우스 → 몸통 yaw + 카메라 pitch). 본부 **CCTV**는 `CCTVSwitcher`가 씬의 Camera 여러 대를 RenderTexture로 갈아 끼운다. **Cinemachine은 쓰지 않는다** — 패키지가 설치돼 있지 않다.
 - **비동기:** UniTask (`async`/`await` 대신 `UniTask` 우선 사용 가능).
 - **데이터:** 프로필·대조용 데이터·스탯 등은 **ScriptableObject**로 구현 (GDD 5-3, 10-4).
 - **아트:** Synty Polygon 에셋 — `Assets/Imported/Synty/`. 이 아래 코드/셰이더는 서드파티이므로 임의 수정 금지.
