@@ -35,6 +35,9 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
     // 제한시간이 걸려 있지 않음 — ServerTime은 0에서 시작하므로 음수를 쓴다 (JailSirenButton과 동일).
     private const double k_noDeadline = -1d;
 
+    // 아무도 앞에 앉아 있지 않음. 클라이언트 id는 0부터라 최대값을 빈 자리로 쓴다.
+    private const ulong k_noUser = ulong.MaxValue;
+
     // 한 클라이언트가 제출을 다시 보낼 수 있는 최소 간격(초). 사람이 네 자리를 눌러 넣는 데 드는
     // 시간보다 한참 짧아 정상 입력은 걸리지 않고, 조작된 클라가 한 프레임에 만 번을 쏘는 것만 막는다.
     private const double k_submitCooldown = 0.2d;
@@ -63,6 +66,14 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
     private readonly NetworkVariable<double> m_deadlineSynced = new NetworkVariable<double>(k_noDeadline);
     private double m_deadline = k_noDeadline; // 서버·오프라인의 진실값
 
+    // 지금 이 단말 앞에 앉은 클라이언트 — 한 번에 한 명만 쓴다. 자리 판정은 서버 권위여야 한다:
+    // 로컬 판정으로 두면 같은 프레임에 둘이 앉아 서로 다른 코드를 밀어 넣는다.
+    private readonly NetworkVariable<ulong> m_userSynced = new NetworkVariable<ulong>(k_noUser);
+    private ulong m_user = k_noUser; // 서버·오프라인의 진실값
+
+    // 승인을 기다리는 로컬 포커스 — 자리를 잡고 나서야 화면 앞으로 간다. 로컬 전용이라 동기화하지 않는다.
+    private PlayerTerminalFocus m_pendingFocus;
+
     // 클라이언트별 마지막 제출 시각 — 서버에서만 쓴다. 값이 아니라 간격만 보므로 라운드마다 비울 필요가 없다.
     private readonly Dictionary<ulong, double> m_lastSubmit = new Dictionary<ulong, double>();
 
@@ -78,6 +89,15 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
     /// <summary>지금 코드가 만료되기까지 남은 시간(초). 서버 시각에서 파생돼 전 피어가 같은 값을 본다.</summary>
     public float RemainingSeconds =>
         (float)System.Math.Max(0d, (IsSpawned && !IsServer ? m_deadlineSynced.Value : m_deadline) - Now);
+
+    /// <summary>지금 단말 앞에 앉은 클라이언트 — 비어 있으면 최대값. 전 피어에서 유효하다.</summary>
+    public ulong User => IsSpawned && !IsServer ? m_userSynced.Value : m_user;
+
+    /// <summary>남이 쓰는 중인가 — 조준 안내가 회색 사유를 붙일지 가른다.</summary>
+    public bool IsUsedByOther => User != k_noUser && User != LocalId;
+
+    // 이 피어의 클라이언트 id — 세션 밖(오프라인 Play)에서는 0으로 떨어진다.
+    private ulong LocalId => IsSpawned && NetworkManager != null ? NetworkManager.LocalClientId : 0ul;
 
     /// <summary>
     /// 이 클라이언트의 플레이어가 지금 이 화면 앞에 앉아 있는가 — <b>로컬 전용</b> 상태다.
@@ -101,6 +121,11 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
     public override void OnNetworkSpawn()
     {
         m_codeSynced.OnValueChanged += HandleCodeSyncedChanged;
+        m_userSynced.OnValueChanged += HandleUserSyncedChanged;
+
+        // 앉은 채로 접속이 끊기면 자리가 영영 잠긴다 — 그 라운드 동안 아무도 복구를 못 한다.
+        if (IsServer && NetworkManager != null)
+            NetworkManager.OnClientDisconnectCallback += HandleClientDisconnect;
 
         // 해킹이 진행 중일 때 들어온 피어 — 발급 통지를 놓쳤으므로 현재 코드로 화면을 맞춘다.
         if (Code != k_noCode)
@@ -112,7 +137,17 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
     public override void OnNetworkDespawn()
     {
         m_codeSynced.OnValueChanged -= HandleCodeSyncedChanged;
+        m_userSynced.OnValueChanged -= HandleUserSyncedChanged;
+
+        if (IsServer && NetworkManager != null)
+            NetworkManager.OnClientDisconnectCallback -= HandleClientDisconnect;
     }
+
+    // 자리 주인이 바뀌었다 — 내가 잡았으면 그제야 화면 앞으로 가고, 남이 잡았으면 기다리던 요청을 버린다.
+    private void HandleUserSyncedChanged(ulong previous, ulong current) => ApplySeat();
+
+    // 앉아 있던 사람이 나갔으면 자리를 비운다. 서버 전용.
+    private void HandleClientDisconnect(ulong clientId) => ServerRelease(clientId);
 
     // 서버는 SetCode에서 직접 발행하므로 여기선 원격 클라만 중계한다 (이중 발행 방지 — DeviceBlackoutEvent와 같은 구조)
     private void HandleCodeSyncedChanged(int previous, int current)
@@ -154,7 +189,12 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
     private void HandleBlackoutChanged(bool active)
     {
         if (!IsSpawned || IsServer)
+        {
             SetCode(active ? NewCode() : k_noCode);
+
+            if (!active)
+                SetUser(k_noUser); // 복구·라운드 정리로 꺼지면 자리도 비운다
+        }
 
         ApplyScreen();
     }
@@ -170,6 +210,15 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
     /// "글자만 사라지고 테두리는 빛나는" 어긋남이 생기지 않는다.
     /// </summary>
     public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.BlackoutRecovery;
+
+    /// <summary>
+    /// 막힌 사유 (#664) — 남이 앞에 앉아 있으면 회색 "사용 중"이 붙는다.
+    ///
+    /// <see cref="CanInteract"/>를 false로 만들지 않는 이유: 그러면 안내가 통째로 사라져
+    /// "왜 안 되는지"를 어디에서도 말하지 않는다 (IInteractable 주석이 지목한 그 자리다).
+    /// </summary>
+    public LocalizedString BlockedReason(GameObject interactor) =>
+        IsUsedByOther ? InteractPrompts.ReasonInUse : null;
 
     /// <summary>
     /// E 상호작용 — 화면 앞으로 카메라를 옮기고 입력을 받는다.
@@ -190,11 +239,103 @@ public class BlackoutRecoveryTerminal : NetworkBehaviour, IInteractable
             return;
         }
 
+        // 이미 내가 보고 있으면 나가기다 — 자리도 함께 비워진다(SetLocalFocused 경유).
+        if (IsLocalFocused)
+        {
+            focus.Release();
+            return;
+        }
+
+        // 남이 앉아 있으면 아무 일도 하지 않는다 — 이유는 BlockedReason이 회색으로 안내한다.
+        if (IsUsedByOther)
+            return;
+
+        // 자리를 먼저 잡는다. 승인은 서버가 하고, 확정된 뒤에야 ApplySeat가 화면 앞으로 보낸다 —
+        // 낙관적으로 먼저 앉히면 같은 프레임에 둘이 앉았다가 한쪽이 튕겨 나가는 깜빡임이 생긴다.
+        m_pendingFocus = focus;
+
+        if (!IsSpawned || IsServer)
+            ServerClaim(LocalId);
+        else
+            RequestClaimRpc();
+    }
+
+    // 자리 상태를 로컬 표현에 반영한다 — 전 피어에서 돌지만 실제로 움직이는 것은 자리 주인뿐이다.
+    private void ApplySeat()
+    {
+        if (User != LocalId)
+        {
+            m_pendingFocus = null; // 남이 먼저 잡았다 — 기다리던 요청은 버린다
+            return;
+        }
+
+        if (m_pendingFocus == null)
+            return;
+
+        PlayerTerminalFocus focus = m_pendingFocus;
+        m_pendingFocus = null;
         focus.Begin(this);
     }
 
+    // Everyone 권한 — 씬에 놓인 서버 소유 오브젝트라 어떤 플레이어도 오너가 아니다 (JailSirenButton과 동일, #55)
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void RequestClaimRpc(RpcParams rpcParams = default) => ServerClaim(rpcParams.Receive.SenderClientId);
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void RequestReleaseRpc(RpcParams rpcParams = default) => ServerRelease(rpcParams.Receive.SenderClientId);
+
+    // 자리 배정 — 비어 있을 때만 준다. 클라 게이트는 신뢰하지 않으므로 여기서 다시 본다.
+    private void ServerClaim(ulong client)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        if (!IsOnline || (m_user != k_noUser && m_user != client))
+            return;
+
+        SetUser(client);
+    }
+
+    // 자리 반납 — 자기 자리만 비울 수 있다. 위조 RPC로 남을 밀어내지 못하게 한다.
+    private void ServerRelease(ulong client)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        if (m_user != client)
+            return;
+
+        SetUser(k_noUser);
+    }
+
+    private void SetUser(ulong value)
+    {
+        if (m_user == value)
+            return;
+
+        m_user = value;
+        if (IsSpawned && IsServer)
+            m_userSynced.Value = value; // 원격은 OnValueChanged가 중계한다
+
+        ApplySeat(); // 서버·오프라인 로컬 반영 (원격은 위 동기화 콜백이 담당)
+    }
+
     /// <summary>화면 앞에 앉았는지 알린다 — <see cref="PlayerTerminalFocus"/>가 들고 날 때 부른다.</summary>
-    public void SetLocalFocused(bool focused) => IsLocalFocused = focused;
+    public void SetLocalFocused(bool focused)
+    {
+        IsLocalFocused = focused;
+        if (focused)
+            return;
+
+        m_pendingFocus = null;
+        if (User != LocalId)
+            return;
+
+        if (!IsSpawned || IsServer)
+            ServerRelease(LocalId);
+        else
+            RequestReleaseRpc();
+    }
 
     /// <summary>
     /// 입력한 코드를 제출한다 — 화면 UI가 부른다. 상호작용한 본인의 클라이언트에서 호출된다.

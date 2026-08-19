@@ -335,6 +335,10 @@ MonoBehaviour:
     m_Key: Hud.Terminal.HackHint
     m_Metadata:
       m_Items: []
+  - m_Id: 5463808403922944
+    m_Key: Hud.Interact.Reason.InUse
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

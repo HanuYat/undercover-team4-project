@@ -65,6 +65,7 @@ public static class InteractPrompts
     public static readonly LocalizedString ReasonLocked = Of("Hud.Interact.Reason.Locked");
     public static readonly LocalizedString ReasonEscorting = Of("Hud.Interact.Reason.Escorting");
     public static readonly LocalizedString ReasonNoCustody = Of("Hud.Interact.Reason.NoCustody");
+    public static readonly LocalizedString ReasonInUse = Of("Hud.Interact.Reason.InUse");
 
     private static LocalizedString Of(string key) => new LocalizedString(k_table, key);
 }
