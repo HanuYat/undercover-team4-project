@@ -51,6 +51,9 @@ public class MontageLayerBaker : EditorWindow
     // 굽는 축)에서는 배선 '후' 실제 레이어로 재는 것이 정확하다. 걸린 쌍은 ExcludeFromMontage 후보다.
     [SerializeField] private float m_minPairDistance = 0.12f;
 
+    // 비우면 화질 단계별 갈래 수를 재지 않는다 — 원본 해상도에서의 갈래 수만 보던 지금과 같다 (#724)
+    [SerializeField] private MontageClarityTable m_clarityTable;
+
     // 이미지는 전부 Imported 공유 저장소에 둔다 (2026-08-12 에셋 폴더 정리)
     [SerializeField] private string m_outputFolder = "Assets/Imported/Art/Montage/Layers";
 
@@ -133,6 +136,13 @@ public class MontageLayerBaker : EditorWindow
             0.3f
         );
         m_outputFolder = EditorGUILayout.TextField("저장 폴더", m_outputFolder);
+        m_clarityTable = (MontageClarityTable)
+            EditorGUILayout.ObjectField(
+                new GUIContent("화질 표 (선택)", "지정하면 단계별로 뭉갠 그림에서도 갈래 수를 재서 로그에 찍는다 — 최저 화질에서 값이 몇 갈래로 붕괴하는지 보는 자리 (#724)"),
+                m_clarityTable,
+                typeof(MontageClarityTable),
+                false
+            );
 
         EditorGUILayout.Space();
 
@@ -427,6 +437,7 @@ public class MontageLayerBaker : EditorWindow
 
             CollectClosePairs(axis, layers, close);
             CollectGroups(axis, layers, groups);
+            CollectClarityGroups(axis, layers, groups);
         }
 
         EditorUtility.SetDirty(m_database);
@@ -744,7 +755,9 @@ public class MontageLayerBaker : EditorWindow
             {
                 int i = y * size + x;
                 bool outline = capEdge[i] && y > capBottom;
-                bool fuzz = grownEdge[i] && ((x + y) & 1) == 0;
+                // 디더 칸도 thickness와 같은 비율로 키운다 — 1px 칸은 16px일 때만 보이고, 128px에서는
+                // 화면 표시 배율이 낮아져 안 보이는 채 회색으로 뭉개진다 (#724, 해상도를 올리며 발견).
+                bool fuzz = grownEdge[i] && (((x / thickness) + (y / thickness)) & 1) == 0;
                 result[i] = outline || fuzz ? Color.white : Color.clear; // 머리색으로 칠할 것이므로 흰색이다
             }
         }
@@ -818,52 +831,7 @@ public class MontageLayerBaker : EditorWindow
         if (layers.Count < 2)
             return;
 
-        int cells = m_resolution * m_resolution;
-        float threshold = cells * m_minPairDistance;
-
-        int[,] distance = new int[layers.Count, layers.Count];
-        for (int a = 0; a < layers.Count; a++)
-        {
-            for (int b = a + 1; b < layers.Count; b++)
-                distance[a, b] = distance[b, a] = DifferentCells(layers[a].Pixels, layers[b].Pixels);
-        }
-
-        var buckets = new List<List<int>>(layers.Count);
-        for (int i = 0; i < layers.Count; i++)
-            buckets.Add(new List<int> { i });
-
-        // 합칠 수 있는 것 중 가장 가까운 둘을 합치기를, 합칠 게 없어질 때까지 반복한다
-        while (true)
-        {
-            int bestWorst = int.MaxValue;
-            int bestA = -1;
-            int bestB = -1;
-
-            for (int a = 0; a < buckets.Count; a++)
-            {
-                for (int b = a + 1; b < buckets.Count; b++)
-                {
-                    int worst = 0;
-                    foreach (int left in buckets[a])
-                    {
-                        foreach (int right in buckets[b])
-                            worst = Mathf.Max(worst, distance[left, right]);
-                    }
-                    if (worst < threshold && worst < bestWorst)
-                    {
-                        bestWorst = worst;
-                        bestA = a;
-                        bestB = b;
-                    }
-                }
-            }
-
-            if (bestA < 0)
-                break;
-
-            buckets[bestA].AddRange(buckets[bestB]);
-            buckets.RemoveAt(bestB);
-        }
+        List<List<int>> buckets = Bucketize(layers);
 
         groups.Add($"{axis} — 레이어 {layers.Count}장이 {buckets.Count}갈래");
         foreach (List<int> bucket in buckets)
@@ -875,6 +843,63 @@ public class MontageLayerBaker : EditorWindow
             string members = string.Join(", ", bucket.ConvertAll(slot => $"[{layers[slot].Index}]"));
             groups.Add($"  한 갈래로 뭉친 {bucket.Count}값: {members}");
         }
+    }
+
+    /// <summary>화질 표 단계마다 뭉갠 픽셀로 갈래 수를 다시 잰다 — 최저 화질에서 1갈래로 붕괴하면 표에서 뺄 후보다 (#724)</summary>
+    private void CollectClarityGroups(AppearanceAxis axis, List<(int Index, Color[] Pixels)> layers, List<string> groups)
+    {
+        if (m_clarityTable == null || layers.Count < 2)
+            return;
+
+        foreach (MontageClarityStep step in m_clarityTable.Steps)
+        {
+            var degraded = layers.ConvertAll(l => (l.Index, MontageDegrader.Apply(l.Pixels, m_resolution, step)));
+            groups.Add($"  화질 {step.PixelSize}px — {Bucketize(degraded).Count}갈래");
+        }
+    }
+
+    // 완전연결 군집화 — 한 갈래 안 모든 쌍이 구분 문턱 미만이어야 합친다. 가까운 쌍 하나로 사슬처럼 이으면
+    // 서로 먼 값까지 한 갈래로 빨려 들어가 실태가 과장된다 (#619)
+    private List<List<int>> Bucketize(List<(int Index, Color[] Pixels)> layers)
+    {
+        int cells = m_resolution * m_resolution;
+        float threshold = cells * m_minPairDistance;
+
+        int[,] distance = new int[layers.Count, layers.Count];
+        for (int a = 0; a < layers.Count; a++)
+            for (int b = a + 1; b < layers.Count; b++)
+                distance[a, b] = distance[b, a] = DifferentCells(layers[a].Pixels, layers[b].Pixels);
+
+        var buckets = new List<List<int>>(layers.Count);
+        for (int i = 0; i < layers.Count; i++)
+            buckets.Add(new List<int> { i });
+
+        while (true)
+        {
+            int bestWorst = int.MaxValue, bestA = -1, bestB = -1;
+            for (int a = 0; a < buckets.Count; a++)
+            for (int b = a + 1; b < buckets.Count; b++)
+            {
+                int worst = 0;
+                foreach (int left in buckets[a])
+                foreach (int right in buckets[b])
+                    worst = Mathf.Max(worst, distance[left, right]);
+                if (worst < threshold && worst < bestWorst)
+                {
+                    bestWorst = worst;
+                    bestA = a;
+                    bestB = b;
+                }
+            }
+
+            if (bestA < 0)
+                break;
+
+            buckets[bestA].AddRange(buckets[bestB]);
+            buckets.RemoveAt(bestB);
+        }
+
+        return buckets;
     }
 
     /// <summary>두 레이어가 몇 칸에서 다르게 보이는가 — 있고 없음이 갈리거나, 둘 다 보이는데 색이 갈리는 칸.</summary>
@@ -969,6 +994,7 @@ public class MontageLayerBaker : EditorWindow
         importer.mipmapEnabled = false;
         importer.alphaIsTransparency = true;
         importer.textureCompression = TextureImporterCompression.Uncompressed;
+        importer.isReadable = true; // 화질 저하(MontageDegrader)가 런타임에 픽셀을 읽어야 한다 (#724)
         importer.SaveAndReimport();
     }
 

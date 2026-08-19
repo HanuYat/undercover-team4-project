@@ -1388,6 +1388,7 @@ MonoBehaviour:
   m_montageBase: {fileID: 21300000, guid: c45d2eea083118a468c8798fff0c31b9, type: 3}
   m_montageFace: {fileID: 21300000, guid: e1d606e7374c9394fba0477ed5936b95, type: 3}
   m_montageUnknownHair: {fileID: 21300000, guid: 23f6ac8740d48f04393d4a77cf98d4e9, type: 3}
+  m_clarityTable: {fileID: 11400000, guid: 506dfff5c32d435e9afbe5aab0fa7a2e, type: 2}
   references:
     version: 2
     RefIds: []
