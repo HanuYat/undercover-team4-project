@@ -244,6 +244,9 @@ public class NpcController : NetworkBehaviour
         if (m_death.IsDead)
             return;
 
+        // 방치 회복 — 사망 게이트 뒤, 나머지 게이트보다는 앞 (#707)
+        m_health.Tick();
+
         // 밧줄 장력 — 게이트보다 **먼저** (#390). 묶인 채 기절한 대상은 스턴 오버레이를 단 채 끌려가야 하므로,
         // 뒤로 내리면 테이저→밧줄 콤보로 잡은 대상이 그 자리에 멈춘다. (넉백과는 배타적 — StopEscort가 끌기를 정리한다)
         //

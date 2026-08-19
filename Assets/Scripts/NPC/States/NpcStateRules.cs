@@ -265,4 +265,11 @@ public static class NpcStateRules
     /// 실제 역할과 어긋나게 되어 #438에서 바꿨다.</summary>
     public static bool HasInteractKeyAction(NpcState state) =>
         state is NpcState.Captured or NpcState.Jailed;
+
+    /// <summary>방치 회복(<see cref="NpcHealth"/>)이 지금 적용될 수 있는 상태인가 — 사망·수감·호송 중 제외. (#707)</summary>
+    public static bool CanRegenerate(NpcController npc) =>
+        npc != null
+        && !npc.Death.IsDead
+        && npc.CurrentState != NpcState.Jailed
+        && npc.CurrentState != NpcState.Escorted;
 }
