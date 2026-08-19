@@ -161,16 +161,16 @@ public class BodyTint : MonoBehaviour
                 continue;
 
             int slots = renderer.sharedMaterials.Length;
+            if (slots <= 1)
+            {
+                SetBlock(renderer, m_baseColors[0], slot: -1);
+                continue;
+            }
+
             for (int slot = 0; slot < slots; slot++)
             {
-                Color color =
-                    slots > 1 && slot < m_baseColors.Length ? m_baseColors[slot]
-                    : slots > 1 ? m_baseFallback
-                    : m_baseColors[0];
-
-                m_block.Clear();
-                m_block.SetColor(s_baseColorId, color);
-                renderer.SetPropertyBlock(m_block, slot);
+                Color color = slot < m_baseColors.Length ? m_baseColors[slot] : m_baseFallback;
+                SetBlock(renderer, color, slot);
             }
         }
 
@@ -178,18 +178,14 @@ public class BodyTint : MonoBehaviour
     }
 
     /// <summary>
-    /// 모든 서브메시에 같은 블록을 민다. <paramref name="color"/>가 null이면 오버라이드를 걷는다.
+    /// 모든 렌더러에 같은 블록을 민다. <paramref name="color"/>가 null이면 오버라이드를 걷는다.
     /// </summary>
     /// <param name="visibleOnly">
     /// 칠할 때는 true — Synty 캐릭터는 안 보이는 바디 변형 메시를 여럿 달고 있어 헛일이 된다.
-    /// 걷을 때는 false — 그 사이 꺼진 렌더러에 색이 남지 않게 전부 훑는다.
+    /// 걸을 때는 false — 그 사이 꺼진 렌더러에 색이 남지 않게 전부 훑는다.
     /// </param>
     private void Push(Color? color, bool visibleOnly)
     {
-        m_block.Clear();
-        if (color.HasValue)
-            m_block.SetColor(s_baseColorId, color.Value);
-
         for (int i = 0; i < m_targets.Count; i++)
         {
             Renderer renderer = m_targets[i];
@@ -198,10 +194,29 @@ public class BodyTint : MonoBehaviour
             if (visibleOnly && (!renderer.enabled || !renderer.gameObject.activeInHierarchy))
                 continue;
 
-            // 블록은 서브메시 단위로 남는다 — 부위별로 칠한 뒤 전체 색으로 덮으려면 같은 단위로 밀어야 한다
             int slots = renderer.sharedMaterials.Length;
+            if (slots <= 1)
+            {
+                SetBlock(renderer, color, slot: -1);
+                continue;
+            }
+
+            // 부위별로 칠한 뒤 전체 색으로 덮으려면 같은 단위로 밀어야 한다 — 서브메시 블록이 더 세다
             for (int slot = 0; slot < slots; slot++)
-                renderer.SetPropertyBlock(m_block, slot);
+                SetBlock(renderer, color, slot);
         }
+    }
+
+    // slot이 -1이면 렌더러 단위 — 머티리얼이 하나뿐인 몸(NPC·1인칭 팔)은 이 경로만 탄다
+    private void SetBlock(Renderer renderer, Color? color, int slot)
+    {
+        m_block.Clear();
+        if (color.HasValue)
+            m_block.SetColor(s_baseColorId, color.Value);
+
+        if (slot < 0)
+            renderer.SetPropertyBlock(m_block);
+        else
+            renderer.SetPropertyBlock(m_block, slot);
     }
 }
