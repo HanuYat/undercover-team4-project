@@ -31,6 +31,7 @@ public static class InteractPrompts
     public static readonly LocalizedString RemoteDoorOpen = Of("Hud.Interact.RemoteDoorOpen");
     public static readonly LocalizedString FactionSymbol = Of("Hud.Interact.FactionSymbol");
     public static readonly LocalizedString MapSelect = Of("Hud.Interact.MapSelect");
+    public static readonly LocalizedString BlackoutRecovery = Of("Hud.Interact.BlackoutRecovery");
 
     // ---- 아이템 ----
     public static readonly LocalizedString Pickup = Of("Hud.Interact.Pickup");
@@ -64,6 +65,7 @@ public static class InteractPrompts
     public static readonly LocalizedString ReasonLocked = Of("Hud.Interact.Reason.Locked");
     public static readonly LocalizedString ReasonEscorting = Of("Hud.Interact.Reason.Escorting");
     public static readonly LocalizedString ReasonNoCustody = Of("Hud.Interact.Reason.NoCustody");
+    public static readonly LocalizedString ReasonInUse = Of("Hud.Interact.Reason.InUse");
 
     private static LocalizedString Of(string key) => new LocalizedString(k_table, key);
 }

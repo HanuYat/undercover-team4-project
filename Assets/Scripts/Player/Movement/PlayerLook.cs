@@ -82,6 +82,7 @@ public class PlayerLook : MonoBehaviour
     private PlayerJump m_jump;               // 공중에서는 앉기 시점 변화를 얼린다 (#189)
     private PlayerHandView m_handView;       // 3인칭 동안 1인칭 팔 감추기 (#219, #576)
     private PlayerSpectateCamera m_spectate; // 사망 관전 오빗 (#576)
+    private PlayerTerminalFocus m_terminalFocus; // 본부 단말 화면 포커스 (#689)
 
     private float m_pitch;
     private Vector2 m_smoothedLook; // 지수 감쇠로 부드럽게 만든 시점 입력 — 저속 픽셀 양자화 지터 완화 (#216)
@@ -91,7 +92,9 @@ public class PlayerLook : MonoBehaviour
     private float m_downCamBlend;   // 서기 시점(0) ↔ 다운 시점(1) 보간 진행도 (#105)
     private float m_downYaw;        // 쓰러진 동안 누적한 시야 좌우 각도 — 몸 회전이 아니라 카메라 로컬 (#252)
     private bool m_downLookTaken;   // 쓰러진 뒤 플레이어가 시선을 직접 움직였는가 — 그 순간부터 강제 피치를 놓는다
-    private bool m_lookSuspended;   // 시점 회전만 멈춘 상태 — 감정표현 휠 조준 중 (#219)
+    // 요청한 곳의 수 — 감정표현 휠(#219)과 단말 포커스(#689)가 겹칠 수 있어 bool로는 못 센다.
+    // 한쪽이 먼저 놓으면 나머지 요청까지 풀린다. CursorLock의 Push/Pop과 같은 방식이다.
+    private int m_lookSuspendCount;
     private bool m_emoteView;       // 감정표현 3인칭 시점이 요청됐는가 (#219)
     private float m_emoteCamBlend;  // 1인칭(0) ↔ 3인칭(1) 보간 진행도
     private float m_emoteYaw;       // 감정표현 중 누적한 카메라 좌우 각 — 몸은 돌리지 않는다
@@ -119,6 +122,7 @@ public class PlayerLook : MonoBehaviour
         m_jump = GetComponent<PlayerJump>();
         m_handView = GetComponent<PlayerHandView>();
         m_spectate = GetComponent<PlayerSpectateCamera>();
+        m_terminalFocus = GetComponent<PlayerTerminalFocus>();
 
         if (m_playerCamera != null)
         {
@@ -250,10 +254,10 @@ public class PlayerLook : MonoBehaviour
     /// 그쪽은 액션을 통째로 비활성화하므로 휠을 여는 홀드 입력까지 끊겨 휠이 그 순간 닫힌다.
     /// 여기서 막는 것은 <b>시점 회전 하나뿐</b>이고, 마우스 델타는 휠 조준이 계속 읽어 간다.
     /// </summary>
-    public void SetLookSuspended(bool suspended)
-    {
-        m_lookSuspended = suspended;
-    }
+    public void PushLookSuspend() => m_lookSuspendCount++;
+
+    /// <summary>시점 회전 정지 요청을 하나 거둔다 — <see cref="PushLookSuspend"/>와 반드시 짝을 지어 부른다.</summary>
+    public void PopLookSuspend() => m_lookSuspendCount = Mathf.Max(0, m_lookSuspendCount - 1);
 
     /// <summary>
     /// 이 클래스의 보간 계수는 전부 이걸 쓴다. 0이면 보간 없이 즉시. (#665)
@@ -271,7 +275,7 @@ public class PlayerLook : MonoBehaviour
         // 쓰러진 동안(다운·기절)은 열어 둔다 (#252) — 몸은 못 움직여도 주변은 볼 수 있어야 한다.
         // 감정표현 휠이 열려 있는 동안도 막는다 (#219) — 같은 마우스 이동이 칸을 고르는 조준이라,
         // 화면까지 함께 돌면 고르는 내내 시점이 휩쓸린다.
-        if ((m_movement != null && m_movement.IsRoundOver) || CursorLock.IsUnlocked || m_lookSuspended)
+        if ((m_movement != null && m_movement.IsRoundOver) || CursorLock.IsUnlocked || m_lookSuspendCount > 0)
         {
             m_smoothedLook = Vector2.zero; // 재개 시 잠긴 동안의 스무딩 잔여값으로 튀지 않도록 초기화 (#216)
             return;
@@ -452,6 +456,20 @@ public class PlayerLook : MonoBehaviour
         // 피벗이 루트가 아니라 시체(골반)라 <b>월드에서 만들어 로컬로 되돌린다</b> — 래그돌 비행
         // 중에는 루트가 제자리에 남고 yaw만 몸을 따라가므로(PlayerRagdoll의 FollowBodyYaw),
         // 루트 기준으로 잡으면 날아가는 내 몸을 화면이 놓친다.
+        // 본부 단말 포커스 (#689) — 관전보다 먼저 얹어야 사망이 이긴다. 뒤집으면 죽은 뒤에도
+        // 카메라가 컴퓨터에 붙어 있다.
+        if (m_terminalFocus != null)
+        {
+            float focusBlend = m_terminalFocus.Tick(); // 포커스 중이 아니어도 불러야 이탈 보간이 진행된다
+
+            if (focusBlend > 0.001f
+                && m_terminalFocus.TryGetPose(out Vector3 focusPos, out Quaternion focusRot))
+            {
+                localPos = Vector3.Lerp(localPos, transform.InverseTransformPoint(focusPos), focusBlend);
+                localRot = Quaternion.Slerp(localRot, Quaternion.Inverse(transform.rotation) * focusRot, focusBlend);
+            }
+        }
+
         if (m_spectate != null)
         {
             float spectateBlend = m_spectate.Tick(); // 관전 중이 아니어도 불러야 이탈 보간이 진행된다

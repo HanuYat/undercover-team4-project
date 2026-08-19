@@ -6789,6 +6789,7 @@ GameObject:
   - component: {fileID: -5847868601103535694}
   - component: {fileID: 8718556211917965241}
   - component: {fileID: 2157526431572492624}
+  - component: {fileID: 1286722615097752607}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -7856,6 +7857,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerTeamStatusInput
   ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &1286722615097752607
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 566eba9415ee9dc4688320404ea28b62, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerTerminalFocus
+  m_blendSpeed: 7
 --- !u!1 &5606094146414363504
 GameObject:
   m_ObjectHideFlags: 0
