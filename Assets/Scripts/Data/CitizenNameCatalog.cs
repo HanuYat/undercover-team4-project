@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Localization.Settings;
 
@@ -49,4 +50,27 @@ public class CitizenNameCatalog : ScriptableObject
         var locale = LocalizationSettings.SelectedLocale;
         return locale != null && locale.Identifier.Code.StartsWith("ko");
     }
+
+#if UNITY_EDITOR
+    // 같은 이름이 두 번 들어가면 한 라운드에 동명이인이 생겨 인명부 대조(#223)가 무의미해진다.
+    // 풀은 섞기만 하고 중복을 걸러내지 않으므로 넣는 시점에 잡는다. (#752)
+    private void OnValidate()
+    {
+        WarnDuplicates(m_korean, nameof(m_korean));
+        WarnDuplicates(m_english, nameof(m_english));
+    }
+
+    private void WarnDuplicates(string[] names, string listName)
+    {
+        if (names == null)
+            return;
+
+        var seen = new HashSet<string>();
+        for (int i = 0; i < names.Length; i++)
+        {
+            if (!string.IsNullOrEmpty(names[i]) && !seen.Add(names[i]))
+                Debug.LogWarning($"[{name}] {listName}에 중복된 이름이 있다: {names[i]}", this);
+        }
+    }
+#endif
 }
