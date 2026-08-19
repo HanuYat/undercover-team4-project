@@ -122,6 +122,15 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
+                },
+                {
+                    "name": "TeamStatus",
+                    "type": "Button",
+                    "id": "5b7e0c14-2a93-4d76-9f38-6c1a5e8b2740",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
                 }
             ],
             "bindings": [
@@ -557,7 +566,7 @@
                 {
                     "name": "",
                     "id": "b4440144-0144-4b00-8000-000000000144",
-                    "path": "<Keyboard>/tab",
+                    "path": "<Keyboard>/i",
                     "interactions": "",
                     "processors": "",
                     "groups": "Keyboard&Mouse",
@@ -573,6 +582,17 @@
                     "processors": "",
                     "groups": "Keyboard&Mouse",
                     "action": "Emote",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "c9f26a38-4d71-4e5b-8a02-3f7d9b1c6e85",
+                    "path": "<Keyboard>/tab",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "TeamStatus",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

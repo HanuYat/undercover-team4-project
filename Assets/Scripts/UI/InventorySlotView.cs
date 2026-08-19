@@ -6,7 +6,7 @@ using TMPro;
 
 /// <summary>
 /// 인벤토리 핫바의 슬롯 한 칸 (#144). 아이콘·이름 표시와 선택 하이라이트,
-/// 편집 모드(Tab)에서의 호버 툴팁·드래그 정렬 이벤트를 담당한다. 로직은 InventoryBarView가 소유.
+/// 편집 모드(I)에서의 호버 툴팁·드래그 정렬 이벤트를 담당한다. 로직은 InventoryBarView가 소유.
 /// </summary>
 public class InventorySlotView : MonoBehaviour,
     IPointerEnterHandler, IPointerExitHandler,

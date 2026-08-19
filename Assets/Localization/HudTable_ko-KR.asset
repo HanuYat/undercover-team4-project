@@ -341,6 +341,30 @@ MonoBehaviour:
     m_Localized: "\uC804\uBD80 \uB193\uAE30"
     m_Metadata:
       m_Items: []
+  - m_Id: 5472766220918784
+    m_Localized: "\uC0DD\uC874"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5472766308999168
+    m_Localized: "\uB0A9\uCE58"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5472766308999169
+    m_Localized: "\uC0AC\uB9DD"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5472766308999170
+    m_Localized: "팀 상황"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5472766308999171
+    m_Localized: "대원"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5472766308999172
+    m_Localized: "수배"
+    m_Metadata:
+      m_Items: []
   - m_Id: 5439534670635008
     m_Localized: "\uBCF5\uAD6C \uCF54\uB4DC \uC785\uB825"
     m_Metadata:

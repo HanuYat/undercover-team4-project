@@ -65,7 +65,7 @@ public class PlayerItemUser : MonoBehaviour
 
     private void HandleUseItem()
     {
-        // 커서가 풀려 있으면 좌클릭은 UI 것이다 — 인벤토리 편집(Tab)은 슬롯을 좌클릭으로 끌기 때문에
+        // 커서가 풀려 있으면 좌클릭은 UI 것이다 — 인벤토리 편집(I)은 슬롯을 좌클릭으로 끌기 때문에
         // 그 클릭이 아이템 사용까지 때린다. 편집 모드는 WASD를 감지해 닫혀야 해서 입력 정지
         // (SetSuspended)를 쓸 수 없다 — 커서 상태로 게이트한다. 뗌(HandleCancelItem)은 막지 않는다:
         // 채널링 도중 커서가 풀리면 취소가 닿아야 한다. (#352)
@@ -99,7 +99,7 @@ public class PlayerItemUser : MonoBehaviour
 
     /// <summary>
     /// 진행 중인 채널링을 취소한다 — 좌클릭 뗌(<see cref="HandleCancelItem"/>) 외에,
-    /// 좌클릭을 누른 채 커서가 풀리는 경로(인벤토리 편집 Tab)도 이걸 부른다. (#352)
+    /// 좌클릭을 누른 채 커서가 풀리는 경로(인벤토리 편집 I)도 이걸 부른다. (#352)
     /// </summary>
     public void CancelUse()
     {
