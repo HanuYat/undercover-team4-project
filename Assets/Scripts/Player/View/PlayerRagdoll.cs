@@ -43,8 +43,6 @@ public class PlayerRagdoll : MonoBehaviour
     // 되살릴 때 판정을 쥔 것은 루트이므로 부활·라운드 리셋은 정상 동작한다.
     private const float k_lostBodyTimeoutFactor = 4f;
 
-    // 원격 정렬이 "끝났다"로 보는 수평 잔차(m) — 이 안에 들어오면 정착해도 굳는 오프셋이 눈에 띄지 않는다.
-    private const float k_alignedTolerance = 0.05f;
 
     // 사망 동기화를 기다려 주는 시간(초). 이 값이 하는 일은 <b>안전망뿐</b>이다 — 정상 경로에서는
     // 사망이 다음 몇 틱 안에 반드시 도착하므로 걸리지 않는다. 걸리는 경우는 대상이 아주 빠르게
@@ -91,22 +89,6 @@ public class PlayerRagdoll : MonoBehaviour
              "(RagdollRig.TryGetBodyYaw) 클립 사정인 이 보정만 여기서 얹는다")]
     [SerializeField] private float m_rootYawOffset;
 
-    [Tooltip("원격 피어가 착지한 시체를 오너 위치로 당겨오는 속도(m/s) — 수평만. 크게 잡으면 " +
-             "스냅처럼 보인다. 착지 후 구르는 중의 델타는 실측 0.15~0.23m라 이 속도로 충분하다")]
-    [SerializeField] private float m_alignPullSpeed = 1.5f;
-
-    [Tooltip("원격 피어가 비행 중 시체를 오너 골반으로 당겨오는 속도(m/s) — 3차원. 착지 후 값(1.5)으로는 " +
-             "따라붙지 못한다. 병리적 루트 점프를 뼈로 넘기지 않기 위한 상한이라 정상 비행에서는 " +
-             "걸리지 않는다(진입 시 델타 0에서 출발). " +
-             "⚠ <b>시체의 비행 속도와 짝이다</b> — BombDevice.m_ragdollImpulseScale을 올리면 여기도 " +
-             "같이 올릴 것. 16은 폭심 임펄스(약 10.3m/s)에 대한 여유다")]
-    [SerializeField] private float m_flightAlignPullSpeed = 16f;
-
-    [Tooltip("원격 시체가 스트리밍된 루트에서 이만큼(m) 벗어나면 보정을 스냅으로 바꾼다 — 안전망이다. " +
-             "정상 동작에서는 걸리지 않아야 하고, 자주 걸리면 잔차가 큰 것이므로 보정을 세게 할 게 " +
-             "아니라 입력(임펄스·밧줄)이 어긋난 것을 봐야 한다")]
-    [SerializeField] private float m_alignSnapDistance = 2.5f;
-
     [Header("애니메이터 복귀")]
     [Tooltip("정착 포즈 → 애니메이터 포즈 보간 시간(초)")]
     [SerializeField] private float m_blendSeconds = 0.4f;
@@ -114,11 +96,6 @@ public class PlayerRagdoll : MonoBehaviour
     [Tooltip("부활 순간의 yaw를 실측해 콘솔에 남긴다 — m_rootYawOffset을 맞추기 위한 계측이다. " +
              "값이 확정되면 끈다")]
     [SerializeField] private bool m_logRevivalYaw;
-
-    [Tooltip("시체가 지면을 파고드는지 1초 간격으로 실측해 남긴다 — 호스트와 클라 로그를 나란히 놓고 " +
-             "골반 높이가 갈리는지(스트림 문제) 아니면 뼈만 파고드는지(키네마틱 골반이 못 버티는 것)를 " +
-             "가른다. 값이 확정되면 끈다")]
-    [SerializeField] private bool m_logSinkDiagnostics;
 
     [Header("사망 전용 모델 (#571 분리)")]
     [Tooltip("살아있는 몸의 스킨 — 사망 중에만 끈다.\n\n" +
@@ -139,12 +116,18 @@ public class PlayerRagdoll : MonoBehaviour
     private int m_expectedPoseBones; // 포즈 복사가 전부 닿았는지 대조할 기대치 (CopyPose)
     private bool m_corpseVisible; // 시체가 지금 보이고 물리에 참여하는가 (오브젝트 활성 여부가 아니다)
 
-    // 골반이 NetworkTransform으로 직접 복제되는가 — 프리팹 배선에서 읽는다.
-    //
-    // <b>스위치를 따로 두지 않는다.</b> 배선과 코드가 어긋날 여지를 없애려고 컴포넌트 존재 자체를
-    // 진실로 삼는다. 참이면 궤적의 주인이 루트에서 골반으로 넘어가므로 원격 정렬이 필요 없어지고
-    // (오히려 싸운다), 비권위 피어의 골반은 키네마틱으로 남아야 한다.
-    private bool m_hipsIsNetworkSynced;
+
+    [Tooltip("정착 순간 앞뒤 20프레임을 한 줄씩 찍는다 — <b>정착할 때 몸이 아래로 내려갔다 올라오는</b> " +
+             "현상을 잡는 계측이다.\n\n" +
+             "딥은 한순간이라 사후에 찍으면 이미 지나가 있다. 그래서 매 프레임을 링버퍼에 담아 두고 " +
+             "정착하는 순간 <b>이전 20프레임 + 이후 20프레임</b>을 함께 쏟는다.\n\n" +
+             "읽는 법 — 프레임 0이 정착이다:\n" +
+             "· <b>루트Y가 0에서 뚝 떨어지면</b> Settle이 루트를 지면으로 내린 낙차다. 원격의 " +
+             "키네마틱 뼈가 계층으로 그것을 따라가면 골반월드Y도 같이 내려간다\n" +
+             "· <b>골반월드Y만 내려갔다 올라오면</b> 스트림 종료와 최종 자세 적용 사이의 빈 구간이다\n" +
+             "· <b>골반로컬Y가 튀면</b> 최종 자세(로컬 좌표)가 옛 루트 기준으로 적용된 것이다\n\n" +
+             "확정되면 끈다")]
+    [SerializeField] private bool m_logSettleTrace;
 
     // 전 뼈 자세 스트림 — 이 컴포넌트가 피어로 내보내는 유일한 통로다.
     // NPC와 같은 부품을 그대로 쓰고, 갈리는 것은 <b>권위뿐</b>이다(프리팹에서 Owner로 박는다).
@@ -219,10 +202,6 @@ public class PlayerRagdoll : MonoBehaviour
         m_rig.EnsureCollected();
 
         m_corpse = m_rig.gameObject;
-
-        m_hipsIsNetworkSynced =
-            m_rig.HipsBody != null
-            && m_rig.HipsBody.GetComponent<Unity.Netcode.Components.NetworkTransform>() != null;
 
         // 시체는 <b>항상 활성</b>이어야 한다 — NGO가 비활성 GameObject의 NetworkBehaviour를 스폰에서
         // 제외하고 나중에 만회하지 않으므로(RagdollRig.SetBoneCollidersEnabled 주석) 골반의
@@ -424,6 +403,7 @@ public class PlayerRagdoll : MonoBehaviour
 
         m_holdPoseUntilStream = false;
         m_state = RagdollState.Settled;
+        DumpSettleTrace();
     }
 
     private void OnDestroy()
@@ -741,68 +721,7 @@ public class PlayerRagdoll : MonoBehaviour
 
     private float m_sinkLogTimer;
 
-    /// <summary>
-    /// 시체 상태를 1초 간격으로 남긴다 — <b>호스트와 클라 로그를 나란히 놓고 읽는다.</b>
-    /// 평소에는 꺼 두고, 래그돌이 이상하게 보일 때 켠다.
-    ///
-    /// 네 칸이 각각 <b>불변식 하나씩을 지킨다</b>:
-    /// <list type="bullet">
-    ///   <item><c>골반↔최저뼈</c> — 골격이 낼 수 있는 최대(골반→발끝 약 0.9m)를 넘으면 자세가
-    ///   이상한 게 아니라 <b>관절이 위반된 것</b>이다. 뼈 길이 오염(불변식 10)이 재발하면 여기서
-    ///   먼저 보인다.</item>
-    ///   <item><c>뼈길이드리프트</c> — 그 원인을 직접 잰다. 0이 아니면 관절의 <c>connectedAnchor</c>
-    ///   기준과 실제 골격이 어긋나 있다는 뜻이다.</item>
-    ///   <item><c>최저뼈-지면</c> — 음수면 몸이 지면을 파고들었다.</item>
-    ///   <item><c>루트↔골반수평</c> — 이름표·상호작용이 시체와 벌어진 거리. 화면에서 보이는 간격 그 자체다.</item>
-    /// </list>
-    ///
-    /// <c>골반키네마틱</c>·<c>모드</c>는 어느 피어가 무엇을 쥐고 있는지 가르는 기준이라 함께 남긴다.
-    /// </summary>
-    private void TickSinkDiagnostics()
-    {
-        m_sinkLogTimer += Time.deltaTime;
-        if (m_sinkLogTimer < 1f)
-            return;
 
-        m_sinkLogTimer = 0f;
-
-        Vector3 hips = m_rig.Hips.position;
-        bool haveGround = TryGroundUnder(hips, out Vector3 ground);
-        float lowest = m_rig.LowestBoneY;
-
-        // 골반에서 가장 낮은 뼈까지의 <b>수직 거리</b> — 관절이 늘어났는지를 직접 재는 값이다.
-        // 골격이 물리적으로 낼 수 있는 값에는 상한이 있다(골반에서 발끝까지, 약 0.9m). 이걸 넘으면
-        // 자세가 이상한 것이 아니라 <b>관절이 위반된 것</b>이고, A안에서는 2.75m가 나왔다.
-        float stretch = hips.y - lowest;
-
-        // 루트와 골반의 <b>수평</b> 거리 — 이름표·상호작용이 시체와 얼마나 어긋나는지를 그대로 재는 값이다.
-        // 이름표는 루트에 매달려 있고 몸은 골반을 따르므로, 이 값이 곧 화면에서 보이는 간격이다.
-        // 높이는 뺀다 — 정착 후 루트는 캡슐 밑면(지면)이고 골반은 그 위라 상시 차이가 나는 것이 정상이다.
-        Vector3 rootGap = m_root.position - hips;
-        rootGap.y = 0f;
-
-        // 관절이 보는 뼈 길이가 프리팹 값에서 벗어났는가 — 위 <c>골반↔최저뼈</c>의 원인 쪽 값이다.
-        float drift = m_rig.MaxBindPositionDrift;
-
-        Debug.Log(
-            $"[래그돌 침하] 권한={HasMoveAuthority} 모드={DescribeHipsMode()} 상태={m_state} "
-                + $"| 골반Y={hips.y:F3} 지면Y={(haveGround ? ground.y.ToString("F3") : "없음")} "
-                + $"골반-지면={(haveGround ? (hips.y - ground.y).ToString("F3") : "-")} "
-                + $"| 최저뼈Y={lowest:F3} "
-                + $"최저뼈-지면={(haveGround ? (lowest - ground.y).ToString("F3") : "-")} "
-                + $"| 골반↔최저뼈={stretch:F3}{(stretch > 1.2f ? " ⚠관절위반" : "")} "
-                + $"| 루트↔골반수평={rootGap.magnitude:F3}{(rootGap.magnitude > 0.3f ? " ⚠이름표어긋남" : "")} "
-                + $"| 뼈길이드리프트={drift:F4}{(drift > 0.01f ? " ⚠관절기준어긋남" : "")} "
-                + $"| 골반키네마틱={(m_rig.HipsBody != null ? m_rig.HipsBody.isKinematic.ToString() : "?")} "
-                + $"평균속도={m_rig.AverageSpeed:F2}",
-            this
-        );
-    }
-
-    // 골반이 스트림의 소유물인가 — 호스트·클라 로그를 나란히 놓을 때 이 한 칸이 기준이 된다.
-    // 배선(골반 NetworkTransform)에서 읽으므로, 프리팹을 바꾸면 로그도 따라온다.
-    private string DescribeHipsMode() =>
-        m_hipsIsNetworkSynced ? "골반복제(권위 전용 밧줄)" : "전부동적+정렬";
 
     // ---- yaw 진단 (m_rootYawOffset 캘리브레이션) ----
 
@@ -893,10 +812,6 @@ public class PlayerRagdoll : MonoBehaviour
         RefreshCapsuleIgnoreOnReenable();
         PollDeath();
 
-        if (m_logSinkDiagnostics
-            && (m_state == RagdollState.Ragdoll || m_state == RagdollState.Settled))
-            TickSinkDiagnostics();
-
         if (m_state != RagdollState.Ragdoll)
             return;
 
@@ -934,24 +849,12 @@ public class PlayerRagdoll : MonoBehaviour
     /// 시체가 허공에 매달렸다. <see cref="GroundUnder"/>의 옛 주석은 "못 찾으면 중력이 남은 차이를
     /// 메운다"고 했지만 원격에서는 거짓이다 — <see cref="PlayerMovement"/>가 꺼져 있어 중력이 돌지 않는다.
     ///
-    /// ② 당겨오기는 <c>m_alignPullSpeed</c>(1.5m/s)로 제한되므로 실측 1.2m면 0.8초가 걸린다. 정지
-    /// 판정은 0.3초라, 이 가드가 없으면 <b>거의 항상 당겨오는 도중에 정착</b>해 남은 델타가 굳는다.
+    /// ⚠ <b>②(원격의 당겨오기 완료 대기)가 사라졌다.</b> 그 가드는 원격이 <b>자기 물리로 정착을
+    /// 판정하던</b> 시절의 것이다 — 매 프레임 루트 쪽으로 당겨 오는 도중에 정착하면 남은 델타가
+    /// 그대로 굳어서, 다 당겨졌는지 물어봐야 했다. 지금은 <b>정착 판정 자체를 권위만 돈다</b>
+    /// (<see cref="Update"/>의 게이트). 원격은 정착 자세를 받아 상태만 넘기므로 물을 것이 없다.
     /// </summary>
-    private bool IsReadyToSettle()
-    {
-        if (!HasGroundUnderHips())
-            return false;
-        if (HasMoveAuthority)
-            return true; // 오너는 캡슐이 이미 시체를 따라와 있다 (TickCapsuleFollow)
-
-        // 골반을 직접 복제하면 원격 골반이 곧 오너 골반이다 — 당겨오기를 기다릴 이유가 없다.
-        if (m_hipsIsNetworkSynced)
-            return true;
-
-        Vector3 delta = m_root.position - m_rig.Hips.position;
-        delta.y = 0f;
-        return delta.sqrMagnitude <= k_alignedTolerance * k_alignedTolerance;
-    }
+    private bool IsReadyToSettle() => HasGroundUnderHips();
 
     // 골반 밑에 지면이 있는가 — 정착 자격과 원격 정렬이 함께 쓴다. 탐색 거리는 정착 정렬과 같은 값을
     // 쓴다 (다른 값을 쓰면 "정착해도 된다"고 판단한 뒤 정렬이 지면을 못 찾는 모순이 생긴다).
@@ -1030,31 +933,11 @@ public class PlayerRagdoll : MonoBehaviour
         if (m_state == RagdollState.BlendingToAnimator && m_blend.Tick(m_blendSeconds))
             m_state = RagdollState.Animated;
 
-        // 원격의 시체를 스트리밍된 루트에 맞춘다 — 오너 쪽 짝(TickCapsuleFollow)은 PlayerMovement가
-        // 돌린다(그쪽은 이 컴포넌트가 비활성인 원격에서도 순서를 보장해야 하는 시점·이동과 얽혀 있다).
-        // 여기서 하는 이유: 원격에서는 PlayerMovement가 꺼져 있고(오너만 켜진다), NetworkTransform이
-        // 이번 프레임에 적용한 루트 위치를 LateUpdate에서 읽어야 한 프레임 늦지 않는다.
-        //
-        // <b>정착 후에도 계속 맞춘다.</b> §9-7로 골반 용접을 없앤 뒤로는 정착 후 원격의 뼈를 붙들어
-        // 주는 것이 아무것도 없어서, 밧줄로 끌면 <b>루트(이름표·파티클)만 가고 모델은 제자리에 남았다.</b>
-        //
-        // ⚠ 이건 힘 튜닝이 아니다 — <b>원격의 시체는 판정의 주인이 아니라 표시</b>이고, 권위 있는
-        // 위치는 스트리밍된 루트다. 원격의 로컬 물리는 <b>포즈</b>만 만들고 <b>궤적</b>은 오너에게서
-        // 받는다. 단 <b>동력이 아니라 표류 방지</b>다 — 몸을 움직이는 것은 각 피어의 로컬 물리
-        // (임펄스·밧줄)이고, 여기서 하는 일은 그 결과가 루트에서 서서히 벗어나는 것을 막는 것뿐이다.
-        // 입력이 같아지면 잔차가 작아 보정이 눈에 띄지 않는다. (§10-5)
-        //
-        // <b>골반을 직접 복제하면 이 보정을 끈다</b> — 궤적의 주인이 루트에서 골반으로 넘어가므로
-        // 좁힐 잔차가 없고, 켜 두면 스트림이 놓은 골반을 매 프레임 루트 쪽으로 밀어 서로 싸운다.
-        // 지금 프리팹이 그 배선이라 이 함수는 <b>실제로는 돌지 않는다</b> — 남겨 둔 것은 골반 복제를
-        // 빼면 곧바로 옛 동작으로 돌아갈 수 있게 하기 위해서다.
-        if (!m_hipsIsNetworkSynced
-            && !HasMoveAuthority
-            && (m_state == RagdollState.Ragdoll || m_state == RagdollState.Settled))
-            TickAlignBonesToRoot();
-
         // 스트림이 아직 몸을 쥐기 전이면 진입 시점의 자세를 붙든다 — <b>루트에 끌려가지 않게.</b>
         TickHoldPoseUntilStream();
+
+        // 붙들기까지 끝난 뒤에 담는다 — 여기가 렌더 직전이라 화면에 보이는 값과 같다.
+        TickSettleTrace();
     }
 
     /// <summary>
@@ -1077,6 +960,102 @@ public class PlayerRagdoll : MonoBehaviour
     /// <b>렌더 전용이다</b> — 이 프로젝트는 <c>m_AutoSyncTransforms = 0</c>이라 여기 쓴 값이 PhysX로
     /// 넘어가지 않는다. 원격의 뼈는 물리에 참여하지 않으므로 잃는 것도 없다.
     /// </summary>
+    // ---- 정착 딥 추적 (m_logSettleTrace) — ⚠ 임시 계측, 원인이 잡히면 지운다 ----
+
+    // "몸이 바닥에 있다"로 보는 골반 높이(m) — 이 안이면 루트 높이를 골반이 아니라 <b>지면</b>이
+    // 준다(<see cref="TickCapsuleFollow"/>). 누운 시체의 골반은 약 0.2m이고 서 있거나 날아가는 몸은
+    // 그보다 훨씬 높다 — 정확한 경계가 필요한 값이 아니라 <b>그 둘을 가르기만</b> 하면 된다.
+    // <c>NpcRagdoll</c>의 같은 이름 상수와 같은 값이다.
+    private const float k_groundedHipsHeight = 0.5f;
+
+    private const int k_settleTraceFrames = 20;
+
+    private struct SettleTraceSample
+    {
+        public int Frame;
+        public float RootY;
+        public float HipsWorldY;
+        public float HipsLocalY;
+        public bool Driven;
+        public RagdollState State;
+    }
+
+    private SettleTraceSample[] m_trace;
+    private int m_traceHead;
+    private int m_traceFilled;
+    private int m_traceAfter; // 정착 뒤로 더 찍을 프레임 수 (0이면 안 찍는 중)
+    private int m_traceSettleFrame;
+
+    // 매 프레임 담아만 둔다 — 찍는 것은 정착하는 순간이다. 딥이 한순간이라 사후 관측이 불가능하다.
+    private void TickSettleTrace()
+    {
+        if (!m_logSettleTrace || m_rig == null || !m_rig.IsValid || m_rig.Hips == null)
+            return;
+
+        if (m_state == RagdollState.Animated)
+            return;
+
+        if (m_trace == null || m_trace.Length != k_settleTraceFrames)
+        {
+            m_trace = new SettleTraceSample[k_settleTraceFrames];
+            m_traceHead = 0;
+            m_traceFilled = 0;
+        }
+
+        SettleTraceSample sample = new SettleTraceSample
+        {
+            Frame = Time.frameCount,
+            RootY = m_root != null ? m_root.position.y : float.NaN,
+            HipsWorldY = m_rig.Hips.position.y,
+            HipsLocalY = m_rig.Hips.localPosition.y,
+            Driven = m_streamer != null && m_streamer.IsStreamDriven,
+            State = m_state,
+        };
+
+        m_trace[m_traceHead] = sample;
+        m_traceHead = (m_traceHead + 1) % k_settleTraceFrames;
+        if (m_traceFilled < k_settleTraceFrames)
+            m_traceFilled++;
+
+        // 정착 이후 구간 — 실시간으로 이어 찍는다.
+        if (m_traceAfter > 0)
+        {
+            m_traceAfter--;
+            LogTraceSample(sample);
+        }
+    }
+
+    // 정착하는 순간 링버퍼를 쏟고, 이후 구간을 이어 찍도록 예약한다. 양쪽 피어가 같은 함수를 쓴다.
+    private void DumpSettleTrace()
+    {
+        if (!m_logSettleTrace)
+            return;
+
+        m_traceSettleFrame = Time.frameCount;
+        Debug.Log(
+            $"[정착추적] ===== 정착 (권한={HasMoveAuthority} 프레임={m_traceSettleFrame}) — "
+                + $"이전 {m_traceFilled}프레임 ↓ =====",
+            this
+        );
+
+        int start = (m_traceHead - m_traceFilled + k_settleTraceFrames) % k_settleTraceFrames;
+        for (int i = 0; i < m_traceFilled; i++)
+            LogTraceSample(m_trace[(start + i) % k_settleTraceFrames]);
+
+        m_traceAfter = k_settleTraceFrames;
+    }
+
+    // 한 샘플이 한 줄이다 — 여러 줄로 쓰면 MPPM 로그에서 잘린다.
+    private void LogTraceSample(SettleTraceSample sample)
+    {
+        Debug.Log(
+            $"[정착추적] 권한={HasMoveAuthority} f={sample.Frame - m_traceSettleFrame:+0;-0;0} "
+                + $"루트Y={sample.RootY:F3} 골반월드Y={sample.HipsWorldY:F3} "
+                + $"골반로컬Y={sample.HipsLocalY:F3} 스트림={sample.Driven} 상태={sample.State}",
+            this
+        );
+    }
+
     private void TickHoldPoseUntilStream()
     {
         if (!m_holdPoseUntilStream || m_streamer == null || HasMoveAuthority)
@@ -1117,18 +1096,36 @@ public class PlayerRagdoll : MonoBehaviour
         // 대표하지 못하고, 이름표·운반 조준·부활 히트박스가 전부 루트에 붙어 있어 그만큼 어긋난다.
         Vector3 target = m_rig.Hips.position;
 
-        // <b>단 정착 후에는 캡슐이 지면에 앉는다.</b> 수평은 그대로 골반을 따라가되 높이만 지면이 준다.
+        // <b>단 몸이 바닥에 있으면 캡슐이 지면에 앉는다.</b> 수평은 그대로 골반을 따라가되
+        // 높이만 지면이 준다.
         //
         // 비행 중처럼 골반 높이(지면 위 약 0.3m)에 붙여 두면 두 가지가 깨진다:
         //  · 캡슐이 내내 <c>공중</c>이라 CharacterController가 접지를 못 본다
         //  · <b>끌리며 시체가 위아래로 튀는 것이 그대로 루트의 높이가 되어 스트림에 실린다.</b>
         //
+        // ⚠ <b>예전에는 <c>Settled</c>일 때만 앉혔다 — 무너지는 동안까지 넓혔다.</b> (실측 2026-08-19)
+        //
+        // 그러면 정착하는 순간 루트가 골반 높이에서 지면으로 <b>한 방에</b> 떨어진다. 권위 피어는
+        // 아래 <c>CapturePose</c>/<c>RestoreCapturedPose</c>가 그 프레임을 감싸 무사하지만,
+        // <b>원격은 그 낙차를 루트 NetworkTransform으로 받는다</b> — 원격의 뼈는 키네마틱이라
+        // 계층을 그대로 따라가므로 몸이 통째로 내려갔다 올라온다.
+        // 실측: 루트 0.402 → 0.173(<b>23cm</b>), 골반월드 0.403 → 0.300 → 0.401(<b>10cm 딥, 5프레임</b>).
+        //
+        // 미리 지면에 앉혀 두면 정착 낙차가 0이라 끌 것이 애초에 없다.
+        // <c>NpcRagdoll.TickRootFollow</c>가 같은 이유로 같은 처리를 하고 있고
+        // (<c>k_groundedHipsHeight</c>), 플레이어만 안 받고 있었다.
+        //
+        // <b>공중에서는 앉히지 않는다</b> — 날아가는 동안 루트가 시체를 대표해야 이름표·운반
+        // 조준·부활 히트박스가 따라간다. 그래서 <b>골반이 낮을 때만</b>이다.
+        //
         // 지면 판정은 정착 정렬(ResolveSettledRootPose)과 같은 것을 쓴다 — 두 곳이 다른 높이를
         // 내면 정착하는 순간 캡슐이 튄다.
-        if (
+        bool haveGround = TryGroundUnder(m_rig.Hips.position, out Vector3 ground);
+        bool bodyIsGrounded =
             m_state == RagdollState.Settled
-            && TryGroundUnder(m_rig.Hips.position, out Vector3 ground)
-        )
+            || (haveGround && m_rig.Hips.position.y - ground.y <= k_groundedHipsHeight);
+
+        if (haveGround && bodyIsGrounded)
             target.y = ground.y - CapsuleBottomOffset;
 
         // ⚠ <b>루트를 옮기기 전에 뼈를 잡아 두고, 아래에서 되돌린다.</b>
@@ -1196,81 +1193,7 @@ public class PlayerRagdoll : MonoBehaviour
 
     // ---- 원격 정렬 ----
 
-    /// <summary>
-    /// 원격 피어의 시체를 스트리밍된 루트에 맞춘다 — <b>원격 전용.</b>
-    ///
-    /// 오너의 캡슐이 골반을 따라오므로(<see cref="TickCapsuleFollow"/>) <b>스트리밍된 루트의 수평
-    /// 위치가 곧 오너 골반의 수평 위치다</b> — 뼈를 따로 동기화하지 않고도 원격이 오너의 궤적을
-    /// 받는다(#506 결정 4 "뼈를 동기화하지 않는다"를 지킨다).
-    ///
-    /// 리그 루트 오프셋으로는 못 고친다 — <b>동적 리지드바디는 부모 트랜스폼을 따르지 않는다.</b>
-    /// 그래서 뼈의 <c>position</c>에 직접 델타를 더한다(<see cref="RagdollRig.TranslateBy"/>).
-    /// </summary>
-    private void TickAlignBonesToRoot()
-    {
-        // <b>비행 중에도 당겨온다.</b> §9-10이 "비행 중 정렬하면 시체 궤적이 캡슐 궤적으로 덮인다"고
-        // 결론 냈지만, 그 측정은 <b>캡슐이 시체를 못 따라가던 시절</b>의 것이다(시체 38.8m / 캡슐
-        // 0.23m). 진짜 교훈은 "보정하지 마라"가 아니라 <b>"접지된 캡슐을 기준으로 보정하지 마라"</b>
-        // 였다 — 그때 루트는 지면을 타는 CharacterController였으니 그걸 향해 당기면 포물선이 평평해진다.
-        //
-        // 캡슐 추종이 들어온 뒤로 <b>스트리밍된 루트 = 오너 골반</b>이다(실측 시체 55.28m / 루트
-        // 55.24m). 기준이 시체의 궤적 자체가 됐으므로 당겨오는 것이 이제는 옳다.
-        bool grounded = HasGroundUnderHips();
 
-        Vector3 delta = m_root.position - m_rig.Hips.position;
-
-        // 착지 후에만 높이를 뺀다 — 그때는 각 피어의 지형 충돌이 높이의 주인이고, 같은 지형이므로
-        // 편차가 작다. 반대로 <b>비행 중에는 3차원으로 맞춘다</b>: 공중에는 높이를 정해 줄 지형 접촉이
-        // 없고, 오너 골반의 고도(=포물선의 정점)를 받아야 원격도 같은 궤적을 그린다. 여기서 y를 지우면
-        // 원격 시체만 뜨지 않는 §9-10의 증상이 그대로 재현된다.
-        if (grounded)
-            delta.y = 0f;
-
-        float distance = delta.magnitude;
-        if (distance < 1e-4f)
-            return;
-
-        // 어느 쪽이든 <b>스냅이 아니라 당겨오기</b>다 — 상한이 있어야 루트가 병리적으로 튈 때 그
-        // 점프가 뼈로 전달되지 않는다. 접지 후에는 느린 상한 — 보정은 동력이 아니라 표류 방지다
-        // (§10-5). 몸은 밧줄이 끈다. 상한을 올려 "끌어오게" 만들려던 시도가 §9-16에서 발산으로 끝났다.
-        float maxStep = (grounded ? m_alignPullSpeed : m_flightAlignPullSpeed) * Time.deltaTime;
-
-        // 잔차가 임계를 넘으면 스냅한다 — 그 상태는 이미 눈에 띄게 틀렸으므로 포즈 보존이 의미가
-        // 없고, 느린 상한으로는 영구히 못 따라잡는다(§10-5 규칙 6). 안전망이므로 봉투 바깥에 둔다.
-        if (distance > m_alignSnapDistance)
-            maxStep = distance;
-        if (distance > maxStep)
-            delta *= maxStep / distance;
-
-        // <b>몸 전체를 같은 델타로 옮긴다.</b> 끄는 지점이 없으므로 강체 평행이동이 맞다: 포즈는
-        // 이미 이 피어의 임펄스가 로컬로 만들고 있고, 여기서 하는 일은 그 궤적을 오너 것에 맞추는
-        // 것뿐이다. 뼈마다 다르게 옮기면 만들어 둔 텀블이 깨진다.
-        //
-        // ⚠ <b>"골반만 옮겨 흐느적임을 만든다"를 여기서 시도했다가 되돌렸다.</b> 골반(10.9kg)만
-        // 옮기면 나머지 59kg이 관절로 되당겨서 <b>질량비만큼(실측 12~21%)밖에 안 움직인다</b> —
-        // 몸을 5m/s로 옮기려면 골반에 32m/s를 명령해야 하고 그러면 §9-5의 채찍질이 재현된다.
-        // 실측에서 원격 격차가 <b>12.6m까지 발산</b>했다. 위치 추적을 이 방식으로는 못 한다.
-        m_rig.TranslateBy(ClampByWall(delta));
-    }
-
-    private Vector3 ClampByWall(Vector3 delta)
-    {
-        const float k_skin = 0.02f; // 벽에 딱 붙이지 않고 살짝 띄운다 — 겹치면 탈출 임펄스가 생긴다
-
-        Vector3 from = m_rig.Hips.position;
-        if (
-            !Physics.Linecast(
-                from,
-                from + delta,
-                out RaycastHit hit,
-                m_groundMask,
-                QueryTriggerInteraction.Ignore
-            )
-        )
-            return delta;
-
-        return delta.normalized * Mathf.Max(0f, hit.distance - k_skin);
-    }
 
     // ---- 정착 ----
 
@@ -1333,6 +1256,7 @@ public class PlayerRagdoll : MonoBehaviour
         RestToPhysics();
 
         m_state = RagdollState.Settled;
+        DumpSettleTrace();
 
         // 스트림을 끊고 <b>마지막 자세를 로컬 좌표로</b> 한 번 보낸다 — 원격의 종착 상태다.
         //
