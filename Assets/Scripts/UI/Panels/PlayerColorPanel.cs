@@ -1,0 +1,54 @@
+using UnityEngine;
+using UnityEngine.UI;
+
+/// <summary>
+/// 로비에서 자기 로봇 색을 고르는 창. (#432)
+///
+/// 감정표현 휠 구성(<see cref="EmoteLoadoutPanel"/>)과 같은 자리·같은 방식이다 — 로비 버튼으로 열고,
+/// 칸을 눌러 고르고, 고른 값은 로컬에 남는다. 고른 색은 <see cref="GameSettings.PlayerColorIndex"/>로
+/// 들어가고 남에게 나르는 일은 명부(<see cref="SessionRoster"/>)가 맡는다 — 이 창은 네트워크를 모른다.
+///
+/// 칸을 그리는 일은 <see cref="PlayerColorPickerView"/>에 있다. 창은 열고 닫기만 맡는다.
+/// </summary>
+public class PlayerColorPanel : PanelBase
+{
+    [Tooltip("내 로봇 얼굴 미리보기 — 비워 두면 미리보기 없이 팔레트만 보인다")]
+    [SerializeField] private RawImage m_preview;
+
+    [Tooltip("얼굴을 굽는 무대 — 로비 카드와 같은 것을 물린다")]
+    [SerializeField] private LobbyPortraitStage m_portraitStage;
+
+    [SerializeField] private Button m_closeButton;
+
+    public override bool CanCloseWithESC => true;
+    public override bool IsStackable => true;
+
+    protected override void Awake()
+    {
+        base.Awake();
+
+        if (m_closeButton != null)
+            m_closeButton.onClick.AddListener(ClosePanel);
+    }
+
+    public override void OpenPanel()
+    {
+        base.OpenPanel();
+        RefreshPreview();
+    }
+
+    private void OnEnable() => GameSettings.OnPlayerColorChanged += HandleColorChanged;
+
+    private void OnDisable() => GameSettings.OnPlayerColorChanged -= HandleColorChanged;
+
+    private void HandleColorChanged(int _) => RefreshPreview();
+
+    // 고른 색의 얼굴은 무대가 이미 굽고 있다 — 여기서는 어느 그림을 볼지만 정한다
+    private void RefreshPreview()
+    {
+        if (m_preview == null || m_portraitStage == null)
+            return;
+
+        m_preview.texture = m_portraitStage.GetPortrait(GameSettings.PlayerColorIndex);
+    }
+}
