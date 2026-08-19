@@ -540,7 +540,6 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 1
   m_groundProbeDistance: 1.5
-  m_logRootFollow: 0
 --- !u!114 &2208455432558358453
 MonoBehaviour:
   m_ObjectHideFlags: 0
