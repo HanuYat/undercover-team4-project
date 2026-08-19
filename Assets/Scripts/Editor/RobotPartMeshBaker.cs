@@ -3,12 +3,12 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// 로봇 메시를 부위별 서브메시 3개로 갈라 굽는다 (#432). 원본은 서브메시가 하나라 몸 전체가
-/// 한 색으로만 칠해진다 — 삼각형을 <see cref="EBodyPart"/>별로 나눠 담으면
-/// <c>SetPropertyBlock(block, materialIndex)</c>로 부위마다 다른 색을 넣을 수 있다.
+/// 로봇 메시를 부위별 서브메시 3개로 갈라 굽는다 (#432) — 서브메시 순서 = <see cref="EBodyPart"/> 순서.
+/// 원본은 서브메시가 하나라 몸 전체가 한 색으로만 칠해진다. UV 마스크로는 못 나눈다(아틀라스가
+/// UV 섬을 부위끼리 재사용한다) — 그래서 본으로 나눈다. 근거·재생성 절차는 docs/design/player-color.md.
 ///
-/// UV 마스크로는 못 나눈다 — Synty 아틀라스는 UV 섬을 부위끼리 재사용한다. 그래서 본으로 나눈다.
-/// 서브메시 순서 = EBodyPart 순서. 결과는 Assets/Meshes/에 새 에셋으로 나가고 원본(Imported)은 건드리지 않는다.
+/// <b>결과물은 원본과 끊긴 사본이다</b> — Synty 원본이 바뀌거나 모델을 갈아 끼우면 직접 다시 돌려야 한다.
+/// 안 돌려도 에러는 나지 않고 옛 메시가 그대로 쓰인다.
 /// </summary>
 public static class RobotPartMeshBaker
 {

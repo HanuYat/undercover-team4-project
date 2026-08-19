@@ -3,6 +3,7 @@ using UnityEngine;
 /// <summary>
 /// 로봇 색 팔레트 (#432) — 고를 수 있는 색을 순서대로 담는다. 인덱스가 곧 동기화 값이므로
 /// <b>중간에 끼워 넣지 말 것</b>: 뒤 항목이 밀려 예전에 고른 색이 바뀐다. 추가는 항상 끝에 한다.
+/// 설계 정본: docs/design/player-color.md
 /// </summary>
 [CreateAssetMenu(fileName = "PlayerColors", menuName = "Scriptable Objects/PlayerColorPalette")]
 public class PlayerColorPalette : ScriptableObject
