@@ -23,7 +23,8 @@ public static class GameSettings
     private const string k_masterVolumeKey = "settings.masterVolume";
     private const string k_voiceVolumeKey = "settings.voiceVolume";
     private const string k_micMutedKey = "settings.micMuted";
-    private const string k_playerColorKey = "settings.playerColor";
+    // 부위별로 키가 갈린다 — 접미사는 EBodyPart 이름이다 (settings.playerColor.Head 등) (#432)
+    private const string k_playerColorKeyPrefix = "settings.playerColor.";
 
     // 감도는 '배율'이다 — 프리팹의 기준 감도에 곱한다 (PlayerLook.HandleLook).
     // 슬라이더 min/max도 이 상수로 맞춰 인스펙터 값과 어긋나지 않게 한다.
@@ -64,6 +65,8 @@ public static class GameSettings
     // 팔레트 첫 색 — 여기서는 목록 길이를 모른다. 범위 밖 값은 읽는 쪽(PlayerColorPalette.Get)이 자른다. (#432)
     private const int k_defaultPlayerColor = 0;
 
+    private static readonly int[] s_playerColors = new int[3]; // 인덱스 = EBodyPart
+
     private static float s_mouseSensitivity = k_defaultMouseSensitivity; // 백킹 필드
     private static float s_lookSmoothing = k_defaultLookSmoothing;
     private static float s_fov = k_defaultFov;
@@ -72,7 +75,6 @@ public static class GameSettings
     private static float s_masterVolume = k_defaultMasterVolume;
     private static float s_voiceVolume = k_defaultVoiceVolume;
     private static bool s_micMuted = k_defaultMicMuted;
-    private static int s_playerColor = k_defaultPlayerColor;
 
     /// <summary>마우스 감도 배율 (0.25~3.0, 기본 1.0). 프리팹 기준 감도에 곱해진다.</summary>
     public static float MouseSensitivity
@@ -201,25 +203,27 @@ public static class GameSettings
         }
     }
 
-    /// <summary>내 로봇 색이 바뀌었다 — 로비 로스터 보고·아바타·팔레트 표시가 되읽는다. (#432)</summary>
-    public static event Action<int> OnPlayerColorChanged;
+    /// <summary>내 로봇 색이 바뀌었다 — 로비 로스터 보고·초상·팔레트 표시가 되읽는다. 인자는 바뀐 부위. (#432)</summary>
+    public static event Action<EBodyPart> OnPlayerColorChanged;
 
     /// <summary>
-    /// 내 로봇 색 인덱스 (#432) — <see cref="PlayerColorPalette"/>의 몇 번째 색인지.
-    /// 순수 코스메틱이고, 값의 출처는 여기 하나다: 로비 로스터와 게임 씬의 <c>PlayerCosmetics</c>가
+    /// 그 부위의 색 인덱스 (#432) — <see cref="PlayerColorPalette"/>의 몇 번째 색인지.
+    /// 순수 코스메틱이고, 값의 출처는 여기 하나다: 로비 명부와 게임 씬의 <c>PlayerCosmetics</c>가
     /// 각자 자기 씬의 운반 수단으로 나르되 <b>읽는 값은 이것</b>이다 (음소거와 같은 구조, #430).
     ///
     /// 팔레트 길이를 여기서 모르므로 <b>자르지 않고</b> 그대로 담는다 — 팔레트를 아는 쪽이 자른다.
     /// </summary>
-    public static int PlayerColorIndex
+    public static int GetPlayerColor(EBodyPart part) => s_playerColors[(int)part];
+
+    public static void SetPlayerColor(EBodyPart part, int index)
     {
-        get => s_playerColor;
-        set
-        {
-            s_playerColor = Mathf.Max(0, value);
-            PlayerPrefs.SetInt(k_playerColorKey, s_playerColor);
-            OnPlayerColorChanged?.Invoke(s_playerColor);
-        }
+        int clamped = Mathf.Max(0, index);
+        if (s_playerColors[(int)part] == clamped)
+            return;
+
+        s_playerColors[(int)part] = clamped;
+        PlayerPrefs.SetInt(k_playerColorKeyPrefix + part, clamped);
+        OnPlayerColorChanged?.Invoke(part);
     }
 
     /// <summary>
@@ -274,7 +278,9 @@ public static class GameSettings
         MasterVolume = PlayerPrefs.GetFloat(k_masterVolumeKey, k_defaultMasterVolume);
         VoiceVolume = PlayerPrefs.GetFloat(k_voiceVolumeKey, k_defaultVoiceVolume);
         MicMuted = PlayerPrefs.GetInt(k_micMutedKey, k_defaultMicMuted ? 1 : 0) != 0;
-        PlayerColorIndex = PlayerPrefs.GetInt(k_playerColorKey, k_defaultPlayerColor);
+        // 부위별 색 — 저장된 값이 없으면 전부 팔레트 첫 색에서 시작한다 (#432)
+        foreach (EBodyPart part in Enum.GetValues(typeof(EBodyPart)))
+            s_playerColors[(int)part] = PlayerPrefs.GetInt(k_playerColorKeyPrefix + part, k_defaultPlayerColor);
     }
 
     /// <summary>

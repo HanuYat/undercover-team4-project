@@ -164,3 +164,15 @@ public enum EExecutionOrder
     UIContent = -150, // 패널이 첫 그리기에서 읽어가는 UI 재료(초상 무대 등) — 패널보다 먼저 준비돼야 한다
     UIPanel = -100, // PanelBase 파생 — 매니저 뒤, 일반 스크립트 앞
 }
+
+/// <summary>
+/// 로봇 색을 나눠 칠하는 몸 부위 (#432). <b>값의 순서 = 구운 메시의 서브메시 순서</b>이므로
+/// 중간에 끼워 넣지 말 것 — RobotPartMeshBaker가 이 순서대로 삼각형을 나눠 담는다.
+/// 팔은 상체에, 골반은 하체에 붙는다.
+/// </summary>
+public enum EBodyPart
+{
+    Head, // 머리 — Head·Neck·Eyes·Eyebrows
+    Torso, // 상체 — Spine·어깨·팔·손
+    Legs, // 하체 — Hips·다리·발
+}

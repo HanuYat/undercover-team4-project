@@ -56,7 +56,7 @@ public class SessionRoster : NetworkedManagerBase
         // 음소거를 바꾸면 다시 보고한다 — 자기 것만 올리므로 서버·클라 구분이 없다 (#430)
         GameSettings.OnMicMutedChanged += HandleMicMutedChanged;
 
-        // 로봇 색도 같은 경로로 올린다 — 로비에서 색을 고르면 남의 화면에 바로 반영돼야 한다 (#432)
+        // 로봇 색도 같은 경로로 올린다 (#432)
         GameSettings.OnPlayerColorChanged += HandlePlayerColorChanged;
 
         // 자기 정보 보고. 호스트도 자기 행이 필요하므로 서버·클라 구분 없이 부른다.
@@ -144,7 +144,7 @@ public class SessionRoster : NetworkedManagerBase
     // 갱신으로 흡수하므로(행이 두 개로 늘지 않는다) 상태를 나르는 경로가 하나로 유지된다. (#430)
     private void HandleMicMutedChanged(bool _) => ReportSelf();
 
-    private void HandlePlayerColorChanged(int _) => ReportSelf();
+    private void HandlePlayerColorChanged(EBodyPart _) => ReportSelf();
 
     private void ReportSelf()
     {
@@ -166,7 +166,7 @@ public class SessionRoster : NetworkedManagerBase
             Nickname = nickname,
             PlayerId = playerId,
             MicMuted = GameSettings.MicMuted,
-            ColorIndex = (byte)Mathf.Clamp(GameSettings.PlayerColorIndex, 0, byte.MaxValue),
+            Colors = PlayerColorSet.FromSettings(),
         };
     }
 }
