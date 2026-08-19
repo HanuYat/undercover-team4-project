@@ -18,16 +18,8 @@ MonoBehaviour:
   m_Metadata:
     m_Items: []
   m_TableData:
-  - m_Id: 286270754816
-    m_Localized: Handcuffs
-    m_Metadata:
-      m_Items: []
   - m_Id: 410178883584
     m_Localized: Scanner
-    m_Metadata:
-      m_Items: []
-  - m_Id: 4498341826560
-    m_Localized: It is used when arresting a suspect.
     m_Metadata:
       m_Items: []
   - m_Id: 4509783887872

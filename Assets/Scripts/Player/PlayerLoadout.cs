@@ -400,7 +400,6 @@ public class PlayerLoadout : NetworkBehaviour
     }
 
     // ---- 밧줄 자원 게이트 (#269) ----
-    // 수갑 소모·반환(#229: HasHandcuffs/ConsumeHandcuffsTo/TryRecoverHandcuffs)은 밧줄이 소모형이 아니게 되며 제거됐다. (#369)
 
     /// <summary>이 플레이어가 밧줄을 보유 중인가 — 풀기 등 "한 개라도 있으면 되는" 게이트. (#269)</summary>
     public bool HasRope => RopeCount > 0;
