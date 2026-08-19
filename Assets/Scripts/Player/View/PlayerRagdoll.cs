@@ -1,4 +1,4 @@
-using Unity.Netcode;
+﻿using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -81,8 +81,18 @@ public class PlayerRagdoll : MonoBehaviour
 
     [Tooltip("루트 yaw를 몸이 누운 방향에 맞춘다 — 기상 모션이 '루트 전방을 향해 누워 있다'를 전제하므로. " +
              "비행 중에도 매 프레임 맞춘다(FollowBodyYaw) — 정착 때 한 번에 돌리면 그 회전이 원격에 " +
-             "늦게 도착해 시체가 루트를 축으로 휙 돈다")]
+             "늦게 도착해 시체가 루트를 축으로 휙 돈다.\n\n" +
+             "몸이 아직 서 있는 동안은 RagdollRig.TryGetBodyYaw가 방향을 내지 않으므로 기존 yaw가 " +
+             "유지된다 — 그래서 이 추종은 몸이 실제로 기운 뒤에 시작한다")]
     [SerializeField] private bool m_alignRootYawToBody = true;
+
+    [Tooltip("루트 yaw 추종 감쇠율(1/초) — 0이면 즉시 대입(예전 동작)이다.\n\n" +
+             "⚠ <b>즉시 대입은 위험하다.</b> 몸 방향은 골반→머리를 투영해 얻는데 그 값은 몸이 " +
+             "막 기우는 동안 아직 흔들린다. 그때 루트를 그대로 슬램하면 루트에 매달린 것들 " +
+             "(이름표·상호작용·들고 있던 아이템 모델)이 한 프레임에 통째로 돌아간다.\n\n" +
+             "감쇠는 그 흔들림을 흡수한다. 목표가 안정된 뒤에는 곧 수렴하므로 정착 정렬 " +
+             "(ResolveSettledRootPose)에 남는 잔차는 작다")]
+    [SerializeField] private float m_rootYawFollowSpeed = 8f;
 
     [Tooltip("몸 방향 대비 루트 yaw 보정(도) — Knockdown_StandUp 클립이 어느 쪽을 머리로 보는지에 맞춘다. " +
              "Editor에서 부활을 눌러 보며 조정할 값이다. 리그가 내는 '몸 방향'은 순수한 값이고 " +
@@ -286,6 +296,10 @@ public class PlayerRagdoll : MonoBehaviour
 
         m_rig.SetSkinsAlwaysVisible(true);
         IgnoreOwnCapsule(); // 뼈 콜라이더가 이제 켜졌다 — 걸 수 있는 첫 시점이다
+
+        // ⚠ 물리로 넘기기 <b>전에</b> 열어야 복사가 옮긴 것과 물리가 바꿔 놓은 것이 갈린다.
+        BeginEntryTrace();
+
         ReleaseBonesToPhysics();
     }
 
@@ -810,6 +824,12 @@ public class PlayerRagdoll : MonoBehaviour
     private void Update()
     {
         RefreshCapsuleIgnoreOnReenable();
+
+        // 진입 추적의 기준선을 담는다 — <b>Update 시작</b>이 직전 프레임의 최종 자세를 읽는 유일하게
+        // 안전한 지점이다. LateUpdate 끝에 담으려면 PlayerHeadLook보다 뒤에 돌아야 하는데 스크립트
+        // 실행 순서는 정해져 있지 않고, Animator는 아직 이번 프레임을 평가하지 않았다.
+        SampleEntryBaseline();
+
         PollDeath();
 
         if (m_state != RagdollState.Ragdoll)
@@ -938,6 +958,10 @@ public class PlayerRagdoll : MonoBehaviour
 
         // 붙들기까지 끝난 뒤에 담는다 — 여기가 렌더 직전이라 화면에 보이는 값과 같다.
         TickSettleTrace();
+
+        // ⚠ <b>LateUpdate여야 한다.</b> PlayerHeadLook이 시선을 얻는 시점이 여기라,
+        // Update에서 재면 이 계측이 물으려는 시점 차를 지나치게 된다.
+        TickEntryTrace();
     }
 
     /// <summary>
@@ -960,6 +984,316 @@ public class PlayerRagdoll : MonoBehaviour
     /// <b>렌더 전용이다</b> — 이 프로젝트는 <c>m_AutoSyncTransforms = 0</c>이라 여기 쓴 값이 PhysX로
     /// 넘어가지 않는다. 원격의 뼈는 물리에 참여하지 않으므로 잃는 것도 없다.
     /// </summary>
+    private void TickHoldPoseUntilStream()
+    {
+        if (!m_holdPoseUntilStream || m_streamer == null || HasMoveAuthority)
+            return;
+
+        if (!m_streamer.IsAwaitingFirstPose)
+        {
+            m_holdPoseUntilStream = false;
+            return;
+        }
+
+        m_rig.RestoreCapturedPose();
+    }
+
+    // ---- 진입 자세 추적 (m_logEntryHeadTrace) — ⚠ 임시 계측, 원인이 잡히면 지운다 ----
+
+    [Tooltip("래그돌 진입 직후 6프레임을 <b>루트 한 줄 + 뼈 한 줄</b>로 찍는다 — 쓰러지는 순간 몸이 " +
+             "죽기 직전 자세에서 <b>뜨고 돌아 버리는</b> 현상을 잡는 계측이다.\n\n" +
+             "⚠ <b>권한=True로 찍어야 한다.</b> 원격의 뼈는 키네마틱이고 첫 자세 패킷이 오기 전까지 " +
+             "TickHoldPoseUntilStream이 진입 자세에 못박아 두므로, 원격에서는 시체가 아예 " +
+             "움직이지 않는다(실측: 단차가 6프레임 전부 0.0°).\n\n" +
+             "<b>기준선은 죽기 직전 프레임에 화면에 나온 살아있는 몸</b>이다 — 매 프레임 Update " +
+             "시작에 담고 진입 순간의 값을 얼린다. 뜸·yawΔ는 전부 그것과의 차이다.\n\n" +
+             "읽는 법 — f=0이 시체를 켠 프레임이다:\n" +
+             "· <b>루트뜸이 f=+1에 0.9m 근처로 뛰면</b> TickCapsuleFollow가 캡슐 밑면에서 골반으로 " +
+             "루트를 올린 그 점프다(그 함수 주석의 실측과 같은 값)\n" +
+             "· <b>루트yawΔ가 크면</b> FollowBodyYaw가 루트를 돌린 것이다. 같은 줄의 <b>수평</b>을 " +
+             "함께 볼 것 — 서 있는 몸의 골반→머리는 거의 수직이라 수평 성분이 몇 cm뿐이고, 그 " +
+             "방향은 몸이 향한 쪽이 아니라 <b>미세한 기울어짐</b>이다. 수평이 작은데 유효=True면 " +
+             "RagdollRig.TryGetBodyYaw의 거절 가드(2cm)가 노이즈를 통과시킨 것이다\n" +
+             "· <b>뼈 줄에서 물리 뼈와 아닌 뼈가 갈리면</b> 그것이 비틀림의 정체다. 루트가 움직일 때 " +
+             "RestoreCapturedPose는 물리 뼈만 되돌리고, 리지드바디가 없는 뼈는 계층을 따라간다 " +
+             "(Hips·Head는 물리 뼈, Spine_01·Neck은 아니다)\n" +
+             "· <b>골반간격</b>은 두 리그가 어긋난 거리다 — 0이면 복사는 결백하다\n" +
+             "· <b>팝</b>은 기준선 대비 머리 회전차, <b>단차</b>는 직전 프레임 대비 시체 머리 " +
+             "회전차다. 첫 스텝의 단차만 유독 크면 관절 위반을 물리가 되잡은 것이다\n\n" +
+             "<b>지면 줄은 기준이 다르다.</b> 위 두 줄은 죽기 직전 자세를 기준으로 한 상대값이라 " +
+             "몸 전체가 바닥에서 떠 있어도 0으로 보인다 — 그것을 보려면 이 줄을 읽는다:\n" +
+             "· <b>최저뼈-지면이 계속 양수로 남으면</b> 시체가 공중에 떠 있는 것이다\n" +
+             "· <b>루트-지면만 크고 최저뼈-지면은 0 근처면</b> 몸은 바닥에 있고 루트만 떠 있는 " +
+             "것이다(캡슐 추종의 설계상 점프). 그때 뜨는 것은 몸이 아니라 <b>루트에 매달린 것들</b>" +
+             "이다 — 이름표·상호작용 표시\n" +
+             "· <b>찾음=False면</b> 골반 밑에서 지면을 못 찾은 것이다. 그 프레임의 지면 기준값은 " +
+             "전부 의미가 없고, 정착 판정도 같은 탐색을 쓰므로 그쪽도 함께 막혀 있다\n\n" +
+             "확정되면 끈다")]
+    [SerializeField] private bool m_logEntryHeadTrace;
+
+    // 쓰러져 바닥에 닿기까지를 담아야 "언제 뜨나"를 볼 수 있다 — 6프레임으로는 몸이 아직 서 있다.
+    private const int k_entryTraceFrames = 30;
+
+    // 볼 뼈 — <b>물리 뼈와 아닌 뼈를 섞어</b> 담는다. 루트가 움직일 때 리지드바디가 없는 뼈만
+    // 계층을 따라가면 그 차이가 곧 비틀림이고, 섞어 두지 않으면 그것을 못 본다.
+    private static readonly string[] s_entryTraceBones = { "Hips", "Spine_01", "Neck", "Head" };
+
+    private const int k_entryTraceHeadIndex = 3; // 팝·단차를 재는 뼈 = s_entryTraceBones의 "Head"
+
+    private PlayerHeadLook m_headLook; // 죽기 직전에 얹혀 있던 시선 기울기를 묻는다
+
+    private Transform[] m_liveTraceBones;
+    private Transform[] m_corpseTraceBones;
+
+    private int m_entryTraceLeft;
+    private int m_entryFrame;
+
+    // 직전 프레임의 최종 자세 — 매 프레임 갱신하고, 진입 순간의 값을 기준선으로 얼린다.
+    private float[] m_lastBoneY;
+    private float[] m_lastBoneYaw;
+    private Quaternion m_lastHeadRotation;
+    private float m_lastRootY;
+    private float m_lastRootYaw;
+    private bool m_haveLast;
+
+    // 진입 기준선 — 죽기 직전 프레임에 화면에 나온 몸. 뜸·yawΔ·팝은 전부 이것과의 차이다.
+    private float[] m_baselineBoneY;
+    private float[] m_baselineBoneYaw;
+    private Quaternion m_baselineHeadRotation;
+    private float m_baselineRootY;
+    private float m_baselineRootYaw;
+    private bool m_haveBaseline;
+
+    private Quaternion m_prevCorpseHead;
+    private bool m_havePrevCorpseHead;
+
+    // 이름으로 찾는다 — 리그가 두 벌이라 각자의 서브트리에서 따로 집어야 한다.
+    private static Transform FindBone(Transform root, string name)
+    {
+        if (root == null)
+            return null;
+
+        if (root.name == name)
+            return root;
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform found = FindBone(root.GetChild(i), name);
+            if (found != null)
+                return found;
+        }
+
+        return null;
+    }
+
+    private void ResolveTraceBones()
+    {
+        if (m_liveTraceBones != null)
+            return;
+
+        m_liveTraceBones = new Transform[s_entryTraceBones.Length];
+        m_corpseTraceBones = new Transform[s_entryTraceBones.Length];
+        m_lastBoneY = new float[s_entryTraceBones.Length];
+        m_lastBoneYaw = new float[s_entryTraceBones.Length];
+        m_baselineBoneY = new float[s_entryTraceBones.Length];
+        m_baselineBoneYaw = new float[s_entryTraceBones.Length];
+
+        for (int i = 0; i < s_entryTraceBones.Length; i++)
+        {
+            m_liveTraceBones[i] = FindBone(m_liveBoneRoot, s_entryTraceBones[i]);
+            m_corpseTraceBones[i] = FindBone(m_rig.BoneRoot, s_entryTraceBones[i]);
+        }
+    }
+
+    // 직전 프레임의 자세를 담아 둔다 — <see cref="Update"/> 시작에서만 정직한 값이다. LateUpdate
+    // 끝에 담으려면 PlayerHeadLook보다 뒤에 돌아야 하는데 스크립트 실행 순서는 정해져 있지 않고,
+    // Animator는 아직 이번 프레임을 평가하지 않았다.
+    private void SampleEntryBaseline()
+    {
+        if (!m_logEntryHeadTrace)
+            return;
+
+        ResolveTraceBones();
+
+        for (int i = 0; i < m_liveTraceBones.Length; i++)
+        {
+            Transform bone = m_liveTraceBones[i];
+            if (bone == null)
+                continue;
+
+            m_lastBoneY[i] = bone.position.y;
+            m_lastBoneYaw[i] = bone.eulerAngles.y;
+        }
+
+        Transform head = m_liveTraceBones[k_entryTraceHeadIndex];
+        if (head != null)
+            m_lastHeadRotation = head.rotation;
+
+        m_lastRootY = m_root.position.y;
+        m_lastRootYaw = m_root.eulerAngles.y;
+        m_haveLast = true;
+    }
+
+    // 시체를 켜는 프레임에 연다 — 복사 <b>직후</b>의 값이 첫 줄이 되어야 복사가 옮긴 것과
+    // 그 뒤 프레임이 바꿔 놓은 것이 갈린다.
+    private void BeginEntryTrace()
+    {
+        if (!m_logEntryHeadTrace)
+            return;
+
+        ResolveTraceBones();
+        m_headLook ??= GetComponentInParent<PlayerHeadLook>();
+
+        m_entryFrame = Time.frameCount;
+        m_entryTraceLeft = k_entryTraceFrames;
+        m_havePrevCorpseHead = false;
+
+        // ⚠ 기준선은 <b>직전 프레임</b>의 값이다 — 지금 살아있는 몸을 읽으면 안 된다. CopyPose가
+        // 방금 그 자세를 시체에 넘겼으므로, 지금 값으로 재면 차이가 정의상 0이 되어 버린다.
+        m_haveBaseline = m_haveLast;
+        System.Array.Copy(m_lastBoneY, m_baselineBoneY, m_lastBoneY.Length);
+        System.Array.Copy(m_lastBoneYaw, m_baselineBoneYaw, m_lastBoneYaw.Length);
+        m_baselineHeadRotation = m_lastHeadRotation;
+        m_baselineRootY = m_lastRootY;
+        m_baselineRootYaw = m_lastRootYaw;
+
+        float tilt = m_headLook != null ? m_headLook.LastAppliedTilt : float.NaN;
+
+        Debug.Log(
+            $"[진입추적] ===== 시체 켬 (권한={HasMoveAuthority} 프레임={m_entryFrame}) — 시선={tilt:F1}° "
+                + $"기준선={m_haveBaseline} 기준루트Y={m_baselineRootY:F3} "
+                + $"기준루트yaw={m_baselineRootYaw:F1}° / 복사직후 ↓ =====",
+            this
+        );
+
+        LogEntrySample();
+    }
+
+    private void TickEntryTrace()
+    {
+        if (m_entryTraceLeft <= 0)
+            return;
+
+        m_entryTraceLeft--;
+        LogEntrySample();
+    }
+
+    // 루트 한 줄 + 뼈 한 줄이다 — 한 줄에 다 넣으면 MPPM 로그에서 잘린다.
+    private void LogEntrySample()
+    {
+        if (m_corpseTraceBones == null)
+            return;
+
+        string frame = (Time.frameCount - m_entryFrame).ToString("+0;-0;0");
+
+        // ---- 루트 ----
+        float rootLift = m_haveBaseline ? m_root.position.y - m_baselineRootY : float.NaN;
+        float rootYawDelta = m_haveBaseline
+            ? Mathf.DeltaAngle(m_baselineRootYaw, m_root.eulerAngles.y)
+            : float.NaN;
+
+        // TryGetBodyYaw가 무엇을 보고 판단했는지 같이 남긴다 — 서 있는 몸의 수평 성분은 몇 cm뿐이고,
+        // 그 크기가 곧 그 함수의 거절 가드가 옳게 걸렸는지의 근거다.
+        float bodyYaw = float.NaN;
+        bool haveBodyYaw = false;
+        if (m_rig != null && m_rig.TryGetBodyYaw(out float measuredYaw))
+        {
+            haveBodyYaw = true;
+            bodyYaw = measuredYaw;
+        }
+
+        Transform corpseHips = m_corpseTraceBones[0];
+        Transform corpseHead = m_corpseTraceBones[k_entryTraceHeadIndex];
+        float horizontalCm = float.NaN;
+        if (corpseHips != null && corpseHead != null)
+        {
+            Vector3 lengthwise = corpseHead.position - corpseHips.position;
+            lengthwise.y = 0f;
+            horizontalCm = lengthwise.magnitude * 100f;
+        }
+
+        Debug.Log(
+            $"[진입루트] 권한={HasMoveAuthority} f={frame} 루트뜸={rootLift:+0.000;-0.000;0.000}m "
+                + $"루트yawΔ={rootYawDelta:+0.0;-0.0;0.0}° 몸yaw={bodyYaw:F1}° 수평={horizontalCm:F1}cm "
+                + $"유효={haveBodyYaw} 상태={m_state}",
+            this
+        );
+
+        // ---- 뼈 ----
+        var bones = new System.Text.StringBuilder();
+        for (int i = 0; i < m_corpseTraceBones.Length; i++)
+        {
+            Transform bone = m_corpseTraceBones[i];
+            if (bone == null)
+                continue;
+
+            float lift = m_haveBaseline ? bone.position.y - m_baselineBoneY[i] : float.NaN;
+            float yawDelta = m_haveBaseline
+                ? Mathf.DeltaAngle(m_baselineBoneYaw[i], bone.eulerAngles.y)
+                : float.NaN;
+
+            bones.Append(
+                $"{s_entryTraceBones[i]}={lift:+0.000;-0.000;0.000}m/{yawDelta:+0.0;-0.0;0.0}° "
+            );
+        }
+
+        // 두 리그가 어긋난 거리 — 0이면 복사는 결백하다.
+        Transform liveHips = m_liveTraceBones[0];
+        float rigSpan =
+            liveHips != null && corpseHips != null
+                ? (liveHips.position - corpseHips.position).magnitude
+                : float.NaN;
+
+        float pop =
+            m_haveBaseline && corpseHead != null
+                ? Quaternion.Angle(m_baselineHeadRotation, corpseHead.rotation)
+                : float.NaN;
+
+        float step = 0f;
+        if (corpseHead != null)
+        {
+            step = m_havePrevCorpseHead
+                ? Quaternion.Angle(m_prevCorpseHead, corpseHead.rotation)
+                : 0f;
+            m_prevCorpseHead = corpseHead.rotation;
+            m_havePrevCorpseHead = true;
+        }
+
+        Debug.Log(
+            $"[진입뼈] 권한={HasMoveAuthority} f={frame} {bones}골반간격={rigSpan:F3}m "
+                + $"팝={pop:F1}° 단차={step:F1}°",
+            this
+        );
+
+        // ---- 지면 ----
+        //
+        // <b>"떠 있다"를 직접 재는 줄이다.</b> 위 두 줄은 전부 죽기 직전 자세를 기준으로 한 상대값이라,
+        // 몸 전체가 바닥에서 떨어져 있어도 0으로 보인다. 기준을 <b>지면</b>으로 바꿔야 그것이 보인다.
+        //
+        // 지면 탐색은 정착 판정·정착 정렬과 같은 것을 쓴다(<see cref="TryGroundUnder"/>) — 다른 것을
+        // 쓰면 "여기가 바닥이다"의 정의가 갈려서 이 계측이 그 둘을 검증하지 못한다.
+        float groundY = float.NaN;
+        bool haveGround = false;
+        if (corpseHips != null && TryGroundUnder(corpseHips.position, out Vector3 groundPoint))
+        {
+            haveGround = true;
+            groundY = groundPoint.y;
+        }
+
+        float lowestAbove = haveGround && m_rig != null ? m_rig.LowestBoneY - groundY : float.NaN;
+        float hipsAbove = haveGround && corpseHips != null
+            ? corpseHips.position.y - groundY
+            : float.NaN;
+        float rootAbove = haveGround ? m_root.position.y - groundY : float.NaN;
+
+        Debug.Log(
+            $"[진입지면] 권한={HasMoveAuthority} f={frame} 지면Y={groundY:F3} 찾음={haveGround} "
+                + $"최저뼈-지면={lowestAbove:+0.000;-0.000;0.000}m "
+                + $"골반-지면={hipsAbove:F3}m 루트-지면={rootAbove:+0.000;-0.000;0.000}m",
+            this
+        );
+    }
+
     // ---- 정착 딥 추적 (m_logSettleTrace) — ⚠ 임시 계측, 원인이 잡히면 지운다 ----
 
     // "몸이 바닥에 있다"로 보는 골반 높이(m) — 이 안이면 루트 높이를 골반이 아니라 <b>지면</b>이
@@ -1056,20 +1390,6 @@ public class PlayerRagdoll : MonoBehaviour
         );
     }
 
-    private void TickHoldPoseUntilStream()
-    {
-        if (!m_holdPoseUntilStream || m_streamer == null || HasMoveAuthority)
-            return;
-
-        if (!m_streamer.IsAwaitingFirstPose)
-        {
-            m_holdPoseUntilStream = false;
-            return;
-        }
-
-        m_rig.RestoreCapturedPose();
-    }
-
     // ---- 캡슐 추종 (#506 — 이 설계의 중심) ----
 
     /// <summary>
@@ -1141,8 +1461,8 @@ public class PlayerRagdoll : MonoBehaviour
         // 골반 높이만큼 떠서 그려진다. 물리를 거치지 않으므로 겹침 탈출 속도 상한
         // (<see cref="RagdollRig"/>의 k_maxDepenetrationVelocity)으로는 줄지 않는다.
         //
-        // <c>NpcRagdoll.ServerFreezeInPlace</c> ①④와 같은 패턴이다 — 저쪽은 얼리는 순간의 같은
-        // 왕복(실측 14.6cm)을 이 방식으로 잡았고, 진입 쪽에만 빠져 있었다.
+        // <c>NpcRagdoll.TickRootFollow</c>와 같은 패턴이다 — 저쪽은 루트가 골반을 따라가는 매
+        // 프레임의 같은 왕복(실측 14.6cm)을 이 방식으로 잡는다.
         //
         // <b>아래 <see cref="FollowBodyYaw"/>까지 감싼다</b> — 회전도 계층을 타고 자식에게
         // 전해지므로, 골반 높이만큼 떨어져 있는 몸이 루트 원점을 축으로 휜다.
@@ -1171,12 +1491,26 @@ public class PlayerRagdoll : MonoBehaviour
         m_rig.RestoreCapturedPose();
     }
 
+    // 목표 yaw로 <b>감쇠 추종</b>한다 — 슬램하지 않는다.
+    //
+    // <b>왜 슬램이 안 되나.</b> 목표는 골반→머리를 지면에 투영해 얻으므로, 몸이 서 있다가 기우는
+    // 구간에서는 투영이 짧아 값이 아직 흔들린다. 그 값을 그대로 대입하면 <b>루트에 매달린 것들이
+    // 한 프레임에 통째로 돈다</b> — 뼈는 <see cref="TickCapsuleFollow"/>가 월드 자세로 되돌리므로
+    // 시체 자체는 멀쩡한데, 이름표·상호작용·들고 있던 아이템 모델(살아있는 리그의 손에 붙어 있고
+    // 사망 시 꺼지는 것은 스킨뿐이다)은 되돌려지지 않는다.
+    //
+    // 프레임률 독립 지수 감쇠다 — <c>PlayerHeadLook</c>의 pitch 추종과 같은 형태.
     private void FollowBodyYaw()
     {
         if (!m_alignRootYawToBody || !TryGetRootYaw(out float yaw))
             return;
 
-        m_root.rotation = Quaternion.Euler(0f, yaw, 0f);
+        float current = m_root.eulerAngles.y;
+        float eased = m_rootYawFollowSpeed > 0f
+            ? Mathf.LerpAngle(current, yaw, 1f - Mathf.Exp(-m_rootYawFollowSpeed * Time.deltaTime))
+            : yaw;
+
+        m_root.rotation = Quaternion.Euler(0f, eased, 0f);
     }
 
     // 루트가 향해야 할 yaw — 리그가 내는 순수한 몸 방향에 기상 클립 보정을 얹은 값.
