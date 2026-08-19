@@ -44,6 +44,8 @@ public class InteractionFeedback : NetworkBehaviour
     // 각자 자기 화면 몫만 다룬다.
     private Outliner m_outliner;
 
+    private PlayerTerminalFocus m_terminalFocus; // 화면 앞에서 표시를 내린다 (#689). 없는 구성이면 null
+
     public override void OnNetworkSpawn()
     {
         if (!IsOwner)
@@ -64,6 +66,7 @@ public class InteractionFeedback : NetworkBehaviour
         m_carrier = GetComponent<PlayerCarrier>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
         m_outliner = GetComponentInChildren<Outliner>(true); // 카메라에 붙어 있다
+        m_terminalFocus = GetComponent<PlayerTerminalFocus>(); // 없는 구성(테스트 등)이면 null
     }
 
     public override void OnNetworkDespawn()
@@ -179,6 +182,14 @@ public class InteractionFeedback : NetworkBehaviour
         // 사격과 무관한 E 상호작용물까지 통째로 표시가 죽었다. 이 무기들의 대상은 NPC뿐이므로,
         // NPC만 빼면 오조준 설계는 그대로 유지된다.
         if (holdingAimedWeapon && root != null && root.GetComponentInParent<NpcController>() != null)
+        {
+            itemUsable = false;
+            interactUsable = false;
+        }
+
+        // 단말 화면 앞에서는 표시를 통째로 내린다 (#689) — 카메라가 코앞이라 안내가 화면을 가린다.
+        // 대상 쪽에서 CanInteract를 끄면 E까지 죽어 나갈 수단이 사라지므로 여기서 끈다.
+        if (m_terminalFocus != null && m_terminalFocus.IsFocusing)
         {
             itemUsable = false;
             interactUsable = false;

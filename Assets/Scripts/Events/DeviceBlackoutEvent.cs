@@ -7,7 +7,12 @@ using UnityEngine;
 /// 먹통 플래그를 <b>스스로 소유</b>해 서버 권위로 켜고 끄며, NetworkVariable로 전 클라에 동기화한다.
 /// 실제 표현은 이 플래그를 구독하는 쪽이 각자 담당한다 — 무전 음성 왜곡은 <see cref="DeviceBlackoutView"/>,
 /// CCTV 송출 차단은 <see cref="CCTVSwitcher"/>, 스캐너 사용 불가는 <see cref="Scanner"/>가 본다.
-/// 시간이 지나면 자동으로 해제된다.
+///
+/// <b>스스로 풀리지 않는다</b> (#689). 라운드가 끝날 때까지 유지되고, 본부의 복구 단말이
+/// <see cref="ServerRecover"/>를 불러야 해제된다. 예전에는 12초 뒤 자동 복구였는데 그러면 양쪽 다
+/// "잠깐 참으면 되는 시간"이라 이벤트에 대한 <b>대응이 존재하지 않았다</b> — 해제 권한을 본부에 주면
+/// 먹통이 관제의 일거리가 된다. <b>상한 시간을 두지 않는 것도 확정 사항이다</b>: 결국 알아서
+/// 돌아오면 복구 절차가 다시 무의미해진다 (GDD 6-4 확정 노트).
 ///
 /// 서버 권위 — 발생·해제 판정은 서버(또는 오프라인)에서만. 프레임워크(<see cref="SuddenEventManager"/>)가
 /// ServerBegin/Tick/Reset을 서버에서만 부르므로 이 안에서는 권위를 다시 검사하지 않는다. (#56)
@@ -25,18 +30,16 @@ using UnityEngine;
 [RequireComponent(typeof(SuddenEventManager))]
 public class DeviceBlackoutEvent : NetworkBehaviour, ISuddenEvent
 {
-    [Header("지속 시간(초)")]
-    [Tooltip("먹통이 유지되는 시간 — 지나면 무전·CCTV가 자동 복구된다")]
-    [SerializeField]
-    private float m_durationSeconds = 12f;
+    // 복구 완료 알림 문구 키 — 발생 알림(NoticeKey)과 <b>같은 테이블</b>에서 찾는다 (SuddenEventToastView).
+    // 발생용 키를 재활용하면 "먹통이 발생했습니다"가 복구 시점에 뜬다.
+    private const string k_recoveredNoticeKey = "Hud.Event.Notice.BlackoutRecovered";
 
     // 먹통 전역 상태 — 서버만 쓰고 모든 클라가 읽는다. (PlayerHealth.m_syncedHp와 동일 이중 구조)
     private readonly NetworkVariable<bool> m_blackoutSynced = new NetworkVariable<bool>();
     private bool m_blackout; // 서버·오프라인의 진실값 (비네트워크 Play 폴백)
 
-    private float m_endTime;
-
-    public string DisplayName => "전자기기 먹통";
+    // 게임 내 표기만 바꿨다 — 클래스·문구 키 이름(Blackout)은 코드 정본과 이슈 번호를 따라 그대로 둔다.
+    public string DisplayName => "시스템 해킹";
 
     public string NoticeKey => "Hud.Event.Notice.Blackout";
 
@@ -78,20 +81,36 @@ public class DeviceBlackoutEvent : NetworkBehaviour, ISuddenEvent
 
     public void ServerBegin()
     {
-        m_endTime = Time.time + m_durationSeconds;
         SetBlackout(true);
     }
 
-    public void ServerTick()
-    {
-        if (!m_blackout)
-            return;
+    // 할 일이 없다 — 지속 판정이 사라졌기 때문이다 (#689). 인터페이스가 요구하므로 선언만 남긴다.
+    // 여기에 상한 시간을 되살리지 말 것: "결국 알아서 돌아온다"가 되면 복구 절차가 무의미해진다.
+    public void ServerTick() { }
 
-        if (Time.time >= m_endTime)
-        {
-            Debug.Log("[돌발이벤트] 전자기기 먹통 — 시간 경과로 복구");
-            SetBlackout(false);
-        }
+    /// <summary>
+    /// 복구 — 본부 복구 단말이 절차를 통과시켰을 때 부른다. 서버(또는 오프라인) 전용. (#689)
+    ///
+    /// 실제로 풀렸을 때만 true다 — 이미 복구됐거나 애초에 먹통이 아니면 false. 부르는 쪽이 연출·소리를
+    /// 중복해서 내지 않게 하려는 것이다(같은 프레임에 두 사람이 입력을 확정하는 경합이 있다).
+    ///
+    /// 표현 계층은 건드리지 않는다 — <see cref="SetBlackout"/> 하나로 무전 왜곡·CCTV·스캐너가
+    /// 한꺼번에 돌아온다. 각자 <see cref="OnCommsBlackoutChanged"/>를 보고 있기 때문이다.
+    /// </summary>
+    public bool ServerRecover()
+    {
+        if (IsSpawned && !IsServer)
+            return false;
+
+        if (!m_blackout)
+            return false;
+
+        Debug.Log("[돌발이벤트] 전자기기 먹통 — 본부 복구 단말로 해제");
+        SetBlackout(false);
+
+        // 현장이 "이제 스캐너 되냐"고 묻지 않아도 되게 전원에게 알린다. 매니저는 캐싱하지 않는다 (R8).
+        App.Game.SuddenEvent?.Announce(DisplayName, k_recoveredNoticeKey);
+        return true;
     }
 
     public void ServerReset()
