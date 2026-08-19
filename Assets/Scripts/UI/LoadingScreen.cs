@@ -10,11 +10,15 @@ using UnityEngine.UI;
 /// <summary>
 /// 씬 전환을 덮는 상주 로딩 화면 (#403). AppBootstrap 프리팹 하위(DontDestroyOnLoad)에 배치한다.
 ///
-/// 구동 경로가 둘이다 — 세션 중 씬 전환은 서버만 App.LoadScene을 호출하고(AppHelper 참고),
+/// 구동 경로가 셋이다 — 세션 중 씬 전환은 서버만 App.LoadScene을 호출하고(AppHelper 참고),
 /// 클라이언트는 NGO 씬 동기화로 끌려올 뿐이라 그 파이프라인에 들어오지 않기 때문이다.
 ///  · 서버·오프라인 — App.LoadScene이 ShowAsync/HideAsync를 직접 호출한다.
 ///  · 클라이언트   — NGO 씬 이벤트(OnLoad/OnLoadComplete)를 구독해 스스로 덮는다.
-/// 서버는 두 경로 모두에 걸리므로 <see cref="IsBusy"/>로 뒤쪽(클라이언트용 자동 경로)을 막는다.
+///  · 클라이언트   — 그보다 앞서 전환 예고(SceneTransitionAnnouncer)를 받아 미리 덮는다 (#748).
+/// 서버는 IsServer 검사로 뒤쪽 두 경로에서 빠진다.
+///
+/// 자동 경로의 재진입 가드는 <see cref="IsBusy"/>가 아니라 m_isTrackingNetworkLoad다 — 예고로 먼저
+/// 덮으면 IsBusy가 이미 true라, 그걸로 막으면 완료 대기·내리기가 안 돌아 화면이 영영 남는다. (#748)
 ///
 /// 페이드 인은 두지 않는다 — 대신 로드 시작 전 k_settleFrames만큼 프레임을 흘려 "덮은 화면이 최소
 /// 한 번 렌더됐다"를 보장한다. 캔버스를 켜는 것만으로는 아직 그려진 게 아니라서, 이 대기가 없으면
@@ -23,14 +27,18 @@ using UnityEngine.UI;
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class LoadingScreen : CommonManagerBase
 {
-    // 덮은 화면이 실제로 렌더되는 것을 보장하는 최소 프레임 수.
-    private const int k_settleFrames = 60;
+    // 덮은 화면이 실제로 렌더되는 것을 보장하는 최소 프레임 수. 한두 프레임이면 되는데 60(약 1초)이라
+    // 서버의 NGO 로드 시작이 그만큼 늦었고, 클라가 덮는 시점도 함께 밀렸다. (#748)
+    private const int k_settleFrames = 3;
 
     // 표시값이 목표를 따라가는 속도(초당 비율) — 로드 진행률은 계단식으로 튄다.
     private const float k_progressPerSecond = 2.5f;
 
     // 클라이언트 자동 경로의 무한 대기 방지 상한.
     private const float k_loadTimeoutSeconds = 30f;
+
+    // 전환 예고만 오고 씬 로드가 시작되지 않을 때 스스로 내리는 상한 (#748).
+    private const float k_announceTimeoutSeconds = 10f;
 
     [Header("참조")]
     [SerializeField]
@@ -77,6 +85,9 @@ public class LoadingScreen : CommonManagerBase
 
     // 클라이언트 자동 경로에서 로컬 로드 완료를 확인하는 씬 이름
     private string m_clientLoadedScene;
+
+    // 클라이언트 자동 경로가 돌고 있는가 — "화면이 떠 있는가"(IsBusy)와 구분한다 (클래스 주석 참고, #748)
+    private bool m_isTrackingNetworkLoad;
 
     // 지금 표시 중인 상태 문구 — 구독 해제 기준
     private LocalizedString m_boundStatus;
@@ -318,7 +329,7 @@ public class LoadingScreen : CommonManagerBase
         if (net == null || net.IsServer)
             return; // 서버는 App.LoadScene이 이미 덮고 있다
 
-        if (clientId != net.LocalClientId || IsBusy)
+        if (clientId != net.LocalClientId || m_isTrackingNetworkLoad)
             return;
 
         CoverUntilLoadedAsync(sceneName, operation).Forget();
@@ -331,46 +342,83 @@ public class LoadingScreen : CommonManagerBase
             m_clientLoadedScene = sceneName;
     }
 
+    /// <summary>서버의 전환 예고를 받아 미리 덮는다 — 완료 대기·내리기는 뒤이어 올 씬 이벤트가 맡는다. (#748)</summary>
+    public void CoverForIncomingSceneChange()
+    {
+        if (IsBusy)
+            return;
+
+        ShowInstant();
+        WaitForAnnouncedLoadAsync().Forget();
+    }
+
+    // 예고만 오고 로드가 시작되지 않으면(로드 실패·세션 끊김) 덮은 화면이 굳는다 —
+    // 자동 경로가 이어받지 않은 채 상한을 넘기면 스스로 내린다.
+    private async UniTaskVoid WaitForAnnouncedLoadAsync()
+    {
+        CancellationToken token = this.GetCancellationTokenOnDestroy();
+
+        float deadline = Time.realtimeSinceStartup + k_announceTimeoutSeconds;
+        while (!m_isTrackingNetworkLoad && IsBusy && Time.realtimeSinceStartup < deadline)
+            await UniTask.Yield(PlayerLoopTiming.Update, token);
+
+        if (m_isTrackingNetworkLoad || !IsBusy)
+            return;
+
+        Debug.LogWarning(
+            "[LoadingScreen] 전환 예고 뒤 씬 로드가 시작되지 않았습니다 — 로딩 화면을 내립니다."
+        );
+        await HideAsync(token);
+    }
+
     private async UniTaskVoid CoverUntilLoadedAsync(string sceneName, AsyncOperation operation)
     {
         CancellationToken token = this.GetCancellationTokenOnDestroy();
         m_clientLoadedScene = null;
+        m_isTrackingNetworkLoad = true; // 예고가 먼저 덮었더라도 완료 대기는 여기가 맡는다 (#748)
         ShowInstant();
 
-        // 데드라인 폴링 — SessionFlow.WaitForNetworkShutdownAsync와 같은 방침(강제하지 않고 경고 후 진행).
-        // 세션이 도중에 끊기면 완료 신호가 영영 안 오므로 IsListening도 종료 조건에 넣는다.
-        // 폴링하는 김에 게이지도 여기서 채운다 — 클라이언트는 이 경로가 유일하다 (#582).
-        float deadline = Time.realtimeSinceStartup + k_loadTimeoutSeconds;
-        while (
-            m_clientLoadedScene != sceneName
-            && NetworkManager.Singleton != null
-            && NetworkManager.Singleton.IsListening
-            && Time.realtimeSinceStartup < deadline
-        )
+        try
         {
-            if (operation != null)
-                ReportSceneLoadProgress(operation.progress);
+            // 데드라인 폴링 — SessionFlow.WaitForNetworkShutdownAsync와 같은 방침(강제하지 않고 경고 후 진행).
+            // 세션이 도중에 끊기면 완료 신호가 영영 안 오므로 IsListening도 종료 조건에 넣는다.
+            // 폴링하는 김에 게이지도 여기서 채운다 — 클라이언트는 이 경로가 유일하다 (#582).
+            float deadline = Time.realtimeSinceStartup + k_loadTimeoutSeconds;
+            while (
+                m_clientLoadedScene != sceneName
+                && NetworkManager.Singleton != null
+                && NetworkManager.Singleton.IsListening
+                && Time.realtimeSinceStartup < deadline
+            )
+            {
+                if (operation != null)
+                    ReportSceneLoadProgress(operation.progress);
 
-            await UniTask.Yield(PlayerLoopTiming.Update, token);
+                await UniTask.Yield(PlayerLoopTiming.Update, token);
+            }
+
+            if (m_clientLoadedScene == sceneName)
+            {
+                BeginSceneReadyWait();
+
+                await UniTask.DelayFrame(k_settleFrames, PlayerLoopTiming.Update, token); // 첫 렌더 가리기
+
+                // 런타임 스폰까지 기다린다 — 서버는 App.LoadScene이 같은 대기를 걸지만 클라는 여기가 유일한 경로
+                await App.WaitUntilSceneReadyAsync(token);
+            }
+            else
+            {
+                Debug.LogWarning(
+                    $"[LoadingScreen] '{sceneName}' 로드 완료를 확인하지 못했습니다 — 로딩 화면을 내립니다."
+                );
+            }
+
+            await HideAsync(token);
         }
-
-        if (m_clientLoadedScene == sceneName)
+        finally
         {
-            BeginSceneReadyWait();
-
-            await UniTask.DelayFrame(k_settleFrames, PlayerLoopTiming.Update, token); // 첫 렌더 가리기
-
-            // 런타임 스폰까지 기다린다 — 서버는 App.LoadScene이 같은 대기를 걸지만 클라는 여기가 유일한 경로
-            await App.WaitUntilSceneReadyAsync(token);
+            m_isTrackingNetworkLoad = false;
         }
-        else
-        {
-            Debug.LogWarning(
-                $"[LoadingScreen] '{sceneName}' 로드 완료를 확인하지 못했습니다 — 로딩 화면을 내립니다."
-            );
-        }
-
-        await HideAsync(token);
     }
     #endregion
 }
