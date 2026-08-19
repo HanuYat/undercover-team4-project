@@ -41,12 +41,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000405
-    m_Localized: "\uC81C\uD55C\uC2DC\uAC04 \uCD08\uACFC \u2014 \uBAA9\uD45C \uAE08\uC561
-      \uBBF8\uB2EC"
+    m_Localized: "\uC81C\uD55C\uC2DC\uAC04 \uCD08\uACFC"
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000406
-    m_Localized: "\uD50C\uB808\uC774\uC5B4 \uC804\uC6D0 \uD589\uB3D9\uBD88\uB2A5"
+    m_Localized: "\uC804\uC6D0 \uD589\uB3D9\uBD88\uB2A5"
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000407
@@ -54,22 +53,15 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000408
-    m_Localized: "\uC218\uC775 {0:N0}\uC6D0  -  \uD560\uB2F9\uB7C9 {1:N0}\uC6D0 
-      =  \uD300 \uBAAB {2:N0}\uC6D0\n\uD300 \uC790\uAE08  {3:N0}\uC6D0\n\uC218\uAC10
-      \uC815\uC0B0: \uD604\uC0C1\uC218\uBC30 {4} \xB7 \uACBD\uBC94\uC8C4 {5}"
+    m_Localized: "\uD300 \uC790\uAE08 {0:+#,##0;-#,##0;0}\uC6D0 \u2192 {1:N0}\uC6D0 (\uD560\uB2F9\uB7C9 {2:N0}\uC6D0 \uB0A9\uBD80)"
     m_Metadata:
       m_Items:
       - rid: 6276845898492543061
   - m_Id: 7100000000409
-    m_Localized: "\uC774\uBC88 \uD310 \uCD5C\uB2E4 \uC624\uAC80\uAC70: {0} ({1}\uD68C)"
+    m_Localized: "\uBBF8\uCE5C \uB85C\uBD07 \u2014 {0}"
     m_Metadata:
       m_Items:
       - rid: 6276845898492543061
-  - m_Id: 7100000000410
-    m_Localized: "\uC774\uBC88 \uD310 \uC624\uAC80\uAC70 \uC5C6\uC74C \u2014 \uAE68\uB057\uD55C
-      \uC218\uC0AC!"
-    m_Metadata:
-      m_Items: []
   - m_Id: 7100000000411
     m_Localized: "\uB0B4 \uBAAB  +{0:N0}\uC6D0   (\uAC1C\uC778 \uC790\uAE08 {1:N0}\uC6D0)"
     m_Metadata:
@@ -84,6 +76,11 @@ MonoBehaviour:
     m_Localized: "\uB77C\uC6B4\uB4DC \uC815\uC0B0"
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000414
+    m_Localized: "{0} \u2014 {1}"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845898492543061
   references:
     version: 2
     RefIds:
@@ -96,3 +93,4 @@ MonoBehaviour:
         - id: 7100000000409
         - id: 7100000000411
         - id: 7100000000412
+        - id: 7100000000414
