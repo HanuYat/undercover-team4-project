@@ -146,6 +146,13 @@ public class PlayerRagdoll : MonoBehaviour
     // (오히려 싸운다), 비권위 피어의 골반은 키네마틱으로 남아야 한다.
     private bool m_hipsIsNetworkSynced;
 
+    // 전 뼈 자세 스트림 — 이 컴포넌트가 피어로 내보내는 유일한 통로다.
+    // NPC와 같은 부품을 그대로 쓰고, 갈리는 것은 <b>권위뿐</b>이다(프리팹에서 Owner로 박는다).
+    private RagdollPoseStreamer m_streamer;
+
+    // 첫 패킷이 오기 전까지 붙들 자세를 잡았는가 — <see cref="TickHoldPoseUntilStream"/>.
+    private bool m_holdPoseUntilStream;
+
     private Animator m_animator;
     private CharacterController m_controller;
     private PlayerIncapacitation m_incapacitation;
@@ -256,6 +263,23 @@ public class PlayerRagdoll : MonoBehaviour
         // 같은 것을 가리키게 한다.
         m_root = m_controller != null ? m_controller.transform : transform;
 
+        // 스트리머는 <b>루트</b>에 있다 — NGO가 비활성 GameObject의 NetworkBehaviour를 스폰에서
+        // 제외하므로 <c>Corpse</c> 같은 하위가 아니라 NetworkObject와 같은 오브젝트여야 한다.
+        m_streamer = m_root.GetComponent<RagdollPoseStreamer>();
+        if (m_streamer == null)
+        {
+            Debug.LogWarning(
+                $"PlayerRagdoll: RagdollPoseStreamer가 없다 — {name}. 원격 피어에 자세가 가지 않아 "
+                    + "시체가 진입 자세로 굳는다. Player 프리팹 루트에 붙일 것",
+                this
+            );
+        }
+        else
+        {
+            // 정착 자세가 도착하면 원격도 그 자리에서 정착으로 넘긴다 — <b>원격의 종착 상태다.</b>
+            m_streamer.OnSettledPoseReceived += HandleSettledPoseReceived;
+        }
+
         // ⚠ 여기서 캡슐 무시를 걸지 않는다 — 시체가 비활성이라 뼈 콜라이더도 비활성이고,
         // <c>Physics.IgnoreCollision</c>은 비활성 콜라이더에 대해 에러를 뱉는다.
         // 걸 수 있는 유일한 시점은 시체를 켜는 순간이다(<see cref="ShowCorpse"/>).
@@ -362,10 +386,50 @@ public class PlayerRagdoll : MonoBehaviour
     /// </summary>
     private void ReleaseBonesToPhysics()
     {
-        m_rig.SetKinematic(false);
+        // ⚠ <b>자세를 스트림으로 받는 피어는 물리를 아예 돌리지 않는다 — 전 뼈 키네마틱.</b>
+        //
+        // 골반 하나만 고정하고 나머지 열을 동적으로 두던 것이 지금까지의 구성인데, 그러면 골반이
+        // 크게 움직일 때마다 관절이 위반돼 솔버가 <b>중력으로는 나올 수 없는 속도</b>를 먹인다
+        // (NPC에서 실측 6261 m/s). 전부 키네마틱이면 <b>위반될 관절이 원리적으로 없다</b> —
+        // 관절은 동적 바디 사이에서만 힘을 만든다.
+        //
+        // 로컬 물리가 만들던 흐느적임을 잃지만, <b>그 흐느적임이 곧 피어마다 다른 몸이었다.</b>
+        if (m_streamer != null && !HasMoveAuthority)
+        {
+            m_rig.SetKinematic(true);
 
-        if (m_hipsIsNetworkSynced && !HasMoveAuthority && m_rig.HipsBody != null)
-            m_rig.HipsBody.isKinematic = true;
+            // 첫 패킷이 오기 전까지 붙들 자세를 잡아 둔다 — 그 사이에도 루트는 이미 움직인다.
+            m_rig.CapturePose();
+            m_holdPoseUntilStream = true;
+            return;
+        }
+
+        m_rig.SetKinematic(false);
+    }
+
+    /// <summary>
+    /// 원격이 정착 자세를 받았다 — 그 자리에서 정착으로 넘긴다. (전 뼈 스트리밍)
+    ///
+    /// <b>자세는 스트리머가 이미 입혔고, 여기서 하는 것은 상태 전이뿐이다.</b> 권위 피어의
+    /// <see cref="Settle"/>이 하는 나머지(루트 포즈 확정·물리 복귀)는 <b>여기서 하면 안 된다</b> —
+    /// 그건 자기 물리의 결과를 정리하는 일이고, 원격에는 그 물리가 없다.
+    ///
+    /// <b>NPC와 갈리는 지점</b>: 저쪽은 정착이 곧 얼림이라 <c>Freeze()</c>를 불렀지만, 플레이어의
+    /// 원격 뼈는 <b>이미 상시 키네마틱</b>이라 따로 얼릴 것이 없다. 남는 것은 상태뿐이다.
+    /// </summary>
+    private void HandleSettledPoseReceived()
+    {
+        if (m_state == RagdollState.Animated)
+            return; // 이번 사망을 건너뛴 피어 — 살아있는 몸을 시체 상태로 밀지 않는다
+
+        m_holdPoseUntilStream = false;
+        m_state = RagdollState.Settled;
+    }
+
+    private void OnDestroy()
+    {
+        if (m_streamer != null)
+            m_streamer.OnSettledPoseReceived -= HandleSettledPoseReceived;
     }
 
     // 포즈를 옮기고 <b>전부 닿았는지 대조한다.</b>
@@ -507,7 +571,12 @@ public class PlayerRagdoll : MonoBehaviour
     /// <param name="carrier">운반자(밧줄을 쥔 쪽).</param>
     public void BeginRopePull(Transform carrier)
     {
-        if (m_hipsIsNetworkSynced && !HasMoveAuthority)
+        // 끌리기 시작은 몸이 다시 움직인다는 뜻이다 — 정착하며 끊은 스트림을 여기서 재개한다.
+        // 안 재개하면 끌려가는 시체가 원격에서 마지막 정착 자세로 굳는다.
+        // (NPC는 같은 자리에서 녹이기까지 하지만 플레이어는 얼지 않아 녹일 것이 없다)
+        m_streamer?.BeginStreaming();
+
+        if (!HasMoveAuthority)
             return;
 
         m_rope?.Attach(carrier);
@@ -561,6 +630,9 @@ public class PlayerRagdoll : MonoBehaviour
 
         ShowCorpse();
         m_rig.ApplyImpulse(impulse);
+
+        // 자세를 흘려보내기 시작한다 — 권위가 아니면 스스로 무동작이다(그쪽 주석).
+        m_streamer?.BeginStreaming();
     }
 
     /// <summary>
@@ -586,6 +658,13 @@ public class PlayerRagdoll : MonoBehaviour
         // 에피소드가 여기서 끝난다 — 다음 사망은 자기 사망을 다시 관측해야 부활할 수 있다 (PollDeath).
         m_sawDeathThisEpisode = false;
         m_awaitingDeathSeconds = 0f;
+
+        // 스트림을 <b>아무것도 보내지 않고</b> 끓는다 — 기상에는 종착 자세가 없다.
+        // <b>전 피어가 각자 부른다</b>: 부활 판정은 동기화된 값을 읽는 폴링이라 원격도 같은
+        // 프레임에 여기 온다 — 그래서 재생 정지에 RPC가 필요 없다. 안 끓으면 스트림이
+        // 기상 블렌드를 매 프레임 덮어쓴다.
+        m_streamer?.StopStreaming();
+        m_holdPoseUntilStream = false;
 
         if (m_state == RagdollState.Ragdoll)
             Settle(); // 날아가는 중이면 먼저 포즈를 확정한다
@@ -821,6 +900,17 @@ public class PlayerRagdoll : MonoBehaviour
         if (m_state != RagdollState.Ragdoll)
             return;
 
+        // ⚠ <b>정착 판정은 권위만 돌린다.</b> 이 게이트가 없으면 전 뼈 스트리밍에서
+        // <b>즉시 버그가 된다</b>: 원격의 뼈는 키네마틱이라 <c>AverageSpeed</c>가 항상 0이고,
+        // 그러면 아래 정지 타이머가 바로 차서 <b>무너지지도 전에</b> 0.3초 뒤 정착해 버린다.
+        //
+        // 원격의 종착 상태는 권위가 보내는 정착 자세가 준다(<see cref="HandleSettledPoseReceived"/>).
+        //
+        // <b>NPC에는 이 게이트가 이미 있었다</b> — 저쪽은 정착을 서버만 판정해서다.
+        // 여기는 <c>MonoBehaviour</c>라 전 피어에서 돌고, 그게 플레이어 고유의 함정이다.
+        if (!HasMoveAuthority)
+            return;
+
         m_elapsedInRagdoll += Time.deltaTime;
 
         m_stillTimer = m_rig.AverageSpeed <= m_settleSpeedThreshold
@@ -962,6 +1052,43 @@ public class PlayerRagdoll : MonoBehaviour
             && !HasMoveAuthority
             && (m_state == RagdollState.Ragdoll || m_state == RagdollState.Settled))
             TickAlignBonesToRoot();
+
+        // 스트림이 아직 몸을 쥐기 전이면 진입 시점의 자세를 붙든다 — <b>루트에 끌려가지 않게.</b>
+        TickHoldPoseUntilStream();
+    }
+
+    /// <summary>
+    /// 원격에서 <b>첫 자세 패킷이 오기 전</b> 구간을 메운다 — 진입 시점의 월드 자세를 그대로 붙든다.
+    ///
+    /// <b>왜 빈 구간이 생기나.</b> 래그돌 진입은 동기화된 값을 읽는 폴링이라 전 피어가 거의 같은
+    /// 프레임에 들어가지만, 자세는 <b>왕복 지연 + 보간 지연</b>만큼 늦게 온다. 그 사이 원격의 뼈는
+    /// 이미 키네마틱인데 루트는 이미 움직이고 있다 — <b>키네마틱 뼈는 계층을 따라가므로 몸이
+    /// 통째로 딸려 간다.</b>
+    ///
+    /// <b>플레이어에서 그 움직임을 만드는 것은 <see cref="TickCapsuleFollow"/>다</b> — 캡슐을 골반
+    /// 위치로 3차원 추종시키므로 진입 프레임에 발밑에서 골반까지, 서 있는 몸 기준 약 0.9m를 뛴다.
+    /// (NPC는 <c>TickRootFollow</c>가 같은 점프를 만든다 — 이름만 다르고 증상이 같다)
+    ///
+    /// ⚠ <b><see cref="RagdollPoseStreamer.IsStreamDriven"/>의 반대로 묻지 않는다.</b> 그것이 거짓인
+    /// 경우가 둘인데 뜻이 정반대다 — <b>아직 안 왔다</b>(메워야 한다)와 <b>정착까지 다 받고
+    /// 끝났다</b>(확정이라 건드리면 안 된다). NPC에서 하나로 물었다가 <b>다 쓰러진 시체가 마지막에
+    /// 벌떡 선 자세로 바뀌었다.</b>
+    ///
+    /// <b>렌더 전용이다</b> — 이 프로젝트는 <c>m_AutoSyncTransforms = 0</c>이라 여기 쓴 값이 PhysX로
+    /// 넘어가지 않는다. 원격의 뼈는 물리에 참여하지 않으므로 잃는 것도 없다.
+    /// </summary>
+    private void TickHoldPoseUntilStream()
+    {
+        if (!m_holdPoseUntilStream || m_streamer == null || HasMoveAuthority)
+            return;
+
+        if (!m_streamer.IsAwaitingFirstPose)
+        {
+            m_holdPoseUntilStream = false;
+            return;
+        }
+
+        m_rig.RestoreCapturedPose();
     }
 
     // ---- 캡슐 추종 (#506 — 이 설계의 중심) ----
@@ -1206,6 +1333,14 @@ public class PlayerRagdoll : MonoBehaviour
         RestToPhysics();
 
         m_state = RagdollState.Settled;
+
+        // 스트림을 끊고 <b>마지막 자세를 로컬 좌표로</b> 한 번 보낸다 — 원격의 종착 상태다.
+        //
+        // ⚠ <b>얼림과 스트림 종료가 여기서 갈린다.</b> NPC는 정착 = 얼림이라 둘이 붙어 있었지만,
+        // 플레이어는 정착해도 권위 피어의 뼈가 물리에 남는다(<see cref="RestToPhysics"/>의 네 가지
+        // 실패 기록). 스트리머가 요구하는 것은 얼림이 아니라 <b>"권위의 몸이 더 이상
+        // 유의미하게 움직이지 않는다"</b>뿐이라 그것만 떼어 붙이면 된다.
+        m_streamer?.EndStreaming();
     }
 
     // 정착 후 루트가 있어야 할 포즈 — 골반 밑 지면 위, 몸이 누운 방향을 향해.
