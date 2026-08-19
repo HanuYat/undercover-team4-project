@@ -23,6 +23,7 @@ public static class GameSettings
     private const string k_masterVolumeKey = "settings.masterVolume";
     private const string k_voiceVolumeKey = "settings.voiceVolume";
     private const string k_micMutedKey = "settings.micMuted";
+    private const string k_playerColorKey = "settings.playerColor";
 
     // 감도는 '배율'이다 — 프리팹의 기준 감도에 곱한다 (PlayerLook.HandleLook).
     // 슬라이더 min/max도 이 상수로 맞춰 인스펙터 값과 어긋나지 않게 한다.
@@ -60,6 +61,9 @@ public static class GameSettings
     private const float k_defaultVoiceVolume = 1f;
     private const bool k_defaultMicMuted = false;
 
+    // 팔레트 첫 색 — 여기서는 목록 길이를 모른다. 범위 밖 값은 읽는 쪽(PlayerColorPalette.Get)이 자른다. (#432)
+    private const int k_defaultPlayerColor = 0;
+
     private static float s_mouseSensitivity = k_defaultMouseSensitivity; // 백킹 필드
     private static float s_lookSmoothing = k_defaultLookSmoothing;
     private static float s_fov = k_defaultFov;
@@ -68,6 +72,7 @@ public static class GameSettings
     private static float s_masterVolume = k_defaultMasterVolume;
     private static float s_voiceVolume = k_defaultVoiceVolume;
     private static bool s_micMuted = k_defaultMicMuted;
+    private static int s_playerColor = k_defaultPlayerColor;
 
     /// <summary>마우스 감도 배율 (0.25~3.0, 기본 1.0). 프리팹 기준 감도에 곱해진다.</summary>
     public static float MouseSensitivity
@@ -196,6 +201,27 @@ public static class GameSettings
         }
     }
 
+    /// <summary>내 로봇 색이 바뀌었다 — 로비 로스터 보고·아바타·팔레트 표시가 되읽는다. (#432)</summary>
+    public static event Action<int> OnPlayerColorChanged;
+
+    /// <summary>
+    /// 내 로봇 색 인덱스 (#432) — <see cref="PlayerColorPalette"/>의 몇 번째 색인지.
+    /// 순수 코스메틱이고, 값의 출처는 여기 하나다: 로비 로스터와 게임 씬의 <c>PlayerCosmetics</c>가
+    /// 각자 자기 씬의 운반 수단으로 나르되 <b>읽는 값은 이것</b>이다 (음소거와 같은 구조, #430).
+    ///
+    /// 팔레트 길이를 여기서 모르므로 <b>자르지 않고</b> 그대로 담는다 — 팔레트를 아는 쪽이 자른다.
+    /// </summary>
+    public static int PlayerColorIndex
+    {
+        get => s_playerColor;
+        set
+        {
+            s_playerColor = Mathf.Max(0, value);
+            PlayerPrefs.SetInt(k_playerColorKey, s_playerColor);
+            OnPlayerColorChanged?.Invoke(s_playerColor);
+        }
+    }
+
     /// <summary>
     /// 고를 수 있는 언어 목록 — 설정 창 드롭다운이 이 순서 그대로 항목을 만든다. (#374)
     /// 로케일 추가는 Localization Settings에서 하며 여기 코드는 건드리지 않는다.
@@ -238,6 +264,7 @@ public static class GameSettings
         // static 이벤트도 함께 리셋한다 — 도메인 리로드를 끄면 이전 플레이의 죽은 구독자가 남아
         // 파괴된 UI를 깨운다. 씬 로드 전이라 이번 플레이의 구독자는 아직 붙지 않았다. (#430)
         OnMicMutedChanged = null;
+        OnPlayerColorChanged = null;
 
         MouseSensitivity = PlayerPrefs.GetFloat(k_mouseSensitivityKey, k_defaultMouseSensitivity);
         LookSmoothing = PlayerPrefs.GetFloat(k_lookSmoothingKey, k_defaultLookSmoothing);
@@ -247,10 +274,13 @@ public static class GameSettings
         MasterVolume = PlayerPrefs.GetFloat(k_masterVolumeKey, k_defaultMasterVolume);
         VoiceVolume = PlayerPrefs.GetFloat(k_voiceVolumeKey, k_defaultVoiceVolume);
         MicMuted = PlayerPrefs.GetInt(k_micMutedKey, k_defaultMicMuted ? 1 : 0) != 0;
+        PlayerColorIndex = PlayerPrefs.GetInt(k_playerColorKey, k_defaultPlayerColor);
     }
 
     /// <summary>
-    /// 언어를 뺀 전부를 기본값으로 되돌린다 — 설정 창의 [기본값 복원].
+    /// 언어와 로봇 색을 뺀 전부를 기본값으로 되돌린다 — 설정 창의 [기본값 복원].
+    /// <b>로봇 색도 빼는 이유는 언어와 같다</b> — 감도·볼륨을 되돌리려다 자기 색이 지워지면
+    /// 되돌린 줄도 모르고 남의 색과 겹친다. 색은 로비 팔레트에서 언제든 다시 고른다. (#432)
     /// <b>언어는 포함하지 않는다</b> — 되돌릴 '기본 언어'가 시스템 로케일이라, 한국어로 쓰던 사람이
     /// 이 버튼을 누르면 메뉴 언어가 통째로 바뀐다. 감도·볼륨을 되돌리려다 화면을 못 읽게 되는 쪽이
     /// 잘못 조절한 값보다 나쁘고, 언어는 바로 위 드롭다운에서 되돌릴 수 있다. (#374)

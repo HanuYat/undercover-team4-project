@@ -8,16 +8,21 @@ using UnityEngine;
 /// <see cref="MaterialPropertyBlock"/>을 들고 쓰면 서로의 값을 덮어쓰고, 한쪽이 오버라이드를
 /// 걷어내는 순간 다른 쪽 표시까지 함께 지워진다. 소유권을 여기 하나로 모아 그 사고를 없앤다.
 ///
-/// 지금 쓰는 곳은 감전 발광(<see cref="NpcShockView"/>, #477) 하나다 — 타격 플래시가 함께 있었지만
+/// 쓰는 곳은 감전 발광(<see cref="NpcShockView"/>, #477)과 플레이어 로봇 색(<see cref="PlayerCosmetics"/>, #432)이다 —
+/// 후자가 이 부품이 막으려던 사고의 실제 사례다: 코스메틱 색이 따로 칠했다면 감전이 끝나는 순간 함께 지워진다.
+/// 타격 플래시가 함께 있었지만
 /// 몸 전체가 물드는 그림이 과하다는 판단으로 걷어냈다(#478). 채널 분리는 그대로 둔다: 다시 붙거나
 /// 다른 지속 표시가 생기면 그때 같은 사고가 그대로 돌아온다.
 ///
-/// <b>채널은 둘이고 우선순위가 있다:</b>
+/// <b>채널은 셋이고 우선순위가 있다:</b>
 /// <list type="bullet">
 ///   <item><see cref="SetFlash"/> — 순간 표시. 맞은 그 찰나에만 쓴다.</item>
 ///   <item><see cref="SetSustained"/> — 지속 표시. 상태가 유지되는 동안 깔린다.</item>
+///   <item><see cref="SetBase"/> — 밑색. 연출이 아니라 <b>그 몸의 평상시 색</b>이다 (#432 로봇 색).</item>
 /// </list>
 /// 플래시가 지속보다 <b>우선</b>한다 — 손상된 몸이 다시 맞으면 그 순간은 새 타격이 보여야 한다.
+/// 밑색은 맨 아래다 — 연출이 걷히면 흰색이 아니라 <b>그 사람이 고른 색</b>으로 돌아와야 한다.
+/// 밑색이 없을 때만 오버라이드를 통째로 걷어 머티리얼 원색이 드러난다.
 ///
 /// <b>머티리얼 인스턴스를 만들지 않는다.</b> PropertyBlock으로만 칠하므로 누수도, 배칭 파괴도 없고,
 /// 오버라이드를 걷어내면 외형 배정(<c>AppearanceAssigner</c>)이 칠한 원래 색이 그대로 돌아온다.
@@ -35,6 +40,8 @@ public class BodyTint : MonoBehaviour
     private bool m_hasFlash;
     private Color m_sustained;
     private bool m_hasSustained;
+    private Color m_base;
+    private bool m_hasBase;
     private bool m_applied; // 지금 오버라이드가 걸려 있는가 — 불필요한 재적용을 막는다
 
     private void Awake()
@@ -101,6 +108,24 @@ public class BodyTint : MonoBehaviour
         Refresh();
     }
 
+    /// <summary>밑색을 건다 — 연출이 없을 때 보이는 그 몸의 평상시 색. (#432)</summary>
+    public void SetBase(Color color)
+    {
+        m_base = color;
+        m_hasBase = true;
+        Refresh();
+    }
+
+    /// <summary>밑색을 걷는다 — 머티리얼 원색으로 돌아간다.</summary>
+    public void ClearBase()
+    {
+        if (!m_hasBase)
+            return;
+
+        m_hasBase = false;
+        Refresh();
+    }
+
     private void Refresh()
     {
         if (m_hasFlash)
@@ -112,6 +137,12 @@ public class BodyTint : MonoBehaviour
         if (m_hasSustained)
         {
             Apply(m_sustained);
+            return;
+        }
+
+        if (m_hasBase)
+        {
+            Apply(m_base);
             return;
         }
 
