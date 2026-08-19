@@ -8,7 +8,7 @@ using UnityEngine.UI;
 /// </summary>
 public class PlayerColorPanel : PanelBase
 {
-    [Tooltip("내 로봇 얼굴 미리보기 — 비워 두면 미리보기 없이 팔레트만 보인다")]
+    [Tooltip("내 로봇 전신 미리보기 — 비워 두면 미리보기 없이 팔레트만 보인다")]
     [SerializeField] private RawImage m_preview;
 
     [Tooltip("얼굴을 굽는 무대 — 로비 카드와 같은 것을 물린다")]
@@ -39,12 +39,12 @@ public class PlayerColorPanel : PanelBase
 
     private void HandleColorChanged(EBodyPart _) => RefreshPreview();
 
-    // 고른 색의 얼굴은 무대가 이미 굽고 있다 — 여기서는 어느 그림을 볼지만 정한다
+    // 그림은 무대가 그린다 — 창은 어느 것을 볼지만 정한다
     private void RefreshPreview()
     {
         if (m_preview == null || m_portraitStage == null)
             return;
 
-        m_preview.texture = m_portraitStage.GetPortrait(PlayerColorSet.FromSettings());
+        m_preview.texture = m_portraitStage.BodyPreview;
     }
 }

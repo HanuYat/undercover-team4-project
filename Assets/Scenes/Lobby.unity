@@ -979,7 +979,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -2165,10 +2165,14 @@ MonoBehaviour:
   m_palette: {fileID: 11400000, guid: 7b4d0e93c1a54f6489d2e35a1c8f7b02, type: 2}
   m_stageOrigin: {x: 0, y: -500, z: 0}
   m_headBoneName: Head
-  m_distance: 0.78
-  m_heightOffset: 0.02
+  m_distance: 1.05
+  m_heightOffset: -0.14
   m_fieldOfView: 28
   m_textureSize: {x: 256, y: 348}
+  m_bodyDistance: 3.4
+  m_bodyHeight: 0.95
+  m_bodyFieldOfView: 32
+  m_bodyTextureSize: {x: 384, y: 640}
 --- !u!4 &637075662
 Transform:
   m_ObjectHideFlags: 0
@@ -3344,7 +3348,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -3981,7 +3985,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -5482,8 +5486,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 60, y: 20}
-  m_SizeDelta: {x: 256, y: 348}
+  m_AnchoredPosition: {x: 50, y: 10}
+  m_SizeDelta: {x: 300, y: 500}
   m_Pivot: {x: 0, y: 0.5}
 --- !u!114 &1689366055
 MonoBehaviour:

@@ -47,12 +47,27 @@ public class LobbyPortraitStage : MonoBehaviour
     [Tooltip("초상 텍스처 크기(px) — 카드 사진 창과 같은 세로 비율로 굽는다. 정사각으로 구워 창에 늘리면 얼굴이 눌린다")]
     [SerializeField] private Vector2Int m_textureSize = new Vector2Int(256, 348);
 
+    [Header("전신 미리보기 (#432)")]
+    [Tooltip("발끝에서 이만큼(m) 뒤로 물러나 전신을 잡는다")]
+    [SerializeField] private float m_bodyDistance = 3.4f;
+
+    [Tooltip("카메라 높이(m) — 몸 가운데쯤")]
+    [SerializeField] private float m_bodyHeight = 0.95f;
+
+    [Range(10f, 60f)]
+    [SerializeField] private float m_bodyFieldOfView = 32f;
+
+    [SerializeField] private Vector2Int m_bodyTextureSize = new Vector2Int(384, 640);
+
     // 색 조합(PlayerColorSet.Key) → 그 색으로 구운 얼굴
     private readonly Dictionary<int, RenderTexture> m_portraits = new Dictionary<int, RenderTexture>();
     private readonly Dictionary<int, PlayerColorSet> m_requested = new Dictionary<int, PlayerColorSet>();
     private readonly HashSet<int> m_pending = new HashSet<int>(); // 아직 그림이 안 채워진 것
 
     private Camera m_camera;
+    private Camera m_bodyCamera;
+    private RenderTexture m_bodyTexture;
+    private bool m_bodyDirty = true; // 내 색이 바뀌면 다시 그린다
     private BodyTint m_tint;
     private readonly Color[] m_tintBuffer = new Color[3]; // 인덱스 = EBodyPart
     private bool m_baking;
@@ -67,6 +82,20 @@ public class LobbyPortraitStage : MonoBehaviour
 
     /// <summary>내 색으로 구운 얼굴. (#432)</summary>
     public Texture Portrait => GetPortrait(PlayerColorSet.FromSettings());
+
+    /// <summary>내 색으로 그린 전신 — 색 고르는 창이 쓴다. 무대가 없으면 null. (#432)</summary>
+    public Texture BodyPreview
+    {
+        get
+        {
+            if (m_bodyCamera == null)
+                return null;
+
+            m_bodyDirty = true;
+            BakeAsync().Forget();
+            return m_bodyTexture;
+        }
+    }
 
     /// <summary>로비에서 구워 세션 동안 유지되는 <b>내</b> 얼굴 — 게임 씬 UI가 이걸 읽는다. 준비 전이면 null. (#720)</summary>
     public static Texture SessionPortrait => s_sessionPortrait;
@@ -123,10 +152,21 @@ public class LobbyPortraitStage : MonoBehaviour
         }
 
         m_portraits.Clear();
+
+        if (m_bodyTexture == null)
+            return;
+
+        m_bodyTexture.Release();
+        Destroy(m_bodyTexture);
+        m_bodyTexture = null;
     }
 
-    // 내 색 얼굴을 확보해 두면 굽기가 끝날 때 세션용으로 옮겨진다
-    private void HandleOwnColorChanged(EBodyPart _) => GetPortrait(PlayerColorSet.FromSettings());
+    // 내 색 얼굴을 확보해 두면 굽기가 끝날 때 세션용으로 옮겨진다. 전신도 같이 다시 그린다.
+    private void HandleOwnColorChanged(EBodyPart _)
+    {
+        m_bodyDirty = true;
+        GetPortrait(PlayerColorSet.FromSettings());
+    }
 
     private void BuildStage()
     {
@@ -163,15 +203,34 @@ public class LobbyPortraitStage : MonoBehaviour
         // 모델도 카메라도 움직이지 않으므로 필요할 때만 그린다 — 켜 둔 채로 두면 매 프레임 다시 그린다.
         m_camera.enabled = false;
 
+        m_bodyTexture = CreateTexture(m_bodyTextureSize, "LobbyBodyPreview");
+
+        var bodyGo = new GameObject("BodyCamera");
+        bodyGo.transform.SetParent(stage.transform, false);
+        m_bodyCamera = bodyGo.AddComponent<Camera>();
+        m_bodyCamera.clearFlags = CameraClearFlags.SolidColor;
+        m_bodyCamera.backgroundColor = new Color(0f, 0f, 0f, 0f);
+        m_bodyCamera.fieldOfView = m_bodyFieldOfView;
+        m_bodyCamera.nearClipPlane = 0.05f;
+        m_bodyCamera.farClipPlane = 20f;
+        m_bodyCamera.enabled = false;
+
+        Vector3 bodyFocus = model.transform.position + Vector3.up * m_bodyHeight;
+        bodyGo.transform.position = bodyFocus + model.transform.forward * m_bodyDistance;
+        bodyGo.transform.LookAt(bodyFocus);
+
         // 내 얼굴은 아무도 묻기 전에 챙겨 둔다 — 게임 씬으로 들고 갈 그림이라 로비에서 구워야 한다
         GetPortrait(PlayerColorSet.FromSettings());
     }
 
-    private RenderTexture CreateTexture(int key)
+    private RenderTexture CreateTexture(int key) =>
+        CreateTexture(m_textureSize, $"LobbyPortrait {key}");
+
+    private RenderTexture CreateTexture(Vector2Int size, string name)
     {
-        var texture = new RenderTexture(m_textureSize.x, m_textureSize.y, 16, RenderTextureFormat.ARGB32)
+        var texture = new RenderTexture(size.x, size.y, 16, RenderTextureFormat.ARGB32)
         {
-            name = $"LobbyPortrait {key}",
+            name = name,
             antiAliasing = 2,
         };
 
@@ -220,7 +279,10 @@ public class LobbyPortraitStage : MonoBehaviour
     private void BakePending()
     {
         if (m_pending.Count == 0)
+        {
+            BakeBody();
             return;
+        }
 
         foreach (int key in m_pending)
         {
@@ -235,7 +297,21 @@ public class LobbyPortraitStage : MonoBehaviour
         m_pending.Clear();
         m_camera.targetTexture = null;
 
+        BakeBody();
         CaptureSessionPortrait();
+    }
+
+    // 창에 띄울 전신 — 내 색으로만 그린다
+    private void BakeBody()
+    {
+        if (!m_bodyDirty || m_bodyCamera == null || m_bodyTexture == null)
+            return;
+
+        Tint(PlayerColorSet.FromSettings());
+        m_bodyCamera.targetTexture = m_bodyTexture;
+        Render(m_bodyCamera, m_bodyTexture);
+        m_bodyCamera.targetTexture = null;
+        m_bodyDirty = false;
     }
 
     // 무대 모델을 그 사람 색으로 갈아입힌다 — 얼굴만 잡지만 부위 색을 그대로 태운다 (#432)
@@ -278,17 +354,19 @@ public class LobbyPortraitStage : MonoBehaviour
             Destroy(stale);
     }
 
+    private void RenderPortrait(RenderTexture destination) => Render(m_camera, destination);
+
     // SRP에서 Camera.Render()는 파이프라인 밖 경로다 — URP가 지원하는 렌더 요청을 먼저 쓴다.
-    private void RenderPortrait(RenderTexture destination)
+    private static void Render(Camera camera, RenderTexture destination)
     {
-        if (m_camera == null || destination == null)
+        if (camera == null || destination == null)
             return;
 
         var request = new UniversalRenderPipeline.SingleCameraRequest { destination = destination };
-        if (RenderPipeline.SupportsRenderRequest(m_camera, request))
-            RenderPipeline.SubmitRenderRequest(m_camera, request);
+        if (RenderPipeline.SupportsRenderRequest(camera, request))
+            RenderPipeline.SubmitRenderRequest(camera, request);
         else
-            m_camera.Render();
+            camera.Render();
     }
 
     // 본 이름은 계층 어디에 있을지 모른다 — 이름으로 깊이 우선 탐색한다.
