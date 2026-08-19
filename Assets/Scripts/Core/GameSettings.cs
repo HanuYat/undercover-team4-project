@@ -65,7 +65,8 @@ public static class GameSettings
     // 팔레트 첫 색 — 여기서는 목록 길이를 모른다. 범위 밖 값은 읽는 쪽(PlayerColorPalette.Get)이 자른다. (#432)
     private const int k_defaultPlayerColor = 0;
 
-    private static readonly int[] s_playerColors = new int[3]; // 인덱스 = EBodyPart
+    // 인덱스 = EBodyPart. 길이를 enum에서 얻는다 — 부위가 늘어도 여기서 터지지 않게
+    private static readonly int[] s_playerColors = new int[Enum.GetValues(typeof(EBodyPart)).Length];
 
     private static float s_mouseSensitivity = k_defaultMouseSensitivity; // 백킹 필드
     private static float s_lookSmoothing = k_defaultLookSmoothing;

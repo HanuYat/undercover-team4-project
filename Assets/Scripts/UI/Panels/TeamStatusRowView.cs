@@ -58,7 +58,10 @@ public class TeamStatusRowView : MonoBehaviour
         m_shownName = null;
     }
 
-    /// <summary>얼굴을 넣는다. 지금은 전원이 같은 한 장을 나눠 쓴다 — 개인별 외형은 #432 몫.</summary>
+    /// <summary>얼굴이 들어와 있는가 — 색이 늦게 도착하면 상황판이 다시 넘긴다. (#432)</summary>
+    public bool HasPortrait => m_portrait != null && m_portrait.texture != null;
+
+    /// <summary>얼굴을 넣는다 — 사람마다 고른 색으로 로비에서 구운 그림이다. (#432)</summary>
     public void SetPortrait(Texture portrait)
     {
         if (m_portrait != null)

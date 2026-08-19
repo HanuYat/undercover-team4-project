@@ -163,7 +163,7 @@ public class BodyTint : MonoBehaviour
             int slots = renderer.sharedMaterials.Length;
             if (slots <= 1)
             {
-                SetBlock(renderer, m_baseColors[0], slot: -1);
+                SetBlock(renderer, m_baseFallback, slot: -1);
                 continue;
             }
 

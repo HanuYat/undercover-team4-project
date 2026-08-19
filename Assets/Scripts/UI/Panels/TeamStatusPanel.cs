@@ -188,6 +188,11 @@ public class TeamStatusPanel : PanelBase
             // 채워진 뒤엔 바뀌지 않으므로 매 프레임 문자열을 만들지 않는다.
             if (!m_rows[i].HasName)
                 m_rows[i].SetName(NameOf(i));
+
+            // 얼굴도 같은 이유로 다시 묻는다 — 색은 오너 쓰기 NetworkVariable이라 스폰과 같은
+            // 프레임에는 아직 안 와 있고, 그때 한 번만 넣으면 빈 칸으로 굳는다. (#432)
+            if (!m_rows[i].HasPortrait)
+                m_rows[i].SetPortrait(PortraitOf(i));
         }
     }
 

@@ -63,6 +63,8 @@ public class LobbyPortraitStage : MonoBehaviour
     private readonly Dictionary<int, RenderTexture> m_portraits = new Dictionary<int, RenderTexture>();
     private readonly Dictionary<int, PlayerColorSet> m_requested = new Dictionary<int, PlayerColorSet>();
     private readonly HashSet<int> m_pending = new HashSet<int>(); // 아직 그림이 안 채워진 것
+    private readonly HashSet<int> m_live = new HashSet<int>(); // 지금 쓰이는 조합 — 나머지는 굽고 나서 버린다
+    private readonly List<int> m_stale = new List<int>();
 
     private Camera m_camera;
     private Camera m_bodyCamera;
@@ -100,6 +102,11 @@ public class LobbyPortraitStage : MonoBehaviour
 
     /// <summary>로비에서 구워 세션 동안 유지되는 <b>내</b> 얼굴. 준비 전이면 null. (#720)</summary>
     public static Texture SessionPortrait => GetSessionPortrait(PlayerColorSet.FromSettings());
+
+    // 도메인 리로드를 끄면 지난 플레이의 (이미 파괴된) 텍스처 참조가 static에 남는다 —
+    // Unity 가짜 null이라 받는 쪽 null 검사도 통과한다. 플레이 시작마다 비운다. (GameSettings.Load와 같은 이유)
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void ResetStatics() => s_sessionPortraits.Clear();
 
     /// <summary>그 색 조합으로 로비에서 구워 둔 얼굴 — 게임 씬 UI가 읽는다. 없으면 null. (#432)</summary>
     public static Texture GetSessionPortrait(PlayerColorSet colors) =>
@@ -295,6 +302,7 @@ public class LobbyPortraitStage : MonoBehaviour
         if (m_pending.Count == 0)
         {
             BakeBody();
+            EvictUnused();
             return;
         }
 
@@ -313,6 +321,47 @@ public class LobbyPortraitStage : MonoBehaviour
         m_camera.targetTexture = null;
 
         BakeBody();
+        EvictUnused();
+    }
+
+    // 쓰지 않는 조합을 버린다 — 팔레트를 눌러 볼 때마다 조합이 하나씩 늘어 그대로 두면
+    // 텍스처가 세션 내내 쌓인다. 살아 있는 것은 명부에 있는 색과 내 색뿐이다. (#432)
+    private void EvictUnused()
+    {
+        m_live.Clear();
+        m_live.Add(PlayerColorSet.FromSettings().Key);
+
+        SessionRoster roster = App.Game.Roster;
+        if (roster != null && roster.IsSpawned)
+        {
+            for (int i = 0; i < roster.Players.Count; i++)
+                m_live.Add(roster.Players[i].Colors.Key);
+        }
+
+        m_stale.Clear();
+        foreach (int key in m_portraits.Keys)
+        {
+            if (!m_live.Contains(key))
+                m_stale.Add(key);
+        }
+
+        for (int i = 0; i < m_stale.Count; i++)
+        {
+            int key = m_stale[i];
+
+            if (m_portraits.TryGetValue(key, out RenderTexture texture) && texture != null)
+            {
+                texture.Release();
+                Destroy(texture);
+            }
+
+            if (s_sessionPortraits.TryGetValue(key, out Texture2D captured) && captured != null)
+                Destroy(captured);
+
+            m_portraits.Remove(key);
+            s_sessionPortraits.Remove(key);
+            m_requested.Remove(key);
+        }
     }
 
     // 창에 띄울 전신 — 내 색으로만 그린다
