@@ -40,7 +40,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000405
-    m_Localized: "Time up \u2014 quota not met"
+    m_Localized: Time's up
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000406
@@ -52,20 +52,16 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000408
-    m_Localized: "Earned \u20A9{0:N0}  -  Quota \u20A9{1:N0}  =  Team share \u20A9{2:N0}\nTeam
-      funds  \u20A9{3:N0}\nJail settlement: wanted {4} \xB7 misdemeanor {5}"
+    m_Localized: "Team funds {0:+\u20A9#,##0;-\u20A9#,##0;\u20A90} \u2192 \u20A9{1:N0}
+      (\u20A9{2:N0} quota paid)"
     m_Metadata:
       m_Items:
       - rid: 6276845898492543062
   - m_Id: 7100000000409
-    m_Localized: 'Most wrongful arrests: {0} ({1})'
+    m_Localized: "Crazy Bot \u2014 {0}"
     m_Metadata:
       m_Items:
       - rid: 6276845898492543062
-  - m_Id: 7100000000410
-    m_Localized: "No wrongful arrests \u2014 clean work!"
-    m_Metadata:
-      m_Items: []
   - m_Id: 7100000000411
     m_Localized: "My cut  +\u20A9{0:N0}   (Personal funds \u20A9{1:N0})"
     m_Metadata:
@@ -80,6 +76,11 @@ MonoBehaviour:
     m_Localized: "Round settlement"
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000414
+    m_Localized: "{0} — {1}"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845898492543062
   references:
     version: 2
     RefIds:
@@ -92,3 +93,4 @@ MonoBehaviour:
         - id: 7100000000409
         - id: 7100000000411
         - id: 7100000000412
+        - id: 7100000000414

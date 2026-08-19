@@ -8,10 +8,10 @@ using UnityEngine.Localization;
 using UnityEngine.UI;
 
 /// <summary>
-/// 라운드 정산 패널 (#107, GDD 3-2) — 라운드 결과·팀 자금 증감·이번 판 최다 오검거(코믹 스탯)를 보여준다.
+/// 라운드 정산 패널 (#107, GDD 3-2, #693) — 라운드 결과·팀 자금 증감·최다 오검거 칭호(코믹 스탯)를 보여준다.
 /// 표시는 각 클라 로컬. 데이터는 SettlementController가 서버 권위 값으로 채워 <see cref="Show"/>로 넘긴다.
 ///
-/// 연출: 패널(창·배경)은 즉시 뜨고, 결과/자금/오검거 3줄은 <see cref="m_textRevealDelay"/>초 뒤에 등장한다.
+/// 연출: 패널(창·배경)은 즉시 뜨고, 결과/자금/칭호/내 몫 4줄은 <see cref="m_textRevealDelay"/>초 뒤에 등장한다.
 /// 텍스트가 뜨는 순간부터 <see cref="m_countdownSeconds"/>초 상점 복귀 카운트다운을 화면 중앙 상단에 보여준다.
 /// (실제 복귀는 RoundEndResetter가 서버 주도로 처리 — 그 딜레이 = 텍스트 지연 + 카운트다운으로 맞춰 둔다)
 ///
@@ -28,9 +28,6 @@ public class SettlementPanel : PanelBase
     private TextMeshProUGUI m_resultText;
 
     [SerializeField]
-    private TextMeshProUGUI m_reasonText;
-
-    [SerializeField]
     private TextMeshProUGUI m_fundText;
 
     [SerializeField]
@@ -44,7 +41,7 @@ public class SettlementPanel : PanelBase
     private TextMeshProUGUI m_countdownText;
 
     [Header("연출 타이밍")]
-    [Tooltip("패널이 뜬 뒤 3줄 텍스트가 나타나기까지의 지연(초)")]
+    [Tooltip("패널이 뜬 뒤 4줄 텍스트가 나타나기까지의 지연(초)")]
     [SerializeField]
     private float m_textRevealDelay = 1.5f;
 
@@ -59,17 +56,17 @@ public class SettlementPanel : PanelBase
     // 문구는 채우는 순간 한 번 읽고 끝낸다 — HUD와 달리 StringChanged를 구독하지 않는다.
     // 정산 화면은 10초짜리 결과 요약이고 그 사이 설정 창으로 언어를 바꿀 경로가 없어서다. (#497)
     [Header("문구")]
-    [Tooltip("수익·할당량·팀 몫 요약 — Settlement.Fund.Summary ({0}=수익, {1}=할당량, {2}=팀 몫, {3}=팀 자금, {4}=현상수배 수, {5}=경범죄 수)")]
+    [Tooltip("팀 자금 증감 요약 — Settlement.Fund.Summary ({0}=팀 몫 증감, {1}=팀 자금, {2}=할당량)")]
     [SerializeField]
     private LocalizedString m_fundSummary;
 
-    [Tooltip("최다 오검거 — Settlement.TopOffender.Some ({0}=이름, {1}=횟수)")]
+    [Tooltip("실패 시 결과 줄에 사유를 흡수 — Settlement.Result.WithReason ({0}=결과, {1}=사유)")]
+    [SerializeField]
+    private LocalizedString m_resultWithReasonFormat;
+
+    [Tooltip("최다 오검거 칭호 — Settlement.TopOffender.Some ({0}=이름)")]
     [SerializeField]
     private LocalizedString m_topOffenderFormat;
-
-    [Tooltip("오검거가 없을 때 — Settlement.TopOffender.None")]
-    [SerializeField]
-    private LocalizedString m_noOffenderText;
 
     [Tooltip("개인 몫 — Settlement.Personal.Earned ({0}=이번 판 수익, {1}=개인 자금 잔액)")]
     [SerializeField]
@@ -135,7 +132,10 @@ public class SettlementPanel : PanelBase
     // 이번 정산의 도착지 — 성공은 상점, 실패는 로비(새 판). RoundEndResetter의 분기와 맞춘다 (#395).
     private string m_returnLabel = string.Empty;
 
-    /// <summary>정산 데이터를 채우고 패널을 연다. 3줄 텍스트는 지연 후 등장한다.</summary>
+    // 오검거 0회면 칭호 줄 자체를 숨긴다 (#693) — 지연 등장 시점에도 다시 켜지지 않게 기억해 둔다.
+    private bool m_hasTopOffender;
+
+    /// <summary>정산 데이터를 채우고 패널을 연다. 4줄 텍스트는 지연 후 등장한다.</summary>
     public void Show(SettlementData data)
     {
         // None(종료 전)으로 열릴 일은 없지만, 들어와도 키가 없는 조회로 새지 않게 실패로 접는다.
@@ -144,28 +144,30 @@ public class SettlementPanel : PanelBase
         m_returnLabel = LocalizedStrings.Get(k_table, k_returnPrefix + result);
 
         if (m_resultText != null)
-            m_resultText.text = LocalizedStrings.Get(k_table, k_resultPrefix + result);
-
-        if (m_reasonText != null)
-            m_reasonText.text = ReasonToText(data.Reason);
+        {
+            string resultBase = LocalizedStrings.Get(k_table, k_resultPrefix + result);
+            // 실패 원인은 별도 줄 대신 결과 줄에 흡수한다 — "종료 사유" 줄을 없애며 유일한 정보처였던
+            // 실패 원인이 사라지지 않게 하기 위함 (#693 검토포인트 2).
+            m_resultText.text =
+                result == RoundResult.Failure && data.Reason != RoundEndReason.None
+                    ? m_resultWithReasonFormat.GetLocalizedString(resultBase, ReasonToText(data.Reason))
+                    : resultBase;
+        }
 
         if (m_fundText != null)
             // 할당량은 경찰서 납부분이라 총 수익에서 떼고 남은 초과분만 팀 몫이 된다 (#395).
-            // 뺄셈을 그대로 보여줘야 "왜 이만큼밖에 안 들어왔지"가 생기지 않는다.
+            // 압축 표기(팀 몫 증감 → 팀 자금, 할당량 납부분 괄호)로도 그 근거가 보이게 한다 (#693 검토포인트 1).
             m_fundText.text = m_fundSummary.GetLocalizedString(
-                data.GrossEarned,
-                data.TargetFund,
                 data.FundDelta,
                 data.FundBalance,
-                data.CriminalCount,
-                data.MisdemeanorCount
+                data.TargetFund
             );
 
+        m_hasTopOffender = data.TopOffenderCount > 0;
         if (m_topOffenderText != null)
-            m_topOffenderText.text =
-                data.TopOffenderCount > 0
-                    ? m_topOffenderFormat.GetLocalizedString(data.TopOffenderName, data.TopOffenderCount)
-                    : m_noOffenderText.GetLocalizedString();
+            m_topOffenderText.text = m_hasTopOffender
+                ? m_topOffenderFormat.GetLocalizedString(data.TopOffenderName)
+                : string.Empty;
 
         BindWallet();
         BindGate();
@@ -235,7 +237,7 @@ public class SettlementPanel : PanelBase
         );
     }
 
-    // 종료 사유 문구 — 규약 키 Settlement.Reason.<RoundEndReason>. (다운·기능 정지(Die) 혼재는 #364)
+    // 실패 결과 줄에 흡수할 사유 문구 — 규약 키 Settlement.Reason.<RoundEndReason>. (다운·기능 정지(Die) 혼재는 #364)
     // None은 라운드 종료 전이라 표시할 사유가 없다 — 키도 두지 않는다.
     private static string ReasonToText(RoundEndReason reason)
     {
@@ -292,17 +294,16 @@ public class SettlementPanel : PanelBase
         m_personalText.text = m_personalFormat.GetLocalizedString(earned, balance);
     }
 
-    // 결과 텍스트 5줄의 표시를 한꺼번에 켜고 끈다. (카운트다운은 별도 — 닫아도 남긴다)
+    // 결과 텍스트 4줄의 표시를 한꺼번에 켜고 끈다. (카운트다운은 별도 — 닫아도 남긴다)
+    // 칭호 줄은 오검거 0회면 지연 등장 이후에도 계속 숨긴다 (#693).
     private void SetResultTextsVisible(bool visible)
     {
         if (m_resultText != null)
             m_resultText.gameObject.SetActive(visible);
-        if (m_reasonText != null)
-            m_reasonText.gameObject.SetActive(visible);
         if (m_fundText != null)
             m_fundText.gameObject.SetActive(visible);
         if (m_topOffenderText != null)
-            m_topOffenderText.gameObject.SetActive(visible);
+            m_topOffenderText.gameObject.SetActive(visible && m_hasTopOffender);
         if (m_personalText != null)
             m_personalText.gameObject.SetActive(visible);
     }

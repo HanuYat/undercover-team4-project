@@ -123,6 +123,9 @@ public class AppearanceDatabase : ScriptableObject
     [Tooltip("머리 스타일은 미공개인데 머리색만 공개일 때 칠할 '형태 미상' 머리. 스타일을 말하지 않으면서 색을 얹을 자리를 만든다")]
     [SerializeField] private Sprite m_montageUnknownHair;
 
+    [Tooltip("라운드가 진행될수록 몽타주를 흐리게 하는 표 (#724). 비우면 항상 원본 화질 그대로다")]
+    [SerializeField] private MontageClarityTable m_clarityTable;
+
     /// <summary>포트레이트 바닥 레이어 — 피부색을 칠하는 대상.</summary>
     public Sprite MontageBase => m_montageBase;
 
@@ -131,6 +134,9 @@ public class AppearanceDatabase : ScriptableObject
 
     /// <summary>머리 스타일 미공개용 머리 레이어 — 머리색만 공개된 몽타주에서 색을 얹는 자리.</summary>
     public Sprite MontageUnknownHair => m_montageUnknownHair;
+
+    /// <summary>라운드별 몽타주 화질 표 — null이면 표시하는 쪽이 원본 화질을 쓴다.</summary>
+    public MontageClarityTable ClarityTable => m_clarityTable;
 
     public AxisDefinition GetAxis(AppearanceAxis axis) => axis switch
     {
