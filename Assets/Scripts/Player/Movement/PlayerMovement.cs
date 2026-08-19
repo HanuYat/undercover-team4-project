@@ -178,8 +178,15 @@ public class PlayerMovement : NetworkBehaviour
     /// </summary>
     public void SetIgnoreRoundEndFreeze(bool ignore) => m_ignoreRoundEndFreeze = ignore;
 
-    // 이동·시점을 막아야 하는 상태 — 다운(무력화) 또는 라운드 종료
-    private bool IsMovementLocked => IsIncapacitated || IsRoundOver;
+    // 카메라를 뺏는 연출 동안의 이동 잠금 — 본부 단말 포커스(#689)가 켠다.
+    // 커서 해제(CursorLock)는 시점만 멈추므로 이동은 여기서 따로 막아야 한다.
+    private bool m_viewLocked;
+
+    /// <summary>카메라를 뺏는 연출 동안 이동을 잠근다 — <see cref="PlayerTerminalFocus"/>가 짝을 맞춰 부른다. (#689)</summary>
+    public void SetViewLocked(bool locked) => m_viewLocked = locked;
+
+    // 이동·시점을 막아야 하는 상태 — 다운(무력화) · 라운드 종료 · 카메라를 뺏긴 연출
+    private bool IsMovementLocked => IsIncapacitated || IsRoundOver || m_viewLocked;
 
     // 앉기 중 여부 — 앉기 컴포넌트가 없으면(테스트 구성 등) 항상 false (#236)
     private bool IsCrouching => m_crouch != null && m_crouch.IsCrouching;

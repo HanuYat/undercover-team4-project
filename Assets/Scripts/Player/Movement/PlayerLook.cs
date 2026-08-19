@@ -82,6 +82,7 @@ public class PlayerLook : MonoBehaviour
     private PlayerJump m_jump;               // 공중에서는 앉기 시점 변화를 얼린다 (#189)
     private PlayerHandView m_handView;       // 3인칭 동안 1인칭 팔 감추기 (#219, #576)
     private PlayerSpectateCamera m_spectate; // 사망 관전 오빗 (#576)
+    private PlayerTerminalFocus m_terminalFocus; // 본부 단말 화면 포커스 (#689)
 
     private float m_pitch;
     private Vector2 m_smoothedLook; // 지수 감쇠로 부드럽게 만든 시점 입력 — 저속 픽셀 양자화 지터 완화 (#216)
@@ -119,6 +120,7 @@ public class PlayerLook : MonoBehaviour
         m_jump = GetComponent<PlayerJump>();
         m_handView = GetComponent<PlayerHandView>();
         m_spectate = GetComponent<PlayerSpectateCamera>();
+        m_terminalFocus = GetComponent<PlayerTerminalFocus>();
 
         if (m_playerCamera != null)
         {
@@ -452,6 +454,21 @@ public class PlayerLook : MonoBehaviour
         // 피벗이 루트가 아니라 시체(골반)라 <b>월드에서 만들어 로컬로 되돌린다</b> — 래그돌 비행
         // 중에는 루트가 제자리에 남고 yaw만 몸을 따라가므로(PlayerRagdoll의 FollowBodyYaw),
         // 루트 기준으로 잡으면 날아가는 내 몸을 화면이 놓친다.
+        // 본부 단말 포커스 — 화면 앞으로 옮겨 간다 (#689). 관전보다 <b>먼저</b> 얹는 이유는
+        // 사망이 이겨야 하기 때문이다: 화면을 보다 죽으면 아래 관전이 이 포즈에서 시체 오빗으로
+        // 이어 받는다. 순서를 뒤집으면 죽은 뒤에도 카메라가 컴퓨터에 붙어 있다.
+        if (m_terminalFocus != null)
+        {
+            float focusBlend = m_terminalFocus.Tick(); // 포커스 중이 아니어도 불러야 이탈 보간이 진행된다
+
+            if (focusBlend > 0.001f
+                && m_terminalFocus.TryGetPose(out Vector3 focusPos, out Quaternion focusRot))
+            {
+                localPos = Vector3.Lerp(localPos, transform.InverseTransformPoint(focusPos), focusBlend);
+                localRot = Quaternion.Slerp(localRot, Quaternion.Inverse(transform.rotation) * focusRot, focusBlend);
+            }
+        }
+
         if (m_spectate != null)
         {
             float spectateBlend = m_spectate.Tick(); // 관전 중이 아니어도 불러야 이탈 보간이 진행된다

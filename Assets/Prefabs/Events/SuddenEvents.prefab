@@ -164,7 +164,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DeviceBlackoutEvent
   ShowTopMostFoldoutHeaderGroup: 1
-  m_durationSeconds: 5
 --- !u!114 &812660901877859943
 MonoBehaviour:
   m_ObjectHideFlags: 0

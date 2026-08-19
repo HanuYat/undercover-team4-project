@@ -31,6 +31,7 @@ public static class InteractPrompts
     public static readonly LocalizedString RemoteDoorOpen = Of("Hud.Interact.RemoteDoorOpen");
     public static readonly LocalizedString FactionSymbol = Of("Hud.Interact.FactionSymbol");
     public static readonly LocalizedString MapSelect = Of("Hud.Interact.MapSelect");
+    public static readonly LocalizedString BlackoutRecovery = Of("Hud.Interact.BlackoutRecovery");
 
     // ---- 아이템 ----
     public static readonly LocalizedString Pickup = Of("Hud.Interact.Pickup");
