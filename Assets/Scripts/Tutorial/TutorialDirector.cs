@@ -149,7 +149,12 @@ public class TutorialDirector : MonoBehaviour
         // 세션 SDK를 거치지 않으므로 연결 승인 게이트를 여기서 직접 건다 (#628 · #663).
         // 이걸 빼면 승인 콜백이 없어 NGO가 <b>플레이어를 원점에</b> 만든다 — PlayerSpawnManager의
         // 스폰 지점(본부)은 그 콜백을 타야 적용된다. SDK로 방을 만들 때는 SessionManager가 대신 걸어 준다.
-        App.Net.Session?.Approval.Install(net);
+        // DevAutoHost가 같은 이유로 같은 짝을 부른다.
+        if (App.Net.Session != null)
+        {
+            ConnectionApprovalGate.StampLocalPayload(net);
+            App.Net.Session.Approval.Install(net);
+        }
 
         net.StartHost();
 
