@@ -299,6 +299,7 @@ public class PlayerRagdoll : MonoBehaviour
 
         // ⚠ 물리로 넘기기 <b>전에</b> 열어야 복사가 옮긴 것과 물리가 바꿔 놓은 것이 갈린다.
         BeginEntryTrace();
+        BeginFallRateTrace();
 
         ReleaseBonesToPhysics();
     }
@@ -646,6 +647,7 @@ public class PlayerRagdoll : MonoBehaviour
     /// </summary>
     public void ExitToAnimator(bool blend)
     {
+        DumpFallRate("이탈"); // 창이 닫히기 전에 부활했다 — 남은 값으로라도 마감한다
         if (m_state == RagdollState.Animated || m_rig == null || !m_rig.IsValid)
             return;
 
@@ -962,6 +964,9 @@ public class PlayerRagdoll : MonoBehaviour
         // ⚠ <b>LateUpdate여야 한다.</b> PlayerHeadLook이 시선을 얻는 시점이 여기라,
         // Update에서 재면 이 계측이 물으려는 시점 차를 지나치게 된다.
         TickEntryTrace();
+
+        // 물리가 실시간을 따라갔는지 적립한다 — 프레임 시간을 재는 계측이라 렌더 주기에 붙인다.
+        TickFallRate();
     }
 
     /// <summary>
@@ -1294,6 +1299,84 @@ public class PlayerRagdoll : MonoBehaviour
         );
     }
 
+    // ---- 낙하 속도 계측 (m_logFallRate) — ⚠ 임시 계측, #759가 닫히면 지운다 ----
+
+    [Tooltip("쓰러지는 동안 <b>물리가 실시간을 따라갔는가</b>를 한 줄로 찍는다 — #759 ③(권위 피어의 " +
+             "시뮬레이션이 느리다) 판정용이다.\n\n" +
+             "<b>비율 = 물리시간 ÷ 실시간.</b> 1.00이 정상이고 <b>0.60이면 40% 느리게 쓰러진 것</b>이다 " +
+             "— 슬로모션의 정의가 이 값이다. 물리시간은 Time.fixedTime으로 잰다(실행된 고정 스텝만 " +
+             "누적되는 시계라 스텝을 따로 셀 필요가 없다).\n\n" +
+             "<b>최장프레임이 333ms를 넘으면</b> Maximum Allowed Timestep 클램프에 걸린 것이라 원인이 " +
+             "<b>프레임 히칭으로 확정</b>된다. 비율은 낮은데 최장프레임이 그보다 작으면 클램프가 " +
+             "아니므로 겹침 해소(RagdollRig의 최대 침투 해소 속도)를 다음으로 의심한다.\n\n" +
+             "<b>권한 피어에서 읽는다</b> — 원격은 뼈가 키네마틱이라 잴 물리가 없다. 그래도 함께 " +
+             "찍는 이유는 두 피어의 프레임 사정을 같은 화면에서 비교하기 위해서다.\n\n" +
+             "확정되면 끈다")]
+    [SerializeField] private bool m_logFallRate;
+
+    // 무너짐 한 번을 덮기에 넉넉한 창 — 이 안에 정착하면 그쪽이 먼저 마감한다.
+    private const float k_fallRateWindowSeconds = 3f;
+
+
+    private bool m_fallRateActive;
+    private float m_fallRateRealStart;
+    private float m_fallRatePhysicsStart;
+    private float m_fallRateHipsStartY;
+    private int m_fallRateFrames;
+    private float m_fallRateWorstFrame;
+
+    // 시체를 켜는 순간 = 낙하의 시작. 두 시계를 나란히 찍어 두고 그 뒤로 벌어지는 차를 본다.
+    private void BeginFallRateTrace()
+    {
+        m_fallRateActive = m_logFallRate;
+        if (!m_fallRateActive)
+            return;
+
+        m_fallRateRealStart = Time.unscaledTime;
+        m_fallRatePhysicsStart = Time.fixedTime;
+        m_fallRateHipsStartY = m_rig.Hips != null ? m_rig.Hips.position.y : float.NaN;
+        m_fallRateFrames = 0;
+        m_fallRateWorstFrame = 0f;
+    }
+
+    private void TickFallRate()
+    {
+        if (!m_fallRateActive)
+            return;
+
+        m_fallRateFrames++;
+        m_fallRateWorstFrame = Mathf.Max(m_fallRateWorstFrame, Time.unscaledDeltaTime);
+
+        if (Time.unscaledTime - m_fallRateRealStart >= k_fallRateWindowSeconds)
+            DumpFallRate("창종료");
+    }
+
+    // 한 줄로 마감한다 — 창이 닫히거나 정착한 시점, 둘 중 먼저 오는 쪽이 부른다.
+    private void DumpFallRate(string reason)
+    {
+        if (!m_fallRateActive)
+            return;
+
+        m_fallRateActive = false;
+
+        float real = Time.unscaledTime - m_fallRateRealStart;
+        float physics = Time.fixedTime - m_fallRatePhysicsStart;
+        float ratio = real > 0.0001f ? physics / real : float.NaN;
+        float fps = real > 0.0001f ? m_fallRateFrames / real : float.NaN;
+        float drop = m_rig.Hips != null ? m_fallRateHipsStartY - m_rig.Hips.position.y : float.NaN;
+        // 경계는 상수로 박지 않고 런타임 값을 읽는다 — ProjectSettings가 바뀌면 판정도 따라간다.
+        string verdict = m_fallRateWorstFrame > Time.maximumDeltaTime
+            ? "⚠ 클램프에 걸린 프레임 있음"
+            : "클램프 없음";
+
+        Debug.Log(
+            $"[낙하속도] 권한={HasMoveAuthority} 종료={reason} 실시간={real:F2}s 물리={physics:F2}s "
+                + $"비율={ratio:F2}(1.00이 정상) 프레임={m_fallRateFrames} 평균={fps:F1}fps "
+                + $"최장프레임={m_fallRateWorstFrame * 1000f:F0}ms({verdict}) 골반낙차={drop:F2}m",
+            this
+        );
+    }
+
     // ---- 정착 딥 추적 (m_logSettleTrace) — ⚠ 임시 계측, 원인이 잡히면 지운다 ----
 
     // "몸이 바닥에 있다"로 보는 골반 높이(m) — 이 안이면 루트 높이를 골반이 아니라 <b>지면</b>이
@@ -1545,6 +1628,7 @@ public class PlayerRagdoll : MonoBehaviour
     // (<see cref="TickAlignBonesToRoot"/>). 흡수할 어긋남이 없으니 수렴도 유예도 없다.
     private void Settle()
     {
+        DumpFallRate("정착"); // 무너짐이 끝난 지점 — 창이 닫히기 전이면 여기가 마감이다
         m_rig.CapturePose();
         Vector3 landedHips = m_rig.Hips.position;
 

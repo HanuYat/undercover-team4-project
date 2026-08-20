@@ -7733,6 +7733,7 @@ MonoBehaviour:
   m_liveBoneRoot: {fileID: 575005799806648508}
   m_logSettleTrace: 0
   m_logEntryHeadTrace: 0
+  m_logFallRate: 1
 --- !u!114 &511173363813317716
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7874,6 +7875,7 @@ MonoBehaviour:
   m_authority: 1
   m_sendEveryFixedSteps: 2
   m_interpolationDelay: 0.08
+  m_logArrival: 1
 --- !u!1 &5606094146414363504
 GameObject:
   m_ObjectHideFlags: 0
