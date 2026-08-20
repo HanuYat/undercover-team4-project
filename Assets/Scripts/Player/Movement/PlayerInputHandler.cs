@@ -2,6 +2,7 @@ using System;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 
 public class PlayerInputHandler : NetworkBehaviour
 {
@@ -163,6 +164,33 @@ public class PlayerInputHandler : NetworkBehaviour
             LookInput = Vector2.zero;
             IsSprinting = false;
         }
+    }
+
+    /// <summary>
+    /// 상호작용 키가 이번 프레임에 눌렸는가 — <b>입력 정지 중에도 답한다</b>. (#487 후속)
+    ///
+    /// 액션 콜백(<see cref="OnInteractPerformed"/>)이 아니라 <b>바인딩된 컨트롤을 직접</b> 읽는다.
+    /// 이걸 묻는 자리가 스스로 입력을 정지시킨 UI(약탈 창)이기 때문이다 — <see cref="SetSuspended"/>가
+    /// 상호작용 액션까지 꺼 버리므로 콜백은 오지 않는다. 그렇다고 창이 E를 상수로 박으면
+    /// <see cref="InteractBinding"/>이 안내하는 키와 갈라진다.
+    ///
+    /// <b>정지를 우회하는 것이 아니다</b> — 정지 중에는 이벤트가 아무 곳에도 가지 않고, 이 함수를
+    /// 부른 쪽만 자기 키를 본다. 게임플레이 입력으로 새지 않는다.
+    /// </summary>
+    public bool WasInteractPressedThisFrame()
+    {
+        if (m_interactAction == null || m_interactAction.action == null)
+            return false;
+
+        // 액션이 꺼져 있어도 controls는 해석된다(필요하면 접근 시점에 해석한다) — 컨트롤의
+        // wasPressedThisFrame은 장치 상태를 직접 보므로 액션의 켜짐 여부와 무관하다.
+        foreach (InputControl control in m_interactAction.action.controls)
+        {
+            if (control is ButtonControl button && button.wasPressedThisFrame)
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
