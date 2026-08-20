@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 래그돌 뼈 한 벌 — <b>물리에 넘기고 되돌리는 것만</b> 한다. (#506)
@@ -107,6 +107,32 @@ public class RagdollRig : MonoBehaviour
     private Quaternion[] m_bindRotations;
     private bool[] m_bindJointed; // 관절이 달려 있는가 — 드리프트 판정을 이 뼈들로 좁힌다
 
+    // 이 뼈가 <see cref="m_poseBones"/>에 들어 있는가 — 즉 <b>자세가 복제되는 뼈인가.</b>
+    // 거짓인 뼈(손·발·손가락 같은 말단)는 아무도 값을 보내 주지 않으므로 바인드로 못박는다.
+    private bool[] m_bindStreamed;
+
+    /// <summary>
+    /// <b>자세 한 벌 — 복제되는 뼈 전부.</b> <see cref="m_bodies"/>에 <b>체인 뼈</b>를 더한 것이다.
+    ///
+    /// 표준 래그돌 위저드는 Rigidbody를 11개만 만드는데, 리그에는 그 사이를 잇는 뼈가 끼어 있다:
+    ///
+    /// <code>
+    /// Hips(rb) → Spine_01 → Spine_02(rb) → Spine_03 → Neck → Head(rb)
+    ///                                   └→ Clavicle_L → UpperArm_L(rb)
+    /// </code>
+    ///
+    /// 그 사이 뼈를 빼고 보내면 <b>상체 전체가 Spine_01 하나에 매달린다</b> — 받는 쪽의 Spine_01은
+    /// 자기 애니메이터가 마지막에 놓은 값이라, 보낸 회전 11개가 전부 같아도 몸이 다른 자세로 굳는다.
+    ///
+    /// <b>포함 규칙: 자기가 리지드바디 뼈이거나, 자손에 리지드바디 뼈가 있는 것.</b> 손·발·손가락 같은
+    /// <b>말단</b>은 체인에 없어 몸 모양을 바꾸지 못하므로 뺀다 — 그쪽은
+    /// <see cref="RestoreUnstreamedBonesToBind"/>가 바인드로 못박아 공짜로 맞춘다.
+    ///
+    /// ⚠ <b>순서가 피어마다 같아야 한다</b> — <c>GetComponentsInChildren</c>의 계층 순서를 그대로
+    /// 쓰므로 같은 프리팹이면 같다. 부모가 자식보다 먼저 오는 것도 그 성질에 기댄다.
+    /// </summary>
+    private Transform[] m_poseBones;
+
     /// <summary>뼈를 제대로 찾았는가 — 거짓이면 소유자는 래그돌 기능 전체를 꺼야 한다.</summary>
     public bool IsValid => m_bodies != null && m_bodies.Length > 0 && m_hipsBone != null;
 
@@ -119,10 +145,24 @@ public class RagdollRig : MonoBehaviour
     /// <summary>리그 최상단 — 스킨 판정·계층 질의용.</summary>
     public Transform BoneRoot => m_boneRoot;
 
-    /// <summary>물리를 받는 뼈 수 — 진단·검증용.</summary>
-    public int BoneCount => m_bodies != null ? m_bodies.Length : 0;
+    /// <summary>
+    /// <b>자세 한 벌을 이루는 뼈 수</b> — 스트림 페이로드의 길이이자 피어 간 배선 검증값.
+    /// <see cref="m_bodies"/>보다 많다(<see cref="m_poseBones"/> 주석).
+    /// </summary>
+    public int BoneCount => m_poseBones != null ? m_poseBones.Length : 0;
 
-    /// <summary>가장 낮은 뼈의 월드 y — 시체가 지면을 파고드는지 재는 진단용.</summary>
+    /// <summary>
+    /// 가장 낮은 뼈의 월드 y — 시체가 지면을 파고드는지 재는 값.
+    ///
+    /// ⚠ <b><see cref="Rigidbody.position"/>이 아니라 트랜스폼을 읽는다.</b> 이 프로젝트는
+    /// <c>Physics.autoSyncTransforms = 0</c>이라 트랜스폼에 쓴 값이 다음 물리 스텝까지 물리 포즈에
+    /// 반영되지 않는다. 이 값을 재는 자리는 전부 <b>뼈를 방금 대입한 직후</b>이므로
+    /// (<c>RestoreCapturedPose</c>·<c>RestoreBindBoneLengths</c> 뒤) 물리 포즈를 읽으면
+    /// <b>대입 전 골격을 재고 조용히 0을 돌려준다.</b>
+    ///
+    /// 물리가 굴러가는 동안에도 트랜스폼이 곧 화면에 보이는 것이라 이쪽이 맞다 — 파고들었는지는
+    /// 보이는 몸으로 판정해야 한다.
+    /// </summary>
     public float LowestBoneY
     {
         get
@@ -133,7 +173,7 @@ public class RagdollRig : MonoBehaviour
             float lowest = float.MaxValue;
             for (int i = 0; i < m_bodies.Length; i++)
             {
-                float y = m_bodies[i].position.y;
+                float y = m_bodies[i].transform.position.y;
                 if (y < lowest)
                     lowest = y;
             }
@@ -309,13 +349,53 @@ public class RagdollRig : MonoBehaviour
         m_bindPositions = new Vector3[m_bindBones.Length];
         m_bindRotations = new Quaternion[m_bindBones.Length];
         m_bindJointed = new bool[m_bindBones.Length];
+        m_bindStreamed = new bool[m_bindBones.Length];
 
         for (int i = 0; i < m_bindBones.Length; i++)
         {
             m_bindPositions[i] = m_bindBones[i].localPosition;
             m_bindRotations[i] = m_bindBones[i].localRotation;
             m_bindJointed[i] = m_bindBones[i].GetComponent<Joint>() != null;
+
+            // ⚠ <b>Rigidbody 유무가 아니라 <see cref="m_bodies"/> 소속으로 판정한다</b> — 수집이
+            // 레이어로도 거르므로(<see cref="Collect"/>), 둘이 갈리면 이 표가 조용히 틀린다.
+            // 체인 뼈(자손에 리지드바디가 있는 뼈)도 복제 대상이다 — m_poseBones 주석.
+            m_bindStreamed[i] = IsSelfOrAncestorOfBody(m_bindBones[i]);
         }
+
+        CollectPoseBones();
+    }
+
+    // 자세 한 벌을 고른다 — 계층 순서 그대로라 피어마다 같고 부모가 자식보다 먼저 온다.
+    private void CollectPoseBones()
+    {
+        int count = 0;
+        for (int i = 0; i < m_bindBones.Length; i++)
+        {
+            if (m_bindStreamed[i])
+                count++;
+        }
+
+        m_poseBones = new Transform[count];
+        int next = 0;
+        for (int i = 0; i < m_bindBones.Length; i++)
+        {
+            if (m_bindStreamed[i])
+                m_poseBones[next++] = m_bindBones[i];
+        }
+    }
+
+    // 이 뼈가 리지드바디 뼈이거나, 그 조상인가 — 즉 <b>몸 모양을 결정하는 체인 위에 있는가.</b>
+    private bool IsSelfOrAncestorOfBody(Transform bone)
+    {
+        for (int i = 0; i < m_bodies.Length; i++)
+        {
+            Transform body = m_bodies[i].transform;
+            if (body == bone || body.IsChildOf(bone))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -351,6 +431,63 @@ public class RagdollRig : MonoBehaviour
             }
             return worst;
         }
+    }
+
+    // ---- 진단 보조 (임시 — NpcRagdoll의 진단 ⑨가 쓴다. 그 블록과 함께 지운다) ----
+
+    /// <summary>
+    /// 스트림에 실리는 뼈 — <b>계층 순서</b>(부모가 자식보다 먼저)라 그대로 훑으면 체인이 풀린다.
+    /// 원격의 재구성을 흉내 내는 진단에만 쓴다.
+    /// </summary>
+    public Transform[] PoseBones => m_poseBones;
+
+    /// <summary>
+    /// <b>뼈마다</b>의 바인드 로컬 위치 드리프트(m) — <see cref="MaxBindPositionDrift"/>가 최댓값만
+    /// 주는 자리를 <b>어느 뼈인지</b>까지 벌려 놓은 진단용이다. 대상은 같다(관절이 달린 뼈만).
+    /// </summary>
+    /// <returns>담은 개수.</returns>
+    public int CollectBindPositionDrift(System.Collections.Generic.List<(string Bone, float Drift)> into)
+    {
+        if (into == null)
+            return 0;
+
+        into.Clear();
+        if (m_bindBones == null)
+            return 0;
+
+        for (int i = 0; i < m_bindBones.Length; i++)
+        {
+            if (m_bindBones[i] == null || !m_bindJointed[i])
+                continue;
+
+            into.Add(
+                (m_bindBones[i].name, Vector3.Distance(m_bindBones[i].localPosition, m_bindPositions[i]))
+            );
+        }
+
+        return into.Count;
+    }
+
+    /// <summary>
+    /// 이 뼈의 <b>바인드 로컬 위치</b> — 원격이 자세를 입힐 때 실제로 쓰는 뼈 길이다(스트림은 회전만
+    /// 싣는다). 리그의 뼈가 아니면 거짓.
+    /// </summary>
+    public bool TryGetBindLocalPosition(Transform bone, out Vector3 bindLocal)
+    {
+        bindLocal = Vector3.zero;
+        if (m_bindBones == null || bone == null)
+            return false;
+
+        for (int i = 0; i < m_bindBones.Length; i++)
+        {
+            if (m_bindBones[i] != bone)
+                continue;
+
+            bindLocal = m_bindPositions[i];
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -408,6 +545,40 @@ public class RagdollRig : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// <b>말단 뼈</b>(손·발·손가락)의 회전을 바인드로 못박는다 — 전 피어가 같은 값을 쓰게 만드는 것이
+    /// 목적이다. 래그돌에 <b>진입할 때 모든 피어가</b> 부른다.
+    ///
+    /// 대상은 <see cref="m_poseBones"/>에 <b>들지 않는</b> 뼈다. 그것들은 아무도 값을 보내 주지 않아
+    /// 각 피어의 애니메이터가 마지막에 놓은 자세에 멈추는데, 기상 클립처럼 피어마다 클립 시간이
+    /// 어긋나는 구간에서 죽으면 손발 모양이 갈린다. 바인드는 전 피어가 프리팹에서 읽는 값이라
+    /// <b>공짜로 결정적</b>이다.
+    ///
+    /// ⚠ <b>체인 뼈는 여기서 손대지 않는다 — 그쪽은 스트림이 싣는다</b>(<see cref="m_poseBones"/>).
+    /// 한때 체인까지 여기서 못박았다가 <b>시체가 바닥에 파묻혔다</b>: 바인드 척추는 <b>골반 로컬
+    /// 기준으로 똑바로 선</b> 자세라, 골반이 엎어진 기상 자세에서 그걸 강제하면 상체가 지면 쪽으로
+    /// 꺾인다. 그 자세로 물리를 시작하면 겹침 탈출 상한에 걸려 다 빠져나오지 못하고, 지형에 낀 몸은
+    /// 속도가 낮아 <b>그대로 정착·얼림</b>된다. 표기만 맞추려던 것이 <b>몸을 실제로 옮긴</b> 사고다.
+    ///
+    /// 말단은 콜라이더도 리지드바디도 없어 같은 사고가 원리적으로 안 난다 — 순수 표시다.
+    ///
+    /// ⚠ <b>위치는 건드리지 않는다</b> — 그쪽은 뼈 길이이고, 애니메이터도 물리도 이 뼈들의
+    /// localPosition은 쓰지 않는다. 되돌릴 짝은 <see cref="RestoreBindBoneLengths"/>다.
+    /// </summary>
+    public void RestoreUnstreamedBonesToBind()
+    {
+        if (m_bindBones == null)
+            return;
+
+        for (int i = 0; i < m_bindBones.Length; i++)
+        {
+            if (m_bindBones[i] == null || m_bindStreamed[i])
+                continue;
+
+            m_bindBones[i].localRotation = m_bindRotations[i];
+        }
+    }
+
     // 직렬화되지 않는 Rigidbody 값을 인스턴스마다 다시 건다 — 상수 주석에 이유가 적혀 있다.
     private void ApplyRuntimePhysics()
     {
@@ -434,9 +605,8 @@ public class RagdollRig : MonoBehaviour
     /// 정확)인데 <c>물리반영차 81.7°</c>였다 — 세 피어 모두. 그래서 시체가 <b>바인드 포즈(T자)에서
     /// 무너지기 시작했다.</b>
     ///
-    /// <b>여기가 맞는 자리인 이유:</b> 같은 전이가 네 군데다(사망 시 시체 켜기, 정착 후 물리 복귀,
-    /// NPC 래그돌 진입, 얼린 시체 녹이기). 호출부마다 동기화를 끼우면 하나 빠뜨리는 순간 같은 증상이
-    /// 조용히 돌아온다.
+    /// <b>여기가 맞는 자리인 이유:</b> 같은 전이가 여러 군데다(사망 시 시체 켜기, 정착 후 물리 복귀,
+    /// NPC 래그돌 진입). 호출부마다 동기화를 끼우면 하나 빠뜨리는 순간 같은 증상이 조용히 돌아온다.
     ///
     /// 반대 방향(동적 → 키네마틱)에는 필요 없다 — 그때는 물리가 트랜스폼을 쓰고 있었으므로 이미 맞다.
     /// </summary>
@@ -651,6 +821,54 @@ public class RagdollRig : MonoBehaviour
     }
 
     /// <summary>
+    /// <b>전 뼈가 잠들었는가</b> — 물리가 스스로 낸 "다 끝났다" 신호다. 코드로 정착을 판정하던
+    /// 자리를 이것이 대신한다.
+    ///
+    /// <b>하나라도 깨어 있으면 거짓이다.</b> 사지가 아직 움직이는데 골반만 잤다고 끝난 것으로 보면
+    /// 마지막 자세가 팔다리가 뜬 채로 굳는다.
+    ///
+    /// 키네마틱 뼈는 <b>세지 않는다</b> — PhysX가 재우지 않으므로 항상 깨어 있는 것으로 보고되고,
+    /// 원격은 전 뼈가 키네마틱이라 이 값이 영영 참이 되지 않는다. 어차피 묻는 쪽은 권위 피어다.
+    /// </summary>
+    public bool AllAsleep
+    {
+        get
+        {
+            if (m_bodies == null || m_bodies.Length == 0)
+                return false;
+
+            for (int i = 0; i < m_bodies.Length; i++)
+            {
+                if (m_bodies[i] == null || m_bodies[i].isKinematic)
+                    continue;
+
+                if (!m_bodies[i].IsSleeping())
+                    return false;
+            }
+
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// 전 뼈를 강제로 재운다 — <b>지형에 껴서 영영 안 자는 몸</b>의 안전망이다(타임아웃 경로).
+    ///
+    /// <see cref="SetKinematic"/>과 다르다: 얼리는 것이 아니라 <b>물리 수면</b>이라, 밟히거나
+    /// 밧줄이 걸리면(<see cref="WakeAll"/>) 그 자리에서 그대로 이어진다. 자세도 상태도 안 바꾼다.
+    /// </summary>
+    public void SleepAll()
+    {
+        if (m_bodies == null)
+            return;
+
+        for (int i = 0; i < m_bodies.Length; i++)
+        {
+            if (m_bodies[i] != null && !m_bodies[i].isKinematic)
+                m_bodies[i].Sleep();
+        }
+    }
+
+    /// <summary>
     /// 전 뼈를 같은 델타로 강체 평행이동한다 — 포즈·상대속도·관절이 보존된다.
     /// 동적 바디의 <c>position</c> 대입은 텔레포트라 속도가 유도되지 않는다
     /// (키네마틱과 반대 — <see cref="SetBodyKinematic"/> 주석).
@@ -713,11 +931,11 @@ public class RagdollRig : MonoBehaviour
     public bool CaptureLocalPose(Quaternion[] rotations, out Vector3 hipsLocalPosition)
     {
         hipsLocalPosition = Vector3.zero;
-        if (m_bodies == null || rotations == null || rotations.Length != m_bodies.Length)
+        if (m_poseBones == null || rotations == null || rotations.Length != m_poseBones.Length)
             return false;
 
-        for (int i = 0; i < m_bodies.Length; i++)
-            rotations[i] = m_bodies[i].transform.localRotation;
+        for (int i = 0; i < m_poseBones.Length; i++)
+            rotations[i] = m_poseBones[i].localRotation;
 
         hipsLocalPosition = m_hipsBone.localPosition;
         return true;
@@ -727,14 +945,67 @@ public class RagdollRig : MonoBehaviour
     /// <returns>입혔으면 참 — 길이가 안 맞으면 거짓.</returns>
     public bool ApplyLocalPose(Quaternion[] rotations, Vector3 hipsLocalPosition)
     {
-        if (m_bodies == null || rotations == null || rotations.Length != m_bodies.Length)
+        if (m_poseBones == null || rotations == null || rotations.Length != m_poseBones.Length)
             return false;
 
         // 골반이 먼저다 — 자식들의 월드 위치가 골반의 로컬 위치 위에 얹히기 때문.
         m_hipsBone.localPosition = hipsLocalPosition;
 
-        for (int i = 0; i < m_bodies.Length; i++)
-            m_bodies[i].transform.localRotation = rotations[i];
+        for (int i = 0; i < m_poseBones.Length; i++)
+            m_poseBones[i].localRotation = rotations[i];
+
+        return true;
+    }
+
+    // ---- 뼈 길이 (#728 후속 5) ----
+    //
+    // <b>"뼈 길이는 관절이 유지하므로 상수다"가 시체에서는 거짓이다.</b> 그 전제로 회전만 보내다가
+    // 실측(2026-08-19)에서 갈렸다: 래그돌 <b>진입 시점 0.000m</b>이던 드리프트가 무너져 정착하고 나면
+    // <b>0.036~0.206m</b>다(최악은 항상 <c>Spine_02</c>). 겹침 탈출과 솔버가 무너지는 동안 뼈를 늘려
+    // 놓는데, 시체는 <see cref="RestoreBindPose"/>를 도는 <c>ExitRagdoll</c>을 영영 지나지 않아
+    // <b>그 길이가 영구히 남는다.</b>
+    //
+    // 그래서 원격은 <b>바인드 길이 골격에 권위 쪽 회전</b>을 입히게 되고, 체인을 따라 오차가 쌓여
+    // 팔·머리에서 최대 0.17m 다른 몸이 나온다 — 호스트에서는 등이 바닥에 붙어 있는데 클라에서는 떠
+    // 보이던 증상이 이것이다.
+    //
+    // <b>실어 보내는 것은 신뢰 1회 패킷뿐이다</b>(정착·순간이동 — <c>RagdollPoseStreamer</c>).
+    // 길이는 무너지는 동안 변하고 정착하면 상수인데, 화면에 오래 남는 것은 정착 자세다. 25Hz 스트림에
+    // 매번 실으면 대역폭이 2.4배가 되고 얻는 것은 <b>이미 빠르게 움직이는 동안의</b> 정확도뿐이다.
+
+    /// <summary>전 자세 뼈의 <b>로컬 위치</b>(= 뼈 길이)를 담아 간다 — 배열 길이는 <see cref="BoneCount"/>.</summary>
+    /// <returns>담았으면 참 — 길이가 안 맞으면 거짓(아무것도 쓰지 않는다).</returns>
+    public bool CaptureBoneLengths(Vector3[] lengths)
+    {
+        if (m_poseBones == null || lengths == null || lengths.Length != m_poseBones.Length)
+            return false;
+
+        for (int i = 0; i < m_poseBones.Length; i++)
+            lengths[i] = m_poseBones[i].localPosition;
+
+        return true;
+    }
+
+    /// <summary>
+    /// 담아 온 뼈 길이를 입힌다 — 원격 전용(키네마틱일 때만 의미가 있다).
+    ///
+    /// ⚠ <b>골반은 건너뛴다.</b> 골반의 로컬 위치는 길이가 아니라 <b>자세</b>이고
+    /// (<see cref="MaxBindPositionDrift"/>가 골반을 빼는 것과 같은 이유), 원격에서는 스트리머가
+    /// 월드로 못박으므로 여기서 손대면 그 값과 싸운다.
+    /// </summary>
+    /// <returns>입혔으면 참 — 길이가 안 맞으면 거짓.</returns>
+    public bool ApplyBoneLengths(Vector3[] lengths)
+    {
+        if (m_poseBones == null || lengths == null || lengths.Length != m_poseBones.Length)
+            return false;
+
+        for (int i = 0; i < m_poseBones.Length; i++)
+        {
+            if (m_poseBones[i] == m_hipsBone)
+                continue;
+
+            m_poseBones[i].localPosition = lengths[i];
+        }
 
         return true;
     }
@@ -744,9 +1015,22 @@ public class RagdollRig : MonoBehaviour
 
     // ---- 질의 ----
 
+    // 몸이 "누웠다"고 보는 최소 기울기 — <b>수평 성분 / 전체 길이</b>로 잰다. 그 비율이 곧 수직에서
+    // 기운 각도의 sin이므로 0.7은 약 45°다.
+    //
+    // ⚠ <b>절대 길이로 재면 안 된다.</b> 예전 가드는 수평 성분이 2cm보다 짧을 때만 거절했는데,
+    // 서 있는 몸도 척추 곡선·이동 관성으로 머리가 골반보다 <b>5~6cm</b> 나가 있어서 그냥 통과했다.
+    // 통과한 그 값은 몸이 향한 쪽이 아니라 <b>미세한 기울어짐의 방향</b>이라 프레임마다 춤춘다
+    // (실측: 사망 직후 6프레임에 353.2° → 20.9° → 22.4° → 21.3° → 24.3° → 30.1°, 수평은 5.6cm).
+    // 그 노이즈가 루트 yaw로 대입되면서 죽는 순간 몸이 <b>147° 뒤집혔다</b>.
+    private const float k_lyingHorizontalRatio = 0.7f;
+
     /// <summary>
     /// 몸이 누운 방향의 yaw — 골반→머리를 지면에 투영한 값. 비행 중 추종과 정착 정렬이 <b>같은</b>
     /// 계산을 써야 정착 순간에 회전이 안 튄다.
+    ///
+    /// <b>누워 있지 않으면 거짓을 낸다</b> — 투영이 방향 정보를 잃기 때문이다. 부르는 쪽은 그때
+    /// <b>기존 yaw를 유지</b>할 것 (<see cref="k_lyingHorizontalRatio"/>의 실측 기록 참고).
     ///
     /// <b>기상 모션 보정은 여기서 더하지 않는다.</b> "루트 전방을 향해 누워 있다"를 전제하는 클립이
     /// 어느 쪽을 머리로 보는지는 <b>그 리그의 클립 사정</b>이라 소유자가 자기 오프셋을 얹는다
@@ -759,11 +1043,15 @@ public class RagdollRig : MonoBehaviour
             return false;
 
         Vector3 lengthwise = m_headBone.position - m_hipsBone.position;
-        lengthwise.y = 0f;
-        if (lengthwise.sqrMagnitude < 0.0004f)
-            return false; // 거의 수직으로 서 있다 — 방향을 못 정하니 기존 yaw를 유지한다
+        float length = lengthwise.magnitude;
+        if (length < 0.02f)
+            return false; // 두 뼈가 겹쳐 있다 — 뺄 방향이 없다
 
-        yaw = Quaternion.LookRotation(lengthwise.normalized).eulerAngles.y;
+        Vector3 horizontal = new Vector3(lengthwise.x, 0f, lengthwise.z);
+        if (horizontal.magnitude < length * k_lyingHorizontalRatio)
+            return false; // 아직 서 있다 — 방향을 못 정하니 기존 yaw를 유지한다
+
+        yaw = Quaternion.LookRotation(horizontal.normalized).eulerAngles.y;
         return true;
     }
 }

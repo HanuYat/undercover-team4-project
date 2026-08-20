@@ -1,4 +1,4 @@
-using Unity.Netcode;
+﻿using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -15,16 +15,19 @@ using UnityEngine;
 /// "받은 자세를 입히는 법"</b>뿐이다. 반대쪽 짝인 <see cref="RagdollRig"/>가 네트워크를 모르는 것과
 /// 같은 선이다.
 ///
-/// <b>⚠ 골반 좌표계가 국면에 따라 갈린다 — 이 부품의 핵심 결정이다</b> (계획서 §1-3):
+/// <b>골반은 처음부터 끝까지 <u>월드</u>다 — 국면에 따라 갈리지 않는다.</b>
 ///
-/// <list type="table">
-///   <item><term>스트리밍 중</term><description>골반은 <b>월드</b>. 루트 NetworkTransform과 완전히
-///   독립이라 두 스트림의 지연 차가 오차로 새지 않는다. 로컬로 보내면 몸이 루트 보간값 위에 얹혀
-///   실측 0.25m까지 벌어지던 <c>루트↔골반수평</c> 항이 그대로 되살아난다.</description></item>
-///   <item><term>정착(얼림)</term><description><see cref="EndStreaming"/>이 <b>로컬</b>로 한 번
-///   보내고 스트림을 끊는다. 그때부터 몸의 주인은 루트다 — 뼈가 키네마틱 자식이라 루트를 옮기면
-///   딸려 온다. 유치장 순간이동이 성립하는 자리가 여기다.</description></item>
-/// </list>
+/// 루트 NetworkTransform과 완전히 독립이라 두 스트림의 지연 차가 오차로 새지 않는다. 로컬로 보내면
+/// 몸이 루트 보간값 위에 얹혀 실측 0.25m까지 벌어지던 <c>루트↔골반수평</c> 항이 되살아난다.
+///
+/// ⚠ <b>예전에는 정착에서 로컬로 갈아탔다 — 그 이음새를 없앴다.</b> 목적은 "정착한 시체는 루트를
+/// 옮기면 딸려온다"였는데, 원격의 루트가 호스트와 조금만 달라도 그 차이가 통째로 <b>정착 순간의
+/// 점프</b>가 됐다. 게다가 자세는 신뢰 RPC로 즉시·루트는 NT 보간으로 늦게 도착해 <b>두 값의 동시
+/// 도착이 구조적으로 불가능</b>했다. 지금은 순간이동 쪽이 뼈를 직접 옮기고 자세를 다시 쏜다
+/// (<c>NpcRagdoll.ServerPlaceCorpse</c>).
+///
+/// <b>그래서 정착 패킷을 받아도 화면은 변하지 않는다.</b> 그것이 사양이다 — 정착은 "스트림이
+/// 멈췄다"는 사실일 뿐이고, 몸은 이미 그 자세를 그리고 있다.
 ///
 /// <b><c>NpcDeath</c>가 정착 자세를 1회 뿌리던 경로를 흡수했다.</b> 그쪽은 지웠고, 그 1회는
 /// 이제 스트림의 <b>마지막 패킷</b>(<see cref="EndStreaming"/>)이다 — 자세가 가는 통로는 하나만 남긴다.
@@ -63,7 +66,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
     [Header("송신")]
     [Tooltip("몇 번의 물리 스텝마다 한 번 보내는가 — 50Hz 기준 2면 25Hz, 4면 12.5Hz.\n\n" +
              "<b>대역폭의 유일한 1차 손잡이다</b>(계획서 §1-6). 실측으로 시체 1구당 원격 1인 기준 " +
-             "<b>1.5KB/s</b>(25Hz · 페이로드 62B)이고, 서버 업링크는 여기에 <b>동시 시체 수 × 원격 " +
+             "<b>약 2KB/s</b>(25Hz · 페이로드 82B)이고, 서버 업링크는 여기에 <b>동시 시체 수 × 원격 " +
              "수</b>가 곱해진다. 예산이 빠듯하면 여기부터 올린다 — 잃는 것은 보간 지연뿐이고 " +
              "정착 자세는 그대로다")]
     [SerializeField] private int m_sendEveryFixedSteps = 2;
@@ -83,6 +86,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
     private ushort m_sequence;
     private int m_stepsSinceSend;
     private Quaternion[] m_sendBuffer;  // 캡처용 — 매 스텝 새로 할당할 이유가 없다
+    private Vector3[] m_lengthBuffer;   // 뼈 길이 — 신뢰 1회 패킷에만 실린다 (docs/npc-ragdoll.md §8)
     private uint[] m_packedBuffer;      // 실제로 선에 실리는 것 — 쿼터니언당 4바이트
     private Quaternion[] m_unpackBuffer; // 수신 쪽 — 푸는 자리
 
@@ -109,6 +113,13 @@ public class RagdollPoseStreamer : NetworkBehaviour
     private bool m_expectingStream; // 전 피어 — 지금 자세가 흘러야 하는 국면인가
     private bool m_hasReceivedPose;    // 원격 — 이번 국면에 한 개라도 받았는가
     private bool m_warnedBoneMismatch; // 배선 불일치 경고를 한 번만 내기 위해
+
+    // 기상으로 재생이 끝났다 — 그 뒤 도착한 스냅샷을 버리는 래치다. 애니메이터가 몸을 되받은
+    // 뒤에 자세가 들어오면 그쪽과 매 프레임 싸운다.
+    //
+    // ⚠ <b>정착은 여기 해당하지 않는다.</b> 정착 패킷은 좌표계가 스트림과 같고 번호도 달고 오므로,
+    // 뒤늦게 온 언리라이어블 스냅샷은 시퀀스 가드가 알아서 버린다 — 래치가 필요 없다.
+    private bool m_streamEnded;
 
     private struct Snapshot
     {
@@ -211,6 +222,14 @@ public class RagdollPoseStreamer : NetworkBehaviour
         m_expectingStream = true;
         m_hasReceivedPose = false; // 새 국면 — 이번 무너짐의 첫 패킷을 다시 기다린다
 
+        // 새 국면이 열렸으니 래치를 내린다 — 기상으로 한 번 끊긴 몸이 다시 무너질 때 여기를 지난다.
+        //
+        // ⚠ <b>잠든 시체를 깨우는 경로는 여기가 아니라 <see cref="ResumeStreaming"/>이다.</b>
+        // 그쪽은 래치를 내리지 않는데, 시체는 <c>StopStreaming</c>을 지나지 않으므로(사망은 영구라
+        // 기상이 없다) 래치가 서 있을 수가 없다. 기절했다 깨어난 몸이 다시 무너지는 경우만 여기를
+        // 지나고, 그때는 이 대입이 필요하다.
+        m_streamEnded = false;
+
         if (!IsPoseAuthority)
             return;
 
@@ -219,15 +238,20 @@ public class RagdollPoseStreamer : NetworkBehaviour
     }
 
     /// <summary>
-    /// 스트림을 끊고 <b>마지막 자세를 로컬 좌표로</b> 한 번 보낸다 — 소유자가 정착시킬 때 부른다.
-    /// <b>멱등</b>(보내는 중이 아니면 무동작).
+    /// 스트림을 끊고 <b>마지막 자세를 한 번 더</b> 보낸다 — 물리가 잠들었을 때 부른다. <b>멱등</b>.
     ///
-    /// <b>여기서 좌표계가 바뀌는 것이 사양이다</b>(클래스 주석). 스트리밍 중에는 몸이 루트와 무관하게
-    /// 월드에 놓이지만, 정착한 뒤에는 <b>루트가 몸을 끌어야</b> 한다 — 뼈가 키네마틱 자식이 되므로
-    /// 루트를 옮기면 딸려 오고, 그래야 유치장 순간이동이 원격에서도 성립한다.
+    /// <b>좌표계는 바뀌지 않는다 — 스트리밍과 똑같이 월드다.</b> 그래서 이 패킷을 받아도 원격의
+    /// 화면은 <b>변하지 않는다</b>. 그것이 사양이다: 정착은 "스트림이 멈췄다"는 사실일 뿐이고,
+    /// 몸은 이미 마지막 자세를 그리고 있다.
     ///
-    /// <b>신뢰 전송이다.</b> 이 한 패킷이 원격의 <b>종착 상태</b>라 잃으면 그 시체는 마지막 스트림
-    /// 자세로 영원히 남는다.
+    /// <b>예전에는 여기서 월드→로컬로 갈아탔다.</b> 정착 뒤 몸을 루트에 매달아 유치장 순간이동을
+    /// 루트 한 줄로 만들려는 것이었는데, 그 전환이 <b>이음새</b>였다: 원격의 루트가 호스트와 조금만
+    /// 달라도 그 차이가 통째로 몸의 점프가 됐고, 자세는 신뢰 RPC로 즉시·루트는 NT 보간으로 늦게
+    /// 도착해 <b>두 값의 동시 도착이 구조적으로 불가능</b>했다. 지금은 순간이동 쪽이 뼈를 직접
+    /// 옮기고 자세를 다시 쏘므로(<c>NpcRagdoll.ServerPlaceCorpse</c>) 갈아탈 이유가 없다.
+    ///
+    /// <b>신뢰 전송이다.</b> 이 한 패킷이 원격의 <b>종착 상태</b>라 잃으면 그 시체는 마지막으로
+    /// 도착한 언리라이어블 자세로 남는다.
     /// </summary>
     public void EndStreaming()
     {
@@ -237,25 +261,61 @@ public class RagdollPoseStreamer : NetworkBehaviour
         m_streaming = false;
         m_expectingStream = false;
 
-        if (!IsSpawned || m_rig == null || !m_rig.IsValid)
+        if (!IsSpawned || m_rig == null || !m_rig.IsValid || m_rig.Hips == null)
             return;
 
         EnsureSendBuffer();
-        if (m_rig.CaptureLocalPose(m_sendBuffer, out Vector3 hipsLocal))
-            FinalPoseRpc(hipsLocal, Pack(m_sendBuffer));
+        if (!m_rig.CaptureLocalPose(m_sendBuffer, out _))
+            return;
+
+        // ⚠ <b>뼈 길이를 함께 싣는다</b> — 이 패킷이 원격의 종착 상태라, 여기가 틀리면 그 시체는
+        // 끝까지 다른 몸으로 남는다 (docs/npc-ragdoll.md §8).
+        m_rig.CaptureBoneLengths(m_lengthBuffer);
+
+        m_sequence = unchecked((ushort)(m_sequence + 1));
+        FinalPoseRpc(m_sequence, m_rig.Hips.position, Pack(m_sendBuffer), m_lengthBuffer);
     }
 
     /// <summary>
-    /// 스트림을 <b>아무것도 보내지 않고</b> 끝낸다 — 몸이 일어날 때(기절 해제) 부른다. <b>멱등</b>.
-    ///
-    /// <see cref="EndStreaming"/>과 갈리는 지점이 여기다. 정착은 <b>종착 자세가 있는</b> 끝이라
-    /// 마지막 패킷을 보내야 하지만, 기상은 <b>애니메이터가 몸을 도로 가져가는</b> 끝이라 보낼 자세가
-    /// 없다 — 보내면 원격에서 기상 블렌드와 래그돌 자세가 같은 프레임을 두고 싸운다.
-    ///
-    /// <b>RPC가 필요 없다.</b> 기상 트리거(<c>NpcRagdoll.WantsRagdoll</c>)는 동기화된 상태에서 읽는
-    /// 값이라 <b>전 피어가 각자 같은 답을 얻는다</b> — 원격도 자기 <c>ExitRagdoll</c>에서 이 함수를
-    /// 부르므로 재생이 그 자리에서 멈춘다. 정착은 권위 피어만 판정하므로 그쪽만 RPC가 필요했던 것이다.
+    /// 잠든 몸이 다시 움직이기 시작했다 — 스트림을 재개한다. <b>멱등</b>.
+    /// 밧줄·발길질·폭발 어느 쪽이든 권위 피어가 깨어남을 감지하면 부른다.
     /// </summary>
+    public void ResumeStreaming()
+    {
+        // ⚠ <c>m_streamEnded</c>는 <b>기상</b>으로만 선다 — 정착은 세우지 않는다. 그래서 잠들었다
+        // 깨어난 몸은 여기를 통과하고, 애니메이터가 몸을 되받은 뒤에는 통과하지 못한다.
+        if (m_streaming || m_streamEnded || !IsPoseAuthority)
+            return;
+
+        m_streaming = true;
+        m_expectingStream = true;
+        m_stepsSinceSend = 0;
+    }
+
+    /// <summary>
+    /// 자세를 <b>보간 없이</b> 한 번 보낸다 — 시체를 통째로 옮겼을 때(유치장 배치) 부른다.
+    ///
+    /// 평범한 스냅샷으로 보내면 원격이 출발지와 도착지 <b>사이를 보간하며</b> 시체가 맵을 가로질러
+    /// 날아간다. 이 패킷은 원격의 스냅샷 버퍼를 비우고 새 자세만 남긴다 — NetworkTransform의
+    /// <c>Teleport</c>와 같은 성격이고, 그쪽과 <b>같은 프레임에</b> 나가야 루트와 몸이 함께 뛴다.
+    /// </summary>
+    public void SendTeleportPose()
+    {
+        if (!IsPoseAuthority || !IsSpawned || m_rig == null || !m_rig.IsValid || m_rig.Hips == null)
+            return;
+
+        EnsureSendBuffer();
+        if (!m_rig.CaptureLocalPose(m_sendBuffer, out _))
+            return;
+
+        // 길이도 함께 — 옮겨 놓은 몸을 원격이 <b>도착 즉시</b> 같은 모양으로 그리게 한다. 안 실으면
+        // 다시 무너져 정착할 때까지(수 초) 바인드 길이 몸으로 누워 있다 (docs/npc-ragdoll.md §8).
+        m_rig.CaptureBoneLengths(m_lengthBuffer);
+
+        m_sequence = unchecked((ushort)(m_sequence + 1));
+        TeleportPoseRpc(m_sequence, m_rig.Hips.position, Pack(m_sendBuffer), m_lengthBuffer);
+    }
+
     public void StopStreaming()
     {
         m_streaming = false;
@@ -265,6 +325,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
         m_streamDriven = false;
         m_snapshotCount = 0;
         m_haveSequence = false;
+        m_streamEnded = true; // 늦게 온 스냅샷이 기상 자세를 덮지 못하게
     }
 
     // 캡처는 <b>FixedUpdate</b>다 — 물리가 진실인 자리에서 떠야 스텝 사이 보간값이 섞이지 않는다.
@@ -305,6 +366,9 @@ public class RagdollPoseStreamer : NetworkBehaviour
 
         if (m_packedBuffer == null || m_packedBuffer.Length != m_rig.BoneCount)
             m_packedBuffer = new uint[m_rig.BoneCount];
+
+        if (m_lengthBuffer == null || m_lengthBuffer.Length != m_rig.BoneCount)
+            m_lengthBuffer = new Vector3[m_rig.BoneCount];
     }
 
     // ---- 압축 ----
@@ -351,12 +415,61 @@ public class RagdollPoseStreamer : NetworkBehaviour
     /// 정착 자세(<see cref="FinalPoseRpc"/>)는 <b>뒤가 없어서</b> 신뢰 전송이어야 한다.
     ///
     /// 회전은 <b>압축해서</b> 온다 — 쿼터니언당 4B(<see cref="Pack"/>·<see cref="Unpack"/>).
-    /// 페이로드는 62B이고 실측으로 시체 1구당 원격 1인 기준 1.5KB/s다(25Hz).
+    /// 페이로드는 82B(뼈 17개)이고 시체 1구당 원격 1인 기준 약 2KB/s다(25Hz).
     /// </summary>
     [Rpc(SendTo.NotMe, Delivery = RpcDelivery.Unreliable)]
     private void StreamPoseRpc(ushort sequence, Vector3 hipsWorld, uint[] packed)
+        => ReceivePose(sequence, hipsWorld, packed, terminal: false);
+
+    /// <summary>
+    /// <b>스트림의 마지막 패킷</b> — 물리가 잠들었다. 신뢰 전송이고 <b>좌표계는 스트리밍과 같은
+    /// 월드다.</b>
+    ///
+    /// <b>받아도 화면이 바뀌지 않는 것이 사양이다.</b> 원격은 이미 이 자세를 그리고 있고, 이 패킷은
+    /// "여기서 멈춘다"를 <b>유실 없이</b> 알릴 뿐이다. 예전에는 여기서 로컬 좌표로 갈아타며 몸을
+    /// 루트에 매달았고, 그 전환이 정착 순간의 점프였다(<see cref="EndStreaming"/> 주석).
+    ///
+    /// <b>뼈 길이를 함께 나른다</b>(<paramref name="lengths"/>) — 권위 쪽 시체는 무너지는 동안 뼈가
+    /// 늘어나고 그 길이가 영구히 남는데(실측 0.036~0.206m), 원격은 물리를 안 굴려 바인드 그대로라
+    /// 안 보내면 <b>같은 회전을 다른 골격에 입힌 몸</b>이 된다. 근거·실측은 docs/npc-ragdoll.md §8.
+    ///
+    /// ⚠ <b>늦게 접속한 피어에는 오지 않는다</b>(신뢰 RPC의 성질). 이미 누워 있던 시체를 자세 없이
+    /// 보게 되는 구멍이고, 계획서 6단계에서 닫는다(권위 피어가 마지막 자세를 캐시했다가 새
+    /// 접속자에게만 다시 쏜다).
+    /// </summary>
+    [Rpc(SendTo.NotMe)]
+    private void FinalPoseRpc(ushort sequence, Vector3 hipsWorld, uint[] packed, Vector3[] lengths)
+        => ReceivePose(sequence, hipsWorld, packed, terminal: true, lengths);
+
+    /// <summary>시체를 통째로 옮겼다 — 보간을 끊고 이 자세만 남긴다. (<see cref="SendTeleportPose"/>)</summary>
+    [Rpc(SendTo.NotMe)]
+    private void TeleportPoseRpc(ushort sequence, Vector3 hipsWorld, uint[] packed, Vector3[] lengths)
+    {
+        m_snapshotCount = 0; // 출발지 스냅샷을 버린다 — 안 버리면 그 사이를 보간하며 날아간다
+        m_haveSequence = false;
+        ReceivePose(sequence, hipsWorld, packed, terminal: false, lengths);
+    }
+
+    /// <summary>
+    /// 받은 자세를 스냅샷 버퍼에 넣는다 — <b>스트림과 정착이 같은 경로를 탄다.</b>
+    ///
+    /// 둘을 가르지 않는 것이 이 구조의 요점이다: 정착은 <b>마지막 스냅샷</b>일 뿐이라 보간이 그대로
+    /// 이어지고, 재생을 끊거나 좌표계를 갈아탈 이유가 없다. 뒤늦게 도착한 언리라이어블 스냅샷은
+    /// <b>시퀀스 가드가 알아서 버린다</b> — 정착 패킷도 번호를 달고 오기 때문이다.
+    /// </summary>
+    private void ReceivePose(
+        ushort sequence,
+        Vector3 hipsWorld,
+        uint[] packed,
+        bool terminal,
+        Vector3[] lengths = null
+    )
     {
         if (m_rig == null || !m_rig.IsValid || packed == null)
+            return;
+
+        // 기상으로 재생이 끝난 뒤 도착한 것 — 받으면 애니메이터가 놓은 포즈와 매 프레임 싸운다.
+        if (m_streamEnded)
             return;
 
         if (packed.Length != m_rig.BoneCount)
@@ -387,41 +500,23 @@ public class RagdollPoseStreamer : NetworkBehaviour
         m_haveSequence = true;
         m_streamDriven = true;
 
-        PushSnapshot(hipsWorld, Unpack(packed));
-    }
-
-    /// <summary>
-    /// 정착한 자세 — <b>스트림의 마지막 패킷</b>이고 골반이 <b>로컬</b>로 온다. 신뢰 전송.
-    /// 받는 즉시 갈아끼우고 스트림 재생을 끝낸다 — 그때부터 몸은 루트 계층이 옮긴다.
-    ///
-    /// ⚠ <b>늦게 접속한 피어에는 오지 않는다</b>(신뢰 RPC의 성질). 이미 누워 있던 시체를 자세 없이
-    /// 보게 되는 구멍이고, <b>지우기 전 <c>NpcDeath</c>의 1회 방송도 똑같이 뚫려 있었다</b> —
-    /// 계획서 6단계에서 닫는다(권위 피어가 마지막 자세를 캐시했다가 새 접속자에게만 다시 쏜다).
-    /// </summary>
-    [Rpc(SendTo.NotMe)]
-    private void FinalPoseRpc(Vector3 hipsLocal, uint[] packed)
-    {
-        if (m_rig == null || !m_rig.IsValid || packed == null)
-            return;
-
-        if (packed.Length != m_rig.BoneCount)
-            return;
-
-        // 재생 중이던 보간을 통째로 버린다 — 이 자세가 확정이라 섞을 것이 없다.
+        // ⚠ <b>길이가 자세보다 먼저다.</b> 자세는 회전뿐이라 팔다리 <b>위치</b>는 이 길이 위에
+        // 얹혀 계층 수학으로 만들어진다 — 순서가 뒤집히면 이번 프레임은 옛 길이로 그려진다.
         //
-        // ⚠ <c>m_expectingStream</c>을 내리는 것이 <b>이 자세를 지키는 일이다</b>: 소유자의
-        // 빈 구간 메우기가 <see cref="IsAwaitingFirstPose"/>를 보므로, 여기서 안 내리면 그쪽이
-        // 다시 켜져 진입 시점의 자세로 덮어쓴다.
-        m_snapshotCount = 0;
-        m_streamDriven = false;
-        m_haveSequence = false;
+        // 한 번 쓰면 남는다(원격의 뼈는 키네마틱이라 아무도 덮지 않는다). 그래서 <b>신뢰 1회
+        // 패킷에만</b> 실어도 그 뒤 흘러오는 스냅샷이 같은 골격 위에서 재생된다.
+        if (lengths != null && lengths.Length == m_rig.BoneCount)
+            m_rig.ApplyBoneLengths(lengths);
+
+        PushSnapshot(hipsWorld, Unpack(packed));
+
+        if (!terminal)
+            return;
+
+        // 자세가 더 오지 않는 국면 — 소유자에게 알린다. <b>재생은 계속 돈다</b>:
+        // <see cref="TickApply"/>가 마지막 스냅샷을 붙들고, 그 한 줄이 원격의 몸을 루트에서
+        // 떼어 놓는다(루트가 흔들려도 몸은 스트림이 놓은 자리에 있는다).
         m_expectingStream = false;
-        m_hasReceivedPose = true;
-
-        m_rig.ApplyLocalPose(Unpack(packed), hipsLocal);
-
-        // <b>자세를 입힌 뒤에 알린다</b> — 구독자가 이 자세를 얼리므로, 먼저 알리면 직전(스트림)
-        // 자세가 굳는다.
         OnSettledPoseReceived?.Invoke();
     }
 
@@ -550,4 +645,5 @@ public class RagdollPoseStreamer : NetworkBehaviour
     // ushort 랩어라운드를 견디는 "더 새것인가" 판정 — 차이를 부호 없는 반바퀴로 읽는다.
     private static bool IsNewer(ushort candidate, ushort current)
         => unchecked((ushort)(candidate - current)) is > 0 and < k_sequenceHalfRange;
+
 }

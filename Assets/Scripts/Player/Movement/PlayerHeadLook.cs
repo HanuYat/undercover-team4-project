@@ -42,6 +42,16 @@ public class PlayerHeadLook : NetworkBehaviour
     private float m_displayPitch; // 실제 본에 반영 중인 pitch — 목표값을 지수 감쇠로 추종
     private float m_weight; // 오버라이드 가중치 0~1 — 다운 중 0으로 블렌드해 쓰러짐 애니메이션과 싸우지 않게
 
+    /// <summary>
+    /// 마지막으로 본에 <b>실제로 얹은</b> pitch(도) — ⚠ 진단용이다
+    /// (<see cref="PlayerRagdoll"/>의 진입 머리 추적).
+    ///
+    /// 래그돌이 켜지면 이 컴포넌트는 아래에서 즉시 빠지므로 값이 갱신되지 않는다. 그래서 사망 시점에
+    /// 이 값은 <b>죽기 직전 프레임에 얹혀 있던</b> 기울기이고, 그것이 시체로 복사된 뒤 물리에 어떻게
+    /// 처리되는지가 지금 묻는 것이다. <b>0에 가까우면 그 테이크는 아무것도 증명하지 못한다.</b>
+    /// </summary>
+    public float LastAppliedTilt { get; private set; }
+
     private void Awake()
     {
         m_look = GetComponent<PlayerLook>();
@@ -88,6 +98,7 @@ public class PlayerHeadLook : NetworkBehaviour
         m_weight = Mathf.Lerp(m_weight, active ? 1f : 0f, weightT);
 
         float applied = m_displayPitch * m_weight;
+        LastAppliedTilt = applied; // 조기 리턴보다 앞이다 — 0도 "얹은 값이 0"이라는 정보다
         if (Mathf.Abs(applied) < 0.01f)
             return;
 
