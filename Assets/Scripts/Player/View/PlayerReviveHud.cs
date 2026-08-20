@@ -5,8 +5,8 @@ using UnityEngine.Localization;
 /// <summary>
 /// 쓰러진 동료 관련 온스크린 프롬프트 — 오너 화면 전용. (#105/#493, #725)
 /// 다운(유예)·기능 정지(Die) 각각을 조준하면 일으키기/부활 키트 + 뒤지기 안내를, 내가 쓰러지면
-/// 상태 안내(유예 잔여 또는 "재부팅 중")를 띄운다. 문구는 HUD의 공용 프롬프트
-/// (<see cref="PromptView"/>)에 얹는다 — 이 클래스는 상태를 보고 어떤 문구를 띄울지만 고른다.
+/// "재부팅 중" 등 상태 문구를 띄운다(유예 잔여 초는 <see cref="DamageVignetteUI.ShowDownCountdown"/>이
+/// 화면 중앙에 큰 숫자로 대신 그린다). 문구는 HUD의 공용 프롬프트(<see cref="PromptView"/>)에 얹는다.
 ///
 /// <b>월드 아이콘(채워지는 해골)을 시도했다가 되돌렸다</b>: 평면 스프라이트라 옆에서 보면 보이지
 /// 않고, 상태를 알리는 수단으로 텍스트보다 나을 게 없었다. 시각화로 다시 갈 거면 평면 이미지가
@@ -16,10 +16,6 @@ using UnityEngine.Localization;
 public class PlayerReviveHud : NetworkBehaviour
 {
     [Header("상태 문구")]
-    [Tooltip("내가 다운(유예) 중 — HudTable/Hud.Revive.Downed. {0}=완전 사망까지 남은 초")]
-    [SerializeField]
-    private LocalizedString m_downedPrompt;
-
     [Tooltip(
         "동료가 나를 구조하는 중 — HudTable/Hud.Revive.BeingRevived. 유예 시계가 멈췄다는 신호"
     )]
@@ -68,7 +64,10 @@ public class PlayerReviveHud : NetworkBehaviour
     public override void OnNetworkDespawn()
     {
         if (IsOwner)
+        {
             ClearPrompt(); // 퇴장·씬 전환으로 사라질 때 문구가 화면에 남지 않게
+            App.UI.DamageVignette?.HideDownCountdown();
+        }
     }
 
     private void Update() // 비오너는 OnNetworkSpawn에서 비활성화되므로 오너만 돈다
@@ -82,20 +81,25 @@ public class PlayerReviveHud : NetworkBehaviour
         )
         {
             ClearPrompt();
+            App.UI.DamageVignette?.HideDownCountdown();
             return;
         }
 
-        // 내가 다운된 경우 — 구조 대기 메시지.
-        // IsIncapacitated가 아니라 IsDowned를 본다 (#252): 기절·오검거 매달기도 무력화지만 스스로
-        // 풀리므로 구조를 기다리라는 안내가 거짓이 된다. 아무도 오지 않는데 기다리게 만든다.
-        // 동료가 채널링 중이면(IsBeingRevived) 문구 자체를 바꾼다 — 화면이 그 밝기에서 멈추는 것과
-        // 같은 신호를 글자로도 준다. 아니면 완전 사망까지 남은 초를 보여준다. (#725)
-        if (m_incapacitation != null && m_incapacitation.IsDowned)
+        bool isDowned = m_incapacitation != null && m_incapacitation.IsDowned;
+        if (!isDowned)
+            App.UI.DamageVignette?.HideDownCountdown();
+
+        // 다운 — 남은 초는 화면 중앙에 큰 숫자로, 구조 채널링 중이면 "재부팅 중" 문구를 더한다. (#725)
+        if (isDowned)
         {
+            App.UI.DamageVignette?.ShowDownCountdown(
+                Mathf.CeilToInt(m_incapacitation.RemainingUntilDie)
+            );
+
             if (m_incapacitation.IsBeingRevived)
                 SetPrompt(m_beingRevivedPrompt);
             else
-                SetPrompt(m_downedPrompt, keyLabel: RemainingSecondsLabel);
+                ClearPrompt();
             return;
         }
 
@@ -148,12 +152,6 @@ public class PlayerReviveHud : NetworkBehaviour
     private string UseItemKey => m_input != null ? m_input.UseItemBinding : "?";
 
     private string LootKey => m_input != null ? m_input.LootBinding : "?";
-
-    // 완전 사망까지 남은 초 — 다운(비-구조 중) 프롬프트의 인자. 정수로 반올림해 초 단위로 보여준다.
-    private string RemainingSecondsLabel =>
-        m_incapacitation != null
-            ? Mathf.CeilToInt(m_incapacitation.RemainingUntilDie).ToString()
-            : "?";
 
     /// <summary>
     /// keyLabel(들)이 있으면 문구의 인자({0}, {1})에 끼운다. (#664, #725)

@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -64,6 +65,21 @@ public class DamageVignetteUI : CommonManagerBase
     [SerializeField]
     private float m_downDarknessMaxAlpha = 0.85f;
 
+    [Tooltip("화면 중앙에 크게 뜨는 다운 유예 잔여 초 — 부가 설명 없이 숫자만 (#725)")]
+    [SerializeField]
+    private TextMeshProUGUI m_downCountdownText;
+
+    [Tooltip("이 초 이하로 남으면 숫자를 경고색으로 바꾼다")]
+    [SerializeField]
+    private int m_downCountdownWarningSeconds = 10;
+
+    [Tooltip("경고 구간 숫자 색상")]
+    [SerializeField]
+    private Color m_downCountdownWarningColor = Color.red;
+
+    // 평상시 색 — 프리팹에 설정된 값을 Awake에서 그대로 기억한다(하드코딩 안 함)
+    private Color m_downCountdownNormalColor = Color.white;
+
     [Header("저체력 글리치")]
     [Tooltip(
         "화면 가장자리 스캔라인·노이즈 오버레이 — 순간 연출이 아니라 저체력 동안 상시 표시된다"
@@ -108,10 +124,14 @@ public class DamageVignetteUI : CommonManagerBase
         if (m_glitchImage != null)
             m_glitchBasePosition = m_glitchImage.rectTransform.anchoredPosition;
 
+        if (m_downCountdownText != null)
+            m_downCountdownNormalColor = m_downCountdownText.color;
+
         OverlayImage.SetAlpha(m_vignetteImage, 0f);
         SetArcAlpha(0f);
         OverlayImage.SetAlpha(m_glitchImage, 0f);
         OverlayImage.SetAlpha(m_downDarknessImage, 0f);
+        HideDownCountdown();
     }
 
     /// <summary>
@@ -127,6 +147,26 @@ public class DamageVignetteUI : CommonManagerBase
             m_downDarknessImage,
             Mathf.Clamp01(darknessRatio) * m_downDarknessMaxAlpha
         );
+    }
+
+    /// <summary>다운 유예 잔여 초를 화면 중앙에 큰 숫자로 띄운다 — 부가 설명 없이 숫자만. (#725)</summary>
+    public void ShowDownCountdown(int remainingSeconds)
+    {
+        if (m_downCountdownText == null)
+            return;
+
+        m_downCountdownText.text = remainingSeconds.ToString();
+        m_downCountdownText.color =
+            remainingSeconds <= m_downCountdownWarningSeconds
+                ? m_downCountdownWarningColor
+                : m_downCountdownNormalColor;
+        m_downCountdownText.gameObject.SetActive(true);
+    }
+
+    public void HideDownCountdown()
+    {
+        if (m_downCountdownText != null)
+            m_downCountdownText.gameObject.SetActive(false);
     }
 
     /// <summary>
@@ -205,6 +245,7 @@ public class DamageVignetteUI : CommonManagerBase
         OverlayImage.SetAlpha(m_vignetteImage, 0f);
         SetArcAlpha(0f);
         OverlayImage.SetAlpha(m_downDarknessImage, 0f);
+        HideDownCountdown();
     }
 
     private void Update()
