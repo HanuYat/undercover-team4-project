@@ -456,8 +456,6 @@ public class BombDevice : NetworkBehaviour
         StopAgent();
 
         // 반경 내 행동 가능한 플레이어에게 거리 감쇠 피해.
-        // NPC는 이제 체력이 있지만(#366) 폭발 피해는 아직 연결하지 않았다 — 넉백 착지가 이미
-        // Stunned로 보내고 있어 중복 정리가 필요하다(후속 이슈). 지금은 넉백만 받는다.
         m_deathBuffer.Clear();
         SuddenEventUtil.CollectFieldPlayers(transform.position, m_explosionRadius, m_blastBuffer);
         for (int i = 0; i < m_blastBuffer.Count; i++)
@@ -645,12 +643,14 @@ public class BombDevice : NetworkBehaviour
                 continue;
 
             // 환경 피해로 넣는다 — TakeDamage의 게이트는 연행 중을 막는다 (차량과 같은 이유, #690)
+            bool wasAlive = !npc.Death.IsDead;
             npc.Health.TakeEnvironmentalDamage(damage, gameObject);
 
-            // ⚠ 죽은 NPC에 넉백을 걸면 시체가 Stunned로 되살아난다 — 이 분기가 그 방지다
+            // 시체는 넉백이 아니라 임펄스로 민다 — 래그돌이 이미 물리를 쥐고 있다
             if (npc.Death.IsDead)
             {
-                if (npc.Ragdoll != null)
+                // 이 폭발로 죽은 대상만 날린다 — 원래 있던 시체는 회수 위치를 지킨다
+                if (wasAlive && npc.Ragdoll != null)
                     npc.Ragdoll.EnterRagdoll(EvaluateRagdollImpulse(position));
             }
             else
