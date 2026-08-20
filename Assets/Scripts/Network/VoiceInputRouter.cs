@@ -27,6 +27,9 @@ public class VoiceInputRouter : MonoBehaviour
     private string m_proximityChannelName;
     private bool m_transmitting; // PTT를 누르고 있는지 — 디버그 표시용
 
+    // 완전 사망 중 PTT 차단 (#725) — GameSettings.MicMuted(음소거)와는 독립된 축이라 따로 둔다.
+    private bool m_transmitBlocked;
+
     /// <summary>음소거 중에 무전 키를 눌렀다 — HUD가 "마이크가 꺼져 있습니다"를 띄운다.</summary>
     public event Action OnMutedTalkAttempt;
 
@@ -90,6 +93,22 @@ public class VoiceInputRouter : MonoBehaviour
             VivoxService.Instance.UnmuteInputDevice();
     }
 
+    /// <summary>
+    /// PTT 송신을 강제로 막거나 푼다 — 완전 사망(Die) 동안은 말을 걸 수 없다는 규칙(#725)을 위한 것.
+    /// 음소거(<see cref="ApplyMicMute"/>)와 독립된 축이다 — 부활하면 음소거 여부와 무관하게 이 차단만
+    /// 풀리고, 음소거 자체는 그대로 유지된다. 막는 순간 이미 송신 중이면 즉시 끈다(말하다 죽는 경우).
+    /// </summary>
+    public void SetTransmitBlocked(bool blocked)
+    {
+        if (m_transmitBlocked == blocked)
+            return;
+
+        m_transmitBlocked = blocked;
+
+        if (blocked && m_transmitting)
+            SetRadioTransmit(false);
+    }
+
     // ---- 입력 구독 ----
 
     private void OnEnable()
@@ -144,6 +163,11 @@ public class VoiceInputRouter : MonoBehaviour
     private void OnPushToTalkStarted(InputAction.CallbackContext ctx)
     {
         if (IsTypingInUI())
+            return;
+
+        // 완전 사망 중에는 무전 자체가 조용히 무시된다 — 음소거처럼 안내를 띄우지 않는다(#725).
+        // 이미 화면 암전·무음으로 "죽었다"는 신호가 뚜렷해 별도 토스트가 필요 없다고 본다.
+        if (m_transmitBlocked)
             return;
 
         // 음소거가 이긴다 — 송신을 막는 가드는 넣지 않는다(입력 장치가 뮤트면 송신 모드와 무관하게

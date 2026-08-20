@@ -359,6 +359,9 @@ public class VivoxManager : CommonManagerBase
             VivoxService.Instance.SetOutputDeviceVolume(k_vivoxVolumeMute);
     }
 
+    /// <summary>PTT 송신 차단 — VoiceInputRouter로 그대로 전달한다. 완전 사망 규칙(#725)용.</summary>
+    public void SetTransmitBlocked(bool blocked) => m_input?.SetTransmitBlocked(blocked);
+
     // 0~1 → Vivox 정수 스케일. 0은 확실한 무음으로 떨어뜨리고, 그 위는 실사용 구간으로 보간한다.
     private static int ToVivoxVolume(float volume01)
     {

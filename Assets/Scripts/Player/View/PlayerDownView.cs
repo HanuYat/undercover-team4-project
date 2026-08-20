@@ -20,6 +20,10 @@ using UnityEngine;
 /// Vivox 무전·근접 음성은 AudioListener를 거치지 않는 별개 경로라(GameSettings.MasterVolume 문서 참고)
 /// 따로 <see cref="VivoxManager.ForceMuteOutput"/>/<see cref="VivoxManager.ApplyVoiceVolume"/>으로
 /// 같은 구간에 맞춰 껐다 되살린다.
+///
+/// <b>말하기(송신)는 별개 축이다</b> — 완전 사망(Die) 동안은 통째로 PTT가 막힌다(홀드·페이드와
+/// 무관하게 Die인 내내). 부활 키트로 되살아나는 즉시 <see cref="VivoxManager.SetTransmitBlocked"/>로
+/// 풀린다. 다운(Down) 유예 중에는 여전히 말할 수 있다 — 막는 건 완전 사망뿐이다.
 /// </summary>
 [RequireComponent(typeof(PlayerIncapacitation))]
 public class PlayerDownView : NetworkBehaviour
@@ -60,6 +64,12 @@ public class PlayerDownView : NetworkBehaviour
             App.UI.DamageVignette?.SetDownDarkness(0f);
 
         RestoreVolume();
+
+        // 완전 사망 중에 디스폰되는 드문 경로(연결 끊김 등)에서도 송신 차단이 눌어붙지 않게 한다 —
+        // 새로 스폰될 뷰는 None에서 시작해 이 else 분기를 다시 타지 않으므로, 여기서 확실히 풀어야 한다.
+        if (m_lastCause == IncapacitationCause.Die)
+            App.Net.Vivox?.SetTransmitBlocked(false);
+
         m_lastCause = IncapacitationCause.None;
         m_deathElapsed = -1f;
 
@@ -78,6 +88,12 @@ public class PlayerDownView : NetworkBehaviour
         }
 
         IncapacitationCause cause = m_incapacitation.Cause;
+
+        // 완전 사망 진입/이탈 — 홀드·페이드와 무관하게 Die인 내내 말을 막는다.
+        if (cause == IncapacitationCause.Die && m_lastCause != IncapacitationCause.Die)
+            App.Net.Vivox?.SetTransmitBlocked(true);
+        else if (cause != IncapacitationCause.Die && m_lastCause == IncapacitationCause.Die)
+            App.Net.Vivox?.SetTransmitBlocked(false); // 부활 즉시 다시 말할 수 있게
 
         if (m_lastCause == IncapacitationCause.Down && cause == IncapacitationCause.Die)
         {
