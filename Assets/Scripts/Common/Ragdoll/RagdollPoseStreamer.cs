@@ -76,6 +76,17 @@ public class RagdollPoseStreamer : NetworkBehaviour
              "확정되면 끈다")]
     [SerializeField] private bool m_logArrival;
 
+    [Tooltip("자세 스트림이 <b>실제로 얼마를 보내는지</b>를 2초 창마다 찍는다 — 시체별 한 줄 + " +
+             "전체 합산 한 줄.\n\n" +
+             "<b>페이로드만 센다</b> — 시퀀스 2B + 골반 월드 12B + 압축 회전 배열(4B + 4B×뼈수). " +
+             "정착·순간이동 패킷은 뼈 길이(4B + 12B×뼈수)가 더 붙는다. NGO 메시지 헤더·배칭·UTP " +
+             "오버헤드는 빠져 있으므로 <b>실제 회선 사용량은 이 값보다 크다</b>(패킷당 수십 바이트).\n\n" +
+             "<b>업링크는 원격 수를 곱한 값이다</b> — 같은 패킷이 피어마다 한 벌씩 나간다. 원격 수를 " +
+             "아는 것은 서버뿐이라(ConnectedClients가 서버 전용) 클라 권위에서는 -1로 찍는다.\n\n" +
+             "예산 손잡이는 위의 <b>송신 주기</b>다 — 4로 올리면 12.5Hz로 절반이 된다.\n\n" +
+             "확정되면 끈다")]
+    [SerializeField] private bool m_logBandwidth;
+
     [Header("송신")]
     [Tooltip("몇 번의 물리 스텝마다 한 번 보내는가 — 50Hz 기준 2면 25Hz, 4면 12.5Hz.\n\n" +
              "<b>대역폭의 유일한 1차 손잡이다</b>(계획서 §1-6). 실측으로 시체 1구당 원격 1인 기준 " +
@@ -121,6 +132,20 @@ public class RagdollPoseStreamer : NetworkBehaviour
 
     // ---- 도착 계측 (m_logArrival) — ⚠ 임시 계측, #759가 닫히면 지운다 ----
     private const float k_arrivalHeartbeatSeconds = 2f;
+
+    // ---- 대역폭 계측 (m_logBandwidth) — ⚠ 임시 계측, 예산이 확정되면 지운다 ----
+    private const float k_bandwidthWindowSeconds = 2f;
+
+    private int m_sentPackets;
+    private int m_sentBytes;
+    private float m_bandwidthWindowStart;
+
+    // 전 시체 합산 — 서버 업링크는 여기에 원격 수가 곱해진다. 시체가 쌓이는 라운드에서
+    // 개별 줄만 보면 총량을 놓치므로 정적으로 함께 센다.
+    private static int s_windowPackets;
+    private static int s_windowBytes;
+    private static int s_windowStreamers;
+    private static float s_windowStart;
 
     private int m_arrivalCount;
     private ushort m_arrivalFirstSequence;
@@ -299,6 +324,9 @@ public class RagdollPoseStreamer : NetworkBehaviour
 
         m_sequence = unchecked((ushort)(m_sequence + 1));
         FinalPoseRpc(m_sequence, m_rig.Hips.position, Pack(m_sendBuffer), m_lengthBuffer);
+
+        CountSent(StreamPayloadBytes + LengthPayloadBytes);
+        DumpBandwidth("스트림종료"); // 창이 닫히기 전에 끝났다 — 남은 값으로 마감한다
     }
 
     /// <summary>
@@ -339,6 +367,8 @@ public class RagdollPoseStreamer : NetworkBehaviour
 
         m_sequence = unchecked((ushort)(m_sequence + 1));
         TeleportPoseRpc(m_sequence, m_rig.Hips.position, Pack(m_sendBuffer), m_lengthBuffer);
+
+        CountSent(StreamPayloadBytes + LengthPayloadBytes);
     }
 
     public void StopStreaming()
@@ -383,6 +413,8 @@ public class RagdollPoseStreamer : NetworkBehaviour
 
         m_sequence = unchecked((ushort)(m_sequence + 1));
         StreamPoseRpc(m_sequence, m_rig.Hips.position, Pack(m_sendBuffer));
+
+        CountSent(StreamPayloadBytes);
 
     }
 
@@ -736,6 +768,83 @@ public class RagdollPoseStreamer : NetworkBehaviour
         );
 
         m_arrivalCount = 0;
+    }
+
+    // ---- 대역폭 계측 (m_logBandwidth) ----
+    //
+    // 재는 것은 <b>페이로드</b>다: 시퀀스 2B + 골반 월드 12B + 압축 회전 배열(길이 4B + 4B×뼈수).
+    // 정착·순간이동은 뼈 길이 배열(4B + 12B×뼈수)이 더 붙는다. NGO 헤더·배칭은 빠져 있다.
+
+    private int StreamPayloadBytes => 2 + 12 + 4 + (4 * m_rig.BoneCount);
+
+    private int LengthPayloadBytes => 4 + (12 * m_rig.BoneCount);
+
+    private void CountSent(int bytes)
+    {
+        if (!m_logBandwidth)
+            return;
+
+        if (m_sentPackets == 0)
+            m_bandwidthWindowStart = Time.time;
+
+        m_sentPackets++;
+        m_sentBytes += bytes;
+
+        if (s_windowPackets == 0)
+        {
+            s_windowStart = Time.time;
+            s_windowStreamers = 0;
+        }
+
+        s_windowPackets++;
+        s_windowBytes += bytes;
+
+        if (Time.time - m_bandwidthWindowStart >= k_bandwidthWindowSeconds)
+            DumpBandwidth("창");
+    }
+
+    // 창 하나를 마감한다 — 시체별 한 줄, 그리고 <b>전체 합산</b>은 창이 다 찼을 때 한 번만.
+    private void DumpBandwidth(string reason)
+    {
+        if (!m_logBandwidth || m_sentPackets == 0)
+            return;
+
+        float span = Mathf.Max(0.0001f, Time.time - m_bandwidthWindowStart);
+        int remotes = IsServer && NetworkManager != null
+            ? Mathf.Max(0, NetworkManager.ConnectedClients.Count - 1)
+            : -1;
+
+        float perSecond = m_sentBytes / span;
+        string uplink = remotes >= 0
+            ? $"{perSecond * remotes / 1024f:F1}KB/s"
+            : "모름(클라 권위)";
+
+        Debug.Log(
+            $"[래그돌대역폭] 시체#{NetworkObjectId} 종료={reason} 창={span:F1}s "
+                + $"패킷={m_sentPackets}({m_sentPackets / span:F1}Hz) 페이로드={StreamPayloadBytes}B "
+                + $"뼈={m_rig.BoneCount} 초당={perSecond / 1024f:F1}KB/s 원격={remotes} 업링크={uplink}",
+            this
+        );
+
+        s_windowStreamers++;
+        m_sentPackets = 0;
+        m_sentBytes = 0;
+
+        // 합산은 창이 찬 뒤에만 — 중간에 끝난 시체 하나 때문에 총량을 잘라 찍지 않는다.
+        float totalSpan = Time.time - s_windowStart;
+        if (totalSpan < k_bandwidthWindowSeconds)
+            return;
+
+        float totalPerSecond = s_windowBytes / Mathf.Max(0.0001f, totalSpan);
+        Debug.Log(
+            $"[래그돌대역폭 합계] 창={totalSpan:F1}s 스트리밍={s_windowStreamers}구 "
+                + $"패킷={s_windowPackets} 초당={totalPerSecond / 1024f:F1}KB/s 원격={remotes} "
+                + $"업링크={(remotes >= 0 ? $"{totalPerSecond * remotes / 1024f:F1}KB/s" : "모름")}"
+        );
+
+        s_windowPackets = 0;
+        s_windowBytes = 0;
+        s_windowStreamers = 0;
     }
 
     // ushort 랩어라운드를 견디는 "더 새것인가" 판정 — 차이를 부호 없는 반바퀴로 읽는다.

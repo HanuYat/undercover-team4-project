@@ -570,6 +570,7 @@ MonoBehaviour:
   m_sendEveryFixedSteps: 2
   m_interpolationDelay: 0.08
   m_logArrival: 1
+  m_logBandwidth: 1
 --- !u!1001 &2229125471116794606
 PrefabInstance:
   m_ObjectHideFlags: 0

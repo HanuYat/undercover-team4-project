@@ -7366,6 +7366,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_authority: 1
   m_logArrival: 1
+  m_logBandwidth: 1
   m_sendEveryFixedSteps: 2
   m_interpolationDelay: 0.08
 --- !u!114 &9186688055930901132
