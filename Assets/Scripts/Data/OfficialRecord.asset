@@ -21,3 +21,4 @@ MonoBehaviour:
     variants:
     - {fileID: 21300000, guid: a8a758f4fea5e334f9ba511ddaf9455d, type: 3}
     - {fileID: 21300000, guid: db9b20cd6b2c837469f494f956470c75, type: 3}
+  m_citizenNames: {fileID: 11400000, guid: aa12be30bb43e5d4aa92d9af3844235f, type: 2}

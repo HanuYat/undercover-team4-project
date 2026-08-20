@@ -276,7 +276,25 @@ public class RagdollRope : MonoBehaviour
     private void DestroyStrand(Strand strand)
     {
         if (strand.Joint != null)
+        {
+            // ⚠ <b>지우기 전에 제약을 먼저 푼다.</b> <c>Destroy</c>는 프레임 끝까지 지연되므로 그
+            // 사이에 도는 물리 스텝에서 관절은 <b>여전히 살아 있다.</b> 그 스텝 전에 시체를
+            // 순간이동시키면(유치장 배치·퇴장) 앵커는 제자리에 남아 위반이 그 거리만큼 생기고,
+            // 솔버가 그것을 메우며 시체를 <b>발사한다</b> — 실측 237 m/s, 유치장 퇴장에서 재현됐다.
+            //
+            // 전 축을 <c>Free</c>로 바꾸면 그 스텝부터 아무 힘도 걸지 않는다. 드라이브는 애초에
+            // 설정하지 않으므로(<see cref="Attach"/>) 이 셋이 제약의 전부다.
+            //
+            // ⚠ 예전에는 이 구멍이 안 보였다 — 시체의 뼈가 키네마틱으로 얼어 있어 관절이 무력했기
+            // 때문이다. 뼈를 끝까지 동적으로 두면서 드러났고, <b>"끊었다"가 지금 끊긴 것을 뜻해야
+            // 한다</b>는 것이 여기서 지켜야 할 불변식이다.
+            strand.Joint.xMotion = ConfigurableJointMotion.Free;
+            strand.Joint.yMotion = ConfigurableJointMotion.Free;
+            strand.Joint.zMotion = ConfigurableJointMotion.Free;
+
             Destroy(strand.Joint);
+        }
+
         if (strand.AnchorObject != null)
             Destroy(strand.AnchorObject); // 앵커는 부모가 없어 안 지우면 씬에 남는다
 
