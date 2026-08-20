@@ -209,10 +209,10 @@ MonoBehaviour:
   m_carrierGap: 1.1
   m_arriveDistance: 2
   m_travelTimeoutSeconds: 90
-  m_lynchTimeoutSeconds: 30
-  m_disposalDistance: 25
-  m_disposalSpeed: 3.5
-  m_maxChaseSeconds: 60
+  m_manholeOpenSeconds: 3
+  m_descendDepth: 3
+  m_descendSpeed: 2
+  m_maxChaseSeconds: 120
 --- !u!114 &4391990372060924147
 MonoBehaviour:
   m_ObjectHideFlags: 0
