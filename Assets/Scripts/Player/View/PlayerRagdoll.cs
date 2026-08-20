@@ -56,8 +56,9 @@ public class PlayerRagdoll : MonoBehaviour
     private enum RagdollState
     {
         Animated, // 평시 — 전 Rigidbody 키네마틱, 애니메이터가 포즈를 쥔다
-        Ragdoll, // 물리 중 — 애니메이터 정지, 임펄스로 날아가는 구간
-        Settled, // 착지 정착 — 뼈를 전부 물리에 둔 채 그대로 둔다 (RestToPhysics)
+        // 물리 중 — 애니메이터 정지. <b>시체도 끝까지 이 상태다</b>: 정착은 상태가 아니라
+        // <see cref="m_settled"/> 깃발이고, 뜻은 "물리가 잠들어 스트림을 끊었다"뿐이다.
+        Ragdoll,
         BlendingToAnimator, // 정착 포즈 → 애니메이터 포즈 보간 (부활)
     }
 
@@ -149,6 +150,11 @@ public class PlayerRagdoll : MonoBehaviour
     private Transform m_root; // CharacterController가 붙은 트랜스폼 = 판정·동기화의 주체
 
     private RagdollState m_state = RagdollState.Animated;
+
+    // <b>정착은 상태가 아니라 국면을 적어 둔 깃발이다</b> (NpcRagdoll과 같은 모델). 뜻하는 것은
+    // "물리가 잠들어 스트림을 끊었다"뿐이고 뼈는 동적으로 남는다. 그래서 밟히거나 폭발에 밀리면
+    // <see cref="Update"/>의 깨어남 폴링이 스트림을 되살린다.
+    private bool m_settled;
     private float m_elapsedInRagdoll;
 
     // 늦게 접속했는데 대상이 이미 죽어 있던 경우 — 이번 사망은 래그돌을 건너뛴다.
@@ -177,7 +183,7 @@ public class PlayerRagdoll : MonoBehaviour
     /// 대신하는 것과 같은 자리이고, 몸을 끄는 주체가 남이 아니라 <b>자기 뼈 물리</b>라는 점만 다르다.
     /// </summary>
     internal bool IsCapsuleFollowingBody =>
-        (m_state == RagdollState.Ragdoll || m_state == RagdollState.Settled) && HasMoveAuthority;
+        m_state == RagdollState.Ragdoll && HasMoveAuthority;
 
     // 이동 권한 — 오너(또는 세션 없는 오프라인 Play)만 루트를 옮길 수 있다.
     // 서버가 남의 캐릭터를 옮겨봤자 오너 권한 NetworkTransform이 되돌린다(BombExplosionView 주석과 같은 논리).
@@ -410,7 +416,7 @@ public class PlayerRagdoll : MonoBehaviour
             return; // 이번 사망을 건너뛴 피어 — 살아있는 몸을 시체 상태로 밀지 않는다
 
         m_holdPoseUntilStream = false;
-        m_state = RagdollState.Settled;
+        m_settled = true;
         DumpSettleTrace();
     }
 
@@ -562,11 +568,16 @@ public class PlayerRagdoll : MonoBehaviour
         // 끌리기 시작은 몸이 다시 움직인다는 뜻이다 — 정착하며 끊은 스트림을 여기서 재개한다.
         // 안 재개하면 끌려가는 시체가 원격에서 마지막 정착 자세로 굳는다.
         // (NPC는 같은 자리에서 녹이기까지 하지만 플레이어는 얼지 않아 녹일 것이 없다)
-        m_streamer?.BeginStreaming();
         BeginRopeTrace();
 
         if (!HasMoveAuthority)
             return;
+
+        // 깨우기만 한다 — 스트림 재개는 <see cref="Update"/>의 깨어남 폴링이 받는다.
+        // (NpcRagdoll.WakeCorpse와 같은 모양. 재개 경로를 하나로 모으는 것이 요점이다)
+        m_rig.WakeAll();
+        if (m_settled)
+            ResumeFromSleep();
 
         m_rope?.Attach(carrier);
     }
@@ -601,6 +612,7 @@ public class PlayerRagdoll : MonoBehaviour
             return; // 이미 정착했거나 일어나는 중 — 다시 날리지 않는다
 
         m_state = RagdollState.Ragdoll;
+        m_settled = false;
         m_elapsedInRagdoll = 0f;
 
         // 슬라이드 넉백과 이중으로 밀리지 않게 CharacterController 쪽 외력을 지운다.
@@ -645,6 +657,7 @@ public class PlayerRagdoll : MonoBehaviour
             return;
 
         // 에피소드가 여기서 끝난다 — 다음 사망은 자기 사망을 다시 관측해야 부활할 수 있다 (PollDeath).
+        m_settled = false;
         m_sawDeathThisEpisode = false;
         m_awaitingDeathSeconds = 0f;
 
@@ -841,6 +854,20 @@ public class PlayerRagdoll : MonoBehaviour
         if (!HasMoveAuthority)
             return;
 
+        // 잠든 뒤에는 <b>깨어났는지만</b> 본다. 밟히거나 폭발에 밀리면 PhysX가 스스로 깨우므로
+        // 이 한 줄이 그 모든 경로를 받는다 — 깨우는 쪽마다 알림을 심을 필요가 없다.
+        //
+        // <b>이것이 없던 것이 #763의 뿌리다.</b> 예전에는 정착이 상태였고 여기서 이미 빠져나갔으므로
+        // 스트림을 되살리는 경로가 <c>BeginRopePull</c> 하나뿐이었다. 그래서 다른 이유로 몸이
+        // 움직이면 권위만 움직이고 원격은 마지막 자세를 월드로 붙든 채 남았다.
+        if (m_settled)
+        {
+            if (!m_rig.AllAsleep)
+                ResumeFromSleep();
+
+            return;
+        }
+
         // 끌리는 동안에는 재우지 않는다 — 끌리는 몸은 어차피 안 잠들지만, 타임아웃까지 흐르면
         // 끌고 가는 중에 강제 수면이 걸린다. 놓는 순간부터 다시 센다. (NpcRagdoll과 같은 자리)
         if (m_rope != null && m_rope.IsBeingCarried)
@@ -932,8 +959,7 @@ public class PlayerRagdoll : MonoBehaviour
             m_skipThisEpisode = false;
             bool revivalIsReal =
                 m_sawDeathThisEpisode || m_awaitingDeathSeconds >= k_deathSyncGraceSeconds;
-            if ((m_state == RagdollState.Ragdoll || m_state == RagdollState.Settled)
-                && revivalIsReal)
+            if (m_state == RagdollState.Ragdoll && revivalIsReal)
             {
                 ExitToAnimator(blend: true); // 부활 — 정착 포즈에서 기상으로 잇는다
             }
@@ -1704,7 +1730,7 @@ public class PlayerRagdoll : MonoBehaviour
         // 내면 정착하는 순간 캡슐이 튄다.
         bool haveGround = TryGroundUnder(m_rig.Hips.position, out Vector3 ground);
         bool bodyIsGrounded =
-            m_state == RagdollState.Settled
+            m_settled
             || (haveGround && m_rig.Hips.position.y - ground.y <= k_groundedHipsHeight);
 
         if (haveGround && bodyIsGrounded)
@@ -1805,8 +1831,19 @@ public class PlayerRagdoll : MonoBehaviour
     // ③은 비행 중 캡슐이 이미 따라와 있으므로 <b>cm 단위 잔차</b>만 남는다. 원격은 아무것도 옮기지
     // 않는다: 루트는 비행 내내 오너 값을 스트리밍받았고 뼈는 그 루트에 맞춰져 있다
     // (<see cref="TickAlignBonesToRoot"/>). 흡수할 어긋남이 없으니 수렴도 유예도 없다.
+    // 잠든 몸이 다시 움직이기 시작했다 — 스트림을 되살린다. (NpcRagdoll.ServerResumeFromSleep와 짝)
+    private void ResumeFromSleep()
+    {
+        m_settled = false;
+        m_elapsedInRagdoll = 0f;
+        m_streamer?.ResumeStreaming();
+    }
+
     private void Settle()
     {
+        if (m_settled)
+            return;
+
         DumpFallRate("정착"); // 무너짐이 끝난 지점 — 창이 닫히기 전이면 여기가 마감이다
         m_rig.CapturePose();
         Vector3 landedHips = m_rig.Hips.position;
@@ -1852,7 +1889,7 @@ public class PlayerRagdoll : MonoBehaviour
         // 흔들리게. 원격의 릴리스 타이밍을 재던 유예 구간은 이 설계에서 사라졌다.
         RestToPhysics();
 
-        m_state = RagdollState.Settled;
+        m_settled = true;
         DumpSettleTrace();
 
         // 스트림을 끊고 <b>마지막 자세를 로컬 좌표로</b> 한 번 보낸다 — 원격의 종착 상태다.
