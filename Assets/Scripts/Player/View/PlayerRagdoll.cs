@@ -1318,6 +1318,13 @@ public class PlayerRagdoll : MonoBehaviour
 
     private bool m_ropeTraceActive;
     private float m_ropeTraceStart;
+    private static readonly float[] k_ropeMarks = { 0.5f, 1f, 1.5f };
+
+    private readonly float[] m_ropeMoved = new float[3];
+    private int m_ropeMarkIndex;
+    private float m_ropePeakSpeed;
+    private Vector3 m_ropePrevHips;
+
     private Vector3 m_ropeTraceHipsStart;
     private Vector3 m_ropeTraceRootStart;
 
@@ -1331,6 +1338,11 @@ public class PlayerRagdoll : MonoBehaviour
         m_ropeTraceStart = Time.unscaledTime;
         m_ropeTraceHipsStart = m_rig.Hips != null ? m_rig.Hips.position : Vector3.zero;
         m_ropeTraceRootStart = m_root.position;
+        m_ropePrevHips = m_ropeTraceHipsStart;
+        m_ropeMarkIndex = 0;
+        m_ropePeakSpeed = 0f;
+        for (int i = 0; i < m_ropeMoved.Length; i++)
+            m_ropeMoved[i] = float.NaN;
 
         Rigidbody hips = m_rig.HipsBody;
         Debug.Log(
@@ -1344,7 +1356,29 @@ public class PlayerRagdoll : MonoBehaviour
 
     private void TickRopeTrace()
     {
-        if (!m_ropeTraceActive || Time.unscaledTime - m_ropeTraceStart < k_ropeTraceSeconds)
+        if (!m_ropeTraceActive)
+            return;
+
+        // 끌려온 거리의 <b>모양</b>과 최고 속도 — 총량만 보면 "느리게 끌렸다"를 놓친다.
+        Vector3 hipsNow = m_rig.Hips != null ? m_rig.Hips.position : m_ropePrevHips;
+        if (Time.unscaledDeltaTime > 0.0001f)
+        {
+            m_ropePeakSpeed = Mathf.Max(
+                m_ropePeakSpeed,
+                Vector3.Distance(hipsNow, m_ropePrevHips) / Time.unscaledDeltaTime
+            );
+        }
+
+        m_ropePrevHips = hipsNow;
+
+        float ropeElapsed = Time.unscaledTime - m_ropeTraceStart;
+        while (m_ropeMarkIndex < k_ropeMarks.Length && ropeElapsed >= k_ropeMarks[m_ropeMarkIndex])
+        {
+            m_ropeMoved[m_ropeMarkIndex] = Vector3.Distance(hipsNow, m_ropeTraceHipsStart);
+            m_ropeMarkIndex++;
+        }
+
+        if (ropeElapsed < k_ropeTraceSeconds)
             return;
 
         m_ropeTraceActive = false;
@@ -1360,9 +1394,23 @@ public class PlayerRagdoll : MonoBehaviour
                 + $"루트이동={Vector3.Distance(m_root.position, m_ropeTraceRootStart):F2}m "
                 + $"평균속도={m_rig.AverageSpeed:F2}m/s "
                 + $"골반키네마틱={(hips != null ? hips.isKinematic.ToString() : "없음")} "
-                + $"잠듦={(hips != null ? hips.IsSleeping().ToString() : "없음")}",
+                + $"잠듦={(hips != null ? hips.IsSleeping().ToString() : "없음")} "
+                + $"최고속도={m_ropePeakSpeed:F2}m/s 견인곡선=[{DescribeRopeCurve()}]",
             this
         );
+    }
+
+    private string DescribeRopeCurve()
+    {
+        System.Text.StringBuilder line = new System.Text.StringBuilder();
+        for (int i = 0; i < m_ropeMarkIndex && i < k_ropeMarks.Length; i++)
+        {
+            if (line.Length > 0)
+                line.Append(' ');
+            line.Append($"{k_ropeMarks[i]:0.##}s:{m_ropeMoved[i]:F2}m");
+        }
+
+        return line.Length > 0 ? line.ToString() : "표본없음";
     }
 
     // ---- 낙하 속도 계측 (m_logFallRate) — ⚠ 임시 계측, #759가 닫히면 지운다 ----
@@ -1384,6 +1432,14 @@ public class PlayerRagdoll : MonoBehaviour
     private const float k_fallRateWindowSeconds = 3f;
 
 
+    // 낙하 곡선 표본 시각(초) — 정상 낙하는 0.5s 안에 거의 끝난다. 느린 판은 이 곡선이 기어간다.
+    private static readonly float[] k_fallMarks = { 0.25f, 0.5f, 1f, 2f, 3f };
+
+    private readonly float[] m_fallDrops = new float[5];
+    private int m_fallMarkIndex;
+    private float m_fallPeakDescent;
+    private float m_fallPrevHipsY;
+
     private bool m_fallRateActive;
     private float m_fallRateRealStart;
     private float m_fallRatePhysicsStart;
@@ -1403,6 +1459,31 @@ public class PlayerRagdoll : MonoBehaviour
         m_fallRateHipsStartY = m_rig.Hips != null ? m_rig.Hips.position.y : float.NaN;
         m_fallRateFrames = 0;
         m_fallRateWorstFrame = 0f;
+
+        m_fallMarkIndex = 0;
+        m_fallPeakDescent = 0f;
+        m_fallPrevHipsY = m_fallRateHipsStartY;
+        for (int i = 0; i < m_fallDrops.Length; i++)
+            m_fallDrops[i] = float.NaN;
+
+        LogRigPhysics();
+    }
+
+    // 진입 시점의 물리 설정 1회 — "시계는 정상인데 몸이 느리다"의 원인은 거의 여기 있다.
+    private void LogRigPhysics()
+    {
+        Rigidbody hips = m_rig.HipsBody;
+        if (hips == null)
+            return;
+
+        Debug.Log(
+            $"[리그물리] {name} 뼈={m_rig.BoneCount} 골반질량={hips.mass:F1}kg "
+                + $"선형감쇠={hips.linearDamping:F2} 각감쇠={hips.angularDamping:F2} "
+                + $"중력={hips.useGravity} 침투해소상한={hips.maxDepenetrationVelocity:F2}m/s "
+                + $"솔버={hips.solverIterations}/{hips.solverVelocityIterations} "
+                + $"중력크기={Physics.gravity.magnitude:F2}m/s²",
+            this
+        );
     }
 
     private void TickFallRate()
@@ -1412,6 +1493,25 @@ public class PlayerRagdoll : MonoBehaviour
 
         m_fallRateFrames++;
         m_fallRateWorstFrame = Mathf.Max(m_fallRateWorstFrame, Time.unscaledDeltaTime);
+
+        // 골반이 내려간 속도와 곡선 — 낙차 총량은 포화되므로 <b>모양</b>을 봐야 느림이 보인다.
+        float hipsY = m_rig.Hips != null ? m_rig.Hips.position.y : m_fallPrevHipsY;
+        if (Time.unscaledDeltaTime > 0.0001f)
+        {
+            m_fallPeakDescent = Mathf.Max(
+                m_fallPeakDescent,
+                (m_fallPrevHipsY - hipsY) / Time.unscaledDeltaTime
+            );
+        }
+
+        m_fallPrevHipsY = hipsY;
+
+        float elapsed = Time.unscaledTime - m_fallRateRealStart;
+        while (m_fallMarkIndex < k_fallMarks.Length && elapsed >= k_fallMarks[m_fallMarkIndex])
+        {
+            m_fallDrops[m_fallMarkIndex] = m_fallRateHipsStartY - hipsY;
+            m_fallMarkIndex++;
+        }
 
         if (Time.unscaledTime - m_fallRateRealStart >= k_fallRateWindowSeconds)
             DumpFallRate("창종료");
@@ -1438,9 +1538,24 @@ public class PlayerRagdoll : MonoBehaviour
         Debug.Log(
             $"[낙하속도] 권한={HasMoveAuthority} 종료={reason} 실시간={real:F2}s 물리={physics:F2}s "
                 + $"비율={ratio:F2}(1.00이 정상) 프레임={m_fallRateFrames} 평균={fps:F1}fps "
-                + $"최장프레임={m_fallRateWorstFrame * 1000f:F0}ms({verdict}) 골반낙차={drop:F2}m",
+                + $"최장프레임={m_fallRateWorstFrame * 1000f:F0}ms({verdict}) 골반낙차={drop:F2}m "
+                + $"최고하강={m_fallPeakDescent:F2}m/s 낙하곡선=[{DescribeFallCurve()}]",
             this
         );
+    }
+
+    // 표본이 찍힌 구간만 적는다 — 일찍 끝난 국면에서 빈 칸이 0으로 보이면 오독한다.
+    private string DescribeFallCurve()
+    {
+        System.Text.StringBuilder line = new System.Text.StringBuilder();
+        for (int i = 0; i < m_fallMarkIndex && i < k_fallMarks.Length; i++)
+        {
+            if (line.Length > 0)
+                line.Append(' ');
+            line.Append($"{k_fallMarks[i]:0.##}s:{m_fallDrops[i]:F2}m");
+        }
+
+        return line.Length > 0 ? line.ToString() : "표본없음";
     }
 
     // ---- 정착 딥 추적 (m_logSettleTrace) — ⚠ 임시 계측, 원인이 잡히면 지운다 ----
