@@ -69,3 +69,7 @@ Assets/StreamingAssets/HockeyAppUnityAndroid
 # /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*
 # /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AddressableAssetSettings.asset
 /[Aa]ssets/[Ii]mported/
+
+# 빌드 시 생성되는 커밋 sha 도장 (#622) — 빌드마다 바뀌어 추적하지 않는다
+/[Aa]ssets/[Ss]cripts/[Nn]etwork/[Cc]onfig/[Rr]esources/
+/[Aa]ssets/[Ss]cripts/[Nn]etwork/[Cc]onfig/[Rr]esources.meta

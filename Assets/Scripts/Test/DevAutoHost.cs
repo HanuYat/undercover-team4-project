@@ -44,7 +44,7 @@ public class DevAutoHost : MonoBehaviour
         // 정식 흐름(SessionManager.CreateSessionAsync)을 안 타는 이 경로는 직접 걸어야 한다.
         if (App.Net.Session != null)
         {
-            ConnectionApprovalGate.StampLocalVersion(nm);
+            ConnectionApprovalGate.StampLocalPayload(nm);
             App.Net.Session.Approval.Install(nm);
         }
 
@@ -79,7 +79,7 @@ public class DevAutoHost : MonoBehaviour
         if (GUILayout.Button("클라이언트로 참가 (127.0.0.1)"))
         {
             // 안 찍으면 페이로드가 비어 호스트의 버전 게이트가 "?"로 보고 거부한다 (#628).
-            ConnectionApprovalGate.StampLocalVersion(nm);
+            ConnectionApprovalGate.StampLocalPayload(nm);
             nm.StartClient();
         }
         GUILayout.EndArea();

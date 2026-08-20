@@ -13,7 +13,7 @@ public static class NetworkProtocol
     /// 네트워크 호환성이 깨지는 변경마다 손으로 +1. 마케팅 버전(bundleVersion)은 이런 변경에 따라
     /// 오르지 않으므로 별도로 둔다.
     /// </summary>
-    public const int k_protocolVersion = 1;
+    public const int k_protocolVersion = 2;
 
     public static string VersionString => $"{Application.version}#{k_protocolVersion}";
 
@@ -21,22 +21,32 @@ public static class NetworkProtocol
     public const string k_unknownVersion = "?";
 
     private const string k_mismatchReasonPrefix = "VER#";
+    private const char k_payloadSeparator = '\n';
 
-    /// <summary>NetworkConfig.ConnectionData / 승인 Payload에 실을 바이트 (#628).</summary>
-    public static byte[] EncodePayload() => Encoding.UTF8.GetBytes(VersionString);
+    /// <summary>NetworkConfig.ConnectionData / 승인 Payload에 실을 바이트 (#628, sha는 #622).</summary>
+    public static byte[] EncodePayload() =>
+        Encoding.UTF8.GetBytes(VersionString + k_payloadSeparator + BuildStamp.Sha);
 
-    public static string DecodePayload(byte[] payload)
+    /// <summary>
+    /// 반환 타입이 string이 아니라 PeerStamp인 이유 — 호출자가 통짜 문자열을 비교하다 sha가
+    /// 참가 차단에 끼어드는 사고를 타입으로 막는다 (#622). 차단 판정은 Version 필드만 본다.
+    /// </summary>
+    public static PeerStamp DecodePayload(byte[] payload)
     {
         if (payload == null || payload.Length == 0)
-            return k_unknownVersion;
+            return new PeerStamp(k_unknownVersion, BuildStamp.k_unknownSha);
 
         try
         {
-            return Encoding.UTF8.GetString(payload);
+            string decoded = Encoding.UTF8.GetString(payload);
+            int separatorIndex = decoded.IndexOf(k_payloadSeparator);
+            return separatorIndex < 0
+                ? new PeerStamp(decoded, BuildStamp.k_unknownSha)
+                : new PeerStamp(decoded[..separatorIndex], decoded[(separatorIndex + 1)..]);
         }
         catch (Exception)
         {
-            return k_unknownVersion;
+            return new PeerStamp(k_unknownVersion, BuildStamp.k_unknownSha);
         }
     }
 
@@ -54,6 +64,19 @@ public static class NetworkProtocol
 
         hostVersion = null;
         return false;
+    }
+}
+
+// 승인 페이로드 한 쪽의 정보 (#622) — Version은 차단 판정에, Sha는 로그 진단에만 쓴다.
+public readonly struct PeerStamp
+{
+    public string Version { get; }
+    public string Sha { get; }
+
+    public PeerStamp(string version, string sha)
+    {
+        Version = version;
+        Sha = sha;
     }
 }
 

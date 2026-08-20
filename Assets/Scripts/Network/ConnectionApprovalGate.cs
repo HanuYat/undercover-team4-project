@@ -14,7 +14,7 @@ public class ConnectionApprovalGate
     private NetworkManager m_networkManager;
 
     /// <summary>SDK가 StartClient/StartHost를 부르기 전에 대입해야 실제 요청에 실린다 (#628).</summary>
-    public static void StampLocalVersion(NetworkManager networkManager)
+    public static void StampLocalPayload(NetworkManager networkManager)
     {
         if (networkManager != null)
             networkManager.NetworkConfig.ConnectionData = NetworkProtocol.EncodePayload();
@@ -34,19 +34,38 @@ public class ConnectionApprovalGate
     {
         // 호스트 자기 자신도 이 콜백을 타지만 NGO는 호스트 거부를 무시하고 강제 승인한다 —
         // 검사를 건너뛰고 곧장 스폰 정책까지 실행해야 호스트 자신의 플레이어가 생긴다.
-        bool isSelf = m_networkManager != null && request.ClientNetworkId == m_networkManager.LocalClientId;
+        bool isSelf =
+            m_networkManager != null && request.ClientNetworkId == m_networkManager.LocalClientId;
 
         if (!isSelf)
         {
-            string clientVersion = NetworkProtocol.DecodePayload(request.Payload);
-            if (clientVersion != NetworkProtocol.VersionString)
+            PeerStamp client = NetworkProtocol.DecodePayload(request.Payload);
+
+            // 차단 판정은 Version만 본다 — Sha는 로그에만 실린다 (#622).
+            if (client.Version != NetworkProtocol.VersionString)
             {
                 Debug.LogWarning(
-                    $"[ConnectionApprovalGate] 버전 불일치로 연결 거부 / 내 버전(호스트): {NetworkProtocol.VersionString}, 클라 버전: {clientVersion}"
+                    $"[ConnectionApprovalGate] 버전 불일치로 연결 거부 / 내 버전(호스트): {NetworkProtocol.VersionString}, 클라 버전: {client.Version}, 내 sha: {BuildStamp.Sha}, 클라 sha: {client.Sha}"
                 );
                 response.Approved = false;
-                response.Reason = NetworkProtocol.BuildMismatchReason(NetworkProtocol.VersionString);
+                response.Reason = NetworkProtocol.BuildMismatchReason(
+                    NetworkProtocol.VersionString
+                );
                 return;
+            }
+
+            // 버전이 같아도 sha가 다르면 프로토콜 번호를 안 올린 것이다 — 막지 않고 남긴다.
+            if (client.Sha != BuildStamp.Sha)
+            {
+                Debug.LogWarning(
+                    $"[ConnectionApprovalGate] 버전은 같은데 커밋이 다름(참가 허용) / 버전: {NetworkProtocol.VersionString}, 내 sha: {BuildStamp.Sha}, 클라 sha: {client.Sha}"
+                );
+            }
+            else
+            {
+                Debug.Log(
+                    $"[ConnectionApprovalGate] 클라 접속 승인 / 버전: {client.Version}, sha: {client.Sha}"
+                );
             }
         }
 
