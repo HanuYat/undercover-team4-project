@@ -37,10 +37,14 @@ public class SessionPanel : PanelBase
         if (TutorialFlow.WasOffered)
             return;
 
-        // 물어봤다는 것 자체를 기억한다 — 거절한 사람에게도 다시 묻지 않는 것이 요구사항이다
-        TutorialFlow.MarkOffered();
-
-        App.UI.Current?.OpenPanel<TutorialConfirmPanel>();
+        // 실제로 띄운 뒤에 기억한다 — 기억이 PlayerPrefs라 한 번 찍히면 되돌아오지 않는다.
+        // 먼저 찍으면 창을 못 띄운 경우(씬에서 TutorialConfirmCanvas가 빠진 구성 등) 그 플레이어는
+        // 권유를 영영 못 받는다. OpenPanel<T>가 성공 여부를 돌려주므로 그것만 보면 된다
+        // (실패하면 콘솔에 에러도 남는다 — UIManagerBase, #441).
+        //
+        // 물어본 것 자체를 기억하는 것이지 완주를 기억하는 게 아니다 — 거절한 사람에게도 다시 묻지 않는다.
+        if (App.UI.Current != null && App.UI.Current.OpenPanel<TutorialConfirmPanel>())
+            TutorialFlow.MarkOffered();
     }
 
     [Header("UI 참조")]
