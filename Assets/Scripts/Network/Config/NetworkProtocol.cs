@@ -1,22 +1,60 @@
 using System;
+using System.Text;
 using UnityEngine;
 
 /// <summary>
 /// 네트워크 호환성 식별자의 단일 출처 (#586) — 버전이 다른 빌드가 한 세션에 섞이는 것을 막는다.
-/// 섞이면 NetworkVariable 역직렬화·RPC 시그니처·네트워크 프리팹 해시·씬 인덱스가 어긋나는데,
-/// 참가 시점엔 조용히 지나가고 인게임에서야 "나만 이상함"으로 터진다.
+/// A층(세션 프로퍼티, 클라가 스스로 물러남)과 B층(연결 승인, <see cref="ConnectionApprovalGate"/>가
+/// 호스트에서 거부)이 반대 방향에서 이 값을 검사한다 (#628) — 하나가 다른 하나의 대체가 아니다.
 /// </summary>
 public static class NetworkProtocol
 {
     /// <summary>
-    /// 네트워크 호환성이 깨지는 변경마다 손으로 +1 — NetworkVariable 추가/삭제, RPC 시그니처 변경,
-    /// DefaultNetworkPrefabs 목록 변경, 씬 추가/순서 변경.
-    /// 마케팅 버전(bundleVersion)은 이런 변경에 따라 오르지 않으므로 별도로 둔다.
+    /// 네트워크 호환성이 깨지는 변경마다 손으로 +1. 마케팅 버전(bundleVersion)은 이런 변경에 따라
+    /// 오르지 않으므로 별도로 둔다.
     /// </summary>
     public const int k_protocolVersion = 1;
 
-    /// <summary>세션 프로퍼티로 심고 비교하는 값.</summary>
     public static string VersionString => $"{Application.version}#{k_protocolVersion}";
+
+    /// <summary>버전 정보가 아예 없을 때의 표시 (구버전 빌드/페이로드 없음). 값이 다른 것과 똑같이 취급.</summary>
+    public const string k_unknownVersion = "?";
+
+    private const string k_mismatchReasonPrefix = "VER#";
+
+    /// <summary>NetworkConfig.ConnectionData / 승인 Payload에 실을 바이트 (#628).</summary>
+    public static byte[] EncodePayload() => Encoding.UTF8.GetBytes(VersionString);
+
+    public static string DecodePayload(byte[] payload)
+    {
+        if (payload == null || payload.Length == 0)
+            return k_unknownVersion;
+
+        try
+        {
+            return Encoding.UTF8.GetString(payload);
+        }
+        catch (Exception)
+        {
+            return k_unknownVersion;
+        }
+    }
+
+    /// <summary>사람이 읽는 문장이 아니라 <see cref="TryParseMismatchReason"/>이 되돌려 파싱할 값이다.</summary>
+    public static string BuildMismatchReason(string hostVersion) =>
+        k_mismatchReasonPrefix + hostVersion;
+
+    public static bool TryParseMismatchReason(string reason, out string hostVersion)
+    {
+        if (!string.IsNullOrEmpty(reason) && reason.StartsWith(k_mismatchReasonPrefix))
+        {
+            hostVersion = reason.Substring(k_mismatchReasonPrefix.Length);
+            return true;
+        }
+
+        hostVersion = null;
+        return false;
+    }
 }
 
 /// <summary>
