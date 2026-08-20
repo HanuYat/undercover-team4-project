@@ -58,6 +58,15 @@ public class OfficialRecords : ScriptableObject
         return variants != null ? variants.Length : 0;
     }
 
+    // 이름 풀을 여기 두는 이유: 팩토리(CitizenProfileFactory)가 신원 4축(이름·타입·세력·문양)을 한 번에
+    // 만드는데 이 에셋이 이미 나머지 셋을 들고 있다. CriminalAssigner에 SerializeField를 새로 달면
+    // 그 컴포넌트가 있는 씬 3개를 전부 고쳐야 한다 — 팩토리가 이미 받는 참조로 온다. (#752)
+    [Tooltip("시민 이름 풀 — 비워 두면 이름이 배정되지 않는다 (#752)")]
+    [SerializeField] private CitizenNameCatalog m_citizenNames;
+
+    /// <summary>시민 이름 풀 — 팩토리가 라운드 시작에 읽는다. 배선이 빠지면 null. (#752)</summary>
+    public CitizenNameCatalog CitizenNames => m_citizenNames;
+
     public Sprite GetFactionSymbol(Faction faction, int index)
     {
         Sprite[] variants = GetVariants(faction);

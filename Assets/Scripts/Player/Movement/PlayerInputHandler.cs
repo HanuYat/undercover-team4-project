@@ -2,6 +2,7 @@ using System;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 
 public class PlayerInputHandler : NetworkBehaviour
 {
@@ -14,6 +15,9 @@ public class PlayerInputHandler : NetworkBehaviour
 
     [SerializeField]
     private InputActionReference m_interactAction;
+
+    [SerializeField]
+    private InputActionReference m_lootAction; // R — 쓰러진 동료 뒤지기 (#725)
 
     [SerializeField]
     private InputActionReference m_sprintAction;
@@ -80,6 +84,18 @@ public class PlayerInputHandler : NetworkBehaviour
         }
     }
 
+    /// <summary>뒤지기(R) 키 표시 문자열 — 조준 안내용. (#725)</summary>
+    public string LootBinding
+    {
+        get
+        {
+            if (m_lootBinding == null)
+                m_lootBinding = BindingDisplay(m_lootAction);
+
+            return m_lootBinding;
+        }
+    }
+
     /// <summary>
     /// 안내에 적을 키 표기 하나를 고른다 — 키보드·마우스 스킴의 첫 바인딩. 타깃이 PC라서다(GDD). (#664)
     /// 인자 없는 GetBindingDisplayString은 못 쓴다: 바인딩을 전부 이어 붙여 상호작용은 "E | Y",
@@ -109,7 +125,7 @@ public class PlayerInputHandler : NetworkBehaviour
 
     public event Action OnInteractStarted; // 상호작용 버튼 누름
     public event Action OnInteractPerformed; // 상호작용 발동 — 순수 Button이라 누르는 즉시 발화 (즉시발동)
-    public event Action OnInteractCanceled; // 상호작용 버튼 뗌
+    public event Action OnLootPerformed; // R — 쓰러진 동료 뒤지기, 즉시발동 (#725)
     public event Action OnUseItemStarted; // 아이템 사용 시작 (좌클릭 누름 — 채널링 시작, #91)
     public event Action OnUseItemCanceled; // 아이템 사용 중단 (좌클릭 뗌 — 채널링 취소, #91)
     public event Action OnPreviousItem; // 마우스 휠 위 — 이전 아이템으로 전환 (#46)
@@ -135,6 +151,7 @@ public class PlayerInputHandler : NetworkBehaviour
     // 키 표기 캐시 — null이면 다음 요청 때 다시 만든다 (#664)
     private string m_interactBinding;
     private string m_useItemBinding;
+    private string m_lootBinding;
 
     /// <summary>
     /// 게임플레이 입력이 정지된 상태인지 — 텍스트 입력 UI(신호 해석기 #108) 등이 켠다.
@@ -166,6 +183,33 @@ public class PlayerInputHandler : NetworkBehaviour
     }
 
     /// <summary>
+    /// 상호작용 키가 이번 프레임에 눌렸는가 — <b>입력 정지 중에도 답한다</b>. (#487 후속)
+    ///
+    /// 액션 콜백(<see cref="OnInteractPerformed"/>)이 아니라 <b>바인딩된 컨트롤을 직접</b> 읽는다.
+    /// 이걸 묻는 자리가 스스로 입력을 정지시킨 UI(약탈 창)이기 때문이다 — <see cref="SetSuspended"/>가
+    /// 상호작용 액션까지 꺼 버리므로 콜백은 오지 않는다. 그렇다고 창이 E를 상수로 박으면
+    /// <see cref="InteractBinding"/>이 안내하는 키와 갈라진다.
+    ///
+    /// <b>정지를 우회하는 것이 아니다</b> — 정지 중에는 이벤트가 아무 곳에도 가지 않고, 이 함수를
+    /// 부른 쪽만 자기 키를 본다. 게임플레이 입력으로 새지 않는다.
+    /// </summary>
+    public bool WasInteractPressedThisFrame()
+    {
+        if (m_interactAction == null || m_interactAction.action == null)
+            return false;
+
+        // 액션이 꺼져 있어도 controls는 해석된다(필요하면 접근 시점에 해석한다) — 컨트롤의
+        // wasPressedThisFrame은 장치 상태를 직접 보므로 액션의 켜짐 여부와 무관하다.
+        foreach (InputControl control in m_interactAction.action.controls)
+        {
+            if (control is ButtonControl button && button.wasPressedThisFrame)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// 팀 상황판을 보는 동안인지 알린다 — 그 사이 감정표현 휠·인벤토리 편집 입력을 흘리지 않는다. (#720)
     /// 액션을 끄지 않고 이벤트만 막는다 — 끄면 진행 중이던 입력의 canceled가 돌아 감정표현이 오발동한다.
     /// <see cref="SetSuspended"/>는 팀 상황판 액션까지 함께 꺼서 홀드가 끊기므로 쓸 수 없다.
@@ -178,7 +222,7 @@ public class PlayerInputHandler : NetworkBehaviour
         m_isPeekingTeamStatus = peeking;
     }
 
-    // 14개 액션을 한꺼번에 켜고 끈다 — 스폰/디스폰/정지가 같은 목록을 쓰도록 한 곳에 모은다.
+    // 15개 액션을 한꺼번에 켜고 끈다 — 스폰/디스폰/정지가 같은 목록을 쓰도록 한 곳에 모은다.
     private void SetActionsEnabled(bool value)
     {
         InputActionReference[] actions =
@@ -186,6 +230,7 @@ public class PlayerInputHandler : NetworkBehaviour
             m_moveAction,
             m_lookAction,
             m_interactAction,
+            m_lootAction,
             m_sprintAction,
             m_useItemAction,
             m_previousAction,
@@ -227,7 +272,7 @@ public class PlayerInputHandler : NetworkBehaviour
         m_lookAction.action.canceled += OnLook;
         m_interactAction.action.started += OnInteractStartedHandler;
         m_interactAction.action.performed += OnInteractPerformedHandler;
-        m_interactAction.action.canceled += OnInteractCanceledHandler;
+        m_lootAction.action.performed += OnLootPerformedHandler;
         m_sprintAction.action.performed += OnSprintPerformed;
         m_sprintAction.action.canceled += OnSprintCanceled;
         m_useItemAction.action.started += OnUseItemStartedHandler;
@@ -259,7 +304,7 @@ public class PlayerInputHandler : NetworkBehaviour
         m_lookAction.action.canceled -= OnLook;
         m_interactAction.action.started -= OnInteractStartedHandler;
         m_interactAction.action.performed -= OnInteractPerformedHandler;
-        m_interactAction.action.canceled -= OnInteractCanceledHandler;
+        m_lootAction.action.performed -= OnLootPerformedHandler;
         m_sprintAction.action.performed -= OnSprintPerformed;
         m_sprintAction.action.canceled -= OnSprintCanceled;
         m_useItemAction.action.started -= OnUseItemStartedHandler;
@@ -292,6 +337,7 @@ public class PlayerInputHandler : NetworkBehaviour
 
         m_interactBinding = null;
         m_useItemBinding = null;
+        m_lootBinding = null;
     }
 
     private void OnMove(InputAction.CallbackContext ctx) => MoveInput = ctx.ReadValue<Vector2>();
@@ -304,8 +350,8 @@ public class PlayerInputHandler : NetworkBehaviour
     private void OnInteractPerformedHandler(InputAction.CallbackContext ctx) =>
         OnInteractPerformed?.Invoke();
 
-    private void OnInteractCanceledHandler(InputAction.CallbackContext ctx) =>
-        OnInteractCanceled?.Invoke();
+    private void OnLootPerformedHandler(InputAction.CallbackContext ctx) =>
+        OnLootPerformed?.Invoke();
 
     private void OnSprintPerformed(InputAction.CallbackContext ctx) => IsSprinting = true;
 

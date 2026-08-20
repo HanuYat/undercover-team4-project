@@ -1,8 +1,9 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 피격 화면 연출 — 붉은 비네트 · 피격 방향 아크 · 저체력 글리치. (#476)
+/// 피격 화면 연출 — 붉은 비네트 · 피격 방향 아크 · 저체력 글리치 · 다운 유예 어두워짐. (#476, #725)
 /// HUD 프리팹에 부착되며 App.UI.DamageVignette로 접근한다 — <see cref="CrosshairUI"/>·
 /// <see cref="ChannelingGaugeUI"/>와 동일 관례. 네트워크 무관한 로컬 UI다.
 ///
@@ -18,42 +19,85 @@ using UnityEngine.UI;
 public class DamageVignetteUI : CommonManagerBase
 {
     [Header("붉은 비네트")]
-    [Tooltip("화면을 덮는 비네트 이미지 — 가장자리만 붉은 텍스처. 알파를 코드가 구동하므로 씬에서는 비활성으로 둬도 된다")]
-    [SerializeField] private Image m_vignetteImage;
+    [Tooltip(
+        "화면을 덮는 비네트 이미지 — 가장자리만 붉은 텍스처. 알파를 코드가 구동하므로 씬에서는 비활성으로 둬도 된다"
+    )]
+    [SerializeField]
+    private Image m_vignetteImage;
 
     [Tooltip("피격 후 비네트가 완전히 빠질 때까지의 시간(초)")]
-    [SerializeField] private float m_vignetteSeconds = 0.4f;
+    [SerializeField]
+    private float m_vignetteSeconds = 0.4f;
 
     [Tooltip("가장 강한 피격의 비네트 알파 — 1로 두면 화면이 통째로 붉어져 앞이 안 보인다")]
-    [SerializeField] private float m_vignetteMaxAlpha = 0.55f;
+    [SerializeField]
+    private float m_vignetteMaxAlpha = 0.55f;
 
     // 진압봉 1대(Baton.m_damage 기본 34)에서 최대 강도가 나오도록 잡은 기준값.
     // 참조하지 않고 숫자로 두는 이유: 저건 '그 무기의 위력'이고 이건 '연출이 포화되는 피해량'이라,
     // 무기 밸런스를 만지려고 이 값을 따라가면 NPC 주먹·폭발의 체감까지 함께 흔들린다.
     [Tooltip("이 데미지 이상이면 비네트가 최대 강도로 나온다. 그 미만은 비례해서 옅어진다")]
-    [SerializeField] private int m_damageForMaxAlpha = 34;
+    [SerializeField]
+    private int m_damageForMaxAlpha = 34;
 
     [Header("피격 방향 아크")]
-    [Tooltip("화면 중앙을 축으로 회전시킬 부채꼴 이미지 — 기본 회전(0도)이 화면 위쪽(정면)을 가리키도록 배치할 것")]
-    [SerializeField] private RectTransform m_directionArc;
+    [Tooltip(
+        "화면 중앙을 축으로 회전시킬 부채꼴 이미지 — 기본 회전(0도)이 화면 위쪽(정면)을 가리키도록 배치할 것"
+    )]
+    [SerializeField]
+    private RectTransform m_directionArc;
 
-    [Tooltip("방향 아크가 표시되는 시간(초) — 비네트보다 길게. '어디서 맞았나'가 비네트보다 오래 필요하다")]
-    [SerializeField] private float m_arcSeconds = 0.8f;
+    [Tooltip(
+        "방향 아크가 표시되는 시간(초) — 비네트보다 길게. '어디서 맞았나'가 비네트보다 오래 필요하다"
+    )]
+    [SerializeField]
+    private float m_arcSeconds = 0.8f;
 
-    [SerializeField] private float m_arcMaxAlpha = 0.85f;
+    [SerializeField]
+    private float m_arcMaxAlpha = 0.85f;
+
+    [Header("다운 유예 어두워짐 (#725)")]
+    [Tooltip("다운 유예 잔여에 따라 어두워지는 전체 화면 오버레이 — 알파를 코드가 직접 구동한다")]
+    [SerializeField]
+    private Image m_downDarknessImage;
+
+    [Tooltip("완전히 어두워졌을 때(유예 만료 직전)의 알파 — 1이면 화면이 통째로 캄캄해진다")]
+    [SerializeField]
+    private float m_downDarknessMaxAlpha = 0.85f;
+
+    [Tooltip("화면 중앙에 크게 뜨는 다운 유예 잔여 초 — 부가 설명 없이 숫자만 (#725)")]
+    [SerializeField]
+    private TextMeshProUGUI m_downCountdownText;
+
+    [Tooltip("이 초 이하로 남으면 숫자를 경고색으로 바꾼다")]
+    [SerializeField]
+    private int m_downCountdownWarningSeconds = 10;
+
+    [Tooltip("경고 구간 숫자 색상")]
+    [SerializeField]
+    private Color m_downCountdownWarningColor = Color.red;
+
+    // 평상시 색 — 프리팹에 설정된 값을 Awake에서 그대로 기억한다(하드코딩 안 함)
+    private Color m_downCountdownNormalColor = Color.white;
 
     [Header("저체력 글리치")]
-    [Tooltip("화면 가장자리 스캔라인·노이즈 오버레이 — 순간 연출이 아니라 저체력 동안 상시 표시된다")]
-    [SerializeField] private Image m_glitchImage;
+    [Tooltip(
+        "화면 가장자리 스캔라인·노이즈 오버레이 — 순간 연출이 아니라 저체력 동안 상시 표시된다"
+    )]
+    [SerializeField]
+    private Image m_glitchImage;
 
     [Tooltip("이 체력 비율 이하에서 글리치가 켜진다")]
-    [SerializeField] private float m_lowHealthThreshold = 0.3f;
+    [SerializeField]
+    private float m_lowHealthThreshold = 0.3f;
 
     [Tooltip("글리치 상시 알파 — 노이즈 버스트가 아닐 때의 기본값")]
-    [SerializeField] private float m_glitchBaseAlpha = 0.18f;
+    [SerializeField]
+    private float m_glitchBaseAlpha = 0.18f;
 
     [Tooltip("간헐 노이즈 버스트 시의 알파")]
-    [SerializeField] private float m_glitchBurstAlpha = 0.5f;
+    [SerializeField]
+    private float m_glitchBurstAlpha = 0.5f;
 
     // 버스트 간격·길이. NpcDespawnGhost의 플리커(0.02~0.07초)보다 훨씬 성기게 잡는다 —
     // 저건 0.45초짜리 소멸 연출이고 이건 저체력 내내 떠 있는 상태 표시라, 같은 빈도면 눈이 아프다.
@@ -80,9 +124,49 @@ public class DamageVignetteUI : CommonManagerBase
         if (m_glitchImage != null)
             m_glitchBasePosition = m_glitchImage.rectTransform.anchoredPosition;
 
+        if (m_downCountdownText != null)
+            m_downCountdownNormalColor = m_downCountdownText.color;
+
         OverlayImage.SetAlpha(m_vignetteImage, 0f);
         SetArcAlpha(0f);
         OverlayImage.SetAlpha(m_glitchImage, 0f);
+        OverlayImage.SetAlpha(m_downDarknessImage, 0f);
+        HideDownCountdown();
+    }
+
+    /// <summary>
+    /// 다운 유예 어두워짐 — 오너가 매 프레임 잔여 비율을 알린다. (#725)
+    /// 페이드 타이머 없이 값을 그대로 반영한다 — 구조 채널링 중에는 잔여 자체가 얼어붙으므로
+    /// (PlayerIncapacitation.RemainingUntilDie) 화면도 저절로 멈춘다. 여기서 따로 보간하면
+    /// "화면은 밝아지는데 시계는 이미 멈췄다"는 어긋남이 생긴다.
+    /// </summary>
+    /// <param name="darknessRatio">0(다운 진입 직후) ~ 1(완전 사망 직전).</param>
+    public void SetDownDarkness(float darknessRatio)
+    {
+        OverlayImage.SetAlpha(
+            m_downDarknessImage,
+            Mathf.Clamp01(darknessRatio) * m_downDarknessMaxAlpha
+        );
+    }
+
+    /// <summary>다운 유예 잔여 초를 화면 중앙에 큰 숫자로 띄운다 — 부가 설명 없이 숫자만. (#725)</summary>
+    public void ShowDownCountdown(int remainingSeconds)
+    {
+        if (m_downCountdownText == null)
+            return;
+
+        m_downCountdownText.text = remainingSeconds.ToString();
+        m_downCountdownText.color =
+            remainingSeconds <= m_downCountdownWarningSeconds
+                ? m_downCountdownWarningColor
+                : m_downCountdownNormalColor;
+        m_downCountdownText.gameObject.SetActive(true);
+    }
+
+    public void HideDownCountdown()
+    {
+        if (m_downCountdownText != null)
+            m_downCountdownText.gameObject.SetActive(false);
     }
 
     /// <summary>
@@ -94,8 +178,8 @@ public class DamageVignetteUI : CommonManagerBase
         if (damage <= 0)
             return;
 
-        float alpha = Mathf.Clamp01((float)damage / Mathf.Max(1, m_damageForMaxAlpha))
-            * m_vignetteMaxAlpha;
+        float alpha =
+            Mathf.Clamp01((float)damage / Mathf.Max(1, m_damageForMaxAlpha)) * m_vignetteMaxAlpha;
 
         // 연속 피격이 서로를 약화시키지 않게 한다 — 새 연출을 0부터 다시 그리면 앞선 강한 피격이
         // 진행 중일 때 들어온 약한 피격이 화면을 오히려 옅게 만든다.
@@ -148,8 +232,8 @@ public class DamageVignetteUI : CommonManagerBase
             return;
         }
 
-        m_glitchNextBurstTime = Time.time
-            + Random.Range(k_glitchBurstMinInterval, k_glitchBurstMaxInterval);
+        m_glitchNextBurstTime =
+            Time.time + Random.Range(k_glitchBurstMinInterval, k_glitchBurstMaxInterval);
     }
 
     /// <summary>연출을 즉시 걷어낸다 — 라운드 사이 리셋·오너 교체 지점에서 부른다.</summary>
@@ -160,6 +244,8 @@ public class DamageVignetteUI : CommonManagerBase
         UpdateHealthState(1f, false);
         OverlayImage.SetAlpha(m_vignetteImage, 0f);
         SetArcAlpha(0f);
+        OverlayImage.SetAlpha(m_downDarknessImage, 0f);
+        HideDownCountdown();
     }
 
     private void Update()
@@ -219,13 +305,15 @@ public class DamageVignetteUI : CommonManagerBase
 
         if (Time.time >= m_glitchNextBurstTime)
         {
-            m_glitchBurstUntil = Time.time
-                + Random.Range(k_glitchBurstMinSeconds, k_glitchBurstMaxSeconds);
-            m_glitchNextBurstTime = m_glitchBurstUntil
+            m_glitchBurstUntil =
+                Time.time + Random.Range(k_glitchBurstMinSeconds, k_glitchBurstMaxSeconds);
+            m_glitchNextBurstTime =
+                m_glitchBurstUntil
                 + Random.Range(k_glitchBurstMinInterval, k_glitchBurstMaxInterval);
 
             // 버스트마다 수평으로 살짝 튼다 — 화면이 지직거리는 인상 (NpcDespawnGhost의 지터와 같은 장치)
-            m_glitchImage.rectTransform.anchoredPosition = m_glitchBasePosition
+            m_glitchImage.rectTransform.anchoredPosition =
+                m_glitchBasePosition
                 + new Vector2(Random.Range(-k_glitchJitterPixels, k_glitchJitterPixels), 0f);
         }
 

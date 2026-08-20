@@ -12,56 +12,12 @@ using Random = UnityEngine.Random;
 ///
 /// 이름 풀은 생성자에서 한 번 섞어 인원수만큼 확정한다 — 라운드 안에서 중복이 없어야 하므로
 /// 개별 호출로는 만들 수 없다. 그래서 정적 유틸이 아니라 인스턴스다.
+///
+/// 이름 목록은 <see cref="CitizenNameCatalog"/>(데이터 에셋)에 있고 <see cref="OfficialRecords"/>를
+/// 경유해 온다 — 코드에 박혀 있던 40개로는 스폰 인원(맵에 따라 100)을 못 채워 번호가 붙었다 (#752/#505).
 /// </summary>
 public sealed class CitizenProfileFactory
 {
-    // 임시 이름 풀 — 사이버펑크 톤. 추후 데이터 에셋으로 분리 가능.
-    // 라운드 시작 인원(NpcSpawner.m_spawnCount)뿐 아니라 라운드 중에 스폰되는 돌발 이벤트
-    // NPC(#106)까지 이 풀에서 이어 뽑는다 — 여유가 없으면 NextName의 번호 폴백이 화면에 나온다 (#505).
-    private static readonly string[] s_namePool =
-    {
-        "Kai Vex",
-        "Nova Lin",
-        "Rex Halden",
-        "Mira Sato",
-        "Juno Ashe",
-        "Silas Kwon",
-        "Vera Molnar",
-        "Dax Rivera",
-        "Iris Chen",
-        "Orin Blake",
-        "Lena Voss",
-        "Cyrus Nam",
-        "Tessa Rho",
-        "Egan Cole",
-        "Yuna Park",
-        "Marlo Finn",
-        "Sana Idris",
-        "Bront Keller",
-        "Hana Ryu",
-        "Odis Grant",
-        "Piper Nyx",
-        "Ravi Sol",
-        "Wren Okada",
-        "Zane Mercer",
-        "Ada Krell",
-        "Bex Otoro",
-        "Coda Vane",
-        "Doro Kesh",
-        "Elin Marsh",
-        "Fen Alarie",
-        "Gil Vantor",
-        "Hollis Bay",
-        "Ivo Strand",
-        "Jae Corbin",
-        "Kira Lund",
-        "Lux Ferrer",
-        "Mox Danil",
-        "Nadia Sork",
-        "Oren Talis",
-        "Pax Ludwin",
-    };
-
     // None(무소속·문양 없음)은 위조 대조 축이 될 수 없어 배정에서 제외한다 (#222 (b)).
     // enum에 세력을 추가하면 자동으로 후보에 포함된다 — 여기를 고칠 필요 없음.
     private static readonly OfficialRecords.Faction[] s_assignableFactions = BuildAssignableFactions();
@@ -79,11 +35,11 @@ public sealed class CitizenProfileFactory
     private readonly Dictionary<OfficialRecords.Faction, int> m_localRealIndices =
         new Dictionary<OfficialRecords.Faction, int>();
 
-    /// <param name="records">세력 심볼 조회용 공식 기록. null이면 문양 위조가 불가능해 이름 위조로 폴백한다.</param>
+    /// <param name="records">세력 심볼·이름 풀을 담은 공식 기록. null이면 문양 위조가 불가능해 이름 위조로 폴백한다.</param>
     public CitizenProfileFactory(OfficialRecords records)
     {
         m_records = records;
-        m_shuffledNames = ShuffledPool();
+        m_shuffledNames = ShuffledPool(records != null ? records.CitizenNames : null);
     }
 
     /// <summary>
@@ -170,9 +126,18 @@ public sealed class CitizenProfileFactory
     }
 
     /// <summary>이름 풀을 피셔-예이츠로 섞은 사본. 뽑기 전에 한 번만 돌린다.</summary>
-    private static string[] ShuffledPool()
+    private static string[] ShuffledPool(CitizenNameCatalog catalog)
     {
-        string[] shuffled = (string[])s_namePool.Clone();
+        string[] source = catalog != null ? catalog.Resolve() : Array.Empty<string>();
+        if (source.Length == 0)
+        {
+            Debug.LogWarning(
+                "[CitizenProfileFactory] 이름 풀이 비어 있다 — OfficialRecords의 이름 카탈로그 배선을 확인할 것 (#752)"
+            );
+            return source;
+        }
+
+        string[] shuffled = (string[])source.Clone();
         for (int i = shuffled.Length - 1; i > 0; i--)
         {
             int j = Random.Range(0, i + 1);
@@ -182,11 +147,16 @@ public sealed class CitizenProfileFactory
     }
 
     // 다음 이름 하나. 풀을 다 쓰면 번호를 붙여 재사용한다 — 보기 좋지 않지만 중복 자체는 없다.
-    // 번호가 보이기 시작하면 s_namePool을 늘릴 신호다 (#505).
+    // 번호가 보이기 시작하면 카탈로그를 늘릴 신호다 (#505/#752).
     private string NextName()
     {
         int index = m_issuedCount++;
         int length = m_shuffledNames.Length;
+
+        // 카탈로그가 없거나 비었을 때의 폴백 — 화면에 그대로 보이므로 배선 누락이 드러난다 (#752)
+        if (length == 0)
+            return "Citizen " + (index + 1);
+
         return index < length
             ? m_shuffledNames[index]
             : $"{m_shuffledNames[index % length]} {index / length + 1}";

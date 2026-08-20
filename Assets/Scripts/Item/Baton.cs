@@ -12,8 +12,8 @@ using UnityEngine;
 /// 점 레이캐스트는 조준이 과하게 빡빡해서 <see cref="Physics.SphereCastNonAlloc"/>로 두께를 준다.
 /// 벽·소품이 먼저 맞으면 그대로 빗나간다(가장 가까운 것만 판정 — 엄폐가 성립).
 /// <b>동료를 맞추면 아군 오사다</b> — NPC와 같은 데미지가 그대로 HP에 들어간다 (GDD 7-5, #461).
-/// 테이저 오사(5초 뒤 자력 기상, #252)와 달리 진짜 피해라, 3대면 기능 정지(<c>IncapacitationCause.Die</c>)가
-/// 되어 <b>본부 이송 부활</b>이 필요해진다 — 현장 구조가 사라져(#524) 오사의 대가가 그만큼 무거워졌다.
+/// 3대째에 다운(유예)이 걸리고, 60초 안에 못 일어나면 기능 정지다(#725). 유예 중인 동료를
+/// 한 대 더 때리면 유예를 건너뛰고 곧장 기능 정지가 된다 — 진압봉도 확인사살 수단이다.
 /// 때린 쪽에 페널티는 없다 — 쿨다운이 이미 대가다.
 ///
 /// 서버 권위 — 오너가 조준 원점·방향을 보내면 서버가 자기 물리로 캐스트해 판정한다 (#55).
@@ -31,7 +31,9 @@ using UnityEngine;
 public class Baton : ItemBase, IAimedWeapon
 {
     [Header("진압봉 설정")]
-    [Tooltip("타격이 닿는 최대 사거리(m). 상호작용 레이(PlayerInteractor.Range)와 무관하게 이 값이 기준이다")]
+    [Tooltip(
+        "타격이 닿는 최대 사거리(m). 상호작용 레이(PlayerInteractor.Range)와 무관하게 이 값이 기준이다"
+    )]
     [SerializeField]
     private float m_range = 2f;
 
@@ -43,20 +45,26 @@ public class Baton : ItemBase, IAimedWeapon
     // E 제압이 제거되면서(#438) 이 값이 NPC 체력을 깎는 유일한 플레이어 타격 수치가 됐다.
     // 같은 수치를 공유하지만 참조하지는 않는다: 저건 'NPC가 제압당할 때 깎이는 양'이고 이건 '이 무기의 위력'이라,
     // 무기 밸런스를 만지려고 NPC 공용 config를 건드리면 제압 홀드까지 함께 움직인다.
-    [Tooltip("1회 타격이 깎는 NPC 체력. 서버가 자기 프리팹 값을 쓴다 — 클라이언트가 수치를 보내지 않는다")]
+    [Tooltip(
+        "1회 타격이 깎는 NPC 체력. 서버가 자기 프리팹 값을 쓴다 — 클라이언트가 수치를 보내지 않는다"
+    )]
     [SerializeField]
     private int m_damage = 34;
 
     // 스윙 연출 길이(PlayerAnimationDriver.k_swingSeconds, 0.64초)보다 길게 유지할 것. 짧게 잡으면
     // 애니메이션이 끝나기 전에 다음 스윙이 들어와 계속 처음부터 잘린다 — 데미지는 들어가는데
     // 화면에서는 휘두르다 마는 그림이 된다. 남는 0.26초는 다음 타격 전의 뜸이다(연출 아님).
-    [Tooltip("타격 후 다음 타격까지 대기 시간(초). 명중·빗나감 모두 소모한다 — 빗나가도 대가가 있어야 조준이 의미를 갖는다")]
+    [Tooltip(
+        "타격 후 다음 타격까지 대기 시간(초). 명중·빗나감 모두 소모한다 — 빗나가도 대가가 있어야 조준이 의미를 갖는다"
+    )]
     [SerializeField]
     private float m_cooldownSeconds = 0.9f;
 
     // 근거는 Taser.m_originTolerance와 동일: 카메라 높이(1.6m) + 스프린트 8m/s × 지연 150ms(1.2m) ≈ 2.8 → 3.0.
     // 줄이면 핑 높은 플레이어의 정상 타격이 조용히 거부된다.
-    [Tooltip("클라가 보낸 조준 원점이 서버가 아는 플레이어 위치에서 이만큼(m) 넘게 떨어져 있으면 거부한다")]
+    [Tooltip(
+        "클라가 보낸 조준 원점이 서버가 아는 플레이어 위치에서 이만큼(m) 넘게 떨어져 있으면 거부한다"
+    )]
     [SerializeField]
     private float m_originTolerance = 3f;
 
@@ -171,9 +179,15 @@ public class Baton : ItemBase, IAimedWeapon
             return; // 아무에게도 안 들린 아이템이 휘둘러질 수는 없다
         }
 
-        if ((origin - holder.transform.position).sqrMagnitude > m_originTolerance * m_originTolerance)
+        if (
+            (origin - holder.transform.position).sqrMagnitude
+            > m_originTolerance * m_originTolerance
+        )
         {
-            Debug.LogWarning($"Baton: 조준 원점이 플레이어 위치와 너무 멀다 — 타격 거부 (origin={origin})", this);
+            Debug.LogWarning(
+                $"Baton: 조준 원점이 플레이어 위치와 너무 멀다 — 타격 거부 (origin={origin})",
+                this
+            );
             return;
         }
 
@@ -199,10 +213,11 @@ public class Baton : ItemBase, IAimedWeapon
         // 겨누는 것은 여전히 안 된다 — 휘두르기 시작하면 되돌릴 수 없다.
         Transform holderTransform = holder.transform;
         ServerResolveHitAtImpactAsync(
-            holderTransform.InverseTransformPoint(origin),
-            holderTransform.InverseTransformDirection(direction),
-            holder
-        ).Forget();
+                holderTransform.InverseTransformPoint(origin),
+                holderTransform.InverseTransformDirection(direction),
+                holder
+            )
+            .Forget();
     }
 
     /// <summary>
@@ -244,8 +259,15 @@ public class Baton : ItemBase, IAimedWeapon
 
         switch (
             EvaluateSwing(
-                origin, direction, holderTransform, out NpcController target,
-                out PlayerHealth playerTarget, out BombDevice bombTarget, out RaycastHit hit))
+                origin,
+                direction,
+                holderTransform,
+                out NpcController target,
+                out PlayerHealth playerTarget,
+                out BombDevice bombTarget,
+                out RaycastHit hit
+            )
+        )
         {
             case SwingResult.NoHit:
                 // 허공은 연출이 없다 — 이미 나간 스윙음이 '휘두르긴 했다'를 말해 주고 있다.
@@ -264,7 +286,8 @@ public class Baton : ItemBase, IAimedWeapon
                 NotifyOwner(
                     playerTarget != null
                         ? $"진압봉 무효 — 이미 무력화된 동료 ({playerTarget.name})"
-                        : $"진압봉 무효 — {(target.CurrentState == NpcState.Dead ? "이미 죽은" : "이미 제압됐거나 페널티 진행 중인")} 대상 ({target.CurrentState})");
+                        : $"진압봉 무효 — {(target.CurrentState == NpcState.Dead ? "이미 죽은" : "이미 제압됐거나 페널티 진행 중인")} 대상 ({target.CurrentState})"
+                );
                 return;
         }
 
@@ -293,7 +316,8 @@ public class Baton : ItemBase, IAimedWeapon
             playerTarget.TakeDamage(m_damage, holder.gameObject);
             NotifyOwner(
                 $"진압봉 명중 — 동료 오사! {playerTarget.name} "
-                    + $"(-{m_damage} → {playerTarget.CurrentHp}/{playerTarget.MaxHp})");
+                    + $"(-{m_damage} → {playerTarget.CurrentHp}/{playerTarget.MaxHp})"
+            );
             return;
         }
 
@@ -301,7 +325,9 @@ public class Baton : ItemBase, IAimedWeapon
         // 이 타격으로 기절하면 깨어난 뒤에도 이 사람에게서 도망친다 (#269).
         target.Health.TakeDamage(m_damage, holder.gameObject);
         target.Reaction.ServerReactTo(ReactionTrigger.Damage, holderTransform); // 맞은 즉시 반응 (#400)
-        NotifyOwner($"진압봉 명중: {target.name} (-{m_damage} → {target.Health.CurrentHp}/{target.Health.MaxHp})");
+        NotifyOwner(
+            $"진압봉 명중: {target.name} (-{m_damage} → {target.Health.CurrentHp}/{target.Health.MaxHp})"
+        );
     }
 
     // ---- 정리 ----
@@ -406,9 +432,7 @@ public class Baton : ItemBase, IAimedWeapon
         // 프로필 미배정 구간을 사람으로 보는 것도 그쪽 규칙이다.
         CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
 
-        return identity != null && identity.IsAndroidBody
-            ? EFx.BatonHitMetal
-            : EFx.BatonHitFlesh;
+        return identity != null && identity.IsAndroidBody ? EFx.BatonHitMetal : EFx.BatonHitFlesh;
     }
 
     /// <summary>
@@ -430,11 +454,18 @@ public class Baton : ItemBase, IAimedWeapon
     private void NotifyHitRpc(bool friendlyFire) => ApplyHitMarker(friendlyFire);
 
     // 로컬 HUD라 오너 스폰 전이거나 HUD 없는 구성에서는 null이다 (App.UI.Crosshair 주석).
-    private static void ApplyHitMarker(bool friendlyFire) => App.UI.Crosshair?.ShowHit(friendlyFire);
+    private static void ApplyHitMarker(bool friendlyFire) =>
+        App.UI.Crosshair?.ShowHit(friendlyFire);
 
     // ---- 조준 판정 ----
 
-    private enum SwingResult { NoHit, HitNonTarget, TargetInvalidState, ValidTarget }
+    private enum SwingResult
+    {
+        NoHit,
+        HitNonTarget,
+        TargetInvalidState,
+        ValidTarget,
+    }
 
     /// <summary>
     /// 조준 원점·방향으로 사거리(m_range)만큼 반경 m_hitRadius 구체를 날려 명중 결과를 분류한다.
@@ -540,8 +571,9 @@ public class Baton : ItemBase, IAimedWeapon
     /// 살아 있는 동안에도 켜져 있는 자기 래그돌 머리 뼈에 사격이 막혔다.
     /// <b>이 함수를 제외 루트 없이 부르게 바꾸면 자기 타격 가드를 여기에 추가해야 한다.</b>
     ///
-    /// 무력화 게이트는 <see cref="PlayerHealth.IsTargetable"/> 하나로 본다 — 다운·기절·매달기 중인
-    /// 동료를 더 때려 상태를 악화시키는 경로는 만들지 않는다 (NPC 쪽 <c>NpcStateRules.CanBeDamaged</c>와 같은 취지).
+    /// 무력화 게이트는 <see cref="PlayerHealth.IsTargetable"/>을 본다 — 기절·매달기·납치·완전 사망 중인
+    /// 동료는 더 때릴 수 없다. <b>유예(Down)만 예외</b> — 확인사살이 의도된 동작이라(#725),
+    /// IsTargetable이 CurrentHp&gt;0으로 걸러내도 유예 중이면 따로 유효 처리한다.
     /// </remarks>
     private static SwingResult EvaluateNonNpcSwing(
         RaycastHit hit,
@@ -554,7 +586,10 @@ public class Baton : ItemBase, IAimedWeapon
         playerTarget = hit.collider.GetComponentInParent<PlayerHealth>();
         if (playerTarget != null)
         {
-            return playerTarget.IsTargetable
+            // 유예(Down)만 예외 — IsTargetable은 CurrentHp>0을 요구해 다운을 걸러내지만, 확인사살은 의도된 동작이다(#725)
+            PlayerIncapacitation targetIncap = playerTarget.GetComponent<PlayerIncapacitation>();
+            bool isDownException = targetIncap != null && targetIncap.IsDowned;
+            return playerTarget.IsTargetable || isDownException
                 ? SwingResult.ValidTarget
                 : SwingResult.TargetInvalidState;
         }
