@@ -211,6 +211,13 @@ public class InventoryBarView : NetworkBehaviour
             return;
         }
 
+        // 복구 단말을 보는 중에도 막는다 (#762) — 여기서 커서가 풀리면 PlayerInteractor가 E를
+        // 막아(#352) 단말에서 나갈 수단이 사라진다.
+        if (m_loadout.IsTerminalFocused && !m_isEditMode)
+        {
+            return;
+        }
+
         SetEditMode(!m_isEditMode);
     }
 

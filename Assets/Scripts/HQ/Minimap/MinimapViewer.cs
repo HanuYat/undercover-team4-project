@@ -23,16 +23,109 @@ public class MinimapViewer : MonoBehaviour
     [Tooltip("범위 오버레이 부모. 비우면 아이콘 부모를 쓰되 맨 뒤로 보내 아이콘에 깔린다")]
     [SerializeField] private RectTransform m_areaContainer;
 
+    [Header("먹통 차단 (#762)")]
+    [Tooltip("먹통 중 지도를 덮는 판. 비우면 런타임에 검은 판을 만든다 — 프리팹 배선을 잊어도 동작한다")]
+    [SerializeField] private Image m_blackoutCover;
+
+    private DeviceBlackoutEvent m_blackout;
+    private bool m_covered;
+
     private readonly Dictionary<MinimapTarget, Image> m_targetIcons = new();
     private readonly Dictionary<MinimapTarget, Image> m_targetAreas = new();
     private readonly List<MinimapTarget> m_removeBuffer = new();
 
     private RectTransform AreaParent => m_areaContainer != null ? m_areaContainer : m_iconContainer;
 
+    // 배선된 덮개가 켜진 채 저장돼 있으면 첫 먹통 전까지 지도가 검다 — 시작 상태를 여기서 맞춘다.
+    private void Awake()
+    {
+        if (m_blackoutCover != null)
+            m_blackoutCover.enabled = false;
+    }
+
     private void LateUpdate()
     {
+        ApplyBlackout(IsBlackout());
+
+        // 먹통 중에는 아이콘을 돌리지 않는다 — 덮여서 보이지도 않고, 해제되는 프레임의 SyncIcons가
+        // 그동안의 스폰·디스폰을 한 번에 맞춘다.
+        if (m_covered)
+            return;
+
         SyncIcons();
         UpdatePositions();
+    }
+
+    // ---- 먹통 차단 (#762) ----
+
+    // 먹통 플래그를 구독하지 않고 매 프레임 묻는다 (JailSirenButton과 같은 방식) — 미니맵은 씬에 놓인
+    // 프리팹이고 SuddenEventManager는 세션 스폰이라, 구독하려면 스폰을 기다리는 배선이 따로 필요하다.
+    // 여기는 이미 LateUpdate가 도는 자리라 묻는 편이 싸고, 복구·이벤트 도중 입장이 배선 없이 따라온다.
+    private bool IsBlackout()
+    {
+        DeviceBlackoutEvent blackout = ResolveBlackout();
+        return blackout != null && blackout.IsCommsBlackout;
+    }
+
+    // ??= 대신 Unity의 == 오버로드로 확인한다 — 파괴된 참조(fake null)를 통과시키면 다음 라운드에서
+    // 죽은 컴포넌트를 계속 붙들고 묻는다. (HqPanelView의 '?. 금지' 주석과 같은 이유)
+    private DeviceBlackoutEvent ResolveBlackout()
+    {
+        if (m_blackout != null)
+            return m_blackout;
+
+        SuddenEventManager manager = App.Game.SuddenEvent;
+        m_blackout = manager != null ? manager.GetEvent<DeviceBlackoutEvent>() : null;
+        return m_blackout;
+    }
+
+    // CCTV가 먹통에 모니터를 검게 지우는 것과 같은 언어다(CCTVSwitcher.ClearMonitor) — 지도와 아이콘을
+    // 통째로 덮는다. 지형까지 안 보이는 것이 의도다.
+    private void ApplyBlackout(bool blackout)
+    {
+        if (blackout == m_covered)
+            return;
+
+        m_covered = blackout;
+
+        Image cover = EnsureCover();
+        if (cover == null)
+            return;
+
+        // 켤 때마다 맨 앞으로 올린다 — 아이콘은 지도의 자식이라 나중에 만들어진 것이 위에 그려진다.
+        if (blackout)
+            cover.rectTransform.SetAsLastSibling();
+
+        cover.enabled = blackout;
+    }
+
+    // 배선을 잊어도 동작하게 런타임에 만든다 (RopeDragView.Build와 같은 방침). 지도를 부모로 잡고
+    // 네 변을 붙여 늘리므로 지도 크기가 바뀌어도 따라간다.
+    private Image EnsureCover()
+    {
+        if (m_blackoutCover != null)
+            return m_blackoutCover;
+
+        if (m_mapRect == null)
+        {
+            enabled = false; // 지도 참조가 없으면 가릴 대상도 없다 — 매 프레임 헛돌지 않게 스스로 꺼진다
+            Debug.LogWarning($"MinimapViewer: m_mapRect가 없어 먹통 차단을 만들 수 없다. {name} 프리팹에 지정할 것", this);
+            return null;
+        }
+
+        var built = new GameObject("MinimapBlackoutCover", typeof(RectTransform), typeof(Image));
+        RectTransform rect = built.GetComponent<RectTransform>();
+        rect.SetParent(m_mapRect, false);
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+
+        m_blackoutCover = built.GetComponent<Image>();
+        m_blackoutCover.color = Color.black;
+        m_blackoutCover.raycastTarget = false; // 지도 위 클릭을 먹지 않는다
+        m_blackoutCover.enabled = false;
+        return m_blackoutCover;
     }
 
     private void SyncIcons()    // 레지스트리와 아이콘 개수 맞추기 (스폰/디스폰 대응)

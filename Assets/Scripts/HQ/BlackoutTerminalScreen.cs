@@ -53,6 +53,11 @@ public class BlackoutTerminalScreen : MonoBehaviour
 
     private readonly List<int> m_entry = new List<int>();
 
+    // 제출한 네 자리를 화면에 남겨 둔 상태 (#762). 제출이 서버 빈도 제한
+    // (BlackoutRecoveryTerminal.k_submitCooldown)에 버려지면 코드가 안 바뀌어 입력이 4자리로
+    // 잠겼다 — 서버 응답 대신 이 플래그로 다음 입력을 받는다.
+    private bool m_submitted;
+
     private void Awake()
     {
         if (m_terminal == null)
@@ -61,7 +66,7 @@ public class BlackoutTerminalScreen : MonoBehaviour
 
     private void OnEnable()
     {
-        m_entry.Clear(); // 화면이 켜지는 순간이 곧 해킹 시작이다
+        ClearEntry(); // 화면이 켜지는 순간이 곧 해킹 시작이다
 
         if (m_terminal != null)
             m_terminal.OnCodeChanged += HandleCodeChanged;
@@ -130,14 +135,17 @@ public class BlackoutTerminalScreen : MonoBehaviour
     // 코드가 새로 뽑히면 입력도 비운다 — 이어서 누르면 섞인다.
     private void HandleCodeChanged(int code)
     {
-        m_entry.Clear();
+        ClearEntry();
         Redraw();
     }
 
     private void Press(int digit)
     {
+        if (m_submitted)
+            ClearEntry(); // 제출 뒤 첫 입력 — 새 시도로 시작한다
+
         if (m_entry.Count >= BlackoutRecoveryTerminal.k_codeDigits)
-            return;
+            return; // 안전망 — 네 자리를 채우면 곧바로 제출한다
 
         m_entry.Add(digit);
         Redraw();
@@ -149,11 +157,25 @@ public class BlackoutTerminalScreen : MonoBehaviour
 
     private void Erase()
     {
+        // 제출한 것에 Backspace = 다시 넣겠다는 뜻 — 꼬리만 지워 이어 쓰게 두지 않는다
+        if (m_submitted)
+        {
+            ClearEntry();
+            Redraw();
+            return;
+        }
+
         if (m_entry.Count == 0)
             return;
 
         m_entry.RemoveAt(m_entry.Count - 1);
         Redraw();
+    }
+
+    private void ClearEntry()
+    {
+        m_entry.Clear();
+        m_submitted = false;
     }
 
     private void Submit()
@@ -163,6 +185,7 @@ public class BlackoutTerminalScreen : MonoBehaviour
             value = value * 10 + m_entry[i];
 
         // 결과는 여기서 판단하지 않는다 — 맞으면 화면이 꺼지고 틀리면 코드가 새로 뽑혀 다시 그려진다.
+        m_submitted = true;
         m_terminal.SubmitCode(value);
     }
 
