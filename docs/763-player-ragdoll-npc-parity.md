@@ -1,6 +1,6 @@
-# 플레이어 래그돌을 NPC 구조로 — 1단계: 사망 중 소유권 이관 (#763, 계획)
+# 플레이어 래그돌을 NPC 구조로 (#763, 계획)
 
-> 브랜치: `feature/759-player-ragdoll` · **1단계(권위)만 이 문서의 범위다**
+> 브랜치: `feature/759-player-ragdoll` · **1단계 = 권위(§0~§7) · 2단계 = 모델 단일화(§8)**
 >
 > 선행 문서(읽는 순서): [npc-ragdoll.md](npc-ragdoll.md) §2(정착은 상태가 아니다) →
 > [728-player-pose-streaming.md](728-player-pose-streaming.md) §1·§4 →
