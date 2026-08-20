@@ -485,9 +485,9 @@ public class BombDevice : NetworkBehaviour
 
         NotifyBlastDeaths();
 
-        // 반경 내 NPC 넉백 — 서버 권위. 플레이어와 달리 NPC 이동은 서버의 NavMeshAgent가 쥐고
-        // 클라는 NetworkTransform으로 결과만 받으므로, 뷰가 아니라 여기서 직접 날린다.
-        ServerKnockbackNpcs();
+        // 반경 내 NPC 피해·넉백 — 서버 권위. 플레이어와 달리 RPC가 없다: 시체 자세는
+        // RagdollPoseStreamer가 서버에서만 굴려 원격에 흘린다(PoseAuthority.Server).
+        ServerBlastNpcs();
 
         // 진압봉 즉발도 여기로 오므로 main의 '시간 초과' 문구는 쓰지 않는다 (#399 추격 폭탄).
         Debug.Log(
@@ -622,8 +622,9 @@ public class BombDevice : NetworkBehaviour
         return horizontal + Vector3.up * (horizontal.magnitude * m_ragdollLiftRatio);
     }
 
-    // 반경 내 NPC를 폭심 반대쪽으로 날린다. 한 사람이 콜라이더 여러 개로 잡히므로 집합으로 한 번만 민다.
-    private void ServerKnockbackNpcs()
+    // 반경 내 NPC에 피해를 주고, 죽으면 시체를 날리고 살아 있으면 넉백만 건다.
+    // 한 사람이 콜라이더 여러 개로 잡히므로 집합으로 한 번만 처리한다.
+    private void ServerBlastNpcs()
     {
         int hitCount = Physics.OverlapSphereNonAlloc(transform.position, m_explosionRadius, s_blastColliders);
 
@@ -638,7 +639,24 @@ public class BombDevice : NetworkBehaviour
             if (npc == null || !s_blastNpcs.Add(npc))
                 continue;
 
-            npc.Knockback.ServerApplyKnockback(EvaluateKnockback(npc.transform.position));
+            Vector3 position = npc.transform.position;
+            int damage = EvaluateDamage(position);
+            if (damage <= 0)
+                continue;
+
+            // 환경 피해로 넣는다 — TakeDamage의 게이트는 연행 중을 막는다 (차량과 같은 이유, #690)
+            npc.Health.TakeEnvironmentalDamage(damage, gameObject);
+
+            // ⚠ 죽은 NPC에 넉백을 걸면 시체가 Stunned로 되살아난다 — 이 분기가 그 방지다
+            if (npc.Death.IsDead)
+            {
+                if (npc.Ragdoll != null)
+                    npc.Ragdoll.EnterRagdoll(EvaluateRagdollImpulse(position));
+            }
+            else
+            {
+                npc.Knockback.ServerApplyKnockback(EvaluateKnockback(position));
+            }
         }
     }
 
