@@ -60,9 +60,10 @@ public sealed class AssignmentLog
             : $"  [위조: {profile.CitizenName}→{profile.m_nameView}]";
 
         string bountyTag = identity.Bounty > 0 ? $"  [현상금 {identity.Bounty}원]" : "";
+        string conditionTag = isSuspect ? $"  [{identity.WantedCondition}]" : "";
 
         m_builder.AppendLine(
-            $"  {profile.CitizenName} | {profile.m_typeView} | {profile.m_factionView}{roleTag}{forgeryTag}{bountyTag}"
+            $"  {profile.CitizenName} | {profile.m_typeView} | {profile.m_factionView}{roleTag}{forgeryTag}{bountyTag}{conditionTag}"
         );
     }
 

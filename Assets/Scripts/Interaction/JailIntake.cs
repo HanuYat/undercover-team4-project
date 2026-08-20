@@ -177,11 +177,11 @@ public class JailIntake : CommonManagerBase
             // 오검거 — 감옥에 들이지 않는다. 행선지(원한 구역 수용)는 WrongfulArrestPenalty가 같은
             // 판정 이벤트를 이미 받아 정했고, 그 매니저가 없는 씬에서는 CustodyRouter가 배회로 돌려보낸다.
             // 여기서는 남은 줄을 걷고 일으켜 세우기만 한다 — 누운 채 끌려가는 그림을 없앤다.
-            if (result.Value.Verdict == ArrestVerdict.WrongfulArrest)
+            if (!result.Value.Verdict.IsCredited())
             {
-                npc.Custody.SetJailExtracted(false); // 반출했던 대상이 오검거로 뒤집힌 경우 표식을 걷어낸다 (#517)
+                npc.Custody.SetJailExtracted(false); // 반출했던 대상이 뒤집힌 경우 표식을 걷어낸다 (#517)
                 PlayerEscorter.ReleaseAllTethersOn(npc, null);
-                Debug.Log($"[감옥] 오검거 — 감옥에 들이지 않고 문 앞에서 놓는다: {npc.name}");
+                Debug.Log($"[감옥] {result.Value.Verdict} — 감옥에 들이지 않고 문 앞에서 놓는다: {npc.name}");
                 continue;
             }
 
@@ -248,10 +248,10 @@ public class JailIntake : CommonManagerBase
         // 자리도 축내지 않는다. 오검거 집계는 판정이 이미 했다(ArrestJudge.JudgeCorpse).
         //
         // 줄은 걷는다 — 안 걷으면 관절이 남아 운반자를 계속 따라다닌다(아래 수감 경로와 같은 사정).
-        if (result.Value.Verdict == ArrestVerdict.WrongfulArrest)
+        if (!result.Value.Verdict.IsCredited())
         {
             PlayerEscorter.ReleaseAllTethersOnCorpse(npc);
-            Debug.Log($"[감옥] 오검거 시체 — 감옥에 들이지 않고 문 앞에 둔다: {npc.name}");
+            Debug.Log($"[감옥] {result.Value.Verdict} 시체 — 감옥에 들이지 않고 문 앞에 둔다: {npc.name}");
             return true;
         }
 

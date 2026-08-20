@@ -215,6 +215,18 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: -257
       objectReference: {fileID: 0}
+    - target: {fileID: 4736110391898325161, guid: 868ef7eaf350e6f42885f5a350af2a9b, type: 3}
+      propertyPath: m_fontSize
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 4736110391898325161, guid: 868ef7eaf350e6f42885f5a350af2a9b, type: 3}
+      propertyPath: m_fontStyle
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4736110391898325161, guid: 868ef7eaf350e6f42885f5a350af2a9b, type: 3}
+      propertyPath: m_fontSizeBase
+      value: 20
+      objectReference: {fileID: 0}
     - target: {fileID: 5469376534437670805, guid: 868ef7eaf350e6f42885f5a350af2a9b, type: 3}
       propertyPath: m_Pivot.y
       value: 1
@@ -266,6 +278,10 @@ PrefabInstance:
     - target: {fileID: 6010041694323957873, guid: 868ef7eaf350e6f42885f5a350af2a9b, type: 3}
       propertyPath: m_IsActive
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7287682260269669548, guid: 868ef7eaf350e6f42885f5a350af2a9b, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 190
       objectReference: {fileID: 0}
     - target: {fileID: 7574304464748618407, guid: 868ef7eaf350e6f42885f5a350af2a9b, type: 3}
       propertyPath: m_Pivot.x

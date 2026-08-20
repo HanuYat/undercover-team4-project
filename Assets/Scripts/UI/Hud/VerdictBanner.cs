@@ -26,6 +26,7 @@ public class VerdictBanner : PanelBase
     [SerializeField] private Color m_positiveColor = new Color(0.20f, 0.70f, 0.35f); // 진범 검거
     [SerializeField] private Color m_negativeColor = new Color(0.80f, 0.25f, 0.25f); // 오검거
     [SerializeField] private Color m_neutralColor  = new Color(0.45f, 0.45f, 0.50f); // 경범죄
+    [SerializeField] private Color m_cautionColor  = new Color(0.85f, 0.55f, 0.15f); // 생포 조건 불충족 (#766)
 
     [Header("표시 시간")]
     [SerializeField] private float m_displaySeconds = 3f;
@@ -151,12 +152,10 @@ public class VerdictBanner : PanelBase
         m_detailBound = false;
     }
 
-    // 오검거만 실패음이고 나머지는 성공음이다. 경범죄는 톤 색이 중립이라 소리도 비워 뒀었는데,
-    // 실제로 잡아 보면 "제대로 처리했다"는 확인이 없어 실패한 것처럼 읽혔다 — 난동꾼 연행은 수익이
-    // 나는 정상 처리이므로 성공 쪽에 둔다. 갈리는 기준은 '보상이 있었는가'가 아니라 '잘못 잡았는가'다.
+    // 갈리는 기준은 '계상됐는가'다 — 계상 안 되는 판정(오검거·생포 조건 불충족)만 실패음. (#766)
     private static EAudioClip VerdictToSound(ArrestVerdict verdict)
     {
-        return verdict == ArrestVerdict.WrongfulArrest ? EAudioClip.UiFail : EAudioClip.UiSuccess;
+        return verdict.IsCredited() ? EAudioClip.UiSuccess : EAudioClip.UiFail;
     }
 
     private Color VerdictToColor(ArrestVerdict verdict)
@@ -165,6 +164,7 @@ public class VerdictBanner : PanelBase
         {
             ArrestVerdict.WantedCriminal => m_positiveColor,
             ArrestVerdict.Misdemeanor => m_neutralColor,
+            ArrestVerdict.ConditionUnmet => m_cautionColor,
             _ => m_negativeColor,
         };
     }

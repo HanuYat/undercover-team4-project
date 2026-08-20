@@ -67,6 +67,9 @@ public class CitizenIdentity : NetworkBehaviour
     /// </summary>
     public int Bounty { get; private set; }
 
+    /// <summary>수배 조건(생사 불문/생포 필수) — Bounty와 같은 성격(서버 전용), ArrestJudge가 읽는다. (#766)</summary>
+    public WantedCondition WantedCondition { get; private set; }
+
     // ---- 동기화 수신 (클라이언트) ----
 
     public override void OnNetworkSpawn()
@@ -189,5 +192,11 @@ public class CitizenIdentity : NetworkBehaviour
     public void AssignBounty(int bounty)
     {
         Bounty = bounty;
+    }
+
+    /// <summary>수배 조건을 배정한다. CriminalAssigner 전용. (서버 전용 — 동기화 없음, #766)</summary>
+    public void AssignWantedCondition(WantedCondition condition)
+    {
+        WantedCondition = condition;
     }
 }
