@@ -38,6 +38,7 @@ public class TeamStatusPanel : PanelBase
     private readonly List<PlayerHealth> m_health = new List<PlayerHealth>();
     private readonly List<PlayerIncapacitation> m_incapacitation = new List<PlayerIncapacitation>();
     private readonly List<PlayerNameTag> m_nameTags = new List<PlayerNameTag>();
+    private readonly List<PlayerCosmetics> m_cosmetics = new List<PlayerCosmetics>();
 
     public override void OpenPanel()
     {
@@ -127,12 +128,14 @@ public class TeamStatusPanel : PanelBase
         m_health.Clear();
         m_incapacitation.Clear();
         m_nameTags.Clear();
+        m_cosmetics.Clear();
         for (int i = 0; i < m_players.Count; i++)
         {
             NetworkObject player = m_players[i];
             m_health.Add(player != null ? player.GetComponent<PlayerHealth>() : null);
             m_incapacitation.Add(player != null ? player.GetComponent<PlayerIncapacitation>() : null);
             m_nameTags.Add(player != null ? player.GetComponent<PlayerNameTag>() : null);
+            m_cosmetics.Add(player != null ? player.GetComponent<PlayerCosmetics>() : null);
         }
 
         if (m_rowContainer == null || m_rowPrefab == null)
@@ -153,10 +156,18 @@ public class TeamStatusPanel : PanelBase
             m_rows[i].SetName(NameOf(i));
 
             // 로비에서 구운 얼굴을 그대로 쓴다 — 게임 씬에서 다시 구우면 맵 조명을 타 어둡게 나온다.
-            m_rows[i].SetPortrait(LobbyPortraitStage.SessionPortrait);
+            // 사람마다 고른 색이 다르므로 그 사람 색으로 찾는다 (#432)
+            m_rows[i].SetPortrait(PortraitOf(i));
         }
 
         RefreshRows();
+    }
+
+    // 색을 아직 못 읽었으면(스폰 직후) 얼굴 없이 둔다 — 남의 얼굴을 대신 띄우지 않는다
+    private Texture PortraitOf(int index)
+    {
+        PlayerCosmetics cosmetics = index < m_cosmetics.Count ? m_cosmetics[index] : null;
+        return cosmetics != null ? LobbyPortraitStage.GetSessionPortrait(cosmetics.Colors) : null;
     }
 
     private void RefreshRows()
@@ -177,6 +188,11 @@ public class TeamStatusPanel : PanelBase
             // 채워진 뒤엔 바뀌지 않으므로 매 프레임 문자열을 만들지 않는다.
             if (!m_rows[i].HasName)
                 m_rows[i].SetName(NameOf(i));
+
+            // 얼굴도 같은 이유로 다시 묻는다 — 색은 오너 쓰기 NetworkVariable이라 스폰과 같은
+            // 프레임에는 아직 안 와 있고, 그때 한 번만 넣으면 빈 칸으로 굳는다. (#432)
+            if (!m_rows[i].HasPortrait)
+                m_rows[i].SetPortrait(PortraitOf(i));
         }
     }
 

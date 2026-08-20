@@ -56,6 +56,9 @@ public class SessionRoster : NetworkedManagerBase
         // 음소거를 바꾸면 다시 보고한다 — 자기 것만 올리므로 서버·클라 구분이 없다 (#430)
         GameSettings.OnMicMutedChanged += HandleMicMutedChanged;
 
+        // 로봇 색도 같은 경로로 올린다 (#432)
+        GameSettings.OnPlayerColorChanged += HandlePlayerColorChanged;
+
         // 자기 정보 보고. 호스트도 자기 행이 필요하므로 서버·클라 구분 없이 부른다.
         ReportSelfRpc(BuildSelf());
     }
@@ -63,6 +66,7 @@ public class SessionRoster : NetworkedManagerBase
     public override void OnNetworkDespawn()
     {
         GameSettings.OnMicMutedChanged -= HandleMicMutedChanged;
+        GameSettings.OnPlayerColorChanged -= HandlePlayerColorChanged;
 
         // 세션이 끝나 명부가 사라질 때 반드시 뗀다 — 죽은 객체를 가리키는 구독이 남는다.
         if (IsServer && NetworkManager != null)
@@ -138,9 +142,14 @@ public class SessionRoster : NetworkedManagerBase
 
     // 음소거가 바뀌면 자기 보고를 다시 보낸다 — 전용 RPC를 만들지 않는다. ReportSelfRpc가 중복 보고를
     // 갱신으로 흡수하므로(행이 두 개로 늘지 않는다) 상태를 나르는 경로가 하나로 유지된다. (#430)
-    private void HandleMicMutedChanged(bool _)
+    private void HandleMicMutedChanged(bool _) => ReportSelf();
+
+    private void HandlePlayerColorChanged(EBodyPart _) => ReportSelf();
+
+    private void ReportSelf()
     {
-        if (IsSpawned) ReportSelfRpc(BuildSelf());
+        if (IsSpawned)
+            ReportSelfRpc(BuildSelf());
     }
 
     // 닉네임·PlayerId는 각 클라의 로컬 값이다 (AuthBootstrap — PlayerPrefs + UGS, #249)
@@ -157,6 +166,7 @@ public class SessionRoster : NetworkedManagerBase
             Nickname = nickname,
             PlayerId = playerId,
             MicMuted = GameSettings.MicMuted,
+            Colors = PlayerColorSet.FromSettings(),
         };
     }
 }
