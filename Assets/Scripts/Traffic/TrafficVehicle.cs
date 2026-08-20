@@ -406,10 +406,12 @@ public class TrafficVehicle : NetworkBehaviour
     // 피해는 TakeEnvironmentalDamage로 넣는다 (#690) — 밧줄 신병은 TakeDamage의 우회 방지 게이트에
     // 막혀 차에 치여도 죽지 않았다. 그 게이트는 플레이어 타격용이지 차는 신병 상태를 가리지 않는다.
     //
-    // ⚠ <b>넉백이 피해보다 먼저다.</b> 피해가 먼저 가면 대상이 죽어 상태가 Dead가 되는데
-    // ServerApplyKnockback은 그 상태를 거르지 않아 시체를 Stunned로 되살린다. 이 순서면
+    // ⚠ <b>넉백이 피해보다 먼저다.</b> 피해가 먼저 가면 대상이 죽어 상태가 Dead가 되고,
+    // ServerApplyKnockback은 Dead·Jailed·Intruding을 이미 걸러 넉백이 씹힌다(NpcKnockback 참고). 이 순서면
     // 사망 처리(NpcDeath.ServerEnterDead ①)가 비행을 스스로 끊는다 — 즉 <b>죽는 시민은 그 자리에
-    // 무너진다.</b> 시체를 날리는 임펄스는 폭발(#506)과 같은 전 피어 통로가 필요해 여기서는 걸지 않는다.
+    // 무너진다.</b> 시체 임펄스는 여기서 걸지 않는다.
+    // ⚠ "전 피어 통로가 필요해서"라던 옛 근거는 #728 이후 사실이 아니다 — NPC 시체 자세는
+    //   RagdollPoseStreamer가 서버에서만 굴려 흘리므로 서버 임펄스 하나면 된다 (폭탄이 그렇게 한다, #768).
     //
     // <b>장부는 시체를 못 막는다.</b> m_hitNpcs는 이 차의 한 번의 주행 안에서만 유효한데, 시체는
     // 도로에 남으므로 <b>다음 차가 같은 시체를 다시 친다</b>. 그래서 시체 거르기는 여기가 아니라
