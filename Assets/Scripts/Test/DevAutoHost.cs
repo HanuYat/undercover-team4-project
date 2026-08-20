@@ -40,6 +40,14 @@ public class DevAutoHost : MonoBehaviour
         // 콜백을 등록하는데, 그 전에 StartHost하면 호스트 플레이어가 스폰 포인트를 못 받고 원점에 생성된다(#247).
         await UniTask.NextFrame(this.GetCancellationTokenOnDestroy());
 
+        // #628 이후로는 ConnectionApprovalGate.Install()이 걸려야 SpawnPolicy가 실제로 불린다 —
+        // 정식 흐름(SessionManager.CreateSessionAsync)을 안 타는 이 경로는 직접 걸어야 한다.
+        if (App.Net.Session != null)
+        {
+            ConnectionApprovalGate.StampLocalVersion(nm);
+            App.Net.Session.Approval.Install(nm);
+        }
+
         nm.StartHost(); // 로컬 호스트 — Relay/세션 코드 불필요
 
         await UniTask.NextFrame(this.GetCancellationTokenOnDestroy()); // NGO 서버 준비 보장
@@ -69,7 +77,11 @@ public class DevAutoHost : MonoBehaviour
 
         GUILayout.BeginArea(new Rect(10, 10, 260, 60));
         if (GUILayout.Button("클라이언트로 참가 (127.0.0.1)"))
+        {
+            // 안 찍으면 페이로드가 비어 호스트의 버전 게이트가 "?"로 보고 거부한다 (#628).
+            ConnectionApprovalGate.StampLocalVersion(nm);
             nm.StartClient();
+        }
         GUILayout.EndArea();
     }
 }
