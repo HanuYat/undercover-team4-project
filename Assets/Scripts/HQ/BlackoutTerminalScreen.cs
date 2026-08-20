@@ -66,7 +66,7 @@ public class BlackoutTerminalScreen : MonoBehaviour
 
     private void OnEnable()
     {
-        m_entry.Clear(); // 화면이 켜지는 순간이 곧 해킹 시작이다
+        ClearEntry(); // 화면이 켜지는 순간이 곧 해킹 시작이다
 
         if (m_terminal != null)
             m_terminal.OnCodeChanged += HandleCodeChanged;

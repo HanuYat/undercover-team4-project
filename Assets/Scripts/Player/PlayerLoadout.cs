@@ -67,10 +67,10 @@ public class PlayerLoadout : NetworkBehaviour
     // 인벤토리 UI(#144)가 편집 모드 진입 게이트에 쓰므로 public.
     public bool IsIncapacitated => m_incapacitation != null && m_incapacitation.IsIncapacitated;
 
-    // 본부 복구 단말을 보고 있는 중인가 (#762). 단말은 코드를 숫자 키로 받는데(BlackoutTerminalScreen)
-    // 슬롯 직접 선택도 숫자키 1~3이라, 막지 않으면 코드를 누를 때마다 손에 든 것이 바뀐다.
-    // 시점·이동은 PlayerTerminalFocus.ApplyLocks가 이미 잠그고 있고 이것이 그 짝이다.
-    private bool IsTerminalFocused => m_terminalFocus != null && m_terminalFocus.IsFocusing;
+    // 본부 복구 단말을 보고 있는 중인가 (#762). 단말이 코드를 숫자 키로 받는데 슬롯 선택도 숫자키라
+    // 막지 않으면 코드를 누를 때마다 손에 든 것이 바뀐다. 인벤토리 UI(#144)도 편집 모드 진입
+    // 게이트에 쓰므로 public — IsIncapacitated와 같은 이유다.
+    public bool IsTerminalFocused => m_terminalFocus != null && m_terminalFocus.IsFocusing;
 
     /// <summary>고정 3칸 슬롯 (빈 칸 = null). 인벤토리 UI(#144)·휠 전환(#46)이 사용한다. (오너 로컬)</summary>
     public IReadOnlyList<ItemBase> Slots => m_slotModel.Slots;
