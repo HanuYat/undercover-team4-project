@@ -36,6 +36,13 @@ public class MinimapViewer : MonoBehaviour
 
     private RectTransform AreaParent => m_areaContainer != null ? m_areaContainer : m_iconContainer;
 
+    // 배선된 덮개가 켜진 채 저장돼 있으면 첫 먹통 전까지 지도가 검다 — 시작 상태를 여기서 맞춘다.
+    private void Awake()
+    {
+        if (m_blackoutCover != null)
+            m_blackoutCover.enabled = false;
+    }
+
     private void LateUpdate()
     {
         ApplyBlackout(IsBlackout());
