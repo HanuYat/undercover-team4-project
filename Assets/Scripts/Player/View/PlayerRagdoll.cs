@@ -85,8 +85,8 @@ public class PlayerRagdoll : MonoBehaviour
              "⚠ <b>즉시 대입은 위험하다.</b> 몸 방향은 골반→머리를 투영해 얻는데 그 값은 몸이 " +
              "막 기우는 동안 아직 흔들린다. 그때 루트를 그대로 슬램하면 루트에 매달린 것들 " +
              "(이름표·상호작용·들고 있던 아이템 모델)이 한 프레임에 통째로 돌아간다.\n\n" +
-             "감쇠는 그 흔들림을 흡수한다. 목표가 안정된 뒤에는 곧 수렴하므로 정착 정렬 " +
-             "(ResolveSettledRootPose)에 남는 잔차는 작다")]
+             "감쇠는 그 흔들림을 흡수한다. 목표가 안정된 뒤에는 곧 수렴하므로 정착 시점에 남는 " +
+             "잔차는 작다 — 정착은 더 이상 루트를 옮기지 않고 이 추종만이 루트를 맞춘다")]
     [SerializeField] private float m_rootYawFollowSpeed = 8f;
 
     [Tooltip("몸 방향 대비 루트 yaw 보정(도) — Knockdown_StandUp 클립이 어느 쪽을 머리로 보는지에 맞춘다. " +
@@ -376,6 +376,36 @@ public class PlayerRagdoll : MonoBehaviour
     ///
     /// <see cref="RagdollRig"/>가 아니라 여기서 하는 이유는 분리의 기준이다 — 저쪽에는
     /// <c>IsOwner</c>·<c>NetworkObject</c>가 한 번도 나오지 않는다.
+    ///
+    /// <b>─── 정착해도 얼리지 않는다 ───</b> (정착이 몸을 건드리지 않게 되면서 옛 <c>RestToPhysics</c>의
+    /// 기록을 여기로 옮겼다. 뼈를 물리에 놓는 자리가 이제 여기 하나뿐이다)
+    ///
+    /// 정착 = 완전 정지가 아니다. <b>뼈를 전부 물리에 두고, 그대로 둔다.</b>
+    ///
+    /// 네 번째 방식이다. 앞의 셋은 각각 반쪽만 얻었다:
+    ///  · <b>전부 키네마틱</b> — 운반은 되지만 몸이 하나의 자세로 굳는다 (처음 구현)
+    ///  · <b>골반만 키네마틱</b> — 둘 다 얻은 것처럼 보였지만 <b>§9-7의 원인이었다</b> (아래)
+    ///  · <b>전부 물리 + 골반을 캡슐에 스프링으로</b> — 세게 잡으면 시체가 떠오르고, 약하게 잡으면
+    ///    마찰(412N)을 못 이겨 안 끌린다. <b>수직으로 지고 수평으로 이기는 스프링은 없다</b>
+    ///
+    /// <b>골반만 키네마틱이 왜 틀렸나.</b> 키네마틱 골반은 리그 루트의 자식이라 <b>프레임 클럭</b>
+    /// (원격은 네트워크 보간)으로 움직이고, 나머지는 <b>물리 클럭</b>이다. 관절이 그 두 클럭을
+    /// 이으므로 스텝마다의 양자화 차이가 곧 관절 위반이 되고, 솔버가 한 스텝에 해소하며 사지를
+    /// 채찍처럼 당긴다 — <b>몸이 찢어진다.</b> 보간 모드도 갈려(동적 Interpolate / 키네마틱 None)
+    /// 3m/s면 골반 이음새에 상시 약 6cm 어긋남이 생겼다.
+    ///
+    /// 그리고 <b>키네마틱은 무한 강성이다</b>. 골반이 지면과 안 맞는 높이에 고정되면 거기 매달린
+    /// <c>Spine_02</c>가 지면으로 밀려 들어가고, 물리는 키네마틱 골반을 밀어낼 수 없어 매 스텝
+    /// 싸운다 — 실측 <c>Spine_02 ← 충격 121</c>이 수십 스텝 지속되며 <b>허리가 땅에 박힌 채
+    /// 몸이 부들부들 떨렸다.</b>
+    ///
+    /// <b>그래서 정착은 아무것도 붙들지 않는다.</b> 시체는 그냥 물리에 놓인 뼈다. 끌고 가는 것은
+    /// <see cref="BeginRopePull"/>이 붙이는 <b>밧줄</b>이 하고, 그동안 캡슐은
+    /// <see cref="TickCapsuleFollow"/>로 시체를 따라간다 — <b>사망 구간 내내 주인은 시체다.</b>
+    ///
+    /// <b>전 피어가 물리를 유지한다.</b> 원격에서 뼈를 키네마틱으로 굳혔다가 되돌렸다 — 굳히면
+    /// 시체가 루트 높이 하나에 매달린 조각상이 되어, 그 높이가 조금이라도 틀리면 흡수할 수단이 없어
+    /// 바닥에 박히거나 공중에 뜬다. 물리가 있으면 중력·접촉이 흡수한다. (§10-3)
     /// </summary>
     private void ReleaseBonesToPhysics()
     {
@@ -502,40 +532,6 @@ public class PlayerRagdoll : MonoBehaviour
             IgnoreOwnCapsule();
     }
 
-    /// <summary>
-    /// 정착 = 완전 정지가 아니다. <b>뼈를 전부 물리에 두고, 그대로 둔다.</b>
-    ///
-    /// 네 번째 방식이다. 앞의 셋은 각각 반쪽만 얻었다:
-    ///  · <b>전부 키네마틱</b> — 운반은 되지만 몸이 하나의 자세로 굳는다 (처음 구현)
-    ///  · <b>골반만 키네마틱</b> — 둘 다 얻은 것처럼 보였지만 <b>§9-7의 원인이었다</b> (아래)
-    ///  · <b>전부 물리 + 골반을 캡슐에 스프링으로</b> — 세게 잡으면 시체가 떠오르고, 약하게 잡으면
-    ///    마찰(412N)을 못 이겨 안 끌린다. <b>수직으로 지고 수평으로 이기는 스프링은 없다</b>
-    ///
-    /// <b>골반만 키네마틱이 왜 틀렸나.</b> 키네마틱 골반은 리그 루트의 자식이라 <b>프레임 클럭</b>
-    /// (원격은 네트워크 보간)으로 움직이고, 나머지는 <b>물리 클럭</b>이다. 관절이 그 두 클럭을
-    /// 이으므로 스텝마다의 양자화 차이가 곧 관절 위반이 되고, 솔버가 한 스텝에 해소하며 사지를
-    /// 채찍처럼 당긴다 — <b>몸이 찢어진다.</b> 보간 모드도 갈려(동적 Interpolate / 키네마틱 None)
-    /// 3m/s면 골반 이음새에 상시 약 6cm 어긋남이 생겼다.
-    ///
-    /// 그리고 <b>키네마틱은 무한 강성이다</b>. 골반이 지면과 안 맞는 높이에 고정되면 거기 매달린
-    /// <c>Spine_02</c>가 지면으로 밀려 들어가고, 물리는 키네마틱 골반을 밀어낼 수 없어 매 스텝
-    /// 싸운다 — 실측 <c>Spine_02 ← 충격 121</c>이 수십 스텝 지속되며 <b>허리가 땅에 박힌 채
-    /// 몸이 부들부들 떨렸다.</b>
-    ///
-    /// <b>그래서 정착은 아무것도 붙들지 않는다.</b> 시체는 그냥 물리에 놓인 뼈다. 끌고 가는 것은
-    /// <see cref="BeginRopePull"/>이 붙이는 <b>밧줄</b>이 하고, 그동안 캡슐은
-    /// <see cref="TickCapsuleFollow"/>로 시체를 따라간다 — <b>사망 구간 내내 주인은 시체다.</b>
-    ///
-    /// <b>전 피어가 물리를 유지한다.</b> 원격에서 뼈를 키네마틱으로 굳혔다가 되돌렸다 — 굳히면
-    /// 시체가 루트 높이 하나에 매달린 조각상이 되어, 그 높이가 조금이라도 틀리면 흡수할 수단이 없어
-    /// 바닥에 박히거나 공중에 뜬다. 물리가 있으면 중력·접촉이 흡수한다. (§10-3)
-    /// </summary>
-    private void RestToPhysics()
-    {
-        IgnoreOwnCapsule(); // 뼈를 다시 물리로 놓아주기 전에 — 정착 중 캡슐 토글이 무시를 지웠을 수 있다
-        ReleaseBonesToPhysics();
-    }
-
     // ---- 밧줄 파사드 (#365 운반 / #398 드래그) ----
     //
     // 실물은 RagdollRope가 쥔다. 여기 파사드를 두는 이유는 호출부(PlayerTowedMotion)가 "래그돌인
@@ -637,7 +633,7 @@ public class PlayerRagdoll : MonoBehaviour
 
     /// <summary>
     /// 날아가는 구간을 즉시 끝내고 정착 상태로 넘긴다 — 운반 시작(#365)처럼 외부 사정으로 몸을 캡슐에
-    /// 붙여야 할 때. 정착해도 몸이 굳지는 않는다(<see cref="RestToPhysics"/>).
+    /// 붙여야 할 때. 정착해도 몸이 굳지는 않는다(<see cref="ReleaseBonesToPhysics"/>의 주석).
     /// </summary>
     public void ForceSettle()
     {
@@ -668,10 +664,10 @@ public class PlayerRagdoll : MonoBehaviour
         m_streamer?.StopStreaming();
         m_holdPoseUntilStream = false;
 
-        if (m_state == RagdollState.Ragdoll)
-            Settle(); // 날아가는 중이면 먼저 포즈를 확정한다
+        // ⚠ 예전에는 여기서 <c>Settle()</c>을 불러 "날아가는 중이면 포즈를 확정"했다. 정착이
+        // 아무것도 옮기지 않게 된 뒤로는 할 일이 없어 지웠다(NPC의 <c>ExitRagdoll</c>도 안 부른다).
 
-        // 정착 상태에서는 뼈가 전부 물리에 있다(<see cref="RestToPhysics"/>) — 애니메이터로 돌아가려면
+        // 정착해도 뼈는 전부 물리에 있다(<see cref="ReleaseBonesToPhysics"/>의 주석) — 애니메이터로 돌아가려면
         // 전부 멈춰야 한다. 안 멈추면 블렌드가 놓는 포즈를 물리가 매 스텝 덮는다.
         // 밧줄을 먼저 끊는다: 키네마틱 바디에는 관절이 안 먹지만, 순서를 뒤집으면 한 스텝 동안
         // 스프링이 블렌드 시작 포즈를 당긴다.
@@ -686,8 +682,9 @@ public class PlayerRagdoll : MonoBehaviour
         // 있으므로 캡슐과 겹칠 일이 없다.
         HideCorpse();
 
-        // 캡슐을 되살린다 (§10-0 — 사망 중 꺼 뒀다). 이 시점의 루트는 정착 정렬이 지면 위에
-        // 놓아 둔 자리이므로(ResolveSettledRootPose가 CapsuleBottomOffset까지 보정) 그대로 켜면 된다.
+        // 캡슐을 되살린다 (§10-0 — 사망 중 꺼 뒀다). 이 시점의 루트는 캡슐 추종
+        // (<see cref="TickCapsuleFollow"/>)이 매 프레임 지면 위에 놓아 둔 자리라 그대로 켜면 된다 —
+        // 그쪽이 <see cref="CapsuleBottomOffset"/>까지 보정한다.
         SetControllerEnabled(true);
         m_movement?.ClearExternalVelocity(); // 꺼져 있던 동안 쌓인 값이 도착지에서 바닥을 파고들지 않게 (#189)
 
@@ -1726,8 +1723,8 @@ public class PlayerRagdoll : MonoBehaviour
         // <b>공중에서는 앉히지 않는다</b> — 날아가는 동안 루트가 시체를 대표해야 이름표·운반
         // 조준·부활 히트박스가 따라간다. 그래서 <b>골반이 낮을 때만</b>이다.
         //
-        // 지면 판정은 정착 정렬(ResolveSettledRootPose)과 같은 것을 쓴다 — 두 곳이 다른 높이를
-        // 내면 정착하는 순간 캡슐이 튄다.
+        // 몸이 바닥에 있으면 루트 높이는 <b>지면</b>이 준다 — 정착이 아무것도 옮기지 않으므로
+        // 루트가 지면에 있는 것은 여기가 유일한 보장이다. (NpcRagdoll.TickRootFollow와 같은 선)
         bool haveGround = TryGroundUnder(m_rig.Hips.position, out Vector3 ground);
         bool bodyIsGrounded =
             m_settled
@@ -1771,8 +1768,10 @@ public class PlayerRagdoll : MonoBehaviour
         // 같이 도는데 Head는 동적이라 안 따라가므로 목이 그 사이에서 비틀린다. 게다가 yaw를
         // 머리 위치에서 계산하므로 같은 프레임에 되먹임 고리가 생겨 회전이 멎지 않는다.
         //
-        // 정착 후의 yaw는 ResolveSettledRootPose가 이미 확정했다 — 시체는 방향을 바꾸지 않는다.
-        if (m_state == RagdollState.Ragdoll)
+        // 정착 후에는 멈춘다 — 잠든 시체는 방향을 바꾸지 않으므로 따라갈 것이 없다.
+        // ⚠ <b>깃발로 물어야 한다.</b> 시체도 끝까지 <c>Ragdoll</c> 상태이므로 상태로 물으면
+        // 정착 뒤에도 계속 돌아 위 되먹임 고리가 되살아난다.
+        if (!m_settled)
             FollowBodyYaw();
 
         // 위 CapturePose의 짝 — 루트를 옮기고 돌린 뒤 뼈를 원래 월드 포즈로 되돌린다.
@@ -1802,8 +1801,7 @@ public class PlayerRagdoll : MonoBehaviour
     }
 
     // 루트가 향해야 할 yaw — 리그가 내는 순수한 몸 방향에 기상 클립 보정을 얹은 값.
-    // 비행 중 추종(FollowBodyYaw)과 정착 정렬(ResolveSettledRootPose)이 같은 계산을 써야
-    // 정착 순간에 회전이 안 튄다.
+    // 이제 이 값을 쓰는 곳은 <see cref="FollowBodyYaw"/> 하나뿐이다(정착은 루트를 안 건드린다).
     private bool TryGetRootYaw(out float yaw)
     {
         if (!m_rig.TryGetBodyYaw(out yaw))
@@ -1839,109 +1837,42 @@ public class PlayerRagdoll : MonoBehaviour
         m_streamer?.ResumeStreaming();
     }
 
+    /// <summary>
+    /// 정착 — <b>몸도 루트도 건드리지 않는다.</b> 하는 일은 깃발을 세우고 스트림을 끊는 것뿐이다.
+    ///
+    /// 예전에는 여기서 ① 자세를 캡처하고 ② 전 뼈를 키네마틱으로 뒤집고 ③ 루트를 골반 밑 지면으로
+    /// 텔레포트하고 ④ 다시 물리로 놓아줬다. 그 넷이 <b>정착 순간의 이음새</b>였다 — 뼈가 한 프레임
+    /// 얼고, 루트에 매달린 이름표가 뛰었다.
+    ///
+    /// <b>루트 정렬이 사라져도 되는 이유는 이미 매 프레임 하고 있기 때문이다</b> —
+    /// <see cref="TickCapsuleFollow"/>가 래그돌 내내 캡슐을 몸 밑으로 끌고 다니고
+    /// (<see cref="FollowBodyYaw"/>로 yaw까지), 몸이 바닥에 있으면 높이는 지면이 준다.
+    /// NPC가 <c>TickRootFollow</c>로 같은 보장을 만들어 정착에서 정렬을 걷어낸 것과 같은 선이다.
+    /// </summary>
     private void Settle()
     {
         if (m_settled)
             return;
 
-        DumpFallRate("정착"); // 무너짐이 끝난 지점 — 창이 닫히기 전이면 여기가 마감이다
-        m_rig.CapturePose();
-        Vector3 landedHips = m_rig.Hips.position;
-
-        m_rig.SetKinematic(true);
-
-        // 캡슐은 진입 때 이미 꺼져 있다(§10-0) — 여기서 토글할 것이 없다. 켜져 있으면 지면 레이가
-        // 자기 캡슐에 걸리고(캡슐도 Default 레이어다) 트랜스폼 대입도 내부 캐시가 되돌린다.
-
-        Vector3 rootPosition = m_root.position;
-        Quaternion rootRotation = m_root.rotation;
-        float rootYawBefore = m_root.eulerAngles.y;
-        ResolveSettledRootPose(landedHips, ref rootPosition, ref rootRotation);
-
-        if (HasMoveAuthority)
-        {
-            m_root.SetPositionAndRotation(rootPosition, rootRotation);
-
-            // 텔레포트로 도착했으니 쌓인 수직 속도를 지운다 — <see cref="PlayerMovement.SetPose"/>가
-            // 같은 이유로 하는 처리다(#189). 여기는 SetPose를 거치지 않고 트랜스폼을 직접 옮기므로
-            // 그 짝이 필요하다.
-            m_movement?.ClearExternalVelocity();
-        }
-
-        // 루트 yaw 정렬이 실제로 닿는지 잰다 — 부활 회전 진단의 절반이 여기다. 부활 시점의 루트가
-        // 오프셋을 바꿔도 안 변한다면, 원인은 클립 상수가 아니라 <b>이 대입이 안 먹는 것</b>이다.
-        if (m_logRevivalYaw)
-        {
-            bool haveYaw = m_rig.TryGetBodyYaw(out float bodyYaw);
-            Debug.Log(
-                $"[래그돌 정착 yaw] 권한={HasMoveAuthority} "
-                    + $"몸={(haveYaw ? bodyYaw.ToString("F1") : "실패")}° "
-                    + $"정렬={m_alignRootYawToBody} 오프셋={m_rootYawOffset:F1}° "
-                    + $"→ 목표 {rootRotation.eulerAngles.y:F1}° / "
-                    + $"루트 {rootYawBefore:F1}° → {m_root.eulerAngles.y:F1}°",
-                this
-            );
-        }
-
-        m_rig.RestoreCapturedPose();
-
-        // 루트가 더 이상 나중에 점프하지 않으므로 양쪽 모두 곧장 물리로 놓아준다 — 누운 몸이 계속
-        // 흔들리게. 원격의 릴리스 타이밍을 재던 유예 구간은 이 설계에서 사라졌다.
-        RestToPhysics();
+        DumpFallRate("정착");
 
         m_settled = true;
         DumpSettleTrace();
 
-        // 스트림을 끊고 <b>마지막 자세를 로컬 좌표로</b> 한 번 보낸다 — 원격의 종착 상태다.
-        //
-        // ⚠ <b>얼림과 스트림 종료가 여기서 갈린다.</b> NPC는 정착 = 얼림이라 둘이 붙어 있었지만,
-        // 플레이어는 정착해도 권위 피어의 뼈가 물리에 남는다(<see cref="RestToPhysics"/>의 네 가지
-        // 실패 기록). 스트리머가 요구하는 것은 얼림이 아니라 <b>"권위의 몸이 더 이상
-        // 유의미하게 움직이지 않는다"</b>뿐이라 그것만 떼어 붙이면 된다.
+        // 스트림을 끊고 마지막 자세를 한 번 더 보낸다 — 원격의 종착 상태다.
+        // ⚠ <b>좌표계는 바뀌지 않는다 — 스트리밍과 같은 월드다.</b> 그래서 원격은 이 패킷을 받아도
+        // 화면이 변하지 않는다. 그것이 사양이다: 정착은 "스트림이 멈췄다"는 사실일 뿐이고 몸은
+        // 이미 그 자세를 그리고 있다.
         m_streamer?.EndStreaming();
     }
 
-    // 정착 후 루트가 있어야 할 포즈 — 골반 밑 지면 위, 몸이 누운 방향을 향해.
-    //
-    // yaw까지 맞추는 이유는 기상 모션이다. Knockdown_StandUp은 "루트 전방을 향해 등을 대고 누워
-    // 있다"를 전제하므로, 래그돌이 옆으로 굴러 있으면 부활 블렌드에서 몸이 휙 돌아간다.
-    private void ResolveSettledRootPose(
-        Vector3 landedHips,
-        ref Vector3 position,
-        ref Quaternion rotation
-    )
-    {
-        // 지면 점에 루트 원점을 그대로 놓으면 안 된다 — 루트 원점은 캡슐 밑면이 아니다.
-        // 캡슐은 center.y ± height/2 범위라 밑면이 루트보다 (center.y - height/2)만큼 위에 있고
-        // (이 프리팹은 3cm), 그대로 두면 캡슐이 떠서 출발한다. CharacterController는 Move()를 한 번
-        // 돌기 전까지 isGrounded가 거짓이라 그동안 중력이 쌓이고, 그 낙하가 시체를 끌어내린다.
-        position = GroundUnder(landedHips) - Vector3.up * CapsuleBottomOffset;
-
-        // 비행 중 이미 맞춰 온 값이라 보통 잔차만 남는다 — 추종이 꺼져 있거나 오프라인일 때가 본작업.
-        if (m_alignRootYawToBody && TryGetRootYaw(out float yaw))
-            rotation = Quaternion.Euler(0f, yaw, 0f);
-    }
-
-    // 루트 원점에서 캡슐 밑면까지의 높이 — 위 ResolveSettledRootPose 주석 참고.
+    // 루트 원점에서 캡슐 밑면까지의 높이. 지면 점에 루트 원점을 그대로 놓으면 안 되기 때문이다 —
+    // 캡슐 밑면이 루트보다 (center.y - height/2)만큼 위에 있어(이 프리팹은 3cm) 그대로 두면 캡슐이
+    // 떠서 출발하고, CharacterController는 Move()를 한 번 돌기 전까지 isGrounded가 거짓이라
+    // 그동안 쌓인 중력이 몸을 끌어내린다.
     private float CapsuleBottomOffset =>
         m_controller == null ? 0f : m_controller.center.y - m_controller.height * 0.5f;
 
-    // 정착 정렬용 지면 — 여기까지 왔다면 보통 지면이 있다(Update가 없으면 정착을 미룬다).
-    //
-    // ⚠ 못 찾는 경우는 <b>맵 밖으로 떨어진 시체</b>뿐이고, 그때는 골반 높이를 쓴다. 예전 주석은
-    // "CharacterController의 중력이 남은 차이를 메운다"고 적었지만 <b>그건 거짓이다</b> — 원격은
-    // PlayerMovement가 꺼져 있어 중력이 돌지 않는다. 그래서 이 경로로 오지 않게 막는 것이
-    // Update의 지면 판정이다.
-    private Vector3 GroundUnder(Vector3 hipsPosition)
-    {
-        bool hitGround = TryGroundUnder(hipsPosition, out Vector3 point);
-        return hitGround ? point : hipsPosition;
-    }
-
-    // 골반 밑 지면 탐색 — 정착 자격 판정(HasGroundUnderHips)과 정착 정렬(GroundUnder)이 공유한다.
-    //
-    // 탐색 거리를 짧게(m_groundProbeDistance) 잡는 것이 중요하다. 길게 쏘면 얇은 실내 바닥을 뚫고
-    // 아래층·지면을 찾아내, 시체가 정착하는 순간 한 층 밑으로 순간이동한다.
     private bool TryGroundUnder(Vector3 hipsPosition, out Vector3 point)
     {
         const float k_probeLift = 0.5f; // 골반이 바닥에 파묻혀 있어도 레이가 지면 위에서 출발하게
