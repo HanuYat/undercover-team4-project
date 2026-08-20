@@ -7526,6 +7526,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerTowedMotion
   m_dragFollowDistance: 1.6
   m_dragSmoothTime: 0.14
+  m_logDragPath: 1
   m_dragTurnSharpness: 6
   m_dragSwayAngle: 7
   m_dragSwayFrequency: 1.6
