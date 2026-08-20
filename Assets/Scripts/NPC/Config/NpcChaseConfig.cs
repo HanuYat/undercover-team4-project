@@ -46,6 +46,27 @@ public class NpcChaseConfig : ScriptableObject
     [Min(0f)]
     [SerializeField] private float m_switchAdvantage = 5f;
 
+    [Header("납치 기습 — 납치 임무(#775)에서만 쓴다")]
+    [Tooltip("표적 후방 부채꼴의 반각(도) — 이 안에 들어야 포획이 성립한다. 90이면 옆까지, 작을수록 정확히 뒤를 잡아야 한다")]
+    [Range(10f, 90f)]
+    [SerializeField] private float m_ambushRearHalfAngle = 75f;
+
+    [Tooltip("표적 뒤 어느 거리(m)를 목적지로 삼는가 — 좌우 벌림까지 더한 값이 포획 거리(CatchDistance) 안이어야 닿는 순간 잡는다")]
+    [Min(0.1f)]
+    [SerializeField] private float m_ambushApproachDistance = 0.9f;
+
+    [Tooltip("2인조가 겹치지 않게 좌우로 벌리는 거리(m) — 각자 지금 서 있는 쪽의 뒤를 노린다")]
+    [Min(0f)]
+    [SerializeField] private float m_ambushSideSpread = 0.6f;
+
+    [Tooltip("표적 정면 이 각(도) 안에 있으면 '보고 있다'로 친다 — 이 동안에는 다가가지 않고 거리를 유지한다")]
+    [Range(10f, 120f)]
+    [SerializeField] private float m_ambushViewHalfAngle = 60f;
+
+    [Tooltip("보이는 동안 표적 반대쪽으로 걸어가는 거리(m) — 매 재경로마다 다시 잡으므로 보이는 내내 멀어진다")]
+    [Min(0.5f)]
+    [SerializeField] private float m_ambushWalkAwayDistance = 6f;
+
     public float MaxSpeed => m_maxSpeed;
     public float AccelSeconds => m_accelSeconds;
     public float Range => m_range;
@@ -59,6 +80,21 @@ public class NpcChaseConfig : ScriptableObject
     /// <summary>추격을 완전히 접는 거리(m) — <b><see cref="Range"/>보다 넓어야 한다</b>. (#568 후속)
     /// 좁으면 방금 고른 표적이 즉시 자격을 잃어 물었다 놨다를 반복한다(이력이 없어진다).</summary>
     public float ReleaseDistance => m_releaseDistance;
+
+    /// <summary>납치 기습이 성립하는 표적 후방 부채꼴의 반각(도). (#775)</summary>
+    public float AmbushRearHalfAngle => m_ambushRearHalfAngle;
+
+    /// <summary>납치 접근 목적지를 표적 뒤 얼마나 떨어진 곳으로 잡는가(m). (#775)</summary>
+    public float AmbushApproachDistance => m_ambushApproachDistance;
+
+    /// <summary>납치 접근 시 2인조를 좌우로 벌리는 거리(m). (#775)</summary>
+    public float AmbushSideSpread => m_ambushSideSpread;
+
+    /// <summary>표적이 나를 보고 있다고 볼 정면 반각(도) — 이 안에서는 접근하지 않는다. (#775)</summary>
+    public float AmbushViewHalfAngle => m_ambushViewHalfAngle;
+
+    /// <summary>보이는 동안 표적 반대쪽으로 걸어가는 거리(m). (#775)</summary>
+    public float AmbushWalkAwayDistance => m_ambushWalkAwayDistance;
 
     /// <summary>갈아타는 기준 — 다른 후보가 현재 표적보다 이만큼(m) 더 가까울 때만 바꾼다. (#568 후속)
     /// 거리로 놓았다 다시 고르는 방식과 달리 왕복이 생기지 않는다 — 바꾼 직후에는
