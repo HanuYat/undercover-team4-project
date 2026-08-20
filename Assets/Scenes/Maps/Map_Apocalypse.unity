@@ -20011,6 +20011,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: df5ce1efead3d784895dc53f93f9ebef, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ArrestJudge
+  m_corpseBountyPenalty: 0.4
 --- !u!4 &461460872
 Transform:
   m_ObjectHideFlags: 0
@@ -50756,6 +50757,7 @@ MonoBehaviour:
   m_positiveColor: {r: 0.2, g: 0.7, b: 0.35, a: 1}
   m_negativeColor: {r: 0.8, g: 0.25, b: 0.25, a: 1}
   m_neutralColor: {r: 0.45, g: 0.45, b: 0.5, a: 1}
+  m_cautionColor: {r: 0.85, g: 0.55, b: 0.15, a: 1}
   m_displaySeconds: 3
   m_detailFormat:
     m_TableReference:
@@ -50852,7 +50854,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AppearanceAssigner
   m_appearanceDatabase: {fileID: 11400000, guid: 57bb736c337156747a8246abdf3cab42, type: 2}
-  m_revealedAxisCount: 6
+  m_revealedAxisCount: 5
   m_femaleFacialHairChance: 0.03
   m_montageMatchCount: 3
 --- !u!1 &1165603911
@@ -60745,6 +60747,7 @@ MonoBehaviour:
   m_criminalBountyMax: 12000
   m_forgeryBountyMin: 1000
   m_forgeryBountyMax: 2500
+  m_aliveOnlyChance: 0.35
   m_compliantWeight: 0.2
   m_fleeWeight: 0.4
   m_resistWeight: 0.4
@@ -95655,6 +95658,10 @@ PrefabInstance:
       propertyPath: GlobalObjectIdHash
       value: 2151380003
       objectReference: {fileID: 0}
+    - target: {fileID: 4329672435876263704, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 1.53
+      objectReference: {fileID: 0}
     - target: {fileID: 4352177584844278631, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
       propertyPath: GlobalObjectIdHash
       value: 3897831515
@@ -95824,6 +95831,14 @@ PrefabInstance:
       value: 2034215429
       objectReference: {fileID: 0}
     - target: {fileID: 7433686582201298648, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
+      propertyPath: SceneMigrationSynchronization
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7712792004932666311, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 2196699946
+      objectReference: {fileID: 0}
+    - target: {fileID: 7712792004932666311, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
       propertyPath: SceneMigrationSynchronization
       value: 0
       objectReference: {fileID: 0}

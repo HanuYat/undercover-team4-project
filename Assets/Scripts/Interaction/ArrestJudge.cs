@@ -23,6 +23,11 @@ public class ArrestJudge : CommonManagerBase
 {
     private const int k_wrongfulReward = 0;
 
+    [Tooltip("DeadOrAlive 대상을 시체로 인계할 때 깎는 비율(0.4 = 40% 감액). 100원 단위로 떨어진다(BountyRoll.Reduce). AliveOnly는 이 비율을 타지 않고 ConditionUnmet으로 0원이다 (#766)")]
+    [Range(0f, 1f)]
+    [SerializeField]
+    private float m_corpseBountyPenalty = 0.4f;
+
     private RoundManager Round => App.Game.Round;
 
     // 진범·위조범 보상은 여기서 정하지 않는다 (#395) — NPC마다 다른 현상금을 CriminalAssigner가
@@ -89,7 +94,7 @@ public class ArrestJudge : CommonManagerBase
         // 첫 인계 여부를 표식 세우기 전에 잡아 둔다 — 할당량·오검거 카운트가 재판정으로 부풀지 않게 (#358).
         bool firstDelivery = !npc.Custody.IsDelivered;
 
-        if (!TryResolveVerdict(npc, out ArrestVerdict verdict, out int reward, out CitizenProfile profile))
+        if (!TryResolveVerdict(npc, isCorpse: false, out ArrestVerdict verdict, out int reward, out CitizenProfile profile))
             return null;
 
         // 판정 완료로 표시 — 방치 도주 타이머(#230)를 멈춘다. 재판정 자체는 허용하므로(#358)
@@ -196,19 +201,16 @@ public class ArrestJudge : CommonManagerBase
         // 표식은 판별보다 <b>먼저</b> 읽는다 — 아래 계상 가드와 결과의 IsFirstDelivery가 같은 값을 봐야 한다.
         bool firstDelivery = !npc.Custody.IsDelivered;
 
-        if (!TryResolveVerdict(npc, out ArrestVerdict verdict, out int reward, out CitizenProfile profile))
+        if (!TryResolveVerdict(npc, isCorpse: true, out ArrestVerdict verdict, out int reward, out CitizenProfile profile))
             return null;
 
-        // 이미 계상된 시체는 다시 계상하지 않는다 — 원장에 두 번 오르면 현상금이 겹친다. 되돌리는
-        // 경로는 밧줄 반출 하나다(JailIntake.ServerReleaseCorpse가 원장과 표식을 함께 걷는다).
-        //
-        // <b>오검거는 여기를 지난다.</b> 감옥에 들어가지 않아 원장에 없고, 계상 대신 횟수만 세므로
-        // 막을 중복이 없다 — 막으면 무고한 시민의 시체가 한 번 판정된 뒤 영영 결과를 못 내게 된다.
-        if (!firstDelivery && verdict != ArrestVerdict.WrongfulArrest)
+        // 이미 계상된 시체는 다시 계상하지 않는다 — 계상 안 되는 판정(오검거·생포 조건 불충족)은
+        // 감옥에 안 들어가 원장에 없으므로 막을 중복이 없다.
+        if (!firstDelivery && verdict.IsCredited())
             return null;
 
-        // 표식도 계상되는 쪽에만 세운다 — 오검거에 세우면 위 가드를 스스로 닫아 재판정이 막힌다.
-        if (verdict != ArrestVerdict.WrongfulArrest)
+        // 표식도 계상되는 쪽에만 세운다 — 나머지에 세우면 위 가드를 스스로 닫아 재판정이 막힌다.
+        if (verdict.IsCredited())
             npc.Custody.MarkDelivered();
 
         // 인계자 기준은 산 신병과 같다 (#537) — 줄을 쥔 전원 + 버튼을 누른 사람.
@@ -241,8 +243,9 @@ public class ArrestJudge : CommonManagerBase
     /// 판별까지 복사하면 진범/위조범/난동꾼 우선순위가 여러 곳으로 갈린다.
     /// </summary>
     /// <returns>판정할 수 있으면 참 — 경범죄 마커도 신원도 없으면 거짓.</returns>
-    private static bool TryResolveVerdict(
+    private bool TryResolveVerdict(
         NpcController npc,
+        bool isCorpse,
         out ArrestVerdict verdict,
         out int reward,
         out CitizenProfile profile
@@ -279,6 +282,20 @@ public class ArrestJudge : CommonManagerBase
             // 진범 우선 — 진범이면서 위조범인 NPC도 현상수배범으로 판정한다 (위조 판정에 가려지지 않음, #320).
             verdict = ArrestVerdict.WantedCriminal;
             reward = ResolveBounty(identity, npc);
+
+            // 수배 조건은 진범에만 걸린다 — 산 채/시체 축은 이 시점에만 알 수 있어 배정 때 못 정한다 (#766)
+            if (isCorpse)
+            {
+                if (identity.WantedCondition == WantedCondition.AliveOnly)
+                {
+                    verdict = ArrestVerdict.ConditionUnmet;
+                    reward = 0;
+                }
+                else
+                {
+                    reward = BountyRoll.Reduce(reward, m_corpseBountyPenalty);
+                }
+            }
         }
         else if (identity.IsForger)
         {
@@ -307,6 +324,7 @@ public class ArrestJudge : CommonManagerBase
         {
             ArrestVerdict.WantedCriminal => "현상수배범 검거",
             ArrestVerdict.Misdemeanor => "경범죄 처리",
+            ArrestVerdict.ConditionUnmet => "생포 조건 불충족",
             _ => "오검거"
         };
         string deliverer = result.DeliveredBy.Count > 0

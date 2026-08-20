@@ -71,6 +71,10 @@ MonoBehaviour:
     m_Key: Hud.Verdict.Detail
     m_Metadata:
       m_Items: []
+  - m_Id: 7035667821215076
+    m_Key: Hud.Verdict.ConditionUnmet
+    m_Metadata:
+      m_Items: []
   - m_Id: 7100000000314
     m_Key: Hud.Scan.Battery
     m_Metadata:

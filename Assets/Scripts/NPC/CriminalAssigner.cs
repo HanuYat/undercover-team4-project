@@ -66,6 +66,11 @@ public class CriminalAssigner : CommonManagerBase
     [SerializeField]
     private int m_forgeryBountyMax = 2000;
 
+    [Tooltip("진범 1명이 '생포 필수(AliveOnly)'로 뽑힐 확률. 나머지는 생사 불문(DeadOrAlive)이며 시체 인계 시 감액된다 (#766)")]
+    [Range(0f, 1f)]
+    [SerializeField]
+    private float m_aliveOnlyChance = 0.35f;
+
     [Header("예비 용의자 반응 가중치 (#76 · 트리거 변경 #400)")]
     [Tooltip("합이 1일 필요 없음 — 비율로 추첨한다. 스캔·피격당할 때 이 유형대로 반응한다 (#400). 범인은 도주/저항 성향이 높다")]
     [SerializeField]
@@ -251,6 +256,10 @@ public class CriminalAssigner : CommonManagerBase
             // 만들고, 승격(PromoteNext)도 여기서 다음 대상을 찾는다. 공개 여부는 IsCriminal이 가른다 (#102)
             if (isSuspect)
             {
+                // isCriminal이 아니라 isSuspect 기준 — 제보 전화 승격된 진범도 조건을 물고 있어야 한다 (#766)
+                identity.AssignWantedCondition(
+                    Random.value < m_aliveOnlyChance ? WantedCondition.AliveOnly : WantedCondition.DeadOrAlive);
+
                 m_criminalNpcs.Add(npcs[i]);
                 m_wantedProfiles.Add(profile);
             }

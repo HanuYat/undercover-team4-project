@@ -117,6 +117,7 @@ public class WantedListManager : NetworkedManagerBase
             RevealedAxes = revealedAxes,
             // 현상금은 서버 전용 값이라 항목에 실어야 본부에서 볼 수 있다 (#395)
             Bounty = identity != null ? identity.Bounty : 0,
+            Condition = identity != null ? identity.WantedCondition : default,
         });
         // 전체 진범 수 누적(#331) — 검거/탈출로는 줄지 않는다.
         // ⚠ 라운드 도중 수배 리스트에 진범을 새로 추가하는 다른 경로(#102 제보 전화 '승격' 등)가 생기면,
@@ -128,11 +129,12 @@ public class WantedListManager : NetworkedManagerBase
         Debug.Log($"[수배] 등록: {wantedName} — \"{montageText}\" / 현상금 {(identity != null ? identity.Bounty : 0)}원 (현재 {m_wanted.Count}건)");
     }
 
-    // 검거·시체 판정 수신 — 진범일 때만 해당 개체의 수배 항목을 지운다. (서버 전용)
-    // 산 신병이든 시체든 유치장에 들어간 이상 더 찾을 대상이 아니다 (#616).
+    // 검거·시체 판정 수신 — 진범 검거이거나 생포 조건 불충족으로 끝난 경우 항목을 지운다. (서버 전용)
+    // 후자는 시체가 감옥에 들어가지 않지만 더 잡을 방법이 없는 것은 같다 (#616, #766).
     private void HandleArrestJudged(ArrestResult result)
     {
-        if (result.Verdict != ArrestVerdict.WantedCriminal || result.Npc == null) 
+        bool resolved = result.Verdict == ArrestVerdict.WantedCriminal || result.Verdict == ArrestVerdict.ConditionUnmet;
+        if (!resolved || result.Npc == null)
             return;
 
         RemoveByNpcId(result.Npc.NetworkObjectId);
