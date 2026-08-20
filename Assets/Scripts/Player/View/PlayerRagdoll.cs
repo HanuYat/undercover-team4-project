@@ -102,24 +102,11 @@ public class PlayerRagdoll : MonoBehaviour
              "값이 확정되면 끈다")]
     [SerializeField] private bool m_logRevivalYaw;
 
-    [Header("사망 전용 모델 (#571 분리)")]
-    [Tooltip("살아있는 몸의 스킨 — 사망 중에만 끈다.\n\n" +
-             "⚠ <b>뼈(Root)는 끄지 않는다.</b> Animator의 아바타 바인딩이 경로 기반이라 리그를 끄거나 " +
-             "한 단 더 깊이 옮기면 살아있는 애니메이션이 끊긴다. 안 보이는 뼈가 계속 애니메이션되는 " +
-             "것은 무해하고, 부활 블렌드가 그 포즈를 목표로 삼으므로 오히려 필요하다")]
-    [SerializeField] private GameObject m_liveSkin;
-
-    [Tooltip("살아있는 리그 최상단(Root) — 사망 시 이 포즈를 시체로 넘기고, 부활 시 시체의 정착 포즈를 " +
-             "여기로 되돌린다. 시체 리그와 같은 서브트리의 복제본이어야 한다(RagdollPose의 전제)")]
-    [SerializeField] private Transform m_liveBoneRoot;
-
-    private RagdollRig m_rig; // 뼈 한 벌 — 물리 조작 전부를 여기 위임한다. 시체 모델에 붙어 있다
+    private RagdollRig m_rig; // 뼈 한 벌 — 물리 조작 전부를 여기 위임한다. 리그는 루트에 붙어 있다
     private RagdollRope m_rope; // 밧줄 견인 (선택 — 없으면 운반이 물리로 안 끌린다)
+    private RagdollPoseBlend m_blend; // 부활 블렌드 — 리그가 한 벌이므로 그 리그를 섞는다
 
-    private GameObject m_corpse; // 시체 모델 = 리그가 붙어 있는 오브젝트. <b>항상 활성</b> (아래 주석)
-    private RagdollPoseBlend m_blend; // 부활 블렌드 — <b>살아있는</b> 리그를 섞는다
-    private int m_expectedPoseBones; // 포즈 복사가 전부 닿았는지 대조할 기대치 (CopyPose)
-    private bool m_corpseVisible; // 시체가 지금 보이고 물리에 참여하는가 (오브젝트 활성 여부가 아니다)
+    [Header("사망 전용 모델 (#571 분리)")]
 
 
     [Tooltip("정착 순간 앞뒤 20프레임을 한 줄씩 찍는다 — <b>정착할 때 몸이 아래로 내려갔다 올라오는</b> " +
@@ -223,40 +210,11 @@ public class PlayerRagdoll : MonoBehaviour
             return;
         }
 
-        // 시체는 평시 비활성이라 <see cref="RagdollRig.Awake"/>가 아직 돌지 않았다 — 여기서 보장한다.
-        // (비활성 오브젝트에서도 transform 탐색·GetComponentsInChildren(true)는 정상 동작한다)
+        // 소유자보다 먼저 돌 수 있다 — 리그 수집은 멱등이라 여기서 보장해도 된다.
         m_rig.EnsureCollected();
 
-        m_corpse = m_rig.gameObject;
-
-        // 시체는 <b>항상 활성</b>이어야 한다 — NGO가 비활성 GameObject의 NetworkBehaviour를 스폰에서
-        // 제외하고 나중에 만회하지 않으므로(RagdollRig.SetBoneCollidersEnabled 주석) 골반의
-        // NetworkTransform이 영구히 죽는다. 그래서 평시 숨김은 렌더러·콜라이더로 한다.
-        if (m_corpse != null && !m_corpse.activeSelf)
-            m_corpse.SetActive(true);
-
-        SetCorpseVisible(false); // 평시 — 안 보이고 물리에도 참여하지 않는다
-
-        // 시체 리그는 런타임에 자식이 늘지 않으므로(RagdollPose 주석) 이 수가 곧 포즈 복사의 기대치다.
-        m_expectedPoseBones = m_rig.BoneRoot != null
-            ? m_rig.BoneRoot.GetComponentsInChildren<Transform>(true).Length
-            : 0;
-
-        // 밧줄도 리그와 같은 오브젝트에 있다 — RagdollRope가 RagdollRig를 RequireComponent한다.
-        m_rope = m_rig.GetComponent<RagdollRope>();
-
-        // 블렌드는 <b>살아있는</b> 리그를 섞는다 — 부활 시점의 시체는 이미 꺼져 있다.
-        m_blend = new RagdollPoseBlend(m_liveBoneRoot);
-        if (m_liveBoneRoot == null || m_liveSkin == null)
-        {
-            Debug.LogWarning(
-                $"PlayerRagdoll: 살아있는 모델 참조가 비어 있다 — {name} "
-                    + $"(m_liveBoneRoot={(m_liveBoneRoot == null ? "없음" : m_liveBoneRoot.name)}, "
-                    + $"m_liveSkin={(m_liveSkin == null ? "없음" : m_liveSkin.name)}). "
-                    + "사망 시 모델 교체가 동작하지 않는다",
-                this
-            );
-        }
+        // 리그가 한 벌이므로 섞는 대상도 그 리그다 — 애니메이터와 물리가 같은 뼈를 번갈아 쥔다.
+        m_blend = new RagdollPoseBlend(m_rig.BoneRoot);
 
         m_animator = GetComponentInChildren<Animator>();
         m_controller = GetComponentInParent<CharacterController>();
@@ -285,35 +243,34 @@ public class PlayerRagdoll : MonoBehaviour
             m_streamer.OnSettledPoseReceived += HandleSettledPoseReceived;
         }
 
-        // ⚠ 여기서 캡슐 무시를 걸지 않는다 — 시체가 비활성이라 뼈 콜라이더도 비활성이고,
-        // <c>Physics.IgnoreCollision</c>은 비활성 콜라이더에 대해 에러를 뱉는다.
-        // 걸 수 있는 유일한 시점은 시체를 켜는 순간이다(<see cref="ShowCorpse"/>).
+        // 뼈 콜라이더는 <b>평시에도 켜져 있다</b>(NPC와 같다 — 격리는 Ragdoll 레이어와 충돌
+        // 매트릭스가 맡는다). 그래서 캡슐 무시를 여기서 바로 건다. 예전에는 시체 오브젝트가
+        // 비활성이라 <c>Physics.IgnoreCollision</c>이 에러를 뱉어, 걸 수 있는 유일한 시점이
+        // "시체를 켜는 순간"이었다.
+        IgnoreOwnCapsule();
     }
 
-    // ---- 모델 교체 (#571 사망 전용 모델 분리) ----
+    // ---- 래그돌 표현 전환 (리그 한 벌 — NPC와 같은 모양, #763 2단계) ----
 
     /// <summary>
-    /// 시체를 켠다 — <b>사망 시 표현 전환의 전부.</b>
+    /// 리그를 물리에 넘긴다 — <b>사망 시 표현 전환의 전부.</b>
     ///
-    /// <b>애니메이터를 끄지 않는다.</b> 예전에는 같은 리그를 애니메이터와 물리가 번갈아 쥐었기 때문에
-    /// 사망 순간 애니메이터를 꺼야 했다. 모델이 갈린 뒤로는 서로 다른 리그를 쥐므로 싸울 일이 없다 —
-    /// 살아있는 뼈는 보이지 않는 채 계속 애니메이션되고, 그 포즈는 부활 블렌드의 목표로 쓰인다.
+    /// ⚠ <b>애니메이터를 반드시 먼저 끈다.</b> 리그가 한 벌이라 켜 둔 채로 물리에 넘기면 애니메이터가
+    /// 매 프레임 물리 결과를 덮는다. (<c>NpcRagdoll.StopAnimator</c>와 같은 자리·같은 이유)
     ///
-    /// <b>포즈를 켜기 전에 넘긴다.</b> 켠 뒤에 넘기면 그 사이 한 물리 스텝이 프리팹 기본 포즈로
-    /// 시뮬레이션돼 시체가 엉뚱한 자세에서 출발한다.
+    /// <b>모델을 갈아 끼우지 않는다.</b> 예전에는 사망 전용 모델을 켜고 살아있는 모델을 껐고, 두 리그
+    /// 사이의 자세를 <c>CopyPose</c>가 맞춰 줬다 — <b>같은 몸이 그대로 무너지므로 맞출 것이 없다.</b>
+    /// 커스터마이징(색·파츠)이 자동으로 따라오는 것도 같은 이유다.
     /// </summary>
-    private void ShowCorpse()
+    private void EnterRagdollPose()
     {
-        CopyPose(m_liveBoneRoot, m_rig.BoneRoot);
+        if (m_animator != null)
+            m_animator.enabled = false;
 
-        SetCorpseVisible(true);
-        if (m_liveSkin != null)
-            m_liveSkin.SetActive(false);
-
+        // 컬링으로 사라지지 않게 — 무너진 뼈가 루트에서 멀어져도 그린다(NPC와 같다).
         m_rig.SetSkinsAlwaysVisible(true);
-        IgnoreOwnCapsule(); // 뼈 콜라이더가 이제 켜졌다 — 걸 수 있는 첫 시점이다
 
-        // ⚠ 물리로 넘기기 <b>전에</b> 열어야 복사가 옮긴 것과 물리가 바꿔 놓은 것이 갈린다.
+        // ⚠ 물리로 넘기기 <b>전에</b> 열어야 진입 프레임의 자세가 계측에 남는다.
         BeginEntryTrace();
         BeginFallRateTrace();
 
@@ -321,23 +278,15 @@ public class PlayerRagdoll : MonoBehaviour
     }
 
     /// <summary>
-    /// 시체를 끄고 살아있는 몸으로 되돌린다 — 부활·라운드 리셋.
-    ///
-    /// <b>정착 포즈를 살아있는 리그로 넘기는 것이 핵심이다.</b> 그러지 않으면 살아있는 뼈는 사망
-    /// 내내 애니메이터가 놓아 둔 자세이므로, 시체를 끄는 프레임에 몸이 누운 자세에서 그 자세로 툭 튄다.
-    /// 넘겨 두면 <see cref="RagdollPoseBlend"/>가 그 자리에서 기상 자세로 이어 준다.
+    /// 리그를 애니메이터에게 돌려줄 준비 — 부활·라운드 리셋.
+    /// <b>애니메이터를 켜는 것은 호출부가 한다</b> — 블렌드 출발점을 잡는 순서 때문이다
+    /// (<see cref="ExitToAnimator"/>).
     /// </summary>
-    private void HideCorpse()
+    private void ExitRagdollPose()
     {
-        CopyPose(m_rig.BoneRoot, m_liveBoneRoot);
-
         m_rig.SetSkinsAlwaysVisible(false);
 
-        SetCorpseVisible(false);
-        if (m_liveSkin != null)
-            m_liveSkin.SetActive(true);
-
-        // 시체가 쉬는 동안 <b>뼈 길이를 프리팹 값으로 되돌린다</b> — 자세를 되돌리는 것이 아니다.
+        // <b>뼈 길이를 프리팹 값으로 되돌린다</b> — 자세를 되돌리는 것이 아니다.
         //
         // 물리가 관절을 늘린 채 정착하면 그 길이가 뼈의 로컬 위치에 굳는데, 관절의
         // <c>connectedAnchor</c>는 <b>바인드 포즈 기준으로 구워져 있다</b>(프리팹이
@@ -345,11 +294,9 @@ public class PlayerRagdoll : MonoBehaviour
         // 출발해 사지가 고무처럼 늘어나며 바닥을 뚫는다(실측: 1차 0.0055m → 2차 0.0624m로 누적,
         // 2차에서 발이 띄워 올린 바닥을 지나 허공에 매달렸다).
         //
-        // <b><see cref="RagdollPose.Copy"/>의 짝이다.</b> 저쪽이 <b>리그 사이 전파</b>를 막고,
-        // 이쪽이 시체 <b>자신의 누적</b>을 끊는다. 하나만으로는 다른 경로로 되돌아온다.
-        //
-        // <b>맨 뒤여야 한다.</b> 위 CopyPose가 정착 포즈를 살아있는 리그로 넘긴 뒤여야 하고
-        // (블렌드의 출발점), 뼈는 ExitToAnimator가 이미 키네마틱으로 돌려놓아 물리에 덮이지 않는다.
+        // ⚠ <b>리그가 한 벌이 된 뒤로는 이 줄이 유일한 방어다.</b> 예전에는 리그가 둘이라
+        // <c>RagdollPose.Copy</c>가 리그 사이 전파를 막고 이 줄이 자신의 누적을 끊는 두 겹이었는데,
+        // 그 짝이 사라졌다. (<c>NpcRagdoll.ExitRagdoll</c>이 같은 이유로 같은 자리에서 부른다)
         m_rig.RestoreBindPose();
     }
 
@@ -357,10 +304,10 @@ public class PlayerRagdoll : MonoBehaviour
     // RagdollRig 의 수집 방식(관절 없는 뼈 = 골반)을 쓸 수 없다.
     private Transform FindLiveBone(string boneName)
     {
-        if (m_liveBoneRoot == null)
+        if (m_rig.BoneRoot == null)
             return null;
 
-        Transform[] bones = m_liveBoneRoot.GetComponentsInChildren<Transform>(true);
+        Transform[] bones = m_rig.BoneRoot.GetComponentsInChildren<Transform>(true);
         for (int i = 0; i < bones.Length; i++)
         {
             if (bones[i].name == boneName)
@@ -368,20 +315,6 @@ public class PlayerRagdoll : MonoBehaviour
         }
 
         return null;
-    }
-
-    /// <summary>
-    /// 시체를 보이게/숨기게 한다 — <b>GameObject를 끄지 않는다.</b>
-    ///
-    /// 시체 오브젝트는 항상 활성이어야 한다(<see cref="RagdollRig.SetBoneCollidersEnabled"/> 주석의
-    /// NGO 사정). 그래서 "없는 것처럼" 만드는 일을 렌더러와 콜라이더가 나눠 맡는다 — 렌더러는 보이지
-    /// 않게, 콜라이더는 세계와 부딪히지 않게. 뼈는 평시 키네마틱이라 그 자체로는 아무 일도 하지 않는다.
-    /// </summary>
-    private void SetCorpseVisible(bool visible)
-    {
-        m_corpseVisible = visible;
-        m_rig.SetSkinsEnabled(visible);
-        m_rig.SetBoneCollidersEnabled(visible);
     }
 
     /// <summary>
@@ -473,26 +406,6 @@ public class PlayerRagdoll : MonoBehaviour
             m_streamer.OnSettledPoseReceived -= HandleSettledPoseReceived;
     }
 
-    // 포즈를 옮기고 <b>전부 닿았는지 대조한다.</b>
-    //
-    // ⚠ 이 대조가 없어서 한 번 크게 물렸다. 아이템 모델이 살아있는 손 본 밑에 인스턴스화되면서 두
-    // 리그의 자식 수가 갈렸는데, 그때의 복사 함수는 그것을 실패로 보고 <b>조용히 아무것도 하지
-    // 않았다</b> — 시체가 첫 사망에 바인드 포즈로, 이후 사망에 직전 누운 포즈로 나타났다.
-    // 지금 함수는 이름으로 짝지어 그 상황에 영향받지 않지만, <b>조용히 지나갈 수 있는 실패는 다시
-    // 만들지 않는다.</b>
-    private void CopyPose(Transform from, Transform to)
-    {
-        int copied = RagdollPose.Copy(from, to);
-        if (copied == m_expectedPoseBones)
-            return;
-
-        Debug.LogWarning(
-            $"PlayerRagdoll: 포즈 복사가 {copied}/{m_expectedPoseBones} 뼈에만 닿았다 — {name}. "
-                + "두 리그가 같은 서브트리의 복제본인지 확인할 것 (뼈 이름이 갈리면 그 아래가 통째로 빠진다)",
-            this
-        );
-    }
-
     // ---- 캡슐(대리값) 다루기 — 여기부터가 플레이어 고유다 ----
 
     // 자기 CharacterController 캡슐과의 충돌을 끈다.
@@ -516,11 +429,6 @@ public class PlayerRagdoll : MonoBehaviour
     // 남의 캡슐이 내 몸 안에 겹쳐 있는 경우는 없다.
     private void IgnoreOwnCapsule()
     {
-        // 시체가 숨어 있으면 뼈 콜라이더도 꺼져 있다 — Physics.IgnoreCollision은 비활성 콜라이더에
-        // 에러를 뱉으므로 조건 없이 부르면 콘솔이 도배된다.
-        if (!m_corpseVisible)
-            return;
-
         m_rig.IgnoreCollisionWith(m_controller, true);
     }
 
@@ -641,7 +549,7 @@ public class PlayerRagdoll : MonoBehaviour
         // 그 탈출 임펄스에 몸이 튄다.
         SetControllerEnabled(false);
 
-        ShowCorpse();
+        EnterRagdollPose();
         m_rig.ApplyImpulse(impulse);
 
         // 자세를 흘려보내기 시작한다 — 권위가 아니면 스스로 무동작이다(그쪽 주석).
@@ -684,7 +592,7 @@ public class PlayerRagdoll : MonoBehaviour
         // ⚠ 예전에는 여기서 <c>Settle()</c>을 불러 "날아가는 중이면 포즈를 확정"했다. 정착이
         // 아무것도 옮기지 않게 된 뒤로는 할 일이 없어 지웠다(NPC의 <c>ExitRagdoll</c>도 안 부른다).
 
-        // 정착해도 뼈는 전부 물리에 있다(<see cref="ReleaseBonesToPhysics"/>의 주석) — 애니메이터로 돌아가려면
+        // 뼈는 전부 물리에 있다(<see cref="ReleaseBonesToPhysics"/>의 주석) — 애니메이터로 돌아가려면
         // 전부 멈춰야 한다. 안 멈추면 블렌드가 놓는 포즈를 물리가 매 스텝 덮는다.
         // 밧줄을 먼저 끊는다: 키네마틱 바디에는 관절이 안 먹지만, 순서를 뒤집으면 한 스텝 동안
         // 스프링이 블렌드 시작 포즈를 당긴다.
@@ -695,9 +603,21 @@ public class PlayerRagdoll : MonoBehaviour
 
         m_rig.SetKinematic(true);
 
-        // 시체 → 살아있는 몸. <b>캡슐을 켜기 전에</b> 해야 한다 — 그 순간 뼈 콜라이더가 이미 사라져
-        // 있으므로 캡슐과 겹칠 일이 없다.
-        HideCorpse();
+        // ⚠ <b>블렌드 출발점은 지금 이 래그돌 자세다 — 뼈 길이 복원보다 반드시 먼저 잡는다.</b>
+        // 리그가 한 벌이 된 뒤로는 순서가 그대로 결과를 바꾼다: <see cref="ExitRagdollPose"/>가
+        // <c>RestoreBindPose</c>로 뼈를 바인드 길이로 돌려놓으므로, 그 뒤에 잡으면 누운 자세를
+        // 잃고 몸이 툭 선다. (NpcRagdoll.ExitRagdoll이 같은 이유로 같은 순서다)
+        bool blending =
+            blend
+            && m_animator != null
+            && m_blend != null
+            && m_blend.IsValid
+            && m_state != RagdollState.BlendingToAnimator;
+
+        if (blending)
+            m_blend.Begin();
+
+        ExitRagdollPose();
 
         // 캡슐을 되살린다 (§10-0 — 사망 중 꺼 뒀다). 이 시점의 루트는 캡슐 추종
         // (<see cref="TickCapsuleFollow"/>)이 매 프레임 지면 위에 놓아 둔 자리라 그대로 켜면 된다 —
@@ -705,25 +625,21 @@ public class PlayerRagdoll : MonoBehaviour
         SetControllerEnabled(true);
         m_movement?.ClearExternalVelocity(); // 꺼져 있던 동안 쌓인 값이 도착지에서 바닥을 파고들지 않게 (#189)
 
-        // <b>애니메이터를 켜는 줄이 없다</b> — 모델을 분리한 뒤로는 애초에 끄지 않는다(ShowCorpse).
-        if (!blend
-            || m_animator == null
-            || m_blend == null
-            || !m_blend.IsValid
-            || m_state == RagdollState.BlendingToAnimator)
+        // <b>애니메이터를 여기서 켠다</b> — 리그가 한 벌이라 진입에서 껐다(EnterRagdollPose).
+        // 아래 Update(0f)가 클립을 평가하려면 켜져 있어야 한다.
+        if (m_animator != null)
+            m_animator.enabled = true;
+
+        if (!blending)
         {
             m_state = RagdollState.Animated;
             return;
         }
 
-        // 시체에서 넘겨받은 정착 포즈를 출발점으로 잡아 둔다 — 아래 LateUpdate가 애니메이터 포즈로
-        // 끌고 간다. HideCorpse가 그 포즈를 살아있는 리그에 이미 입혀 놓았다.
-        m_blend.Begin();
-
         // Down은 아직 참이다(AnimationDriver가 IsRagdollActive를 보고 붙들고 있다) — 바닥 대기 자세로
         // 물려 들어가야 정착 포즈와의 거리가 가장 짧다. 여기서 Ground를 직접 찍는 이유다.
-        // 애니메이터가 실제로 뼈를 썼는지 보려면 쓰기 전 값을 들고 있어야 한다 — HideCorpse가 방금
-        // 시체 포즈를 입혔으니, Update(0f) 뒤에도 이 값이면 애니메이터가 아무것도 안 쓴 것이다.
+        // 애니메이터가 실제로 뼈를 썼는지 보려면 쓰기 전 값을 들고 있어야 한다 — Update(0f) 뒤에도
+        // 이 값이면 애니메이터가 아무것도 안 쓴 것이다.
         bool haveLiveBefore = TryLiveBodyYaw(out float liveBefore);
 
         m_animator.Play(s_groundStateHash, 0, 0f);
@@ -824,7 +740,7 @@ public class PlayerRagdoll : MonoBehaviour
     private bool TryLiveBodyYaw(out float yaw)
     {
         yaw = 0f;
-        if (m_liveBoneRoot == null)
+        if (m_rig.BoneRoot == null)
             return false;
 
         Transform hips = FindLiveBone("Hips");
@@ -989,8 +905,8 @@ public class PlayerRagdoll : MonoBehaviour
         // 블렌드는 LateUpdate에서 돈다 — 이 시점의 뼈 로컬값이 곧 애니메이터가 평가한 포즈다.
         // 완료되면 Animated로 돌아가고, 그때서야 AnimationDriver가 Down을 내려 기상 모션이 시작된다.
         //
-        // <b>섞는 대상은 살아있는 리그다</b> (#571) — 시체는 HideCorpse가 이미 껐다. 그래서 스킨 컬링을
-        // 되돌리는 줄도 여기 없다(그쪽도 HideCorpse가 한다).
+        // <b>섞는 대상은 그 리그다</b> — 리그가 한 벌이므로 출발점(래그돌 자세)과 목표(애니메이터
+        // 자세)가 같은 뼈에서 만난다. 스킨 컬링을 되돌리는 것은 ExitRagdollPose가 한다.
         if (m_state == RagdollState.BlendingToAnimator && m_blend.Tick(m_blendSeconds))
             m_state = RagdollState.Animated;
 
@@ -1145,7 +1061,7 @@ public class PlayerRagdoll : MonoBehaviour
 
         for (int i = 0; i < s_entryTraceBones.Length; i++)
         {
-            m_liveTraceBones[i] = FindBone(m_liveBoneRoot, s_entryTraceBones[i]);
+            m_liveTraceBones[i] = FindBone(m_rig.BoneRoot, s_entryTraceBones[i]);
             m_corpseTraceBones[i] = FindBone(m_rig.BoneRoot, s_entryTraceBones[i]);
         }
     }
@@ -1193,8 +1109,8 @@ public class PlayerRagdoll : MonoBehaviour
         m_entryTraceLeft = k_entryTraceFrames;
         m_havePrevCorpseHead = false;
 
-        // ⚠ 기준선은 <b>직전 프레임</b>의 값이다 — 지금 살아있는 몸을 읽으면 안 된다. CopyPose가
-        // 방금 그 자세를 시체에 넘겼으므로, 지금 값으로 재면 차이가 정의상 0이 되어 버린다.
+        // ⚠ 기준선은 <b>직전 프레임</b>의 값이다 — 지금 몸을 읽으면 안 된다. 이 프레임에 이미
+        // 물리로 넘어갔으므로, 지금 값으로 재면 차이가 정의상 0이 되어 버린다.
         m_haveBaseline = m_haveLast;
         System.Array.Copy(m_lastBoneY, m_baselineBoneY, m_lastBoneY.Length);
         System.Array.Copy(m_lastBoneYaw, m_baselineBoneYaw, m_lastBoneYaw.Length);
