@@ -32,6 +32,11 @@ using UnityEngine;
 /// <b><c>NpcDeath</c>가 정착 자세를 1회 뿌리던 경로를 흡수했다.</b> 그쪽은 지웠고, 그 1회는
 /// 이제 스트림의 <b>마지막 패킷</b>(<see cref="EndStreaming"/>)이다 — 자세가 가는 통로는 하나만 남긴다.
 /// </summary>
+// ⚠ <b>루트 추종보다 뒤에 돈다.</b> #759 수정으로 <c>PlayerRagdoll</c>·<c>NpcRagdoll</c>의 루트
+// 추종이 <c>FixedUpdate</c>로 내려오면서 이 클래스의 캡처와 <b>같은 페이즈</b>가 됐다. 순서를 안
+// 박으면 미지정이 되고, 루트 회전이 뼈의 <b>로컬</b> 값을 바꾸므로(캡처가 보내는 것이 그 로컬이다)
+// 어느 쪽이 먼저 도느냐로 보내는 자세가 갈린다. 뒤에 두어 <b>이번 스텝의 루트</b>를 기준으로 뜬다.
+[DefaultExecutionOrder(100)]
 [DisallowMultipleComponent]
 public class RagdollPoseStreamer : NetworkBehaviour
 {

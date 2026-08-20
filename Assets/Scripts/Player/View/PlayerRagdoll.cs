@@ -761,6 +761,38 @@ public class PlayerRagdoll : MonoBehaviour
 
     // ---- 매 프레임 ----
 
+    /// <summary>
+    /// 캡슐 추종은 <b>물리 스텝에 묶는다 — 프레임이 아니다.</b> (#759)
+    ///
+    /// ⚠ <b>이것이 슬로모션의 원인이었다.</b> <see cref="TickCapsuleFollow"/>는 루트를 옮긴 뒤
+    /// 뼈 리지드바디의 트랜스폼에 월드 자세를 되쓴다. 그 대입이 "렌더 전용"이라던 전제가 틀렸다 —
+    /// <c>m_AutoSyncTransforms = 0</c>이 미루는 것은 <b>쿼리</b>가 보는 시점이지 시뮬레이션이 보는
+    /// 시점이 아니라, 쓴 값은 <b>다음 스텝 직전에 PhysX로 flush된다.</b> 동적 바디에 대한 트랜스폼
+    /// 대입은 텔레포트여서 솔버·접촉 상태를 무효화한다.
+    ///
+    /// <c>Update</c>에 두면 그 무효화가 <b>프레임마다</b> 일어나는데 물리는 50Hz다. 스텝당 주입이
+    /// 1을 넘으면 솔버가 관절 오차를 못 따라잡고, 몸은 안 내려가면서 뼈만 떤다:
+    /// 60fps 호스트는 스텝당 1.2회로 수렴했고(관절오차 3.6~15mm), 100fps 호스트는 2.0회로
+    /// 발산했다(12~80mm, 3초 뒤에도 69.68mm). 근거는 <c>docs/759-ragdoll-slowmotion-handoff.md</c> §2.
+    ///
+    /// 여기로 옮기면 주입이 <b>스텝당 항상 1회</b>가 되어 프레임레이트와 무관해진다 —
+    /// 144Hz 호스트가 들어와도 같다. 잃는 것은 없다: 뼈는 <c>Interpolate = None</c>이라 어차피
+    /// 물리 스텝에만 갱신되고, 따라가는 대상인 골반도 그렇다.
+    ///
+    /// ⚠ <b>캡슐 추종은 이 컴포넌트가 돈다 — <c>PlayerMovement</c>가 아니다.</b>
+    /// 저쪽은 <b>스폰 시점의 오너에서만</b> 활성이라, 사망 중 소유권이 서버로 넘어가면(#763 A-1)
+    /// 아무도 돌리지 않는 구간이 생긴다: 죽은 클라는 권위가 아니고, 서버의 인스턴스는
+    /// 컴포넌트가 꺼져 있다. 여기면 <b>권위가 어디로 가든 그 피어가 돈다</b>
+    /// (<c>NpcRagdoll</c>이 <c>TickRootFollow</c>를 스스로 도는 것과 같은 모양).
+    /// </summary>
+    private void FixedUpdate()
+    {
+        if (m_state != RagdollState.Ragdoll || !HasMoveAuthority)
+            return;
+
+        TickCapsuleFollow();
+    }
+
     private void Update()
     {
         RefreshCapsuleIgnoreOnReenable();
@@ -774,14 +806,6 @@ public class PlayerRagdoll : MonoBehaviour
 
         if (m_state != RagdollState.Ragdoll)
             return;
-
-        // ⚠ <b>캡슐 추종은 이 컴포넌트가 돈다 — <c>PlayerMovement</c>가 아니다.</b>
-        // 저쪽은 <b>스폰 시점의 오너에서만</b> 활성이라, 사망 중 소유권이 서버로 넘어가면(#763 A-1)
-        // 아무도 돌리지 않는 구간이 생긴다: 죽은 클라는 권위가 아니고, 서버의 인스턴스는
-        // 컴포넌트가 꺼져 있다. 여기로 옮기면 <b>권위가 어디로 가든 그 피어가 돈다</b>
-        // (NpcRagdoll이 TickRootFollow를 스스로 도는 것과 같은 모양).
-        if (HasMoveAuthority)
-            TickCapsuleFollow();
 
         // ⚠ <b>정착 판정은 권위만 돌린다.</b> 이 게이트가 없으면 전 뼈 스트리밍에서
         // <b>즉시 버그가 된다</b>: 원격의 뼈는 키네마틱이라 <c>AverageSpeed</c>가 항상 0이고,
@@ -1407,6 +1431,13 @@ public class PlayerRagdoll : MonoBehaviour
     private float m_fallPeakDescent;
     private float m_fallPrevHipsY;
 
+    // #759 A/B — 같은 시각에 나란히 뽑는 두 곡선. 둘의 <b>조합</b>이 A와 B를 가른다 (docs/759 §6):
+    //  · A(관절 앵커가 어긋난 채 구워짐) → 관절오차 크게 출발, 뼈속도 높음(떤다), 골반은 안 나감
+    //  · B(speculative 접촉이 제동)      → 관절오차 작음,        뼈속도 낮음(눌린다), 골반도 안 나감
+    private readonly float[] m_fallJointErrors = new float[5];
+    private readonly float[] m_fallBoneSpeeds = new float[5];
+    private float m_fallEntryJointError; // 붕괴 첫 프레임의 앵커 오차 — 사망마다 흔들리면 A다
+
     private bool m_fallRateActive;
     private float m_fallRateRealStart;
     private float m_fallRatePhysicsStart;
@@ -1431,7 +1462,13 @@ public class PlayerRagdoll : MonoBehaviour
         m_fallPeakDescent = 0f;
         m_fallPrevHipsY = m_fallRateHipsStartY;
         for (int i = 0; i < m_fallDrops.Length; i++)
+        {
             m_fallDrops[i] = float.NaN;
+            m_fallJointErrors[i] = float.NaN;
+            m_fallBoneSpeeds[i] = float.NaN;
+        }
+
+        m_fallEntryJointError = m_rig.MaxJointAnchorError(out _);
 
         LogRigPhysics();
     }
@@ -1443,12 +1480,20 @@ public class PlayerRagdoll : MonoBehaviour
         if (hips == null)
             return;
 
+        // #759 A/B — 아래 넷이 이번 판의 가설을 가른다 (docs/759 §5·§6).
+        //  · 충돌검출: 프리팹은 ContinuousSpeculative다. Discrete로 덮고 낙하곡선 0.25s 칸을 본다 → B
+        //  · 진입관절오차: 붕괴 첫 프레임에 솔버가 이미 지고 있는 위치 오차. 사망마다 흔들리면 → A
+        float entryError = m_rig.MaxJointAnchorError(out string worstJoint);
+
         Debug.Log(
             $"[리그물리] {TraceId} 뼈={m_rig.BoneCount} 골반질량={hips.mass:F1}kg "
                 + $"선형감쇠={hips.linearDamping:F2} 각감쇠={hips.angularDamping:F2} "
                 + $"중력={hips.useGravity} 침투해소상한={hips.maxDepenetrationVelocity:F2}m/s "
                 + $"솔버={hips.solverIterations}/{hips.solverVelocityIterations} "
-                + $"중력크기={Physics.gravity.magnitude:F2}m/s²",
+                + $"중력크기={Physics.gravity.magnitude:F2}m/s² "
+                + $"충돌검출={hips.collisionDetectionMode} "
+                + $"관절={m_rig.JointCount}개 자동앵커={m_rig.HasAutoConfiguredAnchors} "
+                + $"진입관절오차={entryError * 1000f:F1}mm(최악={(string.IsNullOrEmpty(worstJoint) ? "없음" : worstJoint)})",
             this
         );
     }
@@ -1477,6 +1522,11 @@ public class PlayerRagdoll : MonoBehaviour
         while (m_fallMarkIndex < k_fallMarks.Length && elapsed >= k_fallMarks[m_fallMarkIndex])
         {
             m_fallDrops[m_fallMarkIndex] = m_fallRateHipsStartY - hipsY;
+
+            // 같은 시각의 관절 오차와 뼈 속도 — 낙하곡선과 나란히 놓아야 A와 B가 갈린다.
+            m_fallJointErrors[m_fallMarkIndex] = m_rig.MaxJointAnchorError(out _);
+            m_fallBoneSpeeds[m_fallMarkIndex] = m_rig.AverageSpeed;
+
             m_fallMarkIndex++;
         }
 
@@ -1506,20 +1556,26 @@ public class PlayerRagdoll : MonoBehaviour
             $"[낙하속도] {TraceId} 권한={HasMoveAuthority} 종료={reason} 실시간={real:F2}s 물리={physics:F2}s "
                 + $"비율={ratio:F2}(1.00이 정상) 프레임={m_fallRateFrames} 평균={fps:F1}fps "
                 + $"최장프레임={m_fallRateWorstFrame * 1000f:F0}ms({verdict}) 골반낙차={drop:F2}m "
-                + $"최고하강={m_fallPeakDescent:F2}m/s 낙하곡선=[{DescribeFallCurve()}]",
+                + $"최고하강={m_fallPeakDescent:F2}m/s 낙하곡선=[{DescribeFallCurve()}] "
+                + $"진입관절오차={m_fallEntryJointError * 1000f:F1}mm "
+                + $"관절오차곡선=[{DescribeMarkCurve(m_fallJointErrors, 1000f, "mm")}] "
+                + $"뼈속도곡선=[{DescribeMarkCurve(m_fallBoneSpeeds, 1f, "m/s")}]",
             this
         );
     }
 
     // 표본이 찍힌 구간만 적는다 — 일찍 끝난 국면에서 빈 칸이 0으로 보이면 오독한다.
-    private string DescribeFallCurve()
+    private string DescribeFallCurve() => DescribeMarkCurve(m_fallDrops, 1f, "m");
+
+    // 낙하 표본 시각(k_fallMarks)에 나란히 찍힌 값 하나를 곡선으로 편다. (#759 A/B 계측)
+    private string DescribeMarkCurve(float[] samples, float scale, string unit)
     {
         System.Text.StringBuilder line = new System.Text.StringBuilder();
         for (int i = 0; i < m_fallMarkIndex && i < k_fallMarks.Length; i++)
         {
             if (line.Length > 0)
                 line.Append(' ');
-            line.Append($"{k_fallMarks[i]:0.##}s:{m_fallDrops[i]:F2}m");
+            line.Append($"{k_fallMarks[i]:0.##}s:{samples[i] * scale:F2}{unit}");
         }
 
         return line.Length > 0 ? line.ToString() : "표본없음";
@@ -1733,6 +1789,8 @@ public class PlayerRagdoll : MonoBehaviour
     // 사망 시 꺼지는 것은 스킨뿐이다)은 되돌려지지 않는다.
     //
     // 프레임률 독립 지수 감쇠다 — <c>PlayerHeadLook</c>의 pitch 추종과 같은 형태.
+    // ⚠ <b>기준은 <c>fixedDeltaTime</c>이다</b> — 부르는 쪽(<see cref="TickCapsuleFollow"/>)이
+    // 물리 스텝마다 도므로(#759). <c>deltaTime</c>을 쓰면 감쇠 속도가 프레임레이트를 탄다.
     private void FollowBodyYaw()
     {
         if (!m_alignRootYawToBody || !TryGetRootYaw(out float yaw))
@@ -1740,7 +1798,11 @@ public class PlayerRagdoll : MonoBehaviour
 
         float current = m_root.eulerAngles.y;
         float eased = m_rootYawFollowSpeed > 0f
-            ? Mathf.LerpAngle(current, yaw, 1f - Mathf.Exp(-m_rootYawFollowSpeed * Time.deltaTime))
+            ? Mathf.LerpAngle(
+                current,
+                yaw,
+                1f - Mathf.Exp(-m_rootYawFollowSpeed * Time.fixedDeltaTime)
+            )
             : yaw;
 
         m_root.rotation = Quaternion.Euler(0f, eased, 0f);
