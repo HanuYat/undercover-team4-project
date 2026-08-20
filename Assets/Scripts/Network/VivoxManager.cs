@@ -425,7 +425,7 @@ public class VivoxManager : CommonManagerBase
     // (자체 서버 연결) 클라의 음성 연결은 그대로 살아있다. 채널에서 실제로 나가지 않으면 세션이 죽어도
     // 클라들끼리 계속 목소리가 들린다. 그래서 자발적 경로와 동일하게 완전 정리한다.
     // (클라 본인 인터넷이 끊긴 진짜 드롭이면 LeaveAllChannelsAsync가 타임아웃날 수 있으나 fire-and-forget이라 무해.)
-    private void HandleConnectionLost()
+    private void HandleConnectionLost(EConnectionLostReason reason)
     {
         m_positionReporter?.StopReporting();
         m_input?.NotifyChannelsLeft();

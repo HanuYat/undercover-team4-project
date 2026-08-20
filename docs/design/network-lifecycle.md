@@ -40,10 +40,12 @@ auth · session · NGO · Vivox 네 계층이 느슨하게만 연결돼 있어, 
 
 ```
 SessionManager  ──emit──►  OnSessionJoined(id)
-                ──emit──►  OnSessionLeft()          // 자발적 이탈
-                ──emit──►  OnConnectionLost()        // 비자발 (드롭·킥·호스트 이탈)
+                ──emit──►  OnSessionLeft()                       // 자발적 이탈
+                ──emit──►  OnConnectionLost(EConnectionLostReason) // 비자발 (드롭·킥·호스트 이탈)
    구독: VivoxManager, UI, (추후) 게임 흐름
 ```
+
+`OnConnectionLost`는 #764에서 인자를 받게 됐다 — `EConnectionLostReason`(`NetworkDropped`/`SessionClosed`)으로 타이틀 복귀 토스트가 원인별 문구를 고른다.
 
 ### 4. 로그아웃 게이트는 델리게이트 주입
 `AuthBootstrap`은 세션을 **모르는 채로(leaf)** 있어야 한다. 대신 게이트 훅을 노출하고,
