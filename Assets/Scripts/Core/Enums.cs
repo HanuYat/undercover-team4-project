@@ -48,6 +48,15 @@ public enum EVoiceState
     Failed, // 로그인·참가 실패 (사유는 디버그 패널에만)
 }
 
+/// <summary>비자발 세션 끊김 사유 (#764) — 타이틀 복귀 토스트가 원인별 문구를 고르는 데 쓴다.</summary>
+[LocalizedEnum("TitleTable", "Title.ConnectionLost.", nameof(EConnectionLostReason.None))]
+public enum EConnectionLostReason
+{
+    None,
+    NetworkDropped, // NGO 본인 드롭 — 호스트 종료 시 클라가 세션 삭제보다 먼저 받는 신호이기도 하다
+    SessionClosed, // 세션 삭제 / 호스트 종료 이벤트
+}
+
 /// <summary>
 /// 일회성 이펙트 식별자 — EffectManager가 EffectLibrary에서 프리팹·수명을 찾는 키. (#478)
 /// 프리팹 참조가 아닌 enum으로 가리키는 이유는 EInstallable과 같다: 사용처(무기·NPC)가

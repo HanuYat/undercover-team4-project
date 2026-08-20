@@ -22,7 +22,10 @@ public class ConnectionLostReturner : MonoBehaviour
         if (Session != null)
             Session.OnConnectionLost += HandleConnectionLost;
         else
-            Debug.LogWarning("ConnectionLostReturner: SessionManager가 없어 드롭 복귀를 걸 수 없다", this);
+            Debug.LogWarning(
+                "ConnectionLostReturner: SessionManager가 없어 드롭 복귀를 걸 수 없다",
+                this
+            );
     }
 
     private void OnDestroy()
@@ -31,7 +34,7 @@ public class ConnectionLostReturner : MonoBehaviour
             Session.OnConnectionLost -= HandleConnectionLost;
     }
 
-    private void HandleConnectionLost()
+    private void HandleConnectionLost(EConnectionLostReason reason)
     {
         if (m_returning)
             return;
