@@ -287,6 +287,14 @@ MonoBehaviour:
     m_Localized: No saved run to continue - start a new session
     m_Metadata:
       m_Items: []
+  - m_Id: 5849908475650048
+    m_Localized: Lost connection to the session.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5849911873036288
+    m_Localized: The host ended the session.
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

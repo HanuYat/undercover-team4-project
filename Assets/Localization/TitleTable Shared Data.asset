@@ -255,6 +255,14 @@ MonoBehaviour:
     m_Key: Title.Session.Status.NoSave
     m_Metadata:
       m_Items: []
+  - m_Id: 5849908475650048
+    m_Key: Title.ConnectionLost.NetworkDropped
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5849911873036288
+    m_Key: Title.ConnectionLost.SessionClosed
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
