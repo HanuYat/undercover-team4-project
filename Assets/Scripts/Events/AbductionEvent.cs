@@ -104,7 +104,7 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     [SerializeField] private float m_travelTimeoutSeconds = 90f;
 
     [Header("맨홀 결말")]
-    [Tooltip("뚜껑이 열리는 동안 기다리는 시간(초) — 이 구간이 마지막 구조 창이다 (#775, 잠정치는 #589에서 확정)")]
+    [Tooltip("뚜껑이 열리는 동안 기다리는 시간(초) — 이 구간이 마지막 구조 창이다 (#775, 잠정치)")]
     [Min(0.1f)]
     [SerializeField] private float m_manholeOpenSeconds = 3f;
 
