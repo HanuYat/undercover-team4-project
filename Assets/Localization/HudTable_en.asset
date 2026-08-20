@@ -406,8 +406,8 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 5871218008518660
-    m_Localized: Hold the scanner and aim at a citizen to match them against the
-      montage
+    m_Localized: Now go outside, hold a scanner, aim at the citizen, and compare
+      it with the montage
     m_Metadata:
       m_Items: []
   - m_Id: 5871218008518661
@@ -426,11 +426,18 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 5871218008518664
     m_Localized: "Press the button to see the judgment\r\nIf it\u2019s not the culprit,
-      no reward will come in"
+      no reward will come in, and the suspect will not go to jail either"
     m_Metadata:
       m_Items: []
   - m_Id: 5871218008518665
     m_Localized: Tutorial complete. Returning to the title shortly
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6010079826546688
+    m_Localized: 'A corpse can still be booked, but the bounty is reduced
+
+      Alive-only
+      targets pay nothing if delivered dead'
     m_Metadata:
       m_Items: []
   references:

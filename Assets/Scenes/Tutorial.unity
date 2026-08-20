@@ -6980,15 +6980,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_eventEntries.Array.data[0].enabled
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_eventEntries.Array.data[1].enabled
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_eventEntries.Array.data[2].enabled
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_eventEntries.Array.data[3].enabled
@@ -21374,7 +21374,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RoundManager
   m_targetFund: 8000
   m_quotaTable: {fileID: 0}
-  m_timeLimitSeconds: 600
+  m_timeLimitSeconds: 0
   m_startDelaySeconds: 3
   m_jailZone: {fileID: 1077811843}
 --- !u!114 &708957384
@@ -34730,6 +34730,7 @@ MonoBehaviour:
   m_positiveColor: {r: 0.2, g: 0.7, b: 0.35, a: 1}
   m_negativeColor: {r: 0.8, g: 0.25, b: 0.25, a: 1}
   m_neutralColor: {r: 0.45, g: 0.45, b: 0.5, a: 1}
+  m_cautionColor: {r: 0.85, g: 0.55, b: 0.15, a: 1}
   m_displaySeconds: 3
   m_detailFormat:
     m_TableReference:
@@ -35000,6 +35001,7 @@ MonoBehaviour:
   m_criminalBountyMax: 15000
   m_forgeryBountyMin: 500
   m_forgeryBountyMax: 2000
+  m_aliveOnlyChance: 0.35
   m_compliantWeight: 0.2
   m_fleeWeight: 0.4
   m_resistWeight: 0.4
@@ -40213,6 +40215,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: df5ce1efead3d784895dc53f93f9ebef, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ArrestJudge
+  m_corpseBountyPenalty: 0.4
 --- !u!1001 &1337212480
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -44506,7 +44509,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TutorialDirector
   m_cctv: {fileID: 1077811845}
+  m_hqGates:
+  - {fileID: 1755347542}
+  - {fileID: 1755347541}
   m_moveDistance: 6
+  m_minPromptSeconds: 3
   m_finishDelaySeconds: 8
 --- !u!1001 &1493748345
 PrefabInstance:
@@ -53002,6 +53009,28 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4240577228766462, guid: 8a4f2276ebfcdc541ac877445abef006, type: 3}
   m_PrefabInstance: {fileID: 1849921445}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &1755347541 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6270286243745820590, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
+  m_PrefabInstance: {fileID: 1077811841}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7082baa8d8695824eb2f22ecdda35757, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DoubleDoor
+--- !u!114 &1755347542 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5639268715161631598, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
+  m_PrefabInstance: {fileID: 1077811841}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7082baa8d8695824eb2f22ecdda35757, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DoubleDoor
 --- !u!1001 &1755363338
 PrefabInstance:
   m_ObjectHideFlags: 0

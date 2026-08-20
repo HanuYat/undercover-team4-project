@@ -13,13 +13,18 @@ using UnityEngine.Localization;
 /// ConnectionLostToastView와 같은 결의 씬 부착 컴포넌트다.
 ///
 /// <b>단계 판정은 폴링이다.</b> 열 가지 조건을 위해 시스템 열 곳에 이벤트를 새로 뚫는 대신,
-/// 이미 있는 이벤트 넷만 구독해 깃발을 세우고 나머지는 매 프레임 상태를 읽는다. 도는 것은
+/// 이미 있는 이벤트만 구독해 깃발을 세우고 나머지는 매 프레임 상태를 읽는다. 도는 것은
 /// 한 번에 조건 하나뿐이라 비용이 사실상 없다.
 /// </summary>
 public class TutorialDirector : MonoBehaviour
 {
     private const string k_table = "HudTable";
     private const string k_keyPrefix = "Hud.Tutorial.";
+
+    // 코드가 이름으로 집어 쓰는 단계 키 — 아래 s_steps가 이 상수를 그대로 쓴다.
+    // 리터럴을 양쪽에 따로 적으면 한쪽만 고쳤을 때 비교가 조용히 안 맞는다.
+    private const string k_slotsKey = "Slots"; // 부팅 장착 이벤트를 거르는 기준 (HandleEquippedItemChanged)
+    private const string k_fieldStartKey = "Scan"; // 여기부터 현장 — 들어설 때 본부 대문을 연다
 
     /// <summary>단계 하나 — 문구 키와 "끝났는가" 판정.</summary>
     private readonly struct Step
@@ -39,11 +44,11 @@ public class TutorialDirector : MonoBehaviour
     private static readonly Step[] s_steps =
     {
         new Step("Move", d => d.m_movedDistance >= d.m_moveDistance),
-        new Step("Slots", d => d.m_slotChanged),
+        new Step(k_slotsKey, d => d.m_slotChanged),
         new Step("Aim", d => d.m_interactor != null && d.m_interactor.CurrentInteractable != null),
         new Step("TeamTab", d => d.m_teamPanelSeen),
         new Step("Cctv", d => d.m_cctvSwitched),
-        new Step("Scan", d => d.m_scanned),
+        new Step(k_fieldStartKey, d => d.m_scanned),
         new Step("Subdue", d => d.AnyNpcStunned),
         new Step("Rope", d => d.m_escorter != null && d.m_escorter.IsDraggingAny),
         new Step("Jail", d => d.m_admitted),
@@ -57,11 +62,25 @@ public class TutorialDirector : MonoBehaviour
     [SerializeField]
     private CCTVSwitcher m_cctv;
 
+    [Tooltip("본부 대문 전부 — 본부 학습이 끝나면 자동으로 연다. HQ/Doors/* (남·북 두 짝)")]
+    [SerializeField]
+    private DoubleDoor[] m_hqGates;
+
     [Header("단계 기준값")]
     [Tooltip("이동 단계를 통과시킬 누적 이동 거리(m)")]
     [Min(0f)]
     [SerializeField]
     private float m_moveDistance = 6f;
+
+    [Tooltip("문구가 최소한 이만큼은 떠 있는다 — 조건이 곧바로 충족돼도 읽을 시간을 준다(초)")]
+    [Min(0f)]
+    [SerializeField]
+    private float m_minPromptSeconds = 3f;
+
+    [Tooltip("시체 경고 토스트가 떠 있는 시간(초)")]
+    [Min(0f)]
+    [SerializeField]
+    private float m_corpseToastSeconds = 6f;
 
     [Tooltip("마지막 문구를 읽을 시간 — 이 시간이 지나면 타이틀로 돌아간다(초)")]
     [Min(0f)]
@@ -75,6 +94,10 @@ public class TutorialDirector : MonoBehaviour
     private Vector3 m_lastPlayerPosition;
     private bool m_finished;
 
+    // 지금 단계 문구를 띄운 시각 — 최소 표시 시간의 기준. 라운드 종료 freeze로 timeScale이
+    // 건드려져도 흐르도록 실시간 기준을 쓴다(RoundManager의 시작 지연과 같은 방침).
+    private float m_stepShownTime;
+
     // 이벤트로 세우는 깃발 — 폴링으로는 잡을 수 없는 "그 순간 한 번" 짜리들
     private bool m_slotChanged;
     private bool m_cctvSwitched;
@@ -82,6 +105,9 @@ public class TutorialDirector : MonoBehaviour
     private bool m_admitted;
     private bool m_judged;
     private bool m_teamPanelSeen;
+
+    // 시체 경고는 튜토리얼 통틀어 한 번뿐이다
+    private bool m_corpseWarned;
 
     // 로컬 플레이어 부품 — 스폰이 씬 시작보다 늦어 매 프레임 다시 찾다가 잡히면 그때 건다
     private Transform m_playerTransform;
@@ -95,21 +121,28 @@ public class TutorialDirector : MonoBehaviour
     private ArrestJudge m_boundJudge;
     private bool m_cctvBound;
 
-    private bool AnyNpcStunned
+    // 스폰된 NPC 중 조건에 맞는 것이 하나라도 있는가. 조건마다 같은 순회를 복사하지 않으려고 나눠 뒀다.
+    // 아래 두 곳이 넘기는 람다는 캡처가 없어 델리게이트가 한 번만 만들어진다 — 매 프레임 도는 자리라
+    // 그게 중요하다(AnyNpcDead는 시체가 생길 때까지 계속 돈다).
+    private static bool AnyNpc(Func<NpcController, bool> test)
     {
-        get
-        {
-            NpcSpawner spawner = App.Game.NpcSpawner;
-            if (spawner == null)
-                return false;
-
-            foreach (NpcController npc in spawner.SpawnedNpcs)
-                if (npc != null && npc.CurrentState == NpcState.Stunned)
-                    return true;
-
+        NpcSpawner spawner = App.Game.NpcSpawner;
+        if (spawner == null)
             return false;
-        }
+
+        foreach (NpcController npc in spawner.SpawnedNpcs)
+            if (npc != null && test(npc))
+                return true;
+
+        return false;
     }
+
+    // NpcStun.IsStunned로 본다 — 무력화 경로가 둘이라 상태 비교로는 절반을 놓친다.
+    // 진압봉·테이저는 FSM을 바꾸지 않는 오버레이 경로고(NPC는 Idle/Run인 채 기절한다),
+    // NpcState.Stunned 전이는 넉백 착지 KO 전용이다. 그 둘을 함께 답하는 것이 IsStunned다.
+    private bool AnyNpcStunned => AnyNpc(n => n.Stun != null && n.Stun.IsStunned);
+
+    private bool AnyNpcDead => AnyNpc(n => n.Death != null && n.Death.IsDead);
 
     private void Start()
     {
@@ -174,8 +207,14 @@ public class TutorialDirector : MonoBehaviour
         BindLate();
         TrackMovement();
         TrackTeamPanel();
+        TrackCorpse();
 
         if (m_finished || m_stepIndex < 0 || m_stepIndex >= s_steps.Length)
+            return;
+
+        // 문구를 읽을 시간을 준다 — 조건이 이미 충족된 채로 단계에 들어서면 한 프레임 깜빡이고
+        // 지나가 버린다. 이동(6m)처럼 원래 오래 걸리는 단계에는 아무 영향이 없다.
+        if (Time.unscaledTime - m_stepShownTime < m_minPromptSeconds)
             return;
 
         if (s_steps[m_stepIndex].IsDone(this))
@@ -186,6 +225,7 @@ public class TutorialDirector : MonoBehaviour
     private void Advance()
     {
         m_stepIndex++;
+        m_stepShownTime = Time.unscaledTime;
 
         if (m_stepIndex >= s_steps.Length)
         {
@@ -195,8 +235,20 @@ public class TutorialDirector : MonoBehaviour
             return;
         }
 
+        // 본부에서 배울 것(이동·슬롯·조준·상황판·CCTV)이 끝나면 현장으로 내보낸다.
+        // 잠금은 라운드 시작 때 이미 풀렸으므로(DoubleDoor.HandleRoundStarted) 여는 것만 남는다.
+        // 두 짝을 다 여는 이유는 어느 쪽으로 나갈지 모르기 때문이다 — 닫힌 쪽으로 간 사람이 갇힌다.
+        if (s_steps[m_stepIndex].Key == k_fieldStartKey && m_hqGates != null)
+            foreach (DoubleDoor gate in m_hqGates)
+                if (gate != null)
+                    gate.ServerSetOpen(true);
+
         ShowPrompt(s_steps[m_stepIndex].Key);
     }
+
+    /// <summary>지금 떠 있는 단계의 키 — 아직 시작 전이거나 다 끝났으면 null.</summary>
+    private string CurrentStepKey =>
+        m_stepIndex >= 0 && m_stepIndex < s_steps.Length ? s_steps[m_stepIndex].Key : null;
 
     private async UniTaskVoid FinishAsync()
     {
@@ -212,7 +264,9 @@ public class TutorialDirector : MonoBehaviour
     {
         HidePrompt();
 
-        // 안내 HUD는 오너 스폰과 함께 생기므로 아직 없을 수 있다 — 그때는 다음 단계에서 다시 뜬다
+        // 안내 HUD는 오너 스폰과 함께 생긴다(InteractionFeedback.EnsureHud). 그 스폰이 StartHost
+        // 안에서 동기로 끝나고 첫 Advance는 그 다음 프레임이라 정상 흐름에서는 항상 서 있다 —
+        // HUD가 없는 구성(데디케이티드 서버 등)에서 조용히 넘어가기 위한 가드다.
         if (App.UI.Prompt == null)
             return;
 
@@ -248,22 +302,30 @@ public class TutorialDirector : MonoBehaviour
             }
         }
 
+        // CCTV는 씬 직렬화 참조라 Start에서도 잡히지만 <b>여기서 걸어야 한다</b> —
+        // CCTVSwitcher.OnNetworkSpawn의 Apply()가 StartHost 도중 OnDisplayChanged를 한 번 쏘고,
+        // 이 구독은 그 뒤(같은 프레임 Update)라 그것을 놓친다. 일찍 걸면 Cctv 단계가 저절로 통과한다.
         if (!m_cctvBound && m_cctv != null)
         {
             m_cctv.OnDisplayChanged += HandleCctvChanged;
             m_cctvBound = true;
         }
 
+        // 인계·판정은 산 사람과 시체가 서로 다른 이벤트로 갈린다 (#766) — 튜토리얼은 둘 다 통과로 친다.
+        // 시체 인계도 정상 경로다(생사 불문 대상은 감액, 생포 필수 대상은 0원). 산 쪽만 들으면
+        // 죽여서 끌고 온 플레이어가 아무 반응 없는 화면 앞에 갇힌다. "값이 다르다"는 토스트가 가르친다.
         if (m_boundJail == null && App.Game.Jail != null)
         {
             m_boundJail = App.Game.Jail;
             m_boundJail.OnInmateAdmitted += HandleInmateAdmitted;
+            m_boundJail.OnDeceasedRecorded += HandleInmateAdmitted;
         }
 
         if (m_boundJudge == null && App.Game.ArrestJudge != null)
         {
             m_boundJudge = App.Game.ArrestJudge;
             m_boundJudge.OnArrestJudged += HandleArrestJudged;
+            m_boundJudge.OnCorpseJudged += HandleArrestJudged;
         }
     }
 
@@ -276,9 +338,15 @@ public class TutorialDirector : MonoBehaviour
         if (m_cctvBound && m_cctv != null)
             m_cctv.OnDisplayChanged -= HandleCctvChanged;
         if (m_boundJail != null)
+        {
             m_boundJail.OnInmateAdmitted -= HandleInmateAdmitted;
+            m_boundJail.OnDeceasedRecorded -= HandleInmateAdmitted;
+        }
         if (m_boundJudge != null)
+        {
             m_boundJudge.OnArrestJudged -= HandleArrestJudged;
+            m_boundJudge.OnCorpseJudged -= HandleArrestJudged;
+        }
     }
 
     private void TrackMovement()
@@ -289,6 +357,18 @@ public class TutorialDirector : MonoBehaviour
         Vector3 now = m_playerTransform.position;
         m_movedDistance += Vector3.Distance(now, m_lastPlayerPosition);
         m_lastPlayerPosition = now;
+    }
+
+    // NPC가 죽으면 한 번 알려 준다 — 시체 인계도 통과 경로지만 값이 다르다는 것을 가르친다 (#766).
+    // 단계 문구(PromptView)를 덮지 않게 토스트로 띄운다. "하나라도 죽었나"만 알면 되므로
+    // NpcDeath.OnDied 구독 열 개 대신 폴링한다.
+    private void TrackCorpse()
+    {
+        if (m_corpseWarned || !AnyNpcDead)
+            return;
+
+        m_corpseWarned = true;
+        App.UI.Toast?.Show(new LocalizedString(k_table, k_keyPrefix + "Corpse"), m_corpseToastSeconds);
     }
 
     // Tab 상황판은 홀드로 잠깐 뜨고 만다 — 열린 순간을 놓치지 않게 매 프레임 본다.
@@ -306,7 +386,14 @@ public class TutorialDirector : MonoBehaviour
     // 스캐너는 매니저가 아니라 손에 든 아이템이라 이 시점 말고는 잡을 자리가 없다.
     private void HandleEquippedItemChanged(ItemBase item)
     {
-        m_slotChanged = true;
+        // 부팅 중 기본 장비 지급(PlayerItemSupply)이 이 이벤트를 한 번 저절로 쏜다. 지급이 한 프레임
+        // 미뤄져(#370) 이 구독보다 뒤에 오므로 구독 시점으로는 못 거른다 — 단계가 떠 있을 때만 센다.
+        //
+        // 이 가드는 여기에만 둔다. 나머지 깃발은 사람 입력이 있어야 서고, 인계(Jail)와 판정(Verdict)은
+        // 유치장 버튼 한 번이 둘 다 쏘므로(JailIntake가 판정을 먼저 돌린다) 단계별로 끊으면
+        // 판정 단계가 이미 끝난 판정을 영원히 기다린다.
+        if (CurrentStepKey == k_slotsKey)
+            m_slotChanged = true;
 
         if (m_boundScanner != null)
         {

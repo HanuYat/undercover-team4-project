@@ -415,6 +415,10 @@ MonoBehaviour:
     m_Key: Hud.Tutorial.Done
     m_Metadata:
       m_Items: []
+  - m_Id: 6010079826546688
+    m_Key: Hud.Tutorial.Corpse
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
