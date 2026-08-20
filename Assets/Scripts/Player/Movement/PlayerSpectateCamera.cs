@@ -59,9 +59,15 @@ public class PlayerSpectateCamera : MonoBehaviour
     /// <summary>관전이 요청된 상태인가 — 블렌드가 끝났는지와는 별개다.</summary>
     public bool IsActive => m_active;
 
-    // 오빗 중심 덮어쓰기 — 시체가 지하로 사라진 경우에만 쓴다 (#775)
+    // 오빗 중심 덮어쓰기 — 몸이 지하로 사라진 경우에만 쓴다 (#775)
     private Vector3 m_pivotOverride;
     private bool m_hasPivotOverride;
+
+    /// <summary>
+    /// 피벗이 시체가 아니라 고정 지점인가 — <b>사망 전에도 관전으로 넘어가는 신호</b>다. (#775)
+    /// 맨홀 하강은 사망 확정 전에 몸이 지면을 통과하므로, PlayerLook이 이 값을 보고 시점을 뺀다.
+    /// </summary>
+    public bool HasPivotOverride => m_hasPivotOverride;
 
     private void Awake()
     {
@@ -81,10 +87,7 @@ public class PlayerSpectateCamera : MonoBehaviour
         m_active = spectating;
 
         if (!spectating)
-        {
-            m_hasPivotOverride = false; // 부활했다 — 다음 관전은 다시 자기 몸을 돈다 (#775)
-            return;
-        }
+            return; // 피벗 고정 해제는 PlayerLook이 무력화가 풀리는 것을 보고 한다 (#775)
 
         m_yaw = entryYaw;
         m_pitch = m_enterPitch;
@@ -147,6 +150,9 @@ public class PlayerSpectateCamera : MonoBehaviour
         m_pivotOverride = worldPosition;
         m_hasPivotOverride = true;
     }
+
+    /// <summary>피벗 고정을 놓는다 — 부활 등으로 자기 몸을 다시 돌 수 있게 됐을 때. (#775)</summary>
+    public void ClearPivotOverride() => m_hasPivotOverride = false;
 
     /// <summary>
     /// 관전 카메라의 <b>월드</b> 포즈. 골반이 없으면 false — 호출자는 1인칭 포즈를 그대로 쓴다.

@@ -51,9 +51,6 @@ public class PlayerAnimationDriver : MonoBehaviour
     private static readonly int s_attackHash = Animator.StringToHash("Attack"); // 타격 상체 레이어 트리거 (#217)
     private static readonly int s_revivingHash = Animator.StringToHash("Reviving"); // 구조 채널링 모션 (#725)
 
-    // 기상 모션을 건너뛰고 곧장 세울 때 찍는 상태 (#371 후속) — 아래 스냅 참고.
-    // Base Layer의 기본 상태 이름과 같아야 한다(Player.controller).
-
     [SerializeField]
     private Animator m_animator;
 
@@ -62,9 +59,6 @@ public class PlayerAnimationDriver : MonoBehaviour
 
     [SerializeField]
     private float m_damping = 0.1f; // 전환 부드럽게
-
-    // 직전 프레임의 쓰러짐 여부 — 일어서는 '순간'을 잡아 기상 모션을 건너뛸지 정한다 (#371 후속)
-    private bool m_wasProne;
 
     private PlayerIncapacitation m_incapacitation; // 다운 애니메이션 구동용 (#105)
     private PlayerCrouch m_crouch; // 앉기 애니메이션 구동용 (#236)
@@ -146,8 +140,6 @@ public class PlayerAnimationDriver : MonoBehaviour
             bool prone =
                 m_incapacitation.IsProne || (m_ragdoll != null && m_ragdoll.IsRagdollActive);
             m_animator.SetBool(s_downHash, prone);
-
-            m_wasProne = prone;
         }
 
         // 앉기도 같은 방식 — 서버 권위 동기화값을 폴링해 Crouch 상태(Crouch Idle/Walk 블렌드 트리)를 구동한다. (#236)

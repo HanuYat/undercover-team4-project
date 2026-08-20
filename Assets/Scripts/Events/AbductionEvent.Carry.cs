@@ -159,7 +159,13 @@ public partial class AbductionEvent
             return;
         }
 
-        await DescendAsync(caught, manholePoint, manhole);
+        // 하강도 실패를 낸다 — 데려갈 사람이 남지 않은 채 여기까지 온 경우다(아래 참고).
+        // 그때는 결말이 아니라 구조로 끝내야 한다: 몸을 풀어 주지 않으면 라운드가 끝날 때까지 굳는다.
+        if (!await DescendAsync(caught, manholePoint, manhole))
+        {
+            FinishRescued(caught);
+            return;
+        }
 
         m_carryTarget = null;
         Finish();
@@ -179,9 +185,11 @@ public partial class AbductionEvent
 
         Debug.Log($"[납치] 맨홀 도착 — 뚜껑 열림 ({m_manholeOpenSeconds:F1}초, 납치범 {m_abductors.Count}명)");
 
+        // 마감을 <b>기다린 뒤에</b> 본다 — 조건을 while에 두면 마지막 폴링 이후 마감까지의 틈에서
+        // 떼어낸 것을 못 보고 도착을 성공으로 반환한다. 구조 창은 내려가기 전까지이므로 그 틈도 창이다.
         float deadline = Time.time + m_manholeOpenSeconds;
 
-        while (Time.time < deadline)
+        while (true)
         {
             await UniTask.Delay(
                 TimeSpan.FromSeconds(0.25), cancellationToken: destroyCancellationToken);
@@ -197,9 +205,10 @@ public partial class AbductionEvent
                     manhole.ServerClose();
                 return false;
             }
-        }
 
-        return caught != null;
+            if (Time.time >= deadline)
+                return true;
+        }
     }
 
     /// <summary>
@@ -216,19 +225,24 @@ public partial class AbductionEvent
     /// <b>사망 확정은 다 내려간 뒤다.</b> 먼저 걸면 그 순간 래그돌이 켜지는데, 래그돌이 된 몸은
     /// 추종을 따라올 수단이 없어(동적 리지드바디는 부모 트랜스폼을 따르지 않는다) 캡슐만 내려가고
     /// 시체는 인도 위에 남는다.
+    ///
+    /// 반환값: 결말을 냈으면 true. <b>데려갈 사람이 남지 않아 못 냈으면 false</b> — 부르는 쪽이 구조로 끝낸다.
     /// </summary>
-    private async UniTask DescendAsync(Transform caught, Transform manholePoint, AbductionManhole manhole)
+    private async UniTask<bool> DescendAsync(
+        Transform caught, Transform manholePoint, AbductionManhole manhole)
     {
         // 이 지점부터 격퇴는 통하지 않는다 — 구조 창은 내려가기 전까지다.
         m_descending = true;
 
+        // 뚜껑 대기의 마지막 순간에 떼어냈을 수 있다 — 여기서 끝내면 결말도 구조도 아닌 상태로
+        // 무력화가 남는다. false로 물러나 부르는 쪽이 몸을 풀게 한다.
         PruneDead(m_abductors);
         if (caught == null || m_abductors.Count == 0)
         {
             if (manhole != null)
                 manhole.ServerClose(); // 내려갈 사람이 없다 — 열어 둔 뚜껑만 되돌린다
             DisposeAbductors();
-            return;
+            return false;
         }
 
         // 몸을 다시 붙잡는다 — 호송 시퀀스가 도착과 함께 풀어 뒀다(그래서 뚜껑이 열리는 동안 서 있었다)
@@ -259,6 +273,20 @@ public partial class AbductionEvent
             }
         }
 
+        // 피해자 시점을 먼저 지상으로 뺀다 — 1인칭으로 지면을 통과하면 땅속이 화면을 덮는다 (#775).
+        // 사망 확정 전이라 관전 진입 신호는 이 피벗 고정 자체다(PlayerLook이 그것을 본다).
+        if (view != null && manholePoint != null)
+        {
+            view.SetSpectatePivot(manholePoint.position);
+
+            if (m_descendViewLeadSeconds > 0f)
+            {
+                await UniTask.Delay(
+                    TimeSpan.FromSeconds(m_descendViewLeadSeconds),
+                    cancellationToken: destroyCancellationToken);
+            }
+        }
+
         Debug.Log($"[납치] 맨홀 하강 — {m_descendDepth:F0}m 아래로 내려간다");
 
         float descended = 0f;
@@ -283,10 +311,7 @@ public partial class AbductionEvent
 
         // 다 내려왔다 — 여기서 라운드 아웃을 확정한다(래그돌은 지하에서 켜진다).
         // 우리가 낸 결말이라고 표시해 무력화 감시가 외부 사인으로 오인하지 않게 한다.
-        // 관전 오빗 중심을 맨홀로 넘긴다 — 사망 확정 <b>전에</b> 해야 첫 프레임부터 지상을 본다 (#775)
-        if (view != null && manholePoint != null)
-            view.SetSpectatePivot(manholePoint.position);
-
+        // 관전 오빗 중심은 하강 전에 이미 맨홀로 넘겨 뒀다 — 시점이 지상에 남아 있다.
         PlayerIncapacitation incap = caught != null ? caught.GetComponent<PlayerIncapacitation>() : null;
         if (incap != null)
         {
@@ -313,6 +338,7 @@ public partial class AbductionEvent
 
         Debug.Log("[납치] 하강 완료 — 맨홀 아래로 사라졌다");
         DisposeAbductors();
+        return true;
     }
 
     // 구조·소실로 끝났다 — 납치범을 잔류 시민으로 놓아주고 피해자의 납치 무력화를 푼다.

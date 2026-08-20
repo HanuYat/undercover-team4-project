@@ -116,6 +116,10 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     [Min(0.1f)]
     [SerializeField] private float m_descendSpeed = 2f;
 
+    [Tooltip("내려가기 전에 피해자 시점을 지상 3인칭으로 빼 두는 시간(초) — 전환 보간이 끝날 만큼 (#775)")]
+    [Min(0f)]
+    [SerializeField] private float m_descendViewLeadSeconds = 0.6f;
+
     [Header("수명")]
     [Tooltip("이 시간(초) 안에 붙잡지 못하면 납치범이 포기한다 — 잔류 시민으로 남아 언제든 검거 가능")]
     [SerializeField] private float m_maxChaseSeconds = 60f;
@@ -371,6 +375,18 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
 
     public void ServerReset()
     {
+        // 하강 중이면 결말은 이미 확정됐다 (#775) — 피해자를 되돌리지 않고, 돌고 있는 하강 절차가
+        // 그대로 끝을 내게 둔다(라운드 정리 뒤의 사망은 상점 진입 리셋이 되돌린다).
+        // 납치범은 잔류로 <b>놓지 않고</b> 그 자리에서 치운다: 프리즈 + 에이전트 off 상태라 임무 해제가
+        // 얹히면 배회 복귀 상태의 Enter가 꺼진 에이전트를 만진다 — 격퇴를 이 구간에 막아 둔 것과 같은 이유다.
+        if (m_descending)
+        {
+            DisposeAbductors();
+            CloseAllManholes();
+            Finish();
+            return;
+        }
+
         // 라운드 종료 등 강제 정리 — 끌려가던 플레이어를 풀어 주고 납치범을 놓는다.
         // 참조를 <b>먼저</b> 비운다: 아래 Recover가 무력화 감시(HandleVictimCauseChanged)를 울리는데,
         // 그때 m_carryTarget이 남아 있으면 스스로 푼 것을 외부 사유로 오인해 중단 로그가 뜬다 (#554).
