@@ -190,6 +190,23 @@ public class PlayerRagdoll : MonoBehaviour
     private bool HasMoveAuthority =>
         m_netObject == null || !m_netObject.IsSpawned || m_netObject.IsOwner;
 
+    // 계측 줄머리 — <b>같은 시체를 피어마다 짝지으려면 이름만으로는 안 된다</b>(전부 Player(Clone)).
+    // 오브젝트 id로 시체를, 오너 id로 "누구의 몸인가"를, 로컬 id로 "이 줄을 찍은 피어"를 가른다.
+    private string TraceId
+    {
+        get
+        {
+            if (m_netObject == null || !m_netObject.IsSpawned)
+                return name;
+
+            ulong local = NetworkManager.Singleton != null
+                ? NetworkManager.Singleton.LocalClientId
+                : 0;
+
+            return $"시체#{m_netObject.NetworkObjectId} 오너{m_netObject.OwnerClientId} 나{local}";
+        }
+    }
+
     private void Awake()
     {
         // ⚠ 리그는 <b>자식</b>(Corpse)에 있다 — 사망 전용 모델을 분리하면서 옮겼다.
@@ -1367,7 +1384,7 @@ public class PlayerRagdoll : MonoBehaviour
 
         Rigidbody hips = m_rig.HipsBody;
         Debug.Log(
-            $"[밧줄] {name} 권한={HasMoveAuthority} 상태={m_state} 밧줄길이={RopeLength:F2}m "
+            $"[밧줄] {TraceId} 권한={HasMoveAuthority} 상태={m_state} 밧줄길이={RopeLength:F2}m "
                 + $"골반키네마틱={(hips != null ? hips.isKinematic.ToString() : "없음")} "
                 + $"잠듦={(hips != null ? hips.IsSleeping().ToString() : "없음")} "
                 + $"평균속도={m_rig.AverageSpeed:F2}m/s",
@@ -1410,7 +1427,7 @@ public class PlayerRagdoll : MonoBehaviour
             : float.NaN;
 
         Debug.Log(
-            $"[밧줄추적] {name} 권한={HasMoveAuthority} t={k_ropeTraceSeconds:F1}s "
+            $"[밧줄추적] {TraceId} 권한={HasMoveAuthority} t={k_ropeTraceSeconds:F1}s "
                 + $"골반이동={hipsMoved:F2}m "
                 + $"루트이동={Vector3.Distance(m_root.position, m_ropeTraceRootStart):F2}m "
                 + $"평균속도={m_rig.AverageSpeed:F2}m/s "
@@ -1498,7 +1515,7 @@ public class PlayerRagdoll : MonoBehaviour
             return;
 
         Debug.Log(
-            $"[리그물리] {name} 뼈={m_rig.BoneCount} 골반질량={hips.mass:F1}kg "
+            $"[리그물리] {TraceId} 뼈={m_rig.BoneCount} 골반질량={hips.mass:F1}kg "
                 + $"선형감쇠={hips.linearDamping:F2} 각감쇠={hips.angularDamping:F2} "
                 + $"중력={hips.useGravity} 침투해소상한={hips.maxDepenetrationVelocity:F2}m/s "
                 + $"솔버={hips.solverIterations}/{hips.solverVelocityIterations} "
@@ -1557,7 +1574,7 @@ public class PlayerRagdoll : MonoBehaviour
             : "클램프 없음";
 
         Debug.Log(
-            $"[낙하속도] 권한={HasMoveAuthority} 종료={reason} 실시간={real:F2}s 물리={physics:F2}s "
+            $"[낙하속도] {TraceId} 권한={HasMoveAuthority} 종료={reason} 실시간={real:F2}s 물리={physics:F2}s "
                 + $"비율={ratio:F2}(1.00이 정상) 프레임={m_fallRateFrames} 평균={fps:F1}fps "
                 + $"최장프레임={m_fallRateWorstFrame * 1000f:F0}ms({verdict}) 골반낙차={drop:F2}m "
                 + $"최고하강={m_fallPeakDescent:F2}m/s 낙하곡선=[{DescribeFallCurve()}]",

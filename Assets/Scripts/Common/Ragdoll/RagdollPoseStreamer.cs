@@ -728,7 +728,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
         float holdRatio = m_applyFrames > 0 ? (float)m_holdFrames / m_applyFrames : 0f;
 
         Debug.Log(
-            $"[자세도착] {name} 종료={reason} 패킷={m_arrivalCount}/{sent} 유실={lost} "
+            $"[자세도착] 시체#{NetworkObjectId} 오너{OwnerClientId} 나{(NetworkManager != null ? NetworkManager.LocalClientId : 0)} 종료={reason} 패킷={m_arrivalCount}/{sent} 유실={lost} "
                 + $"구식버림={m_arrivalStaleDrops} 기대간격={expected * 1000f:F0}ms "
                 + $"평균간격={average * 1000f:F0}ms 최대간격={m_arrivalWorstGap * 1000f:F0}ms "
                 + $"재생배율={rate:F2}(1.00이 정상) 홀드={holdRatio * 100f:F0}%({m_holdFrames}/{m_applyFrames}f)",

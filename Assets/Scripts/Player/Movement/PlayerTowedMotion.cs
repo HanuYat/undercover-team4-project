@@ -1,3 +1,4 @@
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -200,8 +201,12 @@ public class PlayerTowedMotion : MonoBehaviour
         // ⚠ 임시 계측 (#763) — 이 분기가 피어마다 갈리면 그것이 증상의 정체다.
         if (m_logDragPath)
         {
+            NetworkObject self = GetComponent<NetworkObject>();
+            ulong local = NetworkManager.Singleton != null ? NetworkManager.Singleton.LocalClientId : 0;
             Debug.Log(
-                $"[운반경로] {name} 경로={(ropePath ? "밧줄" : "캡슐추종")} "
+                $"[운반경로] 시체#{(self != null ? self.NetworkObjectId : 0)} "
+                    + $"오너{(self != null ? self.OwnerClientId : 0)} 나{local} "
+                    + $"경로={(ropePath ? "밧줄" : "캡슐추종")} "
                     + $"래그돌={(m_ragdoll != null ? m_ragdoll.IsRagdollActive.ToString() : "없음")} "
                     + $"운반자={(carrier != null ? carrier.name : "없음")}",
                 this
