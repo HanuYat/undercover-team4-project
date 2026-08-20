@@ -59,9 +59,15 @@ public class PlayerNameTag : NetworkBehaviour
         NetworkVariableWritePermission.Owner
     );
 
+    // <b>"내 캐릭터인가"는 스폰 시점에 굳힌다 — <c>IsOwner</c>로 매번 묻지 않는다.</b>
+    // 사망 중에는 소유권이 서버로 넘어가므로(#763 A-1) <c>IsOwner</c>의 뜻이 라운드 중에 뒤집힌다:
+    // 호스트에서 남의 시체가 "내 것"이 되고, 죽은 클라에서 자기 몸이 "남의 것"이 된다.
+    // 화면·HUD는 <b>누가 조작하는 몸인가</b>를 물어야 하고 그 답은 스폰 때 정해진다.
+    private bool m_isLocalPlayer;
+
     private void LateUpdate()
     {
-        if (IsOwner || !IsSpawned)
+        if (m_isLocalPlayer || !IsSpawned)
             return;
 
         // 이름이 아직 동기화되지 않았으면 빈 라벨이 보이지 않도록 숨긴다
@@ -83,6 +89,8 @@ public class PlayerNameTag : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
+        m_isLocalPlayer = IsOwner; // 라운드 중에 뒤집히는 값이라 여기서 굳힌다 (#763 A-1)
+
         if (IsOwner)
         {
             m_name.Value = App.Net.Auth.Nickname.ToFixed64();

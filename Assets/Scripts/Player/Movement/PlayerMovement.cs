@@ -130,6 +130,10 @@ public class PlayerMovement : NetworkBehaviour
     private PlayerTowedMotion m_towed; // 남이 내 몸을 옮기는 동안의 추종 — 입력 이동을 대신한다 (#279, #365)
     private PlayerLook m_look; // 시점 회전·카메라 자세 — 몸통 yaw가 이동 방향의 기준이라 여기서 순서를 잡는다
     private PlayerRagdoll m_ragdoll; // 사망 래그돌 — 켜져 있는 동안 외력(넉백)을 삼킨다 (#506)
+
+    // 재배치를 보간 없이 원격에 알리는 통로 — SetPose가 Teleport를 부른다(근거는 저쪽 주석).
+    private Unity.Netcode.Components.NetworkTransform m_netTransform;
+
     private RoundManager Round => App.Game.Round; // 라운드 종료 시 이동·시점 차단용 (라운드 종료 freeze)
     private float m_verticalVelocity;
     private Vector3 m_knockbackVelocity; // 외력으로 밀려나는 수평 속도 — 매 프레임 감쇠 (#232 폭발 넉백)
@@ -202,6 +206,7 @@ public class PlayerMovement : NetworkBehaviour
         m_towed = GetComponent<PlayerTowedMotion>();
         m_look = GetComponent<PlayerLook>();
         m_ragdoll = GetComponent<PlayerRagdoll>();
+        m_netTransform = GetComponent<Unity.Netcode.Components.NetworkTransform>();
     }
 
     private void Start()
@@ -435,6 +440,12 @@ public class PlayerMovement : NetworkBehaviour
         transform.SetPositionAndRotation(pos, rot);
         m_controller.enabled = true;
 
+        // 원격에 "이건 순간이동이다"를 알린다 — 안 보내면 각 피어가 이 거리를 보간해 걸어·달려온다
+        // (프리팹 설정 Interpolate=1 · PositionMaxInterpolationTime=0.1). 시체 쪽과 같은 수단이고
+        // (NpcRagdoll.ServerTeleportNetTransforms) 권위만 오너로 갈린다 — 이 함수가 도는 곳이 곧 오너다.
+        if (IsSpawned && IsOwner)
+            m_netTransform?.Teleport(transform.position, transform.rotation, transform.localScale);
+
         // 낙하·점프 도중 텔레포트되면 쌓인 수직 속도가 그대로 남아 도착지에서 바닥을 파고들거나
         // 튀어오른다 — 도착 즉시 접지 판정으로 이어지도록 초기화한다. (#189)
         m_verticalVelocity = 0f;
@@ -454,11 +465,14 @@ public class PlayerMovement : NetworkBehaviour
         if (!IsSpawned || IsOwner)
             App.UI.SpeedVignette?.UpdateSpeed(m_currentHorizontalVelocity.magnitude, SprintSpeed);
 
-        // 래그돌인 동안(#506) — <b>위치의 주인은 시체다.</b> 캡슐이 시체를 따라간다.
+        // 래그돌인 동안(#506) — <b>위치의 주인은 시체다.</b> 이동 입력을 받지 않는다.
+        //
+        // ⚠ <b>캡슐 추종은 여기서 부르지 않는다</b> — 사망 중 소유권이 서버로 넘어가면(#763 A-1)
+        // 이 컴포넌트가 꺼져 있는 피어가 권위가 되므로, 추종은 PlayerRagdoll이 스스로 돈다.
+        // 여기 남는 것은 <b>내 화면의 시점</b>뿐이다.
         if (m_ragdoll != null && m_ragdoll.IsCapsuleFollowingBody)
         {
             m_look?.HandleLook();
-            m_ragdoll.TickCapsuleFollow();
             m_look?.UpdateCameraPose();
             return;
         }

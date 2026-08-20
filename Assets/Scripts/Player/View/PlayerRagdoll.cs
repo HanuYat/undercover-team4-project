@@ -169,8 +169,7 @@ public class PlayerRagdoll : MonoBehaviour
     /// <see cref="TickCapsuleFollow"/>를 돌리는 판정. 호송·운반(<c>PlayerTowedMotion</c>)이 입력 이동을
     /// 대신하는 것과 같은 자리이고, 몸을 끄는 주체가 남이 아니라 <b>자기 뼈 물리</b>라는 점만 다르다.
     /// </summary>
-    internal bool IsCapsuleFollowingBody =>
-        m_state == RagdollState.Ragdoll && HasMoveAuthority;
+    internal bool IsCapsuleFollowingBody => m_state == RagdollState.Ragdoll;
 
     // 이동 권한 — 오너(또는 세션 없는 오프라인 Play)만 루트를 옮길 수 있다.
     // 서버가 남의 캐릭터를 옮겨봤자 오너 권한 NetworkTransform이 되돌린다(BombExplosionView 주석과 같은 논리).
@@ -212,6 +211,9 @@ public class PlayerRagdoll : MonoBehaviour
 
         // 소유자보다 먼저 돌 수 있다 — 리그 수집은 멱등이라 여기서 보장해도 된다.
         m_rig.EnsureCollected();
+
+        // 밧줄은 리그와 <b>같은 오브젝트</b>에 있다 — RagdollRope가 RagdollRig를 RequireComponent한다.
+        m_rope = m_rig.GetComponent<RagdollRope>();
 
         // 리그가 한 벌이므로 섞는 대상도 그 리그다 — 애니메이터와 물리가 같은 뼈를 번갈아 쥔다.
         m_blend = new RagdollPoseBlend(m_rig.BoneRoot);
@@ -772,6 +774,14 @@ public class PlayerRagdoll : MonoBehaviour
 
         if (m_state != RagdollState.Ragdoll)
             return;
+
+        // ⚠ <b>캡슐 추종은 이 컴포넌트가 돈다 — <c>PlayerMovement</c>가 아니다.</b>
+        // 저쪽은 <b>스폰 시점의 오너에서만</b> 활성이라, 사망 중 소유권이 서버로 넘어가면(#763 A-1)
+        // 아무도 돌리지 않는 구간이 생긴다: 죽은 클라는 권위가 아니고, 서버의 인스턴스는
+        // 컴포넌트가 꺼져 있다. 여기로 옮기면 <b>권위가 어디로 가든 그 피어가 돈다</b>
+        // (NpcRagdoll이 TickRootFollow를 스스로 도는 것과 같은 모양).
+        if (HasMoveAuthority)
+            TickCapsuleFollow();
 
         // ⚠ <b>정착 판정은 권위만 돌린다.</b> 이 게이트가 없으면 전 뼈 스트리밍에서
         // <b>즉시 버그가 된다</b>: 원격의 뼈는 키네마틱이라 <c>AverageSpeed</c>가 항상 0이고,
@@ -1349,7 +1359,10 @@ public class PlayerRagdoll : MonoBehaviour
                 + $"평균속도={m_rig.AverageSpeed:F2}m/s "
                 + $"골반키네마틱={(hips != null ? hips.isKinematic.ToString() : "없음")} "
                 + $"잠듦={(hips != null ? hips.IsSleeping().ToString() : "없음")} "
-                + $"최고속도={m_ropePeakSpeed:F2}m/s 견인곡선=[{DescribeRopeCurve()}]",
+                + $"최고속도={m_ropePeakSpeed:F2}m/s 견인곡선=[{DescribeRopeCurve()}] "
+                + $"관절={(m_rope != null && m_rope.IsAttached ? "걸림" : "없음")} "
+                + $"끌림={(m_rope != null && m_rope.IsBeingCarried ? "예" : "아니오")} "
+                + $"골반바디={(m_rig.HipsBody != null ? m_rig.HipsBody.name : "없음")}",
             this
         );
     }
