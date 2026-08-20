@@ -188,3 +188,71 @@ grep -E "소유권|밧줄|자세도착|낙하속도|운반경로" "$USERPROFILE/
 
 1단계는 **커밋 되돌리기 한 번**이면 원상복구된다 — 프리팹 값도, 스트리머 enum도 안 건드리기
 때문이다. 회귀가 나오면 그대로 되돌리고 2단계로 간다.
+
+---
+
+## 8. 2단계 — 모델 단일화 (리그 한 벌로)
+
+> **왜 하는가.** 1단계와 목적이 다르다. 이쪽은 **활성화 시 자세를 일치시키는 로직(`CopyPose`)을
+> 지우는 것**이 목적이고, 그 다음이 "NPC와 같은 모양이면 버그를 고치기 쉽다"는 것이다.
+> 커스터마이징에서 이미 한 번 물렸다 — `04e341eb`("죽었을 때 시체가 원래 색으로 돌아오던 것을
+> 고친다", #432): 시체 모델의 렌더러가 평시에 꺼져 있어 밑색 칠하기가 건너뛰었다. **색은 전
+> 렌더러를 순회해 덮을 수 있었지만, 파츠·메시가 갈리는 커스터마이징은 그 방법이 없다.**
+
+### 8-1. 지금 구조와 목표
+
+```
+지금                                      목표 (NPC와 같은 모양)
+Player                                    Player
+├── Root                (살아있는 리그)    ├── Root      ← 애니메이터와 물리가 번갈아 쥔다
+├── SM_Gen_Chr_Robot_01 (살아있는 스킨)    └── SM_Gen_Chr_Robot_01
+└── Corpse
+    ├── Root            (시체 리그)
+    └── SM_Gen_Chr_Robot_01
+```
+
+`RagdollSetup.RunPlayer()`가 이미 `rigOwnerPath: ""`(루트)를 넘기고 있고, 살아있는 `Root`가 Player
+루트의 직속 자식이므로 **단일화하면 그 값이 그대로 맞는다.** 그 함수 주석이 "별도 작업으로 남긴다"고
+적어 둔 그 작업이 이것이다.
+
+### 8-2. 단계
+
+| # | 누가 | 작업 |
+|---|---|---|
+| **B-1** | 코드 | `RagdollRigCloner`에 **플레이어 메뉴** 추가 — `Corpse/Root`의 완성된 리그를 같은 프리팹의 살아있는 `Root`로 복제. 뼈대가 같다는 전제를 **뼈마다 좌표로 검증**하고 하나라도 어긋나면 아무것도 고치지 않는다(그 도구의 기존 안전장치) |
+| **B-2** | 프리팹(에디터) | ① B-1 메뉴 실행 ② `Tools > Ragdoll > Finish Setup - Player` 실행(레이어·충돌 매트릭스·`isKinematic`·보간·관절 preprocessing) ③ `RagdollRig`·`RagdollRope`를 **Player 루트**로 옮김 ④ `Corpse` 삭제 |
+| **B-3** | 코드 | `PlayerRagdoll`에서 두 모델 배선 제거 — `ShowCorpse`/`HideCorpse`/`SetCorpseVisible`/`CopyPose`/`m_corpse`/`m_liveSkin`/`m_liveBoneRoot`/`m_expectedPoseBones`. 대신 NPC와 같은 `StopAnimator`(진입) + `RestoreBindPose`(이탈) |
+| **B-4** | 코드 | 부활 블렌드를 같은 리그로 — `RagdollPoseBlend(m_rig.BoneRoot)`. 순서는 NPC의 `ExitRagdoll` 그대로: `StopStreaming` → `SetKinematic(true)` → `blend.Begin()` → `RestoreBindPose()` → 애니메이터 켜기 |
+
+### 8-3. 새로 필요해지는 것 — 뼈 길이 복원
+
+지금은 시체 리그가 따로여서 **살아있는 뼈가 물리에 늘어나지 않았다.** 리그가 한 벌이 되면
+애니메이터는 회전만 쓰므로 물리가 바꿔 놓은 `localPosition`이 남고, 기절·부활을 반복하면
+**사지가 늘어나며 바닥을 뚫는다**(NPC가 이미 밟은 것 — `NpcRagdoll.ExitRagdoll`의 `RestoreBindPose`
+주석). `RagdollRig.RestoreBindPose()`가 그 짝이고 이탈 경로에 반드시 넣는다.
+
+### 8-4. 함정
+
+1. ⚠ **1인칭 팔(FPArm) 리그가 뼈 이름이 같은 복사본이다** — `Camera/FPArm_Right/Root/...`에
+   `Hips`·`Spine_02`·`Shoulder_R`가 그대로 있다. 이름 탐색 범위를 **루트 직속**으로 좁혀야 하고,
+   `RagdollRig`가 이미 그렇게 하고 있다(그 툴팁의 실측: 안 좁히면 사망 시 1인칭 팔이 물리로 풀려
+   바닥에 떨어진다). `Corpse`가 사라지면 직속 `Root`가 하나뿐이라 오히려 안전해진다.
+2. **평시에 애니메이터와 물리가 같은 리그를 쥔다** — 그래서 `isKinematic = true` 초기화와
+   진입 시 `StopAnimator`가 필수다. 순서가 뒤집히면 애니메이터가 매 프레임 물리 결과를 덮는다.
+3. **캡슐 무시(`IgnoreOwnCapsule`)의 시점이 바뀐다** — 지금은 "시체를 켜는 순간"이 유일한 시점이지만
+   (비활성 콜라이더에 `Physics.IgnoreCollision`이 에러다), 단일 리그에서는 뼈 콜라이더가 항상 활성이라
+   스폰에서 한 번 걸면 된다. 껐다 켜는 경로에서 다시 거는 처리(`RefreshCapsuleIgnoreOnReenable`)는 남는다.
+4. **`BodyTint`의 "꺼진 렌더러도 칠한다"(#432)** — 단일화 뒤에는 필요 없어지지만, NPC 시체도 같은
+   함수를 쓰는지 확인하고 지운다.
+5. **스트리머는 안 건드린다** — `GetComponentInChildren<RagdollRig>(true)`가 새 위치도 그대로 집는다.
+
+### 8-5. 검증
+
+| # | 항목 | 기준 |
+|---|---|---|
+| 1 | 사망 | 죽는 순간 자세가 튀지 않는다 — **`CopyPose`가 없어도** 같은 몸이 그대로 무너지므로 원리적으로 이음새가 없다 |
+| 2 | 부활 → 재사망 3회 | 사지가 늘어나지 않는다(8-3) |
+| 3 | 1인칭 팔 | 사망·부활에서 팔이 떨어지거나 굳지 않는다 |
+| 4 | 색 커스터마이징 | 시체가 자기 색으로 보인다 — 이제 **같은 스킨**이라 자동 |
+| 5 | 원격 화면 | 자세 스트리밍 회귀 없음 |
+| 6 | 약탈·이름표·조준 히트박스 | 회귀 없음 |
