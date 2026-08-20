@@ -68,6 +68,9 @@ public class RagdollPoseStreamer : NetworkBehaviour
              "몸과 루트가 서로 다른 피어에서 계산돼 시체가 이름표를 두고 떠난다")]
     [SerializeField] private PoseAuthority m_authority = PoseAuthority.Server;
 
+    // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
+    //    인스펙터 진단 스위치 둘 — m_logArrival / m_logBandwidth.
+    /*
     [Header("진단")]
     [Tooltip("원격이 <b>자세를 언제 받았는가</b>를 국면당 한 줄로 찍는다 — 재생이 늘어나 " +
              "시체가 슬로모션으로 보이는 현상(#759 ①)의 판정용이다.\n\n" +
@@ -91,6 +94,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
              "예산 손잡이는 위의 <b>송신 주기</b>다 — 4로 올리면 12.5Hz로 절반이 된다.\n\n" +
              "확정되면 끈다")]
     [SerializeField] private bool m_logBandwidth;
+    */
 
     [Header("송신")]
     [Tooltip("몇 번의 물리 스텝마다 한 번 보내는가 — 50Hz 기준 2면 25Hz, 4면 12.5Hz.\n\n" +
@@ -135,6 +139,9 @@ public class RagdollPoseStreamer : NetworkBehaviour
 
     private Quaternion[] m_applyBuffer; // 두 스냅샷을 섞어 담는 자리
 
+    // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
+    //    도착·대역폭 계측 상태. 아래 메서드 블록과 한 쌍이다.
+    /*
     // ---- 도착 계측 (m_logArrival) — ⚠ 임시 계측, #759가 닫히면 지운다 ----
     private const float k_arrivalHeartbeatSeconds = 2f;
 
@@ -160,6 +167,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
     private int m_arrivalStaleDrops;
     private int m_holdFrames;
     private int m_applyFrames;
+    */
 
     // ---- 국면 추적 ----
     //
@@ -330,8 +338,8 @@ public class RagdollPoseStreamer : NetworkBehaviour
         m_sequence = unchecked((ushort)(m_sequence + 1));
         FinalPoseRpc(m_sequence, m_rig.Hips.position, Pack(m_sendBuffer), m_lengthBuffer);
 
-        CountSent(StreamPayloadBytes + LengthPayloadBytes);
-        DumpBandwidth("스트림종료"); // 창이 닫히기 전에 끝났다 — 남은 값으로 마감한다
+        // CountSent(StreamPayloadBytes + LengthPayloadBytes);
+        // DumpBandwidth("스트림종료"); // 창이 닫히기 전에 끝났다 — 남은 값으로 마감한다
     }
 
     /// <summary>
@@ -373,7 +381,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
         m_sequence = unchecked((ushort)(m_sequence + 1));
         TeleportPoseRpc(m_sequence, m_rig.Hips.position, Pack(m_sendBuffer), m_lengthBuffer);
 
-        CountSent(StreamPayloadBytes + LengthPayloadBytes);
+        // CountSent(StreamPayloadBytes + LengthPayloadBytes);
     }
 
     public void StopStreaming()
@@ -387,7 +395,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
         m_haveSequence = false;
         m_streamEnded = true; // 늦게 온 스냅샷이 기상 자세를 덮지 못하게
 
-        DumpArrivalTrace("이탈"); // 정착 패킷 없이 끝난 국면 — 받은 만큼으로 마감한다
+        // DumpArrivalTrace("이탈"); // 정착 패킷 없이 끝난 국면 — 받은 만큼으로 마감한다
     }
 
     // 캡처는 <b>FixedUpdate</b>다 — 물리가 진실인 자리에서 떠야 스텝 사이 보간값이 섞이지 않는다.
@@ -419,7 +427,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
         m_sequence = unchecked((ushort)(m_sequence + 1));
         StreamPoseRpc(m_sequence, m_rig.Hips.position, Pack(m_sendBuffer));
 
-        CountSent(StreamPayloadBytes);
+        // CountSent(StreamPayloadBytes);
 
     }
 
@@ -559,7 +567,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
         // 이따금 한 스냅샷 뒤로 튄다.
         if (m_haveSequence && !IsNewer(sequence, m_newestSequence))
         {
-            m_arrivalStaleDrops++;
+            // m_arrivalStaleDrops++;
             return;
         }
 
@@ -575,7 +583,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
         if (lengths != null && lengths.Length == m_rig.BoneCount)
             m_rig.ApplyBoneLengths(lengths);
 
-        TickArrivalTrace(sequence);
+        // TickArrivalTrace(sequence);
         PushSnapshot(hipsWorld, Unpack(packed));
 
         if (!terminal)
@@ -585,7 +593,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
         // <see cref="TickApply"/>가 마지막 스냅샷을 붙들고, 그 한 줄이 원격의 몸을 루트에서
         // 떼어 놓는다(루트가 흔들려도 몸은 스트림이 놓은 자리에 있는다).
         m_expectingStream = false;
-        DumpArrivalTrace("정착");
+        // DumpArrivalTrace("정착");
         OnSettledPoseReceived?.Invoke();
     }
 
@@ -657,7 +665,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
         if (m_snapshotCount == 0)
             return;
 
-        m_applyFrames++;
+        // m_applyFrames++;
         float renderTime = Time.time - m_interpolationDelay;
 
         // 재생 시점이 가장 오래된 스냅샷보다 앞이면(=버퍼가 아직 안 찼다) 그것을 그대로 쓴다.
@@ -683,7 +691,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
 
         // 재생 시점이 가장 새 스냅샷보다 뒤다 — 패킷이 늦거나 끊겼다. <b>외삽하지 않고 붙든다.</b>
         // 시체가 잠깐 멈춰 보이는 편이 없는 데이터로 지어낸 자세보다 낫고, 정착 패킷이 곧 온다.
-        m_holdFrames++;
+        // m_holdFrames++;
         ApplySnapshot(m_snapshots[m_snapshotCount - 1]);
     }
 
@@ -713,6 +721,9 @@ public class RagdollPoseStreamer : NetworkBehaviour
         hips.position = hipsWorld;
     }
 
+    // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
+    //    [자세도착] / [래그돌대역폭] 본체. 호출부 일곱 곳도 같이 막혀 있다.
+    /*
     // ---- 도착 계측 (m_logArrival) — ⚠ 임시 계측, #759가 닫히면 지운다 ----
     //
     // 재는 것은 하나다: <b>보낸 주기대로 도착했는가.</b> 스냅샷 시각이 로컬 수신 시각이므로
@@ -851,6 +862,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
         s_windowBytes = 0;
         s_windowStreamers = 0;
     }
+    */
 
     // ushort 랩어라운드를 견디는 "더 새것인가" 판정 — 차이를 부호 없는 반바퀴로 읽는다.
     private static bool IsNewer(ushort candidate, ushort current)

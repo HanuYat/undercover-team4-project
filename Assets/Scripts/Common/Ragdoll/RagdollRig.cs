@@ -52,6 +52,9 @@ public class RagdollRig : MonoBehaviour
     [Tooltip("골반보다 높은 뼈에 얹는 추가 속도 비율(1/m) — 상체가 더 빨라 다리가 끌리는 텀블이 생긴다")]
     [SerializeField] private float m_tumbleBias = 0.8f;
 
+    // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
+    //    §4-B 충돌검출 실험 스위치 — 인스펙터 필드 둘과 -ragdollDiscrete 인자.
+    /*
     // ---- #759 A/B 실험용 (원인이 잡히면 이 둘은 지운다 — docs/759 §6) ----
 
     [Tooltip("⚠ <b>#759 실험용.</b> 켜면 아래 값으로 뼈 Rigidbody의 충돌 검출 방식을 런타임에 덮는다.\n\n" +
@@ -100,6 +103,7 @@ public class RagdollRig : MonoBehaviour
 
         return found;
     }
+    */
 
     private Transform m_boneRoot; // 리그 최상단 — 뼈·스킨 수집 범위를 여기로 못박는다
 
@@ -190,6 +194,9 @@ public class RagdollRig : MonoBehaviour
         }
     }
 
+    // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
+    //    관절 앵커 계측 API — JointCount / HasAutoConfiguredAnchors / MaxJointAnchorError.
+    /*
     // ---- #759 A/B 계측 — 관절 앵커 (원인이 잡히면 지운다, docs/759 §6) ----
 
     /// <summary>관절 수 — 골반은 관절이 없으므로 뼈 수보다 하나 적다.</summary>
@@ -266,6 +273,7 @@ public class RagdollRig : MonoBehaviour
         }
         return worst;
     }
+    */
 
     private bool m_collected;
 
@@ -604,12 +612,16 @@ public class RagdollRig : MonoBehaviour
             m_bodies[i].solverIterations = k_solverIterations;
             m_bodies[i].solverVelocityIterations = k_solverVelocityIterations;
 
+            // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
+            //    위 실험 스위치의 적용부. 프리팹 값(ContinuousSpeculative)이 그대로 산다.
+            /*
             // #759 실험 — 프리팹 값(ContinuousSpeculative)을 덮는다. 둘 다 아니면 아무것도 안 한다.
             // 실행 인자가 인스펙터를 이긴다 — 빌드에서 바꿀 수 있는 쪽이 그것뿐이라서다.
             if (DiscreteRequestedByArgs())
                 m_bodies[i].collisionDetectionMode = CollisionDetectionMode.Discrete;
             else if (m_overrideCollisionDetection)
                 m_bodies[i].collisionDetectionMode = m_collisionDetection;
+            */
         }
     }
 

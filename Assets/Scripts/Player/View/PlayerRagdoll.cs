@@ -176,6 +176,9 @@ public class PlayerRagdoll : MonoBehaviour
     private bool HasMoveAuthority =>
         m_netObject == null || !m_netObject.IsSpawned || m_netObject.IsOwner;
 
+    // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
+    //    계측 줄머리 TraceId — [리그물리]/[낙하속도]/[밧줄]만 쓰던 것이다.
+    /*
     // 계측 줄머리 — <b>같은 시체를 피어마다 짝지으려면 이름만으로는 안 된다</b>(전부 Player(Clone)).
     // 오브젝트 id로 시체를, 오너 id로 "누구의 몸인가"를, 로컬 id로 "이 줄을 찍은 피어"를 가른다.
     private string TraceId
@@ -192,6 +195,7 @@ public class PlayerRagdoll : MonoBehaviour
             return $"시체#{m_netObject.NetworkObjectId} 오너{m_netObject.OwnerClientId} 나{local}";
         }
     }
+    */
 
     private void Awake()
     {
@@ -274,7 +278,7 @@ public class PlayerRagdoll : MonoBehaviour
 
         // ⚠ 물리로 넘기기 <b>전에</b> 열어야 진입 프레임의 자세가 계측에 남는다.
         BeginEntryTrace();
-        BeginFallRateTrace();
+        // BeginFallRateTrace();
 
         ReleaseBonesToPhysics();
     }
@@ -491,7 +495,7 @@ public class PlayerRagdoll : MonoBehaviour
         // 끌리기 시작은 몸이 다시 움직인다는 뜻이다 — 정착하며 끊은 스트림을 여기서 재개한다.
         // 안 재개하면 끌려가는 시체가 원격에서 마지막 정착 자세로 굳는다.
         // (NPC는 같은 자리에서 녹이기까지 하지만 플레이어는 얼지 않아 녹일 것이 없다)
-        BeginRopeTrace();
+        // BeginRopeTrace();
 
         if (!HasMoveAuthority)
             return;
@@ -575,7 +579,7 @@ public class PlayerRagdoll : MonoBehaviour
     /// </summary>
     public void ExitToAnimator(bool blend)
     {
-        DumpFallRate("이탈"); // 창이 닫히기 전에 부활했다 — 남은 값으로라도 마감한다
+        // DumpFallRate("이탈"); // 창이 닫히기 전에 부활했다 — 남은 값으로라도 마감한다
         if (m_state == RagdollState.Animated || m_rig == null || !m_rig.IsValid)
             return;
 
@@ -954,9 +958,9 @@ public class PlayerRagdoll : MonoBehaviour
         // Update에서 재면 이 계측이 물으려는 시점 차를 지나치게 된다.
         TickEntryTrace();
 
-        // 물리가 실시간을 따라갔는지 적립한다 — 프레임 시간을 재는 계측이라 렌더 주기에 붙인다.
-        TickFallRate();
-        TickRopeTrace();
+        // // 물리가 실시간을 따라갔는지 적립한다 — 프레임 시간을 재는 계측이라 렌더 주기에 붙인다.
+        // TickFallRate();
+        // TickRopeTrace();
     }
 
     /// <summary>
@@ -1289,6 +1293,9 @@ public class PlayerRagdoll : MonoBehaviour
         );
     }
 
+    // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
+    //    [밧줄]·[밧줄추적]·[리그물리]·[낙하속도] 본체. 호출부 일곱 곳도 같이 막혀 있다.
+    /*
     // ---- 밧줄 견인 계측 (m_logRopePull) — ⚠ 임시 계측, #759가 닫히면 지운다 ----
 
     [Tooltip("밧줄로 끌기 시작한 순간과 그 1.5초 뒤를 두 줄로 찍는다 — <b>끌리는 시체가 원격에서 " +
@@ -1581,6 +1588,7 @@ public class PlayerRagdoll : MonoBehaviour
         return line.Length > 0 ? line.ToString() : "표본없음";
     }
 
+    */
     // ---- 정착 딥 추적 (m_logSettleTrace) — ⚠ 임시 계측, 원인이 잡히면 지운다 ----
 
     // "몸이 바닥에 있다"로 보는 골반 높이(m) — 이 안이면 루트 높이를 골반이 아니라 <b>지면</b>이
@@ -1862,7 +1870,7 @@ public class PlayerRagdoll : MonoBehaviour
         if (m_settled)
             return;
 
-        DumpFallRate("정착");
+        // DumpFallRate("정착");
 
         m_settled = true;
         DumpSettleTrace();

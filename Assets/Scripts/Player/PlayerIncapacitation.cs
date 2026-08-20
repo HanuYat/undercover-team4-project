@@ -527,7 +527,7 @@ public class PlayerIncapacitation : NetworkBehaviour
 
             m_ownershipMovedToServer = true;
             NetworkObject.ChangeOwnership(NetworkManager.ServerClientId);
-            LogOwnership("사망", m_ownerBeforeDeath, NetworkManager.ServerClientId);
+            // LogOwnership("사망", m_ownerBeforeDeath, NetworkManager.ServerClientId);
             return;
         }
 
@@ -539,9 +539,12 @@ public class PlayerIncapacitation : NetworkBehaviour
             return;
 
         NetworkObject.ChangeOwnership(m_ownerBeforeDeath);
-        LogOwnership("복귀", NetworkManager.ServerClientId, m_ownerBeforeDeath);
+        // LogOwnership("복귀", NetworkManager.ServerClientId, m_ownerBeforeDeath);
     }
 
+    // ⚠ #759/#763 계측 — A-1 이관이 실측으로 확인돼 주석 처리했다(2026-08-20).
+    //    호출부 둘도 같이 막혀 있다. 근거: docs/759-ragdoll-slowmotion-handoff.md §3-1-3
+    /*
     // ⚠ 임시 계측 (#763 A-1) — 이관이 실제로 걸렸는지와, <b>플레이어 오브젝트 연결이 유지되는지</b>를
     // 함께 찍는다. 후자는 이 프로젝트에서 플레이어 오브젝트의 소유권을 옮기는 것이 처음이라 확인이
     // 필요한 항목이다(계획서 §4 함정 2). 확정되면 지운다.
@@ -557,6 +560,7 @@ public class PlayerIncapacitation : NetworkBehaviour
             this
         );
     }
+    */
 
     // 기절 해제 예정 시각 갱신 — 실참조와 동기화값을 함께 쓴다(m_cause/m_causeSynced와 동일 관례).
     // 연출(#477)만 읽는다.
