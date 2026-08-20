@@ -23,8 +23,10 @@ public static class GameSettings
     private const string k_masterVolumeKey = "settings.masterVolume";
     private const string k_voiceVolumeKey = "settings.voiceVolume";
     private const string k_micMutedKey = "settings.micMuted";
-    // 부위별로 키가 갈린다 — 접미사는 EBodyPart 이름이다 (settings.playerColor.Head 등) (#432)
+    // settings.playerColor.<계정>.<부위> — 색은 기기 설정이 아니라 그 사람의 것이라 계정으로 가른다.
+    // 정본은 Cloud Save(CosmeticsSaveService)이고 여기 값은 캐시다. (#432 후속)
     private const string k_playerColorKeyPrefix = "settings.playerColor.";
+    private const string k_localColorAccount = "local"; // 로그인 전에 고른 색이 갈 자리
 
     // 감도는 '배율'이다 — 프리팹의 기준 감도에 곱한다 (PlayerLook.HandleLook).
     // 슬라이더 min/max도 이 상수로 맞춰 인스펙터 값과 어긋나지 않게 한다.
@@ -67,6 +69,8 @@ public static class GameSettings
 
     // 인덱스 = EBodyPart. 길이를 enum에서 얻는다 — 부위가 늘어도 여기서 터지지 않게
     private static readonly int[] s_playerColors = new int[Enum.GetValues(typeof(EBodyPart)).Length];
+
+    private static string s_colorAccount = k_localColorAccount;
 
     private static float s_mouseSensitivity = k_defaultMouseSensitivity; // 백킹 필드
     private static float s_lookSmoothing = k_defaultLookSmoothing;
@@ -223,8 +227,53 @@ public static class GameSettings
             return;
 
         s_playerColors[(int)part] = clamped;
-        PlayerPrefs.SetInt(k_playerColorKeyPrefix + part, clamped);
+        PlayerPrefs.SetInt(ColorKey(part), clamped);
         OnPlayerColorChanged?.Invoke(part);
+    }
+
+    /// <summary>
+    /// 색 캐시를 이 계정 것으로 갈아탄다 — 로그인·로그아웃이 부른다. 비우면 로그인 전 자리로 돌아간다.
+    /// </summary>
+    public static void UseColorAccount(string accountId)
+    {
+        string next = string.IsNullOrWhiteSpace(accountId) ? k_localColorAccount : accountId;
+        if (s_colorAccount == next)
+            return;
+
+        s_colorAccount = next;
+        LoadPlayerColors();
+    }
+
+    /// <summary>클라우드에서 받은 한 벌을 적용한다 — 캐시에도 남긴다. (CosmeticsSaveService)</summary>
+    public static void ApplyPlayerColors(IReadOnlyList<int> colors)
+    {
+        if (colors == null)
+            return;
+
+        foreach (EBodyPart part in Enum.GetValues(typeof(EBodyPart)))
+        {
+            int index = (int)part;
+            if (index >= colors.Count)
+                continue;
+
+            int clamped = Mathf.Max(0, colors[index]);
+            s_playerColors[index] = clamped;
+            PlayerPrefs.SetInt(ColorKey(part), clamped);
+            OnPlayerColorChanged?.Invoke(part);
+        }
+    }
+
+    private static string ColorKey(EBodyPart part) =>
+        k_playerColorKeyPrefix + s_colorAccount + "." + part;
+
+    // 캐시에서 전 부위를 다시 읽어 적용한다. 저장된 값이 없으면 팔레트 첫 색이다.
+    private static void LoadPlayerColors()
+    {
+        foreach (EBodyPart part in Enum.GetValues(typeof(EBodyPart)))
+        {
+            s_playerColors[(int)part] = PlayerPrefs.GetInt(ColorKey(part), k_defaultPlayerColor);
+            OnPlayerColorChanged?.Invoke(part);
+        }
     }
 
     /// <summary>
@@ -279,9 +328,9 @@ public static class GameSettings
         MasterVolume = PlayerPrefs.GetFloat(k_masterVolumeKey, k_defaultMasterVolume);
         VoiceVolume = PlayerPrefs.GetFloat(k_voiceVolumeKey, k_defaultVoiceVolume);
         MicMuted = PlayerPrefs.GetInt(k_micMutedKey, k_defaultMicMuted ? 1 : 0) != 0;
-        // 부위별 색 — 저장된 값이 없으면 전부 팔레트 첫 색에서 시작한다 (#432)
-        foreach (EBodyPart part in Enum.GetValues(typeof(EBodyPart)))
-            s_playerColors[(int)part] = PlayerPrefs.GetInt(k_playerColorKeyPrefix + part, k_defaultPlayerColor);
+        // 부위별 색 — 로그인 전이라 아직 'local' 자리를 읽는다. 로그인하면 계정 것으로 갈아탄다 (#432 후속)
+        s_colorAccount = k_localColorAccount;
+        LoadPlayerColors();
     }
 
     /// <summary>
