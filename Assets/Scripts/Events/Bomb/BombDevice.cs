@@ -144,8 +144,12 @@ public class BombDevice : NetworkBehaviour
     // 이 폭발로 죽은 플레이어 — 래그돌 임펄스 대상(#506). 서버·오프라인에서만 채운다.
     private readonly List<NetworkObject> m_deathBuffer = new List<NetworkObject>();
 
-    // NPC 넉백 대상 수집용 공유 버퍼 — 서버(또는 오프라인)에서만 쓰므로 정적으로 공유해도 안전하다
-    private static readonly Collider[] s_blastColliders = new Collider[64];
+    // 폭발 대상 수집용 공유 버퍼 — 서버(또는 오프라인)에서만 쓰므로 정적으로 공유해도 안전하다.
+    // 사람 하나가 래그돌 뼈 콜라이더 여러 개로 잡혀 64칸은 대여섯 명이면 포화된다 (#768).
+    private static readonly Collider[] s_blastColliders = new Collider[256];
+
+    // 한 폭발에서 이미 처리한 NPC — 위 버퍼가 같은 사람을 여러 번 담기 때문이다 (#768).
+    private static readonly HashSet<NpcController> s_blastNpcs = new HashSet<NpcController>();
 
     // 라운드당 폭탄 1개 — 씬에 놓인 상자(BombCrate)가 "내 상자에서 나오는 폭탄인가"를 묻는 단일 참조.
     // 매니저가 아니라 스폰물이므로 App 파사드가 아닌 이 정적 참조로 노출한다(단일 인스턴스 보장은 이벤트가 한다).
@@ -618,15 +622,20 @@ public class BombDevice : NetworkBehaviour
         return horizontal + Vector3.up * (horizontal.magnitude * m_ragdollLiftRatio);
     }
 
-    // 반경 내 NPC를 폭심 반대쪽으로 날린다. NPC 하나가 콜라이더 여러 개로 잡혀도
-    // ServerApplyKnockback이 비행 중 중복 호출을 무시하므로 별도 중복 제거가 필요 없다.
+    // 반경 내 NPC를 폭심 반대쪽으로 날린다. 한 사람이 콜라이더 여러 개로 잡히므로 집합으로 한 번만 민다.
     private void ServerKnockbackNpcs()
     {
         int hitCount = Physics.OverlapSphereNonAlloc(transform.position, m_explosionRadius, s_blastColliders);
+
+        // 포화는 조용히 틀린다 — 넘친 대상은 아무 일도 겪지 않는다
+        if (hitCount == s_blastColliders.Length)
+            Debug.LogWarning($"[폭탄] 대상 버퍼({s_blastColliders.Length}) 포화 — 일부 NPC가 누락됐을 수 있다", this);
+
+        s_blastNpcs.Clear();
         for (int i = 0; i < hitCount; i++)
         {
             NpcController npc = s_blastColliders[i].GetComponentInParent<NpcController>();
-            if (npc == null)
+            if (npc == null || !s_blastNpcs.Add(npc))
                 continue;
 
             npc.Knockback.ServerApplyKnockback(EvaluateKnockback(npc.transform.position));
