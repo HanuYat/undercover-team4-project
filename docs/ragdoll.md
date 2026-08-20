@@ -50,6 +50,9 @@ Player  [Animator, CharacterController, ..., PlayerRagdoll]
 | `RagdollPoseBlend` | `Common/Ragdoll/` | (plain class) | 기상 블렌드. **살아있는** 리그를 섞는다 |
 | `PlayerRagdoll` | `Player/View/` | Player 루트 | 상태 기계, 사망 폴링, 모델 교체, 캡슐 추종, 원격 정렬, 정착 루트 포즈 |
 
+> **클래스별 설계 근거 아카이브** — 코드에서 걷어낸 "왜 그렇게 됐나 / 실측이 얼마였나"는 여기 있다.
+> [ragdoll-rig.md](ragdoll-rig.md) (`RagdollRig`) · [npc-ragdoll.md](npc-ragdoll.md) (`NpcRagdoll`)
+
 **Animator를 끄지 않는다.** 애니메이터와 물리가 서로 다른 리그를 쥐므로 싸울 일이 없다 — 사망 시
 끄는 것은 **살아있는 스킨**뿐이고, 살아있는 뼈는 보이지 않는 채 계속 애니메이션되어 부활 블렌드의
 목표가 된다.
