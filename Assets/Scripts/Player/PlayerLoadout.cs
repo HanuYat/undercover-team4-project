@@ -60,11 +60,17 @@ public class PlayerLoadout : NetworkBehaviour
     // 서버 줍기 거리 검증용 — PlayerInteractor의 조준 사거리·기준점을 그대로 재사용한다 (#147).
     // 값을 따로 두지 않고 여기서 읽어야 조준-줍기 사거리가 항상 정합된다.
     private PlayerInteractor m_interactor;
+    private PlayerTerminalFocus m_terminalFocus;
     private float m_pickupRange;
 
     // 다운(무력화) 중 여부 — 무력화 컴포넌트가 없으면(테스트 구성 등) 항상 false. (PlayerMovement 관례)
     // 인벤토리 UI(#144)가 편집 모드 진입 게이트에 쓰므로 public.
     public bool IsIncapacitated => m_incapacitation != null && m_incapacitation.IsIncapacitated;
+
+    // 본부 복구 단말을 보고 있는 중인가 (#762). 단말은 코드를 숫자 키로 받는데(BlackoutTerminalScreen)
+    // 슬롯 직접 선택도 숫자키 1~3이라, 막지 않으면 코드를 누를 때마다 손에 든 것이 바뀐다.
+    // 시점·이동은 PlayerTerminalFocus.ApplyLocks가 이미 잠그고 있고 이것이 그 짝이다.
+    private bool IsTerminalFocused => m_terminalFocus != null && m_terminalFocus.IsFocusing;
 
     /// <summary>고정 3칸 슬롯 (빈 칸 = null). 인벤토리 UI(#144)·휠 전환(#46)이 사용한다. (오너 로컬)</summary>
     public IReadOnlyList<ItemBase> Slots => m_slotModel.Slots;
@@ -114,6 +120,7 @@ public class PlayerLoadout : NetworkBehaviour
         m_incapacitation = GetComponent<PlayerIncapacitation>();
         m_escorter = GetComponent<PlayerEscorter>();
         m_interactor = GetComponent<PlayerInteractor>();
+        m_terminalFocus = GetComponent<PlayerTerminalFocus>();
         m_pickupRange = m_interactor.Range;
     }
 
@@ -484,6 +491,12 @@ public class PlayerLoadout : NetworkBehaviour
             return;
         }
 
+        // 단말 입력 중에도 막는다 (#762) — 숫자키만 막으면 휠로 바뀌어 같은 사고가 남는다
+        if (IsTerminalFocused)
+        {
+            return;
+        }
+
         // 빈손이면 첫 칸 기준으로 순환한다 — 인덱스 계산(음수 보정 포함)은 슬롯 모델이 담당.
         EquipSlot(m_slotModel.NextIndex(direction));
     }
@@ -493,6 +506,12 @@ public class PlayerLoadout : NetworkBehaviour
     {
         // 다운(무력화) 중에는 아이템 전환 차단 (#105)
         if (IsIncapacitated)
+        {
+            return;
+        }
+
+        // 복구 단말에 코드를 넣는 동안은 숫자키가 그쪽 것이다 (#762)
+        if (IsTerminalFocused)
         {
             return;
         }
