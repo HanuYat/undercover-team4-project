@@ -11,6 +11,7 @@ public class PlayerItemUser : MonoBehaviour
     private PlayerInteractor m_interactor;
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 아이템 사용 차단용 (#105)
     private PlayerEscorter m_escorter; // 밧줄 끌기 중 아이템 사용 잠금용 (#269)
+    private PlayerTerminalFocus m_terminalFocus; // 복구 단말 입력 중 아이템 사용 차단용 (#762)
 
     /// <summary>현재 장착 중인 아이템. 없으면 null. (#45 — PlayerHandView가 초기 표시에 사용)</summary>
     // 파괴된 아이템은 null로 내보낸다 — 장착 중 디스폰(라운드 종료 회수, #370) 후 장착 해제가 도착하기까지
@@ -29,6 +30,7 @@ public class PlayerItemUser : MonoBehaviour
         m_interactor = GetComponent<PlayerInteractor>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
         m_escorter = GetComponent<PlayerEscorter>();
+        m_terminalFocus = GetComponent<PlayerTerminalFocus>();
     }
 
     private void OnEnable()
@@ -76,6 +78,13 @@ public class PlayerItemUser : MonoBehaviour
 
         // 다운(무력화) 중에는 아이템 사용 불가 (#105)
         if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
+        {
+            return;
+        }
+
+        // 단말 포커스 중에는 좌클릭도 막는다 (#762) — 커서가 잠긴 채 앉아 있어 위 게이트에 안 걸린다.
+        // 뗌(HandleCancelItem)은 막지 않는다 — 누른 채 앉는 경로에서 취소가 닿아야 한다 (#352 방침).
+        if (m_terminalFocus != null && m_terminalFocus.IsFocusing)
         {
             return;
         }
