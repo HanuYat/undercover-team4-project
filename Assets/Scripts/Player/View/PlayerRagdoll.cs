@@ -14,7 +14,7 @@ using UnityEngine;
 /// 오너 권한 NetworkTransform)이 계속 쥐고, 이 컴포넌트는 모든 피어에서 <b>로컬로</b> 같은 규칙으로 돈다.
 /// 그래서 NetworkBehaviour가 아니고, 매니저도 아니라 App 파사드와 무관하다(architecture.md R1~R8 해당 없음).
 ///
-/// <b>진입 조건은 폭발이 아니라 사망이다.</b> 폭발·진압봉·납치 린치는 모두 HP 0 → Die로 수렴하므로
+/// <b>진입 조건은 폭발이 아니라 사망이다.</b> 폭발·진압봉·납치는 모두 Die로 수렴하므로
 /// (<see cref="PlayerHealth.SetHp"/>, #524), 진입을 Die 하나로 잡으면 사망 경로가 몇 개든 전부 같은
 /// 래그돌을 탄다. 폭발이 특별한 것은 <b>임펄스가 붙는다</b>는 점 하나뿐이다.
 ///
@@ -882,8 +882,8 @@ public class PlayerRagdoll : MonoBehaviour
 
     // 사망 여부를 폴링한다 — 이벤트로는 잡을 수 없다.
     //
-    // OnIncapacitatedChanged는 bool만 넘기고 <b>원인만 바뀌면 울리지 않는다</b>. 납치 린치 사망은
-    // Abducted/Lynched → Die 전이라 bool이 그대로여서 이벤트가 아예 안 온다
+    // OnIncapacitatedChanged는 bool만 넘기고 <b>원인만 바뀌면 울리지 않는다</b>. 납치 결말의 사망은
+    // Abducted → Die 전이라 bool이 그대로여서 이벤트가 아예 안 온다 (#775)
     // (PlayerIncapacitation.HandleSyncedChanged 참고). PlayerAnimationDriver가 IsProne을 Update에서
     // 폴링하는 것과 같은 방식으로 맞춘다 — 전 피어가 같은 동기화값을 보므로 원격 뷰도 동일하게 돈다.
     private void PollDeath()
@@ -940,7 +940,7 @@ public class PlayerRagdoll : MonoBehaviour
         }
 
         if (!m_skipThisEpisode && m_state == RagdollState.Animated)
-            EnterRagdoll(Vector3.zero); // 힘없이 무너지는 사망(진압봉·린치). 폭발은 임펄스를 따로 준다
+            EnterRagdoll(Vector3.zero); // 힘없이 무너지는 사망(진압봉·납치). 폭발은 임펄스를 따로 준다
     }
 
     private void LateUpdate()

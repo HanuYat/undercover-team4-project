@@ -18,8 +18,7 @@ public enum IncapacitationCause
     Penalty, // 오검거 광장 매달기 (#101) — 30초 뒤 자동 복귀
     Stun, // 테이저 피격 기절 (#252) — 시간이 지나면 스스로 일어난다
     Die, // 다운 방치 또는 확인사살로 기능 정지 (#364, #725) — 복구는 동료의 부활 키트(#613)
-    Abducted, // 납치 호송 중 (#371) — 끌려가는 동안 걸어 나가지 못하게. 외곽에 도착하면 Lynched로 넘어간다
-    Lynched, // 외곽 린치 (#371 후속) — 납치범에게 맞는 중. 행동은 막되 <b>쓰러진 자세가 아니다</b>(IsProne 제외)
+    Abducted, // 납치 호송 중 (#371) — 끌려가는 동안 걸어 나가지 못하게. 맨홀 아래로 내려가면 Die로 넘어간다 (#775)
     // (값은 반드시 끝에 추가한다 — NetworkVariable로 동기화되는 enum이라 순서가 곧 와이어 포맷이다)
 }
 
@@ -34,8 +33,8 @@ public enum IncapacitationCause
 ///    (<see cref="ServerSetBeingRevived"/>) 복귀하고, 방치되면 Die로 넘어간다.
 ///  · Die — 다운 방치 또는 확인사살(<see cref="ServerFinishOff"/>)로 들어간다. 부활 키트로만 복구된다(#613).
 ///  · 매달기·기절 — 시간이 지나면 스스로 복귀하므로 운반 대상도, 전멸 판정 대상도 아니다.
-///  · 납치·린치 — 끌려가는 동안·맞는 동안 걸어 나가지 못하게 한다(#371). 동료가 납치범을 때려
-///    떼어내면 풀리고, 떼어내지 못하면 HP가 0이 되어 Down으로 넘어간다 — 그 자체로는 전멸 판정 대상이 아니다.
+///  · 납치 — 끌려가는 동안 걸어 나가지 못하게 한다(#371). 동료가 납치범을 떼어내면 풀리고,
+///    떼어내지 못하면 맨홀 아래에서 Die로 확정된다 (#775).
 /// 조준 히트박스는 쓰러져 있는 동안(<see cref="IsOutOfAction"/>) 켠다.
 /// </summary>
 public class PlayerIncapacitation : NetworkBehaviour
@@ -176,19 +175,12 @@ public class PlayerIncapacitation : NetworkBehaviour
     }
 
     /// <summary>
-    /// <b>쓰러진 자세인가</b> — 다운 모션·바닥 시점·몸 회전 잠금이 함께 보는 값이다. (#371 후속)
+    /// <b>쓰러진 자세인가</b> — 다운 모션·바닥 시점·몸 회전 잠금이 <b>반드시 같은 값</b>을 보게 모아 둔 자리다.
+    /// 하나만 갈라지면 몸은 서 있는데 카메라는 바닥에 있는 어긋남이 난다 (#252에서 밟은 함정).
     ///
-    /// 원래 이 셋은 <see cref="IsIncapacitated"/>를 직접 봤다. "무력화는 곧 쓰러진 자세"가 참이었기 때문인데,
-    /// 외곽 린치(<see cref="IncapacitationCause.Lynched"/>)가 <b>서서 맞는</b> 무력화라 그 전제가 깨졌다.
-    ///
-    /// 세 곳이 <b>반드시 같은 값</b>을 봐야 한다는 것이 이 프로퍼티의 존재 이유다 — 하나만 갈라지면
-    /// 몸은 서 있는데 카메라는 바닥에 있는 어긋남이 난다(#252에서 이미 한 번 밟은 함정이라
-    /// PlayerAnimationDriver 주석에 경고로 남아 있었다).
-    ///
-    /// 행동 차단은 이 값이 아니라 <see cref="IsIncapacitated"/>가 계속 맡는다 — 린치 중에도
-    /// 이동·아이템·상호작용은 전부 막힌다. 갈리는 것은 자세뿐이다.
+    /// 지금은 무력화와 값이 같다 — 서서 맞던 외곽 린치가 사라지면서 예외가 없어졌다 (#775).
     /// </summary>
-    public bool IsProne => IsIncapacitated && Cause != IncapacitationCause.Lynched;
+    public bool IsProne => IsIncapacitated;
 
     // 살아 있는 인스턴스 목록 — 플레이어 전원을 훑어야 하는 쪽(전멸 판정 RoundManager)이
     // FindObjectsByType으로 씬 전체를 뒤지지 않게 한다. 조회는 배열을 새로 만드는 엔진 호출이라,
@@ -316,12 +308,9 @@ public class PlayerIncapacitation : NetworkBehaviour
     }
 
     /// <summary>
-    /// 납치 처형 — 외곽에서 린치당한 피해자를 기능 정지(Die)로 확정한다. 서버(또는 오프라인) 전용. (#371 후속)
+    /// 납치 결말 — 맨홀 아래로 내려간 피해자를 기능 정지(Die)로 확정한다. 서버(또는 오프라인) 전용. (#775)
     ///
-    /// 린치로 HP가 0이 되면 <see cref="PlayerHealth"/>가 이미 Down을 걸어 뒀는데(#725), 이 메서드는
-    /// 그 유예를 건너뛰고 곧장 Die로 확정한다 — 상한까지 못 뗀 납치에는 구조 유예를 줄 이유가 없다.
-    /// 남겨 두는 또 다른 이유는 <b>린치 상한 초과 폴백</b>이다: HP가 남았는데도 결말을 집행해야 하는
-    /// 경로(AbductionEvent.LynchAsync)에는 HP 0이 없어 이 메서드가 유일한 진입점이다.
+    /// 납치는 피해자를 때리지 않으므로 HP 0을 거치지 않는다 — 이 메서드가 유일한 진입점이다.
     /// </summary>
     public void ServerKillByAbduction()
     {
@@ -331,7 +320,7 @@ public class PlayerIncapacitation : NetworkBehaviour
         if (Cause == IncapacitationCause.Die)
             return; // 이미 기능 정지 — 중복 호출 방어
 
-        Debug.Log($"[납치] 처형 — 기능 정지: {name}", this);
+        Debug.Log($"[납치] 결말 — 기능 정지: {name}", this);
         SetCause(IncapacitationCause.Die);
     }
 

@@ -432,7 +432,7 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         // 자동 복귀 — 대상이 퇴장·파괴됐을 수 있어 fake-null 가드.
         // Cause 확인이 두 번째 가드다: 30초를 기다리는 사이 다른 무력화가 이 상태를 덮어썼을 수 있는데,
         // 그걸 이 타이머가 풀면 남의 진행 도중에 조작권이 돌아간다(납치 호송이면 끌려가는 중에 풀린다, #371).
-        // 납치 쪽 AbductionEvent.CarryToOutskirtsAsync가 쓰는 것과 같은 가드다.
+        // 납치 쪽 AbductionEvent.CarryToManholeAsync가 쓰는 것과 같은 가드다.
         if (incap != null && incap.Cause == IncapacitationCause.Penalty)
             incap.Recover();
     }

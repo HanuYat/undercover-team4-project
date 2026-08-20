@@ -59,6 +59,10 @@ public class PlayerSpectateCamera : MonoBehaviour
     /// <summary>관전이 요청된 상태인가 — 블렌드가 끝났는지와는 별개다.</summary>
     public bool IsActive => m_active;
 
+    // 오빗 중심 덮어쓰기 — 시체가 지하로 사라진 경우에만 쓴다 (#775)
+    private Vector3 m_pivotOverride;
+    private bool m_hasPivotOverride;
+
     private void Awake()
     {
         m_rig = GetComponentInChildren<RagdollRig>();
@@ -77,7 +81,10 @@ public class PlayerSpectateCamera : MonoBehaviour
         m_active = spectating;
 
         if (!spectating)
+        {
+            m_hasPivotOverride = false; // 부활했다 — 다음 관전은 다시 자기 몸을 돈다 (#775)
             return;
+        }
 
         m_yaw = entryYaw;
         m_pitch = m_enterPitch;
@@ -132,6 +139,16 @@ public class PlayerSpectateCamera : MonoBehaviour
     public void SnapNextTick() => m_snap = true;
 
     /// <summary>
+    /// 오빗 중심을 <b>시체가 아닌 지점</b>으로 고정한다 — 몸이 회수 불가능한 곳으로 사라졌을 때. (#775)
+    /// 납치 결말은 시체를 지하로 데려가므로, 그대로 두면 땅속 어둠을 도는 화면이 된다.
+    /// </summary>
+    public void SetPivotOverride(Vector3 worldPosition)
+    {
+        m_pivotOverride = worldPosition;
+        m_hasPivotOverride = true;
+    }
+
+    /// <summary>
     /// 관전 카메라의 <b>월드</b> 포즈. 골반이 없으면 false — 호출자는 1인칭 포즈를 그대로 쓴다.
     /// </summary>
     public bool TryGetPose(out Vector3 position, out Quaternion rotation)
@@ -140,10 +157,11 @@ public class PlayerSpectateCamera : MonoBehaviour
         rotation = default;
 
         Transform hips = m_rig != null ? m_rig.Hips : null;
-        if (hips == null)
+        if (hips == null && !m_hasPivotOverride)
             return false; // 리그가 없는 구성(테스트 씬 등) — 기존 바닥 시점으로 남는다
 
-        Vector3 pivot = hips.position + Vector3.up * m_pivotHeight;
+        Vector3 pivotBase = m_hasPivotOverride ? m_pivotOverride : hips.position;
+        Vector3 pivot = pivotBase + Vector3.up * m_pivotHeight;
         rotation = Quaternion.Euler(m_pitch, m_yaw, 0f);
 
         // 벽을 파고들지 않게 당긴다. 감정표현 3인칭(#219)과 같은 SphereCast 1회 — 맵 교체가

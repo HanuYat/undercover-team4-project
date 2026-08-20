@@ -214,9 +214,7 @@ public class TeamStatusPanel : PanelBase
             case IncapacitationCause.Die:
                 return ETeamMemberState.Dead;
 
-            // 납치 호송과 그 끝의 린치는 한 줄기라 같은 표기로 묶는다 (#371).
             case IncapacitationCause.Abducted:
-            case IncapacitationCause.Lynched:
                 return ETeamMemberState.Abducted;
 
             default:

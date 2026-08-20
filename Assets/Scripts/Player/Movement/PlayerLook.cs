@@ -106,8 +106,8 @@ public class PlayerLook : MonoBehaviour
     public float Pitch => m_pitch;
 
     // 다운(무력화) 중 여부 — 무력화 컴포넌트가 없으면(테스트 구성 등) 항상 false
-    // 자세 판정이라 IsIncapacitated가 아니라 IsProne을 본다 — 외곽 린치(#371 후속)는 서서 맞는
-    // 무력화라 바닥 시점·회전 잠금이 걸리면 안 된다. 이름은 쓰임(쓰러졌는가)에 맞췄다.
+    // 자세 판정이라 IsIncapacitated가 아니라 IsProne을 본다 — 모션·시점·회전 잠금이 같은 값을
+    // 봐야 한다. 이름은 쓰임(쓰러졌는가)에 맞췄다.
     private bool IsProne => m_incapacitation != null && m_incapacitation.IsProne;
 
     // 앉기 블렌딩으로 머리가 내려간 높이(m) — 카메라를 같은 만큼 낮춘다 (#236)

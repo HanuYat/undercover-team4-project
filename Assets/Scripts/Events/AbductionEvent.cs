@@ -4,23 +4,20 @@ using UnityEngine;
 using UnityEngine.AI;
 
 /// <summary>
-/// 플레이어 납치 — <b>혼자 다니는 현장 플레이어</b>를 납치범 NPC 2명이 쫓아가 붙잡고 도시 외곽까지 끌고 간다. (GDD 6-4, #371)
+/// 플레이어 납치 — <b>혼자 다니는 현장 플레이어</b>를 납치범 NPC 2명이 뒤를 잡아 붙잡고 맨홀까지 끌고 간다. (GDD 6-4, #371)
 ///
 /// 오검거 페널티(#276~#279)의 호송 파이프라인을 그대로 쓴다 — 추격(<see cref="NpcDutyAgent.StartPenaltyChase"/>) →
 /// 포획 통보 → 수렴 → <see cref="CarryEscortSequence"/>. 다른 점은 <b>트리거·목적지·결말</b> 셋이다:
-/// 트리거는 "혼자 있음"이고, 목적지는 광장이 아니라 외곽이며, 결말은 매달기가 아니라 <b>처형</b>이다.
+/// 트리거는 "혼자 있음"이고, 목적지는 광장이 아니라 맨홀이며, 결말은 매달기가 아니라 <b>맵에서 사라지는 것</b>이다.
 ///
-/// <b>결말은 3단계다</b> (팀 확정 2026-08-05):
-///  1. <b>린치</b> — 외곽에 도착하면 끌기를 끊어 피해자를 세우고(무력화는 유지 — 서 있되 아무것도 못 한다)
-///     납치범을 저항형으로 돌려 구타한다. 저항 상태(<see cref="NpcResistState"/>)를 그대로 쓴다.
-///  2. <b>처형</b> — HP가 0이 되면 기능 정지로 확정한다(<see cref="PlayerIncapacitation.ServerKillByAbduction"/>).
-///  3. <b>반출</b> — 시체를 끌고 도시 바깥으로 걸어 나가고, 맵 밖에서 납치범도 함께 사라진다.
-///     이 구간만 NavMesh를 벗어난다 — 그 이유는 <c>DisposeBodyAsync</c>에 적어 뒀다.
-/// 반출이 끝난 뒤 그 플레이어가 라운드 남은 시간에 무엇을 하는지는 이 이벤트의 몫이 아니다(별도 이슈).
+/// <b>결말은 2단계다</b> (#775 — 린치·처형·도보 반출을 대체했다):
+///  1. <b>뚜껑 열림</b> — 맨홀에 도착하면 끌기를 끊고 뚜껑을 연다(<see cref="AbductionManhole"/>).
+///  2. <b>하강</b> — 납치범이 피해자를 데리고 맨홀 아래로 내려가고, 지하에서 함께 사라진다.
+/// 살아있는 채로 데려가므로 HP를 깎아 죽이는 단계가 없다. 그 뒤 그 플레이어가 라운드 남은 시간에
+/// 무엇을 하는지는 이 이벤트의 몫이 아니다(별도 이슈).
 ///
-/// <b>구조 창은 HP 0 이전까지다</b> — 린치 중에 납치범을 전부 떼어내면 피해자는 깎인 HP로 그 자리에서
-/// 풀려난다. HP 0을 넘기면 되돌릴 길이 없다: 반출은 결말의 연출이지 판정이 아니다. 이 선이 곧
-/// "혼자 다니면 죽는다"의 값이다 — 되돌릴 수 있는 구간을 반출까지 늘리면 외곽까지 달려갈 이유가 사라진다.
+/// <b>구조 창은 내려가기 전까지다</b> — 뚜껑이 열리는 동안 납치범을 전부 떼어내면 피해자는
+/// <b>멀쩡한 몸으로</b> 그 자리에서 풀려난다. 내려가기 시작하면 되돌릴 길이 없다.
 ///
 /// <b>구조는 호송 중에도 된다</b> — 이것이 오검거와 정반대다. 오검거는 포획이 확정되면 격퇴가 무시되지만
 /// (<see cref="NpcDutyAgent.ApplyChaseRepel"/>이 수렴 중을 걸러낸다 — "유예 창은 잡히기 전까지다", #278),
@@ -40,6 +37,9 @@ using UnityEngine.AI;
 /// 계속 쫓게 한다. 놓쳤을 때의 결말은 아래 <see cref="m_maxChaseSeconds"/>가 낸다 — 개별 납치범이
 /// 스스로 빠지면 남은 하나가 혼자 끌고 가 2인 호송이 무너진다. 오검거 쪽 재타겟은 그대로 둔다.
 ///
+/// <b>피해자를 때리지 않는다</b> (#775) — 그래서 피해자의 HP가 깎이는 것은 언제나 납치 밖의 사유다.
+/// "마지막 일격이 납치범이었나"를 가리던 판정(#554)이 통째로 필요 없어졌다.
+///
 /// <b>포획 전에 다른 사유로 죽으면 즉시 무산한다</b> (#679) — 추격 중 죽음은 납치범이 아직 손대지
 /// 못한 시점이라 언제나 외부 사유다. <see cref="HandleVictimCauseChanged"/>가 60초를 기다리지 않고 해산시킨다.
 ///
@@ -53,7 +53,7 @@ using UnityEngine.AI;
 /// 스폰·판정·호송은 서버(또는 오프라인)에서만 — 스폰물은 NetworkObject로 복제된다. (#56)
 ///
 /// <b>파일이 둘로 갈려 있다</b> — 이 파일은 발동 조건·스폰·수명(ISuddenEvent 골격)을 들고,
-/// 포획 이후(접수·호송·방치·구조)는 AbductionEvent.Carry.cs에 있다.
+/// 포획 이후(접수·호송·결말·구조)는 AbductionEvent.Carry.cs에 있다.
 /// 오검거(WrongfulArrestPenalty + .Carry)와 같은 가름이다.
 /// </summary>
 [RequireComponent(typeof(SuddenEventManager))]
@@ -92,7 +92,7 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     [Tooltip("표적 선정 — 반경 안에 동료가 없는 상태가 일정 시간 이어진 현장 플레이어를 고른다")]
     [SerializeField] private LonePlayerWatch m_loneWatch = new LonePlayerWatch();
 
-    [Header("외곽 방치 지점")]
+    [Header("맨홀 지점")]
     [Tooltip("끌고 갈 목적지 후보. 붙잡힌 자리에서 가장 가까운 지점을 고른다 — NavMesh 위에 둘 것. 비우면 발동하지 않는다")]
     [SerializeField] private Transform[] m_outskirtPoints;
 
@@ -103,18 +103,18 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     [SerializeField] private float m_arriveDistance = 2f;
     [SerializeField] private float m_travelTimeoutSeconds = 90f;
 
-    [Header("외곽 린치 · 시체 반출")]
-    [Tooltip("도착 후 구타로 HP를 소진시키지 못해도 이 시간(초)에 강제로 끝낸다 — 교착 안전망이지 연출 값이 아니다")]
-    [Min(1f)]
-    [SerializeField] private float m_lynchTimeoutSeconds = 30f;
-
-    [Tooltip("시체를 끌고 도시 바깥으로 걸어 나가는 거리(m) — 이 거리를 지나면 시체와 납치범이 함께 사라진다")]
-    [Min(1f)]
-    [SerializeField] private float m_disposalDistance = 25f;
-
-    [Tooltip("반출 이동 속도(m/s) — NavMesh 밖이라 에이전트가 아니라 이 값으로 직접 민다")]
+    [Header("맨홀 결말")]
+    [Tooltip("뚜껑이 열리는 동안 기다리는 시간(초) — 이 구간이 마지막 구조 창이다 (#775, 잠정치는 #589에서 확정)")]
     [Min(0.1f)]
-    [SerializeField] private float m_disposalSpeed = 3.5f;
+    [SerializeField] private float m_manholeOpenSeconds = 3f;
+
+    [Tooltip("맨홀 아래로 내려가는 깊이(m) — 지형 밑으로 충분히 내려가 보이지 않을 만큼")]
+    [Min(0.1f)]
+    [SerializeField] private float m_descendDepth = 3f;
+
+    [Tooltip("내려가는 속도(m/s) — NavMesh 밖이라 에이전트가 아니라 이 값으로 직접 민다")]
+    [Min(0.1f)]
+    [SerializeField] private float m_descendSpeed = 2f;
 
     [Header("수명")]
     [Tooltip("이 시간(초) 안에 붙잡지 못하면 납치범이 포기한다 — 잔류 시민으로 남아 언제든 검거 가능")]
@@ -124,26 +124,21 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     private readonly List<NpcController> m_abductors = new List<NpcController>();
 
     private bool m_active;
+
+    // 개발자 강제 발동이 지정한 표적 — 다음 ServerBegin이 한 번 쓰고 버린다 (#775)
+    private Transform m_forcedTarget;
+
     private Transform m_chaseTarget;   // 포획 전 추격 표적 — 다른 사유로 죽으면 추격을 무산한다 (#679)
     private Transform m_carryTarget;   // 포획해 끌고 가는 중인 플레이어 — 중복 접수 방지
     private float m_chaseDeadline;
 
-    // 시체 반출(DisposeBodyAsync)에 들어갔다 — 이 구간에는 격퇴가 통하지 않는다 (#554).
-    // 결말이 이미 확정된 뒤이고(구조 창은 HP 0 이전까지다), 납치범은 프리즈 + 에이전트 off 상태라
-    // 임무 해제가 얹히면 배회 복귀 상태의 Enter가 꺼진 에이전트를 만진다.
-    private bool m_disposing;
+    // 맨홀 하강(DescendAsync)에 들어갔다 — 이 구간에는 격퇴가 통하지 않는다 (#775).
+    // 구조 창은 내려가기 전까지이고, 납치범은 프리즈 + 에이전트 off 상태라 임무 해제가 얹히면
+    // 배회 복귀 상태의 Enter가 꺼진 에이전트를 만진다.
+    private bool m_descending;
 
-    // 외곽 린치(LynchAsync)에 들어갔다 — 이 구간의 사인 변경은 마지막 가해자로 갈린다
-    // (납치범 주먹이면 결말, 외부 사인이면 물러난다 — #554, HandleVictimCauseChanged 참고).
-    private bool m_lynching;
-
-    // 린치 상한 폴백으로 <b>우리가</b> 처형을 집행하는 중 — 무력화 감시가 이것을 외부 사인으로 오인하지 않게. (#554)
-    private bool m_executing;
-
-    // 피해자를 마지막으로 때린 자 — 린치 결말을 가르는 근거다 (#554, HandleVictimCauseChanged 참고).
-    // 납치범 주먹이면 처형·반출로 끝나고, 폭발 같은 외부 사인이면 몸을 남기고 물러난다.
-    private PlayerHealth m_victimHealth;
-    private GameObject m_lastVictimAttacker;
+    // 우리가 낸 결말을 집행하는 중 — 무력화 감시가 이것을 외부 사인으로 오인하지 않게. (#775)
+    private bool m_finishing;
 
     public string DisplayName => m_displayName;
 
@@ -169,11 +164,12 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
         m_loneWatch.ResolveSceneRefs();
 
         // 끌고 가던 몸이 <b>다른 사유로</b> 쓰러지는 것을 지켜본다 (#554) — 폭탄 사망이 그것이다.
+        // 납치범은 때리지 않으므로(#775) 여기 걸리는 것은 언제나 외부 사유다.
         // 정적 이벤트라 플레이어 인스턴스가 새로 스폰돼도 배선이 끊기지 않는다(서버에서만 발행된다).
         PlayerIncapacitation.OnAnyIncapacitatedChanged += HandleVictimCauseChanged;
 
         if (m_outskirtPoints == null || m_outskirtPoints.Length == 0)
-            Debug.LogWarning("AbductionEvent: 외곽 방치 지점이 배선되지 않아 발동하지 않는다", this);
+            Debug.LogWarning("AbductionEvent: 맨홀 지점이 배선되지 않아 발동하지 않는다", this);
     }
 
     // 이벤트가 사라질 때 납치범에 걸어 둔 구독을 남기지 않는다. 보통은 씬 언로드로 NPC도 함께
@@ -183,7 +179,6 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     private void OnDestroy()
     {
         PlayerIncapacitation.OnAnyIncapacitatedChanged -= HandleVictimCauseChanged;
-        UntrackVictimDamage();
 
         for (int i = 0; i < m_abductors.Count; i++)
         {
@@ -221,9 +216,32 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
         return m_loneWatch.FindTarget() != null;
     }
 
+    /// <summary>
+    /// 강제 발동 준비 — <b>혼자 20초</b>를 기다리지 않고 표적을 하나 집는다. 개발자 단축키 전용. (#775)
+    /// 이 이벤트만 이 훅을 쓰는 이유는 조건이 누적이라서다 — 나머지는 즉시 판정이라 필요 없다.
+    /// </summary>
+    public bool ServerPrepareForceTrigger()
+    {
+        if (m_abductorPrefab == null || m_outskirtPoints == null || m_outskirtPoints.Length == 0)
+            return false; // 배선이 없으면 강제로도 못 한다
+
+        m_forcedTarget = m_loneWatch.FindForcedTarget();
+        if (m_forcedTarget == null)
+        {
+            Debug.LogWarning("AbductionEvent: 강제 발동할 표적이 없다 — 살아 있는 플레이어가 없다", this);
+            return false;
+        }
+
+        Debug.Log($"[납치] 강제 발동 준비 — 표적 {m_forcedTarget.name} (혼자 판정을 건너뛴다)");
+        return true;
+    }
+
     public void ServerBegin()
     {
-        Transform target = m_loneWatch.FindTarget();
+        // 강제 발동이 집어 준 표적이 있으면 그것부터 쓴다 — 한 번 쓰고 버린다 (#775)
+        Transform target = m_forcedTarget != null ? m_forcedTarget : m_loneWatch.FindTarget();
+        m_forcedTarget = null;
+
         if (target == null)
             return; // 발생 직전에 동료가 합류했다 — 이번엔 건너뛴다
 
@@ -362,13 +380,30 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
         if (released != null)
         {
             PlayerIncapacitation incap = released.GetComponent<PlayerIncapacitation>();
-            if (incap != null
-                && (incap.Cause == IncapacitationCause.Abducted || incap.Cause == IncapacitationCause.Lynched))
+            if (incap != null && incap.Cause == IncapacitationCause.Abducted)
                 incap.Recover();
         }
 
         ReleaseAllAbductors();
+        CloseAllManholes(); // 열린 채로 다음 라운드에 넘어가지 않게
         Finish();
+    }
+
+    // 라운드 정리에서 뚜껑을 되돌린다 — 지점마다 맨홀이 없을 수도 있다(선택 배선).
+    private void CloseAllManholes()
+    {
+        if (m_outskirtPoints == null)
+            return;
+
+        for (int i = 0; i < m_outskirtPoints.Length; i++)
+        {
+            if (m_outskirtPoints[i] == null)
+                continue;
+
+            AbductionManhole manhole = m_outskirtPoints[i].GetComponentInChildren<AbductionManhole>();
+            if (manhole != null)
+                manhole.ServerClose();
+        }
     }
 
     // 임무 해제 — 구독을 풀고 배회 시민으로 돌려보낸다. 스폰물을 지우지는 않는다:
@@ -404,11 +439,11 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     }
 
     /// <summary>
-    /// 반출 완료 — 납치범을 씬에서 치운다. <see cref="ReleaseAbductor"/>와 <b>갈리는 경로</b>다:
-    /// 그쪽은 도심에 잔류 시민으로 남겨 언제든 검거할 수 있게 하지만(#310), 시체를 끌고 맵 밖까지
-    /// 나간 놈은 잔류하지 않는다(팀 확정 2026-08-05). 그래서 잔류 정리를 물려줄
+    /// 하강 완료 — 납치범을 씬에서 치운다. <see cref="ReleaseAbductor"/>와 <b>갈리는 경로</b>다:
+    /// 그쪽은 도심에 잔류 시민으로 남겨 언제든 검거할 수 있게 하지만(#310), 맨홀까지 내려간 놈은
+    /// 잔류하지 않는다(2026-08-05 확정 그대로). 그래서 잔류 정리를 물려줄
     /// <see cref="MisdemeanorLoiterer"/>도 붙이지 않는다 — 여기서 바로 사라지기 때문이다.
-    /// 반출이 도중에 실패해도 부른다: 어느 경로로 끝나든 납치범이 씬에 남지 않게 하는 것이 이 함수의 계약이다.
+    /// 하강이 도중에 실패해도 부른다: 어느 경로로 끝나든 납치범이 씬에 남지 않게 하는 것이 이 함수의 계약이다.
     /// </summary>
     private void DisposeAbductors()
     {
@@ -436,10 +471,8 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     {
         m_active = false;
         m_chaseTarget = null;
-        m_disposing = false;
-        m_lynching = false;
-        m_executing = false;
-        UntrackVictimDamage();
+        m_descending = false;
+        m_finishing = false;
         m_loneWatch.Reset(); // 다음 프레임부터 혼자 판정을 처음부터 다시 센다
     }
 
