@@ -190,8 +190,8 @@ public class BombBlast : NetworkBehaviour
             // 시체에는 넉백이 막혀 있어(#634) 임펄스로만 움직인다
             if (npc.Death.IsDead)
             {
-                // 원래 있던 시체는 회수 위치를 지킨다 — 정착한 시체도 EnterRagdoll은 임펄스를
-                // 받으므로 이 wasAlive가 유일한 방어다
+                // 원래 있던 시체는 건드리지 않는다 — EnterRagdoll이 정착 시체를 거부하지 않아
+                // (뼈가 키네마틱이라 경고만 뜨고 몸이 깨어난다) 이 wasAlive가 유일한 방어다
                 if (wasAlive && npc.Ragdoll != null)
                     npc.Ragdoll.EnterRagdoll(EvaluateRagdollImpulse(position));
             }
