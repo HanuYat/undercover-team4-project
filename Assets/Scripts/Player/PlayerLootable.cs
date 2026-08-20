@@ -28,13 +28,11 @@ public class PlayerLootable : ChanneledInteractionBehaviour
     private PlayerTheftView m_theftView; // 소매치기(#303)와 같은 도난 알림을 재사용한다
 
     /// <summary>
-    /// 지금 이 몸을 털 수 있는가 — 기능 정지(Die)뿐. 전 피어에서 같은 답이 나온다(동기화된 원인).
-    ///
+    /// 지금 이 몸을 털 수 있는가 — 다운(유예)·기능 정지(Die) 둘 다(#725). 전 피어에서 같은 답이 나온다.
     /// 테이저 기절(<c>Stun</c>)은 제외한다: 스스로 일어나는 상태까지 털 수 있으면 테이저가 최고의
-    /// 강도 도구가 된다. 어차피 조준 히트박스가 <c>IsOutOfAction</c>에서만 켜져 기절한 몸은
-    /// 겨냥조차 되지 않지만(<see cref="PlayerIncapacitation"/>), 위조 RPC 방어로 여기서도 본다.
+    /// 강도 도구가 된다.
     /// </summary>
-    public bool CanBeLooted => m_incapacitation != null && m_incapacitation.IsDead;
+    public bool CanBeLooted => m_incapacitation != null && m_incapacitation.IsOutOfAction;
 
     /// <summary>이 몸의 소지품 — 약탈자가 목록을 읽고(표시) 서버가 이전 대상을 확인한다.</summary>
     internal PlayerLoadout Loadout => m_loadout;

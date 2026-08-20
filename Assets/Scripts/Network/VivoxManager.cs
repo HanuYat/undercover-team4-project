@@ -344,6 +344,23 @@ public class VivoxManager : CommonManagerBase
         m_distortion?.ApplyVolume();
     }
 
+    /// <summary>
+    /// 출력을 강제로 완전 무음으로 내린다 — 설정값(GameSettings.VoiceVolume)은 건드리지 않는다.
+    /// 완전 사망 1초 암전·SFX 무음(<see cref="PlayerDownView"/>, #725)과 짝. 복원은
+    /// <see cref="ApplyVoiceVolume"/>를 다시 부르면 된다.
+    ///
+    /// ⚠ 먹통 음성 왜곡(#372) 중에는 Vivox 자체 믹스가 아니라 우리 AudioSource로 재생되므로 출력
+    /// 장치 볼륨이 안 먹힌다 — 죽는 순간과 먹통이 겹치는 경우는 후속 과제로 남긴다.
+    /// </summary>
+    public void ForceMuteOutput()
+    {
+        if (m_loggedIn)
+            VivoxService.Instance.SetOutputDeviceVolume(k_vivoxVolumeMute);
+    }
+
+    /// <summary>PTT 송신 차단 — VoiceInputRouter로 그대로 전달한다. 완전 사망 규칙(#725)용.</summary>
+    public void SetTransmitBlocked(bool blocked) => m_input?.SetTransmitBlocked(blocked);
+
     // 0~1 → Vivox 정수 스케일. 0은 확실한 무음으로 떨어뜨리고, 그 위는 실사용 구간으로 보간한다.
     private static int ToVivoxVolume(float volume01)
     {

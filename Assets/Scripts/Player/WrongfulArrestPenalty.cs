@@ -35,37 +35,50 @@ using UnityEngine;
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public partial class WrongfulArrestPenalty : NetworkedManagerBase
 {
-    private const int k_maxWrongful = 1;      // 이 값을 "초과"하면(2회째) 추격대 출동
-    private const float k_hangSeconds = 30f;  // 광장 매달기(행동불능) 지속 시간 — NPC 수와 무관하게 고정 (#276 확정)
+    private const int k_maxWrongful = 1; // 이 값을 "초과"하면(2회째) 추격대 출동
+    private const float k_hangSeconds = 30f; // 광장 매달기(행동불능) 지속 시간 — NPC 수와 무관하게 고정 (#276 확정)
 
-    private const float k_carrierGap = 1.1f;         // 양옆 끌기 담당의 선두 기준 좌우 간격(m)
-    private const float k_plazaArriveDistance = 2f;  // 호송 선두의 광장 도착 판정 거리(m)
+    private const float k_carrierGap = 1.1f; // 양옆 끌기 담당의 선두 기준 좌우 간격(m)
+    private const float k_plazaArriveDistance = 2f; // 호송 선두의 광장 도착 판정 거리(m)
     private const float k_carryTravelTimeoutSeconds = 90f; // 호송 이동 안전 상한(초) — 넘으면 스냅 텔레포트로 마무리
-    private const float k_warningSeconds = 8f;       // 출동 알림 표시 시간(초) — 카운트다운이 아니라 잠깐 뜨는 경고
+    private const float k_warningSeconds = 8f; // 출동 알림 표시 시간(초) — 카운트다운이 아니라 잠깐 뜨는 경고
     private const float k_detentionSlotSpacing = 1.1f; // 원한 구역에서 시민끼리 벌어질 간격(m) — 캡슐 지름 0.8m + 여유
 
     [Header("페널티 발동 (#612)")]
-    [Tooltip("끄면 원한 구역 수용·추격대 출동·호송·광장 매달기를 전부 하지 않고 오검거 시민을 그 자리에서 석방한다. "
-        + "오검거 집계(정산 '최다 오검거')는 켜짐/꺼짐과 무관하게 그대로 쌓인다")]
-    [SerializeField] private bool m_penaltyEnabled;
+    [Tooltip(
+        "끄면 원한 구역 수용·추격대 출동·호송·광장 매달기를 전부 하지 않고 오검거 시민을 그 자리에서 석방한다. "
+            + "오검거 집계(정산 '최다 오검거')는 켜짐/꺼짐과 무관하게 그대로 쌓인다"
+    )]
+    [SerializeField]
+    private bool m_penaltyEnabled;
 
     [Header("광장 (매달기 지점) — 비우면 원점")]
     [Tooltip("페널티 확정 시 끌려가/이송될 맵 중앙 지점. 씬의 빈 GameObject를 지정한다")]
-    [SerializeField] private Transform m_plazaPoint;
+    [SerializeField]
+    private Transform m_plazaPoint;
 
     [Header("원한 구역 (오검거 시민 수용 지점) — 비우면 그 자리 수용 (#277)")]
-    [Tooltip("오검거당한 시민이 걸어가 대기하는 지점. NavMesh 위에 둘 것 — 여러 명은 이 지점 주변으로 퍼져 선다")]
-    [SerializeField] private Transform m_detentionPoint;
+    [Tooltip(
+        "오검거당한 시민이 걸어가 대기하는 지점. NavMesh 위에 둘 것 — 여러 명은 이 지점 주변으로 퍼져 선다"
+    )]
+    [SerializeField]
+    private Transform m_detentionPoint;
 
     [Header("추격 (#278)")]
     [Tooltip("격퇴(RepelChasers, 호루라기 #250 예정)가 미치는 반경(m)")]
-    [SerializeField] private float m_repelRadius = 10f;
+    [SerializeField]
+    private float m_repelRadius = 10f;
 
     [Header("수렴·호송 (#279)")]
     [Tooltip("포획된 플레이어 주변 이 거리(m) 안에 전원이 모이면 호송을 시작한다")]
-    [SerializeField] private float m_convergeArriveDistance = 2.5f;
-    [Tooltip("수렴 대기 상한(초) — 길이 막힌 NPC가 있어도 이 시간이 지나면 모인 인원으로 호송을 시작한다")]
-    [SerializeField] private float m_convergeTimeoutSeconds = 20f;
+    [SerializeField]
+    private float m_convergeArriveDistance = 2.5f;
+
+    [Tooltip(
+        "수렴 대기 상한(초) — 길이 막힌 NPC가 있어도 이 시간이 지나면 모인 인원으로 호송을 시작한다"
+    )]
+    [SerializeField]
+    private float m_convergeTimeoutSeconds = 20f;
 
     private ArrestJudge Judge => App.Game.ArrestJudge;
 
@@ -106,7 +119,10 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
             if (Judge != null)
                 Judge.OnArrestJudged += HandleArrestJudged;
             else
-                Debug.LogWarning("WrongfulArrestPenalty: ArrestJudge를 찾지 못해 오검거를 집계할 수 없다", this);
+                Debug.LogWarning(
+                    "WrongfulArrestPenalty: ArrestJudge를 찾지 못해 오검거를 집계할 수 없다",
+                    this
+                );
         }
     }
 
@@ -153,7 +169,9 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         // 배회 복귀까지 이쪽 책임이다 — 안 풀면 시민이 Captured로 굳는다.
         if (!m_penaltyEnabled)
         {
-            Debug.Log($"[오검거] 집계만 — 페널티 발동 꺼짐(#612), 석방한다. {FormatPerPlayerCounts()}");
+            Debug.Log(
+                $"[오검거] 집계만 — 페널티 발동 꺼짐(#612), 석방한다. {FormatPerPlayerCounts()}"
+            );
             if (result.Npc != null)
                 result.Npc.Custody.ReleaseFromCustody();
             return;
@@ -211,12 +229,16 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         // 시체는 원한 구역에 보내지도, 석방하지도 않는다(이미 Dead 상태를 든다).
         if (!m_penaltyEnabled)
         {
-            Debug.Log($"[오검거] 시체 인계 — 집계만, 페널티 발동 꺼짐(#612). {FormatPerPlayerCounts()}");
+            Debug.Log(
+                $"[오검거] 시체 인계 — 집계만, 페널티 발동 꺼짐(#612). {FormatPerPlayerCounts()}"
+            );
             return;
         }
 
         m_teamCountSynced.Value += 1;
-        Debug.Log($"[오검거] 시체 인계 — 팀 카운트 {m_teamCountSynced.Value} — {FormatPerPlayerCounts()}");
+        Debug.Log(
+            $"[오검거] 시체 인계 — 팀 카운트 {m_teamCountSynced.Value} — {FormatPerPlayerCounts()}"
+        );
 
         if (m_teamCountSynced.Value > k_maxWrongful)
             LaunchSquad(CollectTargets(deliverers));
@@ -243,7 +265,10 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
             return;
 
         if (m_detentionPoint == null)
-            Debug.LogWarning("WrongfulArrestPenalty: 원한 구역(Detention Point) 미배선 — 그 자리에서 수용된다", this);
+            Debug.LogWarning(
+                "WrongfulArrestPenalty: 원한 구역(Detention Point) 미배선 — 그 자리에서 수용된다",
+                this
+            );
 
         // 설 자리는 여기서 나눠 준다 — 구역 지점은 하나뿐이고, 이송 중에는 회피를 끄므로
         // (NpcDetainedState.Enter) 겹침을 흩어 줄 주체가 없다. 구역 로스터를 쥔 이쪽이 도착 순번으로
@@ -294,9 +319,10 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         foreach (Transform target in targets)
             ShowWarning(target, k_warningSeconds);
 
-        string targetNames = targets.Count > 0
-            ? string.Join(", ", targets.ConvertAll(t => t.name))
-            : "(없음 — 사냥 모드)";
+        string targetNames =
+            targets.Count > 0
+                ? string.Join(", ", targets.ConvertAll(t => t.name))
+                : "(없음 — 사냥 모드)";
         Debug.Log($"[오검거] 추격대 출동 — {launched}명, 초기 타겟 {targetNames}");
     }
 
@@ -365,12 +391,17 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         // 이 폴백에서는 페널티가 미뤄지는 게 아니라 이번 집행분이 넘어간다 — 예외 경로라 그대로 둔다.
         if (incap != null && incap.IsIncapacitated && incap.Cause != IncapacitationCause.Penalty)
         {
-            Debug.Log($"[오검거] 매달기 건너뜀 — {target.name}은 이미 {incap.Cause} 상태다 (그쪽이 우선)");
+            Debug.Log(
+                $"[오검거] 매달기 건너뜀 — {target.name}은 이미 {incap.Cause} 상태다 (그쪽이 우선)"
+            );
             return;
         }
 
         if (m_plazaPoint == null)
-            Debug.LogWarning("WrongfulArrestPenalty: Plaza Point 미할당 — 원점(0,0,0)으로 이송된다. 인스펙터에 광장 지점을 지정할 것", this);
+            Debug.LogWarning(
+                "WrongfulArrestPenalty: Plaza Point 미할당 — 원점(0,0,0)으로 이송된다. 인스펙터에 광장 지점을 지정할 것",
+                this
+            );
 
         Vector3 pos = m_plazaPoint != null ? m_plazaPoint.position : Vector3.zero;
         Quaternion rot = m_plazaPoint != null ? m_plazaPoint.rotation : Quaternion.identity;
@@ -378,8 +409,8 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         if (movement != null)
             movement.ServerTeleport(pos, rot); // 오너 권한 경로 — 호스트·원격 클라 모두 이동
         // 폴백 경로(구역이 비어 추격대 없이 집행)에서는 여기서 무력화가 처음 걸린다.
-        // 같은 원인이면 무동작이지만 <b>다른 원인은 덮어쓴다</b> — 기능 정지(Die)만은 덮이지 않게
-        // Incapacitate 쪽에서 막는다(#364). 안 막으면 30초 뒤 아래 Recover()가 Die까지 풀어 공짜 부활이 된다.
+        // 같은 원인이면 무동작이지만 <b>다른 원인은 덮어쓴다</b> — 다운·기능 정지만은 덮이지 않게
+        // Incapacitate 쪽에서 막는다(#364, #725). 안 막으면 30초 뒤 아래 Recover()가 다운·Die까지 풀어 공짜 부활이 된다.
         if (incap != null)
             incap.Incapacitate(IncapacitationCause.Penalty);
 
@@ -388,7 +419,10 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         // 씬 전환·파괴 시 토큰으로 안전 중단한다.
         try
         {
-            await UniTask.Delay(TimeSpan.FromSeconds(k_hangSeconds), cancellationToken: destroyCancellationToken);
+            await UniTask.Delay(
+                TimeSpan.FromSeconds(k_hangSeconds),
+                cancellationToken: destroyCancellationToken
+            );
         }
         catch (OperationCanceledException)
         {
@@ -429,7 +463,8 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         bool first = true;
         foreach (KeyValuePair<ulong, int> pair in m_perPlayerCounts)
         {
-            if (!first) sb.Append(", ");
+            if (!first)
+                sb.Append(", ");
             sb.Append($"client {pair.Key}:{pair.Value}회");
             first = false;
         }

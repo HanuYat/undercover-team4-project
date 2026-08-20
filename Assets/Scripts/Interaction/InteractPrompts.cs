@@ -55,7 +55,6 @@ public static class InteractPrompts
     public static readonly LocalizedString NpcJailRelease = Of("Hud.Interact.NpcJailRelease");
 
     // ---- 동료 ----
-    public static readonly LocalizedString Loot = Of("Hud.Interact.Loot");
     public static readonly LocalizedString HandOverBody = Of("Hud.Interact.HandOverBody");
     public static readonly LocalizedString PutDownBody = Of("Hud.Interact.PutDownBody");
     public static readonly LocalizedString Revive = Of("Hud.Interact.Revive");

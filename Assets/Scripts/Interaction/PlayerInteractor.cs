@@ -5,19 +5,31 @@ using UnityEngine;
 public class PlayerInteractor : NetworkBehaviour
 {
     [Header("레이캐스트")]
-    [SerializeField] private Camera m_camera;
-    [SerializeField] private float m_range = 3f;
-    [SerializeField] private LayerMask m_interactMask = ~0;
+    [SerializeField]
+    private Camera m_camera;
+
+    [SerializeField]
+    private float m_range = 3f;
+
+    [SerializeField]
+    private LayerMask m_interactMask = ~0;
 
     [Tooltip("시야를 가로막는 장애물 레이어 — 벽·건물(Default). 여기 걸리면 대상으로 잡지 않는다")]
-    [SerializeField] private LayerMask m_losBlockMask = 1; // Default
+    [SerializeField]
+    private LayerMask m_losBlockMask = 1; // Default
 
     [Header("디버그")]
-    [Tooltip("조준·가시선 판정을 콘솔에 찍는다 — 히트 목록·거리·무엇이 차단했는지. Gizmos를 켜면 레이도 보인다")]
-    [SerializeField] private bool m_logLineOfSight;
+    [Tooltip(
+        "조준·가시선 판정을 콘솔에 찍는다 — 히트 목록·거리·무엇이 차단했는지. Gizmos를 켜면 레이도 보인다"
+    )]
+    [SerializeField]
+    private bool m_logLineOfSight;
 
-    [Tooltip("Gizmos로 그리는 레이가 화면에 남는 시간(초). 콘솔 로그는 상황이 바뀔 때 한 번만 찍힌다")]
-    [SerializeField] private float m_logInterval = 0.5f;
+    [Tooltip(
+        "Gizmos로 그리는 레이가 화면에 남는 시간(초). 콘솔 로그는 상황이 바뀔 때 한 번만 찍힌다"
+    )]
+    [SerializeField]
+    private float m_logInterval = 0.5f;
 
     // 가시선 검사를 끝점 직전에서 멈추는 여유(m) — 대상이 딛고 선 바닥이 가림으로 잡히는 것을 막는다.
     private const float k_losEndMargin = 0.05f;
@@ -47,7 +59,7 @@ public class PlayerInteractor : NetworkBehaviour
     public LayerMask LosBlockMask => m_losBlockMask;
 
     private PlayerInputHandler m_inputHandler;
-    private PlayerEscorter m_escorter;       // "지금 이걸 끌고 있나" 조회 (연결 상태)
+    private PlayerEscorter m_escorter; // "지금 이걸 끌고 있나" 조회 (연결 상태)
     private PlayerEscortCommands m_commands; // 놓기 요청 (명령 허브)
     private PlayerIncapacitation m_incapacitation;
     private PlayerCarrier m_carrier; // 운반 중 E의 "내려놓기" 선점 판정용 (#365)
@@ -67,7 +79,8 @@ public class PlayerInteractor : NetworkBehaviour
         // 행동불능 중 상호작용 차단용 — 이동/아이템은 각자 게이팅하지만 E 상호작용은 공백이었다 (#101)
         m_incapacitation = GetComponent<PlayerIncapacitation>();
         m_carrier = GetComponent<PlayerCarrier>(); // 없는 구성(테스트 등)이면 null (#365)
-        if (m_camera == null) m_camera = Camera.main;
+        if (m_camera == null)
+            m_camera = Camera.main;
 
         if (!IsOwner)
         {
@@ -76,14 +89,14 @@ public class PlayerInteractor : NetworkBehaviour
         }
 
         m_inputHandler.OnInteractPerformed += HandleInteract;
-        // E 뗌 구독은 제거됐다 (#436) — 도주 제압 홀드 취소 전용이었고, 그 홀드가 사라졌다.
-        // OnInteractCanceled 자체는 PlayerReviver(다운 동료 부활 홀드)가 구독한다 — 그 구조 경로는
-        // #524로 휴면이지만, 구독은 되살릴 때를 위해 그대로 남아 있다.
+        // E 뗌(OnInteractCanceled) 구독은 여기 없다 — 도주 제압 홀드 취소 전용이었고 그 홀드가
+        // 사라졌다(#436). PlayerReviver의 구조도 이제 탭 방식이라 뗌을 보지 않는다(#725).
     }
 
     public override void OnNetworkDespawn()
     {
-        if (!IsOwner) return;
+        if (!IsOwner)
+            return;
 
         m_inputHandler.OnInteractPerformed -= HandleInteract;
     }
@@ -95,7 +108,8 @@ public class PlayerInteractor : NetworkBehaviour
 
     private void UpdateTarget()
     {
-        if (m_camera == null) return;
+        if (m_camera == null)
+            return;
 
         GameObject previousTarget = CurrentTarget;
 
@@ -108,12 +122,14 @@ public class PlayerInteractor : NetworkBehaviour
         }
         else
         {
-            if (!aimed) LogAimMiss(ray);
+            if (!aimed)
+                LogAimMiss(ray);
             CurrentTarget = null;
             CurrentInteractable = null;
         }
 
-        if (CurrentTarget != previousTarget) OnTargetChanged?.Invoke(CurrentTarget);
+        if (CurrentTarget != previousTarget)
+            OnTargetChanged?.Invoke(CurrentTarget);
     }
 
     /// <summary>
@@ -140,7 +156,11 @@ public class PlayerInteractor : NetworkBehaviour
     /// interactor가 없는 구성(테스트 씬 등)은 fallbackOrigin을 기준점으로 쓰고 가시선은 생략한다.
     /// </summary>
     public static bool IsWithinReach(
-        PlayerInteractor interactor, Transform target, float range, Vector3 fallbackOrigin)
+        PlayerInteractor interactor,
+        Transform target,
+        float range,
+        Vector3 fallbackOrigin
+    )
     {
         Vector3 origin = interactor != null ? interactor.AimOrigin.position : fallbackOrigin;
         return (target.position - origin).sqrMagnitude <= range * range
@@ -159,7 +179,12 @@ public class PlayerInteractor : NetworkBehaviour
     // 히트를 하나만 보지 않고 전부 받아 AimOcclusion에 판정을 맡긴다 — 테이저 사격·진압봉 스윙과
     // 같은 규칙이어야 "테이저는 맞는데 E는 안 되는" 어긋남이 생기지 않는다.
     // 기준(피봇 거리)과 그 한계는 AimOcclusion 문서 주석에 정리돼 있다.
-    private bool HasLineOfSight(Vector3 origin, Vector3 point, Transform target, string context = null)
+    private bool HasLineOfSight(
+        Vector3 origin,
+        Vector3 point,
+        Transform target,
+        string context = null
+    )
     {
         Vector3 toPoint = point - origin;
         float fullDistance = toPoint.magnitude;
@@ -182,9 +207,11 @@ public class PlayerInteractor : NetworkBehaviour
         int blockerIndex = AimOcclusion.FindNearestByPivot(origin, s_losHits, count, target.root);
 
         // 가장 가까운 피봇조차 대상보다 멀면 가림은 없다 (그보다 먼 것들은 볼 필요가 없다)
-        if (blockerIndex >= 0
+        if (
+            blockerIndex >= 0
             && AimOcclusion.PivotDistance(origin, s_losHits[blockerIndex])
-                >= Vector3.Distance(origin, target.position))
+                >= Vector3.Distance(origin, target.position)
+        )
         {
             blockerIndex = -1;
         }
@@ -196,10 +223,17 @@ public class PlayerInteractor : NetworkBehaviour
     // ---- 디버그 로그 (m_logLineOfSight) ----
 
     private void LogLineOfSight(
-        string context, Vector3 origin, Vector3 point, Transform target,
-        int count, int blockerIndex, float distance)
+        string context,
+        Vector3 origin,
+        Vector3 point,
+        Transform target,
+        int count,
+        int blockerIndex,
+        float distance
+    )
     {
-        if (!m_logLineOfSight) return;
+        if (!m_logLineOfSight)
+            return;
 
         bool blocked = blockerIndex >= 0;
 
@@ -215,10 +249,12 @@ public class PlayerInteractor : NetworkBehaviour
         // (매 프레임 도는 경로라 시간 스로틀만 두면 같은 줄이 계속 쌓여 읽을 수 없다)
         int targetId = target.GetInstanceID();
         int blockerId = blocked ? s_losHits[blockerIndex].collider.GetInstanceID() : 0;
-        if (!m_lastLogWasAimMiss
+        if (
+            !m_lastLogWasAimMiss
             && targetId == m_lastLogTargetId
             && blockerId == m_lastLogBlockerId
-            && blocked == m_lastLogBlocked)
+            && blocked == m_lastLogBlocked
+        )
         {
             return;
         }
@@ -232,7 +268,9 @@ public class PlayerInteractor : NetworkBehaviour
         sb.Append($"[LOS/{context ?? "?"}] {(blocked ? "차단" : "통과")} — 대상 {target.name}");
         sb.Append($", 사거리 검사 {distance:F2}m, 히트 {count}개");
         sb.Append($" (server={IsServer} owner={IsOwner}, blockMask={m_losBlockMask.value})");
-        sb.Append($"\n  대상 Transform까지 {Vector3.Distance(origin, target.position):F2}m — 이보다 가까운 피봇만 가림으로 센다");
+        sb.Append(
+            $"\n  대상 Transform까지 {Vector3.Distance(origin, target.position):F2}m — 이보다 가까운 피봇만 가림으로 센다"
+        );
 
         if (count == 0)
         {
@@ -242,43 +280,65 @@ public class PlayerInteractor : NetworkBehaviour
         for (int i = 0; i < count; i++)
         {
             Collider c = s_losHits[i].collider;
-            string mark = i == blockerIndex
-                ? "  ← 여기서 차단"
-                : c != null && c.transform.root == target.root ? "  (대상 자신)" : "";
+            string mark =
+                i == blockerIndex ? "  ← 여기서 차단"
+                : c != null && c.transform.root == target.root ? "  (대상 자신)"
+                : "";
             sb.Append($"\n  [{i}] {s_losHits[i].distance:F2}m  {(c == null ? "(null)" : c.name)}");
             if (c != null)
             {
-                sb.Append($"  (Transform까지 {Vector3.Distance(origin, c.transform.position):F2}m)");
-                sb.Append($"  root={c.transform.root.name}, layer={LayerMask.LayerToName(c.gameObject.layer)}");
+                sb.Append(
+                    $"  (Transform까지 {Vector3.Distance(origin, c.transform.position):F2}m)"
+                );
+                sb.Append(
+                    $"  root={c.transform.root.name}, layer={LayerMask.LayerToName(c.gameObject.layer)}"
+                );
             }
 
             sb.Append(mark);
         }
 
-        if (blocked) Debug.LogWarning(sb.ToString(), s_losHits[blockerIndex].collider);
-        else Debug.Log(sb.ToString(), target);
+        if (blocked)
+            Debug.LogWarning(sb.ToString(), s_losHits[blockerIndex].collider);
+        else
+            Debug.Log(sb.ToString(), target);
     }
 
     // 조준 레이가 아무것도 못 맞춘 경우 — 가시선 이전 단계에서 실패한 것이라 위 로그가 아예 안 찍힌다.
     // 마스크를 무시하고 한 번 더 쏴서, 대상이 m_interactMask 밖 레이어에 있는 것인지 구분한다.
     private void LogAimMiss(Ray ray)
     {
-        if (!m_logLineOfSight) return;
+        if (!m_logLineOfSight)
+            return;
 
-        Debug.DrawRay(ray.origin, ray.direction * m_range, Color.yellow, Mathf.Max(0.05f, m_logInterval));
+        Debug.DrawRay(
+            ray.origin,
+            ray.direction * m_range,
+            Color.yellow,
+            Mathf.Max(0.05f, m_logInterval)
+        );
 
         // 대상 없음도 상태가 바뀔 때 한 번만 — 아무것도 안 보고 있는 동안 계속 찍히면 의미가 없다
-        if (m_lastLogWasAimMiss) return;
+        if (m_lastLogWasAimMiss)
+            return;
         m_lastLogWasAimMiss = true;
         m_lastLogTargetId = 0;
         m_lastLogBlockerId = 0;
 
-        string extra = Physics.Raycast(ray, out RaycastHit any, m_range, ~0, QueryTriggerInteraction.Collide)
+        string extra = Physics.Raycast(
+            ray,
+            out RaycastHit any,
+            m_range,
+            ~0,
+            QueryTriggerInteraction.Collide
+        )
             ? $"마스크를 무시하면 {any.collider.name} (layer={LayerMask.LayerToName(any.collider.gameObject.layer)}, "
-              + $"{any.distance:F2}m, trigger={any.collider.isTrigger})를 맞는다 — 대상 레이어가 interactMask 밖일 수 있다"
+                + $"{any.distance:F2}m, trigger={any.collider.isTrigger})를 맞는다 — 대상 레이어가 interactMask 밖일 수 있다"
             : $"마스크를 무시해도 아무것도 없다 — 사거리({m_range}m) 밖이거나 콜라이더가 없다";
 
-        Debug.Log($"[LOS/조준] 대상 없음 — interactMask={m_interactMask.value}, range={m_range}m. {extra}");
+        Debug.Log(
+            $"[LOS/조준] 대상 없음 — interactMask={m_interactMask.value}, range={m_range}m. {extra}"
+        );
     }
 
     private void HandleInteract()
@@ -294,15 +354,15 @@ public class PlayerInteractor : NetworkBehaviour
         // 겨냥한 상호작용이 지금 실제로 동작하는가 — 아래 '손 떼기'보다 앞서는 조건이다 (#638).
         // 윤곽선 판정(CanInteract)을 그대로 쓴다: 배회하는 시민처럼 E가 아무 일도 하지 않는 대상을
         // 겨눴다는 이유로 끌던 줄이 안 풀리면, 무엇을 보고 있느냐에 따라 E가 죽는 구간이 생긴다.
-        bool aimedInteraction = CurrentInteractable != null && CurrentInteractable.CanInteract(gameObject);
+        bool aimedInteraction =
+            CurrentInteractable != null && CurrentInteractable.CanInteract(gameObject);
 
         // 끌고 있는 대상을 겨눈 E는 **그 한 명만** 푼다 (#390/#513) — 여러 명을 끌 때 하나만 놓는 수단이다.
         // 겨냥이 비면 아래에서 전원 풀기로 간다 (#638): 끌리는 몸은 늘 등 뒤에 있어서, 겨냥을 요구하면
         // 놓을 때마다 뒤를 돌아봐야 했다.
         // (연행 쪽이 따로 입력을 구독하면 풀기와 다른 E 동작이 한 입력에 동시 발동하는 이중 소비가 생긴다)
-        NpcController aimed = CurrentTarget != null
-            ? CurrentTarget.GetComponentInParent<NpcController>()
-            : null;
+        NpcController aimed =
+            CurrentTarget != null ? CurrentTarget.GetComponentInParent<NpcController>() : null;
         if (m_escorter != null && m_escorter.IsDraggingNpc(aimed))
         {
             // '끌고 온 상태에서만 의미 있는' 대상에 선점을 열어 주던 예외(TakesPriorityOverRelease, #414)는
@@ -319,8 +379,10 @@ public class PlayerInteractor : NetworkBehaviour
             // 몸을 받는 대상(부활 장치)은 내려놓기보다 앞선다 — 아니면 장치 앞에서 E를 눌러도 그 자리에
             // 툭 내려놓게 된다. 선점을 여는 대상은 ICarriedBodyReceiver로 한정한다(문·콘솔은 종전대로).
             // CanInteract를 함께 보므로 조준 윤곽선이 켜진 조건과 실제로 E가 먹히는 조건이 일치한다.
-            if (CurrentInteractable is ICarriedBodyReceiver receiver
-                && receiver.CanInteract(gameObject))
+            if (
+                CurrentInteractable is ICarriedBodyReceiver receiver
+                && receiver.CanInteract(gameObject)
+            )
             {
                 receiver.Interact(gameObject);
                 return;
@@ -328,7 +390,11 @@ public class PlayerInteractor : NetworkBehaviour
 
             // 업은 동료를 겨눈 E는 그 몸만 내려놓는다 — 겨냥으로 하나를 고르는 위 밧줄 갈래와 같은 취지.
             Transform carried = m_carrier.CarriedTransform;
-            if (carried != null && CurrentTarget != null && CurrentTarget.transform.IsChildOf(carried))
+            if (
+                carried != null
+                && CurrentTarget != null
+                && CurrentTarget.transform.IsChildOf(carried)
+            )
             {
                 Debug.Log("E 입력 — 내려놓기 요청 (운반, 겨냥)");
                 m_carrier.RequestDrop();

@@ -65,15 +65,16 @@ public abstract class ChanneledInteractionBehaviour : NetworkBehaviour
 
     // 소리를 RPC 인자로 실어 보내는 이유 — 원격 오너에서는 ChannelLoopSound를 그대로 읽어도 되지만,
     // 게이지와 소리가 같은 한 번의 결정에서 나와야 둘이 어긋날 여지가 없다.
-    private static void ShowChannelFeedback(float seconds, float elapsed, EAudioClip sound)
+    // owner로 this를 넘기는 이유는 ChannelingGaugeUI 문서 참고. (#725)
+    private void ShowChannelFeedback(float seconds, float elapsed, EAudioClip sound)
     {
-        App.UI.Gauge?.Show(seconds, elapsed);
+        App.UI.Gauge?.Show(seconds, elapsed, this);
         App.Sound?.PlayLoop2D(sound);
     }
 
-    private static void HideChannelFeedback()
+    private void HideChannelFeedback()
     {
-        App.UI.Gauge?.Hide();
+        App.UI.Gauge?.Hide(this);
         App.Sound?.StopLoop2D();
     }
 

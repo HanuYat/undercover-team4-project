@@ -31,6 +31,10 @@ MonoBehaviour:
     m_Key: Hud.Revive.SelfDead
     m_Metadata:
       m_Items: []
+  - m_Id: 3135784423426
+    m_Key: Hud.Revive.BeingRevived
+    m_Metadata:
+      m_Items: []
   - m_Id: 3135784423425
     m_Key: Hud.Penalty.ChaseWarning
     m_Metadata:

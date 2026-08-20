@@ -509,6 +509,9 @@ public class PlayerLoadout : NetworkBehaviour
     // 빈 칸↔빈 칸이면 SetEquippedItem이 이벤트를 안 내므로, 인덱스 변경 이벤트를 따로 발행해 UI 하이라이트를 갱신한다.
     private void EquipSlot(int index)
     {
+        // 전환 전 아이템 — 게이지 소유자 판별 기준 (#725).
+        ItemBase previousEquipped = m_itemUser.EquippedItem;
+
         m_slotModel.SetEquippedIndex(index);
         m_itemUser.SetEquippedItem(m_slotModel.Equipped);
 
@@ -517,11 +520,14 @@ public class PlayerLoadout : NetworkBehaviour
         // 않는다 — 손에 없는 아이템의 진행도가 화면에 남는다. 채널링 쪽도 서버 통지를 기다리지 않고
         // 즉시 사라져 반응이 또렷해진다.
         //
+        // 게이지는 아이템·구조·포박이 공유하므로 owner로 이전 아이템을 넘긴다 — 구조 채널링 게이지처럼
+        // 이전 아이템이 띄운 게 아니면 Hide가 무동작으로 넘어간다. (#725)
+        //
         // 오너에서만: 이 메서드는 서버 목록 동기화(RebuildHeldItems) 경로로도 불려 비오너 피어에서
         // 실행되므로, 가드가 없으면 남의 아이템 정리가 내 화면 게이지를 지운다.
         if (IsOwner)
         {
-            App.UI.Gauge?.Hide();
+            App.UI.Gauge?.Hide(previousEquipped);
 
             // 새로 든 아이템이 진행 중인 것을 갖고 있으면 다시 띄운다 — 테이저 충전 중에 다른 걸 들었다가
             // 돌아온 경우 (#455). 순서가 중요하다: 먼저 내려서 이전 아이템 게이지를 확실히 지운 뒤,

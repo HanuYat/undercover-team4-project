@@ -49,6 +49,7 @@ public class PlayerAnimationDriver : MonoBehaviour
     private static readonly int s_crouchHash = Animator.StringToHash("Crouch"); // 서기↔앉기 상태 전환 (#236)
     private static readonly int s_airborneHash = Animator.StringToHash("Airborne"); // 점프 상태 머신 구동 (#189)
     private static readonly int s_attackHash = Animator.StringToHash("Attack"); // 타격 상체 레이어 트리거 (#217)
+    private static readonly int s_revivingHash = Animator.StringToHash("Reviving"); // 구조 채널링 모션 (#725)
 
     // 기상 모션을 건너뛰고 곧장 세울 때 찍는 상태 (#371 후속) — 아래 스냅 참고.
     // Base Layer의 기본 상태 이름과 같아야 한다(Player.controller).
@@ -71,6 +72,7 @@ public class PlayerAnimationDriver : MonoBehaviour
     private PlayerJump m_jump; // 점프 애니메이션 구동용 (#189)
     private PlayerHandView m_handView; // 1인칭 팔 스윙 구동용 — 오너에서만 활성 (#217)
     private PlayerRagdoll m_ragdoll; // 사망 래그돌 — 뼈를 쥐고 있는 동안 Down을 붙든다 (#506)
+    private PlayerReviver m_reviver; // 구조 채널링 모션 구동용 (#725)
     private Vector3 m_lastPosition;
 
     private void Awake()
@@ -90,6 +92,7 @@ public class PlayerAnimationDriver : MonoBehaviour
         m_jump = GetComponentInParent<PlayerJump>();
         m_handView = GetComponentInParent<PlayerHandView>();
         m_ragdoll = GetComponentInParent<PlayerRagdoll>();
+        m_reviver = GetComponentInParent<PlayerReviver>();
         m_lastPosition = transform.position;
     }
 
@@ -141,7 +144,8 @@ public class PlayerAnimationDriver : MonoBehaviour
             //
             // 두 컴포넌트가 같은 Animator를 만지므로 역할을 나눠 둔다 —
             // <b>파라미터는 이 컴포넌트만, Animator on/off와 뼈는 PlayerRagdoll만</b> 건드린다.
-            bool prone = m_incapacitation.IsProne || (m_ragdoll != null && m_ragdoll.IsRagdollActive);
+            bool prone =
+                m_incapacitation.IsProne || (m_ragdoll != null && m_ragdoll.IsRagdollActive);
             m_animator.SetBool(s_downHash, prone);
 
             // 린치로 세워지는 순간만 <b>기상 모션을 건너뛰고</b> 곧장 선다.
@@ -174,6 +178,13 @@ public class PlayerAnimationDriver : MonoBehaviour
         if (m_jump != null)
         {
             m_animator.SetBool(s_airborneHash, m_jump.IsAirborne);
+        }
+
+        // 구조 채널링도 같은 방식 — 서버 권위 동기화값(PlayerReviver.IsChanneling)을 폴링해 제3자
+        // 화면에도 같은 모션이 보이게 한다. (#725)
+        if (m_reviver != null)
+        {
+            m_animator.SetBool(s_revivingHash, m_reviver.IsChanneling);
         }
 
         if (m_movement == null || Time.deltaTime <= 0f)

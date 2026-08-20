@@ -6725,6 +6725,7 @@ GameObject:
   - component: {fileID: 8718556211917965241}
   - component: {fileID: 2157526431572492624}
   - component: {fileID: 1286722615097752607}
+  - component: {fileID: 465736134258289606}
   - component: {fileID: 1051911861902201608}
   m_Layer: 0
   m_Name: Player
@@ -6906,6 +6907,7 @@ MonoBehaviour:
   m_moveAction: {fileID: -1680190386980627800, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_lookAction: {fileID: -5630151704836100654, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_interactAction: {fileID: 1781555164194001046, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  m_lootAction: {fileID: -5931461861488747923, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_sprintAction: {fileID: -7471211009204490832, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_useItemAction: {fileID: 1120369429361536294, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_previousAction: {fileID: 2411907206095950430, guid: 052faaac586de48259a63d0c4782560b, type: 3}
@@ -7165,6 +7167,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerIncapacitation
   ShowTopMostFoldoutHeaderGroup: 1
   m_reviveHitbox: {fileID: 6891439341619729457}
+  m_dieAfterDownSeconds: 60
 --- !u!114 &-6997859010805551940
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7198,6 +7201,15 @@ MonoBehaviour:
     m_TableEntryReference:
       m_KeyId: 0
       m_Key: Hud.Revive.Downed
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_beingRevivedPrompt:
+    m_TableReference:
+      m_TableCollectionName: 
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: 
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
@@ -7805,6 +7817,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerTerminalFocus
   m_blendSpeed: 7
+--- !u!114 &465736134258289606
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 68c48c97f9212874faf32ccb11a84ebc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerDownView
+  ShowTopMostFoldoutHeaderGroup: 1
 --- !u!114 &1051911861902201608
 MonoBehaviour:
   m_ObjectHideFlags: 0
