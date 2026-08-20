@@ -34,4 +34,14 @@ public static class BountyRoll
 
         return Random.Range(lo, hi + 1) * k_unit;
     }
+
+    /// <summary>비율만큼 깎고 <see cref="k_unit"/> 배수로 떨어뜨린다 — 추첨이 아니라 결정적 계산이라 재판정해도 같은 값이 나온다. (#766)</summary>
+    public static int Reduce(int bounty, float ratio)
+    {
+        if (bounty <= 0)
+            return 0;
+
+        float kept = 1f - Mathf.Clamp01(ratio);
+        return Mathf.Max(0, Mathf.RoundToInt(bounty * kept / k_unit) * k_unit);
+    }
 }

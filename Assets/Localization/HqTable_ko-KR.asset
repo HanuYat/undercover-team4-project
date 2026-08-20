@@ -70,6 +70,14 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 6276845898492543064
+  - m_Id: 7100000000700
+    m_Localized: "생사 불문"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000701
+    m_Localized: "생포 필수"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

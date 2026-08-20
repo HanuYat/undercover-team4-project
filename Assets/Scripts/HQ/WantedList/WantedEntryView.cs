@@ -30,11 +30,17 @@ public class WantedEntryView : MonoBehaviour
     [SerializeField]
     private TMP_Text m_montageText;
 
+    [Tooltip("수배 조건 표시 (생사 불문/생포 필수, #766). 비워 두면 표시하지 않는다")]
+    [SerializeField]
+    private TMP_Text m_conditionText;
+
     // 금액 서식은 프로젝트 공용이고 행마다 같은 문구다 — SerializeField로 두면 행 프리팹이
     // 늘 때마다 같은 키를 다시 배선해야 하고 하나만 빠지면 그 행만 옛 표기로 남는다. (#497)
     // 언어 변경 갱신은 WantedListView가 로케일 변경에 걸고 통째로 다시 그리는 것으로 처리한다.
     private const string k_commonTable = "CommonTable";
     private const string k_moneyKey = "Common.Unit.Money";
+    private const string k_hqTable = "HqTable";
+    private const string k_conditionPrefix = "Hq.Wanted.Condition.";
 
     public void Bind(in WantedEntry entry, AppearanceDatabase appearanceDatabase)
     {
@@ -55,5 +61,8 @@ public class WantedEntryView : MonoBehaviour
 
         if (m_bountyText != null)
             m_bountyText.text = LocalizedStrings.Get(k_commonTable, k_moneyKey, entry.Bounty);
+
+        if (m_conditionText != null)
+            m_conditionText.text = LocalizedStrings.Get(k_hqTable, k_conditionPrefix + entry.Condition);
     }
 }

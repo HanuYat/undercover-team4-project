@@ -80,6 +80,10 @@ MonoBehaviour:
     m_Localized: "{0}  \u2014  \uBCF4\uC0C1 {1:N0}\uC6D0"
     m_Metadata:
       m_Items: []
+  - m_Id: 7035667821215076
+    m_Localized: "\uC0DD\uD3EC \uC870\uAC74 \uBD88\uCDA9\uC871"
+    m_Metadata:
+      m_Items: []
   - m_Id: 7100000000314
     m_Localized: "\uBC30\uD130\uB9AC {0}/{1}"
     m_Metadata:

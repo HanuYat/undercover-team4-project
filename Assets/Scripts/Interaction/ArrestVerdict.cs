@@ -25,4 +25,14 @@ public enum ArrestVerdict
     /// 대상은 <see cref="MisdemeanorOffender"/> 마커로 식별한다 (신원 IsCriminal 대조를 타지 않는다).
     /// </summary>
     Misdemeanor,
+
+    /// <summary>생포 조건 불충족 — AliveOnly 대상을 시체로 인계함. 보상 0, 오검거는 아니다. (#766)</summary>
+    ConditionUnmet,
+}
+
+public static class ArrestVerdictRules
+{
+    /// <summary>원장에 계상되는 판정인가 — 거짓이면 감옥에 들이지 않고 문 앞에 남긴다.</summary>
+    public static bool IsCredited(this ArrestVerdict verdict) =>
+        verdict == ArrestVerdict.WantedCriminal || verdict == ArrestVerdict.Misdemeanor;
 }

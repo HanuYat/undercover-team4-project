@@ -28,6 +28,9 @@ public struct WantedEntry : INetworkSerializable, IEquatable<WantedEntry>
     // (CitizenIdentity.Bounty)이라, 본부에 보여주려면 이렇게 항목에 실어 보내야 한다.
     public int Bounty;
 
+    // 수배 조건 (생사 불문/생포 필수) — Bounty와 같은 이유로 실어 보낸다. (#766)
+    public WantedCondition Condition;
+
     public void NetworkSerialize<T>(BufferSerializer<T> serializer)
         where T : IReaderWriter
     {
@@ -36,6 +39,7 @@ public struct WantedEntry : INetworkSerializable, IEquatable<WantedEntry>
         serializer.SerializeValue(ref Appearance);
         serializer.SerializeValue(ref RevealedAxes);
         serializer.SerializeValue(ref Bounty);
+        serializer.SerializeValue(ref Condition);
     }
 
     public bool Equals(WantedEntry other) => NpcId == other.NpcId; // 제거 매칭 용도
