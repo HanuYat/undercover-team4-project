@@ -62,12 +62,6 @@ public class PlayerRagdoll : MonoBehaviour
     }
 
     [Header("정착 판정")]
-    [Tooltip("뼈 평균 속도(m/s)가 이 아래로 내려가면 멈춘 것으로 본다")]
-    [SerializeField] private float m_settleSpeedThreshold = 0.15f;
-
-    [Tooltip("위 속도 조건이 이만큼 유지되어야 정착으로 확정한다(초) — 한 프레임 튀는 값에 속지 않게")]
-    [SerializeField] private float m_settleHoldSeconds = 0.3f;
-
     [Tooltip("정착 판정 타임아웃(초) — 지형에 껴서 영원히 떨리는 경우의 안전장치")]
     [SerializeField] private float m_settleTimeoutSeconds = 5f;
 
@@ -155,7 +149,6 @@ public class PlayerRagdoll : MonoBehaviour
     private Transform m_root; // CharacterController가 붙은 트랜스폼 = 판정·동기화의 주체
 
     private RagdollState m_state = RagdollState.Animated;
-    private float m_stillTimer;
     private float m_elapsedInRagdoll;
 
     // 늦게 접속했는데 대상이 이미 죽어 있던 경우 — 이번 사망은 래그돌을 건너뛴다.
@@ -608,7 +601,6 @@ public class PlayerRagdoll : MonoBehaviour
             return; // 이미 정착했거나 일어나는 중 — 다시 날리지 않는다
 
         m_state = RagdollState.Ragdoll;
-        m_stillTimer = 0f;
         m_elapsedInRagdoll = 0f;
 
         // 슬라이드 넉백과 이중으로 밀리지 않게 CharacterController 쪽 외력을 지운다.
@@ -849,35 +841,41 @@ public class PlayerRagdoll : MonoBehaviour
         if (!HasMoveAuthority)
             return;
 
+        // 끌리는 동안에는 재우지 않는다 — 끌리는 몸은 어차피 안 잠들지만, 타임아웃까지 흐르면
+        // 끌고 가는 중에 강제 수면이 걸린다. 놓는 순간부터 다시 센다. (NpcRagdoll과 같은 자리)
+        if (m_rope != null && m_rope.IsBeingCarried)
+        {
+            m_elapsedInRagdoll = 0f;
+            return;
+        }
+
         m_elapsedInRagdoll += Time.deltaTime;
 
-        m_stillTimer = m_rig.AverageSpeed <= m_settleSpeedThreshold
-            ? m_stillTimer + Time.deltaTime
-            : 0f;
+        // <b>정착은 물리가 정한다</b> — 전 뼈가 하나도 안 남고 잠들어야 참이다. 옛 판정은 뼈
+        // <b>평균</b> 속도(0.15m/s · 0.3초)여서 몸통이 멈추면 아직 흔들리는 팔을 한 프레임에
+        // 세웠고, 그것이 "흔들거리다 갑자기 굳는" 어색함이었다. AllAsleep은 팔 하나가 전체를 붙잡는다.
+        if (m_rig.AllAsleep)
+        {
+            Settle();
+            return;
+        }
 
-        if (m_stillTimer < m_settleHoldSeconds && m_elapsedInRagdoll < m_settleTimeoutSeconds)
+        if (m_elapsedInRagdoll < m_settleTimeoutSeconds)
             return;
 
-        if (!IsReadyToSettle()
+        // 아직 공중이다 — 여기서 재우면 <b>떠 있는 시체</b>가 된다. 실측: 임펄스가 과했을 때 9m
+        // 위에서 타임아웃이 터져 골반이 루트로부터 +8.95m로 고정돼 시체가 허공에 매달렸다.
+        // 다만 맵 밖으로 떨어진 몸이 영원히 갇히지 않게 무한정 기다리지는 않는다.
+        if (!HasGroundUnderHips()
             && m_elapsedInRagdoll < m_settleTimeoutSeconds * k_lostBodyTimeoutFactor)
             return;
 
+        // 타임아웃 — 지형에 물려 스스로 못 잠드는 몸이다. 대신 재운다.
+        // ⚠ 키네마틱 얼림이 아니라 <b>물리 수면</b>이라, 밟거나 밧줄을 걸면 깨어남 폴링이 그대로 받는다.
+        m_rig.SleepAll();
         Settle();
     }
 
-    /// <summary>
-    /// 정착해도 되는가 — ① 골반 밑에 지면이 있다 ② 원격이면 오너 위치로 당겨오기가 끝났다.
-    ///
-    /// ① 실측: 임펄스가 과했을 때 9m 위에서 타임아웃이 터져 골반이 루트로부터 <b>+8.95m</b>로 고정돼
-    /// 시체가 허공에 매달렸다. <see cref="GroundUnder"/>의 옛 주석은 "못 찾으면 중력이 남은 차이를
-    /// 메운다"고 했지만 원격에서는 거짓이다 — <see cref="PlayerMovement"/>가 꺼져 있어 중력이 돌지 않는다.
-    ///
-    /// ⚠ <b>②(원격의 당겨오기 완료 대기)가 사라졌다.</b> 그 가드는 원격이 <b>자기 물리로 정착을
-    /// 판정하던</b> 시절의 것이다 — 매 프레임 루트 쪽으로 당겨 오는 도중에 정착하면 남은 델타가
-    /// 그대로 굳어서, 다 당겨졌는지 물어봐야 했다. 지금은 <b>정착 판정 자체를 권위만 돈다</b>
-    /// (<see cref="Update"/>의 게이트). 원격은 정착 자세를 받아 상태만 넘기므로 물을 것이 없다.
-    /// </summary>
-    private bool IsReadyToSettle() => HasGroundUnderHips();
 
     // 골반 밑에 지면이 있는가 — 정착 자격과 원격 정렬이 함께 쓴다. 탐색 거리는 정착 정렬과 같은 값을
     // 쓴다 (다른 값을 쓰면 "정착해도 된다"고 판단한 뒤 정렬이 지면을 못 찾는 모순이 생긴다).

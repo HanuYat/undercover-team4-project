@@ -7718,8 +7718,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 06e6af83c2d87d1449fa54bf57c131e8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerRagdoll
-  m_settleSpeedThreshold: 0.15
-  m_settleHoldSeconds: 0.3
   m_settleTimeoutSeconds: 5
   m_groundMask:
     serializedVersion: 2
