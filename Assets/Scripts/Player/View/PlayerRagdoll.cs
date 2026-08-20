@@ -586,7 +586,7 @@ public class PlayerRagdoll : MonoBehaviour
     ///
     /// 멱등이어야 하는 이유는 원격 클라의 도착 순서다. 사망 사실은
     /// <see cref="PlayerIncapacitation"/>의 NetworkVariable로, 폭발 사망자 목록은
-    /// <see cref="BombDevice"/>의 ClientRpc로 온다 — 서로 다른 오브젝트라 같은 틱에 실려 와도
+    /// <see cref="BombBlast"/>의 ClientRpc로 온다 — 서로 다른 오브젝트라 같은 틱에 실려 와도
     /// 콜백 순서가 보장되지 않는다. 순서를 맞추려 들지 말고 어느 쪽이 먼저 와도 결과가 같게 만든다.
     /// <b>반대 순서(임펄스가 먼저)</b>는 <see cref="PollDeath"/>가 막는다 — §9-19.
     /// </summary>
@@ -905,7 +905,7 @@ public class PlayerRagdoll : MonoBehaviour
         //
         // 아래 <c>!dead</c> 분기는 "살아 있는데 래그돌이면 부활한 것"이라는 전제였는데, 그 전제가
         // 원격 피어에서 깨진다. 사망 사실은 <see cref="PlayerIncapacitation"/>의 NetworkVariable로,
-        // 폭발 임펄스는 <see cref="BombDevice"/>의 ClientRpc로 온다 — <b>다른 오브젝트라 도착 순서가
+        // 폭발 임펄스는 <see cref="BombBlast"/>의 ClientRpc로 온다 — <b>다른 오브젝트라 도착 순서가
         // 보장되지 않는다.</b> 임펄스가 먼저 오면 이 피어는 "아직 살아 있는 대상이 래그돌 중"인
         // 상태를 보고, 방금 시작한 비행을 부활로 오인해 취소한다. 그 뒤 사망이 도착하면 임펄스 0으로
         // 다시 들어가 <b>제자리에서 무너진다.</b> (실측: 취소가 진입 후 0.00초에, 사망=False 원인=None)
@@ -915,7 +915,7 @@ public class PlayerRagdoll : MonoBehaviour
         //
         // 시간으로 맞추지 않는다 — 지연은 상한이 없다. <b>인과로</b> 막는다: 죽는 것을 한 번도 못 본
         // 대상은 되살아날 수도 없다. 임펄스는 서버가 사망을 확정한 대상에게만 나가므로
-        // (<c>BombDevice.m_deathBuffer</c>) 사망 동기화는 반드시 뒤따라 온다.
+        // (<c>BombBlast.m_deathBuffer</c>) 사망 동기화는 반드시 뒤따라 온다.
         if (dead)
         {
             m_sawDeathThisEpisode = true;
