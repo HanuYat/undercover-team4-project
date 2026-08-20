@@ -7734,6 +7734,7 @@ MonoBehaviour:
   m_logSettleTrace: 0
   m_logEntryHeadTrace: 0
   m_logFallRate: 1
+  m_logRopePull: 1
 --- !u!114 &511173363813317716
 MonoBehaviour:
   m_ObjectHideFlags: 0

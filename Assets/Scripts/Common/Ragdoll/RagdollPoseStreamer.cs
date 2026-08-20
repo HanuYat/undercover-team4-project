@@ -120,6 +120,8 @@ public class RagdollPoseStreamer : NetworkBehaviour
     private Quaternion[] m_applyBuffer; // 두 스냅샷을 섞어 담는 자리
 
     // ---- 도착 계측 (m_logArrival) — ⚠ 임시 계측, #759가 닫히면 지운다 ----
+    private const float k_arrivalHeartbeatSeconds = 2f;
+
     private int m_arrivalCount;
     private ushort m_arrivalFirstSequence;
     private float m_arrivalFirstTime;
@@ -699,6 +701,11 @@ public class RagdollPoseStreamer : NetworkBehaviour
 
         m_arrivalLastTime = Time.time;
         m_arrivalCount++;
+
+        // ⚠ 국면이 끝나야만 찍으면 <b>견인 구간이 로그에 안 남는다</b> — 정착도 이탈도 없이 계속
+        // 흐르기 때문이다. 그래서 창을 넘기면 중간 정산으로 한 줄 남기고 다음 창을 새로 연다.
+        if (Time.time - m_arrivalFirstTime >= k_arrivalHeartbeatSeconds)
+            DumpArrivalTrace("진행중");
     }
 
     // 국면당 한 줄. 권위 피어는 보내는 쪽이라 잴 것이 없으므로 건너뛴다.

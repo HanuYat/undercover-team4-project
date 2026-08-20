@@ -570,6 +570,7 @@ public class PlayerRagdoll : MonoBehaviour
         // 안 재개하면 끌려가는 시체가 원격에서 마지막 정착 자세로 굳는다.
         // (NPC는 같은 자리에서 녹이기까지 하지만 플레이어는 얼지 않아 녹일 것이 없다)
         m_streamer?.BeginStreaming();
+        BeginRopeTrace();
 
         if (!HasMoveAuthority)
             return;
@@ -967,6 +968,7 @@ public class PlayerRagdoll : MonoBehaviour
 
         // 물리가 실시간을 따라갔는지 적립한다 — 프레임 시간을 재는 계측이라 렌더 주기에 붙인다.
         TickFallRate();
+        TickRopeTrace();
     }
 
     /// <summary>
@@ -1295,6 +1297,70 @@ public class PlayerRagdoll : MonoBehaviour
             $"[진입지면] 권한={HasMoveAuthority} f={frame} 지면Y={groundY:F3} 찾음={haveGround} "
                 + $"최저뼈-지면={lowestAbove:+0.000;-0.000;0.000}m "
                 + $"골반-지면={hipsAbove:F3}m 루트-지면={rootAbove:+0.000;-0.000;0.000}m",
+            this
+        );
+    }
+
+    // ---- 밧줄 견인 계측 (m_logRopePull) — ⚠ 임시 계측, #759가 닫히면 지운다 ----
+
+    [Tooltip("밧줄로 끌기 시작한 순간과 그 1.5초 뒤를 두 줄로 찍는다 — <b>끌리는 시체가 원격에서 " +
+             "제자리에 남는</b> 증상의 판정용이다.\n\n" +
+             "<b>가르는 것은 골반이동 대 루트이동이다.</b> 루트만 움직이고 골반이 0에 가까우면 " +
+             "<b>권위 피어에서 몸 자체가 안 끌린 것</b>이다 — 원격은 마지막 자세를 월드로 붙들고 " +
+             "있을 뿐이라 전송은 결백하다. 골반이 제대로 움직였는데도 원격이 제자리면 그때가 " +
+             "전송 문제다.\n\n" +
+             "함께 찍는 <b>키네마틱·잠듦</b>이 원인을 바로 지목한다 — 키네마틱 뼈에는 밧줄 관절이 " +
+             "힘을 만들지 못하고, 잠든 뼈는 장력을 받지 못한다(RagdollRope.Tick).\n\n" +
+             "확정되면 끈다")]
+    [SerializeField] private bool m_logRopePull;
+
+    private const float k_ropeTraceSeconds = 1.5f;
+
+    private bool m_ropeTraceActive;
+    private float m_ropeTraceStart;
+    private Vector3 m_ropeTraceHipsStart;
+    private Vector3 m_ropeTraceRootStart;
+
+    // 끌기 시작 — 이 순간의 물리 상태가 곧 "왜 안 끌리는가"의 답이다.
+    private void BeginRopeTrace()
+    {
+        m_ropeTraceActive = m_logRopePull;
+        if (!m_ropeTraceActive)
+            return;
+
+        m_ropeTraceStart = Time.unscaledTime;
+        m_ropeTraceHipsStart = m_rig.Hips != null ? m_rig.Hips.position : Vector3.zero;
+        m_ropeTraceRootStart = m_root.position;
+
+        Rigidbody hips = m_rig.HipsBody;
+        Debug.Log(
+            $"[밧줄] {name} 권한={HasMoveAuthority} 상태={m_state} 밧줄길이={RopeLength:F2}m "
+                + $"골반키네마틱={(hips != null ? hips.isKinematic.ToString() : "없음")} "
+                + $"잠듦={(hips != null ? hips.IsSleeping().ToString() : "없음")} "
+                + $"평균속도={m_rig.AverageSpeed:F2}m/s",
+            this
+        );
+    }
+
+    private void TickRopeTrace()
+    {
+        if (!m_ropeTraceActive || Time.unscaledTime - m_ropeTraceStart < k_ropeTraceSeconds)
+            return;
+
+        m_ropeTraceActive = false;
+
+        Rigidbody hips = m_rig.HipsBody;
+        float hipsMoved = m_rig.Hips != null
+            ? Vector3.Distance(m_rig.Hips.position, m_ropeTraceHipsStart)
+            : float.NaN;
+
+        Debug.Log(
+            $"[밧줄추적] {name} 권한={HasMoveAuthority} t={k_ropeTraceSeconds:F1}s "
+                + $"골반이동={hipsMoved:F2}m "
+                + $"루트이동={Vector3.Distance(m_root.position, m_ropeTraceRootStart):F2}m "
+                + $"평균속도={m_rig.AverageSpeed:F2}m/s "
+                + $"골반키네마틱={(hips != null ? hips.isKinematic.ToString() : "없음")} "
+                + $"잠듦={(hips != null ? hips.IsSleeping().ToString() : "없음")}",
             this
         );
     }
