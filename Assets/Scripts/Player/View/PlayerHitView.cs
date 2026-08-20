@@ -28,7 +28,15 @@ public class PlayerHitView : NetworkBehaviour
 
     // 스폰 전(오프라인)에는 IsOwner가 늘 false다 — 그때는 자기 화면이 곧 내 화면이므로 오너로 본다.
     // PlayerHealth가 "IsSpawned && !IsServer"로 오프라인을 권위자 취급하는 것과 같은 형태.
-    private bool IsLocalOwner => !IsSpawned || IsOwner;
+    //
+    // ⚠ <b>스폰 시점의 오너를 굳혀서 쓴다</b> — 사망 중 소유권 이관(#763 A-1)으로 IsOwner의 뜻이
+    // 라운드 중에 뒤집히기 때문이다. 피격 연출은 <b>내가 맞았는가</b>를 물어야 한다.
+    private bool IsLocalOwner => !IsSpawned || m_isLocalPlayer;
+
+    private bool m_isLocalPlayer;
+
+    // 라운드 중에 뒤집히는 값이라 스폰 시점에 굳힌다 (#763 A-1 — 위 IsLocalOwner 주석).
+    public override void OnNetworkSpawn() => m_isLocalPlayer = IsOwner;
 
     private void Awake()
     {

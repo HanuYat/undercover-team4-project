@@ -24,7 +24,12 @@ public class PlayerHpUI : NetworkBehaviour
 
     // 스폰 전(오프라인)에는 IsOwner가 늘 false다 — 그때는 자기 화면이 곧 내 화면이므로 오너로 본다.
     // (PlayerHitView.IsLocalOwner와 같은 형태)
-    private bool IsLocalOwner => !IsSpawned || IsOwner;
+    //
+    // ⚠ <b>스폰 시점의 오너를 굳혀서 쓴다.</b> 사망 중에는 소유권이 서버로 넘어가므로(#763 A-1)
+    // IsOwner를 매번 물으면 호스트에서 남의 시체가 "내 몸"이 되어 내 HUD가 그쪽 HP를 따라간다.
+    private bool IsLocalOwner => !IsSpawned || m_isLocalPlayer;
+
+    private bool m_isLocalPlayer;
 
     private void Awake()
     {
@@ -44,6 +49,8 @@ public class PlayerHpUI : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
+        m_isLocalPlayer = IsOwner; // 라운드 중에 뒤집히는 값이라 여기서 굳힌다 (#763 A-1)
+
         // 남의 플레이어 게이지가 내 화면에 그려지지 않게 오너의 것만 남긴다.
         // 예전에는 컴포넌트를 끄기만 했는데, 그러면 남의 프리팹에 딸려 온 통이 화면에 그대로 남는다.
         // 통을 끄고 컴포넌트도 함께 끈다 — InventoryBarView가 "PlayerHpUI 관례"로 인용하는 처리이고,

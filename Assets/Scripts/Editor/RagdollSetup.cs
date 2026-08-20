@@ -77,7 +77,8 @@ public static class RagdollSetup
     // <c>transform.Find(m_boneRootName)</c>으로 <b>직속 자식</b>에서 리그를 찾기 때문에,
     // "Root"를 직속 자식으로 가진 오브젝트여야 한다.
 
-    private const string k_playerPrefab = "Assets/Prefabs/Player.prefab";
+    // 복제 도구(RagdollRigCloner)도 같은 경로를 쓴다 — 정본을 하나로 둔다.
+    public const string k_playerPrefab = "Assets/Prefabs/Player.prefab";
 
     /// <summary>NPC 리그 소유자 — 전 NPC 프리팹이 몸을 <c>Model</c> 중첩 인스턴스로 들고 있다. (#571)</summary>
     public const string k_npcRigOwnerPath = "Model";

@@ -50,6 +50,9 @@ Player  [Animator, CharacterController, ..., PlayerRagdoll]
 | `RagdollPoseBlend` | `Common/Ragdoll/` | (plain class) | 기상 블렌드. **살아있는** 리그를 섞는다 |
 | `PlayerRagdoll` | `Player/View/` | Player 루트 | 상태 기계, 사망 폴링, 모델 교체, 캡슐 추종, 원격 정렬, 정착 루트 포즈 |
 
+> **클래스별 설계 근거 아카이브** — 코드에서 걷어낸 "왜 그렇게 됐나 / 실측이 얼마였나"는 여기 있다.
+> [ragdoll-rig.md](ragdoll-rig.md) (`RagdollRig`) · [npc-ragdoll.md](npc-ragdoll.md) (`NpcRagdoll`)
+
 **Animator를 끄지 않는다.** 애니메이터와 물리가 서로 다른 리그를 쥐므로 싸울 일이 없다 — 사망 시
 끄는 것은 **살아있는 스킨**뿐이고, 살아있는 뼈는 보이지 않는 채 계속 애니메이션되어 부활 블렌드의
 목표가 된다.
@@ -347,8 +350,13 @@ Synty 본 이름**(`Root`/`Hips`/`Head`/`Spine_02`)을 쓰고, 리그가 한 벌
 `NpcController.Update`는 클라에서 즉시 return하고 서버에서도 사망 게이트에서 끊겨 부를 자리가 없다.
 
 ⚠ **뼈 좌표로 물리를 판단하지 말 것.** 이 프로젝트는 `Physics.autoSyncTransforms`가 꺼져 있어,
-루트 추종이 대입한 값이 PhysX에 써지지 않고 다음 FixedUpdate가 되돌린다. 트랜스폼을 읽는 계측에는
-진입 첫 프레임에 골반이 한 뼘 솟은 것처럼 보이는데 **물리에는 그런 일이 없다.**
+루트 추종이 대입한 값을 **쿼리가 그 프레임 안에서는 보지 못하고**, 다음 스텝의 물리 결과가 뼈
+트랜스폼을 되쓴다. 트랜스폼을 읽는 계측에는 진입 첫 프레임에 골반이 한 뼘 솟은 것처럼 보이는데
+**물리에는 그런 일이 없다.**
+
+⚠ 다만 **"PhysX에 아예 안 써진다"는 뜻이 아니다** — 그 오해가 #759의 원인이었다. 대입은 다음 스텝
+직전에 flush되고 동적 바디에는 텔레포트로 먹는다.
+[759-ragdoll-slowmotion-handoff.md](759-ragdoll-slowmotion-handoff.md) §2-3 참고.
 (#571에서 한 번 헛짚었다 — `docs/571-npc-death-ragdoll.md` §7-1)
 
 세부 근거·실측은 [571-npc-death-ragdoll.md](571-npc-death-ragdoll.md)에 있다.

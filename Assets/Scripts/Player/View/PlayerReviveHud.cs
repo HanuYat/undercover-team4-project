@@ -48,8 +48,16 @@ public class PlayerReviveHud : NetworkBehaviour
     private string m_shownKey;
     private string m_shownKey2;
 
+    // 스폰 시점의 오너를 굳힌다 — 사망 중에는 소유권이 서버로 넘어가므로(#763 A-1) IsOwner의 뜻이
+    // 라운드 중에 뒤집힌다. 아래 Update는 스폰 때 정해진 enabled를 타므로 영향이 없지만,
+    // <b>디스폰은 사망 중에도 일어난다</b>(라운드 리셋·퇴장) — 그때 IsOwner로 물으면 정리가 통째로
+    // 건너뛰어져 "기능 정지" 문구와 유예 카운트다운이 화면에 그대로 눌어붙는다.
+    private bool m_isLocalPlayer;
+
     public override void OnNetworkSpawn()
     {
+        m_isLocalPlayer = IsOwner;
+
         if (!IsOwner)
         {
             enabled = false; // 남의 플레이어 것이 내 화면에 그려지지 않게 (오너 전용 HUD)
@@ -63,7 +71,7 @@ public class PlayerReviveHud : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
-        if (IsOwner)
+        if (m_isLocalPlayer)
         {
             ClearPrompt(); // 퇴장·씬 전환으로 사라질 때 문구가 화면에 남지 않게
             App.UI.DamageVignette?.HideDownCountdown();

@@ -27,8 +27,21 @@ public class PlayerDownView : NetworkBehaviour
 
     private PlayerIncapacitation m_incapacitation;
 
-    // 스폰 전(오프라인)엔 IsOwner가 늘 false라 오너로 본다. (PlayerHitView.IsLocalOwner 관례)
-    private bool IsLocalOwner => !IsSpawned || IsOwner;
+    // 스폰 전(오프라인)에는 IsOwner가 늘 false다 — 그때는 자기 화면이 곧 내 화면이므로 오너로 본다.
+    // (PlayerHitView.IsLocalOwner와 같은 형태)
+    //
+    // ⚠ <b>스폰 시점의 오너를 굳혀서 쓴다.</b> 사망 중에는 소유권이 서버로 넘어가므로(#763 A-1)
+    // IsOwner를 매번 물으면 이 화면 연출이 <b>양쪽에서 동시에 틀린다</b>:
+    //  · 죽는 본인 — 소유권을 잃어 Update가 먼저 빠져나가고, 암전·무음·PTT 차단이 통째로 안 걸린다
+    //  · 호스트 — 남의 시체가 "내 몸"이 되어, 남이 죽었는데 내 화면이 어두워지고 내 송신이 막힌다
+    //
+    // 이 연출이 물어야 하는 것은 "지금 이 몸의 주인인가"가 아니라 <b>"내가 죽었는가"</b>다.
+    private bool IsLocalOwner => !IsSpawned || m_isLocalPlayer;
+
+    private bool m_isLocalPlayer;
+
+    // 라운드 중에 뒤집히는 값이라 스폰 시점에 굳힌다 (#763 A-1 — 위 IsLocalOwner 주석).
+    public override void OnNetworkSpawn() => m_isLocalPlayer = IsOwner;
 
     private IncapacitationCause m_lastCause = IncapacitationCause.None;
 
