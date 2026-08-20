@@ -980,8 +980,12 @@ public class PlayerRagdoll : MonoBehaviour
     /// 끝났다</b>(확정이라 건드리면 안 된다). NPC에서 하나로 물었다가 <b>다 쓰러진 시체가 마지막에
     /// 벌떡 선 자세로 바뀌었다.</b>
     ///
-    /// <b>렌더 전용이다</b> — 이 프로젝트는 <c>m_AutoSyncTransforms = 0</c>이라 여기 쓴 값이 PhysX로
-    /// 넘어가지 않는다. 원격의 뼈는 물리에 참여하지 않으므로 잃는 것도 없다.
+    /// <b>원격에서만 도는 대입이라 안전하다</b> — 그쪽 뼈는 키네마틱이라 솔버가 이 자세를 풀어야 할
+    /// 상태로 삼지 않는다.
+    ///
+    /// ⚠ <b>여기에 "<c>m_AutoSyncTransforms = 0</c>이라 PhysX로 안 넘어간다"는 이유를 붙이지 말 것 —
+    /// 그 전제는 틀렸고, 그것이 #759의 원인이었다.</b> 그 설정이 미루는 것은 <b>쿼리</b>가 보는
+    /// 시점이지 시뮬레이션이 보는 시점이 아니다. 근거는 <c>docs/759-ragdoll-slowmotion-handoff.md</c> §2-3.
     /// </summary>
     private void TickHoldPoseUntilStream()
     {
@@ -1762,9 +1766,15 @@ public class PlayerRagdoll : MonoBehaviour
         // <b>아래 <see cref="FollowBodyYaw"/>까지 감싼다</b> — 회전도 계층을 타고 자식에게
         // 전해지므로, 골반 높이만큼 떨어져 있는 몸이 루트 원점을 축으로 휜다.
         //
-        // 되돌리는 대입은 <b>렌더 전용</b>이다: 이 프로젝트는 <c>m_AutoSyncTransforms = 0</c>이라
-        // 트랜스폼에 쓴 값이 액터로 넘어가지 않는다. PhysX의 포즈는 손대지 않은 채, 화면에
-        // 그려지는 자리만 제자리로 돌린다.
+        // ⚠ <b>되돌리는 대입은 "렌더 전용"이 아니다 — 그 전제가 #759의 원인이었다.</b>
+        // <c>m_AutoSyncTransforms = 0</c>이 미루는 것은 <b>쿼리</b>(레이캐스트·<c>Collider.bounds</c>)가
+        // 보는 시점이지 <b>시뮬레이션이 보는 시점이 아니다.</b> 트랜스폼에 쓴 값은 다음 스텝 직전에
+        // PhysX로 flush되고, 동적 바디에 대한 대입은 <b>텔레포트</b>여서 솔버·접촉 상태를 무효화한다.
+        //
+        // 왕복이 정확하면 델타가 0이라 화면은 제자리로 돌아온다. 하지만 <b>잔차는 부를 때마다
+        // 다시 주입된다</b> — 그래서 이 함수는 <c>FixedUpdate</c>에서만 돈다(스텝당 1회). 프레임마다
+        // 돌렸을 때 100fps 호스트에서 관절 오차가 발산했고 몸이 슬로모션으로 무너졌다
+        // (<c>docs/759-ragdoll-slowmotion-handoff.md</c> §2-3, 실측은 §3-1-1).
         m_rig.CapturePose();
 
         // 사망 중에는 CharacterController가 꺼져 있으므로(EnterRagdoll) 대입이 곧 이동이다.

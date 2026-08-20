@@ -193,8 +193,11 @@ speculative CCD · 밧줄 스프링은 전부 근거와 함께 배제됐다.
 
 ### 3-2. 같이 볼 것 (원인이 닫힌 뒤에도 남는 것)
 
-- **`RestoreCapturedPose`의 "렌더 전용" 주석을 고친다** — 전제가 틀렸다(§2-3). 이 주석을 믿고
-  같은 패턴을 다른 데 심으면 같은 버그가 난다
+- ~~**`RestoreCapturedPose`의 "렌더 전용" 주석을 고친다**~~ — 2026-08-20에 정정했다. 코드 세 곳
+  (`PlayerRagdoll`의 `TickHoldPoseUntilStream`·`TickCapsuleFollow`, `NpcRagdoll.TickRootFollow`)과
+  문서 두 곳(`npc-ragdoll.md` · `ragdoll.md`)이 같은 전제를 복제하고 있었다.
+  ⚠ `NpcRagdoll`의 순간이동 주석("두 대입이 서로 더해지지 않는다")은 **맞는 설명이라 두었다** —
+  거기서 문제 삼는 것은 "즉시" 넘어가지 않는다는 것이고, 그건 사실이다
 - `AutoConfigureConnectedAnchor`를 끄고 앵커를 바인드 기준으로 한 번만 굽는다 — 진입 오차가
   40~85mm나 되는 것이 정상은 아니다(§4-A). 본 수정으로 증상이 사라져도 이 값은 남는다
 - `EnablePreprocessing`을 켜 본다 — 공짜고, 오차 흡수력이 달라진다

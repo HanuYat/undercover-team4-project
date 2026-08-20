@@ -267,7 +267,10 @@ public class NpcRagdoll : MonoBehaviour
             return;
 
         // ⚠ 루트를 옮기기 전에 뼈를 잡아 두고 옮긴 뒤 되돌린다 — 안 감싸면 진입 프레임에 몸 전체가
-        // 골반 높이(약 0.9m)만큼 떠서 한 프레임 그려진다. 이 대입은 렌더 전용이다.
+        // 골반 높이(약 0.9m)만큼 떠서 한 프레임 그려진다.
+        //
+        // ⚠ <b>이 대입은 "렌더 전용"이 아니다</b> — 다음 스텝 직전에 PhysX로 flush되고 동적 바디에는
+        // 텔레포트로 먹는다. 그래서 이 함수는 <c>FixedUpdate</c>에서만 돈다 (#759 — 위 주석 참고).
         m_rig.CapturePose();
 
         Vector3 target = m_rig.Hips.position;
