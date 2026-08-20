@@ -16,6 +16,10 @@ using UnityEngine;
 /// <see cref="SoundManager"/>는 "전역 음량은 건드리지 않는다"는 규칙을 지키므로(#225 — GameSettings가
 /// AudioListener.volume을 이미 쓴다), 여기서 직접 잠깐 0으로 내렸다가 설정값으로 복원한다. 화면 암전과
 /// 마찬가지로 오너의 클라이언트에만 있는 하나뿐인 AudioListener를 건드리는 것이라 남에게는 들리지 않는다.
+///
+/// Vivox 무전·근접 음성은 AudioListener를 거치지 않는 별개 경로라(GameSettings.MasterVolume 문서 참고)
+/// 따로 <see cref="VivoxManager.ForceMuteOutput"/>/<see cref="VivoxManager.ApplyVoiceVolume"/>으로
+/// 같은 구간에 맞춰 껐다 되살린다.
 /// </summary>
 [RequireComponent(typeof(PlayerIncapacitation))]
 public class PlayerDownView : NetworkBehaviour
@@ -79,6 +83,7 @@ public class PlayerDownView : NetworkBehaviour
         {
             m_deathElapsed = 0f; // 지금 이 프레임에 완전 사망으로 넘어갔다 — 암전·무음 유지 시작
             AudioListener.volume = 0f;
+            App.Net.Vivox?.ForceMuteOutput();
             m_isMuted = true;
         }
         m_lastCause = cause;
@@ -117,14 +122,16 @@ public class PlayerDownView : NetworkBehaviour
         App.UI.DamageVignette?.SetDownDarkness(darkness);
     }
 
-    // 죽음 홀드가 눌러 둔 볼륨을 설정값으로 복원한다 — 하드코딩한 1이 아니라 GameSettings.MasterVolume을
-    // 읽는 이유는 음량 슬라이더를 무시하지 않기 위해서다. m_isMuted 가드로 정확히 한 번만 동작한다.
+    // 죽음 홀드가 눌러 둔 볼륨을 설정값으로 복원한다 — 하드코딩한 1이 아니라 GameSettings.MasterVolume·
+    // VivoxManager.ApplyVoiceVolume을 쓰는 이유는 음량 슬라이더를 무시하지 않기 위해서다.
+    // m_isMuted 가드로 정확히 한 번만 동작한다.
     private void RestoreVolume()
     {
         if (!m_isMuted)
             return;
 
         AudioListener.volume = GameSettings.MasterVolume;
+        App.Net.Vivox?.ApplyVoiceVolume();
         m_isMuted = false;
     }
 }
