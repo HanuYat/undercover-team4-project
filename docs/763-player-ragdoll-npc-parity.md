@@ -113,13 +113,16 @@ dotnet build Assembly-CSharp.csproj
 **분류 기준:** 스폰 1회(`OnNetworkSpawn`)에서 읽는 값은 이관해도 **안 뒤집힌다**. 매 호출마다 읽는
 값은 **이관 순간 뒤집힌다**.
 
+⚠ 이 표는 감사 당시(리베이스 전) 이 브랜치에 있던 것만 담았다. main에서 #725가 들어오며
+`PlayerDownView`가 새로 붙었고 그쪽이 매 프레임 읽는 쪽이었다 — 아래 두 번째 표에 실었다.
+
 ### 뒤집히지 않는다 — 손댈 필요 없음
 
 | 위치 | 시점 | 사망 중 뜻 |
 |---|---|---|
 | `PlayerMovement:223` `ApplyOwnerView(IsOwner)` | 스폰 1회 | **1인칭 시점이 유지된다**(카메라가 남에게 안 넘어감) |
 | `PlayerInputHandler:244·281` | 스폰/디스폰 1회 | 입력 구독은 그대로 |
-| `PlayerHpUI:51` · `PlayerNameTag:86` · `PlayerReviveHud:51·64` · `PlayerReviver:56·65` | 스폰 1회 | HUD 유지 |
+| `PlayerHpUI:51` · `PlayerNameTag:86` · `PlayerReviveHud:51` · `PlayerReviver:56·65` | 스폰 1회 | HUD 유지 |
 
 ### 즉시 뒤집힌다 — 확인 대상
 
@@ -132,6 +135,8 @@ dotnet build Assembly-CSharp.csproj
 | `PlayerInputHandler:153·203` (`SetSuspended` 등) | `!IsOwner`면 무동작 → **사망 중 입력 정지/재개 지시가 안 먹는다** | 순서 확인(A-2) |
 | `PlayerLoadout:174·238·522`, `PlayerHeldItemView:102·223`, `PlayerHandView:210` | 들고 있던 아이템·손 표시 | 시체가 든 물건 표시가 깨지지 않는지 |
 | `PlayerEmote` · `PlayerEscortCommands` · `PlayerTeamStatusInput` | 사망 중 입력 없음 | 회귀만 |
+| `PlayerDownView` (Update 전체) | **main #725로 들어왔다 — 감사 당시엔 없던 컴포넌트다.** 양쪽에서 동시에 틀린다: 죽는 본인은 암전·무음·PTT 차단이 통째로 안 걸리고, 호스트는 남의 시체가 "내 몸"이 되어 남이 죽을 때 자기 화면이 어두워지고 자기 송신이 막힌다 | **고쳤다** — 스폰 시점 오너를 굳힌다(`PlayerHitView` 관례) |
+| `PlayerReviveHud:64` (`OnNetworkDespawn`) | 위 표에 "스폰 1회"로 실었지만 **디스폰은 사망 중에도 일어난다**(라운드 리셋·퇴장) — 그때 정리가 건너뛰어져 문구와 유예 카운트다운이 화면에 눌어붙는다 | **고쳤다** — 같은 방식 |
 
 ### NGO 쪽 함정
 
