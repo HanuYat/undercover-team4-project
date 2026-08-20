@@ -65,6 +65,10 @@ public class PlayerIncapacitation : NetworkBehaviour
 
     private IncapacitationCause m_cause; // 서버·오프라인의 진실값 (비네트워크 Play 테스트 폴백)
 
+    // 사망 전 오너 — 이관은 서버만 하고 복귀도 서버가 하므로 동기화하지 않는다. (#763 1단계)
+    private ulong m_ownerBeforeDeath;
+    private bool m_ownershipMovedToServer;
+
     // 기절 회차 — 지연 복구가 '자기가 건 기절'만 풀게 하는 토큰. 기절이 풀린 뒤 다시 걸리거나 그 사이
     // 기능 정지·매달기가 들어오면 회차가 어긋나, 낡은 타이머는 무동작으로 끝난다. (#252)
     private int m_stunEpisode;
@@ -445,6 +449,9 @@ public class PlayerIncapacitation : NetworkBehaviour
         if (IsSpawned && IsServer)
             m_causeSynced.Value = cause;
 
+        // 사망 구간에는 <b>서버가 이 몸의 주인이다</b> — 시체를 NPC와 같은 조건으로 만든다. (#763 1단계)
+        ApplyDeathOwnership(cause);
+
         // 기절에서 벗어나면 마감도 지운다 — 남겨 두면 다음 기절 전까지 옛 값이 읽힌다.
         // 기절로 '들어가는' 경우의 값은 ServerStun이 이 호출 직후에 채운다 (#477).
         if (cause != IncapacitationCause.Stun)
@@ -485,6 +492,70 @@ public class PlayerIncapacitation : NetworkBehaviour
         if (was != IsIncapacitated)
             OnIncapacitatedChanged?.Invoke(IsIncapacitated);
         OnAnyIncapacitatedChanged?.Invoke(); // 전역 훅 — RoundManager가 전원 행동불능(전멸) 여부를 재검사
+    }
+
+    /// <summary>
+    /// 사망 중 이 <see cref="NetworkObject"/>의 주인을 <b>서버로 옮기고</b>, 풀리면 돌려준다. (#763 1단계)
+    ///
+    /// <b>왜 소유권인가.</b> 시체의 자세를 흘리는 <c>RagdollPoseStreamer</c>도, 루트
+    /// <c>NetworkTransform</c>도 권위를 <b>오너</b>로 두고 있다(루트 NT의 <c>AuthorityMode</c>가
+    /// Owner인 것은 살아있는 이동이 요구하는 값이다). 그래서 둘 중 하나만 서버로 바꾸면 몸과 루트가
+    /// 서로 다른 피어에서 계산돼 시체가 이름표를 두고 떠난다. <b>오너 자체를 서버로 만들면 둘 다
+    /// 서버를 가리키고 고칠 배선이 없다.</b>
+    ///
+    /// 얻는 것은 밧줄 견인의 왕복이다. 지금은 끄는 사람(클라 B) → 서버 → 시체 오너(클라 A)가 장력을
+    /// 계산 → 서버 → B가 자세 수신으로 <b>4홉</b>이라, B의 화면에서 시체가 무겁고 줄이 끊긴다.
+    /// 서버가 주인이면 NPC와 같은 <b>2홉</b>이 된다. (계획서 docs/763-player-ragdoll-npc-parity.md §1)
+    ///
+    /// ⚠ <b>호스트 자신의 몸은 옮길 것이 없다</b> — 이미 서버가 주인이다. 그때는 깃발도 세우지 않아
+    /// 복귀에서도 아무 일이 일어나지 않는다.
+    /// </summary>
+    private void ApplyDeathOwnership(IncapacitationCause cause)
+    {
+        if (!IsSpawned || !IsServer || NetworkObject == null || NetworkManager == null)
+            return;
+
+        bool wantsServerOwner = cause == IncapacitationCause.Die;
+        if (wantsServerOwner == m_ownershipMovedToServer)
+            return;
+
+        if (wantsServerOwner)
+        {
+            m_ownerBeforeDeath = OwnerClientId;
+            if (m_ownerBeforeDeath == NetworkManager.ServerClientId)
+                return; // 호스트의 몸 — 이미 서버 소유다
+
+            m_ownershipMovedToServer = true;
+            NetworkObject.ChangeOwnership(NetworkManager.ServerClientId);
+            LogOwnership("사망", m_ownerBeforeDeath, NetworkManager.ServerClientId);
+            return;
+        }
+
+        m_ownershipMovedToServer = false;
+
+        // ⚠ 나간 클라에게 돌려주지 않는다 — 없는 클라를 오너로 지정하면 NGO가 예외를 던진다.
+        // 그 몸은 서버 소유로 남고, 정리는 접속 종료 경로가 한다(#287).
+        if (!NetworkManager.ConnectedClients.ContainsKey(m_ownerBeforeDeath))
+            return;
+
+        NetworkObject.ChangeOwnership(m_ownerBeforeDeath);
+        LogOwnership("복귀", NetworkManager.ServerClientId, m_ownerBeforeDeath);
+    }
+
+    // ⚠ 임시 계측 (#763 A-1) — 이관이 실제로 걸렸는지와, <b>플레이어 오브젝트 연결이 유지되는지</b>를
+    // 함께 찍는다. 후자는 이 프로젝트에서 플레이어 오브젝트의 소유권을 옮기는 것이 처음이라 확인이
+    // 필요한 항목이다(계획서 §4 함정 2). 확정되면 지운다.
+    private void LogOwnership(string reason, ulong from, ulong to)
+    {
+        bool keptPlayerObject =
+            NetworkManager.ConnectedClients.TryGetValue(m_ownerBeforeDeath, out NetworkClient client)
+            && client.PlayerObject == NetworkObject;
+
+        Debug.Log(
+            $"[소유권] 시체#{NetworkObject.NetworkObjectId} 원인={reason} 오너 {from}→{to} "
+                + $"플레이어오브젝트유지={keptPlayerObject}",
+            this
+        );
     }
 
     // 기절 해제 예정 시각 갱신 — 실참조와 동기화값을 함께 쓴다(m_cause/m_causeSynced와 동일 관례).
