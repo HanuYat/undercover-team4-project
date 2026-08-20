@@ -749,6 +749,11 @@ public class RagdollRig : MonoBehaviour
         float hipsHeight = m_hipsBone.position.y;
         for (int i = 0; i < m_bodies.Length; i++)
         {
+            // 키네마틱 바디는 속도 대입이 무시되고 경고만 난다 — 형제 루프(ClampSpeed 등)와 같은 가드다.
+            // 정착한 시체가 이 상태다: 뼈 12개가 전부 키네마틱이라 임펄스가 경고로만 남았다 (#768).
+            if (m_bodies[i] == null || m_bodies[i].isKinematic)
+                continue;
+
             float lift = m_bodies[i].worldCenterOfMass.y - hipsHeight;
             m_bodies[i].linearVelocity += velocity * (1f + m_tumbleBias * lift);
         }
