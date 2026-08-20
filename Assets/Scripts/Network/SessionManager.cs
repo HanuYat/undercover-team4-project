@@ -11,6 +11,9 @@ public class SessionManager : CommonManagerBase
     // 게임 버전을 담는 세션 프로퍼티 키 (#586). 값은 NetworkProtocol.VersionString.
     private const string k_versionProperty = "ver";
 
+    // 호스트 커밋 sha (#622). 진단 전용 — 이 값으로 참가를 막지 않는다.
+    private const string k_shaProperty = "sha";
+
     [SerializeField]
     private int m_maxPlayer = 6;
 
@@ -86,12 +89,16 @@ public class SessionManager : CommonManagerBase
                     NetworkProtocol.VersionString,
                     VisibilityPropertyOptions.Public
                 ),
+                [k_shaProperty] = new SessionProperty(
+                    BuildStamp.Sha,
+                    VisibilityPropertyOptions.Public
+                ),
             },
         }.WithRelayNetwork();
         ISession session = await MultiplayerService.Instance.CreateSessionAsync(options);
         AdoptSession(session);
         Debug.Log(
-            $"[SessionManager] 세션과 호스트 만들어짐 / Id: {session.Id}, Code = {session.Code}"
+            $"[SessionManager] 세션과 호스트 만들어짐 / Id: {session.Id}, Code = {session.Code}, 버전: {NetworkProtocol.VersionString}, sha: {BuildStamp.Sha}"
         );
 
         return session.Code;
@@ -148,6 +155,19 @@ public class SessionManager : CommonManagerBase
 
         AdoptSession(session);
         Debug.Log($"[SessionManager] 세션 참가 완료 / Id: {session.Id}, Code: {session.Code}");
+
+        // 진단 전용 (#622) — sha가 달라도 물러나지 않는다. 차단 기준은 위의 버전 검사뿐이다.
+        string sessionSha = ReadSha(session);
+        if (sessionSha != BuildStamp.Sha)
+        {
+            Debug.LogWarning(
+                $"[SessionManager] 버전은 같은데 커밋이 다름(참가 유지) / 버전: {NetworkProtocol.VersionString}, 내 sha: {BuildStamp.Sha}, 방 sha: {sessionSha}"
+            );
+        }
+        else
+        {
+            Debug.Log($"[SessionManager] 커밋 일치 / sha: {BuildStamp.Sha}");
+        }
     }
 
     private void PrepareApprovalGate(NetworkManager nm)
@@ -158,7 +178,7 @@ public class SessionManager : CommonManagerBase
             return;
         }
 
-        ConnectionApprovalGate.StampLocalVersion(nm);
+        ConnectionApprovalGate.StampLocalPayload(nm);
         m_approvalGate.Install(nm);
     }
 
@@ -174,6 +194,20 @@ public class SessionManager : CommonManagerBase
         }
 
         return NetworkProtocol.k_unknownVersion;
+    }
+
+    private static string ReadSha(ISession session)
+    {
+        if (
+            session.Properties != null
+            && session.Properties.TryGetValue(k_shaProperty, out SessionProperty property)
+            && !string.IsNullOrEmpty(property.Value)
+        )
+        {
+            return property.Value;
+        }
+
+        return BuildStamp.k_unknownSha;
     }
 
     /// <summary>
