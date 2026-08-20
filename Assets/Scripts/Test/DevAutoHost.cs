@@ -77,7 +77,11 @@ public class DevAutoHost : MonoBehaviour
 
         GUILayout.BeginArea(new Rect(10, 10, 260, 60));
         if (GUILayout.Button("클라이언트로 참가 (127.0.0.1)"))
+        {
+            // 안 찍으면 페이로드가 비어 호스트의 버전 게이트가 "?"로 보고 거부한다 (#628).
+            ConnectionApprovalGate.StampLocalVersion(nm);
             nm.StartClient();
+        }
         GUILayout.EndArea();
     }
 }
