@@ -4,19 +4,14 @@ using UnityEngine.AI;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// 추격 폭탄 (돌발 이벤트 · 현장) — 도시에 놓인 상자(<see cref="BombCrate"/>) 중 한 곳에서 폭탄이 나와
-/// 근처에 사람이 오면 쫓아오고, 제한시간이 끝나면 그 자리에서 폭발한다. 해체는 없다 — 달아나거나
-/// 진압봉으로 밀어내는 수밖에 없다. (GDD 6-4, #399)
+/// 추격 폭탄 (돌발 이벤트 · 현장) — 도시에 놓인 상자(<see cref="BombCrate"/>) 중 한 곳에서 폭탄이
+/// 나와 근처에 사람이 오면 쫓아오고, 제한시간이 끝나면 터진다. 해체는 없다. (GDD 6-4, #399)
 ///
-/// 스폰형 이벤트 — 폭탄 프리팹(<see cref="BombDevice"/>)을 스폰하고 수명·정리만 맡는다. 등장·대기·추격·
-/// 폭발은 스폰물이 스스로 서버 권위로 처리하고 자기 NetworkObject로 전파한다 (ISuddenEvent 규약,
-/// JailbreakEvent ↔ NpcController와 동일 관계).
-///
-/// <b>등장 지점을 이 컴포넌트가 들고 있지 않다</b> — 씬에 놓인 상자가 곧 후보다. 상자는 평소에도 도시
-/// 소품으로 서 있어서 "저기서 나올 수 있다"를 미리 볼 수 있고, 지점을 옮기는 일이 곧 상자를 옮기는 일이라
-/// 인스펙터 배열과 실제 상자가 어긋날 여지가 없다.
-///
-/// 라운드당 폭탄 1개 — <see cref="IsActive"/>가 폭탄이 살아 있는 동안 true라, 프레임워크가 겹쳐 발생시키지 않는다.
+/// 스폰형 이벤트 — 폭탄 프리팹(<see cref="BombDevice"/>)을 스폰하고 수명·정리만 맡는다. 등장·대기·
+/// 추격·폭발은 스폰물이 스스로 서버 권위로 처리한다 (JailbreakEvent ↔ NpcController와 같은 관계).
+/// <b>등장 지점을 이 컴포넌트가 들지 않는다</b> — 씬의 상자가 곧 후보다. 평소에도 소품으로 서 있어
+/// "저기서 나올 수 있다"가 미리 보이고, 인스펙터 배열과 실제 상자가 어긋날 여지도 없다.
+/// 라운드당 1개 — <see cref="IsActive"/>가 true인 동안 프레임워크가 겹쳐 발생시키지 않는다.
 /// </summary>
 [RequireComponent(typeof(SuddenEventManager))]
 public class BombChaseEvent : MonoBehaviour, ISuddenEvent
@@ -93,12 +88,8 @@ public class BombChaseEvent : MonoBehaviour, ISuddenEvent
         if (m_bomb == null)
             return;
 
-        // 잔류 시간이 지나면 치운다 — 기본값(0)이면 폭발 다음 틱이라 눈으로는 터지는 순간이다.
-        //
-        // <b>폭발 콜백에서 직접 치우지 않는다.</b> HandleExploded가 도는 시점은 OnExploded를 아직
-        // 발행하는 중이라, 뒤에 오는 구독자가 이미 사라진 폭탄을 보게 된다 — 이펙트를 폭심에
-        // 스폰하고 넉백을 먹이는 BombExplosionView가 바로 그 구독자다. 한 틱 미루면 전 구독자가
-        // 끝난 뒤라 안전하고, 한 프레임 차이는 보이지 않는다.
+        // 잔류 시간이 지나면 치운다 — 기본값(0)이면 폭발 다음 틱이다.
+        // <b>폭발 콜백에서 직접 치우지 않는다</b> — OnExploded 발행 중이라 뒤 구독자가 사라진 폭탄을 본다.
         if (m_resolved && Time.time >= m_despawnAt)
             Despawn();
     }
