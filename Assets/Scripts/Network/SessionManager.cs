@@ -11,6 +11,10 @@ public class SessionManager : CommonManagerBase
     // 게임 버전을 담는 세션 프로퍼티 키 (#586). 값은 NetworkProtocol.VersionString.
     private const string k_versionProperty = "ver";
 
+    // 프로퍼티가 아예 없는 세션 — #586 이전 빌드가 만든 방이다. 값이 다른 것과 똑같이 취급하되
+    // 표시만 구분한다(빈 문자열이면 "방 버전 " 뒤가 비어 무슨 말인지 알 수 없다).
+    private const string k_unknownVersion = "?";
+
     [SerializeField]
     private int m_maxPlayer = 6;
 
@@ -20,10 +24,6 @@ public class SessionManager : CommonManagerBase
 
     private ISession m_session;
     public ISession CurrentSession => m_session;
-
-    // 연결 승인 콜백의 단일 소유자 (#628 B층) — 씬과 무관하게 항상 걸려야 해 상주 매니저가 든다.
-    private readonly ConnectionApprovalGate m_approvalGate = new();
-    public ConnectionApprovalGate Approval => m_approvalGate;
 
     public event Action<string> OnSessionJoined; // 인자: session.Id
     public event Action OnSessionLeft;
@@ -74,7 +74,6 @@ public class SessionManager : CommonManagerBase
     public async UniTask<string> CreateSessionAsync(int maxPlayer)
     {
         await EnsureSignedInAsync();
-        PrepareApprovalGate(NetworkManager.Singleton); // StartHost 전에 버전 페이로드·게이트를 건다 (#628)
         var options = new SessionOptions
         {
             MaxPlayers = maxPlayer,
@@ -100,34 +99,7 @@ public class SessionManager : CommonManagerBase
     public async UniTask JoinByCodeAsync(string code)
     {
         await EnsureSignedInAsync();
-        NetworkManager nm = NetworkManager.Singleton;
-        PrepareApprovalGate(nm);
-
-        // B층 거부 사유 캡처 — DisconnectReason은 Shutdown에서 안 비워져 스테일 값이 남을 수 있다 (#628)
-        string rejectReason = null;
-        void CaptureReason(ulong _) => rejectReason = nm?.DisconnectReason;
-        if (nm != null)
-            nm.OnClientDisconnectCallback += CaptureReason;
-
-        ISession session;
-        try
-        {
-            session = await MultiplayerService.Instance.JoinSessionByCodeAsync(code);
-        }
-        catch (Exception) when (NetworkProtocol.TryParseMismatchReason(rejectReason, out string hostVersion))
-        {
-            Debug.LogWarning(
-                $"[SessionManager] 승인 단계 버전 불일치로 거부됨(B층) / 내 버전: {NetworkProtocol.VersionString}, 호스트 버전: {hostVersion}"
-            );
-            var mismatch = new SessionVersionMismatchException(NetworkProtocol.VersionString, hostVersion);
-            PendingVersionMismatch = mismatch;
-            throw mismatch;
-        }
-        finally
-        {
-            if (nm != null)
-                nm.OnClientDisconnectCallback -= CaptureReason;
-        }
+        ISession session = await MultiplayerService.Instance.JoinSessionByCodeAsync(code);
 
         // 버전 검사는 AdoptSession보다 먼저 — 채택하면 OnSessionJoined가 발화해 Vivox가 음성 채널까지
         // 붙는다. 여기까지 await 없이 이어지므로 참가와 검사 사이에 NGO가 한 프레임도 돌지 않는다. (#586)
@@ -150,18 +122,6 @@ public class SessionManager : CommonManagerBase
         Debug.Log($"[SessionManager] 세션 참가 완료 / Id: {session.Id}, Code: {session.Code}");
     }
 
-    private void PrepareApprovalGate(NetworkManager nm)
-    {
-        if (nm == null)
-        {
-            Debug.LogError("[SessionManager] NetworkManager.Singleton이 없어 버전 게이트를 걸 수 없습니다.");
-            return;
-        }
-
-        ConnectionApprovalGate.StampLocalVersion(nm);
-        m_approvalGate.Install(nm);
-    }
-
     private static string ReadVersion(ISession session)
     {
         if (
@@ -173,7 +133,7 @@ public class SessionManager : CommonManagerBase
             return property.Value;
         }
 
-        return NetworkProtocol.k_unknownVersion;
+        return k_unknownVersion;
     }
 
     /// <summary>
