@@ -431,14 +431,32 @@ public class PlayerMovement : NetworkBehaviour
     /// CharacterController를 껐다 켠다 — transform을 직접 옮기는 호송 추종(#279)이 쓴다.
     /// 켠 채로 transform을 옮기면 CC 내부 캐시가 위치를 되돌린다 (<see cref="SetPose"/>와 동일 사정).
     /// </summary>
-    internal void SetControllerEnabled(bool value) => m_controller.enabled = value;
+    internal void SetControllerEnabled(bool value) => SetCapsuleEnabled(value);
+
+    /// <summary>
+    /// ⚠ <b>캡슐 enable을 만지는 유일한 통로다 — 다른 데서 <c>m_controller.enabled</c>에 직접 쓰지 말 것.</b>
+    ///
+    /// 콜라이더를 껐다 켜면 <c>Physics.IgnoreCollision</c> 상태가 <b>초기화된다</b>(Unity 사양).
+    /// 사망 중에 그 일이 일어나면 시체 뼈가 자기 캡슐 <b>안에서</b> 출발하게 되고, 그걸 밀어내는
+    /// 힘에 몸이 발작처럼 튄다. 그래서 켜는 쪽에서 래그돌에게 무시를 다시 걸게 한다
+    /// (<see cref="PlayerRagdoll.ReapplyCapsuleIgnore"/>에 사정이 적혀 있다).
+    ///
+    /// ⚠ <b>같은 프레임 안에서 껐다 켜는 <see cref="SetPose"/>도 여기를 지난다</b> — 그쪽은 폴링으로는
+    /// 전이를 볼 수 없어서, 예전에 재적용이 통째로 빠져 있던 자리다 (#759 §5).
+    /// </summary>
+    private void SetCapsuleEnabled(bool value)
+    {
+        m_controller.enabled = value;
+        if (value)
+            m_ragdoll?.ReapplyCapsuleIgnore();
+    }
 
     // CharacterController가 켜진 상태에서 transform을 직접 옮기면 내부 캐시가 위치를 되돌릴 수 있어 잠시 끄고 옮긴다.
     private void SetPose(Vector3 pos, Quaternion rot)
     {
-        m_controller.enabled = false;
+        SetCapsuleEnabled(false);
         transform.SetPositionAndRotation(pos, rot);
-        m_controller.enabled = true;
+        SetCapsuleEnabled(true);
 
         // 원격에 "이건 순간이동이다"를 알린다 — 안 보내면 각 피어가 이 거리를 보간해 걸어·달려온다
         // (프리팹 설정 Interpolate=1 · PositionMaxInterpolationTime=0.1). 시체 쪽과 같은 수단이고

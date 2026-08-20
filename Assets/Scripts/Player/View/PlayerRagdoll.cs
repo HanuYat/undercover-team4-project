@@ -155,7 +155,6 @@ public class PlayerRagdoll : MonoBehaviour
     private bool m_sawDeathThisEpisode;
     private float m_awaitingDeathSeconds;
 
-    private bool m_capsuleWasEnabled = true; // 캡슐 충돌 무시 재적용 판정 (IgnoreOwnCapsule 주석 참고)
 
     /// <summary>
     /// 래그돌이 애니메이터로부터 포즈를 빼앗고 있는가 — <see cref="PlayerMovement.AddKnockback"/>·
@@ -253,7 +252,7 @@ public class PlayerRagdoll : MonoBehaviour
         // 매트릭스가 맡는다). 그래서 캡슐 무시를 여기서 바로 건다. 예전에는 시체 오브젝트가
         // 비활성이라 <c>Physics.IgnoreCollision</c>이 에러를 뱉어, 걸 수 있는 유일한 시점이
         // "시체를 켜는 순간"이었다.
-        IgnoreOwnCapsule();
+        ReapplyCapsuleIgnore();
     }
 
     // ---- 래그돌 표현 전환 (리그 한 벌 — NPC와 같은 모양, #763 2단계) ----
@@ -420,47 +419,50 @@ public class PlayerRagdoll : MonoBehaviour
     // 지형 충돌을 켜면 캡슐 충돌도 같이 켜지는데, 죽는 순간 래그돌은 자기 캡슐 <b>안에서</b> 출발하므로
     // 그대로 두면 깊게 겹친 상태로 시작하고, 그걸 밀어내는 힘에 몸이 발작처럼 튄다(실제로 밟았다).
     //
-    // ⚠ <b>이 상태는 콜라이더를 껐다 켜면 초기화된다</b>(Unity 사양). 시체를 켤 때 한 번 걸어 두는
-    // 것으로는 부족하다 — 우리 밖에서 CharacterController를 껐다 켜는 경로가 여럿이다:
+    // ⚠ <b>이 상태는 콜라이더를 껐다 켜면 초기화된다</b>(Unity 사양). 한 번 걸어 두는 것으로는
+    // 부족하다 — 캡슐을 껐다 켜는 경로가 여럿이다:
     //  · <see cref="PlayerMovement"/>의 스폰 포즈 적용·텔레포트(SetPose) — <b>같은 프레임 안에서</b>
     //    껐다 켜므로 폴링으로는 전이를 볼 수도 없다
     //  · 호송·운반(PlayerTowedMotion, #279/#365) — 여러 프레임 동안 꺼 둔다
-    // 그래서 세 곳에서 다시 건다: 시체를 켜는 순간, 뼈를 다시 물리로 놓아줄 때, 그리고 캡슐이 꺼졌다
-    // 켜진 것이 관측될 때(Update).
+    //  · 사망 진입·기상(<see cref="SetControllerEnabled"/>)
+    //
+    // <b>그래서 재적용을 경로마다 흩지 않고 캡슐을 켜는 통로 하나에 걸었다</b> —
+    // <see cref="PlayerMovement.SetCapsuleEnabled"/>가 켜는 순간 이 함수를 부른다. 위 셋이 전부
+    // 그 통로를 지나므로 새 호출부가 생겨도 자동으로 덮인다.
+    //
+    // ⚠ 예전에는 여기서 <c>Update</c> 폴러로 "꺼졌다 켜진 것이 관측될 때"를 잡았는데, <b>같은 프레임
+    // 안에서 껐다 켜는 SetPose는 그 폴러가 볼 수 없었다.</b> 그 구멍이 #759 §5의 회귀다.
     //
     // <b>모델을 분리해도 이 처리는 남는다.</b> 사망 중 캡슐은 꺼져 있지만(§10-0) 위 경로들이 그 사이에
     // 캡슐을 되살릴 수 있고, 그때 시체 뼈가 캡슐 안에 있으면 예전 증상이 그대로 재현된다.
     //
     // 남의 캡슐은 그대로 둔다 — 시체가 통행을 방해하는 것은 오히려 자연스럽고, 무엇보다 죽는 순간
     // 남의 캡슐이 내 몸 안에 겹쳐 있는 경우는 없다.
-    private void IgnoreOwnCapsule()
-    {
-        m_rig.IgnoreCollisionWith(m_controller, true);
-    }
-
-    // 여러 프레임에 걸쳐 꺼져 있던 캡슐(호송·운반)이 다시 켜지는 순간을 잡아 무시를 다시 건다.
-    // 같은 프레임 안에서 껐다 켜는 경로(PlayerMovement.SetPose)는 여기서 볼 수 없으므로,
-    // 그쪽은 시체를 켜는 시점의 적용이 담당한다.
-    private void RefreshCapsuleIgnoreOnReenable()
+    internal void ReapplyCapsuleIgnore()
     {
         if (m_controller == null)
             return;
 
-        bool enabledNow = m_controller.enabled;
-        if (enabledNow && !m_capsuleWasEnabled)
-            IgnoreOwnCapsule();
-        m_capsuleWasEnabled = enabledNow;
+        m_rig.IgnoreCollisionWith(m_controller, true);
     }
 
-    // CharacterController를 껐다 켜면 IgnoreCollision 상태가 초기화된다(Unity 사양) — 켤 때마다 다시 건다.
+    // 캡슐을 켜고 끈다 — <b>쓰기는 <see cref="PlayerMovement"/>에 맡긴다.</b> 캡슐의 주인이 저쪽이고,
+    // 켜는 순간의 무시 재적용도 저쪽 통로가 책임진다(위 주석). 배선이 없는 구성(리그만 있는 테스트
+    // 오브젝트 등)에서만 직접 쓴다.
     private void SetControllerEnabled(bool value)
     {
+        if (m_movement != null)
+        {
+            m_movement.SetControllerEnabled(value);
+            return;
+        }
+
         if (m_controller == null)
             return;
 
         m_controller.enabled = value;
         if (value)
-            IgnoreOwnCapsule();
+            ReapplyCapsuleIgnore();
     }
 
     // ---- 밧줄 파사드 (#365 운반 / #398 드래그) ----
@@ -799,8 +801,6 @@ public class PlayerRagdoll : MonoBehaviour
 
     private void Update()
     {
-        RefreshCapsuleIgnoreOnReenable();
-
         // 진입 추적의 기준선을 담는다 — <b>Update 시작</b>이 직전 프레임의 최종 자세를 읽는 유일하게
         // 안전한 지점이다. LateUpdate 끝에 담으려면 PlayerHeadLook보다 뒤에 돌아야 하는데 스크립트
         // 실행 순서는 정해져 있지 않고, Animator는 아직 이번 프레임을 평가하지 않았다.
