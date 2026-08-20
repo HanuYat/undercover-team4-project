@@ -101,11 +101,21 @@ public static class RagdollSetup
         "Assets/Prefabs/NPC/NPC_Streaker.prefab",
     };
 
-    // ⚠ 플레이어는 <b>골반 복제를 여기서 건드리지 않는다</b>(stripHipsReplication: false). 이미 손으로
-    // 배선돼 있고 <b>오너 권한</b>인데, 아래 자동화는 <b>서버 권한</b>을 쓴다(NPC 루트 NT와 같은 값).
-    // 켜면 플레이어 시체의 권위가 조용히 뒤집힌다.
+    // ⚠ <b>이 메뉴는 지금 플레이어에서 돌지 않는다 — 이 브랜치가 만든 문제가 아니다.</b>
+    //
+    // <c>rigOwnerPath: ""</c>는 리그가 <b>프리팹 루트의 직속 자식</b>(<c>Player/Root</c>)이라는 뜻인데,
+    // 사망 전용 모델을 분리하면서(#571) 시체 리그가 <c>Corpse/Root</c>로 내려갔다. 그래서 검증이
+    // "몸통 리그 밖에 붙은 래그돌 뼈가 있다"로 중단한다 — <b>살아있는 리그를 몸통으로 착각</b>하는 것이다.
+    //
+    // 고치려면 <c>rigOwnerPath: "Corpse"</c>여야 하지만, 그러면 이 자동화가 레이어·콜라이더·
+    // 키네마틱 초기화까지 <b>플레이어 프리팹에 처음으로</b> 돌게 된다. 손으로 배선된 값이 바뀔 수
+    // 있어 래그돌 스트리밍 검증과 섞지 않는다 — <b>별도 작업으로 남긴다.</b>
+    //
+    // 그때까지 플레이어 골반 복제 해제는 손으로 했다(<c>Corpse/Root/Hips</c>의 NetworkTransform +
+    // NetworkRigidbody 제거, 2026-08-19). <c>stripHipsReplication: true</c>는 경로가 고쳐지는 날
+    // 멱등하게 다시 확인해 주기 위해 미리 켜 둔다.
     [MenuItem("Tools/Ragdoll/Finish Setup - Player")]
-    public static void RunPlayer() => Run(k_playerPrefab, rigOwnerPath: "", stripHipsReplication: false);
+    public static void RunPlayer() => Run(k_playerPrefab, rigOwnerPath: "", stripHipsReplication: true);
 
     [MenuItem("Tools/Ragdoll/Finish Setup - NPC (전체)")]
     public static void RunAllNpc()

@@ -182,12 +182,13 @@ public class NpcCustody : NetworkBehaviour
     /// (<c>NpcStateMachine</c>이 사망 이탈을 거부한다) 나갈 이유도 없다 — 옮기기만 하면 된다.
     /// 그래서 여기서 하는 일은 <b>순간이동 하나</b>다: 커스터디도, 기절 해제도, 배치 상태도 없다.
     ///
-    /// <b>원격에 따로 보낼 것이 없다</b> (#571 권위 반전). 배치가 시체를 <b>얼리고</b> 옮기는데,
-    /// 얼린 뼈는 루트의 키네마틱 자식이라 루트를 따라오고 그 루트는 NetworkTransform이 이미 복제한다.
-    /// 자세는 <see cref="RagdollPoseStreamer"/>가 보낸다 — 무너지는 동안 스트림으로, 얼리는 순간 1회로.
+    /// <b>원격 배선은 배치 쪽이 쥔다</b> (#571 권위 반전). <see cref="NpcRagdoll.ServerPlaceCorpse"/>가
+    /// 루트와 뼈를 같은 델타로 옮기고 자세를 보간 없이 한 번 더 쏜다 — 시체의 뼈는 동적으로 남으므로
+    /// 루트를 따라오지 않는다. 자세가 가는 통로는 <see cref="RagdollPoseStreamer"/> 하나다.
     /// </summary>
-    /// <param name="position">시체가 놓일 감옥 안 지점 — 유치장이 정한다. <b>바닥에 스냅된 좌표여야
-    /// 한다</b>: 얼린 시체는 스스로 바닥을 찾지 않는다(<see cref="JailZone.RandomRestPointInRoom"/>).</param>
+    /// <param name="position">시체가 놓일 감옥 안 지점 — 유치장이 정한다
+    /// (<see cref="JailZone.RandomRestPointInRoom"/>). <b>바닥에 정확히 스냅될 필요는 없다</b>:
+    /// 시체는 물리에 남아 있어 도착지에서 알아서 무너져 눕는다.</param>
     public void SendCorpseToJail(Vector3 position) => ServerMoveCorpse(position);
 
     /// <summary>시체를 통째로 옮긴다 — 서버(또는 오프라인) 전용. 수감·퇴장이 함께 쓴다. (#571/#597)
