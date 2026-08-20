@@ -311,8 +311,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LightningEvent
   ShowTopMostFoldoutHeaderGroup: 1
-  m_strikeIntervalMin: 2
-  m_strikeIntervalMax: 5
+  m_strikeIntervalMin: 15
+  m_strikeIntervalMax: 20
   m_warningSeconds: 0.6
   m_strikeRadius: 2.5
   m_damageChance: 0.5
