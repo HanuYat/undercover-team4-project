@@ -5,7 +5,8 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 개발용 자동 호스트 — 게임 씬(Main Scene·Assets/Scenes/Maps/*)을 직접 Play할 때 쓴다.
+/// 개발용 자동 호스트 — 게임 맵 씬(Assets/Scenes/Maps/*)을 직접 Play할 때 쓴다.
+/// 튜토리얼 씬에는 두지 않는다 — 그쪽은 빌드에서도 호스트가 필요해 TutorialDirector가 직접 띄운다 (#663).
 /// 메인 에디터에서 Play하면 로컬 호스트를 띄우고 라운드를
 /// 자동 시작해 바로 플레이한다(솔로). MPPM 가상 플레이어(클론)는 자동 호스트하지 않고
 /// '클라이언트 참가' 버튼만 띄운다 — 호스트가 뜬 뒤 눌러 접속하면 멀티 테스트가 된다.

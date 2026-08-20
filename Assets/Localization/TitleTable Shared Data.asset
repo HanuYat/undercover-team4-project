@@ -263,6 +263,14 @@ MonoBehaviour:
     m_Key: Title.ConnectionLost.SessionClosed
     m_Metadata:
       m_Items: []
+  - m_Id: 5871219950481408
+    m_Key: Title.Tutorial.Button
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871219967258624
+    m_Key: Title.Tutorial.Offer
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

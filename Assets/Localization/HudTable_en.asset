@@ -38,7 +38,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 3135784423426
-    m_Localized: "Rebooting... a teammate is reviving you"
+    m_Localized: Rebooting... a teammate is reviving you
     m_Metadata:
       m_Items: []
   - m_Id: 3135784423425
@@ -382,6 +382,55 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 5463808403922944
     m_Localized: In use
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871217966575616
+    m_Localized: Move with WASD and look around with the mouse
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518656
+    m_Localized: Switch your equipped gear with the number keys or mouse wheel
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518657
+    m_Localized: You can interact with objects whose outlines appear by pressing
+      the E key
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518658
+    m_Localized: Hold Tab to check your team and this round's wanted montage
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518659
+    m_Localized: Switch channels on the HQ CCTV console to watch the streets
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518660
+    m_Localized: Hold the scanner and aim at a citizen to match them against the
+      montage
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518661
+    m_Localized: If you find someone suspected of being the culprit, neutralize them
+      with a baton or a taser
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518662
+    m_Localized: You can use the rope item to tie up the suspect and move them to
+      the detention cell inside the HQ
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518663
+    m_Localized: Press the intake button on the holding cell to put the suspect in
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518664
+    m_Localized: "Press the button to see the judgment\r\nIf it\u2019s not the culprit,
+      no reward will come in"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518665
+    m_Localized: Tutorial complete. Returning to the title shortly
     m_Metadata:
       m_Items: []
   references:

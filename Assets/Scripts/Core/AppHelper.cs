@@ -27,6 +27,10 @@ public static class AppHelper
     // 고른 맵이 없을 때 갈 맵. 세션 밖(에디터에서 Shop을 직접 Play)이거나 목록이 비었을 때 쓰인다.
     private const string k_defaultGameScene = "Map_Apocalypse";
 
+    // 튜토리얼 전용 맵 (#663). 놀고 있던 옛 게임 씬("Main Scene")을 개조해 재사용한다 — 본 게임이
+    // 쓰는 맵은 Assets/Scenes/Maps/* 두 장뿐이다. MapSelection 목록에는 넣지 않는다(고를 대상이 아니다).
+    private const string k_tutorialScene = "Tutorial";
+
     /// <summary>EScene → 실제 씬 이름. 빌드 인덱스에 결합하지 않는다 (NGO도 이름 기반 로드).</summary>
     public static string ToSceneName(EScene scene) =>
         scene switch
@@ -39,6 +43,9 @@ public static class AppHelper
             // 이름만 바꿔치운다. 맵마다 EScene 값을 늘리면 App.CurrentScene == EScene.Game 비교가
             // 전부 깨진다(PlayerSpawnManager·PlayerItemSupply·SceneIndicatorHud). 목록은 MapSelection이 주인.
             EScene.Game => App.Game.MapSelection?.SelectedSceneName ?? k_defaultGameScene,
+            // 튜토리얼 맵 (#663). 고정 한 장이라 MapSelection을 거치지 않는다 — 고르는 화면(Shop)을
+            // 지나지 않고 타이틀에서 바로 들어오므로 그 홀더가 아예 없다. 목록에 넣지 않는 것도 같은 이유다.
+            EScene.Tutorial => k_tutorialScene,
             _ => null,
         };
 
@@ -51,7 +58,11 @@ public static class AppHelper
             "Title Scene" => EScene.Title,
             "Lobby" => EScene.Lobby,
             "Shop" => EScene.Shop,
-            "Main Scene" => EScene.Game,
+            // 튜토리얼 맵도 Game으로 분류한다 — 일부러 그렇게 둔다 (#663). 플레이어 스폰·기본 장비 지급이
+            // App.CurrentScene == EScene.Game으로 갈리므로(PlayerSpawnManager·PlayerItemSupply), 여기서
+            // Tutorial을 돌려주면 튜토리얼에 플레이어가 서지도 장비를 받지도 못한다.
+            // "지금이 튜토리얼인가"는 씬에 TutorialDirector가 있는지로 판별한다.
+            "Tutorial" => EScene.Game,
             _ => App.SceneFlow.Game != null ? EScene.Game : EScene.None,
         };
 

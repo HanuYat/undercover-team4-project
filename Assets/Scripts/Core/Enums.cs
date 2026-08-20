@@ -5,7 +5,8 @@ public enum EScene
     Title, // 메인메뉴 — 세션 생성/참가
     Lobby, // 최초 대기 화면
     Shop, // 상점 = 인게임 허브 (라운드 사이 준비, 루프 진입점)
-    Game, // 게임맵 - 라운드 진행 (구 InGame / "Main Scene")
+    Game, // 게임맵 - 라운드 진행 (Assets/Scenes/Maps/*)
+    Tutorial, // 튜토리얼 전용 맵 (Tutorial.unity) — 로드 후에는 Game으로 분류된다 (AppHelper.FromSceneName)
 }
 
 /// <summary>

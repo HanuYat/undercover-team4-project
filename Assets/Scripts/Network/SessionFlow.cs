@@ -42,6 +42,17 @@ public static class SessionFlow
             if (App.Net.Session != null)
                 await App.Net.Session.LeaveAsync();
 
+            // 2-0. SDK 세션 없이 띄운 로컬 호스트(튜토리얼 #663 · DevAutoHost 직접 Play)는 위 LeaveAsync가
+            //      무동작이라 아무도 NGO를 내리지 않는다 — 그 경우에만 직접 내린다. 세션이 있을 때
+            //      직접 내리면 안 되는 이유는 아래 WaitForNetworkShutdownAsync 주석에 있고,
+            //      "세션이 없을 때만"이라는 이 조건이 곧 그 안전장치다.
+            if (
+                App.Net.Session?.CurrentSession == null
+                && NetworkManager.Singleton != null
+                && NetworkManager.Singleton.IsListening
+            )
+                NetworkManager.Singleton.Shutdown();
+
             // 2-1. NGO가 완전히 내려갈 때까지 대기 — Shutdown은 즉시가 아니라 다음 프레임(들)에 걸쳐 끝난다.
             //      완료를 기다리지 않으면 App.LoadScene이 NGO가 살아있는 걸로 보고
             //      로컬 로드 대신 NGO 씬 동기화로 잘못 분기한다.

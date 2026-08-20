@@ -23,7 +23,7 @@ public class App : Singleton<App>
     private LoadingScreen m_loadingScreen;
     private SoundManager m_soundManager;
 
-    // 인게임 매니저 (Main Scene)
+    // 인게임 매니저 (게임 맵 — Assets/Scenes/Maps/* · 튜토리얼 맵)
     private RoundManager m_roundManager;
     private RoundProgress m_roundProgress;
     private SuddenEventManager m_suddenEventManager;

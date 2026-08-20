@@ -14,6 +14,10 @@ public class TitleUIManager : UIManagerBase
     [SerializeField]
     private Button m_settingsBtn;
 
+    [Tooltip("튜토리얼 — 로그인 없이도 눌린다 (#663). 배선하지 않으면 버튼이 없는 것으로 취급한다")]
+    [SerializeField]
+    private Button m_tutorialBtn;
+
     /// <summary>
     /// 첫 화면을 고른다 — 관문을 이미 넘었으면 세션 화면으로 바로 간다. (#585)
     ///
@@ -86,12 +90,19 @@ public class TitleUIManager : UIManagerBase
     {
         m_quitBtn.onClick.AddListener(QuitGame);
         m_settingsBtn.onClick.AddListener(OpenSettings);
+
+        // 튜토리얼은 UGS를 타지 않으므로 로그인 관문 앞에서도 눌려도 된다 (#663)
+        if (m_tutorialBtn != null)
+            m_tutorialBtn.onClick.AddListener(TutorialFlow.Enter);
     }
 
     private void OnDisable()
     {
         m_quitBtn.onClick.RemoveListener(QuitGame);
         m_settingsBtn.onClick.RemoveListener(OpenSettings);
+
+        if (m_tutorialBtn != null)
+            m_tutorialBtn.onClick.RemoveListener(TutorialFlow.Enter);
     }
 
     /// <summary>
