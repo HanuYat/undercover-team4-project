@@ -94,9 +94,8 @@ public class VoiceInputRouter : MonoBehaviour
     }
 
     /// <summary>
-    /// PTT 송신을 강제로 막거나 푼다 — 완전 사망(Die) 동안은 말을 걸 수 없다는 규칙(#725)을 위한 것.
-    /// 음소거(<see cref="ApplyMicMute"/>)와 독립된 축이다 — 부활하면 음소거 여부와 무관하게 이 차단만
-    /// 풀리고, 음소거 자체는 그대로 유지된다. 막는 순간 이미 송신 중이면 즉시 끈다(말하다 죽는 경우).
+    /// PTT 송신을 강제로 막거나 푼다 — 완전 사망(Die) 동안 말을 막는 규칙(#725)용.
+    /// 음소거(<see cref="ApplyMicMute"/>)와는 독립된 축이다.
     /// </summary>
     public void SetTransmitBlocked(bool blocked)
     {
@@ -165,8 +164,7 @@ public class VoiceInputRouter : MonoBehaviour
         if (IsTypingInUI())
             return;
 
-        // 완전 사망 중에는 무전 자체가 조용히 무시된다 — 음소거처럼 안내를 띄우지 않는다(#725).
-        // 이미 화면 암전·무음으로 "죽었다"는 신호가 뚜렷해 별도 토스트가 필요 없다고 본다.
+        // 완전 사망 중엔 조용히 무시한다 — 화면 암전·무음으로 이미 신호가 뚜렷하다 (#725)
         if (m_transmitBlocked)
             return;
 

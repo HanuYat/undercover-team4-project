@@ -65,8 +65,7 @@ public abstract class ChanneledInteractionBehaviour : NetworkBehaviour
 
     // 소리를 RPC 인자로 실어 보내는 이유 — 원격 오너에서는 ChannelLoopSound를 그대로 읽어도 되지만,
     // 게이지와 소리가 같은 한 번의 결정에서 나와야 둘이 어긋날 여지가 없다.
-    // owner로 this를 넘기는 이유는 ChannelingGaugeUI 문서 참고 — 아이템·구조·포박이 게이지 하나를
-    // 공유하므로, 남의 게이지를 실수로 껐다 켰다 하지 않으려면 짝을 맞춰야 한다. (#725)
+    // owner로 this를 넘기는 이유는 ChannelingGaugeUI 문서 참고. (#725)
     private void ShowChannelFeedback(float seconds, float elapsed, EAudioClip sound)
     {
         App.UI.Gauge?.Show(seconds, elapsed, this);

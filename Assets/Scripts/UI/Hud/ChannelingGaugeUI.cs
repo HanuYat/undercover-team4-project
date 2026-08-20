@@ -18,10 +18,8 @@ public class ChannelingGaugeUI : CommonManagerBase
     private float m_elapsed;
     private bool m_isRunning;
 
-    // 지금 게이지를 띄운 쪽 — 아이템(Taser 등)과 플레이어 행동 채널(구조·포박)이 게이지 하나를
-    // 공유하므로, 소유자가 다른 Hide 요청은 무시해야 남의 진행 중인 게이지가 꺼지지 않는다. (#725)
-    // 예: 구조 채널링 중 아이템을 바꾸면 PlayerLoadout이 "이전 아이템의" 게이지만 내리려 하는데,
-    // 지금 떠 있는 게 구조 게이지면 owner가 안 맞아 그대로 남는다.
+    // 지금 게이지를 띄운 쪽 — 아이템·구조·포박이 게이지 하나를 공유하므로, 소유자가 다른 Hide
+    // 요청은 무시해야 남의 게이지가 꺼지지 않는다. (#725)
     private object m_owner;
 
     protected override void Awake()

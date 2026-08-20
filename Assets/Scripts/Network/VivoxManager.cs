@@ -346,12 +346,11 @@ public class VivoxManager : CommonManagerBase
 
     /// <summary>
     /// 출력을 강제로 완전 무음으로 내린다 — 설정값(GameSettings.VoiceVolume)은 건드리지 않는다.
-    /// 완전 사망 순간 1초 암전·SFX 무음(<see cref="PlayerDownView"/>, #725)과 짝을 맞추는 용도.
-    /// 복원은 <see cref="ApplyVoiceVolume"/>를 다시 부르면 된다 — 값을 따로 저장해 두지 않는다.
+    /// 완전 사망 1초 암전·SFX 무음(<see cref="PlayerDownView"/>, #725)과 짝. 복원은
+    /// <see cref="ApplyVoiceVolume"/>를 다시 부르면 된다.
     ///
-    /// ⚠ 먹통 음성 왜곡(#372) 중에는 Vivox 자체 믹스가 아니라 우리 AudioSource로 재생되므로
-    /// (<see cref="VoiceDistortionController"/> 문서 참고) 출력 장치 볼륨이 안 먹힌다 — 죽는 순간과
-    /// 먹통이 겹치는 드문 경우는 후속 과제로 남긴다.
+    /// ⚠ 먹통 음성 왜곡(#372) 중에는 Vivox 자체 믹스가 아니라 우리 AudioSource로 재생되므로 출력
+    /// 장치 볼륨이 안 먹힌다 — 죽는 순간과 먹통이 겹치는 경우는 후속 과제로 남긴다.
     /// </summary>
     public void ForceMuteOutput()
     {
