@@ -25,10 +25,8 @@ using UnityEngine;
 /// 1인칭·3인칭 애니메이션이 모두 같은 상수로 임팩트를 맞추므로, 세 곳(내 화면·남의 화면·데미지)이
 /// 한 순간에 일어난다.
 ///
-/// <b>그래서 판정은 한 줄이 아니라 부채꼴이다</b> (#779) — 지연 동안의 표적 이동을 보정하지 않으므로
-/// 한 줄로는 옆으로 달리는 대상이 구조적으로 빠진다. 스윙은 실제로 호를 그리니
-/// <see cref="m_arcHalfAngle"/>만큼 벌린 여러 줄을 훑는다. 예측 보정이 아니라 임팩트 시점을 묻는
-/// 것이므로 "조준해서 맞으면 명중, 빗나가면 실패" 원칙은 그대로다.
+/// 지연 동안의 표적 이동은 보정하지 않는다 — 그래서 판정은 한 줄이 아니라
+/// <see cref="m_arcHalfAngle"/>만큼 벌린 부채꼴이다 (#779).
 ///
 /// 홀드 채널링은 아니다 — 좌클릭을 떼도 이미 시작된 스윙은 그대로 들어간다(CancelUse 기본 구현 유지).
 /// 취소되는 경우는 스윙 도중 아이템이 손을 떠났을 때뿐이다.
@@ -46,18 +44,16 @@ public class Baton : ItemBase, IAimedWeapon
     [SerializeField]
     private float m_hitRadius = 0.35f;
 
-    // 반경만 키우면 허용 각도가 23°→32°밖에 안 늘어난다 — 각도로 벌려야 사거리에 비례해 폭이 커진다.
     [Tooltip(
-        "스윙 호의 반각(도) — 조준 정면 기준 좌우로 이만큼 벌린 부채꼴을 판정한다. 0이면 정면 한 줄. 키우면 도주 대상 명중률이 오르는 대신 크로스헤어가 켜지는 범위도 함께 넓어진다"
+        "스윙 호의 반각(도). 0이면 정면 한 줄 — 키우면 도주 대상 명중률과 크로스헤어가 켜지는 범위가 함께 넓어진다"
     )]
     [Range(0f, 60f)]
     [SerializeField]
     private float m_arcHalfAngle = 25f;
 
-    // 5줄이면 최대 사거리에서 이웃 줄 간격이 0.51m라 반경 0인 표적에도 틈이 없다. 늘리면 캐스트가
-    // 그만큼 늘어난다 — 크로스헤어가 매 프레임 이 경로를 돈다.
+    // 5줄이면 최대 사거리에서 줄 간격이 0.51m라 반경 0인 표적에도 틈이 없다
     [Tooltip(
-        "호를 훑는 캐스트 수. 짝수를 넣으면 +1 해서 쓴다 — 가운데 한 줄이 없으면 정면이 비어 정지 대상이 빠진다"
+        "호를 훑는 캐스트 수. 짝수를 넣으면 +1 해서 쓴다 — 가운데 한 줄이 비면 정지 대상이 빠진다"
     )]
     [Range(1, 11)]
     [SerializeField]
@@ -93,10 +89,8 @@ public class Baton : ItemBase, IAimedWeapon
     // 캐스트 결과 버퍼 — 서버 판정과 오너 크로스헤어(HasValidAimTarget)가 함께 쓰지만 공유해도 안전하다.
     // 둘 다 메인 스레드에서 동기적으로 돌고, 결과를 호출 안에서 즉시 꺼내 쓴 뒤 버퍼를 붙들지 않는다.
     // (호스트에서는 두 경로가 같은 프레임에 돌 수 있지만 겹쳐 실행되지는 않는다)
-    // 호의 줄마다 덮어쓰지만 결과는 그 자리에서 구조체로 복사해 나가므로 줄끼리 섞이지 않는다.
-    // 16칸은 모자랐다 (#779) — 래그돌 본까지 세면 플레이어 13 + NPC 12개이고, 자기 몸이 distance 0으로
-    // 슬롯을 먼저 먹는다(제외는 캐스트 후다). 넘치면 정렬 없이 잘려 대상이 전부 탈락하면 '허공'이 된다.
-    // 포화 경고는 넣지 않는다 — 크로스헤어와 공유되는 순수 판정이라 매 프레임 찍힌다.
+    // 16칸은 모자랐다 (#779) — 래그돌 본까지 세면 플레이어 13 + NPC 12개고, 넘치면 정렬 없이 잘린다.
+    // 포화 경고는 못 넣는다 — 크로스헤어와 공유되는 순수 판정이라 매 프레임 찍힌다.
     private static readonly RaycastHit[] s_hitBuffer = new RaycastHit[64];
 
     // 다음 타격이 가능해지는 시각. 판정자가 서버 하나뿐이라 동기화하지 않는다 (서버 전용 상태).
@@ -235,8 +229,7 @@ public class Baton : ItemBase, IAimedWeapon
         // 월드 좌표로 굳혀 둔 조준선은 몸에서 떨어져 나가, 화면에서는 정면을 후려치는데 판정은
         // 0.3초 전 허공에서 나가는 일이 생긴다. 몸에 붙여 두면 스윙이 캐릭터를 따라간다
         // (= 애니메이션이 보여주는 것과 같다). 이 기준은 PlayerLook이 마우스 yaw로 돌리는 그
-        // transform이라 스윙 도중에도 좌우로는 따라간다 — 굳는 것은 pitch뿐이다. 다만 근접에서
-        // 도주 대상을 쫓을 만한 각속도는 안 나와서, 명중은 호 판정이 담당한다 (#779).
+        // transform이라 스윙 도중에도 좌우로는 따라간다 — 굳는 것은 pitch뿐이다.
         Transform holderTransform = holder.transform;
         ServerResolveHitAtImpactAsync(
                 holderTransform.InverseTransformPoint(origin),
@@ -485,8 +478,7 @@ public class Baton : ItemBase, IAimedWeapon
 
     // ---- 조준 판정 ----
 
-    // <b>선언 순서가 판정에 실린다</b> (#779) — EvaluateSwing이 호의 여러 줄 중 하나를 고를 때
-    // 이 순서로 비교한다(뒤가 더 좋은 결과). 순서를 바꾸면 어느 줄이 이기는지가 조용히 달라진다.
+    // <b>선언 순서가 판정에 실린다</b> — EvaluateSwing이 호의 여러 줄을 이 순서로 비교한다(뒤가 더 좋다).
     private enum SwingResult
     {
         NoHit,
@@ -496,16 +488,14 @@ public class Baton : ItemBase, IAimedWeapon
     }
 
     /// <summary>
-    /// 조준 정면 기준 <see cref="m_arcHalfAngle"/>만큼 벌린 부채꼴을 훑어 명중 결과를 분류한다 (#779).
-    /// 각 줄은 <see cref="EvaluateSwingRay"/>가 따로 판정하므로 <b>엄폐도 줄 단위</b>다 — 정면이
-    /// 기둥에 막혔어도 호가 닿는 대상은 맞는다. 여러 줄 중에서는 <see cref="SwingResult"/> 값이 큰
-    /// 줄을, 같으면 피봇이 가까운 줄을 고른다.
+    /// 부채꼴을 훑어 명중 결과를 분류한다 (#779). 각 줄은 <see cref="EvaluateSwingRay"/>가 따로
+    /// 판정하므로 <b>엄폐도 줄 단위</b>다 — 정면이 기둥에 막혀도 호가 닿는 대상은 맞는다.
+    /// 여러 줄 중에서는 <see cref="SwingResult"/>가 큰 줄을, 같으면 피봇이 가까운 줄을 고른다.
     ///
     /// <b>부수효과 없는 순수 판정으로 유지할 것.</b> 서버 타격 판정(<see cref="ServerResolveHitAtImpactAsync"/>)과
     /// 오너 크로스헤어(<see cref="HasValidAimTarget"/>) 둘이 공유한다 — 후자는 매 프레임 도는 로컬
     /// 피드백이라, 여기에 상태 변경이나 로그를 넣으면 조준만 해도 그게 매 프레임 실행된다.
-    /// 둘이 같은 함수를 보는 것이 "크로스헤어는 켜졌는데 안 맞음"을 막는 장치이므로 분기시키지 말 것 —
-    /// 호를 넓히면 크로스헤어가 켜지는 범위도 함께 넓어지는 것이 <b>맞다</b>(넓어진 만큼 실제로 맞는다).
+    /// 둘이 같은 함수를 보는 것이 "크로스헤어는 켜졌는데 안 맞음"을 막는 장치이므로 분기시키지 말 것.
     /// </summary>
     private SwingResult EvaluateSwing(
         Vector3 origin,
@@ -522,15 +512,14 @@ public class Baton : ItemBase, IAimedWeapon
         bombTarget = null;
         hit = default;
 
-        // 짝수는 홀수로 올린다 — 가운데 한 줄이 없으면 정면이 비어 정지 대상이 빠진다
+        // 홀수로 올린다 — 가운데 한 줄이 비면 정지 대상이 빠진다
         int samples = Mathf.Max(1, m_arcSampleCount);
         if (samples % 2 == 0)
         {
             samples++;
         }
 
-        // 호는 몸통 기준으로 벌어진다 — 소지자의 up을 축으로 돌리므로 경사면에서도 몸을 따라간다.
-        // 월드 up으로 돌리면 언덕에서 호의 양 끝이 지면을 파고들거나 허공으로 들린다.
+        // 소지자 up을 축으로 돌린다 — 월드 up이면 경사면에서 호가 지면을 파고든다
         Vector3 axis = holderRoot != null ? holderRoot.up : Vector3.up;
         Vector3 forward = direction.normalized;
         int half = samples / 2;
@@ -557,7 +546,6 @@ public class Baton : ItemBase, IAimedWeapon
                 continue;
             }
 
-            // NoHit끼리는 둘 다 MaxValue라 첫 줄만 통과한다 — 결과가 같으니 무해하다
             float pivotDistance = AimOcclusion.PivotDistance(origin, rayHit);
             if (result == best && pivotDistance >= bestPivotDistance)
             {
@@ -586,8 +574,6 @@ public class Baton : ItemBase, IAimedWeapon
     /// SphereCast는 레이캐스트와 달리 <b>시작 지점에 이미 겹친 콜라이더를 distance 0으로 되돌려준다.</b>
     /// 원점이 카메라(= 소지자 캡슐 안)라서 자기 몸이 항상 걸리므로, 소지자 계층은 걸러내고 최근접을 고른다.
     /// 원점을 앞으로 밀어 피하는 방법도 있지만, 벽에 붙어 있을 때 시작점이 벽 너머로 넘어가 관통 타격이 된다.
-    ///
-    /// <b>여기도 순수 함수다</b> — 호 한 번에 여러 번 돌고, 그 호가 매 프레임 크로스헤어에서 다시 돈다.
     /// </summary>
     private SwingResult EvaluateSwingRay(
         Vector3 origin,
