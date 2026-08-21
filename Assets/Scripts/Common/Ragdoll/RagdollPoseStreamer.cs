@@ -32,6 +32,11 @@ using UnityEngine;
 /// <b><c>NpcDeath</c>가 정착 자세를 1회 뿌리던 경로를 흡수했다.</b> 그쪽은 지웠고, 그 1회는
 /// 이제 스트림의 <b>마지막 패킷</b>(<see cref="EndStreaming"/>)이다 — 자세가 가는 통로는 하나만 남긴다.
 /// </summary>
+// ⚠ <b>루트 추종보다 뒤에 돈다.</b> #759 수정으로 <c>PlayerRagdoll</c>·<c>NpcRagdoll</c>의 루트
+// 추종이 <c>FixedUpdate</c>로 내려오면서 이 클래스의 캡처와 <b>같은 페이즈</b>가 됐다. 순서를 안
+// 박으면 미지정이 되고, 루트 회전이 뼈의 <b>로컬</b> 값을 바꾸므로(캡처가 보내는 것이 그 로컬이다)
+// 어느 쪽이 먼저 도느냐로 보내는 자세가 갈린다. 뒤에 두어 <b>이번 스텝의 루트</b>를 기준으로 뜬다.
+[DefaultExecutionOrder(100)]
 [DisallowMultipleComponent]
 public class RagdollPoseStreamer : NetworkBehaviour
 {
@@ -62,6 +67,34 @@ public class RagdollPoseStreamer : NetworkBehaviour
              "⚠ 루트 NetworkTransform의 AuthorityMode와 <b>반드시 같아야</b> 한다. 어긋나면 " +
              "몸과 루트가 서로 다른 피어에서 계산돼 시체가 이름표를 두고 떠난다")]
     [SerializeField] private PoseAuthority m_authority = PoseAuthority.Server;
+
+    // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
+    //    인스펙터 진단 스위치 둘 — m_logArrival / m_logBandwidth.
+    /*
+    [Header("진단")]
+    [Tooltip("원격이 <b>자세를 언제 받았는가</b>를 국면당 한 줄로 찍는다 — 재생이 늘어나 " +
+             "시체가 슬로모션으로 보이는 현상(#759 ①)의 판정용이다.\n\n" +
+             "<b>재생배율 = 기대간격 ÷ 평균도착간격.</b> 스냅샷 시각이 <b>로컬 수신 시각</b>이라 " +
+             "(TickApply 주석) 도착이 늘어지면 그만큼 재생이 늘어진다 — 0.67이면 33% 느리게 " +
+             "재생된 것이고, 그것이 곧 화면의 슬로모션이다.\n\n" +
+             "<b>홀드</b>는 버퍼가 말라 마지막 자세를 붙든 프레임 비율이다. 높으면 늘어짐이 아니라 " +
+             "<b>멈췄다 튀는</b> 모양으로 보인다.\n\n" +
+             "<b>NPC와 같은 판에서 비교하는 것이 요점이다</b> — NPC는 서버→전원 1홉, 플레이어는 " +
+             "오너→서버→전원 2홉이다. 두 줄의 평균간격이 갈리면 그 홉이 범인이다.\n\n" +
+             "확정되면 끈다")]
+    [SerializeField] private bool m_logArrival;
+
+    [Tooltip("자세 스트림이 <b>실제로 얼마를 보내는지</b>를 2초 창마다 찍는다 — 시체별 한 줄 + " +
+             "전체 합산 한 줄.\n\n" +
+             "<b>페이로드만 센다</b> — 시퀀스 2B + 골반 월드 12B + 압축 회전 배열(4B + 4B×뼈수). " +
+             "정착·순간이동 패킷은 뼈 길이(4B + 12B×뼈수)가 더 붙는다. NGO 메시지 헤더·배칭·UTP " +
+             "오버헤드는 빠져 있으므로 <b>실제 회선 사용량은 이 값보다 크다</b>(패킷당 수십 바이트).\n\n" +
+             "<b>업링크는 원격 수를 곱한 값이다</b> — 같은 패킷이 피어마다 한 벌씩 나간다. 원격 수를 " +
+             "아는 것은 서버뿐이라(ConnectedClients가 서버 전용) 클라 권위에서는 -1로 찍는다.\n\n" +
+             "예산 손잡이는 위의 <b>송신 주기</b>다 — 4로 올리면 12.5Hz로 절반이 된다.\n\n" +
+             "확정되면 끈다")]
+    [SerializeField] private bool m_logBandwidth;
+    */
 
     [Header("송신")]
     [Tooltip("몇 번의 물리 스텝마다 한 번 보내는가 — 50Hz 기준 2면 25Hz, 4면 12.5Hz.\n\n" +
@@ -105,6 +138,36 @@ public class RagdollPoseStreamer : NetworkBehaviour
     private bool m_streamDriven;
 
     private Quaternion[] m_applyBuffer; // 두 스냅샷을 섞어 담는 자리
+
+    // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
+    //    도착·대역폭 계측 상태. 아래 메서드 블록과 한 쌍이다.
+    /*
+    // ---- 도착 계측 (m_logArrival) — ⚠ 임시 계측, #759가 닫히면 지운다 ----
+    private const float k_arrivalHeartbeatSeconds = 2f;
+
+    // ---- 대역폭 계측 (m_logBandwidth) — ⚠ 임시 계측, 예산이 확정되면 지운다 ----
+    private const float k_bandwidthWindowSeconds = 2f;
+
+    private int m_sentPackets;
+    private int m_sentBytes;
+    private float m_bandwidthWindowStart;
+
+    // 전 시체 합산 — 서버 업링크는 여기에 원격 수가 곱해진다. 시체가 쌓이는 라운드에서
+    // 개별 줄만 보면 총량을 놓치므로 정적으로 함께 센다.
+    private static int s_windowPackets;
+    private static int s_windowBytes;
+    private static int s_windowStreamers;
+    private static float s_windowStart;
+
+    private int m_arrivalCount;
+    private ushort m_arrivalFirstSequence;
+    private float m_arrivalFirstTime;
+    private float m_arrivalLastTime;
+    private float m_arrivalWorstGap;
+    private int m_arrivalStaleDrops;
+    private int m_holdFrames;
+    private int m_applyFrames;
+    */
 
     // ---- 국면 추적 ----
     //
@@ -274,6 +337,9 @@ public class RagdollPoseStreamer : NetworkBehaviour
 
         m_sequence = unchecked((ushort)(m_sequence + 1));
         FinalPoseRpc(m_sequence, m_rig.Hips.position, Pack(m_sendBuffer), m_lengthBuffer);
+
+        // CountSent(StreamPayloadBytes + LengthPayloadBytes);
+        // DumpBandwidth("스트림종료"); // 창이 닫히기 전에 끝났다 — 남은 값으로 마감한다
     }
 
     /// <summary>
@@ -314,6 +380,8 @@ public class RagdollPoseStreamer : NetworkBehaviour
 
         m_sequence = unchecked((ushort)(m_sequence + 1));
         TeleportPoseRpc(m_sequence, m_rig.Hips.position, Pack(m_sendBuffer), m_lengthBuffer);
+
+        // CountSent(StreamPayloadBytes + LengthPayloadBytes);
     }
 
     public void StopStreaming()
@@ -326,6 +394,8 @@ public class RagdollPoseStreamer : NetworkBehaviour
         m_snapshotCount = 0;
         m_haveSequence = false;
         m_streamEnded = true; // 늦게 온 스냅샷이 기상 자세를 덮지 못하게
+
+        // DumpArrivalTrace("이탈"); // 정착 패킷 없이 끝난 국면 — 받은 만큼으로 마감한다
     }
 
     // 캡처는 <b>FixedUpdate</b>다 — 물리가 진실인 자리에서 떠야 스텝 사이 보간값이 섞이지 않는다.
@@ -356,6 +426,8 @@ public class RagdollPoseStreamer : NetworkBehaviour
 
         m_sequence = unchecked((ushort)(m_sequence + 1));
         StreamPoseRpc(m_sequence, m_rig.Hips.position, Pack(m_sendBuffer));
+
+        // CountSent(StreamPayloadBytes);
 
     }
 
@@ -494,7 +566,10 @@ public class RagdollPoseStreamer : NetworkBehaviour
         // ⚠ 옛 패킷을 버린다. 언리라이어블은 순서를 보장하지 않으므로, 이 검사가 없으면 시체가
         // 이따금 한 스냅샷 뒤로 튄다.
         if (m_haveSequence && !IsNewer(sequence, m_newestSequence))
+        {
+            // m_arrivalStaleDrops++;
             return;
+        }
 
         m_newestSequence = sequence;
         m_haveSequence = true;
@@ -508,6 +583,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
         if (lengths != null && lengths.Length == m_rig.BoneCount)
             m_rig.ApplyBoneLengths(lengths);
 
+        // TickArrivalTrace(sequence);
         PushSnapshot(hipsWorld, Unpack(packed));
 
         if (!terminal)
@@ -517,6 +593,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
         // <see cref="TickApply"/>가 마지막 스냅샷을 붙들고, 그 한 줄이 원격의 몸을 루트에서
         // 떼어 놓는다(루트가 흔들려도 몸은 스트림이 놓은 자리에 있는다).
         m_expectingStream = false;
+        // DumpArrivalTrace("정착");
         OnSettledPoseReceived?.Invoke();
     }
 
@@ -588,6 +665,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
         if (m_snapshotCount == 0)
             return;
 
+        // m_applyFrames++;
         float renderTime = Time.time - m_interpolationDelay;
 
         // 재생 시점이 가장 오래된 스냅샷보다 앞이면(=버퍼가 아직 안 찼다) 그것을 그대로 쓴다.
@@ -613,6 +691,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
 
         // 재생 시점이 가장 새 스냅샷보다 뒤다 — 패킷이 늦거나 끊겼다. <b>외삽하지 않고 붙든다.</b>
         // 시체가 잠깐 멈춰 보이는 편이 없는 데이터로 지어낸 자세보다 낫고, 정착 패킷이 곧 온다.
+        // m_holdFrames++;
         ApplySnapshot(m_snapshots[m_snapshotCount - 1]);
     }
 
@@ -641,6 +720,149 @@ public class RagdollPoseStreamer : NetworkBehaviour
         m_rig.ApplyLocalPose(rotations, hips.localPosition);
         hips.position = hipsWorld;
     }
+
+    // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
+    //    [자세도착] / [래그돌대역폭] 본체. 호출부 일곱 곳도 같이 막혀 있다.
+    /*
+    // ---- 도착 계측 (m_logArrival) — ⚠ 임시 계측, #759가 닫히면 지운다 ----
+    //
+    // 재는 것은 하나다: <b>보낸 주기대로 도착했는가.</b> 스냅샷 시각이 로컬 수신 시각이므로
+    // (TickApply 주석) 도착 간격이 늘어진 만큼 재생도 늘어지고, 그것이 화면의 슬로모션이다.
+
+    // 첫 패킷이 국면을 연다 — 마감(<see cref="DumpArrivalTrace"/>)이 개수를 0으로 되돌리므로
+    // 밧줄 견인으로 스트림이 재개되면 그 구간이 <b>독립된 한 국면</b>으로 잡힌다.
+    private void TickArrivalTrace(ushort sequence)
+    {
+        if (m_arrivalCount == 0)
+        {
+            m_arrivalFirstSequence = sequence;
+            m_arrivalFirstTime = Time.time;
+            m_arrivalWorstGap = 0f;
+            m_arrivalStaleDrops = 0;
+            m_holdFrames = 0;
+            m_applyFrames = 0;
+        }
+        else
+        {
+            m_arrivalWorstGap = Mathf.Max(m_arrivalWorstGap, Time.time - m_arrivalLastTime);
+        }
+
+        m_arrivalLastTime = Time.time;
+        m_arrivalCount++;
+
+        // ⚠ 국면이 끝나야만 찍으면 <b>견인 구간이 로그에 안 남는다</b> — 정착도 이탈도 없이 계속
+        // 흐르기 때문이다. 그래서 창을 넘기면 중간 정산으로 한 줄 남기고 다음 창을 새로 연다.
+        if (Time.time - m_arrivalFirstTime >= k_arrivalHeartbeatSeconds)
+            DumpArrivalTrace("진행중");
+    }
+
+    // 국면당 한 줄. 권위 피어는 보내는 쪽이라 잴 것이 없으므로 건너뛴다.
+    private void DumpArrivalTrace(string reason)
+    {
+        if (!m_logArrival || m_arrivalCount < 2 || IsPoseAuthority)
+        {
+            m_arrivalCount = 0;
+            return;
+        }
+
+        float span = m_arrivalLastTime - m_arrivalFirstTime;
+        float average = span / (m_arrivalCount - 1);
+        float expected = Mathf.Max(1, m_sendEveryFixedSteps) * Time.fixedDeltaTime;
+        float rate = average > 0.0001f ? expected / average : float.NaN;
+
+        // 보낸 개수는 시퀀스 차로 안다 — 랩어라운드를 견디게 부호 없이 뺀다.
+        int sent = unchecked((ushort)(m_newestSequence - m_arrivalFirstSequence)) + 1;
+        int lost = Mathf.Max(0, sent - m_arrivalCount - m_arrivalStaleDrops);
+        float holdRatio = m_applyFrames > 0 ? (float)m_holdFrames / m_applyFrames : 0f;
+
+        Debug.Log(
+            $"[자세도착] 시체#{NetworkObjectId} 오너{OwnerClientId} 나{(NetworkManager != null ? NetworkManager.LocalClientId : 0)} 종료={reason} 패킷={m_arrivalCount}/{sent} 유실={lost} "
+                + $"구식버림={m_arrivalStaleDrops} 기대간격={expected * 1000f:F0}ms "
+                + $"평균간격={average * 1000f:F0}ms 최대간격={m_arrivalWorstGap * 1000f:F0}ms "
+                + $"재생배율={rate:F2}(1.00이 정상) 홀드={holdRatio * 100f:F0}%({m_holdFrames}/{m_applyFrames}f)",
+            this
+        );
+
+        m_arrivalCount = 0;
+    }
+
+    // ---- 대역폭 계측 (m_logBandwidth) ----
+    //
+    // 재는 것은 <b>페이로드</b>다: 시퀀스 2B + 골반 월드 12B + 압축 회전 배열(길이 4B + 4B×뼈수).
+    // 정착·순간이동은 뼈 길이 배열(4B + 12B×뼈수)이 더 붙는다. NGO 헤더·배칭은 빠져 있다.
+
+    private int StreamPayloadBytes => 2 + 12 + 4 + (4 * m_rig.BoneCount);
+
+    private int LengthPayloadBytes => 4 + (12 * m_rig.BoneCount);
+
+    private void CountSent(int bytes)
+    {
+        if (!m_logBandwidth)
+            return;
+
+        if (m_sentPackets == 0)
+            m_bandwidthWindowStart = Time.time;
+
+        m_sentPackets++;
+        m_sentBytes += bytes;
+
+        if (s_windowPackets == 0)
+        {
+            s_windowStart = Time.time;
+            s_windowStreamers = 0;
+        }
+
+        s_windowPackets++;
+        s_windowBytes += bytes;
+
+        if (Time.time - m_bandwidthWindowStart >= k_bandwidthWindowSeconds)
+            DumpBandwidth("창");
+    }
+
+    // 창 하나를 마감한다 — 시체별 한 줄, 그리고 <b>전체 합산</b>은 창이 다 찼을 때 한 번만.
+    private void DumpBandwidth(string reason)
+    {
+        if (!m_logBandwidth || m_sentPackets == 0)
+            return;
+
+        float span = Mathf.Max(0.0001f, Time.time - m_bandwidthWindowStart);
+        int remotes = IsServer && NetworkManager != null
+            ? Mathf.Max(0, NetworkManager.ConnectedClients.Count - 1)
+            : -1;
+
+        float perSecond = m_sentBytes / span;
+        string uplink = remotes >= 0
+            ? $"{perSecond * remotes / 1024f:F1}KB/s"
+            : "모름(클라 권위)";
+
+        Debug.Log(
+            $"[래그돌대역폭] 시체#{NetworkObjectId} 종료={reason} 창={span:F1}s "
+                + $"패킷={m_sentPackets}({m_sentPackets / span:F1}Hz) 페이로드={StreamPayloadBytes}B "
+                + $"뼈={m_rig.BoneCount} 초당={perSecond / 1024f:F1}KB/s 원격={remotes} 업링크={uplink}",
+            this
+        );
+
+        s_windowStreamers++;
+        m_sentPackets = 0;
+        m_sentBytes = 0;
+
+        // 합산은 창이 찬 뒤에만 — 중간에 끝난 시체 하나 때문에 총량을 잘라 찍지 않는다.
+        float totalSpan = Time.time - s_windowStart;
+        if (totalSpan < k_bandwidthWindowSeconds)
+            return;
+
+        float totalPerSecond = s_windowBytes / Mathf.Max(0.0001f, totalSpan);
+        Debug.Log(
+            $"[래그돌대역폭 합계] 창={totalSpan:F1}s 스트리밍={s_windowStreamers}구 "
+                + $"패킷={s_windowPackets} 초당={totalPerSecond / 1024f:F1}KB/s 원격={remotes} "
+                + $"업링크={(remotes >= 0 ? $"{totalPerSecond * remotes / 1024f:F1}KB/s" : "모름")}"
+        );
+
+        s_windowPackets = 0;
+        s_windowBytes = 0;
+        s_windowStreamers = 0;
+    }
+    */
 
     // ushort 랩어라운드를 견디는 "더 새것인가" 판정 — 차이를 부호 없는 반바퀴로 읽는다.
     private static bool IsNewer(ushort candidate, ushort current)

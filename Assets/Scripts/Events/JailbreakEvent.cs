@@ -144,7 +144,10 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         // E였는데, 안 누르면 이 조건이 false로 굳어 <b>그 라운드 내내 재발동하지 않았다</b> — 열어 둘수록
         // 이득이 되는 구조였다. 이제 복구는 JailLock의 자동 재잠금이 하고, 연속 발동 억제는 추첨 주기
         // (SuddenEventManager)가 맡는다.
-        if (m_jailZone.InmateCount <= 0)
+        //
+        // Inmates(산 수감자)로 본다 — InmateCount는 표지판 총원이라 시체만 있어도 0을 넘어, 시체는
+        // 달아날 수 없는데 침입이 발동하는 사고가 난다.
+        if (m_jailZone.Inmates.Count <= 0)
             return false;
 
         return true;
@@ -235,7 +238,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (!m_unlockAnnounced
             && m_intruder.CurrentState == NpcState.Intruding
             && m_jailZone != null
-            && m_jailZone.InmateCount <= 0)
+            && m_jailZone.Inmates.Count <= 0)
         {
             Debug.Log("[돌발이벤트] 범인 탈출 — 유치장이 비어 침입 포기");
             m_intruder.Reaction.StartFlee(null);

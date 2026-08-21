@@ -72,6 +72,9 @@ public class JailZone : NetworkedManagerBase
     // 이미 수용된 NPC — 중복 카운트 방어(같은 대상이 두 번 판정·통보되거나 재수용되는 경우)
     private readonly HashSet<NpcController> m_inmates = new HashSet<NpcController>();
 
+    // 방 안의 시체 — m_inmates와 분리한다: 탈옥 발동 판정은 산 수감자만 봐야 하지만, 표지판 총원(InmateCount)에는 잡혀야 한다.
+    private readonly HashSet<NpcController> m_corpses = new HashSet<NpcController>();
+
     // 수감자별 정산 레코드 — 보상액(bounty)과 진범 여부를 수감 시점(NPC 생존 확정)에 박제한다. 라운드 종료 시
     // 잔류 정리(MisdemeanorLoiterer)로 NPC가 파괴돼도 살아 있는 참조 없이 합산할 수 있어, 파괴 타이밍과
     // 정산 읽는 프레임의 경합으로 돌발이벤트 수감자가 누락되던 문제를 없앤다. 탈옥 방출 시 함께 제거되므로
@@ -102,10 +105,10 @@ public class JailZone : NetworkedManagerBase
     // 정원 초과분을 나눠 세울 커서 — 지점이 전부 찼을 때만 쓴다 (아래 ReservePlacement)
     private int m_overflowCursor;
 
-    /// <summary>현재 수용 인원. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 읽을 수 있다.</summary>
+    /// <summary>현재 수용 인원(산 수감자 + 시체) — 표지판이 보여주는 총원. 탈옥 발동 판정에는 쓰지 말 것, 그건 <see cref="Inmates"/>를 볼 것.</summary>
     public int InmateCount => IsSpawned ? m_inmateCount.Value : m_localInmateCount;
 
-    /// <summary>현재 수감자 — 범인 탈출 이벤트(#231)가 방출 대상을 고르려고 읽는다. 서버에서만 유효.</summary>
+    /// <summary>현재 수감자(산 사람만) — 범인 탈출 이벤트가 방출 대상·발동 전제로 읽는다. 서버에서만 유효.</summary>
     public IReadOnlyCollection<NpcController> Inmates => m_inmates;
 
     /// <summary>
@@ -406,7 +409,7 @@ public class JailZone : NetworkedManagerBase
 
         // 진범 여부를 수감 시점에 판정해 박제한다 — 정산 때 살아 있는 NPC를 다시 안 봐도 되게 (#358).
         m_records[npc] = new InmateRecord(bounty, IsCriminalInmate(npc), deliverers ?? Array.Empty<ulong>()); // 방출을 거친 재수용 시 최신 값으로 갱신
-        SetInmateCount(m_inmates.Count);
+        RefreshInmateCount();
         RefreshBountyTotal();
         Debug.Log($"[유치장] 수용: {npc.name} — 현재 {InmateCount}명, 누적 현상금 {BountyTotal}원");
 
@@ -421,15 +424,8 @@ public class JailZone : NetworkedManagerBase
     }
 
     /// <summary>
-    /// 수감 중 사망 — <b>점유에서만 뺀다.</b> 원장(<c>m_records</c>)은 그대로 남겨 정산에 계상된다.
-    ///
-    /// <see cref="RecordDeceased"/>가 배달된 시체에 적용한 "시체는 수감자가 아니다"를 <b>사망 시점</b>에도
-    /// 같게 적용하는 것이다. 점유에 남겨 두면 유치장 표지판이 시체를 한 수로 세고,
-    /// <c>JailbreakEvent</c>가 "풀어 줄 수감자가 있다"고 오판해 시체를 방출하려 든다 —
-    /// 사망은 종착 상태라(<c>NpcStateMachine</c>) 도주 전이가 거부되고 자물쇠만 열린 채 끝난다.
-    ///
-    /// <see cref="ReleaseInmate"/>와 갈리는 점이 원장이다: 저쪽은 탈옥해 <b>빠져나간</b> 대상이라
-    /// 레코드를 지우지만(보상 없음), 시체는 방 안에 그대로 있으니 계상은 유지된다.
+    /// 수감 중 사망 — 탈출 가능 점유(<c>m_inmates</c>)에서는 빼지만(탈옥이 시체를 방출 대상으로
+    /// 오판하면 안 된다), 몸은 <c>m_corpses</c>로 옮겨 표지판 총원에는 그대로 남는다. 원장은 그대로다.
     /// </summary>
     private void HandleInmateDied(NpcController npc, GameObject killer)
     {
@@ -439,35 +435,24 @@ public class JailZone : NetworkedManagerBase
         npc.Death.OnDied -= HandleInmateDied;
 
         if (!m_inmates.Remove(npc))
-            return; // 이미 방출된 뒤에 죽었다 — 점유에서 뺄 것이 없다
+            return; // 이미 방출된 뒤에 죽었다
 
-        ReleasePlacement(npc); // 서 있던 자리를 비운다 — 몸은 남지만 다음 수감자가 그 자리를 쓴다
-        SetInmateCount(m_inmates.Count);
+        ReleasePlacement(npc);
+        m_corpses.Add(npc);
+        RefreshInmateCount();
         Debug.Log($"[유치장] 수감 중 사망: {npc.name} — 현재 {InmateCount}명 (정산 계상은 유지)");
     }
 
     /// <summary>
-    /// 사망 계상 — 시체를 <b>정산 원장에만</b> 올린다. 서버(또는 오프라인) 전용. (#571)
-    /// 부르는 곳은 시체 수감(<c>JailIntake.ServerAdmitCorpse</c>) 하나다 — 유치장 문 앞까지 끌고 와
-    /// 수감 버튼을 눌러야 여기 온다.
+    /// 사망 계상 — 시체를 정산 원장에 올린다. 서버(또는 오프라인) 전용. (#571)
+    /// 부르는 곳은 시체 수감(<c>JailIntake.ServerAdmitCorpse</c>) 하나다.
     ///
-    /// <b><see cref="Admit"/>과 갈리는 점은 점유다.</b> 저쪽은 <c>m_inmates</c>에도 넣어
-    /// <see cref="InmateCount"/>를 올리지만, 시체는 <b>수감자가 아니다</b>. 몸은 방 안에 있어도
-    /// 점유까지 올리면 유치장 표지판이 산 사람과 시체를 한 수로 세고, 탈옥 이벤트가 "풀어 줄 수감자가
-    /// 있다"고 오판한다 (<c>JailbreakEvent</c>의 발동 전제와 진행 중 포기 판정이 둘 다
-    /// <see cref="InmateCount"/>를 본다).
-    ///
-    /// 원장(<c>m_records</c>)만으로 정산이 되는 것은 <see cref="TallySettlement"/>·
-    /// <see cref="TallyDelivererCredits"/>가 점유가 아니라 레코드를 훑기 때문이다 — "NPC 오브젝트가
-    /// 이미 파괴됐어도 계상된다"(#358)는 성질을 그대로 물려받는다.
-    ///
-    /// <b>탈옥으로는 빠져나가지 않는다.</b> 레코드를 지우는 <see cref="ReleaseInmate"/>는
-    /// <c>m_inmates</c> 제거에 성공해야 진행하는데 시체는 애초에 거기 없다 — 시체가 스스로 달아날 수
-    /// 없으니 그게 맞다. 다만 <b>플레이어가 들고 나가는 것은 별개다</b>: 밧줄에 걸린 시체는 문으로
-    /// 함께 끌려 나오므로(#597) 그 경로만 <see cref="ReleaseDeceased"/>로 계상을 취소한다.
+    /// <c>m_inmates</c>(탈출 가능 점유)에는 넣지 않는다 — 시체는 탈옥으로 달아날 수 없어 그 목록에
+    /// 섞이면 <c>JailbreakEvent</c>가 오판한다. 대신 <c>m_corpses</c>에 올려 표지판 총원
+    /// (<see cref="InmateCount"/>)에는 잡히게 한다.
     /// </summary>
-    /// <param name="bounty">이 시체가 정산에 기여할 보상액 — <c>ArrestJudge</c>가 확정해 넘긴다.</param>
-    /// <param name="deliverers">공을 나눠 가질 clientId — 시체를 끌고 와 넣은 사람들. 없으면 빈 배열.</param>
+    /// <param name="bounty">이 시체가 정산에 기여할 보상액.</param>
+    /// <param name="deliverers">공을 나눠 가질 clientId — 없으면 빈 배열.</param>
     public void RecordDeceased(NpcController npc, int bounty, ulong[] deliverers)
     {
         if (npc == null)
@@ -477,13 +462,15 @@ public class JailZone : NetworkedManagerBase
             return;
 
         if (m_records.ContainsKey(npc))
-            return; // 이미 계상됨 — 산 채로 수감됐다가 죽는 경로는 없지만(수감 중엔 피해가 안 들어간다) 멱등으로 둔다
+            return; // 이미 계상됨
 
         m_records[npc] = new InmateRecord(bounty, IsCriminalInmate(npc), deliverers ?? Array.Empty<ulong>());
-        RefreshBountyTotal(); // 라운드 진행도(RoundManager.CurrentFund)가 곧 이 값이다
-        Debug.Log($"[유치장] 사망 계상: {npc.name} — 현상금 {bounty}원, 누적 {BountyTotal}원");
+        m_corpses.Add(npc);
+        RefreshInmateCount();
+        RefreshBountyTotal();
+        Debug.Log($"[유치장] 사망 계상: {npc.name} — 현상금 {bounty}원, 누적 {BountyTotal}원, 수용 인원 {InmateCount}명");
 
-        OnDeceasedRecorded?.Invoke(npc); // 계상이 끝난 뒤에 알린다 (OnInmateAdmitted와 같은 순서)
+        OnDeceasedRecorded?.Invoke(npc);
     }
 
     /// <summary>
@@ -520,14 +507,17 @@ public class JailZone : NetworkedManagerBase
             return false;
         }
 
+        m_corpses.Remove(npc); // 몸이 문 밖으로 나갔다 — 표지판 총원에서도 뺀다
+        RefreshInmateCount();
         RefreshBountyTotal();
-        Debug.Log($"[유치장] 사망 계상 취소: {npc.name} — 감옥 밖으로 나갔다, 누적 현상금 {BountyTotal}원");
+        Debug.Log($"[유치장] 사망 계상 취소: {npc.name} — 감옥 밖으로 나갔다, 누적 현상금 {BountyTotal}원, 수용 인원 {InmateCount}명");
         return true;
     }
 
     /// <summary>시체가 계상된 순간 — 서버(또는 오프라인) 전용. 비밀 청탁이 대상 추첨에 쓴다. (#597)
-    /// <see cref="OnInmateAdmitted"/>와 갈라 두는 이유: 시체는 수감자가 아니라(점유·탈옥·표지판이
-    /// 전부 산 사람만 센다) 한 이벤트로 묶으면 구독하는 쪽이 시체를 한 수로 세게 된다.</summary>
+    /// <see cref="OnInmateAdmitted"/>와 갈라 두는 이유: 시체는 탈출 가능한 수감자가 아니라(점유·탈옥이
+    /// 산 사람만 센다) 한 이벤트로 묶으면 구독하는 쪽이 시체를 탈옥 대상으로 오인하게 된다.
+    /// 표지판 총원(<see cref="InmateCount"/>)에는 산 사람과 마찬가지로 잡힌다.</summary>
     public event Action<NpcController> OnDeceasedRecorded;
 
     /// <summary>
@@ -566,7 +556,7 @@ public class JailZone : NetworkedManagerBase
 
         m_records.Remove(npc); // 방출된 수감자는 정산에서 빠진다 — 탈옥해 감옥에 없으면 보상 없음 (#340)
         ReleasePlacement(npc); // 서 있던 자리를 비운다 — 다음 수감자가 그 자리를 쓸 수 있게 (#462/#537)
-        SetInmateCount(m_inmates.Count);
+        RefreshInmateCount();
         RefreshBountyTotal();
         Debug.Log($"[유치장] 수용 해제: {npc.name} — 현재 {InmateCount}명, 누적 현상금 {BountyTotal}원");
     }
@@ -576,8 +566,8 @@ public class JailZone : NetworkedManagerBase
     /// 진범 여부는 수감(또는 사망 계상) 시점의 <see cref="CitizenIdentity.IsCriminal"/>로 박제된 값이다.
     /// 서버(또는 오프라인) 전용.
     ///
-    /// <b>'점유 기반'이 아니라 '원장 기반'이다</b> (#571) — 죽은 대상은 유치장에 들어오지 않고
-    /// 레코드에만 오르므로(<see cref="RecordDeceased"/>) 여기 합계가 <see cref="InmateCount"/>보다 클 수 있다.
+    /// <b>'점유 기반'이 아니라 '원장 기반'이다</b> (#571) — 탈옥 방출된 대상은 점유·원장에서 함께
+    /// 빠지므로, 여기 합계는 <see cref="InmateCount"/>(산 수감자 + 시체)와 항상 일치한다.
     /// </summary>
     public (int criminals, int misdemeanors, int total) TallySettlement()
     {
@@ -642,6 +632,9 @@ public class JailZone : NetworkedManagerBase
         else if (!IsSpawned)
             OnBountyTotalChanged?.Invoke(total);
     }
+
+    // 산 수감자 + 시체 합으로 총원을 다시 잰다 — m_inmates/m_corpses가 바뀌는 모든 지점에서 호출한다.
+    private void RefreshInmateCount() => SetInmateCount(m_inmates.Count + m_corpses.Count);
 
     // 서버 진실값과 동기화 변수에 함께 기록한다 — 오프라인에서는 NetworkVariable에 쓰지 않고
     // 이벤트를 직접 발행한다 (NpcController.HandleFsmStateChanged와 동일 구조)

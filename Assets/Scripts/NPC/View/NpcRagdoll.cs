@@ -143,6 +143,29 @@ public class NpcRagdoll : MonoBehaviour
             m_streamer.OnSettledPoseReceived -= HandleSettledPoseReceived;
     }
 
+    // ---- 매 물리 스텝 ----
+
+    /// <summary>
+    /// 루트 추종은 <b>물리 스텝에 묶는다 — 프레임이 아니다.</b> (#759 — 플레이어와 같은 원인·같은 수정)
+    ///
+    /// ⚠ <b>이것이 슬로모션의 원인이었다.</b> <see cref="TickRootFollow"/>는 루트를 옮긴 뒤 뼈
+    /// 리지드바디의 트랜스폼에 월드 자세를 되쓰는데, 그 대입이 "렌더 전용"이 아니다 — 다음 스텝
+    /// 직전에 PhysX로 flush되고 동적 바디에는 텔레포트로 먹는다. <c>Update</c>에 두면 프레임마다
+    /// 솔버 상태가 무효화되는데 물리는 50Hz라, 호스트가 50fps를 넘는 만큼 관절 오차가 쌓인다.
+    /// 근거와 실측은 <c>docs/759-ragdoll-slowmotion-handoff.md</c> §2.
+    ///
+    /// <b>정착한 몸은 건너뛴다</b> — 레이캐스트도 자세 캡처도 하지 않는다. 잠든 몸은 루트가 다시
+    /// 따라갈 곳이 없고, 시체가 쌓이는 라운드에서 이 생략이 스텝당 비용을 시체 수에 비례하지
+    /// 않게 만든다.
+    /// </summary>
+    private void FixedUpdate()
+    {
+        if (m_state != RagdollState.Ragdoll || !HasMoveAuthority || m_settled)
+            return;
+
+        TickRootFollow();
+    }
+
     // ---- 매 프레임 ----
 
     private void Update()
@@ -158,10 +181,6 @@ public class NpcRagdoll : MonoBehaviour
 
         // 잠든 뒤에는 <b>깨어났는지만</b> 본다. 밟히거나 폭발에 밀리면 PhysX가 스스로 깨우므로
         // 이 한 줄이 그 모든 경로를 받는다 — 깨우는 쪽마다 알림을 심을 필요가 없다.
-        //
-        // 레이캐스트도 자세 캡처도 하지 않는다(<see cref="TickRootFollow"/>를 건너뛴다) — 잠든 몸은
-        // 움직이지 않으니 루트가 다시 따라갈 곳이 없고, 시체가 쌓이는 라운드에서 이 생략이
-        // 프레임당 비용을 시체 수에 비례하지 않게 만든다.
         if (m_settled)
         {
             if (!m_rig.AllAsleep)
@@ -169,8 +188,6 @@ public class NpcRagdoll : MonoBehaviour
 
             return;
         }
-
-        TickRootFollow();
 
         // 끌리는 동안에는 재우지 않는다 — 끌리는 몸은 계속 움직이니 어차피 안 잠들지만,
         // 타임아웃까지 흐르면 끌고 가는 중에 Sleep()이 걸린다. 놓는 순간부터 다시 재야 하므로
@@ -250,7 +267,10 @@ public class NpcRagdoll : MonoBehaviour
             return;
 
         // ⚠ 루트를 옮기기 전에 뼈를 잡아 두고 옮긴 뒤 되돌린다 — 안 감싸면 진입 프레임에 몸 전체가
-        // 골반 높이(약 0.9m)만큼 떠서 한 프레임 그려진다. 이 대입은 렌더 전용이다.
+        // 골반 높이(약 0.9m)만큼 떠서 한 프레임 그려진다.
+        //
+        // ⚠ <b>이 대입은 "렌더 전용"이 아니다</b> — 다음 스텝 직전에 PhysX로 flush되고 동적 바디에는
+        // 텔레포트로 먹는다. 그래서 이 함수는 <c>FixedUpdate</c>에서만 돈다 (#759 — 위 주석 참고).
         m_rig.CapturePose();
 
         Vector3 target = m_rig.Hips.position;

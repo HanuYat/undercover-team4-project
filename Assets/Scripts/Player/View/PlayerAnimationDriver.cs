@@ -51,10 +51,6 @@ public class PlayerAnimationDriver : MonoBehaviour
     private static readonly int s_attackHash = Animator.StringToHash("Attack"); // 타격 상체 레이어 트리거 (#217)
     private static readonly int s_revivingHash = Animator.StringToHash("Reviving"); // 구조 채널링 모션 (#725)
 
-    // 기상 모션을 건너뛰고 곧장 세울 때 찍는 상태 (#371 후속) — 아래 스냅 참고.
-    // Base Layer의 기본 상태 이름과 같아야 한다(Player.controller).
-    private static readonly int s_locomotionHash = Animator.StringToHash("Locomotion");
-
     [SerializeField]
     private Animator m_animator;
 
@@ -63,9 +59,6 @@ public class PlayerAnimationDriver : MonoBehaviour
 
     [SerializeField]
     private float m_damping = 0.1f; // 전환 부드럽게
-
-    // 직전 프레임의 쓰러짐 여부 — 일어서는 '순간'을 잡아 기상 모션을 건너뛸지 정한다 (#371 후속)
-    private bool m_wasProne;
 
     private PlayerIncapacitation m_incapacitation; // 다운 애니메이션 구동용 (#105)
     private PlayerCrouch m_crouch; // 앉기 애니메이션 구동용 (#236)
@@ -132,7 +125,7 @@ public class PlayerAnimationDriver : MonoBehaviour
         // 구동하므로 원격 뷰도 동일하게 재생된다.
         //
         // 원인(다운·매달기·기절)을 가리지 않고 같은 Knockdown 모션을 쓴다 — 대부분의 무력화는 곧 쓰러진 자세다.
-        // 예외는 외곽 린치 하나뿐이고(서서 맞는다, #371 후속), 그 판정은 IsProne이 쥔다.
+        // 판정은 IsProne이 쥔다 — 세 곳이 같은 값을 봐야 한다 (#775).
         // 여기서 IsIncapacitated로 되돌리지 말 것 — 카메라 높이·몸 회전 잠금이 같은 IsProne을 보므로
         // 한쪽만 바꾸면 몸은 서 있는데 카메라는 바닥에 있는 어긋남이 난다 (#252에서 밟은 함정).
         if (m_incapacitation != null)
@@ -147,21 +140,6 @@ public class PlayerAnimationDriver : MonoBehaviour
             bool prone =
                 m_incapacitation.IsProne || (m_ragdoll != null && m_ragdoll.IsRagdollActive);
             m_animator.SetBool(s_downHash, prone);
-
-            // 린치로 세워지는 순간만 <b>기상 모션을 건너뛰고</b> 곧장 선다.
-            //
-            // Down을 내리면 컨트롤러가 Knockdown_Ground → Knockdown_StandUp(1.17초 클립)을 태우는데,
-            // 그 1초는 "납치범이 끌어 세운다"가 아니라 "스스로 천천히 일어난다"로 보이고 그동안 이미
-            // 맞고 있다. 전이 자체를 손대지 않는 이유는 그 기상 모션이 <b>일반 구조(#105)에는 맞기</b>
-            // 때문이다 — 컨트롤러를 고치면 두 상황이 같이 바뀐다. 그래서 이 경우만 상태를 직접 찍는다.
-            //
-            // Play는 블렌드 없이 잘라 붙인다(그게 "쫙 세우는" 느낌의 정체다). 다시 눕지 않는 이유는
-            // Locomotion에서 나가는 전이가 전부 조건부(Down/Crouch/Airborne)인데 그중 어느 것도 켜져
-            // 있지 않기 때문이다. 모든 피어가 같은 동기화값을 폴링하므로 원격 화면에서도 함께 선다.
-            if (m_wasProne && !prone && m_incapacitation.Cause == IncapacitationCause.Lynched)
-                m_animator.Play(s_locomotionHash, 0, 0f);
-
-            m_wasProne = prone;
         }
 
         // 앉기도 같은 방식 — 서버 권위 동기화값을 폴링해 Crouch 상태(Crouch Idle/Walk 블렌드 트리)를 구동한다. (#236)

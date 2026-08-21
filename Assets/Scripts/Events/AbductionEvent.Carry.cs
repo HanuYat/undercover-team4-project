@@ -3,21 +3,21 @@ using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
-/// AbductionEvent의 <b>포획 이후</b> 파트 (#371) — 접수·호송·방치·구조를 든다.
+/// AbductionEvent의 <b>포획 이후</b> 파트 (#371) — 접수·호송·결말·구조를 든다.
 /// 본체(AbductionEvent.cs)는 발동 조건·스폰·수명을 들고, 이 파일이 그것과 호송을 잇는다 —
 /// partial이므로 상태(m_abductors·m_carryTarget·인스펙터 값)는 그대로 공유한다.
 /// 오검거(WrongfulArrestPenalty + .Carry)와 같은 가름이며, 수렴·대형·끌기 연출 자체는
 /// 두 이벤트가 <see cref="CarryEscortSequence"/>를 함께 쓴다.
 ///
 /// 여기 남은 것은 납치만의 판단이다: 끌려가는 중에도 떼어낼 수 있다는 것(구조),
-/// 목적지가 광장이 아니라 가장 가까운 외곽이라는 것, 그리고 <b>도착이 끝이 아니라</b>
-/// 린치·처형·반출로 이어진다는 것(3단계의 근거는 본체 문서에 있다).
+/// 목적지가 광장이 아니라 가장 가까운 맨홀이라는 것, 그리고 <b>도착이 끝이 아니라</b>
+/// 뚜껑 열림·하강으로 이어진다는 것 (#775).
 /// </summary>
 public partial class AbductionEvent
 {
     // 타격 통보 — <b>구조</b>다. 한 대라도 맞으면 그 납치범은 이 호송에서 떨어진다 (#371).
     // 체력을 다 깎을 필요는 없다: 여기서 요구하는 것은 "떼어냈다"이지 "제압했다"가 아니고,
-    // 진압봉 3대(0.9초 쿨다운)를 요구하면 이미 외곽에 도착해 있다. 제압·검거는 그 다음 선택지다.
+    // 진압봉 3대(0.9초 쿨다운)를 요구하면 이미 맨홀에 도착해 있다. 제압·검거는 그 다음 선택지다.
     //
     // 데미지 소스를 가리지 않는다 — 폭발(BombDevice)에 휘말려 놓치는 것도, 동료가 오사(#461)로 맞춘
     // 것도 같은 결말이면 맞는다. 그래서 attacker는 보지 않는다(가해자를 가리면 "누가 구했나"를 따지는
@@ -30,7 +30,7 @@ public partial class AbductionEvent
     // 무력화 통보 — 타격과 <b>같은 격퇴</b>다 (#554). 테이저 한 발이면 그 납치범은 이 호송에서 떨어진다.
     // 데미지에만 물려 있던 것을 넓힌 이유는 역할 분담이다: 체력 깎기는 진압봉, 즉시 무력화는 테이저인데
     // (#446) 격퇴가 타격 전용이면 "즉시 무력화" 담당이 정작 동료가 끌려가는 상황에서만 쓸모가 없다.
-    // 테이저는 상태 게이트(CanBeDamaged)를 타지 않으므로 추격·호송·린치 어느 단계에서도 통한다.
+    // 테이저는 상태 게이트(CanBeDamaged)를 타지 않으므로 추격·호송 어느 단계에서도 통한다.
     //
     // 떨어져 나간 납치범은 <b>스턴이 유지된 채</b>다 — 그대로 밧줄로 묶어 검거할 수 있다(팀 확정 2026-08-07).
     // 구조와 검거가 한 동작으로 이어지는 것이 테이저의 값이고, 대가는 쿨다운 5초·사거리 8m다.
@@ -48,9 +48,8 @@ public partial class AbductionEvent
     /// 포획 전: 추격 중 죽음은 납치범이 아직 손대지 못한 시점이라 항상 외부 사인이다. 표적 오브젝트는
     /// 파괴되지 않으니 <see cref="NpcChaseState"/>가 스스로 못 챙기므로, 60초 상한 전에 여기서 끊는다.
     ///
-    /// 포획 후: 실제 경로는 폭탄이다 — 호송 중 폭발로 HP가 0이 되면 접수 단계 가드만으로는 못 잡아
-    /// 시체가 반출까지 끌려갔다. 린치 중엔 납치 스스로도 사인을 바꾸므로(Lynched→Die) 마지막 가해자로
-    /// (<see cref="m_lastVictimAttacker"/>) 갈라, 납치범 주먹이면 결말을 두고 외부 사인이면 물러난다.
+    /// 포획 후: 실제 경로는 폭탄이다 — 호송 중 폭발로 HP가 0이 되면 접수 단계 가드만으로는 못 잡는다.
+    /// 납치범은 때리지 않으므로(#775) 여기 걸리는 사인은 언제나 외부 사유다 — 가려낼 것이 없다.
     ///
     /// 정적 이벤트라 모든 플레이어의 변경이 들어온다 — 지금 쫓거나 끌고 가는 대상만 본다.
     /// </summary>
@@ -74,63 +73,21 @@ public partial class AbductionEvent
             return;
         }
 
-        if (m_disposing || m_executing)
+        if (m_descending || m_finishing)
             return;
 
         PlayerIncapacitation incap = m_carryTarget.GetComponent<PlayerIncapacitation>();
-        if (incap == null
-            || incap.Cause == IncapacitationCause.Abducted
-            || incap.Cause == IncapacitationCause.Lynched)
+        if (incap == null || incap.Cause == IncapacitationCause.Abducted)
             return; // 우리가 건 무력화 그대로다
 
-        // 린치 중 납치범이 낸 죽음이면 결말을 그대로 집행한다 — 그게 이 이벤트의 결말이다.
-        if (m_lynching && IsOurAbductor(m_lastVictimAttacker))
-            return;
-
-        Debug.Log(
-            $"[납치] {(m_lynching ? "린치" : "호송")} 중단 — {m_carryTarget.name}이 납치 밖의 사유로 쓰러졌다 ({incap.Cause})");
+        Debug.Log($"[납치] 호송 중단 — {m_carryTarget.name}이 납치 밖의 사유로 쓰러졌다 ({incap.Cause})");
 
         // 임무만 해제한다 — 몸은 그 자리에 그대로 둔다(폭탄 사망이면 운반해 부활시킬 몸이다).
-        // 호송·린치 어느 쪽이든 남은 절차가 다음 틱에 "납치범이 남지 않았다"를 보고 스스로 끝내고,
-        // 그 뒤는 FinishRescued가 받는다. 무력화를 여기서 풀지 않는 것도 같은 이유다 — 우리가 건 것이 아니다.
+        // 남은 절차가 다음 틱에 "납치범이 남지 않았다"를 보고 스스로 끝내고, 그 뒤는 FinishRescued가 받는다.
         ReleaseAllAbductors();
     }
 
-    // 이 가해자가 지금 이 호송의 납치범인가 — 린치 결말 판정의 근거. (#554)
-    // 저항 상태가 타격에 자기 gameObject를 실어 보낸다(NpcResistState.TryAttack).
-    private bool IsOurAbductor(GameObject attacker)
-    {
-        if (attacker == null)
-            return false; // 가해자를 모르면(또는 이미 파괴됐으면) 우리 것으로 치지 않는다
-
-        NpcController npc = attacker.GetComponentInParent<NpcController>();
-        return npc != null && m_abductors.Contains(npc);
-    }
-
-    // 피해자의 피격을 지켜본다 — 마지막 가해자만 들고 있으면 결말 판정에 충분하다. (#554)
-    private void TrackVictimDamage(PlayerHealth health)
-    {
-        UntrackVictimDamage();
-
-        m_victimHealth = health;
-        if (m_victimHealth != null)
-            m_victimHealth.OnServerDamaged += HandleVictimDamaged;
-    }
-
-    // 구독 해제 + 기록 초기화. 이벤트가 끝나는 모든 경로가 지나는 Finish가 부른다.
-    private void UntrackVictimDamage()
-    {
-        if (m_victimHealth != null)
-            m_victimHealth.OnServerDamaged -= HandleVictimDamaged;
-
-        m_victimHealth = null;
-        m_lastVictimAttacker = null;
-    }
-
-    private void HandleVictimDamaged(PlayerHealth victim, GameObject attacker) =>
-        m_lastVictimAttacker = attacker;
-
-    // 포획 통보 — 행동불능을 걸고 수렴시킨 뒤 외곽까지 끌고 간다.
+    // 포획 통보 — 행동불능을 걸고 수렴시킨 뒤 맨홀까지 끌고 간다.
     private void HandleAbductionCaught(NpcController catcher, Transform caught)
     {
         if (m_carryTarget != null || caught == null)
@@ -152,9 +109,8 @@ public partial class AbductionEvent
             return;
 
         m_carryTarget = caught;
-        TrackVictimDamage(caught.GetComponent<PlayerHealth>()); // 마지막 가해자를 지켜본다 (#554)
 
-        // 끌려가는 동안 걸어 나가지 못하게. 외곽에 도착하면 방치 시간만큼 더 이어지고, 구조되면 즉시 풀린다
+        // 끌려가는 동안 걸어 나가지 못하게. 맨홀에 도착하면 뚜껑이 열릴 동안 더 이어지고, 구조되면 즉시 풀린다
         if (incap != null)
             incap.Incapacitate(IncapacitationCause.Abducted);
 
@@ -167,21 +123,25 @@ public partial class AbductionEvent
         // 끌려가는 것 자체는 화면에서 보인다. 서버 로그는 남긴다 — 디버깅에는 이 순간이 필요하다.
         Debug.Log($"[납치] 포획 — {catcher.name} → {caught.name}");
 
-        CarryToOutskirtsAsync(caught).Forget();
+        CarryToManholeAsync(caught).Forget();
     }
 
-    // 외곽까지 끌고 가 린치하고, 숨이 끊기면 시체를 맵 밖으로 반출한다. (서버 전용)
+    // 맨홀까지 끌고 가 뚜껑을 열고, 그 아래로 데려간다. (서버 전용)
     // m_carryTarget을 끝에서야 비우는 이유는 그대로다 — 이 사이에 라운드가 끝나면 ServerReset이
     // 그 참조로 무력화를 풀어 준다.
-    private async UniTask CarryToOutskirtsAsync(Transform caught)
+    private async UniTask CarryToManholeAsync(Transform caught)
     {
+        Transform manholePoint = PickNearest(m_outskirtPoints, caught.position);
+        AbductionManhole manhole = manholePoint != null
+            ? manholePoint.GetComponentInChildren<AbductionManhole>()
+            : null;
+
         var settings = new CarryEscortSequence.Settings(
             m_convergeArriveDistance, m_convergeTimeoutSeconds,
             m_carrierGap, m_arriveDistance, m_travelTimeoutSeconds);
 
         bool arrived = await CarryEscortSequence.RunAsync(
-            caught, m_abductors, PickNearest(m_outskirtPoints, caught.position),
-            settings, destroyCancellationToken);
+            caught, m_abductors, manholePoint, settings, destroyCancellationToken);
 
         // 호송이 해체됐다 — 전원 격퇴(구조 성공)이거나 대상 소실. 그 자리에서 즉시 풀려난다.
         if (!arrived)
@@ -192,137 +152,100 @@ public partial class AbductionEvent
         }
 
         // 도착 — RunAsync가 StopCarried로 끌기를 끊었으므로 피해자는 그 자리에 선다.
-        // 무력화(Abducted)는 풀지 않는다: 서 있되 아무것도 못 하는 채로 맞는 것이 이 구간이다.
-        if (!await LynchAsync(caught))
+        // 무력화(Abducted)는 풀지 않는다: 뚜껑이 열리는 동안 서 있되 아무것도 못 한다.
+        if (!await OpenManholeAsync(caught, manhole))
         {
             FinishRescued(caught);
             return;
         }
 
-        await DisposeBodyAsync(caught);
+        // 하강도 실패를 낸다 — 데려갈 사람이 남지 않은 채 여기까지 온 경우다(아래 참고).
+        // 그때는 결말이 아니라 구조로 끝내야 한다: 몸을 풀어 주지 않으면 라운드가 끝날 때까지 굳는다.
+        if (!await DescendAsync(caught, manholePoint, manhole))
+        {
+            FinishRescued(caught);
+            return;
+        }
 
         m_carryTarget = null;
         Finish();
     }
 
     /// <summary>
-    /// 외곽 린치 — 납치범을 저항형으로 돌려 피해자를 구타하고, HP가 0이 되면 기능 정지로 확정한다.
-    /// 반환값: 숨이 끊겼으면 true. 구조(납치범 전멸)·대상 소실로 중단됐으면 false.
+    /// 뚜껑을 열고 기다린다 — <b>이 구간이 마지막 구조 창</b>이다. (#775)
+    /// 반환값: 끝까지 버텼으면 true. 구조(납치범 전멸)·대상 소실로 중단됐으면 false.
     ///
-    /// 구타 자체는 <see cref="NpcResistState"/>가 한다 — 부채꼴 판정·사거리·모션 타이밍이 이미 거기 있고,
-    /// 무력화된 표적을 놓지 않게 하는 예외도 그쪽에 있다. 여기서 보는 것은 "언제 끝나는가"뿐이다.
+    /// 뚜껑은 선택 배선이다 — 없으면 연출만 빠지고 대기는 그대로 돈다. 씬 배선 상태에 결말이 걸리면
+    /// 배선을 빠뜨린 지점으로 끌려간 판이 결말 없이 멈춘다.
     /// </summary>
-    private async UniTask<bool> LynchAsync(Transform caught)
+    private async UniTask<bool> OpenManholeAsync(Transform caught, AbductionManhole manhole)
     {
-        // 여기부터 사인 변경은 마지막 가해자로 갈린다 (#554) — 이 함수도 사인을 바꾸므로(Lynched)
-        // 감시가 그것을 외부 사인으로 오인하지 않게 구간을 표시해 둔다.
-        m_lynching = true;
+        if (manhole != null)
+            manhole.ServerOpen();
 
-        // 무력화 원인을 린치로 바꾼다 — 행동 차단은 그대로 두고 <b>자세만</b> 세운다(PlayerIncapacitation.IsProne).
-        // 이걸 빼면 끌려오던 자세 그대로 바닥에 누운 채 맞는다.
-        PlayerIncapacitation victim = caught != null ? caught.GetComponent<PlayerIncapacitation>() : null;
-        if (victim != null)
-            victim.Incapacitate(IncapacitationCause.Lynched);
+        Debug.Log($"[납치] 맨홀 도착 — 뚜껑 열림 ({m_manholeOpenSeconds:F1}초, 납치범 {m_abductors.Count}명)");
 
-        PruneDead(m_abductors);
-        foreach (NpcController abductor in m_abductors)
-            abductor.Reaction.StartResist(caught);
+        // 마감을 <b>기다린 뒤에</b> 본다 — 조건을 while에 두면 마지막 폴링 이후 마감까지의 틈에서
+        // 떼어낸 것을 못 보고 도착을 성공으로 반환한다. 구조 창은 내려가기 전까지이므로 그 틈도 창이다.
+        float deadline = Time.time + m_manholeOpenSeconds;
 
-        Debug.Log($"[납치] 외곽 도착 — 린치 시작 (납치범 {m_abductors.Count}명)");
-
-        PlayerHealth health = caught != null ? caught.GetComponent<PlayerHealth>() : null;
-        float deadline = Time.time + m_lynchTimeoutSeconds;
-
-        while (Time.time < deadline)
+        while (true)
         {
             await UniTask.Delay(
                 TimeSpan.FromSeconds(0.25), cancellationToken: destroyCancellationToken);
 
-            if (caught == null || health == null)
-                return false; // 접속 종료 등 — 처형할 대상이 없다
-
-            // 숨이 끊겼는지를 납치범 잔존보다 <b>먼저</b> 본다. 순서가 반대면, 마지막 일격으로 HP가
-            // 0이 된 뒤 같은 폴링 구간(0.25초) 안에 그 납치범까지 격퇴됐을 때 '납치범이 남지 않았다'가
-            // 먼저 걸려, 납치가 낸 죽음이 구조 성공으로 기록됐다. 결말은 HP가 0이 되는 순간 이미
-            // 확정된 것이라(구조 창은 그 전에 닫힌다) 뒤늦은 격퇴가 되돌릴 수 있는 것이 아니다.
-            if (health.CurrentHp <= 0)
-                break;
+            if (caught == null)
+                return false; // 접속 종료 등 — 데려갈 대상이 없다
 
             PruneDead(m_abductors);
             if (m_abductors.Count == 0)
             {
-                Debug.Log("[납치] 린치 중단 — 납치범이 남지 않았다 (구조 성공)");
+                Debug.Log("[납치] 맨홀 앞에서 구조 성공 — 납치범이 남지 않았다");
+                if (manhole != null)
+                    manhole.ServerClose();
                 return false;
             }
+
+            if (Time.time >= deadline)
+                return true;
         }
-
-        if (caught == null || health == null)
-            return false;
-
-        // 상한까지 못 죽였다 = 때리지 못하고 있다는 뜻이다(지형에 낀 경우 등). 서 있는 채로 영원히
-        // 맞고 있게 두지 않고 결말을 집행하되, 원인을 놓치지 않게 경고를 남긴다.
-        if (health.CurrentHp > 0)
-            Debug.LogWarning($"[납치] 린치 상한({m_lynchTimeoutSeconds}초) 초과 — 강제로 끝낸다", this);
-
-        // HP 0에는 PlayerHealth가 이미 기능 정지를 걸어 뒀으므로(#524) 보통은 여기서 할 일이 없다.
-        // 그래도 부르는 것은 위의 상한 초과 폴백 때문이다 — HP가 남은 채 끝난 경우엔 여기서만 확정된다.
-        // 구조 창은 HP 0 이전에 닫혔으므로 어느 쪽이든 되돌아갈 길은 없다.
-        // 우리가 내는 죽음이라고 표시한다 (#554) — 이 경로는 HP가 남은 채로 오므로 마지막 가해자가
-        // 납치범이 아닐 수 있고, 그러면 무력화 감시가 외부 사인으로 오인해 결말을 취소한다.
-        PlayerIncapacitation incap = caught.GetComponent<PlayerIncapacitation>();
-        if (incap != null)
-        {
-            m_executing = true;
-            incap.ServerKillByAbduction();
-            m_executing = false;
-        }
-
-        return true;
     }
 
     /// <summary>
-    /// 시체 반출 — 도시 바깥으로 <b>NavMesh를 벗어나</b> 걸어 나간 뒤, 시체와 납치범을 함께 치운다.
+    /// 맨홀 하강 — 피해자와 납치범이 함께 지하로 내려가 사라진다. <b>결말이 확정되는 구간</b>이다. (#775)
     ///
-    /// <b>왜 에이전트를 끄고 직접 미는가.</b> 목적지가 맵 밖이라 애초에 NavMesh가 없다. 처음에는 맵
-    /// 가장자리에 반출 지점을 배선해 <see cref="CarryEscortSequence"/>를 한 번 더 돌리려 했는데,
-    /// 그건 "맵 밖으로 나간다"를 NavMesh 안에서 흉내 내는 것이라 후보 지점마다 경로가 끊겼다
-    /// (바깥쪽 조각이 도로 건너 섬이라 걸어갈 수 없다 — 실측으로 5곳 중 2곳이 그랬다).
-    /// 나가는 것이 목적이면 나가면 된다.
-    ///
-    /// 밧줄 끌기(<see cref="NpcRopeDrag.StartRopeDrag"/>)가 지고 있는 위험 — 에이전트를 껐다 켤 때
-    /// NavMesh 재부착에 실패해 그 자리에 굳는 것 — 은 여기 없다. <b>다시 켜지 않기 때문이다.</b>
+    /// <b>왜 에이전트를 끄고 직접 미는가.</b> 목적지가 지하라 NavMesh가 없다. 밧줄 끌기가 지고 있는
+    /// 위험(재부착 실패로 그 자리에 굳는 것)은 여기 없다 — <b>다시 켜지 않기 때문이다.</b>
     /// 이 이동의 끝은 언제나 소멸이다.
     ///
-    /// 두 가지가 저절로 따라온다:
-    ///  · <b>걷는 모션</b> — <see cref="NpcAnimationDriver"/>가 agent.velocity가 아니라 실제 트랜스폼
-    ///    변위로 속도를 재므로, 에이전트를 꺼도 이동만 하면 로코모션이 맞는다.
-    ///  · <b>시체 추종</b> — PlayerTowedMotion의 호송 추종은 두 앵커의 중점만 보지 NavMesh를 보지 않는다.
+    /// 몸이 따라 내려오는 것은 PlayerTowedMotion이 두 앵커의 중점만 보고 NavMesh를 보지 않기 때문이다.
+    /// 서버가 플레이어 좌표를 직접 밀 수 없으므로(이동 권한은 오너에게 있다) 이 경로가 유일하다.
+    /// CharacterController는 그쪽이 꺼 주므로 지면을 통과한다.
     ///
-    /// 직선으로 나가므로 가장자리 지형을 스칠 수는 있다. 도시 바깥 방향이라 대개 열려 있고,
-    /// 몇 초 뒤 사라지는 구간이라 벽 회피를 붙이지 않았다.
+    /// <b>사망 확정은 다 내려간 뒤다.</b> 먼저 걸면 그 순간 래그돌이 켜지는데, 래그돌이 된 몸은
+    /// 추종을 따라올 수단이 없어(동적 리지드바디는 부모 트랜스폼을 따르지 않는다) 캡슐만 내려가고
+    /// 시체는 인도 위에 남는다.
+    ///
+    /// 반환값: 결말을 냈으면 true. <b>데려갈 사람이 남지 않아 못 냈으면 false</b> — 부르는 쪽이 구조로 끝낸다.
     /// </summary>
-    private async UniTask DisposeBodyAsync(Transform caught)
+    private async UniTask<bool> DescendAsync(
+        Transform caught, Transform manholePoint, AbductionManhole manhole)
     {
-        // 이 지점부터 격퇴는 통하지 않는다 (#554) — 아래에서 프리즈 + 에이전트 off로 들어가므로,
-        // 임무 해제(배회 복귀)가 얹히면 그 상태의 Enter가 꺼진 에이전트에 isStopped를 써 에러가 난다.
-        // 규칙상으로도 맞다: 구조 창은 HP 0 이전까지이고 반출은 결말의 연출이지 판정이 아니다.
-        m_disposing = true;
+        // 이 지점부터 격퇴는 통하지 않는다 — 구조 창은 내려가기 전까지다.
+        m_descending = true;
 
+        // 뚜껑 대기의 마지막 순간에 떼어냈을 수 있다 — 여기서 끝내면 결말도 구조도 아닌 상태로
+        // 무력화가 남는다. false로 물러나 부르는 쪽이 몸을 풀게 한다.
         PruneDead(m_abductors);
         if (caught == null || m_abductors.Count == 0)
         {
+            if (manhole != null)
+                manhole.ServerClose(); // 내려갈 사람이 없다 — 열어 둔 뚜껑만 되돌린다
             DisposeAbductors();
-            return;
+            return false;
         }
 
-        // 도시 중심에서 멀어지는 방향 — 외곽에 서 있는 상태이므로 이게 곧 맵 바깥이다.
-        // 중심은 외곽 지점들의 평균으로 잡는다(도시를 둘러싸게 배치된 데이터라 그 평균이 중심이다).
-        Vector3 away = caught.position - OutskirtCentroid();
-        away.y = 0f;
-        away = away.sqrMagnitude > 0.01f ? away.normalized : Vector3.forward;
-        Quaternion facing = Quaternion.LookRotation(away, Vector3.up);
-
-        // 시체 추종을 다시 건다 — 호송 시퀀스가 도착과 함께 풀어 뒀다(그래서 린치 동안 서 있었다)
+        // 몸을 다시 붙잡는다 — 호송 시퀀스가 도착과 함께 풀어 뒀다(그래서 뚜껑이 열리는 동안 서 있었다)
         PlayerPenaltyView view = caught.GetComponent<PlayerPenaltyView>();
         if (view != null)
         {
@@ -331,9 +254,7 @@ public partial class AbductionEvent
             view.StartCarried(lead, mate);
         }
 
-        // FSM을 먼저 멈춘다 — 납치범은 아직 저항(Attack) 상태라, 안 멈추면 걸어 나가면서 계속 스윙하고
-        // 꺼진 에이전트까지 만진다. 프리즈는 Update 최상단에서 틱을 끊고 에이전트 접근도 가드한다.
-        // 에이전트를 끄기 <b>전에</b> 불러야 isStopped가 정상 경로로 걸린다.
+        // FSM을 먼저 멈춘다 — 에이전트를 끄기 <b>전에</b> 불러야 isStopped가 정상 경로로 걸린다.
         for (int i = 0; i < m_abductors.Count; i++)
             m_abductors[i].SetFrozen(true);
 
@@ -341,55 +262,87 @@ public partial class AbductionEvent
             if (m_abductors[i].Agent != null && m_abductors[i].Agent.enabled)
                 m_abductors[i].Agent.enabled = false;
 
-        Debug.Log($"[납치] 시체 반출 — 맵 밖으로 {m_disposalDistance:F0}m 끌고 나간다");
+        // 입구 위로 모아 세운 뒤 수직으로 내린다 — 서 있던 자리에서 그냥 가라앉으면 땅속으로 꺼지는 그림이 된다
+        if (manholePoint != null)
+        {
+            for (int i = 0; i < m_abductors.Count; i++)
+            {
+                Transform body = m_abductors[i].transform;
+                body.position = new Vector3(
+                    manholePoint.position.x, body.position.y, manholePoint.position.z);
+            }
+        }
 
-        float traveled = 0f;
-        while (traveled < m_disposalDistance)
+        // 피해자 시점을 먼저 지상으로 뺀다 — 1인칭으로 지면을 통과하면 땅속이 화면을 덮는다 (#775).
+        // 사망 확정 전이라 관전 진입 신호는 이 피벗 고정 자체다(PlayerLook이 그것을 본다).
+        if (view != null && manholePoint != null)
+        {
+            view.SetSpectatePivot(manholePoint.position);
+
+            if (m_descendViewLeadSeconds > 0f)
+            {
+                await UniTask.Delay(
+                    TimeSpan.FromSeconds(m_descendViewLeadSeconds),
+                    cancellationToken: destroyCancellationToken);
+            }
+        }
+
+        Debug.Log($"[납치] 맨홀 하강 — {m_descendDepth:F0}m 아래로 내려간다");
+
+        float descended = 0f;
+        while (descended < m_descendDepth)
         {
             await UniTask.Yield(destroyCancellationToken);
 
             PruneDead(m_abductors);
             if (m_abductors.Count == 0)
-                break; // 끌 사람이 남지 않았다 — 시체는 그 자리에 남는다(이미 확정된 결말이라 되돌리지 않는다)
+                break; // 데려갈 사람이 남지 않았다 — 이미 확정된 결말이라 되돌리지 않는다
 
-            float step = m_disposalSpeed * Time.deltaTime;
-            traveled += step;
+            float step = m_descendSpeed * Time.deltaTime;
+            descended += step;
 
             for (int i = 0; i < m_abductors.Count; i++)
-            {
-                Transform body = m_abductors[i].transform;
-                body.SetPositionAndRotation(body.position + away * step, facing);
-            }
+                m_abductors[i].transform.position += Vector3.down * step;
         }
 
-        // 추종을 먼저 끊는다 — 앵커가 파괴된 뒤에 끊으면 오너 클라가 사라진 참조를 한 프레임 따라간다
+        // 다 내려갔으면 뚜껑을 덮는다 — 열린 채로 두면 지나가던 사람이 계속 들여다보는 그림이 된다
+        if (manhole != null)
+            manhole.ServerClose();
+
+        // 다 내려왔다 — 여기서 라운드 아웃을 확정한다(래그돌은 지하에서 켜진다).
+        // 우리가 낸 결말이라고 표시해 무력화 감시가 외부 사인으로 오인하지 않게 한다.
+        // 관전 오빗 중심은 하강 전에 이미 맨홀로 넘겨 뒀다 — 시점이 지상에 남아 있다.
+        PlayerIncapacitation incap = caught != null ? caught.GetComponent<PlayerIncapacitation>() : null;
+        if (incap != null)
+        {
+            m_finishing = true;
+            incap.ServerKillByAbduction();
+
+            // 체력도 0으로 내린다 — 때린 적이 없어 HP가 가득한 채였고, 그러면 화면에 "기능 정지"인데
+            // 체력바는 100인 어긋남이 남는다. Die를 <b>먼저</b> 걸어야 이 0이 다운을 다시 걸지 않는다.
+            PlayerHealth health = caught.GetComponent<PlayerHealth>();
+            if (health != null && health.CurrentHp > 0)
+                health.ModifyHp(-health.CurrentHp);
+
+            m_finishing = false;
+        }
+
+        // 래그돌이 몸을 넘겨받을 틈을 준다 — 추종을 먼저 끊으면 CharacterController가 되살아나
+        // 지면 밖으로 밀려 올라온다(오너 클라에서 사망이 전파되는 데 몇 프레임 걸린다).
+        await UniTask.Delay(
+            TimeSpan.FromSeconds(0.5), cancellationToken: destroyCancellationToken);
+
+        // 추종은 앵커가 파괴되기 전에 끊는다 — 뒤에 끊으면 오너 클라가 사라진 참조를 한 프레임 따라간다
         if (view != null)
             view.StopCarried();
 
-        Debug.Log("[납치] 반출 완료 — 시체와 납치범이 맵 밖으로 사라졌다");
+        Debug.Log("[납치] 하강 완료 — 맨홀 아래로 사라졌다");
         DisposeAbductors();
-    }
-
-    // 외곽 지점들의 평균 = 도시 중심. 반출 방향(중심 → 린치 지점)의 기준이다.
-    // 별도 필드를 두지 않는 이유는 이미 배선된 데이터로 충분하기 때문이다 — 외곽 지점은 도시를
-    // 둘러싸게 놓으므로 그 평균이 곧 중심이고, 지점을 옮기면 중심도 따라 움직인다.
-    private Vector3 OutskirtCentroid()
-    {
-        Vector3 sum = Vector3.zero;
-        int count = 0;
-        for (int i = 0; i < m_outskirtPoints.Length; i++)
-        {
-            if (m_outskirtPoints[i] == null)
-                continue;
-
-            sum += m_outskirtPoints[i].position;
-            count++;
-        }
-
-        return count > 0 ? sum / count : transform.position;
+        return true;
     }
 
     // 구조·소실로 끝났다 — 납치범을 잔류 시민으로 놓아주고 피해자의 납치 무력화를 푼다.
+    // 때린 적이 없으므로 피해자는 <b>멀쩡한 몸으로</b> 풀려난다 (#775).
     // Cause 확인이 가드다: 기능 정지(Die)까지 갔거나 다른 사유로 바뀌었으면 건드리지 않는다.
     private void FinishRescued(Transform caught)
     {
@@ -400,8 +353,7 @@ public partial class AbductionEvent
         m_carryTarget = null;
 
         PlayerIncapacitation incap = caught != null ? caught.GetComponent<PlayerIncapacitation>() : null;
-        if (incap != null
-            && (incap.Cause == IncapacitationCause.Abducted || incap.Cause == IncapacitationCause.Lynched))
+        if (incap != null && incap.Cause == IncapacitationCause.Abducted)
         {
             incap.Recover();
 
@@ -414,7 +366,7 @@ public partial class AbductionEvent
         Finish();
     }
 
-    // 기준점에서 <b>가장 가까운</b> 외곽 지점 — 끌고 갈 린치 장소를 고른다.
+    // 기준점에서 <b>가장 가까운</b> 맨홀 지점 — 끌고 갈 곳을 고른다.
     // 가장 먼 곳을 고르던 초기 방식은 끌려가는 구간이 늘 최대치(맵 횡단 30~55초)가 됐다 —
     // 그 시간은 페널티가 아니라 아무것도 못 하고 보고만 있는 시간이다. 페널티는 결말이 내지 거리가 내지 않는다.
     // 목록이 비었거나 전부 미배선이면 null — 부르는 쪽이 그 경우를 처리한다.
@@ -458,8 +410,8 @@ public partial class AbductionEvent
         if (!HasServerAuthority || abductor == null)
             return;
 
-        if (m_disposing)
-            return; // 반출 구간 — 결말이 확정된 뒤라 떼어낼 것이 없다 (#554)
+        if (m_descending)
+            return; // 하강 구간 — 결말이 확정된 뒤라 떼어낼 것이 없다 (#775)
 
         if (!m_abductors.Contains(abductor))
             return; // 이 이벤트의 납치범이 아니다

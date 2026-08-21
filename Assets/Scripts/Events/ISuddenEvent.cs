@@ -33,6 +33,15 @@ public interface ISuddenEvent
     /// <summary>지금 발생 가능한지 — 선행 조건(예: 현장 플레이어 존재) 검사. 서버(또는 오프라인)에서만 호출된다.</summary>
     bool CanTrigger();
 
+    /// <summary>
+    /// 강제 발동 준비 — <see cref="CanTrigger"/>가 거절했을 때 개발자 단축키가 한 번 더 묻는다. (#775)
+    /// 조건을 스스로 채울 수 있으면 채우고 true. <b>기본은 거절</b>이라 대부분의 이벤트는 이 훅이 없다.
+    ///
+    /// 필요한 것은 <b>누적 조건</b>을 가진 이벤트뿐이다 — 납치는 "20초 동안 혼자였는가"를 재므로
+    /// 테스트하려면 그 20초를 기다려야 했다.
+    /// </summary>
+    bool ServerPrepareForceTrigger() => false;
+
     /// <summary>발생 — 서버(또는 오프라인)에서 호출. 효과를 시작한다.</summary>
     void ServerBegin();
 

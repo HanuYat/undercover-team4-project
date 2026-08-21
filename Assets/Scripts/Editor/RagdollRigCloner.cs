@@ -80,6 +80,81 @@ public static class RagdollRigCloner
 
     // ---- 복제 ----
 
+    /// <summary>
+    /// 플레이어 프리팹 <b>안에서</b> 시체 리그(<c>Corpse/Root</c>)를 살아있는 리그(<c>Root</c>)로
+    /// 복제한다 — 모델 단일화의 첫 걸음이다. (#763 2단계 B-1)
+    ///
+    /// 위의 NPC 복제와 다른 점은 <b>원본과 대상이 같은 프리팹</b>이라는 것뿐이다. 뼈 좌표 대조·기존
+    /// 리그 제거·세 패스는 그대로 쓴다 — 두 리그가 같은 Synty 뼈대라는 전제가 깨지면 그 대조가 막는다.
+    ///
+    /// <b>컴포넌트를 붙이지 않는다</b> — <c>PlayerRagdoll</c>은 이미 루트에 있고, <c>RagdollRig</c>·
+    /// <c>RagdollRope</c>를 옮기는 것은 손으로 하는 프리팹 작업이다(계획서 §8-2 B-2).
+    ///
+    /// ⚠ <b>복제만 한다.</b> 레이어·충돌 매트릭스·<c>isKinematic</c> 초기화·보간·관절 전처리는
+    /// 이어서 <c>Tools > Ragdoll > Finish Setup - Player</c>가 한다.
+    /// </summary>
+    [MenuItem("Tools/Ragdoll/Clone Rig - Player (Corpse → 살아있는 리그)")]
+    public static void CloneToPlayerLiveRig()
+    {
+        string path = RagdollSetup.k_playerPrefab;
+        GameObject prefab = PrefabUtility.LoadPrefabContents(path);
+        if (prefab == null)
+        {
+            Debug.LogError($"[래그돌 복제] 프리팹을 열 수 없다: {path}");
+            return;
+        }
+
+        try
+        {
+            string boneRootName = RagdollRig.k_defaultBoneRootName;
+            Transform source = prefab.transform.Find($"Corpse/{boneRootName}");
+            Transform target = prefab.transform.Find(boneRootName);
+
+            if (source == null || target == null)
+            {
+                Debug.LogError(
+                    $"[래그돌 복제] 리그를 찾지 못했다 — 시체 리그 'Corpse/{boneRootName}'="
+                        + $"{(source == null ? "없음" : "있음")}, 살아있는 리그 '{boneRootName}'="
+                        + $"{(target == null ? "없음" : "있음")}. 이미 단일화됐다면 이 메뉴는 쓸 일이 없다"
+                );
+                return;
+            }
+
+            List<Transform> sourceBones = CollectRagdollBones(prefab, source);
+            if (sourceBones.Count == 0)
+            {
+                Debug.LogError("[래그돌 복제] 시체 리그에서 래그돌 뼈를 찾지 못했다 — 원본이 비었다");
+                return;
+            }
+
+            if (!MapBones(source, sourceBones, target, path, out List<Transform> targetBones))
+                return; // 뼈대가 어긋난다 — 아무것도 고치지 않는다
+
+            StripExistingRagdoll(targetBones);
+
+            // 패스가 셋인 이유는 관절이 상대 Rigidbody를 요구하기 때문이다 (CloneInto와 같다).
+            for (int i = 0; i < sourceBones.Count; i++)
+                CopyIfPresent(sourceBones[i].GetComponent<Rigidbody>(), targetBones[i]);
+
+            for (int i = 0; i < sourceBones.Count; i++)
+                foreach (Collider collider in sourceBones[i].GetComponents<Collider>())
+                    CopyIfPresent(collider, targetBones[i]);
+
+            for (int i = 0; i < sourceBones.Count; i++)
+                CopyJoint(sourceBones[i], targetBones[i], sourceBones, targetBones);
+
+            PrefabUtility.SaveAsPrefabAsset(prefab, path);
+            Debug.Log(
+                $"[래그돌 복제] {path} — 시체 리그의 뼈 {sourceBones.Count}개를 살아있는 리그로 "
+                    + "복제했다. 이어서 Tools > Ragdoll > Finish Setup - Player를 실행할 것"
+            );
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(prefab);
+        }
+    }
+
     private static bool CloneInto(
         Transform sourceBoneRoot,
         List<Transform> sourceBones,

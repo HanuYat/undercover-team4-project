@@ -12,5 +12,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 70d7c2bfab51ca34aa8c5c2c4b6d9eba, type: 3}
   m_Name: RoundWeatherTable_Apocalypse
   m_EditorClassIdentifier: Assembly-CSharp::RoundWeatherTable
-  m_clearPercents: 00000000000000000000000000000000
+  m_clearPercents: 46000000320000001e00000014000000
   m_weights: []

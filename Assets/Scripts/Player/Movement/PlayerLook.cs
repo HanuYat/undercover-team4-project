@@ -106,8 +106,8 @@ public class PlayerLook : MonoBehaviour
     public float Pitch => m_pitch;
 
     // 다운(무력화) 중 여부 — 무력화 컴포넌트가 없으면(테스트 구성 등) 항상 false
-    // 자세 판정이라 IsIncapacitated가 아니라 IsProne을 본다 — 외곽 린치(#371 후속)는 서서 맞는
-    // 무력화라 바닥 시점·회전 잠금이 걸리면 안 된다. 이름은 쓰임(쓰러졌는가)에 맞췄다.
+    // 자세 판정이라 IsIncapacitated가 아니라 IsProne을 본다 — 모션·시점·회전 잠금이 같은 값을
+    // 봐야 한다. 이름은 쓰임(쓰러졌는가)에 맞췄다.
     private bool IsProne => m_incapacitation != null && m_incapacitation.IsProne;
 
     // 앉기 블렌딩으로 머리가 내려간 높이(m) — 카메라를 같은 만큼 낮춘다 (#236)
@@ -341,9 +341,18 @@ public class PlayerLook : MonoBehaviour
         float lerp = Damp(m_camPoseLerpSpeed);
         bool downed = IsProne;
 
-        // 사망 관전 시점 — 기능 정지(Die) 동안만 켠다 (#576). 기절·매달기·납치처럼 스스로 풀리는
+        // 사망 관전 시점 — 기능 정지(Die) 동안 켠다 (#576). 기절·매달기·납치처럼 스스로 풀리는
         // 무력화는 짧고 곧 일어나므로 지금의 바닥 시점을 그대로 둔다.
-        SetSpectateView(m_incapacitation != null && m_incapacitation.IsDead);
+        //
+        // 예외가 맨홀 하강이다 (#775) — 사망이 확정되기 전에 몸이 지면을 통과하므로 1인칭으로 두면
+        // 땅속이 화면을 덮는다. 서버가 오빗 중심을 지상에 고정해 오는 것을 관전 진입 신호로 본다.
+        bool dead = m_incapacitation != null && m_incapacitation.IsDead;
+
+        // 무력화가 완전히 풀렸다(구조·부활) — 고정을 놓아 다음 관전은 다시 자기 몸을 돌게 한다.
+        if (!dead && !downed)
+            m_spectate?.ClearPivotOverride();
+
+        SetSpectateView(dead || (m_spectate != null && m_spectate.HasPivotOverride));
 
         m_downCamBlend = Mathf.Lerp(m_downCamBlend, downed ? 1f : 0f, lerp);
 

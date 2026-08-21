@@ -18,8 +18,7 @@ public enum IncapacitationCause
     Penalty, // 오검거 광장 매달기 (#101) — 30초 뒤 자동 복귀
     Stun, // 테이저 피격 기절 (#252) — 시간이 지나면 스스로 일어난다
     Die, // 다운 방치 또는 확인사살로 기능 정지 (#364, #725) — 복구는 동료의 부활 키트(#613)
-    Abducted, // 납치 호송 중 (#371) — 끌려가는 동안 걸어 나가지 못하게. 외곽에 도착하면 Lynched로 넘어간다
-    Lynched, // 외곽 린치 (#371 후속) — 납치범에게 맞는 중. 행동은 막되 <b>쓰러진 자세가 아니다</b>(IsProne 제외)
+    Abducted, // 납치 호송 중 (#371) — 끌려가는 동안 걸어 나가지 못하게. 맨홀 아래로 내려가면 Die로 넘어간다 (#775)
     // (값은 반드시 끝에 추가한다 — NetworkVariable로 동기화되는 enum이라 순서가 곧 와이어 포맷이다)
 }
 
@@ -34,8 +33,8 @@ public enum IncapacitationCause
 ///    (<see cref="ServerSetBeingRevived"/>) 복귀하고, 방치되면 Die로 넘어간다.
 ///  · Die — 다운 방치 또는 확인사살(<see cref="ServerFinishOff"/>)로 들어간다. 부활 키트로만 복구된다(#613).
 ///  · 매달기·기절 — 시간이 지나면 스스로 복귀하므로 운반 대상도, 전멸 판정 대상도 아니다.
-///  · 납치·린치 — 끌려가는 동안·맞는 동안 걸어 나가지 못하게 한다(#371). 동료가 납치범을 때려
-///    떼어내면 풀리고, 떼어내지 못하면 HP가 0이 되어 Down으로 넘어간다 — 그 자체로는 전멸 판정 대상이 아니다.
+///  · 납치 — 끌려가는 동안 걸어 나가지 못하게 한다(#371). 동료가 납치범을 떼어내면 풀리고,
+///    떼어내지 못하면 맨홀 아래에서 Die로 확정된다 (#775).
 /// 조준 히트박스는 쓰러져 있는 동안(<see cref="IsOutOfAction"/>) 켠다.
 /// </summary>
 public class PlayerIncapacitation : NetworkBehaviour
@@ -64,6 +63,10 @@ public class PlayerIncapacitation : NetworkBehaviour
         new NetworkVariable<IncapacitationCause>();
 
     private IncapacitationCause m_cause; // 서버·오프라인의 진실값 (비네트워크 Play 테스트 폴백)
+
+    // 사망 전 오너 — 이관은 서버만 하고 복귀도 서버가 하므로 동기화하지 않는다. (#763 1단계)
+    private ulong m_ownerBeforeDeath;
+    private bool m_ownershipMovedToServer;
 
     // 기절 회차 — 지연 복구가 '자기가 건 기절'만 풀게 하는 토큰. 기절이 풀린 뒤 다시 걸리거나 그 사이
     // 기능 정지·매달기가 들어오면 회차가 어긋나, 낡은 타이머는 무동작으로 끝난다. (#252)
@@ -176,19 +179,12 @@ public class PlayerIncapacitation : NetworkBehaviour
     }
 
     /// <summary>
-    /// <b>쓰러진 자세인가</b> — 다운 모션·바닥 시점·몸 회전 잠금이 함께 보는 값이다. (#371 후속)
+    /// <b>쓰러진 자세인가</b> — 다운 모션·바닥 시점·몸 회전 잠금이 <b>반드시 같은 값</b>을 보게 모아 둔 자리다.
+    /// 하나만 갈라지면 몸은 서 있는데 카메라는 바닥에 있는 어긋남이 난다 (#252에서 밟은 함정).
     ///
-    /// 원래 이 셋은 <see cref="IsIncapacitated"/>를 직접 봤다. "무력화는 곧 쓰러진 자세"가 참이었기 때문인데,
-    /// 외곽 린치(<see cref="IncapacitationCause.Lynched"/>)가 <b>서서 맞는</b> 무력화라 그 전제가 깨졌다.
-    ///
-    /// 세 곳이 <b>반드시 같은 값</b>을 봐야 한다는 것이 이 프로퍼티의 존재 이유다 — 하나만 갈라지면
-    /// 몸은 서 있는데 카메라는 바닥에 있는 어긋남이 난다(#252에서 이미 한 번 밟은 함정이라
-    /// PlayerAnimationDriver 주석에 경고로 남아 있었다).
-    ///
-    /// 행동 차단은 이 값이 아니라 <see cref="IsIncapacitated"/>가 계속 맡는다 — 린치 중에도
-    /// 이동·아이템·상호작용은 전부 막힌다. 갈리는 것은 자세뿐이다.
+    /// 지금은 무력화와 값이 같다 — 서서 맞던 외곽 린치가 사라지면서 예외가 없어졌다 (#775).
     /// </summary>
-    public bool IsProne => IsIncapacitated && Cause != IncapacitationCause.Lynched;
+    public bool IsProne => IsIncapacitated;
 
     // 살아 있는 인스턴스 목록 — 플레이어 전원을 훑어야 하는 쪽(전멸 판정 RoundManager)이
     // FindObjectsByType으로 씬 전체를 뒤지지 않게 한다. 조회는 배열을 새로 만드는 엔진 호출이라,
@@ -316,12 +312,9 @@ public class PlayerIncapacitation : NetworkBehaviour
     }
 
     /// <summary>
-    /// 납치 처형 — 외곽에서 린치당한 피해자를 기능 정지(Die)로 확정한다. 서버(또는 오프라인) 전용. (#371 후속)
+    /// 납치 결말 — 맨홀 아래로 내려간 피해자를 기능 정지(Die)로 확정한다. 서버(또는 오프라인) 전용. (#775)
     ///
-    /// 린치로 HP가 0이 되면 <see cref="PlayerHealth"/>가 이미 Down을 걸어 뒀는데(#725), 이 메서드는
-    /// 그 유예를 건너뛰고 곧장 Die로 확정한다 — 상한까지 못 뗀 납치에는 구조 유예를 줄 이유가 없다.
-    /// 남겨 두는 또 다른 이유는 <b>린치 상한 초과 폴백</b>이다: HP가 남았는데도 결말을 집행해야 하는
-    /// 경로(AbductionEvent.LynchAsync)에는 HP 0이 없어 이 메서드가 유일한 진입점이다.
+    /// 납치는 피해자를 때리지 않으므로 HP 0을 거치지 않는다 — 이 메서드가 유일한 진입점이다.
     /// </summary>
     public void ServerKillByAbduction()
     {
@@ -331,7 +324,7 @@ public class PlayerIncapacitation : NetworkBehaviour
         if (Cause == IncapacitationCause.Die)
             return; // 이미 기능 정지 — 중복 호출 방어
 
-        Debug.Log($"[납치] 처형 — 기능 정지: {name}", this);
+        Debug.Log($"[납치] 결말 — 기능 정지: {name}", this);
         SetCause(IncapacitationCause.Die);
     }
 
@@ -445,6 +438,9 @@ public class PlayerIncapacitation : NetworkBehaviour
         if (IsSpawned && IsServer)
             m_causeSynced.Value = cause;
 
+        // 사망 구간에는 <b>서버가 이 몸의 주인이다</b> — 시체를 NPC와 같은 조건으로 만든다. (#763 1단계)
+        ApplyDeathOwnership(cause);
+
         // 기절에서 벗어나면 마감도 지운다 — 남겨 두면 다음 기절 전까지 옛 값이 읽힌다.
         // 기절로 '들어가는' 경우의 값은 ServerStun이 이 호출 직후에 채운다 (#477).
         if (cause != IncapacitationCause.Stun)
@@ -486,6 +482,74 @@ public class PlayerIncapacitation : NetworkBehaviour
             OnIncapacitatedChanged?.Invoke(IsIncapacitated);
         OnAnyIncapacitatedChanged?.Invoke(); // 전역 훅 — RoundManager가 전원 행동불능(전멸) 여부를 재검사
     }
+
+    /// <summary>
+    /// 사망 중 이 <see cref="NetworkObject"/>의 주인을 <b>서버로 옮기고</b>, 풀리면 돌려준다. (#763 1단계)
+    ///
+    /// <b>왜 소유권인가.</b> 시체의 자세를 흘리는 <c>RagdollPoseStreamer</c>도, 루트
+    /// <c>NetworkTransform</c>도 권위를 <b>오너</b>로 두고 있다(루트 NT의 <c>AuthorityMode</c>가
+    /// Owner인 것은 살아있는 이동이 요구하는 값이다). 그래서 둘 중 하나만 서버로 바꾸면 몸과 루트가
+    /// 서로 다른 피어에서 계산돼 시체가 이름표를 두고 떠난다. <b>오너 자체를 서버로 만들면 둘 다
+    /// 서버를 가리키고 고칠 배선이 없다.</b>
+    ///
+    /// 얻는 것은 밧줄 견인의 왕복이다. 지금은 끄는 사람(클라 B) → 서버 → 시체 오너(클라 A)가 장력을
+    /// 계산 → 서버 → B가 자세 수신으로 <b>4홉</b>이라, B의 화면에서 시체가 무겁고 줄이 끊긴다.
+    /// 서버가 주인이면 NPC와 같은 <b>2홉</b>이 된다. (계획서 docs/763-player-ragdoll-npc-parity.md §1)
+    ///
+    /// ⚠ <b>호스트 자신의 몸은 옮길 것이 없다</b> — 이미 서버가 주인이다. 그때는 깃발도 세우지 않아
+    /// 복귀에서도 아무 일이 일어나지 않는다.
+    /// </summary>
+    private void ApplyDeathOwnership(IncapacitationCause cause)
+    {
+        if (!IsSpawned || !IsServer || NetworkObject == null || NetworkManager == null)
+            return;
+
+        bool wantsServerOwner = cause == IncapacitationCause.Die;
+        if (wantsServerOwner == m_ownershipMovedToServer)
+            return;
+
+        if (wantsServerOwner)
+        {
+            m_ownerBeforeDeath = OwnerClientId;
+            if (m_ownerBeforeDeath == NetworkManager.ServerClientId)
+                return; // 호스트의 몸 — 이미 서버 소유다
+
+            m_ownershipMovedToServer = true;
+            NetworkObject.ChangeOwnership(NetworkManager.ServerClientId);
+            // LogOwnership("사망", m_ownerBeforeDeath, NetworkManager.ServerClientId);
+            return;
+        }
+
+        m_ownershipMovedToServer = false;
+
+        // ⚠ 나간 클라에게 돌려주지 않는다 — 없는 클라를 오너로 지정하면 NGO가 예외를 던진다.
+        // 그 몸은 서버 소유로 남고, 정리는 접속 종료 경로가 한다(#287).
+        if (!NetworkManager.ConnectedClients.ContainsKey(m_ownerBeforeDeath))
+            return;
+
+        NetworkObject.ChangeOwnership(m_ownerBeforeDeath);
+        // LogOwnership("복귀", NetworkManager.ServerClientId, m_ownerBeforeDeath);
+    }
+
+    // ⚠ #759/#763 계측 — A-1 이관이 실측으로 확인돼 주석 처리했다(2026-08-20).
+    //    호출부 둘도 같이 막혀 있다. 근거: docs/759-ragdoll-slowmotion-handoff.md §3-1-3
+    /*
+    // ⚠ 임시 계측 (#763 A-1) — 이관이 실제로 걸렸는지와, <b>플레이어 오브젝트 연결이 유지되는지</b>를
+    // 함께 찍는다. 후자는 이 프로젝트에서 플레이어 오브젝트의 소유권을 옮기는 것이 처음이라 확인이
+    // 필요한 항목이다(계획서 §4 함정 2). 확정되면 지운다.
+    private void LogOwnership(string reason, ulong from, ulong to)
+    {
+        bool keptPlayerObject =
+            NetworkManager.ConnectedClients.TryGetValue(m_ownerBeforeDeath, out NetworkClient client)
+            && client.PlayerObject == NetworkObject;
+
+        Debug.Log(
+            $"[소유권] 시체#{NetworkObject.NetworkObjectId} 원인={reason} 오너 {from}→{to} "
+                + $"플레이어오브젝트유지={keptPlayerObject}",
+            this
+        );
+    }
+    */
 
     // 기절 해제 예정 시각 갱신 — 실참조와 동기화값을 함께 쓴다(m_cause/m_causeSynced와 동일 관례).
     // 연출(#477)만 읽는다.
