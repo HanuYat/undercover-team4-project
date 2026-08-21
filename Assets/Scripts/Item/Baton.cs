@@ -478,7 +478,6 @@ public class Baton : ItemBase, IAimedWeapon
 
     // ---- 조준 판정 ----
 
-    // <b>선언 순서가 판정에 실린다</b> — EvaluateSwing이 호의 여러 줄을 이 순서로 비교한다(뒤가 더 좋다).
     private enum SwingResult
     {
         NoHit,
@@ -490,7 +489,11 @@ public class Baton : ItemBase, IAimedWeapon
     /// <summary>
     /// 부채꼴을 훑어 명중 결과를 분류한다 (#779). 각 줄은 <see cref="EvaluateSwingRay"/>가 따로
     /// 판정하므로 <b>엄폐도 줄 단위</b>다 — 정면이 기둥에 막혀도 호가 닿는 대상은 맞는다.
-    /// 여러 줄 중에서는 <see cref="SwingResult"/>가 큰 줄을, 같으면 피봇이 가까운 줄을 고른다.
+    ///
+    /// 줄을 고르는 규칙은 둘이다 — <b>유효타가 있으면 그 줄이 이기고, 없으면 조준축에 가장 가까운 줄이
+    /// 남는다.</b> 가운데부터 좌우로 번져 나가며 훑으므로 후자는 순회 순서가 곧 우선순위다.
+    /// 거리로 고르지 않는 이유: NPC와 동료가 둘 다 유효타라(#461) 거리로 갈리면, 정면의 NPC를
+    /// 조준했는데 옆에 붙어 선 동료가 더 가깝다는 이유로 타격을 가로챈다.
     ///
     /// <b>부수효과 없는 순수 판정으로 유지할 것.</b> 서버 타격 판정(<see cref="ServerResolveHitAtImpactAsync"/>)과
     /// 오너 크로스헤어(<see cref="HasValidAimTarget"/>) 둘이 공유한다 — 후자는 매 프레임 도는 로컬
@@ -512,24 +515,27 @@ public class Baton : ItemBase, IAimedWeapon
         bombTarget = null;
         hit = default;
 
-        // 홀수로 올린다 — 가운데 한 줄이 비면 정지 대상이 빠진다
-        int samples = Mathf.Max(1, m_arcSampleCount);
+        // 반각이 0이면 줄을 늘려도 같은 캐스트가 반복될 뿐이다. 그 외에는 홀수로 올린다 —
+        // 가운데 한 줄이 비면 정지 대상이 빠진다.
+        int samples = m_arcHalfAngle <= 0f ? 1 : Mathf.Max(1, m_arcSampleCount);
         if (samples % 2 == 0)
         {
             samples++;
         }
 
-        // 소지자 up을 축으로 돌린다 — 월드 up이면 경사면에서 호가 지면을 파고든다
+        // 소지자 up을 축으로 돌린다 — 지금은 루트가 기울지 않아 월드 up과 같지만, 몸 기준이 이 판정의
+        // 의미(스윙이 캐릭터를 따라간다)에 맞다.
         Vector3 axis = holderRoot != null ? holderRoot.up : Vector3.up;
         Vector3 forward = direction.normalized;
         int half = samples / 2;
 
         SwingResult best = SwingResult.NoHit;
-        float bestPivotDistance = float.PositiveInfinity;
 
         for (int i = 0; i < samples; i++)
         {
-            float angle = half == 0 ? 0f : m_arcHalfAngle * (i - half) / half;
+            // 가운데(0) → 좌 → 우 → 더 좌 → 더 우 순서로 번져 나간다
+            int step = (i + 1) / 2;
+            float angle = half == 0 ? 0f : m_arcHalfAngle * step / half * (i % 2 == 0 ? 1f : -1f);
 
             SwingResult result = EvaluateSwingRay(
                 origin,
@@ -541,23 +547,26 @@ public class Baton : ItemBase, IAimedWeapon
                 out RaycastHit rayHit
             );
 
-            if (result < best)
-            {
-                continue;
-            }
-
-            float pivotDistance = AimOcclusion.PivotDistance(origin, rayHit);
-            if (result == best && pivotDistance >= bestPivotDistance)
+            // 허공은 알려줄 것이 없다. 그 외에는 유효타만 앞의 결과를 밀어낼 수 있다 —
+            // 밀어내지 못하면 먼저 온(= 조준축에 더 가까운) 줄이 그대로 남는다.
+            if (
+                result == SwingResult.NoHit
+                || (result != SwingResult.ValidTarget && best != SwingResult.NoHit)
+            )
             {
                 continue;
             }
 
             best = result;
-            bestPivotDistance = pivotDistance;
             target = rayTarget;
             playerTarget = rayPlayerTarget;
             bombTarget = rayBombTarget;
             hit = rayHit;
+
+            if (best == SwingResult.ValidTarget)
+            {
+                break; // 가운데부터 훑었으니 더 잘 조준된 유효타는 남아 있지 않다
+            }
         }
 
         return best;
