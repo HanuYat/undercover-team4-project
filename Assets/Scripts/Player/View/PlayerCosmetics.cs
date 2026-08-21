@@ -25,6 +25,16 @@ public class PlayerCosmetics : NetworkBehaviour
         NetworkVariableWritePermission.Server
     );
 
+    // 위 값이 <b>진짜 이 사람의 색인지</b> — 늦게 접속하면 서버가 스폰 시점에 색을 모른다(연결 승인에서
+    // 스폰되므로 클라가 아직 아무것도 보고하지 못한 상태다). 그때 기본색을 칠해 버리면 오너 보고가
+    // 닿는 순간 색이 튀므로, 배정될 때까지 <b>남의 몸을 그리지 않는다</b>. (#790)
+    // 별도 값으로 두는 이유: PlayerColorSet은 byte 인덱스라 "미배정"을 표현할 수 없다(0이 곧 첫 색이다).
+    private readonly NetworkVariable<bool> m_assigned = new(
+        false,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
     /// <summary>이 플레이어가 고른 색 — 상황판이 얼굴을 찾을 때 읽는다. (#432)</summary>
     public PlayerColorSet Colors => m_colors.Value;
 
@@ -38,7 +48,10 @@ public class PlayerCosmetics : NetworkBehaviour
         // 여기서 쓴 값은 <b>스폰 페이로드에 실려</b> 나간다 — 그래서 남의 화면도 첫 프레임부터 제 색이다.
         // 오너 쓰기로는 이 시점에 값이 없어(오너는 스폰 메시지를 받은 뒤에야 쓴다) 기본색이 먼저 갔다. (#790)
         if (IsServer)
-            m_colors.Value = ResolveSpawnColors();
+        {
+            m_colors.Value = ResolveSpawnColors(out bool resolved);
+            m_assigned.Value = resolved;
+        }
 
         if (IsOwner)
         {
@@ -52,6 +65,7 @@ public class PlayerCosmetics : NetworkBehaviour
         }
 
         m_colors.OnValueChanged += HandleColorsChanged;
+        m_assigned.OnValueChanged += HandleAssignedChanged;
         Apply(); // late-join은 값을 복제만 받고 OnValueChanged를 못 받는다
     }
 
@@ -60,8 +74,10 @@ public class PlayerCosmetics : NetworkBehaviour
     /// 명부가 없거나(세션 없이 씬 직접 Play) 보고가 아직 안 닿았으면 로컬 설정으로 떨어진다 —
     /// 그 경우 서버가 곧 오너라 로컬 설정이 맞는 값이다.
     /// </summary>
-    private PlayerColorSet ResolveSpawnColors()
+    private PlayerColorSet ResolveSpawnColors(out bool resolved)
     {
+        resolved = true;
+
         SessionRoster roster = App.Game.Roster;
         if (roster != null && roster.TryGetEntry(OwnerClientId, out LobbyPlayerEntry entry))
             return entry.Colors;
@@ -78,12 +94,14 @@ public class PlayerCosmetics : NetworkBehaviour
                 + $"— 클라 {OwnerClientId}, 명부 {(App.Game.Roster == null ? "없음" : App.Game.Roster.Players.Count + "명")} (#790)",
             this
         );
+        resolved = false;
         return default;
     }
 
     public override void OnNetworkDespawn()
     {
         m_colors.OnValueChanged -= HandleColorsChanged;
+        m_assigned.OnValueChanged -= HandleAssignedChanged;
 
         // 오너만 구독했지만 무조건 뗀다 — 아니면 죽은 로봇을 가리키는 static 구독이 쌓인다
         GameSettings.OnPlayerColorChanged -= HandleOwnerColorChanged;
@@ -105,7 +123,13 @@ public class PlayerCosmetics : NetworkBehaviour
 
     // 값의 주인이 서버가 됐으므로 원격 오너는 보고만 한다. 코스메틱이라 서버가 검증하지 않는다 (#432).
     [Rpc(SendTo.Server)]
-    private void ReportColorsRpc(PlayerColorSet colors) => m_colors.Value = colors;
+    private void ReportColorsRpc(PlayerColorSet colors)
+    {
+        m_colors.Value = colors;
+        m_assigned.Value = true; // 이제 진짜 그 사람 색이다 — 남들도 몸을 그리기 시작한다
+    }
+
+    private void HandleAssignedChanged(bool previous, bool current) => Apply();
 
     private void HandleColorsChanged(PlayerColorSet previous, PlayerColorSet current) => Apply();
 
@@ -118,6 +142,22 @@ public class PlayerCosmetics : NetworkBehaviour
         }
 
         PlayerColorSet colors = m_colors.Value;
+
+        if (!m_assigned.Value)
+        {
+            // 오너는 자기 색을 언제나 안다 — 서버 값이 없어도 로컬 설정으로 즉시 칠한다.
+            // (여기서 숨기면 내 1인칭 팔까지 사라진다)
+            if (!IsOwner)
+            {
+                m_tint.SetRendering(false);
+                return;
+            }
+
+            colors = PlayerColorSet.FromSettings();
+        }
+
+        m_tint.SetRendering(true);
+
         for (int i = 0; i < m_buffer.Length; i++)
             m_buffer[i] = m_palette.Get(colors[(EBodyPart)i]);
 
