@@ -46,7 +46,7 @@ public class NpcDutyAgent : NetworkBehaviour
     public NpcDutyKind Duty => IsSpawned ? m_duty.Value : m_dutyLocal;
 
     /// <summary>
-    /// 이 임무가 <b>납치</b>(#371)인가. 저항 상태의 근접 타격 처리(<see cref="NpcResistState"/>)가
+    /// 이 임무가 <b>납치</b>(#371)인가. 추격 상태(<see cref="NpcChaseState"/>)의 기습 갈래(#775)가
     /// 납치범만 다르게 다루므로 종류를 그대로 묻는 자리가 남아 있다.
     /// </summary>
     public bool IsAbductionDuty => Duty == NpcDutyKind.Abduction;

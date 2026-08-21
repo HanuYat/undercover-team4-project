@@ -350,9 +350,17 @@ public class SuddenEventManager : NetworkedManagerBase
         }
 
         ISuddenEvent evt = m_events[index];
-        if (evt.IsActive || !evt.CanTrigger())
+        if (evt.IsActive)
         {
-            Debug.Log($"[돌발이벤트] 강제발동 불가 — {evt.DisplayName} (활성이거나 조건 미충족)");
+            Debug.Log($"[돌발이벤트] 강제발동 불가 — {evt.DisplayName} (이미 진행 중)");
+            return;
+        }
+
+        // 조건이 안 맞으면 스스로 채울 수 있는지 한 번 더 묻는다 (#775) — 누적 조건을 가진 이벤트(납치)를
+        // 테스트하려고 그 조건이 찰 때까지 기다리지 않게 한다. 기본 구현은 거절이라 나머지는 그대로다.
+        if (!evt.CanTrigger() && !evt.ServerPrepareForceTrigger())
+        {
+            Debug.Log($"[돌발이벤트] 강제발동 불가 — {evt.DisplayName} (조건 미충족)");
             return;
         }
 
@@ -362,7 +370,15 @@ public class SuddenEventManager : NetworkedManagerBase
             ResetOtherWeather(evt);
 
         evt.ServerBegin();
-        if (evt.IsActive && evt.AnnounceOnBegin)
+
+        // 시작에 실패한 것을 성공으로 찍지 않는다 — 이유는 이벤트가 직전에 남긴 경고에 있다
+        if (!evt.IsActive)
+        {
+            Debug.LogWarning($"[돌발이벤트] 강제발동했지만 시작되지 않았다 — {evt.DisplayName} (위 로그 참고)", this);
+            return;
+        }
+
+        if (evt.AnnounceOnBegin)
             Announce(evt.DisplayName, evt.NoticeKey);
         Debug.Log($"[돌발이벤트] 강제발동 — {evt.DisplayName}");
     }

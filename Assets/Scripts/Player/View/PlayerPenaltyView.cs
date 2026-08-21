@@ -61,6 +61,33 @@ public class PlayerPenaltyView : NetworkBehaviour
     // 내가 띄운 경고가 아직 떠 있을 때만 지운다 — 그 사이 다른 알림이 덮어썼으면 건드리지 않는다
     private void HideLocal() => App.UI.Toast?.Hide(m_chaseWarning);
 
+    // ---- 납치 결말 관전 (#775) ----
+
+    /// <summary>
+    /// 서버 전용 — 관전 오빗 중심을 지정한 지점으로 고정한다. 납치 결말이 몸을 지하로 데려가므로,
+    /// 그대로 두면 땅속을 도는 화면이 된다.
+    ///
+    /// 고정 자체가 <b>관전 진입 신호</b>이기도 하다 — 그래서 사망 확정이 아니라 <b>하강을 시작하기
+    /// 전에</b> 부른다(PlayerLook이 이 값을 보고 시점을 지상 3인칭으로 뺀다). 무력화가 풀리면 그쪽이 놓는다.
+    /// </summary>
+    public void SetSpectatePivot(Vector3 worldPosition)
+    {
+        if (IsSpawned)
+            SetSpectatePivotRpc(worldPosition);
+        else
+            ApplySpectatePivot(worldPosition); // 오프라인 Play 테스트 폴백
+    }
+
+    [Rpc(SendTo.Owner)]
+    private void SetSpectatePivotRpc(Vector3 worldPosition) => ApplySpectatePivot(worldPosition);
+
+    private void ApplySpectatePivot(Vector3 worldPosition)
+    {
+        PlayerSpectateCamera spectate = GetComponent<PlayerSpectateCamera>();
+        if (spectate != null)
+            spectate.SetPivotOverride(worldPosition);
+    }
+
     // ---- 끌려가기 (#279) ----
 
     /// <summary>

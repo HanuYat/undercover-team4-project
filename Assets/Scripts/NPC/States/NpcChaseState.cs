@@ -16,11 +16,15 @@ using UnityEngine.AI;
 /// - <b>격퇴/수렴</b>: 격퇴(ApplyChaseRepel, 호루라기 #250 예정)당하면 잠시 도주 후 사냥으로 복귀하고
 ///   그 플레이어에게 재추격 쿨다운을 건다. 누군가 포획되면(PenaltyConvergeTarget) 전원 그리로 모인다.
 ///
+/// - <b>기습</b>: 납치(#775)만 갈라져 나가는 갈래다 — 걸어서 표적의 뒤로 접근하고 뒤를 잡았을 때만 포획한다.
+///   들키면 잠시 물러났다가 다시 노린다.
+///
 /// 포획은 <b>수평</b> 거리 판정 — WrongfulArrestPenalty가 OnPenaltyCaught를 구독해 수렴·호송(#279)을 지휘한다.
 ///
 /// <b>이 클래스는 국면 진행만 맡는다</b> (#568 후속). 세 가지는 부품이 가져갔다:
 /// 조향·리드 조준은 <see cref="ChaseSteering"/>, 도달 가능성 누적은 <see cref="ChaseReachability"/>,
-/// 표적 선정·쿨다운은 <see cref="ChaseTargeting"/>. 셋 다 FSM을 모르므로 따로 검증할 수 있다.
+/// 표적 선정·쿨다운은 <see cref="ChaseTargeting"/>, 기습 각도·지점은 <see cref="ChaseAmbush"/>.
+/// 넷 다 FSM을 모르므로 따로 검증할 수 있다.
 /// </summary>
 public class NpcChaseState : NpcStateBase
 {
@@ -37,6 +41,7 @@ public class NpcChaseState : NpcStateBase
     private readonly ChaseSteering m_steering;
     private readonly ChaseReachability m_reachability = new ChaseReachability();
     private readonly ChaseTargeting m_targeting;
+    private readonly ChaseAmbush m_ambush;
 
     private float m_baseSpeed; // 진입 전 원래 속도 — 사냥 모드 속도이자 Exit 복원값
     private float m_targetAcquiredTime; // 현재 타겟 확보 시각 — 가속 기준점
@@ -62,6 +67,7 @@ public class NpcChaseState : NpcStateBase
 
         m_steering = new ChaseSteering(config);
         m_targeting = new ChaseTargeting(config, owner.Repath);
+        m_ambush = new ChaseAmbush(config);
     }
 
     public override void Enter()
@@ -153,6 +159,14 @@ public class NpcChaseState : NpcStateBase
         if (target == null)
         {
             TickHunt();
+            return;
+        }
+
+        // ---- 기습: 납치(#775)는 걸어서 뒤로 접근하고 뒤를 잡았을 때만 포획한다.
+        // 아래 추격 경로는 오검거·소매치기가 쓰므로 갈래를 여기서 완전히 가른다.
+        if (m_owner.Penalty.IsAbductionDuty)
+        {
+            TickAmbush(target, now);
             return;
         }
 
@@ -265,6 +279,41 @@ public class NpcChaseState : NpcStateBase
 
         m_owner.Agent.SetDestination(aim);
         m_reachability.Report(partial, now); // 스냅이 먹었으면 다음 주기에 정상 경로로 돌아와 누적이 풀린다
+    }
+
+    /// <summary>
+    /// 납치 기습 — 시민 걸음으로 표적의 뒤를 향해 걷고, 후방 각도 안에 닿았을 때만 포획을 통보한다. (#775)
+    /// 정면을 마주 보고 있으면 거리를 유지한 채 옆으로 돌아 뒤를 노린다(목적지 계산은 ChaseAmbush).
+    /// </summary>
+    private void TickAmbush(Transform target, float now)
+    {
+        m_hunting = false;
+        m_owner.Agent.speed = m_baseSpeed; // 달리면 걸음걸이로 정체가 새어 나간다 (소매치기 #303과 같은 이유)
+        m_owner.Agent.stoppingDistance = 0f;
+        m_steering.Apply(m_owner.Agent, false); // 시민처럼 걷는 구간이라 추격용 급선회를 쓰지 않는다
+
+        Vector3 position = m_owner.transform.position;
+        float distance = ChaseMath.FlatDistance(position, target.position);
+        bool behind = m_ambush.IsBehind(target, position);
+
+        if (m_owner.Repath.Due(NpcRepathChannel.Repath))
+            SetAmbushDestination(m_ambush.ApproachPoint(target, position));
+
+        if (behind && distance <= m_config.CatchDistance && now >= m_nextCatchNotifyTime)
+        {
+            m_nextCatchNotifyTime = now + k_catchRetrySeconds;
+            m_owner.Penalty.NotifyPenaltyCaught(target);
+        }
+    }
+
+    // 기습 목적지 — 표적 뒤 지점은 벽·연석 너머일 수 있어 항상 NavMesh 위로 끌어당긴다.
+    // 도달 불가 누적은 쓰지 않는다 — 납치는 표적을 갈아타지 않으므로 이벤트의 추격 상한이 끝을 낸다.
+    private void SetAmbushDestination(Vector3 aim)
+    {
+        if (NavMesh.SamplePosition(aim, out NavMeshHit hit, k_destinationSnapRadius, m_owner.Agent.areaMask))
+            aim = hit.position;
+
+        m_owner.Agent.SetDestination(aim);
     }
 
     // 포획된 플레이어에게 모여 선다 — 도착 판정·호송 개시는 매니저(WrongfulArrestPenalty)가 거리로 지휘한다.

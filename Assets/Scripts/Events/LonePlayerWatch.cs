@@ -82,6 +82,26 @@ public class LonePlayerWatch
         return best;
     }
 
+    /// <summary>
+    /// 지속 조건을 무시하고 표적을 하나 고른다 — <b>개발자 강제 발동 전용</b>. (#775)
+    /// 지금 혼자인 현장 플레이어를 먼저 보고, 없으면 아무나(본부 안 포함) 고른다.
+    /// </summary>
+    public Transform FindForcedTarget()
+    {
+        PlayerHealth[] players = UnityEngine.Object.FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
+
+        for (int i = 0; i < players.Length; i++)
+            if (IsLoneCandidate(players[i], players))
+                return players[i].transform;
+
+        // 아무도 혼자가 아니다 — 붙어 다니는 중이거나 본부 안이다. 테스트는 되게 한다.
+        for (int i = 0; i < players.Length; i++)
+            if (players[i] != null && players[i].IsTargetable)
+                return players[i].transform;
+
+        return null;
+    }
+
     /// <summary>쌓인 타이머를 모두 버린다 — 표적을 소비했거나 강제 정리할 때. 다음 Tick부터 처음부터 센다.</summary>
     public void Reset()
     {
