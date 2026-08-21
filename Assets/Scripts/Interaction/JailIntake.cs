@@ -271,8 +271,8 @@ public class JailIntake : CommonManagerBase
         Vector3 spot = m_jailZone.RandomRestPointInRoom();
         npc.Custody.SendCorpseToJail(spot);
 
-        // 점유(m_inmates)가 아니라 원장(m_records)에만 올린다 — 시체는 유치장 표지판이 세는 인원도,
-        // 탈옥이 풀어 줄 수감자도 아니다 (JailZone.RecordDeceased 주석).
+        // 점유(m_inmates)가 아니라 원장(m_records)에 올린다 — 표지판 총원에는 잡히지만
+        // 탈옥이 풀어 줄 산 수감자는 아니다 (JailZone.RecordDeceased 주석).
         m_jailZone.RecordDeceased(npc, bounty, deliverers);
 
         Debug.Log($"[감옥] 시체 수감 — {npc.name}을(를) 감옥 안에 눕혔다 (현상금 {bounty}원)");
