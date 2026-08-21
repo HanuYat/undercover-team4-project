@@ -63,6 +63,9 @@ public class PlayerSpectateCamera : MonoBehaviour
     // 순환 고리 재사용 버퍼 — 좌클릭마다 새로 만들지 않는다. 0번은 항상 내 시체(null)다.
     private readonly List<PlayerIncapacitation> m_ring = new();
 
+    // 벽 충돌 SphereCast 재사용 버퍼 — 모든 인스턴스가 공유해도 된다(같은 프레임에 재진입하지 않는다).
+    private static readonly RaycastHit[] s_wallProbeBuffer = new RaycastHit[8];
+
     private bool m_active;
     private float m_blend; // 1인칭(0) ↔ 관전(1) 진행도
     private bool m_snap; // 다음 Tick에서 보간을 끊고 현재 상태를 즉시 반영한다
@@ -317,24 +320,36 @@ public class PlayerSpectateCamera : MonoBehaviour
         // 동료를 볼 때는 그 동료의 yaw에 얹는다 — 걸어가는 동안 뒤통수를 유지하려면 기준이 함께 돌아야 한다.
         rotation = Quaternion.Euler(m_pitch, TargetBaseYaw() + m_yaw, 0f);
 
-        // 벽을 파고들지 않게 당긴다. 감정표현 3인칭(#219)과 같은 SphereCast 1회 — 맵 교체가
-        // 예정돼 있어 여기서 완벽한 충돌 대응을 만들 이유가 없다.
+        // 벽을 파고들지 않게 당긴다. 캐릭터는 벽으로 치지 않는다 — 환경과 같은 Default 레이어라
+        // 마스크로 못 거른다(NpcController.SweepHitsObstacle과 같은 사정). 안 걸러내면 맨홀
+        // 하강 중 앞을 막고 내려가는 납치범이 매 프레임 다른 거리로 잡혀 카메라가 떨린다.
         Vector3 back = rotation * Vector3.back;
         float distance = m_distance;
-        if (
-            Physics.SphereCast(
-                pivot,
-                m_probeRadius,
-                back,
-                out RaycastHit hit,
-                distance,
-                m_collisionMask,
-                QueryTriggerInteraction.Ignore
-            )
-        )
+        int hitCount = Physics.SphereCastNonAlloc(
+            pivot,
+            m_probeRadius,
+            back,
+            s_wallProbeBuffer,
+            distance,
+            m_collisionMask,
+            QueryTriggerInteraction.Ignore
+        );
+        for (int i = 0; i < hitCount; i++)
         {
-            distance = Mathf.Max(hit.distance - m_probeRadius, 0f);
+            Collider hitCollider = s_wallProbeBuffer[i].collider;
+            if (hitCollider == null)
+                continue;
+            if (hitCollider.GetComponentInParent<PlayerHealth>() != null)
+                continue;
+            if (hitCollider.GetComponentInParent<NpcController>() != null)
+                continue;
+
+            float hitDistance = s_wallProbeBuffer[i].distance;
+            if (hitDistance < distance)
+                distance = hitDistance;
         }
+
+        distance = Mathf.Max(distance - m_probeRadius, 0f);
 
         position = pivot + back * distance;
         return true;
