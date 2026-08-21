@@ -846,6 +846,16 @@ public class PlayerRagdoll : MonoBehaviour
 
         m_elapsedInRagdoll += Time.deltaTime;
 
+        // 회수 불가로 확정된 몸은 기다리지 않고 즉시 재운다 (#775) — 맨홀 아래는 지면이 없어
+        // 뼈가 영영 잠들지 않고, 그 낙하가 관전 시점을 계속 흔든다. 아무도 볼 수 없는 몸이라
+        // 정착 연출을 지킬 이유도 없다.
+        if (m_incapacitation != null && m_incapacitation.IsBodyLost)
+        {
+            m_rig.SleepAll();
+            Settle();
+            return;
+        }
+
         // <b>정착은 물리가 정한다</b> — 전 뼈가 하나도 안 남고 잠들어야 참이다. 옛 판정은 뼈
         // <b>평균</b> 속도(0.15m/s · 0.3초)여서 몸통이 멈추면 아직 흔들리는 팔을 한 프레임에
         // 세웠고, 그것이 "흔들거리다 갑자기 굳는" 어색함이었다. AllAsleep은 팔 하나가 전체를 붙잡는다.

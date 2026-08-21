@@ -64,8 +64,9 @@ public class ReviveKit : ItemBase
         if (target == null || target == HolderHealth)
             return null; // 자기 자신에게는 쓸 수 없다
 
+        // 몸이 회수 불가능한 곳으로 사라졌으면(맨홀 납치, #775) 부활 대상이 아니다
         PlayerIncapacitation targetIncapacitation = target.GetComponent<PlayerIncapacitation>();
-        return targetIncapacitation != null && targetIncapacitation.IsDead ? target : null;
+        return targetIncapacitation != null && targetIncapacitation.IsRevivable ? target : null;
     }
 
     // 이 키트를 든 사람의 체력 컴포넌트 — 자기 자신 판정용. 바닥에 놓여 있으면 null.
@@ -122,10 +123,11 @@ public class ReviveKit : ItemBase
         }
 
         PlayerIncapacitation targetIncapacitation = target.GetComponent<PlayerIncapacitation>();
-        if (targetIncapacitation == null || !targetIncapacitation.IsDead)
+        if (targetIncapacitation == null || !targetIncapacitation.IsRevivable)
         {
-            // 살아 있는 동료, 또는 그 사이 다른 키트로 먼저 일어난 대상 — 키트는 소모하지 않는다
-            NotifyOwner($"부활 실패 — {target.name}은 기능 정지 상태가 아니다");
+            // 살아 있는 동료, 이미 일어난 대상, 또는 몸이 회수 불가능한 곳으로 사라진 대상(#775) —
+            // 어느 경우든 키트는 소모하지 않는다
+            NotifyOwner($"부활 실패 — {target.name}은 부활 대상이 아니다");
             return;
         }
 

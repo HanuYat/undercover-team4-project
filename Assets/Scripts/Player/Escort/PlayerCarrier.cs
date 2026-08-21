@@ -80,9 +80,16 @@ public class PlayerCarrier : NetworkBehaviour
 
     private PlayerCarrier m_carriedBy; // 나를 끌고 있는 플레이어. 서버(또는 오프라인)에서만 유효
 
-    /// <summary>이 플레이어가 지금 운반 대상이 될 수 있는가 — 기능 정지(Die) + 임자 없음. (#364/#365)</summary>
+    /// <summary>
+    /// 이 플레이어가 지금 운반 대상이 될 수 있는가 — 기능 정지(Die) + 임자 없음 + 몸이 회수 가능함. (#364/#365)
+    /// 부활 판정(IsRevivable)이 아니라 IsBodyLost를 직접 본다 — 운반은 부활 여부와 별개로,
+    /// 몸이 맨홀 아래로 사라졌으면(#775) 애초에 회수할 몸이 없다는 뜻이다.
+    /// </summary>
     public bool CanBeCarried =>
-        m_incapacitation != null && m_incapacitation.IsDead && !IsBeingCarried;
+        m_incapacitation != null
+        && m_incapacitation.IsDead
+        && !m_incapacitation.IsBodyLost
+        && !IsBeingCarried;
 
     private void Awake()
     {
@@ -365,6 +372,9 @@ public class PlayerCarrier : NetworkBehaviour
     }
 
     // 끌려가는 쪽이 여전히 기능 정지 상태인가 — Update의 부활 감지용(서버·오프라인 실참조).
+    // IsRevivable로 바꾸지 않는다 — 몸이 회수 불가(#775)로 바뀌는 경로는 이 운반(CanBeCarried)
+    // 시작 전에 이미 걸러지므로 여기 도달할 일이 없고, 바꾸면 그 값이 뒤집히는 매 프레임마다
+    // 오탐 ServerDrop이 난다.
     private bool IsDeadTarget => m_incapacitation != null && m_incapacitation.IsDead;
 
     private bool IsInRange(PlayerCarrier target) =>

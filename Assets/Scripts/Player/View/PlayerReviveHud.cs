@@ -112,9 +112,14 @@ public class PlayerReviveHud : NetworkBehaviour
         }
 
         // 내가 기능 정지(Die)된 경우 — 동료의 부활 키트를 기다려야 한다는 안내 (#364/#613)
+        // 몸이 회수 불가능한 곳으로 사라졌으면(맨홀 납치, #775) 부활이 영영 없으므로 이 안내 자체가
+        // 거짓이다 — 아무 문구도 띄우지 않는다.
         if (m_incapacitation != null && m_incapacitation.IsDead)
         {
-            SetPrompt(m_selfDeadPrompt);
+            if (m_incapacitation.IsRevivable)
+                SetPrompt(m_selfDeadPrompt);
+            else
+                ClearPrompt();
             return;
         }
 

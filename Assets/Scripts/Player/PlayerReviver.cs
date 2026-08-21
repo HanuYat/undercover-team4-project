@@ -142,7 +142,15 @@ public class PlayerReviver : ChanneledInteractionBehaviour
             return null; // 자기 자신 제외
 
         PlayerIncapacitation targetIncap = target.GetComponent<PlayerIncapacitation>();
-        return targetIncap != null && targetIncap.Cause == cause ? target : null;
+        if (targetIncap == null || targetIncap.Cause != cause)
+            return null;
+
+        // 회수 불가한 몸(맨홀 납치, #775)은 부활 대상이 아니다 — 조준 프롬프트도 뜨면 안 된다.
+        // Down 분기는 영향받지 않는다 — 몸 회수 불가는 Die로 확정된 뒤에만 성립한다.
+        if (cause == IncapacitationCause.Die && !targetIncap.IsRevivable)
+            return null;
+
+        return target;
     }
 
     // ---- 오너 클라 진입점 (서버/오프라인은 즉시 실행, 원격 클라는 서버로 요청) ----
