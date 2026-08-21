@@ -62,6 +62,7 @@ public class PrecipitationMask : MonoBehaviour
     private static readonly int s_amountId = Shader.PropertyToID("_PrecipAmount");
 
     private Camera m_camera; // 시점 카메라 — 꺼지면 다시 찾는다 (ResolveCamera)
+    private bool m_idle;    // 강수가 없어 쉬는 중인가 — 세기를 매 프레임 다시 쓰지 않게
 
     private float m_nextLogAt;
     private System.Text.StringBuilder m_logBuffer;
@@ -84,12 +85,35 @@ public class PrecipitationMask : MonoBehaviour
     {
         // 강수가 끝나면 셰이더가 남은 마스크로 계속 그리지 않게 세기를 0으로 눌러 둔다
         Shader.SetGlobalFloat(s_amountId, 0f);
+        m_idle = false; // 다음에 켜질 때 다시 눌러 주도록
+    }
+
+    private void OnDestroy()
+    {
+        // 런타임에 만든 텍스처는 스스로 정리한다 — 맵을 오갈 때마다 SuddenEvents가 새로 생긴다
+        if (m_mask != null)
+            Destroy(m_mask);
+        m_mask = null;
     }
 
     // 카메라가 움직인 뒤에 굽는다 — 시점 제어(PlayerLook)가 Update 구간에서 카메라를 옮기므로,
     // Update에서 구우면 마스크가 한 프레임 뒤처져 빠르게 돌 때 경계가 밀린다 — 폐기된 파티클 리그도 같은 이유로 LateUpdate였다.
     private void LateUpdate()
     {
+        // <b>강수가 없으면 굽지 않는다.</b> 맑은 라운드(GDD 6-7의 4택 중 하나)에는 마스크를 쓰는 곳이
+        // 없는데도 레이 225발과 텍스처 업로드를 매 프레임 냈다. 세기는 한 번만 눌러 두고 쉰다.
+        if (Amount <= 0f)
+        {
+            if (!m_idle)
+            {
+                m_idle = true;
+                Shader.SetGlobalFloat(s_amountId, 0f);
+            }
+            return;
+        }
+
+        m_idle = false;
+
         Camera camera = ResolveCamera();
         if (camera == null)
             return;
@@ -185,6 +209,10 @@ public class PrecipitationMask : MonoBehaviour
 
         m_built = m_grid;
         m_pixels = new Color[m_grid * m_grid];
+
+        // 격자를 바꾸면 옛 텍스처를 버린다 — 안 버리면 인스펙터를 만질 때마다 쌓인다
+        if (m_mask != null)
+            Destroy(m_mask);
 
         // R8 하나면 충분하다 — 값이 "열렸나" 하나뿐이다. 바이리니어로 늘려 읽고 경계는 물리지 않는다.
         m_mask = new Texture2D(m_grid, m_grid, TextureFormat.R8, mipChain: false, linear: true)

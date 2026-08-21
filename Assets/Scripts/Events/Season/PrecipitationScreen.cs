@@ -180,6 +180,20 @@ public class PrecipitationScreen : MonoBehaviour
             m_renderer.enabled = false;
     }
 
+    private void OnDestroy()
+    {
+        // 런타임에 만든 것은 스스로 정리한다. 쿼드는 카메라의 자식이라 보통 카메라와 함께 죽지만,
+        // 이 컴포넌트가 먼저 사라지는 순서(씬 언로드)에서는 남는다.
+        if (m_quad != null)
+            Destroy(m_quad.gameObject);
+        if (m_material != null)
+            Destroy(m_material);
+
+        m_quad = null;
+        m_material = null;
+        m_renderer = null;
+    }
+
     private void LateUpdate()
     {
         m_current = m_fadeSeconds <= 0f
