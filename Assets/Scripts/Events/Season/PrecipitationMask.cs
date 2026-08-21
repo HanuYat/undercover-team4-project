@@ -61,6 +61,8 @@ public class PrecipitationMask : MonoBehaviour
     private static readonly int s_maskId = Shader.PropertyToID("_PrecipMask");
     private static readonly int s_amountId = Shader.PropertyToID("_PrecipAmount");
 
+    private Camera m_camera; // 시점 카메라 — 꺼지면 다시 찾는다 (ResolveCamera)
+
     private float m_nextLogAt;
     private System.Text.StringBuilder m_logBuffer;
 
@@ -84,7 +86,7 @@ public class PrecipitationMask : MonoBehaviour
     // Update에서 구우면 마스크가 한 프레임 뒤처져 빠르게 돌 때 경계가 밀린다. (WeatherSkyRig와 같은 사정)
     private void LateUpdate()
     {
-        Camera camera = Camera.main;
+        Camera camera = ResolveCamera();
         if (camera == null)
             return;
 
@@ -137,6 +139,39 @@ public class PrecipitationMask : MonoBehaviour
         }
 
         Debug.Log(m_logBuffer.ToString(), this);
+    }
+
+    /// <summary>
+    /// 마스크를 구울 카메라 — <b>로컬 플레이어의 시점 카메라가 1순위, `Camera.main`은 폴백이다.</b>
+    ///
+    /// ⚠ <c>Camera.main</c>만 믿으면 안 된다: <c>Player.prefab</c>의 시점 카메라는 <b>Untagged</b>라
+    /// Camera.main으로 잡히지 않는다. 그러면 씬에 놓인 고정 카메라가 잡혀 마스크가 <b>맵의 한 지점
+    /// 기준으로 굳는다</b>. (<c>WeatherSkyRig.ResolveView</c>가 같은 이유로 같은 순서를 쓴다)
+    ///
+    /// 꺼진 카메라는 다시 찾는다 — 관전 전환·CCTV로 갈아 끼워지기 때문이다.
+    /// </summary>
+    private Camera ResolveCamera()
+    {
+        if (m_camera != null && m_camera.isActiveAndEnabled)
+            return m_camera;
+
+        m_camera = null;
+
+        Unity.Netcode.NetworkManager manager = Unity.Netcode.NetworkManager.Singleton;
+        if (manager != null && manager.IsListening && manager.LocalClient.PlayerObject != null)
+        {
+            foreach (Camera camera in manager.LocalClient.PlayerObject.GetComponentsInChildren<Camera>(true))
+            {
+                if (!camera.isActiveAndEnabled)
+                    continue;
+
+                m_camera = camera;
+                return m_camera;
+            }
+        }
+
+        m_camera = Camera.main;
+        return m_camera;
     }
 
     private void EnsureBuffers()
