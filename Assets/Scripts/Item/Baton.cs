@@ -296,13 +296,11 @@ public class Baton : ItemBase, IAimedWeapon
         )
         {
             case SwingResult.NoHit:
-                // 허공은 맞은 지점이 없어 월드 연출을 낼 자리가 없다 — 크로스헤어로만 알린다 (#779)
-                NotifyMiss();
+                // 허공은 연출이 없다 — 이미 나간 스윙음이 '휘두르긴 했다'를 말해 주고 있다.
                 NotifyOwner("진압봉 빗나감 — 허공");
                 return;
             case SwingResult.HitNonTarget:
                 App.Game.Fx?.PlayEverywhere(EFx.BatonHitWorld, hit.point, hit.normal);
-                NotifyMiss();
                 NotifyOwner($"진압봉 빗나감 — {hit.collider.name}에 맞음");
                 return;
             case SwingResult.TargetInvalidState:
@@ -311,7 +309,6 @@ public class Baton : ItemBase, IAimedWeapon
                 // 휘두른 것 자체는 이미 나간 스윙 모션·스윙음이 말해 준다.
                 // NPC 쪽 사유는 이제 <b>상태 하나</b>다 — "이미 쓰러진" 갈래는 그 게이트를 걷으면서
                 // 함께 사라졌다(#571, EvaluateSwing 주석). 쓰러진 대상은 이제 유효타다.
-                NotifyMiss(); // 데미지가 안 들어간 것은 허공과 같다 — 사유는 아래 콘솔에 있다
                 NotifyOwner(
                     playerTarget != null
                         ? $"진압봉 무효 — 이미 무력화된 동료 ({playerTarget.name})"
@@ -485,26 +482,6 @@ public class Baton : ItemBase, IAimedWeapon
     // 로컬 HUD라 오너 스폰 전이거나 HUD 없는 구성에서는 null이다 (App.UI.Crosshair 주석).
     private static void ApplyHitMarker(bool friendlyFire) =>
         App.UI.Crosshair?.ShowHit(friendlyFire);
-
-    /// <summary>
-    /// 빗나감을 때린 사람에게만 알린다 — 크로스헤어 미스 마커. (#779)
-    /// 데미지가 안 들어간 결과 전부(허공·소품·무효 대상)를 하나로 묶는다 — 갈래는 오너 콘솔에 있다.
-    /// </summary>
-    private void NotifyMiss()
-    {
-        if (!IsSpawned)
-        {
-            ApplyMissMarker(); // 오프라인 — RPC 경로가 없다
-            return;
-        }
-
-        NotifyMissRpc();
-    }
-
-    [Rpc(SendTo.Owner)]
-    private void NotifyMissRpc() => ApplyMissMarker();
-
-    private static void ApplyMissMarker() => App.UI.Crosshair?.ShowMiss();
 
     // ---- 조준 판정 ----
 
