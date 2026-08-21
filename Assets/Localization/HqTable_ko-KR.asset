@@ -71,13 +71,23 @@ MonoBehaviour:
       m_Items:
       - rid: 6276845898492543064
   - m_Id: 7100000000700
-    m_Localized: "생사 불문"
+    m_Localized: "\uC0DD\uC0AC \uBD88\uBB38"
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000701
-    m_Localized: "생포 필수"
+    m_Localized: "\uC0DD\uD3EC \uD544\uC218"
     m_Metadata:
       m_Items: []
+  - m_Id: 6221034091503616
+    m_Localized: "CH{0} \xB7 IR"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845898492543064
+  - m_Id: 6221102777425920
+    m_Localized: "CH{0} \xB7 {1} \xB7 IR"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845898492543064
   references:
     version: 2
     RefIds:
@@ -89,3 +99,5 @@ MonoBehaviour:
         - id: 7100000000502
         - id: 7100000000503
         - id: 7100000000504
+        - id: 6221034091503616
+        - id: 6221102777425920

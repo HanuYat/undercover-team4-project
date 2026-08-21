@@ -441,6 +441,10 @@ MonoBehaviour:
       targets pay nothing if delivered dead'
     m_Metadata:
       m_Items: []
+  - m_Id: 6220632138768384
+    m_Localized: Infrared
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

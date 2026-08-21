@@ -461,6 +461,10 @@ MonoBehaviour:
       \uD55C \uD47C\uB3C4 \uBC1B\uC9C0 \uBABB\uD569\uB2C8\uB2E4"
     m_Metadata:
       m_Items: []
+  - m_Id: 6220632138768384
+    m_Localized: "\uC801\uC678\uC120"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

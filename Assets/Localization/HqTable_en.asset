@@ -78,6 +78,16 @@ MonoBehaviour:
     m_Localized: Alive Only
     m_Metadata:
       m_Items: []
+  - m_Id: 6221034091503616
+    m_Localized: "CH{0} \xB7 IR"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845898492543065
+  - m_Id: 6221102777425920
+    m_Localized: "CH{0} \xB7 {1} \xB7 IR"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845898492543065
   references:
     version: 2
     RefIds:
@@ -89,3 +99,5 @@ MonoBehaviour:
         - id: 7100000000502
         - id: 7100000000503
         - id: 7100000000504
+        - id: 6221034091503616
+        - id: 6221102777425920
