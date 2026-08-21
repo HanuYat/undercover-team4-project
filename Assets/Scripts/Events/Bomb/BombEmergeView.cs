@@ -5,11 +5,10 @@ using UnityEngine;
 ///
 /// <b>순수 표현이다.</b> 등장 시간 동안 폭탄은 무장 전(<see cref="BombState.Emerging"/>)이라 움직이지도
 /// 터지지도 않는다. 그 사실은 <see cref="BombDevice"/>가 서버 권위로 정해 전 피어에 전파하고, 이 뷰는
-/// 상태가 Emerging으로 바뀐 순간부터 자기 시계로 애니메이션을 돌린다 — 진행도를 따로 동기화하지 않는다
-/// (피어 간 몇 프레임 어긋나도 보이는 것만 다르고, 무장 시각은 서버가 쥔 하나뿐이다).
-///
-/// <b>상자는 여기서 다루지 않는다</b> — 씬에 미리 놓인 <see cref="BombCrate"/>가 자기 연출을 스스로
-/// 돌린다. 이 뷰는 상자가 물러난 뒤의 로봇 기동만 맡는다.
+/// 상태가 Emerging이 된 순간부터 자기 시계로 애니메이션을 돌린다 — 진행도는 동기화하지 않는다
+/// (몇 프레임 어긋나도 보이는 것만 다르고, 무장 시각은 서버가 쥔 하나뿐이다).
+/// <b>상자는 여기서 다루지 않는다</b> — 씬의 <see cref="BombCrate"/>가 자기 연출을 스스로 돌리고,
+/// 이 뷰는 상자가 물러난 뒤의 로봇 기동만 맡는다.
 /// </summary>
 [RequireComponent(typeof(BombDevice))]
 public class BombEmergeView : MonoBehaviour

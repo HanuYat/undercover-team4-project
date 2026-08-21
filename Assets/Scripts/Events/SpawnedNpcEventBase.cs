@@ -292,6 +292,15 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
             return;
         }
 
+        // 죽었다 — 손을 떼고 시체를 남긴다. 마커가 남아 유치장에 끌고 가면 경범죄 인계다 (#688)
+        if (state == NpcState.Dead)
+        {
+            Debug.Log($"[돌발이벤트] {m_displayName} — 사망, 이벤트 종료 (시체 인계 시 경범죄 판정)");
+            m_pendingStart = false; // 스폰 프레임에 죽으면 시체에 ApplyBehavior가 걸린다
+            m_releaseQueued = true; // 전이 통지 중첩 회피 — 아래 이탈 분기와 같은 관례 (#310)
+            return;
+        }
+
         // 행동을 시작한 뒤 배회 상태로 돌아왔다 = 제압 실패로 뿌리치고 이탈함. 소멸시키지 않고
         // 배회 시민으로 도심에 남긴다 (#310) — 마커가 남아 있어 언제든 다시 잡아 인계하면 수익이 난다.
         if (m_hasStarted && (state == NpcState.Idle || state == NpcState.Walk))

@@ -3,26 +3,14 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 도로를 흐르는 차 한 대 (#634). 스폰된 자리에서 <b>직진만</b> 하고, 정해진 거리를 다 쓰면
-/// 회수돼 풀로 돌아간다 — 조향도, 제자리 복귀도 없다.
+/// 도로를 흐르는 차 한 대 (#634). 스폰된 자리에서 <b>직진만</b> 하고 정해진 거리를 다 쓰면 회수돼
+/// 풀로 돌아간다 — 조향도, 국면도 없다(#304의 4국면은 차를 재사용하는 전제에서만 필요했다).
 ///
-/// <b>국면이 없다.</b> 예전(#304)에는 세워 둠 → 경고 → 주행 → 복귀 넷을 오갔는데, 그 넷은
-/// "이벤트로 뽑힌 한 대를 다시 쓴다"는 전제에서만 필요한 장치였다. 상시 교통에서 차는 스폰되는
-/// 순간부터 이미 달리는 중이고, 다 달리면 <b>다른 자리에서 다시 태어난다</b>.
-///
-/// <b>예고는 빛과 소리가 진다.</b> 경고 2초가 사라진 자리를 헤드라이트·엔진음이 대신하며, 둘 다
-/// 스폰 순간부터 켜져 있다. 그 시점을 오브젝트 활성화(<see cref="OnEnable"/>)에 묶어 둔 이유는
-/// 세션이든 오프라인이든, 서버든 클라든 <b>차가 화면에 나타나는 바로 그 순간</b>이기 때문이다.
-/// 공정성의 나머지 절반인 배출 간격의 하한은 <see cref="TrafficLane"/>이 진다.
-///
-/// 이동은 서버가 계산하고 NetworkTransform이 결과를 복제한다. NavMesh를 쓰지 않는다 — 도로가
-/// 아니라 좌표 직선이다.
-///
-/// 명중 처리는 폭탄(<see cref="BombDevice"/>)의 3단 구조를 그대로 따른다:
-///  · 사람 피해·밧줄 해제는 서버
-///  · 사람 넉백은 <b>오너 클라</b> — 이동 권한이 오너에게 있어 서버가 밀어도 되돌아간다
-///  · NPC 피해·넉백은 서버 — NPC 이동 권한은 서버에 있다
-/// 한 번 친 대상은 다시 치지 않는다(차체가 지나가는 동안 매 틱 겹치므로).
+/// 예고는 헤드라이트·엔진음이 진다 — 둘 다 <see cref="OnEnable"/>(차가 화면에 나타나는 순간)부터
+/// 켜져 있고, 배출 간격의 하한은 <see cref="TrafficLane"/>이 진다.
+/// 이동은 서버가 풀고 NetworkTransform이 복제한다 — NavMesh가 아니라 좌표 직선이다. 명중은
+/// 폭탄(<see cref="BombDevice"/>)의 3단 구조를 따른다: 사람 피해·밧줄은 서버, 사람 넉백은 오너 클라
+/// (이동 권한이 오너다), NPC 피해·넉백은 서버. 한 번 친 대상은 그 주행 안에서 다시 치지 않는다.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
 [RequireComponent(typeof(AudioSource))] // 엔진음 루프 — 떼면 접근 예고가 절반 사라진다
@@ -84,25 +72,16 @@ public class TrafficVehicle : NetworkBehaviour
     private readonly HashSet<Transform> m_hitPeople = new HashSet<Transform>();
     private readonly HashSet<NpcController> m_hitNpcs = new HashSet<NpcController>();
 
-    // 사람을 찾는 쿼리라 <b>래그돌 본을 뺀다.</b> 한 사람이 본만 11개를 들고 있어(플레이어·시민 동일)
-    // 마스크를 열어 두면 차체 5 + 도로 2 + 사람 둘이면 벌써 31개다 — OverlapBox는 버퍼가 넘치면
-    // <b>잘린 개수만 돌려주고 넘쳤다고 알려주지 않으므로</b> 정면으로 치인 사람이 조용히 살아남는다.
-    // 시체가 도로에 남는 설계라 그 포화는 라운드가 갈수록 상시가 된다.
-    // 어느 본에 맞아도 GetComponentInParent가 같은 대상으로 올라가므로 판정력은 그대로다.
+    // 사람 쿼리라 <b>래그돌 본을 뺀다</b> — 한 사람이 본 11개라 마스크를 열면 64칸이 조용히 포화되고
+    // (OverlapBox는 넘쳤다고 알려주지 않는다) 정면으로 치인 사람이 살아남는다.
     private static readonly List<Transform> s_hornScan = new List<Transform>();
 
     private static int s_hitLayers; // 0 = 아직 조회 전
 
-    private static readonly Collider[] s_overlap = new Collider[64]; // 폭탄(BombDevice)과 같은 크기
+    private static readonly Collider[] s_overlap = new Collider[64]; // 폭탄(BombBlast)은 256이다 — 여기는 차체 한 대분
 
-    /// <summary>
-    /// 치임 판정에 쓰는 레이어 마스크 — 래그돌 본을 뺀 전 레이어.
-    ///
-    /// ⚠ <b>필드 초기화로 못 만든다.</b> <see cref="LayerMask.NameToLayer"/>는 MonoBehaviour의
-    /// 생성자·필드 초기화(= static 생성자가 그 시점에 걸리는 경우 포함)에서 호출이 <b>금지</b>돼 있어
-    /// 예외가 난다 — 풀이 차를 미리 만드는 순간 정확히 그 시점이다. 그래서 첫 사용 시점에 늦게
-    /// 조회한다(<see cref="NpcNavAreas.RoadMask"/>와 같은 패턴).
-    /// </summary>
+    /// <summary>치임 판정 레이어 마스크 — 래그돌 본을 뺀 전 레이어.
+    /// ⚠ 필드 초기화로 못 만든다: <see cref="LayerMask.NameToLayer"/>가 생성자·필드 초기화에서 금지돼 첫 사용 시점에 늦게 조회한다.</summary>
     private static int HitLayers
     {
         get
@@ -158,9 +137,8 @@ public class TrafficVehicle : NetworkBehaviour
         SetHeadlights(false);
         StopEngineLoop();
 
-        // 명중 장부는 여기서 비운다 — 중복을 막는 것은 <b>한 번의 주행 안에서만</b>이 목적이다
-        // (차체가 지나가는 동안 매 틱 겹친다). 비우지 않으면 재사용된 차가 지난 주행에서 한 번
-        // 친 사람을 영영 다시 치지 않는다.
+        // 명중 장부는 여기서 비운다 — 중복 방지는 <b>한 주행 안에서만</b>이 목적이라, 비우지 않으면
+        // 재사용된 차가 지난 주행에서 친 사람을 영영 다시 치지 않는다.
         m_hitPeople.Clear();
         m_hitNpcs.Clear();
 
@@ -169,11 +147,8 @@ public class TrafficVehicle : NetworkBehaviour
         IsFinished = false;
     }
 
-    /// <summary>
-    /// 이 자리에서 <paramref name="runDistance"/>m를 <paramref name="speed"/>로 달리게 한다 —
-    /// 서버(또는 오프라인) 전용. 위치·회전은 이미 레인이 잡아 둔 상태로 들어온다(풀 핸들러가 스폰
-    /// 전에 세운다) — 여기서는 방향을 수평으로 눕히고 그 축으로만 달린다.
-    /// </summary>
+    /// <summary><paramref name="runDistance"/>m를 <paramref name="speed"/>로 달리게 한다 — 서버(또는 오프라인) 전용.
+    /// 위치·회전은 레인이 스폰 전에 잡아 두므로, 여기서는 방향을 수평으로 눕히고 그 축으로만 달린다.</summary>
     public void ServerBeginRun(float runDistance, float speed)
     {
         m_direction = transform.forward;
@@ -216,25 +191,19 @@ public class TrafficVehicle : NetworkBehaviour
     }
 
     // 호스트 화면만을 위한 프레임 보간 (#717) — 위치를 렌더 시각으로 당겨 그린다.
-    // <b>판정·도착·경적은 건드리지 않는다</b>: 그건 틱이 소유하고, 여기는 그리는 자리일 뿐이다.
-    // 틱이 매번 자기 시각의 값으로 되돌려 놓으므로 이 덧그리기가 복제값을 흔들지 않는다.
+    // <b>판정·도착·경적은 건드리지 않는다</b> — 틱이 매번 자기 시각의 값으로 되돌려 놓는다.
     private void ServerRenderStep()
     {
         float travelled = Mathf.Min(m_speed * (ServerNow() - m_startTime), m_runDistance);
         transform.position = m_startPoint + m_direction * travelled;
     }
 
-    // 서버(또는 오프라인)의 주행 1스텝 — 시각을 받아 그 시각의 위치를 <b>새로 푼다</b>.
-    //
-    // ⚠ <b>누적하지 않는 것이 요점이다</b> (#717). 예전에는 매 Update마다 speed*deltaTime을 더했는데,
-    // NetworkTransform은 틱에 그 값을 찍어 보내므로 틱당 이동량이 <b>프레임레이트에서 파생</b>됐다 —
-    // 실측 0.000~2.324m(기대 0.733m)로 흔들려 클라가 그 속도 변동을 그대로 재생했다.
-    // 시작점·시작시각에서 풀면 틱당 이동량이 speed÷tickRate로 고정된다.
+    // 서버(또는 오프라인)의 주행 1스텝 — 시작점·시작시각에서 그 시각의 위치를 <b>새로 푼다</b>.
+    // ⚠ 누적하면 틱당 이동량이 프레임레이트에서 파생돼 클라가 속도 변동을 재생한다 (#717).
     private void ServerDriveStep(float now)
     {
-        // Update()와 같은 가드 — 주행이 끝난 뒤 회수(TrafficManager.RecycleFinished)되기 전까지
-        // 틱마다 이 함수가 계속 불리므로(OnServerTick은 m_driving을 보지 않는다), 여기서 막지 않으면
-        // 회수 타이밍이 바뀔 때 조용히 어긋난다.
+        // Update()와 같은 가드 — 주행이 끝나도 회수 전까지 틱마다 불리므로(OnServerTick은
+        // m_driving을 보지 않는다) 여기서 막아야 회수 타이밍이 바뀔 때 어긋나지 않는다.
         if (!m_driving)
             return;
 
@@ -319,18 +288,8 @@ public class TrafficVehicle : NetworkBehaviour
         return true;
     }
 
-    /// <summary>
-    /// 앞에 사람이 있으면 경적을 울린다. 서버 전용.
-    ///
-    /// <b>대낮에는 헤드라이트가 거의 읽히지 않는다</b> — 그래서 즉사의 예고를 지는 가시성 축
-    /// (GDD 6-6)의 실질은 소리가 진다. 한 번만 울리면 눈치채기 전에 지나가므로 앞에 사람이 있는
-    /// 동안 간격을 두고 되풀이한다.
-    ///
-    /// 대상은 <b>플레이어뿐이다</b> — 시민은 경적에 반응하지 않고, 예고는 피할 수 있는 쪽에만 뜻이 있다.
-    ///
-    /// ⚠ <b>쿨다운을 먼저 본다.</b> 아래 훑기가 FindObjectsByType이라 매 프레임 돌리면 동시 주행
-    /// 대수만큼 곱해진다 — 이 순서면 차 한 대가 <see cref="m_hornInterval"/>에 한 번만 훑는다.
-    /// </summary>
+    /// <summary>앞에 사람이 있으면 경적을 울린다 — 대상은 플레이어뿐. 서버 전용. 대낮엔 헤드라이트가 안 읽혀 예고의 실질은 소리다 (GDD 6-6).
+    /// ⚠ 쿨다운을 먼저 본다 — 아래 훑기가 FindObjectsByType이라 동시 주행 대수만큼 곱해진다.</summary>
     private void ServerTickHorn()
     {
         if (m_hornFx == EFx.None || Time.time < m_nextHornAt)
@@ -401,19 +360,8 @@ public class TrafficVehicle : NetworkBehaviour
         }
     }
 
-    // 시민도 플레이어와 같은 피해를 받는다 (#634 확정) — 예전에는 넘어지기만 했다.
-    //
-    // 피해는 TakeEnvironmentalDamage로 넣는다 (#690) — 밧줄 신병은 TakeDamage의 우회 방지 게이트에
-    // 막혀 차에 치여도 죽지 않았다. 그 게이트는 플레이어 타격용이지 차는 신병 상태를 가리지 않는다.
-    //
-    // ⚠ <b>넉백이 피해보다 먼저다.</b> 피해가 먼저 가면 대상이 죽어 상태가 Dead가 되는데
-    // ServerApplyKnockback은 그 상태를 거르지 않아 시체를 Stunned로 되살린다. 이 순서면
-    // 사망 처리(NpcDeath.ServerEnterDead ①)가 비행을 스스로 끊는다 — 즉 <b>죽는 시민은 그 자리에
-    // 무너진다.</b> 시체를 날리는 임펄스는 폭발(#506)과 같은 전 피어 통로가 필요해 여기서는 걸지 않는다.
-    //
-    // <b>장부는 시체를 못 막는다.</b> m_hitNpcs는 이 차의 한 번의 주행 안에서만 유효한데, 시체는
-    // 도로에 남으므로 <b>다음 차가 같은 시체를 다시 친다</b>. 그래서 시체 거르기는 여기가 아니라
-    // 맞는 쪽에 있다 — 피해는 NpcStateRules.CanTakeEnvironmentalDamage가, 넉백은 ServerApplyKnockback이 막는다.
+    // 시민도 같은 피해를 받고(#634) 진입점은 TakeEnvironmentalDamage다(#690 — 밧줄 신병도 치인다).
+    // ⚠ 넉백이 피해보다 먼저다: 나중이면 Dead가 되어 씹힌다. 시체 임펄스는 안 건다(가능하지만 #634 결정, #768).
     private void ServerHitNpc(NpcController npc)
     {
         if (!m_hitNpcs.Add(npc))

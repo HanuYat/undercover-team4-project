@@ -113,6 +113,8 @@ public class NpcController : NetworkBehaviour
     public NpcKnockback Knockback => m_knockback;
     /// <summary>특수 임무 — 오검거·납치·소매치기의 수용·추격·수렴·호송 (#277~#279/#371/#303)</summary>
     public NpcDutyAgent Penalty => m_penalty;
+    /// <summary>래그돌 — 리그가 없는 프리팹에서는 null이다 (#571/#768)</summary>
+    public NpcRagdoll Ragdoll => m_ragdoll;
     /// <summary>검거 반응 — 위협 대상·도주·저항·스윙 (#76/#205/#213/#220)</summary>
     public NpcReaction Reaction => m_reaction;
     /// <summary>밧줄 — 묶임·끌기·무게 (#269/#369/#398)</summary>

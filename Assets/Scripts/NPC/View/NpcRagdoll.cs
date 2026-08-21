@@ -336,7 +336,8 @@ public class NpcRagdoll : MonoBehaviour
     }
 
     /// <summary>
-    /// 래그돌 진입 — <b>멱등</b>. 이미 물리 중이면 임펄스만 누적하고, 정착했으면 무동작.
+    /// 래그돌 진입 — <b>멱등</b>. 이미 물리 중이면 임펄스만 누적한다.
+    /// ⚠ <b>정착한 시체도 임펄스를 받는다</b> — 다시 날리지 않으려면 호출부가 걸러야 한다 (#768).
     /// </summary>
     /// <param name="impulse">밀려나는 속도(m/s). 힘없이 무너지는 사망은 <see cref="Vector3.zero"/>.</param>
     public void EnterRagdoll(Vector3 impulse)
@@ -351,7 +352,7 @@ public class NpcRagdoll : MonoBehaviour
         }
 
         if (m_state != RagdollState.Animated)
-            return; // 이미 정착했다 — 다시 날리지 않는다
+            return; // 도달 불가 — 상태는 Animated/Ragdoll 둘뿐이다. 정착은 m_settled가 따로 든다
 
         SampleAnimatorClock(); // 진단 ④ (임시) — ⚠ 애니메이터를 끄기 전에 읽어야 한다
 
