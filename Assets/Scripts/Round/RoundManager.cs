@@ -230,6 +230,9 @@ public class RoundManager : CommonManagerBase
 
         PlayerIncapacitation.OnAnyIncapacitatedChanged -= HandleAnyIncapacitatedChanged;
 
+        if (m_networkManager != null)
+            m_networkManager.OnClientDisconnectCallback -= HandleClientDisconnected;
+
         if (Assigner != null)
             Assigner.OnCriminalAssigned -= HandleCriminalAssigned;
     }
@@ -264,6 +267,9 @@ public class RoundManager : CommonManagerBase
         // 서버만 연다(서버 권위) - 클라이언트는 서버의 스폰/판정 동기화만 받음.
         if (!m_networkManager.IsServer)
             return;
+
+        // 이탈은 무력화 변화가 아니라 전멸 판정이 다시 돌 계기가 없다 — 여기서 계기를 만든다 (#780)
+        m_networkManager.OnClientDisconnectCallback += HandleClientDisconnected;
 
         BeginRoundPreparation();
     }
@@ -400,6 +406,8 @@ public class RoundManager : CommonManagerBase
 
     private void Update()
     {
+        TickWipeoutRecheck();
+
         // 제한시간 진행 (#103). Phase가 InProgress가 되는 곳이 서버/오프라인뿐이라
         // 클라이언트에서는 이 타이머가 돌지 않는다 — 라운드 진행은 서버 권위.
         if (m_phase != RoundPhase.InProgress || float.IsPositiveInfinity(RemainingSeconds))
@@ -489,6 +497,23 @@ public class RoundManager : CommonManagerBase
 
         CriminalArrestCount--;
         Debug.Log($"[라운드] 진범 탈출 — 진범 검거 {CriminalArrestCount}명, 목표 진행 {CurrentFund}/{TargetFund}원");
+    }
+
+    // 이탈 재판정을 예약한 프레임. -1이면 예약 없음.
+    private int m_wipeoutRecheckFrame = -1;
+
+    // 세션 이탈 — 나간 사람이 레지스트리에서 빠지는 것은 오브젝트 파괴(프레임 끝) 뒤라, 지금 판정하면
+    // 아직 멀쩡한 그 사람이 잡혀 전멸이 아니라고 나온다. 다음 프레임으로 미룬다. (#780)
+    private void HandleClientDisconnected(ulong clientId) => m_wipeoutRecheckFrame = Time.frameCount;
+
+    // 예약된 재판정을 소화한다 — 예약한 프레임을 넘긴 뒤에만 돈다.
+    private void TickWipeoutRecheck()
+    {
+        if (m_wipeoutRecheckFrame < 0 || Time.frameCount <= m_wipeoutRecheckFrame)
+            return;
+
+        m_wipeoutRecheckFrame = -1;
+        HandleAnyIncapacitatedChanged();
     }
 
     // 플레이어 무력화 상태 변화 수신 — 전원 다운(전멸)이면 게임오버로 종료한다. (#105, 서버/오프라인에서만 발행됨)
