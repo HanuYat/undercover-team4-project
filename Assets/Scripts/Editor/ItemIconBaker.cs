@@ -367,10 +367,11 @@ public class ItemIconBaker : EditorWindow
             if (item == null || entry.Value == null)
                 continue;
 
-            // 이미 배선된 아이콘이 있으면 그 파일에 덮어쓴다 — .meta가 남아 임포트 설정과 GUID 배선이 유지된다
-            string path = item.ItemIcon != null
-                ? AssetDatabase.GetAssetPath(item.ItemIcon)
-                : $"{m_outputFolder}/Item_{item.name}.png";
+            // 저장 위치는 항상 이 폴더다. 배선된 아이콘의 경로를 따라가면 누가 임시로 꽂아 둔 팩 스프라이트를
+            // 구운 그림으로 덮어쓸 수 있고(서드파티 에셋 수정 금지), 따라갈 이유도 없다 — 임포트 설정은
+            // ApplySpriteImport가, 프리팹 배선은 AssignIcon이 직접 하고, 경로가 이름으로 결정적이라
+            // 다시 구워도 같은 파일을 쳐서 GUID가 그대로 유지된다.
+            string path = $"{m_outputFolder}/Item_{item.name}.png";
 
             File.WriteAllBytes(path, entry.Value.EncodeToPNG());
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
