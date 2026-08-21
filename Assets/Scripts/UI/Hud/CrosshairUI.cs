@@ -53,6 +53,9 @@ public class CrosshairUI : CommonManagerBase
     [Tooltip("동료를 때렸을 때 히트마커 색 — 오사를 즉시 알아야 한다 (#461)")]
     [SerializeField] private Color m_friendlyFireColor = new Color(1f, 0.35f, 0.1f);
 
+    [Tooltip("빗나갔을 때 마커 색 (#779) — 명중과 헷갈리지 않게 흐리게 둔다")]
+    [SerializeField] private Color m_missColor = new Color(0.7f, 0.7f, 0.7f, 0.5f);
+
     [Tooltip("히트마커 표시 시간(초)")]
     [Min(0.02f)]
     [SerializeField] private float m_hitMarkerSeconds = 0.15f;
@@ -63,16 +66,23 @@ public class CrosshairUI : CommonManagerBase
 
     /// <summary>
     /// 명중 순간 히트마커를 잠깐 띄운다 — 때린 사람에게만 보인다(오너 전용 호출). (#478)
-    /// <b>유효타에만 부른다</b> — 이미 제압된 대상을 쳐서 피해가 들어가지 않았을 때는 부르지 않는다.
-    /// 이 표시의 의미를 "데미지가 들어갔다" 하나로 고정하기 위해서다.
+    /// <b>피해가 실제로 들어갔을 때만 부른다</b> — 안 들어간 스윙은 <see cref="ShowMiss"/>다.
     /// </summary>
     /// <param name="friendlyFire">동료를 맞혔는가 — 색이 달라진다. 소리로는 구분되지 않는다(둘 다 로봇)</param>
-    public void ShowHit(bool friendlyFire)
+    public void ShowHit(bool friendlyFire) =>
+        ShowMarker(friendlyFire ? m_friendlyFireColor : m_hitColor);
+
+    /// <summary>
+    /// 빗나간 순간 같은 마커를 흐린 색으로 띄운다 — 때린 사람에게만 보인다. (#779)
+    /// 컨테이너를 히트마커와 공유한다 — 마커는 "판정이 끝났다"를 말하고 결과는 색이 말한다.
+    /// </summary>
+    public void ShowMiss() => ShowMarker(m_missColor);
+
+    private void ShowMarker(Color color)
     {
         if (m_hitMarker == null)
             return;
 
-        Color color = friendlyFire ? m_friendlyFireColor : m_hitColor;
         foreach (Graphic graphic in HitMarkerGraphics)
             graphic.color = color;
 

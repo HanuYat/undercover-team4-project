@@ -36,7 +36,8 @@ public class PlayerInteractor : NetworkBehaviour
 
     // 가시선 히트 버퍼 — UpdateTarget이 매 프레임 도는 경로라 RaycastAll(호출마다 배열 할당) 대신
     // NonAlloc + 고정 버퍼를 쓴다. 소유자 전용 컴포넌트라 static 공유로 충분하다.
-    private static readonly RaycastHit[] s_losHits = new RaycastHit[16];
+    // 16칸은 래그돌 본까지 세면 군중 안에서 넘친다 — 넘치면 정렬 없이 잘려 가림이 조용히 빠진다 (#779)
+    private static readonly RaycastHit[] s_losHits = new RaycastHit[64];
 
     public IInteractable CurrentInteractable { get; private set; }
     public GameObject CurrentTarget { get; private set; } // 아이템 타겟팅/UI용
