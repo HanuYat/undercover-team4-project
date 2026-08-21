@@ -597,6 +597,12 @@ public class JailIntake : CommonManagerBase
             if (npc == null || !npc.Death.IsDead)
                 continue;
 
+            // ⚠ 옮기기 <b>전</b>에 끊는다 (#757) — ServerMoveCorpse가 원장에 남은 전원에게 관절을
+            // 다시 건다(NpcRopeDrag.ServerReattachCorpseRopes). 뒤에서 끊으면 감옥 안 참가자와
+            // 문 밖을 잇는 관절이 한 번 생겼다 사라진다. 앞에서 걷으면 재부착 시점에 나가는 사람만
+            // 남아 있어 애초에 안 생긴다.
+            PlayerEscorter.ReleaseTethersOnCorpseExcept(npc, escorter);
+
             npc.Custody.ServerMoveCorpse(m_jailZone.ExitSlot(firstSlot + moved));
             ServerReleaseCorpse(npc);
             moved++;
