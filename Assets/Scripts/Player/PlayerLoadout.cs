@@ -7,7 +7,7 @@ using UnityEngine;
 /// <summary>
 /// 플레이어의 아이템 보유·장착·줍기·버리기를 관리한다. (#47, #46, #88)
 /// 아이템은 독립 NetworkObject 프리팹이므로(#88) 서버가 스폰·소유권 부여·부착을 담당하고,
-/// 오너 클라는 서버가 보낸 보유 목록으로 자기 인벤토리(Slots, 고정 3칸)를 재구성해 휠/숫자키 전환(#46, #144)·
+/// 오너 클라는 서버가 보낸 보유 목록으로 자기 인벤토리(Slots, 고정 5칸)를 재구성해 휠/숫자키 전환(#46, #144)·
 /// 1인칭 손 표시(#45)·인벤토리 UI(#144)에 쓴다. 칸 배치(어느 칸에 뭐가 있는지)는 오너 로컬 관심사.
 ///
 /// 권위 구분:
@@ -30,8 +30,8 @@ public class PlayerLoadout : NetworkBehaviour
     [SerializeField]
     private float m_dropDistance = 1.2f;
 
-    /// <summary>플레이어 소지 슬롯 수 — 고정 3칸 (#144, GDD 용량 3칸).</summary>
-    public const int k_maxHeldItems = 3;
+    /// <summary>플레이어 소지 슬롯 수 — 고정 5칸 (#144, 3칸에서 확장 #793, GDD 용량 5칸).</summary>
+    public const int k_maxHeldItems = 5;
 
     // 드롭 장애물 탐침 높이(m). 발밑에서 쏘면 바닥·문턱에 걸리므로 허리 높이에서 앞을 훑는다.
     private const float k_dropProbeHeight = 0.5f;
@@ -72,7 +72,7 @@ public class PlayerLoadout : NetworkBehaviour
     // 게이트에 쓰므로 public — IsIncapacitated와 같은 이유다.
     public bool IsTerminalFocused => m_terminalFocus != null && m_terminalFocus.IsFocusing;
 
-    /// <summary>고정 3칸 슬롯 (빈 칸 = null). 인벤토리 UI(#144)·휠 전환(#46)이 사용한다. (오너 로컬)</summary>
+    /// <summary>고정 5칸 슬롯 (빈 칸 = null). 인벤토리 UI(#144)·휠 전환(#46)이 사용한다. (오너 로컬)</summary>
     public IReadOnlyList<ItemBase> Slots => m_slotModel.Slots;
 
     /// <summary>슬롯 구성 변경 이벤트 — 줍기/버리기/초기 지급/드래그 스왑 시 발행. 인벤토리 UI(#144)가 구독.</summary>
@@ -216,7 +216,7 @@ public class PlayerLoadout : NetworkBehaviour
             return;
         }
 
-        // 소지 3칸 제한 (#144, GDD 용량 3칸) — 꽉 차면 줍기 거부. 서버 권위 검증.
+        // 소지 5칸 제한 (#144/#793, GDD 용량 5칸) — 꽉 차면 줍기 거부. 서버 권위 검증.
         // 개수만 필요하므로 무할당 Count 사용 (동기화용 refs는 부착 후 아래에서 1회 빌드).
         if (m_held.Count >= k_maxHeldItems)
         {
@@ -501,7 +501,7 @@ public class PlayerLoadout : NetworkBehaviour
         EquipSlot(m_slotModel.NextIndex(direction));
     }
 
-    /// <summary>슬롯을 직접 선택해 장착한다 (숫자키 1~3, #144). 빈 칸이면 빈손이 된다.</summary>
+    /// <summary>슬롯을 직접 선택해 장착한다 (숫자키 1~5, #144/#793). 빈 칸이면 빈손이 된다.</summary>
     public void SelectSlot(int index)
     {
         // 다운(무력화) 중에는 아이템 전환 차단 (#105)

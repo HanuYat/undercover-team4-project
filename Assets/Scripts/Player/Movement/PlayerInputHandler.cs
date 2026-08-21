@@ -131,7 +131,7 @@ public class PlayerInputHandler : NetworkBehaviour
     public event Action OnPreviousItem; // 마우스 휠 위 — 이전 아이템으로 전환 (#46)
     public event Action OnNextItem; // 마우스 휠 아래 — 다음 아이템으로 전환 (#46)
     public event Action OnDropItem; // 장착 아이템 버리기 (#88)
-    public event Action<int> OnSelectSlot; // 숫자키 1~3 — 슬롯 직접 선택, 인덱스 0~2 (#144)
+    public event Action<int> OnSelectSlot; // 숫자키 1~5 — 슬롯 직접 선택, 인덱스 0~4 (#144/#793)
     public event Action OnToggleInventory; // I — 인벤토리 편집 모드 토글 (#144, Tab을 상황판에 내주고 옮김 #720)
     public event Action<bool> OnCrouchChanged; // Left Ctrl 홀드 — 누르면 true, 떼면 false (#236)
     public event Action OnJumpPressed; // Space 누름 — 홀드가 아닌 단발 입력 (#189)
@@ -369,7 +369,7 @@ public class PlayerInputHandler : NetworkBehaviour
 
     private void OnDropItemHandler(InputAction.CallbackContext ctx) => OnDropItem?.Invoke();
 
-    // 숫자키 1~3 바인딩이 한 액션에 묶여 있어, 눌린 키 이름("1"~"3")으로 슬롯 인덱스(0~2)를 구한다.
+    // 숫자키 1~5 바인딩이 한 액션에 묶여 있어, 눌린 키 이름("1"~"5")으로 슬롯 인덱스(0~4)를 구한다.
     private void OnSelectSlotHandler(InputAction.CallbackContext ctx)
     {
         if (int.TryParse(ctx.control.name, out int keyNumber))

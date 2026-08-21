@@ -5,8 +5,9 @@ using UnityEngine.UI;
 using TMPro;
 
 /// <summary>
-/// 인벤토리 핫바의 슬롯 한 칸 (#144). 아이콘·이름 표시와 선택 하이라이트,
+/// 인벤토리 핫바의 슬롯 한 칸 (#144). 아이콘 표시와 선택 하이라이트,
 /// 편집 모드(I)에서의 호버 툴팁·드래그 정렬 이벤트를 담당한다. 로직은 InventoryBarView가 소유.
+/// 이름 텍스트는 <b>아이콘이 없는 아이템의 폴백</b>일 뿐이다 (#793) — 아이콘이 있으면 비운다.
 /// </summary>
 public class InventorySlotView : MonoBehaviour,
     IPointerEnterHandler, IPointerExitHandler,
@@ -37,7 +38,7 @@ public class InventorySlotView : MonoBehaviour,
     /// <summary>이 슬롯에 표시 중인 아이템. 빈 칸이면 null.</summary>
     public ItemBase Item => m_item;
 
-    /// <summary>슬롯 인덱스 (0~2).</summary>
+    /// <summary>슬롯 인덱스 (0~4).</summary>
     public int Index => m_index;
 
     /// <summary>바가 스폰 시 1회 호출 — 슬롯 인덱스와 소유 바를 연결한다.</summary>
@@ -67,7 +68,17 @@ public class InventorySlotView : MonoBehaviour,
         }
 
         m_icon.sprite = item.ItemIcon;
-        m_icon.enabled = item.ItemIcon != null; // 아이콘 미설정이면 이름 텍스트가 폴백
+        m_icon.enabled = item.ItemIcon != null;
+
+        // 아이콘이 있으면 칸에 이름을 겹쳐 쓰지 않는다 (#793) — 무엇을 들었는지는 전환할 때마다 뜨는
+        // 이름 팝업(InventoryBarView)과 편집 모드 툴팁이 이미 알려 준다. 아이콘이 아직 없는 아이템만
+        // 이름 텍스트로 버틴다 — 안 그러면 빈 칸과 구분이 안 된다.
+        if (item.ItemIcon != null)
+        {
+            m_nameText.text = string.Empty;
+            return;
+        }
+
         // 구독 즉시 현재 언어 값으로 1회 호출되고, 이후 언어 전환 시마다 다시 호출된다 (#251)
         m_boundName = item.ItemName;
         m_boundName.StringChanged += HandleItemNameChanged;

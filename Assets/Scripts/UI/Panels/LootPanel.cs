@@ -35,7 +35,7 @@ public class LootPanel : PanelBase
     public override bool IsStackable => true; // 창처럼 겹치는 모달
 
     [Header("슬롯")]
-    [Tooltip("소지 3칸(GDD 10-1)에 맞춘 칸 뷰. 부착 순서대로 채운다")]
+    [Tooltip("소지 5칸(GDD 10-1)에 맞춘 칸 뷰. 부착 순서대로 채운다")]
     [SerializeField]
     private LootSlotView[] m_slotViews;
 
