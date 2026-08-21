@@ -257,8 +257,14 @@ public class CriminalAssigner : CommonManagerBase
             if (isSuspect)
             {
                 // isCriminal이 아니라 isSuspect 기준 — 제보 전화 승격된 진범도 조건을 물고 있어야 한다 (#766)
+                //
+                // 튜토리얼에는 생포 필수를 내지 않는다 (#663) — 한 사이클을 처음부터 끝까지 걸어 보게
+                // 하는 것이 목적인데, 저 조건은 <b>가르치지 않은 규칙으로 보상만 0원이 되는</b> 결말이라
+                // 첫 판에 뽑히면 배우는 것 없이 끝난다. 조건 자체는 본 게임에서 배운다.
                 identity.AssignWantedCondition(
-                    Random.value < m_aliveOnlyChance ? WantedCondition.AliveOnly : WantedCondition.DeadOrAlive);
+                    !TutorialDirector.IsActive && Random.value < m_aliveOnlyChance
+                        ? WantedCondition.AliveOnly
+                        : WantedCondition.DeadOrAlive);
 
                 m_criminalNpcs.Add(npcs[i]);
                 m_wantedProfiles.Add(profile);

@@ -51,7 +51,13 @@ public class TutorialDirector : MonoBehaviour
         new Step(k_fieldStartKey, d => d.m_scanned),
         new Step("Subdue", d => d.AnyNpcStunned),
         new Step("Rope", d => d.m_escorter != null && d.m_escorter.IsDraggingAny),
-        new Step("Jail", d => d.m_admitted),
+        // 인계와 판정은 <b>수감 버튼 한 번</b>에 함께 일어난다(JailIntake가 판정을 먼저 돌린다) —
+        // 그래서 조건이 같고, 문구만 둘로 나눠 읽힌다(최소 표시 시간이 순서를 지켜 준다).
+        //
+        // ⚠ <b>감옥 수용(JailZone) 이벤트로 재지 않는다.</b> 그쪽은 <b>계상되는 판정</b>에서만 울리므로
+        // (ArrestVerdictRules.IsCredited) 생포 조건 불충족·오검거는 아무것도 쏘지 않아, 그렇게 인계한
+        // 플레이어가 반응 없는 화면 앞에 영영 갇혔다. 판정은 어느 결과로든 나므로 그것을 기준으로 삼는다.
+        new Step("Jail", d => d.m_judged),
         // 오검거는 체험시키지 않는다 — 지금 페널티가 꺼져 있어(#612) 가르칠 "대가"가 정산 코믹 스탯뿐이다.
         // 대신 판정을 한 번 받아 보게 하고, 진범이 아니면 돈이 들어오지 않는다는 것만 문구로 알린다.
         new Step("Verdict", d => d.m_judged),
@@ -102,7 +108,6 @@ public class TutorialDirector : MonoBehaviour
     private bool m_slotChanged;
     private bool m_cctvSwitched;
     private bool m_scanned;
-    private bool m_admitted;
     private bool m_judged;
     private bool m_teamPanelSeen;
 
@@ -117,7 +122,6 @@ public class TutorialDirector : MonoBehaviour
     private Scanner m_boundScanner;
 
     // 매니저 구독 — 라운드 준비가 끝나야 서는 것들이라 늦게 붙는다
-    private JailZone m_boundJail;
     private ArrestJudge m_boundJudge;
     private bool m_cctvBound;
 
@@ -144,6 +148,15 @@ public class TutorialDirector : MonoBehaviour
 
     private bool AnyNpcDead => AnyNpc(n => n.Death != null && n.Death.IsDead);
 
+    /// <summary>
+    /// 지금이 튜토리얼인가 — 이 컴포넌트가 씬에 있다는 것이 곧 판별 기준이다(AppHelper.FromSceneName 주석).
+    /// 튜토리얼 씬은 <see cref="EScene.Game"/>으로 분류되므로 App.CurrentScene으로는 가릴 수 없다.
+    /// 읽는 곳: <see cref="PlayerHealth"/>(무적 바닥값).
+    /// </summary>
+    public static bool IsActive { get; private set; }
+
+    private void Awake() => IsActive = true;
+
     private void Start()
     {
         TutorialFlow.MarkOffered(); // 직접 Play로 들어온 경우까지 포함해 여기서 한 번 기록한다
@@ -152,6 +165,7 @@ public class TutorialDirector : MonoBehaviour
 
     private void OnDestroy()
     {
+        IsActive = false;
         HidePrompt();
         UnbindAll();
     }
@@ -311,16 +325,9 @@ public class TutorialDirector : MonoBehaviour
             m_cctvBound = true;
         }
 
-        // 인계·판정은 산 사람과 시체가 서로 다른 이벤트로 갈린다 (#766) — 튜토리얼은 둘 다 통과로 친다.
+        // 판정은 산 사람과 시체가 서로 다른 이벤트로 갈린다 (#766) — 튜토리얼은 둘 다 통과로 친다.
         // 시체 인계도 정상 경로다(생사 불문 대상은 감액, 생포 필수 대상은 0원). 산 쪽만 들으면
         // 죽여서 끌고 온 플레이어가 아무 반응 없는 화면 앞에 갇힌다. "값이 다르다"는 토스트가 가르친다.
-        if (m_boundJail == null && App.Game.Jail != null)
-        {
-            m_boundJail = App.Game.Jail;
-            m_boundJail.OnInmateAdmitted += HandleInmateAdmitted;
-            m_boundJail.OnDeceasedRecorded += HandleInmateAdmitted;
-        }
-
         if (m_boundJudge == null && App.Game.ArrestJudge != null)
         {
             m_boundJudge = App.Game.ArrestJudge;
@@ -337,11 +344,6 @@ public class TutorialDirector : MonoBehaviour
             m_boundScanner.OnScanCompleted -= HandleScanCompleted;
         if (m_cctvBound && m_cctv != null)
             m_cctv.OnDisplayChanged -= HandleCctvChanged;
-        if (m_boundJail != null)
-        {
-            m_boundJail.OnInmateAdmitted -= HandleInmateAdmitted;
-            m_boundJail.OnDeceasedRecorded -= HandleInmateAdmitted;
-        }
         if (m_boundJudge != null)
         {
             m_boundJudge.OnArrestJudged -= HandleArrestJudged;
@@ -409,8 +411,6 @@ public class TutorialDirector : MonoBehaviour
     private void HandleScanCompleted(CitizenProfile profile, ulong npcId) => m_scanned = true;
 
     private void HandleCctvChanged() => m_cctvSwitched = true;
-
-    private void HandleInmateAdmitted(NpcController npc) => m_admitted = true;
 
     private void HandleArrestJudged(ArrestResult result) => m_judged = true;
 }
