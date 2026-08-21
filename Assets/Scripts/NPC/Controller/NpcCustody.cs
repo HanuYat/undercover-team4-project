@@ -208,9 +208,18 @@ public class NpcCustody : NetworkBehaviour
             return;
 
         if (m_ragdoll != null)
+        {
             m_ragdoll.ServerPlaceCorpse(position);
+
+            // 자른 쪽이 되돌린다 — ServerPlaceCorpse는 옮기기 전에 관절 밧줄을 전부 끊는다(발사 방지).
+            // 밧줄 원장은 그 뒤에도 남으므로, 옮긴 자리에서 원장이 말하는 사람들에게 다시 건다.
+            // 무동작인 경우(수감 — 배치 전에 원장도 이미 걷혔다)는 NpcRopeDrag 쪽 주석 참고.
+            m_owner.Rope.ServerReattachCorpseRopes();
+        }
         else
+        {
             transform.position = position; // 리그가 없는 프리팹 — 옮길 뼈가 없다
+        }
     }
 
     /// <summary>
