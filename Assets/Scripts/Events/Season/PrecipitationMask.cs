@@ -49,9 +49,20 @@ public class PrecipitationMask : MonoBehaviour
     [Min(0.1f)]
     [SerializeField] private float m_settleSpeed = 6f;
 
+    [Header("진단")]
+    [Tooltip("켜면 마스크 격자를 콘솔에 그린다 — 셰이더 없이 판정만 확인할 때 쓴다 (#782)")]
+    [SerializeField] private bool m_logMask;
+
+    [Tooltip("찍는 간격(초)")]
+    [Min(0.1f)]
+    [SerializeField] private float m_logInterval = 1f;
+
     // 셰이더가 읽는 전역 — 강수 셰이더 하나뿐이라 머티리얼마다 물리지 않는다
     private static readonly int s_maskId = Shader.PropertyToID("_PrecipMask");
     private static readonly int s_amountId = Shader.PropertyToID("_PrecipAmount");
+
+    private float m_nextLogAt;
+    private System.Text.StringBuilder m_logBuffer;
 
     private Texture2D m_mask;
     private Color[] m_pixels; // Texture2D.SetPixels용 버퍼 — 매 프레임 새로 만들지 않는다
@@ -85,6 +96,47 @@ public class PrecipitationMask : MonoBehaviour
 
         Shader.SetGlobalTexture(s_maskId, m_mask);
         Shader.SetGlobalFloat(s_amountId, Mathf.Clamp01(Amount));
+
+        if (m_logMask)
+            TickLog(camera);
+    }
+
+    // 격자를 그대로 그린다 — 숫자 하나로는 "창가에서 그 방향만 열렸다"가 안 보인다.
+    // # = 열림, . = 막힘, 중간값은 + (시간 보간 중). 화면 위쪽이 첫 줄이다.
+    private void TickLog(Camera camera)
+    {
+        if (Time.time < m_nextLogAt)
+            return;
+
+        m_nextLogAt = Time.time + m_logInterval;
+        m_logBuffer ??= new System.Text.StringBuilder();
+        m_logBuffer.Clear();
+
+        bool cameraSheltered = WeatherShelter.IsSheltered(
+            camera.transform.position,
+            m_blockMask,
+            m_probeHeight
+        );
+
+        m_logBuffer
+            .Append("[강수마스크] 열림 ")
+            .Append((OpenRatio * 100f).ToString("F0"))
+            .Append("% · 카메라 머리 위=")
+            .Append(cameraSheltered ? "막힘(실내)" : "열림(실외)")
+            .Append('\n');
+
+        for (int y = m_grid - 1; y >= 0; y--)
+        {
+            m_logBuffer.Append("  ");
+            for (int x = 0; x < m_grid; x++)
+            {
+                float v = m_pixels[y * m_grid + x].r;
+                m_logBuffer.Append(v > 0.75f ? '#' : v < 0.25f ? '.' : '+');
+            }
+            m_logBuffer.Append('\n');
+        }
+
+        Debug.Log(m_logBuffer.ToString(), this);
     }
 
     private void EnsureBuffers()
