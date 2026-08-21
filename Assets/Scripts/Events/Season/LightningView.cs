@@ -6,8 +6,8 @@ using UnityEngine;
 /// 비·번개 표현 계층 — <see cref="LightningEvent"/>의 on/off와 낙뢰 순간을 받아 화면에 낸다. (#227)
 /// 판정·피해는 이벤트가 하고 여기는 보이는 것만 맡는다 (DeviceBlackoutView와 같은 가름).
 ///
-/// 하늘에 매다는 방식은 <see cref="WeatherSkyRig"/>가 쥔다 — 카메라 위치만 따라가고 회전은 물려받지
-/// 않아 비가 월드 -Y로 떨어지며, 구름과 비가 한 리그에 매달려 <b>구름 아래에서 내리는</b> 그림이 된다.
+/// 비 자체는 <see cref="PrecipitationScreen"/>이 화면 셰이더로 그린다 (#782) — 이 클래스는 on/off와
+/// 먹구름·섬광·낙뢰 FX를 쥔다. 파티클 리그로 하늘에 매달던 방식은 폐기했다.
 ///
 /// <b>싱글톤을 쓰지 않는다</b> — 예전에는 이벤트가 <c>LightningView.Instance</c>로 뷰를 직접 불렀는데,
 /// 새 <c>static Instance</c>는 아키텍처 규칙 R2가 금지한다. 지금은 <see cref="LightningEvent.OnStrike"/>를
@@ -24,55 +24,6 @@ public class LightningView : MonoBehaviour
             + "비워 두면 예고 연출이 없다. 판정은 그대로 예고 시간 뒤에 나므로 회피는 성립한다"
     )]
     [SerializeField] private GameObject m_warningPrefab;
-
-    [Tooltip("내리는 비 파티클")]
-    [SerializeField] private GameObject m_rainParticlePrefab;
-
-    [Tooltip("머리 위 먹구름 파티클")]
-    [SerializeField] private GameObject m_cloudPrefab;
-
-    [Header("하늘 배치")]
-    [Tooltip("카메라 기준 먹구름층 높이(m) — 낮으면 하늘이 아니라 '거리 위 연기'로 보인다")]
-    [SerializeField] private float m_cloudHeight = 80f;
-
-    [Tooltip("비가 방출되는 높이(m) — 구름 높이와 따로 준다. 너무 높으면 화면에 닿기까지 오래 걸린다")]
-    [SerializeField] private float m_precipitationHeight = 14f;
-
-    [Tooltip("켜면 비를 보는 쪽에만 뿌린다 — 시야 앞 한 덩이로 해결한다(수평 방향만 따라가므로 낙하는 그대로 아래)")]
-    [SerializeField] private bool m_rainFollowsView = true;
-
-    [Tooltip("시야 앞으로 밀 거리(m)")]
-    [Min(0f)]
-    [SerializeField] private float m_rainForwardOffset = 8f;
-
-    [Header("크기")]
-    [SerializeField] private float m_rainScale = 2f;
-    [SerializeField] private float m_cloudScale = 10f;
-
-    [Header("먹구름")]
-    [Tooltip(
-        "구름 파티클을 실제로 띄울지. <b>기본은 끔</b> — 하늘을 덮으려면 파티클 시스템이 수십 개 필요해 "
-            + "프레임이 크게 떨어진다. 끄면 먹구름은 '하늘이 어두워지는 것'으로만 표현된다"
-    )]
-    [SerializeField] private bool m_useCloudFx;
-
-    [Header("먹구름 파티클 (m_useCloudFx가 켜졌을 때만)")]
-    [Tooltip("구름을 한 변 몇 장으로 깔 것인가 — 9면 81장")]
-    [Range(1, 11)]
-    [SerializeField] private int m_cloudTiles = 9;
-
-    [Tooltip("구름 장 사이 간격(m) — 구름 크기보다 좁게 둬야 겹쳐서 틈이 안 보인다")]
-    [Min(1f)]
-    [SerializeField] private float m_cloudSpacing = 70f;
-
-    [Header("비 진하기")]
-    [Tooltip("빗줄기 크기 배율")]
-    [Min(0.1f)]
-    [SerializeField] private float m_rainSizeBoost = 1.5f;
-
-    [Tooltip("비 방출량 배율 — 상한(maxParticles)도 함께 올라간다")]
-    [Min(1f)]
-    [SerializeField] private float m_rainRateBoost = 4f;
 
     [Header("먹구름 — 어두워지기")]
     [Tooltip(
@@ -103,28 +54,7 @@ public class LightningView : MonoBehaviour
     [Min(0.1f)]
     [SerializeField] private float m_strikeFxSeconds = 3f;
 
-    [Header("실내 차단")]
-    [Tooltip(
-        "머리 위로 이 거리(m) 안에 지붕이 있으면 비를 그친다 — 0이면 실내에서도 내린다.\n\n"
-            + "건물 높이보다 넉넉히 잡을 것. 판정은 방출 지점의 수평 위치에서 위로 쏘는 레이 하나다"
-    )]
-    [Min(0f)]
-    [SerializeField] private float m_shelterProbeHeight = 25f;
-
-    [Tooltip("하늘을 막는 것으로 칠 레이어 — 건물은 Default다")]
-    [SerializeField] private LayerMask m_shelterMask = 1;
-
-    [Tooltip("문을 드나들 때 비가 여닫히는 시간(초) — 0이면 툭 끊긴다")]
-    [Min(0f)]
-    [SerializeField] private float m_shelterFadeSeconds = 0.35f;
-
-    [Header("그치는 연출")]
-    [Tooltip("비가 그칠 때 방출만 멈추고 이 시간(초) 뒤에 리그를 없앤다 — 공중의 비가 끝까지 떨어지게")]
-    [Min(0f)]
-    [SerializeField] private float m_stopFadeSeconds = 4f;
-
     private LightningEvent m_lightningEvent;
-    private WeatherSkyRig m_rig;
     private bool m_overcastPushed; // 내가 먹구름을 요청해 둔 상태인가 — Push/Pop 짝을 뷰가 직접 센다
 
     // 이벤트가 켜지기 전의 밝기 — 되돌릴 기준값. 섬광·먹구름이 모두 이 값을 기준으로 움직인다.
@@ -213,32 +143,12 @@ public class LightningView : MonoBehaviour
             HideRain();
     }
 
+    // 비는 화면 셰이더가 그린다 (#782) — 파티클 리그를 만들지 않는다. 섬광·낙뢰 FX·소리는 그대로다.
     private void ShowRain()
     {
         CaptureBaseIntensity();
 
-        if (m_rig != null)
-            return; // 이미 오는 중 — 중복 통보 무시
-
-        // 카메라가 아직 없어도 만든다 — 리그가 매 프레임 카메라를 다시 본다.
-        // 예전에는 여기서 Camera.main이 null이면 return해, 그 이벤트 내내 비가 안 내렸다.
-        m_rig = WeatherSkyRig.Create("WeatherSky_Rain", m_cloudHeight, m_precipitationHeight);
-        m_rig.SetCloudSnap(m_cloudSpacing); // 하늘은 월드에 고정 — 구름 한 덩이가 따라오는 그림을 막는다
-        m_rig.SetPrecipitationFacesView(m_rainFollowsView, m_rainForwardOffset); // 비는 보는 쪽에만
-        m_rig.SetShelterProbe(m_shelterMask, m_shelterProbeHeight, m_shelterFadeSeconds); // 지붕 아래에선 그친다
-
-        // 구름 파티클은 기본으로 띄우지 않는다 — 프레임 부담이 커서, 먹구름은 밝기로 표현한다
-        if (m_useCloudFx && m_cloudPrefab != null)
-            WeatherSkyRig.AttachTiled(m_cloudPrefab, m_rig.CloudAnchor, m_cloudScale, m_cloudTiles, m_cloudSpacing);
-
-        if (m_rainParticlePrefab != null)
-        {
-            GameObject rain = Instantiate(m_rainParticlePrefab);
-            WeatherSkyRig.Attach(rain, m_rig.PrecipitationAnchor, m_rainScale);
-            // 낙하 속도·방출 볼륨은 1 — 비의 튜닝은 지금 것을 그대로 둔다. 눈에만 올린 값이라
-            // (SnowView) 여기도 필요해지면 같은 인자를 노출하면 된다.
-            WeatherSkyRig.Boost(rain, m_rainSizeBoost, m_rainRateBoost, 1f, 1f);
-        }
+        Screen?.Show(PrecipitationScreen.EKind.Rain);
 
         if (!m_overcastPushed)
         {
@@ -251,11 +161,7 @@ public class LightningView : MonoBehaviour
 
     private void HideRain()
     {
-        if (m_rig != null)
-        {
-            m_rig.StopAndDispose(m_stopFadeSeconds);
-            m_rig = null;
-        }
+        Screen?.Hide();
 
         StopFlash();
         ClearWarningFx();
@@ -263,6 +169,12 @@ public class LightningView : MonoBehaviour
 
         App.Sound?.StopAmbient2D(EAudioClip.RainLoop);
     }
+
+    // 같은 오브젝트(SuddenEvents)에 붙어 있다 — 인스펙터로 물릴 것이 없다.
+    private PrecipitationScreen Screen =>
+        m_screen != null ? m_screen : m_screen = GetComponent<PrecipitationScreen>();
+
+    private PrecipitationScreen m_screen;
 
     // 예고 — 떨어질 자리에 표시를 띄운다. 전 피어에서 불린다. (#647)
     private void HandleStrikeWarning(Vector3 position)

@@ -109,7 +109,7 @@
 두 답이 갈리는 것을 허용하되, **갈리는 방향을 정해 둔다**: 마스크가 "열림"이라고 하는데 레이가 "막힘"이라
 하면 눈은 보이지만 벼락은 안 맞는다 — 그게 반대(안 보이는데 맞는다)보다 낫다. 이 우선순위를 코드 주석에 남긴다.
 
-## 지워지는 것
+## 지운 것 (구현 완료)
 
 - `WeatherSkyRig` 전체 (실코드 600줄) — 배치 3종, 창 탐색 2단 레이, 시뮬레이션 공간 전환, 재충전 프리웜,
   구름 스냅, `Boost` 4배율
@@ -127,13 +127,14 @@
 
 | 파일 | 변경 |
 |---|---|
-| `Assets/Scripts/Events/Season/WeatherSkyRig.cs` | 삭제 |
-| `Assets/Scripts/Events/Season/SnowView.cs` | 파티클 배선 → 셰이더 파라미터 |
-| `Assets/Scripts/Events/Season/LightningView.cs` | 같음 (비 부분만) |
-| `Assets/Scripts/Events/Season/WeatherShelter.cs` | 주석만 — 소비자가 둘로 줄었음을 남긴다 |
-| `Assets/Scripts/Events/Season/PrecipitationMask.cs` | 신규 — 레이 그리드 마스크 (구현 완료) |
-| 신규 셰이더 + URP Renderer Feature | 강수 화면 패스. `Assets/Settings/PC_Renderer`에 배선 |
-| `Assets/Prefabs/Events/SuddenEvents.prefab` | 파티클·튜닝 필드 정리 |
+| `Assets/Scripts/Events/Season/WeatherSkyRig.cs` | **삭제됨** (실코드 600줄) |
+| `Assets/Scripts/Events/Season/PrecipitationMask.cs` | 신규 — 레이 그리드 마스크 |
+| `Assets/Scripts/Events/Season/PrecipitationScreen.cs` | 신규 — 카메라 자식 쿼드 + 눈·비 프리셋 |
+| `Assets/Shaders/Weather/PrecipitationScreen.shader` | 신규 — 절차적 강수, 알파 블렌드 |
+| `Assets/Scripts/Events/Season/SnowView.cs` | 직렬화 필드 21 → 2 (먹구름만 남음) |
+| `Assets/Scripts/Events/Season/LightningView.cs` | 직렬화 필드 25 → 8 (섬광·낙뢰 FX·먹구름) |
+| `Assets/Scripts/Events/Season/WeatherShelter.cs` | 주석만 — 소비자가 셋(낙뢰·빙판·마스크)임을 남긴다 |
+| `Assets/Prefabs/Events/SuddenEvents.prefab` | 컴포넌트 2개 추가, 죽은 파티클 필드 정리 |
 
 ## 테스트 (회귀 지점 — 전부 한 번씩 밟은 증상이다)
 
@@ -146,9 +147,27 @@
 - 6인 세션 프레임
 - 애디티브가 밝은 벽·맑은 톤에서 사라져 보이지 않는다 (더하기 연산의 한계)
 
-## 미결 (결정·실측이 필요한 것)
+## 실측으로 결론 난 것
 
-1. **눈과 비를 같은 셰이더로 갈 것인가** — 지금은 `SnowView`/`LightningView`로 나뉘고 리그만 공유한다.
-2. **애디티브가 맞는가** — 먹구름으로 하늘이 어두워진 위에 얹히므로 조건은 맞지만, 맑은 낮·밝은 벽 앞에서
-   읽히는지 실측이 필요하다. 안 되면 알파 블렌드로 갈 수도 있다(그러면 "애디티브"라는 전제가 바뀐다).
-3. **엔진음 도플러**(#673에서 끈 것) — 강수와 무관하나, 표현 계층을 손대는 김에 볼지.
+1. **눈과 비는 같은 셰이더다** — 갈리는 것은 값뿐이라(줄기 길이·속도·흔들림·색) 프리셋 둘로 끝났다.
+2. **⚠ 애디티브는 아니었다.** 밝은 하늘(아포칼립스 맵)에서 더하기는 이미 흰 배경에 묻혀 **아무것도
+   보이지 않았다**. 알파 블렌드로 바꿨다. 애디티브를 먼저 택한 판단이 틀린 게 아니라, 이 맵 톤을
+   모른 상태의 선택이었다 — 더하기는 어두운 배경을 전제한다.
+3. **화면 전면을 고르게 덮으면 안 된다.** "세계의 날씨"가 아니라 **렌즈에 묻은 것**처럼 보이고
+   크로스헤어·표적이 있는 중앙까지 가린다. `_CenterClear`로 중앙을 비우고 가장자리를 진하게 한다.
+4. **마스크 경계를 세워야 한다.** 저해상 마스크를 바이리니어로 늘리면 문 구멍이 주변 실내 벽까지
+   번져 **깊은 실내에서 밖을 볼 때 강수가 실내에 들어온 것처럼** 보인다. 격자를 15×15로 올리고
+   셰이더에서 `smoothstep`으로 중간값을 0/1로 밀어 해결했다.
+5. **낙하 부호를 조심할 것.** `grid.y -= time`은 무늬를 **위로** 흐르게 한다(무늬가 고정되려면
+   `uv.y`가 커져야 하고 `uv.y`가 큰 쪽이 화면 위다). 더해야 내린다 — 한 번 밟았다.
+6. **문짝은 `Interactable`(레이어 7)이다.** `Default`(0)만 보면 레이가 닫힌 문을 통과해 강수가
+   보인다. 마스크는 `Default + Interactable`을 본다. ⚠ 폐기된 파티클 리그의 창 탐색도 같은 마스크를
+   썼으므로 **같은 버그가 있었다** — 앵커를 옮기는 방식이라 눈에 덜 띄었을 뿐이다.
+
+## 미결
+
+1. **URP Renderer Feature로 옮길지** — 지금은 카메라 자식 쿼드다. URP 17.3의 전체화면 패스가
+   RenderGraph 전용이라 버전에 묶이는 것을 피했다. 옮기더라도 셰이더와 마스크는 그대로 쓴다.
+2. **엔진음 도플러**(#673에서 끈 것) — 강수와 무관하나, 표현 계층을 손대는 김에 볼지.
+3. **마스크 레이어에 큰 상호작용물이 들어오면** — 지금은 2단 판정이 작은 물체를 걸러내지만, 머리 위를
+   덮는 큰 `Interactable`이 생기면 실외에서 실내로 잡힐 수 있다.

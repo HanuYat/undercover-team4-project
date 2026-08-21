@@ -39,7 +39,7 @@ public class PrecipitationMask : MonoBehaviour
 
     [Tooltip(
         "맞은 표면에서 물러설 거리(m) — 벽 콜라이더 <b>안에서</b> 위로 쏘면 그 콜라이더를 맞히지 못해 "
-            + "실내 벽이 하늘로 잡힌다. WeatherSkyRig의 창 탐색이 같은 이유로 쓰던 값이다"
+            + "실내 벽이 하늘로 잡힌다. 폐기된 파티클 리그의 창 탐색도 같은 이유로 이 값을 썼다 (#733)"
     )]
     [Min(0.01f)]
     [SerializeField] private float m_surfaceBackoff = 0.5f;
@@ -76,6 +76,10 @@ public class PrecipitationMask : MonoBehaviour
     /// <summary>마지막으로 구운 칸 중 하늘이 열린 비율 — 진단·테스트용. 격자가 없으면 0.</summary>
     public float OpenRatio { get; private set; }
 
+    /// <summary>마스크를 구운 시점 카메라 — 화면 쿼드(<see cref="PrecipitationScreen"/>)가 같은 것에 붙는다.
+    /// 마스크와 쿼드가 다른 카메라를 보면 가림이 화면과 어긋난다.</summary>
+    public Camera Camera => ResolveCamera();
+
     private void OnDisable()
     {
         // 강수가 끝나면 셰이더가 남은 마스크로 계속 그리지 않게 세기를 0으로 눌러 둔다
@@ -83,7 +87,7 @@ public class PrecipitationMask : MonoBehaviour
     }
 
     // 카메라가 움직인 뒤에 굽는다 — 시점 제어(PlayerLook)가 Update 구간에서 카메라를 옮기므로,
-    // Update에서 구우면 마스크가 한 프레임 뒤처져 빠르게 돌 때 경계가 밀린다. (WeatherSkyRig와 같은 사정)
+    // Update에서 구우면 마스크가 한 프레임 뒤처져 빠르게 돌 때 경계가 밀린다 — 폐기된 파티클 리그도 같은 이유로 LateUpdate였다.
     private void LateUpdate()
     {
         Camera camera = ResolveCamera();
@@ -146,7 +150,7 @@ public class PrecipitationMask : MonoBehaviour
     ///
     /// ⚠ <c>Camera.main</c>만 믿으면 안 된다: <c>Player.prefab</c>의 시점 카메라는 <b>Untagged</b>라
     /// Camera.main으로 잡히지 않는다. 그러면 씬에 놓인 고정 카메라가 잡혀 마스크가 <b>맵의 한 지점
-    /// 기준으로 굳는다</b>. (<c>WeatherSkyRig.ResolveView</c>가 같은 이유로 같은 순서를 쓴다)
+    /// 기준으로 굳는다</b>. 폐기된 파티클 리그가 같은 함정을 주석으로 남겨 뒀던 자리다.
     ///
     /// 꺼진 카메라는 다시 찾는다 — 관전 전환·CCTV로 갈아 끼워지기 때문이다.
     /// </summary>
@@ -225,7 +229,7 @@ public class PrecipitationMask : MonoBehaviour
     //
     // 2단이다. ① 시선이 닿는 끝 지점을 잡고 ② 그 지점에서 위로 쏴 하늘을 묻는다. ②가 핵심이다 —
     // 없으면 천장 있는 큰 실내 홀도 하늘로 읽힌다(레이가 끝까지 날아가도 아무것도 안 맞으므로).
-    // WeatherSkyRig.TryFindWindow가 창 하나를 찾던 판정을 화면 전체로 넓힌 것이다.
+    // 폐기된 파티클 리그가 창 하나를 찾던 2단 판정(#733)을 화면 전체로 넓힌 것이다.
     private bool IsSkyOpenAlong(Ray ray)
     {
         Vector3 probe = Physics.Raycast(
