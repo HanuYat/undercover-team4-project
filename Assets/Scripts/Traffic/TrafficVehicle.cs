@@ -8,7 +8,8 @@ using UnityEngine;
 ///
 /// 예고는 헤드라이트·엔진음이 진다 — 둘 다 <see cref="OnEnable"/>(차가 화면에 나타나는 순간)부터
 /// 켜져 있고, 배출 간격의 하한은 <see cref="TrafficLane"/>이 진다.
-/// 이동은 서버가 풀고 NetworkTransform이 복제한다 — NavMesh가 아니라 좌표 직선이다. 명중은
+/// 이동은 NavMesh가 아니라 좌표 직선이고, <b>위치를 복제하지 않는다</b> — 주행 파라미터만 보내고
+/// 각 피어가 자기 프레임 시각으로 직접 푼다 (#787, 아래 RunState). 명중은
 /// 폭탄(<see cref="BombDevice"/>)의 3단 구조를 따른다: 사람 피해·밧줄은 서버, 사람 넉백은 오너 클라
 /// (이동 권한이 오너다), NPC 피해·넉백은 서버. 한 번 친 대상은 그 주행 안에서 다시 치지 않는다.
 /// </summary>
@@ -63,6 +64,40 @@ public class TrafficVehicle : NetworkBehaviour
     private float m_speed;
     private bool m_driving;
     private float m_nextHornAt;
+
+    // ---- 주행 복제 (#787) ----
+    //
+    // 위치를 매 틱 복제하지 않는다. 감속·조향이 없어 주행이 아래 다섯 값으로 완전히 결정되므로,
+    // 스폰 때 한 번만 보내고 각 피어가 <b>자기 프레임 시각으로</b> 위치를 푼다(ApplyFramePosition).
+    // ⚠ 프리팹에서 NetworkTransform의 SyncPosition을 껐다 — 켜 두면 보간값이 이 계산을 덮는다.
+    private struct RunState : INetworkSerializable, System.IEquatable<RunState>
+    {
+        public Vector3 StartPoint;
+        public Vector3 Direction;
+        public float Speed;
+        public float RunDistance;
+        public int StartTick; // 실수 시각이 아니라 틱 번호 — 전 피어가 같은 값을 봐야 한다
+
+        public void NetworkSerialize<T>(BufferSerializer<T> serializer)
+            where T : IReaderWriter
+        {
+            serializer.SerializeValue(ref StartPoint);
+            serializer.SerializeValue(ref Direction);
+            serializer.SerializeValue(ref Speed);
+            serializer.SerializeValue(ref RunDistance);
+            serializer.SerializeValue(ref StartTick);
+        }
+
+        // 전 필드를 비교한다 — NGO의 변경 감지가 이걸 쓴다 (RopeTether와 같은 사정).
+        public bool Equals(RunState other) =>
+            StartPoint == other.StartPoint
+            && Direction == other.Direction
+            && Speed == other.Speed
+            && RunDistance == other.RunDistance
+            && StartTick == other.StartTick;
+    }
+
+    private readonly NetworkVariable<RunState> m_runSynced = new NetworkVariable<RunState>();
 
     private AudioSource m_engineSource;
 
@@ -166,36 +201,79 @@ public class TrafficVehicle : NetworkBehaviour
 
         m_startPoint = transform.position;
         m_runDistance = runDistance;
-        m_startTime = ServerNow();
         m_endPoint = m_startPoint + m_direction * runDistance;
         m_speed = speed;
         m_driving = true;
+
+        // 시작시각을 <b>틱 격자에</b> 맞춘다 — 프레임 시각으로 잡으면 첫 스텝이 부분 스텝이 돼
+        // 복제되는 첫 이동량만 작아진다(스폰마다 확정 발생). 오프라인은 틱이 없어 로컬 시각을 쓴다. (#787)
+        if (IsSpawned && IsServer)
+        {
+            int startTick = NetworkManager.ServerTime.Tick;
+            m_startTime = (float)TickToSeconds(startTick);
+            m_runSynced.Value = new RunState
+            {
+                StartPoint = m_startPoint,
+                Direction = m_direction,
+                Speed = speed,
+                RunDistance = runDistance,
+                StartTick = startTick,
+            };
+        }
+        else
+        {
+            m_startTime = Time.time;
+        }
+
         m_nextHornAt = 0f; // 첫 경적은 앞에 사람이 보이는 즉시
         IsFinished = false;
     }
 
-    // 세션에서는 주행이 틱에서 돈다(OnServerTick) — 여기는 <b>오프라인 폴백</b> 전용이다.
-    // 클라는 m_driving이 꺼져 있어 어차피 들어오지 않는다.
     private void Update()
     {
-        if (!m_driving)
-            return;
-
+        // 세션에서는 전 피어가 자기 프레임 시각으로 위치를 푼다 (#787).
         if (IsSpawned)
         {
-            ServerRenderStep();
+            ApplyFramePosition();
             return;
         }
 
-        ServerDriveStep(Time.time);
+        // 오프라인 폴백 — 틱이 없어 프레임이 주행 스텝을 겸한다
+        if (m_driving)
+            ServerDriveStep(Time.time);
     }
 
-    // 호스트 화면만을 위한 프레임 보간 (#717) — 위치를 렌더 시각으로 당겨 그린다.
-    // <b>판정·도착·경적은 건드리지 않는다</b> — 틱이 매번 자기 시각의 값으로 되돌려 놓는다.
-    private void ServerRenderStep()
+    /// <summary>
+    /// 이 프레임 시각의 위치를 <b>새로 풀어</b> 그린다 — 서버·클라 공통. (#787)
+    ///
+    /// ⚠ <b>누적하면 안 된다.</b> speed*deltaTime을 더하는 방식은 프레임이 흔들리면 피어마다
+    /// 위치가 갈려 시간이 갈수록 벌어진다 — #717이 고친 원래 버그가 그것이다.
+    ///
+    /// 서버도 이 경로로 그린다. 틱에서 쓴 판정용 위치(<see cref="ServerDriveStep"/>)는 같은 프레임의
+    /// 이 계산이 곧 덮으므로, <b>판정은 틱 · 그림은 프레임</b>이 그대로 유지된다.
+    /// </summary>
+    private void ApplyFramePosition()
     {
-        float travelled = Mathf.Min(m_speed * (ServerNow() - m_startTime), m_runDistance);
-        transform.position = m_startPoint + m_direction * travelled;
+        if (NetworkManager == null)
+            return; // 세션 종료 중 — 그 자리에 둔다
+
+        RunState run = m_runSynced.Value;
+        if (run.Speed <= 0f || run.RunDistance <= 0f)
+            return; // 주행 정보가 아직 안 왔거나 주행이 끝났다(회수 대기) — 그 자리에 둔다
+
+        double elapsed = NetworkManager.ServerTime.Time - TickToSeconds(run.StartTick);
+        if (elapsed < 0d)
+            return; // 클라의 서버 시각 추정이 시작 틱보다 앞선 순간 — 출발선에 둔다
+
+        float travelled = Mathf.Min((float)(elapsed * run.Speed), run.RunDistance);
+        transform.position = run.StartPoint + run.Direction * travelled;
+    }
+
+    // 틱 번호 → 초. 시작시각과 경과 계산이 같은 격자를 봐야 한다.
+    private double TickToSeconds(int tick)
+    {
+        NetworkTickSystem ticks = NetworkManager != null ? NetworkManager.NetworkTickSystem : null;
+        return ticks != null && ticks.TickRate > 0 ? tick / (double)ticks.TickRate : 0d;
     }
 
     // 서버(또는 오프라인)의 주행 1스텝 — 시작점·시작시각에서 그 시각의 위치를 <b>새로 푼다</b>.
@@ -219,15 +297,16 @@ public class TrafficVehicle : NetworkBehaviour
         {
             m_driving = false;
             IsFinished = true; // 회수는 스폰한 쪽(TrafficManager)이 한다 — 풀의 주인이 하나여야 한다
+
+            // 풀에서 다시 나온 차가 <b>옛 주행을 잠깐 그리는</b> 것을 막는다 — 새 값이 도착하기
+            // 전까지 클라가 이전 값을 들고 있기 때문이다. 아직 스폰 중이라 여기서 쓰는 것이 안전하다. (#787)
+            if (IsSpawned && IsServer)
+                m_runSynced.Value = default;
             return;
         }
 
         ServerTickHorn();
     }
-
-    // 주행 시계 — 세션은 서버 네트워크 시각, 오프라인은 로컬 시각. 시작시각과 스텝이 같은 시계를 봐야 한다.
-    private float ServerNow() =>
-        IsSpawned && NetworkManager != null ? (float)NetworkManager.ServerTime.Time : Time.time;
 
     private void SetHeadlights(bool on)
     {
