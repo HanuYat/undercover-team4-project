@@ -599,7 +599,15 @@ public class JailIntake : CommonManagerBase
     /// <c>PlayerMovement.SetPose</c>가 <c>PlayerRagdoll.PlaceBodyBy</c>를 부르기 때문이고, 그 과정에서
     /// 잠깐 끊긴 관절 밧줄은 운반자가 가까워지면 몸 쪽이 스스로 다시 맨다.
     ///
-    /// ⚠ <b>옮기기 전에 거리 유예를 건다.</b> 몸의 이동은 오너 권한이라 한 왕복 늦게 반영되는데,
+    /// ⚠ <b>다른 참가자의 줄부터 끊는다 — 옮기기 전, 유예보다도 먼저다</b> (#757의 플레이어판). 이
+    /// 몸을 여럿이 덧걸어 끌 수 있게 되면서(합류), 문으로 나가는 사람 말고 감옥에 남는 참가자가
+    /// 생길 수 있다. 그 줄은 목줄 예외(<c>PlayerCarrier.k_leashCarrierCount</c>) 때문에 거리 끊김이
+    /// 자기 치유를 안 한다 — 안 끊으면 벽을 뚫고 셀까지 이어진 채 남는다. 뒤에서 끊으면
+    /// <see cref="PlayerRagdoll.TickRopeReattach"/>가 그 사이 감옥 안 참가자 ↔ 문 밖을 잇는 관절을
+    /// 한 번 만들고, 그 위반이 몸을 발사한다(NPC 실측 237 m/s와 같은 사고). 앞에서 걷으면 애초에
+    /// 안 생긴다 — 시체 밧줄 쪽(<see cref="ServerExitRopedCorpses"/>)과 같은 순서다.
+    ///
+    /// ⚠ <b>그다음 거리 유예를 건다.</b> 몸의 이동은 오너 권한이라 한 왕복 늦게 반영되는데,
     /// 운반자와 몸은 오너가 서로 달라 그 왕복이 각자 도착한다 — 유예가 없으면 그 사이에 둘이 맵
     /// 양끝으로 보여 <c>PlayerCarrier</c>의 거리 검사가 운반을 스스로 끊는다.
     /// </summary>
@@ -614,6 +622,7 @@ public class JailIntake : CommonManagerBase
         if (bodyMovement == null)
             return false;
 
+        body.ServerReleaseCarriersExcept(carrier, "다른 참가자가 감옥 문으로 데리고 나갔다");
         carrier.ServerBeginTeleportGrace();
         bodyMovement.ServerTeleport(position, rotation);
         return true;

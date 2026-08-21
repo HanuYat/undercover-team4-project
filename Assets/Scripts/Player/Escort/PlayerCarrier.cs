@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -13,6 +14,9 @@ using UnityEngine;
 /// <see cref="PlayerTowedMotion.BeginDraggedFollow"/>로 따라간다. (오검거 호송 #279와 같은 구조)
 ///
 /// 복구는 운반이 아니라 본부 부활 장치(<see cref="HqRevivalDevice"/>)가 한다 — 여기는 옮기기만 한다.
+///
+/// <b>끄는 쪽은 1인당 몸 1구, 끌리는 쪽은 여럿이 덧걸 수 있다</b> (합류 — NPC 밧줄 #390/#398과 같은
+/// 규칙). 그래서 <see cref="CarriedTarget"/>는 단일 참조지만 <see cref="m_carriedBy"/>는 목록이다.
 /// </summary>
 public class PlayerCarrier : NetworkBehaviour
 {
@@ -32,6 +36,10 @@ public class PlayerCarrier : NetworkBehaviour
     private const float k_teleportGraceSeconds = 1f;
     private float m_teleportGraceRemaining;
 
+    // 목줄 발동 인원 — PlayerEscorter.k_leashDraggerCount와 같은 값·같은 규칙. 둘 이상이 함께 끌면
+    // 거리 이탈로 끊지 않는다(반대로 당기면 8m를 넘는 것이 정상이다).
+    private const int k_leashCarrierCount = 2;
+
     private PlayerInteractor m_interactor;
     private PlayerIncapacitation m_incapacitation;
     private PlayerTowedMotion m_towed;
@@ -46,8 +54,9 @@ public class PlayerCarrier : NetworkBehaviour
     // (PlayerEscorter.m_tetheredNpcSynced와 같은 사정)
     private readonly NetworkVariable<NetworkObjectReference> m_carriedSynced = new();
 
-    // 끌려가는 중인지 — 다른 플레이어가 가로채지 못하게 막는 게이트. 서버가 쓰고 모두가 읽는다.
-    private readonly NetworkVariable<bool> m_isBeingCarriedSynced = new NetworkVariable<bool>();
+    // 나를 끄는 인원 수의 클라 사본 — bool이 아니라 수인 이유는 오너가 목줄 반경(끊김거리 ÷ 인원)을
+    // 계산해야 해서다(NpcRopeDrag.m_draggerCountSynced와 같은 사정). 0이면 아무도 안 끈다.
+    private readonly NetworkVariable<byte> m_carrierCountSynced = new NetworkVariable<byte>();
 
     /// <summary>운반 중 여부(끄는 쪽). 서버·오프라인은 실참조, 원격 피어는 동기화값. (PlayerEscorter.IsDraggingNpc 관례)</summary>
     public bool IsCarrying =>
@@ -78,22 +87,50 @@ public class PlayerCarrier : NetworkBehaviour
         }
     }
 
-    /// <summary>누군가에게 끌려가는 중인지(끌려가는 쪽) — 이미 임자가 있는 대상을 가로채지 못하게 한다.</summary>
-    public bool IsBeingCarried =>
-        IsSpawned && !IsServer ? m_isBeingCarriedSynced.Value : m_carriedBy != null;
+    /// <summary>
+    /// 끌고 가는 동료의 운반 허브 — <b>전 피어에서 유효한</b> 접근자. 없으면 null.
+    /// (<see cref="CarriedTransform"/>의 컴포넌트판 — 같은 동기화 참조를 푼다)
+    ///
+    /// ⚠ <b>오너가 읽어야 하는 값은 이쪽이다.</b> <see cref="CarriedTarget"/>는 서버 전용이라 원격
+    /// 클라에서 항상 null이고, 목줄 제한(<see cref="RopeDragLoad.ConstrainByTautRopes"/>)은 오너가
+    /// 로컬로 돈다 — 그쪽이 서버 참조를 보면 <b>호스트에서만</b> 목줄이 걸려 원격 클라는 줄을 무한정
+    /// 늘이며 걸어간다. (플레이 테스트 확인)
+    /// </summary>
+    public PlayerCarrier CarriedBody
+    {
+        get
+        {
+            if (CarriedTarget != null)
+                return CarriedTarget;
 
-    private PlayerCarrier m_carriedBy; // 나를 끌고 있는 플레이어. 서버(또는 오프라인)에서만 유효
+            Transform carried = CarriedTransform;
+            return carried != null && carried.TryGetComponent(out PlayerCarrier body) ? body : null;
+        }
+    }
+
+    /// <summary>누군가에게 끌려가는 중인지(끌려가는 쪽) — <see cref="CarrierCount"/>가 1 이상이면 참이다.</summary>
+    public bool IsBeingCarried => CarrierCount > 0;
+
+    /// <summary>지금 나를 끄는 인원 수 — 목줄 반경(끊김거리 ÷ 인원)을 오너가 계산해야 해서 공개한다.
+    /// 서버·오프라인은 실목록, 원격 피어는 동기화값. (합류 — NPC 밧줄 #390/#398과 같은 규칙)</summary>
+    public int CarrierCount =>
+        IsSpawned && !IsServer ? m_carrierCountSynced.Value : m_carriedBy.Count;
+
+    // 나를 끌고 있는 플레이어들 — 서버(또는 오프라인) 진실. 여럿이 덧걸 수 있다(합류).
+    private readonly List<PlayerCarrier> m_carriedBy = new List<PlayerCarrier>();
 
     /// <summary>
-    /// 이 플레이어가 지금 운반 대상이 될 수 있는가 — 기능 정지(Die) + 임자 없음 + 몸이 회수 가능함. (#364/#365)
+    /// 이 플레이어가 지금 운반 대상이 될 수 있는가 — 기능 정지(Die) + 몸이 회수 가능함. (#364/#365)
     /// 부활 판정(IsRevivable)이 아니라 IsBodyLost를 직접 본다 — 운반은 부활 여부와 별개로,
     /// 몸이 맨홀 아래로 사라졌으면(#775) 애초에 회수할 몸이 없다는 뜻이다.
+    ///
+    /// <b>이미 끌려가는 중이어도 참이다</b> — "합류는 허용, 탈취는 차단"이 여기서도 성립한다
+    /// (NPC 밧줄 #390과 같은 원칙). 남의 줄을 끊는 조작이 없으니 탈취 자체가 없다.
     /// </summary>
     public bool CanBeCarried =>
         m_incapacitation != null
         && m_incapacitation.IsDead
-        && !m_incapacitation.IsBodyLost
-        && !IsBeingCarried;
+        && !m_incapacitation.IsBodyLost;
 
     private void Awake()
     {
@@ -231,7 +268,7 @@ public class PlayerCarrier : NetworkBehaviour
             return;
 
         CarriedTarget = target;
-        target.ServerSetCarriedBy(this);
+        target.ServerAddCarrier(this);
         SetCarriedRef(target);
 
         // 동료를 묶는 것도 같은 밧줄이라 같은 소리다 (#549 · NPC 쪽은 ServerApplyRopeDrag).
@@ -270,39 +307,45 @@ public class PlayerCarrier : NetworkBehaviour
 
         // 대상이 이미 파괴됐으면(퇴장·라운드 종료) 정리할 상대가 없다 — Unity 가짜 null 가드 (#356 계열)
         if (target != null)
-            target.ServerSetCarriedBy(null);
+            target.ServerRemoveCarrier(this);
 
         Debug.Log($"[운반] 종료({reason}) — {name}");
         NotifyOwner($"운반 종료: {reason}");
     }
 
     /// <summary>
-    /// 내가 끌려가는 중이라면 그 운반을 끊는다 — <b>끌려가는 쪽 사정</b>으로 끝낼 때 쓴다(본부 부활 등).
-    /// 서버(또는 오프라인) 전용. 끌고 있는 쪽에서 끝내는 것은 <see cref="ServerDrop"/>다.
+    /// 나를 끌고 있는 참가자 중 <paramref name="keeper"/>만 남기고 나머지를 전부 끊는다 — <b>끌려가는
+    /// 쪽 사정</b>으로 끝낼 때 쓴다. <paramref name="keeper"/>가 null이면 전부 끊는다
+    /// (= <see cref="ServerDropAllCarriers"/>). 서버(또는 오프라인) 전용.
+    ///
+    /// 감옥 문(플레이어판 #757)과 본부 부활 장치가 쓴다 — 각자 자기 사정으로 "나를 끄는 사람들"을
+    /// 정리해야 하는데, 그 정리는 끄는 쪽(<see cref="ServerDrop"/>)이 아니라 끌리는 쪽에서 시작된다.
+    /// 실제 해제는 각 참가자 자신의 <see cref="ServerDrop"/>을 불러 처리한다 — 그래야 그쪽의
+    /// <see cref="CarriedTarget"/>도 함께 비워진다.
     /// </summary>
-    public void ServerDropSelf(string reason)
+    public void ServerReleaseCarriersExcept(PlayerCarrier keeper, string reason)
     {
         if (IsSpawned && !IsServer)
             return;
-        if (m_carriedBy != null)
-            m_carriedBy.ServerDrop(reason);
+
+        for (int i = m_carriedBy.Count - 1; i >= 0; i--)
+        {
+            PlayerCarrier holder = m_carriedBy[i];
+            if (holder == null || holder == keeper)
+                continue;
+
+            holder.ServerDrop(reason); // holder 쪽의 CarriedTarget도 비우고, 여기 m_carriedBy에서도 스스로 빠진다
+        }
     }
 
-    /// <summary>끌려가는 쪽 상태 갱신 + 오너에게 추종 지시 — 운반자(서버)가 호출한다.</summary>
-    private void ServerSetCarriedBy(PlayerCarrier carrier)
-    {
-        m_carriedBy = carrier;
-        if (IsSpawned && IsServer)
-            m_isBeingCarriedSynced.Value = carrier != null;
+    /// <summary>나를 끌고 있는 전원을 끊는다 — <see cref="ServerReleaseCarriersExcept"/>에 keeper=null.</summary>
+    public void ServerDropAllCarriers(string reason) => ServerReleaseCarriersExcept(null, reason);
 
-        if (carrier == null)
-        {
-            if (IsSpawned)
-                EndDraggedRpc();
-            else
-                m_towed?.EndDraggedFollow(); // 오프라인 Play 테스트 폴백
-            return;
-        }
+    /// <summary>합류 — 참가자 한 명이 추가로 나를 끌기 시작한다. 서버(또는 오프라인) 전용.</summary>
+    private void ServerAddCarrier(PlayerCarrier carrier)
+    {
+        m_carriedBy.Add(carrier);
+        SyncCarrierCount();
 
         if (!IsSpawned)
         {
@@ -313,6 +356,31 @@ public class PlayerCarrier : NetworkBehaviour
         // 스폰된 운반자만 참조로 넘길 수 있다(NetworkObjectReference 제약)
         if (carrier.NetworkObject != null && carrier.NetworkObject.IsSpawned)
             BeginDraggedRpc(new NetworkObjectReference(carrier.NetworkObject));
+    }
+
+    /// <summary>참가자 한 명이 나를 끄는 것을 멈춘다(그 가닥만) — 서버(또는 오프라인) 전용.</summary>
+    private void ServerRemoveCarrier(PlayerCarrier carrier)
+    {
+        m_carriedBy.Remove(carrier);
+        SyncCarrierCount();
+
+        if (!IsSpawned)
+        {
+            m_towed?.EndDraggedFollow(carrier.transform); // 오프라인 폴백
+            return;
+        }
+
+        if (carrier.NetworkObject != null && carrier.NetworkObject.IsSpawned)
+            EndDraggedRpc(new NetworkObjectReference(carrier.NetworkObject));
+        else
+            m_towed?.EndDraggedFollow(); // 참조를 못 보낼 만큼 이미 사라졌다 — 안전하게 전부 정리
+    }
+
+    // 매 프레임 불려도 대역폭을 안 먹는다 — NetworkVariable 세터가 같은 값이면 스스로 조기 반환한다.
+    private void SyncCarrierCount()
+    {
+        if (IsSpawned && IsServer)
+            m_carrierCountSynced.Value = (byte)m_carriedBy.Count;
     }
 
     // <b>전 피어로 보낸다.</b> 위치 변경 자체는 여전히 오너만 하지만(NetworkTransform 오너 권한),
@@ -333,8 +401,17 @@ public class PlayerCarrier : NetworkBehaviour
         m_towed.BeginDraggedFollow(carrierObj.transform);
     }
 
+    // <b>참가자별로 가닥을 지정해 끊는다</b> — 무인자였던 옛 버전은 전부를 놓아 합류 중이던 다른
+    // 참가자까지 끊었다. 참조를 못 찾으면(운반자가 이미 디스폰) 전부를 놓아 안전하게 정리한다 —
+    // 그 참가자가 어차피 사라졌으므로 개별 참조로는 뗄 수도 없다.
     [Rpc(SendTo.Everyone)]
-    private void EndDraggedRpc() => m_towed?.EndDraggedFollow();
+    private void EndDraggedRpc(NetworkObjectReference carrierRef)
+    {
+        if (carrierRef.TryGet(out NetworkObject carrierObj))
+            m_towed?.EndDraggedFollow(carrierObj.transform);
+        else
+            m_towed?.EndDraggedFollow();
+    }
 
     // 끌고 있는 대상 참조 동기화 — 서버(또는 오프라인)에서만 호출된다. (PlayerEscorter.SetTethered 관례)
     private void SetCarriedRef(PlayerCarrier target)
@@ -389,6 +466,12 @@ public class PlayerCarrier : NetworkBehaviour
             return;
         }
 
+        // 둘 이상이 함께 끌면(목줄) 거리로 끊지 않는다 — 반대로 당기면 8m를 넘는 것이 정상이고,
+        // 그 경우 몸이 움직이지 못하게 막는 것은 RopeDragLoad의 목줄 제한이 한다.
+        // (PlayerEscorter.IsLeashedTo·k_leashDraggerCount와 같은 판정·같은 임계)
+        if (CarriedTarget.CarrierCount >= k_leashCarrierCount)
+            return;
+
         // 너무 벌어지면 놓친다 — 추종이 실패한 경우다(몸이 지형에 끼거나 오너가 추종을 못 함).
         // 달리기로는 벌어지지 않는 거리라, 여기 걸렸다는 건 정상 추종이 아니라는 뜻이다. (밧줄 끊김과 같은 처리)
         Vector3 delta = CarriedTarget.transform.position - transform.position;
@@ -396,6 +479,9 @@ public class PlayerCarrier : NetworkBehaviour
         if (delta.sqrMagnitude > m_breakDistance * m_breakDistance)
             ServerDrop("대상을 놓침 — 너무 멀어짐");
     }
+
+    /// <summary>거리 이탈로 끊기는 임계(m) — 목줄 반경(끊김거리 ÷ 인원) 계산에 <see cref="RopeDragLoad"/>가 쓴다.</summary>
+    internal float BreakDistance => m_breakDistance;
 
     // 끌려가는 쪽이 여전히 기능 정지 상태인가 — Update의 부활 감지용(서버·오프라인 실참조).
     // IsRevivable로 바꾸지 않는다 — 몸이 회수 불가(#775)로 바뀌는 경로는 이 운반(CanBeCarried)
@@ -426,8 +512,9 @@ public class PlayerCarrier : NetworkBehaviour
         // 운반 중 퇴장·라운드 종료 — 끌려가던 쪽 추종을 남기지 않는다
         ServerDrop("운반자 퇴장");
 
-        // 내가 끌려가던 쪽이었다면 상대의 운반도 끊는다 (반대 방향 정리)
-        if (m_carriedBy != null)
-            m_carriedBy.ServerDrop("대상 퇴장");
+        // 내가 끌려가던 쪽이었다면 나를 끌던 전원의 운반도 끊는다 (반대 방향 정리) — 역순 순회는
+        // 각 ServerDrop이 이 목록에서 자기 자신을 빼기 때문이다.
+        for (int i = m_carriedBy.Count - 1; i >= 0; i--)
+            m_carriedBy[i]?.ServerDrop("대상 퇴장");
     }
 }

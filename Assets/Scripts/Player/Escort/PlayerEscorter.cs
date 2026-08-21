@@ -82,15 +82,19 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
     // 쓰는 것과 그만큼 무거워지는 것은 같은 사실의 양면이라, 두 곳이 각자 조회하면 갈라질 수 있다.
     private PlayerCarrier m_carrier;
 
-    internal bool IsCarryingPlayer
+    /// <summary>이 플레이어의 운반 허브 — <see cref="RopeDragLoad"/>가 무게·목줄 계산에 빌려 읽는다.
+    /// 상태 소유는 여전히 <see cref="PlayerCarrier"/>다(이 클래스는 조회 경로만 겸한다).</summary>
+    internal PlayerCarrier CarriedPlayer
     {
         get
         {
             if (m_carrier == null)
                 m_carrier = GetComponent<PlayerCarrier>();
-            return m_carrier != null && m_carrier.IsCarrying;
+            return m_carrier;
         }
     }
+
+    internal bool IsCarryingPlayer => CarriedPlayer != null && CarriedPlayer.IsCarrying;
 
     /// <summary>동시에 묶을 수 있는 상한 — 로드아웃이 없으면(테스트 구성) 무제한.</summary>
     internal int RopeCapacity => Loadout != null ? Loadout.RopeCount : int.MaxValue;

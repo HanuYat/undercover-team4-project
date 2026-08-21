@@ -1,4 +1,5 @@
-﻿using Unity.Netcode;
+﻿using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -76,8 +77,9 @@ public partial class PlayerRagdoll : MonoBehaviour
     private RagdollRig m_rig; // 뼈 한 벌 — 물리 조작 전부를 여기 위임한다
     private RagdollRope m_rope; // 밧줄 견인 (선택 — 없으면 운반이 물리로 안 끌린다)
 
-    // 다시 맬 상대 — 순간이동이 관절을 끊어도 남는다. 운반이 실제로 끝날 때만 비워진다. (#614)
-    private Transform m_ropeCarrier;
+    // 다시 맬 상대들 — 순간이동이 관절을 끊어도 남는다. 참가자별로 실제 운반이 끝날 때만 빠진다.
+    // 여럿이 덧걸 수 있어(합류) 목록이다 (#614·다인 확장).
+    private readonly List<Transform> m_ropeCarriers = new List<Transform>();
     private RagdollPoseBlend m_blend; // 부활 블렌드 — 리그가 한 벌이므로 그 리그를 섞는다
 
     // 전 뼈 자세 스트림 — 이 컴포넌트가 피어로 내보내는 유일한 통로다.
@@ -319,17 +321,19 @@ public partial class PlayerRagdoll : MonoBehaviour
     public float RopeLength => m_rope != null ? m_rope.Length : 0f;
 
     /// <summary>
-    /// 밧줄을 시체에 묶는다 — <see cref="PlayerTowedMotion.BeginDraggedFollow"/>가 래그돌인 대상에게만
-    /// 부른다. <b>권위 피어만 묶는다</b> — 전 피어가 각자 묶던 옛 배선이 견인 발산의 근원이었다 (docs §12).
+    /// 밧줄을 시체에 <b>한 가닥</b> 묶는다 — <see cref="PlayerTowedMotion.BeginDraggedFollow"/>가
+    /// 래그돌인 대상에게, 참가자(합류)마다 부른다. <b>권위 피어만 묶는다</b> — 전 피어가 각자 묶던
+    /// 옛 배선이 견인 발산의 근원이었다 (docs §12).
     /// </summary>
-    /// <param name="carrier">운반자(밧줄을 쥔 쪽).</param>
+    /// <param name="carrier">운반자(밧줄을 쥔 쪽) — 이미 목록에 있으면 멱등.</param>
     public void BeginRopePull(Transform carrier)
     {
         // BeginRopeTrace();
 
         // ⚠ 권위 가드보다 <b>앞</b>에 기억한다 — 이 호출은 전 피어에 오지만(운반 RPC가 SendTo.Everyone),
         // 사망 중 소유권이 넘어가면 지금 권위가 아닌 피어가 나중에 권위가 될 수 있다. (#614)
-        m_ropeCarrier = carrier;
+        if (carrier != null && !m_ropeCarriers.Contains(carrier))
+            m_ropeCarriers.Add(carrier);
 
         if (!HasMoveAuthority)
             return;
@@ -343,35 +347,56 @@ public partial class PlayerRagdoll : MonoBehaviour
         m_rope?.Attach(carrier);
     }
 
-    /// <summary>밧줄을 푼다 — 내려놓기·부활·운반자 소실. <b>다시 맬 상대도 잊는다</b> — 순간이동이
-    /// 잠깐 끊는 것(<see cref="PlaceBodyBy"/>)과 갈리는 지점이 여기다. (#614)</summary>
+    /// <summary>이 참가자의 가닥만 푼다 — 줄다리기에서 한 명이 손을 뗄 때. 없으면 무동작(멱등).
+    /// <b>다시 맬 상대에서도 뺀다</b> — <see cref="PlaceBodyBy"/>가 남기는 것과 갈리는 지점이 여기다. (#614)</summary>
+    public void EndRopePull(Transform carrier)
+    {
+        m_ropeCarriers.Remove(carrier);
+        m_rope?.Detach(carrier);
+    }
+
+    /// <summary>밧줄을 전부 푼다 — 내려놓기·부활·운반자 전원 소실. <b>다시 맬 상대도 전부 잊는다</b>
+    /// — 순간이동이 잠깐 끊는 것(<see cref="PlaceBodyBy"/>)과 갈리는 지점이 여기다. (#614)</summary>
     public void EndRopePull()
     {
-        m_ropeCarrier = null;
+        m_ropeCarriers.Clear();
         m_rope?.Detach();
     }
 
     /// <summary>
-    /// 순간이동이 끊어 둔 줄을 <b>운반자가 실제로 가까워지면</b> 다시 맨다 — 권위 피어 전용. (#614)
+    /// 순간이동이 끊어 둔 줄을 <b>참가자가 실제로 가까워지면</b> 각자 다시 맨다 — 권위 피어 전용. (#614)
     ///
     /// <b>왜 바로 못 매는가.</b> 운반자와 이 몸은 <b>오너가 서로 다른 피어</b>라 두 순간이동이 각자
     /// 도착한다 — 이 피어가 옮겨진 직후에는 운반자가 아직 <b>옛 자리</b>로 보인다. 그때 매면 앵커가
     /// 거기 생기고 다음 물리 스텝에 그 거리만큼 위반이 터진다(<see cref="PlaceBodyBy"/>가 줄을 끊고
     /// 가는 이유와 같은 사고).
     ///
+    /// <b>참가자마다 따로 판정한다</b> — <c>m_rope.IsAttached</c>("한 가닥이라도")로 한 번만 보면
+    /// 다인 운반에서 A가 먼저 붙는 순간 B의 재부착이 영영 막힌다. 각자 자기 가닥이 이미 붙었는지
+    /// (<see cref="RagdollRope.IsAttachedTo"/>)와 자기 거리만 본다.
+    ///
     /// 영영 안 매인 채 남지 않는 근거는 서버에 있다 — 그만큼 멀면 <see cref="PlayerCarrier"/>의 거리
-    /// 검사가 유예가 끝난 뒤 운반을 정리한다.
+    /// 검사(또는 목줄 완화식)가 유예가 끝난 뒤 그 참가자의 운반을 정리한다.
     /// </summary>
     private void TickRopeReattach()
     {
-        if (m_ropeCarrier == null || m_rope == null || m_rope.IsAttached)
+        if (m_rope == null || m_ropeCarriers.Count == 0)
             return;
 
-        Vector3 delta = m_ropeCarrier.position - m_root.position;
-        if (delta.sqrMagnitude > k_ropeReattachRange * k_ropeReattachRange)
-            return;
+        // 이 프레임에 다시 매는 참가자가 있을 수 있어 스냅샷을 돈다 — BeginRopePull이 같은 목록을
+        // 다시 건드리지는 않지만(이미 들어 있으면 멱등), 방어적으로 인덱스 역순 순회를 쓴다.
+        for (int i = m_ropeCarriers.Count - 1; i >= 0; i--)
+        {
+            Transform carrier = m_ropeCarriers[i];
+            if (carrier == null || m_rope.IsAttachedTo(carrier))
+                continue;
 
-        BeginRopePull(m_ropeCarrier);
+            Vector3 delta = carrier.position - m_root.position;
+            if (delta.sqrMagnitude > k_ropeReattachRange * k_ropeReattachRange)
+                continue;
+
+            BeginRopePull(carrier);
+        }
     }
 
     // ---- 순간이동 (#614) ----
@@ -400,8 +425,8 @@ public partial class PlayerRagdoll : MonoBehaviour
         // <b>발사한다</b>(NPC 실측 237 m/s). 다시 매는 것은 운반자가 가까워진 뒤다
         // (<see cref="TickRopeReattach"/>) — 여기서 바로 매면 아직 옛 자리에 있는 운반자에게 걸린다.
         //
-        // ⚠ <see cref="EndRopePull"/>이 아니라 관절만 끊는다 — 저쪽은 "운반이 끝났다"라 다시 맬
-        // 상대까지 잊는다. 여기서는 운반이 계속되는 중이므로 <see cref="m_ropeCarrier"/>를 남긴다.
+        // ⚠ <see cref="EndRopePull()"/>이 아니라 관절만 끊는다 — 저쪽은 "운반이 끝났다"라 다시 맬
+        // 상대까지 잊는다. 여기서는 운반이 계속되는 중이므로 <see cref="m_ropeCarriers"/>를 남긴다.
         m_rope?.Detach();
 
         // 전 뼈를 한 델타로 — 상대 자세·속도·관절이 보존돼 도착지에서 솔버가 메울 것이 없다.

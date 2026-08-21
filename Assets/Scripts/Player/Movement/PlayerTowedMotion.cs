@@ -77,17 +77,21 @@ public class PlayerTowedMotion : MonoBehaviour
     private Transform m_escortAnchorA;
     private Transform m_escortAnchorB;
 
-    // 운반(#365) — 나를 끌고 가는 플레이어.
+    // 운반(#365) — 나를 끌고 가는 플레이어. 여럿이 덧걸 수 있어(합류) 수만 센다 — 실제 견인은
+    // 래그돌 경로에서 PlayerRagdoll/RagdollRope가 참가자별 가닥으로 들고 있으므로, 여기서는
+    // "지금 누구 하나라도 끄는가"만 알면 된다. m_dragCarrier는 비래그돌 폴백(위치 추종)의 대표
+    // 한 명일 뿐이다 — 그 경로는 운반이 항상 Die(래그돌)를 전제해 실제로는 도달하지 않는다.
     private Transform m_dragCarrier;
+    private int m_dragCarrierCount;
     private Vector3 m_dragVelocity;  // SmoothDamp 관성
     private Quaternion m_dragFacing; // 흔들림을 뺀 몸 방향 — 여기에 sway를 얹어 최종 회전을 만든다
     private float m_dragTravel;      // 끌린 누적 거리(m) — 흔들림 위상의 기준
 
     /// <summary>지금 남에게 옮겨지는 중인가 — 참이면 입력 이동 대신 <see cref="Tick"/>이 돈다.</summary>
-    public bool IsActive => m_escorted || m_dragCarrier != null;
+    public bool IsActive => m_escorted || m_dragCarrierCount > 0;
 
     /// <summary>운반되어 끌려가는 중인지 — 오너 로컬 판정. (#365)</summary>
-    public bool IsDraggedFollowing => m_dragCarrier != null;
+    public bool IsDraggedFollowing => m_dragCarrierCount > 0;
 
     private void Awake()
     {
@@ -110,7 +114,7 @@ public class PlayerTowedMotion : MonoBehaviour
         }
 
         // 래그돌은 밧줄이 물리로 끌고 캡슐이 그걸 따라간다 — 여기서 위치를 옮기면 둘이 싸운다.
-        if (m_dragCarrier != null && (m_ragdoll == null || !m_ragdoll.IsRagdollActive))
+        if (m_dragCarrierCount > 0 && (m_ragdoll == null || !m_ragdoll.IsRagdollActive))
         {
             UpdateDraggedFollow();
         }
@@ -184,6 +188,10 @@ public class PlayerTowedMotion : MonoBehaviour
     /// 운반 추종 시작 — 오너 로컬 전용, <see cref="PlayerCarrier"/>가 서버 지시로 호출한다. (#365)
     /// 기능 정지(Die)된 몸을 동료가 끌고 가는 동안 오너가 스스로 따라가야 위치가 전 피어에 전파된다
     /// (NetworkTransform 오너 권한 — 오검거 호송 #279와 같은 사정).
+    ///
+    /// <b>참가자마다 호출된다</b> — 합류(덧걸기)가 이 함수를 다시 부르므로 <see cref="m_dragCarrierCount"/>로
+    /// 인원을 센다. 래그돌 경로는 참가자 수와 무관하게 매번 <see cref="PlayerRagdoll.BeginRopePull"/>을
+    /// 불러 자기 가닥을 추가한다(실제 다인 견인은 그쪽 관절이 든다).
     /// </summary>
     public void BeginDraggedFollow(Transform carrier)
     {
@@ -192,7 +200,9 @@ public class PlayerTowedMotion : MonoBehaviour
             return;
         }
 
-        m_dragCarrier = carrier;
+        bool wasActive = m_dragCarrierCount > 0;
+        m_dragCarrierCount++;
+        m_dragCarrier = carrier; // 비래그돌 폴백의 대표 — 항상 최신 참가자를 가리킨다(아래 근거)
 
         // 래그돌이면 <b>몸을 직접 밧줄로 묶는다</b> — 아래의 위치 추종을 쓰지 않는다 (#506 §9-7).
         //
@@ -225,24 +235,44 @@ public class PlayerTowedMotion : MonoBehaviour
             return;
         }
 
-        // 새 운반의 추종 상태 초기화 — 이전 운반의 관성·위상이 남으면 첫 프레임에 튄다 (SetDragging 관례)
-        m_dragVelocity = Vector3.zero;
-        m_dragFacing = transform.rotation;
-        m_dragTravel = 0f;
+        // 첫 참가자일 때만 추종 상태를 새로 잡는다 — 합류 중에 리셋하면 끌려가던 몸이 멈칫한다
+        // (NpcRopeDrag.StartRopeDrag와 같은 관례). 이 경로는 비래그돌 전용이라 실제로는 도달하지 않는다.
+        if (!wasActive)
+        {
+            m_dragVelocity = Vector3.zero;
+            m_dragFacing = transform.rotation;
+            m_dragTravel = 0f;
 
-        m_movement.ClearExternalVelocity(); // 호송 진입과 같은 이유 (BeginEscortFollow 참고)
-        ReportGroundedOnEnter();
+            m_movement.ClearExternalVelocity(); // 호송 진입과 같은 이유 (BeginEscortFollow 참고)
+            ReportGroundedOnEnter();
+        }
     }
 
     // 밧줄을 묶을 지점(운반자의 손)을 고르는 근거는 PlayerHeldItemView.ResolveRopeAnchor에 있다 —
     // NPC 시체 끌기(#571)가 같은 판정을 쓰게 되면서 앵커의 주인 쪽으로 옮겼다.
 
-    /// <summary>운반 추종 종료 — 내려놓기·부활·운반자 소실 시 <see cref="PlayerCarrier"/>가 호출한다. (#365)</summary>
+    /// <summary>참가자 한 명의 운반 추종만 끝낸다(그 가닥만) — 남은 참가자가 있으면 추종은 계속된다.
+    /// <see cref="PlayerCarrier"/>가 호출한다. (#365, 합류)</summary>
+    public void EndDraggedFollow(Transform carrier)
+    {
+        m_dragCarrierCount = Mathf.Max(0, m_dragCarrierCount - 1);
+        if (m_dragCarrierCount == 0)
+        {
+            m_dragCarrier = null;
+            m_dragVelocity = Vector3.zero;
+        }
+
+        m_ragdoll?.EndRopePull(carrier); // 래그돌 경로였으면 이 가닥만 푼다 (아니었으면 무동작)
+    }
+
+    /// <summary>운반 추종을 전부 끝낸다 — 디스폰·라운드 리셋처럼 서버 지시 없이 정리해야 하는 경로.
+    /// <see cref="StopAll"/>이 쓴다. (#365)</summary>
     public void EndDraggedFollow()
     {
         m_dragCarrier = null;
+        m_dragCarrierCount = 0;
         m_dragVelocity = Vector3.zero;
-        m_ragdoll?.EndRopePull(); // 래그돌 경로였으면 밧줄을 푼다 (아니었으면 무동작)
+        m_ragdoll?.EndRopePull(); // 래그돌 경로였으면 밧줄을 전부 푼다 (아니었으면 무동작)
     }
 
     // 운반자 추종 — 밧줄 끌기(PlayerEscorter.ServerUpdateDrag)와 같은 수식이다: 간격을 넘을 때만
