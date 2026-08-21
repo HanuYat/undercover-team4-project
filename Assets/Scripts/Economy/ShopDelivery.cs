@@ -3,7 +3,7 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 상점 구매품의 본부 택배 배달 (#182) — Main Scene 본부에 배치한다. 서버가 게임 씬 진입 시
+/// 상점 구매품의 본부 택배 배달 (#182) — 본부(HQ.prefab) 안에 배치한다. 서버가 게임 씬 진입 시
 /// 팀 구매 목록(ShopPurchases)을 훑어 이번 라운드 몫을 다시 지급한다.
 ///  · <b>소지형</b> — 택배 지점 바닥에 부모 없이 서버 스폰. 아무나 WorldItemPickup으로 주워 간다.
 ///  · <b>설치형</b> — 본부에 배치된 씬 인스턴스의 SetInstalled(true) 호출. 인벤토리 경로를 타지 않는다 (#108).

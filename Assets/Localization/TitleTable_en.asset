@@ -295,6 +295,17 @@ MonoBehaviour:
     m_Localized: The host ended the session.
     m_Metadata:
       m_Items: []
+  - m_Id: 5871219950481408
+    m_Localized: Tutorial
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871219967258624
+    m_Localized: 'First time here?
+
+      Would you like to run the tutorial and
+      learn the controls and the investigation flow?'
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

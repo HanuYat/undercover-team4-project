@@ -48,13 +48,21 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
         }
     }
 
+    // 튜토리얼에서 HP가 내려갈 수 있는 바닥값 (#663) — 0이 아니므로 다운(무력화)에 들어가지 않는다.
+    // 무적(피해 무시)이 아니라 바닥을 두는 이유는 <b>맞는 것 자체는 배워야 하기 때문</b>이다:
+    // 피격 연출·체력 감소는 그대로 보이고, 아무것도 못 하게 되는 결말만 없다.
+    private const int k_tutorialMinHp = 10;
+
     // 서버 권위로만 실제 값 변경. (데미지 소스가 클라라면 별도 ServerRpc로 요청)
     public void ModifyHp(int delta)
     {
         if (IsSpawned && !IsServer)
             return;
 
-        SetHp(Mathf.Clamp(CurrentHp + delta, 0, m_maxHp));
+        // 바닥은 여기 하나로 둔다 — 피해 경로(진압봉·저항 NPC·폭발)가 전부 이 함수를 지나므로
+        // 소스가 늘어도 따라온다. 회복은 하한이라 영향이 없다.
+        int floor = TutorialDirector.IsActive ? k_tutorialMinHp : 0;
+        SetHp(Mathf.Clamp(CurrentHp + delta, floor, m_maxHp));
     }
 
     /// <summary>

@@ -371,6 +371,54 @@ MonoBehaviour:
     m_Key: Hud.Interact.Reason.InUse
     m_Metadata:
       m_Items: []
+  - m_Id: 5871217966575616
+    m_Key: Hud.Tutorial.Move
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518656
+    m_Key: Hud.Tutorial.Slots
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518657
+    m_Key: Hud.Tutorial.Aim
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518658
+    m_Key: Hud.Tutorial.TeamTab
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518659
+    m_Key: Hud.Tutorial.Cctv
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518660
+    m_Key: Hud.Tutorial.Scan
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518661
+    m_Key: Hud.Tutorial.Subdue
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518662
+    m_Key: Hud.Tutorial.Rope
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518663
+    m_Key: Hud.Tutorial.Jail
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518664
+    m_Key: Hud.Tutorial.Verdict
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5871218008518665
+    m_Key: Hud.Tutorial.Done
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6010079826546688
+    m_Key: Hud.Tutorial.Corpse
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

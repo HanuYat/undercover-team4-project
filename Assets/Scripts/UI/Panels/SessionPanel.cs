@@ -23,6 +23,30 @@ public class SessionPanel : PanelBase
     public override bool CanCloseWithESC => false; // 세션 화면의 기본 바탕 — 닫을 수 없다
     public override bool IsStackable => false;
 
+    /// <summary>
+    /// 세션 화면이 떴다 = 첫 화면에 도달했다. 처음 온 사람에게 튜토리얼을 한 번 권한다 (#663).
+    ///
+    /// 이 자리인 이유: 세션 화면은 관문을 통과해 열리는 길(AuthGatePanel.Pass)과 지난 실행의 기억으로
+    /// 건너뛰어 열리는 길(TitleUIManager.Start) 둘이 있는데, 둘 다 결국 여기를 지난다.
+    /// 관문 위에 겹쳐 띄울 수는 없다 — 로그인도 안 한 사람에게 먼저 물을 일이 아니다.
+    /// </summary>
+    public override void OpenPanel()
+    {
+        base.OpenPanel();
+
+        if (TutorialFlow.WasOffered)
+            return;
+
+        // 실제로 띄운 뒤에 기억한다 — 기억이 PlayerPrefs라 한 번 찍히면 되돌아오지 않는다.
+        // 먼저 찍으면 창을 못 띄운 경우(씬에서 TutorialConfirmCanvas가 빠진 구성 등) 그 플레이어는
+        // 권유를 영영 못 받는다. OpenPanel<T>가 성공 여부를 돌려주므로 그것만 보면 된다
+        // (실패하면 콘솔에 에러도 남는다 — UIManagerBase, #441).
+        //
+        // 물어본 것 자체를 기억하는 것이지 완주를 기억하는 게 아니다 — 거절한 사람에게도 다시 묻지 않는다.
+        if (App.UI.Current != null && App.UI.Current.OpenPanel<TutorialConfirmPanel>())
+            TutorialFlow.MarkOffered();
+    }
+
     [Header("UI 참조")]
     [SerializeField]
     private Button m_createButton;

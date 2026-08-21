@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 ///
 /// 테스트 씬에 <b>Player 프리팹을 직접 놓으면 조작되지 않는다</b>: PlayerInputHandler는 입력 액션
 /// 구독을 전부 OnNetworkSpawn에서 하는데, 씬에 배치한 인스턴스는 NGO가 스폰하지 않아 그 콜백이
-/// 오지 않는다. 그래서 Main Scene처럼 NetworkManager + PlayerSpawnManager를 두고 런타임에
+/// 오지 않는다. 그래서 게임 맵 씬처럼 NetworkManager + PlayerSpawnManager를 두고 런타임에
 /// 스폰시킨다 — 플레이어는 NetworkManager.PlayerPrefab에서 나온다.
 ///
 /// AppBootstrap(세션·Auth·Vivox)은 일부러 넣지 않는다 — DevAutoHost가 Relay 없이 로컬
@@ -17,7 +17,7 @@ using UnityEngine.SceneManagement;
 /// 세션·음성이 필요한 테스트라면 Assets/Prefabs/AppBootstrap.prefab을 직접 얹으면 된다.
 ///
 /// 만드는 것은 뼈대뿐이다. NPC가 필요한 테스트는 NavMeshSurface를, 라운드 흐름이 필요한 테스트는
-/// 인게임 매니저(RoundManager 등)를 각자 얹는다 — 그건 Main Scene을 복제하는 편이 빠르다.
+/// 인게임 매니저(RoundManager 등)를 각자 얹는다 — 그건 게임 맵 씬을 복제하는 편이 빠르다.
 /// </summary>
 public static class TestBaseSceneBuilder
 {
@@ -42,7 +42,7 @@ public static class TestBaseSceneBuilder
 
         EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-        // 루트 그룹 — Main Scene과 같은 구분자 이름을 쓴다
+        // 루트 그룹 — 게임 맵 씬과 같은 구분자 이름을 쓴다
         Transform environment = new GameObject("=== ENVIRONMENT ===").transform;
         Transform systems = new GameObject("=== SYSTEMS ===").transform;
         new GameObject("=== WORLD ===");
@@ -75,7 +75,7 @@ public static class TestBaseSceneBuilder
     }
 
     // 스폰 전까지 화면을 채우는 폴백 카메라 — depth -1이라 플레이어 카메라(0)가 위에 그려진다
-    // (Main Scene의 Main Camera와 같은 방침). AudioListener는 씬에 하나 있어야 해서 여기 둔다.
+    // (게임 맵 씬의 Main Camera와 같은 방침). AudioListener는 씬에 하나 있어야 해서 여기 둔다.
     private static void CreateFallbackCamera(Transform parent)
     {
         var go = new GameObject("Main Camera") { tag = "MainCamera" };
