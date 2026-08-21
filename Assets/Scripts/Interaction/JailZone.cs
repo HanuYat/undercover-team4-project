@@ -147,6 +147,22 @@ public class JailZone : NetworkedManagerBase
     /// <summary>문에 E를 눌러 들어온 플레이어가 서는 감옥 안 지점 — 미배선이면 감옥 자신의 위치. (#537)</summary>
     public Transform PlayerEntryPoint => m_playerEntryPoint != null ? m_playerEntryPoint : transform;
 
+    /// <summary>입장 지점 둘레의 <paramref name="index"/>번째 자리 — <see cref="ExitSlot"/>의 입장판이다.
+    /// 0번은 입장 지점 그 자신(누른 플레이어)이고, 업고 들어온 동료 몸은 1번부터 받는다. (#614)</summary>
+    public Vector3 PlayerEntrySlot(int index)
+    {
+        Transform entry = PlayerEntryPoint;
+        if (index <= 0)
+            return entry.position;
+
+        int row = (index + 1) / 2;
+        float side = (index % 2 == 1) ? -1f : 1f;
+
+        return entry.position
+            + entry.right * (side * k_exitSlotSpacing)
+            + entry.forward * (row * k_exitSlotSpacing);
+    }
+
     /// <summary>
     /// 퇴장 지점 둘레의 <paramref name="index"/>번째 자리 — <b>여럿이 한 번에 나올 때 겹치지 않게</b> 벌린다. (#537)
     ///

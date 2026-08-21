@@ -29,6 +29,10 @@ public partial class PlayerRagdoll : MonoBehaviour
     // 사망 동기화를 기다려 주는 시간(초) — <b>안전망뿐</b>이다. 정상 경로에서는 걸리지 않는다 (docs §9).
     private const float k_deathSyncGraceSeconds = 1f;
 
+    // 순간이동 뒤 줄을 다시 맬 운반자 거리(m) — 밧줄 길이(약 2m)보다 넉넉히 두되 운반 끊김 거리(8m)
+    // 보다는 짧게. 넓게 잡아도 안전하다: 더 멀면 서버가 운반 자체를 정리한다. (#614)
+    private const float k_ropeReattachRange = 5f;
+
     // 부활 블렌드가 물려 들어가는 상태 — PlayerAnimatorControllerBuilder의 k_groundState와 같아야 한다.
     private static readonly int s_groundStateHash = Animator.StringToHash("Knockdown_Ground");
 
@@ -71,6 +75,9 @@ public partial class PlayerRagdoll : MonoBehaviour
 
     private RagdollRig m_rig; // 뼈 한 벌 — 물리 조작 전부를 여기 위임한다
     private RagdollRope m_rope; // 밧줄 견인 (선택 — 없으면 운반이 물리로 안 끌린다)
+
+    // 다시 맬 상대 — 순간이동이 관절을 끊어도 남는다. 운반이 실제로 끝날 때만 비워진다. (#614)
+    private Transform m_ropeCarrier;
     private RagdollPoseBlend m_blend; // 부활 블렌드 — 리그가 한 벌이므로 그 리그를 섞는다
 
     // 전 뼈 자세 스트림 — 이 컴포넌트가 피어로 내보내는 유일한 통로다.
@@ -320,6 +327,10 @@ public partial class PlayerRagdoll : MonoBehaviour
     {
         // BeginRopeTrace();
 
+        // ⚠ 권위 가드보다 <b>앞</b>에 기억한다 — 이 호출은 전 피어에 오지만(운반 RPC가 SendTo.Everyone),
+        // 사망 중 소유권이 넘어가면 지금 권위가 아닌 피어가 나중에 권위가 될 수 있다. (#614)
+        m_ropeCarrier = carrier;
+
         if (!HasMoveAuthority)
             return;
 
@@ -332,8 +343,80 @@ public partial class PlayerRagdoll : MonoBehaviour
         m_rope?.Attach(carrier);
     }
 
-    /// <summary>밧줄을 푼다 — 내려놓기·부활·운반자 소실.</summary>
-    public void EndRopePull() => m_rope?.Detach();
+    /// <summary>밧줄을 푼다 — 내려놓기·부활·운반자 소실. <b>다시 맬 상대도 잊는다</b> — 순간이동이
+    /// 잠깐 끊는 것(<see cref="PlaceBodyBy"/>)과 갈리는 지점이 여기다. (#614)</summary>
+    public void EndRopePull()
+    {
+        m_ropeCarrier = null;
+        m_rope?.Detach();
+    }
+
+    /// <summary>
+    /// 순간이동이 끊어 둔 줄을 <b>운반자가 실제로 가까워지면</b> 다시 맨다 — 권위 피어 전용. (#614)
+    ///
+    /// <b>왜 바로 못 매는가.</b> 운반자와 이 몸은 <b>오너가 서로 다른 피어</b>라 두 순간이동이 각자
+    /// 도착한다 — 이 피어가 옮겨진 직후에는 운반자가 아직 <b>옛 자리</b>로 보인다. 그때 매면 앵커가
+    /// 거기 생기고 다음 물리 스텝에 그 거리만큼 위반이 터진다(<see cref="PlaceBodyBy"/>가 줄을 끊고
+    /// 가는 이유와 같은 사고).
+    ///
+    /// 영영 안 매인 채 남지 않는 근거는 서버에 있다 — 그만큼 멀면 <see cref="PlayerCarrier"/>의 거리
+    /// 검사가 유예가 끝난 뒤 운반을 정리한다.
+    /// </summary>
+    private void TickRopeReattach()
+    {
+        if (m_ropeCarrier == null || m_rope == null || m_rope.IsAttached)
+            return;
+
+        Vector3 delta = m_ropeCarrier.position - m_root.position;
+        if (delta.sqrMagnitude > k_ropeReattachRange * k_ropeReattachRange)
+            return;
+
+        BeginRopePull(m_ropeCarrier);
+    }
+
+    // ---- 순간이동 (#614) ----
+
+    /// <summary>
+    /// 순간이동한 루트에 뼈를 <b>같은 델타로</b> 따라 옮긴다 — 오너 전용. 래그돌이 아니면 무동작.
+    /// 부르는 곳은 <see cref="PlayerMovement.SetPose"/> 하나다.
+    ///
+    /// <b>루트는 건드리지 않는다</b> — 저쪽이 이미 옮겼다. 여기서 또 옮기면 델타가 두 번 실린다.
+    /// 뼈는 동적 리지드바디라 루트를 따라오지 않으므로(계층이 아니라 물리가 자리를 쥔다) 이 보정이
+    /// 없으면 <see cref="TickCapsuleFollow"/>가 다음 물리 스텝에 루트를 <b>도로 시체 자리로</b> 끌어간다.
+    ///
+    /// NPC의 <c>NpcRagdoll.ServerPlaceCorpse</c>와 같은 일을 하지만 <b>도는 피어가 반대다</b> —
+    /// 저쪽은 서버, 이쪽은 그 몸의 오너다(루트 NetworkTransform·자세 스트림이 둘 다 오너 권한).
+    /// </summary>
+    /// <param name="delta">루트가 옮겨 간 거리 — 옮기기 <b>전에</b> 재야 한다.</param>
+    public void PlaceBodyBy(Vector3 delta)
+    {
+        if (!HasMoveAuthority || m_state != RagdollState.Ragdoll)
+            return;
+        if (m_rig == null || !m_rig.IsValid)
+            return;
+
+        // ⚠ <b>줄을 먼저 끊는다.</b> 관절의 앵커는 운반자를 따라가는 별개 오브젝트라 이 델타로 같이
+        // 움직이지 않는다 — 매인 채 옮기면 위반이 그 거리만큼 생기고 솔버가 그것을 메우며 몸을
+        // <b>발사한다</b>(NPC 실측 237 m/s). 다시 매는 것은 운반자가 가까워진 뒤다
+        // (<see cref="TickRopeReattach"/>) — 여기서 바로 매면 아직 옛 자리에 있는 운반자에게 걸린다.
+        //
+        // ⚠ <see cref="EndRopePull"/>이 아니라 관절만 끊는다 — 저쪽은 "운반이 끝났다"라 다시 맬
+        // 상대까지 잊는다. 여기서는 운반이 계속되는 중이므로 <see cref="m_ropeCarrier"/>를 남긴다.
+        m_rope?.Detach();
+
+        // 전 뼈를 한 델타로 — 상대 자세·속도·관절이 보존돼 도착지에서 솔버가 메울 것이 없다.
+        m_rig.TranslateBy(delta);
+
+        // ⚠ <b>보간 없이 쏜다 — 안 쏘면 원격의 몸이 출발지에 남는다.</b> 평범한 스냅샷으로 보내면
+        // 원격이 두 지점 사이를 보간하며 몸이 맵을 가로질러 날아간다. 이 패킷에는 뼈 길이도 실려
+        // 원격이 바인드 골격으로 그리는 것도 함께 막는다.
+        m_streamer?.SendTeleportPose();
+
+        // 옮긴 몸은 깨어난 것으로 본다 — 도착지에서 다시 무너져 잠드는 과정이 원격에도 흘러야 한다.
+        m_rig.WakeAll();
+        if (m_settled)
+            ResumeFromSleep();
+    }
 
     // ---- 진입 / 이탈 ----
 
@@ -501,6 +584,10 @@ public partial class PlayerRagdoll : MonoBehaviour
         // 없으면 무너지기도 전에 정착해 버린다. 원격의 종착 상태는 받는 정착 자세가 준다. (docs §10)
         if (!HasMoveAuthority)
             return;
+
+        // ⚠ <b>정착 게이트보다 앞이다</b> — 순간이동 뒤 줄이 끊긴 채 잠든 몸도 다시 매여야 하고,
+        // 매는 순간 BeginRopePull이 깨우기까지 한다. 뒤로 내리면 잠든 몸은 영영 안 매인다.
+        TickRopeReattach();
 
         // 잠든 뒤에는 <b>깨어났는지만</b> 본다 — 밟히거나 밀리면 PhysX가 스스로 깨우므로 이 한 줄이
         // 그 모든 경로를 받는다. 이것이 없던 것이 #763의 뿌리다. (docs §10)

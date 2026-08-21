@@ -28,6 +28,10 @@ public class PlayerCarrier : NetworkBehaviour
     // 사거리는 조준·윤곽선과 같은 기준 — PlayerInteractor.Range 재사용 (#147 패턴, #184)
     private const float k_fallbackRange = 3f; // 테스트 구성 등 PlayerInteractor가 없을 때
 
+    // 순간이동 뒤 거리 검사를 미루는 유예(초) — 오너 권한 이동이 도착할 시간을 준다. 서버(또는 오프라인). (#614)
+    private const float k_teleportGraceSeconds = 1f;
+    private float m_teleportGraceRemaining;
+
     private PlayerInteractor m_interactor;
     private PlayerIncapacitation m_incapacitation;
     private PlayerTowedMotion m_towed;
@@ -238,6 +242,18 @@ public class PlayerCarrier : NetworkBehaviour
     }
 
     /// <summary>
+    /// 이 운반을 잠시 거리 검사에서 빼 둔다 — <b>운반자와 몸을 함께 순간이동시키는 쪽</b>이 옮기기
+    /// 직전에 부른다(감옥 문). 서버(또는 오프라인) 전용. 근거는 <see cref="Update"/>의 유예 주석. (#614)
+    /// </summary>
+    internal void ServerBeginTeleportGrace()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        m_teleportGraceRemaining = k_teleportGraceSeconds;
+    }
+
+    /// <summary>
     /// 운반 해제 — 서버(또는 오프라인) 전용. 내려놓기·거리 이탈·부활·운반자 무력화가 모두 여기로 모인다.
     /// 부활(<see cref="HqRevivalDevice"/>)처럼 끌려가는 쪽에서 끝내야 하는 경우를 위해 공개한다.
     /// </summary>
@@ -360,6 +376,16 @@ public class PlayerCarrier : NetworkBehaviour
         if (m_incapacitation != null && m_incapacitation.IsIncapacitated)
         {
             ServerDrop("운반자 행동불능");
+            return;
+        }
+
+        // 순간이동 유예 — 감옥 문처럼 둘을 함께 옮기는 경로에서는 아래 거리 검사를 잠깐 쉰다. (#614)
+        // <b>몸의 이동은 오너 권한이라 한 왕복 늦게 반영되고</b>, 운반자와 몸은 오너가 서로 달라 그
+        // 왕복이 각자 도착한다 — 유예가 없으면 문을 지나는 프레임에 둘이 맵 양끝으로 보여 운반이
+        // 스스로 끊긴다. (HqRevivalDevice.k_strayGraceSeconds와 같은 근거·같은 패턴)
+        if (m_teleportGraceRemaining > 0f)
+        {
+            m_teleportGraceRemaining -= Time.deltaTime;
             return;
         }
 

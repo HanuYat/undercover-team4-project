@@ -532,7 +532,11 @@ public class JailIntake : CommonManagerBase
 
         Transform entry = m_jailZone.PlayerEntryPoint;
         mover.ServerTeleport(entry.position, entry.rotation);
-        Debug.Log($"[감옥] 입장 — {mover.name}");
+
+        // 업고 있는 동료 몸도 함께 들어온다 (#614) — 안 옮기면 몸만 문 밖에 남는다.
+        bool carried = ServerMoveCarriedBody(mover, m_jailZone.PlayerEntrySlot(1), entry.rotation);
+
+        Debug.Log($"[감옥] 입장 — {mover.name}{(carried ? " (동료 몸 1구 동반)" : string.Empty)}");
     }
 
     /// <summary>
@@ -577,9 +581,42 @@ public class JailIntake : CommonManagerBase
         // 아직 감옥 안이면 <b>방금 없앤 위반을 그대로 다시 만든다.</b>
         mover.ServerTeleport(exit.position, exit.rotation);
 
+        // 업고 있는 동료 몸도 함께 나온다 (#614) — 밧줄 시체와 같은 이유로 <b>플레이어 뒤</b>다.
+        // 운반자가 아직 안에 있는 채로 몸을 내보내면 그 사이에 줄이 맵을 가로질러 늘어난다.
+        int slot = followers.Count + 1;
+        if (ServerMoveCarriedBody(mover, m_jailZone.ExitSlot(slot), exit.rotation))
+            slot++;
+
         // 밧줄에 걸린 시체도 함께 나온다 (#597) — 안 옮기면 줄만 벽을 뚫고 늘어나고 몸은 방에 남는다.
-        int corpses = ServerExitRopedCorpses(mover, followers.Count + 1);
+        int corpses = ServerExitRopedCorpses(mover, slot);
         Debug.Log($"[감옥] 퇴장 — {mover.name} (동행 {followers.Count}명, 시체 {corpses}구)");
+    }
+
+    /// <summary>
+    /// 업고 있는 동료 몸을 함께 옮긴다 — 입장·퇴장이 같이 쓴다. 업은 것이 없으면 무동작이고 false. (#614)
+    ///
+    /// <b>운반은 유지된다</b> — 여기서 내려놓지 않는다. 몸의 뼈까지 따라가는 것은
+    /// <c>PlayerMovement.SetPose</c>가 <c>PlayerRagdoll.PlaceBodyBy</c>를 부르기 때문이고, 그 과정에서
+    /// 잠깐 끊긴 관절 밧줄은 운반자가 가까워지면 몸 쪽이 스스로 다시 맨다.
+    ///
+    /// ⚠ <b>옮기기 전에 거리 유예를 건다.</b> 몸의 이동은 오너 권한이라 한 왕복 늦게 반영되는데,
+    /// 운반자와 몸은 오너가 서로 달라 그 왕복이 각자 도착한다 — 유예가 없으면 그 사이에 둘이 맵
+    /// 양끝으로 보여 <c>PlayerCarrier</c>의 거리 검사가 운반을 스스로 끊는다.
+    /// </summary>
+    private bool ServerMoveCarriedBody(PlayerMovement mover, Vector3 position, Quaternion rotation)
+    {
+        PlayerCarrier carrier = mover.GetComponent<PlayerCarrier>();
+        PlayerCarrier body = carrier != null ? carrier.CarriedTarget : null;
+        if (body == null)
+            return false;
+
+        PlayerMovement bodyMovement = body.GetComponent<PlayerMovement>();
+        if (bodyMovement == null)
+            return false;
+
+        carrier.ServerBeginTeleportGrace();
+        bodyMovement.ServerTeleport(position, rotation);
+        return true;
     }
 
     // 이 플레이어 줄에 걸린 시체를 퇴장 자리로 옮긴다 — 산 신병은 FindFollowersOf가 이미 집었다.
