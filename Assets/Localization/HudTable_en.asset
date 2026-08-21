@@ -406,8 +406,9 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 5871218008518660
-    m_Localized: Now go outside, hold a scanner, aim at the citizen, and compare
-      it with the montage
+    m_Localized: "Now go outside, grab a scanner, aim at the citizen, and compare
+      it with the montage\r\nIf the scanner\u2019s battery runs completely drained,
+      you need to charge it using the charger at HQ"
     m_Metadata:
       m_Items: []
   - m_Id: 5871218008518661
