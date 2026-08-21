@@ -27,6 +27,20 @@ public class BodyTint : MonoBehaviour
     private bool m_hasBase;
     private bool m_applied; // 지금 오버라이드가 걸려 있는가 — 불필요한 재적용을 막는다
 
+    /// <summary>
+    /// 몸을 그릴지 — 색을 아직 모르는 동안 <b>틀린 색으로 한 프레임 보이는 것</b>을 막는다 (#790).
+    /// <c>enabled</c>가 아니라 <c>forceRenderingOff</c>를 쓴다 — 렌더러 상태를 읽는 쪽과 다투지 않는다.
+    /// (내 몸을 내 카메라에서 걷는 것은 레이어로 하므로 이것과 별개다 — PlayerLook.ApplyOwnerView)
+    /// </summary>
+    public void SetRendering(bool on)
+    {
+        for (int i = 0; i < m_targets.Count; i++)
+        {
+            if (m_targets[i] != null)
+                m_targets[i].forceRenderingOff = !on;
+        }
+    }
+
     private void Awake()
     {
         m_block = new MaterialPropertyBlock();

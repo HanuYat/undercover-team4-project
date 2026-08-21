@@ -31,6 +31,25 @@ public class SessionRoster : NetworkedManagerBase
     /// <summary>이 엔트리가 방장인가 — 별도 필드를 두지 않고 서버 clientId와 비교한다 (#429).</summary>
     public bool IsHostEntry(LobbyPlayerEntry entry) => NetworkManager != null && entry.ClientId == NetworkManager.ServerClientId;
 
+    /// <summary>
+    /// 이 클라이언트의 명부 항목을 찾는다 — 스폰 시점에 색·닉네임을 심는 쪽이 쓴다. (#790)
+    /// 아직 보고가 안 닿았으면 false다(입장 직후 한두 틱).
+    /// </summary>
+    public bool TryGetEntry(ulong clientId, out LobbyPlayerEntry entry)
+    {
+        for (int i = 0; i < m_players.Count; i++)
+        {
+            if (m_players[i].ClientId != clientId)
+                continue;
+
+            entry = m_players[i];
+            return true;
+        }
+
+        entry = default;
+        return false;
+    }
+
     /// <summary>이 피어에서 리스트가 스폰·초기 동기화된 시점 — late-join 빈 화면 방지.</summary>
     public event Action OnListReady;
 
