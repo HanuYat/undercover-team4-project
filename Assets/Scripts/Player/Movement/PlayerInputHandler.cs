@@ -140,6 +140,13 @@ public class PlayerInputHandler : NetworkBehaviour
     public event Action OnTeamStatusOpened; // Tab 누름 — 팀 상황판 열기 (#720)
     public event Action OnTeamStatusClosed; // Tab 뗌 — 닫기 (#720)
 
+    // <b>"내 플레이어인가"는 스폰 시점에 굳힌다 — IsOwner로 매번 묻지 않는다.</b> (#774)
+    // 사망하면 소유권이 서버로 넘어가므로(PlayerIncapacitation, #763 A-1) 호스트에서는 <b>남의 시체가
+    // 내 것으로 보인다.</b> 그 시체가 디스폰될 때 오너 경로가 돌면, 액션 참조가 가리키는 것이
+    // 인스턴스별이 아니라 공용 InputActionAsset이라 <b>살아 있는 내 입력이 꺼진다.</b>
+    // (PlayerNameTag.m_isLocalPlayer와 같은 이유·같은 방식)
+    private bool m_isLocalOwner;
+
     private bool m_isSuspended;
 
     // 팀 상황판(Tab)을 들여다보는 중인가. (#720)
@@ -166,7 +173,7 @@ public class PlayerInputHandler : NetworkBehaviour
     /// </summary>
     public void SetSuspended(bool suspended)
     {
-        if (!IsOwner || m_isSuspended == suspended)
+        if (!m_isLocalOwner || m_isSuspended == suspended)
             return;
 
         m_isSuspended = suspended;
@@ -216,7 +223,7 @@ public class PlayerInputHandler : NetworkBehaviour
     /// </summary>
     public void SetTeamStatusPeeking(bool peeking)
     {
-        if (!IsOwner)
+        if (!m_isLocalOwner)
             return;
 
         m_isPeekingTeamStatus = peeking;
@@ -258,7 +265,9 @@ public class PlayerInputHandler : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        if (!IsOwner)
+        m_isLocalOwner = IsOwner; // 여기서 굳힌다 — 사망 중 뒤집히는 값이다 (#774)
+
+        if (!m_isLocalOwner)
         {
             enabled = false;
             return;
@@ -295,7 +304,7 @@ public class PlayerInputHandler : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
-        if (!IsOwner)
+        if (!m_isLocalOwner)
             return;
 
         m_moveAction.action.performed -= OnMove;
