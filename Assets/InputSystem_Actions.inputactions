@@ -585,6 +585,28 @@
                 },
                 {
                     "name": "",
+                    "id": "b4440793-0793-4b00-8000-000000000793",
+                    "path": "<Keyboard>/4",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "SelectSlot",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "b5440793-0793-4b00-8000-000000000793",
+                    "path": "<Keyboard>/5",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "SelectSlot",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
                     "id": "b4440144-0144-4b00-8000-000000000144",
                     "path": "<Keyboard>/i",
                     "interactions": "",

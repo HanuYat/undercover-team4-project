@@ -300,7 +300,7 @@ public class PlayerLooter : ChanneledInteractionBehaviour
         if (!IsDetachable(victimLoadout, itemObject))
             return;
 
-        // 소지 3칸 제한 (#144) — 꽉 차면 거부한다. 자동 드롭·스왑은 하지 않는다:
+        // 소지 5칸 제한 (#144/#793) — 꽉 차면 거부한다. 자동 드롭·스왑은 하지 않는다:
         // 약탈자가 의도하지 않은 아이템이 바닥에 떨어지는 편이 못 가져가는 것보다 나쁘다.
         if (m_loadout.Held.Count >= PlayerLoadout.k_maxHeldItems)
         {

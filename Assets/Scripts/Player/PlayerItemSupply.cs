@@ -68,7 +68,7 @@ public class PlayerItemSupply : NetworkBehaviour
         HeldItems held = m_loadout.Held;
 
         // 이미 뭔가 들고 있으면 지급하지 않는다 — 게임 씬 재진입·중복 호출로 같은 장비가 겹쳐 스폰되면
-        // 슬롯(3칸)이 헛되이 차 이후 줍기가 전부 거부된다. 정상 흐름에서는 상점 복귀 때 전량 회수돼 빈손이다. (#370)
+        // 슬롯(5칸)이 헛되이 차 이후 줍기가 전부 거부된다. 정상 흐름에서는 상점 복귀 때 전량 회수돼 빈손이다. (#370)
         if (held.Count > 0)
         {
             Debug.LogWarning("[PlayerItemSupply] 이미 아이템을 보유 중이라 기본 장비 지급을 건너뛴다.", this);
@@ -83,7 +83,7 @@ public class PlayerItemSupply : NetworkBehaviour
                 continue;
             }
 
-            // 소지 3칸 초과분은 스폰하지 않는다 (#144) — 캡을 안 두면 초과 아이템이 부착되지만
+            // 소지 5칸 초과분은 스폰하지 않는다 (#144/#793) — 캡을 안 두면 초과 아이템이 부착되지만
             // 슬롯에 안 들어가 장착·드롭 불가 상태로 남고, 보유 카운트가 영구히 꽉 차
             // 이후 모든 줍기가 거부된다.
             if (granted >= PlayerLoadout.k_maxHeldItems)
