@@ -186,9 +186,6 @@ public class PlayerMovement : NetworkBehaviour
     // 시점 정지(PlayerLook.PushLookSuspend)는 말 그대로 시점만 멈추므로 이동은 여기서 따로 막아야 한다.
     private bool m_viewLocked;
 
-    // "내 플레이어인가"를 스폰 시점에 굳힌 값 — 사망 중 소유권이 서버로 넘어가 뒤집힌다 (#774)
-    private bool m_isLocalOwner;
-
     /// <summary>카메라를 뺏는 연출 동안 이동을 잠근다 — <see cref="PlayerTerminalFocus"/>가 짝을 맞춰 부른다. (#689)</summary>
     public void SetViewLocked(bool locked) => m_viewLocked = locked;
 
@@ -230,8 +227,6 @@ public class PlayerMovement : NetworkBehaviour
         // 남의 카메라 끄기·내 몸 숨기기는 시점 담당(PlayerLook)이 든다 — 카메라와 몸 루트 참조가 그쪽에 있다.
         m_look?.ApplyOwnerView(IsOwner);
 
-        m_isLocalOwner = IsOwner; // 여기서 굳힌다 — 사망 중 뒤집히는 값이다 (#774, 아래 OnNetworkDespawn)
-
         if (!IsOwner)
         {
             // 서버가 오너 아닌 캐릭터의 버프 만료를 대신 센다 (#706) — 아래서 컴포넌트를 끄면
@@ -261,11 +256,7 @@ public class PlayerMovement : NetworkBehaviour
             m_buffTickHooked = false;
         }
 
-        // ⚠ <b>IsOwner를 묻지 않는다</b> — 사망하면 소유권이 서버로 넘어가므로(#763 A-1) 호스트에서는
-        // 남의 시체가 자기 것으로 보인다. 그 시체가 디스폰될 때 아래가 돌면 <b>살아 있는 호스트의 커서가
-        // 풀리고 입력이 꺼진다</b>(#774 — 여기와 PlayerInputHandler가 짝이다). 반대로 내가 죽은 채
-        // 디스폰되면 IsOwner가 false라 정리가 아예 안 돌아 #188이 되살아난다. 스폰 때 굳힌 값이 둘을 다 잡는다.
-        if (m_isLocalOwner)
+        if (IsOwner)
         {
             // 오너 로컬 플레이어가 사라지면(라운드 종료 리셋·연결 종료 등) 게임플레이가 끝난 것으로 보고 커서를 푼다.
             // Cursor.lockState는 전역 상태라 씬을 재로드해도 유지되는데, 재로드된 로비 씬에는 이 커서를 풀어 줄
