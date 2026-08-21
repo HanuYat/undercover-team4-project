@@ -15,6 +15,10 @@ public class CCTVSwitcher : NetworkBehaviour
 
     [SerializeField]
     RenderTexture m_monitorRt;
+
+    // IR 볼륨 레이어 — 캐싱 시 한 번만 배선, 런타임엔 건드리지 않는다. (#677)
+    [SerializeField]
+    LayerMask m_volumeLayers = ~0;
     private CCTVNode[] m_nodes;
 
     private readonly NetworkVariable<int> m_currentIndex = new(
@@ -26,6 +30,13 @@ public class CCTVSwitcher : NetworkBehaviour
     // 전원 — 플레이어가 끈다. Game 씬이 매 라운드 재로드되므로 초기값 true면 항상 켜진 채 시작한다.
     private readonly NetworkVariable<bool> m_isPowered = new(
         true,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    // 적외선(야시경) — 콘솔 단위 설정이라 채널·전원과 독립. 라운드마다는 false로 새로 시작한다. (#677)
+    private readonly NetworkVariable<bool> m_isInfrared = new(
+        false,
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server
     );
@@ -50,6 +61,7 @@ public class CCTVSwitcher : NetworkBehaviour
     public int CurrentIndex => m_currentIndex.Value;
     public bool IsPowered => m_isPowered.Value;
     public bool IsExternallyJammed => m_externallyJammed;
+    public bool IsInfrared => m_isInfrared.Value;
 
     /// <summary>화면이 실제로 송출 중인가 — 전원·외부 차단·유효 채널을 모두 만족해야 한다.</summary>
     public bool IsDisplaying => m_isPowered.Value && !m_externallyJammed && ChannelCount > 0;
@@ -62,6 +74,7 @@ public class CCTVSwitcher : NetworkBehaviour
         CacheNodes();
         m_currentIndex.OnValueChanged += HandleIndexChanged;
         m_isPowered.OnValueChanged += HandlePowerChanged;
+        m_isInfrared.OnValueChanged += HandleInfraredChanged;
         Apply();
     }
 
@@ -69,6 +82,7 @@ public class CCTVSwitcher : NetworkBehaviour
     {
         m_currentIndex.OnValueChanged -= HandleIndexChanged;
         m_isPowered.OnValueChanged -= HandlePowerChanged;
+        m_isInfrared.OnValueChanged -= HandleInfraredChanged;
     }
 
     // 먹통 구독은 OnNetworkSpawn이 아니라 Start에서 한다 — App 매니저 등록이 Awake에서
@@ -106,12 +120,15 @@ public class CCTVSwitcher : NetworkBehaviour
             // InParent — 노드가 카메라와 같은 오브젝트에 있어도(현재 배치) 잡히고,
             // 카메라를 자식으로 둔 CCTV 소품 리그에 노드를 붙이는 배치도 허용한다.
             m_nodes[i] = m_cameras[i].GetComponentInParent<CCTVNode>();
+            CCTVInfraredLook.SetVolumeLayers(m_cameras[i], m_volumeLayers);
         }
     }
 
     private void HandleIndexChanged(int previous, int current) => Apply();
 
     private void HandlePowerChanged(bool previous, bool current) => Apply();
+
+    private void HandleInfraredChanged(bool previous, bool current) => Apply();
 
     [Rpc(SendTo.Server)]
     public void RequestSwitchRpc(int delta)
@@ -141,6 +158,18 @@ public class CCTVSwitcher : NetworkBehaviour
         m_isPowered.Value = !m_isPowered.Value;
     }
 
+    [Rpc(SendTo.Server)]
+    public void RequestToggleInfraredRpc()
+    {
+        // CanInteract와 같은 두 조건을 서버에서 다시 가드 (#382와 같은 이유)
+        if (!m_isPowered.Value)
+            return;
+        if (m_externallyJammed)
+            return;
+
+        m_isInfrared.Value = !m_isInfrared.Value;
+    }
+
     /// <summary>외부 차단(먹통 등) 설정 — 로컬 시각 상태. 각 피어가 자기 화면을 끈다. (#106 연동)</summary>
     public void SetExternallyJammed(bool value)
     {
@@ -166,6 +195,9 @@ public class CCTVSwitcher : NetworkBehaviour
                 m_cameras[i].enabled = active;
                 if (m_nodes != null && i < m_nodes.Length && m_nodes[i] != null)
                     m_nodes[i].SetSelected(active);
+
+                // 무조건 대입 — 채널 넘긴 이전 카메라에 포스트가 남지 않게 한다. (#677)
+                CCTVInfraredLook.Apply(m_cameras[i], active && m_isInfrared.Value);
             }
         }
 

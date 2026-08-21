@@ -65,8 +65,14 @@ public class CCTVChannelLabelView : MonoBehaviour
 
         // 노드 미배선 카메라에서 "CH3 · " 처럼 구분자만 남는 것을 막는다
         string location = m_switcher.CurrentLocationLabel;
+        bool ir = m_switcher.IsInfrared; // (#677)
         m_label.text = string.IsNullOrEmpty(location)
-            ? LocalizedStrings.Get(k_table, "Hq.Cctv.Channel", channel)
-            : LocalizedStrings.Get(k_table, "Hq.Cctv.ChannelWithLocation", channel, location);
+            ? LocalizedStrings.Get(k_table, ir ? "Hq.Cctv.ChannelIr" : "Hq.Cctv.Channel", channel)
+            : LocalizedStrings.Get(
+                k_table,
+                ir ? "Hq.Cctv.ChannelWithLocationIr" : "Hq.Cctv.ChannelWithLocation",
+                channel,
+                location
+            );
     }
 }
