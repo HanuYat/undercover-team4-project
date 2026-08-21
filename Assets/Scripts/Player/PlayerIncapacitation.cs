@@ -64,6 +64,12 @@ public class PlayerIncapacitation : NetworkBehaviour
 
     private IncapacitationCause m_cause; // 서버·오프라인의 진실값 (비네트워크 Play 테스트 폴백)
 
+    // 몸이 회수 불가능한 곳으로 사라졌는가 — 납치 결말(맨홀 하강, #775). m_cause와 같은 이중 구조다.
+    // IsDead와 별도 값인 이유: 라운드 아웃·유치장 계상·약탈·관전은 Die 그대로여야 하고, 달라지는 것은
+    // '부활 대상인가' 하나뿐이다 — enum 값을 늘리면 Die를 보는 곳 전부가 함께 뒤집힌다.
+    private readonly NetworkVariable<bool> m_bodyLostSynced = new NetworkVariable<bool>();
+    private bool m_bodyLost;
+
     // 사망 전 오너 — 이관은 서버만 하고 복귀도 서버가 하므로 동기화하지 않는다. (#763 1단계)
     private ulong m_ownerBeforeDeath;
     private bool m_ownershipMovedToServer;
@@ -112,6 +118,12 @@ public class PlayerIncapacitation : NetworkBehaviour
 
     /// <summary>다운 방치 또는 확인사살로 기능 정지(Die)됐는지 — 운반·본부 부활(#365)의 대상 판정용. (#364, #725)</summary>
     public bool IsDead => Cause == IncapacitationCause.Die;
+
+    /// <summary>몸이 회수 불가능한 곳으로 사라졌는가 — 맨홀 납치 결말. (#775)</summary>
+    public bool IsBodyLost => IsSpawned && !IsServer ? m_bodyLostSynced.Value : m_bodyLost;
+
+    /// <summary>부활 키트·본부 장치로 일으킬 수 있는가 — 기능 정지 중이고 몸이 남아 있을 때만. (#775)</summary>
+    public bool IsRevivable => IsDead && !IsBodyLost;
 
     /// <summary>
     /// 스스로도 남의 손으로도 곧 일어나지 못하는 상태 — 다운 또는 Die. (#364, #725)
@@ -226,6 +238,7 @@ public class PlayerIncapacitation : NetworkBehaviour
     {
         // 원격 피어는 서버 Set 경로를 타지 않으므로, 동기화값 변화를 이벤트로 중계한다.
         m_causeSynced.OnValueChanged += HandleSyncedChanged;
+        m_bodyLostSynced.OnValueChanged += HandleBodyLostSyncedChanged;
 
         // 늦게 접속한 클라: 이미 쓰러진 플레이어의 현재 상태를 즉시 반영한다.
         // (OnValueChanged는 '변화' 시에만 발생하므로 스폰 시 한 번 맞춰줘야 한다)
@@ -235,6 +248,7 @@ public class PlayerIncapacitation : NetworkBehaviour
     public override void OnNetworkDespawn()
     {
         m_causeSynced.OnValueChanged -= HandleSyncedChanged;
+        m_bodyLostSynced.OnValueChanged -= HandleBodyLostSyncedChanged;
     }
 
     // 서버(호스트 포함)는 SetCause에서 이벤트를 직접 발행하므로 여기선 원격 클라만 중계 (이중 발행 방지)
@@ -252,12 +266,22 @@ public class PlayerIncapacitation : NetworkBehaviour
             OnIncapacitatedChanged?.Invoke(now);
     }
 
-    // 조준 히트박스 = 쓰러져 있는 동안(다운·Die)만 켠다. 서버·원격·오프라인 모든 인스턴스에서 실행된다.
-    // 다운은 구조자가, Die는 운반자·부활 키트 사용자가 조준해야 하므로 둘 다 켠다. (#105, #364, #725)
+    // body-lost 값이 늦게 도착해도(#775) 원격 클라의 조준 히트박스를 맞춘다. 서버는 SetBodyLost에서 직접 갱신.
+    private void HandleBodyLostSyncedChanged(bool previous, bool current)
+    {
+        if (IsServer)
+            return;
+
+        RefreshAimHitbox();
+    }
+
+    // 조준 히트박스 = 쓰러져 있고(다운·Die) 몸이 회수 가능할 때만 켠다. 서버·원격·오프라인 모든
+    // 인스턴스에서 실행된다. 다운은 구조자가, Die는 운반자·부활 키트 사용자가 조준해야 하므로 둘 다
+    // 켠다. (#105, #364, #725) 몸이 지하로 사라지면(#775) 부활·운반·뒤지기가 전부 이 한 곳에서 닫힌다.
     private void RefreshAimHitbox()
     {
         if (m_reviveHitbox != null)
-            m_reviveHitbox.SetActive(IsOutOfAction);
+            m_reviveHitbox.SetActive(IsOutOfAction && !IsBodyLost);
     }
 
     /// <summary>
@@ -320,6 +344,10 @@ public class PlayerIncapacitation : NetworkBehaviour
     {
         if (IsSpawned && !IsServer)
             return;
+
+        // 하강 중 폭탄 등 외부 사유로 이미 Die가 걸렸어도 "몸이 맨홀 아래"는 참이다 — 중복 호출
+        // 방어(아래 return) 앞에 세운다.
+        SetBodyLost(true);
 
         if (Cause == IncapacitationCause.Die)
             return; // 이미 기능 정지 — 중복 호출 방어
@@ -448,6 +476,13 @@ public class PlayerIncapacitation : NetworkBehaviour
             SetStunDeadline(0d);
         }
 
+        // Die를 벗어나면(구조·부활·라운드 리셋) 몸 회수 불가 플래그도 지운다 — 남겨 두면 다음
+        // 사망이 이전 회차의 맨홀 낙인을 그대로 물려받는다. (#775)
+        if (cause != IncapacitationCause.Die)
+        {
+            SetBodyLost(false);
+        }
+
         // 원인이 바뀌었으니 이전 회차의 Die 타이머는 무효다 — 구조 후 재다운도 새 회차로 다시 센다. (#364, #725)
         m_causeEpisode++;
         if (cause == IncapacitationCause.Down)
@@ -558,6 +593,15 @@ public class PlayerIncapacitation : NetworkBehaviour
         m_stunDeadline = deadline;
         if (IsSpawned && IsServer)
             m_stunDeadlineSynced.Value = deadline;
+    }
+
+    // 몸 회수 불가 플래그 갱신 — 실참조와 동기화값을 함께 쓴다(m_cause/m_causeSynced와 동일 관례). (#775)
+    private void SetBodyLost(bool value)
+    {
+        m_bodyLost = value;
+        if (IsSpawned && IsServer)
+            m_bodyLostSynced.Value = value;
+        RefreshAimHitbox(); // 서버·오프라인은 OnValueChanged가 오지 않으므로 여기서 직접 맞춘다
     }
 
     // Die 전환 예정 시각 갱신 — 실참조와 동기화값을 함께 쓴다(m_cause/m_causeSynced와 동일 관례). (#725)
