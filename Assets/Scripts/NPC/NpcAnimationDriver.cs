@@ -619,7 +619,9 @@ public class NpcAnimationDriver : MonoBehaviour
                 m_animator.SetInteger(s_stateHash, k_subdueGroggyAnimState);
                 return true;
 
+            // 질주(#106)도 달리다 붙잡힌 관성은 같다 — 도주와 같은 구르기 전환을 탄다
             case NpcState.Run:
+            case NpcState.Sprinting:
                 m_animator.SetInteger(s_stateHash, k_subdueRollAnimState);
                 m_subdueUntil = Time.time + m_subdueRollSeconds;
                 m_subdueRollThenGroggy = true; // 굴러 일어난 뒤 그로기로 넘어가 유지된다
