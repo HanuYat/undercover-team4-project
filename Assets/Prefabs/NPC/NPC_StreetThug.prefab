@@ -38,6 +38,7 @@ GameObject:
   - component: {fileID: 8638190228353581779}
   - component: {fileID: 7663553785463991966}
   - component: {fileID: 5496521615781540018}
+  - component: {fileID: 3487352832978371397}
   m_Layer: 7
   m_Name: NPC_StreetThug
   m_TagString: Untagged
@@ -552,6 +553,21 @@ MonoBehaviour:
   m_authority: 0
   m_sendEveryFixedSteps: 2
   m_interpolationDelay: 0.08
+--- !u!114 &3487352832978371397
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fbdd769dd28977345a12784fbe7aaa81, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcWeaponHold
+  m_weapon: {fileID: 4941254951962462537}
+  m_layerName: WeaponUpperBody
+  m_layerWeight: 1
 --- !u!1001 &3679051956096844986
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2174,6 +2190,11 @@ PrefabInstance:
 --- !u!4 &4938114332015355733 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4591303517940038, guid: e9ef675108448aa43848da8917e3f721, type: 3}
+  m_PrefabInstance: {fileID: 4942695190037286419}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &4941254951962462537 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1449313484441434, guid: e9ef675108448aa43848da8917e3f721, type: 3}
   m_PrefabInstance: {fileID: 4942695190037286419}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &5695888833837457978

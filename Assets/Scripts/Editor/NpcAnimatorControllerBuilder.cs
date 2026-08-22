@@ -88,6 +88,110 @@ public static class NpcAnimatorControllerBuilder
         "attack05_inplace.fbx",
     };
 
+    // 무기를 든 상체 자세 (#806) — 다리는 원래 로코모션대로 두고 상체만 1H 자세로 덮는 레이어다.
+    // 1H 걷기·달리기 클립이 팩에 없어 Idle만 갈아서는 뛰어올 때 맨손처럼 보인다.
+    // 레이어는 <b>공용 컨트롤러</b>에 만들되 기본 가중치가 0이라 시민에게는 아무 영향이 없다 —
+    // 무기를 든 개체만 런타임에 1로 올린다(NpcWeaponHold).
+    private const string k_weaponLayerName = "WeaponUpperBody";
+    private const string k_weaponPoseState = "WeaponPose_1H";
+    private const string k_weaponPoseClip =
+        "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Combat/1H/HumanM@CombatIdle1H01.fbx";
+    private const string k_upperBodyMaskPath = "Assets/Animation/NpcUpperBody.mask";
+
+    /// <summary>
+    /// 무기 상체 레이어를 만든다 — 상체 마스크 + 1H 자세 한 상태짜리 레이어. 가중치 0으로 둔다. (#806)
+    /// 재실행하면 같은 이름의 레이어·마스크를 다시 만든다. 메뉴: Tools > NPC > Rebuild Weapon Upper-Body Layer
+    /// </summary>
+    [MenuItem("Tools/NPC/Rebuild Weapon Upper-Body Layer")]
+    public static void RebuildWeaponLayer()
+    {
+        var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(k_controllerPath);
+        if (controller == null)
+        {
+            Debug.LogError($"[NpcAnimatorControllerBuilder] 컨트롤러를 찾을 수 없음: {k_controllerPath}");
+            return;
+        }
+
+        AnimationClip pose = LoadClip(k_weaponPoseClip);
+        if (pose == null)
+        {
+            Debug.LogError($"[NpcAnimatorControllerBuilder] 무기 자세 클립을 찾을 수 없음: {k_weaponPoseClip}");
+            return;
+        }
+
+        AvatarMask mask = BuildUpperBodyMask();
+
+        // 같은 이름의 레이어가 있으면 통째로 갈아 끼운다 — 안에 쌓인 상태 기계도 함께 지운다
+        List<AnimatorControllerLayer> layers = new List<AnimatorControllerLayer>(controller.layers);
+        for (int i = layers.Count - 1; i > 0; i--)
+        {
+            if (layers[i].name != k_weaponLayerName)
+                continue;
+
+            if (layers[i].stateMachine != null)
+                Object.DestroyImmediate(layers[i].stateMachine, true);
+            layers.RemoveAt(i);
+        }
+
+        var machine = new AnimatorStateMachine
+        {
+            name = k_weaponLayerName,
+            hideFlags = HideFlags.HideInHierarchy,
+        };
+        AssetDatabase.AddObjectToAsset(machine, controller);
+
+        AnimatorState state = machine.AddState(k_weaponPoseState);
+        state.motion = pose;
+        state.writeDefaultValues = false;
+        machine.defaultState = state;
+
+        layers.Add(new AnimatorControllerLayer
+        {
+            name = k_weaponLayerName,
+            stateMachine = machine,
+            avatarMask = mask,
+            blendingMode = AnimatorLayerBlendingMode.Override,
+            defaultWeight = 0f, // 무기를 든 개체만 런타임에 올린다
+            iKPass = false,
+        });
+        controller.layers = layers.ToArray();
+
+        EditorUtility.SetDirty(controller);
+        AssetDatabase.SaveAssets();
+
+        Debug.Log(
+            $"[NpcAnimatorControllerBuilder] 무기 상체 레이어 갱신 완료 — {k_weaponLayerName}"
+                + $" (마스크 {k_upperBodyMaskPath}, 가중치 0)"
+        );
+    }
+
+    // 상체만 켠 휴머노이드 마스크 — 하반신은 로코모션이 그대로 돌아야 하므로 끈다.
+    // 루트도 끈다: 켜면 이 레이어의 제자리 클립이 이동을 덮어써 NPC가 미끄러진다.
+    private static AvatarMask BuildUpperBodyMask()
+    {
+        var mask = AssetDatabase.LoadAssetAtPath<AvatarMask>(k_upperBodyMaskPath);
+        if (mask == null)
+        {
+            mask = new AvatarMask();
+            AssetDatabase.CreateAsset(mask, k_upperBodyMaskPath);
+        }
+
+        for (AvatarMaskBodyPart part = 0; part < AvatarMaskBodyPart.LastBodyPart; part++)
+        {
+            bool upper =
+                part == AvatarMaskBodyPart.Body
+                || part == AvatarMaskBodyPart.Head
+                || part == AvatarMaskBodyPart.LeftArm
+                || part == AvatarMaskBodyPart.RightArm
+                || part == AvatarMaskBodyPart.LeftFingers
+                || part == AvatarMaskBodyPart.RightFingers;
+            mask.SetHumanoidBodyPartActive(part, upper);
+        }
+
+        EditorUtility.SetDirty(mask);
+        return mask;
+    }
+
     [MenuItem("Tools/NPC/Rebuild Attack Swing Variants")]
     public static void Rebuild()
     {
