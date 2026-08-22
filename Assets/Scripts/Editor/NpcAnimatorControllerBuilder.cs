@@ -88,15 +88,18 @@ public static class NpcAnimatorControllerBuilder
         "attack05_inplace.fbx",
     };
 
-    // 무기를 든 상체 자세 (#806) — 다리는 원래 로코모션대로 두고 상체만 1H 자세로 덮는 레이어다.
-    // 1H 걷기·달리기 클립이 팩에 없어 Idle만 갈아서는 뛰어올 때 맨손처럼 보인다.
+    // 무기를 든 자세 (#806) — 1H 걷기·달리기 클립이 팩에 없어 로코모션 클립을 갈아 끼울 수 없다.
+    // 대신 팩이 그 용도로 주는 <b>마스크드 포즈</b>를 <b>오른팔에만</b> 얹는다: 왼팔·다리는 원래대로
+    // 흔들리고 오른팔만 파이프를 어깨에 걸친 자세로 고정된다.
+    // 마스크도 팩 것을 그대로 쓴다 — 휴머노이드 마스크를 직접 만들 이유가 없다.
     // 레이어는 <b>공용 컨트롤러</b>에 만들되 기본 가중치가 0이라 시민에게는 아무 영향이 없다 —
-    // 무기를 든 개체만 런타임에 1로 올린다(NpcWeaponHold).
+    // 무기를 든 개체만 런타임에 올린다(NpcWeaponHold).
     private const string k_weaponLayerName = "WeaponUpperBody";
-    private const string k_weaponPoseState = "WeaponPose_1H";
+    private const string k_weaponPoseState = "WeaponPose_Carry";
     private const string k_weaponPoseClip =
-        "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Combat/1H/HumanM@CombatIdle1H01.fbx";
-    private const string k_upperBodyMaskPath = "Assets/Animation/NpcUpperBody.mask";
+        "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Masked Poses/HumanM@ObjectGripShoulder01_R.fbx";
+    private const string k_upperBodyMaskPath =
+        "Assets/Imported/Kevin Iglesias/Human Animations/Models/Avatar Masks/Arms/Human Arm Right Mask.mask";
 
     /// <summary>
     /// 무기 상체 레이어를 만든다 — 상체 마스크 + 1H 자세 한 상태짜리 레이어. 가중치 0으로 둔다. (#806)
@@ -119,7 +122,12 @@ public static class NpcAnimatorControllerBuilder
             return;
         }
 
-        AvatarMask mask = BuildUpperBodyMask();
+        var mask = AssetDatabase.LoadAssetAtPath<AvatarMask>(k_upperBodyMaskPath);
+        if (mask == null)
+        {
+            Debug.LogError($"[NpcAnimatorControllerBuilder] 팔 마스크를 찾을 수 없음: {k_upperBodyMaskPath}");
+            return;
+        }
 
         // 같은 이름의 레이어가 있으면 통째로 갈아 끼운다 — 안에 쌓인 상태 기계도 함께 지운다
         List<AnimatorControllerLayer> layers = new List<AnimatorControllerLayer>(controller.layers);
@@ -160,36 +168,9 @@ public static class NpcAnimatorControllerBuilder
         AssetDatabase.SaveAssets();
 
         Debug.Log(
-            $"[NpcAnimatorControllerBuilder] 무기 상체 레이어 갱신 완료 — {k_weaponLayerName}"
-                + $" (마스크 {k_upperBodyMaskPath}, 가중치 0)"
+            $"[NpcAnimatorControllerBuilder] 무기 자세 레이어 갱신 완료 — {k_weaponLayerName}"
+                + $" (포즈 {k_weaponPoseState}, 마스크 {System.IO.Path.GetFileName(k_upperBodyMaskPath)}, 가중치 0)"
         );
-    }
-
-    // 상체만 켠 휴머노이드 마스크 — 하반신은 로코모션이 그대로 돌아야 하므로 끈다.
-    // 루트도 끈다: 켜면 이 레이어의 제자리 클립이 이동을 덮어써 NPC가 미끄러진다.
-    private static AvatarMask BuildUpperBodyMask()
-    {
-        var mask = AssetDatabase.LoadAssetAtPath<AvatarMask>(k_upperBodyMaskPath);
-        if (mask == null)
-        {
-            mask = new AvatarMask();
-            AssetDatabase.CreateAsset(mask, k_upperBodyMaskPath);
-        }
-
-        for (AvatarMaskBodyPart part = 0; part < AvatarMaskBodyPart.LastBodyPart; part++)
-        {
-            bool upper =
-                part == AvatarMaskBodyPart.Body
-                || part == AvatarMaskBodyPart.Head
-                || part == AvatarMaskBodyPart.LeftArm
-                || part == AvatarMaskBodyPart.RightArm
-                || part == AvatarMaskBodyPart.LeftFingers
-                || part == AvatarMaskBodyPart.RightFingers;
-            mask.SetHumanoidBodyPartActive(part, upper);
-        }
-
-        EditorUtility.SetDirty(mask);
-        return mask;
     }
 
     [MenuItem("Tools/NPC/Rebuild Attack Swing Variants")]
