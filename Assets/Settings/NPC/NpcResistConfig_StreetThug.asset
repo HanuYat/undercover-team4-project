@@ -19,10 +19,10 @@ MonoBehaviour:
   m_giveUpDistance: 250
   m_strikeOffsetSeconds: 0.45
   m_swingImpactOffsets:
-  - 0.63
-  - 0.53
-  - 0.44
-  - 0.73
+  - 0.43
+  - 0.37
+  - 0.37
+  - 0.33
   m_attackConeAngle: 120
   m_attackTurnSpeed: 540
   m_swingHoldSeconds: 0.9

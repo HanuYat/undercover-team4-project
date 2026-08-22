@@ -18,6 +18,15 @@ using UnityEngine;
 ///
 /// 재실행하면 블렌드 트리 내용만 다시 만든다. 다른 상태/전환은 보존된다.
 /// 메뉴: Tools > NPC > Rebuild Attack Swing Variants
+///
+/// <b>동네 깡패는 이 컨트롤러를 덮어 쓴다</b> (#806) — 파이프를 들었으니 맨손 권투 스윙이 아니라
+/// 1H 무기 스윙이어야 한다. 상태 기계를 복제하지 않고 <c>NPC_StreetThug.overrideController</c>
+/// (AnimatorOverrideController)가 <b>Attack 블렌드 트리의 클립 4개만</b> 갈아 끼운다 — 컨트롤러를
+/// 통째로 복제하면 여기서 상태를 고칠 때마다 두 벌을 맞춰야 한다.
+/// 클립이 바뀌면 타격 프레임도 달라지므로 <c>NpcResistConfig_StreetThug</c>의 SwingImpactOffsets를
+/// 함께 맞춘다(손 속도 최대 시점 기준: 0.43 / 0.37 / 0.37 / 0.33초).
+/// ⚠ 이 스크립트가 스윙 변형을 다시 만들면 <b>덮어쓰기 매핑의 원본 클립이 바뀌므로</b>
+/// 오버라이드도 다시 걸어야 한다.
 /// </summary>
 public static class NpcAnimatorControllerBuilder
 {
