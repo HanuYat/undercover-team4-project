@@ -231,6 +231,10 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
             case EEscortCommand.EscortHalt:
                 ServerEscortHalt(target);
                 break;
+            default:
+                // 범위 밖 값은 무시한다 — 버전이 어긋난 클라나 조작된 요청이다 (#594)
+                Debug.LogWarning($"PlayerEscortCommands: 알 수 없는 연행 명령 {(int)cmd}", this);
+                break;
         }
     }
 
