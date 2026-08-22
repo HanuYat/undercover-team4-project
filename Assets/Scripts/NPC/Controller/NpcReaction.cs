@@ -60,9 +60,10 @@ public class NpcReaction : NetworkBehaviour
 
         // 이미 반응 중이거나 확보·페널티 상태면 재판정하지 않는다 — 규칙은 NpcStateRules가 갖는다.
         // 피격만 반출 보행(Releasing)까지 연다 (#548) — 스캔으로는 안 되고 때려야 돌아선다.
-        bool allowed = trigger == ReactionTrigger.Damage
-            ? NpcStateRules.CanReactToDamage(m_owner.CurrentState)
-            : NpcStateRules.CanStartReaction(m_owner.CurrentState);
+        bool allowed =
+            trigger == ReactionTrigger.Damage
+                ? NpcStateRules.CanReactToDamage(m_owner.CurrentState)
+                : NpcStateRules.CanStartReaction(m_owner.CurrentState);
         if (!allowed)
             return;
 
@@ -109,8 +110,41 @@ public class NpcReaction : NetworkBehaviour
         if (IsSpawned && !IsServer)
             return;
 
+        IsSprinter = false;
         ThreatTarget = threat;
         m_owner.StateMachine.ChangeState(NpcState.Run);
+    }
+
+    /// <summary>
+    /// 질주 시작 — 위협 없이 도심을 계속 뛰어다닌다. 공연음란범(<see cref="StreakerEvent"/>) 전용. (#106)
+    /// 도주와 달리 대상이 없으므로 위협도 비운다 — 남겨 두면 이 상태를 빠져나갈 때 엉뚱한 대상이 딸려간다.
+    /// </summary>
+    public void StartSprint()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        IsSprinter = true;
+        ThreatTarget = null;
+        m_owner.StateMachine.ChangeState(NpcState.Sprinting);
+    }
+
+    /// <summary>
+    /// 질주하는 개체인가 — <b>깨어나거나 풀려났을 때 무엇으로 돌아갈지</b>를 가르는 표식. (#106)
+    /// 상태 enum으로는 못 가른다: 기절(넉백 KO)·제압은 상태를 갈아엎어 원래 하던 것이 지워진다.
+    /// </summary>
+    public bool IsSprinter { get; private set; }
+
+    /// <summary>
+    /// 무력화·제압에서 <b>풀려난 뒤 제 행동으로 돌아간다</b> — 보통은 도주, 질주하는 개체는 질주다. (#106)
+    /// 공연음란범이 한 번 맞고 배회 시민이 되어 버리지 않게 하는 단일 복귀 지점이다.
+    /// </summary>
+    public void ResumeReaction(Transform threat)
+    {
+        if (IsSprinter)
+            StartSprint();
+        else
+            StartFlee(threat);
     }
 
     /// <summary>위협 참조 정리 — 반응(도주·저항)이 끝나는 지점에서 호출한다.</summary>
@@ -124,6 +158,7 @@ public class NpcReaction : NetworkBehaviour
 
         // 저항을 유발한(수갑 채우려던) 플레이어를 위협으로 기억한다 — 제압 실패 시 이 대상에게서 도주한다.
         // (도주형이 StartFlee(subduer)로 위협을 받는 것과 대칭 — #205)
+        IsSprinter = false;
         ThreatTarget = subduer;
         m_owner.StateMachine.ChangeState(NpcState.Attack);
     }

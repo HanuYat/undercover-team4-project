@@ -10,7 +10,7 @@ using Random = UnityEngine.Random;
 /// 검거 판정 수신, 도심 잔류(#310), 라운드 종료 정리. NPC가 무슨 짓을 하는지는 파생 클래스가 정한다
 /// (<see cref="ApplyBehavior"/>) — 종류별 행동이 한 파일에 뒤섞이지 않게 하는 것이 이 분리의 목적이다.
 ///
-/// 파생 이벤트: <see cref="RioterEvent"/>(거리 난동자) · <see cref="StreakerEvent"/>(나체 난동꾼) ·
+/// 파생 이벤트: <see cref="RioterEvent"/>(거리 난동자) · <see cref="StreakerEvent"/>(공연음란범) ·
 /// <see cref="PickpocketEvent"/>(소매치기 #303). 종류를 늘리려면 이 클래스를 상속한 컴포넌트를 하나 만들어
 /// <see cref="SuddenEventManager"/>의 이벤트 풀에 등록하면 된다.
 ///
@@ -32,7 +32,7 @@ using Random = UnityEngine.Random;
 public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
 {
     [Header("이벤트 정의")]
-    [Tooltip("로그·HUD에 표시할 이름 (예: 거리 난동자 / 나체 난동꾼 / 소매치기)")]
+    [Tooltip("로그·HUD에 표시할 이름 (예: 거리 난동자 / 공연음란범 / 소매치기)")]
     [SerializeField]
     private string m_displayName = "거리 난동자";
 
@@ -68,7 +68,8 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
     private int m_pettyCrimeRewardMax = 4000;
 
     [Header("소란 지속")]
-    [Tooltip("제압되지 않은 채 이 시간(초)이 지나면 소란을 멈추고 진정해 배회 시민으로 잔류한다 — 마커가 남아 언제든 잡으면 경범죄 수익 (#310)")]
+    [Tooltip("제압되지 않은 채 이 시간(초)이 지나면 소란을 멈추고 진정해 배회 시민으로 잔류한다 — 마커가 남아 언제든 잡으면 경범죄 수익 (#310). " +
+             "0 이하면 무제한 — 잡히거나 라운드가 끝날 때까지 계속한다 (공연음란범, #106)")]
     [SerializeField]
     private float m_maxLifetimeSeconds = 60f;
 
@@ -256,7 +257,8 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
         // 소란 지속 시간이 다하면 진정하고 배회 시민으로 잔류한다 — 저항형은 스스로 멈추지 않으므로
         // 이 타이머가 소란의 끝이다. 제압 시점에 타이머를 새로 돌리므로 "제압해 놓고 안 데려간" 경우도
         // 같은 유예 뒤 (밧줄이 풀려 배회 복귀 →) 잔류로 넘어간다.
-        if (Time.time - m_startTime > m_maxLifetimeSeconds)
+        // 무제한(0 이하)은 타이머 자체를 돌리지 않는다 — 진정도 잔류도 없이 잡힐 때까지 간다 (#106)
+        if (m_maxLifetimeSeconds > 0f && Time.time - m_startTime > m_maxLifetimeSeconds)
         {
             Debug.Log($"[돌발이벤트] {m_displayName} — 소란 지속 시간 종료, 진정");
             m_npc.Reaction.StartFlee(null); // 위협 없는 도주 — 잠깐 흩어졌다가 곧 배회(Idle)로 가라앉는다

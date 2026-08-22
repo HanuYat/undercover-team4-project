@@ -151,7 +151,7 @@ public class NpcCapturedState : NpcStateBase
         if (nearest != null)
         {
             Debug.Log($"인계 방치 — 풀려나 도주: {m_owner.name}");
-            m_owner.Reaction.StartFlee(nearest.transform);
+            m_owner.Reaction.ResumeReaction(nearest.transform); // 질주하던 개체는 질주로 돌아간다 (#106)
             return;
         }
 

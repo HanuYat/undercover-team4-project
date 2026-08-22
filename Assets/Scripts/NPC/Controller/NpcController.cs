@@ -163,6 +163,7 @@ public class NpcController : NetworkBehaviour
         m_stateMachine.AddState(NpcState.PenaltyEscorting, new NpcPenaltyEscortState(this, m_escortConfig));
         m_stateMachine.AddState(NpcState.Releasing, new NpcReleasingState(this, m_fleeConfig));
         m_stateMachine.AddState(NpcState.Dead, new NpcDeadState(this));
+        m_stateMachine.AddState(NpcState.Sprinting, new NpcSprintState(this, m_fleeConfig));
 
         // 통행 정책은 새 상태의 Enter()가 목적지를 잡기 <b>전에</b> 걸려야 한다 — 그래서
         // OnStateChanged가 아니라 OnBeforeEnter다 (#634 후속)

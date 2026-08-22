@@ -54,6 +54,7 @@ public enum NpcState
     /// Jailed와 같은 규약 예외: 대응 Animator 상태가 없어 NpcAnimationDriver가 걷기 모션을 지정한다.
     /// </summary>
     Releasing,
+
     // Holding(임시 거처 이송, #291)이 여기 있었다 — #310이 "경범죄자도 유치장 수감"으로 바꾸며
     // 호출부를 전부 지웠고, 도달 불가 상태로 남아 있던 것을 #503에서 제거했다.
 
@@ -70,4 +71,11 @@ public enum NpcState
     /// (<c>NpcRagdoll</c>), 래그돌이 붙기 전까지는 NpcAnimationDriver가 기절 모션을 빌려 쓴다.
     /// </summary>
     Dead,
+
+    /// <summary>
+    /// 질주 — 목적지를 계속 갈아 끼우며 <b>멈추지 않고</b> 도심을 뛰어다닌다 (#106, 공연음란범).
+    /// 도주(<see cref="Run"/>)와 달리 위협도 종료 조건도 없다 — 잡히거나 라운드가 끝날 때까지 뛴다.
+    /// Jailed와 같은 규약 예외: 대응 Animator 상태가 없어 NpcAnimationDriver가 달리기 모션을 지정한다.
+    /// </summary>
+    Sprinting,
 }

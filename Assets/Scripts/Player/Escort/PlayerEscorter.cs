@@ -479,7 +479,8 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
                     // 그새 파괴됐어도 NpcFleeState가 위협 없는 도주로 받아 준다(ThreatTarget null 검사).
                     Transform threat = transform;
                     NotifyOwner($"밧줄 끊김 — 너무 멀어져 도주: {npc.name}");
-                    npc.StandUp.ServerStandUpThen(() => npc.Reaction.StartFlee(threat));
+                    // 질주하던 개체(공연음란범)는 도주가 아니라 질주로 돌아간다 (#106)
+                    npc.StandUp.ServerStandUpThen(() => npc.Reaction.ResumeReaction(threat));
                 }
 
                 RemoveTetherAt(i);
