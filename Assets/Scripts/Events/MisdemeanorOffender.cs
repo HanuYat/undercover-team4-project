@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 경범죄 범법자 표식 — 돌발 이벤트로 스폰된 난동꾼(거리 난동자·공연음란범 등)에 붙는 마커다. (GDD 6-4, #106)
+/// 경범죄 범법자 표식 — 돌발 이벤트로 스폰된 난동꾼(동네 깡패·공연음란범 등)에 붙는 마커다. (GDD 6-4, #106)
 /// <see cref="ArrestJudge"/>가 인계된 NPC에서 이 컴포넌트를 발견하면 진범/오검거 대조 대신
 /// <see cref="ArrestVerdict.Misdemeanor"/>로 판정하고 <see cref="Reward"/>를 수익으로 지급한다
 /// (지급은 첫 판정 한 번뿐 — 판정 시 ArrestJudge가 비운다).
@@ -50,7 +50,7 @@ public class MisdemeanorOffender : MonoBehaviour
 /// </summary>
 public enum ERiotBehavior
 {
-    /// <summary>그 자리에서 저항하며 소란 — 거리 난동자(<see cref="RioterEvent"/>).</summary>
+    /// <summary>표적을 쫓아가 때리며 소란 — 동네 깡패(<see cref="StreetThugEvent"/>). (#806)</summary>
     Resist,
 
     /// <summary>플레이어에게서 달아나며 소란 — 소매치기(<see cref="PickpocketEvent"/>).</summary>
