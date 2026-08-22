@@ -56,7 +56,11 @@ public static class NpcStateRules
     /// <summary>이 NPC를 지금 밧줄로 묶을 수 있는가 — 상태 규칙에 <b>소매치기 예외</b>를 얹은 정본. (#303)
     /// Chasing이라 상태만 보면 막히지만, 접근 중에 무력화했으면 잡을 수 있어야 한다. 오검거·납치는 그대로 막힌다.</summary>
     public static bool CanArrest(NpcController npc) =>
-        npc != null && (npc.Penalty.IsPickpocketDuty || CanArrest(npc.CurrentState));
+        npc != null
+        // 사망은 소매치기 예외보다 위다 (#571/#593) — 임무 표식은 죽어도 즉시 내려가지 않는다.
+        // 지금은 CanRopeBind가 시체를 먼저 걸러 도달하지 않지만, 이 함수만 보면 죽은 소매치기가 검거된다.
+        && npc.CurrentState != NpcState.Dead
+        && (npc.Penalty.IsPickpocketDuty || CanArrest(npc.CurrentState));
 
     /// <summary>반응·배회군인가 — 스턴이 풀릴 때 도주로 전환되는 쪽. (#292)
     /// 여집합(확보·페널티군)은 스턴이 풀려도 아무 전이 없이 하던 일을 재개한다 —
