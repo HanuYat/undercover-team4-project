@@ -80,6 +80,12 @@ public class JailAlarmBeacon : MonoBehaviour
     // 지난 사건에 경보를 울린다.
     private bool m_knownLocked = true;
 
+    /// <summary>
+    /// 해제 시도 경보가 울리는 중인가 — 소리를 얹는 <see cref="JailAlarmBeaconSound"/>가 읽는다.
+    /// 탈옥(자물쇠 열림)은 포함하지 않는다: 사이렌은 <b>막을 수 있는 동안에만</b> 운다.
+    /// </summary>
+    public bool IsAttemptAlarming => m_state == EState.Attempt;
+
     private void Awake()
     {
         m_block = new MaterialPropertyBlock();

@@ -163,6 +163,12 @@ MonoBehaviour:
     StartOffset: 0.04
     MinDistance: 2
     MaxDistance: 25
+  - Id: 27
+    Clip: {fileID: 8300000, guid: e6beaa9b2af3fa747a7d1abe5fd5306f, type: 3}
+    Volume: 0.6
+    StartOffset: 0
+    MinDistance: 6
+    MaxDistance: 28
   m_bgm:
   - Id: 1
     Clip: {fileID: 8300000, guid: 0b647359afe24e34aaa330ee469e7926, type: 3}
