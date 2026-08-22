@@ -25,6 +25,12 @@ public class NpcReaction : NetworkBehaviour
     public Transform ThreatTarget { get; internal set; }
 
     /// <summary>
+    /// 질주하는 개체인가 — <b>깨어나거나 풀려났을 때 무엇으로 돌아갈지</b>를 가르는 표식. (#106)
+    /// 상태 enum으로는 못 가른다: 기절(넉백 KO)·제압은 상태를 갈아엎어 원래 하던 것이 지워진다.
+    /// </summary>
+    public bool IsSprinter { get; private set; }
+
+    /// <summary>
     /// 위협(플레이어)을 찾는 반경(m) — 저항 패배 후 도주 대상 탐색(#205)과 도주 방향 산출(#213)이 같은 값을 쓴다.
     /// 두 경로가 다른 반경을 쓰면 "도망칠 상대"와 "피할 상대"의 기준이 어긋난다.
     /// </summary>
@@ -128,12 +134,6 @@ public class NpcReaction : NetworkBehaviour
         ThreatTarget = null;
         m_owner.StateMachine.ChangeState(NpcState.Sprinting);
     }
-
-    /// <summary>
-    /// 질주하는 개체인가 — <b>깨어나거나 풀려났을 때 무엇으로 돌아갈지</b>를 가르는 표식. (#106)
-    /// 상태 enum으로는 못 가른다: 기절(넉백 KO)·제압은 상태를 갈아엎어 원래 하던 것이 지워진다.
-    /// </summary>
-    public bool IsSprinter { get; private set; }
 
     /// <summary>
     /// 무력화·제압에서 <b>풀려난 뒤 제 행동으로 돌아간다</b> — 보통은 도주, 질주하는 개체는 질주다. (#106)

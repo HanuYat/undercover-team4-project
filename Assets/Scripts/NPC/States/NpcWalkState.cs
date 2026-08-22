@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.AI;
 
 public class NpcWalkState : NpcStateBase
 {
@@ -18,8 +17,8 @@ public class NpcWalkState : NpcStateBase
     // 재추첨마다 10번씩 경로를 계산한다. 도주가 후보 상한을 4로 둔 것과 같은 이유.
     private const int k_maxReachabilityProbes = 4;
 
-    // 경로 계산용 재사용 인스턴스 — NavMeshPath는 할당이 비싸다. 서버에서만 Tick되므로 공유 안전.
-    private static NavMeshPath s_pathProbe;
+    // 후보를 NavMesh 위로 끌어당길 때 허용하는 거리(m) — 배회는 가까이 뽑으므로 좁게 잡는다
+    private const float k_navSampleMaxDistance = 2f;
 
     private Vector3 m_lastProgressPosition;
     private int m_stuckStrikes;
@@ -92,57 +91,31 @@ public class NpcWalkState : NpcStateBase
         SetNextWanderPoint();
     }
 
-    /// <summary>origin에서 point까지 <b>끊기지 않는</b> 경로가 있는가 — 부분 경로는 도달 불가로 본다.</summary>
-    private bool IsReachable(Vector3 origin, Vector3 point)
-    {
-        s_pathProbe ??= new NavMeshPath();
-
-        return NavMesh.CalculatePath(origin, point, m_owner.Agent.areaMask, s_pathProbe)
-            && s_pathProbe.status == NavMeshPathStatus.PathComplete;
-    }
-
+    // 다음 배회 지점 — 규칙(도로 제외·부분 경로 배제)은 질주와 공유한다 (NpcMovePoint, #805)
     private void SetNextWanderPoint()
     {
-        Vector3 origin = m_owner.transform.position;
+        if (!NpcMovePoint.TryPick(
+                m_owner.Agent,
+                m_config.MinWanderDistance,
+                m_config.WanderRadius,
+                k_navSampleMaxDistance,
+                k_maxSampleAttempts,
+                k_maxReachabilityProbes,
+                out Vector3 point,
+                out bool reachable
+            ))
+            return; // 주변에 NavMesh가 없다 — 목적지를 주지 못한다
 
-        // 도달 가능한 지점이 하나도 없을 때를 위한 차선 — 목적지를 아예 안 주면 NPC가 그 자리에 굳는다
-        Vector3? fallback = null;
-        int probes = 0;
-
-        for (int i = 0; i < k_maxSampleAttempts && probes < k_maxReachabilityProbes; i++)
+        if (!reachable)
         {
-            // 최소~최대 거리 사이의 랜덤 방향 지점을 뽑는다 — 너무 가까운 지점을 배제해 한두 걸음 걷고 마는 이동을 방지
-            float angle = Random.Range(0f, Mathf.PI * 2f);
-            float distance = Random.Range(m_config.MinWanderDistance, m_config.WanderRadius);
-            Vector3 direction = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
-            Vector3 candidate = origin + direction * distance;
-
-            // 통행 마스크로 샘플 — 에이전트가 못 가는 영역(Jail)을 뽑으면 경로가 문 앞에서 끊긴다 (#415).
-            // 도로는 여기서만 뺀다 — 배회하다 도로 한복판을 목적지로 잡으면 거기 멈춰 서서 치인다.
-            // 에이전트 마스크 자체는 그대로라 <b>건너가는 경로는 여전히 도로를 지난다</b> (#634).
-            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, 2f,
-                    NpcNavAreas.ExcludeRoad(m_owner.Agent.areaMask)))
-                continue;
-
-            fallback ??= hit.position;
-
-            // SamplePosition은 "거기에 NavMesh가 있는가"만 답하지 벽 너머인지는 모른다 — 그대로
-            // SetDestination하면 부분 경로가 나와 그 끝에 붙어 제자리 걸음이 된다 (#661).
-            // 추격이 #568에서 pathStatus로, 도주가 CalculatePath로 거른 것과 같은 방향이다.
-            probes++;
-            if (!IsReachable(origin, hit.position))
-                continue;
-
-            m_owner.Agent.SetDestination(hit.position);
-            return;
+            // 전부 도달 불가 — 이 NPC는 NavMesh 조각에 갇혀 있다(잘린 섬, 접근 불가 구역).
+            // 좌표는 #660 조사 재료다. 차선 지점이라도 주고 막힘 감시에 맡긴다.
+            Debug.Log(
+                $"배회 지점 전부 도달 불가 — 위치 {m_owner.transform.position:F1}: {m_owner.name}",
+                m_owner
+            );
         }
 
-        // 전부 도달 불가 — 이 NPC는 NavMesh 조각에 갇혀 있다(잘린 섬, 접근 불가 구역).
-        // 좌표는 #660 조사 재료다. 차선 지점이라도 주고 막힘 감시에 맡긴다.
-        if (fallback == null)
-            return;
-
-        Debug.Log($"배회 지점 전부 도달 불가 — 위치 {origin:F1}: {m_owner.name}", m_owner);
-        m_owner.Agent.SetDestination(fallback.Value);
+        m_owner.Agent.SetDestination(point);
     }
 }

@@ -22,7 +22,8 @@ public class MisdemeanorLoiterer : MonoBehaviour
 {
     // 소란 재개 시 위협으로 삼을 플레이어 탐색 반경(m) — 이 안에 아무도 없으면 배회하며 기다렸다가,
     // 누가 다가오면 그때 소란을 시작한다. 대상 없는 저항/도주는 곧 흐지부지 배회로 돌아오므로
-    // (NpcResistState·NpcFleeState의 이탈 판정) 두 행동 모두 이 게이트를 공유한다.
+    // (NpcResistState·NpcFleeState의 이탈 판정) 저항·도주가 이 게이트를 공유한다.
+    // 질주(공연음란범)는 대상이 필요 없어 타지 않는다 (#805).
     private const float k_riotThreatRadius = 14f;
 
     private RoundManager Round => App.Game.Round;
@@ -182,7 +183,8 @@ public class MisdemeanorLoiterer : MonoBehaviour
             m_riotEndTime = offender.RiotSeconds > 0f
                 ? Time.time + offender.RiotSeconds
                 : float.PositiveInfinity;
-            Debug.Log($"[돌발이벤트] 탈옥 방출 — 소란 재개({offender.RiotBehavior}, {offender.RiotSeconds:F0}초): {name}");
+            string window = offender.RiotSeconds > 0f ? $"{offender.RiotSeconds:F0}초" : "무제한";
+            Debug.Log($"[돌발이벤트] 탈옥 방출 — 소란 재개({offender.RiotBehavior}, {window}): {name}");
         }
     }
 }

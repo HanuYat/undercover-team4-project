@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.AI;
 
 /// <summary>
 /// 질주(Sprinting) 상태 — 도착할 때마다 새 목적지를 뽑아 <b>멈추지 않고</b> 도심을 뛰어다닌다.
@@ -33,9 +32,6 @@ public class NpcSprintState : NpcStateBase
 
     // 지점 추첨 최소 간격(초) — 도달 가능한 지점이 없을 때 매 프레임 경로 계산을 도는 것을 막는다
     private const float k_repickInterval = 0.5f;
-
-    // 서버에서만 Tick되므로 공유 안전 — 재추첨마다의 할당 방지 (배회·도주와 같은 방식)
-    private static NavMeshPath s_pathProbe;
 
     private readonly NpcFleeConfig m_config;
 
@@ -73,7 +69,8 @@ public class NpcSprintState : NpcStateBase
                 || m_owner.Agent.remainingDistance <= m_owner.Agent.stoppingDistance + k_arriveThreshold)
         )
         {
-            // 지점을 못 뽑았을 때(NavMesh 조각에 갇힘 등) 매 프레임 경로를 다시 계산하지 않게 텀을 둔다
+            // 재추첨에 최소 간격을 둔다 — 지점을 못 뽑는 상황(NavMesh 조각에 갇힘 등)에서
+            // 매 프레임 경로를 다시 계산하는 것을 막는다. 정상 주행은 한 지점을 1초 넘게 달리므로 걸리지 않는다
             if (Time.time < m_nextPickTime)
                 return;
 
@@ -118,53 +115,19 @@ public class NpcSprintState : NpcStateBase
 
     // 멀리 있는 다음 목적지를 뽑는다 — 방향은 무작위다. "누구에게서" 달아나는 것이 아니라
     // 그냥 뛰는 것이라 도주처럼 위협을 등지는 방향 점수를 매기지 않는다.
+    // 규칙(도로 제외·부분 경로 배제)은 배회와 공유한다 (NpcMovePoint, #805).
     private void SetNextPoint()
     {
-        Vector3 origin = m_owner.transform.position;
-
-        // 도달 가능한 지점이 하나도 없을 때의 차선 — 목적지를 안 주면 그 자리에 굳어 제자리 질주가 된다
-        Vector3? fallback = null;
-        int probes = 0;
-
-        for (int i = 0; i < k_maxSampleAttempts && probes < k_maxReachabilityProbes; i++)
-        {
-            float angle = Random.Range(0f, Mathf.PI * 2f);
-            float distance = Random.Range(m_config.StepDistance, m_config.FarPointDistance);
-            Vector3 direction = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
-            Vector3 candidate = origin + direction * distance;
-
-            // 도로는 목적지에서만 뺀다 — 도로 한복판을 목적지로 잡으면 거기 멈춰 서서 치인다.
-            // 지나가는 경로는 그대로 도로를 건넌다 (배회와 같은 규칙, #634).
-            if (
-                !NavMesh.SamplePosition(
-                    candidate,
-                    out NavMeshHit hit,
-                    k_navSampleMaxDistance,
-                    NpcNavAreas.ExcludeRoad(m_owner.Agent.areaMask)
-                )
-            )
-                continue;
-
-            fallback ??= hit.position;
-
-            probes++;
-            if (!IsReachable(origin, hit.position))
-                continue;
-
-            m_owner.Agent.SetDestination(hit.position);
-            return;
-        }
-
-        if (fallback.HasValue)
-            m_owner.Agent.SetDestination(fallback.Value);
-    }
-
-    /// <summary>origin에서 point까지 <b>끊기지 않는</b> 경로가 있는가 — 부분 경로는 도달 불가로 본다.</summary>
-    private bool IsReachable(Vector3 origin, Vector3 point)
-    {
-        s_pathProbe ??= new NavMeshPath();
-
-        return NavMesh.CalculatePath(origin, point, m_owner.Agent.areaMask, s_pathProbe)
-            && s_pathProbe.status == NavMeshPathStatus.PathComplete;
+        if (NpcMovePoint.TryPick(
+                m_owner.Agent,
+                m_config.StepDistance,
+                m_config.FarPointDistance,
+                k_navSampleMaxDistance,
+                k_maxSampleAttempts,
+                k_maxReachabilityProbes,
+                out Vector3 point,
+                out _ // 도달 불가라도 차선 지점을 받는다 — 못 가면 막힘 감시가 다시 뽑는다
+            ))
+            m_owner.Agent.SetDestination(point);
     }
 }
