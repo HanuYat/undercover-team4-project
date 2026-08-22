@@ -78,6 +78,11 @@ public static class GameSettings
     // 수직동기화는 켜고 시작한다 — 끄면 프레임 상한이 사라져 매 프레임 비용이 그만큼 더 돈다 (#796).
     private const bool k_defaultVSync = true;
 
+    // 이보다 세로가 작은 해상도는 목록에 내지 않는다 (#796). 캔버스가 기준 1920x1080에
+    // match=height라 배율이 곧 세로 비율이다 — 480이면 0.44배가 되어 본문 26pt가 11.6px,
+    // 자동 축소가 걸린 라벨은 그보다 더 작아져 읽을 수 없다. 720이면 17.3px로 읽힌다.
+    private const int k_minResolutionHeight = 720;
+
     // 팔레트 첫 색 — 여기서는 목록 길이를 모른다. 범위 밖 값은 읽는 쪽(PlayerColorPalette.Get)이 자른다. (#432)
     private const int k_defaultPlayerColor = 0;
 
@@ -255,7 +260,10 @@ public static class GameSettings
     /// <summary>
     /// 고를 수 있는 해상도 — <see cref="Screen.resolutions"/>를 폭x높이로 묶은 것 (#796).
     /// 원본은 주사율마다 같은 해상도를 되풀이해 돌려주므로 그대로 쓰면 드롭다운에 중복이 뜬다.
-    /// 순서는 원본 그대로(오름차순)다.
+    ///
+    /// <b>세로 <see cref="k_minResolutionHeight"/> 미만은 뺀다</b> — 고를 수 있게 두면 UI가
+    /// 읽히지 않는 화면이 되고, 그 상태에서 되돌리려면 그 읽히지 않는 설정 창을 봐야 한다.
+    /// <b>큰 것부터</b> 낸다 — 사람이 찾는 것은 대개 자기 모니터의 최대치다.
     /// </summary>
     public static IReadOnlyList<Vector2Int> AvailableResolutions
     {
@@ -270,15 +278,21 @@ public static class GameSettings
             foreach (var resolution in Screen.resolutions)
             {
                 var size = new Vector2Int(resolution.width, resolution.height);
+                if (size.y < k_minResolutionHeight)
+                    continue;
+
                 if (seen.Add(size))
                     list.Add(size);
             }
 
-            // 지금 해상도가 목록에 없으면(창 크기를 직접 끌었거나 목록이 비었거나) 넣어 준다 —
+            // 지금 해상도가 목록에 없으면(걸러졌거나 창 크기를 직접 끌었거나) 넣어 준다 —
             // 드롭다운이 맞출 커서 자리가 없으면 고르지도 않은 항목이 선택된 것처럼 보인다.
-            if (!seen.Contains(s_resolution))
-                list.Insert(0, s_resolution);
+            // 걸러진 값을 다시 넣는 것은 '이미 그 화면인 사람'을 위한 것이라 하한과 어긋나지 않는다.
+            // 0은 넣지 않는다 — Load()가 아직 안 돈 상태(에디터 도메인 리로드 직후)의 값이다.
+            if (s_resolution.x > 0 && s_resolution.y > 0 && seen.Add(s_resolution))
+                list.Add(s_resolution);
 
+            list.Sort((a, b) => a.x != b.x ? b.x.CompareTo(a.x) : b.y.CompareTo(a.y));
             s_resolutions = list.ToArray();
             return s_resolutions;
         }

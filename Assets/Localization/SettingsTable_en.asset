@@ -78,10 +78,6 @@ MonoBehaviour:
     m_Localized: V-Sync
     m_Metadata:
       m_Items: []
-  - m_Id: 6994200000015
-    m_Localized: Apply
-    m_Metadata:
-      m_Items: []
   - m_Id: 6994200000016
     m_Localized: Windowed
     m_Metadata:
@@ -108,6 +104,22 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 6994200000022
     m_Localized: Revert
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000023
+    m_Localized: View
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000024
+    m_Localized: Audio
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000025
+    m_Localized: Video
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000026
+    m_Localized: General
     m_Metadata:
       m_Items: []
   references:

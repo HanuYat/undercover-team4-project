@@ -75,10 +75,6 @@ MonoBehaviour:
     m_Key: Settings.Label.VSync
     m_Metadata:
       m_Items: []
-  - m_Id: 6994200000015
-    m_Key: Settings.Button.Apply
-    m_Metadata:
-      m_Items: []
   - m_Id: 6994200000016
     m_Key: Settings.WindowMode.Windowed
     m_Metadata:
@@ -105,6 +101,22 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 6994200000022
     m_Key: Settings.Button.Revert
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000023
+    m_Key: Settings.Tab.Look
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000024
+    m_Key: Settings.Tab.Audio
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000025
+    m_Key: Settings.Tab.Video
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000026
+    m_Key: Settings.Tab.General
     m_Metadata:
       m_Items: []
   m_Metadata:
