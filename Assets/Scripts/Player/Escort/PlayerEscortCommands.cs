@@ -4,6 +4,20 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
+/// 대상 하나를 지목하는 연행 명령. RPC 인자로 나가므로 <b>값을 명시하고 순서를 바꾸지 않는다</b> —
+/// 버전이 다른 클라가 섞이면 다른 명령으로 해석된다. (#594)
+/// </summary>
+public enum EEscortCommand
+{
+    RopeDrag = 0,
+    RopeResume = 1,
+    Unrope = 2,
+    JailRelease = 3,
+    EscortResume = 4,
+    EscortHalt = 5,
+}
+
+/// <summary>
 /// 검거·연행 <b>요청과 판정</b>의 서버 권위 허브. (#59, #56/#118 네트워크 전환, #269/#369)
 /// 오너 클라의 아이템/상호작용(Rope·NpcSubdueInteractable·PlayerInteractor)이
 /// 여기 요청 API를 호출하면, 요청을 서버로 넘겨(ServerRpc) 서버가 채널링·사거리·가시선·자원을 검증하고
@@ -96,56 +110,17 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     }
 
     /// <summary>밧줄 묶기 시도 — 오너가 호출(Rope 아이템 좌클릭). 서버/오프라인 즉시 실행, 원격은 서버로 요청. (#269)</summary>
-    public void RequestRopeDrag(NpcController target)
-    {
-        if (target == null)
-            return;
-        if (!IsSpawned || IsServer)
-        {
-            ServerBeginRopeDrag(target);
-            return;
-        }
-        if (!IsOwner)
-            return;
-        if (!IsTargetNetworkReady(target))
-            return;
-        RopeDragRequestRpc(new NetworkObjectReference(target.NetworkObject));
-    }
+    public void RequestRopeDrag(NpcController target) =>
+        SendCommand(EEscortCommand.RopeDrag, target);
 
     /// <summary>밧줄 끌기 재개 — 오너가 호출(<see cref="Rope"/> 좌클릭). 놓아뒀던 체포 대상을 다시 끈다.
     /// (#91 재연행의 자리 → #369 → #513에서 E가 아니라 좌클릭으로 옮겼다 — 좌클릭이 줄을 거는 쪽이다)</summary>
-    public void RequestRopeResume(NpcController target)
-    {
-        if (target == null)
-            return;
-        if (!IsSpawned || IsServer)
-        {
-            ServerResumeRopeDrag(target);
-            return;
-        }
-        if (!IsOwner)
-            return;
-        if (!IsTargetNetworkReady(target))
-            return;
-        RopeResumeRequestRpc(new NetworkObjectReference(target.NetworkObject));
-    }
+    public void RequestRopeResume(NpcController target) =>
+        SendCommand(EEscortCommand.RopeResume, target);
 
     /// <summary>밧줄 풀기 시도 — 오너가 호출(Rope 좌클릭, 대상이 체포 상태일 때). 서버/오프라인 즉시 실행, 원격은 서버로 요청. (#290 → #369)</summary>
-    public void RequestUnrope(NpcController target)
-    {
-        if (target == null)
-            return;
-        if (!IsSpawned || IsServer)
-        {
-            ServerBeginUnrope(target);
-            return;
-        } // 서버/오프라인 즉시 실행
-        if (!IsOwner)
-            return;
-        if (!IsTargetNetworkReady(target))
-            return;
-        UnropeRequestRpc(new NetworkObjectReference(target.NetworkObject));
-    }
+    public void RequestUnrope(NpcController target) =>
+        SendCommand(EEscortCommand.Unrope, target);
 
     /// <summary>지금 끌고 있는 대상 <b>전원</b>의 밧줄 풀기 — 오너가 호출(겨냥 없는 E). (#638)
     /// 겨냥으로 대상을 고르는 <see cref="RequestUnrope"/>의 짝이다: 끌리는 몸은 늘 등 뒤에 있어
@@ -169,56 +144,39 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     // 연결될 수 있다. Escorter.ReleaseDrag는 그대로 남는다 — 풀기·인계 판정·라운드 종료 정리가 쓴다.
 
     /// <summary>유치장 반출 요청 — 오너가 호출(앉은 수감자에 E). 밧줄을 쓰지 않으므로 용량 게이트를 타지 않는다. (#492)</summary>
-    public void RequestJailRelease(NpcController target)
-    {
-        if (target == null)
-            return;
-        if (!IsSpawned)
-        {
-            ServerJailRelease(target);
-            return;
-        }
-        if (!IsOwner)
-            return;
-        if (!IsTargetNetworkReady(target))
-            return;
-        JailReleaseRpc(new NetworkObjectReference(target.NetworkObject));
-    }
+    public void RequestJailRelease(NpcController target) =>
+        SendCommand(EEscortCommand.JailRelease, target);
 
     /// <summary>멈춘 수감자 추종 재개 요청 — 오너가 호출(거리 이탈로 멈춘 반출 수감자에 E).
     /// 정지(<see cref="RequestEscortHalt"/>)의 역방향이다 — 밧줄을 쓰지 않으므로 용량 게이트를 타지 않는다. (#517)</summary>
-    public void RequestEscortResume(NpcController target)
-    {
-        if (target == null)
-            return;
-        if (!IsSpawned)
-        {
-            ServerEscortResume(target);
-            return;
-        }
-        if (!IsOwner)
-            return;
-        if (!IsTargetNetworkReady(target))
-            return;
-        EscortResumeRpc(new NetworkObjectReference(target.NetworkObject));
-    }
+    public void RequestEscortResume(NpcController target) =>
+        SendCommand(EEscortCommand.EscortResume, target);
 
     /// <summary>따라오는 수감자 정지 요청 — 오너가 호출(반출된 수감자에 E). 밧줄과 무관한 추종을 끊는다. (#492)</summary>
-    public void RequestEscortHalt(NpcController target)
+    public void RequestEscortHalt(NpcController target) =>
+        SendCommand(EEscortCommand.EscortHalt, target);
+
+    // 요청 6종이 공유하는 가드. 대상 지목 명령은 전부 이 경로 하나로 나간다 (#594).
+    private void SendCommand(EEscortCommand cmd, NpcController target)
     {
         if (target == null)
             return;
-        if (!IsSpawned)
+        if (!IsSpawned || (IsServer && RunsDirectlyOnServer(cmd)))
         {
-            ServerEscortHalt(target);
+            ServerExecute(cmd, target);
             return;
         }
         if (!IsOwner)
             return;
         if (!IsTargetNetworkReady(target))
             return;
-        EscortHaltRpc(new NetworkObjectReference(target.NetworkObject));
+        EscortCommandRpc(cmd, new NetworkObjectReference(target.NetworkObject));
     }
+
+    // 밧줄 3종만 서버에서 RPC 없이 바로 돈다. 유치장 3종(#492/#517)은 오너 경로만 타던 것을
+    // 통합하면서 그대로 뒀다 — 맞추면 조용한 동작 변경이 된다 (#594).
+    private static bool RunsDirectlyOnServer(EEscortCommand cmd) =>
+        cmd is EEscortCommand.RopeDrag or EEscortCommand.RopeResume or EEscortCommand.Unrope;
 
     // 원격 클라 → 서버로 대상을 넘기려면 스폰돼 있어야 한다(NetworkObjectReference 제약).
     // 스폰 안 된 NPC(씬 배치 후 미스폰 등)면 참조 생성이 예외를 던지므로 미리 걸러 경고만 남긴다.
@@ -239,76 +197,45 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     [Rpc(SendTo.Server)]
     private void CancelCaptureRpc() => ServerCancelCapture();
 
+    /// <summary>대상 지목 연행 명령의 단일 입구 — 대상 유효성만 보고 서버 실행으로 넘긴다.
+    /// 명령별 검증은 각 <c>Server*</c> 안에 있다. (#594)</summary>
     [Rpc(SendTo.Server)]
-    private void RopeDragRequestRpc(NetworkObjectReference targetRef)
+    private void EscortCommandRpc(EEscortCommand cmd, NetworkObjectReference targetRef)
     {
-        if (targetRef.TryGet(out NetworkObject targetObj) &&
-            targetObj.TryGetComponent(out NpcController target))
+        if (targetRef.TryGet(out NetworkObject targetObj)
+            && targetObj.TryGetComponent(out NpcController target))
         {
-            ServerBeginRopeDrag(target);
+            ServerExecute(cmd, target);
         }
     }
 
-    [Rpc(SendTo.Server)]
-    private void RopeResumeRequestRpc(NetworkObjectReference targetRef)
+    private void ServerExecute(EEscortCommand cmd, NpcController target)
     {
-        if (targetRef.TryGet(out NetworkObject targetObj) &&
-            targetObj.TryGetComponent(out NpcController target))
+        switch (cmd)
         {
-            ServerResumeRopeDrag(target);
-        }
-    }
-
-    [Rpc(SendTo.Server)]
-    private void UnropeRequestRpc(NetworkObjectReference targetRef)
-    {
-        if (
-            targetRef.TryGet(out NetworkObject targetObj)
-            && targetObj.TryGetComponent(out NpcController target)
-        )
-        {
-            ServerBeginUnrope(target);
+            case EEscortCommand.RopeDrag:
+                ServerBeginRopeDrag(target);
+                break;
+            case EEscortCommand.RopeResume:
+                ServerResumeRopeDrag(target);
+                break;
+            case EEscortCommand.Unrope:
+                ServerBeginUnrope(target);
+                break;
+            case EEscortCommand.JailRelease:
+                ServerJailRelease(target);
+                break;
+            case EEscortCommand.EscortResume:
+                ServerEscortResume(target);
+                break;
+            case EEscortCommand.EscortHalt:
+                ServerEscortHalt(target);
+                break;
         }
     }
 
     [Rpc(SendTo.Server)]
     private void UnropeAllRequestRpc() => ServerUnropeAllDragged();
-
-    [Rpc(SendTo.Server)]
-    private void EscortResumeRpc(NetworkObjectReference targetRef)
-    {
-        if (
-            targetRef.TryGet(out NetworkObject targetObj)
-            && targetObj.TryGetComponent(out NpcController target)
-        )
-        {
-            ServerEscortResume(target);
-        }
-    }
-
-    [Rpc(SendTo.Server)]
-    private void EscortHaltRpc(NetworkObjectReference targetRef)
-    {
-        if (
-            targetRef.TryGet(out NetworkObject targetObj)
-            && targetObj.TryGetComponent(out NpcController target)
-        )
-        {
-            ServerEscortHalt(target);
-        }
-    }
-
-    [Rpc(SendTo.Server)]
-    private void JailReleaseRpc(NetworkObjectReference targetRef)
-    {
-        if (
-            targetRef.TryGet(out NetworkObject targetObj)
-            && targetObj.TryGetComponent(out NpcController target)
-        )
-        {
-            ServerJailRelease(target);
-        }
-    }
 
     // ---- 서버 실행: 채널 제어 ----
 
