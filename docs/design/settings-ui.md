@@ -64,6 +64,7 @@ GameSettings (Core · static)                     ← PlayerPrefs 읽기/쓰기 
 
 SettingsPanel : PanelBase                        ← 슬라이더 3 + 값 표시 + [닫기] [기본값 복원]
 DisplayConfirmPanel : PanelBase                  ← 창모드·해상도 확인 (15초 카운트다운, #796)
+CreditsPanel : PanelBase                         ← 개발진 명단 ([일반] 탭의 [개발진] 버튼이 연다)
 SettingsCanvas.prefab                            ← Title · Lobby · Shop · Main 배치 (확인창도 이 안)
 ```
 

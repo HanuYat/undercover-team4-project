@@ -89,6 +89,9 @@ public class SettingsPanel : PanelBase
     [SerializeField] private Button m_closeButton; // 닫기
     [SerializeField] private Button m_resetButton; // 기본값 복원
 
+    [Tooltip("개발진 창을 여는 버튼 — [일반] 탭에 있다")]
+    [SerializeField] private Button m_creditsButton;
+
     public override bool CanCloseWithESC => true;
     public override bool IsStackable => true;
 
@@ -145,6 +148,7 @@ public class SettingsPanel : PanelBase
 
         if (m_closeButton != null) m_closeButton.onClick.AddListener(ClosePanel);
         if (m_resetButton != null) m_resetButton.onClick.AddListener(HandleResetClicked);
+        if (m_creditsButton != null) m_creditsButton.onClick.AddListener(HandleCreditsClicked);
     }
 
     protected override void OnDestroy()
@@ -191,6 +195,8 @@ public class SettingsPanel : PanelBase
             m_closeButton.onClick.RemoveListener(ClosePanel);
         if (m_resetButton != null)
             m_resetButton.onClick.RemoveListener(HandleResetClicked);
+        if (m_creditsButton != null)
+            m_creditsButton.onClick.RemoveListener(HandleCreditsClicked);
 
         base.OnDestroy();
     }
@@ -503,6 +509,9 @@ public class SettingsPanel : PanelBase
         if (m_micMuteToggle != null)
             m_micMuteToggle.SetIsOnWithoutNotify(on);
     }
+
+    // 개발진 창은 설정 창 위에 겹쳐 열린다 (배치 누락은 UI 매니저가 콘솔로 드러낸다).
+    private void HandleCreditsClicked() => App.UI.Current?.OpenPanel<CreditsPanel>();
 
     private void HandleResetClicked()
     {

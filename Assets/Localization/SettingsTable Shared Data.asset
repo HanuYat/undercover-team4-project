@@ -119,6 +119,18 @@ MonoBehaviour:
     m_Key: Settings.Tab.General
     m_Metadata:
       m_Items: []
+  - m_Id: 6994200000027
+    m_Key: Settings.Credits.Open
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000028
+    m_Key: Settings.Credits.Title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000029
+    m_Key: Settings.Credits.Roster
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
