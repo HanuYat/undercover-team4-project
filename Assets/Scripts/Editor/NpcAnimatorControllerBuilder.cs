@@ -25,8 +25,9 @@ using UnityEngine;
 /// 통째로 복제하면 여기서 상태를 고칠 때마다 두 벌을 맞춰야 한다.
 /// 클립이 바뀌면 타격 프레임도 달라지므로 <c>NpcResistConfig_StreetThug</c>의 SwingImpactOffsets를
 /// 함께 맞춘다(손 속도 최대 시점 기준: 0.43 / 0.37 / 0.37 / 0.33초).
-/// ⚠ 이 스크립트가 스윙 변형을 다시 만들면 <b>덮어쓰기 매핑의 원본 클립이 바뀌므로</b>
-/// 오버라이드도 다시 걸어야 한다.
+/// ⚠ <b>스윙 클립 목록(s_swingClipFiles)을 바꾸면</b> 오버라이드의 원본 키가 사라져 깡패가 맨손
+/// 스윙으로 돌아간다 — 그때는 오버라이드도 다시 걸어야 한다. 목록 그대로 재실행하는 것은 안전하다:
+/// 같은 fbx에서 같은 클립 에셋을 다시 다는 것이라 매핑 키가 그대로다.
 /// </summary>
 public static class NpcAnimatorControllerBuilder
 {

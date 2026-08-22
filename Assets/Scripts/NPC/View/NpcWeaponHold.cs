@@ -11,6 +11,12 @@ using UnityEngine;
 /// <b>신병이 되면 내려놓는다</b> — 수갑 자세·누운 자세는 무기를 든 상체와 맞지 않고, 무엇보다
 /// 파이프를 든 채 연행되는 그림이 어색하다. 상태가 확보·무력화군으로 가면 레이어를 내리고 무기를 숨긴다.
 /// 상태는 동기화 값이라(<see cref="NpcController.OnStateChanged"/>) 전 피어에서 같은 순간에 갈린다.
+///
+/// ⚠ <b>기절은 상태 enum으로 오지 않는다</b> (#292) — 테이저·체력 0 기절은 오버레이라 CurrentState가
+/// 그대로다. 상태만 보면 <b>쓰러진 몸이 파이프를 쥔 채 어깨에 걸친 자세로 굳는다</b>(테이저 → 밧줄이
+/// 표준 검거 경로라 자주 보인다). <see cref="NpcStun.IsStunned"/>를 함께 보고
+/// <see cref="NpcStun.OnStunnedChanged"/>로 재판정을 태우는 것이 그 대비다 —
+/// <see cref="NpcAnimationDriver"/>가 같은 함정을 같은 방식으로 피한다.
 /// </summary>
 public class NpcWeaponHold : MonoBehaviour
 {
@@ -53,21 +59,29 @@ public class NpcWeaponHold : MonoBehaviour
     private void OnEnable()
     {
         m_controller.OnStateChanged += HandleStateChanged;
-        Apply(m_controller.CurrentState);
+        m_controller.Stun.OnStunnedChanged += HandleStunnedChanged;
+        Apply();
     }
 
     private void OnDisable()
     {
         m_controller.OnStateChanged -= HandleStateChanged;
+        m_controller.Stun.OnStunnedChanged -= HandleStunnedChanged;
     }
 
-    private void HandleStateChanged(NpcState state) => Apply(state);
+    private void HandleStateChanged(NpcState state) => Apply();
 
-    private void Apply(NpcState state)
+    private void HandleStunnedChanged(bool stunned) => Apply();
+
+    private void Apply()
     {
-        bool holding = KeepsWeapon(state);
+        // 기절 중이면 상태와 무관하게 내려놓는다 — 오버레이라 상태 enum이 그대로이기 때문이다 (#292)
+        bool stunned = m_controller.Stun.IsStunned;
+        NpcState state = m_controller.CurrentState;
 
-        m_animator.SetLayerWeight(m_layerIndex, PosesWeapon(state) ? m_layerWeight : 0f);
+        bool holding = !stunned && KeepsWeapon(state);
+
+        m_animator.SetLayerWeight(m_layerIndex, !stunned && PosesWeapon(state) ? m_layerWeight : 0f);
 
         if (m_weapon != null && m_weapon.activeSelf != holding)
             m_weapon.SetActive(holding);
