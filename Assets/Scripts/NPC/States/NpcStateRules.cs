@@ -19,6 +19,10 @@ public static class NpcStateRules
     /// 제외하는 건 이미 신병을 확보(Escorted/Captured/Jailed)했거나 오검거 페널티가 진행(Detained/
     /// Chasing/PenaltyEscorting) 중인 상태 — 도주(Run)·저항(Attack)은 주 타격 대상이라 제외하지 않는다.</summary>
     public static bool CanBeDamaged(NpcState state) =>
+        // 아래 CanArrest와 제외 목록이 같지만 다른 게이트다 — 합치지 말 것 (#593).
+        // 오버로드에서 이미 갈린다: 납치범은 타격 O(IsUndercoverDuty)·검거 X.
+        // 새 상태를 추가할 때는 양쪽 목록을 각각 판단한다.
+        //
         // 시체는 더 때릴 수 없다 (#571). 막지 않아도 HP는 이미 0이라 SetHp의 엣지가 안 걸리지만,
         // 열어 두면 OnDamaged·피격 연출·납치 격퇴 훅이 시체에서 계속 발행된다.
         state != NpcState.Dead
@@ -52,7 +56,11 @@ public static class NpcStateRules
     /// <summary>이 NPC를 지금 밧줄로 묶을 수 있는가 — 상태 규칙에 <b>소매치기 예외</b>를 얹은 정본. (#303)
     /// Chasing이라 상태만 보면 막히지만, 접근 중에 무력화했으면 잡을 수 있어야 한다. 오검거·납치는 그대로 막힌다.</summary>
     public static bool CanArrest(NpcController npc) =>
-        npc != null && (npc.Penalty.IsPickpocketDuty || CanArrest(npc.CurrentState));
+        npc != null
+        // 사망은 소매치기 예외보다 위다 (#571/#593) — 임무 표식은 죽어도 즉시 내려가지 않는다.
+        // 지금은 CanRopeBind가 시체를 먼저 걸러 도달하지 않지만, 이 함수만 보면 죽은 소매치기가 검거된다.
+        && npc.CurrentState != NpcState.Dead
+        && (npc.Penalty.IsPickpocketDuty || CanArrest(npc.CurrentState));
 
     /// <summary>반응·배회군인가 — 스턴이 풀릴 때 도주로 전환되는 쪽. (#292)
     /// 여집합(확보·페널티군)은 스턴이 풀려도 아무 전이 없이 하던 일을 재개한다 —
@@ -92,6 +100,8 @@ public static class NpcStateRules
     /// <b>이것만으로 묶기를 판정하지 말 것</b> — 새로 묶기는 무력화까지 요구하므로
     /// <see cref="CanRopeBind"/>가 정본이고 이 함수는 그 한 조각이다 (#446).</summary>
     public static bool CanArrest(NpcState state) =>
+        // 위 CanBeDamaged와 제외 목록이 같지만 다른 게이트다 — 합치지 말 것 (#593).
+        //
         // 시체는 <b>검거</b> 대상이 아니다 (#571) — 신병이 아니라 짐이라 커스터디로 들어갈 일이 없다.
         // 유치장까지 끌고 가면 계상되지만(ArrestJudge.JudgeCorpse) 그 경로도 커스터디를 쓰지 않는다.
         // ⚠ 그렇다고 시체에 줄을 못 거는 것은 아니다 — 시체 끌기는 이 함수를 거치지 않고
