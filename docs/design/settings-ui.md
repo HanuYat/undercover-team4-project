@@ -18,6 +18,8 @@
 - 무전/근접 음성 **분리** 볼륨, 마이크(입력) 감도
   - **갱신 (#430, 2026-08-01):** 마이크 **음소거 토글**은 Phase 2를 기다리지 않고 구현했다 — `GameSettings.MicMuted` + 입력 장치 뮤트. 아래 결정 (i) 참고. 입력 **감도·장치 선택**은 여전히 Phase 2다(Vivox 입력 장치 열거·전환 경로가 따로 필요).
 - 그래픽 옵션(창모드·해상도·품질)
+  - **갱신 (#796, 2026-08-21):** **창모드·해상도·수직동기화**를 구현했다 — 아래 결정 (j)·(k) 참고.
+    **품질(Quality)은 여전히 범위 밖**이다(같은 섹션 자리만 비워 둔다).
 - 언어 선택 (Localization 인프라는 이미 있음 — 저비용 추가 가능)
 - 키 리바인딩
 
@@ -30,6 +32,9 @@
 | (c) 닉네임 수정 | **설정 창에서 제외** | [AuthPanel](../../Assets/Scripts/UI/AuthPanel.cs)이 이미 담당하고, `!Auth.IsNetworkConnected`일 때만 편집 가능 → 인게임 설정 창에 넣으면 항상 비활성으로 보인다 |
 | (d) 적용 모델 | **즉시 적용.** 저장/취소 버튼 없음, **닫기 + 기본값 복원** 2버튼 | 저장 버튼은 취소 의미를 데려오고, 그러면 값 2벌(적용 중/커밋됨) + 되돌림 재적용 경로가 붙는다. 볼륨·감도는 조절하며 확인하는 항목이라 미리 적용이 본질 |
 | (e) 확인 버튼이 필요한 항목 | Phase 2 **그래픽 옵션에만** "적용"(+되돌림) 도입 | 해상도·창모드는 잘못 적용하면 되돌리기 어렵다 — 슬라이더에 미리 붙일 이유가 없다 |
+| (j) 되돌림 방식 (#796) | **[적용] → 확인창 15초 카운트다운 → [유지]/[되돌리기]**. 저장은 [유지]에서만 — 적용만 한 값은 `PlayerPrefs`에 남지 않는다 | 화면이 깨지면 아무것도 눌러 볼 수 없으므로 되돌림을 사람이 아니라 **시간**이 맡아야 한다. 저장을 미루는 것이 두 번째 그물이다 — 확인하지 못한 채 강제 종료해도 다음 실행은 이전 값으로 뜬다 |
+| (k) [기본값 복원] 범위 (#796) | **창모드·해상도는 제외, 수직동기화만 포함** | 언어·로봇 색을 뺀 것과 같은 이유다 — 감도를 되돌리려던 사람이 버튼 한 번에 창이 통째로 바뀌고 확인창부터 마주하게 된다. 되돌릴 수단은 바로 위 드롭다운에 있다. 수직동기화는 잘못 돌아가도 화면이 깨지지 않는다 |
+| (l) 수직동기화 (#796) | **예외 없이 즉시 적용 토글** — 다른 토글 3개와 같은 모양 | 잘못 켜고 꺼도 화면이 깨지지 않아 [적용]으로 감쌀 이유가 없다 |
 | (f) 저장소 형태 | `GameSettings` **static 클래스** (`Assets/Scripts/Core/`) | 씬 오브젝트·라이프사이클이 필요 없는 로컬 값. [SessionFlow](../../Assets/Scripts/Network/SessionFlow.cs)와 같은 static 진입점 선례. R2(매니저 `static Instance` 금지) 위반이 아니며, R3(App 등록) 기준의 "씬 서비스"도 아니다 |
 | (g) 감도 의미 | 설정값은 **배율** — `LookInput × 프리팹 기준값 × 설정 배율` | 프리팹/씬의 직렬화 값을 건드리지 않고, "기준값 × 사용자 취향"으로 의미가 분리된다 |
 | (h) 왜곡 구간 음성 음량 | **이 이슈에서 함께 처리** — 음성 음량을 Vivox 전역 API와 **살아 있는 오디오 탭 양쪽**에 적용 | 왜곡 중에는 Vivox 믹스가 죽고 우리 `AudioSource`로 재생돼 전역 API가 통하지 않는다. 새 탭의 기본 `volume`은 1이므로, 방치하면 **음성을 0으로 내려둔 사람도 먹통 이벤트 순간 목소리가 원래 크기로 되살아난다** — 슬라이더 무반응보다 나쁜, 음소거가 저절로 풀리는 동작 |
@@ -44,9 +49,13 @@ GameSettings (Core · static)                     ← PlayerPrefs 읽기/쓰기 
    ├─ VoiceVolume       0~1     (기본 1.0)  ──▶ VivoxManager.ApplyVoiceVolume()
    │                                              ├─ 정상 경로: Vivox 전역 출력 볼륨
    │                                              └─ 왜곡 경로: 살아 있는 오디오 탭 AudioSource.volume
-   └─ MicMuted          bool    (기본 false) ─▶ VivoxManager.ApplyMicMute()   (#430)
-                                                  ├─ Vivox 입력 장치 Mute/Unmute (PTT와 독립)
-                                                  └─ OnMicMutedChanged ─▶ 설정 창 토글 · HUD 아이콘 · 로비 로스터 보고
+   ├─ MicMuted          bool    (기본 false) ─▶ VivoxManager.ApplyMicMute()   (#430)
+   │                                              ├─ Vivox 입력 장치 Mute/Unmute (PTT와 독립)
+   │                                              └─ OnMicMutedChanged ─▶ 설정 창 토글 · HUD 아이콘 · 로비 로스터 보고
+   ├─ VSync             bool    (기본 true)  ──▶ QualitySettings.vSyncCount    (#796, 즉시 적용)
+   └─ WindowMode/Resolution  (기본 = 빌드가 띄운 창)                            (#796)
+        ApplyDisplay(mode, res) ──▶ Screen.SetResolution(w, h, mode) + CursorLock.Reassert()  ← 화면만
+        KeepDisplay()           ──▶ PlayerPrefs + Save()                                      ← 확인창 [유지]
 
 SettingsPanel : PanelBase                        ← 슬라이더 3 + 값 표시 + [닫기] [기본값 복원]
 SettingsCanvas.prefab                            ← Title · Lobby · Shop · Main 배치
@@ -93,6 +102,10 @@ SettingsCanvas.prefab                            ← Title · Lobby · Shop · M
 - **마스터 음량은 Vivox 음성에 걸리지 않는다.** Vivox는 자체 믹스로 재생돼 `AudioListener.volume` 밖에 있다 — 음성 슬라이더를 따로 두는 실제 이유.
 - **먹통 음성 왜곡 중에는 경로가 뒤집힌다.** [VivoxManager.cs:405](../../Assets/Scripts/Network/VivoxManager.cs#L405)가 `silenceInChannelAudioMix=true`로 Vivox 믹스를 죽이고 우리 `AudioSource`로 재생하므로, 그 구간에는 `SetOutputDeviceVolume`이 먹지 않는다. **탭 `AudioSource.volume`에 함께 반영하는 것으로 해결한다** (결정 (h) · 작업 2). 남는 차이 하나: 이 경로는 Unity 믹스라 마스터 음량도 함께 걸려 왜곡 중 실효 음량이 `마스터 × 음성`이 된다 — 정상 구간(마스터 무관)과 미묘하게 다르지만 왜곡이 짧은 이벤트라 허용한다.
 - **캔버스 Sort Order 충돌** — `PauseCanvas`·`QuitConfirmCanvas`가 모두 100이다. `PauseCanvas`를 복제해 만든 `SettingsCanvas`도 100을 물려받아, Sort Order가 같은 Overlay 캔버스는 Hierarchy 루트 순서로 승부가 갈린다 → 씬마다 위아래가 달라진다(Shop에서 일시정지가 설정 창을 덮는 문제로 실제 발생). 설정은 일시정지 **위**에 겹치는 유일한 창이므로 프리팹에서 **110**으로 고정한다. 클릭 우선순위(`GraphicRaycaster`)도 같은 순서를 따르므로 이걸 고치면 슬라이더가 안 잡히던 문제도 함께 사라진다.
+- **그래픽 옵션은 에디터에서 검증되지 않는다 (#796).** `Screen.SetResolution`은 에디터 Game 뷰에서 동작하지 않는다 — **빌드로 확인해야 한다.** 또 `PlayerPrefs`는 MPPM 가상 플레이어끼리 공유되므로(계정으로 가른 키는 로봇 색뿐이다) 가상 플레이어로 테스트하면 한쪽 값이 다른 쪽을 덮는다. **혼자 켠 빌드로 확인할 것.**
+- **창모드가 바뀌면 OS가 커서 잠금을 푼다 (#796).** `GameSettings.ApplyDisplay`가 적용 직후 [CursorLock](../../Assets/Scripts/Core/CursorLock.cs)`.Reassert()`를 부른다 — 요청 수는 건드리지 않으므로 판정 결과는 그대로다(설정 창이 떠 있는 동안은 계속 풀림). 설정·일시정지를 닫을 때 `PopUnlock`이 한 번 더 적용하므로 그물이 둘이다.
+- **`Screen.resolutions`에는 중복이 있다 (#796).** 주사율별로 같은 폭×높이를 여러 번 돌려준다 — `GameSettings.AvailableResolutions`가 폭×높이로 묶어 걷어낸 목록을 준다. 드롭다운은 그것만 쓴다.
+- **수직동기화를 끄면 프레임 상한이 사라진다 (#796).** 매 프레임 비용이 있는 것들이 그만큼 더 돈다 — 강수 화면 마스크(#782)와 차량 위치 풀이(#787)가 대상이다.
 - **슬라이더 드래그마다 `PlayerPrefs.Save()`를 부르지 않는다.** `SetFloat`은 메모리, `Save()`는 디스크 쓰기 — 창 닫을 때 1회로 모은다.
 - **감도 배율의 상한**을 프리팹 기준값과 곱해 확인한다 — 기준값이 이미 크면 3.0배가 조작 불가 수준이 될 수 있다.
 - **로그 스케일 매핑 검증** — Vivox 볼륨은 선형이 아니라, 슬라이더 중앙이 "절반 크기"로 들리지 않는다. 2인 테스트에서 체감으로 매핑 구간을 조정한다.

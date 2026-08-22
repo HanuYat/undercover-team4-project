@@ -23,6 +23,11 @@ public static class GameSettings
     private const string k_masterVolumeKey = "settings.masterVolume";
     private const string k_voiceVolumeKey = "settings.voiceVolume";
     private const string k_micMutedKey = "settings.micMuted";
+    // 그래픽 (#796) — 창모드·해상도는 확인창에서 [유지]를 눌러야 여기 남는다 (KeepDisplay).
+    private const string k_windowModeKey = "settings.windowMode";
+    private const string k_resolutionWidthKey = "settings.resolutionWidth";
+    private const string k_resolutionHeightKey = "settings.resolutionHeight";
+    private const string k_vSyncKey = "settings.vSync";
     // settings.playerColor.<계정>.<부위> — 색은 기기 설정이 아니라 그 사람의 것이라 계정으로 가른다.
     // 정본은 Cloud Save(CosmeticsSaveService)이고 여기 값은 캐시다. (#432 후속)
     private const string k_playerColorKeyPrefix = "settings.playerColor.";
@@ -64,6 +69,9 @@ public static class GameSettings
     private const float k_defaultVoiceVolume = 1f;
     private const bool k_defaultMicMuted = false;
 
+    // 수직동기화는 켜고 시작한다 — 끄면 프레임 상한이 사라져 매 프레임 비용이 그만큼 더 돈다 (#796).
+    private const bool k_defaultVSync = true;
+
     // 팔레트 첫 색 — 여기서는 목록 길이를 모른다. 범위 밖 값은 읽는 쪽(PlayerColorPalette.Get)이 자른다. (#432)
     private const int k_defaultPlayerColor = 0;
 
@@ -80,6 +88,12 @@ public static class GameSettings
     private static float s_masterVolume = k_defaultMasterVolume;
     private static float s_voiceVolume = k_defaultVoiceVolume;
     private static bool s_micMuted = k_defaultMicMuted;
+    private static bool s_vSync = k_defaultVSync;
+
+    // 창모드·해상도는 '지금 화면에 걸려 있는 것'이다 — 저장값과 다를 수 있다(적용 후 확인 전). (#796)
+    private static EWindowMode s_windowMode;
+    private static Vector2Int s_resolution;
+    private static Vector2Int[] s_resolutions; // 폭x높이로 묶은 해상도 목록 캐시
 
     /// <summary>마우스 감도 배율 (0.25~3.0, 기본 1.0). 프리팹 기준 감도에 곱해진다.</summary>
     public static float MouseSensitivity
@@ -208,6 +222,109 @@ public static class GameSettings
         }
     }
 
+    /// <summary>
+    /// 수직동기화 (#796). 잘못 켜고 꺼도 화면이 깨지지 않으므로 창모드·해상도와 달리
+    /// 다른 토글처럼 즉시 적용한다.
+    /// </summary>
+    public static bool VSync
+    {
+        get => s_vSync;
+        set
+        {
+            s_vSync = value;
+            PlayerPrefs.SetInt(k_vSyncKey, s_vSync ? 1 : 0);
+            QualitySettings.vSyncCount = s_vSync ? 1 : 0;
+        }
+    }
+
+    /// <summary>
+    /// 지금 화면에 걸려 있는 창 모드 (#796). 대입하지 않는다 — 해상도와 한 번에
+    /// <see cref="ApplyDisplay"/>로 바꾼다(<c>Screen.SetResolution</c>이 둘을 함께 받는다).
+    /// </summary>
+    public static EWindowMode WindowMode => s_windowMode;
+
+    /// <summary>지금 화면에 걸려 있는 해상도 (#796).</summary>
+    public static Vector2Int Resolution => s_resolution;
+
+    /// <summary>
+    /// 고를 수 있는 해상도 — <see cref="Screen.resolutions"/>를 폭x높이로 묶은 것 (#796).
+    /// 원본은 주사율마다 같은 해상도를 되풀이해 돌려주므로 그대로 쓰면 드롭다운에 중복이 뜬다.
+    /// 순서는 원본 그대로(오름차순)다.
+    /// </summary>
+    public static IReadOnlyList<Vector2Int> AvailableResolutions
+    {
+        get
+        {
+            if (s_resolutions != null)
+                return s_resolutions;
+
+            var seen = new HashSet<Vector2Int>();
+            var list = new List<Vector2Int>();
+
+            foreach (var resolution in Screen.resolutions)
+            {
+                var size = new Vector2Int(resolution.width, resolution.height);
+                if (seen.Add(size))
+                    list.Add(size);
+            }
+
+            // 지금 해상도가 목록에 없으면(창 크기를 직접 끌었거나 목록이 비었거나) 넣어 준다 —
+            // 드롭다운이 맞출 커서 자리가 없으면 고르지도 않은 항목이 선택된 것처럼 보인다.
+            if (!seen.Contains(s_resolution))
+                list.Insert(0, s_resolution);
+
+            s_resolutions = list.ToArray();
+            return s_resolutions;
+        }
+    }
+
+    /// <summary>
+    /// 창 모드·해상도를 <b>화면에만</b> 적용한다 (#796) — 저장은 <see cref="KeepDisplay"/>가 한다.
+    /// 다른 설정과 달리 setter에서 바로 저장하지 않는 이유: 잘못 고르면 화면이 깨져 되돌릴 수 없으므로,
+    /// 확인창에서 [유지]를 누르기 전에는 남기지 않는다. 확인하지 못한 채 껐다 켜도 이전 값으로 돌아온다.
+    /// (설계 결정 (e) — docs/design/settings-ui.md)
+    /// </summary>
+    public static void ApplyDisplay(EWindowMode mode, Vector2Int resolution)
+    {
+        s_windowMode = mode;
+        s_resolution = new Vector2Int(Mathf.Max(1, resolution.x), Mathf.Max(1, resolution.y));
+        Screen.SetResolution(s_resolution.x, s_resolution.y, ToFullScreenMode(mode));
+
+        // 창 모드가 바뀌면 OS가 커서 잠금을 푼다 — 요청 수는 그대로 두고 판정만 다시 건다.
+        // 설정 창이 떠 있는 동안은 계속 풀림이고, 창을 닫을 때 PopUnlock이 한 번 더 잡는다.
+        CursorLock.Reassert();
+    }
+
+    /// <summary>
+    /// 지금 적용돼 있는 창 모드·해상도를 저장한다 — 확인창 [유지] (#796).
+    /// 다른 항목과 달리 디스크까지 바로 쓴다: 창을 닫기 전에 화면이 깨져 강제 종료하는 경우가
+    /// 이 설정에서는 실제로 있고, 그때 "유지를 눌렀는데 안 남았다"가 되면 안 된다.
+    /// </summary>
+    public static void KeepDisplay()
+    {
+        PlayerPrefs.SetInt(k_windowModeKey, (int)s_windowMode);
+        PlayerPrefs.SetInt(k_resolutionWidthKey, s_resolution.x);
+        PlayerPrefs.SetInt(k_resolutionHeightKey, s_resolution.y);
+        PlayerPrefs.Save();
+    }
+
+    private static FullScreenMode ToFullScreenMode(EWindowMode mode) =>
+        mode switch
+        {
+            EWindowMode.Windowed => FullScreenMode.Windowed,
+            EWindowMode.Fullscreen => FullScreenMode.ExclusiveFullScreen,
+            _ => FullScreenMode.FullScreenWindow,
+        };
+
+    // 드롭다운에 없는 값(macOS의 MaximizedWindow 등)은 테두리 없는 전체 창으로 읽는다.
+    private static EWindowMode ToWindowMode(FullScreenMode mode) =>
+        mode switch
+        {
+            FullScreenMode.Windowed => EWindowMode.Windowed,
+            FullScreenMode.ExclusiveFullScreen => EWindowMode.Fullscreen,
+            _ => EWindowMode.Borderless,
+        };
+
     /// <summary>내 로봇 색이 바뀌었다 — 로비 로스터 보고·초상·팔레트 표시가 되읽는다. 인자는 바뀐 부위. (#432)</summary>
     public static event Action<EBodyPart> OnPlayerColorChanged;
 
@@ -328,9 +445,36 @@ public static class GameSettings
         MasterVolume = PlayerPrefs.GetFloat(k_masterVolumeKey, k_defaultMasterVolume);
         VoiceVolume = PlayerPrefs.GetFloat(k_voiceVolumeKey, k_defaultVoiceVolume);
         MicMuted = PlayerPrefs.GetInt(k_micMutedKey, k_defaultMicMuted ? 1 : 0) != 0;
+        VSync = PlayerPrefs.GetInt(k_vSyncKey, k_defaultVSync ? 1 : 0) != 0;
+        LoadDisplay();
         // 부위별 색 — 로그인 전이라 아직 'local' 자리를 읽는다. 로그인하면 계정 것으로 갈아탄다 (#432 후속)
         s_colorAccount = k_localColorAccount;
         LoadPlayerColors();
+    }
+
+    /// <summary>
+    /// 저장된 창 모드·해상도를 적용한다 (#796). <b>저장값이 없으면 화면을 건드리지 않는다</b> —
+    /// 첫 실행에는 빌드가 띄운 창이 그대로 기본값이다.
+    /// </summary>
+    private static void LoadDisplay()
+    {
+        s_resolutions = null; // 도메인 리로드 OFF 대비 — 이전 플레이의 캐시가 남지 않게
+        s_windowMode = ToWindowMode(Screen.fullScreenMode);
+        s_resolution = new Vector2Int(Screen.width, Screen.height);
+
+        if (!PlayerPrefs.HasKey(k_windowModeKey))
+            return;
+
+        int storedMode = PlayerPrefs.GetInt(k_windowModeKey, (int)s_windowMode);
+        ApplyDisplay(
+            Enum.IsDefined(typeof(EWindowMode), storedMode)
+                ? (EWindowMode)storedMode
+                : s_windowMode,
+            new Vector2Int(
+                PlayerPrefs.GetInt(k_resolutionWidthKey, s_resolution.x),
+                PlayerPrefs.GetInt(k_resolutionHeightKey, s_resolution.y)
+            )
+        );
     }
 
     /// <summary>
@@ -340,6 +484,9 @@ public static class GameSettings
     /// <b>언어는 포함하지 않는다</b> — 되돌릴 '기본 언어'가 시스템 로케일이라, 한국어로 쓰던 사람이
     /// 이 버튼을 누르면 메뉴 언어가 통째로 바뀐다. 감도·볼륨을 되돌리려다 화면을 못 읽게 되는 쪽이
     /// 잘못 조절한 값보다 나쁘고, 언어는 바로 위 드롭다운에서 되돌릴 수 있다. (#374)
+    /// <b>창 모드·해상도도 빼고 수직동기화만 넣는다</b> — 버튼 한 번에 창이 통째로 바뀌면
+    /// 감도를 되돌리려던 사람이 확인창부터 마주한다. 되돌릴 수단이 바로 위 드롭다운에 있는 것도
+    /// 언어와 같다. 수직동기화는 잘못 돌아가도 화면이 깨지지 않아 함께 되돌린다. (#796)
     /// </summary>
     public static void ResetToDefaults()
     {
@@ -351,6 +498,7 @@ public static class GameSettings
         MasterVolume = k_defaultMasterVolume;
         VoiceVolume = k_defaultVoiceVolume;
         MicMuted = k_defaultMicMuted;
+        VSync = k_defaultVSync;
     }
 
     /// <summary>

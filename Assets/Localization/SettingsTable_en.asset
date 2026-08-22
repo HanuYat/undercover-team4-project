@@ -66,6 +66,50 @@ MonoBehaviour:
     m_Localized: Motion Vignette
     m_Metadata:
       m_Items: []
+  - m_Id: 6994200000012
+    m_Localized: Window Mode
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000013
+    m_Localized: Resolution
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000014
+    m_Localized: V-Sync
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000015
+    m_Localized: Apply
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000016
+    m_Localized: Windowed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000017
+    m_Localized: Borderless Window
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000018
+    m_Localized: Fullscreen
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000019
+    m_Localized: 'Keep these display settings?'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000020
+    m_Localized: 'Reverting in {0}s'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000021
+    m_Localized: Keep
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000022
+    m_Localized: Revert
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

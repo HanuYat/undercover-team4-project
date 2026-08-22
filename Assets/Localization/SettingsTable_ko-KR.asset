@@ -66,6 +66,50 @@ MonoBehaviour:
     m_Localized: "\uC18D\uB3C4 \uBE44\uB124\uD2B8"
     m_Metadata:
       m_Items: []
+  - m_Id: 6994200000012
+    m_Localized: "\uCC3D \uBAA8\uB4DC"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000013
+    m_Localized: "\uD574\uC0C1\uB3C4"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000014
+    m_Localized: "\uC218\uC9C1\uB3D9\uAE30\uD654"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000015
+    m_Localized: "\uC801\uC6A9"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000016
+    m_Localized: "\uCC3D"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000017
+    m_Localized: "\uD14C\uB450\uB9AC \uC5C6\uB294 \uC804\uCCB4 \uCC3D"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000018
+    m_Localized: "\uC804\uCCB4\uD654\uBA74"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000019
+    m_Localized: "\uC774 \uD654\uBA74 \uC124\uC815\uC744 \uC720\uC9C0\uD560\uAE4C\uC694?"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000020
+    m_Localized: "{0}\uCD08 \uB4A4 \uC774\uC804 \uC124\uC815\uC73C\uB85C \uB3CC\uC544\uAC11\uB2C8\uB2E4"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000021
+    m_Localized: "\uC720\uC9C0"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000022
+    m_Localized: "\uB418\uB3CC\uB9AC\uAE30"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []
