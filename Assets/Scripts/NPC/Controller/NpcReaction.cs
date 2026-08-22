@@ -138,10 +138,16 @@ public class NpcReaction : NetworkBehaviour
     /// <summary>
     /// 무력화·제압에서 <b>풀려난 뒤 제 행동으로 돌아간다</b> — 보통은 도주, 질주하는 개체는 질주다. (#106)
     /// 공연음란범이 한 번 맞고 배회 시민이 되어 버리지 않게 하는 단일 복귀 지점이다.
+    ///
+    /// ⚠ <b>반출 목적지가 살아 있으면 질주로 가로채지 않는다</b> — 질주(Sprinting)는
+    /// <c>NpcController.HandleFsmStateChanged</c>의 ClearRelease 예외 목록에 없어 진입하는 순간
+    /// 청탁 인도 목적지가 지워진다. 쓰러뜨리기는 반출의 무산 수단이 아니다(무산은 밧줄·재수감·사망,
+    /// #548). 도주로 돌려보내면 예외 목록의 Run에 걸려 목적지가 살아남고, 깨어난 뒤 인도 지점으로
+    /// 되돌아가는 기존 경로를 그대로 탄다.
     /// </summary>
     public void ResumeReaction(Transform threat)
     {
-        if (IsSprinter)
+        if (IsSprinter && !m_owner.Custody.HasReleaseDestination)
             StartSprint();
         else
             StartFlee(threat);
