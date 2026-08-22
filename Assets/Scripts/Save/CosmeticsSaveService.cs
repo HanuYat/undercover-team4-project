@@ -7,6 +7,8 @@ using UnityEngine;
 
 /// <summary>
 /// 로봇 색을 계정에 저장한다 (#432 후속) — <b>정본은 Cloud Save, PlayerPrefs는 계정별 캐시</b>다.
+/// 계정 단위 설정(감도·볼륨 등)의 자리 갈아타기도 여기서 함께 일어난다 — 로그인·로그아웃 훅이
+/// 여기 하나뿐이고, 색 저장 예약을 막는 가드 안에서 불러야 안전하기 때문이다. (#796 후속)
 /// 캐시를 두는 이유는 로드가 비동기라서다: 없으면 켤 때마다 클라우드가 도착할 때까지 기본색이 보이고,
 /// 오프라인에서는 색이 아예 없다. 값 자체는 <see cref="GameSettings"/>가 들고 동기로 읽히므로
 /// 읽는 쪽(로비 명부·초상·PlayerCosmetics)은 이 클래스를 몰라도 된다.
@@ -39,7 +41,9 @@ public static class CosmeticsSaveService
         Hook();
 
         // ① 캐시 — 즉시. 클라우드 왕복 동안 기본색이 보이지 않게 한다.
-        Apply(() => GameSettings.UseColorAccount(App.Net.Auth.PlayerId));
+        // 색뿐 아니라 계정 단위 설정 전부가 이 자리에서 갈아탄다 (#796 후속) — Apply로 감싸는 이유는
+        // 그대로다: 방금 읽은 캐시를 되올리지 않게 저장 예약을 막는다.
+        Apply(() => GameSettings.UseAccount(App.Net.Auth.PlayerId));
 
         // ② 클라우드 — 있으면 이것이 정본이다.
         CosmeticsSaveData data = await ReadAsync();
@@ -66,8 +70,8 @@ public static class CosmeticsSaveService
         }
     }
 
-    /// <summary>계정이 바뀌면 캐시 기준을 되돌린다 — 다음 로그인이 자기 색을 다시 불러온다.</summary>
-    public static void OnSignedOut() => Apply(() => GameSettings.UseColorAccount(null));
+    /// <summary>계정이 바뀌면 캐시 기준을 되돌린다 — 다음 로그인이 자기 값을 다시 불러온다.</summary>
+    public static void OnSignedOut() => Apply(() => GameSettings.UseAccount(null));
 
     // 색이 바뀔 때마다 저장을 예약한다. 구독은 한 번만.
     private static void Hook()
