@@ -25,6 +25,9 @@ using UnityEngine;
 /// 1인칭·3인칭 애니메이션이 모두 같은 상수로 임팩트를 맞추므로, 세 곳(내 화면·남의 화면·데미지)이
 /// 한 순간에 일어난다.
 ///
+/// 지연 동안의 표적 이동은 보정하지 않는다 — 그래서 판정은 한 줄이 아니라
+/// <see cref="m_arcHalfAngle"/>만큼 벌린 부채꼴이다 (#779).
+///
 /// 홀드 채널링은 아니다 — 좌클릭을 떼도 이미 시작된 스윙은 그대로 들어간다(CancelUse 기본 구현 유지).
 /// 취소되는 경우는 스윙 도중 아이템이 손을 떠났을 때뿐이다.
 /// </summary>
@@ -40,6 +43,21 @@ public class Baton : ItemBase, IAimedWeapon
     [Tooltip("타격 판정 구체의 반경(m). 근접 조준을 관대하게 만드는 값 — 키울수록 빗맞아도 맞는다")]
     [SerializeField]
     private float m_hitRadius = 0.35f;
+
+    [Tooltip(
+        "스윙 호의 반각(도). 0이면 정면 한 줄 — 키우면 도주 대상 명중률과 크로스헤어가 켜지는 범위가 함께 넓어진다"
+    )]
+    [Range(0f, 60f)]
+    [SerializeField]
+    private float m_arcHalfAngle = 25f;
+
+    // 5줄이면 최대 사거리에서 줄 간격이 0.51m라 반경 0인 표적에도 틈이 없다
+    [Tooltip(
+        "호를 훑는 캐스트 수. 짝수를 넣으면 +1 해서 쓴다 — 가운데 한 줄이 비면 정지 대상이 빠진다"
+    )]
+    [Range(1, 11)]
+    [SerializeField]
+    private int m_arcSampleCount = 5;
 
     // 기본값 34는 구 E 제압 타격 1회와 같은 값 — MaxHp 100 기준 3대에 기절한다.
     // E 제압이 제거되면서(#438) 이 값이 NPC 체력을 깎는 유일한 플레이어 타격 수치가 됐다.
@@ -71,8 +89,9 @@ public class Baton : ItemBase, IAimedWeapon
     // 캐스트 결과 버퍼 — 서버 판정과 오너 크로스헤어(HasValidAimTarget)가 함께 쓰지만 공유해도 안전하다.
     // 둘 다 메인 스레드에서 동기적으로 돌고, 결과를 호출 안에서 즉시 꺼내 쓴 뒤 버퍼를 붙들지 않는다.
     // (호스트에서는 두 경로가 같은 프레임에 돌 수 있지만 겹쳐 실행되지는 않는다)
-    // 2m 반경 0.35m 구체가 훑는 범위에 16개를 넘는 콜라이더가 들어올 일은 없다(넘치면 초과분이 잘릴 뿐, 최근접은 대개 남는다).
-    private static readonly RaycastHit[] s_hitBuffer = new RaycastHit[16];
+    // 16칸은 모자랐다 (#779) — 래그돌 본까지 세면 플레이어 13 + NPC 12개고, 넘치면 정렬 없이 잘린다.
+    // 포화 경고는 못 넣는다 — 크로스헤어와 공유되는 순수 판정이라 매 프레임 찍힌다.
+    private static readonly RaycastHit[] s_hitBuffer = new RaycastHit[64];
 
     // 다음 타격이 가능해지는 시각. 판정자가 서버 하나뿐이라 동기화하지 않는다 (서버 전용 상태).
     // 아이템 인스턴스에 붙어 있으므로 버리고 다시 주워도 쿨다운이 따라간다.
@@ -209,8 +228,8 @@ public class Baton : ItemBase, IAimedWeapon
         // 조준을 소지자 로컬로 환산해 들고 간다 — 대기하는 0.3초 동안 플레이어가 걷거나 돌면
         // 월드 좌표로 굳혀 둔 조준선은 몸에서 떨어져 나가, 화면에서는 정면을 후려치는데 판정은
         // 0.3초 전 허공에서 나가는 일이 생긴다. 몸에 붙여 두면 스윙이 캐릭터를 따라간다
-        // (= 애니메이션이 보여주는 것과 같다). 방향도 몸 기준이라 스윙 도중 마우스로 다시
-        // 겨누는 것은 여전히 안 된다 — 휘두르기 시작하면 되돌릴 수 없다.
+        // (= 애니메이션이 보여주는 것과 같다). 이 기준은 PlayerLook이 마우스 yaw로 돌리는 그
+        // transform이라 스윙 도중에도 좌우로는 따라간다 — 굳는 것은 pitch뿐이다.
         Transform holderTransform = holder.transform;
         ServerResolveHitAtImpactAsync(
                 holderTransform.InverseTransformPoint(origin),
@@ -468,15 +487,13 @@ public class Baton : ItemBase, IAimedWeapon
     }
 
     /// <summary>
-    /// 조준 원점·방향으로 사거리(m_range)만큼 반경 m_hitRadius 구체를 날려 명중 결과를 분류한다.
-    /// 유효 대상은 NPC와 <b>동료</b> 둘이며(#461), 어느 쪽인지는 채워진 out 인자로 구분한다 —
-    /// 둘 다 <c>ValidTarget</c>이다(맞으면 데미지가 들어간다는 점이 같고, 크로스헤어도 같이 켜져야 한다).
-    /// 마스크 ~0 + 트리거 무시. 후보 중 하나를 고르는 기준은 <see cref="AimOcclusion"/>가 단독으로
-    /// 가지며, 그 기준이 벽 엄폐의 정의다 — 테이저·상호작용 가시선과 같은 규칙이다.
+    /// 부채꼴을 훑어 명중 결과를 분류한다 (#779). 각 줄은 <see cref="EvaluateSwingRay"/>가 따로
+    /// 판정하므로 <b>엄폐도 줄 단위</b>다 — 정면이 기둥에 막혀도 호가 닿는 대상은 맞는다.
     ///
-    /// SphereCast는 레이캐스트와 달리 <b>시작 지점에 이미 겹친 콜라이더를 distance 0으로 되돌려준다.</b>
-    /// 원점이 카메라(= 소지자 캡슐 안)라서 자기 몸이 항상 걸리므로, 소지자 계층은 걸러내고 최근접을 고른다.
-    /// 원점을 앞으로 밀어 피하는 방법도 있지만, 벽에 붙어 있을 때 시작점이 벽 너머로 넘어가 관통 타격이 된다.
+    /// 줄을 고르는 규칙은 둘이다 — <b>유효타가 있으면 그 줄이 이기고, 없으면 조준축에 가장 가까운 줄이
+    /// 남는다.</b> 가운데부터 좌우로 번져 나가며 훑으므로 후자는 순회 순서가 곧 우선순위다.
+    /// 거리로 고르지 않는 이유: NPC와 동료가 둘 다 유효타라(#461) 거리로 갈리면, 정면의 NPC를
+    /// 조준했는데 옆에 붙어 선 동료가 더 가깝다는 이유로 타격을 가로챈다.
     ///
     /// <b>부수효과 없는 순수 판정으로 유지할 것.</b> 서버 타격 판정(<see cref="ServerResolveHitAtImpactAsync"/>)과
     /// 오너 크로스헤어(<see cref="HasValidAimTarget"/>) 둘이 공유한다 — 후자는 매 프레임 도는 로컬
@@ -484,6 +501,90 @@ public class Baton : ItemBase, IAimedWeapon
     /// 둘이 같은 함수를 보는 것이 "크로스헤어는 켜졌는데 안 맞음"을 막는 장치이므로 분기시키지 말 것.
     /// </summary>
     private SwingResult EvaluateSwing(
+        Vector3 origin,
+        Vector3 direction,
+        Transform holderRoot,
+        out NpcController target,
+        out PlayerHealth playerTarget,
+        out BombDevice bombTarget,
+        out RaycastHit hit
+    )
+    {
+        target = null;
+        playerTarget = null;
+        bombTarget = null;
+        hit = default;
+
+        // 반각이 0이면 줄을 늘려도 같은 캐스트가 반복될 뿐이다. 그 외에는 홀수로 올린다 —
+        // 가운데 한 줄이 비면 정지 대상이 빠진다.
+        int samples = m_arcHalfAngle <= 0f ? 1 : Mathf.Max(1, m_arcSampleCount);
+        if (samples % 2 == 0)
+        {
+            samples++;
+        }
+
+        // 소지자 up을 축으로 돌린다 — 지금은 루트가 기울지 않아 월드 up과 같지만, 몸 기준이 이 판정의
+        // 의미(스윙이 캐릭터를 따라간다)에 맞다.
+        Vector3 axis = holderRoot != null ? holderRoot.up : Vector3.up;
+        Vector3 forward = direction.normalized;
+        int half = samples / 2;
+
+        SwingResult best = SwingResult.NoHit;
+
+        for (int i = 0; i < samples; i++)
+        {
+            // 가운데(0) → 좌 → 우 → 더 좌 → 더 우 순서로 번져 나간다
+            int step = (i + 1) / 2;
+            float angle = half == 0 ? 0f : m_arcHalfAngle * step / half * (i % 2 == 0 ? 1f : -1f);
+
+            SwingResult result = EvaluateSwingRay(
+                origin,
+                Quaternion.AngleAxis(angle, axis) * forward,
+                holderRoot,
+                out NpcController rayTarget,
+                out PlayerHealth rayPlayerTarget,
+                out BombDevice rayBombTarget,
+                out RaycastHit rayHit
+            );
+
+            // 허공은 알려줄 것이 없다. 그 외에는 유효타만 앞의 결과를 밀어낼 수 있다 —
+            // 밀어내지 못하면 먼저 온(= 조준축에 더 가까운) 줄이 그대로 남는다.
+            if (
+                result == SwingResult.NoHit
+                || (result != SwingResult.ValidTarget && best != SwingResult.NoHit)
+            )
+            {
+                continue;
+            }
+
+            best = result;
+            target = rayTarget;
+            playerTarget = rayPlayerTarget;
+            bombTarget = rayBombTarget;
+            hit = rayHit;
+
+            if (best == SwingResult.ValidTarget)
+            {
+                break; // 가운데부터 훑었으니 더 잘 조준된 유효타는 남아 있지 않다
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// 호를 이루는 <b>한 줄</b>의 판정 — 원점에서 그 방향으로 사거리(m_range)만큼 반경 m_hitRadius
+    /// 구체를 날려 결과를 분류한다. 유효 대상은 NPC와 <b>동료</b> 둘이며(#461), 어느 쪽인지는 채워진
+    /// out 인자로 구분한다 — 둘 다 <c>ValidTarget</c>이다(맞으면 데미지가 들어간다는 점이 같고,
+    /// 크로스헤어도 같이 켜져야 한다).
+    /// 마스크 ~0 + 트리거 무시. 후보 중 하나를 고르는 기준은 <see cref="AimOcclusion"/>가 단독으로
+    /// 가지며, 그 기준이 벽 엄폐의 정의다 — 테이저·상호작용 가시선과 같은 규칙이다.
+    ///
+    /// SphereCast는 레이캐스트와 달리 <b>시작 지점에 이미 겹친 콜라이더를 distance 0으로 되돌려준다.</b>
+    /// 원점이 카메라(= 소지자 캡슐 안)라서 자기 몸이 항상 걸리므로, 소지자 계층은 걸러내고 최근접을 고른다.
+    /// 원점을 앞으로 밀어 피하는 방법도 있지만, 벽에 붙어 있을 때 시작점이 벽 너머로 넘어가 관통 타격이 된다.
+    /// </summary>
+    private SwingResult EvaluateSwingRay(
         Vector3 origin,
         Vector3 direction,
         Transform holderRoot,

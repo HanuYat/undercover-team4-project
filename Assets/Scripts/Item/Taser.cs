@@ -57,7 +57,8 @@ public class Taser : ItemBase, IAimedWeapon
 
     // 조준 히트 버퍼 — 크로스헤어(HasValidAimTarget)가 매 프레임 도는 경로라
     // RaycastAll(호출마다 배열 할당) 대신 NonAlloc + 고정 버퍼를 쓴다. (Baton.s_hitBuffer와 동일 관례)
-    private static readonly RaycastHit[] s_aimBuffer = new RaycastHit[16];
+    // 16칸은 래그돌 본까지 세면 군중 안에서 넘친다 (#779)
+    private static readonly RaycastHit[] s_aimBuffer = new RaycastHit[64];
 
     // ---- ItemBase ----
 
