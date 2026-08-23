@@ -102,6 +102,41 @@ public class RopeDragLoad : NetworkBehaviour
                 horizontalVelocity -= outward * away;
         }
 
+        // 운반하는 동료도 같은 목줄 규칙을 쓴다 — 둘 이상이 함께 끌 때만(#546 다인 확장). 반경 계산은
+        // 위와 같은 식이되 끊김 거리가 다르다(PlayerCarrier.BreakDistance, NPC보다 짧다).
+        horizontalVelocity = ConstrainByCarriedBody(horizontalVelocity);
+
+        return horizontalVelocity;
+    }
+
+    // 위 NPC 순회와 같은 수식을 운반 중인 동료 한 건에 적용한다 — 갈라 둔 이유는 PlayerCarrier가
+    // PlayerEscorter.ServerTethered 같은 목록이 아니라 단일 대상 + 인원 수만 가져서다.
+    //
+    // ⚠ 대상은 <b>CarriedBody</b>로 얻는다 — CarriedTarget은 서버 전용이라 이 메서드가 도는 원격
+    // 클라 오너에서 항상 null이고, 그러면 목줄이 <b>호스트에서만</b> 걸린다(NPC 쪽이 안 겪은 이유는
+    // GetTetheredNpc이 처음부터 전 피어 접근자라서다). 클라가 줄을 무한정 늘이던 원인이 이것이다.
+    private Vector3 ConstrainByCarriedBody(Vector3 horizontalVelocity)
+    {
+        PlayerCarrier carrier = Escorter.CarriedPlayer;
+        PlayerCarrier body = carrier != null ? carrier.CarriedBody : null;
+        if (body == null || body.CarrierCount < 2)
+            return horizontalVelocity; // 혼자 끌 때는 목줄을 걸지 않는다 — 위 NPC 쪽과 같은 이유
+
+        Vector3 toBody = body.transform.position - transform.position;
+        toBody.y = 0f;
+        float distance = toBody.magnitude;
+        if (distance < 0.001f)
+            return horizontalVelocity;
+
+        float radius = carrier.BreakDistance / body.CarrierCount;
+        if (distance < radius)
+            return horizontalVelocity; // 아직 늘어져 있다
+
+        Vector3 outward = -toBody / distance;
+        float away = Vector3.Dot(horizontalVelocity, outward);
+        if (away > 0f)
+            horizontalVelocity -= outward * away;
+
         return horizontalVelocity;
     }
 
@@ -140,13 +175,14 @@ public class RopeDragLoad : NetworkBehaviour
             weightSum += npc.Rope.DragWeight / Mathf.Max(1, npc.Rope.DraggerCount);
         }
 
-        // 운반하는 동료도 같은 밧줄이 끄는 짐이다 (#546, GDD 7-5). 나누지 않는 이유는 나눌 참가자가
-        // 없어서다 — 운반은 한 대상에 한 명뿐이라 위의 다인 완화식이 성립하지 않는다.
+        // 운반하는 동료도 같은 밧줄이 끄는 짐이다 (#546, GDD 7-5). 이제는 NPC와 같은 다인 완화식이
+        // 성립한다 — 동료 몸도 여럿이 덧걸 수 있게 열려서다(합류, #390/#398과 같은 규칙).
         //
         // ⚠ 끌려가는 동료에게 딸린 NPC는 세지 않는다 — 셀 것이 없다. 무력화 진입이 그 사람의 끌기를
         // 이미 놓게 하므로(PlayerIncapacitation.SetCause → ReleaseAllDrags, #559) 딸려오지 않는다.
-        if (Escorter.IsCarryingPlayer)
-            weightSum += m_carriedPlayerWeight;
+        PlayerCarrier carriedBody = Escorter.CarriedPlayer?.CarriedTarget;
+        if (carriedBody != null)
+            weightSum += m_carriedPlayerWeight / Mathf.Max(1, carriedBody.CarrierCount);
 
         SetDragSpeedFactor(
             Mathf.Clamp(1f - m_dragSlowPerWeight * weightSum, m_minDragSpeedFactor, 1f)

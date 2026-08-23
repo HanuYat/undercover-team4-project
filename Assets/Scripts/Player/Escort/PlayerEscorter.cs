@@ -82,15 +82,19 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
     // 쓰는 것과 그만큼 무거워지는 것은 같은 사실의 양면이라, 두 곳이 각자 조회하면 갈라질 수 있다.
     private PlayerCarrier m_carrier;
 
-    internal bool IsCarryingPlayer
+    /// <summary>이 플레이어의 운반 허브 — <see cref="RopeDragLoad"/>가 무게·목줄 계산에 빌려 읽는다.
+    /// 상태 소유는 여전히 <see cref="PlayerCarrier"/>다(이 클래스는 조회 경로만 겸한다).</summary>
+    internal PlayerCarrier CarriedPlayer
     {
         get
         {
             if (m_carrier == null)
                 m_carrier = GetComponent<PlayerCarrier>();
-            return m_carrier != null && m_carrier.IsCarrying;
+            return m_carrier;
         }
     }
+
+    internal bool IsCarryingPlayer => CarriedPlayer != null && CarriedPlayer.IsCarrying;
 
     /// <summary>동시에 묶을 수 있는 상한 — 로드아웃이 없으면(테스트 구성) 무제한.</summary>
     internal int RopeCapacity => Loadout != null ? Loadout.RopeCount : int.MaxValue;
@@ -187,7 +191,23 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
     /// <see cref="ReleaseDrag"/>가 관절 밧줄까지 풀어 준다(<c>NpcRopeDrag.StopRopeDrag</c>) — 시체는
     /// 에이전트도 되살아나지 않으므로, 남는 것은 그 자리에 누운 몸뿐이다.
     /// </summary>
-    public static void ReleaseAllTethersOnCorpse(NpcController npc)
+    public static void ReleaseAllTethersOnCorpse(NpcController npc) =>
+        ReleaseTethersOnCorpseExcept(npc, null);
+
+    /// <summary>
+    /// 시체에 걸린 밧줄 중 <paramref name="keeper"/>의 것만 남기고 <b>나머지를 전부 끊는다</b>.
+    /// <paramref name="keeper"/>가 null이면 전부 끊는다(= <see cref="ReleaseAllTethersOnCorpse"/>).
+    /// 서버(또는 오프라인) 전용. (#757)
+    ///
+    /// 감옥 문으로 시체를 데리고 나가는 경로가 쓴다 — 나가는 사람의 줄만 남기고 <b>감옥에 남은 참가자의
+    /// 줄은 끊는다</b>. 안 끊으면 줄이 벽을 뚫고 셀까지 이어진 채로 남는데, 줄다리기 중에는
+    /// <see cref="TickTetherCleanup"/>의 거리 끊김이 목줄 예외(<see cref="IsLeashedTo"/>)에 걸려
+    /// <b>영영 자기 치유가 안 된다.</b>
+    ///
+    /// ⚠ <b>두 줄을 항상 같이 부른다.</b> <see cref="ReleaseDrag"/>는 <b>끌기</b>만 멈추고 줄은 남기며,
+    /// 끌고 있지 않으면(E로 놓아둔 줄) 아예 조기 반환한다 — 실제로 끊는 것은 <see cref="RemoveTether"/>다.
+    /// </summary>
+    public static void ReleaseTethersOnCorpseExcept(NpcController npc, PlayerEscorter keeper)
     {
         if (npc == null)
             return;
@@ -196,8 +216,16 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
 
         for (int i = 0; i < holders.Count; i++)
         {
-            holders[i].ReleaseDrag(npc);
-            holders[i].RemoveTether(npc); // 밧줄 칸을 돌려준다 — 안 빼면 매 프레임 정리가 돌 때까지 물린다
+            PlayerEscorter holder = holders[i];
+            if (holder == keeper)
+                continue;
+
+            holder.ReleaseDrag(npc);
+            holder.RemoveTether(npc); // 밧줄 칸을 돌려준다 — 안 빼면 매 프레임 정리가 돌 때까지 물린다
+
+            // 남긴 사람이 있다는 것은 이 줄이 남의 사정으로 끊겼다는 뜻이다 — 왜 사라졌는지 알려야 한다.
+            if (keeper != null)
+                holder.NotifyOwner($"밧줄 끊김 — 다른 참가자가 감옥 밖으로 데리고 나갔다: {npc.name}");
         }
     }
 

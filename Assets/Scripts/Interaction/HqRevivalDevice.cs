@@ -119,8 +119,10 @@ public class HqRevivalDevice : NetworkBehaviour, ICarriedBodyReceiver
             > m_placeRange * m_placeRange)
             return false;
 
-        // 끌기를 먼저 끊고 나서 옮긴다 — 순서를 뒤집으면 추종이 살아 있어 몸이 자리에서 다시 끌려 나온다
-        carrier.ServerDrop("부활 장치에 안치");
+        // 끌기를 먼저 끊고 나서 옮긴다 — 순서를 뒤집으면 추종이 살아 있어 몸이 자리에서 다시 끌려 나온다.
+        // 전원을 끊는다(합류 중이었으면 안치를 청한 사람 말고도 남을 수 있다) — 한 명만 끊으면 남은
+        // 참가자의 추종이 몸을 안치 자리에서 다시 끌어낸다.
+        body.ServerDropAllCarriers("부활 장치에 안치");
 
         // 몸 위치는 오너 권한이라 서버가 직접 못 옮긴다 — 오너에게 넘기는 텔레포트 경로를 쓴다 (#101/#214)
         PlayerMovement movement = body.GetComponent<PlayerMovement>();

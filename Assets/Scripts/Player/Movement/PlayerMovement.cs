@@ -463,8 +463,21 @@ public class PlayerMovement : NetworkBehaviour
     // CharacterController가 켜진 상태에서 transform을 직접 옮기면 내부 캐시가 위치를 되돌릴 수 있어 잠시 끄고 옮긴다.
     private void SetPose(Vector3 pos, Quaternion rot)
     {
+        // 뼈에 실어 줄 델타는 <b>루트를 옮기기 전에</b> 재야 한다 (#614 — 아래 PlaceBodyBy).
+        Vector3 bodyDelta = pos - transform.position;
+
         SetCapsuleEnabled(false);
         transform.SetPositionAndRotation(pos, rot);
+
+        // ⚠ <b>캡슐을 되켜기 전에 뼈를 옮긴다.</b> 죽은 몸은 위 루트 대입만으로는 안 따라온다 — 뼈가
+        // 동적 리지드바디라 계층을 따르지 않고, 그대로 두면 TickCapsuleFollow가 다음 물리 스텝에
+        // 루트를 도로 시체 자리로 끌어간다. 살아 있으면 무동작이다.
+        //
+        // 순서가 사양이다: CharacterController를 켜는 것은 트랜스폼 동기화를 부를 수 있고, 그러면
+        // 위 루트 대입이 물리 포즈로 flush돼 뼈 델타가 <b>두 번</b> 실린다(NPC 쪽이
+        // Physics.autoSyncTransforms = 0에 기대는 것과 같은 사정 — NpcRagdoll.ServerPlaceCorpse).
+        m_ragdoll?.PlaceBodyBy(bodyDelta);
+
         SetCapsuleEnabled(true);
 
         // 원격에 "이건 순간이동이다"를 알린다 — 안 보내면 각 피어가 이 거리를 보간해 걸어·달려온다

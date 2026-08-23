@@ -412,6 +412,38 @@ public class NpcRopeDrag : NetworkBehaviour
         DetachAllCorpseRopesRpc();
     }
 
+    /// <summary>
+    /// 끊긴 관절 밧줄을 <b>지금 잡고 있는 사람들에게 다시 건다</b> — 시체 순간이동의 짝. <b>멱등</b>.
+    /// 서버(또는 오프라인) 전용. 부르는 곳은 <see cref="NpcCustody.ServerMoveCorpse"/> 하나다.
+    ///
+    /// <b>이것이 없으면 원장과 관절이 어긋난다.</b> 배치는 옮기기 전에 줄을 전부 끊는데
+    /// (<c>NpcRagdoll.ServerPlaceCorpse</c> — 묶인 채 먼 거리를 옮기면 관절 위반이 시체를 발사한다),
+    /// 밧줄 원장(<see cref="m_dragAnchors"/>·묶임 수·<c>PlayerEscorter</c>의 목록)은 그대로 남는다.
+    /// 원장을 읽는 쪽(줄 표시·무게 페널티·목줄)은 전부 "묶여 있다"로 계속 도는데 <b>몸을 실제로 끄는
+    /// 관절만 없어</b>, 반출한 시체가 줄에 묶인 채로 따라오지 않는다 — 놓았다 다시 묶어야 끌렸다.
+    ///
+    /// 복원 기준을 원장으로 잡는 이유: 가닥마다 쥔 사람이 다르므로(#638) "누가 쥐고 있었나"를 관절 쪽에
+    /// 물으면 하나로 답할 수 없다. 원장이 그 답을 이미 들고 있고, 거기서 되걸면 둘의 정합이 보장된다.
+    /// </summary>
+    internal void ServerReattachCorpseRopes()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        // 끌리는 중이 아니거나 관절로 끄는 대상이 아니면 되걸 것이 없다 — 수감 경로가 여기로 온다
+        // (<c>JailIntake.ServerAdmitCorpse</c>가 배치 <b>앞</b>에서 줄을 전부 걷으므로 목록이 비어 있다).
+        // ⚠ 그 순서가 곧 안전장치다: 되걸면 감옥에 눕힌 시체를 관절이 문 밖으로 도로 끌어낸다.
+        if (!m_roped || !UsesRagdollRope)
+            return;
+
+        PruneDeadAnchors();
+
+        // 최초 부착과 <b>같은 함수</b>를 지난다 — 손 앵커 해석·RPC 팬아웃이 같아야 나중에
+        // <see cref="StopRopeDrag"/>가 Transform을 키로 자기 가닥을 찾을 수 있다 (#638).
+        for (int i = 0; i < m_dragAnchors.Count; i++)
+            ServerAttachCorpseRope(m_dragAnchors[i]);
+    }
+
     [Rpc(SendTo.Everyone)]
     private void AttachCorpseRopeRpc(NetworkObjectReference carrierRef)
     {
