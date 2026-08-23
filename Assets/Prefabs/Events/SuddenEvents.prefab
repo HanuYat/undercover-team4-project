@@ -26,6 +26,8 @@ GameObject:
   - component: {fileID: 1732464363476530770}
   - component: {fileID: 2421280246905754952}
   - component: {fileID: 5950034930960708939}
+  - component: {fileID: 7089378905737564626}
+  - component: {fileID: 3759178450178188696}
   m_Layer: 0
   m_Name: SuddenEvents
   m_TagString: Untagged
@@ -212,6 +214,7 @@ MonoBehaviour:
   m_manholeOpenSeconds: 3
   m_descendDepth: 3
   m_descendSpeed: 2
+  m_descendViewLeadSeconds: 0.6
   m_maxChaseSeconds: 120
 --- !u!114 &4391990372060924147
 MonoBehaviour:
@@ -335,29 +338,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 67e10fbd940401e43afcd0712a02fb32, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SnowView
-  m_snowParticlePrefab: {fileID: 2817993819076210315, guid: 6301baffa72b44d98036ef53bb31ef6a, type: 3}
-  m_cloudPrefab: {fileID: 1023308068024276, guid: d368169865e447d4eb38c5700ff9856e, type: 3}
-  m_cloudHeight: 80
-  m_precipitationHeight: 6
-  m_snowFollowsView: 1
-  m_snowForwardOffset: 3
-  m_snowScale: 1
-  m_cloudScale: 25
-  m_useCloudFx: 0
   m_overcastIntensityScale: 0.6
   m_overcastFadeSeconds: 3
-  m_cloudTiles: 9
-  m_cloudSpacing: 70
-  m_snowSizeBoost: 3.5
-  m_snowRateBoost: 10
-  m_snowFallSpeedBoost: 4
-  m_snowVolumeBoost: 2.5
-  m_shelterProbeHeight: 25
-  m_shelterMask:
-    serializedVersion: 2
-    m_Bits: 1
-  m_shelterFadeSeconds: 0.35
-  m_stopFadeSeconds: 6
 --- !u!114 &7324548653836035078
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -372,31 +354,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LightningView
   m_strikeParticlePrefab: {fileID: 1251993928265596, guid: c445b201205907b4f90b242a07f4dbc9, type: 3}
   m_warningPrefab: {fileID: 0}
-  m_rainParticlePrefab: {fileID: 1988216202477046, guid: b99f1f7e52de4c7ba8366ddd75d22d85, type: 3}
-  m_cloudPrefab: {fileID: 1023308068024276, guid: d368169865e447d4eb38c5700ff9856e, type: 3}
-  m_cloudHeight: 80
-  m_precipitationHeight: 10
-  m_rainFollowsView: 1
-  m_rainForwardOffset: 6
-  m_rainScale: 2
-  m_cloudScale: 25
-  m_useCloudFx: 0
-  m_cloudTiles: 9
-  m_cloudSpacing: 70
-  m_rainSizeBoost: 1.2
-  m_rainRateBoost: 2
   m_globalLight: {fileID: 0}
   m_overcastIntensityScale: 0.5
   m_overcastFadeSeconds: 2.5
   m_maxFlashIntensity: 5
   m_flashDuration: 0.45
   m_strikeFxSeconds: 3
-  m_shelterProbeHeight: 25
-  m_shelterMask:
-    serializedVersion: 2
-    m_Bits: 1
-  m_shelterFadeSeconds: 0.35
-  m_stopFadeSeconds: 4
 --- !u!114 &1732464363476530770
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -440,3 +403,68 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SuddenEventDevHotkeys
   m_enabled: 1
   m_logMappingOnStart: 1
+--- !u!114 &7089378905737564626
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498939978214492355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 78e6a22368f7c1d4e925c5a73764259f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PrecipitationMask
+  m_grid: 15
+  m_probeHeight: 25
+  m_blockMask:
+    serializedVersion: 2
+    m_Bits: 129
+  m_viewProbeDistance: 60
+  m_surfaceBackoff: 0.5
+  m_settleSpeed: 6
+  m_logMask: 0
+  m_logInterval: 1
+--- !u!114 &3759178450178188696
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498939978214492355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c484fff98f6557e42af5461a36e0736b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PrecipitationScreen
+  m_shader: {fileID: 4800000, guid: 26c488d5cafd26c49a45d246e6ea2931, type: 3}
+  m_snow:
+    Tint: {r: 0.96, g: 0.98, b: 1, a: 1}
+    Cells: 26
+    Fall: 0.55
+    Streak: 1.35
+    Thickness: 6
+    Occupancy: 0.14
+    Tilt: 0.12
+    Drift: 0.18
+    Layers: 3
+    Opacity: 0.42
+    CenterClear: 0.6
+    MaskCut: 0.6
+    MaskSoft: 0.06
+  m_rain:
+    Tint: {r: 0.72, g: 0.8, b: 0.94, a: 1}
+    Cells: 18
+    Fall: 3
+    Streak: 14
+    Thickness: 7
+    Occupancy: 0.22
+    Tilt: 0.2
+    Drift: 0
+    Layers: 3
+    Opacity: 0.38
+    CenterClear: 0.55
+    MaskCut: 0.6
+    MaskSoft: 0.06
+  m_fadeSeconds: 2
+  m_distance: 0.5
