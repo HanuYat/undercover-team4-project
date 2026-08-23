@@ -364,16 +364,16 @@ public class PlayerCarrier : NetworkBehaviour
         m_carriedBy.Remove(carrier);
         SyncCarrierCount();
 
-        if (!IsSpawned)
-        {
-            m_towed?.EndDraggedFollow(carrier.transform); // 오프라인 폴백
-            return;
-        }
-
-        if (carrier.NetworkObject != null && carrier.NetworkObject.IsSpawned)
+        // 참조를 보낼 수 있을 때만 전 피어에 알린다. 못 보내면(디스폰 중·오프라인) 서버가 자기
+        // 로컬 가닥만 끊는다 — 사망 중 시체의 오너는 서버로 넘어가므로(#763 1단계,
+        // PlayerIncapacitation.ApplyDeathOwnership) 진짜 관절은 여기 있고, 원격은 재부착 목록만
+        // 들어 잃을 것이 없다.
+        // ⚠ 무인자 EndDraggedFollow()를 부르면 안 된다 — 그건 전 가닥을 끊어, 합류(#638) 중이던
+        // 다른 참가자의 견인까지 함께 끊는다(리뷰 코멘트 확인).
+        if (IsSpawned && carrier.NetworkObject != null && carrier.NetworkObject.IsSpawned)
             EndDraggedRpc(new NetworkObjectReference(carrier.NetworkObject));
         else
-            m_towed?.EndDraggedFollow(); // 참조를 못 보낼 만큼 이미 사라졌다 — 안전하게 전부 정리
+            m_towed?.EndDraggedFollow(carrier.transform);
     }
 
     // 매 프레임 불려도 대역폭을 안 먹는다 — NetworkVariable 세터가 같은 값이면 스스로 조기 반환한다.
