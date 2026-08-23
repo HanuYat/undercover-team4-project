@@ -63,6 +63,74 @@ MonoBehaviour:
     m_Key: Settings.Label.SpeedVignette
     m_Metadata:
       m_Items: []
+  - m_Id: 6994200000012
+    m_Key: Settings.Label.WindowMode
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000013
+    m_Key: Settings.Label.Resolution
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000014
+    m_Key: Settings.Label.VSync
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000016
+    m_Key: Settings.WindowMode.Windowed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000017
+    m_Key: Settings.WindowMode.Borderless
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000018
+    m_Key: Settings.WindowMode.Fullscreen
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000019
+    m_Key: Settings.DisplayConfirm.Title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000020
+    m_Key: Settings.DisplayConfirm.Countdown
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000021
+    m_Key: Settings.Button.Keep
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000022
+    m_Key: Settings.Button.Revert
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000023
+    m_Key: Settings.Tab.Look
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000024
+    m_Key: Settings.Tab.Audio
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000025
+    m_Key: Settings.Tab.Video
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000026
+    m_Key: Settings.Tab.General
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000027
+    m_Key: Settings.Credits.Open
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000028
+    m_Key: Settings.Credits.Title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000029
+    m_Key: Settings.Credits.Roster
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

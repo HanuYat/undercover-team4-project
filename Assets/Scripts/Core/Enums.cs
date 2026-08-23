@@ -192,3 +192,14 @@ public enum EBodyPart
     Torso, // 상체 — Spine·어깨·팔·손
     Legs, // 하체 — Hips·다리·발
 }
+
+/// <summary>
+/// 창 모드 (#796). Unity의 <c>FullScreenMode</c> 중 PC에서 쓰는 셋만 골라 둔 것 —
+/// 값은 PlayerPrefs에 저장되므로 순서를 바꾸지 말 것. 변환은 GameSettings가 한다.
+/// </summary>
+public enum EWindowMode
+{
+    Windowed, // 창
+    Borderless, // 테두리 없는 전체 창
+    Fullscreen, // 전체화면(전용)
+}

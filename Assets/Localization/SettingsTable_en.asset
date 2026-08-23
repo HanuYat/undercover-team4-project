@@ -66,6 +66,74 @@ MonoBehaviour:
     m_Localized: Motion Vignette
     m_Metadata:
       m_Items: []
+  - m_Id: 6994200000012
+    m_Localized: Window Mode
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000013
+    m_Localized: Resolution
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000014
+    m_Localized: V-Sync
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000016
+    m_Localized: Windowed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000017
+    m_Localized: Borderless Window
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000018
+    m_Localized: Fullscreen
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000019
+    m_Localized: 'Keep these display settings?'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000020
+    m_Localized: 'Reverting in {0}s'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000021
+    m_Localized: Keep
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000022
+    m_Localized: Revert
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000023
+    m_Localized: View
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000024
+    m_Localized: Audio
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000025
+    m_Localized: Video
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000026
+    m_Localized: General
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000027
+    m_Localized: "Credits"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000028
+    m_Localized: "Credits"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6994200000029
+    m_Localized: "Team Lead : \uC774\uD604\uC9C4\nMember : \uC774\uD604\uC11D\nMember : \uAE40\uC9C4\uC544\nMember : \uAE40\uC900\uC601"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

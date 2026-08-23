@@ -239,6 +239,7 @@ public class AuthBootstrap : CommonManagerBase
                 await RestoreCachedNicknameAsync();
                 // 계정 색 복원 (#432 후속) — 캐시 적용은 첫 await 앞이라 동기로 끝나고,
                 // 클라우드 왕복만 뒤로 흐른다. await하면 로그인 진행 표시가 그만큼 늘어진다.
+                // 계정 단위 설정(감도·볼륨 등)이 이 계정 자리로 갈아타는 것도 여기서다 (#796 후속).
                 CosmeticsSaveService.RestoreAsync().Forget();
             }
         }
@@ -577,7 +578,8 @@ public class AuthBootstrap : CommonManagerBase
         HasPassedAuthGate = false;
         ForgetAuthGate();
 
-        CosmeticsSaveService.OnSignedOut(); // 색 캐시를 로그인 전 자리로 (#432 후속)
+        // 색 캐시와 계정 단위 설정을 로그인 전 자리로 (#432 후속 · #796 후속)
+        CosmeticsSaveService.OnSignedOut();
         OnSignedOut?.Invoke();
         Debug.Log("[AuthBootstrap] SignOut 완료");
     }

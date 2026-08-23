@@ -15,18 +15,29 @@ public static class GameSettings
     // 값은 저장소에 남는 식별자라 배포 후 변경 금지 — 바꾸면 기존 저장값을 못 읽는다.
     // ⚠ 뒤에 v2가 붙은 이유 — 감도 밑값이 바뀌어(1 → 0.08) 예전에 저장된 배율이 그대로 살면
     // 전혀 다른 속도가 된다. 키를 갈아 옛 값을 버리고 기본값에서 다시 시작하게 한다. (#665)
-    private const string k_mouseSensitivityKey = "settings.mouseSensitivity.v2";
-    private const string k_lookSmoothingKey = "settings.lookSmoothing";
-    private const string k_fovKey = "settings.fov";
-    private const string k_screenShakeKey = "settings.screenShake";
-    private const string k_speedVignetteKey = "settings.speedVignette";
-    private const string k_masterVolumeKey = "settings.masterVolume";
-    private const string k_voiceVolumeKey = "settings.voiceVolume";
-    private const string k_micMutedKey = "settings.micMuted";
+    //
+    // 아래는 키가 아니라 <b>이름</b>이다 — 실제 키는 Key()가 계정 자리를 끼워 만든다. (#796 후속)
+    private const string k_mouseSensitivityName = "mouseSensitivity.v2";
+    private const string k_lookSmoothingName = "lookSmoothing";
+    private const string k_fovName = "fov";
+    private const string k_screenShakeName = "screenShake";
+    private const string k_speedVignetteName = "speedVignette";
+    private const string k_masterVolumeName = "masterVolume";
+    private const string k_voiceVolumeName = "voiceVolume";
+    private const string k_micMutedName = "micMuted";
+    private const string k_vSyncName = "vSync";
+    // 창모드·해상도 (#796) — 확인창에서 [유지]를 눌러야 여기 남는다 (KeepDisplay).
+    // <b>계정으로 가르지 않는 유일한 항목</b>이다 — 모니터가 다른 PC에 같은 계정으로 로그인하면
+    // 그 PC에 없는 해상도가 걸리고, 로그인 순간 확인창 없이 화면이 갈아치워진다. 기기의 성질이다.
+    private const string k_windowModeKey = "settings.windowMode";
+    private const string k_resolutionWidthKey = "settings.resolutionWidth";
+    private const string k_resolutionHeightKey = "settings.resolutionHeight";
     // settings.playerColor.<계정>.<부위> — 색은 기기 설정이 아니라 그 사람의 것이라 계정으로 가른다.
     // 정본은 Cloud Save(CosmeticsSaveService)이고 여기 값은 캐시다. (#432 후속)
     private const string k_playerColorKeyPrefix = "settings.playerColor.";
-    private const string k_localColorAccount = "local"; // 로그인 전에 고른 색이 갈 자리
+
+    private const string k_settingPrefix = "settings.";
+    private const string k_localAccount = "local"; // 로그인 전에 고른 값이 갈 자리
 
     // 감도는 '배율'이다 — 프리팹의 기준 감도에 곱한다 (PlayerLook.HandleLook).
     // 슬라이더 min/max도 이 상수로 맞춰 인스펙터 값과 어긋나지 않게 한다.
@@ -64,13 +75,21 @@ public static class GameSettings
     private const float k_defaultVoiceVolume = 1f;
     private const bool k_defaultMicMuted = false;
 
+    // 수직동기화는 켜고 시작한다 — 끄면 프레임 상한이 사라져 매 프레임 비용이 그만큼 더 돈다 (#796).
+    private const bool k_defaultVSync = true;
+
+    // 이보다 세로가 작은 해상도는 목록에 내지 않는다 (#796). 캔버스가 기준 1920x1080에
+    // match=height라 배율이 곧 세로 비율이다 — 480이면 0.44배가 되어 본문 26pt가 11.6px,
+    // 자동 축소가 걸린 라벨은 그보다 더 작아져 읽을 수 없다. 720이면 17.3px로 읽힌다.
+    private const int k_minResolutionHeight = 720;
+
     // 팔레트 첫 색 — 여기서는 목록 길이를 모른다. 범위 밖 값은 읽는 쪽(PlayerColorPalette.Get)이 자른다. (#432)
     private const int k_defaultPlayerColor = 0;
 
     // 인덱스 = EBodyPart. 길이를 enum에서 얻는다 — 부위가 늘어도 여기서 터지지 않게
     private static readonly int[] s_playerColors = new int[Enum.GetValues(typeof(EBodyPart)).Length];
 
-    private static string s_colorAccount = k_localColorAccount;
+    private static string s_account = k_localAccount;
 
     private static float s_mouseSensitivity = k_defaultMouseSensitivity; // 백킹 필드
     private static float s_lookSmoothing = k_defaultLookSmoothing;
@@ -80,6 +99,12 @@ public static class GameSettings
     private static float s_masterVolume = k_defaultMasterVolume;
     private static float s_voiceVolume = k_defaultVoiceVolume;
     private static bool s_micMuted = k_defaultMicMuted;
+    private static bool s_vSync = k_defaultVSync;
+
+    // 창모드·해상도는 '지금 화면에 걸려 있는 것'이다 — 저장값과 다를 수 있다(적용 후 확인 전). (#796)
+    private static EWindowMode s_windowMode;
+    private static Vector2Int s_resolution;
+    private static Vector2Int[] s_resolutions; // 폭x높이로 묶은 해상도 목록 캐시
 
     /// <summary>마우스 감도 배율 (0.25~3.0, 기본 1.0). 프리팹 기준 감도에 곱해진다.</summary>
     public static float MouseSensitivity
@@ -88,7 +113,7 @@ public static class GameSettings
         set
         {
             s_mouseSensitivity = Mathf.Clamp(value, k_minMouseSensitivity, k_maxMouseSensitivity);
-            PlayerPrefs.SetFloat(k_mouseSensitivityKey, s_mouseSensitivity);
+            PlayerPrefs.SetFloat(Key(k_mouseSensitivityName), s_mouseSensitivity);
         }
     }
 
@@ -102,7 +127,7 @@ public static class GameSettings
         set
         {
             s_lookSmoothing = Mathf.Clamp(value, k_minLookSmoothing, k_maxLookSmoothing);
-            PlayerPrefs.SetFloat(k_lookSmoothingKey, s_lookSmoothing);
+            PlayerPrefs.SetFloat(Key(k_lookSmoothingName), s_lookSmoothing);
         }
     }
 
@@ -125,7 +150,7 @@ public static class GameSettings
         set
         {
             s_fov = Mathf.Clamp(value, k_minFov, k_maxFov);
-            PlayerPrefs.SetFloat(k_fovKey, s_fov);
+            PlayerPrefs.SetFloat(Key(k_fovName), s_fov);
         }
     }
 
@@ -139,7 +164,7 @@ public static class GameSettings
         set
         {
             s_screenShake = value;
-            PlayerPrefs.SetInt(k_screenShakeKey, s_screenShake ? 1 : 0);
+            PlayerPrefs.SetInt(Key(k_screenShakeName), s_screenShake ? 1 : 0);
         }
     }
 
@@ -153,7 +178,7 @@ public static class GameSettings
         set
         {
             s_speedVignette = value;
-            PlayerPrefs.SetInt(k_speedVignetteKey, s_speedVignette ? 1 : 0);
+            PlayerPrefs.SetInt(Key(k_speedVignetteName), s_speedVignette ? 1 : 0);
         }
     }
 
@@ -164,7 +189,7 @@ public static class GameSettings
         set
         {
             s_masterVolume = Mathf.Clamp01(value);
-            PlayerPrefs.SetFloat(k_masterVolumeKey, s_masterVolume);
+            PlayerPrefs.SetFloat(Key(k_masterVolumeName), s_masterVolume);
             AudioListener.volume = s_masterVolume;
         }
     }
@@ -180,7 +205,7 @@ public static class GameSettings
         set
         {
             s_voiceVolume = Mathf.Clamp01(value);
-            PlayerPrefs.SetFloat(k_voiceVolumeKey, s_voiceVolume);
+            PlayerPrefs.SetFloat(Key(k_voiceVolumeName), s_voiceVolume);
             App.Net.Vivox?.ApplyVoiceVolume();
         }
     }
@@ -202,11 +227,123 @@ public static class GameSettings
         set
         {
             s_micMuted = value;
-            PlayerPrefs.SetInt(k_micMutedKey, s_micMuted ? 1 : 0);
+            PlayerPrefs.SetInt(Key(k_micMutedName), s_micMuted ? 1 : 0);
             App.Net.Vivox?.ApplyMicMute();
             OnMicMutedChanged?.Invoke(s_micMuted);
         }
     }
+
+    /// <summary>
+    /// 수직동기화 (#796). 잘못 켜고 꺼도 화면이 깨지지 않으므로 창모드·해상도와 달리
+    /// 다른 토글처럼 즉시 적용한다.
+    /// </summary>
+    public static bool VSync
+    {
+        get => s_vSync;
+        set
+        {
+            s_vSync = value;
+            PlayerPrefs.SetInt(Key(k_vSyncName), s_vSync ? 1 : 0);
+            QualitySettings.vSyncCount = s_vSync ? 1 : 0;
+        }
+    }
+
+    /// <summary>
+    /// 지금 화면에 걸려 있는 창 모드 (#796). 대입하지 않는다 — 해상도와 한 번에
+    /// <see cref="ApplyDisplay"/>로 바꾼다(<c>Screen.SetResolution</c>이 둘을 함께 받는다).
+    /// </summary>
+    public static EWindowMode WindowMode => s_windowMode;
+
+    /// <summary>지금 화면에 걸려 있는 해상도 (#796).</summary>
+    public static Vector2Int Resolution => s_resolution;
+
+    /// <summary>
+    /// 고를 수 있는 해상도 — <see cref="Screen.resolutions"/>를 폭x높이로 묶은 것 (#796).
+    /// 원본은 주사율마다 같은 해상도를 되풀이해 돌려주므로 그대로 쓰면 드롭다운에 중복이 뜬다.
+    ///
+    /// <b>세로 <see cref="k_minResolutionHeight"/> 미만은 뺀다</b> — 고를 수 있게 두면 UI가
+    /// 읽히지 않는 화면이 되고, 그 상태에서 되돌리려면 그 읽히지 않는 설정 창을 봐야 한다.
+    /// <b>큰 것부터</b> 낸다 — 사람이 찾는 것은 대개 자기 모니터의 최대치다.
+    /// </summary>
+    public static IReadOnlyList<Vector2Int> AvailableResolutions
+    {
+        get
+        {
+            if (s_resolutions != null)
+                return s_resolutions;
+
+            var seen = new HashSet<Vector2Int>();
+            var list = new List<Vector2Int>();
+
+            foreach (var resolution in Screen.resolutions)
+            {
+                var size = new Vector2Int(resolution.width, resolution.height);
+                if (size.y < k_minResolutionHeight)
+                    continue;
+
+                if (seen.Add(size))
+                    list.Add(size);
+            }
+
+            // 지금 해상도가 목록에 없으면(걸러졌거나 창 크기를 직접 끌었거나) 넣어 준다 —
+            // 드롭다운이 맞출 커서 자리가 없으면 고르지도 않은 항목이 선택된 것처럼 보인다.
+            // 걸러진 값을 다시 넣는 것은 '이미 그 화면인 사람'을 위한 것이라 하한과 어긋나지 않는다.
+            // 0은 넣지 않는다 — Load()가 아직 안 돈 상태(에디터 도메인 리로드 직후)의 값이다.
+            if (s_resolution.x > 0 && s_resolution.y > 0 && seen.Add(s_resolution))
+                list.Add(s_resolution);
+
+            list.Sort((a, b) => a.x != b.x ? b.x.CompareTo(a.x) : b.y.CompareTo(a.y));
+            s_resolutions = list.ToArray();
+            return s_resolutions;
+        }
+    }
+
+    /// <summary>
+    /// 창 모드·해상도를 <b>화면에만</b> 적용한다 (#796) — 저장은 <see cref="KeepDisplay"/>가 한다.
+    /// 다른 설정과 달리 setter에서 바로 저장하지 않는 이유: 잘못 고르면 화면이 깨져 되돌릴 수 없으므로,
+    /// 확인창에서 [유지]를 누르기 전에는 남기지 않는다. 확인하지 못한 채 껐다 켜도 이전 값으로 돌아온다.
+    /// (설계 결정 (e) — docs/design/settings-ui.md)
+    /// </summary>
+    public static void ApplyDisplay(EWindowMode mode, Vector2Int resolution)
+    {
+        s_windowMode = mode;
+        s_resolution = new Vector2Int(Mathf.Max(1, resolution.x), Mathf.Max(1, resolution.y));
+        Screen.SetResolution(s_resolution.x, s_resolution.y, ToFullScreenMode(mode));
+
+        // 창 모드가 바뀌면 OS가 커서 잠금을 푼다 — 요청 수는 그대로 두고 판정만 다시 건다.
+        // 설정 창이 떠 있는 동안은 계속 풀림이고, 창을 닫을 때 PopUnlock이 한 번 더 잡는다.
+        CursorLock.Reassert();
+    }
+
+    /// <summary>
+    /// 지금 적용돼 있는 창 모드·해상도를 저장한다 — 확인창 [유지] (#796).
+    /// 다른 항목과 달리 디스크까지 바로 쓴다: 창을 닫기 전에 화면이 깨져 강제 종료하는 경우가
+    /// 이 설정에서는 실제로 있고, 그때 "유지를 눌렀는데 안 남았다"가 되면 안 된다.
+    /// </summary>
+    public static void KeepDisplay()
+    {
+        PlayerPrefs.SetInt(k_windowModeKey, (int)s_windowMode);
+        PlayerPrefs.SetInt(k_resolutionWidthKey, s_resolution.x);
+        PlayerPrefs.SetInt(k_resolutionHeightKey, s_resolution.y);
+        PlayerPrefs.Save();
+    }
+
+    private static FullScreenMode ToFullScreenMode(EWindowMode mode) =>
+        mode switch
+        {
+            EWindowMode.Windowed => FullScreenMode.Windowed,
+            EWindowMode.Fullscreen => FullScreenMode.ExclusiveFullScreen,
+            _ => FullScreenMode.FullScreenWindow,
+        };
+
+    // 드롭다운에 없는 값(macOS의 MaximizedWindow 등)은 테두리 없는 전체 창으로 읽는다.
+    private static EWindowMode ToWindowMode(FullScreenMode mode) =>
+        mode switch
+        {
+            FullScreenMode.Windowed => EWindowMode.Windowed,
+            FullScreenMode.ExclusiveFullScreen => EWindowMode.Fullscreen,
+            _ => EWindowMode.Borderless,
+        };
 
     /// <summary>내 로봇 색이 바뀌었다 — 로비 로스터 보고·초상·팔레트 표시가 되읽는다. 인자는 바뀐 부위. (#432)</summary>
     public static event Action<EBodyPart> OnPlayerColorChanged;
@@ -232,16 +369,17 @@ public static class GameSettings
     }
 
     /// <summary>
-    /// 색 캐시를 이 계정 것으로 갈아탄다 — 로그인·로그아웃이 부른다. 비우면 로그인 전 자리로 돌아간다.
+    /// 설정을 이 계정 것으로 갈아탄다 (#796 후속) — 로그인·로그아웃이 부른다.
+    /// 비우면 로그인 전 자리로 돌아간다. <b>창모드·해상도는 따라오지 않는다</b> — 기기 단위다.
     /// </summary>
-    public static void UseColorAccount(string accountId)
+    public static void UseAccount(string accountId)
     {
-        string next = string.IsNullOrWhiteSpace(accountId) ? k_localColorAccount : accountId;
-        if (s_colorAccount == next)
+        string next = string.IsNullOrWhiteSpace(accountId) ? k_localAccount : accountId;
+        if (s_account == next)
             return;
 
-        s_colorAccount = next;
-        LoadPlayerColors();
+        s_account = next;
+        LoadAccountSettings();
     }
 
     /// <summary>클라우드에서 받은 한 벌을 적용한다 — 캐시에도 남긴다. (CosmeticsSaveService)</summary>
@@ -263,8 +401,18 @@ public static class GameSettings
         }
     }
 
+    /// <summary>
+    /// 그 항목의 실제 PlayerPrefs 키 (#796 후속). <b>로그인 전('local')에는 계정 자리를 넣지 않는다</b> —
+    /// 계정으로 가르기 전에 쓰던 키가 그대로 로그인 전 자리가 되어, 갱신해도 저장값을 잃지 않는다.
+    /// </summary>
+    private static string Key(string name) =>
+        s_account == k_localAccount
+            ? k_settingPrefix + name
+            : k_settingPrefix + s_account + "." + name;
+
+    // 색만 로그인 전에도 계정 자리를 쓴다 — 이미 그 형식으로 저장돼 있어 굳이 바꾸지 않는다 (#432)
     private static string ColorKey(EBodyPart part) =>
-        k_playerColorKeyPrefix + s_colorAccount + "." + part;
+        k_playerColorKeyPrefix + s_account + "." + part;
 
     // 캐시에서 전 부위를 다시 읽어 적용한다. 저장된 값이 없으면 팔레트 첫 색이다.
     private static void LoadPlayerColors()
@@ -309,6 +457,9 @@ public static class GameSettings
     /// 저장된 값을 읽어 적용한다. 플레이 시작마다 자동 실행 — 언어 외 전부를 무조건 덮어쓰므로
     /// 도메인 리로드를 꺼도 이전 플레이 값이 남지 않는다 (App·AppBootstrap과 같은 방침).
     ///
+    /// 여기서 읽는 것은 <b>로그인 전('local') 자리</b>다. 로그인하면 <see cref="UseAccount"/>가
+    /// 계정 자리로 갈아탄다 (#796 후속).
+    ///
     /// 언어는 여기서 건드리지 않는다 — <see cref="PlayerPrefLocaleSelector"/>가 Localization 초기화
     /// 시점에 이미 복원한다. 여기서 또 대입하면 초기화 순서에 따라 복원값을 덮어쓸 수 있다.
     /// </summary>
@@ -320,17 +471,77 @@ public static class GameSettings
         OnMicMutedChanged = null;
         OnPlayerColorChanged = null;
 
-        MouseSensitivity = PlayerPrefs.GetFloat(k_mouseSensitivityKey, k_defaultMouseSensitivity);
-        LookSmoothing = PlayerPrefs.GetFloat(k_lookSmoothingKey, k_defaultLookSmoothing);
-        Fov = PlayerPrefs.GetFloat(k_fovKey, k_defaultFov);
-        ScreenShake = PlayerPrefs.GetInt(k_screenShakeKey, k_defaultScreenShake ? 1 : 0) != 0;
-        SpeedVignette = PlayerPrefs.GetInt(k_speedVignetteKey, k_defaultSpeedVignette ? 1 : 0) != 0;
-        MasterVolume = PlayerPrefs.GetFloat(k_masterVolumeKey, k_defaultMasterVolume);
-        VoiceVolume = PlayerPrefs.GetFloat(k_voiceVolumeKey, k_defaultVoiceVolume);
-        MicMuted = PlayerPrefs.GetInt(k_micMutedKey, k_defaultMicMuted ? 1 : 0) != 0;
-        // 부위별 색 — 로그인 전이라 아직 'local' 자리를 읽는다. 로그인하면 계정 것으로 갈아탄다 (#432 후속)
-        s_colorAccount = k_localColorAccount;
+        // 밑값부터 되돌린 뒤 읽는다 — LoadAccountSettings는 '저장값이 없으면 지금 값을 둔다'라서,
+        // 도메인 리로드를 껐을 때 이전 플레이 값이 그대로 살아남는 것을 여기서 끊는다.
+        // ResetToDefaults가 아니라 필드만 되돌리는 것에 주의 — 저장값을 읽기 전에 덮어쓰면 안 된다.
+        ResetFields();
+
+        // 로그인 전이라 아직 'local' 자리를 읽는다. 로그인하면 계정 것으로 갈아탄다 (#796 후속)
+        s_account = k_localAccount;
+        LoadAccountSettings();
+
+        LoadDisplay(); // 창모드·해상도는 계정과 무관한 기기 단위다
+    }
+
+    /// <summary>
+    /// 지금 계정 자리의 값을 읽어 적용한다 — 시작할 때와 계정이 바뀔 때 (#796 후속).
+    ///
+    /// <b>저장값이 없으면 지금 값을 그대로 둔다.</b> 처음 로그인하는 계정에는 아직 아무것도 없는데
+    /// 밑값으로 떨어뜨리면, 로그인 전에 맞춰 둔 감도·볼륨이 로그인하는 순간 기본값으로 튄다.
+    /// 대입은 setter를 타므로 그 값이 곧 계정 자리에 쓰이고, 다음 로그인부터는 자기 값을 읽는다.
+    /// </summary>
+    private static void LoadAccountSettings()
+    {
+        MouseSensitivity = PlayerPrefs.GetFloat(Key(k_mouseSensitivityName), s_mouseSensitivity);
+        LookSmoothing = PlayerPrefs.GetFloat(Key(k_lookSmoothingName), s_lookSmoothing);
+        Fov = PlayerPrefs.GetFloat(Key(k_fovName), s_fov);
+        ScreenShake = PlayerPrefs.GetInt(Key(k_screenShakeName), s_screenShake ? 1 : 0) != 0;
+        SpeedVignette = PlayerPrefs.GetInt(Key(k_speedVignetteName), s_speedVignette ? 1 : 0) != 0;
+        MasterVolume = PlayerPrefs.GetFloat(Key(k_masterVolumeName), s_masterVolume);
+        VoiceVolume = PlayerPrefs.GetFloat(Key(k_voiceVolumeName), s_voiceVolume);
+        MicMuted = PlayerPrefs.GetInt(Key(k_micMutedName), s_micMuted ? 1 : 0) != 0;
+        VSync = PlayerPrefs.GetInt(Key(k_vSyncName), s_vSync ? 1 : 0) != 0;
         LoadPlayerColors();
+    }
+
+    // 백킹 필드만 밑값으로 되돌린다 — PlayerPrefs는 건드리지 않는다.
+    // (되돌린 값을 저장까지 하면 바로 뒤에서 읽을 저장값을 스스로 지운다)
+    private static void ResetFields()
+    {
+        s_mouseSensitivity = k_defaultMouseSensitivity;
+        s_lookSmoothing = k_defaultLookSmoothing;
+        s_fov = k_defaultFov;
+        s_screenShake = k_defaultScreenShake;
+        s_speedVignette = k_defaultSpeedVignette;
+        s_masterVolume = k_defaultMasterVolume;
+        s_voiceVolume = k_defaultVoiceVolume;
+        s_micMuted = k_defaultMicMuted;
+        s_vSync = k_defaultVSync;
+    }
+
+    /// <summary>
+    /// 저장된 창 모드·해상도를 적용한다 (#796). <b>저장값이 없으면 화면을 건드리지 않는다</b> —
+    /// 첫 실행에는 빌드가 띄운 창이 그대로 기본값이다.
+    /// </summary>
+    private static void LoadDisplay()
+    {
+        s_resolutions = null; // 도메인 리로드 OFF 대비 — 이전 플레이의 캐시가 남지 않게
+        s_windowMode = ToWindowMode(Screen.fullScreenMode);
+        s_resolution = new Vector2Int(Screen.width, Screen.height);
+
+        if (!PlayerPrefs.HasKey(k_windowModeKey))
+            return;
+
+        int storedMode = PlayerPrefs.GetInt(k_windowModeKey, (int)s_windowMode);
+        ApplyDisplay(
+            Enum.IsDefined(typeof(EWindowMode), storedMode)
+                ? (EWindowMode)storedMode
+                : s_windowMode,
+            new Vector2Int(
+                PlayerPrefs.GetInt(k_resolutionWidthKey, s_resolution.x),
+                PlayerPrefs.GetInt(k_resolutionHeightKey, s_resolution.y)
+            )
+        );
     }
 
     /// <summary>
@@ -340,6 +551,9 @@ public static class GameSettings
     /// <b>언어는 포함하지 않는다</b> — 되돌릴 '기본 언어'가 시스템 로케일이라, 한국어로 쓰던 사람이
     /// 이 버튼을 누르면 메뉴 언어가 통째로 바뀐다. 감도·볼륨을 되돌리려다 화면을 못 읽게 되는 쪽이
     /// 잘못 조절한 값보다 나쁘고, 언어는 바로 위 드롭다운에서 되돌릴 수 있다. (#374)
+    /// <b>창 모드·해상도도 빼고 수직동기화만 넣는다</b> — 버튼 한 번에 창이 통째로 바뀌면
+    /// 감도를 되돌리려던 사람이 확인창부터 마주한다. 되돌릴 수단이 바로 위 드롭다운에 있는 것도
+    /// 언어와 같다. 수직동기화는 잘못 돌아가도 화면이 깨지지 않아 함께 되돌린다. (#796)
     /// </summary>
     public static void ResetToDefaults()
     {
@@ -351,6 +565,7 @@ public static class GameSettings
         MasterVolume = k_defaultMasterVolume;
         VoiceVolume = k_defaultVoiceVolume;
         MicMuted = k_defaultMicMuted;
+        VSync = k_defaultVSync;
     }
 
     /// <summary>
