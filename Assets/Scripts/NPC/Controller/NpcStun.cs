@@ -205,10 +205,9 @@ public class NpcStun : NetworkBehaviour
 
         // 원래 값을 기억했다가 되돌린다 — 무조건 false로 풀면 밑에 깔린 상태가 스스로 멈춰 있었던
         // NPC(체포·연행 등)가 스턴 해제와 함께 걷기 시작한다.
-        // isOnNavMesh까지 보는 이유: NavMesh 밖에서 isStopped를 읽으면 Unity가 에러를 뱉는다 (#557)
         NavMeshAgent agent = m_owner.Agent;
-        m_agentStoppedBefore = agent.enabled && agent.isOnNavMesh && agent.isStopped;
-        if (agent.enabled && agent.isOnNavMesh)
+        m_agentStoppedBefore = m_owner.AgentReady && agent.isStopped;
+        if (m_owner.AgentReady)
         {
             agent.isStopped = true;
             agent.ResetPath();
@@ -309,7 +308,7 @@ public class NpcStun : NetworkBehaviour
         SetRising(false);
 
         NavMeshAgent agent = m_owner.Agent;
-        if (agent.enabled && agent.isOnNavMesh)
+        if (m_owner.AgentReady)
             agent.isStopped = m_agentStoppedBefore;
 
         if (!resumeReaction)

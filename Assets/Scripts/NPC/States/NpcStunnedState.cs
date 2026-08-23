@@ -77,9 +77,7 @@ public class NpcStunnedState : NpcStateBase
     }
 
     /// <summary>
-    /// 에이전트 정지를 <b>꺼져 있거나 NavMesh 밖일 때는 건너뛴다</b> — 그 상태에서 <c>isStopped</c>를
-    /// 만지면 Unity가 에러를 뱉는다(<see cref="NpcStun.EnterStunned"/>·<c>NpcController.SetFrozen</c>과
-    /// 같은 가드, #557).
+    /// 에이전트를 만질 수 없으면 건너뛴다(<see cref="NpcController.AgentReady"/>).
     ///
     /// 예전에는 가드 없이 대입했다. 진입·이탈 시점에 에이전트가 늘 살아 있었기 때문인데, 사망(#571)이
     /// 그 전제를 깼다: 넉백 비행 중(에이전트 꺼짐 + 상태는 이미 Stunned)에 죽으면
@@ -88,10 +86,10 @@ public class NpcStunnedState : NpcStateBase
     /// </summary>
     private void SetAgentStopped(bool stopped)
     {
-        UnityEngine.AI.NavMeshAgent agent = m_owner.Agent;
-        if (agent == null || !agent.enabled || !agent.isOnNavMesh)
+        if (!m_owner.AgentReady)
             return;
 
+        UnityEngine.AI.NavMeshAgent agent = m_owner.Agent;
         agent.isStopped = stopped;
         if (stopped)
             agent.ResetPath();
