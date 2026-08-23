@@ -74,11 +74,20 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 5508625507356675
-    m_Localized: "Revive Kit"
+    m_Localized: Revive Kit
     m_Metadata:
       m_Items: []
   - m_Id: 5508625507356676
-    m_Localized: "Brings a shut-down teammate back on the spot. Single use."
+    m_Localized: Brings a shut-down teammate back on the spot. Single use.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12488576126152704
+    m_Localized: Area Scanner
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12488576134541312
+    m_Localized: Reveals whether the culprit is within 20m as a green or red ring.
+      60s cooldown.
     m_Metadata:
       m_Items: []
   references:

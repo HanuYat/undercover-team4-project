@@ -6,7 +6,8 @@ using UnityEngine;
 /// 전자기기 먹통 (돌발 이벤트 · 전역) — 도시 인프라 장애로 통신·감시 설비가 마비된다. (GDD 6-4/4-4/7-4, #106)
 /// 먹통 플래그를 <b>스스로 소유</b>해 서버 권위로 켜고 끄며, NetworkVariable로 전 클라에 동기화한다.
 /// 실제 표현은 이 플래그를 구독하는 쪽이 각자 담당한다 — 무전 음성 왜곡은 <see cref="DeviceBlackoutView"/>,
-/// CCTV 송출 차단은 <see cref="CCTVSwitcher"/>, 스캐너 사용 불가는 <see cref="Scanner"/>가 본다.
+/// CCTV 송출 차단은 <see cref="CCTVSwitcher"/>, 스캐너·구역 스캐너 사용 불가는 각각 <see cref="Scanner"/>·
+/// <see cref="AreaScanner"/>가 <see cref="DeviceBlackoutGate"/>로 함께 본다 (#490).
 ///
 /// <b>스스로 풀리지 않는다</b> (#689). 라운드가 끝날 때까지 유지되고, 본부의 복구 단말이
 /// <see cref="ServerRecover"/>를 불러야 해제된다. 예전에는 12초 뒤 자동 복구였는데 그러면 양쪽 다
