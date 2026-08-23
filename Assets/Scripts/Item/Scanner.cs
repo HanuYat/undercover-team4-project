@@ -44,6 +44,11 @@ public class Scanner : ItemBase
     /// 범위 이탈 실패·완충 상태 충전 시도에 발행 — 배터리 부족/충전완료 알림은 배터리 값 변화로 presenter가 직접 구동한다.</summary>
     public event Action<string> OnScanFeedback;
 
+    /// <summary>배터리가 0인 채로 사용을 시도했을 때 발행 — 오너 로컬 전용. (#810)
+    /// 문구는 프레젠터가 자기 키로 조회한다. 여기서 완성 문장을 넘기지 않는 이유는 표시 문구의
+    /// 주인이 UI 쪽이기 때문이다(#525가 지향하는 방향).</summary>
+    public event Action OnDepletedUseAttempt;
+
     /// <summary>기반 NotifyOwner(toast:true)가 오너 로컬에서 부르는 발행 지점. (#309)</summary>
     // 스캐너는 줍기 시 소유권이 홀더로 이전되므로(#88) 기반의 SendTo.Owner가 정확히 든 사람에게 간다.
     protected override void RaiseOwnerToast(string message) => OnScanFeedback?.Invoke(message);
@@ -121,7 +126,11 @@ public class Scanner : ItemBase
             if (IsBlackout)
                 NotifyOwner("스캐너 먹통 — 전자기기 장애", toast: true);
             else if (m_battery != null && m_battery.IsDepleted)
+            {
+                // 소진 안내는 여기서만 낸다 — 들고만 있을 때가 아니라 쓰려 했을 때다 (#810)
                 Debug.Log($"스캐너 배터리 부족! (남은 배터리: {m_battery.CurrentBattery})");
+                OnDepletedUseAttempt?.Invoke();
+            }
 
             return;
         }

@@ -136,7 +136,7 @@ public class ScanResultPresenter : NetworkBehaviour
     }
 
     // 언어가 바뀌면 지금 떠 있는 카드와 배터리 표기를 다시 채운다.
-    // 토스트는 다시 그리지 않는다 — 소진 안내는 다음 배터리 변화에 갱신되고, 나머지는 몇 초짜리다.
+    // 토스트는 다시 그리지 않는다 — 전부 몇 초짜리라 다음 발생분부터 새 언어로 뜬다.
     private void HandleLocaleChanged(Locale locale)
     {
         UpdateCurrentContent();
@@ -260,6 +260,7 @@ public class ScanResultPresenter : NetworkBehaviour
             if (m_battery != null)
                 m_battery.OnCharged -= HandleBatteryChanged;
             m_scanner.OnScanFeedback -= HandleScanFeedback;
+            m_scanner.OnDepletedUseAttempt -= HandleDepletedUseAttempt;
         }
 
         m_scanner = scanner;
@@ -271,9 +272,10 @@ public class ScanResultPresenter : NetworkBehaviour
             if (m_battery != null)
                 m_battery.OnCharged += HandleBatteryChanged; // 스캔 소모·본부 충전 반영 (#309)
             m_scanner.OnScanFeedback += HandleScanFeedback;   // 범위 이탈 등 실패 토스트 (#309)
+            m_scanner.OnDepletedUseAttempt += HandleDepletedUseAttempt; // 소진 상태 사용 시도 (#810)
             m_lastBattery = -1;                               // 장착 시점 값을 "충전"으로 오인하지 않게 리셋
             SetActive(m_batteryPanel, true);                  // 게이지 노출
-            UpdateBattery(m_battery != null ? m_battery.CurrentBattery : 0); // 초기 잔량 + 소진 시 부족 토스트
+            UpdateBattery(m_battery != null ? m_battery.CurrentBattery : 0); // 초기 잔량 표기
         }
         else
         {
@@ -294,7 +296,8 @@ public class ScanResultPresenter : NetworkBehaviour
 
     // ---- 스캐너 배터리 게이지 + 상태 토스트 (#309) ----
     // 배터리 값은 Scanner의 NetworkVariable이 이미 오너에 동기화되므로 여기선 표시만 한다(RPC 불필요).
-    // 토스트: 소진=장착 중 지속, 충전(증가)=잠깐. 범위 이탈은 Scanner.OnScanFeedback가 잠깐 띄운다.
+    // 토스트는 전부 몇 초짜리다 — 잔량 자체는 게이지가 상시로 보여주므로 경고문을 띄워 둘 이유가 없다 (#810).
+    // 소진 안내는 값 변화가 아니라 사용 시도(Scanner.OnDepletedUseAttempt)로 구동한다.
 
     private void HandleBatteryChanged(int current) => UpdateBattery(current);
 
@@ -313,12 +316,11 @@ public class ScanResultPresenter : NetworkBehaviour
 
         if (charged)
             ShowToast(LocalizedStrings.Get(k_hudTable, k_chargedKey), transient: true);
-        else if (current <= 0)
-            // 소진 — 장착 중 계속 노출
-            ShowToast(LocalizedStrings.Get(k_hudTable, k_lowBatteryKey), transient: false);
-        else
-            HideToast(); // 정상 잔량 — 배터리 관련 토스트 없음
     }
+
+    // 배터리 0인 채로 스캔을 시도했을 때만 부족 문구를 띄운다 — 들고 있는 동안이 아니다 (#810).
+    private void HandleDepletedUseAttempt() =>
+        ShowToast(LocalizedStrings.Get(k_hudTable, k_lowBatteryKey), transient: true);
 
     // 범위 이탈 등 스캔 실패 사유 — 잠깐 띄운다.
     private void HandleScanFeedback(string message) => ShowToast(message, transient: true);
