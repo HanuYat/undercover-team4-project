@@ -10,7 +10,7 @@ using Random = UnityEngine.Random;
 /// 검거 판정 수신, 도심 잔류(#310), 라운드 종료 정리. NPC가 무슨 짓을 하는지는 파생 클래스가 정한다
 /// (<see cref="ApplyBehavior"/>) — 종류별 행동이 한 파일에 뒤섞이지 않게 하는 것이 이 분리의 목적이다.
 ///
-/// 파생 이벤트: <see cref="RioterEvent"/>(거리 난동자) · <see cref="StreakerEvent"/>(공연음란범) ·
+/// 파생 이벤트: <see cref="StreetThugEvent"/>(동네 깡패) · <see cref="StreakerEvent"/>(공연음란범) ·
 /// <see cref="PickpocketEvent"/>(소매치기 #303). 종류를 늘리려면 이 클래스를 상속한 컴포넌트를 하나 만들어
 /// <see cref="SuddenEventManager"/>의 이벤트 풀에 등록하면 된다.
 ///
@@ -32,9 +32,9 @@ using Random = UnityEngine.Random;
 public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
 {
     [Header("이벤트 정의")]
-    [Tooltip("로그·HUD에 표시할 이름 (예: 거리 난동자 / 공연음란범 / 소매치기)")]
+    [Tooltip("로그·HUD에 표시할 이름 (예: 동네 깡패 / 공연음란범 / 소매치기)")]
     [SerializeField]
-    private string m_displayName = "거리 난동자";
+    private string m_displayName = "동네 깡패";
 
     [Header("스폰 NPC 프리팹")]
     [SerializeField]

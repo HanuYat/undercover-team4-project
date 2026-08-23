@@ -49,7 +49,7 @@ public class SuddenEventManager : NetworkedManagerBase
     private class SuddenEventEntry
     {
         [Tooltip(
-            "ISuddenEvent 또는 ISuddenEventProvider를 구현한 컴포넌트 (예: DeviceBlackoutEvent, RioterEvent, JailbreakEvent)"
+            "ISuddenEvent 또는 ISuddenEventProvider를 구현한 컴포넌트 (예: DeviceBlackoutEvent, StreetThugEvent, JailbreakEvent)"
         )]
         public MonoBehaviour component;
 

@@ -18,6 +18,16 @@ using UnityEngine;
 ///
 /// 재실행하면 블렌드 트리 내용만 다시 만든다. 다른 상태/전환은 보존된다.
 /// 메뉴: Tools > NPC > Rebuild Attack Swing Variants
+///
+/// <b>동네 깡패는 이 컨트롤러를 덮어 쓴다</b> (#806) — 파이프를 들었으니 맨손 권투 스윙이 아니라
+/// 1H 무기 스윙이어야 한다. 상태 기계를 복제하지 않고 <c>NPC_StreetThug.overrideController</c>
+/// (AnimatorOverrideController)가 <b>Attack 블렌드 트리의 클립 4개만</b> 갈아 끼운다 — 컨트롤러를
+/// 통째로 복제하면 여기서 상태를 고칠 때마다 두 벌을 맞춰야 한다.
+/// 클립이 바뀌면 타격 프레임도 달라지므로 <c>NpcResistConfig_StreetThug</c>의 SwingImpactOffsets를
+/// 함께 맞춘다(손 속도 최대 시점 기준: 0.43 / 0.37 / 0.37 / 0.33초).
+/// ⚠ <b>스윙 클립 목록(s_swingClipFiles)을 바꾸면</b> 오버라이드의 원본 키가 사라져 깡패가 맨손
+/// 스윙으로 돌아간다 — 그때는 오버라이드도 다시 걸어야 한다. 목록 그대로 재실행하는 것은 안전하다:
+/// 같은 fbx에서 같은 클립 에셋을 다시 다는 것이라 매핑 키가 그대로다.
 /// </summary>
 public static class NpcAnimatorControllerBuilder
 {
@@ -78,6 +88,91 @@ public static class NpcAnimatorControllerBuilder
         "attack04_inplace.fbx",
         "attack05_inplace.fbx",
     };
+
+    // 무기를 든 자세 (#806) — 1H 걷기·달리기 클립이 팩에 없어 로코모션 클립을 갈아 끼울 수 없다.
+    // 대신 팩이 그 용도로 주는 <b>마스크드 포즈</b>를 <b>오른팔에만</b> 얹는다: 왼팔·다리는 원래대로
+    // 흔들리고 오른팔만 파이프를 어깨에 걸친 자세로 고정된다.
+    // 마스크도 팩 것을 그대로 쓴다 — 휴머노이드 마스크를 직접 만들 이유가 없다.
+    // 레이어는 <b>공용 컨트롤러</b>에 만들되 기본 가중치가 0이라 시민에게는 아무 영향이 없다 —
+    // 무기를 든 개체만 런타임에 올린다(NpcWeaponHold).
+    private const string k_weaponLayerName = "WeaponUpperBody";
+    private const string k_weaponPoseState = "WeaponPose_Carry";
+    private const string k_weaponPoseClip =
+        "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Masked Poses/HumanM@ObjectGripShoulder01_R.fbx";
+    private const string k_upperBodyMaskPath =
+        "Assets/Imported/Kevin Iglesias/Human Animations/Models/Avatar Masks/Arms/Human Arm Right Mask.mask";
+
+    /// <summary>
+    /// 무기 상체 레이어를 만든다 — 상체 마스크 + 1H 자세 한 상태짜리 레이어. 가중치 0으로 둔다. (#806)
+    /// 재실행하면 같은 이름의 레이어·마스크를 다시 만든다. 메뉴: Tools > NPC > Rebuild Weapon Upper-Body Layer
+    /// </summary>
+    [MenuItem("Tools/NPC/Rebuild Weapon Upper-Body Layer")]
+    public static void RebuildWeaponLayer()
+    {
+        var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(k_controllerPath);
+        if (controller == null)
+        {
+            Debug.LogError($"[NpcAnimatorControllerBuilder] 컨트롤러를 찾을 수 없음: {k_controllerPath}");
+            return;
+        }
+
+        AnimationClip pose = LoadClip(k_weaponPoseClip);
+        if (pose == null)
+        {
+            Debug.LogError($"[NpcAnimatorControllerBuilder] 무기 자세 클립을 찾을 수 없음: {k_weaponPoseClip}");
+            return;
+        }
+
+        var mask = AssetDatabase.LoadAssetAtPath<AvatarMask>(k_upperBodyMaskPath);
+        if (mask == null)
+        {
+            Debug.LogError($"[NpcAnimatorControllerBuilder] 팔 마스크를 찾을 수 없음: {k_upperBodyMaskPath}");
+            return;
+        }
+
+        // 같은 이름의 레이어가 있으면 통째로 갈아 끼운다 — 안에 쌓인 상태 기계도 함께 지운다
+        List<AnimatorControllerLayer> layers = new List<AnimatorControllerLayer>(controller.layers);
+        for (int i = layers.Count - 1; i > 0; i--)
+        {
+            if (layers[i].name != k_weaponLayerName)
+                continue;
+
+            if (layers[i].stateMachine != null)
+                Object.DestroyImmediate(layers[i].stateMachine, true);
+            layers.RemoveAt(i);
+        }
+
+        var machine = new AnimatorStateMachine
+        {
+            name = k_weaponLayerName,
+            hideFlags = HideFlags.HideInHierarchy,
+        };
+        AssetDatabase.AddObjectToAsset(machine, controller);
+
+        AnimatorState state = machine.AddState(k_weaponPoseState);
+        state.motion = pose;
+        state.writeDefaultValues = false;
+        machine.defaultState = state;
+
+        layers.Add(new AnimatorControllerLayer
+        {
+            name = k_weaponLayerName,
+            stateMachine = machine,
+            avatarMask = mask,
+            blendingMode = AnimatorLayerBlendingMode.Override,
+            defaultWeight = 0f, // 무기를 든 개체만 런타임에 올린다
+            iKPass = false,
+        });
+        controller.layers = layers.ToArray();
+
+        EditorUtility.SetDirty(controller);
+        AssetDatabase.SaveAssets();
+
+        Debug.Log(
+            $"[NpcAnimatorControllerBuilder] 무기 자세 레이어 갱신 완료 — {k_weaponLayerName}"
+                + $" (포즈 {k_weaponPoseState}, 마스크 {System.IO.Path.GetFileName(k_upperBodyMaskPath)}, 가중치 0)"
+        );
+    }
 
     [MenuItem("Tools/NPC/Rebuild Attack Swing Variants")]
     public static void Rebuild()

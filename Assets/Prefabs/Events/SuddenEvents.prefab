@@ -227,8 +227,8 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 34c7e058d259989488b34aa61615597a, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RioterEvent
-  m_displayName: "\uAC70\uB9AC \uB09C\uB3D9\uC790"
+  m_EditorClassIdentifier: Assembly-CSharp::StreetThugEvent
+  m_displayName: "\ub3d9\ub124 \uae61\ud328"
   m_npcPrefab: {fileID: 4452197611904741975, guid: d683626f03b237a4da9faa4542cc57a0, type: 3}
   m_spawnDistanceMin: 12
   m_spawnDistanceMax: 20
@@ -236,7 +236,7 @@ MonoBehaviour:
   m_maxSpawnAttempts: 8
   m_pettyCrimeRewardMin: 500
   m_pettyCrimeRewardMax: 4000
-  m_maxLifetimeSeconds: 60
+  m_maxLifetimeSeconds: 0
 --- !u!114 &7866726753952495387
 MonoBehaviour:
   m_ObjectHideFlags: 0
