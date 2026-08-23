@@ -141,6 +141,16 @@ public class NpcCapturedState : NpcStateBase
 
         // 밧줄은 소모형이 아니라 반환할 자원이 없다 — 상태 전이만으로 풀려난다. (#369)
 
+        // 질주하던 개체(공연음란범)는 위협을 찾지 않고 하던 대로 돌아간다 — 대상이 필요 없는 행동이라
+        // 아래 "주변에 아무도 없으면 배회 복귀" 폴백에 걸리면 안 된다. 걸리면 잡아서 인적 없는 곳에
+        // 버려 두는 것만으로 질주가 영영 끝난다. (#106)
+        if (m_owner.Reaction.IsSprinter)
+        {
+            Debug.Log($"인계 방치 — 풀려나 질주 재개: {m_owner.name}");
+            m_owner.Reaction.StartSprint();
+            return;
+        }
+
         // 가장 가까운 플레이어를 위협 삼아 도주한다 — 반경은 저항 폴백(#205)·도주 회피(#213)와 같은
         // ThreatSearchRadius를 쓴다. 기준이 어긋나면 "도망칠 상대"와 "피할 상대"가 달라진다.
         PlayerHealth nearest = SuddenEventUtil.FindNearestFieldPlayer(

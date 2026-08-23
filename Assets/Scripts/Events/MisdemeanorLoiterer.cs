@@ -9,8 +9,9 @@ using UnityEngine;
 /// 맡는 일은 둘이다:
 ///  1. <b>라운드 종료 정리</b> — 이벤트에서 떨어져 나온 스폰물이 다음 라운드까지 남지 않게 하는 누수 방지.
 ///  2. <b>탈옥 방출 후 소란 재개</b> — 방출된 난동꾼이 조용한 시민으로 남는 대신 원래 이벤트 행동으로
-///     복귀한다(팀 확정 2026-07-23): 도주가 가라앉으면 난동자는 그 자리 저항 난동을, 난동꾼은 근처
-///     플레이어를 보고 도주 소란을 재개한다. 소란 시간(마커에 기록된 원래 값)이 다하면 다시 진정·잔류하고,
+///     복귀한다(팀 확정 2026-07-23): 도주가 가라앉으면 난동자는 그 자리 저항 난동을, 소매치기는 근처
+///     플레이어를 보고 도주 소란을, 공연음란범은 대상 없이 질주를 재개한다(#106). 소란 시간(마커에
+///     기록된 원래 값)이 다하면 다시 진정·잔류하고 — 0 이하면 무제한이라 진정하지 않는다 —
 ///     제압·재수감되면 소란은 그대로 취소된다 — 이벤트 본편과 같은 수명 규칙이다.
 ///
 /// 이벤트가 추적을 끊는 시점에 서버(또는 오프라인)에서만 AddComponent로 붙는다 —
@@ -21,7 +22,8 @@ public class MisdemeanorLoiterer : MonoBehaviour
 {
     // 소란 재개 시 위협으로 삼을 플레이어 탐색 반경(m) — 이 안에 아무도 없으면 배회하며 기다렸다가,
     // 누가 다가오면 그때 소란을 시작한다. 대상 없는 저항/도주는 곧 흐지부지 배회로 돌아오므로
-    // (NpcResistState·NpcFleeState의 이탈 판정) 두 행동 모두 이 게이트를 공유한다.
+    // (NpcResistState·NpcFleeState의 이탈 판정) 저항·도주가 이 게이트를 공유한다.
+    // 질주(공연음란범)는 대상이 필요 없어 타지 않는다 (#805).
     private const float k_riotThreatRadius = 14f;
 
     private RoundManager Round => App.Game.Round;
@@ -122,7 +124,7 @@ public class MisdemeanorLoiterer : MonoBehaviour
         if (m_rioting && Time.time >= m_riotEndTime)
         {
             m_rioting = false;
-            if (state is NpcState.Attack or NpcState.Run)
+            if (state is NpcState.Attack or NpcState.Run or NpcState.Sprinting)
             {
                 Debug.Log($"[돌발이벤트] 방출 소란 종료 — 진정: {name}");
                 m_controller.Reaction.StartFlee(null); // 위협 없는 도주 — 곧 배회(Idle)로 가라앉는다
@@ -148,19 +150,28 @@ public class MisdemeanorLoiterer : MonoBehaviour
             return;
         }
 
-        PlayerHealth threat = SuddenEventUtil.FindNearestFieldPlayer(transform.position, k_riotThreatRadius);
-        if (threat == null)
-            return; // 대기 — 다음 틱에 다시 본다
-
-        switch (offender.RiotBehavior)
+        // 질주(공연음란범)만 위협 없이 성립한다 — 누가 보든 말든 뛰는 것이 그 행동의 정의라
+        // 아래 "가까이 온 플레이어" 게이트를 타지 않는다. (#106)
+        if (offender.RiotBehavior == ERiotBehavior.Sprint)
         {
-            case ERiotBehavior.Resist:
-                m_controller.Reaction.StartResist(threat.transform); // 그 자리 저항 난동 — 다가온 플레이어가 표적
-                break;
+            m_controller.Reaction.StartSprint();
+        }
+        else
+        {
+            PlayerHealth threat = SuddenEventUtil.FindNearestFieldPlayer(transform.position, k_riotThreatRadius);
+            if (threat == null)
+                return; // 대기 — 다음 틱에 다시 본다
 
-            case ERiotBehavior.Flee:
-                m_controller.Reaction.StartFlee(threat.transform); // 도주 소란 — 다가온 플레이어에게서 달아난다
-                break;
+            switch (offender.RiotBehavior)
+            {
+                case ERiotBehavior.Resist:
+                    m_controller.Reaction.StartResist(threat.transform); // 그 자리 저항 난동 — 다가온 플레이어가 표적
+                    break;
+
+                case ERiotBehavior.Flee:
+                    m_controller.Reaction.StartFlee(threat.transform); // 도주 소란 — 다가온 플레이어에게서 달아난다
+                    break;
+            }
         }
 
         // 소란 창은 첫 점화 때만 연다 — 창 안의 재점화는 남은 시간을 그대로 쓴다
@@ -168,8 +179,12 @@ public class MisdemeanorLoiterer : MonoBehaviour
         {
             m_riotPending = false;
             m_rioting = true;
-            m_riotEndTime = Time.time + offender.RiotSeconds;
-            Debug.Log($"[돌발이벤트] 탈옥 방출 — 소란 재개({offender.RiotBehavior}, {offender.RiotSeconds:F0}초): {name}");
+            // 소란 시간 0 이하는 무제한 — 진정하지 않는다 (이벤트 본편의 수명 규칙과 같은 약속, #106)
+            m_riotEndTime = offender.RiotSeconds > 0f
+                ? Time.time + offender.RiotSeconds
+                : float.PositiveInfinity;
+            string window = offender.RiotSeconds > 0f ? $"{offender.RiotSeconds:F0}초" : "무제한";
+            Debug.Log($"[돌발이벤트] 탈옥 방출 — 소란 재개({offender.RiotBehavior}, {window}): {name}");
         }
     }
 }

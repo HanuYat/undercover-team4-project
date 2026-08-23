@@ -1,21 +1,25 @@
 /// <summary>
-/// 나체(속옷) 난동꾼 — 현장 근처에 스폰돼 <b>플레이어에게서 도주</b>하며 뛰어다녀 소란을 퍼뜨린다. (GDD 6-4, #106)
-/// 쫓아가 무력화한 뒤 밧줄로 잡는다.
+/// 공연음란범 — 속옷 차림으로 도심을 <b>쉬지 않고</b> 뛰어다닌다. 쫓아가 무력화한 뒤 밧줄로 잡는다.
+/// (GDD 6-4, #106)
 ///
-/// 도주 상태(<see cref="NpcFleeState"/>)의 소란 펄스(#81)를 그대로 쓴다 — 이 이벤트 고유 코드는
-/// "누구에게서 달아나는가" 한 줄뿐이고, 나머지는 전부 공통 골격(<see cref="SpawnedNpcEventBase"/>)이 맡는다.
+/// 다른 스폰형과 달리 <b>진정하지도, 잔류로 넘어가지도 않는다</b> — 소란 지속 시간을 0(무제한)으로
+/// 두면 공통 골격이 타이머를 끄고, 이벤트가 대상을 계속 쥐고 있어 <b>라운드당 한 명</b>이 된다
+/// (<see cref="SuddenEventManager"/>는 비활성 이벤트만 다시 추첨한다). 잡아서 인계하면 이벤트가
+/// 풀리므로 나중에 새 공연음란범이 나올 수 있다.
+///
+/// 도주(<see cref="NpcFleeState"/>)를 쓰지 않는 이유는 그쪽이 <b>위협에게서</b> 달아나는 행동이라
+/// 멀어지면 배회로 가라앉기 때문이다 — 여기 필요한 것은 대상도 끝도 없는 질주라
+/// <see cref="NpcSprintState"/>를 따로 둔다.
 /// </summary>
 public class StreakerEvent : SpawnedNpcEventBase
 {
     public override string NoticeKey => "Hud.Event.Notice.Streaker";
 
-    protected override ERiotBehavior RiotBehavior => ERiotBehavior.Flee;
+    protected override ERiotBehavior RiotBehavior => ERiotBehavior.Sprint;
 
     protected override void ApplyBehavior()
     {
-        // 위협(스폰 기준이 된 플레이어)에게서 도주하며 뛰어다녀 소란을 퍼뜨린다.
-        // 대상이 없으면 배회로 둔다 — 공통 골격이 곧 이탈(잔류)로 끝낸다.
-        if (m_threat != null)
-            m_npc.Reaction.StartFlee(m_threat);
+        // 위협을 보지 않는다 — 스폰 기준 플레이어가 사라져도 하던 대로 계속 뛴다.
+        m_npc.Reaction.StartSprint();
     }
 }

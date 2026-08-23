@@ -25,6 +25,12 @@ public class NpcReaction : NetworkBehaviour
     public Transform ThreatTarget { get; internal set; }
 
     /// <summary>
+    /// 질주하는 개체인가 — <b>깨어나거나 풀려났을 때 무엇으로 돌아갈지</b>를 가르는 표식. (#106)
+    /// 상태 enum으로는 못 가른다: 기절(넉백 KO)·제압은 상태를 갈아엎어 원래 하던 것이 지워진다.
+    /// </summary>
+    public bool IsSprinter { get; private set; }
+
+    /// <summary>
     /// 위협(플레이어)을 찾는 반경(m) — 저항 패배 후 도주 대상 탐색(#205)과 도주 방향 산출(#213)이 같은 값을 쓴다.
     /// 두 경로가 다른 반경을 쓰면 "도망칠 상대"와 "피할 상대"의 기준이 어긋난다.
     /// </summary>
@@ -60,9 +66,10 @@ public class NpcReaction : NetworkBehaviour
 
         // 이미 반응 중이거나 확보·페널티 상태면 재판정하지 않는다 — 규칙은 NpcStateRules가 갖는다.
         // 피격만 반출 보행(Releasing)까지 연다 (#548) — 스캔으로는 안 되고 때려야 돌아선다.
-        bool allowed = trigger == ReactionTrigger.Damage
-            ? NpcStateRules.CanReactToDamage(m_owner.CurrentState)
-            : NpcStateRules.CanStartReaction(m_owner.CurrentState);
+        bool allowed =
+            trigger == ReactionTrigger.Damage
+                ? NpcStateRules.CanReactToDamage(m_owner.CurrentState)
+                : NpcStateRules.CanStartReaction(m_owner.CurrentState);
         if (!allowed)
             return;
 
@@ -109,8 +116,41 @@ public class NpcReaction : NetworkBehaviour
         if (IsSpawned && !IsServer)
             return;
 
+        IsSprinter = false;
         ThreatTarget = threat;
         m_owner.StateMachine.ChangeState(NpcState.Run);
+    }
+
+    /// <summary>
+    /// 질주 시작 — 위협 없이 도심을 계속 뛰어다닌다. 공연음란범(<see cref="StreakerEvent"/>) 전용. (#106)
+    /// 도주와 달리 대상이 없으므로 위협도 비운다 — 남겨 두면 이 상태를 빠져나갈 때 엉뚱한 대상이 딸려간다.
+    /// </summary>
+    public void StartSprint()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        IsSprinter = true;
+        ThreatTarget = null;
+        m_owner.StateMachine.ChangeState(NpcState.Sprinting);
+    }
+
+    /// <summary>
+    /// 무력화·제압에서 <b>풀려난 뒤 제 행동으로 돌아간다</b> — 보통은 도주, 질주하는 개체는 질주다. (#106)
+    /// 공연음란범이 한 번 맞고 배회 시민이 되어 버리지 않게 하는 단일 복귀 지점이다.
+    ///
+    /// ⚠ <b>반출 목적지가 살아 있으면 질주로 가로채지 않는다</b> — 질주(Sprinting)는
+    /// <c>NpcController.HandleFsmStateChanged</c>의 ClearRelease 예외 목록에 없어 진입하는 순간
+    /// 청탁 인도 목적지가 지워진다. 쓰러뜨리기는 반출의 무산 수단이 아니다(무산은 밧줄·재수감·사망,
+    /// #548). 도주로 돌려보내면 예외 목록의 Run에 걸려 목적지가 살아남고, 깨어난 뒤 인도 지점으로
+    /// 되돌아가는 기존 경로를 그대로 탄다.
+    /// </summary>
+    public void ResumeReaction(Transform threat)
+    {
+        if (IsSprinter && !m_owner.Custody.HasReleaseDestination)
+            StartSprint();
+        else
+            StartFlee(threat);
     }
 
     /// <summary>위협 참조 정리 — 반응(도주·저항)이 끝나는 지점에서 호출한다.</summary>
@@ -124,6 +164,7 @@ public class NpcReaction : NetworkBehaviour
 
         // 저항을 유발한(수갑 채우려던) 플레이어를 위협으로 기억한다 — 제압 실패 시 이 대상에게서 도주한다.
         // (도주형이 StartFlee(subduer)로 위협을 받는 것과 대칭 — #205)
+        IsSprinter = false;
         ThreatTarget = subduer;
         m_owner.StateMachine.ChangeState(NpcState.Attack);
     }

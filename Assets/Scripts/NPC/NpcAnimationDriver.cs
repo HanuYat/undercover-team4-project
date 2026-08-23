@@ -348,6 +348,9 @@ public class NpcAnimationDriver : MonoBehaviour
             // (NpcReleasingState) 걷기 모션을 씌우면 발이 미끄러진다.
             // 저항과 같이 이동 여부로 갈린다 — 멈춰 선 동안에도 달리기가 돌면 제자리 질주가 된다.
             NpcState.Releasing => m_releaseMoving ? (int)NpcState.Run : (int)NpcState.Idle,
+            // 질주(Sprinting)도 대응 Animator 상태가 없다 (#106) — 도주와 같은 배율로 달리므로
+            // 달리기(Run)를 빌려 쓴다. 멈추는 구간이 없어 이동 여부로 가르지 않는다.
+            NpcState.Sprinting => (int)NpcState.Run,
             _ => (int)state,
         };
     }
@@ -616,7 +619,9 @@ public class NpcAnimationDriver : MonoBehaviour
                 m_animator.SetInteger(s_stateHash, k_subdueGroggyAnimState);
                 return true;
 
+            // 질주(#106)도 달리다 붙잡힌 관성은 같다 — 도주와 같은 구르기 전환을 탄다
             case NpcState.Run:
+            case NpcState.Sprinting:
                 m_animator.SetInteger(s_stateHash, k_subdueRollAnimState);
                 m_subdueUntil = Time.time + m_subdueRollSeconds;
                 m_subdueRollThenGroggy = true; // 굴러 일어난 뒤 그로기로 넘어가 유지된다

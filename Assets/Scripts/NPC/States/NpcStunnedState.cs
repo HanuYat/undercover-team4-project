@@ -56,8 +56,9 @@ public class NpcStunnedState : NpcStateBase
         // 때린 플레이어가 옆에 있으면 그쪽에서 도망친다.
         // 주변에 아무도 없으면 도주 상태가 스스로 배회로 돌려보낸다 — 아무도 없는 곳에 두고 온
         // NPC가 혼자 전력 질주하지 않는다.
+        // 질주하는 개체(공연음란범)만 도주가 아니라 질주로 돌아간다 — 한 대 맞았다고 그만두지 않는다 (#106).
         if (m_timer >= m_config.StunSeconds + m_config.StandUpSeconds)
-            m_owner.Reaction.StartFlee(m_owner.Reaction.ThreatTarget);
+            m_owner.Reaction.ResumeReaction(m_owner.Reaction.ThreatTarget);
     }
 
     public override void Exit()
