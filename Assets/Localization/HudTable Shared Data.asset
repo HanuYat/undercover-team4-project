@@ -419,6 +419,10 @@ MonoBehaviour:
     m_Key: Hud.Tutorial.Corpse
     m_Metadata:
       m_Items: []
+  - m_Id: 6220632138768384
+    m_Key: Hud.Interact.CctvInfrared
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
