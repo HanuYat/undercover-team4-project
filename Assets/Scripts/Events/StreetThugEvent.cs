@@ -28,10 +28,10 @@ public class StreetThugEvent : SpawnedNpcEventBase
 
     protected override ERiotBehavior RiotBehavior => ERiotBehavior.Resist;
 
-    protected override void ApplyBehavior()
+    protected override void ApplyBehavior(NpcController npc)
     {
         // 스폰 기준 플레이어를 유발자로 넘겨 표적을 고정한다. 대상이 사라졌으면 저항 상태가
         // 근처 플레이어를 스스로 찾는다 — 표적 없이 서 있는 그림은 나오지 않는다.
-        m_npc.Reaction.StartResist(m_threat);
+        npc.Reaction.StartResist(m_threat);
     }
 }

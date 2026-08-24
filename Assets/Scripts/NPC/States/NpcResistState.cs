@@ -62,6 +62,10 @@ public class NpcResistState : NpcStateBase
     private float m_baseSpeed; // 진입 시점의 이동 속도 — 추격 질주 배율 적용 전 값(Exit에서 복원) (#254)
     private float m_baseAcceleration; // 진입 시점의 가속도 — 개체차를 덮어쓰지 않게 실제 값을 기억한다 (#568 후속)
 
+    // 진입 시점의 도로 비용 — Exit에서 되돌린다. 인덱스 -1이면 도로 영역이 없는 구성. (#721)
+    private int m_roadArea = -1;
+    private float m_baseRoadCost = 1f;
+
     private readonly NpcResistConfig m_config;
     private readonly NpcFleeConfig m_fleeConfig;
 
@@ -92,6 +96,15 @@ public class NpcResistState : NpcStateBase
         // 표적 발밑까지 가는 NpcChaseState(#568)가 끄는 것과 목적이 반대다.
         m_baseAcceleration = m_owner.Agent.acceleration;
         m_owner.Agent.acceleration = m_config.ChaseAcceleration;
+
+        // 추격 중에는 도로를 피하지 않는다 (#721) — 전역 Road 비용 5(#634) 때문에 표적이 도로 위에 있으면
+        // 최단 경로가 인도로 돌아 나가 쫓아오다 옆으로 샌다. 에이전트별 override라 배회 시민의 기피는 그대로다.
+        m_roadArea = NpcNavAreas.RoadArea;
+        if (m_roadArea >= 0)
+        {
+            m_baseRoadCost = m_owner.Agent.GetAreaCost(m_roadArea);
+            m_owner.Agent.SetAreaCost(m_roadArea, 1f);
+        }
 
         // 표적을 직접 바라보도록 수동 회전할 것이므로 에이전트 자동 회전을 끈다 — 안 그러면 서로 방향을 다툰다 (#220)
         m_owner.Agent.updateRotation = false;
@@ -183,6 +196,10 @@ public class NpcResistState : NpcStateBase
         m_owner.Agent.stoppingDistance = 0f; // 추격용으로 늘린 정지 거리를 원복 (#254)
         m_owner.Agent.speed = m_baseSpeed;   // 추격 질주 배율 원복 (#254)
         m_owner.Agent.acceleration = m_baseAcceleration; // 조향 원복 — 배회 시민이 급가속으로 튀지 않게 (#568 후속)
+
+        // 도로 비용 원복 — 안 되돌리면 이 몸이 배회로 돌아간 뒤에도 차도를 지름길로 쓴다 (#721)
+        if (m_roadArea >= 0)
+            m_owner.Agent.SetAreaCost(m_roadArea, m_baseRoadCost);
     }
 
     /// <summary>

@@ -17,9 +17,9 @@ public class StreakerEvent : SpawnedNpcEventBase
 
     protected override ERiotBehavior RiotBehavior => ERiotBehavior.Sprint;
 
-    protected override void ApplyBehavior()
+    protected override void ApplyBehavior(NpcController npc)
     {
         // 위협을 보지 않는다 — 스폰 기준 플레이어가 사라져도 하던 대로 계속 뛴다.
-        m_npc.Reaction.StartSprint();
+        npc.Reaction.StartSprint();
     }
 }

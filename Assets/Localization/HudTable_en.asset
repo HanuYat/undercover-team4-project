@@ -453,6 +453,10 @@ MonoBehaviour:
     m_Localized: "Area scan failed \u2014 device blackout"
     m_Metadata:
       m_Items: []
+  - m_Id: 7296109215571968
+    m_Localized: "\u26A0 Faction members want revenge"
+    m_Metadata:
+      m_Items: []
   - m_Id: 7318329074192384
     m_Localized: Hold [{0}] to self-revive with your revive kit
     m_Metadata:
