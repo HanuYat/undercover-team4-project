@@ -64,8 +64,8 @@ public class FactionRevengeEvent : SpawnedNpcEventBase
         if (round < m_minRound || round == m_lastTriggeredRound)
             return false;
 
-        // 복수할 세력이 있어야 성립한다 — 수감자가 없거나 전원 무소속이면 발동하지 않는다
-        if (!TryPickJailedFaction(out m_faction))
+        // 복수할 세력이 있는지만 본다 — 어느 세력인지는 ServerBegin에서 고른다(술어가 상태를 남기지 않게)
+        if (!TryPickJailedFaction(out _))
             return false;
 
         return base.CanTrigger(); // 표적이 될 현장 플레이어
@@ -81,16 +81,17 @@ public class FactionRevengeEvent : SpawnedNpcEventBase
             return false;
         }
 
-        if (!TryPickJailedFaction(out m_faction))
-            m_faction = PickAnyFaction();
-
         m_forced = true;
-        Debug.Log($"[세력 소탕] 강제 발동 준비 — 발동 근거 세력 {m_faction} (라운드 게이트·수감자 조건을 건너뛴다)");
+        Debug.Log("[세력 소탕] 강제 발동 준비 — 라운드 게이트·수감자 조건을 건너뛴다");
         return true;
     }
 
     public override void ServerBegin()
     {
+        // 세력은 여기서 고른다 — 강제 발동이면 세력 있는 수감자가 없을 수 있어 임의 세력으로 떨어진다
+        if (!TryPickJailedFaction(out m_faction))
+            m_faction = PickAnyFaction();
+
         base.ServerBegin();
 
         if (!IsActive)
@@ -105,6 +106,15 @@ public class FactionRevengeEvent : SpawnedNpcEventBase
         m_forced = false;
 
         Debug.Log($"[세력 소탕] 복수대가 현장으로 몰려온다 ({CurrentRound}라운드) — 발동 근거: 유치장의 {m_faction} 수감자");
+    }
+
+    /// <summary>라운드 종료 정리 — 스폰물과 함께 라운드당 1회 게이트도 푼다. 매니저가 InProgress를
+    /// 벗어날 때만 부르므로(날씨 교체 경로는 IRoundWeather만 탄다) 라운드 경계와 일치한다.
+    /// 세션을 새로 시작해 라운드가 1로 되돌아와도 지난 게이트가 첫 라운드를 막지 않는다.</summary>
+    public override void ServerReset()
+    {
+        base.ServerReset();
+        m_lastTriggeredRound = k_neverTriggered;
     }
 
     /// <summary>외형을 한 모델로 고정한다 — 프리팹 기본은 무작위 바디라 그대로 두면 잡다한 군중이 된다.</summary>
@@ -190,6 +200,7 @@ public class FactionRevengeEvent : SpawnedNpcEventBase
             return -1;
 
         int suffixMatch = -1;
+        int suffixCount = 0;
         for (int i = 0; i < catalog.Count; i++)
         {
             string name = catalog.GetModelName(i);
@@ -199,9 +210,18 @@ public class FactionRevengeEvent : SpawnedNpcEventBase
             if (string.Equals(name, modelName, System.StringComparison.OrdinalIgnoreCase))
                 return i;
 
-            if (suffixMatch < 0 && name.EndsWith(modelName, System.StringComparison.OrdinalIgnoreCase))
+            if (!name.EndsWith(modelName, System.StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            suffixCount++;
+            if (suffixMatch < 0)
                 suffixMatch = i;
         }
+
+        // 접미사가 여럿 걸리면 어느 것을 골랐는지 알린다 — 조용히 엉뚱한 모델을 입지 않게
+        if (suffixCount > 1)
+            Debug.LogWarning($"FactionRevengeEvent: '{modelName}'이 접미사로 {suffixCount}개 모델에 걸려 "
+                + $"'{catalog.GetModelName(suffixMatch)}'을 골랐다 — 전체 이름으로 적을 것");
 
         return suffixMatch;
     }

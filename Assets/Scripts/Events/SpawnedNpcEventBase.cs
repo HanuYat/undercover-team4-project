@@ -307,7 +307,7 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
         }
     }
 
-    public void ServerReset()
+    public virtual void ServerReset()
     {
         // 라운드 종료 일괄 정리 — 남은 스폰물마다 이펙트가 터지지 않게 연출은 끈다
         for (int i = m_spawned.Count - 1; i >= 0; i--)
