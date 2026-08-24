@@ -125,6 +125,7 @@ public class PlayerInputHandler : NetworkBehaviour
 
     public event Action OnInteractStarted; // 상호작용 버튼 누름
     public event Action OnInteractPerformed; // 상호작용 발동 — 순수 Button이라 누르는 즉시 발화 (즉시발동)
+    public event Action OnInteractCanceled; // 상호작용 버튼 뗌 — 자가 부활 등 홀드형 취소용 (#820)
     public event Action OnLootPerformed; // R — 쓰러진 동료 뒤지기, 즉시발동 (#725)
     public event Action OnUseItemStarted; // 아이템 사용 시작 (좌클릭 누름 — 채널링 시작, #91)
     public event Action OnUseItemCanceled; // 아이템 사용 중단 (좌클릭 뗌 — 채널링 취소, #91)
@@ -281,6 +282,7 @@ public class PlayerInputHandler : NetworkBehaviour
         m_lookAction.action.canceled += OnLook;
         m_interactAction.action.started += OnInteractStartedHandler;
         m_interactAction.action.performed += OnInteractPerformedHandler;
+        m_interactAction.action.canceled += OnInteractCanceledHandler;
         m_lootAction.action.performed += OnLootPerformedHandler;
         m_sprintAction.action.performed += OnSprintPerformed;
         m_sprintAction.action.canceled += OnSprintCanceled;
@@ -313,6 +315,7 @@ public class PlayerInputHandler : NetworkBehaviour
         m_lookAction.action.canceled -= OnLook;
         m_interactAction.action.started -= OnInteractStartedHandler;
         m_interactAction.action.performed -= OnInteractPerformedHandler;
+        m_interactAction.action.canceled -= OnInteractCanceledHandler;
         m_lootAction.action.performed -= OnLootPerformedHandler;
         m_sprintAction.action.performed -= OnSprintPerformed;
         m_sprintAction.action.canceled -= OnSprintCanceled;
@@ -358,6 +361,9 @@ public class PlayerInputHandler : NetworkBehaviour
 
     private void OnInteractPerformedHandler(InputAction.CallbackContext ctx) =>
         OnInteractPerformed?.Invoke();
+
+    private void OnInteractCanceledHandler(InputAction.CallbackContext ctx) =>
+        OnInteractCanceled?.Invoke();
 
     private void OnLootPerformedHandler(InputAction.CallbackContext ctx) =>
         OnLootPerformed?.Invoke();
