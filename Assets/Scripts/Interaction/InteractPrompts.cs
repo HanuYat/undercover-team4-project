@@ -37,6 +37,7 @@ public static class InteractPrompts
 
     // ---- 상점 ----
     public static readonly LocalizedString Cosmetics = Of("Hud.Interact.Cosmetics");
+    public static readonly LocalizedString Gacha = Of("Hud.Interact.Gacha");
 
     // ---- 아이템 ----
     public static readonly LocalizedString Pickup = Of("Hud.Interact.Pickup");

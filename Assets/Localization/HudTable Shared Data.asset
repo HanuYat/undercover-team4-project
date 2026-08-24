@@ -439,6 +439,10 @@ MonoBehaviour:
     m_Key: Hud.Interact.Cosmetics
     m_Metadata:
       m_Items: []
+  - m_Id: 7415952269803520
+    m_Key: Hud.Interact.Gacha
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
