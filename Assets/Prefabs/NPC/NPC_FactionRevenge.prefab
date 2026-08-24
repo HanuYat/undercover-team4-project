@@ -10,15 +10,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 2281887230768859551, guid: d683626f03b237a4da9faa4542cc57a0, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 2078915346
-      objectReference: {fileID: 0}
-    - target: {fileID: 2281887230768859551, guid: d683626f03b237a4da9faa4542cc57a0, type: 3}
-      propertyPath: SceneMigrationSynchronization
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 2281887230768859551, guid: d683626f03b237a4da9faa4542cc57a0, type: 3}
-      propertyPath: InScenePlacedSourceGlobalObjectIdHash
-      value: 3092420515
+      value: 3783968547
       objectReference: {fileID: 0}
     - target: {fileID: 3692059701882310837, guid: d683626f03b237a4da9faa4542cc57a0, type: 3}
       propertyPath: m_LocalPosition.x
