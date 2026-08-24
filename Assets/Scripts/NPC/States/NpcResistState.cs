@@ -195,6 +195,7 @@ public class NpcResistState : NpcStateBase
 
         int engaged = 0;    // 정면 부채꼴 안에서 실제로 노린 대상 수
         int aliveCount = 0; // 그중 타격 후에도 살아있는 수
+        int struck = 0;     // 실제로 데미지가 들어간 수 — 타격음 판정용 (#817)
         foreach (PlayerHealth player in s_playerBuffer)
         {
             if (!IsInFrontCone(player.transform.position))
@@ -205,9 +206,14 @@ public class NpcResistState : NpcStateBase
                 continue;
 
             ((IDamageable)player).TakeDamage(m_config.AttackDamage, m_owner.gameObject);
+            struck++;
             if (player.CurrentHp > 0)
                 aliveCount++;
         }
+
+        // engaged가 아니라 struck을 보는 이유: 쓰러진 몸은 위에서 건너뛰어 실제로는 맞지 않는다 (#817)
+        if (struck > 0)
+            m_owner.Reaction.RaiseAttackHit();
 
         if (engaged == 0)
             return false; // 정면에 아무도 없으면 허공에 휘두를 뿐 — 패배 판정은 제한 시간이 담당

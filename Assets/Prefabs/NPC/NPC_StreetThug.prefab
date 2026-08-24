@@ -39,6 +39,7 @@ GameObject:
   - component: {fileID: 7663553785463991966}
   - component: {fileID: 5496521615781540018}
   - component: {fileID: 3487352832978371397}
+  - component: {fileID: 6748584981211307587}
   m_Layer: 7
   m_Name: NPC_StreetThug
   m_TagString: Untagged
@@ -568,6 +569,19 @@ MonoBehaviour:
   m_weapon: {fileID: 4941254951962462537}
   m_layerName: WeaponUpperBody
   m_layerWeight: 1
+--- !u!114 &6748584981211307587
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b055661e18c359c4b8a1d5a80dacc03f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcAttackSound
+  m_swingLeadSeconds: 0.18
 --- !u!1001 &3679051956096844986
 PrefabInstance:
   m_ObjectHideFlags: 0
