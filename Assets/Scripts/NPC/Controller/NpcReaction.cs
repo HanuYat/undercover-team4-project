@@ -48,6 +48,10 @@ public class NpcReaction : NetworkBehaviour
     /// FSM 상태와 독립한 순간 이벤트라 State 동기화와 별개로 스윙 타이밍을 정확히 맞춘다. (#220)</summary>
     public event Action<int> OnAttackSwing;
 
+    /// <summary>스윙이 실제로 플레이어를 맞힌 순간 발행 — 전 피어에서 발생한다(스윙과 같은 중계 구조).
+    /// 스윙과 나눠 두는 이유는 빗나간 스윙에 명중음이 나면 안 되기 때문이다. (#817)</summary>
+    public event Action OnAttackHit;
+
     private void Awake()
     {
         m_owner = GetComponent<NpcController>();
@@ -196,6 +200,24 @@ public class NpcReaction : NetworkBehaviour
         if (IsServer)
             return;
         OnAttackSwing?.Invoke(variant);
+    }
+
+    /// <summary>공격이 플레이어를 맞힌 것을 전 피어에 알린다 — 타격음용. 서버(또는 오프라인) FSM Tick에서만 호출한다.
+    /// 판정 자체가 서버 전용이라(<see cref="NpcResistState"/>) 이 중계가 없으면 호스트에서만 소리가 난다. (#817)</summary>
+    public void RaiseAttackHit()
+    {
+        OnAttackHit?.Invoke(); // 서버·오프라인 로컬 발행
+        if (IsSpawned && IsServer)
+            PlayAttackHitClientRpc();
+    }
+
+    [ClientRpc]
+    private void PlayAttackHitClientRpc()
+    {
+        // 서버(호스트)는 위에서 이미 발행했으므로 원격 클라에서만 중계
+        if (IsServer)
+            return;
+        OnAttackHit?.Invoke();
     }
 
     // E 제압 경로는 전부 제거됐다 — E는 신병 조작(재연행·줄다리기 복귀) 전용 키가 됐다.
