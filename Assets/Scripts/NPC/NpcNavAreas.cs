@@ -37,10 +37,8 @@ public static class NpcNavAreas
     /// <summary>도로 영역 비트마스크. 프로젝트 설정에 그 영역이 없으면 0이라 아래가 전부 무동작이 된다.</summary>
     public static int RoadMask => ResolveMask(k_roadAreaName, ref s_roadMask);
 
-    /// <summary>
-    /// 도로 영역 <b>인덱스</b> — 없으면 -1. 마스크와 달리 <see cref="NavMeshAgent.SetAreaCost"/>가 요구하는 값이다.
-    /// 개체별 도로 비용 조정(추격 중 도로 기피 해제, #721)이 쓴다.
-    /// </summary>
+    /// <summary>도로 영역 <b>인덱스</b> — 없으면 -1. <see cref="NavMeshAgent.SetAreaCost"/>가 마스크가 아니라
+    /// 이 값을 요구한다 — 개체별 도로 비용 조정(#721)이 쓴다.</summary>
     public static int RoadArea
     {
         get

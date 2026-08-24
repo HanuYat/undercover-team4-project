@@ -325,9 +325,7 @@ public class NpcStun : NetworkBehaviour
             return;
         }
 
-        // 복귀 지점은 ResumeReaction 하나다 — 대부분 도주지만, 포기하지 않는 개체(세력 복수대)는
-        // 저항으로 돌아온다 (#721). 테이저·넉다운은 이 오버레이 경로를 타므로 여기가 빠지면
-        // "기절시켜도 다시 쫓아온다"가 성립하지 않는다.
+        // 복귀 지점은 ResumeReaction 하나다 — 대부분 도주지만 포기하지 않는 개체는 저항으로 돌아온다 (#721)
         if (NpcStateRules.IsReactive(m_owner.CurrentState))
             m_owner.Reaction.ResumeReaction(m_owner.Reaction.ThreatTarget);
     }

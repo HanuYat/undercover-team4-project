@@ -13,10 +13,8 @@ using Random = UnityEngine.Random;
 /// 검거 판정 수신, 도심 잔류(#310), 라운드 종료 정리. NPC가 무슨 짓을 하는지는 파생 클래스가 정한다
 /// (<see cref="ApplyBehavior"/>) — 종류별 행동이 한 파일에 뒤섞이지 않게 하는 것이 이 분리의 목적이다.
 ///
-/// <b>인원은 <see cref="SpawnCount"/>가 정한다</b> (#721). 기본은 1명이고, 그때는 한 지점에 하나가 선다.
-/// 2명 이상이면 지점을 <b>하나만</b> 잡고 그 주위에 흩뿌려 덩어리로 세운다 — "저쪽에서 넷 온다"가
-/// 눈으로도 무전으로도 읽히게 하기 위함이다. 종료·잔류·정리는 개체마다 따로 판정하고, <b>전원이 손을
-/// 떠났을 때</b> 이벤트가 비활성이 된다.
+/// <b>인원은 <see cref="SpawnCount"/>가 정한다</b> (#721). 2명 이상이면 지점을 하나만 잡고 그 주위에
+/// 덩어리로 세운다. 종료·잔류·정리는 개체마다 따로 판정하고, 전원이 손을 떠났을 때 비활성이 된다.
 ///
 /// 파생 이벤트: <see cref="StreetThugEvent"/>(동네 깡패) · <see cref="StreakerEvent"/>(공연음란범) ·
 /// <see cref="PickpocketEvent"/>(소매치기 #303) · <see cref="FactionRevengeEvent"/>(세력 소탕 #721).
@@ -87,9 +85,7 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
     [SerializeField]
     private float m_maxLifetimeSeconds = 60f;
 
-    /// <summary>
-    /// 이번 발생에서 스폰한 개체 하나 — 종료·잔류를 <b>각자</b> 판정하므로 상태가 이벤트가 아니라 여기 딸린다. (#721)
-    /// </summary>
+    /// <summary>스폰한 개체 하나 — 종료·잔류를 각자 판정하므로 상태가 이벤트가 아니라 여기 딸린다. (#721)</summary>
     private class SpawnedEntry
     {
         public NpcController Npc;
@@ -120,10 +116,8 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
 
     public bool IsActive => m_spawned.Count > 0;
 
-    /// <summary>
-    /// 첫 스폰물 — <b>1명 전제</b>인 파생이 개체 참조가 필요할 때 쓴다 (<see cref="PickpocketEvent"/>).
-    /// 진행 중이 아니면 null. 여러 명을 스폰하는 이벤트는 <see cref="ApplyBehavior"/>가 받는 개체를 쓸 것.
-    /// </summary>
+    /// <summary>첫 스폰물 — <b>1명 전제</b>인 파생 전용(<see cref="PickpocketEvent"/>). 진행 중이 아니면 null.
+    /// 여러 명을 스폰하는 이벤트는 <see cref="ApplyBehavior"/>가 받는 개체를 쓸 것.</summary>
     protected NpcController PrimaryNpc => m_spawned.Count > 0 ? m_spawned[0].Npc : null;
 
     /// <summary>
@@ -145,17 +139,12 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
 
     // ---- 파생 클래스가 채우는 부분 ----
 
-    /// <summary>
-    /// 한 번의 발생에서 스폰할 인원 — 기본 1명. 2명 이상이면 한 지점 주위에 덩어리로 선다. (#721)
-    /// <b>발생 시점에 한 번</b> 읽으므로 라운드 표 같은 동적 값을 돌려줘도 된다.
-    /// </summary>
+    /// <summary>한 번의 발생에서 스폰할 인원 — 기본 1명. <b>발생 시점에 한 번</b> 읽으므로 라운드 표 같은
+    /// 동적 값을 돌려줘도 된다. (#721)</summary>
     protected virtual int SpawnCount => 1;
 
-    /// <summary>
-    /// 스폰 직후 이 NPC가 취할 행동 — 서버에서만, <b>개체마다</b> 불린다. <see cref="m_threat"/>가 이미 서 있다.
-    /// 스폰과 같은 프레임이 아니라 <b>다음 프레임</b>에 불린다: 같은 프레임이면 뒤이어 실행되는
-    /// NPC 초기화(InitBehavior)가 Idle로 덮어쓴다.
-    /// </summary>
+    /// <summary>스폰 직후 이 NPC가 취할 행동 — 서버에서만, <b>개체마다</b> 불린다.
+    /// 스폰 <b>다음 프레임</b>이다: 같은 프레임이면 뒤이어 실행되는 InitBehavior가 Idle로 덮어쓴다.</summary>
     protected abstract void ApplyBehavior(NpcController npc);
 
     /// <summary>
@@ -164,10 +153,8 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
     /// </summary>
     protected abstract ERiotBehavior RiotBehavior { get; }
 
-    /// <summary>
-    /// 스폰·복제 등록이 끝난 직후 — 파생이 개체별 초기 설정을 얹는다(예: 외형 고정). 서버 전용.
-    /// <see cref="ApplyBehavior"/>와 달리 <b>같은 프레임</b>이다: FSM을 건드리지 않는 것만 여기서 할 것.
-    /// </summary>
+    /// <summary>스폰·복제 등록 직후 — 파생이 개체별 초기 설정을 얹는다(예: 외형 고정). 서버 전용.
+    /// <b>같은 프레임</b>이라 FSM을 건드리지 않는 것만 여기서 할 것.</summary>
     protected virtual void OnSpawned(NpcController npc) { }
 
     /// <summary>
@@ -219,11 +206,8 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
         return SuddenEventUtil.FindRandomFieldPlayer() != null;
     }
 
-    /// <summary>
-    /// 강제 발동 준비 — 기본은 거절. <b>인터페이스 기본 구현이 아니라 여기 실제 멤버로 두는 이유는
-    /// <see cref="AnnounceOnBegin"/>과 같다</b>: 기본 구현에 기대면 매핑이 이 클래스에서 고정돼
-    /// 파생이 같은 이름을 선언해도 매니저가 부르는 것은 여전히 기본값(false)이다. (#775, #721)
-    /// </summary>
+    /// <summary>강제 발동 준비 — 기본은 거절. 인터페이스 기본 구현이 아니라 여기 실제 멤버로 둔 이유는
+    /// <see cref="AnnounceOnBegin"/>과 같다(파생이 덮어도 반영되지 않는다). (#775, #721)</summary>
     public virtual bool ServerPrepareForceTrigger() => false;
 
     public virtual void ServerBegin()
@@ -248,8 +232,7 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
             return;
         }
 
-        // 지점은 한 번만 찾는다 — 각자 찾게 하면 표적을 사이에 두고 흩어져 나와 덩어리로 읽히지 않는다
-        // (AbductionEvent의 2인조 스폰과 같은 방침). 첫 명은 앵커에 그대로 세운다.
+        // 지점은 한 번만 찾는다 — 각자 찾으면 흩어져 나와 덩어리로 읽히지 않는다 (AbductionEvent와 같은 방침)
         int count = Mathf.Max(1, SpawnCount);
         for (int i = 0; i < count; i++)
             SpawnOne(i == 0 ? anchor : ScatterAround(anchor, areaMask));
@@ -345,7 +328,7 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
         MisdemeanorOffender offender = npc.gameObject.AddComponent<MisdemeanorOffender>();
 
         // 수익은 스폰 시점에 확정한다 (#395) — 판정 시점에 뽑으면 재검거로 금액을 리롤할 수 있다.
-        // 개체마다 따로 뽑으므로 여럿이면 총액이 그만큼 커진다 (#721).
+        // 개체마다 따로 뽑으므로 여럿이면 총액이 그만큼 커진다.
         int reward = BountyRoll.Roll(m_pettyCrimeRewardMin, m_pettyCrimeRewardMax);
         offender.Reward = reward;
         offender.SetRiotBehavior(RiotBehavior, m_maxLifetimeSeconds);
@@ -362,8 +345,7 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
         m_spawned.Add(entry);
     }
 
-    // 앵커 주위 짧은 반경에 흩뿌린다 — NavMesh를 못 잡으면 앵커 자신으로 폴백한다.
-    // 겹쳐 서더라도 스폰 자체가 불발되는 것보다 낫다(에이전트가 곧 서로를 밀어낸다). (#721)
+    // 앵커 주위에 흩뿌린다 — NavMesh를 못 잡으면 앵커로 폴백한다. 겹쳐 서는 편이 스폰 불발보다 낫다. (#721)
     private Vector3 ScatterAround(Vector3 anchor, int areaMask)
     {
         Vector2 offset = Random.insideUnitCircle * m_clusterRadius;
@@ -426,8 +408,8 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
         ReleaseToCity(entry);
     }
 
-    // 이벤트가 손을 떼고 NPC를 도심에 남긴다 — 뒷일(인계 판정·라운드 종료 정리)은 MisdemeanorLoiterer가
-    // 물려받는다. 마지막 한 명이 빠지면 이벤트가 비활성(IsActive=false)이 되어 다시 추첨될 수 있다. (#310)
+    // 이벤트가 손을 떼고 NPC를 도심에 남긴다 — 뒷일은 MisdemeanorLoiterer가 물려받는다.
+    // 마지막 한 명이 빠지면 비활성이 되어 다시 추첨될 수 있다. (#310)
     private void ReleaseToCity(SpawnedEntry entry)
     {
         NpcController npc = entry.Npc;

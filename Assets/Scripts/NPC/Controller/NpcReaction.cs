@@ -30,10 +30,8 @@ public class NpcReaction : NetworkBehaviour
     /// </summary>
     public bool IsSprinter { get; private set; }
 
-    /// <summary>
-    /// 포기하지 않는 개체인가 — 깨어나거나 풀려나면 도주가 아니라 <b>저항으로 돌아간다</b>. (#721)
-    /// <see cref="IsSprinter"/>와 같은 자리·같은 목적의 표식이다: 기절·제압이 상태를 갈아엎어도 하던 것을 잃지 않는다.
-    /// </summary>
+    /// <summary>포기하지 않는 개체인가 — 깨어나거나 풀려나면 도주가 아니라 <b>저항으로 돌아간다</b>.
+    /// <see cref="IsSprinter"/>와 같은 자리·같은 목적의 표식이다. (#721)</summary>
     public bool IsRelentless { get; private set; }
 
     /// <summary>
@@ -159,7 +157,7 @@ public class NpcReaction : NetworkBehaviour
         if (IsSprinter && !m_owner.Custody.HasReleaseDestination)
             StartSprint();
         else if (IsRelentless)
-            StartResist(threat, relentless: true); // 반출 목적지 가드가 없는 이유: Attack은 ClearRelease 예외 목록에 있다
+            StartResist(threat, relentless: true); // 가드가 없는 이유: Attack은 ClearRelease 예외 목록에 있다
         else
             StartFlee(threat);
     }
