@@ -35,6 +35,9 @@ public static class InteractPrompts
     public static readonly LocalizedString MapSelect = Of("Hud.Interact.MapSelect");
     public static readonly LocalizedString BlackoutRecovery = Of("Hud.Interact.BlackoutRecovery");
 
+    // ---- 상점 ----
+    public static readonly LocalizedString Cosmetics = Of("Hud.Interact.Cosmetics");
+
     // ---- 아이템 ----
     public static readonly LocalizedString Pickup = Of("Hud.Interact.Pickup");
     public static readonly LocalizedString Shop = Of("Hud.Interact.Shop");

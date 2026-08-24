@@ -480,6 +480,10 @@ MonoBehaviour:
       \uC77C\uC5B4\uB09C\uB2E4"
     m_Metadata:
       m_Items: []
+  - m_Id: 7355433073860608
+    m_Localized: "\uC678\uD615 \uBC14\uAFB8\uAE30"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

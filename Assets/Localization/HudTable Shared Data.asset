@@ -435,6 +435,10 @@ MonoBehaviour:
     m_Key: Hud.Revive.SelfKit
     m_Metadata:
       m_Items: []
+  - m_Id: 7355433073860608
+    m_Key: Hud.Interact.Cosmetics
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
