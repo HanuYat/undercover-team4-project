@@ -20,7 +20,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 70274809663488
-    m_Key: Shop.Stand.Purchased
+    m_Key: Shop.Stand.Owned
+    m_Metadata:
+      m_Items: []
+  - m_Id: 70274809663492
+    m_Key: Shop.Stand.SoldOut
     m_Metadata:
       m_Items: []
   - m_Id: 70274809663489
