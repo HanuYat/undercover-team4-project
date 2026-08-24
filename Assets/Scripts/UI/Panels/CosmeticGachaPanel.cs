@@ -79,7 +79,12 @@ public class CosmeticGachaPanel : PanelBase
     public bool IsSpinning => m_spinning;
 
     private float Pitch => m_cellSize + m_gap;
-    private int Center => m_visibleCells / 2;
+    private int Center => VisibleCells / 2;
+
+    // 인스펙터 값이 이상해도 릴이 터지지 않게 못 박는다. 칸 수가 0 이하면 당첨을 꽂는 자리가
+    // 시퀀스 범위를 넘고, 짝수면 가운데 칸이 테두리와 반 칸 어긋난다(툴팁 경고만으로는 못 막는다).
+    private int VisibleCells => Mathf.Max(3, m_visibleCells | 1);
+    private int ScrollCells => Mathf.Max(1, m_scrollCells);
 
     /// <summary>
     /// 이 결과가 가운데에 멈추도록 릴을 돌린다 (#818 D).
@@ -121,24 +126,24 @@ public class CosmeticGachaPanel : PanelBase
         }
     }
 
-    // 당첨은 <b>정확히 m_scrollCells + Center</b> 자리에 둔다 — 감속이 끝나는 순간 그 자리가 가운데다.
+    // 당첨은 <b>정확히 ScrollCells + Center</b> 자리에 둔다 — 감속이 끝나는 순간 그 자리가 가운데다.
     private void BuildSequence(EAccessorySlot slot, int index)
     {
         m_sequence.Clear();
-        int length = m_scrollCells + m_visibleCells;
+        int length = ScrollCells + VisibleCells;
         for (int i = 0; i < length; i++)
             m_sequence.Add(m_pool[UnityEngine.Random.Range(0, m_pool.Count)]);
 
-        m_sequence[m_scrollCells + Center] = (slot, index);
+        m_sequence[ScrollCells + Center] = (slot, index);
     }
 
     private void EnsureCells()
     {
-        while (m_cells.Count < m_visibleCells)
+        while (m_cells.Count < VisibleCells)
             m_cells.Add(CreateCell(m_cells.Count));
 
         for (int i = 0; i < m_cells.Count; i++)
-            m_cells[i].Root.gameObject.SetActive(i < m_visibleCells);
+            m_cells[i].Root.gameObject.SetActive(i < VisibleCells);
     }
 
     // 칸은 런타임에 찍는다 — 개수가 인스펙터 값이라 프리팹에 미리 박아 둘 수 없다
@@ -189,12 +194,12 @@ public class CosmeticGachaPanel : PanelBase
                 await UniTask.NextFrame(destroyCancellationToken);
                 elapsed += Time.unscaledDeltaTime; // 정산·일시정지로 시간이 멈춰도 릴은 돈다
 
-                // 끝으로 갈수록 느려지는 곡선. 끝점이 정확히 m_scrollCells라 당첨이 가운데에 선다.
+                // 끝으로 갈수록 느려지는 곡선. 끝점이 정확히 ScrollCells라 당첨이 가운데에 선다.
                 float t = Mathf.Clamp01(elapsed / m_spinSeconds);
-                Layout(m_scrollCells * (1f - Mathf.Pow(1f - t, 3f)));
+                Layout(ScrollCells * (1f - Mathf.Pow(1f - t, 3f)));
             }
 
-            Layout(m_scrollCells); // 부동소수 오차로 반 칸 어긋난 채 끝나지 않게 못 박는다
+            Layout(ScrollCells); // 부동소수 오차로 반 칸 어긋난 채 끝나지 않게 못 박는다
             SetFrameColor(m_frameWin);
             ShowResult(slot, index, gained);
 
@@ -225,7 +230,7 @@ public class CosmeticGachaPanel : PanelBase
         int start = Mathf.FloorToInt(passed);
         float fraction = passed - start;
 
-        for (int i = 0; i < m_visibleCells; i++)
+        for (int i = 0; i < VisibleCells; i++)
         {
             Cell cell = m_cells[i];
             cell.Root.anchoredPosition = new Vector2((i - Center - fraction) * Pitch, 0f);

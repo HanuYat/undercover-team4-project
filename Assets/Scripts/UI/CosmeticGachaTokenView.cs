@@ -21,6 +21,14 @@ public class CosmeticGachaTokenView : MonoBehaviour
 
     private void OnEnable()
     {
+        // 키가 안 붙었으면 구독하지 않는다 — 빈 LocalizedString을 구독하면 조회할 때마다
+        // 에러가 쌓인다 (EmoteWheelSlotView가 같은 이유로 IsEmpty를 본다)
+        if (m_format.IsEmpty)
+        {
+            Debug.LogWarning($"[{nameof(CosmeticGachaTokenView)}] 표시 문구 키가 연결되지 않았습니다 (#818 D)", this);
+            return;
+        }
+
         // 인자를 먼저 넣고 구독한다 — 순서를 어기면 첫 발화가 인자 없는 문장으로 나간다
         m_format.Arguments = new object[] { CosmeticInventory.Tokens };
         m_format.StringChanged += SetText;
@@ -29,6 +37,9 @@ public class CosmeticGachaTokenView : MonoBehaviour
 
     private void OnDisable()
     {
+        if (m_format.IsEmpty)
+            return;
+
         m_format.StringChanged -= SetText;
         CosmeticInventory.OnTokensChanged -= Refresh;
     }
