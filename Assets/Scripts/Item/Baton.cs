@@ -101,7 +101,7 @@ public class Baton : ItemBase, IAimedWeapon
     // 재진입 가드, 디스폰 시 정리) — 그 골격이 이미 ServerChannel에 있어 그대로 재사용한다 (#109).
     private readonly ServerChannel m_swingImpact = new();
 
-    // ---- 하위 클래스 확장 시임 (#816) ----
+    // ---- 하위 클래스 확장 시임 (#815/#816) ----
 
     /// <summary>
     /// 이 타격의 위력 — 데미지와 '대박' 여부를 함께 정한다. 굴림 한 번이 데미지와 연출(<see cref="ImpactFxFor"/>)
@@ -130,6 +130,21 @@ public class Baton : ItemBase, IAimedWeapon
     /// 서버 판정 로그·토스트에 실을 무기 이름 — 콘솔·토스트 전용 문자열이라 지역화 대상이 아니다.
     /// </summary>
     protected virtual string WeaponLogName => "진압봉";
+
+    /// <summary>
+    /// 유효타가 실제로 적용된 뒤 — 서버 전용, 데미지·반응(ServerReactTo)보다 <b>뒤</b>에 불린다.
+    /// 기본 구현은 무동작. 데미지 외의 추가 효과(발사 등)를 얹는 하위 클래스가 재정의한다 (홈런 진압봉, #815).
+    /// </summary>
+    /// <param name="npc">맞은 NPC. 동료를 맞췄으면 null.</param>
+    /// <param name="player">맞은 동료. NPC를 맞췄으면 null.</param>
+    /// <param name="swingDirection">타격 시점의 조준 방향(월드) — 발사 벡터 계산 등에 쓴다.</param>
+    /// <param name="holder">때린 사람.</param>
+    protected virtual void ServerOnHitLanded(
+        NpcController npc,
+        PlayerHealth player,
+        Vector3 swingDirection,
+        Transform holder
+    ) { }
 
     // ---- ItemBase ----
 
@@ -380,6 +395,7 @@ public class Baton : ItemBase, IAimedWeapon
                 $"{WeaponLogName} 명중 — 동료 오사! {playerTarget.name} "
                     + $"(-{power.Damage} → {playerTarget.CurrentHp}/{playerTarget.MaxHp})"
             );
+            ServerOnHitLanded(null, playerTarget, direction, holderTransform);
             return;
         }
 
@@ -390,6 +406,7 @@ public class Baton : ItemBase, IAimedWeapon
         NotifyOwner(
             $"{WeaponLogName} 명중: {target.name} (-{power.Damage} → {target.Health.CurrentHp}/{target.Health.MaxHp})"
         );
+        ServerOnHitLanded(target, null, direction, holderTransform);
     }
 
     // ---- 정리 ----
