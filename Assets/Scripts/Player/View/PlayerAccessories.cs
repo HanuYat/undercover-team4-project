@@ -47,12 +47,19 @@ public class PlayerAccessories : NetworkBehaviour
 
         if (IsOwner)
         {
+            // 안 가진 치장을 입고 있으면 여기서 벗긴다 — 명부에 담긴 값이 해금 이전 것일 수 있다 (#818 D)
+            CosmeticInventory.SanitizeEquipped(m_catalog);
+
             GameSettings.OnAccessoryChanged += HandleOwnerAccessoryChanged;
 
             // 안전망 — 명부 보고가 스폰을 앞지르지 못한 경합에서만 한 박자 늦게 고쳐진다.
             // 값이 같으면 NetworkVariable이 스스로 무시하므로 정상 경로에서는 대역폭을 먹지 않는다.
-            if (!IsServer)
-                ReportAccessoriesRpc(AccessorySet.FromSettings());
+            // 호스트도 함께 덮는다 — 위에서 심은 명부 값이 방금 벗긴 것을 되입힐 수 있어서다 (#818 D).
+            AccessorySet mine = AccessorySet.FromSettings();
+            if (IsServer)
+                m_accessories.Value = mine;
+            else
+                ReportAccessoriesRpc(mine);
         }
 
         m_accessories.OnValueChanged += HandleAccessoriesChanged;

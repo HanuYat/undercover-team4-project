@@ -5,7 +5,8 @@ using UnityEngine;
 /// 한 슬롯의 치장을 고르는 칸들 (#818) — <see cref="PlayerColorPickerView"/>와 같은 구조다.
 /// 고르면 <see cref="GameSettings"/>에 쓰고, 남에게 나르는 일은 명부와 <c>PlayerAccessories</c>가 맡는다.
 ///
-/// <b>보유 개념이 아직 없다</b> — 카탈로그의 전 항목을 고를 수 있다. 보유함 필터는 후속(#818 D)에서 얹는다.
+/// <b>안 가진 항목은 잠긴 칸으로 남긴다</b> (#818 D) — 숨기지 않는 것은 무엇이 더 있는지 보여야
+/// 자판기를 돌릴 이유가 생기기 때문이다. 보유 판단은 <see cref="CosmeticInventory"/>가 한다.
 /// </summary>
 public class AccessoryPickerView : MonoBehaviour
 {
@@ -38,6 +39,12 @@ public class AccessoryPickerView : MonoBehaviour
     {
         GameSettings.OnAccessoryChanged += HandleAccessoryChanged;
         CosmeticNames.OnLanguageChanged += RefreshLabels;
+        CosmeticInventory.OnOwnedChanged += RefreshLocks;
+
+        // 창을 열 때 한 번 걸러 낸다 — 해금이 생기기 전에 고른 값이 남아 있을 수 있다 (#818 D)
+        CosmeticInventory.SanitizeEquipped(m_catalog);
+
+        RefreshLocks();
         RefreshSelection();
     }
 
@@ -45,6 +52,7 @@ public class AccessoryPickerView : MonoBehaviour
     {
         GameSettings.OnAccessoryChanged -= HandleAccessoryChanged;
         CosmeticNames.OnLanguageChanged -= RefreshLabels;
+        CosmeticInventory.OnOwnedChanged -= RefreshLocks;
     }
 
     private void Build()
@@ -63,6 +71,7 @@ public class AccessoryPickerView : MonoBehaviour
             m_cells.Add(cell);
         }
 
+        RefreshLocks();
         RefreshSelection();
     }
 
@@ -76,6 +85,13 @@ public class AccessoryPickerView : MonoBehaviour
     {
         for (int i = 0; i < m_cells.Count; i++)
             m_cells[i].SetLabel(CosmeticNames.Of(m_catalog.Get(m_slot, i)));
+    }
+
+    // 자판기로 뽑으면 잠금이 풀린다 — 칸을 다시 만들지 않고 표시만 갈아 준다
+    private void RefreshLocks()
+    {
+        for (int i = 0; i < m_cells.Count; i++)
+            m_cells[i].SetLocked(!CosmeticInventory.IsOwned(m_catalog, m_slot, i));
     }
 
     private void RefreshSelection()

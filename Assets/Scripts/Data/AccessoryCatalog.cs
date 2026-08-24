@@ -19,6 +19,9 @@ public class AccessoryCatalog : ScriptableObject
 
         [Tooltip("이걸 쓰면 가려지는 슬롯 — 전면 헬멧이 머리카락을, 마스크가 수염을 덮는 식")]
         public EAccessorySlotMask Hides;
+
+        [Tooltip("계정을 새로 만들어도 처음부터 쓸 수 있는가 — 나머지는 자판기로 해금한다")]
+        public bool DefaultOwned;
     }
 
     [Serializable]
@@ -49,6 +52,20 @@ public class AccessoryCatalog : ScriptableObject
     {
         Item item = ItemAt(slot, index);
         return item == null ? null : item.Icon;
+    }
+
+    /// <summary>
+    /// 처음부터 쓸 수 있는 항목인가 (#818 D). <b>보유함에 담지 않고 카탈로그가 정한다</b> —
+    /// 담아 두면 기본 지급 세트를 고칠 때 이미 만든 계정에는 반영되지 않는다.
+    /// "안 씀"(0)은 늘 쓸 수 있다.
+    /// </summary>
+    public bool IsDefaultOwned(EAccessorySlot slot, int index)
+    {
+        if (index <= 0)
+            return true;
+
+        Item item = ItemAt(slot, index);
+        return item != null && item.DefaultOwned;
     }
 
     /// <summary>

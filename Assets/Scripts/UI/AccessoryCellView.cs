@@ -23,6 +23,12 @@ public class AccessoryCellView : MonoBehaviour
     [Tooltip("지금 고른 칸에만 켜지는 표시. 없으면 선택 표시가 없다")]
     [SerializeField] private GameObject m_selectedMark;
 
+    [Tooltip("아직 못 얻은 칸에 켜지는 자물쇠. 없으면 흐려지기만 한다")]
+    [SerializeField] private GameObject m_lockMark;
+
+    [Tooltip("잠긴 칸의 아이콘 투명도")]
+    [SerializeField] private float m_lockedAlpha = 0.3f;
+
     private Button m_button;
 
     private void Awake() => m_button = GetComponent<Button>();
@@ -58,5 +64,28 @@ public class AccessoryCellView : MonoBehaviour
     {
         if (m_selectedMark != null)
             m_selectedMark.SetActive(selected);
+    }
+
+    /// <summary>
+    /// 잠긴 칸으로 만든다 (#818 D) — 자판기로 해금하기 전의 항목이다.
+    /// <b>숨기지 않고 흐리게 남긴다</b>: 무엇이 더 있는지 보여야 뽑을 이유가 생긴다.
+    /// 버튼도 함께 끄므로 눌러도 착용되지 않는다.
+    /// </summary>
+    public void SetLocked(bool locked)
+    {
+        if (m_lockMark != null)
+            m_lockMark.SetActive(locked);
+
+        if (m_icon != null)
+        {
+            Color color = m_icon.color;
+            color.a = locked ? m_lockedAlpha : 1f;
+            m_icon.color = color;
+        }
+
+        if (m_button == null)
+            m_button = GetComponent<Button>();
+
+        m_button.interactable = !locked;
     }
 }
