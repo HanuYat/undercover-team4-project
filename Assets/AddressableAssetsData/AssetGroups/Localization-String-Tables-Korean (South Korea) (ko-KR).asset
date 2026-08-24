@@ -87,6 +87,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Locale-ko-KR
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ee648456b47f0f94ebed03a93d6bc2f6
+    m_Address: CosmeticsTable_ko-KR
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko-KR
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f25d73f432eb89442a3d3dbdf25dd81a
     m_Address: ItemTable_ko-KR
     m_ReadOnly: 1

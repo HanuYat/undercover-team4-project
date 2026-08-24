@@ -87,6 +87,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Locale-en
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e330969bff420b44d9b333bd7bb98335
+    m_Address: CosmeticsTable_en
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-en
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: faa0adf83e0314847a2dc2b9c6e7c10c
     m_Address: HqTable_en
     m_ReadOnly: 1

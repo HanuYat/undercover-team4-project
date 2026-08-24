@@ -1,0 +1,359 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e9620f8c34305754d8cc9a7e49e852d9, type: 3}
+  m_Name: CosmeticsTable_en
+  m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.StringTable
+  m_LocaleId:
+    m_Code: en
+  m_SharedData: {fileID: 11400000, guid: b6a4a75d125d7e04da19552d73a00bff, type: 2}
+  m_Metadata:
+    m_Items: []
+  m_TableData:
+  - m_Id: 202535165952
+    m_Localized: None
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577108992
+    m_Localized: Football Helmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577108993
+    m_Localized: Camo Cap
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577108994
+    m_Localized: Hunter Cap
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577108995
+    m_Localized: Riot Helmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577108996
+    m_Localized: Scout Hat
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577108997
+    m_Localized: Sheriff Hat
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577108998
+    m_Localized: Combat Helmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577108999
+    m_Localized: Backwards Cap
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109000
+    m_Localized: Police Cap
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109001
+    m_Localized: Custodian Helmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109002
+    m_Localized: Constable Hat
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109003
+    m_Localized: POLICE Cap
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109004
+    m_Localized: POLICE Cap Alt
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109005
+    m_Localized: Ranger Hat
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109006
+    m_Localized: Beret
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109007
+    m_Localized: Campaign Hat
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109008
+    m_Localized: Patrol Helmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109009
+    m_Localized: Police Helmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109010
+    m_Localized: Ballistic Helmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109011
+    m_Localized: Riot Visor Helmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109012
+    m_Localized: Biker Beard
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109013
+    m_Localized: Goatee
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109014
+    m_Localized: Scruffy Beard
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109015
+    m_Localized: Hunter Beard
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109016
+    m_Localized: Chinstrap Beard
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109017
+    m_Localized: Stubble
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109018
+    m_Localized: Wanderer Beard
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109019
+    m_Localized: Ragged Beard
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109020
+    m_Localized: Trimmed Beard
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109021
+    m_Localized: Moustache
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497600
+    m_Localized: Handlebar Moustache
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497601
+    m_Localized: Biker Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497602
+    m_Localized: Business Cut
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497603
+    m_Localized: Pink Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497604
+    m_Localized: Spiky Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497605
+    m_Localized: Cropped Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497606
+    m_Localized: Purple Emo Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497607
+    m_Localized: Short Black Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497608
+    m_Localized: Bandana Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497609
+    m_Localized: Black Bob
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497610
+    m_Localized: Long Blonde Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497611
+    m_Localized: Parted Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497612
+    m_Localized: Dreadlocks
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497613
+    m_Localized: Buzz Cut
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497614
+    m_Localized: Side Part
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497615
+    m_Localized: Ponytail
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497616
+    m_Localized: Twin Tails
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497617
+    m_Localized: Headband Curls
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497618
+    m_Localized: Shaggy Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497619
+    m_Localized: Matted Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497620
+    m_Localized: Wild Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497621
+    m_Localized: Thinning Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497622
+    m_Localized: Tangled Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497623
+    m_Localized: Capped Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497624
+    m_Localized: Short Brown Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497625
+    m_Localized: Short Brown Hair Alt
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497626
+    m_Localized: Swept Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497627
+    m_Localized: Wavy Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497628
+    m_Localized: Blonde Bangs
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497629
+    m_Localized: Crew Cut
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497630
+    m_Localized: Crew Cut Alt
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497631
+    m_Localized: Voluminous Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497632
+    m_Localized: Nerd Glasses
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497633
+    m_Localized: Eyepatch
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497634
+    m_Localized: Tactical Goggles
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497635
+    m_Localized: Round Glasses
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497636
+    m_Localized: Gold Rim Glasses
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497637
+    m_Localized: Square Glasses
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497638
+    m_Localized: Sunglasses
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497639
+    m_Localized: Visor Shades
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497640
+    m_Localized: Safety Goggles
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497641
+    m_Localized: Night Goggles
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497642
+    m_Localized: Gas Mask
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497643
+    m_Localized: Skull Mask
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497644
+    m_Localized: Hockey Mask
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497645
+    m_Localized: Tactical Gas Mask
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497646
+    m_Localized: Surgical Mask
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497647
+    m_Localized: Earpiece
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497648
+    m_Localized: Wireless Earpiece
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497649
+    m_Localized: Headset
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497650
+    m_Localized: Comms Headset
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497651
+    m_Localized: Ear Piercing
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497652
+    m_Localized: Piercing Set
+    m_Metadata:
+      m_Items: []
+  references:
+    version: 2
+    RefIds: []

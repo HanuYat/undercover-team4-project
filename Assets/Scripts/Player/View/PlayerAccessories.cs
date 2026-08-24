@@ -116,6 +116,10 @@ public class PlayerAccessories : NetworkBehaviour
 
         AccessorySet set = m_accessories.Value;
 
+        // 겹치는 조합은 가린다 — 전면 헬멧을 쓰면 머리카락이, 마스크를 쓰면 수염이 덮인다.
+        // 고른 값은 그대로 두므로 벗으면 다시 나온다.
+        EAccessorySlotMask hidden = m_catalog.HiddenSlots(set);
+
         foreach (EAccessorySlot slot in Enum.GetValues(typeof(EAccessorySlot)))
         {
             int i = (int)slot;
@@ -126,9 +130,12 @@ public class PlayerAccessories : NetworkBehaviour
                 m_spawned[i] = null;
             }
 
-            GameObject prefab = m_catalog.Get(slot, set[slot]);
+            GameObject prefab = AccessoryCatalog.IsHidden(hidden, slot)
+                ? null
+                : m_catalog.Get(slot, set[slot]);
+
             if (prefab == null)
-                continue; // 0(안 씀)이거나 범위 밖 — 아무것도 붙이지 않는다
+                continue; // 0(안 씀)이거나 가려졌거나 범위 밖 — 아무것도 붙이지 않는다
 
             m_spawned[i] = Instantiate(prefab, m_headBone, false);
             m_spawned[i].name = prefab.name;

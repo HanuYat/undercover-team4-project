@@ -220,6 +220,22 @@ public enum EAccessorySlot
 }
 
 /// <summary>
+/// 치장 슬롯 묶음 (#818) — 한 아이템이 <b>가리는</b> 슬롯을 표시하는 데 쓴다.
+/// 값은 <see cref="EAccessorySlot"/>의 비트 자리이므로 그쪽 순서를 따라간다.
+/// </summary>
+[System.Flags]
+public enum EAccessorySlotMask
+{
+    None = 0,
+    Headwear = 1 << EAccessorySlot.Headwear,
+    FacialHair = 1 << EAccessorySlot.FacialHair,
+    Hair = 1 << EAccessorySlot.Hair,
+    Eyewear = 1 << EAccessorySlot.Eyewear,
+    Facewear = 1 << EAccessorySlot.Facewear,
+    Earwear = 1 << EAccessorySlot.Earwear,
+}
+
+/// <summary>
 /// 창 모드 (#796). Unity의 <c>FullScreenMode</c> 중 PC에서 쓰는 셋만 골라 둔 것 —
 /// 값은 PlayerPrefs에 저장되므로 순서를 바꾸지 말 것. 변환은 GameSettings가 한다.
 /// </summary>

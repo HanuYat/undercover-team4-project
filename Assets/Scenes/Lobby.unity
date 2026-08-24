@@ -309,7 +309,7 @@ MonoBehaviour:
   m_slot: 2
   m_catalog: {fileID: 11400000, guid: 4d0d855372518f94184454112d35bef4, type: 2}
   m_container: {fileID: 26832992}
-  m_buttonPrefab: {fileID: 1227722270755931575, guid: 48a3bc40bec2c384680a6bdcdca0f5c4, type: 3}
+  m_cellPrefab: {fileID: 168262024777345165, guid: 48a3bc40bec2c384680a6bdcdca0f5c4, type: 3}
 --- !u!114 &26832994
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -344,10 +344,10 @@ MonoBehaviour:
   m_ChildAlignment: 0
   m_StartCorner: 0
   m_StartAxis: 0
-  m_CellSize: {x: 160, y: 40}
+  m_CellSize: {x: 96, y: 96}
   m_Spacing: {x: 8, y: 8}
   m_Constraint: 1
-  m_ConstraintCount: 7
+  m_ConstraintCount: 12
 --- !u!1 &47221229
 GameObject:
   m_ObjectHideFlags: 0
@@ -1790,7 +1790,7 @@ MonoBehaviour:
   m_slot: 3
   m_catalog: {fileID: 11400000, guid: 4d0d855372518f94184454112d35bef4, type: 2}
   m_container: {fileID: 317958461}
-  m_buttonPrefab: {fileID: 1227722270755931575, guid: 48a3bc40bec2c384680a6bdcdca0f5c4, type: 3}
+  m_cellPrefab: {fileID: 168262024777345165, guid: 48a3bc40bec2c384680a6bdcdca0f5c4, type: 3}
 --- !u!114 &317958463
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1825,10 +1825,10 @@ MonoBehaviour:
   m_ChildAlignment: 0
   m_StartCorner: 0
   m_StartAxis: 0
-  m_CellSize: {x: 160, y: 40}
+  m_CellSize: {x: 96, y: 96}
   m_Spacing: {x: 8, y: 8}
   m_Constraint: 1
-  m_ConstraintCount: 7
+  m_ConstraintCount: 12
 --- !u!1 &324303524
 GameObject:
   m_ObjectHideFlags: 0
@@ -1882,7 +1882,7 @@ MonoBehaviour:
   m_slot: 0
   m_catalog: {fileID: 11400000, guid: 4d0d855372518f94184454112d35bef4, type: 2}
   m_container: {fileID: 324303525}
-  m_buttonPrefab: {fileID: 1227722270755931575, guid: 48a3bc40bec2c384680a6bdcdca0f5c4, type: 3}
+  m_cellPrefab: {fileID: 168262024777345165, guid: 48a3bc40bec2c384680a6bdcdca0f5c4, type: 3}
 --- !u!114 &324303527
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1917,10 +1917,10 @@ MonoBehaviour:
   m_ChildAlignment: 0
   m_StartCorner: 0
   m_StartAxis: 0
-  m_CellSize: {x: 160, y: 40}
+  m_CellSize: {x: 96, y: 96}
   m_Spacing: {x: 8, y: 8}
   m_Constraint: 1
-  m_ConstraintCount: 7
+  m_ConstraintCount: 12
 --- !u!1 &339945945
 GameObject:
   m_ObjectHideFlags: 0
@@ -2457,8 +2457,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 380, y: -450}
-  m_SizeDelta: {x: -440, y: 130}
+  m_AnchoredPosition: {x: 380, y: -360}
+  m_SizeDelta: {x: -440, y: 110}
   m_Pivot: {x: 0, y: 1}
 --- !u!1 &586547640
 GameObject:
@@ -3761,7 +3761,7 @@ MonoBehaviour:
   m_slot: 4
   m_catalog: {fileID: 11400000, guid: 4d0d855372518f94184454112d35bef4, type: 2}
   m_container: {fileID: 1221599583}
-  m_buttonPrefab: {fileID: 1227722270755931575, guid: 48a3bc40bec2c384680a6bdcdca0f5c4, type: 3}
+  m_cellPrefab: {fileID: 168262024777345165, guid: 48a3bc40bec2c384680a6bdcdca0f5c4, type: 3}
 --- !u!114 &1221599585
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3796,10 +3796,10 @@ MonoBehaviour:
   m_ChildAlignment: 0
   m_StartCorner: 0
   m_StartAxis: 0
-  m_CellSize: {x: 160, y: 40}
+  m_CellSize: {x: 96, y: 96}
   m_Spacing: {x: 8, y: 8}
   m_Constraint: 1
-  m_ConstraintCount: 7
+  m_ConstraintCount: 12
 --- !u!1 &1222426517
 GameObject:
   m_ObjectHideFlags: 0
@@ -4069,8 +4069,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 380, y: -150}
-  m_SizeDelta: {x: -440, y: 130}
+  m_AnchoredPosition: {x: 380, y: -120}
+  m_SizeDelta: {x: -440, y: 110}
   m_Pivot: {x: 0, y: 1}
 --- !u!1001 &1307294608
 PrefabInstance:
@@ -4298,7 +4298,7 @@ MonoBehaviour:
   m_slot: 1
   m_catalog: {fileID: 11400000, guid: 4d0d855372518f94184454112d35bef4, type: 2}
   m_container: {fileID: 1314692542}
-  m_buttonPrefab: {fileID: 1227722270755931575, guid: 48a3bc40bec2c384680a6bdcdca0f5c4, type: 3}
+  m_cellPrefab: {fileID: 168262024777345165, guid: 48a3bc40bec2c384680a6bdcdca0f5c4, type: 3}
 --- !u!114 &1314692544
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4333,10 +4333,10 @@ MonoBehaviour:
   m_ChildAlignment: 0
   m_StartCorner: 0
   m_StartAxis: 0
-  m_CellSize: {x: 160, y: 40}
+  m_CellSize: {x: 96, y: 96}
   m_Spacing: {x: 8, y: 8}
   m_Constraint: 1
-  m_ConstraintCount: 7
+  m_ConstraintCount: 12
 --- !u!1001 &1326147023
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -4428,8 +4428,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 380, y: -580}
-  m_SizeDelta: {x: -440, y: 300}
+  m_AnchoredPosition: {x: 380, y: -480}
+  m_SizeDelta: {x: -440, y: 410}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &1344837853
 MonoBehaviour:
@@ -4774,7 +4774,7 @@ MonoBehaviour:
   m_slot: 5
   m_catalog: {fileID: 11400000, guid: 4d0d855372518f94184454112d35bef4, type: 2}
   m_container: {fileID: 1400866116}
-  m_buttonPrefab: {fileID: 1227722270755931575, guid: 48a3bc40bec2c384680a6bdcdca0f5c4, type: 3}
+  m_cellPrefab: {fileID: 168262024777345165, guid: 48a3bc40bec2c384680a6bdcdca0f5c4, type: 3}
 --- !u!114 &1400866118
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4809,10 +4809,10 @@ MonoBehaviour:
   m_ChildAlignment: 0
   m_StartCorner: 0
   m_StartAxis: 0
-  m_CellSize: {x: 160, y: 40}
+  m_CellSize: {x: 96, y: 96}
   m_Spacing: {x: 8, y: 8}
   m_Constraint: 1
-  m_ConstraintCount: 7
+  m_ConstraintCount: 12
 --- !u!1 &1416721164
 GameObject:
   m_ObjectHideFlags: 0
@@ -8454,8 +8454,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 380, y: -300}
-  m_SizeDelta: {x: -440, y: 130}
+  m_AnchoredPosition: {x: 380, y: -240}
+  m_SizeDelta: {x: -440, y: 110}
   m_Pivot: {x: 0, y: 1}
 --- !u!1 &1951752660
 GameObject:

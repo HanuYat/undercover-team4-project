@@ -250,10 +250,14 @@ public class LobbyPortraitStage : MonoBehaviour
         if (m_stageHead == null || m_accessoryCatalog == null)
             return;
 
+        EAccessorySlotMask hidden = m_accessoryCatalog.HiddenSlots(accessories);
+
         foreach (EAccessorySlot slot in System.Enum.GetValues(typeof(EAccessorySlot)))
         {
             int i = (int)slot;
-            GameObject prefab = m_accessoryCatalog.Get(slot, accessories[slot]);
+            GameObject prefab = AccessoryCatalog.IsHidden(hidden, slot)
+                ? null
+                : m_accessoryCatalog.Get(slot, accessories[slot]);
             if (m_worn[i] == prefab && (prefab == null) == (m_accessories[i] == null))
                 continue; // 같은 것을 이미 쓰고 있다
 
