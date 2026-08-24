@@ -98,8 +98,14 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
         if (!CosmeticInventory.TrySpendToken())
             return; // 같은 프레임에 두 번 눌린 경합 — 위 검사와 여기 사이에서만 갈린다
 
-        bool gained = CosmeticInventory.Grant(slot, index);
-        if (!gained)
+        // 환급 판정은 <b>보유함이 아니라 IsOwned</b>로 한다 — 기본 지급 세트는 보유함에 비트가
+        // 없으므로(카탈로그가 판정한다) Grant의 반환값만 보면 처음부터 갖고 있던 8개를 뽑을 때마다
+        // "새로 얻었다"가 되어 토큰이 환급 없이 사라졌다.
+        bool alreadyOwned = CosmeticInventory.IsOwned(m_catalog, slot, index);
+        CosmeticInventory.Grant(slot, index); // 기본 세트여도 비트는 켜 둔다 — 판정 출처를 하나로 모은다
+        bool gained = !alreadyOwned;
+
+        if (alreadyOwned)
             CosmeticInventory.AddTokens(1); // 중복은 환급이다 (팀 결정 #818 D)
 
         App.Sound?.PlaySfx2D(m_drawSound);
@@ -166,8 +172,12 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
     [Rpc(SendTo.SpecifiedInParams)]
     private void PlayDrawRpc(byte slot, int index, RpcParams rpcParams)
     {
-        if (!m_playing && m_catalog != null)
-            PlayRevealAsync((EAccessorySlot)slot, index).Forget();
+        // 내 릴이 돌고 있으면 <b>내가 뽑은 것</b>이다 — 발신자 제외가 어긋나도 두 연출이 겹치지 않게 막는다.
+        // 보내는 쪽에서 이미 발신자를 빼지만, 그 판정이 틀리면 뽑은 사람 화면에 릴과 모형이 함께 뜬다.
+        if (m_playing || m_catalog == null || IsReelSpinning())
+            return;
+
+        PlayRevealAsync((EAccessorySlot)slot, index).Forget();
     }
 
     // 릴은 스스로 UI 매니저에 등록한다 — 자판기가 인스펙터로 물고 있지 않는 이유는

@@ -211,7 +211,11 @@ public class CosmeticGachaPanel : PanelBase
         finally
         {
             m_spinning = false;
-            ClosePanel();
+
+            // 취소는 이 창이 파괴됐다는 뜻이다 — PanelBase.ClosePanel은 m_panelRoot에 가드가 없어
+            // 파괴된 오브젝트에 SetActive를 부른다. 여기서 걸러야 예외가 로그에 남지 않는다.
+            if (m_panelRoot != null)
+                ClosePanel();
         }
     }
 
