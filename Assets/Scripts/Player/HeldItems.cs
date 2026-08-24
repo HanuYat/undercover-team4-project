@@ -58,6 +58,30 @@ public sealed class HeldItems
     public bool Holds(NetworkObject item) =>
         item != null && IsUsable && item.transform.parent == m_anchor;
 
+    /// <summary>
+    /// <typeparamref name="TComponent"/>를 가진 첫 소지품(없으면 null) — 자가 부활 게이트 등 "하나라도
+    /// 있으면" 판정용. 무할당. CollectInto처럼 목록이 필요하지 않을 때 이걸 쓴다. (#820)
+    /// </summary>
+    public TComponent FirstOf<TComponent>()
+        where TComponent : Component
+    {
+        if (!IsUsable)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < m_anchor.childCount; i++)
+        {
+            TComponent found = m_anchor.GetChild(i).GetComponent<TComponent>();
+            if (found != null)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>소지품을 into에 담는다(기존 내용은 지운다) — 목록이 필요한 쪽만 쓴다. (#303)</summary>
     public void CollectInto(List<ItemBase> into)
     {

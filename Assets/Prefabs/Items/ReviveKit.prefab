@@ -98,6 +98,7 @@ MonoBehaviour:
   m_handGrip: 2
   m_targetOutlineColor: {r: 0.35, g: 1, b: 0.55, a: 1}
   m_shopPrice: 5000
+  m_selfReviveSeconds: 3
   references:
     version: 2
     RefIds: []
