@@ -39,6 +39,7 @@ GameObject:
   - component: {fileID: 4152139263146004562}
   - component: {fileID: 2208455432558358453}
   - component: {fileID: 4170001419849907619}
+  - component: {fileID: 3610995538256426369}
   m_Layer: 7
   m_Name: NPC_Citizen
   m_TagString: Untagged
@@ -532,8 +533,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e457215489dc76d4595986f935172c7d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcRagdoll
-  m_settleSpeedThreshold: 0.15
-  m_settleHoldSeconds: 0.3
   m_settleTimeoutSeconds: 5
   m_blendSeconds: 0.3
   m_groundMask:
@@ -569,8 +568,19 @@ MonoBehaviour:
   m_authority: 0
   m_sendEveryFixedSteps: 2
   m_interpolationDelay: 0.08
-  m_logArrival: 1
-  m_logBandwidth: 1
+--- !u!114 &3610995538256426369
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b055661e18c359c4b8a1d5a80dacc03f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcAttackSound
+  m_swingLeadSeconds: 0.18
 --- !u!1001 &2229125471116794606
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2252,6 +2262,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RagdollRig
   m_boneRootName: Root
+  m_maxDepenetrationVelocity: 0.5
   m_tumbleBias: 0.8
 --- !u!114 &5584184010485763133
 MonoBehaviour:
