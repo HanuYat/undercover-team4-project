@@ -15919,6 +15919,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 1943517841819872, guid: fd5265e1bff79694782bf5c50669f524, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1073960832}
+    - targetCorrespondingSourceObject: {fileID: 1943517841819872, guid: fd5265e1bff79694782bf5c50669f524, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1073960833}
   m_SourcePrefab: {fileID: 100100000, guid: fd5265e1bff79694782bf5c50669f524, type: 3}
 --- !u!4 &1073960828 stripped
 Transform:
@@ -16004,6 +16007,20 @@ MonoBehaviour:
   references:
     version: 2
     RefIds: []
+--- !u!114 &1073960833
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1073960829}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: caf9f3348b78d7a4e8c4afbd99cb06c7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CosmeticTokenDevHotkey
+  m_enabled: 1
+  m_amount: 1
 --- !u!1 &1082840354
 GameObject:
   m_ObjectHideFlags: 0
