@@ -80,6 +80,7 @@ CanTrigger() =
 | 죽이기 | 진압봉으로 HP 0 → `NpcState.Dead` |
 | 공격 사운드 | #817 (PR #822) — `NpcResistState`를 타므로 자동 적용 |
 | 라운드별 수치 표 | `RoundWeatherTable` 선례 |
+| 개발자 단축키 | `SuddenEventDevHotkeys` — 풀에 등록하면 F키가 자동 배정 (§6-⑥) |
 
 ## 6. 신규·수정 작업
 
@@ -134,6 +135,32 @@ public void ResumeReaction(Transform threat)
 표적이 다운되면 `NpcResistState.IsStillEngaged`의 기존 규칙대로 각자 근처 플레이어로 넘어간다 — 쓰러진
 사람을 계속 때려 구조를 막지 않는다.
 
+### ⑥ 개발자 단축키 — `ServerPrepareForceTrigger` 구현
+
+**단축키 배선 자체는 공짜다.** [`SuddenEventDevHotkeys`](../../../Assets/Scripts/Events/SuddenEventDevHotkeys.cs)가
+`SuddenEventManager`의 인스펙터 이벤트 풀 순서대로 F1~F12(F9 제외)를 자동으로 물린다 — 풀에 등록만 하면
+키가 붙고, Play 시작 시 실제 매핑이 콘솔에 찍힌다.
+
+**문제는 강제 발동이 거절된다는 것이다.** `ForceTrigger`는 `CanTrigger()`가 false면 한 번 더
+`ServerPrepareForceTrigger()`를 묻고, 그것도 false면 포기한다. 이 이벤트의 `CanTrigger`는 **유치장에
+세력 있는 수감자**를 요구하므로, 그대로 두면 테스트할 때마다 범인을 잡아 연행·수감시켜야 한다.
+
+`ServerPrepareForceTrigger()`를 구현해 **테스트용으로 조건 셋을 건너뛴다**:
+
+| 조건 | 강제 발동 시 |
+|---|---|
+| 발동 하한 라운드 | 무시 |
+| 라운드당 1회 | 무시 (반복 발동 허용 — 인원 스케일 확인에 필요) |
+| 세력 있는 수감자 존재 | 수감자가 있으면 그 세력, **없으면 임의 세력**으로 진행 |
+| 현장 플레이어 존재 | **그대로 요구** — 없으면 표적이 없어 성립하지 않으므로 false |
+
+납치 이벤트([`AbductionEvent.ServerPrepareForceTrigger`](../../../Assets/Scripts/Events/AbductionEvent.cs))가
+같은 패턴을 쓴다 — 채울 수 있으면 채우고 `true`, 배선·표적이 없으면 경고 남기고 `false`.
+
+**⚠ 단축키 슬롯이 이걸로 만석이다.** 현재 이벤트 10종(돌발 7 — 납치·폭탄추격·기기먹통·범인탈출·소매치기·
+공연음란범·동네깡패, 날씨 3 — 안개·낙뢰·눈)에 이 이벤트를 더하면 **11개 = 슬롯 11개**로 정확히 찬다.
+다음 이벤트부터는 키가 모자라며, `SuddenEventDevHotkeys.LogMapping`이 그 경고를 콘솔에 찍는다.
+
 ## 7. 알려진 위험·미해결
 
 - **회귀 위험은 ②뿐이다.** 기존 이벤트 3종(동네 깡패·공연음란범·소매치기)의 베이스 클래스를 수술한다.
@@ -144,5 +171,7 @@ public void ResumeReaction(Transform threat)
 - ⏸ **수치 전부 보류** (GDD 12장) — 발동 하한 라운드, 라운드별 인원, 포기 거리, 앵커 반경. 인스펙터 노출.
 - ⏸ **보상 설계는 기존 경범죄 수익을 그대로 쓴다.** N명분이 쌓이므로 총액은 자동으로 커지지만, 그것이
   "소탕에 쓴 시간"을 납득시키는 수준인지는 미검증.
+- **개발자 단축키 슬롯이 이 이벤트로 만석이다** (11/11). 다음 이벤트를 추가하는 사람은 키 확장이나
+  풀 순서 조정을 함께 해야 한다 — §6-⑥ 참고.
 - **무한 추격의 출구가 죽음·연행뿐이다.** 소란 지속 타이머(`m_maxLifetimeSeconds`)를 0(무제한)으로 두므로
   방치하면 라운드 끝까지 따라온다. 이것이 의도지만, 플레이 테스트에서 지나치면 타이머를 열면 된다.
