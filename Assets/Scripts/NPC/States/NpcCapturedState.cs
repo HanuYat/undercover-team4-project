@@ -160,6 +160,14 @@ public class NpcCapturedState : NpcStateBase
 
         if (nearest != null)
         {
+            // 포기하지 않는 개체(세력 복수대)는 달아나지 않고 다시 덤빈다 — 묶어 놓고 방치하는 것이 결말이면 안 된다 (#721)
+            if (m_owner.Reaction.IsRelentless)
+            {
+                Debug.Log($"인계 방치 — 풀려나 저항 재개: {m_owner.name}");
+                m_owner.Reaction.StartResist(nearest.transform, relentless: true);
+                return;
+            }
+
             Debug.Log($"인계 방치 — 풀려나 도주: {m_owner.name}");
             m_owner.Reaction.StartFlee(nearest.transform);
             return;

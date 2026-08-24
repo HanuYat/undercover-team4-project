@@ -31,6 +31,12 @@ public class NpcReaction : NetworkBehaviour
     public bool IsSprinter { get; private set; }
 
     /// <summary>
+    /// 포기하지 않는 개체인가 — 깨어나거나 풀려나면 도주가 아니라 <b>저항으로 돌아간다</b>. (#721)
+    /// <see cref="IsSprinter"/>와 같은 자리·같은 목적의 표식이다: 기절·제압이 상태를 갈아엎어도 하던 것을 잃지 않는다.
+    /// </summary>
+    public bool IsRelentless { get; private set; }
+
+    /// <summary>
     /// 위협(플레이어)을 찾는 반경(m) — 저항 패배 후 도주 대상 탐색(#205)과 도주 방향 산출(#213)이 같은 값을 쓴다.
     /// 두 경로가 다른 반경을 쓰면 "도망칠 상대"와 "피할 상대"의 기준이 어긋난다.
     /// </summary>
@@ -117,6 +123,7 @@ public class NpcReaction : NetworkBehaviour
             return;
 
         IsSprinter = false;
+        IsRelentless = false;
         ThreatTarget = threat;
         m_owner.StateMachine.ChangeState(NpcState.Run);
     }
@@ -131,12 +138,14 @@ public class NpcReaction : NetworkBehaviour
             return;
 
         IsSprinter = true;
+        IsRelentless = false;
         ThreatTarget = null;
         m_owner.StateMachine.ChangeState(NpcState.Sprinting);
     }
 
     /// <summary>
-    /// 무력화·제압에서 <b>풀려난 뒤 제 행동으로 돌아간다</b> — 보통은 도주, 질주하는 개체는 질주다. (#106)
+    /// 무력화·제압에서 <b>풀려난 뒤 제 행동으로 돌아간다</b> — 보통은 도주, 질주하는 개체는 질주,
+    /// 포기하지 않는 개체(<see cref="IsRelentless"/>)는 저항이다. (#106, #721)
     /// 공연음란범이 한 번 맞고 배회 시민이 되어 버리지 않게 하는 단일 복귀 지점이다.
     ///
     /// ⚠ <b>반출 목적지가 살아 있으면 질주로 가로채지 않는다</b> — 질주(Sprinting)는
@@ -149,6 +158,8 @@ public class NpcReaction : NetworkBehaviour
     {
         if (IsSprinter && !m_owner.Custody.HasReleaseDestination)
             StartSprint();
+        else if (IsRelentless)
+            StartResist(threat, relentless: true); // 반출 목적지 가드가 없는 이유: Attack은 ClearRelease 예외 목록에 있다
         else
             StartFlee(threat);
     }
@@ -157,7 +168,8 @@ public class NpcReaction : NetworkBehaviour
     public void ClearThreat() => ThreatTarget = null;
 
     /// <summary>저항 시작 — 그 자리에서 버틴다. 반응 판정은 ServerReactTo가 한다.</summary>
-    public void StartResist(Transform subduer = null)
+    /// <param name="relentless">참이면 <see cref="IsRelentless"/>로 굳어 기절·석방 뒤에도 저항으로 돌아온다 (#721).</param>
+    public void StartResist(Transform subduer = null, bool relentless = false)
     {
         if (IsSpawned && !IsServer)
             return;
@@ -165,6 +177,7 @@ public class NpcReaction : NetworkBehaviour
         // 저항을 유발한(수갑 채우려던) 플레이어를 위협으로 기억한다 — 제압 실패 시 이 대상에게서 도주한다.
         // (도주형이 StartFlee(subduer)로 위협을 받는 것과 대칭 — #205)
         IsSprinter = false;
+        IsRelentless = relentless;
         ThreatTarget = subduer;
         m_owner.StateMachine.ChangeState(NpcState.Attack);
     }

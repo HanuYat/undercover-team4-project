@@ -35,20 +35,20 @@ public class PickpocketEvent : SpawnedNpcEventBase
     // 빈손 소매치기가 다시 노리게 두면 같은 사람이 몇 번이고 털린다.
     protected override ERiotBehavior RiotBehavior => ERiotBehavior.Flee;
 
-    protected override void ApplyBehavior()
+    protected override void ApplyBehavior(NpcController npc)
     {
         if (m_threat == null)
             return; // 표적이 사라졌다 — 배회로 두면 공통 골격이 이탈(잔류)로 끝낸다
 
-        m_npc.Penalty.OnPenaltyCaught += HandleReach;
+        npc.Penalty.OnPenaltyCaught += HandleReach;
 
         // 무력화되는 순간을 직접 받는다 — <b>여기가 "제압당했다"의 실제 순간</b>이다.
         // 예전에는 Captured 전이에만 걸어 뒀는데, 스턴은 오버레이라 CurrentState를 바꾸지 않는다(#292):
         // 진압봉으로 때려 쓰러뜨려도 상태는 Run 그대로여서 물건이 떨어지지 않았고, 밧줄로 묶었다(Escorted)
         // 놓아준 순간(Captured)에야 나왔다. 테이저로 재운 경우도 같은 이유로 안 떨어졌다.
-        m_npc.Stun.OnStunned += HandleStunned;
+        npc.Stun.OnStunned += HandleStunned;
 
-        m_npc.Penalty.StartPenaltyChase(m_threat, NpcDutyKind.Pickpocket);
+        npc.Penalty.StartPenaltyChase(m_threat, NpcDutyKind.Pickpocket);
         m_giveUpTime = Time.time + m_approachSeconds;
     }
 
@@ -61,27 +61,28 @@ public class PickpocketEvent : SpawnedNpcEventBase
             return false;
 
         m_giveUpTime = 0f;
-        if (!m_npc.Penalty.IsPickpocketDuty)
+        NpcController npc = PrimaryNpc;
+        if (npc == null || !npc.Penalty.IsPickpocketDuty)
             return false; // 이미 탈취를 끝내고 도주 중이다
 
         Debug.Log($"[돌발이벤트] {DisplayName} — 접근 실패, 포기하고 시민으로 섞임");
-        m_npc.Penalty.EndPenaltyDuty();
+        npc.Penalty.EndPenaltyDuty();
         return true;
     }
 
     // 표적에 밀착했다 — 물건 하나를 채고 곧바로 도주로 넘어간다. 서버에서만 발생.
     private void HandleReach(NpcController npc, Transform caught)
     {
-        if (m_npc == null || npc != m_npc)
+        if (npc == null || npc != PrimaryNpc)
             return;
 
         // 통보는 3초마다 재시도되므로(NpcChaseState) 한 번 챘으면 더 받지 않는다
-        m_npc.Penalty.OnPenaltyCaught -= HandleReach;
+        npc.Penalty.OnPenaltyCaught -= HandleReach;
         m_giveUpTime = 0f; // 붙었으니 접근 제한은 끝
 
         // 훔치는 것도 뒷일(떨구기·손실)도 소매치기 자신의 행동이다 — 이 이벤트는 대상만 넘긴다
         PlayerLoadout victim = caught != null ? caught.GetComponentInParent<PlayerLoadout>() : null;
-        ItemBase stolen = victim != null ? GetOrAddPickpocket(m_npc).ServerStealFrom(victim) : null;
+        ItemBase stolen = victim != null ? GetOrAddPickpocket(npc).ServerStealFrom(victim) : null;
 
         if (stolen != null)
         {
@@ -97,13 +98,13 @@ public class PickpocketEvent : SpawnedNpcEventBase
             Debug.Log($"[돌발이벤트] {DisplayName} — 뺏을 소지품이 없어 빈손으로 도주");
         }
 
-        m_npc.Reaction.StartFlee(m_threat);
+        npc.Reaction.StartFlee(m_threat);
     }
 
     // 무력화되면 그 자리에 떨군다 — 진압봉으로 쓰러뜨렸든 테이저로 재웠든 같다. 서버에서만 발생.
     private void HandleStunned(NpcController npc, Transform by)
     {
-        if (m_npc == null || npc != m_npc)
+        if (npc == null || npc != PrimaryNpc)
             return;
 
         DropStolen(npc);

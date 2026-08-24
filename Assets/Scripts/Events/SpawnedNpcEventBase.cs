@@ -1,5 +1,8 @@
+using System;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.AI;
 using Random = UnityEngine.Random;
 
 /// <summary>
@@ -10,9 +13,15 @@ using Random = UnityEngine.Random;
 /// 검거 판정 수신, 도심 잔류(#310), 라운드 종료 정리. NPC가 무슨 짓을 하는지는 파생 클래스가 정한다
 /// (<see cref="ApplyBehavior"/>) — 종류별 행동이 한 파일에 뒤섞이지 않게 하는 것이 이 분리의 목적이다.
 ///
+/// <b>인원은 <see cref="SpawnCount"/>가 정한다</b> (#721). 기본은 1명이고, 그때는 한 지점에 하나가 선다.
+/// 2명 이상이면 지점을 <b>하나만</b> 잡고 그 주위에 흩뿌려 덩어리로 세운다 — "저쪽에서 넷 온다"가
+/// 눈으로도 무전으로도 읽히게 하기 위함이다. 종료·잔류·정리는 개체마다 따로 판정하고, <b>전원이 손을
+/// 떠났을 때</b> 이벤트가 비활성이 된다.
+///
 /// 파생 이벤트: <see cref="StreetThugEvent"/>(동네 깡패) · <see cref="StreakerEvent"/>(공연음란범) ·
-/// <see cref="PickpocketEvent"/>(소매치기 #303). 종류를 늘리려면 이 클래스를 상속한 컴포넌트를 하나 만들어
-/// <see cref="SuddenEventManager"/>의 이벤트 풀에 등록하면 된다.
+/// <see cref="PickpocketEvent"/>(소매치기 #303) · <see cref="FactionRevengeEvent"/>(세력 소탕 #721).
+/// 종류를 늘리려면 이 클래스를 상속한 컴포넌트를 하나 만들어 <see cref="SuddenEventManager"/>의 이벤트 풀에
+/// 등록하면 된다.
 ///
 /// 제압은 종료가 아니라 시작이다 — 스폰 시 <see cref="MisdemeanorOffender"/> 마커를 붙여 두면 일반 용의자와 똑같이
 /// "제압 → 밧줄 → E로 연행 → HQ 인계" 흐름을 타고, <see cref="ArrestJudge"/>가 경범죄로 판정하며 수익도 그쪽에서 지급한다.
@@ -56,6 +65,11 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
     [SerializeField]
     private int m_maxSpawnAttempts = 8;
 
+    [Tooltip("2명 이상 스폰할 때 앵커 지점 주위로 흩뿌리는 반경(m) — 좁게 잡아야 한 덩어리로 읽힌다 (#721)")]
+    [Min(0f)]
+    [SerializeField]
+    private float m_clusterRadius = 2.5f;
+
     [Header("경범죄 수익")]
     [Tooltip("본부 인계 후 경범죄 판정 성공 시의 수익 하한 — 스폰 시점에 [하한, 상한]에서 100원 단위로 뽑아 마커에 박는다 (#395)")]
     [Min(0)]
@@ -73,28 +87,44 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
     [SerializeField]
     private float m_maxLifetimeSeconds = 60f;
 
-    // 이번 스폰에서 실제로 뽑힌 수익 — 마커에 실은 값과 같다 (#395)
-    private int m_rolledReward;
+    /// <summary>
+    /// 이번 발생에서 스폰한 개체 하나 — 종료·잔류를 <b>각자</b> 판정하므로 상태가 이벤트가 아니라 여기 딸린다. (#721)
+    /// </summary>
+    private class SpawnedEntry
+    {
+        public NpcController Npc;
+
+        // 상태 구독 해제용 — 개체를 물고 있는 람다라 메서드 그룹으로는 뗄 수 없다
+        public Action<NpcState> StateHandler;
+
+        public int Reward;         // 스폰 시점에 확정한 경범죄 수익 — 마커에 실은 값과 같다 (#395)
+        public bool Captured;      // 한 번이라도 제압됐는지 — 제압 로그를 첫 진입에만 남기려고 쓴다
+        public bool ReleaseQueued; // 잔류 전환 확정 — 다음 틱에 이벤트가 손을 뗀다 (전이 체인 안 처리 회피, #310)
+    }
+
+    // 진행 중인 스폰물 — 손을 뗀 개체는 여기서 빠지고, 비면 이벤트가 비활성이 된다
+    private readonly List<SpawnedEntry> m_spawned = new List<SpawnedEntry>();
 
     // 모든 스폰형이 공유한다 — 인계 후 경범죄 판정 시점에 자기 스폰물을 정리하는 데 쓴다
     private ArrestJudge m_arrestJudge;
 
-    /// <summary>스폰한 NPC. 이벤트가 진행 중이 아니면 null. 서버에서만 유효.</summary>
-    protected NpcController m_npc;
-
-    /// <summary>스폰 기준이 된 현장 플레이어 — 도주·소매치기가 표적으로 쓴다.</summary>
+    /// <summary>스폰 기준이 된 현장 플레이어 — 도주·소매치기·복수대가 표적으로 쓴다.</summary>
     protected Transform m_threat;
 
     private float m_startTime;
     private int m_spawnFrame;
     private bool m_pendingStart; // 스폰 다음 프레임에 행동을 적용(초기화 순서 보장)하기 위한 플래그
     private bool m_hasStarted; // 행동을 실제로 시작했는지 — 이탈(배회 복귀) 종료 판정에 쓴다
-    private bool m_captured; // 한 번이라도 제압됐는지 — 제압 로그를 첫 진입에만 남기려고 쓴다
-    private bool m_releaseQueued; // 잔류 전환 확정 — 다음 틱에 이벤트가 손을 뗀다 (상태 전이 체인 안 처리 회피, #310)
 
     public string DisplayName => m_displayName;
 
-    public bool IsActive => m_npc != null;
+    public bool IsActive => m_spawned.Count > 0;
+
+    /// <summary>
+    /// 첫 스폰물 — <b>1명 전제</b>인 파생이 개체 참조가 필요할 때 쓴다 (<see cref="PickpocketEvent"/>).
+    /// 진행 중이 아니면 null. 여러 명을 스폰하는 이벤트는 <see cref="ApplyBehavior"/>가 받는 개체를 쓸 것.
+    /// </summary>
+    protected NpcController PrimaryNpc => m_spawned.Count > 0 ? m_spawned[0].Npc : null;
 
     /// <summary>
     /// 발생 즉시 전 클라에 알릴지 — 스폰형의 기본은 <b>알린다</b>(소란은 알려져야 소란이다).
@@ -116,17 +146,29 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
     // ---- 파생 클래스가 채우는 부분 ----
 
     /// <summary>
-    /// 스폰 직후 이 NPC가 취할 행동 — 서버에서만 불린다. <see cref="m_npc"/>·<see cref="m_threat"/>가 이미 서 있다.
+    /// 한 번의 발생에서 스폰할 인원 — 기본 1명. 2명 이상이면 한 지점 주위에 덩어리로 선다. (#721)
+    /// <b>발생 시점에 한 번</b> 읽으므로 라운드 표 같은 동적 값을 돌려줘도 된다.
+    /// </summary>
+    protected virtual int SpawnCount => 1;
+
+    /// <summary>
+    /// 스폰 직후 이 NPC가 취할 행동 — 서버에서만, <b>개체마다</b> 불린다. <see cref="m_threat"/>가 이미 서 있다.
     /// 스폰과 같은 프레임이 아니라 <b>다음 프레임</b>에 불린다: 같은 프레임이면 뒤이어 실행되는
     /// NPC 초기화(InitBehavior)가 Idle로 덮어쓴다.
     /// </summary>
-    protected abstract void ApplyBehavior();
+    protected abstract void ApplyBehavior(NpcController npc);
 
     /// <summary>
     /// 탈옥으로 방출됐을 때 재개할 소란 행동 — 마커(<see cref="MisdemeanorOffender"/>)에 실어 둔다.
     /// 재개는 <see cref="MisdemeanorLoiterer.BeginRiot"/>가 하며, 그 시점에는 이 이벤트가 이미 손을 뗀 뒤다.
     /// </summary>
     protected abstract ERiotBehavior RiotBehavior { get; }
+
+    /// <summary>
+    /// 스폰·복제 등록이 끝난 직후 — 파생이 개체별 초기 설정을 얹는다(예: 외형 고정). 서버 전용.
+    /// <see cref="ApplyBehavior"/>와 달리 <b>같은 프레임</b>이다: FSM을 건드리지 않는 것만 여기서 할 것.
+    /// </summary>
+    protected virtual void OnSpawned(NpcController npc) { }
 
     /// <summary>
     /// 파생 고유의 진행 틱 — 공통 타이머(연행 유예·소란 지속)보다 먼저 돈다.
@@ -171,13 +213,20 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
 
     // ---- ISuddenEvent ----
 
-    public bool CanTrigger()
+    public virtual bool CanTrigger()
     {
         // 소란을 일으킬 현장 플레이어가 있어야 성립한다
         return SuddenEventUtil.FindRandomFieldPlayer() != null;
     }
 
-    public void ServerBegin()
+    /// <summary>
+    /// 강제 발동 준비 — 기본은 거절. <b>인터페이스 기본 구현이 아니라 여기 실제 멤버로 두는 이유는
+    /// <see cref="AnnounceOnBegin"/>과 같다</b>: 기본 구현에 기대면 매핑이 이 클래스에서 고정돼
+    /// 파생이 같은 이름을 선언해도 매니저가 부르는 것은 여전히 기본값(false)이다. (#775, #721)
+    /// </summary>
+    public virtual bool ServerPrepareForceTrigger() => false;
+
+    public virtual void ServerBegin()
     {
         if (m_npcPrefab == null)
         {
@@ -189,69 +238,73 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
         if (player == null)
             return; // 발생 직전에 대상이 사라짐 — 이번엔 건너뛴다 (IsActive=false 유지)
 
+        int areaMask = SuddenEventUtil.SpawnAreaMask(m_npcPrefab);
         if (!SuddenEventUtil.TryFindSpawnPositionNear(
                 player.position, m_spawnDistanceMin, m_spawnDistanceMax, m_navSampleMaxDistance, m_maxSpawnAttempts,
-                SuddenEventUtil.SpawnAreaMask(m_npcPrefab),
-                out Vector3 spawnPosition, hiddenFromPlayers: true)) // 눈앞 팝인 방지 (#332 A)
+                areaMask,
+                out Vector3 anchor, hiddenFromPlayers: true)) // 눈앞 팝인 방지 (#332 A)
         {
             Debug.LogWarning($"{GetType().Name}({m_displayName}): NavMesh 위 스폰 지점을 찾지 못해 발생 취소", this);
             return;
         }
 
-        Quaternion rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
-        m_npc = Instantiate(m_npcPrefab, spawnPosition, rotation);
+        // 지점은 한 번만 찾는다 — 각자 찾게 하면 표적을 사이에 두고 흩어져 나와 덩어리로 읽히지 않는다
+        // (AbductionEvent의 2인조 스폰과 같은 방침). 첫 명은 앵커에 그대로 세운다.
+        int count = Mathf.Max(1, SpawnCount);
+        for (int i = 0; i < count; i++)
+            SpawnOne(i == 0 ? anchor : ScatterAround(anchor, areaMask));
 
-        // 경범죄 표식 — 인계되면 ArrestJudge가 이 마커를 보고 진범 대조 대신 경범죄로 판정하고 Reward를 지급한다 (#106).
-        // 판정이 서버 권위라 마커도 서버에서만 읽힌다 — 복제할 필요가 없어 plain MonoBehaviour로 붙인다.
-        // 소란 행동도 함께 기록한다 — 탈옥으로 방출되면 이 행동을 재개한다 (MisdemeanorLoiterer.BeginRiot).
-        MisdemeanorOffender offender = m_npc.gameObject.AddComponent<MisdemeanorOffender>();
-        // 수익은 스폰 시점에 확정한다 (#395) — 판정 시점에 뽑으면 재검거로 금액을 리롤할 수 있다.
-        // 뽑은 값을 따로 들고 있는 이유는 아래 제압 로그가 실제 지급될 금액을 보여주기 위함이다.
-        m_rolledReward = BountyRoll.Roll(m_pettyCrimeRewardMin, m_pettyCrimeRewardMax);
-        offender.Reward = m_rolledReward;
-        offender.SetRiotBehavior(RiotBehavior, m_maxLifetimeSeconds);
+        if (m_spawned.Count == 0)
+            return; // 전원 스폰 실패 — IsActive=false 유지
 
-        // 네트워크 세션이면 전 클라에 복제 — Spawn()이 서버에서 OnNetworkSpawn(InitBehavior)를 동기 실행한다 (#56)
-        if (SuddenEventUtil.IsNetworkSessionActive)
-            m_npc.GetComponent<NetworkObject>().Spawn();
-
-        m_npc.OnStateChanged += HandleStateChanged;
         m_threat = player;
         m_startTime = Time.time;
         m_spawnFrame = Time.frameCount;
         m_pendingStart = true;
         m_hasStarted = false;
-        m_captured = false;
-        m_releaseQueued = false;
     }
 
     public void ServerTick()
     {
-        if (m_npc == null)
+        if (m_spawned.Count == 0)
             return;
 
         // 스폰 초기화(InitBehavior의 Idle 전환)가 끝난 다음 프레임에 행동을 적용한다 —
         // 같은 프레임에 부르면 뒤이어 실행되는 InitBehavior가 Idle로 덮어쓸 수 있다.
         if (m_pendingStart && Time.frameCount > m_spawnFrame)
         {
-            ApplyBehavior();
+            for (int i = 0; i < m_spawned.Count; i++)
+            {
+                // 스폰 프레임에 죽은 개체는 건너뛴다 — 안 그러면 시체에 ApplyBehavior가 걸린다
+                if (!m_spawned[i].ReleaseQueued)
+                    ApplyBehavior(m_spawned[i].Npc);
+            }
+
             m_pendingStart = false;
             m_hasStarted = true;
         }
 
         // 잔류 전환 확정분을 상태 전이 체인 밖(다음 틱)에서 처리한다 — OnStateChanged 안에서 곧바로
         // 상태를 갈아타면 전이 통지가 중첩된다. (#310)
-        if (m_releaseQueued)
+        bool released = false;
+        for (int i = m_spawned.Count - 1; i >= 0; i--)
         {
-            ReleaseToCity();
-            return;
+            if (!m_spawned[i].ReleaseQueued)
+                continue;
+
+            ReleaseToCity(m_spawned[i]);
+            released = true;
         }
+
+        if (released)
+            return;
 
         if (OnServerTick())
             return; // 파생이 이번 틱을 끝냈다 (예: 소매치기 접근 포기)
 
         // 연행 중에는 소란 타이머를 멈춘다 — 본부까지 데려가는 동안 이벤트가 끝나면 안 된다.
-        if (m_npc.CurrentState == NpcState.Escorted)
+        // 여럿이면 한 명이라도 연행 중이면 멈춘다.
+        if (AnyEscorted())
             m_startTime = Time.time;
 
         // 소란 지속 시간이 다하면 진정하고 배회 시민으로 잔류한다 — 저항형은 스스로 멈추지 않으므로
@@ -261,35 +314,85 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
         if (m_maxLifetimeSeconds > 0f && Time.time - m_startTime > m_maxLifetimeSeconds)
         {
             Debug.Log($"[돌발이벤트] {m_displayName} — 소란 지속 시간 종료, 진정");
-            m_npc.Reaction.StartFlee(null); // 위협 없는 도주 — 잠깐 흩어졌다가 곧 배회(Idle)로 가라앉는다
-            ReleaseToCity();
+            for (int i = m_spawned.Count - 1; i >= 0; i--)
+            {
+                SpawnedEntry entry = m_spawned[i];
+                if (entry.Npc != null)
+                    entry.Npc.Reaction.StartFlee(null); // 위협 없는 도주 — 잠깐 흩어졌다가 곧 배회(Idle)로 가라앉는다
+                ReleaseToCity(entry);
+            }
         }
     }
 
     public void ServerReset()
     {
-        Despawn(playVfx: false); // 라운드 종료 일괄 정리 — 남은 스폰물마다 이펙트가 터지지 않게 연출은 끈다
+        // 라운드 종료 일괄 정리 — 남은 스폰물마다 이펙트가 터지지 않게 연출은 끈다
+        for (int i = m_spawned.Count - 1; i >= 0; i--)
+            Despawn(m_spawned[i], playVfx: false);
+    }
+
+    // ---- 스폰 ----
+
+    // 한 명을 세우고 경범죄 마커·복제·상태 구독까지 붙인다.
+    private void SpawnOne(Vector3 position)
+    {
+        Quaternion rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
+        NpcController npc = Instantiate(m_npcPrefab, position, rotation);
+
+        // 경범죄 표식 — 인계되면 ArrestJudge가 이 마커를 보고 진범 대조 대신 경범죄로 판정하고 Reward를 지급한다 (#106).
+        // 판정이 서버 권위라 마커도 서버에서만 읽힌다 — 복제할 필요가 없어 plain MonoBehaviour로 붙인다.
+        // 소란 행동도 함께 기록한다 — 탈옥으로 방출되면 이 행동을 재개한다 (MisdemeanorLoiterer.BeginRiot).
+        MisdemeanorOffender offender = npc.gameObject.AddComponent<MisdemeanorOffender>();
+
+        // 수익은 스폰 시점에 확정한다 (#395) — 판정 시점에 뽑으면 재검거로 금액을 리롤할 수 있다.
+        // 개체마다 따로 뽑으므로 여럿이면 총액이 그만큼 커진다 (#721).
+        int reward = BountyRoll.Roll(m_pettyCrimeRewardMin, m_pettyCrimeRewardMax);
+        offender.Reward = reward;
+        offender.SetRiotBehavior(RiotBehavior, m_maxLifetimeSeconds);
+
+        // 네트워크 세션이면 전 클라에 복제 — Spawn()이 서버에서 OnNetworkSpawn(InitBehavior)를 동기 실행한다 (#56)
+        if (SuddenEventUtil.IsNetworkSessionActive)
+            npc.GetComponent<NetworkObject>().Spawn();
+
+        OnSpawned(npc);
+
+        SpawnedEntry entry = new SpawnedEntry { Npc = npc, Reward = reward };
+        entry.StateHandler = state => HandleStateChanged(entry, state);
+        npc.OnStateChanged += entry.StateHandler;
+        m_spawned.Add(entry);
+    }
+
+    // 앵커 주위 짧은 반경에 흩뿌린다 — NavMesh를 못 잡으면 앵커 자신으로 폴백한다.
+    // 겹쳐 서더라도 스폰 자체가 불발되는 것보다 낫다(에이전트가 곧 서로를 밀어낸다). (#721)
+    private Vector3 ScatterAround(Vector3 anchor, int areaMask)
+    {
+        Vector2 offset = Random.insideUnitCircle * m_clusterRadius;
+        Vector3 candidate = anchor + new Vector3(offset.x, 0f, offset.y);
+
+        return NavMesh.SamplePosition(candidate, out NavMeshHit hit, m_navSampleMaxDistance, areaMask)
+            ? hit.position
+            : anchor;
     }
 
     // ---- 공통 진행 ----
 
     // 상태 전이 수신 — 제압(Captured)은 연행 대기, 행동 시작 뒤 배회 복귀(Idle/Walk)는 이탈로 종료 처리
-    private void HandleStateChanged(NpcState state)
+    private void HandleStateChanged(SpawnedEntry entry, NpcState state)
     {
-        if (m_npc == null)
+        if (entry.Npc == null)
             return;
 
         if (state == NpcState.Captured)
         {
-            OnCaptured(m_npc);
+            OnCaptured(entry.Npc);
 
             // 제압만으로는 아무 일도 일어나지 않는다 — 본부까지 연행해야 판정·수익이 난다.
             // 연행이 끊겨 다시 Captured로 돌아온 경우에도 방치 유예를 새로 준다.
             m_startTime = Time.time;
-            if (!m_captured)
+            if (!entry.Captured)
             {
-                m_captured = true;
-                Debug.Log($"[돌발이벤트] {m_displayName} 제압 — 본부로 연행하면 경범죄 처리(수익 {m_rolledReward})");
+                entry.Captured = true;
+                Debug.Log($"[돌발이벤트] {m_displayName} 제압 — 본부로 연행하면 경범죄 처리(수익 {entry.Reward})");
             }
             return;
         }
@@ -297,9 +400,8 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
         // 죽었다 — 손을 떼고 시체를 남긴다. 마커가 남아 유치장에 끌고 가면 경범죄 인계다 (#688)
         if (state == NpcState.Dead)
         {
-            Debug.Log($"[돌발이벤트] {m_displayName} — 사망, 이벤트 종료 (시체 인계 시 경범죄 판정)");
-            m_pendingStart = false; // 스폰 프레임에 죽으면 시체에 ApplyBehavior가 걸린다
-            m_releaseQueued = true; // 전이 통지 중첩 회피 — 아래 이탈 분기와 같은 관례 (#310)
+            Debug.Log($"[돌발이벤트] {m_displayName} — 사망, 이벤트에서 이탈 (시체 인계 시 경범죄 판정)");
+            entry.ReleaseQueued = true; // 전이 통지 중첩 회피 — 아래 이탈 분기와 같은 관례 (#310)
             return;
         }
 
@@ -308,7 +410,7 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
         if (m_hasStarted && (state == NpcState.Idle || state == NpcState.Walk))
         {
             Debug.Log($"[돌발이벤트] {m_displayName} — 제압 실패, 도심에 잔류");
-            m_releaseQueued = true;
+            entry.ReleaseQueued = true;
         }
     }
 
@@ -316,54 +418,90 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
     // 수익은 ArrestJudge가 이미 지급했다(첫 판정 한정). 뒷정리(라운드 종료)는 Loiterer가 물려받는다.
     private void HandleArrestJudged(ArrestResult result)
     {
-        if (m_npc == null || result.Npc != m_npc)
+        SpawnedEntry entry = FindEntry(result.Npc);
+        if (entry == null)
             return;
 
-        Debug.Log($"[돌발이벤트] {m_displayName} — 경범죄 판정, 유치장 인계 (이벤트 종료)");
-        ReleaseToCity();
+        Debug.Log($"[돌발이벤트] {m_displayName} — 경범죄 판정, 유치장 인계 (이벤트에서 이탈)");
+        ReleaseToCity(entry);
     }
 
     // 이벤트가 손을 떼고 NPC를 도심에 남긴다 — 뒷일(인계 판정·라운드 종료 정리)은 MisdemeanorLoiterer가
-    // 물려받고, 이 이벤트는 비활성(IsActive=false)이 되어 다시 추첨될 수 있다. (#310)
-    private void ReleaseToCity()
+    // 물려받는다. 마지막 한 명이 빠지면 이벤트가 비활성(IsActive=false)이 되어 다시 추첨될 수 있다. (#310)
+    private void ReleaseToCity(SpawnedEntry entry)
     {
-        NpcController npc = m_npc;
+        NpcController npc = entry.Npc;
 
-        OnReleasing(npc);
-        npc.OnStateChanged -= HandleStateChanged;
-        ClearRun();
+        if (npc != null)
+            OnReleasing(npc);
+        Detach(entry);
 
-        MisdemeanorLoiterer.Attach(npc, m_displayName);
+        if (npc != null)
+            MisdemeanorLoiterer.Attach(npc, m_displayName);
     }
 
-    // 스폰한 NPC를 정리한다 — 구독 해제 후 Despawn/Destroy하고 참조·플래그를 비운다.
-    private void Despawn(bool playVfx = true)
+    // 스폰한 NPC를 정리한다 — 구독 해제 후 Despawn/Destroy하고 목록에서 뺀다.
+    private void Despawn(SpawnedEntry entry, bool playVfx)
     {
-        if (m_npc == null)
+        NpcController npc = entry.Npc;
+        if (npc == null)
+        {
+            Detach(entry);
             return;
+        }
 
-        OnDespawning(m_npc);
-        m_npc.OnStateChanged -= HandleStateChanged;
+        OnDespawning(npc);
+        Detach(entry);
 
         // 연행 중인 채로 정리되면(라운드 종료 등) 연행 참조가 파괴된 NPC를 가리킨 채 남아 그 플레이어가
         // 영영 연행 중이 된다 — 파괴 전에 놓게 한다. 판정 경로에서는 ArrestJudge가 이미 놓았으므로 null이다.
         // 줄다리기로 여러 명이 걸려 있을 수 있다 — 전원에게서 이 대상의 줄만 뺀다 (#390).
-        foreach (PlayerEscorter escorter in PlayerEscorter.FindEscortersOf(m_npc))
-            escorter.ReleaseDrag(m_npc);
+        foreach (PlayerEscorter escorter in PlayerEscorter.FindEscortersOf(npc))
+            escorter.ReleaseDrag(npc);
 
-        SuddenEventUtil.DespawnOrDestroy(m_npc.gameObject, playVfx);
-        ClearRun();
+        SuddenEventUtil.DespawnOrDestroy(npc.gameObject, playVfx);
     }
 
-    // 한 번의 발생에 딸린 상태를 비운다 — 잔류·정리 두 경로가 같은 것을 지운다.
+    // 구독을 끊고 목록에서 뺀다 — 손을 떼는 두 경로(잔류·정리)가 모두 지난다.
+    private void Detach(SpawnedEntry entry)
+    {
+        if (entry.Npc != null && entry.StateHandler != null)
+            entry.Npc.OnStateChanged -= entry.StateHandler;
+
+        entry.StateHandler = null;
+        m_spawned.Remove(entry);
+
+        if (m_spawned.Count == 0)
+            ClearRun();
+    }
+
+    // 한 번의 발생에 딸린 공통 상태를 비운다 — 마지막 개체가 빠질 때만 지난다.
     // 파생 고유 상태는 OnReleasing/OnDespawning에서 각자 비운다.
     private void ClearRun()
     {
-        m_npc = null;
         m_threat = null;
         m_pendingStart = false;
         m_hasStarted = false;
-        m_captured = false;
-        m_releaseQueued = false;
+    }
+
+    private SpawnedEntry FindEntry(NpcController npc)
+    {
+        if (npc == null)
+            return null;
+
+        for (int i = 0; i < m_spawned.Count; i++)
+            if (m_spawned[i].Npc == npc)
+                return m_spawned[i];
+
+        return null;
+    }
+
+    private bool AnyEscorted()
+    {
+        for (int i = 0; i < m_spawned.Count; i++)
+            if (m_spawned[i].Npc != null && m_spawned[i].Npc.CurrentState == NpcState.Escorted)
+                return true;
+
+        return false;
     }
 }
