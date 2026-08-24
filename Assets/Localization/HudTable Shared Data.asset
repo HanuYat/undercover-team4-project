@@ -431,6 +431,10 @@ MonoBehaviour:
     m_Key: Hud.AreaScan.Blackout
     m_Metadata:
       m_Items: []
+  - m_Id: 7318329074192384
+    m_Key: Hud.Revive.SelfKit
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
