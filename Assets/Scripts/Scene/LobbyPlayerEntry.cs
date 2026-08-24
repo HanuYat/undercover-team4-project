@@ -21,6 +21,9 @@ public struct LobbyPlayerEntry : INetworkSerializable, IEquatable<LobbyPlayerEnt
     /// <summary>부위별 로봇 색 (#432) — 순수 코스메틱이라 서버가 검증하지 않는다.</summary>
     public PlayerColorSet Colors;
 
+    /// <summary>슬롯별 치장 인덱스 (#818) — 색과 같이 순수 코스메틱이라 서버가 검증하지 않는다.</summary>
+    public AccessorySet Accessories;
+
     public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
     {
         serializer.SerializeValue(ref ClientId);
@@ -28,6 +31,7 @@ public struct LobbyPlayerEntry : INetworkSerializable, IEquatable<LobbyPlayerEnt
         serializer.SerializeValue(ref PlayerId);
         serializer.SerializeValue(ref MicMuted);
         Colors.NetworkSerialize(serializer);
+        Accessories.NetworkSerialize(serializer);
     }
 
     // NetworkList는 이 Equals로 "값이 바뀌었는가"를 판정한다 (NetworkList.Set → NetworkVariableSerialization.AreEqual).
@@ -39,7 +43,8 @@ public struct LobbyPlayerEntry : INetworkSerializable, IEquatable<LobbyPlayerEnt
         && Nickname == other.Nickname
         && PlayerId == other.PlayerId
         && MicMuted == other.MicMuted
-        && Colors.Equals(other.Colors);
+        && Colors.Equals(other.Colors)
+        && Accessories.Equals(other.Accessories);
 
     public override bool Equals(object obj) => obj is LobbyPlayerEntry other && Equals(other);
 

@@ -53,7 +53,11 @@ public static class CosmeticsSaveService
             return;
         }
 
-        Apply(() => GameSettings.ApplyPlayerColors(data.Colors));
+        Apply(() =>
+        {
+            GameSettings.ApplyPlayerColors(data.Colors);
+            GameSettings.ApplyAccessories(data.Accessories); // v1 레코드면 null — 그쪽에서 무시한다
+        });
     }
 
     // GameSettings가 부위마다 변경 이벤트를 내므로, 그대로 두면 방금 받은 값을 되올린다.
@@ -81,9 +85,16 @@ public static class CosmeticsSaveService
 
         s_hooked = true;
         GameSettings.OnPlayerColorChanged += HandleColorChanged;
+        GameSettings.OnAccessoryChanged += HandleAccessoryChanged;
     }
 
     private static void HandleColorChanged(EBodyPart part)
+    {
+        if (!s_applying)
+            QueueSave();
+    }
+
+    private static void HandleAccessoryChanged(EAccessorySlot slot)
     {
         if (!s_applying)
             QueueSave();
@@ -114,7 +125,12 @@ public static class CosmeticsSaveService
         for (int i = 0; i < parts.Length; i++)
             colors[(int)parts[i]] = GameSettings.GetPlayerColor(parts[i]);
 
-        return new CosmeticsSaveData { Colors = colors };
+        var slots = (EAccessorySlot[])Enum.GetValues(typeof(EAccessorySlot));
+        var accessories = new int[slots.Length];
+        for (int i = 0; i < slots.Length; i++)
+            accessories[(int)slots[i]] = GameSettings.GetAccessory(slots[i]);
+
+        return new CosmeticsSaveData { Colors = colors, Accessories = accessories };
     }
 
     private static async UniTask<CosmeticsSaveData> ReadAsync()
@@ -130,14 +146,23 @@ public static class CosmeticsSaveService
 
             var data = JsonUtility.FromJson<CosmeticsSaveData>(item.Value.GetAs<string>());
 
-            // 포맷이 어긋나면 읽지 않는다 — 색이 조용히 뒤섞이는 쪽이 기본색보다 나쁘다.
-            if (data == null || data.Version != CosmeticsSaveData.k_version || data.Colors == null)
+            // 모르는(미래) 포맷은 읽지 않는다 — 색이 조용히 뒤섞이는 쪽이 기본색보다 나쁘다.
+            // 반대로 옛 포맷은 버리지 않는다 (#818): v1은 색만 있으므로 색을 살리고 치장은 기본값으로 둔다.
+            if (
+                data == null
+                || data.Colors == null
+                || data.Version < 1
+                || data.Version > CosmeticsSaveData.k_version
+            )
             {
                 Debug.LogWarning(
-                    $"[커스터마이징] 포맷이 달라 무시한다 — 저장 {data?.Version}, 현재 {CosmeticsSaveData.k_version}"
+                    $"[커스터마이징] 읽을 수 없는 포맷이라 무시한다 — 저장 {data?.Version}, 현재 {CosmeticsSaveData.k_version}"
                 );
                 return null;
             }
+
+            if (data.Version < CosmeticsSaveData.k_version)
+                Debug.Log($"[커스터마이징] v{data.Version} 레코드를 읽었다 — 색만 복원하고 치장은 기본값으로 둔다");
 
             Debug.Log($"[커스터마이징] 계정 색을 불러왔다 — {string.Join(",", data.Colors)}");
             return data;
@@ -169,10 +194,14 @@ public static class CosmeticsSaveService
 [Serializable]
 public class CosmeticsSaveData
 {
-    public const int k_version = 1;
+    // v2에서 치장(Accessories)이 추가됐다 — v1 레코드는 색만 읽어 살린다 (CosmeticsSaveService.ReadAsync)
+    public const int k_version = 2;
 
     public int Version = k_version;
 
     /// <summary>인덱스 = <see cref="EBodyPart"/>, 값 = 팔레트 색 인덱스.</summary>
     public int[] Colors;
+
+    /// <summary>인덱스 = <see cref="EAccessorySlot"/>, 값 = 카탈로그 인덱스(0 = 안 씀). v1에는 없다.</summary>
+    public int[] Accessories;
 }

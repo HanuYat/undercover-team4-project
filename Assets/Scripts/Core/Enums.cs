@@ -206,6 +206,20 @@ public enum EBodyPart
 }
 
 /// <summary>
+/// 플레이어 치장 부위 (#818). 저장·전파 배열의 길이가 곧 이 enum의 크기다.
+/// <b>순서를 바꾸지 말 것</b> — 계정에 인덱스로 저장된다. 추가는 뒤에만.
+/// </summary>
+public enum EAccessorySlot
+{
+    Headwear, // 모자·헬멧
+    FacialHair, // 수염·콧수염
+    Hair, // 머리카락 — 모자와 함께 쓸 수 있게 따로 둔다
+    Eyewear, // 안경·고글·안대
+    Facewear, // 마스크
+    Earwear, // 이어피스·헤드셋·피어싱
+}
+
+/// <summary>
 /// 창 모드 (#796). Unity의 <c>FullScreenMode</c> 중 PC에서 쓰는 셋만 골라 둔 것 —
 /// 값은 PlayerPrefs에 저장되므로 순서를 바꾸지 말 것. 변환은 GameSettings가 한다.
 /// </summary>
