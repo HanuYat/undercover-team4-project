@@ -56,8 +56,7 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
     // 서버 권위로만 실제 값 변경. (데미지 소스가 클라라면 별도 ServerRpc로 요청)
     public void ModifyHp(int delta)
     {
-        if (IsSpawned && !IsServer)
-            return;
+        if (IsSpawned && !IsServer) return;
 
         // 바닥은 여기 하나로 둔다 — 피해 경로(진압봉·저항 NPC·폭발)가 전부 이 함수를 지나므로
         // 소스가 늘어도 따라온다. 회복은 하한이라 영향이 없다.
@@ -67,12 +66,6 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 
     /// <summary>
     /// 피격 순간 <b>전 피어</b>에서 발행된다 — 표현(<see cref="PlayerHitView"/>)용. (#476)
-    /// HP는 동기화 값이라 폴링할 수 있지만 "지금 맞았다"는 순간은 값 비교로 잡을 수 없다
-    /// (같은 프레임에 여러 번 맞거나, 이미 0인 HP에 또 맞는 경우가 구분되지 않는다).
-    ///
-    /// 오너 전용이 아니라 전 피어인 이유: NPC 쪽 OnStateChanged/OnStunnedChanged와 같은 방침으로
-    /// 발행은 넓게 하고 <b>연출 컴포넌트가 각자 판단</b>한다 (#56/#292). 본부가 CCTV로 현장을 보는
-    /// 게임이라 월드 연출(피격 스파크 등)은 결국 전 피어여야 한다.
     /// </summary>
     public event System.Action<DamageHit> OnDamaged;
 

@@ -81,6 +81,12 @@ MonoBehaviour:
     m_Localized: Brings a shut-down teammate back on the spot. Single use.
     m_Metadata:
       m_Items: []
+  - m_Id: 12729268256169984
+    m_Localized: Heal Pack
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12729386766229504
+    m_Localized: Restores a certain amount of health.
   - m_Id: 12488576126152704
     m_Localized: Area Scanner
     m_Metadata:

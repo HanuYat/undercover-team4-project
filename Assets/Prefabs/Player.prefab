@@ -6987,7 +6987,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerData
   ShowTopMostFoldoutHeaderGroup: 1
   m_maxHp: 100
-  m_reviveHp: 50
+  m_reviveHp: 10
 --- !u!114 &7365381909932747572
 MonoBehaviour:
   m_ObjectHideFlags: 0
