@@ -16238,7 +16238,7 @@ MonoBehaviour:
   m_catalog: {fileID: 11400000, guid: 4d0d855372518f94184454112d35bef4, type: 2}
   m_dispenseAnchor: {fileID: 1295111152}
   m_capsulePrefab: {fileID: 0}
-  m_revealScale: 4
+  m_revealScale: 1
   m_capsuleSeconds: 0.8
   m_popSeconds: 0.35
   m_holdSeconds: 2.5
@@ -19694,7 +19694,7 @@ Transform:
   m_GameObject: {fileID: 1295111151}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.00000023841858, y: 1.0959044, z: 0.028424978}
+  m_LocalPosition: {x: 0.00000023841858, y: 1.5459046, z: -0.071575046}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -19760,7 +19760,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -28064,7 +28064,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
