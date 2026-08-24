@@ -69,6 +69,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Locale-en
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: acb8177dd3d43bb45978bca0db5a8b16
+    m_Address: EmoteTable_en
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-en
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ceaaa84fa347fa845b7394f06827e5e2
     m_Address: SettlementTable_en
     m_ReadOnly: 1

@@ -15,14 +15,13 @@ MonoBehaviour:
   m_id: clap
   m_displayName:
     m_TableReference:
-      m_TableCollectionName: 
+      m_TableCollectionName: EmoteTable
     m_TableEntryReference:
-      m_KeyId: 0
+      m_KeyId: 959873027
       m_Key: 
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
-  m_fallbackName: "\uBC15\uC218"
   m_icon: {fileID: 21300000, guid: e74765cd37e47004782e04d75fcbecff, type: 3}
   m_clip: {fileID: 3094330708855449807, guid: fd3c4482d0a246e4d8b14696506e7dd2, type: 3}
   m_loop: 0

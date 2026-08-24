@@ -59,6 +59,10 @@ MonoBehaviour:
     m_Key: Lobby.Roster.Left
     m_Metadata:
       m_Items: []
+  - m_Id: 7404992532480000
+    m_Key: Lobby.Emote.Title
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

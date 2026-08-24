@@ -59,6 +59,10 @@ MonoBehaviour:
     m_Key: Common.Loading.Preparing
     m_Metadata:
       m_Items: []
+  - m_Id: 7404993681719296
+    m_Key: Common.Button.SaveClose
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

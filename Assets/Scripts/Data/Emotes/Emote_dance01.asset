@@ -15,14 +15,13 @@ MonoBehaviour:
   m_id: dance01
   m_displayName:
     m_TableReference:
-      m_TableCollectionName: 
+      m_TableCollectionName: EmoteTable
     m_TableEntryReference:
-      m_KeyId: 0
+      m_KeyId: 959873028
       m_Key: 
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
-  m_fallbackName: "\uCDA4 1"
   m_icon: {fileID: 21300000, guid: 66a765bc90e5f3049b11c2c9988a44a8, type: 3}
   m_clip: {fileID: -8694131350697414543, guid: f44f70b2354508c4cb2534cc3f6bce94, type: 3}
   m_loop: 1

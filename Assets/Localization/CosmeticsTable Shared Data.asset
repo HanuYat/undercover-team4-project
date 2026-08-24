@@ -351,6 +351,46 @@ MonoBehaviour:
     m_Key: Cosmetic.Pol_Piercings_02
     m_Metadata:
       m_Items: []
+  - m_Id: 52074028367872
+    m_Key: Cosmetic.Window.Title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533696
+    m_Key: Cosmetic.Slot.Headwear
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533697
+    m_Key: Cosmetic.Slot.Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533698
+    m_Key: Cosmetic.Slot.FacialHair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533699
+    m_Key: Cosmetic.Slot.Eyewear
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533700
+    m_Key: Cosmetic.Slot.Facewear
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533701
+    m_Key: Cosmetic.Slot.Earwear
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533702
+    m_Key: Cosmetic.Part.Head
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533703
+    m_Key: Cosmetic.Part.Torso
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533704
+    m_Key: Cosmetic.Part.Legs
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

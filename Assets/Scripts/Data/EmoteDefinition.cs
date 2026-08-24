@@ -19,13 +19,9 @@ public class EmoteDefinition : ScriptableObject
     [SerializeField]
     private string m_id;
 
-    [Tooltip("휠·로비 목록에 표시할 이름")]
+    [Tooltip("휠·로비 목록에 표시할 이름 — EmoteTable의 Emote.Name.<Id>")]
     [SerializeField]
     private LocalizedString m_displayName;
-
-    [Tooltip("로컬라이즈 키를 연결하기 전까지 쓸 이름. m_displayName이 비어 있을 때만 쓰인다")]
-    [SerializeField]
-    private string m_fallbackName;
 
     [Tooltip("휠 칸 아이콘")]
     [SerializeField]
@@ -48,13 +44,6 @@ public class EmoteDefinition : ScriptableObject
 
     public LocalizedString DisplayName => m_displayName;
 
-    /// <summary>
-    /// 로컬라이즈 키가 아직 없을 때 화면에 쓸 이름. 비어 있으면 <see cref="Id"/>가 대신 나간다.
-    ///
-    /// 임시 자리라 프로퍼티를 따로 둔다 — 나중에 로컬라이즈 테이블이 채워지면 <see cref="DisplayName"/>이
-    /// 이기고 이 값은 쓰이지 않게 되므로, 그때 이 필드만 지우면 된다.
-    /// </summary>
-    public string FallbackName => string.IsNullOrEmpty(m_fallbackName) ? m_id : m_fallbackName;
     public Sprite Icon => m_icon;
     public AnimationClip Clip => m_clip;
     public bool Loop => m_loop;

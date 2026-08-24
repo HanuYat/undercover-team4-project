@@ -354,6 +354,46 @@ MonoBehaviour:
     m_Localized: Piercing Set
     m_Metadata:
       m_Items: []
+  - m_Id: 52074028367872
+    m_Localized: Customization
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533696
+    m_Localized: Headwear
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533697
+    m_Localized: Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533698
+    m_Localized: Facial Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533699
+    m_Localized: Eyewear
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533700
+    m_Localized: Mask
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533701
+    m_Localized: Ear
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533702
+    m_Localized: Head
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533703
+    m_Localized: Torso
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533704
+    m_Localized: Legs
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

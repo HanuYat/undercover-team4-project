@@ -25,6 +25,11 @@ MonoBehaviour:
     m_ReadOnly: 1
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1d63b6aed71d64740885a0f824dcce1e
+    m_Address: Assets/Localization/EmoteTable Shared Data.asset
+    m_ReadOnly: 1
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2482529739cee144e908dc2a2e78c2c6
     m_Address: Assets/Localization/WorldTable Shared Data.asset
     m_ReadOnly: 1
