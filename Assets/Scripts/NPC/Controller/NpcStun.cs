@@ -325,7 +325,8 @@ public class NpcStun : NetworkBehaviour
             return;
         }
 
+        // 복귀 지점은 ResumeReaction 하나다 — 대부분 도주지만 포기하지 않는 개체는 저항으로 돌아온다 (#721)
         if (NpcStateRules.IsReactive(m_owner.CurrentState))
-            m_owner.Reaction.StartFlee(m_owner.Reaction.ThreatTarget);
+            m_owner.Reaction.ResumeReaction(m_owner.Reaction.ThreatTarget);
     }
 }
