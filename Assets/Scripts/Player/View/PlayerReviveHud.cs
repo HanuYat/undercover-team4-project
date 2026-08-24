@@ -26,6 +26,12 @@ public class PlayerReviveHud : NetworkBehaviour
     [SerializeField]
     private LocalizedString m_selfDeadPrompt;
 
+    [Tooltip(
+        "부활 키트를 들고 Down·Die 중 — HudTable/Hud.Revive.SelfKit. {0}=상호작용 키(홀드). (#820)"
+    )]
+    [SerializeField]
+    private LocalizedString m_selfReviveHintPrompt;
+
     [Header("행동 문구")]
     [Tooltip("다운된 아군을 조준 중 — HudTable/Hud.Revive.Hint. {0}=일으키기 키, {1}=뒤지기 키")]
     [SerializeField]
@@ -40,6 +46,7 @@ public class PlayerReviveHud : NetworkBehaviour
     private PlayerReviver m_reviver;
     private PlayerIncapacitation m_incapacitation;
     private PlayerInputHandler m_input; // 문구에 끼울 키 표기 (#664)
+    private PlayerSelfRevive m_selfRevive; // 부활 키트 자가 부활 게이트 (#820)
 
     // 지금 띄워 둔 문구 — 매 프레임 같은 것을 다시 띄워 재구독하지 않도록 기억한다
     private LocalizedString m_shown;
@@ -67,6 +74,7 @@ public class PlayerReviveHud : NetworkBehaviour
         m_reviver = GetComponent<PlayerReviver>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
         m_input = GetComponent<PlayerInputHandler>();
+        m_selfRevive = GetComponent<PlayerSelfRevive>();
     }
 
     public override void OnNetworkDespawn()
@@ -104,19 +112,25 @@ public class PlayerReviveHud : NetworkBehaviour
                 Mathf.CeilToInt(m_incapacitation.RemainingUntilDie)
             );
 
+            // 동료가 구조하러 오는 중이면 그 안내가 우선이다 — 내가 부활 키트로 스스로 일으키는
+            // 중이어도 동료 쪽 유예 시계는 이미 얼어 있으므로(ServerSetBeingRevived) 상충하지 않는다.
             if (m_incapacitation.IsBeingRevived)
                 SetPrompt(m_beingRevivedPrompt);
+            else if (m_selfRevive != null && m_selfRevive.CanSelfRevive)
+                SetPrompt(m_selfReviveHintPrompt, InteractKey);
             else
                 ClearPrompt();
             return;
         }
 
-        // 내가 기능 정지(Die)된 경우 — 동료의 부활 키트를 기다려야 한다는 안내 (#364/#613)
-        // 몸이 회수 불가능한 곳으로 사라졌으면(맨홀 납치, #775) 부활이 영영 없으므로 이 안내 자체가
-        // 거짓이다 — 아무 문구도 띄우지 않는다.
+        // 내가 기능 정지(Die)된 경우 — 부활 키트가 있으면 스스로, 없으면 동료의 키트를 기다려야
+        // 한다는 안내 (#364/#613/#820). 몸이 회수 불가능한 곳으로 사라졌으면(맨홀 납치, #775) 부활이
+        // 영영 없으므로 이 안내 자체가 거짓이다 — 아무 문구도 띄우지 않는다.
         if (m_incapacitation != null && m_incapacitation.IsDead)
         {
-            if (m_incapacitation.IsRevivable)
+            if (m_selfRevive != null && m_selfRevive.CanSelfRevive)
+                SetPrompt(m_selfReviveHintPrompt, InteractKey);
+            else if (m_incapacitation.IsRevivable)
                 SetPrompt(m_selfDeadPrompt);
             else
                 ClearPrompt();

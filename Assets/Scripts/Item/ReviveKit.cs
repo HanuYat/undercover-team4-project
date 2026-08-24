@@ -1,14 +1,34 @@
+using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Localization;
 
 /// <summary>
-/// 부활 키트 — Die 상태의 플레이어를 그 자리에서 즉시 부활시키는 소모성 아이템
+/// 부활 키트 — Die 상태의 플레이어를 그 자리에서 즉시 부활시키는 소모성 아이템.
+/// 남에게 쓰는 좌클릭 경로(<see cref="Use"/>)에 더해, 소지자 본인이 Down·Die 중 E를 홀드해
+/// 스스로 일으키는 경로(<see cref="RequestSelfRevive"/>)를 함께 담는다. (#820)
+///
+/// <b>자가 부활의 채널링이 왜 여기(아이템)에 있는가.</b> Die 중에는 플레이어 오브젝트의 네트워크
+/// 오너가 서버로 이관된다(<see cref="PlayerIncapacitation"/>의 ApplyDeathOwnership, #763) — 그래서
+/// 플레이어 오브젝트에 붙은 컴포넌트의 SendTo.Owner(게이지·NotifyOwner)는 쓰러진 본인에게 닿지
+/// 않는다. 반면 소지품(이 아이템)의 소유권은 사망 중에도 그대로 남는다(사망 경로에 ChangeOwnership이
+/// 없다) — 그래서 채널링·게이지·피드백을 플레이어가 아니라 이 아이템에 둔다.
 /// </summary>
 public class ReviveKit : ItemBase
 {
     // 사거리는 조준·윤곽선과 같은 기준 — PlayerInteractor.Range를 재사용 (#147 패턴, #184).
     private const float k_fallbackRange = 3f; // 테스트 구성 등 PlayerInteractor가 없을 때
+
+    [Header("자가 부활 (#820)")]
+    [Tooltip("자가 부활 채널링 시간(초) — 동료 구조(PlayerReviver)와 같은 값으로 시작한다")]
+    [SerializeField]
+    private float m_selfReviveSeconds = 3f;
+
+    // 자가 부활 채널링 생명주기(CTS 소유·재진입 가드)는 ServerChannel에 위임 (#109, Scanner 관례)
+    private readonly ServerChannel m_selfChannel = new();
+
+    // 자가 부활 채널링 중 루프음 — 동료 구조(PlayerReviver)와 같은 소리로 통일한다.
+    protected override EAudioClip ChannelLoopSound => EAudioClip.ReviveLoop;
 
     /// <summary>
     /// 이 키트로 일으킬 수 있는 대상을 조준 중인지 — 윤곽선·크로스헤어 게이트. (#184)
@@ -62,7 +82,7 @@ public class ReviveKit : ItemBase
 
         PlayerHealth target = aimTarget.GetComponentInParent<PlayerHealth>();
         if (target == null || target == HolderHealth)
-            return null; // 자기 자신에게는 쓸 수 없다
+            return null; // 자기 자신에게는 쓸 수 없다 — 자가 부활은 RequestSelfRevive의 별도 경로다 (#820)
 
         // 몸이 회수 불가능한 곳으로 사라졌으면(맨홀 납치, #775) 부활 대상이 아니다
         PlayerIncapacitation targetIncapacitation = target.GetComponent<PlayerIncapacitation>();
@@ -148,5 +168,148 @@ public class ReviveKit : ItemBase
 
         // 성공했을 때만 소모한다 — 거부된 사용으로 키트가 사라지면 산 값을 그냥 잃는다
         ServerConsume();
+    }
+
+    // ---- 자가 부활 (#820) ----
+
+    /// <summary>
+    /// 자가 부활 채널링 시작 요청 — 소지자(오너) 본인이 E를 누르는 순간 PlayerSelfRevive가 호출한다.
+    /// PlayerReviver.RequestBeginRevive와 같은 3분기 구조.
+    /// </summary>
+    public void RequestSelfRevive()
+    {
+        if (HasServerAuthority)
+        {
+            ServerBeginSelfRevive();
+            return;
+        }
+
+        if (!IsOwner)
+            return; // 남의 키트에서 온 호출 방지
+
+        BeginSelfReviveRpc();
+    }
+
+    /// <summary>자가 부활 채널링 취소 요청 — E를 떼거나 다른 취소 조건이 걸리면 호출한다.</summary>
+    public void RequestCancelSelfRevive()
+    {
+        if (!IsSpawned)
+        {
+            ServerCancelSelfRevive();
+            return;
+        }
+        if (!IsOwner)
+            return;
+
+        CancelSelfReviveRpc();
+    }
+
+    [Rpc(SendTo.Server)]
+    private void BeginSelfReviveRpc() => ServerBeginSelfRevive();
+
+    [Rpc(SendTo.Server)]
+    private void CancelSelfReviveRpc() => ServerCancelSelfRevive();
+
+    private void ServerBeginSelfRevive()
+    {
+        if (!HasServerAuthority || m_selfChannel.IsActive)
+            return;
+
+        PlayerInteractor holder = Holder;
+        if (holder == null)
+        {
+            // 바닥에 놓인 키트로 온 요청 — 든 사람이 없으면 자가 부활 대상 자체가 없다
+            Debug.LogWarning("[부활 키트] 든 사람이 없는 키트로 자가 부활 요청이 들어왔다 — 거부", this);
+            return;
+        }
+
+        // 라운드 종료 뒤에는 부활을 막는다 — PlayerMovement.IsRoundOver와 같은 기준(GameplayFrozen)
+        if (App.Game.Round != null && App.Game.Round.GameplayFrozen)
+            return;
+
+        PlayerIncapacitation incap = holder.GetComponent<PlayerIncapacitation>();
+        if (incap == null || !(incap.IsDowned || incap.IsRevivable))
+        {
+            // Down도 Die(맨홀로 몸이 사라지지 않은 경우)도 아니면 자가 부활 대상이 아니다
+            // (몸이 회수 불가능한 경우는 IsRevivable이 걸러낸다, #775)
+            return;
+        }
+
+        ServerSelfChannelAsync(holder, incap).Forget();
+    }
+
+    private async UniTaskVoid ServerSelfChannelAsync(PlayerInteractor holder, PlayerIncapacitation incap)
+    {
+        NotifyOwner($"자가 부활 채널링 시작 ({m_selfReviveSeconds}초)");
+        NotifyChannelGaugeStart(m_selfReviveSeconds);
+
+        // Down 유예 시계를 얼린다 — Die 중이면 IsDowned가 아니라 무동작으로 넘어간다 (#725)
+        incap.ServerSetBeingRevived(true, m_selfReviveSeconds);
+
+        ServerChannel.Result result;
+        try
+        {
+            result = await m_selfChannel.RunAsync(
+                m_selfReviveSeconds,
+                () =>
+                    Holder == holder // 채널링 중 약탈(#487)로 손이 바뀌면 즉시 중단
+                    && (incap.IsDowned || incap.IsRevivable) // 동료가 먼저 살렸거나 몸을 잃으면 중단
+            );
+        }
+        finally
+        {
+            // 완료·취소·예외 어떤 경로로 끝나도 게이지 숨김과 유예 시계 해동을 보장한다 (#184, #725)
+            NotifyChannelGaugeEnd();
+            incap.ServerSetBeingRevived(false);
+        }
+
+        switch (result)
+        {
+            case ServerChannel.Result.Canceled:
+                NotifyOwner("자가 부활 취소됨");
+                return;
+
+            case ServerChannel.Result.OutOfRange:
+                NotifyOwner("자가 부활 중단 — 대상이 부활 대상이 아니게 됨");
+                return;
+
+            case ServerChannel.Result.Completed:
+                break;
+        }
+
+        // 채널링 동안 손이 바뀌었으면(약탈 등) 실패 — keepAlive가 대부분 잡지만 완료 프레임과의
+        // 경합을 한 번 더 막는다
+        if (Holder != holder)
+        {
+            NotifyOwner("자가 부활 실패 — 키트를 손에서 놓쳤다");
+            return;
+        }
+
+        PlayerHealth health = holder.GetComponent<PlayerHealth>();
+        if (health == null || !(incap.IsDowned || incap.IsRevivable))
+        {
+            NotifyOwner("자가 부활 실패 — 이미 복구됐거나 부활 대상이 아니다");
+            return;
+        }
+
+        // 부활이 먼저다 — ServerRevive()의 Recover()가 소유권을 본인에게 되돌려야, 뒤따르는
+        // ServerConsume() 안의 SyncHeldItemsRpc(SendTo.Owner)가 서버가 아니라 본인에게 간다 (#763, #820)
+        health.ServerRevive();
+        NotifyOwner("자가 부활 완료 (부활 키트 소모)");
+        ServerConsume();
+    }
+
+    private void ServerCancelSelfRevive() => m_selfChannel.Cancel();
+
+    /// <summary>
+    /// 서버 권위로 자가 부활 채널링을 즉시 중단한다 — 약탈로 소유권이 넘어가는 경로 등에서
+    /// 서버가 직접 호출한다 (ItemBase 계약, Scanner 관례). 남에게 쓰는 경로는 채널링이 없어 영향받지 않는다.
+    /// </summary>
+    public override void ServerCancelActiveUse() => m_selfChannel.Cancel();
+
+    public override void OnDestroy()
+    {
+        m_selfChannel.Dispose();
+        base.OnDestroy(); // NetworkBehaviour 내부 정리 — 반드시 호출 (R5)
     }
 }

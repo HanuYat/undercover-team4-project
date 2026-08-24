@@ -418,6 +418,15 @@ public class PlayerLoadout : NetworkBehaviour
     /// </summary>
     public int RopeCount => m_held.CountOf<Rope>();
 
+    // ---- 부활 키트 게이트 (#820) ----
+
+    /// <summary>
+    /// 소지 중인 부활 키트(없으면 null) — 자가 부활 게이트. <b>장착 여부와 무관하다</b> — 5칸 어디에
+    /// 있어도 유효해야 한다(무력화 중엔 슬롯 전환이 막혀 장착 아이템으로 제한하면 운이 갈린다).
+    /// HasRope/RopeCount와 같은 부착 자식 기준이라 Die 중 소유권 이관(#763)에도 영향받지 않는다.
+    /// </summary>
+    public ReviveKit HeldReviveKit => m_held.FirstOf<ReviveKit>();
+
     // ---- 서버 → 오너: 보유 목록 동기화 ----
 
     // 오너가 서버 진실 목록으로 자기 인벤토리를 재구성한다 — 줍기/버리기로 목록이 바뀌어도
