@@ -13,9 +13,10 @@ using UnityEngine.Localization;
 /// 깎을 수 없다 — 서버 권위로 만들려면 UGS Cloud Code가 필요하고, 순수 코스메틱이라 조작해도
 /// 조작한 사람 모자만 늘어난다. <see cref="CosmeticLocker"/>가 '순수 로컬 동작'인 것과 같은 자리다.
 ///
-/// <b>네트워크를 타는 것은 연출뿐이다.</b> 상점에 같이 서 있는 사람도 캡슐이 나오는 것을 보게
-/// 하려고, 결과를 서버에 한 번 올려 나머지에게 뿌린다. 값이 위조돼도 남의 화면에 잠깐 뜨는
-/// 모형이 바뀔 뿐이라 검증하지 않는다.
+/// <b>연출이 뽑은 사람과 남에게 다르다.</b> 뽑은 사람은 아이콘이 흘러가다 가운데에 멈추는 릴
+/// (<see cref="CosmeticGachaPanel"/>)을 보고, 같이 서 있는 사람은 기계 앞에 그 치장이 뜨는 것만
+/// 본다 — 남이 돌릴 때마다 내 화면이 릴에 덮이면 안 된다. 그래서 결과를 서버에 한 번 올려
+/// 나머지에게만 뿌린다. 값이 위조돼도 남의 화면에 잠깐 뜨는 모형이 바뀔 뿐이라 검증하지 않는다.
 ///
 /// 콜라이더는 반드시 <c>Interactable</c> 레이어에 둘 것 — PlayerInteractor의 조준 마스크가 그 레이어만 본다.
 /// </summary>
@@ -55,7 +56,7 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
     [Tooltip("결과 문구가 떠 있는 시간(초)")]
     [SerializeField] private float m_messageSeconds = 4f;
 
-    // 연출이 겹치지 않게 — 내가 돌리는 중이든 남의 결과를 보는 중이든 하나만 돈다
+    // 기계 앞 모형 연출이 겹치지 않게 — 남의 결과를 잇달아 받아도 하나만 돈다
     private bool m_playing;
 
     // 지금 떠 있는 모형 — 연출이 끊기면(씬 전환·파괴) 같이 지운다
@@ -63,13 +64,15 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
 
     public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.Gacha;
 
-    // 연출 중에만 막는다. 토큰이 없다고 미리 막지 않는 것은 눌러서 사유를 볼 수 있게 하려는
-    // 것이고, 이유 표시 방식은 ShopStand와 같다.
-    public bool CanInteract(GameObject interactor) => !m_playing;
+    // 내 릴이 도는 중에만 막는다. 토큰이 없다고 미리 막지 않는 것은 눌러서 사유를 볼 수 있게
+    // 하려는 것이고, 이유 표시 방식은 ShopStand와 같다.
+    // 기계 앞 모형(m_playing)은 남의 뽑기로도 돌므로 여기서 보지 않는다 — 남이 뽑는 동안 내가
+    // 못 누르면 붐빌 때 아무도 못 뽑는다.
+    public bool CanInteract(GameObject interactor) => !IsReelSpinning();
 
     public void Interact(GameObject interactor)
     {
-        if (m_playing)
+        if (IsReelSpinning())
             return;
 
         if (m_catalog == null)
@@ -100,8 +103,19 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
             CosmeticInventory.AddTokens(1); // 중복은 환급이다 (팀 결정 #818 D)
 
         App.Sound?.PlaySfx2D(m_drawSound);
-        ShowResultMessage(slot, index, gained);
-        PlayRevealAsync(slot, index).Forget();
+
+        // 릴이 결과 문구까지 띄운다 — 창이 화면을 덮으므로 토스트는 그 뒤에 가린다.
+        // 릴이 없는 씬(패널 미배치)에서는 기계 앞 모형과 토스트로 물러난다.
+        CosmeticGachaPanel reel = FindReel();
+        if (reel != null)
+        {
+            reel.Play(slot, index, gained);
+        }
+        else
+        {
+            ShowResultMessage(slot, index, gained);
+            PlayRevealAsync(slot, index).Forget();
+        }
 
         // 같이 서 있는 사람도 보게 한다 — 세션이 아니면(씬 단독 Play) 보낼 곳이 없다
         if (IsSpawned)
@@ -154,6 +168,19 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
     {
         if (!m_playing && m_catalog != null)
             PlayRevealAsync((EAccessorySlot)slot, index).Forget();
+    }
+
+    // 릴은 스스로 UI 매니저에 등록한다 — 자판기가 인스펙터로 물고 있지 않는 이유는
+    // CosmeticLocker가 커스터마이징 창을 찾는 것과 같다(씬에 자판기가 늘면 배선이 여러 벌 된다).
+    private static CosmeticGachaPanel FindReel() =>
+        App.UI.Current != null && App.UI.Current.TryGetPanel(out CosmeticGachaPanel panel)
+            ? panel
+            : null;
+
+    private static bool IsReelSpinning()
+    {
+        CosmeticGachaPanel reel = FindReel();
+        return reel != null && reel.IsSpinning;
     }
 
     /// <summary>
