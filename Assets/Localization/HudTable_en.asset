@@ -158,11 +158,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 3338714365911040
-    m_Localized: "\u26a0 A street thug is after you"
+    m_Localized: "\u26A0 A street thug is after you"
     m_Metadata:
       m_Items: []
   - m_Id: 3338714399465472
-    m_Localized: "\u26a0 A streaker is running loose"
+    m_Localized: "\u26A0 A streaker is running loose"
     m_Metadata:
       m_Items: []
   - m_Id: 3338714399465473
@@ -443,6 +443,14 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 6220632138768384
     m_Localized: Infrared
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7050224400855040
+    m_Localized: "Area scan on cooldown \u2014 {0}s left"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7050224434409472
+    m_Localized: "Area scan failed \u2014 device blackout"
     m_Metadata:
       m_Items: []
   references:

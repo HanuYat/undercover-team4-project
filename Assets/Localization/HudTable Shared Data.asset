@@ -423,6 +423,14 @@ MonoBehaviour:
     m_Key: Hud.Interact.CctvInfrared
     m_Metadata:
       m_Items: []
+  - m_Id: 7050224400855040
+    m_Key: Hud.AreaScan.Cooldown
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7050224434409472
+    m_Key: Hud.AreaScan.Blackout
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

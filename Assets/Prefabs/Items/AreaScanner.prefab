@@ -1,0 +1,121 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &3548487367736433955
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1598778629498169912}
+  - component: {fileID: 1896902269743218172}
+  - component: {fileID: 9191439955366297747}
+  - component: {fileID: 7679794720558980840}
+  m_Layer: 7
+  m_Name: AreaScanner
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1598778629498169912
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3548487367736433955}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1896902269743218172
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3548487367736433955}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
+  GlobalObjectIdHash: 1374665802
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  DeferredDespawnTick: 0
+  Ownership: 1
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  <InScenePlaced>k__BackingField: 0
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 0
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+  SyncOwnerTransformWhenParented: 1
+  AllowOwnerToParent: 0
+--- !u!114 &9191439955366297747
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3548487367736433955}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fab68f071270f3b44a1098941bf0587f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AreaScanner
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_itemName:
+    m_TableReference:
+      m_TableCollectionName: GUID:faae75c9a0a19b441be27b8614effa3d
+    m_TableEntryReference:
+      m_KeyId: 12488576126152704
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_itemIcon: {fileID: 0}
+  m_itemDescription:
+    m_TableReference:
+      m_TableCollectionName: GUID:faae75c9a0a19b441be27b8614effa3d
+    m_TableEntryReference:
+      m_KeyId: 12488576134541312
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_heldModelPrefab: {fileID: 9165171215913758722, guid: f3fa43e03b509be4db69a5be7803fd91, type: 3}
+  m_heldPositionOffset: {x: 0.13, y: 0.04, z: -0.01}
+  m_heldRotationOffset: {x: 185, y: -88, z: 95}
+  m_handGrip: 2
+  m_targetOutlineColor: {r: 0.2, g: 0.9, b: 0.6, a: 1}
+  m_shopPrice: 3000
+  m_scanRadius: 20
+  m_cooldownSeconds: 60
+  m_originTolerance: 2
+  m_ringPrefab: {fileID: 5174203954150712900, guid: 6fb051f1fc524fc4497c22d478449c0b, type: 3}
+  m_hitColor: {r: 0, g: 1, b: 0, a: 1}
+  m_missColor: {r: 1, g: 0, b: 0, a: 1}
+  references:
+    version: 2
+    RefIds: []
+--- !u!114 &7679794720558980840
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3548487367736433955}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6708c43a2175d914ea50ce6a610d3cb6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WorldItemPickup

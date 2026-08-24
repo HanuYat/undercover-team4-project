@@ -44514,6 +44514,7 @@ MonoBehaviour:
   - {fileID: 1755347541}
   m_moveDistance: 6
   m_minPromptSeconds: 3
+  m_corpseToastSeconds: 6
   m_finishDelaySeconds: 8
 --- !u!1001 &1493748345
 PrefabInstance:
@@ -44661,6 +44662,12 @@ MonoBehaviour:
   - Id: 8
     Effect: 0
     Sound: 18
+  - Id: 9
+    Effect: 0
+    Sound: 28
+  - Id: 10
+    Effect: 0
+    Sound: 29
 --- !u!4 &1496433913 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4744096329500722, guid: e5ea23645ddbb58408bd3bb44e10f168, type: 3}

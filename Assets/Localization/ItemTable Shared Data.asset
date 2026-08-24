@@ -71,6 +71,14 @@ MonoBehaviour:
     m_Key: Item.Description.ReviveKit
     m_Metadata:
       m_Items: []
+  - m_Id: 12488576126152704
+    m_Key: Item.Name.AreaScanner
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12488576134541312
+    m_Key: Item.Description.AreaScanner
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
