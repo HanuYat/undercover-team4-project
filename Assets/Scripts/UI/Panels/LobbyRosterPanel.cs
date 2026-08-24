@@ -205,8 +205,12 @@ public class LobbyRosterPanel : PanelBase
                 LobbyPlayerEntry entry = m_roster.Players[i];
                 m_rows[i].Bind(entry, m_roster.IsHostEntry(entry));
 
-                // 카드마다 그 사람 색의 얼굴을 받는다 — 무대는 색 조합 단위로 굽는다 (#432)
-                m_rows[i].SetPortrait(m_portraitStage != null ? m_portraitStage.GetPortrait(entry.Colors) : null);
+                // 카드마다 그 사람 얼굴을 받는다 — 무대는 색·치장 조합 단위로 굽는다 (#432 · #818)
+                m_rows[i].SetPortrait(
+                    m_portraitStage != null
+                        ? m_portraitStage.GetPortrait(entry.Colors, entry.Accessories)
+                        : null
+                );
             }
             else
             {

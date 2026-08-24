@@ -33,11 +33,22 @@ public class PlayerColorPanel : PanelBase
         RefreshPreview();
     }
 
-    private void OnEnable() => GameSettings.OnPlayerColorChanged += HandleColorChanged;
+    private void OnEnable()
+    {
+        GameSettings.OnPlayerColorChanged += HandleColorChanged;
+        GameSettings.OnAccessoryChanged += HandleAccessoryChanged;
+    }
 
-    private void OnDisable() => GameSettings.OnPlayerColorChanged -= HandleColorChanged;
+    private void OnDisable()
+    {
+        GameSettings.OnPlayerColorChanged -= HandleColorChanged;
+        GameSettings.OnAccessoryChanged -= HandleAccessoryChanged;
+    }
 
     private void HandleColorChanged(EBodyPart _) => RefreshPreview();
+
+    // 치장도 같은 자리에서 되그린다 — 무대가 전신 미리보기에만 태운다 (#818)
+    private void HandleAccessoryChanged(EAccessorySlot _) => RefreshPreview();
 
     // 그림은 무대가 그린다 — 창은 어느 것을 볼지만 정한다
     private void RefreshPreview()
