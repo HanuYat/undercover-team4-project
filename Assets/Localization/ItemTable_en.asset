@@ -96,6 +96,14 @@ MonoBehaviour:
       60s cooldown.
     m_Metadata:
       m_Items: []
+  - m_Id: 816000000000001
+    m_Localized: Giant Squeaky Hammer
+    m_Metadata:
+      m_Items: []
+  - m_Id: 816000000000002
+    m_Localized: Normally just a light tap, but on a very rare roll it flattens the target completely on the spot.
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

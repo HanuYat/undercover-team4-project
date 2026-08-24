@@ -101,6 +101,36 @@ public class Baton : ItemBase, IAimedWeapon
     // 재진입 가드, 디스폰 시 정리) — 그 골격이 이미 ServerChannel에 있어 그대로 재사용한다 (#109).
     private readonly ServerChannel m_swingImpact = new();
 
+    // ---- 하위 클래스 확장 시임 (#816) ----
+
+    /// <summary>
+    /// 이 타격의 위력 — 데미지와 '대박' 여부를 함께 정한다. 굴림 한 번이 데미지와 연출(<see cref="ImpactFxFor"/>)
+    /// 둘 다를 결정해야 하므로 하나로 묶는다 (거대 뿅망치, #816) — 따로 굴리면 두 번째 굴림에서 결과가
+    /// 어긋나 '터졌는데 평타 소리'가 나는 경합이 생긴다.
+    /// </summary>
+    protected readonly struct SwingPower
+    {
+        public readonly int Damage;
+        public readonly bool IsCritical;
+
+        public SwingPower(int damage, bool isCritical)
+        {
+            Damage = damage;
+            IsCritical = isCritical;
+        }
+    }
+
+    /// <summary>
+    /// 이번 타격의 위력을 정한다 — 서버 전용, 유효타가 확정된 뒤 <b>타격당 한 번만</b> 불린다.
+    /// 기본 구현은 프리팹 데미지 고정(대박 없음). 확률로 위력이 갈리는 하위 클래스가 이걸 재정의한다.
+    /// </summary>
+    protected virtual SwingPower RollSwingPower() => new SwingPower(m_damage, false);
+
+    /// <summary>
+    /// 서버 판정 로그·토스트에 실을 무기 이름 — 콘솔·토스트 전용 문자열이라 지역화 대상이 아니다.
+    /// </summary>
+    protected virtual string WeaponLogName => "진압봉";
+
     // ---- ItemBase ----
 
     // CanTarget은 재정의하지 않는다(기본 false) — 조준 대상 윤곽선(#184)의 기준인 상호작용 레이(3m)와
@@ -290,11 +320,11 @@ public class Baton : ItemBase, IAimedWeapon
         {
             case SwingResult.NoHit:
                 // 허공은 연출이 없다 — 이미 나간 스윙음이 '휘두르긴 했다'를 말해 주고 있다.
-                NotifyOwner("진압봉 빗나감 — 허공");
+                NotifyOwner($"{WeaponLogName} 빗나감 — 허공");
                 return;
             case SwingResult.HitNonTarget:
                 App.Game.Fx?.PlayEverywhere(EFx.BatonHitWorld, hit.point, hit.normal);
-                NotifyOwner($"진압봉 빗나감 — {hit.collider.name}에 맞음");
+                NotifyOwner($"{WeaponLogName} 빗나감 — {hit.collider.name}에 맞음");
                 return;
             case SwingResult.TargetInvalidState:
                 // 아무 연출도 내지 않는다 — 때릴 수 없는 대상이므로 허공(NoHit)과 같은 취급이다.
@@ -304,8 +334,8 @@ public class Baton : ItemBase, IAimedWeapon
                 // 함께 사라졌다(#571, EvaluateSwing 주석). 쓰러진 대상은 이제 유효타다.
                 NotifyOwner(
                     playerTarget != null
-                        ? $"진압봉 무효 — 이미 무력화된 동료 ({playerTarget.name})"
-                        : $"진압봉 무효 — {(target.CurrentState == NpcState.Dead ? "이미 죽은" : "이미 제압됐거나 페널티 진행 중인")} 대상 ({target.CurrentState})"
+                        ? $"{WeaponLogName} 무효 — 이미 무력화된 동료 ({playerTarget.name})"
+                        : $"{WeaponLogName} 무효 — {(target.CurrentState == NpcState.Dead ? "이미 죽은" : "이미 제압됐거나 페널티 진행 중인")} 대상 ({target.CurrentState})"
                 );
                 return;
         }
@@ -319,33 +349,46 @@ public class Baton : ItemBase, IAimedWeapon
             App.Game.Fx?.PlayEverywhere(EFx.BatonHitMetal, hit.point, hit.normal);
             NotifyHit(false);
             bombTarget.ServerDetonate();
-            NotifyOwner("진압봉 명중 — 폭탄이 그 자리에서 터졌다");
+            NotifyOwner($"{WeaponLogName} 명중 — 폭탄이 그 자리에서 터졌다");
             return;
         }
 
+        // 위력 굴림은 여기서 <b>단 한 번</b> — 데미지와 연출이 같은 결과를 보게 한다 (#816).
+        // 허공·비대상·무효타는 위에서 이미 return했으므로 굴림이 낭비되지 않는다.
+        SwingPower power = RollSwingPower();
+
         // 유효타 — 임팩트 연출은 전 피어, 히트마커는 때린 사람에게만.
-        App.Game.Fx?.PlayEverywhere(ImpactFxFor(target, playerTarget), hit.point, hit.normal);
+        App.Game.Fx?.PlayEverywhere(
+            ImpactFxFor(target, playerTarget, power.IsCritical),
+            hit.point,
+            hit.normal
+        );
         NotifyHit(playerTarget != null);
 
         // 동료를 맞췄다 — 아군 오사 (#461). NPC와 같은 데미지를 그대로 넣고, HP 0이 되면
         // PlayerHealth.SetHp가 기능 정지(IncapacitationCause.Die)까지 이어준다 — 여기서 따로 할 일이 없다.
         // NPC 경로의 ServerReactTo(반격·도주 전환)는 플레이어에게 해당 없다.
+        // 대박(#816)도 예외 없이 이 경로를 그대로 탄다 — 특별 취급하지 않는다는 뜻이지 즉사를
+        // 보장한다는 뜻은 아니다. 건강한 동료가 맞으면 PlayerHealth.SetHp가 다운(60초 유예,
+        // IncapacitationCause.Down)에 먼저 들어간다 — 9999든 1이든 HP를 0으로 떨어뜨리는 첫 타격의
+        // 결과는 같다. 이미 유예 중인 동료를 맞히면(확인사살, ServerFinishOff)에서만 그 자리에서
+        // 완전 사망한다 — 팀 결정(2026-08-24)은 '아군도 봐주지 않는다'이지 '즉시 죽는다'가 아니다.
         if (playerTarget != null)
         {
-            playerTarget.TakeDamage(m_damage, holder.gameObject);
+            playerTarget.TakeDamage(power.Damage, holder.gameObject);
             NotifyOwner(
-                $"진압봉 명중 — 동료 오사! {playerTarget.name} "
-                    + $"(-{m_damage} → {playerTarget.CurrentHp}/{playerTarget.MaxHp})"
+                $"{WeaponLogName} 명중 — 동료 오사! {playerTarget.name} "
+                    + $"(-{power.Damage} → {playerTarget.CurrentHp}/{playerTarget.MaxHp})"
             );
             return;
         }
 
         // 때린 사람을 가해자로 넘긴다 — 맞은 즉시 이 사람에게 반격·도주하고(#400),
         // 이 타격으로 기절하면 깨어난 뒤에도 이 사람에게서 도망친다 (#269).
-        target.Health.TakeDamage(m_damage, holder.gameObject);
+        target.Health.TakeDamage(power.Damage, holder.gameObject);
         target.Reaction.ServerReactTo(ReactionTrigger.Damage, holderTransform); // 맞은 즉시 반응 (#400)
         NotifyOwner(
-            $"진압봉 명중: {target.name} (-{m_damage} → {target.Health.CurrentHp}/{target.Health.MaxHp})"
+            $"{WeaponLogName} 명중: {target.name} (-{power.Damage} → {target.Health.CurrentHp}/{target.Health.MaxHp})"
         );
     }
 
@@ -425,6 +468,8 @@ public class Baton : ItemBase, IAimedWeapon
     /// <summary>
     /// 맞은 대상에 따른 타격 연출 — 로봇은 깡, 사람은 퍽. (#478)
     /// 먼지·소리 조합과 전 피어 전파는 <see cref="FxManager"/>가 가져갔다 (#532) — 여기서는 무엇을 맞혔는지만 고른다.
+    /// <paramref name="critical"/>은 대박 여부(#816) — 기본 구현은 무시한다. 로봇/사람 구분이 아니라
+    /// '무엇이 일어났는가'가 다른 소리를 원하는 하위 클래스(뿅망치)가 재정의해서 쓴다.
     /// </summary>
     /// <remarks>
     /// <b>클라이언트가 스스로 판단하지 않고 서버가 정해 실어 보낸다.</b> <see cref="OfficialRecords.CitizenType"/>은
@@ -435,7 +480,7 @@ public class Baton : ItemBase, IAimedWeapon
     /// 종족을 소리로 드러내도 정보가 새지 않는다 — 위조(#223)는 표시 이름·문양만 오염시키고
     /// 표시 타입(<c>m_typeView</c>)은 건드리지 않으므로, 소리와 스캔 결과가 어긋나는 일이 없다.
     /// </remarks>
-    private static EFx ImpactFxFor(NpcController npc, PlayerHealth player)
+    protected virtual EFx ImpactFxFor(NpcController npc, PlayerHealth player, bool critical)
     {
         if (player != null)
         {

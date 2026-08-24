@@ -149,6 +149,10 @@ public enum EAudioClip
     // 치장 뽑기 (#818 D). 뒤에 붙이는 이유는 위와 같다 — 정수로 직렬화돼 있다.
     GachaSpin, // 드르르 — 릴이 도는 동안 (뽑은 사람 화면 전용, 2D). 릴이 멈추면 끊긴다
     GachaReveal, // 짜잔 — 당첨이 가운데 멈춘 순간
+
+    // 거대 뿅망치 (#816). 뒤에 붙이는 이유는 위와 같다 — 정수로 직렬화돼 있다.
+    HammerHit, // 뿅 — 뿅망치 평타 (맞은 대상 종류를 가리지 않는다)
+    HammerCrit, // 콰광 — 1% 대박이 터져 대상이 그 자리에서 죽었다
 }
 
 /// <summary>
@@ -190,6 +194,10 @@ public enum EFx
     // 구역 스캔 (#490). 파티클은 없고 소리만 배선한다(FxManager.Entry.Effect = None) — 링은 별도 뷰가 그린다.
     AreaScanHit, // 반경 안에 진범이 있다 — 판독음만
     AreaScanMiss, // 반경 안에 진범이 없다 — 판독음만
+
+    // 거대 뿅망치 (#816)
+    HammerHit, // 뿅망치 평타
+    HammerCrit, // 뿅망치 1% 대박 — 대상이 그 자리에서 죽었다
 }
 
 /// <summary>
