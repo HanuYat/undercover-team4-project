@@ -41,6 +41,7 @@ public static class InteractPrompts
 
     // ---- 아이템 ----
     public static readonly LocalizedString Pickup = Of("Hud.Interact.Pickup");
+    public static readonly LocalizedString OpenCrate = Of("Hud.Interact.OpenCrate");
     public static readonly LocalizedString Shop = Of("Hud.Interact.Shop");
     public static readonly LocalizedString Charge = Of("Hud.Interact.Charge");
     public static readonly LocalizedString Decoder = Of("Hud.Interact.Decoder");

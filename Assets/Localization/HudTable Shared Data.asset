@@ -447,6 +447,10 @@ MonoBehaviour:
     m_Key: Hud.Interact.Gacha
     m_Metadata:
       m_Items: []
+  - m_Id: 7647812597112832
+    m_Key: Hud.Interact.OpenCrate
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
