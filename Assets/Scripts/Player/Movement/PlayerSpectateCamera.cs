@@ -286,6 +286,20 @@ public class PlayerSpectateCamera : MonoBehaviour
     /// <summary>피벗 고정을 놓는다 — 부활 등으로 자기 몸을 다시 돌 수 있게 됐을 때. (#775)</summary>
     public void ClearPivotOverride() => m_hasPivotOverride = false;
 
+    /// <summary>관전 대상을 곧장 살아있는 동료로 돌린다 — 없으면 내 시체(피벗 고정) 슬롯에 남는다. (#819)</summary>
+    public void SpectateTeammateIfAny()
+    {
+        RebuildRing();
+        for (int i = 1; i < m_ring.Count; i++)
+        {
+            if (m_ring[i] != null)
+            {
+                SetTarget(m_ring[i]);
+                return;
+            }
+        }
+    }
+
     /// <summary>
     /// 관전 카메라의 <b>월드</b> 포즈. 골반이 없으면 false — 호출자는 1인칭 포즈를 그대로 쓴다.
     /// </summary>

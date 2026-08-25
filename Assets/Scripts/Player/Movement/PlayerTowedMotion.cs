@@ -77,6 +77,9 @@ public class PlayerTowedMotion : MonoBehaviour
     private Transform m_escortAnchorA;
     private Transform m_escortAnchorB;
 
+    // 0이면 기존 지수 보간. 0보다 크면 그 속도(m/s)를 넘지 않는다 — UFO 흡입(#819)이 쓴다.
+    private float m_escortMaxSpeed;
+
     // 운반(#365) — 나를 끌고 가는 플레이어. 여럿이 덧걸 수 있어(합류) 수만 센다 — 실제 견인은
     // 래그돌 경로에서 PlayerRagdoll/RagdollRope가 참가자별 가닥으로 들고 있으므로, 여기서는
     // "지금 누구 하나라도 끄는가"만 알면 된다. m_dragCarrier는 비래그돌 폴백(위치 추종)의 대표
@@ -134,11 +137,14 @@ public class PlayerTowedMotion : MonoBehaviour
     /// CharacterController를 끄고 매 프레임 두 앵커(양옆 끌기 NPC — 전 피어에 NetworkTransform으로
     /// 동기화된 위치) 중점 살짝 뒤를 따라간다 — 오너가 움직여야 내 위치가 전 피어에 전파된다.
     /// </summary>
-    public void BeginEscortFollow(Transform anchorA, Transform anchorB)
+    /// <param name="maxSpeed">0보다 크면 이 속도(m/s)를 넘지 않는다 — 떠오르는 속도를 서버가
+    /// 정해야 하는 UFO 흡입(#819)용. 0이면 지금까지대로 남은 거리에 비례해 따라붙는다.</param>
+    public void BeginEscortFollow(Transform anchorA, Transform anchorB, float maxSpeed = 0f)
     {
         m_escorted = true;
         m_escortAnchorA = anchorA;
         m_escortAnchorB = anchorB;
+        m_escortMaxSpeed = maxSpeed;
 
         // 직접 transform 이동 — 켜 두면 CC 내부 캐시가 위치를 되돌린다 (PlayerMovement.SetPose와 동일 사정)
         m_movement.SetControllerEnabled(false);
@@ -157,6 +163,7 @@ public class PlayerTowedMotion : MonoBehaviour
         m_escorted = false;
         m_escortAnchorA = null;
         m_escortAnchorB = null;
+        m_escortMaxSpeed = 0f;
         m_movement.SetControllerEnabled(true);
     }
 
@@ -175,11 +182,26 @@ public class PlayerTowedMotion : MonoBehaviour
         forward.Normalize();
 
         Vector3 mid = (a.position + b.position) * 0.5f;
-        Vector3 targetPos = mid - forward * k_escortTrailDistance; // 끌기 담당들 살짝 뒤 — 질질 끌리는 그림
+
+        // 간격은 '질질 끌리는' 그림을 만드는 값이라 위로 빨려 올라갈 때는 쓰지 않는다 —
+        // 도는 기체를 앵커로 삼으면 그 간격만큼 옆으로 계속 흔들린다. (#819)
+        Vector3 targetPos = m_escortMaxSpeed > 0f
+            ? mid
+            : mid - forward * k_escortTrailDistance;
 
         float lerp = k_escortLerpSpeed * Time.deltaTime;
-        transform.position = Vector3.Lerp(transform.position, targetPos, lerp);
-        transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(forward), lerp);
+
+        // 지수 보간은 남은 거리에 비례해 빨라진다 — 서버가 정한 속도를 지켜야 하면 쓸 수 없다
+        transform.position = m_escortMaxSpeed > 0f
+            ? Vector3.MoveTowards(transform.position, targetPos, m_escortMaxSpeed * Time.deltaTime)
+            : Vector3.Lerp(transform.position, targetPos, lerp);
+
+        // 방향도 위치와 같은 이유로 갈린다 — 걷는 앵커의 forward는 진행 방향이라 몸을 그리로 돌리는
+        // 것이 맞지만, UFO는 제자리 자전이라 forward가 매 프레임 도는 값일 뿐이다. 그대로 따라가면
+        // 쓰러진 상태 카메라(화면이 몸을 따라간다)가 함께 빙글빙글 돈다 — 위로 끌려가는 동안은
+        // 방향을 고정해 둔다. (#819)
+        if (m_escortMaxSpeed <= 0f)
+            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(forward), lerp);
     }
 
     // ---- 운반 (#365, 동료가 밧줄로) ----
