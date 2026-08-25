@@ -77,6 +77,8 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 12729386766229504
     m_Key: Item.Description.HealPack
+    m_Metadata:
+      m_Items: []
   - m_Id: 12488576126152704
     m_Key: Item.Name.AreaScanner
     m_Metadata:
