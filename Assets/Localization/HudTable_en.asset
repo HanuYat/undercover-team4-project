@@ -469,6 +469,10 @@ MonoBehaviour:
     m_Localized: Draw cosmetic
     m_Metadata:
       m_Items: []
+  - m_Id: 7647812597112832
+    m_Localized: Open Crate
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:
