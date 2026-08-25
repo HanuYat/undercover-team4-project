@@ -13,25 +13,21 @@
   - `ShopPurchases.cs`/`ItemBase.cs` — 주석·죽은 코드 정리
   - `ShopTable` 지역화 3종 — `Purchased`→`Owned` 개명, `SoldOut` 키 추가
 - **씬 작업**
-  - `Assets/Prefabs/Items/Displays.prefab` — 진열대 7개(Table1~7), 각각 NetworkObject+ShopStand+ShopStandView+ShopStandDisplay+메시+MeshCollider 구성
+  - `Assets/Prefabs/Items/Displays.prefab` — 진열대 7개, 공통 구조는 `DisplayTable.prefab` 서브프리팹으로 추출
   - 레이어 버그 발견·수정: Table1~7 전부 Default(0)였던 걸 Interactable(7)로 고침 — 안 고쳤으면 조준 자체가 안 됐을 것
   - `Shop.unity`에 `Displays` 프리팹 배치, 기존 구식 진열대 6개 제거 완료
-  - `ShopLineup` 오브젝트 생성 + 카탈로그·Table1~7 배선 완료
-  - Play 테스트: 추첨 로그 정상, 모델 실제로 올라오는 것 확인
+  - `ShopLineup` 오브젝트 생성 + 카탈로그·진열대 7개 배선 완료
+- **버그 수정**
+  - 새 진열대 UI 텍스트가 네모로 깨지던 문제 — 해결 완료(원인: 폰트, 사용자가 직접 조치)
+  - 설치형(신호해석기·사이렌버튼) 진열 모델이 안 보이던 문제 — 원인은 카탈로그가 `SignalDecoder.prefab`/`JailSirenButton.prefab` **본체**(NetworkBehaviour 포함)를 가리켜서, `InstallableItem.Awake()`가 항상 미설치 상태로 자기 렌더러·콜라이더를 꺼버렸기 때문. 순수 아트 에셋으로 교체:
+    - 신호해석기 → `SM_Prop_ControlPanel_01.prefab`(PolygonSciFiCity)
+    - 사이렌버튼 → 신규 `Assets/Prefabs/Items/JailSirenButtonModel.prefab`(구체 메시만, 원래 실물 스케일 0.1/0.4/0.4를 카탈로그 `DisplayScale`로 재현)
+- **검증**
+  - MPPM 다중 클라이언트 테스트 완료 (늦은 접속자 동일 진열/품절 상태, 설치형 재구매 차단 등)
+  - 설치형 중복 진열 방지(`ShopLineup.PickRandomSlots`가 뽑힌 설치형을 풀에서 제거) 재확인 — 라운드당 각 설치형 최대 1개만 뜨는 것 확인됨
+- **문서**
+  - `docs/GDD.md` 8-3에 진열 재추첨 규칙 한 문단 반영
 
-## 막힌 것 — 새 진열대 UI 텍스트 깨짐
+## 안 한 것 (범위 밖)
 
-새로 만든 7개 진열대의 텍스트만 네모(□)로 깨짐 (기존 UI 텍스트는 정상). 폰트·머티리얼 참조는 파일상 전부 정상(`NotoSansKR-VF SDF` 정확히 참조, 소스 폰트 파일도 존재) — **와이어링 문제 아님.**
-
-가설: Dynamic 아틀라스(`NotoSansKR-VF SDF`)에 진열대 7개가 한 프레임에 스폰되며 처음 보는 한글 글자가 몰려서 일부를 못 그린 것.
-
-**다음에 확인할 것 (순서대로):**
-1. 조준 카드를 켰다 껐다 하면(다른 진열대 봤다가 다시) 글자가 정상으로 돌아오는지 — 돌아오면 "그 프레임에 못 그림" 확정, 심각한 문제 아님
-2. `Assets/Imported/Fonts/NotoSansKR-VF SDF.asset` 인스펙터 → **Multi Atlas Textures** 체크 → 재시도
-3. 그래도면 같은 에셋에서 **Clear Dynamic Data** → 재시도
-
-## 안 한 것
-
-- 구매 응답 지역화(`ReplyRpc` 하드코딩 한국어 문자열) — 범위 밖, 별도 이슈
-- `docs/GDD.md` 갱신 (8-3 또는 9-2에 진열 규칙 한 문단)
-- 검증 시나리오 전체 재확인 (계획 파일 §검증 목록) — 품절/기보유/동시구매/세이브 연동 등
+- 구매 응답 지역화(`ReplyRpc` 하드코딩 한국어 문자열) — 별도 이슈로 미룸
