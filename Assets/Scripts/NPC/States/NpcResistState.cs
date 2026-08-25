@@ -16,6 +16,10 @@ public class NpcResistState : NpcStateBase
     // 아래 CollectPlayersInRange 주석 참고.
     private const int k_maxOverlapHits = 64;
 
+    // 가시선 레이의 높이(m) — 발밑(transform.position) 기준으로 쏘면 연석 같은 낮은 지형에 걸린다.
+    // 정확한 가슴 높이일 필요는 없다 — "벽이 있는가"만 가르면 된다 (#839).
+    private const float k_losHeight = 1f;
+
     // 서버에서만 Tick되므로 버퍼 공유 안전 — 매 타격마다의 할당 방지
     private static readonly Collider[] s_overlapBuffer = new Collider[k_maxOverlapHits];
 
@@ -218,6 +222,9 @@ public class NpcResistState : NpcStateBase
             if (!IsInFrontCone(player.transform.position))
                 continue; // 등 뒤·측면 — 스윙이 닿지 않는다
 
+            if (!HasLineOfSight(player))
+                continue; // 사이에 벽·소품이 있다 — 사거리·각도만으로는 걸러지지 않았다 (#839)
+
             engaged++;
             if (player.CurrentHp <= 0)
                 continue;
@@ -335,6 +342,36 @@ public class NpcResistState : NpcStateBase
         Vector3 forward = m_owner.transform.forward;
         forward.y = 0f;
         return Vector3.Angle(forward, to) <= m_config.AttackConeAngle * 0.5f;
+    }
+
+    /// <summary>
+    /// NPC에서 그 플레이어까지 막힌 데 없이 닿는가 (#839). 사거리·부채꼴만으로는 사이의 벽·소품을
+    /// 걸러내지 못해 관통 타격이 났었다 — 진압봉(<see cref="Baton"/>)의 <c>AimOcclusion</c>이
+    /// 겹친 자기 콜라이더를 걸러내려고 제외 루트·피벗 거리까지 동원하는 것과 달리, 여기는
+    /// <b>SphereCast가 아니라 Raycast</b>라 자기 겹침 문제 자체가 없다 — 레이캐스트는 원점이
+    /// 이미 들어가 있는 콜라이더를 애초에 히트로 잡지 않는다(Unity 기본 동작). 단순 레이캐스트로 충분하다.
+    ///
+    /// <b>맞은 것이 그 플레이어 자신인지로 판정한다</b> — 벽이든 다른 대상이든 먼저 걸리면 막힌 것이다.
+    /// 레이가 아무것도 못 맞히면(수치 오차로 표적 표면 바로 앞에서 거리가 끝나는 경우) 막힌 것으로
+    /// 오판하지 않고 통과시킨다 — 오차단보다 오차히트가 낫다는 판단은 AimOcclusion과 같다.
+    /// </summary>
+    private bool HasLineOfSight(PlayerHealth player)
+    {
+        Vector3 origin = m_owner.transform.position + Vector3.up * k_losHeight;
+        Vector3 target = player.transform.position + Vector3.up * k_losHeight;
+        Vector3 toTarget = target - origin;
+        float distance = toTarget.magnitude;
+        if (distance < 0.01f)
+            return true;
+
+        if (
+            !Physics.Raycast(
+                origin, toTarget / distance, out RaycastHit hit, distance, HitLayers,
+                QueryTriggerInteraction.Ignore)
+        )
+            return true;
+
+        return hit.collider.GetComponentInParent<PlayerHealth>() == player;
     }
 
     /// <summary>플레이어 승리 실패 — 저항을 유발한 플레이어(없으면 근처 플레이어)를 위협 삼아 도주형으로 전환한다.</summary>
