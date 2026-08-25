@@ -82,7 +82,7 @@ MonoBehaviour:
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
-  m_itemIcon: {fileID: 21300000, guid: d2292a76d62e73f41911dae45a070afb, type: 3}
+  m_itemIcon: {fileID: 21300000, guid: 5849e84439cd3d74b82486db9642dd41, type: 3}
   m_itemDescription:
     m_TableReference:
       m_TableCollectionName: GUID:faae75c9a0a19b441be27b8614effa3d
