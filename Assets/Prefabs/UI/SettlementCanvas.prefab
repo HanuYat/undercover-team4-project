@@ -727,7 +727,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &2466750112211977979
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1123,7 +1123,6 @@ MonoBehaviour:
   m_resultText: {fileID: 3916788690192754460}
   m_fundText: {fileID: 4212604529772346419}
   m_topOffenderText: {fileID: 1394153943246874420}
-  m_personalText: {fileID: 1848505696608719090}
   m_countdownText: {fileID: 4088709605413401743}
   m_textRevealDelay: 1.5
   m_countdownSeconds: 10
@@ -1153,15 +1152,6 @@ MonoBehaviour:
     m_TableEntryReference:
       m_KeyId: 7100000000409
       m_Key:
-    m_FallbackState: 0
-    m_WaitForCompletion: 0
-    m_LocalVariables: []
-  m_personalFormat:
-    m_TableReference:
-      m_TableCollectionName: GUID:3f2fd7e385653d942b703d8de65d7d61
-    m_TableEntryReference:
-      m_KeyId: 7100000000411
-      m_Key: 
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
