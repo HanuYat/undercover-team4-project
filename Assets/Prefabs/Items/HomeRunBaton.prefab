@@ -97,7 +97,7 @@ MonoBehaviour:
   m_heldRotationOffset: {x: 0, y: 140, z: 0}
   m_handGrip: 3
   m_targetOutlineColor: {r: 1, g: 0, b: 0.9479666, a: 1}
-  m_shopPrice: 25000
+  m_shopPrice: 10000
   m_range: 2
   m_hitRadius: 0.35
   m_arcHalfAngle: 25

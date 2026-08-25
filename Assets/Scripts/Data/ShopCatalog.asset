@@ -65,7 +65,7 @@ MonoBehaviour:
   - m_itemPrefab: {fileID: 1048637736484071511, guid: fb2e14cf34b8f854db650513ce13003d, type: 3}
     m_installable: 0
     m_installablePrice: 0
-    m_staple: 0
+    m_staple: 1
     m_displayModel: {fileID: 1844027589456706, guid: 30557939935d4ee48b28a5de57e9e605, type: 3}
     m_displayScale: {x: 1, y: 1, z: 1}
     m_displayEuler: {x: -75, y: 0, z: 0}
