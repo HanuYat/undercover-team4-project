@@ -15,7 +15,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &8445936454080070591
 Transform:
   m_ObjectHideFlags: 0
@@ -44,6 +44,7 @@ GameObject:
   - component: {fileID: 4789829077487156358}
   - component: {fileID: 3790587686756250764}
   - component: {fileID: 7660496493789269114}
+  - component: {fileID: 7558498052587098679}
   m_Layer: 0
   m_Name: Ufo
   m_TagString: Untagged
@@ -154,11 +155,34 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::UfoCraft
   ShowTopMostFoldoutHeaderGroup: 1
   m_beamPivot: {fileID: 8445936454080070591}
+  m_beamRadius: 3
+  m_groundMask:
+    serializedVersion: 2
+    m_Bits: 1
+  m_groundProbeDistance: 200
+  m_roamRadius: 90
+  m_roamSpeed: 5
+  m_arriveDistance: 1.5
   m_spinDegreesPerSecond: 30
   m_bobAmplitude: 0.4
   m_bobPeriod: 3
-  m_flySpeed: 12
-  m_arriveDistance: 1.5
+--- !u!114 &7558498052587098679
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4547056725478927799}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a108895143608a47b3664667e561a87, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UfoAbductor
+  m_captureSeconds: 3
+  m_dwellDecayScale: 1.5
+  m_liftSpeed: 4
+  m_swallowDistance: 2.5
+  m_liftTimeoutSeconds: 15
 --- !u!1 &5675860863749555095
 GameObject:
   m_ObjectHideFlags: 0
