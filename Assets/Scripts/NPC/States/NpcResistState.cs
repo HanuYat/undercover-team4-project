@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 
 /// <summary>
 /// 저항(Attack) 상태 — 수갑 채널링 성공 순간 그 자리에서 버티며 싸운다. (GDD 6-1/7-4, #76/#79)
@@ -62,6 +63,11 @@ public class NpcResistState : NpcStateBase
     private float m_baseSpeed; // 진입 시점의 이동 속도 — 추격 질주 배율 적용 전 값(Exit에서 복원) (#254)
     private float m_baseAcceleration; // 진입 시점의 가속도 — 개체차를 덮어쓰지 않게 실제 값을 기억한다 (#568 후속)
 
+    // 직선 경로가 없어 제자리에서 기다리는 중인가 (#829, 팀 피드백) — ChaseTarget/IsDirectlyReachable가 쓴다.
+    private bool m_awaitingDirectPath;
+    // IsDirectlyReachable의 동기 사전 판정용 — 재사용해 매 재탐색마다 새로 할당하지 않는다.
+    private readonly NavMeshPath m_pathBuffer = new NavMeshPath();
+
     // 진입 시점의 도로 비용 — Exit에서 되돌린다. 인덱스 -1이면 도로 영역이 없는 구성. (#721)
     private int m_roadArea = -1;
     private float m_baseRoadCost = 1f;
@@ -119,6 +125,7 @@ public class NpcResistState : NpcStateBase
         m_swingHoldUntil = 0f;
 
         m_lastChaseDestination = k_noDestination; // 첫 Tick에 무조건 목적지를 새로 잡게 한다
+        m_awaitingDirectPath = false;
     }
 
     public override void Tick()
@@ -277,10 +284,12 @@ public class NpcResistState : NpcStateBase
         return player == null || player.IsTargetable;
     }
 
-    /// <summary>
-    /// 표적을 향해 이동한다 — 사거리 안(stoppingDistance)에 들면 NavMeshAgent가 스스로 멈춰 타격 사거리를 유지한다.
-    /// 표적이 없으면 그 자리에 선다(제한 시간이 패배를 판정). 재경로는 NpcFleeState와 같은 스로틀로 묶는다. (#254)
-    /// </summary>
+    // 경로 길이가 직선 거리의 이 배율을 넘으면 "직선이 없다"로 본다 — 값을 넘는 우회로까지 그대로
+    // 걸으면 표적이 조금만 움직여도 매 재탐색마다 다른 우회로를 잡아 왔다갔다하는 것처럼 보인다.
+    private const float k_directPathSlack = 1.5f;
+
+    /// <summary>표적을 향해 이동한다 — 사거리 안이면 자연히 멈춘다. 직선 경로가 없으면
+    /// 우회 대신 제자리 대기, 열리면 재개한다 (#254, #829 팀 피드백).</summary>
     private void ChaseTarget(Transform target)
     {
         // 스윙 홀드 중엔 제자리 — 홀드가 끝나면 아래 경로가 isStopped를 되돌려 추격을 재개한다
@@ -291,10 +300,13 @@ public class NpcResistState : NpcStateBase
         {
             if (m_owner.Agent.isOnNavMesh)
                 m_owner.Agent.isStopped = true;
+            m_awaitingDirectPath = false;
             return;
         }
 
-        m_owner.Agent.isStopped = false;
+        // 대기 중이 아니면 매 틱 갱신해도 무해한 보험성 대입 — 대기 중에는 아래 재탐색이 갈릴 때까지 유지한다
+        if (!m_awaitingDirectPath)
+            m_owner.Agent.isStopped = false;
 
         // 주기가 됐거나 목표가 충분히 움직였으면 — 둘 중 하나면 다시 잡는다 (기존 OR 동작 유지)
         bool moved = (target.position - m_lastChaseDestination).sqrMagnitude
@@ -304,18 +316,75 @@ public class NpcResistState : NpcStateBase
 
         m_owner.Repath.MarkDone(NpcRepathChannel.Repath);
         m_lastChaseDestination = target.position;
-        if (m_owner.Agent.isOnNavMesh)
+
+        if (!m_owner.Agent.isOnNavMesh)
+            return;
+
+        if (IsDirectlyReachable(target.position))
+        {
+            m_awaitingDirectPath = false;
+            m_owner.Agent.isStopped = false;
             m_owner.Agent.SetDestination(target.position);
+        }
+        else
+        {
+            m_awaitingDirectPath = true;
+            m_owner.Agent.isStopped = true;
+            m_owner.Agent.ResetPath(); // 걷던 우회로를 끊는다 — 그 자리에서 기다린다
+        }
     }
 
-    /// <summary>표적을 향해 몸을 돌린다 — 정면 부채꼴 타격 판정의 기준 방향을 표적에 맞춘다. 서버(또는 오프라인) 전용. (#220)</summary>
+    // 지금 자리에서 목적지까지 직선에 가까운 경로가 있는가 — k_directPathSlack 참고.
+    private bool IsDirectlyReachable(Vector3 destination)
+    {
+        float straight = Vector3.Distance(m_owner.transform.position, destination);
+        if (straight < 0.01f)
+            return true;
+
+        if (
+            !NavMesh.CalculatePath(
+                m_owner.transform.position, destination, m_owner.Agent.areaMask, m_pathBuffer)
+            || m_pathBuffer.status != NavMeshPathStatus.PathComplete
+        )
+            return false;
+
+        return PathLength(m_pathBuffer) <= straight * k_directPathSlack;
+    }
+
+    private static float PathLength(NavMeshPath path)
+    {
+        Vector3[] corners = path.corners;
+        float length = 0f;
+        for (int i = 1; i < corners.Length; i++)
+            length += Vector3.Distance(corners[i - 1], corners[i]);
+        return length;
+    }
+
+    // 실제로 걷는 중으로 볼 속도 임계값(m/s) — 이 위면 몸은 이동 방향을 본다. stoppingDistance로
+    // 감속을 시작하는 문턱보다 낮게 둬서, 사거리 안에 거의 다 왔을 때는 이미 표적 쪽으로 넘어간다.
+    private const float k_facingMoveSpeed = 0.5f;
+
+    /// <summary>표적을 향해 몸을 돌린다 — 정면 부채꼴 타격 판정 기준. 이동 중엔 이동 방향을
+    /// 대신 본다(#829), 멈추면 표적을 본다. 서버(또는 오프라인) 전용. (#220)</summary>
     private void FaceTarget(Transform target)
     {
         if (target == null)
             return;
 
-        Vector3 to = target.position - m_owner.transform.position;
-        to.y = 0f; // 수평 회전(yaw)만 — NetworkTransform이 동기화하는 축과 일치 (SyncRotAngleY)
+        Vector3 velocity = m_owner.Agent.velocity;
+        velocity.y = 0f;
+
+        Vector3 to;
+        if (velocity.sqrMagnitude >= k_facingMoveSpeed * k_facingMoveSpeed)
+        {
+            to = velocity;
+        }
+        else
+        {
+            to = target.position - m_owner.transform.position;
+            to.y = 0f; // 수평 회전(yaw)만 — NetworkTransform이 동기화하는 축과 일치 (SyncRotAngleY)
+        }
+
         if (to.sqrMagnitude < 0.0001f)
             return;
 
