@@ -69373,10 +69373,10 @@ MonoBehaviour:
     Sound: 29
   - Id: 11
     Effect: 1
-    Sound: 32
+    Sound: 34
   - Id: 12
     Effect: 1
-    Sound: 33
+    Sound: 35
 --- !u!114 &1585279159
 MonoBehaviour:
   m_ObjectHideFlags: 0
