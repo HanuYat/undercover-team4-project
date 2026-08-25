@@ -43,6 +43,9 @@ public class NpcChaseState : NpcStateBase
     private readonly ChaseTargeting m_targeting;
     private readonly ChaseAmbush m_ambush;
 
+    // SetChaseDestination의 동기 사전 판정용 - 재사용해 매 재탐색마다 새로 할당하지 않는다.
+    private readonly NavMeshPath m_pathBuffer = new NavMeshPath();
+
     private float m_baseSpeed; // 진입 전 원래 속도 — 사냥 모드 속도이자 Exit 복원값
     private float m_targetAcquiredTime; // 현재 타겟 확보 시각 — 가속 기준점
     private float m_nextCatchNotifyTime;
@@ -262,13 +265,15 @@ public class NpcChaseState : NpcStateBase
     {
         Vector3 aim = m_steering.PredictAimPoint(target, distance, m_owner.Agent.speed, now);
 
-        // pathPending 중에는 pathStatus가 직전 경로의 낡은 값이라 함께 가드한다.
-        bool partial =
-            !m_owner.Agent.pathPending
-            && m_owner.Agent.pathStatus != NavMeshPathStatus.PathComplete;
+        // 지금 잡으려는 목적지 자체를 미리 계산해서 판정한다 - Agent.pathStatus를 보면
+        // 그건 지난 주기에 잡은 목적지의 결과라 한 주기 뒤처진다. 뒤처진 판정으로 매 주기
+        // 리드 조준점(부분 경로여서 다음 주기엔 실제 위치로 후퇴)과 실제 위치(정상 경로여서
+        // 다음 주기 다시 리드 조준)를 번갈아 타면 다가가다 물러나다를 반복하는 진동이 생긴다. (#829)
+        bool complete =
+            NavMesh.CalculatePath(m_owner.transform.position, aim, m_owner.Agent.areaMask, m_pathBuffer)
+            && m_pathBuffer.status == NavMeshPathStatus.PathComplete;
 
-        // 부분 경로일 때만 샘플링하므로 정상 경로에서는 프로퍼티 읽기 두 번이 전부다.
-        if (partial)
+        if (!complete)
         {
             aim = target.position;
 
@@ -284,7 +289,7 @@ public class NpcChaseState : NpcStateBase
         }
 
         m_owner.Agent.SetDestination(aim);
-        m_reachability.Report(partial, now); // 스냅이 먹었으면 다음 주기에 정상 경로로 돌아와 누적이 풀린다
+        m_reachability.Report(!complete, now); // 스냅이 먹었으면 다음 주기에 정상 경로로 돌아와 누적이 풀린다
     }
 
     /// <summary>
