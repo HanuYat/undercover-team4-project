@@ -23,9 +23,13 @@ public class ShopStandView : MonoBehaviour
     [SerializeField]
     private TMP_Text m_tagPriceText;
 
-    [Tooltip("한 번이라도 구매한 품목에 켜지는 표시. 소지형은 중복 구매가 가능하므로 '구매 불가'가 아니라 '산 적 있음'이다")]
+    [Tooltip("설치형을 세션 내 이미 구매했을 때 켜지는 표시")]
     [SerializeField]
-    private GameObject m_purchasedMark;
+    private GameObject m_ownedMark;
+
+    [Tooltip("이번 라운드 재고가 소진됐을 때 켜지는 표시")]
+    [SerializeField]
+    private GameObject m_soldOutMark;
 
     [Header("조준 카드 (기본 비활성)")]
     [Tooltip("카드 루트. 조준 중에만 켜진다")]
@@ -87,10 +91,23 @@ public class ShopStandView : MonoBehaviour
             m_cardDescriptionText.text = description;
     }
 
-    /// <summary>구매 이력 표시를 갱신한다 — 진열대의 NetworkVariable이 바뀔 때마다 호출된다.</summary>
-    public void SetPurchased(bool purchased)
+    /// <summary>판매 상태 배지를 갱신한다 — 진열대의 NetworkVariable이 바뀔 때마다 호출된다.</summary>
+    public void SetStatus(EStandStatus status)
     {
-        SetActive(m_purchasedMark, purchased);
+        SetActive(m_ownedMark, status == EStandStatus.Owned);
+        SetActive(m_soldOutMark, status == EStandStatus.SoldOut);
+    }
+
+    /// <summary>빈 슬롯 표시 — 가격표·카드를 통째로 숨긴다. 모델·콜라이더는 ShopStand가 맡는다.</summary>
+    public void SetEmpty(bool empty)
+    {
+        SetActive(m_tagNameText?.gameObject, !empty);
+        SetActive(m_tagPriceText?.gameObject, !empty);
+        SetActive(m_ownedMark, false);
+        SetActive(m_soldOutMark, false);
+
+        if (empty)
+            ShowCard(false);
     }
 
     /// <summary>조준 카드를 켜고 끈다. 알림은 조준을 뗄 때도, 다시 겨냥할 때도 지운다.</summary>

@@ -12,8 +12,9 @@ using UnityEngine;
 /// 데이터로 처리하는 #370 방침의 지급쪽 근거 데이터다(회수는 ShopManager·PlayerLoadout이 한다).
 ///
 /// <b>서버 전용 컬렉션 2개 — 네트워크 동기화하지 않는다.</b> 클라가 목록을 알 필요가 없기 때문이다:
-/// 중복 구매는 서버가 거부하고, 진열대의 "구매함" 표시는 진열대 자신의 bool NetworkVariable이 낸다.
-/// 그래서 품목 id 체계도, 카탈로그 자산도 필요 없다.
+/// 중복 구매는 서버가 거부하고, 진열대 상태는 진열대 자신의 NetworkVariable이 낸다.
+/// 상점 진열 후보(#814)는 ShopCatalog가 따로 들고, 이 홀더는 여전히 ItemBase 참조만 든다 — 품목 id
+/// 체계를 갖는 것은 아니다(세이브 id는 SaveItemLookup이 프리팹 이름으로 담당).
 ///
 /// 세이브(#373)만은 목록을 문자열로 적어야 하지만, 그 id도 <b>여기서 들지 않는다</b> — 프리팹 이름을
 /// 그대로 쓰고 되찾는 일은 SaveItemLookup이 NGO 등록 명부로 한다. 위 전제는 그대로다.
@@ -61,9 +62,6 @@ public class ShopPurchases : NetworkedManagerBase
 
         Debug.Log($"[상점] 세이브 복원 — 소지형 {m_carried.Count}개, 설치형 {m_installables.Count}종");
     }
-
-    /// <summary>이 소지형을 한 번이라도 샀는가 — 진열대 "구매함" 표시 복원용. 서버 전용.</summary>
-    public bool HasCarried(ItemBase itemPrefab) => itemPrefab != null && m_carried.Contains(itemPrefab);
 
     /// <summary>구매한 설치형 목록. 배달(ShopDelivery)이 순회한다. 서버 전용.</summary>
     public IReadOnlyCollection<EInstallable> Installables => m_installables;
