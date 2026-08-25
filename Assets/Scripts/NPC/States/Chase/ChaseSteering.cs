@@ -80,6 +80,29 @@ public class ChaseSteering
         return current + velocity * lead;
     }
 
+    /// <summary>
+    /// 몸 방향을 <b>실제 이동 속도</b> 쪽으로 돌린다 — NavMeshAgent 기본 회전(updateRotation) 대신
+    /// 이걸 쓰는 이유는 경로 재탐색으로 우회할 때 기본 회전이 목적지(표적) 쪽을 향한 채로 남는
+    /// 순간이 있어서다(pathPending 구간의 desiredVelocity는 새 경로의 코너가 아니라 새로 지정한
+    /// 목적지 방향을 그대로 가리킨다). 실제로 이동한 벡터를 쓰면 우회 구간에서도 발이 향하는
+    /// 쪽을 몸이 그대로 따라간다. (#829)
+    ///
+    /// <see cref="NpcChaseState"/>가 진입 시 <c>Agent.updateRotation</c>을 꺼 두고 이걸 대신 매 틱 부른다.
+    /// </summary>
+    public void TickFacing(NavMeshAgent agent, Transform transform)
+    {
+        Vector3 velocity = agent.velocity;
+        velocity.y = 0f;
+
+        // 멈춰 서 있으면(수렴 도착·목적지 코앞) 방향을 바꾸지 않는다 — 마지막으로 보던 쪽을 유지한다.
+        if (velocity.sqrMagnitude < 0.01f)
+            return;
+
+        Quaternion target = Quaternion.LookRotation(velocity);
+        transform.rotation = Quaternion.RotateTowards(
+            transform.rotation, target, agent.angularSpeed * Time.deltaTime);
+    }
+
     /// <summary>리드 표본을 버린다 — 표적이 바뀌거나 상태에 새로 진입할 때.</summary>
     public void ClearLeadSample()
     {

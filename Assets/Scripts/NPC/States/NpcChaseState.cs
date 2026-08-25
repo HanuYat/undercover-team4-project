@@ -85,6 +85,9 @@ public class NpcChaseState : NpcStateBase
         m_steering.CaptureBaseline(m_owner.Agent);
         m_steering.Apply(m_owner.Agent, true);
 
+        // 몸 방향은 여기서부터 TickFacing이 매 틱 직접 돈다 — 근거는 그쪽 주석 (#829)
+        m_owner.Agent.updateRotation = false;
+
         m_owner.Agent.isStopped = false;
         m_owner.Agent.stoppingDistance = 0f;
     }
@@ -99,6 +102,7 @@ public class NpcChaseState : NpcStateBase
         m_owner.Agent.stoppingDistance = 0f; // 수렴 페이즈가 올린 정지 거리 원복 — 배회 복귀 시 목적지 앞 멈춤 방지
 
         m_steering.Apply(m_owner.Agent, false); // 조향 원복 — 추격을 벗어난 시민이 팽이처럼 도는 것을 막는다
+        m_owner.Agent.updateRotation = true; // 기본 회전으로 복귀 — 추격을 벗어난 상태들은 그걸로 충분하다 (#829)
 
         if (m_owner.Agent.isOnNavMesh)
         {
@@ -211,6 +215,8 @@ public class NpcChaseState : NpcStateBase
         if (m_owner.Repath.Due(NpcRepathChannel.Repath))
             SetChaseDestination(target, distance, now);
 
+        m_steering.TickFacing(m_owner.Agent, m_owner.transform);
+
         // ---- 도달 불가: 문 뒤·다른 층이다 (#568). 스냅으로도 안 붙은 채 시간이 흘렀다.
         // 오검거는 표적을 놓고 다른 사람을 찾는다 — 벽면을 따라 좌우로 미끄러지며 비비지 않는다.
         // 납치(#371)는 갈아타지 않는 것이 이벤트의 유일한 규칙이라 계속 다가간 채로 둔다.
@@ -299,6 +305,8 @@ public class NpcChaseState : NpcStateBase
         if (m_owner.Repath.Due(NpcRepathChannel.Repath))
             SetAmbushDestination(m_ambush.ApproachPoint(target, position));
 
+        m_steering.TickFacing(m_owner.Agent, m_owner.transform);
+
         if (behind && distance <= m_config.CatchDistance && now >= m_nextCatchNotifyTime)
         {
             m_nextCatchNotifyTime = now + k_catchRetrySeconds;
@@ -327,6 +335,8 @@ public class NpcChaseState : NpcStateBase
 
         if (m_owner.Repath.Due(NpcRepathChannel.Repath))
             m_owner.Agent.SetDestination(converge.position);
+
+        m_steering.TickFacing(m_owner.Agent, m_owner.transform);
     }
 
     // 격퇴 도주 — 격퇴한 플레이어 반대 방향으로 달아난다. 같은 격퇴당 한 번만 재추격 쿨다운을 등록한다.
@@ -342,6 +352,7 @@ public class NpcChaseState : NpcStateBase
         m_owner.Agent.speed = m_config.MaxSpeed;
         m_owner.Agent.stoppingDistance = 0f;
         m_steering.Apply(m_owner.Agent, false); // 격퇴 도주는 이 이슈 범위 밖 — 기존 조향 그대로 둔다
+        m_steering.TickFacing(m_owner.Agent, m_owner.transform);
 
         // 격퇴 대상을 먼저 본다 — 없으면 게이트를 소모하지 않는다
         if (m_owner.Penalty.ChaseRepelBy == null || !m_owner.Repath.Due(NpcRepathChannel.Repath))
@@ -369,6 +380,7 @@ public class NpcChaseState : NpcStateBase
         m_owner.Agent.speed = m_baseSpeed;
         m_owner.Agent.stoppingDistance = 0f;
         m_steering.Apply(m_owner.Agent, false); // 배회는 시민처럼 걷는 구간 — 급선회가 어울리지 않는다
+        m_steering.TickFacing(m_owner.Agent, m_owner.transform);
 
         if (!m_hunting)
         {
