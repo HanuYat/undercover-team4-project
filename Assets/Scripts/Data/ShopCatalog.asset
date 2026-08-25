@@ -55,5 +55,12 @@ MonoBehaviour:
     m_displayModel: {fileID: 1341259235766940, guid: 7f93e1c20bd4df647865b27d7d1aaf19, type: 3}
     m_displayScale: {x: 1, y: 1, z: 1}
     m_displayEuler: {x: 0, y: 0, z: 0}
+  - m_itemPrefab: {fileID: 3597358746278584263, guid: dfc014bb0d5440b4a93c8fa57ef27e42, type: 3}
+    m_installable: 0
+    m_installablePrice: 0
+    m_staple: 0
+    m_displayModel: {fileID: 6973116298489018123, guid: 3f8d1738e552c184ea19e6b73df2f6c0, type: 3}
+    m_displayScale: {x: 1, y: 1, z: 1}
+    m_displayEuler: {x: 0, y: 0, z: 0}
   m_stapleSlots: 5
   m_randomSlots: 2
