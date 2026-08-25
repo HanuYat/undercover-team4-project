@@ -5,47 +5,23 @@ using UnityEngine;
 using UnityEngine.Localization;
 
 /// <summary>
-/// 비밀 청탁 (#485) — 본부 전화를 <b>받은 사람에게만</b> 걸리는 개인 의뢰.
-/// "유치장의 ○○○를 인도 지점까지 데려오면 개인 자금을 주겠다".
-///
-/// <b>제보 전화와 별개로 걸려온다.</b> 새 수감자가 앉을 때마다 "이 사람을 빼달라는 전화가 올지"를
-/// 대상별로 굴려(<see cref="m_favorChance"/>) 예약하고, 시간이 되면 <see cref="TipCallPhone.TryRingExternal"/>로
-/// 벨을 울린다. 그 벨은 제보 전화 횟수를 소모하지 않고 수배도 승격하지 않으므로, <b>팀은 이 전화 때문에
-/// 갱신 기회를 잃지 않는다</b>. 대신 받은 사람 화면에 수배가 안 늘어나는 것이 본부에 남는 희미한 단서다
-/// (승격 후보가 없어 갱신이 안 되는 경우와 구분되지 않으므로 확증은 아니다).
-///
-/// 팀에 손해를 끼치고 나만 이득을 보는 경로다. 트레이드오프는 별도 배선 없이 성립한다:
-/// 반출(<see cref="JailIntake.ServerExtract"/>)이 정산 레코드를 지우므로 그 순간
-/// <see cref="RoundManager.CurrentFund"/>(=JailZone.BountyTotal)가 대상의 현상금만큼 줄어든다 (#340/#395).
-/// 대상은 인도 지점에서 소멸하므로 다시 잡아 메울 수도 없다 — 꺼냈다 다시 앉혀 양쪽을 다 챙기는 구멍이 없다.
-///
-/// <b>정보 비대칭이 이 기능의 전부다.</b> 의뢰 발행·완수 통보는 요청자 한 명에게만 가는 타깃 RPC이고
-/// (<see cref="RpcTarget.Single"/> — ShopStand.ReplyRpc와 같은 관례), 보상은 오너만 읽는
-/// <see cref="PlayerWallet"/>으로 들어간다. NetworkVariable로 상태를 두면 전 피어가 읽으므로 쓰지 않는다.
-///
-/// <b>들킬 위험</b>은 유치장 CCTV·사이렌(#488)과, 목표 진행 금액이 줄어드는 것(RoundFundBoard)이다.
-/// 자물쇠 경보(<see cref="JailAlarmBeacon"/>)는 울리지 않는다 — 반출은 <see cref="JailLock"/>을 건드리지 않고,
-/// 감옥 문은 이제 통로가 아니라 순간이동 지점이다(<see cref="JailDoor"/>, #537).
-///
-/// 서버 권위 — 발행·완수·지급은 서버(또는 오프라인)에서만 돌고, 클라이언트는 자기 화면 표시만 한다.
-/// <b>네트워크 세션 전용이다</b>: 보상 그릇인 PlayerWallet에 오프라인 폴백이 없어(#484) 오프라인 단독
-/// Play에서는 청탁을 발행하지 않는다 — 테스트는 Multiplayer Play Mode로 한다.
-///
-/// 씬 배치: NetworkObject를 가진 전용 오브젝트에 둔다(전화기와 같은 오브젝트에 두지 않는다 — 그쪽은
-/// 울리고 받는 장치일 뿐 무엇을 위한 전화인지 모른다). 인도 지점은 <see cref="SecretFavorDropoff"/>로 따로 배치한다.
+/// 비밀 청탁 (#485) — 본부 전화를 받은 사람에게만 걸리는 개인 의뢰.
+/// 개인 자금 제거(#842)로 기능을 껐다 — <see cref="k_favorDisabled"/> 참고.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
 public class SecretFavorBroker : NetworkBehaviour
 {
+    // 개인 자금 제거(#842) — 매니저·전화기 구독 자체를 걸지 않는다(Start).
+    // const가 아니라 static readonly라 아래 조기 리턴이 상수 폴딩으로 "도달 불가"warning이 되지 않는다.
+    private static readonly bool k_favorDisabled = true;
+
     [Header("전화기 (비우면 씬에서 자동 탐색)")]
     [SerializeField] private TipCallPhone m_phone;
 
     [Header("발생 조건")]
     [Tooltip(
-        "<b>수감자 한 명당</b> 그 사람을 빼달라는 전화가 올 확률(0~1). 새 수감자가 좌석에 앉을 때마다 굴린다.\n\n"
-            + "라운드 예산이 아니라 대상별 추첨이라, 유치장이 붐빌수록 제안이 잦아진다. 낮게 둘 것 — "
-            + "0.1이면 한 라운드에 5명을 잡았을 때 한 번쯤 걸려온다(41%).\n\n"
-            + "제보 전화 횟수와는 별개다: 청탁 전화는 자기 예산으로 따로 오며 수배 갱신을 하지 않는다"
+        "수감자 한 명당 이 전화가 올 확률(0~1). 새 수감자가 앉을 때마다 굴린다.\n"
+            + "제보 전화와는 별개 예산이라 수배 갱신에 영향을 주지 않는다."
     )]
     [Range(0f, 1f)]
     [SerializeField] private float m_favorChance = 0.1f;
@@ -73,9 +49,8 @@ public class SecretFavorBroker : NetworkBehaviour
     [SerializeField] private float m_checkInterval = 0.2f;
 
     [Tooltip(
-        "발행 후 이 시간(초)이 지나면 의뢰를 거둬들인다 — \"저쪽도 마냥 기다리지 않는다\". 0이면 만료 없음.\n\n"
-            + "이게 없으면 받은 사람이 청탁을 무시할 때 슬롯이 라운드 끝까지 잠겨, 그 뒤 들어온 수감자 전원이 "
-            + "추첨 기회를 잃는다(동시 1건이므로)"
+        "발행 후 이 시간(초)이 지나면 의뢰를 거둬들인다 — 0이면 만료 없음.\n"
+            + "없으면 무시된 의뢰가 슬롯을 계속 잠가 이후 수감자들이 추첨 기회를 잃는다."
     )]
     [Min(0f)]
     [SerializeField] private float m_favorExpireSeconds = 180f;
@@ -83,9 +58,8 @@ public class SecretFavorBroker : NetworkBehaviour
 #if UNITY_EDITOR
     [Header("개발용 (에디터 전용)")]
     [Tooltip(
-        "이 키를 누르면 유치장 수감자 한 명으로 지금 즉시 청탁을 발행한다 — 확률·대기·전화 수신을 전부 건너뛴다.\n\n"
-            + "누른 사람에게 의뢰가 간다. 호스트(또는 오프라인 단독 Play)에서만 동작한다 — 키 입력은 로컬이고 발행은 서버 판정이라, "
-            + "MPPM 클론에서 눌러도 아무 일도 일어나지 않는다. 저지 테스트에서 부패한 쪽을 호스트로 두면 그대로 맞는다"
+        "누르면 확률·대기·전화 수신을 건너뛰고 즉시 청탁을 발행한다.\n"
+            + "호스트(또는 오프라인 단독 Play)에서만 동작 — MPPM 클론에서는 무반응."
     )]
     [SerializeField] private UnityEngine.InputSystem.Key m_devIssueKey = UnityEngine.InputSystem.Key.F9;
 #endif
@@ -106,8 +80,8 @@ public class SecretFavorBroker : NetworkBehaviour
 
     private RoundManager Round => App.Game.Round;
 
-    // 진행 중인 의뢰 — 서버(또는 오프라인) 전용. 동시에 한 건만 둔다: 여러 건을 허용하면 같은 대상이
-    // 두 명에게 지목되는 경합(한쪽이 데려가면 다른 쪽은 영구 미완수)이 생기고, 그 처리는 이 기능의 본질이 아니다.
+    // 진행 중인 의뢰 — 서버(또는 오프라인) 전용, 동시 1건만 허용한다.
+    // 여러 건이면 같은 대상이 중복 지목되는 경합이 생긴다.
     private bool m_active;
     private ulong m_clientId;
     private NpcController m_target;
@@ -121,14 +95,8 @@ public class SecretFavorBroker : NetworkBehaviour
     private NpcController m_pendingTarget;
     private float m_callTime;
 
-    // 이미 추첨을 거친 대상 — <b>대상 한 명은 평생 한 번만 굴린다.</b> (서버·오프라인 전용)
-    //
-    // 없으면 반출(#492)로 일으켰다 다시 앉히는 것만으로 추첨이 다시 돌아, 청탁이 뜰 때까지 리롤할 수 있다.
-    // 우연히 걸려오는 제안이라는 전제가 깨지고 배신 기회를 의도적으로 낚을 수 있게 된다.
-    // JailIntake.ServerExtract가 ClearDelivered를 일부러 부르지 않는 것과 같은 계열의 방어다.
-    //
-    // 추첨을 건너뛴 경우(이미 진행 중인 청탁이 있어서)에도 등록한다 — 건너뛴 대상을 남겨 두면
-    // 그 대상으로 리롤이 다시 열린다. 대신 그 수감자는 기회를 잃는다(아래 HandleInmateAdmitted 주석).
+    // 이미 추첨을 거친 대상 — 한 명당 평생 한 번만 굴린다(서버·오프라인 전용).
+    // 없으면 반출 후 재수감으로 리롤이 열려 배신 기회를 의도적으로 낚을 수 있다.
     private readonly HashSet<NpcController> m_rolled = new HashSet<NpcController>();
 
     // 유치장 — 수감 훅을 걸어 두려고 잡는다. App 등록이라 Start에서 읽는다 (#592).
@@ -137,9 +105,8 @@ public class SecretFavorBroker : NetworkBehaviour
     // 감옥 문 — 반출 대상이 문 밖으로 나오는 순간을 받으려고 잡는다 (#548).
     private JailIntake m_intake;
 
-    /// <summary>이번 대상이 <b>발행 시점에</b> 시체였는가 — 시체는 걷지 못해 밧줄로 끌고 가야 완수다. (#597)
-    /// 발행 시점으로 못박는 것이 핵심이다: 산 대상이 도중에 죽으면 여전히 무산이라(아래 사망 가드)
-    /// "빼내 달라"를 죽여서 이행하는 우회가 열리지 않는다.</summary>
+    /// <summary>발행 시점에 시체였는가(#597) — 시체는 밧줄로 끌고 가야 완수다.
+    /// 발행 시점으로 못박아, 도중에 죽은 대상을 "죽여서 이행"하는 우회를 막는다.</summary>
     private bool m_targetIsCorpse;
 
     // 스폰 전(오프라인 단독 Play)이면 이 피어가 곧 권위다 — TipCallPhone.IsAuthority와 같은 판단
@@ -148,6 +115,12 @@ public class SecretFavorBroker : NetworkBehaviour
     // 매니저·전화기 구독은 Start에서 — 모든 매니저의 Awake(=App 등록)가 끝난 뒤가 보장된다 (R6)
     private void Start()
     {
+        if (k_favorDisabled)
+        {
+            enabled = false;
+            return;
+        }
+
         if (m_phone == null)
             m_phone = FindFirstObjectByType<TipCallPhone>();
 
@@ -197,11 +170,8 @@ public class SecretFavorBroker : NetworkBehaviour
 
     // ---- 전화 예약 (서버 · 오프라인 전용) ----
 
-    /// 새 수감자가 앉았다 — <b>그 사람을 빼달라는 전화가 올지</b> 여기서 한 번 굴린다.
-    /// 대상을 이 시점에 정하므로 발행 때 다시 고를 일이 없고, 유치장이 붐빌수록 제안이 잦아진다.
-    ///
-    /// 이미 예약·진행 중인 청탁이 있으면 굴리지도 않는다 — 동시에 한 건만 두기 때문이다(m_active 주석).
-    /// 그 결과 확률은 "비어 있을 때만" 평가되어, 붐빌 때 제안이 쏟아지지 않는다.
+    /// 새 수감자가 앉았다 — 그 사람을 빼달라는 전화가 올지 여기서 굴린다.
+    /// 이미 예약·진행 중인 청탁이 있으면 굴리지 않는다(동시 1건 제한).
     private void HandleInmateAdmitted(NpcController npc)
     {
         if (!IsAuthority || npc == null) return;
@@ -209,9 +179,8 @@ public class SecretFavorBroker : NetworkBehaviour
         // 세션 전용 — 지급할 지갑(PlayerWallet)이 세션에만 존재한다 (#484)
         if (!IsSpawned) return;
 
-        // 재수감 리롤 방어 — 굴리기 전에 먼저 등록한다. 아래 게이트에 걸려 추첨을 못 해도 등록은 남는다:
-        // 그 대상은 이번 라운드에 기회를 잃지만(청탁이 이미 진행 중이었으니 기능은 돌고 있다),
-        // 남겨 두면 그 대상으로 리롤이 열린다.
+        // 재수감 리롤 방어 — 굴리기 전에 먼저 등록한다.
+        // 게이트에 걸려 추첨을 못 해도 등록은 남겨, 그 대상으로 리롤이 열리지 않게 한다.
         if (!m_rolled.Add(npc)) return;
 
         if (m_active || m_pendingTarget != null) return;
@@ -305,10 +274,7 @@ public class SecretFavorBroker : NetworkBehaviour
     // ---- 반출 보행 (서버 · 오프라인 전용, #548) ----
 
     // 반출 대상이 문을 나섰다 — 내 청탁 대상이면 인도 지점을 목적지로 준다.
-    // 여기서 걷기 시작하는 것이 곧 <b>저지 창이 열리는 순간</b>이다: 대상이 혼자 길 위에 나오고,
-    // 그 시간 동안 다른 플레이어가 알아채면 기절시켜 밧줄로 묶어 되돌릴 수 있다.
-    //
-    // 내 대상이 아니면 아무것도 하지 않는다 — 목적지를 못 받은 대상은 문 쪽에서 도주로 보낸다.
+    // 여기서 걷기 시작하는 순간이 저지 창이다: 다른 플레이어가 알아채면 되돌릴 수 있다.
     private void HandleInmateExited(NpcController npc)
     {
         if (!IsAuthority || !m_active)
@@ -329,9 +295,8 @@ public class SecretFavorBroker : NetworkBehaviour
         Debug.Log($"[비밀 청탁] 대상이 인도 지점으로 걸어간다: {npc.name}");
     }
 
-    /// <summary>아직 감옥 안에 있는가 — 산 수감자와 시체를 함께 답한다. (#597)
-    /// 시체는 <see cref="NpcState.Jailed"/>를 타지 않으므로(사망이 종착 상태라 Dead로 남는다)
-    /// <b>방 안에 누워 있는가</b>로 묻는다 — 끌려 나가면 그 순간 밖이다.</summary>
+    /// <summary>아직 감옥 안에 있는가 — 산 수감자와 시체를 함께 답한다(#597).
+    /// 시체는 <see cref="NpcState.Jailed"/>를 타지 않으므로 방 안에 누워 있는가로 묻는다.</summary>
     private static bool IsInJail(NpcController npc)
     {
         if (npc == null)
@@ -343,8 +308,7 @@ public class SecretFavorBroker : NetworkBehaviour
     }
 
     // 의뢰가 접혔는데 대상이 아직 걷고 있거나 인도 지점에 서 있다 — 도시로 돌려보낸다 (#548).
-    // 그냥 두면 의뢰가 사라진 뒤에도 그 자리에 붙박이로 남는다. 근처에 아무도 없으면
-    // NpcFleeState가 곧 Idle로 되돌리므로 평범한 시민으로 복귀한다.
+    // 안 하면 의뢰가 사라진 뒤에도 그 자리에 붙박이로 남는다.
     private void SendTargetAway()
     {
         if (m_target == null || !m_target.Custody.HasReleaseDestination)
@@ -410,16 +374,8 @@ public class SecretFavorBroker : NetworkBehaviour
             return;
         }
 
-        // <b>대상이 죽으면 그것으로 무산이다</b> (#571 사망 + #548 반출 보행).
-        // 아래 완수 판정이 대상의 상태를 보지 않으므로, 이 가드가 없으면 <b>시체를 인도 지점까지 끌고 가
-        // 보상을 받을 수 있다</b> — 부패한 쪽이 "빼내 달라"를 죽여서 이행하는 우회가 된다. 청탁은 산 사람을
-        // 빼내는 일이고, 시체 인도는 그 이행이 아니다.
-        //
-        // 만료(m_favorExpireSeconds)까지 매달아 두지 않고 즉시 접는 이유: 되살릴 길이 없는데 의뢰인은
-        // 왜 안 되는지 모른 채 남은 시간을 기다린다. 실패를 바로 알려 다음 판단을 하게 한다.
-        // SendTargetAway는 부르지 않는다 — 시체는 흩어질 수 없고, 목적지는 사망 전이를 받은
-        // NpcController의 상태 훅이 이미 지웠다.
-        // 처음부터 시체였던 건은 여기 걸리지 않는다 (#597) — 그쪽은 시체 인도가 곧 이행이다.
+        // 대상이 죽으면 무산이다(#571/#548) — 안 그러면 시체를 끌고 가 보상을 받는 우회가 열린다.
+        // 만료까지 기다리지 않고 즉시 접는다. 처음부터 시체였던 건은 걸리지 않는다(#597).
         if (m_target.Death.IsDead && !m_targetIsCorpse)
         {
             Debug.Log($"[비밀 청탁] 대상이 사망해 의뢰가 무산됐다: {m_target.name}");
@@ -427,12 +383,8 @@ public class SecretFavorBroker : NetworkBehaviour
             return;
         }
 
-        // <b>대상이 인도 범위에 닿으면 완수다 — 의뢰인은 그 자리에 없어도 된다</b> (#548).
-        // 자율 보행이 붙기 전에는 의뢰인이 대상을 데리고 와야 했으므로 둘을 함께 봤다. 지금은 대상이
-        // 스스로 걸어가므로 의뢰인까지 요구하면 그 보행 시간이 곧 의뢰인의 대기 시간이 되고,
-        // "꺼내 보내 놓고 시치미 떼고 딴 일을 한다"는 이 기능의 그림이 사라진다 — 오히려 인도 지점에
-        // 서서 기다리는 모습이 남에게 들키는 자리가 된다.
-        // 대상의 상태는 보지 않는다 — 걸어왔든 누가 끌어다 놨든 "여기 도착했다"는 사실은 같다.
+        // 대상이 인도 범위에 닿으면 완수다 — 의뢰인은 그 자리에 없어도 된다(#548).
+        // 대상의 상태는 보지 않는다 — 걸어왔든 누가 끌어다 놨든 도착했다는 사실은 같다.
         if (!m_dropoff.Contains(m_target.transform.position))
             return;
 
@@ -552,13 +504,7 @@ public class SecretFavorBroker : NetworkBehaviour
 #if UNITY_EDITOR
 
     // ---- 개발용 단축키 (에디터 전용) ----
-    //
-    // 반출 보행(#548)을 손으로 확인하려면 청탁이 떠 있어야 하는데, 정상 경로는 수감자별 추첨 →
-    // 30~90초 대기 → 전화기까지 달려가 받기다. 한 번 보려고 매번 그 셋을 통과하는 것이 테스트에서
-    // 제일 성가신 부분이라 지름길을 둔다. 발행 자체는 정상 경로와 <b>같은 Issue</b>를 타므로
-    // 이 길로 뜬 의뢰도 만료·완수·취소가 전부 평소대로 돈다.
-    //
-    // <b>빌드에는 없다</b> — 필드까지 통째로 #if UNITY_EDITOR 안이라 컴파일되지 않는다.
+    // 정상 경로(추첨→대기→전화 받기)를 건너뛰고 같은 Issue를 태워 즉시 발행한다 — 빌드에는 없다.
 
     private void DevTickIssueShortcut()
     {
@@ -594,11 +540,8 @@ public class SecretFavorBroker : NetworkBehaviour
         Issue(clientId, target);
     }
 
-    // 이름을 댈 수 있는 수감자 — Issue가 CitizenIdentity를 그대로 참조하므로 여기서 걸러야 한다
-    // (정상 경로에서는 HandleInmateAdmitted가 같은 검사를 이미 통과시킨다).
-    //
-    // 산 수감자와 시체를 함께 찾되 <b>시체를 먼저 고른다</b> (#597) — 둘 다 있을 때 산 대상이 잡히면
-    // 시체 청탁(밧줄로 끌고 가기)을 손으로 확인할 방법이 없다. 판정은 정상 경로와 같은 IsInJail이다.
+    // 이름을 댈 수 있는 수감자만 — Issue가 CitizenIdentity를 그대로 참조하므로 여기서 걸러야 한다.
+    // 산 수감자와 시체를 함께 찾되 시체를 먼저 고른다(#597) — 시체 청탁을 손으로 확인하기 위해서다.
     private static NpcController DevFindJailedTarget()
     {
         NpcController[] all = FindObjectsByType<NpcController>(FindObjectsSortMode.None);

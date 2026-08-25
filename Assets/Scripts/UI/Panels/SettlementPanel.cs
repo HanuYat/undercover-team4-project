@@ -11,7 +11,7 @@ using UnityEngine.UI;
 /// 라운드 정산 패널 (#107, GDD 3-2, #693) — 라운드 결과·팀 자금 증감·최다 오검거 칭호(코믹 스탯)를 보여준다.
 /// 표시는 각 클라 로컬. 데이터는 SettlementController가 서버 권위 값으로 채워 <see cref="Show"/>로 넘긴다.
 ///
-/// 연출: 패널(창·배경)은 즉시 뜨고, 결과/자금/칭호/내 몫 4줄은 <see cref="m_textRevealDelay"/>초 뒤에 등장한다.
+/// 연출: 패널(창·배경)은 즉시 뜨고, 결과/자금/칭호 3줄은 <see cref="m_textRevealDelay"/>초 뒤에 등장한다.
 /// 텍스트가 뜨는 순간부터 <see cref="m_countdownSeconds"/>초 상점 복귀 카운트다운을 화면 중앙 상단에 보여준다.
 /// (실제 복귀는 RoundEndResetter가 서버 주도로 처리 — 그 딜레이 = 텍스트 지연 + 카운트다운으로 맞춰 둔다)
 ///
@@ -33,15 +33,12 @@ public class SettlementPanel : PanelBase
     [SerializeField]
     private TextMeshProUGUI m_topOffenderText;
 
-    [SerializeField]
-    private TextMeshProUGUI m_personalText;
-
     [Header("상점 복귀 카운트다운 (화면 중앙 상단)")]
     [SerializeField]
     private TextMeshProUGUI m_countdownText;
 
     [Header("연출 타이밍")]
-    [Tooltip("패널이 뜬 뒤 4줄 텍스트가 나타나기까지의 지연(초)")]
+    [Tooltip("패널이 뜬 뒤 결과 텍스트가 나타나기까지의 지연(초)")]
     [SerializeField]
     private float m_textRevealDelay = 1.5f;
 
@@ -68,10 +65,6 @@ public class SettlementPanel : PanelBase
     [SerializeField]
     private LocalizedString m_topOffenderFormat;
 
-    [Tooltip("개인 몫 — Settlement.Personal.Earned ({0}=이번 판 수익, {1}=개인 자금 잔액)")]
-    [SerializeField]
-    private LocalizedString m_personalFormat;
-
     [Tooltip("복귀 카운트다운 — Settlement.Countdown ({0}=도착지, {1}=남은 초, {2}=확인 인원, {3}=총원)")]
     [SerializeField]
     private LocalizedString m_countdownFormat;
@@ -91,8 +84,6 @@ public class SettlementPanel : PanelBase
 
     // 텍스트 지연 등장 + 카운트다운 시퀀스 취소용 — 닫히거나 파괴되면 중단한다.
     private CancellationTokenSource m_revealCts;
-
-    private PlayerWallet m_wallet;
 
     // 확인 인원이 바뀌어도 문구를 다시 그려야 해서 남은 초를 들고 있는다 (초 갱신과 인원 갱신이 따로 온다).
     private int m_secondsLeft;
@@ -119,7 +110,6 @@ public class SettlementPanel : PanelBase
     protected override void OnDestroy()
     {
         CancelReveal();
-        UnbindWallet();
         UnbindGate();
 
         if (m_playerBlocked)
@@ -135,7 +125,7 @@ public class SettlementPanel : PanelBase
     // 오검거 0회면 칭호 줄 자체를 숨긴다 (#693) — 지연 등장 시점에도 다시 켜지지 않게 기억해 둔다.
     private bool m_hasTopOffender;
 
-    /// <summary>정산 데이터를 채우고 패널을 연다. 4줄 텍스트는 지연 후 등장한다.</summary>
+    /// <summary>정산 데이터를 채우고 패널을 연다. 결과 텍스트는 지연 후 등장한다.</summary>
     public void Show(SettlementData data)
     {
         // None(종료 전)으로 열릴 일은 없지만, 들어와도 키가 없는 조회로 새지 않게 실패로 접는다.
@@ -169,7 +159,6 @@ public class SettlementPanel : PanelBase
                 ? m_topOffenderFormat.GetLocalizedString(data.TopOffenderName)
                 : string.Empty;
 
-        BindWallet();
         BindGate();
 
         m_confirmReported = false;
@@ -246,29 +235,6 @@ public class SettlementPanel : PanelBase
             : LocalizedStrings.Get(k_table, k_reasonPrefix + reason);
     }
 
-    // 개인 몫은 SettlementData에 없다 — 전원에게 가는 브로드캐스트라 실으면 "본인만"이 깨진다.
-    // 원격 클라는 NetworkVariable이 정산 메시지보다 늦게 올 수 있어 구독해 둔다.
-    private void BindWallet()
-    {
-        UnbindWallet();
-
-        m_wallet = PlayerWallet.Local;
-        if (m_wallet != null)
-            m_wallet.RoundEarnedVar.OnValueChanged += HandleRoundEarnedChanged;
-
-        RefreshPersonalText();
-    }
-
-    private void UnbindWallet()
-    {
-        if (m_wallet != null)
-            m_wallet.RoundEarnedVar.OnValueChanged -= HandleRoundEarnedChanged;
-
-        m_wallet = null;
-    }
-
-    private void HandleRoundEarnedChanged(int previous, int current) => RefreshPersonalText();
-
     // 확인 인원은 서버가 세어 복제한다 — 바뀔 때마다 카운트다운 문구를 다시 그린다. (#509)
     // 창을 닫아도 카운트다운은 남으므로 구독은 파괴될 때까지 유지한다.
     private void BindGate()
@@ -285,16 +251,7 @@ public class SettlementPanel : PanelBase
             Gate.OnCountsChanged -= RefreshCountdownText;
     }
 
-    private void RefreshPersonalText()
-    {
-        if (m_personalText == null) return;
-
-        int earned = m_wallet != null ? m_wallet.RoundEarned : 0;
-        int balance = m_wallet != null ? m_wallet.Balance : 0;
-        m_personalText.text = m_personalFormat.GetLocalizedString(earned, balance);
-    }
-
-    // 결과 텍스트 4줄의 표시를 한꺼번에 켜고 끈다. (카운트다운은 별도 — 닫아도 남긴다)
+    // 결과 텍스트의 표시를 한꺼번에 켜고 끈다. (카운트다운은 별도 — 닫아도 남긴다)
     // 칭호 줄은 오검거 0회면 지연 등장 이후에도 계속 숨긴다 (#693).
     private void SetResultTextsVisible(bool visible)
     {
@@ -304,8 +261,6 @@ public class SettlementPanel : PanelBase
             m_fundText.gameObject.SetActive(visible);
         if (m_topOffenderText != null)
             m_topOffenderText.gameObject.SetActive(visible && m_hasTopOffender);
-        if (m_personalText != null)
-            m_personalText.gameObject.SetActive(visible);
     }
 
     private void SetCountdownVisible(bool visible)
@@ -354,9 +309,8 @@ public class SettlementPanel : PanelBase
         ReportConfirmed();
 
         // 카운트다운은 일부러 남긴다 — 창·배경을 닫아도 상점 복귀까지 남은 시간을 계속 보여준다.
-        // (시퀀스를 취소하지 않으므로 카운트다운은 계속 돌고, 결과 4줄은 창이 꺼지며 함께 숨는다)
+        // (시퀀스를 취소하지 않으므로 카운트다운은 계속 돌고, 결과 텍스트는 창이 꺼지며 함께 숨는다)
         SetLocalPlayerBlocked(false);
-        UnbindWallet();
         base.ClosePanel();
     }
 
