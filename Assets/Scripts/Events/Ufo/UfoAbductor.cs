@@ -232,17 +232,17 @@ public class UfoAbductor : MonoBehaviour
     /// <summary>
     /// 흡입 완료 — 라운드 아웃을 확정한다 (팀 확정 2026-08-25, 납치와 같은 결말).
     ///
-    /// 시점은 기체 위치 근처로 뺀다 — 1인칭 그대로 기체 안으로 들어가면 화면이 기체 내부로
-    /// 덮이는 것은 납치의 하강과 같은 이유로 피해야 하지만, 지상으로 빼면 방금 하늘로 빨려
-    /// 올라간 시점이 갑자기 바닥으로 뚝 떨어져 보여 어색했다(팀 피드백) — 잡혀간 방향과 맞게
-    /// 기체 쪽에 남긴다. 몸이 회수 불가능하다는 표시(<c>BodyLost</c>)까지 그쪽 경로가 함께 들고,
+    /// 시점은 곧장 살아있는 동료에게 넘긴다(없으면 기체 위치가 폴백) — 1인칭 그대로 기체 안으로
+    /// 들어가면 화면이 기체 내부로 덮이고, 지상으로 빼면 방금 하늘로 빨려 올라간 시점이 바닥으로
+    /// 뚝 떨어져 보였다(팀 피드백). 기체 근처 피벗은 동료가 아무도 없을 때의 안전망일 뿐이다.
+    /// 몸이 회수 불가능하다는 표시(<c>BodyLost</c>)까지 그쪽 경로가 함께 들고,
     /// <see cref="PlayerRagdoll"/>이 그 표시를 보고 몸을 감춘다 — 상공에 시체가 걸리지 않게.
     /// </summary>
     private void Swallow(Transform victim)
     {
         PlayerPenaltyView view = victim.GetComponent<PlayerPenaltyView>();
         if (view != null)
-            view.SetSpectatePivot(transform.position);
+            view.SetSpectatePivot(transform.position, cycleToTeammate: true);
 
         PlayerIncapacitation incap = victim.GetComponent<PlayerIncapacitation>();
         if (incap != null)

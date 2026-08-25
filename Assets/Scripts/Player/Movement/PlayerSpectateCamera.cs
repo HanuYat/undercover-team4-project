@@ -287,6 +287,24 @@ public class PlayerSpectateCamera : MonoBehaviour
     public void ClearPivotOverride() => m_hasPivotOverride = false;
 
     /// <summary>
+    /// 관전 대상을 곧장 살아있는 동료로 돌린다 — 없으면 그대로 내 시체(피벗 고정) 슬롯에 남는다. (#819)
+    /// <see cref="CycleTarget"/>과 달리 <c>m_active</c> 게이트를 보지 않는다 — 이 호출은 관전 진입과
+    /// 같은 프레임에(피벗 고정 직후) 올 수 있는데, 그 시점엔 아직 PlayerLook이 관전을 켜기 전이다.
+    /// </summary>
+    public void SpectateTeammateIfAny()
+    {
+        RebuildRing();
+        for (int i = 1; i < m_ring.Count; i++)
+        {
+            if (m_ring[i] != null)
+            {
+                SetTarget(m_ring[i]);
+                return;
+            }
+        }
+    }
+
+    /// <summary>
     /// 관전 카메라의 <b>월드</b> 포즈. 골반이 없으면 false — 호출자는 1인칭 포즈를 그대로 쓴다.
     /// </summary>
     public bool TryGetPose(out Vector3 position, out Quaternion rotation)
