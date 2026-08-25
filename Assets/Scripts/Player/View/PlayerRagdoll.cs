@@ -3,8 +3,10 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 사망 래그돌 — 기능 정지(<see cref="IncapacitationCause.Die"/>) 동안 애니메이터를 끄고 뼈를 물리에
-/// 넘긴 뒤, 착지·정착하면 다시 애니메이터로 되돌린다. (#506)
+/// 플레이어 래그돌 — 기능 정지(<see cref="IncapacitationCause.Die"/>) 또는 홈런 진압봉 비행
+/// (<see cref="IncapacitationCause.Launched"/>, #815) 동안 애니메이터를 끄고 뼈를 물리에 넘긴 뒤,
+/// 착지·정착하면 다시 애니메이터로 되돌린다. (#506) 사망은 부활 키트가 풀고, 비행은 정착 자체가
+/// 복구 신호다 — <see cref="Settle"/>이 그 통보를 보낸다.
 ///
 /// <b>이 클래스가 쥔 것은 "누가 위치를 쥐나"다.</b> 뼈를 물리에 넘기고 되돌리는 일 자체는
 /// <see cref="RagdollRig"/>가, 밧줄 견인은 <see cref="RagdollRope"/>가 한다 — 둘 다 네트워크·권위를
@@ -27,8 +29,8 @@ public partial class PlayerRagdoll : MonoBehaviour
     private const float k_lostBodyTimeoutFactor = 4f;
 
 
-    // 사망 동기화를 기다려 주는 시간(초) — <b>안전망뿐</b>이다. 정상 경로에서는 걸리지 않는다 (docs §9).
-    private const float k_deathSyncGraceSeconds = 1f;
+    // 사망·비행 원인 동기화를 기다려 주는 시간(초) — <b>안전망뿐</b>이다. 정상 경로에서는 걸리지 않는다 (docs §9).
+    private const float k_causeSyncGraceSeconds = 1f;
 
     // 순간이동 뒤 줄을 다시 맬 운반자 거리(m) — 밧줄 길이(약 2m)보다 넉넉히 두되 운반 끊김 거리(8m)
     // 보다는 짧게. 넓게 잡아도 안전하다: 더 멀면 서버가 운반 자체를 정리한다. (#614)
@@ -108,11 +110,12 @@ public partial class PlayerRagdoll : MonoBehaviour
     private bool m_settled;
     private float m_elapsedInRagdoll;
 
-    // 늦게 접속했는데 대상이 이미 죽어 있던 경우 — 이번 사망은 래그돌을 건너뛴다 (docs §9).
+    // 늦게 접속했는데 대상이 이미 사망·비행 중이던 경우 — 이번 래그돌 원인은 건너뛴다 (docs §9).
     private bool m_skipThisEpisode;
     private bool m_polledOnce;
 
-    // 이번 에피소드에서 <b>사망을 한 번이라도 관측했는가</b> — 부활 판정의 전제다 (docs §9).
+    // 이번 에피소드에서 <b>래그돌 원인(사망·비행)을 한 번이라도 관측했는가</b> — 부활 판정의 전제다 (docs §9).
+    // 이름은 사망 전용이던 시절 그대로다 — #815로 비행이 늘어와도 뜻은 "원인을 봤다"로 그대로 넓어진다.
     private bool m_sawDeathThisEpisode;
     private float m_awaitingDeathSeconds;
 
@@ -128,6 +131,13 @@ public partial class PlayerRagdoll : MonoBehaviour
     /// 캡슐이 시체를 따라가야 하는 구간인가 — <see cref="PlayerMovement.Update"/>가 입력 이동을 접는 판정.
     /// </summary>
     internal bool IsCapsuleFollowingBody => m_state == RagdollState.Ragdoll;
+
+    /// <summary>
+    /// 물리가 정착했는가 — <see cref="PlayerIncapacitation.RequestLaunchSettled"/>가 비행(#815) 복구
+    /// 판정에 쓴다. <see cref="m_settled"/>는 권위 게이트 뒤에서만 세워지므로 이 값이 참인 피어가
+    /// 곧 그 통보를 보낼 오너다.
+    /// </summary>
+    internal bool IsSettled => m_settled;
 
     // 이동 권한 — 오너(또는 세션 없는 오프라인 Play)만 루트를 옮길 수 있다.
     private bool HasMoveAuthority =>
@@ -549,7 +559,7 @@ public partial class PlayerRagdoll : MonoBehaviour
         // 회수 불가로 감춰졌던 몸이라면 애니메이터로 돌아가는 이 시점에 되살린다 — HideLostBody 참고.
         ShowLostBody();
 
-        // 에피소드가 여기서 끝난다 — 다음 사망은 자기 사망을 다시 관측해야 부활할 수 있다 (PollDeath).
+        // 에피소드가 여기서 끝난다 — 다음 래그돌은 자기 원인을 다시 관측해야 부활할 수 있다 (PollDeath).
         m_settled = false;
         m_sawDeathThisEpisode = false;
         m_awaitingDeathSeconds = 0f;
@@ -714,23 +724,25 @@ public partial class PlayerRagdoll : MonoBehaviour
     // 골반 밑에 지면이 있는가 — 정착 자격과 정착 정렬이 <b>같은 탐색</b>을 써야 모순이 안 생긴다.
     private bool HasGroundUnderHips() => TryGroundUnder(m_rig.Hips.position, out _);
 
-    // 사망 여부를 폴링한다 — 이벤트로는 잡을 수 없다(원인만 바뀌면 안 울린다).
-    // 부활은 <b>죽음을 본 뒤에만</b> 성립한다 — 그 인과 가드의 근거는 docs/player-ragdoll.md §9.
+    // 래그돌 진입 사유(사망 또는 비행)를 폴링한다 — 이벤트로는 잡을 수 없다(원인만 바뀌면 안 울린다).
+    // 사유는 둘이지만 <see cref="PlayerIncapacitation.Cause"/>는 동시에 하나만 참일 수 있어 겹치지 않는다.
+    // NPC의 <see cref="NpcRagdoll.WantsRagdoll"/>과 같은 자리다 — #815로 플레이어도 사유가 둘로 늘었다.
+    // 부활은 <b>원인을 본 뒤에만</b> 성립한다 — 그 인과 가드의 근거는 docs/player-ragdoll.md §9.
     private void PollDeath()
     {
         if (m_incapacitation == null)
             return;
 
-        bool dead = m_incapacitation.IsDead;
+        bool wantsRagdoll = m_incapacitation.IsDead || m_incapacitation.IsLaunched;
 
-        // 접속 직후 이미 죽어 있었다면 이번 사망은 건너뛴다 — 낙하는 이미 끝난 과거다.
+        // 접속 직후 이미 사망·비행 중이었다면 이번 원인은 건너뛴다 — 낙하는 이미 끝난 과거다.
         if (!m_polledOnce)
         {
             m_polledOnce = true;
-            m_skipThisEpisode = dead;
+            m_skipThisEpisode = wantsRagdoll;
         }
 
-        if (dead)
+        if (wantsRagdoll)
         {
             m_sawDeathThisEpisode = true;
             m_awaitingDeathSeconds = 0f;
@@ -740,11 +752,11 @@ public partial class PlayerRagdoll : MonoBehaviour
             m_awaitingDeathSeconds += Time.deltaTime;
         }
 
-        if (!dead)
+        if (!wantsRagdoll)
         {
             m_skipThisEpisode = false;
             bool revivalIsReal =
-                m_sawDeathThisEpisode || m_awaitingDeathSeconds >= k_deathSyncGraceSeconds;
+                m_sawDeathThisEpisode || m_awaitingDeathSeconds >= k_causeSyncGraceSeconds;
             if (m_state == RagdollState.Ragdoll && revivalIsReal)
             {
                 ExitToAnimator(blend: true); // 부활 — 정착 포즈에서 기상으로 잇는다
@@ -753,7 +765,7 @@ public partial class PlayerRagdoll : MonoBehaviour
         }
 
         if (!m_skipThisEpisode && m_state == RagdollState.Animated)
-            EnterRagdoll(Vector3.zero); // 힘없이 무너지는 사망(진압봉·납치). 폭발은 임펄스를 따로 준다
+            EnterRagdoll(Vector3.zero); // 힘없이 무너지는 사망(진압봉·납치)·비행 진입. 임펄스는 각자 RPC로 따로 온다
     }
 
     private void LateUpdate()
@@ -909,6 +921,12 @@ public partial class PlayerRagdoll : MonoBehaviour
         // 스트림을 끊고 마지막 자세를 한 번 더 보낸다 — 원격의 종착 상태다.
         // ⚠ 좌표계는 바뀌지 않으므로 원격 화면은 변하지 않는다. 그것이 사양이다. (docs §10)
         m_streamer?.EndStreaming();
+
+        // 사망(Die)은 부활 키트가 별도로 풀지만, 비행(Launched)은 정착 자체가 복구 신호다 — 여기서
+        // 서버에 알린다(#815). 이 함수는 권위 피어에서만 도므로(Update의 HasMoveAuthority 게이트,
+        // ForceSettle은 아직 호출부가 없다) 곧 그 오너가 통보를 보낸다.
+        if (m_incapacitation != null && m_incapacitation.IsLaunched)
+            m_incapacitation.RequestLaunchSettled();
     }
 
     // 루트 원점에서 캡슐 밑면까지의 높이 — 지면 점에 루트를 그대로 놓으면 캡슐이 떠서 출발한다 (docs §4).

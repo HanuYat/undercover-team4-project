@@ -7,12 +7,12 @@ using UnityEngine;
 ///
 /// <b>데미지가 아니라 발사가 본체다.</b> 프리팹 <c>m_damage</c>는 0으로 둔다 — HP를 깎지 않으므로
 /// 죽이지 않고, 그래서 밧줄 검거·수감 흐름과 원리적으로 충돌하지 않는다. 맞은 대상은 대신
-/// <b>기절 오버레이 + 래그돌 임펄스</b>로 타격 방향으로 날아간다.
+/// <b>무력화 원인 + 래그돌 임펄스</b>로 타격 방향으로 날아간다.
 ///
-/// <b>NPC와 동료(플레이어)는 다른 문으로 날아간다.</b> NPC는 살아 있는 동안에도 래그돌이 붙을 수
-/// 있어(<see cref="NpcKnockback.ServerLaunchRagdoll"/>) 물리로 날아가지만, 살아 있는 플레이어는
-/// 래그돌이 붙지 않으므로(<see cref="PlayerRagdoll"/>은 다운·사망 전용) 캡슐 넉백
-/// (<see cref="PlayerMovement.AddKnockback"/>)으로 대신한다. 둘의 연출이 다른 것은 사양이다.
+/// <b>NPC와 동료(플레이어)는 이제 같은 문으로 날아간다.</b> NPC는 <see cref="NpcKnockback.ServerLaunchRagdoll"/>로,
+/// 플레이어는 <see cref="IncapacitationCause.Launched"/>(#815)로 <see cref="PlayerRagdoll"/>에 진입해
+/// 물리로 날아간다 — 살아 있는 몸에 래그돌이 붙는 첫 사유다. 세기만 <see cref="m_playerLaunchScale"/>로
+/// 따로 조정한다(캡슐이 아니라 뼈 11개·70kg가 받는 값이라 NPC와 같은 세기면 과하다).
 /// </summary>
 public class HomeRunBaton : Baton
 {
@@ -39,15 +39,21 @@ public class HomeRunBaton : Baton
     [SerializeField]
     private float m_stunSeconds = 6f;
 
-    [Tooltip("동료(플레이어)에게 적용할 세기 배율. 캡슐 넉백이라 래그돌과 같은 세기면 과하다")]
+    [Tooltip("동료(플레이어)에게 적용할 래그돌 임펄스 세기 배율 — NPC와 같은 뼈·질량이라 1.0에서 출발해 " +
+             "플레이 테스트로 조정할 것")]
     [Range(0f, 2f)]
     [SerializeField]
-    private float m_playerLaunchScale = 0.6f;
+    private float m_playerLaunchScale = 1f;
+
+    [Tooltip("비행 상태의 서버 최대시간(초) — 오너의 정착 통보가 안 오는 경우(연결 끊김 등)의 안전장치. " +
+             "정상 정착(1~3초)보다 넉넉히, 시체 정착 최악 타임아웃(약 20초)보다는 짧게")]
+    [SerializeField]
+    private float m_launchMaxSeconds = 6f;
 
     protected override string WeaponLogName => "홈런 진압봉";
 
     /// <summary>
-    /// 유효타 확정 뒤 — NPC는 래그돌 발사, 동료는 캡슐 넉백. 데미지·반응 이후에 불리므로
+    /// 유효타 확정 뒤 — NPC·동료 모두 래그돌로 발사한다. 데미지·반응 이후에 불리므로
     /// 여기서는 순수하게 "날린다"만 담당한다. (#815)
     /// </summary>
     protected override void ServerOnHitLanded(
@@ -76,32 +82,40 @@ public class HomeRunBaton : Baton
 
         if (player != null)
         {
-            Vector3 knockback =
+            Vector3 impulse =
                 horizontal * (m_launchSpeed * m_playerLaunchScale)
                 + Vector3.up * (m_launchSpeed * m_liftRatio * m_playerLaunchScale);
-            ServerLaunchPlayer(player, knockback);
+            ServerLaunchPlayer(player, impulse);
         }
     }
 
-    // ---- 동료 넉백 (#815) ----
+    // ---- 동료 비행 (#815) ----
     //
-    // PlayerMovement.AddKnockback은 오너 로컬이다 — 이동 권한이 오너라 서버가 남의 캐릭터를 직접
-    // 밀면 다음 위치 전파에 덮인다. TrafficVehicle.ServerHitPlayer와 같은 패턴: 오프라인은 로컬
-    // 직접 호출, 세션 중이면 피격자 오너에게만 RPC를 보내 그쪽에서 스스로 적용한다.
-    // RPC는 이 아이템 자신의 NetworkObject로 보낸다 — 대상(플레이어)이 아니라 때린 무기가 발신자다.
-    private void ServerLaunchPlayer(PlayerHealth player, Vector3 knockback)
+    // 상태(Launched)는 서버 권위 동기화값이라 전 피어가 PlayerRagdoll.PollDeath 폴링으로 알아서
+    // 진입한다(BombBlast의 사망 폴링과 같은 구조). RPC가 필요한 이유는 임펄스 하나뿐이다.
+    //
+    // 물리는 오너(피격당한 클라)가 돌린다 — PlayerRagdoll.HasMoveAuthority가 IsOwner라, 본인이
+    // 자기 비행을 로컬 물리로 보게 하려는 선택이다(docs/815-homerun-player-ragdoll.md §1).
+    // 그래서 소유권은 옮기지 않는다 — ServerLaunch가 Cause만 세운다.
+    //
+    // RPC는 이 아이템 자신의 NetworkObject로 보낸다 — 대상(플레이어)이 아니라 때린 무기가 발신자다
+    // (PlayerMovement.AddKnockback 시절과 같은 자리).
+    private void ServerLaunchPlayer(PlayerHealth player, Vector3 impulse)
     {
+        PlayerIncapacitation incap = player.GetComponent<PlayerIncapacitation>();
+        incap?.ServerLaunch(m_launchMaxSeconds);
+
         if (!IsSpawned)
         {
-            player.GetComponent<PlayerMovement>()?.AddKnockback(knockback);
+            player.GetComponent<PlayerRagdoll>()?.EnterRagdoll(impulse);
             return;
         }
 
-        LaunchPlayerRpc(knockback, RpcTarget.Single(player.OwnerClientId, RpcTargetUse.Temp));
+        LaunchPlayerRpc(impulse, RpcTarget.Single(player.OwnerClientId, RpcTargetUse.Temp));
     }
 
     [Rpc(SendTo.SpecifiedInParams)]
-    private void LaunchPlayerRpc(Vector3 knockback, RpcParams rpcParams)
+    private void LaunchPlayerRpc(Vector3 impulse, RpcParams rpcParams)
     {
         NetworkManager nm = NetworkManager.Singleton;
         if (nm == null || nm.LocalClient.PlayerObject == null)
@@ -109,6 +123,6 @@ public class HomeRunBaton : Baton
             return;
         }
 
-        nm.LocalClient.PlayerObject.GetComponent<PlayerMovement>()?.AddKnockback(knockback);
+        nm.LocalClient.PlayerObject.GetComponent<PlayerRagdoll>()?.EnterRagdoll(impulse);
     }
 }

@@ -46,7 +46,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2447293074
+  GlobalObjectIdHash: 1945006965
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -70,7 +70,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f3ac5fb5be3c6c143b200b8f0abfe76a, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HomeRunBaton
   ShowTopMostFoldoutHeaderGroup: 1
   m_itemName:
@@ -78,7 +78,7 @@ MonoBehaviour:
       m_TableCollectionName: GUID:faae75c9a0a19b441be27b8614effa3d
     m_TableEntryReference:
       m_KeyId: 12800064385781760
-      m_Key:
+      m_Key: 
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
@@ -88,16 +88,16 @@ MonoBehaviour:
       m_TableCollectionName: GUID:faae75c9a0a19b441be27b8614effa3d
     m_TableEntryReference:
       m_KeyId: 12800064440307712
-      m_Key:
+      m_Key: 
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
-  m_heldModelPrefab: {fileID: 6463821525030920642, guid: dfd82aa3527962e449f5d5436d594754, type: 3}
-  m_heldPositionOffset: {x: 0.09, y: 0.02, z: -0.022}
-  m_heldRotationOffset: {x: 100, y: 135, z: 0}
+  m_heldModelPrefab: {fileID: 1844027589456706, guid: 30557939935d4ee48b28a5de57e9e605, type: 3}
+  m_heldPositionOffset: {x: -0.02, y: 0.02, z: 0.15}
+  m_heldRotationOffset: {x: 0, y: 140, z: 0}
   m_handGrip: 3
   m_targetOutlineColor: {r: 1, g: 0, b: 0.9479666, a: 1}
-  m_shopPrice: 3500
+  m_shopPrice: 25000
   m_range: 2
   m_hitRadius: 0.35
   m_arcHalfAngle: 25
@@ -108,7 +108,8 @@ MonoBehaviour:
   m_launchSpeed: 14
   m_liftRatio: 1
   m_stunSeconds: 6
-  m_playerLaunchScale: 0.6
+  m_playerLaunchScale: 1
+  m_launchMaxSeconds: 6
   references:
     version: 2
     RefIds: []

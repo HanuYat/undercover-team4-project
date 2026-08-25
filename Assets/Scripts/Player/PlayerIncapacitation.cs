@@ -20,6 +20,11 @@ public enum IncapacitationCause
     Die, // 다운 방치 또는 확인사살로 기능 정지 (#364, #725) — 복구는 동료의 부활 키트(#613)
     Abducted, // 납치 호송 중 (#371) — 끌려가는 동안 걸어 나가지 못하게. 맨홀 아래로 내려가면 Die로 넘어간다 (#775)
     Beamed, // UFO 빔에 걸려 떠오르는 중 (#819) — 납치처럼 끌려가는 동안 못 움직인다. 기체에 닿으면 Die로 넘어간다
+
+    // 홈런 진압봉에 맞아 날아가는 중 (#815) — 살아 있는 채로 래그돌이 붙는 첫 사유. 정착하면(오너가
+    // 통보) 스스로 풀리고, 서버 최대시간 안전장치가 통보를 못 받는 경우를 받는다. 운반·전멸 판정
+    // 대상이 아니다 — 곧 스스로 일어나는 기절·매달기와 같은 성질.
+    Launched,
     // (값은 반드시 끝에 추가한다 — NetworkVariable로 동기화되는 enum이라 순서가 곧 와이어 포맷이다)
 }
 
@@ -79,6 +84,10 @@ public class PlayerIncapacitation : NetworkBehaviour
     // 기능 정지·매달기가 들어오면 회차가 어긋나, 낡은 타이머는 무동작으로 끝난다. (#252)
     private int m_stunEpisode;
 
+    // 비행 회차 — 기절 회차와 같은 장치. 서버 최대시간 타이머와 오너의 정착 통보 중 먼저 온 쪽이
+    // 이기고, 늦게 온 쪽은 회차가 어긋나 무동작으로 끝난다. (#815)
+    private int m_launchEpisode;
+
     // 기절 해제 예정 시각 — 감전 연출이 잦아드는 시점을 잡는 데 쓴다 (#477). m_cause와 같은 이중 구조.
     // 연출용이라 없어도 규칙은 돌아가지만, 클라이언트는 기절 지속 시간(서버가 쥔 Taser 프리팹 값)을
     // 알 방법이 이것뿐이다 — 없으면 "곧 일어난다"를 표현할 수 없다.
@@ -136,6 +145,10 @@ public class PlayerIncapacitation : NetworkBehaviour
 
     /// <summary>테이저 피격 기절인지. 모션은 기능 정지와 같으므로(#252) 표시·집계처럼 원인을 구분할 때만 쓴다.</summary>
     public bool IsStunned => Cause == IncapacitationCause.Stun;
+
+    /// <summary>홈런 진압봉에 맞아 날아가는 중인지 — <see cref="PlayerRagdoll.PollDeath"/>가 래그돌
+    /// 진입 판정에 함께 본다. (#815)</summary>
+    public bool IsLaunched => Cause == IncapacitationCause.Launched;
 
     /// <summary>
     /// 기절이 풀릴 때까지 남은 시간(초) — 기절이 아니면 0. 감전 연출이 잦아드는 시점 계산용. (#477)
@@ -334,6 +347,78 @@ public class PlayerIncapacitation : NetworkBehaviour
         SetCause(IncapacitationCause.Stun);
         SetStunDeadline(CurrentTime + seconds); // 연출용 (#477) — SetCause 뒤에 둔다(거기서 0으로 지운다)
         ServerStunTimerAsync(seconds, ++m_stunEpisode).Forget();
+    }
+
+    /// <summary>
+    /// 비행 진입 — 홈런 진압봉에 맞은 순간 서버가 건다. 정착하면 오너가 <see cref="RequestLaunchSettled"/>로
+    /// 알려 풀리고, 통보가 안 오면(연결 끊김 등) <paramref name="maxSeconds"/> 뒤 안전장치가 대신 푼다. (#815)
+    /// 이미 무력화된 대상은 무시한다 — <see cref="ServerStun"/>과 같은 방어.
+    /// </summary>
+    public void ServerLaunch(float maxSeconds)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+        if (IsIncapacitated)
+            return;
+
+        SetCause(IncapacitationCause.Launched);
+        ServerLaunchTimeoutAsync(maxSeconds, ++m_launchEpisode).Forget();
+    }
+
+    /// <summary>
+    /// 비행 정착 통보 — <see cref="PlayerRagdoll"/>이 정착(<c>IsSettled</c>)을 감지한 오너가 호출한다. (#815)
+    /// 서버(또는 오프라인)에서만 실행되고, 원격이면 <see cref="LaunchSettledRpc"/>로 넘겨받는다.
+    ///
+    /// ⚠ 회차 번호를 들고 오지 않는다 — <see cref="m_launchEpisode"/>는 <b>서버 전용</b> 값이라
+    /// (기절 회차와 같은 관례) 원격 오너에서 읽으면 항상 0이다. 대신 서버가 <b>지금 원인이
+    /// 여전히 비행인가</b>만 본다 — 이미 다른 사유로 바뀌었다면 늦게 온 통보이므로 무동작이다.
+    /// </summary>
+    public void RequestLaunchSettled()
+    {
+        if (!IsSpawned || IsServer)
+        {
+            ServerRecoverFromLaunch();
+            return;
+        }
+        if (!IsOwner)
+            return;
+
+        LaunchSettledRpc();
+    }
+
+    [Rpc(SendTo.Server)]
+    private void LaunchSettledRpc() => ServerRecoverFromLaunch();
+
+    // 원인이 아직 비행이면 푼다 — 이미 안전장치로 풀렸거나 다른 무력화로 덮였으면 늦게 온 통보이므로
+    // 무동작으로 끝난다.
+    private void ServerRecoverFromLaunch()
+    {
+        if (m_cause != IncapacitationCause.Launched)
+            return;
+
+        Recover();
+    }
+
+    // 정착 통보가 안 오는 경우(연결 끊김·낙사 등)의 안전장치 — 기절 타이머(ServerStunTimerAsync)와
+    // 같은 구조. 이쪽은 서버 로컬에서만 도는 값이라 회차 비교가 안전하다(위 통보 경로와 다른 이유).
+    private async UniTaskVoid ServerLaunchTimeoutAsync(float seconds, int episode)
+    {
+        try
+        {
+            await UniTask.Delay(
+                TimeSpan.FromSeconds(seconds),
+                cancellationToken: destroyCancellationToken
+            );
+        }
+        catch (OperationCanceledException)
+        {
+            return; // 파괴·퇴장 — 복구할 대상이 이미 없다
+        }
+
+        if (episode != m_launchEpisode || m_cause != IncapacitationCause.Launched)
+            return; // 그 사이 통보로 이미 풀렸거나 다른 무력화가 덮었다 — 남의 회차다
+
+        Recover();
     }
 
     /// <summary>
