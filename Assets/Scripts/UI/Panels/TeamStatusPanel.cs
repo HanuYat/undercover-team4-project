@@ -224,7 +224,9 @@ public class TeamStatusPanel : PanelBase
             case IncapacitationCause.Die:
                 return ETeamMemberState.Dead;
 
+            // UFO 흡입(#819)도 같은 칸을 쓴다 — 동료 입장에서는 둘 다 끌려가고 있는 것이다
             case IncapacitationCause.Abducted:
+            case IncapacitationCause.Beamed:
                 return ETeamMemberState.Abducted;
 
             default:

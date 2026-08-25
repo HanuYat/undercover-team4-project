@@ -316,7 +316,7 @@ public partial class AbductionEvent
         if (incap != null)
         {
             m_finishing = true;
-            incap.ServerKillByAbduction();
+            incap.ServerKillByBodyLost();
 
             // 체력도 0으로 내린다 — 때린 적이 없어 HP가 가득한 채였고, 그러면 화면에 "기능 정지"인데
             // 체력바는 100인 어긋남이 남는다. Die를 <b>먼저</b> 걸어야 이 0이 다운을 다시 걸지 않는다.

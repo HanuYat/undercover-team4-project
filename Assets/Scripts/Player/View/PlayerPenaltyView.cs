@@ -100,9 +100,27 @@ public class PlayerPenaltyView : NetworkBehaviour
             return;
 
         if (IsSpawned)
-            StartCarriedRpc(carrierA.NetworkObject, carrierB.NetworkObject);
+            StartCarriedRpc(carrierA.NetworkObject, carrierB.NetworkObject, 0f);
         else if (m_towed != null)
             m_towed.BeginEscortFollow(carrierA.transform, carrierB.transform); // 오프라인 폴백
+    }
+
+    /// <summary>
+    /// 서버 전용 — 앵커 <b>하나</b>를 정해진 속도로 따라가게 한다 (#819 UFO 흡입).
+    ///
+    /// 추종 자체는 호송과 같은 경로다: 같은 앵커를 두 번 넘겨 중점이 그 앵커 위치가 되게 한다
+    /// (끌기가 1명뿐일 때의 관례와 같다). 다른 것은 속도 상한 하나뿐이고, 그것이 떠오르는 속도다.
+    /// 푸는 것은 <see cref="StopCarried"/>로 같다 — 추종은 한 종류이므로 끄는 문도 하나다.
+    /// </summary>
+    public void StartTowedBy(NetworkObject anchor, float maxSpeed)
+    {
+        if (anchor == null)
+            return;
+
+        if (IsSpawned)
+            StartCarriedRpc(anchor, anchor, maxSpeed);
+        else if (m_towed != null)
+            m_towed.BeginEscortFollow(anchor.transform, anchor.transform, maxSpeed); // 오프라인 폴백
     }
 
     /// <summary>서버 전용 — 호송 종료(광장 도착·중단): 추종을 풀어 준다. 직후 서버가 광장 스냅 텔레포트로 보정한다.</summary>
@@ -116,14 +134,18 @@ public class PlayerPenaltyView : NetworkBehaviour
 
     // 오너 클라에서만 실행 — NetworkTransform 오너 권한이라 위치 추종은 오너가 해야 전 피어에 전파된다 (#279).
     [Rpc(SendTo.Owner)]
-    private void StartCarriedRpc(NetworkObjectReference carrierA, NetworkObjectReference carrierB)
+    private void StartCarriedRpc(
+        NetworkObjectReference carrierA,
+        NetworkObjectReference carrierB,
+        float maxSpeed
+    )
     {
         if (m_towed == null)
             return;
         if (!carrierA.TryGet(out NetworkObject a) || !carrierB.TryGet(out NetworkObject b))
             return; // 담당 NPC가 이미 디스폰됨 — 추종 없이 서버의 스냅 텔레포트(HangAsync)에 맡긴다
 
-        m_towed.BeginEscortFollow(a.transform, b.transform);
+        m_towed.BeginEscortFollow(a.transform, b.transform, maxSpeed);
     }
 
     [Rpc(SendTo.Owner)]
