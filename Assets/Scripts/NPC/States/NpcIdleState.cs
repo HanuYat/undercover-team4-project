@@ -13,7 +13,9 @@ public class NpcIdleState : NpcStateBase
 
     public override void Enter()
     {
-        m_owner.Agent.isStopped = true;
+        // 넉백 비행 등으로 에이전트가 꺼진 채 Idle로 강제 전이될 수 있다 — 다른 State와 같은 가드.
+        if (m_owner.Agent.isOnNavMesh)
+            m_owner.Agent.isStopped = true;
 
         // 가끔은 구경하듯 오래 멈춰 서 있는다 — 걷다 서다 리듬이 단조로워지는 것을 방지
         bool isLongIdle = Random.value < m_config.LongIdleChance;
@@ -31,6 +33,7 @@ public class NpcIdleState : NpcStateBase
 
     public override void Exit()
     {
-        m_owner.Agent.isStopped = false;
+        if (m_owner.Agent.isOnNavMesh)
+            m_owner.Agent.isStopped = false;
     }
 }
