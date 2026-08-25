@@ -24,7 +24,7 @@
 | 손모델 래퍼 | `Assets/Prefabs/Items/ToyHammerHeldModel.prefab` | 서드파티 에셋 `Rubber Play Hammer/SM_Bouncy_Hammer_Toy.prefab`(원본 수정 금지)를 자식으로 0.45배 스케일해 담은 신규 래퍼. `ToyHammer.HeldModelPrefab`이 이걸 가리킨다 |
 | 상점 등록 | `Assets/DefaultNetworkPrefabs.asset` | 등록 완료 |
 | 로컬라이제이션 | `ItemTable Shared Data`/`_ko-KR`/`_en` | `Item.Name.ToyHammer`(id 816000000000001)·`Item.Description.ToyHammer`(id 816000000000002) |
-| FxManager 조합표 | `Map_Cyberpunk.unity`·`Tutorial.unity`(디스크 직접 편집) / `Map_Apocalypse.unity`(라이브 에디터, MCP `set_property`) | `HammerHit`→`ImpactDust`+오디오32, `HammerCrit`→`ImpactDust`+오디오33 |
+| FxManager 조합표 | `Map_Cyberpunk.unity`·`Tutorial.unity`(디스크 직접 편집) | `HammerHit`→`ImpactDust`+오디오32, `HammerCrit`→`ImpactDust`+오디오33 |
 | 오디오 항목 | `AudioLibrary.asset` | Id 32(HammerHit)·33(HammerCrit) — **`Clip`은 비워 둠**(미배선, 아래 참고) |
 
 ## 미배선·미완료 항목
@@ -34,7 +34,7 @@
 - **모델·손 오프셋은 확정됐다.** `SM_Bouncy_Hammer_Toy`(래퍼로 0.45배 스케일) 사용. `HeldItemAnchor`에 임시 Player 리그를 붙여 스크린샷으로 그립 위치를 확인해 가며 잡은 값 → 팀에서 최종 미세 조정: `m_heldPositionOffset = (0.15, 0.02, -0.05)`, `m_heldRotationOffset = (10, 135, -20)`.
 - **상점 진열대(ShopStand)가 씬에 아직 없다.** `Shop.unity`의 기존 진열대들은 3D 메시·가격표·설명 카드가 각각 개별 UI 오브젝트를 참조하는 구조라(예: 테이저 진열대 `SM_Wep_Stungun_01`은 자신이 곧 메시+콜라이더+`ShopStand`/`ShopStandView`이고, `ShopStandView`가 참조하는 가격표/카드 텍스트는 씬의 별도 오브젝트다) 단순 GameObject 복제로는 참조가 원본을 계속 가리켜 잘못된 이름/가격이 뜬다. 배치·카드 세트 복제는 레벨 배치 판단이 필요해 에디터에서 직접 할 것을 권한다. `m_itemPrefab`에 `Assets/Prefabs/Items/ToyHammer.prefab`을 연결하면 된다.
 - **판매가(`m_shopPrice`)는 25로 임시 지정**했다 — 밸런스 확정 전 자리표시자.
-- **`Map_Apocalypse.unity`는 이후 다른 세션/에디터에 의해 저장됐다.** 처음엔 라이브 씬 컴포넌트에만 FxManager 항목을 반영하고 파일 저장은 보류했으나, 이후 다른 작업(다른 Claude 세션 또는 팀원 에디터)에서 저장되며 `=== _TEST ===` 그룹 활성화·"사용안함" 표시된 NavMesh Modifier Volume 삭제가 함께 커밋됐다 — 둘 다 이 작업에서 만든 변경이 아니다.
+- **`Map_Apocalypse.unity`에는 FxManager 항목이 없다.** 처음엔 이 씬에도 라이브 에디터로 항목을 반영했으나, 다른 세션이 같은 파일을 동시에 저장하면서 의도치 않은 변경(`=== _TEST ===` 그룹 활성화·"사용안함" 표시된 NavMesh Modifier Volume 삭제)이 함께 섞여 들어와, 분리하는 대신 이 PR 범위에서 파일 전체를 되돌렸다. 이 맵에서 타격음·연출을 내려면 `Map_Cyberpunk.unity`/`Tutorial.unity`와 같은 `HammerHit`/`HammerCrit` 2행을 별도로 추가할 것.
 
 ## 테스트 항목
 
