@@ -37,6 +37,9 @@ public class UfoCraft : NetworkBehaviour
     [Min(1f)]
     [SerializeField] private float m_groundProbeDistance = 200f;
 
+    // 레이 경로의 히트 버퍼 — 가로등 같은 얇은 소품에 막히지 않고 가장 먼(=가장 낮은) 지면을 찾는 데 쓴다.
+    private static readonly RaycastHit[] s_groundHitBuffer = new RaycastHit[16];
+
     [Header("배회")]
     [Tooltip("씬에 놓인 처음 자리를 중심으로 이 반경(m) 안을 떠다닌다")]
     [Min(1f)]
@@ -100,15 +103,28 @@ public class UfoCraft : NetworkBehaviour
     private Vector3 BeamGroundPoint(out bool grounded)
     {
         Vector3 origin = transform.position;
-        if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit,
-                m_groundProbeDistance, m_groundMask, QueryTriggerInteraction.Ignore))
+
+        // 첫 히트가 아니라 <b>가장 먼(=가장 낮은) 히트</b>를 지면으로 본다 — 가로등 같은 얇은 소품이
+        // 먼저 걸리면 빔이 그 위에서 뜬 채로 멈춰 보였다. 진짜 지면은 대개 그 아래에 있다.
+        int count = Physics.RaycastNonAlloc(
+            origin, Vector3.down, s_groundHitBuffer, m_groundProbeDistance,
+            m_groundMask, QueryTriggerInteraction.Ignore);
+
+        if (count == 0)
         {
-            grounded = true;
-            return hit.point;
+            grounded = false;
+            return origin + Vector3.down * m_groundProbeDistance;
         }
 
-        grounded = false;
-        return origin + Vector3.down * m_groundProbeDistance;
+        int farthest = 0;
+        for (int i = 1; i < count; i++)
+        {
+            if (s_groundHitBuffer[i].distance > s_groundHitBuffer[farthest].distance)
+                farthest = i;
+        }
+
+        grounded = true;
+        return s_groundHitBuffer[farthest].point;
     }
 
     private void Update()
@@ -128,7 +144,9 @@ public class UfoCraft : NetworkBehaviour
         Vector3 position = transform.position;
         position.y -= BobOffset();
 
-        // 세워 둔 동안에는 목적지도 새로 고르지 않는다 — 풀리는 순간 가던 곳으로 이어 간다
+        // 세워 둔 동안에는 목적지도 새로 고르지 않는다 — 풀리는 순간 가던 곳으로 이어 간다.
+        // 흔들림도 함께 멈춘다 — 안 그러면 흡입 중에 빔 길이가 흔들림 폭만큼 매 프레임 펄스쳐
+        // "빔이 위로 솟는" 것처럼 보였다(#819, 팀 피드백). 세운 동안은 높이도 고정이 맞다.
         if (!m_held)
         {
             position = Vector3.MoveTowards(position, m_destination, m_roamSpeed * Time.deltaTime);
@@ -137,9 +155,10 @@ public class UfoCraft : NetworkBehaviour
             flat.y = 0f;
             if (flat.sqrMagnitude <= m_arriveDistance * m_arriveDistance)
                 PickDestination();
+
+            m_bobPhase += m_bobPeriod > 0f ? Time.deltaTime * (Mathf.PI * 2f / m_bobPeriod) : 0f;
         }
 
-        m_bobPhase += m_bobPeriod > 0f ? Time.deltaTime * (Mathf.PI * 2f / m_bobPeriod) : 0f;
         position.y += BobOffset();
         transform.position = position;
     }
