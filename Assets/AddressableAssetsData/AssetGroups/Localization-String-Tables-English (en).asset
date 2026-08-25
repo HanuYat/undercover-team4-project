@@ -69,6 +69,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Locale-en
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: acb8177dd3d43bb45978bca0db5a8b16
+    m_Address: EmoteTable_en
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-en
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ceaaa84fa347fa845b7394f06827e5e2
     m_Address: SettlementTable_en
     m_ReadOnly: 1
@@ -83,6 +89,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: de869d8f9f1963048bbf98964ef44d6e
     m_Address: CommonTable_en
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-en
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e330969bff420b44d9b333bd7bb98335
+    m_Address: CosmeticsTable_en
     m_ReadOnly: 1
     m_SerializedLabels:
     - Locale-en

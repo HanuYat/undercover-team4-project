@@ -6727,6 +6727,7 @@ GameObject:
   - component: {fileID: 1051911861902201608}
   - component: {fileID: 9186688055930901132}
   - component: {fileID: 5270586889476606736}
+  - component: {fileID: 9155120424423556794}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -6961,7 +6962,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fd572c15ce4e4b0399522ce4c70561f9, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerSelfRevive
 --- !u!114 &5787005119048988933
 MonoBehaviour:
@@ -7916,6 +7917,22 @@ MonoBehaviour:
   m_dragLinearDamping: 0.6
   m_dragAngularDamping: 0.6
   m_maxSpeed: 8
+--- !u!114 &9155120424423556794
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e21c71cbad5a9b045ab4c916b52c9659, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerAccessories
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_catalog: {fileID: 11400000, guid: 4d0d855372518f94184454112d35bef4, type: 2}
+  m_headBone: {fileID: 4290756012787818498}
+  m_bodyRenderer: {fileID: 6722683628906457244}
 --- !u!1 &5517047033924982284
 GameObject:
   m_ObjectHideFlags: 0

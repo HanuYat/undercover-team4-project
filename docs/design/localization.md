@@ -64,6 +64,8 @@
 | `SettlementTable` | `Settlement.` | 정산 화면 (결과·종료 사유·수익 내역·복귀 카운트다운) |
 | `NpcTable` | `Npc.` | 외형 축·옵션 이름(몽타주 원본), 시민 타입·세력 표기 |
 | `EventTable` | `Event.` | 돌발 이벤트 (폭탄 해체, 탈옥, 거리 난동자) |
+| `CosmeticsTable` | `Cosmetic.` | 치장 아이템 이름(`Cosmetic.<프리팹 이름>` 규약) + 커스터마이징 창 문구 (#818) |
+| `EmoteTable` | `Emote.` | 감정표현 이름 (`Emote.Name.<Id>`) — 로비 구성 창과 인게임 휠 양쪽 (#219) |
 
 `UITable`은 아래 이관 후 **삭제한다.**
 
@@ -71,6 +73,19 @@
 > ① `SettingsCanvas`는 Title 포함 4개 씬에 있고 `PauseCanvas`는 인게임 3개 씬에만 있어서, 합쳐 두면 **Title 씬이 절대 표시할 수 없는 문구를 로드**한다 — 결정 (b)가 테이블을 쪼갠 바로 그 이유다.
 > ② 결정 (a)는 "키 첫 마디를 보면 테이블을 안다"인데 `Settings.Pause.Title`은 그 규칙을 스스로 깬다.
 > 테이블이 작아지는 것(4엔트리)은 감수한다 — `WorldTable` 3개, `HudTable` 6개도 같은 규모다.
+
+> **`CosmeticsTable`·`EmoteTable`은 표를 12개에서 14개로 늘린 것이다.** 둘 다 **한 화면에 묶이지 않는 이름 목록**이라
+> 기존 표 어디에도 들어갈 수 없었다.
+> · 치장 아이템 이름은 `CustomizationCanvas`가 쓰는데 그 캔버스가 **로비·상점(락커) 양쪽**에 있다.
+> · 감정표현 이름은 **로비 구성 창과 인게임 휠**이 같은 값을 쓴다 — `LobbyTable`에 두면 인게임이 로비 표를 로드하고,
+>   `HudTable`에 두면 로비가 HUD 표를 로드한다. 결정 (b)가 표를 쪼갠 이유와 같은 상황이다.
+>
+> **창 문구는 화면이 있는 표에 붙이고, 겹치는 낱말은 키를 공유한다** (인명부 제목 선례와 같다).
+> · `Cosmetic.Window.Title`(`커스터마이징`) — 창 제목과 **로비의 여는 버튼**이 같은 키를 쓴다.
+> · `Lobby.Emote.Title`(`감정표현 구성`) — `EmoteLoadoutCanvas`는 로비 씬에만 있으므로 `LobbyTable`이다.
+>   여기도 창 제목과 여는 버튼이 한 키다.
+> · `Common.Button.SaveClose`(`저장하고 닫기`) — 두 창의 닫기 버튼이 쓴다. 표가 갈려 공유가 불가능한 대신
+>   §3이 `CommonTable`에 잡아 둔 "닫기·적용" 부류라 그쪽으로 올렸다.
 
 ### 기존 키 이관표 (`UITable` → 신규) — **완료 (Phase 0)**
 
@@ -365,6 +380,12 @@ ToastOwner(EItemFeedback, args…)     ← 신설. RPC는 enum + 숫자 인자�
 - ~~**곁다리 정리:** `CitizenProfile`의 `m_typeView`/`m_factionView` enum 승격~~ — **완료.** 위조(#223)가 이름·문양만 오염시키는 것을 확인했다
   (`SetSymbolIndexView`와 `m_nameView` 대입뿐이고 타입·세력 표시값을 건드리는 경로는 없다)
 - `SpawnedNpcEvent.m_displayName` · `JailbreakEvent.DisplayName` — 돌발 이벤트 묶음이라 이번 범위 밖
+- ~~`EmoteDefinition.m_displayName` (24개)~~ — **완료.** `EmoteTable`을 만들고 `Emote.Name.<Id>`로 24개를 ko/en 양쪽 채워
+  전 에셋에 배선했다. 임시 필드 `m_fallbackName`(한국어만 있던 자리)은 필드 주석의 예고대로 **지웠다** —
+  남겨 두면 그 값은 영원히 번역되지 않는다(결정 (f)). 키가 안 붙은 감정표현은 `Id`가 나오므로 배선 누락이 화면에서 보인다
+- ~~치장 커스터마이징 창 문구 (15개)~~ — **완료.** `CustomizationCanvas` 11개(제목·슬롯 6·색 부위 3·닫기)와
+  로비 씬 4개(`EmoteLoadoutCanvas` 제목·닫기, 여는 버튼 2)에 `LocalizeStringEvent`를 붙였다.
+  치장 **아이템 이름 83개는 #818에서 이미** `CosmeticsTable`에 ko/en 양쪽 들어가 있었다 ([CosmeticNames](../../Assets/Scripts/UI/CosmeticNames.cs))
 - ~~`CCTVNode.m_locationLabel`~~ — **완료.** 씬의 노드 4개(감옥·횡단보도·본부 앞·상점가 방면)를 `WorldTable`로
 
 > **'없음' 옵션 4개는 키 하나를 공유한다** (`Npc.Appearance.None`). 머리색·수염·모자·안경이 같은 낱말을 쓰고,

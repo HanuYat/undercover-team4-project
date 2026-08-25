@@ -1,4 +1,4 @@
-/// <summary>씬 식별자. 실제 씬 이름 매핑은 AppHelper.ToSceneName — 빌드 인덱스에 결합하지 않는다.</summary>
+﻿/// <summary>씬 식별자. 실제 씬 이름 매핑은 AppHelper.ToSceneName — 빌드 인덱스에 결합하지 않는다.</summary>
 public enum EScene
 {
     None,
@@ -145,6 +145,10 @@ public enum EAudioClip
     // NPC 근접 공격 (#817). 뒤에 붙이는 이유는 위와 같다 — 정수로 직렬화돼 있다.
     NpcAttackSwing, // 휙 — NPC가 공격을 휘두른 순간 (명중 여부와 무관, 맨손이든 무기든 같다)
     NpcAttackHitRobot, // 깡 — NPC의 공격이 로봇 경찰을 맞혔다 (플레이어는 전원 로봇이다)
+
+    // 치장 뽑기 (#818 D). 뒤에 붙이는 이유는 위와 같다 — 정수로 직렬화돼 있다.
+    GachaSpin, // 드르르 — 릴이 도는 동안 (뽑은 사람 화면 전용, 2D). 릴이 멈추면 끊긴다
+    GachaReveal, // 짜잔 — 당첨이 가운데 멈춘 순간
 }
 
 /// <summary>
@@ -211,6 +215,36 @@ public enum EBodyPart
     Head, // 머리 — Head·Neck·Eyes·Eyebrows
     Torso, // 상체 — Spine·어깨·팔·손
     Legs, // 하체 — Hips·다리·발
+}
+
+/// <summary>
+/// 플레이어 치장 부위 (#818). 저장·전파 배열의 길이가 곧 이 enum의 크기다.
+/// <b>순서를 바꾸지 말 것</b> — 계정에 인덱스로 저장된다. 추가는 뒤에만.
+/// </summary>
+public enum EAccessorySlot
+{
+    Headwear, // 모자·헬멧
+    FacialHair, // 수염·콧수염
+    Hair, // 머리카락 — 모자와 함께 쓸 수 있게 따로 둔다
+    Eyewear, // 안경·고글·안대
+    Facewear, // 마스크
+    Earwear, // 이어피스·헤드셋·피어싱
+}
+
+/// <summary>
+/// 치장 슬롯 묶음 (#818) — 한 아이템이 <b>가리는</b> 슬롯을 표시하는 데 쓴다.
+/// 값은 <see cref="EAccessorySlot"/>의 비트 자리이므로 그쪽 순서를 따라간다.
+/// </summary>
+[System.Flags]
+public enum EAccessorySlotMask
+{
+    None = 0,
+    Headwear = 1 << EAccessorySlot.Headwear,
+    FacialHair = 1 << EAccessorySlot.FacialHair,
+    Hair = 1 << EAccessorySlot.Hair,
+    Eyewear = 1 << EAccessorySlot.Eyewear,
+    Facewear = 1 << EAccessorySlot.Facewear,
+    Earwear = 1 << EAccessorySlot.Earwear,
 }
 
 /// <summary>

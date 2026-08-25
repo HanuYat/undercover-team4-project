@@ -25,6 +25,11 @@ MonoBehaviour:
     m_ReadOnly: 1
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1d63b6aed71d64740885a0f824dcce1e
+    m_Address: Assets/Localization/EmoteTable Shared Data.asset
+    m_ReadOnly: 1
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2482529739cee144e908dc2a2e78c2c6
     m_Address: Assets/Localization/WorldTable Shared Data.asset
     m_ReadOnly: 1
@@ -57,6 +62,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a4c8df317b247dd44b76163f41d8135a
     m_Address: Assets/Localization/HqTable Shared Data.asset
+    m_ReadOnly: 1
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b6a4a75d125d7e04da19552d73a00bff
+    m_Address: Assets/Localization/CosmeticsTable Shared Data.asset
     m_ReadOnly: 1
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

@@ -33,6 +33,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Locale-ko-KR
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 54d9854261c5ee145864beb8bae87bbc
+    m_Address: EmoteTable_ko-KR
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko-KR
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5e66946e04f0dee4ab63147ef9fd34b5
     m_Address: WorldTable_ko-KR
     m_ReadOnly: 1
@@ -83,6 +89,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d80cd998e6c902a41abfd2497cd897d6
     m_Address: HqTable_ko-KR
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko-KR
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ee648456b47f0f94ebed03a93d6bc2f6
+    m_Address: CosmeticsTable_ko-KR
     m_ReadOnly: 1
     m_SerializedLabels:
     - Locale-ko-KR

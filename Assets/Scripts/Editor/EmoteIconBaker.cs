@@ -122,7 +122,7 @@ public class EmoteIconBaker : EditorWindow
             DrawThumb(m_preview.TryGetValue(i, out Texture2D baked) ? baked : null, "구운 것");
 
             EditorGUILayout.BeginVertical();
-            EditorGUILayout.LabelField($"{i:00}  {definition.FallbackName}", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField($"{i:00}  {definition.Id}", EditorStyles.boldLabel);
             EditorGUILayout.LabelField(
                 definition.Clip != null ? definition.Clip.name : "클립 없음 — 굽지 않는다",
                 EditorStyles.miniLabel
@@ -170,7 +170,7 @@ public class EmoteIconBaker : EditorWindow
                 if (definition == null || definition.Clip == null)
                     continue;
 
-                EditorUtility.DisplayProgressBar("감정표현 아이콘", definition.FallbackName, (float)i / m_catalog.Count);
+                EditorUtility.DisplayProgressBar("감정표현 아이콘", definition.Id, (float)i / m_catalog.Count);
                 BakeOne(i, definition);
             }
         }

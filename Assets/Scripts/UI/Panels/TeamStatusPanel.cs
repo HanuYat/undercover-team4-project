@@ -39,6 +39,7 @@ public class TeamStatusPanel : PanelBase
     private readonly List<PlayerIncapacitation> m_incapacitation = new List<PlayerIncapacitation>();
     private readonly List<PlayerNameTag> m_nameTags = new List<PlayerNameTag>();
     private readonly List<PlayerCosmetics> m_cosmetics = new List<PlayerCosmetics>();
+    private readonly List<PlayerAccessories> m_accessories = new List<PlayerAccessories>();
 
     public override void OpenPanel()
     {
@@ -129,6 +130,7 @@ public class TeamStatusPanel : PanelBase
         m_incapacitation.Clear();
         m_nameTags.Clear();
         m_cosmetics.Clear();
+        m_accessories.Clear();
         for (int i = 0; i < m_players.Count; i++)
         {
             NetworkObject player = m_players[i];
@@ -136,6 +138,7 @@ public class TeamStatusPanel : PanelBase
             m_incapacitation.Add(player != null ? player.GetComponent<PlayerIncapacitation>() : null);
             m_nameTags.Add(player != null ? player.GetComponent<PlayerNameTag>() : null);
             m_cosmetics.Add(player != null ? player.GetComponent<PlayerCosmetics>() : null);
+            m_accessories.Add(player != null ? player.GetComponent<PlayerAccessories>() : null);
         }
 
         if (m_rowContainer == null || m_rowPrefab == null)
@@ -167,7 +170,14 @@ public class TeamStatusPanel : PanelBase
     private Texture PortraitOf(int index)
     {
         PlayerCosmetics cosmetics = index < m_cosmetics.Count ? m_cosmetics[index] : null;
-        return cosmetics != null ? LobbyPortraitStage.GetSessionPortrait(cosmetics.Colors) : null;
+        if (cosmetics == null)
+            return null;
+
+        PlayerAccessories accessories = index < m_accessories.Count ? m_accessories[index] : null;
+        return LobbyPortraitStage.GetSessionPortrait(
+            cosmetics.Colors,
+            accessories != null ? accessories.Accessories : default
+        );
     }
 
     private void RefreshRows()

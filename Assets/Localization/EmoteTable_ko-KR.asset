@@ -1,0 +1,119 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e9620f8c34305754d8cc9a7e49e852d9, type: 3}
+  m_Name: EmoteTable_ko-KR
+  m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.StringTable
+  m_LocaleId:
+    m_Code: ko-KR
+  m_SharedData: {fileID: 11400000, guid: 1d63b6aed71d64740885a0f824dcce1e, type: 2}
+  m_Metadata:
+    m_Items: []
+  m_TableData:
+  - m_Id: 930512896
+    m_Localized: "\uBD84\uB178"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873024
+    m_Localized: "\uC0BF\uB300\uC9C8"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873025
+    m_Localized: "\uD658\uD638"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873026
+    m_Localized: "\uB9CC\uC138"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873027
+    m_Localized: "\uBC15\uC218"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873028
+    m_Localized: "\uCDA4 1"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873029
+    m_Localized: "\uCDA4 2"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873030
+    m_Localized: "\uCDA4 3"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873031
+    m_Localized: "\uCDA4 4"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873032
+    m_Localized: "\uCDA4 5"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873033
+    m_Localized: "\uCDA4 6"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873034
+    m_Localized: "\uCDA4 7"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873035
+    m_Localized: "\uCDA4 8"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873036
+    m_Localized: "\uCDA4 9"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873037
+    m_Localized: "\uCDA4 10"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873038
+    m_Localized: "\uCDA4 11"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873039
+    m_Localized: "\uCDA4 12"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873040
+    m_Localized: "\uCDA4 13"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873041
+    m_Localized: "\uCDA4 14"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873042
+    m_Localized: "\uCDA4 15"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873043
+    m_Localized: "\uCDA4 16"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873044
+    m_Localized: "\uCDA4 17"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873045
+    m_Localized: "\uCDA4 18"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 959873046
+    m_Localized: "\uAC81\uBA39\uAE30"
+    m_Metadata:
+      m_Items: []
+  references:
+    version: 2
+    RefIds: []

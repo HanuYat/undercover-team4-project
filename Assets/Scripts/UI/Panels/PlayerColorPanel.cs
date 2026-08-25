@@ -30,14 +30,74 @@ public class PlayerColorPanel : PanelBase
     public override void OpenPanel()
     {
         base.OpenPanel();
+        SetBlocked(true);
         RefreshPreview();
     }
 
-    private void OnEnable() => GameSettings.OnPlayerColorChanged += HandleColorChanged;
+    /// <summary>닫기 — ESC·닫기 버튼·씬 정리가 모두 여기로 모인다. 커서를 반드시 여기서 되돌린다.</summary>
+    public override void ClosePanel()
+    {
+        if (!IsOpened)
+            return; // 중복 호출로 CursorLock 참조 수가 어긋나지 않게
 
-    private void OnDisable() => GameSettings.OnPlayerColorChanged -= HandleColorChanged;
+        base.ClosePanel();
+        SetBlocked(false);
+    }
+
+    // 창이 열린 채 사라지면(씬 전환) 커서 해제 요청을 되돌릴 주체가 없어진다 — LootPanel과 같은 사정
+    private void OnDisable()
+    {
+        HandleDisabled();
+        SetBlocked(false);
+    }
+
+    // 커서를 푼다 — 로비는 원래 풀려 있지만 상점 락커(#818)로 열 때는 잠긴 상태에서 들어온다.
+    // 래치 덕에 몇 번 불려도 Push/Pop은 1:1로 유지된다.
+    private void SetBlocked(bool blocked)
+    {
+        if (m_blocked == blocked)
+            return;
+
+        m_blocked = blocked;
+
+        if (blocked)
+            CursorLock.PushUnlock();
+        else
+            CursorLock.PopUnlock();
+
+        // 커서를 푼 채 WASD가 이동으로 새지 않게 — 상점에서는 내 로봇이 살아 있다
+        PlayerInputHandler input = FindLocalInput();
+        if (input != null)
+            input.SetSuspended(blocked);
+    }
+
+    private static PlayerInputHandler FindLocalInput()
+    {
+        Unity.Netcode.NetworkManager manager = Unity.Netcode.NetworkManager.Singleton;
+        Unity.Netcode.NetworkObject player =
+            manager != null && manager.IsListening ? manager.LocalClient.PlayerObject : null;
+
+        return player != null ? player.GetComponent<PlayerInputHandler>() : null;
+    }
+
+    private bool m_blocked;
+
+    private void OnEnable()
+    {
+        GameSettings.OnPlayerColorChanged += HandleColorChanged;
+        GameSettings.OnAccessoryChanged += HandleAccessoryChanged;
+    }
+
+    private void HandleDisabled()
+    {
+        GameSettings.OnPlayerColorChanged -= HandleColorChanged;
+        GameSettings.OnAccessoryChanged -= HandleAccessoryChanged;
+    }
 
     private void HandleColorChanged(EBodyPart _) => RefreshPreview();
+
+    // 치장도 같은 자리에서 되그린다 — 무대가 전신 미리보기에만 태운다 (#818)
+    private void HandleAccessoryChanged(EAccessorySlot _) => RefreshPreview();
 
     // 그림은 무대가 그린다 — 창은 어느 것을 볼지만 정한다
     private void RefreshPreview()

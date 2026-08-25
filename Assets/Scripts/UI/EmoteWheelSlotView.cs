@@ -70,13 +70,12 @@ public class EmoteWheelSlotView : MonoBehaviour
             return;
         }
 
-        // 표시 이름 키가 아직 연결되지 않았으면 임시 이름을 대신 보여 준다.
-        // 빈 칸으로 두면 아이콘만으로 무엇인지 알아내야 하는데, 비슷한 자세가 여럿이라
-        // 그게 어렵다 — 로컬라이즈 배선이 끝나기 전에도 고를 수 있어야 한다.
+        // 키가 안 붙은 감정표현은 id를 그대로 보여 준다 — 빈 칸으로 두면 비슷한 자세가 여럿이라
+        // 아이콘만으로 구분이 안 된다. (배선 누락을 화면에서 바로 알아채는 효과도 있다)
         if (definition.DisplayName == null || definition.DisplayName.IsEmpty)
         {
             m_boundName = null;
-            SetLabelText(definition.FallbackName);
+            SetLabelText(definition.Id);
             return;
         }
 

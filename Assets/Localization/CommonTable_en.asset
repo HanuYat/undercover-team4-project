@@ -67,6 +67,10 @@ MonoBehaviour:
     m_Localized: Getting into position...
     m_Metadata:
       m_Items: []
+  - m_Id: 7404993681719296
+    m_Localized: Save & Close
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

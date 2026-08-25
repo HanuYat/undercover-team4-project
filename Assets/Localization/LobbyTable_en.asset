@@ -64,6 +64,10 @@ MonoBehaviour:
     m_Localized: '{0} has left'
     m_Metadata:
       m_Items: []
+  - m_Id: 7404992532480000
+    m_Localized: Emote Loadout
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

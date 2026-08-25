@@ -1,0 +1,404 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b11a58205ec3474ca216360e9fa74a8, type: 3}
+  m_Name: CosmeticsTable Shared Data
+  m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.SharedTableData
+  m_TableCollectionName: CosmeticsTable
+  m_TableCollectionNameGuidString: b6a4a75d125d7e04da19552d73a00bff
+  m_Entries:
+  - m_Id: 202535165952
+    m_Key: Cosmetic.None
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577108992
+    m_Key: Cosmetic.Apo_FootballHelmet_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577108993
+    m_Key: Cosmetic.Apo_Hunter_Male_Hat_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577108994
+    m_Key: Cosmetic.Apo_Hunter_Male_Hat_02
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577108995
+    m_Key: Cosmetic.Apo_RiotCop_Male_Helmet_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577108996
+    m_Key: Cosmetic.Apo_Scout_Female_Hat_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577108997
+    m_Key: Cosmetic.Apo_Sheriff_Male_Hat_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577108998
+    m_Key: Cosmetic.Apo_Soldier_Male_Helmet_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577108999
+    m_Key: Cosmetic.Apo_Teen_Male_Hat_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109000
+    m_Key: Cosmetic.Pol_Hat_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109001
+    m_Key: Cosmetic.Pol_Hat_02
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109002
+    m_Key: Cosmetic.Pol_Hat_03
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109003
+    m_Key: Cosmetic.Pol_Hat_04
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109004
+    m_Key: Cosmetic.Pol_Hat_04_Alt
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109005
+    m_Key: Cosmetic.Pol_Hat_05
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109006
+    m_Key: Cosmetic.Pol_Hat_06
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109007
+    m_Key: Cosmetic.Pol_Hat_07
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109008
+    m_Key: Cosmetic.Pol_Helmet_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109009
+    m_Key: Cosmetic.Pol_Helmet_02
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109010
+    m_Key: Cosmetic.Pol_Helmet_03
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109011
+    m_Key: Cosmetic.Pol_Helmet_04
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109012
+    m_Key: Cosmetic.Apo_Biker_Male_Beard_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109013
+    m_Key: Cosmetic.Apo_Criminal_Male_Beard_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109014
+    m_Key: Cosmetic.Apo_Homeless_Male_Beard_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109015
+    m_Key: Cosmetic.Apo_Hunter_Male_Beard_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109016
+    m_Key: Cosmetic.Apo_Press_Male_Beard_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109017
+    m_Key: Cosmetic.Apo_RiotCop_Male_Beard_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109018
+    m_Key: Cosmetic.Apo_Wanderer_Male_Beard_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109019
+    m_Key: Cosmetic.Apo_Zombie_Male_Beard_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109020
+    m_Key: Cosmetic.Pol_Beard_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202577109021
+    m_Key: Cosmetic.Pol_Moustache_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497600
+    m_Key: Cosmetic.Pol_Moustache_02
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497601
+    m_Key: Cosmetic.Apo_Biker_Male_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497602
+    m_Key: Cosmetic.Apo_Business_Male_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497603
+    m_Key: Cosmetic.Apo_Cool_Female_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497604
+    m_Key: Cosmetic.Apo_Cool_Male_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497605
+    m_Key: Cosmetic.Apo_Criminal_Male_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497606
+    m_Key: Cosmetic.Apo_Emo_Female_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497607
+    m_Key: Cosmetic.Apo_Islander_Male_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497608
+    m_Key: Cosmetic.Apo_Mechanic_Female_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497609
+    m_Key: Cosmetic.Apo_Nerd_Female_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497610
+    m_Key: Cosmetic.Apo_Patient_Female_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497611
+    m_Key: Cosmetic.Apo_Press_Male_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497612
+    m_Key: Cosmetic.Apo_Punk_Female_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497613
+    m_Key: Cosmetic.Apo_RiotCop_Male_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497614
+    m_Key: Cosmetic.Apo_Sheriff_Male_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497615
+    m_Key: Cosmetic.Apo_Soldier_Female_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497616
+    m_Key: Cosmetic.Apo_Teen_Female_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497617
+    m_Key: Cosmetic.Apo_Waitress_Female_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497618
+    m_Key: Cosmetic.Apo_Wanderer_Male_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497619
+    m_Key: Cosmetic.Apo_Zombie_Female_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497620
+    m_Key: Cosmetic.Apo_Zombie_Female_Hair_02
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497621
+    m_Key: Cosmetic.Apo_Zombie_Male_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497622
+    m_Key: Cosmetic.Apo_Zombie_Male_Hair_02
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497623
+    m_Key: Cosmetic.Pol_Hair_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497624
+    m_Key: Cosmetic.Pol_Hair_02
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497625
+    m_Key: Cosmetic.Pol_Hair_02_Alt
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497626
+    m_Key: Cosmetic.Pol_Hair_03
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497627
+    m_Key: Cosmetic.Pol_Hair_05
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497628
+    m_Key: Cosmetic.Pol_Hair_06
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497629
+    m_Key: Cosmetic.Pol_Hair_07
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497630
+    m_Key: Cosmetic.Pol_Hair_07_Alt
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497631
+    m_Key: Cosmetic.Pol_Hair_08
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497632
+    m_Key: Cosmetic.Apo_Nerd_Female_Glasses_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497633
+    m_Key: Cosmetic.Apo_Press_Male_Eyepatch_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497634
+    m_Key: Cosmetic.Apo_Soldier_Male_Glass_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497635
+    m_Key: Cosmetic.Apo_Teen_Female_Glasses_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497636
+    m_Key: Cosmetic.Apo_Waitress_Female_Glasses_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497637
+    m_Key: Cosmetic.Pol_Glasses_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497638
+    m_Key: Cosmetic.Pol_Glasses_02
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497639
+    m_Key: Cosmetic.Pol_Glasses_03
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497640
+    m_Key: Cosmetic.Pol_Goggles_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497641
+    m_Key: Cosmetic.Pol_Goggles_02
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497642
+    m_Key: Cosmetic.Apo_GasMask_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497643
+    m_Key: Cosmetic.Apo_Mask_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497644
+    m_Key: Cosmetic.Apo_Mask_Hockey_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497645
+    m_Key: Cosmetic.Pol_Mask_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497646
+    m_Key: Cosmetic.Pol_Mask_02
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497647
+    m_Key: Cosmetic.Pol_Ear_Piece_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497648
+    m_Key: Cosmetic.Pol_Ear_Piece_02
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497649
+    m_Key: Cosmetic.Pol_Headset_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497650
+    m_Key: Cosmetic.Pol_Headset_02
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497651
+    m_Key: Cosmetic.Pol_Piercings_01
+    m_Metadata:
+      m_Items: []
+  - m_Id: 202585497652
+    m_Key: Cosmetic.Pol_Piercings_02
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074028367872
+    m_Key: Cosmetic.Window.Title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533696
+    m_Key: Cosmetic.Slot.Headwear
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533697
+    m_Key: Cosmetic.Slot.Hair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533698
+    m_Key: Cosmetic.Slot.FacialHair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533699
+    m_Key: Cosmetic.Slot.Eyewear
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533700
+    m_Key: Cosmetic.Slot.Facewear
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533701
+    m_Key: Cosmetic.Slot.Earwear
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533702
+    m_Key: Cosmetic.Part.Head
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533703
+    m_Key: Cosmetic.Part.Torso
+    m_Metadata:
+      m_Items: []
+  - m_Id: 52074053533704
+    m_Key: Cosmetic.Part.Legs
+    m_Metadata:
+      m_Items: []
+  m_Metadata:
+    m_Items: []
+  m_KeyGenerator:
+    rid: 4973575427206676565
+  references:
+    version: 2
+    RefIds:
+    - rid: 4973575427206676565
+      type: {class: DistributedUIDGenerator, ns: UnityEngine.Localization.Tables, asm: Unity.Localization}
+      data:
+        m_CustomEpoch: 1787560960919

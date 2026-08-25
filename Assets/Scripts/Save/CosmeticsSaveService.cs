@@ -43,7 +43,11 @@ public static class CosmeticsSaveService
         // ① 캐시 — 즉시. 클라우드 왕복 동안 기본색이 보이지 않게 한다.
         // 색뿐 아니라 계정 단위 설정 전부가 이 자리에서 갈아탄다 (#796 후속) — Apply로 감싸는 이유는
         // 그대로다: 방금 읽은 캐시를 되올리지 않게 저장 예약을 막는다.
-        Apply(() => GameSettings.UseAccount(App.Net.Auth.PlayerId));
+        Apply(() =>
+        {
+            GameSettings.UseAccount(App.Net.Auth.PlayerId);
+            CosmeticInventory.UseAccount(App.Net.Auth.PlayerId);
+        });
 
         // ② 클라우드 — 있으면 이것이 정본이다.
         CosmeticsSaveData data = await ReadAsync();
@@ -53,7 +57,15 @@ public static class CosmeticsSaveService
             return;
         }
 
-        Apply(() => GameSettings.ApplyPlayerColors(data.Colors));
+        Apply(() =>
+        {
+            GameSettings.ApplyPlayerColors(data.Colors);
+            GameSettings.ApplyAccessories(data.Accessories); // v1 레코드면 null — 그쪽에서 무시한다
+
+            // v2 이하 레코드는 보유함이 없다 — 빈 보유함으로 두면 기본 지급 세트만 남고,
+            // 자판기로 얻은 것이 있었다면 애초에 v3로 저장됐을 것이므로 잃는 것이 없다. (#818 D)
+            CosmeticInventory.Apply(data.Owned, data.Tokens);
+        });
     }
 
     // GameSettings가 부위마다 변경 이벤트를 내므로, 그대로 두면 방금 받은 값을 되올린다.
@@ -71,7 +83,12 @@ public static class CosmeticsSaveService
     }
 
     /// <summary>계정이 바뀌면 캐시 기준을 되돌린다 — 다음 로그인이 자기 값을 다시 불러온다.</summary>
-    public static void OnSignedOut() => Apply(() => GameSettings.UseAccount(null));
+    public static void OnSignedOut() =>
+        Apply(() =>
+        {
+            GameSettings.UseAccount(null);
+            CosmeticInventory.UseAccount(null);
+        });
 
     // 색이 바뀔 때마다 저장을 예약한다. 구독은 한 번만.
     private static void Hook()
@@ -81,9 +98,25 @@ public static class CosmeticsSaveService
 
         s_hooked = true;
         GameSettings.OnPlayerColorChanged += HandleColorChanged;
+        GameSettings.OnAccessoryChanged += HandleAccessoryChanged;
+        CosmeticInventory.OnOwnedChanged += HandleInventoryChanged;
+        CosmeticInventory.OnTokensChanged += HandleInventoryChanged;
     }
 
     private static void HandleColorChanged(EBodyPart part)
+    {
+        if (!s_applying)
+            QueueSave();
+    }
+
+    private static void HandleAccessoryChanged(EAccessorySlot slot)
+    {
+        if (!s_applying)
+            QueueSave();
+    }
+
+    // 뽑기로 보유함이 늘거나 토큰이 오갈 때 — 색과 같은 예약을 탄다. (#818 D)
+    private static void HandleInventoryChanged()
     {
         if (!s_applying)
             QueueSave();
@@ -114,7 +147,18 @@ public static class CosmeticsSaveService
         for (int i = 0; i < parts.Length; i++)
             colors[(int)parts[i]] = GameSettings.GetPlayerColor(parts[i]);
 
-        return new CosmeticsSaveData { Colors = colors };
+        var slots = (EAccessorySlot[])Enum.GetValues(typeof(EAccessorySlot));
+        var accessories = new int[slots.Length];
+        for (int i = 0; i < slots.Length; i++)
+            accessories[(int)slots[i]] = GameSettings.GetAccessory(slots[i]);
+
+        return new CosmeticsSaveData
+        {
+            Colors = colors,
+            Accessories = accessories,
+            Owned = CosmeticInventory.Capture(),
+            Tokens = CosmeticInventory.Tokens,
+        };
     }
 
     private static async UniTask<CosmeticsSaveData> ReadAsync()
@@ -130,14 +174,25 @@ public static class CosmeticsSaveService
 
             var data = JsonUtility.FromJson<CosmeticsSaveData>(item.Value.GetAs<string>());
 
-            // 포맷이 어긋나면 읽지 않는다 — 색이 조용히 뒤섞이는 쪽이 기본색보다 나쁘다.
-            if (data == null || data.Version != CosmeticsSaveData.k_version || data.Colors == null)
+            // 모르는(미래) 포맷은 읽지 않는다 — 색이 조용히 뒤섞이는 쪽이 기본색보다 나쁘다.
+            // 반대로 옛 포맷은 버리지 않는다 (#818): v1은 색만 있으므로 색을 살리고 치장은 기본값으로 둔다.
+            if (
+                data == null
+                || data.Colors == null
+                || data.Version < 1
+                || data.Version > CosmeticsSaveData.k_version
+            )
             {
                 Debug.LogWarning(
-                    $"[커스터마이징] 포맷이 달라 무시한다 — 저장 {data?.Version}, 현재 {CosmeticsSaveData.k_version}"
+                    $"[커스터마이징] 읽을 수 없는 포맷이라 무시한다 — 저장 {data?.Version}, 현재 {CosmeticsSaveData.k_version}"
                 );
                 return null;
             }
+
+            if (data.Version < CosmeticsSaveData.k_version)
+                Debug.Log(
+                    $"[커스터마이징] v{data.Version} 레코드를 읽었다 — 그 판에 있던 것만 복원하고 나머지는 기본값으로 둔다"
+                );
 
             Debug.Log($"[커스터마이징] 계정 색을 불러왔다 — {string.Join(",", data.Colors)}");
             return data;
@@ -169,10 +224,21 @@ public static class CosmeticsSaveService
 [Serializable]
 public class CosmeticsSaveData
 {
-    public const int k_version = 1;
+    // v2에서 치장(Accessories), v3에서 보유함·토큰(Owned·Tokens)이 추가됐다.
+    // 옛 레코드는 버리지 않고 있는 것만 살린다 (CosmeticsSaveService.ReadAsync)
+    public const int k_version = 3;
 
     public int Version = k_version;
 
     /// <summary>인덱스 = <see cref="EBodyPart"/>, 값 = 팔레트 색 인덱스.</summary>
     public int[] Colors;
+
+    /// <summary>인덱스 = <see cref="EAccessorySlot"/>, 값 = 카탈로그 인덱스(0 = 안 씀). v1에는 없다.</summary>
+    public int[] Accessories;
+
+    /// <summary>자판기로 얻은 치장 (#818 D) — 기본 지급 세트는 카탈로그가 정하므로 여기 없다. v2 이하에는 없다.</summary>
+    public List<CosmeticSlotOwnership> Owned;
+
+    /// <summary>남은 뽑기 토큰 (#818 D). v2 이하에는 없어 0으로 읽힌다.</summary>
+    public int Tokens;
 }

@@ -304,9 +304,32 @@ public class SettlementController : MonoBehaviour
 
     private static void ShowLocal(SettlementData data)
     {
+        GrantCosmeticToken(data.Result);
+
         if (App.UI.Current != null && App.UI.Current.TryGetPanel(out SettlementPanel panel))
             panel.Show(data);
         else
             Debug.LogWarning("SettlementController: 정산 패널(SettlementPanel)을 찾지 못해 표시하지 못했다");
+    }
+
+    /// <summary>
+    /// 라운드를 클리어하면 치장 뽑기 토큰을 1개 준다 (#818 D).
+    ///
+    /// <b>지급 자리가 여기인 이유는 "각 피어에서 정확히 한 번"이기 때문이다</b> — 호스트는
+    /// <see cref="GatherAndShowAsync"/>가, 클라는 <see cref="ReceiveSettlement"/>가 각자 한 번씩
+    /// 여기로 들어온다. 표시와 지급을 한 메서드에 두는 것이 어색하긴 해도, 갈라 두면 두 호출 지점에
+    /// 같은 코드를 두어야 하고 한쪽만 빠지면 그 역할만 토큰을 못 받는다.
+    ///
+    /// 토큰은 <b>계정 소유라 서버가 대신 줄 수 없다</b>(각자의 Cloud Save다) — 그래서 받은 사람이
+    /// 자기 것에 더한다. 무엇을 받았는지는 서버가 보낸 결과가 정하므로, 클라가 라운드 결과를
+    /// 스스로 판단하는 자리는 아니다. 순수 코스메틱이라 이 정도 권위로 충분하다.
+    /// </summary>
+    private static void GrantCosmeticToken(RoundResult result)
+    {
+        if (result != RoundResult.Success)
+            return;
+
+        CosmeticInventory.AddTokens(1);
+        Debug.Log($"[치장] 라운드 클리어 — 뽑기 토큰 +1 (보유 {CosmeticInventory.Tokens}개)");
     }
 }

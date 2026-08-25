@@ -35,6 +35,8 @@ public static class GameSettings
     // settings.playerColor.<계정>.<부위> — 색은 기기 설정이 아니라 그 사람의 것이라 계정으로 가른다.
     // 정본은 Cloud Save(CosmeticsSaveService)이고 여기 값은 캐시다. (#432 후속)
     private const string k_playerColorKeyPrefix = "settings.playerColor.";
+    // settings.accessory.<계정>.<슬롯> — 색과 같은 자리 규칙이다. 정본은 Cloud Save, 여기는 캐시. (#818)
+    private const string k_accessoryKeyPrefix = "settings.accessory.";
 
     private const string k_settingPrefix = "settings.";
     private const string k_localAccount = "local"; // 로그인 전에 고른 값이 갈 자리
@@ -88,6 +90,11 @@ public static class GameSettings
 
     // 인덱스 = EBodyPart. 길이를 enum에서 얻는다 — 부위가 늘어도 여기서 터지지 않게
     private static readonly int[] s_playerColors = new int[Enum.GetValues(typeof(EBodyPart)).Length];
+
+    // 인덱스 = EAccessorySlot. 0은 "안 씀"이라 기본값 자체가 안전한 상태다 (#818)
+    private static readonly int[] s_accessories = new int[Enum.GetValues(
+        typeof(EAccessorySlot)
+    ).Length];
 
     private static string s_account = k_localAccount;
 
@@ -401,6 +408,42 @@ public static class GameSettings
         }
     }
 
+    /// <summary>내 치장이 바뀌었다 — 로비 명부 보고·선택 칸이 되읽는다. 인자는 바뀐 슬롯. (#818)</summary>
+    public static event Action<EAccessorySlot> OnAccessoryChanged;
+
+    /// <summary>그 슬롯에 쓴 카탈로그 인덱스 — <b>0은 안 씀</b>. 카탈로그 길이는 여기서 모른다.</summary>
+    public static int GetAccessory(EAccessorySlot slot) => s_accessories[(int)slot];
+
+    public static void SetAccessory(EAccessorySlot slot, int index)
+    {
+        int clamped = Mathf.Max(0, index);
+        if (s_accessories[(int)slot] == clamped)
+            return;
+
+        s_accessories[(int)slot] = clamped;
+        PlayerPrefs.SetInt(AccessoryKey(slot), clamped);
+        OnAccessoryChanged?.Invoke(slot);
+    }
+
+    /// <summary>클라우드에서 받은 한 벌을 적용한다 — 캐시에도 남긴다. (CosmeticsSaveService)</summary>
+    public static void ApplyAccessories(IReadOnlyList<int> accessories)
+    {
+        if (accessories == null)
+            return;
+
+        foreach (EAccessorySlot slot in Enum.GetValues(typeof(EAccessorySlot)))
+        {
+            int index = (int)slot;
+            if (index >= accessories.Count)
+                continue;
+
+            int clamped = Mathf.Max(0, accessories[index]);
+            s_accessories[index] = clamped;
+            PlayerPrefs.SetInt(AccessoryKey(slot), clamped);
+            OnAccessoryChanged?.Invoke(slot);
+        }
+    }
+
     /// <summary>
     /// 그 항목의 실제 PlayerPrefs 키 (#796 후속). <b>로그인 전('local')에는 계정 자리를 넣지 않는다</b> —
     /// 계정으로 가르기 전에 쓰던 키가 그대로 로그인 전 자리가 되어, 갱신해도 저장값을 잃지 않는다.
@@ -414,6 +457,10 @@ public static class GameSettings
     private static string ColorKey(EBodyPart part) =>
         k_playerColorKeyPrefix + s_account + "." + part;
 
+    // 색과 같은 자리 규칙 — 계정별로 갈라 둔다 (#818)
+    private static string AccessoryKey(EAccessorySlot slot) =>
+        k_accessoryKeyPrefix + s_account + "." + slot;
+
     // 캐시에서 전 부위를 다시 읽어 적용한다. 저장된 값이 없으면 팔레트 첫 색이다.
     private static void LoadPlayerColors()
     {
@@ -421,6 +468,16 @@ public static class GameSettings
         {
             s_playerColors[(int)part] = PlayerPrefs.GetInt(ColorKey(part), k_defaultPlayerColor);
             OnPlayerColorChanged?.Invoke(part);
+        }
+    }
+
+    // 캐시에서 전 슬롯을 다시 읽어 적용한다. 저장된 값이 없으면 0(안 씀)이다. (#818)
+    private static void LoadAccessories()
+    {
+        foreach (EAccessorySlot slot in Enum.GetValues(typeof(EAccessorySlot)))
+        {
+            s_accessories[(int)slot] = PlayerPrefs.GetInt(AccessoryKey(slot), 0);
+            OnAccessoryChanged?.Invoke(slot);
         }
     }
 
@@ -470,6 +527,7 @@ public static class GameSettings
         // 파괴된 UI를 깨운다. 씬 로드 전이라 이번 플레이의 구독자는 아직 붙지 않았다. (#430)
         OnMicMutedChanged = null;
         OnPlayerColorChanged = null;
+        OnAccessoryChanged = null;
 
         // 밑값부터 되돌린 뒤 읽는다 — LoadAccountSettings는 '저장값이 없으면 지금 값을 둔다'라서,
         // 도메인 리로드를 껐을 때 이전 플레이 값이 그대로 살아남는 것을 여기서 끊는다.
@@ -502,6 +560,7 @@ public static class GameSettings
         MicMuted = PlayerPrefs.GetInt(Key(k_micMutedName), s_micMuted ? 1 : 0) != 0;
         VSync = PlayerPrefs.GetInt(Key(k_vSyncName), s_vSync ? 1 : 0) != 0;
         LoadPlayerColors();
+        LoadAccessories();
     }
 
     // 백킹 필드만 밑값으로 되돌린다 — PlayerPrefs는 건드리지 않는다.

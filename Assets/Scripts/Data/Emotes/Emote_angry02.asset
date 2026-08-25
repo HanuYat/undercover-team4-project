@@ -15,14 +15,13 @@ MonoBehaviour:
   m_id: angry02
   m_displayName:
     m_TableReference:
-      m_TableCollectionName: 
+      m_TableCollectionName: EmoteTable
     m_TableEntryReference:
-      m_KeyId: 0
+      m_KeyId: 959873024
       m_Key: 
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
-  m_fallbackName: "\uC0BF\uB300\uC9C8"
   m_icon: {fileID: 21300000, guid: e78258378cc751d489d7cb782f452cfb, type: 3}
   m_clip: {fileID: 3094330708855449807, guid: ffc8dd687a3364d4c900549526afc6da, type: 3}
   m_loop: 0

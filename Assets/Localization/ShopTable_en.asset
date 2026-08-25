@@ -16,7 +16,8 @@ MonoBehaviour:
     m_Code: en
   m_SharedData: {fileID: 11400000, guid: 02523d40abbc73e48bee1f7b28a81881, type: 2}
   m_Metadata:
-    m_Items: []
+    m_Items:
+    - rid: 8213493152023576666
   m_TableData:
   - m_Id: 70274797080576
     m_Localized: 'Start Game
@@ -44,6 +45,35 @@ MonoBehaviour:
     m_Localized: (No item assigned)
     m_Metadata:
       m_Items: []
+  - m_Id: 7415953284825088
+    m_Localized: "No draw tokens \u2014 clear a round to earn one"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7415953305796608
+    m_Localized: Got {0}!
+    m_Metadata:
+      m_Items:
+      - rid: 8213493152023576666
+  - m_Id: 7415953309990912
+    m_Localized: "{0} \u2014 already owned, token refunded"
+    m_Metadata:
+      m_Items:
+      - rid: 8213493152023576666
+  - m_Id: 7416925042147328
+    m_Localized: 'Cosmetic Draw
+
+      {0} tokens'
+    m_Metadata:
+      m_Items:
+      - rid: 8213493152023576666
   references:
     version: 2
-    RefIds: []
+    RefIds:
+    - rid: 8213493152023576666
+      type: {class: SmartFormatTag, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_Entries: 
+        m_SharedEntries:
+        - id: 7415953305796608
+        - id: 7415953309990912
+        - id: 7416925042147328
