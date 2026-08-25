@@ -19,6 +19,7 @@ public enum IncapacitationCause
     Stun, // 테이저 피격 기절 (#252) — 시간이 지나면 스스로 일어난다
     Die, // 다운 방치 또는 확인사살로 기능 정지 (#364, #725) — 복구는 동료의 부활 키트(#613)
     Abducted, // 납치 호송 중 (#371) — 끌려가는 동안 걸어 나가지 못하게. 맨홀 아래로 내려가면 Die로 넘어간다 (#775)
+    Beamed, // UFO 빔에 걸려 떠오르는 중 (#819) — 납치처럼 끌려가는 동안 못 움직인다. 기체에 닿으면 Die로 넘어간다
     // (값은 반드시 끝에 추가한다 — NetworkVariable로 동기화되는 enum이라 순서가 곧 와이어 포맷이다)
 }
 
@@ -336,11 +337,12 @@ public class PlayerIncapacitation : NetworkBehaviour
     }
 
     /// <summary>
-    /// 납치 결말 — 맨홀 아래로 내려간 피해자를 기능 정지(Die)로 확정한다. 서버(또는 오프라인) 전용. (#775)
+    /// <b>몸이 회수 불가능한 곳으로 사라졌다</b> — 기능 정지(Die)로 확정한다. 서버(또는 오프라인) 전용.
+    /// 맨홀 아래로 내려간 납치 피해자(#775)와 UFO에 실려 간 피해자(#819)가 함께 쓴다.
     ///
-    /// 납치는 피해자를 때리지 않으므로 HP 0을 거치지 않는다 — 이 메서드가 유일한 진입점이다.
+    /// 둘 다 피해자를 때리지 않으므로 HP 0을 거치지 않는다 — 이 메서드가 유일한 진입점이다.
     /// </summary>
-    public void ServerKillByAbduction()
+    public void ServerKillByBodyLost()
     {
         if (IsSpawned && !IsServer)
             return;
@@ -352,7 +354,7 @@ public class PlayerIncapacitation : NetworkBehaviour
         if (Cause == IncapacitationCause.Die)
             return; // 이미 기능 정지 — 중복 호출 방어
 
-        Debug.Log($"[납치] 결말 — 기능 정지: {name}", this);
+        Debug.Log($"[몸 소실] 결말 — 기능 정지: {name}", this);
         SetCause(IncapacitationCause.Die);
     }
 
