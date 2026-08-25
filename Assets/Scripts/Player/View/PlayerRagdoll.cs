@@ -75,6 +75,7 @@ public partial class PlayerRagdoll : MonoBehaviour
     [SerializeField] private float m_blendSeconds = 0.4f;
 
     private RagdollRig m_rig; // 뼈 한 벌 — 물리 조작 전부를 여기 위임한다
+    private bool m_lostBodyHidden; // 회수 불가 몸을 이미 감췄는가 (#819) — 매 프레임 렌더러를 훑지 않으려고
     private RagdollRope m_rope; // 밧줄 견인 (선택 — 없으면 운반이 물리로 안 끌린다)
 
     // 다시 맬 상대들 — 순간이동이 관절을 끊어도 남는다. 참가자별로 실제 운반이 끝날 때만 빠진다.
@@ -353,6 +354,19 @@ public partial class PlayerRagdoll : MonoBehaviour
     {
         m_ropeCarriers.Remove(carrier);
         m_rope?.Detach(carrier);
+    }
+
+    // 회수 불가로 확정된 몸을 화면에서 지운다 (#819). 전 피어가 각자 부르는 자리다 —
+    // IsBodyLost가 복제되므로 서버 지시 없이도 같은 결과가 난다. 되돌리지 않는다:
+    // 이 플래그는 부활·운반·뒤지기를 이미 전부 닫아 둔 상태고, 라운드가 끝나면 몸이 새로 스폰된다.
+    private void HideLostBody()
+    {
+        if (m_lostBodyHidden)
+            return;
+
+        m_lostBodyHidden = true;
+        foreach (Renderer renderer in GetComponentsInChildren<Renderer>(true))
+            renderer.enabled = false;
     }
 
     /// <summary>밧줄을 전부 푼다 — 내려놓기·부활·운반자 전원 소실. <b>다시 맬 상대도 전부 잊는다</b>
@@ -636,9 +650,14 @@ public partial class PlayerRagdoll : MonoBehaviour
         // 회수 불가로 확정된 몸은 기다리지 않고 즉시 재운다 (#775) — 맨홀 아래는 지면이 없어
         // 뼈가 영영 잠들지 않고, 그 낙하가 관전 시점을 계속 흔든다. 아무도 볼 수 없는 몸이라
         // 정착 연출을 지킬 이유도 없다.
+        //
+        // <b>재우는 것만으로는 부족하다</b> (#819) — 맨홀은 지하라 그 자리에서 굳어도 안 보였지만,
+        // UFO에 실려 간 몸은 상공에서 굳어 하늘에 시체가 걸린다. 어느 쪽이든 '회수 불가'는
+        // 곧 '없는 몸'이므로 여기서 함께 감춘다.
         if (m_incapacitation != null && m_incapacitation.IsBodyLost)
         {
             m_rig.SleepAll();
+            HideLostBody();
             Settle();
             return;
         }
