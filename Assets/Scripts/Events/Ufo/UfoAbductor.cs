@@ -26,7 +26,8 @@ using UnityEngine;
 ///
 /// <b>빨아올리는 일은 오너가 한다.</b> 서버는 플레이어 좌표를 직접 밀 수 없으므로(이동 권한이 오너에게
 /// 있다) 오검거 호송·납치와 같은 경로를 탄다 — <see cref="PlayerPenaltyView.StartTowedBy"/>가 오너에게
-/// "이 앵커를 따라가라"고 지시하고, 서버는 앵커(= UFO)가 움직이게 두기만 한다.
+/// "이 앵커를 따라가라"고 지시하고, 서버는 그동안 기체를 제자리에 세워 둔다
+/// (<see cref="UfoCraft.ServerSetHold"/>).
 /// </summary>
 [RequireComponent(typeof(UfoCraft))]
 public class UfoAbductor : MonoBehaviour
@@ -88,18 +89,23 @@ public class UfoAbductor : MonoBehaviour
         {
             ReleaseVictim();
             m_dwell.Clear();
+            m_craft.ServerSetHold(false);
             return;
         }
 
         if (m_victim != null)
-        {
             TickLifting();
-            return;
+        else
+        {
+            Transform caught = TickDwell(Time.deltaTime);
+            if (caught != null)
+                BeginLifting(caught);
         }
 
-        Transform caught = TickDwell(Time.deltaTime);
-        if (caught != null)
-            BeginLifting(caught);
+        // 빨아올리는 동안에만 기체를 세운다. 매 프레임 현재 상태로 다시 거는 이유는
+        // 흡입이 끝나는 길이 여럿(완료·중단·소실)이라, 한 곳에서 풀면 빠뜨린 길이 생기기 때문이다.
+        // 누적이 차는 중에는 세우지 않는다 — 빔이 다가오는 것을 보고 피하는 것이 이 기믹이다.
+        m_craft.ServerSetHold(m_victim != null);
     }
 
     private void OnDisable()
