@@ -195,7 +195,13 @@ public class PlayerTowedMotion : MonoBehaviour
         transform.position = m_escortMaxSpeed > 0f
             ? Vector3.MoveTowards(transform.position, targetPos, m_escortMaxSpeed * Time.deltaTime)
             : Vector3.Lerp(transform.position, targetPos, lerp);
-        transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(forward), lerp);
+
+        // 방향도 위치와 같은 이유로 갈린다 — 걷는 앵커의 forward는 진행 방향이라 몸을 그리로 돌리는
+        // 것이 맞지만, UFO는 제자리 자전이라 forward가 매 프레임 도는 값일 뿐이다. 그대로 따라가면
+        // 쓰러진 상태 카메라(화면이 몸을 따라간다)가 함께 빙글빙글 돈다 — 위로 끌려가는 동안은
+        // 방향을 고정해 둔다. (#819)
+        if (m_escortMaxSpeed <= 0f)
+            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(forward), lerp);
     }
 
     // ---- 운반 (#365, 동료가 밧줄로) ----

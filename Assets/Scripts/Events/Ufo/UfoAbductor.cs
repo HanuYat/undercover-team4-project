@@ -67,7 +67,7 @@ public class UfoAbductor : MonoBehaviour
     private RoundManager Round => App.Game.Round;
 
     // 씬 배치물이라 자기 Update가 스스로 돈다 — 서버 권한을 직접 게이트한다 (AbductionEvent와 같은 패턴)
-    private static bool IsServerAuthority =>
+    private static bool HasServerAuthority =>
         NetworkManager.Singleton == null
         || !NetworkManager.Singleton.IsListening
         || NetworkManager.Singleton.IsServer;
@@ -80,7 +80,7 @@ public class UfoAbductor : MonoBehaviour
 
     private void Update()
     {
-        if (!IsServerAuthority)
+        if (!HasServerAuthority)
             return;
 
         // 라운드 진행 중에만 판정한다 — 준비·정산 국면에 걸리면 아무것도 못 하는 시간에 라운드가 끝난다.
@@ -93,14 +93,15 @@ public class UfoAbductor : MonoBehaviour
             return;
         }
 
+        // 흡입 중에도 체류 판정은 계속 돈다 — "벗어나면 식는다"가 이 구간에서만 멈추면,
+        // 다른 사람이 빔 밖으로 걸어 나가 안전한 채로 있어도 누적이 그대로 보존된다.
+        // 다만 새로 잡힌 사람을 곧장 태우지는 않는다 — 한 번에 한 명만 끌어올린다.
+        Transform caught = TickDwell(Time.deltaTime);
+
         if (m_victim != null)
             TickLifting();
-        else
-        {
-            Transform caught = TickDwell(Time.deltaTime);
-            if (caught != null)
-                BeginLifting(caught);
-        }
+        else if (caught != null)
+            BeginLifting(caught);
 
         // 빨아올리는 동안에만 기체를 세운다. 매 프레임 현재 상태로 다시 거는 이유는
         // 흡입이 끝나는 길이 여럿(완료·중단·소실)이라, 한 곳에서 풀면 빠뜨린 길이 생기기 때문이다.
@@ -112,7 +113,7 @@ public class UfoAbductor : MonoBehaviour
     {
         // 라운드 종료·씬 전환 등으로 기체가 꺼지면 빨아올리던 몸을 풀어 준다 —
         // 흡입은 되돌릴 수 없다는 규칙은 플레이 중의 이야기다. 굳은 채 남으면 상점에 못 들어간다.
-        if (IsServerAuthority)
+        if (HasServerAuthority)
             ReleaseVictim();
     }
 
@@ -211,12 +212,21 @@ public class UfoAbductor : MonoBehaviour
         bool swallowed =
             (m_victim.position - transform.position).sqrMagnitude <= m_swallowDistance * m_swallowDistance;
 
-        // 상한을 두는 이유는 앵커를 놓친 경우다 — 오너가 추종을 못 걸면 영영 닿지 않는다
-        if (!swallowed && Time.time < m_liftDeadline)
+        if (swallowed)
+        {
+            Swallow(m_victim);
+            m_victim = null;
+            return;
+        }
+
+        // 상한을 두는 이유는 앵커를 놓친 경우다 — 오너 RPC 유실·배선 누락·지형에 낀 경우가 전부
+        // 여기로 떨어진다. <b>닿지 못했다면 풀어 준다</b> — 죽인 것으로 치면 네트워크·배선 실패의
+        // 대가가 화면에 아무 일도 없이 15초 뒤 라운드 아웃으로 나타난다.
+        if (Time.time < m_liftDeadline)
             return;
 
-        Swallow(m_victim);
-        m_victim = null;
+        Debug.Log($"[UFO] 흡입 타임아웃 — {m_victim.name}에 닿지 못해 풀어준다");
+        ReleaseVictim();
     }
 
     /// <summary>

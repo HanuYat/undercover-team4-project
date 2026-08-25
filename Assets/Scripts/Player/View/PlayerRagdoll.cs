@@ -76,6 +76,9 @@ public partial class PlayerRagdoll : MonoBehaviour
 
     private RagdollRig m_rig; // 뼈 한 벌 — 물리 조작 전부를 여기 위임한다
     private bool m_lostBodyHidden; // 회수 불가 몸을 이미 감췄는가 (#819) — 매 프레임 렌더러를 훑지 않으려고
+    // HideLostBody가 실제로 끈 렌더러만 담는다 — 되살릴 때 이 목록만 켜야, 평소 꺼져 있는 렌더러
+    // (1인칭 팔 리그처럼 뼈 이름이 겹치는 여분 리그)까지 함께 켜는 사고를 피한다.
+    private readonly List<Renderer> m_hiddenLostBodyRenderers = new List<Renderer>();
     private RagdollRope m_rope; // 밧줄 견인 (선택 — 없으면 운반이 물리로 안 끌린다)
 
     // 다시 맬 상대들 — 순간이동이 관절을 끊어도 남는다. 참가자별로 실제 운반이 끝날 때만 빠진다.
@@ -357,8 +360,10 @@ public partial class PlayerRagdoll : MonoBehaviour
     }
 
     // 회수 불가로 확정된 몸을 화면에서 지운다 (#819). 전 피어가 각자 부르는 자리다 —
-    // IsBodyLost가 복제되므로 서버 지시 없이도 같은 결과가 난다. 되돌리지 않는다:
-    // 이 플래그는 부활·운반·뒤지기를 이미 전부 닫아 둔 상태고, 라운드가 끝나면 몸이 새로 스폰된다.
+    // IsBodyLost가 복제되므로 서버 지시 없이도 같은 결과가 난다.
+    // <see cref="ShowLostBody"/>와 대칭 — 같은 오브젝트가 라운드를 넘어 재사용되므로
+    // (PlayerHealth.ServerResetState가 HP만 초기화하고 despawn하지 않는다) 되돌리지 않으면
+    // 다음 라운드부터 이 플레이어가 영구히 투명해진다.
     private void HideLostBody()
     {
         if (m_lostBodyHidden)
@@ -366,7 +371,29 @@ public partial class PlayerRagdoll : MonoBehaviour
 
         m_lostBodyHidden = true;
         foreach (Renderer renderer in GetComponentsInChildren<Renderer>(true))
+        {
+            if (!renderer.enabled)
+                continue;
+
             renderer.enabled = false;
+            m_hiddenLostBodyRenderers.Add(renderer);
+        }
+    }
+
+    // HideLostBody가 끈 렌더러만 되살린다 — IsBodyLost가 풀리는 유일한 경로(PlayerIncapacitation
+    // .SetBodyLost(false))는 부활 RPC 안에서 돌고, 그 직후 PollDeath가 ExitToAnimator를 부른다.
+    private void ShowLostBody()
+    {
+        if (!m_lostBodyHidden)
+            return;
+
+        m_lostBodyHidden = false;
+        foreach (Renderer renderer in m_hiddenLostBodyRenderers)
+        {
+            if (renderer != null)
+                renderer.enabled = true;
+        }
+        m_hiddenLostBodyRenderers.Clear();
     }
 
     /// <summary>밧줄을 전부 푼다 — 내려놓기·부활·운반자 전원 소실. <b>다시 맬 상대도 전부 잊는다</b>
@@ -518,6 +545,9 @@ public partial class PlayerRagdoll : MonoBehaviour
         // DumpFallRate("이탈"); // 창이 닫히기 전에 부활했다 — 남은 값으로라도 마감한다
         if (m_state == RagdollState.Animated || m_rig == null || !m_rig.IsValid)
             return;
+
+        // 회수 불가로 감춰졌던 몸이라면 애니메이터로 돌아가는 이 시점에 되살린다 — HideLostBody 참고.
+        ShowLostBody();
 
         // 에피소드가 여기서 끝난다 — 다음 사망은 자기 사망을 다시 관측해야 부활할 수 있다 (PollDeath).
         m_settled = false;

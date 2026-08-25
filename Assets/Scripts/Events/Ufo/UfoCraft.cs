@@ -93,13 +93,22 @@ public class UfoCraft : NetworkBehaviour
     /// 빔이 닿는 지면 지점 — 기체 바로 아래로 레이를 쏴 찾는다. 못 찾으면 기체 아래
     /// <see cref="m_groundProbeDistance"/>만큼을 지면으로 친다(허공을 지날 때의 폴백).
     /// </summary>
-    public Vector3 BeamGroundPoint()
+    public Vector3 BeamGroundPoint() => BeamGroundPoint(out _);
+
+    /// <summary>지면 지점과 함께 실제로 레이가 맞았는지도 돌려준다 — <see cref="StretchBeam"/>이
+    /// 폴백 거리(기본 200m)로 시각 기둥을 늘리지 않게 가르는 데 쓴다.</summary>
+    private Vector3 BeamGroundPoint(out bool grounded)
     {
         Vector3 origin = transform.position;
-        return Physics.Raycast(origin, Vector3.down, out RaycastHit hit,
-                   m_groundProbeDistance, m_groundMask, QueryTriggerInteraction.Ignore)
-            ? hit.point
-            : origin + Vector3.down * m_groundProbeDistance;
+        if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit,
+                m_groundProbeDistance, m_groundMask, QueryTriggerInteraction.Ignore))
+        {
+            grounded = true;
+            return hit.point;
+        }
+
+        grounded = false;
+        return origin + Vector3.down * m_groundProbeDistance;
     }
 
     private void Update()
@@ -111,7 +120,7 @@ public class UfoCraft : NetworkBehaviour
         StretchBeam();
 
         // 위치는 서버만 민다. 나머지 피어는 NetworkTransform이 채운다.
-        if (!IsServerAuthority)
+        if (!HasServerAuthority)
             return;
 
         // 흔들림을 뺀 기준 높이에서 옮긴 뒤 새 흔들림을 얹는다 — 진폭이 더해진 채로 수렴하면
@@ -152,13 +161,17 @@ public class UfoCraft : NetworkBehaviour
         if (m_beamPivot == null)
             return;
 
-        float length = Mathf.Max(0.1f, transform.position.y - BeamGroundPoint().y);
+        Vector3 groundPoint = BeamGroundPoint(out bool grounded);
+
+        // 지면을 못 찾았다면(맵 밖·허공 위) 판정은 그대로 폴백 지점을 쓰되(그 자리엔 아무도 없다),
+        // 시각 기둥은 200m짜리로 늘리는 대신 접어 둔다 — 허공에 뜬 긴 기둥이 눈에 띄지 않게.
+        float length = grounded ? Mathf.Max(0.1f, transform.position.y - groundPoint.y) : 0f;
         float diameter = m_beamRadius * 2f;
         m_beamPivot.localScale = new Vector3(diameter, length * 0.5f, diameter);
     }
 
     // 씬 배치물이라 자기 Update가 스스로 돈다 — 서버 권한을 직접 게이트한다 (AbductionEvent와 같은 패턴)
-    private bool IsServerAuthority =>
+    private bool HasServerAuthority =>
         NetworkManager.Singleton == null
         || !NetworkManager.Singleton.IsListening
         || NetworkManager.Singleton.IsServer;
