@@ -286,11 +286,7 @@ public class PlayerSpectateCamera : MonoBehaviour
     /// <summary>피벗 고정을 놓는다 — 부활 등으로 자기 몸을 다시 돌 수 있게 됐을 때. (#775)</summary>
     public void ClearPivotOverride() => m_hasPivotOverride = false;
 
-    /// <summary>
-    /// 관전 대상을 곧장 살아있는 동료로 돌린다 — 없으면 그대로 내 시체(피벗 고정) 슬롯에 남는다. (#819)
-    /// <see cref="CycleTarget"/>과 달리 <c>m_active</c> 게이트를 보지 않는다 — 이 호출은 관전 진입과
-    /// 같은 프레임에(피벗 고정 직후) 올 수 있는데, 그 시점엔 아직 PlayerLook이 관전을 켜기 전이다.
-    /// </summary>
+    /// <summary>관전 대상을 곧장 살아있는 동료로 돌린다 — 없으면 내 시체(피벗 고정) 슬롯에 남는다. (#819)</summary>
     public void SpectateTeammateIfAny()
     {
         RebuildRing();

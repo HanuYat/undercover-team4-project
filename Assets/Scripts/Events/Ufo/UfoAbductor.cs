@@ -35,7 +35,7 @@ public class UfoAbductor : MonoBehaviour
     [Header("빔 판정")]
     [Tooltip("빔 안에 이만큼(초) 머무르면 빨려 올라간다")]
     [Min(0.1f)]
-    [SerializeField] private float m_captureSeconds = 1.5f; // 3초는 일부러 서 있지 않으면 안 걸릴 만큼 관대했다 (팀 피드백)
+    [SerializeField] private float m_captureSeconds = 1.5f;
 
     [Tooltip("빔에서 벗어났을 때 누적이 식는 속도 배율 — 1이면 머문 만큼 그대로 되돌아간다. 클수록 도망이 쉽다")]
     [Min(0f)]
@@ -231,10 +231,6 @@ public class UfoAbductor : MonoBehaviour
 
     /// <summary>
     /// 흡입 완료 — 라운드 아웃을 확정한다 (팀 확정 2026-08-25, 납치와 같은 결말).
-    ///
-    /// 시점은 곧장 살아있는 동료에게 넘긴다(없으면 기체 위치가 폴백) — 1인칭 그대로 기체 안으로
-    /// 들어가면 화면이 기체 내부로 덮이고, 지상으로 빼면 방금 하늘로 빨려 올라간 시점이 바닥으로
-    /// 뚝 떨어져 보였다(팀 피드백). 기체 근처 피벗은 동료가 아무도 없을 때의 안전망일 뿐이다.
     /// 몸이 회수 불가능하다는 표시(<c>BodyLost</c>)까지 그쪽 경로가 함께 들고,
     /// <see cref="PlayerRagdoll"/>이 그 표시를 보고 몸을 감춘다 — 상공에 시체가 걸리지 않게.
     /// </summary>

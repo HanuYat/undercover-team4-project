@@ -70,10 +70,6 @@ public class PlayerPenaltyView : NetworkBehaviour
     /// 고정 자체가 <b>관전 진입 신호</b>이기도 하다 — 그래서 사망 확정이 아니라 <b>하강을 시작하기
     /// 전에</b> 부른다(PlayerLook이 이 값을 보고 시점을 지상 3인칭으로 뺀다). 무력화가 풀리면 그쪽이 놓는다.
     /// </summary>
-    /// <param name="cycleToTeammate">참이면 피벗 고정과 동시에 살아있는 동료가 있는 쪽으로 곧장
-    /// 넘긴다(없으면 그대로 피벗 고정 자리에 남는다) — UFO 흡입(#819) 전용. 몸이 사라진 방향(기체 쪽)을
-    /// 보여주는 것보다 동료 시점이 낫다는 팀 판단. 맨홀 납치(#775)는 이 옵션 없이 기존대로 쓴다 —
-    /// 결말은 같아도 이 연출 선택은 UFO만 바꾸기로 했다.</param>
     public void SetSpectatePivot(Vector3 worldPosition, bool cycleToTeammate = false)
     {
         if (IsSpawned)

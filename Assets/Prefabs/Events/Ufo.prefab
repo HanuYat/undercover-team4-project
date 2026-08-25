@@ -81,7 +81,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 0
+  GlobalObjectIdHash: 243902025
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -178,7 +178,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4a108895143608a47b3664667e561a87, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UfoAbductor
-  m_captureSeconds: 3
+  m_captureSeconds: 0.5
   m_dwellDecayScale: 1.5
   m_liftSpeed: 4
   m_swallowDistance: 2.5

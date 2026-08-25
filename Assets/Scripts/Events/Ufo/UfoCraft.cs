@@ -37,7 +37,6 @@ public class UfoCraft : NetworkBehaviour
     [Min(1f)]
     [SerializeField] private float m_groundProbeDistance = 200f;
 
-    // 레이 경로의 히트 버퍼 — 가로등 같은 얇은 소품에 막히지 않고 가장 먼(=가장 낮은) 지면을 찾는 데 쓴다.
     private static readonly RaycastHit[] s_groundHitBuffer = new RaycastHit[16];
 
     [Header("배회")]
@@ -104,8 +103,6 @@ public class UfoCraft : NetworkBehaviour
     {
         Vector3 origin = transform.position;
 
-        // 첫 히트가 아니라 <b>가장 먼(=가장 낮은) 히트</b>를 지면으로 본다 — 가로등 같은 얇은 소품이
-        // 먼저 걸리면 빔이 그 위에서 뜬 채로 멈춰 보였다. 진짜 지면은 대개 그 아래에 있다.
         int count = Physics.RaycastNonAlloc(
             origin, Vector3.down, s_groundHitBuffer, m_groundProbeDistance,
             m_groundMask, QueryTriggerInteraction.Ignore);
@@ -144,9 +141,7 @@ public class UfoCraft : NetworkBehaviour
         Vector3 position = transform.position;
         position.y -= BobOffset();
 
-        // 세워 둔 동안에는 목적지도 새로 고르지 않는다 — 풀리는 순간 가던 곳으로 이어 간다.
-        // 흔들림도 함께 멈춘다 — 안 그러면 흡입 중에 빔 길이가 흔들림 폭만큼 매 프레임 펄스쳐
-        // "빔이 위로 솟는" 것처럼 보였다(#819, 팀 피드백). 세운 동안은 높이도 고정이 맞다.
+        // 세워 둔 동안에는 목적지도 새로 고르지 않는다 — 풀리는 순간 가던 곳으로 이어 간다. 흔들림도 함께 멈춘다.
         if (!m_held)
         {
             position = Vector3.MoveTowards(position, m_destination, m_roamSpeed * Time.deltaTime);
