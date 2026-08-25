@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.AI;
 
 /// <summary>
 /// UFO 흡입 (#819) — 상공의 UFO가 지면에 빔을 비추고, <b>그 안에 일정 시간 머무른</b> 현장 플레이어를
@@ -24,6 +25,9 @@ using UnityEngine;
 /// 있다) 오검거 호송·납치와 같은 경로를 탄다 — <see cref="PlayerPenaltyView.StartTowedBy"/>가 오너에게
 /// "이 앵커를 따라가라"고 지시하고, 서버는 앵커(= UFO)를 올리기만 한다.
 ///
+/// <b>씬 배선이 없어도 돈다</b> — 빔 지점을 배선하지 않으면 현장 플레이어 주변의 NavMesh 위에서 고른다.
+/// 씬마다 지점을 심어야 하면 맵이 늘 때마다 빠뜨린 곳이 생기고, 빠뜨린 티도 안 난다(조용히 발동하지 않는다).
+///
 /// <b>이벤트 컴포넌트는 매니저와 같은 오브젝트에 둔다</b> — <see cref="SuddenEventManager"/>가 자식을
 /// 훑지 않는다. 다른 이벤트와 같은 관례다.
 /// </summary>
@@ -42,11 +46,25 @@ public class UfoAbductionEvent : MonoBehaviour, ISuddenEvent
     [SerializeField] private float m_altitude = 25f;
 
     [Header("빔 지점")]
-    [Tooltip("빔을 비출 후보 지점 — 무작위로 고른다. 지점의 높이가 곧 빔이 닿는 지면이다. 비우면 발동하지 않는다")]
+    [Tooltip("비추고 싶은 자리를 정해 두고 싶을 때만 채운다 — 비우면 현장 플레이어 주변 NavMesh에서 고른다")]
     [SerializeField] private Transform[] m_beamPoints;
 
+    [Tooltip("자동으로 고를 때, 무작위로 뽑은 현장 플레이어에서 이 범위(m) 안을 비춘다")]
+    [Min(0f)]
+    [SerializeField] private float m_beamDistanceMin = 8f;
+
+    [SerializeField] private float m_beamDistanceMax = 30f;
+
+    [Tooltip("후보 지점에서 이 거리(m) 안에 NavMesh가 없으면 버린다 — 지붕·허공을 비추지 않게")]
+    [Min(0.1f)]
+    [SerializeField] private float m_navSampleMaxDistance = 4f;
+
+    [Tooltip("쓸 만한 지점을 찾는 최대 시도 횟수")]
+    [Min(1)]
+    [SerializeField] private int m_maxPickAttempts = 8;
+
     [Header("빔")]
-    [Tooltip("빔 반경(m) — 이 안에 서 있으면 누적이 찬다")]
+    [Tooltip("빔 반경(m) — 이 안에 서 있으면 누적이 찬다. 보이는 굵기도 이 값으로 맞춰진다")]
     [Min(0.5f)]
     [SerializeField] private float m_beamRadius = 3f;
 
@@ -80,7 +98,7 @@ public class UfoAbductionEvent : MonoBehaviour, ISuddenEvent
     [Min(5f)]
     [SerializeField] private float m_maxLifetimeSeconds = 90f;
 
-    [Tooltip("떠날 때 이만큼(m) 더 올라간 뒤 사라진다")]
+    [Tooltip("등장·이탈 고도(m) — 이만큼 위에서 내려오고 이만큼 위로 올라가 사라진다")]
     [Min(1f)]
     [SerializeField] private float m_departAltitude = 60f;
 
@@ -96,7 +114,8 @@ public class UfoAbductionEvent : MonoBehaviour, ISuddenEvent
     private EPhase m_phase;
     private float m_deadline;      // 수명 마감 시각
     private float m_phaseDeadline; // 지금 국면의 마감 시각 (빔 유지·흡입 상한)
-    private Transform m_beamPoint; // 지금 비추는 지점 — 빔이 닿는 지면 높이의 출처
+    private Vector3 m_beamGround;  // 지금 비추는 지면 지점
+    private Transform m_wiredPoint; // 배선 지점을 쓸 때의 직전 선택 — 같은 자리를 연달아 고르지 않으려고 기억한다
     private Transform m_victim;
 
     // 빔 안에 머무른 시간 — 벗어나면 식는다. 0까지 식은 항목은 버린다.
@@ -111,41 +130,39 @@ public class UfoAbductionEvent : MonoBehaviour, ISuddenEvent
     // 하늘에 뜨는 물건이라 어차피 보인다 — 알림을 참는 이유가 없다.
     public bool AnnounceOnBegin => true;
 
-    // 문구 키는 아직 없다 — 비워 두면 매니저가 DisplayName을 일반 포맷에 끼워 넣는다.
-    // 전용 키를 만들 때 여기에 적을 것 (조사 문제는 ISuddenEvent 주석 참고).
+    // 전용 문구 키는 아직 없다 — 비워 두면 매니저가 DisplayName을 일반 포맷에 끼워 넣는다.
+    // 조사가 어색하면 여기에 키를 적을 것 (근거는 ISuddenEvent 주석).
     public string NoticeKey => null;
 
-    public bool CanTrigger() => m_ufoPrefab != null
-        && HasBeamPoint()
-        && SuddenEventUtil.FindRandomFieldPlayer() != null;
+    public bool CanTrigger() =>
+        m_ufoPrefab != null && SuddenEventUtil.FindRandomFieldPlayer() != null;
 
     public void ServerBegin()
     {
-        if (m_ufoPrefab == null || !HasBeamPoint())
+        if (m_ufoPrefab == null)
         {
-            Debug.LogWarning($"{nameof(UfoAbductionEvent)}: 기체 프리팹 또는 빔 지점이 배선되지 않아 발동하지 않는다 (#819)", this);
+            Debug.LogWarning($"{nameof(UfoAbductionEvent)}: 기체 프리팹이 배선되지 않아 발동하지 않는다 (#819)", this);
             return;
         }
 
-        Transform point = PickBeamPoint();
-        if (point == null)
-            return;
+        if (!TryPickBeamGround(out Vector3 ground))
+            return; // 쓸 만한 지점을 못 찾았다 — 이번엔 건너뛴다 (IsActive=false 유지)
 
-        // 첫 지점 위에 바로 세우지 않고 떠날 고도에서 내려온다 — 눈앞에 솟아나는 그림을 피한다
-        Vector3 entry = point.position + Vector3.up * m_departAltitude;
+        // 지점 위에 바로 세우지 않고 더 높은 곳에서 내려온다 — 눈앞에 솟아나는 그림을 피한다
+        Vector3 entry = ground + Vector3.up * m_departAltitude;
         m_craft = Instantiate(m_ufoPrefab, entry, Quaternion.identity);
 
         if (SuddenEventUtil.IsNetworkSessionActive)
             m_craft.GetComponent<NetworkObject>().Spawn();
 
-        m_beamPoint = point;
-        m_craft.ServerFlyTo(point.position + Vector3.up * m_altitude);
+        m_beamGround = ground;
+        m_craft.ServerFlyTo(ground + Vector3.up * m_altitude);
 
         m_phase = EPhase.Roaming;
         m_deadline = Time.time + m_maxLifetimeSeconds;
         m_dwell.Clear();
 
-        Debug.Log($"[UFO] 발동 — 첫 빔 지점 {point.name}");
+        Debug.Log($"[UFO] 발동 — 첫 빔 지점 {ground.ToString("F1")}");
     }
 
     public void ServerTick()
@@ -204,7 +221,7 @@ public class UfoAbductionEvent : MonoBehaviour, ISuddenEvent
             return;
 
         m_craft.ServerHold();
-        m_craft.ServerSetBeam(true);
+        m_craft.ServerSetBeam(true, m_beamRadius, m_beamGround.y);
         m_dwell.Clear(); // 지점을 옮겼으면 앞 지점의 누적은 남기지 않는다
         m_phase = EPhase.Beaming;
         m_phaseDeadline = Time.time + m_beamHoldSeconds;
@@ -222,35 +239,29 @@ public class UfoAbductionEvent : MonoBehaviour, ISuddenEvent
         if (Time.time < m_phaseDeadline)
             return;
 
-        // 아무도 안 걸렸다 — 빔을 접고 다음 지점으로. 수명이 다했으면 그대로 떠난다.
+        // 아무도 안 걸렸다 — 빔을 접고 다음 지점으로. 수명이 다했거나 지점을 못 찾으면 떠난다.
         m_craft.ServerSetBeam(false);
 
-        if (Time.time >= m_deadline)
+        if (Time.time >= m_deadline || !TryPickBeamGround(out Vector3 next))
         {
             BeginLeaving();
             return;
         }
 
-        Transform next = PickBeamPoint();
-        if (next == null)
-        {
-            BeginLeaving();
-            return;
-        }
-
-        m_beamPoint = next;
-        m_craft.ServerFlyTo(next.position + Vector3.up * m_altitude);
+        m_beamGround = next;
+        m_craft.ServerFlyTo(next + Vector3.up * m_altitude);
         m_phase = EPhase.Roaming;
     }
 
     /// <summary>
     /// 빔 안의 체류 시간을 갱신하고, 임계를 넘은 사람을 돌려준다 — 없으면 null.
-    /// <b>벗어난 사람도 지운 것이 아니라 식힌다</b>: 스쳐 지나가는 것만으로 초기화되면 빔 가장자리에서
+    /// <b>벗어난 사람도 지우는 것이 아니라 식힌다</b>: 스쳐 지나가는 것만으로 초기화되면 빔 가장자리에서
     /// 들락거리는 것이 최적 행동이 되고, 반대로 영영 남으면 한참 뒤 다시 밟았을 때 즉사한다.
     /// </summary>
     private Transform TickDwell(float deltaTime)
     {
-        Vector3 ground = m_craft.BeamGroundPoint(m_beamPoint != null ? m_beamPoint.position.y : m_craft.transform.position.y);
+        Vector3 ground = new Vector3(
+            m_craft.transform.position.x, m_beamGround.y, m_craft.transform.position.z);
         SuddenEventUtil.CollectFieldPlayers(ground, m_beamRadius, m_inBeam);
 
         Transform caught = null;
@@ -361,8 +372,8 @@ public class UfoAbductionEvent : MonoBehaviour, ISuddenEvent
     private void Swallow(Transform victim)
     {
         PlayerPenaltyView view = victim.GetComponent<PlayerPenaltyView>();
-        if (view != null && m_beamPoint != null)
-            view.SetSpectatePivot(m_beamPoint.position);
+        if (view != null)
+            view.SetSpectatePivot(m_beamGround);
 
         PlayerIncapacitation incap = victim.GetComponent<PlayerIncapacitation>();
         if (incap != null)
@@ -412,6 +423,69 @@ public class UfoAbductionEvent : MonoBehaviour, ISuddenEvent
         Finish();
     }
 
+    // ---- 지점 고르기 ----
+
+    /// <summary>
+    /// 다음에 비출 지면 지점 — 배선된 지점이 있으면 그중에서, 없으면 현장 플레이어 주변 NavMesh에서 고른다.
+    ///
+    /// 자동으로 고를 때 <b>맵 전체에서 균등하게 뽑지 않는 이유</b>는 아무도 없는 골목만 비추다 끝나기
+    /// 때문이다. 사람이 있는 동네를 고르되 <b>누구를 겨누지는 않는다</b> — 반경이 넓어 표적이 그 안에
+    /// 들어올지는 운이다. 숨은 지점을 요구하지도 않는다: 빔은 보여야 피할 수 있다.
+    /// </summary>
+    private bool TryPickBeamGround(out Vector3 ground)
+    {
+        Transform wired = PickWiredPoint();
+        if (wired != null)
+        {
+            m_wiredPoint = wired;
+            ground = wired.position;
+            return true;
+        }
+
+        Transform player = SuddenEventUtil.FindRandomFieldPlayer();
+        if (player == null)
+        {
+            ground = default;
+            return false;
+        }
+
+        return SuddenEventUtil.TryFindSpawnPositionNear(
+            player.position,
+            m_beamDistanceMin,
+            m_beamDistanceMax,
+            m_navSampleMaxDistance,
+            m_maxPickAttempts,
+            NavMesh.AllAreas,
+            out ground,
+            hiddenFromPlayers: false
+        );
+    }
+
+    // 미배선 칸이 섞여 있어도 배선된 것 중에서만 고른다 — 배열 크기만 늘려 둔 상태가 흔하다.
+    // 직전에 쓴 지점은 후보에서 뺀다: 같은 자리에 다시 켜면 옮겨 다니는 그림이 되지 않는다.
+    private Transform PickWiredPoint()
+    {
+        if (m_beamPoints == null)
+            return null;
+
+        Transform picked = null;
+        int seen = 0;
+
+        for (int i = 0; i < m_beamPoints.Length; i++)
+        {
+            Transform candidate = m_beamPoints[i];
+            if (candidate == null || candidate == m_wiredPoint)
+                continue;
+
+            seen++;
+            if (Random.Range(0, seen) == 0)
+                picked = candidate;
+        }
+
+        // 배선된 지점이 하나뿐이면 그 자리를 다시 쓴다 — 후보가 없다고 자동 선택으로 흘리지 않는다
+        return picked != null ? picked : m_wiredPoint;
+    }
+
     // ---- 보조 ----
 
     // 흡입이 확정되기 전에 정리되면 몸을 풀어 준다 — 그대로 두면 라운드가 끝날 때까지 굳는다
@@ -440,42 +514,7 @@ public class UfoAbductionEvent : MonoBehaviour, ISuddenEvent
     private void Finish()
     {
         m_phase = EPhase.Roaming;
-        m_beamPoint = null;
         m_victim = null;
         m_dwell.Clear();
-    }
-
-    private bool HasBeamPoint()
-    {
-        if (m_beamPoints == null)
-            return false;
-
-        for (int i = 0; i < m_beamPoints.Length; i++)
-            if (m_beamPoints[i] != null)
-                return true;
-
-        return false;
-    }
-
-    // 미배선 칸이 섞여 있어도 배선된 것 중에서만 고른다 — 인스펙터에서 배열 크기만 늘려 둔 상태가 흔하다.
-    // 지금 비추는 지점은 후보에서 뺀다: 같은 자리에 다시 켜면 옮겨 다니는 그림이 되지 않는다.
-    private Transform PickBeamPoint()
-    {
-        Transform picked = null;
-        int seen = 0;
-
-        for (int i = 0; i < m_beamPoints.Length; i++)
-        {
-            Transform candidate = m_beamPoints[i];
-            if (candidate == null || candidate == m_beamPoint)
-                continue;
-
-            seen++;
-            if (Random.Range(0, seen) == 0)
-                picked = candidate;
-        }
-
-        // 배선된 지점이 하나뿐이면 그 자리를 다시 쓴다 — 후보가 없다고 이벤트를 접을 이유는 없다
-        return picked != null ? picked : m_beamPoint;
     }
 }

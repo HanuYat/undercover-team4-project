@@ -29,6 +29,7 @@ GameObject:
   - component: {fileID: 7089378905737564626}
   - component: {fileID: 3759178450178188696}
   - component: {fileID: 3941778138045511832}
+  - component: {fileID: 3392122129860735643}
   m_Layer: 0
   m_Name: SuddenEvents
   m_TagString: Untagged
@@ -116,6 +117,8 @@ MonoBehaviour:
   - component: {fileID: 2421280246905754952}
     enabled: 1
   - component: {fileID: 3941778138045511832}
+    enabled: 1
+  - component: {fileID: 3392122129860735643}
     enabled: 1
   m_weatherTable: {fileID: 0}
   m_clearPercentFallback: 50
@@ -500,3 +503,32 @@ MonoBehaviour:
   m_memberTable: {fileID: 11400000, guid: e993c7c812159444e8a3627a569ea582, type: 2}
   m_fallbackMemberCount: 3
   m_modelName: Character_Muscle_Male_01
+--- !u!114 &3392122129860735643
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498939978214492355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a108895143608a47b3664667e561a87, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UfoAbductionEvent
+  m_displayName: UFO
+  m_ufoPrefab: {fileID: 7660496493789269114, guid: 51fb62522e9970640aefda6bfa416527, type: 3}
+  m_altitude: 25
+  m_beamPoints: []
+  m_beamDistanceMin: 8
+  m_beamDistanceMax: 30
+  m_navSampleMaxDistance: 4
+  m_maxPickAttempts: 8
+  m_beamRadius: 3
+  m_captureSeconds: 2.5
+  m_dwellDecayScale: 1.5
+  m_beamHoldSeconds: 8
+  m_liftSpeed: 4
+  m_swallowDistance: 2.5
+  m_liftTimeoutSeconds: 15
+  m_maxLifetimeSeconds: 90
+  m_departAltitude: 60
