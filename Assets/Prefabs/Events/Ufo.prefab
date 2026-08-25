@@ -155,14 +155,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::UfoCraft
   ShowTopMostFoldoutHeaderGroup: 1
   m_beamPivot: {fileID: 8445936454080070591}
-  m_beamRadius: 3
+  m_beamRadius: 4
   m_groundMask:
     serializedVersion: 2
     m_Bits: 1
   m_groundProbeDistance: 200
   m_roamRadius: 90
   m_roamSpeed: 5
-  m_arriveDistance: 1.5
+  m_arriveDistance: 1
   m_spinDegreesPerSecond: 30
   m_bobAmplitude: 0.4
   m_bobPeriod: 3
@@ -178,8 +178,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4a108895143608a47b3664667e561a87, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UfoAbductor
-  m_captureSeconds: 0.5
-  m_dwellDecayScale: 1.5
+  m_captureSeconds: 0.1
+  m_dwellDecayScale: 0.2
   m_liftSpeed: 4
   m_swallowDistance: 2.5
   m_liftTimeoutSeconds: 15
