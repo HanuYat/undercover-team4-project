@@ -65,9 +65,17 @@ public class UfoCraft : NetworkBehaviour
     private Vector3 m_home;        // 씬에 놓인 자리 — 배회 반경의 중심
     private Vector3 m_destination; // 지금 향하는 곳 (흔들림을 뺀 기준 높이)
     private float m_bobPhase;
+    private bool m_held;           // 제자리 정지 — 빨아올리는 동안 판정부가 건다
 
     /// <summary>빔 반경 — 판정도 이 값을 쓴다.</summary>
     public float BeamRadius => m_beamRadius;
+
+    /// <summary>
+    /// 서버 전용 — 제자리에 세우거나 다시 배회시킨다. <b>빨아올리는 동안</b> 판정부가 건다:
+    /// 기체가 계속 날아가면 매달린 몸이 하늘을 가로질러 끌려가고, 빔도 발밑을 떠나
+    /// "저 기둥에 잡혔다"가 화면에서 성립하지 않는다. 흔들림·회전은 계속한다.
+    /// </summary>
+    public void ServerSetHold(bool held) => m_held = held;
 
     private void Awake()
     {
@@ -110,12 +118,17 @@ public class UfoCraft : NetworkBehaviour
         // 상하로 떨면서 영영 도착하지 못한다
         Vector3 position = transform.position;
         position.y -= BobOffset();
-        position = Vector3.MoveTowards(position, m_destination, m_roamSpeed * Time.deltaTime);
 
-        Vector3 flat = m_destination - position;
-        flat.y = 0f;
-        if (flat.sqrMagnitude <= m_arriveDistance * m_arriveDistance)
-            PickDestination();
+        // 세워 둔 동안에는 목적지도 새로 고르지 않는다 — 풀리는 순간 가던 곳으로 이어 간다
+        if (!m_held)
+        {
+            position = Vector3.MoveTowards(position, m_destination, m_roamSpeed * Time.deltaTime);
+
+            Vector3 flat = m_destination - position;
+            flat.y = 0f;
+            if (flat.sqrMagnitude <= m_arriveDistance * m_arriveDistance)
+                PickDestination();
+        }
 
         m_bobPhase += m_bobPeriod > 0f ? Time.deltaTime * (Mathf.PI * 2f / m_bobPeriod) : 0f;
         position.y += BobOffset();
