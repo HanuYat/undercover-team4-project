@@ -85,6 +85,14 @@ MonoBehaviour:
     m_Key: Item.Description.AreaScanner
     m_Metadata:
       m_Items: []
+  - m_Id: 816000000000001
+    m_Key: Item.Name.ToyHammer
+    m_Metadata:
+      m_Items: []
+  - m_Id: 816000000000002
+    m_Key: Item.Description.ToyHammer
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
