@@ -43,6 +43,9 @@ public class NpcChaseState : NpcStateBase
     private readonly ChaseTargeting m_targeting;
     private readonly ChaseAmbush m_ambush;
 
+    // SetChaseDestination의 동기 사전 판정용 - 재사용해 매 재탐색마다 새로 할당하지 않는다.
+    private readonly NavMeshPath m_pathBuffer = new NavMeshPath();
+
     private float m_baseSpeed; // 진입 전 원래 속도 — 사냥 모드 속도이자 Exit 복원값
     private float m_targetAcquiredTime; // 현재 타겟 확보 시각 — 가속 기준점
     private float m_nextCatchNotifyTime;
@@ -85,6 +88,9 @@ public class NpcChaseState : NpcStateBase
         m_steering.CaptureBaseline(m_owner.Agent);
         m_steering.Apply(m_owner.Agent, true);
 
+        // 몸 방향은 여기서부터 TickFacing이 매 틱 직접 돈다 — 근거는 그쪽 주석 (#829)
+        m_owner.Agent.updateRotation = false;
+
         m_owner.Agent.isStopped = false;
         m_owner.Agent.stoppingDistance = 0f;
     }
@@ -99,6 +105,7 @@ public class NpcChaseState : NpcStateBase
         m_owner.Agent.stoppingDistance = 0f; // 수렴 페이즈가 올린 정지 거리 원복 — 배회 복귀 시 목적지 앞 멈춤 방지
 
         m_steering.Apply(m_owner.Agent, false); // 조향 원복 — 추격을 벗어난 시민이 팽이처럼 도는 것을 막는다
+        m_owner.Agent.updateRotation = true; // 기본 회전으로 복귀 — 추격을 벗어난 상태들은 그걸로 충분하다 (#829)
 
         if (m_owner.Agent.isOnNavMesh)
         {
@@ -211,6 +218,8 @@ public class NpcChaseState : NpcStateBase
         if (m_owner.Repath.Due(NpcRepathChannel.Repath))
             SetChaseDestination(target, distance, now);
 
+        m_steering.TickFacing(m_owner.Agent, m_owner.transform);
+
         // ---- 도달 불가: 문 뒤·다른 층이다 (#568). 스냅으로도 안 붙은 채 시간이 흘렀다.
         // 오검거는 표적을 놓고 다른 사람을 찾는다 — 벽면을 따라 좌우로 미끄러지며 비비지 않는다.
         // 납치(#371)는 갈아타지 않는 것이 이벤트의 유일한 규칙이라 계속 다가간 채로 둔다.
@@ -256,13 +265,12 @@ public class NpcChaseState : NpcStateBase
     {
         Vector3 aim = m_steering.PredictAimPoint(target, distance, m_owner.Agent.speed, now);
 
-        // pathPending 중에는 pathStatus가 직전 경로의 낡은 값이라 함께 가드한다.
-        bool partial =
-            !m_owner.Agent.pathPending
-            && m_owner.Agent.pathStatus != NavMeshPathStatus.PathComplete;
+        // Agent.pathStatus는 지난 주기 결과라 한 주기 뒤처진다 — 목적지 자체를 미리 판정한다. (#829)
+        bool complete =
+            NavMesh.CalculatePath(m_owner.transform.position, aim, m_owner.Agent.areaMask, m_pathBuffer)
+            && m_pathBuffer.status == NavMeshPathStatus.PathComplete;
 
-        // 부분 경로일 때만 샘플링하므로 정상 경로에서는 프로퍼티 읽기 두 번이 전부다.
-        if (partial)
+        if (!complete)
         {
             aim = target.position;
 
@@ -278,7 +286,7 @@ public class NpcChaseState : NpcStateBase
         }
 
         m_owner.Agent.SetDestination(aim);
-        m_reachability.Report(partial, now); // 스냅이 먹었으면 다음 주기에 정상 경로로 돌아와 누적이 풀린다
+        m_reachability.Report(!complete, now); // 스냅이 먹었으면 다음 주기에 정상 경로로 돌아와 누적이 풀린다
     }
 
     /// <summary>
@@ -298,6 +306,8 @@ public class NpcChaseState : NpcStateBase
 
         if (m_owner.Repath.Due(NpcRepathChannel.Repath))
             SetAmbushDestination(m_ambush.ApproachPoint(target, position));
+
+        m_steering.TickFacing(m_owner.Agent, m_owner.transform);
 
         if (behind && distance <= m_config.CatchDistance && now >= m_nextCatchNotifyTime)
         {
@@ -327,6 +337,8 @@ public class NpcChaseState : NpcStateBase
 
         if (m_owner.Repath.Due(NpcRepathChannel.Repath))
             m_owner.Agent.SetDestination(converge.position);
+
+        m_steering.TickFacing(m_owner.Agent, m_owner.transform);
     }
 
     // 격퇴 도주 — 격퇴한 플레이어 반대 방향으로 달아난다. 같은 격퇴당 한 번만 재추격 쿨다운을 등록한다.
@@ -342,6 +354,7 @@ public class NpcChaseState : NpcStateBase
         m_owner.Agent.speed = m_config.MaxSpeed;
         m_owner.Agent.stoppingDistance = 0f;
         m_steering.Apply(m_owner.Agent, false); // 격퇴 도주는 이 이슈 범위 밖 — 기존 조향 그대로 둔다
+        m_steering.TickFacing(m_owner.Agent, m_owner.transform);
 
         // 격퇴 대상을 먼저 본다 — 없으면 게이트를 소모하지 않는다
         if (m_owner.Penalty.ChaseRepelBy == null || !m_owner.Repath.Due(NpcRepathChannel.Repath))
@@ -369,6 +382,7 @@ public class NpcChaseState : NpcStateBase
         m_owner.Agent.speed = m_baseSpeed;
         m_owner.Agent.stoppingDistance = 0f;
         m_steering.Apply(m_owner.Agent, false); // 배회는 시민처럼 걷는 구간 — 급선회가 어울리지 않는다
+        m_steering.TickFacing(m_owner.Agent, m_owner.transform);
 
         if (!m_hunting)
         {

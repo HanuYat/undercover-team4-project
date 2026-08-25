@@ -80,6 +80,21 @@ public class ChaseSteering
         return current + velocity * lead;
     }
 
+    /// <summary>몸 방향을 실제 이동 속도 쪽으로 돌린다 — 재탐색 우회 중 표적 쪽을 보는 문제 수정. (#829)</summary>
+    public void TickFacing(NavMeshAgent agent, Transform transform)
+    {
+        Vector3 velocity = agent.velocity;
+        velocity.y = 0f;
+
+        // 멈춰 서 있으면(수렴 도착·목적지 코앞) 방향을 바꾸지 않는다 — 마지막으로 보던 쪽을 유지한다.
+        if (velocity.sqrMagnitude < 0.01f)
+            return;
+
+        Quaternion target = Quaternion.LookRotation(velocity);
+        transform.rotation = Quaternion.RotateTowards(
+            transform.rotation, target, agent.angularSpeed * Time.deltaTime);
+    }
+
     /// <summary>리드 표본을 버린다 — 표적이 바뀌거나 상태에 새로 진입할 때.</summary>
     public void ClearLeadSample()
     {
