@@ -87,6 +87,8 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 12729386766229504
     m_Localized: Restores a certain amount of health.
+    m_Metadata:
+      m_Items: []
   - m_Id: 12488576126152704
     m_Localized: Area Scanner
     m_Metadata:
@@ -102,6 +104,14 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 816000000000002
     m_Localized: Normally just a light tap, but on a very rare roll it flattens the target completely on the spot.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12800064385781760
+    m_Localized: Home Run Baton
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12800064440307712
+    m_Localized: Swing it to launch a target flying instead of dealing damage.
     m_Metadata:
       m_Items: []
   references:

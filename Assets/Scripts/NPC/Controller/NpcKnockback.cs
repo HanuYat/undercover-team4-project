@@ -101,6 +101,48 @@ public class NpcKnockback : NetworkBehaviour
         m_knockbackVelocity = Vector3.zero;
     }
 
+    /// <summary>
+    /// 래그돌인 채로 날려보낸다 — 홈런 진압봉(#815). 서버(또는 오프라인) 전용.
+    ///
+    /// <b>위 <see cref="ServerApplyKnockback"/>과는 다른 문이다.</b> 그쪽은 스턴 오버레이를
+    /// <see cref="NpcStun.ClearStunOverlay"/>로 걷어내고 <see cref="NpcState.Stunned"/> 전이로
+    /// 뻣뻣한 포물선 비행을 만드는데, <see cref="NpcRagdoll.WantsRagdoll"/>이 그 오버레이를 보고
+    /// 래그돌 진입을 판단하므로 오버레이를 걷으면 몸이 물리로 넘어가지 않는다. 그래서 여기서는
+    /// 반대로 오버레이를 <b>켠 채</b> <see cref="NpcRagdoll.EnterRagdoll"/>을 직접 불러 뼈에 임펄스를
+    /// 준다 — 폭발이 시체를 날릴 때(<see cref="BombBlast"/>)와 같은 문이고, 대상이 산 사람일 뿐이다.
+    ///
+    /// <b>순서가 사양이다.</b> 오버레이를 먼저 켜야 한다 — 뒤집으면 다음 <c>NpcRagdoll.Update</c>의
+    /// 폴링이 <c>WantsRagdoll() == false</c>를 보고 몸을 곧바로 애니메이터에 되돌린다.
+    /// </summary>
+    /// <param name="impulse">뼈에 줄 초기 속도(m/s) — 수평 성분이 타격 방향, 수직 성분이 발사각이다.</param>
+    /// <param name="stunSeconds">착지 후까지 누워 있는 시간(초). 비행 시간보다 짧으면 공중에서
+    /// 일어나는 기상 사고가 난다 — 호출부(<c>HomeRunBaton</c>)가 발사 세기에 맞춰 넉넉히 잡는다.</param>
+    /// <param name="threat">깨어나면 이 대상에게서 도주한다. null 허용.</param>
+    public void ServerLaunchRagdoll(Vector3 impulse, float stunSeconds, Transform threat)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+        if (impulse.sqrMagnitude < 0.01f)
+            return;
+
+        NpcState state = m_owner.StateMachine.CurrentState;
+        if (state == NpcState.Dead || state == NpcState.Jailed || state == NpcState.Intruding)
+            return;
+
+        // 포물선 비행 중이었다면 끊는다 — 두 넉백이 같은 프레임에 transform.position을 다투면 안 된다.
+        if (m_knockbackActive)
+            ServerAbortFlight();
+
+        // 이미 누워 있는 대상을 다시 후려치는 것이 이 아이템의 주 용도다 — 재무장해 타이머를 리셋한다.
+        if (m_owner.Stun.HasStunOverlay)
+            m_owner.Stun.ClearStunOverlay();
+        m_owner.Stun.EnterStunned(threat, stunSeconds);
+
+        // 정착해 잠들어 있었을 수 있다 — WakeCorpse는 래그돌 상태가 아니면 무동작이라 먼저 불러도 안전하다.
+        m_owner.Ragdoll?.WakeCorpse();
+        m_owner.Ragdoll?.EnterRagdoll(impulse);
+    }
+
     // 포물선 비행 1프레임. 착지하면 NavMesh 위로 되돌리고 발사 시점에 정한 상태로 넘긴다.
     internal void Tick()
     {

@@ -4,10 +4,11 @@
 > "지금 무엇을 하는가"만 남기고, "왜 그렇게 됐나 / 무엇을 시도했다 되돌렸나 / 실측이 얼마였나"는
 > 전부 여기로 옮겼다. 코드를 고치기 전에 해당 항목을 찾아 읽을 것.
 >
-> **⚠ 이 파일은 두 번 크게 뒤집혔다.** 기억하고 있는 판본이 있다면 §2를 먼저 볼 것.
+> **⚠ 이 파일은 두 번 크게 뒤집혔고, 세 번째로 진입 사유가 늘었다.** 기억하고 있는 판본이 있다면 §2를 먼저 볼 것.
 > - **#571** — 사망 전용 모델을 분리해 리그가 두 벌이 됐다(그때 Animator를 끄지 않게 됐다)
 > - **#763 2단계** — **다시 한 벌로 합쳤다.** Animator를 도로 끈다. 모델 교체가 사라졌다
 > - **#759** — 캡슐 추종이 `Update`에서 `FixedUpdate`로 갔다 (§5)
+> - **#815** — 진입 사유가 `Die` 하나에서 `Die`·`Launched` 둘로 늘었다 (§1·§9)
 >
 > 관련 문서
 > - [ragdoll.md](ragdoll.md) — 래그돌 전반. 구조·불변식·셋업의 정본
@@ -15,6 +16,7 @@
 > - [npc-ragdoll.md](npc-ragdoll.md) — `NpcRagdoll`. 같은 문제를 서버 권위로 푼 쪽
 > - [759-ragdoll-slowmotion-handoff.md](759-ragdoll-slowmotion-handoff.md) — 슬로모션 원인 규명 정본
 > - [506-explosion-ragdoll.md](506-explosion-ragdoll.md) — 작업 기록(`§9-x`·`§10-x`가 가리키는 곳)
+> - [815-homerun-player-ragdoll.md](815-homerun-player-ragdoll.md) — 비행(`Launched`) 진입 근거·미검증 항목
 
 ---
 
@@ -30,9 +32,14 @@
 그래서 `NetworkBehaviour`가 아니고, 매니저도 아니라 App 파사드와 무관하다
 ([architecture.md](architecture.md) R1~R8 해당 없음).
 
-**진입 조건은 폭발이 아니라 사망이다.** 폭발·진압봉·납치는 모두 `Die`로 수렴하므로
+**진입 조건은 사망 하나였다가 #815로 둘이 됐다.** 폭발·(구)진압봉·납치는 모두 `Die`로 수렴하므로
 (`PlayerHealth.SetHp`, #524), 진입을 `Die` 하나로 잡으면 사망 경로가 몇 개든 전부 같은 래그돌을
 탄다. 폭발이 특별한 것은 **임펄스가 붙는다**는 점 하나뿐이다.
+
+**홈런 진압봉(#815)은 살아 있는 채로 태우는 첫 사유다.** `IncapacitationCause.Launched`가 그
+사유이고, `PollDeath`는 이제 `IsDead || IsLaunched`를 본다 — 사망은 부활 키트가 풀고, 비행은
+`Settle()`이 정착을 서버에 통보해 스스로 풀린다. 근거는
+[815-homerun-player-ragdoll.md](815-homerun-player-ragdoll.md).
 
 래그돌이 켜져 있는 동안 `PlayerAnimationDriver`는 `Down`을 내리지 못한다(`IsRagdollActive`를 보고
 참으로 붙든다) — 안 막으면 부활 블렌드 도중에 기상 모션이 먼저 시작된다.
@@ -325,6 +332,14 @@ NetworkVariable이라 도착 순서가 갈릴 수 있다** — RPC가 먼저 오
 ---
 
 ## 9. 부활은 죽음을 본 뒤에만 성립한다 (`§9-19`)
+
+> **#815 갱신** — 이 절의 "사망"은 이제 "래그돌 원인(사망 또는 비행)"으로 읽어야 한다. 필드 이름
+> (`m_sawDeathThisEpisode`·`m_awaitingDeathSeconds`)은 사망 전용이던 시절 그대로 남겨 뒀지만,
+> `PollDeath`가 보는 값은 `IsDead || IsLaunched`로 넓어졌고 로직은 원인을 가리지 않으므로 그대로
+> 유효하다. 상수 `k_deathSyncGraceSeconds`는 `k_causeSyncGraceSeconds`로 이름만 바뀌었다.
+> 비행 임펄스도 사망 임펄스(폭발)와 같은 순서 문제를 그대로 갖는다 — 상태는 NetworkVariable 폴링,
+> 임펄스는 RPC라 도착 순서가 갈릴 수 있다. 자세한 근거는
+> [815-homerun-player-ragdoll.md §3](815-homerun-player-ragdoll.md).
 
 ### 왜 폴링인가
 
