@@ -87,8 +87,13 @@ public class DeliveryCrate : NetworkBehaviour, IInteractable
     {
         m_opened = true;
         SpillItems();
+        PlayOpenSoundRpc();
         NetworkObject.Despawn(destroy: true);
     }
+
+    [Rpc(SendTo.Everyone)]
+    private void PlayOpenSoundRpc() =>
+        App.Sound?.PlaySfxAt(EAudioClip.CrateOpen, transform.position);
 
     private void SpillItems()
     {

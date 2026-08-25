@@ -68,6 +68,8 @@ public class DeliveryPad : MonoBehaviour
         if (drone != null)
             m_droneModel.SetActive(true);
 
+        App.Sound?.PlaySfxAt(EAudioClip.DroneApproach, startPosition);
+
         // 하강 — 드론이 상자를 매달고 내려온다.
         float elapsed = 0f;
         while (elapsed < landSeconds)
@@ -86,6 +88,7 @@ public class DeliveryPad : MonoBehaviour
         }
 
         crate.position = landedPosition;
+        App.Sound?.PlaySfxAt(EAudioClip.CrateLand, landedPosition);
 
         if (drone == null)
             return;
