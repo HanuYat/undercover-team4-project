@@ -155,6 +155,18 @@ public class PlayerSpawnManager : MonoBehaviour
         movement.ServerReposition(pos, rot);
     }
 
+    /// <summary>
+    /// 서버 전용 — 이미 스폰된 플레이어를 스폰 지점으로 되돌린다. 맵 이탈 복귀(<see cref="MapBoundary"/>)가 쓴다.
+    /// 씬 진입 재배치(<see cref="RepositionPlayer"/>)와 달리 라운드 도중이라 ServerTeleport를 쓴다 —
+    /// 재배치 회차를 올리면 이미 끝난 로딩 화면이 기다릴 대상이 되어 버린다(PlayerMovement 참고).
+    /// </summary>
+    public void ServerReturnToSpawn(PlayerMovement movement)
+    {
+        if (movement == null) return;
+        (Vector3 pos, Quaternion rot) = NextPose();
+        movement.ServerTeleport(pos, rot);
+    }
+
     private (Vector3, Quaternion) NextPose()
     {
         Vector3 basePos = m_spawnPoint != null ? m_spawnPoint.position : Vector3.zero;
