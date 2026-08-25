@@ -308,14 +308,38 @@ public class NpcResistState : NpcStateBase
             m_owner.Agent.SetDestination(target.position);
     }
 
-    /// <summary>표적을 향해 몸을 돌린다 — 정면 부채꼴 타격 판정의 기준 방향을 표적에 맞춘다. 서버(또는 오프라인) 전용. (#220)</summary>
+    // 실제로 걷는 중으로 볼 속도 임계값(m/s) — 이 위면 몸은 이동 방향을 본다. stoppingDistance로
+    // 감속을 시작하는 문턱보다 낮게 둬서, 사거리 안에 거의 다 왔을 때는 이미 표적 쪽으로 넘어간다.
+    private const float k_facingMoveSpeed = 0.5f;
+
+    /// <summary>
+    /// 표적을 향해 몸을 돌린다 — 정면 부채꼴 타격 판정의 기준 방향을 표적에 맞춘다. 서버(또는 오프라인) 전용. (#220)
+    ///
+    /// <b>실제로 이동 중이면 표적이 아니라 이동 방향을 본다</b> (#829). ChaseTarget이 잡는 목적지는
+    /// 표적 위치 그대로라 경로가 장애물을 우회할 때는 실제 이동이 표적 방향에서 벗어난다 — 그런데도
+    /// 몸이 계속 표적만 보면 발만 다른 쪽으로 가는 것처럼 보인다(NpcChaseState.ChaseSteering.TickFacing과
+    /// 같은 부류의 문제). 멈춰 서면(사거리 진입·스윙 준비) 그때부터는 표적을 직접 본다 — 정면 부채꼴
+    /// 판정이 표적 방향을 기준으로 삼기 때문에 여기서는 놓을 수 없다.
+    /// </summary>
     private void FaceTarget(Transform target)
     {
         if (target == null)
             return;
 
-        Vector3 to = target.position - m_owner.transform.position;
-        to.y = 0f; // 수평 회전(yaw)만 — NetworkTransform이 동기화하는 축과 일치 (SyncRotAngleY)
+        Vector3 velocity = m_owner.Agent.velocity;
+        velocity.y = 0f;
+
+        Vector3 to;
+        if (velocity.sqrMagnitude >= k_facingMoveSpeed * k_facingMoveSpeed)
+        {
+            to = velocity;
+        }
+        else
+        {
+            to = target.position - m_owner.transform.position;
+            to.y = 0f; // 수평 회전(yaw)만 — NetworkTransform이 동기화하는 축과 일치 (SyncRotAngleY)
+        }
+
         if (to.sqrMagnitude < 0.0001f)
             return;
 
