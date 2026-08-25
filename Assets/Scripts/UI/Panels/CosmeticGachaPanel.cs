@@ -60,6 +60,13 @@ public class CosmeticGachaPanel : PanelBase
     [Tooltip("이미 가진 것이었을 때 — {0}에 이름이 들어간다")]
     [SerializeField] private LocalizedString m_duplicateFormat;
 
+    [Header("소리")]
+    [Tooltip("릴이 도는 동안 나는 소리 — 멈추는 순간 끊긴다")]
+    [SerializeField] private EAudioClip m_spinSound = EAudioClip.GachaSpin;
+
+    [Tooltip("당첨이 가운데 멈춘 순간 나는 소리")]
+    [SerializeField] private EAudioClip m_revealSound = EAudioClip.GachaReveal;
+
     [Header("색")]
     [SerializeField] private Color m_frameIdle = new Color(1f, 1f, 1f, 0.35f);
     [SerializeField] private Color m_frameWin = new Color(1f, 0.85f, 0.2f, 1f);
@@ -75,6 +82,9 @@ public class CosmeticGachaPanel : PanelBase
 
     private bool m_spinning;
 
+    // 릴 소리 전용 소스 — 효과음 풀은 오래된 것을 뺏어 가므로 붙잡고 있다 끊을 수 없다
+    private AudioSource m_spinSource;
+
     /// <summary>릴이 도는 중인가 — 자판기가 겹쳐 돌리지 않으려고 본다.</summary>
     public bool IsSpinning => m_spinning;
 
@@ -85,6 +95,17 @@ public class CosmeticGachaPanel : PanelBase
     // 시퀀스 범위를 넘고, 짝수면 가운데 칸이 테두리와 반 칸 어긋난다(툴팁 경고만으로는 못 막는다).
     private int VisibleCells => Mathf.Max(3, m_visibleCells | 1);
     private int ScrollCells => Mathf.Max(1, m_scrollCells);
+
+    protected override void Awake()
+    {
+        base.Awake();
+
+        // 음원이 도는 시간보다 길어 멈추는 순간 잘라야 한다 (SoundManager.GetSfxEntry 참고)
+        m_spinSource = gameObject.AddComponent<AudioSource>();
+        m_spinSource.playOnAwake = false;
+        m_spinSource.loop = true; // 도는 시간을 늘려 배선해도 소리가 먼저 끝나지 않게
+        m_spinSource.spatialBlend = 0f; // 2D — 릴은 뽑은 사람 화면에만 뜬다
+    }
 
     /// <summary>
     /// 이 결과가 가운데에 멈추도록 릴을 돌린다 (#818 D).
@@ -186,6 +207,7 @@ public class CosmeticGachaPanel : PanelBase
     private async UniTaskVoid SpinAsync(EAccessorySlot slot, int index, bool gained)
     {
         m_spinning = true;
+        PlaySpinSound();
         try
         {
             float elapsed = 0f;
@@ -200,6 +222,8 @@ public class CosmeticGachaPanel : PanelBase
             }
 
             Layout(ScrollCells); // 부동소수 오차로 반 칸 어긋난 채 끝나지 않게 못 박는다
+            StopSpinSound(); // 당첨음과 겹치지 않게 도는 소리를 먼저 끊는다
+            App.Sound?.PlaySfx2D(m_revealSound);
             SetFrameColor(m_frameWin);
             ShowResult(slot, index, gained);
 
@@ -215,6 +239,7 @@ public class CosmeticGachaPanel : PanelBase
         }
         finally
         {
+            StopSpinSound(); // 연출이 도중에 끊겨도 소리는 남지 않는다
             m_spinning = false;
 
             // 취소는 이 창이 파괴됐다는 뜻이다 — PanelBase.ClosePanel은 m_panelRoot에 가드가 없어
@@ -253,6 +278,26 @@ public class CosmeticGachaPanel : PanelBase
         LocalizedString format = gained ? m_resultFormat : m_duplicateFormat;
         format.Arguments = new object[] { CosmeticNames.Of(m_catalog.Get(slot, index)) };
         m_resultLabel.text = format.GetLocalizedString();
+    }
+
+    // 카탈로그의 클립·볼륨만 받아 내 소스로 튼다 — 배선 지점은 다른 소리와 같게 유지된다
+    private void PlaySpinSound()
+    {
+        AudioLibrary.Entry entry = App.Sound?.GetSfxEntry(m_spinSound);
+        if (m_spinSource == null || entry?.Clip == null)
+            return;
+
+        m_spinSource.clip = entry.Clip;
+        m_spinSource.volume = entry.Volume;
+        // 앞을 건너뛰는 배선도 따른다 — 풀로 낼 때와 같게 들려야 한다
+        m_spinSource.time = Mathf.Clamp(entry.StartOffset, 0f, Mathf.Max(0f, entry.Clip.length - 0.05f));
+        m_spinSource.Play();
+    }
+
+    private void StopSpinSound()
+    {
+        if (m_spinSource != null && m_spinSource.isPlaying)
+            m_spinSource.Stop();
     }
 
     private void SetFrameColor(Color color)

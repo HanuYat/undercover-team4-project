@@ -1,4 +1,4 @@
-/// <summary>씬 식별자. 실제 씬 이름 매핑은 AppHelper.ToSceneName — 빌드 인덱스에 결합하지 않는다.</summary>
+﻿/// <summary>씬 식별자. 실제 씬 이름 매핑은 AppHelper.ToSceneName — 빌드 인덱스에 결합하지 않는다.</summary>
 public enum EScene
 {
     None,
@@ -137,6 +137,10 @@ public enum EAudioClip
     // NPC 근접 공격 (#817). 뒤에 붙이는 이유는 위와 같다 — 정수로 직렬화돼 있다.
     NpcAttackSwing, // 휙 — NPC가 공격을 휘두른 순간 (명중 여부와 무관, 맨손이든 무기든 같다)
     NpcAttackHitRobot, // 깡 — NPC의 공격이 로봇 경찰을 맞혔다 (플레이어는 전원 로봇이다)
+
+    // 치장 뽑기 (#818 D). 뒤에 붙이는 이유는 위와 같다 — 정수로 직렬화돼 있다.
+    GachaSpin, // 드르르 — 릴이 도는 동안 (뽑은 사람 화면 전용, 2D). 릴이 멈추면 끊긴다
+    GachaReveal, // 짜잔 — 당첨이 가운데 멈춘 순간
 }
 
 /// <summary>
