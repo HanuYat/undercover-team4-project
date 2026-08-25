@@ -288,16 +288,8 @@ public class NpcResistState : NpcStateBase
     // 걸으면 표적이 조금만 움직여도 매 재탐색마다 다른 우회로를 잡아 왔다갔다하는 것처럼 보인다.
     private const float k_directPathSlack = 1.5f;
 
-    /// <summary>
-    /// 표적을 향해 이동한다 — 사거리 안(stoppingDistance)에 들면 NavMeshAgent가 스스로 멈춰 타격 사거리를 유지한다.
-    /// 표적이 없으면 그 자리에 선다(제한 시간이 패배를 판정). 재경로는 NpcFleeState와 같은 스로틀로 묶는다. (#254)
-    ///
-    /// <b>직선에 가까운 길이 없으면 그 우회로를 걷지 않고 제자리에서 기다린다</b> (#829, 팀 피드백).
-    /// 장애물 뒤에 숨은 표적을 그대로 쫓으면 표적이 살짝만 움직여도 재탐색마다 경로가 뒤집혀 앞으로
-    /// 갔다 뒤로 갔다를 반복한다 — 대신 표적이 시야가 트인 곳으로 나와 직선 경로가 다시 열리면
-    /// (다음 재탐색에서) 그때 다시 쫓는다. 저항 NPC는 이동을 멈춰도 FaceTarget이 계속 표적을 보므로
-    /// "노려보며 대기"로 자연스럽게 이어진다.
-    /// </summary>
+    /// <summary>표적을 향해 이동한다 — 사거리 안이면 자연히 멈춘다. 직선 경로가 없으면
+    /// 우회 대신 제자리 대기, 열리면 재개한다 (#254, #829 팀 피드백).</summary>
     private void ChaseTarget(Transform target)
     {
         // 스윙 홀드 중엔 제자리 — 홀드가 끝나면 아래 경로가 isStopped를 되돌려 추격을 재개한다
@@ -372,15 +364,8 @@ public class NpcResistState : NpcStateBase
     // 감속을 시작하는 문턱보다 낮게 둬서, 사거리 안에 거의 다 왔을 때는 이미 표적 쪽으로 넘어간다.
     private const float k_facingMoveSpeed = 0.5f;
 
-    /// <summary>
-    /// 표적을 향해 몸을 돌린다 — 정면 부채꼴 타격 판정의 기준 방향을 표적에 맞춘다. 서버(또는 오프라인) 전용. (#220)
-    ///
-    /// <b>실제로 이동 중이면 표적이 아니라 이동 방향을 본다</b> (#829). ChaseTarget이 잡는 목적지는
-    /// 표적 위치 그대로라 경로가 장애물을 우회할 때는 실제 이동이 표적 방향에서 벗어난다 — 그런데도
-    /// 몸이 계속 표적만 보면 발만 다른 쪽으로 가는 것처럼 보인다(NpcChaseState.ChaseSteering.TickFacing과
-    /// 같은 부류의 문제). 멈춰 서면(사거리 진입·스윙 준비) 그때부터는 표적을 직접 본다 — 정면 부채꼴
-    /// 판정이 표적 방향을 기준으로 삼기 때문에 여기서는 놓을 수 없다.
-    /// </summary>
+    /// <summary>표적을 향해 몸을 돌린다 — 정면 부채꼴 타격 판정 기준. 이동 중엔 이동 방향을
+    /// 대신 본다(#829), 멈추면 표적을 본다. 서버(또는 오프라인) 전용. (#220)</summary>
     private void FaceTarget(Transform target)
     {
         if (target == null)

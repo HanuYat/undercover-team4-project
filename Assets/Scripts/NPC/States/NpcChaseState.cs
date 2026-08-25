@@ -265,10 +265,7 @@ public class NpcChaseState : NpcStateBase
     {
         Vector3 aim = m_steering.PredictAimPoint(target, distance, m_owner.Agent.speed, now);
 
-        // 지금 잡으려는 목적지 자체를 미리 계산해서 판정한다 - Agent.pathStatus를 보면
-        // 그건 지난 주기에 잡은 목적지의 결과라 한 주기 뒤처진다. 뒤처진 판정으로 매 주기
-        // 리드 조준점(부분 경로여서 다음 주기엔 실제 위치로 후퇴)과 실제 위치(정상 경로여서
-        // 다음 주기 다시 리드 조준)를 번갈아 타면 다가가다 물러나다를 반복하는 진동이 생긴다. (#829)
+        // Agent.pathStatus는 지난 주기 결과라 한 주기 뒤처진다 — 목적지 자체를 미리 판정한다. (#829)
         bool complete =
             NavMesh.CalculatePath(m_owner.transform.position, aim, m_owner.Agent.areaMask, m_pathBuffer)
             && m_pathBuffer.status == NavMeshPathStatus.PathComplete;
