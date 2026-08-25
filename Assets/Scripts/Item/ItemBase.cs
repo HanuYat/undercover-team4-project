@@ -74,9 +74,8 @@ public abstract class ItemBase : ChanneledInteractionBehaviour
     public HandGrip HandGrip => m_handGrip;
 
     /// <summary>
-    /// 상점 판매가 — 진열대(ShopStand)가 참조한 프리팹에서 읽는다. 0이면 비매품. (#182)
-    /// 상점 전용 ScriptableObject를 따로 두지 않는 이유: 표시 이름·아이콘·설명이 이미 여기 있어
-    /// 판매가만 얹으면 끝이고, SO를 만들면 그 필드를 복제하는 껍데기가 된다 (GDD 10-4 이탈 사유).
+    /// 상점 판매가. 0이면 비매품. (#182) ShopCatalog(#814)가 판매 후보 명부를 들지만 표시 데이터는
+    /// 복제하지 않는다 — 소지형 가격의 주인은 여전히 여기다(설치형만 카탈로그가 가격을 든다).
     /// </summary>
     public int ShopPrice => m_shopPrice;
 

@@ -25,6 +25,14 @@ public enum EInstallable
     JailSirenButton, // 유치장 사이렌 버튼 — 본부에서 탈옥을 원격 제지한다 (#488)
 }
 
+/// <summary>상점 진열대의 판매 상태 (#814).</summary>
+public enum EStandStatus
+{
+    Available,
+    SoldOut, // 이번 라운드 한정
+    Owned, // 설치형 세션 내 이미 구매
+}
+
 /// <summary>
 /// 로컬 음성(Vivox) 연결 상태. (#430)
 /// 지금까지는 상태가 private 문자열뿐이어서 Vivox 로그인이 실패해도 플레이어가 알 방법이 없었다.
