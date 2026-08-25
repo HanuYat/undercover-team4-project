@@ -649,6 +649,16 @@ public partial class PlayerRagdoll : MonoBehaviour
         if (m_state != RagdollState.Ragdoll)
             return;
 
+        // 회수 불가로 확정된 몸은 권위와 무관하게 전 피어가 각자 즉시 재우고 감춘다 — 원격은
+        // HasMoveAuthority 게이트에 걸려 이 자리에 못 오면 몸이 계속 남아 보인다. (#775/#819)
+        if (m_incapacitation != null && m_incapacitation.IsBodyLost)
+        {
+            m_rig.SleepAll();
+            HideLostBody();
+            Settle();
+            return;
+        }
+
         // ⚠ <b>정착 판정은 권위만 돌린다.</b> 원격의 뼈는 키네마틱이라 속도가 항상 0이고, 이 게이트가
         // 없으면 무너지기도 전에 정착해 버린다. 원격의 종착 상태는 받는 정착 자세가 준다. (docs §10)
         if (!HasMoveAuthority)
@@ -676,21 +686,6 @@ public partial class PlayerRagdoll : MonoBehaviour
         }
 
         m_elapsedInRagdoll += Time.deltaTime;
-
-        // 회수 불가로 확정된 몸은 기다리지 않고 즉시 재운다 (#775) — 맨홀 아래는 지면이 없어
-        // 뼈가 영영 잠들지 않고, 그 낙하가 관전 시점을 계속 흔든다. 아무도 볼 수 없는 몸이라
-        // 정착 연출을 지킬 이유도 없다.
-        //
-        // <b>재우는 것만으로는 부족하다</b> (#819) — 맨홀은 지하라 그 자리에서 굳어도 안 보였지만,
-        // UFO에 실려 간 몸은 상공에서 굳어 하늘에 시체가 걸린다. 어느 쪽이든 '회수 불가'는
-        // 곧 '없는 몸'이므로 여기서 함께 감춘다.
-        if (m_incapacitation != null && m_incapacitation.IsBodyLost)
-        {
-            m_rig.SleepAll();
-            HideLostBody();
-            Settle();
-            return;
-        }
 
         // <b>정착은 물리가 정한다</b> — 전 뼈가 하나도 안 남고 잠들어야 참이다. 옛 평균속도 판정이
         // "흔들거리다 갑자기 굳는" 어색함의 정체였다. (docs §10)
