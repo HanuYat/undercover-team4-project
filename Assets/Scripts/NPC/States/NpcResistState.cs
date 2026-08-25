@@ -344,17 +344,7 @@ public class NpcResistState : NpcStateBase
         return Vector3.Angle(forward, to) <= m_config.AttackConeAngle * 0.5f;
     }
 
-    /// <summary>
-    /// NPC에서 그 플레이어까지 막힌 데 없이 닿는가 (#839). 사거리·부채꼴만으로는 사이의 벽·소품을
-    /// 걸러내지 못해 관통 타격이 났었다 — 진압봉(<see cref="Baton"/>)의 <c>AimOcclusion</c>이
-    /// 겹친 자기 콜라이더를 걸러내려고 제외 루트·피벗 거리까지 동원하는 것과 달리, 여기는
-    /// <b>SphereCast가 아니라 Raycast</b>라 자기 겹침 문제 자체가 없다 — 레이캐스트는 원점이
-    /// 이미 들어가 있는 콜라이더를 애초에 히트로 잡지 않는다(Unity 기본 동작). 단순 레이캐스트로 충분하다.
-    ///
-    /// <b>맞은 것이 그 플레이어 자신인지로 판정한다</b> — 벽이든 다른 대상이든 먼저 걸리면 막힌 것이다.
-    /// 레이가 아무것도 못 맞히면(수치 오차로 표적 표면 바로 앞에서 거리가 끝나는 경우) 막힌 것으로
-    /// 오판하지 않고 통과시킨다 — 오차단보다 오차히트가 낫다는 판단은 AimOcclusion과 같다.
-    /// </summary>
+    /// <summary>NPC에서 그 플레이어까지 벽에 안 막히는가 (#839). 맞은 것이 그 플레이어 자신이 아니면 막힌 것이다.</summary>
     private bool HasLineOfSight(PlayerHealth player)
     {
         Vector3 origin = m_owner.transform.position + Vector3.up * k_losHeight;
