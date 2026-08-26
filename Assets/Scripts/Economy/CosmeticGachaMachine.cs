@@ -182,8 +182,10 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
         float spriteWidth = m_coinSprite.bounds.size.x;
         float scale = spriteWidth > 0f ? m_coinSize / spriteWidth : m_coinSize;
 
-        // 자판기 정면(로컬 +Z) 바깥에서 출발한다
+        // 자판기 정면(로컬 +Z) 바깥에서 출발해 투입구 <b>안쪽</b>까지 들어간다 — 표면에서 멈추면
+        // 넣다 만 것으로 보인다
         Vector3 start = slot + transform.forward * (m_coinSize * 2.5f);
+        Vector3 end = slot - transform.forward * (m_coinSize * 0.8f);
 
         try
         {
@@ -196,7 +198,7 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
                 float t = Mathf.Clamp01(elapsed / m_coinInsertSeconds);
                 // 위에서 떨어뜨리지 않고 <b>앞에서 밀어 넣는다</b> — 투입구는 세로 홈이라 동전은
                 // 정면에서 들어간다. 나오는 거리는 토큰 크기를 따라간다.
-                coin.transform.position = Vector3.Lerp(start, slot, t * t);
+                coin.transform.position = Vector3.Lerp(start, end, t * t);
 
                 // 마지막 구간에서만 사라진다 — 처음부터 줄이면 들어가는 것이 아니라 녹는 것으로 보인다
                 float shrink = t < 0.75f ? 1f : 1f - ((t - 0.75f) / 0.25f);
@@ -268,12 +270,27 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
         PlayRemoteDrawAsync((EAccessorySlot)slot, index).Forget();
     }
 
-    // 남이 돌리는 것도 토큰 투입부터 보인다 — 기계 앞 모형만 뜨면 무엇 때문에 나온 것인지 모른다
+    /// <summary>
+    /// 남이 돌리는 것도 토큰 투입부터 보인다 — 기계 앞 모형만 뜨면 무엇 때문에 나온 것인지 모른다.
+    ///
+    /// <b>모형은 릴이 멈출 때까지 기다린다</b> (#850) — 뽑은 사람은 릴이 다 돌아야 결과를 아는데,
+    /// 옆 사람 화면에 물건이 먼저 뜨면 당첨을 남이 먼저 보는 셈이 된다. 기다리는 시간은 이 씬의
+    /// 릴에서 읽는다(모두 같은 프리팹이라 값이 같다).
+    /// </summary>
     private async UniTaskVoid PlayRemoteDrawAsync(EAccessorySlot slot, int index)
     {
         try
         {
             await PlayCoinInsertAsync();
+
+            CosmeticGachaPanel reel = FindReel();
+            float wait = (reel != null ? reel.SpinSeconds : 0f) - m_coinInsertSeconds;
+            if (wait > 0f)
+                await UniTask.Delay(
+                    TimeSpan.FromSeconds(wait),
+                    DelayType.UnscaledDeltaTime,
+                    cancellationToken: destroyCancellationToken
+                );
         }
         catch (OperationCanceledException)
         {
