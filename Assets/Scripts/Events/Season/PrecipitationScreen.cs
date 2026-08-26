@@ -176,7 +176,7 @@ public class PrecipitationScreen : MonoBehaviour
     {
         if (kind == EKind.None)
         {
-            Hide();
+            ForceHide();
             return;
         }
 
@@ -185,8 +185,20 @@ public class PrecipitationScreen : MonoBehaviour
         ApplyPreset();
     }
 
-    /// <summary>강수를 끈다 — 페이드가 끝나면 쿼드까지 감춘다.</summary>
-    public void Hide() => m_target = 0f;
+    /// <summary>
+    /// 자기가 켠 강수를 끈다 — 페이드가 끝나면 쿼드까지 감춘다. <b>지금 그리는 것이 남의 것이면 무동작</b> (#891).
+    /// 뷰 둘이 이 컴포넌트 하나를 공유하므로, 검사 없이 끄면 눈 뷰가 방금 켜진 비를 지운다.
+    /// </summary>
+    public void Hide(EKind kind)
+    {
+        if (m_kind != kind)
+            return;
+
+        m_target = 0f;
+    }
+
+    // 종류를 가리지 않고 끈다 — 컴포넌트 자신이 정리할 때만 쓴다.
+    private void ForceHide() => m_target = 0f;
 
     private void OnDisable()
     {
