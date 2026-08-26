@@ -180,7 +180,12 @@ Shader "Undercover/Weather/PrecipitationScreen"
                 // 칸의 앞뒤 끝에서는 흐려 둔다 — 껍질이 칸을 지날 때 송이가 툭 나타나지 않게
                 float crossFade = saturate(1.0 - abs(radial) / cellSize);
 
-                return shape * crossFade;
+                // 화면에서 1픽셀 밑으로 작아지면 지운다 — 그대로 두면 픽셀 사이를 오가며 반짝인다.
+                // 화면 폭이 _FovH를 담으므로 픽셀당 각도가 나온다. 거리는 약분된다(칸이 거리에 비례).
+                float pixelRadius = radius * 2.0 * tan(_FovH * 0.5) / max(cells, 1.0)
+                    * _ScreenParams.x / max(_FovH, 0.01);
+
+                return shape * crossFade * smoothstep(0.6, 1.5, pixelRadius);
             }
 
             half4 Frag(Varyings input) : SV_Target
