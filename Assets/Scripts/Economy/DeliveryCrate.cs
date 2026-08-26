@@ -47,11 +47,17 @@ public class DeliveryCrate : NetworkBehaviour, IInteractable
 
     public override void OnNetworkSpawn()
     {
+        DeliveryPad pad = DeliveryPad.All.Count > 0 ? DeliveryPad.All[0] : null;
         double remaining = m_landTimeSynced.Value - NetworkManager.ServerTime.Time;
         if (remaining <= 0d)
+        {
+            // 초기 동기화로 받은 위치는 호스트가 이미 상승시킨 시점의 값일 수 있어 신뢰할 수
+            // 없다 — 착지 지점을 다시 계산해 확정한다 (#884).
+            if (pad != null)
+                transform.position = pad.ResolveCratePosition();
             return;
+        }
 
-        DeliveryPad pad = DeliveryPad.All.Count > 0 ? DeliveryPad.All[0] : null;
         pad?.PlayDroneDelivery(transform, (float)remaining);
     }
 

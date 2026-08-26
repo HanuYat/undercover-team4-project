@@ -161,7 +161,7 @@ public class LightningView : MonoBehaviour
 
     private void HideRain()
     {
-        Screen?.Hide();
+        Screen?.Hide(PrecipitationScreen.EKind.Rain);
 
         StopFlash();
         ClearWarningFx();

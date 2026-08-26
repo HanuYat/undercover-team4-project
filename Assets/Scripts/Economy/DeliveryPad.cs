@@ -60,7 +60,9 @@ public class DeliveryPad : MonoBehaviour
         if (crate == null)
             return;
 
-        Vector3 landedPosition = crate.position;
+        // crate.position(초기 동기화 값)이 아니라 착지 지점을 다시 계산한다 — 호스트가
+        // 이미 상승시킨 뒤 스폰 메시지가 전송되면 클라가 받는 초기 위치가 공중일 수 있다 (#884).
+        Vector3 landedPosition = ResolveCratePosition();
         Vector3 startPosition = landedPosition + Vector3.up * m_descentHeight;
         var cancellation = crate.gameObject.GetCancellationTokenOnDestroy();
         Transform drone = m_droneModel != null ? m_droneModel.transform : null;

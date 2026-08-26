@@ -76,7 +76,7 @@ public class SnowView : MonoBehaviour
 
     private void HideSnow()
     {
-        Screen?.Hide();
+        Screen?.Hide(PrecipitationScreen.EKind.Snow);
         PopOvercast(m_overcastFadeSeconds);
     }
 

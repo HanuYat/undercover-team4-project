@@ -31,18 +31,28 @@ public static class DeliveryScatter
     public static Vector3 SnapToGround(Vector3 candidate, LayerMask groundMask)
     {
         Vector3 probeOrigin = candidate + Vector3.up * k_groundProbeHeight;
-        if (
-            Physics.Raycast(
-                probeOrigin,
-                Vector3.down,
-                out RaycastHit hit,
-                k_groundProbeHeight * 2f,
-                groundMask,
-                QueryTriggerInteraction.Ignore
-            )
-        )
-            return hit.point + Vector3.up * k_groundClearance;
+        RaycastHit[] hits = Physics.RaycastAll(
+            probeOrigin,
+            Vector3.down,
+            k_groundProbeHeight * 2f,
+            groundMask,
+            QueryTriggerInteraction.Ignore
+        );
 
-        return candidate;
+        RaycastHit? closestGround = null;
+        foreach (RaycastHit hit in hits)
+        {
+            // 플레이어 몸(CharacterController)도 groundMask 기본값(Default)에 걸린다 — 착지 지점
+            // 아래 서 있으면 머리를 바닥으로 오인해 상자가 공중에서 멈춘다. 실제 바닥을 찾을 때까지 건너뛴다.
+            if (hit.collider.GetComponentInParent<CharacterController>() != null)
+                continue;
+
+            if (closestGround == null || hit.distance < closestGround.Value.distance)
+                closestGround = hit;
+        }
+
+        return closestGround != null
+            ? closestGround.Value.point + Vector3.up * k_groundClearance
+            : candidate;
     }
 }

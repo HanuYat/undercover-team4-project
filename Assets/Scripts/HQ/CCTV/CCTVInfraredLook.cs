@@ -19,4 +19,42 @@ public static class CCTVInfraredLook
         if (data != null)
             data.volumeLayerMask = layers;
     }
+
+    private static readonly int s_emissionMapId = Shader.PropertyToID("_EmissionMap");
+    private static readonly int s_emissionColorId = Shader.PropertyToID("_EmissionColor");
+    private static MaterialPropertyBlock s_monitorBlock;
+
+    // 백라이트는 콘텐츠 무관 균일 발광("화면은 켜져 있다"), IR 발광은 RT를 그대로 밝힌다. (#677)
+    public static void ApplyMonitorEmission(
+        Renderer monitorRenderer,
+        bool displaying,
+        bool infrared,
+        Texture content,
+        Color backlightColor,
+        Color infraredColor
+    )
+    {
+        if (monitorRenderer == null)
+            return;
+
+        s_monitorBlock ??= new MaterialPropertyBlock();
+        monitorRenderer.GetPropertyBlock(s_monitorBlock);
+
+        if (!displaying)
+        {
+            s_monitorBlock.SetColor(s_emissionColorId, Color.black);
+        }
+        else if (infrared)
+        {
+            s_monitorBlock.SetTexture(s_emissionMapId, content);
+            s_monitorBlock.SetColor(s_emissionColorId, infraredColor);
+        }
+        else
+        {
+            s_monitorBlock.SetTexture(s_emissionMapId, Texture2D.whiteTexture);
+            s_monitorBlock.SetColor(s_emissionColorId, backlightColor);
+        }
+
+        monitorRenderer.SetPropertyBlock(s_monitorBlock);
+    }
 }

@@ -696,6 +696,18 @@ public partial class NpcRagdoll : MonoBehaviour
         ServerResumeFromSleep();
     }
 
+    /// <summary>래그돌인 몸을 통째로 옮긴다 — 수단은 <see cref="ServerPlaceCorpse"/>와 같고, 산 채로
+    /// 래그돌인 신병(유치장 배치)이 쓴다. 서버 전용. (#866)</summary>
+    /// <returns>옮겼으면 참 — 애니메이터가 쥔 몸이면 거짓(그쪽은 뼈가 루트를 따라온다).</returns>
+    public bool ServerPlaceRagdollBody(Vector3 position)
+    {
+        if (!HasMoveAuthority || m_state != RagdollState.Ragdoll)
+            return false;
+
+        ServerPlaceCorpse(position);
+        return true;
+    }
+
     // 순간이동을 보간 없이 원격에 보낸다 — 안 쓰면 원격이 이 거리를 여러 프레임에 걸쳐 보간한다
     // (실측 573.94m을 21프레임). 보내는 것은 루트 하나뿐이고 뼈는 계층으로 딸려 온다.
     private void ServerTeleportNetTransforms()
