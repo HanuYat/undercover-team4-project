@@ -72,10 +72,7 @@ public class NpcReaction : NetworkBehaviour
         if (IsSpawned && !IsServer)
             return;
 
-        // <b>이미 저항 중인 몸을 다른 사람이 때렸다 — 그쪽으로 돌아선다</b> (#879). 아래 게이트가
-        // "이미 반응 중"으로 걸러 버리기 전에 갈래를 만든다: 그 게이트 때문에 세력 소탕 조직원이
-        // 표적 한 명만 물고 옆에서 때리는 사람을 끝까지 무시했다.
-        // 기절 중에는 하지 않는다 — 쓰러진 대상은 그대로 잡히는 것이 규칙이다(아래 스턴 게이트와 같은 이유).
+        // 저항 중 피격은 아래 "이미 반응 중" 게이트 앞에서 가른다 — 때린 사람으로 돌아선다 (#879)
         if (trigger == ReactionTrigger.Damage
             && m_owner.CurrentState == NpcState.Attack
             && !m_owner.Stun.IsStunned
@@ -111,16 +108,10 @@ public class NpcReaction : NetworkBehaviour
         }
     }
 
-    // 저항 표적을 마지막으로 바꾼 시각 기준의 잠금 만료 — 아래 TryRetargetTo가 쓴다.
+    // 표적 교체 잠금 만료 — 한 번 휘두를 시간은 지금 상대에게 집중한다(번갈아 맞으면 제자리에서 돈다).
     private float m_retargetLockUntil;
 
-    /// <summary>
-    /// 저항 중 표적을 때린 사람으로 갈아탄다 — 실제로 갈아탔으면 참. 서버(또는 오프라인) 전용. (#879)
-    ///
-    /// <b>한 번 휘두를 시간(<see cref="NpcResistConfig.AttackInterval"/>)만큼은 지금 상대에게
-    /// 집중한다</b> — 여러 명이 번갈아 때리면 매 대마다 돌아서서 아무도 못 때리고 제자리에서 도는
-    /// 그림이 된다. 잠금 중에 들어온 타격은 무시되고 지금 상대를 계속 노린다.
-    /// </summary>
+    /// <summary>저항 중 표적을 때린 사람으로 갈아탄다 — 갈아탔으면 참. 서버(또는 오프라인) 전용. (#879)</summary>
     private bool TryRetargetTo(Transform attacker)
     {
         if (attacker == null || attacker == ThreatTarget)

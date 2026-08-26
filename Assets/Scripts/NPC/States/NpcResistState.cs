@@ -68,7 +68,7 @@ public class NpcResistState : NpcStateBase
     private float m_baseAcceleration; // 진입 시점의 가속도 — 개체차를 덮어쓰지 않게 실제 값을 기억한다 (#568 후속)
 
     // IsDirectlyReachable의 동기 사전 판정용 — 재사용해 매 재탐색마다 새로 할당하지 않는다.
-    // 직선 경로가 없을 때 다가갈 자리를 뽑는 데도 같은 버퍼를 읽는다 (TryClosestApproach, #879).
+    // TryClosestApproach도 이 결과를 읽는다 (#879).
     private readonly NavMeshPath m_pathBuffer = new NavMeshPath();
 
     // 진입 시점의 도로 비용 — Exit에서 되돌린다. 인덱스 -1이면 도로 영역이 없는 구성. (#721)
@@ -330,9 +330,8 @@ public class NpcResistState : NpcStateBase
             return;
         }
 
-        // <b>우회는 여전히 하지 않는다</b> (#829) — 다만 판정이 갈린 <b>그 자리에 서 있지도 않는다</b> (#879):
-        // 담장 하나 사이인데 한참 떨어져 멈추면 쫓아온 것으로 보이지 않는다. 표적을 향한 직선으로
-        // 갈 수 있는 데까지 다가가 코앞에서 지켜본다 — 그래서 사거리 정지도 여기서는 끈다.
+        // 우회는 하지 않되(#829) 판정이 갈린 자리에 서 있지도 않는다 — 직선으로 갈 수 있는 데까지
+        // 다가가 코앞에서 지켜본다. 사거리 정지는 여기서 끈다 (#879)
         if (!TryClosestApproach(target.position, out Vector3 approach))
         {
             m_owner.Agent.ResetPath(); // 다가갈 자리조차 없다 — 걷던 우회로를 끊고 그 자리에서 기다린다
@@ -343,17 +342,9 @@ public class NpcResistState : NpcStateBase
         m_owner.Agent.SetDestination(approach);
     }
 
-    /// <summary>
-    /// 표적 쪽으로 다가갈 수 있는 가장 가까운 자리 — 못 찾으면 거짓. (#879)
-    ///
-    /// 기준은 <b>표적을 향한 직선</b>이다: <see cref="NavMesh.Raycast"/>가 그 직선이 NavMesh를 벗어나는
-    /// 지점을 주므로, 그 자리가 곧 담장·벽 바로 앞이고 나까지 걸어갈 길도 직선으로 보장된다.
-    /// 우회로의 끝을 쓰지 않는 이유가 이것이다 — 표적이 움직일 때마다 다른 우회로를 잡아
-    /// 왔다갔다하는 것이 #829에서 대기로 바꾼 원인이었다.
-    ///
-    /// 직선이 열려 있는데 경로가 없는 구성(높이 차·링크)에서만 부분 경로의 끝으로 물러난다 —
-    /// 방금 <see cref="IsDirectlyReachable"/>가 채운 버퍼를 그대로 읽는다.
-    /// </summary>
+    /// <summary>표적을 향한 직선이 NavMesh를 벗어나는 지점 — 담장 바로 앞이고 거기까지는 직선이라
+    /// 우회가 생기지 않는다(#829가 대기로 바꾼 이유). 직선이 열려 있는데 경로가 없는 구성에서만
+    /// 부분 경로의 끝으로 물러난다. 못 찾으면 거짓. (#879)</summary>
     private bool TryClosestApproach(Vector3 target, out Vector3 point)
     {
         if (NavMesh.Raycast(m_owner.transform.position, target, out NavMeshHit hit, m_owner.Agent.areaMask))
@@ -380,17 +371,13 @@ public class NpcResistState : NpcStateBase
         if (straight < 0.01f)
             return true;
 
-        // <b>직선이 통째로 NavMesh 위면 그것으로 끝이다</b> (#879 후속 — 도로에서 멈칫거린 원인).
-        // 아래 길이 비교는 <b>경로 계산이 고른 길</b>을 재는데, 그 선택은 거리가 아니라 <b>비용</b>이
-        // 좌우한다: 전역 도로 비용이 5라(#634) 표적이 도로에 있으면 인도로 크게 돌아가는 길이 뽑히고,
-        // 그 길이가 직선의 1.5배를 넘어 <b>실제로는 곧장 뛸 수 있는데도</b> '못 쫓는다'로 잡혔다.
-        // (저항 중 이 몸의 도로 비용은 1로 낮춰 둔다 — Enter의 SetAreaCost, #721. 그런데 정적
-        // NavMesh.CalculatePath는 개체별 비용을 보지 않는다.)
+        // 직선이 통째로 NavMesh 위면 그것으로 끝 — 아래 길이 비교는 도로 비용(#634)에 끌려 인도로
+        // 돌아가는 길을 재는 탓에, 곧장 뛸 수 있는데도 '못 쫓는다'가 됐다 (#879 — 도로 위 멈칫거림)
         if (!NavMesh.Raycast(m_owner.transform.position, destination, out NavMeshHit _, m_owner.Agent.areaMask))
             return true;
 
-        // 직선이 막혔다 — 돌아가는 길이 짧으면(연석·기둥 하나) 그대로 쫓는다. 비용은 이 몸 기준으로
-        // 재야 위와 같은 오판이 안 나므로 정적 호출이 아니라 에이전트에게 묻는다.
+        // 직선이 막혔다 — 우회가 짧으면 그대로 쫓는다. 정적 호출은 개체별 도로 비용(#721)을 안 보므로
+        // 에이전트에게 묻는다.
         if (
             !m_owner.Agent.CalculatePath(destination, m_pathBuffer)
             || m_pathBuffer.status != NavMeshPathStatus.PathComplete
