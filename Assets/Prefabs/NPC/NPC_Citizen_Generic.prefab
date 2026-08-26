@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8180789692227460844}
   - component: {fileID: 7392251841296770374}
+  - component: {fileID: 1339886889915759825}
   m_Layer: 0
   m_Name: SM_Gen_Chr_Business_Male_01
   m_TagString: Untagged
@@ -142,6 +143,18 @@ SkinnedMeshRenderer:
     m_Center: {x: -0.000002682209, y: 0.848197, z: -0.05130989}
     m_Extent: {x: 1.024559, y: 0.93985677, z: 0.27877232}
   m_DirtyAABB: 0
+--- !u!114 &1339886889915759825
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 106157405148428728}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab92e93bbbf14544aa797e3b19a157fc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodyTint
 --- !u!1 &173687966939747027
 GameObject:
   m_ObjectHideFlags: 0

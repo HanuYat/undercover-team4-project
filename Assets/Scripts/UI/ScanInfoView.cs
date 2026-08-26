@@ -17,65 +17,93 @@ public class ScanInfoView : NpcWorldCard
     [SerializeField]
     private TMP_Text m_nameText;
 
+    [Header("타입 아이콘")]
+    [Tooltip("스캔된 NPC의 타입(인간/안드로이드) 아이콘")]
     [SerializeField]
-    private TMP_Text m_typeText;
+    private Image m_typeIcon;
 
     [SerializeField]
-    private TMP_Text m_factionText;
+    private Sprite m_humanIcon;
 
-    [Tooltip("스캔된 NPC의 세력 문양")]
     [SerializeField]
-    private Image m_symbolImage;
+    private Sprite m_androidIcon;
+
+    [Tooltip("미스캔 NPC에 표시할 타입 아이콘 — 비우면 미스캔 상태에서 아이콘이 꺼진다")]
+    [SerializeField]
+    private Sprite m_unknownTypeIcon;
+
+    [Header("생사 상태 아이콘")]
+    [Tooltip("스캔된 NPC가 살아있을 때 표시할 아이콘")]
+    [SerializeField]
+    private Image m_statusIcon;
+
+    [SerializeField]
+    private Sprite m_aliveIcon;
+
+    [SerializeField]
+    private Sprite m_deadIcon;
 
     // 미스캔 NPC의 미확인 필드 표기 (#233)
     private const string k_masked = "??";
 
-    // 필드 라벨은 카드마다 같은 문구이고 카드는 NPC 수만큼 있다 — SerializeField로 두면
+    // 이름 라벨은 카드마다 같은 문구이고 카드는 NPC 수만큼 있다 — SerializeField로 두면
     // NPC 프리팹마다 같은 키를 다시 배선해야 하고 하나만 빠지면 그 NPC만 옛 표기로 남는다. (#497)
     // 언어 변경 갱신은 ScanResultPresenter가 로케일 변경에 걸고 다시 채우는 것으로 처리한다.
     private const string k_hudTable = "HudTable";
     private const string k_nameKey = "Hud.Scan.FieldName";
-    private const string k_typeKey = "Hud.Scan.FieldType";
-    private const string k_factionKey = "Hud.Scan.FieldFaction";
 
     /// <summary>
     /// 스캔 완료 NPC — 실제 프로필 값을 표시하고 카드를 켠다.
-    /// 타입·세력은 완성된 문자열이 아니라 enum으로 받는다 — 표기를 여기서 지금 언어로 번역한다 (#497).
+    /// 세력은 표시하지 않는다(팀 UI로 대체돼 스캔 카드에서는 뺐다). 타입·생사는 문자열이 아니라
+    /// 아이콘으로 낸다 — 카드 정보량을 줄여 한눈에 읽히게 하기 위함이다.
     /// </summary>
-    public void ShowReal(
-        string citizenName,
-        OfficialRecords.CitizenType typeView,
-        OfficialRecords.Faction factionView,
-        Sprite symbolView
-    )
-    {
-        SetFields(citizenName, OfficialRecords.TypeName(typeView), OfficialRecords.FactionName(factionView));
-        SetSymbol(symbolView);
-        SetCardActive(true);
-    }
-
-    /// <summary>미스캔 NPC — 모든 필드를 ??로 마스킹하고 카드를 켠다.</summary>
-    public void ShowMasked()
-    {
-        SetFields(k_masked, k_masked, k_masked);
-        SetSymbol(null);
-        SetCardActive(true);
-    }
-
-    // 실제값이든 ??든 라벨 서식은 같다 — 마스킹은 값만 바꾼다.
-    private void SetFields(string citizenName, string typeView, string factionView)
+    /// <param name="isDead">이 NPC가 죽었는가 — <see cref="NpcDeath.IsDead"/>(전 피어 동기화 상태).</param>
+    public void ShowReal(string citizenName, OfficialRecords.CitizenType typeView, bool isDead)
     {
         m_nameText.text = LocalizedStrings.Get(k_hudTable, k_nameKey, citizenName);
-        m_typeText.text = LocalizedStrings.Get(k_hudTable, k_typeKey, typeView);
-        m_factionText.text = LocalizedStrings.Get(k_hudTable, k_factionKey, factionView);
+        SetTypeIcon(typeView);
+        SetStatusIcon(isDead);
+        SetCardActive(true);
     }
 
-    // 문양 스프라이트 세팅
-    private void SetSymbol(Sprite symbol)
+    /// <summary>미스캔 NPC — 이름은 ??로, 아이콘은 미확인 표기로 채우고 카드를 켠다.</summary>
+    public void ShowMasked()
     {
-        if (m_symbolImage == null) return;
+        m_nameText.text = LocalizedStrings.Get(k_hudTable, k_nameKey, k_masked);
+        SetTypeIcon(null);
+        SetStatusIcon(null);
+        SetCardActive(true);
+    }
 
-        m_symbolImage.sprite = symbol;
-        m_symbolImage.enabled = symbol != null;
+    // type이 null이면 미스캔 — 미확인 아이콘(비었으면 꺼짐)으로 표시한다.
+    private void SetTypeIcon(OfficialRecords.CitizenType? type)
+    {
+        if (m_typeIcon == null) return;
+
+        Sprite sprite = type switch
+        {
+            OfficialRecords.CitizenType.Human => m_humanIcon,
+            OfficialRecords.CitizenType.Android => m_androidIcon,
+            _ => m_unknownTypeIcon,
+        };
+
+        m_typeIcon.sprite = sprite;
+        m_typeIcon.enabled = sprite != null;
+    }
+
+    // isDead가 null이면 미스캔 — 생사도 스캔 전까지는 모른다는 뜻으로 아이콘을 끈다.
+    private void SetStatusIcon(bool? isDead)
+    {
+        if (m_statusIcon == null) return;
+
+        Sprite sprite = isDead switch
+        {
+            true => m_deadIcon,
+            false => m_aliveIcon,
+            null => null,
+        };
+
+        m_statusIcon.sprite = sprite;
+        m_statusIcon.enabled = sprite != null;
     }
 }

@@ -100,7 +100,18 @@ public class NpcDeath : NetworkBehaviour
         //    <b>시체를 끌고 가도 판정이 조용히 끊기게</b> 만들고 있었다 — 버튼을 눌러도 배너가
         //    안 뜨던 원인이다.
 
-        // ⑧ 통보 — OnDied 구독자가 이벤트 뒷정리로 대상을 despawn할 수 있으므로(AbductionEvent.DisposeAbductors)
+        // ⑧ 처치 집계 — ⑦의 "사망은 아무것도 판정하지 않는다"와 상충하지 않는다. 저건 현상금·오검거
+        //    같은 경제 판정 얘기고, 이건 때린 사람 화면에 붙는 즉시 피드백(#869)이다. 가해자가
+        //    플레이어가 아니면(다른 NPC·차량·환경) GetComponent가 null이라 저절로 무동작.
+        //    이름은 스캔 표시 이름(m_nameView)을 쓴다 — 스캐너로 이미 본 이름과 어긋나지 않는다.
+        if (killer != null && killer.TryGetComponent(out PlayerKillCredit killCredit))
+        {
+            CitizenProfile profile = m_owner.GetComponent<CitizenIdentity>()?.Profile;
+            string victimName = !string.IsNullOrEmpty(profile?.m_nameView) ? profile.m_nameView : "대상";
+            killCredit.ServerCreditKill(victimName, friendlyFire: false);
+        }
+
+        // ⑨ 통보 — OnDied 구독자가 이벤트 뒷정리로 대상을 despawn할 수 있으므로(AbductionEvent.DisposeAbductors)
         //    이 뒤에 NPC를 건드리는 일을 두지 말 것.
         OnDied?.Invoke(m_owner, killer);
     }

@@ -74,6 +74,10 @@ public class ScanResultPresenter : NetworkBehaviour
     private ulong m_currentNpcId;
     private bool m_currentHasId;
 
+    // 생사 상태 아이콘용 — 생사는 조준 유지 중에도 바뀔 수 있어 폴링으로 따라간다 (아래 Update 참고).
+    private NpcController m_currentController;
+    private bool m_currentDeadState;
+
     // 토스트 자동 숨김 타이머 — 새 메시지가 오면 이전 타이머를 취소하고 이어받는다. (지속 토스트는 타이머 없음)
     private CancellationTokenSource m_toastCts;
 
@@ -180,6 +184,10 @@ public class ScanResultPresenter : NetworkBehaviour
         m_currentHasId = npcObject != null;
         m_currentNpcId = npcObject != null ? npcObject.NetworkObjectId : 0;
 
+        // 생사는 CitizenIdentity와 같은 오브젝트의 NpcController가 갖는다(#571) — 없으면(테스트 씬 등) 폴링을 건너뛴다.
+        m_currentController = identity.GetComponent<NpcController>();
+        m_currentDeadState = m_currentController != null && m_currentController.Death.IsDead;
+
         // 빌보드가 바라볼 카메라를 로컬 플레이어 카메라로 지정 (Camera.main 태그에 의존하지 않게)
         if (m_interactor.AimCamera != null)
             m_currentView.SetCamera(m_interactor.AimCamera.transform);
@@ -212,12 +220,29 @@ public class ScanResultPresenter : NetworkBehaviour
         {
             CitizenProfile profile = m_currentIdentity.Profile;
             // 스캔 표시는 정본이 아닌 표시 이름(m_nameView) — 위조범은 여기서 정본과 어긋난다 (#223)
-            m_currentView.ShowReal(profile.m_nameView, profile.m_typeView, profile.m_factionView, profile.m_symbolView);
+            m_currentView.ShowReal(profile.m_nameView, profile.m_typeView, m_currentDeadState);
         }
         else
         {
             m_currentView.ShowMasked();
         }
+    }
+
+    // 생사 상태는 조준을 유지한 채로도 바뀔 수 있다(카드를 보는 동안 대상이 죽는 경우) — 조준이
+    // 바뀔 때만 갱신하는 HandleTargetChanged로는 못 잡으므로, 지금 조준 중인 대상이 있을 때만
+    // 가볍게 폴링한다. NpcDeath.OnDied는 서버(오프라인) 전용이라 클라 로컬인 이 클래스에서는
+    // 못 쓴다 — IsDead(동기화 상태)를 직접 비교하는 이 방식만 전 클라에서 안전하다.
+    private void Update()
+    {
+        if (m_currentController == null)
+            return;
+
+        bool dead = m_currentController.Death.IsDead;
+        if (dead == m_currentDeadState)
+            return;
+
+        m_currentDeadState = dead;
+        UpdateCurrentContent();
     }
 
     // 스캔 카드가 없는 NPC — 프로필이 배정돼 있어도 띄울 카드가 없어 아무 일도 일어나지 않는다.
@@ -246,6 +271,7 @@ public class ScanResultPresenter : NetworkBehaviour
         m_currentIdentity = null;
         m_currentHasId = false;
         m_currentNpcId = 0;
+        m_currentController = null;
     }
 
     // 구독 대상 스캐너를 교체한다 — 이전 스캐너는 구독 해제하고 새 스캐너(있으면)를 구독한다.

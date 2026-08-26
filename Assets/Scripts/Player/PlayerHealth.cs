@@ -87,6 +87,18 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
         if (m_incapacitation != null && m_incapacitation.IsDowned)
         {
             m_incapacitation.ServerFinishOff();
+
+            // 처치 집계 — 확인사살이 유일한 '플레이어가 플레이어를 죽이는' 순간이다. 건강한 동료는
+            // HP 0에서 먼저 다운(60초 유예)에 들어가므로 그 진입 자체는 사망이 아니다. 가해자가
+            // 환경·NPC면 GetComponent가 null이라 저절로 무동작 — 오사만 걸린다 (#869).
+            if (attacker != null && attacker.TryGetComponent(out PlayerKillCredit killCredit))
+            {
+                string victimName = GetComponent<PlayerNameTag>()?.DisplayName;
+                killCredit.ServerCreditKill(
+                    string.IsNullOrEmpty(victimName) ? "동료" : victimName,
+                    friendlyFire: true
+                );
+            }
             return;
         }
 

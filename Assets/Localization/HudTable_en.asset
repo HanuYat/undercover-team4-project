@@ -55,7 +55,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000302
-    m_Localized: 'Mic muted (press [{0}] to unmute)'
+    m_Localized: Mic muted (press [{0}] to unmute)
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000303
@@ -96,14 +96,6 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 7100000000317
     m_Localized: 'Name: {0}'
-    m_Metadata:
-      m_Items: []
-  - m_Id: 7100000000318
-    m_Localized: 'Type: {0}'
-    m_Metadata:
-      m_Items: []
-  - m_Id: 7100000000319
-    m_Localized: 'Faction: {0}'
     m_Metadata:
       m_Items: []
   - m_Id: 95807313862656
@@ -473,6 +465,10 @@ MonoBehaviour:
     m_Localized: Open Crate
     m_Metadata:
       m_Items: []
+  - m_Id: 8046671440187392
+    m_Localized: '{0} eliminated'
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:
@@ -487,8 +483,6 @@ MonoBehaviour:
         - id: 7100000000313
         - id: 7100000000314
         - id: 7100000000317
-        - id: 7100000000318
-        - id: 7100000000319
         - id: 95807313862656
         - id: 95878210183168
         - id: 4406443574198272
