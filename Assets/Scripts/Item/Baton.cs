@@ -151,18 +151,11 @@ public class Baton : ItemBase, IAimedWeapon
     // CanTarget은 재정의하지 않는다(기본 false) — 조준 대상 윤곽선(#184)의 기준인 상호작용 레이(3m)와
     // 실제 사거리(2m)가 어긋나 그대로 쓰면 2~3m에서 "윤곽선은 떴는데 안 맞는" 상태가 된다.
     // 대신 IAimedWeapon으로 크로스헤어 색만 구동한다 (테이저와 같은 방식, 아래 HasValidAimTarget).
-
     /// <summary>
-    /// 조준선이 지금 휘두르면 맞을 대상(NPC·동료)에 닿는지 — 오너 크로스헤어 색 예측용. (#184/#217)
-    /// 서버 타격 판정과 <b>같은 함수</b>(<see cref="EvaluateSwing"/>)를 쓰므로 규칙이 어긋날 수 없다.
-    /// 동료를 겨눠도 켜진다 — 휘두르면 실제로 HP가 깎이므로, 오사를 피하려면 그게 보여야 한다 (#461).
+    /// 조준선이 지금 휘두르면 맞을 대상(NPC·동료)에 닿는지 확인한다 — 크로스헤어 색 예측용.
+    /// 서버 타격 판정(EvaluateSwing)과 같은 함수를 써서 결과가 어긋나지 않는다.
+    /// 동료를 겨눠도 켜진다 — 오사 위험을 미리 보여주기 위해서다.
     /// </summary>
-    /// <remarks>
-    /// 거리 비교로 흉내 내지 않는 이유: 실제 판정은 두께 있는 구체 캐스트라 사거리 안이어도
-    /// 벽 엄폐에 걸리거나 빗나간다. 쿨다운은 보지 않는다 — 서버 전용 상태(m_nextSwingTime)라
-    /// 원격 오너에게는 늘 0이어서, 넣으면 호스트와 클라이언트의 크로스헤어가 서로 달라진다.
-    /// '지금 칠 수 있나'가 아니라 '겨냥이 맞았나'만 답한다 (Taser.HasValidAimTarget과 같은 방침).
-    /// </remarks>
     public bool HasValidAimTarget(Vector3 origin, Vector3 direction)
     {
         // 소지자 계층은 자기 몸을 캐스트에서 걸러내는 데 필요하다 — 원점이 카메라(캡슐 안)라
@@ -173,7 +166,8 @@ public class Baton : ItemBase, IAimedWeapon
             return false;
         }
 
-        return EvaluateSwing(origin, direction, holder.transform, out _, out _, out _, out _)
+        return EvaluateSwing(
+                origin, direction, holder.transform, holder.LosBlockMask, out _, out _, out _, out _)
             == SwingResult.ValidTarget;
     }
 
@@ -326,6 +320,7 @@ public class Baton : ItemBase, IAimedWeapon
                 origin,
                 direction,
                 holderTransform,
+                holder.LosBlockMask,
                 out NpcController target,
                 out PlayerHealth playerTarget,
                 out BombDevice bombTarget,
@@ -549,23 +544,15 @@ public class Baton : ItemBase, IAimedWeapon
     }
 
     /// <summary>
-    /// 부채꼴을 훑어 명중 결과를 분류한다 (#779). 각 줄은 <see cref="EvaluateSwingRay"/>가 따로
-    /// 판정하므로 <b>엄폐도 줄 단위</b>다 — 정면이 기둥에 막혀도 호가 닿는 대상은 맞는다.
-    ///
-    /// 줄을 고르는 규칙은 둘이다 — <b>유효타가 있으면 그 줄이 이기고, 없으면 조준축에 가장 가까운 줄이
-    /// 남는다.</b> 가운데부터 좌우로 번져 나가며 훑으므로 후자는 순회 순서가 곧 우선순위다.
-    /// 거리로 고르지 않는 이유: NPC와 동료가 둘 다 유효타라(#461) 거리로 갈리면, 정면의 NPC를
-    /// 조준했는데 옆에 붙어 선 동료가 더 가깝다는 이유로 타격을 가로챈다.
-    ///
-    /// <b>부수효과 없는 순수 판정으로 유지할 것.</b> 서버 타격 판정(<see cref="ServerResolveHitAtImpactAsync"/>)과
-    /// 오너 크로스헤어(<see cref="HasValidAimTarget"/>) 둘이 공유한다 — 후자는 매 프레임 도는 로컬
-    /// 피드백이라, 여기에 상태 변경이나 로그를 넣으면 조준만 해도 그게 매 프레임 실행된다.
-    /// 둘이 같은 함수를 보는 것이 "크로스헤어는 켜졌는데 안 맞음"을 막는 장치이므로 분기시키지 말 것.
+    /// 부채꼴을 훑어 명중 결과를 분류한다. 유효타가 있으면 그 줄이 이기고,
+    /// 없으면 조준축에 가장 가까운 줄이 남는다. 부수효과 없는 순수 판정으로
+    /// 유지할 것 — 크로스헤어 예측(HasValidAimTarget)이 매 프레임 공유한다.
     /// </summary>
     private SwingResult EvaluateSwing(
         Vector3 origin,
         Vector3 direction,
         Transform holderRoot,
+        LayerMask wallMask,
         out NpcController target,
         out PlayerHealth playerTarget,
         out BombDevice bombTarget,
@@ -603,6 +590,7 @@ public class Baton : ItemBase, IAimedWeapon
                 origin,
                 Quaternion.AngleAxis(angle, axis) * forward,
                 holderRoot,
+                wallMask,
                 out NpcController rayTarget,
                 out PlayerHealth rayPlayerTarget,
                 out BombDevice rayBombTarget,
@@ -635,21 +623,15 @@ public class Baton : ItemBase, IAimedWeapon
     }
 
     /// <summary>
-    /// 호를 이루는 <b>한 줄</b>의 판정 — 원점에서 그 방향으로 사거리(m_range)만큼 반경 m_hitRadius
-    /// 구체를 날려 결과를 분류한다. 유효 대상은 NPC와 <b>동료</b> 둘이며(#461), 어느 쪽인지는 채워진
-    /// out 인자로 구분한다 — 둘 다 <c>ValidTarget</c>이다(맞으면 데미지가 들어간다는 점이 같고,
-    /// 크로스헤어도 같이 켜져야 한다).
-    /// 마스크 ~0 + 트리거 무시. 후보 중 하나를 고르는 기준은 <see cref="AimOcclusion"/>가 단독으로
-    /// 가지며, 그 기준이 벽 엄폐의 정의다 — 테이저·상호작용 가시선과 같은 규칙이다.
-    ///
-    /// SphereCast는 레이캐스트와 달리 <b>시작 지점에 이미 겹친 콜라이더를 distance 0으로 되돌려준다.</b>
-    /// 원점이 카메라(= 소지자 캡슐 안)라서 자기 몸이 항상 걸리므로, 소지자 계층은 걸러내고 최근접을 고른다.
-    /// 원점을 앞으로 밀어 피하는 방법도 있지만, 벽에 붙어 있을 때 시작점이 벽 너머로 넘어가 관통 타격이 된다.
+    /// 호를 이루는 한 줄의 판정 — 반경 m_hitRadius 구체로 NPC·동료를 찾는다.
+    /// 후보 선정은 AimOcclusion.FindNearest, 가림 재확인은 IsBlocked가 맡는다
+    /// (SphereCast는 벽에 붙으면 겹침 히트가 섞이기 때문).
     /// </summary>
     private SwingResult EvaluateSwingRay(
         Vector3 origin,
         Vector3 direction,
         Transform holderRoot,
+        LayerMask wallMask,
         out NpcController target,
         out PlayerHealth playerTarget,
         out BombDevice bombTarget,
@@ -672,13 +654,21 @@ public class Baton : ItemBase, IAimedWeapon
         );
 
         // 휘두른 본인(과 그가 들고 있는 것들)은 제외 계층으로 넘긴다 — 위 주석의 자기 겹침 문제.
-        int index = AimOcclusion.FindNearestByPivot(origin, s_hitBuffer, count, holderRoot);
+        int index = AimOcclusion.FindNearest(origin, s_hitBuffer, count, holderRoot);
         if (index < 0)
         {
             return SwingResult.NoHit;
         }
 
         hit = s_hitBuffer[index];
+
+        // 후보가 실제로 벽 뒤에 있는지 다시 확인한다 — SphereCast가 벽에 바짝 붙으면
+        // 벽을 distance 0으로 잡아 뒤로 밀려날 수 있어서다. hit.distance가 0 이하면
+        // hit.point가 신뢰할 수 없는 값(0,0,0)이라 이 재확인을 건너뛴다.
+        if (hit.distance > 0f && AimOcclusion.IsBlocked(origin, hit.point, hit.collider.transform, wallMask))
+        {
+            return SwingResult.NoHit;
+        }
 
         // 콜라이더가 NPC 루트의 자식일 수 있으므로 부모까지 탐색한다 (Taser.EvaluateAim과 동일 관례).
         // 벽·소품을 맞췄으면 그대로 빗나감이고, 동료를 맞췄으면 아군 오사다 (#461).
@@ -722,22 +712,10 @@ public class Baton : ItemBase, IAimedWeapon
     }
 
     /// <summary>
-    /// NPC가 아닌 것을 맞췄을 때의 분류 — 동료면 아군 오사(#461), 추격 폭탄이면 밀어내기(#399),
-    /// 그 외(벽·소품)는 빗나감.
+    /// NPC가 아닌 것을 맞췄을 때의 분류 — 동료면 아군 오사, 추격 폭탄이면 즉발,
+    /// 그 외(벽·소품)는 빗나감. 소지자 자신은 AimOcclusion.FindNearest가 제외 루트로
+    /// 걸러내므로 후보에 오르지 않는다. 유예(Down) 중인 동료만 예외로 유효타 처리한다.
     /// </summary>
-    /// <remarks>
-    /// <b>자기 자신을 걸러내는 분기가 없다.</b> 필요가 없기 때문이다 — 진압봉은
-    /// <see cref="AimOcclusion.FindNearestByPivot"/>에 소지자 계층을 제외 루트로 넘기므로(SphereCast가
-    /// 원점에 겹친 자기 콜라이더를 distance 0으로 되돌려주는 문제 때문에 원래부터 필요했다) 자기 몸은
-    /// 후보에 아예 오르지 않는다. 앉기·넉백으로 원점이 몸 밖으로 나가도 같다.
-    /// 테이저(<c>Taser.EvaluateAim</c>)도 같은 처리를 쓴다 — 레이캐스트라 없어도 된다고 봤지만,
-    /// 살아 있는 동안에도 켜져 있는 자기 래그돌 머리 뼈에 사격이 막혔다.
-    /// <b>이 함수를 제외 루트 없이 부르게 바꾸면 자기 타격 가드를 여기에 추가해야 한다.</b>
-    ///
-    /// 무력화 게이트는 <see cref="PlayerHealth.IsTargetable"/>을 본다 — 기절·매달기·납치·완전 사망 중인
-    /// 동료는 더 때릴 수 없다. <b>유예(Down)만 예외</b> — 확인사살이 의도된 동작이라(#725),
-    /// IsTargetable이 CurrentHp&gt;0으로 걸러내도 유예 중이면 따로 유효 처리한다.
-    /// </remarks>
     private static SwingResult EvaluateNonNpcSwing(
         RaycastHit hit,
         out PlayerHealth playerTarget,
