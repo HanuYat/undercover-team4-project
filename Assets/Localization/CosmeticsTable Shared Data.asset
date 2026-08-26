@@ -391,6 +391,10 @@ MonoBehaviour:
     m_Key: Cosmetic.Part.Legs
     m_Metadata:
       m_Items: []
+  - m_Id: 633735494590464
+    m_Key: Cosmetic.Tokens
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
