@@ -8,7 +8,6 @@
 // 카메라를 돌릴 때 통째로 따라 돌고, 좌표를 오프셋으로 밀어 보정하면 송이가 이동하는 대신 늘어난다.
 // 월드에 놓으면 회전·이동·전진이 전부 저절로 맞는다 — 보정할 항이 없다.
 //
-// 눈과 비는 같은 셰이더다. 갈리는 것은 값뿐이다(줄기 길이·속도·흔들림).
 Shader "Undercover/Weather/PrecipitationScreen"
 {
     Properties
@@ -40,9 +39,6 @@ Shader "Undercover/Weather/PrecipitationScreen"
         Pass
         {
             Name "Precipitation"
-            // ⚠ 애디티브(Blend One One)로 시작했다가 알파 블렌드로 바꿨다 (#782).
-            // 밝은 하늘(아포칼립스 맵)에서는 더하기가 이미 흰 배경에 묻혀 아무것도 안 보였다 —
-            // 설계 문서가 미결로 적어둔 "애디티브가 맞는가"의 답이 실측으로 '아니다'였다.
             Blend SrcAlpha OneMinusSrcAlpha
             ZWrite Off
             ZTest Always           // 카메라 자식 쿼드라 깊이로 걸러질 이유가 없다
@@ -118,11 +114,6 @@ Shader "Undercover/Weather/PrecipitationScreen"
                 return float3(Hash31(p + 0.13), Hash31(p + 7.71), Hash31(p + 19.3));
             }
 
-            // 한 겹 — 월드 셀 격자에 눈송이를 하나씩 놓고 이 픽셀에 비치는 밝기를 낸다.
-            //
-            // <b>이웃 칸을 뒤지지 않는다.</b> 송이를 셀 안쪽으로 가두면(offsetInCell을 반지름만큼 좁힌다)
-            // 송이가 칸 경계를 넘지 못하므로, 송이에 닿는 픽셀의 샘플 지점은 반드시 그 칸 안에 있다 —
-            // 한 칸만 봐도 빠지는 것이 없다. 이웃 27칸 탐색이 사라져 비용이 종전과 비슷하게 유지된다.
             //
             // <b>어긋남에서 깊이 성분을 버린다.</b> 3차원 거리로 재면 껍질(거리 distance)이 송이를
             // 스치는 순간에만 보여 태반이 사라지고 움직일 때마다 튄다. 시선에 수직인 성분만 재면
@@ -242,8 +233,7 @@ Shader "Undercover/Weather/PrecipitationScreen"
                 }
 
                 // <b>화면 중앙을 비운다</b> — 전면에 고르게 덮으면 세계의 날씨가 아니라 <b>렌즈에 묻은 것</b>
-                // 처럼 보이고, 크로스헤어·표적이 있는 중앙까지 가려 플레이에 방해가 된다. 가장자리를
-                // 진하게 두면 시야 주변에서 날씨를 느끼면서 볼 곳은 트인다.
+                // 처럼 보이고, 크로스헤어·표적이 있는 중앙까지 가려 플레이에 방해가 된다. 
                 float aspect = _ScreenParams.x / max(_ScreenParams.y, 1.0);
                 float2 fromCenter = float2((input.uv.x - 0.5) * aspect, input.uv.y - 0.5);
                 float edge = saturate(length(fromCenter) / 0.7);
