@@ -48,7 +48,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2767304461
+  GlobalObjectIdHash: 2025248869
   InScenePlacedSourceGlobalObjectIdHash: 2025248869
   DeferredDespawnTick: 0
   Ownership: 1
@@ -78,7 +78,10 @@ MonoBehaviour:
   m_minInterval: 40
   m_maxInterval: 90
   m_startDelay: 20
-  m_ringDuration: 15
+  m_minCallCount: 2
+  m_maxCallCount: 4
+  m_ringDuration: 6
+  m_externalRingGrace: 8
 --- !u!82 &6736088829418134764
 AudioSource:
   m_ObjectHideFlags: 0
