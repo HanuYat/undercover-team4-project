@@ -193,6 +193,9 @@ public class JailZone : NetworkedManagerBase
     // 퇴장 자리 간격(m) — 플레이어 캡슐(반지름 ~0.4)과 NPC가 서로 밀지 않을 만큼.
     private const float k_exitSlotSpacing = 1.2f;
 
+    /// <summary>방 범위가 배선돼 있는가 — <see cref="ContainsPoint"/>의 false를 '밖'으로 읽어도 되는지 가른다. (#866)</summary>
+    public bool HasRoomVolume => m_roomVolume != null;
+
     /// <summary>
     /// 이 좌표가 감옥 방 안인가 — 범위가 미배선이면 항상 false(문 E가 전부 '들어가기'로 읽힌다). (#537)
     ///

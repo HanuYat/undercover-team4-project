@@ -25,12 +25,21 @@ public class NpcJailedState : NpcStateBase
     // 도착 판정 여유(m) — stoppingDistance에 더해 쓴다. 딱 맞추려 들면 미세하게 떨며 멈추지 못한다.
     private const float k_arriveSlack = 0.15f;
 
+    // 래그돌인 몸을 배치 지점 바닥으로 당길 최대 거리(m) — 지점이 바닥보다 아래에 놓인 만큼만 덮으면 된다.
+    private const float k_bodySnapRadius = 3f;
+
+    // 방 밖 이탈을 확인하는 주기(초) — 수감자 수만큼 도는 판정이라 매 프레임 보지 않는다.
+    private const float k_roomCheckInterval = 0.5f;
+
     // 다음 목적지를 고르기까지 서 있는 시간(초) 범위 — 계속 걷기만 하면 우리를 도는 로봇처럼 보인다.
     private const float k_pauseSecondsMin = 1.5f;
     private const float k_pauseSecondsMax = 5f;
 
     // 다음에 움직일 시각. 서 있는 동안만 의미가 있다.
     private float m_nextMoveTime;
+
+    // 다음으로 방 안팎을 확인할 시각.
+    private float m_nextRoomCheckTime;
 
     // <b>걷는 중인가 — 에이전트에게 묻지 않는다.</b>
     //
@@ -61,6 +70,14 @@ public class NpcJailedState : NpcStateBase
         if (JailRoom.Contains(m_owner.transform.position))
             return;
 
+        // <b>래그돌이 몸을 쥐고 있으면 워프로는 루트만 간다</b> (#866). 동적인 뼈는 따라오지 않고,
+        // 다음 물리 스텝에 루트 추종(<c>NpcRagdoll.TickRootFollow</c>)이 루트를 그 몸으로 도로
+        // 끌어간다 — 배치가 통째로 없던 일이 되어, 깨어난 몸이 문 앞에 붙는다. 그 자리에서는 방 안
+        // 목적지까지 경로가 없으므로(셀은 별도 NavMesh 섬) <b>수갑 찬 채 건물 밖을 배회한다</b>.
+        // 검거는 무력화가 전제라 여기 오는 신병은 거의 이쪽이다.
+        if (m_owner.Ragdoll != null && m_owner.Ragdoll.ServerPlaceRagdollBody(RagdollPlacement()))
+            return;
+
         // Warp = 위치를 즉시 옮기고 NavMesh에 다시 붙이는 것. 대상이 어디에 있었든(문 앞·도시 한복판)
         // 감옥 안 배치 지점으로 건너오는 유일한 수단이다 — 두 NavMesh 섬 사이에 경로가 없기 때문이다.
         //
@@ -73,10 +90,11 @@ public class NpcJailedState : NpcStateBase
         }
 
         // <b>에이전트가 꺼져 있으면 실패가 정상이다</b> — Warp는 그때 false를 돌려주지만 몸은 옮겨
-        // 준다(실측). 들어오는 경로는 <b>기절 래그돌인 채로 수감되는 신병</b>이다: 검거는 무력화가
-        // 전제라 거의 모든 수감이 이쪽이고, 밧줄을 걷어도 래그돌이 에이전트를 쥐고 있어 켜지지 않는다
-        // (<c>NpcRopeDrag.ReleaseDrag</c>의 래그돌 가드 — "뗀 쪽이 되돌린다"). NavMesh 재부착은
-        // 일어날 때 래그돌이 하고(<c>NpcRagdoll</c>), <see cref="Tick"/>은 붙기 전까지 배회를 미룬다.
+        // 준다(실측). 밧줄을 걷어도 래그돌이 에이전트를 쥐고 있어 켜지지 않는다
+        // (<c>NpcRopeDrag.ReleaseDrag</c>의 래그돌 가드 — "뗀 쪽이 되돌린다"). 뼈까지 옮겨야 하는
+        // 몸은 위 래그돌 갈래가 이미 가져갔으므로, 여기 오는 것은 뼈가 루트를 따라오는 몸이다.
+        // NavMesh 재부착은 일어날 때 래그돌이 하고(<c>NpcRagdoll</c>), <see cref="Tick"/>은 붙기
+        // 전까지 배회를 미룬다.
         //
         // 방향은 맞추지 않는다 — 래그돌이 쥔 몸의 루트 회전은 골반을 따라가므로 여기서 돌려도 되돌아온다.
         if (!m_owner.Agent.enabled)
@@ -107,6 +125,10 @@ public class NpcJailedState : NpcStateBase
 
         // 일어나는 중에는 움직이지 않는다 — 기상 클립이 도는 동안 걷기 시작하면 누운 몸이 미끄러진다
         if (m_owner.StandUp.IsStandingUp)
+            return;
+
+        // 방 밖으로 새어 나갔으면 배회보다 먼저 되돌린다 (#866)
+        if (TryReturnToRoom())
             return;
 
         // 걷는 중 — 도착했는지만 본다
@@ -161,6 +183,47 @@ public class NpcJailedState : NpcStateBase
         }
 
         m_walking = true;
+    }
+
+    // 래그돌인 몸을 놓을 자리 — 배치 지점을 NavMesh 바닥에 스냅한다. 지점은 바닥보다 조금 아래에
+    // 두는 것이 보통이라(시체 배치와 같은 사정 — <c>JailZone.RandomRestPointInRoom</c>) 그대로
+    // 놓으면 몸이 바닥에 파묻힌 채 떤다.
+    private Vector3 RagdollPlacement()
+    {
+        Vector3 spot = m_owner.Custody.JailSpot.position;
+
+        return UnityEngine.AI.NavMesh.SamplePosition(
+            spot, out UnityEngine.AI.NavMeshHit hit, k_bodySnapRadius, UnityEngine.AI.NavMesh.AllAreas)
+            ? hit.position
+            : spot;
+    }
+
+    // 방 밖에 있는 수감자를 배치 지점으로 되돌린다 — 되돌렸으면(또는 되돌리려다 실패했으면) 참. (#866)
+    //
+    // <b>원인을 가리지 않는 안전망이다.</b> 밖으로 나가는 길은 여럿인데(배치 워프 실패·넉백·겹침
+    // 밀림) 결과는 하나다: 셀이 별도 NavMesh 섬이라 방 안 목적지로 가는 경로가 없어, 수갑 찬 채
+    // 건물 밖을 배회한다. 경로마다 막는 대신 "밖에 있으면 되돌린다"로 받는다.
+    private bool TryReturnToRoom()
+    {
+        if (!JailRoom.HasRoom || Time.time < m_nextRoomCheckTime)
+            return false;
+
+        m_nextRoomCheckTime = Time.time + k_roomCheckInterval;
+
+        if (JailRoom.Contains(m_owner.transform.position))
+            return false;
+
+        if (!m_owner.Agent.Warp(m_owner.Custody.JailSpot.position))
+        {
+            Debug.LogWarning(
+                $"NpcJailedState: 방 밖으로 나간 수감자를 되돌리지 못했다 — {m_owner.name}", m_owner);
+            return true;
+        }
+
+        m_owner.transform.rotation = SpotRotation();
+        BeginPause();
+        Debug.Log($"[감옥] 방 밖으로 나간 수감자를 배치 지점으로 되돌렸다: {m_owner.name}");
+        return true;
     }
 
     // 폴백 — 감옥 방 범위가 없는 씬에서 배치 지점 둘레를 쓴다.
