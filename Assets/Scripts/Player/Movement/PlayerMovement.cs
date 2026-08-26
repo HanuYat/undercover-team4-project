@@ -142,6 +142,10 @@ public class PlayerMovement : NetworkBehaviour
 
     private SnowEvent m_snowEvent; // 눈 날씨 이벤트 캐싱용 (#227)
 
+    /// <summary>눈 이벤트 — 없을 때만 다시 찾는다. 맵 씬에만 있는데 플레이어는 씬을 넘어 산다 (#864).</summary>
+    private SnowEvent Snow =>
+        m_snowEvent != null ? m_snowEvent : m_snowEvent = App.Game.SuddenEvent?.GetEvent<SnowEvent>();
+
     // 이번 Move에서 밟은 면 중 법선이 가장 선 것 — OnControllerColliderHit이 채운다
     private Vector3 m_groundNormal = Vector3.up;
     private bool m_hasGroundContact;
@@ -210,12 +214,6 @@ public class PlayerMovement : NetworkBehaviour
         m_look = GetComponent<PlayerLook>();
         m_ragdoll = GetComponent<PlayerRagdoll>();
         m_netTransform = GetComponent<Unity.Netcode.Components.NetworkTransform>();
-    }
-
-    private void Start()
-    {
-        // App 싱글톤을 통한 날씨 이벤트 초기화 (Awake 시점에서는 App이 준비되지 않을 수 있음)
-        m_snowEvent = App.Game.SuddenEvent?.GetEvent<SnowEvent>();
     }
 
     public override void OnNetworkSpawn()
@@ -601,8 +599,9 @@ public class PlayerMovement : NetworkBehaviour
         //
         // 비율은 <b>내가 선 자리</b>로 묻는다 (#699) — 지붕 아래에는 빙판이 없다. 눈 표현은 이미 실내에서
         // 그치므로 여기서 전역 값을 읽으면 눈이 안 오는 실내에서 바닥만 어는다.
-        float iceRatio = m_snowEvent != null
-            ? m_snowEvent.IceRatioAt(transform.position + Vector3.up * k_shelterProbeOriginHeight)
+        SnowEvent snow = Snow;
+        float iceRatio = snow != null
+            ? snow.IceRatioAt(transform.position + Vector3.up * k_shelterProbeOriginHeight)
             : 0f;
         float currentFriction = Mathf.Lerp(m_defaultFriction, m_snowFriction, iceRatio);
         
