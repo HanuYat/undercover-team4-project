@@ -3,6 +3,7 @@ using Cysharp.Threading.Tasks;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Localization;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 /// <summary>
@@ -55,11 +56,9 @@ public class SessionPanel : PanelBase
     [SerializeField]
     private Button m_continueButton;
 
+    [FormerlySerializedAs("m_joinButton")]
     [SerializeField]
-    private Button m_joinButton;
-
-    [SerializeField]
-    private TMP_InputField m_codeInput;
+    private Button m_joinCodeButton;
 
     [SerializeField]
     private TMP_Text m_statusText;
@@ -128,7 +127,7 @@ public class SessionPanel : PanelBase
     {
         m_createButton.onClick.AddListener(HandleCreateClicked);
         m_continueButton.onClick.AddListener(HandleContinueClicked);
-        m_joinButton.onClick.AddListener(HandleJoinClicked);
+        m_joinCodeButton.onClick.AddListener(HandleJoinCodeClicked);
 
         // 이 화면이 열릴 때 로그인이 끝나 있는지는 어느 길로 왔느냐에 갈린다 (#585):
         //  · 관문(AuthGatePanel)을 넘어 왔으면 — 세 갈래 전부 로그인 뒤에 Pass()하므로 이미 끝나 있다.
@@ -155,7 +154,7 @@ public class SessionPanel : PanelBase
     {
         m_createButton.onClick.RemoveListener(HandleCreateClicked);
         m_continueButton.onClick.RemoveListener(HandleContinueClicked);
-        m_joinButton.onClick.RemoveListener(HandleJoinClicked);
+        m_joinCodeButton.onClick.RemoveListener(HandleJoinCodeClicked);
 
         if (App.Net.Auth != null)
             App.Net.Auth.OnSignedIn -= HandleSignedIn;
@@ -211,7 +210,7 @@ public class SessionPanel : PanelBase
     {
         m_createButton.interactable = interactable;
         m_continueButton.interactable = interactable;
-        m_joinButton.interactable = interactable;
+        m_joinCodeButton.interactable = interactable;
     }
 
     private void HandleCreateClicked() => CreateAsync(continueSave: false).Forget();
@@ -246,7 +245,17 @@ public class SessionPanel : PanelBase
         CreateAsync(continueSave: true).Forget();
     }
 
-    private void HandleJoinClicked() => JoinAsync().Forget();
+    private void HandleJoinCodeClicked()
+    {
+        if (App.UI.Current == null || !App.UI.Current.TryGetPanel(out JoinCodePanel panel))
+        {
+            Debug.LogError("[SessionPanel] JoinCodePanel이 씬에 없어 코드 입력을 열지 못했습니다.");
+            return;
+        }
+
+        panel.Prepare(code => JoinAsync(code).Forget());
+        panel.OpenPanel();
+    }
 
     /// <param name="continueSave">저장된 판을 이어서 시작할지. 세션 생성 전에 정해져야 한다 (#373).</param>
     private async UniTaskVoid CreateAsync(bool continueSave)
@@ -276,7 +285,7 @@ public class SessionPanel : PanelBase
         }
     }
 
-    private async UniTaskVoid JoinAsync()
+    private async UniTaskVoid JoinAsync(string code)
     {
         if (m_isBusy)
             return;
@@ -285,7 +294,7 @@ public class SessionPanel : PanelBase
         SetStatus(m_statusJoining);
         try
         {
-            await App.Net.Session.JoinByCodeAsync(m_codeInput.text.Trim());
+            await App.Net.Session.JoinByCodeAsync(code);
             SetStatus(m_statusConnecting);
             // 씬 전환은 하지 않는다 — 서버 권위. NGO 씬 동기화가 InGame으로 끌고 간다.
         }
