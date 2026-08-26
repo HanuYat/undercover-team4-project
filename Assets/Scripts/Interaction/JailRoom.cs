@@ -14,6 +14,9 @@ using UnityEngine;
 /// </summary>
 public static class JailRoom
 {
+    /// <summary>감옥 방 범위가 배선돼 있는가 — false면 판정이 항상 false라 안팎을 가릴 수 없다. (#866)</summary>
+    public static bool HasRoom => Zone != null && Zone.HasRoomVolume;
+
     /// <summary>이 좌표가 감옥 방 안인가 — 감옥이 없거나 방 범위가 미배선이면 항상 false.</summary>
     public static bool Contains(Vector3 position)
     {
