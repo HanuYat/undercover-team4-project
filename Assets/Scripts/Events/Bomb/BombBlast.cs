@@ -3,14 +3,9 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 폭발 적용 — 반경 내 플레이어·NPC에 피해를 넣고 죽은 몸을 날린다. (#768 분할)
-///
-/// <b>세기는 여기서 정하지 않는다</b> — 감쇠식과 노브는 <see cref="BombBlastProfile"/>이 들고,
-/// 이 컴포넌트는 누가 반경에 들었나를 찾아 적용할 뿐이다. 폭발 시점과 <see cref="BombState"/>
-/// 전이도 <see cref="BombDevice"/>가 쥔다.
-///
-/// <b><see cref="NetworkBehaviour"/>인 이유는 <see cref="BlastDeathsClientRpc"/> 하나다</b> —
-/// 한 <c>NetworkObject</c>에 여러 개는 정상이고, NetworkVariable은 상태 주인 쪽에 남는다.
+/// 폭발 적용 — 반경 내 플레이어·NPC에 피해를 넣고 죽은 몸을 날린다.
+/// 세기(감쇠식·노브)는 <see cref="BombBlastProfile"/>이 갖고, 폭발 시점·상태 전이는 <see cref="BombDevice"/>가 쥔다.
+/// NetworkBehaviour인 이유는 <see cref="BlastDeathsClientRpc"/> 하나다.
 /// </summary>
 public class BombBlast : NetworkBehaviour
 {
@@ -18,13 +13,16 @@ public class BombBlast : NetworkBehaviour
     [SerializeField]
     private BombBlastProfile m_profile = new BombBlastProfile();
 
+    [Header("가림 판정")]
+    [SerializeField]
+    private LayerMask m_blockMask = 1; // Default
+
     private readonly List<Transform> m_blastBuffer = new List<Transform>();
 
     // 이 폭발로 죽은 플레이어 — 래그돌 임펄스 대상(#506). 서버·오프라인에서만 채운다.
     private readonly List<NetworkObject> m_deathBuffer = new List<NetworkObject>();
 
-    // 폭발 대상 수집용 공유 버퍼 — 서버(또는 오프라인)에서만 쓰므로 정적으로 공유해도 안전하다.
-    // 사람 하나가 래그돌 뼈 콜라이더 여러 개로 잡혀 64칸은 대여섯 명이면 포화된다 (#768).
+    // 래그돌 뼈 콜라이더 다중 매칭 때문에 64칸은 대여섯 명이면 포화된다 (#768).
     private static readonly Collider[] s_blastColliders = new Collider[256];
 
     // 한 폭발에서 이미 처리한 NPC — 위 버퍼가 같은 사람을 여러 번 담기 때문이다 (#768).
@@ -56,6 +54,10 @@ public class BombBlast : NetworkBehaviour
         return m_profile.EvaluateRagdollImpulse(targetPosition - transform.position, transform.forward);
     }
 
+    // BombExplosionView도 이걸로 넉백 연출을 가려 서버 피해 판정과 기준을 맞춘다.
+    public bool IsOccluded(Vector3 targetPosition, Transform targetRoot) =>
+        AimOcclusion.IsBlocked(transform.position, targetPosition, targetRoot, m_blockMask);
+
     /// <summary>
     /// 터진다 — 서버(또는 오프라인) 전용. 호출 시점과 중복 방지는 <see cref="BombDevice"/>가 쥔다.
     /// </summary>
@@ -69,6 +71,9 @@ public class BombBlast : NetworkBehaviour
         for (int i = 0; i < m_blastBuffer.Count; i++)
         {
             Transform target = m_blastBuffer[i];
+            if (IsOccluded(target.position, target))
+                continue;
+
             IDamageable damageable = target.GetComponent<IDamageable>();
             if (damageable != null)
                 damageable.TakeDamage(EvaluateDamage(target.position), gameObject);
@@ -79,8 +84,7 @@ public class BombBlast : NetworkBehaviour
                 && target.TryGetComponent(out NetworkObject victim))
                 m_deathBuffer.Add(victim);
 
-            // 휘말린 사람은 밧줄에서 손을 뗀다 (#559) — 넉백이 오너 로컬이라 반경을 아는 것은 이 자리뿐이다.
-            // 두 번 불려도 무해하다(끌고 있지 않으면 그대로 돌아간다).
+            // 휘말린 사람은 밧줄에서 손을 뗀다(#559) — 두 번 불려도 무해하다.
             PlayerEscorter escorter = target.GetComponent<PlayerEscorter>();
             if (escorter != null)
                 escorter.ReleaseAllDrags();
@@ -88,8 +92,7 @@ public class BombBlast : NetworkBehaviour
 
         NotifyBlastDeaths();
 
-        // 반경 내 NPC 피해·넉백 — 서버 권위. 플레이어와 달리 RPC가 없다: 시체 자세는
-        // RagdollPoseStreamer가 서버에서만 굴려 원격에 흘린다(PoseAuthority.Server).
+        // NPC는 시체 자세를 RagdollPoseStreamer가 서버에서만 굴려 흘리므로 RPC가 필요 없다.
         ServerBlastNpcs();
 
         // 진압봉 즉발도 여기로 오므로 main의 "시간 초과" 문구는 쓰지 않는다 (#399 추격 폭탄).
@@ -102,14 +105,9 @@ public class BombBlast : NetworkBehaviour
     // ---- 폭발 사망자 → 래그돌 임펄스 (#506) ----
 
     /// <summary>
-    /// 이 폭발로 죽은 사람과 <b>그에게 줄 임펄스</b>를 전 피어에 알린다.
-    ///
-    /// <b>임펄스를 서버가 계산해 함께 보낸다.</b> 각 피어가 직접 계산하면 감쇠식이 쓰는
-    /// <c>victim.transform.position</c>이 NetworkTransform 보간값이라 <b>세기와 방향이 갈려</b>
-    /// 궤적이 처음부터 벌어진다 — 래그돌은 각 피어가 로컬로 굴리므로 입력이 같아야 한다 (#506 §10-3).
-    /// <b>RPC가 필요한 이유는 임펄스 하나다</b> — 사망 자체는 <see cref="PlayerRagdoll"/>이 동기화값
-    /// 폴링으로 잡지만, "누가 이 폭발로 죽었나"는 피해를 계산한 서버만 안다. 호스트 중복 발행은
-    /// <see cref="WrongCutClientRpc"/> 관례로 막는다(ClientRpc 쪽이 <c>IsServer</c>면 물러난다).
+    /// 이 폭발로 죽은 사람과 임펄스를 전 피어에 알린다.
+    /// 임펄스는 서버가 계산해 함께 보낸다 — 각 피어가 <c>victim.transform.position</c>(보간값)으로
+    /// 직접 계산하면 세기·방향이 갈려 궤적이 벌어진다. 호스트 중복 발행은 <c>IsServer</c> 가드로 막는다.
     /// </summary>
     private void NotifyBlastDeaths()
     {
@@ -149,8 +147,7 @@ public class BombBlast : NetworkBehaviour
         }
     }
 
-    // 래그돌 진입은 <b>멱등이다</b> — 사망 폴링과 이 RPC는 다른 오브젝트에서 와 순서를 맞출 수 없어,
-    // 어느 쪽이 먼저 와도 결과가 같게 만든다 (#506 §3-1).
+    // 래그돌 진입은 멱등이다 — 사망 폴링과 이 RPC 중 어느 쪽이 먼저 와도 결과가 같다.
     private void ApplyBlastRagdoll(NetworkObject victim, Vector3 impulse)
     {
         if (victim == null || !victim.TryGetComponent(out PlayerRagdoll ragdoll))
@@ -159,11 +156,11 @@ public class BombBlast : NetworkBehaviour
         ragdoll.EnterRagdoll(impulse);
     }
 
-    // 반경 내 NPC에 피해를 주고, 죽으면 시체를 날리고 살아 있으면 넉백만 건다.
-    // 한 사람이 콜라이더 여러 개로 잡히므로 집합으로 한 번만 처리한다.
+    // 콜라이더 여러 개로 잡히는 NPC를 집합으로 한 번만 처리해 피해·넉백을 건다.
     private void ServerBlastNpcs()
     {
-        int hitCount = Physics.OverlapSphereNonAlloc(transform.position, m_profile.Radius, s_blastColliders);
+        Vector3 origin = transform.position;
+        int hitCount = Physics.OverlapSphereNonAlloc(origin, m_profile.Radius, s_blastColliders);
 
         // 포화는 조용히 틀린다 — 넘친 대상은 아무 일도 겪지 않는다
         if (hitCount == s_blastColliders.Length)
@@ -177,6 +174,9 @@ public class BombBlast : NetworkBehaviour
                 continue;
 
             Vector3 position = npc.transform.position;
+            if (IsOccluded(position, npc.transform))
+                continue;
+
             int damage = EvaluateDamage(position);
             if (damage <= 0)
                 continue;
@@ -190,8 +190,7 @@ public class BombBlast : NetworkBehaviour
             // 시체에는 넉백이 막혀 있어(#634) 임펄스로만 움직인다
             if (npc.Death.IsDead)
             {
-                // 원래 있던 시체는 건드리지 않는다 — EnterRagdoll이 정착 시체를 거부하지 않아
-                // (뼈가 키네마틱이라 경고만 뜨고 몸이 깨어난다) 이 wasAlive가 유일한 방어다
+                // wasAlive 가드로 원래 있던 시체는 건드리지 않는다 (EnterRagdoll은 정착 시체를 거부하지 않는다)
                 if (wasAlive && npc.Ragdoll != null)
                     npc.Ragdoll.EnterRagdoll(EvaluateRagdollImpulse(position));
             }
