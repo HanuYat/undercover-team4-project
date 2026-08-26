@@ -29,6 +29,18 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
     [SerializeField] private AccessoryCatalog m_catalog;
 
     [Header("연출")]
+    [Tooltip("투입구로 빨려 들어갈 토큰 그림. 비우면 투입 연출을 건너뛴다")]
+    [SerializeField] private Sprite m_coinSprite;
+
+    [Tooltip("투입구 위치 — 자판기 기준 로컬 오프셋(m). 인스펙터에서 눈으로 맞출 것")]
+    [SerializeField] private Vector3 m_coinSlotOffset = new Vector3(0.55f, 1.15f, 0.35f);
+
+    [Tooltip("토큰 한 변 크기(m)")]
+    [SerializeField] private float m_coinSize = 0.14f;
+
+    [Tooltip("토큰이 들어가는 데 걸리는 시간(초) — 이 뒤에 룰렛이 돈다")]
+    [SerializeField] private float m_coinInsertSeconds = 0.5f;
+
     [Tooltip("캡슐·치장이 뜰 자리. 비우면 자판기 자신의 위치를 쓴다")]
     [SerializeField] private Transform m_dispenseAnchor;
 
@@ -110,8 +122,32 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
 
         App.Sound?.PlaySfx2D(m_drawSound);
 
-        // 릴이 결과 문구까지 띄운다 — 창이 화면을 덮으므로 토스트는 그 뒤에 가린다.
-        // 릴이 없는 씬(패널 미배치)에서는 기계 앞 모형과 토스트로 물러난다.
+        // 토큰이 들어가는 것을 보여 준 뒤에 돌린다 — 넣지도 않았는데 릴부터 돌면 무엇을 내고
+        // 받는 것인지 읽히지 않는다. 장부는 이미 위에서 끝냈으므로 이 연출이 끊겨도 잔량은 옳다.
+        DrawAsync(slot, index, gained).Forget();
+
+        // 같이 서 있는 사람도 보게 한다 — 세션이 아니면(씬 단독 Play) 보낼 곳이 없다
+        if (IsSpawned)
+            ReportDrawRpc((byte)slot, index);
+    }
+
+    /// <summary>
+    /// 뽑은 사람의 연출 — 토큰이 투입구로 들어가고, 그 뒤에 릴이 돈다.
+    ///
+    /// 릴이 결과 문구까지 띄운다 — 창이 화면을 덮으므로 토스트는 그 뒤에 가린다.
+    /// 릴이 없는 씬(패널 미배치)에서는 기계 앞 모형과 토스트로 물러난다.
+    /// </summary>
+    private async UniTaskVoid DrawAsync(EAccessorySlot slot, int index, bool gained)
+    {
+        try
+        {
+            await PlayCoinInsertAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            return; // 자판기가 사라졌다(씬 전환)
+        }
+
         CosmeticGachaPanel reel = FindReel();
         if (reel != null)
         {
@@ -122,10 +158,52 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
             ShowResultMessage(slot, index, gained);
             PlayRevealAsync(slot, index).Forget();
         }
+    }
 
-        // 같이 서 있는 사람도 보게 한다 — 세션이 아니면(씬 단독 Play) 보낼 곳이 없다
-        if (IsSpawned)
-            ReportDrawRpc((byte)slot, index);
+    /// <summary>
+    /// 토큰 한 닢이 투입구 위에 떠서 돌다가 빨려 들어간다 (#850) — 그림이 없으면 아무것도 하지 않는다.
+    ///
+    /// 스프라이트로 그리는 이유는 이 토큰이 <b>UI에만 있던 그림</b>이라서다 — 같은 그림을 쓰면
+    /// 상점 HUD의 보유 개수와 여기서 사라지는 한 닢이 같은 물건으로 읽힌다.
+    /// 늘 보는 사람 쪽을 향하게 세운다 — 자판기 앞면이 어느 축인지는 프롭마다 다르다.
+    /// </summary>
+    private async UniTask PlayCoinInsertAsync()
+    {
+        if (m_coinSprite == null || m_coinInsertSeconds <= 0f)
+            return;
+
+        Vector3 slot = transform.TransformPoint(m_coinSlotOffset);
+        var coin = new GameObject("GachaCoin");
+        var renderer = coin.AddComponent<SpriteRenderer>();
+        renderer.sprite = m_coinSprite;
+
+        try
+        {
+            float elapsed = 0f;
+            while (elapsed < m_coinInsertSeconds)
+            {
+                await UniTask.NextFrame(destroyCancellationToken);
+                elapsed += Time.deltaTime;
+
+                float t = Mathf.Clamp01(elapsed / m_coinInsertSeconds);
+                coin.transform.position = Vector3.Lerp(slot + Vector3.up * 0.35f, slot, t * t);
+
+                // 마지막 구간에서만 사라진다 — 처음부터 줄이면 들어가는 것이 아니라 녹는 것으로 보인다
+                float shrink = t < 0.75f ? 1f : 1f - ((t - 0.75f) / 0.25f);
+                coin.transform.localScale = Vector3.one * (m_coinSize * shrink);
+
+                Camera view = Camera.main;
+                if (view != null)
+                    coin.transform.rotation = Quaternion.LookRotation(
+                        coin.transform.position - view.transform.position
+                    );
+            }
+        }
+        finally
+        {
+            if (coin != null)
+                Destroy(coin);
+        }
     }
 
     /// <summary>
@@ -177,7 +255,22 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
         if (m_playing || m_catalog == null || IsReelSpinning())
             return;
 
-        PlayRevealAsync((EAccessorySlot)slot, index).Forget();
+        PlayRemoteDrawAsync((EAccessorySlot)slot, index).Forget();
+    }
+
+    // 남이 돌리는 것도 토큰 투입부터 보인다 — 기계 앞 모형만 뜨면 무엇 때문에 나온 것인지 모른다
+    private async UniTaskVoid PlayRemoteDrawAsync(EAccessorySlot slot, int index)
+    {
+        try
+        {
+            await PlayCoinInsertAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        PlayRevealAsync(slot, index).Forget();
     }
 
     // 릴은 스스로 UI 매니저에 등록한다 — 자판기가 인스펙터로 물고 있지 않는 이유는
@@ -262,6 +355,13 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
     {
         Clear();
         base.OnDestroy();
+    }
+
+    // 투입구 자리는 눈으로 맞춰야 한다 — 고를 때 그 자리에 토큰 크기의 원을 그려 준다
+    private void OnDrawGizmosSelected()
+    {
+        Gizmos.color = new Color(1f, 0.82f, 0.25f);
+        Gizmos.DrawWireSphere(transform.TransformPoint(m_coinSlotOffset), m_coinSize * 0.5f);
     }
 
     private void ShowResultMessage(EAccessorySlot slot, int index, bool gained)
