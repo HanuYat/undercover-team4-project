@@ -1,14 +1,9 @@
 using Unity.Netcode;
 using UnityEngine;
 
-/// <summary>
-/// 1인칭 손·장착 아이템 표시. (#45)
-/// 오너의 카메라 하위 손 앵커에 손 모델을 표시하고, PlayerItemUser의 장착 변경 이벤트를 구독해
-/// 장착 아이템의 HeldModelPrefab을 손에 갈아끼운다.
-/// 순수 시각 표현 — 아이템 사용 로직(PlayerItemUser → ItemBase.Use)에는 관여하지 않는다.
-/// 1인칭(오너 로컬) 전용: 다른 플레이어에게 보이는 3인칭 장착 표시와 장착 상태의
-/// 네트워크 동기화는 이 이슈 범위 밖이므로 후속 이슈로 다룬다.
-/// </summary>
+// 1인칭 손·장착 아이템 표시(#45). 오너 카메라 하위 손 앵커에 손 모델을 표시하고, PlayerItemUser의
+// 장착 변경 이벤트를 구독해 HeldModelPrefab을 손에 갈아끼운다. 순수 시각 표현이라 아이템 사용 로직에는
+// 관여하지 않는다. 1인칭(오너 로컬) 전용 — 3인칭 장착 표시·네트워크 동기화는 PlayerHeldItemView가 맡는다.
 [RequireComponent(typeof(PlayerItemUser))]
 public class PlayerHandView : NetworkBehaviour
 {
@@ -60,22 +55,15 @@ public class PlayerHandView : NetworkBehaviour
     private const float k_convulsionOffset = 0.006f;
 
     // ---- 스윙 튜닝 (인스펙터) ----
-    //
-    // 회전은 팔 로컬이 아니라 카메라(부모) 축 기준이다 — Update가 base 회전 <b>앞에</b> 곱한다.
-    // X = 위아래(음수가 들어올림), Y = 좌우, Z = 롤.
-    //
-    // 각도가 작아 보여도 회전축이 어깨라 화면에서는 크게 움직인다. 팔이 기준 자세부터 이미
-    // 화면 오른쪽 아래(뷰포트 약 0.80, 0.21)에 있어서, 키우면 손이 곧장 프레임 밖으로 나간다.
-    // <b>조정할 때는 '손이 화면에 남아 있는지'를 가장 먼저 볼 것</b> — 손만 빠지고 봉은 남으면
-    // 봉이 허공에 떠 보인다. 기본값의 실측 여유는 손 최저 y=0.044 / 최대 x=0.942다.
-    //
-    // 휘두르는 '맛'은 대부분 롤(Z)에서 나온다. X·Y는 손을 화면에서 옮길 뿐이고, 든 물건이 실제로
-    // 회전해 보이게 만드는 건 롤이다 — 롤 없이 X·Y만 키우면 봉이 각도를 유지한 채 미끄러져
-    // 휘두르는 게 아니라 흔드는 그림이 된다. 게다가 롤은 손 위치를 거의 안 건드린다(계측: 롤을
-    // 26→40으로 14도 더 줘도 손은 0.06→0.04, 봉 기울기는 -41°→-49°). 그래서 <b>역동성은 롤에서 벌고
-    // X·Y는 아낀다.</b> 부호 주의 — 롤 음수가 봉을 오른쪽으로 세우고, 양수가 좌하로 넘긴다.
-    //
-    // 기본값에서 봉의 화면상 기울기가 -9°(준비) → -53°(임팩트) → -66°(팔로스루)로 돈다.
+    // 회전은 팔 로컬이 아니라 카메라(부모) 축 기준(Update가 base 회전 앞에 곱함). X=위아래, Y=좌우, Z=롤.
+    // 회전축이 어깨라 각도가 작아도 화면에서는 크게 움직인다. 기본 자세가 이미 화면 오른쪽 아래
+    // (뷰포트 약 0.80, 0.21)라 키우면 손이 프레임 밖으로 나가기 쉽다 — 조정 시 손이 화면에 남는지부터
+    // 확인할 것(실측 여유: 손 최저 y=0.044, 최대 x=0.942).
+    // 휘두르는 '맛'은 대부분 롤(Z)에서 나온다. X·Y는 손 위치만 옮기고, 회전해 보이게 만드는 건 롤이다 —
+    // 롤 없이 X·Y만 키우면 흔드는 그림이 된다. 롤은 손 위치를 거의 안 건드리므로(실측: 26→40으로
+    // 14도 더 줘도 손은 0.06→0.04, 봉 기울기는 -41°→-49°) 역동성은 롤에서 벌고 X·Y는 아낀다.
+    // 부호: 롤 음수=봉이 오른쪽으로, 양수=좌하로.
+    // 기본값 화면 기울기: -9°(준비) → -53°(임팩트) → -66°(팔로스루).
 
     [Header("스윙 포즈 — 준비 (#217)")]
     [Tooltip("오른쪽 위로 세워 젖히는 자세. 카메라 축 기준 회전(도)")]
@@ -127,9 +115,8 @@ public class PlayerHandView : NetworkBehaviour
     // 훑는 것처럼 보인다. 기본값은 코드로 계산하던 것과 정확히 같은 모양이다(준비 1-(1-u)²,
     // 내려침 u², 팔로스루 1-(1-u)², 회수 smoothstep).
     //
-    // 경계에서 속도가 이어지도록 접선을 맞출 것. 준비 끝과 내려침 시작은 둘 다 0,
-    // <b>임팩트(내려침 끝 ↔ 팔로스루 시작)는 둘 다 최고 속도</b>여야 한다 — 여기서 0이 되면
-    // 봉이 맞는 순간 허공에 멈춰 선다.
+    // 경계에서 속도가 이어지도록 접선을 맞출 것. 준비 끝과 내려침 시작은 둘 다 0, 임팩트(내려침 끝 ↔
+    // 팔로스루 시작)는 둘 다 최고 속도여야 한다 — 여기서 0이 되면 봉이 맞는 순간 허공에 멈춰 선다.
     [Tooltip("준비 — 빠르게 젖혔다 멎는다(감속으로 끝날 것)")]
     [SerializeField]
     private AnimationCurve m_swingWindupCurve = new AnimationCurve(
@@ -158,14 +145,17 @@ public class PlayerHandView : NetworkBehaviour
     private PlayerItemUser m_itemUser;
     private GameObject m_heldModelInstance;
 
-    // FP 손 손가락 프리셋 — 장착 아이템의 HandGrip에 맞춰 손가락을 굽힌다 (#265).
-    // 손 본이 통짜 스킨드 메시라 애니메이터 없이 본을 직접 회전한다.
-    //
-    // <b>축(#428): 굽힘 = 본 로컬 Z(+가 손바닥 안쪽), 벌림 = Y, X는 안 쓴다.</b>
-    // 이 리그의 손가락 본은 제 로컬 +X로 뻗어 있어(자식 본 localPosition이 전부 (+길이, 0, 0))
+    // 1인칭 손을 그리는 카메라와 월드를 그리는 카메라. 둘은 트랜스폼이 같아도 FOV가 달라
+    // 같은 월드 점의 화면 위치가 어긋난다 — 근거·계산은 docs/828-rope-first-person.md. (#828)
+    private Camera m_worldCamera;
+    private Camera m_viewmodelCamera;
+
+    // FP 손 손가락 프리셋 — 장착 아이템의 HandGrip에 맞춰 손가락을 굽힌다(#265). 손 본이 통짜 스킨드
+    // 메시라 애니메이터 없이 본을 직접 회전한다.
+    // 축(#428): 굽힘=본 로컬 Z(+가 손바닥 안쪽), 벌림=Y, X는 안 쓴다. 손가락 본이 로컬 +X로 뻗어 있어
     // X 회전은 굽힘이 아니라 길이축 롤이다 — 키워도 안 굽고 살만 꼬인다. 되돌리지 말 것.
-    // 엄지만 <b>-Y가 굽힘</b>이다. 쥘 때 엄지는 감기는 게 아니라 손바닥을 가로질러 넘어오기(대립) 때문.
-    // 근거(3관절에 ±40° 먹이고 잰 손끝↔엄지끝 거리, 기준 0.156): +Z 0.138 / -Z 0.189 / 엄지 -Y 0.090.
+    // 엄지만 -Y가 굽힘이다(감기는 게 아니라 손바닥을 가로질러 넘어오는 대립 운동이라). 근거(3관절에
+    // ±40° 먹이고 잰 손끝↔엄지끝 거리, 기준 0.156): +Z 0.138 / -Z 0.189 / 엄지 -Y 0.090.
     private enum FingerKind { Finger, Index, Thumb }
 
     private struct FingerJoint
@@ -219,6 +209,8 @@ public class PlayerHandView : NetworkBehaviour
 
         m_controller = GetComponent<CharacterController>();
 
+        CacheCameras(); // 손을 그리는 카메라·월드를 그리는 카메라 (#828)
+
         SetupHandViewmodel(); // 손 모델 활성화·레이어·앵커·기준 포즈·손가락 캐시 (FP 팔이 있을 때)
         EnsureHandAnchor(); // 위에서 앵커를 못 잡았으면(FP 팔 없음 등) 카메라 하위에 폴백 앵커 생성
 
@@ -255,6 +247,54 @@ public class PlayerHandView : NetworkBehaviour
         CacheFingerJoints();
     }
 
+    // 손을 그리는 두 카메라를 각자의 컬링 마스크로 구분해 캐시한다 — Viewmodel 레이어를
+    // 그리는 쪽이 1인칭 팔 카메라, 아닌 쪽이 월드(=밧줄 LineRenderer)를 그리는 카메라다.
+    // 이름이 아니라 마스크로 가르는 이유는 씬 계층 순서에 기대지 않기 위해서다. (#828)
+    private void CacheCameras()
+    {
+        int viewmodelLayer = LayerMask.NameToLayer("Viewmodel");
+        if (viewmodelLayer < 0)
+        {
+            return; // 레이어가 없는 구성(테스트 씬 등) — 이후 TryGetHandWorldPoint가 폴백을 낸다
+        }
+
+        int viewmodelBit = 1 << viewmodelLayer;
+        foreach (Camera cam in GetComponentsInChildren<Camera>(true))
+        {
+            if ((cam.cullingMask & viewmodelBit) != 0)
+                m_viewmodelCamera = cam;
+            else
+                m_worldCamera = cam;
+        }
+    }
+
+    // 1인칭 손을 메인 카메라 월드 좌표로 환산해 낸다 — 밧줄(#269) 시작점용. 실패하면 3인칭 손 앵커로
+    // 폴백. 두 카메라 FOV가 달라 좌표를 그대로 못 쓰는 이유는 docs/828-rope-first-person.md 참고.
+    // depth: 시작점을 놓을 카메라 앞 거리(m), 0 이하면 손 자체 깊이. viewportOffsetX: 화면 가로 보정(뷰포트 비율, 음수=왼쪽).
+    public bool TryGetHandWorldPoint(float depth, out Vector3 point, float viewportOffsetX = 0f)
+    {
+        point = default;
+
+        if (!enabled || m_handAnchor == null || m_worldCamera == null)
+        {
+            return false; // 비오너·앵커 미해결 — 3인칭으로 폴백
+        }
+
+        // 감정표현(#219)·사망 관전(#576)으로 3인칭에 빠지면 SetViewmodelVisible(false)가 이 팔을
+        // 끈다 — 그 상태를 그대로 "지금은 3인칭 시점"의 신호로 재사용한다.
+        if (m_handsModel != null && !m_handsModel.activeInHierarchy)
+        {
+            return false;
+        }
+
+        Camera viewCamera = m_viewmodelCamera != null ? m_viewmodelCamera : m_worldCamera;
+        Vector3 viewport = viewCamera.WorldToViewportPoint(m_handAnchor.position);
+        viewport.x += viewportOffsetX;
+        viewport.z = depth > 0f ? depth : viewport.z;
+        point = m_worldCamera.ViewportToWorldPoint(viewport);
+        return true;
+    }
+
     public override void OnNetworkDespawn()
     {
         if (m_itemUser != null)
@@ -263,17 +303,9 @@ public class PlayerHandView : NetworkBehaviour
         }
     }
 
-    /// <summary>
-    /// 1인칭 뷰모델(팔·든 아이템)을 숨기거나 되살린다 — 감정표현 3인칭 전환이 쓴다. (#219)
-    ///
-    /// 3인칭으로 시점을 빼도 이 팔은 카메라 자식이라 <b>화면에 그대로 붙어 따라온다</b>.
-    /// 내 캐릭터의 전신이 보이는 화면에 팔 한 쌍이 허공에 떠 있는 그림이 되므로 재생 동안 감춘다.
-    ///
-    /// 레이어를 만지지 않고 오브젝트를 끄는 이유: 여기 있는 모든 것은 <see cref="SetupHandViewmodel"/>이
-    /// 이미 Viewmodel 레이어로 옮겨 뒀고, 되살릴 때 원래 레이어를 복원할 필요가 없어야 한다.
-    ///
-    /// 비오너에는 애초에 뷰모델이 없다(OnNetworkSpawn에서 비활성) — 그쪽에서 불려도 무해하다.
-    /// </summary>
+    // 1인칭 뷰모델(팔·든 아이템) 표시 전환 — 감정표현 3인칭 전환(#219)이 쓴다. 팔이 카메라 자식이라
+    // 안 끄면 3인칭 화면에 허공에 뜬 채로 남는다. 레이어가 아니라 오브젝트를 끄는 건 SetupHandViewmodel이
+    // 이미 Viewmodel 레이어로 옮겨 뒀으니 복원할 게 없어야 해서. 비오너는 애초에 뷰모델이 없어 무해하다.
     public void SetViewmodelVisible(bool visible)
     {
         if (!enabled || m_handsModel == null)
@@ -284,12 +316,8 @@ public class PlayerHandView : NetworkBehaviour
         m_handsModel.SetActive(visible);
     }
 
-    /// <summary>
-    /// 1인칭 팔에 타격 스윙 1회를 재생한다 — 3인칭 상체 클립과 짝을 이루는 내 화면 몫이다. (#217)
-    /// 타격 이벤트 하나로 둘이 함께 돌도록 <see cref="PlayerAnimationDriver.TriggerAttack"/>이 불러 준다.
-    /// 비오너 인스턴스는 OnNetworkSpawn에서 enabled=false라 여기서 곧장 빠진다 — 남의 1인칭 팔은
-    /// 애초에 표시되지 않으므로 흔들 것도 없다(남이 보는 스윙은 3인칭 클립이 담당).
-    /// </summary>
+    // 1인칭 팔 타격 스윙 1회 재생(#217) — 3인칭 상체 클립과 짝을 이루는 내 화면 몫.
+    // PlayerAnimationDriver.TriggerAttack이 같은 타격 이벤트로 호출한다. 비오너는 enabled=false라 무해.
     public void PlaySwing()
     {
         if (!enabled || m_handsModel == null)
@@ -302,11 +330,8 @@ public class PlayerHandView : NetworkBehaviour
         m_swingTime = 0f;
     }
 
-    /// <summary>
-    /// 맞은 순간 1인칭 팔을 한 번 튕긴다 — <see cref="PlayerHitView"/>가 오너 화면에서만 부른다. (#476)
-    /// 스윙과 독립이라 휘두르는 도중에 맞아도 둘이 겹쳐 재생된다(Update가 두 포즈를 곱해 얹는다) —
-    /// 때리는 중에 맞는 것은 실제로 일어나는 일이므로 한쪽을 끊지 않는다.
-    /// </summary>
+    // 맞은 순간 1인칭 팔을 튕긴다(#476) — PlayerHitView가 오너 화면에서만 호출.
+    // 스윙과 독립이라 휘두르는 도중에 맞아도 둘 다 재생된다(Update가 두 포즈를 곱해 얹는다).
     public void PlayHitShake()
     {
         if (!enabled || m_handsModel == null)
@@ -325,11 +350,8 @@ public class PlayerHandView : NetworkBehaviour
         m_hitShakeTime = 0f; // 진행 중이어도 처음부터 — 새로 맞은 것이 우선이다 (스윙과 같은 방침)
     }
 
-    /// <summary>
-    /// 감전 경련 강도 — 0이면 떨지 않는다. 매 프레임 갱신하는 <b>지속형</b> 값이다. (#477)
-    /// 단발 감쇠 진동인 <see cref="PlayHitShake"/>와 별개로, 기절이 유지되는 내내 손이 떨린다.
-    /// 둘은 동시에 얹힐 수 있다 — 맞고 쓰러진 그 순간이 실제로 그렇다.
-    /// </summary>
+    // 감전 경련 강도 설정(#477, 0=안 떪) — 매 프레임 갱신하는 지속형 값.
+    // 단발 감쇠 진동인 PlayHitShake와 별개로 동시에 걸릴 수 있다(맞고 쓰러지는 순간이 그렇다).
     public void SetConvulsion(float intensity) =>
         m_convulsionIntensity = Mathf.Clamp01(intensity);
 
@@ -358,9 +380,8 @@ public class PlayerHandView : NetworkBehaviour
         AdvanceSwingTime();
         EvaluateSwingPose(out Vector3 swingOffset, out Quaternion swingRotation);
 
-        // 피격 킥도 같은 방식으로 얹는다 (#476) — 스윙과 독립이라 휘두르는 도중에 맞으면 둘이 겹친다.
-        // 킥을 스윙 <b>바깥쪽</b>에 곱해 스윙 포즈 전체를 통째로 흔든다(안쪽에 넣으면 스윙의 기준
-        // 자세만 틀어져 휘두르는 궤적이 어긋나 보인다).
+        // 피격 킥도 같은 방식으로 얹는다(#476) — 스윙과 독립이라 휘두르는 도중에 맞으면 둘이 겹친다.
+        // 킥을 스윙 바깥쪽에 곱해 스윙 포즈 전체를 통째로 흔든다(안쪽에 넣으면 궤적이 어긋나 보인다).
         AdvanceHitShakeTime();
         EvaluateHitShakePose(out Vector3 hitOffset, out Quaternion hitRotation);
 
@@ -377,11 +398,8 @@ public class PlayerHandView : NetworkBehaviour
             * Quaternion.Euler(y * k_swayTiltDegrees, x * k_swayTiltDegrees, 0f);
     }
 
-    /// <summary>
-    /// 지금 감전 경련 강도에 해당하는 포즈를 낸다 — 지속형이라 타이머가 없다(강도가 곧 상태). (#477)
-    /// 파형은 <see cref="ShockShake"/>가 카메라 떨림과 공유한다 — 주파수가 어긋나면 손과 시야의
-    /// 두 진동이 서로 미끄러져 경련이 아니라 고장난 화면처럼 보인다.
-    /// </summary>
+    // 현재 감전 경련 강도의 포즈를 낸다(#477) — 지속형이라 타이머 없음(강도가 곧 상태).
+    // 파형은 ShockShake가 카메라 떨림과 공유 — 주파수가 어긋나면 경련이 아니라 고장난 화면처럼 보인다.
     private void EvaluateConvulsionPose(out Vector3 offset, out Quaternion rotation)
     {
         ShockShake.Evaluate(
@@ -409,11 +427,8 @@ public class PlayerHandView : NetworkBehaviour
         }
     }
 
-    /// <summary>
-    /// 지금 피격 킥 진행도에 해당하는 포즈를 낸다 — 상태를 바꾸지 않는다(타이머는 AdvanceHitShakeTime 담당). (#476)
-    /// 감쇠 진동이다: 맞은 순간 최대로 튀었다가 진폭이 선형으로 줄며 기준 자세로 수렴한다.
-    /// 진행 중이 아니면 무변화(오프셋 0, 항등 회전).
-    /// </summary>
+    // 현재 피격 킥 진행도의 포즈를 낸다(#476, 상태는 안 바꿈 — 타이머는 AdvanceHitShakeTime 담당).
+    // 감쇠 진동: 맞은 순간 최대로 튀었다가 선형으로 줄며 수렴한다. 진행 중 아니면 무변화.
     private void EvaluateHitShakePose(out Vector3 offset, out Quaternion rotation)
     {
         offset = Vector3.zero;
@@ -432,7 +447,7 @@ public class PlayerHandView : NetworkBehaviour
         offset = m_hitShakeAxis * (wave * k_hitShakeOffset);
     }
 
-    // 스윙 타이머를 한 프레임 진행시킨다 — Update에서 <b>프레임당 정확히 한 번만</b> 부를 것.
+    // 스윙 타이머를 한 프레임 진행시킨다 — Update에서 프레임당 정확히 한 번만 부를 것.
     // 두 번 부르면 스윙이 2배 속도로 간다. 진행 중이 아니면 아무 일도 하지 않는다.
     private void AdvanceSwingTime()
     {
@@ -448,10 +463,7 @@ public class PlayerHandView : NetworkBehaviour
         }
     }
 
-    /// <summary>
-    /// 지금 스윙 진행도에 해당하는 포즈를 낸다 — 상태를 바꾸지 않는다(타이머는 AdvanceSwingTime 담당).
-    /// 스윙 중이 아니면 무변화(오프셋 0, 항등 회전).
-    /// </summary>
+    // 현재 스윙 진행도의 포즈를 낸다(상태는 안 바꿈 — 타이머는 AdvanceSwingTime 담당). 스윙 중 아니면 무변화.
     private void EvaluateSwingPose(out Vector3 offset, out Quaternion rotation)
     {
         offset = Vector3.zero;
@@ -633,14 +645,9 @@ public class PlayerHandView : NetworkBehaviour
         }
     }
 
-    /// <summary>
-    /// 든 총의 방아쇠에 검지를 얹는다. (#428)
-    /// 방아쇠 위치는 총마다 달라 <see cref="CurlEuler"/>의 고정 각도로는 못 맞춘다(테이저에 45도를 고정으로
-    /// 물려 보니 5.3cm 어긋났다). Synty 총기 프리팹은 방아쇠가 이름에 "Trigger"가 든 별도 자식 메시라, 그 중심을
-    /// 목표로 검지 굽힘만 훑어 가장 가까운 각을 고른다 — 아이템 오프셋을 나중에 옮겨도 검지가 따라온다.
-    /// 거리는 손끝 점이 아니라 <b>말단 마디 선분</b>으로 잰다. 방아쇠에 닿는 건 손톱이 아니라 손가락
-    /// 바닥면이라, 점으로 재면 손끝을 방아쇠에 붙이려고 과하게 말린다.
-    /// </summary>
+    // 든 총의 방아쇠에 검지를 맞춘다(#428). 방아쇠 위치가 총마다 달라 CurlEuler의 고정 각도로는 못
+    // 맞춘다(테이저 실측 5.3cm 어긋남). 방아쇠 메시(이름에 "Trigger" 포함) 중심까지 거리를 검지 굽힘 각으로
+    // 훑어 가장 가까운 값을 고른다. 거리는 손끝 점이 아니라 말단 마디 선분 기준 — 점으로 재면 과하게 말린다.
     private void AimIndexAtTrigger(GameObject heldModel)
     {
         if (m_fingerJoints == null || heldModel == null)
@@ -720,15 +727,9 @@ public class PlayerHandView : NetworkBehaviour
         return Vector3.Distance(a + ab * t, p);
     }
 
-    /// <summary>
-    /// 프리셋·손가락 종류·마디 깊이에 해당하는 굽힘 오일러 각(도)을 낸다. (#265, 축 정정 #428)
-    /// 각도는 <b>뿌리 마디 기준</b>이고 깊은 마디는 s_*DepthWeights 비율만큼만 굽는다.
-    /// 축은 FingerKind 선언부 주석 참고 — 되돌리면 손가락이 다시 비틀린다.
-    ///
-    /// 각도 감각: Finger 체인 손끝이 Hand_R 로컬로 curl 90 → (0.039, 0.032)면 주먹,
-    /// 100 → (0.040, 0.012)면 손끝이 손바닥에 닿고, 110부터 y가 음수 = 손바닥을 뚫는다.
-    /// 그래서 손가락 curl 상한은 100 언저리다.
-    /// </summary>
+    // 그립·손가락 종류·마디 깊이에 해당하는 굽힘 오일러 각(#265, 축 정정 #428). 각도는 뿌리 마디 기준이고
+    // 깊은 마디는 s_*DepthWeights 비율만큼만 굽는다. 축은 FingerKind 선언부 참고 — 되돌리면 손가락이 비틀린다.
+    // curl 상한은 100 언저리(실측: curl 100에서 손끝이 손바닥에 닿고, 110부터 손바닥을 뚫는다).
     private static Vector3 CurlEuler(HandGrip grip, FingerKind kind, int depth)
     {
         bool isThumb = kind == FingerKind.Thumb;

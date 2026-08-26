@@ -7396,6 +7396,9 @@ MonoBehaviour:
   m_maxSag: 0.3
   m_fallbackHandHeight: 1.1
   m_npcKnotHeight: 0.25
+  m_fpStartDepth: 0.6
+  m_fpStartWidth: 0.012
+  m_fpStartOffsetX: -0.1
   m_dustPrefab: {fileID: 1045822040965688886, guid: 4de88cbc821234449becd970358420a7, type: 3}
 --- !u!114 &-3123601567961304525
 MonoBehaviour:
