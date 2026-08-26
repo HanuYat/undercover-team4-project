@@ -398,6 +398,10 @@ MonoBehaviour:
     m_Localized: 'Tokens held : {0}'
     m_Metadata:
       m_Items: []
+  - m_Id: 669658743660544
+    m_Localized: Cosmetic token +{0}!
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

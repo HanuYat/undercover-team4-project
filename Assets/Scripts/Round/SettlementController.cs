@@ -330,6 +330,10 @@ public class SettlementController : MonoBehaviour
             return;
 
         CosmeticInventory.AddTokens(1);
+
+        // 축하는 상점에서 한다 (#850) — 지금은 정산 패널이 화면을 덮고 있어 알림이 묻힌다.
+        CosmeticInventory.QueueRewardNotice(1);
+
         Debug.Log($"[치장] 라운드 클리어 — 뽑기 토큰 +1 (보유 {CosmeticInventory.Tokens}개)");
     }
 }

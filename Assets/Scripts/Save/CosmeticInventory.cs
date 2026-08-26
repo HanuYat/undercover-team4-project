@@ -47,6 +47,7 @@ public static class CosmeticInventory
         OnOwnedChanged = null;
         OnTokensChanged = null;
 
+        s_pendingReward = 0;
         s_account = k_localAccount;
         LoadAccount();
     }
@@ -103,6 +104,29 @@ public static class CosmeticInventory
             Debug.Log($"[치장] 가지지 않은 {slot} {index}번을 입고 있어 벗긴다 (#818 D)");
             GameSettings.SetAccessory(slot, 0);
         }
+    }
+
+    /// <summary>
+    /// 아직 축하하지 못한 지급분 (#850) — 정산에서 적어 두고 상점에서 소비한다.
+    ///
+    /// 저장하지 않는다: 이 값은 <b>보유량이 아니라 "이번에 알릴 것이 남았는가"</b>다. 토큰 자체는
+    /// <see cref="AddTokens"/>가 이미 계정에 넣었으므로, 알림을 못 보고 껐다고 잃는 것은 없다.
+    /// </summary>
+    private static int s_pendingReward;
+
+    /// <summary>축하할 지급분을 적어 둔다 — 상점에 들어갈 때까지 쌓인다.</summary>
+    public static void QueueRewardNotice(int count)
+    {
+        if (count > 0)
+            s_pendingReward += count;
+    }
+
+    /// <summary>적어 둔 지급분을 가져가며 비운다 — 두 번 축하하지 않는다.</summary>
+    public static int ClaimRewardNotice()
+    {
+        int claimed = s_pendingReward;
+        s_pendingReward = 0;
+        return claimed;
     }
 
     /// <summary>토큰을 더한다 — 라운드 클리어 지급. 0 이하는 무시한다.</summary>

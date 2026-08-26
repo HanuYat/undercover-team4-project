@@ -395,6 +395,10 @@ MonoBehaviour:
     m_Key: Cosmetic.Tokens
     m_Metadata:
       m_Items: []
+  - m_Id: 669658743660544
+    m_Key: Cosmetic.TokenReward
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
