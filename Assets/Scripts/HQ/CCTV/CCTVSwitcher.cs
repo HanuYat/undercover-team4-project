@@ -19,7 +19,15 @@ public class CCTVSwitcher : NetworkBehaviour
     // IR 볼륨 레이어 — 캐싱 시 한 번만 배선, 런타임엔 건드리지 않는다. (#677)
     [SerializeField]
     LayerMask m_volumeLayers = ~0;
+
+    [SerializeField]
+    Color m_monitorBacklightEmission = new(0.05f, 0.07f, 0.09f);
+
+    [SerializeField]
+    Color m_infraredMonitorEmission = new(1.4f, 1.4f, 1.4f);
+
     private CCTVNode[] m_nodes;
+    private Renderer m_monitorRenderer;
 
     private readonly NetworkVariable<int> m_currentIndex = new(
         0,
@@ -111,6 +119,8 @@ public class CCTVSwitcher : NetworkBehaviour
 
     private void CacheNodes()
     {
+        m_monitorRenderer = GetComponent<Renderer>();
+
         int count = ChannelCount;
         m_nodes = new CCTVNode[count];
         for (int i = 0; i < count; i++)
@@ -203,6 +213,15 @@ public class CCTVSwitcher : NetworkBehaviour
 
         if (!displaying)
             ClearMonitor();
+
+        CCTVInfraredLook.ApplyMonitorEmission(
+            m_monitorRenderer,
+            displaying,
+            m_isInfrared.Value,
+            m_monitorRt,
+            m_monitorBacklightEmission,
+            m_infraredMonitorEmission
+        );
 
         OnDisplayChanged?.Invoke();
     }
