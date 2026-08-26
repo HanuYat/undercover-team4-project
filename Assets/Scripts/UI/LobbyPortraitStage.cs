@@ -9,9 +9,7 @@ using UnityEngine.Rendering.Universal;
 /// <summary>
 /// 로비 명단 카드에 넣을 <b>얼굴</b>을 만든다 — 무대에 캐릭터를 세우고 머리만 잡아 RenderTexture로 굽는다. (#598)
 ///
-/// 무대는 <b>로비와 상점 두 곳</b>에 있다 (#863) — 외형은 상점에서도 바뀌므로 로비에서 구운 것만으로는
-/// 맵의 팀 상황판이 옛 조합을 찾게 된다. 두 곳 모두에서 <b>명부 전원</b>의 조합을 굽고, 루프가
-/// Shop ↔ Game이라 맵으로 넘어가는 것은 언제나 상점에서 구운 그림이다.
+/// 무대는 <b>로비와 상점 두 곳</b>에 있다 (#863) — 두 곳 모두 명부 전원의 조합을 굽는다.
 ///
 /// 그림은 사람이 아니라 <b>색 조합 단위</b>로 굽는다 (#432) — 같은 색을 고른 두 사람은 같은 얼굴이다.
 /// 무대는 씬 밖 먼 곳에 세운다: 전용 레이어 없이도 카메라 far clip이 짧아 아무것도 안 잡힌다.
@@ -245,11 +243,7 @@ public class LobbyPortraitStage : MonoBehaviour
         BakeNow();
     }
 
-    /// <summary>
-    /// 프레임을 기다리지 않고 지금 굽는다 (#863) — 호스트가 '출동'을 누르는 프레임에 누군가 외형을
-    /// 바꾸면 <see cref="BakeAsync"/>가 기다리는 다음 프레임이 상점에 오지 않는다. 조명이 확정되기
-    /// 전(첫 프레임)이면 평소대로 미룬다 — 그때 구우면 밝기가 실행할 때마다 달라진다.
-    /// </summary>
+    /// <summary>프레임을 기다리지 않고 지금 굽는다 — 출동 직전 외형 변경이 씬 전환에 지지 않게. (#863)</summary>
     private void BakeNow()
     {
         if (!m_lit || m_baking || m_camera == null || m_pending.Count == 0)
@@ -258,10 +252,7 @@ public class LobbyPortraitStage : MonoBehaviour
         BakePending();
     }
 
-    /// <summary>
-    /// 명부에 있는 사람 전부의 얼굴을 확보한다 (#863) — 누가 색·모자를 바꾸면 명부가 갱신되므로
-    /// 바뀐 조합이 그때마다 여기로 들어온다. 이미 구운 조합은 <see cref="GetPortrait"/>가 걸러 낸다.
-    /// </summary>
+    /// <summary>명부에 있는 사람 전부의 얼굴을 확보한다. (#863)</summary>
     private void BakeRoster()
     {
         if (m_roster == null || !m_roster.IsSpawned)
