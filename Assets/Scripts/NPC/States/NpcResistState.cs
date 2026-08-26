@@ -380,9 +380,19 @@ public class NpcResistState : NpcStateBase
         if (straight < 0.01f)
             return true;
 
+        // <b>직선이 통째로 NavMesh 위면 그것으로 끝이다</b> (#879 후속 — 도로에서 멈칫거린 원인).
+        // 아래 길이 비교는 <b>경로 계산이 고른 길</b>을 재는데, 그 선택은 거리가 아니라 <b>비용</b>이
+        // 좌우한다: 전역 도로 비용이 5라(#634) 표적이 도로에 있으면 인도로 크게 돌아가는 길이 뽑히고,
+        // 그 길이가 직선의 1.5배를 넘어 <b>실제로는 곧장 뛸 수 있는데도</b> '못 쫓는다'로 잡혔다.
+        // (저항 중 이 몸의 도로 비용은 1로 낮춰 둔다 — Enter의 SetAreaCost, #721. 그런데 정적
+        // NavMesh.CalculatePath는 개체별 비용을 보지 않는다.)
+        if (!NavMesh.Raycast(m_owner.transform.position, destination, out NavMeshHit _, m_owner.Agent.areaMask))
+            return true;
+
+        // 직선이 막혔다 — 돌아가는 길이 짧으면(연석·기둥 하나) 그대로 쫓는다. 비용은 이 몸 기준으로
+        // 재야 위와 같은 오판이 안 나므로 정적 호출이 아니라 에이전트에게 묻는다.
         if (
-            !NavMesh.CalculatePath(
-                m_owner.transform.position, destination, m_owner.Agent.areaMask, m_pathBuffer)
+            !m_owner.Agent.CalculatePath(destination, m_pathBuffer)
             || m_pathBuffer.status != NavMeshPathStatus.PathComplete
         )
             return false;
