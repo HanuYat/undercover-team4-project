@@ -185,7 +185,7 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
         // 자판기 정면(로컬 +Z) 바깥에서 출발해 투입구 <b>안쪽</b>까지 들어간다 — 표면에서 멈추면
         // 넣다 만 것으로 보인다
         Vector3 start = slot + transform.forward * (m_coinSize * 2.5f);
-        Vector3 end = slot - transform.forward * (m_coinSize * 0.8f);
+        Vector3 end = slot - transform.forward * (m_coinSize * 3f);
 
         try
         {
@@ -201,7 +201,7 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
                 coin.transform.position = Vector3.Lerp(start, end, t * t);
 
                 // 마지막 구간에서만 사라진다 — 처음부터 줄이면 들어가는 것이 아니라 녹는 것으로 보인다
-                float shrink = t < 0.75f ? 1f : 1f - ((t - 0.75f) / 0.25f);
+                float shrink = t < 0.85f ? 1f : 1f - ((t - 0.85f) / 0.15f);
                 coin.transform.localScale = Vector3.one * (scale * shrink);
 
                 Camera view = Camera.main;

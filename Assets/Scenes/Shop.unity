@@ -11034,12 +11034,44 @@ PrefabInstance:
       value: SessionCodePanel
       objectReference: {fileID: 0}
     - target: {fileID: 5502538574278371971, guid: 130be79052d31134cb819d9c56bcecc6, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5502538574278371971, guid: 130be79052d31134cb819d9c56bcecc6, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5502538574278371971, guid: 130be79052d31134cb819d9c56bcecc6, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5502538574278371971, guid: 130be79052d31134cb819d9c56bcecc6, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 30
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5502538574278371971, guid: 130be79052d31134cb819d9c56bcecc6, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -100
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8864336399897098308, guid: 130be79052d31134cb819d9c56bcecc6, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8864336399897098308, guid: 130be79052d31134cb819d9c56bcecc6, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8864336399897098308, guid: 130be79052d31134cb819d9c56bcecc6, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8864336399897098308, guid: 130be79052d31134cb819d9c56bcecc6, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8864336399897098308, guid: 130be79052d31134cb819d9c56bcecc6, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -12669,7 +12701,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_catalog: {fileID: 11400000, guid: 4d0d855372518f94184454112d35bef4, type: 2}
   m_coinSprite: {fileID: 21300000, guid: 44fb66a2c41929c418e9cef8215ddd2c, type: 3}
-  m_coinSlotOffset: {x: -0.42, y: 1.35, z: 0.45}
+  m_coinSlotOffset: {x: -0.38, y: 1.14, z: 0.45}
   m_coinSize: 0.055
   m_coinInsertSeconds: 0.5
   m_dispenseAnchor: {fileID: 1295111152}
@@ -14909,8 +14941,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1295111151}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0.7071068, z: -0.7071068, w: 0}
-  m_LocalPosition: {x: -2.842171e-14, y: 1.05, z: 1.5459058}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 1.25, z: 0.9}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
