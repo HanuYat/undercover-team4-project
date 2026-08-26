@@ -4,7 +4,7 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 팀 상황판 (#720) — Tab 홀드 중 동료 상태와 이번 라운드 수배 몽타주를 함께 띄운다.
+/// 팀 상황판 (#720) — Tab 홀드 중 대원 전원(나 포함)의 상태와 이번 라운드 수배 몽타주를 함께 띄운다.
 /// 여는 것은 <see cref="PlayerTeamStatusInput"/>(오너 로컬)이고 여기는 그리기만 한다.
 ///
 /// 커서를 풀지 않는다 — 표시용 창인데 커서가 풀리면 E가 통째로 막힌다(#352). 같은 이유로
@@ -74,8 +74,12 @@ public class TeamStatusPanel : PanelBase
     }
 
     // 스폰된 플레이어 오브젝트를 모은다 — 이름·체력·상태가 전부 여기 달려 있어 명부와 합칠 것이 없다.
-    // 내 것은 뺀다 — 내 체력은 좌하단 기름통이 상시로 보여 준다.
+    // 내 것도 넣되 맨 앞에 고정한다 — 스폰 순서는 피어마다 달라 그냥 넣으면 내 카드 자리가 매번 바뀐다.
     // 반환값은 "인원 구성이 바뀌었는가".
+    //
+    // ⚠ 내 몸은 IsLocalPlayer로 찾지 않는다 (#863) — 그 값은 소유권을 타는데, 죽으면 시체 소유권이
+    // 서버로 넘어가(#763) 내 카드가 첫 칸에서 밀려난다. 스폰 때 정해지고 소유권 이관에 흔들리지 않는
+    // LocalClient.PlayerObject로 판정한다.
     private bool CollectPlayers()
     {
         NetworkManager manager = NetworkManager.Singleton;
@@ -87,18 +91,22 @@ public class TeamStatusPanel : PanelBase
         }
 
         IReadOnlyList<NetworkObject> spawned = manager.SpawnManager.PlayerObjects;
+        NetworkObject mine = manager.LocalClient != null ? manager.LocalClient.PlayerObject : null;
 
         m_scratch.Clear();
         for (int i = 0; i < spawned.Count; i++)
         {
             NetworkObject player = spawned[i];
-            if (player == null || player.IsLocalPlayer)
+            if (player == null)
                 continue;
 
-            m_scratch.Add(player);
+            if (player == mine)
+                m_scratch.Insert(0, player);
+            else
+                m_scratch.Add(player);
         }
 
-        // 걸러낸 뒤에 비교한다 — 원본 목록과 대조하면 내 것이 빠진 만큼 인덱스가 어긋난다.
+        // 정렬한 뒤에 비교한다 — 원본 목록과 대조하면 내 것을 앞으로 옮긴 만큼 인덱스가 어긋난다.
         bool changed = m_scratch.Count != m_players.Count;
 
         if (!changed)
@@ -158,8 +166,8 @@ public class TeamStatusPanel : PanelBase
             // 이름이 남는다. 아직 안 온 이름은 RefreshRows가 채운다.
             m_rows[i].SetName(NameOf(i));
 
-            // 로비에서 구운 얼굴을 그대로 쓴다 — 게임 씬에서 다시 구우면 맵 조명을 타 어둡게 나온다.
-            // 사람마다 고른 색이 다르므로 그 사람 색으로 찾는다 (#432)
+            // 직전에 거친 상점에서 구운 얼굴을 쓴다 — 게임 씬에서 다시 구우면 맵 조명을 타 어둡게 나온다.
+            // 사람마다 색·치장이 다르므로 그 조합으로 찾는다 (#432 · #863)
             m_rows[i].SetPortrait(PortraitOf(i));
         }
 

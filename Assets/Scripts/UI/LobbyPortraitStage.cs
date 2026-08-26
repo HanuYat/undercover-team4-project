@@ -1,12 +1,15 @@
 using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
 /// <summary>
 /// 로비 명단 카드에 넣을 <b>얼굴</b>을 만든다 — 무대에 캐릭터를 세우고 머리만 잡아 RenderTexture로 굽는다. (#598)
+///
+/// 무대는 <b>로비와 상점 두 곳</b>에 있다 (#863) — 두 곳 모두 명부 전원의 조합을 굽는다.
 ///
 /// 그림은 사람이 아니라 <b>색 조합 단위</b>로 굽는다 (#432) — 같은 색을 고른 두 사람은 같은 얼굴이다.
 /// 무대는 씬 밖 먼 곳에 세운다: 전용 레이어 없이도 카메라 far clip이 짧아 아무것도 안 잡힌다.
@@ -111,10 +114,12 @@ public class LobbyPortraitStage : MonoBehaviour
     private readonly Color[] m_tintBuffer = new Color[3]; // 인덱스 = EBodyPart
     private bool m_baking;
     private bool m_lit; // 첫 프레임(조명 확정)을 지났는가
+    private SessionRoster m_roster; // 전원의 조합을 굽는 근거 (#863)
 
-    // 로비를 떠나도 살려 두는 얼굴들 — 게임 씬에서 다시 구우면 맵 조명을 타 어둡게 나오므로,
-    // 로비에서 구운 것을 세션 내내 쓴다. 다음 로비 방문에서 새로 구울 때 놓아 준다. (#720)
-    // 열쇠는 색 조합(PlayerColorSet.Key) — 게임 씬 상황판이 각 플레이어 색으로 찾아 간다. (#432)
+    // 무대가 있는 씬을 떠나도 살려 두는 얼굴들 — 게임 씬에서 다시 구우면 맵 조명을 타 어둡게
+    // 나오므로, 직전에 거친 무대(=상점)에서 구운 것을 쓴다. 명부에서 사라진 조합은 EvictUnused가
+    // 놓아 준다. (#720 · #863)
+    // 열쇠는 색·치장 조합 — 게임 씬 상황판이 각 플레이어의 조합으로 찾아 간다. (#432 · #818)
     //
     // RenderTexture가 아니라 Texture2D인 것은 씬 너머로 들고 가야 해서다 — RenderTexture는
     // 오브젝트만 남고 GPU 쪽은 놓여, 게임 씬에서는 빈 칸이 그려졌다.
@@ -192,18 +197,76 @@ public class LobbyPortraitStage : MonoBehaviour
     {
         GameSettings.OnPlayerColorChanged += HandleOwnColorChanged;
         GameSettings.OnAccessoryChanged += HandleOwnAccessoryChanged;
+        TryBindRoster();
     }
 
     private void OnDisable()
     {
         GameSettings.OnPlayerColorChanged -= HandleOwnColorChanged;
         GameSettings.OnAccessoryChanged -= HandleOwnAccessoryChanged;
+        UnbindRoster();
+    }
+
+    // 아직 못 잡았을 때만 도는 폴링 — 잡는 즉시 이벤트 구동으로 넘어간다 (LobbyRosterPanel과 같은 방식)
+    private void Update()
+    {
+        if (m_roster == null)
+            TryBindRoster();
+    }
+
+    // 명부는 세션 상주라 씬에 없다 — App 경유로 잡는다. 세션 없이 씬을 직접 Play하면 끝내 null이다.
+    private void TryBindRoster()
+    {
+        SessionRoster roster = App.Game.Roster;
+        if (roster == null)
+            return;
+
+        m_roster = roster;
+        m_roster.Players.OnListChanged += HandleRosterChanged;
+        m_roster.OnListReady += BakeRoster; // late-join은 초기 내용을 OnListChanged로 받지 못한다
+        BakeRoster();
+    }
+
+    private void UnbindRoster()
+    {
+        if (m_roster == null)
+            return;
+
+        m_roster.Players.OnListChanged -= HandleRosterChanged;
+        m_roster.OnListReady -= BakeRoster;
+        m_roster = null;
+    }
+
+    private void HandleRosterChanged(NetworkListEvent<LobbyPlayerEntry> _)
+    {
+        BakeRoster();
+        BakeNow();
+    }
+
+    /// <summary>프레임을 기다리지 않고 지금 굽는다 — 출동 직전 외형 변경이 씬 전환에 지지 않게. (#863)</summary>
+    // m_baking을 보지 않는다 — 직전 GetPortrait이 이미 그 값을 동기적으로 켜 둬서, 보면 항상 걸려 절대 안 돈다.
+    private void BakeNow()
+    {
+        if (!m_lit || m_camera == null || m_pending.Count == 0)
+            return;
+
+        BakePending();
+    }
+
+    /// <summary>명부에 있는 사람 전부의 얼굴을 확보한다. (#863)</summary>
+    private void BakeRoster()
+    {
+        if (m_roster == null || !m_roster.IsSpawned)
+            return;
+
+        for (int i = 0; i < m_roster.Players.Count; i++)
+            GetPortrait(new PortraitKey(m_roster.Players[i].Colors, m_roster.Players[i].Accessories));
     }
 
     private void OnDestroy()
     {
         // RenderTexture는 GC 대상이 아니다 — 씬을 오갈 때마다 쌓이지 않게 직접 놓는다.
-        // 세션용 얼굴은 별도 Texture2D라 여기서 놓는 것과 상관이 없다 (#720)
+        // 세션용 얼굴은 별도 Texture2D라 여기서 놓지 않는다 — 다음 씬이 그것을 쓴다 (#720 · #863)
         foreach (RenderTexture texture in m_portraits.Values)
         {
             if (texture == null)
@@ -278,15 +341,7 @@ public class LobbyPortraitStage : MonoBehaviour
 
     private void BuildStage()
     {
-        // 지난 로비 방문에서 구운 것은 여기서 놓는다 — 세션이 이어지는 동안만 살아 있으면 된다
-        foreach (Texture2D stale in s_sessionPortraits.Values)
-        {
-            if (stale != null)
-                Destroy(stale);
-        }
-
-        s_sessionPortraits.Clear();
-
+        // 세션용 얼굴은 여기서 비우지 않는다 — 상점 무대가 로비에서 구운 것을 지워 버렸다 (#863)
         var stage = new GameObject("PortraitStage");
         stage.transform.SetParent(transform, false);
         stage.transform.position = m_stageOrigin;
@@ -431,15 +486,27 @@ public class LobbyPortraitStage : MonoBehaviour
         m_live.Clear();
         m_live.Add(PortraitKey.Mine);
 
-        SessionRoster roster = App.Game.Roster;
-        if (roster != null && roster.IsSpawned)
+        SessionRoster roster = m_roster != null ? m_roster : App.Game.Roster;
+        bool rosterReady = roster != null && roster.IsSpawned;
+
+        if (rosterReady)
         {
             for (int i = 0; i < roster.Players.Count; i++)
                 m_live.Add(new PortraitKey(roster.Players[i].Colors, roster.Players[i].Accessories));
         }
 
+        Sweep(m_portraits);
+
+        // 세션용은 명부를 읽을 수 있을 때만 쓸어 낸다 — 못 읽는 동안 버리면 직전 씬에서 구운 것이 통째로 날아간다 (#863)
+        if (rosterReady)
+            Sweep(s_sessionPortraits);
+    }
+
+    // 명부에 없는 조합의 텍스처를 놓는다 — RenderTexture는 GPU 쪽도 함께 반납한다
+    private void Sweep<TTexture>(Dictionary<PortraitKey, TTexture> cache) where TTexture : Texture
+    {
         m_stale.Clear();
-        foreach (PortraitKey key in m_portraits.Keys)
+        foreach (PortraitKey key in cache.Keys)
         {
             if (!m_live.Contains(key))
                 m_stale.Add(key);
@@ -447,19 +514,15 @@ public class LobbyPortraitStage : MonoBehaviour
 
         for (int i = 0; i < m_stale.Count; i++)
         {
-            PortraitKey key = m_stale[i];
-
-            if (m_portraits.TryGetValue(key, out RenderTexture texture) && texture != null)
+            if (cache.TryGetValue(m_stale[i], out TTexture texture) && texture != null)
             {
-                texture.Release();
+                if (texture is RenderTexture render)
+                    render.Release();
+
                 Destroy(texture);
             }
 
-            if (s_sessionPortraits.TryGetValue(key, out Texture2D captured) && captured != null)
-                Destroy(captured);
-
-            m_portraits.Remove(key);
-            s_sessionPortraits.Remove(key);
+            cache.Remove(m_stale[i]);
         }
     }
 

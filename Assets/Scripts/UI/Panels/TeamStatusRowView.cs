@@ -27,7 +27,7 @@ public class TeamStatusRowView : MonoBehaviour
     // 첫 호출이 반드시 통과하도록 실제 상태가 될 수 없는 값으로 둔다.
     private const ETeamMemberState k_noState = (ETeamMemberState)(-1);
 
-    [Tooltip("대원 얼굴 — 로비에서 구운 것을 세션 동안 그대로 쓴다 (#598)")]
+    [Tooltip("대원 얼굴 — 상점에서 구운 것을 그대로 쓴다 (#598 · #863)")]
     [SerializeField] private RawImage m_portrait;
 
     [SerializeField] private TextMeshProUGUI m_nameText;
@@ -61,11 +61,14 @@ public class TeamStatusRowView : MonoBehaviour
     /// <summary>얼굴이 들어와 있는가 — 색이 늦게 도착하면 상황판이 다시 넘긴다. (#432)</summary>
     public bool HasPortrait => m_portrait != null && m_portrait.texture != null;
 
-    /// <summary>얼굴을 넣는다 — 사람마다 고른 색으로 로비에서 구운 그림이다. (#432)</summary>
+    /// <summary>얼굴을 넣는다 — 사람마다 고른 색·치장으로 상점에서 구운 그림이다. (#432 · #863)</summary>
     public void SetPortrait(Texture portrait)
     {
-        if (m_portrait != null)
-            m_portrait.texture = portrait;
+        if (m_portrait == null)
+            return;
+
+        m_portrait.texture = portrait;
+        m_portrait.enabled = portrait != null; // 텍스처 없는 RawImage는 흰 사각형으로 그려진다 (#863)
     }
 
     /// <summary>
