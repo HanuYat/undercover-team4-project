@@ -7,9 +7,9 @@ using UnityEngine.Localization;
 /// 약탈 창 — 기능 정지(Die)된 동료의 <b>소지품과 개인 자금을 확인하고</b> 골라 가져간다. (#487)
 /// 약탈을 시작한 본인 클라이언트에서만 열린다(<see cref="PlayerLooter"/>가 서버 확인을 받은 뒤 호출).
 ///
-/// <b>E는 확인용이고, 가져가는 것은 전부 칸 클릭이다</b> — 소지품은 <see cref="LootSlotView"/>,
+/// <b>R은 확인용이고, 가져가는 것은 전부 칸 클릭이다</b> — 소지품은 <see cref="LootSlotView"/>,
 /// 자금은 <see cref="LootFundsView"/>. 열어 보고 아무것도 안 가져간 채 떠날 수 있다.
-/// <b>닫기는 ESC와 E 둘 다</b> — 연 손이 그대로 닫는다(<see cref="Update"/>).
+/// <b>닫기는 ESC와 R 둘 다</b> — 연 손이 그대로 닫는다(<see cref="Update"/>).
 ///
 /// <b>이 창은 권한이 아니다.</b> 열려 있다는 사실은 서버에서 아무것도 보장하지 않는다 — 칸을 누르면
 /// 매번 서버가 처음부터 다시 검증한다(<see cref="PlayerLooter"/>). 아래의 자동 닫기는 순전히 UX이고,
@@ -65,9 +65,9 @@ public class LootPanel : PanelBase
     private PlayerIncapacitation m_looterIncapacitation; // 터던 사람이 쓰러지면 창을 닫는 판정
     private PlayerLoadout m_watched; // 부착 변화를 구독 중인 대상의 소지품 — 해제 기준
 
-    // 창이 열린 프레임. E로 닫을 때 <b>열게 한 그 누름</b>을 닫기로 다시 세지 않기 위한 기준이다 —
-    // 호스트·오프라인에서는 E 콜백에서 서버 검증까지 한 프레임에 끝나 Open이 같은 프레임에 돌고,
-    // 그 프레임의 Update에서도 상호작용 키는 아직 "이번 프레임에 눌림"이다.
+    // 창이 열린 프레임. R로 닫을 때 <b>열게 한 그 누름</b>을 닫기로 다시 세지 않기 위한 기준이다 —
+    // 호스트·오프라인에서는 R 콜백에서 서버 검증까지 한 프레임에 끝나 Open이 같은 프레임에 돌고,
+    // 그 프레임의 Update에서도 뒤지기 키는 아직 "이번 프레임에 눌림"이다.
     private int m_openedFrame = -1;
 
     // 커서 Push/Pop 짝을 지키는 래치. OpenPanel/ClosePanel엔 재진입 가드가 없어 같은 값으로 두 번
@@ -250,10 +250,10 @@ public class LootPanel : PanelBase
             return;
         }
 
-        // E로도 닫는다 — 연 키가 곧 닫는 키다. 여기서 폴링하는 이유는 이 창이 스스로 상호작용
+        // R로도 닫는다 — 연 키가 곧 닫는 키다. 여기서 폴링하는 이유는 이 창이 스스로 상호작용
         // 액션을 꺼 두기 때문이다(SetBlocked) — 콜백은 오지 않는다.
         // m_input이 null이면 위 CanKeepOpen에서 이미 닫혔다.
-        if (Time.frameCount != m_openedFrame && m_input.WasInteractPressedThisFrame())
+        if (Time.frameCount != m_openedFrame && m_input.WasLootPressedThisFrame())
             ClosePanel();
     }
 

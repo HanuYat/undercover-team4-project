@@ -218,6 +218,25 @@ public class PlayerInputHandler : NetworkBehaviour
     }
 
     /// <summary>
+    /// 뒤지기(R) 키가 이번 프레임에 눌렸는가 — <b>입력 정지 중에도 답한다</b>. (#725)
+    /// 약탈 창(LootPanel)이 스스로 입력을 정지시킨 뒤 "연 키로 닫기"를 판정하는 자리라
+    /// <see cref="WasInteractPressedThisFrame"/>과 같은 이유로 콜백 대신 컨트롤을 직접 읽는다.
+    /// </summary>
+    public bool WasLootPressedThisFrame()
+    {
+        if (m_lootAction == null || m_lootAction.action == null)
+            return false;
+
+        foreach (InputControl control in m_lootAction.action.controls)
+        {
+            if (control is ButtonControl button && button.wasPressedThisFrame)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// 팀 상황판을 보는 동안인지 알린다 — 그 사이 감정표현 휠·인벤토리 편집 입력을 흘리지 않는다. (#720)
     /// 액션을 끄지 않고 이벤트만 막는다 — 끄면 진행 중이던 입력의 canceled가 돌아 감정표현이 오발동한다.
     /// <see cref="SetSuspended"/>는 팀 상황판 액션까지 함께 꺼서 홀드가 끊기므로 쓸 수 없다.
