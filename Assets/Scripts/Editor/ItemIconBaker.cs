@@ -4,7 +4,7 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// 아이템 아이콘 굽기 — 메뉴: Tools/아이템 아이콘 굽기 (#793)
+/// 아이템 아이콘 굽기 — 메뉴: Tools/아이템 아이콘 굽기 (#793, #843)
 ///
 /// 인벤토리 핫바(<see cref="InventorySlotView"/>)와 약탈창(<see cref="LootSlotView"/>)이 쓰는
 /// <see cref="ItemBase.ItemIcon"/>을 아이템 모델에서 직접 찍어 만든다. 손으로 그리지 않는 이유는
@@ -14,7 +14,10 @@ using UnityEngine;
 /// 프리팹에는 렌더러가 없고(월드에 떨어진 모습도 손에 든 모습도 이 모델을 런타임에 붙인 것),
 /// 모델을 안 걸어 둔 아이템은 그릴 것이 없어 건너뛴다.
 ///
-/// 저장까지 하면 프리팹의 <c>m_itemIcon</c>까지 배선한다 — 구워 놓고 손으로 다시 끌어다 넣을 이유가 없다.
+/// <b>설치형은 아이템 프리팹이 없다</b> — 주문창 목록에 쓸 아이콘을 <see cref="ShopCatalog"/> 항목의
+/// 진열 모델에서 찍어 그 항목의 <c>m_displayIcon</c>에 배선한다 (#843). 굽는 방식은 소지형과 같다.
+///
+/// 저장까지 하면 대상의 아이콘 필드까지 배선한다 — 구워 놓고 손으로 다시 끌어다 넣을 이유가 없다.
 /// </summary>
 public class ItemIconBaker : EditorWindow
 {
@@ -28,29 +31,110 @@ public class ItemIconBaker : EditorWindow
     [SerializeField] private float m_padding = 1.2f;
     [SerializeField] private string m_outputFolder = k_defaultOutput;
 
-    private readonly List<ItemBase> m_items = new List<ItemBase>();
+    private readonly List<BakeTarget> m_targets = new List<BakeTarget>();
 
-    // 아이템별 각도 — 모델마다 정면으로 삼는 축이 달라 한 각도로 전부 찍으면 어떤 것은 뒤통수가 나온다.
-    // 프리팹 GUID로 EditorPrefs에 남긴다: 굽는 사람이 눈으로 맞춘 값이라 다시 구울 때 되살아나야 하고,
+    // 대상별 각도 — 모델마다 정면으로 삼는 축이 달라 한 각도로 전부 찍으면 어떤 것은 뒤통수가 나온다.
+    // 대상 식별자로 EditorPrefs에 남긴다: 굽는 사람이 눈으로 맞춘 값이라 다시 구울 때 되살아나야 하고,
     // 결과물(PNG)은 어차피 별도 저장소로 나가므로 각도까지 에셋으로 만들 값어치는 없다.
-    private readonly Dictionary<ItemBase, Vector2> m_angles = new Dictionary<ItemBase, Vector2>();
+    private readonly Dictionary<string, Vector2> m_angles = new Dictionary<string, Vector2>();
 
     // 미리 구운 결과 — 저장 전에 눈으로 확인한다. 저장은 이 결과를 그대로 쓴다.
-    private readonly Dictionary<ItemBase, Texture2D> m_preview = new Dictionary<ItemBase, Texture2D>();
+    private readonly Dictionary<string, Texture2D> m_preview = new Dictionary<string, Texture2D>();
 
     private Vector2 m_scroll;
+
+    // ---- 굽는 대상 ----
+
+    /// <summary>아이콘을 굽고 배선할 자리 하나. 소지형 아이템과 설치형 카탈로그 항목이 같은 창을 쓴다.</summary>
+    private abstract class BakeTarget
+    {
+        /// <summary>각도·미리보기를 기억하는 열쇠. 에셋 GUID 기반이라 다시 모아도 같은 값이다.</summary>
+        public abstract string Id { get; }
+        public abstract string Label { get; }
+        public abstract GameObject Model { get; }
+
+        /// <summary>찍을 때 모델에 씌울 배율. 진열대에 올라간 모습과 아이콘이 어긋나지 않게 한다.</summary>
+        public virtual Vector3 ModelScale => Vector3.one;
+
+        public abstract Sprite Current { get; }
+        public abstract string FileName { get; }
+        public abstract void Assign(Sprite sprite);
+    }
+
+    private class ItemTarget : BakeTarget
+    {
+        private readonly ItemBase m_item;
+
+        public ItemTarget(ItemBase item) => m_item = item;
+
+        public override string Id => AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(m_item));
+        public override string Label => m_item.name;
+        public override GameObject Model => m_item.HeldModelPrefab;
+        public override Sprite Current => m_item.ItemIcon;
+        public override string FileName => "Item_" + m_item.name + ".png";
+
+        public override void Assign(Sprite sprite)
+        {
+            var so = new SerializedObject(m_item);
+            so.FindProperty("m_itemIcon").objectReferenceValue = sprite;
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            PrefabUtility.SavePrefabAsset(m_item.gameObject);
+        }
+    }
+
+    private class InstallableTarget : BakeTarget
+    {
+        private readonly ShopCatalog m_catalog;
+        private readonly int m_index;
+
+        public InstallableTarget(ShopCatalog catalog, int index)
+        {
+            m_catalog = catalog;
+            m_index = index;
+        }
+
+        private ShopCatalog.Entry Entry => m_catalog.Get(m_index);
+
+        public override string Id =>
+            AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(m_catalog)) + ":" + m_index;
+
+        public override string Label => Entry != null ? Entry.Installable.ToString() : "(빈 항목)";
+        public override GameObject Model => Entry?.DisplayModel;
+
+        // 설치형 모델은 진열 배율이 곧 실물 비례다 — 사이렌 버튼처럼 납작하게 눌러 쓰는 것을
+        // 배율 없이 찍으면 아이콘만 원래 구(球)로 나와 진열대와 다른 물건처럼 보인다.
+        public override Vector3 ModelScale => Entry != null ? Entry.DisplayScale : Vector3.one;
+
+        public override Sprite Current => Entry?.Icon;
+        public override string FileName => "Installable_" + Label + ".png";
+
+        public override void Assign(Sprite sprite)
+        {
+            var so = new SerializedObject(m_catalog);
+            SerializedProperty entries = so.FindProperty("m_entries");
+            if (entries == null || m_index >= entries.arraySize)
+                return;
+
+            entries.GetArrayElementAtIndex(m_index).FindPropertyRelative("m_displayIcon").objectReferenceValue = sprite;
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            EditorUtility.SetDirty(m_catalog);
+        }
+    }
 
     [MenuItem("Tools/아이템 아이콘 굽기")]
     private static void Open() => GetWindow<ItemIconBaker>("아이템 아이콘");
 
-    private void OnEnable() => CollectItems();
+    private void OnEnable() => CollectTargets();
 
     private void OnDisable() => ClearPreview();
 
-    // Assets/Prefabs 아래에서 ItemBase를 단 프리팹을 모은다 — 목록을 손으로 유지하면 아이템이 늘 때 빠진다.
-    private void CollectItems()
+    // Assets/Prefabs 아래의 ItemBase 프리팹 + 카탈로그의 설치형 항목을 모은다 — 목록을 손으로
+    // 유지하면 아이템이 늘 때 빠진다.
+    private void CollectTargets()
     {
-        m_items.Clear();
+        m_targets.Clear();
 
         foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { k_prefabSearchFolder }))
         {
@@ -60,22 +144,38 @@ public class ItemIconBaker : EditorWindow
                 continue;
 
             var item = prefab.GetComponent<ItemBase>();
-            if (item == null)
+            if (item != null)
+                m_targets.Add(new ItemTarget(item));
+        }
+
+        foreach (string guid in AssetDatabase.FindAssets("t:ShopCatalog"))
+        {
+            var catalog = AssetDatabase.LoadAssetAtPath<ShopCatalog>(AssetDatabase.GUIDToAssetPath(guid));
+            if (catalog == null)
                 continue;
 
-            m_items.Add(item);
+            // 소지형은 위에서 프리팹으로 이미 잡혔다 — 여기서는 프리팹이 없는 설치형만 더한다.
+            for (int i = 0; i < catalog.Count; i++)
+            {
+                ShopCatalog.Entry entry = catalog.Get(i);
+                if (entry != null && entry.IsInstallable)
+                    m_targets.Add(new InstallableTarget(catalog, i));
+            }
+        }
 
-            string saved = EditorPrefs.GetString(AngleKey(item), string.Empty);
+        m_targets.Sort((a, b) => string.CompareOrdinal(a.Label, b.Label));
+
+        foreach (BakeTarget target in m_targets)
+        {
+            string saved = EditorPrefs.GetString(AngleKey(target), string.Empty);
             string[] parts = saved.Split(';');
             if (parts.Length == 2
                 && float.TryParse(parts[0], out float yaw)
                 && float.TryParse(parts[1], out float pitch))
             {
-                m_angles[item] = new Vector2(yaw, pitch);
+                m_angles[target.Id] = new Vector2(yaw, pitch);
             }
         }
-
-        m_items.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
     }
 
     private void OnGUI()
@@ -87,15 +187,15 @@ public class ItemIconBaker : EditorWindow
 
         EditorGUILayout.Space();
 
-        if (GUILayout.Button("아이템 목록 새로고침"))
-            CollectItems();
+        if (GUILayout.Button("목록 새로고침"))
+            CollectTargets();
 
         if (GUILayout.Button("전부 미리 굽기"))
             BakeAll();
 
         using (new EditorGUI.DisabledScope(m_preview.Count == 0))
         {
-            if (GUILayout.Button($"미리 구운 {m_preview.Count}장 저장 + 프리팹 배선"))
+            if (GUILayout.Button($"미리 구운 {m_preview.Count}장 저장 + 배선"))
                 SaveAll();
         }
 
@@ -107,45 +207,42 @@ public class ItemIconBaker : EditorWindow
     {
         m_scroll = EditorGUILayout.BeginScrollView(m_scroll);
 
-        foreach (ItemBase item in m_items)
+        foreach (BakeTarget target in m_targets)
         {
-            if (item == null)
-                continue;
-
             EditorGUILayout.BeginHorizontal("box");
 
             // 왼쪽: 지금 배선된 아이콘 / 오른쪽: 방금 구운 것 — 나란히 놓아야 나아졌는지 보인다
-            DrawThumb(item.ItemIcon != null ? item.ItemIcon.texture : null, "현재");
-            DrawThumb(m_preview.TryGetValue(item, out Texture2D baked) ? baked : null, "구운 것");
+            DrawThumb(target.Current != null ? target.Current.texture : null, "현재");
+            DrawThumb(m_preview.TryGetValue(target.Id, out Texture2D baked) ? baked : null, "구운 것");
 
             EditorGUILayout.BeginVertical();
-            EditorGUILayout.LabelField(item.name, EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(target.Label, EditorStyles.boldLabel);
             EditorGUILayout.LabelField(
-                item.HeldModelPrefab != null ? item.HeldModelPrefab.name : "모델 없음 — 굽지 않는다",
+                target.Model != null ? target.Model.name : "모델 없음 — 굽지 않는다",
                 EditorStyles.miniLabel
             );
 
-            Vector2 angle = ResolveAngle(item);
+            Vector2 angle = ResolveAngle(target);
             float yaw = EditorGUILayout.Slider("가로 회전", angle.x, -180f, 180f);
             float pitch = EditorGUILayout.Slider("내려다보는 각", angle.y, -89f, 89f);
 
             if (!Mathf.Approximately(yaw, angle.x) || !Mathf.Approximately(pitch, angle.y))
-                SetAngle(item, new Vector2(yaw, pitch));
+                SetAngle(target, new Vector2(yaw, pitch));
 
             EditorGUILayout.BeginHorizontal();
 
-            using (new EditorGUI.DisabledScope(item.HeldModelPrefab == null))
+            using (new EditorGUI.DisabledScope(target.Model == null))
             {
                 if (GUILayout.Button("이것만 다시 굽기"))
-                    BakeOne(item);
+                    BakeOne(target);
             }
 
-            using (new EditorGUI.DisabledScope(!m_angles.ContainsKey(item)))
+            using (new EditorGUI.DisabledScope(!m_angles.ContainsKey(target.Id)))
             {
                 if (GUILayout.Button("기본 각도로"))
                 {
-                    m_angles.Remove(item);
-                    EditorPrefs.DeleteKey(AngleKey(item));
+                    m_angles.Remove(target.Id);
+                    EditorPrefs.DeleteKey(AngleKey(target));
                 }
             }
 
@@ -158,22 +255,18 @@ public class ItemIconBaker : EditorWindow
         EditorGUILayout.EndScrollView();
     }
 
-    // ---- 아이템별 각도 ----
+    // ---- 대상별 각도 ----
 
-    private static string AngleKey(ItemBase item)
+    private static string AngleKey(BakeTarget target) => "ItemIconBaker.angle." + target.Id;
+
+    /// <summary>이 대상에 맞춰 둔 각도. 없으면 창의 기본값.</summary>
+    private Vector2 ResolveAngle(BakeTarget target) =>
+        m_angles.TryGetValue(target.Id, out Vector2 angle) ? angle : new Vector2(m_yaw, m_pitch);
+
+    private void SetAngle(BakeTarget target, Vector2 angle)
     {
-        string path = AssetDatabase.GetAssetPath(item);
-        return "ItemIconBaker.angle." + AssetDatabase.AssetPathToGUID(path);
-    }
-
-    /// <summary>이 아이템에 맞춰 둔 각도. 없으면 창의 기본값.</summary>
-    private Vector2 ResolveAngle(ItemBase item) =>
-        m_angles.TryGetValue(item, out Vector2 angle) ? angle : new Vector2(m_yaw, m_pitch);
-
-    private void SetAngle(ItemBase item, Vector2 angle)
-    {
-        m_angles[item] = angle;
-        EditorPrefs.SetString(AngleKey(item), angle.x + ";" + angle.y);
+        m_angles[target.Id] = angle;
+        EditorPrefs.SetString(AngleKey(target), angle.x + ";" + angle.y);
     }
 
     private static void DrawThumb(Texture texture, string caption)
@@ -194,14 +287,14 @@ public class ItemIconBaker : EditorWindow
 
         try
         {
-            for (int i = 0; i < m_items.Count; i++)
+            for (int i = 0; i < m_targets.Count; i++)
             {
-                ItemBase item = m_items[i];
-                if (item == null || item.HeldModelPrefab == null)
+                BakeTarget target = m_targets[i];
+                if (target.Model == null)
                     continue;
 
-                EditorUtility.DisplayProgressBar("아이템 아이콘", item.name, (float)i / m_items.Count);
-                BakeOne(item);
+                EditorUtility.DisplayProgressBar("아이템 아이콘", target.Label, (float)i / m_targets.Count);
+                BakeOne(target);
             }
         }
         finally
@@ -210,23 +303,23 @@ public class ItemIconBaker : EditorWindow
         }
     }
 
-    private void BakeOne(ItemBase item)
+    private void BakeOne(BakeTarget target)
     {
-        Vector2 angle = ResolveAngle(item);
+        Vector2 angle = ResolveAngle(target);
 
-        Texture2D icon = RenderModel(item.HeldModelPrefab, angle.x, angle.y);
+        Texture2D icon = RenderModel(target.Model, angle.x, angle.y, target.ModelScale);
         if (icon == null)
             return;
 
-        if (m_preview.TryGetValue(item, out Texture2D old) && old != null)
+        if (m_preview.TryGetValue(target.Id, out Texture2D old) && old != null)
             DestroyImmediate(old);
 
-        m_preview[item] = icon;
+        m_preview[target.Id] = icon;
         Repaint();
     }
 
     // 모델 하나를 정투영으로 찍는다. 배경은 투명 — 슬롯 배경(선택 하이라이트가 색을 바꾼다) 위에 얹혀야 한다.
-    private Texture2D RenderModel(GameObject modelPrefab, float yaw, float pitch)
+    private Texture2D RenderModel(GameObject modelPrefab, float yaw, float pitch, Vector3 scale)
     {
         var root = new GameObject("~ItemIconBake") { hideFlags = HideFlags.HideAndDontSave };
         root.transform.position = new Vector3(0f, -10000f, 0f); // 열려 있는 씬이 화면에 들어오지 않게 멀리 둔다
@@ -239,6 +332,7 @@ public class ItemIconBaker : EditorWindow
             var subject = (GameObject)PrefabUtility.InstantiatePrefab(modelPrefab, root.transform);
             subject.transform.localPosition = Vector3.zero;
             subject.transform.localRotation = Quaternion.Euler(pitch, yaw, 0f);
+            subject.transform.localScale = scale;
 
             if (!TryGetBounds(subject, out Bounds bounds))
             {
@@ -361,35 +455,34 @@ public class ItemIconBaker : EditorWindow
 
         int written = 0;
 
-        foreach (KeyValuePair<ItemBase, Texture2D> entry in m_preview)
+        foreach (BakeTarget target in m_targets)
         {
-            ItemBase item = entry.Key;
-            if (item == null || entry.Value == null)
+            if (!m_preview.TryGetValue(target.Id, out Texture2D baked) || baked == null)
                 continue;
 
             // 저장 위치는 항상 이 폴더다. 배선된 아이콘의 경로를 따라가면 누가 임시로 꽂아 둔 팩 스프라이트를
             // 구운 그림으로 덮어쓸 수 있고(서드파티 에셋 수정 금지), 따라갈 이유도 없다 — 임포트 설정은
-            // ApplySpriteImport가, 프리팹 배선은 AssignIcon이 직접 하고, 경로가 이름으로 결정적이라
+            // ApplySpriteImport가, 배선은 target.Assign이 직접 하고, 경로가 이름으로 결정적이라
             // 다시 구워도 같은 파일을 쳐서 GUID가 그대로 유지된다.
-            string path = $"{m_outputFolder}/Item_{item.name}.png";
+            string path = $"{m_outputFolder}/{target.FileName}";
 
-            File.WriteAllBytes(path, entry.Value.EncodeToPNG());
+            File.WriteAllBytes(path, baked.EncodeToPNG());
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
             ApplySpriteImport(path);
 
             var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
             if (sprite == null)
             {
-                Debug.LogError($"ItemIconBaker: {path}에서 스프라이트를 못 읽어 {item.name} 배선을 건너뛴다");
+                Debug.LogError($"ItemIconBaker: {path}에서 스프라이트를 못 읽어 {target.Label} 배선을 건너뛴다");
                 continue;
             }
 
-            AssignIcon(item, sprite);
+            target.Assign(sprite);
             written++;
         }
 
         AssetDatabase.SaveAssets();
-        Debug.Log($"[아이템] 아이콘 {written}장을 굽고 프리팹에 배선했다");
+        Debug.Log($"[아이템] 아이콘 {written}장을 굽고 배선했다");
     }
 
     // 새로 만든 PNG는 기본이 Default 텍스처라 Image.sprite에 못 넣는다 — 스프라이트로 돌려놓는다.
@@ -410,18 +503,6 @@ public class ItemIconBaker : EditorWindow
         importer.alphaIsTransparency = true;
         importer.mipmapEnabled = false;
         importer.SaveAndReimport();
-    }
-
-    private static void AssignIcon(ItemBase item, Sprite sprite)
-    {
-        if (sprite == null)
-            return;
-
-        var so = new SerializedObject(item);
-        so.FindProperty("m_itemIcon").objectReferenceValue = sprite;
-        so.ApplyModifiedPropertiesWithoutUndo();
-
-        PrefabUtility.SavePrefabAsset(item.gameObject);
     }
 
     private void ClearPreview()

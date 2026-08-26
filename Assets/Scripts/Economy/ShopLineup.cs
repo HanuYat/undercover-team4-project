@@ -16,6 +16,9 @@ public class ShopLineup : MonoBehaviour
     [SerializeField]
     private ShopStand[] m_stands;
 
+    /// <summary>이번 라운드 슬롯들 — 주문창이 목록을 그릴 때 읽는다 (#843).</summary>
+    public IReadOnlyList<ShopStand> Stands => m_stands;
+
     private void Awake()
     {
         if (m_catalog == null)

@@ -34,6 +34,10 @@ public class ShopCatalog : ScriptableObject
         [SerializeField]
         private GameObject m_displayModel;
 
+        [Tooltip("주문창 목록에 쓸 아이콘. 비우면 소지형은 ItemBase.ItemIcon으로 대신한다. (설치형은 필수)")]
+        [SerializeField]
+        private Sprite m_displayIcon;
+
         [SerializeField]
         private Vector3 m_displayScale = Vector3.one;
 
@@ -51,6 +55,12 @@ public class ShopCatalog : ScriptableObject
 
         /// <summary>판매가. 소지형은 프리팹의 ItemBase.ShopPrice, 설치형은 이 항목의 값.</summary>
         public int Price => IsInstallable ? m_installablePrice : (m_itemPrefab != null ? m_itemPrefab.ShopPrice : 0);
+
+        /// <summary>주문창 아이콘 (#843). 지정값이 없으면 소지형은 아이템 아이콘으로 대신한다.</summary>
+        public Sprite Icon =>
+            m_displayIcon != null ? m_displayIcon
+            : !IsInstallable && m_itemPrefab != null ? m_itemPrefab.ItemIcon
+            : null;
 
         /// <summary>진열 모델. 지정값이 없으면 소지형은 손 모델로 대신한다.</summary>
         public GameObject DisplayModel =>
