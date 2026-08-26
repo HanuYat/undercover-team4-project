@@ -244,9 +244,10 @@ public class LobbyPortraitStage : MonoBehaviour
     }
 
     /// <summary>프레임을 기다리지 않고 지금 굽는다 — 출동 직전 외형 변경이 씬 전환에 지지 않게. (#863)</summary>
+    // m_baking을 보지 않는다 — 직전 GetPortrait이 이미 그 값을 동기적으로 켜 둬서, 보면 항상 걸려 절대 안 돈다.
     private void BakeNow()
     {
-        if (!m_lit || m_baking || m_camera == null || m_pending.Count == 0)
+        if (!m_lit || m_camera == null || m_pending.Count == 0)
             return;
 
         BakePending();
