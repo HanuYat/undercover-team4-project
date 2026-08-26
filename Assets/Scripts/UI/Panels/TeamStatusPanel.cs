@@ -158,8 +158,8 @@ public class TeamStatusPanel : PanelBase
             // 이름이 남는다. 아직 안 온 이름은 RefreshRows가 채운다.
             m_rows[i].SetName(NameOf(i));
 
-            // 로비에서 구운 얼굴을 그대로 쓴다 — 게임 씬에서 다시 구우면 맵 조명을 타 어둡게 나온다.
-            // 사람마다 고른 색이 다르므로 그 사람 색으로 찾는다 (#432)
+            // 직전에 거친 상점에서 구운 얼굴을 쓴다 — 게임 씬에서 다시 구우면 맵 조명을 타 어둡게 나온다.
+            // 사람마다 색·치장이 다르므로 그 조합으로 찾는다 (#432 · #863)
             m_rows[i].SetPortrait(PortraitOf(i));
         }
 
