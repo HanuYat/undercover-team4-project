@@ -71,20 +71,24 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
     // 기계 앞 모형 연출이 겹치지 않게 — 남의 결과를 잇달아 받아도 하나만 돈다
     private bool m_playing;
 
+    // 내 뽑기가 코인 투입~릴 오픈 사이를 지나는 중 — 그 사이는 IsReelSpinning()이 아직 false라
+    // 이 플래그가 없으면 그 틈에 다시 눌러 토큰을 이중으로 쓸 수 있다. DrawAsync 시작~끝까지만 켜 둔다.
+    private bool m_drawing;
+
     // 지금 떠 있는 모형 — 연출이 끊기면(씬 전환·파괴) 같이 지운다
     private GameObject m_shown;
 
     public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.Gacha;
 
-    // 내 릴이 도는 중에만 막는다. 토큰이 없다고 미리 막지 않는 것은 눌러서 사유를 볼 수 있게
-    // 하려는 것이고, 이유 표시 방식은 ShopStand와 같다.
+    // 내 릴이 도는 중이거나 내 뽑기가 진행 중일 때만 막는다. 토큰이 없다고 미리 막지 않는 것은
+    // 눌러서 사유를 볼 수 있게 하려는 것이고, 이유 표시 방식은 ShopStand와 같다.
     // 기계 앞 모형(m_playing)은 남의 뽑기로도 돌므로 여기서 보지 않는다 — 남이 뽑는 동안 내가
     // 못 누르면 붐빌 때 아무도 못 뽑는다.
-    public bool CanInteract(GameObject interactor) => !IsReelSpinning();
+    public bool CanInteract(GameObject interactor) => !m_drawing && !IsReelSpinning();
 
     public void Interact(GameObject interactor)
     {
-        if (IsReelSpinning())
+        if (m_drawing || IsReelSpinning())
             return;
 
         if (m_catalog == null)
@@ -139,24 +143,31 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
     /// </summary>
     private async UniTaskVoid DrawAsync(EAccessorySlot slot, int index, bool gained)
     {
+        // 여기까지는 Interact와 같은 프레임에 동기로 실행된다 — 첫 await 앞에서 켜야 틈이 없다
+        m_drawing = true;
         try
         {
             await PlayCoinInsertAsync();
+
+            CosmeticGachaPanel reel = FindReel();
+            if (reel != null)
+            {
+                reel.Play(slot, index, gained);
+            }
+            else
+            {
+                ShowResultMessage(slot, index, gained);
+                PlayRevealAsync(slot, index).Forget();
+            }
         }
         catch (OperationCanceledException)
         {
-            return; // 자판기가 사라졌다(씬 전환)
+            // 자판기가 사라졌다(씬 전환)
         }
-
-        CosmeticGachaPanel reel = FindReel();
-        if (reel != null)
+        finally
         {
-            reel.Play(slot, index, gained);
-        }
-        else
-        {
-            ShowResultMessage(slot, index, gained);
-            PlayRevealAsync(slot, index).Forget();
+            // 릴이 이미 돌기 시작해 이 뒤는 IsReelSpinning()이 막는다
+            m_drawing = false;
         }
     }
 
