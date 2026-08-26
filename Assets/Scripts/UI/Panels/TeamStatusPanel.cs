@@ -4,7 +4,7 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 팀 상황판 (#720) — Tab 홀드 중 동료 상태와 이번 라운드 수배 몽타주를 함께 띄운다.
+/// 팀 상황판 (#720) — Tab 홀드 중 대원 전원(나 포함)의 상태와 이번 라운드 수배 몽타주를 함께 띄운다.
 /// 여는 것은 <see cref="PlayerTeamStatusInput"/>(오너 로컬)이고 여기는 그리기만 한다.
 ///
 /// 커서를 풀지 않는다 — 표시용 창인데 커서가 풀리면 E가 통째로 막힌다(#352). 같은 이유로
@@ -74,7 +74,7 @@ public class TeamStatusPanel : PanelBase
     }
 
     // 스폰된 플레이어 오브젝트를 모은다 — 이름·체력·상태가 전부 여기 달려 있어 명부와 합칠 것이 없다.
-    // 내 것은 뺀다 — 내 체력은 좌하단 기름통이 상시로 보여 준다.
+    // 내 것도 넣되 맨 앞에 고정한다 — 스폰 순서는 피어마다 달라 그냥 넣으면 내 카드 자리가 매번 바뀐다.
     // 반환값은 "인원 구성이 바뀌었는가".
     private bool CollectPlayers()
     {
@@ -92,13 +92,16 @@ public class TeamStatusPanel : PanelBase
         for (int i = 0; i < spawned.Count; i++)
         {
             NetworkObject player = spawned[i];
-            if (player == null || player.IsLocalPlayer)
+            if (player == null)
                 continue;
 
-            m_scratch.Add(player);
+            if (player.IsLocalPlayer)
+                m_scratch.Insert(0, player);
+            else
+                m_scratch.Add(player);
         }
 
-        // 걸러낸 뒤에 비교한다 — 원본 목록과 대조하면 내 것이 빠진 만큼 인덱스가 어긋난다.
+        // 정렬한 뒤에 비교한다 — 원본 목록과 대조하면 내 것을 앞으로 옮긴 만큼 인덱스가 어긋난다.
         bool changed = m_scratch.Count != m_players.Count;
 
         if (!changed)
