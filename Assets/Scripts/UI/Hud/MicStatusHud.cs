@@ -23,8 +23,7 @@ public class MicStatusHud : MonoBehaviour
     [SerializeField]
     private TextMeshProUGUI m_hintText;
 
-    // 코드가 대입하는 자리라 라벨에 LocalizeStringEvent를 붙일 수 없다 — 서로 덮어쓴다. (#497)
-    [Tooltip("음소거 안내 문구 — Hud.Mic.MutedHint")]
+    [Tooltip("음소거 안내 문구 — Hud.Mic.MutedHint ({0}=음소거 해제 키 이름)")]
     [SerializeField]
     private LocalizedString m_hintMessage;
 
@@ -102,6 +101,7 @@ public class MicStatusHud : MonoBehaviour
 
         Unbind();
 
+        m_hintMessage.Arguments = new object[] { Vivox != null ? Vivox.MicMuteBinding : "(미할당)" };
         m_hintMessage.StringChanged += HandleHintChanged;
         m_bound = true;
     }

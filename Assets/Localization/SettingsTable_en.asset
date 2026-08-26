@@ -134,6 +134,10 @@ MonoBehaviour:
     m_Localized: "Team Lead : \uC774\uD604\uC9C4\nMember : \uC774\uD604\uC11D\nMember : \uAE40\uC9C4\uC544\nMember : \uAE40\uC900\uC601"
     m_Metadata:
       m_Items: []
+  - m_Id: 6994200000030
+    m_Localized: "Shortcut: [{0}] \u00B7 doesn't work before connecting"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

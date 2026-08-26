@@ -55,7 +55,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000302
-    m_Localized: Your mic is muted
+    m_Localized: 'Mic muted (press [{0}] to unmute)'
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000303

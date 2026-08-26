@@ -35,7 +35,7 @@ public class LobbyRosterPanel : PanelBase
 
     [SerializeField] private TextMeshProUGUI m_radioKeyText; // 무전 키 안내
 
-    [Tooltip("무전 키 안내 — Lobby.Voice.RadioKey ({0}=키 이름)")]
+    [Tooltip("무전/음소거 키 안내 — Lobby.Voice.RadioKey ({0}=무전 키, {1}=음소거 키)")]
     [SerializeField] private LocalizedString m_radioKeyFormat;
 
     [Tooltip("카드에 넣을 얼굴을 굽는 무대 (#598). 비워 두면 얼굴 칸 없이 이름만 나온다")]
@@ -309,8 +309,7 @@ public class LobbyRosterPanel : PanelBase
 
         UnbindRadioKey();
 
-        // 인자를 먼저 넣어야 구독 시점의 첫 발화부터 키 이름이 들어간 문장이 나온다
-        m_radioKeyFormat.Arguments = new object[] { Vivox.PushToTalkBinding };
+        m_radioKeyFormat.Arguments = new object[] { Vivox.PushToTalkBinding, Vivox.MicMuteBinding };
         m_radioKeyFormat.StringChanged += HandleRadioKeyChanged;
         m_radioKeyBound = true;
     }
