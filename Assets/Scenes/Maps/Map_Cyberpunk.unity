@@ -7455,6 +7455,27 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4294814583432324, guid: 8e7631b36958d68408ebf64b86f272e9, type: 3}
   m_PrefabInstance: {fileID: 204417018}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &209569519 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 4547056725478927799, guid: 51fb62522e9970640aefda6bfa416527, type: 3}
+  m_PrefabInstance: {fileID: 1859714438}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &209569525
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 209569519}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8589cf5bdc1bf07489b808b1f33f0108, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MinimapTarget
+  m_iconSprite: {fileID: 0}
+  m_iconColor: {r: 1, g: 0, b: 0.047945976, a: 1}
+  m_areaRadius: 0
+  m_areaColor: {r: 1, g: 0.25, b: 0.25, a: 0.25}
 --- !u!1001 &211930837
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -64888,7 +64909,10 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 4547056725478927799, guid: 51fb62522e9970640aefda6bfa416527, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 209569525}
   m_SourcePrefab: {fileID: 100100000, guid: 51fb62522e9970640aefda6bfa416527, type: 3}
 --- !u!1001 &1863854925
 PrefabInstance:
