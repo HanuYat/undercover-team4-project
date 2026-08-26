@@ -54,6 +54,9 @@ public class UfoAbductor : MonoBehaviour
     [Min(1f)]
     [SerializeField] private float m_liftTimeoutSeconds = 15f;
 
+    // 실내 판정을 쏘는 높이(m) — 발밑에서 쏘면 자기가 선 바닥에 걸린다 (WeatherShelter 주석과 같은 이유).
+    private const float k_shelterProbeHeight = 1.8f;
+
     private UfoCraft m_craft;
     private NetworkObject m_anchor;
     private Transform m_victim;
@@ -126,6 +129,13 @@ public class UfoAbductor : MonoBehaviour
     {
         SuddenEventUtil.CollectFieldPlayers(m_craft.BeamGroundPoint(), m_craft.BeamRadius, m_inBeam);
 
+        // 지붕 아래는 빔이 닿지 않는다 (#885) — 목록에서 빼면 아래 식히기가 밖에 있는 것과 같게 처리한다.
+        for (int i = m_inBeam.Count - 1; i >= 0; i--)
+        {
+            if (IsShelteredFromBeam(m_inBeam[i]))
+                m_inBeam.RemoveAt(i);
+        }
+
         Transform caught = null;
         for (int i = 0; i < m_inBeam.Count; i++)
         {
@@ -163,6 +173,16 @@ public class UfoAbductor : MonoBehaviour
         }
 
         return caught;
+    }
+
+    // 이 사람과 기체 사이가 막혀 있는가 — 실내·처마 밑이면 빔이 닿지 않는다. 날씨의 실내 판정과
+    // 같은 규칙을 쓴다: 같은 자리에서 눈은 안 맞는데 UFO엔 빨려 가면 어긋난다. (#885)
+    private bool IsShelteredFromBeam(Transform player)
+    {
+        Vector3 body = player.position + Vector3.up * k_shelterProbeHeight;
+        float toCraft = transform.position.y - body.y;
+
+        return toCraft > 0f && WeatherShelter.IsSheltered(body, m_craft.GroundMask, toCraft);
     }
 
     private void BeginLifting(Transform victim)

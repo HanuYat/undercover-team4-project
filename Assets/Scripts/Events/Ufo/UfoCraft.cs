@@ -37,6 +37,15 @@ public class UfoCraft : NetworkBehaviour
     [Min(1f)]
     [SerializeField] private float m_groundProbeDistance = 200f;
 
+    [Tooltip("빔을 멈춰 세우는 면의 최소 가로세로(m) — 이보다 좁으면 가로등·간판으로 보고 통과한다. " +
+             "실측: 가로등 0.34~0.5, 간판 0.19, 인도 조각 2.5, 건물 9.5")]
+    [Min(0f)]
+    [SerializeField] private float m_blockingFootprint = 2f;
+
+    [Tooltip("기둥 밑면을 지면에서 이만큼(m) 띄운다 — 0이면 밑면과 지면이 겹쳐 그 자리가 번쩍인다")]
+    [Min(0f)]
+    [SerializeField] private float m_beamGroundClearance = 0.2f;
+
     private static readonly RaycastHit[] s_groundHitBuffer = new RaycastHit[16];
 
     [Header("배회")]
@@ -71,6 +80,9 @@ public class UfoCraft : NetworkBehaviour
 
     /// <summary>빔 반경 — 판정도 이 값을 쓴다.</summary>
     public float BeamRadius => m_beamRadius;
+
+    /// <summary>하늘을 막는 것으로 치는 레이어 — 판정부의 실내 검사도 같은 값을 써야 보이는 것과 걸리는 것이 맞는다. (#885)</summary>
+    public LayerMask GroundMask => m_groundMask;
 
     /// <summary>
     /// 서버 전용 — 제자리에 세우거나 다시 배회시킨다. <b>빨아올리는 동안</b> 판정부가 건다:
@@ -113,15 +125,33 @@ public class UfoCraft : NetworkBehaviour
             return origin + Vector3.down * m_groundProbeDistance;
         }
 
+        // <b>빔을 막을 만큼 넓은 것 중 가장 가까운(=가장 높은) 히트</b>가 지면이다. 가로등 같은 얇은
+        // 소품은 건너뛰고(#819), 건물 지붕에서는 멈춘다 — 가장 먼 히트를 쓰면 지붕을 뚫고 내려가
+        // 기둥이 건물을 관통하고(#890) 실내에 선 사람이 빨려 올라갔다 (#885).
+        int nearest = -1;
         int farthest = 0;
-        for (int i = 1; i < count; i++)
+        for (int i = 0; i < count; i++)
         {
             if (s_groundHitBuffer[i].distance > s_groundHitBuffer[farthest].distance)
                 farthest = i;
+
+            if (!BlocksBeam(s_groundHitBuffer[i].collider))
+                continue;
+
+            if (nearest < 0 || s_groundHitBuffer[i].distance < s_groundHitBuffer[nearest].distance)
+                nearest = i;
         }
 
         grounded = true;
-        return s_groundHitBuffer[farthest].point;
+        // 전부 얇은 소품뿐이면 종전대로 가장 먼 히트 — 기둥이 소품 위에 떠서 멈추는 것보다 낫다
+        return s_groundHitBuffer[nearest >= 0 ? nearest : farthest].point;
+    }
+
+    // 빔을 멈춰 세울 만큼 넓은 면인가 — 도로·인도·지붕은 참, 기둥·간판은 거짓.
+    private bool BlocksBeam(Collider collider)
+    {
+        Vector3 size = collider.bounds.size;
+        return Mathf.Min(size.x, size.z) >= m_blockingFootprint;
     }
 
     private void Update()
@@ -179,7 +209,10 @@ public class UfoCraft : NetworkBehaviour
 
         // 지면을 못 찾았다면(맵 밖·허공 위) 판정은 그대로 폴백 지점을 쓰되(그 자리엔 아무도 없다),
         // 시각 기둥은 200m짜리로 늘리는 대신 접어 둔다 — 허공에 뜬 긴 기둥이 눈에 띄지 않게.
-        float length = grounded ? Mathf.Max(0.1f, transform.position.y - groundPoint.y) : 0f;
+        // 지면에서 살짝 띄운다 — 가산 블렌딩이라 밑면이 지면과 겹치면 그 자리가 번쩍인다 (#890)
+        float length = grounded
+            ? Mathf.Max(0.1f, transform.position.y - groundPoint.y - m_beamGroundClearance)
+            : 0f;
         float diameter = m_beamRadius * 2f;
         m_beamPivot.localScale = new Vector3(diameter, length * 0.5f, diameter);
     }
