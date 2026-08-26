@@ -35,7 +35,7 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
     [Tooltip("투입구 위치 — 자판기 기준 로컬 오프셋(m). 인스펙터에서 눈으로 맞출 것")]
     [SerializeField] private Vector3 m_coinSlotOffset = new Vector3(0.42f, 0.4f, 0.2f);
 
-    [Tooltip("토큰 한 변 크기(m)")]
+    [Tooltip("토큰 지름(m) — 투입구 폭에 맞춘다")]
     [SerializeField] private float m_coinSize = 0.055f;
 
     [Tooltip("토큰이 들어가는 데 걸리는 시간(초) — 이 뒤에 룰렛이 돈다")]
@@ -177,6 +177,11 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
         var renderer = coin.AddComponent<SpriteRenderer>();
         renderer.sprite = m_coinSprite;
 
+        // 스프라이트는 스케일 1이 곧 1m가 아니다(PPU에 따라 십수 m가 되기도 한다) — 지름을 m로
+        // 받으려면 그림의 실제 크기로 나눠야 한다. 안 그러면 동전이 자판기만 해진다.
+        float spriteWidth = m_coinSprite.bounds.size.x;
+        float scale = spriteWidth > 0f ? m_coinSize / spriteWidth : m_coinSize;
+
         try
         {
             float elapsed = 0f;
@@ -191,7 +196,7 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
 
                 // 마지막 구간에서만 사라진다 — 처음부터 줄이면 들어가는 것이 아니라 녹는 것으로 보인다
                 float shrink = t < 0.75f ? 1f : 1f - ((t - 0.75f) / 0.25f);
-                coin.transform.localScale = Vector3.one * (m_coinSize * shrink);
+                coin.transform.localScale = Vector3.one * (scale * shrink);
 
                 Camera view = Camera.main;
                 if (view != null)
