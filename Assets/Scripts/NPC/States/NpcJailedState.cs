@@ -28,7 +28,7 @@ public class NpcJailedState : NpcStateBase
     // 래그돌인 몸을 배치 지점 바닥으로 당길 최대 거리(m) — 지점이 바닥보다 아래에 놓인 만큼만 덮으면 된다.
     private const float k_bodySnapRadius = 3f;
 
-    // 방 밖 이탈을 확인하는 주기(초) — 수감자 수만큼 도는 판정이라 매 프레임 보지 않는다.
+    // 방 밖 이탈 확인 주기(초) — 수감자 수만큼 도는 판정이라 매 프레임 보지 않는다.
     private const float k_roomCheckInterval = 0.5f;
 
     // 다음 목적지를 고르기까지 서 있는 시간(초) 범위 — 계속 걷기만 하면 우리를 도는 로봇처럼 보인다.
@@ -70,11 +70,8 @@ public class NpcJailedState : NpcStateBase
         if (JailRoom.Contains(m_owner.transform.position))
             return;
 
-        // <b>래그돌이 몸을 쥐고 있으면 워프로는 루트만 간다</b> (#866). 동적인 뼈는 따라오지 않고,
-        // 다음 물리 스텝에 루트 추종(<c>NpcRagdoll.TickRootFollow</c>)이 루트를 그 몸으로 도로
-        // 끌어간다 — 배치가 통째로 없던 일이 되어, 깨어난 몸이 문 앞에 붙는다. 그 자리에서는 방 안
-        // 목적지까지 경로가 없으므로(셀은 별도 NavMesh 섬) <b>수갑 찬 채 건물 밖을 배회한다</b>.
-        // 검거는 무력화가 전제라 여기 오는 신병은 거의 이쪽이다.
+        // 래그돌이 몸을 쥐고 있으면(검거 전제가 무력화라 대부분 이쪽) 워프로는 루트만 간다 — 뼈는
+        // 문 앞에 남고 루트 추종(NpcRagdoll)이 다음 물리 스텝에 루트를 그리로 도로 끌어간다 (#866)
         if (m_owner.Ragdoll != null && m_owner.Ragdoll.ServerPlaceRagdollBody(RagdollPlacement()))
             return;
 
@@ -91,10 +88,9 @@ public class NpcJailedState : NpcStateBase
 
         // <b>에이전트가 꺼져 있으면 실패가 정상이다</b> — Warp는 그때 false를 돌려주지만 몸은 옮겨
         // 준다(실측). 밧줄을 걷어도 래그돌이 에이전트를 쥐고 있어 켜지지 않는다
-        // (<c>NpcRopeDrag.ReleaseDrag</c>의 래그돌 가드 — "뗀 쪽이 되돌린다"). 뼈까지 옮겨야 하는
-        // 몸은 위 래그돌 갈래가 이미 가져갔으므로, 여기 오는 것은 뼈가 루트를 따라오는 몸이다.
-        // NavMesh 재부착은 일어날 때 래그돌이 하고(<c>NpcRagdoll</c>), <see cref="Tick"/>은 붙기
-        // 전까지 배회를 미룬다.
+        // (<c>NpcRopeDrag.ReleaseDrag</c>의 래그돌 가드 — "뗀 쪽이 되돌린다"). 여기 오는 것은 뼈가
+        // 루트를 따라오는 몸이다(래그돌인 몸은 위 갈래가 가져갔다). NavMesh 재부착은 일어날 때
+        // 래그돌이 하고, <see cref="Tick"/>은 붙기 전까지 배회를 미룬다.
         //
         // 방향은 맞추지 않는다 — 래그돌이 쥔 몸의 루트 회전은 골반을 따라가므로 여기서 돌려도 되돌아온다.
         if (!m_owner.Agent.enabled)
@@ -185,9 +181,8 @@ public class NpcJailedState : NpcStateBase
         m_walking = true;
     }
 
-    // 래그돌인 몸을 놓을 자리 — 배치 지점을 NavMesh 바닥에 스냅한다. 지점은 바닥보다 조금 아래에
-    // 두는 것이 보통이라(시체 배치와 같은 사정 — <c>JailZone.RandomRestPointInRoom</c>) 그대로
-    // 놓으면 몸이 바닥에 파묻힌 채 떤다.
+    // 래그돌인 몸을 놓을 자리 — 배치 지점은 보통 바닥보다 조금 아래라 그대로 놓으면 파묻힌 채 떤다
+    // (시체 배치와 같은 사정 — <c>JailZone.RandomRestPointInRoom</c>).
     private Vector3 RagdollPlacement()
     {
         Vector3 spot = m_owner.Custody.JailSpot.position;
@@ -199,10 +194,7 @@ public class NpcJailedState : NpcStateBase
     }
 
     // 방 밖에 있는 수감자를 배치 지점으로 되돌린다 — 되돌렸으면(또는 되돌리려다 실패했으면) 참. (#866)
-    //
-    // <b>원인을 가리지 않는 안전망이다.</b> 밖으로 나가는 길은 여럿인데(배치 워프 실패·넉백·겹침
-    // 밀림) 결과는 하나다: 셀이 별도 NavMesh 섬이라 방 안 목적지로 가는 경로가 없어, 수갑 찬 채
-    // 건물 밖을 배회한다. 경로마다 막는 대신 "밖에 있으면 되돌린다"로 받는다.
+    // 원인을 가리지 않는 안전망이다: 나가는 길은 여럿이어도(워프 실패·넉백·밀림) 결과는 하나다.
     private bool TryReturnToRoom()
     {
         if (!JailRoom.HasRoom || Time.time < m_nextRoomCheckTime)

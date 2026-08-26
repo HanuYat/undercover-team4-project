@@ -696,12 +696,8 @@ public partial class NpcRagdoll : MonoBehaviour
         ServerResumeFromSleep();
     }
 
-    /// <summary>
-    /// 래그돌인 몸을 통째로 옮긴다 — 서버 전용. 산 채로 래그돌인 신병(유치장 배치)이 쓴다. (#866)
-    ///
-    /// 수단은 <see cref="ServerPlaceCorpse"/>와 같다 — 루트만 옮기면 동적인 뼈가 제자리에 남고,
-    /// <see cref="TickRootFollow"/>가 다음 물리 스텝에 루트를 그 몸으로 도로 끌어간다.
-    /// </summary>
+    /// <summary>래그돌인 몸을 통째로 옮긴다 — 수단은 <see cref="ServerPlaceCorpse"/>와 같고, 산 채로
+    /// 래그돌인 신병(유치장 배치)이 쓴다. 서버 전용. (#866)</summary>
     /// <returns>옮겼으면 참 — 애니메이터가 쥔 몸이면 거짓(그쪽은 뼈가 루트를 따라온다).</returns>
     public bool ServerPlaceRagdollBody(Vector3 position)
     {
