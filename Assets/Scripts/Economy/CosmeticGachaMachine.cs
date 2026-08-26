@@ -182,6 +182,9 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
         float spriteWidth = m_coinSprite.bounds.size.x;
         float scale = spriteWidth > 0f ? m_coinSize / spriteWidth : m_coinSize;
 
+        // 자판기 정면(로컬 +Z) 바깥에서 출발한다
+        Vector3 start = slot + transform.forward * (m_coinSize * 2.5f);
+
         try
         {
             float elapsed = 0f;
@@ -191,8 +194,9 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
                 elapsed += Time.deltaTime;
 
                 float t = Mathf.Clamp01(elapsed / m_coinInsertSeconds);
-                // 떨어지는 높이는 토큰 크기를 따라간다 — 작은 동전이 30cm 위에서 내려오면 어색하다
-                coin.transform.position = Vector3.Lerp(slot + Vector3.up * (m_coinSize * 2.5f), slot, t * t);
+                // 위에서 떨어뜨리지 않고 <b>앞에서 밀어 넣는다</b> — 투입구는 세로 홈이라 동전은
+                // 정면에서 들어간다. 나오는 거리는 토큰 크기를 따라간다.
+                coin.transform.position = Vector3.Lerp(start, slot, t * t);
 
                 // 마지막 구간에서만 사라진다 — 처음부터 줄이면 들어가는 것이 아니라 녹는 것으로 보인다
                 float shrink = t < 0.75f ? 1f : 1f - ((t - 0.75f) / 0.25f);
