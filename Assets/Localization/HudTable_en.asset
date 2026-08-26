@@ -55,7 +55,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000302
-    m_Localized: 'Mic muted (press [{0}] to unmute)'
+    m_Localized: Mic muted (press [{0}] to unmute)
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000303
@@ -471,6 +471,10 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 7647812597112832
     m_Localized: Open Crate
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8152779461132288
+    m_Localized: Open catalog
     m_Metadata:
       m_Items: []
   references:

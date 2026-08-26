@@ -52,6 +52,7 @@ public static class InteractPrompts
     public static readonly LocalizedString RopeBind = Of("Hud.Interact.RopeBind");
     public static readonly LocalizedString RopeJoin = Of("Hud.Interact.RopeJoin");
     public static readonly LocalizedString RopeResume = Of("Hud.Interact.RopeResume");
+    public static readonly LocalizedString CatalogOpen = Of("Hud.Interact.CatalogOpen");
 
     // ---- 신병 (E는 손을 떼는 쪽이다 — 줄을 거는 쪽은 밧줄 좌클릭, #513) ----
     public static readonly LocalizedString NpcUnrope = Of("Hud.Interact.NpcUnrope");

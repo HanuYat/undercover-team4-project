@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 장비 카탈로그 (#843) — 사용하면 주문창(<see cref="ShopBrowserPanel"/>)이 열린다.
@@ -10,6 +11,9 @@ using UnityEngine;
 /// </summary>
 public class ShopCatalogItem : ItemBase
 {
+    // 겨눌 대상이 없는 아이템이라 조준 안내(TargetPromptLabel)로는 뜰 자리가 없다 — 들고만 있으면 띄운다
+    public override LocalizedString HeldPromptLabel() => InteractPrompts.CatalogOpen;
+
     public override void Use(GameObject target)
     {
         if (!IsOwner)

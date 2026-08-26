@@ -98,6 +98,13 @@ public abstract class ItemBase : ChanneledInteractionBehaviour
     public virtual LocalizedString TargetPromptLabel(GameObject aimTarget) => null;
 
     /// <summary>
+    /// 겨눈 것 없이 손에 든 것만으로 쓰는 아이템의 사용 안내 — "카탈로그 열기"처럼 동사로. (#843)
+    /// 키(좌클릭) 표기는 <see cref="TargetPromptLabel"/>과 같이 표시 쪽이 붙인다.
+    /// 조준과 무관하게 뜨므로 겨냥한 대상이 있는 안내에 자리를 내준다. null이면 뜨지 않는다.
+    /// </summary>
+    public virtual LocalizedString HeldPromptLabel() => null;
+
+    /// <summary>
     /// 현재 아이템을 사용할 수 있는지 — UI 표시(장착 아이콘 활성/비활성 등)용 힌트. 기본값 true.
     /// 사용 가능 여부의 최종 판정은 Use() 구현부가 스스로 수행한다 (아래 Use() 계약 참고).
     /// </summary>
