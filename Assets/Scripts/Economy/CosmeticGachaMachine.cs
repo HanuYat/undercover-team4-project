@@ -33,7 +33,7 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
     [SerializeField] private Sprite m_coinSprite;
 
     [Tooltip("투입구 위치 — 자판기 기준 로컬 오프셋(m). 인스펙터에서 눈으로 맞출 것")]
-    [SerializeField] private Vector3 m_coinSlotOffset = new Vector3(0.55f, 1.15f, 0.35f);
+    [SerializeField] private Vector3 m_coinSlotOffset = new Vector3(0.42f, 0.4f, 0.2f);
 
     [Tooltip("토큰 한 변 크기(m)")]
     [SerializeField] private float m_coinSize = 0.14f;

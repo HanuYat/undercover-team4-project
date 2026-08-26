@@ -12531,7 +12531,11 @@ MonoBehaviour:
   m_catalog: {fileID: 11400000, guid: 4d0d855372518f94184454112d35bef4, type: 2}
   m_dispenseAnchor: {fileID: 1295111152}
   m_capsulePrefab: {fileID: 0}
-  m_revealScale: 1
+  m_coinSprite: {fileID: 21300000, guid: 44fb66a2c41929c418e9cef8215ddd2c, type: 3}
+  m_coinSlotOffset: {x: 0.42, y: 0.4, z: 0.2}
+  m_coinSize: 0.14
+  m_coinInsertSeconds: 0.5
+  m_revealScale: 4
   m_capsuleSeconds: 0.8
   m_popSeconds: 0.35
   m_holdSeconds: 2.5
