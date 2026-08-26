@@ -13,6 +13,26 @@ using UnityEngine.UI;
 /// </summary>
 public class ScanInfoView : NpcWorldCard
 {
+    [Header("배경")]
+    [Tooltip("카드 배경 — 마스킹 여부에 따라 색이 바뀐다(미스캔 시 통째로 까맣게)")]
+    [SerializeField]
+    private Image m_background;
+
+    [SerializeField]
+    private Color m_maskedColor = Color.black;
+
+    [SerializeField]
+    private Color m_scannedColor = new Color(0f, 0.05f, 0.08f, 0.72f);
+
+    [Header("마스킹")]
+    [Tooltip("미스캔 시 뜨는 큰 물음표 — 스캔 완료 시 꺼진다")]
+    [SerializeField]
+    private GameObject m_maskedRoot;
+
+    [Tooltip("이름+아이콘 컨테이너 — 스캔 완료 시에만 켜진다")]
+    [SerializeField]
+    private GameObject m_contentRoot;
+
     [Header("텍스트")]
     [SerializeField]
     private TMP_Text m_nameText;
@@ -28,12 +48,7 @@ public class ScanInfoView : NpcWorldCard
     [SerializeField]
     private Sprite m_androidIcon;
 
-    [Tooltip("미스캔 NPC에 표시할 타입 아이콘 — 비우면 미스캔 상태에서 아이콘이 꺼진다")]
-    [SerializeField]
-    private Sprite m_unknownTypeIcon;
-
     [Header("생사 상태 아이콘")]
-    [Tooltip("스캔된 NPC가 살아있을 때 표시할 아이콘")]
     [SerializeField]
     private Image m_statusIcon;
 
@@ -42,9 +57,6 @@ public class ScanInfoView : NpcWorldCard
 
     [SerializeField]
     private Sprite m_deadIcon;
-
-    // 미스캔 NPC의 미확인 필드 표기 (#233)
-    private const string k_masked = "??";
 
     // 이름 라벨은 카드마다 같은 문구이고 카드는 NPC 수만큼 있다 — SerializeField로 두면
     // NPC 프리팹마다 같은 키를 다시 배선해야 하고 하나만 빠지면 그 NPC만 옛 표기로 남는다. (#497)
@@ -63,46 +75,43 @@ public class ScanInfoView : NpcWorldCard
         m_nameText.text = LocalizedStrings.Get(k_hudTable, k_nameKey, citizenName);
         SetTypeIcon(typeView);
         SetStatusIcon(isDead);
+        SetMasked(false);
         SetCardActive(true);
     }
 
-    /// <summary>미스캔 NPC — 이름은 ??로, 아이콘은 미확인 표기로 채우고 카드를 켠다.</summary>
+    /// <summary>미스캔 NPC — 카드 전체를 까맣게 채우고 물음표만 띄운다(이름·아이콘은 통째로 숨김).</summary>
     public void ShowMasked()
     {
-        m_nameText.text = LocalizedStrings.Get(k_hudTable, k_nameKey, k_masked);
-        SetTypeIcon(null);
-        SetStatusIcon(null);
+        SetMasked(true);
         SetCardActive(true);
     }
 
-    // type이 null이면 미스캔 — 미확인 아이콘(비었으면 꺼짐)으로 표시한다.
-    private void SetTypeIcon(OfficialRecords.CitizenType? type)
+    private void SetMasked(bool masked)
+    {
+        if (m_background != null)
+            m_background.color = masked ? m_maskedColor : m_scannedColor;
+
+        if (m_maskedRoot != null)
+            m_maskedRoot.SetActive(masked);
+
+        if (m_contentRoot != null)
+            m_contentRoot.SetActive(!masked);
+    }
+
+    private void SetTypeIcon(OfficialRecords.CitizenType type)
     {
         if (m_typeIcon == null) return;
 
-        Sprite sprite = type switch
-        {
-            OfficialRecords.CitizenType.Human => m_humanIcon,
-            OfficialRecords.CitizenType.Android => m_androidIcon,
-            _ => m_unknownTypeIcon,
-        };
-
+        Sprite sprite = type == OfficialRecords.CitizenType.Android ? m_androidIcon : m_humanIcon;
         m_typeIcon.sprite = sprite;
         m_typeIcon.enabled = sprite != null;
     }
 
-    // isDead가 null이면 미스캔 — 생사도 스캔 전까지는 모른다는 뜻으로 아이콘을 끈다.
-    private void SetStatusIcon(bool? isDead)
+    private void SetStatusIcon(bool isDead)
     {
         if (m_statusIcon == null) return;
 
-        Sprite sprite = isDead switch
-        {
-            true => m_deadIcon,
-            false => m_aliveIcon,
-            null => null,
-        };
-
+        Sprite sprite = isDead ? m_deadIcon : m_aliveIcon;
         m_statusIcon.sprite = sprite;
         m_statusIcon.enabled = sprite != null;
     }
