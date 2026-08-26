@@ -291,16 +291,13 @@ public class LightningEvent : NetworkBehaviour, IRoundWeather
             }
 
             // 발밑이 아니라 몸 높이에서 쏜다 — 바닥에서 쏘면 자기가 선 바닥에 걸리는 맵이 있다.
-            Vector3 origin = position + Vector3.up * k_shelterProbeOriginHeight;
+            Vector3 origin = position + Vector3.up * WeatherShelter.k_bodyProbeHeight;
             if (WeatherShelter.IsSheltered(origin, m_shelterMask, m_shelterProbeHeight))
                 continue;
 
             s_exposed.Add(player);
         }
     }
-
-    // 실내 판정 레이의 시작 높이(m) — 사람 가슴께. 발밑에서 쏘면 자기 바닥에 걸린다.
-    private const float k_shelterProbeOriginHeight = 1f;
 
     // 후보 버퍼 — 서버에서만 도는 경로라 공유해도 안전하다(프레임마다의 할당 방지, NpcFleeState와 같은 수법)
     private static readonly System.Collections.Generic.List<PlayerHealth> s_exposed =

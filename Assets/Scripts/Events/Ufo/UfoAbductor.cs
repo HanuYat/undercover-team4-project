@@ -54,8 +54,8 @@ public class UfoAbductor : MonoBehaviour
     [Min(1f)]
     [SerializeField] private float m_liftTimeoutSeconds = 15f;
 
-    // 실내 판정을 쏘는 높이(m) — 발밑에서 쏘면 자기가 선 바닥에 걸린다 (WeatherShelter 주석과 같은 이유).
-    private const float k_shelterProbeHeight = 1.8f;
+    // 실내 판정 탐침 굵기(m) — 가는 레이는 창살·소품 틈을 지나 '노출'로 오판한다 (Synty 지오메트리).
+    private const float k_shelterProbeRadius = 0.3f;
 
     // 기둥 아래 여유(m) — 발밑 원점이 지면 지점보다 조금 낮아도(경사·계단) 같은 기둥으로 본다.
     private const float k_beamFootSlack = 1.5f;
@@ -196,14 +196,16 @@ public class UfoAbductor : MonoBehaviour
         return position.y >= groundPoint.y - k_beamFootSlack && position.y <= axis.y;
     }
 
-    // 이 사람과 기체 사이가 막혀 있는가 — 실내·처마 밑이면 빔이 닿지 않는다. 날씨의 실내 판정과
-    // 같은 규칙을 쓴다: 같은 자리에서 눈은 안 맞는데 UFO엔 빨려 가면 어긋난다. (#885)
+    // 이 사람과 기체 사이가 막혀 있는가 — 실내·처마 밑이면 빔이 닿지 않는다. 날씨와 같은 함수·같은
+    // 몸 높이로 묻는다: 같은 자리에서 눈은 안 맞는데 UFO엔 빨려 가면 어긋난다. (#885)
+    // 마스크만은 빔의 것을 쓴다 — 기둥을 멈춰 세우는 것과 사람을 가려 주는 것이 같아야 한다.
     private bool IsShelteredFromBeam(Transform player)
     {
-        Vector3 body = player.position + Vector3.up * k_shelterProbeHeight;
+        Vector3 body = player.position + Vector3.up * WeatherShelter.k_bodyProbeHeight;
         float toCraft = transform.position.y - body.y;
 
-        return toCraft > 0f && WeatherShelter.IsSheltered(body, m_craft.GroundMask, toCraft);
+        return toCraft > 0f
+            && WeatherShelter.IsSheltered(body, m_craft.GroundMask, toCraft, k_shelterProbeRadius);
     }
 
     private void BeginLifting(Transform victim)

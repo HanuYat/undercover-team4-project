@@ -37,16 +37,18 @@ public class UfoCraft : NetworkBehaviour
     [Min(1f)]
     [SerializeField] private float m_groundProbeDistance = 200f;
 
-    [Tooltip("빔을 멈춰 세우는 면의 최소 가로세로(m) — 이보다 좁으면 가로등·간판으로 보고 통과한다. " +
-             "실측: 가로등 0.34~0.5, 간판 0.19, 인도 조각 2.5, 건물 9.5")]
-    [Min(0f)]
-    [SerializeField] private float m_blockingFootprint = 2f;
+    [Tooltip("빔을 멈춰 세우려면 그 면이 기둥 단면을 이 비율만큼 덮어야 한다 — 1이면 기둥을 온전히 " +
+             "덮는 것(도로·건물 지붕)만 멈춰 세우고 가로등·간판·정류장 지붕은 통과한다. " +
+             "낮출수록 좁은 것에도 멈춘다")]
+    [Range(0.1f, 1f)]
+    [SerializeField] private float m_blockingCoverage = 1f;
 
     [Tooltip("기둥 밑면을 지면에서 이만큼(m) 띄운다 — 0이면 밑면과 지면이 겹쳐 그 자리가 번쩍인다")]
     [Min(0f)]
     [SerializeField] private float m_beamGroundClearance = 0.2f;
 
-    private static readonly RaycastHit[] s_groundHitBuffer = new RaycastHit[16];
+    // 넘치면 어느 히트가 버려지는지 정해져 있지 않다 — 지붕이 빠지면 #885·#890이 그대로 되돌아온다
+    private static readonly RaycastHit[] s_groundHitBuffer = new RaycastHit[64];
 
     [Header("배회")]
     [Tooltip("씬에 놓인 처음 자리를 중심으로 이 반경(m) 안을 떠다닌다")]
@@ -147,11 +149,18 @@ public class UfoCraft : NetworkBehaviour
         return s_groundHitBuffer[nearest >= 0 ? nearest : farthest].point;
     }
 
-    // 빔을 멈춰 세울 만큼 넓은 면인가 — 도로·인도·지붕은 참, 기둥·간판은 거짓.
+    // 기둥을 덮는 면만 멈춰 세운다 — 좁은 소품이 기둥 전체의 지면을 정하면 그 옆 훤한 길에 선
+    // 사람까지 밑면 아래로 밀려 면제된다. 덮지 못하는 것 밑은 판정부의 실내 검사가 사람마다 가린다.
     private bool BlocksBeam(Collider collider)
     {
-        Vector3 size = collider.bounds.size;
-        return Mathf.Min(size.x, size.z) >= m_blockingFootprint;
+        Bounds bounds = collider.bounds;
+        Vector3 axis = transform.position;
+        float reach = m_beamRadius * m_blockingCoverage;
+
+        return bounds.min.x <= axis.x - reach
+            && bounds.max.x >= axis.x + reach
+            && bounds.min.z <= axis.z - reach
+            && bounds.max.z >= axis.z + reach;
     }
 
     private void Update()
