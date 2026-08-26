@@ -76,6 +76,10 @@ public class TeamStatusPanel : PanelBase
     // 스폰된 플레이어 오브젝트를 모은다 — 이름·체력·상태가 전부 여기 달려 있어 명부와 합칠 것이 없다.
     // 내 것도 넣되 맨 앞에 고정한다 — 스폰 순서는 피어마다 달라 그냥 넣으면 내 카드 자리가 매번 바뀐다.
     // 반환값은 "인원 구성이 바뀌었는가".
+    //
+    // ⚠ 내 몸은 IsLocalPlayer로 찾지 않는다 (#863) — 그 값은 소유권을 타는데, 죽으면 시체 소유권이
+    // 서버로 넘어가(#763) 내 카드가 첫 칸에서 밀려난다. 스폰 때 정해지고 소유권 이관에 흔들리지 않는
+    // LocalClient.PlayerObject로 판정한다.
     private bool CollectPlayers()
     {
         NetworkManager manager = NetworkManager.Singleton;
@@ -87,6 +91,7 @@ public class TeamStatusPanel : PanelBase
         }
 
         IReadOnlyList<NetworkObject> spawned = manager.SpawnManager.PlayerObjects;
+        NetworkObject mine = manager.LocalClient != null ? manager.LocalClient.PlayerObject : null;
 
         m_scratch.Clear();
         for (int i = 0; i < spawned.Count; i++)
@@ -95,7 +100,7 @@ public class TeamStatusPanel : PanelBase
             if (player == null)
                 continue;
 
-            if (player.IsLocalPlayer)
+            if (player == mine)
                 m_scratch.Insert(0, player);
             else
                 m_scratch.Add(player);
