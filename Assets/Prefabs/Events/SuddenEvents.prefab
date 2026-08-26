@@ -447,21 +447,24 @@ MonoBehaviour:
   m_snow:
     Tint: {r: 0.96, g: 0.98, b: 1, a: 1}
     Cells: 26
-    Fall: 0.55
+    Fall: 2
     Streak: 1.35
     Thickness: 6
-    Occupancy: 0.14
+    Occupancy: 0.26
     Tilt: 0.12
-    Drift: 0.18
+    Drift: 0.08
     Layers: 3
-    Opacity: 0.42
+    Opacity: 0.5
     CenterClear: 0.6
     MaskCut: 0.6
     MaskSoft: 0.06
+    NearDistance: 3
+    FarDistance: 15
+    LandFade: 2
   m_rain:
     Tint: {r: 0.72, g: 0.8, b: 0.94, a: 1}
     Cells: 18
-    Fall: 3
+    Fall: 9
     Streak: 14
     Thickness: 7
     Occupancy: 0.22
@@ -472,6 +475,9 @@ MonoBehaviour:
     CenterClear: 0.55
     MaskCut: 0.6
     MaskSoft: 0.06
+    NearDistance: 2
+    FarDistance: 20
+    LandFade: 1
   m_fadeSeconds: 2
   m_distance: 0.5
 --- !u!114 &3941778138045511832

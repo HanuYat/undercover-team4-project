@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.Localization;
+using UnityEngine.UI;
 
 /// <summary>
 /// 세션 코드 HUD — 인게임 좌측 상단에 현재 세션 코드만 표시한다. (#247)
@@ -17,11 +18,23 @@ public class SessionCodePanel : PanelBase
     [SerializeField]
     private TMP_Text m_codeText;
 
+    [Tooltip("누르면 세션 코드를 클립보드에 복사한다")]
+    [SerializeField]
+    private Button m_copyButton;
+
     // 코드가 대입하는 자리라 라벨에 LocalizeStringEvent를 붙일 수 없다 — 서로 덮어쓴다. (#497)
     // CommonTable에 두는 이유는 이 패널이 Lobby·Shop 두 씬에 걸쳐 있어서다 (문서 §3).
     [Tooltip("세션 코드 표시 — Common.Session.Code ({0}=참가 코드)")]
     [SerializeField]
     private LocalizedString m_codeFormat;
+
+    [Tooltip("복사 버튼을 누르면 뜨는 토스트 — Common.Toast.Copied")]
+    [SerializeField]
+    private LocalizedString m_copiedToast;
+
+    [Tooltip("복사 토스트가 떠 있는 시간(초)")]
+    [SerializeField]
+    private float m_toastSeconds = 2f;
 
     private SessionManager Session => App.Net.Session;
 
@@ -35,6 +48,9 @@ public class SessionCodePanel : PanelBase
             Session.OnSessionLeft += Refresh;
         }
 
+        if (m_copyButton != null)
+            m_copyButton.onClick.AddListener(HandleCopyClicked);
+
         Refresh();
     }
 
@@ -46,7 +62,24 @@ public class SessionCodePanel : PanelBase
             Session.OnSessionLeft -= Refresh;
         }
 
+        if (m_copyButton != null)
+            m_copyButton.onClick.RemoveListener(HandleCopyClicked);
+
         Unbind(); // 꺼진 HUD가 언어 변경에 반응하지 않게 — 다시 켜질 때 OnEnable이 건다
+    }
+
+    /// <summary>
+    /// 코드를 클립보드에 복사하고 토스트로 알린다. 세션이 없으면 아무 것도 하지 않는다.
+    /// </summary>
+    private void HandleCopyClicked()
+    {
+        if (Session == null || Session.CurrentSession == null)
+            return;
+
+        GUIUtility.systemCopyBuffer = Session.CurrentSession.Code;
+
+        if (App.UI.Toast != null)
+            App.UI.Toast.Show(m_copiedToast, m_toastSeconds);
     }
 
     private void HandleSessionJoined(string sessionId) => Refresh();

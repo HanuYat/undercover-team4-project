@@ -31,7 +31,7 @@ public class PrecipitationScreen : MonoBehaviour
         [Tooltip("한 겹의 칸 수 — 크면 촘촘하다")]
         public float Cells;
 
-        [Tooltip("낙하 속도")]
+        [Tooltip("낙하 속도(m/s) — 월드 속도라 가까운 겹이 화면에서 더 빨리 떨어진다. 실제 눈은 1~1.5")]
         public float Fall;
 
         [Tooltip("줄기 길이 — 1이면 점(눈), 크면 선(비)")]
@@ -70,6 +70,15 @@ public class PrecipitationScreen : MonoBehaviour
         [Tooltip("마스크 경계 부드러움 — 작으면 칼같이 끊기고, 크면 번진다(실내로 새 보인다)")]
         [Range(0.01f, 0.4f)]
         public float MaskSoft;
+
+        [Tooltip("가장 가까운 겹이 떠 있다고 칠 거리(m) — 이보다 가까운 벽·바닥에서는 눈이 사라진다")]
+        public float NearDistance;
+
+        [Tooltip("가장 먼 겹의 거리(m) — 크면 먼 건물까지 눈이 덮인다")]
+        public float FarDistance;
+
+        [Tooltip("닿기 전에 흐려지는 폭(m) — 작으면 칼같이 끊기고, 크면 부드럽게 녹아 사라진다")]
+        public float LandFade;
     }
 
     [Header("셰이더")]
@@ -81,7 +90,7 @@ public class PrecipitationScreen : MonoBehaviour
     {
         Tint = new Color(0.85f, 0.90f, 1f),
         Cells = 26f,
-        Fall = 0.35f,
+        Fall = 2f, // m/s
         Streak = 1.4f,
         Thickness = 16f,
         Occupancy = 0.30f,
@@ -92,6 +101,9 @@ public class PrecipitationScreen : MonoBehaviour
         CenterClear = 0.55f,
         MaskCut = 0.55f,
         MaskSoft = 0.10f,
+        NearDistance = 3f,
+        FarDistance = 15f,
+        LandFade = 2f,
     };
 
     [Header("프리셋 — 비")]
@@ -99,7 +111,7 @@ public class PrecipitationScreen : MonoBehaviour
     {
         Tint = new Color(0.62f, 0.72f, 0.90f),
         Cells = 34f,
-        Fall = 2.6f,
+        Fall = 9f, // m/s
         Streak = 12f,
         Thickness = 22f,
         Occupancy = 0.40f,
@@ -110,6 +122,9 @@ public class PrecipitationScreen : MonoBehaviour
         CenterClear = 0.5f,
         MaskCut = 0.55f,
         MaskSoft = 0.10f,
+        NearDistance = 2f,
+        FarDistance = 20f,
+        LandFade = 1f, // 비는 칼같이 끊겨야 바닥에 꽂히는 것으로 읽힌다
     };
 
     [Header("페이드")]
@@ -135,6 +150,10 @@ public class PrecipitationScreen : MonoBehaviour
     private static readonly int s_centerClearId = Shader.PropertyToID("_CenterClear");
     private static readonly int s_maskCutId = Shader.PropertyToID("_MaskCut");
     private static readonly int s_maskSoftId = Shader.PropertyToID("_MaskSoft");
+    private static readonly int s_fovHId = Shader.PropertyToID("_FovH");
+    private static readonly int s_nearDistanceId = Shader.PropertyToID("_NearDistance");
+    private static readonly int s_farDistanceId = Shader.PropertyToID("_FarDistance");
+    private static readonly int s_landFadeId = Shader.PropertyToID("_LandFade");
 
     private PrecipitationMask m_mask;
     private Material m_material;
@@ -145,6 +164,7 @@ public class PrecipitationScreen : MonoBehaviour
     private EKind m_kind;
     private float m_target; // 목표 세기 — Show/Hide가 정한다
     private float m_current;
+
 
     /// <summary>지금 그리는 강수 종류. 없으면 <see cref="EKind.None"/>.</summary>
     public EKind Kind => m_kind;
@@ -209,6 +229,7 @@ public class PrecipitationScreen : MonoBehaviour
                 m_renderer.enabled = false;
             if (m_target <= 0f)
                 m_kind = EKind.None;
+
             return;
         }
 
@@ -218,6 +239,20 @@ public class PrecipitationScreen : MonoBehaviour
 
         m_renderer.enabled = true;
         FitToCamera();
+        ApplyViewUniforms();
+    }
+
+    // 셰이더가 칸 밀도를 각도로 환산할 때 쓴다 — 시야각이 바뀌어도 밀도가 유지된다
+    private void ApplyViewUniforms()
+    {
+        if (m_material != null)
+            m_material.SetFloat(s_fovHId, HorizontalFovRadians());
+    }
+
+    private float HorizontalFovRadians()
+    {
+        float halfV = Mathf.Max(m_attachedTo.fieldOfView, 1f) * 0.5f * Mathf.Deg2Rad;
+        return 2f * Mathf.Atan(Mathf.Tan(halfV) * m_attachedTo.aspect);
     }
 
     // 쿼드를 시점 카메라 자식으로 만든다. 카메라가 갈아 끼워지면(관전·CCTV) 다시 붙인다.
@@ -291,5 +326,8 @@ public class PrecipitationScreen : MonoBehaviour
         m_material.SetFloat(s_centerClearId, preset.CenterClear);
         m_material.SetFloat(s_maskCutId, preset.MaskCut);
         m_material.SetFloat(s_maskSoftId, preset.MaskSoft);
+        m_material.SetFloat(s_nearDistanceId, preset.NearDistance);
+        m_material.SetFloat(s_farDistanceId, preset.FarDistance);
+        m_material.SetFloat(s_landFadeId, preset.LandFade);
     }
 }

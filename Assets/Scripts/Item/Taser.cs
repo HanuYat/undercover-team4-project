@@ -216,10 +216,9 @@ public class Taser : ItemBase, IAimedWeapon
     private enum AimResult { NoHit, HitNonTarget, TargetInvalidState, ValidTarget }
 
     /// <summary>
-    /// 조준 원점·방향으로 사거리(m_range) 레이캐스트해 명중 결과를 분류한다 (레이캐스트 1회).
-    /// 서버 사격 판정(ServerFire)과 오너 크로스헤어 색(#328)이 이 한 규칙을 공유한다.
-    /// 마스크 ~0 + 트리거 무시. 히트를 전부 받아 <see cref="AimOcclusion.FindNearestByPivot"/>로
-    /// 하나를 고르며, 그 기준이 벽 엄폐의 정의다.
+    /// 조준 원점·방향으로 레이캐스트해 명중 결과를 분류한다. 서버 사격 판정과
+    /// 오너 크로스헤어가 이 규칙을 공유하며, AimOcclusion.FindNearest로 교차점이
+    /// 가장 가까운 히트 하나를 고른다.
     /// </summary>
     private AimResult EvaluateAim(
         Vector3 origin,
@@ -243,9 +242,9 @@ public class Taser : ItemBase, IAimedWeapon
         // 살아 있는 동안에도 뼈 콜라이더는 켜져 있고(RagdollRig는 Rigidbody만 키네마틱으로 돌린다)
         // 레이어가 ~0 마스크에 그대로 걸리는데, 앉기(카메라 최대 0.8m 하강)·머리 뼈 pitch 회전
         // (PlayerHeadLook)으로 카메라가 머리 구 밖으로 나가는 순간 자기 머리가 후보에 올라온다.
-        // 그 피봇은 원점 코앞이라 무조건 최근접이 돼, 조준이 맞아도 "Head에 맞음"으로 빗나간다.
+        // 그 히트는 원점 코앞이라 무조건 최근접이 돼, 조준이 맞아도 "Head에 맞음"으로 빗나간다.
         PlayerInteractor holder = Holder;
-        int index = AimOcclusion.FindNearestByPivot(
+        int index = AimOcclusion.FindNearest(
             origin, s_aimBuffer, count, holder != null ? holder.transform : null);
         if (index < 0)
             return AimResult.NoHit;

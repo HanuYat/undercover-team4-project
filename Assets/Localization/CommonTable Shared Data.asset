@@ -63,6 +63,10 @@ MonoBehaviour:
     m_Key: Common.Button.SaveClose
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000103
+    m_Key: Common.Toast.Copied
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

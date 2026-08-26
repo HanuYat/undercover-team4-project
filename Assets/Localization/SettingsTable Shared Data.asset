@@ -131,6 +131,10 @@ MonoBehaviour:
     m_Key: Settings.Credits.Roster
     m_Metadata:
       m_Items: []
+  - m_Id: 6994200000030
+    m_Key: Settings.Label.MicMuteHint
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

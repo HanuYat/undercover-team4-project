@@ -36,7 +36,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 60554333982720
-    m_Localized: 'Radio: [{0}]'
+    m_Localized: 'Radio: [{0}] hold · Mute: [{1}]'
     m_Metadata:
       m_Items:
       - rid: 6276845892712267887
