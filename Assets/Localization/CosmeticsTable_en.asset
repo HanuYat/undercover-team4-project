@@ -399,7 +399,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 669658743660544
-    m_Localized: Cosmetic token +{0}!
+    m_Localized: Cosmetic token earned!
     m_Metadata:
       m_Items: []
   references:

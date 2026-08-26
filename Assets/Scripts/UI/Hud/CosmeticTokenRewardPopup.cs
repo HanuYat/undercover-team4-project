@@ -26,7 +26,7 @@ public class CosmeticTokenRewardPopup : MonoBehaviour
     [SerializeField]
     private TMP_Text m_label;
 
-    [Tooltip("표시 문구 — {0}에 이번에 받은 개수가 들어간다")]
+    [Tooltip("표시 문구 — 개수는 넣지 않는다. 라운드당 1개뿐이다")]
     [SerializeField]
     private LocalizedString m_format;
 
@@ -70,12 +70,12 @@ public class CosmeticTokenRewardPopup : MonoBehaviour
 
         Cancel();
         m_playCts = CancellationTokenSource.CreateLinkedTokenSource(destroyCancellationToken);
-        PlayAsync(claimed, m_playCts.Token).Forget();
+        PlayAsync(m_playCts.Token).Forget();
     }
 
-    private async UniTaskVoid PlayAsync(int count, CancellationToken ct)
+    private async UniTaskVoid PlayAsync(CancellationToken ct)
     {
-        SetText(count);
+        SetText();
 
         if (m_group != null)
             m_group.alpha = 1f;
@@ -124,12 +124,12 @@ public class CosmeticTokenRewardPopup : MonoBehaviour
         }
     }
 
-    private void SetText(int count)
+    // 몇 개를 받았는지는 적지 않는다 — 라운드당 1개라 개수를 쓰면 늘 "+1"이다
+    private void SetText()
     {
         if (m_label == null || m_format.IsEmpty)
             return;
 
-        m_format.Arguments = new object[] { count };
         m_label.text = m_format.GetLocalizedString();
     }
 

@@ -140,7 +140,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\uCE58\uC7A5 \uD1A0\uD070 +1 \uD68D\uB4DD!"
+  m_text: "\uCE58\uC7A5 \uD1A0\uD070 \uD68D\uB4DD!"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: dae95c0d09f76a447926cc7bde6d06ed, type: 2}
   m_sharedMaterial: {fileID: 5818149142314395018, guid: dae95c0d09f76a447926cc7bde6d06ed, type: 2}
