@@ -179,7 +179,8 @@ public class PlayerInteractor : NetworkBehaviour
     //
     // 히트를 하나만 보지 않고 전부 받아 AimOcclusion에 판정을 맡긴다 — 테이저 사격·진압봉 스윙과
     // 같은 규칙이어야 "테이저는 맞는데 E는 안 되는" 어긋남이 생기지 않는다.
-    // 기준(피봇 거리)과 그 한계는 AimOcclusion 문서 주석에 정리돼 있다.
+    // 대상 직전(k_losEndMargin)까지만 검사하므로, 대상 자신을 제외하고 남은 히트가 있으면
+    // 그대로 가림이다 — 피봇 거리로 다시 걸러내지 않는다 (#853, AimOcclusion 문서 주석 참고).
     private bool HasLineOfSight(
         Vector3 origin,
         Vector3 point,
@@ -205,17 +206,7 @@ public class PlayerInteractor : NetworkBehaviour
         );
 
         // 대상 자신의 콜라이더는 가림이 아니다 — 폭탄은 몸통(Default)이 배선(Interactable)을 감싼다.
-        int blockerIndex = AimOcclusion.FindNearestByPivot(origin, s_losHits, count, target.root);
-
-        // 가장 가까운 피봇조차 대상보다 멀면 가림은 없다 (그보다 먼 것들은 볼 필요가 없다)
-        if (
-            blockerIndex >= 0
-            && AimOcclusion.PivotDistance(origin, s_losHits[blockerIndex])
-                >= Vector3.Distance(origin, target.position)
-        )
-        {
-            blockerIndex = -1;
-        }
+        int blockerIndex = AimOcclusion.FindNearest(origin, s_losHits, count, target.root);
 
         LogLineOfSight(context, origin, point, target, count, blockerIndex, distance);
         return blockerIndex < 0;
@@ -269,9 +260,6 @@ public class PlayerInteractor : NetworkBehaviour
         sb.Append($"[LOS/{context ?? "?"}] {(blocked ? "차단" : "통과")} — 대상 {target.name}");
         sb.Append($", 사거리 검사 {distance:F2}m, 히트 {count}개");
         sb.Append($" (server={IsServer} owner={IsOwner}, blockMask={m_losBlockMask.value})");
-        sb.Append(
-            $"\n  대상 Transform까지 {Vector3.Distance(origin, target.position):F2}m — 이보다 가까운 피봇만 가림으로 센다"
-        );
 
         if (count == 0)
         {
