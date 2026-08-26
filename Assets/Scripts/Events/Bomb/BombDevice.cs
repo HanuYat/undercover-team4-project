@@ -92,6 +92,9 @@ public class BombDevice : NetworkBehaviour
     /// </summary>
     public Vector3 EvaluateKnockback(Vector3 targetPosition) => m_blast.EvaluateKnockback(targetPosition);
 
+    /// <summary>대상이 벽 등에 가려졌는가 — 넉백 연출(<see cref="BombExplosionView"/>)이 서버 피해 판정과 같은 기준을 쓴다.</summary>
+    public bool IsOccluded(Vector3 targetPosition, Transform targetRoot) => m_blast.IsOccluded(targetPosition, targetRoot);
+
     /// <summary>남은 시간(초) — 카운트다운 UI용. 카운트다운 중이 아니면 0.</summary>
     public float RemainingSeconds
     {
