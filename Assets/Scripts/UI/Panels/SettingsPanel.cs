@@ -44,6 +44,11 @@ public class SettingsPanel : PanelBase
 
     [Header("토글")]
     [SerializeField] private Toggle m_micMuteToggle; // 마이크 음소거 (#430)
+
+    [Tooltip("마이크 음소거 단축키 안내 — Settings.Label.MicMuteHint ({0}=음소거 키)")]
+    [SerializeField] private TextMeshProUGUI m_micMuteHintText;
+    [SerializeField] private LocalizedString m_micMuteHintFormat;
+
     [SerializeField] private Toggle m_screenShakeToggle; // 화면 흔들림 (#665)
     [SerializeField] private Toggle m_speedVignetteToggle; // 속도 비네트 (#665)
 
@@ -94,6 +99,10 @@ public class SettingsPanel : PanelBase
 
     public override bool CanCloseWithESC => true;
     public override bool IsStackable => true;
+
+    private bool m_micMuteHintBound;
+
+    private VivoxManager Vivox => App.Net.Vivox;
 
     protected override void Awake()
     {
@@ -155,6 +164,8 @@ public class SettingsPanel : PanelBase
     {
         // 창이 열린 채 씬이 넘어가면 ClosePanel을 못 타므로 여기서도 기록한다
         if (IsOpened) GameSettings.Save();
+
+        UnbindMicMuteHint();
 
         if (m_mouseSensitivitySlider != null)
             m_mouseSensitivitySlider.onValueChanged.RemoveListener(HandleMouseSensitivityChanged);
@@ -273,6 +284,7 @@ public class SettingsPanel : PanelBase
     public override void ClosePanel()
     {
         GameSettings.Save();    // 디스크 기록
+        UnbindMicMuteHint();
         base.ClosePanel();
     }
 
@@ -307,6 +319,7 @@ public class SettingsPanel : PanelBase
         SyncDisplayDropdowns();
         SyncLanguageDropdown();
         RefreshLabels();
+        RefreshMicMuteHint();
     }
 
     /// <summary>
@@ -487,6 +500,39 @@ public class SettingsPanel : PanelBase
     }
 
     private void HandleMicMuteToggled(bool on) => GameSettings.MicMuted = on;
+
+    private void RefreshMicMuteHint()
+    {
+        if (m_micMuteHintText == null)
+            return;
+
+        if (Vivox == null || m_micMuteHintFormat == null || m_micMuteHintFormat.IsEmpty)
+        {
+            m_micMuteHintText.text = string.Empty;
+            return;
+        }
+
+        UnbindMicMuteHint();
+
+        m_micMuteHintFormat.Arguments = new object[] { Vivox.MicMuteBinding };
+        m_micMuteHintFormat.StringChanged += HandleMicMuteHintChanged;
+        m_micMuteHintBound = true;
+    }
+
+    private void HandleMicMuteHintChanged(string localized)
+    {
+        if (m_micMuteHintText != null)
+            m_micMuteHintText.text = localized;
+    }
+
+    private void UnbindMicMuteHint()
+    {
+        if (!m_micMuteHintBound)
+            return;
+
+        m_micMuteHintFormat.StringChanged -= HandleMicMuteHintChanged;
+        m_micMuteHintBound = false;
+    }
 
     private void HandleScreenShakeToggled(bool on) => GameSettings.ScreenShake = on;
 
