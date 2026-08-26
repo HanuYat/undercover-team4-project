@@ -96,17 +96,28 @@ public class SuddenEventManager : NetworkedManagerBase
     /// <summary>이벤트 발생 알림 — 본부/현장 HUD 토스트가 구독할 훅. (표시 이름, 문구 키)</summary>
     public event Action<string, string> OnEventAnnounced;
 
+    // 한 번이라도 스폰된 적이 있는가 — 세션에 속했던 피어인지를 가른다. 아래 IsAuthority가 쓴다 (#889).
+    private bool m_wasEverSpawned;
+
+    public override void OnNetworkSpawn() => m_wasEverSpawned = true;
+
     // 이 피어가 이벤트 권위를 가지는지 — 세션 중이면 스폰된 뒤의 서버뿐이다.
     // 스폰 전을 권위로 치면 그 프레임에 뽑힌 날씨가 NetworkVariable을 못 타 호스트에만 적용된다 (#864).
     private bool IsAuthority
     {
         get
         {
-            NetworkManager net = NetworkManager.Singleton;
-            if (net == null || !net.IsListening)
-                return true; // 세션 밖(씬 직접 Play) — 스폰될 일이 없으므로 각자가 권위다
+            if (IsSpawned)
+                return IsServer;
 
-            return IsSpawned && IsServer;
+            // 세션에 있었던 피어가 끊겼다 — 접속이 끊긴 순간에도 아래 오프라인 폴백과 같은 조건
+            // (NetworkManager가 안 듣는 상태)이 되므로, 스폰 이력으로 갈라 다시 권위로 보지 않는다.
+            // 없으면 끊긴 클라가 자기 혼자 날씨를 새로 굴려 호스트와 어긋난다 (#889).
+            if (m_wasEverSpawned)
+                return false;
+
+            NetworkManager net = NetworkManager.Singleton;
+            return net == null || !net.IsListening; // 세션 밖(씬 직접 Play) — 각자가 권위다
         }
     }
 
