@@ -57,6 +57,9 @@ public class UfoAbductor : MonoBehaviour
     // 실내 판정을 쏘는 높이(m) — 발밑에서 쏘면 자기가 선 바닥에 걸린다 (WeatherShelter 주석과 같은 이유).
     private const float k_shelterProbeHeight = 1.8f;
 
+    // 기둥 아래 여유(m) — 발밑 원점이 지면 지점보다 조금 낮아도(경사·계단) 같은 기둥으로 본다.
+    private const float k_beamFootSlack = 1.5f;
+
     private UfoCraft m_craft;
     private NetworkObject m_anchor;
     private Transform m_victim;
@@ -127,12 +130,15 @@ public class UfoAbductor : MonoBehaviour
     /// </summary>
     private Transform TickDwell(float deltaTime)
     {
-        SuddenEventUtil.CollectFieldPlayers(m_craft.BeamGroundPoint(), m_craft.BeamRadius, m_inBeam);
+        // 기둥 전체를 덮는 구로 후보를 모은 뒤 아래에서 원기둥으로 좁힌다 — 모으는 유틸이 구밖에 없다.
+        Vector3 ground = m_craft.BeamGroundPoint();
+        float span = transform.position.y - ground.y + m_craft.BeamRadius + k_beamFootSlack;
+        SuddenEventUtil.CollectFieldPlayers(transform.position, span, m_inBeam);
 
-        // 지붕 아래는 빔이 닿지 않는다 (#885) — 목록에서 빼면 아래 식히기가 밖에 있는 것과 같게 처리한다.
+        // 기둥 밖·지붕 아래는 빔이 닿지 않는다 (#885) — 목록에서 빼면 아래 식히기가 밖에 있는 것과 같게 처리한다.
         for (int i = m_inBeam.Count - 1; i >= 0; i--)
         {
-            if (IsShelteredFromBeam(m_inBeam[i]))
+            if (!IsInsideBeamColumn(m_inBeam[i].position, ground) || IsShelteredFromBeam(m_inBeam[i]))
                 m_inBeam.RemoveAt(i);
         }
 
@@ -173,6 +179,21 @@ public class UfoAbductor : MonoBehaviour
         }
 
         return caught;
+    }
+
+    // 빔 기둥 안인가 — 수평 거리와 높이를 <b>따로</b> 본다. 구로 재면 지면보다 높은 곳에 선 사람이
+    // 기둥 안에 보이는데도 빠진다(높이차만큼 가로 반경이 줄어든다). 보이는 기둥과 걸리는 범위를
+    // 맞추는 것이 이 판정의 요점이다. (#885)
+    private bool IsInsideBeamColumn(Vector3 position, Vector3 groundPoint)
+    {
+        Vector3 axis = transform.position;
+
+        float dx = position.x - axis.x;
+        float dz = position.z - axis.z;
+        if (dx * dx + dz * dz > m_craft.BeamRadius * m_craft.BeamRadius)
+            return false;
+
+        return position.y >= groundPoint.y - k_beamFootSlack && position.y <= axis.y;
     }
 
     // 이 사람과 기체 사이가 막혀 있는가 — 실내·처마 밑이면 빔이 닿지 않는다. 날씨의 실내 판정과
