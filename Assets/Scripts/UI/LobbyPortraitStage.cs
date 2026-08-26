@@ -239,7 +239,24 @@ public class LobbyPortraitStage : MonoBehaviour
         m_roster = null;
     }
 
-    private void HandleRosterChanged(NetworkListEvent<LobbyPlayerEntry> _) => BakeRoster();
+    private void HandleRosterChanged(NetworkListEvent<LobbyPlayerEntry> _)
+    {
+        BakeRoster();
+        BakeNow();
+    }
+
+    /// <summary>
+    /// 프레임을 기다리지 않고 지금 굽는다 (#863) — 호스트가 '출동'을 누르는 프레임에 누군가 외형을
+    /// 바꾸면 <see cref="BakeAsync"/>가 기다리는 다음 프레임이 상점에 오지 않는다. 조명이 확정되기
+    /// 전(첫 프레임)이면 평소대로 미룬다 — 그때 구우면 밝기가 실행할 때마다 달라진다.
+    /// </summary>
+    private void BakeNow()
+    {
+        if (!m_lit || m_baking || m_camera == null || m_pending.Count == 0)
+            return;
+
+        BakePending();
+    }
 
     /// <summary>
     /// 명부에 있는 사람 전부의 얼굴을 확보한다 (#863) — 누가 색·모자를 바꾸면 명부가 갱신되므로
