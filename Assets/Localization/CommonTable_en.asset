@@ -71,6 +71,10 @@ MonoBehaviour:
     m_Localized: Save & Close
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000103
+    m_Localized: Copied!
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:
