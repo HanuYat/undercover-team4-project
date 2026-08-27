@@ -1928,11 +1928,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 833119219956902894, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 100
+      value: 90
       objectReference: {fileID: 0}
     - target: {fileID: 833119219956902894, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
       propertyPath: m_SizeDelta.y
-      value: 12
+      value: 18
       objectReference: {fileID: 0}
     - target: {fileID: 833119219956902894, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
       propertyPath: m_LocalPosition.x
@@ -1988,7 +1988,19 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2941639261495338817, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
       propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8216745839245533791, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
+      propertyPath: m_AnchorMax.x
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8216745839245533791, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8732653618947506529, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
+      propertyPath: m_PresetInfoIsWorld
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
