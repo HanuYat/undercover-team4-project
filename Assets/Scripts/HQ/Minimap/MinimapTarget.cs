@@ -9,6 +9,16 @@ public class MinimapTarget : MonoBehaviour
     [SerializeField] private Sprite m_iconSprite;   // 비우면 컨트롤러 기본 아이콘 사용
     [SerializeField] private Color m_iconColor = Color.blue;
 
+    [Tooltip("아이콘 한 변의 크기(px). 0이면 아이콘 프리팹 크기를 그대로 쓴다")]
+    [Min(0f)]
+    [SerializeField] private float m_iconSize = 0f;
+
+    [Tooltip("아이콘 회전(도, 반시계). 대상의 월드 회전과 무관한 고정 각도")]
+    [SerializeField] private float m_iconAngle = 0f;
+
+    [Tooltip("켜면 대상이 바라보는 방향으로 아이콘이 돌아간다 — 위 각도는 스프라이트가 위를 보게 맞추는 보정으로 쓰인다")]
+    [SerializeField] private bool m_iconFollowsFacing = false;
+
     [Header("범위 오버레이 (#610)")]
     [Tooltip("이 대상이 덮는 월드 반경(m). 0이면 점만 찍는다 — 폭발 반경처럼 '얼마나 넓게'를 알려야 할 때만 채운다")]
     [Min(0f)]
@@ -25,6 +35,23 @@ public class MinimapTarget : MonoBehaviour
         get => m_iconColor;
         set => m_iconColor = value;
     }
+
+    /// <summary>아이콘 크기(px) — 0이면 프리팹 크기. IconColor와 같이 매 프레임 반영된다.</summary>
+    public float IconSize
+    {
+        get => m_iconSize;
+        set => m_iconSize = value;
+    }
+
+    /// <summary>아이콘 회전(도) — FollowsFacing이 켜져 있으면 대상 방향에 더해지는 보정각이 된다.</summary>
+    public float IconAngle
+    {
+        get => m_iconAngle;
+        set => m_iconAngle = value;
+    }
+
+    /// <summary>아이콘이 대상의 바라보는 방향(월드 yaw)을 따라가는지.</summary>
+    public bool IconFollowsFacing => m_iconFollowsFacing;
 
     /// <summary>
     /// 범위 오버레이의 월드 반경(m) — 0이면 오버레이가 없다. (#610)
