@@ -46,6 +46,7 @@ GameObject:
   - component: {fileID: 7660496493789269114}
   - component: {fileID: 7558498052587098679}
   - component: {fileID: 5865322388799094137}
+  - component: {fileID: 2555569793871451778}
   m_Layer: 0
   m_Name: Ufo
   m_TagString: Untagged
@@ -161,8 +162,6 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 1
   m_groundProbeDistance: 200
-  m_blockingCoverage: 1
-  m_beamGroundClearance: 0.2
   m_roamRadius: 90
   m_roamSpeed: 5
   m_arriveDistance: 1
@@ -205,6 +204,23 @@ MonoBehaviour:
   m_iconFollowsFacing: 0
   m_areaRadius: 0
   m_areaColor: {r: 1, g: 0.25, b: 0.25, a: 0.25}
+--- !u!114 &2555569793871451778
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4547056725478927799}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 02a4be5bdd504464f816c9e42490f621, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UfoBeamGroundField
+  m_beamRenderer: {fileID: 6418237230185986072}
+  m_grid: 32
+  m_padding: 0.5
+  m_rayLift: 0.5
+  m_refreshInterval: 0.05
 --- !u!1 &5675860863749555095
 GameObject:
   m_ObjectHideFlags: 0

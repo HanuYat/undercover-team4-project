@@ -17,6 +17,9 @@ using UnityEngine;
 /// <b>빔 길이는 각 피어가 스스로 잰다.</b> 늘 켜져 있으므로 상태를 복제할 것이 없고, 지면까지의
 /// 거리는 기체 위치(이미 복제된다)에서 아래로 레이를 쏘면 나온다. 판정도 같은 레이를 쓰므로
 /// <b>보이는 기둥과 걸리는 범위가 어긋나지 않는다</b>.
+///
+/// <b>지붕에 걸리는 것은 셰이더가 픽셀마다 자른다</b> (#907) — 여기서는 기둥을 가장 낮은 지면까지
+/// 늘리기만 하고, <see cref="UfoBeamGroundField"/>가 구운 높이맵이 걸린 쪽만 지붕에서 끊는다.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
 public class UfoCraft : NetworkBehaviour
@@ -37,17 +40,7 @@ public class UfoCraft : NetworkBehaviour
     [Min(1f)]
     [SerializeField] private float m_groundProbeDistance = 200f;
 
-    [Tooltip("빔을 멈춰 세우려면 그 면이 기둥 단면을 이 비율만큼 덮어야 한다 — 1이면 기둥을 온전히 " +
-             "덮는 것(도로·건물 지붕)만 멈춰 세우고 가로등·간판·정류장 지붕은 통과한다. " +
-             "낮출수록 좁은 것에도 멈춘다")]
-    [Range(0.1f, 1f)]
-    [SerializeField] private float m_blockingCoverage = 1f;
-
-    [Tooltip("기둥 밑면을 지면에서 이만큼(m) 띄운다 — 0이면 밑면과 지면이 겹쳐 그 자리가 번쩍인다")]
-    [Min(0f)]
-    [SerializeField] private float m_beamGroundClearance = 0.2f;
-
-    // 넘치면 어느 히트가 버려지는지 정해져 있지 않다 — 지붕이 빠지면 #885·#890이 그대로 되돌아온다
+    // 넘치면 어느 히트가 버려지는지 정해져 있지 않다 — 가장 낮은 지면이 빠지면 기둥이 짧아진다
     private static readonly RaycastHit[] s_groundHitBuffer = new RaycastHit[64];
 
     [Header("배회")]
@@ -79,12 +72,16 @@ public class UfoCraft : NetworkBehaviour
     private Vector3 m_destination; // 지금 향하는 곳 (흔들림을 뺀 기준 높이)
     private float m_bobPhase;
     private bool m_held;           // 제자리 정지 — 빨아올리는 동안 판정부가 건다
+    private UfoBeamGroundField m_groundField; // 없으면 기둥은 중앙 레이 하나로만 길이를 잡는다
 
     /// <summary>빔 반경 — 판정도 이 값을 쓴다.</summary>
     public float BeamRadius => m_beamRadius;
 
     /// <summary>하늘을 막는 것으로 치는 레이어 — 판정부의 실내 검사도 같은 값을 써야 보이는 것과 걸리는 것이 맞는다. (#885)</summary>
     public LayerMask GroundMask => m_groundMask;
+
+    /// <summary>지면을 찾을 때 아래로 보는 최대 거리(m) — 높이맵도 같은 거리를 쓴다. (#907)</summary>
+    public float GroundProbeDistance => m_groundProbeDistance;
 
     /// <summary>
     /// 서버 전용 — 제자리에 세우거나 다시 배회시킨다. <b>빨아올리는 동안</b> 판정부가 건다:
@@ -97,6 +94,7 @@ public class UfoCraft : NetworkBehaviour
     {
         m_home = transform.position;
         m_destination = m_home;
+        m_groundField = GetComponent<UfoBeamGroundField>();
 
         // 개체마다 다른 위상으로 흔들린다 — 여럿이 떠 있을 때 한 몸처럼 오르내리지 않게
         m_bobPhase = Random.Range(0f, Mathf.PI * 2f);
@@ -127,40 +125,17 @@ public class UfoCraft : NetworkBehaviour
             return origin + Vector3.down * m_groundProbeDistance;
         }
 
-        // <b>빔을 막을 만큼 넓은 것 중 가장 가까운(=가장 높은) 히트</b>가 지면이다. 가로등 같은 얇은
-        // 소품은 건너뛰고(#819), 건물 지붕에서는 멈춘다 — 가장 먼 히트를 쓰면 지붕을 뚫고 내려가
-        // 기둥이 건물을 관통하고(#890) 실내에 선 사람이 빨려 올라갔다 (#885).
-        int nearest = -1;
+        // <b>가장 먼(=가장 낮은) 히트</b>가 지면이다. 지붕에서 멈추던 것은 셰이더가 픽셀마다
+        // 대신하므로(#907), 여기서는 기둥이 길 바닥까지 닿도록 가장 낮은 곳을 고른다.
         int farthest = 0;
-        for (int i = 0; i < count; i++)
+        for (int i = 1; i < count; i++)
         {
             if (s_groundHitBuffer[i].distance > s_groundHitBuffer[farthest].distance)
                 farthest = i;
-
-            if (!BlocksBeam(s_groundHitBuffer[i].collider))
-                continue;
-
-            if (nearest < 0 || s_groundHitBuffer[i].distance < s_groundHitBuffer[nearest].distance)
-                nearest = i;
         }
 
         grounded = true;
-        // 전부 얇은 소품뿐이면 종전대로 가장 먼 히트 — 기둥이 소품 위에 떠서 멈추는 것보다 낫다
-        return s_groundHitBuffer[nearest >= 0 ? nearest : farthest].point;
-    }
-
-    // 기둥을 덮는 면만 멈춰 세운다 — 좁은 소품이 기둥 전체의 지면을 정하면 그 옆 훤한 길에 선
-    // 사람까지 밑면 아래로 밀려 면제된다. 덮지 못하는 것 밑은 판정부의 실내 검사가 사람마다 가린다.
-    private bool BlocksBeam(Collider collider)
-    {
-        Bounds bounds = collider.bounds;
-        Vector3 axis = transform.position;
-        float reach = m_beamRadius * m_blockingCoverage;
-
-        return bounds.min.x <= axis.x - reach
-            && bounds.max.x >= axis.x + reach
-            && bounds.min.z <= axis.z - reach
-            && bounds.max.z >= axis.z + reach;
+        return s_groundHitBuffer[farthest].point;
     }
 
     private void Update()
@@ -218,10 +193,12 @@ public class UfoCraft : NetworkBehaviour
 
         // 지면을 못 찾았다면(맵 밖·허공 위) 판정은 그대로 폴백 지점을 쓰되(그 자리엔 아무도 없다),
         // 시각 기둥은 200m짜리로 늘리는 대신 접어 둔다 — 허공에 뜬 긴 기둥이 눈에 띄지 않게.
-        // 지면에서 살짝 띄운다 — 가산 블렌딩이라 밑면이 지면과 겹치면 그 자리가 번쩍인다 (#890)
-        float length = grounded
-            ? Mathf.Max(0.1f, transform.position.y - groundPoint.y - m_beamGroundClearance)
-            : 0f;
+        // 밑면은 높이맵이 잡은 가장 낮은 지면까지 — 기둥 아래를 셰이더가 픽셀마다 자른다 (#907)
+        float bottom = m_groundField != null && m_groundField.HasField
+            ? Mathf.Min(groundPoint.y, m_groundField.LowestGround)
+            : groundPoint.y;
+
+        float length = grounded ? Mathf.Max(0.1f, transform.position.y - bottom) : 0f;
         float diameter = m_beamRadius * 2f;
         m_beamPivot.localScale = new Vector3(diameter, length * 0.5f, diameter);
     }
