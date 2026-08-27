@@ -87,9 +87,6 @@ public class PlayerSpectateCamera : MonoBehaviour
     /// <summary>관전이 요청된 상태인가 — 블렌드가 끝났는지와는 별개다.</summary>
     public bool IsActive => m_active;
 
-    /// <summary>내 시체를 보고 있는가 — <see cref="PlayerLook"/>이 내 몸 렌더 여부를 이걸로 가른다. (#590)</summary>
-    public bool IsWatchingSelf => m_target == null;
-
     // 오빗 중심 덮어쓰기 — 몸이 지하로 사라진 경우에만 쓴다 (#775)
     private Vector3 m_pivotOverride;
     private bool m_hasPivotOverride;
