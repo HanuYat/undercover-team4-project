@@ -20,6 +20,10 @@ public class RoundTimerUI : MonoBehaviour
     [SerializeField]
     private TextMeshProUGUI m_timerText;
 
+    [Tooltip("표시 루트 — 판·테두리·숫자를 함께 켜고 끈다 (LocalizedMessageView와 같은 구조, #894)")]
+    [SerializeField]
+    private CanvasGroup m_group;
+
     // 마지막으로 표시한 초 — 초가 바뀔 때만 문자열을 다시 만들어 매 프레임 GC 할당을 피한다
     private int m_lastShownSeconds = int.MinValue;
 
@@ -78,11 +82,14 @@ public class RoundTimerUI : MonoBehaviour
         return true;
     }
 
-    // 오브젝트가 아니라 TMP 컴포넌트만 켜고 끈다 — 이 스크립트가 텍스트와 같은 오브젝트에
-    // 붙어 있어도(권장 배치) SetActive(false)로 자기 Update까지 멈추는 일이 없게.
+    // 루트 오브젝트를 껐다 켠다 — 판까지 같이 사라져야 한다. 이 스크립트는 그 루트 밖(HUD 루트)에
+    // 있어야 자기 Update가 멈추지 않는다 (LocalizedMessageView.SetVisible과 같은 방침).
     private void SetVisible(bool visible)
     {
-        if (m_timerText != null && m_timerText.enabled != visible)
-            m_timerText.enabled = visible;
+        if (m_group == null)
+            return;
+
+        if (m_group.gameObject.activeSelf != visible)
+            m_group.gameObject.SetActive(visible);
     }
 }
