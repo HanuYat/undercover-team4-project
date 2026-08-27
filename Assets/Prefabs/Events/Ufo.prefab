@@ -160,6 +160,8 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 1
   m_groundProbeDistance: 200
+  m_blockingCoverage: 1
+  m_beamGroundClearance: 0.2
   m_roamRadius: 90
   m_roamSpeed: 5
   m_arriveDistance: 1

@@ -36,10 +36,6 @@ public class PlayerMovement : NetworkBehaviour
     // (격리벽 실측) — 3m/s면 세 프레임 남짓. 왜 필요한지는 IsStablyGrounded 참고.
     private const float k_steepSlideSpeed = 3f;
 
-    // 빙판 실내 판정 레이의 시작 높이(m) — 가슴께. 발밑에서 쏘면 자기가 선 바닥에 걸린다.
-    // (LightningEvent의 같은 상수와 짝) (#699)
-    private const float k_shelterProbeOriginHeight = 1f;
-
     // PlayerAnimationDriver가 속도 정규화에 사용 (실제 속도 ↔ 블렌드 트리 좌표 분리)
     // 실제 이동(HandleMove)도 같은 프로퍼티를 쓴다 — 배율이 걸린 값을 한 곳에서만 내야
     // 애니메이션 블렌드가 실제 속도와 어긋나지 않는다. (#398)
@@ -601,7 +597,7 @@ public class PlayerMovement : NetworkBehaviour
         // 그치므로 여기서 전역 값을 읽으면 눈이 안 오는 실내에서 바닥만 어는다.
         SnowEvent snow = Snow;
         float iceRatio = snow != null
-            ? snow.IceRatioAt(transform.position + Vector3.up * k_shelterProbeOriginHeight)
+            ? snow.IceRatioAt(transform.position + Vector3.up * WeatherShelter.k_bodyProbeHeight)
             : 0f;
         float currentFriction = Mathf.Lerp(m_defaultFriction, m_snowFriction, iceRatio);
         

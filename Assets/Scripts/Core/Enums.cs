@@ -159,6 +159,10 @@ public enum EAudioClip
     DroneApproach, // 위잉 — 드론이 하강을 시작하는 순간
     CrateLand, // 쿵 — 상자가 착지하는 순간
     CrateOpen, // 철컹 — 상자를 여는 순간
+
+    // 처치 확인 (#869) — 막타를 친 사람 화면 전용, 2D
+    KillConfirm, // 처치했다
+    KillFriendly, // 동료를 처치했다(오사) — 확인음이지 축하음이 아니다
 }
 
 /// <summary>

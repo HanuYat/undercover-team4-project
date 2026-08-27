@@ -6727,6 +6727,7 @@ GameObject:
   - component: {fileID: 9186688055930901132}
   - component: {fileID: 5270586889476606736}
   - component: {fileID: 9155120424423556794}
+  - component: {fileID: 7829046604217022194}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -7925,6 +7926,19 @@ MonoBehaviour:
   m_catalog: {fileID: 11400000, guid: 4d0d855372518f94184454112d35bef4, type: 2}
   m_headBone: {fileID: 4290756012787818498}
   m_bodyRenderer: {fileID: 6722683628906457244}
+--- !u!114 &7829046604217022194
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5a307d839043cd043b9834644bd38a1b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerKillCredit
+  ShowTopMostFoldoutHeaderGroup: 1
 --- !u!1 &5517047033924982284
 GameObject:
   m_ObjectHideFlags: 0

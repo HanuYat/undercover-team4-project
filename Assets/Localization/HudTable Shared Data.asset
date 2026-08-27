@@ -91,14 +91,6 @@ MonoBehaviour:
     m_Key: Hud.Scan.FieldName
     m_Metadata:
       m_Items: []
-  - m_Id: 7100000000318
-    m_Key: Hud.Scan.FieldType
-    m_Metadata:
-      m_Items: []
-  - m_Id: 7100000000319
-    m_Key: Hud.Scan.FieldFaction
-    m_Metadata:
-      m_Items: []
   - m_Id: 95636848959488
     m_Key: Hud.SecretFavor.Offer
     m_Metadata:
@@ -449,6 +441,10 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 7647812597112832
     m_Key: Hud.Interact.OpenCrate
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8046671440187392
+    m_Key: Hud.Kill.Confirm
     m_Metadata:
       m_Items: []
   - m_Id: 8152779461132288
