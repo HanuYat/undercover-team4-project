@@ -80,6 +80,10 @@ public class PlayerTowedMotion : MonoBehaviour
     // 0이면 기존 지수 보간. 0보다 크면 그 속도(m/s)를 넘지 않는다 — UFO 흡입(#819)이 쓴다.
     private float m_escortMaxSpeed;
 
+    // 참이면 CC를 켠 채 CC.Move로 따라간다(벽 스윕을 CC가 푼다) — 납치 지상 호송 전용 (#902).
+    // 거짓이면 기존처럼 CC를 끄고 transform을 직접 옮긴다(오검거 호송·UFO·맨홀 하강).
+    private bool m_escortCollide;
+
     // 운반(#365) — 나를 끌고 가는 플레이어. 여럿이 덧걸 수 있어(합류) 수만 센다 — 실제 견인은
     // 래그돌 경로에서 PlayerRagdoll/RagdollRope가 참가자별 가닥으로 들고 있으므로, 여기서는
     // "지금 누구 하나라도 끄는가"만 알면 된다. m_dragCarrier는 비래그돌 폴백(위치 추종)의 대표
@@ -95,6 +99,16 @@ public class PlayerTowedMotion : MonoBehaviour
 
     /// <summary>운반되어 끌려가는 중인지 — 오너 로컬 판정. (#365)</summary>
     public bool IsDraggedFollowing => m_dragCarrierCount > 0;
+
+    /// <summary>호송 추종 중인가 — 운반(#365)과 달리 앵커 2개(양옆 끌기) 사이를 따라가는 쪽. (#279)
+    /// 밧줄 연출(<c>AbductionRopeView</c>, #901)이 앵커를 읽어 그릴지 말지 이 값으로 가른다.</summary>
+    public bool IsEscorted => m_escorted;
+
+    /// <summary>호송 앵커 A — 대개 끌기 담당 NPC의 transform. 없으면 null. (#279/#901)</summary>
+    public Transform EscortAnchorA => m_escortAnchorA;
+
+    /// <summary>호송 앵커 B — 끌기가 1명뿐이면 앵커 A와 같은 값. 없으면 null. (#279/#901)</summary>
+    public Transform EscortAnchorB => m_escortAnchorB;
 
     private void Awake()
     {
@@ -139,15 +153,25 @@ public class PlayerTowedMotion : MonoBehaviour
     /// </summary>
     /// <param name="maxSpeed">0보다 크면 이 속도(m/s)를 넘지 않는다 — 떠오르는 속도를 서버가
     /// 정해야 하는 UFO 흡입(#819)용. 0이면 지금까지대로 남은 거리에 비례해 따라붙는다.</param>
-    public void BeginEscortFollow(Transform anchorA, Transform anchorB, float maxSpeed = 0f)
+    /// <param name="collide">참이면 CC를 켠 채 CC.Move로 따라간다 — 벽 스윕·미끄러짐·지면 스냅을
+    /// CC가 그대로 풀게 한다(운반(#365)과 같은 방식). 납치 지상 호송 전용이다 (#902): 오검거 호송과
+    /// 맨홀 하강(#775)은 거짓을 써야 한다 — 하강은 CC가 켜져 있으면 지면을 통과하지 못한다.</param>
+    public void BeginEscortFollow(
+        Transform anchorA, Transform anchorB, float maxSpeed = 0f, bool collide = false)
     {
         m_escorted = true;
         m_escortAnchorA = anchorA;
         m_escortAnchorB = anchorB;
         m_escortMaxSpeed = maxSpeed;
+        m_escortCollide = collide;
 
-        // 직접 transform 이동 — 켜 두면 CC 내부 캐시가 위치를 되돌린다 (PlayerMovement.SetPose와 동일 사정)
-        m_movement.SetControllerEnabled(false);
+        if (!collide)
+        {
+            // 직접 transform 이동 — 켜 두면 CC 내부 캐시가 위치를 되돌린다 (PlayerMovement.SetPose와 동일 사정).
+            // collide 모드는 CC를 건드리지 않는다 — 벽 스윕이 필요해 켜 둔 채로 부른 것이다.
+            m_movement.SetControllerEnabled(false);
+        }
+
         m_movement.ClearExternalVelocity(); // 날아가던 중에 붙잡히면 그 속도가 감쇠 없이 남는다
         ReportGroundedOnEnter();
     }
@@ -160,11 +184,18 @@ public class PlayerTowedMotion : MonoBehaviour
             return; // CC를 괜히 다시 켜지 않는다 — 다른 사정으로 꺼 둔 것을 덮을 수 있다
         }
 
+        bool wasCollide = m_escortCollide;
+
         m_escorted = false;
         m_escortAnchorA = null;
         m_escortAnchorB = null;
         m_escortMaxSpeed = 0f;
-        m_movement.SetControllerEnabled(true);
+        m_escortCollide = false;
+
+        // collide 모드는 CC를 끈 적이 없으니 다시 켤 것도 없다 — 다른 사정으로 꺼 둔 것을 덮지 않는다
+        // (위 가드와 같은 이유).
+        if (!wasCollide)
+            m_movement.SetControllerEnabled(true);
     }
 
     // 끌기 NPC 추종 — 두 앵커 중점 뒤(끌리는 몸)를 부드럽게 따라간다. 한쪽이 파괴되면 남은 쪽만 따른다.
@@ -192,9 +223,23 @@ public class PlayerTowedMotion : MonoBehaviour
         float lerp = k_escortLerpSpeed * Time.deltaTime;
 
         // 지수 보간은 남은 거리에 비례해 빨라진다 — 서버가 정한 속도를 지켜야 하면 쓸 수 없다
-        transform.position = m_escortMaxSpeed > 0f
+        Vector3 nextPos = m_escortMaxSpeed > 0f
             ? Vector3.MoveTowards(transform.position, targetPos, m_escortMaxSpeed * Time.deltaTime)
             : Vector3.Lerp(transform.position, targetPos, lerp);
+
+        if (m_escortCollide)
+        {
+            // CC.Move에 맡긴다 — 운반(#365)의 UpdateDraggedFollow와 같은 방식. 벽에 부딪히면 스윕이
+            // 걸리며, 계단·경사에서는 CC가 알아서 지면에 붙인다. 높이는 직접 만지지 않는다 — 중력은
+            // MoveWithGravity가 적분한다(#902).
+            Vector3 step = nextPos - transform.position;
+            step.y = 0f;
+            m_movement.MoveWithGravity(step);
+        }
+        else
+        {
+            transform.position = nextPos;
+        }
 
         // 방향도 위치와 같은 이유로 갈린다 — 걷는 앵커의 forward는 진행 방향이라 몸을 그리로 돌리는
         // 것이 맞지만, UFO는 제자리 자전이라 forward가 매 프레임 도는 값일 뿐이다. 그대로 따라가면

@@ -106,6 +106,11 @@ public static class CarryEscortSequence
         NpcController carrierA = carriers[0];
         NpcController carrierB = carriers.Count > 1 ? carriers[1] : null;
 
+        // 납치(#371)만 벽 충돌을 받는다 — 오검거 광장 호송은 그대로 둔다. 여기서 한 번만 물어
+        // 아래 재결속(호송 도중 담당 교체)에서도 같은 값을 쓴다: 같은 호송 안에서 담당이 바뀐다고
+        // 임무 종류가 바뀌지는 않는다. (#902)
+        bool collide = carrierA.Penalty.IsAbductionDuty;
+
         carrierA.Penalty.StartPenaltyEscort(destination, null, Vector3.zero);
         if (carrierB != null)
             carrierB.Penalty.StartPenaltyEscort(destination, carrierA, new Vector3(settings.CarrierGap, 0f, 0f));
@@ -120,7 +125,7 @@ public static class CarryEscortSequence
         // 플레이어 본인은 오너 클라가 끌기 담당 2명 사이를 추종한다 — NetworkTransform 오너 권한
         PlayerPenaltyView view = target.GetComponent<PlayerPenaltyView>();
         if (view != null)
-            view.StartCarried(carrierA, carrierB != null ? carrierB : carrierA);
+            view.StartCarried(carrierA, carrierB != null ? carrierB : carrierA, collide);
 
         // ---- 도착 대기 — <b>아직 임무 중인</b> 끌기 담당 기준. 담당 소실·목적지 미배선·상한 초과는
         // '도착'으로 보고 넘긴다: 그래야 부르는 쪽이 결말(스냅 보정 포함)을 집행해 플레이어가
@@ -162,7 +167,7 @@ public static class CarryEscortSequence
             {
                 boundLead = lead;
                 boundMate = mate;
-                view.StartCarried(lead, mate);
+                view.StartCarried(lead, mate, collide);
             }
 
             if (Vector3.Distance(lead.transform.position, destination.position) <= settings.ArriveDistance)

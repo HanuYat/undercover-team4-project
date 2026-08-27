@@ -99,15 +99,18 @@ public class PlayerPenaltyView : NetworkBehaviour
     /// 서버 전용 — 호송 시작: 오너 클라가 끌기 담당 2명 사이를 추종하게 한다.
     /// 끌기가 1명뿐이면 같은 NPC를 두 번 넘긴다(매니저 관례) — 추종 중점이 그 NPC 위치가 된다.
     /// </summary>
-    public void StartCarried(NpcController carrierA, NpcController carrierB)
+    /// <param name="collide">참이면 CharacterController를 켠 채로 추종한다 — 벽 스윕·미끄러짐을
+    /// CC가 풀게 한다(납치 지상 호송 전용, #902). 거짓이면 기존처럼 transform을 직접 옮긴다
+    /// (오검거 호송·맨홀 하강 — 하강은 CC가 켜져 있으면 지면을 통과하지 못한다).</param>
+    public void StartCarried(NpcController carrierA, NpcController carrierB, bool collide = false)
     {
         if (carrierA == null || carrierB == null)
             return;
 
         if (IsSpawned)
-            StartCarriedRpc(carrierA.NetworkObject, carrierB.NetworkObject, 0f);
+            StartCarriedRpc(carrierA.NetworkObject, carrierB.NetworkObject, 0f, collide);
         else if (m_towed != null)
-            m_towed.BeginEscortFollow(carrierA.transform, carrierB.transform); // 오프라인 폴백
+            m_towed.BeginEscortFollow(carrierA.transform, carrierB.transform, 0f, collide); // 오프라인 폴백
     }
 
     /// <summary>
@@ -123,9 +126,9 @@ public class PlayerPenaltyView : NetworkBehaviour
             return;
 
         if (IsSpawned)
-            StartCarriedRpc(anchor, anchor, maxSpeed);
+            StartCarriedRpc(anchor, anchor, maxSpeed, false);
         else if (m_towed != null)
-            m_towed.BeginEscortFollow(anchor.transform, anchor.transform, maxSpeed); // 오프라인 폴백
+            m_towed.BeginEscortFollow(anchor.transform, anchor.transform, maxSpeed, false); // 오프라인 폴백
     }
 
     /// <summary>서버 전용 — 호송 종료(광장 도착·중단): 추종을 풀어 준다. 직후 서버가 광장 스냅 텔레포트로 보정한다.</summary>
@@ -142,7 +145,8 @@ public class PlayerPenaltyView : NetworkBehaviour
     private void StartCarriedRpc(
         NetworkObjectReference carrierA,
         NetworkObjectReference carrierB,
-        float maxSpeed
+        float maxSpeed,
+        bool collide
     )
     {
         if (m_towed == null)
@@ -150,7 +154,7 @@ public class PlayerPenaltyView : NetworkBehaviour
         if (!carrierA.TryGet(out NetworkObject a) || !carrierB.TryGet(out NetworkObject b))
             return; // 담당 NPC가 이미 디스폰됨 — 추종 없이 서버의 스냅 텔레포트(HangAsync)에 맡긴다
 
-        m_towed.BeginEscortFollow(a.transform, b.transform, maxSpeed);
+        m_towed.BeginEscortFollow(a.transform, b.transform, maxSpeed, collide);
     }
 
     [Rpc(SendTo.Owner)]
@@ -159,5 +163,4 @@ public class PlayerPenaltyView : NetworkBehaviour
         if (m_towed != null)
             m_towed.EndEscortFollow();
     }
-
 }
