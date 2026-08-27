@@ -18,8 +18,7 @@ using UnityEngine;
 /// 거리는 기체 위치(이미 복제된다)에서 아래로 레이를 쏘면 나온다. 판정도 같은 레이를 쓰므로
 /// <b>보이는 기둥과 걸리는 범위가 어긋나지 않는다</b>.
 ///
-/// <b>지붕에 걸리는 것은 셰이더가 픽셀마다 자른다</b> (#907) — 여기서는 기둥을 가장 낮은 지면까지
-/// 늘리기만 하고, <see cref="UfoBeamGroundField"/>가 구운 높이맵이 걸린 쪽만 지붕에서 끊는다.
+/// <b>지붕에 걸리는 것은 셰이더가 픽셀마다 자른다</b> (#907) — 여기서는 기둥을 가장 낮은 지면까지 늘리기만 한다.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
 public class UfoCraft : NetworkBehaviour
@@ -125,8 +124,7 @@ public class UfoCraft : NetworkBehaviour
             return origin + Vector3.down * m_groundProbeDistance;
         }
 
-        // <b>가장 먼(=가장 낮은) 히트</b>가 지면이다. 지붕에서 멈추던 것은 셰이더가 픽셀마다
-        // 대신하므로(#907), 여기서는 기둥이 길 바닥까지 닿도록 가장 낮은 곳을 고른다.
+        // 가장 먼(=가장 낮은) 히트가 지면이다 — 지붕에서 멈추는 것은 셰이더가 한다 (#907)
         int farthest = 0;
         for (int i = 1; i < count; i++)
         {
@@ -193,7 +191,7 @@ public class UfoCraft : NetworkBehaviour
 
         // 지면을 못 찾았다면(맵 밖·허공 위) 판정은 그대로 폴백 지점을 쓰되(그 자리엔 아무도 없다),
         // 시각 기둥은 200m짜리로 늘리는 대신 접어 둔다 — 허공에 뜬 긴 기둥이 눈에 띄지 않게.
-        // 밑면은 높이맵이 잡은 가장 낮은 지면까지 — 기둥 아래를 셰이더가 픽셀마다 자른다 (#907)
+        // 밑면은 높이맵이 잡은 가장 낮은 지면까지 — 그 아래는 셰이더가 자른다 (#907)
         float bottom = m_groundField != null && m_groundField.HasField
             ? Mathf.Min(groundPoint.y, m_groundField.LowestGround)
             : groundPoint.y;

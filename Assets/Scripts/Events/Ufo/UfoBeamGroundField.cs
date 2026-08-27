@@ -1,12 +1,9 @@
 using UnityEngine;
 
 /// <summary>
-/// UFO 빔 지면 높이맵 (#907) — 기체 아래를 격자로 쏴 "이 XZ의 지면 높이"를 텍스처로 굽는다.
-/// 빔 셰이더(<c>Undercover/Events/UfoBeam</c>)가 픽셀마다 이걸 읽어 그보다 아래를 잘라내므로,
-/// 기둥 단면 일부만 지붕에 걸려도 걸린 쪽만 지붕에서 끝난다.
-///
-/// 굽는 방식은 <see cref="PrecipitationMask"/>와 같다 — 저해상 격자 + 바이리니어. 판정과 같은
-/// 콜라이더·같은 마스크를 쓰므로 보이는 기둥과 걸리는 범위가 어긋나지 않는다 (#819·#885).
+/// UFO 빔 지면 높이맵 (#907) — 기체 아래를 격자로 쏴 지면 높이를 텍스처로 굽는다.
+/// 빔 셰이더(<c>Undercover/Events/UfoBeam</c>)가 픽셀마다 읽어 그보다 아래를 잘라낸다.
+/// 굽는 방식은 <see cref="PrecipitationMask"/>와 같고, 판정과 같은 콜라이더·마스크를 쓴다.
 /// </summary>
 [RequireComponent(typeof(UfoCraft))]
 public class UfoBeamGroundField : MonoBehaviour
@@ -51,7 +48,7 @@ public class UfoBeamGroundField : MonoBehaviour
 
     private void OnDestroy()
     {
-        // 런타임에 만든 것은 스스로 정리한다 — 맵을 오갈 때마다 기체가 새로 생긴다
+        // 런타임에 만든 것은 스스로 정리한다
         if (m_map != null)
             Destroy(m_map);
         m_map = null;
@@ -70,8 +67,7 @@ public class UfoBeamGroundField : MonoBehaviour
         m_nextBakeAt = Time.time + m_refreshInterval;
         EnsureBuffers();
 
-        // 구운 자리를 셰이더에 같이 넘긴다 — 월드 좌표로 읽으므로 다음 베이크까지 기체가 움직여도
-        // 지면 경계는 제자리에 남는다
+        // 구운 자리도 같이 넘긴다 — 월드 좌표라 건너뛰는 동안에도 경계가 제자리다
         Vector3 center = transform.position;
         float size = FieldSize;
         Bake(center, size);
@@ -102,7 +98,7 @@ public class UfoBeamGroundField : MonoBehaviour
         if (m_map != null)
             Destroy(m_map);
 
-        // 높이를 월드 Y 그대로 담으므로 부동소수 한 채널이 필요하다 (R8은 0~1밖에 못 담는다)
+        // 월드 Y를 그대로 담아서 부동소수 한 채널이다 (R8은 0~1밖에 못 담는다)
         m_map = new Texture2D(m_grid, m_grid, TextureFormat.RFloat, mipChain: false, linear: true)
         {
             filterMode = FilterMode.Bilinear,
@@ -111,7 +107,7 @@ public class UfoBeamGroundField : MonoBehaviour
         };
     }
 
-    // 칸마다 위에서 아래로 한 발 — 가장 가까운 히트가 곧 그 자리의 천장이자 빔이 멈출 면이다
+    // 칸마다 위에서 아래로 한 발 — 가장 가까운 히트가 그 자리에서 빔이 멈출 면이다
     private void Bake(Vector3 center, float size)
     {
         float step = size / m_grid;

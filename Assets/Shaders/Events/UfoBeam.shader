@@ -1,15 +1,11 @@
-// UFO 빔 (#907) — 가산 원기둥을 픽셀마다 지면 높이로 잘라낸다.
-//
-// 메시 하나는 길이 하나뿐이라, 기둥 단면 일부만 지붕에 걸려도 전체가 지붕 높이에서 끊겼다.
-// UfoBeamGroundField가 구운 높이맵을 읽어 자기 월드 XZ의 지면보다 아래면 버리므로,
-// 걸린 쪽은 지붕에서 안 걸린 쪽은 바닥에서 끝난다. 자르는 면 근처는 알파를 눕혀
-// 밑면이 지면과 겹쳐 번쩍이던 것(#890)도 함께 없앤다.
+// UFO 빔 (#907) — UfoBeamGroundField가 구운 높이맵보다 아래인 프래그먼트를 버린다.
+// 걸린 쪽은 지붕에서, 안 걸린 쪽은 바닥에서 끝난다.
+// 자르는 면 근처는 알파를 눕혀 밑면이 번쩍이던 것(#890)도 없앤다.
 Shader "Undercover/Events/UfoBeam"
 {
     Properties
     {
-        // ⚠ [HDR]를 붙이지 말 것 — HDR 색은 이미 선형으로 보고 그대로 올라가서, 종전 URP/Unlit
-        // (감마→선형 변환)보다 훨씬 옅고 하얗게 나온다
+        // ⚠ [HDR]를 붙이지 말 것 — 감마→선형 변환을 건너뛰어 색이 옅어진다
         _BaseColor ("색", Color) = (0.3, 1, 0.75, 0.32)
         _GroundFade ("바닥 페이드 폭(m)", Range(0.01, 5)) = 0.8
         [NoScaleOffset] _HeightMap ("지면 높이맵 (코드가 넣는다)", 2D) = "black" {}
@@ -38,8 +34,7 @@ Shader "Undercover/Events/UfoBeam"
             TEXTURE2D(_HeightMap);
             SAMPLER(sampler_HeightMap);
 
-            // ⚠ 기체마다 다른 값이 들어가므로 재질을 복제해서 쓴다(UfoBeamGroundField) —
-            // MaterialPropertyBlock은 SRP Batcher가 켜져 있으면 무시될 수 있다.
+            // ⚠ 기체마다 값이 다르다 — SRP Batcher가 MPB를 무시하므로 재질을 복제해 쓴다
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseColor;
                 float _GroundFade;
@@ -68,7 +63,7 @@ Shader "Undercover/Events/UfoBeam"
 
             half4 Frag(Varyings input) : SV_Target
             {
-                // 높이맵이 아직 안 들어왔으면 자르지 않는다 — 검은 텍스처(높이 0)로 전부 잘리지 않게
+                // 높이맵이 아직 없으면 자르지 않는다 — 검은 텍스처(높이 0)로 전부 잘리지 않게
                 float above = 1e+9;
                 if (_HeightField.w > 0.5)
                 {
