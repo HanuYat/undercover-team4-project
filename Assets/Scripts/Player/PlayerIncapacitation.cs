@@ -143,6 +143,15 @@ public class PlayerIncapacitation : NetworkBehaviour
     /// </summary>
     public bool IsOutOfAction => IsDowned || IsDead;
 
+    /// <summary>
+    /// 조준으로 손이 닿는 몸인가 — 쓰러져 있고(<see cref="IsOutOfAction"/>) 몸이 남아 있을 때. (#857)
+    /// 조준 히트박스를 켜는 조건과 래그돌 뼈 보조 레이(<see cref="PlayerInteractor"/>)가 반드시 같은
+    /// 값을 보게 모아 둔 자리다 — 갈라지면 몸통은 잡히는데 팔은 안 잡히는 #857이 방향만 바꿔 살아난다.
+    /// 몸이 사라진 뒤(#775/#819)에도 뼈 콜라이더는 켜진 채 남으므로(PlayerRagdoll.HideLostBody는
+    /// 렌더러만 끈다) IsBodyLost를 여기서 함께 닫아야 투명한 몸이 조준되지 않는다.
+    /// </summary>
+    public bool IsAimTargetable => IsOutOfAction && !IsBodyLost;
+
     /// <summary>테이저 피격 기절인지. 모션은 기능 정지와 같으므로(#252) 표시·집계처럼 원인을 구분할 때만 쓴다.</summary>
     public bool IsStunned => Cause == IncapacitationCause.Stun;
 
@@ -295,7 +304,7 @@ public class PlayerIncapacitation : NetworkBehaviour
     private void RefreshAimHitbox()
     {
         if (m_reviveHitbox != null)
-            m_reviveHitbox.SetActive(IsOutOfAction && !IsBodyLost);
+            m_reviveHitbox.SetActive(IsAimTargetable);
     }
 
     /// <summary>

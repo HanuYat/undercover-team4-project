@@ -239,16 +239,17 @@ public class NpcCustody : NetworkBehaviour
     }
 
     /// <summary>
-    /// 셀 밖으로 내보낸다 — 퇴장 동행·탈옥 방출이 부른다. 서버(또는 오프라인) 전용. (#415/#537/#744)
+    /// 셀 밖으로 내보낸다 — 퇴장 동행·탈옥 방출이 부른다. 서버(또는 오프라인) 전용. (#415/#537/#744/#838)
     ///
     /// 셀 바닥은 본관과 이어진 NavMesh 경로가 없는 섬이라(#722), 나가는 것은 곧 순간이동이다.
     /// 워프가 실패하면(퇴장 지점이 NavMesh 밖) 경고만 남기고 제자리에 둔다 — 셀 안에 남는 편이
     /// NavMesh 밖에 떨어져 굳는 것보다 낫다.
     ///
-    /// <b>통행을 셀에서 본부로 갈아 끼우는 것이 워프보다 앞이다</b> (#744) — 퇴장 지점이 본관 실내(HQ
-    /// 영역)인데 워프는 마스크를 보지 않으므로, 순서가 뒤집히면 <b>못 걷는 폴리곤 위에 몸을 내려놓는다</b>.
-    /// 갈아 끼우기·반납의 규칙은 <c>NpcController.ApplyGrantedAreas</c>에 있다(워프 실패로 셀에 남는
-    /// 경우까지 그쪽이 받는다).
+    /// <b>셀 통행을 내려놓는 것이 워프보다 앞이다</b> (#744) — 순서 자체는 그때와 같지만 받는 것이
+    /// 없어졌다. 퇴장 지점인 본관 실내는 이제 시민 프리팹 마스크에 들어 있어(#838 — <c>HQ</c> 영역이
+    /// 통행을 가르지 않는다) 따로 빌릴 것이 없고, 여기서는 셀만 반납한다.
+    /// 반납이 실제로 언제 적용되는지는 <c>NpcController.ApplyGrantedAreas</c>가 정한다 — 아직 셀
+    /// 바닥을 딛고 있으면(워프 실패로 셀에 남는 경우까지) 발밑을 비울 때까지 미룬다.
     /// </summary>
     public void ServerExitJail(Vector3 exitPosition)
     {
@@ -258,7 +259,7 @@ public class NpcCustody : NetworkBehaviour
         if (m_owner.Agent == null)
             return;
 
-        m_owner.SetGrantedAreas(NpcNavAreas.HqMask);
+        m_owner.SetGrantedAreas(0);
 
         // 워프 유틸은 코어에 있다 — 밧줄 놓기(#369)와 공유하는 공용 헬퍼라서다 (계획서 § 3-6)
         if (!m_owner.TryWarpNear(exitPosition))
