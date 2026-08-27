@@ -427,9 +427,9 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
                 m_releaseBuffer.Add(inmate);
         }
 
-        // 정문을 먼저 연다 (#744) — 방출된 수감자는 본관 실내로 나와 본부를 가로질러 도시로 달아난다.
-        // 열지 않으면 닫힌 문짝을 그대로 통과해(NavMeshAgent는 문짝에 막히지 않는다) 탈옥이 일어난
-        // 흔적이 화면에 남지 않는다.
+        // 정문을 먼저 연다 (#744/#838) — 방출된 수감자는 본관 실내로 나와 본부를 가로질러 도시로
+        // 달아난다. 열지 않으면 <b>나갈 길 자체가 없다</b>: 닫힌 문은 그 자리 NavMesh를 도려낸다
+        // (DoorNavBlocker). #744 때는 문짝을 그냥 통과해서 "흔적이 안 남는다"가 유일한 이유였다.
         if (m_releaseBuffer.Count > 0)
             m_jailZone.ServerOpenFrontDoors();
 

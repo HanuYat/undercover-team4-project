@@ -25,7 +25,9 @@ using UnityEngine.Localization;
 ///    본다. 레이어는 조준 마스크만 가르고 충돌은 끊지 않으므로, 조준도 되고 닫힌 문이 플레이어를
 ///    막는 것도 그대로 된다 (CellGate와 같은 관례).
 ///  · <b>문짝은 NavMesh 베이크에서 제외할 것</b>(NavMeshModifier의 Ignore From Build) — 닫힌 문짝이
-///    베이크에 잡히면 문턱의 NavMesh가 끊겨 안팎 경로가 사라진다.
+///    베이크에 잡히면 문턱의 NavMesh가 끊겨 안팎 경로가 사라진다. 그래서 <b>구운 NavMesh만 보면
+///    문은 언제나 열려 있고</b>, NPC 통행을 실제로 막으려면 <see cref="DoorNavBlocker"/>를 함께 붙인다
+///    (#838 — 그게 없으면 NavMeshAgent가 닫힌 문짝을 그대로 통과한다).
 ///  · 문턱(문틀 하단) 콜라이더가 CharacterController의 stepOffset보다 높으면 열어도 못 지나간다.
 ///    Synty 벙커 문은 0.32m라 stepOffset 0.3을 넘어서 껐다.
 ///
@@ -73,6 +75,14 @@ public class DoubleDoor : NetworkBehaviour, IInteractable
 
     /// <summary>개폐 전환 — 소리·연출이 구독할 훅. 전 피어에서 발생한다.</summary>
     public event System.Action<bool> OnOpenChanged;
+
+    /// <summary>왼쪽 문짝 — 없을 수 있다. <see cref="DoorNavBlocker"/>가 <b>닫힌 자세의</b> 문짝 크기로
+    /// 차단막을 잡는 데 쓴다(문짝이 채우고 있는 부피가 곧 문틀 구멍이다). 연출용 회전은 여기서 하지 말 것 —
+    /// 문짝을 돌리는 유일한 곳은 <see cref="Swing"/>이다.</summary>
+    internal Transform LeafLeft => m_leafLeft;
+
+    /// <summary>오른쪽 문짝 — <see cref="LeafLeft"/>와 같은 용도.</summary>
+    internal Transform LeafRight => m_leafRight;
 
     private void Awake()
     {
