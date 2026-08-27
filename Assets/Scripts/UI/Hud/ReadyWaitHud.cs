@@ -21,6 +21,10 @@ public class ReadyWaitHud : MonoBehaviour
     [SerializeField]
     private TextMeshProUGUI m_waitText;
 
+    [Tooltip("표시 루트 — 판·테두리·문구를 함께 켜고 끈다 (LocalizedMessageView와 같은 구조, #894)")]
+    [SerializeField]
+    private CanvasGroup m_group;
+
     // 코드가 대입하는 자리라 라벨에 LocalizeStringEvent를 붙일 수 없다 — 서로 덮어쓴다. (#497)
     [Tooltip("표시 형식 — Hud.Ready.Waiting ({0}=준비된 인원, {1}=전체 인원)")]
     [SerializeField]
@@ -109,9 +113,14 @@ public class ReadyWaitHud : MonoBehaviour
         m_bound = false;
     }
 
+    // 루트 오브젝트를 껐다 켠다 — 판까지 같이 사라져야 한다. 이 컴포넌트는 HUD 루트에 있어
+    // 이 토글에 영향받지 않는다 (LocalizedMessageView.SetVisible과 같은 방침).
     private void SetVisible(bool visible)
     {
-        if (m_waitText != null && m_waitText.enabled != visible)
-            m_waitText.enabled = visible;
+        if (m_group == null)
+            return;
+
+        if (m_group.gameObject.activeSelf != visible)
+            m_group.gameObject.SetActive(visible);
     }
 }
