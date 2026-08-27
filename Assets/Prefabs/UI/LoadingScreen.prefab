@@ -281,7 +281,7 @@ MonoBehaviour:
   m_text: "\uBD88\uB7EC\uC624\uB294 \uC911..."
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 672baec5a3f7b4d329bf5b4052d5109b, type: 2}
-  m_sharedMaterial: {fileID: 4707819496639375797, guid: 672baec5a3f7b4d329bf5b4052d5109b, type: 2}
+  m_sharedMaterial: {fileID: 2100000, guid: 5612908217bc07b44b686dc5831f9d40, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
