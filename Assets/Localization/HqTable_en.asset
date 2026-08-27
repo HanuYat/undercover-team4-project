@@ -88,6 +88,14 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 6276845898492543065
+  - m_Id: 7100000000800
+    m_Localized: Consumables in stock
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000801
+    m_Localized: "{0} left"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

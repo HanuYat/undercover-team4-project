@@ -79,6 +79,14 @@ MonoBehaviour:
     m_Key: Hq.Cctv.ChannelWithLocationIr
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000800
+    m_Key: Hq.Stock.Title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000801
+    m_Key: Hq.Stock.Count
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

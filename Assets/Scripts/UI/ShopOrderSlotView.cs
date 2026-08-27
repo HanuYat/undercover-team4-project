@@ -16,7 +16,6 @@ public class ShopOrderSlotView : MonoBehaviour
     private const string k_itemTable = "ItemTable";
     private const string k_shopTable = "ShopTable";
     private const string k_commonTable = "CommonTable";
-    private const string k_nameKeyPrefix = "Item.Name.";
     private const string k_descriptionKeyPrefix = "Item.Description.";
     private const string k_moneyKey = "Common.Unit.Money";
 
@@ -150,14 +149,11 @@ public class ShopOrderSlotView : MonoBehaviour
             m_orderButton.gameObject.SetActive(false);
     }
 
+    // 이름 조회는 카탈로그 항목이 한다 (#840) — 구매 내역·본부 재고 게시판도 같은 것을 읽는다.
     private static string ResolveName(ShopCatalog.Entry entry)
     {
-        if (entry.IsInstallable)
-            return LocalizedStrings.Get(k_itemTable, k_nameKeyPrefix + entry.Installable);
-
-        return entry.ItemPrefab != null && !entry.ItemPrefab.ItemName.IsEmpty
-            ? entry.ItemPrefab.ItemName.GetLocalizedString()
-            : LocalizedStrings.Get(k_shopTable, "Shop.Order.Empty");
+        string name = entry.DisplayName;
+        return string.IsNullOrEmpty(name) ? LocalizedStrings.Get(k_shopTable, "Shop.Order.Empty") : name;
     }
 
     private static string ResolveDescription(ShopCatalog.Entry entry)

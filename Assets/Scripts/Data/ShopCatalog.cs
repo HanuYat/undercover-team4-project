@@ -10,6 +10,9 @@ using UnityEngine;
 [CreateAssetMenu(fileName = "ShopCatalog", menuName = "Scriptable Objects/Shop Catalog")]
 public class ShopCatalog : ScriptableObject
 {
+    private const string k_itemTable = "ItemTable";
+    private const string k_nameKeyPrefix = "Item.Name.";
+
     [Serializable]
     public class Entry
     {
@@ -26,9 +29,15 @@ public class ShopCatalog : ScriptableObject
         [SerializeField]
         private int m_installablePrice;
 
-        [Tooltip("고정 등장 그룹(소모형). ShopLineup의 소모형 칸이 이 표시가 붙은 항목에서만 뽑힌다.")]
+        [Tooltip("고정 등장 그룹. ShopLineup의 고정 칸이 이 표시가 붙은 항목에서만 뽑힌다.")]
         [SerializeField]
         private bool m_staple;
+
+        // 진열 고정 그룹(m_staple)과 갈라 둔다 — 홈런 진압봉처럼 고정 등장이면서 소모품이 아닌 항목이
+        // 생겼다. 이 표시는 "쓰면 없어지는가"만 뜻한다. (#840)
+        [Tooltip("소모품(쓰면 없어진다). 본부 재고 게시판이 이 표시가 붙은 항목의 남은 개수를 센다.")]
+        [SerializeField]
+        private bool m_consumable;
 
         [Tooltip("설치형 아이콘을 구울 때 쓸 모델 (ItemIconBaker). 소지형은 ItemBase.HeldModelPrefab로 대신한다")]
         [SerializeField]
@@ -46,6 +55,7 @@ public class ShopCatalog : ScriptableObject
         public EInstallable Installable => m_installable;
         public int InstallablePrice => m_installablePrice;
         public bool IsStaple => m_staple;
+        public bool IsConsumable => m_consumable;
         public Vector3 DisplayScale => m_displayScale;
 
         public bool IsInstallable => m_installable != EInstallable.None;
@@ -58,6 +68,17 @@ public class ShopCatalog : ScriptableObject
             m_displayIcon != null ? m_displayIcon
             : !IsInstallable && m_itemPrefab != null ? m_itemPrefab.ItemIcon
             : null;
+
+        /// <summary>
+        /// 지금 언어로 읽은 표시 이름 (#840) — 설치형은 규약 키, 소지형은 아이템의 LocalizedString.
+        /// 배선이 없으면 빈 문자열이다(폴백 문구는 보는 쪽이 정한다). 언어 변경 갱신은 호출부가
+        /// 통째로 다시 그리는 것으로 처리한다 (#497).
+        /// </summary>
+        public string DisplayName =>
+            IsInstallable ? LocalizedStrings.Get(k_itemTable, k_nameKeyPrefix + m_installable)
+            : m_itemPrefab != null && !m_itemPrefab.ItemName.IsEmpty
+                ? m_itemPrefab.ItemName.GetLocalizedString()
+            : string.Empty;
 
         /// <summary>아이콘을 구울 때 쓰는 모델 (#814). 지정값이 없으면 소지형은 손 모델로 대신한다.</summary>
         public GameObject DisplayModel =>
@@ -73,7 +94,7 @@ public class ShopCatalog : ScriptableObject
     [SerializeField]
     private Entry[] m_entries;
 
-    [Tooltip("소모형(Staple) 항목이 채우는 칸 수")]
+    [Tooltip("고정 등장(Staple) 항목이 채우는 칸 수")]
     [Min(0)]
     [SerializeField]
     private int m_stapleSlots = 5;
@@ -92,4 +113,36 @@ public class ShopCatalog : ScriptableObject
 
     /// <summary>인덱스로 항목을 얻는다 — 범위 밖이면 null.</summary>
     public Entry Get(int index) => IsValidIndex(index) ? m_entries[index] : null;
+
+    /// <summary>이 소지형 프리팹이 몇 번 항목인가 — 없으면 -1. 구매 집계(#840)의 역인덱스다.</summary>
+    public int IndexOf(ItemBase itemPrefab)
+    {
+        if (itemPrefab == null || m_entries == null)
+            return -1;
+
+        for (int i = 0; i < m_entries.Length; i++)
+        {
+            Entry entry = m_entries[i];
+            if (entry != null && !entry.IsInstallable && entry.ItemPrefab == itemPrefab)
+                return i;
+        }
+
+        return -1;
+    }
+
+    /// <summary>이 설치형이 몇 번 항목인가 — 없으면 -1. (#840)</summary>
+    public int IndexOf(EInstallable installable)
+    {
+        if (installable == EInstallable.None || m_entries == null)
+            return -1;
+
+        for (int i = 0; i < m_entries.Length; i++)
+        {
+            Entry entry = m_entries[i];
+            if (entry != null && entry.Installable == installable)
+                return i;
+        }
+
+        return -1;
+    }
 }

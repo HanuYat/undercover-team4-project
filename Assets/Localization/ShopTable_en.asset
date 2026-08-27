@@ -98,6 +98,22 @@ MonoBehaviour:
     m_Localized: No item
     m_Metadata:
       m_Items: []
+  - m_Id: 8136759908401156
+    m_Localized: Purchase history
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401157
+    m_Localized: "Bought {0} \u00B7 Left {1}"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401158
+    m_Localized: No equipment bought yet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401159
+    m_Localized: Catalog
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:
