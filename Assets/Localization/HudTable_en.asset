@@ -469,6 +469,10 @@ MonoBehaviour:
     m_Localized: '{0} eliminated'
     m_Metadata:
       m_Items: []
+  - m_Id: 8152779461132288
+    m_Localized: Open catalog
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

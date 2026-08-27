@@ -21,6 +21,11 @@ public class PlayerItemSupply : NetworkBehaviour
     [SerializeField]
     private List<ItemBase> m_startingGear = new List<ItemBase>();
 
+    [Header("상점 지급 장비 (#843)")]
+    [Tooltip("상점 씬에서 지급할 아이템 프리팹 — 장비 카탈로그. 게임 씬 진입 시 회수된다.")]
+    [SerializeField]
+    private List<ItemBase> m_shopGear = new List<ItemBase>();
+
     private PlayerLoadout m_loadout;
 
     private void Awake()
@@ -44,11 +49,17 @@ public class PlayerItemSupply : NetworkBehaviour
     /// 상점 복귀 때 <see cref="ServerClearHeldItems"/>로 전량 회수되므로 매 라운드 같은 구성으로 시작한다.
     /// 서버 판정은 한 프레임 뒤 GrantStartingGearAsync가 한다 — 클라 호출은 거기서 걸러진다.
     /// </summary>
-    public void ServerGrantStartingGear() => GrantStartingGearAsync().Forget();
+    public void ServerGrantStartingGear() => GrantAsync(m_startingGear, "기본 장비").Forget();
+
+    /// <summary>
+    /// 상점 장비(장비 카탈로그)를 지급한다 — 상점 씬 진입 시 서버(ShopManager)가 회수 직후 호출한다. (#843)
+    /// 게임 씬 진입 때 다시 회수되므로 라운드 시작 구성은 그대로다.
+    /// </summary>
+    public void ServerGrantShopGear() => GrantAsync(m_shopGear, "상점 장비").Forget();
 
     // 호출 지점(스폰 처리·씬 로드 완료 콜백) 밖으로 한 프레임 미뤄 지급한다 — NGO 메시지 처리 중
     // 스폰하면 후속 접속 클라의 씬 동기화가 중복 스폰(같은 NetworkObjectId 재생성)으로 깨진다.
-    private async UniTaskVoid GrantStartingGearAsync()
+    private async UniTaskVoid GrantAsync(List<ItemBase> gear, string label)
     {
         await UniTask.NextFrame();
 
@@ -58,12 +69,12 @@ public class PlayerItemSupply : NetworkBehaviour
             return;
         }
 
-        GrantStartingGear();
+        Grant(gear, label);
     }
 
     // 기본 장비 프리팹을 NetworkObject로 스폰해 오너 소유로 만들고 플레이어에 부착한 뒤,
     // 오너에게 보유 목록을 동기화한다.
-    private void GrantStartingGear()
+    private void Grant(List<ItemBase> gear, string label)
     {
         HeldItems held = m_loadout.Held;
 
@@ -71,12 +82,12 @@ public class PlayerItemSupply : NetworkBehaviour
         // 슬롯(5칸)이 헛되이 차 이후 줍기가 전부 거부된다. 정상 흐름에서는 상점 복귀 때 전량 회수돼 빈손이다. (#370)
         if (held.Count > 0)
         {
-            Debug.LogWarning("[PlayerItemSupply] 이미 아이템을 보유 중이라 기본 장비 지급을 건너뛴다.", this);
+            Debug.LogWarning($"[PlayerItemSupply] 이미 아이템을 보유 중이라 {label} 지급을 건너뛴다.", this);
             return;
         }
 
         int granted = 0;
-        foreach (ItemBase gearPrefab in m_startingGear)
+        foreach (ItemBase gearPrefab in gear)
         {
             if (gearPrefab == null)
             {
@@ -89,7 +100,7 @@ public class PlayerItemSupply : NetworkBehaviour
             if (granted >= PlayerLoadout.k_maxHeldItems)
             {
                 Debug.LogWarning(
-                    $"[PlayerItemSupply] 시작 지급이 소지 한도({PlayerLoadout.k_maxHeldItems})를 초과 — 초과분 무시. m_startingGear 설정 확인."
+                    $"[PlayerItemSupply] {label} 지급이 소지 한도({PlayerLoadout.k_maxHeldItems})를 초과 — 초과분 무시. 지급 목록 설정 확인."
                 );
                 break;
             }
@@ -101,7 +112,7 @@ public class PlayerItemSupply : NetworkBehaviour
             granted++;
         }
 
-        Debug.Log($"[PlayerItemSupply] 기본 장비 지급 — client {OwnerClientId}, {granted}개 ({App.CurrentScene})");
+        Debug.Log($"[PlayerItemSupply] {label} 지급 — client {OwnerClientId}, {granted}개 ({App.CurrentScene})");
         m_loadout.ServerNotifyHeldItemsChanged();
     }
 

@@ -66,6 +66,38 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 8213493152023576666
+  - m_Id: 8128692487618560
+    m_Localized: 'Next map: {0}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8128692584087552
+    m_Localized: '{0} citizens'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8128786469388288
+    m_Localized: (Not wired)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759874846720
+    m_Localized: Equipment catalog
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401152
+    m_Localized: Order
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401153
+    m_Localized: Sold out
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401154
+    m_Localized: Owned
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401155
+    m_Localized: No item
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

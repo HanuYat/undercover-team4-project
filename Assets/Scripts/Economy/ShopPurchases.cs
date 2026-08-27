@@ -12,7 +12,7 @@ using UnityEngine;
 /// 데이터로 처리하는 #370 방침의 지급쪽 근거 데이터다(회수는 ShopManager·PlayerLoadout이 한다).
 ///
 /// <b>서버 전용 컬렉션 2개 — 네트워크 동기화하지 않는다.</b> 클라가 목록을 알 필요가 없기 때문이다:
-/// 중복 구매는 서버가 거부하고, 진열대 상태는 진열대 자신의 NetworkVariable이 낸다.
+/// 중복 구매는 서버가 거부하고, 칸의 판매 상태는 ShopLineup의 NetworkList가 낸다.
 /// 상점 진열 후보(#814)는 ShopCatalog가 따로 들고, 이 홀더는 여전히 ItemBase 참조만 든다 — 품목 id
 /// 체계를 갖는 것은 아니다(세이브 id는 SaveItemLookup이 프리팹 이름으로 담당).
 ///
@@ -69,7 +69,7 @@ public class ShopPurchases : NetworkedManagerBase
     /// <summary>이 설치형을 이미 샀는가 — 중복 구매 거부·표시 복원용. 서버 전용.</summary>
     public bool HasInstallable(EInstallable installable) => m_installables.Contains(installable);
 
-    /// <summary>소지형 구매를 기록한다 — 진열대의 구매 RPC(서버)가 자금 차감 성공 후 호출한다.</summary>
+    /// <summary>소지형 구매를 기록한다 — ShopLineup의 구매 RPC(서버)가 자금 차감 성공 후 호출한다.</summary>
     public void AddCarried(ItemBase itemPrefab)
     {
         if (!IsServer)
@@ -83,7 +83,7 @@ public class ShopPurchases : NetworkedManagerBase
         Debug.Log($"[상점] 소지형 구매 기록 — {itemPrefab.name} (총 {m_carried.Count}개)");
     }
 
-    /// <summary>설치형 구매를 기록한다 — 진열대의 구매 RPC(서버)가 자금 차감 성공 후 호출한다.</summary>
+    /// <summary>설치형 구매를 기록한다 — ShopLineup의 구매 RPC(서버)가 자금 차감 성공 후 호출한다.</summary>
     public void AddInstallable(EInstallable installable)
     {
         if (!IsServer)

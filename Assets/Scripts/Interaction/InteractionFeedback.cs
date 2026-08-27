@@ -301,13 +301,23 @@ public class InteractionFeedback : NetworkBehaviour
 
         // ③ 상호작용 대상
         LocalizedString action = interactable?.PromptLabel(gameObject);
-        if (action == null)
+        if (action != null)
+        {
+            view.ShowPrompt(key, action, interactable.BlockedReason(gameObject));
+            return;
+        }
+
+        // ④ 겨눈 것이 아무것도 없다 — 대상 없이 쓰는 아이템(카탈로그)만 여기서 자기 안내를 띄운다 (#843).
+        //    맨 뒤인 이유: 조준한 대상이 있으면 그쪽이 지금 누를 수 있는 것을 말해 준다.
+        ItemBase equipped = m_itemUser != null ? m_itemUser.EquippedItem : null;
+        LocalizedString heldAction = equipped != null ? equipped.HeldPromptLabel() : null;
+        if (heldAction == null)
         {
             view.HidePrompt();
             return;
         }
 
-        view.ShowPrompt(key, action, interactable.BlockedReason(gameObject));
+        view.ShowPrompt(m_input != null ? m_input.UseItemBinding : string.Empty, heldAction, null);
     }
 
     /// <summary>

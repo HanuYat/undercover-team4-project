@@ -6699,7 +6699,6 @@ GameObject:
   - component: {fileID: 2884170593316442071}
   - component: {fileID: 3605863908184502176}
   - component: {fileID: 3601868820283084074}
-  - component: {fileID: 5887233641706128439}
   - component: {fileID: 8634843281634365864}
   - component: {fileID: 6985509239275209907}
   - component: {fileID: 8655701205623984669}
@@ -7485,18 +7484,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerJump
   ShowTopMostFoldoutHeaderGroup: 1
   m_jumpHeight: 0.8
---- !u!114 &5887233641706128439
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5466483465133727208}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3e00d2b1d9a0c854b97aac62808ac808, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ShopStandPresenter
 --- !u!114 &8634843281634365864
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7528,6 +7515,8 @@ MonoBehaviour:
   - {fileID: 6465765157232573796, guid: ef3d4594c5614be42ad3cdf1ec34cb19, type: 3}
   - {fileID: 5880397347069557750, guid: d1c30cbbf1aa4ac44b4f5ad0936bd9f2, type: 3}
   - {fileID: 1048637736484071511, guid: 35764ff7639685444b8c8802043b67b1, type: 3}
+  m_shopGear:
+  - {fileID: 935024008352489090, guid: d82adb76dd7c4f445b15b293f4ed5430, type: 3}
 --- !u!114 &8655701205623984669
 MonoBehaviour:
   m_ObjectHideFlags: 0

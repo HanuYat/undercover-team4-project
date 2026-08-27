@@ -55,6 +55,38 @@ MonoBehaviour:
     m_Key: Shop.Gacha.Tokens
     m_Metadata:
       m_Items: []
+  - m_Id: 8128692487618560
+    m_Key: Shop.MapSelect.Next
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8128692584087552
+    m_Key: Shop.MapSelect.NpcCount
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8128786469388288
+    m_Key: Shop.MapSelect.NoMap
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759874846720
+    m_Key: Shop.Order.Title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401152
+    m_Key: Shop.Order.Button
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401153
+    m_Key: Shop.Order.SoldOut
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401154
+    m_Key: Shop.Order.Owned
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401155
+    m_Key: Shop.Order.Empty
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

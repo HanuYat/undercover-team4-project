@@ -61,6 +61,14 @@ MonoBehaviour:
     m_Localized: Toward the shops
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000900
+    m_Localized: Ruined City
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000901
+    m_Localized: Cyberpunk
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

@@ -20,13 +20,13 @@ public enum EScene
 [LocalizedEnum("ItemTable", "Item.Description.", nameof(EInstallable.None))]
 public enum EInstallable
 {
-    None, // 이 진열대는 소지형 — 프리팹 참조로 판다
+    None, // 이 칸은 소지형 — 프리팹 참조로 판다
     SignalDecoder, // 신호 해석기 (#108)
     JailSirenButton, // 유치장 사이렌 버튼 — 본부에서 탈옥을 원격 제지한다 (#488)
 }
 
-/// <summary>상점 진열대의 판매 상태 (#814).</summary>
-public enum EStandStatus
+/// <summary>상점 주문창 칸의 판매 상태 (#814, #843).</summary>
+public enum EShopSlotStatus
 {
     Available,
     SoldOut, // 이번 라운드 한정

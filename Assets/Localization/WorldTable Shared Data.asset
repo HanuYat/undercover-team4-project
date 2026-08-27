@@ -55,6 +55,14 @@ MonoBehaviour:
     m_Key: World.Cctv.ShopStreet
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000900
+    m_Key: World.Map.Apocalypse
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000901
+    m_Key: World.Map.Cyberpunk
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
