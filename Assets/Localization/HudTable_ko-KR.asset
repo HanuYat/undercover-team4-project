@@ -489,11 +489,23 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 8046671440187392
-    m_Localized: "{0} 처치"
+    m_Localized: "{0} \uCC98\uCE58"
     m_Metadata:
       m_Items: []
   - m_Id: 8152779461132288
-    m_Localized: "카탈로그 열기"
+    m_Localized: "\uCE74\uD0C8\uB85C\uADF8 \uC5F4\uAE30"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8396537558818816
+    m_Localized: "\uB098"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8396537613344768
+    m_Localized: "\uD300\uC6D0"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8399387659689984
+    m_Localized: "\uBC30\uD130\uB9AC"
     m_Metadata:
       m_Items: []
   references:

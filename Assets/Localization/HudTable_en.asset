@@ -473,6 +473,18 @@ MonoBehaviour:
     m_Localized: Open catalog
     m_Metadata:
       m_Items: []
+  - m_Id: 8396537558818816
+    m_Localized: You
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8396537613344768
+    m_Localized: Teammate
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8399387659689984
+    m_Localized: Battery
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

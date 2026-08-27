@@ -17,7 +17,7 @@ public enum ETeamMemberState
 
 /// <summary>
 /// 팀 상황판의 대원 카드 (#720) — 얼굴 · 이름 · 체력 게이지 · 상태.
-/// 게이지는 좌하단 기름통(<see cref="HpOilGaugeView"/>)을 그대로 얹는다 — 같은 값을 두 모양으로
+/// 게이지는 좌하단 HP 바(<see cref="HpBarView"/>)를 그대로 얹는다 — 같은 값을 두 모양으로
 /// 그리면 내 체력과 동료 체력이 다른 물건처럼 읽힌다.
 /// </summary>
 public class TeamStatusRowView : MonoBehaviour
@@ -33,9 +33,21 @@ public class TeamStatusRowView : MonoBehaviour
     [SerializeField] private TextMeshProUGUI m_nameText;
 
     [Tooltip("HP 게이지 — 좌하단 기름통 뷰를 그대로 쓴다. 숫자(72/100)도 이 뷰가 통 안에 그린다")]
-    [SerializeField] private HpOilGaugeView m_gauge;
+    [SerializeField] private HpBarView m_gauge;
 
     [SerializeField] private TextMeshProUGUI m_stateText;
+
+    [Header("나 / 팀원")]
+    [Tooltip("내 카드는 늘 첫 칸이지만(TeamStatusPanel) 자리만으로는 읽히지 않아 칩으로 못 박는다 (#894)")]
+    [SerializeField] private TextMeshProUGUI m_ownerText;
+
+    [Tooltip("위 문구가 앉는 칩 — 비워도 된다")]
+    [SerializeField] private Image m_ownerPlate;
+
+    [SerializeField] private Color m_minePlateTone = new Color(0.878f, 0.663f, 0.290f, 1f);
+    [SerializeField] private Color m_mineTextTone = new Color(0.06f, 0.08f, 0.12f, 1f);
+    [SerializeField] private Color m_matePlateTone = new Color(0.24f, 0.29f, 0.36f, 0.9f);
+    [SerializeField] private Color m_mateTextTone = new Color(0.82f, 0.86f, 0.91f, 1f);
 
     [Header("상태 색")]
     [SerializeField] private Color m_aliveTone = new Color(0.85f, 0.92f, 0.95f, 1f);
@@ -48,6 +60,9 @@ public class TeamStatusRowView : MonoBehaviour
     // 마지막으로 그린 이름 — null은 "아직 한 번도 안 넣었다"는 뜻이다.
     private string m_shownName;
 
+    // 마지막으로 그린 주인 표시 — -1은 "아직 한 번도 안 넣었다"는 뜻이다 (0=팀원, 1=나).
+    private int m_shownOwner = -1;
+
     /// <summary>이름이 들어와 있는가 — 상황판이 빈 이름만 다시 물어보게 하는 표시다. (#720)</summary>
     public bool HasName => !string.IsNullOrEmpty(m_shownName);
 
@@ -56,6 +71,7 @@ public class TeamStatusRowView : MonoBehaviour
     {
         m_shownState = k_noState;
         m_shownName = null;
+        m_shownOwner = -1;
     }
 
     /// <summary>얼굴이 들어와 있는가 — 색이 늦게 도착하면 상황판이 다시 넘긴다. (#432)</summary>
@@ -84,6 +100,28 @@ public class TeamStatusRowView : MonoBehaviour
         m_nameText.text = displayName;
     }
 
+    /// <summary>
+    /// 이 카드가 내 것인지 표시한다 — 자리(첫 칸)로만 말하면 카드가 여섯 장 늘어섰을 때 안 읽힌다.
+    /// 상태 표기와 같은 이유로 바뀔 때만 테이블을 찾는다. (#894)
+    /// </summary>
+    public void SetOwnership(bool isMine)
+    {
+        int owner = isMine ? 1 : 0;
+        if (owner == m_shownOwner)
+            return;
+
+        m_shownOwner = owner;
+
+        if (m_ownerText != null)
+        {
+            m_ownerText.text = LocalizedStrings.Get(k_table, isMine ? "Hud.Team.Owner.Me" : "Hud.Team.Owner.Mate");
+            m_ownerText.color = isMine ? m_mineTextTone : m_mateTextTone;
+        }
+
+        if (m_ownerPlate != null)
+            m_ownerPlate.color = isMine ? m_minePlateTone : m_matePlateTone;
+    }
+
     /// <summary>매 프레임 값만 갈아 끼운다 — 상황판이 떠 있는 동안만 불린다.</summary>
     public void SetStatus(int hp, int maxHp, ETeamMemberState state)
     {
@@ -91,7 +129,7 @@ public class TeamStatusRowView : MonoBehaviour
             m_gauge.SetHealth(hp, maxHp);
 
         // 상태 표기는 바뀔 때만 찾는다 — 매 프레임 부르는 경로라 그냥 대입하면 값이 같아도
-        // 프레임마다 테이블을 조회하고 TMP 메시를 더티로 만든다 (HpOilGaugeView.SetHealth와 같은 방침).
+        // 프레임마다 테이블을 조회하고 TMP 메시를 더티로 만든다 (HpBarView.SetHealth와 같은 방침).
         if (m_stateText == null || state == m_shownState)
             return;
 
