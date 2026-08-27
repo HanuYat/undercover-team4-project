@@ -33,6 +33,8 @@ public class SettingsPanel : PanelBase
     [SerializeField] private Slider m_fovSlider;
 
     [SerializeField] private Slider m_masterVolumeSlider;
+    [SerializeField] private Slider m_bgmVolumeSlider;
+    [SerializeField] private Slider m_sfxVolumeSlider;
     [SerializeField] private Slider m_voiceVolumeSlider;
 
     [Header("값 표시")]
@@ -40,6 +42,8 @@ public class SettingsPanel : PanelBase
     [SerializeField] private TextMeshProUGUI m_lookSmoothingValue;
     [SerializeField] private TextMeshProUGUI m_fovValue;
     [SerializeField] private TextMeshProUGUI m_masterVolumeValue;
+    [SerializeField] private TextMeshProUGUI m_bgmVolumeValue;
+    [SerializeField] private TextMeshProUGUI m_sfxVolumeValue;
     [SerializeField] private TextMeshProUGUI m_voiceVolumeValue;
 
     [Header("토글")]
@@ -124,6 +128,8 @@ public class SettingsPanel : PanelBase
         );
         SetupSlider(m_fovSlider, GameSettings.k_minFov, GameSettings.k_maxFov, HandleFovChanged);
         SetupSlider(m_masterVolumeSlider, 0f, 1f, HandleMasterVolumeChanged);
+        SetupSlider(m_bgmVolumeSlider, 0f, 1f, HandleBgmVolumeChanged);
+        SetupSlider(m_sfxVolumeSlider, 0f, 1f, HandleSfxVolumeChanged);
         SetupSlider(m_voiceVolumeSlider, 0f, 1f, HandleVoiceVolumeChanged);
 
         if (m_micMuteToggle != null)
@@ -177,6 +183,10 @@ public class SettingsPanel : PanelBase
             m_fovSlider.onValueChanged.RemoveListener(HandleFovChanged);
         if (m_masterVolumeSlider != null)
             m_masterVolumeSlider.onValueChanged.RemoveListener(HandleMasterVolumeChanged);
+        if (m_bgmVolumeSlider != null)
+            m_bgmVolumeSlider.onValueChanged.RemoveListener(HandleBgmVolumeChanged);
+        if (m_sfxVolumeSlider != null)
+            m_sfxVolumeSlider.onValueChanged.RemoveListener(HandleSfxVolumeChanged);
         if (m_voiceVolumeSlider != null)
             m_voiceVolumeSlider.onValueChanged.RemoveListener(HandleVoiceVolumeChanged);
         if (m_micMuteToggle != null)
@@ -328,6 +338,10 @@ public class SettingsPanel : PanelBase
             m_fovSlider.SetValueWithoutNotify(GameSettings.Fov);
         if (m_masterVolumeSlider != null)
             m_masterVolumeSlider.SetValueWithoutNotify(GameSettings.MasterVolume);
+        if (m_bgmVolumeSlider != null)
+            m_bgmVolumeSlider.SetValueWithoutNotify(GameSettings.BgmVolume);
+        if (m_sfxVolumeSlider != null)
+            m_sfxVolumeSlider.SetValueWithoutNotify(GameSettings.SfxVolume);
         if (m_voiceVolumeSlider != null)
             m_voiceVolumeSlider.SetValueWithoutNotify(GameSettings.VoiceVolume);
         SetToggle(m_micMuteToggle, GameSettings.MicMuted);
@@ -512,6 +526,18 @@ public class SettingsPanel : PanelBase
         RefreshLabels();
     }
 
+    private void HandleBgmVolumeChanged(float value)
+    {
+        GameSettings.BgmVolume = value;
+        RefreshLabels();
+    }
+
+    private void HandleSfxVolumeChanged(float value)
+    {
+        GameSettings.SfxVolume = value;
+        RefreshLabels();
+    }
+
     private void HandleVoiceVolumeChanged(float value)
     {
         GameSettings.VoiceVolume = value;
@@ -594,6 +620,12 @@ public class SettingsPanel : PanelBase
 
         if (m_masterVolumeValue != null)
             m_masterVolumeValue.text = $"{GameSettings.MasterVolume * 100f:0}%";
+
+        if (m_bgmVolumeValue != null)
+            m_bgmVolumeValue.text = $"{GameSettings.BgmVolume * 100f:0}%";
+
+        if (m_sfxVolumeValue != null)
+            m_sfxVolumeValue.text = $"{GameSettings.SfxVolume * 100f:0}%";
 
         if (m_voiceVolumeValue != null)
             m_voiceVolumeValue.text = $"{GameSettings.VoiceVolume * 100f:0}%";

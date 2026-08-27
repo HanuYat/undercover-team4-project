@@ -142,13 +142,27 @@ public class BgmPlayer : MonoBehaviour
                 continue;
 
             m_gain[i] = Mathf.MoveTowards(m_gain[i], m_gainTarget[i], step);
-            m_sources[i].volume = m_gain[i] * m_volume[i];
+            ApplyVolume(i);
 
             // 다 빠진 소스는 멈춰 둔다 — 볼륨 0으로 계속 도는 소스를 남기지 않는다.
             if (m_gain[i] <= 0f && m_sources[i].isPlaying)
                 m_sources[i].Stop();
         }
     }
+
+    /// <summary>설정의 배경음 음량을 지금 울리는 곡에 다시 건다 — 슬라이더를 끄는 동안 불린다.
+    /// 페이드가 끝나면 Update가 볼륨을 다시 쓰지 않으므로 여기서 밀어 넣어야 즉시 반영된다.</summary>
+    public void ApplyVolume()
+    {
+        if (m_sources == null)
+            return;
+
+        for (int i = 0; i < m_sources.Length; i++)
+            ApplyVolume(i);
+    }
+
+    private void ApplyVolume(int index) =>
+        m_sources[index].volume = m_gain[index] * m_volume[index] * GameSettings.BgmVolume;
 
     private void HandleSceneLoaded(EScene scene) => ApplyScene(scene);
 

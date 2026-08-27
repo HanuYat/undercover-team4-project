@@ -9,8 +9,8 @@ using UnityEngine;
 /// 효과음은 불릴 때만 도는 원샷 풀이지만 BGM은 페이드 때문에 매 프레임 돌고 씬 전환을 구독하므로,
 /// 한 클래스에 두면 소리 하나를 추가할 때마다 성격이 다른 두 덩어리를 함께 읽어야 한다.
 ///
-/// <b>전역 음량은 건드리지 않는다</b> — <see cref="GameSettings"/>가 이미 <c>AudioListener.volume</c>으로
-/// 배율을 걸고 있다(#225). 이 매니저는 재생만 한다.
+/// <b>마스터 음량은 건드리지 않는다</b> — <see cref="GameSettings"/>가 <c>AudioListener.volume</c>으로
+/// 이미 걸고 있다(#225). 대신 <b>효과음 음량</b>은 여기서 곱한다 — 믹서가 없어 재생 지점이 유일한 창구다.
 ///
 /// <b>3D 재생은 리스너가 로컬 플레이어에 있어야 의미가 있다</b> (#482). 리스너가 씬 카메라에 고정돼
 /// 있으면 모든 소리가 그 지점 기준으로 계산돼 거리감이 사라진다.
@@ -65,6 +65,35 @@ public class SoundManager : CommonManagerBase
         // 카탈로그 배선 지점을 하나로 두려고 이쪽이 넘겨준다 (BgmPlayer.Initialize 주석 참고).
         Bgm = GetComponent<BgmPlayer>();
         Bgm.Initialize(m_library);
+
+        GameSettings.OnSfxVolumeChanged += HandleSfxVolumeChanged;
+    }
+
+    protected override void OnDestroy()
+    {
+        GameSettings.OnSfxVolumeChanged -= HandleSfxVolumeChanged;
+        base.OnDestroy(); // App.Sound 해제 (R5)
+    }
+
+    /// <summary>이 항목을 지금 설정으로 낼 때의 음량 — 자기 <see cref="AudioSource"/>로 직접 트는 쪽도
+    /// 이걸 거쳐야 효과음 슬라이더가 걸린다 (<see cref="GetSfxEntry"/>와 짝).</summary>
+    public static float SfxVolumeOf(AudioLibrary.Entry entry) =>
+        entry == null ? 0f : entry.Volume * GameSettings.SfxVolume;
+
+    // 이미 울리고 있는 루프에 새 음량을 건다. 원샷은 곧 끝나므로 굳이 다시 쓰지 않는다.
+    private void HandleSfxVolumeChanged(float _)
+    {
+        if (m_loopSource != null && m_loopId != EAudioClip.None
+            && m_entries.TryGetValue(m_loopId, out AudioLibrary.Entry loop))
+        {
+            m_loopSource.volume = SfxVolumeOf(loop);
+        }
+
+        if (m_ambientSource != null && m_ambientId != EAudioClip.None
+            && m_entries.TryGetValue(m_ambientId, out AudioLibrary.Entry ambient))
+        {
+            m_ambientSource.volume = SfxVolumeOf(ambient);
+        }
     }
 
     /// <summary>
@@ -97,7 +126,7 @@ public class SoundManager : CommonManagerBase
         source.transform.position = position;
         source.spatialBlend = 1f; // 완전 3D — 거리·방향이 그대로 반영된다 (#482)
         source.clip = entry.Clip;
-        source.volume = entry.Volume;
+        source.volume = SfxVolumeOf(entry);
         ApplyStartOffset(source, entry);
         source.minDistance = entry.MinDistance;
         // 최대 거리가 최소보다 작게 배선되면 Unity가 감쇠를 계산하지 못한다 — 사고를 조용히 삼키지 않고 보정한다.
@@ -135,7 +164,7 @@ public class SoundManager : CommonManagerBase
         // 2D는 거리 항목을 쓰지 않는다 — 감쇠가 없으므로 min/maxDistance가 결과에 관여하지 않는다.
         source.spatialBlend = 0f;
         source.clip = entry.Clip;
-        source.volume = entry.Volume;
+        source.volume = SfxVolumeOf(entry);
         ApplyStartOffset(source, entry);
         source.Play();
     }
@@ -175,7 +204,7 @@ public class SoundManager : CommonManagerBase
             return;
 
         m_loopSource.clip = entry.Clip;
-        m_loopSource.volume = entry.Volume;
+        m_loopSource.volume = SfxVolumeOf(entry);
         m_loopSource.Play();
         m_loopId = id;
     }
@@ -227,7 +256,7 @@ public class SoundManager : CommonManagerBase
             return;
 
         m_ambientSource.clip = entry.Clip;
-        m_ambientSource.volume = entry.Volume;
+        m_ambientSource.volume = SfxVolumeOf(entry);
         m_ambientSource.Play();
         m_ambientId = id;
     }

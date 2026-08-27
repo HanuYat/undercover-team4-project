@@ -23,6 +23,8 @@ public static class GameSettings
     private const string k_screenShakeName = "screenShake";
     private const string k_speedVignetteName = "speedVignette";
     private const string k_masterVolumeName = "masterVolume";
+    private const string k_bgmVolumeName = "bgmVolume";
+    private const string k_sfxVolumeName = "sfxVolume";
     private const string k_voiceVolumeName = "voiceVolume";
     private const string k_micMutedName = "micMuted";
     private const string k_vSyncName = "vSync";
@@ -74,6 +76,8 @@ public static class GameSettings
     private const bool k_defaultSpeedVignette = true;
 
     private const float k_defaultMasterVolume = 1f;
+    private const float k_defaultBgmVolume = 1f;
+    private const float k_defaultSfxVolume = 1f;
     private const float k_defaultVoiceVolume = 1f;
     private const bool k_defaultMicMuted = false;
 
@@ -104,6 +108,8 @@ public static class GameSettings
     private static bool s_screenShake = k_defaultScreenShake;
     private static bool s_speedVignette = k_defaultSpeedVignette;
     private static float s_masterVolume = k_defaultMasterVolume;
+    private static float s_bgmVolume = k_defaultBgmVolume;
+    private static float s_sfxVolume = k_defaultSfxVolume;
     private static float s_voiceVolume = k_defaultVoiceVolume;
     private static bool s_micMuted = k_defaultMicMuted;
     private static bool s_vSync = k_defaultVSync;
@@ -200,6 +206,33 @@ public static class GameSettings
             AudioListener.volume = s_masterVolume;
         }
     }
+
+    /// <summary>배경음 음량 (0~1). 마스터 아래에 걸린다 — 실효 음량은 마스터 x 이 값이다.</summary>
+    public static float BgmVolume
+    {
+        get => s_bgmVolume;
+        set
+        {
+            s_bgmVolume = Mathf.Clamp01(value);
+            PlayerPrefs.SetFloat(Key(k_bgmVolumeName), s_bgmVolume);
+            App.Sound?.Bgm?.ApplyVolume();
+        }
+    }
+
+    /// <summary>효과음 음량 (0~1). 마스터 아래에 걸린다 — 실효 음량은 마스터 x 이 값이다.</summary>
+    public static float SfxVolume
+    {
+        get => s_sfxVolume;
+        set
+        {
+            s_sfxVolume = Mathf.Clamp01(value);
+            PlayerPrefs.SetFloat(Key(k_sfxVolumeName), s_sfxVolume);
+            OnSfxVolumeChanged?.Invoke(s_sfxVolume);
+        }
+    }
+
+    /// <summary>효과음 음량이 바뀌었다 — 이미 울리고 있는 루프(발소리·엔진·경보)가 되읽는다.</summary>
+    public static event Action<float> OnSfxVolumeChanged;
 
     /// <summary>
     /// 음성 채팅 음량 (0~1). 무전·근접 공통 — 채널별 분리는 Phase 2.
@@ -526,6 +559,7 @@ public static class GameSettings
         // static 이벤트도 함께 리셋한다 — 도메인 리로드를 끄면 이전 플레이의 죽은 구독자가 남아
         // 파괴된 UI를 깨운다. 씬 로드 전이라 이번 플레이의 구독자는 아직 붙지 않았다. (#430)
         OnMicMutedChanged = null;
+        OnSfxVolumeChanged = null;
         OnPlayerColorChanged = null;
         OnAccessoryChanged = null;
 
@@ -556,6 +590,8 @@ public static class GameSettings
         ScreenShake = PlayerPrefs.GetInt(Key(k_screenShakeName), s_screenShake ? 1 : 0) != 0;
         SpeedVignette = PlayerPrefs.GetInt(Key(k_speedVignetteName), s_speedVignette ? 1 : 0) != 0;
         MasterVolume = PlayerPrefs.GetFloat(Key(k_masterVolumeName), s_masterVolume);
+        BgmVolume = PlayerPrefs.GetFloat(Key(k_bgmVolumeName), s_bgmVolume);
+        SfxVolume = PlayerPrefs.GetFloat(Key(k_sfxVolumeName), s_sfxVolume);
         VoiceVolume = PlayerPrefs.GetFloat(Key(k_voiceVolumeName), s_voiceVolume);
         MicMuted = PlayerPrefs.GetInt(Key(k_micMutedName), s_micMuted ? 1 : 0) != 0;
         VSync = PlayerPrefs.GetInt(Key(k_vSyncName), s_vSync ? 1 : 0) != 0;
@@ -573,6 +609,8 @@ public static class GameSettings
         s_screenShake = k_defaultScreenShake;
         s_speedVignette = k_defaultSpeedVignette;
         s_masterVolume = k_defaultMasterVolume;
+        s_bgmVolume = k_defaultBgmVolume;
+        s_sfxVolume = k_defaultSfxVolume;
         s_voiceVolume = k_defaultVoiceVolume;
         s_micMuted = k_defaultMicMuted;
         s_vSync = k_defaultVSync;
@@ -622,6 +660,8 @@ public static class GameSettings
         ScreenShake = k_defaultScreenShake;
         SpeedVignette = k_defaultSpeedVignette;
         MasterVolume = k_defaultMasterVolume;
+        BgmVolume = k_defaultBgmVolume;
+        SfxVolume = k_defaultSfxVolume;
         VoiceVolume = k_defaultVoiceVolume;
         MicMuted = k_defaultMicMuted;
         VSync = k_defaultVSync;

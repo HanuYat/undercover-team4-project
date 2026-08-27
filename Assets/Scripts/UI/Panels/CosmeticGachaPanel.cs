@@ -291,7 +291,7 @@ public class CosmeticGachaPanel : PanelBase
             return;
 
         m_spinSource.clip = entry.Clip;
-        m_spinSource.volume = entry.Volume;
+        m_spinSource.volume = SoundManager.SfxVolumeOf(entry);
         // 앞을 건너뛰는 배선도 따른다 — 풀로 낼 때와 같게 들려야 한다
         m_spinSource.time = Mathf.Clamp(entry.StartOffset, 0f, Mathf.Max(0f, entry.Clip.length - 0.05f));
         m_spinSource.Play();

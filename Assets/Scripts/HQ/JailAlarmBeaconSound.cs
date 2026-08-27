@@ -45,7 +45,20 @@ public class JailAlarmBeaconSound : MonoBehaviour
         }
     }
 
-    private void OnDisable() => Stop();
+    private void OnEnable() => GameSettings.OnSfxVolumeChanged += HandleSfxVolumeChanged;
+
+    private void OnDisable()
+    {
+        GameSettings.OnSfxVolumeChanged -= HandleSfxVolumeChanged;
+        Stop();
+    }
+
+    // 사이렌은 계속 도는 루프라 슬라이더를 끄는 동안 스스로 되읽어야 한다
+    private void HandleSfxVolumeChanged(float _)
+    {
+        if (m_source != null && m_playing)
+            m_source.volume = SoundManager.SfxVolumeOf(App.Sound?.GetSfxEntry(m_sound));
+    }
 
     // 경보등의 상태를 매 프레임 읽는다 — 자물쇠 신호는 이미 전 피어에 오므로 각자 자기 쪽에서 운다.
     // 시도 중에 탈옥이 성사되면 그 프레임에 멎는다 (경보등은 빨강으로 넘어간다)
@@ -68,7 +81,7 @@ public class JailAlarmBeaconSound : MonoBehaviour
             return; // 카탈로그 미배정 — 조용히 넘어간다
 
         m_source.clip = entry.Clip;
-        m_source.volume = entry.Volume;
+        m_source.volume = SoundManager.SfxVolumeOf(entry);
         m_source.minDistance = entry.MinDistance;
         // 최대 거리가 최소보다 작게 배선되면 Unity가 감쇠를 계산하지 못한다 (SoundManager와 같은 보정)
         m_source.maxDistance = Mathf.Max(entry.MaxDistance, entry.MinDistance + 0.1f);

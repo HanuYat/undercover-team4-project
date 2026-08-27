@@ -135,6 +135,14 @@ MonoBehaviour:
     m_Key: Settings.Label.MicMuteHint
     m_Metadata:
       m_Items: []
+  - m_Id: 8527129204916224
+    m_Key: Settings.Label.BgmVolume
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8527129251053568
+    m_Key: Settings.Label.SfxVolume
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
