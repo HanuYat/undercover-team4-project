@@ -87,7 +87,7 @@ public class BombCountdownSound : MonoBehaviour
         }
 
         m_source.clip = entry.Clip;
-        m_source.volume = entry.Volume;
+        m_source.volume = SoundManager.SfxVolumeOf(entry);
         m_source.minDistance = entry.MinDistance;
         // 최대 거리가 최소보다 작게 배선되면 Unity가 감쇠를 계산하지 못한다 (SoundManager와 같은 보정)
         m_source.maxDistance = Mathf.Max(entry.MaxDistance, entry.MinDistance + 0.1f);

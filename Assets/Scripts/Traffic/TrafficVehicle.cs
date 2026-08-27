@@ -163,12 +163,14 @@ public class TrafficVehicle : NetworkBehaviour
     {
         SetHeadlights(true);
         PlayEngineLoop();
+        GameSettings.OnSfxVolumeChanged += HandleSfxVolumeChanged;
     }
 
     // 풀에 반납되는 지점 — 세션에서는 프리팹 핸들러의 Destroy가, 오프라인에서는 매니저가
     // SetActive(false)로 여기를 지난다. 두 경로를 한 자리로 모으려고 활성화에 묶었다.
     private void OnDisable()
     {
+        GameSettings.OnSfxVolumeChanged -= HandleSfxVolumeChanged;
         SetHeadlights(false);
         StopEngineLoop();
 
@@ -329,6 +331,13 @@ public class TrafficVehicle : NetworkBehaviour
             m_engineSource.Play();
     }
 
+    // 엔진은 한 번 걸면 계속 도는 루프라 슬라이더를 끄는 동안 스스로 되읽어야 한다
+    private void HandleSfxVolumeChanged(float _)
+    {
+        if (m_engineSource != null)
+            m_engineSource.volume = SoundManager.SfxVolumeOf(App.Sound?.GetSfxEntry(m_engineSound));
+    }
+
     private void StopEngineLoop()
     {
         if (m_engineSource != null && m_engineSource.isPlaying)
@@ -352,7 +361,7 @@ public class TrafficVehicle : NetworkBehaviour
             return false;
 
         source.clip = entry.Clip;
-        source.volume = entry.Volume;
+        source.volume = SoundManager.SfxVolumeOf(entry);
         source.minDistance = entry.MinDistance;
         source.maxDistance = Mathf.Max(entry.MaxDistance, entry.MinDistance + 0.1f);
         source.spatialBlend = 1f; // 완전 3D — 어느 방향에서 오는지가 예고의 전부다

@@ -49,7 +49,10 @@
 ```
 GameSettings (Core · static)                     ← PlayerPrefs 읽기/쓰기 + 즉시 적용
    ├─ MouseSensitivity  0.2~3.0 (기본 1.0)  ──▶ PlayerMovement가 매 프레임 읽음 (구독 없음)
-   ├─ MasterVolume      0~1     (기본 1.0)  ──▶ AudioListener.volume
+   ├─ MasterVolume      0~1     (기본 1.0)  ──▶ AudioListener.volume        ← Unity 소리 전부
+   ├─ BgmVolume         0~1     (기본 1.0)  ──▶ BgmPlayer.ApplyVolume()     ← 마스터 아래
+   ├─ SfxVolume         0~1     (기본 1.0)  ──▶ SoundManager.SfxVolumeOf()  ← 마스터 아래
+   │                                             + OnSfxVolumeChanged ─▶ 도는 루프(발소리·엔진·경보)가 되읽는다
    ├─ VoiceVolume       0~1     (기본 1.0)  ──▶ VivoxManager.ApplyVoiceVolume()
    │                                              ├─ 정상 경로: Vivox 전역 출력 볼륨
    │                                              └─ 왜곡 경로: 살아 있는 오디오 탭 AudioSource.volume
@@ -67,6 +70,8 @@ DisplayConfirmPanel : PanelBase                  ← 창모드·해상도 확인
 CreditsPanel : PanelBase                         ← 개발진 명단 ([일반] 탭의 [개발진] 버튼이 연다)
 SettingsCanvas.prefab                            ← Title · Lobby · Shop · Main 배치 (확인창도 이 안)
 ```
+
+> **음량은 셋으로 갈렸다 (2026-08-27).** 믹서가 없어 **재생 지점에서 곱한다** — BGM은 `BgmPlayer`가, 효과음은 `SoundManager`가 창구다. 실효 음량은 `마스터 x 배경음`·`마스터 x 효과음`이고, 음성(Vivox)은 마스터에 걸리지 않으므로 종전대로 자기 슬라이더 하나만 탄다. 자기 `AudioSource`로 직접 트는 쪽(발소리·엔진·경보·폭탄·뽑기)은 `SoundManager.SfxVolumeOf(entry)`를 거쳐야 슬라이더가 걸리고, 계속 도는 루프는 `GameSettings.OnSfxVolumeChanged`를 구독해 슬라이더를 끄는 동안 스스로 되읽는다.
 
 ### 저장 자리 (#796 후속)
 

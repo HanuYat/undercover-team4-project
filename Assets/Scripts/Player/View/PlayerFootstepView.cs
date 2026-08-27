@@ -67,9 +67,21 @@ public class PlayerFootstepView : MonoBehaviour
         m_lastPosition = transform.position;
         m_speed = 0f;
         m_wasAirborne = m_jump.IsAirborne;
+        GameSettings.OnSfxVolumeChanged += HandleSfxVolumeChanged;
     }
 
-    private void OnDisable() => StopLoop();
+    private void OnDisable()
+    {
+        GameSettings.OnSfxVolumeChanged -= HandleSfxVolumeChanged;
+        StopLoop();
+    }
+
+    // 걷는 동안 계속 도는 루프라 슬라이더를 끄는 동안 스스로 되읽어야 한다
+    private void HandleSfxVolumeChanged(float _)
+    {
+        if (m_loopSource != null && m_loopId != EAudioClip.None)
+            m_loopSource.volume = SoundManager.SfxVolumeOf(App.Sound?.GetSfxEntry(m_loopId));
+    }
 
     private void Update()
     {
@@ -129,7 +141,7 @@ public class PlayerFootstepView : MonoBehaviour
         }
 
         m_loopSource.clip = entry.Clip;
-        m_loopSource.volume = entry.Volume;
+        m_loopSource.volume = SoundManager.SfxVolumeOf(entry);
         m_loopSource.minDistance = entry.MinDistance;
         m_loopSource.maxDistance = Mathf.Max(entry.MaxDistance, entry.MinDistance + 0.1f);
         m_loopSource.Play();

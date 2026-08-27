@@ -131,11 +131,21 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 6994200000029
-    m_Localized: "\uD300\uC7A5 : \uC774\uD604\uC9C4\n\uD300\uC6D0 : \uC774\uD604\uC11D\n\uD300\uC6D0 : \uAE40\uC9C4\uC544\n\uD300\uC6D0 : \uAE40\uC900\uC601"
+    m_Localized: "\uD300\uC7A5 : \uC774\uD604\uC9C4\n\uD300\uC6D0 : \uC774\uD604\uC11D\n\uD300\uC6D0
+      : \uAE40\uC9C4\uC544\n\uD300\uC6D0 : \uAE40\uC900\uC601"
     m_Metadata:
       m_Items: []
   - m_Id: 6994200000030
-    m_Localized: "\uB2E8\uCD95\uD0A4: [{0}] \u00B7 \uC811\uC18D \uC804\uC5D4 \uC791\uB3D9 \uC548 \uD568"
+    m_Localized: "\uB2E8\uCD95\uD0A4: [{0}] \xB7 \uC811\uC18D \uC804\uC5D4 \uC791\uB3D9
+      \uC548 \uD568"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8527129204916224
+    m_Localized: "\uBC30\uACBD\uC74C \uC74C\uB7C9"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8527129251053568
+    m_Localized: "\uD6A8\uACFC\uC74C \uC74C\uB7C9"
     m_Metadata:
       m_Items: []
   references:
