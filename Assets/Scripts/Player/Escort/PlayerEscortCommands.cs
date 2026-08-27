@@ -551,6 +551,25 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         }
     }
 
+    /// <summary>내 줄을 전부 푼다 — 몸이 돌아오지 못할 때 쓰는 정리 경로. 소지·사거리를 보지 않고
+    /// 묶어만 둔 것까지 푼다. (#907)</summary>
+    public void ServerUnropeEverything()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        // 돌던 채널링부터 끊는다 — 합류가 완료되면 방금 푼 대상에 줄이 다시 걸린다
+        ServerCancelChannel();
+
+        // 푸는 동안 목록이 줄어든다 — 복사해서 돈다
+        var tethered = new List<NpcController>(Escorter.ServerTethered);
+        for (int i = 0; i < tethered.Count; i++)
+        {
+            if (tethered[i] != null)
+                ServerApplyUnrope(tethered[i]);
+        }
+    }
+
     /// <summary>이 대상에 밧줄 풀기를 걸 수 있는가 — 서버 가드와 클라 조기검증(Rope)이 함께 쓰는 단일 기준.</summary>
     public bool CanUnrope(NpcController target) =>
         target != null

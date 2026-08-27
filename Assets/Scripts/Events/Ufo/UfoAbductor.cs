@@ -227,6 +227,9 @@ public class UfoAbductor : MonoBehaviour
         if (incap != null)
             incap.Incapacitate(IncapacitationCause.Beamed);
 
+        // 쥐고 있던 밧줄은 전부 푼다 — 안 풀면 주인 없는 줄이 대상에 붙박인다 (#907)
+        victim.GetComponent<PlayerEscortCommands>()?.ServerUnropeEverything();
+
         // 오너가 기체를 따라 올라온다 — 속도 상한을 넘겨 서버 값대로 떠오르게 한다
         PlayerPenaltyView view = victim.GetComponent<PlayerPenaltyView>();
         if (view != null && m_anchor != null)
