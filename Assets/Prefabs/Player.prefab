@@ -2968,7 +2968,9 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 3
+  m_text: '4
+
+'
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: dae95c0d09f76a447926cc7bde6d06ed, type: 2}
   m_sharedMaterial: {fileID: 5818149142314395018, guid: dae95c0d09f76a447926cc7bde6d06ed, type: 2}
@@ -6260,7 +6262,7 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 22
+  m_fontSize: 33.3
   m_fontSizeBase: 36
   m_fontWeight: 400
   m_enableAutoSizing: 1
@@ -7826,6 +7828,7 @@ MonoBehaviour:
   m_collisionMask:
     serializedVersion: 2
     m_Bits: 1
+  m_inputGraceSeconds: 0.3
 --- !u!114 &2002181355187889777
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10037,7 +10040,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 3863652832
   m_fontColor: {r: 0.878, g: 0.663, b: 0.29, a: 0.9}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -10055,7 +10058,7 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 19
+  m_fontSize: 22.75
   m_fontSizeBase: 36
   m_fontWeight: 400
   m_enableAutoSizing: 1
@@ -10165,7 +10168,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 3
+  m_text: 25
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: dae95c0d09f76a447926cc7bde6d06ed, type: 2}
   m_sharedMaterial: {fileID: 5818149142314395018, guid: dae95c0d09f76a447926cc7bde6d06ed, type: 2}

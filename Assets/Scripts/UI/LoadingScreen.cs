@@ -20,8 +20,12 @@ using UnityEngine.UI;
 /// 자동 경로의 재진입 가드는 <see cref="IsBusy"/>가 아니라 m_isTrackingNetworkLoad다 — 예고로 먼저
 /// 덮으면 IsBusy가 이미 true라, 그걸로 막으면 완료 대기·내리기가 안 돌아 화면이 영영 남는다. (#748)
 ///
-/// 페이드 인은 두지 않는다 — 대신 로드 시작 전 k_settleFrames만큼 프레임을 흘려 "덮은 화면이 최소
-/// 한 번 렌더됐다"를 보장한다. 캔버스를 켜는 것만으로는 아직 그려진 게 아니라서, 이 대기가 없으면
+/// 덮을 때는 페이드 인, 내릴 때는 페이드 아웃한다. 페이드 인은 <see cref="ShowAsync"/>가 await 하므로
+/// 씬 로드는 화면이 완전히 불투명해진 뒤에야 시작된다 — 반투명한 채로 씬이 갈아끼워지면 전환이 그대로
+/// 비친다. 이미 로드가 시작돼 기다릴 여유가 없는 <see cref="ShowInstant"/> 경로만 페이드 없이 덮는다.
+///
+/// 페이드 인 뒤에도 k_settleFrames만큼 프레임을 더 흘린다 — 마지막 알파(=1)를 쓴 프레임이 아직 렌더되지
+/// 않았기 때문이다. 캔버스를 켜는 것도 알파를 쓰는 것도 아직 그려진 게 아니라서, 이 대기가 없으면
 /// 같은 프레임에 씬이 갈아끼워져 유저에겐 여전히 옛 씬이 멈춘 화면으로 보인다.
 /// </summary>
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
@@ -76,7 +80,11 @@ public class LoadingScreen : CommonManagerBase
     private LocalizedString m_readyWaitStatus;
 
     [Header("연출")]
-    [Tooltip("페이드 아웃 시간(초). 0이면 즉시 사라진다. (페이드 인은 두지 않는다 — #403)")]
+    [Tooltip("페이드 인 시간(초). 0이면 즉시 덮는다. 이 시간만큼 씬 로드 시작이 늦어진다.")]
+    [SerializeField]
+    private float m_fadeInSeconds = 0.25f;
+
+    [Tooltip("페이드 아웃 시간(초). 0이면 즉시 사라진다.")]
     [SerializeField]
     private float m_fadeOutSeconds = 0.35f;
 
@@ -99,13 +107,16 @@ public class LoadingScreen : CommonManagerBase
     // 마지막으로 라벨에 쓴 정수 퍼센트 — 같은 값이면 문자열을 다시 만들지 않는다
     private int m_shownPercent = -1;
 
+    // 진행 중인 페이드의 세대 번호 — 새 페이드나 BeginShow가 끼어들면 이전 루프가 알파 쓰기를 멈춘다
+    private int m_fadeGeneration;
+
     /// <summary>이 화면이 지금 씬을 덮고 있는가 — 두 구동 경로의 중복 실행을 막는 데 쓴다.</summary>
     public bool IsBusy { get; private set; }
 
     protected override void Awake()
     {
         base.Awake(); // ★ 매니저 등록 유지 (R5)
-        SetVisible(false);
+        SetVisible(false, 0f);
         SetStatus(null); // 기본 문구를 걸어 둔다
     }
 
@@ -126,15 +137,22 @@ public class LoadingScreen : CommonManagerBase
     }
 
     #region 표시 제어 — App.LoadScene 파이프라인이 호출
-    /// <summary>화면을 덮고, 그것이 실제로 렌더될 때까지 대기한다. 씬 로드를 시작하기 전에 await 할 것.</summary>
+    /// <summary>
+    /// 페이드 인으로 화면을 덮고, 완전히 불투명해진 화면이 실제로 렌더될 때까지 대기한다.
+    /// 씬 로드를 시작하기 전에 await 할 것.
+    /// </summary>
     public async UniTask ShowAsync(CancellationToken token = default)
     {
-        ShowInstant();
+        BeginShow(0f);
+        await FadeToAsync(1f, m_fadeInSeconds, token);
         await UniTask.DelayFrame(k_settleFrames, PlayerLoopTiming.Update, token);
     }
 
     /// <summary>대기 없이 즉시 덮는다 — 이미 로드가 시작돼 기다릴 여유가 없는 클라이언트 경로용.</summary>
-    public void ShowInstant()
+    public void ShowInstant() => BeginShow(1f);
+
+    // 덮기 공통 — 지난 전환의 잔여 상태를 되돌리고 주어진 알파로 화면을 켠다.
+    private void BeginShow(float alpha)
     {
         IsBusy = true;
         m_targetProgress = 0f;
@@ -142,7 +160,8 @@ public class LoadingScreen : CommonManagerBase
         m_shownPercent = -1;
         RenderProgress();
         SetStatus(null); // 지난 전환의 준비 대기 문구가 남아 있지 않게 되돌린다
-        SetVisible(true);
+        m_fadeGeneration++; // 진행 중인 페이드가 아래 알파를 덮어쓰지 않게 무효화한다
+        SetVisible(true, alpha);
     }
 
     /// <summary>페이드 아웃 후 화면을 내린다.</summary>
@@ -156,8 +175,8 @@ public class LoadingScreen : CommonManagerBase
         m_shownProgress = 1f;
         RenderProgress();
 
-        await FadeOutAsync(token);
-        SetVisible(false);
+        await FadeToAsync(0f, m_fadeOutSeconds, token);
+        SetVisible(false, 0f);
         IsBusy = false;
     }
 
@@ -256,22 +275,40 @@ public class LoadingScreen : CommonManagerBase
         m_boundStatus = null;
     }
 
-    // 페이드도 실시간 기준 — RoundEndResetter의 정산 대기와 같은 이유(timeScale 조작에 영향받지 않게)
-    private async UniTask FadeOutAsync(CancellationToken token)
+    /// <summary>
+    /// 알파를 목표값까지 옮긴다. 페이드는 실시간 기준 — RoundEndResetter의 정산 대기와 같은 이유
+    /// (timeScale 조작에 영향받지 않게). 도중에 다른 페이드나 <see cref="BeginShow"/>가 끼어들면
+    /// 세대 번호가 어긋나 조용히 손을 뗀다 (예고로 페이드 인하던 중 즉시 덮기가 들어오는 경우 — #748).
+    /// </summary>
+    private async UniTask FadeToAsync(float target, float seconds, CancellationToken token)
     {
-        if (m_canvasGroup == null || m_fadeOutSeconds <= 0f)
+        if (m_canvasGroup == null)
             return;
 
+        int generation = ++m_fadeGeneration;
+
+        if (seconds <= 0f)
+        {
+            m_canvasGroup.alpha = target;
+            return;
+        }
+
+        float from = m_canvasGroup.alpha;
         float elapsed = 0f;
-        while (elapsed < m_fadeOutSeconds)
+        while (elapsed < seconds)
         {
             elapsed += Time.unscaledDeltaTime;
-            m_canvasGroup.alpha = Mathf.Lerp(1f, 0f, elapsed / m_fadeOutSeconds);
+            m_canvasGroup.alpha = Mathf.Lerp(from, target, elapsed / seconds);
             await UniTask.Yield(PlayerLoopTiming.Update, token);
+
+            if (generation != m_fadeGeneration)
+                return;
         }
+
+        m_canvasGroup.alpha = target;
     }
 
-    private void SetVisible(bool visible)
+    private void SetVisible(bool visible, float alpha)
     {
         if (m_canvas != null)
             m_canvas.enabled = visible;
@@ -283,7 +320,7 @@ public class LoadingScreen : CommonManagerBase
         if (m_canvasGroup == null)
             return;
 
-        m_canvasGroup.alpha = visible ? 1f : 0f;
+        m_canvasGroup.alpha = alpha;
         m_canvasGroup.blocksRaycasts = visible; // 아래 씬 UI로 클릭이 새지 않게
         m_canvasGroup.interactable = visible;
     }
@@ -348,7 +385,8 @@ public class LoadingScreen : CommonManagerBase
         if (IsBusy)
             return;
 
-        ShowInstant();
+        BeginShow(0f);
+        FadeToAsync(1f, m_fadeInSeconds, this.GetCancellationTokenOnDestroy()).Forget();
         WaitForAnnouncedLoadAsync().Forget();
     }
 
@@ -376,7 +414,10 @@ public class LoadingScreen : CommonManagerBase
         CancellationToken token = this.GetCancellationTokenOnDestroy();
         m_clientLoadedScene = null;
         m_isTrackingNetworkLoad = true; // 예고가 먼저 덮었더라도 완료 대기는 여기가 맡는다 (#748)
-        ShowInstant();
+
+        // 예고가 이미 덮는 중이면 손대지 않는다 — 페이드 인하던 알파를 1로 튕겨 올리는 꼴이 된다.
+        if (!IsBusy)
+            ShowInstant();
 
         try
         {
