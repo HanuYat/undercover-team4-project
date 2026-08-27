@@ -72,6 +72,13 @@ public class NpcReaction : NetworkBehaviour
         if (IsSpawned && !IsServer)
             return;
 
+        // 저항 중 피격은 아래 "이미 반응 중" 게이트 앞에서 가른다 — 때린 사람으로 돌아선다 (#879)
+        if (trigger == ReactionTrigger.Damage
+            && m_owner.CurrentState == NpcState.Attack
+            && !m_owner.Stun.IsStunned
+            && TryRetargetTo(threat))
+            return;
+
         // 이미 반응 중이거나 확보·페널티 상태면 재판정하지 않는다 — 규칙은 NpcStateRules가 갖는다.
         // 피격만 반출 보행(Releasing)까지 연다 (#548) — 스캔으로는 안 되고 때려야 돌아선다.
         bool allowed =
@@ -99,6 +106,24 @@ public class NpcReaction : NetworkBehaviour
                 StartResist(threat);
                 return;
         }
+    }
+
+    // 표적 교체 잠금 만료 — 한 번 휘두를 시간은 지금 상대에게 집중한다(번갈아 맞으면 제자리에서 돈다).
+    private float m_retargetLockUntil;
+
+    /// <summary>저항 중 표적을 때린 사람으로 갈아탄다 — 갈아탔으면 참. 서버(또는 오프라인) 전용. (#879)</summary>
+    private bool TryRetargetTo(Transform attacker)
+    {
+        if (attacker == null || attacker == ThreatTarget)
+            return false;
+
+        if (Time.time < m_retargetLockUntil)
+            return false;
+
+        m_retargetLockUntil = Time.time + m_owner.ResistConfig.AttackInterval;
+        ThreatTarget = attacker;
+        Debug.Log($"저항 표적 교체(피격) — {m_owner.name} → {attacker.name}");
+        return true;
     }
 
     // 배정된 유형을 그대로 쓰되, 순응형만 트리거에 따라 갈린다. 서버 전용.
