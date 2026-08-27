@@ -218,8 +218,28 @@ public class LobbyRosterPanel : PanelBase
             }
         }
 
+        ApplyRowScale(slots);
+
         // 행을 새로 바인딩했으니 현재 발화 상태를 다시 얹는다 (재빌드로 아이콘이 꺼진 채 남지 않게)
         RefreshSpeaking();
+    }
+
+    // 넘칠 때만 카드 전체를 균일 축소 — RowContainer의 Use Child Scale이 이 스케일을 반영한다.
+    private void ApplyRowScale(int slots)
+    {
+        if (slots == 0 || m_rows.Count == 0 || m_rows[0] == null)
+            return;
+
+        RectTransform firstRow = (RectTransform)m_rows[0].transform;
+        float spacing = m_rowContainer.TryGetComponent(out HorizontalLayoutGroup layout) ? layout.spacing : 0f;
+        float totalWidth = slots * firstRow.rect.width + (slots - 1) * spacing;
+        float scale = totalWidth > m_rowContainer.rect.width ? m_rowContainer.rect.width / totalWidth : 1f;
+
+        foreach (LobbyRosterRowView row in m_rows)
+        {
+            if (row != null)
+                row.transform.localScale = Vector3.one * scale;
+        }
     }
 
     private void HandleSpeakingChanged(string playerId, bool speaking)
