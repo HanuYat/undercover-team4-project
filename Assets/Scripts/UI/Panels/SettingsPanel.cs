@@ -262,6 +262,19 @@ public class SettingsPanel : PanelBase
             label.color = selected ? m_tabSelectedTextColor : m_tabNormalTextColor;
     }
 
+    // SetIsOnWithoutNotify는 onValueChanged를 깨우지 않아 ToggleTint가 색을 따라오지 못한다 — 여기서 같이 맞춘다 (#894).
+    private static void SetToggle(Toggle toggle, bool on)
+    {
+        if (toggle == null)
+            return;
+
+        toggle.SetIsOnWithoutNotify(on);
+
+        ToggleTint tint = toggle.GetComponent<ToggleTint>();
+        if (tint != null)
+            tint.Refresh();
+    }
+
     private static void SetupSlider(Slider slider, float min, float max, UnityAction<float> handler)
     {
         if (slider == null) return;
@@ -307,14 +320,10 @@ public class SettingsPanel : PanelBase
             m_masterVolumeSlider.SetValueWithoutNotify(GameSettings.MasterVolume);
         if (m_voiceVolumeSlider != null)
             m_voiceVolumeSlider.SetValueWithoutNotify(GameSettings.VoiceVolume);
-        if (m_micMuteToggle != null)
-            m_micMuteToggle.SetIsOnWithoutNotify(GameSettings.MicMuted);
-        if (m_screenShakeToggle != null)
-            m_screenShakeToggle.SetIsOnWithoutNotify(GameSettings.ScreenShake);
-        if (m_speedVignetteToggle != null)
-            m_speedVignetteToggle.SetIsOnWithoutNotify(GameSettings.SpeedVignette);
-        if (m_vSyncToggle != null)
-            m_vSyncToggle.SetIsOnWithoutNotify(GameSettings.VSync);
+        SetToggle(m_micMuteToggle, GameSettings.MicMuted);
+        SetToggle(m_screenShakeToggle, GameSettings.ScreenShake);
+        SetToggle(m_speedVignetteToggle, GameSettings.SpeedVignette);
+        SetToggle(m_vSyncToggle, GameSettings.VSync);
 
         SyncDisplayDropdowns();
         SyncLanguageDropdown();
@@ -550,11 +559,7 @@ public class SettingsPanel : PanelBase
 
     // 창 밖(토글 키)에서 바뀐 값을 표시에만 반영한다 — SetIsOnWithoutNotify가 아니면 onValueChanged가
     // 깨어나 '표시 갱신 → 설정 대입 → 표시 갱신' 되돌이가 돈다 (슬라이더와 같은 이유). (#430)
-    private void HandleMicMutedExternally(bool on)
-    {
-        if (m_micMuteToggle != null)
-            m_micMuteToggle.SetIsOnWithoutNotify(on);
-    }
+    private void HandleMicMutedExternally(bool on) => SetToggle(m_micMuteToggle, on);
 
     // 개발진 창은 설정 창 위에 겹쳐 열린다 (배치 누락은 UI 매니저가 콘솔로 드러낸다).
     private void HandleCreditsClicked() => App.UI.Current?.OpenPanel<CreditsPanel>();
