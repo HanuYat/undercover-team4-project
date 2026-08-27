@@ -82,12 +82,14 @@ public class SettingsPanel : PanelBase
     [Tooltip("탭 내용 — m_tabButtons와 같은 순서. 고른 하나만 켜진다")]
     [SerializeField] private GameObject[] m_tabPages;
 
-    [Tooltip("고른 탭의 바탕색 / 글자색 — 바탕이 밝아지므로 글자는 어두워진다")]
-    [SerializeField] private Color m_tabSelectedColor = new Color(0.878f, 0.663f, 0.290f);
-    [SerializeField] private Color m_tabSelectedTextColor = new Color(0.110f, 0.137f, 0.165f);
+    [Tooltip("고른 탭에서만 켜지는 그림 묶음 — m_tabButtons와 같은 순서 (#894)")]
+    [SerializeField] private GameObject[] m_tabSelectedMarks;
 
-    [Tooltip("고르지 않은 탭의 바탕색 / 글자색")]
-    [SerializeField] private Color m_tabNormalColor = new Color(0.227f, 0.278f, 0.341f);
+    [Tooltip("고르지 않은 탭에서만 켜지는 그림 묶음 — m_tabButtons와 같은 순서 (#894)")]
+    [SerializeField] private GameObject[] m_tabNormalMarks;
+
+    [Tooltip("고른 탭 / 고르지 않은 탭의 글자색 — 고른 탭은 바탕이 밝아지므로 글자가 어두워진다")]
+    [SerializeField] private Color m_tabSelectedTextColor = new Color(0.110f, 0.137f, 0.165f);
     [SerializeField] private Color m_tabNormalTextColor = new Color(0.894f, 0.918f, 0.945f);
 
     [Header("버튼")]
@@ -243,23 +245,31 @@ public class SettingsPanel : PanelBase
             return;
 
         for (int i = 0; i < m_tabButtons.Length; i++)
-            ApplyTabVisual(m_tabButtons[i], i == index);
+            ApplyTabVisual(i, i == index);
     }
 
-    // 버튼 색은 ColorTint가 Image.color에 곱해지는 구조라(normalColor는 흰색) 여기서 바탕을 직접 바꾼다.
-    // 글자색도 함께 뒤집지 않으면 고른 탭에서 밝은 글자가 밝은 바탕에 얹혀 안 읽힌다.
-    private void ApplyTabVisual(Button tab, bool selected)
+    // 탭 모양은 그림 두 벌(고름/안 고름)을 갈아 켜서 낸다 — 바탕색만 바꾸면 어느 탭이 열려 있는지
+    // 눈에 덜 띈다. 글자색도 함께 뒤집지 않으면 고른 탭에서 밝은 글자가 밝은 바탕에 얹혀 안 읽힌다.
+    private void ApplyTabVisual(int index, bool selected)
     {
+        SetTabMark(m_tabSelectedMarks, index, selected);
+        SetTabMark(m_tabNormalMarks, index, !selected);
+
+        Button tab = m_tabButtons[index];
         if (tab == null)
             return;
-
-        Image background = tab.GetComponent<Image>();
-        if (background != null)
-            background.color = selected ? m_tabSelectedColor : m_tabNormalColor;
 
         TMP_Text label = tab.GetComponentInChildren<TMP_Text>(true);
         if (label != null)
             label.color = selected ? m_tabSelectedTextColor : m_tabNormalTextColor;
+    }
+
+    private static void SetTabMark(GameObject[] marks, int index, bool on)
+    {
+        if (marks == null || index < 0 || index >= marks.Length || marks[index] == null)
+            return;
+
+        marks[index].SetActive(on);
     }
 
     // SetIsOnWithoutNotify는 onValueChanged를 깨우지 않아 ToggleTint가 색을 따라오지 못한다 — 여기서 같이 맞춘다 (#894).
