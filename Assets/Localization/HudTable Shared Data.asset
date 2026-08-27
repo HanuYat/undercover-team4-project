@@ -459,6 +459,10 @@ MonoBehaviour:
     m_Key: Hud.Team.Owner.Mate
     m_Metadata:
       m_Items: []
+  - m_Id: 8399387659689984
+    m_Key: Hud.Scan.BatteryLabel
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
