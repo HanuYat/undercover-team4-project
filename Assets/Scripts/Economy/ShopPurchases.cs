@@ -42,25 +42,19 @@ public class ShopPurchases : NetworkedManagerBase
     /// <summary>품목별 구매 집계 — 주문창·본부 게시판이 구독해 읽는다 (#840). 서버 외에는 읽기 전용.</summary>
     public NetworkList<PurchaseTally> Tallies => m_tallies;
 
-    /// <summary>
-    /// 이 피어에서 집계가 스폰·초기 동기화된 시점 — 뷰가 최초 표시를 위해 구독한다.
-    /// NetworkList는 late-join 클라에 초기 내용을 OnListChanged로 알리지 않는다 (WantedListManager와 같은 사정).
-    /// </summary>
-    public event Action OnTalliesReady;
-
-    /// <summary>
-    /// 세션 시작 시 1회 — 이어하기면 저장된 구매 목록을 되살리고(#373), 집계 준비를 알린다(#840).
-    /// </summary>
+    /// <summary>세션 시작 시 1회 — 이어하기면 저장된 구매 목록을 되살린다 (#373).</summary>
     public override void OnNetworkSpawn()
     {
-        if (IsServer)
-        {
-            m_tallies.Clear(); // 재시작 시 이전 세션 항목이 남는다 (#209 패턴)
-            RestoreFromSave();
-        }
+        if (!IsServer)
+            return;
 
-        // 모든 피어 공통 — 이 시점엔 집계가 초기 동기화된 상태다 (late-join 빈 화면 방지)
-        OnTalliesReady?.Invoke();
+        m_tallies.Clear(); // 재시작 시 이전 세션 항목이 남는다 (#209 패턴)
+
+        // 배선이 없으면 집계가 통째로 비므로 여기서 한 번만 알린다 (구매마다 경고하지 않는다)
+        if (m_catalog == null)
+            Debug.LogWarning("[상점] 카탈로그가 배선되지 않아 구매 집계를 채울 수 없다 (#840)", this);
+
+        RestoreFromSave();
     }
 
     // 세이브에는 누적 구매가 남지 않는다 — 복원분은 "남은 것 = 산 것"으로 세운다.
@@ -214,14 +208,12 @@ public class ShopPurchases : NetworkedManagerBase
     }
 
     // 카탈로그에 없는 품목은 집계에서 건너뛴다 — 아이콘·이름을 카탈로그 항목에서 읽기 때문이다.
+    // 배선 누락 경고는 OnNetworkSpawn이 한 번만 낸다 — 여기서 내면 구매마다 쌓인다.
     private bool TryTallyIndex(int catalogIndex, out ushort index)
     {
         index = 0;
         if (catalogIndex < 0 || catalogIndex > ushort.MaxValue)
-        {
-            Debug.LogWarning("[상점] 카탈로그에 없는 품목이라 구매 집계에 올리지 못한다 — 카탈로그 배선 확인 (#840)", this);
             return false;
-        }
 
         index = (ushort)catalogIndex;
         return true;

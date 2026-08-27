@@ -145,7 +145,8 @@ public class ShopBrowserPanel : PanelBase
         if (m_historyTab != null)
             m_historyTab.onClick.AddListener(HandleHistoryTabClicked);
 
-        ShowTab(false);
+        // 여기서는 어느 쪽을 켤지만 정한다 — 라벨은 로컬라이제이션이 준비된 뒤 OnOpen이 채운다
+        SwapTabViews(false);
     }
 
     protected override void OnDestroy()
@@ -332,14 +333,19 @@ public class ShopBrowserPanel : PanelBase
     // 탭 하나만 켜고 나머지를 끈다. 구매 내역 뷰는 꺼져 있는 동안 구독도 함께 풀린다(OnDisable).
     private void ShowTab(bool history)
     {
+        SwapTabViews(history);
+        RefreshTabLabels();
+    }
+
+    // 라벨을 건드리지 않는 절반 — Awake처럼 로컬라이제이션이 아직 준비되지 않은 시점에서 쓴다
+    private void SwapTabViews(bool history)
+    {
         m_historyShown = history;
 
         if (m_catalogView != null)
             m_catalogView.SetActive(!history);
         if (m_historyView != null)
             m_historyView.SetActive(history);
-
-        RefreshTabLabels();
     }
 
     private void RefreshTabLabels()

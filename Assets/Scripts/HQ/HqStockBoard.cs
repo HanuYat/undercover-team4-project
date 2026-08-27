@@ -6,7 +6,8 @@ using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
 
 /// <summary>
-/// 본부 소모품 재고 게시판 (#840) — 팀에 힐팩·부활 키트가 몇 개 남았는지를 상시로 띄운다.
+/// 본부 소모품 재고 게시판 (#840) — 상점에서 <b>사서 아직 안 쓴</b> 소모품이 몇 개 남았는지를 띄운다.
+/// 기본 지급품·주운 물건은 세지 않는다 — 원본이 구매 집계라 상점을 거치지 않은 물건은 표식이 없다.
 /// 열고 닫는 패널이 아니라 씬에 붙은 게시판이다(RoundFundBoard와 같은 자리) — 본부 인원이 지나가며
 /// 눈으로 확인해 무전으로 알려주는 그림이기 때문이다.
 ///
@@ -55,8 +56,10 @@ public class HqStockBoard : MonoBehaviour
         LocalizationSettings.SelectedLocaleChanged += HandleLocaleChanged;
 
         CollectConsumables();
-        Bind();
-        Rebuild(); // 홀더가 아직 없어도 0개 줄로 한 번 그린다
+
+        // Bind가 성공하면 그쪽이 그린다 — 홀더가 아직 없을 때만 0개 줄로 한 번 그려 둔다
+        if (!Bind())
+            Rebuild();
     }
 
     private void OnDisable()
@@ -78,15 +81,16 @@ public class HqStockBoard : MonoBehaviour
             Bind();
     }
 
-    private void Bind()
+    private bool Bind()
     {
         ShopPurchases purchases = App.Game.ShopPurchases;
         if (purchases == null || !purchases.IsSpawned)
-            return;
+            return false;
 
         m_bound = purchases;
         m_bound.Tallies.OnListChanged += HandleTalliesChanged;
         Rebuild();
+        return true;
     }
 
     private void Unbind()

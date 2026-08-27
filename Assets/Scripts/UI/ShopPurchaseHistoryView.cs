@@ -58,8 +58,9 @@ public class ShopPurchaseHistoryView : MonoBehaviour
         // 이름이 테이블에서 오므로 언어가 바뀌면 통째로 다시 그린다 — 줄마다 구독하지 않는다 (#497)
         LocalizationSettings.SelectedLocaleChanged += HandleLocaleChanged;
 
-        Bind();
-        Rebuild(); // 홀더가 아직 없어도 빈 목록으로 한 번 그려 옛 줄이 남지 않게 한다
+        // Bind가 성공하면 그쪽이 그린다 — 홀더가 아직 없을 때만 빈 목록으로 그려 옛 줄을 지운다
+        if (!Bind())
+            Rebuild();
     }
 
     private void OnDisable()
@@ -82,15 +83,16 @@ public class ShopPurchaseHistoryView : MonoBehaviour
             Bind();
     }
 
-    private void Bind()
+    private bool Bind()
     {
         ShopPurchases purchases = App.Game.ShopPurchases;
         if (purchases == null || !purchases.IsSpawned)
-            return;
+            return false;
 
         m_bound = purchases;
         m_bound.Tallies.OnListChanged += HandleTalliesChanged;
         Rebuild();
+        return true;
     }
 
     private void Unbind()
