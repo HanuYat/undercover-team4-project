@@ -1,3 +1,5 @@
+using Unity.Collections;
+using Unity.Jobs;
 using UnityEngine;
 
 /// <summary>
@@ -28,6 +30,9 @@ public class UfoBeamGroundField : MonoBehaviour
     [Min(0f)]
     [SerializeField] private float m_refreshInterval = 0.05f;
 
+    // 잡 하나가 맡는 최소 레이 수 — 너무 잘게 나누면 스케줄 비용이 이득을 먹는다
+    private const int k_raysPerJob = 64;
+
     private static readonly int s_heightMapId = Shader.PropertyToID("_HeightMap");
     private static readonly int s_heightFieldId = Shader.PropertyToID("_HeightField");
 
@@ -35,6 +40,11 @@ public class UfoBeamGroundField : MonoBehaviour
     private Material m_beamMaterial; // 기체마다 다른 높이맵이 들어가므로 재질을 복제해서 쓴다
     private Texture2D m_map;
     private float[] m_heights;
+
+    // 레이는 잡으로 한 번에 쏜다 — 격자가 커지면 메인 스레드 동기 레이캐스트로는 감당이 안 된다
+    private NativeArray<RaycastCommand> m_commands;
+    private NativeArray<RaycastHit> m_results;
+
     private int m_built; // 지금 버퍼가 만들어진 격자 크기 (인스펙터에서 바뀌면 다시 만든다)
     private float m_nextBakeAt;
 
@@ -56,6 +66,16 @@ public class UfoBeamGroundField : MonoBehaviour
         if (m_beamMaterial != null)
             Destroy(m_beamMaterial);
         m_beamMaterial = null;
+
+        DisposeBatch();
+    }
+
+    private void DisposeBatch()
+    {
+        if (m_commands.IsCreated)
+            m_commands.Dispose();
+        if (m_results.IsCreated)
+            m_results.Dispose();
     }
 
     // 기체가 움직인 뒤에 굽는다 — Update에서 구우면 높이맵이 한 프레임 뒤처져 기둥이 밀린다
@@ -93,7 +113,12 @@ public class UfoBeamGroundField : MonoBehaviour
             return;
 
         m_built = m_grid;
-        m_heights = new float[m_grid * m_grid];
+        int cells = m_grid * m_grid;
+        m_heights = new float[cells];
+
+        DisposeBatch();
+        m_commands = new NativeArray<RaycastCommand>(cells, Allocator.Persistent);
+        m_results = new NativeArray<RaycastHit>(cells, Allocator.Persistent);
 
         if (m_map != null)
             Destroy(m_map);
@@ -107,7 +132,8 @@ public class UfoBeamGroundField : MonoBehaviour
         };
     }
 
-    // 칸마다 위에서 아래로 한 발 — 가장 가까운 히트가 그 자리에서 빔이 멈출 면이다
+    // 칸마다 위에서 아래로 한 발 — 가장 가까운 히트가 그 자리에서 빔이 멈출 면이다.
+    // 잡으로 한 번에 쏴 워커 스레드에 흩는다 (maxHits 1이라 결과는 칸마다 하나).
     private void Bake(Vector3 center, float size)
     {
         float step = size / m_grid;
@@ -115,8 +141,7 @@ public class UfoBeamGroundField : MonoBehaviour
 
         float probe = m_craft.GroundProbeDistance;
         float miss = center.y - probe; // 아무것도 없으면 아주 아래 — 잘라 낼 것이 없다는 뜻
-        float lowest = float.MaxValue;
-        bool anyHit = false;
+        var query = new QueryParameters(m_craft.GroundMask, false, QueryTriggerInteraction.Ignore, false);
 
         for (int z = 0; z < m_grid; z++)
         {
@@ -128,18 +153,27 @@ public class UfoBeamGroundField : MonoBehaviour
                     center.z + corner + z * step
                 );
 
-                bool hitGround = Physics.Raycast(
-                    origin, Vector3.down, out RaycastHit hit,
-                    probe + m_rayLift, m_craft.GroundMask, QueryTriggerInteraction.Ignore);
+                m_commands[z * m_grid + x] =
+                    new RaycastCommand(origin, Vector3.down, query, probe + m_rayLift);
+            }
+        }
 
-                m_heights[z * m_grid + x] = hitGround ? hit.point.y : miss;
+        RaycastCommand.ScheduleBatch(m_commands, m_results, k_raysPerJob, 1).Complete();
 
-                // 빗나간 칸은 길이에 치지 않는다 — 폴백 200m가 섞이면 기둥이 허공으로 늘어난다
-                if (hitGround && hit.point.y < lowest)
-                {
-                    lowest = hit.point.y;
-                    anyHit = true;
-                }
+        float lowest = float.MaxValue;
+        bool anyHit = false;
+
+        for (int i = 0; i < m_heights.Length; i++)
+        {
+            // 빗나간 칸은 콜라이더가 없다 — 길이에 치지 않는다(폴백 200m가 섞이면 기둥이 허공으로 늘어난다)
+            bool hitGround = m_results[i].colliderInstanceID != 0;
+            float height = hitGround ? m_results[i].point.y : miss;
+            m_heights[i] = height;
+
+            if (hitGround && height < lowest)
+            {
+                lowest = height;
+                anyHit = true;
             }
         }
 

@@ -558,6 +558,9 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         if (IsSpawned && !IsServer)
             return;
 
+        // 돌던 채널링부터 끊는다 — 합류가 완료되면 방금 푼 대상에 줄이 다시 걸린다
+        ServerCancelChannel();
+
         // 푸는 동안 목록이 줄어든다 — 복사해서 돈다
         var tethered = new List<NpcController>(Escorter.ServerTethered);
         for (int i = 0; i < tethered.Count; i++)
