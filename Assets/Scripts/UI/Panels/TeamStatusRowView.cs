@@ -17,7 +17,7 @@ public enum ETeamMemberState
 
 /// <summary>
 /// 팀 상황판의 대원 카드 (#720) — 얼굴 · 이름 · 체력 게이지 · 상태.
-/// 게이지는 좌하단 기름통(<see cref="HpOilGaugeView"/>)을 그대로 얹는다 — 같은 값을 두 모양으로
+/// 게이지는 좌하단 HP 바(<see cref="HpBarView"/>)를 그대로 얹는다 — 같은 값을 두 모양으로
 /// 그리면 내 체력과 동료 체력이 다른 물건처럼 읽힌다.
 /// </summary>
 public class TeamStatusRowView : MonoBehaviour
@@ -33,7 +33,7 @@ public class TeamStatusRowView : MonoBehaviour
     [SerializeField] private TextMeshProUGUI m_nameText;
 
     [Tooltip("HP 게이지 — 좌하단 기름통 뷰를 그대로 쓴다. 숫자(72/100)도 이 뷰가 통 안에 그린다")]
-    [SerializeField] private HpOilGaugeView m_gauge;
+    [SerializeField] private HpBarView m_gauge;
 
     [SerializeField] private TextMeshProUGUI m_stateText;
 
@@ -91,7 +91,7 @@ public class TeamStatusRowView : MonoBehaviour
             m_gauge.SetHealth(hp, maxHp);
 
         // 상태 표기는 바뀔 때만 찾는다 — 매 프레임 부르는 경로라 그냥 대입하면 값이 같아도
-        // 프레임마다 테이블을 조회하고 TMP 메시를 더티로 만든다 (HpOilGaugeView.SetHealth와 같은 방침).
+        // 프레임마다 테이블을 조회하고 TMP 메시를 더티로 만든다 (HpBarView.SetHealth와 같은 방침).
         if (m_stateText == null || state == m_shownState)
             return;
 

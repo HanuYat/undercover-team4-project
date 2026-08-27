@@ -92,19 +92,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5a015e18a0d1bf045b11c02ec8a757cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HpOilGaugeView
-  m_gauge: {fileID: 6668517079420233230}
+  m_fill: {fileID: 6668517079420233230}
   m_hpText: {fileID: 6354466802170311253}
-  m_leak: {fileID: 0}
-  m_burstSeconds: 2.5
-  m_damageForMaxBurst: 34
-  m_steadyThreshold: 0.8
-  m_steadyMaxAlpha: 0.75
-  m_steadyFadeSeconds: 0.8
-  m_puddle: {fileID: 0}
-  m_puddleMaxAlpha: 0.85
-  m_puddleMaxScale: 1
-  m_puddleFillPerSecond: 0.5
-  m_puddleDryPerSecond: 0.2
 --- !u!1 &847247782247207128
 GameObject:
   m_ObjectHideFlags: 0
