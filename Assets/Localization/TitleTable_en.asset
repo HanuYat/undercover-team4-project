@@ -36,7 +36,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 6994091118595
-    m_Localized: Join with Code
+    m_Localized: Join
     m_Metadata:
       m_Items: []
   - m_Id: 6994091118596
@@ -254,7 +254,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 2261328199245826
-    m_Localized: Play as Guest
+    m_Localized: Guest
     m_Metadata:
       m_Items: []
   - m_Id: 2261328199245828
