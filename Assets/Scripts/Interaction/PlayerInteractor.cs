@@ -39,6 +39,30 @@ public class PlayerInteractor : NetworkBehaviour
     // 16칸은 래그돌 본까지 세면 군중 안에서 넘친다 (#779)
     private static readonly RaycastHit[] s_losHits = new RaycastHit[64];
 
+    // 래그돌 뼈 조준 히트 버퍼 — s_losHits와 같은 이유(매 프레임·오너 전용)로 정적 공유한다. (#857)
+    // 별도 배열인 이유: LogLineOfSight가 s_losHits를 순회해 출력하므로, 같은 배열을 쓰면 보조 레이가
+    // 덮어쓴 히트가 가시선 디버그 출력에 섞여 나온다.
+    private static readonly RaycastHit[] s_ragdollHits = new RaycastHit[64];
+
+    // 래그돌 뼈 레이어 마스크 — 레이어 인덱스는 RagdollSetup이 이름으로 빈 슬롯에 만드는 값이라
+    // 인스펙터에 굳히면 재생성 시 조용히 엉뚱한 레이어를 가리킨다. 그래서 이름으로 조회한다.
+    // LayerMask.NameToLayer는 필드 초기화에서 호출이 금지돼 첫 사용 시점으로 미룬다
+    // (AreaScanner.HitLayers·NpcResistState.HitLayers와 같은 패턴). -1 = 조회 전, 0 = 레이어 없음.
+    private static int s_ragdollAimMask = -1;
+
+    private static int RagdollAimMask
+    {
+        get
+        {
+            if (s_ragdollAimMask < 0)
+            {
+                int layer = LayerMask.NameToLayer(RagdollRig.k_layerName);
+                s_ragdollAimMask = layer >= 0 ? 1 << layer : 0;
+            }
+            return s_ragdollAimMask;
+        }
+    }
+
     public IInteractable CurrentInteractable { get; private set; }
     public GameObject CurrentTarget { get; private set; } // 아이템 타겟팅/UI용
 
@@ -116,7 +140,23 @@ public class PlayerInteractor : NetworkBehaviour
 
         Ray ray = new Ray(m_camera.transform.position, m_camera.transform.forward);
         bool aimed = Physics.Raycast(ray, out RaycastHit hit, m_range, m_interactMask);
-        if (aimed && HasLineOfSight(ray.origin, hit.point, hit.transform, "조준"))
+
+        // 쓰러진 몸의 래그돌 뼈는 Ragdoll 레이어라 위 레이(Interactable)에 안 잡힌다 — 조준
+        // 히트박스가 몸통만 덮어 뻗어나간 팔다리를 놓치므로 보조 레이로 따로 받는다. (#857)
+        // !aimed 단락이 필수다 — aimed가 false면 hit은 default(distance 0)라 거리 비교가 뒤집힌다.
+        bool viaBone =
+            TryAimRagdollBone(ray, out RaycastHit boneHit)
+            && (!aimed || boneHit.distance < hit.distance);
+        if (viaBone)
+        {
+            hit = boneHit;
+            aimed = true;
+        }
+
+        if (
+            aimed
+            && HasLineOfSight(ray.origin, hit.point, hit.transform, viaBone ? "조준/뼈" : "조준")
+        )
         {
             CurrentTarget = hit.collider.gameObject;
             CurrentInteractable = hit.collider.GetComponentInParent<IInteractable>();
@@ -171,6 +211,63 @@ public class PlayerInteractor : NetworkBehaviour
     /// <summary>인터랙터의 사거리 — 없는 구성(테스트 등)이면 fallback. IsWithinReach와 짝으로 쓴다.</summary>
     public static float RangeOf(PlayerInteractor interactor, float fallback) =>
         interactor != null ? interactor.Range : fallback;
+
+    // 쓰러진 몸의 래그돌 뼈를 조준 후보로 받는다 — Ragdoll 레이어만 보는 보조 레이. (#857)
+    // 유효하지 않은 뼈를 통째로 건너뛰는 것이 이 메서드의 요점이다 — 뼈 콜라이더는 살아있을 때도
+    // 항상 켜져 있어(docs/506-explosion-ragdoll.md), 거르지 않으면 동료 뒤의 문·아이템 조준을
+    // 뼈가 가로챈다. AimOcclusion.FindNearest를 쓰지 않는 이유는 제외 기준이 '루트 하나'가 아니라
+    // 히트마다 다시 보는 상태 술어이기 때문이다.
+    private bool TryAimRagdollBone(Ray ray, out RaycastHit nearest)
+    {
+        nearest = default;
+
+        int mask = RagdollAimMask;
+        if (mask == 0)
+            return false; // Ragdoll 레이어가 없는 구성(래그돌 셋업 전·단독 테스트 씬)
+
+        int count = Physics.RaycastNonAlloc(
+            ray,
+            s_ragdollHits,
+            m_range,
+            mask,
+            QueryTriggerInteraction.Ignore
+        );
+
+        float nearestDistance = float.PositiveInfinity;
+        bool found = false;
+        for (int i = 0; i < count; i++)
+        {
+            // distance 0은 원점이 콜라이더 안 — hit.point가 채워지지 않아 그대로 넘기면 가시선이
+            // 월드 원점 방향을 잰다 (#853 §5.5에서 실제로 밟은 버그). 그 구간은 히트박스가 덮는다.
+            float distance = s_ragdollHits[i].distance;
+            if (distance <= 0f || distance >= nearestDistance)
+                continue;
+            if (!IsAimableRagdollBone(s_ragdollHits[i].collider))
+                continue;
+
+            nearest = s_ragdollHits[i];
+            nearestDistance = distance;
+            found = true;
+        }
+
+        return found;
+    }
+
+    // 이 뼈가 지금 조준 대상인 몸에 속하는가 — 플레이어는 쓰러진 동안만, NPC는 래그돌 동안만. (#857)
+    // 판정을 몸 쪽 프로퍼티에 맡긴다: 플레이어는 조준 히트박스를 켜는 조건과 같은 값이어야 하고,
+    // NPC는 루트 캡슐이 살았든 죽었든 항상 조준 대상이라 "래그돌인가"만 보면 된다.
+    private bool IsAimableRagdollBone(Collider collider)
+    {
+        if (collider == null || collider.transform.IsChildOf(transform))
+            return false; // 내 몸의 뼈 — 사망 시 카메라가 자기 흉곽 안에 들어가 매 프레임 잡힌다
+
+        PlayerIncapacitation body = collider.GetComponentInParent<PlayerIncapacitation>();
+        if (body != null)
+            return body.IsAimTargetable;
+
+        NpcRagdoll npc = collider.GetComponentInParent<NpcRagdoll>();
+        return npc != null && npc.IsRagdollActive;
+    }
 
     // 조준 레이캐스트는 Interactable 레이어만 보므로 벽(Default)을 그냥 통과한다 — 대상 확정 후
     // 여기서 장애물만 따로 본다. (마스크에 벽을 넣으면 본부 트리거 존이 레이를 가로채고, 트리거를
@@ -323,11 +420,35 @@ public class PlayerInteractor : NetworkBehaviour
         )
             ? $"마스크를 무시하면 {any.collider.name} (layer={LayerMask.LayerToName(any.collider.gameObject.layer)}, "
                 + $"{any.distance:F2}m, trigger={any.collider.isTrigger})를 맞는다 — 대상 레이어가 interactMask 밖일 수 있다"
+                + RagdollAimRejectReason(any.collider)
             : $"마스크를 무시해도 아무것도 없다 — 사거리({m_range}m) 밖이거나 콜라이더가 없다";
 
         Debug.Log(
             $"[LOS/조준] 대상 없음 — interactMask={m_interactMask.value}, range={m_range}m. {extra}"
         );
+    }
+
+    // 마스크 무시 히트가 래그돌 뼈일 때 보조 레이가 왜 걸렀는지 — 디버그 전용. 뼈가 아니면 빈 문자열.
+    // "마스크 밖"으로만 찍히면 의도적 제외(살아있는 동료)와 배선 실수를 구분할 수 없다. (#857)
+    private string RagdollAimRejectReason(Collider collider)
+    {
+        if (collider == null || ((1 << collider.gameObject.layer) & RagdollAimMask) == 0)
+            return string.Empty;
+        if (collider.transform.IsChildOf(transform))
+            return " (뼈: 내 몸이라 제외)";
+
+        const string valid = " (뼈: 유효한데 안 잡혔다 — distance<=0·버퍼 넘침을 의심할 것)";
+
+        PlayerIncapacitation body = collider.GetComponentInParent<PlayerIncapacitation>();
+        if (body != null)
+            return body.IsAimTargetable
+                ? valid
+                : $" (뼈: 겨냥 대상 아님 — cause={body.Cause}, bodyLost={body.IsBodyLost})";
+
+        NpcRagdoll npc = collider.GetComponentInParent<NpcRagdoll>();
+        if (npc == null)
+            return " (뼈: PlayerIncapacitation·NpcRagdoll 둘 다 없음 — 리그 배선 확인)";
+        return npc.IsRagdollActive ? valid : " (뼈: NPC가 래그돌이 아니다)";
     }
 
     private void HandleInteract()

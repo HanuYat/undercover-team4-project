@@ -166,14 +166,24 @@ public class InteractionFeedback : NetworkBehaviour
         // 아이템 경로만 가능하고 IInteractable이 없는 대상이면 조준 대상 자체.
         GameObject root = interactable is Component component ? component.gameObject : aimTarget;
 
+        // 쓰러진 몸은 조준 대상이 자식(히트박스·래그돌 뼈)이라 root가 몸이 아니라 그 자식이 된다.
+        // 거리는 반드시 몸 루트에서 재야 서버 판정(PlayerInteractor.IsWithinReach)과 같아진다 —
+        // 뼈까지 재면 골반→손 ≈0.9m만큼 관대해져 아래 세 갈래가 전부 어긋난다. (#857)
+        PlayerIncapacitation aimedIncap =
+            aimTarget != null ? aimTarget.GetComponentInParent<PlayerIncapacitation>() : null;
+        Transform rangeAnchor =
+            aimedIncap != null ? aimedIncap.transform
+            : root != null ? root.transform
+            : null;
+
         // 서버 거리 검증과 동일 공식(AimOrigin→대상 루트 중심)으로 재확인 — 레이캐스트는 콜라이더
         // '표면'까지의 거리라서 임계점에서 "윤곽선은 뜨는데 서버가 거부"하는 불일치가 생긴다 (#184)
         bool inRange = false;
-        if (root != null)
+        if (rangeAnchor != null)
         {
             float range = m_interactor.Range;
             inRange =
-                (root.transform.position - m_interactor.AimOrigin.position).sqrMagnitude
+                (rangeAnchor.position - m_interactor.AimOrigin.position).sqrMagnitude
                 <= range * range;
         }
 
@@ -187,14 +197,12 @@ public class InteractionFeedback : NetworkBehaviour
 
         // ③ 쓰러진 동료 몸 — 일으키기(E)·뒤지기(R) 둘 다 IInteractable이 아니라 여기서 따로 본다 (#725).
         //    조준 히트박스(자식)엔 렌더러가 없으므로 윤곽선은 플레이어 루트(PlayerIncapacitation)에 건다.
-        PlayerIncapacitation aimedIncap =
-            aimTarget != null ? aimTarget.GetComponentInParent<PlayerIncapacitation>() : null;
         bool allyBodyTargetable =
             inRange
             && !itemUsable
             && !interactUsable
             && aimedIncap != null
-            && aimedIncap.IsOutOfAction;
+            && aimedIncap.IsAimTargetable;
         GameObject allyBodyRoot = allyBodyTargetable ? aimedIncap.gameObject : null;
 
         // 조준 무기를 든 동안엔 NPC 윤곽선만 끈다 (#328/#363/#217). 상호작용 레이(3m) 기준 윤곽선이
