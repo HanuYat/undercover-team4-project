@@ -11,6 +11,9 @@ using UnityEngine.Localization;
 ///   - 쓰러진 동료 몸(일으키기·뒤지기 대상) → 기본색. IInteractable이 아니라 따로 판정한다(#725)
 /// 조준 유지 중에도 NPC 상태·배터리·장착 아이템이 변하므로 매 프레임 재평가한다.
 /// Outlinable은 첫 조준 시 런타임 부착 후 캐시(비활성 유지)되므로 대상 프리팹 사전 작업이 필요 없다.
+/// 씬에 미리 놓인 상호작용물은 <see cref="WarmUpInteractableOutlines"/>가 로딩 화면이 덮은 동안
+/// 이 부착을 앞당겨 두므로, 플레이어가 처음 조준하는 순간엔 이미 붙어 있다 — 런타임에 새로 스폰되는
+/// 대상(NPC 등)만 종전대로 첫 조준 시 붙는다.
 /// </summary>
 [RequireComponent(typeof(PlayerInteractor))]
 public class InteractionFeedback : NetworkBehaviour
@@ -435,6 +438,35 @@ public class InteractionFeedback : NetworkBehaviour
             $"camEnabled={(diagCam != null ? diagCam.enabled : false)} " +
             $"forceIntoRT={(diagCam != null ? diagCam.forceIntoRenderTexture : false)}"
         );
+    }
+
+    /// <summary>
+    /// 씬에 미리 놓인 상호작용물에 Outlinable을 앞당겨 붙인다 — App.WaitUntilSceneReadyAsync가 로딩
+    /// 화면이 아직 덮고 있는 동안 호출한다.
+    ///
+    /// SetOutlined가 첫 조준 시 하던 AddComponent + AddOutlineTargets(자식 렌더러 전수 스캔)를 여기서
+    /// 미리 해 두고 <c>enabled = false</c>로 남긴다 — SetOutlined는 그 자리에서 기존 Outlinable을
+    /// 찾아 켜기만 하면 되므로, 플레이어가 처음 조준하는 프레임에 그 비용이 몰려 히치로 보이는 일이
+    /// 없어진다(무기 락커 등에서 관찰된 렉).
+    ///
+    /// 런타임에 새로 스폰되는 대상(NPC·드롭 아이템 등)은 이 시점에 씬에 없으므로 대상이 아니다 —
+    /// 그런 대상은 종전대로 첫 조준 시 붙는다(회귀 아님, 기존 동작 그대로).
+    /// </summary>
+    public static void WarmUpInteractableOutlines()
+    {
+        foreach (
+            MonoBehaviour behaviour in Object.FindObjectsByType<MonoBehaviour>(
+                FindObjectsSortMode.None
+            )
+        )
+        {
+            if (behaviour is not IInteractable || behaviour.GetComponent<Outlinable>() != null)
+                continue;
+
+            Outlinable outlinable = behaviour.gameObject.AddComponent<Outlinable>();
+            AddOutlineTargets(outlinable, behaviour.gameObject);
+            outlinable.enabled = false;
+        }
     }
 
     /// <summary>
