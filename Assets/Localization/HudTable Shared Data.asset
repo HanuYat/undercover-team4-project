@@ -451,6 +451,14 @@ MonoBehaviour:
     m_Key: Hud.Interact.CatalogOpen
     m_Metadata:
       m_Items: []
+  - m_Id: 8396537558818816
+    m_Key: Hud.Team.Owner.Me
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8396537613344768
+    m_Key: Hud.Team.Owner.Mate
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
