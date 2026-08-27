@@ -35034,10 +35034,6 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7432425744020537740, guid: 96e44a1e96ca63349a76cb3946aa311a, type: 3}
-      propertyPath: m_fontSize
-      value: 40.8
-      objectReference: {fileID: 0}
-    - target: {fileID: 7432425744020537740, guid: 96e44a1e96ca63349a76cb3946aa311a, type: 3}
       propertyPath: m_fontColor32.rgba
       value: 4294044388
       objectReference: {fileID: 0}
