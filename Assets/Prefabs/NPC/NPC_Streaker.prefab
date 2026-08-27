@@ -1928,11 +1928,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 833119219956902894, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 200
+      value: 100
       objectReference: {fileID: 0}
     - target: {fileID: 833119219956902894, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
       propertyPath: m_SizeDelta.y
-      value: 24
+      value: 12
       objectReference: {fileID: 0}
     - target: {fileID: 833119219956902894, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
       propertyPath: m_LocalPosition.x
@@ -1968,7 +1968,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 833119219956902894, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 2.05
+      value: 1.95
       objectReference: {fileID: 0}
     - target: {fileID: 833119219956902894, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -1985,6 +1985,10 @@ PrefabInstance:
     - target: {fileID: 2941639261495338817, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
       propertyPath: m_Name
       value: HealthBarCard
+      objectReference: {fileID: 0}
+    - target: {fileID: 2941639261495338817, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
