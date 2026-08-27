@@ -26,7 +26,7 @@ public static class NpcNavAreas
     /// <summary>유치장 셀 바닥 영역 (#415 → #744에서 복귀) — 시민 프리팹의 통행 마스크에서 빠져 있다.</summary>
     public const string k_jailAreaName = "Jail";
 
-    /// <summary>본부 실내 영역 (#722) — 시민 프리팹의 통행 마스크에서 빠져 있다.</summary>
+    /// <summary>본부 실내 영역 (#722) — <b>통행은 가르지 않고</b> 스폰 자리만 가른다 (#838, <see cref="ExcludeSpawnAreas"/>).</summary>
     public const string k_hqAreaName = "HQ";
 
     private static int s_roadArea = int.MinValue; // int.MinValue = 아직 조회 전, -1 = 그런 영역 없음
@@ -49,10 +49,20 @@ public static class NpcNavAreas
         }
     }
 
-    /// <summary>셀 바닥 영역 비트마스크 — 수감 중에만 열어 준다 (<c>NpcController.SetGrantedAreas</c>).</summary>
+    /// <summary>
+    /// 셀 바닥 영역 비트마스크 — 수감 중에만 열어 준다 (<c>NpcController.SetGrantedAreas</c>).
+    ///
+    /// <b>본부 실내(<c>HQ</c>)에는 이제 짝이 없다</b> (#838). 거기도 한때 같은 방식으로 시민을 막았지만,
+    /// 마스크로 막으면 <b>본부 안에 놓인 몸을 NavMesh에 다시 붙일 때</b> 마스크 안쪽 폴리곤을 찾느라
+    /// 벽을 뚫고 길바닥으로 끌려간다 — 실내가 좁아 어디에 서든 바깥이 2m 안이다. 본부 출입 통제는
+    /// <c>DoorNavBlocker</c>(닫힌 정문이 NavMesh를 끊는다)로 옮겼다.
+    ///
+    /// <b>셀은 사정이 다르다.</b> 셀에서 나가는 길은 워프 하나뿐이고(본관과 이어진 폴리곤이 없다)
+    /// 철창문은 통로가 아니라 플레이어용 문이라, 끊어서 막을 길목이 애초에 없다 — 마스크가 유일한 수단이다.
+    /// </summary>
     public static int JailMask => ResolveMask(k_jailAreaName, ref s_jailMask);
 
-    /// <summary>본부 실내 영역 비트마스크 — 셀에서 나와 도시로 걸어 나가는 동안만 열어 준다.</summary>
+    /// <summary>본부 실내 영역 비트마스크 — <see cref="ExcludeSpawnAreas"/>만 쓴다. (#838)</summary>
     public static int HqMask => ResolveMask(k_hqAreaName, ref s_hqMask);
 
     // 이름 → 비트마스크 1회 조회. 없는 영역은 0이라 부르는 쪽이 자연히 무동작이 된다.
@@ -67,7 +77,8 @@ public static class NpcNavAreas
     }
 
     /// <summary>
-    /// 도로를 뺀 통행 마스크 — <b>목적지·스폰 지점을 고를 때만</b> 쓴다.
+    /// 도로를 뺀 통행 마스크 — <b>목적지를 고를 때만</b> 쓴다
+    /// (스폰 지점은 본부 실내까지 함께 빼는 <see cref="ExcludeSpawnAreas"/> 쪽이다, #838).
     /// 에이전트 자신의 <see cref="NavMeshAgent.areaMask"/>는 건드리지 않는다: 그걸 줄이면 경로가
     /// 도로를 건너지 못해 위 클래스 주석의 분단이 그대로 재현된다.
     /// </summary>
@@ -77,6 +88,27 @@ public static class NpcNavAreas
 
         // 통행 가능한 곳이 도로뿐인 구성(테스트 씬 등) — 빈 마스크로 샘플하면 아무 데도 못 뽑아
         // NPC가 그 자리에 굳는다. 그럴 땐 도로라도 쓰게 원래 마스크를 돌려준다.
+        return masked != 0 ? masked : areaMask;
+    }
+
+    /// <summary>
+    /// 스폰 자리로 써서는 안 되는 영역을 뺀 마스크 — <b>스폰 지점 추첨 전용</b>이다. (#838)
+    ///
+    /// 빼는 것은 둘이다. <b>도로</b>는 라운드 시작부터 차도 한복판에 서 있지 않게(#634),
+    /// <b>본부 실내</b>는 아무도 걸어 들어오지 않은 자리에 <b>솟지</b> 않게 뺀다.
+    ///
+    /// <b>본부가 통행 마스크가 아니라 여기로 온 이유</b>(#838): 통행에서 빼면 본부 안에 놓인 몸을
+    /// NavMesh에 다시 붙일 때 벽 너머로 끌려간다(<see cref="JailMask"/> 주석). 그렇다고 스폰까지
+    /// 열어 두면 #744가 막아 둔 것 — 돌발 이벤트 소란꾼·납치범이 본관 한복판에 솟는 것 — 이 되살아난다.
+    /// <b>걸어 들어오는 것과 솟는 것은 다른 질문이라</b> 답도 따로 둔다: 걸어 들어오는 쪽은 문이
+    /// 막고(<c>DoorNavBlocker</c>), 솟는 쪽은 이 마스크가 막는다.
+    /// </summary>
+    public static int ExcludeSpawnAreas(int areaMask)
+    {
+        int masked = areaMask & ~(RoadMask | HqMask);
+
+        // 도로뿐인 구성(테스트 씬 등)에 대한 폴백은 ExcludeRoad와 같은 이유다 — 빈 마스크로 샘플하면
+        // 아무 데도 못 뽑아 스폰이 통째로 불발된다.
         return masked != 0 ? masked : areaMask;
     }
 
@@ -135,7 +167,7 @@ public static class NpcNavAreas
     /// (실측: <c>CalculatePath</c> → <c>PathInvalid</c>, 반환값도 false). 그 자리가 하필 차도
     /// 한복판이라, 좁히는 쪽은 반드시 이걸 먼저 물어야 한다.
     ///
-    /// 같은 사정이 Jail·HQ 통행 회수에도 그대로 있어(#744) 판정을 <see cref="AreaMaskAt"/>로 모았다.
+    /// 같은 사정이 Jail 통행 회수에도 그대로 있어(#744) 판정을 <see cref="AreaMaskAt"/>로 모았다.
     /// </summary>
     public static bool IsOnRoad(Vector3 position)
     {

@@ -11952,6 +11952,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 1414365055408122, guid: 623e9ef7ccd815743894b9a606359df2, type: 3}
       insertIndex: -1
       addedObject: {fileID: 6270286243745820590}
+    - targetCorrespondingSourceObject: {fileID: 1414365055408122, guid: 623e9ef7ccd815743894b9a606359df2, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8380116451208380001}
     - targetCorrespondingSourceObject: {fileID: 1783584350862116, guid: 623e9ef7ccd815743894b9a606359df2, type: 3}
       insertIndex: -1
       addedObject: {fileID: 5601460500511350885}
@@ -12034,6 +12037,20 @@ MonoBehaviour:
   m_openAngleRight: -160
   m_swingSeconds: 0.7
   m_lockedUntilRoundStart: 1
+--- !u!114 &8380116451208380001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3801454227446892210}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 54282d7d3b5f4b97bfcd535fa35573bd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DoorNavBlocker
+  m_widthPadding: 0.2
+  m_minThickness: 0.5
 --- !u!1 &3801647249469745772 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1783584350862116, guid: 623e9ef7ccd815743894b9a606359df2, type: 3}
@@ -13554,6 +13571,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 1414365055408122, guid: 623e9ef7ccd815743894b9a606359df2, type: 3}
       insertIndex: -1
       addedObject: {fileID: 5639268715161631598}
+    - targetCorrespondingSourceObject: {fileID: 1414365055408122, guid: 623e9ef7ccd815743894b9a606359df2, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8380116451208380002}
     - targetCorrespondingSourceObject: {fileID: 1783584350862116, guid: 623e9ef7ccd815743894b9a606359df2, type: 3}
       insertIndex: -1
       addedObject: {fileID: 5552516674089696966}
@@ -13676,6 +13696,20 @@ MonoBehaviour:
   m_openAngleRight: -160
   m_swingSeconds: 0.7
   m_lockedUntilRoundStart: 1
+--- !u!114 &8380116451208380002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6295809185477942017}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 54282d7d3b5f4b97bfcd535fa35573bd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DoorNavBlocker
+  m_widthPadding: 0.2
+  m_minThickness: 0.5
 --- !u!1001 &6338817421541500176
 PrefabInstance:
   m_ObjectHideFlags: 0

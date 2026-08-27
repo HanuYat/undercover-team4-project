@@ -63,7 +63,7 @@ public class NpcController : NetworkBehaviour
     // 프리팹이 정한 통행 마스크 — Awake에서 1회 확정하고 이후 <b>절대 바뀌지 않는다</b> (#634 후속).
     private int m_prefabAreaMask;
 
-    // 지금 추가로 열어 준 영역(Jail·HQ) — 유치장에 드나드는 동안만 얹힌다 (#744, SetGrantedAreas)
+    // 지금 추가로 열어 준 영역(Jail) — 유치장에 드나드는 동안만 얹힌다 (#744, SetGrantedAreas)
     private int m_grantedAreas;
 
     // 호출부가 요구한 영역 — m_grantedAreas와 다르면 아직 반영하지 못한 것이다 (TickAreaGrant)
@@ -129,7 +129,7 @@ public class NpcController : NetworkBehaviour
         m_agent = GetComponent<NavMeshAgent>();
 
         // 프리팹이 정한 통행 마스크를 <b>좁히기 전에</b> 잡아 둔다 (#634 후속).
-        // 되돌릴 때 NavMesh.AllAreas로 복구하면 프리팹이 일부러 뺀 영역(Jail·HQ)까지 되살아나고,
+        // 되돌릴 때 NavMesh.AllAreas로 복구하면 프리팹이 일부러 뺀 영역(Jail)까지 되살아나고,
         // 좁아진 뒤의 m_agent.areaMask를 기준으로 삼으면 한 번 좁힌 뒤 영영 못 되돌린다.
         m_prefabAreaMask = m_agent.areaMask;
 
@@ -260,8 +260,8 @@ public class NpcController : NetworkBehaviour
         if (m_death.IsDead)
             return;
 
-        // 미뤄 둔 Jail·HQ 통행 회수 (#744) — <b>사망 게이트 뒤</b>다. 시체는 돌려줄 통행이 없고,
-        // 앞에 두면 본부에서 죽은 방출 대상이 영영 끝나지 않는 회수를 매 주기 재시도한다.
+        // 미뤄 둔 Jail 통행 회수 (#744) — <b>사망 게이트 뒤</b>다. 시체는 돌려줄 통행이 없고,
+        // 앞에 두면 셀에서 죽은 수감자가 영영 끝나지 않는 회수를 매 주기 재시도한다.
         // 기절·넉백은 이 게이트를 지나므로, 멈춰 있는 동안에도 발밑은 계속 확인된다.
         TickAreaGrant();
 
@@ -482,16 +482,20 @@ public class NpcController : NetworkBehaviour
     /// "이 몸을 NavMesh 어디에 놓을 수 있는가"를 묻는 쪽(넉백 착지·래그돌 기상)이 쓴다.
     /// 그건 "지금 걸어도 되는 곳인가"와 다른 질문이라 <see cref="NavMeshAgent.areaMask"/>를
     /// 쓰면 안 된다 — 배회 중이라 마스크가 좁아진 몸이 도로 위에 떨어지면 착지점을 못 찾는다.
-    /// (Jail·HQ 제외는 부여받지 않은 몸에는 그대로 살아 있어 #415/#722의 이유가 지켜진다)
+    /// (Jail 제외는 부여받지 않은 몸에는 그대로 살아 있어 #415의 이유가 지켜진다)
     /// </summary>
     internal int BaseAreaMask => m_prefabAreaMask | m_grantedAreas;
 
     /// <summary>
-    /// 유치장에 드나드는 동안 <b>추가로</b> 열어 줄 통행 영역 — 서버(또는 오프라인) 전용. (#744)
+    /// 유치장에 드나드는 동안 <b>추가로</b> 열어 줄 통행 영역 — 서버(또는 오프라인) 전용. (#744/#838)
     ///
-    /// 시민 프리팹의 마스크는 Jail·HQ를 빼고 있어(배회 시민이 셀·본부에 걸어 들어오지 못하게) 수감자와
-    /// 방출 대상만 그때그때 열어 줘야 한다. 부르는 곳은 셋이고 <b>덮어쓰기</b>다(누적이 아니다):
-    /// 수감 시 <c>JailMask</c>, 셀을 나설 때 <c>HqMask</c>, 도시에 정착하면 0.
+    /// 시민 프리팹의 마스크는 Jail을 빼고 있어(배회 시민이 셀에 걸어 들어오지 못하게) 수감자만 그동안
+    /// 열어 줘야 한다. 부르는 곳은 둘이고 <b>덮어쓰기</b>다(누적이 아니다):
+    /// 수감 시 <c>JailMask</c>, 셀을 나서면 0.
+    ///
+    /// <b>한때 본부 실내(<c>HQ</c>)도 여기를 지났다</b> — #838에서 그 영역이 통행을 가르지 않게 되며
+    /// 빠졌다. 부여받을 것이 하나로 줄었어도 구조는 그대로 둔다: 아래 "잃는 것은 발밑을 비운 뒤"가
+    /// 셀 하나만으로도 그대로 필요하다.
     ///
     /// <b>프리팹 마스크가 아니라 이 값을 갈아 끼우는 이유</b>는 <see cref="ApplyRoadPolicy"/>가 상태
     /// 전이마다 <see cref="BaseAreaMask"/>로 되돌리기 때문이다 — 에이전트의 <c>areaMask</c>를 직접
@@ -508,12 +512,12 @@ public class NpcController : NetworkBehaviour
     ///
     /// <b>잃는 쪽을 미루는 이유</b>는 도로와 같다(<see cref="ApplyRoadPolicy"/>): 서 있는 폴리곤이
     /// 마스크 밖이 되면 경로 계산이 통째로 실패해(<c>PathInvalid</c>) 그 자리에서 굳는다. 도로와
-    /// 다른 점은 굳는 자리가 <b>본부 실내나 셀</b>이라는 것이다 — 도로처럼 스스로 걸어 나올 수도 없다.
+    /// 다른 점은 굳는 자리가 <b>셀 안</b>이라는 것이다 — 도로처럼 스스로 걸어 나올 수도 없다.
     ///
-    /// <b>얻는 쪽까지 함께 미루면 안 된다.</b> 셀을 나설 때 Jail을 놓고 HQ를 받는데, 그 순간 몸은
-    /// 아직 셀 안(Jail 위)이라 둘을 묶어 미루면 HQ도 안 열린 채 워프가 진행되고, 워프는 마스크를
-    /// 보지 않으므로(<see cref="TryWarpNear"/>는 <c>AllAreas</c>로 붙인다) <b>못 걷는 폴리곤 위에
-    /// 몸을 내려놓는다</b>.
+    /// <b>얻는 쪽을 함께 미루면 안 된다.</b> 지금은 부여받는 것이 Jail 하나뿐이라 이 갈래가 도는
+    /// 경로가 없지만, 규칙은 남긴다 — 워프는 마스크를 보지 않으므로(<see cref="TryWarpNear"/>는
+    /// <c>AllAreas</c>로 붙인다) 받을 영역이 다시 생기는 날 순서가 뒤집히면 <b>못 걷는 폴리곤 위에
+    /// 몸을 내려놓는다</b>. 실제로 #744가 그 순서로 셀→본부 워프를 통과시켰다.
     ///
     /// 이 구조라 <b>워프 실패도 저절로 수습된다</b> — 셀에 남으면 다음 확인에서 발밑이 여전히 Jail이라
     /// 그 통행이 계속 유지된다.
@@ -573,8 +577,9 @@ public class NpcController : NetworkBehaviour
     /// 도로를 밟으면 안 되는 상태인데 <b>지금 도로 위</b>라면 좁히지 않고 미룬다:
     /// 서 있는 폴리곤이 마스크 밖이 되면 경로 계산이 통째로 실패해(<c>PathInvalid</c>)
     /// <b>차도 한복판에서 영영 굳는다</b> — 고치려던 것보다 나쁜 증상이다.
-    /// 미루는 동안에도 목적지 쪽은 이미 도로를 빼고 뽑으므로(<see cref="NpcWalkState"/>·
-    /// <see cref="NpcSpawner"/>가 <c>NpcNavAreas.ExcludeRoad</c>를 쓴다) 스스로 도로를 벗어난다.
+    /// 미루는 동안에도 목적지 쪽은 이미 도로를 빼고 뽑으므로(<see cref="NpcWalkState"/>가
+    /// <c>NpcNavAreas.ExcludeRoad</c>를, <see cref="NpcSpawner"/>가 <c>ExcludeSpawnAreas</c>를 쓴다)
+    /// 스스로 도로를 벗어난다.
     /// </summary>
     private void ApplyRoadPolicy(NpcState next)
     {

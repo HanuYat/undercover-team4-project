@@ -232,8 +232,8 @@ public class NpcSpawner : CommonManagerBase
             // 프리팹을 먼저 고른다 — 아래 NavMesh 보정에 그 에이전트의 통행 마스크를 써야 하기 때문 (#415)
             NpcController prefab = (m_npcPrefabAlt != null && Random.value < m_altRatio) ? m_npcPrefabAlt : m_npcPrefab;
             NavMeshAgent prefabAgent = prefab.GetComponent<NavMeshAgent>();
-            // 도로는 뺀다 — 라운드 시작부터 도로 한복판에 서 있으면 첫 차에 그대로 치인다 (#634)
-            int spawnAreaMask = NpcNavAreas.ExcludeRoad(
+            // 도로(#634 — 첫 차에 치인다)와 본부 실내(#838 — 아무도 안 들여보낸 자리에 솟는다)를 뺀다
+            int spawnAreaMask = NpcNavAreas.ExcludeSpawnAreas(
                 prefabAgent != null ? prefabAgent.areaMask : NavMesh.AllAreas
             );
 
@@ -335,7 +335,7 @@ public class NpcSpawner : CommonManagerBase
     {
         m_pathBuffer = new NavMeshPath();
         m_anchors = NpcSpawnAnchors.Resolve(m_spawnPoints, m_spawnRadius, m_sampleMaxDistance,
-            NpcNavAreas.ExcludeRoad(agentAreaMask), agentAreaMask, m_anchorProbeCount);
+            NpcNavAreas.ExcludeSpawnAreas(agentAreaMask), agentAreaMask, m_anchorProbeCount);
 
         // 기준점끼리 못 닿으면 그중 하나가 고립 구역에 앉은 것이다. 그 포인트는 정상 후보까지 전부
         // 기각돼 "N마리만 스폰됨"으로만 드러나므로, 원인이 보이게 미리 경고한다.

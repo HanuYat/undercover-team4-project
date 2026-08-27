@@ -151,16 +151,18 @@ public static class SuddenEventUtil
     }
 
     /// <summary>
-    /// 스폰할 프리팹이 설 수 있는 영역 마스크 — 프리팹 에이전트의 통행 마스크에서 도로만 더 뺀다
-    /// (라운드 시작부터 차도 한복판에 서 있지 않게, #634). <see cref="NpcSpawner"/>와 같은 계산이다.
+    /// 스폰할 프리팹이 설 수 있는 영역 마스크 — 프리팹 에이전트의 통행 마스크에서 스폰 금지 영역을
+    /// 더 뺀다(<see cref="NpcNavAreas.ExcludeSpawnAreas"/>). <see cref="NpcSpawner"/>와 같은 계산이다.
     ///
-    /// <b>안 걸면 못 가는 영역에 스폰된다</b> (#744) — 시민 마스크는 셀(Jail)·본부 실내(HQ)를 빼고
-    /// 있는데 <c>NavMesh.AllAreas</c>로 고르면 그 안에 솟고, 딛고 선 폴리곤이 마스크 밖이라 굳는다.
+    /// <b>안 걸면 엉뚱한 데 스폰된다</b> (#744/#838) — <c>NavMesh.AllAreas</c>로 고르면 셀(Jail)에
+    /// 솟아 딛고 선 폴리곤이 마스크 밖이라 굳고, 프리팹 마스크만으로 고르면 본부 실내(HQ)에 솟는다.
+    /// 본부는 이제 통행 마스크에 들어 있어(#838) 굳지는 않지만, 아무도 걸어 들여보내지 않은
+    /// 소란꾼·납치범이 본관 한복판에 나타나는 것은 여전히 사고다.
     /// </summary>
     public static int SpawnAreaMask(NpcController prefab)
     {
         NavMeshAgent agent = prefab != null ? prefab.GetComponent<NavMeshAgent>() : null;
-        return NpcNavAreas.ExcludeRoad(agent != null ? agent.areaMask : NavMesh.AllAreas);
+        return NpcNavAreas.ExcludeSpawnAreas(agent != null ? agent.areaMask : NavMesh.AllAreas);
     }
 
     /// <summary>
