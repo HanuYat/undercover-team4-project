@@ -23,8 +23,18 @@ public class SuddenEventToastView : MonoBehaviour
     [Min(0.5f)]
     [SerializeField] private float m_noticeSeconds = 3f;
 
-    [Tooltip("알림 배경색 — 검거 알림(#616)의 초록과 갈라 두는 경고색. 좋은 소식이 아니라는 것이 색으로 먼저 읽혀야 한다")]
-    [SerializeField] private Color m_noticeTone = new Color(0.80f, 0.42f, 0.10f, 0.95f);
+    [Tooltip("알림 배경색 — 기본은 다홍. 좋은 소식이 아니라는 것이 색으로 먼저 읽혀야 한다")]
+    [SerializeField] private Color m_noticeTone = new Color(0.89f, 0.26f, 0.20f, 0.95f);
+
+    [Tooltip("아래 키로 뜨는 알림에만 쓰는 색 — 다홍 한 덩어리에서 갈라 두려는 이벤트용 (#894)")]
+    [SerializeField] private Color m_altNoticeTone = new Color(0.18f, 0.62f, 0.35f, 0.95f);
+
+    [Tooltip("m_altNoticeTone으로 띄울 문구 키 — 현재는 전자기기 장애(발생·복구) 두 줄")]
+    [SerializeField] private string[] m_altToneKeys =
+    {
+        "Hud.Event.Notice.Blackout",
+        "Hud.Event.Notice.BlackoutRecovered",
+    };
 
     // 구독해 둔 매니저. 이벤트 매니저는 맵 씬에 있고 원격 클라에서는 스폰 동기화가 늦어 아직 없을 수
     // 있으므로 잡힐 때까지 기다린다 (PlayerPresenceToastView와 같은 방식). 라운드가 끝나고 맵을 벗어나면
@@ -78,7 +88,7 @@ public class SuddenEventToastView : MonoBehaviour
             App.UI.Toast?.Show(
                 new LocalizedString(m_noticeMessage.TableReference, noticeKey),
                 m_noticeSeconds,
-                m_noticeTone);
+                ToneFor(noticeKey));
             return;
         }
 
@@ -87,5 +97,21 @@ public class SuddenEventToastView : MonoBehaviour
         m_noticeMessage.Arguments = new object[] { displayName };
 
         App.UI.Toast?.Show(m_noticeMessage, m_noticeSeconds, m_noticeTone);
+    }
+
+    // 색은 문구 키로만 가른다 — 알림 경로(Announce)가 나르는 것이 이름과 키뿐이라, 이벤트마다
+    // 색을 들려 보내려면 RPC까지 넓혀야 한다. 예외가 한 종일 동안은 이쪽이 싸다.
+    private Color ToneFor(string noticeKey)
+    {
+        if (m_altToneKeys != null)
+        {
+            for (int i = 0; i < m_altToneKeys.Length; i++)
+            {
+                if (m_altToneKeys[i] == noticeKey)
+                    return m_altNoticeTone;
+            }
+        }
+
+        return m_noticeTone;
     }
 }

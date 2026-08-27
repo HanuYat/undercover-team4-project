@@ -47,7 +47,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000300
-    m_Localized: Waiting for other players ({0}/{1})
+    m_Localized: Waiting for squad ({0}/{1})
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000301
@@ -471,6 +471,18 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 8152779461132288
     m_Localized: Open catalog
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8396537558818816
+    m_Localized: You
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8396537613344768
+    m_Localized: Teammate
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8399387659689984
+    m_Localized: Battery
     m_Metadata:
       m_Items: []
   references:

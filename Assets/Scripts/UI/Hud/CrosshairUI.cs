@@ -25,6 +25,17 @@ public class CrosshairUI : CommonManagerBase
     [FormerlySerializedAs("m_taserTargetColor")]
     [SerializeField] private Color m_weaponTargetColor = new Color(1f, 0.25f, 0.2f);
 
+    /// <summary>
+    /// 크로스헤어 표시를 켜고 끈다 — 조준할 수 없는 동안 내린다(무력화·입력 정지, #899).
+    /// 히트마커·처치 알림은 별개 오브젝트라 함께 내려가지 않는다: 죽는 순간 들어간 막타의
+    /// 처치 알림(#869)은 관전 화면에서도 보여야 한다.
+    /// </summary>
+    public void SetVisible(bool visible)
+    {
+        if (m_crosshairImage != null)
+            m_crosshairImage.enabled = visible;
+    }
+
     /// <summary>조준 대상의 상호작용 가능 여부에 따라 크로스헤어 색을 바꾼다.</summary>
     public void SetInteractable(bool interactable)
     {

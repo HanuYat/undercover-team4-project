@@ -138,12 +138,17 @@ public class App : Singleton<App>
 
     /// <summary>
     /// 새 씬의 준비 완료를 기다린다 (#403). 씬 매니저는 활성화 프레임에 이미 App에 등록돼 있어 그대로 물으면 된다.
-    /// 클라이언트는 이 경로를 타지 않으므로 LoadingScreen이 같은 대기를 따로 건다.
+    /// 클라이언트는 이 경로를 타지 않으므로 LoadingScreen이 같은 대기를 따로 건다 — 두 경로 모두
+    /// 여기를 거치므로, 로딩 화면이 아직 덮고 있는 이 시점에 조준 윤곽선 워밍업(InteractionFeedback
+    /// 참고)도 함께 끼워 둔다.
     /// </summary>
-    internal static UniTask WaitUntilSceneReadyAsync(CancellationToken token) =>
-        SceneFlow.Current != null
-            ? SceneFlow.Current.WaitUntilReadyAsync(token)
-            : UniTask.CompletedTask;
+    internal static async UniTask WaitUntilSceneReadyAsync(CancellationToken token)
+    {
+        InteractionFeedback.WarmUpInteractableOutlines();
+
+        if (SceneFlow.Current != null)
+            await SceneFlow.Current.WaitUntilReadyAsync(token);
+    }
 
     /// <summary>AppHelper의 sceneLoaded 콜백에서만 호출 — 씬 상태 갱신 + 완료 이벤트.</summary>
     internal static void NotifySceneLoaded(EScene scene)

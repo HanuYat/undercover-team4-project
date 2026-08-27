@@ -52,6 +52,12 @@ public class PlayerSpectateCamera : MonoBehaviour
     [SerializeField]
     private LayerMask m_collisionMask = ~0;
 
+    [Tooltip(
+        "관전 진입 직후 좌클릭 순환 입력을 무시하는 시간(초) — 죽는 순간까지 누르고 있던 공격 클릭이 그대로 넘어와 동료로 튀는 것을 막는다 (#899)"
+    )]
+    [SerializeField]
+    private float m_inputGraceSeconds = 0.3f;
+
     private RagdollRig m_ownRig; // 내 골반 — 대상이 없을 때(내 시체)의 피벗
     private PlayerIncapacitation m_self; // 나 자신 — 순환 목록에서 걸러낼 기준
     private PlayerInputHandler m_input; // 좌클릭 순환 입력 (#590)
@@ -66,6 +72,8 @@ public class PlayerSpectateCamera : MonoBehaviour
     // 벽 충돌 SphereCast 재사용 버퍼 — 모든 인스턴스가 공유해도 된다(같은 프레임에 재진입하지 않는다).
     private static readonly RaycastHit[] s_wallProbeBuffer = new RaycastHit[8];
 
+    private float m_activatedAt; // 관전이 켜진 시각(Time.time) — 좌클릭 순환 입력 유예 판정 기준 (#899)
+
     private bool m_active;
     private float m_blend; // 1인칭(0) ↔ 관전(1) 진행도
     private bool m_snap; // 다음 Tick에서 보간을 끊고 현재 상태를 즉시 반영한다
@@ -78,9 +86,6 @@ public class PlayerSpectateCamera : MonoBehaviour
 
     /// <summary>관전이 요청된 상태인가 — 블렌드가 끝났는지와는 별개다.</summary>
     public bool IsActive => m_active;
-
-    /// <summary>내 시체를 보고 있는가 — <see cref="PlayerLook"/>이 내 몸 렌더 여부를 이걸로 가른다. (#590)</summary>
-    public bool IsWatchingSelf => m_target == null;
 
     // 오빗 중심 덮어쓰기 — 몸이 지하로 사라진 경우에만 쓴다 (#775)
     private Vector3 m_pivotOverride;
@@ -124,6 +129,11 @@ public class PlayerSpectateCamera : MonoBehaviour
     private void CycleNext()
     {
         if (CursorLock.IsUnlocked || m_self == null || !m_self.IsDead)
+            return;
+
+        // 죽는 순간까지 누르고 있던 좌클릭(공격·아이템 사용)의 started 이벤트가 이 프레임에 그대로
+        // 넘어올 수 있다 — 그러면 자기 시체를 보기도 전에 첫 순환이 동료로 튄다 (#899).
+        if (Time.time - m_activatedAt < m_inputGraceSeconds)
             return;
 
         CycleTarget(1);
@@ -223,6 +233,7 @@ public class PlayerSpectateCamera : MonoBehaviour
 
         m_yaw = entryYaw;
         m_pitch = m_enterPitch;
+        m_activatedAt = Time.time;
     }
 
     /// <summary>

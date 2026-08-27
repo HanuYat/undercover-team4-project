@@ -11,6 +11,9 @@ using UnityEngine.Localization;
 ///   - 쓰러진 동료 몸(일으키기·뒤지기 대상) → 기본색. IInteractable이 아니라 따로 판정한다(#725)
 /// 조준 유지 중에도 NPC 상태·배터리·장착 아이템이 변하므로 매 프레임 재평가한다.
 /// Outlinable은 첫 조준 시 런타임 부착 후 캐시(비활성 유지)되므로 대상 프리팹 사전 작업이 필요 없다.
+/// 씬에 미리 놓인 상호작용물은 <see cref="WarmUpInteractableOutlines"/>가 로딩 화면이 덮은 동안
+/// 이 부착을 앞당겨 두므로, 플레이어가 처음 조준하는 순간엔 이미 붙어 있다 — 런타임에 새로 스폰되는
+/// 대상(NPC 등)만 종전대로 첫 조준 시 붙는다.
 /// </summary>
 [RequireComponent(typeof(PlayerInteractor))]
 public class InteractionFeedback : NetworkBehaviour
@@ -51,6 +54,13 @@ public class InteractionFeedback : NetworkBehaviour
 
     private PlayerTerminalFocus m_terminalFocus; // 화면 앞에서 표시를 내린다 (#689). 없는 구성이면 null
 
+    // 조준 안내(윤곽선·크로스헤어·프롬프트) 억제 공통 조건 — 조준 레이가 카메라에서 그대로 나가므로
+    // (PlayerInteractor.AimOrigin), 죽어서 카메라가 관전 궤도로 빠진 동안도 막지 않으면 궤도가 스치는
+    // 대상에 윤곽선이 켜진다 (#899). 원래 TickPrompt에만 있던 조건을 셋이 같이 쓰도록 승격했다.
+    private bool IsAimSuppressed =>
+        m_incapacitation != null && m_incapacitation.IsIncapacitated
+        || m_input != null && m_input.IsSuspended;
+
     public override void OnNetworkSpawn()
     {
         if (!IsOwner)
@@ -82,6 +92,7 @@ public class InteractionFeedback : NetworkBehaviour
         App.OnSceneLoaded -= HandleSceneLoaded;
         SetOutlined(null, Color.clear);
         App.UI.InteractPrompt?.HidePrompt(); // 퇴장·씬 전환으로 사라질 때 안내가 화면에 남지 않게
+        App.UI.Crosshair?.SetVisible(true); // 죽은 채로 퇴장하면 Refresh가 멈춰 숨김 상태로 박제된다 (#899)
     }
 
     private void HandleSceneLoaded(EScene scene) => EnsureHud();
@@ -221,9 +232,11 @@ public class InteractionFeedback : NetworkBehaviour
             interactUsable = false;
         }
 
-        // 단말 화면 앞에서는 표시를 통째로 내린다 (#689) — 카메라가 코앞이라 안내가 화면을 가린다.
-        // 대상 쪽에서 CanInteract를 끄면 E까지 죽어 나갈 수단이 사라지므로 여기서 끈다.
-        if (m_terminalFocus != null && m_terminalFocus.IsFocusing)
+        // 단말 화면 앞(#689)이거나 무력화·입력 정지 중(#899)이면 표시를 통째로 내린다 — 카메라가
+        // 코앞이거나, 죽어서 카메라가 관전 궤도로 빠져 있다. 조기 return이 아니라 부울을 내리는
+        // 이유는 그대로다: 아래 SetOutlined(null, …)까지 타야 죽기 직전 마지막 대상의 윤곽선이
+        // 관전 화면에 박제되지 않는다.
+        if (m_terminalFocus != null && m_terminalFocus.IsFocusing || IsAimSuppressed)
         {
             itemUsable = false;
             interactUsable = false;
@@ -237,7 +250,11 @@ public class InteractionFeedback : NetworkBehaviour
         else
             SetOutlined(null, Color.clear);
 
-        // 크로스헤어는 무기 명중선이 최우선 — 때리거나 쏠 수 있는 대상을 겨눴다면 그 색을 덮어쓰지 않는다.
+        // 크로스헤어 표시 자체도 억제 대상이다 (#899) — 매 프레임 맞추므로 부활·기절 해제 시
+        // 별도 복구 없이 자동으로 되살아난다.
+        App.UI.Crosshair?.SetVisible(!IsAimSuppressed);
+
+        // 크로스헤어 색은 무기 명중선이 최우선 — 때리거나 쏠 수 있는 대상을 겨눴다면 그 색을 덮어쓰지 않는다.
         // (둘 다 아니면 어느 쪽을 부르든 기본색이라 분기 하나로 충분하다)
         if (weaponOnTarget)
             App.UI.Crosshair?.SetWeaponTargeting(true);
@@ -262,10 +279,8 @@ public class InteractionFeedback : NetworkBehaviour
         // 입력이 죽은 구간에서는 안내도 내린다. 무력화 중엔 E도 좌클릭도 각자 가드에 막히고
         // (PlayerInteractor·PlayerItemUser), 입력 정지 중엔 액션 자체가 꺼져 있다.
         // 이 자리를 열어 두면 이 이슈가 없애려던 "떠 있는데 눌러도 반응 없음"이 그대로 남는다.
-        if (
-            m_incapacitation != null && m_incapacitation.IsIncapacitated
-            || m_input != null && m_input.IsSuspended
-        )
+        // 조건은 윤곽선·크로스헤어와 같은 IsAimSuppressed다 (#899).
+        if (IsAimSuppressed)
         {
             view.HidePrompt();
             return;
@@ -423,6 +438,35 @@ public class InteractionFeedback : NetworkBehaviour
             $"camEnabled={(diagCam != null ? diagCam.enabled : false)} " +
             $"forceIntoRT={(diagCam != null ? diagCam.forceIntoRenderTexture : false)}"
         );
+    }
+
+    /// <summary>
+    /// 씬에 미리 놓인 상호작용물에 Outlinable을 앞당겨 붙인다 — App.WaitUntilSceneReadyAsync가 로딩
+    /// 화면이 아직 덮고 있는 동안 호출한다.
+    ///
+    /// SetOutlined가 첫 조준 시 하던 AddComponent + AddOutlineTargets(자식 렌더러 전수 스캔)를 여기서
+    /// 미리 해 두고 <c>enabled = false</c>로 남긴다 — SetOutlined는 그 자리에서 기존 Outlinable을
+    /// 찾아 켜기만 하면 되므로, 플레이어가 처음 조준하는 프레임에 그 비용이 몰려 히치로 보이는 일이
+    /// 없어진다(무기 락커 등에서 관찰된 렉).
+    ///
+    /// 런타임에 새로 스폰되는 대상(NPC·드롭 아이템 등)은 이 시점에 씬에 없으므로 대상이 아니다 —
+    /// 그런 대상은 종전대로 첫 조준 시 붙는다(회귀 아님, 기존 동작 그대로).
+    /// </summary>
+    public static void WarmUpInteractableOutlines()
+    {
+        foreach (
+            MonoBehaviour behaviour in Object.FindObjectsByType<MonoBehaviour>(
+                FindObjectsSortMode.None
+            )
+        )
+        {
+            if (behaviour is not IInteractable || behaviour.GetComponent<Outlinable>() != null)
+                continue;
+
+            Outlinable outlinable = behaviour.gameObject.AddComponent<Outlinable>();
+            AddOutlineTargets(outlinable, behaviour.gameObject);
+            outlinable.enabled = false;
+        }
     }
 
     /// <summary>

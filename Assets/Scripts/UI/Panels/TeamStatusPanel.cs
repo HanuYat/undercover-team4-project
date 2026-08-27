@@ -34,6 +34,9 @@ public class TeamStatusPanel : PanelBase
     // 직전 구성과 비교할 임시 자리 — 매 프레임 도는 경로라 새로 할당하지 않는다.
     private readonly List<NetworkObject> m_scratch = new List<NetworkObject>();
 
+    // 내 몸 — 카드가 "나"를 표시할 때 쓴다. 첫 칸이라는 자리와 별개로 대조해 둔다 (#894).
+    private NetworkObject m_mine;
+
     // 인원이 바뀔 때만 찾아 둔다 — 아니면 떠 있는 동안 매 프레임 인원수만큼 GetComponent가 돈다.
     private readonly List<PlayerHealth> m_health = new List<PlayerHealth>();
     private readonly List<PlayerIncapacitation> m_incapacitation = new List<PlayerIncapacitation>();
@@ -87,11 +90,13 @@ public class TeamStatusPanel : PanelBase
         {
             bool had = m_players.Count > 0;
             m_players.Clear();
+            m_mine = null;
             return had;
         }
 
         IReadOnlyList<NetworkObject> spawned = manager.SpawnManager.PlayerObjects;
         NetworkObject mine = manager.LocalClient != null ? manager.LocalClient.PlayerObject : null;
+        m_mine = mine;
 
         m_scratch.Clear();
         for (int i = 0; i < spawned.Count; i++)
@@ -169,6 +174,10 @@ public class TeamStatusPanel : PanelBase
             // 직전에 거친 상점에서 구운 얼굴을 쓴다 — 게임 씬에서 다시 구우면 맵 조명을 타 어둡게 나온다.
             // 사람마다 색·치장이 다르므로 그 조합으로 찾는다 (#432 · #863)
             m_rows[i].SetPortrait(PortraitOf(i));
+
+            // 자리가 아니라 대조로 정한다 — 내 몸을 못 찾은 구성(오프라인 등)에서 첫 칸이
+            // 남의 카드인데도 "나"가 붙는 것을 막는다.
+            m_rows[i].SetOwnership(m_mine != null && m_players[i] == m_mine);
         }
 
         RefreshRows();

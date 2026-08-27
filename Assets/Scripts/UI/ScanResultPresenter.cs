@@ -7,6 +7,7 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
+using UnityEngine.UI;
 
 /// <summary>
 /// 스캔 결과 프레젠터. (#39 → #233)
@@ -38,9 +39,19 @@ public class ScanResultPresenter : NetworkBehaviour
     [SerializeField]
     private GameObject m_batteryPanel;
 
-    [Tooltip("장착 스캐너 배터리 잔량 텍스트 (m_batteryPanel 하위)")]
+    [Tooltip("배터리 라벨 (m_batteryPanel 하위). 칸이 최대치를 다 담으면 라벨만, 아니면 숫자까지 찍는다")]
     [SerializeField]
     private TextMeshProUGUI m_batteryText;
+
+    [Tooltip("배터리 칸 — 왼쪽부터 잔량만큼 켜진다. 비워 두면 숫자 표기만 남는다 (#894)")]
+    [SerializeField]
+    private Image[] m_batteryCells = new Image[0];
+
+    [SerializeField]
+    private Color m_cellFilledTone = new Color(0.98f, 0.62f, 0.16f, 1f);
+
+    [SerializeField]
+    private Color m_cellEmptyTone = new Color(0.13f, 0.15f, 0.19f, 1f);
 
     [Tooltip("토스트 패널 루트(배경 포함). 실패 사유 표시 중에만 켜진다 — 표시/숨김 토글 대상")]
     [SerializeField]
@@ -57,6 +68,7 @@ public class ScanResultPresenter : NetworkBehaviour
     // 배터리·토스트 문구는 조회 시점이 코드 안이라 인스펙터에서 고를 것이 없다. (#497)
     private const string k_hudTable = "HudTable";
     private const string k_batteryKey = "Hud.Scan.Battery";
+    private const string k_batteryLabelKey = "Hud.Scan.BatteryLabel";
     private const string k_chargedKey = "Hud.Scan.Charged";
     private const string k_lowBatteryKey = "Hud.Scan.LowBattery";
 
@@ -145,13 +157,8 @@ public class ScanResultPresenter : NetworkBehaviour
     {
         UpdateCurrentContent();
 
-        if (m_batteryText != null && m_battery != null)
-            m_batteryText.text = LocalizedStrings.Get(
-                k_hudTable,
-                k_batteryKey,
-                m_battery.CurrentBattery,
-                m_battery.MaxBattery
-            );
+        if (m_battery != null)
+            ApplyBatteryText(m_battery.CurrentBattery);
     }
 
     // 조준 대상이 바뀔 때만 호출된다 — 이전 카드를 끄고, 새 대상이 스캔 가능한 NPC면 그 카드를 켠다.
@@ -329,19 +336,51 @@ public class ScanResultPresenter : NetworkBehaviour
 
     private void UpdateBattery(int current)
     {
-        if (m_batteryText != null && m_battery != null)
-            m_batteryText.text = LocalizedStrings.Get(
-                k_hudTable,
-                k_batteryKey,
-                current,
-                m_battery.MaxBattery
-            );
+        ApplyBatteryText(current);
+        ApplyBatteryCells(current);
 
         bool charged = m_lastBattery >= 0 && current > m_lastBattery; // 잔량 증가 = 충전기 이용
         m_lastBattery = current;
 
         if (charged)
             ShowToast(LocalizedStrings.Get(k_hudTable, k_chargedKey), transient: true);
+    }
+
+    // 칸이 최대치를 다 담을 때는 라벨만 쓴다 — 숫자는 칸이 이미 말하고 있다. 칸이 모자라는
+    // 구성(칸을 안 배선했거나 최대치가 칸 수보다 큰 스캐너)에서만 예전처럼 숫자를 찍는다.
+    private void ApplyBatteryText(int current)
+    {
+        if (m_batteryText == null || m_battery == null)
+            return;
+
+        int max = m_battery.MaxBattery;
+        bool cellsCover = max > 0 && m_batteryCells != null && m_batteryCells.Length >= max;
+
+        m_batteryText.text = cellsCover
+            ? LocalizedStrings.Get(k_hudTable, k_batteryLabelKey)
+            : LocalizedStrings.Get(k_hudTable, k_batteryKey, current, max);
+    }
+
+    // 남는 칸은 꺼 둔다 — 최대치가 3인 스캐너에 빈 칸 둘이 붙어 있으면 잔량을 잘못 읽는다.
+    private void ApplyBatteryCells(int current)
+    {
+        if (m_batteryCells == null || m_batteryCells.Length == 0)
+            return;
+
+        int used = m_battery != null ? Mathf.Min(m_battery.MaxBattery, m_batteryCells.Length) : 0;
+        for (int i = 0; i < m_batteryCells.Length; i++)
+        {
+            Image cell = m_batteryCells[i];
+            if (cell == null)
+                continue;
+
+            bool inUse = i < used;
+            if (cell.gameObject.activeSelf != inUse)
+                cell.gameObject.SetActive(inUse);
+
+            if (inUse)
+                cell.color = i < current ? m_cellFilledTone : m_cellEmptyTone;
+        }
     }
 
     // 배터리 0인 채로 스캔을 시도했을 때만 부족 문구를 띄운다 — 들고 있는 동안이 아니다 (#810).
