@@ -4798,6 +4798,7 @@ GameObject:
   - component: {fileID: 4895499700660949980}
   - component: {fileID: 3943311451158290870}
   - component: {fileID: 922322044007907061}
+  - component: {fileID: 6361535487603393590}
   m_Layer: 5
   m_Name: mapView
   m_TagString: Untagged
@@ -4862,6 +4863,20 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
+--- !u!114 &6361535487603393590
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5401622991683638458}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3312d7739989d2b4e91e6319e9a96d76, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.RectMask2D
+  m_Padding: {x: 0, y: 0, z: 0, w: 0}
+  m_Softness: {x: 0, y: 0}
 --- !u!1 &5412720894995978090
 GameObject:
   m_ObjectHideFlags: 0

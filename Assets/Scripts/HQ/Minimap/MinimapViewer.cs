@@ -29,6 +29,7 @@ public class MinimapViewer : MonoBehaviour
 
     private DeviceBlackoutEvent m_blackout;
     private bool m_covered;
+    private Vector2 m_iconPrefabSize;
 
     private readonly Dictionary<MinimapTarget, Image> m_targetIcons = new();
     private readonly Dictionary<MinimapTarget, Image> m_targetAreas = new();
@@ -41,6 +42,10 @@ public class MinimapViewer : MonoBehaviour
     {
         if (m_blackoutCover != null)
             m_blackoutCover.enabled = false;
+
+        // 크기를 비운 타겟이 돌아갈 기본값 — 프리팹은 인스턴스화하면서 바뀔 수 있으니 미리 재둔다
+        if (m_iconPrefab != null)
+            m_iconPrefabSize = m_iconPrefab.rectTransform.sizeDelta;
     }
 
     private void LateUpdate()
@@ -179,7 +184,10 @@ public class MinimapViewer : MonoBehaviour
     {
         foreach (var pair in m_targetIcons)
         {
-            pair.Value.rectTransform.anchoredPosition = WorldToMap(pair.Key.transform.position);
+            RectTransform rect = pair.Value.rectTransform;
+            rect.anchoredPosition = WorldToMap(pair.Key.transform.position);
+            rect.sizeDelta = IconSizeOf(pair.Key);
+            rect.localRotation = Quaternion.Euler(0f, 0f, IconAngleOf(pair.Key));
             pair.Value.color = pair.Key.IconColor;
         }
 
@@ -190,6 +198,19 @@ public class MinimapViewer : MonoBehaviour
             rect.sizeDelta = WorldRadiusToMapSize(pair.Key.AreaRadius);
             pair.Value.color = pair.Key.AreaColor;
         }
+    }
+
+    private Vector2 IconSizeOf(MinimapTarget target)
+        => target.IconSize > 0f
+            ? new Vector2(target.IconSize, target.IconSize)
+            : m_iconPrefabSize;
+
+    // 월드 yaw는 위에서 볼 때 시계 방향이고 UI z 회전은 반시계다 — 부호를 뒤집어야 지도에서
+    // 아이콘이 실제로 보는 쪽을 가리킨다. 스프라이트가 위(+Y)를 보고 있다는 전제.
+    private float IconAngleOf(MinimapTarget target)
+    {
+        float facing = target.IconFollowsFacing ? -target.transform.eulerAngles.y : 0f;
+        return facing + target.IconAngle;
     }
 
     // 월드 XZ -> 맵 좌표

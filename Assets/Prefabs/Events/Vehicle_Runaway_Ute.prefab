@@ -207,6 +207,7 @@ GameObject:
   - component: {fileID: 5496246556811211807}
   - component: {fileID: 4797828229265045752}
   - component: {fileID: 4227105288742398043}
+  - component: {fileID: -6988803477269408414}
   m_Layer: 0
   m_Name: Vehicle_Runaway_Ute
   m_TagString: Untagged
@@ -244,7 +245,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2205575553
+  GlobalObjectIdHash: 4278336159
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -325,6 +326,10 @@ MonoBehaviour:
   - {fileID: 4980601386494238095}
   - {fileID: 2758166340915066271}
   m_engineSound: 17
+  m_hornFx: 8
+  m_hornDistance: 30
+  m_hornHalfWidth: 3
+  m_hornInterval: 1.2
 --- !u!82 &4227105288742398043
 AudioSource:
   m_ObjectHideFlags: 0
@@ -422,6 +427,25 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+--- !u!114 &-6988803477269408414
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5881772632886919696}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8589cf5bdc1bf07489b808b1f33f0108, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MinimapTarget
+  m_iconSprite: {fileID: 21300000, guid: ffa7cc840acd34669bcedcea4e719316, type: 3}
+  m_iconColor: {r: 1, g: 0, b: 0, a: 1}
+  m_iconSize: 30
+  m_iconAngle: 0
+  m_iconFollowsFacing: 0
+  m_areaRadius: 0
+  m_areaColor: {r: 1, g: 0.25, b: 0.25, a: 0.25}
 --- !u!1001 &3306811855942338149
 PrefabInstance:
   m_ObjectHideFlags: 0
