@@ -91,6 +91,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShopPurchases
   ShowTopMostFoldoutHeaderGroup: 1
+  m_catalog: {fileID: 11400000, guid: dd0c9282a83657d4f800db2677000260, type: 2}
 --- !u!114 &5729287333612907991
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -87,6 +87,22 @@ MonoBehaviour:
     m_Key: Shop.Order.Empty
     m_Metadata:
       m_Items: []
+  - m_Id: 8136759908401156
+    m_Key: Shop.History.Title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401157
+    m_Key: Shop.History.Row
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401158
+    m_Key: Shop.History.Empty
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401159
+    m_Key: Shop.Tab.Catalog
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

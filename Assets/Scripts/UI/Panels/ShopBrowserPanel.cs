@@ -4,6 +4,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
+using UnityEngine.UI;
 
 /// <summary>
 /// 장비 주문창 (#843) — 카탈로그 아이템(<see cref="ShopCatalogItem"/>)을 쓰면 열리는 브라우저 창.
@@ -14,10 +15,14 @@ using UnityEngine.Localization.Settings;
 /// 처음부터 다시 판정한다 (<see cref="LootPanel"/>과 같은 방침).
 ///
 /// 진열대가 없어진 뒤로 이름·가격·설명이 보이는 곳은 여기뿐이다.
+///
+/// 화면은 탭 둘로 갈린다 (#840) — 진열 그리드와 구매 내역(<see cref="ShopPurchaseHistoryView"/>).
+/// 창을 열 때마다 진열 탭에서 시작한다.
 /// </summary>
 public class ShopBrowserPanel : PanelBase
 {
     private const string k_commonTable = "CommonTable";
+    private const string k_shopTable = "ShopTable";
     private const string k_moneyKey = "Common.Unit.Money";
 
     public override bool CanCloseWithESC => true;
@@ -32,6 +37,35 @@ public class ShopBrowserPanel : PanelBase
     [Tooltip("그리드 칸. 부착 순서대로 진열 칸에 대응한다")]
     [SerializeField]
     private ShopOrderSlotView[] m_slotViews;
+
+    [Header("탭")]
+    [Tooltip("진열 탭이 켜는 것 — 그리드 루트")]
+    [SerializeField]
+    private GameObject m_catalogView;
+
+    [Tooltip("구매 내역 탭이 켜는 것 — ShopPurchaseHistoryView 루트")]
+    [SerializeField]
+    private GameObject m_historyView;
+
+    [SerializeField]
+    private Button m_catalogTab;
+
+    [SerializeField]
+    private Button m_historyTab;
+
+    [Tooltip("선택된 탭 배경 / 글자색")]
+    [SerializeField]
+    private Color m_tabOnColor = new Color(0.106f, 0.208f, 0.286f, 1f);
+
+    [SerializeField]
+    private Color m_tabOnTextColor = new Color(0.541f, 0.902f, 1f, 1f);
+
+    [Tooltip("선택되지 않은 탭 배경 / 글자색")]
+    [SerializeField]
+    private Color m_tabOffColor = new Color(0.043f, 0.098f, 0.141f, 1f);
+
+    [SerializeField]
+    private Color m_tabOffTextColor = new Color(0.443f, 0.514f, 0.573f, 1f);
 
     [Header("문구")]
     [Tooltip("창 제목 — 예: ShopTable/Shop.Order.Title. 비우면 제목을 건드리지 않는다")]
@@ -81,6 +115,9 @@ public class ShopBrowserPanel : PanelBase
     // 열기 연출의 세대 번호 — 알림과 같은 방식이다
     private int m_openVersion;
 
+    // 지금 구매 내역 탭인가 — 창을 열 때마다 진열로 되돌린다
+    private bool m_historyShown;
+
     protected override void Awake()
     {
         base.Awake();
@@ -102,12 +139,25 @@ public class ShopBrowserPanel : PanelBase
 
         if (!m_title.IsEmpty)
             m_title.StringChanged += HandleTitleChanged;
+
+        if (m_catalogTab != null)
+            m_catalogTab.onClick.AddListener(HandleCatalogTabClicked);
+        if (m_historyTab != null)
+            m_historyTab.onClick.AddListener(HandleHistoryTabClicked);
+
+        // 여기서는 어느 쪽을 켤지만 정한다 — 라벨은 로컬라이제이션이 준비된 뒤 OnOpen이 채운다
+        SwapTabViews(false);
     }
 
     protected override void OnDestroy()
     {
         if (!m_title.IsEmpty)
             m_title.StringChanged -= HandleTitleChanged;
+
+        if (m_catalogTab != null)
+            m_catalogTab.onClick.RemoveListener(HandleCatalogTabClicked);
+        if (m_historyTab != null)
+            m_historyTab.onClick.RemoveListener(HandleHistoryTabClicked);
 
         base.OnDestroy();
     }
@@ -129,6 +179,7 @@ public class ShopBrowserPanel : PanelBase
         BindLineup();
         BindFund();
         ClearNotice();
+        ShowTab(false); // 열 때는 늘 진열부터
 
         // 언어가 바뀌면 칸을 통째로 다시 채운다 — 칸마다 StringChanged를 걸지 않는 이유가 이것이다
         LocalizationSettings.SelectedLocaleChanged += HandleLocaleChanged;
@@ -267,9 +318,57 @@ public class ShopBrowserPanel : PanelBase
     private void HandleLocaleChanged(Locale locale)
     {
         RefreshSlots();
+        RefreshTabLabels();
 
         if (m_teamFund != null)
             RefreshBalance(m_teamFund.Balance);
+    }
+
+    // ---- 탭 ----
+
+    private void HandleCatalogTabClicked() => ShowTab(false);
+
+    private void HandleHistoryTabClicked() => ShowTab(true);
+
+    // 탭 하나만 켜고 나머지를 끈다. 구매 내역 뷰는 꺼져 있는 동안 구독도 함께 풀린다(OnDisable).
+    private void ShowTab(bool history)
+    {
+        SwapTabViews(history);
+        RefreshTabLabels();
+    }
+
+    // 라벨을 건드리지 않는 절반 — Awake처럼 로컬라이제이션이 아직 준비되지 않은 시점에서 쓴다
+    private void SwapTabViews(bool history)
+    {
+        m_historyShown = history;
+
+        if (m_catalogView != null)
+            m_catalogView.SetActive(!history);
+        if (m_historyView != null)
+            m_historyView.SetActive(history);
+    }
+
+    private void RefreshTabLabels()
+    {
+        ApplyTabLook(m_catalogTab, !m_historyShown, "Shop.Tab.Catalog");
+        ApplyTabLook(m_historyTab, m_historyShown, "Shop.History.Title");
+    }
+
+    private void ApplyTabLook(Button tab, bool selected, string labelKey)
+    {
+        if (tab == null)
+            return;
+
+        Image background = tab.GetComponent<Image>();
+        if (background != null)
+            background.color = selected ? m_tabOnColor : m_tabOffColor;
+
+        TMP_Text label = tab.GetComponentInChildren<TMP_Text>();
+        if (label != null)
+        {
+            label.text = LocalizedStrings.Get(k_shopTable, labelKey);
+            label.color = selected ? m_tabOnTextColor : m_tabOffTextColor;
+        }
     }
 
     // ---- 잔액 ----
