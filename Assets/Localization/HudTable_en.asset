@@ -47,7 +47,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000300
-    m_Localized: Waiting for other players ({0}/{1})
+    m_Localized: Waiting for squad ({0}/{1})
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000301
