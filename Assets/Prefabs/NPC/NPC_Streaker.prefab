@@ -1988,15 +1988,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2941639261495338817, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
       propertyPath: m_IsActive
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8216745839245533791, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
       propertyPath: m_AnchorMax.x
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8216745839245533791, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8732653618947506529, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
       propertyPath: m_PresetInfoIsWorld
