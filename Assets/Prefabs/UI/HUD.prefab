@@ -872,7 +872,11 @@ MonoBehaviour:
     m_WaitForCompletion: 0
     m_LocalVariables: []
   m_noticeSeconds: 3
-  m_noticeTone: {r: 0.8, g: 0.42, b: 0.1, a: 0.95}
+  m_noticeTone: {r: 0.89, g: 0.26, b: 0.2, a: 0.95}
+  m_altNoticeTone: {r: 0.18, g: 0.62, b: 0.35, a: 0.95}
+  m_altToneKeys:
+  - Hud.Event.Notice.Blackout
+  - Hud.Event.Notice.BlackoutRecovered
   references:
     version: 2
     RefIds: []
