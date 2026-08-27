@@ -1,5 +1,7 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.Localization;
+using UnityEngine.Localization.Settings;
 using UnityEngine.UI;
 
 /// <summary>
@@ -15,10 +17,6 @@ public class MapSelectionView : MonoBehaviour
     [SerializeField]
     private TMP_Text m_label;
 
-    [Tooltip("표시 형식 — {0}=맵 이름")]
-    [SerializeField]
-    private string m_format = "다음 출동지: {0}";
-
     [Header("맵 정보 (#611)")]
     [Tooltip("항공뷰 이미지가 들어갈 자리. 비워 두면 이미지 없이 이름만 뜬다")]
     [SerializeField]
@@ -28,9 +26,11 @@ public class MapSelectionView : MonoBehaviour
     [SerializeField]
     private TMP_Text m_npcCountLabel;
 
-    [Tooltip("NPC 수 표시 형식 — {0}=마릿수")]
-    [SerializeField]
-    private string m_npcCountFormat = "시민 {0}명";
+    // 서식은 ShopTable에서 온다 — 인스펙터 문자열로 두면 영원히 번역되지 않는다 (#497 · #843)
+    private const string k_shopTable = "ShopTable";
+    private const string k_nextKey = "Shop.MapSelect.Next";
+    private const string k_npcCountKey = "Shop.MapSelect.NpcCount";
+    private const string k_noMapKey = "Shop.MapSelect.NoMap";
 
     // 지금 구독 중인 홀더 — 세션마다 새로 스폰되므로 참조가 바뀐 프레임에만 다시 건다
     private MapSelection m_bound;
@@ -45,7 +45,18 @@ public class MapSelectionView : MonoBehaviour
             m_previewSize = m_preview.rectTransform.sizeDelta;
     }
 
-    private void OnDisable() => Bind(null);
+    private void OnEnable() => LocalizationSettings.SelectedLocaleChanged += HandleLocaleChanged;
+
+    private void OnDisable()
+    {
+        // 종료 중에는 설정 에셋을 되살리지 않는다 (ShopStand 관례)
+        if (LocalizationSettings.HasSettings)
+            LocalizationSettings.SelectedLocaleChanged -= HandleLocaleChanged;
+
+        Bind(null);
+    }
+
+    private void HandleLocaleChanged(Locale locale) => Refresh();
 
     private void Update()
     {
@@ -79,9 +90,9 @@ public class MapSelectionView : MonoBehaviour
         }
 
         // 칸이 통째로 비어 있으면(씬 이름조차 없음) 배선 실수라 화면에 드러낸다 — RemoteDoorListView와 같다
-        string name = m_bound.SelectedDisplayName;
-        SetText(m_label, string.Format(m_format, name ?? "(미배선)"));
-        SetText(m_npcCountLabel, string.Format(m_npcCountFormat, m_bound.SelectedNpcCount));
+        string name = m_bound.SelectedDisplayName ?? LocalizedStrings.Get(k_shopTable, k_noMapKey);
+        SetText(m_label, LocalizedStrings.Get(k_shopTable, k_nextKey, name));
+        SetText(m_npcCountLabel, LocalizedStrings.Get(k_shopTable, k_npcCountKey, m_bound.SelectedNpcCount));
         SetPreview(m_bound.SelectedPreview, m_bound.SelectedPreviewRotated);
     }
 

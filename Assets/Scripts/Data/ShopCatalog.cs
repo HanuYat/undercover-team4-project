@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 상점 판매 후보 명부 (#814). ShopLineup이 매 라운드 이 중 일부를 뽑아 진열대에 배정한다.
-/// 인덱스가 네트워크 계약이다 — ShopStand.m_entryIndex가 이 인덱스를 그대로 싣는다.
+/// 상점 판매 후보 명부 (#814). ShopLineup이 매 라운드 이 중 일부를 뽑아 주문창 칸에 배정한다.
+/// 인덱스가 네트워크 계약이다 — ShopLineup의 칸이 이 인덱스를 그대로 싣는다.
 /// 세이브에는 남지 않으므로(진열은 라운드마다 다시 뽑힘) 빌드 간 순서 제약은 없다.
 /// </summary>
 [CreateAssetMenu(fileName = "ShopCatalog", menuName = "Scriptable Objects/Shop Catalog")]
@@ -30,29 +30,36 @@ public class ShopCatalog : ScriptableObject
         [SerializeField]
         private bool m_staple;
 
-        [Tooltip("진열대에 올릴 모델. 비우면 소지형은 ItemBase.HeldModelPrefab로 대신한다. (설치형은 필수)")]
+        [Tooltip("설치형 아이콘을 구울 때 쓸 모델 (ItemIconBaker). 소지형은 ItemBase.HeldModelPrefab로 대신한다")]
         [SerializeField]
         private GameObject m_displayModel;
 
+        [Tooltip("아이콘을 구울 때 모델에 씌울 배율 — 눌러 쓰는 설치형은 이 비례가 곧 실물이다")]
         [SerializeField]
         private Vector3 m_displayScale = Vector3.one;
 
+        [Tooltip("주문창 목록에 쓸 아이콘. 비우면 소지형은 ItemBase.ItemIcon으로 대신한다. (설치형은 필수)")]
         [SerializeField]
-        private Vector3 m_displayEuler;
+        private Sprite m_displayIcon;
 
         public ItemBase ItemPrefab => m_itemPrefab;
         public EInstallable Installable => m_installable;
         public int InstallablePrice => m_installablePrice;
         public bool IsStaple => m_staple;
         public Vector3 DisplayScale => m_displayScale;
-        public Vector3 DisplayEuler => m_displayEuler;
 
         public bool IsInstallable => m_installable != EInstallable.None;
 
         /// <summary>판매가. 소지형은 프리팹의 ItemBase.ShopPrice, 설치형은 이 항목의 값.</summary>
         public int Price => IsInstallable ? m_installablePrice : (m_itemPrefab != null ? m_itemPrefab.ShopPrice : 0);
 
-        /// <summary>진열 모델. 지정값이 없으면 소지형은 손 모델로 대신한다.</summary>
+        /// <summary>주문창 아이콘 (#843). 지정값이 없으면 소지형은 아이템 아이콘으로 대신한다.</summary>
+        public Sprite Icon =>
+            m_displayIcon != null ? m_displayIcon
+            : !IsInstallable && m_itemPrefab != null ? m_itemPrefab.ItemIcon
+            : null;
+
+        /// <summary>아이콘을 구울 때 쓰는 모델 (#814). 지정값이 없으면 소지형은 손 모델로 대신한다.</summary>
         public GameObject DisplayModel =>
             m_displayModel != null ? m_displayModel
             : !IsInstallable && m_itemPrefab != null ? m_itemPrefab.HeldModelPrefab
@@ -62,7 +69,7 @@ public class ShopCatalog : ScriptableObject
         public bool IsValid => IsInstallable ? m_installablePrice > 0 : m_itemPrefab != null;
     }
 
-    [Tooltip("인덱스가 네트워크 계약 — ShopStand가 그대로 복제한다")]
+    [Tooltip("인덱스가 네트워크 계약 — ShopLineup의 칸이 그대로 복제한다")]
     [SerializeField]
     private Entry[] m_entries;
 

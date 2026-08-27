@@ -18,6 +18,7 @@ MonoBehaviour:
     m_installablePrice: 0
     m_staple: 1
     m_displayModel: {fileID: 1136368065188656574, guid: 478a9ddea5a78e24a8dc439bea7bd333, type: 3}
+    m_displayIcon: {fileID: 0}
     m_displayScale: {x: 1, y: 1, z: 1}
     m_displayEuler: {x: 0, y: 0, z: 0}
   - m_itemPrefab: {fileID: 8642798545583791299, guid: a9ac620741023794a86cde3139872143, type: 3}
@@ -25,6 +26,7 @@ MonoBehaviour:
     m_installablePrice: 0
     m_staple: 1
     m_displayModel: {fileID: 1136368065188656574, guid: 97ccc75820ed6bf4198d83c80db92579, type: 3}
+    m_displayIcon: {fileID: 0}
     m_displayScale: {x: 1, y: 1, z: 1}
     m_displayEuler: {x: 0, y: 0, z: 0}
   - m_itemPrefab: {fileID: 9191439955366297747, guid: ecf008267fc242846a88146ebcd9505e, type: 3}
@@ -32,6 +34,7 @@ MonoBehaviour:
     m_installablePrice: 0
     m_staple: 0
     m_displayModel: {fileID: 9165171215913758722, guid: f3fa43e03b509be4db69a5be7803fd91, type: 3}
+    m_displayIcon: {fileID: 0}
     m_displayScale: {x: 1, y: 1, z: 1}
     m_displayEuler: {x: 0, y: 0, z: 0}
   - m_itemPrefab: {fileID: 6588843841137046898, guid: 9da4b15656bbf3e4c8c3c0d8134f7547, type: 3}
@@ -39,6 +42,7 @@ MonoBehaviour:
     m_installablePrice: 0
     m_staple: 0
     m_displayModel: {fileID: 4839429111455078644, guid: 795ae67a105c6ae428a56d86768fc150, type: 3}
+    m_displayIcon: {fileID: 0}
     m_displayScale: {x: 1, y: 1, z: 1}
     m_displayEuler: {x: 0, y: 0, z: 0}
   - m_itemPrefab: {fileID: 0}
@@ -46,6 +50,7 @@ MonoBehaviour:
     m_installablePrice: 10000
     m_staple: 0
     m_displayModel: {fileID: 100000, guid: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6, type: 3}
+    m_displayIcon: {fileID: 21300000, guid: 4867701ef3daaaf47a137fc2c7508ed8, type: 3}
     m_displayScale: {x: 0.1, y: 0.4, z: 0.4}
     m_displayEuler: {x: 0, y: 0, z: 0}
   - m_itemPrefab: {fileID: 0}
@@ -53,6 +58,7 @@ MonoBehaviour:
     m_installablePrice: 5000
     m_staple: 0
     m_displayModel: {fileID: 1341259235766940, guid: 7f93e1c20bd4df647865b27d7d1aaf19, type: 3}
+    m_displayIcon: {fileID: 21300000, guid: 09bd18471fcff0d44bd286fad7115701, type: 3}
     m_displayScale: {x: 1, y: 1, z: 1}
     m_displayEuler: {x: 0, y: 90, z: 0}
   - m_itemPrefab: {fileID: 3597358746278584263, guid: dfc014bb0d5440b4a93c8fa57ef27e42, type: 3}
@@ -60,6 +66,7 @@ MonoBehaviour:
     m_installablePrice: 0
     m_staple: 0
     m_displayModel: {fileID: 6973116298489018123, guid: 3f8d1738e552c184ea19e6b73df2f6c0, type: 3}
+    m_displayIcon: {fileID: 0}
     m_displayScale: {x: 1, y: 1, z: 1}
     m_displayEuler: {x: 0, y: 0, z: 0}
   - m_itemPrefab: {fileID: 1048637736484071511, guid: fb2e14cf34b8f854db650513ce13003d, type: 3}
@@ -67,6 +74,7 @@ MonoBehaviour:
     m_installablePrice: 0
     m_staple: 1
     m_displayModel: {fileID: 1844027589456706, guid: 30557939935d4ee48b28a5de57e9e605, type: 3}
+    m_displayIcon: {fileID: 0}
     m_displayScale: {x: 1, y: 1, z: 1}
     m_displayEuler: {x: -75, y: 0, z: 0}
   m_stapleSlots: 5

@@ -103,7 +103,8 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 816000000000002
-    m_Localized: Normally just a light tap, but on a very rare roll it flattens the target completely on the spot.
+    m_Localized: Normally just a light tap, but on a very rare roll it flattens the
+      target completely on the spot.
     m_Metadata:
       m_Items: []
   - m_Id: 12800064385781760
@@ -112,6 +113,14 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 12800064440307712
     m_Localized: Swing it to launch a target flying instead of dealing damage.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13576462929395712
+    m_Localized: Equipment catalog
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13576462958755840
+    m_Localized: Opens the order window. Usable inside the shop only.
     m_Metadata:
       m_Items: []
   references:

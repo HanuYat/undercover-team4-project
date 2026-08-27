@@ -34,6 +34,19 @@ public abstract class ItemBase : ChanneledInteractionBehaviour
     [SerializeField]
     private Vector3 m_heldRotationOffset;
 
+    [Tooltip(
+        "3인칭 손은 손가락 프리셋이 안 걸려 펴진 채라, 1인칭에 맞춘 그립이 손을 뚫는 아이템이 있다."
+            + " 체크하면 3인칭 표시만 아래 값으로 따로 잡는다 (#843)"
+    )]
+    [SerializeField]
+    private bool m_overrideThirdPersonGrip;
+
+    [SerializeField]
+    private Vector3 m_thirdPersonPositionOffset;
+
+    [SerializeField]
+    private Vector3 m_thirdPersonRotationOffset;
+
     [Tooltip("1인칭 손 손가락 프리셋 — 이 아이템을 들 때 손 모양 (#265)")]
     [SerializeField]
     private HandGrip m_handGrip = HandGrip.Relaxed;
@@ -67,6 +80,14 @@ public abstract class ItemBase : ChanneledInteractionBehaviour
     /// <summary>3인칭 손 앵커 기준 회전 오프셋(오일러 각). PlayerHeldItemView가 표시 모델에 적용한다. (#151)</summary>
     public Vector3 HeldRotationOffset => m_heldRotationOffset;
 
+    /// <summary>3인칭 표시용 위치 오프셋 — 따로 잡지 않았으면 <see cref="HeldPositionOffset"/> 그대로. (#843)</summary>
+    public Vector3 ThirdPersonPositionOffset =>
+        m_overrideThirdPersonGrip ? m_thirdPersonPositionOffset : m_heldPositionOffset;
+
+    /// <summary>3인칭 표시용 회전 오프셋 — 따로 잡지 않았으면 <see cref="HeldRotationOffset"/> 그대로. (#843)</summary>
+    public Vector3 ThirdPersonRotationOffset =>
+        m_overrideThirdPersonGrip ? m_thirdPersonRotationOffset : m_heldRotationOffset;
+
     /// <summary>이 아이템으로 사용 가능한 대상을 조준 중일 때의 윤곽선 색. (#184)</summary>
     public Color TargetOutlineColor => m_targetOutlineColor;
 
@@ -96,6 +117,13 @@ public abstract class ItemBase : ChanneledInteractionBehaviour
     /// 대상에 따라 동작이 갈리면 여기서 갈라 준다 — CanTarget의 갈래와 순서를 맞출 것.
     /// </summary>
     public virtual LocalizedString TargetPromptLabel(GameObject aimTarget) => null;
+
+    /// <summary>
+    /// 겨눈 것 없이 손에 든 것만으로 쓰는 아이템의 사용 안내 — "카탈로그 열기"처럼 동사로. (#843)
+    /// 키(좌클릭) 표기는 <see cref="TargetPromptLabel"/>과 같이 표시 쪽이 붙인다.
+    /// 조준과 무관하게 뜨므로 겨냥한 대상이 있는 안내에 자리를 내준다. null이면 뜨지 않는다.
+    /// </summary>
+    public virtual LocalizedString HeldPromptLabel() => null;
 
     /// <summary>
     /// 현재 아이템을 사용할 수 있는지 — UI 표시(장착 아이콘 활성/비활성 등)용 힌트. 기본값 true.

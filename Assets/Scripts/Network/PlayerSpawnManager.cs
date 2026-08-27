@@ -127,9 +127,25 @@ public class PlayerSpawnManager : MonoBehaviour
         else
             RepositionPlayer(client.PlayerObject);
 
-        // 기본 장비는 게임 씬 진입 시점에만 지급 — 상점(허브)은 빈손 대기 (#370)
+        // 장비 지급은 여기서 한다 — 플레이어가 방금 스폰·재배치된 것이 확정된 유일한 지점이다.
+        // ShopManager.Start는 이보다 먼저 돌 수 있어 그 시점엔 호스트 몸이 아직 없다 (#843).
+        //
+        // 게임 씬에서는 상점에서 들려 준 카탈로그를 먼저 회수한다 — 손에 남아 있으면 보유 검사에
+        // 걸려 기본 장비가 통째로 지급되지 않는다.
+        PlayerItemSupply supply = client.PlayerObject?.GetComponent<PlayerItemSupply>();
+        if (supply == null)
+            return;
+
         if (App.CurrentScene == EScene.Game)
-            client.PlayerObject?.GetComponent<PlayerItemSupply>()?.ServerGrantStartingGear();
+        {
+            supply.ServerClearHeldItems();
+            supply.ServerGrantStartingGear();
+        }
+        else if (App.CurrentScene == EScene.Shop)
+        {
+            // 회수는 ShopManager 몫(#370). 지급은 한 프레임 미뤄 도므로 그 회수보다 항상 뒤에 온다.
+            supply.ServerGrantShopGear();
+        }
     }
 
     private void SpawnPlayerFor(ulong clientId)

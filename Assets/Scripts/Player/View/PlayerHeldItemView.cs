@@ -208,8 +208,10 @@ public class PlayerHeldItemView : NetworkBehaviour
 
         // 아이템마다 모델 피벗이 달라(대부분 손목에 걸린다) 앵커 하나로는 못 맞춘다 —
         // 실제로 쥔 각도는 아이템이 자기 그립 오프셋으로 들고 있다. (#151)
-        m_heldModelInstance.transform.localPosition = item.HeldPositionOffset;
-        m_heldModelInstance.transform.localRotation = Quaternion.Euler(item.HeldRotationOffset);
+        m_heldModelInstance.transform.localPosition = item.ThirdPersonPositionOffset;
+        m_heldModelInstance.transform.localRotation = Quaternion.Euler(
+            item.ThirdPersonRotationOffset
+        );
 
         // 표시 전용 인스턴스 — 콜라이더가 플레이어·월드와 간섭하지 않게 전부 끈다 (PlayerHandView와 동일)
         foreach (Collider heldCollider in m_heldModelInstance.GetComponentsInChildren<Collider>(true))
