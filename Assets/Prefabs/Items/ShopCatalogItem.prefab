@@ -95,6 +95,9 @@ MonoBehaviour:
   m_heldModelPrefab: {fileID: 1523162694156800, guid: a5b5e01895a2f294188114a6032d1692, type: 3}
   m_heldPositionOffset: {x: 0.1, y: 0.01, z: -0.07}
   m_heldRotationOffset: {x: 165, y: -15, z: 90}
+  m_overrideThirdPersonGrip: 1
+  m_thirdPersonPositionOffset: {x: 0.17, y: 0.04, z: -0.08}
+  m_thirdPersonRotationOffset: {x: -3.6, y: 159.8, z: 319.3}
   m_handGrip: 3
   m_targetOutlineColor: {r: 1, g: 0.85, b: 0.2, a: 1}
   m_shopPrice: 0
