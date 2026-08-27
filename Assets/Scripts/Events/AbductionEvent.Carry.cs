@@ -151,8 +151,9 @@ public partial class AbductionEvent
             return;
         }
 
-        // 도착 — RunAsync가 StopCarried로 끌기를 끊었으므로 피해자는 그 자리에 선다.
-        // 무력화(Abducted)는 풀지 않는다: 뚜껑이 열리는 동안 서 있되 아무것도 못 한다.
+        // 도착 — RunAsync가 StopCarried로 끌기를 끊었으므로 피해자는 그 자리에 멈춘다(자세는
+        // 무력화가 정한다 — Abducted도 다른 무력화처럼 쓰러진 자세다, #901).
+        // 무력화(Abducted)는 풀지 않는다: 뚜껑이 열리는 동안 아무것도 못 한다.
         if (!await OpenManholeAsync(caught, manhole))
         {
             FinishRescued(caught);
