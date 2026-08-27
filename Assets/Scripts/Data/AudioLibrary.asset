@@ -232,7 +232,7 @@ MonoBehaviour:
   - Id: 38
     Clip: {fileID: 8300000, guid: 38e059d1266a4c84d9a2fd19c6964d97, type: 3}
     Volume: 0.8
-    StartOffset: 0
+    StartOffset: 0.08
     MinDistance: 2
     MaxDistance: 20
   m_bgm:
