@@ -29,6 +29,18 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
     [SerializeField] private AccessoryCatalog m_catalog;
 
     [Header("연출")]
+    [Tooltip("투입구로 빨려 들어갈 토큰 그림. 비우면 투입 연출을 건너뛴다")]
+    [SerializeField] private Sprite m_coinSprite;
+
+    [Tooltip("투입구 위치 — 자판기 기준 로컬 오프셋(m). 인스펙터에서 눈으로 맞출 것")]
+    [SerializeField] private Vector3 m_coinSlotOffset = new Vector3(0.42f, 0.4f, 0.2f);
+
+    [Tooltip("토큰 지름(m) — 투입구 폭에 맞춘다")]
+    [SerializeField] private float m_coinSize = 0.055f;
+
+    [Tooltip("토큰이 들어가는 데 걸리는 시간(초) — 이 뒤에 룰렛이 돈다")]
+    [SerializeField] private float m_coinInsertSeconds = 0.5f;
+
     [Tooltip("캡슐·치장이 뜰 자리. 비우면 자판기 자신의 위치를 쓴다")]
     [SerializeField] private Transform m_dispenseAnchor;
 
@@ -59,20 +71,24 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
     // 기계 앞 모형 연출이 겹치지 않게 — 남의 결과를 잇달아 받아도 하나만 돈다
     private bool m_playing;
 
+    // 내 뽑기가 코인 투입~릴 오픈 사이를 지나는 중 — 그 사이는 IsReelSpinning()이 아직 false라
+    // 이 플래그가 없으면 그 틈에 다시 눌러 토큰을 이중으로 쓸 수 있다. DrawAsync 시작~끝까지만 켜 둔다.
+    private bool m_drawing;
+
     // 지금 떠 있는 모형 — 연출이 끊기면(씬 전환·파괴) 같이 지운다
     private GameObject m_shown;
 
     public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.Gacha;
 
-    // 내 릴이 도는 중에만 막는다. 토큰이 없다고 미리 막지 않는 것은 눌러서 사유를 볼 수 있게
-    // 하려는 것이고, 이유 표시 방식은 ShopStand와 같다.
+    // 내 릴이 도는 중이거나 내 뽑기가 진행 중일 때만 막는다. 토큰이 없다고 미리 막지 않는 것은
+    // 눌러서 사유를 볼 수 있게 하려는 것이고, 이유 표시 방식은 ShopStand와 같다.
     // 기계 앞 모형(m_playing)은 남의 뽑기로도 돌므로 여기서 보지 않는다 — 남이 뽑는 동안 내가
     // 못 누르면 붐빌 때 아무도 못 뽑는다.
-    public bool CanInteract(GameObject interactor) => !IsReelSpinning();
+    public bool CanInteract(GameObject interactor) => !m_drawing && !IsReelSpinning();
 
     public void Interact(GameObject interactor)
     {
-        if (IsReelSpinning())
+        if (m_drawing || IsReelSpinning())
             return;
 
         if (m_catalog == null)
@@ -110,22 +126,107 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
 
         App.Sound?.PlaySfx2D(m_drawSound);
 
-        // 릴이 결과 문구까지 띄운다 — 창이 화면을 덮으므로 토스트는 그 뒤에 가린다.
-        // 릴이 없는 씬(패널 미배치)에서는 기계 앞 모형과 토스트로 물러난다.
-        CosmeticGachaPanel reel = FindReel();
-        if (reel != null)
-        {
-            reel.Play(slot, index, gained);
-        }
-        else
-        {
-            ShowResultMessage(slot, index, gained);
-            PlayRevealAsync(slot, index).Forget();
-        }
+        // 토큰이 들어가는 것을 보여 준 뒤에 돌린다 — 넣지도 않았는데 릴부터 돌면 무엇을 내고
+        // 받는 것인지 읽히지 않는다. 장부는 이미 위에서 끝냈으므로 이 연출이 끊겨도 잔량은 옳다.
+        DrawAsync(slot, index, gained).Forget();
 
         // 같이 서 있는 사람도 보게 한다 — 세션이 아니면(씬 단독 Play) 보낼 곳이 없다
         if (IsSpawned)
             ReportDrawRpc((byte)slot, index);
+    }
+
+    /// <summary>
+    /// 뽑은 사람의 연출 — 토큰이 투입구로 들어가고, 그 뒤에 릴이 돈다.
+    ///
+    /// 릴이 결과 문구까지 띄운다 — 창이 화면을 덮으므로 토스트는 그 뒤에 가린다.
+    /// 릴이 없는 씬(패널 미배치)에서는 기계 앞 모형과 토스트로 물러난다.
+    /// </summary>
+    private async UniTaskVoid DrawAsync(EAccessorySlot slot, int index, bool gained)
+    {
+        // 여기까지는 Interact와 같은 프레임에 동기로 실행된다 — 첫 await 앞에서 켜야 틈이 없다
+        m_drawing = true;
+        try
+        {
+            await PlayCoinInsertAsync();
+
+            CosmeticGachaPanel reel = FindReel();
+            if (reel != null)
+            {
+                reel.Play(slot, index, gained);
+            }
+            else
+            {
+                ShowResultMessage(slot, index, gained);
+                PlayRevealAsync(slot, index).Forget();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // 자판기가 사라졌다(씬 전환)
+        }
+        finally
+        {
+            // 릴이 이미 돌기 시작해 이 뒤는 IsReelSpinning()이 막는다
+            m_drawing = false;
+        }
+    }
+
+    /// <summary>
+    /// 토큰 한 닢이 투입구 위에 떠서 돌다가 빨려 들어간다 (#850) — 그림이 없으면 아무것도 하지 않는다.
+    ///
+    /// 스프라이트로 그리는 이유는 이 토큰이 <b>UI에만 있던 그림</b>이라서다 — 같은 그림을 쓰면
+    /// 상점 HUD의 보유 개수와 여기서 사라지는 한 닢이 같은 물건으로 읽힌다.
+    /// 늘 보는 사람 쪽을 향하게 세운다 — 자판기 앞면이 어느 축인지는 프롭마다 다르다.
+    /// </summary>
+    private async UniTask PlayCoinInsertAsync()
+    {
+        if (m_coinSprite == null || m_coinInsertSeconds <= 0f)
+            return;
+
+        Vector3 slot = transform.TransformPoint(m_coinSlotOffset);
+        var coin = new GameObject("GachaCoin");
+        var renderer = coin.AddComponent<SpriteRenderer>();
+        renderer.sprite = m_coinSprite;
+
+        // 스프라이트는 스케일 1이 곧 1m가 아니다(PPU에 따라 십수 m가 되기도 한다) — 지름을 m로
+        // 받으려면 그림의 실제 크기로 나눠야 한다. 안 그러면 동전이 자판기만 해진다.
+        float spriteWidth = m_coinSprite.bounds.size.x;
+        float scale = spriteWidth > 0f ? m_coinSize / spriteWidth : m_coinSize;
+
+        // 자판기 정면(로컬 +Z) 바깥에서 출발해 투입구 <b>안쪽</b>까지 들어간다 — 표면에서 멈추면
+        // 넣다 만 것으로 보인다
+        Vector3 start = slot + transform.forward * (m_coinSize * 2.5f);
+        Vector3 end = slot - transform.forward * (m_coinSize * 3f);
+
+        try
+        {
+            float elapsed = 0f;
+            while (elapsed < m_coinInsertSeconds)
+            {
+                await UniTask.NextFrame(destroyCancellationToken);
+                elapsed += Time.deltaTime;
+
+                float t = Mathf.Clamp01(elapsed / m_coinInsertSeconds);
+                // 위에서 떨어뜨리지 않고 <b>앞에서 밀어 넣는다</b> — 투입구는 세로 홈이라 동전은
+                // 정면에서 들어간다. 나오는 거리는 토큰 크기를 따라간다.
+                coin.transform.position = Vector3.Lerp(start, end, t * t);
+
+                // 마지막 구간에서만 사라진다 — 처음부터 줄이면 들어가는 것이 아니라 녹는 것으로 보인다
+                float shrink = t < 0.85f ? 1f : 1f - ((t - 0.85f) / 0.15f);
+                coin.transform.localScale = Vector3.one * (scale * shrink);
+
+                Camera view = Camera.main;
+                if (view != null)
+                    coin.transform.rotation = Quaternion.LookRotation(
+                        coin.transform.position - view.transform.position
+                    );
+            }
+        }
+        finally
+        {
+            if (coin != null)
+                Destroy(coin);
+        }
     }
 
     /// <summary>
@@ -177,7 +278,37 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
         if (m_playing || m_catalog == null || IsReelSpinning())
             return;
 
-        PlayRevealAsync((EAccessorySlot)slot, index).Forget();
+        PlayRemoteDrawAsync((EAccessorySlot)slot, index).Forget();
+    }
+
+    /// <summary>
+    /// 남이 돌리는 것도 토큰 투입부터 보인다 — 기계 앞 모형만 뜨면 무엇 때문에 나온 것인지 모른다.
+    ///
+    /// <b>모형은 릴이 멈출 때까지 기다린다</b> (#850) — 뽑은 사람은 릴이 다 돌아야 결과를 아는데,
+    /// 옆 사람 화면에 물건이 먼저 뜨면 당첨을 남이 먼저 보는 셈이 된다. 기다리는 시간은 이 씬의
+    /// 릴에서 읽는다(모두 같은 프리팹이라 값이 같다).
+    /// </summary>
+    private async UniTaskVoid PlayRemoteDrawAsync(EAccessorySlot slot, int index)
+    {
+        try
+        {
+            await PlayCoinInsertAsync();
+
+            CosmeticGachaPanel reel = FindReel();
+            float wait = (reel != null ? reel.SpinSeconds : 0f) - m_coinInsertSeconds;
+            if (wait > 0f)
+                await UniTask.Delay(
+                    TimeSpan.FromSeconds(wait),
+                    DelayType.UnscaledDeltaTime,
+                    cancellationToken: destroyCancellationToken
+                );
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        PlayRevealAsync(slot, index).Forget();
     }
 
     // 릴은 스스로 UI 매니저에 등록한다 — 자판기가 인스펙터로 물고 있지 않는 이유는
@@ -262,6 +393,13 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
     {
         Clear();
         base.OnDestroy();
+    }
+
+    // 투입구 자리는 눈으로 맞춰야 한다 — 고를 때 그 자리에 토큰 크기의 원을 그려 준다
+    private void OnDrawGizmosSelected()
+    {
+        Gizmos.color = new Color(1f, 0.82f, 0.25f);
+        Gizmos.DrawWireSphere(transform.TransformPoint(m_coinSlotOffset), m_coinSize * 0.5f);
     }
 
     private void ShowResultMessage(EAccessorySlot slot, int index, bool gained)

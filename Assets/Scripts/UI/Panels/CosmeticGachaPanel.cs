@@ -88,6 +88,9 @@ public class CosmeticGachaPanel : PanelBase
     /// <summary>릴이 도는 중인가 — 자판기가 겹쳐 돌리지 않으려고 본다.</summary>
     public bool IsSpinning => m_spinning;
 
+    /// <summary>릴이 도는 시간(초) — 자판기가 남의 화면 연출을 여기에 맞춘다 (#850).</summary>
+    public float SpinSeconds => m_spinSeconds;
+
     private float Pitch => m_cellSize + m_gap;
     private int Center => VisibleCells / 2;
 

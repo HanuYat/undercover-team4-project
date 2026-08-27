@@ -3,15 +3,16 @@ using UnityEngine;
 using UnityEngine.Localization;
 
 /// <summary>
-/// 자판기에 붙는 남은 토큰 표시 (#818 D) — <see cref="CosmeticGachaMachine"/>과 같은 오브젝트에 둔다.
+/// 남은 치장 뽑기 토큰 표시 (#818 D · #850) — 자판기 3D 라벨, 상점 HUD, 커스터마이징 창이 같이 쓴다.
+/// 문구는 인스펙터에서 받으므로 놓이는 자리마다 다른 키를 물릴 수 있다.
 ///
 /// 조준 안내(<see cref="InteractPrompts.Gacha"/>)에 숫자를 끼우지 않는 이유는 그 문구가 20종을
-/// 한 벌만 캐시해 두고 참조 비교로 재구독을 판정하는 자리라서다 — 개체마다 다른 인자를 넣을 수 없다.
-/// 그래서 기계 쪽에 따로 붙인다. 계정 값이라 조준하지 않아도 보이는 것이 낫기도 하다.
+/// 한 벌만 캐시해 두고 참조 비교로 재구독을 판정하는 자리라서다 — 인자만 갈면 화면이 갱신되지 않는다.
+/// 그래서 표시를 따로 둔다. 계정 값이라 조준하지 않아도 보이는 것이 낫기도 하다.
 /// </summary>
-public class CosmeticGachaTokenView : MonoBehaviour
+public class CosmeticTokenView : MonoBehaviour
 {
-    [Tooltip("남은 토큰을 적을 3D 라벨")]
+    [Tooltip("남은 토큰을 적을 라벨")]
     [SerializeField]
     private TMP_Text m_label;
 
@@ -25,7 +26,7 @@ public class CosmeticGachaTokenView : MonoBehaviour
         // 에러가 쌓인다 (EmoteWheelSlotView가 같은 이유로 IsEmpty를 본다)
         if (m_format.IsEmpty)
         {
-            Debug.LogWarning($"[{nameof(CosmeticGachaTokenView)}] 표시 문구 키가 연결되지 않았습니다 (#818 D)", this);
+            Debug.LogWarning($"[{nameof(CosmeticTokenView)}] 표시 문구 키가 연결되지 않았습니다 (#818 D)", this);
             return;
         }
 
