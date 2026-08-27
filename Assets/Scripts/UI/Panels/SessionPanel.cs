@@ -25,13 +25,69 @@ public class SessionPanel : PanelBase
     public override bool IsStackable => false;
 
     /// <summary>
-    /// 세션 화면이 떴다 = 첫 화면에 도달했다. 처음 온 사람에게 튜토리얼을 한 번 권한다 (#663).
+    /// 기본 경로 — 배경을 <b>즉시</b> 켜고 연다. 관문을 통과해 오는 길(AuthGatePanel.Pass)이 여기다.
     ///
-    /// 이 자리인 이유: 세션 화면은 관문을 통과해 열리는 길(AuthGatePanel.Pass)과 지난 실행의 기억으로
-    /// 건너뛰어 열리는 길(TitleUIManager.Start) 둘이 있는데, 둘 다 결국 여기를 지난다.
-    /// 관문 위에 겹쳐 띄울 수는 없다 — 로그인도 안 한 사람에게 먼저 물을 일이 아니다.
+    /// 여기서 배경을 페이드하면 안 된다. 관문의 커튼이 방금까지 화면을 덮고 있었으므로 배경을 0부터
+    /// 올리면 그 사이 아무것도 없는 프레임이 생겨 스카이박스가 비친다(실측). 커튼 뒤에서 배경은
+    /// 이미 켜져 있어야 한다.
     /// </summary>
     public override void OpenPanel()
+    {
+        m_closeRequested = false;
+        SetBackdropAlpha(1f);
+        OpenNow();
+    }
+
+    /// <summary>
+    /// 씬 진입 직후 전용 — 화면을 덮은 것이 없으므로 배경부터 페이드 인하고 연다. (#585)
+    /// 부르는 곳은 <see cref="TitleUIManager"/> 하나뿐이다.
+    /// </summary>
+    public void OpenWithBackdropFade()
+    {
+        m_closeRequested = false;
+        OpenAfterBackdropFadeAsync().Forget();
+    }
+
+    // 페이드가 도는 동안 닫히면(자동 로그인이 끝내 실패해 관문으로 되돌아가는 경우 등)
+    // 뒤늦게 열려 관문 위에 겹치지 않게 한다.
+    public override void ClosePanel()
+    {
+        m_closeRequested = true;
+        base.ClosePanel();
+    }
+
+    private bool m_closeRequested;
+
+    private async UniTaskVoid OpenAfterBackdropFadeAsync()
+    {
+        await UIFade.ToAsync(
+            m_backdropCanvasGroup,
+            0f,
+            1f,
+            m_backdropFadeSeconds,
+            this.GetCancellationTokenOnDestroy()
+        );
+
+        SetBackdropAlpha(1f); // 참조가 비어 있어도 열리게 — UIFade는 null이면 아무것도 하지 않는다
+
+        if (!m_closeRequested)
+            OpenNow();
+    }
+
+    private void SetBackdropAlpha(float alpha)
+    {
+        if (m_backdropCanvasGroup != null)
+            m_backdropCanvasGroup.alpha = alpha;
+    }
+
+    /// <summary>
+    /// 실제로 여는 곳. base 호출은 async 밖이어야 하므로 여기로 뺐다.
+    ///
+    /// 튜토리얼 권유가 이 자리인 이유: 세션 화면은 관문을 통과해 열리는 길(AuthGatePanel.Pass)과
+    /// 지난 실행의 기억으로 건너뛰어 열리는 길(TitleUIManager.Start) 둘이 있는데, 둘 다 결국
+    /// 여기를 지난다. 관문 위에 겹쳐 띄울 수는 없다 — 로그인도 안 한 사람에게 먼저 물을 일이 아니다. (#663)
+    /// </summary>
+    private void OpenNow()
     {
         base.OpenPanel();
 
@@ -47,6 +103,15 @@ public class SessionPanel : PanelBase
         if (App.UI.Current != null && App.UI.Current.OpenPanel<TutorialConfirmPanel>())
             TutorialFlow.MarkOffered();
     }
+
+    [Header("연출")]
+    [Tooltip("세션 화면 배경(Backdrop) 페이드 인 — 비우면 페이드 없이 바로 열린다")]
+    [SerializeField]
+    private CanvasGroup m_backdropCanvasGroup;
+
+    [Tooltip("배경 페이드 인 시간(초)")]
+    [SerializeField]
+    private float m_backdropFadeSeconds = 0.5f;
 
     [Header("UI 참조")]
     [SerializeField]

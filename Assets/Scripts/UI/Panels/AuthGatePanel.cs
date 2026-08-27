@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using Cysharp.Threading.Tasks;
 using TMPro;
 using Unity.Services.Core;
@@ -72,6 +73,19 @@ public class AuthGatePanel : PanelBase
     [SerializeField]
     private TMP_Text m_statusText;
 
+    [Header("연출")]
+    [Tooltip("관문 배경(Curtain) 페이드 인 — 비우면 페이드 없이 바로 로그인 폼을 보여준다")]
+    [SerializeField]
+    private CanvasGroup m_curtainCanvasGroup;
+
+    [Tooltip("로그인 폼 — 배경이 페이드 인된 뒤에만 활성화한다")]
+    [SerializeField]
+    private GameObject m_windowRoot;
+
+    [Tooltip("배경 페이드 인 시간(초)")]
+    [SerializeField]
+    private float m_curtainFadeSeconds = 0.5f;
+
     private const string k_table = "TitleTable";
     private const string k_statusPrefix = "Title.AuthStatus.";
     private const string k_linkConfirmKey = "Title.Auth.LinkConfirm";
@@ -135,6 +149,50 @@ public class AuthGatePanel : PanelBase
         Refresh();
     }
 
+    #region 연출
+    // 통과 연출은 커튼과 로그인 폼을 한 덩어리로 걷어내야 해서 루트 CanvasGroup이 필요하다.
+    // 디자이너가 만질 값이 아니라 연출 내부 사정이라 인스펙터 배선을 요구하지 않고 여기서 확보한다.
+    private CanvasGroup m_rootGroup;
+
+    // 통과 연출이 도는 중인가 — 도중에 관문이 다시 열리면(로그아웃 등) 뒤늦게 닫지 않기 위한 표시.
+    private bool m_isPassing;
+
+    protected override void Awake()
+    {
+        base.Awake(); // m_panelRoot이 여기서 정해진다 (R5)
+
+        if (!m_panelRoot.TryGetComponent(out m_rootGroup))
+            m_rootGroup = m_panelRoot.AddComponent<CanvasGroup>();
+    }
+
+    // Window를 먼저 숨겨야 같은 프레임에 Curtain과 함께 반짝이지 않는다 — base.OpenPanel()보다 앞.
+    public override void OpenPanel()
+    {
+        m_isPassing = false;
+        SetWindowVisible(false);
+
+        // 통과 연출이 남겨 둔 상태를 되돌린다 — 로그아웃으로 다시 열릴 때 투명한 채 열리지 않게.
+        m_rootGroup.alpha = 1f;
+        m_rootGroup.blocksRaycasts = true;
+
+        base.OpenPanel();
+        FadeInCurtainAsync(this.GetCancellationTokenOnDestroy()).Forget();
+    }
+
+    // 커튼이 다 차오른 뒤에 로그인 폼을 내놓는다.
+    private async UniTaskVoid FadeInCurtainAsync(CancellationToken token)
+    {
+        await UIFade.ToAsync(m_curtainCanvasGroup, 0f, 1f, m_curtainFadeSeconds, token);
+        SetWindowVisible(true);
+    }
+
+    private void SetWindowVisible(bool visible)
+    {
+        if (m_windowRoot != null)
+            m_windowRoot.SetActive(visible);
+    }
+    #endregion
+
     #region 통과
     /// <summary>관문을 넘긴다 — 다시 오지 않도록 표시하고 세션 화면으로 넘어간다.</summary>
     private void Pass()
@@ -148,7 +206,29 @@ public class AuthGatePanel : PanelBase
             // 넘어갈 화면이 없으면 관문만 닫혀 빈 화면이 남는다 — 조용히 넘기지 않는다
             Debug.LogError("[AuthGatePanel] SessionPanel이 씬에 없어 세션 화면을 열지 못했습니다.", this);
 
-        ClosePanel();
+        FadeOutThenCloseAsync(this.GetCancellationTokenOnDestroy()).Forget();
+    }
+
+    /// <summary>
+    /// 관문 전체(커튼 + 로그인 폼)를 한 덩어리로 걷어 그 아래 준비된 세션 화면을 드러낸다.
+    ///
+    /// <b>폼만 먼저 끄면 그 순간이 깜박임으로 보인다</b>(실측). 커튼만 페이드하고 폼은 즉시 껐더니
+    /// 폼이 사라지는 프레임이 눈에 띄었다 — 둘은 같이 사라져야 한 번의 전환으로 읽힌다.
+    /// 세션 화면은 위 <see cref="Pass"/>에서 이미 커튼 아래에 다 켜 두었으므로 덮개만 벗기면 된다.
+    /// </summary>
+    private async UniTaskVoid FadeOutThenCloseAsync(CancellationToken token)
+    {
+        m_isPassing = true;
+
+        // 드러나는 도중에 눌러도 아래 버튼이 먹게 한다 — 걷히는 중인 관문이 클릭을 삼키면
+        // "눌렀는데 아무 일도 없는" 구간이 생긴다.
+        m_rootGroup.blocksRaycasts = false;
+
+        await UIFade.ToAsync(m_rootGroup, 1f, 0f, m_curtainFadeSeconds, token);
+
+        // 도중에 관문이 다시 열렸으면(로그아웃) 그쪽이 주인이다 — 닫지 않는다.
+        if (m_isPassing)
+            ClosePanel();
     }
     #endregion
 

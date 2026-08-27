@@ -25,6 +25,9 @@ public class TitleUIManager : UIManagerBase
     /// <see cref="PanelBase.Awake"/>가 루트를 비활성화하고, <b>비활성 오브젝트에서는 Start가
     /// 아예 실행되지 않는다</b> — 패널 쪽 Start에 두면 영원히 안 불려 빈 화면이 남는다.
     /// 매니저는 상시 활성이고 Start는 모든 Awake(=패널 등록 완료) 뒤라 이 자리가 맞다.
+    ///
+    /// 배경 페이드는 여기가 아니라 각 패널이 맡는다 — 세션 화면은 여기 말고
+    /// <see cref="AuthGatePanel.Pass"/>로도 열리므로, 그 둘이 다 지나는 자리는 패널 쪽이다.
     /// </summary>
     private void Start()
     {
@@ -43,7 +46,12 @@ public class TitleUIManager : UIManagerBase
 
         if (remembered && canRestoreSession)
         {
-            OpenPanel<SessionPanel>();
+            // 씬에 막 들어온 참이라 화면을 덮은 것이 없다 — 배경부터 띄우고 연다.
+            // 관문을 통과해 오는 길은 커튼이 이미 덮고 있으므로 그쪽은 페이드하지 않는다.
+            if (TryGetPanel(out SessionPanel session))
+                session.OpenWithBackdropFade();
+            else
+                OpenPanel<SessionPanel>(); // 배치 누락 — 에러는 여기서 남는다
 
             // 기억으로 건너뛴 경우, 자동 익명 로그인이 끝내 실패하면 세션 화면이 "로그인 중"에서
             // 멈춘 채 버튼이 잠긴다 — 그 막다른 길 대신 관문으로 되돌린다. (#585)
