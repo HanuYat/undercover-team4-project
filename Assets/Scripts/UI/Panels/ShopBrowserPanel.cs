@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using TMPro;
 using UnityEngine;
@@ -8,13 +7,13 @@ using UnityEngine.Localization.Settings;
 
 /// <summary>
 /// 장비 주문창 (#843) — 카탈로그 아이템(<see cref="ShopCatalogItem"/>)을 쓰면 열리는 브라우저 창.
-/// 이번 라운드 진열 슬롯을 그리드로 그리고, 우상단에 팀 잔액을 띄운다.
+/// 이번 라운드 진열 칸을 그리드로 그리고, 우상단에 팀 잔액을 띄운다.
 ///
 /// <b>이 창은 권한이 아니다.</b> 열려 있다는 사실은 서버에서 아무것도 보장하지 않는다 — 주문 버튼을
-/// 누르면 진열대 슬롯이 서버에 요청하고, 가격·품절·자금은 서버가 자기 NetworkVariable로 처음부터
-/// 다시 판정한다 (<see cref="LootPanel"/>과 같은 방침).
+/// 누르면 <see cref="ShopLineup"/>에 칸 번호를 보내고, 가격·품절·자금은 서버가 자기 NetworkList로
+/// 처음부터 다시 판정한다 (<see cref="LootPanel"/>과 같은 방침).
 ///
-/// 진열대는 이제 전시 전용이라 글자가 없다 — 이름·가격·설명이 보이는 곳은 여기뿐이다.
+/// 진열대가 없어진 뒤로 이름·가격·설명이 보이는 곳은 여기뿐이다.
 /// </summary>
 public class ShopBrowserPanel : PanelBase
 {
@@ -26,11 +25,11 @@ public class ShopBrowserPanel : PanelBase
     public override bool IsStackable => true; // 창처럼 겹치는 모달
 
     [Header("목록")]
-    [Tooltip("이번 라운드 진열 슬롯을 들고 있는 홀더 — 같은 씬이라 인스펙터로 잡는다")]
+    [Tooltip("이번 라운드 진열 칸을 들고 있는 홀더 — 같은 씬이라 인스펙터로 잡는다")]
     [SerializeField]
     private ShopLineup m_lineup;
 
-    [Tooltip("그리드 칸. 부착 순서대로 진열 슬롯에 대응한다")]
+    [Tooltip("그리드 칸. 부착 순서대로 진열 칸에 대응한다")]
     [SerializeField]
     private ShopOrderSlotView[] m_slotViews;
 
@@ -69,8 +68,8 @@ public class ShopBrowserPanel : PanelBase
     // 커서 Push/Pop 짝을 지키는 래치 (LootPanel과 같은 사정, #352)
     private bool m_blocked;
 
-    // 구독해 둔 슬롯 — 해제 기준을 지금 라인업이 아니라 구독한 그 목록으로 잡는다
-    private readonly List<ShopStand> m_bound = new List<ShopStand>();
+    // 구독해 둔 홀더 — 해제 기준을 지금 인스펙터 값이 아니라 실제로 구독한 그 참조로 잡는다
+    private ShopLineup m_bound;
 
     // 알림 자동 숨김 예약의 세대 번호 — 새 알림·지우기가 번호를 올리면 먼저 걸린 예약은 스스로 물러난다
     private int m_noticeVersion;
@@ -127,7 +126,7 @@ public class ShopBrowserPanel : PanelBase
 
         m_input = holder.GetComponent<PlayerInputHandler>();
 
-        BindStands();
+        BindLineup();
         BindFund();
         ClearNotice();
 
@@ -161,7 +160,7 @@ public class ShopBrowserPanel : PanelBase
         if (LocalizationSettings.HasSettings)
             LocalizationSettings.SelectedLocaleChanged -= HandleLocaleChanged;
 
-        UnbindStands();
+        UnbindLineup();
         UnbindFund();
 
         m_input = null;
@@ -216,9 +215,9 @@ public class ShopBrowserPanel : PanelBase
 
     // ---- 슬롯 ----
 
-    private void BindStands()
+    private void BindLineup()
     {
-        UnbindStands();
+        UnbindLineup();
 
         if (m_lineup == null)
         {
@@ -227,53 +226,41 @@ public class ShopBrowserPanel : PanelBase
             return;
         }
 
-        IReadOnlyList<ShopStand> stands = m_lineup.Stands;
-        if (stands == null)
-        {
-            RefreshSlots();
-            return;
-        }
-
-        for (int i = 0; i < stands.Count; i++)
-        {
-            ShopStand stand = stands[i];
-            if (stand == null)
-                continue;
-
-            stand.OnChanged += RefreshSlots;
-            stand.OnPurchaseReply += ShowNotice;
-            m_bound.Add(stand);
-        }
+        m_bound = m_lineup;
+        m_bound.OnChanged += RefreshSlots;
+        m_bound.OnPurchaseReply += ShowNotice;
 
         RefreshSlots();
     }
 
-    private void UnbindStands()
+    private void UnbindLineup()
     {
-        foreach (ShopStand stand in m_bound)
+        if (m_bound != null)
         {
-            if (stand == null)
-                continue;
-
-            stand.OnChanged -= RefreshSlots;
-            stand.OnPurchaseReply -= ShowNotice;
+            m_bound.OnChanged -= RefreshSlots;
+            m_bound.OnPurchaseReply -= ShowNotice;
         }
 
-        m_bound.Clear();
+        m_bound = null;
     }
 
-    // 칸을 다시 채운다. 슬롯 수가 칸 수보다 많으면 남는 슬롯은 그리지 않는다 — 배선 실수는
+    // 칸을 다시 채운다. 진열 칸이 그리드 칸보다 많으면 남는 칸은 그리지 않는다 — 배선 실수는
     // 칸이 비는 것으로 드러나고, 적으면 남는 칸이 빈 칸으로 표시된다.
     private void RefreshSlots()
     {
-        IReadOnlyList<ShopStand> stands = m_lineup != null ? m_lineup.Stands : null;
+        int slotCount = m_lineup != null ? m_lineup.SlotCount : 0;
 
         for (int i = 0; i < m_slotViews.Length; i++)
         {
-            ShopStand stand = stands != null && i < stands.Count ? stands[i] : null;
+            if (m_slotViews[i] == null)
+                continue;
 
-            if (m_slotViews[i] != null)
-                m_slotViews[i].Bind(stand);
+            bool filled = i < slotCount;
+            m_slotViews[i].Bind(
+                i,
+                filled ? m_lineup.GetEntry(i) : null,
+                filled ? m_lineup.GetStatus(i) : EShopSlotStatus.Available
+            );
         }
     }
 
@@ -318,15 +305,15 @@ public class ShopBrowserPanel : PanelBase
 
     /// <summary>
     /// 주문 버튼을 눌렀다 — 서버에 요청한다. <see cref="ShopOrderSlotView"/>가 호출.
-    /// 성공하면 슬롯 상태가 바뀌고 <see cref="RefreshSlots"/>가 칸을 품절로 다시 그린다.
+    /// 성공하면 칸 상태가 바뀌고 <see cref="RefreshSlots"/>가 칸을 품절로 다시 그린다.
     /// 실패 사유는 서버가 요청자에게만 보내 알림줄에 뜬다.
     /// </summary>
-    internal void RequestOrder(ShopStand stand)
+    internal void RequestOrder(int slot)
     {
-        if (stand == null)
+        if (m_lineup == null)
             return;
 
-        stand.RequestPurchase();
+        m_lineup.RequestPurchase(slot);
     }
 
     private void ShowNotice(string message)

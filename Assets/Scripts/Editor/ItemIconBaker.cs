@@ -53,7 +53,7 @@ public class ItemIconBaker : EditorWindow
         public abstract string Label { get; }
         public abstract GameObject Model { get; }
 
-        /// <summary>찍을 때 모델에 씌울 배율. 진열대에 올라간 모습과 아이콘이 어긋나지 않게 한다.</summary>
+        /// <summary>찍을 때 모델에 씌울 배율. 카탈로그가 정한 비례와 아이콘이 어긋나지 않게 한다.</summary>
         public virtual Vector3 ModelScale => Vector3.one;
 
         public abstract Sprite Current { get; }
@@ -102,8 +102,8 @@ public class ItemIconBaker : EditorWindow
         public override string Label => Entry != null ? Entry.Installable.ToString() : "(빈 항목)";
         public override GameObject Model => Entry?.DisplayModel;
 
-        // 설치형 모델은 진열 배율이 곧 실물 비례다 — 사이렌 버튼처럼 납작하게 눌러 쓰는 것을
-        // 배율 없이 찍으면 아이콘만 원래 구(球)로 나와 진열대와 다른 물건처럼 보인다.
+        // 설치형 모델은 카탈로그 배율이 곧 실물 비례다 — 사이렌 버튼처럼 납작하게 눌러 쓰는 것을
+        // 배율 없이 찍으면 아이콘만 원래 구(球)로 나와 실물과 다른 물건처럼 보인다.
         public override Vector3 ModelScale => Entry != null ? Entry.DisplayScale : Vector3.one;
 
         public override Sprite Current => Entry?.Icon;
