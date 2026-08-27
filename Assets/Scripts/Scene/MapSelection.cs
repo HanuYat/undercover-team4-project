@@ -1,6 +1,7 @@
 using System;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 다음 라운드로 갈 게임 맵의 선택 상태 — 세션 내내 유지되는 상주 홀더. (#578)
@@ -32,7 +33,7 @@ public class MapSelection : NetworkedManagerBase
         public string SceneName;
 
         [Tooltip("콘솔에 표시할 이름. 비우면 씬 이름을 그대로 쓴다")]
-        public string DisplayName;
+        public LocalizedString DisplayName;
 
         [Tooltip(
             "콘솔에 띄울 항공뷰 이미지. 에디터에서 맵 위에 직교 카메라를 놓고 한 번 렌더해 둔 스프라이트다"
@@ -76,8 +77,21 @@ public class MapSelection : NetworkedManagerBase
     /// </summary>
     public string SelectedSceneName => NullIfBlank(Selected?.SceneName);
 
-    /// <summary>선택된 맵의 표시 이름 — 비워 뒀으면 씬 이름으로 대신한다. 콘솔 표시용.</summary>
-    public string SelectedDisplayName => NullIfBlank(Selected?.DisplayName) ?? SelectedSceneName;
+    /// <summary>
+    /// 선택된 맵의 표시 이름 — 비워 뒀으면 씬 이름으로 대신한다. 콘솔 표시용.
+    /// 읽는 피어의 언어로 푼다 — 이 값은 복제되지 않고 각 피어가 자기 목록에서 꺼내므로,
+    /// 호스트와 클라의 언어가 갈려도 각자 자기 언어로 본다 (#497 관례).
+    /// </summary>
+    public string SelectedDisplayName
+    {
+        get
+        {
+            LocalizedString name = Selected?.DisplayName;
+            return name != null && !name.IsEmpty
+                ? NullIfBlank(name.GetLocalizedString()) ?? SelectedSceneName
+                : SelectedSceneName;
+        }
+    }
 
     /// <summary>선택된 맵의 항공뷰 이미지 — 배선하지 않았으면 <c>null</c>. 콘솔은 이름만 표시로 떨어진다. (#611)</summary>
     public Sprite SelectedPreview => Selected?.Preview;
