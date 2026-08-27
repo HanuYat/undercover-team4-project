@@ -6728,6 +6728,7 @@ GameObject:
   - component: {fileID: 5270586889476606736}
   - component: {fileID: 9155120424423556794}
   - component: {fileID: 7829046604217022194}
+  - component: {fileID: 8081961614526810824}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -7939,6 +7940,25 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerKillCredit
   ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &8081961614526810824
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed826c5f02947b04884d273666befa86, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AbductionRopeView
+  m_ropeMaterial: {fileID: 2100000, guid: 27971b6c6e4fe13439d5deeb311c44fe, type: 2}
+  m_ropeWidth: 0.035
+  m_segments: 12
+  m_maxSag: 0.25
+  m_ropeLength: 1.4
+  m_handHeight: 1.1
+  m_knotHeight: 0.5
 --- !u!1 &5517047033924982284
 GameObject:
   m_ObjectHideFlags: 0

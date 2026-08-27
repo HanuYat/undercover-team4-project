@@ -100,16 +100,6 @@ public class PlayerTowedMotion : MonoBehaviour
     /// <summary>운반되어 끌려가는 중인지 — 오너 로컬 판정. (#365)</summary>
     public bool IsDraggedFollowing => m_dragCarrierCount > 0;
 
-    /// <summary>호송 추종 중인가 — 운반(#365)과 달리 앵커 2개(양옆 끌기) 사이를 따라가는 쪽. (#279)
-    /// 밧줄 연출(<c>AbductionRopeView</c>, #901)이 앵커를 읽어 그릴지 말지 이 값으로 가른다.</summary>
-    public bool IsEscorted => m_escorted;
-
-    /// <summary>호송 앵커 A — 대개 끌기 담당 NPC의 transform. 없으면 null. (#279/#901)</summary>
-    public Transform EscortAnchorA => m_escortAnchorA;
-
-    /// <summary>호송 앵커 B — 끌기가 1명뿐이면 앵커 A와 같은 값. 없으면 null. (#279/#901)</summary>
-    public Transform EscortAnchorB => m_escortAnchorB;
-
     private void Awake()
     {
         m_movement = GetComponent<PlayerMovement>();

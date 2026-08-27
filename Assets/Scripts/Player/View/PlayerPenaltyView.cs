@@ -23,6 +23,28 @@ public class PlayerPenaltyView : NetworkBehaviour
     [SerializeField]
     private LocalizedString m_chaseWarning;
 
+    // 지금 이 몸을 끌고 있는 캐리어 NPC — 전 피어가 읽는다(밧줄 표시 <c>AbductionRopeView</c>, #901).
+    // StartCarried/StopCarried는 [Rpc(SendTo.Owner)]라 오너(끌려가는 본인) 클라에만 닿는데, 밧줄은
+    // 동료·관전자 화면에도 그려져야 하므로 여기서 따로 동기화한다 — 쓰기는 서버, 읽기는 Everyone
+    // (기본값). 빈손이면 default(NetworkObjectReference) — PlayerHeldItemView.m_equipped과 같은 관례.
+    private readonly NetworkVariable<NetworkObjectReference> m_carrierASynced = new();
+    private readonly NetworkVariable<NetworkObjectReference> m_carrierBSynced = new();
+
+    // 오프라인(네트워크 미사용) Play 테스트 폴백 — 위 NetworkVariable은 스폰 전엔 못 쓴다.
+    private NpcController m_carrierALocal;
+    private NpcController m_carrierBLocal;
+
+    /// <summary>지금 이 몸을 끄는 캐리어 NPC 1 — 전 피어에서 유효. 없으면 null. (#901)</summary>
+    public NpcController CarrierA =>
+        IsSpawned ? ResolveCarrier(m_carrierASynced.Value) : m_carrierALocal;
+
+    /// <summary>지금 이 몸을 끄는 캐리어 NPC 2 — 전 피어에서 유효. 없으면 null. (#901)</summary>
+    public NpcController CarrierB =>
+        IsSpawned ? ResolveCarrier(m_carrierBSynced.Value) : m_carrierBLocal;
+
+    private static NpcController ResolveCarrier(NetworkObjectReference reference) =>
+        reference.TryGet(out NetworkObject obj) ? obj.GetComponent<NpcController>() : null;
+
     private void Awake()
     {
         m_towed = GetComponent<PlayerTowedMotion>();
@@ -108,9 +130,17 @@ public class PlayerPenaltyView : NetworkBehaviour
             return;
 
         if (IsSpawned)
+        {
+            m_carrierASynced.Value = carrierA.NetworkObject;
+            m_carrierBSynced.Value = carrierB.NetworkObject;
             StartCarriedRpc(carrierA.NetworkObject, carrierB.NetworkObject, 0f, collide);
+        }
         else if (m_towed != null)
+        {
+            m_carrierALocal = carrierA;
+            m_carrierBLocal = carrierB;
             m_towed.BeginEscortFollow(carrierA.transform, carrierB.transform, 0f, collide); // 오프라인 폴백
+        }
     }
 
     /// <summary>
@@ -125,19 +155,37 @@ public class PlayerPenaltyView : NetworkBehaviour
         if (anchor == null)
             return;
 
+        // 앵커가 NPC가 아니라 UFO 기체다 — 밧줄 캐리어로 착각하지 않게 비워 둔다(이전 납치의 값이
+        // 남아 있을 수 있다). AbductionRopeView는 이 값이 비어 있으면 그리지 않는다 (#901).
         if (IsSpawned)
+        {
+            m_carrierASynced.Value = default;
+            m_carrierBSynced.Value = default;
             StartCarriedRpc(anchor, anchor, maxSpeed, false);
+        }
         else if (m_towed != null)
+        {
+            m_carrierALocal = null;
+            m_carrierBLocal = null;
             m_towed.BeginEscortFollow(anchor.transform, anchor.transform, maxSpeed, false); // 오프라인 폴백
+        }
     }
 
     /// <summary>서버 전용 — 호송 종료(광장 도착·중단): 추종을 풀어 준다. 직후 서버가 광장 스냅 텔레포트로 보정한다.</summary>
     public void StopCarried()
     {
         if (IsSpawned)
+        {
+            m_carrierASynced.Value = default;
+            m_carrierBSynced.Value = default;
             StopCarriedRpc();
+        }
         else if (m_towed != null)
+        {
+            m_carrierALocal = null;
+            m_carrierBLocal = null;
             m_towed.EndEscortFollow();
+        }
     }
 
     // 오너 클라에서만 실행 — NetworkTransform 오너 권한이라 위치 추종은 오너가 해야 전 피어에 전파된다 (#279).

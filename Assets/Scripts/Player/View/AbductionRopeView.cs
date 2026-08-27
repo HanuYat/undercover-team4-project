@@ -4,17 +4,22 @@ using UnityEngine;
 /// <summary>
 /// 납치 호송 중 캐리어 NPC의 손과 내 몸을 잇는 밧줄 표시 — 순수 로컬 연출. (#371/#901)
 ///
-/// <see cref="RopeDragView"/>와 같은 방침(동기화 없이 이미 동기화된 양 끝점을 보고 각 피어가 스스로
-/// 그린다)이지만 방향이 반대다 — 그쪽은 "내가 남을 끄는" 쪽이고, 이것은 "남이 나를 끄는" 쪽이다.
-/// 그래서 <see cref="PlayerEscorter"/>가 아니라 <see cref="PlayerTowedMotion"/>의 호송 앵커를 읽는다.
+/// <see cref="RopeDragView"/>와 같은 방침(각 피어가 이미 동기화된 값을 보고 스스로 그린다)이지만
+/// 방향이 반대다 — 그쪽은 "내가 남을 끄는" 쪽이고, 이것은 "남이 나를 끄는" 쪽이다.
 ///
-/// 오검거 호송(#279)·UFO 흡입(#819)에는 그리지 않는다 — <see cref="PlayerTowedMotion.IsEscorted"/>가
-/// 참이어도 앵커가 <see cref="NpcController"/>가 아니거나(UFO) 임무가 납치가 아니면(오검거) 숨긴다.
-/// 이 판정을 캐리어 NPC의 <see cref="NpcDutyAgent.IsAbductionDuty"/>로 하므로, 물리(CC 충돌 여부,
-/// #902)와 이 표시는 서로 다른 조건이다 — 맨홀 하강(#775) 구간은 CC를 다시 끄지만(물리는 직접 이동)
-/// 임무는 여전히 납치이므로 밧줄은 하강 중에도 계속 보인다(끝까지 끌려가는 그림).
+/// <b>캐리어 참조는 <see cref="PlayerTowedMotion"/>이 아니라 <see cref="PlayerPenaltyView"/>에서
+/// 읽는다.</b> PlayerTowedMotion의 호송 앵커(m_escortAnchorA/B)는 [Rpc(SendTo.Owner)]로만 채워지는
+/// <b>오너 전용 로컬 상태</b>다(위치는 NetworkTransform이 오너→전 피어로 대신 복제해 주니 그것으로
+/// 충분했다) — 그래서 처음엔 여기서도 그걸 읽었는데, 그러면 끌려가는 <b>본인 화면에서만</b> 밧줄이
+/// 보이고 동료·관전자 화면에는 안 보이는 문제가 났다. PlayerPenaltyView.CarrierA/B는 서버가 쓰고
+/// 전 피어가 읽는 NetworkVariable이라 이 문제가 없다.
+///
+/// 오검거 호송(#279)·UFO 흡입(#819)에는 그리지 않는다 — 캐리어가 없거나(UFO는 앵커를 비워 둔다)
+/// 임무가 납치가 아니면(오검거) 숨긴다. 물리(CC 충돌 여부, #902)와는 서로 다른 조건이다 — 맨홀
+/// 하강(#775) 구간은 CC를 다시 끄지만(물리는 직접 이동) 임무는 여전히 납치이므로 밧줄은 하강
+/// 중에도 계속 보인다(끝까지 끌려가는 그림).
 /// </summary>
-[RequireComponent(typeof(PlayerTowedMotion))]
+[RequireComponent(typeof(PlayerPenaltyView))]
 public class AbductionRopeView : MonoBehaviour
 {
     [Header("밧줄 선")]
@@ -48,7 +53,7 @@ public class AbductionRopeView : MonoBehaviour
         public Transform HandAnchor; // 못 찾았으면 null로 캐시해 재검색을 막는다
     }
 
-    private PlayerTowedMotion m_towed;
+    private PlayerPenaltyView m_penaltyView;
     private readonly List<RopeVisual> m_visuals = new();
 
     // 내 몸(플레이어) 쪽 매듭점 캐시 — self는 바뀌지 않으니 한 번만 찾으면 된다
@@ -57,26 +62,20 @@ public class AbductionRopeView : MonoBehaviour
 
     private void Awake()
     {
-        m_towed = GetComponent<PlayerTowedMotion>();
+        m_penaltyView = GetComponent<PlayerPenaltyView>();
     }
 
     // 앵커 위치는 Update에서 갱신되므로 이번 프레임의 최종 위치를 잇는다 (RopeDragView와 같은 이유)
     private void LateUpdate()
     {
-        if (!m_towed.IsEscorted)
-        {
-            HideAll();
-            return;
-        }
-
-        NpcController carrierA = ResolveAbductionCarrier(m_towed.EscortAnchorA);
+        NpcController carrierA = ResolveAbductionCarrier(m_penaltyView.CarrierA);
         if (carrierA == null)
         {
             HideAll();
             return;
         }
 
-        NpcController carrierB = ResolveAbductionCarrier(m_towed.EscortAnchorB);
+        NpcController carrierB = ResolveAbductionCarrier(m_penaltyView.CarrierB);
 
         Vector3 knot = KnotPoint();
 
@@ -91,15 +90,10 @@ public class AbductionRopeView : MonoBehaviour
 
     private void OnDisable() => HideAll();
 
-    // 이 앵커가 납치 임무 중인 NPC인가 — 오검거 호송·UFO는 null을 돌려받아 표시가 숨는다.
-    private static NpcController ResolveAbductionCarrier(Transform anchor)
-    {
-        if (anchor == null)
-            return null;
-
-        NpcController npc = anchor.GetComponent<NpcController>();
-        return npc != null && npc.Penalty.IsAbductionDuty ? npc : null;
-    }
+    // 이 캐리어가 납치 임무 중인가 — 오검거 호송은 null을 돌려받아 표시가 숨는다.
+    // UFO(#819)는 애초에 PlayerPenaltyView.CarrierA/B가 채워지지 않으므로 여기까지 오지 않는다.
+    private static NpcController ResolveAbductionCarrier(NpcController carrier) =>
+        carrier != null && carrier.Penalty.IsAbductionDuty ? carrier : null;
 
     private void DrawTo(int index, NpcController carrier, Vector3 knot)
     {
