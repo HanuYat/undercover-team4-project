@@ -67,7 +67,7 @@ MonoBehaviour:
       m_Items:
       - rid: 8213493152023576666
   - m_Id: 8128692487618560
-    m_Localized: 'Next deployment: {0}'
+    m_Localized: 'Next map: {0}'
     m_Metadata:
       m_Items: []
   - m_Id: 8128692584087552
