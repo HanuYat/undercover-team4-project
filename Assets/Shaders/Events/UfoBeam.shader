@@ -8,7 +8,9 @@ Shader "Undercover/Events/UfoBeam"
 {
     Properties
     {
-        [HDR] _BaseColor ("색", Color) = (0.3, 1, 0.75, 0.32)
+        // ⚠ [HDR]를 붙이지 말 것 — HDR 색은 이미 선형으로 보고 그대로 올라가서, 종전 URP/Unlit
+        // (감마→선형 변환)보다 훨씬 옅고 하얗게 나온다
+        _BaseColor ("색", Color) = (0.3, 1, 0.75, 0.32)
         _GroundFade ("바닥 페이드 폭(m)", Range(0.01, 5)) = 0.8
         [NoScaleOffset] _HeightMap ("지면 높이맵 (코드가 넣는다)", 2D) = "black" {}
         [HideInInspector] _HeightField ("높이맵 좌표계 (코드가 넣는다)", Vector) = (0, 0, 0, 0)
