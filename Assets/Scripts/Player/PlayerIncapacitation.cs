@@ -167,7 +167,7 @@ public class PlayerIncapacitation : NetworkBehaviour
     /// <summary>테이저 피격 기절인지. 모션은 기능 정지와 같으므로(#252) 표시·집계처럼 원인을 구분할 때만 쓴다.</summary>
     public bool IsStunned => Cause == IncapacitationCause.Stun;
 
-    /// <summary>홈런 진압봉에 맞아 날아가는 중인지 — <see cref="PlayerRagdoll.PollDeath"/>가 래그돌
+    /// <summary>홈런 진압봉에 맞아 날아가는 중인지 — <see cref="PlayerRagdoll.PollRagdollCause"/>가 래그돌
     /// 진입 판정에 함께 본다. (#815)</summary>
     public bool IsLaunched => Cause == IncapacitationCause.Launched;
 

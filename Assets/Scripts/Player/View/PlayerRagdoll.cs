@@ -110,15 +110,17 @@ public partial class PlayerRagdoll : MonoBehaviour
     private bool m_settled;
     private float m_elapsedInRagdoll;
 
-    // 늦게 접속했는데 대상이 이미 사망·비행 중이던 경우 — 이번 래그돌 원인은 건너뛴다 (docs §9).
+    // 늦게 접속했는데 대상이 이미 쓰러져(다운·사망) 있거나 비행 중이던 경우 — 이번 래그돌 원인은
+    // 건너뛴다 (docs §9). ⚠ 다운→사망을 지나도 계속 참이다(!wantsRagdoll일 때만 내려간다) —
+    // 그 피어에서는 유예가 끝나도 몸이 Knockdown_Ground 애니로 남는다. 이미 끝난 낙하를 뒤늦게
+    // 재생하지 않는 것이 이 플래그의 뜻이라 의도된 동작이고, 위치·yaw는 루트 NT가 맞춘다.
     private bool m_skipThisEpisode;
     private bool m_polledOnce;
 
-    // 이번 에피소드에서 <b>래그돌 원인(사망·비행)을 한 번이라도 관측했는가</b> — 부활 판정의 전제다 (docs §9).
-    // 이름은 사망 전용이던 시절 그대로다 — #815로 비행이 늘어와도 뜻은 "원인을 봤다"로 그대로 넓어진다.
-    private bool m_sawDeathThisEpisode;
-    private float m_awaitingDeathSeconds;
-
+    // 이번 에피소드에서 <b>래그돌 원인(다운·사망·비행)을 한 번이라도 관측했는가</b> — 부활 판정의 전제다 (docs §9).
+    // #815로 비행, #865로 다운이 늘어왔다 — 이름을 "원인"으로 고친 것이 그 셋을 함께 담기 위해서다.
+    private bool m_sawCauseThisEpisode;
+    private float m_awaitingCauseSeconds;
 
     /// <summary>
     /// 래그돌이 애니메이터로부터 포즈를 빼앗고 있는가 — <see cref="PlayerMovement.AddKnockback"/>·
@@ -391,7 +393,7 @@ public partial class PlayerRagdoll : MonoBehaviour
     }
 
     // HideLostBody가 끈 렌더러만 되살린다 — IsBodyLost가 풀리는 유일한 경로(PlayerIncapacitation
-    // .SetBodyLost(false))는 부활 RPC 안에서 돌고, 그 직후 PollDeath가 ExitToAnimator를 부른다.
+    // .SetBodyLost(false))는 부활 RPC 안에서 돌고, 그 직후 PollRagdollCause가 ExitToAnimator를 부른다.
     private void ShowLostBody()
     {
         if (!m_lostBodyHidden)
@@ -498,7 +500,7 @@ public partial class PlayerRagdoll : MonoBehaviour
 
     /// <summary>
     /// 래그돌 진입 — <b>멱등이다.</b> 이미 물리 중이면 임펄스만 누적하고, 블렌드 중이면 무동작.
-    /// 원격의 도착 순서가 보장되지 않기 때문이다 — 반대 순서는 <see cref="PollDeath"/>가 막는다 (docs §8·§9).
+    /// 원격의 도착 순서가 보장되지 않기 때문이다 — 반대 순서는 <see cref="PollRagdollCause"/>가 막는다 (docs §8·§9).
     /// </summary>
     /// <param name="impulse">폭심에서 밀려나는 속도(m/s). 힘없이 무너지는 사망은 <see cref="Vector3.zero"/>.</param>
     public void EnterRagdoll(Vector3 impulse)
@@ -559,10 +561,10 @@ public partial class PlayerRagdoll : MonoBehaviour
         // 회수 불가로 감춰졌던 몸이라면 애니메이터로 돌아가는 이 시점에 되살린다 — HideLostBody 참고.
         ShowLostBody();
 
-        // 에피소드가 여기서 끝난다 — 다음 래그돌은 자기 원인을 다시 관측해야 부활할 수 있다 (PollDeath).
+        // 에피소드가 여기서 끝난다 — 다음 래그돌은 자기 원인을 다시 관측해야 부활할 수 있다 (PollRagdollCause).
         m_settled = false;
-        m_sawDeathThisEpisode = false;
-        m_awaitingDeathSeconds = 0f;
+        m_sawCauseThisEpisode = false;
+        m_awaitingCauseSeconds = 0f;
 
         // 스트림을 <b>아무것도 보내지 않고</b> 끊는다 — 기상에는 종착 자세가 없다. 전 피어가 각자
         // 부르므로 RPC가 필요 없다. 안 끊으면 스트림이 기상 블렌드를 매 프레임 덮어쓴다.
@@ -654,7 +656,7 @@ public partial class PlayerRagdoll : MonoBehaviour
         // 진입 추적의 기준선을 담는다 — Update 시작이 직전 프레임의 최종 자세를 읽는 유일한 지점이다.
         SampleEntryBaseline();
 
-        PollDeath();
+        PollRagdollCause();
 
         if (m_state != RagdollState.Ragdoll)
             return;
@@ -731,7 +733,7 @@ public partial class PlayerRagdoll : MonoBehaviour
     // ⚠ <b>다운→사망은 사유가 바뀌는데 래그돌은 이어진다</b> — 셋 중 유일한 "래그돌 중 원인 전이"이고,
     // 그래서 그 전이에 소유권(=물리 권위)이 움직이지 않아야 한다. 근거는 docs/865-down-ragdoll.md.
     // 부활은 <b>원인을 본 뒤에만</b> 성립한다 — 그 인과 가드의 근거는 docs/player-ragdoll.md §9.
-    private void PollDeath()
+    private void PollRagdollCause()
     {
         if (m_incapacitation == null)
             return;
@@ -751,19 +753,19 @@ public partial class PlayerRagdoll : MonoBehaviour
 
         if (wantsRagdoll)
         {
-            m_sawDeathThisEpisode = true;
-            m_awaitingDeathSeconds = 0f;
+            m_sawCauseThisEpisode = true;
+            m_awaitingCauseSeconds = 0f;
         }
-        else if (IsRagdollActive && !m_sawDeathThisEpisode)
+        else if (IsRagdollActive && !m_sawCauseThisEpisode)
         {
-            m_awaitingDeathSeconds += Time.deltaTime;
+            m_awaitingCauseSeconds += Time.deltaTime;
         }
 
         if (!wantsRagdoll)
         {
             m_skipThisEpisode = false;
             bool revivalIsReal =
-                m_sawDeathThisEpisode || m_awaitingDeathSeconds >= k_causeSyncGraceSeconds;
+                m_sawCauseThisEpisode || m_awaitingCauseSeconds >= k_causeSyncGraceSeconds;
             if (m_state == RagdollState.Ragdoll && revivalIsReal)
             {
                 ExitToAnimator(blend: true); // 부활 — 정착 포즈에서 기상으로 잇는다

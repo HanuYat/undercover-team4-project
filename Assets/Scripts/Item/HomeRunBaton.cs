@@ -91,7 +91,7 @@ public class HomeRunBaton : Baton
 
     // ---- 동료 비행 (#815) ----
     //
-    // 상태(Launched)는 서버 권위 동기화값이라 전 피어가 PlayerRagdoll.PollDeath 폴링으로 알아서
+    // 상태(Launched)는 서버 권위 동기화값이라 전 피어가 PlayerRagdoll.PollRagdollCause 폴링으로 알아서
     // 진입한다(BombBlast의 사망 폴링과 같은 구조). RPC가 필요한 이유는 임펄스 하나뿐이다.
     //
     // 물리는 오너(피격당한 클라)가 돌린다 — PlayerRagdoll.HasMoveAuthority가 IsOwner라, 본인이
