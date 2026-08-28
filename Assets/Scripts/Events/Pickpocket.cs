@@ -90,6 +90,7 @@ public class Pickpocket : MonoBehaviour
             return;
 
         stolenObject.transform.SetPositionAndRotation(ResolveDropPosition(), Quaternion.identity);
+        WorldItemPickup.SettleOnGround(stolenObject.gameObject, transform.position.y);
         stolenObject.TrySetParent((Transform)null, true);
     }
 
