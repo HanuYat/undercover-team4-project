@@ -174,7 +174,10 @@ public class ShopLineup : NetworkBehaviour
             $"[상점] 진열 추첨 — 소모형 {stapleSlots}칸, 랜덤 {randomSlots}칸, 빈 칸 {slotCount - stapleSlots - randomSlots}"
         );
 
+        // 추첨이 곧 이 라운드 진열이 확정되는 시점이다 — 여기서 저장하지 않으면 아무것도 안 사고
+        // 나갔다 이어했을 때 다시 뽑혀 리롤이 된다 (#925).
         PushSnapshot();
+        SaveService.SaveAsync().Forget();
     }
 
     // ---- 세이브 왕복 (#925) ----
@@ -203,7 +206,15 @@ public class ShopLineup : NetworkBehaviour
             if (index < 0 && !string.IsNullOrEmpty(e.Id))
                 Debug.LogWarning($"[상점] 세이브의 진열 품목 '{e.Id}'을(를) 카탈로그에서 찾지 못해 빈 칸으로 둔다", this);
 
-            m_slots.Add(new Slot { EntryIndex = index, Status = (EShopSlotStatus)e.Status });
+            if (!Enum.TryParse(e.Status, out EShopSlotStatus status))
+                status = EShopSlotStatus.Available;
+
+            // 설치형은 저장값을 믿지 않고 다시 판정한다 — MakeSlot과 같은 기준이라 어긋날 자리가 없다.
+            ShopCatalog.Entry restored = m_catalog.Get(index);
+            if (restored != null && restored.IsInstallable && purchases.HasInstallable(restored.Installable))
+                status = EShopSlotStatus.Owned;
+
+            m_slots.Add(new Slot { EntryIndex = index, Status = status });
         }
 
         Debug.Log($"[상점] 진열 복원 — {saved.Length}칸 ({CurrentRound}라운드)");
@@ -226,7 +237,7 @@ public class ShopLineup : NetworkBehaviour
             {
                 Id = IdOf(entry),
                 Installable = entry != null && entry.IsInstallable,
-                Status = (int)slot.Status,
+                Status = slot.Status.ToString(),
             };
         }
 

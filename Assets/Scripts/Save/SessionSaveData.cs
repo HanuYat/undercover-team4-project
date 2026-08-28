@@ -54,8 +54,8 @@ public class ShopSlotSaveEntry
     /// <summary>id를 어느 이름 공간으로 읽을지 — 둘이 겹칠 수 있어 함께 적는다.</summary>
     public bool Installable;
 
-    /// <summary>EShopSlotStatus 값.</summary>
-    public int Status;
+    /// <summary>EShopSlotStatus 이름 — 위 Id와 같은 이유로 정수가 아니라 이름이다(순서가 바뀌어도 견딘다).</summary>
+    public string Status = nameof(EShopSlotStatus.Available);
 }
 
 // 팀 구매(SessionSaveData.CarriedItems)와 달리 소유자가 갈리므로 팀 목록에 합치지 말고 이 엔트리에 붙일 것 —

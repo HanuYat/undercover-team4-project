@@ -121,6 +121,11 @@ public static class SaveService
     /// 상주 홀더와 접속 중인 지갑을 훑어 한 벌로 만든 뒤 덮어쓴다.
     /// <b>상태는 호출 즉시 스냅샷</b>되므로(await 이전) 씬 전환 직전에 Forget()으로 던져도 값이 흔들리지 않는다.
     /// </summary>
+    // 진행 중인 쓰기와 대기표 — 상점 구매처럼 연달아 불리는 경로가 생겨(#925) 겹친 쓰기가
+    // 완료 순서를 다투지 않게 막는다. 밀린 요청은 하나로 합쳐 마지막 상태만 한 번 더 쓴다.
+    private static bool s_writing;
+    private static bool s_writeQueued;
+
     public static async UniTask SaveAsync()
     {
         NetworkManager nm = NetworkManager.Singleton;
@@ -133,7 +138,25 @@ public static class SaveService
         if (!IsReady)
             return;
 
-        await WriteAsync(Capture());
+        if (s_writing)
+        {
+            s_writeQueued = true; // 지금 쓰는 값은 낡았을 수 있다 — 끝난 뒤 한 번 더
+            return;
+        }
+
+        s_writing = true;
+        try
+        {
+            do
+            {
+                s_writeQueued = false;
+                await WriteAsync(Capture()); // Capture는 매 회차 최신 상태를 다시 읽는다
+            } while (s_writeQueued);
+        }
+        finally
+        {
+            s_writing = false;
+        }
     }
 
     // 세이브 한 벌을 키에 덮어쓴다. 실패는 경고만 남긴다 — 저장 실패로 게임 흐름을 막지 않는다.
