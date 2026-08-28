@@ -38,7 +38,7 @@ public class NpcPenaltyEscortState : NpcStateBase
         m_baseSpeed = m_owner.Agent.speed; // 호송은 걷는 속도 — 추격 가속을 쓰지 않는다 (질질 끌고 가는 그림)
         m_owner.Repath.ForceDue(NpcRepathChannel.Repath); // 진입 직후 1회는 바로 잡는다
 
-        m_owner.Agent.isStopped = false;
+        m_owner.SetAgentStopped(false);
         m_owner.Agent.stoppingDistance =
             m_owner.Penalty.PenaltyEscortLeader == null ? k_leaderStopDistance : 0.1f;
     }
@@ -48,7 +48,7 @@ public class NpcPenaltyEscortState : NpcStateBase
         m_owner.Agent.speed = m_baseSpeed;
         if (m_owner.Agent.isOnNavMesh)
         {
-            m_owner.Agent.isStopped = false;
+            m_owner.SetAgentStopped(false);
             m_owner.Agent.ResetPath();
         }
     }

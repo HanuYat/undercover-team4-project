@@ -86,7 +86,7 @@ public class NpcFleeState : NpcStateBase
 
     public override void Enter()
     {
-        m_owner.Agent.isStopped = false;
+        m_owner.SetAgentStopped(false);
         m_baseSpeed = m_owner.Agent.speed;
         m_owner.Agent.speed = m_baseSpeed * m_config.SpeedMultiplier;
 

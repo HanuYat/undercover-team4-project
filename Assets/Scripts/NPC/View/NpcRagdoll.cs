@@ -33,8 +33,9 @@ public partial class NpcRagdoll : MonoBehaviour
     // "몸이 바닥에 있다"로 보는 골반 높이(m). 이 안이면 루트 높이를 골반이 아니라 지면이 준다.
     private const float k_groundedHipsHeight = 0.5f;
 
-    // 기상 시 NavMesh를 다시 찾는 반경(m) — "누운 자리 바로 밑"을 뜻하는 값이라 상수다.
-    private const float k_navMeshSampleDistance = 2f;
+    // 기상 시 NavMesh를 다시 찾는 반경(m) — "누운 자리 <b>바로</b> 밑"을 뜻하는 값이라 상수다.
+    // 넓히면 구조물 위에 걸친 몸이 기상하면서 아래로 툭 떨어져 순간이동으로 보인다 (#913).
+    private const float k_navMeshSampleDistance = 0.75f;
 
     private enum RagdollState
     {
@@ -759,7 +760,7 @@ public partial class NpcRagdoll : MonoBehaviour
         if (m_owner.Rope.IsRoped || m_owner.Knockback.IsKnockedBack)
             return;
 
-        // ⚠ 샘플에 실패해도 켠다 — 회수 안전망이 enabled == false인 구간을 건너뛴다.
+        // ⚠ 샘플에 실패해도 켠다 — 굳은 몸 정리가 enabled == false인 구간을 건너뛴다.
         m_agent.enabled = true;
 
         // 기준 마스크로 착지점을 찾는다 — 현재 통행 마스크는 배회 중 도로가 빠져 있어 차도 위에
@@ -773,11 +774,17 @@ public partial class NpcRagdoll : MonoBehaviour
         {
             m_agent.Warp(ground.position);
         }
+        else
+        {
+            // 붙일 자리가 없어도 에이전트의 내부 위치는 몸에 맞춘다 (#913) — 안 맞추면 에이전트가
+            // 쓰러지기 전 자리를 그대로 쥐고 있다가 updatePosition으로 몸을 거기로 끌어다 놓는다.
+            m_agent.Warp(transform.position);
+        }
 
         if (!m_agent.isOnNavMesh)
         {
             Debug.LogWarning(
-                "NpcRagdoll: 기절에서 깨어난 자리를 NavMesh에 붙이지 못했다 — 회수 대기: "
+                "NpcRagdoll: 기절에서 깨어난 자리를 NavMesh에 붙이지 못했다 — 행방불명 처리 대기: "
                     + $"{name} @{transform.position.ToString("F1")}",
                 this
             );

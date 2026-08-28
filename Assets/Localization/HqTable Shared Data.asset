@@ -71,6 +71,10 @@ MonoBehaviour:
     m_Key: Hq.Wanted.Condition.AliveOnly
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000702
+    m_Key: Hq.Wanted.Missing
+    m_Metadata:
+      m_Items: []
   - m_Id: 6221034091503616
     m_Key: Hq.Cctv.ChannelIr
     m_Metadata:

@@ -42,7 +42,7 @@ public class NpcEscortedState : NpcStateBase
         if (m_owner.Rope.IsRoped || !m_owner.AgentReady)
             return;
 
-        m_owner.Agent.isStopped = false;
+        m_owner.SetAgentStopped(false);
         // 플레이어 등에 딱 붙지 않도록 추종 거리만큼 앞에서 멈춘다
         m_owner.Agent.stoppingDistance = m_config.FollowDistance;
 
@@ -90,7 +90,7 @@ public class NpcEscortedState : NpcStateBase
             if (distance > m_config.FollowDistance + k_resumeDistanceOffset)
             {
                 m_isHolding = false;
-                m_owner.Agent.isStopped = false;
+                m_owner.SetAgentStopped(false);
                 m_lastTargetPos = target.position;
                 m_owner.Agent.SetDestination(target.position);
                 m_owner.Repath.MarkDone(NpcRepathChannel.Repath);
@@ -101,7 +101,7 @@ public class NpcEscortedState : NpcStateBase
         if (distance <= m_config.FollowDistance)
         {
             m_isHolding = true;
-            m_owner.Agent.isStopped = true;
+            m_owner.SetAgentStopped(true);
             m_owner.Agent.velocity = Vector3.zero; // 감속 관성까지 끊어 밀림 없이 그 자리에 선다
             if (m_owner.Agent.isOnNavMesh)
                 m_owner.Agent.ResetPath();
@@ -134,7 +134,7 @@ public class NpcEscortedState : NpcStateBase
         m_owner.Agent.stoppingDistance = 0f;
         if (m_owner.Agent.isOnNavMesh)
         {
-            m_owner.Agent.isStopped = false;
+            m_owner.SetAgentStopped(false);
             m_owner.Agent.ResetPath();
         }
     }

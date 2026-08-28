@@ -127,6 +127,7 @@ public class NpcController : NetworkBehaviour
     private void Awake()
     {
         m_agent = GetComponent<NavMeshAgent>();
+        m_lastProbePosition = transform.position; // 굳음 판정의 첫 비교 기준 (#913)
 
         // 프리팹이 정한 통행 마스크를 <b>좁히기 전에</b> 잡아 둔다 (#634 후속).
         // 되돌릴 때 NavMesh.AllAreas로 복구하면 프리팹이 일부러 뺀 영역(Jail)까지 되살아나고,
@@ -237,11 +238,17 @@ public class NpcController : NetworkBehaviour
         if (m_frozen)
             return;
 
-        // NavMesh 밖에서 굳은 몸의 회수 — 아래 모든 게이트보다 **먼저** 돈다 (#557).
+        // NavMesh 밖에서 굳은 몸의 정리 — 아래 모든 게이트보다 **먼저** 돈다 (#557).
         // 뒤로 내리면 스턴 게이트에 가려 기절한 채 굳은 NPC(=신고된 증상 그대로)에 영영 닿지 못한다.
-        TickNavMeshRecovery();
+        TickStuckOffNavMesh();
 
-        // 도로를 벗어나면 통행 마스크를 좁힌다 — 회수와 같은 이유로 게이트보다 먼저 돈다 (#634 후속).
+        // NavMesh 밖인 동안에는 아래를 돌리지 않는다 (#913) — isStopped·SetAreaCost·remainingDistance가
+        // 전부 "not placed on a NavMesh" 예외를 던진다. 예전에는 회수 워프가 1초 만에 붙여 이 구간이
+        // 짧았지만, 지금은 정리까지 몇 초를 그대로 머문다. 그 구간은 위 정리가 끝낸다.
+        if (m_agent.enabled && !m_agent.isOnNavMesh)
+            return;
+
+        // 도로를 벗어나면 통행 마스크를 좁힌다 — 위 정리와 같은 이유로 게이트보다 먼저 돈다 (#634 후속).
         // 도로 위에서 기절·넉백을 맞으면 그 구간 내내 대기 상태로 남는데, 그동안 움직이지 않으므로
         // 판정은 계속 "도로 위"고 좁혀지지 않는다 — 깨어나 걸어 나가면 그때 좁는다.
         TickRoadEgress();
@@ -405,16 +412,28 @@ public class NpcController : NetworkBehaviour
     private const float k_warpSnapRadius = 2f;
 
     /// <summary>
+    /// 에이전트가 준비됐을 때만 <c>isStopped</c>를 바꾼다 (#913) — 준비되지 않은 몸에 대입하면
+    /// Unity가 "not placed on a NavMesh" 예외를 던진다.
+    ///
+    /// 상태 클래스가 직접 대입하지 않고 이 길로 오는 이유는 <b>Enter/Exit</b>다: 틱은 코어의 게이트가
+    /// 막아 주지만, 전이는 밖(피격·밧줄·이벤트)에서도 들어와 NavMesh 밖인 몸의 Enter가 그대로 돈다.
+    /// </summary>
+    internal void SetAgentStopped(bool stopped)
+    {
+        if (AgentReady)
+            m_agent.isStopped = stopped;
+    }
+
+    /// <summary>
     /// 기준점 주변에서 NavMesh 위 지점을 찾아 에이전트를 붙인다 — 붙었으면 true. (#503)
     ///
     /// 밧줄 놓기(#369)와 감옥 방출(#537)이 함께 쓰는 공용 유틸이라 코어에 둔다 (계획서 § 3-6) —
     /// 부품에 딸려 보내면 "Custody가 Rope를 참조한다"는 가짜 의존이 생긴다.
     /// 실패하면 <b>호출부가</b> 대응한다 — 대안 지점이냐 제자리냐는 도메인마다 다르다.
     /// </summary>
-    /// <param name="snapRadius">탐색 반경(m) — 넓히는 건 최후 수단인 회수(<see cref="TickNavMeshRecovery"/>)뿐이다.</param>
-    internal bool TryWarpNear(Vector3 origin, float snapRadius = k_warpSnapRadius)
+    internal bool TryWarpNear(Vector3 origin)
     {
-        if (!NavMesh.SamplePosition(origin, out NavMeshHit hit, snapRadius, NavMesh.AllAreas))
+        if (!NavMesh.SamplePosition(origin, out NavMeshHit hit, k_warpSnapRadius, NavMesh.AllAreas))
             return false;
 
         return m_agent.Warp(hit.position) && m_agent.isOnNavMesh;
@@ -779,77 +798,162 @@ public class NpcController : NetworkBehaviour
             m_agent.SetDestination(m_agent.destination);
     }
 
-    // ---- 굳은 몸 회수 (#557) ----
+    // ---- 걸어 나올 수 없는 자리에 멈춘 몸 (#557/#913) ----
 
-    // 회수를 걸기까지의 유예(초) — 기절 시간(NpcStunConfig.StunSeconds)보다 짧아야 ExitStun보다 먼저
-    // 붙어 깨어나는 경로(isStopped 복구 → StartFlee)가 이어진다. 한 프레임짜리 이탈까지 잡으면
-    // 정상 경로의 워프와 겹쳐 몸이 두 번 튄다.
-    private const float k_stuckGraceSeconds = 1f;
+    // 굳은 몸을 정리하기까지의 유예(초). 정상 경로(넉백 착지·기절 해제·래그돌 기상)는 성공하면
+    // 같은 프레임에 NavMesh로 돌아오지만, 굳었다고 본 몸이 뒤늦게 스스로 빠져나오는 경우가 있어
+    // 넉넉히 잡는다 — 3초는 너무 짧았다 (#913).
+    private const float k_stuckFatalSeconds = 8f;
 
-    // 회수용 탐색 반경(m) — 기본 반경으로 못 붙였을 때의 최후 수단. 8m은 실측이다: 맵 <b>안쪽</b>에서
-    // 설 수 있는 지면 중 NavMesh가 2m 안에 없는 곳은 HQ 실내뿐이고(최대 5.5m) 야외는 전 구간 2m 안이다.
-    // 더 넓혀도 맵 밖으로 나간 몸(#559)에는 어차피 닿지 않고, 엉뚱한 곳으로 튕겨 나갈 위험만 커진다.
-    private const float k_stuckRecoverRadius = 8f;
+    // 판정 주기(초) — SamplePosition을 NPC 수만큼 매 프레임 돌릴 이유가 없다. 유예도 이 단위로 쌓인다.
+    private const float k_stuckProbeInterval = 0.5f;
+
+    // 발밑 NavMesh를 찾는 반경(m) — 이 안에 없으면 그것만으로 굳은 것이다.
+    private const float k_stuckProbeRadius = 2f;
+
+    // 발밑 NavMesh보다 이만큼(m) 높으면 구조물 <b>위에 올라탄</b> 것으로 본다 (#913) — 철조망·컨테이너
+    // 위에 떨어진 몸은 에이전트가 여전히 "NavMesh 위"라고 답해 높이를 안 보면 영영 안 걸린다.
+    private const float k_stuckHeightAboveMesh = 1.5f;
+
+    // 맵 안팎을 가르는 반경(m) — 이 안에 NavMesh가 있으면 <b>맵 안</b>(구조물 위·틈새)이고, 없으면
+    // 맵 밖으로 나간 것이다 (#913). 둘을 갈라야 하는 이유는 시체다: 맵 안에서 죽은 몸은 눈에 보이는
+    // 자리에 그대로 남아야 하고(사라지면 본 사람이 버그로 읽는다), 맵 밖은 아무도 못 보므로 지운다.
+    private const float k_insideMapRadius = 15f;
+
+    // 한 판정 주기(0.5초) 동안 이만큼(m) 넘게 움직였으면 아직 <b>가는 중</b>이다 (#913) — 날아가는
+    // 몸·구르는 몸·미끄러지는 몸이 여기서 빠진다. 걸린 몸은 멈춰 있는 몸뿐이다.
+    private const float k_stuckStillEpsilon = 0.15f;
 
     private float m_offNavMeshSeconds;
-
-    // 회수 실패를 이미 알렸는가 — 재시도는 계속하되 로그는 굳은 구간당 한 번만. 반경 밖까지 밀려나는
-    // 경로가 실제로 있어(#559 — 납치 반출이 맵 밖 25m까지 끌고 나간다) 매초 LogError면 콘솔을 덮는다.
-    private bool m_stuckReported;
+    private float m_stuckProbeSeconds;
+    private Vector3 m_lastProbePosition;
 
     /// <summary>
-    /// <b>에이전트가 켜져 있는데 NavMesh 밖</b>인 상태를 서버가 스스로 회수한다. 서버(또는 오프라인) 전용. (#557)
+    /// <b>걸어 나올 수 없는 자리에 멈춰 있는 몸</b>을 서버가 정리한다. 서버(또는 오프라인) 전용. (#557/#913)
+    ///
+    /// 판정은 셋을 <b>모두</b> 만족해야 선다: ① 남이 쥐고 있지 않다(밧줄·넉백 비행·시체가 아니다),
+    /// ② 판정 주기 사이에 움직이지 않았다, ③ 그 자리가 NavMesh 밖이거나 발밑 NavMesh보다 한참 위다.
+    /// 셋이 8초간 이어지면 정리한다 — 맵 밖이면 행방불명, 맵 안이면 시체로 남긴다.
     ///
     /// 이 상태를 만드는 넷(밧줄 놓기·넉백 착지·기절 해제·<b>래그돌 기상</b>)이 전부 실패 시 경고만
     /// 남기고 포기해, 이후 <c>isStopped</c>·<c>SetDestination</c>이 조용히 실패하며 NPC가 굳었다
-    /// (빌드 2 이슈 E의 재발). 호출부마다 폴백을 다는 대신 <b>결과 상태 하나</b>를 여기서 보면
-    /// 늘어날 호출부까지 덮인다.
+    /// (빌드 2 이슈 E의 재발). 호출부마다 폴백을 다는 대신 <b>결과 상태 하나</b>를 여기서 본다.
     ///
-    /// 에이전트를 꺼 둔 구간(넉백 비행·밧줄 끌기·<b>래그돌</b>)은 위치를 그쪽이 쥐고 있어 굳은 것이
-    /// 아니다 — 건너뛴다.
+    /// <b>NavMesh 밖만 보는 게 아니다</b> (#913) — 철조망·구조물 <b>위에</b> 떨어진 몸은
+    /// <c>isOnNavMesh</c>가 계속 참이라 그것만으로는 안 걸린다. 발밑 NavMesh와의 높이 차도 함께 본다.
     ///
-    /// ⚠ <b>그래서 꺼 둔 쪽은 반드시 스스로 켜야 한다.</b> 이 회수는 <c>enabled == true</c>인데
-    /// NavMesh 밖인 경우만 잡으므로, 꺼 놓고 아무도 켜지 않으면 회수가 <b>영영 오지 않는다.</b>
-    /// 켜는 것은 이 함수의 <b>전제</b>이지 생략해도 되는 이유가 아니다
+    /// <b>NavMesh로 끌어다 붙이지 않는다</b> (#913) — 예전에는 8m 안의 NavMesh로 워프시켰는데,
+    /// 진압봉 홈런으로 맵 밖까지 날아간 몸이 제자리로 순간이동하는 쪽이 더 이상했다. 대신
+    /// <b>행방불명</b>으로 끝낸다: 죽이고, 수배 포스터를 행방불명으로 바꾸고, 몸을 지운다.
+    ///
+    /// <b>멈춰 있을 때만 센다</b> (#913) — 전봇대·난간에 걸린 몸과 아직 날아가는 몸은 한 프레임만
+    /// 보면 구분되지 않는다. 판정 주기 사이의 이동량이 기준이고, 조금이라도 가고 있으면 유예를
+    /// 처음부터 다시 센다. 그래서 포물선을 그리며 날아가는 5초는 유예에 들어가지 않는다.
+    ///
+    /// <b>래그돌인 몸도 센다</b> (#913) — 에이전트가 꺼져 있다고 건너뛰면 기절이 풀릴 때까지 기다렸다가
+    /// 거기서부터 유예를 세게 되고, 그 사이 기상 복귀가 몸을 먼저 끌어다 붙인다. 홈런으로 날아간
+    /// 몸은 대개 래그돌인 채로 구조물에 걸리므로, 그 구간을 빼면 이 정리가 늘 진다.
+    ///
+    /// 남이 위치를 쥐고 있는 구간(넉백 비행·<b>밧줄 끌기</b>)과 이미 죽은 몸은 건너뛴다 —
+    /// 끌려가는 중에 죽이면 플레이어가 쥔 몸이 손에서 사라진다.
+    ///
+    /// ⚠ <b>그래서 에이전트를 꺼 둔 쪽은 반드시 스스로 켜야 한다.</b> 래그돌이 아닌 채로 꺼 놓고
+    /// 아무도 켜지 않으면 이 정리는 <b>영영 오지 않는다</b>
     /// (<see cref="NpcRagdoll"/>의 기상이 실패해도 에이전트를 켜 두는 이유가 이것이다, #572).
     /// </summary>
-    private void TickNavMeshRecovery()
+    private void TickStuckOffNavMesh()
     {
-        if (!m_agent.enabled || m_agent.isOnNavMesh)
+        m_stuckProbeSeconds += Time.deltaTime;
+        if (m_stuckProbeSeconds < k_stuckProbeInterval)
+            return;
+
+        m_stuckProbeSeconds = 0f;
+
+        EStuckKind kind = ProbeStuck();
+        if (kind == EStuckKind.None)
         {
             m_offNavMeshSeconds = 0f;
-            m_stuckReported = false; // 다음에 또 굳으면 그때는 다시 알린다
             return;
         }
 
-        m_offNavMeshSeconds += Time.deltaTime;
-        if (m_offNavMeshSeconds < k_stuckGraceSeconds)
+        m_offNavMeshSeconds += k_stuckProbeInterval;
+        if (m_offNavMeshSeconds < k_stuckFatalSeconds)
             return;
 
-        m_offNavMeshSeconds = 0f; // 실패해도 유예를 다시 채워 매 프레임이 아니라 매 1초로 재시도한다
+        m_offNavMeshSeconds = 0f;
 
-        Vector3 from = transform.position;
-        if (!TryWarpNear(from, k_stuckRecoverRadius))
-        {
-            // 재시도는 이어진다 — 몸이 다시 끌려 들어오면(밧줄 등) 그때 붙는다. 알림만 한 번이다.
-            if (!m_stuckReported)
-            {
-                m_stuckReported = true;
-                Debug.LogError(
-                    $"NpcController: NavMesh 밖에서 굳은 NPC를 {k_stuckRecoverRadius}m 안에서 회수하지 "
-                        + $"못했다 — 재시도는 계속한다: {name} @{from.ToString("F1")}",
-                    this
-                );
-            }
+        // 맵 밖으로 나갔는가, 맵 안에서 어딘가에 올라가 박혔는가 — 뒤처리가 여기서 갈린다
+        bool offMap = !NavMesh.SamplePosition(
+            transform.position,
+            out NavMeshHit _,
+            k_insideMapRadius,
+            NavMesh.AllAreas
+        );
 
-            return;
-        }
-
-        // 회수 사실 자체가 원인 추적의 유일한 단서다 — "무엇이 밖으로 밀어냈는가"는 아직 미확인이다
+        // "무엇이 밀어냈는가"는 아직 미확인이다(#559 — 납치 반출이 맵 밖 25m까지 끌고 나간다) —
+        // 이 로그가 원인 추적의 유일한 단서라 종류까지 남긴다
         Debug.LogWarning(
-            $"NpcController: NavMesh 밖에서 굳은 NPC를 회수했다 — {name} "
-                + $"{from.ToString("F1")} → {transform.position.ToString("F1")}",
+            $"NpcController: {k_stuckFatalSeconds}초간 걸어 나올 수 없던 NPC를 정리했다 "
+                + $"({(offMap ? "맵 밖 — 행방불명" : "맵 안 — 시체로 남긴다")}, {kind}): "
+                + $"{name} @{transform.position.ToString("F1")}",
             this
         );
+
+        // ① 사망 — 호송·이벤트가 쥔 참조를 사망 정리(NpcDeath)가 끊는다. 여기까지는 둘 다 같다.
+        m_health.ServerKillStuck();
+
+        // ② 맵 안이면 여기서 끝이다 — 시체는 보이는 자리에 그대로 남는다. 몸이 사라지는 것은
+        //    맵 밖(아무도 볼 수 없는 자리)에서만 할 일이다.
+        if (!offMap)
+            return;
+
+        // ③ 수배 중이었다면 포스터를 행방불명으로 바꾼다 — 없어진 대상이 그대로 걸려 있으면 본부가 헛돈다
+        WantedListManager wanted = App.Game.WantedList;
+        if (wanted != null)
+            wanted.MarkMissing(NetworkObjectId);
+
+        // ④ 몸을 지운다 — 맵 밖 시체는 보이지도, 유치장까지 끌고 갈 수도 없다. VFX는 없다(아무도 못 본다)
+        SuddenEventUtil.DespawnOrDestroy(gameObject, playVfx: false);
+    }
+
+    // 굳은 자리의 종류 — 로그에 남겨 원인(맵 밖으로 밀림 / 구조물에 올라탐)을 가른다. (#913)
+    private enum EStuckKind
+    {
+        None,        // 정상 — 발밑에 NavMesh가 있다
+        OffNavMesh,  // 에이전트가 NavMesh에 붙어 있지 않다
+        AboveMesh,   // 붙어는 있지만 발밑 NavMesh보다 한참 위다 — 구조물에 올라탄 몸
+    }
+
+    // 걸어 나올 수 없는 자리인가 — NavMesh 밖이거나, 발밑 NavMesh보다 한참 위(구조물에 올라탄 것).
+    private EStuckKind ProbeStuck()
+    {
+        Vector3 previous = m_lastProbePosition;
+        m_lastProbePosition = transform.position;
+
+        // 남이 쥐고 있는 몸은 굳은 것이 아니다 — 시체·밧줄·넉백 비행이 여기서 빠진다
+        if (m_death.IsDead || m_rope.IsRoped || m_knockback.IsKnockedBack)
+            return EStuckKind.None;
+
+        // 래그돌은 에이전트가 꺼져 있어도 센다 — 위 주석의 "래그돌인 몸도 센다"가 이 줄이다
+        bool ragdolled = m_ragdoll != null && m_ragdoll.IsRagdollActive;
+        if (!m_agent.enabled && !ragdolled)
+            return EStuckKind.None;
+
+        // 아직 가고 있으면 걸린 것이 아니다 — 래그돌 내부 상태가 아니라 이동량으로 본다.
+        // 잣대가 하나라 비행·낙하·미끄러짐·에이전트 이동이 한꺼번에 덮인다.
+        if ((transform.position - previous).sqrMagnitude > k_stuckStillEpsilon * k_stuckStillEpsilon)
+            return EStuckKind.None;
+
+        // 에이전트가 꺼진 동안에는 isOnNavMesh가 늘 거짓이라 위치로만 판단한다
+        if (m_agent.enabled && !m_agent.isOnNavMesh)
+            return EStuckKind.OffNavMesh;
+
+        // 마스크는 AllAreas다 — 통행이 막힌 영역(Jail) 위에 서 있는 것은 "올라탄" 것이 아니다
+        if (!NavMesh.SamplePosition(transform.position, out NavMeshHit hit, k_stuckProbeRadius, NavMesh.AllAreas))
+            return EStuckKind.OffNavMesh;
+
+        return transform.position.y - hit.position.y > k_stuckHeightAboveMesh
+            ? EStuckKind.AboveMesh
+            : EStuckKind.None;
     }
 }

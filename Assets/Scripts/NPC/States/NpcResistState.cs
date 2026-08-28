@@ -87,7 +87,7 @@ public class NpcResistState : NpcStateBase
     public override void Enter()
     {
         // 표적을 추격하며 싸운다 — 이동을 멈추지 않고, 사거리 안으로 들어오면 stoppingDistance로 자연히 선다 (#254)
-        m_owner.Agent.isStopped = false;
+        m_owner.SetAgentStopped(false);
         m_owner.Agent.stoppingDistance = m_config.AttackRange * k_stopDistanceFactor;
 
         // 걸어오지 않고 달려온다 — 도주와 같은 질주 속도를 써서 공용 Run 클립이 발 미끄러짐 없이 맞는다 (#254)
@@ -108,7 +108,8 @@ public class NpcResistState : NpcStateBase
 
         // 추격 중에는 도로를 피하지 않는다 (#721) — 전역 Road 비용 5(#634) 때문에 표적이 도로 위에 있으면
         // 최단 경로가 인도로 돌아 나가 쫓아오다 옆으로 샌다. 에이전트별 override라 배회 시민의 기피는 그대로다.
-        m_roadArea = NpcNavAreas.RoadArea;
+        // 준비 안 된 에이전트에는 비용을 못 건다 — -1로 두면 Exit의 원복도 함께 건너뛴다 (#913)
+        m_roadArea = m_owner.AgentReady ? NpcNavAreas.RoadArea : -1;
         if (m_roadArea >= 0)
         {
             m_baseRoadCost = m_owner.Agent.GetAreaCost(m_roadArea);
@@ -182,7 +183,7 @@ public class NpcResistState : NpcStateBase
             // 멈춰서 때린다 — 스윙 동안 추격 이동을 멈춰, 표적이 움직여도 미끄러지며 때리지 않는다 (팀 피드백)
             m_swingHoldUntil = Time.time + m_config.SwingHoldSeconds;
             if (m_owner.Agent.isOnNavMesh)
-                m_owner.Agent.isStopped = true;
+                m_owner.SetAgentStopped(true);
         }
 
         // 타격 프레임 도달 — 예약된 스윙의 데미지를 지금 넣는다. 범위 재수집도 이 순간에 하므로
@@ -200,14 +201,14 @@ public class NpcResistState : NpcStateBase
 
     public override void Exit()
     {
-        m_owner.Agent.isStopped = false;
+        m_owner.SetAgentStopped(false);
         m_owner.Agent.updateRotation = true; // 이동 재개 시 에이전트가 다시 진행 방향으로 돈다
         m_owner.Agent.stoppingDistance = 0f; // 추격용으로 늘린 정지 거리를 원복 (#254)
         m_owner.Agent.speed = m_baseSpeed;   // 추격 질주 배율 원복 (#254)
         m_owner.Agent.acceleration = m_baseAcceleration; // 조향 원복 — 배회 시민이 급가속으로 튀지 않게 (#568 후속)
 
         // 도로 비용 원복 — 안 되돌리면 이 몸이 배회로 돌아간 뒤에도 차도를 지름길로 쓴다 (#721)
-        if (m_roadArea >= 0)
+        if (m_roadArea >= 0 && m_owner.AgentReady)
             m_owner.Agent.SetAreaCost(m_roadArea, m_baseRoadCost);
     }
 
@@ -304,12 +305,12 @@ public class NpcResistState : NpcStateBase
         if (target == null)
         {
             if (m_owner.Agent.isOnNavMesh)
-                m_owner.Agent.isStopped = true;
+                m_owner.SetAgentStopped(true);
             return;
         }
 
         // 매 틱 갱신해도 무해한 보험성 대입 — 다가갈 자리가 있으면 언제나 걸어간다
-        m_owner.Agent.isStopped = false;
+        m_owner.SetAgentStopped(false);
 
         // 주기가 됐거나 목표가 충분히 움직였으면 — 둘 중 하나면 다시 잡는다 (기존 OR 동작 유지)
         bool moved = (target.position - m_lastChaseDestination).sqrMagnitude
