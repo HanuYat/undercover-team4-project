@@ -700,7 +700,7 @@ public class Baton : ItemBase, IAimedWeapon
         //
         // <b>테이저(<c>Taser.EvaluateAim</c>)의 같은 게이트는 그대로 둔다</b> — 두 무기의 근거가 여기서
         // 갈린다. 테이저는 무력화가 목적이라 이미 무력화된 대상에 쏘는 것이 진짜 무효타이고
-        // (<c>NpcStun.EnterStunned</c>가 IsStunned로 물러난다), 진압봉은 체력을 깎는 것이 목적이라
+        // (테이저 기절은 시간이 짧아 EnterStunned가 물러난다), 진압봉은 체력을 깎는 것이 목적이라
         // 쓰러진 대상에도 할 일이 남아 있다.
         //
         // 죽은 대상은 위 <see cref="NpcStateRules.CanBeDamaged"/>가 막으므로 여기까지 오지 않는다.

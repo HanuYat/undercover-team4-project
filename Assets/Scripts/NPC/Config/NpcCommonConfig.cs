@@ -31,10 +31,12 @@ public class NpcCommonConfig : ScriptableObject
     [SerializeField] private int m_maxHp = 100;
 
     [Tooltip("한 방의 <b>초과</b> 피해(피해량 − 남은 체력)가 이 값 이상이면 기절을 건너뛰고 즉사한다 — " +
-             "뿅망치 1% 대박(9999)·홈런 진압봉·차량·폭발이 설계대로 죽이게 하는 예외다(#916). " +
-             "진압봉 한 대(34)로 마지막 체력을 깎는 것은 초과량이 작아 걸리지 않는다")]
+             "뿅망치 대박·차량·폭발이 설계대로 죽이게 하는 예외다(#916). " +
+             "⚠ <b>차량 피해와 함께 봐야 한다.</b> 최대 100 · 차량 120이면 만피를 쳐도 초과가 20뿐이라, " +
+             "이 값을 그보다 크게 잡으면 치인 시민이 죽지 않고 눕기만 한다. " +
+             "반대로 진압봉 한 대(20)는 마지막 체력을 깎아도 초과가 0이라 걸리지 않는다")]
     [Min(1)]
-    [SerializeField] private int m_lethalOverkillHp = 100;
+    [SerializeField] private int m_lethalOverkillHp = 20;
     // 제압 타격량(m_subdueHitPower)은 제거됐다 (#438) — 유일한 소비처였던 E 제압 타격이 사라졌다.
     // 진압봉은 자기 Baton.m_damage(같은 34)를 쓴다 — 무기 수치는 무기가 들고 있는 편이 맞다.
 

@@ -182,10 +182,31 @@ public class NpcStun : NetworkBehaviour
     {
         if (IsSpawned && !IsServer)
             return;
-        // 이미 무력화돼 있으면 무시 — 추가 타격의 타이머 리셋(#366 엣지 성질)과 넉백 KO 위에
-        // 오버레이가 덧씌워지는 이중 기절을 함께 막는다 (#292).
-        if (IsStunned)
+
+        // 넉백 착지 KO 위에는 얹지 않는다 — 그쪽은 상태 전이라 오버레이와 겹치면 이중 기절이 된다 (#292)
+        if (m_owner.CurrentState == NpcState.Stunned)
             return;
+
+        float duration = seconds ?? m_owner.StunConfig.StunSeconds;
+
+        // 이미 기절 중이면 <b>더 긴 기절로만</b> 갈아탄다 (#916). 짧은 쪽을 무시하는 것이 예전의
+        // 통짜 가드가 지키던 것이고(추가 타격이 타이머를 리셋하지 못한다), 긴 쪽을 받는 것이 새로
+        // 필요해진 것이다: 테이저 기절(2.67초) 중에 체력이 0이 되면 넉다운 창(30초)이 열려야 한다.
+        if (HasStunOverlay)
+        {
+            if (duration <= m_stunDuration - m_stunElapsed)
+                return;
+
+            m_owner.Reaction.ThreatTarget = threat;
+            m_stunDuration = duration;
+            m_stunElapsed = 0f;
+            m_standingUp = false;
+            SetRising(false); // 기상 구간에 들어섰더라도 되돌린다 — 다시 누워 있는 시간이 생겼다
+
+            // 에이전트·OnStunned·감전 연출은 건드리지 않는다 — 이미 걸린 기절의 연장이라
+            // m_agentStoppedBefore를 다시 잡으면 '멈춰 있던 상태'가 원래 값으로 굳는다.
+            return;
+        }
 
         // 아무 링크도 끊지 않는다 — 오버레이의 목적 그대로다. 연행(Escorted)만은 예외로 끊던
         // 규칙이 있었지만(#292) 그건 수갑 연행을 전제로 한 것이고, 밧줄로 바뀐 뒤로는 '묶어 둔 것'과
@@ -193,7 +214,7 @@ public class NpcStun : NetworkBehaviour
         // 했다 — 정면 탈취는 CanArrest가 Escorted를 빼서 막아 뒀는데 테이저 한 방이면 같은 결과가
         // 났다. 기절한 채로도 밧줄 장력은 계속 돈다(게이트 순서상 TickRopeDrag가 앞이다). (#562)
         m_owner.Reaction.ThreatTarget = threat;
-        m_stunDuration = seconds ?? m_owner.StunConfig.StunSeconds;
+        m_stunDuration = duration;
         m_stunElapsed = 0f;
         m_standingUp = false;
         SetRising(false);
