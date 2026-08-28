@@ -254,10 +254,12 @@ public static class NpcStateRules
     public static bool HasInteractKeyAction(NpcState state) =>
         state is NpcState.Captured or NpcState.Jailed;
 
-    /// <summary>방치 회복(<see cref="NpcHealth"/>)이 지금 적용될 수 있는 상태인가 — 사망·수감·호송 중 제외. (#707)</summary>
+    /// <summary>방치 회복(<see cref="NpcHealth"/>)이 지금 적용될 수 있는 상태인가 — 사망·기절·수감·호송 중 제외. (#707/#916)
+    /// 기절을 뺀 이유: 넉다운 기절(30초)이 회복 대기(20초)보다 길어, 쓰러진 몸이 누운 채 회복하면 확인사살 창이 조용히 닫힌다.</summary>
     public static bool CanRegenerate(NpcController npc) =>
         npc != null
         && !npc.Death.IsDead
+        && !npc.Stun.IsStunned
         && npc.CurrentState != NpcState.Jailed
         && npc.CurrentState != NpcState.Escorted;
 }
