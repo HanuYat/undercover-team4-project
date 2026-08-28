@@ -5580,6 +5580,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WantedListView
   m_entryContainer: {fileID: 5557354103436823269}
   m_entryPrefab: {fileID: 3610566221792457508, guid: 87c972f1220e16b41bca4048d61b76dc, type: 3}
+  m_prevButton: {fileID: 0}
+  m_nextButton: {fileID: 0}
+  m_pageLabel: {fileID: 0}
+  m_entriesPerPage: 99
 --- !u!1 &6958552632846412569
 GameObject:
   m_ObjectHideFlags: 0

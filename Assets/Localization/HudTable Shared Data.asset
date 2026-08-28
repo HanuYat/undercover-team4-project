@@ -215,6 +215,10 @@ MonoBehaviour:
     m_Key: Hud.Interact.CctvSwitch
     m_Metadata:
       m_Items: []
+  - m_Id: 8399387659689985
+    m_Key: Hud.Interact.WantedPage
+    m_Metadata:
+      m_Items: []
   - m_Id: 4406443624529933
     m_Key: Hud.Interact.RemoteDoorSelect
     m_Metadata:
