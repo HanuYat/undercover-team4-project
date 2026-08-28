@@ -187,6 +187,11 @@ public class ShopPurchases : NetworkedManagerBase
         m_carried.Clear();
         m_installables.Clear();
         m_tallies.Clear();
+
+        // 진열 스냅샷도 버린다 (#927) — 안 버리면 진행도가 1라운드로 되돌아간 뒤 LineupRound가 다시
+        // 맞아떨어져(ShopLineup.TryRestoreLineup) 새 판인데도 지난 판 진열이 품절까지 복원된다.
+        m_lineup = Array.Empty<ShopSlotSaveEntry>();
+        m_lineupRound = 0;
     }
 
     // ---- 집계 (서버 전용) ----
