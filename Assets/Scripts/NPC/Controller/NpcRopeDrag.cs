@@ -285,6 +285,9 @@ public class NpcRopeDrag : NetworkBehaviour
         if (releaser != null && m_owner.TryWarpNear(releaser.position))
             return false;
 
+        // 붙일 자리가 없어도 에이전트의 내부 위치는 몸에 맞춘다 — 안 맞추면 묶이기 전 자리로 끌려간다 (#913)
+        agent.Warp(transform.position);
+
         // 포기해도 굳은 채 남지는 않는다 — TickStuckOffNavMesh가 곧 행방불명 처리한다 (#913).
         // 위치를 남기는 것은 그 로그가 원인 지점을 조용히 덮지 않게 하기 위해서다.
         Debug.LogWarning(

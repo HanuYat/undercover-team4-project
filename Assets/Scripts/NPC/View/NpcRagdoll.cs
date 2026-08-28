@@ -774,6 +774,12 @@ public partial class NpcRagdoll : MonoBehaviour
         {
             m_agent.Warp(ground.position);
         }
+        else
+        {
+            // 붙일 자리가 없어도 에이전트의 내부 위치는 몸에 맞춘다 (#913) — 안 맞추면 에이전트가
+            // 쓰러지기 전 자리를 그대로 쥐고 있다가 updatePosition으로 몸을 거기로 끌어다 놓는다.
+            m_agent.Warp(transform.position);
+        }
 
         if (!m_agent.isOnNavMesh)
         {
