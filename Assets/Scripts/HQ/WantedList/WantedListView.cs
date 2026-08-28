@@ -4,16 +4,14 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
-using UnityEngine.UI;
 
 /// <summary>
 /// 본부 모니터의 수배 리스트 표시 — WantedListManager의 동기화 리스트를 구독해 항목이 추가/제거될 때마다 행을 다시 그림.
 /// MinimapViewer·CCTV와 함께 본부(HQ) 장소의 모니터 화면 컴포넌트다.
 ///
-/// <b>한 페이지에 담기는 만큼만 그린다</b> (#917) — 판 크기는 고정인데 수배 정원(CriminalAssigner의
-/// m_maxWantedCount)은 씬 값이라 언제든 늘어난다. 전부 쌓으면 판 밖으로 넘치므로, 시민 명부
-/// (<see cref="CitizenDirectoryView"/>)와 같은 페이지 방식을 쓴다 — 정원이 몇이 되든 페이지 수만 늘어난다.
-/// 한 페이지 정원은 그리드 배치가 판에 몇 개를 담는지에 맞춘 값이다.
+/// <b>한 페이지씩만 그린다</b> (#917) — 수배 정원은 씬 값이라 언제든 늘어나므로, 시민 명부
+/// (<see cref="CitizenDirectoryView"/>)와 같은 페이지 방식으로 판 크기에 안 매이게 한다.
+/// 넘김은 <see cref="WantedListPageButton"/>과 자동 순환 둘 다 받는다.
 /// </summary>
 public class WantedListView : MonoBehaviour
 {
@@ -24,15 +22,13 @@ public class WantedListView : MonoBehaviour
     [SerializeField] private WantedEntryView m_entryPrefab;  // 행 프리팹
 
     [Header("페이지")]
-    [SerializeField] private Button m_prevButton;
-    [SerializeField] private Button m_nextButton;
     [SerializeField] private TMP_Text m_pageLabel; // "1 / 2" (선택)
 
     [Tooltip("한 페이지에 그릴 수배 수 — 컨테이너 GridLayoutGroup이 판에 담는 칸 수와 맞출 것")]
     [Min(1)]
     [SerializeField] private int m_entriesPerPage = 6;
 
-    [Tooltip("페이지가 둘 이상일 때 자동으로 넘기는 간격(초). 본부 모니터는 상시 표시 화면이라 누를 수가 없다")]
+    [Tooltip("페이지가 둘 이상일 때 자동으로 넘어가는 간격(초) — 버튼을 누르면 그 시점부터 다시 잰다")]
     [Min(1f)]
     [SerializeField] private float m_autoPageSeconds = 8f;
 
@@ -42,22 +38,18 @@ public class WantedListView : MonoBehaviour
     private readonly List<WantedEntryView> m_rows = new List<WantedEntryView>();
     private int m_page;
 
-    private void Awake()
-    {
-        if (m_prevButton != null)
-            m_prevButton.onClick.AddListener(() => ChangePage(-1));
-        if (m_nextButton != null)
-            m_nextButton.onClick.AddListener(() => ChangePage(1));
-    }
+    /// <summary>페이지가 둘 이상인가 — 버튼의 윤곽선 판정용. (#917)</summary>
+    public bool HasMultiplePages => m_pageCount > 1;
 
-    private void ChangePage(int delta)
+    /// <summary>페이지를 넘긴다 — 표시 전용이라 로컬이다. (#917)</summary>
+    public void ChangePage(int delta)
     {
         m_page += delta;
         m_autoPageElapsed = 0f;
         Rebuild();
     }
 
-    // 본부는 커서가 잠겨 있어 버튼을 누를 수 없다 — 페이지가 여럿이면 스스로 넘긴다
+    // 아무도 안 눌러도 뒷장이 보이게 (#917)
     private void Update()
     {
         if (m_pageCount <= 1)
@@ -158,11 +150,6 @@ public class WantedListView : MonoBehaviour
         for (int i = 0; i < visible; i++)
             m_rows[i].Bind(wanted[start + i], database);
 
-        // 첫 페이지=다음만, 마지막=이전만 (명부와 같은 규칙)
-        if (m_prevButton != null)
-            m_prevButton.gameObject.SetActive(m_page > 0);
-        if (m_nextButton != null)
-            m_nextButton.gameObject.SetActive(m_page < pageCount - 1);
         // 한 페이지면 숫자를 보일 이유가 없다
         if (m_pageLabel != null)
         {
