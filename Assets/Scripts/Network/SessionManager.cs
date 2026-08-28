@@ -552,6 +552,28 @@ public class SessionManager : CommonManagerBase
         }
     }
 
+    /// <summary>
+    /// 끊긴 플레이어를 UGS 세션 명부에서 내린다 — 호스트 전용. (#920)
+    /// 강제 종료한 클라는 자기 쪽에서 LeaveAsync를 부르지 못한 채 죽으므로, 호스트가 대신 내려주지
+    /// 않으면 백엔드에 멤버로 남아 같은 코드로 다시 들어오지 못한다(정원도 한 칸 계속 먹는다).
+    /// </summary>
+    public async UniTask RemovePlayerAsync(string playerId)
+    {
+        if (m_session == null || string.IsNullOrEmpty(playerId))
+            return;
+
+        try
+        {
+            await m_session.AsHost().RemovePlayerAsync(playerId);
+            Debug.Log($"[SessionManager] 끊긴 플레이어를 세션에서 내림 / playerId: {playerId}");
+        }
+        catch (Exception ex)
+        {
+            // 자발적으로 나간 사람은 이미 빠진 뒤라 여기로 온다 — 정상 경로라 경고로 올리지 않는다.
+            Debug.Log($"[SessionManager] 세션 플레이어 제거 안 함(이미 없거나 실패): {ex.Message}");
+        }
+    }
+
     /// <summary>세션 잠금/해제 — 호스트 전용. 잠그면 코드 참가가 거부된다. (#214 게임 중 신규 접속 차단)</summary>
     public async UniTask SetLockedAsync(bool locked)
     {
