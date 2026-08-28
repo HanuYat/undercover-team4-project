@@ -450,11 +450,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 8399387659689986
-    m_Localized: Within {0}m - suspect present
+    m_Localized: Present within {0}m
     m_Metadata:
       m_Items: []
   - m_Id: 8399387659689987
-    m_Localized: Within {0}m - no suspect
+    m_Localized: None within {0}m
     m_Metadata:
       m_Items: []
   - m_Id: 7296109215571968

@@ -472,11 +472,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 8399387659689986
-    m_Localized: "반경 {0}m — 진범 있음"
+    m_Localized: "반경 {0}m 내에 있음"
     m_Metadata:
       m_Items: []
   - m_Id: 8399387659689987
-    m_Localized: "반경 {0}m — 진범 없음"
+    m_Localized: "반경 {0}m 내에 없음"
     m_Metadata:
       m_Items: []
   - m_Id: 7296109215571968
