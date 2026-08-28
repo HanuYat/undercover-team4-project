@@ -24,6 +24,14 @@ public class AreaScanPresenter : NetworkBehaviour
     [SerializeField]
     private LocalizedString m_blackoutMessage;
 
+    [Tooltip("반경 안에 진범이 있을 때의 판독 결과 토스트 — {0}=반경(m)")]
+    [SerializeField]
+    private LocalizedString m_hitMessage;
+
+    [Tooltip("반경 안에 진범이 없을 때의 판독 결과 토스트 — {0}=반경(m)")]
+    [SerializeField]
+    private LocalizedString m_missMessage;
+
     [Tooltip("토스트가 화면에 머무는 시간(초)")]
     [Min(0f)]
     [SerializeField]
@@ -73,6 +81,7 @@ public class AreaScanPresenter : NetworkBehaviour
         {
             m_scanner.OnCooldownUseAttempt -= HandleCooldownUseAttempt;
             m_scanner.OnBlackoutUseAttempt -= HandleBlackoutUseAttempt;
+            m_scanner.OnScanResult -= HandleScanResult;
         }
 
         m_scanner = scanner;
@@ -81,6 +90,7 @@ public class AreaScanPresenter : NetworkBehaviour
         {
             m_scanner.OnCooldownUseAttempt += HandleCooldownUseAttempt;
             m_scanner.OnBlackoutUseAttempt += HandleBlackoutUseAttempt;
+            m_scanner.OnScanResult += HandleScanResult;
         }
     }
 
@@ -91,6 +101,17 @@ public class AreaScanPresenter : NetworkBehaviour
 
         m_cooldownMessage.Arguments = new object[] { Mathf.CeilToInt(remaining) }; // Show보다 먼저
         App.UI.Toast?.Show(m_cooldownMessage, m_toastSeconds); // HUD 없으면 무동작
+    }
+
+    // 링이 발밑에서 퍼지고 색으로만 갈려 안 읽혔다 — 같은 결과를 글자로 한 번 더 말한다 (#915)
+    private void HandleScanResult(bool found, float radius)
+    {
+        LocalizedString message = found ? m_hitMessage : m_missMessage;
+        if (message == null || message.IsEmpty)
+            return;
+
+        message.Arguments = new object[] { Mathf.RoundToInt(radius) }; // Show보다 먼저
+        App.UI.Toast?.Show(message, m_toastSeconds);
     }
 
     private void HandleBlackoutUseAttempt()
