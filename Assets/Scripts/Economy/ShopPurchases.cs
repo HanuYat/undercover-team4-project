@@ -36,6 +36,11 @@ public class ShopPurchases : NetworkedManagerBase
     // 서버만 쓰기, 전 클라 읽기 — 표시용 집계다 (#840). 배달·판정은 위 두 컬렉션이 계속 담당한다.
     private readonly NetworkList<PurchaseTally> m_tallies = new NetworkList<PurchaseTally>();
 
+    // 진열 스냅샷 — 세이브 왕복용 (#925). ShopLineup이 Shop 씬 스코프라 SaveService가 직접 읽을 수
+    // 없어서, 라운드를 넘겨야 하는 값을 이미 들고 있는 이쪽에 둔다.
+    private ShopSlotSaveEntry[] m_lineup = Array.Empty<ShopSlotSaveEntry>();
+    private int m_lineupRound;
+
     /// <summary>구매한 소지형 아이템 프리팹 목록(중복 포함). 배달(ShopDelivery)이 순회한다. 서버 전용.</summary>
     public IReadOnlyList<ItemBase> Carried => m_carried;
 
@@ -86,11 +91,31 @@ public class ShopPurchases : NetworkedManagerBase
                 Debug.LogWarning($"[상점] 세이브의 설치형 '{installableName}'을(를) 알 수 없어 건너뛴다", this);
         }
 
-        Debug.Log($"[상점] 세이브 복원 — 소지형 {m_carried.Count}개, 설치형 {m_installables.Count}종");
+        // 진열은 여기서 해석하지 않는다 — 카탈로그 대조는 ShopLineup이 하고, 이쪽은 넘겨주기만 한다.
+        m_lineup = save.ShopSlots ?? Array.Empty<ShopSlotSaveEntry>();
+        m_lineupRound = save.Round;
+
+        Debug.Log($"[상점] 세이브 복원 — 소지형 {m_carried.Count}개, 설치형 {m_installables.Count}종, 진열 {m_lineup.Length}칸({m_lineupRound}라운드)");
     }
 
     /// <summary>구매한 설치형 목록. 배달(ShopDelivery)이 순회한다. 서버 전용.</summary>
     public IReadOnlyCollection<EInstallable> Installables => m_installables;
+
+    /// <summary>진열 스냅샷 — SaveService가 저장에, ShopLineup이 복원에 읽는다. (#925)</summary>
+    public ShopSlotSaveEntry[] Lineup => m_lineup;
+
+    /// <summary>스냅샷이 속한 라운드 — 이 값이 현재 라운드와 다르면 복원하지 않고 새로 추첨한다.</summary>
+    public int LineupRound => m_lineupRound;
+
+    /// <summary>진열이 바뀔 때 ShopLineup(서버)이 밀어 넣는다. (#925)</summary>
+    public void ServerSetLineup(int round, ShopSlotSaveEntry[] slots)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        m_lineupRound = round;
+        m_lineup = slots ?? Array.Empty<ShopSlotSaveEntry>();
+    }
 
     /// <summary>이 설치형을 이미 샀는가 — 중복 구매 거부·표시 복원용. 서버 전용.</summary>
     public bool HasInstallable(EInstallable installable) => m_installables.Contains(installable);

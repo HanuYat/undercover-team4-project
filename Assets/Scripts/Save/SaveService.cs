@@ -240,6 +240,10 @@ public static class SaveService
             installables.Add(installable.ToString());
         data.Installables = installables.ToArray();
 
+        // 진열은 스냅샷을 그대로 싣는다 — 이 라운드 것이 아니면 복원 쪽이 걸러낸다 (#925)
+        if (purchases.LineupRound == data.Round)
+            data.ShopSlots = purchases.Lineup;
+
         return data;
     }
 

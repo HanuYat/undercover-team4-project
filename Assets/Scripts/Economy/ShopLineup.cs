@@ -7,7 +7,9 @@ using UnityEngine;
 /// <summary>
 /// 상점 진열 추첨과 주문 (#814, #843). 카탈로그에서 소모형 고정 칸 + 랜덤 칸을 뽑아 이번 라운드
 /// 칸에 배정하고, 주문창(<see cref="ShopBrowserPanel"/>)이 누른 주문을 서버 권위로 판정한다.
-/// Shop 씬은 라운드마다 재로드되므로 씬 로드 1회 = 라운드 1회 추첨이 자동으로 성립한다.
+/// <b>추첨은 라운드당 1회다</b> — 예전에는 "Shop 씬 로드 1회 = 라운드 1회"로 봤지만 이어하기도 씬
+/// 로드라 그때마다 다시 뽑히고 팔린 칸이 열렸다 (#925). 진열은 세이브에 실려(<see cref="ShopPurchases"/>
+/// 경유) 같은 라운드면 복원된다.
 ///
 /// <b>진열대가 없어지며 칸 상태가 여기로 모였다.</b> 예전에는 칸마다 씬 오브젝트(ShopStand)가
 /// 자기 NetworkVariable과 구매 RPC를 들고 있었지만, 전시가 사라진 지금 칸은 주문창의 칸일 뿐이라
@@ -106,6 +108,10 @@ public class ShopLineup : NetworkBehaviour
     {
         await UniTask.NextFrame(this.GetCancellationTokenOnDestroy());
 
+        // 이어하기로 돌아온 같은 라운드면 그때 진열을 그대로 세운다 (#925)
+        if (TryRestoreLineup())
+            return;
+
         AssignLineup();
     }
 
@@ -167,6 +173,87 @@ public class ShopLineup : NetworkBehaviour
         Debug.Log(
             $"[상점] 진열 추첨 — 소모형 {stapleSlots}칸, 랜덤 {randomSlots}칸, 빈 칸 {slotCount - stapleSlots - randomSlots}"
         );
+
+        PushSnapshot();
+    }
+
+    // ---- 세이브 왕복 (#925) ----
+
+    private int CurrentRound =>
+        App.Game.RoundProgress != null ? App.Game.RoundProgress.Current : RoundProgress.k_firstRound;
+
+    // 같은 라운드의 스냅샷이 있으면 그것으로 칸을 세운다 — 돌려주는 값은 복원했는가다.
+    private bool TryRestoreLineup()
+    {
+        ShopPurchases purchases = App.Game.ShopPurchases;
+        if (m_catalog == null || purchases == null)
+            return false;
+
+        ShopSlotSaveEntry[] saved = purchases.Lineup;
+        if (saved == null || saved.Length == 0 || purchases.LineupRound != CurrentRound)
+            return false;
+
+        for (int i = 0; i < saved.Length; i++)
+        {
+            ShopSlotSaveEntry e = saved[i];
+            int index = string.IsNullOrEmpty(e.Id) ? -1 : IndexOfId(e.Id, e.Installable);
+
+            // 품목을 못 찾으면 그 칸만 빈 칸으로 둔다 — 카탈로그가 바뀐 세이브에서 통째로 새로
+            // 뽑으면 이미 산 칸까지 열려 원래 버그가 되살아난다.
+            if (index < 0 && !string.IsNullOrEmpty(e.Id))
+                Debug.LogWarning($"[상점] 세이브의 진열 품목 '{e.Id}'을(를) 카탈로그에서 찾지 못해 빈 칸으로 둔다", this);
+
+            m_slots.Add(new Slot { EntryIndex = index, Status = (EShopSlotStatus)e.Status });
+        }
+
+        Debug.Log($"[상점] 진열 복원 — {saved.Length}칸 ({CurrentRound}라운드)");
+        return true;
+    }
+
+    // 지금 칸을 스냅샷으로 만들어 ShopPurchases에 맡긴다(세이브가 거기서 읽는다).
+    private void PushSnapshot()
+    {
+        ShopPurchases purchases = App.Game.ShopPurchases;
+        if (purchases == null || m_catalog == null)
+            return;
+
+        var snapshot = new ShopSlotSaveEntry[m_slots.Count];
+        for (int i = 0; i < m_slots.Count; i++)
+        {
+            Slot slot = m_slots[i];
+            ShopCatalog.Entry entry = m_catalog.Get(slot.EntryIndex);
+            snapshot[i] = new ShopSlotSaveEntry
+            {
+                Id = IdOf(entry),
+                Installable = entry != null && entry.IsInstallable,
+                Status = (int)slot.Status,
+            };
+        }
+
+        purchases.ServerSetLineup(CurrentRound, snapshot);
+    }
+
+    // 저장 id — 소지형은 프리팹 이름(SaveItemLookup 관례), 설치형은 enum 이름. 빈 칸은 빈 문자열.
+    private static string IdOf(ShopCatalog.Entry entry)
+    {
+        if (entry == null)
+            return string.Empty;
+
+        return entry.IsInstallable ? entry.Installable.ToString() : SaveItemLookup.GetId(entry.ItemPrefab);
+    }
+
+    private int IndexOfId(string id, bool installable)
+    {
+        for (int i = 0; i < m_catalog.Count; i++)
+        {
+            ShopCatalog.Entry entry = m_catalog.Get(i);
+            if (entry == null || entry.IsInstallable != installable)
+                continue;
+            if (IdOf(entry) == id)
+                return i;
+        }
+
+        return -1;
     }
 
     // 이미 산 설치형은 처음부터 Owned로 연다 — 옛 ShopStand.ServerAssign이 하던 판정이다.
@@ -317,6 +404,11 @@ public class ShopLineup : NetworkBehaviour
 
         value.Status = EShopSlotStatus.SoldOut; // 다음 라운드 재추첨 때 다시 판정된다
         m_slots[slot] = value;
+
+        // 여기서 저장한다 (#925) — 출동·라운드 종료에만 저장하면 상점에서 산 뒤 나갔다 이어했을 때
+        // 이 칸이 다시 열린다. 진열 스냅샷도 같이 최신으로 만든다.
+        PushSnapshot();
+        SaveService.SaveAsync().Forget();
 
         ReplyRpc(
             "주문 완료 — 다음 라운드에 본부로 배달된다",
