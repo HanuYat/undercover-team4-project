@@ -241,6 +241,12 @@ public class NpcController : NetworkBehaviour
         // 뒤로 내리면 스턴 게이트에 가려 기절한 채 굳은 NPC(=신고된 증상 그대로)에 영영 닿지 못한다.
         TickStuckOffNavMesh();
 
+        // NavMesh 밖인 동안에는 아래를 돌리지 않는다 (#913) — isStopped·SetAreaCost·remainingDistance가
+        // 전부 "not placed on a NavMesh" 예외를 던진다. 예전에는 회수 워프가 1초 만에 붙여 이 구간이
+        // 짧았지만, 지금은 정리까지 몇 초를 그대로 머문다. 그 구간은 위 정리가 끝낸다.
+        if (m_agent.enabled && !m_agent.isOnNavMesh)
+            return;
+
         // 도로를 벗어나면 통행 마스크를 좁힌다 — 위 정리와 같은 이유로 게이트보다 먼저 돈다 (#634 후속).
         // 도로 위에서 기절·넉백을 맞으면 그 구간 내내 대기 상태로 남는데, 그동안 움직이지 않으므로
         // 판정은 계속 "도로 위"고 좁혀지지 않는다 — 깨어나 걸어 나가면 그때 좁는다.
