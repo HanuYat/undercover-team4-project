@@ -33,8 +33,9 @@ public partial class NpcRagdoll : MonoBehaviour
     // "몸이 바닥에 있다"로 보는 골반 높이(m). 이 안이면 루트 높이를 골반이 아니라 지면이 준다.
     private const float k_groundedHipsHeight = 0.5f;
 
-    // 기상 시 NavMesh를 다시 찾는 반경(m) — "누운 자리 바로 밑"을 뜻하는 값이라 상수다.
-    private const float k_navMeshSampleDistance = 2f;
+    // 기상 시 NavMesh를 다시 찾는 반경(m) — "누운 자리 <b>바로</b> 밑"을 뜻하는 값이라 상수다.
+    // 넓히면 구조물 위에 걸친 몸이 기상하면서 아래로 툭 떨어져 순간이동으로 보인다 (#913).
+    private const float k_navMeshSampleDistance = 0.75f;
 
     private enum RagdollState
     {

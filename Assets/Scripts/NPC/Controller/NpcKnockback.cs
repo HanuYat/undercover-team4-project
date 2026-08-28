@@ -204,10 +204,21 @@ public class NpcKnockback : NetworkBehaviour
             EndKnockback(transform.position);
     }
 
+    // 착지점이 옆으로 이만큼(m) 넘게 떨어져 있으면 붙이지 않는다 (#913) — 그건 착지가 아니라
+    // 순간이동으로 보인다. 탐색 반경(KnockbackLandSampleDistance)은 "발밑에 NavMesh가 있는가"를
+    // 묻는 값이라 넓어도 되지만, 그 결과를 그대로 워프에 쓰면 몸이 최대 그 거리만큼 옆으로 튄다.
+    private const float k_landSnapMaxHorizontal = 1.5f;
+
     private void EndKnockback(Vector3 landing)
     {
         m_knockbackActive = false;
         m_knockbackVelocity = Vector3.zero;
+
+        // 옆으로 멀면 그 자리에 떨군다 — NavMesh 밖에 남은 몸은 굳은 몸 정리가 끝낸다 (#913)
+        Vector3 offset = landing - transform.position;
+        offset.y = 0f;
+        if (offset.sqrMagnitude > k_landSnapMaxHorizontal * k_landSnapMaxHorizontal)
+            landing = transform.position;
 
         NavMeshAgent agent = m_owner.Agent;
         agent.enabled = true;
