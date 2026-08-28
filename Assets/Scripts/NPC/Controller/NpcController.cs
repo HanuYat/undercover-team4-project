@@ -817,12 +817,15 @@ public class NpcController : NetworkBehaviour
     /// 진압봉 홈런으로 맵 밖까지 날아간 몸이 제자리로 순간이동하는 쪽이 더 이상했다. 대신
     /// <b>행방불명</b>으로 끝낸다: 죽이고, 수배 포스터를 행방불명으로 바꾸고, 몸을 지운다.
     ///
-    /// 에이전트를 꺼 둔 구간(넉백 비행·밧줄 끌기·<b>래그돌</b>)은 위치를 그쪽이 쥐고 있어 굳은 것이
-    /// 아니다 — 건너뛴다.
+    /// <b>래그돌인 몸도 센다</b> (#913) — 에이전트가 꺼져 있다고 건너뛰면 기절이 풀릴 때까지 기다렸다가
+    /// 거기서부터 유예를 세게 되고, 그 사이 기상 복귀가 몸을 먼저 끌어다 붙인다. 홈런으로 날아간
+    /// 몸은 대개 래그돌인 채로 구조물에 걸리므로, 그 구간을 빼면 이 정리가 늘 진다.
     ///
-    /// ⚠ <b>그래서 꺼 둔 쪽은 반드시 스스로 켜야 한다.</b> 이 틱은 <c>enabled == true</c>인데
-    /// NavMesh 밖인 경우만 잡으므로, 꺼 놓고 아무도 켜지 않으면 <b>영영 오지 않는다.</b>
-    /// 켜는 것은 이 함수의 <b>전제</b>이지 생략해도 되는 이유가 아니다
+    /// 남이 위치를 쥐고 있는 구간(넉백 비행·<b>밧줄 끌기</b>)과 이미 죽은 몸은 건너뛴다 —
+    /// 끌려가는 중에 죽이면 플레이어가 쥔 몸이 손에서 사라진다.
+    ///
+    /// ⚠ <b>그래서 에이전트를 꺼 둔 쪽은 반드시 스스로 켜야 한다.</b> 래그돌이 아닌 채로 꺼 놓고
+    /// 아무도 켜지 않으면 이 정리는 <b>영영 오지 않는다</b>
     /// (<see cref="NpcRagdoll"/>의 기상이 실패해도 에이전트를 켜 두는 이유가 이것이다, #572).
     /// </summary>
     private void TickStuckOffNavMesh()
@@ -833,7 +836,7 @@ public class NpcController : NetworkBehaviour
 
         m_stuckProbeSeconds = 0f;
 
-        EStuckKind kind = m_agent.enabled ? ProbeStuck() : EStuckKind.None;
+        EStuckKind kind = ProbeStuck();
         if (kind == EStuckKind.None)
         {
             m_offNavMeshSeconds = 0f;
@@ -891,7 +894,17 @@ public class NpcController : NetworkBehaviour
     // 걸어 나올 수 없는 자리인가 — NavMesh 밖이거나, 발밑 NavMesh보다 한참 위(구조물에 올라탄 것).
     private EStuckKind ProbeStuck()
     {
-        if (!m_agent.isOnNavMesh)
+        // 남이 쥐고 있는 몸은 굳은 것이 아니다 — 시체도 여기서 빠진다(정리는 한 번이면 족하다)
+        if (m_death.IsDead || m_rope.IsRoped)
+            return EStuckKind.None;
+
+        // 래그돌은 에이전트가 꺼져 있어도 센다 — 위 주석의 "래그돌인 몸도 센다"가 이 줄이다
+        bool ragdolled = m_ragdoll != null && m_ragdoll.IsRagdollActive;
+        if (!m_agent.enabled && !ragdolled)
+            return EStuckKind.None;
+
+        // 에이전트가 꺼진 동안에는 isOnNavMesh가 늘 거짓이라 위치로만 판단한다
+        if (m_agent.enabled && !m_agent.isOnNavMesh)
             return EStuckKind.OffNavMesh;
 
         // 마스크는 AllAreas다 — 통행이 막힌 영역(Jail) 위에 서 있는 것은 "올라탄" 것이 아니다
