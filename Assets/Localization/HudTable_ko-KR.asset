@@ -471,6 +471,14 @@ MonoBehaviour:
       \uBA39\uD1B5"
     m_Metadata:
       m_Items: []
+  - m_Id: 8399387659689986
+    m_Localized: "반경 {0}m 내에 있음"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8399387659689987
+    m_Localized: "반경 {0}m 내에 없음"
+    m_Metadata:
+      m_Items: []
   - m_Id: 7296109215571968
     m_Localized: "\u26A0 \uC138\uB825\uC6D0\uB4E4\uC774 \uBCF5\uC218\uB97C \uC6D0\uD569\uB2C8\uB2E4"
     m_Metadata:

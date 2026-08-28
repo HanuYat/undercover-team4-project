@@ -449,6 +449,14 @@ MonoBehaviour:
     m_Localized: "Area scan failed \u2014 device blackout"
     m_Metadata:
       m_Items: []
+  - m_Id: 8399387659689986
+    m_Localized: Present within {0}m
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8399387659689987
+    m_Localized: None within {0}m
+    m_Metadata:
+      m_Items: []
   - m_Id: 7296109215571968
     m_Localized: "\u26A0 Faction members want revenge"
     m_Metadata:

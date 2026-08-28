@@ -140,8 +140,8 @@ public enum EAudioClip
     JailAlarm, // 웨엥 — 경보등이 점멸하는 동안 계속 (루프)
 
     // 구역 스캔 (#490)
-    AreaScanHit, // 삐빅 — 반경 안에 진범이 있을 때의 판독음 (오너 화면 전용, 2D)
-    AreaScanMiss, // 뚜 — 반경 안에 진범이 없을 때의 판독음 (오너 화면 전용, 2D)
+    AreaScanHit, // 삐빅 — 반경 안에 진범이 있을 때의 판독음 (링과 같이 공개 3D다)
+    AreaScanMiss, // 뚜 — 반경 안에 진범이 없을 때의 판독음 (링과 같이 공개 3D다)
 
     // NPC 근접 공격 (#817)
     NpcAttackSwing, // 휙 — NPC가 공격을 휘두른 순간 (명중 여부와 무관, 맨손이든 무기든 같다)

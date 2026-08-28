@@ -248,8 +248,16 @@ public class AreaScanner : ItemBase
     [Rpc(SendTo.Everyone)]
     private void ScanResultRpc(Vector3 origin, bool found) => PlayResultLocal(origin, found);
 
+    /// <summary>
+    /// 판독 결과 — 전 피어에서 발행된다. 인자는 (진범 있었나, 판정 반경). (#915)
+    /// 이 아이템을 장착한 사람의 <c>AreaScanPresenter</c>만 바인딩돼 있어 그 사람 화면에만 문구가 뜬다.
+    /// </summary>
+    public event Action<bool, float> OnScanResult;
+
     private void PlayResultLocal(Vector3 origin, bool found)
     {
+        OnScanResult?.Invoke(found, m_scanRadius);
+
         // 링이 이미 근처 전원에게 결과를 보여주는 공개 연출이라, 소리도 공개 3D로 맞춘다 —
         // 판독음 하나 때문에 나만 아는 정보가 새로 생기지 않는다 (JailSirenButton과 같은 방침).
         // FxManager를 거치는 이유는 "무슨 일이 일어났는지"만 여기서 고르고 조합(파티클·소리·전파)은
