@@ -412,6 +412,19 @@ public class NpcController : NetworkBehaviour
     private const float k_warpSnapRadius = 2f;
 
     /// <summary>
+    /// 에이전트가 준비됐을 때만 <c>isStopped</c>를 바꾼다 (#913) — 준비되지 않은 몸에 대입하면
+    /// Unity가 "not placed on a NavMesh" 예외를 던진다.
+    ///
+    /// 상태 클래스가 직접 대입하지 않고 이 길로 오는 이유는 <b>Enter/Exit</b>다: 틱은 코어의 게이트가
+    /// 막아 주지만, 전이는 밖(피격·밧줄·이벤트)에서도 들어와 NavMesh 밖인 몸의 Enter가 그대로 돈다.
+    /// </summary>
+    internal void SetAgentStopped(bool stopped)
+    {
+        if (AgentReady)
+            m_agent.isStopped = stopped;
+    }
+
+    /// <summary>
     /// 기준점 주변에서 NavMesh 위 지점을 찾아 에이전트를 붙인다 — 붙었으면 true. (#503)
     ///
     /// 밧줄 놓기(#369)와 감옥 방출(#537)이 함께 쓰는 공용 유틸이라 코어에 둔다 (계획서 § 3-6) —

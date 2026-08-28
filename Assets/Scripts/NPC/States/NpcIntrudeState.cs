@@ -29,7 +29,7 @@ public class NpcIntrudeState : NpcStateBase
     {
         m_finished = false;
         m_unlocking = false;
-        m_owner.Agent.isStopped = false;
+        m_owner.SetAgentStopped(false);
         m_owner.Agent.stoppingDistance = 0f;
 
         if (m_owner.Intruder.IntrudeTarget == null)
@@ -80,7 +80,7 @@ public class NpcIntrudeState : NpcStateBase
         // 도주(StartFlee) 등으로 이 상태를 벗어날 때 이동을 복구한다 (NpcJailedState.Exit과 동일)
         if (m_owner.Agent.isOnNavMesh)
         {
-            m_owner.Agent.isStopped = false;
+            m_owner.SetAgentStopped(false);
             m_owner.Agent.ResetPath();
         }
     }
@@ -106,7 +106,7 @@ public class NpcIntrudeState : NpcStateBase
 
     private void StopAgent()
     {
-        m_owner.Agent.isStopped = true;
+        m_owner.SetAgentStopped(true);
         m_owner.Agent.velocity = Vector3.zero;
         if (m_owner.Agent.isOnNavMesh)
             m_owner.Agent.ResetPath();

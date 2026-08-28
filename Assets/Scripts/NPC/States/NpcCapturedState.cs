@@ -38,7 +38,7 @@ public class NpcCapturedState : NpcStateBase
         // 래그돌 가드) <b>일어날 때</b> 래그돌이 직접 붙인다 — 그 사이에 이 전이가 온다. (#572 후속)
         if (m_owner.AgentReady)
         {
-            m_owner.Agent.isStopped = true;
+            m_owner.SetAgentStopped(true);
             m_owner.Agent.ResetPath();
         }
 
@@ -73,7 +73,7 @@ public class NpcCapturedState : NpcStateBase
         // 향후 이송·석방 등으로 풀릴 경우를 대비해 이동을 복구한다 —
         // 살아 있을 때만이다(Enter와 같은 이유). 꺼진 채 나가면 되살리는 쪽이 붙일 때 함께 푼다.
         if (m_owner.AgentReady)
-            m_owner.Agent.isStopped = false;
+            m_owner.SetAgentStopped(false);
     }
 
     /// <summary>방치돼도 그 자리에 남는 대상인가 — 판정 완료 = 인계 성공이라 방치 타이머에서 빠지고

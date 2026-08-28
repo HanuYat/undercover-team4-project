@@ -55,7 +55,7 @@ public class NpcReleasingState : NpcStateBase
         m_pendingDestination = true; // 워프가 반영된 다음 틱에 건다 (필드 주석 참고)
         m_nextRetryTime = 0f;
         m_brokenPathReported = false;
-        m_owner.Agent.isStopped = false;
+        m_owner.SetAgentStopped(false);
         m_owner.Agent.stoppingDistance = 0f;
 
         // 걷지 않고 뛴다 (2026-08-11 확정) — 걸음 속도로 두면 저지가 "따라가서 때리면 그만"이 되어
@@ -158,7 +158,7 @@ public class NpcReleasingState : NpcStateBase
         // 밧줄에 묶이거나(Escorted) 기절해 이 상태를 벗어날 때 이동을 복구한다 (NpcIntrudeState.Exit과 동일)
         if (m_owner.Agent.isOnNavMesh)
         {
-            m_owner.Agent.isStopped = false;
+            m_owner.SetAgentStopped(false);
             m_owner.Agent.ResetPath();
         }
     }
@@ -167,7 +167,7 @@ public class NpcReleasingState : NpcStateBase
     {
         m_stopped = true;
 
-        m_owner.Agent.isStopped = true;
+        m_owner.SetAgentStopped(true);
         m_owner.Agent.velocity = Vector3.zero;
         if (m_owner.Agent.isOnNavMesh)
             m_owner.Agent.ResetPath();

@@ -91,7 +91,7 @@ public class NpcChaseState : NpcStateBase
         // 몸 방향은 여기서부터 TickFacing이 매 틱 직접 돈다 — 근거는 그쪽 주석 (#829)
         m_owner.Agent.updateRotation = false;
 
-        m_owner.Agent.isStopped = false;
+        m_owner.SetAgentStopped(false);
         m_owner.Agent.stoppingDistance = 0f;
     }
 
@@ -109,7 +109,7 @@ public class NpcChaseState : NpcStateBase
 
         if (m_owner.Agent.isOnNavMesh)
         {
-            m_owner.Agent.isStopped = false;
+            m_owner.SetAgentStopped(false);
             m_owner.Agent.ResetPath();
         }
     }

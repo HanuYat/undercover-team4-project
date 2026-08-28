@@ -33,7 +33,7 @@ public class NpcDetainedState : NpcStateBase
     {
         m_arrived = false;
         m_travelAvoidance = m_owner.Agent.obstacleAvoidanceType;
-        m_owner.Agent.isStopped = false;
+        m_owner.SetAgentStopped(false);
         m_owner.Agent.stoppingDistance = 0f;
 
         // 로컬 회피를 끈다 — 이송 시작부터 구역에 선 뒤까지(복원은 Exit). 플레이어가 몸으로 길을
@@ -82,7 +82,7 @@ public class NpcDetainedState : NpcStateBase
         m_owner.Agent.obstacleAvoidanceType = m_travelAvoidance;
         if (m_owner.Agent.isOnNavMesh)
         {
-            m_owner.Agent.isStopped = false;
+            m_owner.SetAgentStopped(false);
             m_owner.Agent.ResetPath();
         }
     }
@@ -92,7 +92,7 @@ public class NpcDetainedState : NpcStateBase
     {
         m_arrived = true;
 
-        m_owner.Agent.isStopped = true;
+        m_owner.SetAgentStopped(true);
         m_owner.Agent.velocity = Vector3.zero; // 감속 관성으로 수용 지점을 지나쳐 밀리지 않게
         if (m_owner.Agent.isOnNavMesh)
             m_owner.Agent.ResetPath();

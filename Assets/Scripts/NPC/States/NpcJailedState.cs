@@ -152,7 +152,7 @@ public class NpcJailedState : NpcStateBase
         // 탈옥·반출로 풀려날 경우를 대비해 이동을 복구한다
         if (m_owner.Agent.isOnNavMesh)
         {
-            m_owner.Agent.isStopped = false;
+            m_owner.SetAgentStopped(false);
             m_owner.Agent.ResetPath();
         }
     }
@@ -171,7 +171,7 @@ public class NpcJailedState : NpcStateBase
             return;
         }
 
-        m_owner.Agent.isStopped = false;
+        m_owner.SetAgentStopped(false);
         if (!m_owner.Agent.SetDestination(target))
         {
             BeginPause(); // 경로를 못 잡았다 — 다음 차례에 다시 고른다
@@ -249,7 +249,7 @@ public class NpcJailedState : NpcStateBase
         m_owner.Agent.velocity = Vector3.zero;
         if (m_owner.Agent.isOnNavMesh)
         {
-            m_owner.Agent.isStopped = true;
+            m_owner.SetAgentStopped(true);
             m_owner.Agent.ResetPath();
         }
     }
