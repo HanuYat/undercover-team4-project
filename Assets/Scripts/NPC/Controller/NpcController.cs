@@ -780,10 +780,10 @@ public class NpcController : NetworkBehaviour
 
     // ---- NavMesh 밖에서 굳은 몸 (#557/#913) ----
 
-    // 굳은 몸을 행방불명 처리하기까지의 유예(초). 정상 경로(넉백 착지·기절 해제·래그돌 기상)는
-    // 성공하면 <b>같은 프레임에</b> NavMesh로 돌아오므로, 이 값은 실패를 확인하는 시간일 뿐이다 —
-    // 길게 잡으면 밖에 나간 몸이 그동안 허공에 서 있는 게 보인다 (#913).
-    private const float k_stuckFatalSeconds = 3f;
+    // 굳은 몸을 정리하기까지의 유예(초). 정상 경로(넉백 착지·기절 해제·래그돌 기상)는 성공하면
+    // 같은 프레임에 NavMesh로 돌아오지만, 굳었다고 본 몸이 뒤늦게 스스로 빠져나오는 경우가 있어
+    // 넉넉히 잡는다 — 3초는 너무 짧았다 (#913).
+    private const float k_stuckFatalSeconds = 8f;
 
     // 판정 주기(초) — SamplePosition을 NPC 수만큼 매 프레임 돌릴 이유가 없다. 유예도 이 단위로 쌓인다.
     private const float k_stuckProbeInterval = 0.5f;
