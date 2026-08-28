@@ -499,7 +499,7 @@ NetworkVariable이라 도착 순서가 갈릴 수 있다** — RPC가 먼저 오
 **구조 채널링 중에는 재운다 (#865).** `PlayerReviver.IsInRange`는 루트를 보고 **완료 시점에만**
 검사하며 구조자는 이동하면 채널링이 취소된다. 그래서 3초 사이에 시체가 밟혀 밀리면 **게이지를 다 채운
 뒤에 "범위를 벗어남"으로 실패**한다 — 실패 모드가 나쁘다. `Update`의 권위 게이트 뒤에서
-`IsBeingRevived`면 `SleepAll()` + `Settle()`. 이 자리가 성립하는 것은 `ServerSetBeingRevived`를 쓰는
+`IsBeingRevived`이고 **이미 정착했으면** 깨어난 뼈를 다시 재운다. ⚠ 무너지는 중에는 재우지 않는다 — 잠든 바디는 중력도 안 받아 공중에서 굳는다. 이 자리가 성립하는 것은 `ServerSetBeingRevived`를 쓰는
 것도 서버이고 래그돌 권위도 서버라(§1-1) **같은 피어에서 같은 값을 본다**는 것 때문이다.
 
 **다운 6구가 쌓이지 않는다 (실측).** `ProjectSettings/DynamicsManager.asset`의 `m_LayerCollisionMatrix`를
