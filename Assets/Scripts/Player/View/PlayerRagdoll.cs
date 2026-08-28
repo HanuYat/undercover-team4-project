@@ -724,16 +724,23 @@ public partial class PlayerRagdoll : MonoBehaviour
     // 골반 밑에 지면이 있는가 — 정착 자격과 정착 정렬이 <b>같은 탐색</b>을 써야 모순이 안 생긴다.
     private bool HasGroundUnderHips() => TryGroundUnder(m_rig.Hips.position, out _);
 
-    // 래그돌 진입 사유(사망 또는 비행)를 폴링한다 — 이벤트로는 잡을 수 없다(원인만 바뀌면 안 울린다).
-    // 사유는 둘이지만 <see cref="PlayerIncapacitation.Cause"/>는 동시에 하나만 참일 수 있어 겹치지 않는다.
-    // NPC의 <see cref="NpcRagdoll.WantsRagdoll"/>과 같은 자리다 — #815로 플레이어도 사유가 둘로 늘었다.
+    // 래그돌 진입 사유(다운·사망·비행)를 폴링한다 — 이벤트로는 잡을 수 없다(원인만 바뀌면 안 울린다).
+    // 사유는 셋이지만 <see cref="PlayerIncapacitation.Cause"/>는 동시에 하나만 참일 수 있어 겹치지 않는다.
+    // NPC의 <see cref="NpcRagdoll.WantsRagdoll"/>과 같은 자리다 — #815로 둘, #865로 셋이 됐다.
+    //
+    // ⚠ <b>다운→사망은 사유가 바뀌는데 래그돌은 이어진다</b> — 셋 중 유일한 "래그돌 중 원인 전이"이고,
+    // 그래서 그 전이에 소유권(=물리 권위)이 움직이지 않아야 한다. 근거는 docs/865-down-ragdoll.md.
     // 부활은 <b>원인을 본 뒤에만</b> 성립한다 — 그 인과 가드의 근거는 docs/player-ragdoll.md §9.
     private void PollDeath()
     {
         if (m_incapacitation == null)
             return;
 
-        bool wantsRagdoll = m_incapacitation.IsDead || m_incapacitation.IsLaunched;
+        // 진입 사유는 셋이다 (#506 Die → #815 Launched → #865 Down). IsDowned || IsDead를 나열하지
+        // 않고 IsOutOfAction을 쓰는 이유는 <b>조준 히트박스와 술어를 하나로 묶기 위해서</b>다 —
+        // IsAimTargetable이 IsOutOfAction 기반이므로, 뼈가 물리로 넘어가는 순간과 히트박스가 켜지는
+        // 순간이 같은 값을 본다. 갈라지면 "래그돌인데 조준이 안 잡히는" 방향으로 #857이 되살아난다.
+        bool wantsRagdoll = m_incapacitation.IsOutOfAction || m_incapacitation.IsLaunched;
 
         // 접속 직후 이미 사망·비행 중이었다면 이번 원인은 건너뛴다 — 낙하는 이미 끝난 과거다.
         if (!m_polledOnce)
