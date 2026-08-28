@@ -6,9 +6,8 @@ using UnityEngine;
 /// 시간이 지나면 일어나(#269 StandUp 모션) 스스로 도주한다 — 무력화가 풀린 대상은 그대로 서 있지
 /// 않는다(#269 확정). #366 결정 5로 배회 복귀에 잠시 바뀌었다가 원복됐다.
 ///
-/// <b>이제 이 상태로 들어오는 경로는 넉백 착지 KO 하나뿐이다</b> (#571) — 테이저와 체력 임계
-/// 넉다운은 상태를 바꾸지 않는 오버레이(<see cref="NpcStun"/>)를 쓰고, 체력 0은 사망
-/// (<see cref="NpcState.Dead"/>)으로 간다. 체력 회복은 제거됐다 — 이유는 <see cref="Exit"/> 참고.
+/// <b>이 상태로 들어오는 경로는 넉백 착지 KO 하나뿐이다</b> (#571) — 테이저와 체력 0 쓰러짐은
+/// 상태를 바꾸지 않는 오버레이(<see cref="NpcStun"/>)를 쓴다.
 /// </summary>
 public class NpcStunnedState : NpcStateBase
 {
@@ -58,7 +57,11 @@ public class NpcStunnedState : NpcStateBase
         // NPC가 혼자 전력 질주하지 않는다.
         // 질주하는 개체(공연음란범)만 도주가 아니라 질주로 돌아간다 — 한 대 맞았다고 그만두지 않는다 (#106).
         if (m_timer >= m_config.StunSeconds + m_config.StandUpSeconds)
+        {
+            // 넉백을 부르는 폭발이 체력도 깎으므로 HP 0인 몸이 여기 들어올 수 있다 (#916)
+            m_owner.Health.ServerRestoreToOne();
             m_owner.Reaction.ResumeReaction(m_owner.Reaction.ThreatTarget);
+        }
     }
 
     public override void Exit()
@@ -66,14 +69,7 @@ public class NpcStunnedState : NpcStateBase
         SetAgentStopped(false);
         m_owner.Stun.SetRising(false); // #624 — 이 상태를 벗어나는 모든 경로에서 rising을 걷는다
 
-        // <b>체력을 회복하지 않는다</b> (#571). 여기는 원래 회복 지점이었고, 근거는 "이 상태를
-        // 벗어나는 경로가 시간 만료만이 아니다(검거·석방·방치 만료) — 어딘가에서 회복하지
-        // 않으면 HP 0인 채로 빠져나가고, 0 도달 엣지가 이미 0인 값에는 다시 걸리지 않아 그 NPC가
-        // 라운드 내내 무적이 된다"였다.
-        //
-        // <b>그 근거가 사라졌다.</b> HP 0은 이제 깨어나는 상태가 아니라 사망(NpcState.Dead)이라
-        // 애초에 이 상태로 들어오지 않는다. 여기 남는 것은 넉백 착지 KO뿐인데 그쪽은 HP를 깎지도
-        // 않으므로 회복할 것이 없다.
+        // 기상 회복은 여기가 아니라 Tick의 만료 지점이다 — Exit은 사망 전이도 태운다 (#916)
     }
 
     /// <summary>

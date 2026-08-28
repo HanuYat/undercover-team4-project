@@ -10,7 +10,7 @@ using UnityEngine.AI;
 /// </summary>
 public enum NpcStunCause
 {
-    /// <summary>체력 0 쓰러짐(#366)·그 밖의 경로. 기본값 — 전기 연출 없음.</summary>
+    /// <summary>체력 0 쓰러짐(#916)·그 밖의 경로. 기본값 — 전기 연출 없음.</summary>
     Knockdown,
 
     /// <summary>테이저 피격(#292) — 감전 연출(NpcShockView)이 붙는 유일한 경로.</summary>
@@ -25,7 +25,7 @@ public enum NpcStunCause
 /// <b>아무 링크도 끊지 않는다</b> — 연행만 예외로 끊던 규칙은 밧줄 전환과 함께 걷어냈다(#562).
 /// 넉백은 여전히 끊는다(<see cref="NpcKnockback"/>) — 폭발로 날아가는 것은 성격이 다르다.
 ///
-/// <b>기절 경로는 둘이다.</b> 테이저와 체력 0(#366)은 이 오버레이를, 넉백 착지는
+/// <b>기절 경로는 둘이다.</b> 테이저와 체력 0(#916)은 이 오버레이를, 넉백 착지는
 /// <see cref="NpcState.Stunned"/> 전이를 쓴다(전이여야 이전 상태의 Exit()이 에이전트를 정리한다).
 /// <see cref="IsStunned"/>가 둘을 함께 답하므로 밖에서는 그것만 쓰면 된다 —
 /// <see cref="HasStunOverlay"/>는 게이팅용이라 internal이다.
@@ -287,11 +287,8 @@ public class NpcStun : NetworkBehaviour
     /// 스턴 해제. 플래그를 내린다 — 상태 enum은 애초에 바뀐 적이 없으므로 확보·페널티군은 다음
     /// Tick부터 하던 일을 그대로 재개한다.
     ///
-    /// <b>체력은 회복하지 않는다</b> (#571). 예전에는 여기가 회복 지점이었고, 근거는 "HP 0인 채로
-    /// 깨어나면 <c>SetHp</c>의 0 도달 엣지가 다시 안 걸려 두 번 다시 기절하지 않는 무적이 된다"였다.
-    /// <b>그 근거가 통째로 사라졌다</b> — 이제 HP 0은 깨어나는 상태가 아니라 사망이라 그 경로 자체가
-    /// 없다. 넉다운도 임계를 <b>내려가는</b> 순간의 한 방향 엣지라 개체당 한 번인 것이 의도다:
-    /// 임계 아래로 내려간 몸이 다음에 맞으면 다시 눕는 것이 아니라 죽는다.
+    /// <b>쓰러졌던 몸은 체력 1로 일어난다</b> (#916). <paramref name="resumeReaction"/>과 무관하게
+    /// 모든 출구가 회복을 탄다 — 밖에서 푸는 경로로 나가도 HP 0인 몸이 남으면 안 된다.
     /// </summary>
     /// <param name="resumeReaction">
     /// 스스로 깨어난 경우 true — 반응·배회군은 도주로 전환한다(#269/#366). 수갑 채포처럼 <b>바깥에서
@@ -310,6 +307,9 @@ public class NpcStun : NetworkBehaviour
         NavMeshAgent agent = m_owner.Agent;
         if (m_owner.AgentReady)
             agent.isStopped = m_agentStoppedBefore;
+
+        // 쓰러져 있었으면 1로 일으킨다 — 테이저 기절은 체력이 멀쩡해 무동작이다 (#916)
+        m_owner.Health.ServerRestoreToOne();
 
         if (!resumeReaction)
             return;

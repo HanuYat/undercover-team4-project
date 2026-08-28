@@ -26,23 +26,22 @@ public class NpcCommonConfig : ScriptableObject
     [Tooltip("스폰 시 이 중 하나를 균등 추첨해 개체 무게로 삼는다(경량/표준/중량). 끄는 플레이어의 이동속도가 이 값에 비례해 떨어진다 — 페널티 계수·하한은 RopeDragLoad에 있다. 비어 있으면 전원 1.0")]
     [SerializeField] private float[] m_weightTiers = { 0.6f, 1f, 1.6f };
 
-    [Header("체력 — #366/#571")]
-    [Tooltip("NPC 최대 체력 — 0이 되면 사망한다(#571). 저항 제압 게이지(구 SubdueGaugeMax)를 대체한 값")]
+    [Header("체력 — #366/#916")]
+    [Tooltip("NPC 최대 체력 — 0이 되면 쓰러진다(기절). 저항 제압 게이지(구 SubdueGaugeMax)를 대체한 값")]
     [SerializeField] private int m_maxHp = 100;
 
-    [Tooltip("이 비율 아래로 체력이 내려가는 <b>순간</b> 쓰러진다(기절) — 0.4면 40%. 체력 0은 별개로 사망이다. " +
-             "⚠ <b>진압봉 데미지와 함께 봐야 한다.</b> 최대 100 · 데미지 34면 100→66→32→0이라, " +
-             "0.2로 잡으면 32→0 타격이 임계 교차와 사망을 동시에 만족해 <b>넉다운 구간이 아예 생기지 않는다</b>. " +
-             "0.4면 2대째(66→32)에 쓰러지고 3대째에 죽는다. 데미지를 바꾸면 이 값도 같이 봐야 한다")]
-    [Range(0f, 1f)]
-    [SerializeField] private float m_knockdownHpRatio = 0.4f;
+    [Tooltip("한 방의 <b>초과</b> 피해(피해량 − 남은 체력)가 이 값 이상이면 기절을 건너뛰고 즉사한다 — " +
+             "뿅망치 1% 대박(9999)·홈런 진압봉·차량·폭발이 설계대로 죽이게 하는 예외다(#916). " +
+             "진압봉 한 대(34)로 마지막 체력을 깎는 것은 초과량이 작아 걸리지 않는다")]
+    [Min(1)]
+    [SerializeField] private int m_lethalOverkillHp = 100;
     // 제압 타격량(m_subdueHitPower)은 제거됐다 (#438) — 유일한 소비처였던 E 제압 타격이 사라졌다.
     // 진압봉은 자기 Baton.m_damage(같은 34)를 쓴다 — 무기 수치는 무기가 들고 있는 편이 맞다.
 
     [Header("방치 회복 — #707")]
     [Tooltip("마지막 피해로부터 이 시간(초)이 지나야 회복이 시작된다. 그 전에 다시 맞으면 처음부터 다시 잰다")]
     [SerializeField] private float m_regenDelaySeconds = 20f;
-    [Tooltip("회복 속도(초당 HP) — MaxHp까지 오른다. 팀 결정(2026-08-19, #707): 상한을 KnockdownHp로 묶지 않고 반복 넉다운을 허용한다")]
+    [Tooltip("회복 속도(초당 HP) — MaxHp까지 오른다. 팀 결정(2026-08-19, #707): 상한을 묶지 않고 반복 넉다운을 허용한다")]
     [SerializeField] private float m_regenHpPerSecond = 2f;
 
     public float SpawnSpeedMultiplierMin => m_spawnSpeedMultiplierMin;
@@ -63,14 +62,9 @@ public class NpcCommonConfig : ScriptableObject
     /// <summary>NPC 최대 체력 — HUD가 비율 계산에, NpcController가 초기화·회복에 읽는다. (#366)</summary>
     public int MaxHp => m_maxHp;
 
-    /// <summary>
-    /// 쓰러짐 임계 체력(HP) — 이 값 <b>아래로 내려가는 순간</b> 넉다운. 0 도달(사망)과는 별개다. (#571)
-    ///
-    /// 올림으로 환산하는 이유는 "40%면 40 이하"가 직관과 맞기 때문이다(내림이면 0.4·100 = 39.99…가
-    /// 39가 되는 부동소수 사고를 탄다). 1 미만으로는 내려가지 않게 잡는다 — 0이 되면 임계가 곧 사망이라
-    /// 넉다운이 영영 안 걸린다.
-    /// </summary>
-    public int KnockdownHp => Mathf.Max(1, Mathf.CeilToInt(m_maxHp * m_knockdownHpRatio));
+    /// <summary>즉사 오버킬 임계(HP) — 한 방의 <b>초과</b> 피해가 이 값 이상이면 기절 없이 죽는다.
+    /// 한 방에 크게 넘기는 수단(뿅망치 대박·홈런·차량·폭발)이 눕히기만 하게 되는 것을 막는 예외다. (#916)</summary>
+    public int LethalOverkillHp => m_lethalOverkillHp;
 
     /// <summary>방치 회복이 시작되기까지의 대기 시간(초) — NpcHealth가 마지막 피해 이후 잰다. (#707)</summary>
     public float RegenDelaySeconds => m_regenDelaySeconds;

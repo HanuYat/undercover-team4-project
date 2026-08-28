@@ -91,34 +91,12 @@ public class NpcHealthBarPresenter : NetworkBehaviour
     }
 
     /// <summary>
-    /// 이미 싸움이 끝난 대상인가 — 누워 있거나(기절) 밧줄에 끌려가는 중.
-    /// 남은 체력이 더 이상 행동 판단에 쓰이지 않고, 바닥에 깔린 몸이나 끌려가는 몸을 따라다니는
-    /// 바만 시야에 남는다. 조준 중에 상태가 바뀌어도 매 프레임 다시 판정하므로 즉시 사라진다.
+    /// 이미 싸움이 끝난 대상인가 — 죽었거나 밧줄에 묶인 중. 남은 체력이 더 이상 판단에 쓰이지 않는다.
+    ///
+    /// <b>기절은 빼 둔다</b> (#916) — 누운 자세로 판정하면 기절이 사망과 함께 묶여 바가 사라진다.
+    /// 쓰러진 몸에 뜨는 빈 바가 "한 대 더 치면 죽는다"를 말해 준다.
     /// </summary>
-    private bool IsOutOfFight(NpcController npc)
-    {
-        if (npc.Rope.IsRoped)
-            return true;
-
-        NpcAnimationDriver driver = DriverOf(npc);
-        return driver != null && driver.IsProne;
-    }
-
-    // 조준 대상이 바뀔 때만 다시 잡는다 — 매 프레임 GetComponent를 피한다
-    // (RopeDragView가 매듭 뼈를 캐시하는 것과 같은 관례)
-    private NpcController m_cachedNpc;
-    private NpcAnimationDriver m_cachedDriver;
-
-    private NpcAnimationDriver DriverOf(NpcController npc)
-    {
-        if (npc != m_cachedNpc)
-        {
-            m_cachedNpc = npc;
-            m_cachedDriver = npc.GetComponent<NpcAnimationDriver>();
-        }
-
-        return m_cachedDriver;
-    }
+    private bool IsOutOfFight(NpcController npc) => npc.Death.IsDead || npc.Rope.IsRoped;
 
     private void Show(NpcHealthBarView view)
     {

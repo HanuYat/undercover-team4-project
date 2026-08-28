@@ -3,11 +3,10 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// NPC 체력 도메인 부품 (#366/#503/#571) — <b>회복 지점이 없다.</b> 한 번 깎인 체력은 라운드가
-/// 끝날 때까지 그대로다.
+/// NPC 체력 도메인 부품 (#366/#503/#916) — 0은 사망이 아니라 <b>쓰러짐</b>이다.
 ///
-/// 체력이 만드는 결과는 둘이고 둘 다 되돌아오지 않는다: 임계 비율 아래로 내려가면 한 번 쓰러졌다
-/// 일어나고(<see cref="NpcStun"/>), 0이 되면 죽는다(<see cref="NpcDeath"/>).
+/// 0이 되면 쓰러지고(<see cref="NpcStun"/>), 기절이 끝나면 1로 일어나며, 쓰러진 몸이 또 맞으면
+/// 죽는다(<see cref="NpcDeath"/>). 한 방의 초과 피해가 임계를 넘으면 곧장 죽는다.
 ///
 /// 서버 권위 + 오프라인 폴백 — 서버(또는 오프라인)만 값을 바꾸고 클라는 동기화 값을 읽는다 (#56 패턴).
 /// 폭발 피해(<see cref="BombDevice"/>)는 <see cref="IDamageable"/>을 GetComponent로 찾으므로 구현이
@@ -109,7 +108,7 @@ public class NpcHealth : NetworkBehaviour, IDamageable
 
         // 실제로 깎인 양을 연출에 실어야 한다 — 아래 Clamp에 걸려 요청량보다 적을 수 있다 (#478)
         int before = CurrentHp;
-        SetHp(Mathf.Clamp(CurrentHp - amount, 0, MaxHp), attacker);
+        SetHp(Mathf.Clamp(before - amount, 0, MaxHp), attacker, IsLethal(before, amount));
 
         // 피격 반응(#400)은 여기서 굴리지 않는다 — 환경 피해도 이 경로를 지나므로
         // 플레이어 타격 경로(Baton.ServerSwing)가 직접 부른다. 연출은 반대로 여기가 맞다 (#478).
@@ -121,6 +120,10 @@ public class NpcHealth : NetworkBehaviour, IDamageable
         m_secondsSinceDamage = 0f;
         m_regenAccumulator = 0f;
     }
+
+    /// <summary>쓰러뜨리는 대신 <b>죽이는</b> 타격인가 — 확인사살(이미 0)이거나 오버킬. 피해를 얹기 전 값으로 판정한다. (#916)</summary>
+    private bool IsLethal(int before, int amount) =>
+        before == 0 || amount - before >= m_owner.CommonConfig.LethalOverkillHp;
 
     // 연출 알림을 전 피어에 돌린다 — 가해자를 GameObject로 실을 수 없어 월드 좌표로 환산해 보낸다.
     private void BroadcastDamaged(int amount, GameObject attacker)
@@ -144,9 +147,19 @@ public class NpcHealth : NetworkBehaviour, IDamageable
     private void RaiseDamaged(int amount, Vector3 attackerPosition, bool hasAttacker) =>
         OnHit?.Invoke(new DamageHit(amount, attackerPosition, hasAttacker));
 
-    // 체력 회복(구 ServerRestoreHp)은 #571에서 제거됐다 — 회복 지점 둘(NpcStun.ExitStun ·
-    // NpcStunnedState.Exit)이 함께 사라져 부르는 곳이 없어졌다. 이유는 그 두 곳의 주석에 있다.
-    // #707이 방치 회복이라는 새 지점을 아래에 연다.
+    /// <summary>
+    /// 쓰러졌던 몸을 체력 1로 일으킨다 — 기절이 끝나는 자리 전용. 서버(또는 오프라인). (#916)
+    /// 만이 아니라 1인 것은 확인사살 창을 남기기 위해서다. 0이 아니면 무동작(테이저 기절).
+    /// </summary>
+    internal void ServerRestoreToOne()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+        if (m_owner.Death.IsDead || CurrentHp > 0)
+            return;
+
+        SetHp(1, null);
+    }
 
     /// <summary>방치 회복 틱 — NpcController.Update가 사망 게이트 통과 직후 매 프레임 부른다. 서버(또는 오프라인) 전용. (#707)</summary>
     internal void Tick()
@@ -177,13 +190,8 @@ public class NpcHealth : NetworkBehaviour, IDamageable
     /// 체력을 만으로 되돌린다 — <b>수감 지점 전용</b>. 서버(또는 오프라인)에서만 의미. (#571 후속)
     /// 부르는 곳은 <see cref="NpcCustody.SendToJail"/> 하나이며, 기절 해제와 같은 자리에서 불린다.
     ///
-    /// <b>#571이 지운 회복과 다른 자리다.</b> 그쪽(기절에서 깨어날 때)은 임계 교차를 개체당 한 번으로
-    /// 묶는 일방 톱니 — "쓰러진 몸이 다음에 맞으면 죽는다" — 를 무너뜨리므로 닫힌 채로 둔다.
-    /// 수감은 그 톱니가 겨눈 자리가 아니다: 대상이 전투에서 빠져나가 판정까지 끝낸 뒤이고,
-    /// 깎인 채로 두면 탈옥으로 풀려난 수감자가 진압봉 한 대에 죽는다.
-    ///
-    /// 위로 올리는 것은 어느 엣지도 건드리지 않는다 — 사망은 0 <b>도달</b>, 기절은 임계 아래로
-    /// <b>내려가는</b> 순간만 보므로(<see cref="SetHp"/>) 회복은 통지 없이 값만 바뀐다.
+    /// 기상 회복(<see cref="ServerRestoreToOne"/>)이 1인 것과 달리 여기는 만이다 — 깎인 채로 두면
+    /// 탈옥으로 풀려난 수감자가 진압봉 한 대에 눕는다.
     /// 이미 죽은 대상은 되살리지 않는다 — 사망은 되돌아오지 않는 끝이다.
     /// </summary>
     internal void ServerRestoreFull()
@@ -196,32 +204,23 @@ public class NpcHealth : NetworkBehaviour, IDamageable
         SetHp(MaxHp, null);
     }
 
-    // 체력 변화가 만드는 결과는 둘이고, 둘 다 <b>엣지</b>다 — 값이 아니라 '넘어서는 순간'을 본다.
-    // 덕분에 이미 그 아래인 대상에 추가 타격이 들어와도 기절 타이머가 리셋되지 않고, 죽은 대상이
-    // 두 번 죽지도 않는다.
-    //
-    // ⚠ <b>사망이 먼저다.</b> 한 타격이 둘 다 만족하는 경우가 실제로 생긴다 — 최대 100·임계 40에서
-    // 32→0 타격은 임계 교차이면서 동시에 0 도달이다. 순서를 뒤집으면 그 대상이 쓰러졌다가 죽는 것이
-    // 아니라 쓰러지기만 하고 사망 처리가 <b>영영 걸리지 않는다</b>(EnterStunned가 IsStunned로 물러난 뒤
-    // 다음 0 도달 엣지가 없다).
-    private void SetHp(int value, GameObject attacker)
+    // 쓰러짐은 0 <b>도달</b> 엣지다 — 값이 아니라 '닿는 순간'을 본다.
+    // lethal은 여기서 재지 않는다: 이미 0인 몸을 때리면 0→0이라 어떤 엣지도 안 걸린다 (IsLethal).
+    private void SetHp(int value, GameObject attacker, bool lethal = false)
     {
         int previous = CurrentHp;
         m_hp = value;
         if (IsSpawned && IsServer)
             m_syncedHp.Value = value;
 
-        if (value == 0 && previous > 0)
+        if (lethal)
         {
             m_owner.Death.ServerEnterDead(attacker);
             return;
         }
 
-        // 임계 아래로 <b>내려가는</b> 순간만 — 회복이 없어졌으므로(#571) 이 교차는 개체당 한 번뿐이다.
-        // 그게 의도다: 임계 아래로 내려간 몸이 다음에 맞으면 다시 눕는 것이 아니라 죽는다.
         // 타격으로 쓰러진 기절은 테이저보다 길다 — 밧줄로 끌 창을 따로 튜닝한다 (#400)
-        int knockdownHp = m_owner.CommonConfig.KnockdownHp;
-        if (previous > knockdownHp && value <= knockdownHp)
+        if (value == 0 && previous > 0)
             m_owner.Stun.EnterStunned(
                 attacker != null ? attacker.transform : null,
                 m_owner.StunConfig.KnockdownStunSeconds
