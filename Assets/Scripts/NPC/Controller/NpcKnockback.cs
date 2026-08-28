@@ -13,7 +13,6 @@ public class NpcKnockback : NetworkBehaviour
 
     // 넉백 비행 상태 — 서버(또는 오프라인)에서만 의미.
     private Vector3 m_knockbackVelocity;
-    private Vector3 m_knockbackLaunch;
     private float m_knockbackElapsed;
     private bool m_knockbackActive;
     private NpcState m_knockbackLandingState; // 착지 후 돌아갈 상태 — 검거 중이었으면 Captured, 그 외엔 Stunned
@@ -74,7 +73,6 @@ public class NpcKnockback : NetworkBehaviour
 
         m_knockbackActive = true;
         m_knockbackVelocity = velocity;
-        m_knockbackLaunch = transform.position;
         m_knockbackElapsed = 0f;
 
         // 에이전트가 켜져 있으면 매 프레임 NavMesh 위로 끌어내려 애초에 뜨지 못한다
