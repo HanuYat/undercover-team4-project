@@ -795,6 +795,11 @@ public class NpcController : NetworkBehaviour
     // 위에 떨어진 몸은 에이전트가 여전히 "NavMesh 위"라고 답해 높이를 안 보면 영영 안 걸린다.
     private const float k_stuckHeightAboveMesh = 1.5f;
 
+    // 맵 안팎을 가르는 반경(m) — 이 안에 NavMesh가 있으면 <b>맵 안</b>(구조물 위·틈새)이고, 없으면
+    // 맵 밖으로 나간 것이다 (#913). 둘을 갈라야 하는 이유는 시체다: 맵 안에서 죽은 몸은 눈에 보이는
+    // 자리에 그대로 남아야 하고(사라지면 본 사람이 버그로 읽는다), 맵 밖은 아무도 못 보므로 지운다.
+    private const float k_insideMapRadius = 15f;
+
     private float m_offNavMeshSeconds;
     private float m_stuckProbeSeconds;
 
@@ -828,7 +833,8 @@ public class NpcController : NetworkBehaviour
 
         m_stuckProbeSeconds = 0f;
 
-        if (!m_agent.enabled || !IsStuck())
+        EStuckKind kind = m_agent.enabled ? ProbeStuck() : EStuckKind.None;
+        if (kind == EStuckKind.None)
         {
             m_offNavMeshSeconds = 0f;
             return;
@@ -840,36 +846,60 @@ public class NpcController : NetworkBehaviour
 
         m_offNavMeshSeconds = 0f;
 
-        // "무엇이 밖으로 밀어냈는가"는 아직 미확인이다(#559 — 납치 반출이 맵 밖 25m까지 끌고 나간다) —
-        // 이 로그가 원인 추적의 유일한 단서다
+        // 맵 밖으로 나갔는가, 맵 안에서 어딘가에 올라가 박혔는가 — 뒤처리가 여기서 갈린다
+        bool offMap = !NavMesh.SamplePosition(
+            transform.position,
+            out NavMeshHit _,
+            k_insideMapRadius,
+            NavMesh.AllAreas
+        );
+
+        // "무엇이 밀어냈는가"는 아직 미확인이다(#559 — 납치 반출이 맵 밖 25m까지 끌고 나간다) —
+        // 이 로그가 원인 추적의 유일한 단서라 종류까지 남긴다
         Debug.LogWarning(
-            $"NpcController: {k_stuckFatalSeconds}초간 걸어 나올 수 없는 자리에 있던 NPC를 행방불명 처리했다 — "
+            $"NpcController: {k_stuckFatalSeconds}초간 걸어 나올 수 없던 NPC를 정리했다 "
+                + $"({(offMap ? "맵 밖 — 행방불명" : "맵 안 — 시체로 남긴다")}, {kind}): "
                 + $"{name} @{transform.position.ToString("F1")}",
             this
         );
 
-        // ① 사망이 먼저다 — 호송·이벤트가 쥔 참조를 사망 정리(NpcDeath)가 끊고 나서 몸을 지운다
+        // ① 사망 — 호송·이벤트가 쥔 참조를 사망 정리(NpcDeath)가 끊는다. 여기까지는 둘 다 같다.
         m_health.ServerKillStuck();
 
-        // ② 수배 중이었다면 포스터를 행방불명으로 바꾼다 — 없어진 대상이 그대로 걸려 있으면 본부가 헛돈다
+        // ② 맵 안이면 여기서 끝이다 — 시체는 보이는 자리에 그대로 남는다. 몸이 사라지는 것은
+        //    맵 밖(아무도 볼 수 없는 자리)에서만 할 일이다.
+        if (!offMap)
+            return;
+
+        // ③ 수배 중이었다면 포스터를 행방불명으로 바꾼다 — 없어진 대상이 그대로 걸려 있으면 본부가 헛돈다
         WantedListManager wanted = App.Game.WantedList;
         if (wanted != null)
             wanted.MarkMissing(NetworkObjectId);
 
-        // ③ 몸을 지운다 — 맵 밖 시체는 보이지도, 유치장까지 끌고 갈 수도 없다. VFX는 없다(아무도 못 본다)
+        // ④ 몸을 지운다 — 맵 밖 시체는 보이지도, 유치장까지 끌고 갈 수도 없다. VFX는 없다(아무도 못 본다)
         SuddenEventUtil.DespawnOrDestroy(gameObject, playVfx: false);
     }
 
+    // 굳은 자리의 종류 — 로그에 남겨 원인(맵 밖으로 밀림 / 구조물에 올라탐)을 가른다. (#913)
+    private enum EStuckKind
+    {
+        None,        // 정상 — 발밑에 NavMesh가 있다
+        OffNavMesh,  // 에이전트가 NavMesh에 붙어 있지 않다
+        AboveMesh,   // 붙어는 있지만 발밑 NavMesh보다 한참 위다 — 구조물에 올라탄 몸
+    }
+
     // 걸어 나올 수 없는 자리인가 — NavMesh 밖이거나, 발밑 NavMesh보다 한참 위(구조물에 올라탄 것).
-    private bool IsStuck()
+    private EStuckKind ProbeStuck()
     {
         if (!m_agent.isOnNavMesh)
-            return true;
+            return EStuckKind.OffNavMesh;
 
         // 마스크는 AllAreas다 — 통행이 막힌 영역(Jail) 위에 서 있는 것은 "올라탄" 것이 아니다
         if (!NavMesh.SamplePosition(transform.position, out NavMeshHit hit, k_stuckProbeRadius, NavMesh.AllAreas))
-            return true;
+            return EStuckKind.OffNavMesh;
 
-        return transform.position.y - hit.position.y > k_stuckHeightAboveMesh;
+        return transform.position.y - hit.position.y > k_stuckHeightAboveMesh
+            ? EStuckKind.AboveMesh
+            : EStuckKind.None;
     }
 }
