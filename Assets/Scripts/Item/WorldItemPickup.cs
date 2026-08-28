@@ -74,17 +74,10 @@ public class WorldItemPickup : MonoBehaviour, IInteractable
         // 프로젝트 설정(Physics.queriesHitTriggers = true)을 따르므로 트리거도 잡힌다.
         m_pickupCollider.isTrigger = true;
 
-        Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
-        if (renderers.Length == 0)
+        if (!TryGetVisualBounds(gameObject, out Bounds bounds))
         {
             m_pickupCollider.size = k_minPickupSize;
             return;
-        }
-
-        Bounds bounds = renderers[0].bounds;
-        foreach (Renderer childRenderer in renderers)
-        {
-            bounds.Encapsulate(childRenderer.bounds);
         }
 
         Vector3 lossy = transform.lossyScale;
@@ -96,6 +89,42 @@ public class WorldItemPickup : MonoBehaviour, IInteractable
 
         m_pickupCollider.center = transform.InverseTransformPoint(bounds.center);
         m_pickupCollider.size = Vector3.Max(localSize, k_minPickupSize);
+    }
+
+    /// <summary>
+    /// 월드에 놓을 아이템을 표면 위에 앉힌다 — 피벗이 아니라 실물 밑면을 <paramref name="groundY"/>에
+    /// 맞춘다. (#918) 놓는 쪽(배달·버리기·탈취품 떨구기)은 피벗을 표면에 두는데, 피벗이 모델
+    /// 한가운데인 아이템(구역 스캐너)은 그러면 아랫부분이 바닥에 파묻힌다. 파묻히면 서버 줍기 검증의
+    /// 가시선이 콜라이더 중심(바닥 아래)을 향해 바닥에 막혀, 조준 안내는 뜨는데 E가 조용히 거부된다.
+    /// 월드 모델은 Awake에서 만들어지므로 Instantiate 직후에도 잴 수 있다.
+    /// 떠 있는 쪽은 건드리지 않는다 — 파묻힘만 해소한다.
+    /// </summary>
+    public static void SettleOnGround(GameObject item, float groundY)
+    {
+        if (!TryGetVisualBounds(item, out Bounds bounds))
+            return;
+
+        float sink = groundY - bounds.min.y;
+        if (sink > 0f)
+            item.transform.position += Vector3.up * sink;
+    }
+
+    // 자식 모델 전체의 월드 경계 — 줍기 박스 크기와 바닥 안착이 같은 기준을 쓴다.
+    private static bool TryGetVisualBounds(GameObject item, out Bounds bounds)
+    {
+        bounds = default;
+
+        Renderer[] renderers = item.GetComponentsInChildren<Renderer>(true);
+        if (renderers.Length == 0)
+            return false;
+
+        bounds = renderers[0].bounds;
+        foreach (Renderer childRenderer in renderers)
+        {
+            bounds.Encapsulate(childRenderer.bounds);
+        }
+
+        return true;
     }
 
     // NetworkObject.TrySetParent 부착/분리가 전 클라에 복제될 때마다 호출된다 — 표시 상태를 맞춘다.

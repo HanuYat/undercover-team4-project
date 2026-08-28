@@ -122,6 +122,7 @@ public class ShopDelivery : MonoBehaviour
 
             Vector3 position = DeliveryScatter.Resolve(m_deliveryZone.position, index++, m_spreadRadius, m_groundMask);
             ItemBase item = Instantiate(itemPrefab, position, Quaternion.identity);
+            WorldItemPickup.SettleOnGround(item.gameObject, position.y);
 
             // 구매품 표식 — 소매치기에게 잃으면 구매 목록에서도 빼야 한다 (#303)
             item.gameObject.AddComponent<ShopDeliveredItem>().SourcePrefab = itemPrefab;
