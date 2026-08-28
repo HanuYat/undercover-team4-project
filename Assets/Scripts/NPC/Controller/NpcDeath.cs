@@ -4,7 +4,8 @@ using UnityEngine;
 using UnityEngine.AI;
 
 /// <summary>
-/// 사망 도메인 부품 (#571) — 체력 0에서 <b>되돌아오지 않는 끝</b>으로 넘긴다.
+/// 사망 도메인 부품 (#571/#916) — <b>되돌아오지 않는 끝</b>으로 넘긴다.
+/// 들어오는 길은 <see cref="NpcHealth"/>의 <c>IsLethal</c>뿐이다 — 체력 0 자체는 사망이 아니다.
 ///
 /// 기절(<see cref="NpcStun"/>)과 정확히 반대다. 기절은 링크를 <b>지키려고</b> 상태 enum을 건드리지
 /// 않는 오버레이이고(#292), 사망은 그 링크를 전부 <b>끊어야</b> 하므로 <see cref="NpcState.Dead"/>
@@ -43,7 +44,7 @@ public class NpcDeath : NetworkBehaviour
     }
 
     /// <summary>
-    /// 사망 처리 — <see cref="NpcHealth"/>가 체력 0 도달 순간에 부른다. 서버(또는 오프라인) 전용. <b>멱등</b>.
+    /// 사망 처리 — <see cref="NpcHealth"/>가 치명타로 판정한 순간에 부른다. 서버(또는 오프라인) 전용. <b>멱등</b>.
     ///
     /// <b>순서가 사양이다.</b> 아래 주석의 근거를 지우고 재배열하면 각각 되살아나는 증상이 있다.
     /// </summary>
