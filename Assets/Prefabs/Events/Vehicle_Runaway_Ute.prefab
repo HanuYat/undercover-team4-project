@@ -322,6 +322,7 @@ MonoBehaviour:
   m_damage: 120
   m_knockbackForward: 14
   m_knockbackUp: 6
+  m_ragdollImpulseScale: 1
   m_headlights:
   - {fileID: 4980601386494238095}
   - {fileID: 2758166340915066271}

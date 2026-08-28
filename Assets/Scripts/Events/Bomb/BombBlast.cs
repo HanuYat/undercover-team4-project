@@ -74,12 +74,20 @@ public class BombBlast : NetworkBehaviour
             if (IsOccluded(target.position, target))
                 continue;
 
-            IDamageable damageable = target.GetComponent<IDamageable>();
-            if (damageable != null)
-                damageable.TakeDamage(EvaluateDamage(target.position), gameObject);
+            // <b>유예를 주지 않는 피해</b>다 — 폭심에서 HP가 0이 되면 다운 60초를 거치지 않고 곧바로
+            // 기능 정지다 (GDD 6-4 "폭심 즉사", PlayerHealth.TakeLethalDamage). 가장자리에서 HP가
+            // 남으면 그대로 살아서 넉백만 받는다 — <b>거리 감쇠는 그대로다.</b>
+            //
+            // CollectFieldPlayers가 PlayerHealth로 대상을 모으므로 이 조회는 형식상 가드다. 아래
+            // 사망자 수집이 같은 참조를 쓴다 — 예전에는 IDamageable로 때리고 두 줄 뒤에 PlayerHealth를
+            // 다시 뽑았다.
+            bool hasHealth = target.TryGetComponent(out PlayerHealth health);
+            if (hasHealth)
+                health.TakeLethalDamage(EvaluateDamage(target.position), gameObject);
 
             // CollectFieldPlayers는 행동 가능한(HP>0) 플레이어만 담으므로, 지금 0이면 이 폭발로 죽은 것이다.
-            if (target.TryGetComponent(out PlayerHealth health)
+            // TakeLethalDamage를 지난 뒤의 HP 0은 <b>곧 Die다</b> — 이 진입점에는 Down으로 갈 경로가 없다.
+            if (hasHealth
                 && health.CurrentHp == 0
                 && target.TryGetComponent(out NetworkObject victim))
                 m_deathBuffer.Add(victim);
