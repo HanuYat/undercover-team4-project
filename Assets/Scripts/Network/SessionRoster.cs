@@ -1,4 +1,5 @@
 using System;
+using Cysharp.Threading.Tasks;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
@@ -139,8 +140,14 @@ public class SessionRoster : NetworkedManagerBase
 
             // 닉네임은 지우기 전에 챙긴다 — 지우고 나면 누가 나갔는지 알릴 방법이 없다 (#598)
             FixedString64Bytes nickname = m_players[i].Nickname;
+
+            // PlayerId도 같이 챙긴다 — clientId를 UGS PlayerId로 옮길 수 있는 곳이 이 명부뿐이라,
+            // 세션에서 내리는 일을 여기서 걸어 준다 (#920)
+            string playerId = m_players[i].PlayerId.ToString();
+
             m_players.RemoveAt(i);
             AnnounceLeftRpc(nickname, clientId);
+            App.Net.Session?.RemovePlayerAsync(playerId).Forget();
         }
     }
 
