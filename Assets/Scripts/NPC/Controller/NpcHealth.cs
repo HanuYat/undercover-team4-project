@@ -161,6 +161,24 @@ public class NpcHealth : NetworkBehaviour, IDamageable
         SetHp(1, null);
     }
 
+    /// <summary>
+    /// NavMesh 밖에서 굳은 몸을 죽인다 — 서버(또는 오프라인). (#913)
+    /// 부르는 곳은 <see cref="NpcController"/>의 굳은 몸 정리 하나다.
+    ///
+    /// <see cref="NpcDeath.ServerEnterDead"/>를 직접 부르지 않는 이유는 HP다 — 그쪽만 부르면 체력이
+    /// 남은 시체가 되어 HUD·회복 틱이 산 몸처럼 읽는다. 사망은 0을 지나서 들어와야 한다.
+    /// <see cref="NpcStateRules.CanBeDamaged"/> 게이트도 지나지 않는다 — 이건 피해가 아니라 굳은 몸의 끝이다.
+    /// </summary>
+    internal void ServerKillStuck()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+        if (m_owner.Death.IsDead)
+            return;
+
+        SetHp(0, null, lethal: true);
+    }
+
     /// <summary>방치 회복 틱 — NpcController.Update가 사망 게이트 통과 직후 매 프레임 부른다. 서버(또는 오프라인) 전용. (#707)</summary>
     internal void Tick()
     {

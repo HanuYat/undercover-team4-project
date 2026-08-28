@@ -40,7 +40,7 @@ public class NpcKnockback : NetworkBehaviour
     /// 막지 않으면 셋이 어긋난다: ① 아래 상태 전이가 시체를 Stunned로 되돌리려다 FSM에 거부당해
     /// 매번 에러가 찍히고, ② 시체가 날아가고, ③ 착지 처리가 <b>에이전트를 다시 켜</b>
     /// <see cref="NpcDeath.ServerEnterDead"/> ⑥("시체는 NavMesh 위로 돌아가지 않는다")을 정면으로
-    /// 뒤집는다 — 회수 로직이 시체를 NavMesh로 끌어다 붙인다.
+    /// 뒤집는다 — 켜진 에이전트가 굳은 몸 정리(<c>TickStuckOffNavMesh</c>)의 감시 대상이 된다.
     /// 피해 쪽은 이미 <see cref="NpcStateRules.CanBeDamaged"/>가 같은 이유로 시체를 막고 있다.
     /// </summary>
     public void ServerApplyKnockback(Vector3 velocity)
@@ -212,12 +212,12 @@ public class NpcKnockback : NetworkBehaviour
         agent.Warp(landing); // 에이전트를 NavMesh 위 착지점에 다시 붙인다
 
         // Warp가 실패했으면(착지점이 NavMesh 밖) 상태 전이를 시키지 않는다 — 상태 클래스들이 곧바로
-        // 에이전트를 건드려 에러가 난다. 에이전트는 TickNavMeshRecovery가 1초 뒤 다시 붙이지만(#557)
-        // 아래 '보정' 전이는 되살아나지 않는다.
+        // 에이전트를 건드려 에러가 난다. 그 몸은 TickStuckOffNavMesh가 10초 뒤 사망 처리한다 (#913) —
+        // 홈런으로 맵 밖까지 날아간 몸을 되돌리지 않는 것이 팀 결정이다.
         if (!agent.isOnNavMesh)
         {
             Debug.LogWarning(
-                "NpcKnockback: 넉백 착지 지점을 NavMesh에 붙이지 못했다 — 회수 대기: "
+                "NpcKnockback: 넉백 착지 지점을 NavMesh에 붙이지 못했다 — 사망 처리 대기: "
                     + $"{name} @{transform.position.ToString("F1")}",
                 this
             );

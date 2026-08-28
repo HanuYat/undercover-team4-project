@@ -5,7 +5,7 @@ using UnityEngine.AI;
 
 /// <summary>
 /// 사망 도메인 부품 (#571/#916) — <b>되돌아오지 않는 끝</b>으로 넘긴다.
-/// 들어오는 길은 <see cref="NpcHealth"/>의 <c>IsLethal</c>뿐이다 — 체력 0 자체는 사망이 아니다.
+/// 들어오는 길은 <see cref="NpcHealth"/>뿐이다(<c>IsLethal</c> 또는 회수 실패, #913) — 체력 0 자체는 사망이 아니다.
 ///
 /// 기절(<see cref="NpcStun"/>)과 정확히 반대다. 기절은 링크를 <b>지키려고</b> 상태 enum을 건드리지
 /// 않는 오버레이이고(#292), 사망은 그 링크를 전부 <b>끊어야</b> 하므로 <see cref="NpcState.Dead"/>
@@ -83,7 +83,7 @@ public class NpcDeath : NetworkBehaviour
         m_owner.StateMachine.ChangeState(NpcState.Dead);
 
         // ⑥ 에이전트를 끈다 — <b>다시 켜지 않는다.</b> 시체는 NavMesh 위로 돌아가지 않는다.
-        //    켜 둔 채로 두면 회수 로직(TickNavMeshRecovery)이 시체를 NavMesh로 끌어다 붙인다.
+        //    켜 둔 채로 두면 굳은 몸 정리(TickStuckOffNavMesh)가 시체를 굳은 몸으로 보고 계속 경고를 찍는다.
         NavMeshAgent agent = m_owner.Agent;
         if (agent.enabled)
         {

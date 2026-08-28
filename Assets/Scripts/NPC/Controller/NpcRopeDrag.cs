@@ -285,10 +285,10 @@ public class NpcRopeDrag : NetworkBehaviour
         if (releaser != null && m_owner.TryWarpNear(releaser.position))
             return false;
 
-        // 포기해도 굳지는 않는다 — TickNavMeshRecovery가 1초 뒤 더 넓게 다시 붙인다 (#557).
-        // 위치를 남기는 것은 회수가 원인 지점을 조용히 덮지 않게 하기 위해서다.
+        // 포기해도 굳은 채 남지는 않는다 — TickStuckOffNavMesh가 10초 뒤 사망 처리한다 (#913).
+        // 위치를 남기는 것은 사망 로그가 원인 지점을 조용히 덮지 않게 하기 위해서다.
         Debug.LogWarning(
-            "NpcRopeDrag: 밧줄을 놓은 지점을 NavMesh에 붙이지 못했다 — 회수 대기: "
+            "NpcRopeDrag: 밧줄을 놓은 지점을 NavMesh에 붙이지 못했다 — 사망 처리 대기: "
                 + $"{name} @{transform.position.ToString("F1")}",
             this
         );

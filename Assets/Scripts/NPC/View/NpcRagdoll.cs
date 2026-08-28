@@ -759,7 +759,7 @@ public partial class NpcRagdoll : MonoBehaviour
         if (m_owner.Rope.IsRoped || m_owner.Knockback.IsKnockedBack)
             return;
 
-        // ⚠ 샘플에 실패해도 켠다 — 회수 안전망이 enabled == false인 구간을 건너뛴다.
+        // ⚠ 샘플에 실패해도 켠다 — 굳은 몸 정리가 enabled == false인 구간을 건너뛴다.
         m_agent.enabled = true;
 
         // 기준 마스크로 착지점을 찾는다 — 현재 통행 마스크는 배회 중 도로가 빠져 있어 차도 위에
@@ -777,7 +777,7 @@ public partial class NpcRagdoll : MonoBehaviour
         if (!m_agent.isOnNavMesh)
         {
             Debug.LogWarning(
-                "NpcRagdoll: 기절에서 깨어난 자리를 NavMesh에 붙이지 못했다 — 회수 대기: "
+                "NpcRagdoll: 기절에서 깨어난 자리를 NavMesh에 붙이지 못했다 — 사망 처리 대기: "
                     + $"{name} @{transform.position.ToString("F1")}",
                 this
             );
