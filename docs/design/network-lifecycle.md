@@ -102,6 +102,25 @@ Vivox 로그아웃은 세션·NGO와 독립이라 세션 이탈보다 **먼저**
 - Vivox는 다음 세션 참가 시 `OnSessionJoined → JoinChannelAsync → EnsureLoggedInAsync`가 다시 로그인하므로 별도 조치가 필요 없다.
 - 비자발 드롭(`ConnectionLostReturner`)도 원래 `SignOut`을 부르지 않으므로, 이 변경으로 자발·비자발 두 복귀 경로의 인증 상태가 같아진다.
 
+### 프로세스 사망 — 세 번째 경로 (#920)
+
+원칙 5의 표는 **자기 프로세스가 살아 있는** 두 경로만 다룬다. 강제 종료(Alt+F4 · 프로세스 킬 · 에디터 Play 정지)는 셋째 경로이고, 위 어느 정리 코드도 돌지 못한다:
+
+- `LeaveAsync`도 `HandleConnectionLost`의 `TeardownLostSessionAsync`(#287)도 **자기 쪽에서는 한 줄도 실행되지 않는다.**
+- 그런데 익명 로그인은 세션 토큰이 남아 **같은 PlayerId로 복귀**한다 → UGS 백엔드에는 그 사람이 아직 방의 멤버로 남아 있다.
+- 결과: 같은 코드로 다시 못 들어가고("이미 멤버"), 유령 멤버가 정원 한 칸을 계속 먹는다.
+
+**규칙: 떠난 사람을 세션에서 내리는 책임은 호스트에 있다.** 죽은 본인은 아무것도 못 하므로, 살아 있는 쪽이 대신 정리하는 수밖에 없다.
+
+| 죽은 쪽 | 정리 주체 |
+|---------|-----------|
+| 클라이언트 | 호스트 — NGO 드롭 감지 → `SessionRoster`가 clientId를 PlayerId로 옮겨 `SessionManager.RemovePlayerAsync` |
+| 호스트 | 없음(불필요) — 하트비트가 끊겨 Lobby가 방을 통째로 지운다. 남은 인원은 `OnConnectionLost` → `ConnectionLostReturner`로 타이틀 복귀 |
+
+clientId ↔ PlayerId 대응을 아는 곳이 `SessionRoster`뿐이라 호출을 거기서 건다. 세션 조작 자체는 원칙 1대로 `SessionManager`가 소유한다.
+
+**남은 구멍:** 클라가 로비 참가(HTTP)는 끝냈지만 NGO 연결 전에 죽으면 호스트가 그 클라를 본 적이 없어 내려 줄 수 없다. 창이 좁아 일단 두지만, 재발하면 참가 실패를 잡아 재접속으로 분기하는 클라 쪽 안전망(`GetJoinedSessionIdsAsync` → `ReconnectToSessionAsync`)을 덧댄다.
+
 ## 의존 방향 요약
 
 ```
