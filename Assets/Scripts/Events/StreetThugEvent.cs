@@ -10,6 +10,7 @@
 ///  · <b>표적 고정</b> — 스폰 기준 플레이어를 유발자로 넘긴다(예전에는 표적 없이 시작해 근처 아무나를 잡았다).
 ///  · <b>포기하지 않는다</b> — 깡패 전용 <see cref="NpcResistConfig"/>가 포기 거리를 크게 잡는다.
 ///    공용 에셋은 시민 저항형도 쓰므로 건드리지 않는다.
+///  · <b>기절해도 돌아온다</b> — relentless로 굳어 깨어나면 도주가 아니라 저항으로 복귀한다 (#910).
 ///
 /// <b>무기는 파이프다</b> — 프리팹(<c>NPC_StreetThug</c>) 오른손에 붙고, 스윙 모션은
 /// <c>NPC_StreetThug.overrideController</c>가 맨손 권투 클립을 1H 무기 스윙으로 갈아 끼운다.
@@ -32,6 +33,6 @@ public class StreetThugEvent : SpawnedNpcEventBase
     {
         // 스폰 기준 플레이어를 유발자로 넘겨 표적을 고정한다. 대상이 사라졌으면 저항 상태가
         // 근처 플레이어를 스스로 찾는다 — 표적 없이 서 있는 그림은 나오지 않는다.
-        npc.Reaction.StartResist(m_threat);
+        npc.Reaction.StartResist(m_threat, relentless: true);
     }
 }
