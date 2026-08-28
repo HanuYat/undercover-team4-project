@@ -230,7 +230,10 @@ public class TeamStatusPanel : PanelBase
     }
 
     // 기절·오검거 매달기는 스스로 풀려서 생존으로 묶는다. 동료가 움직여야 하는 것은 납치와 기능 정지뿐이다.
-    // Down은 쓰지 않는다 — GDD 10-2대로 #524 이후 발생하지 않고 설정하는 곳도 없다.
+    //
+    // ⚠ <b>Down이 여기서 생존으로 떨어진다.</b> "#524 이후 발생하지 않는다"고 적혀 있던 근거는
+    // #725가 유예를 되살리면서 이미 거짓이 됐다 — 유예 중인 동료가 이 판에서 멀쩡해 보인다.
+    // 어느 칸으로 보낼지는 기획 결정이라 이번(#865) 범위에서는 손대지 않고 사실만 적어 둔다.
     private static ETeamMemberState StateOf(PlayerIncapacitation incapacitation)
     {
         if (incapacitation == null)
