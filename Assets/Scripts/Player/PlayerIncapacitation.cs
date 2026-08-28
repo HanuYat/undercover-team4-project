@@ -80,6 +80,18 @@ public class PlayerIncapacitation : NetworkBehaviour
     private ulong m_ownerBeforeDeath;
     private bool m_ownershipMovedToServer;
 
+    /// <summary>
+    /// <b>이 몸의 진짜 주인</b> — 쓰러져 있는 동안 오너가 서버로 옮겨져 있어도(<see
+    /// cref="ApplyDeathOwnership"/>) 원래 클라이언트 id를 돌려준다. 서버(또는 오프라인) 전용.
+    ///
+    /// 쓰러진 <b>본인에게</b> 통지를 보내야 하는 곳이 이 값을 쓴다. 플레이어 오브젝트에 붙은
+    /// <c>SendTo.Owner</c> RPC는 그 구간에 서버가 스스로에게 보내는 것으로 끝나므로(#820 함정 1)
+    /// <c>RpcTarget.Single(BodyOwnerClientId, RpcTargetUse.Temp)</c>로 대신 지정한다.
+    /// 동기화하지 않는다 — 읽는 쪽이 전부 서버 컨텍스트다(<see cref="m_ownerBeforeDeath"/> 관례).
+    /// </summary>
+    internal ulong BodyOwnerClientId =>
+        m_ownershipMovedToServer ? m_ownerBeforeDeath : OwnerClientId;
+
     // 기절 회차 — 지연 복구가 '자기가 건 기절'만 풀게 하는 토큰. 기절이 풀린 뒤 다시 걸리거나 그 사이
     // 기능 정지·매달기가 들어오면 회차가 어긋나, 낡은 타이머는 무동작으로 끝난다. (#252)
     private int m_stunEpisode;
@@ -635,7 +647,16 @@ public class PlayerIncapacitation : NetworkBehaviour
         if (!IsSpawned || !IsServer || NetworkObject == null || NetworkManager == null)
             return;
 
-        bool wantsServerOwner = cause == IncapacitationCause.Die;
+        // <b>Down도 서버로 옮긴다</b> (#865). 래그돌이 Down에서 켜지게 되면서 "소유권은 래그돌이
+        // 꺼져 있을 때만 바뀐다"는 불변식을 지킬 유일한 길이 이것이다 — Down을 오너 권위로 두면
+        // Down→Die 전이(유예 만료보다 <b>확인사살이 주 경로</b>다)가 래그돌이 돌아가는 중에
+        // 물리 권위를 뒤집어, 뼈 배치와 자세 스트림을 진입 시점에 한 번만 정하는 코드가 전부
+        // 어긋난다. 근거와 고장 목록은 docs/865-down-ragdoll.md.
+        //
+        // <b>이관 횟수는 늘지 않는다</b> — Down 진입에서 한 번 옮기고 회복에서 되돌리는 2회이고,
+        // Down→Die는 아래 조기 반환이 삼킨다(양쪽 다 참). 시점만 60초 앞으로 당겨진다.
+        bool wantsServerOwner =
+            cause == IncapacitationCause.Die || cause == IncapacitationCause.Down;
         if (wantsServerOwner == m_ownershipMovedToServer)
             return;
 

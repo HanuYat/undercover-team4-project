@@ -35,6 +35,13 @@ public class PlayerTheftView : NetworkBehaviour
     [Rpc(SendTo.Owner)]
     private void ShowStolenRpc() => ShowLocal();
 
+    /// <summary>
+    /// <b>이 피어에서 바로</b> 띄운다 — 대상 지정을 부르는 쪽이 이미 한 경우. (#865)
+    /// 쓰러진 몸은 오너가 서버라 <see cref="ShowStolen"/>의 <c>SendTo.Owner</c>가 본인에게
+    /// 닿지 않으므로, <see cref="PlayerLootable"/>이 몸의 진짜 주인을 직접 지정해 부른다.
+    /// </summary>
+    internal void ShowStolenLocal() => ShowLocal();
+
     // HUD가 없는 환경(데디케이티드 서버 등)에선 App.UI.Toast가 null이라 무동작 — PlayerPenaltyView와 같은 방침
     private void ShowLocal() => App.UI.Toast?.Show(m_stolenToast, m_toastSeconds);
 }

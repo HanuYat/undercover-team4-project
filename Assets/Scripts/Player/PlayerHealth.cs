@@ -195,6 +195,12 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
         // 회복인데 0이면 여전히 다운이므로 최소 1 보장
         SetHp(Mathf.Clamp(m_reviveHp, 1, m_maxHp));
         m_incapacitation?.Recover();
+
+        // 소지품 목록을 한 번 되돌려 보낸다 — 쓰러져 있는 동안 SyncHeldItemsRpc(SendTo.Owner)가
+        // 서버로 새어(#820 함정 1) 본인 인벤토리 모델(Slots)이 낡은 채로 남는다. 약탈로 물건이
+        // 빠진 경우가 그렇다. 위 Recover()가 소유권을 <b>먼저</b> 되돌리므로 이 호출은 본인에게
+        // 간다 — #820 함정 3(ServerRevive → ServerConsume 순서)과 같은 논리다.
+        GetComponent<PlayerLoadout>()?.ServerNotifyHeldItemsChanged();
     }
 
     private void SetHp(int value) => SetHp(value, skipGrace: false);
