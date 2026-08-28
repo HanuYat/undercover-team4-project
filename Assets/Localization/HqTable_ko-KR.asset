@@ -78,6 +78,10 @@ MonoBehaviour:
     m_Localized: "\uC0DD\uD3EC \uD544\uC218"
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000702
+    m_Localized: "\uD589\uBC29\uBD88\uBA85"
+    m_Metadata:
+      m_Items: []
   - m_Id: 6221034091503616
     m_Localized: "CH{0} \xB7 IR"
     m_Metadata:

@@ -41,6 +41,7 @@ public class WantedEntryView : MonoBehaviour
     private const string k_moneyKey = "Common.Unit.Money";
     private const string k_hqTable = "HqTable";
     private const string k_conditionPrefix = "Hq.Wanted.Condition.";
+    private const string k_missingKey = "Hq.Wanted.Missing";
 
     public void Bind(in WantedEntry entry, AppearanceDatabase appearanceDatabase)
     {
@@ -62,7 +63,10 @@ public class WantedEntryView : MonoBehaviour
         if (m_bountyText != null)
             m_bountyText.text = LocalizedStrings.Get(k_commonTable, k_moneyKey, entry.Bounty);
 
+        // 행방불명이면 조건 자리를 대신 쓴다 (#913) — 잡을 수 없게 된 대상에 '생포 필수'는 의미가 없다
         if (m_conditionText != null)
-            m_conditionText.text = LocalizedStrings.Get(k_hqTable, k_conditionPrefix + entry.Condition);
+            m_conditionText.text = entry.Missing
+                ? LocalizedStrings.Get(k_hqTable, k_missingKey)
+                : LocalizedStrings.Get(k_hqTable, k_conditionPrefix + entry.Condition);
     }
 }

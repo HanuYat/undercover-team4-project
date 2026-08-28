@@ -78,6 +78,10 @@ MonoBehaviour:
     m_Localized: Alive Only
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000702
+    m_Localized: Missing
+    m_Metadata:
+      m_Items: []
   - m_Id: 6221034091503616
     m_Localized: "CH{0} \xB7 IR"
     m_Metadata:

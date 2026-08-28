@@ -777,7 +777,7 @@ public partial class NpcRagdoll : MonoBehaviour
         if (!m_agent.isOnNavMesh)
         {
             Debug.LogWarning(
-                "NpcRagdoll: 기절에서 깨어난 자리를 NavMesh에 붙이지 못했다 — 사망 처리 대기: "
+                "NpcRagdoll: 기절에서 깨어난 자리를 NavMesh에 붙이지 못했다 — 행방불명 처리 대기: "
                     + $"{name} @{transform.position.ToString("F1")}",
                 this
             );

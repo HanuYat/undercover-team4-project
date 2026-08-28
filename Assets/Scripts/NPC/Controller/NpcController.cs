@@ -780,11 +780,23 @@ public class NpcController : NetworkBehaviour
 
     // ---- NavMesh 밖에서 굳은 몸 (#557/#913) ----
 
-    // 굳은 몸을 죽이기까지의 유예(초) — 밧줄로 다시 끌려 들어오는 식으로 스스로 돌아올 여지를 준다.
-    // 정상 경로(넉백 착지·기절 해제·래그돌 기상)는 이보다 훨씬 빨리 NavMesh로 복귀한다.
-    private const float k_stuckFatalSeconds = 10f;
+    // 굳은 몸을 행방불명 처리하기까지의 유예(초). 정상 경로(넉백 착지·기절 해제·래그돌 기상)는
+    // 성공하면 <b>같은 프레임에</b> NavMesh로 돌아오므로, 이 값은 실패를 확인하는 시간일 뿐이다 —
+    // 길게 잡으면 밖에 나간 몸이 그동안 허공에 서 있는 게 보인다 (#913).
+    private const float k_stuckFatalSeconds = 3f;
+
+    // 판정 주기(초) — SamplePosition을 NPC 수만큼 매 프레임 돌릴 이유가 없다. 유예도 이 단위로 쌓인다.
+    private const float k_stuckProbeInterval = 0.5f;
+
+    // 발밑 NavMesh를 찾는 반경(m) — 이 안에 없으면 그것만으로 굳은 것이다.
+    private const float k_stuckProbeRadius = 2f;
+
+    // 발밑 NavMesh보다 이만큼(m) 높으면 구조물 <b>위에 올라탄</b> 것으로 본다 (#913) — 철조망·컨테이너
+    // 위에 떨어진 몸은 에이전트가 여전히 "NavMesh 위"라고 답해 높이를 안 보면 영영 안 걸린다.
+    private const float k_stuckHeightAboveMesh = 1.5f;
 
     private float m_offNavMeshSeconds;
+    private float m_stuckProbeSeconds;
 
     /// <summary>
     /// <b>에이전트가 켜져 있는데 NavMesh 밖</b>인 몸을 서버가 정리한다. 서버(또는 오프라인) 전용. (#557/#913)
@@ -793,9 +805,12 @@ public class NpcController : NetworkBehaviour
     /// 남기고 포기해, 이후 <c>isStopped</c>·<c>SetDestination</c>이 조용히 실패하며 NPC가 굳었다
     /// (빌드 2 이슈 E의 재발). 호출부마다 폴백을 다는 대신 <b>결과 상태 하나</b>를 여기서 본다.
     ///
+    /// <b>NavMesh 밖만 보는 게 아니다</b> (#913) — 철조망·구조물 <b>위에</b> 떨어진 몸은
+    /// <c>isOnNavMesh</c>가 계속 참이라 그것만으로는 안 걸린다. 발밑 NavMesh와의 높이 차도 함께 본다.
+    ///
     /// <b>NavMesh로 끌어다 붙이지 않는다</b> (#913) — 예전에는 8m 안의 NavMesh로 워프시켰는데,
-    /// 진압봉 홈런으로 맵 밖까지 날아간 몸이 제자리로 순간이동하는 쪽이 더 이상했다. 굳은 몸은
-    /// <b>그 자리에서 죽인다</b> — 시체는 에이전트를 끈 채 남으므로(<see cref="NpcDeath"/>) 이 틱도 함께 끝난다.
+    /// 진압봉 홈런으로 맵 밖까지 날아간 몸이 제자리로 순간이동하는 쪽이 더 이상했다. 대신
+    /// <b>행방불명</b>으로 끝낸다: 죽이고, 수배 포스터를 행방불명으로 바꾸고, 몸을 지운다.
     ///
     /// 에이전트를 꺼 둔 구간(넉백 비행·밧줄 끌기·<b>래그돌</b>)은 위치를 그쪽이 쥐고 있어 굳은 것이
     /// 아니다 — 건너뛴다.
@@ -807,13 +822,19 @@ public class NpcController : NetworkBehaviour
     /// </summary>
     private void TickStuckOffNavMesh()
     {
-        if (!m_agent.enabled || m_agent.isOnNavMesh)
+        m_stuckProbeSeconds += Time.deltaTime;
+        if (m_stuckProbeSeconds < k_stuckProbeInterval)
+            return;
+
+        m_stuckProbeSeconds = 0f;
+
+        if (!m_agent.enabled || !IsStuck())
         {
             m_offNavMeshSeconds = 0f;
             return;
         }
 
-        m_offNavMeshSeconds += Time.deltaTime;
+        m_offNavMeshSeconds += k_stuckProbeInterval;
         if (m_offNavMeshSeconds < k_stuckFatalSeconds)
             return;
 
@@ -822,11 +843,33 @@ public class NpcController : NetworkBehaviour
         // "무엇이 밖으로 밀어냈는가"는 아직 미확인이다(#559 — 납치 반출이 맵 밖 25m까지 끌고 나간다) —
         // 이 로그가 원인 추적의 유일한 단서다
         Debug.LogWarning(
-            $"NpcController: NavMesh 밖에서 {k_stuckFatalSeconds}초간 굳은 NPC를 사망 처리했다 — "
+            $"NpcController: {k_stuckFatalSeconds}초간 걸어 나올 수 없는 자리에 있던 NPC를 행방불명 처리했다 — "
                 + $"{name} @{transform.position.ToString("F1")}",
             this
         );
 
+        // ① 사망이 먼저다 — 호송·이벤트가 쥔 참조를 사망 정리(NpcDeath)가 끊고 나서 몸을 지운다
         m_health.ServerKillStuck();
+
+        // ② 수배 중이었다면 포스터를 행방불명으로 바꾼다 — 없어진 대상이 그대로 걸려 있으면 본부가 헛돈다
+        WantedListManager wanted = App.Game.WantedList;
+        if (wanted != null)
+            wanted.MarkMissing(NetworkObjectId);
+
+        // ③ 몸을 지운다 — 맵 밖 시체는 보이지도, 유치장까지 끌고 갈 수도 없다. VFX는 없다(아무도 못 본다)
+        SuddenEventUtil.DespawnOrDestroy(gameObject, playVfx: false);
+    }
+
+    // 걸어 나올 수 없는 자리인가 — NavMesh 밖이거나, 발밑 NavMesh보다 한참 위(구조물에 올라탄 것).
+    private bool IsStuck()
+    {
+        if (!m_agent.isOnNavMesh)
+            return true;
+
+        // 마스크는 AllAreas다 — 통행이 막힌 영역(Jail) 위에 서 있는 것은 "올라탄" 것이 아니다
+        if (!NavMesh.SamplePosition(transform.position, out NavMeshHit hit, k_stuckProbeRadius, NavMesh.AllAreas))
+            return true;
+
+        return transform.position.y - hit.position.y > k_stuckHeightAboveMesh;
     }
 }

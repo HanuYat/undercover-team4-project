@@ -31,6 +31,10 @@ public struct WantedEntry : INetworkSerializable, IEquatable<WantedEntry>
     // 수배 조건 (생사 불문/생포 필수) — Bounty와 같은 이유로 실어 보낸다. (#766)
     public WantedCondition Condition;
 
+    // 행방불명 — 맵 밖으로 나가 회수하지 못한 대상 (#913). 항목을 지우지 않는 이유는 본부다:
+    // 사라진 사실 자체가 정보라, 목록에서 빼면 현장이 없는 사람을 계속 찾는다.
+    public bool Missing;
+
     public void NetworkSerialize<T>(BufferSerializer<T> serializer)
         where T : IReaderWriter
     {
@@ -40,6 +44,7 @@ public struct WantedEntry : INetworkSerializable, IEquatable<WantedEntry>
         serializer.SerializeValue(ref RevealedAxes);
         serializer.SerializeValue(ref Bounty);
         serializer.SerializeValue(ref Condition);
+        serializer.SerializeValue(ref Missing);
     }
 
     public bool Equals(WantedEntry other) => NpcId == other.NpcId; // 제거 매칭 용도

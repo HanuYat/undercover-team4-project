@@ -160,6 +160,28 @@ public class WantedListManager : NetworkedManagerBase
     }
 
     /// <summary>
+    /// 수배 항목을 행방불명으로 바꾼다 — 맵 밖으로 나가 회수하지 못한 대상 전용. 서버에서만 호출된다. (#913)
+    /// 항목을 <b>지우지 않는</b> 것이 요점이다: 사라졌다는 사실 자체가 본부에 필요한 정보다.
+    /// 수배 대상이 아니었으면 조용히 무동작 — 시민 대부분이 이 경로로 들어온다.
+    /// </summary>
+    public void MarkMissing(ulong npcId)
+    {
+        if (!IsSpawned || !IsServer)
+            return;
+
+        for (int i = 0; i < m_wanted.Count; i++)
+        {
+            if (m_wanted[i].NpcId != npcId || m_wanted[i].Missing) continue;
+
+            WantedEntry entry = m_wanted[i];
+            entry.Missing = true;
+            m_wanted[i] = entry; // 대입이 곧 동기화 — 본부 UI는 OnListChanged로 다시 그린다
+            Debug.Log($"[수배] 행방불명 처리: {entry.Name}");
+            return;
+        }
+    }
+
+    /// <summary>
     /// 검거로 내렸던 수배 항목을 되살린다 — 범인 탈출 이벤트(#231) 전용. 서버에서만 호출된다.
     /// 몽타주는 검거 시점에 보관해 둔 것을 그대로 쓴다 — 본부가 기억하던 인상착의와 일치해야
     /// "아까 그 놈"을 다시 찾는 재미가 성립한다.

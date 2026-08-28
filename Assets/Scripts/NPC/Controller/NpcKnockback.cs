@@ -197,9 +197,11 @@ public class NpcKnockback : NetworkBehaviour
             return;
         }
 
-        // NavMesh를 아예 벗어난 곳까지 날아갔다 — 시간이 다 되면 출발점으로 회수한다(맵 밖 유실 방지)
+        // NavMesh를 아예 벗어난 곳까지 날아갔다 — 시간이 다 되면 <b>그 자리에</b> 떨군다 (#913).
+        // 예전에는 출발점으로 회수했는데, 홈런으로 밖에 나간 몸이 제자리로 순간이동하는 쪽이 더
+        // 이상했다. NavMesh 밖에 남은 몸은 NpcController.TickStuckOffNavMesh가 행방불명으로 끝낸다.
         if (timedOut)
-            EndKnockback(m_knockbackLaunch);
+            EndKnockback(transform.position);
     }
 
     private void EndKnockback(Vector3 landing)
@@ -212,12 +214,12 @@ public class NpcKnockback : NetworkBehaviour
         agent.Warp(landing); // 에이전트를 NavMesh 위 착지점에 다시 붙인다
 
         // Warp가 실패했으면(착지점이 NavMesh 밖) 상태 전이를 시키지 않는다 — 상태 클래스들이 곧바로
-        // 에이전트를 건드려 에러가 난다. 그 몸은 TickStuckOffNavMesh가 10초 뒤 사망 처리한다 (#913) —
+        // 에이전트를 건드려 에러가 난다. 그 몸은 TickStuckOffNavMesh가 곧 행방불명 처리한다 (#913) —
         // 홈런으로 맵 밖까지 날아간 몸을 되돌리지 않는 것이 팀 결정이다.
         if (!agent.isOnNavMesh)
         {
             Debug.LogWarning(
-                "NpcKnockback: 넉백 착지 지점을 NavMesh에 붙이지 못했다 — 사망 처리 대기: "
+                "NpcKnockback: 넉백 착지 지점을 NavMesh에 붙이지 못했다 — 행방불명 처리 대기: "
                     + $"{name} @{transform.position.ToString("F1")}",
                 this
             );
