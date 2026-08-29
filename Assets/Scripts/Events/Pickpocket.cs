@@ -28,9 +28,6 @@ public class Pickpocket : MonoBehaviour
 
     private ItemBase m_stolen;
 
-    /// <summary>지금 훔친 물건을 들고 있는가.</summary>
-    public bool HasStolenItem => m_stolen != null;
-
     /// <summary>
     /// 피해자의 소지품 하나를 무작위로 채 이 NPC 밑으로 옮긴다 — 밀착한 순간 서버가 부른다.
     /// 뺏을 것이 없으면(빈손이거나 묶어 둔 밧줄뿐) null — 부르는 쪽은 그래도 도주로 넘긴다.

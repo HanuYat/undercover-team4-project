@@ -43,10 +43,9 @@ public class MinimapAerialBaker : EditorWindow
     private string m_outputFolder = k_defaultOutput;
 
     // 게임에는 있어야 하지만 지도에는 찍히면 안 되는 표식 — 굽는 동안만 끄고 끝나면 되돌린다.
-    // SecretFavorDropoffs 아래 Beam·Ring이 그것이다(위에서 보면 점으로 찍힌다).
     [Tooltip("굽는 동안 끌 오브젝트 이름 — 쉼표로 구분. 자식까지 함께 꺼진다")]
     [SerializeField]
-    private List<string> m_hidden = new List<string> { "SecretFavorDropoffs" };
+    private List<string> m_hidden = new List<string>();
 
     // 미리 구운 결과 — 저장 전에 눈으로 확인한다. 저장은 이 결과를 그대로 쓴다.
     private Texture2D m_preview;

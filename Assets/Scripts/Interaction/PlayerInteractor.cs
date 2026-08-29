@@ -8,8 +8,16 @@ public class PlayerInteractor : NetworkBehaviour
     [SerializeField]
     private Camera m_camera;
 
+    [Tooltip("상호작용이 실제로 닿는 거리(m). 줍기·구조·운반·검거가 이 값을 공유한다")]
     [SerializeField]
     private float m_range = 3f;
+
+    [Tooltip(
+        "조준 레이가 대상을 찾는 거리(m) — 도달 거리보다 길다. 원거리 표시(체력 바 등)가 쓰는 "
+            + "ProbeTarget이 여기까지 잡힌다 (#499)"
+    )]
+    [SerializeField]
+    private float m_probeRange = 20f;
 
     [SerializeField]
     private LayerMask m_interactMask = ~0;
@@ -64,12 +72,20 @@ public class PlayerInteractor : NetworkBehaviour
     }
 
     public IInteractable CurrentInteractable { get; private set; }
-    public GameObject CurrentTarget { get; private set; } // 아이템 타겟팅/UI용
+    public GameObject CurrentTarget { get; private set; } // 아이템 타겟팅/UI용 — 도달 거리 안에서만 채워진다
+
+    /// <summary>조준 레이가 잡은 대상 — 도달 거리 밖이어도 채워진다. 원거리 표시(체력 바)용. (#499)
+    /// 도달 거리를 요구하는 소비자는 <see cref="CurrentTarget"/>을 써야 한다.</summary>
+    public GameObject ProbeTarget { get; private set; }
 
     /// <summary>조준 대상이 바뀔 때 발행 — 조준 피드백(아웃라인·크로스헤어)용. null = 대상 없음. (#184)</summary>
     public event System.Action<GameObject> OnTargetChanged;
 
-    /// <summary>상호작용 레이캐스트 사거리(m). 서버 줍기 거리 검증(#147)이 같은 값을 재사용한다.</summary>
+    /// <summary><see cref="ProbeTarget"/>이 바뀔 때 발행. null = 대상 없음. (#499)</summary>
+    public event System.Action<GameObject> OnProbeTargetChanged;
+
+    /// <summary>상호작용 <b>도달</b> 거리(m) — 레이 길이가 아니다(그쪽은 m_probeRange, #499).
+    /// 서버 줍기 거리 검증(#147)이 같은 값을 재사용한다.</summary>
     public float Range => m_range;
 
     /// <summary>레이캐스트 기준점(카메라 위치). 카메라 미배정 시 플레이어 루트로 대체.
@@ -137,9 +153,10 @@ public class PlayerInteractor : NetworkBehaviour
             return;
 
         GameObject previousTarget = CurrentTarget;
+        GameObject previousProbe = ProbeTarget;
 
         Ray ray = new Ray(m_camera.transform.position, m_camera.transform.forward);
-        bool aimed = Physics.Raycast(ray, out RaycastHit hit, m_range, m_interactMask);
+        bool aimed = Physics.Raycast(ray, out RaycastHit hit, m_probeRange, m_interactMask);
 
         // 쓰러진 몸의 래그돌 뼈는 Ragdoll 레이어라 위 레이(Interactable)에 안 잡힌다 — 조준
         // 히트박스가 몸통만 덮어 뻗어나간 팔다리를 놓치므로 보조 레이로 따로 받는다. (#857)
@@ -158,19 +175,30 @@ public class PlayerInteractor : NetworkBehaviour
             && HasLineOfSight(ray.origin, hit.point, hit.transform, viaBone ? "조준/뼈" : "조준")
         )
         {
-            CurrentTarget = hit.collider.gameObject;
-            CurrentInteractable = hit.collider.GetComponentInParent<IInteractable>();
+            ProbeTarget = hit.collider.gameObject;
+
+            // 레이는 원거리 표시를 위해 길게 쏘되, 상호작용 대상은 도달 거리 안일 때만 채운다 —
+            // 여기서 잘라야 E 상호작용·아이템·스캔 카드가 종전 거리를 그대로 지킨다 (#499)
+            bool inReach = hit.distance <= m_range;
+            CurrentTarget = inReach ? ProbeTarget : null;
+            CurrentInteractable = inReach
+                ? hit.collider.GetComponentInParent<IInteractable>()
+                : null;
         }
         else
         {
             if (!aimed)
                 LogAimMiss(ray);
+            ProbeTarget = null;
             CurrentTarget = null;
             CurrentInteractable = null;
         }
 
         if (CurrentTarget != previousTarget)
             OnTargetChanged?.Invoke(CurrentTarget);
+
+        if (ProbeTarget != previousProbe)
+            OnProbeTargetChanged?.Invoke(ProbeTarget);
     }
 
     /// <summary>
@@ -228,7 +256,7 @@ public class PlayerInteractor : NetworkBehaviour
         int count = Physics.RaycastNonAlloc(
             ray,
             s_ragdollHits,
-            m_range,
+            m_probeRange,
             mask,
             QueryTriggerInteraction.Ignore
         );
@@ -399,7 +427,7 @@ public class PlayerInteractor : NetworkBehaviour
 
         Debug.DrawRay(
             ray.origin,
-            ray.direction * m_range,
+            ray.direction * m_probeRange,
             Color.yellow,
             Mathf.Max(0.05f, m_logInterval)
         );
@@ -414,17 +442,18 @@ public class PlayerInteractor : NetworkBehaviour
         string extra = Physics.Raycast(
             ray,
             out RaycastHit any,
-            m_range,
+            m_probeRange,
             ~0,
             QueryTriggerInteraction.Collide
         )
             ? $"마스크를 무시하면 {any.collider.name} (layer={LayerMask.LayerToName(any.collider.gameObject.layer)}, "
                 + $"{any.distance:F2}m, trigger={any.collider.isTrigger})를 맞는다 — 대상 레이어가 interactMask 밖일 수 있다"
                 + RagdollAimRejectReason(any.collider)
-            : $"마스크를 무시해도 아무것도 없다 — 사거리({m_range}m) 밖이거나 콜라이더가 없다";
+            : $"마스크를 무시해도 아무것도 없다 — 레이 길이({m_probeRange}m) 밖이거나 콜라이더가 없다";
 
         Debug.Log(
-            $"[LOS/조준] 대상 없음 — interactMask={m_interactMask.value}, range={m_range}m. {extra}"
+            $"[LOS/조준] 대상 없음 — interactMask={m_interactMask.value}, "
+                + $"probeRange={m_probeRange}m, range={m_range}m. {extra}"
         );
     }
 

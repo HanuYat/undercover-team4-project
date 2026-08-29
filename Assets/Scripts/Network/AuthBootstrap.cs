@@ -92,9 +92,6 @@ public class AuthBootstrap : CommonManagerBase
     /// <summary>인스펙터에 설정된 프로필 — AuthDebugGui가 Start와 같은 경로로 로그인하려고 읽는다.</summary>
     public string Profile => m_profile;
 
-    /// <summary>연동된 아이디 — 미연동이면 빈 문자열. (#384)</summary>
-    public string AccountUsername => m_accountUsername;
-
     /// <summary>
     /// 이 실행에서 타이틀의 로그인 관문(<c>AuthGatePanel</c>)을 이미 넘었는가. (#585)
     /// 세션에서 타이틀로 돌아올 때마다 로그인 창을 다시 보여주지 않기 위한 것이다.

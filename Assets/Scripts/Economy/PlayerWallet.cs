@@ -26,12 +26,8 @@ public class PlayerWallet : NetworkBehaviour
         NetworkVariableReadPermission.Owner,
         NetworkVariableWritePermission.Server);
 
-    // 잔액
-    public NetworkVariable<int> BalanceVar => m_balance;
     public int Balance => m_balance.Value;
 
-    // 이번 라운드 개인 몫
-    public NetworkVariable<int> RoundEarnedVar => m_roundEarned;
     public int RoundEarned => m_roundEarned.Value;
 
     // 이 지갑 주인의 UGS PlayerId — 세이브의 키다 (#373). 오너가 스폰 시 보고해야 서버가 안다.
@@ -60,18 +56,6 @@ public class PlayerWallet : NetworkBehaviour
         {
             m_balance.Value = saved;
             Debug.Log($"[개인 자금] 세이브 복원 — {OwnerClientId}번 잔액 {saved}");
-        }
-    }
-
-    /// <summary>로컬 플레이어의 지갑 — 표시 전용. 잔액은 오너만 읽으므로 남의 지갑을 잡으면 0만 보인다.</summary>
-    public static PlayerWallet Local
-    {
-        get
-        {
-            NetworkManager nm = NetworkManager.Singleton;
-            if (nm == null || nm.LocalClient == null || nm.LocalClient.PlayerObject == null) return null;
-
-            return nm.LocalClient.PlayerObject.GetComponent<PlayerWallet>();
         }
     }
 

@@ -53,7 +53,6 @@ public class ShopCatalog : ScriptableObject
 
         public ItemBase ItemPrefab => m_itemPrefab;
         public EInstallable Installable => m_installable;
-        public int InstallablePrice => m_installablePrice;
         public bool IsStaple => m_staple;
         public bool IsConsumable => m_consumable;
         public Vector3 DisplayScale => m_displayScale;

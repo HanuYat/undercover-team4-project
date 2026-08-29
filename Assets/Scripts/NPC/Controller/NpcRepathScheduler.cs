@@ -108,16 +108,9 @@ public class NpcRepathScheduler
         m_nextDue[(int)channel] = 0f;
     }
 
-    /// <summary>다음 만료까지 남은 시간(초) — 위상이 실제로 흩어졌는지 확인할 때, 그리고 프로파일링 표시용.</summary>
-    public float NextDueIn(NpcRepathChannel channel) =>
-        Mathf.Max(0f, m_nextDue[(int)channel] - Time.time);
-
     /// <summary>채널의 현재 주기(초) — 로그·디버그 표시용. 조회만 하고 아무것도 바꾸지 않는다.</summary>
     public float IntervalOf(NpcRepathChannel channel) =>
         channel == NpcRepathChannel.Repath ? PickTierInterval() : BaseInterval(channel);
-
-    /// <summary>티어 판정에 쓰인 최근 거리(m) — 디버그 표시용. 표본 주기만큼 낡을 수 있다.</summary>
-    public float TierDistance => m_tierDistance;
 
     private float IntervalFor(NpcRepathChannel channel) =>
         channel == NpcRepathChannel.Repath ? TieredRepathInterval() : BaseInterval(channel);

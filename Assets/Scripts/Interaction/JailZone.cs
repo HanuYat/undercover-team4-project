@@ -278,14 +278,6 @@ public class JailZone : NetworkedManagerBase
     public event Action<int> OnInmateCountChanged;
 
     /// <summary>
-    /// 새 수감자가 계상됐다 — <b>서버(또는 오프라인)에서만</b> 발생한다. 비밀 청탁(#485)이
-    /// "이 사람을 빼달라는 전화가 올지"를 그 대상별로 굴리는 훅이다.
-    /// 인원 수만 필요하면 <see cref="OnInmateCountChanged"/> 쪽을 쓸 것 — 이쪽은 대상을 넘기므로
-    /// 서버 전용 값(신원·현상금)을 읽는 용도다.
-    /// </summary>
-    public event Action<NpcController> OnInmateAdmitted;
-
-    /// <summary>
     /// 지금 유치장에 잡아둔 대상들의 현상금 합 — 라운드 목표 금액(#395)의 진행도다.
     /// 라운드 종료 정산액(<see cref="TallySettlement"/>의 total)과 같은 레코드에서 나오므로
     /// 진행 중에 보이던 금액과 최종 정산이 어긋나지 않는다. 탈옥으로 방출되면 함께 줄어든다
@@ -442,7 +434,6 @@ public class JailZone : NetworkedManagerBase
         // 수감 중 사망을 지켜본다 — 죽으면 점유에서 빼야 한다 (아래 HandleInmateDied)
         npc.Death.OnDied += HandleInmateDied;
 
-        OnInmateAdmitted?.Invoke(npc); // 계상이 끝난 뒤에 알린다 — 구독자가 InmateCount를 읽어도 맞게 나온다
     }
 
     /// <summary>
@@ -492,7 +483,6 @@ public class JailZone : NetworkedManagerBase
         RefreshBountyTotal();
         Debug.Log($"[유치장] 사망 계상: {npc.name} — 현상금 {bounty}원, 누적 {BountyTotal}원, 수용 인원 {InmateCount}명");
 
-        OnDeceasedRecorded?.Invoke(npc);
     }
 
     /// <summary>
@@ -535,12 +525,6 @@ public class JailZone : NetworkedManagerBase
         Debug.Log($"[유치장] 사망 계상 취소: {npc.name} — 감옥 밖으로 나갔다, 누적 현상금 {BountyTotal}원, 수용 인원 {InmateCount}명");
         return true;
     }
-
-    /// <summary>시체가 계상된 순간 — 서버(또는 오프라인) 전용. 비밀 청탁이 대상 추첨에 쓴다. (#597)
-    /// <see cref="OnInmateAdmitted"/>와 갈라 두는 이유: 시체는 탈출 가능한 수감자가 아니라(점유·탈옥이
-    /// 산 사람만 센다) 한 이벤트로 묶으면 구독하는 쪽이 시체를 탈옥 대상으로 오인하게 된다.
-    /// 표지판 총원(<see cref="InmateCount"/>)에는 산 사람과 마찬가지로 잡힌다.</summary>
-    public event Action<NpcController> OnDeceasedRecorded;
 
     /// <summary>
     /// 이 수감자의 기록된 현상금 — 없으면 false. 서버(또는 오프라인) 전용. (#517)

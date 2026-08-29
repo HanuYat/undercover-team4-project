@@ -23,30 +23,25 @@ public class CriminalAssigner : CommonManagerBase
     private OfficialRecords m_officialRecords;
 
     [Header("수배 용의자 (#127 · #102)")]
-    [Tooltip("이번 라운드의 예비 용의자 풀 크기 = 최대 수배 수. 라운드 시작에 전원 확정되지만 공개는 나눠서 된다(제보 전화). NPC 수보다 크면 NPC 수로 잘라 배정한다(경고 로그)")]
+    [Tooltip(
+        "이번 라운드의 예비 용의자 풀 크기 = 최대 수배 수. 라운드 시작에 전원 확정되지만 공개는 나눠서 된다(제보 전화). NPC 수보다 크면 NPC 수로 잘라 배정한다(경고 로그)"
+    )]
     [Min(1)]
     [FormerlySerializedAs("m_criminalCount")] // 씬에 저장된 기존 값 보존 — 의미가 '진범 수'에서 '예비 풀 크기'로 바뀌었다 (#102)
     [SerializeField]
     private int m_maxWantedCount = 3;
 
-    [Tooltip("라운드 시작에 이미 수배로 공개된 용의자 수. 나머지는 미공개로 대기하다가 제보 전화를 받을 때마다 1명씩 공개된다 (#102). 0이면 수배 없이 시작한다")]
+    [Tooltip(
+        "라운드 시작에 이미 수배로 공개된 용의자 수. 나머지는 미공개로 대기하다가 제보 전화를 받을 때마다 1명씩 공개된다 (#102). 0이면 수배 없이 시작한다"
+    )]
     [Min(0)]
     [SerializeField]
     private int m_initialRevealCount = 1;
 
-    [Header("위조범 (#223)")]
-    [Tooltip("표시 이름을 오염시킬 위조범 수. 진범과 독립 배정된다")]
-    [Min(0)]
-    [SerializeField]
-    private int m_forgerCount = 2;
-
-    [Tooltip("위조범 1명의 표시 이름에서 오염시킬 글자 수(모음↔모음·자음↔자음 치환). 이름 글자 수보다 크면 잘린다")]
-    [Min(1)]
-    [SerializeField]
-    private int m_forgedCharCount = 1;
-
     [Header("현상금 (#395)")]
-    [Tooltip("진범 1명의 현상금 하한. 라운드 시작 배정 시점에 [하한, 상한]에서 100원 단위로 뽑아 확정한다 — 판정 시점에 뽑으면 재검거 리롤이 가능해진다")]
+    [Tooltip(
+        "진범 1명의 현상금 하한. 라운드 시작 배정 시점에 [하한, 상한]에서 100원 단위로 뽑아 확정한다 — 판정 시점에 뽑으면 재검거 리롤이 가능해진다"
+    )]
     [Min(0)]
     [SerializeField]
     private int m_criminalBountyMin = 8000;
@@ -56,23 +51,17 @@ public class CriminalAssigner : CommonManagerBase
     [SerializeField]
     private int m_criminalBountyMax = 15000;
 
-    [Tooltip("위조범 1명의 현상금 하한 (경범죄 취급 — GDD 9-1 기본 1,000 주변)")]
-    [Min(0)]
-    [SerializeField]
-    private int m_forgeryBountyMin = 500;
-
-    [Tooltip("위조범 1명의 현상금 상한")]
-    [Min(0)]
-    [SerializeField]
-    private int m_forgeryBountyMax = 2000;
-
-    [Tooltip("진범 1명이 '생포 필수(AliveOnly)'로 뽑힐 확률. 나머지는 생사 불문(DeadOrAlive)이며 시체 인계 시 감액된다 (#766)")]
+    [Tooltip(
+        "진범 1명이 '생포 필수(AliveOnly)'로 뽑힐 확률. 나머지는 생사 불문(DeadOrAlive)이며 시체 인계 시 감액된다 (#766)"
+    )]
     [Range(0f, 1f)]
     [SerializeField]
     private float m_aliveOnlyChance = 0.35f;
 
     [Header("예비 용의자 반응 가중치 (#76 · 트리거 변경 #400)")]
-    [Tooltip("합이 1일 필요 없음 — 비율로 추첨한다. 스캔·피격당할 때 이 유형대로 반응한다 (#400). 범인은 도주/저항 성향이 높다")]
+    [Tooltip(
+        "합이 1일 필요 없음 — 비율로 추첨한다. 스캔·피격당할 때 이 유형대로 반응한다 (#400). 범인은 도주/저항 성향이 높다"
+    )]
     [SerializeField]
     private float m_compliantWeight = 0.2f;
 
@@ -112,7 +101,7 @@ public class CriminalAssigner : CommonManagerBase
     private bool m_initialAssignmentDone;
 
     /// <summary>
-    /// 이번 라운드에 배정된 현상금 총합 (#395) — 진범 + 위조범. 배정 전에는 0.
+    /// 이번 라운드에 배정된 현상금 총합 (#395). 배정 전에는 0.
     /// 라운드 목표 금액이 달성 가능한지 대조하는 기준이다(RoundManager). 돌발 이벤트로 나중에 스폰되는
     /// 난동꾼의 수익은 여기에 포함되지 않는다 — 배정 시점엔 존재하지 않기 때문이다.
     /// </summary>
@@ -189,8 +178,6 @@ public class CriminalAssigner : CommonManagerBase
         int revealCount = Mathf.Clamp(m_initialRevealCount, 0, suspectCount);
 
         HashSet<int> criminalIndices = PickCriminalIndices(npcs.Count, suspectCount);
-        // 위조범은 진범과 독립적으로 추첨한다 — 겹칠 수도 있다(범인이 위조 papers 소지) (#223)
-        HashSet<int> forgerIndices = PickCriminalIndices(npcs.Count, Mathf.Clamp(m_forgerCount, 0, npcs.Count));
 
         // 이름 풀은 매 라운드 새로 만든다 — 라운드 안에서 중복이 없어야 한다. 지역 변수가 아니라
         // 필드에 남기는 이유는 라운드 중에 스폰되는 NPC도 같은 풀에서 이어 뽑기 때문이다 (#505).
@@ -220,35 +207,29 @@ public class CriminalAssigner : CommonManagerBase
 
             CitizenProfile profile = m_factory.Create();
 
-            // 위조범: 표시값을 정본/인명부와 어긋나게 한다 — 이름·문양 중 하나만 오염된다 (#222 (a)①).
-            // 어느 축인지는 팩토리가 정하고(문양 variant가 모자라면 이름으로 폴백), 여기서는 결과만 받는다.
-            bool isForger = forgerIndices.Contains(i);
-            bool forgedSymbol = isForger && m_factory.ApplyForgery(profile, m_forgedCharCount);
-
             // 예비 풀은 라운드 시작에 전부 확정하고 공개만 나눈다 — 전화 시점에 몽타주를 역생성하면
             // 부합 인원 수를 통제할 수 없어 디코이 설계가 깨진다 (#102 설계 결정 1)
             bool isSuspect = criminalIndices.Contains(i);
             // m_criminalNpcs에 담기기 전에 세므로 이 비교가 곧 '앞 revealCount명'이다
             bool isCriminal = isSuspect && m_criminalNpcs.Count < revealCount;
             identity.AssignProfile(profile, isCriminal);
-            // 위조 여부를 신원에 기록 — 위조 검거 판정(#320)이 읽는다. 이름 오염(m_nameView)과 별개의 서버 전용 플래그.
-            identity.AssignForgery(isForger);
 
             // 검거 반응 — 범인은 범인 가중치로, 무고 시민은 시민 가중치로 추첨한다.
             // 시민의 도주/저항은 진범을 헷갈리게 하는 미끼 행동일 뿐 판정엔 영향이 없다 (GDD 6-1/6-3, #76/#78)
             ReactionType reaction = isCriminal
                 ? ReactionRoll.Roll(m_compliantWeight, m_fleeWeight, m_resistWeight)
-                : ReactionRoll.Roll(m_citizenCompliantWeight, m_citizenFleeWeight, m_citizenResistWeight);
+                : ReactionRoll.Roll(
+                    m_citizenCompliantWeight,
+                    m_citizenFleeWeight,
+                    m_citizenResistWeight
+                );
             identity.AssignReaction(reaction);
 
-            // 현상금 확정 (#395) — 판정 시점이 아니라 여기서 뽑는다. ArrestJudge의 판정 우선순위와 같은
-            // 순서로 정한다(진범 > 위조범 > 무고). 무고 시민은 오검거라 0원이다.
+            // 현상금 확정 (#395) — 판정 시점이 아니라 여기서 뽑는다. 무고 시민은 오검거라 0원이다.
             // 기준은 isSuspect가 아니라 isCriminal(지금 공개된 수배)이다 — 미공개 예비 용의자를 잡으면
-            // 오검거이거나(0원) 위조 검거라, 그 시점의 판정과 금액이 맞아야 한다. 승격되어 진범이 되는
+            // 오검거라 0원이고, 그 시점의 판정과 금액이 맞아야 한다. 승격되어 진범이 되는
             // 순간의 현상금은 PromoteNext가 다시 배정한다 (#102 · #395).
-            int bounty = isCriminal ? BountyRoll.Roll(m_criminalBountyMin, m_criminalBountyMax)
-                : isForger ? BountyRoll.Roll(m_forgeryBountyMin, m_forgeryBountyMax)
-                : 0;
+            int bounty = isCriminal ? BountyRoll.Roll(m_criminalBountyMin, m_criminalBountyMax) : 0;
             identity.AssignBounty(bounty);
             m_totalAssignedBounty += bounty;
 
@@ -264,13 +245,14 @@ public class CriminalAssigner : CommonManagerBase
                 identity.AssignWantedCondition(
                     !TutorialDirector.IsActive && Random.value < m_aliveOnlyChance
                         ? WantedCondition.AliveOnly
-                        : WantedCondition.DeadOrAlive);
+                        : WantedCondition.DeadOrAlive
+                );
 
                 m_criminalNpcs.Add(npcs[i]);
                 m_wantedProfiles.Add(profile);
             }
 
-            log.Add(identity, isSuspect, isForger, forgedSymbol, m_factory.RealSymbolIndex(profile.Faction));
+            log.Add(identity, isSuspect);
         }
 
         // 여기부터 늦은 배정이 열린다 — 이 줄 앞에서 들어온 요청은 이 루프가 이미 덮었다
@@ -289,7 +271,7 @@ public class CriminalAssigner : CommonManagerBase
     /// "스캔이 조용히 실패한다"로만 나타나 원인을 찾기 어렵기 때문이다.
     ///
     /// <b>라운드 시작 배정과 다른 점 셋:</b>
-    ///  · <b>이름만 공유한다</b> — 예비 용의자·위조범·현상금·반응·외형은 배정하지 않는다. 이 NPC들은
+    ///  · <b>이름만 공유한다</b> — 예비 용의자·현상금·반응·외형은 배정하지 않는다. 이 NPC들은
     ///    수배 대상이 아니고, 검거 판정은 <see cref="MisdemeanorOffender"/> 마커가 신원보다 먼저
     ///    처리하므로(ArrestJudge) 프로필을 줘도 판정·보상이 바뀌지 않는다. 반응을 비워 두면 기본값이
     ///    순응형이라 스캔당해도 진행 중인 소란·침입 행동이 끊기지 않는다 (#400).

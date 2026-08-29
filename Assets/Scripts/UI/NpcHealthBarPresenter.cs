@@ -5,13 +5,9 @@ using UnityEngine;
 /// NPC 체력 바 프레젠터 — 조준한 NPC의 바만 켠다. (#493)
 /// 오너 로컬 전용: 남의 조준으로 내 화면의 바가 켜지면 안 된다.
 ///
-/// <b>자체 Raycast를 쓰는 이유</b>: <see cref="PlayerInteractor"/>의 조준 레이는 3m다(E 상호작용
-/// 사거리). 그런데 제압은 테이저 8m에서도 일어나므로 그 레이를 재사용하면 원거리로 쏘는 동안
-/// 체력 바가 사라진다 — 정작 "제압이 얼마나 남았나"가 필요한 순간에 정보가 없어진다.
-/// 카메라 기준·레이 구성은 PlayerInteractor.UpdateTarget과 같은 방식이다.
-///
-/// 레이 길이와 상호작용 도달 거리를 하나로 합치는 정리(PlayerInteractor.Range가 지금 둘을 겸한다)는
-/// 별건이다 — 줍기·구조·운반 도달 거리가 같은 값을 읽고 있어 함께 넓어지기 때문이다.
+/// 대상은 <see cref="PlayerInteractor.ProbeTarget"/>에서 받는다 — 도달 거리(E 상호작용)와 무관하게
+/// 조준 레이가 닿는 곳까지 잡히므로, 테이저 8m로 제압하는 동안에도 바가 유지된다. 자체 Raycast를
+/// 쓰던 것을 걷어낸 경위는 #499. 가시선·래그돌 뼈 조준 판정도 그쪽 것을 그대로 따른다.
 ///
 /// 표시물(<see cref="NpcHealthBarView"/>)은 NPC 프리팹의 자식이라 위치는 Transform이 알아서 따라간다.
 /// 이 프레젠터는 조준 대상이 <b>바뀔 때만</b> 이전 바를 끄고 새 바를 켠다 — 값 갱신은 바가 스스로 한다.
@@ -20,17 +16,7 @@ using UnityEngine;
 /// </summary>
 public class NpcHealthBarPresenter : NetworkBehaviour
 {
-    [Tooltip("체력 바를 띄울 최대 거리(m) — 테이저 사거리(8m)보다 넉넉하게 잡는다")]
-    [SerializeField]
-    private float m_probeRange = 20f;
-
-    [Tooltip(
-        "조준 판정에 포함할 레이어 — NPC 레이어(Interactable)와 시야를 막는 레이어(Default)를 함께 넣는다. "
-            + "벽을 빼면 레이가 벽을 통과해 뒤에 있는 NPC의 바가 보인다"
-    )]
-    [SerializeField]
-    private LayerMask m_probeMask = ~0;
-
+    // 표시 거리·레이어·가시선은 모두 PlayerInteractor의 조준 레이가 정한다 (m_probeRange, #499)
     private PlayerInteractor m_interactor;
 
     // 지금 켜 둔 바 — 조준이 바뀌면 끄고 교체한다
@@ -57,29 +43,21 @@ public class NpcHealthBarPresenter : NetworkBehaviour
 
     private void OnDisable() => HideCurrent();
 
+    // 이벤트가 아니라 매 프레임 조회다 — 조준을 유지한 채로도 생사·밧줄 상태가 바뀌므로
+    // IsOutOfFight를 계속 다시 봐야 한다.
     private void Update() // 비오너는 OnNetworkSpawn에서 비활성화되므로 오너만 돈다
     {
-        Camera camera = m_interactor != null ? m_interactor.AimCamera : null;
-        if (camera == null)
-        {
-            HideCurrent();
-            return;
-        }
-
-        Show(Probe(camera));
+        Show(Resolve(m_interactor != null ? m_interactor.ProbeTarget : null));
     }
 
-    // 카메라 정면으로 한 번 쏘고, 맞은 것에서 NPC의 체력 바를 찾는다.
+    // 조준 대상에서 NPC의 체력 바를 찾는다.
     // 콜라이더가 NPC 루트의 자식일 수 있어 부모까지 탐색한다 (ScanResultPresenter와 같은 이유).
-    private NpcHealthBarView Probe(Camera camera)
+    private NpcHealthBarView Resolve(GameObject target)
     {
-        Transform origin = camera.transform;
-        var ray = new Ray(origin.position, origin.forward);
-
-        if (!Physics.Raycast(ray, out RaycastHit hit, m_probeRange, m_probeMask))
+        if (target == null)
             return null;
 
-        NpcController npc = hit.collider.GetComponentInParent<NpcController>();
+        NpcController npc = target.GetComponentInParent<NpcController>();
         if (npc == null)
             return null;
 

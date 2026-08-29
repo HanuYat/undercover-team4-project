@@ -36,9 +36,6 @@ public sealed class LoadoutSlots<T>
     /// <summary>고정 칸(빈 칸 = null). 읽기 전용 뷰.</summary>
     public IReadOnlyList<T> Slots => m_slots;
 
-    /// <summary>칸 수(용량).</summary>
-    public int Capacity => m_slots.Length;
-
     /// <summary>현재 선택 인덱스. 빈손이면 -1.</summary>
     public int EquippedIndex => m_equippedIndex;
 

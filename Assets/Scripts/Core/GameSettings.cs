@@ -202,7 +202,7 @@ public static class GameSettings
         set
         {
             s_masterVolume = Mathf.Clamp01(value);
-            PlayerPrefs.SetFloat(Key(k_masterVolumeName), s_masterVolume);
+            PlayerPrefs.SetFloat(DeviceKey(k_masterVolumeName), s_masterVolume);
             AudioListener.volume = s_masterVolume;
         }
     }
@@ -214,7 +214,7 @@ public static class GameSettings
         set
         {
             s_bgmVolume = Mathf.Clamp01(value);
-            PlayerPrefs.SetFloat(Key(k_bgmVolumeName), s_bgmVolume);
+            PlayerPrefs.SetFloat(DeviceKey(k_bgmVolumeName), s_bgmVolume);
             App.Sound?.Bgm?.ApplyVolume();
         }
     }
@@ -226,7 +226,7 @@ public static class GameSettings
         set
         {
             s_sfxVolume = Mathf.Clamp01(value);
-            PlayerPrefs.SetFloat(Key(k_sfxVolumeName), s_sfxVolume);
+            PlayerPrefs.SetFloat(DeviceKey(k_sfxVolumeName), s_sfxVolume);
             OnSfxVolumeChanged?.Invoke(s_sfxVolume);
         }
     }
@@ -245,7 +245,7 @@ public static class GameSettings
         set
         {
             s_voiceVolume = Mathf.Clamp01(value);
-            PlayerPrefs.SetFloat(Key(k_voiceVolumeName), s_voiceVolume);
+            PlayerPrefs.SetFloat(DeviceKey(k_voiceVolumeName), s_voiceVolume);
             App.Net.Vivox?.ApplyVoiceVolume();
         }
     }
@@ -486,6 +486,20 @@ public static class GameSettings
             ? k_settingPrefix + name
             : k_settingPrefix + s_account + "." + name;
 
+    // 계정과 무관하게 기기에 묶이는 설정 자리 — 창모드·해상도와 같은 급이다.
+    // 음량이 여기 있는 이유: 로드는 로그인 전에 도는데 계정 자리에 두면 로그인이 끝나는
+    // 순간까지 남의 값(로그인 전 자리)으로 소리가 난다.
+    private static string DeviceKey(string name) => k_settingPrefix + name;
+
+    // 기기 자리로 옮긴 설정 — 계정 자리에 남은 예전 값을 승격시킬 때 쓴다.
+    private static readonly string[] s_deviceVolumeNames =
+    {
+        k_masterVolumeName,
+        k_bgmVolumeName,
+        k_sfxVolumeName,
+        k_voiceVolumeName,
+    };
+
     // 색만 로그인 전에도 계정 자리를 쓴다 — 이미 그 형식으로 저장돼 있어 굳이 바꾸지 않는다 (#432)
     private static string ColorKey(EBodyPart part) =>
         k_playerColorKeyPrefix + s_account + "." + part;
@@ -584,19 +598,39 @@ public static class GameSettings
     /// </summary>
     private static void LoadAccountSettings()
     {
+        PromoteAccountVolumesToDevice();
+
         MouseSensitivity = PlayerPrefs.GetFloat(Key(k_mouseSensitivityName), s_mouseSensitivity);
         LookSmoothing = PlayerPrefs.GetFloat(Key(k_lookSmoothingName), s_lookSmoothing);
         Fov = PlayerPrefs.GetFloat(Key(k_fovName), s_fov);
         ScreenShake = PlayerPrefs.GetInt(Key(k_screenShakeName), s_screenShake ? 1 : 0) != 0;
         SpeedVignette = PlayerPrefs.GetInt(Key(k_speedVignetteName), s_speedVignette ? 1 : 0) != 0;
-        MasterVolume = PlayerPrefs.GetFloat(Key(k_masterVolumeName), s_masterVolume);
-        BgmVolume = PlayerPrefs.GetFloat(Key(k_bgmVolumeName), s_bgmVolume);
-        SfxVolume = PlayerPrefs.GetFloat(Key(k_sfxVolumeName), s_sfxVolume);
-        VoiceVolume = PlayerPrefs.GetFloat(Key(k_voiceVolumeName), s_voiceVolume);
+        MasterVolume = PlayerPrefs.GetFloat(DeviceKey(k_masterVolumeName), s_masterVolume);
+        BgmVolume = PlayerPrefs.GetFloat(DeviceKey(k_bgmVolumeName), s_bgmVolume);
+        SfxVolume = PlayerPrefs.GetFloat(DeviceKey(k_sfxVolumeName), s_sfxVolume);
+        VoiceVolume = PlayerPrefs.GetFloat(DeviceKey(k_voiceVolumeName), s_voiceVolume);
         MicMuted = PlayerPrefs.GetInt(Key(k_micMutedName), s_micMuted ? 1 : 0) != 0;
         VSync = PlayerPrefs.GetInt(Key(k_vSyncName), s_vSync ? 1 : 0) != 0;
         LoadPlayerColors();
         LoadAccessories();
+    }
+
+    // 음량이 계정 자리에 저장되던 시절의 값을 기기 자리로 한 번 옮긴다.
+    // 옮긴 뒤 계정 키를 지우므로 두 번 돌지 않는다. 로그인 전(local) 자리는 곧 기기 자리라 건너뛴다.
+    private static void PromoteAccountVolumesToDevice()
+    {
+        if (s_account == k_localAccount)
+            return;
+
+        foreach (string name in s_deviceVolumeNames)
+        {
+            string accountKey = k_settingPrefix + s_account + "." + name;
+            if (!PlayerPrefs.HasKey(accountKey))
+                continue;
+
+            PlayerPrefs.SetFloat(DeviceKey(name), PlayerPrefs.GetFloat(accountKey));
+            PlayerPrefs.DeleteKey(accountKey);
+        }
     }
 
     // 백킹 필드만 밑값으로 되돌린다 — PlayerPrefs는 건드리지 않는다.

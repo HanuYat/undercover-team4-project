@@ -13,10 +13,10 @@ public class CitizenProfile : ScriptableObject
     public OfficialRecords.Faction Faction => m_faction;
 
     // ---- 스캔 표시값(view) ----
-    // 현장 스캐너가 읽는 값. 정본(위 실제 데이터)과 별개로, 위조범은 이 표시값만 어긋나게 오염된다 (#223).
-    // 본부 인명부는 정본(CitizenName/Faction)을, 스캔 UI는 표시값(m_nameView/m_factionView/m_symbolView)을 쓴다.
+    // 현장 스캐너가 읽는 값. 본부 인명부는 정본(CitizenName/Faction)을, 스캔 UI는 표시값을 쓴다.
+    // 위조(표시값 오염)를 걷어낸 뒤로 표시값은 항상 정본과 같다 — 두 경로는 남겨 둔다.
     [Header("스캔으로 확인할 결과")]
-    public string m_nameView;     // 표시 이름 — 정본과 다르면 이름 위조 (#223)
+    public string m_nameView;     // 표시 이름
 
     // 타입·세력은 enum으로 둔다 — 표기 문구는 표시 시점에 번역한다 (#497).
     // 완성된 문자열을 담아 두면 그 문구만 번역에서 빠지고, 프로필이 만들어진 시점의 언어로 굳는다.
@@ -25,10 +25,7 @@ public class CitizenProfile : ScriptableObject
     public Sprite m_symbolView;   // 표시 심볼
     public int m_symbolIndexView;    // 표시 심볼의 variant index
 
-    /// <summary>
-    /// 런타임 생성용 초기화 — 실제 데이터를 채우고 표시값을 정본과 동일하게 세팅한다(정상 시민 기준). (이슈 #38)
-    /// 위조(표시값 오염)는 이 뒤 배정 단계(#223)에서 표시값 필드만 덮어써 적용한다 — Initialize 자체는 항상 정상 프로필을 만든다.
-    /// </summary>
+    /// <summary>런타임 생성용 초기화 — 실제 데이터를 채우고 표시값을 정본과 동일하게 세팅한다. (이슈 #38)</summary>
     public void Initialize(string citizenName, OfficialRecords.CitizenType citizenType,
         OfficialRecords.Faction faction, int symbolIndex, OfficialRecords officialRecords)
     {
@@ -41,12 +38,5 @@ public class CitizenProfile : ScriptableObject
         m_factionView = faction;
         m_symbolIndexView = symbolIndex;
         m_symbolView = officialRecords != null ? officialRecords.GetFactionSymbol(faction, symbolIndex) : null;
-    }
-
-    /// <summary>표시 문양만 다른 variant로 덮어쓴다 — 위조범의 문양 위조 전용 (#222/#223).</summary>
-    public void SetSymbolIndexView(int symbolIndex, OfficialRecords officialRecords)
-    {
-        m_symbolIndexView = symbolIndex;
-        m_symbolView = officialRecords != null ? officialRecords.GetFactionSymbol(m_faction, symbolIndex) : null;
     }
 }

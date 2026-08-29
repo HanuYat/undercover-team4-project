@@ -20,10 +20,6 @@ public class CitizenNameCatalog : ScriptableObject
     [Tooltip("그 밖의 로케일에서 쓸 이름")]
     [SerializeField] private string[] m_english;
 
-    public int KoreanCount => m_korean != null ? m_korean.Length : 0;
-
-    public int EnglishCount => m_english != null ? m_english.Length : 0;
-
     /// <summary>지금 언어에 맞는 목록. 그쪽이 비어 있으면 다른 쪽으로 폴백하고, 둘 다 비면 빈 배열이다.</summary>
     public string[] Resolve()
     {

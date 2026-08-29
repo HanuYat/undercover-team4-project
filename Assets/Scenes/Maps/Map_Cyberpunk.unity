@@ -60668,7 +60668,6 @@ Transform:
   - {fileID: 12189231}
   - {fileID: 1368768349}
   - {fileID: 320827322}
-  - {fileID: 2093293294}
   - {fileID: 1684315537}
   - {fileID: 1585279160}
   m_Father: {fileID: 757967211}
@@ -64931,12 +64930,8 @@ MonoBehaviour:
   m_officialRecords: {fileID: 11400000, guid: 1b5b7a3bc8cc725468fa2e0d915c05cb, type: 2}
   m_maxWantedCount: 5
   m_initialRevealCount: 2
-  m_forgerCount: 0
-  m_forgedCharCount: 1
   m_criminalBountyMin: 6000
   m_criminalBountyMax: 10000
-  m_forgeryBountyMin: 1000
-  m_forgeryBountyMax: 2500
   m_aliveOnlyChance: 0.35
   m_compliantWeight: 0.2
   m_fleeWeight: 0.4
@@ -95294,118 +95289,6 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2091640106}
   m_Mesh: {fileID: 4300000, guid: 17ec786cb0156bf419d47c6495fabff7, type: 3}
---- !u!1 &2093293293
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 2093293294}
-  - component: {fileID: 2093293296}
-  - component: {fileID: 2093293295}
-  m_Layer: 0
-  m_Name: SecretFavorBroker
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &2093293294
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2093293293}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 1326152962}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &2093293295
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2093293293}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6e5ebe07bb8fa1b42b6074f06d4778df, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SecretFavorBroker
-  ShowTopMostFoldoutHeaderGroup: 1
-  m_phone: {fileID: 0}
-  m_favorChance: 0.1
-  m_callDelayMin: 15
-  m_callDelayMax: 30
-  m_rewardPercent: 40
-  m_minReward: 2000
-  m_checkInterval: 0.2
-  m_favorExpireSeconds: 180
-  m_devIssueKey: 102
-  m_offerToast:
-    m_TableReference:
-      m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
-    m_TableEntryReference:
-      m_KeyId: 95636848959488
-      m_Key: 
-    m_FallbackState: 0
-    m_WaitForCompletion: 0
-    m_LocalVariables: []
-  m_offerLine:
-    m_TableReference:
-      m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
-    m_TableEntryReference:
-      m_KeyId: 95807313862656
-      m_Key: 
-    m_FallbackState: 0
-    m_WaitForCompletion: 0
-    m_LocalVariables: []
-  m_completeToast:
-    m_TableReference:
-      m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
-    m_TableEntryReference:
-      m_KeyId: 95878210183168
-      m_Key: 
-    m_FallbackState: 0
-    m_WaitForCompletion: 0
-    m_LocalVariables: []
-  m_toastSeconds: 8
-  references:
-    version: 2
-    RefIds: []
---- !u!114 &2093293296
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2093293293}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 4000768116
-  InScenePlacedSourceGlobalObjectIdHash: 0
-  DeferredDespawnTick: 0
-  Ownership: 1
-  AlwaysReplicateAsRoot: 0
-  SynchronizeTransform: 1
-  <InScenePlaced>k__BackingField: 0
-  ActiveSceneSynchronization: 0
-  SceneMigrationSynchronization: 0
-  SpawnWithObservers: 1
-  DontDestroyWithOwner: 0
-  AutoObjectParentSync: 1
-  SyncOwnerTransformWhenParented: 1
-  AllowOwnerToParent: 0
 --- !u!1001 &2094281037
 PrefabInstance:
   m_ObjectHideFlags: 0

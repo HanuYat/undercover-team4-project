@@ -64,6 +64,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 4277099230259671107, guid: d683626f03b237a4da9faa4542cc57a0, type: 3}
+      propertyPath: m_proneOffset.y
+      value: 1.1
+      objectReference: {fileID: 0}
     - target: {fileID: 4452197611904741975, guid: d683626f03b237a4da9faa4542cc57a0, type: 3}
       propertyPath: m_resistConfig
       value: 

@@ -56,7 +56,6 @@ public class NpcProfileDebugView : MonoBehaviour
         public string RevealedAxesLine; // 공개 축 이름들
         public string VisualMontage;    // 화면 외형으로 만든 몽타주 텍스트
         public bool IsCriminal;         // 서버 전용 값(호스트에서만 true 가능)
-        public bool IsForger;
         public List<MontageMatch> Montages; // 실제 범인 몽타주별 부합 여부
         public string Warning;          // null이면 이상 없음
     }
@@ -83,7 +82,6 @@ public class NpcProfileDebugView : MonoBehaviour
         if (identity != null)
         {
             report.IsCriminal = identity.IsCriminal;
-            report.IsForger = identity.IsForger;
 
             AppearanceProfile truth = identity.Appearance;
             report.TruthKnown = truth.IsAssigned;
@@ -184,7 +182,6 @@ public class NpcProfileDebugView : MonoBehaviour
         var label = new StringBuilder();
         label.Append(name);
         if (report.IsCriminal) label.Append(" [범인]");
-        if (report.IsForger) label.Append(" [위조]");
         label.Append('\n').Append(report.VisualLine);
         if (!string.IsNullOrEmpty(report.Warning))
             label.Append("\n⚠ ").Append(report.Warning);

@@ -17799,7 +17799,6 @@ Transform:
   - {fileID: 2096560708}
   - {fileID: 740130850}
   - {fileID: 1054781820}
-  - {fileID: 1290509029}
   - {fileID: 616000002}
   - {fileID: 592869118}
   - {fileID: 1494780999}
@@ -31759,17 +31758,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6390e2e6d4a0bf94e836bfd3c232a5c2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CCTVSwitcher
---- !u!114 &1077811846 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 2485025227967194673, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
-  m_PrefabInstance: {fileID: 1077811841}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fd63fde33a0b29347bd71a9165ffc930, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TipCallPhone
 --- !u!1001 &1077969079
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -34638,12 +34626,8 @@ MonoBehaviour:
   m_officialRecords: {fileID: 11400000, guid: 1b5b7a3bc8cc725468fa2e0d915c05cb, type: 2}
   m_maxWantedCount: 1
   m_initialRevealCount: 1
-  m_forgerCount: 0
-  m_forgedCharCount: 1
   m_criminalBountyMin: 8000
   m_criminalBountyMax: 15000
-  m_forgeryBountyMin: 500
-  m_forgeryBountyMax: 2000
   m_aliveOnlyChance: 0.35
   m_compliantWeight: 0.2
   m_fleeWeight: 0.4
@@ -38165,118 +38149,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4618335035941736, guid: 1dd39e2a8df331343a963c91a1e0974c, type: 3}
   m_PrefabInstance: {fileID: 1533084786}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &1290509028
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1290509029}
-  - component: {fileID: 1290509030}
-  - component: {fileID: 1290509031}
-  m_Layer: 0
-  m_Name: SecretFavorBroker
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1290509029
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1290509028}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 600757700}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1290509030
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1290509028}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3706955790
-  InScenePlacedSourceGlobalObjectIdHash: 0
-  DeferredDespawnTick: 0
-  Ownership: 1
-  AlwaysReplicateAsRoot: 0
-  SynchronizeTransform: 1
-  <InScenePlaced>k__BackingField: 0
-  ActiveSceneSynchronization: 0
-  SceneMigrationSynchronization: 0
-  SpawnWithObservers: 1
-  DontDestroyWithOwner: 0
-  AutoObjectParentSync: 1
-  SyncOwnerTransformWhenParented: 1
-  AllowOwnerToParent: 0
---- !u!114 &1290509031
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1290509028}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6e5ebe07bb8fa1b42b6074f06d4778df, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SecretFavorBroker
-  ShowTopMostFoldoutHeaderGroup: 1
-  m_phone: {fileID: 1077811846}
-  m_favorChance: 0.1
-  m_callDelayMin: 15
-  m_callDelayMax: 60
-  m_rewardPercent: 40
-  m_minReward: 2000
-  m_checkInterval: 0.2
-  m_favorExpireSeconds: 180
-  m_devIssueKey: 102
-  m_offerToast:
-    m_TableReference:
-      m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
-    m_TableEntryReference:
-      m_KeyId: 95636848959488
-      m_Key: 
-    m_FallbackState: 0
-    m_WaitForCompletion: 0
-    m_LocalVariables: []
-  m_offerLine:
-    m_TableReference:
-      m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
-    m_TableEntryReference:
-      m_KeyId: 95807313862656
-      m_Key: 
-    m_FallbackState: 0
-    m_WaitForCompletion: 0
-    m_LocalVariables: []
-  m_completeToast:
-    m_TableReference:
-      m_TableCollectionName: GUID:100fd20e95db49646a9f3c01aac62cee
-    m_TableEntryReference:
-      m_KeyId: 95878210183168
-      m_Key: 
-    m_FallbackState: 0
-    m_WaitForCompletion: 0
-    m_LocalVariables: []
-  m_toastSeconds: 8
-  references:
-    version: 2
-    RefIds: []
 --- !u!1001 &1291911711
 PrefabInstance:
   m_ObjectHideFlags: 0

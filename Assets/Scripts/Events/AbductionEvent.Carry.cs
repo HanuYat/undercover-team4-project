@@ -421,6 +421,4 @@ public partial class AbductionEvent
         Debug.Log($"[납치] 납치범 이탈 — {abductor.name}, 남은 {m_abductors.Count}명");
     }
 
-    /// <summary>이 NPC가 지금 납치범인가 — 타격 경로가 격퇴 대상인지 묻는다. (#371)</summary>
-    public bool IsAbductor(NpcController npc) => npc != null && m_abductors.Contains(npc);
 }

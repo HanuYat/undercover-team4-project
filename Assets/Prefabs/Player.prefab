@@ -7069,6 +7069,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_camera: {fileID: 7952644528617391114}
   m_range: 5
+  m_probeRange: 20
   m_interactMask:
     serializedVersion: 2
     m_Bits: 128
@@ -7731,10 +7732,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcHealthBarPresenter
   ShowTopMostFoldoutHeaderGroup: 1
-  m_probeRange: 20
-  m_probeMask:
-    serializedVersion: 2
-    m_Bits: 129
 --- !u!114 &1764053349963750978
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -83,15 +83,11 @@ public static class NpcStateRules
     public static bool CanStartReaction(NpcState state) =>
         IsReactive(state) && state != NpcState.Run && state != NpcState.Attack;
 
-    /// <summary>맞았을 때 반응(도주·저항)으로 돌아설 수 있는가 — <see cref="CanStartReaction"/>에
-    /// <b>반출 보행 예외</b>를 얹은 것. (#548) 반출 대상은 스캔에는 꿈쩍하지 않지만(IsReactive에 없다)
-    /// 때리면 배정된 유형대로 돌아선다 — 쳐다봤다고 그만두면 저지가 너무 싸진다.
-    ///
-    /// <b>돌아서도 반출은 살아 있다</b> (2026-08-12 확정) — 목적지는 반응군에서도 유지되고
-    /// (<see cref="NpcController"/>의 상태 훅) 쓰러뜨려 재우면 깨어나 다시 인도 지점으로 뛴다.
-    /// 타격은 시간을 버는 수단이고, 무산시키려면 밧줄로 묶어야 한다.</summary>
+    /// <summary>맞았을 때 반응(도주·저항)으로 돌아설 수 있는가.
+    /// 반출 보행 예외(#548)를 얹고 있었으나 그 상태와 함께 사라져 지금은 <see cref="CanStartReaction"/>과 같다 —
+    /// 트리거별로 규칙이 갈릴 자리를 남겨 둔다(스캔 vs 피격).</summary>
     public static bool CanReactToDamage(NpcState state) =>
-        CanStartReaction(state) || state == NpcState.Releasing;
+        CanStartReaction(state);
 
     /// <summary>밧줄 대상에서 <b>신병·소유권 때문에</b> 빠지는 상태인가. (#269 → #369 기본 검거로 승격)
     /// 제외 목록 방식 — 이미 신병 확보(Escorted/Captured/Jailed)·타 시스템 소유(페널티)는 제외.

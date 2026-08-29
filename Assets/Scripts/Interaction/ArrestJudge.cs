@@ -297,12 +297,6 @@ public class ArrestJudge : CommonManagerBase
                 }
             }
         }
-        else if (identity.IsForger)
-        {
-            // 위조범 — 난동꾼과 동일한 즉결 경범죄로 확정하고 소액 위조 보상을 준다 (#320).
-            verdict = ArrestVerdict.Misdemeanor;
-            reward = ResolveBounty(identity, npc);
-        }
 
         return true;
     }

@@ -13,11 +13,4 @@ public static class FixedStringExtensions
         result.CopyFromTruncated(value ?? string.Empty);
         return result;
     }
-
-    public static FixedString128Bytes ToFixed128(this string value)
-    {
-        var result = new FixedString128Bytes();
-        result.CopyFromTruncated(value ?? string.Empty);
-        return result;
-    }
 }

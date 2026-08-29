@@ -41,9 +41,6 @@ public static class SaveService
     // 이번 세션 시작에 적용할 세이브 — '이어하기'로 시작했을 때만 채워진다. null이면 새 판이다.
     public static SessionSaveData Pending { get; private set; }
 
-    /// <summary>이어할 세이브가 있는가 — <see cref="RefreshAsync"/>로 조회한 결과.</summary>
-    public static bool HasSave => s_known != null;
-
     /// <summary>이어하면 시작할 라운드 번호 — 타이틀 표시용. 세이브가 없으면 0.</summary>
     public static int SavedRound => s_known?.Round ?? 0;
 

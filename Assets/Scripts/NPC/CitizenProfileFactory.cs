@@ -4,11 +4,7 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// 시민 한 명분의 신원(이름·타입·세력·문양)을 만든다 — 라운드 시작 배정의 재료 공급처. (#38 · #222 · #223)
-///
-/// <see cref="CitizenProfile.Initialize"/>는 <b>항상 정본 프로필</b>을 만들고, 위조는 그 뒤에 표시값만
-/// 덮어쓰는 2단 구조다. 이 클래스가 그 두 단계를 <see cref="Create"/>와 <see cref="ApplyForgery"/>로
-/// 그대로 나눠 갖는다 — 순서를 지키지 않으면(위조 후 Initialize) 오염값이 정본으로 되돌아간다.
+/// 시민 한 명분의 신원(이름·타입·세력·문양)을 만든다 — 라운드 시작 배정의 재료 공급처. (#38 · #222)
 ///
 /// 이름 풀은 생성자에서 한 번 섞어 인원수만큼 확정한다 — 라운드 안에서 중복이 없어야 하므로
 /// 개별 호출로는 만들 수 없다. 그래서 정적 유틸이 아니라 인스턴스다.
@@ -20,7 +16,8 @@ public sealed class CitizenProfileFactory
 {
     // None(무소속·문양 없음)은 위조 대조 축이 될 수 없어 배정에서 제외한다 (#222 (b)).
     // enum에 세력을 추가하면 자동으로 후보에 포함된다 — 여기를 고칠 필요 없음.
-    private static readonly OfficialRecords.Faction[] s_assignableFactions = BuildAssignableFactions();
+    private static readonly OfficialRecords.Faction[] s_assignableFactions =
+        BuildAssignableFactions();
 
     private readonly OfficialRecords m_records;
 
@@ -63,29 +60,7 @@ public sealed class CitizenProfileFactory
     }
 
     /// <summary>
-    /// 위조범의 표시값을 정본/인명부와 어긋나게 한다 — 이름·문양 중 <b>하나만</b> 오염한다 (#222 (a)①).
-    /// 문양 variant가 2개 미만이면 가짜를 만들 수 없어 이름 위조로 폴백한다 (#222 (c)).
-    /// 반드시 AssignProfile(= CitizenData 동기화 스냅샷) 이전에 호출해야 오염값이 전 클라에 전파된다 (#223).
-    /// </summary>
-    /// <returns>문양을 위조했으면 true, 이름을 위조했으면 false — 진단 로그가 어느 축인지 구분하는 데 쓴다.</returns>
-    public bool ApplyForgery(CitizenProfile profile, int forgedCharCount)
-    {
-        OfficialRecords.Faction faction = profile.Faction;
-        bool canForgeSymbol = m_records != null && m_records.GetVariantsCount(faction) >= 2;
-
-        if (canForgeSymbol && Random.value < 0.5f)
-        {
-            profile.SetSymbolIndexView(PickFakeSymbolIndex(faction, RealSymbolIndex(faction)), m_records);
-            return true;
-        }
-
-        profile.m_nameView = NameForgery.Corrupt(profile.CitizenName, forgedCharCount);
-        return false;
-    }
-
-    /// <summary>
     /// 이번 세션에 이 세력의 진짜 문양 index. 세션 중이면 동기화 값, 오프라인이면 로컬 폴백. (#222)
-    /// 위조 진단 로그가 "진짜 → 가짜"를 찍을 때도 쓴다.
     /// </summary>
     public int RealSymbolIndex(OfficialRecords.Faction faction)
     {
@@ -100,14 +75,6 @@ public sealed class CitizenProfileFactory
             m_localRealIndices[faction] = index;
         }
         return index;
-    }
-
-    /// <summary>진짜를 제외한 나머지 variant 중 하나 — 위조범의 가짜 문양. variant 2개 이상일 때만 호출. (#222)</summary>
-    private int PickFakeSymbolIndex(OfficialRecords.Faction faction, int realIndex)
-    {
-        int count = m_records.GetVariantsCount(faction);
-        int pick = Random.Range(0, count - 1); // 진짜 1개를 뺀 범위에서 뽑고
-        return pick >= realIndex ? pick + 1 : pick; // 진짜 자리를 건너뛴다
     }
 
     private static OfficialRecords.Faction RandomFaction() =>

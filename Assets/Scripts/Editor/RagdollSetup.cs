@@ -358,34 +358,6 @@ public static class RagdollSetup
     }
 
 
-    // bool·enum·int를 한 자리에서 쓴다 — 직렬화 타입이 셋으로 갈려 있어서다.
-    // 프로퍼티가 없어지면(패키지 업그레이드) <b>조용히 넘어가지 않고</b> 경고를 남긴다.
-    private static void SetSerialized(SerializedObject serialized, string path, int value)
-    {
-        SerializedProperty property = serialized.FindProperty(path);
-        if (property == null)
-        {
-            Debug.LogWarning(
-                $"[래그돌 셋업] 골반 복제 설정 '{path}'를 찾지 못했다 — Netcode 패키지가 필드 이름을 "
-                    + "바꿨을 수 있다. 인스펙터에서 직접 확인할 것"
-            );
-            return;
-        }
-
-        switch (property.propertyType)
-        {
-            case SerializedPropertyType.Boolean:
-                property.boolValue = value != 0;
-                break;
-            case SerializedPropertyType.Enum:
-                property.enumValueIndex = value;
-                break;
-            default:
-                property.intValue = value;
-                break;
-        }
-    }
-
     // 리그 소유자를 찾는다 — 빈 경로면 프리팹 루트다.
     private static Transform ResolveRigOwner(Transform root, string prefabPath, string rigOwnerPath)
     {

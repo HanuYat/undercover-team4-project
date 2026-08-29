@@ -166,10 +166,6 @@ public class NpcRopeDrag : NetworkBehaviour
         // "그냥 거기 쓰러져 있던 대상"을 가르는 기준이다 (#637).
         m_owner.Custody.SetSecuredByPlayer(true);
 
-        // 걸어가던 대상을 잡았다 — 반출은 여기서 무산된다 (#548). 풀어 주더라도 인도 지점으로 다시
-        // 걷지 않는다. 호출부가 이미 Escorted로 전이해 뒀으므로 NpcController의 상태 훅이 목적지를
-        // 지운 뒤지만, 시체 끌기처럼 전이 없이 여기로 오는 경로가 있어 방어선으로 남긴다(멱등).
-        m_owner.Custody.ClearRelease();
 
         SetRoped(true);
         SyncDraggerCount();

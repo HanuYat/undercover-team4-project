@@ -80,7 +80,6 @@ public class NpcReaction : NetworkBehaviour
             return;
 
         // 이미 반응 중이거나 확보·페널티 상태면 재판정하지 않는다 — 규칙은 NpcStateRules가 갖는다.
-        // 피격만 반출 보행(Releasing)까지 연다 (#548) — 스캔으로는 안 되고 때려야 돌아선다.
         bool allowed =
             trigger == ReactionTrigger.Damage
                 ? NpcStateRules.CanReactToDamage(m_owner.CurrentState)
@@ -175,18 +174,13 @@ public class NpcReaction : NetworkBehaviour
     /// 포기하지 않는 개체(<see cref="IsRelentless"/>)는 저항이다. (#106, #721)
     /// 공연음란범이 한 번 맞고 배회 시민이 되어 버리지 않게 하는 단일 복귀 지점이다.
     ///
-    /// ⚠ <b>반출 목적지가 살아 있으면 질주로 가로채지 않는다</b> — 질주(Sprinting)는
-    /// <c>NpcController.HandleFsmStateChanged</c>의 ClearRelease 예외 목록에 없어 진입하는 순간
-    /// 청탁 인도 목적지가 지워진다. 쓰러뜨리기는 반출의 무산 수단이 아니다(무산은 밧줄·재수감·사망,
-    /// #548). 도주로 돌려보내면 예외 목록의 Run에 걸려 목적지가 살아남고, 깨어난 뒤 인도 지점으로
-    /// 되돌아가는 기존 경로를 그대로 탄다.
     /// </summary>
     public void ResumeReaction(Transform threat)
     {
-        if (IsSprinter && !m_owner.Custody.HasReleaseDestination)
+        if (IsSprinter)
             StartSprint();
         else if (IsRelentless)
-            StartResist(threat, relentless: true); // 가드가 없는 이유: Attack은 ClearRelease 예외 목록에 있다
+            StartResist(threat, relentless: true);
         else
             StartFlee(threat);
     }

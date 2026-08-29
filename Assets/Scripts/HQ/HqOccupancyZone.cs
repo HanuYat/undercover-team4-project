@@ -23,9 +23,6 @@ public class HqOccupancyZone : MonoBehaviour
     // 무인이 된 시각(Time.time). 유인이면 의미 없음 — UnmannedSeconds가 0을 돌려준다
     private float m_unmannedSince;
 
-    /// <summary>현재 본부 구역 안의 플레이어 수.</summary>
-    public int OccupantCount => m_occupants.Count;
-
     /// <summary>본부가 무인인가 — 구역 안에 플레이어가 한 명도 없다.</summary>
     public bool IsUnmanned => m_occupants.Count == 0;
 

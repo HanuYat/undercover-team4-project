@@ -65,9 +65,6 @@ public class ShopOrderSlotView : MonoBehaviour
     private Color m_orderLabelColor = Color.white;
     private bool m_orderLabelColorCached;
 
-    /// <summary>이 칸이 그리고 있는 진열 칸 번호. 빈 칸이면 -1.</summary>
-    public int SlotIndex => m_slot;
-
     /// <summary>창이 1회 호출 — 소유 창을 연결하고 버튼을 건다.</summary>
     public void Setup(ShopBrowserPanel owner)
     {

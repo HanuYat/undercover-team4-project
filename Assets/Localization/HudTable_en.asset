@@ -150,15 +150,16 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 3338714365911040
-    m_Localized: "\u26A0 A street thug is after you"
+    m_Localized: "\u26A0 A street thug is after you \u2014 arrest and hand them in"
     m_Metadata:
       m_Items: []
   - m_Id: 3338714399465472
-    m_Localized: "\u26A0 A streaker is running loose"
+    m_Localized: "\u26A0 A streaker is running loose \u2014 arrest and hand them
+      in"
     m_Metadata:
       m_Items: []
   - m_Id: 3338714399465473
-    m_Localized: "\u26A0 Abductors have appeared"
+    m_Localized: "\u26A0 Abductors have appeared \u2014 arrest and hand them in"
     m_Metadata:
       m_Items: []
   - m_Id: 3338714399465474
@@ -167,7 +168,8 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 3338714399465475
-    m_Localized: "\u26A0 The inmates have escaped"
+    m_Localized: "\u26A0 The inmates have escaped \u2014 the intruder is also subject
+      to arrest"
     m_Metadata:
       m_Items: []
   - m_Id: 4406443574198272
@@ -458,7 +460,8 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 7296109215571968
-    m_Localized: "\u26A0 Faction members want revenge"
+    m_Localized: "\u26A0 Faction members want revenge \u2014 arrest and hand them
+      in"
     m_Metadata:
       m_Items: []
   - m_Id: 7318329074192384

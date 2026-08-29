@@ -80,6 +80,10 @@ public class ScanResultPresenter : NetworkBehaviour
     // 이 플레이어가 스캔 완료한 NPC의 NetworkObjectId. 오너 로컬 전용(동기화 없음). (#233)
     private readonly HashSet<ulong> m_scannedNpcIds = new HashSet<ulong>();
 
+    /// <summary>이 플레이어가 이미 스캔한 NPC인가 — 스캐너가 중복 사용을 막는 데 쓴다.
+    /// 카드 표시와 같은 집합을 보므로 "실제값이 보이는데 또 스캔되는" 어긋남이 생기지 않는다.</summary>
+    public bool HasScanned(ulong npcNetworkObjectId) => m_scannedNpcIds.Contains(npcNetworkObjectId);
+
     // 지금 조준해서 표시 중인 NPC의 카드/신원. 조준이 바뀌면 교체된다.
     private ScanInfoView m_currentView;
     private CitizenIdentity m_currentIdentity;

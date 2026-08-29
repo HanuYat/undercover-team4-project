@@ -29,7 +29,6 @@ public class NpcProfileDebugViewEditor : Editor
 
         // 역할
         string role = report.IsCriminal ? "범인" : "일반/디코이";
-        if (report.IsForger) role += " · 위조범";
         EditorGUILayout.LabelField("역할(서버 전용)", role);
 
         // 화면 외형 vs 정답 외형

@@ -363,7 +363,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScanInfoView
   m_billboard: 1
-  m_proneOffset: {x: 0.1, y: 0.72, z: -0.4}
+  m_proneOffset: {x: 0.1, y: 1.1, z: -0.4}
   m_background: {fileID: 8689992301925735358}
   m_maskedColor: {r: 0, g: 0, b: 0, a: 1}
   m_scannedColor: {r: 0, g: 0.05, b: 0.08, a: 0.72}

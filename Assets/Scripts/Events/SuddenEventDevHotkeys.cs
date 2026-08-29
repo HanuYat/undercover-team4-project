@@ -4,7 +4,7 @@ using UnityEngine.InputSystem;
 /// <summary>
 /// 돌발 이벤트 개발자 단축키 — <b>에디터 전용</b>. 추첨을 기다리지 않고 F1~F12로 즉시 발동시킨다.
 ///
-/// <b>F9는 비워 둔다</b> — <see cref="SecretFavorBroker"/>의 청탁 발행 키다(팀 확정 2026-08-13).
+/// <b>F9는 비어 있다</b> — 청탁 발행 키였고, 청탁이 사라지면서 주인이 없어졌다.
 /// 그래서 열둘 중 열하나만 쓰고, F10부터는 인덱스가 하나씩 앞당겨진다 (F8=8번째, F10=9번째).
 ///
 /// 순서 기준은 <see cref="SuddenEventManager"/>의 <b>인스펙터 이벤트 풀</b>이다. 꺼 둔 항목은 풀에
@@ -13,7 +13,7 @@ using UnityEngine.InputSystem;
 ///
 /// 발동은 <see cref="SuddenEventManager.ForceTrigger"/>가 하므로 <b>서버(또는 오프라인)에서만</b>
 /// 듣는다. MPPM 클론에서 눌러도 아무 일도 일어나지 않는다 — 키 입력은 로컬이고 발생은 서버 판정이라,
-/// SecretFavorBroker의 개발용 키와 같은 규칙이다.
+/// 개발용 키는 모두 같은 규칙을 따른다.
 ///
 /// 이미 진행 중이거나 조건(CanTrigger)이 안 맞는 이벤트는 무시되고 그 이유가 콘솔에 남는다.
 /// </summary>
@@ -21,7 +21,7 @@ using UnityEngine.InputSystem;
 public class SuddenEventDevHotkeys : MonoBehaviour
 {
 #if UNITY_EDITOR
-    // 순서가 곧 이벤트 풀 인덱스다. F9는 청탁(SecretFavorBroker) 몫이라 목록에서 빠져 있다.
+    // 순서가 곧 이벤트 풀 인덱스다. F9는 청탁 몫이었던 자리라 목록에서 빠져 있다.
     private static readonly Key[] k_keys =
     {
         Key.F1, Key.F2, Key.F3, Key.F4, Key.F5, Key.F6, Key.F7, Key.F8,

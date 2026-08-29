@@ -100,7 +100,44 @@ public class Scanner : ItemBase
             return false;
 
         CitizenIdentity identity = aimTarget.GetComponentInParent<CitizenIdentity>();
-        return identity != null && identity.Profile != null;
+        if (identity == null || identity.Profile == null)
+            return false;
+
+        return !IsAlreadyScanned(identity);
+    }
+
+    // 스캔 기록을 들고 있는 프레젠터 — 플레이어 루트가 아니라 그 밑 Canvas에 붙어 있어서
+    // GetComponentInParent로는 잡히지 않는다. 홀더를 거쳐 찾고, 손이 바뀌면 다시 찾는다.
+    private PlayerInteractor m_scanLogHolder;
+    private ScanResultPresenter m_scanLog;
+
+    private ScanResultPresenter ScanLog
+    {
+        get
+        {
+            PlayerInteractor holder = Holder;
+            if (holder == null)
+                return null;
+            if (holder != m_scanLogHolder)
+            {
+                m_scanLogHolder = holder;
+                m_scanLog = holder.GetComponentInChildren<ScanResultPresenter>(true);
+            }
+            return m_scanLog;
+        }
+    }
+
+    /// <summary>이 플레이어가 이미 스캔한 대상인가 — 중복 스캔을 막는다.
+    /// 기록은 스캔 결과와 같은 곳(<see cref="ScanResultPresenter"/>, 오너 로컬)에서 읽는다.
+    /// 프레젠터가 없는 구성(테스트 씬 등)에서는 막지 않는다 — 종전대로 동작한다.</summary>
+    private bool IsAlreadyScanned(CitizenIdentity identity)
+    {
+        ScanResultPresenter log = ScanLog;
+        if (log == null)
+            return false;
+
+        NetworkObject npcObject = identity.GetComponentInParent<NetworkObject>();
+        return npcObject != null && log.HasScanned(npcObject.NetworkObjectId);
     }
 
     // 조준 안내 (#664). 배터리 방전·정전·스캔 중은 위 CanTarget이 걸러 안내도 함께 사라진다.
@@ -122,6 +159,16 @@ public class Scanner : ItemBase
                 OnDepletedUseAttempt?.Invoke();
             }
 
+            return;
+        }
+
+        // 이미 스캔한 대상 — 배터리를 태우지 않고 여기서 끊는다. CanTarget이 이미 윤곽선·크로스헤어를
+        // 껐지만 좌클릭 자체는 조준 대상과 무관하게 들어오므로 사용 경로에도 같은 게이트가 필요하다.
+        CitizenIdentity aimed =
+            target != null ? target.GetComponentInParent<CitizenIdentity>() : null;
+        if (aimed != null && IsAlreadyScanned(aimed))
+        {
+            NotifyOwner("이미 스캔한 대상", toast: true);
             return;
         }
 

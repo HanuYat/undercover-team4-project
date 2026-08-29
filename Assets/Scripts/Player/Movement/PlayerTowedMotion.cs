@@ -97,9 +97,6 @@ public class PlayerTowedMotion : MonoBehaviour
     /// <summary>지금 남에게 옮겨지는 중인가 — 참이면 입력 이동 대신 <see cref="Tick"/>이 돈다.</summary>
     public bool IsActive => m_escorted || m_dragCarrierCount > 0;
 
-    /// <summary>운반되어 끌려가는 중인지 — 오너 로컬 판정. (#365)</summary>
-    public bool IsDraggedFollowing => m_dragCarrierCount > 0;
-
     private void Awake()
     {
         m_movement = GetComponent<PlayerMovement>();

@@ -795,10 +795,6 @@ public partial class NpcRagdoll : MonoBehaviour
 
     private bool HasGroundUnderHips() => TryGroundUnder(m_rig.Hips.position, out _);
 
-    // 지면을 못 찾으면 골반 높이를 그대로 쓴다.
-    private Vector3 GroundUnder(Vector3 hipsPosition)
-        => TryGroundUnder(hipsPosition, out Vector3 point) ? point : hipsPosition;
-
     // 골반 밑 지면 탐색 — 정착 자격 판정과 정착 정렬이 <b>같은 것</b>을 써야 한다(다르면 그 차이가
     // 얼리는 순간 낙차로 남는다). 탐색 거리를 짧게 잡을 것 — 근거는 m_groundProbeDistance 툴팁.
     private bool TryGroundUnder(Vector3 hipsPosition, out Vector3 point)

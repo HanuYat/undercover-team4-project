@@ -44,13 +44,6 @@ public class CitizenIdentity : NetworkBehaviour
     /// </summary>
     public bool IsCriminal { get; private set; }
 
-    /// <summary>
-    /// 위조범 여부 — 스캔 표시 정보(m_nameView 등)가 인명부 정본과 어긋나는 NPC. 위조 검거 판정(#320)의 기준.
-    /// IsCriminal과 동일하게 서버 전용이며 동기화하지 않는다 (클라이언트에서는 항상 false).
-    /// 진범과 독립 배정되어 겹칠 수 있고, 판정 시 진범(IsCriminal)이 우선한다.
-    /// </summary>
-    public bool IsForger { get; private set; }
-
     /// <summary>외형 특징 조합(#74) — 몽타주 부합 판정의 기준. AppearanceAssigner가 채워준다. 서버 전용.</summary>
     public AppearanceProfile Appearance { get; private set; } = AppearanceProfile.Unassigned;
 
@@ -170,12 +163,6 @@ public class CitizenIdentity : NetworkBehaviour
     public void AssignAppearance(AppearanceProfile appearance)
     {
         Appearance = appearance;
-    }
-
-    /// <summary>위조범 여부를 배정한다. CriminalAssigner 전용. (서버 전용 — 동기화 없음, #320)</summary>
-    public void AssignForgery(bool isForger)
-    {
-        IsForger = isForger;
     }
 
     /// <summary>

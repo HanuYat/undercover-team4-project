@@ -155,15 +155,18 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 3338714365911040
-    m_Localized: "\u26A0 \uB3D9\uB124 \uAE61\uD328\uAC00 \uB098\uD0C0\uB0AC\uC2B5\uB2C8\uB2E4"
+    m_Localized: "\u26A0 \uB3D9\uB124 \uAE61\uD328\uAC00 \uB098\uD0C0\uB0AC\uC2B5\uB2C8\uB2E4
+      \u2014 \uAC80\uAC70\uD574 \uC720\uCE58\uC7A5\uC5D0 \uC778\uACC4\uD558\uC138\uC694"
     m_Metadata:
       m_Items: []
   - m_Id: 3338714399465472
-    m_Localized: "\u26A0 \uACF5\uC5F0\uC74C\uB780\uBC94\uC774 \uB098\uD0C0\uB0AC\uC2B5\uB2C8\uB2E4"
+    m_Localized: "\u26A0 \uACF5\uC5F0\uC74C\uB780\uBC94\uC774 \uB098\uD0C0\uB0AC\uC2B5\uB2C8\uB2E4
+      \u2014 \uAC80\uAC70\uD574 \uC720\uCE58\uC7A5\uC5D0 \uC778\uACC4\uD558\uC138\uC694"
     m_Metadata:
       m_Items: []
   - m_Id: 3338714399465473
-    m_Localized: "\u26A0 \uB0A9\uCE58\uBC94\uC774 \uB098\uD0C0\uB0AC\uC2B5\uB2C8\uB2E4"
+    m_Localized: "\u26A0 \uB0A9\uCE58\uBC94\uC774 \uB098\uD0C0\uB0AC\uC2B5\uB2C8\uB2E4
+      \u2014 \uAC80\uAC70\uD574 \uC720\uCE58\uC7A5\uC5D0 \uC778\uACC4\uD558\uC138\uC694"
     m_Metadata:
       m_Items: []
   - m_Id: 3338714399465474
@@ -173,7 +176,8 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 3338714399465475
-    m_Localized: "\u26A0 \uBC94\uC778\uB4E4\uC774 \uD0C8\uC625\uC5D0 \uC131\uACF5\uD558\uC600\uC2B5\uB2C8\uB2E4"
+    m_Localized: "\u26A0 \uBC94\uC778\uB4E4\uC774 \uD0C8\uC625\uC5D0 \uC131\uACF5\uD558\uC600\uC2B5\uB2C8\uB2E4
+      \u2014 \uCE68\uC785\uC790\uB3C4 \uAC80\uAC70 \uB300\uC0C1\uC785\uB2C8\uB2E4"
     m_Metadata:
       m_Items: []
   - m_Id: 4406443574198272
@@ -472,15 +476,16 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 8399387659689986
-    m_Localized: "반경 {0}m 내에 있음"
+    m_Localized: "\uBC18\uACBD {0}m \uB0B4\uC5D0 \uC788\uC74C"
     m_Metadata:
       m_Items: []
   - m_Id: 8399387659689987
-    m_Localized: "반경 {0}m 내에 없음"
+    m_Localized: "\uBC18\uACBD {0}m \uB0B4\uC5D0 \uC5C6\uC74C"
     m_Metadata:
       m_Items: []
   - m_Id: 7296109215571968
-    m_Localized: "\u26A0 \uC138\uB825\uC6D0\uB4E4\uC774 \uBCF5\uC218\uB97C \uC6D0\uD569\uB2C8\uB2E4"
+    m_Localized: "\u26A0 \uC138\uB825\uC6D0\uB4E4\uC774 \uBCF5\uC218\uB97C \uC6D0\uD569\uB2C8\uB2E4
+      \u2014 \uAC80\uAC70\uD574 \uC720\uCE58\uC7A5\uC5D0 \uC778\uACC4\uD558\uC138\uC694"
     m_Metadata:
       m_Items: []
   - m_Id: 7318329074192384
