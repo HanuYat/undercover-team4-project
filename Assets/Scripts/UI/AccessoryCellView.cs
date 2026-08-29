@@ -29,7 +29,13 @@ public class AccessoryCellView : MonoBehaviour
     [Tooltip("잠긴 칸의 아이콘 투명도")]
     [SerializeField] private float m_lockedAlpha = 0.3f;
 
+    [Tooltip("다른 치장에 가려진 칸의 아이콘 투명도 — 잠김보다 옅게 흐리지 않는다 (#932)")]
+    [SerializeField] private float m_hiddenAlpha = 0.55f;
+
     private Button m_button;
+
+    private bool m_locked;
+    private bool m_hidden;
 
     private void Awake() => m_button = GetComponent<Button>();
 
@@ -73,19 +79,39 @@ public class AccessoryCellView : MonoBehaviour
     /// </summary>
     public void SetLocked(bool locked)
     {
+        m_locked = locked;
+        Apply();
+    }
+
+    /// <summary>
+    /// 다른 치장에 가려지는 칸으로 만든다 (#932) — 전면 헬멧 밑의 머리카락 같은 자리다.
+    ///
+    /// <b>잠김과 다르다.</b> 자물쇠를 켜지 않고 버튼도 끄지 않는다 — 헬멧 밑에 쓸 머리를 미리
+    /// 골라 두는 것은 정상 조작이고, 벗으면 그대로 나온다(#818, AccessoryCatalog.HiddenSlots).
+    /// 흐림은 "지금 화면에 안 보인다"는 신호일 뿐이다.
+    /// </summary>
+    public void SetHidden(bool hidden)
+    {
+        m_hidden = hidden;
+        Apply();
+    }
+
+    // 잠김이 가려짐을 이긴다 — 버튼을 끄는 쪽이 강한 상태다. 둘 다면 자물쇠와 잠김 투명도가 남는다.
+    private void Apply()
+    {
         if (m_lockMark != null)
-            m_lockMark.SetActive(locked);
+            m_lockMark.SetActive(m_locked);
 
         if (m_icon != null)
         {
             Color color = m_icon.color;
-            color.a = locked ? m_lockedAlpha : 1f;
+            color.a = m_locked ? m_lockedAlpha : (m_hidden ? m_hiddenAlpha : 1f);
             m_icon.color = color;
         }
 
         if (m_button == null)
             m_button = GetComponent<Button>();
 
-        m_button.interactable = !locked;
+        m_button.interactable = !m_locked;
     }
 }

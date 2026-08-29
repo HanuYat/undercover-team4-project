@@ -46,6 +46,7 @@ public class AccessoryPickerView : MonoBehaviour
 
         RefreshLocks();
         RefreshSelection();
+        RefreshHidden();
     }
 
     private void OnDisable()
@@ -73,12 +74,17 @@ public class AccessoryPickerView : MonoBehaviour
 
         RefreshLocks();
         RefreshSelection();
+        RefreshHidden();
     }
 
+    // 다른 슬롯이 바뀌어도 다시 그린다 — 헬멧을 쓰면 머리카락 줄이 가려지기 때문이다 (#932).
+    // 자기 슬롯일 때만 선택 표시를 갱신하는 것은 종전과 같다.
     private void HandleAccessoryChanged(EAccessorySlot slot)
     {
         if (slot == m_slot)
             RefreshSelection();
+
+        RefreshHidden();
     }
 
     private void RefreshLabels()
@@ -100,5 +106,18 @@ public class AccessoryPickerView : MonoBehaviour
 
         for (int i = 0; i < m_cells.Count; i++)
             m_cells[i].SetSelected(i == selected);
+    }
+
+    // 이 슬롯이 다른 치장에 가려지면 줄 전체를 흐린다 (#932) — 고른 것이 화면에 안 나오는데
+    // 칸은 멀쩡해 보여서 "안 눌렸나" 하고 계속 누르게 되던 자리다. 고르는 것 자체는 막지 않는다.
+    private void RefreshHidden()
+    {
+        bool hidden = AccessoryCatalog.IsHidden(
+            m_catalog.HiddenSlots(AccessorySet.FromSettings()),
+            m_slot
+        );
+
+        for (int i = 0; i < m_cells.Count; i++)
+            m_cells[i].SetHidden(hidden);
     }
 }
