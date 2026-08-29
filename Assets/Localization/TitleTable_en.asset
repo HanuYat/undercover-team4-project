@@ -60,7 +60,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 6994091118604
-    m_Localized: Password (8+ chars, upper/lower case, number, symbol)
+    m_Localized: Password (8+ chars, lowercase, digit, symbol)
     m_Metadata:
       m_Items: []
   - m_Id: 6994091118607
@@ -304,6 +304,19 @@ MonoBehaviour:
   - m_Id: 9091959062167552
     m_Localized: Passwords need at least one lowercase letter, one digit, and one
       symbol.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 9100017821712384
+    m_Localized: 'This will create a new account with the ID ''{0}''.
+
+      You''ll
+      be signed out of ''{1}'', but its progress stays with that account.
+
+      Sign
+      in with ''{1}'' to come back.
+
+      The new ID can''t be changed afterwards,
+      either.'
     m_Metadata:
       m_Items: []
   references:

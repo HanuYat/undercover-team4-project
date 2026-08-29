@@ -90,6 +90,10 @@ public class AuthGatePanel : PanelBase
     private const string k_statusPrefix = "Title.AuthStatus.";
     private const string k_linkConfirmKey = "Title.Auth.LinkConfirm";
 
+    // 이미 아이디가 붙어 있을 때의 확인 문구 — 회원가입이 '부계정 만들기'가 되므로 경고가 달라진다.
+    // 지금 계정에서 로그아웃된다는 것과, 그 아이디로 돌아올 수 있다는 것을 함께 알린다.
+    private const string k_linkConfirmSwitchKey = "Title.Auth.LinkConfirmSwitch";
+
     // 요청 겹침 방지 래치 — 세 버튼이 모두 같은 AuthBootstrap을 건드린다
     private bool m_isBusy;
 
@@ -329,10 +333,13 @@ public class AuthGatePanel : PanelBase
 
         // 확정된 값을 인수로 넘긴다 — 확인창이 떠 있는 동안 입력이 바뀌어도
         // 사용자가 재확인한 그 아이디가 전송된다.
-        confirm.Prepare(
-            LocalizedStrings.Get(k_table, k_linkConfirmKey, id),
-            () => SignUpAsync(id, pw).Forget()
-        );
+        // 이미 연동돼 있으면 이 가입은 '부계정 만들기'라 경고가 달라진다 (AuthBootstrap.LinkAccountAsync).
+        string previous = Auth.AccountUsername;
+        string message = string.IsNullOrEmpty(previous)
+            ? LocalizedStrings.Get(k_table, k_linkConfirmKey, id)
+            : LocalizedStrings.Get(k_table, k_linkConfirmSwitchKey, id, previous);
+
+        confirm.Prepare(message, () => SignUpAsync(id, pw).Forget());
         confirm.OpenPanel();
     }
 
