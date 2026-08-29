@@ -119,10 +119,6 @@ MonoBehaviour:
     m_Key: Title.AccountValidation.PasswordCharset
     m_Metadata:
       m_Items: []
-  - m_Id: 10788103327756
-    m_Key: Title.AccountValidation.PasswordComposition
-    m_Metadata:
-      m_Items: []
   - m_Id: 10788103327757
     m_Key: Title.AccountError.UsernameTaken
     m_Metadata:
@@ -269,6 +265,10 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 5871219967258624
     m_Key: Title.Tutorial.Offer
+    m_Metadata:
+      m_Items: []
+  - m_Id: 9091959062167552
+    m_Key: Title.AccountValidation.PasswordComposition
     m_Metadata:
       m_Items: []
   m_Metadata:

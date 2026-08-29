@@ -129,11 +129,6 @@ MonoBehaviour:
     m_Localized: Passwords can only use letters, digits, and symbols.
     m_Metadata:
       m_Items: []
-  - m_Id: 10788103327756
-    m_Localized: Passwords need at least one uppercase letter, one lowercase letter,
-      one digit, and one symbol.
-    m_Metadata:
-      m_Items: []
   - m_Id: 10788103327757
     m_Localized: That ID is already taken. Try another one.
     m_Metadata:
@@ -304,6 +299,11 @@ MonoBehaviour:
 
       Would you like to run the tutorial and
       learn the controls and the investigation flow?'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 9091959062167552
+    m_Localized: Passwords need at least one lowercase letter, one digit, and one
+      symbol.
     m_Metadata:
       m_Items: []
   references:

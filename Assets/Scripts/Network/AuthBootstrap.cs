@@ -368,7 +368,11 @@ public class AuthBootstrap : CommonManagerBase
 
         ThrowIfInvalid(AccountCredentials.Validate(id, pw));
 
-        await AuthenticationService.Instance.AddUsernamePasswordAsync(id, pw);
+        // 조합 규칙은 보낼 때 채운다 — 사용자에게 대문자를 요구하지 않기 위해서다 (AccountCredentials).
+        await AuthenticationService.Instance.AddUsernamePasswordAsync(
+            id,
+            AccountCredentials.ToProviderPassword(pw)
+        );
 
         m_accountUsername = id;
         m_accountStateKnown = true;
@@ -418,7 +422,11 @@ public class AuthBootstrap : CommonManagerBase
 
         try
         {
-            await AuthenticationService.Instance.SignInWithUsernamePasswordAsync(id, pw);
+            // 가입과 같은 변환을 거쳐야 같은 값이 간다 (AccountCredentials.ToProviderPassword).
+            await AuthenticationService.Instance.SignInWithUsernamePasswordAsync(
+                id,
+                AccountCredentials.ToProviderPassword(pw)
+            );
             await AuthenticationService.Instance.GetPlayerNameAsync(); // 이걸 빼면 Nickname이 빈 문자열
         }
         catch
