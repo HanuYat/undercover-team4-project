@@ -318,6 +318,10 @@ MonoBehaviour:
       \uB2E4\uC2DC \uB85C\uADF8\uC778\uD558\uBA74 \uB429\uB2C8\uB2E4."
     m_Metadata:
       m_Items: []
+  - m_Id: 9100017821712385
+    m_Localized: "{0}\n\uC774 \uAE30\uAE30\uB294 \uC0C8 \uACC4\uC815\uC73C\uB85C \uC804\uD658\uB410\uC2B5\uB2C8\uB2E4 \u2014 '{1}' \uC544\uC774\uB514\uB85C \uB2E4\uC2DC \uB85C\uADF8\uC778\uD558\uC138\uC694."
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

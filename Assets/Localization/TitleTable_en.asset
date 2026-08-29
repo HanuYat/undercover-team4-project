@@ -313,6 +313,10 @@ MonoBehaviour:
       stays as it is - sign in with that ID to come back.'
     m_Metadata:
       m_Items: []
+  - m_Id: 9100017821712385
+    m_Localized: "{0}\nThis device switched to a new account - sign in with '{1}' to come back."
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

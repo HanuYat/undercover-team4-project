@@ -275,6 +275,10 @@ MonoBehaviour:
     m_Key: Title.Auth.LinkConfirmSwitch
     m_Metadata:
       m_Items: []
+  - m_Id: 9100017821712385
+    m_Key: Title.Account.SubAccountAborted
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
