@@ -37,7 +37,7 @@ public class AccessoryPickerView : MonoBehaviour
 
     private void OnEnable()
     {
-        GameSettings.OnAccessoryChanged += HandleAccessoryChanged;
+        CosmeticLoadout.OnAccessoryChanged += HandleAccessoryChanged;
         CosmeticNames.OnLanguageChanged += RefreshLabels;
         CosmeticInventory.OnOwnedChanged += RefreshLocks;
 
@@ -50,7 +50,7 @@ public class AccessoryPickerView : MonoBehaviour
 
     private void OnDisable()
     {
-        GameSettings.OnAccessoryChanged -= HandleAccessoryChanged;
+        CosmeticLoadout.OnAccessoryChanged -= HandleAccessoryChanged;
         CosmeticNames.OnLanguageChanged -= RefreshLabels;
         CosmeticInventory.OnOwnedChanged -= RefreshLocks;
     }
@@ -66,7 +66,7 @@ public class AccessoryPickerView : MonoBehaviour
             cell.Bind(
                 m_catalog.IconOf(m_slot, index),
                 CosmeticNames.Of(m_catalog.Get(m_slot, index)),
-                () => GameSettings.SetAccessory(m_slot, index)
+                () => CosmeticLoadout.SetAccessory(m_slot, index)
             );
             m_cells.Add(cell);
         }
@@ -96,7 +96,7 @@ public class AccessoryPickerView : MonoBehaviour
 
     private void RefreshSelection()
     {
-        int selected = GameSettings.GetAccessory(m_slot);
+        int selected = CosmeticLoadout.GetAccessory(m_slot);
 
         for (int i = 0; i < m_cells.Count; i++)
             m_cells[i].SetSelected(i == selected);

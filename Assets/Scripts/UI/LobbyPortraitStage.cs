@@ -195,15 +195,15 @@ public class LobbyPortraitStage : MonoBehaviour
     // 내 색이 바뀌면 세션용 얼굴을 다시 챙긴다 — 게임 씬 상황판이 예전 색을 들고 가지 않게 (#432)
     private void OnEnable()
     {
-        GameSettings.OnPlayerColorChanged += HandleOwnColorChanged;
-        GameSettings.OnAccessoryChanged += HandleOwnAccessoryChanged;
+        CosmeticLoadout.OnPlayerColorChanged += HandleOwnColorChanged;
+        CosmeticLoadout.OnAccessoryChanged += HandleOwnAccessoryChanged;
         TryBindRoster();
     }
 
     private void OnDisable()
     {
-        GameSettings.OnPlayerColorChanged -= HandleOwnColorChanged;
-        GameSettings.OnAccessoryChanged -= HandleOwnAccessoryChanged;
+        CosmeticLoadout.OnPlayerColorChanged -= HandleOwnColorChanged;
+        CosmeticLoadout.OnAccessoryChanged -= HandleOwnAccessoryChanged;
         UnbindRoster();
     }
 

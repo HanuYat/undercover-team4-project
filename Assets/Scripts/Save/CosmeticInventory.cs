@@ -97,12 +97,12 @@ public static class CosmeticInventory
 
         foreach (EAccessorySlot slot in Enum.GetValues(typeof(EAccessorySlot)))
         {
-            int index = GameSettings.GetAccessory(slot);
+            int index = CosmeticLoadout.GetAccessory(slot);
             if (index <= 0 || IsOwned(catalog, slot, index))
                 continue;
 
             Debug.Log($"[치장] 가지지 않은 {slot} {index}번을 입고 있어 벗긴다 (#818 D)");
-            GameSettings.SetAccessory(slot, 0);
+            CosmeticLoadout.SetAccessory(slot, 0);
         }
     }
 

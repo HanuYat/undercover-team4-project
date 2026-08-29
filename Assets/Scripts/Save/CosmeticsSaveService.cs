@@ -46,6 +46,7 @@ public static class CosmeticsSaveService
         Apply(() =>
         {
             GameSettings.UseAccount(App.Net.Auth.PlayerId);
+            CosmeticLoadout.UseAccount(App.Net.Auth.PlayerId);
             CosmeticInventory.UseAccount(App.Net.Auth.PlayerId);
         });
 
@@ -59,8 +60,8 @@ public static class CosmeticsSaveService
 
         Apply(() =>
         {
-            GameSettings.ApplyPlayerColors(data.Colors);
-            GameSettings.ApplyAccessories(data.Accessories); // v1 레코드면 null — 그쪽에서 무시한다
+            CosmeticLoadout.ApplyPlayerColors(data.Colors);
+            CosmeticLoadout.ApplyAccessories(data.Accessories); // v1 레코드면 null — 그쪽에서 무시한다
 
             // v2 이하 레코드는 보유함이 없다 — 빈 보유함으로 두면 기본 지급 세트만 남고,
             // 자판기로 얻은 것이 있었다면 애초에 v3로 저장됐을 것이므로 잃는 것이 없다. (#818 D)
@@ -68,7 +69,7 @@ public static class CosmeticsSaveService
         });
     }
 
-    // GameSettings가 부위마다 변경 이벤트를 내므로, 그대로 두면 방금 받은 값을 되올린다.
+    // CosmeticLoadout이 부위마다 변경 이벤트를 내므로, 그대로 두면 방금 받은 값을 되올린다.
     private static void Apply(Action apply)
     {
         s_applying = true;
@@ -87,6 +88,7 @@ public static class CosmeticsSaveService
         Apply(() =>
         {
             GameSettings.UseAccount(null);
+            CosmeticLoadout.UseAccount(null);
             CosmeticInventory.UseAccount(null);
         });
 
@@ -97,8 +99,8 @@ public static class CosmeticsSaveService
             return;
 
         s_hooked = true;
-        GameSettings.OnPlayerColorChanged += HandleColorChanged;
-        GameSettings.OnAccessoryChanged += HandleAccessoryChanged;
+        CosmeticLoadout.OnPlayerColorChanged += HandleColorChanged;
+        CosmeticLoadout.OnAccessoryChanged += HandleAccessoryChanged;
         CosmeticInventory.OnOwnedChanged += HandleInventoryChanged;
         CosmeticInventory.OnTokensChanged += HandleInventoryChanged;
     }
@@ -145,12 +147,12 @@ public static class CosmeticsSaveService
         var parts = (EBodyPart[])Enum.GetValues(typeof(EBodyPart));
         var colors = new int[parts.Length];
         for (int i = 0; i < parts.Length; i++)
-            colors[(int)parts[i]] = GameSettings.GetPlayerColor(parts[i]);
+            colors[(int)parts[i]] = CosmeticLoadout.GetPlayerColor(parts[i]);
 
         var slots = (EAccessorySlot[])Enum.GetValues(typeof(EAccessorySlot));
         var accessories = new int[slots.Length];
         for (int i = 0; i < slots.Length; i++)
-            accessories[(int)slots[i]] = GameSettings.GetAccessory(slots[i]);
+            accessories[(int)slots[i]] = CosmeticLoadout.GetAccessory(slots[i]);
 
         return new CosmeticsSaveData
         {

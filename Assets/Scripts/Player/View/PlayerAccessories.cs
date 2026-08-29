@@ -50,7 +50,7 @@ public class PlayerAccessories : NetworkBehaviour
             // 안 가진 치장을 입고 있으면 여기서 벗긴다 — 명부에 담긴 값이 해금 이전 것일 수 있다 (#818 D)
             CosmeticInventory.SanitizeEquipped(m_catalog);
 
-            GameSettings.OnAccessoryChanged += HandleOwnerAccessoryChanged;
+            CosmeticLoadout.OnAccessoryChanged += HandleOwnerAccessoryChanged;
 
             // 안전망 — 명부 보고가 스폰을 앞지르지 못한 경합에서만 한 박자 늦게 고쳐진다.
             // 값이 같으면 NetworkVariable이 스스로 무시하므로 정상 경로에서는 대역폭을 먹지 않는다.
@@ -71,7 +71,7 @@ public class PlayerAccessories : NetworkBehaviour
         m_accessories.OnValueChanged -= HandleAccessoriesChanged;
 
         // 오너만 구독했지만 무조건 뗀다 — 아니면 죽은 로봇을 가리키는 static 구독이 쌓인다
-        GameSettings.OnAccessoryChanged -= HandleOwnerAccessoryChanged;
+        CosmeticLoadout.OnAccessoryChanged -= HandleOwnerAccessoryChanged;
     }
 
     /// <summary>

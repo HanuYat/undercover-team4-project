@@ -77,10 +77,10 @@ public class SessionRoster : NetworkedManagerBase
         GameSettings.OnMicMutedChanged += HandleMicMutedChanged;
 
         // 로봇 색도 같은 경로로 올린다 (#432)
-        GameSettings.OnPlayerColorChanged += HandlePlayerColorChanged;
+        CosmeticLoadout.OnPlayerColorChanged += HandlePlayerColorChanged;
 
         // 치장도 마찬가지다 (#818)
-        GameSettings.OnAccessoryChanged += HandleAccessoryChanged;
+        CosmeticLoadout.OnAccessoryChanged += HandleAccessoryChanged;
 
         // 자기 정보 보고. 호스트도 자기 행이 필요하므로 서버·클라 구분 없이 부른다.
         ReportSelfRpc(BuildSelf());
@@ -89,8 +89,8 @@ public class SessionRoster : NetworkedManagerBase
     public override void OnNetworkDespawn()
     {
         GameSettings.OnMicMutedChanged -= HandleMicMutedChanged;
-        GameSettings.OnPlayerColorChanged -= HandlePlayerColorChanged;
-        GameSettings.OnAccessoryChanged -= HandleAccessoryChanged;
+        CosmeticLoadout.OnPlayerColorChanged -= HandlePlayerColorChanged;
+        CosmeticLoadout.OnAccessoryChanged -= HandleAccessoryChanged;
 
         // 세션이 끝나 명부가 사라질 때 반드시 뗀다 — 죽은 객체를 가리키는 구독이 남는다.
         if (IsServer && NetworkManager != null)

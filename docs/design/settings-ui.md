@@ -83,8 +83,13 @@ settings.playerColor.<계정>.<부위>    ← 색만 로그인 전에도 계정 
 settings.windowMode / resolutionWidth / resolutionHeight   ← 기기 단위, 계정과 무관 (결정 (m))
 ```
 
-- 갈아타는 지점은 **하나뿐**이다 — `GameSettings.UseAccount(accountId)`. 로그인·로그아웃 훅이
-  `CosmeticsSaveService`에 있어 거기서 부른다(색 저장 예약을 막는 가드 안이라 그 자리가 안전하다).
+- 갈아타는 것을 **부르는 곳**은 하나뿐이다 — `CosmeticsSaveService`의 로그인·로그아웃 훅
+  (색 저장 예약을 막는 가드 안이라 그 자리가 안전하다). 거기서 계정 자리를 가진 셋을 나란히 부른다:
+  `GameSettings.UseAccount` · `CosmeticLoadout.UseAccount`(색·액세서리, #931) ·
+  `CosmeticInventory.UseAccount`(보유·토큰, #818).
+- **색·액세서리는 이 저장소에 없다 (#931).** 설정이 아니라 계정 단위 외형이라
+  [CosmeticLoadout](../../Assets/Scripts/Save/CosmeticLoadout.cs)이 따로 들고 있다 — 설계는
+  [player-color.md](player-color.md).
 - **언어는 여기 없다.** `PlayerPrefLocaleSelector`가 자기 키로 시작 시 복원한다 — 결정 (m) 참고.
 
 - **적용 방향은 한 방향뿐** — 슬라이더 → `GameSettings` → 각 싱크. 싱크가 설정값을 되쓰는 경로는 없다.

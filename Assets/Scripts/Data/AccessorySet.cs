@@ -67,7 +67,7 @@ public struct AccessorySet : INetworkSerializable, IEquatable<AccessorySet>
     {
         var set = new AccessorySet();
         foreach (EAccessorySlot slot in Enum.GetValues(typeof(EAccessorySlot)))
-            set[slot] = ToIndex(GameSettings.GetAccessory(slot));
+            set[slot] = ToIndex(CosmeticLoadout.GetAccessory(slot));
 
         return set;
     }

@@ -34,11 +34,6 @@ public static class GameSettings
     private const string k_windowModeKey = "settings.windowMode";
     private const string k_resolutionWidthKey = "settings.resolutionWidth";
     private const string k_resolutionHeightKey = "settings.resolutionHeight";
-    // settings.playerColor.<계정>.<부위> — 색은 기기 설정이 아니라 그 사람의 것이라 계정으로 가른다.
-    // 정본은 Cloud Save(CosmeticsSaveService)이고 여기 값은 캐시다. (#432 후속)
-    private const string k_playerColorKeyPrefix = "settings.playerColor.";
-    // settings.accessory.<계정>.<슬롯> — 색과 같은 자리 규칙이다. 정본은 Cloud Save, 여기는 캐시. (#818)
-    private const string k_accessoryKeyPrefix = "settings.accessory.";
 
     private const string k_settingPrefix = "settings.";
     private const string k_localAccount = "local"; // 로그인 전에 고른 값이 갈 자리
@@ -88,17 +83,6 @@ public static class GameSettings
     // match=height라 배율이 곧 세로 비율이다 — 480이면 0.44배가 되어 본문 26pt가 11.6px,
     // 자동 축소가 걸린 라벨은 그보다 더 작아져 읽을 수 없다. 720이면 17.3px로 읽힌다.
     private const int k_minResolutionHeight = 720;
-
-    // 팔레트 첫 색 — 여기서는 목록 길이를 모른다. 범위 밖 값은 읽는 쪽(PlayerColorPalette.Get)이 자른다. (#432)
-    private const int k_defaultPlayerColor = 0;
-
-    // 인덱스 = EBodyPart. 길이를 enum에서 얻는다 — 부위가 늘어도 여기서 터지지 않게
-    private static readonly int[] s_playerColors = new int[Enum.GetValues(typeof(EBodyPart)).Length];
-
-    // 인덱스 = EAccessorySlot. 0은 "안 씀"이라 기본값 자체가 안전한 상태다 (#818)
-    private static readonly int[] s_accessories = new int[Enum.GetValues(
-        typeof(EAccessorySlot)
-    ).Length];
 
     private static string s_account = k_localAccount;
 
@@ -385,29 +369,6 @@ public static class GameSettings
             _ => EWindowMode.Borderless,
         };
 
-    /// <summary>내 로봇 색이 바뀌었다 — 로비 로스터 보고·초상·팔레트 표시가 되읽는다. 인자는 바뀐 부위. (#432)</summary>
-    public static event Action<EBodyPart> OnPlayerColorChanged;
-
-    /// <summary>
-    /// 그 부위의 색 인덱스 (#432) — <see cref="PlayerColorPalette"/>의 몇 번째 색인지.
-    /// 순수 코스메틱이고, 값의 출처는 여기 하나다: 로비 명부와 게임 씬의 <c>PlayerCosmetics</c>가
-    /// 각자 자기 씬의 운반 수단으로 나르되 <b>읽는 값은 이것</b>이다 (음소거와 같은 구조, #430).
-    ///
-    /// 팔레트 길이를 여기서 모르므로 <b>자르지 않고</b> 그대로 담는다 — 팔레트를 아는 쪽이 자른다.
-    /// </summary>
-    public static int GetPlayerColor(EBodyPart part) => s_playerColors[(int)part];
-
-    public static void SetPlayerColor(EBodyPart part, int index)
-    {
-        int clamped = Mathf.Max(0, index);
-        if (s_playerColors[(int)part] == clamped)
-            return;
-
-        s_playerColors[(int)part] = clamped;
-        PlayerPrefs.SetInt(ColorKey(part), clamped);
-        OnPlayerColorChanged?.Invoke(part);
-    }
-
     /// <summary>
     /// 설정을 이 계정 것으로 갈아탄다 (#796 후속) — 로그인·로그아웃이 부른다.
     /// 비우면 로그인 전 자리로 돌아간다. <b>창모드·해상도는 따라오지 않는다</b> — 기기 단위다.
@@ -420,61 +381,6 @@ public static class GameSettings
 
         s_account = next;
         LoadAccountSettings();
-    }
-
-    /// <summary>클라우드에서 받은 한 벌을 적용한다 — 캐시에도 남긴다. (CosmeticsSaveService)</summary>
-    public static void ApplyPlayerColors(IReadOnlyList<int> colors)
-    {
-        if (colors == null)
-            return;
-
-        foreach (EBodyPart part in Enum.GetValues(typeof(EBodyPart)))
-        {
-            int index = (int)part;
-            if (index >= colors.Count)
-                continue;
-
-            int clamped = Mathf.Max(0, colors[index]);
-            s_playerColors[index] = clamped;
-            PlayerPrefs.SetInt(ColorKey(part), clamped);
-            OnPlayerColorChanged?.Invoke(part);
-        }
-    }
-
-    /// <summary>내 치장이 바뀌었다 — 로비 명부 보고·선택 칸이 되읽는다. 인자는 바뀐 슬롯. (#818)</summary>
-    public static event Action<EAccessorySlot> OnAccessoryChanged;
-
-    /// <summary>그 슬롯에 쓴 카탈로그 인덱스 — <b>0은 안 씀</b>. 카탈로그 길이는 여기서 모른다.</summary>
-    public static int GetAccessory(EAccessorySlot slot) => s_accessories[(int)slot];
-
-    public static void SetAccessory(EAccessorySlot slot, int index)
-    {
-        int clamped = Mathf.Max(0, index);
-        if (s_accessories[(int)slot] == clamped)
-            return;
-
-        s_accessories[(int)slot] = clamped;
-        PlayerPrefs.SetInt(AccessoryKey(slot), clamped);
-        OnAccessoryChanged?.Invoke(slot);
-    }
-
-    /// <summary>클라우드에서 받은 한 벌을 적용한다 — 캐시에도 남긴다. (CosmeticsSaveService)</summary>
-    public static void ApplyAccessories(IReadOnlyList<int> accessories)
-    {
-        if (accessories == null)
-            return;
-
-        foreach (EAccessorySlot slot in Enum.GetValues(typeof(EAccessorySlot)))
-        {
-            int index = (int)slot;
-            if (index >= accessories.Count)
-                continue;
-
-            int clamped = Mathf.Max(0, accessories[index]);
-            s_accessories[index] = clamped;
-            PlayerPrefs.SetInt(AccessoryKey(slot), clamped);
-            OnAccessoryChanged?.Invoke(slot);
-        }
     }
 
     /// <summary>
@@ -499,34 +405,6 @@ public static class GameSettings
         k_sfxVolumeName,
         k_voiceVolumeName,
     };
-
-    // 색만 로그인 전에도 계정 자리를 쓴다 — 이미 그 형식으로 저장돼 있어 굳이 바꾸지 않는다 (#432)
-    private static string ColorKey(EBodyPart part) =>
-        k_playerColorKeyPrefix + s_account + "." + part;
-
-    // 색과 같은 자리 규칙 — 계정별로 갈라 둔다 (#818)
-    private static string AccessoryKey(EAccessorySlot slot) =>
-        k_accessoryKeyPrefix + s_account + "." + slot;
-
-    // 캐시에서 전 부위를 다시 읽어 적용한다. 저장된 값이 없으면 팔레트 첫 색이다.
-    private static void LoadPlayerColors()
-    {
-        foreach (EBodyPart part in Enum.GetValues(typeof(EBodyPart)))
-        {
-            s_playerColors[(int)part] = PlayerPrefs.GetInt(ColorKey(part), k_defaultPlayerColor);
-            OnPlayerColorChanged?.Invoke(part);
-        }
-    }
-
-    // 캐시에서 전 슬롯을 다시 읽어 적용한다. 저장된 값이 없으면 0(안 씀)이다. (#818)
-    private static void LoadAccessories()
-    {
-        foreach (EAccessorySlot slot in Enum.GetValues(typeof(EAccessorySlot)))
-        {
-            s_accessories[(int)slot] = PlayerPrefs.GetInt(AccessoryKey(slot), 0);
-            OnAccessoryChanged?.Invoke(slot);
-        }
-    }
 
     /// <summary>
     /// 고를 수 있는 언어 목록 — 설정 창 드롭다운이 이 순서 그대로 항목을 만든다. (#374)
@@ -574,8 +452,6 @@ public static class GameSettings
         // 파괴된 UI를 깨운다. 씬 로드 전이라 이번 플레이의 구독자는 아직 붙지 않았다. (#430)
         OnMicMutedChanged = null;
         OnSfxVolumeChanged = null;
-        OnPlayerColorChanged = null;
-        OnAccessoryChanged = null;
 
         // 밑값부터 되돌린 뒤 읽는다 — LoadAccountSettings는 '저장값이 없으면 지금 값을 둔다'라서,
         // 도메인 리로드를 껐을 때 이전 플레이 값이 그대로 살아남는 것을 여기서 끊는다.
@@ -611,8 +487,6 @@ public static class GameSettings
         VoiceVolume = PlayerPrefs.GetFloat(DeviceKey(k_voiceVolumeName), s_voiceVolume);
         MicMuted = PlayerPrefs.GetInt(Key(k_micMutedName), s_micMuted ? 1 : 0) != 0;
         VSync = PlayerPrefs.GetInt(Key(k_vSyncName), s_vSync ? 1 : 0) != 0;
-        LoadPlayerColors();
-        LoadAccessories();
     }
 
     // 음량이 계정 자리에 저장되던 시절의 값을 기기 자리로 한 번 옮긴다.
@@ -676,9 +550,9 @@ public static class GameSettings
     }
 
     /// <summary>
-    /// 언어와 로봇 색을 뺀 전부를 기본값으로 되돌린다 — 설정 창의 [기본값 복원].
-    /// <b>로봇 색도 빼는 이유는 언어와 같다</b> — 감도·볼륨을 되돌리려다 자기 색이 지워지면
-    /// 되돌린 줄도 모르고 남의 색과 겹친다. 색은 로비 팔레트에서 언제든 다시 고른다. (#432)
+    /// 언어를 뺀 전부를 기본값으로 되돌린다 — 설정 창의 [기본값 복원].
+    /// 로봇 색·액세서리는 애초에 여기 없다(<see cref="CosmeticLoadout"/>, #931) — 감도·볼륨을
+    /// 되돌리려다 자기 치장이 지워지면 되돌린 줄도 모르고 남과 겹친다. (#432/#818)
     /// <b>언어는 포함하지 않는다</b> — 되돌릴 '기본 언어'가 시스템 로케일이라, 한국어로 쓰던 사람이
     /// 이 버튼을 누르면 메뉴 언어가 통째로 바뀐다. 감도·볼륨을 되돌리려다 화면을 못 읽게 되는 쪽이
     /// 잘못 조절한 값보다 나쁘고, 언어는 바로 위 드롭다운에서 되돌릴 수 있다. (#374)

@@ -32,7 +32,7 @@ Synty 로봇(`SM_Gen_Chr_Robot_01`)은 **스킨드 메시 1개·서브메시 1�
 색은 **팔레트 인덱스**로만 오간다 (`PlayerColorSet` = 3바이트). 팔레트(`PlayerColorPalette`)가 정본이라 대역폭이 작고, 범위 밖 값은 팔레트가 자르므로 어느 피어에서든 같은 색이 나온다.
 
 ```
-GameSettings.PlayerColor{Head,Torso,Legs}   ← 값의 출처 (PlayerPrefs, 로컬)
+CosmeticLoadout.GetPlayerColor(EBodyPart)   ← 값의 출처 (PlayerPrefs 캐시 · 정본은 Cloud Save)
         │
         ├─ 로비: SessionRoster (LobbyPlayerEntry.Colors) → 명단 카드 얼굴
         └─ 게임 씬: PlayerCosmetics (오너 쓰기 NetworkVariable) → 몸·시체·1인칭 팔
@@ -42,6 +42,11 @@ GameSettings.PlayerColor{Head,Torso,Legs}   ← 값의 출처 (PlayerPrefs, 로�
 
 - **팔레트 순서를 배포 후 중간에 바꾸지 말 것.** 인덱스가 곧 저장·동기화 값이라 뒤 항목이 밀리면 예전에 고른 색이 달라진다. 추가는 항상 끝에.
 - 서버는 값을 검증하지 않는다 — 순수 코스메틱이라 틀린 값이 와도 자기 로봇 색만 이상해진다.
+
+> **저장소가 옮겨졌다 (2026-08-29, #931).** 값의 출처가 `GameSettings`에서
+> [CosmeticLoadout](../../Assets/Scripts/Save/CosmeticLoadout.cs)으로 갈라져 나왔다 — 색·액세서리는
+> 로컬 설정이 아니라 계정 단위 외형이고, 소비자도 설정 창과 겹치지 않았다.
+> **PlayerPrefs 키(`settings.playerColor.<계정>.<부위>`)는 그대로**라 저장된 값은 이어진다.
 
 ## 4. 칠하기는 BodyTint 하나가 맡는다
 
