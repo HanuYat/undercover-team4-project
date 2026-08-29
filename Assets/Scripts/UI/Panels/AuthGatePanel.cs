@@ -352,6 +352,12 @@ public class AuthGatePanel : PanelBase
         Refresh();
         try
         {
+            // 승격시킬 익명 계정이 없으면 여기서 만든다 — 로그아웃하고 돌아온 자리에서도
+            // 회원가입이 그대로 되게 한다. 토큰이 남아 있으면 원래 PlayerId로 돌아오므로,
+            // 그 계정에 이미 아이디가 붙어 있으면 아래 Link가 부계정 경로로 간다.
+            if (!Auth.IsSignedIn)
+                await Auth.InitializeAndSignInAsync();
+
             await Auth.LinkAccountAsync(username, password);
             m_passwordInput.text = string.Empty;
             SetStatus(Status(EAuthStatus.LinkSucceeded));
@@ -428,9 +434,10 @@ public class AuthGatePanel : PanelBase
         m_signInButton.interactable = ready;
         m_guestButton.interactable = ready;
 
-        // 회원가입만 예외다 — 승격(LinkAccount)은 승격시킬 익명 계정이 있어야 성립한다.
-        // 로그아웃 상태에서는 [게스트로 시작]으로 익명 계정을 되찾은 뒤라야 누를 수 있다.
-        m_signUpButton.interactable = ready && signedIn;
+        // 회원가입도 다른 둘과 같이 푼다. 승격시킬 익명 계정이 없으면 SignUpAsync가 먼저 만든다 —
+        // 예전에는 여기서 signedIn까지 요구해, 로그아웃하고 관문으로 돌아오면 <b>회원가입만 회색</b>이
+        // 됐다. [게스트로 시작]을 먼저 눌러야 풀린다는 것을 화면 어디에서도 알 수 없었다.
+        m_signUpButton.interactable = ready;
 
         m_usernameInput.interactable = ready;
         m_passwordInput.interactable = ready;
