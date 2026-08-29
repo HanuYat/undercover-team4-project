@@ -69,6 +69,14 @@ MonoBehaviour:
     m_Localized: Cyberpunk
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000902
+    m_Localized: "Verdict button"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000903
+    m_Localized: "JAIL\n{0} held"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:
@@ -77,5 +85,6 @@ MonoBehaviour:
       data:
         m_Entries: 
         m_SharedEntries:
+        - id: 7100000000903
         - id: 3135255941120
         - id: 3135310467073

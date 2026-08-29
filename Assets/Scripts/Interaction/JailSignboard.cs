@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 감옥 간판 — 컨테이너 위에 붙어 <b>여기가 감옥이라는 것</b>과 <b>지금 몇 명 들어 있는지</b>를 보여준다. (#537)
@@ -23,8 +24,8 @@ public class JailSignboard : MonoBehaviour
     [Header("표시 대상 (비우면 자신·자식에서 자동 탐색)")]
     [SerializeField] private TMP_Text m_label;
 
-    [Tooltip("표시 형식 — {0}에 현재 수감 인원이 들어간다")]
-    [SerializeField] private string m_format = "감 옥\n수감 {0}명";
+    [Tooltip("표시 형식 — WorldTable/World.Jail.Signboard ({0}에 현재 수감 인원이 들어간다)")]
+    [SerializeField] private LocalizedString m_format;
 
     private void Awake()
     {
@@ -45,25 +46,39 @@ public class JailSignboard : MonoBehaviour
     private void Start()
     {
         if (m_jailZone == null)
-        {
             Debug.LogWarning("JailSignboard: 감옥(JailZone)을 찾지 못했다", this);
-            Refresh(0);
-            return;
-        }
 
-        m_jailZone.OnInmateCountChanged += Refresh;
-        Refresh(m_jailZone.InmateCount); // 구독 전에 이미 들어와 있는 인원을 한 번 반영하고 시작한다
+        // 인자를 먼저 넣고 구독한다 — 순서가 뒤집히면 구독 시점의 첫 발화가 "{0}" 그대로 나간다
+        // (localization.md 결정 (e), SignalDecoder.ShowLocal과 같은 관례).
+        SetCount(m_jailZone != null ? m_jailZone.InmateCount : 0);
+
+        // StringChanged 구독은 즉시 1회 발화하므로 이것이 초기 표시를 겸한다. 간판은 라운드 내내
+        // 떠 있어 도중에 언어를 바꾸면 다시 그려야 하고, 그 갱신도 같은 구독으로 들어온다.
+        m_format.StringChanged += HandleStringChanged;
+
+        if (m_jailZone != null)
+            m_jailZone.OnInmateCountChanged += Refresh;
     }
 
     private void OnDestroy()
     {
         if (m_jailZone != null)
             m_jailZone.OnInmateCountChanged -= Refresh;
+
+        m_format.StringChanged -= HandleStringChanged;
     }
 
     private void Refresh(int count)
     {
+        SetCount(count);
+        m_format.RefreshString(); // 인원만 바뀌었으므로 지금 언어로 다시 조립한다
+    }
+
+    private void SetCount(int count) => m_format.Arguments = new object[] { count };
+
+    private void HandleStringChanged(string text)
+    {
         if (m_label != null)
-            m_label.text = string.Format(m_format, count);
+            m_label.text = text;
     }
 }

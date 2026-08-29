@@ -5982,7 +5982,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::JailSignboard
   m_jailZone: {fileID: 869465318949873049}
   m_label: {fileID: 6375776687978276095}
-  m_format: "\uAC10 \uC625\n\uC218\uAC10 {0}\uBA85"
+  m_format:
+    m_TableReference:
+      m_TableCollectionName: GUID:2482529739cee144e908dc2a2e78c2c6
+    m_TableEntryReference:
+      m_KeyId: 7100000000903
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
 --- !u!1 &5905007282589176576
 GameObject:
   m_ObjectHideFlags: 0
@@ -8773,6 +8781,7 @@ GameObject:
   - component: {fileID: 8767534119729381053}
   - component: {fileID: 1204810516129777400}
   - component: {fileID: 4988568783604730228}
+  - component: {fileID: 8109887608526639186}
   m_Layer: 0
   m_Name: Label
   m_TagString: Untagged
@@ -16869,3 +16878,43 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4901797596438614, guid: 0af7253adfe9a6c4ca7be0a1573f3c77, type: 3}
   m_PrefabInstance: {fileID: 9138144515162995700}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &8109887608526639186
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8109887608526639185}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 56eb0353ae6e5124bb35b17aff880f16, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Components.LocalizeStringEvent
+  m_StringReference:
+    m_TableReference:
+      m_TableCollectionName: GUID:2482529739cee144e908dc2a2e78c2c6
+    m_TableEntryReference:
+      m_KeyId: 7100000000902
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_FormatArguments: []
+  m_UpdateString:
+    m_PersistentCalls:
+      m_Calls:
+      - m_Target: {fileID: 1204810516129777400}
+        m_TargetAssemblyTypeName: TMPro.TextMeshPro, Unity.TextMeshPro
+        m_MethodName: set_text
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 1
+  references:
+    version: 2
+    RefIds: []
