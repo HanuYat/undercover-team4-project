@@ -307,16 +307,10 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 9100017821712384
-    m_Localized: 'This will create a new account with the ID ''{0}''.
+    m_Localized: 'This creates a new account with the ID ''{0}''.
 
-      You''ll
-      be signed out of ''{1}'', but its progress stays with that account.
-
-      Sign
-      in with ''{1}'' to come back.
-
-      The new ID can''t be changed afterwards,
-      either.'
+      ''{1}''
+      stays as it is - sign in with that ID to come back.'
     m_Metadata:
       m_Items: []
   references:
