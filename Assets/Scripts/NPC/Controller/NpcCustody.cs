@@ -30,7 +30,7 @@ public class NpcCustody : NetworkBehaviour
 
     // ---- 연행 (#59) ----
 
-    /// <summary>이 부품이 붙은 NPC 코어 — 부품 목록(<see cref="FindFollowersOf"/>)에서 코어로 되돌아갈 때 쓴다.</summary>
+    /// <summary>이 부품이 붙은 NPC 코어 — 부품에서 코어로 되돌아갈 때 쓴다.</summary>
     internal NpcController Owner => m_owner;
 
     /// <summary>연행 중 따라갈 대상(체포한 플레이어). 연행 중이 아니면 null. 서버에서만 유효.</summary>
@@ -155,7 +155,6 @@ public class NpcCustody : NetworkBehaviour
             return;
 
         SetEscortTarget(null); // 판정 시점에 연행은 이미 풀렸지만, 참조가 남아 있으면 여기서 끊는다
-        SetJailExtracted(false); // 반출했다 되돌린 대상 — 다시 수감됐으므로 표식을 끈다 (#517)
 
         // <b>기절을 푼다.</b> 검거는 무력화가 전제라(NpcStateRules.CanRopeBind) 수감되는 대상은 거의
         // 항상 기절 오버레이를 달고 들어오고, 밧줄에 묶인 동안은 그 타이머마저 멈춰 있다(#269).
@@ -270,56 +269,13 @@ public class NpcCustody : NetworkBehaviour
         }
     }
 
-    /// <summary>
-    /// 이 사람을 밧줄 없이 따라다니는 반출 수감자 전부 — 감옥 퇴장(<see cref="JailIntake"/>)이 동행을 찾는다.
-    /// 서버(또는 오프라인) 전용. (#537)
-    ///
-    /// 반출 표식(<see cref="IsJailExtracted"/>)을 함께 보는 이유: 연행 중인 일반 신병까지 문 밖으로
-    /// 딸려 나가면 안 된다. 감옥 안에서 따라다니는 것은 반출한 수감자뿐이다.
-    /// </summary>
-    public static List<NpcCustody> FindFollowersOf(Transform follower)
-    {
-        var found = new List<NpcCustody>();
-        if (follower == null)
-            return found;
-
-        // 코어가 아니라 부품을 훑는다 — 보는 값 둘(반출 표식·연행 대상)이 모두 이 부품 안에 있다 (#503)
-        NpcCustody[] custodies = FindObjectsByType<NpcCustody>(FindObjectsSortMode.None);
-        for (int i = 0; i < custodies.Length; i++)
-        {
-            NpcCustody custody = custodies[i];
-            if (custody != null && custody.IsJailExtracted && custody.EscortTarget == follower)
-                found.Add(custody);
-        }
-
-        return found;
-    }
-
     // ---- 반출 표식 (#517) ----
-
-    private bool m_jailExtracted;
-
-    // 동기화 플래그 — 서버만 기록한다.
-    // 클라도 읽어야 한다: E 조준 피드백(NpcSubdueInteractable.CanInteract)이 이 값으로 분기를 고른다.
-    private readonly NetworkVariable<bool> m_jailExtractedSynced = new(false);
-
-    /// <summary>
-    /// 감옥에서 반출돼(#492) 밧줄 없이 데려가는 중인 수감자인가 — 거리 이탈로 멈춰 서도(Captured) 유지된다.
-    /// 전 피어에서 유효. (#517)
-    ///
-    /// <b>왜 표식이 필요한가</b> — 멈추면 상태가 Captured가 되는데, 그것만으로는 "반출된 수감자"와
-    /// "방금 제압한 신병"을 구분할 수 없다. 구분이 없으면 E가 밧줄 끌기로 새서 반출 흐름으로 되돌릴
-    /// 입력이 사라진다. <see cref="IsDelivered"/>로는 못 가른다 — 문 앞 판정을 통과해 끌려가는 중인
-    /// 대상도 그 값이 참이다.
-    /// </summary>
-    public bool IsJailExtracted =>
-        IsSpawned && !IsServer ? m_jailExtractedSynced.Value : m_jailExtracted;
 
     /// <summary>
     /// <b>플레이어가 확보했던 대상인가</b> — 수감 버튼이 "끌고 온 신병"과 "그냥 거기 쓰러져 있던
     /// 대상"을 가르는 기준이다. 서버(또는 오프라인) 전용. (#637)
     ///
-    /// <see cref="IsJailExtracted"/>·<see cref="EscortTarget"/>으로는 못 가린다 — 밧줄을 완전히 풀어
+    /// <see cref="EscortTarget"/>으로는 못 가린다 — 밧줄을 완전히 풀어
     /// 문 앞에 세워 둔 신병은 둘 다 비어 있고 상태도 그냥 <c>Captured</c>라, 길에 쓰러진 대상과
     /// 구분되지 않는다. 그 조작(풀어 두고 누르기)을 살리려면 표식이 하나 더 필요했다.
     ///
@@ -345,7 +301,7 @@ public class NpcCustody : NetworkBehaviour
     /// <b>누가 확보했는지는 묻지 않는다</b> — 남이 끌고 온 신병을 대신 넣어 주는 협동이 설계에 있다
     /// (팀 확정 2026-08-06). 걸러내려는 것은 <b>아무도 손대지 않은</b> 대상이다.
     /// </summary>
-    public bool IsSecuredByAnyone => HasEscortTarget || IsJailExtracted || WasSecuredByPlayer;
+    public bool IsSecuredByAnyone => HasEscortTarget || WasSecuredByPlayer;
 
     /// <summary>확보 표식 지정 — 켜는 곳은 밧줄 묶임(<see cref="NpcRopeDrag"/>) 하나다. (#637)
     /// 끄는 곳은 커스터디 이탈(<see cref="NpcController"/>의 상태 훅) — 도주·배회로 돌아가면 남의 몸이다.
@@ -359,18 +315,6 @@ public class NpcCustody : NetworkBehaviour
         m_securedByPlayer = value;
         if (IsSpawned && IsServer)
             m_securedByPlayerSynced.Value = value;
-    }
-
-    /// <summary>반출 표식 지정 — 켜는 곳은 <see cref="JailIntake"/>의 반출 하나뿐이다. 서버(또는 오프라인). (#517)
-    /// 끄는 곳은 셋이다: 커스터디 이탈(재수감·도주·석방), 밧줄에 묶임, 그리고 여기 직접 호출.</summary>
-    public void SetJailExtracted(bool value)
-    {
-        if (IsSpawned && !IsServer)
-            return;
-
-        m_jailExtracted = value;
-        if (IsSpawned && IsServer)
-            m_jailExtractedSynced.Value = value;
     }
 
     // 수갑 소모·반환(#229)은 밧줄이 소모형이 아니게 되면서 통째로 제거됐다 — 밧줄 검거엔 회수할 자원이 없다. (#369)

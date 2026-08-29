@@ -12,9 +12,6 @@ public enum EEscortCommand
     RopeDrag = 0,
     RopeResume = 1,
     Unrope = 2,
-    JailRelease = 3,
-    EscortResume = 4,
-    EscortHalt = 5,
 }
 
 /// <summary>
@@ -143,19 +140,6 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     // 자체가 없어지면서 호출부가 사라졌고, 남겨두면 이 이슈가 없애기로 한 옛 동작이 실수로 다시
     // 연결될 수 있다. Escorter.ReleaseDrag는 그대로 남는다 — 풀기·인계 판정·라운드 종료 정리가 쓴다.
 
-    /// <summary>유치장 반출 요청 — 오너가 호출(앉은 수감자에 E). 밧줄을 쓰지 않으므로 용량 게이트를 타지 않는다. (#492)</summary>
-    public void RequestJailRelease(NpcController target) =>
-        SendCommand(EEscortCommand.JailRelease, target);
-
-    /// <summary>멈춘 수감자 추종 재개 요청 — 오너가 호출(거리 이탈로 멈춘 반출 수감자에 E).
-    /// 정지(<see cref="RequestEscortHalt"/>)의 역방향이다 — 밧줄을 쓰지 않으므로 용량 게이트를 타지 않는다. (#517)</summary>
-    public void RequestEscortResume(NpcController target) =>
-        SendCommand(EEscortCommand.EscortResume, target);
-
-    /// <summary>따라오는 수감자 정지 요청 — 오너가 호출(반출된 수감자에 E). 밧줄과 무관한 추종을 끊는다. (#492)</summary>
-    public void RequestEscortHalt(NpcController target) =>
-        SendCommand(EEscortCommand.EscortHalt, target);
-
     // 요청 6종이 공유하는 가드. 대상 지목 명령은 전부 이 경로 하나로 나간다 (#594).
     private void SendCommand(EEscortCommand cmd, NpcController target)
     {
@@ -221,15 +205,6 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
                 break;
             case EEscortCommand.Unrope:
                 ServerBeginUnrope(target);
-                break;
-            case EEscortCommand.JailRelease:
-                ServerJailRelease(target);
-                break;
-            case EEscortCommand.EscortResume:
-                ServerEscortResume(target);
-                break;
-            case EEscortCommand.EscortHalt:
-                ServerEscortHalt(target);
                 break;
             default:
                 // 범위 밖 값은 무시한다 — 버전이 어긋난 클라나 조작된 요청이다 (#594)
@@ -348,32 +323,17 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     ///    꺼내려면 반출 추종(E)을 쓴다. 훗날 수감자를 눕히는 용도가 필요해지면 그때 다시 연다.
     ///    좌표 판정이던 것을 상태로 바꿨다 (#537) — 감옥 안에 있는 밧줄 대상은 수감자뿐이라
     ///    상태가 더 정확하고, 조준 피드백이 매 프레임 부르는 경로라 위치 조회도 없앨 수 있다.
-    ///  · <b>반출돼 따라오는 중</b>(<see cref="NpcStateRules.IsFollowingUnroped"/>) — 반출을 밧줄로 보험
-    ///    들 수 없게 해 <b>데리고 나오는 구간에 긴장</b>을 남긴다. 거리를 관리하지 않으면 멈춰 서고
-    ///    (NpcEscortedState) 밖에 방치하면 달아난다(#517).
-    ///
-    ///  · <b>반출 표식이 살아 있는 동안</b>(<see cref="NpcCustody.IsJailExtracted"/>, #517) — 거리 이탈로
-    ///    멈춰 서면(<see cref="NpcState.Captured"/>) 방금 제압한 신병과 상태가 같아져 위 조건에서 빠지는데,
-    ///    그때 묶을 수 있으면 "E로 세운 뒤 묶기"라는 우회 하나로 위 긴장이 전부 사라진다. 표식을 함께 봐서
-    ///    <b>방출한 신병은 무조건</b> 밧줄로 다루지 않게 못박는다 (팀 확정 2026-08-05).
-    ///
-    /// ⚠ 그래서 <c>NpcRopeDrag.StartRopeDrag</c>의 표식 해제(밧줄에 묶이면 반출 흐름이 끝난다, #517)는
-    /// <b>이제 도달할 수 없는 경로</b>가 됐다 — 표식이 있는 동안 묶기가 전부 막히기 때문이다. 방어용으로
-    /// 남겨 두었고, 표식을 끄는 실제 경로는 커스터디 이탈(재착석·도주·석방)뿐이다.
-    ///
     /// <b>푸는 것은 막지 않는다.</b> 문 앞에 신병을 놓아두고 E로 넣는 조작이 정상 경로이므로(#537),
     /// 여기서 풀기까지 막으면 그 흐름이 끊긴다.
     ///
     /// <b>줄다리기 합류는 살아 있다</b> — 실제로 밧줄로 끌리는 중인 대상은 여기 걸리지 않는다. 상태만 보고
     /// <see cref="NpcState.Escorted"/> 전체를 막으면 한 대상에 두 번째 줄을 거는 유일한 경로가 사라져
-    /// 무게를 나눠 끄는 협동(#390/#398)이 통째로 죽는다. 그 둘을 가르는 것이 <c>IsFollowingUnroped</c>다.
+    /// 무게를 나눠 끄는 협동(#390/#398)이 통째로 죽는다.
     ///
     /// </summary>
     public static bool IsRopeBlocked(NpcController target) =>
         target != null
         && (target.CurrentState == NpcState.Jailed
-            || NpcStateRules.IsFollowingUnroped(target)
-            || target.Custody.IsJailExtracted
             // 일어나는 모션이 도는 중 — <b>재개까지 함께 막아야 한다.</b> (#572 후속)
             // 새로 묶기는 CanRopeBind가 이미 막지만 <b>재개는 그쪽을 아예 지나지 않아</b>
             // (CanResumeRopeDrag) 거기서만 막으면 줄을 풀고 일어나는 몸을 다시 묶어 눕히게 된다.
@@ -647,86 +607,6 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
 
     // 본부 인계 요청(#414)은 제거됐다 (#492) — 판정 트리거가 인계 단말에서 유치장 앞 보안 게이트로
     // 옮겨져 JailIntake가 직접 ArrestJudge.Judge를 부른다. 플레이어가 보낼 요청 자체가 없어졌다.
-
-    // ---- 서버 실행: 유치장 반출 (#492) ----
-
-    // 반출 실행 — 사거리만 확인하고 나머지(상태·좌석·정산)는 JailIntake가 판단한다.
-    // 유치장을 아는 것은 저쪽이고 여기는 요청 허브일 뿐이다.
-    private void ServerJailRelease(NpcController target)
-    {
-        if (IsSpawned && !IsServer)
-            return;
-
-        if (target == null || !IsInRange(target))
-            return;
-
-        // 감옥이 없는 씬에서는 null이다 — 아래에서 경고하고 끊는다 (#592).
-        JailIntake intake = App.Game.JailIntake;
-        if (intake == null)
-        {
-            Debug.LogWarning("PlayerEscortCommands: JailIntake가 없어 반출할 수 없다", this);
-            return;
-        }
-
-        intake.ServerExtract(target, transform);
-    }
-
-    // 추종 재개 실행 — 거리 이탈로 멈춘 반출 수감자를 다시 따라오게 한다. 서버(또는 오프라인). (#517)
-    //
-    // 밧줄을 걸지 않는다: 반출(JailIntake.ServerExtract)과 같은 방식으로 StartEscort만 부르면
-    // NpcEscortedState의 추종·속도 부스트·거리 이탈이 그대로 동작한다. 따라서 밧줄 소지·용량과 무관하다.
-    //
-    // 소유권을 묻지 않는다 — 정지(ServerEscortHalt)와 같은 취급이다. 남이 꺼낸 수감자를 대신
-    // 데려가는 것은 신병을 뺏는 행위가 아니라 이미 정산에서 빠진 대상을 도로 넣어 주는 협동이다.
-    private void ServerEscortResume(NpcController target)
-    {
-        if (IsSpawned && !IsServer)
-            return;
-
-        // 상태 + 반출 표식 — 방금 제압한 신병(같은 Captured)이 이리로 새면 밧줄 없이 끌려간다
-        if (!NpcStateRules.CanResumeUnropedEscort(target))
-            return;
-
-        if (!IsInRange(target))
-            return;
-
-        target.Custody.StartEscort(transform);
-        NotifyOwner($"수감자 추종 재개: {target.name}");
-    }
-
-    // 추종 정지 실행 — 밧줄 없이 따라오는 수감자를 그 자리에 세운다(Captured). 서버(또는 오프라인).
-    //
-    // <b>감옥 안에서 세우면 그 자리에서 다시 수감된다</b> (#517/#537) — 반출을 되돌리는 조작이다.
-    // 예전에는 JailIntake의 폴링이 "Captured + 유치장 안"을 보고 알아서 재착석시켰는데, 폴링이
-    // 사라져(#537) 되돌리는 순간을 여기서 명시적으로 넘긴다. 감옥 밖이면 그냥 선다.
-    //
-    // 소유권을 묻지 않는다: 남이 꺼낸 수감자도 세울 수 있다. 밧줄 놓기(Captured 대상 풀기)가
-    // 누구에게나 열려 있는 것과 같은 취급이고, 세우는 것은 신병을 뺏는 행위가 아니라 멈추는 행위다.
-    private void ServerEscortHalt(NpcController target)
-    {
-        if (IsSpawned && !IsServer)
-            return;
-
-        // 밧줄 끌기 중인 대상은 여기 못 온다 — 그쪽 E는 놓기/줄다리기 복귀로 이미 갈린다
-        if (!NpcStateRules.IsFollowingUnroped(target))
-            return;
-
-        if (!IsInRange(target))
-            return;
-
-        target.Custody.StopEscort();
-
-        // 감옥 안이면 재수감 — 아니면 아무 일도 없었던 것처럼 false를 돌려준다.
-        // 감옥이 없는 씬에서는 null이다 (#592).
-        JailIntake intake = App.Game.JailIntake;
-        if (intake != null && intake.ServerReturnToJail(target))
-        {
-            NotifyOwner($"재수감: {target.name}");
-            return;
-        }
-
-        NotifyOwner($"수감자 정지: {target.name}");
-    }
 
     // ---- 공통 ----
 

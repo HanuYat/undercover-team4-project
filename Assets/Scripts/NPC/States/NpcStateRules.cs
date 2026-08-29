@@ -5,7 +5,7 @@
 /// 상태별 '행동'은 NpcXxxState 클래스(FSM, 서버 전용), 상태별 '가능 여부'는 여기 — 역할 분리.
 /// 대부분은 동기화된 enum(NpcController.CurrentState)만 보는 순수 함수다 — 클라도 그것만 알기 때문.
 /// 상태 enum에 없는 것을 함께 봐야 하는 몇몇은 NpcController를 받는다: 무력화(<see cref="CanRopeBind"/>, #446),
-/// 밧줄 유무(<see cref="IsFollowingUnroped"/>), 반출 표식(<see cref="CanResumeUnropedEscort"/>, #517).
+/// 밧줄 유무·확보 표식으로 갈리는 판정도 함께 둔다.
 /// 그중 <see cref="StaysPutWhenFreed"/>만 위치(NavMesh 영역)까지 보므로 <b>서버(또는 오프라인) 전용</b>이다 (#526).
 /// </summary>
 public static class NpcStateRules
@@ -171,27 +171,6 @@ public static class NpcStateRules
     public static bool IsPlayingStandUp(NpcController npc) =>
         npc != null && (npc.Stun.IsRising || npc.StandUp.IsPlayingStandUp);
 
-    /// <summary>밧줄 없이 따라오는 수감자인가 — 유치장에서 반출돼 추종 중인 대상. (#492)
-    /// E를 누르면 그 자리에 세운다(Captured) — 유치장 안이면 JailIntake가 좌석에 다시 앉히고,
-    /// 밖이면 그냥 선다(팀 확정 2026-08-03 "위치로 갈린다").
-    ///
-    /// 상태 enum만으로는 못 가른다 — 밧줄 끌기도 같은 <see cref="NpcState.Escorted"/>다.
-    /// 그래서 <see cref="NpcRopeDrag.IsRoped"/>를 함께 본다(<see cref="CanRopeBind"/>와 같은 이유로
-    /// NpcController를 받는다). IsRoped는 동기화 값이라 클라 조준 피드백에서도 읽을 수 있다.</summary>
-    public static bool IsFollowingUnroped(NpcController npc) =>
-        npc != null && npc.CurrentState == NpcState.Escorted && !npc.Rope.IsRoped;
-
-    /// <summary>멈춰 선 반출 수감자인가 — E로 <b>밧줄 없는 추종</b>을 재개할 수 있는 대상. (#517)
-    /// 반출된 대상은 거리가 벌어지면 <see cref="NpcEscortedState"/>가 Captured로 되돌려 세우는데,
-    /// 상태만 보면 방금 제압한 신병과 구분되지 않아 E가 밧줄 끌기로 샜다 — 반출 흐름으로 되돌릴 입력이
-    /// 없어지는 것이 #517의 증상이다. 그래서 상태 대신 <see cref="NpcCustody.IsJailExtracted"/>를
-    /// 함께 본다(<see cref="CanRopeBind"/>·<see cref="IsFollowingUnroped"/>와 같은 이유로 NpcController를 받는다).
-    ///
-    /// 밧줄이 걸린 대상은 여기 오지 않는다 — 묶이는 순간 표식이 꺼져(NpcRopeDrag.StartRopeDrag)
-    /// E가 다시 밧줄 재개로 간다. 두 분기가 겹치지 않는 근거가 그것이다.</summary>
-    public static bool CanResumeUnropedEscort(NpcController npc) =>
-        npc != null && npc.CurrentState == NpcState.Captured && npc.Custody.IsJailExtracted;
-
     /// <summary>이미 남이 끌고 있는 대상에 밧줄을 <b>덧걸</b> 수 있는가 — 줄다리기 합류. (#390)
     /// 팀 결정은 "합류는 허용, 탈취는 차단"이다. 합류는 기존 끌기를 끊지 않고 참가자만 하나 늘린다.
     /// 그래서 <see cref="CanArrest"/>의 <see cref="NpcState.Escorted"/> 제외를 <b>건드리지 않고</b>
@@ -218,9 +197,7 @@ public static class NpcStateRules
     /// 둘 중 하나면 남는다:
     ///  · <b>감옥 방 안</b>(<see cref="JailRoom"/>) — 반출해 놓고 감옥 안에 방치한 대상이 여기 걸린다.
     ///  · <b>판정이 끝난 대상</b>(<see cref="NpcCustody.IsDelivered"/>) — GDD 7-6의 방치 타이머 제외와
-    ///    같은 이유다. 예외는 반출해 놓고 방치한 대상(<see cref="NpcCustody.IsJailExtracted"/>, #517):
-    ///    정산·진행도에서 이미 빠져 있어 그냥 두면 팀 손실만 남긴 채 영원히 서 있으므로 달아나게 한다.
-    ///    그 대상도 감옥 안이면 위 조건에 걸려 남는다.
+    ///    같은 이유다.
     ///
     /// <b>#548 이후 그 예외는 감옥 안에서만 걸린다</b> — 반출 표식이 문을 나서는 순간 꺼지기 때문이다
     /// (<see cref="JailIntake"/>). 그래서 문 밖에서 저지돼 풀려난 대상은 달아나지 않고 그 자리에 선다:
@@ -229,7 +206,7 @@ public static class NpcStateRules
     public static bool StaysPutWhenFreed(NpcController npc) =>
         npc != null
         && (JailRoom.Contains(npc.transform.position)
-            || (npc.Custody.IsDelivered && !npc.Custody.IsJailExtracted));
+            || npc.Custody.IsDelivered);
 
     /// <summary>E 상호작용이 반응하는 상태인가 — 이제 <b>신병 조작 전용</b>이다. (#438/#492)
     /// 포함 목록 방식 — 새 상태는 기본 'E 불가'이므로 열어야 하면 여기 추가할 것.
@@ -248,7 +225,7 @@ public static class NpcStateRules
     /// 개명 이력: <c>HasSubdueInteraction</c> → 제압(subdue) 동작이 E에서 전부 빠져 이름이
     /// 실제 역할과 어긋나게 되어 #438에서 바꿨다.</summary>
     public static bool HasInteractKeyAction(NpcState state) =>
-        state is NpcState.Captured or NpcState.Jailed;
+        state is NpcState.Captured;
 
     /// <summary>방치 회복(<see cref="NpcHealth"/>)이 지금 적용될 수 있는 상태인가 — 사망·기절·수감·호송 중 제외. (#707/#916)
     /// 기절을 뺀 이유: 넉다운 기절(30초)이 회복 대기(20초)보다 길어, 쓰러진 몸이 누운 채 회복하면 확인사살 창이 조용히 닫힌다.</summary>

@@ -320,7 +320,6 @@ public class NpcController : NetworkBehaviour
         if (state != NpcState.Escorted && state != NpcState.Captured)
         {
             m_rope.ClearTethers();
-            m_custody.SetJailExtracted(false);
             m_custody.SetSecuredByPlayer(false); // 도주·배회로 돌아갔다 — 더는 누구의 신병도 아니다 (#637)
             m_custody.ClearEscortTarget(); // 사망·넉백처럼 ReleaseDrag를 안 거치는 이탈도 장부를 남기지 않는다 (#643)
         }

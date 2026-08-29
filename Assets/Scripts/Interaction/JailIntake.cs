@@ -179,7 +179,6 @@ public class JailIntake : CommonManagerBase
             // 여기서는 남은 줄을 걷고 일으켜 세우기만 한다 — 누운 채 끌려가는 그림을 없앤다.
             if (!result.Value.Verdict.IsCredited())
             {
-                npc.Custody.SetJailExtracted(false); // 반출했던 대상이 뒤집힌 경우 표식을 걷어낸다 (#517)
                 PlayerEscorter.ReleaseAllTethersOn(npc, null);
                 Debug.Log($"[감옥] {result.Value.Verdict} — 감옥에 들이지 않고 문 앞에서 놓는다: {npc.name}");
                 continue;
@@ -415,100 +414,6 @@ public class JailIntake : CommonManagerBase
         return result;
     }
 
-    // ---- 반출 ----
-
-    /// <summary>
-    /// 반출 — 배치된 수감자를 플레이어를 따라오게 한다. 서버(또는 오프라인) 전용. (#492/#537)
-    ///
-    /// 밧줄을 걸지 않는다: <see cref="NpcEscortedState"/>가 밧줄 이전의 추종·근접 정지(#97)를 그대로
-    /// 들고 있고 <c>IsRoped</c>일 때만 건너뛰므로, <c>StartRopeDrag</c> 없이 <c>StartEscort</c>만 부르면
-    /// 추종·속도 부스트·거리 이탈이 전부 동작한다.
-    ///
-    /// <b>여기서 감옥 밖으로 나가지는 않는다</b> (#537) — 따라오게만 하고, 실제로 데리고 나오는 것은
-    /// 플레이어가 문에 E를 누를 때다(<see cref="ServerExitJail"/>). 배치 반납과 정산 제외는 여기서
-    /// 일어나므로 "끝까지 데리고 있어야 인정"(GDD 9-2)은 꺼내는 순간부터 적용된다.
-    /// </summary>
-    public void ServerExtract(NpcController npc, Transform follower)
-    {
-        if (!HasServerAuthority)
-            return;
-
-        if (npc == null || follower == null || m_jailZone == null)
-            return;
-
-        if (npc.CurrentState != NpcState.Jailed)
-            return;
-
-        // 수감 자격은 <b>남겨 둔다</b> — 판정 결과(현상금)를 정산 기록에서 꺼내 되살린다. (#517)
-        // 감옥 안에서 다시 세우면(E 정지) 문 앞 재판정 없이 그 자리에서 다시 수감돼야 하는데,
-        // 지우면 계상할 근거가 없어진다. 읽기는 ReleaseInmate <b>앞</b>이어야 한다 — 저쪽이 레코드를 지운다.
-        if (m_jailZone.TryGetBounty(npc, out int bounty))
-            m_pendingBounty[npc] = bounty;
-        else
-            m_pendingBounty.Remove(npc);
-
-        m_jailZone.ReleaseInmate(npc); // 배치 반납 + 정산·진행도에서 제외
-
-        // <b>ClearDelivered는 부르지 않는다 — 반출은 탈옥이 아니다.</b>
-        // 재판정은 문 앞에서 다시 E를 누르면 열리고, 여기서 '첫 인계' 표식까지 되돌리면 반출→재수감을
-        // 반복해 진범 검거 수(RoundManager.CriminalArrestCount)를 부풀릴 수 있다. 탈옥(JailbreakEvent)이
-        // ClearDelivered를 부르는 것은 대상이 실제로 달아나 도시에서 다시 잡아야 하는 진짜 재검거이기
-        // 때문이다 (#358) — 플레이어가 스스로 꺼낸 것과는 다르다.
-
-        // 반출 표식 — 거리 이탈로 멈춰도(Captured) 남아, E가 밧줄이 아니라 추종 재개로 가게 한다 (#517).
-        npc.Custody.SetJailExtracted(true);
-        npc.Custody.StartEscort(follower);
-
-        Debug.Log($"[감옥] 반출 — 따라오게 한다: {npc.name}");
-    }
-
-    // 반출한 대상의 현상금 보관 — 감옥 안에서 다시 세울 때 같은 값으로 계상한다. 서버(또는 오프라인) 전용. (#517)
-    private readonly Dictionary<NpcController, int> m_pendingBounty = new Dictionary<NpcController, int>();
-
-    /// <summary>
-    /// 감옥 안에서 반출을 되돌린다 — 따라오던 대상을 그 자리에 다시 수감한다. 서버(또는 오프라인) 전용. (#517/#537)
-    ///
-    /// 예전에는 폴링(R2)이 "Captured + Jail 영역 안 + 사람이 안에 있음"을 보고 알아서 재착석시켰다.
-    /// 폴링이 사라져(#537) 되돌리는 순간을 명시적으로 받는다 — 부르는 곳은 추종 정지
-    /// (<see cref="PlayerEscortCommands"/>) 하나다. 감옥 밖에서 세운 것은 여기 걸리지 않는다.
-    /// </summary>
-    public bool ServerReturnToJail(NpcController npc)
-    {
-        if (!HasServerAuthority || npc == null || m_jailZone == null)
-            return false;
-
-        if (!npc.Custody.IsJailExtracted || !m_jailZone.ContainsPoint(npc.transform.position))
-            return false;
-
-        // 보관해 둔 현상금이 없으면 판정 결과를 잃은 것이다 — 0원으로 넣지 않고 문 앞 재판정에 맡긴다.
-        if (!m_pendingBounty.TryGetValue(npc, out int bounty))
-            return false;
-
-        m_pendingBounty.Remove(npc);
-        ServerPlaceInJail(npc, bounty, System.Array.Empty<ulong>());
-        return true;
-    }
-
-    // ---- 반출 대상 떠나보내기 (#548) ----
-
-    // 문을 나선 반출 대상을 떠나보낸다 — 플레이어를 따라다니던 것이 여기서 끝난다. (#548)
-    private void ServerSendOff(NpcCustody custody, Transform extractor)
-    {
-        NpcController npc = custody != null ? custody.Owner : null;
-        if (npc == null)
-            return;
-
-        // <b>문을 나서는 순간 반출 추종 국면이 끝난다.</b> 표식을 끄는 것이 곧 저지 창을 여는 일이다 —
-        // PlayerEscortCommands.IsRopeBlocked가 이 표식을 보고 밧줄을 막고 있었다(팀 확정 2026-08-05).
-        // 그 규칙의 취지는 '데리고 나오는 구간에 긴장을 남긴다'였는데, 그 구간이 문 안쪽으로 줄었다.
-        custody.SetJailExtracted(false);
-
-        // 반출 대상은 갈 곳이 없으니 도시로 달아난다 (팀 확정 2026-08-07).
-        // 꺼낸 사람에게서 도망친다: 실수로 꺼냈으면 그 사람이 쫓아가 다시 잡아야 한다.
-        npc.Reaction.StartFlee(extractor);
-        Debug.Log($"[감옥] 반출 대상이 도시로 달아난다: {npc.name}");
-    }
-
     // ---- 플레이어 출입 (문 E) ----
 
     /// <summary>플레이어를 감옥 안 입장 지점으로 옮긴다. 서버(또는 오프라인) 전용. (#537)</summary>
@@ -547,19 +452,6 @@ public class JailIntake : CommonManagerBase
 
         Transform exit = m_jailZone.ExitPoint;
 
-        List<NpcCustody> followers = NpcCustody.FindFollowersOf(mover.transform);
-
-        // 데리고 나오는 대상이 있을 때만 정문을 연다 (#744) — 경찰 혼자 나오는 데 본부 대문이
-        // 저절로 열릴 이유는 없다. 반출 대상은 여기서부터 도시까지 걸어 나간다.
-        if (followers.Count > 0)
-            m_jailZone.ServerOpenFrontDoors();
-
-        for (int i = 0; i < followers.Count; i++)
-        {
-            followers[i].ServerExitJail(m_jailZone.ExitSlot(i + 1)); // 0번은 플레이어 자리다
-            ServerSendOff(followers[i], mover.transform);
-        }
-
         // ⚠ <b>플레이어를 시체보다 먼저 옮긴다.</b> 산 동행과 순서가 반대인데, 이유도 반대다:
         // 동행은 NavMesh로 <b>따라오므로</b> 뒤에 남으면 벽을 향해 달리지만, 밧줄 시체는 관절로
         // <b>매여 있어</b> 운반자가 뒤에 남으면 그 줄이 수백 m로 늘어난다.
@@ -570,13 +462,13 @@ public class JailIntake : CommonManagerBase
 
         // 업고 있는 동료 몸도 함께 나온다 (#614) — 밧줄 시체와 같은 이유로 <b>플레이어 뒤</b>다.
         // 운반자가 아직 안에 있는 채로 몸을 내보내면 그 사이에 줄이 맵을 가로질러 늘어난다.
-        int slot = followers.Count + 1;
+        int slot = 1;
         if (ServerMoveCarriedBody(mover, m_jailZone.ExitSlot(slot), exit.rotation))
             slot++;
 
         // 밧줄에 걸린 시체도 함께 나온다 (#597) — 안 옮기면 줄만 벽을 뚫고 늘어나고 몸은 방에 남는다.
         int corpses = ServerExitRopedCorpses(mover, slot);
-        Debug.Log($"[감옥] 퇴장 — {mover.name} (동행 {followers.Count}명, 시체 {corpses}구)");
+        Debug.Log($"[감옥] 퇴장 — {mover.name} (시체 {corpses}구)");
     }
 
     /// <summary>
@@ -615,7 +507,6 @@ public class JailIntake : CommonManagerBase
         return true;
     }
 
-    // 이 플레이어 줄에 걸린 시체를 퇴장 자리로 옮긴다 — 산 신병은 FindFollowersOf가 이미 집었다.
     // 시체는 에이전트가 없어 워프가 아니라 뼈째 옮긴다(NpcCustody.ServerMoveCorpse).
     private int ServerExitRopedCorpses(PlayerMovement mover, int firstSlot)
     {
@@ -655,11 +546,6 @@ public class JailIntake : CommonManagerBase
     ///   <see cref="ArrestJudge.JudgeCorpse"/>가 '이미 계상됨'으로 끊어, 문 앞에 다시 놓고 눌러도
     ///   영영 들어가지 않는다.</item>
     /// </list>
-    ///
-    /// <b>산 수감자의 반출(<see cref="ServerExtract"/>)이 <c>ClearDelivered</c>를 부르지 않는 것과
-    /// 갈린다</b> — 되돌릴 대상이 다르기 때문이다. 저쪽은 '첫 인계' 표식이 할당량
-    /// (<see cref="RoundManager.CriminalArrestCount"/>)에 물려 있어 반출→재수감 반복으로 부풀 수 있지만,
-    /// 시체 판정은 할당량을 건드리지 않는다(<c>OnCorpseJudged</c> 구독자에 RoundManager가 없다).
     ///
     /// <b>표식·기억은 원장 제거 성공과 무관하게 걷는다</b> (#705) — 예전에는 원장 제거가 실패하면
     /// <c>ClearDelivered</c>도 안 불려 재판정이 영영 막혔다.

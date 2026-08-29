@@ -13,7 +13,7 @@ using UnityEngine.Localization;
 /// 여기로 오는 것은 <b>겨냥한</b> E뿐이다 — 겨냥이 비어 있으면 끌던 대상 전원을 놓는 쪽으로 간다
 /// (<see cref="PlayerInteractor"/> → <c>RequestUnropeAll</c>, #638). 그래서 이 경로는 "여러 명을 끌 때
 /// 한 명만 고른다"와 "안 끌고 있는 대상(놓아둔 신병·수감자)을 다룬다"가 역할로 남는다.
-/// 수감(Jailed) 상태면 유치장에서 빼내 따라오게 한다 — 밧줄 없이 추종만 건다 (#492).
+/// 수감(Jailed) 상태에는 E가 반응하지 않는다 — 반출이 사라지면서 유치장 안 신병은 손댈 수 없다.
 /// PlayerInteractor의 IInteractable 경로를 그대로 사용하므로
 /// NPC가 사거리·조준을 벗어나면 자연히 실패한다.
 /// 프롬프트 표시는 상호작용 UI 이슈(#65 계열) 후속.
@@ -42,7 +42,6 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
     /// 하지 않는다(인자가 즉시 평가되므로 CanRejoinOwnRope 안의 상태 검사로는 늦다).</summary>
     public bool CanInteract(GameObject interactor) =>
         NpcStateRules.HasInteractKeyAction(m_controller.CurrentState)
-        || NpcStateRules.IsFollowingUnroped(m_controller)
         || (
             m_controller.CurrentState == NpcState.Escorted
             && CanRejoinOwnRope(FindTethers(interactor))
@@ -79,20 +78,12 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
         switch (m_controller.CurrentState)
         {
             case NpcState.Escorted:
-                if (NpcStateRules.IsFollowingUnroped(m_controller))
-                    return InteractPrompts.NpcHalt;
-
                 return CanRejoinOwnRope(FindTethers(interactor))
                     ? InteractPrompts.NpcUnropeMine
                     : null;
 
             case NpcState.Captured:
-                return NpcStateRules.CanResumeUnropedEscort(m_controller)
-                    ? InteractPrompts.NpcEscortResume
-                    : InteractPrompts.NpcUnrope;
-
-            case NpcState.Jailed:
-                return InteractPrompts.NpcJailRelease;
+                return InteractPrompts.NpcUnrope;
         }
 
         return null;
@@ -109,15 +100,6 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
         switch (m_controller.CurrentState)
         {
             case NpcState.Escorted:
-                // 반출로 따라오는 수감자를 세운다 (#492) — 밧줄이 없어 아래 줄다리기 분기와 배타적이다.
-                // 유치장 안이면 JailIntake가 좌석에 다시 앉히고, 밖이면 그 자리에 선다.
-                if (NpcStateRules.IsFollowingUnroped(m_controller))
-                {
-                    Debug.Log($"E 입력 — 따라오는 수감자 정지 요청: {m_controller.name}");
-                    escorter?.RequestEscortHalt(m_controller);
-                    break;
-                }
-
                 // 남이 계속 끄는 중인 대상에서 내 줄만 뺀다 — 줄다리기에서 손 떼기 (#398/#513).
                 // 복귀는 밧줄 좌클릭이다. 서버가 줄 소유·사거리를 다시 검증하므로 여기 검사는 조기 차단일 뿐이다.
                 if (CanRejoinOwnRope(FindTethers(interactor)))
@@ -128,16 +110,6 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
                 break;
 
             case NpcState.Captured:
-                // 반출된 수감자가 거리 이탈로 멈춘 것이면 반출 흐름을 잇는다 — 밧줄 없이 다시 따라오게 한다 (#517).
-                // 풀기 분기보다 <b>먼저</b> 봐야 한다: 상태가 같아서 아래로 내려가면 풀 줄도 없는 대상에
-                // 풀기가 나가 그대로 배회로 돌아간다.
-                if (NpcStateRules.CanResumeUnropedEscort(m_controller))
-                {
-                    Debug.Log($"E 입력 — 반출 수감자 추종 재개 요청: {m_controller.name}");
-                    escorter?.RequestEscortResume(m_controller);
-                    break;
-                }
-
                 // 놓아둔 신병의 밧줄을 푼다 — 재개는 밧줄 좌클릭으로 옮겼다 (#513).
                 // 남이 묶어 둔 대상도 풀 수 있다(오검거 구제·방해 수단) — 그 판정은 CanUnrope가 쥔다.
                 // 서버 직접 호출은 가드에 막힌다 — 요청 API로 서버에 넘긴다 (#118).
@@ -145,12 +117,6 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
                 escorter?.RequestUnrope(m_controller);
                 break;
 
-            case NpcState.Jailed:
-                // 앉은 수감자를 일으켜 따라오게 한다 (#492) — 밧줄을 걸지 않으므로 밧줄 소지·용량과 무관하다.
-                // 좌석 반납·정산 제외는 서버(JailIntake)가 하고, 여기 검사는 조기 차단일 뿐이다.
-                Debug.Log($"E 입력 — 유치장 반출 요청: {m_controller.name}");
-                escorter?.RequestJailRelease(m_controller);
-                break;
         }
     }
 }

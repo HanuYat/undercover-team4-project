@@ -160,7 +160,6 @@ public class NpcRopeDrag : NetworkBehaviour
         m_owner.StandUp.CancelStandUp();
 
         // 줄이 걸리는 순간 반출 흐름은 끝난다 — 이제 밧줄 신병이라 E는 놓기/재개로 갈린다 (#517)
-        m_owner.Custody.SetJailExtracted(false);
 
         // 확보 표식 — 줄을 풀어 문 앞에 세워 둬도 남는다. 수감 버튼이 "끌고 온 신병"과
         // "그냥 거기 쓰러져 있던 대상"을 가르는 기준이다 (#637).
