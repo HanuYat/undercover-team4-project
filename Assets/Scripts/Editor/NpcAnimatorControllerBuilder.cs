@@ -37,7 +37,7 @@ public static class NpcAnimatorControllerBuilder
     // 블렌드 트리 선택 파라미터 — 드라이버가 스윙 직전에 정수를 넣는다.
     // 이름은 런타임 쪽 상수를 그대로 쓴다(PlayerAnimatorControllerBuilder가 PlayerAnimationDriver의
     // 상수를 참조하는 것과 같은 방향) — 한쪽만 고쳐 조용히 어긋나는 사고를 막는다.
-    private const string k_swingVariantParam = NpcAnimationDriver.k_swingVariantParam;
+    private const string k_swingVariantParam = NpcAnimStates.k_swingVariantParam;
 
     // 저항 NPC는 제자리에서 버티며 펀치만 얹으므로 루트모션이 없는 Inplace 클립을 쓴다 —
     // 원본(루트모션판)은 펀치할 때 앞으로 파고들어 NPC가 미끄러진다. (권투 모션 교체)
@@ -60,13 +60,9 @@ public static class NpcAnimatorControllerBuilder
         "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Combat/HumanM@Knockdown01 - StandUp.fbx";
     private const string k_standUpState = "Stunned_StandUp";
 
-    // 제압 전환 모션 (#332) — 저항형은 서서 헤롱거리는 그로기(루프, 드라이버가 시간으로 끊음),
-    // 도주형은 태클당해 구르고 일어나는 컴뱃 롤(끝 프레임 완전 기립 — Captured 대기 자세와 자연 연결).
-    private const string k_subdueGroggyClip =
-        "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Combat/HumanM@Stun01.fbx";
+    // 제압 전환 모션 (#332)은 걷혔다 (#502) — 제압은 래그돌로 쓰러지는 것으로 통일됐다.
+    // 상태 이름만 남긴다: 이전 실행이 만들어 둔 것을 지워야 하기 때문이다 (RemoveSubdueStates).
     private const string k_subdueGroggyState = "Subdued_Groggy";
-    private const string k_subdueRollClip =
-        "Assets/Imported/Kevin Iglesias/Human Animations/Animations/Male/Movement/HumanM@Roll01.fbx";
     private const string k_subdueRollState = "Subdued_Roll";
 
     // 유치장 착석 모션 (#462) — 좌석에 도착해 몸을 돌린 순간 Begin, 앉아 있는 동안 Loop.
@@ -229,7 +225,7 @@ public static class NpcAnimatorControllerBuilder
 
         SetupUnlockStates(controller);
         SetupStandUpState(controller);
-        SetupSubdueStates(controller);
+        RemoveSubdueStates(controller.layers[0].stateMachine); // 걷힌 제압 전환 정리 (#502)
         SetupSitStates(controller);
 
         EditorUtility.SetDirty(tree);
@@ -247,7 +243,7 @@ public static class NpcAnimatorControllerBuilder
 
     /// <summary>
     /// 자물쇠 해제 상태를 구성한다 — Any State → Begin(1회), Any State → Loop(반복). (#261)
-    /// Begin·Loop는 서로 <b>다른 번호</b>(<c>k_unlockingBeginAnimState</c>/<c>k_unlockingLoopAnimState</c>)로
+    /// Begin·Loop는 서로 <b>다른 번호</b>(<c>NpcAnimStates.k_unlockingBegin</c>/<c>NpcAnimStates.k_unlockingLoop</c>)로
     /// 진입한다 — 드라이버가 Begin 유지시간이 끝나면 번호를 Loop로 바꿔 Begin→Loop 전환을 직접 몬다.
     /// 두 전이 모두 기존 로코모션 전이(State == enum값)와 번호가 겹치지 않는다.
     /// 이탈은 따로 만들지 않는다 — 드라이버가 다른 번호를 넣는 순간 그쪽 Any State 전이가 걸린다.
@@ -281,7 +277,7 @@ public static class NpcAnimatorControllerBuilder
         toBegin.canTransitionToSelf = false;
         toBegin.AddCondition(
             AnimatorConditionMode.Equals,
-            NpcAnimationDriver.k_unlockingBeginAnimState,
+            NpcAnimStates.k_unlockingBegin,
             "State"
         );
 
@@ -296,14 +292,14 @@ public static class NpcAnimatorControllerBuilder
         toLoop.canTransitionToSelf = false;
         toLoop.AddCondition(
             AnimatorConditionMode.Equals,
-            NpcAnimationDriver.k_unlockingLoopAnimState,
+            NpcAnimStates.k_unlockingLoop,
             "State"
         );
     }
 
     /// <summary>
     /// 기절 해제 시 일어나는 상태를 구성한다 — Any State → StandUp(1회). (#269)
-    /// 해제(Unlocking) 상태와 같은 구조다: 드라이버가 <c>k_standUpAnimState</c> 번호를 넣는 순간 진입하고,
+    /// 해제(Unlocking) 상태와 같은 구조다: 드라이버가 <c>NpcAnimStates.k_standUp</c> 번호를 넣는 순간 진입하고,
     /// 유지 시간이 끝나 드라이버가 다른 번호를 넣으면 그쪽 Any State 전이가 걸려 빠져나온다.
     /// 이탈 전이를 따로 만들지 않는 것도 같은 이유다.
     /// 재실행 시 기존 상태/전이를 지우고 다시 만들어 중복을 막는다.
@@ -338,66 +334,9 @@ public static class NpcAnimatorControllerBuilder
         toStandUp.canTransitionToSelf = false;
         toStandUp.AddCondition(
             AnimatorConditionMode.Equals,
-            NpcAnimationDriver.k_standUpAnimState,
+            NpcAnimStates.k_standUp,
             "State"
         );
-    }
-
-    /// <summary>
-    /// 제압 전환 상태를 구성한다 — Any State → Groggy(저항형)/Roll(도주형). (#332)
-    /// StandUp과 같은 구조다: 드라이버가 전용 번호(<c>k_subdueGroggyAnimState</c>/<c>k_subdueRollAnimState</c>)를
-    /// 넣는 순간 진입하고, 유지 시간이 끝나 드라이버가 Captured 번호를 넣으면 그쪽 Any State 전이가 걸려
-    /// 고개 숙인 대기 자세로 빠져나온다 — 이탈 전이를 따로 만들지 않는다.
-    /// 전이 블렌드(0.25s)가 달리기/버틴 자세 → 전환 모션 → 대기 자세의 스냅을 흡수한다.
-    /// 재실행 시 기존 상태/전이를 지우고 다시 만들어 중복을 막는다.
-    /// </summary>
-    private static void SetupSubdueStates(AnimatorController controller)
-    {
-        AnimationClip groggy = LoadClip(k_subdueGroggyClip);
-        AnimationClip roll = LoadClip(k_subdueRollClip);
-        if (groggy == null || roll == null)
-        {
-            Debug.LogError(
-                "[NpcAnimatorControllerBuilder] 제압 전환 클립을 불러오지 못해 전환 상태 구성을 건너뜀"
-            );
-            return;
-        }
-
-        AnimatorStateMachine stateMachine = controller.layers[0].stateMachine;
-        RemoveSubdueStates(stateMachine);
-
-        AddSubdueState(
-            stateMachine,
-            k_subdueGroggyState,
-            groggy,
-            NpcAnimationDriver.k_subdueGroggyAnimState
-        );
-        AddSubdueState(
-            stateMachine,
-            k_subdueRollState,
-            roll,
-            NpcAnimationDriver.k_subdueRollAnimState
-        );
-    }
-
-    // 제압 전환 상태 1개 + Any State 진입 전이를 만든다 (Groggy/Roll 공통 형태)
-    private static void AddSubdueState(
-        AnimatorStateMachine stateMachine,
-        string stateName,
-        AnimationClip clip,
-        int animStateNumber
-    )
-    {
-        AnimatorState state = stateMachine.AddState(stateName);
-        state.motion = clip;
-
-        // canTransitionToSelf를 끄지 않으면 번호가 유지되는 매 프레임 재진입해 클립이 앞으로 못 나간다
-        // (해제 Begin·StandUp과 같은 함정)
-        AnimatorStateTransition transition = stateMachine.AddAnyStateTransition(state);
-        transition.hasExitTime = false;
-        transition.duration = 0.25f; // 달리던/버티던 자세에서 부드럽게 — 전환 모션 자체가 완충이라 넉넉히
-        transition.canTransitionToSelf = false;
-        transition.AddCondition(AnimatorConditionMode.Equals, animStateNumber, "State");
     }
 
     /// <summary>
@@ -434,7 +373,7 @@ public static class NpcAnimatorControllerBuilder
         toBegin.canTransitionToSelf = false;
         toBegin.AddCondition(
             AnimatorConditionMode.Equals,
-            NpcAnimationDriver.k_sitBeginAnimState,
+            NpcAnimStates.k_sitBegin,
             "State"
         );
 
@@ -444,7 +383,7 @@ public static class NpcAnimatorControllerBuilder
         toLoop.canTransitionToSelf = false;
         toLoop.AddCondition(
             AnimatorConditionMode.Equals,
-            NpcAnimationDriver.k_sitLoopAnimState,
+            NpcAnimStates.k_sitLoop,
             "State"
         );
     }
