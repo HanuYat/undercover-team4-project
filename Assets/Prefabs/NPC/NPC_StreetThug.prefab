@@ -2404,4 +2404,3 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NpcOneShotMotion
   m_swingAnimSeconds: 0.9
   m_standUpSeconds: 1.17
-  m_subdueRollSeconds: 1.3

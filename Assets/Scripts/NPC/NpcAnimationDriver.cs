@@ -11,7 +11,7 @@ using UnityEngine;
 /// 누움 신호(#363), 그리고 우선순위 중재. 표현 축은 부품이 나눠 갖는다:
 /// <list type="bullet">
 /// <item><see cref="NpcLocomotionMotion"/> — 속도로 갈리는 모션 (#97/#254/#261/#277~)</item>
-/// <item><see cref="NpcOneShotMotion"/> — 순간 이벤트로 오는 단발 모션 (#220/#269/#332)</item>
+/// <item><see cref="NpcOneShotMotion"/> — 순간 이벤트로 오는 단발 모션 (#220/#269)</item>
 /// </list>
 ///
 /// <b>누움(#363)은 여기 남는다.</b> 판정 입력이 기준 상태·기상 모션·밧줄 세 곳에 걸쳐 있어
@@ -38,10 +38,6 @@ public class NpcAnimationDriver : MonoBehaviour
 
     // 스윙이 끝난 뒤 되돌아갈 FSM 기준 상태 — 저항(Attack)이면 버틴 자세(Idle)로 복귀한다 (#220)
     private NpcState m_baseState;
-
-    // 마지막으로 Animator에 쓴 번호 — 매 프레임 같은 값을 다시 쓰지 않기 위한 캐시.
-    // -1은 "아직 아무것도 안 썼다" (모션 번호는 전부 0 이상)
-    private int m_appliedMotion = -1;
 
     // 직전 프레임의 묶임 여부 — 묶임/풀림이 바뀌는 순간에만 속도 추적과 콜라이더를 다시 시드한다 (#369/#513)
     private bool m_ropeBoundMotion;
@@ -176,14 +172,17 @@ public class NpcAnimationDriver : MonoBehaviour
     }
 
     // Animator에 쓰는 유일한 지점. 같은 값을 다시 쓰지 않는 이유는 성능이 아니라 안전이다 —
-    // Any State 전이는 조건이 참인 동안 계속 성립하므로, 같은 번호를 반복해서 넣어도 재진입하지
-    // 않도록 컨트롤러가 짜여 있어야 한다. 캐시를 두면 그 가정에 기대지 않아도 된다.
+    // Any State 전이는 조건이 참인 동안 계속 성립하므로, 같은 번호를 반복해 넣어도 재진입하지
+    // 않도록 컨트롤러가 짜여 있어야 한다. 여기서 걸러 두면 그 가정에 기대지 않아도 된다.
+    //
+    // <b>내가 마지막에 쓴 값이 아니라 Animator가 실제로 들고 있는 값과 견준다.</b> 래그돌(#571)이
+    // 기절·사망 동안 Animator를 껐다 켜는데, 캐시를 믿으면 그 사이 파라미터가 어떤 이유로든
+    // 초기화됐을 때 "이미 썼다"며 건너뛰어 몸이 대기 자세에 굳는다. 읽는 비용은 무시할 수준이다.
     private void Apply(int motion)
     {
-        if (motion == m_appliedMotion)
+        if (motion == m_animator.GetInteger(NpcAnimStates.s_stateHash))
             return;
 
-        m_appliedMotion = motion;
         m_animator.SetInteger(NpcAnimStates.s_stateHash, motion);
     }
 
@@ -305,11 +304,9 @@ public class NpcAnimationDriver : MonoBehaviour
         if (m_controller.Stun.IsStunned)
             state = NpcState.Stunned;
 
-        // 제압 전환 분기용 직전 상태 — base를 덮어쓰기 전에 읽는다 (#332)
-        NpcState previous = m_baseState;
         m_baseState = state;
 
-        m_oneShot.OnBaseStateChanged(state, previous);
+        m_oneShot.OnBaseStateChanged(state);
         m_locomotion.OnBaseStateChanged(state);
 
         // 누움 판정은 여기서 끝난다 — 기준 상태와 기상 표시가 모두 확정된 뒤다 (#363)
