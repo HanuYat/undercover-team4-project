@@ -103,6 +103,22 @@ MonoBehaviour:
     m_Key: Shop.Tab.Catalog
     m_Metadata:
       m_Items: []
+  - m_Id: 8136759908401160
+    m_Key: Shop.Reply.AlreadyOwned
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401161
+    m_Key: Shop.Reply.SoldOut
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401162
+    m_Key: Shop.Reply.InsufficientFunds
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401163
+    m_Key: Shop.Reply.OrderPlaced
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

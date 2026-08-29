@@ -84,9 +84,9 @@ public class AreaScanner : ItemBase
     /// <summary>먹통 중 사용을 시도했다 — 오너 로컬 전용.</summary>
     public event Action OnBlackoutUseAttempt;
 
-    // 사유 안내는 전부 위 두 이벤트로 나간다 — RaiseOwnerToast(NotifyOwner의 toast 채널)는
-    // 재정의하지 않는다. 아래 ServerScan의 NotifyOwner 호출은 정상 흐름이 아니라 위조 RPC로
-    // 클라 게이트를 우회했을 때의 서버 로그용이라 토스트로 띄울 대상이 없다.
+    // 사유 안내는 전부 위 두 이벤트로 나간다 — ToastOwner/RaiseOwnerToast는 쓰지 않는다.
+    // 아래 ServerScan의 NotifyOwner 호출은 정상 흐름이 아니라 위조 RPC로 클라 게이트를
+    // 우회했을 때의 서버 로그용이라 토스트로 띄울 대상이 없다.
 
     // ---- 반경 수집 버퍼 ----
     // 서버(또는 오프라인)에서만 쓰므로 정적으로 공유해도 안전하다 (BombBlast.s_blastColliders 관례).

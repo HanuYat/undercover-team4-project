@@ -56,7 +56,7 @@ public class ShopLineup : NetworkBehaviour
     public event Action OnChanged;
 
     /// <summary>구매 응답(성공·자금 부족 등). 요청자 클라에서만 울린다.</summary>
-    public event Action<string> OnPurchaseReply;
+    public event Action<EShopReply> OnPurchaseReply;
 
     /// <summary>칸이 파는 품목 — 빈 칸이거나 범위 밖이면 null.</summary>
     public ShopCatalog.Entry GetEntry(int slot) =>
@@ -381,7 +381,7 @@ public class ShopLineup : NetworkBehaviour
         if (entry.IsInstallable && purchases.HasInstallable(entry.Installable))
         {
             ReplyRpc(
-                "이미 구매한 장비",
+                EShopReply.AlreadyOwned,
                 EAudioClip.None,
                 RpcTarget.Single(requester, RpcTargetUse.Temp)
             );
@@ -391,7 +391,7 @@ public class ShopLineup : NetworkBehaviour
         if (value.Status == EShopSlotStatus.SoldOut)
         {
             ReplyRpc(
-                "품절된 품목",
+                EShopReply.SoldOut,
                 EAudioClip.None,
                 RpcTarget.Single(requester, RpcTargetUse.Temp)
             );
@@ -401,7 +401,7 @@ public class ShopLineup : NetworkBehaviour
         if (!fund.TrySpend(entry.Price))
         {
             ReplyRpc(
-                "팀 자금 부족",
+                EShopReply.InsufficientFunds,
                 EAudioClip.None,
                 RpcTarget.Single(requester, RpcTargetUse.Temp)
             );
@@ -422,16 +422,17 @@ public class ShopLineup : NetworkBehaviour
         SaveService.SaveAsync().Forget();
 
         ReplyRpc(
-            "주문 완료 — 다음 라운드에 본부로 배달된다",
+            EShopReply.OrderPlaced,
             EAudioClip.ShopPurchase,
             RpcTarget.Single(requester, RpcTargetUse.Temp)
         );
     }
 
+    // 사유는 enum으로만 싣는다 — 완성 문장을 실으면 서버 언어가 요청자 화면에 그대로 뜬다 (#525).
     [Rpc(SendTo.SpecifiedInParams)] // 거절은 무음 — 값만 보려고 눌러도 실패음이 나지 않게
-    private void ReplyRpc(string message, EAudioClip sound, RpcParams rpcParams)
+    private void ReplyRpc(EShopReply reply, EAudioClip sound, RpcParams rpcParams)
     {
-        OnPurchaseReply?.Invoke(message);
+        OnPurchaseReply?.Invoke(reply);
         App.Sound?.PlaySfx2D(sound);
     }
 }

@@ -57,6 +57,39 @@ public enum EVoiceState
     Failed, // 로그인·참가 실패 (사유는 디버그 패널에만)
 }
 
+/// <summary>
+/// 아이템이 오너 화면 토스트로 띄우는 사유 (#525). 값 이름이 곧 키다 — <c>Item.Feedback.</c> + 이름.
+/// 서버가 완성 문장을 RPC로 실어 보내면 받는 쪽 언어와 무관하게 서버 언어로 뜨므로,
+/// enum만 싣고 문구는 표시하는 쪽이 자기 로케일로 조회한다 (localization.md 결정 (g)).
+///
+/// <b>콘솔 로그는 여기 넣지 않는다</b> — <c>NotifyOwner</c>가 그대로 담당하고 번역 대상이 아니다.
+/// 토스트로 승격할 문구가 생길 때만 값을 늘린다.
+/// </summary>
+[LocalizedEnum("ItemTable", "Item.Feedback.")]
+public enum EItemFeedback
+{
+    ScannerBlackout, // 스캐너 먹통 — 전자기기 장애 (사용 시도)
+    AlreadyScanned, // 이미 스캔한 대상
+    ScanFailedBlackout, // 스캔 실패 — 서버가 먹통을 다시 봤다
+    ScanStoppedBlackout, // 스캔 중단 — 채널링 도중 먹통
+    ScanFailedOutOfRange, // 스캔 실패 — 대상이 범위를 벗어남
+    BatteryFull, // 완충 상태에서 충전 시도 — ItemBattery 기본값
+    ScannerBatteryFull, // 같은 상황의 스캐너 표현 — 본체가 덮어쓴다
+}
+
+/// <summary>
+/// 상점 구매 요청에 대한 서버 응답 (#525). 값 이름이 곧 키다 — <c>Shop.Reply.</c> + 이름.
+/// <see cref="EItemFeedback"/>과 같은 이유로 문장이 아니라 enum을 싣는다.
+/// </summary>
+[LocalizedEnum("ShopTable", "Shop.Reply.")]
+public enum EShopReply
+{
+    AlreadyOwned, // 이미 구매한 설치형
+    SoldOut, // 이번 라운드 품절
+    InsufficientFunds, // 팀 자금 부족
+    OrderPlaced, // 주문 완료 — 다음 라운드 배달
+}
+
 /// <summary>비자발 세션 끊김 사유 (#764) — 타이틀 복귀 토스트가 원인별 문구를 고르는 데 쓴다.</summary>
 [LocalizedEnum("TitleTable", "Title.ConnectionLost.", nameof(EConnectionLostReason.None))]
 public enum EConnectionLostReason

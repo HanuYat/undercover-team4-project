@@ -114,6 +114,22 @@ MonoBehaviour:
     m_Localized: Catalog
     m_Metadata:
       m_Items: []
+  - m_Id: 8136759908401160
+    m_Localized: "Already purchased"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401161
+    m_Localized: "Sold out"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401162
+    m_Localized: "Not enough team funds"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8136759908401163
+    m_Localized: "Order placed - delivered to HQ next round"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

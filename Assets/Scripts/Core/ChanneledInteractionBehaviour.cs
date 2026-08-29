@@ -81,33 +81,48 @@ public abstract class ChanneledInteractionBehaviour : NetworkBehaviour
     // ---- 오너 판정 피드백 (#91) ----
 
     /// <summary>
-    /// 서버 판정 결과를 오너에게 알린다. 판정 로그는 서버에서 찍히므로 원격 클라 오너는 볼 수 없다 —
-    /// 오너 콘솔에도 같은 로그를 전달한다. toast=true면 로그에 더해 오너 화면 토스트도 요청한다 (#309).
-    /// 정식 UI 피드백(#65 계열)이 생기면 이 전달 경로를 확장한다.
+    /// 서버 판정 결과를 <b>오너 콘솔에</b> 알린다. 판정 로그는 서버에서 찍히므로 원격 클라 오너는
+    /// 볼 수 없다 — 오너 콘솔에도 같은 줄을 전달한다.
+    ///
+    /// <b>콘솔 전용이다.</b> 플레이어에게 보일 것은 <see cref="ToastOwner"/>로 보낸다 — 완성된
+    /// 문장을 RPC에 실으면 받는 쪽 언어와 무관하게 서버 언어로 뜨기 때문이다 (#525).
+    /// 여기 실리는 문장은 번역 대상이 아니므로 그대로 문자열이다 (localization.md §1).
     /// </summary>
-    protected void NotifyOwner(string message, bool toast = false)
+    protected void NotifyOwner(string message)
     {
         Debug.Log(message); // 서버(호스트)·오프라인 콘솔
         if (IsSpawned && IsServer && !IsOwner)
+            OwnerLogRpc(message); // 원격 클라가 오너면 거기서도 로그
+    }
+
+    /// <summary>
+    /// 오너 화면 토스트를 요청한다 (#309 → #525). 사유는 enum으로만 싣고 문구는 받는 쪽이
+    /// 자기 로케일로 조회한다. 콘솔에는 값 이름을 그대로 남긴다 — 콘솔은 번역 대상이 아니다.
+    /// </summary>
+    protected void ToastOwner(EItemFeedback feedback)
+    {
+        Debug.Log($"[오너 토스트] {feedback}");
+        if (IsSpawned && IsServer && !IsOwner)
         {
-            OwnerLogRpc(message, toast); // 원격 클라가 오너면 거기서 로그·토스트
+            OwnerToastRpc(feedback); // 원격 클라가 오너면 거기서 발행
             return;
         }
-        if (toast)
-            RaiseOwnerToast(message); // 호스트 오너·오프라인은 로컬 발행
+        RaiseOwnerToast(feedback); // 호스트 오너·오프라인은 로컬 발행
     }
 
     [Rpc(SendTo.Owner)]
-    private void OwnerLogRpc(string message, bool toast)
+    private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
+
+    [Rpc(SendTo.Owner)]
+    private void OwnerToastRpc(EItemFeedback feedback)
     {
-        Debug.Log($"[서버 판정] {message}");
-        if (toast)
-            RaiseOwnerToast(message);
+        Debug.Log($"[서버 판정] {feedback}");
+        RaiseOwnerToast(feedback);
     }
 
     /// <summary>
     /// 오너 화면 토스트를 발행한다 — 토스트 채널을 가진 하위만 재정의한다(Scanner.OnScanFeedback).
-    /// 기본은 무동작이라 toast를 쓰지 않는 하위는 콘솔 로그만 나간다.
+    /// 기본은 무동작이라 토스트를 쓰지 않는 하위는 콘솔 로그만 나간다.
     /// </summary>
-    protected virtual void RaiseOwnerToast(string message) { }
+    protected virtual void RaiseOwnerToast(EItemFeedback feedback) { }
 }
