@@ -35,11 +35,11 @@ public class PlayerColorPickerView : MonoBehaviour
 
     private void OnEnable()
     {
-        GameSettings.OnPlayerColorChanged += HandleColorChanged;
+        CosmeticLoadout.OnPlayerColorChanged += HandleColorChanged;
         RefreshSelection();
     }
 
-    private void OnDisable() => GameSettings.OnPlayerColorChanged -= HandleColorChanged;
+    private void OnDisable() => CosmeticLoadout.OnPlayerColorChanged -= HandleColorChanged;
 
     private void Build()
     {
@@ -48,7 +48,7 @@ public class PlayerColorPickerView : MonoBehaviour
             int index = i; // 클로저가 루프 변수를 잡지 않게 사본을 넘긴다
             PlayerColorSwatchView swatch = Instantiate(m_swatchPrefab, m_container);
             swatch.name = $"Swatch {index}";
-            swatch.Bind(m_palette.Get(index), () => GameSettings.SetPlayerColor(m_part, index));
+            swatch.Bind(m_palette.Get(index), () => CosmeticLoadout.SetPlayerColor(m_part, index));
             m_swatches.Add(swatch);
         }
 
@@ -63,7 +63,7 @@ public class PlayerColorPickerView : MonoBehaviour
 
     private void RefreshSelection()
     {
-        int selected = GameSettings.GetPlayerColor(m_part);
+        int selected = CosmeticLoadout.GetPlayerColor(m_part);
 
         for (int i = 0; i < m_swatches.Count; i++)
             m_swatches[i].SetSelected(i == selected);

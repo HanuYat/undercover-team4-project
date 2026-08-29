@@ -84,14 +84,14 @@ public class PlayerColorPanel : PanelBase
 
     private void OnEnable()
     {
-        GameSettings.OnPlayerColorChanged += HandleColorChanged;
-        GameSettings.OnAccessoryChanged += HandleAccessoryChanged;
+        CosmeticLoadout.OnPlayerColorChanged += HandleColorChanged;
+        CosmeticLoadout.OnAccessoryChanged += HandleAccessoryChanged;
     }
 
     private void HandleDisabled()
     {
-        GameSettings.OnPlayerColorChanged -= HandleColorChanged;
-        GameSettings.OnAccessoryChanged -= HandleAccessoryChanged;
+        CosmeticLoadout.OnPlayerColorChanged -= HandleColorChanged;
+        CosmeticLoadout.OnAccessoryChanged -= HandleAccessoryChanged;
     }
 
     private void HandleColorChanged(EBodyPart _) => RefreshPreview();

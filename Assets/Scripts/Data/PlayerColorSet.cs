@@ -54,9 +54,9 @@ public struct PlayerColorSet : INetworkSerializable, IEquatable<PlayerColorSet>
     public static PlayerColorSet FromSettings() =>
         new PlayerColorSet
         {
-            Head = ToIndex(GameSettings.GetPlayerColor(EBodyPart.Head)),
-            Torso = ToIndex(GameSettings.GetPlayerColor(EBodyPart.Torso)),
-            Legs = ToIndex(GameSettings.GetPlayerColor(EBodyPart.Legs)),
+            Head = ToIndex(CosmeticLoadout.GetPlayerColor(EBodyPart.Head)),
+            Torso = ToIndex(CosmeticLoadout.GetPlayerColor(EBodyPart.Torso)),
+            Legs = ToIndex(CosmeticLoadout.GetPlayerColor(EBodyPart.Legs)),
         };
 
     /// <summary>초상을 색 조합 단위로 캐시할 때 쓰는 열쇠 — 같은 조합이면 같은 얼굴이다.</summary>

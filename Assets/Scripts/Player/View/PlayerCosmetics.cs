@@ -55,7 +55,7 @@ public class PlayerCosmetics : NetworkBehaviour
 
         if (IsOwner)
         {
-            GameSettings.OnPlayerColorChanged += HandleOwnerColorChanged;
+            CosmeticLoadout.OnPlayerColorChanged += HandleOwnerColorChanged;
 
             // 안전망 — 명부 보고가 아직 안 닿은 채로 스폰되면(입장 직후 게임 씬으로 바로 들어오는 경합)
             // 서버가 내 색을 모른다. 그때만 한 박자 늦게 고쳐진다. 값이 같으면 NetworkVariable이
@@ -104,7 +104,7 @@ public class PlayerCosmetics : NetworkBehaviour
         m_assigned.OnValueChanged -= HandleAssignedChanged;
 
         // 오너만 구독했지만 무조건 뗀다 — 아니면 죽은 로봇을 가리키는 static 구독이 쌓인다
-        GameSettings.OnPlayerColorChanged -= HandleOwnerColorChanged;
+        CosmeticLoadout.OnPlayerColorChanged -= HandleOwnerColorChanged;
     }
 
     // 색을 고치는 UI는 지금 로비에만 있어(PlayerColorPanel) 스폰된 뒤 이 경로가 도는 구성은 없다.
