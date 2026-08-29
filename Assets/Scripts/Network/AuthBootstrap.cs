@@ -116,6 +116,9 @@ public class AuthBootstrap : CommonManagerBase
     /// <summary>정식 계정으로 승격됐는가. 판별은 PlayerInfo.Username 유무. (#384)</summary>
     public bool IsLinked => m_accountStateKnown && !string.IsNullOrEmpty(m_accountUsername);
 
+    /// <summary>연동된 아이디 — 미연동이면 빈 문자열. 부계정 확인 문구가 "어느 계정에서 나가는지"를 밝히는 데 쓴다.</summary>
+    public string AccountUsername => m_accountUsername;
+
     public bool SessionTokenExists =>
         UnityServices.State == ServicesInitializationState.Initialized
         && AuthenticationService.Instance.SessionTokenExists;
@@ -354,21 +357,52 @@ public class AuthBootstrap : CommonManagerBase
     /// <summary>
     /// 익명 계정을 정식 계정으로 승격 — 익명 로그인 상태를 **유지한 채** 자격증명을 붙인다.
     /// 신규 SignUp으로 처리하면 새 PlayerId가 발급돼 닉네임이 유실된다.
+    ///
+    /// <b>이미 연동돼 있으면 새 익명 계정으로 갈아탄 뒤 붙인다</b> — UGS는 한 플레이어에
+    /// 아이디를 하나만 허용하므로(10004) 부계정을 만들려면 새 PlayerId가 먼저 있어야 한다.
+    /// 지금 계정을 잃는 것이 아니다: 이미 아이디가 붙어 있으니 그 아이디로 다시 로그인하면 된다.
+    /// 그래서 <b>연동된 상태에서만</b> 갈아탄다 — 미연동 익명 계정은 돌아올 길이 없어 그대로 붙인다.
+    ///
+    /// <b>갈아탄 뒤의 실패는 되돌릴 수 없다</b> — 전환이 세션 토큰을 지우므로 옛 PlayerId로
+    /// 돌아갈 방법이 UGS에 없다. 형식 검사를 전환 앞으로 당겨 미리 걸러내고, 그래도 서버가
+    /// 거절하면(중복 아이디 등) 사유에 옛 아이디를 실어 "그 아이디로 다시 로그인하라"고 알린다.
     /// </summary>
     public async UniTask LinkAccountAsync(string username, string password)
     {
         if (!IsSignedIn)
             throw new LocalizedMessageException(Message("Title.Account.RequiresSignInToLink"));
         ThrowIfAccountLocked(EAccountAction.Link);
-        if (IsLinked)
-            throw new LocalizedMessageException(Message("Title.Account.AlreadyLinked"));
 
         string id = username?.Trim() ?? string.Empty;
         string pw = password ?? string.Empty; // 비밀번호는 Trim하지 않는다 — 공백도 유효 문자일 수 있다
 
+        // 형식 검사는 계정을 갈아타기 **전에** 끝낸다 — 아래 전환은 되돌릴 수 없다.
         ThrowIfInvalid(AccountCredentials.Validate(id, pw));
 
-        await AuthenticationService.Instance.AddUsernamePasswordAsync(id, pw);
+        // 갈아탄 뒤에 실패하면 이 기기는 새 익명 계정에 남는다 — 토큰을 지워서
+        // 돌아갈 길은 옛 아이디로 다시 로그인하는 것뿐이다. 그래서 사유에 그 아이디를 실어 보낸다.
+        string abandoned = IsLinked ? m_accountUsername : string.Empty;
+        if (IsLinked)
+            await StartNewAnonymousAccountAsync();
+
+        try
+        {
+            // 조합 규칙은 보낼 때 채운다 — 사용자에게 대문자를 요구하지 않기 위해서다 (AccountCredentials).
+            await AuthenticationService.Instance.AddUsernamePasswordAsync(
+                id,
+                AccountCredentials.ToProviderPassword(pw)
+            );
+        }
+        catch (RequestFailedException ex) when (!string.IsNullOrEmpty(abandoned))
+        {
+            throw new LocalizedMessageException(
+                Message(
+                    "Title.Account.SubAccountAborted",
+                    AccountCredentials.DescribeError(ex),
+                    abandoned
+                )
+            );
+        }
 
         m_accountUsername = id;
         m_accountStateKnown = true;
@@ -418,7 +452,11 @@ public class AuthBootstrap : CommonManagerBase
 
         try
         {
-            await AuthenticationService.Instance.SignInWithUsernamePasswordAsync(id, pw);
+            // 가입과 같은 변환을 거쳐야 같은 값이 간다 (AccountCredentials.ToProviderPassword).
+            await AuthenticationService.Instance.SignInWithUsernamePasswordAsync(
+                id,
+                AccountCredentials.ToProviderPassword(pw)
+            );
             await AuthenticationService.Instance.GetPlayerNameAsync(); // 이걸 빼면 Nickname이 빈 문자열
         }
         catch

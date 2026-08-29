@@ -90,6 +90,10 @@ public class AuthGatePanel : PanelBase
     private const string k_statusPrefix = "Title.AuthStatus.";
     private const string k_linkConfirmKey = "Title.Auth.LinkConfirm";
 
+    // 이미 아이디가 붙어 있을 때의 확인 문구 — 회원가입이 '부계정 만들기'가 되므로 경고가 달라진다.
+    // 지금 계정에서 로그아웃된다는 것과, 그 아이디로 돌아올 수 있다는 것을 함께 알린다.
+    private const string k_linkConfirmSwitchKey = "Title.Auth.LinkConfirmSwitch";
+
     // 요청 겹침 방지 래치 — 세 버튼이 모두 같은 AuthBootstrap을 건드린다
     private bool m_isBusy;
 
@@ -329,10 +333,13 @@ public class AuthGatePanel : PanelBase
 
         // 확정된 값을 인수로 넘긴다 — 확인창이 떠 있는 동안 입력이 바뀌어도
         // 사용자가 재확인한 그 아이디가 전송된다.
-        confirm.Prepare(
-            LocalizedStrings.Get(k_table, k_linkConfirmKey, id),
-            () => SignUpAsync(id, pw).Forget()
-        );
+        // 이미 연동돼 있으면 이 가입은 '부계정 만들기'라 경고가 달라진다 (AuthBootstrap.LinkAccountAsync).
+        string previous = Auth.AccountUsername;
+        string message = string.IsNullOrEmpty(previous)
+            ? LocalizedStrings.Get(k_table, k_linkConfirmKey, id)
+            : LocalizedStrings.Get(k_table, k_linkConfirmSwitchKey, id, previous);
+
+        confirm.Prepare(message, () => SignUpAsync(id, pw).Forget());
         confirm.OpenPanel();
     }
 
@@ -345,6 +352,12 @@ public class AuthGatePanel : PanelBase
         Refresh();
         try
         {
+            // 승격시킬 익명 계정이 없으면 여기서 만든다 — 로그아웃하고 돌아온 자리에서도
+            // 회원가입이 그대로 되게 한다. 토큰이 남아 있으면 원래 PlayerId로 돌아오므로,
+            // 그 계정에 이미 아이디가 붙어 있으면 아래 Link가 부계정 경로로 간다.
+            if (!Auth.IsSignedIn)
+                await Auth.InitializeAndSignInAsync();
+
             await Auth.LinkAccountAsync(username, password);
             m_passwordInput.text = string.Empty;
             SetStatus(Status(EAuthStatus.LinkSucceeded));
@@ -421,9 +434,10 @@ public class AuthGatePanel : PanelBase
         m_signInButton.interactable = ready;
         m_guestButton.interactable = ready;
 
-        // 회원가입만 예외다 — 승격(LinkAccount)은 승격시킬 익명 계정이 있어야 성립한다.
-        // 로그아웃 상태에서는 [게스트로 시작]으로 익명 계정을 되찾은 뒤라야 누를 수 있다.
-        m_signUpButton.interactable = ready && signedIn;
+        // 회원가입도 다른 둘과 같이 푼다. 승격시킬 익명 계정이 없으면 SignUpAsync가 먼저 만든다 —
+        // 예전에는 여기서 signedIn까지 요구해, 로그아웃하고 관문으로 돌아오면 <b>회원가입만 회색</b>이
+        // 됐다. [게스트로 시작]을 먼저 눌러야 풀린다는 것을 화면 어디에서도 알 수 없었다.
+        m_signUpButton.interactable = ready;
 
         m_usernameInput.interactable = ready;
         m_passwordInput.interactable = ready;

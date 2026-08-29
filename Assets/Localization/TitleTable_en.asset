@@ -60,7 +60,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 6994091118604
-    m_Localized: Password (8+ chars, upper/lower case, number, symbol)
+    m_Localized: Password (8+ chars, lowercase, digit, symbol)
     m_Metadata:
       m_Items: []
   - m_Id: 6994091118607
@@ -127,11 +127,6 @@ MonoBehaviour:
       - rid: 6276845892712267879
   - m_Id: 10788103327755
     m_Localized: Passwords can only use letters, digits, and symbols.
-    m_Metadata:
-      m_Items: []
-  - m_Id: 10788103327756
-    m_Localized: Passwords need at least one uppercase letter, one lowercase letter,
-      one digit, and one symbol.
     m_Metadata:
       m_Items: []
   - m_Id: 10788103327757
@@ -304,6 +299,22 @@ MonoBehaviour:
 
       Would you like to run the tutorial and
       learn the controls and the investigation flow?'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 9091959062167552
+    m_Localized: Passwords need at least one lowercase letter, one digit, and one
+      symbol.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 9100017821712384
+    m_Localized: 'This creates a new account with the ID ''{0}''.
+
+      ''{1}''
+      stays as it is - sign in with that ID to come back.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 9100017821712385
+    m_Localized: "{0}\nThis device switched to a new account - sign in with '{1}' to come back."
     m_Metadata:
       m_Items: []
   references:
