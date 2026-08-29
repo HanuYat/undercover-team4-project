@@ -40,18 +40,18 @@ public class Scanner : ItemBase
     /// 인스턴스 이벤트이므로 구독자는 자기 스캐너의 결과만 받는다 — 스캔 결과는 본인 화면 전용. (GDD 5-4)</summary>
     public event Action<CitizenProfile, ulong> OnScanCompleted;
 
-    /// <summary>오너 화면 토스트로 띄울 사유 문자열 (#309). ScanResultPresenter(오너 로컬)가 구독.
+    /// <summary>오너 화면 토스트로 띄울 사유 (#309 → #525). ScanResultPresenter(오너 로컬)가 구독.
     /// 범위 이탈 실패·완충 상태 충전 시도에 발행 — 배터리 부족/충전완료 알림은 배터리 값 변화로 presenter가 직접 구동한다.</summary>
-    public event Action<string> OnScanFeedback;
+    public event Action<EItemFeedback> OnScanFeedback;
 
     /// <summary>배터리가 0인 채로 사용을 시도했을 때 발행 — 오너 로컬 전용. (#810)
     /// 문구는 프레젠터가 자기 키로 조회한다. 여기서 완성 문장을 넘기지 않는 이유는 표시 문구의
     /// 주인이 UI 쪽이기 때문이다(#525가 지향하는 방향).</summary>
     public event Action OnDepletedUseAttempt;
 
-    /// <summary>기반 NotifyOwner(toast:true)가 오너 로컬에서 부르는 발행 지점. (#309)</summary>
+    /// <summary>기반 ToastOwner가 오너 로컬에서 부르는 발행 지점. (#309)</summary>
     // 스캐너는 줍기 시 소유권이 홀더로 이전되므로(#88) 기반의 SendTo.Owner가 정확히 든 사람에게 간다.
-    protected override void RaiseOwnerToast(string message) => OnScanFeedback?.Invoke(message);
+    protected override void RaiseOwnerToast(EItemFeedback feedback) => OnScanFeedback?.Invoke(feedback);
 
     // 즉시 스캔에는 "읽는 중" 구간이 없어 루프 판독음이 울릴 자리가 없다 — 결과가 나오는 순간
     // 1회 울린다(#608). 채널링을 되살리면(m_channelSeconds > 0) 그때만 루프도 함께 돌아온다. (#483)
@@ -71,7 +71,7 @@ public class Scanner : ItemBase
 
         m_battery.CanCharge = () => !m_channel.IsActive;
         m_battery.ChargeBlockedReason = "충전 실패 — 스캔 채널링 중";
-        m_battery.FullyChargedMessage = "스캐너 배터리 가득 참";
+        m_battery.FullyChargedFeedback = EItemFeedback.ScannerBatteryFull;
         m_battery.OnChargeToast += RaiseOwnerToast; // 배터리 토스트를 스캐너 토스트 채널로 중계
     }
 
@@ -151,7 +151,7 @@ public class Scanner : ItemBase
         if (!CanUse())
         {
             if (IsBlackout)
-                NotifyOwner("스캐너 먹통 — 전자기기 장애", toast: true);
+                ToastOwner(EItemFeedback.ScannerBlackout);
             else if (m_battery != null && m_battery.IsDepleted)
             {
                 // 소진 안내는 여기서만 낸다 — 들고만 있을 때가 아니라 쓰려 했을 때다 (#810)
@@ -168,7 +168,7 @@ public class Scanner : ItemBase
             target != null ? target.GetComponentInParent<CitizenIdentity>() : null;
         if (aimed != null && IsAlreadyScanned(aimed))
         {
-            NotifyOwner("이미 스캔한 대상", toast: true);
+            ToastOwner(EItemFeedback.AlreadyScanned);
             return;
         }
 
@@ -261,7 +261,7 @@ public class Scanner : ItemBase
         // 먹통을 서버가 다시 보지 않으면 위조 RPC로 먹통 중 스캔이 뚫린다 (#372)
         if (IsBlackout)
         {
-            NotifyOwner("스캔 실패 — 전자기기 먹통", toast: true);
+            ToastOwner(EItemFeedback.ScanFailedBlackout);
             ClearPendingRpc();
             return;
         }
@@ -318,9 +318,10 @@ public class Scanner : ItemBase
                 case ServerChannel.Result.OutOfRange:
                     // 공용 ServerChannel.Result는 이탈 사유를 하나로 묶어 주므로, 먹통 여부를 여기서 갈라
                     // "먹통으로 끊겼는데 범위 이탈로 표시되는" 어긋남을 막는다 (#372).
-                    NotifyOwner(
-                        IsBlackout ? "스캔 중단 — 전자기기 먹통" : "스캔 실패 — 대상이 범위를 벗어남",
-                        toast: true);
+                    ToastOwner(
+                        IsBlackout
+                            ? EItemFeedback.ScanStoppedBlackout
+                            : EItemFeedback.ScanFailedOutOfRange);
                     ClearPendingRpc();
                     return;
 

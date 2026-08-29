@@ -356,12 +356,11 @@ public class PlayerLooter : ChanneledInteractionBehaviour
     /// 전부 거부되는 구간이 실제로 존재한다 — 스스로는 못 움직여도 <b>남이 대상을 밧줄로 끌어갈 수
     /// 있다</b>(#365). 자금 0 케이스를 굳이 알리는 것(<see cref="ServerTakeFunds"/>)과 같은 이유다.
     ///
-    /// <b>지금은 로그뿐이다.</b> 토스트로 띄우려면 <c>toast: true</c>만으로는 안 된다 —
+    /// <b>지금은 로그뿐이다.</b> 토스트로 띄우려면 <c>ToastOwner</c>를 부르는 것만으로는 안 된다 —
     /// <see cref="ChanneledInteractionBehaviour.RaiseOwnerToast"/>의 기반 구현이 무동작이라
     /// 하위가 자기 토스트 채널을 갖고 재정의해야 하고(<see cref="Scanner"/>·<see cref="ItemBattery"/>가 그렇다),
-    /// 그 채널인 <c>App.UI.Toast.Show</c>는 <c>LocalizedString</c>만 받는다. 즉 HudTable 항목과
-    /// 프리팹 배선이 함께 필요하고, 그 문구는 #525(완성 문장 → enum 전송)의 대상이기도 하다.
-    /// 화면 표시는 그쪽에서 한꺼번에 붙이는 편이 맞다.
+    /// 사유는 <see cref="EItemFeedback"/> 값과 <c>Item.Feedback.*</c> 키가 함께 필요하다 (#525).
+    /// 이 클래스에는 아직 그 채널이 없다.
     /// </summary>
     private void NotifyOwnerLootRejected() =>
         NotifyOwner("약탈 실패 — 대상에 손이 닿지 않는다 (거리·가시선·대상 상태)");

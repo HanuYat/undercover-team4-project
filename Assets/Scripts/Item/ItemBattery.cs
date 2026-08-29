@@ -35,14 +35,14 @@ public class ItemBattery : ChanneledInteractionBehaviour, IChargeable
     /// <summary>CanCharge가 막았을 때 오너 콘솔에 남길 사유. 본체가 자기 표현으로 덮어쓴다.</summary>
     public string ChargeBlockedReason { get; set; } = "충전 실패 — 아이템 사용 중";
 
-    /// <summary>완충 상태에서 충전을 시도했을 때 띄울 오너 토스트 (#309).</summary>
-    public string FullyChargedMessage { get; set; } = "배터리 가득 참";
+    /// <summary>완충 상태에서 충전을 시도했을 때 띄울 오너 토스트 (#309). 본체가 자기 값으로 덮어쓴다.</summary>
+    public EItemFeedback FullyChargedFeedback { get; set; } = EItemFeedback.BatteryFull;
 
     /// <summary>오너 화면 토스트로 띄울 사유 — 본체가 자기 토스트 채널로 중계한다 (#309).</summary>
-    public event Action<string> OnChargeToast;
+    public event Action<EItemFeedback> OnChargeToast;
 
-    /// <summary>기반 NotifyOwner(toast:true)의 발행 지점 — 본체로 올려보낸다.</summary>
-    protected override void RaiseOwnerToast(string message) => OnChargeToast?.Invoke(message);
+    /// <summary>기반 ToastOwner의 발행 지점 — 본체로 올려보낸다.</summary>
+    protected override void RaiseOwnerToast(EItemFeedback feedback) => OnChargeToast?.Invoke(feedback);
 
     /// <summary>
     /// 배터리를 amount만큼 충전한다. 오너·비오너(본부 충전기 #60) 모두 호출 가능.
@@ -81,7 +81,7 @@ public class ItemBattery : ChanneledInteractionBehaviour, IChargeable
         // 이미 완충이면 값 변화가 없어 OnCharged가 안 울리므로, 여기서 직접 오너 토스트를 띄운다 (#309).
         if (IsFullyCharged)
         {
-            NotifyOwner(FullyChargedMessage, toast: true);
+            ToastOwner(FullyChargedFeedback);
             return;
         }
 

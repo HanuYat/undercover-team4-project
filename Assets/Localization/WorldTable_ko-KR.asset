@@ -70,6 +70,14 @@ MonoBehaviour:
     m_Localized: "\uC0AC\uC774\uBC84\uD391\uD06C"
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000902
+    m_Localized: "\uD310\uC815 \uBC84\uD2BC"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000903
+    m_Localized: "\uAC10 \uC625\n\uC218\uAC10 {0}\uBA85"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:
@@ -78,5 +86,6 @@ MonoBehaviour:
       data:
         m_Entries: 
         m_SharedEntries:
+        - id: 7100000000903
         - id: 3135255941120
         - id: 3135310467073

@@ -23,6 +23,9 @@ public class ShopBrowserPanel : PanelBase
 {
     private const string k_commonTable = "CommonTable";
     private const string k_shopTable = "ShopTable";
+
+    // 구매 응답 사유는 규약 키로 조회한다 — 서버가 보내는 것은 enum뿐이다 (#525)
+    private const string k_replyPrefix = "Shop.Reply.";
     private const string k_moneyKey = "Common.Unit.Money";
 
     public override bool CanCloseWithESC => true;
@@ -415,12 +418,13 @@ public class ShopBrowserPanel : PanelBase
         m_lineup.RequestPurchase(slot);
     }
 
-    private void ShowNotice(string message)
+    // 서버는 사유만 보내고 문구는 여기서 자기 로케일로 조회한다 — 규약 키 Shop.Reply.<enum 이름> (#525)
+    private void ShowNotice(EShopReply reply)
     {
-        if (m_noticeText == null || string.IsNullOrEmpty(message))
+        if (m_noticeText == null)
             return;
 
-        m_noticeText.text = message;
+        m_noticeText.text = LocalizedStrings.Get(k_shopTable, k_replyPrefix + reply);
         HideNoticeAfterAsync(++m_noticeVersion).Forget();
     }
 

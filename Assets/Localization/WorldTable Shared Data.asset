@@ -63,6 +63,14 @@ MonoBehaviour:
     m_Key: World.Map.Cyberpunk
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000902
+    m_Key: World.JailIntake.Label
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000903
+    m_Key: World.Jail.Signboard
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

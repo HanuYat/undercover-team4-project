@@ -111,6 +111,34 @@ MonoBehaviour:
     m_Key: Item.Description.ShopCatalog
     m_Metadata:
       m_Items: []
+  - m_Id: 13576462958755841
+    m_Key: Item.Feedback.ScannerBlackout
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13576462958755842
+    m_Key: Item.Feedback.AlreadyScanned
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13576462958755843
+    m_Key: Item.Feedback.ScanFailedBlackout
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13576462958755844
+    m_Key: Item.Feedback.ScanStoppedBlackout
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13576462958755845
+    m_Key: Item.Feedback.ScanFailedOutOfRange
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13576462958755846
+    m_Key: Item.Feedback.BatteryFull
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13576462958755847
+    m_Key: Item.Feedback.ScannerBatteryFull
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

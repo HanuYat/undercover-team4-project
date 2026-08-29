@@ -72,6 +72,10 @@ public class ScanResultPresenter : NetworkBehaviour
     private const string k_chargedKey = "Hud.Scan.Charged";
     private const string k_lowBatteryKey = "Hud.Scan.LowBattery";
 
+    // 아이템 토스트 사유는 아이템 쪽 테이블이 주인이다 — 규약 키 Item.Feedback.<enum 이름> (#525)
+    private const string k_itemTable = "ItemTable";
+    private const string k_feedbackPrefix = "Item.Feedback.";
+
     private PlayerInteractor m_interactor;
     private PlayerItemUser m_itemUser;
     private Scanner m_scanner; // 현재 장착된 스캐너 인스턴스에 바인딩. 스캐너 미장착이면 null.
@@ -391,8 +395,10 @@ public class ScanResultPresenter : NetworkBehaviour
     private void HandleDepletedUseAttempt() =>
         ShowToast(LocalizedStrings.Get(k_hudTable, k_lowBatteryKey), transient: true);
 
-    // 범위 이탈 등 스캔 실패 사유 — 잠깐 띄운다.
-    private void HandleScanFeedback(string message) => ShowToast(message, transient: true);
+    // 범위 이탈 등 스캔 실패 사유 — 잠깐 띄운다. 스캐너는 사유를 enum으로만 보내고
+    // 문구는 여기서 자기 로케일로 조회한다 (#525) — 서버 언어가 새어 들어오지 않게.
+    private void HandleScanFeedback(EItemFeedback feedback) =>
+        ShowToast(LocalizedStrings.Get(k_itemTable, k_feedbackPrefix + feedback), transient: true);
 
     // transient=true면 m_toastSeconds 후 자동 숨김, false면 다음 토스트/숨김 전까지 지속.
     private void ShowToast(string message, bool transient)

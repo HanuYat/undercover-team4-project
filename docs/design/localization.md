@@ -347,13 +347,13 @@
 > 복귀 도착지(성공=상점 / 실패=로비)를 `Shop`/`Lobby`가 아니라 enum 이름으로 둔 것은, 키 이름만으로 뜻이
 > 덜 드러나는 대신 **검증에 자동으로 편입**되기 때문이다 — 결과가 늘면 두 접두 모두에서 빠진 키가 잡힌다.
 
-### Phase 3 — 네트워크 문자열 제거 (토스트만, 단독 PR) — **보류, 이슈 #525로 분리**
+### Phase 3 — 네트워크 문자열 제거 (토스트만, 단독 PR) — **완료 (#525)**
 
-> **이 Phase는 #497에서 떼어 [#525](https://github.com/hyunjin0814/undercover-team4-project/issues/525)로 옮겼다 (2026-08-05, 팀 판단).**
-> 대상 UI 둘이 아직 확정이 아니다 — **스캐너 배터리 피드백은 이미지 UI(게이지·아이콘)로 바뀔 수 있고**,
-> **상점도 임시 구현**이라 응답 3종이 지금 형태로 남을지 미정이다. 지금 키를 박으면 UI가 확정된 뒤 다시 걷어내야 한다.
-> 두 UI가 정해진 뒤 착수한다 — 아래 구조(`NotifyOwner` 분리)는 UI 형태와 무관하게 그대로 유효하다.
-> 나머지 Phase(1·2·4·5)는 이 보류와 무관하게 진행한다.
+> **이 Phase는 #497에서 떼어 [#525](https://github.com/hyunjin0814/undercover-team4-project/issues/525)로 옮겼다 (2026-08-05, 팀 판단)** — 대상 UI 둘이 확정 전이었기 때문이다.
+> UI가 확정된 뒤 2026-08-29에 착수해 마쳤다. 착수 시점에 문구 목록을 다시 셌더니 예상과 달랐다:
+> 스캐너 토스트는 4건이 아니라 **5건**(`이미 스캔한 대상`이 늘었다), 상점 응답은 3건이 아니라 **4건**(`품절된 품목`),
+> `ShopStand`는 `ShopLineup`으로, `ShopStandView`는 `ShopBrowserPanel`로 이름이 바뀌어 있었다.
+> `ItemBattery.ChargeBlockedReason`은 예정대로 **string 그대로 뒀다** — 로그 전용이라 번역 대상이 아니다.
 
 서버가 완성된 한국어를 RPC로 실어 보내는 경로를 enum 전송으로 바꾼다.
 
@@ -366,7 +366,9 @@ ToastOwner(EItemFeedback, args…)     ← 신설. RPC는 enum + 숫자 인자�
 
 - `toast:` bool 매개변수는 제거한다 — 두 책임이 갈렸으므로 분기가 필요 없다
 - `Core/Enums.cs`에 `EItemFeedback` · `EShopReply` 추가. 키는 규약대로 `Item.Feedback.<enum 이름>` / `Shop.Reply.<enum 이름>`
-- 적용 대상: `Scanner` 토스트 4건, [ShopStand.ReplyRpc](../../Assets/Scripts/Economy/ShopStand.cs) 3건, [ItemBattery](../../Assets/Scripts/Item/ItemBattery.cs)의 `ChargeBlockedReason`/`FullyChargedMessage`
+- 적용 대상(실제): `Scanner` 토스트 5건, [ShopLineup.ReplyRpc](../../Assets/Scripts/Economy/ShopLineup.cs) 4건, [ItemBattery.FullyChargedMessage](../../Assets/Scripts/Item/ItemBattery.cs) → `FullyChargedFeedback`.
+  `ChargeBlockedReason`은 로그 전용이라 string 그대로 뒀다 — 토스트로 승격할 때 `EItemFeedback` 값을 늘리면 된다
+- `ToastOwner`에 **인자 매개변수는 두지 않았다** — 지금 문구 11개 중 인자가 필요한 것이 하나도 없다. 필요해지면 그때 오버로드를 얹는다
 - **몽타주는 이 PR에서 제외** — §5 참고
 
 ### Phase 4 — 데이터 에셋
