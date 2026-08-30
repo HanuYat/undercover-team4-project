@@ -57,7 +57,7 @@ MonoBehaviour:
       FacialHairIndex: 0
       HeadwearIndex: 6
       EyewearIndex: 0
-    NonHumanoid: 0
+    NonHumanoid: 1
   - ModelName: Character_Cyber_Female_01
     Profile:
       HairStyleIndex: 7
@@ -147,7 +147,7 @@ MonoBehaviour:
       FacialHairIndex: 0
       HeadwearIndex: 6
       EyewearIndex: 3
-    NonHumanoid: 0
+    NonHumanoid: 1
   - ModelName: Character_Monk_Male_01
     Profile:
       HairStyleIndex: 0
@@ -183,7 +183,7 @@ MonoBehaviour:
       FacialHairIndex: 4
       HeadwearIndex: 3
       EyewearIndex: 0
-    NonHumanoid: 0
+    NonHumanoid: 1
   - ModelName: Character_Robot_01
     Profile:
       HairStyleIndex: 0
