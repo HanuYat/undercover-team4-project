@@ -62,6 +62,9 @@ public class BombDevice : NetworkBehaviour
     private BombChaseDriver m_chase;
     private BombBlast m_blast;
 
+    // 폭발 이벤트를 이미 발행했는가 — 상태 동기화와 RPC가 겹쳐도 연출이 두 번 나지 않게 한다 (#936)
+    private bool m_explodedRaised;
+
     // 라운드당 폭탄 1개 — 씬에 놓인 상자(BombCrate)가 "내 상자에서 나오는 폭탄인가"를 묻는 단일 참조.
     // 매니저가 아니라 스폰물이므로 App 파사드가 아닌 이 정적 참조로 노출한다(단일 인스턴스 보장은 이벤트가 한다).
     private static BombDevice s_active;
@@ -69,8 +72,10 @@ public class BombDevice : NetworkBehaviour
     /// <summary>현재 씬에 살아 있는 폭탄 — 없으면 null. 상자가 여는 시점을 판단하는 진입점.</summary>
     public static BombDevice Active => s_active;
 
-    /// <summary>현재 상태 — 서버·오프라인은 실참조, 원격 피어는 동기화값.</summary>
-    public BombState State => IsSpawned && !IsServer ? (BombState)m_stateSynced.Value : m_state;
+    /// <summary>현재 상태 — 서버·오프라인은 실참조, 원격 피어는 동기화값.
+    /// 폭발만 예외로 실참조를 먼저 본다 — 클라는 RPC로 먼저 알 수 있고 그때 동기화값은 아직 Locked다 (#936).</summary>
+    public BombState State =>
+        m_state == BombState.Exploded || !IsSpawned || IsServer ? m_state : (BombState)m_stateSynced.Value;
 
     /// <summary>카운트다운이 도는 중인가 — 추격 중(Armed)과 폭심 확정 후(Locked)를 함께 묶는다.</summary>
     public bool IsCountingDown => State == BombState.Armed || State == BombState.Locked;
@@ -277,6 +282,11 @@ public class BombDevice : NetworkBehaviour
         m_chase.Stop();
         m_blast.ServerExplode();
         SetState(BombState.Exploded);
+
+        // 폭발만 RPC로 한 번 더 알린다 (#936) — 폭탄은 폭발 직후 디스폰되므로 상태 동기화에만
+        // 기대면 델타가 틱 전에 사라져 원격 피어에 영영 도달하지 않는다(연출이 통째로 빠진다).
+        if (IsSpawned && IsServer)
+            ExplodedClientRpc();
     }
 
     // ---- 상태 전파 ----
@@ -297,7 +307,25 @@ public class BombDevice : NetworkBehaviour
     private void HandleStateEntered(BombState state)
     {
         if (state == BombState.Exploded)
-            OnExploded?.Invoke();
+            RaiseExplodedOnce();
+    }
+
+    // 폭발 알림 경로가 둘(상태 동기화·RPC)이라 한 번만 발행되도록 잠근다 — 호스트는 로컬 발행과
+    // 자기에게도 오는 ClientRpc를 둘 다 받고, 클라도 델타가 제때 나가면 양쪽을 받는다.
+    private void RaiseExplodedOnce()
+    {
+        if (m_explodedRaised)
+            return;
+
+        m_explodedRaised = true;
+        OnExploded?.Invoke();
+    }
+
+    [ClientRpc]
+    private void ExplodedClientRpc()
+    {
+        m_state = BombState.Exploded; // 델타가 못 나갔을 수 있다 — 상태도 여기서 맞춘다
+        RaiseExplodedOnce();
     }
 
     // ---- 동기화 콜백 (원격 클라 전용) ----
