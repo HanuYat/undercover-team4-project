@@ -199,8 +199,8 @@ public class AreaScanner : ItemBase
     }
 
     // 반경 내 NPC를 모아 진범이 있는지만 본다 — 수는 세지 않는다(이진 신호).
-    // 유치장에 갇혔거나 기절·사망한 진범도 그대로 포함한다 — 검거 판정(ArrestJudge·JailZone)과
-    // 같은 기준(IsCriminal)을 그대로 쓰는 것이 목적이라 별도 상태 필터를 두지 않는다.
+    // 기절·사망한 진범은 그대로 포함하지만, 유치장에 수감(Jailed)된 진범은 뺀다 — 이미 처리가
+    // 끝난 표적까지 "발견"으로 뜨면 다 잡고도 계속 찾아야 하는 것처럼 보인다(#938).
     private bool ServerFindCriminalInRange(Vector3 origin)
     {
         int hitCount = Physics.OverlapSphereNonAlloc(
@@ -213,8 +213,14 @@ public class AreaScanner : ItemBase
         for (int i = 0; i < hitCount; i++)
         {
             CitizenIdentity identity = s_scanColliders[i].GetComponentInParent<CitizenIdentity>();
-            if (identity != null && identity.IsCriminal)
-                return true;
+            if (identity == null || !identity.IsCriminal)
+                continue;
+
+            NpcController npc = identity.GetComponent<NpcController>();
+            if (npc != null && npc.CurrentState == NpcState.Jailed)
+                continue;
+
+            return true;
         }
 
         return false;
