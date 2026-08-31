@@ -84,21 +84,8 @@ public class BombDevice : NetworkBehaviour
     /// 카운트다운 전(등장·대기)과 이미 터진 뒤는 그냥 소품이라 빗나감으로 둔다.</summary>
     public bool CanBeStruck => IsCountingDown;
 
-    /// <summary>피해·넉백이 닿는 반경(m) — <see cref="BombBlast"/>가 든 값을 그대로 내보낸다.</summary>
+    /// <summary>피해·발사가 닿는 반경(m) — <see cref="BombBlast"/>가 든 값을 그대로 내보낸다.</summary>
     public float ExplosionRadius => m_blast.ExplosionRadius;
-
-    /// <summary>넉백 세기(m/s) — <see cref="BombBlast"/>가 든 값을 그대로 내보낸다.</summary>
-    public float KnockbackForce => m_blast.KnockbackForce;
-
-    /// <summary>
-    /// 폭심에서 <paramref name="targetPosition"/>이 받는 넉백 속도(m/s) — 반경 밖이면 <see cref="Vector3.zero"/>.
-    /// 뷰(<see cref="BombExplosionView"/>)가 자기 오너 캐릭터를 밀 때 쓴다. 식은
-    /// <see cref="BombBlastProfile"/> 한 곳이 쥐고 이것은 파사드 위임이다.
-    /// </summary>
-    public Vector3 EvaluateKnockback(Vector3 targetPosition) => m_blast.EvaluateKnockback(targetPosition);
-
-    /// <summary>대상이 벽 등에 가려졌는가 — 넉백 연출(<see cref="BombExplosionView"/>)이 서버 피해 판정과 같은 기준을 쓴다.</summary>
-    public bool IsOccluded(Vector3 targetPosition, Transform targetRoot) => m_blast.IsOccluded(targetPosition, targetRoot);
 
     /// <summary>남은 시간(초) — 카운트다운 UI용. 카운트다운 중이 아니면 0.</summary>
     public float RemainingSeconds

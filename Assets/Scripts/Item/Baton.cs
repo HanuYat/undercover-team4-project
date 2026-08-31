@@ -376,7 +376,7 @@ public class Baton : ItemBase, IAimedWeapon
         NotifyHit(playerTarget != null);
 
         // 동료를 맞췄다 — 아군 오사 (#461). NPC와 같은 데미지를 그대로 넣고, HP 0이 되면
-        // PlayerHealth.SetHp가 기능 정지(IncapacitationCause.Die)까지 이어준다 — 여기서 따로 할 일이 없다.
+        // PlayerHealth.SetHp가 다운 유예(IncapacitationCause.Down)까지 이어준다 — 여기서 따로 할 일이 없다.
         // NPC 경로의 ServerReactTo(반격·도주 전환)는 플레이어에게 해당 없다.
         // 대박(#816)도 예외 없이 이 경로를 그대로 탄다 — 특별 취급하지 않는다는 뜻이지 즉사를
         // 보장한다는 뜻은 아니다. 건강한 동료가 맞으면 PlayerHealth.SetHp가 다운(60초 유예,

@@ -667,11 +667,13 @@ MonoBehaviour:
     m_knockbackForce: 30
     m_knockbackUpwardRatio: 0.45
     m_knockbackEdgeFalloff: 0.25
-    m_ragdollImpulseScale: 0.22
+    m_ragdollImpulseScale: 0.3
     m_ragdollLiftRatio: 1.2
   m_blockMask:
     serializedVersion: 2
     m_Bits: 1
+  m_launchStunSeconds: 6
+  m_launchMaxSeconds: 6
 --- !u!1001 &2473239888170800502
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// 폭발 세기 — 반경·피해·넉백·래그돌 임펄스의 <b>감쇠식과 노브를 함께 든 값 객체</b>. (#768 분할)
+/// 폭발 세기 — 반경·피해·래그돌 임펄스의 <b>감쇠식과 노브를 함께 든 값 객체</b>. (#768 분할)
 ///
 /// <b>Unity 타입이 아니다</b> — 세 감쇠식은 순수 계산이고, 여기 붙은 튜닝 근거가 폭탄 코드에서
 /// 가장 두꺼운 덩어리다. 떼어 두면 감쇠식을 읽으려고 NGO RPC·수명 타이머를 지나칠 필요가 없다.
@@ -28,7 +28,7 @@ public class BombBlastProfile
     [SerializeField]
     private float m_damageEdgeFalloff = 0.2f;
 
-    [Tooltip("넉백 세기(m/s) — 폭심에서 밀려나는 초기 속도")]
+    [Tooltip("폭심에서 밀려나는 기준 세기(m/s) — 아래 래그돌 배율이 이 값에 곱해진다")]
     [SerializeField]
     private float m_knockbackForce = 12f;
 
@@ -42,21 +42,21 @@ public class BombBlastProfile
     [SerializeField]
     private float m_knockbackEdgeFalloff = 0.25f;
 
-    [Tooltip("사망자 래그돌의 수평 세기 = 넉백 수평 세기 × 이 값. <b>연출 노브다</b> — 크게 잡으면 " +
-             "시원하게 날아간다. 예전 주석이 말하던 '캡슐이 못 따라온다'는 제약은 이미 사라졌다 " +
-             "(EvaluateRagdollImpulse 주석)")]
-    [Range(0f, 1f)]
+    [Tooltip("래그돌 수평 세기 = 넉백 수평 세기 × 이 값. <b>연출 노브다</b> — 크게 잡으면 " +
+             "시원하게 날아간다. '캡슐이 못 따라온다'는 예전 제약은 캡슐 넉백 자체가 사라지며 " +
+             "함께 없어졌다 (EvaluateRagdollImpulse 주석). 사망자와 생존자가 같은 값을 쓴다")]
+    [Range(0f, 2f)]
     [SerializeField]
-    private float m_ragdollImpulseScale = 0.22f;
+    private float m_ragdollImpulseScale = 0.3f;
 
-    [Tooltip("사망자 래그돌의 상승 세기 = 위 수평 세기 × 이 값. <b>곧 발사각이다</b> — 1.0이 45°로 " +
+    [Tooltip("래그돌 상승 세기 = 위 수평 세기 × 이 값. <b>곧 발사각이다</b> — 1.0이 45°로 " +
              "사거리 최대이고, 크면 높이 뜨는 대신 가까이 떨어진다. 예전 값 1.8은 61°라 속도를 " +
              "높이에 낭비했다. 정점(m) ≈ (수평세기 × 이 값)² / 19.6")]
     [Range(0f, 3f)]
     [SerializeField]
     private float m_ragdollLiftRatio = 1.2f;
 
-    /// <summary>피해·넉백이 닿는 반경(m).</summary>
+    /// <summary>피해·발사가 닿는 반경(m).</summary>
     public float Radius => m_explosionRadius;
 
     /// <summary>폭심에서의 피해량 — 로그·튜닝 표시용.</summary>
@@ -65,15 +65,12 @@ public class BombBlastProfile
     /// <summary>반경 끝에서 남는 피해 비율 — 로그·튜닝 표시용.</summary>
     public float DamageEdgeFalloff => m_damageEdgeFalloff;
 
-    /// <summary>넉백 세기(m/s).</summary>
-    public float KnockbackForce => m_knockbackForce;
-
     /// <summary>
     /// <paramref name="delta"/>(폭심 → 대상)가 받는 넉백 속도(m/s) — 반경 밖이면 <see cref="Vector3.zero"/>.
     ///
-    /// <b>넉백 세기의 단일 지점.</b> 플레이어는 각 피어가 자기 오너 캐릭터에 적용하고
-    /// (<see cref="BombExplosionView"/>), NPC는 서버가 직접 민다(<see cref="BombBlast"/>) —
-    /// 두 경로가 각자 감쇠식을 들면 같은 폭발인데 사람과 시민이 다르게 날아간다.
+    /// <b>방향과 거리 감쇠의 단일 지점.</b> 지금은 이 값을 그대로 쓰는 곳이 없다 —
+    /// 사람도 시민도, 죽었든 살았든 전부 <see cref="EvaluateRagdollImpulse"/>를 지나 래그돌 뼈로
+    /// 들어간다. 그 함수가 방향·감쇠를 여기서 얻으므로 <b>세기 튜닝의 뿌리</b>는 여전히 이쪽이다.
     /// </summary>
     /// <param name="delta">폭심에서 대상까지의 벡터. y는 이 안에서 지운다.</param>
     /// <param name="fallbackDirection">거리 0(폭탄을 정확히 밟고 선 경우)에 쓸 방향.</param>
@@ -117,8 +114,9 @@ public class BombBlastProfile
     }
 
     /// <summary>
-    /// 사망자 래그돌 임펄스 — <see cref="EvaluateKnockback"/>의 <b>수평 성분과 방향</b>만 가져와
-    /// 래그돌용 세기·들어올림으로 다시 세운다.
+    /// 래그돌 임펄스 — <see cref="EvaluateKnockback"/>의 <b>수평 성분과 방향</b>만 가져와
+    /// 래그돌용 세기·들어올림으로 다시 세운다. <b>사망자와 생존자가 같은 값을 받는다</b> —
+    /// 폭발 하나에서 죽은 몸과 산 몸이 다르게 날아가면 그림이 갈린다.
     ///
     /// <b>비행 거리는 설계 제약이 아니라 연출 노브다</b> — 예전 근거(캡슐이 지형에 막힌다)는
     /// <c>PlayerRagdoll.TickCapsuleFollow</c>가 직접 대입으로 바뀌며 사라졌고, 남은 실질 상한은

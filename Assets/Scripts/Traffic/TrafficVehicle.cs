@@ -32,6 +32,10 @@ public class TrafficVehicle : NetworkBehaviour
     [Tooltip("치였을 때 위로 뜨는 세기 — 0이면 바닥으로만 밀린다")]
     [SerializeField] private float m_knockbackUp = 6f;
 
+    [Tooltip("즉사 시 래그돌 임펄스 = 위 넉백 벡터 × 이 값. 1.0이 넉백 그대로다 — 홈런 진압봉의 발사 세기(14 m/s)와 같은 규모라 출발점으로 맞다. 캡슐 넉백과 값을 나눠 두는 이유는 단위가 다르기 때문이다: 저쪽은 CharacterController 외력 속도 하나이고, 이쪽은 뼈마다 linearVelocity로 얹혀 회전 편향까지 곱해진다 — 합치면 둘 중 하나가 영구히 인질이 된다")]
+    [Range(0f, 3f)]
+    [SerializeField] private float m_ragdollImpulseScale = 1f;
+
     [Header("예고")]
     [Tooltip("스폰~회수 내내 켜져 있는 헤드라이트 — 소리를 못 듣는 상황(먹통·소음)에서 유일한 예고다")]
     [SerializeField] private Light[] m_headlights;
@@ -449,14 +453,38 @@ public class TrafficVehicle : NetworkBehaviour
     }
 
     // 시민도 같은 피해를 받고(#634) 진입점은 TakeEnvironmentalDamage다(#690 — 밧줄 신병도 치인다).
-    // ⚠ 넉백이 피해보다 먼저다: 나중이면 Dead가 되어 씹힌다. 시체 임펄스는 안 건다(가능하지만 #634 결정, #768).
+    //
+    // <b>순서가 뒤집혔다 (#903).</b> 예전에는 넉백을 <b>먼저</b> 걸었다 — 나중이면 Dead가 되어 씹히기
+    // 때문이다. 그래서 피해 120으로 사실상 항상 죽는 시민이 <b>뻣뻣한 포물선으로 날아가다 도중에
+    // 죽는</b> 그림이 났다. 이제 피해를 먼저 넣고 <b>결과로 갈린다</b>: 죽었으면 래그돌 임펄스,
+    // 살아남았으면 종전 넉백. 폭발(<see cref="BombBlast"/>)이 이미 같은 모양이라 둘이 맞춰진다.
+    //
+    // 이것이 #634/#768의 <b>"차에 치인 NPC 시체에 임펄스는 안 건다"를 뒤집는다</b> — 그 결정은 기술적
+    // 장애가 아니라 당시 범위였고(옛 주석도 "가능하지만"이라 적었다), 폭발이 #768에서 먼저 넘어갔다.
+    // 근거는 docs/903-instant-death.md.
+    //
+    // 플레이어와 달리 <b>RPC가 필요 없다</b> — NPC 시체 자세는 RagdollPoseStreamer가 서버에서만
+    // 굴려 흘린다. 여기가 서버이므로 그대로 부르면 전 피어가 같은 결과를 본다.
     private void ServerHitNpc(NpcController npc)
     {
         if (!m_hitNpcs.Add(npc))
             return;
 
-        npc.Knockback.ServerApplyKnockback(BuildKnockback());
+        // 피해 전에 재 둔다 — 아래에서 "이 차에 치여 죽었나"를 가리는 근거다 (폭발과 같은 관례)
+        bool wasAlive = !npc.Death.IsDead;
         npc.Health.TakeEnvironmentalDamage(m_damage, gameObject);
+
+        if (!npc.Death.IsDead)
+        {
+            npc.Knockback.ServerApplyKnockback(BuildKnockback());
+            return;
+        }
+
+        // ⚠ wasAlive 가드로 <b>원래 있던 시체는 건드리지 않는다</b> — EnterRagdoll은 정착한 시체를
+        // 거부하지 않으므로, 없으면 도로에 누워 있던 몸을 지나가는 차마다 계속 밀고 간다. 그 몸은
+        // 유치장까지 끌고 가야 판정이 나는 검거 대상이다(GDD 7-3).
+        if (wasAlive && npc.Ragdoll != null)
+            npc.Ragdoll.EnterRagdoll(BuildRagdollImpulse());
     }
 
     private void ServerHitPlayer(PlayerHealth player)
@@ -468,10 +496,21 @@ public class TrafficVehicle : NetworkBehaviour
         if (player.CurrentHp <= 0)
             return;
 
-        player.GetComponent<IDamageable>()?.TakeDamage(m_damage, gameObject);
+        // <b>유예를 주지 않는 피해</b>다 — 피해 120은 최대 HP(100)를 넘기므로 다운 60초를 거치지
+        // 않고 곧바로 기능 정지다 (GDD 6-6 "닿으면 즉사"). 인자가 이미 PlayerHealth라
+        // GetComponent<IDamageable>()로 자기 자신을 다시 찾던 우회도 함께 없앤다.
+        player.TakeLethalDamage(m_damage, gameObject);
 
         // 휘말리면 밧줄에서 손을 뗀다 — 폭발과 같은 규칙 (#559)
         player.GetComponent<PlayerEscorter>()?.ReleaseAllDrags();
+
+        // 죽었다 — 캡슐 넉백 대신 <b>래그돌 임펄스</b>로 날린다. 캡슐 넉백을 걸어도 래그돌 진입의
+        // ClearExternalVelocity()가 지우므로 치인 자리에 그냥 주저앉는다.
+        if (player.CurrentHp == 0)
+        {
+            ServerNotifyDeathRagdoll(player, BuildRagdollImpulse());
+            return;
+        }
 
         // 넉백은 오너 클라에서 — 이동 권한이 오너라 서버가 밀면 다음 위치 전파에 덮인다 (폭발과 같은 이유)
         if (!IsSpawned)
@@ -491,6 +530,54 @@ public class TrafficVehicle : NetworkBehaviour
     }
 
     private Vector3 BuildKnockback() => m_direction * m_knockbackForward + Vector3.up * m_knockbackUp;
+
+    private Vector3 BuildRagdollImpulse() => BuildKnockback() * m_ragdollImpulseScale;
+
+    /// <summary>
+    /// 즉사자의 래그돌 임펄스를 <b>전 피어</b>에 알린다 — 서버(또는 오프라인) 전용.
+    /// <c>BombBlast.NotifyBlastDeaths</c>와 같은 구조다.
+    ///
+    /// ⚠ <b>아래 HitClientRpc처럼 RpcTarget.Single(OwnerClientId)을 쓰면 안 된다.</b>
+    /// TakeLethalDamage → Incapacitate(Die) → SetCause → ApplyDeathOwnership →
+    /// ChangeOwnership(ServerClientId)가 <b>같은 호출 스택에서 동기 실행</b>되므로 이 시점의
+    /// OwnerClientId는 이미 서버다. 게다가 저쪽 RPC는 피해자를 nm.LocalClient.PlayerObject로
+    /// 되짚으므로 <b>호스트가 자기 몸을 날린다.</b> 홈런 진압봉(#815)이 Single을 쓸 수 있는 것은
+    /// 그쪽 사유(Launched)가 소유권을 옮기지 않기 때문이다 — 복사하지 말 것.
+    ///
+    /// 전 피어로 보내는 것이 무해한 근거: 원격의 뼈는 전부 키네마틱이고 RagdollRig.ApplyImpulse가
+    /// 키네마틱 바디를 건너뛴다. 도착 순서도 이미 막혀 있다 — EnterRagdoll은 멱등이고, 반대 순서는
+    /// PlayerRagdoll의 원인 폴링이 받는다 (docs/player-ragdoll.md §8·§9).
+    /// </summary>
+    private void ServerNotifyDeathRagdoll(PlayerHealth player, Vector3 impulse)
+    {
+        NetworkObject victim = player.GetComponent<NetworkObject>();
+        if (victim == null)
+        {
+            ApplyDeathRagdoll(player.gameObject, impulse); // 오프라인 — 비네트워크 Play 테스트 폴백
+            return;
+        }
+
+        ApplyDeathRagdoll(victim.gameObject, impulse); // 서버·오프라인 로컬 발행
+
+        if (!IsSpawned || !IsServer)
+            return;
+
+        DeathRagdollRpc(victim, impulse);
+    }
+
+    // SendTo.NotServer라 호스트 중복 발행을 가드로 막을 필요가 없다(BombBlast는 ClientRpc라 가드가 있다).
+    [Rpc(SendTo.NotServer)]
+    private void DeathRagdollRpc(NetworkObjectReference victim, Vector3 impulse)
+    {
+        if (victim.TryGet(out NetworkObject resolved))
+            ApplyDeathRagdoll(resolved.gameObject, impulse);
+    }
+
+    private static void ApplyDeathRagdoll(GameObject victim, Vector3 impulse)
+    {
+        if (victim != null && victim.TryGetComponent(out PlayerRagdoll ragdoll))
+            ragdoll.EnterRagdoll(impulse);
+    }
 
     // 맞은 사람의 오너에게만 간다 — 남의 화면에서 밀어봤자 오너가 되돌린다
     [Rpc(SendTo.SpecifiedInParams)]

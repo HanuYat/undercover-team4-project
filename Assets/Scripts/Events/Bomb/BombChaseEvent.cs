@@ -41,6 +41,12 @@ public class BombChaseEvent : MonoBehaviour, ISuddenEvent
 
     public string DisplayName => "추격 폭탄";
 
+#if UNITY_EDITOR
+    /// <summary>개발자 단축키(<see cref="BombDevHotkeys"/>)가 같은 폭탄을 놓기 위한 접근자 — 에디터 전용.
+    /// 프리팹 참조를 두 벌 물리면 한쪽만 갈아 끼워도 조용히 어긋나므로 이 하나를 공유한다.</summary>
+    public BombDevice DevBombPrefab => m_bombPrefab;
+#endif
+
     public bool IsActive => m_bomb != null;
 
     /// <summary>

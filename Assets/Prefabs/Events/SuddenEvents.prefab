@@ -29,6 +29,7 @@ GameObject:
   - component: {fileID: 7089378905737564626}
   - component: {fileID: 3759178450178188696}
   - component: {fileID: 3941778138045511832}
+  - component: {fileID: 1258941598813027399}
   m_Layer: 0
   m_Name: SuddenEvents
   m_TagString: Untagged
@@ -506,3 +507,25 @@ MonoBehaviour:
   m_memberTable: {fileID: 11400000, guid: e993c7c812159444e8a3627a569ea582, type: 2}
   m_fallbackMemberCount: 3
   m_modelName: Character_Muscle_Male_01
+--- !u!114 &1258941598813027399
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498939978214492355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5ad7e1a895584fb45bfa926c0631a604, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BombDevHotkeys
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_enabled: 1
+  m_spawnKey: 11
+  m_detonateKey: 12
+  m_teleportKey: 10
+  m_spawnDistance: 3
+  m_teleportStandoff: 2
+  m_navSampleMaxDistance: 5
+  m_armOnSpawn: 0
+  m_lingerSeconds: 0

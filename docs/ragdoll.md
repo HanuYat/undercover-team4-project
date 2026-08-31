@@ -182,6 +182,20 @@ Animated ──진입(사망)──> Ragdoll ──정착──> Settled ──�
     T자에서 무너지기 시작했다).
 
     `RagdollRig.SetKinematic(false)`가 대신 한다. **호출부에 끼우지 말 것** — 같은 전이가 네 군데라
+
+12. **소유권은 래그돌이 꺼져 있을 때만 바뀐다** (플레이어 전용, #865). `PlayerIncapacitation.SetCause`가
+    원인 대입 직후 같은 프레임에 이관을 처리하고 원인 폴링은 그 뒤 `Update`에서 도므로, 이관은 언제나
+    `Animated` 구간에서 끝난다. **`ReleaseBonesToPhysics`가 키네마틱/동적을 진입 시점에 한 번만 정하고,
+    `RagdollPoseStreamer.BeginStreaming`이 권위 게이트를 진입 시점에만 통과시키는 것이 이 불변식의**
+    **산물이다.**
+
+    깨면 양쪽 피어가 동시에 고장난다 — 잃은 쪽은 동적 뼈에 자세 스트림이 겹쳐 발산하고, 얻은 쪽은
+    키네마틱 뼈 때문에 `AllAsleep`이 곧바로 참이 되어 **무너지기도 전에 정착한 뒤 영구히 굳는다**
+    (`EndStreaming`도 `m_streaming`이 선 적이 없어 아무것도 안 보낸다).
+
+    그래서 `Down`도 서버로 이관한다 — 다운→사망 전이에서 이관이 아예 일어나지 않게 하는 것이 목적이다.
+    남은 한 경로(`Launched → Down`)는 `PlayerRagdoll.TickAuthorityHandover`가 안전망으로 받는다.
+    [865-down-ragdoll.md §2](865-down-ragdoll.md) · [player-ragdoll.md §1-1](player-ragdoll.md)
     하나 빠뜨리면 조용히 돌아온다. [ragdoll-corpse-split.md §8-1](ragdoll-corpse-split.md)
 
 ---

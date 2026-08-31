@@ -3,9 +3,14 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 폭발 적용 — 반경 내 플레이어·NPC에 피해를 넣고 죽은 몸을 날린다.
+/// 폭발 적용 — 반경 내 플레이어·NPC에 피해를 넣고 <b>죽었든 살았든 래그돌로 날린다.</b>
 /// 세기(감쇠식·노브)는 <see cref="BombBlastProfile"/>이 갖고, 폭발 시점·상태 전이는 <see cref="BombDevice"/>가 쥔다.
-/// NetworkBehaviour인 이유는 <see cref="BlastDeathsClientRpc"/> 하나다.
+///
+/// <b>산 몸을 날리는 문은 홈런 진압봉(#815)이 낸 것을 그대로 쓴다</b> — 플레이어는
+/// <see cref="IncapacitationCause.Launched"/>, NPC는 <see cref="NpcKnockback.ServerLaunchRagdoll"/>.
+/// 예전의 캡슐 밀림(<c>PlayerMovement.AddKnockback</c>)·뻣뻣한 포물선(<c>ServerApplyKnockback</c>)은
+/// 폭발 경로에서 사라졌다 — 같은 폭발인데 죽은 몸과 산 몸이 다르게 날아가는 그림을 없애기 위해서다.
+/// NetworkBehaviour인 이유는 RPC 둘(<see cref="BlastDeathsClientRpc"/>·<see cref="LaunchSurvivorRpc"/>)이다.
 /// </summary>
 public class BombBlast : NetworkBehaviour
 {
@@ -16,6 +21,26 @@ public class BombBlast : NetworkBehaviour
     [Header("가림 판정")]
     [SerializeField]
     private LayerMask m_blockMask = 1; // Default
+
+    [Header("생존자 발사 (#815 문 재사용)")]
+    [Tooltip("살아남은 NPC가 착지 후까지 누워 있는 시간(초). <b>비행 시간보다 넉넉히 길게</b> — " +
+             "짧으면 아직 공중인 몸에 기상 모션이 나간다 (HomeRunBaton.m_stunSeconds와 같은 노브)")]
+    [SerializeField]
+    private float m_launchStunSeconds = 6f;
+
+    [Tooltip("살아남은 플레이어의 비행 상태 서버 최대시간(초) — 오너의 정착 통보가 안 오는 경우 " +
+             "(연결 끊김 등)의 안전장치. 정상 정착(1~3초)보다 넉넉히 잡을 것")]
+    [SerializeField]
+    private float m_launchMaxSeconds = 6f;
+
+    // 가림 검사 높이(m) — 피벗끼리 이으면 지면을 스치는 선이 되어 연석·경사·자기 콜라이더 바닥면에
+    // 걸린다 (#947). 폭탄은 자기 박스 중심, 사람은 가슴 높이에서 잇는다.
+    private const float k_occlusionOriginHeight = 0.4f;
+    private const float k_occlusionTargetHeight = 1f;
+
+    // 가림 검사 구 반지름(m) — 얇은 선은 창살·소품 틈으로 새어 '가려짐'을 오판한다
+    // (SuddenEventUtil.k_visProbeRadius와 같은 이유).
+    private const float k_occlusionProbeRadius = 0.2f;
 
     private readonly List<Transform> m_blastBuffer = new List<Transform>();
 
@@ -28,20 +53,8 @@ public class BombBlast : NetworkBehaviour
     // 한 폭발에서 이미 처리한 NPC — 위 버퍼가 같은 사람을 여러 번 담기 때문이다 (#768).
     private static readonly HashSet<NpcController> s_blastNpcs = new HashSet<NpcController>();
 
-    /// <summary>피해·넉백이 닿는 반경(m).</summary>
+    /// <summary>피해·발사가 닿는 반경(m).</summary>
     public float ExplosionRadius => m_profile.Radius;
-
-    /// <summary>넉백 세기(m/s).</summary>
-    public float KnockbackForce => m_profile.KnockbackForce;
-
-    /// <summary>
-    /// 폭심에서 <paramref name="targetPosition"/>이 받는 넉백 속도(m/s) — 반경 밖이면 <see cref="Vector3.zero"/>.
-    /// 세기의 단일 지점은 <see cref="BombBlastProfile.EvaluateKnockback"/>이고 이것은 폭심을 채워 주는 래퍼다.
-    /// </summary>
-    public Vector3 EvaluateKnockback(Vector3 targetPosition)
-    {
-        return m_profile.EvaluateKnockback(targetPosition - transform.position, transform.forward);
-    }
 
     /// <summary>폭심에서 <paramref name="targetPosition"/>이 받는 피해량 — 반경 밖이면 0.</summary>
     public int EvaluateDamage(Vector3 targetPosition)
@@ -49,14 +62,24 @@ public class BombBlast : NetworkBehaviour
         return m_profile.EvaluateDamage(targetPosition - transform.position);
     }
 
+    // 래그돌 뼈에 줄 초기 속도 — 사망자·생존자·시민이 전부 이 하나를 지난다.
     private Vector3 EvaluateRagdollImpulse(Vector3 targetPosition)
     {
         return m_profile.EvaluateRagdollImpulse(targetPosition - transform.position, transform.forward);
     }
 
-    // BombExplosionView도 이걸로 넉백 연출을 가려 서버 피해 판정과 기준을 맞춘다.
-    public bool IsOccluded(Vector3 targetPosition, Transform targetRoot) =>
-        AimOcclusion.IsBlocked(transform.position, targetPosition, targetRoot, m_blockMask);
+    /// <summary>
+    /// 대상이 <b>환경에</b> 가려졌는가 — 가려졌으면 피해도 임펄스도 통째로 없다.
+    /// 대상 자신도 사람이라 <see cref="AimOcclusion.IsEnvironmentBlocked"/>가 알아서 뺀다 — 루트를 넘길 필요가 없다.
+    /// </summary>
+    private bool IsOccluded(Vector3 targetPosition) =>
+        AimOcclusion.IsEnvironmentBlocked(
+            transform.position + Vector3.up * k_occlusionOriginHeight,
+            targetPosition + Vector3.up * k_occlusionTargetHeight,
+            m_blockMask,
+            k_occlusionProbeRadius,
+            transform
+        );
 
     /// <summary>
     /// 터진다 — 서버(또는 오프라인) 전용. 호출 시점과 중복 방지는 <see cref="BombDevice"/>가 쥔다.
@@ -71,23 +94,41 @@ public class BombBlast : NetworkBehaviour
         for (int i = 0; i < m_blastBuffer.Count; i++)
         {
             Transform target = m_blastBuffer[i];
-            if (IsOccluded(target.position, target))
+            if (IsOccluded(target.position))
                 continue;
 
-            IDamageable damageable = target.GetComponent<IDamageable>();
-            if (damageable != null)
-                damageable.TakeDamage(EvaluateDamage(target.position), gameObject);
-
-            // CollectFieldPlayers는 행동 가능한(HP>0) 플레이어만 담으므로, 지금 0이면 이 폭발로 죽은 것이다.
-            if (target.TryGetComponent(out PlayerHealth health)
-                && health.CurrentHp == 0
-                && target.TryGetComponent(out NetworkObject victim))
-                m_deathBuffer.Add(victim);
+            // <b>유예를 주지 않는 피해</b>다 — 폭심에서 HP가 0이 되면 다운 60초를 거치지 않고 곧바로
+            // 기능 정지다 (GDD 6-4 "폭심 즉사", PlayerHealth.TakeLethalDamage). 가장자리에서 HP가
+            // 남으면 살아서 날아갔다 일어난다 — <b>거리 감쇠는 그대로다.</b>
+            //
+            // CollectFieldPlayers가 PlayerHealth로 대상을 모으므로 이 조회는 형식상 가드다. 아래
+            // 사망자 수집이 같은 참조를 쓴다 — 예전에는 IDamageable로 때리고 두 줄 뒤에 PlayerHealth를
+            // 다시 뽑았다.
+            bool hasHealth = target.TryGetComponent(out PlayerHealth health);
+            if (hasHealth)
+                health.TakeLethalDamage(EvaluateDamage(target.position), gameObject);
 
             // 휘말린 사람은 밧줄에서 손을 뗀다(#559) — 두 번 불려도 무해하다.
+            // <b>날리기 전이다</b> — 몸이 물리로 넘어간 뒤에 줄을 끊을 이유가 없다.
             PlayerEscorter escorter = target.GetComponent<PlayerEscorter>();
             if (escorter != null)
                 escorter.ReleaseAllDrags();
+
+            // CollectFieldPlayers는 행동 가능한(HP>0) 플레이어만 담으므로, 지금 0이면 이 폭발로 죽은 것이다.
+            // TakeLethalDamage를 지난 뒤의 HP 0은 <b>곧 Die다</b> — 이 진입점에는 Down으로 갈 경로가 없다.
+            // 살아남았으면 <b>같은 임펄스로 산 채로</b> 날린다 — 아래 ServerLaunchSurvivor 주석 참고.
+            if (!hasHealth)
+                continue;
+
+            if (health.CurrentHp == 0)
+            {
+                if (target.TryGetComponent(out NetworkObject victim))
+                    m_deathBuffer.Add(victim);
+            }
+            else
+            {
+                ServerLaunchSurvivor(health, EvaluateRagdollImpulse(target.position));
+            }
         }
 
         NotifyBlastDeaths();
@@ -156,7 +197,49 @@ public class BombBlast : NetworkBehaviour
         ragdoll.EnterRagdoll(impulse);
     }
 
-    // 콜라이더 여러 개로 잡히는 NPC를 집합으로 한 번만 처리해 피해·넉백을 건다.
+    // ---- 폭발 생존자 → 산 채로 래그돌 발사 ----
+
+    /// <summary>
+    /// 살아남은 동료를 래그돌인 채로 날린다 — 홈런 진압봉(<c>HomeRunBaton.ServerLaunchPlayer</c>)과
+    /// 같은 문이다. 상태(<see cref="IncapacitationCause.Launched"/>)는 서버 권위 동기화값이라
+    /// 전 피어가 <c>PlayerRagdoll.PollRagdollCause</c> 폴링으로 알아서 진입하고, RPC가 필요한 것은
+    /// 임펄스 하나뿐이다.
+    ///
+    /// ⚠ <b>여기서만 <see cref="RpcTarget.Single"/>을 쓸 수 있다 — 사망자 경로에 복사하지 말 것.</b>
+    /// 비행(Launched)은 소유권을 옮기지 않아 물리를 맞은 본인(오너)이 돌리지만, 사망은
+    /// <c>ApplyDeathOwnership</c>이 같은 호출 스택에서 소유권을 서버로 옮겨 버려 이 시점의
+    /// <c>OwnerClientId</c>가 이미 서버다 — 그래서 사망자는 <see cref="BlastDeathsClientRpc"/>로
+    /// 전 피어에 뿌린다. 같은 함정이 <c>TrafficVehicle.ServerNotifyDeathRagdoll</c>에도 적혀 있다.
+    /// </summary>
+    private void ServerLaunchSurvivor(PlayerHealth player, Vector3 impulse)
+    {
+        // 반경 밖이라 세기가 남지 않았다 — 날릴 것이 없으면 눕히지도 않는다.
+        if (impulse == Vector3.zero)
+            return;
+
+        PlayerIncapacitation incap = player.GetComponent<PlayerIncapacitation>();
+        incap?.ServerLaunch(m_launchMaxSeconds); // 이미 무력화된 대상이면 스스로 무동작이다
+
+        if (!IsSpawned)
+        {
+            player.GetComponent<PlayerRagdoll>()?.EnterRagdoll(impulse); // 오프라인 Play 테스트
+            return;
+        }
+
+        LaunchSurvivorRpc(impulse, RpcTarget.Single(player.OwnerClientId, RpcTargetUse.Temp));
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void LaunchSurvivorRpc(Vector3 impulse, RpcParams rpcParams)
+    {
+        NetworkManager nm = NetworkManager.Singleton;
+        if (nm == null || nm.LocalClient.PlayerObject == null)
+            return;
+
+        nm.LocalClient.PlayerObject.GetComponent<PlayerRagdoll>()?.EnterRagdoll(impulse);
+    }
+
+    // 콜라이더 여러 개로 잡히는 NPC를 집합으로 한 번만 처리해 피해·발사를 건다.
     private void ServerBlastNpcs()
     {
         Vector3 origin = transform.position;
@@ -174,7 +257,7 @@ public class BombBlast : NetworkBehaviour
                 continue;
 
             Vector3 position = npc.transform.position;
-            if (IsOccluded(position, npc.transform))
+            if (IsOccluded(position))
                 continue;
 
             int damage = EvaluateDamage(position);
@@ -196,7 +279,16 @@ public class BombBlast : NetworkBehaviour
             }
             else
             {
-                npc.Knockback.ServerApplyKnockback(EvaluateKnockback(position));
+                // 살아남은 시민도 <b>산 채로 래그돌</b>이다 — 홈런 진압봉과 같은 문(#815)이고
+                // 대상이 시체가 아닐 뿐이다. 스턴 오버레이를 켠 채 뼈에 임펄스를 주는 순서까지
+                // 저쪽이 쥐고 있으므로 여기서 재구현하지 않는다.
+                // 연행·체포 중인 시민도 날아간다 — 그 함수가 Dead/Jailed/Intruding만 빼므로
+                // 홈런봉과 규칙이 하나로 유지된다(수갑은 폭발로 풀리지 않는다).
+                npc.Knockback.ServerLaunchRagdoll(
+                    EvaluateRagdollImpulse(position),
+                    m_launchStunSeconds,
+                    threat: null // 폭탄은 도망칠 대상이 아니다 — 깨어나면 평소 FSM으로 돌아간다
+                );
             }
         }
     }

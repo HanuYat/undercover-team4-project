@@ -310,6 +310,9 @@ public class LightningEvent : NetworkBehaviour, IRoundWeather
         if (healthComponent == null)
             return;
 
+        // ⚠ 차량·폭탄과 달리 낙뢰는 <b>TakeLethalDamage를 쓰지 않는다</b> — HP가 0이 되면 다운
+        // 유예(60초)를 준다. 환경 피해라서가 아니라 <b>피해원별 결정</b>이므로, m_damageAmount를
+        // 올려도 이 선택은 유지된다. "환경 피해를 통일"하지 말 것.
         healthComponent.TakeDamage(m_damageAmount, null);
     }
 

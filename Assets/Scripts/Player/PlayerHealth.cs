@@ -54,14 +54,22 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
     private const int k_tutorialMinHp = 10;
 
     // 서버 권위로만 실제 값 변경. (데미지 소스가 클라라면 별도 ServerRpc로 요청)
-    public void ModifyHp(int delta)
+    public void ModifyHp(int delta) => ApplyHpDelta(delta, skipGrace: false);
+
+    // ModifyHp의 몸통 — '유예 없음'(skipGrace) 하나를 더 받는다. public 시그니처를 늘리지
+    // 않는 이유는 밖에서 부를 때 이 개념이 없기 때문이다 — 회복(HealPack)과 납치·UFO 결말의
+    // ModifyHp(-CurrentHp)는 유예를 물을 이유가 없다(후자는 이미 Die를 세운 뒤에 부른다).
+    //
+    // ⚠ <b>바닥(튜토리얼 하한)과 Clamp는 반드시 이 안에 남아야 한다</b> — 밖으로 빼면
+    // 즉사 경로(<see cref="TakeLethalDamage"/>)가 k_tutorialMinHp를 우회해 튜토리얼에서 사람이 죽는다.
+    private void ApplyHpDelta(int delta, bool skipGrace)
     {
         if (IsSpawned && !IsServer) return;
 
-        // 바닥은 여기 하나로 둔다 — 피해 경로(진압봉·저항 NPC·폭발)가 전부 이 함수를 지나므로
+        // 바닥은 여기 하나로 둔다 — 피해 경로(진압봉·저항 NPC·폭발·차량)가 전부 이 함수를 지나므로
         // 소스가 늘어도 따라온다. 회복은 하한이라 영향이 없다.
         int floor = TutorialDirector.IsActive ? k_tutorialMinHp : 0;
-        SetHp(Mathf.Clamp(CurrentHp + delta, floor, m_maxHp));
+        SetHp(Mathf.Clamp(CurrentHp + delta, floor, m_maxHp), skipGrace);
     }
 
     /// <summary>
@@ -70,8 +78,9 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
     public event System.Action<DamageHit> OnDamaged;
 
     /// <summary>
-    /// 피격 — 저항형 NPC 범위 타격 등 데미지 소스의 공통 경로. (#79)
-    /// HP가 0이 되면 다운(무력화) 처리로 이어진다 (SetHp 내부, GDD 7-5 / #105, #725).
+    /// 피격 — 저항형 NPC 범위 타격·진압봉 오사·낙뢰 등 데미지 소스의 공통 경로. (#79)
+    /// HP가 0이 되면 다운 유예(60초)로 이어진다 (SetHp 내부, GDD 7-5 / #105, #725).
+    /// <b>유예를 주지 않는 피해원(차량·폭발)은 <see cref="TakeLethalDamage"/>를 쓴다.</b>
     /// 이미 유예 중인 대상이 또 맞으면 유예를 건너뛰고 즉시 완전 사망으로 확정한다 — 확인사살(#725).
     /// 연출용 <see cref="OnDamaged"/> 브로드캐스트도 여기 하나로 모인다 — 진압봉 오사(#461)·저항형
     /// NPC 공격·폭발이 전부 이 경로를 지나므로, 데미지 소스가 늘어도 연출은 따라온다 (#476).
@@ -83,7 +92,39 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
         if (amount <= 0)
             return;
 
+        ApplyDamage(amount, attacker, skipGrace: false);
+    }
+
+    /// <summary>
+    /// <b>유예를 주지 않는 피격</b> — 이 피해로 HP가 0에 <b>도달하면</b> 다운 유예(60초)를 건너뛰고
+    /// 곧바로 기능 정지(<see cref="IncapacitationCause.Die"/>)다. 0에 닿지 않으면 평범한 피해다 —
+    /// 데미지·거리 감쇠·튜토리얼 하한은 <see cref="TakeDamage"/>와 완전히 같은 경로를 지난다.
+    ///
+    /// 부르는 곳은 <b>도로 차량</b>(<c>TrafficVehicle</c>, GDD 6-6 "닿으면 즉사")과
+    /// <b>폭발</b>(<c>BombBlast</c>, GDD 6-4 "폭심 즉사 / 가장자리 넉백만") 둘이다.
+    ///
+    /// ⚠ <b>낙뢰(<c>LightningEvent</c>)는 의도적으로 제외</b>다 — 환경 피해라서가 아니라
+    /// <b>피해원별 결정</b>이므로, 데미지 수치를 올려도 이 선택은 유지된다. 이름을
+    /// "환경 피해"로 두지 않은 이유가 그것이다 — 경계가 규칙과 어긋나면 다음 사람이
+    /// 낙뢰를 빠뜨린 것으로 보고 배선한다. (NPC 쪽 <c>NpcHealth.TakeEnvironmentalDamage</c>는
+    /// 뜻이 다르다 — 저쪽은 "연행 게이트 우회"다, #690)
+    /// </summary>
+    public void TakeLethalDamage(int amount, GameObject attacker)
+    {
+        if (IsSpawned && !IsServer)
+            return; // 서버 권위 — ModifyHp도 같은 가드지만 아래 브로드캐스트를 막아야 한다
+        if (amount <= 0)
+            return;
+
+        ApplyDamage(amount, attacker, skipGrace: true);
+    }
+
+    // 두 진입점(TakeDamage · TakeLethalDamage)이 <b>유예 여부만</b> 다르고 이후는 같다 — 여기서
+    // 합친다. NpcHealth가 같은 이유로 같은 모양이다(TakeDamage · TakeEnvironmentalDamage → ApplyDamage).
+    private void ApplyDamage(int amount, GameObject attacker, bool skipGrace)
+    {
         // 유예 중인 대상에게 추가 피해 — 환경·NPC·아군 진압봉 모두 즉시 완전 사망으로 확정한다 (#725)
+        // skipGrace는 여기서 무의미하다 — 어느 진입점으로 왔든 이미 Die로 확정되는 길이다.
         if (m_incapacitation != null && m_incapacitation.IsDowned)
         {
             m_incapacitation.ServerFinishOff();
@@ -103,7 +144,7 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
         }
 
         int before = CurrentHp;
-        ModifyHp(-amount);
+        ApplyHpDelta(-amount, skipGrace);
 
         // '요청한 데미지'가 아니라 '실제로 깎인 양'을 싣는다 — 이미 0인 HP에 들어온 추가 피해는
         // 0이 되어 연출 자체가 나가지 않는다(다운된 몸이 폭발에 휘말릴 때마다 화면이 번쩍이지 않게).
@@ -154,19 +195,43 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
         // 회복인데 0이면 여전히 다운이므로 최소 1 보장
         SetHp(Mathf.Clamp(m_reviveHp, 1, m_maxHp));
         m_incapacitation?.Recover();
+
+        // 소지품 목록을 한 번 되돌려 보낸다 — 쓰러져 있는 동안 SyncHeldItemsRpc(SendTo.Owner)가
+        // 서버로 새어(#820 함정 1) 본인 인벤토리 모델(Slots)이 낡은 채로 남는다. 약탈로 물건이
+        // 빠진 경우가 그렇다. 위 Recover()가 소유권을 <b>먼저</b> 되돌리므로 이 호출은 본인에게
+        // 간다 — #820 함정 3(ServerRevive → ServerConsume 순서)과 같은 논리다.
+        GetComponent<PlayerLoadout>()?.ServerNotifyHeldItemsChanged();
     }
 
-    private void SetHp(int value)
+    private void SetHp(int value) => SetHp(value, skipGrace: false);
+
+    // skipGrace = 이 변경이 <b>유예를 주지 않는 피해</b>에서 왔는가. HP 0 도달 순간의 무력화
+    // 원인이 이 값 하나로 갈린다 (아래 주석).
+    private void SetHp(int value, bool skipGrace)
     {
         int previous = CurrentHp; // 변경 전 값 — HP 0 도달 순간을 감지하기 위함
         m_hp = value;
         if (IsSpawned && IsServer)
             m_syncedHp.Value = value;
 
-        // HP가 0에 도달하는 순간 다운(유예) 진입 — 60초 안에 구조되지 않으면 PlayerIncapacitation의
-        // 내부 타이머가 스스로 Die로 떨어뜨린다. (#105, #725)
-        if (value == 0 && previous > 0)
-            m_incapacitation?.Incapacitate(IncapacitationCause.Down);
+        // HP가 0에 도달하는 순간 무력화 진입. 평소는 <b>다운 유예</b>(60초 안에 구조되지 않으면
+        // PlayerIncapacitation의 내부 타이머가 스스로 Die로 떨어뜨린다)이고, 유예를 주지 않는
+        // 피해원(차량·폭발 — TakeLethalDamage)은 여기서 <b>곧바로 기능 정지</b>로 갈린다.
+        // 즉 유예는 "HP가 남았는가"가 아니라 <b>"어떤 피해원이 0으로 내렸는가"</b>로 갈린다.
+        // (#105, #725, GDD 6-6 / 7-5)
+        if (value != 0 || previous <= 0)
+            return;
+
+        if (skipGrace)
+        {
+            // 다른 Die 전이는 전부 로그가 있다(몸 소실·유예 확인사살·유예 만료) — 즉사만 조용하면
+            // "왜 유예 없이 죽었나"를 추적할 자리가 없다.
+            Debug.Log($"[Die] 즉사 피해 — 유예 없이 기능 정지: {name}", this);
+            m_incapacitation?.Incapacitate(IncapacitationCause.Die);
+            return;
+        }
+
+        m_incapacitation?.Incapacitate(IncapacitationCause.Down);
     }
 
     /// <summary>라운드 사이 상태 초기화 — HP 풀 회복 + 다운 해제 + 끌려가기 해제. 서버(또는 오프라인)에서만. (상점 진입)</summary>

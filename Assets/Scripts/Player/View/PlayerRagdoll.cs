@@ -110,15 +110,26 @@ public partial class PlayerRagdoll : MonoBehaviour
     private bool m_settled;
     private float m_elapsedInRagdoll;
 
-    // 늦게 접속했는데 대상이 이미 사망·비행 중이던 경우 — 이번 래그돌 원인은 건너뛴다 (docs §9).
+    // 늦게 접속했는데 대상이 이미 쓰러져(다운·사망) 있거나 비행 중이던 경우 — 이번 래그돌 원인은
+    // 건너뛴다 (docs §9). ⚠ 다운→사망을 지나도 계속 참이다(!wantsRagdoll일 때만 내려간다) —
+    // 그 피어에서는 유예가 끝나도 몸이 Knockdown_Ground 애니로 남는다. 이미 끝난 낙하를 뒤늦게
+    // 재생하지 않는 것이 이 플래그의 뜻이라 의도된 동작이고, 위치·yaw는 루트 NT가 맞춘다.
     private bool m_skipThisEpisode;
     private bool m_polledOnce;
 
-    // 이번 에피소드에서 <b>래그돌 원인(사망·비행)을 한 번이라도 관측했는가</b> — 부활 판정의 전제다 (docs §9).
-    // 이름은 사망 전용이던 시절 그대로다 — #815로 비행이 늘어와도 뜻은 "원인을 봤다"로 그대로 넓어진다.
-    private bool m_sawDeathThisEpisode;
-    private float m_awaitingDeathSeconds;
+    // 이번 에피소드에서 <b>래그돌 원인(다운·사망·비행)을 한 번이라도 관측했는가</b> — 부활 판정의 전제다 (docs §9).
+    // #815로 비행, #865로 다운이 늘어왔다 — 이름을 "원인"으로 고친 것이 그 셋을 함께 담기 위해서다.
+    private bool m_sawCauseThisEpisode;
+    private float m_awaitingCauseSeconds;
 
+    // 직전 프레임의 물리 권위 — 래그돌 도중 권위가 뒤집히는 경우를 잡는 안전망용. (#865)
+    private bool m_hadMoveAuthority;
+
+    // 이번 에피소드에서 <b>한 번이라도 정착했는가</b> — 루트 yaw 추종을 끄는 일방향 래치다. (#865)
+    // m_settled로 물으면 안 된다: 잠든 몸이 밟혀 깨어나면 ResumeFromSleep이 그것을 되돌려 추종이
+    // 다시 켜지고, 다운은 1인칭이라 <b>그 yaw가 곧 쓰러진 본인의 시야</b>다 — 동료가 몸을 발로 차서
+    // 남의 화면을 돌릴 수 있게 된다. 사망은 3인칭 관전이라 없던 문제고 비행은 정착 전이라 의도였다.
+    private bool m_yawFollowDone;
 
     /// <summary>
     /// 래그돌이 애니메이터로부터 포즈를 빼앗고 있는가 — <see cref="PlayerMovement.AddKnockback"/>·
@@ -259,6 +270,12 @@ public partial class PlayerRagdoll : MonoBehaviour
     /// </summary>
     private void ReleaseBonesToPhysics()
     {
+        // ⚠ <b>여기가 이관 래치의 갱신 지점이다</b> — "뼈를 지금 권위 기준으로 배선했다"는 사실을
+        // 진입·이관 양쪽에서 한 곳에 기록한다. 안 세우면 소유권이 옮겨간 뒤 처음 진입한 몸이
+        // 다음 Update의 TickAuthorityHandover에 뒤늦게 걸려 <b>임펄스를 통째로 잃는다</b>
+        // (SetKinematic(false)가 속도를 0으로 대입한다). 근거는 docs/506-explosion-ragdoll.md.
+        m_hadMoveAuthority = HasMoveAuthority;
+
         if (m_streamer != null && !HasMoveAuthority)
         {
             m_rig.SetKinematic(true);
@@ -352,6 +369,26 @@ public partial class PlayerRagdoll : MonoBehaviour
         if (!HasMoveAuthority)
             return;
 
+        // 동료가 구조 채널링 중이면 <b>정착한 몸</b>을 붙들어 둔다 (#865). 구조는 <b>완료 시점에만</b>
+        // 사거리를 보고 구조자는 이동하면 채널링이 취소되므로, 그 3초 사이에 시체가 밟혀 밀리면
+        // 게이지를 다 채운 뒤에 "범위를 벗어남"으로 실패한다 — 실패 모드가 나쁘다.
+        //
+        // ⚠ <b>아직 무너지는 중이면 재우지 않는다</b> — 공중이나 기울어진 자세로 굳는다(잠든 바디는
+        // 중력도 안 받는다). 밀려서 사거리를 벗어나는 것은 <b>정착한 뒤에만</b> 생기는 일이므로,
+        // 붙드는 것도 그때부터면 충분하다.
+        //
+        // 이 자리가 성립하는 것은 ServerSetBeingRevived를 쓰는 것도 서버이고 래그돌 권위도 서버라
+        // (#865) <b>같은 피어에서 같은 값을 본다</b>는 것 때문이다. IsBeingRevived는 동기화값 기반이라
+        // 원격도 어긋나지 않는다. 여기서 반환하므로 아래 깨어남 폴링을 지나지 않는다 — 구조 중에
+        // 스트림을 되살리지 않는 것이 의도다(채널링이 끝나면 다음 깨어남부터 다시 받는다).
+        if (m_incapacitation != null && m_incapacitation.IsBeingRevived && m_settled)
+        {
+            if (!m_rig.AllAsleep)
+                m_rig.SleepAll(); // 밟혀 깨어난 몸을 다시 재운다
+
+            return;
+        }
+
         // 깨우기만 한다 — 스트림 재개는 <see cref="Update"/>의 깨어남 폴링이 받는다.
         // (NpcRagdoll.WakeCorpse와 같은 모양. 재개 경로를 하나로 모으는 것이 요점이다)
         m_rig.WakeAll();
@@ -391,7 +428,7 @@ public partial class PlayerRagdoll : MonoBehaviour
     }
 
     // HideLostBody가 끈 렌더러만 되살린다 — IsBodyLost가 풀리는 유일한 경로(PlayerIncapacitation
-    // .SetBodyLost(false))는 부활 RPC 안에서 돌고, 그 직후 PollDeath가 ExitToAnimator를 부른다.
+    // .SetBodyLost(false))는 부활 RPC 안에서 돌고, 그 직후 PollRagdollCause가 ExitToAnimator를 부른다.
     private void ShowLostBody()
     {
         if (!m_lostBodyHidden)
@@ -498,7 +535,7 @@ public partial class PlayerRagdoll : MonoBehaviour
 
     /// <summary>
     /// 래그돌 진입 — <b>멱등이다.</b> 이미 물리 중이면 임펄스만 누적하고, 블렌드 중이면 무동작.
-    /// 원격의 도착 순서가 보장되지 않기 때문이다 — 반대 순서는 <see cref="PollDeath"/>가 막는다 (docs §8·§9).
+    /// 원격의 도착 순서가 보장되지 않기 때문이다 — 반대 순서는 <see cref="PollRagdollCause"/>가 막는다 (docs §8·§9).
     /// </summary>
     /// <param name="impulse">폭심에서 밀려나는 속도(m/s). 힘없이 무너지는 사망은 <see cref="Vector3.zero"/>.</param>
     public void EnterRagdoll(Vector3 impulse)
@@ -517,6 +554,7 @@ public partial class PlayerRagdoll : MonoBehaviour
 
         m_state = RagdollState.Ragdoll;
         m_settled = false;
+        m_yawFollowDone = false; // 새 에피소드 — 몸이 기울면 다시 따라간다
         m_elapsedInRagdoll = 0f;
 
         // 슬라이드 넉백과 이중으로 밀리지 않게 CharacterController 쪽 외력을 지운다.
@@ -559,10 +597,11 @@ public partial class PlayerRagdoll : MonoBehaviour
         // 회수 불가로 감춰졌던 몸이라면 애니메이터로 돌아가는 이 시점에 되살린다 — HideLostBody 참고.
         ShowLostBody();
 
-        // 에피소드가 여기서 끝난다 — 다음 래그돌은 자기 원인을 다시 관측해야 부활할 수 있다 (PollDeath).
+        // 에피소드가 여기서 끝난다 — 다음 래그돌은 자기 원인을 다시 관측해야 부활할 수 있다 (PollRagdollCause).
         m_settled = false;
-        m_sawDeathThisEpisode = false;
-        m_awaitingDeathSeconds = 0f;
+        m_yawFollowDone = false;
+        m_sawCauseThisEpisode = false;
+        m_awaitingCauseSeconds = 0f;
 
         // 스트림을 <b>아무것도 보내지 않고</b> 끊는다 — 기상에는 종착 자세가 없다. 전 피어가 각자
         // 부르므로 RPC가 필요 없다. 안 끊으면 스트림이 기상 블렌드를 매 프레임 덮어쓴다.
@@ -654,7 +693,10 @@ public partial class PlayerRagdoll : MonoBehaviour
         // 진입 추적의 기준선을 담는다 — Update 시작이 직전 프레임의 최종 자세를 읽는 유일한 지점이다.
         SampleEntryBaseline();
 
-        PollDeath();
+        PollRagdollCause();
+
+        // 래그돌이 돌아가는 중에 물리 권위가 바뀐 경우를 받는다 — 안전망 (아래 주석).
+        TickAuthorityHandover();
 
         if (m_state != RagdollState.Ragdoll)
             return;
@@ -724,16 +766,23 @@ public partial class PlayerRagdoll : MonoBehaviour
     // 골반 밑에 지면이 있는가 — 정착 자격과 정착 정렬이 <b>같은 탐색</b>을 써야 모순이 안 생긴다.
     private bool HasGroundUnderHips() => TryGroundUnder(m_rig.Hips.position, out _);
 
-    // 래그돌 진입 사유(사망 또는 비행)를 폴링한다 — 이벤트로는 잡을 수 없다(원인만 바뀌면 안 울린다).
-    // 사유는 둘이지만 <see cref="PlayerIncapacitation.Cause"/>는 동시에 하나만 참일 수 있어 겹치지 않는다.
-    // NPC의 <see cref="NpcRagdoll.WantsRagdoll"/>과 같은 자리다 — #815로 플레이어도 사유가 둘로 늘었다.
+    // 래그돌 진입 사유(다운·사망·비행)를 폴링한다 — 이벤트로는 잡을 수 없다(원인만 바뀌면 안 울린다).
+    // 사유는 셋이지만 <see cref="PlayerIncapacitation.Cause"/>는 동시에 하나만 참일 수 있어 겹치지 않는다.
+    // NPC의 <see cref="NpcRagdoll.WantsRagdoll"/>과 같은 자리다 — #815로 둘, #865로 셋이 됐다.
+    //
+    // ⚠ <b>다운→사망은 사유가 바뀌는데 래그돌은 이어진다</b> — 셋 중 유일한 "래그돌 중 원인 전이"이고,
+    // 그래서 그 전이에 소유권(=물리 권위)이 움직이지 않아야 한다. 근거는 docs/865-down-ragdoll.md.
     // 부활은 <b>원인을 본 뒤에만</b> 성립한다 — 그 인과 가드의 근거는 docs/player-ragdoll.md §9.
-    private void PollDeath()
+    private void PollRagdollCause()
     {
         if (m_incapacitation == null)
             return;
 
-        bool wantsRagdoll = m_incapacitation.IsDead || m_incapacitation.IsLaunched;
+        // 진입 사유는 셋이다 (#506 Die → #815 Launched → #865 Down). IsDowned || IsDead를 나열하지
+        // 않고 IsOutOfAction을 쓰는 이유는 <b>조준 히트박스와 술어를 하나로 묶기 위해서</b>다 —
+        // IsAimTargetable이 IsOutOfAction 기반이므로, 뼈가 물리로 넘어가는 순간과 히트박스가 켜지는
+        // 순간이 같은 값을 본다. 갈라지면 "래그돌인데 조준이 안 잡히는" 방향으로 #857이 되살아난다.
+        bool wantsRagdoll = m_incapacitation.IsOutOfAction || m_incapacitation.IsLaunched;
 
         // 접속 직후 이미 사망·비행 중이었다면 이번 원인은 건너뛴다 — 낙하는 이미 끝난 과거다.
         if (!m_polledOnce)
@@ -744,19 +793,19 @@ public partial class PlayerRagdoll : MonoBehaviour
 
         if (wantsRagdoll)
         {
-            m_sawDeathThisEpisode = true;
-            m_awaitingDeathSeconds = 0f;
+            m_sawCauseThisEpisode = true;
+            m_awaitingCauseSeconds = 0f;
         }
-        else if (IsRagdollActive && !m_sawDeathThisEpisode)
+        else if (IsRagdollActive && !m_sawCauseThisEpisode)
         {
-            m_awaitingDeathSeconds += Time.deltaTime;
+            m_awaitingCauseSeconds += Time.deltaTime;
         }
 
         if (!wantsRagdoll)
         {
             m_skipThisEpisode = false;
             bool revivalIsReal =
-                m_sawDeathThisEpisode || m_awaitingDeathSeconds >= k_causeSyncGraceSeconds;
+                m_sawCauseThisEpisode || m_awaitingCauseSeconds >= k_causeSyncGraceSeconds;
             if (m_state == RagdollState.Ragdoll && revivalIsReal)
             {
                 ExitToAnimator(blend: true); // 부활 — 정착 포즈에서 기상으로 잇는다
@@ -855,8 +904,10 @@ public partial class PlayerRagdoll : MonoBehaviour
         m_root.position = target;
 
         // ⚠ <b>yaw는 비행 중에만 따라간다</b> — 정착 후에도 돌리면 목이 비틀리고 되먹임 고리가 생긴다.
-        // 상태가 아니라 <b>깃발</b>로 물어야 한다(시체도 끝까지 Ragdoll이다). (docs §11)
-        if (!m_settled)
+        // 상태가 아니라 <b>깃발</b>로 물어야 한다(시체도 끝까지 Ragdoll이다). 그리고 그 깃발은
+        // m_settled가 아니라 <b>일방향 래치</b>여야 한다 — 밟혀 깨어난 몸이 다운된 본인의 시야를
+        // 돌리지 않게 (m_yawFollowDone 주석, #865). (docs §11)
+        if (!m_yawFollowDone)
             FollowBodyYaw();
 
         // 위 CapturePose의 짝 — 루트를 옮기고 돌린 뒤 뼈를 원래 월드 포즈로 되돌린다.
@@ -895,6 +946,47 @@ public partial class PlayerRagdoll : MonoBehaviour
 
     // ---- 정착 ----
 
+    /// <summary>
+    /// 래그돌이 <b>돌아가는 중에</b> 물리 권위가 바뀐 경우를 받는다 — 안전망. (#865)
+    ///
+    /// <b>정상 경로에서는 걸리지 않는다.</b> 소유권 이관은 <c>PlayerIncapacitation.SetCause</c>가
+    /// 원인 대입 직후 <b>같은 프레임</b>에 처리하고 이 폴링은 그 뒤 Update에서 도므로, 이관은 언제나
+    /// <c>Animated</c> 구간에서 끝난다. 다운도 서버로 옮기게 되면서(#865) 다운→사망 전이에는 이관이
+    /// 아예 없다. 남는 경로는 <b>비행 중 외부 피해로 다운이 되는 것</b> 하나다(비행은 오너 권위다).
+    ///
+    /// 안 받으면 양쪽 피어가 동시에 깨진다:
+    ///  · 권위를 <b>잃은</b> 쪽 — 뼈가 동적으로 남은 채 자세 패킷까지 받아, 물리와 스트림이 같은 뼈를
+    ///    매 프레임 번갈아 쓴다(<see cref="ReleaseBonesToPhysics"/>는 진입 때 한 번만 돈다).
+    ///  · 권위를 <b>얻은</b> 쪽 — 뼈가 키네마틱으로 남고, <c>RagdollRig.AllAsleep</c>은 키네마틱 바디를
+    ///    건너뛰므로 <b>곧바로 참</b>이 되어 무너지기도 전에 정착한다. 그 뒤 깨어남 폴링도 영구히
+    ///    안 돌아 몸이 굳는다.
+    ///
+    /// 근거와 고장 전수는 docs/865-down-ragdoll.md.
+    /// </summary>
+    private void TickAuthorityHandover()
+    {
+        bool authority = HasMoveAuthority;
+        if (authority == m_hadMoveAuthority)
+            return;
+
+        m_hadMoveAuthority = authority;
+        if (m_state != RagdollState.Ragdoll)
+            return; // 래그돌 밖에서의 이관은 정상 경로다 — 진입이 새 권위로 알아서 정한다
+
+        // 이 함수가 이미 양방향으로 정확하다 — 잃은 쪽은 키네마틱 + 자세 붙들기, 얻은 쪽은
+        // SetKinematic(false) 안의 Physics.SyncTransforms가 <b>지금 화면에 있는 자세</b>에서
+        // 물리를 출발시킨다.
+        ReleaseBonesToPhysics();
+
+        // 멱등이다. ⚠ <b>양쪽 피어에서 부른다</b> — 원격 분기가 세우는 두 래치가 여기서 다시 서야 한다.
+        m_streamer?.BeginStreaming();
+
+        // 새 권위가 물리로 정착을 다시 판정한다. yaw 래치는 건드리지 않는다 — 이미 정착한 몸이면
+        // 그대로 두는 것이 맞다.
+        m_settled = false;
+        m_elapsedInRagdoll = 0f;
+    }
+
     // 잠든 몸이 다시 움직이기 시작했다 — 스트림을 되살린다. (NpcRagdoll.ServerResumeFromSleep와 짝)
     private void ResumeFromSleep()
     {
@@ -916,6 +1008,7 @@ public partial class PlayerRagdoll : MonoBehaviour
         // DumpFallRate("정착");
 
         m_settled = true;
+        m_yawFollowDone = true; // 한 번 정착하면 이 에피소드에서 다시 안 돈다 (필드 주석)
         DumpSettleTrace();
 
         // 스트림을 끊고 마지막 자세를 한 번 더 보낸다 — 원격의 종착 상태다.

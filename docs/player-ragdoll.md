@@ -4,11 +4,12 @@
 > "지금 무엇을 하는가"만 남기고, "왜 그렇게 됐나 / 무엇을 시도했다 되돌렸나 / 실측이 얼마였나"는
 > 전부 여기로 옮겼다. 코드를 고치기 전에 해당 항목을 찾아 읽을 것.
 >
-> **⚠ 이 파일은 두 번 크게 뒤집혔고, 세 번째로 진입 사유가 늘었다.** 기억하고 있는 판본이 있다면 §2를 먼저 볼 것.
+> **⚠ 이 파일은 두 번 크게 뒤집혔고, 진입 사유는 세 번 늘었다.** 기억하고 있는 판본이 있다면 §2를 먼저 볼 것.
 > - **#571** — 사망 전용 모델을 분리해 리그가 두 벌이 됐다(그때 Animator를 끄지 않게 됐다)
 > - **#763 2단계** — **다시 한 벌로 합쳤다.** Animator를 도로 끈다. 모델 교체가 사라졌다
 > - **#759** — 캡슐 추종이 `Update`에서 `FixedUpdate`로 갔다 (§5)
 > - **#815** — 진입 사유가 `Die` 하나에서 `Die`·`Launched` 둘로 늘었다 (§1·§9)
+> - **#865** — **진입 사유가 셋이 됐다**(`Down` 추가). 그와 함께 **소유권 이관 조건이 `Die || Down`으로** 바뀌었다 (§1의 새 소절·§9)
 >
 > 관련 문서
 > - [ragdoll.md](ragdoll.md) — 래그돌 전반. 구조·불변식·셋업의 정본
@@ -17,6 +18,8 @@
 > - [759-ragdoll-slowmotion-handoff.md](759-ragdoll-slowmotion-handoff.md) — 슬로모션 원인 규명 정본
 > - [506-explosion-ragdoll.md](506-explosion-ragdoll.md) — 작업 기록(`§9-x`·`§10-x`가 가리키는 곳)
 > - [815-homerun-player-ragdoll.md](815-homerun-player-ragdoll.md) — 비행(`Launched`) 진입 근거·미검증 항목
+> - [865-down-ragdoll.md](865-down-ragdoll.md) — 다운(`Down`) 진입 근거. **소유권 판단의 정본**이다
+> - [903-instant-death.md](903-instant-death.md) — 차·폭탄 즉사. 차량 임펄스를 브로드캐스트로 보내는 근거
 
 ---
 
@@ -32,14 +35,28 @@
 그래서 `NetworkBehaviour`가 아니고, 매니저도 아니라 App 파사드와 무관하다
 ([architecture.md](architecture.md) R1~R8 해당 없음).
 
-**진입 조건은 사망 하나였다가 #815로 둘이 됐다.** 폭발·(구)진압봉·납치는 모두 `Die`로 수렴하므로
-(`PlayerHealth.SetHp`, #524), 진입을 `Die` 하나로 잡으면 사망 경로가 몇 개든 전부 같은 래그돌을
-탄다. 폭발이 특별한 것은 **임펄스가 붙는다**는 점 하나뿐이다.
+**진입 사유는 셋이다** — `Die`(#506) · `Launched`(#815) · `Down`(#865). `PollRagdollCause`가 보는 것은
+`IsOutOfAction || IsLaunched`이고, `IsOutOfAction`은 `IsDowned || IsDead`다.
 
-**홈런 진압봉(#815)은 살아 있는 채로 태우는 첫 사유다.** `IncapacitationCause.Launched`가 그
-사유이고, `PollDeath`는 이제 `IsDead || IsLaunched`를 본다 — 사망은 부활 키트가 풀고, 비행은
-`Settle()`이 정착을 서버에 통보해 스스로 풀린다. 근거는
-[815-homerun-player-ragdoll.md](815-homerun-player-ragdoll.md).
+`IsDowned || IsDead`를 나열하지 않고 `IsOutOfAction`을 쓰는 이유는 **조준 히트박스와 술어를 하나로
+묶기 위해서**다 — `IsAimTargetable`이 같은 값 기반이라(`PlayerIncapacitation`), **뼈가 물리로
+넘어가는 순간과 히트박스가 켜지는 순간이 같은 술어를 본다.** 갈라지면 "래그돌인데 조준이 안 잡히는"
+방향으로 #857이 되살아난다.
+
+**셋은 풀리는 방식이 다르다:**
+
+| 사유 | 무엇이 푸나 |
+|---|---|
+| `Die` | 부활 키트·본부 장치(#613) — 래그돌 밖에서 온다 |
+| `Launched` | `Settle()`이 정착을 서버에 통보해 **스스로** 풀린다 (#815) |
+| `Down` | 동료의 맨손 구조, 또는 **60초 만료로 `Die`가 된다** (#725/#865) |
+
+⚠ **마지막 칸이 셋 중 유일한 "래그돌 중 원인 전이"다.** 다운→사망에서는 원인만 바뀌고 래그돌은
+그대로 이어진다 — 그래서 **그 전이에 소유권(=물리 권위)이 움직이면 안 된다.** 다음 소절이 그것이다.
+
+폭발이 특별한 것은 **임펄스가 붙는다**는 점 하나뿐이다. `Down`은 반대로 **임펄스가 붙는 경로가
+하나도 없다** — 차·폭탄은 #903으로 다운을 건너뛰고, 진압봉·저항 NPC·낙뢰는 임펄스를 주지 않는다.
+그래서 다운 래그돌은 항상 제자리에서 힘없이 무너진다.
 
 래그돌이 켜져 있는 동안 `PlayerAnimationDriver`는 `Down`을 내리지 못한다(`IsRagdollActive`를 보고
 참으로 붙든다) — 안 막으면 부활 블렌드 도중에 기상 모션이 먼저 시작된다.
@@ -51,6 +68,39 @@
 ⚠ `RagdollRig`는 여기가 아니라 **자식**에 붙는다 — 그래서 `GetComponentInChildren(true)`로 찾는다.
 `RagdollPoseStreamer`는 반대로 **루트**에 있어야 한다: NGO가 비활성 GameObject의
 `NetworkBehaviour`를 스폰에서 제외하므로 `NetworkObject`와 같은 오브젝트여야 한다.
+
+---
+
+## 1-1. 소유권은 래그돌이 꺼져 있을 때만 바뀐다 (#865)
+
+**이것은 불변식이고, 코드 곳곳이 여기에 기대고 있다.**
+
+`PlayerIncapacitation.SetCause`가 `m_cause` 대입 직후 **같은 프레임**에 `ApplyDeathOwnership`을 부르고,
+`PollRagdollCause`는 그 뒤 `Update`에서 돈다. 그래서 이관은 언제나 `RagdollState.Animated` 구간에서
+끝난다. 그 위에 서 있는 것들:
+
+- `ReleaseBonesToPhysics`가 키네마틱/동적을 **진입 시점에 한 번만** 정하고 다시 묻지 않는다 (§7)
+- `RagdollPoseStreamer.BeginStreaming`이 권위 게이트를 **진입 시점에만** 통과시킨다
+- 정착 판정·`TickCapsuleFollow`·밧줄 재부착이 전부 `HasMoveAuthority` 게이트 뒤에 있다 (§5·§10·§12)
+
+**깨면 무엇이 되나** — 래그돌 도중에 권위가 뒤집히면 양쪽 피어가 동시에 고장난다:
+
+| 피어 | 증상 |
+|---|---|
+| 권위를 **잃은** 쪽 | 뼈가 동적으로 남은 채 자세 패킷까지 받아, 물리와 스트림이 같은 뼈를 매 프레임 번갈아 쓴다 → 떨림/발산 |
+| 권위를 **얻은** 쪽 | 뼈가 키네마틱으로 남고, `RagdollRig.AllAsleep`은 **키네마틱 바디를 건너뛰므로 곧바로 참**이 되어 무너지기도 전에 정착한다. 그 `Settle()`의 `EndStreaming()`은 `m_streaming`이 선 적이 없어 아무것도 안 보내고, 깨어남 폴링도 영구히 안 돌아 **몸이 굳는다** |
+
+그래서 **`Down`도 서버로 이관한다**(`wantsServerOwner = Die || Down`) — 그러면 다운→사망 전이가
+기존 `m_ownershipMovedToServer` 가드에 걸려 **문자 그대로 무동작**이 되고, 이관 총량은 2회로 그대로다
+(진입에서 한 번, 회복에서 한 번). `Launched`만 오너 권위로 남는다.
+
+⚠ **미래에 "`Launched`도 서버로" 또는 "`Down`은 오너로"를 하려면 이 소절을 먼저 읽을 것.** 그 경우
+래그돌 중 이관이 상시 경로가 되므로 `TickAuthorityHandover`(§8)가 안전망이 아니라 정상 경로가 된다.
+판단 근거 전수는 [865-down-ragdoll.md §2](865-down-ragdoll.md).
+
+대가는 #820 함정 1(플레이어 오브젝트의 `SendTo.Owner`가 서버로 샌다)이 다운으로 번지는 것이고,
+실제로 깨지는 것은 **약탈 통보 3종**이다 — 유예 60초가 주된 약탈 창이라 실기능이다. 고친 방법은
+`PlayerIncapacitation.BodyOwnerClientId`를 대상으로 직접 지정하는 것(같은 문서 §2-4).
 
 ---
 
@@ -157,6 +207,12 @@ Animated ──진입(사망)──> Ragdoll ──부활──> BlendingToAnima
 `isGrounded`가 거짓이라 그동안 쌓인 중력이 몸을 끌어내린다.
 
 ---
+
+### 부수 이득 — 서 있는 투명 기둥이 사라진다 (#865)
+
+다운이 래그돌을 타기 전에는 `CharacterController` 캡슐이 **켜진 채 서 있는 1.8m 캡슐**로 쓰러진
+자리에 남았다. 래그돌 진입이 그 캡슐을 끄고 루트를 골반 아래 지면으로 끌어오므로, 이제 **누운 몸을
+걸어서 지나갈 수 있다.**
 
 ## 5. 캡슐 추종은 `FixedUpdate`에서 돈다 (#759)
 
@@ -273,6 +329,47 @@ Default 레이어다(Player 프리팹 루트 `m_Layer = 0`). 지형 충돌을 �
 — 서로 다른 오브젝트라 같은 틱에 실려 와도 콜백 순서가 보장되지 않는다. 순서를 맞추려 들지 말고 어느
 쪽이 먼저 와도 결과가 같게 만든다. **반대 순서(임펄스가 먼저)**는 `PollDeath`가 막는다 (§9).
 
+### 사망 임펄스는 `RpcTarget.Single(OwnerClientId)`로 보낼 수 없다 (#903)
+
+⚠ **사망 진입은 소유권을 서버로 옮긴다**(`ApplyDeathOwnership`). 그리고 그 이관은 피해 함수와
+**같은 호출 스택에서 동기 실행**된다 — `TakeLethalDamage` → `SetHp` → `Incapacitate(Die)` →
+`SetCause` → `ChangeOwnership(ServerClientId)`. 그래서 그 다음 줄에서 `OwnerClientId`를 읽으면
+**이미 서버**다. 피해자를 `NetworkManager.LocalClient.PlayerObject`로 되짚는 형태라면 **호스트가
+자기 몸을 날린다.**
+
+`HomeRunBaton`(#815)이 `Single`을 쓸 수 있는 것은 그쪽 사유(`Launched`)가 **소유권을 옮기지 않기**
+때문이다 — 사망 임펄스에 그 패턴을 **복사하지 말 것.** 차량(#903)·폭발(#506)은 둘 다 전 피어
+브로드캐스트다. 원격에 가도 무해한 이유는 원격의 뼈가 전부 키네마틱이고 `RagdollRig.ApplyImpulse`가
+키네마틱 바디를 건너뛰기 때문이고, 도착 순서는 위 멱등과 §9의 인과 가드가 받는다.
+
+### `TickAuthorityHandover` — 래그돌 중 권위 변경 (#865)
+
+§1-1의 불변식("소유권은 래그돌이 꺼져 있을 때만 바뀐다")을 지키지 못하는 경로 하나를 받는 **안전망**이다.
+`Down`도 서버로 이관하게 된 뒤 남은 것은 `Launched → Down`(비행 중 외부 피해) 하나다 — 비행만 오너
+권위이기 때문이다.
+
+하는 일은 **`ReleaseBonesToPhysics()`를 다시 부르는 것**이 거의 전부다. 그 함수가 이미 양방향으로
+정확하다 — 잃은 쪽은 `SetKinematic(true)` + `CapturePose()` + 붙들기, 얻은 쪽은 `SetKinematic(false)`
+안의 `Physics.SyncTransforms()`가 **지금 화면에 있는 자세**에서 물리를 출발시킨다. 거기에
+`BeginStreaming()`(멱등, ⚠ **양쪽 피어에서 부른다**)과 정착 재판정을 얹는다.
+
+정착한 몸에서 타면 임펄스 0·속도 0으로 같은 자세에 다시 놓이므로 시각적으로 거의 무동작이다.
+
+#### ⚠ 래치를 세우는 자리는 이 함수가 아니라 `ReleaseBonesToPhysics`다 (2026-08-31)
+
+`m_hadMoveAuthority`를 이 폴링 안에서만 갱신하면 **이관이 이미 끝난 진입을 이관으로 다시 센다.**
+이 함수의 원래 주석은 *"정상 경로에서는 걸리지 않는다 — 이관은 언제나 `Animated` 구간에서 끝난다"*
+였는데, 그 전제는 **래그돌 진입이 `PollRagdollCause`로만 일어날 때** 참이다. 폭발·차량은 자기
+`Update`(폭탄/차 쪽)에서 `EnterRagdoll(impulse)`를 부르므로 진입이 이관 감지보다 **먼저**다.
+
+그러면 다음 `Update`에서 이 함수가 뒤늦게 걸려 `ReleaseBonesToPhysics()`를 한 번 더 부르고,
+`SetKinematic(false)` 안의 속도 0 대입이 **막 넣은 임펄스를 지운다** — 클라 소유 플레이어가
+폭탄·차에 죽으면 제자리에 무너지던 원인이다(호스트 자기 몸은 소유권이 안 움직여 멀쩡했다).
+
+그래서 래치는 `ReleaseBonesToPhysics()` 안에서 세운다 — 진입과 이관 양쪽이 지나는 자리라
+*"뼈를 지금 권위 기준으로 배선했다"*는 사실이 한 곳에 기록된다. 전문은
+[506-explosion-ragdoll.md §9-21](506-explosion-ragdoll.md).
+
 ### 캡슐은 시체를 물리에 넘기기 **전에** 끈다
 
 사망 중에는 캡슐을 끈다(`§10-0`) — 대리값이 물리 오브젝트일 이유가 없고, 켜 두면 ① 뼈와 서로 충돌해
@@ -333,13 +430,21 @@ NetworkVariable이라 도착 순서가 갈릴 수 있다** — RPC가 먼저 오
 
 ## 9. 부활은 죽음을 본 뒤에만 성립한다 (`§9-19`)
 
-> **#815 갱신** — 이 절의 "사망"은 이제 "래그돌 원인(사망 또는 비행)"으로 읽어야 한다. 필드 이름
-> (`m_sawDeathThisEpisode`·`m_awaitingDeathSeconds`)은 사망 전용이던 시절 그대로 남겨 뒀지만,
-> `PollDeath`가 보는 값은 `IsDead || IsLaunched`로 넓어졌고 로직은 원인을 가리지 않으므로 그대로
-> 유효하다. 상수 `k_deathSyncGraceSeconds`는 `k_causeSyncGraceSeconds`로 이름만 바뀌었다.
-> 비행 임펄스도 사망 임펄스(폭발)와 같은 순서 문제를 그대로 갖는다 — 상태는 NetworkVariable 폴링,
-> 임펄스는 RPC라 도착 순서가 갈릴 수 있다. 자세한 근거는
-> [815-homerun-player-ragdoll.md §3](815-homerun-player-ragdoll.md).
+> **#815·#865 갱신** — 이 절의 "사망"은 **"래그돌 원인"** 으로 읽어야 한다. 사유가 셋이 되면서
+> (`Die`·`Launched`·`Down`) 필드 이름도 원인 기준으로 바꿨다:
+> `PollDeath` → `PollRagdollCause`, `m_sawDeathThisEpisode` → `m_sawCauseThisEpisode`,
+> `m_awaitingDeathSeconds` → `m_awaitingCauseSeconds`, `k_deathSyncGraceSeconds` → `k_causeSyncGraceSeconds`.
+> 아래 소절 제목에 남은 옛 이름은 이 대응으로 읽을 것 — 로직은 원인을 가리지 않으므로 그대로 유효하다.
+>
+> 비행·폭발 임펄스가 갖는 순서 문제도 그대로다 — 상태는 NetworkVariable 폴링, 임펄스는 RPC라
+> 도착 순서가 갈릴 수 있다. 근거는
+> [815-homerun-player-ragdoll.md §3](815-homerun-player-ragdoll.md) ·
+> [903-instant-death.md](903-instant-death.md).
+>
+> ⚠ **이 계약은 위쪽에서 누가 `Die`를 세우는가가 바뀌면 조용히 반대로 작동한다.** #725가 HP 0을
+> `Down`으로 돌렸을 때 폭발 사망 래그돌이 그렇게 깨졌다 — 임펄스는 오는데 사망이 영영 오지 않아,
+> 가드가 1초 뒤 "부활"로 판정해 몸을 일으켰다. 가드는 정상이었고 사실이 오지 않게 된 것이다.
+> 실화 전문은 [903-instant-death.md](903-instant-death.md).
 
 ### 왜 폴링인가
 
@@ -378,6 +483,12 @@ NetworkVariable이라 도착 순서가 갈릴 수 있다** — RPC가 먼저 오
 
 ---
 
+⚠ **다운이 사유가 된 뒤로는 이 플래그가 다운→사망을 지나도 계속 참이다** — `!wantsRagdoll`일 때만
+내려가기 때문이다(#865). 늦게 접속한 피어에서는 그 몸이 유예가 끝나도 `Knockdown_Ground` 애니로
+남는다. **의도된 동작이다**(위와 같은 근거 — 이미 끝난 낙하를 재생하지 않는다). 위치·yaw는 루트
+`NetworkTransform`이 맞춘다. 문제가 되면 고칠 자리는 하나 — 마지막 관측 원인을 기억해 원인이
+**바뀔 때** 플래그를 내리는 것.
+
 ## 10. 정착 — 아무것도 옮기지 않는다
 
 ### 정착은 물리가 정한다
@@ -399,6 +510,17 @@ NetworkVariable이라 도착 순서가 갈릴 수 있다** — RPC가 먼저 오
 | 밧줄로 끌리는 중 | 재우지 않고 경과 시간을 0으로 되돌린다 — 놓는 순간부터 다시 센다 |
 | 타임아웃(`m_settleTimeoutSeconds`) | 지형에 물려 스스로 못 자는 몸. **키네마틱 얼림이 아니라 물리 수면**이라 밟거나 밧줄을 걸면 깨어남 폴링이 그대로 받는다 |
 | 아직 공중 | 여기서 재우면 **떠 있는 시체**가 된다. 실측: 임펄스가 과했을 때 9m 위에서 타임아웃이 터져 골반이 루트로부터 +8.95m로 고정돼 허공에 매달렸다. 다만 맵 밖으로 떨어진 몸이 영원히 갇히지 않게 `k_lostBodyTimeoutFactor = 4`배까지만 기다린다 |
+
+**구조 채널링 중에는 재운다 (#865).** `PlayerReviver.IsInRange`는 루트를 보고 **완료 시점에만**
+검사하며 구조자는 이동하면 채널링이 취소된다. 그래서 3초 사이에 시체가 밟혀 밀리면 **게이지를 다 채운
+뒤에 "범위를 벗어남"으로 실패**한다 — 실패 모드가 나쁘다. `Update`의 권위 게이트 뒤에서
+`IsBeingRevived`이고 **이미 정착했으면** 깨어난 뼈를 다시 재운다. ⚠ 무너지는 중에는 재우지 않는다 — 잠든 바디는 중력도 안 받아 공중에서 굳는다. 이 자리가 성립하는 것은 `ServerSetBeingRevived`를 쓰는
+것도 서버이고 래그돌 권위도 서버라(§1-1) **같은 피어에서 같은 값을 본다**는 것 때문이다.
+
+**다운 6구가 쌓이지 않는다 (실측).** `ProjectSettings/DynamicsManager.asset`의 `m_LayerCollisionMatrix`를
+디코드하면 레이어 10(`Ragdoll`)의 마스크가 `0x00000001` — **`Default`와만 충돌한다.** 뼈끼리 안
+부딪히므로 여러 구가 겹쳐 누워도 서로 밀지 않고, 상호 깨어남 연쇄가 구조적으로 없다. 뼈 ↔ 살아있는
+플레이어 캡슐(`Default`)은 부딪히므로 밟히면 깨어난다 — 의도한 거동이다(§6이 자기 캡슐만 무시하는 이유).
 
 ### 깨어남 폴링이 #763의 뿌리를 막는다
 
@@ -452,6 +574,12 @@ yaw를 머리 위치에서 계산하므로 같은 프레임에 **되먹임 고�
 
 ⚠ **깃발(`m_settled`)로 물어야 한다.** 시체도 끝까지 `Ragdoll` 상태이므로 상태로 물으면 정착 뒤에도
 계속 돌아 위 되먹임 고리가 되살아난다.
+
+⚠ **그 깃발은 `m_settled`가 아니라 일방향 래치여야 한다 (#865).** 잠든 몸이 밟혀 깨어나면
+`ResumeFromSleep`이 `m_settled`를 되돌려 추종이 **다시 켜진다.** 다운은 1인칭이라 그 yaw가 **곧
+쓰러진 본인의 시야**다 — **동료가 몸을 발로 차서 남의 화면을 돌릴 수 있다.** 사망은 3인칭 관전이라
+없던 문제고, 비행은 정착 전이라 의도된 동작이었다. 그래서 "이 에피소드에서 한 번이라도 정착했는가"
+(`m_yawFollowDone` — `Settle()`에서 세우고 진입·기상에서 내린다)로 바꿨다.
 
 ### `m_rootYawOffset`
 
@@ -596,3 +724,4 @@ yaw를 머리 위치에서 계산하므로 같은 프레임에 **되먹임 고�
 | 마찰 412N | 스프링으로 끌 수 없었던 이유 (§7) |
 | 1차 0.0055m → 2차 0.0624m | 뼈 길이 누적 (§8) |
 | 골반 +8.95m | 공중에서 타임아웃이 터졌을 때 (§10) |
+| `Ragdoll` 마스크 `0x00000001` | 레이어 10은 `Default`와만 충돌한다 — 시체끼리 안 엉킨다 (§10) |
