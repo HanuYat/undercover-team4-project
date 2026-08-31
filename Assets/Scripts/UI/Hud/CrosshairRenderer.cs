@@ -53,8 +53,9 @@ public static class CrosshairRenderer
         if (refs.Dot != null)
         {
             refs.Dot.gameObject.SetActive(showDot);
+            // 굵기만 반영하면 크기 슬라이더가 점 모양에서 아무 효과가 없어 보인다 — 둘 다 반영한다.
             if (showDot)
-                refs.Dot.sizeDelta = new Vector2(thickness * 2f, thickness * 2f);
+                refs.Dot.sizeDelta = new Vector2(size + thickness * 2f, size + thickness * 2f);
         }
 
         if (refs.CircleRing != null)

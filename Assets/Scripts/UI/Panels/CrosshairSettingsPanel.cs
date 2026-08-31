@@ -1,9 +1,10 @@
 // Assets/Scripts/UI/Panels/CrosshairSettingsPanel.cs
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 크로스헤어 커스터마이징 창 (#945) — 설정 창 Look 탭 버튼으로 연다. 모양 4종 토글, 색 스와치,
+/// 크로스헤어 커스터마이징 창 (#945) — 설정 창 Look 탭 버튼으로 연다. 모양 4종 토글, 색 드롭다운,
 /// 크기·굵기 슬라이더를 <see cref="CosmeticLoadout"/>에 즉시 쓰고(설정 창의 "즉시 적용" 관례,
 /// docs/design/settings-ui.md), 같은 값으로 미리보기(<see cref="CrosshairPreviewView"/>)를 다시 그린다.
 /// </summary>
@@ -16,9 +17,8 @@ public class CrosshairSettingsPanel : PanelBase
     [SerializeField] private Toggle m_shapeCircleToggle;
 
     [Header("색")]
-    [SerializeField] private RectTransform m_swatchContainer;
-    [SerializeField] private PlayerColorSwatchView m_swatchPrefab;
-    [SerializeField] private PlayerColorPalette m_colorPalette;
+    [Tooltip("옵션(텍스트+색 아이콘)은 프리팹에 CrosshairColorPalette 순서대로 미리 채워 둔다")]
+    [SerializeField] private TMP_Dropdown m_colorDropdown;
 
     [Header("크기·굵기")]
     [SerializeField] private Slider m_sizeSlider;
@@ -31,9 +31,6 @@ public class CrosshairSettingsPanel : PanelBase
 
     public override bool CanCloseWithESC => true;
     public override bool IsStackable => true;
-
-    private readonly System.Collections.Generic.List<PlayerColorSwatchView> m_swatches =
-        new System.Collections.Generic.List<PlayerColorSwatchView>();
 
     protected override void Awake()
     {
@@ -57,19 +54,7 @@ public class CrosshairSettingsPanel : PanelBase
         m_shapeCrossDotToggle.onValueChanged.AddListener(isOn => { if (isOn) HandleShapeChanged(ECrosshairShape.CrossDot); });
         m_shapeCircleToggle.onValueChanged.AddListener(isOn => { if (isOn) HandleShapeChanged(ECrosshairShape.Circle); });
 
-        BuildSwatches();
-    }
-
-    private void BuildSwatches()
-    {
-        for (int i = 0; i < m_colorPalette.Count; i++)
-        {
-            int index = i;
-            PlayerColorSwatchView swatch = Instantiate(m_swatchPrefab, m_swatchContainer);
-            swatch.name = $"Swatch {index}";
-            swatch.Bind(m_colorPalette.Get(index), () => HandleColorChanged(index));
-            m_swatches.Add(swatch);
-        }
+        m_colorDropdown.onValueChanged.AddListener(HandleColorChanged);
     }
 
     public override void OpenPanel()
@@ -91,8 +76,8 @@ public class CrosshairSettingsPanel : PanelBase
         m_sizeSlider.SetValueWithoutNotify(settings.Size);
         m_thicknessSlider.SetValueWithoutNotify(settings.Thickness);
 
-        for (int i = 0; i < m_swatches.Count; i++)
-            m_swatches[i].SetSelected(i == settings.ColorIndex);
+        m_colorDropdown.SetValueWithoutNotify(settings.ColorIndex);
+        m_colorDropdown.RefreshShownValue();
 
         RefreshPreview(settings);
     }
@@ -117,9 +102,6 @@ public class CrosshairSettingsPanel : PanelBase
         mutate(next);
 
         CosmeticLoadout.SetCrosshairSettings(next);
-
-        for (int i = 0; i < m_swatches.Count; i++)
-            m_swatches[i].SetSelected(i == next.ColorIndex);
 
         RefreshPreview(next);
     }

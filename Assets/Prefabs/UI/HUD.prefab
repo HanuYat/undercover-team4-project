@@ -654,7 +654,6 @@ MonoBehaviour:
   m_circleImage: {fileID: 8449511206218270137}
   m_crosshairRoot: {fileID: 1265731815198501353}
   m_colorPalette: {fileID: 11400000, guid: 96cb6c008fc818d41b233eafac54a5cf, type: 2}
-  m_defaultColor: {r: 1, g: 1, b: 1, a: 1}
   m_interactableColor: {r: 1, g: 0.85, b: 0.2, a: 1}
   m_weaponTargetColor: {r: 1, g: 0.25, b: 0.2, a: 1}
   m_hitMarker: {fileID: 9113651649413304787}
@@ -4467,7 +4466,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
+  m_Sprite: {fileID: 21300000, guid: 4b07844572879f44395fc181e6b93a51, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -5200,7 +5199,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: 082adab85417e4cf29b94209dbab8328, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 4b07844572879f44395fc181e6b93a51, type: 3}
   m_Type: 0
   m_PreserveAspect: 1
   m_FillCenter: 1
