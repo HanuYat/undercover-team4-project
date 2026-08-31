@@ -143,6 +143,14 @@ MonoBehaviour:
     m_Key: Settings.Label.SfxVolume
     m_Metadata:
       m_Items: []
+  - m_Id: 9840195826966528
+    m_Key: Settings.Label.Crosshair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 9840195881492480
+    m_Key: Settings.Crosshair.Open
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

@@ -21,6 +21,7 @@ public static class CosmeticLoadout
     // ⚠ 키는 저장소에 남는 식별자라 바꾸면 이미 저장된 색·치장을 못 읽는다 — 분리하면서도 그대로 뒀다.
     private const string k_playerColorKeyPrefix = "settings.playerColor.";
     private const string k_accessoryKeyPrefix = "settings.accessory.";
+    private const string k_crosshairKeyPrefix = "settings.crosshair.";
 
     private const string k_localAccount = "local"; // 로그인 전에 고른 값이 갈 자리
 
@@ -37,6 +38,8 @@ public static class CosmeticLoadout
         Enum.GetValues(typeof(EAccessorySlot)).Length
     ];
 
+    private static CrosshairSettings s_crosshair = CrosshairSettings.Default();
+
     private static string s_account = k_localAccount;
 
     /// <summary>내 로봇 색이 바뀌었다 — 로비 로스터 보고·초상·팔레트 표시가 되읽는다. 인자는 바뀐 부위. (#432)</summary>
@@ -44,6 +47,9 @@ public static class CosmeticLoadout
 
     /// <summary>내 치장이 바뀌었다 — 로비 명부 보고·선택 칸이 되읽는다. 인자는 바뀐 슬롯. (#818)</summary>
     public static event Action<EAccessorySlot> OnAccessoryChanged;
+
+    /// <summary>내 크로스헤어 설정이 바뀌었다 — 게임 크로스헤어·설정 패널 미리보기가 되읽는다. (#945)</summary>
+    public static event Action OnCrosshairSettingsChanged;
 
     /// <summary>
     /// 그 부위의 색 인덱스 (#432) — <see cref="PlayerColorPalette"/>의 몇 번째 색인지.
@@ -75,6 +81,19 @@ public static class CosmeticLoadout
         s_accessories[(int)slot] = clamped;
         PlayerPrefs.SetInt(AccessoryKey(slot), clamped);
         OnAccessoryChanged?.Invoke(slot);
+    }
+
+    /// <summary>현재 크로스헤어 설정 — 값 자체를 그대로 돌려준다(참조 공유 주의: 호출부는 읽기 전용으로 쓸 것).</summary>
+    public static CrosshairSettings GetCrosshairSettings() => s_crosshair;
+
+    public static void SetCrosshairSettings(CrosshairSettings settings)
+    {
+        if (settings == null)
+            return;
+
+        s_crosshair = settings;
+        SaveCrosshairToPrefs(settings);
+        OnCrosshairSettingsChanged?.Invoke();
     }
 
     /// <summary>클라우드에서 받은 한 벌을 적용한다 — 캐시에도 남긴다. (CosmeticsSaveService)</summary>
@@ -115,6 +134,17 @@ public static class CosmeticLoadout
         }
     }
 
+    /// <summary>클라우드에서 받은 값을 적용한다 — 캐시에도 남긴다. null이면 기본값을 그대로 둔다(옛 레코드). (CosmeticsSaveService, #945)</summary>
+    public static void ApplyCrosshairSettings(CrosshairSettings settings)
+    {
+        if (settings == null)
+            return;
+
+        s_crosshair = settings;
+        SaveCrosshairToPrefs(settings);
+        OnCrosshairSettingsChanged?.Invoke();
+    }
+
     /// <summary>계정 자리를 갈아탄다 — 캐시에서 그 계정 것을 다시 읽는다. (CosmeticsSaveService)</summary>
     public static void UseAccount(string accountId)
     {
@@ -133,6 +163,7 @@ public static class CosmeticLoadout
         // 파괴된 UI를 깨운다. 씬 로드 전이라 이번 플레이의 구독자는 아직 붙지 않았다. (#430)
         OnPlayerColorChanged = null;
         OnAccessoryChanged = null;
+        OnCrosshairSettingsChanged = null;
 
         // 로그인 전이라 아직 'local' 자리를 읽는다. 로그인하면 계정 것으로 갈아탄다 (#796 후속)
         s_account = k_localAccount;
@@ -143,6 +174,7 @@ public static class CosmeticLoadout
     {
         LoadPlayerColors();
         LoadAccessories();
+        LoadCrosshairSettings();
     }
 
     // 색만 로그인 전에도 계정 자리를 쓴다 — 이미 그 형식으로 저장돼 있어 굳이 바꾸지 않는다 (#432)
@@ -152,6 +184,15 @@ public static class CosmeticLoadout
     // 색과 같은 자리 규칙 — 계정별로 갈라 둔다 (#818)
     private static string AccessoryKey(EAccessorySlot slot) =>
         k_accessoryKeyPrefix + s_account + "." + slot;
+
+    private static string CrosshairShapeKey() => k_crosshairKeyPrefix + s_account + ".shape";
+
+    private static string CrosshairColorKey() => k_crosshairKeyPrefix + s_account + ".color";
+
+    private static string CrosshairSizeKey() => k_crosshairKeyPrefix + s_account + ".size";
+
+    private static string CrosshairThicknessKey() =>
+        k_crosshairKeyPrefix + s_account + ".thickness";
 
     // 캐시에서 전 부위를 다시 읽어 적용한다. 저장된 값이 없으면 팔레트 첫 색이다.
     private static void LoadPlayerColors()
@@ -171,5 +212,27 @@ public static class CosmeticLoadout
             s_accessories[(int)slot] = PlayerPrefs.GetInt(AccessoryKey(slot), 0);
             OnAccessoryChanged?.Invoke(slot);
         }
+    }
+
+    private static void SaveCrosshairToPrefs(CrosshairSettings settings)
+    {
+        PlayerPrefs.SetInt(CrosshairShapeKey(), (int)settings.Shape);
+        PlayerPrefs.SetInt(CrosshairColorKey(), settings.ColorIndex);
+        PlayerPrefs.SetFloat(CrosshairSizeKey(), settings.Size);
+        PlayerPrefs.SetFloat(CrosshairThicknessKey(), settings.Thickness);
+    }
+
+    // 캐시에서 다시 읽는다. 저장된 적이 없으면 기본값이다.
+    private static void LoadCrosshairSettings()
+    {
+        CrosshairSettings fallback = CrosshairSettings.Default();
+        s_crosshair = new CrosshairSettings
+        {
+            Shape = (ECrosshairShape)PlayerPrefs.GetInt(CrosshairShapeKey(), (int)fallback.Shape),
+            ColorIndex = PlayerPrefs.GetInt(CrosshairColorKey(), fallback.ColorIndex),
+            Size = PlayerPrefs.GetFloat(CrosshairSizeKey(), fallback.Size),
+            Thickness = PlayerPrefs.GetFloat(CrosshairThicknessKey(), fallback.Thickness),
+        };
+        OnCrosshairSettingsChanged?.Invoke();
     }
 }

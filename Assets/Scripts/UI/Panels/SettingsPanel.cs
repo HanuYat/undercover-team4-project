@@ -32,6 +32,9 @@ public class SettingsPanel : PanelBase
     [Tooltip("시야각(수직, 도). 좁을수록 멀미가 심해진다 (#665)")]
     [SerializeField] private Slider m_fovSlider;
 
+    [Tooltip("크로스헤어 설정 패널을 여는 버튼 (#945)")]
+    [SerializeField] private Button m_crosshairSettingsButton;
+
     [SerializeField] private Slider m_masterVolumeSlider;
     [SerializeField] private Slider m_bgmVolumeSlider;
     [SerializeField] private Slider m_sfxVolumeSlider;
@@ -127,6 +130,10 @@ public class SettingsPanel : PanelBase
             HandleLookSmoothingChanged
         );
         SetupSlider(m_fovSlider, GameSettings.k_minFov, GameSettings.k_maxFov, HandleFovChanged);
+
+        if (m_crosshairSettingsButton != null)
+            m_crosshairSettingsButton.onClick.AddListener(HandleCrosshairSettingsClicked);
+
         SetupSlider(m_masterVolumeSlider, 0f, 1f, HandleMasterVolumeChanged);
         SetupSlider(m_bgmVolumeSlider, 0f, 1f, HandleBgmVolumeChanged);
         SetupSlider(m_sfxVolumeSlider, 0f, 1f, HandleSfxVolumeChanged);
@@ -181,6 +188,8 @@ public class SettingsPanel : PanelBase
             m_lookSmoothingSlider.onValueChanged.RemoveListener(HandleLookSmoothingChanged);
         if (m_fovSlider != null)
             m_fovSlider.onValueChanged.RemoveListener(HandleFovChanged);
+        if (m_crosshairSettingsButton != null)
+            m_crosshairSettingsButton.onClick.RemoveListener(HandleCrosshairSettingsClicked);
         if (m_masterVolumeSlider != null)
             m_masterVolumeSlider.onValueChanged.RemoveListener(HandleMasterVolumeChanged);
         if (m_bgmVolumeSlider != null)
@@ -599,6 +608,15 @@ public class SettingsPanel : PanelBase
 
     // 개발진 창은 설정 창 위에 겹쳐 열린다 (배치 누락은 UI 매니저가 콘솔로 드러낸다).
     private void HandleCreditsClicked() => App.UI.Current?.OpenPanel<CreditsPanel>();
+
+    // PlayerColorPanel과 같은 열기 방식 — App.UI.Current에 등록된 인스턴스를 찾아 연다 (#945)
+    private void HandleCrosshairSettingsClicked()
+    {
+        if (App.UI.Current != null && App.UI.Current.TryGetPanel(out CrosshairSettingsPanel panel))
+            panel.OpenPanel();
+        else
+            Debug.LogWarning("SettingsPanel: 크로스헤어 설정 패널을 찾지 못했다");
+    }
 
     private void HandleResetClicked()
     {

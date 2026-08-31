@@ -147,6 +147,14 @@ MonoBehaviour:
     m_Localized: Effects Volume
     m_Metadata:
       m_Items: []
+  - m_Id: 9840195826966528
+    m_Localized: Crosshair
+    m_Metadata:
+      m_Items: []
+  - m_Id: 9840195881492480
+    m_Localized: Open Settings
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []
