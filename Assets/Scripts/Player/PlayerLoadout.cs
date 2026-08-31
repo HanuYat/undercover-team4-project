@@ -30,6 +30,10 @@ public class PlayerLoadout : NetworkBehaviour
     [SerializeField]
     private float m_dropDistance = 1.2f;
 
+    [Tooltip("착지면으로 인정할 레이어 — 기본 Default")]
+    [SerializeField]
+    private LayerMask m_groundMask = 1;
+
     /// <summary>플레이어 소지 슬롯 수 — 고정 5칸 (#144, 3칸에서 확장 #793, GDD 용량 5칸).</summary>
     public const int k_maxHeldItems = 5;
 
@@ -402,7 +406,11 @@ public class PlayerLoadout : NetworkBehaviour
             distance = Mathf.Max(0f, obstacle.distance - k_dropWallMargin);
         }
 
-        return transform.position + transform.forward * distance;
+        // 수평 지점만 정했을 뿐 높이는 아직 "선 곳의 발밑"이다 — 계단·인도 턱·경사 발판처럼 앞쪽 지면이
+        // 높아지면 그 높이가 실제 지면보다 아래라 아이템이 파묻힌다(#937). 배달 흩뿌리기(#824)가 쓰는
+        // 것과 같은 하향 레이캐스트로 실제 지면 y를 구하고, 못 찾으면(공중·구멍) 지금 높이로 폴백한다.
+        Vector3 candidate = transform.position + transform.forward * distance;
+        return DeliveryScatter.SnapToGround(candidate, m_groundMask);
     }
 
     // ---- 밧줄 자원 게이트 (#269) ----
