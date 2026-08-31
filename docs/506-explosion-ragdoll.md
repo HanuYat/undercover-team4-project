@@ -1318,6 +1318,87 @@ NPC에도 밧줄이 있지만(`NpcController.Rope`) **메커니즘이 다르다*
 
 ---
 
+## 12. 폭발 넉백을 래그돌로 통일한다 (2026-08-31)
+
+`§9-21`로 사망자가 제대로 날아가게 되자, **살아남은 사람은 여전히 캡슐이 미끄러진다**는 것이
+그대로 눈에 띄었다. 같은 폭발 하나에서 죽은 몸은 물리로 날고 산 몸은 캡슐로 밀리니 그림이 갈린다.
+
+### 12-1. 결정 — 폭발 경로에서 캡슐 넉백·포물선 넉백을 **없앤다**
+
+| 대상 | 이전 | 지금 |
+|---|---|---|
+| 죽은 플레이어 | `EnterRagdoll(impulse)` (RPC 브로드캐스트) | 그대로 |
+| **산 플레이어** | `PlayerMovement.AddKnockback` (각 피어가 자기 오너만) | `Launched` + 오너 지정 임펄스 RPC |
+| 죽은 NPC | `NpcRagdoll.EnterRagdoll(impulse)` | 그대로 |
+| **산 NPC** | `NpcKnockback.ServerApplyKnockback` (뻣뻣한 포물선) | `NpcKnockback.ServerLaunchRagdoll` |
+
+**새로 만든 것이 없다.** 산 몸을 래그돌로 날리는 문은 홈런 진압봉(#815)이 이미 냈고
+(`PlayerIncapacitation.ServerLaunch` / `NpcKnockback.ServerLaunchRagdoll`), 폭발은 그 문을
+같은 순서로 두드릴 뿐이다. 그래서 착지·기상·`Launched` 해제 타이밍의 함정도 이미 저쪽이 겪었다.
+
+### 12-2. ⚠ 사망자와 생존자는 **RPC 대상이 다르다**
+
+같은 클래스 안에 두 임펄스 경로가 나란히 있으므로 복사 사고가 나기 쉬운 자리다.
+
+| | 소유권 | RPC |
+|---|---|---|
+| 사망자 | `ApplyDeathOwnership`이 **서버로 옮긴다** | `BlastDeathsClientRpc` — 전 피어 브로드캐스트 |
+| 생존자 | `Launched`는 **옮기지 않는다** (물리를 본인이 돌린다) | `RpcTarget.Single(OwnerClientId)` |
+
+사망자에 `Single(OwnerClientId)`을 쓰면 그 시점의 오너가 이미 서버라 **호스트가 자기 몸을 날린다**
+— `TrafficVehicle.ServerNotifyDeathRagdoll`에 같은 경고가 적혀 있다.
+
+### 12-3. 함께 사라진 것
+
+- `BombExplosionView`의 `FindObjectsByType<PlayerMovement>` 넉백 루프 → **VFX·폭발음 전용**이 됐다.
+  가림 판정 중복(서버와 뷰가 각자 `IsOccluded`를 부르던 것)도 같이 사라졌다.
+- `BombBlast.KnockbackForce` / `BombBlast.EvaluateKnockback` / `BombDevice`의 같은 이름 위임 둘 —
+  뷰가 유일한 호출부였다. `BombBlastProfile.EvaluateKnockback`은 남는다:
+  `EvaluateRagdollImpulse`가 **방향과 거리 감쇠를 얻는 근거**라 세기 튜닝의 뿌리는 여전히 그쪽이다.
+- `BombBlast.IsOccluded`는 `private`로 내려갔다.
+
+`PlayerMovement.AddKnockback` 자체는 남는다 — `TrafficVehicle`이 치이고 살아남은 사람에게 계속 쓴다.
+
+### 12-4. 세기 — 홈런봉과 같은 m/s는 같은 사거리가 아니었다
+
+`m_ragdollImpulseScale` **0.22 → 0.3**, `[Range]` 상한 1 → 2.
+
+0.22는 **캡슐 넉백(`m_knockbackForce = 30`) 기준으로 튜닝된 값**이었다. 폭심 수평 6.6 m/s로
+홈런 진압봉(14 m/s)·차량(14 m/s)의 절반이 안 되고, 캡슐 경로가 사라진 지금 그 값을 유지할 근거가
+없다. 그래서 처음엔 홈런봉 수준(수평 15 m/s = 스케일 0.5)으로 잡았는데 **플레이 테스트에서 과했다.**
+
+수평 속도만 맞추면 안 된다 — **사거리는 발사각이 함께 정한다.** `m_ragdollLiftRatio`가 홈런봉은
+1.0(45°)인데 폭탄은 1.2(50°)라, 같은 수평 15 m/s에서도 체공이 3.7초로 길어져 사거리가 55m가 된다
+(홈런봉은 40m). 0.3으로 낮춰 **사거리 20m·정점 5.9m·체공 2.2초**에 맞췄다. 발사각은 1.2 그대로 —
+폭발이 위로 띄우는 그림은 유지한다.
+
+| 스케일 | 수평 / 상승 (m/s) | 체공 | 정점 | 사거리 |
+|---|---|---|---|---|
+| 0.22 (이전) | 6.6 / 7.9 | 1.6초 | 3.2m | 10.7m |
+| **0.3 (현재)** | **9 / 10.8** | **2.2초** | **5.9m** | **19.8m** |
+| 0.5 (과했음) | 15 / 18 | 3.7초 | 16.5m | 55m |
+
+평지·공기저항 없음 기준이라 실제로는 지형·관절 마찰로 더 짧다.
+
+새 노브 둘은 `BombBlast`에 있다(세기가 아니라 **에피소드 수명**이라 프로필에 넣지 않았다):
+
+- `m_launchStunSeconds` (6초) — 살아남은 NPC가 착지 후까지 누워 있는 시간. 비행 시간보다 짧으면
+  공중에서 기상 모션이 나간다 (`HomeRunBaton.m_stunSeconds`와 같은 노브).
+- `m_launchMaxSeconds` (6초) — 살아남은 플레이어의 `Launched` 안전장치. 오너의 정착 통보가
+  안 올 때만 쓰인다.
+
+### 12-5. 열어 둔 것
+
+- **연행·체포 중인 시민도 날아간다.** `ServerLaunchRagdoll`이 `Dead/Jailed/Intruding`만 빼므로
+  홈런봉과 규칙이 하나로 유지된다(수갑은 폭발로 풀리지 않는다). 예전 `ServerApplyKnockback`이 하던
+  `Escorted → StopEscort → Captured` 처리는 폭발 경로에서 빠졌다 — 검거 진행이 실제로 끊기는지는
+  플레이 테스트로 확인할 항목이다.
+- **가장자리 생존자도 눕는다.** 반경 8m 안이면 세기가 얼마 안 남아도 래그돌이라 조작 상실 시간이
+  생긴다. 너무 길게 느껴지면 `m_knockbackEdgeFalloff`를 낮춰 가장자리 임펄스를 0에 가깝게 만들면
+  된다 — 임펄스가 0이면 `ServerLaunchSurvivor`가 스스로 빠진다.
+
+---
+
 ## 부록 A — #506에 달 코멘트 초안
 
 > ## 범위 변경 — 진입 조건을 "폭발 넉백"에서 "사망"으로 바꾼다
