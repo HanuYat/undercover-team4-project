@@ -13,8 +13,9 @@ using UnityEngine.UI;
 ///
 /// 게임 중 검거마다 반복 발생하므로 입력을 멈추지 않는 비차단 HUD다(정산 패널과 달리 모달 아님):
 /// ESC 스택에 쌓지 않고(IsStackable=false), <see cref="m_displaySeconds"/>초 뒤 자동으로 숨는다.
-/// 판정에 따라 색을 바꾼다 — 진범=긍정, 오검거=경고, 경범죄=중립. 테두리는 판정 원색,
-/// 채움은 그보다 어둡게 칠해 한눈에 구분되게 한다 (#943).
+/// 판정에 따라 채움 색을 바꾼다 — 진범=긍정, 오검거=경고, 경범죄=중립. 배경·테두리 배선은
+/// 이벤트 알림 토스트(SuddenEventToastView가 쓰는 HUD.prefab의 Toast/Edge 한 쌍)와 같은
+/// 스프라이트 구성을 그대로 가져와 톤만 다르다 (#943).
 /// </summary>
 public class VerdictBanner : PanelBase
 {
@@ -22,14 +23,12 @@ public class VerdictBanner : PanelBase
     [SerializeField] private TextMeshProUGUI m_titleText;   // 판정 문구
     [SerializeField] private TextMeshProUGUI m_detailText;  // 이름 + 보상
 
+    // 이벤트 알림 토스트(SuddenEventToastView)와 같은 배선 방식 — 채움(m_toneTarget)만 판정색을
+    // 입히고, 테두리(Edge)는 그 토스트처럼 판정과 무관한 고정 장식색이라 여기서 건드리지 않는다.
     [Header("톤 (판정별 강조 색)")]
-    [SerializeField] private Graphic m_toneTarget;          // 카드 테두리(불투명) — 판정색을 원색 그대로 쓴다
-    [SerializeField] private Graphic m_fillTarget;          // 카드 배경 채움 — 테두리보다 어둡게 칠해 도드라지게 한다
-    [Tooltip("채움 색 = 판정색을 검정 쪽으로 이만큼 섞은 값 — 테두리(원색)보다 어둡게 만든다")]
+    [SerializeField] private Graphic m_toneTarget;          // 카드 채움
     [Range(0f, 1f)]
-    [SerializeField] private float m_fillDarken = 0.25f;
-    [Range(0f, 1f)]
-    [SerializeField] private float m_fillAlpha = 0.55f;
+    [SerializeField] private float m_fillAlpha = 0.95f;
     [SerializeField] private Color m_positiveColor = new Color(0.290f, 0.871f, 0.502f); // 진범 검거
     [SerializeField] private Color m_negativeColor = new Color(0.863f, 0.149f, 0.149f); // 오검거 — 진한 레드 (#943)
     [SerializeField] private Color m_neutralColor  = new Color(0.612f, 0.639f, 0.686f); // 경범죄
@@ -101,12 +100,7 @@ public class VerdictBanner : PanelBase
 
         Color tone = VerdictToColor(data.Verdict);
         if (m_toneTarget != null)
-            m_toneTarget.color = tone;
-        if (m_fillTarget != null)
-        {
-            Color fillTone = Color.Lerp(tone, Color.black, m_fillDarken);
-            m_fillTarget.color = new Color(fillTone.r, fillTone.g, fillTone.b, m_fillAlpha);
-        }
+            m_toneTarget.color = new Color(tone.r, tone.g, tone.b, m_fillAlpha);
 
         // 판정음은 배너와 같은 자리에서 낸다 — 이 배너 자체가 이미 '검거한 본인에게만' 뜨므로
         // 전파를 새로 고민할 것이 없고, 소리와 화면이 어긋날 여지도 없다.
