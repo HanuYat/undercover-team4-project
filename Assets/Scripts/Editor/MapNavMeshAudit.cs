@@ -13,7 +13,8 @@ using UnityEngine.AI;
 public class MapNavMeshAudit : EditorWindow
 {
     private const float k_originSampleRadius = 5f;
-    private const int k_maxClustersLogged = 20;
+    private const int k_maxClustersLogged = 30;
+    private const float k_anchorFloatTolerance = 1.5f;
 
     [SerializeField]
     private Transform m_origin;
@@ -113,16 +114,37 @@ public class MapNavMeshAudit : EditorWindow
                 + $"z[{bounds.min.z:F1}~{bounds.max.z:F1}] y[{bounds.min.y:F1}~{bounds.max.y:F1}]"
         );
 
+        var clusters = new List<Cluster>();
+        var reachable = new List<Vector3>();
+
         foreach (float level in ParseFloats(m_levels))
         {
-            AuditLevel(origin, bounds, level);
+            AuditLevel(origin, bounds, level, clusters, reachable);
         }
 
+        AnalyzeClusters(clusters, reachable);
         AuditAnchors(origin);
         AuditProbes(origin);
     }
 
-    private void AuditLevel(Vector3 origin, Bounds bounds, float level)
+    private class Cluster
+    {
+        public float Level;
+        public float Area;
+        public Vector3 Center;
+        public Bounds Box;
+        public Vector3 Sample;
+        public List<Vector3> Points;
+        public int Group = -1;
+    }
+
+    private void AuditLevel(
+        Vector3 origin,
+        Bounds bounds,
+        float level,
+        List<Cluster> clusters,
+        List<Vector3> reachable
+    )
     {
         int cols = Mathf.Max(1, Mathf.CeilToInt(bounds.size.x / m_cellSize));
         int rows = Mathf.Max(1, Mathf.CeilToInt(bounds.size.z / m_cellSize));
@@ -180,6 +202,7 @@ public class MapNavMeshAudit : EditorWindow
                     if (ok)
                     {
                         reached++;
+                        reachable.Add(hit.position);
                     }
                 }
             }
@@ -198,31 +221,30 @@ public class MapNavMeshAudit : EditorWindow
         string head =
             $"맵 NavMesh 점검: y={level:F2} — 도달률 {100f * reached / sampled:F1}% ({reached}/{sampled}칸)";
 
-        List<string> clusters = CollectClusters(state, hitPos, cols, rows);
-        if (clusters.Count == 0)
+        int before = clusters.Count;
+        CollectClusters(state, hitPos, cols, rows, level, clusters);
+        int found = clusters.Count - before;
+
+        if (found == 0)
         {
             Debug.Log($"{head} · 고립 구역 없음");
-            return;
         }
-
-        var sb = new StringBuilder($"{head} · 고립 덩어리 {clusters.Count}개\n");
-        for (int i = 0; i < clusters.Count && i < k_maxClustersLogged; i++)
+        else
         {
-            sb.AppendLine($"  {clusters[i]}");
+            Debug.Log($"{head} · 고립 덩어리 {found}개 (자세한 것은 아래 고립 덩어리 분석)");
         }
-
-        if (clusters.Count > k_maxClustersLogged)
-        {
-            sb.AppendLine($"  … 외 {clusters.Count - k_maxClustersLogged}개");
-        }
-
-        Debug.LogWarning(sb.ToString().TrimEnd());
     }
 
-    private List<string> CollectClusters(int[] state, Vector3[] hitPos, int cols, int rows)
+    private void CollectClusters(
+        int[] state,
+        Vector3[] hitPos,
+        int cols,
+        int rows,
+        float level,
+        List<Cluster> clusters
+    )
     {
         float cellArea = m_cellSize * m_cellSize;
-        var found = new List<(float area, Vector3 center, Bounds box)>();
         var seen = new bool[state.Length];
         var stack = new Stack<int>();
 
@@ -239,6 +261,7 @@ public class MapNavMeshAudit : EditorWindow
             int count = 0;
             Vector3 sum = Vector3.zero;
             var box = new Bounds(hitPos[start], Vector3.zero);
+            var points = new List<Vector3>();
 
             while (stack.Count > 0)
             {
@@ -246,6 +269,7 @@ public class MapNavMeshAudit : EditorWindow
                 count++;
                 sum += hitPos[i];
                 box.Encapsulate(hitPos[i]);
+                points.Add(hitPos[i]);
 
                 int c = i % cols;
                 int r = i / cols;
@@ -258,21 +282,143 @@ public class MapNavMeshAudit : EditorWindow
             float area = count * cellArea;
             if (area >= m_minClusterArea)
             {
-                found.Add((area, sum / count, box));
+                clusters.Add(
+                    new Cluster
+                    {
+                        Level = level,
+                        Area = area,
+                        Center = sum / count,
+                        Box = box,
+                        Sample = hitPos[start],
+                        Points = points,
+                    }
+                );
+            }
+        }
+    }
+
+    private void AnalyzeClusters(List<Cluster> clusters, List<Vector3> reachable)
+    {
+        if (clusters.Count == 0)
+        {
+            Debug.Log("맵 NavMesh 점검: 고립 덩어리 없음 — 검사한 전 층이 기준점과 이어져 있다");
+            return;
+        }
+
+        var path = new NavMeshPath();
+
+        int groupCount = 0;
+        for (int i = 0; i < clusters.Count; i++)
+        {
+            if (clusters[i].Group >= 0)
+            {
+                continue;
+            }
+
+            clusters[i].Group = groupCount++;
+
+            for (int j = i + 1; j < clusters.Count; j++)
+            {
+                if (clusters[j].Group >= 0)
+                {
+                    continue;
+                }
+
+                if (
+                    NavMesh.CalculatePath(clusters[i].Sample, clusters[j].Sample, NavMesh.AllAreas, path)
+                    && path.status == NavMeshPathStatus.PathComplete
+                )
+                {
+                    clusters[j].Group = clusters[i].Group;
+                }
             }
         }
 
-        found.Sort((a, b) => b.area.CompareTo(a.area));
-
-        var lines = new List<string>(found.Count);
-        foreach ((float area, Vector3 center, Bounds box) in found)
+        var groups = new List<List<Cluster>>(groupCount);
+        for (int g = 0; g < groupCount; g++)
         {
-            lines.Add(
-                $"{area:F0}m² · 중심 {Fmt(center)} · x[{box.min.x:F1}~{box.max.x:F1}] z[{box.min.z:F1}~{box.max.z:F1}]"
-            );
+            groups.Add(clusters.FindAll(c => c.Group == g));
         }
 
-        return lines;
+        groups.Sort((a, b) => TotalArea(b).CompareTo(TotalArea(a)));
+
+        var sb = new StringBuilder(
+            $"맵 NavMesh 점검: 고립 덩어리 {clusters.Count}개 — 서로 이어진 것끼리 묶으면 {groupCount}덩이\n"
+        );
+
+        for (int g = 0; g < groups.Count && g < k_maxClustersLogged; g++)
+        {
+            List<Cluster> group = groups[g];
+            group.Sort((a, b) => a.Level.CompareTo(b.Level));
+
+            sb.AppendLine(
+                $"  [{g + 1}] 총 {TotalArea(group):F0}m² · {group.Count}조각 — {DescribeNearest(group, reachable)}"
+            );
+
+            foreach (Cluster c in group)
+            {
+                sb.AppendLine(
+                    $"      y{c.Level:F2}  {c.Area:F0}m² 중심 {Fmt(c.Center)} "
+                        + $"x[{c.Box.min.x:F1}~{c.Box.max.x:F1}] z[{c.Box.min.z:F1}~{c.Box.max.z:F1}]"
+                );
+            }
+        }
+
+        if (groups.Count > k_maxClustersLogged)
+        {
+            sb.AppendLine($"  … 외 {groups.Count - k_maxClustersLogged}덩이");
+        }
+
+        Debug.LogWarning(sb.ToString().TrimEnd());
+    }
+
+    // 높이차가 climb(0.75) 근처면 단차 문제, 수평이 멀면 구멍 문제다.
+    private static string DescribeNearest(List<Cluster> group, List<Vector3> reachable)
+    {
+        if (reachable.Count == 0)
+        {
+            return "도달 가능 지점이 하나도 없다";
+        }
+
+        float best = float.MaxValue;
+        Vector3 from = Vector3.zero;
+        Vector3 to = Vector3.zero;
+
+        foreach (Cluster c in group)
+        {
+            foreach (Vector3 q in c.Points)
+            {
+                foreach (Vector3 p in reachable)
+                {
+                    float d = (p - q).sqrMagnitude;
+                    if (d >= best)
+                    {
+                        continue;
+                    }
+
+                    best = d;
+                    to = p;
+                    from = q;
+                }
+            }
+        }
+
+        float horizontal = new Vector2(to.x - from.x, to.z - from.z).magnitude;
+        float vertical = to.y - from.y;
+        string sign = vertical >= 0f ? "+" : string.Empty;
+
+        return $"끊긴 곳 {Fmt(from)} ↔ 도달 가능 {Fmt(to)} — 수평 {horizontal:F2}m / 높이차 {sign}{vertical:F2}m";
+    }
+
+    private static float TotalArea(List<Cluster> group)
+    {
+        float sum = 0f;
+        foreach (Cluster c in group)
+        {
+            sum += c.Area;
+        }
+
+        return sum;
     }
 
     private static void TryPush(int[] state, bool[] seen, Stack<int> stack, int cols, int rows, int c, int r)
@@ -301,7 +447,8 @@ public class MapNavMeshAudit : EditorWindow
         }
 
         var path = new NavMeshPath();
-        var bad = new List<string>();
+        var unreachable = new List<string>();
+        var floating = new List<string>();
         int total = 0;
 
         foreach (Transform t in FindObjectsByType<Transform>(FindObjectsSortMode.None))
@@ -315,18 +462,18 @@ public class MapNavMeshAudit : EditorWindow
 
             if (!NavMesh.SamplePosition(t.position, out NavMeshHit hit, 2f, NavMesh.AllAreas))
             {
-                bad.Add($"{t.name} {Fmt(t.position)} — 2m 안에 NavMesh 없음");
+                unreachable.Add($"{t.name} {Fmt(t.position)} — 2m 안에 NavMesh 없음");
             }
             else if (
                 !NavMesh.CalculatePath(origin, hit.position, NavMesh.AllAreas, path)
                 || path.status != NavMeshPathStatus.PathComplete
             )
             {
-                bad.Add($"{t.name} {Fmt(t.position)} — 기준점에서 못 감 ({path.status})");
+                unreachable.Add($"{t.name} {Fmt(t.position)} — 기준점에서 못 감 ({path.status})");
             }
-            else if (hit.distance > 1f)
+            else if (hit.distance > k_anchorFloatTolerance)
             {
-                bad.Add($"{t.name} {Fmt(t.position)} — NavMesh에서 {hit.distance:F2}m 떠 있음");
+                floating.Add($"{t.name} {Fmt(t.position)} — NavMesh에서 {hit.distance:F2}m 떠 있음");
             }
         }
 
@@ -336,19 +483,37 @@ public class MapNavMeshAudit : EditorWindow
             return;
         }
 
-        if (bad.Count == 0)
+        if (unreachable.Count == 0 && floating.Count == 0)
         {
             Debug.Log($"맵 NavMesh 점검: 앵커 {total}개 전부 정상");
             return;
         }
 
-        var sb = new StringBuilder($"맵 NavMesh 점검: 앵커 {total}개 중 {bad.Count}개 문제\n");
-        foreach (string line in bad)
+        if (unreachable.Count > 0)
+        {
+            Debug.LogError(Bullet($"맵 NavMesh 점검: 앵커 {total}개 중 {unreachable.Count}개 도달 불가", unreachable));
+        }
+
+        if (floating.Count > 0)
+        {
+            Debug.LogWarning(
+                Bullet(
+                    $"맵 NavMesh 점검: 앵커 {floating.Count}개가 {k_anchorFloatTolerance}m 넘게 떠 있다 (스폰 시 스냅되므로 대개 무해)",
+                    floating
+                )
+            );
+        }
+    }
+
+    private static string Bullet(string head, List<string> lines)
+    {
+        var sb = new StringBuilder(head + "\n");
+        foreach (string line in lines)
         {
             sb.AppendLine($"  {line}");
         }
 
-        Debug.LogError(sb.ToString().TrimEnd());
+        return sb.ToString().TrimEnd();
     }
 
     private void AuditProbes(Vector3 origin)
