@@ -13,7 +13,26 @@ using UnityEngine.UI;
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class CrosshairUI : CommonManagerBase
 {
-    [SerializeField] private Image m_crosshairImage;
+    [Header("조합형 크로스헤어 (#945)")]
+    [SerializeField] private RectTransform m_lineUp;
+    [SerializeField] private RectTransform m_lineDown;
+    [SerializeField] private RectTransform m_lineLeft;
+    [SerializeField] private RectTransform m_lineRight;
+    [SerializeField] private RectTransform m_dot;
+    [SerializeField] private RectTransform m_circleRing;
+    [SerializeField] private Image m_circleImage;
+    [SerializeField] private RectTransform m_crosshairRoot; // SetVisible 대상 — 전 조각의 공통 부모
+    [SerializeField] private PlayerColorPalette m_colorPalette;
+
+    private CrosshairVisualRefs VisualRefs => new CrosshairVisualRefs
+    {
+        Up = m_lineUp, Down = m_lineDown, Left = m_lineLeft, Right = m_lineRight,
+        Dot = m_dot, CircleRing = m_circleRing, CircleImage = m_circleImage,
+    };
+
+    // 마지막으로 적용된 설정 — SetInteractable/SetWeaponTargeting이 색만 덮어쓸 때 모양은 그대로 둬야 하므로 기억해 둔다.
+    private CrosshairSettings m_currentSettings = CrosshairSettings.Default();
+
     [Tooltip("기본 크로스헤어 색")]
     [SerializeField] private Color m_defaultColor = Color.white;
     [Tooltip("상호작용 가능한 대상 조준 시 색")]
@@ -32,15 +51,15 @@ public class CrosshairUI : CommonManagerBase
     /// </summary>
     public void SetVisible(bool visible)
     {
-        if (m_crosshairImage != null)
-            m_crosshairImage.enabled = visible;
+        if (m_crosshairRoot != null)
+            m_crosshairRoot.gameObject.SetActive(visible);
     }
 
     /// <summary>조준 대상의 상호작용 가능 여부에 따라 크로스헤어 색을 바꾼다.</summary>
     public void SetInteractable(bool interactable)
     {
-        if (m_crosshairImage != null)
-            m_crosshairImage.color = interactable ? m_interactableColor : m_defaultColor;
+        Color? overrideColor = interactable ? m_interactableColor : (Color?)null;
+        CrosshairRenderer.ApplyColor(VisualRefs, m_currentSettings, overrideColor, m_colorPalette);
     }
 
     /// <summary>
@@ -49,8 +68,8 @@ public class CrosshairUI : CommonManagerBase
     /// </summary>
     public void SetWeaponTargeting(bool onTarget)
     {
-        if (m_crosshairImage != null)
-            m_crosshairImage.color = onTarget ? m_weaponTargetColor : m_defaultColor;
+        Color? overrideColor = onTarget ? m_weaponTargetColor : (Color?)null;
+        CrosshairRenderer.ApplyColor(VisualRefs, m_currentSettings, overrideColor, m_colorPalette);
     }
 
     // ---- 히트마커 (#478) ----
@@ -102,10 +121,28 @@ public class CrosshairUI : CommonManagerBase
             m_hitMarker.gameObject.SetActive(false);
     }
 
+    protected override void Awake()
+    {
+        base.Awake();
+        CosmeticLoadout.OnCrosshairSettingsChanged += HandleCrosshairSettingsChanged;
+        ApplyCurrentSettings();
+    }
+
+    // 계정 설정이 바뀔 때마다(설정 패널에서 슬라이더를 움직이는 즉시) 다시 그린다.
+    private void HandleCrosshairSettingsChanged() => ApplyCurrentSettings();
+
+    private void ApplyCurrentSettings()
+    {
+        m_currentSettings = CosmeticLoadout.GetCrosshairSettings();
+        CrosshairRenderer.ApplyShape(VisualRefs, m_currentSettings);
+        CrosshairRenderer.ApplyColor(VisualRefs, m_currentSettings, null, m_colorPalette);
+    }
+
     // 킬 페이드 타이머(CTS)는 파괴 시점에도 반드시 정리한다 — Update 폴링과 달리 비동기라
     // 오브젝트가 사라진 뒤에도 계속 돌 수 있다.
     protected override void OnDestroy()
     {
+        CosmeticLoadout.OnCrosshairSettingsChanged -= HandleCrosshairSettingsChanged;
         CancelKillFade();
         base.OnDestroy();
     }
