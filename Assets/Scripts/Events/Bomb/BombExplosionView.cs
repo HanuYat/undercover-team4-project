@@ -59,7 +59,7 @@ public class BombExplosionView : MonoBehaviour
             if (knockback == Vector3.zero)
                 continue;
 
-            if (m_device.IsOccluded(player.transform.position, player.transform))
+            if (m_device.IsOccluded(player.transform.position))
                 continue;
 
             player.AddKnockback(knockback);

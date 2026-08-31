@@ -17,6 +17,15 @@ public class BombBlast : NetworkBehaviour
     [SerializeField]
     private LayerMask m_blockMask = 1; // Default
 
+    // 가림 검사 높이(m) — 피벗끼리 이으면 지면을 스치는 선이 되어 연석·경사·자기 콜라이더 바닥면에
+    // 걸린다 (#947). 폭탄은 자기 박스 중심, 사람은 가슴 높이에서 잇는다.
+    private const float k_occlusionOriginHeight = 0.4f;
+    private const float k_occlusionTargetHeight = 1f;
+
+    // 가림 검사 구 반지름(m) — 얇은 선은 창살·소품 틈으로 새어 '가려짐'을 오판한다
+    // (SuddenEventUtil.k_visProbeRadius와 같은 이유).
+    private const float k_occlusionProbeRadius = 0.2f;
+
     private readonly List<Transform> m_blastBuffer = new List<Transform>();
 
     // 이 폭발로 죽은 플레이어 — 래그돌 임펄스 대상(#506). 서버·오프라인에서만 채운다.
@@ -54,9 +63,18 @@ public class BombBlast : NetworkBehaviour
         return m_profile.EvaluateRagdollImpulse(targetPosition - transform.position, transform.forward);
     }
 
-    // BombExplosionView도 이걸로 넉백 연출을 가려 서버 피해 판정과 기준을 맞춘다.
-    public bool IsOccluded(Vector3 targetPosition, Transform targetRoot) =>
-        AimOcclusion.IsBlocked(transform.position, targetPosition, targetRoot, m_blockMask);
+    /// <summary>
+    /// 대상이 <b>환경에</b> 가려졌는가 — BombExplosionView도 이걸로 넉백 연출을 가려 서버 피해 판정과 기준을 맞춘다.
+    /// 대상 자신도 사람이라 <see cref="AimOcclusion.IsEnvironmentBlocked"/>가 알아서 뺀다 — 루트를 넘길 필요가 없다.
+    /// </summary>
+    public bool IsOccluded(Vector3 targetPosition) =>
+        AimOcclusion.IsEnvironmentBlocked(
+            transform.position + Vector3.up * k_occlusionOriginHeight,
+            targetPosition + Vector3.up * k_occlusionTargetHeight,
+            m_blockMask,
+            k_occlusionProbeRadius,
+            transform
+        );
 
     /// <summary>
     /// 터진다 — 서버(또는 오프라인) 전용. 호출 시점과 중복 방지는 <see cref="BombDevice"/>가 쥔다.
@@ -71,7 +89,7 @@ public class BombBlast : NetworkBehaviour
         for (int i = 0; i < m_blastBuffer.Count; i++)
         {
             Transform target = m_blastBuffer[i];
-            if (IsOccluded(target.position, target))
+            if (IsOccluded(target.position))
                 continue;
 
             // <b>유예를 주지 않는 피해</b>다 — 폭심에서 HP가 0이 되면 다운 60초를 거치지 않고 곧바로
@@ -182,7 +200,7 @@ public class BombBlast : NetworkBehaviour
                 continue;
 
             Vector3 position = npc.transform.position;
-            if (IsOccluded(position, npc.transform))
+            if (IsOccluded(position))
                 continue;
 
             int damage = EvaluateDamage(position);
