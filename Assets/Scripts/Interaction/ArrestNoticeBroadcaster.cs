@@ -29,8 +29,8 @@ public class ArrestNoticeBroadcaster : MonoBehaviour
     [Min(0f)]
     [SerializeField] private float m_noticeSeconds = 3f;
 
-    [Tooltip("알림 배경색 — 판정 배너(VerdictBanner)의 '진범 검거' 초록과 맞춘 값")]
-    [SerializeField] private Color m_noticeTone = new Color(0.20f, 0.70f, 0.35f, 0.95f);
+    [Tooltip("알림 배경색 — 판정 배너(VerdictBanner)의 '진범 검거' 초록과 맞춘 값 (#943)")]
+    [SerializeField] private Color m_noticeTone = new Color(0.290f, 0.871f, 0.502f, 0.95f);
 
     private ArrestJudge Judge => App.Game.ArrestJudge;
     private WantedListManager WantedList => App.Game.WantedList;
