@@ -7028,7 +7028,7 @@ MonoBehaviour:
   m_gravity: -9.81
   m_knockbackDamping: 4
   m_defaultFriction: 15
-  m_snowFriction: 2
+  m_snowFriction: 0.5
 --- !u!114 &6972632809807839780
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7256,6 +7256,9 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_itemAnchor: {fileID: 0}
   m_dropDistance: 1.2
+  m_groundMask:
+    serializedVersion: 2
+    m_Bits: 1
 --- !u!114 &-6068744480840221127
 MonoBehaviour:
   m_ObjectHideFlags: 0
