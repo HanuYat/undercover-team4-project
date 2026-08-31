@@ -151,6 +151,26 @@ internal ulong BodyOwnerClientId =>
 
 **이 자리가 성립하는 근거**는 `ServerSetBeingRevived`를 쓰는 것도 서버이고 래그돌 권위도 서버라(§2) **같은 피어에서 같은 값을 본다**는 것이다. `IsBeingRevived`는 `m_reviveEndSynced` 기반이라 원격도 읽을 수 있어 어긋나지 않는다. 채널링이 끝나면 몸은 정착한 채 남고, 나중에 밟히면 깨어남 폴링이 받는다.
 
+#### 3-2-1. 처음 구현은 자리를 틀렸다 (PR #954 리뷰에서 수정)
+
+1차 구현은 이 판정을 `Update`가 아니라 **`PlayerRagdoll.BeginRopePull` 안에** 넣었다. 그 자리는 **도달할 수 없다** — 세 사실이 겹친다:
+
+1. `ServerSetBeingRevived`가 `if (!IsDowned) return;`으로 막으므로 `IsBeingRevived` ⟹ `IsDowned`.
+2. 플레이어의 `BeginRopePull` 진입은 `PlayerTowedMotion.BeginDraggedFollow`의 래그돌 분기 하나뿐이고, 그것을 부르는 `PlayerCarrier`가 `CanBeCarried => IsDead && !IsBodyLost`를 요구하므로 `BeginRopePull` ⟹ `IsDead`.
+3. `IsDowned`/`IsDead`는 둘 다 단일 `Cause` 비교라 **배타적**이다.
+
+즉 조건이 동시에 참일 수 없어 §3-2가 막으려던 실패 모드가 **그대로 남아 있었다.** 원인은 경로를 잘못 짚은 것이다 — 몸을 깨우는 것은 **밟은 PhysX**이고, 그 재개를 받는 자리는 `Update`의 깨어남 폴링(`ResumeFromSleep` 직전)이지 `BeginRopePull`이 아니다. 위 §3-2 본문이 처음부터 "`Update`의 권위 게이트 뒤"라고 적어 두었으므로, **문서가 옳고 구현이 틀렸던 경우**다.
+
+부수적으로 그 자리의 조기 반환은 `m_rope?.Attach(carrier)`를 건너뛰어, `m_ropeCarriers`에는 등록됐는데 가닥은 안 붙은 상태를 만들 수 있었다(`TickRopeReattach`가 매 프레임 재시도). 도달 불가라 발현하지 않았지만, 아래 확장에서 곧바로 문제가 될 자리였다.
+
+#### 3-2-2. Down도 끌 수 있게 되면 — 끌기가 구조를 취소한다 (2026-08-31 확정)
+
+`CanBeCarried`에서 `IsDead` 요구를 푸는 순간 §3-2의 붙들기와 끌기가 **정면충돌**한다: 붙들기는 몸을 재워 못 움직이게 하는 것이고, 끌기는 그 몸을 움직여야 한다.
+
+**결정: 끌기가 시작되면 구조 채널링을 취소한다.** 자리는 `PlayerCarrier`의 서버 진입점(`ServerStartCarry`)에서 `ServerSetBeingRevived(false)`를 부르는 것이고, 래그돌 쪽은 손대지 않는다 — `IsBeingRevived`가 그 즉시 거짓이 되므로 §3-2의 판정이 스스로 빠진다.
+
+⚠ **래그돌에서 조용히 무시하는 방식으로 구현하지 말 것.** 끌기 요청을 `BeginRopePull`에서 조기 반환으로 삼키면 로그도 에러도 없이 "줄이 안 걸린다"가 되고, 그것이 1차 구현이 만든 잠재 결함이었다(§3-2-1).
+
 ### 3-3. 루트 yaw 추종을 일방향 래치로
 
 `TickCapsuleFollow`는 `if (!m_settled) FollowBodyYaw();`였다. 정착 후 밟혀 깨어나면 `ResumeFromSleep`이 `m_settled = false`로 되돌려 **yaw 추종이 다시 켜진다.**

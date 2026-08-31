@@ -45,6 +45,9 @@ public class NpcResistState : NpcStateBase
     }
     private static readonly List<PlayerHealth> s_playerBuffer = new List<PlayerHealth>(8);
 
+    // 비행 중인 플레이어 임시 버퍼 — 서버에서만 도는 경로라 공유해도 안전하다(s_playerBuffer와 같다).
+    private static readonly List<PlayerHealth> s_launchedBuffer = new List<PlayerHealth>(6);
+
     private const float k_noPendingStrike = -1f;
 
     // 추격 이동 (#254)
@@ -510,6 +513,16 @@ public class NpcResistState : NpcStateBase
             PlayerHealth player = s_overlapBuffer[i].GetComponentInParent<PlayerHealth>();
             if (player != null && !s_playerBuffer.Contains(player))
                 s_playerBuffer.Add(player);
+        }
+
+        // 날아가는 중인 사람은 위 쿼리에 <b>안 잡힌다</b> — 래그돌 중에는 캡슐이 꺼지고 뼈는 위
+        // HitLayers가 빼는 Ragdoll 레이어다(#692가 뺀 바로 그 레이어). 마스크를 도로 열면 #692의
+        // 버퍼 넘침이 돌아오므로 목록을 따로 훑는다 — 근거는 PlayerHealth.CollectLaunched.
+        PlayerHealth.CollectLaunched(m_owner.transform.position, radius, s_launchedBuffer);
+        for (int i = 0; i < s_launchedBuffer.Count; i++)
+        {
+            if (!s_playerBuffer.Contains(s_launchedBuffer[i]))
+                s_playerBuffer.Add(s_launchedBuffer[i]);
         }
     }
 }

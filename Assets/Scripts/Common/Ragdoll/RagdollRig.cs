@@ -732,6 +732,27 @@ public class RagdollRig : MonoBehaviour
     /// 전 뼈에 같은 속도를 주고, 골반보다 높은 뼈에만 조금 더 얹어 텀블을 만든다.
     /// 폭심 기준 <c>AddExplosionForce</c>를 쓰지 않는 이유는 결정론이다 (docs §8).
     /// </summary>
+    /// <summary>
+    /// 뼈가 하나라도 키네마틱인가 — <see cref="ApplyImpulse"/>가 <b>통째로 버려지는</b> 상태의 판정.
+    /// 원격에서 자세를 받는 동안·정착한 시체가 이 상태다. 임펄스를 넣기 전에 물어볼 자리가 있다
+    /// (<c>PlayerRagdoll.EnterRagdoll</c>의 재진입 분기 — docs/506-explosion-ragdoll.md §15).
+    /// </summary>
+    public bool AnyKinematic
+    {
+        get
+        {
+            if (m_bodies == null)
+                return false;
+
+            for (int i = 0; i < m_bodies.Length; i++)
+            {
+                if (m_bodies[i] != null && m_bodies[i].isKinematic)
+                    return true;
+            }
+            return false;
+        }
+    }
+
     public void ApplyImpulse(Vector3 velocity)
     {
         if (velocity == Vector3.zero || m_bodies == null || m_hipsBone == null)

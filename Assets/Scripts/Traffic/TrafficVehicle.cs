@@ -119,6 +119,13 @@ public class TrafficVehicle : NetworkBehaviour
 
     private static readonly Collider[] s_overlap = new Collider[64]; // 폭탄(BombBlast)은 256이다 — 여기는 차체 한 대분
 
+    // 비행 중인 플레이어 임시 버퍼 — 서버에서만 도는 경로라 공유해도 안전하다(LightningEvent와 같은 수법).
+    private static readonly System.Collections.Generic.List<PlayerHealth> s_launched =
+        new System.Collections.Generic.List<PlayerHealth>(6);
+
+    // 위 목록 훑기의 사전 추림 반경 — 회전한 차체 박스를 통째로 감싸는 구의 반지름이다.
+    private float LaunchedScanRadius => m_hitBoxSize.magnitude * 0.5f;
+
     /// <summary>치임 판정 레이어 마스크 — 래그돌 본을 뺀 전 레이어.
     /// ⚠ 필드 초기화로 못 만든다: <see cref="LayerMask.NameToLayer"/>가 생성자·필드 초기화에서 금지돼 첫 사용 시점에 늦게 조회한다.</summary>
     private static int HitLayers
@@ -450,6 +457,37 @@ public class TrafficVehicle : NetworkBehaviour
             if (player != null)
                 ServerHitPlayer(player);
         }
+
+        ServerApplyLaunchedHits();
+    }
+
+    // 날아가는 중인 사람은 위 OverlapBox에 <b>안 잡힌다</b> — 래그돌 중에는 캡슐이 꺼지고 뼈는
+    // HitLayers가 빼는 Ragdoll 레이어라 콜라이더가 하나도 안 남는다. 마스크를 여는 대신 목록을 훑는
+    // 이유(시체 재타격·버퍼 넘침)는 PlayerHealth.CollectLaunched에 적어 뒀다.
+    //
+    // 차체가 회전한 박스라 반경으로 추린 뒤 로컬 좌표에서 정확히 본다 — 위 쿼리와 같은 부피여야
+    // "치였는데 안 죽음"이 안 생긴다.
+    private void ServerApplyLaunchedHits()
+    {
+        // ⚠ 추림 구의 중심은 <b>박스 중심</b>이다 — 차량 원점(바퀴 높이)에 두면 반지름이 모자라
+        // 상단 모서리 쪽 대상을 놓친다. 위 OverlapBox가 쓰는 것과 같은 중심이어야 한다.
+        Vector3 center = transform.position + Vector3.up * (m_hitBoxSize.y * 0.5f);
+        PlayerHealth.CollectLaunched(center, LaunchedScanRadius, s_launched);
+
+        Vector3 half = m_hitBoxSize * 0.5f;
+        Quaternion inverse = Quaternion.Inverse(transform.rotation);
+
+        for (int i = 0; i < s_launched.Count; i++)
+        {
+            PlayerHealth player = s_launched[i];
+            Vector3 local = inverse * (player.transform.position - center);
+            if (
+                Mathf.Abs(local.x) <= half.x
+                && Mathf.Abs(local.y) <= half.y
+                && Mathf.Abs(local.z) <= half.z
+            )
+                ServerHitPlayer(player);
+        }
     }
 
     // 시민도 같은 피해를 받고(#634) 진입점은 TakeEnvironmentalDamage다(#690 — 밧줄 신병도 치인다).
@@ -547,6 +585,12 @@ public class TrafficVehicle : NetworkBehaviour
     /// 전 피어로 보내는 것이 무해한 근거: 원격의 뼈는 전부 키네마틱이고 RagdollRig.ApplyImpulse가
     /// 키네마틱 바디를 건너뛴다. 도착 순서도 이미 막혀 있다 — EnterRagdoll은 멱등이고, 반대 순서는
     /// PlayerRagdoll의 원인 폴링이 받는다 (docs/player-ragdoll.md §8·§9).
+    ///
+    /// ⚠ <b>그 "무해하다"에 예외가 하나 있다 — 죽기 직전의 오너다.</b> 그 피어만 뼈가 아직 동적이라
+    /// (자기 몸을 시뮬레이션하던 중이다) 임펄스가 실제로 들어가 <b>자기 궤적</b>을 만들고, 곧 소유권을
+    /// 잃어 그 자리에 얼어붙었다가 서버 자세가 도착하면 튄다. 그래서 옛 오너 id를 함께 보내
+    /// 그쪽에서는 임펄스를 0으로 떨어뜨린다 — 상태 진입만 시키고 <b>힘은 서버에 맡긴다.</b>
+    /// 근거는 docs/506-explosion-ragdoll.md §16.
     /// </summary>
     private void ServerNotifyDeathRagdoll(PlayerHealth player, Vector3 impulse)
     {
@@ -562,15 +606,34 @@ public class TrafficVehicle : NetworkBehaviour
         if (!IsSpawned || !IsServer)
             return;
 
-        DeathRagdollRpc(victim, impulse);
+        // 죽기 <b>전</b>의 오너 — ApplyDeathOwnership이 이미 소유권을 서버로 옮겼으므로 OwnerClientId로는
+        // 못 찾는다. #865가 같은 사정으로 만들어 둔 값이다.
+        PlayerIncapacitation incap = player.GetComponent<PlayerIncapacitation>();
+        ulong bodyOwner = incap != null ? incap.BodyOwnerClientId : victim.OwnerClientId;
+
+        DeathRagdollRpc(victim, impulse, bodyOwner);
     }
 
     // SendTo.NotServer라 호스트 중복 발행을 가드로 막을 필요가 없다(BombBlast는 ClientRpc라 가드가 있다).
     [Rpc(SendTo.NotServer)]
-    private void DeathRagdollRpc(NetworkObjectReference victim, Vector3 impulse)
+    private void DeathRagdollRpc(
+        NetworkObjectReference victim,
+        Vector3 impulse,
+        ulong previousOwner
+    )
     {
-        if (victim.TryGet(out NetworkObject resolved))
-            ApplyDeathRagdoll(resolved.gameObject, impulse);
+        if (!victim.TryGet(out NetworkObject resolved))
+            return;
+
+        ApplyDeathRagdoll(resolved.gameObject, IsPreviousOwner(previousOwner) ? Vector3.zero : impulse);
+    }
+
+    // 이 피어가 죽은 몸의 옛 오너인가 — 위 주석의 예외 판정. NetworkManager가 없으면(테스트 구성)
+    // 거짓으로 둔다: 임펄스를 주는 편이 안 주는 편보다 안전하다(안 주면 아무도 안 날린다).
+    private static bool IsPreviousOwner(ulong previousOwner)
+    {
+        NetworkManager nm = NetworkManager.Singleton;
+        return nm != null && nm.LocalClientId == previousOwner;
     }
 
     private static void ApplyDeathRagdoll(GameObject victim, Vector3 impulse)

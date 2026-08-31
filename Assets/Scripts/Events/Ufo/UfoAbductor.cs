@@ -133,7 +133,9 @@ public class UfoAbductor : MonoBehaviour
         // 기둥 전체를 덮는 구로 후보를 모은 뒤 아래에서 원기둥으로 좁힌다 — 모으는 유틸이 구밖에 없다.
         Vector3 ground = m_craft.BeamGroundPoint();
         float span = transform.position.y - ground.y + m_craft.BeamRadius + k_beamFootSlack;
-        SuddenEventUtil.CollectFieldPlayers(transform.position, span, m_inBeam);
+        // 피해 판정과 같은 술어를 쓴다 — <b>날아가는 사람도 빔에 걸린다.</b> 표적 선정이 아니라
+        // "빔이 이 몸을 붙드는가"라서다(폭발과 같은 갈림 — docs/506-explosion-ragdoll.md §13).
+        SuddenEventUtil.CollectDamageablePlayers(transform.position, span, m_inBeam);
 
         // 기둥 밖·지붕 아래는 빔이 닿지 않는다 (#885) — 목록에서 빼면 아래 식히기가 밖에 있는 것과 같게 처리한다.
         for (int i = m_inBeam.Count - 1; i >= 0; i--)
@@ -212,9 +214,13 @@ public class UfoAbductor : MonoBehaviour
     {
         PlayerIncapacitation incap = victim.GetComponent<PlayerIncapacitation>();
 
-        // 이미 무력화된 몸은 접수하지 않는다 — 원인을 가리지 않는다. 근거는 납치와 같다:
-        // 무력화 원인이 하나뿐이라 덮어쓰면 오검거 호송·납치 중인 몸을 가로채 두 결말이 한 몸을 다툰다.
-        if (incap != null && incap.IsIncapacitated)
+        // 이미 무력화된 몸은 접수하지 않는다 — 무력화 원인이 하나뿐이라 덮어쓰면 오검거 호송·납치
+        // 중인 몸을 가로채 두 결말이 한 몸을 다툰다.
+        //
+        // <b>비행(Launched)만 예외</b>다 — 그쪽은 다투는 결말이 없고(정착하면 스스로 풀린다) 이미
+        // 래그돌이라 빔 구간의 래그돌과 <b>이어진다</b>: Launched→Beamed는 둘 다 진입 사유라
+        // (PlayerIncapacitation.IsRagdollCause) 물리가 안 끊긴다. 근거는 §14.
+        if (incap != null && incap.IsIncapacitated && !incap.IsLaunched)
         {
             m_dwell.Remove(victim); // 누적을 비워 다음 사람에게 순서를 넘긴다
             return;

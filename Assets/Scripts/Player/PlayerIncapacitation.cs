@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
@@ -156,13 +156,36 @@ public class PlayerIncapacitation : NetworkBehaviour
     public bool IsOutOfAction => IsDowned || IsDead;
 
     /// <summary>
-    /// 조준으로 손이 닿는 몸인가 — 쓰러져 있고(<see cref="IsOutOfAction"/>) 몸이 남아 있을 때. (#857)
+    /// 조준으로 손이 닿는 몸인가 — <b>래그돌이 켜져 있고</b> 몸이 남아 있을 때. (#857)
     /// 조준 히트박스를 켜는 조건과 래그돌 뼈 보조 레이(<see cref="PlayerInteractor"/>)가 반드시 같은
     /// 값을 보게 모아 둔 자리다 — 갈라지면 몸통은 잡히는데 팔은 안 잡히는 #857이 방향만 바꿔 살아난다.
     /// 몸이 사라진 뒤(#775/#819)에도 뼈 콜라이더는 켜진 채 남으므로(PlayerRagdoll.HideLostBody는
     /// 렌더러만 끈다) IsBodyLost를 여기서 함께 닫아야 투명한 몸이 조준되지 않는다.
+    ///
+    /// <b>비행(Launched)을 포함한다</b> — 조건을 <see cref="IsOutOfAction"/>에서 넓힌 것은
+    /// <c>PlayerRagdoll.PollRagdollCause</c>의 진입 조건(<c>IsOutOfAction || IsLaunched</c>)과
+    /// <b>같은 집합이어야</b> 하기 때문이다. 뼈가 물리로 넘어가 있는데 히트박스만 꺼져 있으면
+    /// 날아가는 동료에게 조준선이 안 걸린다(진압봉 헛스윙의 정체가 이것이었다).
+    /// 근거는 docs/506-explosion-ragdoll.md §13.
+    ///
+    /// ⚠ 이 값이 참이라고 <b>구조·운반이 열리는 것은 아니다</b> — 저쪽은 각자
+    /// <c>PlayerReviver</c>(IsDowned)·<c>PlayerCarrier.CanBeCarried</c>(IsDead) 게이트를 따로 본다.
+    /// 여기서 여는 것은 <b>조준이 닿는가</b>뿐이다.
     /// </summary>
-    public bool IsAimTargetable => IsOutOfAction && !IsBodyLost;
+    public bool IsAimTargetable => IsRagdollCause && !IsBodyLost;
+
+    /// <summary>
+    /// <b>이 사유에서 래그돌이 켜지는가</b> — <c>PlayerRagdoll.PollRagdollCause</c>의 진입 조건이자
+    /// <see cref="IsAimTargetable"/>의 근거다. 둘이 <b>반드시 같은 집합</b>이어야 하므로 주석으로
+    /// 맞춰 두지 않고 술어 하나로 묶었다 — 갈라지면 "래그돌인데 조준이 안 잡히는" #857이 되살아난다.
+    ///
+    /// 사유가 넷이 된 내력: #506 Die → #815 Launched → #865 Down → 빔 흡입(Beamed).
+    /// </summary>
+    public bool IsRagdollCause => IsOutOfAction || IsLaunched || IsBeamed;
+
+    /// <summary>UFO 빔에 걸려 끌려 올라가는 중인지 (#819) — 래그돌 사유 중 <b>유일하게 남이 몸을
+    /// 옮기는</b> 것이라, 그 구간만 캡슐과 몸의 주종이 뒤집힌다(<c>PlayerRagdoll.TickBeamedBodyFollow</c>).</summary>
+    public bool IsBeamed => Cause == IncapacitationCause.Beamed;
 
     /// <summary>테이저 피격 기절인지. 모션은 기능 정지와 같으므로(#252) 표시·집계처럼 원인을 구분할 때만 쓴다.</summary>
     public bool IsStunned => Cause == IncapacitationCause.Stun;
