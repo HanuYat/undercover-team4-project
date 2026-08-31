@@ -299,6 +299,20 @@ public class MapNavMeshAudit : EditorWindow
 
     private void AnalyzeClusters(List<Cluster> clusters, List<Vector3> reachable)
     {
+        List<Cluster> falsePositives = ReverifyAgainstNearestReachable(clusters, reachable);
+        if (falsePositives.Count > 0)
+        {
+            var fpSb = new StringBuilder(
+                $"맵 NavMesh 점검: 기준점 원거리 오탐으로 제외된 덩어리 {falsePositives.Count}개 "
+                    + "(기준점에서는 부분경로만 나오지만 가까운 도달 지점에서는 완전 경로 확인됨)\n"
+            );
+            foreach (Cluster c in falsePositives)
+            {
+                fpSb.AppendLine($"  y{c.Level:F2}  {c.Area:F0}m² 중심 {Fmt(c.Center)}");
+            }
+            Debug.LogWarning(fpSb.ToString().TrimEnd());
+        }
+
         if (clusters.Count == 0)
         {
             Debug.Log("맵 NavMesh 점검: 고립 덩어리 없음 — 검사한 전 층이 기준점과 이어져 있다");
@@ -370,6 +384,49 @@ public class MapNavMeshAudit : EditorWindow
         }
 
         Debug.LogWarning(sb.ToString().TrimEnd());
+    }
+
+    // 기준점이 멀면 CalculatePath 한 방 쿼리가 실제로는 이어진 경로를 PathPartial로
+    // 오판하는 경우가 있다(#946 후속 — 모텔 2층 계단이 이 오탐 때문에 4번 재베이크해도
+    // 똑같이 고립으로 잡혔었다). 고립 판정을 확정하기 전에 이미 도달 확인된 지점 중
+    // 가장 가까운 곳에서 다시 한번 물어봐서 오탐을 걸러낸다.
+    private static List<Cluster> ReverifyAgainstNearestReachable(List<Cluster> clusters, List<Vector3> reachable)
+    {
+        var falsePositives = new List<Cluster>();
+        if (reachable.Count == 0)
+        {
+            return falsePositives;
+        }
+
+        var path = new NavMeshPath();
+        for (int i = clusters.Count - 1; i >= 0; i--)
+        {
+            Cluster c = clusters[i];
+
+            Vector3 nearest = Vector3.zero;
+            float best = float.MaxValue;
+            foreach (Vector3 p in reachable)
+            {
+                float d = (p - c.Sample).sqrMagnitude;
+                if (d < best)
+                {
+                    best = d;
+                    nearest = p;
+                }
+            }
+
+            if (
+                NavMesh.CalculatePath(nearest, c.Sample, NavMesh.AllAreas, path)
+                && path.status == NavMeshPathStatus.PathComplete
+            )
+            {
+                falsePositives.Add(c);
+                clusters.RemoveAt(i);
+            }
+        }
+
+        falsePositives.Reverse();
+        return falsePositives;
     }
 
     // 높이차가 climb(0.75) 근처면 단차 문제, 수평이 멀면 구멍 문제다.
