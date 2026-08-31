@@ -33,8 +33,6 @@ public class CrosshairUI : CommonManagerBase
     // 마지막으로 적용된 설정 — SetInteractable/SetWeaponTargeting이 색만 덮어쓸 때 모양은 그대로 둬야 하므로 기억해 둔다.
     private CrosshairSettings m_currentSettings = CrosshairSettings.Default();
 
-    [Tooltip("기본 크로스헤어 색")]
-    [SerializeField] private Color m_defaultColor = Color.white;
     [Tooltip("상호작용 가능한 대상 조준 시 색")]
     [SerializeField] private Color m_interactableColor = new Color(1f, 0.85f, 0.2f);
     // 조준 무기(테이저·진압봉)가 공유하는 '명중 가능' 색. 무기별로 나누지 않는 이유는 HUD 언어를
