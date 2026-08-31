@@ -18,6 +18,7 @@ using UnityEngine;
 public static class CosmeticsSaveService
 {
     // 배포 후 변경 금지. Cloud Save 키는 영숫자·대시·언더스코어만 허용한다.
+    // v4: 크로스헤어 설정 필드 추가 (#945)
     private const string k_key = "player_cosmetics";
 
     // 부위를 연달아 고르면 저장 요청이 부위 수만큼 나간다 — 한 번으로 묶는다.
@@ -66,7 +67,9 @@ public static class CosmeticsSaveService
             // v2 이하 레코드는 보유함이 없다 — 빈 보유함으로 두면 기본 지급 세트만 남고,
             // 자판기로 얻은 것이 있었다면 애초에 v3로 저장됐을 것이므로 잃는 것이 없다. (#818 D)
             CosmeticInventory.Apply(data.Owned, data.Tokens);
-            CosmeticLoadout.ApplyCrosshairSettings(data.Crosshair); // v3 이하 레코드면 null — 기본값 유지
+            // v3 이하 레코드는 Crosshair 키가 없어 JsonUtility가 0값 객체로 채운다(null이 아님) —
+            // 그 값을 그대로 적용하면 기존 플레이어 크로스헤어가 크기 0으로 깨진다. 버전으로 명시 분기한다.
+            CosmeticLoadout.ApplyCrosshairSettings(data.Version >= CosmeticsSaveData.k_version ? data.Crosshair : null);
         });
     }
 
