@@ -66,6 +66,7 @@ public static class CosmeticsSaveService
             // v2 이하 레코드는 보유함이 없다 — 빈 보유함으로 두면 기본 지급 세트만 남고,
             // 자판기로 얻은 것이 있었다면 애초에 v3로 저장됐을 것이므로 잃는 것이 없다. (#818 D)
             CosmeticInventory.Apply(data.Owned, data.Tokens);
+            CosmeticLoadout.ApplyCrosshairSettings(data.Crosshair); // v3 이하 레코드면 null — 기본값 유지
         });
     }
 
@@ -101,6 +102,7 @@ public static class CosmeticsSaveService
         s_hooked = true;
         CosmeticLoadout.OnPlayerColorChanged += HandleColorChanged;
         CosmeticLoadout.OnAccessoryChanged += HandleAccessoryChanged;
+        CosmeticLoadout.OnCrosshairSettingsChanged += HandleCrosshairChanged;
         CosmeticInventory.OnOwnedChanged += HandleInventoryChanged;
         CosmeticInventory.OnTokensChanged += HandleInventoryChanged;
     }
@@ -112,6 +114,12 @@ public static class CosmeticsSaveService
     }
 
     private static void HandleAccessoryChanged(EAccessorySlot slot)
+    {
+        if (!s_applying)
+            QueueSave();
+    }
+
+    private static void HandleCrosshairChanged()
     {
         if (!s_applying)
             QueueSave();
@@ -160,6 +168,7 @@ public static class CosmeticsSaveService
             Accessories = accessories,
             Owned = CosmeticInventory.Capture(),
             Tokens = CosmeticInventory.Tokens,
+            Crosshair = CosmeticLoadout.GetCrosshairSettings(),
         };
     }
 
@@ -226,9 +235,9 @@ public static class CosmeticsSaveService
 [Serializable]
 public class CosmeticsSaveData
 {
-    // v2에서 치장(Accessories), v3에서 보유함·토큰(Owned·Tokens)이 추가됐다.
+    // v2에서 치장(Accessories), v3에서 보유함·토큰(Owned·Tokens), v4에서 크로스헤어(Crosshair)가 추가됐다.
     // 옛 레코드는 버리지 않고 있는 것만 살린다 (CosmeticsSaveService.ReadAsync)
-    public const int k_version = 3;
+    public const int k_version = 4;
 
     public int Version = k_version;
 
@@ -243,4 +252,7 @@ public class CosmeticsSaveData
 
     /// <summary>남은 뽑기 토큰 (#818 D). v2 이하에는 없어 0으로 읽힌다.</summary>
     public int Tokens;
+
+    /// <summary>크로스헤어 설정 (#945). v3 이하에는 없어 null로 읽힌다 — 그 경우 기본값을 유지한다.</summary>
+    public CrosshairSettings Crosshair;
 }
