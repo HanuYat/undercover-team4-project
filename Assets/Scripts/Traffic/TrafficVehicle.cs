@@ -453,14 +453,38 @@ public class TrafficVehicle : NetworkBehaviour
     }
 
     // 시민도 같은 피해를 받고(#634) 진입점은 TakeEnvironmentalDamage다(#690 — 밧줄 신병도 치인다).
-    // ⚠ 넉백이 피해보다 먼저다: 나중이면 Dead가 되어 씹힌다. 시체 임펄스는 안 건다(가능하지만 #634 결정, #768).
+    //
+    // <b>순서가 뒤집혔다 (#903).</b> 예전에는 넉백을 <b>먼저</b> 걸었다 — 나중이면 Dead가 되어 씹히기
+    // 때문이다. 그래서 피해 120으로 사실상 항상 죽는 시민이 <b>뻣뻣한 포물선으로 날아가다 도중에
+    // 죽는</b> 그림이 났다. 이제 피해를 먼저 넣고 <b>결과로 갈린다</b>: 죽었으면 래그돌 임펄스,
+    // 살아남았으면 종전 넉백. 폭발(<see cref="BombBlast"/>)이 이미 같은 모양이라 둘이 맞춰진다.
+    //
+    // 이것이 #634/#768의 <b>"차에 치인 NPC 시체에 임펄스는 안 건다"를 뒤집는다</b> — 그 결정은 기술적
+    // 장애가 아니라 당시 범위였고(옛 주석도 "가능하지만"이라 적었다), 폭발이 #768에서 먼저 넘어갔다.
+    // 근거는 docs/903-instant-death.md.
+    //
+    // 플레이어와 달리 <b>RPC가 필요 없다</b> — NPC 시체 자세는 RagdollPoseStreamer가 서버에서만
+    // 굴려 흘린다. 여기가 서버이므로 그대로 부르면 전 피어가 같은 결과를 본다.
     private void ServerHitNpc(NpcController npc)
     {
         if (!m_hitNpcs.Add(npc))
             return;
 
-        npc.Knockback.ServerApplyKnockback(BuildKnockback());
+        // 피해 전에 재 둔다 — 아래에서 "이 차에 치여 죽었나"를 가리는 근거다 (폭발과 같은 관례)
+        bool wasAlive = !npc.Death.IsDead;
         npc.Health.TakeEnvironmentalDamage(m_damage, gameObject);
+
+        if (!npc.Death.IsDead)
+        {
+            npc.Knockback.ServerApplyKnockback(BuildKnockback());
+            return;
+        }
+
+        // ⚠ wasAlive 가드로 <b>원래 있던 시체는 건드리지 않는다</b> — EnterRagdoll은 정착한 시체를
+        // 거부하지 않으므로, 없으면 도로에 누워 있던 몸을 지나가는 차마다 계속 밀고 간다. 그 몸은
+        // 유치장까지 끌고 가야 판정이 나는 검거 대상이다(GDD 7-3).
+        if (wasAlive && npc.Ragdoll != null)
+            npc.Ragdoll.EnterRagdoll(BuildRagdollImpulse());
     }
 
     private void ServerHitPlayer(PlayerHealth player)
