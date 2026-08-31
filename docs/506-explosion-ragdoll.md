@@ -1030,6 +1030,48 @@ SafetyNetFloor: layer=2(Ignore Raycast), BoxCollider, y=0, "=== ENVIRONMENT ==="
 
 ---
 
+### 9-21. 임펄스는 도착했는데 **다음 프레임에 지워졌다** — 권위 이관 폴링 (2026-08-31)
+
+**증상** — 폭탄에 죽은 플레이어가 폭심 반대로 날아가지 않고 **제자리에서 힘없이 무너진다.**
+`§9-19`(부활 오인)도 `§9-20`(유예)도 아니다 — 래그돌은 정상적으로 켜지고 취소도 안 되며,
+로그상 사망자 수집·임펄스 계산·RPC 발행이 전부 정상이다.
+
+**비대칭이 진단의 전부였다.** 호스트 자기 캐릭터는 날아가고 **클라이언트 캐릭터만** 제자리다.
+그리고 홈런 진압봉(#815)은 클라이언트에서도 멀쩡히 날아간다. 세 사실을 겹치면 남는 차이는 하나뿐이다
+— **사망은 소유권을 서버로 옮기고(#763/#865), 비행(`Launched`)은 옮기지 않는다.**
+
+**성립 조건** — `PlayerRagdoll.m_hadMoveAuthority`는 기본값 `false`이고 `TickAuthorityHandover`
+**안에서만** 갱신됐다. 클라 소유 플레이어의 **서버 쪽 인스턴스**에서는 이 래치가 계속 `false`다.
+
+1. `TakeLethalDamage` → `Incapacitate(Die)` → `ApplyDeathOwnership` → `ChangeOwnership(Server)`
+   — 같은 호출 스택에서 동기 실행. 이 순간 서버의 `HasMoveAuthority`가 `true`가 된다.
+2. 이어서 `BombBlast.NotifyBlastDeaths` → `EnterRagdoll(impulse)`. 뼈가 비키네마틱이 되고
+   `ApplyImpulse`가 제대로 걸린다. **여기까지는 옳다.**
+3. **다음 `Update`**의 `TickAuthorityHandover`가 `false → true` 전이를 뒤늦게 보고
+   `ReleaseBonesToPhysics()`를 다시 부른다 → `RagdollRig.SetKinematic(false)` →
+   `SetBodyKinematic(body, false)`의 `body.linearVelocity = Vector3.zero`가 **임펄스를 지운다.**
+
+`SetBodyKinematic`이 양방향에서 속도를 지우는 것은 의도된 사양이다(ragdoll-rig 문서 §6) — 잘못은
+**이관이 이미 끝난 진입을 이관으로 다시 세는 것**에 있었다.
+
+**깨진 전제** — `TickAuthorityHandover`의 주석은 *"정상 경로에서는 걸리지 않는다 — 이관은 언제나
+`Animated` 구간에서 끝난다"*고 적고 있었다. 그 말은 **래그돌 진입이 `PollRagdollCause`로만 일어날 때**
+참이다. 폭발·차량은 자기 `Update`(폭탄/차 쪽)에서 진입시키므로 **진입이 이관 감지보다 먼저**다.
+
+**고친 방법** — `ReleaseBonesToPhysics()` 안에서 `m_hadMoveAuthority = HasMoveAuthority`를 세운다.
+이 함수는 진입과 이관 양쪽에서 불리므로 *"뼈를 지금 권위 기준으로 배선했다"*는 사실이 한 곳에
+기록된다. 진짜 비행 중 이관(비행 중 다운 등)은 그대로 잡힌다 — 그때는 배선 시점의 권위와 현재
+권위가 실제로 다르다.
+
+> **일반화되는 교훈**: 상태 전이를 "직전 값과 다른가"로 감지하는 래치는, **그 상태를 소비하는 코드가**
+> **폴링 밖에서도 불릴 수 있게 되는 순간** 조용히 한 박자 늦는다. 래치를 세우는 자리는 폴링이 아니라
+> **그 상태를 실제로 반영한 자리**여야 한다.
+
+**함께 고쳐진 것** — 차에 치인 즉사(#903)도 같은 경로라 클라 캐릭터가 안 날아가고 있었다.
+이 한 줄로 같이 낫는다.
+
+---
+
 ---
 
 ## 10. 설계 계약 (2026-08-06 재정리)

@@ -270,6 +270,12 @@ public partial class PlayerRagdoll : MonoBehaviour
     /// </summary>
     private void ReleaseBonesToPhysics()
     {
+        // ⚠ <b>여기가 이관 래치의 갱신 지점이다</b> — "뼈를 지금 권위 기준으로 배선했다"는 사실을
+        // 진입·이관 양쪽에서 한 곳에 기록한다. 안 세우면 소유권이 옮겨간 뒤 처음 진입한 몸이
+        // 다음 Update의 TickAuthorityHandover에 뒤늦게 걸려 <b>임펄스를 통째로 잃는다</b>
+        // (SetKinematic(false)가 속도를 0으로 대입한다). 근거는 docs/506-explosion-ragdoll.md.
+        m_hadMoveAuthority = HasMoveAuthority;
+
         if (m_streamer != null && !HasMoveAuthority)
         {
             m_rig.SetKinematic(true);
