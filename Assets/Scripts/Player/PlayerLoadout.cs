@@ -30,6 +30,10 @@ public class PlayerLoadout : NetworkBehaviour
     [SerializeField]
     private float m_dropDistance = 1.2f;
 
+    [Tooltip("착지면으로 인정할 레이어 — 기본 Default")]
+    [SerializeField]
+    private LayerMask m_groundMask = 1;
+
     /// <summary>플레이어 소지 슬롯 수 — 고정 5칸 (#144, 3칸에서 확장 #793, GDD 용량 5칸).</summary>
     public const int k_maxHeldItems = 5;
 
@@ -402,7 +406,9 @@ public class PlayerLoadout : NetworkBehaviour
             distance = Mathf.Max(0f, obstacle.distance - k_dropWallMargin);
         }
 
-        return transform.position + transform.forward * distance;
+        // 높이는 아직 발밑 y다 — 앞쪽 지면이 높으면 파묻히므로(#937) 하향 레이캐스트로 실제 지면을 구한다.
+        Vector3 candidate = transform.position + transform.forward * distance;
+        return DeliveryScatter.SnapToGround(candidate, m_groundMask);
     }
 
     // ---- 밧줄 자원 게이트 (#269) ----

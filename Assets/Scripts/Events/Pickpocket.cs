@@ -70,6 +70,9 @@ public class Pickpocket : MonoBehaviour
     private const float k_dropSideDistance = 0.8f;
     private const float k_dropHeight = 0.2f;
 
+    // 착지면 레이어(기본 Default) — 런타임 AddComponent라 인스펙터 대신 상수로 둔다.
+    private const int k_groundMask = 1;
+
     /// <summary>
     /// <b>몸 옆에</b> 떨어뜨린다 — 무력화된 순간. 떨어진 물건은 기존 줍기로 회수한다.
     /// 위치를 먼저 옮기고 떼는 순서가 중요하다: 아이템엔 NetworkTransform이 없어 분리 시 나가는
@@ -86,8 +89,9 @@ public class Pickpocket : MonoBehaviour
         if (stolenObject == null || !stolenObject.IsSpawned)
             return;
 
-        stolenObject.transform.SetPositionAndRotation(ResolveDropPosition(), Quaternion.identity);
-        WorldItemPickup.SettleOnGround(stolenObject.gameObject, transform.position.y);
+        Vector3 dropPosition = ResolveDropPosition();
+        stolenObject.transform.SetPositionAndRotation(dropPosition, Quaternion.identity);
+        WorldItemPickup.SettleOnGround(stolenObject.gameObject, dropPosition.y);
         stolenObject.TrySetParent((Transform)null, true);
     }
 
@@ -104,13 +108,19 @@ public class Pickpocket : MonoBehaviour
             side = Vector3.right;
         side.Normalize();
 
+        Vector3 candidate = origin; // 양쪽이 다 막혔다 — 발밑이 벽 너머보다 낫다
+
         foreach (Vector3 dir in new[] { side, -side })
         {
             if (!Physics.Raycast(origin, dir, k_dropSideDistance, ~0, QueryTriggerInteraction.Ignore))
-                return origin + dir * k_dropSideDistance;
+            {
+                candidate = origin + dir * k_dropSideDistance;
+                break;
+            }
         }
 
-        return origin; // 양쪽이 다 막혔다 — 발밑이 벽 너머보다 낫다
+        // 발밑 높이는 실제 지면보다 아래일 수 있다(#937, 버리기와 같은 결함) — 하향 레이캐스트로 보정.
+        return DeliveryScatter.SnapToGround(candidate, k_groundMask);
     }
 
     /// <summary>놓쳤다 — 물건을 없앤다. 구매품이면 다음 라운드 배달 목록에서도 빼 영구 손실로 만든다.</summary>
