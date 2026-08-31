@@ -70,8 +70,7 @@ public class Pickpocket : MonoBehaviour
     private const float k_dropSideDistance = 0.8f;
     private const float k_dropHeight = 0.2f;
 
-    // 착지면으로 인정할 레이어 — 기본 Default. 런타임 AddComponent(#303)라 인스펙터로 못 바꾸므로
-    // 다른 곳(ShopDelivery 등)의 SerializeField 기본값과 같은 값을 상수로 둔다.
+    // 착지면 레이어(기본 Default) — 런타임 AddComponent라 인스펙터 대신 상수로 둔다.
     private const int k_groundMask = 1;
 
     /// <summary>
@@ -120,8 +119,7 @@ public class Pickpocket : MonoBehaviour
             }
         }
 
-        // 옆이 인도 턱·계단처럼 몸보다 높으면 발밑 높이가 실제 지면보다 아래라 파묻힌다(#937,
-        // 버리기와 같은 결함). 같은 하향 레이캐스트로 실제 지면 y를 구한다.
+        // 발밑 높이는 실제 지면보다 아래일 수 있다(#937, 버리기와 같은 결함) — 하향 레이캐스트로 보정.
         return DeliveryScatter.SnapToGround(candidate, k_groundMask);
     }
 

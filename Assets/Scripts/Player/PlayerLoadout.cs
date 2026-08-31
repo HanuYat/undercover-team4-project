@@ -406,9 +406,7 @@ public class PlayerLoadout : NetworkBehaviour
             distance = Mathf.Max(0f, obstacle.distance - k_dropWallMargin);
         }
 
-        // 수평 지점만 정했을 뿐 높이는 아직 "선 곳의 발밑"이다 — 계단·인도 턱·경사 발판처럼 앞쪽 지면이
-        // 높아지면 그 높이가 실제 지면보다 아래라 아이템이 파묻힌다(#937). 배달 흩뿌리기(#824)가 쓰는
-        // 것과 같은 하향 레이캐스트로 실제 지면 y를 구하고, 못 찾으면(공중·구멍) 지금 높이로 폴백한다.
+        // 높이는 아직 발밑 y다 — 앞쪽 지면이 높으면 파묻히므로(#937) 하향 레이캐스트로 실제 지면을 구한다.
         Vector3 candidate = transform.position + transform.forward * distance;
         return DeliveryScatter.SnapToGround(candidate, m_groundMask);
     }
