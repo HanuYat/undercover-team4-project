@@ -13,7 +13,9 @@ using UnityEngine.UI;
 ///
 /// 게임 중 검거마다 반복 발생하므로 입력을 멈추지 않는 비차단 HUD다(정산 패널과 달리 모달 아님):
 /// ESC 스택에 쌓지 않고(IsStackable=false), <see cref="m_displaySeconds"/>초 뒤 자동으로 숨는다.
-/// 판정에 따라 톤 색을 바꾼다 — 진범=긍정, 오검거=경고, 경범죄=중립.
+/// 판정에 따라 채움 색을 바꾼다 — 진범=긍정, 오검거=경고, 경범죄=중립. 배경·테두리 배선은
+/// 이벤트 알림 토스트(SuddenEventToastView가 쓰는 HUD.prefab의 Toast/Edge 한 쌍)와 같은
+/// 스프라이트 구성을 그대로 가져와 톤만 다르다 (#943).
 /// </summary>
 public class VerdictBanner : PanelBase
 {
@@ -21,15 +23,29 @@ public class VerdictBanner : PanelBase
     [SerializeField] private TextMeshProUGUI m_titleText;   // 판정 문구
     [SerializeField] private TextMeshProUGUI m_detailText;  // 이름 + 보상
 
+    // 이벤트 알림 토스트(SuddenEventToastView)와 같은 배선 방식 — 채움(m_toneTarget)만 판정색을
+    // 입히고, 테두리(Edge)는 그 토스트처럼 판정과 무관한 고정 장식색이라 여기서 건드리지 않는다.
     [Header("톤 (판정별 강조 색)")]
-    [SerializeField] private Graphic m_toneTarget;          // 색을 입힐 대상(배경/테두리 등)
-    [SerializeField] private Color m_positiveColor = new Color(0.20f, 0.70f, 0.35f); // 진범 검거
-    [SerializeField] private Color m_negativeColor = new Color(0.80f, 0.25f, 0.25f); // 오검거
-    [SerializeField] private Color m_neutralColor  = new Color(0.45f, 0.45f, 0.50f); // 경범죄
-    [SerializeField] private Color m_cautionColor  = new Color(0.85f, 0.55f, 0.15f); // 생포 조건 불충족 (#766)
+    [SerializeField] private Graphic m_toneTarget;          // 카드 채움
+    [Range(0f, 1f)]
+    [SerializeField] private float m_fillAlpha = 0.95f;
+    [SerializeField] private Color m_positiveColor = new Color(0.290f, 0.871f, 0.502f); // 진범 검거
+    [SerializeField] private Color m_negativeColor = new Color(0.863f, 0.149f, 0.149f); // 오검거 — 진한 레드 (#943)
+    [SerializeField] private Color m_neutralColor  = new Color(0.612f, 0.639f, 0.686f); // 경범죄
+    [SerializeField] private Color m_cautionColor  = new Color(0.984f, 0.749f, 0.141f); // 생포 조건 불충족 (#766)
 
     [Header("표시 시간")]
     [SerializeField] private float m_displaySeconds = 3f;
+
+    [Header("등장/퇴장 애니메이션 (#943)")]
+    [Tooltip("펀치인·페이드에 쓰는 CanvasGroup — 비우면 애니메이션 없이 즉시 표시된다")]
+    [SerializeField] private CanvasGroup m_canvasGroup;
+    [Tooltip("스케일 애니메이션 대상 — 비우면 패널 루트를 그대로 쓴다")]
+    [SerializeField] private RectTransform m_animRoot;
+    [SerializeField] private float m_enterSeconds = 0.18f;
+    [SerializeField] private float m_exitSeconds = 0.2f;
+
+    private const float k_enterStartScale = 0.9f;
 
     // 판정 문구는 규약 기반 키(Hud.Verdict.<ArrestVerdict>)라 인스펙터에서 고를 것이 없다.
     // 이름 + 보상은 고를 것이 있으므로 SerializeField로 둔다. (#497 · 문서 §2 결정 (h))
@@ -42,14 +58,17 @@ public class VerdictBanner : PanelBase
     public override bool CanCloseWithESC => false;
     public override bool IsStackable => false;
 
-    // 자동 숨김 타이머 취소용 — 새 판정이 오면 재시작, 파괴되면 중단한다.
-    private CancellationTokenSource m_hideCts;
+    // 표시 시퀀스(등장 → 대기 → 퇴장) 취소용 — 새 판정이 오면 재시작, 파괴되면 중단한다.
+    private CancellationTokenSource m_showCts;
 
     private bool m_detailBound;
 
+    private RectTransform AnimRoot => m_animRoot != null ? m_animRoot
+        : (m_panelRoot != null ? m_panelRoot.GetComponent<RectTransform>() : null);
+
     protected override void OnDestroy()
     {
-        CancelHide();
+        CancelShowSequence();
         UnbindDetail();
         base.OnDestroy();
     }
@@ -61,7 +80,7 @@ public class VerdictBanner : PanelBase
         base.ClosePanel();
     }
 
-    /// <summary>판정 데이터를 채우고 배너를 띄운다. m_displaySeconds초 뒤 자동으로 숨는다.</summary>
+    /// <summary>판정 데이터를 채우고 배너를 띄운다. m_displaySeconds초 뒤 애니메이션과 함께 자동으로 숨는다.</summary>
     public void Show(VerdictFeedbackData data)
     {
         if (m_titleText != null)
@@ -79,42 +98,95 @@ public class VerdictBanner : PanelBase
             }
         }
 
+        Color tone = VerdictToColor(data.Verdict);
         if (m_toneTarget != null)
-            m_toneTarget.color = VerdictToColor(data.Verdict);
+            m_toneTarget.color = new Color(tone.r, tone.g, tone.b, m_fillAlpha);
 
         // 판정음은 배너와 같은 자리에서 낸다 — 이 배너 자체가 이미 '검거한 본인에게만' 뜨므로
         // 전파를 새로 고민할 것이 없고, 소리와 화면이 어긋날 여지도 없다.
         // 위치가 없는 확인음이라 2D다 — 옆 사람에게 들리면 "내 판정"이라는 신호가 아니게 된다.
         App.Sound?.PlaySfx2D(VerdictToSound(data.Verdict));
 
-        OpenPanel();
-
-        CancelHide();
-        m_hideCts = CancellationTokenSource.CreateLinkedTokenSource(destroyCancellationToken);
-        AutoHideAsync(m_hideCts.Token).Forget();
+        CancelShowSequence();
+        m_showCts = CancellationTokenSource.CreateLinkedTokenSource(destroyCancellationToken);
+        PlayShowSequenceAsync(m_showCts.Token).Forget();
     }
 
-    // 실시간 기준(정산 freeze로 timeScale이 건드려져도 흐르게) N초 뒤 숨김.
-    private async UniTaskVoid AutoHideAsync(CancellationToken ct)
+    // 등장(펀치인) → 표시 유지 → 퇴장(페이드) → 실제 닫기를 한 시퀀스로 잇는다. 전부 실시간 기준
+    // (ignoreTimeScale과 같은 뜻으로 Time.unscaledDeltaTime을 쓴다)이라 정산 freeze로 timeScale이
+    // 건드려져도 흐른다 — 기존 AutoHideAsync가 지키던 성질을 애니메이션에도 그대로 유지한다.
+    private async UniTaskVoid PlayShowSequenceAsync(CancellationToken ct)
     {
         try
         {
+            if (m_canvasGroup != null)
+                m_canvasGroup.alpha = 0f;
+
+            RectTransform rt = AnimRoot;
+            if (rt != null)
+                rt.localScale = Vector3.one * k_enterStartScale;
+
+            OpenPanel();
+
+            await AnimateAsync(m_enterSeconds, k_enterStartScale, 1f, 0f, 1f, ct);
+
             await UniTask.Delay(TimeSpan.FromSeconds(m_displaySeconds), ignoreTimeScale: true, cancellationToken: ct);
+
+            await AnimateAsync(m_exitSeconds, 1f, 1f, 1f, 0f, ct);
+
             ClosePanel();
         }
         catch (OperationCanceledException)
         {
-            // 새 판정으로 재시작되거나 파괴됨 — 이전 타이머는 조용히 중단
+            // 새 판정으로 재시작되거나 파괴됨 — 이전 시퀀스는 조용히 중단
         }
     }
 
-    private void CancelHide()
+    // scale·alpha를 각각 [fromScale→toScale], [fromAlpha→toAlpha]로 seconds 동안 선형 보간한다.
+    // CanvasGroup·AnimRoot 중 비어 있는 쪽은 건드리지 않는다(둘 다 선택 사항).
+    private async UniTask AnimateAsync(
+        float seconds, float fromScale, float toScale, float fromAlpha, float toAlpha, CancellationToken ct)
     {
-        if (m_hideCts == null)
+        RectTransform rt = AnimRoot;
+
+        if (seconds <= 0f)
+        {
+            if (rt != null)
+                rt.localScale = Vector3.one * toScale;
+            if (m_canvasGroup != null)
+                m_canvasGroup.alpha = toAlpha;
             return;
-        m_hideCts.Cancel();
-        m_hideCts.Dispose();
-        m_hideCts = null;
+        }
+
+        float elapsed = 0f;
+        while (elapsed < seconds)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / seconds);
+
+            if (rt != null)
+                rt.localScale = Vector3.one * Mathf.Lerp(fromScale, toScale, t);
+            if (m_canvasGroup != null)
+                m_canvasGroup.alpha = Mathf.Lerp(fromAlpha, toAlpha, t);
+
+            await UniTask.Yield(PlayerLoopTiming.Update, ct);
+        }
+
+        if (rt != null)
+            rt.localScale = Vector3.one * toScale;
+        if (m_canvasGroup != null)
+            m_canvasGroup.alpha = toAlpha;
+    }
+
+    private void CancelShowSequence()
+    {
+        if (m_showCts == null)
+            return;
+        m_showCts.Cancel();
+        m_showCts.Dispose();
+        m_showCts = null;
     }
 
     // 인자를 먼저 넣어야 구독 시점의 첫 발화부터 이름·금액이 들어간 문장이 나온다 (문서 §2 결정 (e)).
@@ -168,4 +240,5 @@ public class VerdictBanner : PanelBase
             _ => m_negativeColor,
         };
     }
+
 }
