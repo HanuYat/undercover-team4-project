@@ -27394,7 +27394,7 @@ MonoBehaviour:
       m_TableCollectionName: SettingsTable
     m_TableEntryReference:
       m_KeyId: 0
-      m_Key: Settings.Label.SpeedVignette
+      m_Key: Settings.Label.Crosshair
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
@@ -29444,8 +29444,8 @@ MonoBehaviour:
     m_TableReference:
       m_TableCollectionName: GUID:69f94021b201c264fb4a0a3915662935
     m_TableEntryReference:
-      m_KeyId: 6994200000027
-      m_Key: 
+      m_KeyId: 0
+      m_Key: Settings.Crosshair.Open
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
