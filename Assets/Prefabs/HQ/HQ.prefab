@@ -8714,7 +8714,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 186544188
+  GlobalObjectIdHash: 3803708277
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -9641,6 +9641,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6543556046630099584}
   - component: {fileID: 3008223293105650576}
+  - component: {fileID: -1071448967723303544}
   m_Layer: 0
   m_Name: HQ
   m_TagString: Untagged
@@ -9690,6 +9691,26 @@ MonoBehaviour:
   m_IgnoreFromBuild: 0
   m_ApplyToChildren: 1
   m_AffectedAgents: ffffffff
+--- !u!114 &-1071448967723303544
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8615647344756761491}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8589cf5bdc1bf07489b808b1f33f0108, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MinimapTarget
+  m_category: 2
+  m_iconSprite: {fileID: 21300000, guid: 11228b8f44fe04465a4c7ade8e51b20c, type: 3}
+  m_iconColor: {r: 1, g: 1, b: 1, a: 1}
+  m_iconSize: 30
+  m_iconAngle: 0
+  m_iconFollowsFacing: 0
+  m_areaRadius: 0
+  m_areaColor: {r: 1, g: 0.25, b: 0.25, a: 0.25}
 --- !u!1 &8622137274805555272
 GameObject:
   m_ObjectHideFlags: 0
@@ -10055,7 +10076,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3049475544
+  GlobalObjectIdHash: 816048553
   InScenePlacedSourceGlobalObjectIdHash: 3106246618
   DeferredDespawnTick: 0
   Ownership: 1
@@ -10298,6 +10319,14 @@ MonoBehaviour:
   m_areaPrefab: {fileID: 5698290347383743024, guid: 41ac604fe4079214a9b55c9283195142, type: 3}
   m_areaContainer: {fileID: 0}
   m_blackoutCover: {fileID: 0}
+  m_useSceneArea: 0
+  m_iconAngleCorrection: 0
+  m_filterByCategory: 0
+  m_visibleCategories: -1
+  m_showOtherPlayers: 1
+  m_followsLocalPlayer: 0
+  m_viewFrame: {fileID: 0}
+  m_viewRadius: 30
 --- !u!1 &8883526466005979430
 GameObject:
   m_ObjectHideFlags: 0
@@ -11563,7 +11592,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -4930228644917906032, guid: 1a78ce388d91d9c4fb88860e0acfeb14, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 808079692
+      value: 2985768055
       objectReference: {fileID: 0}
     - target: {fileID: 5387706645138793384, guid: 1a78ce388d91d9c4fb88860e0acfeb14, type: 3}
       propertyPath: m_LocalPosition.x
@@ -11874,7 +11903,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8694283574057450249, guid: 2f72cb1d5a1ba9146bd8bb9e0c003cc8, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 172613097
+      value: 3209469778
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -12323,7 +12352,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 2500166932188238906, guid: 9f0eb16dd002b004d9dee18325f43d73, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 509085607
+      value: 3438870895
       objectReference: {fileID: 0}
     - target: {fileID: 3885930050228702808, guid: 9f0eb16dd002b004d9dee18325f43d73, type: 3}
       propertyPath: m_Name
@@ -12902,7 +12931,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2351881029844577331, guid: 9fa3538ededdf0042a7c38a5933807b2, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 3364713
+      value: 1415231418
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -13492,7 +13521,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2733299456
+  GlobalObjectIdHash: 1104195579
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -14618,7 +14647,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 2646710520597727360, guid: 86264725e25d5a141bd60b7bed642eea, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 1774910467
+      value: 1022173542
       objectReference: {fileID: 0}
     - target: {fileID: 3157610518753704136, guid: 86264725e25d5a141bd60b7bed642eea, type: 3}
       propertyPath: m_LocalPosition.x
@@ -15151,7 +15180,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2863672865
+  GlobalObjectIdHash: 2926824246
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1

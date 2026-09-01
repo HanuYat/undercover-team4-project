@@ -77,5 +77,13 @@ MonoBehaviour:
     m_displayModel: {fileID: 1844027589456706, guid: 30557939935d4ee48b28a5de57e9e605, type: 3}
     m_displayScale: {x: 1, y: 1, z: 1}
     m_displayIcon: {fileID: 0}
+  - m_itemPrefab: {fileID: 8401942714147356230, guid: 037ef90e8db2d994589104b1d0ac5f10, type: 3}
+    m_installable: 0
+    m_installablePrice: 0
+    m_staple: 0
+    m_consumable: 0
+    m_displayModel: {fileID: 1679583239124126, guid: 74c10bf06c5acb443b0fca8cc8f7db3c, type: 3}
+    m_displayScale: {x: 1, y: 1, z: 1}
+    m_displayIcon: {fileID: 0}
   m_stapleSlots: 4
   m_randomSlots: 4

@@ -1,0 +1,118 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &6426340477477999945
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5886646344782412597}
+  - component: {fileID: 4976432306983580452}
+  - component: {fileID: 9216988297301806110}
+  - component: {fileID: 8401942714147356230}
+  m_Layer: 7
+  m_Name: PortableMinimap
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5886646344782412597
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6426340477477999945}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4976432306983580452
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6426340477477999945}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
+  GlobalObjectIdHash: 2006385771
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  DeferredDespawnTick: 0
+  Ownership: 1
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  <InScenePlaced>k__BackingField: 0
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 0
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+  SyncOwnerTransformWhenParented: 1
+  AllowOwnerToParent: 0
+--- !u!114 &9216988297301806110
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6426340477477999945}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6708c43a2175d914ea50ce6a610d3cb6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WorldItemPickup
+--- !u!114 &8401942714147356230
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6426340477477999945}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7835bcb91cd18b3448cba3b918e2c0e0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PortableMinimap
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_itemName:
+    m_TableReference:
+      m_TableCollectionName: GUID:faae75c9a0a19b441be27b8614effa3d
+    m_TableEntryReference:
+      m_KeyId: 15600440425635840
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_itemIcon: {fileID: 21300000, guid: 9bef216b37220b9488777f2541b8dd5c, type: 3}
+  m_itemDescription:
+    m_TableReference:
+      m_TableCollectionName: GUID:faae75c9a0a19b441be27b8614effa3d
+    m_TableEntryReference:
+      m_KeyId: 15600467889938432
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_heldModelPrefab: {fileID: 1679583239124126, guid: 74c10bf06c5acb443b0fca8cc8f7db3c, type: 3}
+  m_heldPositionOffset: {x: 0.13, y: 0.09, z: -0.01}
+  m_heldRotationOffset: {x: 0, y: 90, z: 0}
+  m_overrideThirdPersonGrip: 1
+  m_thirdPersonPositionOffset: {x: 0.12, y: 0.08, z: 0.02}
+  m_thirdPersonRotationOffset: {x: 52.2, y: 50.7, z: 182.4}
+  m_handGrip: 2
+  m_targetOutlineColor: {r: 1, g: 0.85, b: 0.2, a: 1}
+  m_shopPrice: 30000
+  references:
+    version: 2
+    RefIds: []

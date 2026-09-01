@@ -61,6 +61,7 @@ public class App : Singleton<App>
     private SignalMessageView m_signalMessageView;
     private PromptView m_promptView;
     private InteractPromptView m_interactPromptView;
+    private PortableMinimapHud m_portableMinimapHud;
 #pragma warning restore CS0649
     #endregion
 
@@ -250,6 +251,7 @@ public class App : Singleton<App>
         public static SignalMessageView SignalMessage => Instance.m_signalMessageView;
         public static PromptView Prompt => Instance.m_promptView;
         public static InteractPromptView InteractPrompt => Instance.m_interactPromptView; // 조준 대상 조작키 안내 (#664)
+        public static PortableMinimapHud PortableMinimap => Instance.m_portableMinimapHud; // 휴대용 미니맵 위젯 (#835)
 
         // 씬 전환을 덮는 상주 로딩 화면 (AppBootstrap 하위). 씬 직접 Play 등 부트스트랩이 없으면 null
         public static LoadingScreen Loading => Instance.m_loadingScreen;

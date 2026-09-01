@@ -1,10 +1,14 @@
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 
 // 미니맵에 표시할 대상에 붙인다. 활성화되면 스스로 레지스트리에 등록된다.
 public class MinimapTarget : MonoBehaviour
 {
     public static readonly List<MinimapTarget> ActiveTargets = new();
+
+    [Tooltip("휴대용 미니맵의 카테고리 필터가 이 값으로 대상을 거른다 (#835)")]
+    [SerializeField] private EMinimapMarker m_category = EMinimapMarker.None;
 
     [SerializeField] private Sprite m_iconSprite;   // 비우면 컨트롤러 기본 아이콘 사용
     [SerializeField] private Color m_iconColor = Color.blue;
@@ -26,6 +30,8 @@ public class MinimapTarget : MonoBehaviour
 
     [Tooltip("범위 오버레이 색 — 알파를 낮게 둬야 밑의 맵이 비친다")]
     [SerializeField] private Color m_areaColor = new Color(1f, 0.25f, 0.25f, 0.25f);
+
+    public EMinimapMarker Category => m_category;
 
     public Sprite IconSprite => m_iconSprite;
 
@@ -73,6 +79,19 @@ public class MinimapTarget : MonoBehaviour
         set => m_areaColor = value;
     }
 
-    private void OnEnable() => ActiveTargets.Add(this);
+    private NetworkObject m_networkObject;
+
+    // 네트워크 오브젝트가 없거나 아직 스폰 전이면(호스트 없이 씬을 바로 Play하는 오프라인 테스트)
+    // true로 둔다 — 플레이어가 하나뿐이라 내 아이콘이 사라지는 편이 더 나쁘다. 스폰 전엔
+    // IsOwner가 신뢰할 수 없어(AreaScanner.Now 등과 같은 관례) IsSpawned로 먼저 가른다.
+    public bool IsLocalPlayer =>
+        m_networkObject == null || !m_networkObject.IsSpawned || m_networkObject.IsOwner;
+
+    private void OnEnable()
+    {
+        m_networkObject = GetComponentInParent<NetworkObject>();
+        ActiveTargets.Add(this);
+    }
+
     private void OnDisable() => ActiveTargets.Remove(this);
 }

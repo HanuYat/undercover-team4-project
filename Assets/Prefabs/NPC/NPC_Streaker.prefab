@@ -178,6 +178,33 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcAnimationDriver
   m_animator: {fileID: 3068399505254570713}
+--- !u!114 &1405749366994800698
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a9b67d35ca424dc2941a9bad0f04ea4e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcLocomotionMotion
+  m_unlockBeginSeconds: 0.63
+--- !u!114 &1405749366994800699
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3d53ac0efdf0417a88462091614812f7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcOneShotMotion
+  m_swingAnimSeconds: 0.9
+  m_standUpSeconds: 1.17
 --- !u!114 &3625219082931332717
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -561,6 +588,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8589cf5bdc1bf07489b808b1f33f0108, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MinimapTarget
+  m_category: 8
   m_iconSprite: {fileID: 21300000, guid: ffa7cc840acd34669bcedcea4e719316, type: 3}
   m_iconColor: {r: 1, g: 0, b: 0.00931406, a: 1}
   m_iconSize: 20
@@ -2034,30 +2062,3 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 833119219956902894, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
   m_PrefabInstance: {fileID: 8788566937790136343}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &1405749366994800698
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8791269624150694847}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a9b67d35ca424dc2941a9bad0f04ea4e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NpcLocomotionMotion
-  m_unlockBeginSeconds: 0.63
---- !u!114 &1405749366994800699
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8791269624150694847}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3d53ac0efdf0417a88462091614812f7, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NpcOneShotMotion
-  m_swingAnimSeconds: 0.9
-  m_standUpSeconds: 1.17
