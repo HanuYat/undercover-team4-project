@@ -300,9 +300,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SnowEvent
   ShowTopMostFoldoutHeaderGroup: 1
-  m_iceOnsetSeconds: 5
-  m_iceFullSeconds: 20
-  m_iceMaxRatio: 0.6
+  m_iceOnsetSeconds: 0
+  m_iceFullSeconds: 1
+  m_iceMaxRatio: 0.95
   m_thawSeconds: 45
   m_shelterProbeHeight: 25
   m_shelterMask:
