@@ -14,7 +14,7 @@ using UnityEngine.UI;
 public class ScanInfoView : NpcWorldCard
 {
     [Header("배경")]
-    [Tooltip("카드 배경 — 마스킹 여부에 따라 색이 바뀐다(미스캔 시 통째로 까맣게)")]
+    [Tooltip("카드 배경 — 마스킹 여부에 따라 색이 바뀐다(미스캔 시 반투명 노이즈로 마스킹)")]
     [SerializeField]
     private Image m_background;
 
@@ -25,7 +25,7 @@ public class ScanInfoView : NpcWorldCard
     private Color m_scannedColor = new Color(0f, 0.05f, 0.08f, 0.72f);
 
     [Header("마스킹")]
-    [Tooltip("미스캔 시 뜨는 큰 물음표 — 스캔 완료 시 꺼진다")]
+    [Tooltip("미스캔 시 뜨는 노이즈 오버레이 — 스캔 완료 시 꺼진다")]
     [SerializeField]
     private GameObject m_maskedRoot;
 
@@ -79,7 +79,7 @@ public class ScanInfoView : NpcWorldCard
         SetCardActive(true);
     }
 
-    /// <summary>미스캔 NPC — 카드 전체를 까맣게 채우고 물음표만 띄운다(이름·아이콘은 통째로 숨김).</summary>
+    /// <summary>미스캔 NPC — 카드를 노이즈로 마스킹한다(이름·아이콘은 통째로 숨김).</summary>
     public void ShowMasked()
     {
         SetMasked(true);
