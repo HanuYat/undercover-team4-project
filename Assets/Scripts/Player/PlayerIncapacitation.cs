@@ -147,6 +147,9 @@ public class PlayerIncapacitation : NetworkBehaviour
     /// <summary>부활 키트·본부 장치로 일으킬 수 있는가 — 기능 정지 중이고 몸이 남아 있을 때만. (#775)</summary>
     public bool IsRevivable => IsDead && !IsBodyLost;
 
+    private int m_downCount; // 이번 판 무력화 진입 횟수 — 다운 + 즉사·몸 소실 등 곧장 Die로 온 경우 포함 (#739)
+    public int DownCount => m_downCount;
+
     /// <summary>
     /// 스스로도 남의 손으로도 곧 일어나지 못하는 상태 — 다운 또는 Die. (#364, #725)
     /// <b>전멸(게임오버) 판정과 조준 히트박스</b>가 이걸 본다: 다운만 세면 전원이 Die로 넘어간 순간
@@ -516,6 +519,12 @@ public class PlayerIncapacitation : NetworkBehaviour
         SetCause(IncapacitationCause.None);
     }
 
+    /// <summary>라운드 사이 초기화 — 다운 횟수를 비운다. PlayerHealth.ServerResetState가 부른다. (#739)</summary>
+    public void ServerResetRound()
+    {
+        m_downCount = 0;
+    }
+
     // 기절 자동 회복 타이머. 씬 전환·파괴는 토큰으로 안전 중단한다 (WrongfulArrestPenalty.HangAsync 관례).
     private async UniTaskVoid ServerStunTimerAsync(float seconds, int episode)
     {
@@ -573,6 +582,12 @@ public class PlayerIncapacitation : NetworkBehaviour
         m_cause = cause;
         if (IsSpawned && IsServer)
             m_causeSynced.Value = cause;
+
+        // 멀쩡하다가 다운되거나 곧장 기능 정지된 경우만 센다 — 즉사(PlayerHealth skipGrace)·몸 소실
+        // (ServerKillByBodyLost)은 Down을 거치지 않고 바로 Die로 오므로 이 조건이 아니면 못 잡는다.
+        // 다운 상태에서 Die로 넘어가는 것(방치·확인사살)은 이미 그 다운으로 한 번 셌으니 또 세지 않는다.
+        if (!was && (cause == IncapacitationCause.Down || cause == IncapacitationCause.Die))
+            m_downCount++;
 
         // 사망 구간에는 <b>서버가 이 몸의 주인이다</b> — 시체를 NPC와 같은 조건으로 만든다. (#763 1단계)
         ApplyDeathOwnership(cause);

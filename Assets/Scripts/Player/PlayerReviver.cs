@@ -331,6 +331,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
 
         NotifyOwner($"구조 완료: {target.name}");
         target.ServerRevive();
+        GetComponent<PlayerAssistCredit>()?.ServerCreditRescue(); // 정산 "최다 팀원 구조" 집계 (#739)
     }
 
     private void ServerCancelRevive() => m_channel.Cancel();

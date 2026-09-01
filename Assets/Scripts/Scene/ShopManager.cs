@@ -80,6 +80,8 @@ public class ShopManager : SceneManagerBase
         Session?.SetLockedAsync(false).Forget();
 
         DespawnDroppedItems(); // 지난 라운드에 바닥에 버려진 아이템 회수 (#370)
+        App.Game.ArrestJudge?.ServerResetRound(); // 개인 진범 체포 집계 초기화 (#739)
+        App.Game.WrongfulArrestPenalty?.ServerResetRound(); // 개인 오검거 집계 초기화 (#739 후속)
 
         NetworkManager.Singleton.SceneManager.OnLoadComplete += HandleLoadComplete;
         ResetPlayer(NetworkManager.Singleton.LocalClientId); // 호스트 자신
@@ -109,6 +111,7 @@ public class ShopManager : SceneManagerBase
         client.PlayerObject?.GetComponent<PlayerItemSupply>()?.ServerClearHeldItems(); // 지급 장비 회수 (#370)
         client.PlayerObject?.GetComponent<PlayerWallet>()?.ServerResetRound(); // 이번 라운드 몫만 초기화 (#484)
         client.PlayerObject?.GetComponent<PlayerKillCredit>()?.ServerResetRound(); // 처치 수 초기화 (#869)
+        client.PlayerObject?.GetComponent<PlayerAssistCredit>()?.ServerResetRound(); // 구조 수 초기화 (#739)
     }
 
     // 주인 없이 바닥에 떨어져 있는 아이템을 정리한다 — 아이템은 destroyWithScene:false로 스폰돼 안 치우면

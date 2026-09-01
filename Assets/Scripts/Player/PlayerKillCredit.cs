@@ -19,21 +19,32 @@ using Unity.Netcode;
 public class PlayerKillCredit : NetworkBehaviour
 {
     private int m_killCount; // 서버·오프라인의 진실값 — 지금은 라운드 종료 후 정산 몫으로만 쓴다
+    private int m_innocentKillCount; // 순수 민간인(무고 시민) 처치 수 — 정산 "최다 무고 시민 사살" 집계용 (#739)
 
     /// <summary>이번 라운드 처치 수 — 서버 전용 참조. 정산 등 라운드 종료 후 UI가 읽어갈 값이다 (#869).</summary>
     public int KillCount => m_killCount;
+
+    /// <summary>이번 라운드 무고 시민(순수 민간인) 처치 수 — 정산 칭호 집계용. 서버 전용 참조. (#739)</summary>
+    public int InnocentKillCount => m_innocentKillCount;
 
     /// <summary>
     /// 처치 집계 — 사망 판정 지점(서버)에서 가해자 쪽에 부른다. 서버(또는 오프라인) 전용.
     /// </summary>
     /// <param name="victimName">화면에 띄울 처치 대상 이름 — NPC는 스캔 표시 이름, 동료는 닉네임.</param>
     /// <param name="friendlyFire">동료를 죽였는가 — 오너 알림의 색·문구가 갈린다.</param>
-    public void ServerCreditKill(string victimName, bool friendlyFire)
+    /// <param name="isInnocentCivilian">순수 민간인(진범도 경범죄자도 아닌 일반 시민)을 죽였는가. (#739)</param>
+    public void ServerCreditKill(
+        string victimName,
+        bool friendlyFire,
+        bool isInnocentCivilian = false
+    )
     {
         if (IsSpawned && !IsServer)
             return;
 
         m_killCount++;
+        if (isInnocentCivilian)
+            m_innocentKillCount++;
         NotifyOwner(victimName, friendlyFire);
     }
 
@@ -44,6 +55,7 @@ public class PlayerKillCredit : NetworkBehaviour
             return;
 
         m_killCount = 0;
+        m_innocentKillCount = 0;
     }
 
     // 오너 화면에만 알린다 — Baton.NotifyHit과 같은 구조(오프라인은 RPC 경로가 없어 로컬 발행).

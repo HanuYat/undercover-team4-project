@@ -164,6 +164,7 @@ public class ReviveKit : ItemBase
 
         // 부활은 본부 장치와 같은 경로 — HP 부분 회복 + 무력화 해제 (#365와 동일)
         target.ServerRevive();
+        holder.GetComponent<PlayerAssistCredit>()?.ServerCreditRescue(); // 정산 "최다 팀원 구조" 집계 (#739)
         NotifyOwner($"부활 완료: {target.name} (부활 키트 소모)");
 
         // 성공했을 때만 소모한다 — 거부된 사용으로 키트가 사라지면 산 값을 그냥 잃는다

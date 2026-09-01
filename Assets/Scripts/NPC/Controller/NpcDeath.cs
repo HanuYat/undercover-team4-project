@@ -109,11 +109,21 @@ public class NpcDeath : NetworkBehaviour
         {
             CitizenProfile profile = m_owner.GetComponent<CitizenIdentity>()?.Profile;
             string victimName = !string.IsNullOrEmpty(profile?.m_nameView) ? profile.m_nameView : "대상";
-            killCredit.ServerCreditKill(victimName, friendlyFire: false);
+            killCredit.ServerCreditKill(victimName, friendlyFire: false, IsInnocentCivilian());
         }
 
         // ⑨ 통보 — OnDied 구독자가 이벤트 뒷정리로 대상을 despawn할 수 있으므로(AbductionEvent.DisposeAbductors)
         //    이 뒤에 NPC를 건드리는 일을 두지 말 것.
         OnDied?.Invoke(m_owner, killer);
+    }
+
+    // 순수 민간인(진범도 경범죄자도 아닌 일반 시민)인가 — 정산 "최다 무고 시민 사살" 집계 기준 (#739).
+    private bool IsInnocentCivilian()
+    {
+        if (m_owner.GetComponent<MisdemeanorOffender>() != null)
+            return false;
+
+        CitizenIdentity identity = m_owner.GetComponent<CitizenIdentity>();
+        return identity != null && identity.Profile != null && !identity.IsCriminal;
     }
 }

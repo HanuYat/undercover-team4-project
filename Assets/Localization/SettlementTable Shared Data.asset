@@ -71,6 +71,26 @@ MonoBehaviour:
     m_Key: Settlement.Result.WithReason
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000415
+    m_Key: Settlement.Title.TopArrester
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000416
+    m_Key: Settlement.Title.TopOffender
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000417
+    m_Key: Settlement.Title.TopInnocentKiller
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000418
+    m_Key: Settlement.Title.TopDowns
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000419
+    m_Key: Settlement.Title.TopRescuer
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
