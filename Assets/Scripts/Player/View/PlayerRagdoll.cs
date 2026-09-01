@@ -292,6 +292,22 @@ public partial class PlayerRagdoll : MonoBehaviour
         }
 
         m_rig.SetKinematic(false);
+
+        // ⚠ <b>이미 정착한 몸의 권위를 얻었다면 곧바로 다시 재운다</b> (#957). 이관을 정착까지 미루면서
+        // 이 조합이 처음으로 정상 경로가 됐다. 안 재우면 위 SetKinematic(false)가 뼈를 <b>깨어난 채</b>
+        // 동적으로 만들고, Update의 깨어남 폴링이 그것을 "밟혀서 깨어났다"로 읽어 ResumeFromSleep이
+        // m_settled를 되돌린다 — 멈춰 있던 시체가 다시 흔들렸다 재정착한다.
+        //
+        // 잃는 것은 없다: 정착했다는 것이 곧 속도가 0이라는 뜻이라, 여기서 재워도 물리 상태가 사라지지
+        // 않는다(그것이 이관을 이 시점으로 옮긴 근거이기도 하다 — docs/865-down-ragdoll.md §2-1).
+        //
+        // ⚠ <b>여기서 m_settled가 이미 참인 근거는 전송 순서다.</b> 옛 오너가 Settle()에서
+        // EndStreaming()의 FinalPoseRpc를 먼저 쏘고 그다음 RequestDeathSettled()를 쏘는데, <b>둘 다
+        // 신뢰 RPC라 같은 연결에서 순서가 보장된다</b> — 서버는 종착 자세를 받아
+        // HandleSettledPoseReceived로 m_settled를 세운 <b>뒤에</b> 이관을 받는다. 스트림 패킷
+        // (StreamPoseRpc)만 Unreliable이고 이 마지막 패킷은 아니다.
+        if (m_settled)
+            m_rig.SleepAll();
     }
 
     /// <summary>
@@ -322,6 +338,28 @@ public partial class PlayerRagdoll : MonoBehaviour
     // ⚠ 콜라이더를 껐다 켜면 이 상태가 초기화된다(Unity 사양). 그래서 재적용을 경로마다 흩지 않고
     // <b>캡슐을 켜는 통로 하나</b>에 걸었다 — PlayerMovement.SetCapsuleEnabled가 켜는 순간 부른다.
     // 근거와 옛 폴러가 놓친 구멍은 docs/player-ragdoll.md §6.
+    /// <summary>
+    /// 이 몸의 뼈가 <paramref name="others"/>와 <b>충돌하지 않게</b> 한다 — 전 피어가 각자 부른다.
+    ///
+    /// 쓰는 곳은 <b>치인 차</b>다(<c>TrafficVehicle</c>). 차 몸통 MeshCollider는 Default 레이어이고
+    /// Ragdoll×Default 충돌이 켜져 있어서, <b>정면으로 치이면 몸이 범퍼 앞에 갇힌다</b> — 임펄스로
+    /// 14~25 m/s를 줘도 차가 22 m/s로 따라붙어 매 스텝 다시 부딪히므로 날아가는 대신 끌려간다
+    /// (옆면에 맞으면 메시를 비껴가 잘 날아가던 것이 이 차이였다). 근거는 docs/903-instant-death.md.
+    ///
+    /// ⚠ <b>되돌릴 필요가 없다</b> — 차는 풀로 반납될 때 <c>SetActive(false)</c>되고, 콜라이더를
+    /// 껐다 켜면 이 상태가 초기화된다(Unity 사양 — <see cref="ReapplyCapsuleIgnore"/>가 존재하는
+    /// 이유이기도 하다). 그 관례가 깨지면 여기도 함께 새므로, 풀 반납이 비활성화를 그만두면
+    /// 이 주석을 다시 볼 것.
+    /// </summary>
+    public void IgnoreCollisionWith(Collider[] others, bool ignore)
+    {
+        if (others == null || m_rig == null || !m_rig.IsValid)
+            return;
+
+        for (int i = 0; i < others.Length; i++)
+            m_rig.IgnoreCollisionWith(others[i], ignore);
+    }
+
     internal void ReapplyCapsuleIgnore()
     {
         if (m_controller == null)
@@ -523,7 +561,8 @@ public partial class PlayerRagdoll : MonoBehaviour
     // ---- 진입 / 이탈 ----
 
     /// <summary>
-    /// 래그돌 진입 — <b>멱등이다.</b> 이미 물리 중이면 임펄스만 누적하고, 블렌드 중이면 무동작.
+    /// 래그돌 진입 — <b>멱등이다.</b> 이미 물리 중이면 임펄스만 누적하고, 기상 블렌드 중이면
+    /// <b>지금 사유가 래그돌 사유일 때만</b> 새로 진입한다(늦게 도착한 옛 RPC를 거르기 위함).
     /// 원격의 도착 순서가 보장되지 않기 때문이다 — 반대 순서는 <see cref="PollRagdollCause"/>가 막는다 (docs §8·§9).
     /// </summary>
     /// <param name="impulse">폭심에서 밀려나는 속도(m/s). 힘없이 무너지는 사망은 <see cref="Vector3.zero"/>.</param>
@@ -550,8 +589,22 @@ public partial class PlayerRagdoll : MonoBehaviour
             return;
         }
 
-        if (m_state != RagdollState.Animated)
-            return; // 이미 정착했거나 일어나는 중 — 다시 날리지 않는다
+        // 여기 오는 것은 <b>기상 블렌드 중</b>(BlendingToAnimator)뿐이다 — 정착한 시체는 상태가
+        // 여전히 Ragdoll이라 위 갈래가 받는다(정착은 상태가 아니라 깃발이다).
+        //
+        // ⚠ <b>블렌드 중이어도 "새로 쓰러진 것"이면 받는다.</b> 예전에는 무조건 물러났는데, 그러면
+        // 폭발에 날아갔다 <b>일어나는 중에</b> 차에 치인 사람이 임펄스를 통째로 잃고 제자리에서
+        // 죽는다(실측 — 그 자리엔 로그도 안 남아 원인이 안 보였다). 그 가드가 막으려던 것은
+        // "도로에 누운 시체를 지나가는 차마다 다시 날리는 것"인데, 그쪽은 피해원의 시체 가드가
+        // 이미 막는다(TrafficVehicle의 CurrentHp<=0 · ServerHitNpc의 wasAlive).
+        //
+        // 판정을 <b>동기화된 사유</b>로 하는 것이 요점이다 — 늦게 도착한 옛 임펄스 RPC는 그 사이
+        // 부활해 사유가 None이 되어 있으므로 그대로 걸러진다(이 가드의 원래 목적인 도착 순서 방어).
+        if (m_state != RagdollState.Animated
+            && (m_incapacitation == null || !m_incapacitation.IsRagdollCause))
+        {
+            return;
+        }
 
         m_state = RagdollState.Ragdoll;
         m_settled = false;
@@ -1092,8 +1145,18 @@ public partial class PlayerRagdoll : MonoBehaviour
         // 사망(Die)은 부활 키트가 별도로 풀지만, 비행(Launched)은 정착 자체가 복구 신호다 — 여기서
         // 서버에 알린다(#815). 이 함수는 권위 피어에서만 도므로(Update의 HasMoveAuthority 게이트,
         // ForceSettle은 아직 호출부가 없다) 곧 그 오너가 통보를 보낸다.
-        if (m_incapacitation != null && m_incapacitation.IsLaunched)
+        if (m_incapacitation == null)
+            return;
+
+        if (m_incapacitation.IsLaunched)
+        {
             m_incapacitation.RequestLaunchSettled();
+            return;
+        }
+
+        // 래그돌이 도는 중에 죽었다면 소유권 이관이 <b>이 순간까지 미뤄져 있다</b> (#957) — 지금이
+        // 그것을 푸는 자리다. 미뤄 둔 것이 없으면 저쪽이 스스로 무동작이라 조건을 따지지 않는다.
+        m_incapacitation.RequestDeathSettled();
     }
 
     // 루트 원점에서 캡슐 밑면까지의 높이 — 지면 점에 루트를 그대로 놓으면 캡슐이 떠서 출발한다 (docs §4).

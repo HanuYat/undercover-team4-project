@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
@@ -62,6 +62,14 @@ public class PlayerIncapacitation : NetworkBehaviour
     /// <summary>다운 유예 전체 시간(초) — 화면 어두워짐이 <see cref="RemainingUntilDie"/>와 함께 비율을 낸다. (#725)</summary>
     public float DieAfterDownSeconds => m_dieAfterDownSeconds;
 
+    [Header("소유권 이관 (#957)")]
+    [Tooltip(
+        "래그돌이 도는 중에 죽었을 때, 미뤄 둔 소유권 이관의 서버 상한(초) — 오너의 정착 통보가 "
+            + "안 오는 경우(연결 끊김·맵 밖 낙하)의 안전장치. PlayerRagdoll의 정착 타임아웃보다 넉넉히 잡을 것"
+    )]
+    [SerializeField]
+    private float m_ownershipHandoverMaxSeconds = 8f;
+
     // 서버 권위 무력화 원인 — 서버만 쓰고 모든 클라가 읽는다. (PlayerHealth.m_syncedHp와 동일 패턴)
     // 예전에는 bool 두 개(무력화 여부 + 구조 가능 여부)였는데, 기절이 들어오며 '구조 불가'가 둘로
     // 갈려(매달기·기절) 조합으로는 구분할 수 없게 됐다 — 원인 하나로 합쳤다. (#252)
@@ -79,6 +87,26 @@ public class PlayerIncapacitation : NetworkBehaviour
     // 사망 전 오너 — 이관은 서버만 하고 복귀도 서버가 하므로 동기화하지 않는다. (#763 1단계)
     private ulong m_ownerBeforeDeath;
     private bool m_ownershipMovedToServer;
+
+    // 이관을 <b>정착까지 미뤄 둔</b> 상태인가 — 래그돌이 도는 중에 죽으면 여기 머문다. (#957)
+    // m_ownershipMovedToServer와 배타적이다: 대기 중에는 소유권을 아직 안 옮겼으므로 저쪽이 거짓이다.
+    //
+    // <b>동기화하지 않는다</b> — 읽는 쪽이 전부 서버 컨텍스트다(m_ownerBeforeDeath 관례).
+    // 한때 NetworkVariable이었던 것은 PlayerCarrier.CanBeCarried가 이 값을 봤기 때문인데,
+    // 그 차단은 걷었다(운반 시작이 이관을 끝내므로 막을 이유가 없어졌다 — 그쪽 주석).
+    private bool m_ownershipHandoverPending;
+
+    private int m_handoverEpisode;
+
+    /// <summary>
+    /// 이관을 정착까지 미뤄 둔 구간인가 — <b>이 창에서만 시체의 오너가 서버가 아니다.</b> (#957)
+    /// 서버(또는 오프라인) 전용. <c>PlayerCarrier.CanBeCarried</c>가 이 값을 보고 정착 전 운반을 막는다:
+    /// 밧줄 관절·앵커 재부착이 전부 "시체는 서버 소유"를 전제로 있어서, 그 전수 확인 전에는 열지 않는다.
+    ///
+    /// <c>PlayerRagdoll.IsSettled</c>를 대신 쓸 수 없다 — 정착 자세가 도착하기 전의 원격에서는
+    /// 거짓이라 피어마다 답이 갈린다. 이 값은 서버가 세워 동기화하므로 전 피어가 같은 것을 본다.
+    /// </summary>
+    internal bool IsOwnershipHandoverPending => m_ownershipHandoverPending;
 
     /// <summary>
     /// <b>이 몸의 진짜 주인</b> — 쓰러져 있는 동안 오너가 서버로 옮겨져 있어도(<see
@@ -279,6 +307,19 @@ public class PlayerIncapacitation : NetworkBehaviour
         }
     }
 
+    // 같은 오브젝트의 래그돌 — 이관을 미룰지 판정할 때만 쓴다. 없을 수 있어 null 허용 (Escorter 관례).
+    private PlayerRagdoll m_ragdoll;
+
+    private PlayerRagdoll Ragdoll
+    {
+        get
+        {
+            if (m_ragdoll == null)
+                m_ragdoll = GetComponent<PlayerRagdoll>();
+            return m_ragdoll;
+        }
+    }
+
     private void OnEnable() => s_instances.Add(this);
 
     private void OnDisable() => s_instances.Remove(this);
@@ -441,6 +482,104 @@ public class PlayerIncapacitation : NetworkBehaviour
             return;
 
         Recover();
+    }
+
+    // ---- 미뤄 둔 소유권 이관 (#957) ----
+
+    /// <summary>
+    /// <b>정착했다 — 미뤄 둔 소유권 이관을 지금 한다.</b> <see cref="PlayerRagdoll"/>이 정착을 감지한
+    /// 오너가 호출한다. 서버(또는 오프라인)에서만 실행되고, 원격이면 <see cref="DeathSettledRpc"/>로
+    /// 넘겨받는다. <see cref="RequestLaunchSettled"/>와 <b>같은 모양</b>이고 회차를 안 들고 가는
+    /// 이유도 같다 — <see cref="m_handoverEpisode"/>는 서버 전용 값이라 원격 오너에서 0이다.
+    ///
+    /// 미뤄 둔 것이 없으면 스스로 무동작이다 — 정착은 사망이 아닌 이유로도 일어나므로
+    /// (부활 대기 중인 다운, 진압봉 사망 등) 호출부가 조건을 따지지 않아도 되게 여기서 받는다.
+    /// </summary>
+    public void RequestDeathSettled()
+    {
+        if (!IsSpawned || IsServer)
+        {
+            ServerCompleteOwnershipHandover();
+            return;
+        }
+        if (!IsOwner)
+            return;
+
+        DeathSettledRpc();
+    }
+
+    [Rpc(SendTo.Server)]
+    private void DeathSettledRpc() => ServerCompleteOwnershipHandover();
+
+    // 미뤄 둔 이관을 실제로 수행한다 — 정착 통보와 상한 타이머가 함께 쓰는 종착점. 멱등.
+    //
+    // 사유가 서버 소유 집합을 벗어났으면 CancelPendingHandover가 이미 깃발을 내렸으므로, 깃발이
+    // 아직 서 있다는 것 자체가 "여전히 옮겨야 한다"는 뜻이다 — 여기서 사유를 다시 볼 필요가 없다.
+    internal void ServerCompleteOwnershipHandover()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+        if (!m_ownershipHandoverPending)
+            return;
+
+        m_ownershipHandoverPending = false;
+        m_handoverEpisode++; // 남은 상한 타이머를 무효로 만든다
+
+        if (!IsSpawned || NetworkObject == null || NetworkManager == null)
+            return;
+        if (m_ownerBeforeDeath == NetworkManager.ServerClientId)
+            return; // 호스트의 몸 — 애초에 미뤄지지 않지만 방어로 남긴다
+
+        m_ownershipMovedToServer = true;
+        NetworkObject.ChangeOwnership(NetworkManager.ServerClientId);
+    }
+
+    // 미뤄 둔 이관을 취소한다 — 소유권을 옮긴 적이 없으므로 되돌릴 것 없이 깃발만 내린다.
+    // 회차를 올려 남은 상한 타이머가 뒤늦게 이관하는 것을 막는다.
+    private void CancelPendingHandover()
+    {
+        if (!m_ownershipHandoverPending)
+            return;
+
+        m_ownershipHandoverPending = false;
+        m_handoverEpisode++;
+    }
+
+    // 이관을 미룰 상황인가 — <b>래그돌이 돌고 있고 아직 정착 전</b>이면 참. 사유(Die/Down)로 가르지
+    // 않는 이유는 비행 중 진압봉 오사로 Launched→Down이 되는 경로도 같은 불변식을 깨기 때문이다.
+    //
+    // 서 있다 죽으면 이 시점의 상태가 Animated다 — 래그돌 진입은 PollRagdollCause가 다음 프레임에
+    // 한다. 그래서 그 경우는 미뤄지지 않고 종전대로 즉시 이관된다(양쪽 피어가 정지에서 같은 임펄스를
+    // 받아 궤적이 겹치므로 미룰 이유도 없다).
+    private bool ShouldDeferHandover()
+    {
+        PlayerRagdoll ragdoll = Ragdoll;
+        return ragdoll != null && ragdoll.IsRagdollActive && !ragdoll.IsSettled;
+    }
+
+    // 정착 통보가 안 오는 경우(연결 끊김·맵 밖 낙하)의 안전장치 — ServerLaunchTimeoutAsync와 같은 구조.
+    private async UniTaskVoid ServerOwnershipHandoverTimeoutAsync(float seconds, int episode)
+    {
+        try
+        {
+            await UniTask.Delay(
+                TimeSpan.FromSeconds(seconds),
+                cancellationToken: destroyCancellationToken
+            );
+        }
+        catch (OperationCanceledException)
+        {
+            return; // 파괴·퇴장 — 옮길 대상이 이미 없다
+        }
+
+        if (episode != m_handoverEpisode)
+            return; // 그 사이 통보로 이미 옮겼거나 취소됐다 — 남의 회차다
+
+        Debug.LogWarning(
+            $"[소유권] 정착 통보가 안 와 상한({seconds}초)으로 이관한다 — {name}",
+            this
+        );
+        ServerCompleteOwnershipHandover();
     }
 
     // 정착 통보가 안 오는 경우(연결 끊김·낙사 등)의 안전장치 — 기절 타이머(ServerStunTimerAsync)와
@@ -680,14 +819,40 @@ public class PlayerIncapacitation : NetworkBehaviour
         // Down→Die는 아래 조기 반환이 삼킨다(양쪽 다 참). 시점만 60초 앞으로 당겨진다.
         bool wantsServerOwner =
             cause == IncapacitationCause.Die || cause == IncapacitationCause.Down;
+
+        // ⚠ <b>조기 반환보다 앞이다.</b> 미룸 중에는 m_ownershipMovedToServer가 거짓이라, 부활이
+        // 아래 가드(거짓 == 거짓)에 걸려 그냥 돌아가고 대기 깃발만 남는다 — 그러면 다음 사망이
+        // 영영 안 미뤄진다. 옮긴 적이 없으므로 되돌릴 것은 없고 깃발만 내리면 된다. (#957)
+        if (!wantsServerOwner)
+            CancelPendingHandover();
+
         if (wantsServerOwner == m_ownershipMovedToServer)
             return;
 
         if (wantsServerOwner)
         {
+            // 이미 미뤄 둔 이관이 있다 — 사유만 바뀐 것이다(비행→다운→사망). 회차를 새로 돌리면
+            // 상한 타이머가 매 전이마다 연장돼 안전망이 무의미해진다.
+            if (m_ownershipHandoverPending)
+                return;
+
             m_ownerBeforeDeath = OwnerClientId;
             if (m_ownerBeforeDeath == NetworkManager.ServerClientId)
-                return; // 호스트의 몸 — 이미 서버 소유다
+                return; // 호스트의 몸 — 이미 서버 소유다(미룰 것도 없다)
+
+            // <b>래그돌이 도는 중이면 정착까지 미룬다</b> (#957). 이관이 RagdollState.Ragdoll 구간
+            // <b>안</b>에서 일어나면 불변식 (C)가 깨진다 — 고장 목록은 docs/865-down-ragdoll.md §2-1.
+            // 정착 시점에는 <b>잃을 물리 상태가 없어</b>(속도가 0) 그 목록이 통째로 무효가 된다.
+            if (ShouldDeferHandover())
+            {
+                m_ownershipHandoverPending = true;
+                ServerOwnershipHandoverTimeoutAsync(
+                        m_ownershipHandoverMaxSeconds,
+                        ++m_handoverEpisode
+                    )
+                    .Forget();
+                return;
+            }
 
             m_ownershipMovedToServer = true;
             NetworkObject.ChangeOwnership(NetworkManager.ServerClientId);

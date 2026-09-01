@@ -554,6 +554,19 @@ public partial class NpcRagdoll : MonoBehaviour
     /// 관절 장력만으로는 잠든 몸이 안 깨어날 수 있어 명시적으로 깨운다. 예전의 <c>Unfreeze</c>와
     /// 달리 <b>상태를 바꾸지 않는다</b> — 뼈는 애초에 키네마틱이 된 적이 없으므로 되돌릴 것이 없다.
     /// </summary>
+    /// <summary>
+    /// 이 시체의 뼈가 <paramref name="others"/>와 충돌하지 않게 한다 — 치인 차와의 접촉을 끊는다.
+    /// 근거·되돌리지 않는 이유는 <see cref="PlayerRagdoll.IgnoreCollisionWith"/>와 같다.
+    /// </summary>
+    public void IgnoreCollisionWith(Collider[] others, bool ignore)
+    {
+        if (others == null || m_rig == null || !m_rig.IsValid)
+            return;
+
+        for (int i = 0; i < others.Length; i++)
+            m_rig.IgnoreCollisionWith(others[i], ignore);
+    }
+
     public void WakeCorpse()
     {
         if (m_state != RagdollState.Ragdoll || !HasMoveAuthority)

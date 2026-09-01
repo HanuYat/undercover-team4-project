@@ -753,8 +753,17 @@ public class RagdollRig : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 직전 <see cref="ApplyImpulse"/>에서 실제로 힘이 <b>들어간</b> 뼈 수 — 0이면 통째로 버려졌다.
+    /// 계측으로 넣었다가 <b>영구 가드로 남겼다</b>: 이 실패는 #768·#957에서 세 번 났고 매번
+    /// 조용했다(경고 하나 없이 "안 날아간다"로만 보인다). 근거는 docs/865-down-ragdoll.md §9-7.
+    /// </summary>
+    public int LastImpulseAppliedCount { get; private set; }
+
     public void ApplyImpulse(Vector3 velocity)
     {
+        LastImpulseAppliedCount = 0;
+
         if (velocity == Vector3.zero || m_bodies == null || m_hipsBone == null)
             return;
 
@@ -768,6 +777,22 @@ public class RagdollRig : MonoBehaviour
 
             float lift = m_bodies[i].worldCenterOfMass.y - hipsHeight;
             m_bodies[i].linearVelocity += velocity * (1f + m_tumbleBias * lift);
+            LastImpulseAppliedCount++;
+        }
+
+        // ⚠ <b>힘을 실을 뼈가 하나도 없었다.</b> 뼈가 전부 키네마틱이라는 뜻이고, 그러면 임펄스가
+        // 경고 없이 사라진다 — 이 저장소에서 세 번 난 고장이다:
+        //  · 정착한 시체에 임펄스를 건 것 (#768)
+        //  · 소유권이 방금 넘어와 뼈가 아직 원격 시절 키네마틱인 것 (§15)
+        //  · 권위가 아닌 피어에 임펄스를 보낸 것 (§9-7)
+        // 셋 다 "안 날아간다"로만 보였다. 조용히 넘기지 않는다.
+        if (LastImpulseAppliedCount == 0)
+        {
+            Debug.LogWarning(
+                $"RagdollRig: 임펄스({velocity.magnitude:0.00})가 통째로 버려졌다 — 뼈가 전부 "
+                    + "키네마틱이다. 권위 피어가 맞는지, 뼈를 물리로 넘긴 뒤에 부르는지 확인할 것",
+                this
+            );
         }
     }
 

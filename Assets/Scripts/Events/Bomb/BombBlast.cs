@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -168,32 +168,44 @@ public class BombBlast : NetworkBehaviour
         for (int i = 0; i < impulses.Length; i++)
             impulses[i] = EvaluateRagdollImpulse(m_deathBuffer[i].transform.position);
 
-        for (int i = 0; i < m_deathBuffer.Count; i++)
-            ApplyBlastRagdoll(m_deathBuffer[i], impulses[i]); // 서버·오프라인 로컬 발행
-
         if (!IsSpawned || !IsServer)
+        {
+            for (int i = 0; i < m_deathBuffer.Count; i++)
+                ApplyBlastRagdoll(m_deathBuffer[i], impulses[i]); // 오프라인 — 피어가 하나뿐이다
             return;
+        }
 
+        // <b>임펄스는 물리 권위 피어에게만 간다</b> (#957) — 이관을 정착까지 미룬 구간에는 그것이
+        // 서버가 아니라 <b>아직 옛 오너</b>다. 근거는 TrafficVehicle.ResolveImpulseAuthority.
         NetworkObjectReference[] victims = new NetworkObjectReference[m_deathBuffer.Count];
-        ulong[] previousOwners = new ulong[m_deathBuffer.Count];
+        ulong[] authorities = new ulong[m_deathBuffer.Count];
+        ulong serverId = NetworkManager.ServerClientId;
+
         for (int i = 0; i < victims.Length; i++)
         {
             victims[i] = m_deathBuffer[i];
 
-            // 죽기 <b>전</b>의 오너 — 소유권은 이미 서버로 옮겨졌으므로 OwnerClientId로는 못 찾는다.
             PlayerIncapacitation incap = m_deathBuffer[i].GetComponent<PlayerIncapacitation>();
-            previousOwners[i] =
-                incap != null ? incap.BodyOwnerClientId : m_deathBuffer[i].OwnerClientId;
+            authorities[i] =
+                incap != null && incap.IsOwnershipHandoverPending
+                    ? incap.BodyOwnerClientId
+                    : m_deathBuffer[i].OwnerClientId;
+
+            // 서버가 권위일 때만 힘을 싣는다 — 아니면 상태 진입만 시킨다.
+            ApplyBlastRagdoll(
+                m_deathBuffer[i],
+                authorities[i] == serverId ? impulses[i] : Vector3.zero
+            );
         }
 
-        BlastDeathsClientRpc(victims, impulses, previousOwners);
+        BlastDeathsClientRpc(victims, impulses, authorities);
     }
 
     [ClientRpc]
     private void BlastDeathsClientRpc(
         NetworkObjectReference[] victims,
         Vector3[] impulses,
-        ulong[] previousOwners
+        ulong[] authorities
     )
     {
         if (IsServer)
@@ -203,15 +215,15 @@ public class BombBlast : NetworkBehaviour
 
         // 길이는 서버가 맞춰 보내지만, 직렬화 경계를 믿지 않고 짧은 쪽까지만 돈다.
         int count = Mathf.Min(victims.Length, impulses.Length);
-        count = Mathf.Min(count, previousOwners.Length);
+        count = Mathf.Min(count, authorities.Length);
         for (int i = 0; i < count; i++)
         {
             if (!victims[i].TryGet(out NetworkObject victim))
                 continue;
 
-            // 옛 오너면 상태 진입만 시키고 힘은 서버에 맡긴다 (위 주석).
-            bool wasOwner = nm != null && nm.LocalClientId == previousOwners[i];
-            ApplyBlastRagdoll(victim, wasOwner ? Vector3.zero : impulses[i]);
+            // 권위 피어만 힘을 싣는다. 나머지는 상태 진입만 — 뼈가 키네마틱이라 어차피 무시된다.
+            bool mine = nm != null && nm.LocalClientId == authorities[i];
+            ApplyBlastRagdoll(victim, mine ? impulses[i] : Vector3.zero);
         }
     }
 

@@ -119,6 +119,12 @@ public class TrafficVehicle : NetworkBehaviour
 
     private static readonly Collider[] s_overlap = new Collider[64]; // 폭탄(BombBlast)은 256이다 — 여기는 차체 한 대분
 
+    // 이 차의 콜라이더 — 치인 몸과의 충돌을 끊는 데 쓴다. 풀에서 재사용되므로 한 번만 모은다.
+    private Collider[] m_ownColliders;
+
+    private Collider[] OwnColliders =>
+        m_ownColliders ??= GetComponentsInChildren<Collider>(includeInactive: true);
+
     // 비행 중인 플레이어 임시 버퍼 — 서버에서만 도는 경로라 공유해도 안전하다(LightningEvent와 같은 수법).
     private static readonly System.Collections.Generic.List<PlayerHealth> s_launched =
         new System.Collections.Generic.List<PlayerHealth>(6);
@@ -522,7 +528,10 @@ public class TrafficVehicle : NetworkBehaviour
         // 거부하지 않으므로, 없으면 도로에 누워 있던 몸을 지나가는 차마다 계속 밀고 간다. 그 몸은
         // 유치장까지 끌고 가야 판정이 나는 검거 대상이다(GDD 7-3).
         if (wasAlive && npc.Ragdoll != null)
+        {
+            npc.Ragdoll.IgnoreCollisionWith(OwnColliders, true); // 플레이어와 같은 이유 (위 주석)
             npc.Ragdoll.EnterRagdoll(BuildRagdollImpulse());
+        }
     }
 
     private void ServerHitPlayer(PlayerHealth player)
@@ -601,17 +610,41 @@ public class TrafficVehicle : NetworkBehaviour
             return;
         }
 
-        ApplyDeathRagdoll(victim.gameObject, impulse); // 서버·오프라인 로컬 발행
-
         if (!IsSpawned || !IsServer)
+        {
+            ApplyDeathRagdoll(victim.gameObject, impulse); // 오프라인 — 피어가 하나뿐이다
             return;
+        }
 
-        // 죽기 <b>전</b>의 오너 — ApplyDeathOwnership이 이미 소유권을 서버로 옮겼으므로 OwnerClientId로는
-        // 못 찾는다. #865가 같은 사정으로 만들어 둔 값이다.
+        ulong authority = ResolveImpulseAuthority(player, victim);
+
+        // 서버가 권위일 때만 여기서 힘을 싣는다 — 아니면 상태 진입만 시킨다(임펄스 0).
+        ApplyDeathRagdoll(
+            victim.gameObject,
+            authority == NetworkManager.ServerClientId ? impulse : Vector3.zero
+        );
+
+        DeathRagdollRpc(victim, impulse, authority);
+    }
+
+    /// <summary>
+    /// <b>임펄스를 받아야 하는 피어 = 물리 권위 피어.</b> (#957)
+    ///
+    /// 예전에는 "죽으면 서버가 곧 권위"라 서버가 실으면 됐고, 옛 오너는 헛궤적을 만들지 않도록
+    /// 빼기만 하면 됐다(§16). <b>#957이 그 전제를 뒤집었다</b> — 래그돌이 도는 중에 죽으면 이관이
+    /// 정착까지 미뤄져 <b>그 구간의 권위는 아직 옛 오너</b>다. 그때 서버에 실으면 키네마틱 뼈에
+    /// 버려지고(실측 적용뼈 0/11) 옛 오너는 0을 받아 <b>아무도 안 날린다.</b>
+    ///
+    /// 그래서 "누구를 뺄까"가 아니라 <b>"누가 권위인가"</b>로 묻는다 — 미룸 중이면 옛 오너,
+    /// 아니면 이미 서버다. 근거는 docs/865-down-ragdoll.md §9-7.
+    /// </summary>
+    private static ulong ResolveImpulseAuthority(PlayerHealth player, NetworkObject victim)
+    {
         PlayerIncapacitation incap = player.GetComponent<PlayerIncapacitation>();
-        ulong bodyOwner = incap != null ? incap.BodyOwnerClientId : victim.OwnerClientId;
+        if (incap != null && incap.IsOwnershipHandoverPending)
+            return incap.BodyOwnerClientId; // 이관 대기 — 아직 본인이 물리를 돈다
 
-        DeathRagdollRpc(victim, impulse, bodyOwner);
+        return victim.OwnerClientId; // 이관이 끝났다 = 서버다
     }
 
     // SendTo.NotServer라 호스트 중복 발행을 가드로 막을 필요가 없다(BombBlast는 ClientRpc라 가드가 있다).
@@ -619,27 +652,28 @@ public class TrafficVehicle : NetworkBehaviour
     private void DeathRagdollRpc(
         NetworkObjectReference victim,
         Vector3 impulse,
-        ulong previousOwner
+        ulong authority
     )
     {
         if (!victim.TryGet(out NetworkObject resolved))
             return;
 
-        ApplyDeathRagdoll(resolved.gameObject, IsPreviousOwner(previousOwner) ? Vector3.zero : impulse);
-    }
-
-    // 이 피어가 죽은 몸의 옛 오너인가 — 위 주석의 예외 판정. NetworkManager가 없으면(테스트 구성)
-    // 거짓으로 둔다: 임펄스를 주는 편이 안 주는 편보다 안전하다(안 주면 아무도 안 날린다).
-    private static bool IsPreviousOwner(ulong previousOwner)
-    {
+        // 권위 피어만 힘을 싣는다. 나머지는 상태 진입만 — 어차피 뼈가 키네마틱이라 무시된다.
         NetworkManager nm = NetworkManager.Singleton;
-        return nm != null && nm.LocalClientId == previousOwner;
+        bool mine = nm != null && nm.LocalClientId == authority;
+        ApplyDeathRagdoll(resolved.gameObject, mine ? impulse : Vector3.zero);
     }
 
-    private static void ApplyDeathRagdoll(GameObject victim, Vector3 impulse)
+    // ⚠ <b>임펄스보다 먼저 충돌을 끊는다.</b> 안 끊으면 정면으로 치인 몸이 범퍼 앞에 갇혀,
+    // 세기를 아무리 올려도 날아가는 대신 끌려간다(차 22m/s가 몸보다 빠르다 — 세기 1.8배로
+    // 올려 봐도 해결되지 않는 것을 실측했다). 근거는 PlayerRagdoll.IgnoreCollisionWith.
+    private void ApplyDeathRagdoll(GameObject victim, Vector3 impulse)
     {
-        if (victim != null && victim.TryGetComponent(out PlayerRagdoll ragdoll))
-            ragdoll.EnterRagdoll(impulse);
+        if (victim == null || !victim.TryGetComponent(out PlayerRagdoll ragdoll))
+            return;
+
+        ragdoll.IgnoreCollisionWith(OwnColliders, true);
+        ragdoll.EnterRagdoll(impulse);
     }
 
     // 맞은 사람의 오너에게만 간다 — 남의 화면에서 밀어봤자 오너가 되돌린다
