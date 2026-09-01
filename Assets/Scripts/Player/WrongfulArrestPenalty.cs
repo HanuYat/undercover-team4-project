@@ -104,6 +104,15 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
     /// <summary>정산용 개인 오검거 집계(clientId→횟수). 서버에서만 채워진다.</summary>
     public IReadOnlyDictionary<ulong, int> PerPlayerCounts => m_perPlayerCounts;
 
+    /// <summary>라운드 사이 초기화 — 개인 오검거 집계만 비운다(팀 카운트는 별개 성격이라 안 건드림). 서버(또는 오프라인) 전용.</summary>
+    public void ServerResetRound()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        m_perPlayerCounts.Clear();
+    }
+
     public override void OnNetworkSpawn()
     {
         // 판정은 서버 권위이므로 서버에서만 구독한다 (WantedListManager 관례).

@@ -36,6 +36,35 @@ public class ArrestJudge : CommonManagerBase
 
     public event Action<ArrestResult> OnArrestJudged;
 
+    private readonly Dictionary<ulong, int> m_perPlayerArrests = new Dictionary<ulong, int>(); // 정산 "최다 진범 체포" 집계 (#739)
+
+    /// <summary>정산용 개인 진범 체포 집계(clientId→횟수). 서버에서만 채워진다.</summary>
+    public IReadOnlyDictionary<ulong, int> PerPlayerArrests => m_perPlayerArrests;
+
+    /// <summary>라운드 사이 초기화. 서버(또는 오프라인) 전용 — ShopManager 진입 지점에서 부른다. (#739)</summary>
+    public void ServerResetRound()
+    {
+        m_perPlayerArrests.Clear();
+    }
+
+    // 진범 체포만 개인 집계에 올린다 — 재판정으로 부풀지 않게 첫 인계에서만 센다(경범죄 즉결과 달리
+    // 정산 코믹 스탯 성격이라 WrongfulArrestPenalty의 오검거 집계와 기준을 맞춘다).
+    private void CreditArrest(ArrestVerdict verdict, bool firstDelivery, List<PlayerEscorter> deliverers)
+    {
+        if (verdict != ArrestVerdict.WantedCriminal || !firstDelivery)
+            return;
+
+        foreach (PlayerEscorter deliverer in deliverers)
+        {
+            if (deliverer == null)
+                continue;
+
+            ulong clientId = deliverer.OwnerClientId;
+            m_perPlayerArrests.TryGetValue(clientId, out int prev);
+            m_perPlayerArrests[clientId] = prev + 1;
+        }
+    }
+
     /// <summary>
     /// 시체 판정이 났다 — <b>표시 전용 훅이다.</b> 서버(또는 오프라인)에서만 발생한다. (#571)
     ///
@@ -117,6 +146,7 @@ public class ArrestJudge : CommonManagerBase
 
         var result = new ArrestResult(npc, verdict, profile, reward, deliverers, firstDelivery);
 
+        CreditArrest(verdict, firstDelivery, deliverers);
         LogVerdict(result);
 
         // 밧줄 해제는 <b>오검거에만</b> 건다 (#492).
@@ -220,6 +250,8 @@ public class ArrestJudge : CommonManagerBase
             deliverers.Add(presser);
 
         var result = new ArrestResult(npc, verdict, profile, reward, deliverers, firstDelivery);
+
+        CreditArrest(verdict, firstDelivery, deliverers);
 
         // 오검거 집계는 산 신병과 같은 기준·같은 대상이고, <b>인계마다</b> 오른다 (#358 — 저쪽
         // HandleArrestJudged가 IsFirstDelivery로 막지 않는 것과 같은 이유).

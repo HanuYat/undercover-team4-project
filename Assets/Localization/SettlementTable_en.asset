@@ -81,13 +81,33 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 6276845898492543062
+  - m_Id: 7100000000415
+    m_Localized: "Ace Detective"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000416
+    m_Localized: "Crazy Bot"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000417
+    m_Localized: "Trigger Happy"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000418
+    m_Localized: "Made of Glass"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000419
+    m_Localized: "Guardian Angel"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:
     - rid: 6276845898492543062
       type: {class: SmartFormatTag, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_Entries: 
+        m_Entries:
         m_SharedEntries:
         - id: 7100000000408
         - id: 7100000000409

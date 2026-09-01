@@ -18,12 +18,19 @@ public struct SettlementData
     // 죽은 대상도 계상되므로(JailZone.RecordDeceased) "유치장에 앉아 있는 수"보다 클 수 있다.
     public int CriminalCount;       // 종료 시 계상된 진범 수 (#340/#571)
     public int MisdemeanorCount;    // 종료 시 계상된 경범죄자(난동꾼·위조범) 수 (#340/#571)
-    public string TopOffenderName;  // 이번 판 최다 오검거 플레이어 이름 (없으면 빈 문자열)
-    public int TopOffenderCount;    // 그 플레이어의 오검거 횟수 (0이면 오검거 없음)
+    public List<SettlementPlayerTitle> PlayerTitles; // 이번 판 개인 칭호 로스터 (#739)
+}
+
+/// <summary>정산 로스터 한 줄 — 플레이어 하나와 칭호(없으면 None). (#739)</summary>
+public struct SettlementPlayerTitle
+{
+    public ulong ClientId;
+    public string PlayerName;
+    public SettlementTitleKind Title;
 }
 
 /// <summary>
-/// 라운드 정산 화면 제어 (#107, GDD 3-2) — 라운드 종료 시 결과·팀 자금 증감·이번 판 최다 오검거(코믹 스탯)를
+/// 라운드 정산 화면 제어 (#107, GDD 3-2) — 라운드 종료 시 결과·팀 자금 증감·개인 칭호 로스터(코믹 스탯, #739)를
 /// 모아 전 클라이언트의 정산 패널(SettlementPanel)에 띄운다.
 ///
 /// 전파 흐름은 RoundEndFeedback(#210)과 동일 — 라운드 진행이 서버 권위이므로(#56):
@@ -38,11 +45,10 @@ public struct SettlementData
 public class SettlementController : MonoBehaviour
 {
     private const string k_messageName = "RoundSettlement";
-    private const int k_writerSize = 128; // byte*2 + int*7 + FixedString64(최대 66) = 96 < 128
+    private const int k_writerSize = 800; // byte*2 + int*6 + byte(로스터 수) + 항목당(ulong+byte+FixedString64) × 최대 6인 여유
     private const int k_personalSharePercent = 10; // 인계자 개인 몫 — 귀속 현상금의 % (#484)
 
     private RoundManager Round => App.Game.Round;
-    private WrongfulArrestPenalty Penalty => App.Game.WrongfulArrestPenalty;
     private TeamFund TeamFund => App.Game.TeamFund;
 
     private bool m_handlerRegistered;
@@ -161,11 +167,6 @@ public class SettlementController : MonoBehaviour
         int balance = TeamFund != null ? TeamFund.Balance : 0;
         int delta = TeamFund != null ? balance - m_roundStartFund : 0;
 
-        string topName = string.Empty;
-        int topCount = 0;
-        if (Penalty != null)
-            FindTopOffender(Penalty.PerPlayerCounts, out topName, out topCount);
-
         return new SettlementData
         {
             Result = result,
@@ -176,9 +177,97 @@ public class SettlementController : MonoBehaviour
             TargetFund = target,
             CriminalCount = criminals,
             MisdemeanorCount = misdemeanors,
-            TopOffenderName = topName,
-            TopOffenderCount = topCount,
+            PlayerTitles = BuildPlayerTitles(),
         };
+    }
+
+    // 카테고리별 1위를 뽑아 우선순위(SettlementTitleKind 선언 순서)로 한 사람당 배지 하나만 확정한다 (#739).
+    // 로스터는 현재 접속 중인 전원 + 집계가 남은 clientId 전원의 합집합이다(퇴장한 기록자도 이름은 남긴다).
+    private static List<SettlementPlayerTitle> BuildPlayerTitles()
+    {
+        IReadOnlyDictionary<ulong, int> arrests = App.Game.ArrestJudge?.PerPlayerArrests;
+        IReadOnlyDictionary<ulong, int> offenses = App.Game.WrongfulArrestPenalty?.PerPlayerCounts;
+        Dictionary<ulong, int> innocentKills = CollectPerPlayer(p => p.GetComponent<PlayerKillCredit>()?.InnocentKillCount ?? 0);
+        Dictionary<ulong, int> downs = CollectPerPlayer(p => p.GetComponent<PlayerIncapacitation>()?.DownCount ?? 0);
+        Dictionary<ulong, int> rescues = CollectPerPlayer(p => p.GetComponent<PlayerAssistCredit>()?.RescueCount ?? 0);
+
+        bool hasArrest = TryFindTop(arrests, out ulong arrestWinner, out _);
+        bool hasOffense = TryFindTop(offenses, out ulong offenseWinner, out _);
+        bool hasInnocent = TryFindTop(innocentKills, out ulong innocentWinner, out _);
+        bool hasDowns = TryFindTop(downs, out ulong downWinner, out _);
+        bool hasRescue = TryFindTop(rescues, out ulong rescueWinner, out _);
+
+        var roster = new HashSet<ulong>();
+        AddConnectedIds(roster);
+        AddKeys(roster, arrests);
+        AddKeys(roster, offenses);
+        AddKeys(roster, innocentKills);
+        AddKeys(roster, downs);
+        AddKeys(roster, rescues);
+
+        var titles = new List<SettlementPlayerTitle>();
+        foreach (ulong clientId in roster)
+        {
+            SettlementTitleKind kind = SettlementTitleKind.None;
+            if (hasArrest && clientId == arrestWinner)
+                kind = SettlementTitleKind.TopArrester;
+            else if (hasOffense && clientId == offenseWinner)
+                kind = SettlementTitleKind.TopOffender;
+            else if (hasInnocent && clientId == innocentWinner)
+                kind = SettlementTitleKind.TopInnocentKiller;
+            else if (hasDowns && clientId == downWinner)
+                kind = SettlementTitleKind.TopDowns;
+            else if (hasRescue && clientId == rescueWinner)
+                kind = SettlementTitleKind.TopRescuer;
+
+            titles.Add(new SettlementPlayerTitle
+            {
+                ClientId = clientId,
+                PlayerName = ResolvePlayerName(clientId),
+                Title = kind,
+            });
+        }
+
+        return titles;
+    }
+
+    // 접속 중인 클라이언트의 컴포넌트 값을 clientId별로 모은다 — PlayerKillCredit 등 플레이어당 하나뿐인
+    // 상태를 들고 있는 컴포넌트 공용 (0은 담지 않는다 — TryFindTop과 "집계 없음"의 기준을 맞춘다).
+    private static Dictionary<ulong, int> CollectPerPlayer(Func<NetworkObject, int> selector)
+    {
+        var result = new Dictionary<ulong, int>();
+        NetworkManager nm = NetworkManager.Singleton;
+        if (nm == null)
+            return result;
+
+        foreach (KeyValuePair<ulong, NetworkClient> pair in nm.ConnectedClients)
+        {
+            NetworkObject player = pair.Value.PlayerObject;
+            if (player == null)
+                continue;
+
+            int value = selector(player);
+            if (value > 0)
+                result[pair.Key] = value;
+        }
+        return result;
+    }
+
+    private static void AddConnectedIds(HashSet<ulong> ids)
+    {
+        NetworkManager nm = NetworkManager.Singleton;
+        if (nm == null)
+            return;
+        foreach (ulong clientId in nm.ConnectedClients.Keys)
+            ids.Add(clientId);
+    }
+
+    private static void AddKeys(HashSet<ulong> ids, IReadOnlyDictionary<ulong, int> dict)
+    {
+        if (dict == null)
+            return;
+        foreach (ulong key in dict.Keys)
+            ids.Add(key);
     }
 
     // 인계자별 개인 자금 지급 — 귀속 현상금(JailZone)에 비율만 적용한다. 서버·오프라인 전용.
@@ -197,29 +286,22 @@ public class SettlementController : MonoBehaviour
         }
     }
 
-    // 개인 오검거 집계에서 최다자를 뽑아 clientId를 표시 이름으로 바꾼다. 동률이면 먼저 순회된 쪽.
-    private static void FindTopOffender(
-        IReadOnlyDictionary<ulong, int> counts,
-        out string name,
-        out int count
-    )
+    // 개인 집계에서 최다자를 뽑는다. 동률이면 먼저 순회된 쪽 — 모든 칭호 카테고리가 공유하는 기준.
+    private static bool TryFindTop(IReadOnlyDictionary<ulong, int> counts, out ulong clientId, out int count)
     {
-        name = string.Empty;
+        clientId = 0;
         count = 0;
         if (counts == null)
-            return;
+            return false;
 
-        ulong topClient = 0;
         foreach (KeyValuePair<ulong, int> pair in counts)
         {
             if (pair.Value <= count)
                 continue;
             count = pair.Value;
-            topClient = pair.Key;
+            clientId = pair.Key;
         }
-
-        if (count > 0)
-            name = ResolvePlayerName(topClient);
+        return count > 0;
     }
 
     // clientId → 동기화된 표시 이름. 접속이 끊겼거나 이름이 비었으면 "플레이어 N"으로 폴백.
@@ -245,7 +327,7 @@ public class SettlementController : MonoBehaviour
         if (nm == null || !nm.IsServer || nm.CustomMessagingManager == null)
             return;
 
-        FixedString64Bytes name = data.TopOffenderName.ToFixed64();
+        List<SettlementPlayerTitle> titles = data.PlayerTitles ?? new List<SettlementPlayerTitle>();
 
         using FastBufferWriter writer = new FastBufferWriter(k_writerSize, Allocator.Temp);
         writer.WriteValueSafe((byte)data.Result);
@@ -256,8 +338,15 @@ public class SettlementController : MonoBehaviour
         writer.WriteValueSafe(data.TargetFund);
         writer.WriteValueSafe(data.CriminalCount);
         writer.WriteValueSafe(data.MisdemeanorCount);
-        writer.WriteValueSafe(data.TopOffenderCount);
-        writer.WriteValueSafe(name);
+
+        writer.WriteValueSafe((byte)titles.Count);
+        foreach (SettlementPlayerTitle title in titles)
+        {
+            writer.WriteValueSafe(title.ClientId);
+            writer.WriteValueSafe((byte)title.Title);
+            writer.WriteValueSafe(title.PlayerName.ToFixed64());
+        }
+
         nm.CustomMessagingManager.SendNamedMessageToAll(
             k_messageName,
             writer,
@@ -282,8 +371,21 @@ public class SettlementController : MonoBehaviour
         reader.ReadValueSafe(out int target);
         reader.ReadValueSafe(out int criminals);
         reader.ReadValueSafe(out int misdemeanors);
-        reader.ReadValueSafe(out int topCount);
-        reader.ReadValueSafe(out FixedString64Bytes name);
+
+        reader.ReadValueSafe(out byte titleCount);
+        var titles = new List<SettlementPlayerTitle>(titleCount);
+        for (int i = 0; i < titleCount; i++)
+        {
+            reader.ReadValueSafe(out ulong clientId);
+            reader.ReadValueSafe(out byte titleByte);
+            reader.ReadValueSafe(out FixedString64Bytes name);
+            titles.Add(new SettlementPlayerTitle
+            {
+                ClientId = clientId,
+                Title = (SettlementTitleKind)titleByte,
+                PlayerName = name.ToString(),
+            });
+        }
 
         ShowLocal(
             new SettlementData
@@ -296,8 +398,7 @@ public class SettlementController : MonoBehaviour
                 TargetFund = target,
                 CriminalCount = criminals,
                 MisdemeanorCount = misdemeanors,
-                TopOffenderCount = topCount,
-                TopOffenderName = name.ToString(),
+                PlayerTitles = titles,
             }
         );
     }

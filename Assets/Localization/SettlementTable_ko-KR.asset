@@ -81,13 +81,33 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 6276845898492543061
+  - m_Id: 7100000000415
+    m_Localized: "\ubca0\ud14c\ub791 \ud615\uc0ac"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000416
+    m_Localized: "\ubbf8\uce5c \ub85c\ubd07"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000417
+    m_Localized: "\ud559\uc0b4\uc790"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000418
+    m_Localized: "\uc885\uc774 \ubab8"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000419
+    m_Localized: "\uad6c\uae09\ub300\uc6d0"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:
     - rid: 6276845898492543061
       type: {class: SmartFormatTag, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_Entries: 
+        m_Entries:
         m_SharedEntries:
         - id: 7100000000408
         - id: 7100000000409

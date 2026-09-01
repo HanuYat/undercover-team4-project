@@ -6818,6 +6818,7 @@ GameObject:
   - component: {fileID: 9155120424423556794}
   - component: {fileID: 7829046604217022194}
   - component: {fileID: 8081961614526810824}
+  - component: {fileID: 6563192310571307439}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -6905,7 +6906,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3828970125
+  GlobalObjectIdHash: 152330586
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -7436,6 +7437,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8589cf5bdc1bf07489b808b1f33f0108, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MinimapTarget
+  m_category: 1
   m_iconSprite: {fileID: 21300000, guid: a0e24389386424e5893a4668a86b06dc, type: 3}
   m_iconColor: {r: 0, g: 0.32809806, b: 1, a: 1}
   m_iconSize: 50
@@ -8052,6 +8054,18 @@ MonoBehaviour:
   m_ropeLength: 1.4
   m_handHeight: 1.1
   m_knotHeight: 0.5
+--- !u!114 &6563192310571307439
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ac7b5d74171e7e049b5e72ec63c04a81, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerAssistCredit
 --- !u!1 &5517047033924982284
 GameObject:
   m_ObjectHideFlags: 0

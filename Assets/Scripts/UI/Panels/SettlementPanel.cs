@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using TMPro;
@@ -8,7 +9,7 @@ using UnityEngine.Localization;
 using UnityEngine.UI;
 
 /// <summary>
-/// 라운드 정산 패널 (#107, GDD 3-2, #693) — 라운드 결과·팀 자금 증감·최다 오검거 칭호(코믹 스탯)를 보여준다.
+/// 라운드 정산 패널 (#107, GDD 3-2, #693, #739) — 라운드 결과·팀 자금 증감·개인 칭호 로스터(코믹 스탯)를 보여준다.
 /// 표시는 각 클라 로컬. 데이터는 SettlementController가 서버 권위 값으로 채워 <see cref="Show"/>로 넘긴다.
 ///
 /// 연출: 패널(창·배경)은 즉시 뜨고, 결과/자금/칭호 3줄은 <see cref="m_textRevealDelay"/>초 뒤에 등장한다.
@@ -30,8 +31,15 @@ public class SettlementPanel : PanelBase
     [SerializeField]
     private TextMeshProUGUI m_fundText;
 
+    [Header("개인 칭호 로스터 (#739, 리썰 컴퍼니 스타일)")]
     [SerializeField]
-    private TextMeshProUGUI m_topOffenderText;
+    private RectTransform m_titleRowContainer;
+
+    [SerializeField]
+    private SettlementTitleRowView m_titleRowPrefab;
+
+    // 행은 재사용한다 — TeamStatusPanel과 같은 관례.
+    private readonly List<SettlementTitleRowView> m_titleRows = new List<SettlementTitleRowView>();
 
     [Header("상점 복귀 카운트다운 (화면 중앙 상단)")]
     [SerializeField]
@@ -61,10 +69,6 @@ public class SettlementPanel : PanelBase
     [SerializeField]
     private LocalizedString m_resultWithReasonFormat;
 
-    [Tooltip("최다 오검거 칭호 — Settlement.TopOffender.Some ({0}=이름)")]
-    [SerializeField]
-    private LocalizedString m_topOffenderFormat;
-
     [Tooltip("복귀 카운트다운 — Settlement.Countdown ({0}=도착지, {1}=남은 초, {2}=확인 인원, {3}=총원)")]
     [SerializeField]
     private LocalizedString m_countdownFormat;
@@ -75,6 +79,7 @@ public class SettlementPanel : PanelBase
     private const string k_resultPrefix = "Settlement.Result.";
     private const string k_returnPrefix = "Settlement.Return.";
     private const string k_reasonPrefix = "Settlement.Reason.";
+    private const string k_titlePrefix = "Settlement.Title.";
 
     public override bool CanCloseWithESC => true;
     public override bool IsStackable => true;
@@ -122,9 +127,6 @@ public class SettlementPanel : PanelBase
     // 이번 정산의 도착지 — 성공은 상점, 실패는 로비(새 판). RoundEndResetter의 분기와 맞춘다 (#395).
     private string m_returnLabel = string.Empty;
 
-    // 오검거 0회면 칭호 줄 자체를 숨긴다 (#693) — 지연 등장 시점에도 다시 켜지지 않게 기억해 둔다.
-    private bool m_hasTopOffender;
-
     /// <summary>정산 데이터를 채우고 패널을 연다. 결과 텍스트는 지연 후 등장한다.</summary>
     public void Show(SettlementData data)
     {
@@ -153,11 +155,7 @@ public class SettlementPanel : PanelBase
                 data.TargetFund
             );
 
-        m_hasTopOffender = data.TopOffenderCount > 0;
-        if (m_topOffenderText != null)
-            m_topOffenderText.text = m_hasTopOffender
-                ? m_topOffenderFormat.GetLocalizedString(data.TopOffenderName)
-                : string.Empty;
+        BuildTitleRows(data.PlayerTitles);
 
         BindGate();
 
@@ -252,16 +250,41 @@ public class SettlementPanel : PanelBase
     }
 
     // 결과 텍스트의 표시를 한꺼번에 켜고 끈다. (카운트다운은 별도 — 닫아도 남긴다)
-    // 칭호 줄은 오검거 0회면 지연 등장 이후에도 계속 숨긴다 (#693).
     private void SetResultTextsVisible(bool visible)
     {
         if (m_resultText != null)
             m_resultText.gameObject.SetActive(visible);
         if (m_fundText != null)
             m_fundText.gameObject.SetActive(visible);
-        if (m_topOffenderText != null)
-            m_topOffenderText.gameObject.SetActive(visible && m_hasTopOffender);
+        if (m_titleRowContainer != null)
+            m_titleRowContainer.gameObject.SetActive(visible);
     }
+
+    // 개인 칭호 로스터를 그린다 — 칭호가 없는 사람도 이름은 뜨고 배지만 빈다(리썰 컴퍼니 스타일, #739).
+    private void BuildTitleRows(List<SettlementPlayerTitle> titles)
+    {
+        if (m_titleRowContainer == null || m_titleRowPrefab == null)
+            return;
+
+        titles ??= new List<SettlementPlayerTitle>();
+
+        while (m_titleRows.Count < titles.Count)
+            m_titleRows.Add(Instantiate(m_titleRowPrefab, m_titleRowContainer));
+
+        for (int i = 0; i < m_titleRows.Count; i++)
+        {
+            bool used = i < titles.Count;
+            m_titleRows[i].gameObject.SetActive(used);
+            if (!used)
+                continue;
+
+            m_titleRows[i].SetName(titles[i].PlayerName);
+            m_titleRows[i].SetTitle(TitleText(titles[i].Title));
+        }
+    }
+
+    private static string TitleText(SettlementTitleKind kind) =>
+        kind == SettlementTitleKind.None ? string.Empty : LocalizedStrings.Get(k_table, k_titlePrefix + kind);
 
     private void SetCountdownVisible(bool visible)
     {
