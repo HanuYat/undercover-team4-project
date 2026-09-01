@@ -59,8 +59,11 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
     ///
     /// 마스크에 Ragdoll을 도로 넣는 대신 목록을 직접 훑는 이유는 두 가지다: ① 그 마스크 제외는
     /// 시체(도로에 누운 몸·자기 몸)를 빼려고 있는 것이라 되돌리면 그 버그가 돌아온다, ② 뼈가 사람당
-    /// 11개라 논알록 버퍼가 넘친다(#692가 정확히 그 사고였다). 플레이어는 최대 6명이라 직접 훑는
-    /// 편이 싸다 — <c>SuddenEventUtil.CollectFieldPlayers</c>가 같은 이유로 같은 방식을 쓴다.
+    /// 11개라 논알록 버퍼가 넘친다(#692가 정확히 그 사고였다).
+    ///
+    /// ⚠ 훑는 대상은 <see cref="PlayerIncapacitation.All"/>(#365의 등록 목록)이다 —
+    /// <c>FindObjectsByType</c>은 씬 전체를 뒤지고 배열까지 새로 만드는데, 이 함수는 차량 한 대마다
+    /// 틱마다 불린다(<c>TrafficVehicle.ServerApplyLaunchedHits</c>). 무할당 목록이라 상시 비용이 없다.
     /// </summary>
     public static void CollectLaunched(
         Vector3 origin,
@@ -70,15 +73,23 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
     {
         results.Clear();
 
-        PlayerHealth[] players = FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
+        System.Collections.Generic.IReadOnlyList<PlayerIncapacitation> candidates =
+            PlayerIncapacitation.All;
         float maxSqr = radius * radius;
-        for (int i = 0; i < players.Length; i++)
+        for (int i = 0; i < candidates.Count; i++)
         {
-            PlayerHealth player = players[i];
-            if (player == null || !player.IsDamageable || player.IsTargetable)
-                continue; // IsTargetable이면 물리 쿼리가 이미 잡았다 — 두 번 담지 않는다
+            PlayerIncapacitation incapacitation = candidates[i];
 
-            if ((player.transform.position - origin).sqrMagnitude <= maxSqr)
+            // 비행 중이 아니면 볼 것도 없다 — 멀쩡한 사람은 물리 쿼리가 이미 잡았고(두 번 담지 않는다),
+            // 다운·기능 정지는 애초에 이 함수의 대상이 아니다. PlayerHealth 조회를 여기서 먼저 거른다.
+            if (incapacitation == null || !incapacitation.IsLaunched)
+                continue;
+
+            if ((incapacitation.transform.position - origin).sqrMagnitude > maxSqr)
+                continue;
+
+            PlayerHealth player = incapacitation.GetComponent<PlayerHealth>();
+            if (player != null && player.IsDamageable && !player.IsTargetable)
                 results.Add(player);
         }
     }
