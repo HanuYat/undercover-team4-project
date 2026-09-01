@@ -99,14 +99,15 @@ public class App : Singleton<App>
             CancellationToken token = Application.exitCancellationToken;
 
             // 에디터에서 씬을 직접 Play하면 AppBootstrap이 없어 null일 수 있다 — 그때는 그냥 덮지 않는다
-            LoadingScreen loading = ShouldCoverWithLoadingScreen(scene) ? UI.Loading : null;
+            LoadingScreen loading = UI.Loading;
+            bool fadeOnly = IsFadeOnlyTransition(scene);
 
             if (loading != null)
             {
                 // 클라는 NGO 씬 이벤트를 받아야 덮는데 그 이벤트는 아래 대기 뒤에 나간다 — 먼저 알린다 (#748)
                 Net.SceneTransition?.AnnounceCover();
 
-                await loading.ShowAsync(token); // 덮은 화면이 실제로 렌더될 때까지 대기
+                await loading.ShowAsync(token, fadeOnly); // 덮은 화면이 실제로 렌더될 때까지 대기
             }
 
             // 게이지바가 실측할 수 있는 구간은 여기까지다 (#582)
@@ -117,7 +118,7 @@ public class App : Singleton<App>
             );
 
             // 아래 대기는 진척을 알 수 없다 — 게이지를 채우고 문구로 바꿔 알린다 (#582)
-            if (loading != null)
+            if (loading != null && !fadeOnly)
                 loading.BeginSceneReadyWait();
 
             // 씬 오브젝트는 활성화 프레임에 다 섰지만 런타임 스폰(NPC 등)은 아직이다 — 씬이 스스로 보고한다
@@ -132,9 +133,9 @@ public class App : Singleton<App>
         }
     }
 
-    // Title → Lobby는 세션 생성 UI가 이미 진행 상태를 보여주고 있어 덮지 않는다 (#403).
-    private static bool ShouldCoverWithLoadingScreen(EScene next) =>
-        !(CurrentScene == EScene.Title && next == EScene.Lobby);
+    // Title → Lobby는 금방 끝나 게이지·러너가 번쩍이고 사라진다 — 검은 페이드만 쓴다.
+    private static bool IsFadeOnlyTransition(EScene next) =>
+        CurrentScene == EScene.Title && next == EScene.Lobby;
 
     /// <summary>
     /// 새 씬의 준비 완료를 기다린다 (#403). 씬 매니저는 활성화 프레임에 이미 App에 등록돼 있어 그대로 물으면 된다.

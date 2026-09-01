@@ -79,6 +79,15 @@ public class LoadingScreen : CommonManagerBase
     [SerializeField]
     private LocalizedString m_readyWaitStatus;
 
+    [Header("페이드 전용 모드")]
+    [Tooltip("페이드 전용 모드에서 화면을 덮는 검은 이미지 — 전체 스트레치, 알파 1")]
+    [SerializeField]
+    private GameObject m_fadeCover;
+
+    [Tooltip("페이드 전용 모드에서 감출 로딩 표시 — 배경·게이지·문구 (러너 무대는 따로 처리)")]
+    [SerializeField]
+    private GameObject[] m_loadingVisuals;
+
     [Header("연출")]
     [Tooltip("페이드 인 시간(초). 0이면 즉시 덮는다. 이 시간만큼 씬 로드 시작이 늦어진다.")]
     [SerializeField]
@@ -110,6 +119,9 @@ public class LoadingScreen : CommonManagerBase
     // 진행 중인 페이드의 세대 번호 — 새 페이드나 BeginShow가 끼어들면 이전 루프가 알파 쓰기를 멈춘다
     private int m_fadeGeneration;
 
+    // 로딩 표시 없이 검은 화면만 페이드시키는가
+    private bool m_isFadeOnly;
+
     /// <summary>이 화면이 지금 씬을 덮고 있는가 — 두 구동 경로의 중복 실행을 막는 데 쓴다.</summary>
     public bool IsBusy { get; private set; }
 
@@ -139,22 +151,24 @@ public class LoadingScreen : CommonManagerBase
     #region 표시 제어 — App.LoadScene 파이프라인이 호출
     /// <summary>
     /// 페이드 인으로 화면을 덮고, 완전히 불투명해진 화면이 실제로 렌더될 때까지 대기한다.
-    /// 씬 로드를 시작하기 전에 await 할 것.
+    /// 씬 로드를 시작하기 전에 await 할 것. <paramref name="fadeOnly"/>면 로딩 표시를 감추고
+    /// 검은 화면만 페이드시킨다 — 금방 끝나는 전환용.
     /// </summary>
-    public async UniTask ShowAsync(CancellationToken token = default)
+    public async UniTask ShowAsync(CancellationToken token = default, bool fadeOnly = false)
     {
-        BeginShow(0f);
+        BeginShow(0f, fadeOnly);
         await FadeToAsync(1f, m_fadeInSeconds, token);
         await UniTask.DelayFrame(k_settleFrames, PlayerLoopTiming.Update, token);
     }
 
     /// <summary>대기 없이 즉시 덮는다 — 이미 로드가 시작돼 기다릴 여유가 없는 클라이언트 경로용.</summary>
-    public void ShowInstant() => BeginShow(1f);
+    public void ShowInstant() => BeginShow(1f, false);
 
     // 덮기 공통 — 지난 전환의 잔여 상태를 되돌리고 주어진 알파로 화면을 켠다.
-    private void BeginShow(float alpha)
+    private void BeginShow(float alpha, bool fadeOnly)
     {
         IsBusy = true;
+        m_isFadeOnly = fadeOnly;
         m_targetProgress = 0f;
         m_shownProgress = 0f;
         m_shownPercent = -1;
@@ -313,9 +327,21 @@ public class LoadingScreen : CommonManagerBase
         if (m_canvas != null)
             m_canvas.enabled = visible;
 
+        bool showLoadingVisuals = visible && !m_isFadeOnly;
+
         // 무대에는 전용 카메라가 있다 — 켠 채로 두면 로딩이 아닐 때도 매 프레임 RenderTexture를 그린다.
         if (m_runnerStage != null)
-            m_runnerStage.SetActive(visible);
+            m_runnerStage.SetActive(showLoadingVisuals);
+
+        if (m_loadingVisuals != null)
+        {
+            foreach (GameObject visual in m_loadingVisuals)
+                if (visual != null)
+                    visual.SetActive(showLoadingVisuals);
+        }
+
+        if (m_fadeCover != null)
+            m_fadeCover.SetActive(visible && m_isFadeOnly);
 
         if (m_canvasGroup == null)
             return;
@@ -385,7 +411,7 @@ public class LoadingScreen : CommonManagerBase
         if (IsBusy)
             return;
 
-        BeginShow(0f);
+        BeginShow(0f, false);
         FadeToAsync(1f, m_fadeInSeconds, this.GetCancellationTokenOnDestroy()).Forget();
         WaitForAnnouncedLoadAsync().Forget();
     }
