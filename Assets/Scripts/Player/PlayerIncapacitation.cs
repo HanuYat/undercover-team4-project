@@ -100,11 +100,16 @@ public class PlayerIncapacitation : NetworkBehaviour
 
     /// <summary>
     /// 이관을 정착까지 미뤄 둔 구간인가 — <b>이 창에서만 시체의 오너가 서버가 아니다.</b> (#957)
-    /// 서버(또는 오프라인) 전용. <c>PlayerCarrier.CanBeCarried</c>가 이 값을 보고 정착 전 운반을 막는다:
-    /// 밧줄 관절·앵커 재부착이 전부 "시체는 서버 소유"를 전제로 있어서, 그 전수 확인 전에는 열지 않는다.
+    /// 서버(또는 오프라인) 전용. 읽는 쪽은 <c>BombBlast</c>·<c>TrafficVehicle</c>로, 둘 다
+    /// <b>임펄스를 누구에게 실을지</b> 고르는 데 쓴다 — 미룸 중이면 물리를 도는 쪽이 아직 옛 오너라
+    /// 서버에 실으면 키네마틱 뼈에 버려진다(<c>TrafficVehicle.ResolveImpulseAuthority</c>).
     ///
-    /// <c>PlayerRagdoll.IsSettled</c>를 대신 쓸 수 없다 — 정착 자세가 도착하기 전의 원격에서는
-    /// 거짓이라 피어마다 답이 갈린다. 이 값은 서버가 세워 동기화하므로 전 피어가 같은 것을 본다.
+    /// <c>PlayerRagdoll.IsSettled</c>를 대신 쓸 수 없다 — 원격 오너의 몸이면 정착 자세가 도착하기
+    /// 전까지 서버에서 거짓이라 <b>한 박자 늦다.</b> 이 값은 서버가 스스로 세우고 내리는 장부라
+    /// 그 지연이 없다.
+    ///
+    /// ⚠ <b>운반은 이 값으로 막지 않는다</b> — <c>PlayerCarrier</c>는 운반을 시작하며
+    /// <see cref="ServerCompleteOwnershipHandover"/>로 미룸을 <b>끝내</b> 버린다(그쪽 주석).
     /// </summary>
     internal bool IsOwnershipHandoverPending => m_ownershipHandoverPending;
 
