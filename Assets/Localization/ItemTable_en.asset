@@ -124,31 +124,39 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 13576462958755841
-    m_Localized: "Scanner down - electronics jammed"
+    m_Localized: Scanner down - electronics jammed
     m_Metadata:
       m_Items: []
   - m_Id: 13576462958755842
-    m_Localized: "Already scanned"
+    m_Localized: Already scanned
     m_Metadata:
       m_Items: []
   - m_Id: 13576462958755843
-    m_Localized: "Scan failed - electronics jammed"
+    m_Localized: Scan failed - electronics jammed
     m_Metadata:
       m_Items: []
   - m_Id: 13576462958755844
-    m_Localized: "Scan interrupted - electronics jammed"
+    m_Localized: Scan interrupted - electronics jammed
     m_Metadata:
       m_Items: []
   - m_Id: 13576462958755845
-    m_Localized: "Scan failed - target out of range"
+    m_Localized: Scan failed - target out of range
     m_Metadata:
       m_Items: []
   - m_Id: 13576462958755846
-    m_Localized: "Battery already full"
+    m_Localized: Battery already full
     m_Metadata:
       m_Items: []
   - m_Id: 13576462958755847
-    m_Localized: "Scanner battery already full"
+    m_Localized: Scanner battery already full
+    m_Metadata:
+      m_Items: []
+  - m_Id: 15600440425635840
+    m_Localized: Portable Minimap
+    m_Metadata:
+      m_Items: []
+  - m_Id: 15600467889938432
+    m_Localized: For those with no sense of direction.
     m_Metadata:
       m_Items: []
   references:

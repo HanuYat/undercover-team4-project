@@ -75,7 +75,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000903
-    m_Localized: "\uAC10 \uC625\n\uC218\uAC10 {0}\uBA85"
+    m_Localized: "\uC218\uAC10 {0}\uBA85"
     m_Metadata:
       m_Items: []
   references:

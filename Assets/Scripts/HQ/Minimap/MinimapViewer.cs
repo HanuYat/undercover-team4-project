@@ -27,8 +27,35 @@ public class MinimapViewer : MonoBehaviour
     [Tooltip("먹통 중 지도를 덮는 판. 비우면 런타임에 검은 판을 만든다 — 프리팹 배선을 잊어도 동작한다")]
     [SerializeField] private Image m_blackoutCover;
 
+    [Header("맵 씬 연동 (#835)")]
+    [Tooltip("켜면 씬의 MinimapArea.Current에서 월드 사각형·항공뷰를 읽는다 — 위 '맵이 덮는 월드 영역' 값을 무시한다")]
+    [SerializeField] private bool m_useSceneArea;
+
+    [Tooltip("이 뷰어의 캔버스 자체가 화면비 때문에 돌아가 있으면(예: 세로로 긴 맵을 가로 콘솔에 맞춤) 그 각도만큼 모든 아이콘 회전을 보정한다. 마커마다 따로 각도를 맞추지 않도록 여기 한 곳에 둔다")]
+    [SerializeField] private float m_iconAngleCorrection;
+
+    [Header("카테고리 필터 (#835)")]
+    [Tooltip("끄면 지금처럼 모든 MinimapTarget을 표시한다")]
+    [SerializeField] private bool m_filterByCategory;
+
+    [SerializeField] private EMinimapMarker m_visibleCategories = ~EMinimapMarker.None;
+
+    [Tooltip("Player 카테고리 중 로컬 플레이어가 아닌 대상도 보일지")]
+    [SerializeField] private bool m_showOtherPlayers = true;
+
+    [Header("내 위치 추종 크롭 (#835)")]
+    [Tooltip("켜면 로컬 플레이어를 중심에 두고 그 주변 m_viewRadius만 잘라 보여준다. m_mapRect는 이 프레임의 중앙 고정 자식이어야 한다(스트레치 앵커 금지)")]
+    [SerializeField] private bool m_followsLocalPlayer;
+
+    [Tooltip("정사각형 마스크 프레임 — 이 크기 기준으로 지도를 확대한다")]
+    [SerializeField] private RectTransform m_viewFrame;
+
+    [Tooltip("추종 시 보이는 반경(m) — 정사각형 한 변은 이 값의 2배에 해당한다")]
+    [SerializeField] private float m_viewRadius = 30f;
+
     private DeviceBlackoutEvent m_blackout;
     private bool m_covered;
+    private bool m_sceneAreaApplied;
     private Vector2 m_iconPrefabSize;
 
     private readonly Dictionary<MinimapTarget, Image> m_targetIcons = new();
@@ -50,6 +77,7 @@ public class MinimapViewer : MonoBehaviour
 
     private void LateUpdate()
     {
+        ApplySceneAreaOnce();
         ApplyBlackout(IsBlackout());
 
         // 먹통 중에는 아이콘을 돌리지 않는다 — 덮여서 보이지도 않고, 해제되는 프레임의 SyncIcons가
@@ -58,7 +86,74 @@ public class MinimapViewer : MonoBehaviour
             return;
 
         SyncIcons();
+        ApplyFollowCrop();
         UpdatePositions();
+    }
+
+    // ---- 맵 씬 연동 (#835) ----
+
+    // MinimapArea는 씬의 다른 오브젝트라 Awake 순서가 보장되지 않는다 — 모든 Awake/OnEnable이
+    // 끝난 뒤인 LateUpdate에서 읽으면 항상 준비돼 있다. Current가 아직 없으면(로드 도중) 다음
+    // 프레임에 다시 시도한다.
+    private void ApplySceneAreaOnce()
+    {
+        if (m_sceneAreaApplied || !m_useSceneArea)
+            return;
+
+        MinimapArea area = MinimapArea.Current;
+        if (area == null)
+            return;
+
+        Image mapImage = m_mapRect != null ? m_mapRect.GetComponent<Image>() : null;
+        area.ApplyTo(mapImage, out m_worldCenterX, out m_worldCenterZ, out m_worldSizeX, out m_worldSizeZ);
+        m_sceneAreaApplied = true;
+    }
+
+    // ---- 카테고리 필터 (#835) ----
+
+    private bool IsVisible(MinimapTarget target)
+    {
+        if (!m_filterByCategory)
+            return true;
+
+        if ((target.Category & m_visibleCategories) == EMinimapMarker.None)
+            return false;
+
+        if (!m_showOtherPlayers && target.Category.HasFlag(EMinimapMarker.Player) && !target.IsLocalPlayer)
+            return false;
+
+        return true;
+    }
+
+    // ---- 내 위치 추종 크롭 (#835) ----
+
+    // 지도(m_mapRect)를 (worldSize * 픽셀/미터) 크기로 늘리고 로컬 플레이어 위치가 프레임 중앙에
+    // 오도록 이동시킨다. 두 축에 같은 배율을 써서 정사각형 크롭이 비율 왜곡 없이 보이게 한다.
+    private void ApplyFollowCrop()
+    {
+        if (!m_followsLocalPlayer || m_viewFrame == null || m_mapRect == null)
+            return;
+
+        MinimapTarget local = FindLocalPlayer();
+        if (local == null)
+            return;
+
+        float frameSide = Mathf.Min(m_viewFrame.rect.width, m_viewFrame.rect.height);
+        float pixelsPerMeter = frameSide / (2f * m_viewRadius);
+
+        m_mapRect.sizeDelta = new Vector2(m_worldSizeX * pixelsPerMeter, m_worldSizeZ * pixelsPerMeter);
+        m_mapRect.anchoredPosition = -WorldToMap(local.transform.position);
+    }
+
+    private MinimapTarget FindLocalPlayer()
+    {
+        foreach (MinimapTarget target in MinimapTarget.ActiveTargets)
+        {
+            if (target != null && target.Category.HasFlag(EMinimapMarker.Player) && target.IsLocalPlayer)
+                return target;
+        }
+
+        return null;
     }
 
     // ---- 먹통 차단 (#762) ----
@@ -138,8 +233,9 @@ public class MinimapViewer : MonoBehaviour
         m_removeBuffer.Clear();
         foreach (var pair in m_targetIcons)
         {
-            if (pair.Key == null || !MinimapTarget.ActiveTargets.Contains(pair.Key))    // 레지스트리의 타겟이 없어짐
-                m_removeBuffer.Add(pair.Key);   // 제거할 타겟 목록에 추가
+            // 레지스트리에서 없어졌거나(스폰 해제) 필터가 바뀌어 더는 안 보여야 하면 제거 대상
+            if (pair.Key == null || !MinimapTarget.ActiveTargets.Contains(pair.Key) || !IsVisible(pair.Key))
+                m_removeBuffer.Add(pair.Key);
         }
         foreach (var target in m_removeBuffer) 
         {
@@ -157,7 +253,7 @@ public class MinimapViewer : MonoBehaviour
         }
         foreach (var target in MinimapTarget.ActiveTargets) // 레지스트리 타겟 순회
         {
-            if (target == null || m_targetIcons.ContainsKey(target))    // 이미 아이콘이 존재하면 스킵
+            if (target == null || m_targetIcons.ContainsKey(target) || !IsVisible(target))
                 continue;
 
             // ▼ 아이콘 생성, 초기화
@@ -210,7 +306,7 @@ public class MinimapViewer : MonoBehaviour
     private float IconAngleOf(MinimapTarget target)
     {
         float facing = target.IconFollowsFacing ? -target.transform.eulerAngles.y : 0f;
-        return facing + target.IconAngle;
+        return facing + target.IconAngle + m_iconAngleCorrection;
     }
 
     // 월드 XZ -> 맵 좌표

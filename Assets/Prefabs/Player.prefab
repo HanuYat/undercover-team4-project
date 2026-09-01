@@ -1974,6 +1974,7 @@ GameObject:
   - component: {fileID: 5304475210594764216}
   - component: {fileID: 8686803251532056274}
   - component: {fileID: 1260242999058790954}
+  - component: {fileID: 1241071905276459327}
   m_Layer: 5
   m_Name: Canvas
   m_TagString: Untagged
@@ -2148,6 +2149,19 @@ MonoBehaviour:
   references:
     version: 2
     RefIds: []
+--- !u!114 &1241071905276459327
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1776703635028233291}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a415bc929d9d6404bbd14aa397f3cd54, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PortableMinimapWatcher
+  ShowTopMostFoldoutHeaderGroup: 1
 --- !u!1 &1781462423159994470
 GameObject:
   m_ObjectHideFlags: 0
@@ -2754,9 +2768,9 @@ RectTransform:
   - {fileID: 7015411696491217849}
   m_Father: {fileID: 6887614465653935901}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 140, y: -50}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 80, y: 80}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &8122457613095332240
@@ -3233,9 +3247,9 @@ RectTransform:
   - {fileID: 933854013412098166}
   m_Father: {fileID: 6887614465653935901}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 320, y: -50}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 80, y: 80}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &1370138106853104815
@@ -4113,9 +4127,9 @@ RectTransform:
   - {fileID: 5319262516652626622}
   m_Father: {fileID: 6887614465653935901}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 50, y: -50}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 80, y: 80}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &4421093776908465574
@@ -4504,9 +4518,9 @@ RectTransform:
   - {fileID: 8681994484610337565}
   m_Father: {fileID: 6887614465653935901}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 410, y: -50}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 80, y: 80}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &175558389671388955
@@ -4600,9 +4614,9 @@ RectTransform:
   - {fileID: 5268611851315852980}
   m_Father: {fileID: 6887614465653935901}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 230, y: -50}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 80, y: 80}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &8129052382282711076
@@ -6905,7 +6919,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3828970125
+  GlobalObjectIdHash: 152330586
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -7436,8 +7450,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8589cf5bdc1bf07489b808b1f33f0108, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MinimapTarget
+  m_category: 1
   m_iconSprite: {fileID: 21300000, guid: a0e24389386424e5893a4668a86b06dc, type: 3}
-  m_iconColor: {r: 0, g: 0.32809806, b: 1, a: 1}
+  m_iconColor: {r: 0.48584908, g: 0.65521634, b: 1, a: 1}
   m_iconSize: 50
   m_iconAngle: 0
   m_iconFollowsFacing: 0

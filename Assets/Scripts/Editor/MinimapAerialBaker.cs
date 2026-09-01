@@ -128,8 +128,20 @@ public class MinimapAerialBaker : EditorWindow
 
     // worldCenter/worldSize는 private 직렬화 필드다 — 굽기 도구 하나 때문에 런타임 클래스에
     // 프로퍼티를 새로 뚫는 대신 SerializedObject로 읽는다.
+    //
+    // MinimapArea(#835)가 씬에 있으면 그쪽 값을 우선한다 — m_useSceneArea가 켜진 뷰어는
+    // 자기 직렬화 필드를 런타임에만 덮어써서 에디터 값은 그대로 낡아 있고, 그걸 구우면
+    // 좌표계가 실제 표시와 어긋난다.
     private static bool TryReadArea(MinimapViewer viewer, out Vector2 center, out Vector2 size)
     {
+        if (MinimapArea.Current != null)
+        {
+            MinimapArea area = MinimapArea.Current;
+            center = new Vector2(area.WorldCenterX, area.WorldCenterZ);
+            size = new Vector2(area.WorldSizeX, area.WorldSizeZ);
+            return size.x > 0.01f && size.y > 0.01f;
+        }
+
         center = Vector2.zero;
         size = Vector2.zero;
 

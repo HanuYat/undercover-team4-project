@@ -70,11 +70,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000902
-    m_Localized: "Verdict button"
+    m_Localized: Verdict button
     m_Metadata:
       m_Items: []
   - m_Id: 7100000000903
-    m_Localized: "JAIL\n{0} held"
+    m_Localized: '{0} held'
     m_Metadata:
       m_Items: []
   references:
