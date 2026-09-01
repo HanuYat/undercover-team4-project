@@ -791,12 +791,21 @@ public partial class PlayerRagdoll : MonoBehaviour
     }
 
     // 빔이 끝났다(놓아줌·삼킴·다른 사유로 전이) — 얼려 둔 뼈를 물리에 돌려준다. 멱등.
+    //
+    // ⚠ <b>래치는 항상 내리되, 물리로 돌려주는 것은 아직 래그돌일 때만이다.</b> 이 함수는 빔만 끝난
+    // 경우와 <b>래그돌 자체를 빠져나간</b> 경우 양쪽에서 불리는데, 후자는 ExitToAnimator가 기상
+    // 블렌드를 넘기려고 방금 일부러 얼린 것이라 여기서 풀면 블렌드 중인 뼈가 다시 물리로 열린다.
+    // 근거는 docs/506-explosion-ragdoll.md §14-5.
     private void ReleaseBeamedHold()
     {
         if (!m_beamedHold)
             return;
 
         m_beamedHold = false;
+
+        if (m_state != RagdollState.Ragdoll)
+            return;
+
         if (m_rig != null && m_rig.IsValid)
             m_rig.SetKinematic(false);
     }

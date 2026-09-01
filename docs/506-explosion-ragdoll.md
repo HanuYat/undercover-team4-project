@@ -1514,6 +1514,34 @@ PlayerMovement.Update:
 - **상공에서 놓아주면 래그돌로 안 떨어진다** — `ReleaseVictim`이 `Recover()`로 `None`을 걸어 래그돌이 꺼지고 `CharacterController` 낙하로 돌아간다. 이 변경 <b>전과 같은 동작</b>이라 회귀는 아니지만, 이제 그 직전까지 래그돌이었던 만큼 눈에 띌 수 있다. 고치려면 놓아줄 때 `Launched`를 걸면 된다(§13이 그 경로를 이미 열어 뒀다).
 - **`m_captureSeconds`(1.5초)와 비행 시간(1~3초)이 비슷하다** — 빔을 가로질러 날아가는 것만으로는 대체로 안 잡히고, 빔 안에 떨어져 누워 있어야 걸린다. 인스펙터 값이라 조절 가능.
 
+### 14-5. 흡입이 중간에 접히면 기상 블렌드 중인 뼈가 물리로 열린다 (2026-09-01, PR #959 리뷰)
+
+`m_beamedHold`는 "내가 뼈를 키네마틱으로 얼려 놨다"는 래치이고, 그것을 푸는 `ReleaseBeamedHold`는 상태를 보지 않고 `SetKinematic(false)`를 걸었다. 그런데 이 함수는 `FixedUpdate`에서 **뜻이 다른 두 상황**에 불린다:
+
+| | 조건 | 뜻 | `SetKinematic(false)`가 맞나 |
+|---|---|---|---|
+| **A** | `m_state == Ragdoll`인데 `IsBeamed`만 거짓 | 래그돌은 계속 도는데 빔만 끝났다 | ✅ 물리에 돌려주는 것이 맞다 |
+| **B** | `m_state != Ragdoll` | **래그돌 자체를 빠져나갔다** | ❌ `ExitToAnimator`가 애니메이터에게 넘기려고 **일부러 얼린 것**을 덮어쓴다 |
+
+B는 프레임 구조상(`FixedUpdate → Update → LateUpdate`) 반드시 성립한다:
+
+```
+프레임 N    Update      : 사유 None 감지 → ExitToAnimator → SetKinematic(true), state=Blending
+            LateUpdate  : 기상 블렌드 시작
+프레임 N+1  FixedUpdate : state != Ragdoll → ReleaseBeamedHold() → SetKinematic(false)  ← 여기
+            LateUpdate  : 블렌드 계속 (뼈는 이제 동적)
+```
+
+결과: 애니메이터가 뼈 Transform을 쓰는 동안 그 뼈가 동적이다. `ExitRagdollPose`는 콜라이더를 끄지 않으므로 뼈 콜라이더도 살아 있다.
+
+**언제 걸리나.** 흡입이 시작된 뒤 걸어 나오는 길은 없다(§14-2, 설계대로다). `Beamed`에서 `Recover()`로 빠지는 자리는 `UfoAbductor.ReleaseVictim` 하나이고, 거기로 오는 길 셋이 전부 **흡입이 중간에 접히는** 경우다 — ① 라운드 국면이 바뀜(가장 현실적: 빔은 상주 기믹이고 흡입은 최대 15초까지 간다), ② 15초 흡입 타임아웃, ③ `OnDisable`(라운드 종료·씬 전환). **①·③이 "몸이 굳은 채 남지 않게 하려고" 만든 안전장치라는 점이 요점이다** — 푸는 그 순간 뼈가 물리로 열려 목적을 절반만 달성한다.
+
+확정 흡입(`Beamed → Die`)에서 안 걸린 이유는 두 사유 모두 래그돌 사유라 `m_state`가 `Ragdoll`을 안 벗어나 A로 가기 때문이다.
+
+**고침** — 래치는 항상 내리되, `SetKinematic(false)`는 `m_state == Ragdoll`일 때만 건다.
+
+`ExitToAnimator`가 얼리기 전에 `ReleaseBeamedHold`를 먼저 부르는 안도 있었지만(얼리고 푸는 주체를 한 곳에 모은다), 그러면 그 자리에서 `SetKinematic(false) → (true)`를 연달아 걸게 되고, **래그돌을 빠져나가는 다른 경로가 생기면 또 새는** 구조가 남는다. 판정을 `ReleaseBeamedHold` 안에 두면 호출부가 늘어도 따라온다.
+
 ## 15. 비행 중 맞으면 임펄스가 사라진다 (2026-08-31)
 
 §13으로 비행 중 피해를 열자마자 나온 증상 — **폭탄에 날아가는 도중 차에 치이면 거의 안 날아간다.** 보이는 것은 폭탄이 준 잔여 속도뿐이다.
