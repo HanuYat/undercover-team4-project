@@ -5,9 +5,10 @@ using UnityEngine;
 /// 사망 관전 시점 — 기능 정지(<see cref="IncapacitationCause.Die"/>) 동안 내 시체 또는 살아 있는
 /// 동료를 중심으로 도는 3인칭 오빗 카메라. (#576, #590)
 ///
-/// <b>피벗이 루트가 아니라 시체(골반)다.</b> 래그돌 비행 중(#506) 루트는 제자리에 남고 yaw만 몸을
-/// 따라가므로, 루트에 붙은 카메라는 폭발로 날아가는 자기 몸을 화면에서 놓친다. 정착한 뒤에는
-/// 루트와 사실상 같은 자리이고, 동료가 시체를 옮기는 동안(#365)에도 골반을 보면 그대로 따라간다.
+/// <b>피벗이 대상에 따라 다르다.</b> 내 시체는 루트가 아니라 골반(<see cref="RagdollRig.Hips"/>)이다
+/// — 래그돌 비행 중(#506) 루트는 제자리에 남고 yaw만 몸을 따라가므로, 루트에 붙은 카메라는 폭발로
+/// 날아가는 자기 몸을 화면에서 놓친다. 살아 있는 동료는 거꾸로 <b>루트</b>가 피벗이다 — 골반은
+/// 달리기 클립이 흔드는 뼈라 그대로 쓰면 화면이 흔들린다(#963).
 ///
 /// <b>포즈를 스스로 대입하지 않는다</b> — 월드 포즈를 내주기만 하고 카메라에 넣는 것은
 /// <see cref="PlayerLook.UpdateCameraPose"/>다. 카메라 transform을 밖에서 만지면 그쪽이 매 프레임
@@ -23,6 +24,14 @@ public class PlayerSpectateCamera : MonoBehaviour
     [Tooltip("시체(골반)에서 카메라가 도는 중심까지의 높이(m)")]
     [SerializeField]
     private float m_pivotHeight = 0.6f;
+
+    [Tooltip("동료 루트에서 오빗 중심까지의 높이(m)")]
+    [SerializeField]
+    private float m_teammatePivotHeight = 1.4f;
+
+    [Tooltip("동료 피벗·기준 yaw 감쇠 추종 속도 (#963)")]
+    [SerializeField]
+    private float m_followRate = 12f;
 
     [Tooltip("중심에서 카메라까지의 거리(m)")]
     [SerializeField]
@@ -64,7 +73,11 @@ public class PlayerSpectateCamera : MonoBehaviour
 
     // 지금 보고 있는 동료 — null이면 내 시체다. 순환 고리의 원점이라 "없음"을 별도 플래그로 두지 않는다.
     private PlayerIncapacitation m_target;
-    private RagdollRig m_targetRig;
+
+    // 동료 피벗·기준 yaw 감쇠 추종 상태 (#963) — m_followValid가 거짓이면 다음 표본에서 스냅한다.
+    private Vector3 m_followPivot;
+    private float m_followYaw;
+    private bool m_followValid;
 
     // 순환 고리 재사용 버퍼 — 좌클릭마다 새로 만들지 않는다. 0번은 항상 내 시체(null)다.
     private readonly List<PlayerIncapacitation> m_ring = new();
@@ -186,8 +199,7 @@ public class PlayerSpectateCamera : MonoBehaviour
         float previousBase = TargetBaseYaw();
 
         m_target = target;
-        m_targetRig = target != null ? target.GetComponentInChildren<RagdollRig>() : null;
-        m_targetRig?.EnsureCollected();
+        m_followValid = false; // 다음 TryGetPose에서 새 대상 값으로 스냅한다 (#963)
 
         // 동료로 갈아타면 뒤통수(상대각 0)에서 시작한다 — 갈아탄 직후 옆구리가 보이면 누구를 보는지
         // 알기 어렵다. 내 시체로 돌아올 때는 직전 절대각을 그대로 이어받아 화면이 튀지 않게 한다.
@@ -208,8 +220,14 @@ public class PlayerSpectateCamera : MonoBehaviour
         CycleTarget(1);
     }
 
-    // 좌우 각의 기준값 — 동료를 볼 때는 그 동료의 yaw(뒤통수 기준), 내 시체는 월드 절대각(0).
-    private float TargetBaseYaw() => m_target != null ? m_target.transform.eulerAngles.y : 0f;
+    // 좌우 각의 기준값 — 동료를 볼 때는 그 동료의 (감쇠 추종된) yaw, 내 시체는 월드 절대각(0).
+    private float TargetBaseYaw()
+    {
+        if (m_target == null)
+            return 0f;
+
+        return m_followValid ? m_followYaw : m_target.transform.eulerAngles.y;
+    }
 
     /// <summary>
     /// 관전 진입/이탈. <paramref name="entryYaw"/>는 지금 보고 있는 월드 yaw다 —
@@ -321,26 +339,42 @@ public class PlayerSpectateCamera : MonoBehaviour
 
         EnsureTargetValid(); // 보던 동료가 죽거나 나갔으면 여기서 넘긴다
 
-        RagdollRig rig = m_target != null ? m_targetRig : m_ownRig;
-        Transform hips = rig != null ? rig.Hips : null;
+        Vector3 pivot;
 
-        // 피벗 고정(#775)은 내 시체 슬롯에만 걸린다 — "내 몸이 회수 불가능해졌다"는 뜻이라
-        // 동료를 볼 때는 그 동료의 골반이 진짜 피벗이다.
-        bool useOverride = m_target == null && m_hasPivotOverride;
-
-        if (hips == null && !useOverride)
+        if (m_target != null)
         {
-            if (m_target == null)
+            // 동료는 루트가 피벗이다 — 골반을 쓰면 달리기 클립 흔들림과 네트워크 보간 노이즈가
+            // 화면에 그대로 실린다(#963). 감쇠 추종으로 그 노이즈를 깎는다.
+            Vector3 rawPivot = m_target.transform.position + Vector3.up * m_teammatePivotHeight;
+            float rawYaw = m_target.transform.eulerAngles.y;
+
+            if (!m_followValid)
+            {
+                m_followPivot = rawPivot;
+                m_followYaw = rawYaw;
+                m_followValid = true;
+            }
+            else
+            {
+                float t = m_followRate <= 0f ? 1f : 1f - Mathf.Exp(-m_followRate * Time.deltaTime);
+                m_followPivot = Vector3.Lerp(m_followPivot, rawPivot, t);
+                m_followYaw = Mathf.LerpAngle(m_followYaw, rawYaw, t);
+            }
+
+            pivot = m_followPivot;
+        }
+        else
+        {
+            // 피벗 고정(#775)은 내 시체 슬롯에만 걸린다.
+            Transform hips = m_ownRig != null ? m_ownRig.Hips : null;
+            bool useOverride = m_hasPivotOverride;
+
+            if (hips == null && !useOverride)
                 return false; // 리그가 없는 구성(테스트 씬 등) — 기존 바닥 시점으로 남는다
 
-            // 동료 리그가 없다 — 내 슬롯으로 내린다. 맨홀 피해자가 그 프레임에 지하 1인칭으로
-            // 떨어지는 것을 막는다(#775 조합에서만 생기는 구멍).
-            SetTarget(null);
-            return TryGetPose(out position, out rotation);
+            Vector3 pivotBase = useOverride ? m_pivotOverride : hips.position;
+            pivot = pivotBase + Vector3.up * m_pivotHeight;
         }
-
-        Vector3 pivotBase = useOverride ? m_pivotOverride : hips.position;
-        Vector3 pivot = pivotBase + Vector3.up * m_pivotHeight;
 
         // 동료를 볼 때는 그 동료의 yaw에 얹는다 — 걸어가는 동안 뒤통수를 유지하려면 기준이 함께 돌아야 한다.
         rotation = Quaternion.Euler(m_pitch, TargetBaseYaw() + m_yaw, 0f);
