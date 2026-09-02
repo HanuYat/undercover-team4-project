@@ -29,9 +29,15 @@ public class PlayerSpectateCamera : MonoBehaviour
     [SerializeField]
     private float m_teammatePivotHeight = 1.4f;
 
-    [Tooltip("동료 피벗·기준 yaw 감쇠 추종 속도 (#963)")]
+    [Tooltip("동료 피벗(위치) 감쇠 추종 속도 (#963)")]
     [SerializeField]
-    private float m_followRate = 12f;
+    private float m_followRate = 6f;
+
+    [Tooltip(
+        "동료 기준 yaw 감쇠 추종 속도 — 위치보다 훨씬 낮게. 각도 오차가 궤도 반지름만큼 증폭돼 화면에서 더 크게 보인다 (#963)"
+    )]
+    [SerializeField]
+    private float m_followYawRate = 4f;
 
     [Tooltip("중심에서 카메라까지의 거리(m)")]
     [SerializeField]
@@ -357,8 +363,10 @@ public class PlayerSpectateCamera : MonoBehaviour
             else
             {
                 float t = m_followRate <= 0f ? 1f : 1f - Mathf.Exp(-m_followRate * Time.deltaTime);
+                float yawT =
+                    m_followYawRate <= 0f ? 1f : 1f - Mathf.Exp(-m_followYawRate * Time.deltaTime);
                 m_followPivot = Vector3.Lerp(m_followPivot, rawPivot, t);
-                m_followYaw = Mathf.LerpAngle(m_followYaw, rawYaw, t);
+                m_followYaw = Mathf.LerpAngle(m_followYaw, rawYaw, yawT);
             }
 
             pivot = m_followPivot;

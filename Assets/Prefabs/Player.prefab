@@ -7288,6 +7288,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_reviveHitbox: {fileID: 6891439341619729457}
   m_dieAfterDownSeconds: 60
+  m_ownershipHandoverMaxSeconds: 8
 --- !u!114 &-6997859010805551940
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7843,6 +7844,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerSpectateCamera
   m_pivotHeight: 0.6
+  m_teammatePivotHeight: 1.4
+  m_followRate: 6
   m_distance: 3.5
   m_minPitch: -10
   m_maxPitch: 70
