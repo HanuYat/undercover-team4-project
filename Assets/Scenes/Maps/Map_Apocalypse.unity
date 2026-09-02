@@ -8109,6 +8109,10 @@ PrefabInstance:
       propertyPath: m_jailZone
       value: 
       objectReference: {fileID: 2125754135245051286}
+    - target: {fileID: 4617273519023223210, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_unlockSeconds
+      value: 7
+      objectReference: {fileID: 0}
     - target: {fileID: 5897735017321614696, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: GlobalObjectIdHash
       value: 481684432
