@@ -207,6 +207,9 @@ public partial class NpcRagdoll : MonoBehaviour
         // 멈추면 흔들리는 팔을 키네마틱으로 한 프레임에 세워 버렸다(그것이 "갑자기 굳는" 어색함).
         if (m_rig.AllAsleep)
         {
+            // 진단(임시) — 경과가 0에 가까우면 물리가 한 프레임도 못 굴러 보고 바로 정착한 것이다
+            // (진입 로그의 AllAsleep=True와 짝 — 같이 뜨면 재기절 즉시정착 가설 확정).
+            Debug.Log($"[진단 즉시정착] {name} 정착호출 경과={m_elapsedInRagdoll:F3}s", this);
             ServerSettleInPlace();
             return;
         }
@@ -389,6 +392,11 @@ public partial class NpcRagdoll : MonoBehaviour
         ReleaseAgentForRagdoll();
         ReleaseBonesToPhysics();
         m_rig.ApplyImpulse(impulse);
+
+        // 진단(임시) — 재기절 즉시정착 가설. 물리로 넘긴 직후 이미 잠들어 있으면(=AllAsleep 참)
+        // 이번 Update의 뒤쪽 AllAsleep 검사가 같은 프레임에 바로 정착시킨다("무너지는 연출 생략").
+        if (HasMoveAuthority)
+            Debug.Log($"[진단 즉시정착] {name} 진입직후 AllAsleep={m_rig.AllAsleep}", this);
 
         m_streamer?.BeginStreaming(); // 권위가 아니면 스스로 무동작이다
     }

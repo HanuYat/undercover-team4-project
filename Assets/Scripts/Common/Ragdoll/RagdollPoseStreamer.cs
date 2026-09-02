@@ -68,8 +68,12 @@ public class RagdollPoseStreamer : NetworkBehaviour
              "몸과 루트가 서로 다른 피어에서 계산돼 시체가 이름표를 두고 떠난다")]
     [SerializeField] private PoseAuthority m_authority = PoseAuthority.Server;
 
-    // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
-    //    인스펙터 진단 스위치 둘 — m_logArrival / m_logBandwidth.
+    // ⚠ 임시 계측 — 평소에는 주석이다. 재려면 이 파일의 네 블록(여기 · 계측 상태 · 계측 본체 ·
+    //    Pack 안의 왕복 검사)과 호출부 네 줄의 주석을 함께 풀고 프리팹에서 스위치를 켠다.
+    //    도착 계측(m_logArrival)은 #759가 닫혀 쓸 일이 없다 — docs/759-ragdoll-slowmotion-handoff.md
+    //
+    //    ⚑ 2026-09-02 실측(NPC · MPPM 2인 · 원격 1): 자세 뼈 17개 · 페이로드 86B · 25.5Hz ·
+    //      시체 1구당 2.1KB/s · 압축 왕복 오차 최대 0.194°. 6인 최악(6구 × 원격 5) 환산 약 63KB/s.
     /*
     [Header("진단")]
     [Tooltip("원격이 <b>자세를 언제 받았는가</b>를 국면당 한 줄로 찍는다 — 재생이 늘어나 " +
@@ -104,6 +108,17 @@ public class RagdollPoseStreamer : NetworkBehaviour
              "정착 자세는 그대로다")]
     [SerializeField] private int m_sendEveryFixedSteps = 2;
 
+    [Tooltip("몇 번의 물리 스텝마다 <b>뼈 길이</b>를 한 번 보내는가 — 50Hz 기준 25면 2Hz. " +
+             "<b>0이면 끈다</b>(정착 패킷만 나르던 예전 동작).\n\n" +
+             "권위 쪽 뼈는 무너지는 동안 관절이 늘어나는데 원격은 물리를 안 굴려 바인드 그대로다. " +
+             "예전에는 그 차를 <b>정착 패킷 한 번</b>으로 몰아 넘겼고, 원격은 그것을 한 프레임에 " +
+             "통째로 입혀 <b>정착 순간 상체가 내려앉았다</b>(실측 3.9cm · 2026-09-02, 클라에서만 " +
+             "보인다). 드리프트는 몇 초에 걸쳐 자라는 값이라 0.5초마다 갱신하면 보정 한 번이 1cm " +
+             "미만으로 쪼개지고, 그 구간은 몸이 빨라 눈에 안 띈다.\n\n" +
+             "<b>비용은 208B × 주기</b>(뼈 17 기준). 2Hz면 약 0.4KB/s로 시체 1구·원격 1인 기준 " +
+             "2.1 → 2.5KB/s다. <b>자세 패킷(86B·25Hz)은 안 바뀐다</b> — 별도 RPC다")]
+    [SerializeField] private int m_lengthEveryFixedSteps = 25;
+
     [Header("수신")]
     [Tooltip("원격이 얼마나 뒤처진 시점을 그리는가(초) — 송신 주기의 2배가 기본값이다.\n\n" +
              "이만큼 늦게 그려야 다음 스냅샷이 이미 도착해 있어 <b>보간할 두 점</b>이 생긴다. " +
@@ -118,8 +133,9 @@ public class RagdollPoseStreamer : NetworkBehaviour
     private bool m_streaming;
     private ushort m_sequence;
     private int m_stepsSinceSend;
+    private int m_stepsSinceLengths;
     private Quaternion[] m_sendBuffer;  // 캡처용 — 매 스텝 새로 할당할 이유가 없다
-    private Vector3[] m_lengthBuffer;   // 뼈 길이 — 신뢰 1회 패킷에만 실린다 (docs/npc-ragdoll.md §8)
+    private Vector3[] m_lengthBuffer;   // 뼈 길이 — 정착·순간이동 패킷 + m_lengthEveryFixedSteps 주기
     private uint[] m_packedBuffer;      // 실제로 선에 실리는 것 — 쿼터니언당 4바이트
     private Quaternion[] m_unpackBuffer; // 수신 쪽 — 푸는 자리
 
@@ -151,6 +167,8 @@ public class RagdollPoseStreamer : NetworkBehaviour
     private int m_sentPackets;
     private int m_sentBytes;
     private float m_bandwidthWindowStart;
+    private float m_worstPackErrorDeg; // 압축 왕복 오차의 최댓값(도) — 창마다 리셋한다
+    private Vector3[] m_lastSentLengths; // 마지막으로 흘려보낸 뼈 길이 — 정착 잔여를 재는 기준
 
     // 전 시체 합산 — 서버 업링크는 여기에 원격 수가 곱해진다. 시체가 쌓이는 라운드에서
     // 개별 줄만 보면 총량을 놓치므로 정적으로 함께 센다.
@@ -183,6 +201,13 @@ public class RagdollPoseStreamer : NetworkBehaviour
     // ⚠ <b>정착은 여기 해당하지 않는다.</b> 정착 패킷은 좌표계가 스트림과 같고 번호도 달고 오므로,
     // 뒤늦게 온 언리라이어블 스냅샷은 시퀀스 가드가 알아서 버린다 — 래치가 필요 없다.
     private bool m_streamEnded;
+
+    // 뼈 길이 전용 시퀀스 가드. <b>자세의 m_newestSequence와 따로 두는 것이 요점이다</b> — 둘은
+    // 같은 카운터에서 번호를 받지만 주기가 달라(25Hz vs 2Hz), 자세로 갱신하면 방금 보낸 길이가
+    // 곧바로 "옛것"이 되어 통째로 버려진다. 여기를 올리는 것은 <b>길이를 실제로 입힌 패킷</b>뿐이다:
+    // 주기 길이 · 정착 · 순간이동. 그래서 정착 뒤에 늦게 도착한 주기 길이도 자동으로 버려진다.
+    private ushort m_newestLengthSequence;
+    private bool m_haveLengthSequence;
 
     private struct Snapshot
     {
@@ -292,12 +317,14 @@ public class RagdollPoseStreamer : NetworkBehaviour
         // 기상이 없다) 래치가 서 있을 수가 없다. 기절했다 깨어난 몸이 다시 무너지는 경우만 여기를
         // 지나고, 그때는 이 대입이 필요하다.
         m_streamEnded = false;
+        m_haveLengthSequence = false; // 새 국면 — 이번 무너짐의 첫 길이는 무조건 받는다
 
         if (!IsPoseAuthority)
             return;
 
         m_streaming = true;
         m_stepsSinceSend = 0;
+        m_stepsSinceLengths = 0;
     }
 
     /// <summary>
@@ -338,6 +365,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
         m_sequence = unchecked((ushort)(m_sequence + 1));
         FinalPoseRpc(m_sequence, m_rig.Hips.position, Pack(m_sendBuffer), m_lengthBuffer);
 
+        // LogLengthResidual("정착"); // 진단 (임시) — 원격이 한 프레임에 입는 보정의 크기
         // CountSent(StreamPayloadBytes + LengthPayloadBytes);
         // DumpBandwidth("스트림종료"); // 창이 닫히기 전에 끝났다 — 남은 값으로 마감한다
     }
@@ -356,6 +384,7 @@ public class RagdollPoseStreamer : NetworkBehaviour
         m_streaming = true;
         m_expectingStream = true;
         m_stepsSinceSend = 0;
+        m_stepsSinceLengths = 0;
     }
 
     /// <summary>
@@ -405,6 +434,14 @@ public class RagdollPoseStreamer : NetworkBehaviour
         if (!m_streaming || !IsSpawned || !IsPoseAuthority)
             return;
 
+        // ⚠ <b>길이가 먼저다.</b> 아래 자세 게이트가 <c>return</c>으로 빠져나가므로, 뒤에 두면
+        // 길이 카운터가 자세를 보내는 틱에만 돌아 주기가 통째로 어긋난다.
+        if (m_lengthEveryFixedSteps > 0 && ++m_stepsSinceLengths >= m_lengthEveryFixedSteps)
+        {
+            m_stepsSinceLengths = 0;
+            SendLengths();
+        }
+
         m_stepsSinceSend++;
         if (m_stepsSinceSend < m_sendEveryFixedSteps)
             return;
@@ -431,6 +468,29 @@ public class RagdollPoseStreamer : NetworkBehaviour
 
     }
 
+    /// <summary>
+    /// 뼈 길이만 따로 흘려보낸다 — <b>자세 패킷에 끼워 넣지 않는다.</b>
+    ///
+    /// 주기가 다르고(25Hz vs 2Hz) 핫 패킷의 크기를 건드리지 않기 위해서다. <b>언리라이어블로
+    /// 충분하다</b> — 하나를 놓쳐도 다음 것이 곧 오고, 최종값은 <see cref="FinalPoseRpc"/>가
+    /// 신뢰 전송으로 못박는다.
+    /// </summary>
+    private void SendLengths()
+    {
+        if (m_rig == null || !m_rig.IsValid)
+            return;
+
+        EnsureSendBuffer();
+        if (!m_rig.CaptureBoneLengths(m_lengthBuffer))
+            return;
+
+        m_sequence = unchecked((ushort)(m_sequence + 1));
+        StreamLengthsRpc(m_sequence, m_lengthBuffer);
+
+        // RecordSentLengths(); // 진단 (임시) — 아래 LogLengthResidual과 한 쌍이다
+        // CountSent(LengthPayloadBytes);
+    }
+
     private void EnsureSendBuffer()
     {
         if (m_sendBuffer == null || m_sendBuffer.Length != m_rig.BoneCount)
@@ -448,7 +508,9 @@ public class RagdollPoseStreamer : NetworkBehaviour
     // <b>쿼터니언 하나를 16B → 4B로 줄인다</b>(smallest-three). NGO가 자기
     // <c>NetworkTransform</c>에 쓰는 것과 <b>같은</b> 유틸리티라 직접 짜지 않았다.
     //
-    // 오차는 성분당 10비트라 약 0.1°다 — 무너지는 시체에서 보이는 크기가 아니고,
+    // <b>원리는 docs/quaternion-compression.md에 있다</b> — 왜 4바이트에 들어가는가, 오차가 어디서 오는가.
+    //
+    // 오차는 성분당 10비트라 사양상 약 0.1°(실측 최대 0.194°)다 — 무너지는 시체에서 보이는 크기가 아니고,
     // 정착 자세도 같은 압축을 쓴다(둘을 가르면 마지막 스트림과 정착 사이에
     // 그 0.1°만큼 튀는 이음새이 생긴다).
     private uint[] Pack(Quaternion[] rotations)
@@ -457,6 +519,16 @@ public class RagdollPoseStreamer : NetworkBehaviour
         {
             Quaternion rotation = rotations[i];
             m_packedBuffer[i] = QuaternionCompressor.CompressQuaternion(ref rotation);
+
+            // 압축 오차를 실제 자세로 왕복시켜 재는 자리 — 계측 블록과 한 쌍이라 같이 막혀 있다.
+            /*
+            if (m_logBandwidth)
+            {
+                Quaternion back = default;
+                QuaternionCompressor.DecompressQuaternion(ref back, m_packedBuffer[i]);
+                m_worstPackErrorDeg = Mathf.Max(m_worstPackErrorDeg, Quaternion.Angle(rotation, back));
+            }
+            */
         }
 
         return m_packedBuffer;
@@ -487,11 +559,23 @@ public class RagdollPoseStreamer : NetworkBehaviour
     /// 정착 자세(<see cref="FinalPoseRpc"/>)는 <b>뒤가 없어서</b> 신뢰 전송이어야 한다.
     ///
     /// 회전은 <b>압축해서</b> 온다 — 쿼터니언당 4B(<see cref="Pack"/>·<see cref="Unpack"/>).
-    /// 페이로드는 82B(뼈 17개)이고 시체 1구당 원격 1인 기준 약 2KB/s다(25Hz).
+    /// 페이로드는 86B(뼈 17개)이고 시체 1구당 원격 1인 기준 약 2.1KB/s다(25Hz · 2026-09-02 실측).
     /// </summary>
     [Rpc(SendTo.NotMe, Delivery = RpcDelivery.Unreliable)]
     private void StreamPoseRpc(ushort sequence, Vector3 hipsWorld, uint[] packed)
         => ReceivePose(sequence, hipsWorld, packed, terminal: false);
+
+    /// <summary>
+    /// 흘러오는 <b>뼈 길이</b> — 자세와 따로, 훨씬 낮은 주기로 온다
+    /// (<see cref="m_lengthEveryFixedSteps"/>). 언리라이어블인 이유는 자세와 같다: 누적되지 않는
+    /// 값이라 하나를 놓쳐도 다음 것이 완전한 상태를 들고 온다.
+    ///
+    /// <b>왜 보내야 하는가는 docs/npc-ragdoll.md §8이다</b> — 권위 쪽 뼈는 무너지는 동안 늘어나고,
+    /// 원격은 물리를 안 굴려 바인드 그대로라 안 보내면 같은 회전을 다른 골격에 입힌 몸이 된다.
+    /// </summary>
+    [Rpc(SendTo.NotMe, Delivery = RpcDelivery.Unreliable)]
+    private void StreamLengthsRpc(ushort sequence, Vector3[] lengths)
+        => ReceiveLengths(sequence, lengths);
 
     /// <summary>
     /// <b>스트림의 마지막 패킷</b> — 물리가 잠들었다. 신뢰 전송이고 <b>좌표계는 스트리밍과 같은
@@ -580,8 +664,12 @@ public class RagdollPoseStreamer : NetworkBehaviour
         //
         // 한 번 쓰면 남는다(원격의 뼈는 키네마틱이라 아무도 덮지 않는다). 그래서 <b>신뢰 1회
         // 패킷에만</b> 실어도 그 뒤 흘러오는 스냅샷이 같은 골격 위에서 재생된다.
-        if (lengths != null && lengths.Length == m_rig.BoneCount)
-            m_rig.ApplyBoneLengths(lengths);
+        if (lengths != null && lengths.Length == m_rig.BoneCount && m_rig.ApplyBoneLengths(lengths))
+        {
+            // 이 패킷이 골격을 못박았다 — 이보다 옛 주기 길이가 뒤늦게 와도 되돌리지 못하게 한다.
+            m_newestLengthSequence = sequence;
+            m_haveLengthSequence = true;
+        }
 
         // TickArrivalTrace(sequence);
         PushSnapshot(hipsWorld, Unpack(packed));
@@ -595,6 +683,35 @@ public class RagdollPoseStreamer : NetworkBehaviour
         m_expectingStream = false;
         // DumpArrivalTrace("정착");
         OnSettledPoseReceived?.Invoke();
+    }
+
+    /// <summary>
+    /// 흘러온 뼈 길이를 <b>즉시</b> 입힌다 — 보간하지 않는다.
+    ///
+    /// <see cref="RagdollRig.ApplyBoneLengths"/>는 <c>localPosition</c>만, 자세 재생
+    /// (<see cref="ApplyPose"/>)은 <c>localRotation</c>만 쓰므로 둘은 서로 싸우지 않는다.
+    /// 다음 프레임의 재생이 <b>새 골격 위에</b> 회전을 얹는다.
+    /// </summary>
+    private void ReceiveLengths(ushort sequence, Vector3[] lengths)
+    {
+        if (m_rig == null || !m_rig.IsValid || lengths == null)
+            return;
+
+        // 기상으로 재생이 끝난 뒤 도착한 것 — 애니메이터가 되받은 몸의 골격을 건드리면 안 된다.
+        if (m_streamEnded)
+            return;
+
+        // 뼈 수가 어긋나면 조용히 버린다 — 경고는 자세 쪽이 이미 한 번 낸다.
+        if (lengths.Length != m_rig.BoneCount)
+            return;
+
+        if (m_haveLengthSequence && !IsNewer(sequence, m_newestLengthSequence))
+            return;
+
+        m_newestLengthSequence = sequence;
+        m_haveLengthSequence = true;
+
+        m_rig.ApplyBoneLengths(lengths);
     }
 
     private void PushSnapshot(Vector3 hipsWorld, Quaternion[] rotations)
@@ -838,13 +955,15 @@ public class RagdollPoseStreamer : NetworkBehaviour
         Debug.Log(
             $"[래그돌대역폭] 시체#{NetworkObjectId} 종료={reason} 창={span:F1}s "
                 + $"패킷={m_sentPackets}({m_sentPackets / span:F1}Hz) 페이로드={StreamPayloadBytes}B "
-                + $"뼈={m_rig.BoneCount} 초당={perSecond / 1024f:F1}KB/s 원격={remotes} 업링크={uplink}",
+                + $"뼈={m_rig.BoneCount}(회전 16B→4B) 압축오차최대={m_worstPackErrorDeg:F3}도 "
+                + $"초당={perSecond / 1024f:F1}KB/s 원격={remotes} 업링크={uplink}",
             this
         );
 
         s_windowStreamers++;
         m_sentPackets = 0;
         m_sentBytes = 0;
+        m_worstPackErrorDeg = 0f;
 
         // 합산은 창이 찬 뒤에만 — 중간에 끝난 시체 하나 때문에 총량을 잘라 찍지 않는다.
         float totalSpan = Time.time - s_windowStart;
@@ -861,6 +980,63 @@ public class RagdollPoseStreamer : NetworkBehaviour
         s_windowPackets = 0;
         s_windowBytes = 0;
         s_windowStreamers = 0;
+    }
+
+    // ---- 정착 잔여 계측 (임시) ----
+    //
+    // 주기 전송(m_lengthEveryFixedSteps)이 실제로 계단을 줄였는가를 재는 유일한 자리다.
+    //
+    // ⚠ <b>NpcRagdoll.LogRemoteReconstructionError로 판정하면 안 된다</b> — 그쪽은 <b>바인드</b>
+    // 길이 기준이라 주기 전송을 켜든 끄든 같은 값이 나온다. 여기서 재는 것은
+    // <b>"원격이 마지막으로 받은 길이"와 "정착 길이"의 차</b> = 원격이 한 프레임에 입는 보정이다.
+
+    private void RecordSentLengths()
+    {
+        if (m_lengthBuffer == null)
+            return;
+
+        if (m_lastSentLengths == null || m_lastSentLengths.Length != m_lengthBuffer.Length)
+            m_lastSentLengths = new Vector3[m_lengthBuffer.Length];
+
+        System.Array.Copy(m_lengthBuffer, m_lastSentLengths, m_lengthBuffer.Length);
+    }
+
+    // ⚠ <b>길이를 캡처한 직후에만 부른다</b> — m_lengthBuffer에 담긴 값을 그대로 비교 대상으로 쓴다.
+    private void LogLengthResidual(string phase)
+    {
+        if (!IsPoseAuthority || m_rig == null || !m_rig.IsValid)
+            return;
+
+        if (m_lengthBuffer == null || m_lastSentLengths == null
+            || m_lastSentLengths.Length != m_lengthBuffer.Length)
+        {
+            Debug.Log($"[길이잔여] 시체#{NetworkObjectId} {phase} 기준없음 — 주기 전송이 한 번도 안 나갔다", this);
+            return;
+        }
+
+        float worst = 0f;
+        int worstIndex = -1;
+
+        for (int i = 0; i < m_lengthBuffer.Length; i++)
+        {
+            float delta = Vector3.Distance(m_lengthBuffer[i], m_lastSentLengths[i]);
+            if (delta <= worst)
+                continue;
+
+            worst = delta;
+            worstIndex = i;
+        }
+
+        Transform[] bones = m_rig.PoseBones;
+        string worstBone = worstIndex >= 0 && bones != null && worstIndex < bones.Length
+            ? bones[worstIndex].name
+            : "없음";
+
+        Debug.Log(
+            $"[길이잔여] 시체#{NetworkObjectId} {phase} 최대={worst:F3}m 뼈={worstBone} "
+                + $"주기={m_lengthEveryFixedSteps}스텝",
+            this
+        );
     }
     */
 
