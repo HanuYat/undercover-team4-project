@@ -621,14 +621,21 @@ public class PlayerIncapacitation : NetworkBehaviour
             return;
 
         // 하강 중 폭탄 등 외부 사유로 이미 Die가 걸렸어도 "몸이 맨홀 아래"는 참이다 — 중복 호출
-        // 방어(아래 return) 앞에 세운다.
+        // 방어(아래 분기) 앞에 세운다.
         SetBodyLost(true);
 
-        if (Cause == IncapacitationCause.Die)
-            return; // 이미 기능 정지 — 중복 호출 방어
+        if (Cause != IncapacitationCause.Die) // 이미 기능 정지면 사유는 그대로 둔다 — 중복 호출 방어
+        {
+            Debug.Log($"[몸 소실] 결말 — 기능 정지: {name}", this);
+            SetCause(IncapacitationCause.Die);
+        }
 
-        Debug.Log($"[몸 소실] 결말 — 기능 정지: {name}", this);
-        SetCause(IncapacitationCause.Die);
+        // ⚠ <b>미뤄 둔 이관은 여기서 끝낸다</b> — 회수 불가로 사라진 몸에는 지킬 물리 상태가 없다.
+        // 안 하면 8초 상한 타이머까지 권위가 붕 뜬다: 빔에 실려 가는 동안에는 뼈가 키네마틱이라
+        // 정착 통보가 영영 오지 않기 때문이다(PlayerCarrier가 운반 시작에서 같은 이유로 같은 일을
+        // 한다). 위 SetCause가 미룸을 세우는 쪽이므로 <b>그보다 뒤여야</b> 하고, 이미 Die였던
+        // 경로에도 미룸이 남아 있을 수 있어 분기 밖에 둔다. 멱등이라 미룬 것이 없으면 무동작이다.
+        ServerCompleteOwnershipHandover();
     }
 
     /// <summary>
