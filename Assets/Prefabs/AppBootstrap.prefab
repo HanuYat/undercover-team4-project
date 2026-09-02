@@ -255,6 +255,8 @@ MonoBehaviour:
     m_WaitForCompletion: 0
     m_LocalVariables: []
   m_toastSeconds: 3
+  m_palette: {fileID: 11400000, guid: 9e612fc6ea2adfb488c4ce5ce55cf54a, type: 2}
+  m_toastAlpha: 0.95
   references:
     version: 2
     RefIds: []
