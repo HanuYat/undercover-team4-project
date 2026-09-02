@@ -16,3 +16,4 @@ MonoBehaviour:
   m_negative: {r: 0.863, g: 0.149, b: 0.149, a: 1}
   m_neutral: {r: 0.612, g: 0.639, b: 0.686, a: 1}
   m_caution: {r: 0.984, g: 0.749, b: 0.141, a: 1}
+  m_highlight: {r: 1, g: 0.85, b: 0.2, a: 1}

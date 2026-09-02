@@ -23302,7 +23302,7 @@ MonoBehaviour:
   m_spinSound: 32
   m_revealSound: 33
   m_frameIdle: {r: 1, g: 1, b: 1, a: 0.35}
-  m_frameWin: {r: 1, g: 0.85, b: 0.2, a: 1}
+  m_palette: {fileID: 11400000, guid: 9e612fc6ea2adfb488c4ce5ce55cf54a, type: 2}
   references:
     version: 2
     RefIds: []

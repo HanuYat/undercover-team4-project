@@ -69,7 +69,8 @@ public class CosmeticGachaPanel : PanelBase
 
     [Header("색")]
     [SerializeField] private Color m_frameIdle = new Color(1f, 1f, 1f, 0.35f);
-    [SerializeField] private Color m_frameWin = new Color(1f, 0.85f, 0.2f, 1f);
+    [Tooltip("공용 색 팔레트 — 당첨 테두리에 Highlight를 쓴다 (#951)")]
+    [SerializeField] private UiColorPalette m_palette;
 
     public override bool CanCloseWithESC => false;
     public override bool IsStackable => false;
@@ -227,7 +228,7 @@ public class CosmeticGachaPanel : PanelBase
             Layout(ScrollCells); // 부동소수 오차로 반 칸 어긋난 채 끝나지 않게 못 박는다
             StopSpinSound(); // 당첨음과 겹치지 않게 도는 소리를 먼저 끊는다
             App.Sound?.PlaySfx2D(m_revealSound);
-            SetFrameColor(m_frameWin);
+            SetFrameColor(FrameWinColor);
             ShowResult(slot, index, gained);
 
             await UniTask.Delay(
@@ -318,5 +319,18 @@ public class CosmeticGachaPanel : PanelBase
         public RectTransform Root;
         public Image Icon;
         public TextMeshProUGUI Label;
+    }
+
+    // 배선이 빠지면 흰색이라 대기색(m_frameIdle)과 구분이 흐려진다 — 경고를 남긴다. (#951)
+    private Color FrameWinColor
+    {
+        get
+        {
+            if (m_palette != null)
+                return m_palette.Highlight;
+
+            Debug.LogWarning("CosmeticGachaPanel: 색 팔레트가 연결되지 않았다", this);
+            return Color.white;
+        }
     }
 }

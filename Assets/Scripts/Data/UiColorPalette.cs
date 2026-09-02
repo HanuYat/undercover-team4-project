@@ -24,10 +24,16 @@ public class UiColorPalette : ScriptableObject
     [Tooltip("주의 — 조건 불충족처럼 실패는 아니지만 짚어야 하는 경우")]
     [SerializeField] private Color m_caution = new Color(0.984f, 0.749f, 0.141f);
 
+    // 주의(m_caution)와 톤이 비슷하지만 뜻이 다르다 — 저쪽은 "짚어야 할 결과", 이쪽은
+    // "지금 누를 수 있다"는 조작 안내다. 합치면 결과와 조작이 같은 색으로 읽힌다.
+    [Tooltip("강조 — 상호작용 가능·선택됨. 조준 윤곽선·크로스헤어·슬롯 선택이 공유한다")]
+    [SerializeField] private Color m_highlight = new Color(1f, 0.85f, 0.2f);
+
     public Color Positive => m_positive;
     public Color Negative => m_negative;
     public Color Neutral => m_neutral;
     public Color Caution => m_caution;
+    public Color Highlight => m_highlight;
 
     /// <summary>알파만 갈아 끼운 색을 돌려준다 — 팔레트는 RGB만 정하고 투명도는 쓰는 쪽 몫이다.</summary>
     public static Color WithAlpha(Color color, float alpha)
