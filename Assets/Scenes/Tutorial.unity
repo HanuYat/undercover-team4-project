@@ -18500,7 +18500,8 @@ MonoBehaviour:
     m_WaitForCompletion: 0
     m_LocalVariables: []
   m_noticeSeconds: 3
-  m_noticeTone: {r: 0.29, g: 0.871, b: 0.502, a: 0.95}
+  m_palette: {fileID: 11400000, guid: 9e612fc6ea2adfb488c4ce5ce55cf54a, type: 2}
+  m_noticeAlpha: 0.95
   references:
     version: 2
     RefIds: []

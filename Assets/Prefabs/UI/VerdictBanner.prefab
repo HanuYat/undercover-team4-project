@@ -451,10 +451,7 @@ MonoBehaviour:
   m_detailText: {fileID: 419801502479120003}
   m_toneTarget: {fileID: 1562206945486386013}
   m_fillAlpha: 0.95
-  m_positiveColor: {r: 0.29, g: 0.871, b: 0.502, a: 1}
-  m_negativeColor: {r: 0.863, g: 0.149, b: 0.149, a: 1}
-  m_neutralColor: {r: 0.612, g: 0.639, b: 0.686, a: 1}
-  m_cautionColor: {r: 0.984, g: 0.749, b: 0.141, a: 1}
+  m_palette: {fileID: 11400000, guid: 9e612fc6ea2adfb488c4ce5ce55cf54a, type: 2}
   m_displaySeconds: 3
   m_canvasGroup: {fileID: 8337111510585068623}
   m_animRoot: {fileID: 0}
