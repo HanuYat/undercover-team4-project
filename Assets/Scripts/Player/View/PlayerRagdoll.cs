@@ -332,12 +332,6 @@ public partial class PlayerRagdoll : MonoBehaviour
 
     // ---- 캡슐(대리값) 다루기 — 여기부터가 플레이어 고유다 ----
 
-    // 자기 CharacterController 캡슐과의 충돌을 끈다 — 죽는 순간 래그돌은 자기 캡슐 <b>안에서</b>
-    // 출발하므로 그대로 두면 겹침 탈출에 몸이 튄다.
-    //
-    // ⚠ 콜라이더를 껐다 켜면 이 상태가 초기화된다(Unity 사양). 그래서 재적용을 경로마다 흩지 않고
-    // <b>캡슐을 켜는 통로 하나</b>에 걸었다 — PlayerMovement.SetCapsuleEnabled가 켜는 순간 부른다.
-    // 근거와 옛 폴러가 놓친 구멍은 docs/player-ragdoll.md §6.
     /// <summary>
     /// 이 몸의 뼈가 <paramref name="others"/>와 <b>충돌하지 않게</b> 한다 — 전 피어가 각자 부른다.
     ///
@@ -360,6 +354,12 @@ public partial class PlayerRagdoll : MonoBehaviour
             m_rig.IgnoreCollisionWith(others[i], ignore);
     }
 
+    // 자기 CharacterController 캡슐과의 충돌을 끈다 — 죽는 순간 래그돌은 자기 캡슐 <b>안에서</b>
+    // 출발하므로 그대로 두면 겹침 탈출에 몸이 튄다.
+    //
+    // ⚠ 콜라이더를 껐다 켜면 이 상태가 초기화된다(Unity 사양). 그래서 재적용을 경로마다 흩지 않고
+    // <b>캡슐을 켜는 통로 하나</b>에 걸었다 — PlayerMovement.SetCapsuleEnabled가 켜는 순간 부른다.
+    // 근거와 옛 폴러가 놓친 구멍은 docs/player-ragdoll.md §6.
     internal void ReapplyCapsuleIgnore()
     {
         if (m_controller == null)
