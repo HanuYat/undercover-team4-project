@@ -114,6 +114,14 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
 
     // ---- 정적 조회 (전 피어) ----
 
+    // 살아 있는 인스턴스 목록 — 아래 조회가 인계 판정마다 씬을 뒤지지 않게 한다
+    // (PlayerIncapacitation.All과 같은 패턴, #961). OnEnable/OnDisable이라 집합은 비활성 제외 그대로다.
+    private static readonly List<PlayerEscorter> s_instances = new List<PlayerEscorter>();
+
+    private void OnEnable() => s_instances.Add(this);
+
+    private void OnDisable() => s_instances.Remove(this);
+
     /// <summary>
     /// 해당 NPC를 밧줄에 묶고 있는 플레이어를 찾는다 — 없으면 null. 서버(또는 오프라인)에서만 유효.
     /// 인계 판정(ArrestJudge)이 이 결과로 끌기를 물리적으로 풀기 때문에, 빼면 인계자가 "알 수 없음"이 되고
@@ -125,10 +133,12 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
         if (npc == null)
             return null;
 
-        PlayerEscorter[] escorters = FindObjectsByType<PlayerEscorter>(FindObjectsSortMode.None);
-        foreach (PlayerEscorter escorter in escorters)
-            if (escorter.IsTetheredTo(npc))
+        for (int i = 0; i < s_instances.Count; i++)
+        {
+            PlayerEscorter escorter = s_instances[i];
+            if (escorter != null && escorter.IsTetheredTo(npc))
                 return escorter;
+        }
 
         return null;
     }
@@ -144,10 +154,12 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
         if (npc == null)
             return found;
 
-        PlayerEscorter[] escorters = FindObjectsByType<PlayerEscorter>(FindObjectsSortMode.None);
-        foreach (PlayerEscorter escorter in escorters)
-            if (escorter.IsTetheredTo(npc))
+        for (int i = 0; i < s_instances.Count; i++)
+        {
+            PlayerEscorter escorter = s_instances[i];
+            if (escorter != null && escorter.IsTetheredTo(npc))
                 found.Add(escorter);
+        }
 
         return found;
     }

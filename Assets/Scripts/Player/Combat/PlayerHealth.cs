@@ -49,6 +49,18 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
         IsTargetable
         || (CurrentHp > 0 && m_incapacitation != null && m_incapacitation.IsLaunched);
 
+    // 살아 있는 인스턴스 목록 — 플레이어 전원을 훑는 쪽이 FindObjectsByType으로 씬을 뒤지지 않게 한다
+    // (PlayerIncapacitation.All과 같은 패턴, #961). 등록·해제가 OnEnable/OnDisable에 있어야
+    // 기존 FindObjectsByType(FindObjectsSortMode.None)과 집합(비활성 제외)이 어긋나지 않는다.
+    private static readonly System.Collections.Generic.List<PlayerHealth> s_instances = new();
+
+    /// <summary>씬에 존재하는 모든 플레이어의 체력 컴포넌트 — 자주 순회해도 되는 무할당 목록. (#961)</summary>
+    public static System.Collections.Generic.IReadOnlyList<PlayerHealth> All => s_instances;
+
+    private void OnEnable() => s_instances.Add(this);
+
+    private void OnDisable() => s_instances.Remove(this);
+
     /// <summary>
     /// 반경 안에서 <b>비행(Launched) 중인</b> 플레이어를 모은다 — 호출 시 목록을 비운다.
     ///

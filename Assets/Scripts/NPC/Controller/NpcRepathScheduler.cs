@@ -28,8 +28,8 @@ public class NpcRepathScheduler
 {
     private const int k_channelCount = 4;
 
-    // 플레이어 위치 캐시 — 프레임당 1회만 수집한다. NPC마다 FindObjectsByType을 도는 것이
-    // 원래 줄이려던 비용보다 커지는 것을 막는다 (SuddenEventUtil.CollectFieldPlayers는 호출마다 전수 검색).
+    // 플레이어 위치 캐시 — 프레임당 1회만 수집한다. NPC마다 목록을 다시 훑지 않게 하기 위한 것으로,
+    // 수집 자체도 이제 씬 스캔이 아니라 PlayerHealth.All 순회다 (#961).
     private static readonly List<Transform> s_players = new List<Transform>();
     private static int s_playersFrame = -1;
 
@@ -187,8 +187,9 @@ public class NpcRepathScheduler
         // SuddenEventUtil.CollectFieldPlayers와 <b>기준이 다르다</b> — 저쪽은 IsTargetable만 모으지만
         // 여기는 다운된 플레이어도 넣는다. 티어는 "누구를 노릴 수 있는가"가 아니라 "누가 보고 있는가"라
         // 쓰러진 플레이어 주변도 촘촘해야 하기 때문이다. 저쪽과 합치지 않는 이유가 이것이다.
-        PlayerHealth[] found = Object.FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
-        for (int i = 0; i < found.Length; i++)
-            s_players.Add(found[i].transform);
+        IReadOnlyList<PlayerHealth> found = PlayerHealth.All;
+        for (int i = 0; i < found.Count; i++)
+            if (found[i] != null)
+                s_players.Add(found[i].transform);
     }
 }

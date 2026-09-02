@@ -394,7 +394,7 @@ public class TrafficVehicle : NetworkBehaviour
     }
 
     /// <summary>앞에 사람이 있으면 경적을 울린다 — 대상은 플레이어뿐. 서버 전용. 대낮엔 헤드라이트가 안 읽혀 예고의 실질은 소리다 (GDD 6-6).
-    /// ⚠ 쿨다운을 먼저 본다 — 아래 훑기가 FindObjectsByType이라 동시 주행 대수만큼 곱해진다.</summary>
+    /// ⚠ 쿨다운을 먼저 본다 — 아래 훑기가 동시 주행 대수만큼 곱해진다.</summary>
     private void ServerTickHorn()
     {
         if (m_hornFx == EFx.None || Time.time < m_nextHornAt)
