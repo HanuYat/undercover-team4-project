@@ -23,7 +23,6 @@ using UnityEngine.AI;
 public class NpcDeath : NetworkBehaviour
 {
     private NpcController m_owner;
-    private NpcRagdoll m_ragdoll; // 자세를 받아 입힐 쪽 — 리그가 없는 프리팹에서는 null일 수 있다
 
     /// <summary>죽었는가 — 세션 중에는 동기화된 상태 enum이라 클라에서도 읽을 수 있다. (#571)</summary>
     public bool IsDead => m_owner.CurrentState == NpcState.Dead;

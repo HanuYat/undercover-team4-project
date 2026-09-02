@@ -105,7 +105,7 @@ public class BombDevHotkeys : NetworkBehaviour
         if (IsSpawned && !IsServer)
             SpawnRpc();
         else
-            ServerSpawn(LocalPlayer());
+            ServerSpawn(DevPlayerLookup.LocalPlayer());
     }
 
     private void RequestDetonate()
@@ -121,19 +121,19 @@ public class BombDevHotkeys : NetworkBehaviour
         if (IsSpawned && !IsServer)
             TeleportRpc();
         else
-            ServerTeleport(LocalPlayer());
+            ServerTeleport(DevPlayerLookup.LocalPlayer());
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)] // 오너 없는 씬 오브젝트
     private void SpawnRpc(RpcParams rpcParams = default) =>
-        ServerSpawn(ResolvePlayer(rpcParams.Receive.SenderClientId));
+        ServerSpawn(DevPlayerLookup.ResolvePlayer(rpcParams.Receive.SenderClientId));
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void DetonateRpc() => ServerDetonate();
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void TeleportRpc(RpcParams rpcParams = default) =>
-        ServerTeleport(ResolvePlayer(rpcParams.Receive.SenderClientId));
+        ServerTeleport(DevPlayerLookup.ResolvePlayer(rpcParams.Receive.SenderClientId));
 
     // ---- 처리 (서버·오프라인) ----
 
@@ -255,29 +255,6 @@ public class BombDevHotkeys : NetworkBehaviour
     }
 
     // ---- 조회 ----
-
-    // 이 피어의 플레이어 — 세션이 없으면(오프라인 Play) 씬에 하나뿐이다.
-    private static Transform LocalPlayer()
-    {
-        NetworkManager manager = NetworkManager.Singleton;
-        if (manager != null && manager.IsListening && manager.LocalClient?.PlayerObject != null)
-            return manager.LocalClient.PlayerObject.transform;
-
-        // 매니저가 아니라 스폰물이라 R1(FindFirstObjectByType 금지)의 대상이 아니다
-        PlayerMovement player = FindFirstObjectByType<PlayerMovement>();
-        return player != null ? player.transform : null;
-    }
-
-    private static Transform ResolvePlayer(ulong clientId)
-    {
-        NetworkManager manager = NetworkManager.Singleton;
-        if (manager != null
-            && manager.ConnectedClients.TryGetValue(clientId, out NetworkClient client)
-            && client.PlayerObject != null)
-            return client.PlayerObject.transform;
-
-        return null;
-    }
 
     // 수평 성분만 남긴 단위 벡터 — 위아래를 보고 눌러도 발밑 평면에 놓기 위함.
     private static Vector3 Flat(Vector3 direction, Vector3 fallback)

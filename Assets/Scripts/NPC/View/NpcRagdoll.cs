@@ -810,21 +810,7 @@ public partial class NpcRagdoll : MonoBehaviour
 
     // 골반 밑 지면 탐색 — 정착 자격 판정과 정착 정렬이 <b>같은 것</b>을 써야 한다(다르면 그 차이가
     // 얼리는 순간 낙차로 남는다). 탐색 거리를 짧게 잡을 것 — 근거는 m_groundProbeDistance 툴팁.
-    private bool TryGroundUnder(Vector3 hipsPosition, out Vector3 point)
-    {
-        const float k_probeLift = 0.5f; // 골반이 바닥에 파묻혀 있어도 레이가 지면 위에서 출발하게
-
-        bool hitGround = Physics.Raycast(
-            hipsPosition + Vector3.up * k_probeLift,
-            Vector3.down,
-            out RaycastHit hit,
-            k_probeLift + m_groundProbeDistance,
-            m_groundMask,
-            QueryTriggerInteraction.Ignore
-        );
-
-        point = hitGround ? hit.point : hipsPosition;
-        return hitGround;
-    }
+    private bool TryGroundUnder(Vector3 hipsPosition, out Vector3 point) =>
+        RagdollGround.TryGroundUnder(hipsPosition, m_groundProbeDistance, m_groundMask, out point);
 
 }

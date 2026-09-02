@@ -1173,20 +1173,6 @@ public partial class PlayerRagdoll : MonoBehaviour
         m_controller == null ? 0f : m_controller.center.y - m_controller.height * 0.5f;
 
     // 골반 밑 지면 탐색 — 정착 자격 판정·정착 정렬·진입 계측이 <b>같은 것</b>을 쓴다.
-    private bool TryGroundUnder(Vector3 hipsPosition, out Vector3 point)
-    {
-        const float k_probeLift = 0.5f; // 골반이 바닥에 파묻혀 있어도 레이가 지면 위에서 출발하게
-
-        bool hitGround = Physics.Raycast(
-            hipsPosition + Vector3.up * k_probeLift,
-            Vector3.down,
-            out RaycastHit hit,
-            k_probeLift + m_groundProbeDistance,
-            m_groundMask,
-            QueryTriggerInteraction.Ignore
-        );
-
-        point = hitGround ? hit.point : hipsPosition;
-        return hitGround;
-    }
+    private bool TryGroundUnder(Vector3 hipsPosition, out Vector3 point) =>
+        RagdollGround.TryGroundUnder(hipsPosition, m_groundProbeDistance, m_groundMask, out point);
 }

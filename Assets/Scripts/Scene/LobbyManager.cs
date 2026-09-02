@@ -31,20 +31,8 @@ public class LobbyManager : SceneManagerBase
     /// 프레임 수만 세면(LoadingScreen.k_settleFrames) fps가 높고 RTT가 붙는 빌드에서 진다 —
     /// 에디터에서 재현되지 않던 이유다. 그래서 시간이 아니라 조건을 기다린다.
     /// </summary>
-    public override async UniTask WaitUntilReadyAsync(CancellationToken token)
-    {
-        float deadline = Time.realtimeSinceStartup + k_localReadyTimeoutSeconds;
-        await UniTask.WaitUntil(
-            () => IsLocallyReady() || Time.realtimeSinceStartup >= deadline,
-            cancellationToken: token
-        );
-
-        if (!IsLocallyReady())
-            Debug.LogWarning(
-                $"[LobbyManager] 플레이어 정리를 {k_localReadyTimeoutSeconds}초 내에 확인하지 못했다 — 그대로 진행한다",
-                this
-            );
-    }
+    public override UniTask WaitUntilReadyAsync(CancellationToken token) =>
+        WaitUntilLocallyReadyAsync(token, IsLocallyReady, k_localReadyTimeoutSeconds, "플레이어 정리");
 
     // 내 몸이 없어야 준비 완료다. 세션 밖(오프라인·씬 직접 Play)이면 지워 줄 서버가 없으므로 기다리지 않는다.
     private static bool IsLocallyReady()

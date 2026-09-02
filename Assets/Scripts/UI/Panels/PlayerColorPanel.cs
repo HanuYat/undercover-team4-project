@@ -53,23 +53,7 @@ public class PlayerColorPanel : PanelBase
 
     // 커서를 푼다 — 로비는 원래 풀려 있지만 상점 락커(#818)로 열 때는 잠긴 상태에서 들어온다.
     // 래치 덕에 몇 번 불려도 Push/Pop은 1:1로 유지된다.
-    private void SetBlocked(bool blocked)
-    {
-        if (m_blocked == blocked)
-            return;
-
-        m_blocked = blocked;
-
-        if (blocked)
-            CursorLock.PushUnlock();
-        else
-            CursorLock.PopUnlock();
-
-        // 커서를 푼 채 WASD가 이동으로 새지 않게 — 상점에서는 내 로봇이 살아 있다
-        PlayerInputHandler input = FindLocalInput();
-        if (input != null)
-            input.SetSuspended(blocked);
-    }
+    protected override PlayerInputHandler BlockTarget => FindLocalInput();
 
     private static PlayerInputHandler FindLocalInput()
     {
@@ -79,8 +63,6 @@ public class PlayerColorPanel : PanelBase
 
         return player != null ? player.GetComponent<PlayerInputHandler>() : null;
     }
-
-    private bool m_blocked;
 
     private void OnEnable()
     {

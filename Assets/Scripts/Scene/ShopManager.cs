@@ -32,20 +32,8 @@ public class ShopManager : SceneManagerBase
     /// 프레임 수만 세면(LoadingScreen.k_settleFrames) fps가 높고 RTT가 붙는 빌드에서 진다 —
     /// 에디터에서 재현되지 않던 이유다. 그래서 시간이 아니라 조건을 기다린다.
     /// </summary>
-    public override async UniTask WaitUntilReadyAsync(CancellationToken token)
-    {
-        float deadline = Time.realtimeSinceStartup + k_localReadyTimeoutSeconds;
-        await UniTask.WaitUntil(
-            () => IsLocallyReady() || Time.realtimeSinceStartup >= deadline,
-            cancellationToken: token
-        );
-
-        if (!IsLocallyReady())
-            Debug.LogWarning(
-                $"[ShopManager] 플레이어 재배치를 {k_localReadyTimeoutSeconds}초 내에 확인하지 못했다 — 그대로 진행한다",
-                this
-            );
-    }
+    public override UniTask WaitUntilReadyAsync(CancellationToken token) =>
+        WaitUntilLocallyReadyAsync(token, IsLocallyReady, k_localReadyTimeoutSeconds, "플레이어 재배치");
 
     // 내 몸이 도착했고, 서버가 지시한 재배치를 적용했어야 준비 완료다.
     // 로비에서 처음 들어올 때는 재배치가 아니라 새로 스폰되는데(PlayerSpawnManager.SpawnPlayerFor),

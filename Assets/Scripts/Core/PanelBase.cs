@@ -34,6 +34,32 @@ public abstract class PanelBase : MonoBehaviour
     /// <summary>씬 시작 시 열린 상태로 시작하는가.</summary>
     protected virtual bool OpenOnAwake => false;
 
+    // 창이 열린 동안 커서를 풀고 이동 입력을 멈춘다 — 네 패널이 같은 모양으로 복사해 쓰던 것을 모았다.
+    // CursorLock의 Push/Pop은 카운터라 짝이 맞아야 하고(#352), 이 래치가 그 짝을 보장한다.
+    private bool m_blocked;
+
+    /// <summary>입력을 멈출 대상 — 막기를 쓰는 패널만 덮는다. null이면 커서만 푼다.</summary>
+    protected virtual PlayerInputHandler BlockTarget => null;
+
+    protected void SetBlocked(bool blocked)
+    {
+        if (m_blocked == blocked)
+            return;
+
+        m_blocked = blocked;
+
+        // 대상 조회보다 먼저 — 플레이어가 도중에 사라져도 Push/Pop 짝은 유지돼야 한다 (#352)
+        if (blocked)
+            CursorLock.PushUnlock();
+        else
+            CursorLock.PopUnlock();
+
+        // ?. 금지 — Unity 오브젝트의 ?.는 C# 참조 null만 보고 파괴 판정(fake null)을 우회한다.
+        PlayerInputHandler input = BlockTarget;
+        if (input != null)
+            input.SetSuspended(blocked);
+    }
+
     protected virtual void Awake()
     {
         if (m_panelRoot == null)

@@ -51,8 +51,6 @@ public class SettlementController : MonoBehaviour
     private RoundManager Round => App.Game.Round;
     private TeamFund TeamFund => App.Game.TeamFund;
 
-    private bool m_handlerRegistered;
-
     // 이번 라운드 시작 시점의 팀 자금 — 정산 증감(현재-시작) 기준. TeamFund가 세션 지속형이라(#214)
     // 세션 초기값이 아니라 "이 라운드가 시작될 때" 잔액을 스냅샷해야 이번 라운드 증감이 나온다.
     private int m_roundStartFund;
@@ -82,38 +80,16 @@ public class SettlementController : MonoBehaviour
         m_roundStartFund = TeamFund != null ? TeamFund.Balance : 0;
     }
 
+    // 네임드 메시지 수신 — 등록·해제 절차는 NamedMessageSubscription이 맡는다.
+    private NamedMessageSubscription m_message;
+
     private void Start()
     {
-        // 클라이언트 수신 등록 — CustomMessagingManager는 NGO가 시작된 뒤에만 존재한다. (RoundEndFeedback와 동일 패턴)
-        NetworkManager nm = NetworkManager.Singleton;
-        if (nm == null)
-            return;
-
-        nm.OnClientStarted += RegisterMessageHandler;
-        if (nm.IsListening)
-            RegisterMessageHandler();
+        m_message = new NamedMessageSubscription(k_messageName, ReceiveSettlement);
+        m_message.Attach();
     }
 
-    private void OnDestroy()
-    {
-        NetworkManager nm = NetworkManager.Singleton;
-        if (nm == null)
-            return;
-
-        nm.OnClientStarted -= RegisterMessageHandler;
-        if (m_handlerRegistered && nm.CustomMessagingManager != null)
-            nm.CustomMessagingManager.UnregisterNamedMessageHandler(k_messageName);
-    }
-
-    private void RegisterMessageHandler()
-    {
-        NetworkManager nm = NetworkManager.Singleton;
-        if (nm == null || nm.CustomMessagingManager == null)
-            return;
-
-        nm.CustomMessagingManager.RegisterNamedMessageHandler(k_messageName, ReceiveSettlement);
-        m_handlerRegistered = true;
-    }
+    private void OnDestroy() => m_message?.Detach();
 
     // 서버·오프라인: 종료 후 데이터를 모아 로컬 표시 + 세션이면 전 클라 전파.
     private void HandleRoundEnded(RoundResult result, RoundEndReason reason)

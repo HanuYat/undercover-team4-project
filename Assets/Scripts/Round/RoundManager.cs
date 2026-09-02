@@ -274,20 +274,6 @@ public class RoundManager : CommonManagerBase
         BeginRoundPreparation();
     }
 
-    // 서버 재시작 시 이전 라운드 상태를 초기화한다 — Phase·결과·진행도와 스포너 래치를 되돌려 재스폰을 허용한다.
-    private void ResetForRestart()
-    {
-        m_phase = RoundPhase.Preparing;
-        Result = RoundResult.None;
-        EndReason = RoundEndReason.None;
-        CriminalArrestCount = 0;
-        RemainingSeconds = float.PositiveInfinity;
-        m_endedTargetFund = -1;
-        m_preparing = false;
-        m_warnedPhaseReaders.Clear();
-        Spawner.ResetSpawnState(); // IsSpawnCompleted 래치 해제 + 이전 NPC 정리 → StartSpawn 재동작
-    }
-
     /// <summary>
     /// 라운드 준비를 시작한다 — NPC를 먼저 스폰하고, 스폰 완료 + 전원 입장 확인 후 지연을 두고 StartRound로 넘어간다.
     /// 게임 씬 진입 시 서버(또는 오프라인)에서 자동 호출된다.
