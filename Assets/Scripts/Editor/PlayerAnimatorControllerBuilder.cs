@@ -38,7 +38,7 @@ public static class PlayerAnimatorControllerBuilder
     private const string k_emoteParam = "Emote";
     private const string k_emoteIndexParam = "EmoteIndex";
     private const string k_emoteStatePrefix = "Emote_";
-    private const string k_emoteCatalogPath = "Assets/Scripts/Data/EmoteCatalog.asset";
+    private const string k_emoteCatalogPath = "Assets/Settings/Emote/EmoteCatalog.asset";
 
     // 기절(테이저 아군 오사)은 다운과 같은 Knockdown 상태 머신을 탄다 — 맞는 즉시 쓰러진다. (#252)
     // 한때 Stun01로 갈랐는데 그건 NPC '제압 그로기'(서서 헤롱거리는 루프)가 쓰는 클립이었다.
