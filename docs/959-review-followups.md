@@ -1,4 +1,4 @@
-# PR #959 리뷰 후속 — 3건 (2건 완료 · 1건 조사만) (2026-09-01)
+# PR #959 리뷰 후속 — 3건 (2026-09-01, 개정 2판)
 
 > 브랜치: `feature/903-865-death-ragdoll` (PR [#959](https://github.com/hyunjin0814/undercover-team4-project/pull/959) 열려 있음)
 >
@@ -10,14 +10,14 @@
 |---|---|---|
 | 1 | `CollectLaunched`의 `FindObjectsByType`을 등록 목록 순회로 교체 | **코드 완료** · 컴파일 확인 · **플레이 미검증** |
 | 2 | 빔 래치를 풀 때 기상 블렌드 중인 뼈가 물리로 열리던 것 | **코드 완료** · 컴파일 확인 · **플레이 미검증** |
-| 3 | `[Netcode] Rpc message received from a client without permission` 로그 | **조사만 끝났다 — 수정 안 들어갔다** |
+| 3 | `[Netcode] Rpc message received from a client without permission` 로그 | **원인 확정 · UFO 쪽만 이 브랜치에서 고쳤다** — 일반 수정은 [#962](https://github.com/hyunjin0814/undercover-team4-project/issues/962)로 뺐다 |
 
 컴파일은 `dotnet build Assembly-CSharp.csproj` **오류 0개**(경고는 전부 기존 `CS0618`/`CS0649`). Unity Editor Console·Play 모드는 확인하지 않았다.
 
 ### 이어받는 세션이 처음 할 일
 
-1. **§3의 결정 하나를 받는다** — 접지 보고를 무력화 중에 막을지. 방향은 정해져 있고 코드만 안 넣었다.
-2. §1·§2의 **플레이 검증 항목**(각 절 끝)을 돌린다. 둘 다 정적으로만 확인된 상태다.
+1. §1·§2·§3의 **플레이 검증 항목**(각 절 끝)을 돌린다. 셋 다 정적으로만 확인된 상태다.
+2. §3의 로그가 **그래도 재현되면** [#962](https://github.com/hyunjin0814/undercover-team4-project/issues/962)로 넘어간다 — 계측 한 줄로 발신자를 확정하는 것이 첫 단계다.
 3. `FindObjectsByType` 전반 정리는 이 브랜치 범위가 아니다 — 이슈 [#961](https://github.com/hyunjin0814/undercover-team4-project/issues/961)로 떼어 놨다.
 
 ---
@@ -77,6 +77,8 @@ without permission to perform this operation!. Dropping RPC message
 
 재현 상황: **래그돌로 날아가던 플레이어가 UFO 빔에 빨려 들어가 죽은 직후.**
 
+> **용어 — "접지 보고"** 는 `PlayerJump.ReportGrounded()`를 줄인 말이다. 게임 규칙이 아니라 **남의 화면에서 점프·낙하 애니메이션을 맞추기 위한 상태 동기화**다: 원격 인스턴스는 `Move()`를 안 타 `isGrounded`가 갱신되지 않으므로, 접지를 아는 오너가 값이 바뀔 때만 서버에 보고하고(`ReportAirborneServerRpc`) 서버가 `NetworkVariable`로 전 피어에 뿌린다. `PlayerAnimationDriver`가 그 값을 읽는다.
+
 ### 3-1. 확정 — 20번은 `PlayerJump`다
 
 근거 둘이 독립적으로 맞는다.
@@ -110,11 +112,29 @@ without permission to perform this operation!. Dropping RPC message
 
 게임플레이는 대체로 무해하지만 하나 샌다 — 드롭된 값은 버려지는데 클라의 `m_reportedAirborne`은 **이미 갱신돼 있어서 같은 값으로는 다시 안 보낸다.** 부활 후 실제 상태가 드롭된 값과 같으면 **남의 화면에서 공중/낙하 애니메이션이 다음 전환까지 고착**될 수 있다.
 
-### 3-5. 제안하는 수정 (합의 대기 — 코드 안 넣었다)
+### 3-5. 이 브랜치에서 한 것 — 몸이 사라지면 이관을 즉시 끝낸다
 
-1. **무력화된 몸은 접지 보고를 하지 않는다.** 다운·사망·빔 중인 몸의 공중 플래그는 애니메이터가 래그돌에 밀려 쓰지도 않는 값이다. 이걸 막으면 8초 미룸 창 전체가 조용해진다. `ReportGroundedOnEnter`가 필요한 것은 **살아서** 끌려가는 오검거 호송·운반뿐이라 그쪽은 그대로 남는다.
-2. **`OnGainedOwnership`에서 중복 제거 래치(`m_reportedAirborne`)를 무효화한다** — 소유권을 되받은 뒤 첫 보고가 무조건 나가게 해서 §3-4의 고착을 막는다.
+**접지 보고 쪽은 건드리지 않았다.** 흡입 시작의 `ReportGrounded(true)`는 그 시점에 오너가 아직 클라라 **정상 수락**된다(죽기 전이다) — 그러니 UFO 쪽 보고만 막아 봐야 로그가 안 없어질 공산이 크다. 대신 **창을 넓힌 쪽**을 닫았다.
 
-버린 안: `[ServerRpc(RequireOwnership = false)]` + 발신자 검사. 로그는 사라지지만 원인이 아니라 증상을 덮는다. 1·2번이 안 통할 때만 되살릴 것.
+`ServerKillByBodyLost`(UFO 삼킴 · 맨홀 납치가 함께 쓰는 결말 진입점)가 미뤄 둔 이관을 그 자리에서 끝낸다. [PlayerIncapacitation.cs:618](../Assets/Scripts/Player/PlayerIncapacitation.cs)
+
+- **근거는 로그가 아니다.** 회수 불가로 사라진 몸(`BodyLost`)에는 지킬 물리 상태가 없는데, 빔 중에는 뼈가 키네마틱이라 정착 통보가 영영 오지 않아 이관이 **8초 상한 타이머**까지 붕 뜬다. `PlayerCarrier`가 운반 시작에서 [같은 이유로 같은 일](../Assets/Scripts/Player/Escort/PlayerCarrier.cs)을 한다("한창 끌고 가는 중에 권위가 뒤집힌다 — #957이 피하려던 바로 그 그림").
+- 호출 위치는 `SetCause(Die)` **뒤**여야 한다(미룸을 세우는 쪽이 그것이다). 이미 `Die`였던 경로에도 미룸이 남을 수 있어 중복 호출 방어 분기 **밖**에 뒀다. 멱등이라 미룬 것이 없으면 무동작이다.
+
+⚠ **이것으로 로그가 사라진다는 보장은 없다** — §3-3이 미확정이기 때문이다. 사라지지 않으면 [#962](https://github.com/hyunjin0814/undercover-team4-project/issues/962)로 간다.
+
+**플레이 검증 항목**
+
+- [ ] UFO에 삼켜져 죽는다 → **그 로그가 뜨는지** 확인 (뜨면 #962)
+- [ ] 삼켜진 뒤 관전·라운드 종료가 정상 (이관 시점이 8초 뒤 → 즉시로 당겨진 영향)
+- [ ] **맨홀 납치**(#775) 결말도 같다 — 같은 함수를 지난다
+- [ ] 하강 중 폭탄 등으로 **이미 Die인 채** 몸이 소실되는 경로 (중복 호출 방어 밖으로 뺀 자리)
+
+### 3-6. #962로 뺀 것 — 접지 보고 일반 수정
+
+1. **래그돌이 몸을 쥔 동안(`IsRagdollCause`)은 접지 보고를 보내지 않는다.** ⚠ `IsIncapacitated`로 넓히지 말 것 — 매달기·기절·납치는 애니메이터가 계속 돌아 보고가 필요하다(`ReportGroundedOnEnter`가 노리는 것이 **살아서** 끌려가는 호송·운반이다).
+2. **중복 제거 래치(`m_reportedAirborne`) 무효화** — 건너뛸 때·소유권 변경 때. §3-4의 고착을 막는다.
+
+버린 안: `[ServerRpc(RequireOwnership = false)]` + 발신자 검사. 로그는 사라지지만 원인이 아니라 증상을 덮는다.
 
 ⚠ **같은 레이스가 `PlayerCrouch`(14)·`PlayerEmote`(27)에도 구조적으로 있다** — 둘 다 오너 게이트 + 구형 `[ServerRpc]`다. 로그에 14/27이 뜨면 같은 진단을 적용하면 된다.
