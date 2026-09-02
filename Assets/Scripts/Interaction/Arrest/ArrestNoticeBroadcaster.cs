@@ -39,7 +39,6 @@ public class ArrestNoticeBroadcaster : MonoBehaviour
     private ArrestJudge Judge => App.Game.ArrestJudge;
     private WantedListManager WantedList => App.Game.WantedList;
 
-    private bool m_handlerRegistered;
 
     // 검거마다 재사용하는 버퍼 — 서버에서만 쓴다.
     private readonly HashSet<ulong> m_arresters = new HashSet<ulong>();
@@ -63,38 +62,16 @@ public class ArrestNoticeBroadcaster : MonoBehaviour
         Judge.OnCorpseJudged -= HandleArrestJudged;
     }
 
+    // 네임드 메시지 수신 — 등록·해제 절차는 NamedMessageSubscription이 맡는다.
+    private NamedMessageSubscription m_message;
+
     private void Start()
     {
-        // CustomMessagingManager는 NGO가 시작된 뒤에만 존재한다.
-        NetworkManager nm = NetworkManager.Singleton;
-        if (nm == null)
-            return;
-
-        nm.OnClientStarted += RegisterMessageHandler;
-        if (nm.IsListening)
-            RegisterMessageHandler();
+        m_message = new NamedMessageSubscription(k_messageName, ReceiveNotice);
+        m_message.Attach();
     }
 
-    private void OnDestroy()
-    {
-        NetworkManager nm = NetworkManager.Singleton;
-        if (nm == null)
-            return;
-
-        nm.OnClientStarted -= RegisterMessageHandler;
-        if (m_handlerRegistered && nm.CustomMessagingManager != null)
-            nm.CustomMessagingManager.UnregisterNamedMessageHandler(k_messageName);
-    }
-
-    private void RegisterMessageHandler()
-    {
-        NetworkManager nm = NetworkManager.Singleton;
-        if (nm == null || nm.CustomMessagingManager == null)
-            return;
-
-        nm.CustomMessagingManager.RegisterNamedMessageHandler(k_messageName, ReceiveNotice);
-        m_handlerRegistered = true;
-    }
+    private void OnDestroy() => m_message?.Detach();
 
     private void HandleArrestJudged(ArrestResult result)
     {

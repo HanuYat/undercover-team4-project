@@ -103,7 +103,6 @@ public class ShopBrowserPanel : PanelBase
     private TeamFund m_teamFund;
 
     // 커서 Push/Pop 짝을 지키는 래치 (LootPanel과 같은 사정, #352)
-    private bool m_blocked;
 
     // 구독해 둔 홀더 — 해제 기준을 지금 인스펙터 값이 아니라 실제로 구독한 그 참조로 잡는다
     private ShopLineup m_bound;
@@ -231,24 +230,8 @@ public class ShopBrowserPanel : PanelBase
         SetBlocked(false); // 창이 이미 닫힌 뒤라도 래치가 켜져 있으면 짝이 안 맞은 것이다
     }
 
-    // 커서 해제·입력 정지를 한 쌍으로 묶는다. 래치 덕에 몇 번 불려도 Push/Pop은 1:1로 유지된다.
-    private void SetBlocked(bool blocked)
-    {
-        if (m_blocked == blocked)
-            return;
-
-        m_blocked = blocked;
-
-        // 플레이어 조회보다 먼저 — 플레이어가 도중에 사라져도 Push/Pop 짝은 유지돼야 한다 (#352)
-        if (blocked)
-            CursorLock.PushUnlock();
-        else
-            CursorLock.PopUnlock();
-
-        // ?. 금지 — 파괴된 Unity 오브젝트의 fake null 우회 방지
-        if (m_input != null)
-            m_input.SetSuspended(blocked);
-    }
+    /// <summary>입력을 멈출 대상 — 공용 SetBlocked(PanelBase)가 읽는다.</summary>
+    protected override PlayerInputHandler BlockTarget => m_input;
 
     private void Update()
     {

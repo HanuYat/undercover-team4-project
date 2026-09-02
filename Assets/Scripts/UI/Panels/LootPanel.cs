@@ -73,7 +73,6 @@ public class LootPanel : PanelBase
     // 커서 Push/Pop 짝을 지키는 래치. OpenPanel/ClosePanel엔 재진입 가드가 없어 같은 값으로 두 번
     // 불릴 수 있는데, Push만 두 번(또는 Pop만 두 번) 들어가면 전역 요청 수가 어긋나 커서가 영영
     // 풀리거나 영영 잠긴다. (SignalInputPanel·PausePanel과 같은 방침, #352)
-    private bool m_blocked;
 
     // 표시 목록 버퍼 — 매 프레임 대조하므로 새로 만들지 않는다.
     private readonly List<ItemBase> m_lootable = new List<ItemBase>();
@@ -217,25 +216,8 @@ public class LootPanel : PanelBase
         SetBlocked(false); // 창이 이미 닫힌 뒤라도 래치가 켜져 있으면 짝이 안 맞은 것이다
     }
 
-    // 커서 해제·입력 정지를 한 쌍으로 묶는다. 래치 덕에 몇 번 불려도 Push/Pop은 1:1로 유지된다.
-    private void SetBlocked(bool blocked)
-    {
-        if (m_blocked == blocked)
-            return;
-
-        m_blocked = blocked;
-
-        // 플레이어 조회보다 먼저 — 플레이어가 도중에 사라져도 Push/Pop 짝은 유지돼야 한다 (#352)
-        if (blocked)
-            CursorLock.PushUnlock();
-        else
-            CursorLock.PopUnlock();
-
-        // 터는 동안은 움직이지 못한다 — 커서를 푼 채 WASD가 이동으로 새는 것도 함께 막힌다.
-        // ?. 금지 — Unity 오브젝트의 ?.는 C# 참조 null만 보고 파괴 판정(fake null)을 우회한다.
-        if (m_input != null)
-            m_input.SetSuspended(blocked);
-    }
+    /// <summary>입력을 멈출 대상 — 공용 SetBlocked(PanelBase)가 읽는다.</summary>
+    protected override PlayerInputHandler BlockTarget => m_input;
 
     // 칸 내용은 이벤트로만 갱신한다 — Update가 남아 있는 것은 <b>거리</b> 때문이다.
     // 대상이 밧줄에 끌려 멀어지는 것(#365)에는 이벤트가 없어서 매 프레임 볼 수밖에 없다.

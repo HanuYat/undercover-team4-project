@@ -31,7 +31,6 @@ public class ArrestVerdictFeedback : MonoBehaviour
 
     private ArrestJudge Judge => App.Game.ArrestJudge;
 
-    private bool m_handlerRegistered;
 
     private void OnEnable()
     {
@@ -56,38 +55,16 @@ public class ArrestVerdictFeedback : MonoBehaviour
         Judge.OnCorpseJudged -= HandleArrestJudged;
     }
 
+    // 네임드 메시지 수신 — 등록·해제 절차는 NamedMessageSubscription이 맡는다.
+    private NamedMessageSubscription m_message;
+
     private void Start()
     {
-        // 클라이언트 수신 등록 — CustomMessagingManager는 NGO가 시작된 뒤에만 존재한다. (SettlementController와 동일 패턴)
-        NetworkManager nm = NetworkManager.Singleton;
-        if (nm == null)
-            return;
-
-        nm.OnClientStarted += RegisterMessageHandler;
-        if (nm.IsListening)
-            RegisterMessageHandler();
+        m_message = new NamedMessageSubscription(k_messageName, ReceiveVerdict);
+        m_message.Attach();
     }
 
-    private void OnDestroy()
-    {
-        NetworkManager nm = NetworkManager.Singleton;
-        if (nm == null)
-            return;
-
-        nm.OnClientStarted -= RegisterMessageHandler;
-        if (m_handlerRegistered && nm.CustomMessagingManager != null)
-            nm.CustomMessagingManager.UnregisterNamedMessageHandler(k_messageName);
-    }
-
-    private void RegisterMessageHandler()
-    {
-        NetworkManager nm = NetworkManager.Singleton;
-        if (nm == null || nm.CustomMessagingManager == null)
-            return;
-
-        nm.CustomMessagingManager.RegisterNamedMessageHandler(k_messageName, ReceiveVerdict);
-        m_handlerRegistered = true;
-    }
+    private void OnDestroy() => m_message?.Detach();
 
     // 서버·오프라인: 판정 결과를 표시 데이터로 추리고, 검거한 플레이어에게만 표시(로컬 또는 단일 전송).
     private void HandleArrestJudged(ArrestResult result)

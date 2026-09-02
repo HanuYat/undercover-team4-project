@@ -153,7 +153,7 @@ public class TrafficDevHotkeys : NetworkBehaviour
         if (IsSpawned && !IsServer)
             CarRpc();
         else
-            ServerCar(LocalPlayer());
+            ServerCar(DevPlayerLookup.LocalPlayer());
     }
 
     private void RequestCombo()
@@ -161,16 +161,16 @@ public class TrafficDevHotkeys : NetworkBehaviour
         if (IsSpawned && !IsServer)
             ComboRpc();
         else
-            ServerCombo(LocalPlayer());
+            ServerCombo(DevPlayerLookup.LocalPlayer());
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)] // 오너 없는 씬 오브젝트
     private void CarRpc(RpcParams rpcParams = default) =>
-        ServerCar(ResolvePlayer(rpcParams.Receive.SenderClientId));
+        ServerCar(DevPlayerLookup.ResolvePlayer(rpcParams.Receive.SenderClientId));
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void ComboRpc(RpcParams rpcParams = default) =>
-        ServerCombo(ResolvePlayer(rpcParams.Receive.SenderClientId));
+        ServerCombo(DevPlayerLookup.ResolvePlayer(rpcParams.Receive.SenderClientId));
 
     // ---- 처리 (서버·오프라인) ----
 
@@ -314,27 +314,5 @@ public class TrafficDevHotkeys : NetworkBehaviour
 
     // ---- 조회 (BombDevHotkeys와 같은 구현) ----
 
-    // 이 피어의 플레이어 — 세션이 없으면(오프라인 Play) 씬에 하나뿐이다.
-    private static Transform LocalPlayer()
-    {
-        NetworkManager manager = NetworkManager.Singleton;
-        if (manager != null && manager.IsListening && manager.LocalClient?.PlayerObject != null)
-            return manager.LocalClient.PlayerObject.transform;
-
-        // 매니저가 아니라 스폰물이라 R1(FindFirstObjectByType 금지)의 대상이 아니다
-        PlayerMovement player = FindFirstObjectByType<PlayerMovement>();
-        return player != null ? player.transform : null;
-    }
-
-    private static Transform ResolvePlayer(ulong clientId)
-    {
-        NetworkManager manager = NetworkManager.Singleton;
-        if (manager != null
-            && manager.ConnectedClients.TryGetValue(clientId, out NetworkClient client)
-            && client.PlayerObject != null)
-            return client.PlayerObject.transform;
-
-        return null;
-    }
 #endif
 }

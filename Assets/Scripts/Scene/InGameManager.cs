@@ -24,17 +24,8 @@ public class InGameManager : SceneManagerBase
     /// </summary>
     public override async UniTask WaitUntilReadyAsync(CancellationToken token)
     {
-        float deadline = Time.realtimeSinceStartup + k_localReadyTimeoutSeconds;
-        await UniTask.WaitUntil(
-            () => IsLocallyReady() || Time.realtimeSinceStartup >= deadline,
-            cancellationToken: token
-        );
-
-        if (!IsLocallyReady())
-            Debug.LogWarning(
-                $"[InGameManager] 로컬 준비를 {k_localReadyTimeoutSeconds}초 내에 확인하지 못했다 — 그대로 진행한다",
-                this
-            );
+        await WaitUntilLocallyReadyAsync(
+            token, IsLocallyReady, k_localReadyTimeoutSeconds, "로컬 준비");
 
         // 준비 완료 보고 (#410) — 기다리지 않고 바로 들어간다. 게이트가 없으면(오프라인·씬 직접 Play) 무동작.
         App.Game.ReadyGate?.ReportSelfReady();
