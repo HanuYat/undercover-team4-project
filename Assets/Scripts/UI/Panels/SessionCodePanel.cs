@@ -4,7 +4,7 @@ using UnityEngine.Localization;
 using UnityEngine.UI;
 
 /// <summary>
-/// 세션 코드 HUD — 인게임 좌측 상단에 현재 세션 코드만 표시한다. (#247)
+/// 세션 코드 HUD — 인게임 우측 상단에 현재 세션 코드만 표시한다. (#247)
 /// 참가자에게 코드를 공유할 수 있게 상시 노출하고, 세션이 없으면(오프라인·테스트) 아무것도 그리지 않는다.
 /// OnGUI 디버그 UI를 대체하는 정식 표시.
 /// </summary>
@@ -28,13 +28,21 @@ public class SessionCodePanel : PanelBase
     [SerializeField]
     private LocalizedString m_codeFormat;
 
-    [Tooltip("복사 버튼을 누르면 뜨는 토스트 — Common.Toast.Copied")]
+    [Tooltip("복사 확인 문구 — Common.Toast.Copied")]
     [SerializeField]
     private LocalizedString m_copiedToast;
 
-    [Tooltip("복사 토스트가 떠 있는 시간(초)")]
+    [Tooltip("복사 확인 문구를 띄울 라벨 — 세션 코드 바로 아래 자리 (#977)")]
     [SerializeField]
-    private float m_toastSeconds = 2f;
+    private TMP_Text m_copiedLabel;
+
+    [Tooltip("복사 확인 문구가 떠 있는 시간(초)")]
+    [Min(0.5f)]
+    [SerializeField]
+    private float m_copiedSeconds = 2f;
+
+    // 문구를 내릴 시각(Time.time). 0이면 지금 떠 있지 않다.
+    private float m_copiedHideTime;
 
     private SessionManager Session => App.Net.Session;
 
@@ -50,6 +58,11 @@ public class SessionCodePanel : PanelBase
 
         if (m_copyButton != null)
             m_copyButton.onClick.AddListener(HandleCopyClicked);
+
+        // 껐다 켜면 이전 확인 문구는 지운다 — 남겨두면 누른 적 없는 문구가 떠 있는 채로 열린다
+        m_copiedHideTime = 0f;
+        if (m_copiedLabel != null)
+            m_copiedLabel.enabled = false;
 
         Refresh();
     }
@@ -69,7 +82,10 @@ public class SessionCodePanel : PanelBase
     }
 
     /// <summary>
-    /// 코드를 클립보드에 복사하고 토스트로 알린다. 세션이 없으면 아무 것도 하지 않는다.
+    /// 코드를 클립보드에 복사하고 <b>코드 바로 아래</b>에 확인 문구를 띄운다. 세션이 없으면 아무 것도 하지 않는다.
+    ///
+    /// 전역 토스트(<c>App.UI.Toast</c>)를 쓰지 않는 이유는 자리다 — 코드는 우측 상단인데 확인 문구가
+    /// 화면 반대편에 뜨면 방금 누른 것의 결과로 읽히지 않는다. (#977)
     /// </summary>
     private void HandleCopyClicked()
     {
@@ -77,9 +93,39 @@ public class SessionCodePanel : PanelBase
             return;
 
         GUIUtility.systemCopyBuffer = Session.CurrentSession.Code;
+        ShowCopied();
+    }
 
-        if (App.UI.Toast != null)
-            App.UI.Toast.Show(m_copiedToast, m_toastSeconds);
+    private void ShowCopied()
+    {
+        if (m_copiedLabel == null)
+        {
+            Debug.LogWarning("SessionCodePanel: 복사 확인 라벨이 연결되지 않았습니다.", this);
+            return;
+        }
+
+        // 한 번 읽어 대입한다 — 문구가 2초만 떠 있어 그사이 언어가 바뀌는 경우를 다룰 이유가 없다
+        // (세션 코드 라벨이 StringChanged를 구독하는 것과 갈리는 지점).
+        m_copiedLabel.text = m_copiedToast != null && !m_copiedToast.IsEmpty
+            ? m_copiedToast.GetLocalizedString()
+            : string.Empty;
+
+        m_copiedLabel.enabled = true;
+        m_copiedHideTime = Time.time + m_copiedSeconds;
+    }
+
+    // 코루틴 대신 타이머로 내린다 — architecture.md 비동기 대기 규칙(코루틴 금지).
+    private void Update()
+    {
+        if (m_copiedHideTime <= 0f)
+            return;
+
+        if (Time.time < m_copiedHideTime)
+            return;
+
+        m_copiedHideTime = 0f;
+        if (m_copiedLabel != null)
+            m_copiedLabel.enabled = false;
     }
 
     private void HandleSessionJoined(string sessionId) => Refresh();

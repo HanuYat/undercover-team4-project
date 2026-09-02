@@ -23,6 +23,13 @@ public class PlayerPresenceToastView : MonoBehaviour
     [Min(0.5f)]
     [SerializeField] private float m_toastSeconds = 3f;
 
+    [Tooltip("알림 배경색 — 검거 알림(ArrestNoticeBroadcaster)과 같은 공용 팔레트를 쓴다 (#951)")]
+    [SerializeField] private UiColorPalette m_palette;
+
+    [Tooltip("알림 배경 채움 투명도")]
+    [Range(0f, 1f)]
+    [SerializeField] private float m_toastAlpha = 0.95f;
+
     // 구독해 둔 명부. 세션 상주라 대개 이미 스폰돼 있지만, 세션 시작 전(타이틀)이나 원격 클라의 늦은
     // 스폰 동기화에서는 아직 없다 — 잡힐 때까지 기다린다 (TeamFundBalanceView와 같은 방식).
     private SessionRoster m_roster;
@@ -59,11 +66,26 @@ public class PlayerPresenceToastView : MonoBehaviour
         m_roster = null;
     }
 
-    private void HandlePlayerJoined(string nickname) => ShowToast(m_joinedToast, nickname);
+    // 입장은 성공색, 퇴장은 중립색 — 나가는 것은 사고가 아니라 그냥 일어난 일이라 실패색을 쓰지 않는다.
+    private void HandlePlayerJoined(string nickname) =>
+        ShowToast(m_joinedToast, nickname, Tone(true));
 
-    private void HandlePlayerLeft(string nickname) => ShowToast(m_leftToast, nickname);
+    private void HandlePlayerLeft(string nickname) =>
+        ShowToast(m_leftToast, nickname, Tone(false));
 
-    private void ShowToast(LocalizedString message, string nickname)
+    // 배선이 빠지면 프리팹 기본색으로 뜬다 — 색만 빠질 뿐 알림 자체는 살아 있어야 한다.
+    private Color? Tone(bool joined)
+    {
+        if (m_palette == null)
+            return null;
+
+        return UiColorPalette.WithAlpha(
+            joined ? m_palette.Positive : m_palette.Neutral,
+            m_toastAlpha
+        );
+    }
+
+    private void ShowToast(LocalizedString message, string nickname, Color? tone)
     {
         if (string.IsNullOrEmpty(nickname))
             return; // 닉네임 보고가 닿기 전에 끊긴 경우 — 알릴 이름이 없으면 조용히 넘어간다
@@ -78,6 +100,6 @@ public class PlayerPresenceToastView : MonoBehaviour
         message.Arguments = new object[] { nickname };
 
         // 토스트가 없는 환경(타이틀·데디케이티드 서버)에선 null이라 무동작 — PlayerTheftView와 같은 방침
-        App.UI.Toast?.Show(message, m_toastSeconds);
+        App.UI.Toast?.Show(message, m_toastSeconds, tone);
     }
 }
