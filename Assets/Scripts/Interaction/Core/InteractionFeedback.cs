@@ -476,6 +476,8 @@ public class InteractionFeedback : NetworkBehaviour
     /// </summary>
     public static void WarmUpInteractableOutlines()
     {
+        // 씬 전수 검색이지만 <b>로딩 화면 뒤 1회</b>다 — 레지스트리로 바꾸지 않은 자리다 (#961).
+        // IInteractable은 구현체가 수십 종이라 등록·해제를 전부에 심는 비용이 얻는 것보다 크다.
         foreach (
             MonoBehaviour behaviour in Object.FindObjectsByType<MonoBehaviour>(
                 FindObjectsSortMode.None

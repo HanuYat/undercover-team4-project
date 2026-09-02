@@ -88,14 +88,14 @@ public class LonePlayerWatch
     /// </summary>
     public Transform FindForcedTarget()
     {
-        PlayerHealth[] players = UnityEngine.Object.FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
+        IReadOnlyList<PlayerHealth> players = PlayerHealth.All;
 
-        for (int i = 0; i < players.Length; i++)
+        for (int i = 0; i < players.Count; i++)
             if (IsLoneCandidate(players[i], players))
                 return players[i].transform;
 
         // 아무도 혼자가 아니다 — 붙어 다니는 중이거나 본부 안이다. 테스트는 되게 한다.
-        for (int i = 0; i < players.Length; i++)
+        for (int i = 0; i < players.Count; i++)
             if (players[i] != null && players[i].IsTargetable)
                 return players[i].transform;
 
@@ -111,14 +111,14 @@ public class LonePlayerWatch
 
     // 현장 플레이어 각자가 '혼자'인지 갱신한다. 혼자가 아니게 되면 타이머를 버린다(다시 혼자가 되면 처음부터).
     //
-    // 씬 스캔은 <b>주기당 1회</b>다. 모은 배열을 반경 판정에 그대로 넘긴다 — 예전에는 여기서 한 번,
+    // 목록은 <b>주기당 한 번</b> 잡아 반경 판정에 그대로 넘긴다 — 예전에는 여기서 한 번,
     // 반경 판정이 플레이어마다 SuddenEventUtil.CollectFieldPlayers로 또 한 번 훑어 N명이면 주기당
-    // N+1회였다(6인이면 초당 28회 + 매번 배열 할당).
+    // N+1회였다(6인이면 초당 28회 + 매번 배열 할당). 스캔 자체도 이제 레지스트리 순회다 (#961).
     private void TickLoneTimers()
     {
-        PlayerHealth[] players = UnityEngine.Object.FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
+        IReadOnlyList<PlayerHealth> players = PlayerHealth.All;
 
-        for (int i = 0; i < players.Length; i++)
+        for (int i = 0; i < players.Count; i++)
         {
             PlayerHealth player = players[i];
 
@@ -144,8 +144,8 @@ public class LonePlayerWatch
     }
 
     // 지금 이 순간 혼자인가 — 후보 자격의 순간 조건. 지속 시간은 타이머가 본다.
-    // scanned는 이번 주기에 이미 모아 둔 전체 플레이어 목록이다(위 TickLoneTimers 주석 참고).
-    private bool IsLoneCandidate(PlayerHealth player, PlayerHealth[] scanned)
+    // scanned는 이번 주기에 이미 잡아 둔 전체 플레이어 목록이다(위 TickLoneTimers 주석 참고).
+    private bool IsLoneCandidate(PlayerHealth player, IReadOnlyList<PlayerHealth> scanned)
     {
         // 다운·기능 정지된 플레이어는 제외한다 — 이미 무력한 대상은 쓰는 쪽에서도 다룰 것이 없다
         // (SuddenEventUtil의 현장 플레이어 판정과 같은 기준)
@@ -161,7 +161,7 @@ public class LonePlayerWatch
         Vector3 origin = player.transform.position;
         float radiusSqr = m_loneRadius * m_loneRadius;
 
-        for (int i = 0; i < scanned.Length; i++)
+        for (int i = 0; i < scanned.Count; i++)
         {
             PlayerHealth other = scanned[i];
             if (other == null || other == player || !other.IsTargetable)

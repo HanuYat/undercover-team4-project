@@ -126,8 +126,8 @@ public class NpcFleeState : NpcStateBase
             return; // 길막·포위로 저항 전환됨 — 이 상태는 끝났다
         }
 
-        // 위협 스캔(CollectThreats)은 씬 전체 FindObjectsByType이라 매 프레임 돌리면
-        // 도주 중인 NPC 수만큼 비용이 누적된다(범인 다수 + 미끼 시민 + 난동꾼) — 주기로 묶는다.
+        // 위협 스캔(CollectThreats)을 매 프레임 돌리면 도주 중인 NPC 수만큼 비용이 누적된다
+        // (범인 다수 + 미끼 시민 + 난동꾼) — 주기로 묶는다. 스캔 자체는 #961에서 레지스트리 순회가 됐다.
         // 이탈 판정이 최대 ThreatScan 주기만큼 늦어지지만 게임 상 차이는 없다.
         // 그래서 이 채널은 거리 티어를 타지 않는다 — 늘리면 최적화가 아니라 판정이 느려지는 것이 된다 (#573).
         if (!m_owner.Repath.Due(NpcRepathChannel.ThreatScan))

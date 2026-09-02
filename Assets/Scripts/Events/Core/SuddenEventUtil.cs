@@ -21,21 +21,24 @@ public static class SuddenEventUtil
     /// </summary>
     public static Transform FindRandomFieldPlayer()
     {
-        PlayerHealth[] players = UnityEngine.Object.FindObjectsByType<PlayerHealth>(
-            FindObjectsSortMode.None
-        );
+        IReadOnlyList<PlayerHealth> players = PlayerHealth.All;
 
-        // 후보를 배열 앞쪽에 모아두고 그 안에서 고른다 — 추가 할당 없이 다운된 플레이어를 걸러낸다
+        // 훑으면서 뽑는다(저수지 샘플링) — 레지스트리는 공유 목록이라 예전처럼 후보를 앞쪽으로
+        // 몰아 담을 수 없다. 뽑히는 분포는 그대로고 여전히 추가 할당이 없다.
+        Transform picked = null;
         int candidateCount = 0;
-        for (int i = 0; i < players.Length; i++)
+        for (int i = 0; i < players.Count; i++)
         {
-            if (players[i].IsTargetable)
-                players[candidateCount++] = players[i];
+            PlayerHealth player = players[i];
+            if (player == null || !player.IsTargetable)
+                continue;
+
+            candidateCount++;
+            if (Random.Range(0, candidateCount) == 0)
+                picked = player.transform;
         }
 
-        if (candidateCount == 0)
-            return null;
-        return players[Random.Range(0, candidateCount)].transform;
+        return picked;
     }
 
     /// <summary>
@@ -47,16 +50,14 @@ public static class SuddenEventUtil
     /// </summary>
     public static PlayerHealth FindNearestFieldPlayer(Vector3 origin, float maxRadius)
     {
-        PlayerHealth[] players = UnityEngine.Object.FindObjectsByType<PlayerHealth>(
-            FindObjectsSortMode.None
-        );
+        IReadOnlyList<PlayerHealth> players = PlayerHealth.All;
 
         PlayerHealth nearest = null;
         float nearestSqr = maxRadius * maxRadius; // 반경 밖은 애초에 후보가 되지 않는다
-        for (int i = 0; i < players.Length; i++)
+        for (int i = 0; i < players.Count; i++)
         {
             PlayerHealth player = players[i];
-            if (!player.IsTargetable)
+            if (player == null || !player.IsTargetable)
                 continue;
 
             float sqr = (player.transform.position - origin).sqrMagnitude;
@@ -109,14 +110,14 @@ public static class SuddenEventUtil
     {
         results.Clear();
 
-        PlayerHealth[] players = UnityEngine.Object.FindObjectsByType<PlayerHealth>(
-            FindObjectsSortMode.None
-        );
+        IReadOnlyList<PlayerHealth> players = PlayerHealth.All;
 
         float maxSqr = maxRadius * maxRadius;
-        for (int i = 0; i < players.Length; i++)
+        for (int i = 0; i < players.Count; i++)
         {
             PlayerHealth player = players[i];
+            if (player == null)
+                continue;
             if (!(damageablesToo ? player.IsDamageable : player.IsTargetable))
                 continue;
 
@@ -145,13 +146,14 @@ public static class SuddenEventUtil
     /// </summary>
     public static bool IsHiddenFromFieldPlayers(Vector3 point)
     {
-        PlayerHealth[] players = UnityEngine.Object.FindObjectsByType<PlayerHealth>(
-            FindObjectsSortMode.None
-        );
+        IReadOnlyList<PlayerHealth> players = PlayerHealth.All;
 
         Vector3 target = point + Vector3.up * k_spawnTargetHeight;
-        for (int i = 0; i < players.Length; i++)
+        for (int i = 0; i < players.Count; i++)
         {
+            if (players[i] == null)
+                continue;
+
             Transform playerTransform = players[i].transform;
             Vector3 eye = playerTransform.position + Vector3.up * k_eyeHeight;
             Vector3 toTarget = target - eye;

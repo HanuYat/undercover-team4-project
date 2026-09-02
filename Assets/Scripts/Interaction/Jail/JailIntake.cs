@@ -310,8 +310,8 @@ public class JailIntake : CommonManagerBase
         Vector3 origin = interactor.transform.position;
         float sqrReach = m_admitReach * m_admitReach;
 
-        NpcController[] npcs = FindObjectsByType<NpcController>(FindObjectsSortMode.None);
-        for (int i = 0; i < npcs.Length; i++)
+        IReadOnlyList<NpcController> npcs = NpcController.All;
+        for (int i = 0; i < npcs.Count; i++)
         {
             NpcController npc = npcs[i];
             if (npc == null)
@@ -373,7 +373,7 @@ public class JailIntake : CommonManagerBase
         return m_custodyProbeResult;
     }
 
-    // 씬 훑기가 있어 싸지 않다 — 부르는 쪽은 버튼을 <b>겨누고 있는</b> 동안뿐이고, 위 프레임 캐시가
+    // NPC 수만큼 도는 순회다 — 부르는 쪽은 버튼을 <b>겨누고 있는</b> 동안뿐이고, 위 프레임 캐시가
     // 그 동안에도 프레임당 한 번으로 묶는다.
     private bool ProbeCustody(GameObject interactor)
     {
@@ -385,8 +385,8 @@ public class JailIntake : CommonManagerBase
         Vector3 origin = interactor.transform.position;
         float sqrReach = m_admitReach * m_admitReach;
 
-        NpcController[] npcs = FindObjectsByType<NpcController>(FindObjectsSortMode.None);
-        for (int i = 0; i < npcs.Length; i++)
+        IReadOnlyList<NpcController> npcs = NpcController.All;
+        for (int i = 0; i < npcs.Count; i++)
         {
             NpcController npc = npcs[i];
             if (npc == null || !IsAdmittableState(npc.CurrentState))

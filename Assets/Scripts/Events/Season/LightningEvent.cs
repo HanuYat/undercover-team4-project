@@ -270,12 +270,10 @@ public class LightningEvent : NetworkBehaviour, IRoundWeather
     {
         s_exposed.Clear();
 
-        PlayerHealth[] players = FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
-        if (players == null)
-            return;
+        System.Collections.Generic.IReadOnlyList<PlayerHealth> players = PlayerHealth.All;
 
         float sqrRadius = radius * radius;
-        for (int i = 0; i < players.Length; i++)
+        for (int i = 0; i < players.Count; i++)
         {
             PlayerHealth player = players[i];
             if (player == null)
