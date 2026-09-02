@@ -4,8 +4,8 @@
 
 ## 1. 지금 상태
 
-- [`ScanInfoView.cs`](../../../Assets/Scripts/UI/ScanInfoView.cs)의 `SetMasked(bool masked)`가 `m_background.color`를 `m_maskedColor`(현재 `Color.black`, 완전 불투명) / `m_scannedColor`(`(0, 0.05, 0.08, 0.72)`, 반투명 다크틸)로 스위칭하고, `m_maskedRoot`(`?` 텍스트)와 `m_contentRoot`(이름·아이콘)를 서로 반대로 토글한다.
-- [`ScanResultPresenter.cs`](../../../Assets/Scripts/UI/ScanResultPresenter.cs)가 로컬 `m_scannedNpcIds`에 없는 NPC를 볼 때마다 `ShowMasked()`를 호출 — 이 판정 로직은 이번 범위 밖, 손대지 않는다.
+- [`ScanInfoView.cs`](../../../Assets/Scripts/UI/Scan/ScanInfoView.cs)의 `SetMasked(bool masked)`가 `m_background.color`를 `m_maskedColor`(현재 `Color.black`, 완전 불투명) / `m_scannedColor`(`(0, 0.05, 0.08, 0.72)`, 반투명 다크틸)로 스위칭하고, `m_maskedRoot`(`?` 텍스트)와 `m_contentRoot`(이름·아이콘)를 서로 반대로 토글한다.
+- [`ScanResultPresenter.cs`](../../../Assets/Scripts/UI/Scan/ScanResultPresenter.cs)가 로컬 `m_scannedNpcIds`에 없는 NPC를 볼 때마다 `ShowMasked()`를 호출 — 이 판정 로직은 이번 범위 밖, 손대지 않는다.
 - [`ScanInfoCard.prefab`](../../../Assets/Prefabs/NPC/ScanInfoCard.prefab): `Background` Image(스프라이트 없음, 단색 채움, 280×100), `MaskedText` TMP(`?`, 96pt, 흰색), NPC 머리 위 월드스페이스 캔버스(`localScale 0.0048`).
 - 참고 패턴: [`MontagePortraitView.cs`](../../../Assets/Scripts/HQ/WantedList/MontagePortraitView.cs)의 `m_unknownTint`(반투명 회색 톤)가 이미 같은 문제("미확인 상태를 불투명 검정 대신 반투명으로")를 몽타주 쪽에서 풀어놓은 선례다. 다만 그쪽의 `MontageDegrader` 단계적 픽셀 페이드는 스캔 진행도와 연결된 별도 배선이 필요해 이번엔 가져오지 않는다(§4 범위 밖).
 

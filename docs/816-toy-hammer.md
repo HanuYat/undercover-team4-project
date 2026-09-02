@@ -17,8 +17,8 @@
 
 | 구성요소 | 경로 | 역할 |
 |---|---|---|
-| 판정 시임 | [Baton.cs](../Assets/Scripts/Item/Baton.cs) | `SwingPower` 구조체·`RollSwingPower()`·`ImpactFxFor(..., bool critical)`·`WeaponLogName`을 `protected virtual`로 추가 |
-| 아이템 본체 | [ToyHammer.cs](../Assets/Scripts/Item/ToyHammer.cs) | 평타 고정 데미지(프리팹 `m_damage`=1) + 확률(`m_criticalChance`, 기본 0.01) + 대박 데미지(`m_criticalDamage`, 기본 9999) |
+| 판정 시임 | [Baton.cs](../Assets/Scripts/Item/Weapons/Baton.cs) | `SwingPower` 구조체·`RollSwingPower()`·`ImpactFxFor(..., bool critical)`·`WeaponLogName`을 `protected virtual`로 추가 |
+| 아이템 본체 | [ToyHammer.cs](../Assets/Scripts/Item/Weapons/ToyHammer.cs) | 평타 고정 데미지(프리팹 `m_damage`=1) + 확률(`m_criticalChance`, 기본 0.01) + 대박 데미지(`m_criticalDamage`, 기본 9999) |
 | 효과음/연출 식별자 | `Enums.cs`의 `EAudioClip`/`EFx` | `HammerHit`/`HammerCrit` 각각 맨 뒤에 추가 (직렬화 순서 보존을 위해 중간 삽입 금지) |
 | 프리팹 | `Assets/Prefabs/Items/ToyHammer.prefab` | `Baton.prefab` 복제 → 컴포넌트를 `ToyHammer`로 교체. NetworkObject의 `GlobalObjectIdHash`는 복제 직후 Baton과 충돌했었고, 프리팹 스테이지를 열었다 저장해 재생성함(중복 해시로 두면 NGO 프리팹 조회가 깨진다) |
 | 손모델 래퍼 | `Assets/Prefabs/Items/ToyHammerHeldModel.prefab` | 서드파티 에셋 `Rubber Play Hammer/SM_Bouncy_Hammer_Toy.prefab`(원본 수정 금지)를 자식으로 0.45배 스케일해 담은 신규 래퍼. `ToyHammer.HeldModelPrefab`이 이걸 가리킨다 |

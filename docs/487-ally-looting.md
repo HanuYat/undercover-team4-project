@@ -87,21 +87,21 @@
 
 | 파일 | 역할 |
 |---|---|
-| [PlayerLooter.cs](../Assets/Scripts/Player/PlayerLooter.cs) | **터는 쪽.** 요청 → RPC → 서버 검증(`CanLoot`) → 이전 실행 |
-| [PlayerLootable.cs](../Assets/Scripts/Player/PlayerLootable.cs) | **털리는 쪽.** `CanBeLooted` · `Loadout`/`Wallet` 접근자 · 피해 알림 |
-| [LootableBodyInteractable.cs](../Assets/Scripts/Player/LootableBodyInteractable.cs) | E 진입점. 겨냥당한 `PlayerLootable` + 누른 `PlayerLooter`를 짝지어 준다 |
+| [PlayerLooter.cs](../Assets/Scripts/Player/Loot/PlayerLooter.cs) | **터는 쪽.** 요청 → RPC → 서버 검증(`CanLoot`) → 이전 실행 |
+| [PlayerLootable.cs](../Assets/Scripts/Player/Loot/PlayerLootable.cs) | **털리는 쪽.** `CanBeLooted` · `Loadout`/`Wallet` 접근자 · 피해 알림 |
+| [LootableBodyInteractable.cs](../Assets/Scripts/Player/Loot/LootableBodyInteractable.cs) | E 진입점. 겨냥당한 `PlayerLootable` + 누른 `PlayerLooter`를 짝지어 준다 |
 | [LootPanel.cs](../Assets/Scripts/UI/Panels/LootPanel.cs) | 약탈 창 (`PanelBase`) |
-| [LootSlotView.cs](../Assets/Scripts/UI/LootSlotView.cs) | 소지품 칸 하나. 클릭 → 가져가기 요청 |
-| [LootFundsView.cs](../Assets/Scripts/UI/LootFundsView.cs) | 개인 자금 칸. 금액 표시 · 클릭 → 전액 가져가기 요청 |
-| [HeldItemsWatcher.cs](../Assets/Scripts/Player/HeldItemsWatcher.cs) | 부착 지점 자식 변화를 이벤트로 중계 (§4-4) |
-| [PlayerWallet.cs](../Assets/Scripts/Economy/PlayerWallet.cs) | `ServerTransferAllTo` 추가 |
-| [PlayerLoadout.cs](../Assets/Scripts/Player/PlayerLoadout.cs) | watcher 부착 + `OnHeldItemsChangedAnyPeer` 공개 |
+| [LootSlotView.cs](../Assets/Scripts/UI/Inventory/LootSlotView.cs) | 소지품 칸 하나. 클릭 → 가져가기 요청 |
+| [LootFundsView.cs](../Assets/Scripts/UI/Inventory/LootFundsView.cs) | 개인 자금 칸. 금액 표시 · 클릭 → 전액 가져가기 요청 |
+| [HeldItemsWatcher.cs](../Assets/Scripts/Player/Inventory/HeldItemsWatcher.cs) | 부착 지점 자식 변화를 이벤트로 중계 (§4-4) |
+| [PlayerWallet.cs](../Assets/Scripts/Economy/Funds/PlayerWallet.cs) | `ServerTransferAllTo` 추가 |
+| [PlayerLoadout.cs](../Assets/Scripts/Player/Inventory/PlayerLoadout.cs) | watcher 부착 + `OnHeldItemsChangedAnyPeer` 공개 |
 
 ### 4-2. 왜 터는 쪽/털리는 쪽을 나눴나
 
 [PlayerCarrier](../Assets/Scripts/Player/Escort/PlayerCarrier.cs)는 두 역할을 한 컴포넌트에 두는데,
 그 근거는 **짝 상태 공유**다(`CarriedTarget` ↔ `m_carriedBy`, "끌면서 끌려가는" 조합 차단).
-**약탈에는 짝 상태가 없어** 그 근거가 성립하지 않는다. 대신 소매치기([Pickpocket](../Assets/Scripts/Events/Pickpocket.cs), #303)가
+**약탈에는 짝 상태가 없어** 그 근거가 성립하지 않는다. 대신 소매치기([Pickpocket](../Assets/Scripts/Events/Npc/Pickpocket.cs), #303)가
 세운 축을 따랐다 — *행위 주체가 로직을 갖고, 피해자는 목록만 내준다.*
 
 부수 효과로 **알림 방향이 또렷해졌다**: `NotifyOwner`는 그 컴포넌트의 오너에게 가므로,
@@ -236,7 +236,7 @@ HUD  ← LootPanel 컴포넌트
 잔액이 생기는 경로는 셋뿐이고 셋 다 판을 한 바퀴 돌려야 한다 — 라운드 정산
 ([SettlementController.cs](../Assets/Scripts/Round/SettlementController.cs)) · 비밀 청탁 보상
 ([SecretFavorBroker.cs](../Assets/Scripts/HQ/SecretFavorBroker.cs), #485) · 세이브 복원
-([PlayerWallet.OnNetworkSpawn](../Assets/Scripts/Economy/PlayerWallet.cs)).
+([PlayerWallet.OnNetworkSpawn](../Assets/Scripts/Economy/Funds/PlayerWallet.cs)).
 
 **대신 MCP `execute_code`로 Play 중에 지갑을 채웠다.** `ServerAdd`가 `public`이라 코드를 건드릴 필요가
 없고, `execute_code`는 파일을 만들지 않으므로 **디버그 훅이 커밋에 새어 들어갈 여지가 없다.**
@@ -250,7 +250,7 @@ foreach (var w in wallets)
 
 **방향이 중요하다 — 호스트가 털리고 원격 클라가 턴다.** 자금이 실린 `LootOpenedRpc`도, 자금을 옮기는
 `TakeFundsRpc`/`FundsTakenRpc`도 **약탈자가 원격일 때만** 실행된다(`IsServer && !IsOwner`,
-[PlayerLooter.cs](../Assets/Scripts/Player/PlayerLooter.cs)). 반대로 하면 RPC를 통째로 건너뛴다.
+[PlayerLooter.cs](../Assets/Scripts/Player/Loot/PlayerLooter.cs)). 반대로 하면 RPC를 통째로 건너뛴다.
 
 그다음 **가상 플레이어가 쓰러진 호스트에 E** → **여기서 한 번 끊는다**(자금 칸에 금액이 뜨는지 보고,
 서버 잔액이 아직 그대로인지 확인) → **자금 칸 클릭**.

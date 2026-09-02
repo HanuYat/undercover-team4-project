@@ -90,7 +90,7 @@ git commit -m "미스캔 스캔 카드용 정적 노이즈 텍스처 추가 (#94
 ### Task 2: 스캔 카드 마스킹 배경/텍스트 값 조정
 
 **Files:**
-- Modify: `Assets/Scripts/UI/ScanInfoView.cs:17` (Tooltip 문구), `Assets/Scripts/UI/ScanInfoView.cs:82` (XML 문서 주석)
+- Modify: `Assets/Scripts/UI/Scan/ScanInfoView.cs:17` (Tooltip 문구), `Assets/Scripts/UI/Scan/ScanInfoView.cs:82` (XML 문서 주석)
 - Modify: `Assets/Prefabs/NPC/ScanInfoCard.prefab`
 
 **Interfaces:**
@@ -99,13 +99,13 @@ git commit -m "미스캔 스캔 카드용 정적 노이즈 텍스처 추가 (#94
 
 - [ ] **Step 1: 스테일 코멘트 수정 (`?`가 더는 "까맣게"가 아니므로)**
 
-`Assets/Scripts/UI/ScanInfoView.cs:17`을 다음으로 교체:
+`Assets/Scripts/UI/Scan/ScanInfoView.cs:17`을 다음으로 교체:
 
 ```csharp
     [Tooltip("카드 배경 — 마스킹 여부에 따라 색이 바뀐다(미스캔 시 반투명 노이즈로 마스킹)")]
 ```
 
-`Assets/Scripts/UI/ScanInfoView.cs:82`를 다음으로 교체:
+`Assets/Scripts/UI/Scan/ScanInfoView.cs:82`를 다음으로 교체:
 
 ```csharp
     /// <summary>미스캔 NPC — 카드를 반투명 노이즈로 마스킹하고 물음표만 띄운다(이름·아이콘은 통째로 숨김).</summary>
@@ -171,7 +171,7 @@ finally
 - [ ] **Step 6: 커밋**
 
 ```bash
-git add Assets/Scripts/UI/ScanInfoView.cs Assets/Prefabs/NPC/ScanInfoCard.prefab
+git add Assets/Scripts/UI/Scan/ScanInfoView.cs Assets/Prefabs/NPC/ScanInfoCard.prefab
 git commit -m "스캔 카드 미스캔 배경을 반투명으로, 카드를 얇게 조정 (#942)"
 ```
 

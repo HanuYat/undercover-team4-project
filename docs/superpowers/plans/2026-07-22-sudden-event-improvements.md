@@ -33,12 +33,12 @@ MCP `execute_code`는 CodeDom(C# 6): `using`문 금지(본문만), 보간 문자
 
 | 파트 | 파일 | 책임 |
 |---|---|---|
-| A | `Assets/Scripts/Events/SuddenEventManager.cs` (수정) | 인스펙터 리스트 기반 풀 + 항목 토글 + ForceTrigger |
-| B | `Assets/Scripts/NPC/NpcState.cs` (수정) | `Holding` enum 값 추가 |
+| A | `Assets/Scripts/Events/Core/SuddenEventManager.cs` (수정) | 인스펙터 리스트 기반 풀 + 항목 토글 + ForceTrigger |
+| B | `Assets/Scripts/NPC/States/NpcState.cs` (수정) | `Holding` enum 값 추가 |
 | B | `Assets/Scripts/NPC/NpcHoldingState.cs` (신규) | 임시 거처 보행→도착 통보 상태 |
 | B | `Assets/Scripts/NPC/NpcController.Holding.cs` (신규) | `SendToHolding`·`HoldingSpot`·`OnReachedHolding` |
-| B | `Assets/Scripts/NPC/NpcController.cs` (수정) | Awake에 Holding 상태 등록 |
-| B | `Assets/Scripts/NPC/NpcAnimationDriver.cs` (수정) | Holding→Walk 모션 매핑 |
+| B | `Assets/Scripts/NPC/Controller/NpcController.cs` (수정) | Awake에 Holding 상태 등록 |
+| B | `Assets/Scripts/NPC/View/NpcAnimationDriver.cs` (수정) | Holding→Walk 모션 매핑 |
 | B | `Assets/Scripts/Events/SpawnedNpcEvent.cs` (수정) | 임시 거처 이송 + 도착 시 정리 예약 + 폴백 |
 | C | `Assets/Scripts/Events/Config/ThugChargerConfig.cs` (신규) | 차저 튜닝 SO |
 | C | `Assets/Scripts/Events/ThugAttacker.cs` (재작성) | 돌진 사이클 상태 머신 |
@@ -52,7 +52,7 @@ MCP `execute_code`는 CodeDom(C# 6): `using`문 금지(본문만), 보간 문자
 ### Task A1: 인스펙터 명시 리스트 + 항목 토글
 
 **Files:**
-- Modify: `Assets/Scripts/Events/SuddenEventManager.cs`
+- Modify: `Assets/Scripts/Events/Core/SuddenEventManager.cs`
 
 **Interfaces:**
 - Consumes: `ISuddenEvent`, `ISuddenEventProvider.CollectEvents(List<ISuddenEvent>)` (기존).
@@ -131,14 +131,14 @@ return "events in pool = " + (list == null ? -1 : list.Count);
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add Assets/Scripts/Events/SuddenEventManager.cs
+git add Assets/Scripts/Events/Core/SuddenEventManager.cs
 git commit -m "#291: SuddenEventManager 이벤트 풀을 명시 리스트+항목 토글로 전환 (자동수집 제거)"
 ```
 
 ### Task A2: 강제 발동 디버그 API
 
 **Files:**
-- Modify: `Assets/Scripts/Events/SuddenEventManager.cs`
+- Modify: `Assets/Scripts/Events/Core/SuddenEventManager.cs`
 
 **Interfaces:**
 - Produces: `public void ForceTrigger(int index)` — 풀의 index번 이벤트를 즉시 발동(서버/오프라인).
@@ -193,7 +193,7 @@ return "forced trigger index 0 — 콘솔에서 발생 로그 확인";
 - [ ] **Step 3: 커밋**
 
 ```bash
-git add Assets/Scripts/Events/SuddenEventManager.cs
+git add Assets/Scripts/Events/Core/SuddenEventManager.cs
 git commit -m "#291: 돌발 이벤트 강제발동 디버그 API(ForceTrigger) 추가"
 ```
 
@@ -206,7 +206,7 @@ git commit -m "#291: 돌발 이벤트 강제발동 디버그 API(ForceTrigger) �
 ### Task B1: NpcState.Holding 추가
 
 **Files:**
-- Modify: `Assets/Scripts/NPC/NpcState.cs`
+- Modify: `Assets/Scripts/NPC/States/NpcState.cs`
 
 **Interfaces:**
 - Produces: `NpcState.Holding` (enum 끝값).
@@ -232,7 +232,7 @@ MCP `read_console` (type=Error) → 0건. (enum 추가만으로는 동작 변화
 - [ ] **Step 3: 커밋**
 
 ```bash
-git add Assets/Scripts/NPC/NpcState.cs
+git add Assets/Scripts/NPC/States/NpcState.cs
 git commit -m "#291: NpcState.Holding 추가 (임시 거처 이송 상태)"
 ```
 
@@ -241,7 +241,7 @@ git commit -m "#291: NpcState.Holding 추가 (임시 거처 이송 상태)"
 **Files:**
 - Create: `Assets/Scripts/NPC/NpcHoldingState.cs`
 - Create: `Assets/Scripts/NPC/NpcController.Holding.cs`
-- Modify: `Assets/Scripts/NPC/NpcController.cs` (Awake 등록)
+- Modify: `Assets/Scripts/NPC/Controller/NpcController.cs` (Awake 등록)
 
 **Interfaces:**
 - Consumes: `NpcController.Agent`, `NpcController.HoldingSpot`, `NpcState.Holding`, `NpcStateBase(NpcController)`.
@@ -395,14 +395,14 @@ return "state=" + n.CurrentState + " (Holding 기대), dest 세팅됨";
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add Assets/Scripts/NPC/NpcHoldingState.cs Assets/Scripts/NPC/NpcController.Holding.cs Assets/Scripts/NPC/NpcController.cs Assets/Scripts/NPC/NpcHoldingState.cs.meta Assets/Scripts/NPC/NpcController.Holding.cs.meta
+git add Assets/Scripts/NPC/NpcHoldingState.cs Assets/Scripts/NPC/NpcController.Holding.cs Assets/Scripts/NPC/Controller/NpcController.cs Assets/Scripts/NPC/NpcHoldingState.cs.meta Assets/Scripts/NPC/NpcController.Holding.cs.meta
 git commit -m "#291: NpcController Holding 상태 추가 (임시 거처 보행→도착 통보)"
 ```
 
 ### Task B3: NpcAnimationDriver — Holding→Walk 매핑
 
 **Files:**
-- Modify: `Assets/Scripts/NPC/NpcAnimationDriver.cs`
+- Modify: `Assets/Scripts/NPC/View/NpcAnimationDriver.cs`
 
 **Interfaces:**
 - Consumes: `NpcState.Holding`.
@@ -423,7 +423,7 @@ MCP `read_console` 0 에러. (Holding 진입 시 Walk 모션이 재생되는지�
 - [ ] **Step 3: 커밋**
 
 ```bash
-git add Assets/Scripts/NPC/NpcAnimationDriver.cs
+git add Assets/Scripts/NPC/View/NpcAnimationDriver.cs
 git commit -m "#291: Holding 상태 Walk 모션 매핑"
 ```
 

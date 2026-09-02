@@ -63,7 +63,7 @@
 
 ### 1) 데이터 모델 — OfficialRecords variant 세트
 - **[산출물]** 세력마다 문양을 **여러 개** 담을 수 있는 그릇과, "이 세력의 N번째 문양 줘"라고 꺼내는 함수.
-- [`OfficialRecords`](../Assets/Scripts/Data/OfficialRecords.cs): `FactionSymbol{faction, symbol}` → `FactionSymbolSet{faction, Sprite[] variants}` 로 변경.
+- [`OfficialRecords`](../Assets/Scripts/Data/Npc/OfficialRecords.cs): `FactionSymbol{faction, symbol}` → `FactionSymbolSet{faction, Sprite[] variants}` 로 변경.
 - `GetFactionSymbol(faction, int index)` + `GetVariantCount(faction)` 추가.
 - 코드만 먼저. variant 이미지 채우기는 아트/에디터 작업.
 
@@ -76,16 +76,16 @@
 
 ### 3) per-NPC 문양 배정·동기화
 - **[산출물]** NPC 한 명 한 명이 "내 문양은 몇 번"을 갖고, 그게 전 클라에 동기화됨. 정직=진짜, 위조범=가짜.
-- [`CitizenProfile`](../Assets/Scripts/Data/CitizenProfile.cs)에 `m_symbolIndex` 추가.
-- [`CitizenData`](../Assets/Scripts/Data/CitizenData.cs)에 `SymbolIndex(byte)` 추가 (NetworkSerialize·Equals·FromProfile).
-- [`CriminalAssigner`](../Assets/Scripts/NPC/CriminalAssigner.cs): 정직 = `RealIndex(faction)`, 위조범 = 진짜와 다른 가짜 index.
+- [`CitizenProfile`](../Assets/Scripts/Data/Npc/CitizenProfile.cs)에 `m_symbolIndex` 추가.
+- [`CitizenData`](../Assets/Scripts/Data/Npc/CitizenData.cs)에 `SymbolIndex(byte)` 추가 (NetworkSerialize·Equals·FromProfile).
+- [`CriminalAssigner`](../Assets/Scripts/NPC/Profile/CriminalAssigner.cs): 정직 = `RealIndex(faction)`, 위조범 = 진짜와 다른 가짜 index.
   위조범의 이름/문양 오염은 (a)①에 따라 택1(문양 불가 세력은 이름으로 폴백).
-- [`CitizenIdentity.RebuildProfile`](../Assets/Scripts/NPC/CitizenIdentity.cs:74): 수신한 index로 `m_symbolView` 재조회.
+- [`CitizenIdentity.RebuildProfile`](../Assets/Scripts/NPC/Profile/CitizenIdentity.cs:74): 수신한 index로 `m_symbolView` 재조회.
 
 ### 4) 스캔 UI 문양 표시
 - **[산출물]** 스캐너로 조준하면 NPC 카드에 **세력 이름 + 문양 이미지**가 같이 뜸. 미스캔이면 문양도 마스킹.
-- [`ScanInfoView`](../Assets/Scripts/UI/ScanInfoView.cs)에 `Image` 슬롯 추가, `ShowReal`/`ShowMasked` 확장.
-- [`ScanResultPresenter`](../Assets/Scripts/UI/ScanResultPresenter.cs:177)가 `profile.m_symbolView` 전달.
+- [`ScanInfoView`](../Assets/Scripts/UI/Scan/ScanInfoView.cs)에 `Image` 슬롯 추가, `ShowReal`/`ShowMasked` 확장.
+- [`ScanResultPresenter`](../Assets/Scripts/UI/Scan/ScanResultPresenter.cs:177)가 `profile.m_symbolView` 전달.
 - `ScanInfoCard.prefab`에 Image 배선 (에디터 작업).
 
 ### 5) 본부 대조자료 뷰

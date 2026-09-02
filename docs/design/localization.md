@@ -28,7 +28,7 @@
 | `[Tooltip]` · `[Header]` · `Assets/Scripts/Editor/*` | 에디터 전용 — 팀 내부 문자열 |
 | `NotifyOwner(string)` 콘솔 로그 | 위와 같음. §4 Phase 3에서 토스트 경로와 **분리**한 뒤 그대로 둔다 |
 | 플레이어 닉네임 | 사용자 입력 |
-| 시민 이름 풀 ([CitizenNameCatalog](../../Assets/Scripts/Data/CitizenNameCatalog.cs)) | 테이블을 타지 않는다 — 카탈로그의 ko/en 목록 중 **서버가 라운드 시작에 호스트 언어로 하나를 골라** 그 판 내내 굳힌다 (결정 (j), #752) |
+| 시민 이름 풀 ([CitizenNameCatalog](../../Assets/Scripts/Data/Npc/CitizenNameCatalog.cs)) | 테이블을 타지 않는다 — 카탈로그의 ko/en 목록 중 **서버가 라운드 시작에 호스트 언어로 하나를 골라** 그 판 내내 굳힌다 (결정 (j), #752) |
 
 ## 2. 확정된 설계 결정
 
@@ -38,7 +38,7 @@
 | (b) 테이블 분리 | **도메인/화면 단위로 12개** (§3) | 테이블은 Localization의 **로드 단위**다. 하나에 몰면 타이틀 화면이 인게임 문자열까지 들고 있게 된다. 도메인 접두가 곧 테이블이라 키만 봐도 어느 테이블인지 안다 |
 | (c) 언어 선택 위치 | **설정 창**([SettingsPanel](../../Assets/Scripts/UI/Panels/SettingsPanel.cs))에 드롭다운 1개. `GameSettings`에 편입 | 로컬 전용 값이라는 점이 감도·음량과 완전히 같다 — [settings-ui.md](settings-ui.md) (f)의 static 저장소 선례를 그대로 쓴다. 기존 F10 토글(`LocaleSwitchTester`)은 이때 제거 |
 | (d) 언어별 텍스트 반영 | **`LocalizedString.StringChanged` 구독** — 떠 있는 중에 언어를 바꿔도 갱신된다 | [LocalizedMessageView](../../Assets/Scripts/UI/Hud/LocalizedMessageView.cs)가 #251에서 확립한 관례. 정적 라벨은 `LocalizeStringEvent` 컴포넌트가 같은 일을 한다 |
-| (e) 인자가 있는 문구 | **Smart String `{0}` + `LocalizedString.Arguments`**. 인자를 먼저 넣고 구독한다 | [SignalDecoder.ShowLocal](../../Assets/Scripts/Item/SignalDecoder.cs)의 선례. 순서를 어기면 구독 시점의 첫 발화가 인자 없는 문장으로 나간다 |
+| (e) 인자가 있는 문구 | **Smart String `{0}` + `LocalizedString.Arguments`**. 인자를 먼저 넣고 구독한다 | [SignalDecoder.ShowLocal](../../Assets/Scripts/Item/Tools/SignalDecoder.cs)의 선례. 순서를 어기면 구독 시점의 첫 발화가 인자 없는 문장으로 나간다 |
 | (f) `string m_format` 필드 | **`LocalizedString`으로 타입 교체.** `string.Format` 호출을 Smart String으로 대체 | 인스펙터에 한국어 포맷이 박혀 있으면 그 필드는 영원히 번역되지 않는다. 해당 필드 8개는 §4 Phase 2 참고 |
 | (g) 네트워크로 보내는 알림 | **완성된 문장이 아니라 `enum` + 숫자 인자를 보낸다.** 수신 클라가 자기 로케일로 조회 | 서버가 자기 언어로 문장을 만들어 보내면 클라 언어와 무관하게 그 언어가 뜬다. enum은 4바이트고, 문자열보다 RPC 크기도 작다 |
 | (h) enum → 키 매핑 | **규약 기반** — `Item.Feedback.` + enum 이름. 매핑 SO를 만들지 않는다. 규약은 **enum 선언부에 `[LocalizedEnum]`으로 선언**하고 에디터 검증으로 받친다 | 매핑 에셋은 enum이 늘 때마다 같이 고쳐야 하는 두 번째 진실이 된다. 규약이면 enum 값 추가 = 테이블 키 추가로 끝. 대신 컴파일러가 막아 주지 못하므로 그 구멍은 검증으로 메운다 (§7) |
@@ -268,14 +268,14 @@
 | `Title.Auth.NicknamePlaceholder` | `Enter text...` (TMP 기본 더미) | ko `닉네임` / en `Nickname` |
 
 ### Phase 2 — 코드 조립 문자열 (약 60개)
-`LocalizedString` SerializeField + Smart String으로 교체. 관례는 [SignalDecoder](../../Assets/Scripts/Item/SignalDecoder.cs)와 같다.
+`LocalizedString` SerializeField + Smart String으로 교체. 관례는 [SignalDecoder](../../Assets/Scripts/Item/Tools/SignalDecoder.cs)와 같다.
 
 - ~~`SettlementPanel`~~ (15) · ~~`AuthPanel`+`AccountCredentials`+`NicknameRules`~~ (실제 31) · ~~`ScanInfoView`~~ · ~~`ScanResultPresenter`~~ · ~~`ShopStandView`~~ · ~~`CCTVChannelLabelView`~~ · `HqRevivalDevice` · `BombTimerView`
 - ~~`SessionPanel`~~ · ~~`LeaveConfirmPanel`~~ · ~~`LobbyRosterRowView`/`LobbyRosterPanel`~~ · ~~`SessionCodePanel`~~ — **Phase 1에서 앞당겨 처리했다** (해당 씬·프리팹을 손대는 김에)
 - **`string m_format` 필드 8개** → `LocalizedString`: ~~`RoundFundHud`~~(실제 이름은 `RoundFundBoard`) · ~~`ReadyWaitHud`~~ · ~~`RemainingCriminalsHud`~~ · ~~`WantedEntryView`~~ · ~~`BombSerialView`~~(추격 폭탄 개편으로 삭제, #399) · ~~`MicStatusHud`~~ · `HqRevivalDevice` · `CCTVNode`
 - ~~**곁다리 정리:** 검거 판정 문구 3곳 중복~~ — **정정.** 중복은 2곳이 아니라 **번역 대상 1곳**이었다.
-  [ArrestJudge.LogVerdict](../../Assets/Scripts/Interaction/ArrestJudge.cs)의 판정 문구는 `Debug.Log` 안에만 있어 범위 밖(§1)이고,
-  [ArrestVerdictFeedback](../../Assets/Scripts/Interaction/ArrestVerdictFeedback.cs)이 겹쳐 보인 것은 이름 폴백 `"알 수 없음"` 하나였다.
+  [ArrestJudge.LogVerdict](../../Assets/Scripts/Interaction/Arrest/ArrestJudge.cs)의 판정 문구는 `Debug.Log` 안에만 있어 범위 밖(§1)이고,
+  [ArrestVerdictFeedback](../../Assets/Scripts/Interaction/Arrest/ArrestVerdictFeedback.cs)이 겹쳐 보인 것은 이름 폴백 `"알 수 없음"` 하나였다.
   실제 표시는 [VerdictBanner](../../Assets/Scripts/UI/Hud/VerdictBanner.cs) 한 곳이라 합칠 것이 없어 그대로 번역했다 —
   판정 3종은 규약 키 `Hud.Verdict.<ArrestVerdict>`이고 `ArrestVerdict`에 `[LocalizedEnum]`을 붙였다.
 
@@ -366,16 +366,16 @@ ToastOwner(EItemFeedback, args…)     ← 신설. RPC는 enum + 숫자 인자�
 
 - `toast:` bool 매개변수는 제거한다 — 두 책임이 갈렸으므로 분기가 필요 없다
 - `Core/Enums.cs`에 `EItemFeedback` · `EShopReply` 추가. 키는 규약대로 `Item.Feedback.<enum 이름>` / `Shop.Reply.<enum 이름>`
-- 적용 대상(실제): `Scanner` 토스트 5건, [ShopLineup.ReplyRpc](../../Assets/Scripts/Economy/ShopLineup.cs) 4건, [ItemBattery.FullyChargedMessage](../../Assets/Scripts/Item/ItemBattery.cs) → `FullyChargedFeedback`.
+- 적용 대상(실제): `Scanner` 토스트 5건, [ShopLineup.ReplyRpc](../../Assets/Scripts/Economy/Shop/ShopLineup.cs) 4건, [ItemBattery.FullyChargedMessage](../../Assets/Scripts/Item/Power/ItemBattery.cs) → `FullyChargedFeedback`.
   `ChargeBlockedReason`은 로그 전용이라 string 그대로 뒀다 — 토스트로 승격할 때 `EItemFeedback` 값을 늘리면 된다
 - `ToastOwner`에 **인자 매개변수는 두지 않았다** — 지금 문구 11개 중 인자가 필요한 것이 하나도 없다. 필요해지면 그때 오버로드를 얹는다
 - **몽타주는 이 PR에서 제외** — §5 참고
 
 ### Phase 4 — 데이터 에셋
-- ~~[AppearanceDatabase](../../Assets/Scripts/Data/AppearanceDatabase.cs)의 `AxisDefinition.AxisName` · `AppearanceOption.DisplayName` → `LocalizedString`~~ — **완료** (몽타주 번역).
+- ~~[AppearanceDatabase](../../Assets/Scripts/Data/Appearance/AppearanceDatabase.cs)의 `AxisDefinition.AxisName` · `AppearanceOption.DisplayName` → `LocalizedString`~~ — **완료** (몽타주 번역).
   옵션 37개는 `LocalizedString`으로 바꿔 배선했고, **축 이름은 필드를 아예 없앴다** — 축은 데이터가 아니라
   `AppearanceAxis`가 정하는 목록이라 규약 키(`Npc.Axis.` + enum 이름)로 조회한다. 배선할 곳이 6개 줄고 검증에 편입된다
-- ~~[OfficialRecords](../../Assets/Scripts/Data/OfficialRecords.cs)의 `CitizenTypeNames` · `FactionNames` Dictionary → `NpcTable` 조회~~ — **완료.**
+- ~~[OfficialRecords](../../Assets/Scripts/Data/Npc/OfficialRecords.cs)의 `CitizenTypeNames` · `FactionNames` Dictionary → `NpcTable` 조회~~ — **완료.**
   Dictionary를 지우고 `TypeName()`/`FactionName()` 정적 헬퍼로 바꿨다. 키는 규약(`Npc.CitizenType.` · `Npc.Faction.` + enum 이름)이고
   두 enum에 `[LocalizedEnum]`을 붙였다. [DirectoryEntry](../../Assets/Scripts/HQ/Directory/DirectoryEntry.cs)가 이미 **enum을 동기화**하고
   클라가 로컬에서 이름으로 바꾸므로 네트워크 변경은 없었다
@@ -387,7 +387,7 @@ ToastOwner(EItemFeedback, args…)     ← 신설. RPC는 enum + 숫자 인자�
   남겨 두면 그 값은 영원히 번역되지 않는다(결정 (f)). 키가 안 붙은 감정표현은 `Id`가 나오므로 배선 누락이 화면에서 보인다
 - ~~치장 커스터마이징 창 문구 (15개)~~ — **완료.** `CustomizationCanvas` 11개(제목·슬롯 6·색 부위 3·닫기)와
   로비 씬 4개(`EmoteLoadoutCanvas` 제목·닫기, 여는 버튼 2)에 `LocalizeStringEvent`를 붙였다.
-  치장 **아이템 이름 83개는 #818에서 이미** `CosmeticsTable`에 ko/en 양쪽 들어가 있었다 ([CosmeticNames](../../Assets/Scripts/UI/CosmeticNames.cs))
+  치장 **아이템 이름 83개는 #818에서 이미** `CosmeticsTable`에 ko/en 양쪽 들어가 있었다 ([CosmeticNames](../../Assets/Scripts/UI/Cosmetics/CosmeticNames.cs))
 - ~~`CCTVNode.m_locationLabel`~~ — **완료.** 씬의 노드 4개(감옥·횡단보도·본부 앞·상점가 방면)를 `WorldTable`로
 
 > **'없음' 옵션 4개는 키 하나를 공유한다** (`Npc.Appearance.None`). 머리색·수염·모자·안경이 같은 낱말을 쓰고,
@@ -416,7 +416,7 @@ ToastOwner(EItemFeedback, args…)     ← 신설. RPC는 enum + 숫자 인자�
 
 ## 5. 몽타주 전송 구조 — **해결 완료**
 
-Phase 4에서 `AppearanceDatabase`를 번역했지만, 서버가 `BuildMontageText`로 만든 **완성 문자열**을 `FixedString128Bytes`로 실어 보내는 구조가 남아 있었다 ([WantedEntry](../../Assets/Scripts/Data/WantedEntry.cs)). 그래서 호스트가 en, 클라가 ko로 설정해도 **전원이 호스트 언어의 몽타주**를 봤다. 결정 (i)의 전제(전원 같은 언어)에 기대는 대신 전제를 없앴다 — 결정 (g)를 몽타주에도 적용한 것이다.
+Phase 4에서 `AppearanceDatabase`를 번역했지만, 서버가 `BuildMontageText`로 만든 **완성 문자열**을 `FixedString128Bytes`로 실어 보내는 구조가 남아 있었다 ([WantedEntry](../../Assets/Scripts/Data/Npc/WantedEntry.cs)). 그래서 호스트가 en, 클라가 ko로 설정해도 **전원이 호스트 언어의 몽타주**를 봤다. 결정 (i)의 전제(전원 같은 언어)에 기대는 대신 전제를 없앴다 — 결정 (g)를 몽타주에도 적용한 것이다.
 
 | | 이전 | 이후 |
 |---|------|------|
@@ -429,7 +429,7 @@ Phase 4에서 `AppearanceDatabase`를 번역했지만, 서버가 `BuildMontageTe
 - **공개 축은 항목마다 싣는다.** 라운드 내내 고정이고 전 범인 공통이라 `NetworkVariable` 하나로 둘 수도 있었지만,
   그러면 같은 틱에 도착한 리스트 추가와 공개 축 변경의 **적용 순서**에 표시가 걸린다(필드 선언 순서대로 역직렬화되므로
   `OnListChanged`가 옛 공개 축으로 먼저 발화할 수 있다). 항목 하나가 자족적이면 그 문제가 없고, 1바이트다.
-- **나열 순서는 `AppearanceAxis` 선언 순서다** ([RevealedAxisSet](../../Assets/Scripts/Data/AppearanceProfile.cs)).
+- **나열 순서는 `AppearanceAxis` 선언 순서다** ([RevealedAxisSet](../../Assets/Scripts/Data/Appearance/AppearanceProfile.cs)).
   공개 축을 뽑을 때의 셔플 순서는 전송하지 않는다 — 축의 나열 순서는 규칙상 뜻이 없고, 반대로 **어느 피어에서 조립해도
   같은 문장**이 나오는 것은 중요하다(검거로 내렸다가 탈출로 재등재해도(#231) 본부가 기억하던 문장과 같아야 한다).
 - **비공개 축은 실어 보내지 않는다** (`AppearanceProfile.Masked`). 정답 외형은 서버 전용 값이므로

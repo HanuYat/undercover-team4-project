@@ -39,14 +39,14 @@
 |---|---|---|
 | `Assets/Scripts/NPC/Config/NpcCommonConfig.cs` | 컨트롤러 레벨 공용 튜닝값 — `MaxHp`·`SubdueHitPower` 추가 | 1 |
 | `Assets/Scripts/NPC/NpcController.Health.cs` | **신규** — HP 저장소, `IDamageable`, HP 0 → 기절 | 2 |
-| `Assets/Scripts/NPC/NpcController.cs` | `InitBehavior`에서 HP 초기화 호출 / 게이지 멤버 삭제 | 2, 3 |
+| `Assets/Scripts/NPC/Controller/NpcController.cs` | `InitBehavior`에서 HP 초기화 호출 / 게이지 멤버 삭제 | 2, 3 |
 | `Assets/Scripts/NPC/NpcController.Reaction.cs` | 타격 요청 경로를 HP로 전환 | 3 |
-| `Assets/Scripts/NPC/NpcResistState.cs` | 게이지 참조 제거 / 제한시간 도주 제거 / 표적 상실 복귀 | 3, 5 |
+| `Assets/Scripts/NPC/States/NpcResistState.cs` | 게이지 참조 제거 / 제한시간 도주 제거 / 표적 상실 복귀 | 3, 5 |
 | `Assets/Scripts/NPC/Config/NpcResistConfig.cs` | 게이지·제한시간 값 삭제, `NoTargetIdleSeconds` 신설 | 3, 5 |
 | `Assets/Scripts/NPC/NpcSubdueGaugeHud.cs` | 게이지 바 → HP 바 | 3 |
-| `Assets/Scripts/NPC/NpcStunnedState.cs` | 기절 해제 시 풀피 회복 + 배회 복귀 | 4 |
-| `Assets/Scripts/NPC/NpcStateRules.cs` | `HasSubdueInteraction`에 배회 상태 추가 | 6 |
-| `Assets/Scripts/NPC/NpcSubdueInteractable.cs` | `Interact` 분기를 규칙과 일치시킴 | 6 |
+| `Assets/Scripts/NPC/States/NpcStunnedState.cs` | 기절 해제 시 풀피 회복 + 배회 복귀 | 4 |
+| `Assets/Scripts/NPC/States/NpcStateRules.cs` | `HasSubdueInteraction`에 배회 상태 추가 | 6 |
+| `Assets/Scripts/NPC/Controller/NpcSubdueInteractable.cs` | `Interact` 분기를 규칙과 일치시킴 | 6 |
 | `Assets/Scripts/Events/Bomb/BombDevice.cs` | 낡은 주석 갱신 (주석만) | 7 |
 | `docs/GDD.md` | 7-4 저항 플로우 변경 반영 | 7 |
 
@@ -112,7 +112,7 @@ git commit -m "NPC 체력 — 튜닝값(MaxHp/SubdueHitPower)을 NpcCommonConfig
 
 **Files:**
 - Create: `Assets/Scripts/NPC/NpcController.Health.cs`
-- Modify: `Assets/Scripts/NPC/NpcController.cs` (`InitBehavior` 1줄 추가)
+- Modify: `Assets/Scripts/NPC/Controller/NpcController.cs` (`InitBehavior` 1줄 추가)
 
 **Interfaces:**
 - Consumes: `NpcCommonConfig.MaxHp` (Task 1)
@@ -207,7 +207,7 @@ public partial class NpcController : IDamageable
 
 - [ ] **Step 2: InitBehavior에서 초기화 호출**
 
-`Assets/Scripts/NPC/NpcController.cs`의 `InitBehavior()` 안, `m_stateMachine.ChangeState(NpcState.Idle);` **바로 위**에 추가한다:
+`Assets/Scripts/NPC/Controller/NpcController.cs`의 `InitBehavior()` 안, `m_stateMachine.ChangeState(NpcState.Idle);` **바로 위**에 추가한다:
 
 ```csharp
         // 체력은 FSM 시동 전에 채운다 — 첫 틱부터 CurrentHp가 유효해야 한다 (#366)
@@ -217,12 +217,12 @@ public partial class NpcController : IDamageable
 
 - [ ] **Step 3: 컴파일 확인**
 
-Unity Console 에러 0건. `IDamageable`은 `Assets/Scripts/Interaction/IDamageable.cs`에 이미 있으므로 별도 using이 필요 없다(전역 네임스페이스).
+Unity Console 에러 0건. `IDamageable`은 `Assets/Scripts/Interaction/Core/IDamageable.cs`에 이미 있으므로 별도 using이 필요 없다(전역 네임스페이스).
 
 - [ ] **Step 4: 커밋**
 
 ```bash
-git add Assets/Scripts/NPC/NpcController.Health.cs Assets/Scripts/NPC/NpcController.Health.cs.meta Assets/Scripts/NPC/NpcController.cs
+git add Assets/Scripts/NPC/NpcController.Health.cs Assets/Scripts/NPC/NpcController.Health.cs.meta Assets/Scripts/NPC/Controller/NpcController.cs
 git commit -m "NPC 체력 — HP 저장소 + IDamageable 구현, HP 0 시 기절 (#366)"
 ```
 
@@ -235,9 +235,9 @@ git commit -m "NPC 체력 — HP 저장소 + IDamageable 구현, HP 0 시 기절
 여기서 게이지가 사라진다. 게이지를 참조하는 코드가 전부 한 번에 바뀌어야 컴파일이 통과하므로 한 태스크로 묶는다. **이 태스크 이후 저항 NPC를 3번 때리면 체포가 아니라 기절한다.**
 
 **Files:**
-- Modify: `Assets/Scripts/NPC/NpcController.cs` (게이지 멤버 3개 삭제)
+- Modify: `Assets/Scripts/NPC/Controller/NpcController.cs` (게이지 멤버 3개 삭제)
 - Modify: `Assets/Scripts/NPC/NpcController.Reaction.cs` (타격 경로 전환)
-- Modify: `Assets/Scripts/NPC/NpcResistState.cs` (게이지 참조 제거)
+- Modify: `Assets/Scripts/NPC/States/NpcResistState.cs` (게이지 참조 제거)
 - Modify: `Assets/Scripts/NPC/Config/NpcResistConfig.cs` (게이지 값 삭제)
 - Modify: `Assets/Scripts/NPC/NpcSubdueGaugeHud.cs` (HP 바로 전환)
 
@@ -436,7 +436,7 @@ git commit -m "NPC 체력 — HP 저장소 + IDamageable 구현, HP 0 시 기절
 
 - [ ] **Step 6: JailZone의 낡은 주석 갱신**
 
-`Assets/Scripts/Interaction/JailZone.cs:189`가 삭제되는 `SetSubdueGauge`를 예시로 참조하고 있다. 기존:
+`Assets/Scripts/Interaction/Jail/JailZone.cs:189`가 삭제되는 `SetSubdueGauge`를 예시로 참조하고 있다. 기존:
 
 ```csharp
     // 이벤트를 직접 발행한다 (NpcController.SetSubdueGauge / HandleFsmStateChanged와 동일 구조)
@@ -471,7 +471,7 @@ Unity Play 모드(단독). 저항형 NPC를 만들어 수갑 채널링으로 저
 - [ ] **Step 9: 커밋**
 
 ```bash
-git add Assets/Scripts/NPC/NpcController.cs Assets/Scripts/NPC/NpcController.Reaction.cs Assets/Scripts/NPC/NpcResistState.cs Assets/Scripts/NPC/Config/NpcResistConfig.cs Assets/Scripts/NPC/NpcSubdueGaugeHud.cs Assets/Scripts/Interaction/JailZone.cs
+git add Assets/Scripts/NPC/Controller/NpcController.cs Assets/Scripts/NPC/NpcController.Reaction.cs Assets/Scripts/NPC/States/NpcResistState.cs Assets/Scripts/NPC/Config/NpcResistConfig.cs Assets/Scripts/NPC/NpcSubdueGaugeHud.cs Assets/Scripts/Interaction/Jail/JailZone.cs
 git commit -m "NPC 체력 — 제압 게이지를 체력으로 통합, 제압 결과를 기절로 변경 (#366)"
 ```
 
@@ -482,7 +482,7 @@ git commit -m "NPC 체력 — 제압 게이지를 체력으로 통합, 제압 �
 **이 태스크가 빠지면 Task 3의 결과가 반쪽이다.** HP 0 → 기절은 엣지 트리거라, 회복 없이 깨어난 NPC는 두 번 다시 기절하지 않는 무적이 된다.
 
 **Files:**
-- Modify: `Assets/Scripts/NPC/NpcStunnedState.cs`
+- Modify: `Assets/Scripts/NPC/States/NpcStunnedState.cs`
 
 **Interfaces:**
 - Consumes: `NpcController.ServerRestoreHp()` (Task 2), `NpcController.ClearThreat()` (기존)
@@ -547,7 +547,7 @@ Unity Console 에러 0건.
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add Assets/Scripts/NPC/NpcStunnedState.cs
+git add Assets/Scripts/NPC/States/NpcStunnedState.cs
 git commit -m "NPC 체력 — 기절 해제 시 풀피 회복 + 도주 대신 배회 복귀 (#366)"
 ```
 
@@ -559,7 +559,7 @@ git commit -m "NPC 체력 — 기절 해제 시 풀피 회복 + 도주 대신 �
 
 **Files:**
 - Modify: `Assets/Scripts/NPC/Config/NpcResistConfig.cs`
-- Modify: `Assets/Scripts/NPC/NpcResistState.cs`
+- Modify: `Assets/Scripts/NPC/States/NpcResistState.cs`
 
 **Interfaces:**
 - Produces: `NpcResistConfig.NoTargetIdleSeconds` → `float`
@@ -710,7 +710,7 @@ git grep -n "DefeatSeconds\|m_resistStartTime" -- "Assets/Scripts/*.cs"
 - [ ] **Step 9: 커밋**
 
 ```bash
-git add Assets/Scripts/NPC/Config/NpcResistConfig.cs Assets/Scripts/NPC/NpcResistState.cs
+git add Assets/Scripts/NPC/Config/NpcResistConfig.cs Assets/Scripts/NPC/States/NpcResistState.cs
 git commit -m "NPC 체력 — 저항 제한시간 도주 제거 + 표적 상실 시 5초 후 배회 복귀 (#366)"
 ```
 
@@ -721,8 +721,8 @@ git commit -m "NPC 체력 — 저항 제한시간 도주 제거 + 표적 상실 
 `NpcStateRules.HasSubdueInteraction`과 `NpcSubdueInteractable.Interact`의 분기 집합은 **반드시 일치해야 한다**(#184). 둘을 같은 태스크에서 바꾼다.
 
 **Files:**
-- Modify: `Assets/Scripts/NPC/NpcStateRules.cs`
-- Modify: `Assets/Scripts/NPC/NpcSubdueInteractable.cs`
+- Modify: `Assets/Scripts/NPC/States/NpcStateRules.cs`
+- Modify: `Assets/Scripts/NPC/Controller/NpcSubdueInteractable.cs`
 
 **Interfaces:**
 - Consumes: `NpcController.RequestSubdueHit()` (Task 3)
@@ -819,7 +819,7 @@ Unity Console 에러 0건.
 - [ ] **Step 6: 커밋**
 
 ```bash
-git add Assets/Scripts/NPC/NpcStateRules.cs Assets/Scripts/NPC/NpcSubdueInteractable.cs
+git add Assets/Scripts/NPC/States/NpcStateRules.cs Assets/Scripts/NPC/Controller/NpcSubdueInteractable.cs
 git commit -m "NPC 체력 — 배회 중인 NPC도 타격 대상에 포함 (#366)"
 ```
 

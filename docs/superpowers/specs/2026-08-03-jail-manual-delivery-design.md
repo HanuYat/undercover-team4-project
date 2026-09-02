@@ -33,7 +33,7 @@
 
 ### 신규 `JailIntake`
 
-`Assets/Scripts/Interaction/JailIntake.cs`. 서버 권위. 장소 오브젝트라 App 파사드에 등록하지 않는다 — `JailLock`·`HqDropoffZone`과 같은 관례로 씬 탐색을 쓴다.
+`Assets/Scripts/Interaction/Jail/JailIntake.cs`. 서버 권위. 장소 오브젝트라 App 파사드에 등록하지 않는다 — `JailLock`·`HqDropoffZone`과 같은 관례로 씬 탐색을 쓴다.
 
 `JailZone`이 이미 257줄이라 여기에 출입 로직까지 넣으면 팀 리뷰 기준(250줄)을 넘고, 정산 책임과 출입 책임이 한 클래스에 섞인다. **`JailZone`은 대장(수용 인원·현상금·정산 레코드·좌석 소유), `JailIntake`는 출입구**로 나눈다.
 

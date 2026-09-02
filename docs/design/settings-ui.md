@@ -39,7 +39,7 @@
 | (m) 저장 단위 (#796 후속) | **계정 단위** — 키가 `settings.<계정>.<항목>`이다. 단, **창모드·해상도는 기기 단위**로 남기고 **언어도 제외**한다 | 설정은 기기가 아니라 그 사람의 것이라는 판단은 로봇 색과 같다(#432). 예외 둘의 이유는 서로 다르다 — **창모드·해상도**는 진짜로 기기의 성질이다(모니터가 다른 PC에 로그인하면 없는 해상도가 걸리고, 로그인 순간 확인창 없이 화면이 갈아치워진다). **언어**는 `PlayerPrefLocaleSelector`가 로그인 훨씬 전에 복원하는 값이라, 계정으로 가르면 로그인하는 순간 메뉴 언어가 통째로 바뀐다 — 결정 (k)에서 [기본값 복원]에 언어를 넣지 않은 것과 같은 이유다 |
 | (n) 계정 자리 형식 (#796 후속) | 로그인 전('local')에는 **계정 자리를 넣지 않는다** — 키가 `settings.<항목>` 그대로다 | 계정으로 가르기 전에 쓰던 키가 곧 로그인 전 자리가 되어, 갱신해도 이미 맞춰 둔 값을 잃지 않는다. 마이그레이션 코드가 필요 없다 |
 | (o) 계정에 값이 없을 때 (#796 후속) | **밑값이 아니라 '지금 값'을 그대로 둔다** (그리고 그 값이 계정 자리에 쓰인다) | 처음 로그인하는 계정에는 아무것도 없는데 밑값으로 떨어뜨리면, 로그인 전에 맞춰 둔 감도·볼륨이 로그인하는 순간 기본값으로 튄다 |
-| (f) 저장소 형태 | `GameSettings` **static 클래스** (`Assets/Scripts/Core/`) | 씬 오브젝트·라이프사이클이 필요 없는 로컬 값. [SessionFlow](../../Assets/Scripts/Network/SessionFlow.cs)와 같은 static 진입점 선례. R2(매니저 `static Instance` 금지) 위반이 아니며, R3(App 등록) 기준의 "씬 서비스"도 아니다 |
+| (f) 저장소 형태 | `GameSettings` **static 클래스** (`Assets/Scripts/Core/`) | 씬 오브젝트·라이프사이클이 필요 없는 로컬 값. [SessionFlow](../../Assets/Scripts/Network/Session/SessionFlow.cs)와 같은 static 진입점 선례. R2(매니저 `static Instance` 금지) 위반이 아니며, R3(App 등록) 기준의 "씬 서비스"도 아니다 |
 | (g) 감도 의미 | 설정값은 **배율** — `LookInput × 프리팹 기준값 × 설정 배율` | 프리팹/씬의 직렬화 값을 건드리지 않고, "기준값 × 사용자 취향"으로 의미가 분리된다 |
 | (h) 왜곡 구간 음성 음량 | **이 이슈에서 함께 처리** — 음성 음량을 Vivox 전역 API와 **살아 있는 오디오 탭 양쪽**에 적용 | 왜곡 중에는 Vivox 믹스가 죽고 우리 `AudioSource`로 재생돼 전역 API가 통하지 않는다. 새 탭의 기본 `volume`은 1이므로, 방치하면 **음성을 0으로 내려둔 사람도 먹통 이벤트 순간 목소리가 원래 크기로 되살아난다** — 슬라이더 무반응보다 나쁜, 음소거가 저절로 풀리는 동작 |
 | (i) 마이크 음소거 (#430) | **입력 장치 뮤트**(`MuteInputDevice`)로 구현 — 송신 모드로 구현하지 않는다. 음소거 중 PTT를 눌러도 음소거가 이기고 **안내만** 띄운다 | 송신 모드(`SetChannelTransmissionModeAsync`)는 PTT가 이미 쓴다 — 그걸로 음소거를 구현하면 무전 키를 누르는 순간 음소거가 풀린다. 입력 장치 뮤트는 PTT 경로와 겹치지 않아 두 상태가 자연히 독립이다(그래서 `SetRadioTransmit`에 가드를 넣지 않는다). 푸시투언뮤트는 도입하지 않는다 |
@@ -103,7 +103,7 @@ settings.windowMode / resolutionWidth / resolutionHeight   ← 기기 단위, �
 `SettingsPanel`은 `CanCloseWithESC = true`, `IsStackable = true`, **`IsEscMenu = false`**.
 `IsEscMenu`를 켜면 "씬당 진입 메뉴 하나" 규칙에 걸려 [UIManagerBase](../../Assets/Scripts/Core/UIManagerBase.cs)가 에러 로그를 낸다. 스택 패널로 두면 ESC가 `설정 → 일시정지` 순으로 자연히 풀린다.
 
-**커서·입력 정지는 설정 패널이 건드리지 않는다** — [PausePanel](../../Assets/Scripts/UI/PausePanel.cs)이 이미 로컬 플레이어 입력 정지 + 커서 해제를 대칭으로 처리하고 있고, Title 씬에는 플레이어가 없다.
+**커서·입력 정지는 설정 패널이 건드리지 않는다** — [PausePanel](../../Assets/Scripts/UI/Panels/PausePanel.cs)이 이미 로컬 플레이어 입력 정지 + 커서 해제를 대칭으로 처리하고 있고, Title 씬에는 플레이어가 없다.
 
 ## 4. 작업 순서
 
@@ -124,14 +124,14 @@ settings.windowMode / resolutionWidth / resolutionHeight   ← 기기 단위, �
    ```
 
    `VoiceDistortionProfile.Apply()`는 `pitch`만 건드리므로 `volume` 사용은 충돌하지 않고, `volume`은 곱셈으로 걸려 근접 채널 탭의 3D 거리 감쇠도 망치지 않는다.
-3. **`PlayerMovement`** — [L359](../../Assets/Scripts/Player/PlayerMovement.cs#L359)의 `LookInput * m_mouseSensitivity`에 `* GameSettings.MouseSensitivity`를 곱한다. 직렬화 필드 `m_mouseSensitivity`는 "프리팹 기준값"으로 남기고 툴팁에 설정 배율과의 관계를 적는다.
-4. **`Assets/Scripts/UI/SettingsPanel.cs`** — `PanelBase` 상속. `Slider.onValueChanged` → `GameSettings` 대입, 값 텍스트 갱신. `ClosePanel()`·`OnDestroy()` 오버라이드에서 **`PlayerPrefs.Save()` 1회**(둘 다 `virtual`이라 override로 충분). [기본값 복원] → `ResetToDefaults()` + 슬라이더 값 재동기화.
+3. **`PlayerMovement`** — [L359](../../Assets/Scripts/Player/Movement/PlayerMovement.cs#L359)의 `LookInput * m_mouseSensitivity`에 `* GameSettings.MouseSensitivity`를 곱한다. 직렬화 필드 `m_mouseSensitivity`는 "프리팹 기준값"으로 남기고 툴팁에 설정 배율과의 관계를 적는다.
+4. **`Assets/Scripts/UI/Panels/SettingsPanel.cs`** — `PanelBase` 상속. `Slider.onValueChanged` → `GameSettings` 대입, 값 텍스트 갱신. `ClosePanel()`·`OnDestroy()` 오버라이드에서 **`PlayerPrefs.Save()` 1회**(둘 다 `virtual`이라 override로 충분). [기본값 복원] → `ResetToDefaults()` + 슬라이더 값 재동기화.
 5. **프리팹·씬 작업** — `Assets/Prefabs/UI/SettingsCanvas.prefab` 신규 → 4씬 배치 / `PauseCanvas.prefab`에 "설정" 버튼 추가 → `App.UI.Current.OpenPanel<SettingsPanel>()` / Title 메뉴에 설정 버튼 추가.
 
 ## 5. 함정 (구현 전에 알고 갈 것)
 
 - **마스터 음량은 Vivox 음성에 걸리지 않는다.** Vivox는 자체 믹스로 재생돼 `AudioListener.volume` 밖에 있다 — 음성 슬라이더를 따로 두는 실제 이유.
-- **먹통 음성 왜곡 중에는 경로가 뒤집힌다.** [VivoxManager.cs:405](../../Assets/Scripts/Network/VivoxManager.cs#L405)가 `silenceInChannelAudioMix=true`로 Vivox 믹스를 죽이고 우리 `AudioSource`로 재생하므로, 그 구간에는 `SetOutputDeviceVolume`이 먹지 않는다. **탭 `AudioSource.volume`에 함께 반영하는 것으로 해결한다** (결정 (h) · 작업 2). 남는 차이 하나: 이 경로는 Unity 믹스라 마스터 음량도 함께 걸려 왜곡 중 실효 음량이 `마스터 × 음성`이 된다 — 정상 구간(마스터 무관)과 미묘하게 다르지만 왜곡이 짧은 이벤트라 허용한다.
+- **먹통 음성 왜곡 중에는 경로가 뒤집힌다.** [VivoxManager.cs:405](../../Assets/Scripts/Network/Voice/VivoxManager.cs#L405)가 `silenceInChannelAudioMix=true`로 Vivox 믹스를 죽이고 우리 `AudioSource`로 재생하므로, 그 구간에는 `SetOutputDeviceVolume`이 먹지 않는다. **탭 `AudioSource.volume`에 함께 반영하는 것으로 해결한다** (결정 (h) · 작업 2). 남는 차이 하나: 이 경로는 Unity 믹스라 마스터 음량도 함께 걸려 왜곡 중 실효 음량이 `마스터 × 음성`이 된다 — 정상 구간(마스터 무관)과 미묘하게 다르지만 왜곡이 짧은 이벤트라 허용한다.
 - **캔버스 Sort Order 충돌** — `PauseCanvas`·`QuitConfirmCanvas`가 모두 100이다. `PauseCanvas`를 복제해 만든 `SettingsCanvas`도 100을 물려받아, Sort Order가 같은 Overlay 캔버스는 Hierarchy 루트 순서로 승부가 갈린다 → 씬마다 위아래가 달라진다(Shop에서 일시정지가 설정 창을 덮는 문제로 실제 발생). 설정은 일시정지 **위**에 겹치는 유일한 창이므로 프리팹에서 **110**으로 고정한다. 클릭 우선순위(`GraphicRaycaster`)도 같은 순서를 따르므로 이걸 고치면 슬라이더가 안 잡히던 문제도 함께 사라진다.
 - **`PlayerPrefs`는 계정으로 갈렸지만 창모드·해상도는 아니다 (#796 후속).** MPPM 가상 플레이어끼리 감도·볼륨이 섞이는 문제는 계정 단위 저장으로 풀렸지만, **창모드·해상도는 여전히 기기 단위**라 가상 플레이어가 서로 덮는다. 그래픽 검증은 **혼자 켠 빌드**로 할 것.
 - **그래픽 옵션은 에디터에서 검증되지 않는다 (#796).** `Screen.SetResolution`은 에디터 Game 뷰에서 동작하지 않는다 — **빌드로 확인해야 한다.** 또 `PlayerPrefs`는 MPPM 가상 플레이어끼리 공유되므로(계정으로 가른 키는 로봇 색뿐이다) 가상 플레이어로 테스트하면 한쪽 값이 다른 쪽을 덮는다. **혼자 켠 빌드로 확인할 것.**
@@ -160,7 +160,7 @@ settings.windowMode / resolutionWidth / resolutionHeight   ← 기기 단위, �
 ## 7. 미결 항목
 
 - **#372 코드 변경 공유** — 이 이슈가 `VivoxManager`의 왜곡 탭 경로를 건드린다(작업 2). PR 설명에 명시하고 먹통 이벤트 담당과 공유한다 — 설정 창 이슈에서 왜곡 코드가 바뀌는 게 리뷰에서 예상 밖으로 보이지 않게.
-- **무전/근접 분리 볼륨** — Phase 2. 참가자 단위 `SetLocalVolume` 순회 + `ParticipantAddedToChannel` 훅([VivoxManager.cs:217](../../Assets/Scripts/Network/VivoxManager.cs#L217))으로 신규 참가자 처리가 필요.
+- **무전/근접 분리 볼륨** — Phase 2. 참가자 단위 `SetLocalVolume` 순회 + `ParticipantAddedToChannel` 훅([VivoxManager.cs:217](../../Assets/Scripts/Network/Voice/VivoxManager.cs#L217))으로 신규 참가자 처리가 필요.
 - **UI 문자열 로컬라이즈** — 현재 UI 텍스트는 대부분 평문 TMP(로컬라이즈 사용처는 `ItemBase`·`InventoryBarView` 둘). 설정 창 라벨도 관례에 맞춰 평문으로 두고, 로컬라이즈 일괄 작업 때 함께 처리한다.
 
 ---

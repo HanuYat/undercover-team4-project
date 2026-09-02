@@ -45,7 +45,7 @@
 
 `Muscle_Male_01`은 `AppearanceModelCatalog`에서 `NonHumanoid`가 아니라 **범인·디코이로도 나올 수 있는
 모델**이다. 검토 중 "교전 도중 진범과 헷갈려 오검거가 난다"는 우려가 나왔으나 **성립하지 않는다** —
-[`ArrestJudge.TryResolveVerdict`](../../../Assets/Scripts/Interaction/ArrestJudge.cs)가 신원 대조보다
+[`ArrestJudge.TryResolveVerdict`](../../../Assets/Scripts/Interaction/Arrest/ArrestJudge.cs)가 신원 대조보다
 `MisdemeanorOffender` 마커를 **먼저** 보기 때문이다. 복수대 조직원은 스폰 시 마커가 붙으므로 잡으면
 `ArrestVerdict.Misdemeanor` + 경범죄 수익이고, **오검거로 집계되지 않는다.**
 
@@ -137,7 +137,7 @@ public void ResumeReaction(Transform threat)
 
 ### ⑥ 개발자 단축키 — `ServerPrepareForceTrigger` 구현
 
-**단축키 배선 자체는 공짜다.** [`SuddenEventDevHotkeys`](../../../Assets/Scripts/Events/SuddenEventDevHotkeys.cs)가
+**단축키 배선 자체는 공짜다.** [`SuddenEventDevHotkeys`](../../../Assets/Scripts/Events/Core/SuddenEventDevHotkeys.cs)가
 `SuddenEventManager`의 인스펙터 이벤트 풀 순서대로 F1~F12(F9 제외)를 자동으로 물린다 — 풀에 등록만 하면
 키가 붙고, Play 시작 시 실제 매핑이 콘솔에 찍힌다.
 
@@ -154,7 +154,7 @@ public void ResumeReaction(Transform threat)
 | 세력 있는 수감자 존재 | 수감자가 있으면 그 세력, **없으면 임의 세력**으로 진행 |
 | 현장 플레이어 존재 | **그대로 요구** — 없으면 표적이 없어 성립하지 않으므로 false |
 
-납치 이벤트([`AbductionEvent.ServerPrepareForceTrigger`](../../../Assets/Scripts/Events/AbductionEvent.cs))가
+납치 이벤트([`AbductionEvent.ServerPrepareForceTrigger`](../../../Assets/Scripts/Events/Abduction/AbductionEvent.cs))가
 같은 패턴을 쓴다 — 채울 수 있으면 채우고 `true`, 배선·표적이 없으면 경고 남기고 `false`.
 
 **⚠ 단축키 슬롯이 이걸로 만석이다.** 현재 이벤트 10종(돌발 7 — 납치·폭탄추격·기기먹통·범인탈출·소매치기·

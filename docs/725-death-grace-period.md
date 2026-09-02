@@ -70,9 +70,9 @@ HP 0 ──> Down (유예 60초, 화면이 서서히 어두워진다) ──만�
 - 브랜치 생성은 작업 트리를 바꾸지 않으므로 Unity가 열려 있어도 안전하다(에셋 파일이 바뀌지 않는다).
 - 이슈는 이미 `jinag8904` 배정 + 프로젝트 보드 In progress 상태다 — 추가 조치 없음.
 
-### 1. `Assets/Scripts/Player/PlayerIncapacitation.cs` — 유예 상태·타이머·구조 진행
+### 1. `Assets/Scripts/Player/Combat/PlayerIncapacitation.cs` — 유예 상태·타이머·구조 진행
 
-#524 커밋 `c5952c5f`가 지운 코드를 되돌린다. `git show c5952c5f -- Assets/Scripts/Player/PlayerIncapacitation.cs` 의 `-` 라인이 거의 그대로 원본이다.
+#524 커밋 `c5952c5f`가 지운 코드를 되돌린다. `git show c5952c5f -- Assets/Scripts/Player/Combat/PlayerIncapacitation.cs` 의 `-` 라인이 거의 그대로 원본이다.
 
 - `Down` enum 주석을 "휴면"에서 현역으로 되돌린다(`:15-19`). **값 순서는 절대 건드리지 않는다** — NetworkVariable 동기화 enum이라 순서가 곧 와이어 포맷(`:25`).
 - `[SerializeField] private float m_dieAfterDownSeconds = 60f;`
@@ -89,14 +89,14 @@ HP 0 ──> Down (유예 60초, 화면이 서서히 어두워진다) ──만�
 - **신규** `ServerFinishOff()` — 유예 중인 몸을 즉시 완전 사망으로. `ServerKillByAbduction()`(`:269`)과 같은 모양.
 - `IsOutOfAction`(`:95`)은 **손대지 않는다** — 전멸 판정도 조준 히트박스도 유예를 포함하는 것이 이번 결정이다.
 
-### 2. `Assets/Scripts/Player/PlayerHealth.cs` — 진입 원인과 추가 피해
+### 2. `Assets/Scripts/Player/Combat/PlayerHealth.cs` — 진입 원인과 추가 피해
 
 - `SetHp`(`:162`): `Incapacitate(IncapacitationCause.Die)` → `Incapacitate(IncapacitationCause.Down)`. **이 한 줄이 유예 스위치다.**
 - `TakeDamage`(`:89`)에 유예 종결 분기: 대상이 이미 `IsDowned`면 `m_incapacitation.ServerFinishOff()` 후 종료. `OnServerDamaged` 발행 **뒤**, `ModifyHp` **앞**에 둔다(가해자 통지 순서 관례, `:77-79`).
   - HP가 이미 0이라 `applied <= 0`이므로 기존 피격 연출은 나가지 않는다. 유예가 끊긴 것은 **화면이 즉시 암전되는 것**으로 이미 읽히므로 별도 연출을 만들지 않는다.
 - `ServerRevive`(`:139`)와 클래스 주석(`:132-148`)의 "현장 구조는 성립하지 않는다" 서술을 되돌린다. 호출자는 다시 셋이다.
 
-### 3. `Assets/Scripts/Item/Baton.cs` — 아군 오사 가드 완화
+### 3. `Assets/Scripts/Item/Weapons/Baton.cs` — 아군 오사 가드 완화
 
 진압봉의 "이미 무력화된 동료에게는 걸리지 않는다" 판정에서 **유예(`Down`)만 예외**로 유효 대상에 넣는다. 그 외(기절·매달기·납치·완전 사망)는 현행대로 무효. 테이저는 손대지 않는다 — 기절로 유예를 덮으면 복구 경로가 뒤바뀌고, 어차피 1번의 덮어쓰기 가드에 막힌다.
 
@@ -104,14 +104,14 @@ HP 0 ──> Down (유예 60초, 화면이 서서히 어두워진다) ──만�
 
 `Assets/InputSystem_Actions.inputactions` 에 **`Loot` 액션 신설** (`<Keyboard>/r`). R·F·Q·C 모두 미사용이라 충돌이 없고, 왼손 기준 E보다 한 칸 멀어 **배신 행동이 손을 조금 뻗어야 닿는다** — 실수로 동료를 터는 사고가 줄고 의도와도 맞는다. `PlayerInputHandler`에 이벤트 + `LootBinding`(표시용 키 문자열) 추가 — 기존 `InteractBinding`/`UseItemBinding` 관례 그대로.
 
-**일으키기 (E, 탭 후 유지)** — `Assets/Scripts/Player/PlayerReviver.cs`
+**일으키기 (E, 탭 후 유지)** — `Assets/Scripts/Player/Combat/PlayerReviver.cs`
 - 현행 홀드 구독(`OnInteractStarted`/`OnInteractCanceled`, `:56-60`·`:65-69`)을 **탭 시작**으로 바꾼다.
 - 시작 후에는 취소 조건을 감시한다: 이동 입력, 다른 상호작용·아이템 사용 입력, E 재입력(토글 취소), 사거리 이탈, 대상 유예 만료, 구조자 무력화. 사거리·유예 만료는 서버 `keepAlive`(`:207-208`)가 이미 하고 있으므로 **오너 쪽에 추가할 것은 입력 감시뿐**이다.
 - 서버 검증·RPC·중복 구조 방지·게이지는 전부 완성본이므로 그대로 쓴다.
 - 채널링 시작/종료 시 대상의 `PlayerIncapacitation`에 구조 완료 예정 시각을 설정(1번의 `m_reviveEndSynced`).
 - 완전 사망한 몸에 E → 일으켜지지 않고 안내만("부활 키트가 필요하다"). 기존 `CurrentDeadTarget`(`:45`) 경로가 이미 그 일을 한다.
 
-**뒤지기 (R)** — `Assets/Scripts/Player/LootableBodyInteractable.cs` · `PlayerLooter.cs`
+**뒤지기 (R)** — `Assets/Scripts/Player/Loot/LootableBodyInteractable.cs` · `PlayerLooter.cs`
 - 약탈 창을 여는 경로를 E(`IInteractable`)에서 R로 옮긴다. 조준 대상 조회는 `PlayerReviver.FindAllyTarget`(`:89-101`) 패턴을 그대로 쓴다.
 - ⚠ 검토 지점: `InteractionFeedback`(`:219-277`)은 프롬프트를 `IInteractable` 기준으로 그린다. R 안내를 어떻게 얹을지가 이 변경의 실질적 작업이다 — 유예 중인 몸을 겨냥하면 **두 줄**(`[E] 일으키기` / `[R] 뒤지기`)이 떠야 한다.
 - 클래스 주석(`:10-16`)의 "E가 비어 있어서 쓸 수 있었다" 서술 전면 갱신 — 이제 E는 다시 일으키기 자리다.

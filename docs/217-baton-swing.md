@@ -30,7 +30,7 @@ t = 0.90s   쿨다운 해제 (다음 타격 가능)
 
 ### 타이밍을 바꾸려면
 
-[PlayerAnimationDriver](../Assets/Scripts/Player/PlayerAnimationDriver.cs)의 두 상수만 고친다. 셋 다 여기서 파생된다.
+[PlayerAnimationDriver](../Assets/Scripts/Player/View/PlayerAnimationDriver.cs)의 두 상수만 고친다. 셋 다 여기서 파생된다.
 
 ```csharp
 public const float k_swingImpactSeconds = 0.3f;   // 맞는 순간
@@ -139,7 +139,7 @@ Base Layer가 아니라 **레이어 1(UpperBodyAttack)** 에 마스크로 얹는
 
 좌클릭 순간에 데미지를 넣으면 봉이 아직 뒤로 젖혀져 있는데 NPC가 먼저 맞는다. 그래서 애니메이션만 먼저 전 피어에 재생시키고, `k_swingImpactSeconds`만큼 기다렸다가 캐스트한다 (`Baton.ServerResolveHitAtImpactAsync`).
 
-대기 골격은 [ServerChannel](../Assets/Scripts/Interaction/ServerChannel.cs)(#109)을 재사용한다. 홀드 채널링은 아니지만 필요한 게 같다 — 서버 전용 타이머, CTS 소유, 재진입 가드, 디스폰 시 정리.
+대기 골격은 [ServerChannel](../Assets/Scripts/Interaction/Core/ServerChannel.cs)(#109)을 재사용한다. 홀드 채널링은 아니지만 필요한 게 같다 — 서버 전용 타이머, CTS 소유, 재진입 가드, 디스폰 시 정리.
 
 **조준은 소지자 로컬 좌표로 환산해 들고 간다.** 월드로 굳혀 두면 대기하는 0.3초 동안 플레이어가 걷거나 도는 순간 조준선이 몸에서 떨어져 나가, 화면에선 정면을 후려치는데 판정은 0.3초 전 허공에서 나간다. 방향도 몸 기준이라 스윙 도중 마우스로 다시 겨누는 것은 여전히 안 된다.
 
@@ -158,7 +158,7 @@ Base Layer가 아니라 **레이어 1(UpperBodyAttack)** 에 마스크로 얹는
 
 윤곽선의 기본 경로는 상호작용 레이(`PlayerInteractor.Range`, 3m)가 잡은 대상인데 진압봉 사거리는 2m라, 그대로 두면 2~3m 구간에서 **윤곽선은 떴는데 휘둘러도 안 맞는** 상태가 된다. 게다가 겨냥한 몸이 통째로 빛나면 오조준의 긴장이 사라진다.
 
-두 무기를 타입으로 분기하지 않고 [`IAimedWeapon`](../Assets/Scripts/Item/IAimedWeapon.cs)으로 묶었다. `InteractionFeedback`은 인터페이스만 보므로 조준 무기가 늘어도 그 파일을 고칠 필요가 없다.
+두 무기를 타입으로 분기하지 않고 [`IAimedWeapon`](../Assets/Scripts/Item/Weapons/IAimedWeapon.cs)으로 묶었다. `InteractionFeedback`은 인터페이스만 보므로 조준 무기가 늘어도 그 파일을 고칠 필요가 없다.
 
 ```
 IAimedWeapon.HasValidAimTarget(origin, direction)

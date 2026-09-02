@@ -83,7 +83,7 @@ Synty PolygonGeneric 캐릭터는 **모듈러**(민머리 두상 + 탈착 머리
 
 - **클린 베이스**: 내장 머리/모자 부착물이 없는(또는 끈) Generic 바디 위에 몽타주 프롭이 외형을 100% 전담.
 - 적용 순서: HairStyle(프롭) → HairColor(그 프롭 틴트) → SkinColor(바디 `_Skin_Color`) → FacialHair/Headwear/Eyewear(프롭). 색은 `MaterialPropertyBlock`(공유 머티리얼 불변).
-- 담당: 기존 [NpcAppearance.cs](../Assets/Scripts/NPC/NpcAppearance.cs) (프롭 로직 이미 구현됨 — P1/P2).
+- 담당: 기존 [NpcAppearance.cs](../Assets/Scripts/NPC/Appearance/NpcAppearance.cs) (프롭 로직 이미 구현됨 — P1/P2).
 
 ## 5. SciFi 경로 (모델별 카탈로그)
 
@@ -168,7 +168,7 @@ Synty `Generic_Standard`/`Generic_Basic`는 부위별 마스크 틴트를 지원
 **재검토 (#724, 2026-08-19) — 여전히 접는다, 근거는 갈렸다.** #669 §1이 원래 접은 이유(그림이
 판정 조건보다 많이 말해 플레이어가 개체를 특정하게 된다)는 #723이 개체 일치 판정을 되살리며
 사라졌다 — 지금은 얼굴로 개체를 특정하는 게 정상 동작이다. 런타임 렌더 비용도
-[LobbyPortraitStage](../Assets/Scripts/UI/LobbyPortraitStage.cs)(#598)라는 선례가 있어 낮다. 그래도
+[LobbyPortraitStage](../Assets/Scripts/UI/Lobby/LobbyPortraitStage.cs)(#598)라는 선례가 있어 낮다. 그래도
 접는 이유는 위 블록쿼트의 k 보장이 여전히 무너지기 때문이다 — k는 **공개 축** 기준인데(범인 1명 +
 공개 축 일치 디코이 k−1명) 실물을 통째로 그리면 숨겨진 축까지 그림에 나타나 부합 인원이 항상
 1명이 된다. 무전 어휘(이산 축 값이라 부를 수 있다)와 `RevealedAxisSet`·`MatchesOn`·
@@ -270,7 +270,7 @@ SciFi 바디는 통짜 메시라 부위를 떼어낼 수 없고, Generic 프롭�
 
 ## 8. 이슈 #222 — Faction(문양) 대조
 
-스캐폴드 존재, 매 라운드 랜덤 배정 동작 중([CriminalAssigner.cs:163](../Assets/Scripts/NPC/CriminalAssigner.cs:163)).
+스캐폴드 존재, 매 라운드 랜덤 배정 동작 중([CriminalAssigner.cs:163](../Assets/Scripts/NPC/Profile/CriminalAssigner.cs:163)).
 
 - 데이터: `OfficialRecords.Faction {None, FactionA, FactionB}` + `FactionSymbol[]`/`GetFactionSymbol()`, `CitizenProfile.Faction`+`m_symbolView`, `CitizenData`.
 - **남은 작업**
@@ -332,16 +332,16 @@ SciFi 바디는 통짜 메시라 부위를 떼어낼 수 없고, Generic 프롭�
 ### 파일 지도
 | 파일 | 역할 |
 |---|---|
-| [AppearanceProfile.cs](../Assets/Scripts/Data/AppearanceProfile.cs) | 6축 프로필 struct (공통 통화), 네트워크 직렬화 |
-| [AppearanceDatabase.cs](../Assets/Scripts/Data/AppearanceDatabase.cs) + `.asset` | 축별 옵션(표시이름·색·프롭) + `BuildMontageText` (5/9/6/4/7/5) |
-| [AppearanceModelCatalog.cs](../Assets/Scripts/Data/AppearanceModelCatalog.cs) + `.asset` | SciFi 모델 인덱스 → 고정 Profile (20종, §5-1) |
-| [IAppearanceProfileSource.cs](../Assets/Scripts/NPC/IAppearanceProfileSource.cs) | 소비 측 공통 접점 (`Profile`) |
-| [NpcAppearance.cs](../Assets/Scripts/NPC/NpcAppearance.cs) | **Generic 경로** — 바디 토글 + 프롭/틴트 (`SetProfile`) |
-| [NpcCatalogAppearance.cs](../Assets/Scripts/Data/NpcCatalogAppearance.cs) | **SciFi 경로** — 모델 토글 + 카탈로그 룩업 (`SetModelIndex`·`ModelIndex`·`Catalog`) |
+| [AppearanceProfile.cs](../Assets/Scripts/Data/Appearance/AppearanceProfile.cs) | 6축 프로필 struct (공통 통화), 네트워크 직렬화 |
+| [AppearanceDatabase.cs](../Assets/Scripts/Data/Appearance/AppearanceDatabase.cs) + `.asset` | 축별 옵션(표시이름·색·프롭) + `BuildMontageText` (5/9/6/4/7/5) |
+| [AppearanceModelCatalog.cs](../Assets/Scripts/Data/Appearance/AppearanceModelCatalog.cs) + `.asset` | SciFi 모델 인덱스 → 고정 Profile (20종, §5-1) |
+| [IAppearanceProfileSource.cs](../Assets/Scripts/NPC/Appearance/IAppearanceProfileSource.cs) | 소비 측 공통 접점 (`Profile`) |
+| [NpcAppearance.cs](../Assets/Scripts/NPC/Appearance/NpcAppearance.cs) | **Generic 경로** — 바디 토글 + 프롭/틴트 (`SetProfile`) |
+| [NpcCatalogAppearance.cs](../Assets/Scripts/Data/Appearance/NpcCatalogAppearance.cs) | **SciFi 경로** — 모델 토글 + 카탈로그 룩업 (`SetModelIndex`·`ModelIndex`·`Catalog`) |
 | [AppearanceAssigner.cs](../Assets/Scripts/NPC/Appearance/AppearanceAssigner.cs) | 배정기 — 두 경로 공존(`RealizeCriminal/Decoy/NonMatching`), 디코이 k 보장, **범인별** 공개 축 선택 |
 | [MontagePortraitView.cs](../Assets/Scripts/HQ/WantedList/MontagePortraitView.cs) | 수배 행의 그림 몽타주 — 공개 축 레이어를 겹쳐 그린다 (§7) |
 | [MontageLayerBaker.cs](../Assets/Scripts/Editor/MontageLayerBaker.cs) | 레이어 굽기 에디터 툴 — `Tools/몽타주 레이어 굽기` |
-| [NpcSpawner.cs](../Assets/Scripts/NPC/NpcSpawner.cs) | `m_npcPrefab`(SciFi)+`m_npcPrefabAlt`(Generic)+`m_altRatio` 혼합 스폰 |
+| [NpcSpawner.cs](../Assets/Scripts/NPC/Spawn/NpcSpawner.cs) | `m_npcPrefab`(SciFi)+`m_npcPrefabAlt`(Generic)+`m_altRatio` 혼합 스폰 |
 | `Assets/Prefabs/NPC/NPC_Citizen.prefab` | SciFi NPC (20 통짜 바디 토글, `NpcCatalogAppearance`) |
 | `Assets/Prefabs/NPC/NPC_Citizen_Generic.prefab` | Generic NPC (민머리 옷 바디 13종 + `NpcAppearance`, Animator=NPC 컨트롤러 휴머노이드 리타깃) |
 
@@ -926,7 +926,7 @@ Synty가 세 팩에 같은 리그를 실은 것이다. 그래도 스킨 웨이�
 Play에서 **팔·손·목**은 여전히 볼 것. 뒤틀리면 팩마다 NPC 프리팹을 따로 만드는 길(그 팩 스켈레톤을
 그대로 쓰므로 재바인딩이 없다)로 갈아탄다 — 대신 프리팹마다 Animator 리타깃·NavMeshAgent·콜라이더·
 래그돌 배선과 `DefaultNetworkPrefabs` 등록이 필요하고,
-[NpcSpawner.cs](../Assets/Scripts/NPC/NpcSpawner.cs)의 `m_npcPrefabAlt` 한 칸을 가중치 목록으로 바꿔야 한다.
+[NpcSpawner.cs](../Assets/Scripts/NPC/Spawn/NpcSpawner.cs)의 `m_npcPrefabAlt` 한 칸을 가중치 목록으로 바꿔야 한다.
 
 #### 머티리얼은 새로 안 만든다 — 계획 2단계 취소 (2026-08-14)
 

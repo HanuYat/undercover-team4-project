@@ -30,7 +30,7 @@
 
 ### 1. `LobbyRoster` → `SessionRoster` 승격
 
-`Assets/Scripts/Scene/LobbyRoster.cs` → `Assets/Scripts/Network/SessionRoster.cs`.
+`Assets/Scripts/Scene/LobbyRoster.cs` → `Assets/Scripts/Network/Session/SessionRoster.cs`.
 
 씬 배치를 걷어내고 **기존 `Assets/Prefabs/SessionState.prefab`에 컴포넌트로 얹는다.** 그 프리팹이
 이미 `TeamFund`·`ShopPurchases`·`RoundProgress`·`MapSelection`을 한 NetworkObject에 모아 두고

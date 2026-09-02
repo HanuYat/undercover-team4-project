@@ -84,15 +84,15 @@ struct PurchaseTally : INetworkSerializable, IEquatable<PurchaseTally>
 
 **신규**
 
-- `Assets/Scripts/Economy/PurchaseTally.cs` — 동기화 구조체
-- `Assets/Scripts/UI/ShopPurchaseHistoryView.cs`, `ShopPurchaseRowView.cs`
-- `Assets/Scripts/HQ/HqStockBoard.cs`, `HqStockRowView.cs`
+- `Assets/Scripts/Economy/Shop/PurchaseTally.cs` — 동기화 구조체
+- `Assets/Scripts/UI/Shop/ShopPurchaseHistoryView.cs`, `ShopPurchaseRowView.cs`
+- `Assets/Scripts/HQ/Boards/HqStockBoard.cs`, `HqStockRowView.cs`
 - 행 프리팹 2종(`Assets/Prefabs/UI/`), 게시판 프리팹 1종
 
 **수정**
 
-- `Assets/Scripts/Economy/ShopPurchases.cs` — `NetworkList<PurchaseTally>` 추가, 네 메서드에 집계 갱신, `OnNetworkSpawn` 복원에 집계 세우기. 클래스 주석의 "클라가 목록을 알 필요가 없다" 전제를 갱신한다
-- `Assets/Scripts/Data/ShopCatalog.cs` — `IndexOf` 역인덱스 2개, `IsStaple` 주석에 재사용 근거
+- `Assets/Scripts/Economy/Shop/ShopPurchases.cs` — `NetworkList<PurchaseTally>` 추가, 네 메서드에 집계 갱신, `OnNetworkSpawn` 복원에 집계 세우기. 클래스 주석의 "클라가 목록을 알 필요가 없다" 전제를 갱신한다
+- `Assets/Scripts/Data/Shop/ShopCatalog.cs` — `IndexOf` 역인덱스 2개, `IsStaple` 주석에 재사용 근거
 - `Assets/Prefabs/UI/…` 주문창 프리팹 — 우측 컬럼 배치
 - `Shop.unity` / 본부 씬 — 게시판 배치
 - `ShopTable`, `HqTable` 지역화 3종(ko/en/shared)

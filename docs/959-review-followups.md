@@ -26,7 +26,7 @@
 
 `PlayerHealth.CollectLaunched`는 차량 한 대마다 틱마다 불린다(`TrafficVehicle.ServerApplyLaunchedHits`). 그 안에서 `FindObjectsByType<PlayerHealth>`를 돌고 있었다 — 씬 전체 검색 + 배열 할당이 상시 비용으로 깔린 것이다.
 
-**고침** — 이미 있던 등록 목록 `PlayerIncapacitation.All`(#365에서 도입, `OnEnable`/`OnDisable` 자기 등록·해제, 무할당 `IReadOnlyList`)을 순회한다. [PlayerHealth.cs:68](../Assets/Scripts/Player/PlayerHealth.cs)
+**고침** — 이미 있던 등록 목록 `PlayerIncapacitation.All`(#365에서 도입, `OnEnable`/`OnDisable` 자기 등록·해제, 무할당 `IReadOnlyList`)을 순회한다. [PlayerHealth.cs:68](../Assets/Scripts/Player/Combat/PlayerHealth.cs)
 
 동작이 같은 근거 넷:
 
@@ -124,7 +124,7 @@ without permission to perform this operation!. Dropping RPC message
 
 **접지 보고 쪽은 건드리지 않았다.** 흡입 시작의 `ReportGrounded(true)`는 그 시점에 오너가 아직 클라라 **정상 수락**된다(죽기 전이다) — 그러니 UFO 쪽 보고만 막아 봐야 로그가 안 없어질 공산이 크다. 대신 **창을 넓힌 쪽**을 닫았다.
 
-`ServerKillByBodyLost`(UFO 삼킴 · 맨홀 납치가 함께 쓰는 결말 진입점)가 미뤄 둔 이관을 그 자리에서 끝낸다. [PlayerIncapacitation.cs:618](../Assets/Scripts/Player/PlayerIncapacitation.cs)
+`ServerKillByBodyLost`(UFO 삼킴 · 맨홀 납치가 함께 쓰는 결말 진입점)가 미뤄 둔 이관을 그 자리에서 끝낸다. [PlayerIncapacitation.cs:618](../Assets/Scripts/Player/Combat/PlayerIncapacitation.cs)
 
 - **근거는 로그가 아니다.** 회수 불가로 사라진 몸(`BodyLost`)에는 지킬 물리 상태가 없는데, 빔 중에는 뼈가 키네마틱이라 정착 통보가 영영 오지 않아 이관이 **8초 상한 타이머**까지 붕 뜬다. `PlayerCarrier`가 운반 시작에서 [같은 이유로 같은 일](../Assets/Scripts/Player/Escort/PlayerCarrier.cs)을 한다("한창 끌고 가는 중에 권위가 뒤집힌다 — #957이 피하려던 바로 그 그림").
 - 호출 위치는 `SetCause(Die)` **뒤**여야 한다(미룸을 세우는 쪽이 그것이다). 이미 `Die`였던 경로에도 미룸이 남을 수 있어 중복 호출 방어 분기 **밖**에 뒀다. 멱등이라 미룬 것이 없으면 무동작이다.
