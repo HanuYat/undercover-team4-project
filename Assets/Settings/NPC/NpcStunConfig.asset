@@ -12,6 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fef1cca32d75bdf4e9422a38392f41b5, type: 3}
   m_Name: NpcStunConfig
   m_EditorClassIdentifier: Assembly-CSharp::NpcStunConfig
-  m_stunSeconds: 2.67
+  m_stunSeconds: 5
   m_knockdownStunSeconds: 30
   m_standUpSeconds: 1.17
