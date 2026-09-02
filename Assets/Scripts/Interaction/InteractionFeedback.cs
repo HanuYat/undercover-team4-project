@@ -25,10 +25,11 @@ public class InteractionFeedback : NetworkBehaviour
 
     [Header("아웃라인 (EPO)")]
     [Tooltip(
-        "E 상호작용 대상의 기본 윤곽선 색 — 아이템 사용 대상은 ItemBase.TargetOutlineColor를 쓴다"
+        "공용 색 팔레트 — E 상호작용 대상의 윤곽선에 Highlight를 쓴다 (#951). "
+        + "아이템 사용 대상은 ItemBase.TargetOutlineColor로 아이템별 색을 낸다"
     )]
     [SerializeField]
-    private Color m_outlineColor = new Color(1f, 0.85f, 0.2f, 1f);
+    private UiColorPalette m_palette;
 
     private PlayerInteractor m_interactor;
     private PlayerItemUser m_itemUser;
@@ -156,6 +157,27 @@ public class InteractionFeedback : NetworkBehaviour
         outlinable.OutlineLayer = JailRoom.Contains(worldPosition) ? k_jailOutlineLayer : 0;
     }
 
+    // 팔레트 배선이 빠지면 흰색으로 뜬다. 조준 중 <b>매 프레임</b> 지나는 자리라 경고는 한 번만
+    // 찍는다 — 초당 수십 건이 쌓이면 콘솔이 마비되고 진짜 에러가 묻힌다. (#951)
+    private bool m_paletteWarned;
+
+    private Color HighlightColor
+    {
+        get
+        {
+            if (m_palette != null)
+                return m_palette.Highlight;
+
+            if (!m_paletteWarned)
+            {
+                m_paletteWarned = true;
+                Debug.LogWarning("InteractionFeedback: 색 팔레트가 연결되지 않았다", this);
+            }
+
+            return Color.white;
+        }
+    }
+
     private void Refresh()
     {
         // 조준 무기(테이저 8m·진압봉 2m)는 3m 상호작용 레이(CanTarget) 대신 자체 사거리 조준 판정으로
@@ -244,9 +266,9 @@ public class InteractionFeedback : NetworkBehaviour
         }
 
         if (itemUsable || interactUsable)
-            SetOutlined(root, itemUsable ? equipped.TargetOutlineColor : m_outlineColor);
+            SetOutlined(root, itemUsable ? equipped.TargetOutlineColor : HighlightColor);
         else if (allyBodyTargetable)
-            SetOutlined(allyBodyRoot, m_outlineColor);
+            SetOutlined(allyBodyRoot, HighlightColor);
         else
             SetOutlined(null, Color.clear);
 

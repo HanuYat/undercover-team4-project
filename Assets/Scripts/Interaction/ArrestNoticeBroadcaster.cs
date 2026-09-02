@@ -29,8 +29,12 @@ public class ArrestNoticeBroadcaster : MonoBehaviour
     [Min(0f)]
     [SerializeField] private float m_noticeSeconds = 3f;
 
-    [Tooltip("알림 배경색 — 판정 배너(VerdictBanner)의 '진범 검거' 초록과 맞춘 값 (#943)")]
-    [SerializeField] private Color m_noticeTone = new Color(0.290f, 0.871f, 0.502f, 0.95f);
+    [Tooltip("알림 배경색 — 판정 배너(VerdictBanner)와 같은 공용 팔레트의 '성공' 색을 쓴다 (#951)")]
+    [SerializeField] private UiColorPalette m_palette;
+
+    [Tooltip("알림 배경 채움 투명도")]
+    [Range(0f, 1f)]
+    [SerializeField] private float m_noticeAlpha = 0.95f;
 
     private ArrestJudge Judge => App.Game.ArrestJudge;
     private WantedListManager WantedList => App.Game.WantedList;
@@ -198,6 +202,18 @@ public class ArrestNoticeBroadcaster : MonoBehaviour
         }
 
         m_noticeMessage.Arguments = new object[] { citizenName, remaining }; // Show보다 먼저
-        App.UI.Toast?.Show(m_noticeMessage, m_noticeSeconds, m_noticeTone); // HUD 없으면 무동작
+        App.UI.Toast?.Show(m_noticeMessage, m_noticeSeconds, NoticeTone()); // HUD 없으면 무동작
+    }
+
+    // 배선이 빠지면 흰색으로 뜬다 — 검거 알림이 평범한 토스트가 돼 눈에 띄므로 경고도 남긴다.
+    private Color NoticeTone()
+    {
+        if (m_palette == null)
+        {
+            Debug.LogWarning("ArrestNoticeBroadcaster: 색 팔레트가 연결되지 않았다", this);
+            return Color.white;
+        }
+
+        return UiColorPalette.WithAlpha(m_palette.Positive, m_noticeAlpha);
     }
 }

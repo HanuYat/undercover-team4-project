@@ -20,7 +20,11 @@ public class InventorySlotView : MonoBehaviour,
 
     [Header("하이라이트 색")]
     [SerializeField] private Color m_normalColor = new Color(0f, 0f, 0f, 0.5f);
-    [SerializeField] private Color m_selectedColor = new Color(1f, 0.85f, 0.2f, 0.7f);
+    [Tooltip("공용 색 팔레트 — 선택 슬롯에 Highlight를 쓴다 (#951)")]
+    [SerializeField] private UiColorPalette m_palette;
+    [Tooltip("선택 슬롯 채움 투명도")]
+    [Range(0f, 1f)]
+    [SerializeField] private float m_selectedAlpha = 0.7f;
 
     private InventoryBarView m_owner;
     private int m_index;
@@ -100,7 +104,7 @@ public class InventorySlotView : MonoBehaviour,
     /// <summary>선택(장착) 하이라이트 — 배경색 스왑.</summary>
     public void SetSelected(bool selected)
     {
-        m_background.color = selected ? m_selectedColor : m_normalColor;
+        m_background.color = selected ? SelectedColor : m_normalColor;
     }
 
     // ---- 편집 모드 상호작용 (바가 편집 모드일 때만 유효) ----
@@ -147,6 +151,19 @@ public class InventorySlotView : MonoBehaviour,
         if (source != null && source != this)
         {
             m_owner.RequestSwap(source.Index, m_index);
+        }
+    }
+
+    // 배선이 빠지면 흰색으로 뜬다 — 선택 표시가 남아 조용히 넘어가기 쉬우므로 경고를 남긴다. (#951)
+    private Color SelectedColor
+    {
+        get
+        {
+            if (m_palette != null)
+                return UiColorPalette.WithAlpha(m_palette.Highlight, m_selectedAlpha);
+
+            Debug.LogWarning("InventorySlotView: 색 팔레트가 연결되지 않았다", this);
+            return UiColorPalette.WithAlpha(Color.white, m_selectedAlpha);
         }
     }
 }

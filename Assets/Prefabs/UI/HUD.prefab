@@ -692,7 +692,7 @@ MonoBehaviour:
   m_circleImage: {fileID: 8449511206218270137}
   m_crosshairRoot: {fileID: 1265731815198501353}
   m_colorPalette: {fileID: 11400000, guid: 96cb6c008fc818d41b233eafac54a5cf, type: 2}
-  m_interactableColor: {r: 1, g: 0.85, b: 0.2, a: 1}
+  m_uiPalette: {fileID: 11400000, guid: 9e612fc6ea2adfb488c4ce5ce55cf54a, type: 2}
   m_weaponTargetColor: {r: 1, g: 0.25, b: 0.2, a: 1}
   m_hitMarker: {fileID: 9113651649413304787}
   m_hitColor: {r: 1, g: 1, b: 1, a: 1}

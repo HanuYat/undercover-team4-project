@@ -13,7 +13,8 @@ using UnityEngine.UI;
 ///
 /// 게임 중 검거마다 반복 발생하므로 입력을 멈추지 않는 비차단 HUD다(정산 패널과 달리 모달 아님):
 /// ESC 스택에 쌓지 않고(IsStackable=false), <see cref="m_displaySeconds"/>초 뒤 자동으로 숨는다.
-/// 판정에 따라 채움 색을 바꾼다 — 진범=긍정, 오검거=경고, 경범죄=중립. 배경·테두리 배선은
+/// 판정에 따라 채움 색을 바꾼다 — 진범=긍정, 오검거=실패, 경범죄=중립이며 값은 공용
+/// 색 팔레트(<see cref="UiColorPalette"/>, #951)에서 가져온다. 배경·테두리 배선은
 /// 이벤트 알림 토스트(SuddenEventToastView가 쓰는 HUD.prefab의 Toast/Edge 한 쌍)와 같은
 /// 스프라이트 구성을 그대로 가져와 톤만 다르다 (#943).
 /// </summary>
@@ -29,10 +30,8 @@ public class VerdictBanner : PanelBase
     [SerializeField] private Graphic m_toneTarget;          // 카드 채움
     [Range(0f, 1f)]
     [SerializeField] private float m_fillAlpha = 0.95f;
-    [SerializeField] private Color m_positiveColor = new Color(0.290f, 0.871f, 0.502f); // 진범 검거
-    [SerializeField] private Color m_negativeColor = new Color(0.863f, 0.149f, 0.149f); // 오검거 — 진한 레드 (#943)
-    [SerializeField] private Color m_neutralColor  = new Color(0.612f, 0.639f, 0.686f); // 경범죄
-    [SerializeField] private Color m_cautionColor  = new Color(0.984f, 0.749f, 0.141f); // 생포 조건 불충족 (#766)
+    [Tooltip("판정별 강조 색 — 성공/실패/중립/주의를 공용 팔레트에서 가져온다 (#951)")]
+    [SerializeField] private UiColorPalette m_palette;
 
     [Header("표시 시간")]
     [SerializeField] private float m_displaySeconds = 3f;
@@ -230,14 +229,22 @@ public class VerdictBanner : PanelBase
         return verdict.IsCredited() ? EAudioClip.UiSuccess : EAudioClip.UiFail;
     }
 
+    // 판정 → 팔레트의 의미 색. 배선이 빠지면 흰색으로 뜬다 — 판정별 구분이 사라져 눈에 띄므로
+    // 조용히 넘기지 않고 경고까지 남긴다.
     private Color VerdictToColor(ArrestVerdict verdict)
     {
+        if (m_palette == null)
+        {
+            Debug.LogWarning("VerdictBanner: 색 팔레트가 연결되지 않았다", this);
+            return Color.white;
+        }
+
         return verdict switch
         {
-            ArrestVerdict.WantedCriminal => m_positiveColor,
-            ArrestVerdict.Misdemeanor => m_neutralColor,
-            ArrestVerdict.ConditionUnmet => m_cautionColor,
-            _ => m_negativeColor,
+            ArrestVerdict.WantedCriminal => m_palette.Positive,
+            ArrestVerdict.Misdemeanor => m_palette.Neutral,
+            ArrestVerdict.ConditionUnmet => m_palette.Caution,
+            _ => m_palette.Negative,
         };
     }
 

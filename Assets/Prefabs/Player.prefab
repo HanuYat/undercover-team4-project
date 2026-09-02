@@ -2827,7 +2827,8 @@ MonoBehaviour:
   m_icon: {fileID: 9044661684587214066}
   m_nameText: {fileID: 2501460528675392060}
   m_normalColor: {r: 0, g: 0, b: 0, a: 0.5}
-  m_selectedColor: {r: 1, g: 0.85, b: 0.2, a: 0.7}
+  m_palette: {fileID: 11400000, guid: 9e612fc6ea2adfb488c4ce5ce55cf54a, type: 2}
+  m_selectedAlpha: 0.7
 --- !u!1 &2455501068880385326
 GameObject:
   m_ObjectHideFlags: 0
@@ -3306,7 +3307,8 @@ MonoBehaviour:
   m_icon: {fileID: 3379785552695667398}
   m_nameText: {fileID: 1682043223547945509}
   m_normalColor: {r: 0, g: 0, b: 0, a: 0.5}
-  m_selectedColor: {r: 1, g: 0.85, b: 0.2, a: 0.7}
+  m_palette: {fileID: 11400000, guid: 9e612fc6ea2adfb488c4ce5ce55cf54a, type: 2}
+  m_selectedAlpha: 0.7
 --- !u!1 &2542348527413747033
 GameObject:
   m_ObjectHideFlags: 0
@@ -4186,7 +4188,8 @@ MonoBehaviour:
   m_icon: {fileID: 223660311004807709}
   m_nameText: {fileID: 7393129503465453344}
   m_normalColor: {r: 0, g: 0, b: 0, a: 0.5}
-  m_selectedColor: {r: 1, g: 0.85, b: 0.2, a: 0.7}
+  m_palette: {fileID: 11400000, guid: 9e612fc6ea2adfb488c4ce5ce55cf54a, type: 2}
+  m_selectedAlpha: 0.7
 --- !u!1 &3380754115289656118
 GameObject:
   m_ObjectHideFlags: 0
@@ -4577,7 +4580,8 @@ MonoBehaviour:
   m_icon: {fileID: 4358349189570044684}
   m_nameText: {fileID: 849564363746111305}
   m_normalColor: {r: 0, g: 0, b: 0, a: 0.5}
-  m_selectedColor: {r: 1, g: 0.85, b: 0.2, a: 0.7}
+  m_palette: {fileID: 11400000, guid: 9e612fc6ea2adfb488c4ce5ce55cf54a, type: 2}
+  m_selectedAlpha: 0.7
 --- !u!1 &3582970131028460503
 GameObject:
   m_ObjectHideFlags: 0
@@ -4673,7 +4677,8 @@ MonoBehaviour:
   m_icon: {fileID: 1095401935022690198}
   m_nameText: {fileID: 4725887807450014907}
   m_normalColor: {r: 0, g: 0, b: 0, a: 0.5}
-  m_selectedColor: {r: 1, g: 0.85, b: 0.2, a: 0.7}
+  m_palette: {fileID: 11400000, guid: 9e612fc6ea2adfb488c4ce5ce55cf54a, type: 2}
+  m_selectedAlpha: 0.7
 --- !u!1 &3657638882183221715
 GameObject:
   m_ObjectHideFlags: 0
@@ -7392,7 +7397,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::InteractionFeedback
   ShowTopMostFoldoutHeaderGroup: 1
   m_hudPrefab: {fileID: 704170744150459061, guid: 612fdbb3e55fcce429d654d62a964bfe, type: 3}
-  m_outlineColor: {r: 1, g: 0.85, b: 0.2, a: 1}
+  m_palette: {fileID: 11400000, guid: 9e612fc6ea2adfb488c4ce5ce55cf54a, type: 2}
 --- !u!114 &4837865491593241638
 MonoBehaviour:
   m_ObjectHideFlags: 0
