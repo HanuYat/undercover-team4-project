@@ -51,7 +51,6 @@ public class SettlementController : MonoBehaviour
     private RoundManager Round => App.Game.Round;
     private TeamFund TeamFund => App.Game.TeamFund;
 
-
     // 이번 라운드 시작 시점의 팀 자금 — 정산 증감(현재-시작) 기준. TeamFund가 세션 지속형이라(#214)
     // 세션 초기값이 아니라 "이 라운드가 시작될 때" 잔액을 스냅샷해야 이번 라운드 증감이 나온다.
     private int m_roundStartFund;

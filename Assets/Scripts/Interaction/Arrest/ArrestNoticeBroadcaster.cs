@@ -39,7 +39,6 @@ public class ArrestNoticeBroadcaster : MonoBehaviour
     private ArrestJudge Judge => App.Game.ArrestJudge;
     private WantedListManager WantedList => App.Game.WantedList;
 
-
     // 검거마다 재사용하는 버퍼 — 서버에서만 쓴다.
     private readonly HashSet<ulong> m_arresters = new HashSet<ulong>();
     private readonly List<ulong> m_targets = new List<ulong>();

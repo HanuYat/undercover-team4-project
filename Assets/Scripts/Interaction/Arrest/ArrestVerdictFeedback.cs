@@ -31,7 +31,6 @@ public class ArrestVerdictFeedback : MonoBehaviour
 
     private ArrestJudge Judge => App.Game.ArrestJudge;
 
-
     private void OnEnable()
     {
         // 판정은 서버·오프라인에서만 발행된다 — 권위 피어가 이 훅으로 표시·전파를 처리한다.

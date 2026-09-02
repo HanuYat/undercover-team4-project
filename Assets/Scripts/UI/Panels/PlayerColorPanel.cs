@@ -64,7 +64,6 @@ public class PlayerColorPanel : PanelBase
         return player != null ? player.GetComponent<PlayerInputHandler>() : null;
     }
 
-
     private void OnEnable()
     {
         CosmeticLoadout.OnPlayerColorChanged += HandleColorChanged;
