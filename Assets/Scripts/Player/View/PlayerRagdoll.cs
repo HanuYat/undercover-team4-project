@@ -97,6 +97,10 @@ public partial class PlayerRagdoll : MonoBehaviour
 
     private Animator m_animator;
     private CharacterController m_controller;
+
+    // 빔 흡입 중 뼈를 얼려 루트에 붙여 두는 구간인가 + 그 직전 루트 위치 (TickBeamedBodyFollow)
+    private bool m_beamedHold;
+    private Vector3 m_beamedLastRoot;
     private PlayerIncapacitation m_incapacitation;
     private PlayerMovement m_movement;
     private NetworkObject m_netObject;
@@ -141,7 +145,8 @@ public partial class PlayerRagdoll : MonoBehaviour
     /// <summary>
     /// 캡슐이 시체를 따라가야 하는 구간인가 — <see cref="PlayerMovement.Update"/>가 입력 이동을 접는 판정.
     /// </summary>
-    internal bool IsCapsuleFollowingBody => m_state == RagdollState.Ragdoll;
+    internal bool IsCapsuleFollowingBody =>
+        m_state == RagdollState.Ragdoll && (m_incapacitation == null || !m_incapacitation.IsBeamed);
 
     /// <summary>
     /// 물리가 정착했는가 — <see cref="PlayerIncapacitation.RequestLaunchSettled"/>가 비행(#815) 복구
@@ -287,6 +292,22 @@ public partial class PlayerRagdoll : MonoBehaviour
         }
 
         m_rig.SetKinematic(false);
+
+        // ⚠ <b>이미 정착한 몸의 권위를 얻었다면 곧바로 다시 재운다</b> (#957). 이관을 정착까지 미루면서
+        // 이 조합이 처음으로 정상 경로가 됐다. 안 재우면 위 SetKinematic(false)가 뼈를 <b>깨어난 채</b>
+        // 동적으로 만들고, Update의 깨어남 폴링이 그것을 "밟혀서 깨어났다"로 읽어 ResumeFromSleep이
+        // m_settled를 되돌린다 — 멈춰 있던 시체가 다시 흔들렸다 재정착한다.
+        //
+        // 잃는 것은 없다: 정착했다는 것이 곧 속도가 0이라는 뜻이라, 여기서 재워도 물리 상태가 사라지지
+        // 않는다(그것이 이관을 이 시점으로 옮긴 근거이기도 하다 — docs/865-down-ragdoll.md §2-1).
+        //
+        // ⚠ <b>여기서 m_settled가 이미 참인 근거는 전송 순서다.</b> 옛 오너가 Settle()에서
+        // EndStreaming()의 FinalPoseRpc를 먼저 쏘고 그다음 RequestDeathSettled()를 쏘는데, <b>둘 다
+        // 신뢰 RPC라 같은 연결에서 순서가 보장된다</b> — 서버는 종착 자세를 받아
+        // HandleSettledPoseReceived로 m_settled를 세운 <b>뒤에</b> 이관을 받는다. 스트림 패킷
+        // (StreamPoseRpc)만 Unreliable이고 이 마지막 패킷은 아니다.
+        if (m_settled)
+            m_rig.SleepAll();
     }
 
     /// <summary>
@@ -317,6 +338,28 @@ public partial class PlayerRagdoll : MonoBehaviour
     // ⚠ 콜라이더를 껐다 켜면 이 상태가 초기화된다(Unity 사양). 그래서 재적용을 경로마다 흩지 않고
     // <b>캡슐을 켜는 통로 하나</b>에 걸었다 — PlayerMovement.SetCapsuleEnabled가 켜는 순간 부른다.
     // 근거와 옛 폴러가 놓친 구멍은 docs/player-ragdoll.md §6.
+    /// <summary>
+    /// 이 몸의 뼈가 <paramref name="others"/>와 <b>충돌하지 않게</b> 한다 — 전 피어가 각자 부른다.
+    ///
+    /// 쓰는 곳은 <b>치인 차</b>다(<c>TrafficVehicle</c>). 차 몸통 MeshCollider는 Default 레이어이고
+    /// Ragdoll×Default 충돌이 켜져 있어서, <b>정면으로 치이면 몸이 범퍼 앞에 갇힌다</b> — 임펄스로
+    /// 14~25 m/s를 줘도 차가 22 m/s로 따라붙어 매 스텝 다시 부딪히므로 날아가는 대신 끌려간다
+    /// (옆면에 맞으면 메시를 비껴가 잘 날아가던 것이 이 차이였다). 근거는 docs/903-instant-death.md.
+    ///
+    /// ⚠ <b>되돌릴 필요가 없다</b> — 차는 풀로 반납될 때 <c>SetActive(false)</c>되고, 콜라이더를
+    /// 껐다 켜면 이 상태가 초기화된다(Unity 사양 — <see cref="ReapplyCapsuleIgnore"/>가 존재하는
+    /// 이유이기도 하다). 그 관례가 깨지면 여기도 함께 새므로, 풀 반납이 비활성화를 그만두면
+    /// 이 주석을 다시 볼 것.
+    /// </summary>
+    public void IgnoreCollisionWith(Collider[] others, bool ignore)
+    {
+        if (others == null || m_rig == null || !m_rig.IsValid)
+            return;
+
+        for (int i = 0; i < others.Length; i++)
+            m_rig.IgnoreCollisionWith(others[i], ignore);
+    }
+
     internal void ReapplyCapsuleIgnore()
     {
         if (m_controller == null)
@@ -369,25 +412,9 @@ public partial class PlayerRagdoll : MonoBehaviour
         if (!HasMoveAuthority)
             return;
 
-        // 동료가 구조 채널링 중이면 <b>정착한 몸</b>을 붙들어 둔다 (#865). 구조는 <b>완료 시점에만</b>
-        // 사거리를 보고 구조자는 이동하면 채널링이 취소되므로, 그 3초 사이에 시체가 밟혀 밀리면
-        // 게이지를 다 채운 뒤에 "범위를 벗어남"으로 실패한다 — 실패 모드가 나쁘다.
-        //
-        // ⚠ <b>아직 무너지는 중이면 재우지 않는다</b> — 공중이나 기울어진 자세로 굳는다(잠든 바디는
-        // 중력도 안 받는다). 밀려서 사거리를 벗어나는 것은 <b>정착한 뒤에만</b> 생기는 일이므로,
-        // 붙드는 것도 그때부터면 충분하다.
-        //
-        // 이 자리가 성립하는 것은 ServerSetBeingRevived를 쓰는 것도 서버이고 래그돌 권위도 서버라
-        // (#865) <b>같은 피어에서 같은 값을 본다</b>는 것 때문이다. IsBeingRevived는 동기화값 기반이라
-        // 원격도 어긋나지 않는다. 여기서 반환하므로 아래 깨어남 폴링을 지나지 않는다 — 구조 중에
-        // 스트림을 되살리지 않는 것이 의도다(채널링이 끝나면 다음 깨어남부터 다시 받는다).
-        if (m_incapacitation != null && m_incapacitation.IsBeingRevived && m_settled)
-        {
-            if (!m_rig.AllAsleep)
-                m_rig.SleepAll(); // 밟혀 깨어난 몸을 다시 재운다
-
-            return;
-        }
+        // ⚠ 구조 채널링 중 <b>붙들기는 여기가 아니다</b> — 몸을 깨우는 것은 밟은 PhysX이고 이 함수는
+        // 그 경로에 없다. 붙들기는 <see cref="Update"/>의 깨어남 폴링에 있다. 근거는
+        // docs/865-down-ragdoll.md §3-2. (Down도 끌 수 있게 되면 끌기가 구조를 취소한다 — 같은 절)
 
         // 깨우기만 한다 — 스트림 재개는 <see cref="Update"/>의 깨어남 폴링이 받는다.
         // (NpcRagdoll.WakeCorpse와 같은 모양. 재개 경로를 하나로 모으는 것이 요점이다)
@@ -534,7 +561,8 @@ public partial class PlayerRagdoll : MonoBehaviour
     // ---- 진입 / 이탈 ----
 
     /// <summary>
-    /// 래그돌 진입 — <b>멱등이다.</b> 이미 물리 중이면 임펄스만 누적하고, 블렌드 중이면 무동작.
+    /// 래그돌 진입 — <b>멱등이다.</b> 이미 물리 중이면 임펄스만 누적하고, 기상 블렌드 중이면
+    /// <b>지금 사유가 래그돌 사유일 때만</b> 새로 진입한다(늦게 도착한 옛 RPC를 거르기 위함).
     /// 원격의 도착 순서가 보장되지 않기 때문이다 — 반대 순서는 <see cref="PollRagdollCause"/>가 막는다 (docs §8·§9).
     /// </summary>
     /// <param name="impulse">폭심에서 밀려나는 속도(m/s). 힘없이 무너지는 사망은 <see cref="Vector3.zero"/>.</param>
@@ -545,12 +573,38 @@ public partial class PlayerRagdoll : MonoBehaviour
 
         if (m_state == RagdollState.Ragdoll)
         {
+            // ⚠ <b>뼈가 키네마틱이면 임펄스가 통째로 버려진다</b> — RagdollRig.ApplyImpulse가 키네마틱
+            // 바디를 건너뛴다(#768이 정착한 시체에서 겪은 것과 같다). <b>비행 중 차·폭발에 맞으면
+            // 정확히 그 상태다</b>: 직전에 ApplyDeathOwnership이 소유권을 이 피어로 옮겨 놓았는데
+            // 뼈는 아직 원격 시절의 키네마틱이고, 그것을 푸는 TickAuthorityHandover는 <b>다음
+            // Update</b>다. 그때는 이미 늦다 — SetKinematic 전이가 속도까지 지운다.
+            //
+            // ⚠ <b>조건 없이 부르면 안 된다.</b> 이미 물리로 날고 있는 몸에 부르면 SetKinematic(false)의
+            // 속도 0 대입이 먼저 걸려, "누적"이어야 할 늦은 임펄스가 "대체"가 된다.
+            // 근거는 docs/506-explosion-ragdoll.md §15.
+            if (HasMoveAuthority && m_rig.AnyKinematic)
+                ReleaseBonesToPhysics();
+
             m_rig.ApplyImpulse(impulse); // 늦게 도착한 폭발 정보 — 누적한다
             return;
         }
 
-        if (m_state != RagdollState.Animated)
-            return; // 이미 정착했거나 일어나는 중 — 다시 날리지 않는다
+        // 여기 오는 것은 <b>기상 블렌드 중</b>(BlendingToAnimator)뿐이다 — 정착한 시체는 상태가
+        // 여전히 Ragdoll이라 위 갈래가 받는다(정착은 상태가 아니라 깃발이다).
+        //
+        // ⚠ <b>블렌드 중이어도 "새로 쓰러진 것"이면 받는다.</b> 예전에는 무조건 물러났는데, 그러면
+        // 폭발에 날아갔다 <b>일어나는 중에</b> 차에 치인 사람이 임펄스를 통째로 잃고 제자리에서
+        // 죽는다(실측 — 그 자리엔 로그도 안 남아 원인이 안 보였다). 그 가드가 막으려던 것은
+        // "도로에 누운 시체를 지나가는 차마다 다시 날리는 것"인데, 그쪽은 피해원의 시체 가드가
+        // 이미 막는다(TrafficVehicle의 CurrentHp<=0 · ServerHitNpc의 wasAlive).
+        //
+        // 판정을 <b>동기화된 사유</b>로 하는 것이 요점이다 — 늦게 도착한 옛 임펄스 RPC는 그 사이
+        // 부활해 사유가 None이 되어 있으므로 그대로 걸러진다(이 가드의 원래 목적인 도착 순서 방어).
+        if (m_state != RagdollState.Animated
+            && (m_incapacitation == null || !m_incapacitation.IsRagdollCause))
+        {
+            return;
+        }
 
         m_state = RagdollState.Ragdoll;
         m_settled = false;
@@ -683,9 +737,77 @@ public partial class PlayerRagdoll : MonoBehaviour
     private void FixedUpdate()
     {
         if (m_state != RagdollState.Ragdoll || !HasMoveAuthority)
+        {
+            ReleaseBeamedHold();
+            return;
+        }
+
+        // 빔에 끌려 올라가는 동안은 <b>주종이 뒤집힌다</b> — 캡슐이 몸을 따라가는 것이 아니라
+        // 몸이 캡슐을 따라간다. 근거는 아래 함수와 docs/506-explosion-ragdoll.md §14.
+        if (m_incapacitation != null && m_incapacitation.IsBeamed)
+        {
+            TickBeamedBodyFollow();
+            return;
+        }
+
+        ReleaseBeamedHold();
+        TickCapsuleFollow();
+    }
+
+    /// <summary>
+    /// 빔 흡입 중 <b>몸을 루트에 붙여 함께 올린다</b> — 권위 피어 전용. (UFO 흡입 · #819)
+    ///
+    /// <b>왜 반대인가.</b> 다른 래그돌 사유는 물리가 몸의 자리를 쥐고 캡슐이 그것을 따라간다
+    /// (<see cref="TickCapsuleFollow"/>). 빔은 <b>남이 몸을 옮기는</b> 유일한 사유라, 끌어올리는
+    /// 주체가 <c>PlayerTowedMotion</c>의 호송 추종(캡슐)이다. 그래서 이 구간만
+    /// <see cref="IsCapsuleFollowingBody"/>가 거짓이라야 <c>PlayerMovement.Update</c>가 래그돌 분기에서
+    /// 멈추지 않고 호송 분기까지 내려간다 — <b>그 분기가 안 돌면 몸이 아예 안 올라간다.</b>
+    ///
+    /// ⚠ 뼈를 <b>키네마틱으로 얼린다</b>. 동적인 채로 두면 중력이 매 스텝 끌어내려 올라가는 루트와
+    /// 싸우고, 관절이 늘어나며 몸이 뒤집힌다. 얼리면 빔에 걸린 순간의 <b>축 늘어진 자세</b>가 그대로
+    /// 떠오른다 — 이 기능이 원한 그림이다.
+    /// </summary>
+    private void TickBeamedBodyFollow()
+    {
+        if (m_rig == null || !m_rig.IsValid || m_root == null)
             return;
 
-        TickCapsuleFollow();
+        if (!m_beamedHold)
+        {
+            m_beamedHold = true;
+
+            // ⚠ 매달린 줄은 끊는다 — 관절 앵커는 이 델타로 같이 안 움직여서, 매인 채 올리면 위반이
+            // 쌓이고 솔버가 몸을 쏜다 (<see cref="PlaceBodyBy"/>가 같은 이유로 같은 일을 한다).
+            m_rope?.Detach();
+            m_rig.SetKinematic(true);
+            m_beamedLastRoot = m_root.position;
+        }
+
+        Vector3 delta = m_root.position - m_beamedLastRoot;
+        m_beamedLastRoot = m_root.position;
+
+        if (delta != Vector3.zero)
+            m_rig.TranslateBy(delta); // 전 뼈를 한 델타로 — 상대 자세가 보존된다
+    }
+
+    // 빔이 끝났다(놓아줌·삼킴·다른 사유로 전이) — 얼려 둔 뼈를 물리에 돌려준다. 멱등.
+    //
+    // ⚠ <b>래치는 항상 내리되, 물리로 돌려주는 것은 아직 래그돌일 때만이다.</b> 이 함수는 빔만 끝난
+    // 경우와 <b>래그돌 자체를 빠져나간</b> 경우 양쪽에서 불리는데, 후자는 ExitToAnimator가 기상
+    // 블렌드를 넘기려고 방금 일부러 얼린 것이라 여기서 풀면 블렌드 중인 뼈가 다시 물리로 열린다.
+    // 근거는 docs/506-explosion-ragdoll.md §14-5.
+    private void ReleaseBeamedHold()
+    {
+        if (!m_beamedHold)
+            return;
+
+        m_beamedHold = false;
+
+        if (m_state != RagdollState.Ragdoll)
+            return;
+
+        if (m_rig != null && m_rig.IsValid)
+            m_rig.SetKinematic(false);
     }
 
     private void Update()
@@ -716,6 +838,12 @@ public partial class PlayerRagdoll : MonoBehaviour
         if (!HasMoveAuthority)
             return;
 
+        // 빔에 끌려 올라가는 동안은 정착·수면·재부착을 통째로 건너뛴다 — 뼈가 키네마틱이라 속도가
+        // 항상 0이라, 두면 <b>공중에서 정착으로 굳고</b> 그 뒤 기상 모션이 상공에서 나간다.
+        // 몸을 옮기는 것은 FixedUpdate의 TickBeamedBodyFollow 하나다.
+        if (m_incapacitation != null && m_incapacitation.IsBeamed)
+            return;
+
         // ⚠ <b>정착 게이트보다 앞이다</b> — 순간이동 뒤 줄이 끊긴 채 잠든 몸도 다시 매여야 하고,
         // 매는 순간 BeginRopePull이 깨우기까지 한다. 뒤로 내리면 잠든 몸은 영영 안 매인다.
         TickRopeReattach();
@@ -725,7 +853,15 @@ public partial class PlayerRagdoll : MonoBehaviour
         if (m_settled)
         {
             if (!m_rig.AllAsleep)
-                ResumeFromSleep();
+            {
+                // 구조 채널링 중이면 <b>깨우지 않고 도로 재운다</b> — 밟혀 밀리면 게이지를 다 채운 뒤
+                // "범위를 벗어남"으로 실패한다. 스트림도 되살리지 않는 것이 의도다.
+                // (#865 · docs/865-down-ragdoll.md §3-2)
+                if (m_incapacitation != null && m_incapacitation.IsBeingRevived)
+                    m_rig.SleepAll();
+                else
+                    ResumeFromSleep();
+            }
 
             return;
         }
@@ -778,11 +914,11 @@ public partial class PlayerRagdoll : MonoBehaviour
         if (m_incapacitation == null)
             return;
 
-        // 진입 사유는 셋이다 (#506 Die → #815 Launched → #865 Down). IsDowned || IsDead를 나열하지
-        // 않고 IsOutOfAction을 쓰는 이유는 <b>조준 히트박스와 술어를 하나로 묶기 위해서</b>다 —
-        // IsAimTargetable이 IsOutOfAction 기반이므로, 뼈가 물리로 넘어가는 순간과 히트박스가 켜지는
-        // 순간이 같은 값을 본다. 갈라지면 "래그돌인데 조준이 안 잡히는" 방향으로 #857이 되살아난다.
-        bool wantsRagdoll = m_incapacitation.IsOutOfAction || m_incapacitation.IsLaunched;
+        // 진입 사유는 넷이다 (#506 Die → #815 Launched → #865 Down → 빔 흡입). 사유를 나열하지 않고
+        // IsRagdollCause 하나를 쓰는 이유는 <b>조준 히트박스와 술어를 하나로 묶기 위해서</b>다 —
+        // IsAimTargetable이 같은 술어를 보므로, 뼈가 물리로 넘어가는 순간과 히트박스가 켜지는 순간이
+        // 같은 값을 본다. 갈라지면 "래그돌인데 조준이 안 잡히는" 방향으로 #857이 되살아난다.
+        bool wantsRagdoll = m_incapacitation.IsRagdollCause;
 
         // 접속 직후 이미 사망·비행 중이었다면 이번 원인은 건너뛴다 — 낙하는 이미 끝난 과거다.
         if (!m_polledOnce)
@@ -1018,8 +1154,18 @@ public partial class PlayerRagdoll : MonoBehaviour
         // 사망(Die)은 부활 키트가 별도로 풀지만, 비행(Launched)은 정착 자체가 복구 신호다 — 여기서
         // 서버에 알린다(#815). 이 함수는 권위 피어에서만 도므로(Update의 HasMoveAuthority 게이트,
         // ForceSettle은 아직 호출부가 없다) 곧 그 오너가 통보를 보낸다.
-        if (m_incapacitation != null && m_incapacitation.IsLaunched)
+        if (m_incapacitation == null)
+            return;
+
+        if (m_incapacitation.IsLaunched)
+        {
             m_incapacitation.RequestLaunchSettled();
+            return;
+        }
+
+        // 래그돌이 도는 중에 죽었다면 소유권 이관이 <b>이 순간까지 미뤄져 있다</b> (#957) — 지금이
+        // 그것을 푸는 자리다. 미뤄 둔 것이 없으면 저쪽이 스스로 무동작이라 조건을 따지지 않는다.
+        m_incapacitation.RequestDeathSettled();
     }
 
     // 루트 원점에서 캡슐 밑면까지의 높이 — 지면 점에 루트를 그대로 놓으면 캡슐이 떠서 출발한다 (docs §4).

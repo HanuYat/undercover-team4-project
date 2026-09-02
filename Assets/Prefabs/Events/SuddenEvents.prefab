@@ -30,6 +30,7 @@ GameObject:
   - component: {fileID: 3759178450178188696}
   - component: {fileID: 3941778138045511832}
   - component: {fileID: 1258941598813027399}
+  - component: {fileID: 3564598491983390044}
   m_Layer: 0
   m_Name: SuddenEvents
   m_TagString: Untagged
@@ -529,3 +530,25 @@ MonoBehaviour:
   m_navSampleMaxDistance: 5
   m_armOnSpawn: 0
   m_lingerSeconds: 0
+--- !u!114 &3564598491983390044
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498939978214492355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5eaaac0eee233ea47aa02d4a3ab41f97, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TrafficDevHotkeys
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_enabled: 1
+  m_carKey: 29
+  m_comboKey: 30
+  m_carDistance: 12
+  m_carSpeed: 20
+  m_carOverrun: 20
+  m_launchUpSpeed: 4
+  m_launchMaxSeconds: 6
+  m_carHeadStartSeconds: 0

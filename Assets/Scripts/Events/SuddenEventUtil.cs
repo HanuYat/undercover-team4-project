@@ -78,6 +78,35 @@ public static class SuddenEventUtil
     /// </summary>
     public static void CollectFieldPlayers(Vector3 origin, float maxRadius, List<Transform> results)
     {
+        Collect(origin, maxRadius, results, damageablesToo: false);
+    }
+
+    /// <summary>
+    /// <see cref="CollectFieldPlayers"/>와 같지만 <b>피해 판정용</b>이다 — 표적 선정이 아니라 "이
+    /// 폭발에 누가 다치는가"를 묻는 곳이 쓴다. 차이는 <b>비행(Launched) 중인 사람을 포함</b>하는 것
+    /// 하나이고, 그 근거는 <see cref="PlayerHealth.IsDamageable"/>에 적혀 있다.
+    ///
+    /// ⚠ <b>표적 선정에 쓰지 말 것.</b> 저쪽(추격 폭탄이 쫓을 사람·이벤트 추첨)은 날아가는 중인
+    /// 사람을 고르면 안 된다 — 곧 자리가 바뀌고, 애초에 지금 조종이 안 되는 사람이다.
+    /// </summary>
+    public static void CollectDamageablePlayers(
+        Vector3 origin,
+        float maxRadius,
+        List<Transform> results
+    )
+    {
+        Collect(origin, maxRadius, results, damageablesToo: true);
+    }
+
+    // 두 수집기가 <b>술어만</b> 다르다 — 반경·순회 방식이 갈리면 "폭발이 담은 사람"과 "이벤트가 고른
+    // 사람"의 집합이 어긋난다(FindNearestFieldPlayer가 같은 이유로 같은 순회를 쓴다).
+    private static void Collect(
+        Vector3 origin,
+        float maxRadius,
+        List<Transform> results,
+        bool damageablesToo
+    )
+    {
         results.Clear();
 
         PlayerHealth[] players = UnityEngine.Object.FindObjectsByType<PlayerHealth>(
@@ -88,7 +117,7 @@ public static class SuddenEventUtil
         for (int i = 0; i < players.Length; i++)
         {
             PlayerHealth player = players[i];
-            if (!player.IsTargetable)
+            if (!(damageablesToo ? player.IsDamageable : player.IsTargetable))
                 continue;
 
             if ((player.transform.position - origin).sqrMagnitude <= maxSqr)

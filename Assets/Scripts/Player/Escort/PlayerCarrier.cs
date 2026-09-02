@@ -128,9 +128,7 @@ public class PlayerCarrier : NetworkBehaviour
     /// (NPC 밧줄 #390과 같은 원칙). 남의 줄을 끊는 조작이 없으니 탈취 자체가 없다.
     /// </summary>
     public bool CanBeCarried =>
-        m_incapacitation != null
-        && m_incapacitation.IsDead
-        && !m_incapacitation.IsBodyLost;
+        m_incapacitation != null && m_incapacitation.IsDead && !m_incapacitation.IsBodyLost;
 
     private void Awake()
     {
@@ -266,6 +264,17 @@ public class PlayerCarrier : NetworkBehaviour
             return; // Die 상태 + 임자 없음일 때만. 다운(구조 가능)은 운반이 아니라 구조 대상이다
         if (!IsInRange(target))
             return;
+
+        // <b>운반이 시작됐다 = 비행이 끝났다</b> — 미뤄 둔 소유권 이관을 여기서 끝낸다 (#957).
+        //
+        // 안 하면 이관이 <b>8초 상한 타이머로</b> 떨어진다: 끌리는 동안에는 PlayerRagdoll이 몸을
+        // 재우지 않아(그쪽 "끌리는 동안에는 재우지 않는다") 정착 통보가 영영 안 오기 때문이다.
+        // 그러면 한창 끌고 가는 중에, 그것도 <b>줄이 팽팽한 상태로</b> 권위가 뒤집힌다 — #957이
+        // 피하려던 바로 그 그림이 시점만 밀려 그대로 난다.
+        //
+        // ⚠ <b>밧줄을 매기 전이어야 한다.</b> 매인 뒤에 권위가 뒤집히면 관절이 한쪽 피어에만 남는다.
+        // 남은 비행 속도를 잃지만, 애초에 조준해서 E로 잡을 수 있을 만큼 느려진 몸이라 손해가 없다.
+        target.m_incapacitation?.ServerCompleteOwnershipHandover();
 
         CarriedTarget = target;
         target.ServerAddCarrier(this);

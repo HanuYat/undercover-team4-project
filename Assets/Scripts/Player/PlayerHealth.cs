@@ -33,6 +33,67 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
     public bool IsTargetable =>
         CurrentHp > 0 && (m_incapacitation == null || !m_incapacitation.IsIncapacitated);
 
+    /// <summary>
+    /// <b>지금 때리면 피해가 들어가는 몸인가</b> — <see cref="IsTargetable"/>과 다른 질문이다.
+    /// 저쪽은 "표적으로 고를 만한 사람인가"(돌발 이벤트 추첨·NPC 추격 선정)이고, 이쪽은 피해 판정이다.
+    ///
+    /// 갈리는 것은 <b>비행(Launched)</b> 하나다 — 살아 있는데(HP&gt;0) 무력화라 <see cref="IsTargetable"/>이
+    /// 거짓이라, #815가 그 사유를 추가하면서 날아가는 사람이 <b>모든 피해에 면역</b>이 돼 있었다.
+    /// 의도된 규칙이 아니라 enum 추가에 딸려온 부작용이다. 근거는 docs/506-explosion-ragdoll.md §13.
+    ///
+    /// ⚠ 다운·기능 정지(HP 0)는 여기서도 거짓이다 — 그쪽 추가 피해는 확인사살이라
+    /// <see cref="ApplyDamage"/>의 <c>IsDowned</c> 분기가 따로 받는다. 기절·매달기·납치·빔은
+    /// 이번 범위가 아니다(각자 다른 기획 판단이 필요하다 — 같은 문서 §13).
+    /// </summary>
+    public bool IsDamageable =>
+        IsTargetable
+        || (CurrentHp > 0 && m_incapacitation != null && m_incapacitation.IsLaunched);
+
+    /// <summary>
+    /// 반경 안에서 <b>비행(Launched) 중인</b> 플레이어를 모은다 — 호출 시 목록을 비운다.
+    ///
+    /// <b>왜 물리 쿼리로는 안 잡히는가.</b> 래그돌이 켜진 동안에는 <c>CharacterController</c> 캡슐이
+    /// 꺼지고(<c>PlayerRagdoll.SetControllerEnabled</c>) 남는 콜라이더는 뼈뿐인데, 그 뼈는 Ragdoll
+    /// 레이어라 근접·치임 판정 마스크가 통째로 뺀다(<see cref="NpcResistState"/> #692 ·
+    /// <c>TrafficVehicle.HitLayers</c>). 그래서 <b>날아가는 사람은 어떤 물리 쿼리에도 안 걸린다.</b>
+    ///
+    /// 마스크에 Ragdoll을 도로 넣는 대신 목록을 직접 훑는 이유는 두 가지다: ① 그 마스크 제외는
+    /// 시체(도로에 누운 몸·자기 몸)를 빼려고 있는 것이라 되돌리면 그 버그가 돌아온다, ② 뼈가 사람당
+    /// 11개라 논알록 버퍼가 넘친다(#692가 정확히 그 사고였다).
+    ///
+    /// ⚠ 훑는 대상은 <see cref="PlayerIncapacitation.All"/>(#365의 등록 목록)이다 —
+    /// <c>FindObjectsByType</c>은 씬 전체를 뒤지고 배열까지 새로 만드는데, 이 함수는 차량 한 대마다
+    /// 틱마다 불린다(<c>TrafficVehicle.ServerApplyLaunchedHits</c>). 무할당 목록이라 상시 비용이 없다.
+    /// </summary>
+    public static void CollectLaunched(
+        Vector3 origin,
+        float radius,
+        System.Collections.Generic.List<PlayerHealth> results
+    )
+    {
+        results.Clear();
+
+        System.Collections.Generic.IReadOnlyList<PlayerIncapacitation> candidates =
+            PlayerIncapacitation.All;
+        float maxSqr = radius * radius;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            PlayerIncapacitation incapacitation = candidates[i];
+
+            // 비행 중이 아니면 볼 것도 없다 — 멀쩡한 사람은 물리 쿼리가 이미 잡았고(두 번 담지 않는다),
+            // 다운·기능 정지는 애초에 이 함수의 대상이 아니다. PlayerHealth 조회를 여기서 먼저 거른다.
+            if (incapacitation == null || !incapacitation.IsLaunched)
+                continue;
+
+            if ((incapacitation.transform.position - origin).sqrMagnitude > maxSqr)
+                continue;
+
+            PlayerHealth player = incapacitation.GetComponent<PlayerHealth>();
+            if (player != null && player.IsDamageable && !player.IsTargetable)
+                results.Add(player);
+        }
+    }
+
     private void Awake()
     {
         m_hp = m_maxHp; // 오프라인(비네트워크) Play 테스트 폴백 초기값

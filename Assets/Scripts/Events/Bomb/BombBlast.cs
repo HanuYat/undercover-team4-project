@@ -88,9 +88,11 @@ public class BombBlast : NetworkBehaviour
     {
         Vector3 origin = transform.position;
 
-        // 반경 내 행동 가능한 플레이어에게 거리 감쇠 피해.
+        // 반경 내 <b>피해가 닿는</b> 플레이어에게 거리 감쇠 피해 — 표적 선정이 아니라 피해 판정이라
+        // 비행 중인 사람도 담는다(CollectDamageablePlayers). 연쇄 폭발에서 첫 폭발에 날아간 사람이
+        // 두 번째를 안 맞던 것이 이 줄이었다.
         m_deathBuffer.Clear();
-        SuddenEventUtil.CollectFieldPlayers(origin, m_profile.Radius, m_blastBuffer);
+        SuddenEventUtil.CollectDamageablePlayers(origin, m_profile.Radius, m_blastBuffer);
         for (int i = 0; i < m_blastBuffer.Count; i++)
         {
             Transform target = m_blastBuffer[i];
@@ -114,7 +116,7 @@ public class BombBlast : NetworkBehaviour
             if (escorter != null)
                 escorter.ReleaseAllDrags();
 
-            // CollectFieldPlayers는 행동 가능한(HP>0) 플레이어만 담으므로, 지금 0이면 이 폭발로 죽은 것이다.
+            // 수집기가 HP>0인 사람만 담으므로, 지금 0이면 이 폭발로 죽은 것이다.
             // TakeLethalDamage를 지난 뒤의 HP 0은 <b>곧 Die다</b> — 이 진입점에는 Down으로 갈 경로가 없다.
             // 살아남았으면 <b>같은 임펄스로 산 채로</b> 날린다 — 아래 ServerLaunchSurvivor 주석 참고.
             if (!hasHealth)
@@ -149,6 +151,12 @@ public class BombBlast : NetworkBehaviour
     /// 이 폭발로 죽은 사람과 임펄스를 전 피어에 알린다.
     /// 임펄스는 서버가 계산해 함께 보낸다 — 각 피어가 <c>victim.transform.position</c>(보간값)으로
     /// 직접 계산하면 세기·방향이 갈려 궤적이 벌어진다. 호스트 중복 발행은 <c>IsServer</c> 가드로 막는다.
+    ///
+    /// ⚠ <b>죽기 직전의 오너에게는 임펄스를 주지 않는다.</b> 그 피어만 뼈가 아직 동적이라 임펄스가
+    /// 실제로 들어가 자기 궤적을 만들고, 곧 소유권을 잃어 얼어붙었다가 서버 자세로 튄다. 서 있다
+    /// 죽으면 양쪽이 정지에서 같은 임펄스를 받아 궤적이 겹쳐 안 보이지만, <b>비행 중에 맞으면</b>
+    /// 클라에만 남은 비행 속도 때문에 갈라진다. 같은 처리가
+    /// <c>TrafficVehicle.ServerNotifyDeathRagdoll</c>에도 있다 — 근거는 docs/506-explosion-ragdoll.md §16.
     /// </summary>
     private void NotifyBlastDeaths()
     {
@@ -160,31 +168,62 @@ public class BombBlast : NetworkBehaviour
         for (int i = 0; i < impulses.Length; i++)
             impulses[i] = EvaluateRagdollImpulse(m_deathBuffer[i].transform.position);
 
-        for (int i = 0; i < m_deathBuffer.Count; i++)
-            ApplyBlastRagdoll(m_deathBuffer[i], impulses[i]); // 서버·오프라인 로컬 발행
-
         if (!IsSpawned || !IsServer)
+        {
+            for (int i = 0; i < m_deathBuffer.Count; i++)
+                ApplyBlastRagdoll(m_deathBuffer[i], impulses[i]); // 오프라인 — 피어가 하나뿐이다
             return;
+        }
 
+        // <b>임펄스는 물리 권위 피어에게만 간다</b> (#957) — 이관을 정착까지 미룬 구간에는 그것이
+        // 서버가 아니라 <b>아직 옛 오너</b>다. 근거는 TrafficVehicle.ResolveImpulseAuthority.
         NetworkObjectReference[] victims = new NetworkObjectReference[m_deathBuffer.Count];
+        ulong[] authorities = new ulong[m_deathBuffer.Count];
+        ulong serverId = NetworkManager.ServerClientId;
+
         for (int i = 0; i < victims.Length; i++)
+        {
             victims[i] = m_deathBuffer[i];
 
-        BlastDeathsClientRpc(victims, impulses);
+            PlayerIncapacitation incap = m_deathBuffer[i].GetComponent<PlayerIncapacitation>();
+            authorities[i] =
+                incap != null && incap.IsOwnershipHandoverPending
+                    ? incap.BodyOwnerClientId
+                    : m_deathBuffer[i].OwnerClientId;
+
+            // 서버가 권위일 때만 힘을 싣는다 — 아니면 상태 진입만 시킨다.
+            ApplyBlastRagdoll(
+                m_deathBuffer[i],
+                authorities[i] == serverId ? impulses[i] : Vector3.zero
+            );
+        }
+
+        BlastDeathsClientRpc(victims, impulses, authorities);
     }
 
     [ClientRpc]
-    private void BlastDeathsClientRpc(NetworkObjectReference[] victims, Vector3[] impulses)
+    private void BlastDeathsClientRpc(
+        NetworkObjectReference[] victims,
+        Vector3[] impulses,
+        ulong[] authorities
+    )
     {
         if (IsServer)
             return; // 호스트는 위에서 이미 발행
 
+        NetworkManager nm = NetworkManager.Singleton;
+
         // 길이는 서버가 맞춰 보내지만, 직렬화 경계를 믿지 않고 짧은 쪽까지만 돈다.
         int count = Mathf.Min(victims.Length, impulses.Length);
+        count = Mathf.Min(count, authorities.Length);
         for (int i = 0; i < count; i++)
         {
-            if (victims[i].TryGet(out NetworkObject victim))
-                ApplyBlastRagdoll(victim, impulses[i]);
+            if (!victims[i].TryGet(out NetworkObject victim))
+                continue;
+
+            // 권위 피어만 힘을 싣는다. 나머지는 상태 진입만 — 뼈가 키네마틱이라 어차피 무시된다.
+            bool mine = nm != null && nm.LocalClientId == authorities[i];
+            ApplyBlastRagdoll(victim, mine ? impulses[i] : Vector3.zero);
         }
     }
 
@@ -217,6 +256,9 @@ public class BombBlast : NetworkBehaviour
         if (impulse == Vector3.zero)
             return;
 
+        // ⚠ <b>이미 날아가는 중이면 다시 안 날아간다</b> — ServerLaunch가 IsIncapacitated에서 물러난다.
+        // 연쇄 폭발에서 두 번째 폭발은 <b>피해는 넣지만 임펄스는 못 얹는다</b>(회차가 살아 있어야
+        // 정착 통보가 짝이 맞는다). 눈에 띄면 별도 이슈 — 근거는 docs/506-explosion-ragdoll.md §13.
         PlayerIncapacitation incap = player.GetComponent<PlayerIncapacitation>();
         incap?.ServerLaunch(m_launchMaxSeconds); // 이미 무력화된 대상이면 스스로 무동작이다
 

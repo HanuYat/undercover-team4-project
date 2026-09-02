@@ -273,12 +273,41 @@ public class TrafficManager : MonoBehaviour
             return;
         }
 
-        VehiclePool pool = PickPool(lane.VehicleIndex);
+        ServerSpawnRunaway(lane.StartPoint, direction, lane.RunDistance, lane.Speed, lane.VehicleIndex);
+    }
+
+#if UNITY_EDITOR
+    /// <summary>
+    /// <b>개발용 — 원하는 자리에서 차 한 대를 달리게 한다</b> (<c>TrafficDevHotkeys</c>). 서버·오프라인 전용.
+    ///
+    /// 레인을 거치지 않는 유일한 배출 경로다. <b>풀 밖에서 직접 스폰하면 안 되기 때문에</b> 여기를
+    /// 연다 — 반납 추적(<see cref="m_active"/>)이 이 안에 있어서, 밖에서 만든 차는 회수되지 않고
+    /// 다음 배출이 "이미 스폰된 차를 다시 배출하려 했다" 에러로 떨어진다.
+    /// </summary>
+    internal TrafficVehicle DevSpawnRunaway(
+        Vector3 start,
+        Vector3 direction,
+        float runDistance,
+        float speed
+    ) => ServerSpawnRunaway(start, direction, runDistance, speed, vehicleIndex: -1);
+#endif
+
+    // 레인 배출과 개발용 배출이 함께 쓰는 본문 — 풀 대여·스폰·주행 시작·반납 추적이 한 자리에 있어야
+    // 한쪽만 고치는 사고가 안 난다.
+    private TrafficVehicle ServerSpawnRunaway(
+        Vector3 start,
+        Vector3 direction,
+        float runDistance,
+        float speed,
+        int vehicleIndex
+    )
+    {
+        VehiclePool pool = PickPool(vehicleIndex);
         if (pool == null)
-            return;
+            return null;
 
         Quaternion rotation = Quaternion.LookRotation(direction, Vector3.up);
-        TrafficVehicle vehicle = pool.Rent(lane.StartPoint, rotation);
+        TrafficVehicle vehicle = pool.Rent(start, rotation);
 
         // 클라 쪽 인스턴스는 같은 핸들러가 자기 풀에서 꺼낸다. 맵 씬의 소품이라 씬과 함께 정리한다
         if (IsNetworkSessionActive)
@@ -296,8 +325,9 @@ public class TrafficManager : MonoBehaviour
         }
 
         // 주행은 스폰 뒤에 건다 — 클라가 첫 위치를 받기 전에 움직이지 않게
-        vehicle.ServerBeginRun(lane.RunDistance, lane.Speed);
+        vehicle.ServerBeginRun(runDistance, speed);
         m_active.Add(new ActiveVehicle(vehicle, pool));
+        return vehicle;
     }
 
     private VehiclePool PickPool(int index)

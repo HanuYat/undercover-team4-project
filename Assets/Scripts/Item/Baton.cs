@@ -724,10 +724,13 @@ public class Baton : ItemBase, IAimedWeapon
         playerTarget = hit.collider.GetComponentInParent<PlayerHealth>();
         if (playerTarget != null)
         {
-            // 유예(Down)만 예외 — IsTargetable은 CurrentHp>0을 요구해 다운을 걸러내지만, 확인사살은 의도된 동작이다(#725)
+            // 유예(Down)만 예외 — IsDamageable은 CurrentHp>0을 요구해 다운을 걸러내지만, 확인사살은 의도된 동작이다(#725)
+            //
+            // IsTargetable이 아니라 IsDamageable을 본다 — <b>날아가는 동료도 유효타</b>다. 저쪽은
+            // 표적 선정용이라 비행을 빼고, 그래서 예전에는 날아가는 사람에게 헛스윙이 났다.
             PlayerIncapacitation targetIncap = playerTarget.GetComponent<PlayerIncapacitation>();
             bool isDownException = targetIncap != null && targetIncap.IsDowned;
-            return playerTarget.IsTargetable || isDownException
+            return playerTarget.IsDamageable || isDownException
                 ? SwingResult.ValidTarget
                 : SwingResult.TargetInvalidState;
         }
