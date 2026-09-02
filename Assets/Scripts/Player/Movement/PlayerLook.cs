@@ -46,6 +46,7 @@ public class PlayerLook : MonoBehaviour
             if (m_fallbackConfig == null)
             {
                 m_fallbackConfig = ScriptableObject.CreateInstance<PlayerLookConfig>();
+                m_fallbackConfig.hideFlags = HideFlags.HideAndDontSave; // 씬 로드로 안 지워지므로 직접 정리한다
                 Debug.LogError("PlayerLook: 시점 Config가 연결되지 않았다 — 코드 기본값으로 대체한다", this);
             }
 
@@ -518,5 +519,11 @@ public class PlayerLook : MonoBehaviour
         {
             SetLayerRecursively(child, layer);
         }
+    }
+
+    private void OnDestroy()
+    {
+        if (m_fallbackConfig != null) // 배선이 빠졌을 때만 만들어진다
+            Destroy(m_fallbackConfig);
     }
 }

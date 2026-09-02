@@ -32,7 +32,7 @@ public class Taser : ItemBase, IAimedWeapon
 
     // 실측 근거: Player.prefab의 카메라는 루트에서 (0, 1.60, 0) — 즉 정상 원점-루트 거리는
     // 1.60m(섬)에서 0.80m(앉음, PlayerCrouch.HeadDrop 최대 0.8) 사이다. 여기에 네트워크 지연분을 더한다:
-    // 원점을 보낸 시점과 서버가 대조하는 시점의 위치가 다르므로, 스프린트 8m/s(PlayerMovement.m_sprintSpeed)
+    // 원점을 보낸 시점과 서버가 대조하는 시점의 위치가 다르므로, 스프린트 8m/s(PlayerMovementConfig.SprintSpeed)
     // 기준 150ms 어긋나면 1.2m가 벌어진다. 1.60 + 1.2 ≈ 2.8 → 3.0으로 잡았다.
     // 더 줄이면 핑 높은 플레이어의 정상 사격이 조용히 거부된다(핵심 아이템이라 치명적).
     [Tooltip("클라가 보낸 조준 원점이 서버가 아는 플레이어 위치에서 이만큼(m) 넘게 떨어져 있으면 거부한다 — 카메라 높이(1.6m) + 이동 지연 여유")]

@@ -23,6 +23,7 @@ public class PlayerMovement : NetworkBehaviour
             if (m_fallbackConfig == null)
             {
                 m_fallbackConfig = ScriptableObject.CreateInstance<PlayerMovementConfig>();
+                m_fallbackConfig.hideFlags = HideFlags.HideAndDontSave; // 씬 로드로 안 지워지므로 직접 정리한다
                 Debug.LogError("PlayerMovement: 이동 Config가 연결되지 않았다 — 코드 기본값으로 대체한다", this);
             }
 
@@ -246,6 +247,14 @@ public class PlayerMovement : NetworkBehaviour
 
         // 게임플레이 시작 — 커서를 푸는 UI가 없으면 잠긴다. 실제 Cursor 조작은 CursorLock만 한다. (#352)
         CursorLock.SetGameplayActive(true);
+    }
+
+    public override void OnDestroy()
+    {
+        if (m_fallbackConfig != null) // 배선이 빠졌을 때만 만들어진다
+            Destroy(m_fallbackConfig);
+
+        base.OnDestroy();
     }
 
     public override void OnNetworkDespawn()
