@@ -42,7 +42,10 @@ public class CrosshairUI : CommonManagerBase
     [FormerlySerializedAs("m_taserTargetColor")]
     [SerializeField] private Color m_weaponTargetColor = new Color(1f, 0.25f, 0.2f);
 
-    // 배선이 빠지면 흰색이다 — 기본 크로스헤어 색과 같아 눈에 안 띄므로 경고로 알린다. (#951)
+    // 배선이 빠지면 흰색이라 기본 크로스헤어 색과 구분이 안 된다. 조준 중 <b>매 프레임</b> 지나는
+    // 자리라 경고는 한 번만 찍는다 — InteractionFeedback.HighlightColor와 같은 이유다. (#951)
+    private bool m_uiPaletteWarned;
+
     private Color InteractableColor
     {
         get
@@ -50,7 +53,12 @@ public class CrosshairUI : CommonManagerBase
             if (m_uiPalette != null)
                 return m_uiPalette.Highlight;
 
-            Debug.LogWarning("CrosshairUI: UI 색 팔레트가 연결되지 않았다", this);
+            if (!m_uiPaletteWarned)
+            {
+                m_uiPaletteWarned = true;
+                Debug.LogWarning("CrosshairUI: UI 색 팔레트가 연결되지 않았다", this);
+            }
+
             return Color.white;
         }
     }

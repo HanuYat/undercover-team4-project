@@ -157,8 +157,10 @@ public class InteractionFeedback : NetworkBehaviour
         outlinable.OutlineLayer = JailRoom.Contains(worldPosition) ? k_jailOutlineLayer : 0;
     }
 
-    // 팔레트 배선이 빠지면 흰색으로 뜬다 — 조준 신호가 사라지진 않아 조용히 넘어가기 쉬우므로
-    // 경고를 남긴다. 크로스헤어·슬롯 선택도 같은 규칙이다. (#951)
+    // 팔레트 배선이 빠지면 흰색으로 뜬다. 조준 중 <b>매 프레임</b> 지나는 자리라 경고는 한 번만
+    // 찍는다 — 초당 수십 건이 쌓이면 콘솔이 마비되고 진짜 에러가 묻힌다. (#951)
+    private bool m_paletteWarned;
+
     private Color HighlightColor
     {
         get
@@ -166,7 +168,12 @@ public class InteractionFeedback : NetworkBehaviour
             if (m_palette != null)
                 return m_palette.Highlight;
 
-            Debug.LogWarning("InteractionFeedback: 색 팔레트가 연결되지 않았다", this);
+            if (!m_paletteWarned)
+            {
+                m_paletteWarned = true;
+                Debug.LogWarning("InteractionFeedback: 색 팔레트가 연결되지 않았다", this);
+            }
+
             return Color.white;
         }
     }
