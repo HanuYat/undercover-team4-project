@@ -196,6 +196,12 @@ public enum EAudioClip
     // 처치 확인 (#869) — 막타를 친 사람 화면 전용, 2D
     KillConfirm, // 처치했다
     KillFriendly, // 동료를 처치했다(오사) — 확인음이지 축하음이 아니다
+
+    // 홈런 진압봉 (#815)
+    HomeRunHit, // 깡 — 홈런 진압봉이 맞혔다 (맞은 대상 종류를 가리지 않는다)
+
+    // 힐팩
+    HealPackUse, // 치익 — 힐팩으로 회복한 순간 (회복이 실제로 일어났을 때만)
 }
 
 /// <summary>
@@ -241,6 +247,12 @@ public enum EFx
     // 거대 뿅망치 (#816)
     HammerHit, // 뿅망치 평타
     HammerCrit, // 뿅망치 1% 대박 — 대상이 그 자리에서 죽었다
+
+    // 홈런 진압봉 (#815)
+    HomeRunHit, // 홈런 진압봉이 맞혔다
+
+    // 힐팩
+    HealPackUse, // 힐팩으로 회복했다
 }
 
 /// <summary>
