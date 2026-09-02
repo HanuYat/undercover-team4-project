@@ -5,28 +5,30 @@ using UnityEngine;
 [RequireComponent(typeof(PlayerInputHandler))]
 public class PlayerMovement : NetworkBehaviour
 {
-    [Header("이동")]
-    [SerializeField]
-    private float m_moveSpeed = 5f;
+    [Header("튜닝")]
+    [Tooltip("이동 수치 모음 — 속도·중력·넉백·마찰 (#967)")]
+    [SerializeField] private PlayerMovementConfig m_config;
 
-    [SerializeField]
-    private float m_sprintSpeed = 8f;
+    // 배선이 빠져도 굴러가게 코드 기본값 인스턴스로 대신한다 — 속도 0으로 얼어붙는 것보다 낫고,
+    // 기본값의 정본은 여전히 Config 클래스 하나뿐이라 값이 두 곳으로 갈리지 않는다. (#967)
+    private PlayerMovementConfig m_fallbackConfig;
 
-    [SerializeField]
-    private float m_crouchSpeed = 2.5f;
+    private PlayerMovementConfig Config
+    {
+        get
+        {
+            if (m_config != null)
+                return m_config;
 
-    [SerializeField]
-    private float m_gravity = -9.81f;
+            if (m_fallbackConfig == null)
+            {
+                m_fallbackConfig = ScriptableObject.CreateInstance<PlayerMovementConfig>();
+                Debug.LogError("PlayerMovement: 이동 Config가 연결되지 않았다 — 코드 기본값으로 대체한다", this);
+            }
 
-    [Header("넉백 (폭발 등 외력)")]
-    [Tooltip("넉백 속도가 잦아드는 감쇠율(1/초) — 클수록 빨리 멈춘다")]
-    [SerializeField] private float m_knockbackDamping = 4f;
-
-    [Header("날씨 효과 (눈)")]
-    [Tooltip("기본 이동 마찰 계수 (보간 속도)")]
-    [SerializeField] private float m_defaultFriction = 15f;
-    [Tooltip("눈 올 때의 마찰 계수 (미끄러짐)")]
-    [SerializeField] private float m_snowFriction = 2f;
+            return m_fallbackConfig;
+        }
+    }
 
     // 접지 중 유지하는 하향 속도(m/s). 0으로 두면 CharacterController가 경사·계단에서 지면을 놓쳐
     // 접지 판정이 깜빡인다 — 살짝 눌러 붙여 둔다. 천장 상쇄(0으로 죽이기)의 반대쪽 짝이다. (#189)
@@ -39,9 +41,9 @@ public class PlayerMovement : NetworkBehaviour
     // PlayerAnimationDriver가 속도 정규화에 사용 (실제 속도 ↔ 블렌드 트리 좌표 분리)
     // 실제 이동(HandleMove)도 같은 프로퍼티를 쓴다 — 배율이 걸린 값을 한 곳에서만 내야
     // 애니메이션 블렌드가 실제 속도와 어긋나지 않는다. (#398)
-    public float MoveSpeed => m_moveSpeed * SpeedFactor;
-    public float SprintSpeed => m_sprintSpeed * SpeedFactor;
-    public float CrouchSpeed => m_crouchSpeed * SpeedFactor;
+    public float MoveSpeed => Config.MoveSpeed * SpeedFactor;
+    public float SprintSpeed => Config.SprintSpeed * SpeedFactor;
+    public float CrouchSpeed => Config.CrouchSpeed * SpeedFactor;
 
     /// <summary>
     /// 이동 속도에 걸린 외부 배율 — 밧줄로 끌고 있는 무게(<see cref="RopeDragLoad.DragSpeedFactor"/>)와
@@ -416,7 +418,7 @@ public class PlayerMovement : NetworkBehaviour
             m_verticalVelocity = k_groundedStickVelocity;
         }
 
-        m_verticalVelocity += m_gravity * Time.deltaTime;
+        m_verticalVelocity += Config.Gravity * Time.deltaTime;
     }
 
     /// <summary>
@@ -560,7 +562,7 @@ public class PlayerMovement : NetworkBehaviour
             if (m_jump.ConsumeJumpRequest() && grounded && !IsMovementLocked)
             {
                 m_verticalVelocity = Mathf.Sqrt(
-                    2f * m_jump.JumpHeight * Mathf.Max(-m_gravity, 0.01f)
+                    2f * m_jump.JumpHeight * Mathf.Max(-Config.Gravity, 0.01f)
                 );
             }
         }
@@ -599,7 +601,7 @@ public class PlayerMovement : NetworkBehaviour
         float iceRatio = snow != null
             ? snow.IceRatioAt(transform.position + Vector3.up * WeatherShelter.k_bodyProbeHeight)
             : 0f;
-        float currentFriction = Mathf.Lerp(m_defaultFriction, m_snowFriction, iceRatio);
+        float currentFriction = Mathf.Lerp(Config.DefaultFriction, Config.SnowFriction, iceRatio);
         
         // 방향 전환·정지가 즉각적이지 않도록 현재 속도를 목표 속도로 부드럽게 보간 (관성/미끄러짐 구현)
         m_currentHorizontalVelocity = Vector3.Lerp(m_currentHorizontalVelocity, targetVelocity, currentFriction * Time.deltaTime);
@@ -621,7 +623,7 @@ public class PlayerMovement : NetworkBehaviour
         }
 
         // 넉백 지수 감쇠
-        m_knockbackVelocity *= Mathf.Exp(-m_knockbackDamping * Time.deltaTime);
+        m_knockbackVelocity *= Mathf.Exp(-Config.KnockbackDamping * Time.deltaTime);
         if (m_knockbackVelocity.sqrMagnitude < 0.01f)
             m_knockbackVelocity = Vector3.zero;
     }

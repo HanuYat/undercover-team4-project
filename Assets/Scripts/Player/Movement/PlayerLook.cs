@@ -22,55 +22,36 @@ public class PlayerLook : MonoBehaviour
     [SerializeField]
     private Camera m_playerCamera;
 
-    [Tooltip("기준 감도(도/픽셀) — 여기에 설정 창의 배율을 곱한다. 실제 속도를 정하는 것은 이 값이고, "
-        + "배율은 '기본보다 몇 배'만 고른다 (#225/#665)")]
-    [SerializeField]
-    private float m_mouseSensitivity = 1f;
-
-    // 스무딩 강도·시야각은 프리팹이 아니라 설정 창에 있다 (GameSettings, #665) —
-    // 멀미는 사람마다 달라서 기본값 하나로 맞출 수 없다.
-
-    [SerializeField]
-    private float m_minPitch = -80f;
-
-    [SerializeField]
-    private float m_maxPitch = 80f;
-
     [SerializeField]
     private Transform m_ownBodyRoot; // 내 카메라에서만 안 보이게 할 캐릭터 몸(머리) 루트
 
-    [Header("다운(무력화) 시점")]
-    [Tooltip("다운 중 카메라를 낮출 바닥 근처 높이(m)")]
-    [SerializeField] private float m_downCamHeight = 0.35f;
+    [Header("튜닝")]
+    [Tooltip("시점 수치 모음 — 감도·피치 범위·다운/감정표현 카메라 (#967)")]
+    [SerializeField] private PlayerLookConfig m_config;
 
-    [Tooltip("다운 중 카메라 피치(양수=아래, 음수=위). 바닥에서 살짝 위를 보게 함")]
-    [SerializeField] private float m_downCamPitch = -20f;
+    // 스무딩 강도·시야각은 Config에도 없다 (GameSettings, #665) — 멀미는 사람마다 달라
+    // 기본값 하나로 맞출 수 없어 설정 창에 둔다.
 
-    [Tooltip("서기↔다운 시점 전환 보간 속도. 클수록 빨리 붙는다 — 낮으면 화면이 길게 미끄러져 멀미가 난다 (#665)")]
-    [SerializeField] private float m_camPoseLerpSpeed = 14f;
+    // 배선이 빠져도 굴러가게 코드 기본값 인스턴스로 대신한다 — 시점이 멈추는 것보다 낫고,
+    // 기본값의 정본은 여전히 Config 클래스 하나뿐이다. (#967)
+    private PlayerLookConfig m_fallbackConfig;
 
-    // 쓰러진 동안에도 주변을 볼 수 있게 시야만 돌린다 (#252) — 몸은 누운 채 그대로다.
-    [Tooltip("쓰러진 동안(다운·기절) 시야를 좌우로 돌릴 수 있는 범위(±도). 몸을 돌리지 않으므로 목이 꺾여 보이지 않을 만큼만 준다")]
-    [SerializeField] private float m_downYawRange = 100f;
+    private PlayerLookConfig Config
+    {
+        get
+        {
+            if (m_config != null)
+                return m_config;
 
-    [Tooltip("쓰러진 동안 시야 피치 하한(음수=위). 바닥에 누워 있으니 위로는 넉넉히 열어 둔다")]
-    [SerializeField] private float m_downMinPitch = -80f;
+            if (m_fallbackConfig == null)
+            {
+                m_fallbackConfig = ScriptableObject.CreateInstance<PlayerLookConfig>();
+                Debug.LogError("PlayerLook: 시점 Config가 연결되지 않았다 — 코드 기본값으로 대체한다", this);
+            }
 
-    [Tooltip("쓰러진 동안 시야 피치 상한(양수=아래). 아래로는 바닥밖에 없어 좁게 잡는다")]
-    [SerializeField] private float m_downMaxPitch = 20f;
-
-    [Header("감정표현 시점 (#219)")]
-    [Tooltip("감정표현 재생 중 카메라를 뒤로 뺄 거리(m)")]
-    [SerializeField] private float m_emoteCamDistance = 2.5f;
-
-    [Tooltip("감정표현 재생 중 카메라를 위로 올릴 높이(m)")]
-    [SerializeField] private float m_emoteCamHeight = 0.4f;
-
-    [Tooltip("1인칭↔감정표현 시점 전환 보간 속도. 클수록 빨리 붙는다 (#665)")]
-    [SerializeField] private float m_emoteCamLerpSpeed = 10f;
-
-    [Tooltip("3인칭 카메라가 벽을 파고들지 않게 띄울 반경(m)")]
-    [SerializeField] private float m_emoteCamProbeRadius = 0.25f;
+            return m_fallbackConfig;
+        }
+    }
 
     [Tooltip("3인칭 카메라 충돌 판정에 쓸 레이어 — 플레이어·트리거는 빼 둘 것")]
     [SerializeField] private LayerMask m_emoteCamCollision = ~0;
@@ -286,7 +267,7 @@ public class PlayerLook : MonoBehaviour
             return;
         }
 
-        Vector2 look = m_inputHandler.LookInput * m_mouseSensitivity * GameSettings.MouseSensitivity;
+        Vector2 look = m_inputHandler.LookInput * Config.MouseSensitivity * GameSettings.MouseSensitivity;
 
         // 천천히 돌릴 때 마우스 delta가 0/1/0/1로 튀는 계단 지터를 깎는다. 0이면 스무딩 없음. (#216)
         // 깎는 대상이 각도가 아니라 delta라, 강하게 걸면 마우스를 멈춘 뒤에도 남은 delta가 몇 프레임
@@ -310,8 +291,8 @@ public class PlayerLook : MonoBehaviour
                 m_downLookTaken = true; // 이 순간부터 시선은 플레이어 것 — 바닥 시점 강제를 놓는다
 
             m_downYaw = Mathf.Clamp(
-                m_downYaw + m_smoothedLook.x, -m_downYawRange, m_downYawRange);
-            m_pitch = Mathf.Clamp(m_pitch - m_smoothedLook.y, m_downMinPitch, m_downMaxPitch);
+                m_downYaw + m_smoothedLook.x, -Config.DownYawRange, Config.DownYawRange);
+            m_pitch = Mathf.Clamp(m_pitch - m_smoothedLook.y, Config.DownMinPitch, Config.DownMaxPitch);
             return;
         }
 
@@ -321,13 +302,13 @@ public class PlayerLook : MonoBehaviour
         if (m_emoteView)
         {
             m_emoteYaw += m_smoothedLook.x; // 3인칭은 한 바퀴 돌 수 있어야 하므로 범위를 두지 않는다
-            m_pitch = Mathf.Clamp(m_pitch - m_smoothedLook.y, m_minPitch, m_maxPitch);
+            m_pitch = Mathf.Clamp(m_pitch - m_smoothedLook.y, Config.MinPitch, Config.MaxPitch);
             return;
         }
 
         transform.Rotate(Vector3.up * m_smoothedLook.x);
 
-        m_pitch = Mathf.Clamp(m_pitch - m_smoothedLook.y, m_minPitch, m_maxPitch);
+        m_pitch = Mathf.Clamp(m_pitch - m_smoothedLook.y, Config.MinPitch, Config.MaxPitch);
     }
 
     // 카메라 위치(높이)와 피치를 적용한다. 다운 중에는 바닥 근처 높이 + 상방 시선으로 부드럽게 눕히고,
@@ -343,7 +324,7 @@ public class PlayerLook : MonoBehaviour
         if (!Mathf.Approximately(m_playerCamera.fieldOfView, GameSettings.Fov))
             m_playerCamera.fieldOfView = GameSettings.Fov;
 
-        float lerp = Damp(m_camPoseLerpSpeed);
+        float lerp = Damp(Config.CamPoseLerpSpeed);
         bool downed = IsProne;
 
         // 사망 관전 시점 — 기능 정지(Die) 동안 켠다 (#576). 기절·매달기·납치처럼 스스로 풀리는
@@ -388,7 +369,7 @@ public class PlayerLook : MonoBehaviour
         // 아래 흔들림 오프셋이 매 프레임 누적돼 시점이 옆으로 밀린 채 돌아오지 않는다 (#477).
         Vector3 localPos = new Vector3(
             m_camBaseLateral.x,
-            Mathf.Lerp(uprightHeight, m_downCamHeight, m_downCamBlend),
+            Mathf.Lerp(uprightHeight, Config.DownCamHeight, m_downCamBlend),
             m_camBaseLateral.y
         );
 
@@ -396,7 +377,7 @@ public class PlayerLook : MonoBehaviour
         // 계속 강제하면 올려다본 각도가 매 프레임 되돌아가 시야 조작이 먹지 않는다.
         if (downed && !m_downLookTaken)
         {
-            m_pitch = Mathf.Lerp(m_pitch, m_downCamPitch, lerp);
+            m_pitch = Mathf.Lerp(m_pitch, Config.DownCamPitch, lerp);
         }
 
         // 일어나면 시야 좌우 각도를 0으로 되돌린다 — 몸을 그 방향으로 돌리지는 않는다.
@@ -405,7 +386,7 @@ public class PlayerLook : MonoBehaviour
         {
             m_downYaw = Mathf.Lerp(m_downYaw, 0f, lerp);
             m_downLookTaken = false;
-            m_pitch = Mathf.Clamp(m_pitch, m_minPitch, m_maxPitch); // 누운 자세용 범위에서 서기 범위로 복귀
+            m_pitch = Mathf.Clamp(m_pitch, Config.MinPitch, Config.MaxPitch); // 누운 자세용 범위에서 서기 범위로 복귀
         }
 
         // 흔들림은 마지막에 최종 포즈 위에 얹는다 (#477) — 밖에서 카메라 transform을 직접 흔들면
@@ -421,7 +402,7 @@ public class PlayerLook : MonoBehaviour
         // 통째로 대입하므로 밖에서 얹은 오프셋은 그 프레임에 지워진다.
         // 쓰러지면 다운 시점이 이긴다 — 서버가 감정표현을 끊어 주지만 그 값이 돌아오기까지 왕복이 걸리고,
         // 그 사이 두 블렌드가 겹치면 카메라가 다운 높이와 3인칭 붐 사이 엉뚱한 자리로 간다.
-        m_emoteCamBlend = Mathf.Lerp(m_emoteCamBlend, m_emoteView && !downed ? 1f : 0f, Damp(m_emoteCamLerpSpeed));
+        m_emoteCamBlend = Mathf.Lerp(m_emoteCamBlend, m_emoteView && !downed ? 1f : 0f, Damp(Config.EmoteCamLerpSpeed));
 
         if (!m_emoteView && m_emoteCamBlend < 0.01f)
         {
@@ -431,7 +412,7 @@ public class PlayerLook : MonoBehaviour
         {
             // 붐은 카메라가 보는 방향 기준이다 — 몸통이 아니라 m_emoteYaw를 축으로 돈다.
             Vector3 boom = Quaternion.Euler(0f, m_emoteYaw, 0f)
-                * new Vector3(0f, m_emoteCamHeight, -m_emoteCamDistance);
+                * new Vector3(0f, Config.EmoteCamHeight, -Config.EmoteCamDistance);
 
             // 벽을 파고들지 않게 당긴다. SphereCast 1회로만 처리한다 — 맵 교체가 예정돼 있어
             // 여기서 완벽한 충돌 대응을 만들 이유가 없다.
@@ -441,10 +422,10 @@ public class PlayerLook : MonoBehaviour
             if (distance > 0.001f)
             {
                 direction /= distance;
-                if (Physics.SphereCast(pivot, m_emoteCamProbeRadius, direction, out RaycastHit hit,
+                if (Physics.SphereCast(pivot, Config.EmoteCamProbeRadius, direction, out RaycastHit hit,
                         distance, m_emoteCamCollision, QueryTriggerInteraction.Ignore))
                 {
-                    boom = boom.normalized * Mathf.Max(hit.distance - m_emoteCamProbeRadius, 0f);
+                    boom = boom.normalized * Mathf.Max(hit.distance - Config.EmoteCamProbeRadius, 0f);
                 }
             }
 
