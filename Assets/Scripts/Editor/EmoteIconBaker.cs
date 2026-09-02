@@ -57,7 +57,7 @@ public class EmoteIconBaker : EditorWindow
     private void OnEnable()
     {
         if (m_catalog == null)
-            m_catalog = AssetDatabase.LoadAssetAtPath<EmoteCatalog>("Assets/Scripts/Data/EmoteCatalog.asset");
+            m_catalog = AssetDatabase.LoadAssetAtPath<EmoteCatalog>("Assets/Settings/Emote/EmoteCatalog.asset");
 
         if (m_subjectPrefab == null)
             m_subjectPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Player.prefab");
