@@ -125,8 +125,8 @@ public class NpcController : NetworkBehaviour
     public NpcStun Stun => m_stun;
 
     // 살아 있는 인스턴스 목록 — 반경 안의 NPC를 찾는 쪽(JailIntake)이 씬 전체를 뒤지지 않게 한다
-    // (PlayerIncapacitation.All과 같은 패턴, #961). OnEnable/OnDisable이라 풀에 들어가 꺼진 NPC는
-    // 목록에서 빠진다 — FindObjectsByType(FindObjectsSortMode.None)의 비활성 제외와 같은 집합이다.
+    // (PlayerIncapacitation.All과 같은 패턴, #961). 풀에 들어가 꺼진 NPC는 목록에서 빠진다.
+    // ⚠ 컴포넌트만 비활성(enabled=false)이어도 빠진다 — 집합 정의는 PlayerHealth.All 주석 참고.
     private static readonly System.Collections.Generic.List<NpcController> s_instances = new();
 
     /// <summary>씬에 살아 있는 모든 NPC — 자주 순회해도 되는 무할당 목록. (#961)</summary>

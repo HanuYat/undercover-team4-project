@@ -115,7 +115,7 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
     // ---- 정적 조회 (전 피어) ----
 
     // 살아 있는 인스턴스 목록 — 아래 조회가 인계 판정마다 씬을 뒤지지 않게 한다
-    // (PlayerIncapacitation.All과 같은 패턴, #961). OnEnable/OnDisable이라 집합은 비활성 제외 그대로다.
+    // (PlayerIncapacitation.All과 같은 패턴, #961). 집합 정의는 PlayerHealth.All 주석 참고.
     private static readonly List<PlayerEscorter> s_instances = new List<PlayerEscorter>();
 
     private void OnEnable() => s_instances.Add(this);

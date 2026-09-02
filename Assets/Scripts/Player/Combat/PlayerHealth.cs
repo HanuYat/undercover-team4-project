@@ -50,8 +50,10 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
         || (CurrentHp > 0 && m_incapacitation != null && m_incapacitation.IsLaunched);
 
     // 살아 있는 인스턴스 목록 — 플레이어 전원을 훑는 쪽이 FindObjectsByType으로 씬을 뒤지지 않게 한다
-    // (PlayerIncapacitation.All과 같은 패턴, #961). 등록·해제가 OnEnable/OnDisable에 있어야
-    // 기존 FindObjectsByType(FindObjectsSortMode.None)과 집합(비활성 제외)이 어긋나지 않는다.
+    // (PlayerIncapacitation.All과 같은 패턴, #961). 등록·해제는 OnEnable/OnDisable에 둔다 —
+    // Awake/OnDestroy면 꺼진 오브젝트가 남아 FindObjectsByType 기본 동작과 어긋난다.
+    // ⚠ 빠지는 조건은 GameObject 비활성 <b>또는 컴포넌트 비활성</b>이다 — 후자는 씬 검색이 보지
+    // 않던 것이라, enabled를 끄면 그 플레이어가 표적·피해 판정에서 조용히 사라진다.
     private static readonly System.Collections.Generic.List<PlayerHealth> s_instances = new();
 
     /// <summary>씬에 존재하는 모든 플레이어의 체력 컴포넌트 — 자주 순회해도 되는 무할당 목록. (#961)</summary>
