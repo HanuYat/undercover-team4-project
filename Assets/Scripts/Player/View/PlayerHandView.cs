@@ -27,6 +27,7 @@ public class PlayerHandView : NetworkBehaviour
     private const float k_idleAmp = 0.004f;
     private const float k_walkAmp = 0.010f;
     private const float k_swayTiltDegrees = 90f; // bob 오프셋(m)당 손을 기울이는 각도 — 움직임에 무게감을 준다
+    private const float k_bobSpeedDamp = 12f; // 흔들림 세기가 목표를 좇는 속도(1/초) (#964)
 
     // 뷰모델 스윙(#217) — 3인칭은 상체 레이어 클립(UpperBodyAttack)이 처리하지만, 1인칭 팔은
     // 애니메이터도 아바타도 없는 정적 스킨드 메시라(FPArmGenerator가 그렇게 뽑는다) 그 클립이 오지 않는다.
@@ -186,6 +187,7 @@ public class PlayerHandView : NetworkBehaviour
     private Quaternion m_handBaseRot;
     private bool m_hasHandBase; // 스폰에서 base 포즈를 캡처했는지 — Update가 스폰 전에 먼저 돌아 손을 원점으로 옮기는 것을 막는다
     private float m_bobTime;
+    private float m_bobSpeedT; // 적용 중인 흔들림 세기(0~1) (#964)
     private float m_swingTime = -1f; // 스윙 경과 시간(초). 음수 = 진행 중 아님
     private float m_hitShakeTime = -1f; // 피격 킥 경과 시간(초). 음수 = 진행 중 아님 (#476)
     private Vector3 m_hitShakeAxis; // 이번 피격 킥의 회전축 — 맞을 때마다 다르게 뽑아 같은 그림이 반복되지 않게 한다
@@ -364,12 +366,21 @@ public class PlayerHandView : NetworkBehaviour
             return;
         }
 
-        Vector3 horizontalVelocity = m_controller != null ? m_controller.velocity : Vector3.zero;
-        horizontalVelocity.y = 0f;
-        float speedT = Mathf.Clamp01(horizontalVelocity.magnitude / k_bobRefSpeed);
+        // CC가 꺼지면 velocity는 직전 값에 얼어붙는다 — 끌려가는 중은 걷는 중이 아니라 0으로 본다 (#964)
+        float targetSpeedT = 0f;
+        if (m_controller != null && m_controller.enabled)
+        {
+            Vector3 horizontalVelocity = m_controller.velocity;
+            horizontalVelocity.y = 0f;
+            targetSpeedT = Mathf.Clamp01(horizontalVelocity.magnitude / k_bobRefSpeed);
+        }
 
-        m_bobTime += Time.deltaTime * (k_idleFreq + speedT * k_walkFreq);
-        float amp = k_idleAmp + speedT * k_walkAmp;
+        // 한 프레임에 끊으면 팔이 튄다 — 잦아들게 좇는다
+        m_bobSpeedT = Mathf.Lerp(
+            m_bobSpeedT, targetSpeedT, 1f - Mathf.Exp(-k_bobSpeedDamp * Time.deltaTime));
+
+        m_bobTime += Time.deltaTime * (k_idleFreq + m_bobSpeedT * k_walkFreq);
+        float amp = k_idleAmp + m_bobSpeedT * k_walkAmp;
 
         // 좌우(cos)·상하(sin 2배 주기) = 걸음마다 8자를 그리는 전형적 뷰모델 bob
         float x = Mathf.Cos(m_bobTime) * amp;
