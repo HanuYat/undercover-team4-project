@@ -17,14 +17,14 @@
 
 | 구성요소 | 경로 | 역할 |
 |---|---|---|
-| 아이템 본체 | `Assets/Scripts/Item/AreaScanner.cs` | 즉발 사용, 반경 판정(서버), 쿨타임, 결과 전파 |
+| 아이템 본체 | `Assets/Scripts/Item/Tools/AreaScanner.cs` | 즉발 사용, 반경 판정(서버), 쿨타임, 결과 전파 |
 | 링 연출 | `Assets/Scripts/Vfx/AreaScanRingView.cs` | `LineRenderer` 원을 0→반경으로 확장 후 페이드. 순수 로컬 |
-| 오너 토스트 | `Assets/Scripts/UI/AreaScanPresenter.cs` | 쿨다운·먹통 사유를 `App.UI.Toast`로 |
-| 먹통 게이트 | `Assets/Scripts/Item/DeviceBlackoutGate.cs` | 개인 스캐너와 공용(신규 추출, `Scanner` −12줄) |
+| 오너 토스트 | `Assets/Scripts/UI/Scan/AreaScanPresenter.cs` | 쿨다운·먹통 사유를 `App.UI.Toast`로 |
+| 먹통 게이트 | `Assets/Scripts/Item/Power/DeviceBlackoutGate.cs` | 개인 스캐너와 공용(신규 추출, `Scanner` −12줄) |
 
 **설계상 짚어둘 두 가지**
 
-- **반경 수집에 `Physics.OverlapSphere`를 쓴다.** `NpcSpawner.SpawnedNpcs` 순회가 더 싸지만, `m_spawnedNpcs.Add`는 [NpcSpawner.cs:298](../Assets/Scripts/NPC/NpcSpawner.cs:298) 최초 스폰 1회뿐이라 라운드 중 스폰되는 난동꾼·침입자·탈옥 NPC가 목록에 없다. 그들도 `CriminalAssigner.AssignLateSpawned`로 진범이 될 수 있어, 목록을 훑으면 **진범을 조용히 놓친다.** 대신 `Ragdoll` 레이어 제외 + 512칸 버퍼 + 포화 경고가 필요하다(1인당 뼈 콜라이더가 여럿이라 20m면 256칸도 찬다).
+- **반경 수집에 `Physics.OverlapSphere`를 쓴다.** `NpcSpawner.SpawnedNpcs` 순회가 더 싸지만, `m_spawnedNpcs.Add`는 [NpcSpawner.cs:298](../Assets/Scripts/NPC/Spawn/NpcSpawner.cs:298) 최초 스폰 1회뿐이라 라운드 중 스폰되는 난동꾼·침입자·탈옥 NPC가 목록에 없다. 그들도 `CriminalAssigner.AssignLateSpawned`로 진범이 될 수 있어, 목록을 훑으면 **진범을 조용히 놓친다.** 대신 `Ragdoll` 레이어 제외 + 512칸 버퍼 + 포화 경고가 필요하다(1인당 뼈 콜라이더가 여럿이라 20m면 256칸도 찬다).
 - **링은 `FxManager` 조합표만으로 못 낸다.** `PlayEverywhere`는 `position`/`normal`만 받아 반경·색을 실을 수 없다. 반경을 프리팹에 구우면 `m_scanRadius`와 조용히 어긋나므로, **소리만 `EFx`로 내고 링은 전용 로컬 뷰**로 갈랐다.
 
 **쿨다운은 `Taser`(서버 로컬 float)가 아니라 `JailSirenButton`(종료 시각 `NetworkVariable<double>`) 방식이다.** 테이저 5초는 원형 게이지가 잠깐 돌고 끝나지만 60초 게이지는 화면을 계속 점유하고, 오너가 남은 시간을 알아야 장착 아이콘 힌트(`CanUse`)가 맞는다.
@@ -36,7 +36,7 @@
 ### 배달 · 습득
 - [ ] 상점에서 구매하지 않으면 게임에 존재하지 않는다
 - [ ] 구매 후 게임 씬 진입 시 본부 택배 지점에 나타나고 **눈에 보인다**
-  > ⚠ 회귀 지점. `m_heldModelPrefab`이 비면 [WorldItemPickup.cs:47](../Assets/Scripts/Item/WorldItemPickup.cs:47)이 월드 모델을 만들지 않아 **투명하게 스폰된다**(스폰·줍기는 되므로 로그만 보면 정상으로 보인다). 실제로 이 상태로 한 번 걸렸다.
+  > ⚠ 회귀 지점. `m_heldModelPrefab`이 비면 [WorldItemPickup.cs:47](../Assets/Scripts/Item/Core/WorldItemPickup.cs:47)이 월드 모델을 만들지 않아 **투명하게 스폰된다**(스폰·줍기는 되므로 로그만 보면 정상으로 보인다). 실제로 이 상태로 한 번 걸렸다.
 - [ ] 주우면 인벤토리 칸에 표시된다 (아이콘 미배선이라 "구역 스캔" **텍스트**로 뜬다 — 정상)
 
 ### 판정

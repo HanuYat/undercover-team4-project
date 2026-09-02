@@ -50,12 +50,12 @@
 
 | 축 | 현재 구현 | 파일 |
 |---|---|---|
-| 데미지 | 반경 8m 안 **균일 60**, 거리 감쇠 없음. HP 최대 100 | [BombDevice.cs:51](../Assets/Scripts/Events/Bomb/BombDevice.cs), [PlayerHealth.cs:7](../Assets/Scripts/Player/PlayerHealth.cs) |
-| 사망 | HP 0 → `Incapacitate(Die)` → `m_causeSynced`로 전 피어 동기화 | [PlayerHealth.cs:93](../Assets/Scripts/Player/PlayerHealth.cs) |
+| 데미지 | 반경 8m 안 **균일 60**, 거리 감쇠 없음. HP 최대 100 | [BombDevice.cs:51](../Assets/Scripts/Events/Bomb/BombDevice.cs), [PlayerHealth.cs:7](../Assets/Scripts/Player/Combat/PlayerHealth.cs) |
+| 사망 | HP 0 → `Incapacitate(Die)` → `m_causeSynced`로 전 피어 동기화 | [PlayerHealth.cs:93](../Assets/Scripts/Player/Combat/PlayerHealth.cs) |
 | 넉백(플레이어) | `BombExplosionView`가 각 피어에서 **자기 오너에게만** `AddKnockback` | [BombExplosionView.cs](../Assets/Scripts/Events/Bomb/BombExplosionView.cs) |
 | 넉백(NPC) | 서버가 `NpcController.ServerApplyKnockback` 직접 호출 | [BombDevice.cs](../Assets/Scripts/Events/Bomb/BombDevice.cs) |
 | 쓰러짐 표현 | `PlayerAnimationDriver`가 `IsProne` 폴링 → Animator `Down` → `Knockdown_Fall`→`Ground`(루프) | [PlayerAnimationDriver.cs:135](../Assets/Scripts/Player/View/PlayerAnimationDriver.cs) |
-| 부활 | `HqRevivalDevice` → `ServerRevive` → `Recover()` → `Down=false` → `Knockdown_StandUp`(1.17초) → `Locomotion` | [HqRevivalDevice.cs](../Assets/Scripts/Interaction/HqRevivalDevice.cs) |
+| 부활 | `HqRevivalDevice` → `ServerRevive` → `Recover()` → `Down=false` → `Knockdown_StandUp`(1.17초) → `Locomotion` | [HqRevivalDevice.cs](../Assets/Scripts/Interaction/Hq/HqRevivalDevice.cs) |
 | 카메라 | 프론 시 높이 0.35m·피치 −20°·좌우 ±100° | [PlayerLook.cs:166](../Assets/Scripts/Player/Movement/PlayerLook.cs) |
 
 ### 프리팹을 뜯어보고 확인한 것 (설계에 직접 영향)
@@ -99,7 +99,7 @@ public void EnterRagdoll(Vector3 impulse)
 
 ②만 먼저 와도 래그돌이 켜지고, ①이 뒤늦게 와도 무동작이다. 반대 순서도 같다.
 
-> **①은 이벤트가 아니라 폴링으로 잡아야 한다.** `OnIncapacitatedChanged`는 bool만 넘기고 **원인만 바뀌면 울리지 않는다** ([PlayerIncapacitation.cs:147](../Assets/Scripts/Player/PlayerIncapacitation.cs)). 납치 린치 사망은 `Abducted`/`Lynched` → `Die` 전이라 bool이 안 바뀌어 **이벤트가 아예 안 온다.** `PlayerAnimationDriver`가 `IsProne`을 Update에서 폴링하는 것과 같은 방식으로 `IsDead`를 폴링할 것. (또는 `PlayerIncapacitation`에 `OnCauseChanged`를 새로 추가 — 폴링 쪽이 기존 관례와 일치한다.)
+> **①은 이벤트가 아니라 폴링으로 잡아야 한다.** `OnIncapacitatedChanged`는 bool만 넘기고 **원인만 바뀌면 울리지 않는다** ([PlayerIncapacitation.cs:147](../Assets/Scripts/Player/Combat/PlayerIncapacitation.cs)). 납치 린치 사망은 `Abducted`/`Lynched` → `Die` 전이라 bool이 안 바뀌어 **이벤트가 아예 안 온다.** `PlayerAnimationDriver`가 `IsProne`을 Update에서 폴링하는 것과 같은 방식으로 `IsDead`를 폴링할 것. (또는 `PlayerIncapacitation`에 `OnCauseChanged`를 새로 추가 — 폴링 쪽이 기존 관례와 일치한다.)
 
 ### 3-2. 넉백 이중 적용 방지
 

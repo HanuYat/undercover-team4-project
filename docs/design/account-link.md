@@ -29,12 +29,12 @@
 | (a) 인증 방식 | **UGS Username & Password** (2026-07-28 결정) | 브라우저 왕복이 없어 **게임 내 UI로 완결**된다. 후보 비교는 아래 표 |
 | (b) 익명 유지 허용 | **허용.** 계정 없이도 전부 플레이 가능, 연동은 완전 선택 | 연동을 강제하면 데모 진입에 계정 생성 단계가 붙는다. 얻는 건 닉네임 이식뿐 |
 | (c) 승격 API | `AddUsernamePasswordAsync` — **익명 로그인 상태를 유지한 채** 호출 | 신규 `SignUp`으로 처리하면 새 `PlayerId`가 발급돼 기존 닉네임이 유실된다. `Add...`만이 현재 계정에 자격증명을 붙인다 |
-| (d) 새 기기 로그인 | `SignOut()` **선행 후** `SignInWithUsernamePasswordAsync` | `AuthBootstrap`이 씬 시작 시 이미 익명 로그인을 해둔다([AuthBootstrap.cs:99](../../Assets/Scripts/Network/AuthBootstrap.cs#L99)). 로그인 상태에서 호출하면 `ClientInvalidUserState` |
+| (d) 새 기기 로그인 | `SignOut()` **선행 후** `SignInWithUsernamePasswordAsync` | `AuthBootstrap`이 씬 시작 시 이미 익명 로그인을 해둔다([AuthBootstrap.cs:99](../../Assets/Scripts/Network/Auth/AuthBootstrap.cs#L99)). 로그인 상태에서 호출하면 `ClientInvalidUserState` |
 | (e) 연동 해제 | **해제는 불가.** 대신 ①연동 전 **확인창**으로 되돌릴 수 없음을 알리고 ②연동 후 **"이 기기에서 분리(새 익명 계정으로 전환)"** 경로를 준다 (#444, §10) | UGS가 username/password의 **제거를 지원하지 않는다**(`Unlink*`는 소셜 provider 전용). 분리는 해제가 아니므로 **UI 문구에서 그렇게 쓰지 않는다** — 서버의 계정과 아이디는 그대로 남는다 |
 | (f) 입력 검증 위치 | UGS 규칙(§3)을 **클라이언트에서 먼저** 검사 | #249에서 `ValidateNickname`을 우리가 만든 것과 같은 이유 — UGS 응답이 불친절해 그대로 노출하면 사용자가 무엇을 고쳐야 할지 모른다 |
 | (g) 닉네임 우선순위 | **계정 종류에 따라 방향이 뒤집힌다** (§4) | 연동 후에도 캐시를 서버로 밀면 새 기기의 낡은 익명 캐시가 진짜 계정 닉네임을 덮어쓴다 |
 | (h) UI 위치 | **`AuthPanel`(Title 씬)만.** 설정 창(#225)에 넣지 않는다 | 설정 창은 4씬 전체에 배치돼 있어 넣으면 **게임 중 계정 변경 진입점**이 생긴다. Vivox 로그인이 `PlayerId`에 묶여 세션 중 계정 변경은 곧 버그. [settings-ui.md](settings-ui.md) 결정 (c)와 같은 판단 |
-| (i) 경계 유지 | `AuthBootstrap` 내부만 교체. `PlayerNameTag`·`SessionFlow`는 수정 없음 | #249가 세운 경계를 그대로 잇는다. `PlayerNameTag`는 `App.Net.Auth.Nickname` 1줄만 읽고([PlayerNameTag.cs:63](../../Assets/Scripts/Player/PlayerNameTag.cs#L63)), `SessionFlow`의 `SignOut()`은 토큰을 유지하므로 연동 계정도 같은 기기에서 그대로 복원된다 |
+| (i) 경계 유지 | `AuthBootstrap` 내부만 교체. `PlayerNameTag`·`SessionFlow`는 수정 없음 | #249가 세운 경계를 그대로 잇는다. `PlayerNameTag`는 `App.Net.Auth.Nickname` 1줄만 읽고([PlayerNameTag.cs:63](../../Assets/Scripts/Player/View/PlayerNameTag.cs#L63)), `SessionFlow`의 `SignOut()`은 토큰을 유지하므로 연동 계정도 같은 기기에서 그대로 복원된다 |
 
 ### 후보 비교 (근거)
 
@@ -77,7 +77,7 @@ C-3는 막다른 길이 아니다 — 한 계정에 여러 identity를 링크할
 
 ## 4. 닉네임 우선순위 (가장 위험한 지점)
 
-현재 `RestoreCachedNicknameAsync`([AuthBootstrap.cs:284](../../Assets/Scripts/Network/AuthBootstrap.cs#L284))는 **캐시를 정본으로 서버에 밀어넣는다** — #249에서 "토큰이 지워져 `PlayerId`가 새로 발급된 경우의 복원"을 위해 의도적으로 그렇게 만든 것이다.
+현재 `RestoreCachedNicknameAsync`([AuthBootstrap.cs:284](../../Assets/Scripts/Network/Auth/AuthBootstrap.cs#L284))는 **캐시를 정본으로 서버에 밀어넣는다** — #249에서 "토큰이 지워져 `PlayerId`가 새로 발급된 경우의 복원"을 위해 의도적으로 그렇게 만든 것이다.
 
 그대로 두고 연동을 붙이면: 기기 B에서 계정 로그인 → 기기 B에 남아 있던 **낡은 익명 캐시**가 진짜 계정 닉네임을 덮어쓴다. 계정 종류에 따라 방향을 뒤집는다.
 

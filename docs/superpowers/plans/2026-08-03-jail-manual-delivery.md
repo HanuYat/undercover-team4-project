@@ -36,7 +36,7 @@ Jail NavMesh 영역 마스크 해석이 지금 **두 곳에 복제**돼 있다(`
 
 **Files:**
 - Create: `Assets/Scripts/Interaction/JailArea.cs`
-- Modify: `Assets/Scripts/Interaction/JailDoor.cs` (282-315행의 마스크 캐시·`IsInsideJailArea` 제거, 호출부 교체)
+- Modify: `Assets/Scripts/Interaction/Jail/JailDoor.cs` (282-315행의 마스크 캐시·`IsInsideJailArea` 제거, 호출부 교체)
 - Modify: `Assets/Scripts/NPC/Controller/NpcController.Custody.cs` (8-10행 `s_jailAreaMask`, 65-77행 `JailAreaMask` 위임으로 교체)
 
 **Interfaces:**
@@ -107,7 +107,7 @@ public static class JailArea
 
 - [ ] **Step 3: `JailDoor`의 사본 제거**
 
-`Assets/Scripts/Interaction/JailDoor.cs` 맨 아래 282-315행(`s_jailAreaMask` 필드, `k_insideSampleRadius`, `JailAreaMask` 프로퍼티, `IsInsideJailArea` 메서드)을 **통째로 삭제**하고, 218행의 호출부를 교체:
+`Assets/Scripts/Interaction/Jail/JailDoor.cs` 맨 아래 282-315행(`s_jailAreaMask` 필드, `k_insideSampleRadius`, `JailAreaMask` 프로퍼티, `IsInsideJailArea` 메서드)을 **통째로 삭제**하고, 218행의 호출부를 교체:
 
 ```csharp
             // 이미 유치장 안으로 들어선 대상은 문을 잡아 두지 않는다 — 들어가면 등 뒤로 닫힌다.
@@ -128,7 +128,7 @@ Main Scene Play. 유치장 문 앞에 서서 E로 열고 닫는다.
 - [ ] **Step 6: 커밋**
 
 ```bash
-git add Assets/Scripts/Interaction/JailArea.cs Assets/Scripts/Interaction/JailArea.cs.meta Assets/Scripts/Interaction/JailDoor.cs Assets/Scripts/NPC/Controller/NpcController.Custody.cs
+git add Assets/Scripts/Interaction/JailArea.cs Assets/Scripts/Interaction/JailArea.cs.meta Assets/Scripts/Interaction/Jail/JailDoor.cs Assets/Scripts/NPC/Controller/NpcController.Custody.cs
 git commit -m "#492: Jail 영역 판정을 JailArea로 통합 — 마스크 사본 2개 제거"
 ```
 
@@ -141,10 +141,10 @@ git commit -m "#492: Jail 영역 판정을 JailArea로 통합 — 마스크 사�
 세 변경이 서로를 필요로 하므로 한 태스크로 묶는다: `ReserveSeat`를 최근접 방식으로 바꾸면 유일한 호출부인 `CustodyRouter`를 같이 고쳐야 하고, `ArrestJudge`가 밧줄을 강제로 풀면 착석이 자동으로 일어나 "E로 놓아야 앉는다"가 깨진다.
 
 **Files:**
-- Create: `Assets/Scripts/Interaction/JailIntake.cs`
-- Modify: `Assets/Scripts/Interaction/JailZone.cs` (`ReserveSeat` 교체, 정원 초과 경로 분리)
-- Modify: `Assets/Scripts/Interaction/ArrestJudge.cs` (판정 후 밧줄 강제 해제 블록 제거)
-- Modify: `Assets/Scripts/Interaction/CustodyRouter.cs` (수감 분기 제거)
+- Create: `Assets/Scripts/Interaction/Jail/JailIntake.cs`
+- Modify: `Assets/Scripts/Interaction/Jail/JailZone.cs` (`ReserveSeat` 교체, 정원 초과 경로 분리)
+- Modify: `Assets/Scripts/Interaction/Arrest/ArrestJudge.cs` (판정 후 밧줄 강제 해제 블록 제거)
+- Modify: `Assets/Scripts/Interaction/Jail/CustodyRouter.cs` (수감 분기 제거)
 - Modify: `Assets/Scenes/Main Scene.unity` (`Jail` 오브젝트에 `JailIntake` 추가)
 
 **Interfaces:**
@@ -155,7 +155,7 @@ git commit -m "#492: Jail 영역 판정을 JailArea로 통합 — 마스크 사�
 
 - [ ] **Step 1: `JailZone.ReserveSeat`를 최근접 배정으로 교체**
 
-`Assets/Scripts/Interaction/JailZone.cs`의 기존 `ReserveSeat(NpcController npc)` 메서드 전체를 아래로 교체한다. `NextOverflowSeat`·`ReleaseSeat`는 그대로 둔다.
+`Assets/Scripts/Interaction/Jail/JailZone.cs`의 기존 `ReserveSeat(NpcController npc)` 메서드 전체를 아래로 교체한다. `NextOverflowSeat`·`ReleaseSeat`는 그대로 둔다.
 
 ```csharp
     /// <summary>
@@ -217,7 +217,7 @@ git commit -m "#492: Jail 영역 판정을 JailArea로 통합 — 마스크 사�
 
 - [ ] **Step 2: `ArrestJudge`의 밧줄 강제 해제 제거**
 
-`Assets/Scripts/Interaction/ArrestJudge.cs`에서 `LogVerdict(result);` 다음에 오는 블록(주석 132-137행 + `if (deliverers.Count > 0) { ... } else { npc.StopEscort(); }` 138-149행)을 **통째로 삭제**하고, 그 자리에 아래 주석만 남긴다:
+`Assets/Scripts/Interaction/Arrest/ArrestJudge.cs`에서 `LogVerdict(result);` 다음에 오는 블록(주석 132-137행 + `if (deliverers.Count > 0) { ... } else { npc.StopEscort(); }` 138-149행)을 **통째로 삭제**하고, 그 자리에 아래 주석만 남긴다:
 
 ```csharp
         // 판정은 신병 상태를 건드리지 않는다 (#492). 예전에는 여기서 밧줄을 강제로 풀었는데,
@@ -231,7 +231,7 @@ git commit -m "#492: Jail 영역 판정을 JailArea로 통합 — 마스크 사�
 
 - [ ] **Step 3: `CustodyRouter`의 수감 분기 제거**
 
-`Assets/Scripts/Interaction/CustodyRouter.cs`의 `HandleArrestJudged`에서 오검거 분기 이후 전체(75-96행 — `m_jailZone` null 검사, `Admit`, `ReserveCell`, `SendToJail`)를 삭제하고 아래로 교체. `m_jailZone` 필드와 `Awake`의 탐색도 함께 삭제한다 (더 이상 쓰지 않는다).
+`Assets/Scripts/Interaction/Jail/CustodyRouter.cs`의 `HandleArrestJudged`에서 오검거 분기 이후 전체(75-96행 — `m_jailZone` null 검사, `Admit`, `ReserveCell`, `SendToJail`)를 삭제하고 아래로 교체. `m_jailZone` 필드와 `Awake`의 탐색도 함께 삭제한다 (더 이상 쓰지 않는다).
 
 ```csharp
         // 현상수배범·경범죄의 수용은 여기서 하지 않는다 (#492) — 플레이어가 직접 끌고 들어가
@@ -248,7 +248,7 @@ git commit -m "#492: Jail 영역 판정을 JailArea로 통합 — 마스크 사�
 
 - [ ] **Step 4: `JailIntake` 생성**
 
-`Assets/Scripts/Interaction/JailIntake.cs`:
+`Assets/Scripts/Interaction/Jail/JailIntake.cs`:
 
 ```csharp
 using System.Collections.Generic;
@@ -472,7 +472,7 @@ Main Scene에서 `=== WORLD ===/Jail` 오브젝트를 선택해 `JailIntake` 컴
 - [ ] **Step 8: 커밋**
 
 ```bash
-git add Assets/Scripts/Interaction/JailIntake.cs Assets/Scripts/Interaction/JailIntake.cs.meta Assets/Scripts/Interaction/JailZone.cs Assets/Scripts/Interaction/ArrestJudge.cs Assets/Scripts/Interaction/CustodyRouter.cs "Assets/Scenes/Main Scene.unity"
+git add Assets/Scripts/Interaction/Jail/JailIntake.cs Assets/Scripts/Interaction/Jail/JailIntake.cs.meta Assets/Scripts/Interaction/Jail/JailZone.cs Assets/Scripts/Interaction/Arrest/ArrestJudge.cs Assets/Scripts/Interaction/Jail/CustodyRouter.cs "Assets/Scenes/Main Scene.unity"
 git commit -m "#492: 유치장 진입에서 판정하고 놓을 때 앉힌다 — JailIntake 신설"
 ```
 
@@ -485,7 +485,7 @@ Task 2로 새 흐름이 동작하므로 인계 단말 경로는 죽은 코드가
 **Files:**
 - Delete: `Assets/Scripts/Interaction/HqDropoffTerminal.cs` (+ `.meta`)
 - Delete: `Assets/Scripts/Interaction/HqDropoffZone.cs` (+ `.meta`)
-- Modify: `Assets/Scripts/Interaction/ArrestJudge.cs` (`TryDeliver`·`m_dropoffZone`·`Awake`의 탐색 제거)
+- Modify: `Assets/Scripts/Interaction/Arrest/ArrestJudge.cs` (`TryDeliver`·`m_dropoffZone`·`Awake`의 탐색 제거)
 - Modify: `Assets/Scripts/Player/Escort/PlayerEscortCommands.cs` (`RequestDeliver`·`DeliverRpc`·`ServerDeliver` 제거)
 - Modify: `Assets/Scripts/NPC/States/NpcStateRules.cs` (`CanDeliver` 제거)
 - Modify: `Assets/Scenes/Main Scene.unity` (인계 단말·인계 구역 오브젝트 삭제)
@@ -500,7 +500,7 @@ grep -rn "HqDropoff\|TryDeliver\|CanDeliver\|RequestDeliver\|ServerDeliver\|Deli
 
 - [ ] **Step 2: `ArrestJudge`에서 인계존 제거**
 
-`Assets/Scripts/Interaction/ArrestJudge.cs`에서:
+`Assets/Scripts/Interaction/Arrest/ArrestJudge.cs`에서:
 - `m_dropoffZone` 필드와 그 `[Header]`/`[Tooltip]` 삭제
 - `Awake`의 `if (m_dropoffZone == null) m_dropoffZone = FindFirstObjectByType<HqDropoffZone>();` 삭제 (`base.Awake()`는 유지)
 - `TryDeliver` 메서드 전체 삭제
@@ -621,7 +621,7 @@ git commit -m "#492: 수감 상태 주석 갱신 — 진입 경로와 계상 주
 
 **Files:**
 - Modify: `Assets/Scripts/NPC/States/NpcStateRules.cs` (`HasInteractKeyAction`에 `Jailed` 추가)
-- Modify: `Assets/Scripts/NPC/NpcSubdueInteractable.cs` (`Jailed` 분기 추가)
+- Modify: `Assets/Scripts/NPC/Controller/NpcSubdueInteractable.cs` (`Jailed` 분기 추가)
 - Modify: `Assets/Scripts/Player/Escort/PlayerEscortCommands.cs` (반출 요청 진입점 + RPC)
 
 **Interfaces:**
@@ -648,7 +648,7 @@ git commit -m "#492: 수감 상태 주석 갱신 — 진입 경로와 계상 주
 
 - [ ] **Step 2: `NpcSubdueInteractable`에 `Jailed` 분기 추가**
 
-`Assets/Scripts/NPC/NpcSubdueInteractable.cs`의 `Interact` switch에 `case NpcState.Captured:` 블록 **다음**에 추가:
+`Assets/Scripts/NPC/Controller/NpcSubdueInteractable.cs`의 `Interact` switch에 `case NpcState.Captured:` 블록 **다음**에 추가:
 
 ```csharp
             case NpcState.Jailed:
@@ -748,7 +748,7 @@ RPC 구역(`ReleaseRpc` 다음)에 추가:
 - [ ] **Step 6: 커밋**
 
 ```bash
-git add Assets/Scripts/NPC/States/NpcStateRules.cs Assets/Scripts/NPC/NpcSubdueInteractable.cs Assets/Scripts/Player/Escort/PlayerEscortCommands.cs
+git add Assets/Scripts/NPC/States/NpcStateRules.cs Assets/Scripts/NPC/Controller/NpcSubdueInteractable.cs Assets/Scripts/Player/Escort/PlayerEscortCommands.cs
 git commit -m "#492: 수감자 반출 — E로 일으켜 밧줄 없이 따라오게 한다"
 ```
 
@@ -759,11 +759,11 @@ git commit -m "#492: 수감자 반출 — E로 일으켜 밧줄 없이 따라오
 자동 개폐가 `Jailed` NPC 근접 전용이라, 자동 이송이 사라진 지금 영영 발동하지 않는 죽은 코드다. 플레이어가 끄는 NPC는 `Escorted`이고 문은 플레이어 근접을 보지 않는다.
 
 **Files:**
-- Modify: `Assets/Scripts/Interaction/JailDoor.cs`
+- Modify: `Assets/Scripts/Interaction/Jail/JailDoor.cs`
 
 - [ ] **Step 1: 자동 개폐 필드·메서드 제거**
 
-`Assets/Scripts/Interaction/JailDoor.cs`에서 삭제:
+`Assets/Scripts/Interaction/Jail/JailDoor.cs`에서 삭제:
 - `[Header("자동 개폐 ...")]`와 `m_autoOpenRadius`, `m_proximityCheckInterval` 필드
 - `m_proximityCooldown`, `m_npcWasEnRoute` 필드
 - `ServerTickAutoDoor()` 메서드 전체
@@ -835,7 +835,7 @@ git commit -m "#492: 수감자 반출 — E로 일으켜 밧줄 없이 따라오
 - [ ] **Step 6: 커밋**
 
 ```bash
-git add Assets/Scripts/Interaction/JailDoor.cs
+git add Assets/Scripts/Interaction/Jail/JailDoor.cs
 git commit -m "#492: 유치장 문 자동 개폐 제거 — 수감 이송이 사라져 죽은 경로"
 ```
 

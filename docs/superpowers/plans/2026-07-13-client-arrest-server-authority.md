@@ -21,9 +21,9 @@
 
 ## File Structure
 
-- `Assets/Scripts/Player/PlayerEscorter.cs` (수정, `MonoBehaviour` → `NetworkBehaviour`): 플레이어별 검거/연행 서버 권위 허브. 오너 요청 API + `[Rpc(SendTo.Server)]` + 서버 채널링/사거리/반응/연행 실행. 채널링·사거리 설정값(`m_channelSeconds`, `m_captureRange`)을 여기로 이관.
+- `Assets/Scripts/Player/Escort/PlayerEscorter.cs` (수정, `MonoBehaviour` → `NetworkBehaviour`): 플레이어별 검거/연행 서버 권위 허브. 오너 요청 API + `[Rpc(SendTo.Server)]` + 서버 채널링/사거리/반응/연행 실행. 채널링·사거리 설정값(`m_channelSeconds`, `m_captureRange`)을 여기로 이관.
 - `Assets/Scripts/Item/Handcuffs.cs` (수정): 오너 클라에서 조준 대상 해석 + `PlayerEscorter` 요청 호출로 축소. 로컬 채널링/`NpcController` 직접 호출/반응 판정 제거.
-- `Assets/Scripts/NPC/NpcSubdueInteractable.cs` (수정): 도주 NPC 근접 제압을 `PlayerEscorter.RequestSubdueCapture` 경유로 라우팅. (저항 타격은 기존 `NpcController.RequestSubdueHit` 유지 — 이미 RPC 경로 있음)
+- `Assets/Scripts/NPC/Controller/NpcSubdueInteractable.cs` (수정): 도주 NPC 근접 제압을 `PlayerEscorter.RequestSubdueCapture` 경유로 라우팅. (저항 타격은 기존 `NpcController.RequestSubdueHit` 유지 — 이미 RPC 경로 있음)
 - `Assets/Prefabs/Player.prefab`, `Assets/Prefabs/Player_Handcuffs_Test.prefab` (에디터 수정): `PlayerEscorter`가 `NetworkBehaviour`가 되며 필요한 인스펙터 값(채널 시간·사거리) 세팅 확인.
 
 **아키텍처 결정 근거:** 채널링과 연행은 본질적으로 플레이어별 상태다. 요청을 플레이어 소유 `NetworkObject`(=플레이어 본체)의 `PlayerEscorter`에서 `[Rpc(SendTo.Server)]`로 보내면, 오너→서버 전송이라 소유권 문제 없이 안전하고, 서버는 `this.transform`으로 요청자의 서버측 위치를 그대로 얻어 사거리를 검증할 수 있다. `NpcController`는 순수 서버 권위 상태 타깃으로 유지된다.
@@ -35,14 +35,14 @@
 리팩터의 발판. 이 태스크만으로는 동작이 바뀌지 않아야 한다(호스트 여전히 동작, 클라 여전히 안 됨). 이후 태스크에서 경로를 실제로 바꾼다.
 
 **Files:**
-- Modify: `Assets/Scripts/Player/PlayerEscorter.cs`
+- Modify: `Assets/Scripts/Player/Escort/PlayerEscorter.cs`
 
 **Interfaces:**
 - Produces: `class PlayerEscorter : NetworkBehaviour`, 기존 `public NpcController EscortingNpc { get; }`, `public bool IsEscorting { get; }`, `public void StartEscort(NpcController npc)`, `public void Release()` 시그니처 그대로 유지.
 
 - [ ] **Step 1: using·베이스 클래스 교체**
 
-`Assets/Scripts/Player/PlayerEscorter.cs` 상단과 클래스 선언:
+`Assets/Scripts/Player/Escort/PlayerEscorter.cs` 상단과 클래스 선언:
 
 ```csharp
 using Unity.Netcode;
@@ -87,7 +87,7 @@ MCP: `refresh_unity(compile=request)` 후 `read_console(types=[Error])` — Expe
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add Assets/Scripts/Player/PlayerEscorter.cs
+git add Assets/Scripts/Player/Escort/PlayerEscorter.cs
 git commit -m "refactor: PlayerEscorter를 NetworkBehaviour로 승격 (검거 서버 권위화 준비, #<ISSUE>)"
 ```
 
@@ -96,7 +96,7 @@ git commit -m "refactor: PlayerEscorter를 NetworkBehaviour로 승격 (검거 �
 ## Task 2: PlayerEscorter에 검거 요청 API + 서버 RPC + 서버 채널링 추가
 
 **Files:**
-- Modify: `Assets/Scripts/Player/PlayerEscorter.cs`
+- Modify: `Assets/Scripts/Player/Escort/PlayerEscorter.cs`
 
 **Interfaces:**
 - Consumes: `NpcController` 서버 권위 메서드 — `StartEscort(Transform)`, `StopEscort()`, `StartFlee(Transform)`, `StartResist()`, `CaptureBySubdue()`, `CurrentState`, `IsSpawned`, `IsServer`; `CitizenIdentity.Reaction`; `ReactionType`.
@@ -339,7 +339,7 @@ MCP: `refresh_unity(compile=request)` → `read_console(types=[Error])` — Expe
 - [ ] **Step 8: 커밋**
 
 ```bash
-git add Assets/Scripts/Player/PlayerEscorter.cs
+git add Assets/Scripts/Player/Escort/PlayerEscorter.cs
 git commit -m "feat: 검거 채널링·연행을 PlayerEscorter 서버 RPC로 서버 권위화 (#<ISSUE>)"
 ```
 
@@ -424,7 +424,7 @@ git commit -m "refactor: Handcuffs를 PlayerEscorter 서버 요청 경로로 전
 ## Task 4: NpcSubdueInteractable 도주 제압을 서버 경로로 라우팅
 
 **Files:**
-- Modify: `Assets/Scripts/NPC/NpcSubdueInteractable.cs`
+- Modify: `Assets/Scripts/NPC/Controller/NpcSubdueInteractable.cs`
 
 **Interfaces:**
 - Consumes: `PlayerEscorter.RequestSubdueCapture(NpcController)` (interactor GameObject에서 조회), `NpcController.RequestSubdueHit()` (기존 유지).
@@ -463,7 +463,7 @@ MCP: `refresh_unity(compile=request)` → `read_console(types=[Error])` — Expe
 - [ ] **Step 3: 커밋**
 
 ```bash
-git add Assets/Scripts/NPC/NpcSubdueInteractable.cs
+git add Assets/Scripts/NPC/Controller/NpcSubdueInteractable.cs
 git commit -m "refactor: 도주 NPC 근접 제압을 PlayerEscorter 서버 경로로 라우팅 (#<ISSUE>)"
 ```
 

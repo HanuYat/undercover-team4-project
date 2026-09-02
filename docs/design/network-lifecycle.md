@@ -162,7 +162,7 @@ VivoxManager ──▶ SessionManager ──▶ AuthBootstrap
 
 **검증:** MPPM에서 호스트 종료 / 클라 드롭 / 네트워크 킬 각각 `OnConnectionLost` **1회만** 발화 + 자발 `LeaveAsync` 시 새지 않음.
 
-**참고:** `Assets/Scripts/Network/SessionManager.cs` (`LeaveAsync`, `AdoptSession`, `Subscribe/UnsubscribeSessionEvents`, `OnDisable`). 삭제된 로깅 로직은 커밋 `dbf0c06^`에서 참고.
+**참고:** `Assets/Scripts/Network/Session/SessionManager.cs` (`LeaveAsync`, `AdoptSession`, `Subscribe/UnsubscribeSessionEvents`, `OnDisable`). 삭제된 로깅 로직은 커밋 `dbf0c06^`에서 참고.
 
 ## 미결 사항 (검토 필요)
 

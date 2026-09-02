@@ -46,11 +46,11 @@
 
 `Assets/Prefabs/UI/VerdictBanner.prefab`을 새로 만들어 세 씬(`Map_Apocalypse` / `Map_Cyberpunk` / `Tutorial`)의 기존 임베드 오브젝트를 지우고 프리팹 인스턴스로 교체한다.
 
-재배선은 필요 없다 — [`ArrestVerdictFeedback.cs:176`](../../../Assets/Scripts/Interaction/ArrestVerdictFeedback.cs)이 `App.UI.Current.TryGetPanel<VerdictBanner>()`로 찾고, `PanelBase.Awake()`가 씬에 배치된 인스턴스를 자동 등록한다. 색·아이콘·표시시간 값은 프리팹 하나에만 있으면 세 씬에 그대로 반영된다.
+재배선은 필요 없다 — [`ArrestVerdictFeedback.cs:176`](../../../Assets/Scripts/Interaction/Arrest/ArrestVerdictFeedback.cs)이 `App.UI.Current.TryGetPanel<VerdictBanner>()`로 찾고, `PanelBase.Awake()`가 씬에 배치된 인스턴스를 자동 등록한다. 색·아이콘·표시시간 값은 프리팹 하나에만 있으면 세 씬에 그대로 반영된다.
 
 ## 6. 딸려 나온 것 — ArrestNoticeBroadcaster 색 동기화
 
-[`ArrestNoticeBroadcaster.cs:33`](../../../Assets/Scripts/Interaction/ArrestNoticeBroadcaster.cs)의 `m_noticeTone`이 "판정 배너의 진범 검거 초록과 맞춘 값"이라는 주석과 함께 기존 초록(`0.20, 0.70, 0.35`)을 별도로 하드코딩해 두고 있다. 이번에 `VerdictBanner`의 초록을 `#4ADE80`로 바꾸면서 이 필드 값도 같은 색으로 맞춘다 — 코드 구조는 건드리지 않고 값만 맞춘다.
+[`ArrestNoticeBroadcaster.cs:33`](../../../Assets/Scripts/Interaction/Arrest/ArrestNoticeBroadcaster.cs)의 `m_noticeTone`이 "판정 배너의 진범 검거 초록과 맞춘 값"이라는 주석과 함께 기존 초록(`0.20, 0.70, 0.35`)을 별도로 하드코딩해 두고 있다. 이번에 `VerdictBanner`의 초록을 `#4ADE80`로 바꾸면서 이 필드 값도 같은 색으로 맞춘다 — 코드 구조는 건드리지 않고 값만 맞춘다.
 
 ## 7. 범위 밖
 

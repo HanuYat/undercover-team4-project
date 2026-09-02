@@ -34,13 +34,13 @@
 |---|---|---|
 | `Assets/Scripts/Core/Enums.cs` | `EAccessorySlot` 추가 | 수정 |
 | `Assets/Scripts/Player/View/AccessorySet.cs` | 슬롯별 인덱스 묶음 · 네트워크 직렬화 | 생성 |
-| `Assets/Scripts/Data/AccessoryCatalog.cs` | 슬롯 → 프리팹 배열. 인덱스가 곧 전송값 | 생성 |
+| `Assets/Scripts/Data/Appearance/AccessoryCatalog.cs` | 슬롯 → 프리팹 배열. 인덱스가 곧 전송값 | 생성 |
 | `Assets/Scripts/Core/GameSettings.cs` | 값 보관 · PlayerPrefs 캐시 · 변경 이벤트 | 수정 |
 | `Assets/Scripts/Save/CosmeticsSaveService.cs` | 계정 저장 + v1 마이그레이션 | 수정 |
 | `Assets/Scripts/Scene/LobbyPlayerEntry.cs` | 명부에 치장 값 태우기 | 수정 |
-| `Assets/Scripts/Network/SessionRoster.cs` | 자기 보고에 치장 포함 · 변경 시 재보고 | 수정 |
+| `Assets/Scripts/Network/Session/SessionRoster.cs` | 자기 보고에 치장 포함 · 변경 시 재보고 | 수정 |
 | `Assets/Scripts/Player/View/PlayerAccessories.cs` | 서버가 심고 전 피어가 붙인다 | 생성 |
-| `Assets/Scripts/UI/AccessoryPickerView.cs` | 한 슬롯의 선택 칸들 | 생성 |
+| `Assets/Scripts/UI/Cosmetics/AccessoryPickerView.cs` | 한 슬롯의 선택 칸들 | 생성 |
 
 ---
 
@@ -49,7 +49,7 @@
 **Files:**
 - Modify: `Assets/Scripts/Core/Enums.cs` (`EBodyPart` 선언 근처, 201행 뒤)
 - Create: `Assets/Scripts/Player/View/AccessorySet.cs`
-- Create: `Assets/Scripts/Data/AccessoryCatalog.cs`
+- Create: `Assets/Scripts/Data/Appearance/AccessoryCatalog.cs`
 
 **Interfaces:**
 - Produces: `EAccessorySlot { Headwear, FacialHair }` · `AccessorySet`(`byte this[EAccessorySlot]`, `static AccessorySet FromSettings()`, `INetworkSerializable`, `IEquatable<AccessorySet>`) · `AccessoryCatalog`(`int CountOf(EAccessorySlot)`, `GameObject Get(EAccessorySlot, int)`)
@@ -133,7 +133,7 @@ public struct AccessorySet : INetworkSerializable, IEquatable<AccessorySet>
 
 - [ ] **Step 3: `AccessoryCatalog` 생성**
 
-`Assets/Scripts/Data/AccessoryCatalog.cs`:
+`Assets/Scripts/Data/Appearance/AccessoryCatalog.cs`:
 
 ```csharp
 using System;
@@ -398,7 +398,7 @@ return sb.ToString();
 
 ```bash
 git add Assets/Scripts/Core/Enums.cs Assets/Scripts/Player/View/AccessorySet.cs \
-        Assets/Scripts/Data/AccessoryCatalog.cs Assets/Scripts/Core/GameSettings.cs
+        Assets/Scripts/Data/Appearance/AccessoryCatalog.cs Assets/Scripts/Core/GameSettings.cs
 git commit -m "치장 슬롯 값과 카탈로그를 둔다 (#818)"
 ```
 
@@ -593,7 +593,7 @@ git commit -m "치장을 계정에 저장하고 v1 레코드를 살려 읽는다
 
 **Files:**
 - Modify: `Assets/Scripts/Scene/LobbyPlayerEntry.cs`
-- Modify: `Assets/Scripts/Network/SessionRoster.cs` (79·88·166·188행 근처)
+- Modify: `Assets/Scripts/Network/Session/SessionRoster.cs` (79·88·166·188행 근처)
 
 **Interfaces:**
 - Consumes: `AccessorySet` (Task 1) · `GameSettings.OnAccessoryChanged` (Task 2)
@@ -694,7 +694,7 @@ return sb.ToString();
 - [ ] **Step 6: 커밋**
 
 ```bash
-git add Assets/Scripts/Scene/LobbyPlayerEntry.cs Assets/Scripts/Network/SessionRoster.cs
+git add Assets/Scripts/Scene/LobbyPlayerEntry.cs Assets/Scripts/Network/Session/SessionRoster.cs
 git commit -m "치장을 로비 명부에 태운다 (#818)"
 ```
 
@@ -906,18 +906,18 @@ git commit -m "치장을 서버가 스폰 시점에 심어 전 피어가 붙인�
 ### Task 6: 로비 선택 UI
 
 **Files:**
-- Create: `Assets/Scripts/UI/AccessoryPickerView.cs`
+- Create: `Assets/Scripts/UI/Cosmetics/AccessoryPickerView.cs`
 - Modify: 로비 `PlayerColorPanel` 프리팹/씬 (슬롯별 선택 줄 배치)
 
 **Interfaces:**
 - Consumes: `AccessoryCatalog`·`GameSettings.Get/SetAccessory`·`OnAccessoryChanged`
 - Produces: 없음
 
-`PlayerColorPickerView`(`Assets/Scripts/UI/PlayerColorPickerView.cs`)와 **같은 구조**다. 색 칸은 팔레트 색을 보여 주지만 치장 칸은 이름을 보여 준다 — 아이콘이 없기 때문이다.
+`PlayerColorPickerView`(`Assets/Scripts/UI/Cosmetics/PlayerColorPickerView.cs`)와 **같은 구조**다. 색 칸은 팔레트 색을 보여 주지만 치장 칸은 이름을 보여 준다 — 아이콘이 없기 때문이다.
 
 - [ ] **Step 1: 선택 뷰를 만든다**
 
-`Assets/Scripts/UI/AccessoryPickerView.cs`:
+`Assets/Scripts/UI/Cosmetics/AccessoryPickerView.cs`:
 
 ```csharp
 using System.Collections.Generic;
@@ -1024,7 +1024,7 @@ read_console(action="get", types=["error"])
 - [ ] **Step 4: 커밋**
 
 ```bash
-git add Assets/Scripts/UI/AccessoryPickerView.cs
+git add Assets/Scripts/UI/Cosmetics/AccessoryPickerView.cs
 git commit -m "로비에서 치장을 고르는 칸을 만든다 (#818)"
 ```
 

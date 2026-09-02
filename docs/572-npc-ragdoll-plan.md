@@ -234,7 +234,7 @@ IsProne 거짓    → 거짓   ← 기상 모션 시작 시점
 ```
 
 마지막 줄이 §2-4의 요구("이탈 시점 = `RaiseStandUp` 시점")를 그대로 표현한다 —
-[`NpcAnimationDriver.IsProne`](../Assets/Scripts/NPC/NpcAnimationDriver.cs)이 `HandleStandUp`에서 정확히
+[`NpcAnimationDriver.IsProne`](../Assets/Scripts/NPC/View/NpcAnimationDriver.cs)이 `HandleStandUp`에서 정확히
 그 순간 거짓이 되기 때문에 **타이밍을 따로 계산할 필요가 없었다.** 오버레이 기절도
 `HandleStunnedChanged` → `HandleStateChanged(Stunned)`로 접혀 들어와 같은 값에 실린다.
 
@@ -479,8 +479,8 @@ t=11.39  오버레이=False 묶임=True/True    → ExitRagdoll → 애니메이
 > NPC는 리그가 하나뿐이고 부활이 없으므로 둘 다 없다 — 포팅할 코드가 없다.
 >
 > **무효가 된 곳: 조건 (2)다.** 기절 래그돌은 정의상 부활이다. NPC는 죽으면
-> [`NpcSpawner.ResetSpawnState`](../Assets/Scripts/NPC/NpcSpawner.cs#L132)가 `Destroy`하고 다음
-> 라운드는 [`Instantiate`](../Assets/Scripts/NPC/NpcSpawner.cs#L188)로 새로 만들지만, **기절은 같은
+> [`NpcSpawner.ResetSpawnState`](../Assets/Scripts/NPC/Spawn/NpcSpawner.cs#L132)가 `Destroy`하고 다음
+> 라운드는 [`Instantiate`](../Assets/Scripts/NPC/Spawn/NpcSpawner.cs#L188)로 새로 만들지만, **기절은 같은
 > 인스턴스가 몇 번이고 깨어난다.**
 
 그리고 **리그가 하나라는 것이 여기서는 면제가 아니라 "걸러 줄 코드가 없다"는 뜻이다.** 조건 (1)이
@@ -807,7 +807,7 @@ public void BeginRopePull(Transform carrier)
 
 이슈의 "`NpcProneCollider`(#363)와의 충돌 정리" 항목을 확인하다가 나왔다.
 
-[`PlayerInteractor.m_interactMask`](../Assets/Scripts/Interaction/PlayerInteractor.cs#L10)가 `~0`
+[`PlayerInteractor.m_interactMask`](../Assets/Scripts/Interaction/Core/PlayerInteractor.cs#L10)가 `~0`
 (전 레이어)이다. 즉 **래그돌 뼈 콜라이더(`Ragdoll` 레이어)와 `NpcProneCollider`의 몸통 캡슐이 둘 다
 조준 레이에 걸릴 수 있다.**
 

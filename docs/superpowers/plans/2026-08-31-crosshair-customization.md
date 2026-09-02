@@ -856,7 +856,7 @@ git commit -m "HUD 크로스헤어를 선분+점+원 조합 오브젝트로 재�
 ## Task 8: `CrosshairPreviewView` — 설정 패널용 경량 미리보기
 
 **Files:**
-- Create: `Assets/Scripts/UI/CrosshairPreviewView.cs`
+- Create: `Assets/Scripts/UI/Cosmetics/CrosshairPreviewView.cs`
 
 **Interfaces:**
 - Consumes: `CrosshairVisualRefs`·`CrosshairRenderer`(Task 5)
@@ -867,7 +867,7 @@ git commit -m "HUD 크로스헤어를 선분+점+원 조합 오브젝트로 재�
 - [ ] **Step 1: 스크립트 작성**
 
 ```csharp
-// Assets/Scripts/UI/CrosshairPreviewView.cs
+// Assets/Scripts/UI/Cosmetics/CrosshairPreviewView.cs
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -915,7 +915,7 @@ Expected: `found=True`.
 - [ ] **Step 3: 커밋**
 
 ```bash
-git add "Assets/Scripts/UI/CrosshairPreviewView.cs"
+git add "Assets/Scripts/UI/Cosmetics/CrosshairPreviewView.cs"
 git commit -m "설정 패널용 크로스헤어 미리보기 뷰를 추가한다 (#945)"
 ```
 

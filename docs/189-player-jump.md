@@ -24,7 +24,7 @@ CharacterController: height=2, radius=0.3, center=(0, 1.03, 0)
 Rigidbody: 없음 / Animator: applyRootMotion=False
 ```
 
-[`HandleMove()`](../Assets/Scripts/Player/PlayerMovement.cs)는 `FixedUpdate`가 아니라 **`Update`**에서 돈다:
+[`HandleMove()`](../Assets/Scripts/Player/Movement/PlayerMovement.cs)는 `FixedUpdate`가 아니라 **`Update`**에서 돈다:
 
 1. 수평 — 입력을 정규화해 속도를 바로 곱한다(가감속·관성 없음)
 2. 수직 — `isGrounded`면 `-2f`로 클램프(접지 유지용 상시 하향 압력) 후 `m_gravity * dt` 적분
@@ -33,7 +33,7 @@ Rigidbody: 없음 / Animator: applyRootMotion=False
 
 `m_gravity`는 `[SerializeField] -9.81f`로 프리팹에 박힌 별개 필드다 — `Physics.gravity`를 바꿔도 안 따라온다.
 
-**핵심 발견:** [`AddKnockback()`](../Assets/Scripts/Player/PlayerMovement.cs)이 상향 성분을 `m_verticalVelocity`에 `Max`로 병합하고 있었다. 즉 **수직 임펄스를 쏘는 경로가 이미 있었고**, 점프는 그 채널을 그대로 쓰면 되는 일이었다.
+**핵심 발견:** [`AddKnockback()`](../Assets/Scripts/Player/Movement/PlayerMovement.cs)이 상향 성분을 `m_verticalVelocity`에 `Max`로 병합하고 있었다. 즉 **수직 임펄스를 쏘는 경로가 이미 있었고**, 점프는 그 채널을 그대로 쓰면 되는 일이었다.
 
 ### 이미 있던 것
 
@@ -49,7 +49,7 @@ Rigidbody: 없음 / Animator: applyRootMotion=False
 
 ### 3-1. 컴포넌트 분리
 
-[`PlayerJump`](../Assets/Scripts/Player/PlayerJump.cs) 신설. `PlayerCrouch`(#236)와 같은 서버 권위 패턴을 따르되 역할을 좁혔다:
+[`PlayerJump`](../Assets/Scripts/Player/Movement/PlayerJump.cs) 신설. `PlayerCrouch`(#236)와 같은 서버 권위 패턴을 따르되 역할을 좁혔다:
 
 - 입력 수집(`OnJumpPressed` → 단발 요청)과 **공중 여부 전파**만 담당
 - 실제 수직 임펄스는 `PlayerMovement`가 준다 — `CharacterController`를 만지는 곳을 한 군데로 유지하려는 것
@@ -268,7 +268,7 @@ private void RequestCrouchServerRpc(bool pressed)
 
 ## 7. 물리 적용 횟수 검증
 
-**정적:** `Assets/Scripts` 전체에서 `Move()`/`SimpleMove()` 호출은 [`PlayerMovement.cs:457`](../Assets/Scripts/Player/PlayerMovement.cs) **단 한 곳**. 수평 입력·넉백·수직속도가 한 벡터로 합쳐져 한 번만 넘어간다. 루트 트랜스폼을 직접 쓰는 두 곳(`SetPose`, `UpdateCarriedFollow`)은 **둘 다 `CharacterController`를 끈 상태**다.
+**정적:** `Assets/Scripts` 전체에서 `Move()`/`SimpleMove()` 호출은 [`PlayerMovement.cs:457`](../Assets/Scripts/Player/Movement/PlayerMovement.cs) **단 한 곳**. 수평 입력·넉백·수직속도가 한 벡터로 합쳐져 한 번만 넘어간다. 루트 트랜스폼을 직접 쓰는 두 곳(`SetPose`, `UpdateCarriedFollow`)은 **둘 다 `CharacterController`를 끈 상태**다.
 
 **런타임:** 점프와 넉백을 동시에 걸고 매 프레임 `Δ위치`와 `합성속도 × dt`를 비교 — 충돌이 없는 모든 프레임에서 **x·y·z 동시에 비율 1.000**.
 

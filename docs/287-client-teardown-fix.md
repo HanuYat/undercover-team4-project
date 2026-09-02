@@ -214,7 +214,7 @@ private static async UniTask WaitForNetworkShutdownAsync()
 |---|---|
 | `Assets/Scripts/Network/SessionTeardown.cs` | 매니저 참조 → App 파사드(①), raw Shutdown 제거·폴링만(②) |
 | `Assets/Scripts/Round/RoundEndResetter.cs` | 클라 트리거 `OnClientStopped`→`OnConnectionLost`, raw Shutdown 가드(③) |
-| `Assets/Scripts/Network/VivoxManager.cs` | 채널 참가 전 세션·인증 가드(④) |
+| `Assets/Scripts/Network/Voice/VivoxManager.cs` | 채널 참가 전 세션·인증 가드(④) |
 | `ProjectSettings/ProjectSettings.asset` | ⚠️ 진단용 verbose 디파인 — **제거 예정** |
 
 > 참고: 이 브랜치엔 이전 작업분(`SessionManager`의 `OnConnectionLost`/`m_isLeaving` 등 #287 관련)이 함께 올라와 있고, 이번 수정은 그 위에서 동작한다.

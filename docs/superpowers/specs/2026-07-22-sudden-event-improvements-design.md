@@ -140,12 +140,12 @@
 
 | 파트 | 파일 | 변경 |
 |---|---|---|
-| A | `Assets/Scripts/Events/SuddenEventManager.cs` | 리스트 기반 풀 + 토글 + ForceTrigger |
+| A | `Assets/Scripts/Events/Core/SuddenEventManager.cs` | 리스트 기반 풀 + 토글 + ForceTrigger |
 | B | `Assets/Scripts/NPC/NpcController.Holding.cs` (신규) | `SendToHolding`·`OnReachedHolding` |
-| B | `Assets/Scripts/NPC/NpcState.cs` | `Holding` enum 값 추가(끝에) |
+| B | `Assets/Scripts/NPC/States/NpcState.cs` | `Holding` enum 값 추가(끝에) |
 | B | `Assets/Scripts/NPC/NpcHoldingState.cs` (신규) | 보행→도착 통보 상태 |
-| B | `Assets/Scripts/NPC/NpcController.cs` | Awake에 Holding 상태 등록 |
-| B | `Assets/Scripts/NPC/NpcAnimationDriver.cs` | Holding 모션 대여 |
+| B | `Assets/Scripts/NPC/Controller/NpcController.cs` | Awake에 Holding 상태 등록 |
+| B | `Assets/Scripts/NPC/View/NpcAnimationDriver.cs` | Holding 모션 대여 |
 | B | `Assets/Scripts/Events/SpawnedNpcEvent.cs` | 홀딩 지점 이송 + 도착 시 despawn + 폴백 |
 | C | `Assets/Scripts/Events/ThugAttacker.cs` | 돌진 사이클 재작성 |
 | C | `Assets/Scripts/Events/Config/ThugChargerConfig.cs` (신규) | 차저 튜닝 SO |

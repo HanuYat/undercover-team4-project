@@ -62,14 +62,14 @@
 | `Assets/Tests/EditMode/Undercover.Emote.Tests.asmdef` | EditMode 테스트 어셈블리 |
 | `Assets/Tests/EditMode/EmoteWheelGeometryTests.cs` | 각도 매핑 테스트 |
 | `Assets/Tests/EditMode/EmoteLoadoutTests.cs` | 슬롯 배치·직렬화 테스트 |
-| `Assets/Scripts/Data/EmoteDefinition.cs` | 감정표현 1종 정의 (SO) |
-| `Assets/Scripts/Data/EmoteCatalog.cs` | 감정표현 목록 (SO) |
+| `Assets/Scripts/Data/Emote/EmoteDefinition.cs` | 감정표현 1종 정의 (SO) |
+| `Assets/Scripts/Data/Emote/EmoteCatalog.cs` | 감정표현 목록 (SO) |
 | `Assets/Scripts/Player/Emote/PlayerEmote.cs` | 서버 권위 재생 상태 |
 | `Assets/Scripts/Player/Emote/PlayerEmoteView.cs` | 전 피어 애니메이터·말풍선 반영 |
 | `Assets/Scripts/Player/Emote/PlayerEmoteInput.cs` | 오너 입력 — 휠 열기·발동·취소 |
 | `Assets/Scripts/Player/Emote/EmoteBubbleView.cs` | 머리 위 빌보드 아이콘 |
-| `Assets/Scripts/UI/EmoteWheelView.cs` | 8칸 방사형 휠 렌더 |
-| `Assets/Scripts/UI/EmoteWheelSlotView.cs` | 휠 칸 하나 — 아이콘·이름·강조 (로비 패널도 재사용) |
+| `Assets/Scripts/UI/Emote/EmoteWheelView.cs` | 8칸 방사형 휠 렌더 |
+| `Assets/Scripts/UI/Emote/EmoteWheelSlotView.cs` | 휠 칸 하나 — 아이콘·이름·강조 (로비 패널도 재사용) |
 | `Assets/Scripts/UI/Panels/EmoteLoadoutPanel.cs` | 로비 슬롯 편집 패널 |
 
 ### 수정
@@ -628,8 +628,8 @@ EOF
 ### Task 4: `EmoteDefinition` / `EmoteCatalog` + 카탈로그 에셋
 
 **Files:**
-- Create: `Assets/Scripts/Data/EmoteDefinition.cs`
-- Create: `Assets/Scripts/Data/EmoteCatalog.cs`
+- Create: `Assets/Scripts/Data/Emote/EmoteDefinition.cs`
+- Create: `Assets/Scripts/Data/Emote/EmoteCatalog.cs`
 - Create: `Assets/Scripts/Data/Emotes/` (개별 정의 에셋 8개)
 - Create: `Assets/Scripts/Data/EmoteCatalog.asset`
 
@@ -650,7 +650,7 @@ EOF
 
 - [ ] **Step 1: `EmoteDefinition` 작성**
 
-`Assets/Scripts/Data/EmoteDefinition.cs`:
+`Assets/Scripts/Data/Emote/EmoteDefinition.cs`:
 
 ```csharp
 using UnityEngine;
@@ -712,7 +712,7 @@ public class EmoteDefinition : ScriptableObject
 
 - [ ] **Step 2: `EmoteCatalog` 작성**
 
-`Assets/Scripts/Data/EmoteCatalog.cs`:
+`Assets/Scripts/Data/Emote/EmoteCatalog.cs`:
 
 ```csharp
 using System.Collections.Generic;
@@ -1873,7 +1873,7 @@ EOF
 ### Task 10: `EmoteWheelView` — 8칸 방사형 휠
 
 **Files:**
-- Create: `Assets/Scripts/UI/EmoteWheelView.cs`
+- Create: `Assets/Scripts/UI/Emote/EmoteWheelView.cs`
 
 **Interfaces:**
 - Consumes: `EmoteWheelGeometry.SlotCenterDegrees/SlotFromDirection/k_slotCount`, `EmoteLoadout.GetSlot`, `EmoteCatalog.IndexOf/Get`, `PlayerEmoteInput.WheelDirection`
@@ -1883,7 +1883,7 @@ EOF
 
 - [ ] **Step 1: 구현 작성**
 
-`Assets/Scripts/UI/EmoteWheelView.cs`:
+`Assets/Scripts/UI/Emote/EmoteWheelView.cs`:
 
 ```csharp
 using UnityEngine;
@@ -1989,7 +1989,7 @@ public class EmoteWheelView : MonoBehaviour
 
 - [ ] **Step 2: 칸 뷰 작성**
 
-`Assets/Scripts/UI/EmoteWheelSlotView.cs`:
+`Assets/Scripts/UI/Emote/EmoteWheelSlotView.cs`:
 
 ```csharp
 using UnityEngine;
@@ -2100,7 +2100,7 @@ MCP `read_console`로 `types: ["Error"]` 조회. Expected: 에러 없음 (Task 9
 Task 9의 Step 5 커밋에 함께 담거나 별도로:
 
 ```bash
-git add Assets/Scripts/UI/EmoteWheelView.cs Assets/Scripts/UI/EmoteWheelSlotView.cs
+git add Assets/Scripts/UI/Emote/EmoteWheelView.cs Assets/Scripts/UI/Emote/EmoteWheelSlotView.cs
 git commit -m "$(cat <<'EOF'
 감정표현 휠 UI를 넣는다 (#219)
 

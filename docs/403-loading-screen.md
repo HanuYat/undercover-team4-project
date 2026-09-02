@@ -55,7 +55,7 @@
 
 > 활성화 프레임 자체의 스파이크는 없앨 수 없다 — 새 씬 전체의 `Awake/OnEnable/Start`가 한 프레임에 다 돌기 때문. **가리는 것이 최선**이라는 전제로 설계했다.
 
-### 2-4. `LoadingScreen` — 상주 UI ([LoadingScreen.cs](../Assets/Scripts/UI/LoadingScreen.cs), 신규)
+### 2-4. `LoadingScreen` — 상주 UI ([LoadingScreen.cs](../Assets/Scripts/UI/Common/LoadingScreen.cs), 신규)
 
 `CommonManagerBase` 상속 → AppBootstrap 프리팹 하위(DontDestroyOnLoad)에 배치, Awake에서 자동 등록(R4).
 
@@ -199,7 +199,7 @@ Canvas(ScreenSpaceOverlay, **sortingOrder 1000**) + CanvasScaler + CanvasGroup +
 
 | 파일 | 내용 |
 |---|---|
-| `Assets/Scripts/UI/LoadingScreen.cs` | **신규** — 상주 로딩 화면. 서버 파이프라인 + 클라 NGO 이벤트 2경로 |
+| `Assets/Scripts/UI/Common/LoadingScreen.cs` | **신규** — 상주 로딩 화면. 서버 파이프라인 + 클라 NGO 이벤트 2경로 |
 | `Assets/Scripts/Core/App.cs` | `LoadSceneAsync` 파이프라인, 재진입 가드, `App.UI.Loading`, `WaitUntilSceneReadyAsync` |
 | `Assets/Scripts/Core/AppHelper.cs` | 동기 → 비동기 로드. 로컬은 활성화 제어, NGO는 `OnLoadComplete` 폴링(30초) |
 | `Assets/Scripts/Core/SceneManagerBase.cs` | `WaitUntilReadyAsync` 훅 추가(기본 즉시 완료) |
@@ -297,7 +297,7 @@ Synty 원본(`SM_Gen_Chr_Robot_01.prefab`)은 **수정하지 않았다** — 중
 
 ### 10-2. 전환 예고 — 덮기 전에 먼저 알린다
 
-[`SceneTransitionAnnouncer`](../Assets/Scripts/Network/SceneTransitionAnnouncer.cs)(신규)가 서버에서 `[Rpc(SendTo.NotServer)]`를 쏘고, 받은 클라는 즉시 `LoadingScreen.CoverForIncomingSceneChange()`로 덮는다. `App.LoadSceneAsync`가 **`ShowAsync` 직전에** 부르므로 시차가 `k_settleFrames` → RTT로 줄어든다.
+[`SceneTransitionAnnouncer`](../Assets/Scripts/Network/Session/SceneTransitionAnnouncer.cs)(신규)가 서버에서 `[Rpc(SendTo.NotServer)]`를 쏘고, 받은 클라는 즉시 `LoadingScreen.CoverForIncomingSceneChange()`로 덮는다. `App.LoadSceneAsync`가 **`ShowAsync` 직전에** 부르므로 시차가 `k_settleFrames` → RTT로 줄어든다.
 
 - **자리는 `SessionState.prefab`** — 씬 전환을 알리는 쪽이 씬과 함께 죽으면 알릴 수 없다. `TeamFund`·`RoundProgress`와 같은 세션 상주 홀더고, App 등재도 같은 사정이다(런타임 스폰이라 인스펙터 배선 불가 — architecture §4 "세션 상주 홀더" 예외).
 - **덮지 않는 전환은 예고도 하지 않는다** — `ShouldCoverWithLoadingScreen` 안쪽에서 부른다(Title → Lobby 제외).

@@ -108,7 +108,7 @@ NpcController.cs가 **847줄**이다 (오검거 페널티 #277~#279 이후 기�
   ```
 - **멤버 유실 검사**: 분리 전(HEAD) 멤버 시그니처 목록과 분리 후 합본을 비교 — 비어야 정상
   ```bash
-  git show HEAD:Assets/Scripts/NPC/NpcController.cs \
+  git show HEAD:Assets/Scripts/NPC/Controller/NpcController.cs \
     | grep -oE "(public|private|protected)[a-zA-Z<>, _\[\]]+ [A-Za-z_]+\s*(\(|=>|\{ get|;|=)" | sort > /tmp/old.txt
   cat Assets/Scripts/NPC/NpcController*.cs \
     | grep -oE "(public|private|protected)[a-zA-Z<>, _\[\]]+ [A-Za-z_]+\s*(\(|=>|\{ get|;|=)" | sort > /tmp/new.txt

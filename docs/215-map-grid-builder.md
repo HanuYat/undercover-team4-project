@@ -155,7 +155,7 @@ Project 창에서 **Create ▸ Map ▸ Map Palette**.
 
 **이유.** Synty 팩의 콜리전 껍질은 렌더 메시에서 구운 볼록 껍질이라 벽의 '평평한' 면조차 수직이 아니다. 격리벽 하단 패널은 실측 **88.0도**(법선 y = +0.036)로 2도 눕어 있다. 그 2도 때문에 `CharacterController.isGrounded`가 옆면 접촉을 지면으로 쳐서 **플레이어가 수직 벽면 위에 선다.** 낙하가 통째로 막히고, 접지로 판정되니 거기서 또 점프해 더 높이 얹힌다 — 이게 오래 있던 "벽 타기" 버그의 정체였다.
 
-> 판정 자체는 [PlayerMovement.cs](../Assets/Scripts/Player/Movement/PlayerMovement.cs)의 `IsStablyGrounded`가 고쳤다(법선이 `slopeLimit`보다 가파르면 접지로 치지 않는다). 그래서 BoxCollider 교체는 **필수가 아니다.** 다만 맵 경계는 넘으면 안 되는 선이라 이중으로 막을 값어치가 있고, 상자는 물리 껍질이 눈에 보이는 면과 정확히 일치해 벽 너머 조준([AimOcclusion.cs](../Assets/Scripts/Interaction/AimOcclusion.cs))도 어긋나지 않는다.
+> 판정 자체는 [PlayerMovement.cs](../Assets/Scripts/Player/Movement/PlayerMovement.cs)의 `IsStablyGrounded`가 고쳤다(법선이 `slopeLimit`보다 가파르면 접지로 치지 않는다). 그래서 BoxCollider 교체는 **필수가 아니다.** 다만 맵 경계는 넘으면 안 되는 선이라 이중으로 막을 값어치가 있고, 상자는 물리 껍질이 눈에 보이는 면과 정확히 일치해 벽 너머 조준([AimOcclusion.cs](../Assets/Scripts/Interaction/Core/AimOcclusion.cs))도 어긋나지 않는다.
 >
 > 참고: 이 성질은 격리벽만의 문제가 아니다. 표본 조사 결과 **PolygonApocalypse Buildings 81% / Props 94%, PolygonSciFiCity Buildings 80% / Props 95%** 가 수직이 아닌 옆면을 갖고 있다.
 

@@ -95,7 +95,7 @@
 | `Assets/Scripts/Network/Config/BuildStamp.cs` | **신규** — sha 판독(구운 값 / 에디터 git fallback) |
 | `Assets/Scripts/Editor/BuildStampBaker.cs` | **신규** — 빌드 전처리 굽기 + 후처리 삭제 |
 | `Assets/Scripts/Network/Config/NetworkProtocol.cs` | 페이로드 2필드화, `PeerStamp` 추가, 프로토콜 2 |
-| `Assets/Scripts/Network/ConnectionApprovalGate.cs` | `StampLocalPayload` 개명, 승인 로그에 클라 sha |
-| `Assets/Scripts/Network/SessionManager.cs` | `sha` 세션 프로퍼티, `ReadSha`, 참가 시 sha 로그 |
+| `Assets/Scripts/Network/Session/ConnectionApprovalGate.cs` | `StampLocalPayload` 개명, 승인 로그에 클라 sha |
+| `Assets/Scripts/Network/Session/SessionManager.cs` | `sha` 세션 프로퍼티, `ReadSha`, 참가 시 sha 로그 |
 | `Assets/Scripts/Test/DevAutoHost.cs` | 개명 반영 (2곳) |
 | `.gitignore` | 생성 자산 제외 |

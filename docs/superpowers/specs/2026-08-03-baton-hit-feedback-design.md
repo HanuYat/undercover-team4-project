@@ -299,7 +299,7 @@ public void ShowHit(bool friendlyFire);
 |---|---|
 | `Assets/Scripts/Core/Enums.cs` | `EEffect` · `EAudioClip` 추가 |
 | `Assets/Scripts/Core/App.cs` | 필드 2개 + `App.Game.Effect` · `App.Sound` |
-| `Assets/Scripts/Item/Baton.cs` | 스윙음, `PlayImpactRpc`, `NotifyHitRpc`, 클립 결정 |
+| `Assets/Scripts/Item/Weapons/Baton.cs` | 스윙음, `PlayImpactRpc`, `NotifyHitRpc`, 클립 결정 |
 | `Assets/Scripts/UI/Hud/CrosshairUI.cs` | `ShowHit(bool friendlyFire)` + 마커 `Image` |
 | `Assets/Prefabs/UI/HUD.prefab` | 히트마커 `Image` 추가 (`CrosshairUI`가 붙은 프리팹) |
 | `Assets/Prefabs/Player.prefab` | 카메라에 `AudioListener` |

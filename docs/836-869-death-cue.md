@@ -13,14 +13,14 @@
 
 막타를 친 사람 화면에 대상 이름이 뜨고, 일정 시간 뒤 UniTask 기반으로 서서히 페이드아웃된다(`FadeKillLabelAsync`). 연속 처치 시 이전 페이드는 취소하고 새로 시작한다([VerdictBanner.cs](../Assets/Scripts/UI/Hud/VerdictBanner.cs)와 같은 `CancellationTokenSource` 패턴).
 
-집계·통지는 [PlayerKillCredit.cs](../Assets/Scripts/Player/PlayerKillCredit.cs)가 담당 — 사망 판정 지점(`NpcDeath.ServerEnterDead`, `PlayerHealth`의 확인사살 분기)에서 서버가 가해자 쪽에만 RPC로 알린다.
+집계·통지는 [PlayerKillCredit.cs](../Assets/Scripts/Player/Combat/PlayerKillCredit.cs)가 담당 — 사망 판정 지점(`NpcDeath.ServerEnterDead`, `PlayerHealth`의 확인사살 분기)에서 서버가 가해자 쪽에만 RPC로 알린다.
 
 ### 2. 사망 표식 (#836) — 몸 이펙트 폐기, 스캔카드로 이전
 
 - **`DeadBodyMark.cs` 삭제** — 몸 색 다크닝(`BodyTint.SetSustainedDarken` 등 관련 API 포함) 통째로 되돌림. NPC 4종·Player 프리팹에서 컴포넌트 제거.
 - 대신 **스캔카드에 생사 아이콘**을 추가 — 죽었는지 살았는지는 스캐너로 확인하는 정보로 통합.
 
-### 3. 스캔카드 재설계 — [ScanInfoView.cs](../Assets/Scripts/UI/ScanInfoView.cs) · [ScanInfoCard.prefab](../Assets/Prefabs/NPC/ScanInfoCard.prefab)
+### 3. 스캔카드 재설계 — [ScanInfoView.cs](../Assets/Scripts/UI/Scan/ScanInfoView.cs) · [ScanInfoCard.prefab](../Assets/Prefabs/NPC/ScanInfoCard.prefab)
 
 같은 김에 스캔카드 자체를 정리했다:
 
@@ -43,7 +43,7 @@ ScanInfoCard
         StatusIcon
 ```
 
-생사 상태는 `CitizenProfile`이 아니라 런타임 값(`NpcController.Death.IsDead`, 전 피어 동기화)에서 온다. [ScanResultPresenter.cs](../Assets/Scripts/UI/ScanResultPresenter.cs)가 조준 중인 대상이 있을 때만 매 프레임 `IsDead`를 비교해 변경 시에만 갱신한다 — `NpcDeath.OnDied`는 서버 전용 이벤트라 클라 로컬인 이 클래스에서는 못 쓴다.
+생사 상태는 `CitizenProfile`이 아니라 런타임 값(`NpcController.Death.IsDead`, 전 피어 동기화)에서 온다. [ScanResultPresenter.cs](../Assets/Scripts/UI/Scan/ScanResultPresenter.cs)가 조준 중인 대상이 있을 때만 매 프레임 `IsDead`를 비교해 변경 시에만 갱신한다 — `NpcDeath.OnDied`는 서버 전용 이벤트라 클라 로컬인 이 클래스에서는 못 쓴다.
 
 아이콘 스프라이트(사람/안드로이드/생존/사망)는 이미 배정 완료.
 

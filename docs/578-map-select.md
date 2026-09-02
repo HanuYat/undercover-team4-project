@@ -15,8 +15,8 @@ Shop(출동 전 허브)에서 **호스트가 다음 라운드 맵을 고르고**
 
 ### 왜 `EScene`을 맵마다 늘리지 않나
 
-`App.CurrentScene == EScene.Game` 비교가 [`PlayerSpawnManager`](../Assets/Scripts/Network/PlayerSpawnManager.cs) ·
-[`PlayerItemSupply`](../Assets/Scripts/Player/PlayerItemSupply.cs) · [`SceneIndicatorHud`](../Assets/Scripts/UI/Hud/SceneIndicatorHud.cs)에 있다.
+`App.CurrentScene == EScene.Game` 비교가 [`PlayerSpawnManager`](../Assets/Scripts/Network/Session/PlayerSpawnManager.cs) ·
+[`PlayerItemSupply`](../Assets/Scripts/Player/Inventory/PlayerItemSupply.cs) · [`SceneIndicatorHud`](../Assets/Scripts/UI/Hud/SceneIndicatorHud.cs)에 있다.
 맵마다 enum 값을 늘리면 이 셋이 전부 깨진다. `EScene.Game`은 "게임 맵"이라는 뜻 그대로 두고 **이름만 바꿔치운다**.
 
 ### 왜 Shop 씬이 아니라 상주 프리팹인가

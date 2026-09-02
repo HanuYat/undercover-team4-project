@@ -89,7 +89,7 @@ distance 0으로 되돌려주는데, **캡슐 반경(0.3m) < 구 반경(0.35m)**
 
 ## 5. 수정 — 대상 선정과 가림 판정을 분리
 
-`Assets/Scripts/Interaction/AimOcclusion.cs`를 두 함수로 나눴다:
+`Assets/Scripts/Interaction/Core/AimOcclusion.cs`를 두 함수로 나눴다:
 
 - **`FindNearest(origin, hits, count, excludedRoot)`** — 교차점 거리(`hit.distance`) 기준으로
   후보를 고른다. `distance <= 0`인 히트는 방향 정보가 없어 뒤로 미루되, 유효 히트가

@@ -34,7 +34,7 @@ HP 0으로 쓰러지면 애니메이터 Knockdown 자세가 아니라 **물리�
 이 넷을 모르고 읽으면 §2의 판단이 과해 보인다.
 
 **(A) 다운→사망은 60초 만료만이 아니다 — 확인사살이 주 경로다.**
-[PlayerHealth.ApplyDamage](../Assets/Scripts/Player/PlayerHealth.cs)가 대상이 `IsDowned`면 즉시 `ServerFinishOff()`를 부른다. 진압봉 확인사살은 **언더커버가 동료를 죽이는 유일한 수단**이다(같은 함수의 처치 집계 주석). 따라서 "다운→사망 이음새"는 라운드당 몇 번이 아니라 **모든 의도적 살해마다** 발생한다.
+[PlayerHealth.ApplyDamage](../Assets/Scripts/Player/Combat/PlayerHealth.cs)가 대상이 `IsDowned`면 즉시 `ServerFinishOff()`를 부른다. 진압봉 확인사살은 **언더커버가 동료를 죽이는 유일한 수단**이다(같은 함수의 처치 집계 주석). 따라서 "다운→사망 이음새"는 라운드당 몇 번이 아니라 **모든 의도적 살해마다** 발생한다.
 
 **(B) 다운에 임펄스가 붙는 경로는 정말로 없다.**
 `BombBlast`는 `SuddenEventUtil.CollectFieldPlayers`가 HP>0만 담고 `m_deathBuffer`도 "이번 폭발로 0이 된" 사람만 담으므로 **이미 다운인 몸은 수집조차 안 된다.** `HomeRunBaton`은 데미지 없이 `ServerLaunch`만 부르고, `Baton`은 유효타로 분류하되 임펄스를 주지 않는다. 그리고 #903으로 차·폭탄은 다운을 아예 건너뛴다. **다운 래그돌은 항상 임펄스 0에서 시작한다** — 제자리에서 1~2초 힘없이 무너지고 끝이다.
