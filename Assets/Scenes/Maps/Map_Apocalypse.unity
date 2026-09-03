@@ -57950,8 +57950,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MinimapArea
   m_worldCenterX: 50
   m_worldCenterZ: 90
-  m_worldSizeX: 89.2
-  m_worldSizeZ: 169.1
+  m_worldSizeX: 100
+  m_worldSizeZ: 180
   m_aerialSprite: {fileID: 21300000, guid: 8681eede28e2aef4bb4ab76b5eb34009, type: 3}
 --- !u!1 &863671052
 GameObject:
@@ -142658,7 +142658,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 409479704224147274, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -0.554
+      value: -0.769
       objectReference: {fileID: 0}
     - target: {fileID: 409479704224147274, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
       propertyPath: m_LocalRotation.w
@@ -142690,7 +142690,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1082175828417048686, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -0.7624
+      value: -0.538
       objectReference: {fileID: 0}
     - target: {fileID: 1082175828417048686, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
       propertyPath: m_LocalRotation.w
@@ -143078,7 +143078,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7335312846441893584, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
       propertyPath: m_SizeDelta.y
-      value: 1895
+      value: 1800
       objectReference: {fileID: 0}
     - target: {fileID: 7335312846441893584, guid: 1a1b0e14176505d478d96dcb9c1f60de, type: 3}
       propertyPath: m_LocalScale.y
