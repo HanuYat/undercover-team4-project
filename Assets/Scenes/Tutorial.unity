@@ -43876,6 +43876,12 @@ MonoBehaviour:
   - Id: 12
     Effect: 1
     Sound: 35
+  - Id: 13
+    Effect: 1
+    Sound: 41
+  - Id: 14
+    Effect: 0
+    Sound: 42
 --- !u!4 &1496433913 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4744096329500722, guid: e5ea23645ddbb58408bd3bb44e10f168, type: 3}

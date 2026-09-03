@@ -53,6 +53,14 @@ public class HomeRunBaton : Baton
     protected override string WeaponLogName => "홈런 진압봉";
 
     /// <summary>
+    /// 타격음 하나로 통일한다 — 로봇/사람을 가리지 않는다. 진압봉의 재질별 구분(깡/퍽)은
+    /// 맞은 쪽이 무엇인지를 알리는 소리지만, 이 무기가 알리는 것은 <b>날아갔다</b>는 사실이다.
+    /// (<see cref="ToyHammer"/>가 같은 이유로 같은 선택을 한다.)
+    /// </summary>
+    protected override EFx ImpactFxFor(NpcController npc, PlayerHealth player, bool critical) =>
+        EFx.HomeRunHit;
+
+    /// <summary>
     /// 유효타 확정 뒤 — NPC·동료 모두 래그돌로 발사한다. 데미지·반응 이후에 불리므로
     /// 여기서는 순수하게 "날린다"만 담당한다. (#815)
     /// </summary>

@@ -47,19 +47,27 @@ public class HealPack : ItemBase
     {
         if (!HasServerAuthority) return;
 
-        if (HolderHealth == null)
+        // HolderHealth는 접근할 때마다 다시 찾는 프로퍼티라 한 번만 읽어 쓴다.
+        PlayerHealth health = HolderHealth;
+
+        if (health == null)
         {
             Debug.LogWarning("힐팩 사용 실패: 체력 컴포넌트를 찾을 수 없음", this);
             return;
         }
 
-        if (HolderHealth.CurrentHp >= HolderHealth.MaxHp)
+        if (health.CurrentHp >= health.MaxHp)
         {
             Debug.Log("힐팩 사용 실패: 체력이 이미 최대임", this);
             return;
         }
 
-        HolderHealth?.ModifyHp(k_healAmount);
+        health.ModifyHp(k_healAmount);
+
+        // 회복이 실제로 일어난 뒤에만 낸다 — 위 두 실패 경로(홀더 없음·체력 만땅)에서 울리면
+        // 아무 일도 없었는데 회복된 것처럼 들린다. 3D로 전 피어에 나가므로 옆 사람도 듣는다.
+        App.Game.Fx?.PlayEverywhere(EFx.HealPackUse, health.transform.position);
+
         ServerConsume();
     }
 

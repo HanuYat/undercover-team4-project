@@ -14,6 +14,7 @@ using UnityEngine;
 /// 그 경로는 사거리가 상호작용 레이(3m)에 묶여 원거리 무기가 될 수 없고, 겨냥만 하면 100% 명중이라
 /// 빗나갈 여지가 없다. 대신 조준 방향으로 직접 레이캐스트해 <b>맞으면 명중, 빗나가면 실패</b>다.
 /// 벽·다른 오브젝트가 대상보다 앞이면 그대로 빗나간다 (엄폐 성립).
+/// 선이 빗나갔을 때는 굵은 구로 한 번 더 본다 — <see cref="EvaluateAssist"/> (#984).
 /// "앞"의 정의는 <see cref="AimOcclusion"/>가 단독으로 갖는다 — 진압봉·상호작용 가시선과 같은 규칙이다.
 ///
 /// 서버 권위 — 오너가 조준 원점·방향을 보내면 서버가 자기 물리로 레이캐스트해 판정한다 (#55).
@@ -51,14 +52,26 @@ public class Taser : ItemBase, IAimedWeapon
     [SerializeField]
     private float m_playerStunSeconds = 5f;
 
+    // 조준 보정 (#984) — 선 판정이 빗나갔을 때만 도는 굵은 판정. 0이면 종전처럼 선 하나로만 본다.
+    [Tooltip("조준 보정 반지름(m). 선이 빗나갔을 때 이 굵기의 구로 다시 훑어 사람을 찾는다 — 지연으로 어긋난 만큼을 흡수한다. 0이면 보정 없음")]
+    [Min(0f)]
+    [SerializeField]
+    private float m_aimAssistRadius = 0.25f;
+
+    // 보정으로 찾은 대상까지 실제로 뚫려 있는지 볼 때 쓰는 구 반지름. 폭발 가림(0.2m)보다 얇게 잡는다 —
+    // 여기서는 "벽 뒤를 뚫었는가"만 걸러내면 되고, 두꺼우면 문틀·기둥 옆을 스치는 정상 사격이 막힌다.
+    private const float k_assistProbeRadius = 0.05f;
+
     // 다음 발사가 가능해지는 시각. 판정자가 서버 하나뿐이라 동기화하지 않는다 (서버 전용 상태).
     // 아이템 인스턴스에 붙어 있으므로 버리고 다시 주워도 충전 상태가 따라간다.
     private float m_nextFireTime;
 
     // 조준 히트 버퍼 — 크로스헤어(HasValidAimTarget)가 매 프레임 도는 경로라
     // RaycastAll(호출마다 배열 할당) 대신 NonAlloc + 고정 버퍼를 쓴다. (Baton.s_hitBuffer와 동일 관례)
-    // 16칸은 래그돌 본까지 세면 군중 안에서 넘친다 (#779)
-    private static readonly RaycastHit[] s_aimBuffer = new RaycastHit[64];
+    // 16칸은 래그돌 본까지 세면 군중 안에서 넘친다 (#779). 보정(EvaluateAssist)은 선이 아니라 굵은 관을
+    // 훑어 후보가 훨씬 많다 — 사람 하나가 뼈까지 12칸을 먹으므로 64칸은 군중 대여섯이면 다시 넘친다 (#984).
+    // 넘치면 잘린 히트는 못 보고, 가려 줄 사람이 빠지면 그 뒤 사람이 대신 뽑힌다.
+    private static readonly RaycastHit[] s_aimBuffer = new RaycastHit[128];
 
     // ---- ItemBase ----
 
@@ -216,11 +229,119 @@ public class Taser : ItemBase, IAimedWeapon
     private enum AimResult { NoHit, HitNonTarget, TargetInvalidState, ValidTarget }
 
     /// <summary>
-    /// 조준 원점·방향으로 레이캐스트해 명중 결과를 분류한다. 서버 사격 판정과
-    /// 오너 크로스헤어가 이 규칙을 공유하며, AimOcclusion.FindNearest로 교차점이
-    /// 가장 가까운 히트 하나를 고른다.
+    /// 명중 결과를 분류한다 — 선으로 먼저 보고, 빗나갔으면 보정(<see cref="EvaluateAssist"/>)으로 한 번 더 본다.
+    /// 서버 사격 판정과 오너 크로스헤어가 이 규칙을 공유하므로 색과 명중이 계속 일치한다.
     /// </summary>
     private AimResult EvaluateAim(
+        Vector3 origin,
+        Vector3 direction,
+        out NpcController target,
+        out PlayerIncapacitation playerTarget,
+        out RaycastHit hit)
+    {
+        AimResult precise = EvaluatePrecise(origin, direction, out target, out playerTarget, out hit);
+
+        // 겨눈 것이 이미 잡혔으면(명중·무효) 그대로 둔다. 무효 상태를 보정하지 않는 이유는
+        // 정면으로 겨눈 대상을 두고 옆 사람으로 옮겨 붙으면 "안 겨눈 사람이 맞는다"가 되기 때문이다.
+        if (precise != AimResult.NoHit && precise != AimResult.HitNonTarget)
+            return precise;
+
+        if (m_aimAssistRadius <= 0f || direction.sqrMagnitude < 0.0001f)
+            return precise;
+
+        AimResult assisted = EvaluateAssist(
+            origin,
+            direction,
+            out NpcController assistTarget,
+            out PlayerIncapacitation assistPlayer,
+            out RaycastHit assistHit);
+        if (assisted == AimResult.NoHit)
+            return precise; // 보정으로도 못 찾았다 — 빗나감 문구는 선 판정이 잡은 것을 살린다
+
+        target = assistTarget;
+        playerTarget = assistPlayer;
+        hit = assistHit;
+        return assisted;
+    }
+
+    /// <summary>
+    /// 선이 빗나갔을 때 <b>굵은 구</b>로 다시 훑어 사람을 찾는다 (#984).
+    /// 조준이 맞았는데도 빗나가는 주된 이유는 손이 아니라 지연이다 — 쏘는 사람 화면의 NPC는 서버가
+    /// 아는 위치보다 한 박자 뒤라, 3.5m/s로 뛰면 0.1초에 0.35m(몸통 반쪽)가 어긋난다.
+    /// 구 반지름이 그만큼을 흡수한다. 사람만 후보로 두고(벽·소품까지 끌어오면 보정이 아니라 자동조준이다),
+    /// 찾은 지점까지 환경이 뚫려 있는지 확인해 <b>보정이 엄폐를 뚫지 않게</b> 한다.
+    /// </summary>
+    private AimResult EvaluateAssist(
+        Vector3 origin,
+        Vector3 direction,
+        out NpcController target,
+        out PlayerIncapacitation playerTarget,
+        out RaycastHit hit)
+    {
+        target = null;
+        playerTarget = null;
+        hit = default;
+
+        int count = Physics.SphereCastNonAlloc(
+            origin, m_aimAssistRadius, direction.normalized, s_aimBuffer, m_range, ~0,
+            QueryTriggerInteraction.Ignore);
+
+        PlayerInteractor holder = Holder;
+        Transform holderRoot = holder != null ? holder.transform : null;
+        int bestIndex = -1;
+        float bestDistance = float.PositiveInfinity;
+
+        int limit = Mathf.Min(count, s_aimBuffer.Length);
+        for (int i = 0; i < limit; i++)
+        {
+            Collider collider = s_aimBuffer[i].collider;
+            if (collider == null)
+                continue;
+
+            // distance 0은 "시작 구가 이미 겹쳐 있다"는 뜻이라 쏘는 방향과 무관하다 (AimOcclusion과 같은 판단)
+            float distance = s_aimBuffer[i].distance;
+            if (distance <= 0f || distance >= bestDistance)
+                continue;
+
+            if (holderRoot != null && collider.transform.IsChildOf(holderRoot))
+                continue;
+
+            if (collider.GetComponentInParent<NpcController>() == null
+                && collider.GetComponentInParent<PlayerIncapacitation>() == null)
+                continue;
+
+            bestDistance = distance;
+            bestIndex = i;
+        }
+
+        if (bestIndex < 0)
+            return AimResult.NoHit;
+
+        hit = s_aimBuffer[bestIndex];
+
+        // 가림 검사는 <b>고른 하나에만</b> 한다. 후보마다 돌리면 크로스헤어가 매 프레임 부르는 경로에서
+        // 군중을 겨눌 때 스피어캐스트가 수십 번 나간다. 가장 가까운 사람이 벽 뒤면 그대로 빗나감이다 —
+        // 그 뒤 사람으로 넘어가면 앞사람을 가린 엄폐를 보정이 통과해 버린다.
+        if (AimOcclusion.IsEnvironmentBlocked(
+                origin, hit.point, ~0, k_assistProbeRadius, holderRoot))
+        {
+            hit = default;
+            return AimResult.NoHit;
+        }
+
+        NpcController npc = hit.collider.GetComponentInParent<NpcController>();
+        if (npc == null)
+            return EvaluatePlayerAim(hit, out playerTarget);
+
+        target = npc;
+        return npc.Stun.IsStunned ? AimResult.TargetInvalidState : AimResult.ValidTarget;
+    }
+
+    /// <summary>
+    /// 조준 원점·방향으로 레이캐스트해 명중 결과를 분류한다 — 보정이 없는 선 판정이다.
+    /// AimOcclusion.FindNearest로 교차점이 가장 가까운 히트 하나를 고른다.
+    /// </summary>
+    private AimResult EvaluatePrecise(
         Vector3 origin,
         Vector3 direction,
         out NpcController target,
