@@ -102,7 +102,10 @@ public class SmugglerCourierEvent : SpawnedNpcEventBase
         // (납치는 반대로 가장 가까운 맨홀을 고른다 — 그쪽은 끌고 가는 시간이 곧 구조 창이다)
         Transform manhole = FindFarthestManhole(npc.transform.position);
 
+        // 급해지는 계기는 둘이다. 피해와 무력화를 <b>따로</b> 받아야 한다 —
+        // 테이저는 피해를 주지 않고 재우기만 해서(#292) OnDamaged만 보면 조용히 빠진다.
         npc.Health.OnDamaged += HandleDamaged;
+        npc.Stun.OnStunned += HandleStunned;
 
         SmugglerCargo cargo = GetOrAddCargo(npc);
         cargo.OnFinished += HandleFinished;
@@ -148,15 +151,24 @@ public class SmugglerCourierEvent : SpawnedNpcEventBase
         return true;
     }
 
-    // 맞았다 — 짐을 진 채 맨홀로 달린다. 상태는 그대로 두고 속도만 올린다. 서버에서만 발생.
-    private void HandleDamaged(NpcController npc, GameObject attacker)
+    // 맞았다(진압봉 등) — 짐을 진 채 맨홀로 달린다. 상태는 그대로 두고 속도만 올린다. 서버에서만 발생.
+    private void HandleDamaged(NpcController npc, GameObject attacker) => Panic(npc, "피격");
+
+    // 무력화됐다(테이저·홈런 진압봉 등) — 깨어나면 달려서 마저 간다. 서버에서만 발생.
+    //
+    // 상태가 <see cref="NpcState.Smuggling"/> 그대로라 기절이 풀려도 전이가 없고
+    // (NpcStateRules.IsReactive에 없다) 하던 운반을 이어서 한다 — 여기서는 속도만 올려 둔다.
+    // 깨어난 뒤 경로를 다시 잡는 것은 NpcSmuggleState.Tick이 맡는다(래그돌 Warp가 경로를 버린다).
+    private void HandleStunned(NpcController npc, Transform by) => Panic(npc, "무력화");
+
+    private void Panic(NpcController npc, string reason)
     {
         SmugglerCargo cargo = npc != null ? npc.GetComponent<SmugglerCargo>() : null;
         if (cargo == null || cargo.IsPanicked)
             return;
 
         cargo.ServerPanic();
-        Debug.Log($"[돌발이벤트] {DisplayName} — 피격, 맨홀로 달리기 시작");
+        Debug.Log($"[돌발이벤트] {DisplayName} — {reason}, 맨홀로 달리기 시작");
     }
 
     // 운반 종료 통보 — 처리는 다음 틱으로 미룬다(위 OnServerTick). 서버에서만 발생.
@@ -259,6 +271,7 @@ public class SmugglerCourierEvent : SpawnedNpcEventBase
             return;
 
         npc.Health.OnDamaged -= HandleDamaged;
+        npc.Stun.OnStunned -= HandleStunned;
 
         SmugglerCargo cargo;
         if (npc.TryGetComponent(out cargo))

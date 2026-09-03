@@ -17,11 +17,15 @@ using UnityEngine;
 /// </summary>
 public class NpcSmuggleState : NpcStateBase
 {
-    // 거래 지점에 이만큼(m) 다가오면 도착으로 본다 — NpcIntrudeState와 같은 기준
+    // 맨홀 지점에 이만큼(m) 다가오면 도착으로 본다 — NpcIntrudeState와 같은 기준
     private const float k_arriveDistance = 0.5f;
+
+    // 경로 재시도 최소 간격(초) — 목적지가 잠시 닿지 않을 때 매 프레임 경로를 계산하지 않게
+    private const float k_repathInterval = 0.5f;
 
     private SmugglerCargo m_cargo;
     private float m_baseSpeed;
+    private float m_nextRepathTime;
     private bool m_finished; // 도착·실패 통보를 한 번만 보내기 위한 래치
 
     public NpcSmuggleState(NpcController owner)
@@ -64,7 +68,8 @@ public class NpcSmuggleState : NpcStateBase
 
     public override void Tick()
     {
-        if (m_finished)
+        // 기절·래그돌 동안에는 에이전트가 꺼져 있다 — 그때 remainingDistance를 읽으면 안 된다
+        if (m_finished || !m_owner.AgentReady)
             return;
 
         // 배율을 매 틱 다시 건다 — 맞으면 도중에 올라간다(SmugglerCargo.ServerPanic, #991)
@@ -73,10 +78,31 @@ public class NpcSmuggleState : NpcStateBase
         if (m_owner.Agent.pathPending)
             return;
 
+        // ⚠ <b>경로가 없으면 도착이 아니라 재경로다.</b> 기절에서 깨어나면 래그돌이 몸을 내려놓으며
+        // 에이전트를 Warp하는데(NpcRagdoll), Warp는 경로를 버린다. 경로가 빈 에이전트의
+        // remainingDistance는 0이라, 이 분기가 없으면 <b>일어나는 순간 도착으로 오판해</b>
+        // 맨홀 근처도 아닌 자리에서 화물이 지하로 사라진다.
+        // (질주 상태가 같은 자리에서 목적지를 다시 뽑는 것과 같은 처리다 — NpcSprintState)
+        if (!m_owner.Agent.hasPath)
+        {
+            Repath();
+            return;
+        }
+
         if (m_owner.Agent.remainingDistance > k_arriveDistance)
             return;
 
         Finish(true);
+    }
+
+    // 목적지를 다시 건다 — 못 잡으면 다음 틱에 또 시도한다(재시도 간격으로 매 프레임 계산을 막는다).
+    private void Repath()
+    {
+        if (m_cargo == null || m_cargo.Destination == null || Time.time < m_nextRepathTime)
+            return;
+
+        m_nextRepathTime = Time.time + k_repathInterval;
+        m_owner.Agent.SetDestination(m_cargo.Destination.position);
     }
 
     private void ApplySpeed()
