@@ -39,13 +39,12 @@ public class NpcSmuggleState : NpcStateBase
 
         // 짐이 무거워 보이게 기본 걸음보다 느리게 간다 — 개체별 속도 편차(스폰 시 추첨) 위에 곱한다
         m_baseSpeed = m_owner.Agent.speed;
-        if (m_cargo != null)
-            m_owner.Agent.speed = m_baseSpeed * m_cargo.WalkSpeedMultiplier;
+        ApplySpeed();
 
         if (m_cargo == null || m_cargo.Destination == null)
         {
             Debug.LogWarning(
-                $"NpcSmuggleState: 거래 지점이 없음 — 불발 처리: {m_owner.name}",
+                $"NpcSmuggleState: 맨홀 지점이 없음 — 불발 처리: {m_owner.name}",
                 m_owner
             );
             Finish(false);
@@ -65,13 +64,25 @@ public class NpcSmuggleState : NpcStateBase
 
     public override void Tick()
     {
-        if (m_finished || m_owner.Agent.pathPending)
+        if (m_finished)
+            return;
+
+        // 배율을 매 틱 다시 건다 — 맞으면 도중에 올라간다(SmugglerCargo.ServerPanic, #991)
+        ApplySpeed();
+
+        if (m_owner.Agent.pathPending)
             return;
 
         if (m_owner.Agent.remainingDistance > k_arriveDistance)
             return;
 
         Finish(true);
+    }
+
+    private void ApplySpeed()
+    {
+        if (m_cargo != null)
+            m_owner.Agent.speed = m_baseSpeed * m_cargo.SpeedMultiplier;
     }
 
     public override void Exit()

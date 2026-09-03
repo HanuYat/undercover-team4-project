@@ -4335,50 +4335,6 @@ MonoBehaviour:
   m_slideDistance: 0.9
   m_slideSeconds: 1.2
   m_openSound: {fileID: 0}
---- !u!1 &90063530
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 90063531}
-  - component: {fileID: 90063532}
-  m_Layer: 0
-  m_Name: SmugglerDropoff_3
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &90063531
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 90063530}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 62.851334, y: 0.07500076, z: 51.330994}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 226378948}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &90063532
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 90063530}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3a817d7d9af00894bb50d6d8f84f88ae, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SmugglerDropoff
 --- !u!1001 &91719507
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -6302,50 +6258,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4715545099464176, guid: 8a21e998caeaac347b4127cda7988cf3, type: 3}
   m_PrefabInstance: {fileID: 121413776}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &122875719
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 122875720}
-  - component: {fileID: 122875721}
-  m_Layer: 0
-  m_Name: SmugglerDropoff_2
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &122875720
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 122875719}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 6.6666665, y: 0.07499999, z: 53.933334}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 226378948}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &122875721
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 122875719}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3a817d7d9af00894bb50d6d8f84f88ae, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SmugglerDropoff
 --- !u!1001 &122894070
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -6540,6 +6452,17 @@ MonoBehaviour:
   m_maxLifetimeSeconds: 60
   m_cargoWeight: 4
   m_walkSpeedMultiplier: 0.75
+  m_panicSpeedMultiplier: 1.8
+  m_manholePoints:
+  - {fileID: 1170714921}
+  - {fileID: 384491626}
+  - {fileID: 750251664}
+  - {fileID: 843946679}
+  - {fileID: 1314104754}
+  - {fileID: 637770893}
+  m_lidOpenSeconds: 1.4
+  m_descendDepth: 3
+  m_descendSeconds: 1.5
 --- !u!1001 &124634603
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -10098,41 +10021,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4517893018949164, guid: 553d5ab60b93b904896a8af286bdbe32, type: 3}
   m_PrefabInstance: {fileID: 224489138}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &226378947
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 226378948}
-  m_Layer: 0
-  m_Name: SmugglerDropoffs
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &226378948
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 226378947}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 2020993843}
-  - {fileID: 122875720}
-  - {fileID: 90063531}
-  - {fileID: 1840796010}
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &226887020
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -85298,50 +85186,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 312589959335614738, guid: 5a362ef6e3d20be46a25c4891e2cc8e9, type: 3}
   m_PrefabInstance: {fileID: 1840683343}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &1840796009
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1840796010}
-  - component: {fileID: 1840796011}
-  m_Layer: 0
-  m_Name: SmugglerDropoff_4
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1840796010
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1840796009}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 34.666668, y: 0.07499999, z: 8}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 226378948}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1840796011
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1840796009}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3a817d7d9af00894bb50d6d8f84f88ae, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SmugglerDropoff
 --- !u!1 &1840950665
 GameObject:
   m_ObjectHideFlags: 0
@@ -92786,50 +92630,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4294814583432324, guid: 8e7631b36958d68408ebf64b86f272e9, type: 3}
   m_PrefabInstance: {fileID: 2020661384}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &2020993842
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 2020993843}
-  - component: {fileID: 2020993844}
-  m_Layer: 0
-  m_Name: SmugglerDropoff_1
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &2020993843
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2020993842}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 93.93333, y: 0.07500076, z: 6.400001}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 226378948}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &2020993844
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2020993842}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3a817d7d9af00894bb50d6d8f84f88ae, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SmugglerDropoff
 --- !u!1001 &2021219957
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -98731,4 +98531,3 @@ SceneRoots:
   - {fileID: 1859714438}
   - {fileID: 1148717492}
   - {fileID: 1325279885}
-  - {fileID: 226378948}

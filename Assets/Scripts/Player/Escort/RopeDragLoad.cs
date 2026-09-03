@@ -43,7 +43,7 @@ public class RopeDragLoad : NetworkBehaviour
     )]
     [Range(0f, 1f)]
     [SerializeField]
-    private float m_heavyDragSpeedFactor = 0.08f;
+    private float m_heavyDragSpeedFactor = 0.04f;
 
     // 끌고 있는 무게로 깎인 이동속도 배율 — 서버(또는 오프라인) 진실. 매 프레임 다시 계산된다.
     private float m_dragSpeedFactor = 1f;

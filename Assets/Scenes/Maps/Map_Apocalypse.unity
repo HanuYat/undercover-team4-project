@@ -8567,6 +8567,17 @@ MonoBehaviour:
   m_maxLifetimeSeconds: 60
   m_cargoWeight: 4
   m_walkSpeedMultiplier: 0.75
+  m_panicSpeedMultiplier: 1.8
+  m_manholePoints:
+  - {fileID: 1170714921}
+  - {fileID: 384491626}
+  - {fileID: 750251664}
+  - {fileID: 843946679}
+  - {fileID: 1314104754}
+  - {fileID: 637770893}
+  m_lidOpenSeconds: 1.4
+  m_descendDepth: 3
+  m_descendSeconds: 1.5
 --- !u!1001 &124965428
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -12842,50 +12853,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4200480947055844, guid: 36ec1c0df8c3b5d4b818fe0270dc0c68, type: 3}
   m_PrefabInstance: {fileID: 199953359}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &200429645
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 200429646}
-  - component: {fileID: 200429647}
-  m_Layer: 0
-  m_Name: SmugglerDropoff_4
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &200429646
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 200429645}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 9.166667, y: 0.024999976, z: 119.03333}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 975271495}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &200429647
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 200429645}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3a817d7d9af00894bb50d6d8f84f88ae, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SmugglerDropoff
 --- !u!1001 &201839167
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -16210,50 +16177,6 @@ Camera:
   m_CorrespondingSourceObject: {fileID: 4711002830955612003, guid: 3c7f21a0d94b6e84ab5f0c17d2e63b95, type: 3}
   m_PrefabInstance: {fileID: 1156171649}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &246844052
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 246844053}
-  - component: {fileID: 246844054}
-  m_Layer: 0
-  m_Name: SmugglerDropoff_3
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &246844053
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 246844052}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 94.200005, y: 0.024999976, z: 66.26667}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 975271495}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &246844054
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 246844052}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3a817d7d9af00894bb50d6d8f84f88ae, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SmugglerDropoff
 --- !u!1001 &247178714
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -66061,41 +65984,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4234942047651768, guid: a2483fbde120a8c4a86e0e53b2f21afc, type: 3}
   m_PrefabInstance: {fileID: 974382317}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &975271494
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 975271495}
-  m_Layer: 0
-  m_Name: SmugglerDropoffs
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &975271495
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 975271494}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 1936380719}
-  - {fileID: 1120411256}
-  - {fileID: 246844053}
-  - {fileID: 200429646}
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!134 &975645992
 PhysicsMaterial:
   m_ObjectHideFlags: 0
@@ -74995,50 +74883,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4290496493493964, guid: 5396a093575259c498a56449c2d6a0cb, type: 3}
   m_PrefabInstance: {fileID: 1119317334}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &1120411255
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1120411256}
-  - component: {fileID: 1120411257}
-  m_Layer: 0
-  m_Name: SmugglerDropoff_2
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1120411256
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1120411255}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 6.9500003, y: 0.024999976, z: 5.7833333}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 975271495}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1120411257
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1120411255}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3a817d7d9af00894bb50d6d8f84f88ae, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SmugglerDropoff
 --- !u!1001 &1121472932
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -127549,50 +127393,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4234942047651768, guid: a2483fbde120a8c4a86e0e53b2f21afc, type: 3}
   m_PrefabInstance: {fileID: 1936205083}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &1936380718
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1936380719}
-  - component: {fileID: 1936380720}
-  m_Layer: 0
-  m_Name: SmugglerDropoff_1
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1936380719
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1936380718}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 92.73334, y: 0.024999976, z: 173.28334}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 975271495}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1936380720
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1936380718}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3a817d7d9af00894bb50d6d8f84f88ae, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SmugglerDropoff
 --- !u!1001 &1938426610
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -143727,4 +143527,3 @@ SceneRoots:
   - {fileID: 163960583}
   - {fileID: 789718535}
   - {fileID: 863091971}
-  - {fileID: 975271495}
