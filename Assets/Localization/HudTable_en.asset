@@ -230,6 +230,14 @@ MonoBehaviour:
     m_Localized: Switch feed
     m_Metadata:
       m_Items: []
+  - m_Id: 4406443624529950
+    m_Localized: Enter digit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529951
+    m_Localized: Confirm channel
+    m_Metadata:
+      m_Items: []
   - m_Id: 8399387659689985
     m_Localized: Flip wanted list
     m_Metadata:

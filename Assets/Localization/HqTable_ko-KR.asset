@@ -70,6 +70,10 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 6276845898492543064
+  - m_Id: 7100000000505
+    m_Localized: "입력 {0}"
+    m_Metadata:
+      m_Items: []
   - m_Id: 7100000000700
     m_Localized: "\uC0DD\uC0AC \uBD88\uBB38"
     m_Metadata:
