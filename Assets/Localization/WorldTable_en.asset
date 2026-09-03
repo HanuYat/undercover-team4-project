@@ -61,6 +61,110 @@ MonoBehaviour:
     m_Localized: Toward the shops
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000804
+    m_Localized: HQ rear door
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000805
+    m_Localized: Trailers 1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000806
+    m_Localized: Trailers 2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000807
+    m_Localized: Junkyard
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000808
+    m_Localized: Camp
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000809
+    m_Localized: Church 1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000810
+    m_Localized: Church 2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000811
+    m_Localized: HQ front door
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000812
+    m_Localized: Junktown 1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000813
+    m_Localized: Junktown 2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000814
+    m_Localized: Market 1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000815
+    m_Localized: Market 2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000816
+    m_Localized: Market interior
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000817
+    m_Localized: Motel 1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000818
+    m_Localized: Motel 2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000819
+    m_Localized: Playground
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000820
+    m_Localized: Switchboard
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000821
+    m_Localized: Warehouse
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000822
+    m_Localized: Crosswalk 1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000823
+    m_Localized: Crosswalk 2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000824
+    m_Localized: Parking lot
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000825
+    m_Localized: Side street 1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000826
+    m_Localized: Side street 2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000827
+    m_Localized: Mart 1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000828
+    m_Localized: Mart 2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000829
+    m_Localized: Mart interior
+    m_Metadata:
+      m_Items: []
   - m_Id: 7100000000900
     m_Localized: Ruined City
     m_Metadata:

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -60,6 +61,9 @@ public class MinimapViewer : MonoBehaviour
 
     private readonly Dictionary<MinimapTarget, Image> m_targetIcons = new();
     private readonly Dictionary<MinimapTarget, Image> m_targetAreas = new();
+
+    // 아이콘 안의 글자(CCTV 채널 번호) — 아이콘 프리팹에 있으면 잡히고 없으면 null이다.
+    private readonly Dictionary<MinimapTarget, TMP_Text> m_targetLabels = new();
     private readonly List<MinimapTarget> m_removeBuffer = new();
 
     private RectTransform AreaParent => m_areaContainer != null ? m_areaContainer : m_iconContainer;
@@ -242,6 +246,7 @@ public class MinimapViewer : MonoBehaviour
             if (m_targetIcons[target] != null)  // 아이콘이 존재하면 제거
                 Destroy(m_targetIcons[target].gameObject);
             m_targetIcons.Remove(target);
+            m_targetLabels.Remove(target); // 글자는 아이콘의 자식이라 같이 사라진다
 
             // 범위 오버레이도 같은 수명 — 납치가 끝나 디스폰되면 아이콘과 함께 사라진다
             if (m_targetAreas.TryGetValue(target, out Image area))
@@ -264,6 +269,7 @@ public class MinimapViewer : MonoBehaviour
 
             icon.color = target.IconColor;
             m_targetIcons.Add(target, icon);
+            m_targetLabels.Add(target, icon.GetComponentInChildren<TMP_Text>(true));
 
             // ▼ 범위 오버레이 — 반경이 있는 대상에만 만든다.
             // "범위가 있는가"는 프리팹 값이라 여기서 한 번만 가르고, 크기·색은 매 프레임 갱신한다.
@@ -285,6 +291,8 @@ public class MinimapViewer : MonoBehaviour
             rect.sizeDelta = IconSizeOf(pair.Key);
             rect.localRotation = Quaternion.Euler(0f, 0f, IconAngleOf(pair.Key));
             pair.Value.color = pair.Key.IconColor;
+
+            UpdateLabel(pair.Key);
         }
 
         foreach (var pair in m_targetAreas)
@@ -294,6 +302,37 @@ public class MinimapViewer : MonoBehaviour
             rect.sizeDelta = WorldRadiusToMapSize(pair.Key.AreaRadius);
             pair.Value.color = pair.Key.AreaColor;
         }
+    }
+
+    // 글자는 보는 사람 기준으로 세운다. 각도를 빼는 것으로는 부족하다 — 아이콘의 IconAngle 말고도
+    // 미니맵 캔버스 자체가 눕혀져 있을 수 있다(Apocalypse는 z -90°). 화면 평면은 그대로 두고
+    // 위쪽만 월드 up으로 맞추면 위쪽 무엇이 돌아가 있든 숫자는 똑바로 선다.
+    private void UpdateLabel(MinimapTarget target)
+    {
+        if (!m_targetLabels.TryGetValue(target, out TMP_Text label) || label == null)
+            return;
+
+        string text = target.IconLabel;
+        bool show = !string.IsNullOrEmpty(text);
+
+        if (label.gameObject.activeSelf != show)
+            label.gameObject.SetActive(show);
+
+        if (!show)
+            return;
+
+        if (label.text != text)
+            label.text = text; // TMP는 대입만 해도 메시를 다시 만든다 — 바뀔 때만 넣는다
+
+        // 글자 색은 건드리지 않는다 — IconColor는 아이콘 원판이 이미 쓰고 있어서, 같이 칠하면
+        // 같은 색끼리 겹쳐 글자가 사라진다. 대비색은 아이콘 프리팹에 authoring한다.
+        RectTransform rect = label.rectTransform;
+        Vector3 forward = rect.forward;
+        Vector3 up = Mathf.Abs(Vector3.Dot(forward, Vector3.up)) > 0.99f
+            ? m_iconContainer.up // 천장·바닥에 눕힌 화면 — 월드 up으로는 방향이 안 정해진다
+            : Vector3.up;
+
+        rect.rotation = Quaternion.LookRotation(forward, up);
     }
 
     private Vector2 IconSizeOf(MinimapTarget target)

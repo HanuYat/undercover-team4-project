@@ -46,4 +46,11 @@ public class CCTVNode : MonoBehaviour
         if (m_marker != null)
             m_marker.IconColor = selected ? m_selectedColor : m_idleColor;
     }
+
+    /// <summary>미니맵에 찍을 채널 번호 — CCTVSwitcher가 배열 순서에서 정해 한 번 밀어준다.</summary>
+    public void SetChannel(int channel)
+    {
+        if (m_marker != null)
+            m_marker.IconLabel = channel.ToString();
+    }
 }

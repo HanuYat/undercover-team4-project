@@ -55,6 +55,110 @@ MonoBehaviour:
     m_Key: World.Cctv.ShopStreet
     m_Metadata:
       m_Items: []
+  - m_Id: 7100000000804
+    m_Key: World.Cctv.HQbackdoor
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000805
+    m_Key: World.Cctv.Trailers1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000806
+    m_Key: World.Cctv.Trailers2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000807
+    m_Key: World.Cctv.AbandonedCars
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000808
+    m_Key: World.Cctv.Camp
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000809
+    m_Key: World.Cctv.Church1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000810
+    m_Key: World.Cctv.Church2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000811
+    m_Key: World.Cctv.HQfrontdoor
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000812
+    m_Key: World.Cctv.Junktown1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000813
+    m_Key: World.Cctv.Junktown2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000814
+    m_Key: World.Cctv.Market1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000815
+    m_Key: World.Cctv.Market2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000816
+    m_Key: World.Cctv.MarketInside
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000817
+    m_Key: World.Cctv.Motel1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000818
+    m_Key: World.Cctv.Motel2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000819
+    m_Key: World.Cctv.Playground
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000820
+    m_Key: World.Cctv.Switchboard
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000821
+    m_Key: World.Cctv.Warehouse
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000822
+    m_Key: World.Cctv.Crosswalk1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000823
+    m_Key: World.Cctv.Crosswalk2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000824
+    m_Key: World.Cctv.ParkingArea
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000825
+    m_Key: World.Cctv.Sidestreet1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000826
+    m_Key: World.Cctv.Sidestreet2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000827
+    m_Key: World.Cctv.Mart1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000828
+    m_Key: World.Cctv.Mart2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7100000000829
+    m_Key: World.Cctv.MartInside
+    m_Metadata:
+      m_Items: []
   - m_Id: 7100000000900
     m_Key: World.Map.Apocalypse
     m_Metadata:

@@ -28,6 +28,8 @@ public static class InteractPrompts
     public static readonly LocalizedString RoundEnd = Of("Hud.Interact.RoundEnd");
     public static readonly LocalizedString CctvPower = Of("Hud.Interact.CctvPower");
     public static readonly LocalizedString CctvSwitch = Of("Hud.Interact.CctvSwitch");
+    public static readonly LocalizedString CctvKeypad = Of("Hud.Interact.CctvKeypad");
+    public static readonly LocalizedString CctvKeypadConfirm = Of("Hud.Interact.CctvKeypadConfirm");
     public static readonly LocalizedString CctvInfrared = Of("Hud.Interact.CctvInfrared");
     public static readonly LocalizedString WantedPage = Of("Hud.Interact.WantedPage");
     public static readonly LocalizedString RemoteDoorSelect = Of("Hud.Interact.RemoteDoorSelect");
