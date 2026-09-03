@@ -139,6 +139,18 @@ public class SmugglerCourierEvent : SpawnedNpcEventBase
                 break;
 
             case EPhase.LidOpening:
+                // ⚠ 뚜껑이 열리는 동안에도 <b>잡을 수 있다</b> — 상태가 Smuggling에서 벗어났다는 것은
+                // 그 사이에 밧줄이 걸렸다는 뜻이다(Escorted). 그대로 두면 남이 끌고 있는 몸이
+                // 땅으로 가라앉는다. 공통 골격은 Escorted를 이탈로 보지 않으므로 여기서 직접 본다.
+                if (m_endingNpc.CurrentState != NpcState.Smuggling)
+                {
+                    Debug.Log($"[돌발이벤트] {DisplayName} — 뚜껑 앞에서 붙잡혔다, 하강 취소");
+                    if (m_endingManhole != null)
+                        m_endingManhole.ServerClose();
+                    ClearEnding();
+                    break;
+                }
+
                 if (Time.time - m_phaseStartTime >= m_lidOpenSeconds)
                     BeginDescend();
                 break;

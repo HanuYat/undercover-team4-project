@@ -8557,10 +8557,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SmugglerCourierEvent
   m_displayName: "\uBC00\uC218 \uC6B4\uBC18\uCC45"
   m_npcPrefab: {fileID: 4452197611904741975, guid: 3d3dc14a28dd97f4da3a19cc3497d70f, type: 3}
-  m_spawnDistanceMin: 6
-  m_spawnDistanceMax: 12
+  m_spawnDistanceMin: 35
+  m_spawnDistanceMax: 80
   m_navSampleMaxDistance: 4
-  m_maxSpawnAttempts: 8
+  m_maxSpawnAttempts: 24
   m_clusterRadius: 2.5
   m_pettyCrimeRewardMin: 4000
   m_pettyCrimeRewardMax: 9000
