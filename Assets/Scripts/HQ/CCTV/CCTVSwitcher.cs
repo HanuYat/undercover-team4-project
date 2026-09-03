@@ -10,8 +10,17 @@ using UnityEngine;
 /// </summary>
 public class CCTVSwitcher : NetworkBehaviour
 {
+    private const int k_noEntry = -1;
+
+    // 세 자리까지 받는다 — 채널이 수십 개로 늘어도 남고, 넘치면 새 번호로 다시 시작한다.
+    private const int k_maxEntry = 999;
+
+
+    // 카메라가 아니라 설치물(노드)을 받는다 — 카메라 컴포넌트는 조준 리그 안쪽에 있어
+    // 인스펙터 배열에 죄다 같은 자식 이름으로 뜬다. 노드는 이름을 붙이는 루트에 있다.
+    [Tooltip("이 콘솔이 돌려 볼 CCTV들 — 순서가 곧 채널 번호다")]
     [SerializeField]
-    Camera[] m_cameras;
+    CCTVNode[] m_installations;
 
     [SerializeField]
     RenderTexture m_monitorRt;
@@ -26,7 +35,7 @@ public class CCTVSwitcher : NetworkBehaviour
     [SerializeField]
     Color m_infraredMonitorEmission = new(1.4f, 1.4f, 1.4f);
 
-    private CCTVNode[] m_nodes;
+    private Camera[] m_cameras;
     private Renderer m_monitorRenderer;
 
     private readonly NetworkVariable<int> m_currentIndex = new(
@@ -49,6 +58,14 @@ public class CCTVSwitcher : NetworkBehaviour
         NetworkVariableWritePermission.Server
     );
 
+    // 키패드에 눌린 번호. 버튼이 공용 물체라 콘솔 앞에 둘이 서면 같은 숫자를 봐야 한다
+    // (RemoteDoorConsole이 선택을 동기화하는 것과 같은 이유). -1은 입력 없음.
+    private readonly NetworkVariable<int> m_entry = new(
+        k_noEntry,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
     // 외부 차단(먹통 이벤트) — 이미 동기화된 플래그에서 각 피어가 로컬로 유도하므로 동기화하지 않는다.
     private bool m_externallyJammed;
 
@@ -57,15 +74,21 @@ public class CCTVSwitcher : NetworkBehaviour
 
     /// <summary>현재 채널의 설치 위치 이름 — 송출 중이 아니면 빈 문자열. (#362 라벨용)</summary>
     public string CurrentLocationLabel =>
-        IsDisplaying
-        && m_nodes != null
-        && CurrentIndex >= 0
-        && CurrentIndex < m_nodes.Length
-        && m_nodes[CurrentIndex] != null
-            ? m_nodes[CurrentIndex].LocationLabel
+        IsDisplaying ? GetLocationLabel(CurrentIndex) : string.Empty;
+
+    /// <summary>
+    /// index번째 채널의 설치 위치 이름 — 범위 밖이거나 미배선이면 빈 문자열.
+    /// 송출 여부를 보지 않는다: 채널 목록은 실시간 정보가 아니라 배치표라 화면이 꺼져도 유효하다.
+    /// </summary>
+    public string GetLocationLabel(int index) =>
+        m_installations != null
+        && index >= 0
+        && index < m_installations.Length
+        && m_installations[index] != null
+            ? m_installations[index].LocationLabel
             : string.Empty;
 
-    public int ChannelCount => m_cameras != null ? m_cameras.Length : 0;
+    public int ChannelCount => m_installations != null ? m_installations.Length : 0;
     public int CurrentIndex => m_currentIndex.Value;
     public bool IsPowered => m_isPowered.Value;
     public bool IsExternallyJammed => m_externallyJammed;
@@ -73,6 +96,9 @@ public class CCTVSwitcher : NetworkBehaviour
 
     /// <summary>화면이 실제로 송출 중인가 — 전원·외부 차단·유효 채널을 모두 만족해야 한다.</summary>
     public bool IsDisplaying => m_isPowered.Value && !m_externallyJammed && ChannelCount > 0;
+
+    /// <summary>키패드에 지금까지 눌린 번호 — 아무것도 안 눌렀으면 -1. 표시용 1-based 값이다.</summary>
+    public int PendingEntry => m_entry.Value;
 
     /// <summary>표시 상태 변화 — 채널 라벨·미니맵 하이라이트가 구독한다. (#362)</summary>
     public event Action OnDisplayChanged;
@@ -83,6 +109,7 @@ public class CCTVSwitcher : NetworkBehaviour
         m_currentIndex.OnValueChanged += HandleIndexChanged;
         m_isPowered.OnValueChanged += HandlePowerChanged;
         m_isInfrared.OnValueChanged += HandleInfraredChanged;
+        m_entry.OnValueChanged += HandleEntryChanged;
         Apply();
     }
 
@@ -91,6 +118,7 @@ public class CCTVSwitcher : NetworkBehaviour
         m_currentIndex.OnValueChanged -= HandleIndexChanged;
         m_isPowered.OnValueChanged -= HandlePowerChanged;
         m_isInfrared.OnValueChanged -= HandleInfraredChanged;
+        m_entry.OnValueChanged -= HandleEntryChanged;
     }
 
     // 먹통 구독은 OnNetworkSpawn이 아니라 Start에서 한다 — App 매니저 등록이 Awake에서
@@ -122,14 +150,23 @@ public class CCTVSwitcher : NetworkBehaviour
         m_monitorRenderer = GetComponent<Renderer>();
 
         int count = ChannelCount;
-        m_nodes = new CCTVNode[count];
+        m_cameras = new Camera[count];
         for (int i = 0; i < count; i++)
         {
-            if (m_cameras[i] == null)
+            if (m_installations[i] == null)
                 continue;
-            // InParent — 노드가 카메라와 같은 오브젝트에 있어도(현재 배치) 잡히고,
-            // 카메라를 자식으로 둔 CCTV 소품 리그에 노드를 붙이는 배치도 허용한다.
-            m_nodes[i] = m_cameras[i].GetComponentInParent<CCTVNode>();
+
+            m_installations[i].SetChannel(i + 1); // 번호는 배열 순서가 정한다 — 한 번만 밀면 된다
+
+            // InChildren — 카메라가 노드와 같은 오브젝트에 있어도 잡히고, 머리·몸통으로 나뉜
+            // 소품 리그 안쪽에 카메라를 둔 배치도 허용한다.
+            m_cameras[i] = m_installations[i].GetComponentInChildren<Camera>(true);
+            if (m_cameras[i] == null)
+            {
+                Debug.LogWarning($"CCTVSwitcher: CH{i + 1} 설치물에 카메라가 없다", m_installations[i]);
+                continue;
+            }
+
             CCTVInfraredLook.SetVolumeLayers(m_cameras[i], m_volumeLayers);
         }
     }
@@ -139,6 +176,9 @@ public class CCTVSwitcher : NetworkBehaviour
     private void HandlePowerChanged(bool previous, bool current) => Apply();
 
     private void HandleInfraredChanged(bool previous, bool current) => Apply();
+
+    // 입력은 카메라·발광과 무관하므로 Apply를 돌리지 않고 표시만 깨운다.
+    private void HandleEntryChanged(int previous, int current) => OnDisplayChanged?.Invoke();
 
     [Rpc(SendTo.Server)]
     public void RequestSwitchRpc(int delta)
@@ -155,6 +195,36 @@ public class CCTVSwitcher : NetworkBehaviour
         m_currentIndex.Value = ((m_currentIndex.Value + delta) % count + count) % count;
     }
 
+    /// <summary>키패드 숫자 입력 — 자릿수만큼 쌓인다. 0~9 버튼이 부른다.</summary>
+    [Rpc(SendTo.Server)]
+    public void RequestAppendDigitRpc(int digit)
+    {
+        if (digit < 0 || digit > 9)
+            return;
+        if (!m_isPowered.Value || m_externallyJammed)
+            return;
+
+        int next = (m_entry.Value < 0 ? 0 : m_entry.Value) * 10 + digit;
+        m_entry.Value = next > k_maxEntry ? digit : next;
+    }
+
+    /// <summary>
+    /// 입력한 번호로 채널을 옮긴다 — 확인 버튼이 부른다.
+    /// 맞든 틀리든 입력을 비운다: 잘못 누른 번호를 지우는 수단도 이것뿐이다.
+    /// </summary>
+    [Rpc(SendTo.Server)]
+    public void RequestConfirmEntryRpc()
+    {
+        if (!m_isPowered.Value || m_externallyJammed)
+            return;
+
+        int index = m_entry.Value - 1; // 표시가 1-based
+        m_entry.Value = k_noEntry;
+
+        if (index >= 0 && index < ChannelCount)
+            m_currentIndex.Value = index;
+    }
+
     [Rpc(SendTo.Server)]
     public void RequestTogglePowerRpc()
     {
@@ -166,6 +236,9 @@ public class CCTVSwitcher : NetworkBehaviour
             return;
 
         m_isPowered.Value = !m_isPowered.Value;
+
+        if (!m_isPowered.Value)
+            m_entry.Value = k_noEntry; // 꺼진 화면에 입력이 남아 있을 이유가 없다
     }
 
     [Rpc(SendTo.Server)]
@@ -186,6 +259,12 @@ public class CCTVSwitcher : NetworkBehaviour
         if (m_externallyJammed == value)
             return;
         m_externallyJammed = value;
+
+        // 먹통 중엔 콘솔이 죽으므로 입력도 버린다 — 복구 뒤에 남은 숫자가 되살아나지 않게.
+        // m_entry는 서버 권위라 서버에서만 쓴다(이 메서드는 전 피어에서 돈다).
+        if (value && IsSpawned && IsServer)
+            m_entry.Value = k_noEntry;
+
         Apply();
     }
 
@@ -203,8 +282,8 @@ public class CCTVSwitcher : NetworkBehaviour
                 bool active = displaying && i == m_currentIndex.Value;
                 m_cameras[i].targetTexture = active ? m_monitorRt : null;
                 m_cameras[i].enabled = active;
-                if (m_nodes != null && i < m_nodes.Length && m_nodes[i] != null)
-                    m_nodes[i].SetSelected(active);
+                if (m_installations != null && i < m_installations.Length && m_installations[i] != null)
+                    m_installations[i].SetSelected(active);
 
                 // 무조건 대입 — 채널 넘긴 이전 카메라에 포스트가 남지 않게 한다. (#677)
                 CCTVInfraredLook.Apply(m_cameras[i], active && m_isInfrared.Value);

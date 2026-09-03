@@ -42,6 +42,12 @@ public class MinimapTarget : MonoBehaviour
         set => m_iconColor = value;
     }
 
+    /// <summary>
+    /// 아이콘 위에 찍을 짧은 글자 — 비면 안 그린다. CCTV 채널 번호가 이 자리다.
+    /// 무전이 번호로 오가므로(키패드가 번호를 주소로 쓴다) 지도도 같은 번호를 보여 줘야 한다.
+    /// </summary>
+    public string IconLabel { get; set; }
+
     /// <summary>아이콘 크기(px) — 0이면 프리팹 크기. IconColor와 같이 매 프레임 반영된다.</summary>
     public float IconSize
     {
