@@ -475,6 +475,10 @@ MonoBehaviour:
     m_Key: Hud.Scan.BatteryLabel
     m_Metadata:
       m_Items: []
+  - m_Id: 8399387659690000
+    m_Key: Hud.Event.Notice.SmugglerCourier
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

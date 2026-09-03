@@ -198,6 +198,7 @@ public class NpcAnimationDriver : MonoBehaviour
             NpcState.Chasing => (int)NpcState.Run,
             NpcState.PenaltyEscorting => (int)NpcState.Walk,
             NpcState.Sprinting => (int)NpcState.Run, // 도주와 같은 배율로 달린다 (#106)
+            NpcState.Smuggling => (int)NpcState.Walk, // 화물을 지고 걸어간다 (#991)
             _ => (int)state,
         };
     }

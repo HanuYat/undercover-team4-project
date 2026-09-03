@@ -38,6 +38,13 @@ public class RopeDragLoad : NetworkBehaviour
     [SerializeField]
     private float m_carriedPlayerWeight = 1f;
 
+    [Tooltip(
+        "초중량 개체(밀수 운반책)를 끌고 있을 때 쓰는 하한 — 위 기본 하한 대신 걸린다. 혼자서는 사실상 못 끌게 하는 값이다. 0으로 두지 않는 이유는 완전 정지가 버그로 읽히기 때문"
+    )]
+    [Range(0f, 1f)]
+    [SerializeField]
+    private float m_heavyDragSpeedFactor = 0.08f;
+
     // 끌고 있는 무게로 깎인 이동속도 배율 — 서버(또는 오프라인) 진실. 매 프레임 다시 계산된다.
     private float m_dragSpeedFactor = 1f;
 
@@ -161,6 +168,11 @@ public class RopeDragLoad : NetworkBehaviour
 
         int slot = 0;
         float weightSum = 0f;
+
+        // 초중량 개체를 하나라도 끌고 있으면 하한이 바뀐다 (#991) — 기본 하한(0.35)이 무조건 걸리면
+        // 무게를 아무리 올려도 혼자 1.75m/s로 가 버려서, 무게만으로는 협동을 강제할 수 없다.
+        bool draggingHeavy = false;
+
         for (int i = 0; i < tethered.Count; i++)
         {
             NpcController npc = tethered[i];
@@ -169,6 +181,8 @@ public class RopeDragLoad : NetworkBehaviour
 
             npc.Rope.SetDragSlot(slot, draggingCount);
             slot++;
+
+            draggingHeavy |= npc.Rope.IgnoresDragSpeedFloor;
 
             // 여러 명이 같은 대상을 함께 끌면 참가자 수로 나눠 진다(다인 완화식). 여러 명을 동시에
             // 끌 때의 무게 합산도 이 누적이 그대로 한다 — 상한이 슬롯이 아니라 무게 예산이 되는 지점.
@@ -184,9 +198,10 @@ public class RopeDragLoad : NetworkBehaviour
         if (carriedBody != null)
             weightSum += m_carriedPlayerWeight / Mathf.Max(1, carriedBody.CarrierCount);
 
-        SetDragSpeedFactor(
-            Mathf.Clamp(1f - m_dragSlowPerWeight * weightSum, m_minDragSpeedFactor, 1f)
-        );
+        // 하한은 초중량 여부로 갈린다 — 둘 중 낮은 쪽이 아니라 그때 적용되는 값 하나다 (#991).
+        float floor = draggingHeavy ? m_heavyDragSpeedFactor : m_minDragSpeedFactor;
+
+        SetDragSpeedFactor(Mathf.Clamp(1f - m_dragSlowPerWeight * weightSum, floor, 1f));
     }
 
     // 배율과 동기화 값을 함께 갱신 — 서버(또는 오프라인)에서만 호출된다. (NpcController.SetRoped와 같은 관례)

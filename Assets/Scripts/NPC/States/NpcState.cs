@@ -70,4 +70,12 @@ public enum NpcState
     /// Jailed와 같은 규약 예외: 대응 Animator 상태가 없어 NpcAnimationDriver가 달리기 모션을 지정한다.
     /// </summary>
     Sprinting,
+
+    /// <summary>
+    /// 밀수 운반 — 화물을 지고 거래 지점까지 걸어간다 (#991, 밀수 운반책).
+    /// 도착하면 그대로 빠져나가 이벤트가 실패한다. 위협에 반응하지 않으므로
+    /// <see cref="NpcStateRules.IsReactive"/>에 넣지 않는다 — 기절에서 깨어나면 하던 운반을 재개한다.
+    /// Jailed와 같은 규약 예외: 대응 Animator 상태가 없어 NpcAnimationDriver가 걷기 모션을 지정한다.
+    /// </summary>
+    Smuggling,
 }
