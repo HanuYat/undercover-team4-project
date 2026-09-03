@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// 돌발 이벤트 개발자 단축키 — <b>에디터 전용</b>. 추첨을 기다리지 않고 F1~F12로 즉시 발동시킨다.
+/// 돌발 이벤트 개발자 단축키 — <b>에디터 전용</b>. 추첨을 기다리지 않고 F1~F12·넘패드 1~9로 즉시 발동시킨다.
 ///
 /// <b>F9는 비어 있다</b> — 청탁 발행 키였고, 청탁이 사라지면서 주인이 없어졌다.
 /// 그래서 열둘 중 열하나만 쓰고, F10부터는 인덱스가 하나씩 앞당겨진다 (F8=8번째, F10=9번째).
@@ -22,10 +22,13 @@ public class SuddenEventDevHotkeys : MonoBehaviour
 {
 #if UNITY_EDITOR
     // 순서가 곧 이벤트 풀 인덱스다. F9는 청탁 몫이었던 자리라 목록에서 빠져 있다.
+    // F 열이 다 차서 넘버패드로 이어 붙였다 — 12번째부터는 넘패드 1~9다 (#991).
     private static readonly Key[] k_keys =
     {
         Key.F1, Key.F2, Key.F3, Key.F4, Key.F5, Key.F6, Key.F7, Key.F8,
         Key.F10, Key.F11, Key.F12,
+        Key.Numpad1, Key.Numpad2, Key.Numpad3, Key.Numpad4, Key.Numpad5,
+        Key.Numpad6, Key.Numpad7, Key.Numpad8, Key.Numpad9,
     };
 
     [Tooltip("끄면 단축키가 듣지 않는다 — 같은 키를 쓰는 다른 테스트를 할 때 잠깐 내린다")]
@@ -69,7 +72,7 @@ public class SuddenEventDevHotkeys : MonoBehaviour
             m_manager = GetComponent<SuddenEventManager>();
 
         var sb = new System.Text.StringBuilder(
-            "[돌발이벤트] 개발자 단축키 매핑 (F9는 청탁 몫이라 건너뜀)");
+            "[돌발이벤트] 개발자 단축키 매핑 (F9는 청탁 몫이라 건너뜀 · F 열 다음은 넘패드 1~9)");
 
         for (int i = 0; i < k_keys.Length; i++)
         {
