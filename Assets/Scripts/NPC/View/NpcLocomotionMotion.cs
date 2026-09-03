@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 실제 이동 속도로 갈리는 모션을 제안하는 부품. (#502에서 NpcAnimationDriver에서 분리)
@@ -35,7 +35,7 @@ public class NpcLocomotionMotion : MonoBehaviour, INpcMotionSource
     private bool m_escortMoving;
     private bool m_resistMoving; // 저항(Attack) 추격 중 이동/정지 — 걷기 ↔ 버틴 자세 (#254)
     private bool m_intrudeMoving; // 침입(Intruding) 이동/해제 (#261)
-    private int m_penaltyMotion; // 오검거 페널티의 현재 로코모션 번호(Idle/Walk/Run) (#277~#279)
+    private int m_speedTierMotion; // 속도 3단 로코모션 번호(Idle/Walk/Run) — 오검거 페널티(#277~#279)와 밀수 운반(#991)이 공유한다
 
     // 해제 시작(Begin) 모션을 반복(Loop)으로 넘길 시각. 0 이하면 대기 중 아님 (#261)
     private float m_unlockBeginUntil;
@@ -66,9 +66,9 @@ public class NpcLocomotionMotion : MonoBehaviour, INpcMotionSource
             m_escortMoving = true;
             Reseed(k_moveOnSpeed);
         }
-        else if (IsPenaltyLocomotion(state))
+        else if (IsSpeedTierMotion(state))
         {
-            m_penaltyMotion = state == NpcState.Chasing ? (int)NpcState.Run : (int)NpcState.Walk;
+            m_speedTierMotion = state == NpcState.Chasing ? (int)NpcState.Run : (int)NpcState.Walk;
             Reseed(state == NpcState.Chasing ? k_penaltyRunOnSpeed : k_moveOnSpeed);
         }
         else if (state == NpcState.Intruding)
@@ -114,8 +114,8 @@ public class NpcLocomotionMotion : MonoBehaviour, INpcMotionSource
                 TickIntrude();
                 break;
             default:
-                if (IsPenaltyLocomotion(m_driver.BaseState))
-                    TickPenalty();
+                if (IsSpeedTierMotion(m_driver.BaseState))
+                    TickSpeedTier();
                 else
                     TickEscort();
                 break;
@@ -141,9 +141,9 @@ public class NpcLocomotionMotion : MonoBehaviour, INpcMotionSource
                 return true;
 
             default:
-                if (IsPenaltyLocomotion(m_driver.BaseState))
+                if (IsSpeedTierMotion(m_driver.BaseState))
                 {
-                    animState = m_penaltyMotion;
+                    animState = m_speedTierMotion;
                     return true;
                 }
 
@@ -183,15 +183,15 @@ public class NpcLocomotionMotion : MonoBehaviour, INpcMotionSource
         }
     }
 
-    // 페널티 로코모션 — 속도 3단. 히스테리시스가 두 겹이라 경계 사이에서는 현재 모션을 유지한다 (#277~)
-    private void TickPenalty()
+    // 속도 3단 로코모션 — 페널티(#277~)와 밀수 운반(#991)이 함께 쓴다. 히스테리시스가 두 겹이라 경계 사이에서는 현재 모션을 유지한다 (#277~)
+    private void TickSpeedTier()
     {
         if (m_smoothedSpeed < k_moveOffSpeed)
-            m_penaltyMotion = (int)NpcState.Idle;
+            m_speedTierMotion = (int)NpcState.Idle;
         else if (m_smoothedSpeed > k_penaltyRunOnSpeed)
-            m_penaltyMotion = (int)NpcState.Run;
+            m_speedTierMotion = (int)NpcState.Run;
         else if (m_smoothedSpeed > k_moveOnSpeed && m_smoothedSpeed < k_penaltyRunOffSpeed)
-            m_penaltyMotion = (int)NpcState.Walk;
+            m_speedTierMotion = (int)NpcState.Walk;
     }
 
     // 연행은 "따라 걷기 ↔ 근접 정지", 수감은 "감옥까지 걷기 ↔ 수용 정지" (#97/#228)
@@ -206,9 +206,14 @@ public class NpcLocomotionMotion : MonoBehaviour, INpcMotionSource
     /// <summary>이 기준 상태의 모션을 속도로 가르는가 — 아니면 기준 상태 모션이 그대로 쓰인다.</summary>
     private static bool IsSpeedDriven(NpcState state) =>
         IsHandcuffedMotion(state)
-        || IsPenaltyLocomotion(state)
+        || IsSpeedTierMotion(state)
         || state == NpcState.Attack
         || state == NpcState.Intruding;
+
+    /// <summary>모션이 속도 3단(Idle/Walk/Run)으로 갈리는 상태인가 — 페널티(#277~)와 밀수 운반(#991).
+    /// 밀수 운반은 맞으면 달리기로 올라가므로(SmugglerCargo.ServerPanic) 걷기 하나로 못 박을 수 없다.</summary>
+    private static bool IsSpeedTierMotion(NpcState state) =>
+        IsPenaltyLocomotion(state) || state == NpcState.Smuggling;
 
     /// <summary>수갑 찬 채 이동하는 상태인가 — 수감은 대응 Animator 상태가 없어 연행 모션을 빌린다. (#228)</summary>
     public static bool IsHandcuffedMotion(NpcState state) =>

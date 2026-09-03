@@ -508,6 +508,10 @@ MonoBehaviour:
     m_Localized: Battery
     m_Metadata:
       m_Items: []
+  - m_Id: 8399387659690000
+    m_Localized: "\u26A0 Smuggling tip-off \u2014 a courier is moving through the city"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

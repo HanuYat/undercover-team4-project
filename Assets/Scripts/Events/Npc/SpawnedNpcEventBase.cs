@@ -314,6 +314,22 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
             Despawn(m_spawned[i], playVfx: false);
     }
 
+    /// <summary>
+    /// 스폰물 하나를 <b>통째로 없앤다</b> — 도심에 남기는 <c>ReleaseToCity</c>와 정반대 결말이다. (#991)
+    ///
+    /// 잔류(#310)가 기본인 이유는 "아까 놓친 그 놈"을 다시 잡을 수 있어야 해서인데, 결말 자체가
+    /// "빠져나갔다"인 종류(밀수 운반책의 거래 지점 도착)는 남기면 제한시간이 무의미해진다 —
+    /// 나중에 심심할 때 주워 담는 공짜 보상이 된다. 맨홀로 내려간 납치범(#371)과 같은 예외다.
+    ///
+    /// 이 이벤트가 쥐고 있는 개체가 아니면 아무 일도 하지 않는다.
+    /// </summary>
+    protected void ServerDespawnSpawned(NpcController npc, bool playVfx = true)
+    {
+        SpawnedEntry entry = FindEntry(npc);
+        if (entry != null)
+            Despawn(entry, playVfx);
+    }
+
     // ---- 스폰 ----
 
     // 한 명을 세우고 경범죄 마커·복제·상태 구독까지 붙인다.

@@ -6271,6 +6271,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 11400000, guid: d82ec2c44e38aa44ea7a1d2c4398bbe5, type: 2}
     - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_eventEntries.Array.size
+      value: 12
+      objectReference: {fileID: 0}
+    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_eventEntries.Array.data[0].enabled
       value: 1
       objectReference: {fileID: 0}
@@ -6294,6 +6298,14 @@ PrefabInstance:
       propertyPath: m_eventEntries.Array.data[6].enabled
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_eventEntries.Array.data[11].enabled
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_eventEntries.Array.data[11].component
+      value: 
+      objectReference: {fileID: 122894073}
     - target: {fileID: 498939978214492355, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_Name
       value: SuddenEvents
@@ -6401,13 +6413,56 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 498939978214492355, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 122894073}
   m_SourcePrefab: {fileID: 100100000, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
 --- !u!4 &122894071 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 9176822252311413070, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
   m_PrefabInstance: {fileID: 122894070}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &122894072 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 498939978214492355, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+  m_PrefabInstance: {fileID: 122894070}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &122894073
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 122894072}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 93831b87c5997f44b8804e26a9efc8b9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SmugglerCourierEvent
+  m_displayName: "\uBC00\uC218 \uC6B4\uBC18\uCC45"
+  m_npcPrefab: {fileID: 4452197611904741975, guid: 3d3dc14a28dd97f4da3a19cc3497d70f, type: 3}
+  m_spawnDistanceMin: 20
+  m_spawnDistanceMax: 45
+  m_navSampleMaxDistance: 4
+  m_maxSpawnAttempts: 24
+  m_clusterRadius: 2.5
+  m_pettyCrimeRewardMin: 4000
+  m_pettyCrimeRewardMax: 9000
+  m_maxLifetimeSeconds: 60
+  m_cargoWeight: 4
+  m_walkSpeedMultiplier: 0.75
+  m_panicSpeedMultiplier: 1.8
+  m_manholePoints:
+  - {fileID: 1170714921}
+  - {fileID: 384491626}
+  - {fileID: 750251664}
+  - {fileID: 843946679}
+  - {fileID: 1314104754}
+  - {fileID: 637770893}
+  m_lidOpenSeconds: 1.4
+  m_descendDepth: 3
+  m_descendSeconds: 1.5
 --- !u!1001 &124634603
 PrefabInstance:
   m_ObjectHideFlags: 0

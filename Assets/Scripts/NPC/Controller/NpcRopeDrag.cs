@@ -132,6 +132,29 @@ public class NpcRopeDrag : NetworkBehaviour
     /// <summary>무게 배정 — 코어의 InitBehavior에서 서버(또는 오프라인) 1회 호출된다. (#398)</summary>
     internal void InitDragWeight() => m_dragWeight = m_owner.CommonConfig.PickWeight();
 
+    // 초중량 개체인가 — 참이면 RopeDragLoad가 속도 하한을 면제해 혼자서는 사실상 못 끈다. (#991)
+    private bool m_ignoresDragSpeedFloor;
+
+    /// <summary>속도 하한(<see cref="RopeDragLoad"/>)을 면제받는 초중량 개체인가 — 밀수 운반책. (#991)
+    /// 서버(또는 오프라인)에서만 유효하다. 무게와 마찬가지로 결과 배율만 동기화된다.</summary>
+    public bool IgnoresDragSpeedFloor => m_ignoresDragSpeedFloor;
+
+    /// <summary>
+    /// 무게를 추첨 대신 고정값으로 박는다 — 개체가 무게로 정의되는 경우(밀수 운반책 #991)에 쓴다.
+    ///
+    /// ⚠ <b>반드시 <see cref="InitDragWeight"/> 뒤에 부를 것.</b> 그쪽은 코어의 InitBehavior에서
+    /// 도는데, 그 시점이 네트워크(OnNetworkSpawn)와 오프라인(Start)에서 다르다 — 스폰 직후에
+    /// 부르면 오프라인에서만 조용히 덮어써진다. 스폰 다음 프레임(<c>ApplyBehavior</c>)이 안전한 자리다.
+    /// </summary>
+    public void ServerSetDragWeight(float weight, bool ignoreSpeedFloor)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        m_dragWeight = Mathf.Max(0f, weight);
+        m_ignoresDragSpeedFloor = ignoreSpeedFloor;
+    }
+
     /// <summary>밧줄 끌기 시작 — PlayerEscorter가 서버에서 호출. 위치를 끄는 플레이어가 제어하므로
     /// NavMeshAgent를 끈다. 커스터디 전이(Escorted)는 호출부가 <b>이 호출 앞에</b> 한다 — 뒤에 하면
     /// 직전 상태의 Exit이 꺼진 에이전트를 건드린다. 끈 플레이어는 위협으로 기억한다.</summary>
