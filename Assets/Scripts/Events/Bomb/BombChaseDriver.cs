@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.AI;
 
 /// <summary>
@@ -20,6 +20,24 @@ public class BombChaseDriver : MonoBehaviour
     [Tooltip("이 반경(m) 안에 현장 인원이 들어오면 잠에서 깨어 추격과 카운트다운을 함께 시작한다")]
     [SerializeField]
     private float m_wakeRadius = 14f;
+
+    [Header("배회 (#993)")]
+    [Tooltip("표적을 찾기 전 도시를 도는 속도(m/s) — 추격 속도보다 확실히 느려야 한다. " +
+             "같으면 '발견하고 달려든다'는 전환이 안 읽혀서 배회가 그냥 느린 추격이 된다")]
+    [SerializeField]
+    private float m_roamSpeed = 4.2f;
+
+    [Tooltip("배회 목적지를 뽑는 반경(m) — 현재 위치 기준. 크게 잡을수록 한 번에 멀리 간다")]
+    [SerializeField]
+    private float m_roamPointRadius = 35f;
+
+    [Tooltip("배회 목적지에 이만큼(m) 다가오면 다음 지점을 뽑는다")]
+    [SerializeField]
+    private float m_roamArriveDistance = 1.5f;
+
+    [Tooltip("배회 지점 추첨 시도 횟수 — 다 실패하면 다음 틱에 다시 시도한다")]
+    [SerializeField]
+    private int m_roamSampleAttempts = 8;
 
     [Tooltip("표적을 다시 고르고 목적지를 갱신하는 주기(초)")]
     [SerializeField]
@@ -70,6 +88,59 @@ public class BombChaseDriver : MonoBehaviour
     public void ResetRetargetClock()
     {
         m_nextRetargetTime = 0f;
+
+        // 배회 속도로 내려가 있던 것을 추격 속도로 되돌린다 — 무장은 여기 한 번만 지난다 (#993)
+        if (m_agent != null)
+            m_agent.speed = m_chaseSpeed;
+    }
+
+    /// <summary>
+    /// 배회 이동 — 표적을 찾기 전 도시를 돌아다닌다. 대기(<see cref="BombState.Dormant"/>) 동안
+    /// <see cref="BombDevice"/>가 매 프레임 부른다. (#993)
+    ///
+    /// <b>깨우기 판정은 여기서 하지 않는다</b> — 그건 <see cref="PollWakeTrigger"/> 몫이다.
+    /// 합치면 "지점을 다시 뽑는 조건"과 "사람을 찾는 주기"가 한 시계에 묶여, 한쪽을 튜닝하면
+    /// 다른 쪽이 딸려 움직인다. 이쪽은 시계를 쓰지 않고 경로 상태만 본다(도착했으면 다시 뽑는다).
+    ///
+    /// 지점은 <b>현재 위치 기준</b>으로 뽑는다. 맵 전역에서 뽑으면 반대편 끝으로 직행해 도시를
+    /// 훑지 않고 가로지르기만 한다.
+    /// </summary>
+    public void TickRoam()
+    {
+        if (!m_agent.enabled || !m_agent.isOnNavMesh)
+            return;
+
+        m_agent.speed = m_roamSpeed;
+        m_agent.isStopped = false;
+
+        // 경로가 살아 있고 아직 멀면 그대로 간다
+        if (m_agent.pathPending)
+            return;
+        if (m_agent.hasPath && m_agent.remainingDistance > m_roamArriveDistance)
+            return;
+
+        PickRoamPoint();
+    }
+
+    // 현재 위치 주변에서 NavMesh 위 지점 하나를 뽑는다 — 에이전트 자신의 통행 마스크를 그대로 쓴다.
+    private void PickRoamPoint()
+    {
+        for (int i = 0; i < m_roamSampleAttempts; i++)
+        {
+            Vector2 offset = Random.insideUnitCircle * m_roamPointRadius;
+            Vector3 candidate = transform.position + new Vector3(offset.x, 0f, offset.y);
+
+            NavMeshHit hit;
+            if (!NavMesh.SamplePosition(candidate, out hit, m_roamPointRadius, m_agent.areaMask))
+                continue;
+
+            // 발밑이 다시 뽑히면 도착 판정이 곧바로 서서 제자리에서 지점만 갈아 끼운다
+            if ((hit.position - transform.position).sqrMagnitude < m_roamArriveDistance * m_roamArriveDistance)
+                continue;
+
+            m_agent.SetDestination(hit.position);
+            return;
+        }
     }
 
     /// <summary>표적 재선정 + 목적지 갱신. 표적도 움직이므로 같은 주기로 목적지를 다시 찍는다.</summary>
@@ -109,7 +180,7 @@ public class BombChaseDriver : MonoBehaviour
         m_agent.SetDestination(m_target.transform.position);
     }
 
-    /// <summary>그 자리에 멈춘다 — 폭심 확정(Locked)과 폭발 시점에 불린다.</summary>
+    /// <summary>그 자리에 멈춘다 — 쫓을 사람이 없을 때와 폭발 시점에 불린다.</summary>
     public void Stop()
     {
         if (!m_agent.enabled || !m_agent.isOnNavMesh)

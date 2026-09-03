@@ -1,4 +1,4 @@
-using TMPro;
+﻿using TMPro;
 using UnityEngine;
 
 /// <summary>
@@ -40,10 +40,7 @@ public class BombTimerView : MonoBehaviour
 
         switch (m_device.State)
         {
-            // 추격 중(Armed)과 폭심 확정 후(Locked)는 표시가 같다 — 멈췄다는 사실은 폭탄이 서 있는
-            // 모습이 이미 말해 주고, 남은 시간은 끝까지 같은 자리에서 읽혀야 한다.
             case BombState.Armed:
-            case BombState.Locked:
                 float t = m_device.RemainingSeconds;
                 int minutes = (int)(t / 60f);
                 int seconds = (int)(t % 60f);

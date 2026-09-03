@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -7,9 +7,8 @@ public enum BombState
 {
     Idle,     // 아직 무장 전 (스폰 직후)
     Emerging, // 상자에서 나오는 중 — 아직 움직이지도 카운트다운하지도 않는다 (등장 예고)
-    Dormant,  // 상자 앞에서 대기 — 사람이 다가올 때까지 시간이 흐르지 않는다
+    Dormant,  // 사람을 찾아 배회 — 표적이 생길 때까지 시간이 흐르지 않는다 (#993 전까지는 상자 앞 정지였다)
     Armed,    // 카운트다운 중 — 가장 가까운 현장 플레이어를 쫓는다
-    Locked,   // 폭발 직전 — 그 자리에 멈춰 더는 쫓지 않는다 (폭심 확정)
     Exploded, // 시간 초과 폭발
 }
 
@@ -38,10 +37,6 @@ public class BombDevice : NetworkBehaviour
     [Tooltip("무장부터 폭발까지의 제한시간(초) — 쫓기는 시간과 직결")]
     [SerializeField]
     private float m_countdownSeconds = 30f;
-
-    [Tooltip("남은 시간이 이 값(초) 이하가 되면 그 자리에 멈춘다 — 폭심이 확정돼 마지막으로 벗어날 기회가 된다")]
-    [SerializeField]
-    private float m_lockSeconds = 3f;
 
     [Header("테스트")]
     [Tooltip("켜면 스폰/시작 시 스스로 무장한다 — 돌발 이벤트 없이 폭탄을 씬에 놓고 바로 등장·추격·폭발을 테스트할 때. " +
@@ -73,12 +68,12 @@ public class BombDevice : NetworkBehaviour
     public static BombDevice Active => s_active;
 
     /// <summary>현재 상태 — 서버·오프라인은 실참조, 원격 피어는 동기화값.
-    /// 폭발만 예외로 실참조를 먼저 본다 — 클라는 RPC로 먼저 알 수 있고 그때 동기화값은 아직 Locked다 (#936).</summary>
+    /// 폭발만 예외로 실참조를 먼저 본다 — 클라는 RPC로 먼저 알 수 있고 그때 동기화값은 아직 Armed다 (#936).</summary>
     public BombState State =>
         m_state == BombState.Exploded || !IsSpawned || IsServer ? m_state : (BombState)m_stateSynced.Value;
 
-    /// <summary>카운트다운이 도는 중인가 — 추격 중(Armed)과 폭심 확정 후(Locked)를 함께 묶는다.</summary>
-    public bool IsCountingDown => State == BombState.Armed || State == BombState.Locked;
+    /// <summary>카운트다운이 도는 중인가 — 무장부터 폭발까지가 전부 추격(Armed)이다. (#993)</summary>
+    public bool IsCountingDown => State == BombState.Armed;
 
     /// <summary>지금 때리면 터지는 상태인가 — <see cref="Baton"/>이 타격 판정에 쓴다.
     /// 카운트다운 전(등장·대기)과 이미 터진 뒤는 그냥 소품이라 빗나감으로 둔다.</summary>
@@ -169,28 +164,28 @@ public class BombDevice : NetworkBehaviour
             return;
         }
 
-        // 대기 — 상자 앞에서 사람을 기다린다. 카운트다운은 아직 돌지 않는다.
+        // 대기 — 사람을 찾아 도시를 <b>돌아다닌다</b>. 카운트다운은 아직 돌지 않는다. (#993)
         // 시계는 표적이 생기는 순간부터 돈다 — 빈 골목에서 혼자 터지면 누구도 위협하지 못한다.
+        // 배회는 그 규칙을 바꾸지 않고 <b>표적을 만날 확률만</b> 올린다: 상자 앞에 서 있으면
+        // 아무도 안 지나가는 판이 생기는데, 돌아다니면 폭탄이 스스로 사람을 찾아간다.
         if (m_state == BombState.Dormant)
         {
             if (m_chase.PollWakeTrigger())
+            {
                 ServerArm();
+                return;
+            }
+
+            m_chase.TickRoam();
             return;
         }
 
-        if (m_state != BombState.Armed && m_state != BombState.Locked)
+        if (m_state != BombState.Armed)
             return;
 
-        // 폭심 확정 — 남은 시간이 얼마 없으면 멈춰서 "여기서 터진다"를 보여준다.
-        if (m_state == BombState.Armed && m_explodeAtLocal - Time.time <= m_lockSeconds)
-        {
-            m_chase.Stop();
-            SetState(BombState.Locked);
-        }
-        else if (m_state == BombState.Armed)
-        {
-            m_chase.Tick();
-        }
+        // 터질 때까지 쫓는다 (#993) — 폭심을 미리 확정하고 멈춰 서던 마지막 3초를 없앴다.
+        // 멈추면 그 자리가 안전지대가 되어 "붙어 있다가 마지막에 걸어 나오면 된다"가 공략이 됐다.
+        m_chase.Tick();
 
         if (Time.time >= m_explodeAtLocal)
             ServerExplode();
