@@ -25,7 +25,7 @@ public class BombChaseDriver : MonoBehaviour
     [Tooltip("표적을 찾기 전 도시를 도는 속도(m/s) — 추격 속도보다 확실히 느려야 한다. " +
              "같으면 '발견하고 달려든다'는 전환이 안 읽혀서 배회가 그냥 느린 추격이 된다")]
     [SerializeField]
-    private float m_roamSpeed = 2.8f;
+    private float m_roamSpeed = 4.2f;
 
     [Tooltip("배회 목적지를 뽑는 반경(m) — 현재 위치 기준. 크게 잡을수록 한 번에 멀리 간다")]
     [SerializeField]
