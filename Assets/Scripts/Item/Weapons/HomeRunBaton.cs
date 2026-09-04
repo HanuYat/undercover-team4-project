@@ -28,6 +28,11 @@ public class HomeRunBaton : Baton
     [SerializeField]
     private float m_minLaunchSpeed = 4f;
 
+    [Tooltip("무충전 타격음 볼륨 배율. 최대 충전이 1이고 여기까지 선형으로 내려간다 — 0으로 두면 툭 치기가 무음이다")]
+    [Range(0f, 1f)]
+    [SerializeField]
+    private float m_minHitVolume = 0.35f;
+
     [Tooltip("상승 속도 = 수평 속도 × 이 값. 1.0이 45°로 사거리 최대 (BombBlastProfile과 같은 노브)")]
     [Range(0f, 3f)]
     [SerializeField]
@@ -114,6 +119,13 @@ public class HomeRunBaton : Baton
     /// </summary>
     protected override EFx ImpactFxFor(NpcController npc, PlayerHealth player, bool critical) =>
         EFx.HomeRunHit;
+
+    /// <summary>
+    /// 타격음도 충전량을 따라간다 (#998) — 살짝 친 것과 끝까지 모은 것이 같은 소리로 나면
+    /// 게이지를 보지 않는 주변 사람에게는 세기가 전혀 드러나지 않는다. 소리 종류는 그대로 하나다.
+    /// </summary>
+    protected override float ImpactVolumeScale =>
+        Mathf.Lerp(m_minHitVolume, 1f, m_serverChargeRatio);
 
     /// <summary>유효타 확정 뒤 — NPC·동료 모두 래그돌로 발사한다. 데미지·반응보다 뒤에 불린다. (#815)</summary>
     protected override void ServerOnHitLanded(

@@ -62,14 +62,23 @@ public class FxManager : NetworkedManagerBase
     /// <param name="normal">
     /// 파티클이 향할 방향(맞은 면의 법선 등). 생략하면 회전 없이 재생한다. 소리에는 영향이 없다.
     /// </param>
-    public void PlayEverywhere(EFx id, Vector3 position, Vector3 normal = default)
+    /// <param name="volumeScale">
+    /// 소리 볼륨에 곱할 배율(0~1). 같은 순간이 세기에 따라 크고 작게 들려야 할 때만 쓴다
+    /// (홈런 진압봉 차지, #998). 파티클에는 영향이 없다.
+    /// </param>
+    public void PlayEverywhere(
+        EFx id,
+        Vector3 position,
+        Vector3 normal = default,
+        float volumeScale = 1f
+    )
     {
         if (id == EFx.None)
             return;
 
         if (!IsSpawned)
         {
-            PlayHere(id, position, normal); // 오프라인 — RPC 경로가 없다
+            PlayHere(id, position, normal, volumeScale); // 오프라인 — RPC 경로가 없다
             return;
         }
 
@@ -78,11 +87,11 @@ public class FxManager : NetworkedManagerBase
         if (!IsServer)
         {
             WarnOnce(id, $"{id}를 클라이언트에서 전파 요청했다 — 서버 판정 지점에서 부를 것");
-            PlayHere(id, position, normal);
+            PlayHere(id, position, normal, volumeScale);
             return;
         }
 
-        PlayRpc(id, position, normal);
+        PlayRpc(id, position, normal, volumeScale);
     }
 
     /// <summary>
@@ -90,7 +99,12 @@ public class FxManager : NetworkedManagerBase
     /// (<c>SendTo.Everyone</c> RPC 안, 전 피어에서 발생하는 이벤트 구독 등).
     /// 그런 자리에서 <see cref="PlayEverywhere"/>를 부르면 피어마다 다시 전파돼 소리가 겹친다.
     /// </summary>
-    public void PlayHere(EFx id, Vector3 position, Vector3 normal = default)
+    public void PlayHere(
+        EFx id,
+        Vector3 position,
+        Vector3 normal = default,
+        float volumeScale = 1f
+    )
     {
         if (id == EFx.None)
             return;
@@ -104,13 +118,14 @@ public class FxManager : NetworkedManagerBase
         // 매니저가 없는 구성(로비·테스트 씬·부트스트랩 없는 직접 Play)에서는 조용히 넘어간다 (R8 관례).
         // 항목의 Effect·Sound가 None이면 각 매니저가 스스로 무동작한다 — 여기서 따로 갈래를 만들지 않는다.
         App.Game.Effect?.Play(entry.Effect, position, normal);
-        App.Sound?.PlaySfxAt(entry.Sound, position);
+        App.Sound?.PlaySfxAt(entry.Sound, position, volumeScale);
     }
 
     // 연출 오브젝트를 네트워크에 싣지 않는다 — 각 피어가 자기 화면에 스스로 만든다
     // (docs/architecture.md 연출 전파 규칙의 '일회성 연출' 행).
     [Rpc(SendTo.Everyone)]
-    private void PlayRpc(EFx id, Vector3 position, Vector3 normal) => PlayHere(id, position, normal);
+    private void PlayRpc(EFx id, Vector3 position, Vector3 normal, float volumeScale) =>
+        PlayHere(id, position, normal, volumeScale);
 
     private void BuildIndex()
     {
