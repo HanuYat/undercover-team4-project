@@ -102,7 +102,11 @@ public class SoundManager : CommonManagerBase
     /// </summary>
     /// <param name="id">카탈로그 키. <see cref="EAudioClip.None"/>이면 무동작이다</param>
     /// <param name="position">소리가 날 월드 좌표</param>
-    public void PlaySfxAt(EAudioClip id, Vector3 position)
+    /// <param name="volumeScale">
+    /// 카탈로그 볼륨에 곱할 배율(0~1). 같은 소리가 세기에 따라 크고 작게 나야 하는 경우에만 쓴다
+    /// (홈런 진압봉 차지, #998). 기본 1이라 기존 호출은 그대로다.
+    /// </param>
+    public void PlaySfxAt(EAudioClip id, Vector3 position, float volumeScale = 1f)
     {
         if (id == EAudioClip.None)
             return;
@@ -126,7 +130,7 @@ public class SoundManager : CommonManagerBase
         source.transform.position = position;
         source.spatialBlend = 1f; // 완전 3D — 거리·방향이 그대로 반영된다 (#482)
         source.clip = entry.Clip;
-        source.volume = SfxVolumeOf(entry);
+        source.volume = Mathf.Clamp01(SfxVolumeOf(entry) * volumeScale);
         ApplyStartOffset(source, entry);
         source.minDistance = entry.MinDistance;
         // 최대 거리가 최소보다 작게 배선되면 Unity가 감쇠를 계산하지 못한다 — 사고를 조용히 삼키지 않고 보정한다.

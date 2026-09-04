@@ -132,6 +132,12 @@ public class Baton : ItemBase, IAimedWeapon
     protected virtual string WeaponLogName => "진압봉";
 
     /// <summary>
+    /// 임팩트 연출의 소리 볼륨 배율(0~1) — 서버 전용, 유효타 연출을 전파할 때 한 번 읽는다.
+    /// 기본은 1(카탈로그 볼륨 그대로). 타격 세기가 매번 다른 하위만 재정의한다 (홈런 진압봉 차지, #998).
+    /// </summary>
+    protected virtual float ImpactVolumeScale => 1f;
+
+    /// <summary>
     /// 유효타가 실제로 적용된 뒤 — 서버 전용, 데미지·반응(ServerReactTo)보다 <b>뒤</b>에 불린다.
     /// 기본 구현은 무동작. 데미지 외의 추가 효과(발사 등)를 얹는 하위 클래스가 재정의한다 (홈런 진압봉, #815).
     /// </summary>
@@ -371,7 +377,8 @@ public class Baton : ItemBase, IAimedWeapon
         App.Game.Fx?.PlayEverywhere(
             ImpactFxFor(target, playerTarget, power.IsCritical),
             hit.point,
-            hit.normal
+            hit.normal,
+            ImpactVolumeScale
         );
         NotifyHit(playerTarget != null);
 
