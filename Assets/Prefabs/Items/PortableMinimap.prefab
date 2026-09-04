@@ -112,7 +112,7 @@ MonoBehaviour:
   m_thirdPersonRotationOffset: {x: 52.2, y: 50.7, z: 182.4}
   m_handGrip: 2
   m_targetOutlineColor: {r: 1, g: 0.85, b: 0.2, a: 1}
-  m_shopPrice: 30000
+  m_shopPrice: 3000
   references:
     version: 2
     RefIds: []
