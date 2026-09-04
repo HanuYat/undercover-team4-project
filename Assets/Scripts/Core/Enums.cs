@@ -202,6 +202,9 @@ public enum EAudioClip
 
     // 힐팩
     HealPackUse, // 치익 — 힐팩으로 회복한 순간 (회복이 실제로 일어났을 때만)
+
+    // 홈런 진압봉 차지 (#998)
+    HomeRunCharge, // 위이잉 — 힘을 모으는 동안 계속 (모으는 본인에게만, 2D 루프)
 }
 
 /// <summary>

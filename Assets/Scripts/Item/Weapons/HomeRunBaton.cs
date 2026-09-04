@@ -61,6 +61,12 @@ public class HomeRunBaton : Baton
 
     protected override string WeaponLogName => "홈런 진압봉";
 
+    /// <summary>
+    /// 모으는 동안 계속 나는 소리 — 게이지와 같은 경로라 시작·종료가 이미 짝지어져 있다 (#998).
+    /// 모으는 본인에게만 들리는 2D 루프다. 카탈로그에 클립이 아직 없으면 조용히 넘어간다.
+    /// </summary>
+    protected override EAudioClip ChannelLoopSound => EAudioClip.HomeRunCharge;
+
     // ---- 차지 (#998) ----
 
     /// <summary>
