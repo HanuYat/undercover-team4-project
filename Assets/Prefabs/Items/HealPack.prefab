@@ -82,7 +82,7 @@ MonoBehaviour:
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
-  m_itemIcon: {fileID: 21300000, guid: f06a179595b364bdaae8eb1ceefd9e07, type: 3}
+  m_itemIcon: {fileID: 21300000, guid: 523f23377404bf84ba7ea010d483b7d8, type: 3}
   m_itemDescription:
     m_TableReference:
       m_TableCollectionName: GUID:faae75c9a0a19b441be27b8614effa3d
@@ -92,9 +92,12 @@ MonoBehaviour:
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
-  m_heldModelPrefab: {fileID: 1136368065188656574, guid: 478a9ddea5a78e24a8dc439bea7bd333, type: 3}
-  m_heldPositionOffset: {x: 0.13, y: 0.03, z: 0}
-  m_heldRotationOffset: {x: 0, y: 0, z: 0}
+  m_heldModelPrefab: {fileID: 1627695094941780, guid: a873ef150b04d2344a9d7d0b9fef3150, type: 3}
+  m_heldPositionOffset: {x: 0.14, y: 0.04, z: 0}
+  m_heldRotationOffset: {x: 0, y: -90, z: 0}
+  m_overrideThirdPersonGrip: 0
+  m_thirdPersonPositionOffset: {x: 0, y: 0, z: 0}
+  m_thirdPersonRotationOffset: {x: 0, y: 0, z: 0}
   m_handGrip: 2
   m_targetOutlineColor: {r: 0.34901962, g: 1, b: 0.54901963, a: 1}
   m_shopPrice: 2000
