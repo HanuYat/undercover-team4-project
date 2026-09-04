@@ -84,7 +84,7 @@ public class HomeRunBaton : Baton
     /// 신뢰 RPC는 순서가 보장돼 서버에 항상 먼저 도착한다.
     ///
     /// 장착 전환·커서 풀림도 이 경로다(PlayerItemUser) — 놓음과 뗌을 구분할 방법이 ItemBase 계약에
-    /// 없어 그때도 힘이 나간다. 데미지 0이라 그대로 둔다.
+    /// 없어 그때도 힘이 나간다. 데미지 0이라 그대로 둔다. 다만 <b>다운 중이면 버린다</b>(아래).
     /// </summary>
     public override void CancelUse()
     {
@@ -97,6 +97,19 @@ public class HomeRunBaton : Baton
         float charge = Mathf.Clamp01((Time.time - m_chargeStartTime) / m_maxChargeSeconds);
         m_chargeStartTime = -1f;
         NotifyChannelGaugeEnd();
+
+        // 모으는 도중 다운되면 모은 것은 버린다 — PlayerItemUser는 누름(HandleUseItem)만 무력화로
+        // 막고 뗌은 막지 않으므로, 여기서 보지 않으면 쓰러진 채로 스윙이 나간다. 즉발이던 시절에는
+        // 누름 게이트 하나로 충분했지만, 타격이 뗌으로 옮겨 오면서 이 자리가 필요해졌다.
+        PlayerInteractor holder = Holder;
+        if (holder != null)
+        {
+            PlayerIncapacitation incap = holder.GetComponent<PlayerIncapacitation>();
+            if (incap != null && incap.IsIncapacitated)
+            {
+                return;
+            }
+        }
 
         if (!IsSpawned || IsServer)
         {
