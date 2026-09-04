@@ -303,7 +303,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_iceOnsetSeconds: 0
   m_iceFullSeconds: 1
-  m_iceMaxRatio: 0.95
+  m_iceMaxRatio: 0.85
   m_thawSeconds: 45
   m_shelterProbeHeight: 25
   m_shelterMask:
