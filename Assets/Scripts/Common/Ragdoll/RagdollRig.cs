@@ -1052,4 +1052,162 @@ public class RagdollRig : MonoBehaviour
         yaw = Quaternion.LookRotation(horizontal.normalized).eulerAngles.y;
         return true;
     }
+
+    // ---- 뼈 단위 접근 (#980 — 벽에 박힌 팔 접기) ----
+    //
+    // ⚠ 인덱스는 m_bodies / m_boneColliders / m_joints가 <b>공유</b>한다(같은 길이·같은 순서).
+    // 리그는 여기서도 물리만 안다 — "언제 접을지"는 소유자(RagdollArmFold)가 정한다.
+
+    /// <summary>i번째 뼈의 Rigidbody — 범위 밖이면 null.</summary>
+    public Rigidbody GetBody(int index) =>
+        m_bodies != null && index >= 0 && index < m_bodies.Length ? m_bodies[index] : null;
+
+    /// <summary>i번째 뼈의 콜라이더 — 위와 같은 인덱스.</summary>
+    public Collider GetBoneCollider(int index) =>
+        m_boneColliders != null && index >= 0 && index < m_boneColliders.Length
+            ? m_boneColliders[index]
+            : null;
+
+    /// <summary>i번째 뼈의 이름 — 로그가 "어느 뼈인지"를 말할 수 있어야 판정을 읽는다.</summary>
+    public string GetBoneName(int index)
+    {
+        Rigidbody body = GetBody(index);
+        return body != null ? body.name : "?";
+    }
+
+    /// <summary>
+    /// <b>팔 뼈</b>의 인덱스를 담는다 — 사지 뼈 중 <b>다리와 머리를 뺀</b> 것.
+    /// 실제로 벽에 끼는 것은 거의 팔이다(docs/980 §1-2: 팔만 "가장 얇고 + 가장 가볍고 + 지렛대가
+    /// 가장 길다"를 동시에 만족한다).
+    ///
+    /// 이름 목록이 아니라 <b>계층</b>으로 가른다: 다리는 골반에 <b>직접</b> 매달리고 팔은 상체에
+    /// 매달린다. 머리만 이름으로 알아본 뼈를 뺀다.
+    /// </summary>
+    /// <returns>담은 개수.</returns>
+    public int CollectArmBones(float maxMass, int[] into)
+    {
+        if (m_bodies == null || into == null)
+            return 0;
+
+        int hips = HipsBodyIndex();
+        int count = 0;
+
+        for (int i = 0; i < m_bodies.Length && count < into.Length; i++)
+        {
+            if (m_bodies[i] == null || m_bodies[i] == m_hipsBody || m_bodies[i].mass > maxMass)
+                continue;
+
+            if (m_headBone != null && m_bodies[i].transform == m_headBone)
+                continue;
+
+            if (ParentBoneIndex(i) == hips)
+                continue; // 골반에 직접 매달렸다 = 다리(또는 척추)
+
+            into[count++] = i;
+        }
+
+        return count;
+    }
+
+    /// <summary>골반 뼈의 인덱스 — 못 찾으면 -1.</summary>
+    public int HipsBodyIndex()
+    {
+        if (m_bodies == null)
+            return -1;
+
+        for (int i = 0; i < m_bodies.Length; i++)
+            if (m_bodies[i] == m_hipsBody)
+                return i;
+
+        return -1;
+    }
+
+    /// <summary>
+    /// <paramref name="index"/>에서 <b>부모 쪽으로</b> 뼈를 최대 <paramref name="depth"/>개 더한
+    /// 체인을 담는다(자기 자신 포함). 질량이 <paramref name="maxMass"/>를 넘는 뼈에서 <b>멈춘다</b> —
+    /// 몸통을 끌어들이면 사실상 전신이 되고, 그러면 방향이 틀렸을 때의 피해가 커진다.
+    /// 부모는 <c>CharacterJoint.connectedBody</c>가 준다.
+    /// </summary>
+    /// <returns>담은 개수 — 1 이상.</returns>
+    public int CollectBoneChainUpward(int index, int depth, float maxMass, int[] into)
+    {
+        if (into == null || into.Length == 0 || GetBody(index) == null)
+            return 0;
+
+        into[0] = index;
+        int count = 1;
+
+        int current = index;
+        for (int step = 0; step < depth && count < into.Length; step++)
+        {
+            int parent = ParentBoneIndex(current);
+            if (parent < 0 || m_bodies[parent].mass > maxMass)
+                break; // 몸통에 닿았다 — 여기서 끊는 것이 이 함수의 요점이다
+
+            into[count++] = parent;
+            current = parent;
+        }
+
+        return count;
+    }
+
+    /// <summary>관절이 매달린 부모 뼈의 인덱스 — 골반이거나 못 찾으면 -1.</summary>
+    public int ParentBoneIndex(int index)
+    {
+        if (m_joints == null || index < 0 || index >= m_joints.Length || m_joints[index] == null)
+            return -1;
+
+        Rigidbody parent = m_joints[index].connectedBody;
+        if (parent == null)
+            return -1;
+
+        for (int i = 0; i < m_bodies.Length; i++)
+            if (m_bodies[i] == parent)
+                return i;
+
+        return -1;
+    }
+
+    /// <summary>i번째 뼈의 트랜스폼 — 회전으로 자세를 고칠 때 쓴다(위치 대입은 관절 앵커를 깬다).</summary>
+    public Transform GetBoneTransform(int index)
+    {
+        Rigidbody body = GetBody(index);
+        return body != null ? body.transform : null;
+    }
+
+    /// <summary>이 뼈를 부모로 삼는 첫 자식 뼈 — 없으면 -1(말단). 뼈가 향한 방향을 재는 데 쓴다.</summary>
+    public int ChildBoneIndex(int index)
+    {
+        if (m_bodies == null || index < 0)
+            return -1;
+
+        for (int i = 0; i < m_bodies.Length; i++)
+            if (ParentBoneIndex(i) == index)
+                return i;
+
+        return -1;
+    }
+
+    /// <summary>
+    /// 그 뼈 <b>하나만</b> 물리에서 떼거나 돌려준다 — 전이 양쪽에서 속도를 지운다
+    /// (<see cref="SetKinematic"/>과 같은 규칙, docs §6).
+    /// 벽에 박힌 팔을 <b>회전으로</b> 고치는 동안 그 팔만 물리에서 떼는 데 쓴다 (#980).
+    /// </summary>
+    public void SetBoneKinematic(int index, bool kinematic)
+    {
+        Rigidbody body = GetBody(index);
+        if (body != null)
+            SetBodyKinematic(body, kinematic);
+    }
+
+    /// <summary>그 뼈의 속도를 지운다 — 물리로 돌려준 직후 튀지 않게.</summary>
+    public void StopBone(int index)
+    {
+        Rigidbody body = GetBody(index);
+        if (body == null || body.isKinematic)
+            return;
+
+        body.linearVelocity = Vector3.zero;
+        body.angularVelocity = Vector3.zero;
+    }
 }

@@ -117,6 +117,7 @@ public partial class NpcRagdoll : MonoBehaviour
 
         m_rig.EnsureCollected(); // 같은 오브젝트의 Awake 순서는 보장되지 않는다
         m_rope = m_rig.GetComponent<RagdollRope>();
+        SetupWallFix(); // #980 — 벽에 박힌 팔을 고치는 쪽. 리그가 잡힌 뒤여야 한다
         m_animator = GetComponentInChildren<Animator>(true);
 
         // 섞는 대상은 리그 최상단 이하 전 트랜스폼 — 물리를 안 받는 뼈(목·손가락·발)까지 넣어야
@@ -161,10 +162,17 @@ public partial class NpcRagdoll : MonoBehaviour
     /// </summary>
     private void FixedUpdate()
     {
-        if (m_state != RagdollState.Ragdoll || !HasMoveAuthority || m_settled)
+        if (m_state != RagdollState.Ragdoll || !HasMoveAuthority)
             return;
 
-        TickRootFollow();
+        // ⚠ 벽 탈출이 미는 동안에는 루트 추종을 쉰다 — 위 주석대로 이 함수의 포즈 대입은 동적
+        // 바디에 텔레포트로 먹으므로, 같은 스텝에 넣은 탈출 속도를 헛돌게 만들 수 있다 (#980).
+        if (!m_settled && !IsWallFixBusy)
+            TickRootFollow();
+
+        // ⚠ <b>마지막이어야 한다</b> — 위의 포즈 대입보다 뒤에 속도를 넣어야 물리 스텝이 그것을
+        // 본다. 그리고 정착한 몸에도 돌아야 한다: 박힌 채 잠든 시체가 이 기능의 대표 사례다.
+        TickWallFix();
     }
 
     // ---- 매 프레임 ----
@@ -209,7 +217,7 @@ public partial class NpcRagdoll : MonoBehaviour
         {
             // 진단(임시) — 경과가 0에 가까우면 물리가 한 프레임도 못 굴러 보고 바로 정착한 것이다
             // (진입 로그의 AllAsleep=True와 짝 — 같이 뜨면 재기절 즉시정착 가설 확정).
-            Debug.Log($"[진단 즉시정착] {name} 정착호출 경과={m_elapsedInRagdoll:F3}s", this);
+            // Debug.Log($"[진단 즉시정착] {name} 정착호출 경과={m_elapsedInRagdoll:F3}s", this);
             ServerSettleInPlace();
             return;
         }
@@ -390,15 +398,22 @@ public partial class NpcRagdoll : MonoBehaviour
         m_riseProbeFrame = -1; // 진단 ⑦ (임시) — 진입 로그가 이 프레임을 이미 찍었다
 
         ReleaseAgentForRagdoll();
+
+        // ⚠ <b>물리에 넘기기 전</b>이어야 한다 — 뼈가 아직 키네마틱일 때만 벽과 싸우지 않고
+        // 자세를 고칠 수 있다. 여기서 접으면 애초에 박힌 채로 출발하지 않는다 (#980 §3-ⓐ).
+        TryFoldArmsBeforePhysics();
+
         ReleaseBonesToPhysics();
         m_rig.ApplyImpulse(impulse);
 
         // 진단(임시) — 재기절 즉시정착 가설. 물리로 넘긴 직후 이미 잠들어 있으면(=AllAsleep 참)
         // 이번 Update의 뒤쪽 AllAsleep 검사가 같은 프레임에 바로 정착시킨다("무너지는 연출 생략").
-        if (HasMoveAuthority)
-            Debug.Log($"[진단 즉시정착] {name} 진입직후 AllAsleep={m_rig.AllAsleep}", this);
+        // if (HasMoveAuthority)
+            // Debug.Log($"[진단 즉시정착] {name} 진입직후 AllAsleep={m_rig.AllAsleep}", this);
 
         m_streamer?.BeginStreaming(); // 권위가 아니면 스스로 무동작이다
+
+        BeginWallFix(); // #980 — 이 회차 동안 벽에 박힌 팔을 감시한다
     }
 
     /// <summary>
@@ -449,6 +464,8 @@ public partial class NpcRagdoll : MonoBehaviour
         // 아무것도 보내지 않고 끊는다 — 기상에는 종착 자세가 없다(보내면 원격에서 기상 블렌드와
         // 래그돌 자세가 같은 프레임을 두고 싸운다). 전 피어가 각자 부르므로 RPC가 필요 없다.
         m_streamer?.StopStreaming();
+
+        EndWallFix(); // #980 — 감시를 닫고, 접다 만 팔을 물리로 돌려준다
 
         // 키네마틱이 먼저다 — 동적인 채로 포즈를 쓰면 다음 물리 스텝이 PhysX 결과로 덮는다.
         m_rig.SetKinematic(true);
