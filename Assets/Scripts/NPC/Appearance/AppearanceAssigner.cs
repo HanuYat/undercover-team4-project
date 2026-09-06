@@ -25,7 +25,7 @@ public class AppearanceAssigner : CommonManagerBase
     [SerializeField] private AppearanceDatabase m_appearanceDatabase;
 
     [Header("몽타주 공개 특징 수")]
-    [Tooltip("범인 외형 축 중 몽타주로 공개할 축 수 (기획 2~3개). 진범이 여러 명이어도 공개 축은 공통이다")]
+    [Tooltip("범인 1명당 몽타주로 공개할 외형 축 수 (기획 2~3개). 공개 축은 범인마다 따로 뽑는다 — 이 값은 전 범인이 나눠 갖는 총량이 아니라 각자의 개수다")]
     [Range(1, AppearanceProfile.k_axisCount)]
     [SerializeField] private int m_revealedAxisCount = 2;
 
