@@ -9328,13 +9328,11 @@ GameObject:
   - component: {fileID: 1405749366994800697}
   - component: {fileID: 1405749366994800698}
   - component: {fileID: 1405749366994800699}
-  - component: {fileID: 3625219082931332717}
   - component: {fileID: 1458645678561649132}
   - component: {fileID: 8156950665793670387}
   - component: {fileID: 5127349806152873460}
   - component: {fileID: 4422740345284790104}
   - component: {fileID: 4603734993763582029}
-  - component: {fileID: 5678977034810245416}
   - component: {fileID: 965164983003205256}
   - component: {fileID: 6158578095925378395}
   - component: {fileID: 8819930586284450470}
@@ -9490,7 +9488,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcAnimationDriver
   m_animator: {fileID: 282655735873343081}
---- !u!114 &3625219082931332717
+--- !u!114 &1405749366994800698
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -9499,11 +9497,24 @@ MonoBehaviour:
   m_GameObject: {fileID: 8791269624150694847}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 32ac43b6e86b4a24498de92f1a644b5c, type: 3}
+  m_Script: {fileID: 11500000, guid: a9b67d35ca424dc2941a9bad0f04ea4e, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NpcStateTester
-  m_manualMode: 0
-  m_previewState: 0
+  m_EditorClassIdentifier: Assembly-CSharp::NpcLocomotionMotion
+  m_unlockBeginSeconds: 0.63
+--- !u!114 &1405749366994800699
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8791269624150694847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3d53ac0efdf0417a88462091614812f7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NpcOneShotMotion
+  m_swingAnimSeconds: 0.9
+  m_standUpSeconds: 1.17
 --- !u!114 &1458645678561649132
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9620,20 +9631,6 @@ MonoBehaviour:
   m_hairColorPropertyName: _BaseColor
   m_hairBaseMaterial: {fileID: 2100000, guid: 4625364858fb08d479fa095a5cbcd9a1, type: 2}
   m_skinColorPropertyName: _Skin_Color
---- !u!114 &5678977034810245416
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8791269624150694847}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d525591d149f8b448b1ca167c087f6fc, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NpcProfileDebugView
-  m_drawSceneLabel: 1
-  m_labelHeight: 2.2
 --- !u!114 &965164983003205256
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9834,6 +9831,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e457215489dc76d4595986f935172c7d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcRagdoll
+  m_wallFoldEnabled: 1
+  m_wallMinDepth: 0.06
+  m_wallLimbMassMax: 8
+  m_wallFoldSeconds: 0.25
+  m_wallMaxAttempts: 3
+  m_wallWindowSeconds: 8
+  m_wallFoldOnEntry: 1
   m_settleTimeoutSeconds: 5
   m_blendSeconds: 0.3
   m_groundMask:
@@ -9868,6 +9872,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_authority: 0
   m_sendEveryFixedSteps: 2
+  m_lengthEveryFixedSteps: 25
   m_interpolationDelay: 0.08
 --- !u!114 &466588836733175058
 MonoBehaviour:
@@ -10730,30 +10735,3 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 833119219956902894, guid: 23960b63517c1d546b15a32bf1193913, type: 3}
   m_PrefabInstance: {fileID: 6603088681985083513}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &1405749366994800698
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8791269624150694847}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a9b67d35ca424dc2941a9bad0f04ea4e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NpcLocomotionMotion
-  m_unlockBeginSeconds: 0.63
---- !u!114 &1405749366994800699
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8791269624150694847}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3d53ac0efdf0417a88462091614812f7, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NpcOneShotMotion
-  m_swingAnimSeconds: 0.9
-  m_standUpSeconds: 1.17

@@ -286,13 +286,11 @@ GameObject:
   - component: {fileID: 1405749366994800697}
   - component: {fileID: 1405749366994800698}
   - component: {fileID: 1405749366994800699}
-  - component: {fileID: 3625219082931332717}
   - component: {fileID: 1458645678561649132}
   - component: {fileID: 8156950665793670387}
   - component: {fileID: 5127349806152873460}
   - component: {fileID: 4422740345284790104}
   - component: {fileID: 2671233897693649276}
-  - component: {fileID: 8244280171983730853}
   - component: {fileID: 3755396486927013622}
   - component: {fileID: 8417339097571743145}
   - component: {fileID: 3610354289931807031}
@@ -370,7 +368,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3276814461
+  GlobalObjectIdHash: 648759800
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -475,20 +473,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NpcOneShotMotion
   m_swingAnimSeconds: 0.9
   m_standUpSeconds: 1.17
---- !u!114 &3625219082931332717
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8791269624150694847}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 32ac43b6e86b4a24498de92f1a644b5c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NpcStateTester
-  m_manualMode: 0
-  m_previewState: 0
 --- !u!114 &1458645678561649132
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -598,20 +582,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NpcDespawnVfx
   ShowTopMostFoldoutHeaderGroup: 1
   m_ghostMaterial: {fileID: 2100000, guid: c963e5de356285c46a7cd4699624970b, type: 2}
---- !u!114 &8244280171983730853
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8791269624150694847}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d525591d149f8b448b1ca167c087f6fc, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NpcProfileDebugView
-  m_drawSceneLabel: 1
-  m_labelHeight: 2.2
 --- !u!114 &3755396486927013622
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -812,6 +782,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e457215489dc76d4595986f935172c7d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcRagdoll
+  m_wallFoldEnabled: 1
+  m_wallMinDepth: 0.06
+  m_wallLimbMassMax: 8
+  m_wallFoldSeconds: 0.25
+  m_wallMaxAttempts: 3
+  m_wallWindowSeconds: 8
+  m_wallFoldOnEntry: 1
   m_settleTimeoutSeconds: 5
   m_blendSeconds: 0.3
   m_groundMask:

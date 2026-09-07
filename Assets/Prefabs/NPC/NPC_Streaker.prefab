@@ -16,7 +16,6 @@ GameObject:
   - component: {fileID: 1405749366994800697}
   - component: {fileID: 1405749366994800698}
   - component: {fileID: 1405749366994800699}
-  - component: {fileID: 3625219082931332717}
   - component: {fileID: 1458645678561649132}
   - component: {fileID: 8156950665793670387}
   - component: {fileID: 5127349806152873460}
@@ -205,20 +204,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NpcOneShotMotion
   m_swingAnimSeconds: 0.9
   m_standUpSeconds: 1.17
---- !u!114 &3625219082931332717
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8791269624150694847}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 32ac43b6e86b4a24498de92f1a644b5c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NpcStateTester
-  m_manualMode: 0
-  m_previewState: 0
 --- !u!114 &1458645678561649132
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -528,6 +513,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e457215489dc76d4595986f935172c7d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcRagdoll
+  m_wallFoldEnabled: 1
+  m_wallMinDepth: 0.06
+  m_wallLimbMassMax: 8
+  m_wallFoldSeconds: 0.25
+  m_wallMaxAttempts: 3
+  m_wallWindowSeconds: 8
+  m_wallFoldOnEntry: 1
   m_settleTimeoutSeconds: 5
   m_blendSeconds: 0.3
   m_groundMask:
@@ -562,6 +554,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_authority: 0
   m_sendEveryFixedSteps: 2
+  m_lengthEveryFixedSteps: 25
   m_interpolationDelay: 0.08
 --- !u!114 &4865795963305240508
 MonoBehaviour:

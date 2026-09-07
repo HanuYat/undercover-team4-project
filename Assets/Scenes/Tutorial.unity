@@ -2304,84 +2304,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4253781836966614, guid: d71ef14e65958ca4cb303cb74b7c1f3d, type: 3}
   m_PrefabInstance: {fileID: 1706040505}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &73797846
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 73797847}
-  - component: {fileID: 73797848}
-  - component: {fileID: 73797849}
-  m_Layer: 0
-  m_Name: WrongfulArrestPenalty
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &73797847
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 73797846}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 600757700}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &73797848
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 73797846}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 1367203916
-  InScenePlacedSourceGlobalObjectIdHash: 0
-  DeferredDespawnTick: 0
-  Ownership: 1
-  AlwaysReplicateAsRoot: 0
-  SynchronizeTransform: 1
-  <InScenePlaced>k__BackingField: 0
-  ActiveSceneSynchronization: 0
-  SceneMigrationSynchronization: 0
-  SpawnWithObservers: 1
-  DontDestroyWithOwner: 0
-  AutoObjectParentSync: 1
-  SyncOwnerTransformWhenParented: 1
-  AllowOwnerToParent: 0
---- !u!114 &73797849
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 73797846}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e9da22352b3bd1e42a3ba6305fc5cdc9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::WrongfulArrestPenalty
-  ShowTopMostFoldoutHeaderGroup: 1
-  m_penaltyEnabled: 0
-  m_plazaPoint: {fileID: 0}
-  m_detentionPoint: {fileID: 0}
-  m_repelRadius: 10
-  m_convergeArriveDistance: 2.5
-  m_convergeTimeoutSeconds: 20
 --- !u!1001 &74023839
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -7065,6 +6987,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
       propertyPath: m_eventEntries.Array.data[9].enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 386971617754569526, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
+      propertyPath: m_eventEntries.Array.data[10].enabled
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 498939978214492355, guid: f8811667cd46fea4d90b9b19c6c6ce8d, type: 3}
@@ -17898,9 +17824,7 @@ Transform:
   - {fileID: 708957382}
   - {fileID: 1417416487}
   - {fileID: 1094823306}
-  - {fileID: 73797847}
   - {fileID: 249787104}
-  - {fileID: 2096560708}
   - {fileID: 740130850}
   - {fileID: 1054781820}
   - {fileID: 616000002}
@@ -34699,7 +34623,6 @@ GameObject:
   m_Component:
   - component: {fileID: 1168895122}
   - component: {fileID: 1168895123}
-  - component: {fileID: 1168895124}
   m_Layer: 0
   m_Name: CriminalAssigner
   m_TagString: Untagged
@@ -34746,22 +34669,6 @@ MonoBehaviour:
   m_citizenCompliantWeight: 0.5
   m_citizenFleeWeight: 0.25
   m_citizenResistWeight: 0.25
---- !u!114 &1168895124
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1168895121}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 366f1025f951a4e48a8ccacb70f4731c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TestCriminalLabel
-  m_text: "\uBC94\uC778"
-  m_color: {r: 1, g: 0, b: 0, a: 1}
-  m_pendingText: "\uC608\uBE44(\uBBF8\uACF5\uAC1C)"
-  m_pendingColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
 --- !u!4 &1169266485 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4249636020427460, guid: 4539a9f265debe14db54385bf22e5389, type: 3}
@@ -62363,78 +62270,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: ddece26d5bd591d4a9101773229e67aa, type: 3}
---- !u!1 &2096560705
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 2096560708}
-  - component: {fileID: 2096560707}
-  - component: {fileID: 2096560706}
-  m_Layer: 0
-  m_Name: DirectoryManager
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &2096560706
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2096560705}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4956f8d49e9e9a344a6d0fbe6b87913d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::DirectoryManager
-  ShowTopMostFoldoutHeaderGroup: 1
---- !u!114 &2096560707
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2096560705}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 314933000
-  InScenePlacedSourceGlobalObjectIdHash: 0
-  DeferredDespawnTick: 0
-  Ownership: 1
-  AlwaysReplicateAsRoot: 0
-  SynchronizeTransform: 1
-  <InScenePlaced>k__BackingField: 0
-  ActiveSceneSynchronization: 0
-  SceneMigrationSynchronization: 0
-  SpawnWithObservers: 1
-  DontDestroyWithOwner: 0
-  AutoObjectParentSync: 1
-  SyncOwnerTransformWhenParented: 1
-  AllowOwnerToParent: 0
---- !u!4 &2096560708
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2096560705}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 600757700}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &2097502678
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -64005,7 +63840,8 @@ PrefabInstance:
       propertyPath: m_micMuteToggleAction
       value: 
       objectReference: {fileID: -975240969312698664, guid: 052faaac586de48259a63d0c4782560b, type: 3}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 1633400896758511009, guid: 719f666d4571ca94ca2b4f5a029c960b, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents:
