@@ -169,7 +169,7 @@ Assets/Scripts/
 
 ## 플레이
 
-[v1.0.0 다운로드](../../releases/tag/1.0.0) — Windows 64bit
+[v1.0.0 다운로드](../../releases/tag/v1.0.0) — Windows 64bit
 
 <!-- YouTube 링크 -->
 _준비 중_
