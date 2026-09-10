@@ -88,7 +88,14 @@ Assets/Scripts/
 - **재설계** — 버리기 · 줍기가 생기며 아이템을 독립 `NetworkObject`로 전환. 소지 = 부모 부착이라 NGO가 복제해 주고, 별도 소지 목록이 실제 부착과 어긋날 여지가 없습니다
 - **결과** — 아이템 10종 확장, 이후 팀원이 추가한 아이템도 `ItemBase` 상속만으로 동작. 반복되던 CTS 소유 · 재진입 가드를 `ServerChannel`로 추출해 사용처가 3곳 → 6곳
 
-![아이템 클래스 관계도](docs/diagrams/item-class.png)
+같은 `ItemBase` 계약 위에 올라간 아이템들입니다.
+
+|  |  |  |
+| :---: | :---: | :---: |
+| ![스캐너](docs/gifs/items/scanner.gif) | ![구역 스캐너](docs/gifs/items/areascan.gif) | ![밧줄](docs/gifs/items/rope.gif) |
+| 스캐너 — 용의자 대조 | 구역 스캐너 — 범위 탐지 | 밧줄 — 묶어서 연행 |
+| ![진압봉](docs/gifs/items/baton.gif) | ![홈런 진압봉](docs/gifs/items/homerun.gif) |  |
+| 진압봉 — 근접 제압 | 홈런 진압봉 — 타격 시 대상 날림 |  |
 
 ### 2. 밧줄 연행 시스템
 
