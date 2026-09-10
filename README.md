@@ -92,9 +92,9 @@ Assets/Scripts/
 
 <table align="center">
   <tr>
-    <td width="280" align="center"><img src="docs/gifs/items/scanner.gif" width="265"></td>
-    <td width="280" align="center"><img src="docs/gifs/items/areascan.gif" width="265"></td>
-    <td width="280" align="center"><img src="docs/gifs/items/rope.gif" width="265"></td>
+    <td width="270" align="center"><img src="docs/gifs/items/scanner.gif" width="265"></td>
+    <td width="270" align="center"><img src="docs/gifs/items/areascan.gif" width="265"></td>
+    <td width="270" align="center"><img src="docs/gifs/items/rope.gif" width="265"></td>
   </tr>
   <tr>
     <td align="center"><b>스캐너</b></td>
@@ -105,8 +105,8 @@ Assets/Scripts/
 
 <table align="center">
   <tr>
-    <td width="280" align="center"><img src="docs/gifs/items/baton.gif" width="265"></td>
-    <td width="280" align="center"><img src="docs/gifs/items/homerun.gif" width="265"></td>
+    <td width="270" align="center"><img src="docs/gifs/items/baton.gif" width="265"></td>
+    <td width="270" align="center"><img src="docs/gifs/items/homerun.gif" width="265"></td>
   </tr>
   <tr>
     <td align="center"><b>진압봉</b></td>
