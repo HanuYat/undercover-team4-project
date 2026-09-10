@@ -66,7 +66,7 @@ Assets/Scripts/
 
 | 담당 영역 | 주요 작업 | 담당 형태 |
 | --- | --- | --- |
-| 아이템 · 인벤토리 | ItemBase · IChargeable 계약 설계, 아이템 10종 확장, 줍기 · 버리기 서버 검증, ServerChannel 공통화 | 설계 · 구현 전담 |
+| 아이템 · 인벤토리 | ItemBase · IChargeable 계약 설계, 아이템 11종 확장, 줍기 · 버리기 서버 검증, ServerChannel 공통화 | 설계 · 구현 전담 |
 | 검거 · 연행 | 밧줄 연행 시스템 — 연결 동기화, 무게 페널티 · 장력 반경, 다중 연행 배치 | 설계 · 구현 전담 |
 | 팀 경제 루프 | 팀 공용 자금 · 구매품 이월 · 맵 선택 홀더, 라운드 정산 데이터, 상점 · Shop 씬 | 설계 · 구현 (일부 협업) |
 | 에디터 툴 | MapGridBuilder · MeshSlicer · FacadeRunner · FPArmGenerator · ItemIconBaker, 맵 2종 제작 | 단독 작성 |
