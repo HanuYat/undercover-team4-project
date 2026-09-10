@@ -90,12 +90,19 @@ Assets/Scripts/
 
 같은 `ItemBase` 계약 위에 올라간 아이템들입니다.
 
-|  |  |  |
-| :---: | :---: | :---: |
-| ![스캐너](docs/gifs/items/scanner.gif) | ![구역 스캐너](docs/gifs/items/areascan.gif) | ![밧줄](docs/gifs/items/rope.gif) |
-| 스캐너 — 용의자 대조 | 구역 스캐너 — 범위 탐지 | 밧줄 — 묶어서 연행 |
-| ![진압봉](docs/gifs/items/baton.gif) | ![홈런 진압봉](docs/gifs/items/homerun.gif) |  |
-| 진압봉 — 근접 제압 | 홈런 진압봉 — 타격 시 대상 날림 |  |
+<table>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/gifs/items/scanner.gif" width="100%"><br><b>스캐너</b></td>
+    <td colspan="2" align="center"><img src="docs/gifs/items/areascan.gif" width="100%"><br><b>구역 스캐너</b></td>
+    <td colspan="2" align="center"><img src="docs/gifs/items/rope.gif" width="100%"><br><b>밧줄</b></td>
+  </tr>
+  <tr>
+    <td></td>
+    <td colspan="2" align="center"><img src="docs/gifs/items/baton.gif" width="100%"><br><b>진압봉</b></td>
+    <td colspan="2" align="center"><img src="docs/gifs/items/homerun.gif" width="100%"><br><b>홈런 진압봉</b></td>
+    <td></td>
+  </tr>
+</table>
 
 ### 2. 밧줄 연행 시스템
 
