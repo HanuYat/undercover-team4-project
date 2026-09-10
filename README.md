@@ -90,17 +90,27 @@ Assets/Scripts/
 
 같은 `ItemBase` 계약 위에 올라간 아이템들입니다.
 
-<table>
+<table align="center">
   <tr>
-    <td colspan="2" align="center"><img src="docs/gifs/items/scanner.gif" width="100%"><br><b>스캐너</b></td>
-    <td colspan="2" align="center"><img src="docs/gifs/items/areascan.gif" width="100%"><br><b>구역 스캐너</b></td>
-    <td colspan="2" align="center"><img src="docs/gifs/items/rope.gif" width="100%"><br><b>밧줄</b></td>
+    <td width="280" align="center"><img src="docs/gifs/items/scanner.gif" width="270"></td>
+    <td width="280" align="center"><img src="docs/gifs/items/areascan.gif" width="270"></td>
+    <td width="280" align="center"><img src="docs/gifs/items/rope.gif" width="270"></td>
   </tr>
   <tr>
-    <td></td>
-    <td colspan="2" align="center"><img src="docs/gifs/items/baton.gif" width="100%"><br><b>진압봉</b></td>
-    <td colspan="2" align="center"><img src="docs/gifs/items/homerun.gif" width="100%"><br><b>홈런 진압봉</b></td>
-    <td></td>
+    <td align="center"><b>스캐너</b></td>
+    <td align="center"><b>구역 스캐너</b></td>
+    <td align="center"><b>밧줄</b></td>
+  </tr>
+</table>
+
+<table align="center">
+  <tr>
+    <td width="280" align="center"><img src="docs/gifs/items/baton.gif" width="270"></td>
+    <td width="280" align="center"><img src="docs/gifs/items/homerun.gif" width="270"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>진압봉</b></td>
+    <td align="center"><b>홈런 진압봉</b></td>
   </tr>
 </table>
 
