@@ -2,7 +2,7 @@
 
 > 치안이 무너진 사이버펑크 세계의 로봇 경찰이 되어, 팀원들과 소통하며 용의자를 검거하는 온라인 협동 수사 게임
 
-`Unity 6000.3 LTS` · `C#` · `Netcode for GameObjects` · `Unity Gaming Services` · `Vivox`
+`Unity 6.3 LTS` · `C#` · `Netcode for GameObjects` · `Unity Gaming Services` · `Vivox`
 
 |  |  |  |
 | :---: | :---: | :---: |
